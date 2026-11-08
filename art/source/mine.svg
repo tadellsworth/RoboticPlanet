@@ -1,0 +1,174 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256">
+<defs>  <filter id="shadow" filterUnits="userSpaceOnUse" x="-140" y="-140" width="280" height="280" color-interpolation-filters="sRGB">
+    <feGaussianBlur in="SourceAlpha" stdDeviation="3.5"/>
+    <feOffset dx="6" dy="7" result="b"/>
+    <feFlood flood-color="#0d0805" flood-opacity="0.55"/>
+    <feComposite in2="b" operator="in" result="s"/>
+    <feMerge><feMergeNode in="s"/><feMergeNode in="SourceGraphic"/></feMerge>
+  </filter>
+  <filter id="shadowB" filterUnits="userSpaceOnUse" x="-140" y="-140" width="280" height="280" color-interpolation-filters="sRGB">
+    <feGaussianBlur in="SourceAlpha" stdDeviation="5"/>
+    <feOffset dx="9" dy="11" result="b"/>
+    <feFlood flood-color="#0d0805" flood-opacity="0.55"/>
+    <feComposite in2="b" operator="in" result="s"/>
+    <feMerge><feMergeNode in="s"/><feMergeNode in="SourceGraphic"/></feMerge>
+  </filter>
+  <filter id="metal" filterUnits="userSpaceOnUse" x="-140" y="-140" width="280" height="280" color-interpolation-filters="sRGB">
+    <feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" seed="4" result="fine"/>
+    <feColorMatrix in="fine" type="matrix" values="0 0 0 0 0.05  0 0 0 0 0.045  0 0 0 0 0.04  1.2 0 0 0 -0.58" result="speck"/>
+    <feTurbulence type="fractalNoise" baseFrequency="0.055" numOctaves="3" seed="12" result="coarse"/>
+    <feColorMatrix in="coarse" type="matrix" values="0 0 0 0 0.52  0 0 0 0 0.39  0 0 0 0 0.25  2 0 0 0 -0.98" result="dirt"/>
+    <feMerge result="tex"><feMergeNode in="dirt"/><feMergeNode in="speck"/></feMerge>
+    <feComposite in="tex" in2="SourceAlpha" operator="in" result="texIn"/>
+    <feOffset in="SourceAlpha" dx="1.5" dy="1.5" result="o1"/>
+    <feComposite in="SourceAlpha" in2="o1" operator="out" result="hiEdge"/>
+    <feFlood flood-color="#eef3f6" flood-opacity="0.38"/>
+    <feComposite in2="hiEdge" operator="in" result="hi"/>
+    <feOffset in="SourceAlpha" dx="-2" dy="-2" result="o2"/>
+    <feComposite in="SourceAlpha" in2="o2" operator="out" result="loEdge"/>
+    <feFlood flood-color="#000" flood-opacity="0.6"/>
+    <feComposite in2="loEdge" operator="in" result="lo"/>
+    <feMerge><feMergeNode in="SourceGraphic"/><feMergeNode in="texIn"/><feMergeNode in="hi"/><feMergeNode in="lo"/></feMerge>
+  </filter>
+  <filter id="paint" filterUnits="userSpaceOnUse" x="-140" y="-140" width="280" height="280" color-interpolation-filters="sRGB">
+    <feTurbulence type="fractalNoise" baseFrequency="0.17" numOctaves="3" seed="31" result="chipN"/>
+    <feColorMatrix in="chipN" type="matrix" values="0 0 0 0 0.24  0 0 0 0 0.26  0 0 0 0 0.28  9 0 0 0 -6.1" result="chips"/>
+    <feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" seed="9" result="fine"/>
+    <feColorMatrix in="fine" type="matrix" values="0 0 0 0 0.08  0 0 0 0 0.07  0 0 0 0 0.06  1 0 0 0 -0.5" result="speck"/>
+    <feTurbulence type="fractalNoise" baseFrequency="0.05" numOctaves="3" seed="17" result="coarse"/>
+    <feColorMatrix in="coarse" type="matrix" values="0 0 0 0 0.52  0 0 0 0 0.39  0 0 0 0 0.25  2.2 0 0 0 -1.05" result="dirt"/>
+    <feMerge result="tex"><feMergeNode in="chips"/><feMergeNode in="dirt"/><feMergeNode in="speck"/></feMerge>
+    <feComposite in="tex" in2="SourceAlpha" operator="in" result="texIn"/>
+    <feOffset in="SourceAlpha" dx="1.5" dy="1.5" result="o1"/>
+    <feComposite in="SourceAlpha" in2="o1" operator="out" result="hiEdge"/>
+    <feFlood flood-color="#ffffff" flood-opacity="0.45"/>
+    <feComposite in2="hiEdge" operator="in" result="hi"/>
+    <feOffset in="SourceAlpha" dx="-2" dy="-2" result="o2"/>
+    <feComposite in="SourceAlpha" in2="o2" operator="out" result="loEdge"/>
+    <feFlood flood-color="#000" flood-opacity="0.55"/>
+    <feComposite in2="loEdge" operator="in" result="lo"/>
+    <feMerge><feMergeNode in="SourceGraphic"/><feMergeNode in="texIn"/><feMergeNode in="hi"/><feMergeNode in="lo"/></feMerge>
+  </filter>
+  <filter id="stone" filterUnits="userSpaceOnUse" x="-140" y="-140" width="280" height="280" color-interpolation-filters="sRGB">
+    <feTurbulence type="fractalNoise" baseFrequency="0.07" numOctaves="4" seed="8" result="n"/>
+    <feDiffuseLighting in="n" surfaceScale="3.5" diffuseConstant="1.25" lighting-color="#ffffff" result="lit">
+      <feDistantLight azimuth="225" elevation="50"/>
+    </feDiffuseLighting>
+    <feComposite in="lit" in2="SourceGraphic" operator="arithmetic" k1="1" k2="0" k3="0" k4="0" result="mul"/>
+    <feComposite in="mul" in2="SourceAlpha" operator="in" result="body"/>
+    <feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" seed="3" result="fine"/>
+    <feColorMatrix in="fine" type="matrix" values="0 0 0 0 0.05  0 0 0 0 0.045  0 0 0 0 0.04  1.1 0 0 0 -0.55" result="speck"/>
+    <feComposite in="speck" in2="SourceAlpha" operator="in" result="speckIn"/>
+    <feOffset in="SourceAlpha" dx="1.5" dy="1.5" result="o1"/>
+    <feComposite in="SourceAlpha" in2="o1" operator="out" result="hiEdge"/>
+    <feFlood flood-color="#ffffff" flood-opacity="0.35"/>
+    <feComposite in2="hiEdge" operator="in" result="hi"/>
+    <feOffset in="SourceAlpha" dx="-2" dy="-2" result="o2"/>
+    <feComposite in="SourceAlpha" in2="o2" operator="out" result="loEdge"/>
+    <feFlood flood-color="#000" flood-opacity="0.5"/>
+    <feComposite in2="loEdge" operator="in" result="lo"/>
+    <feMerge><feMergeNode in="body"/><feMergeNode in="speckIn"/><feMergeNode in="hi"/><feMergeNode in="lo"/></feMerge>
+  </filter>
+  <filter id="glow" filterUnits="userSpaceOnUse" x="-140" y="-140" width="280" height="280">
+    <feGaussianBlur in="SourceGraphic" stdDeviation="2.5" result="b1"/>
+    <feGaussianBlur in="SourceGraphic" stdDeviation="9" result="b2"/>
+    <feMerge><feMergeNode in="b2"/><feMergeNode in="b2"/><feMergeNode in="b1"/><feMergeNode in="SourceGraphic"/></feMerge>
+  </filter>
+  <filter id="glowS" filterUnits="userSpaceOnUse" x="-140" y="-140" width="280" height="280">
+    <feGaussianBlur in="SourceGraphic" stdDeviation="1.5" result="b1"/>
+    <feGaussianBlur in="SourceGraphic" stdDeviation="5" result="b2"/>
+    <feMerge><feMergeNode in="b2"/><feMergeNode in="b1"/><feMergeNode in="SourceGraphic"/></feMerge>
+  </filter>
+  <filter id="soft" filterUnits="userSpaceOnUse" x="-140" y="-140" width="280" height="280"><feGaussianBlur stdDeviation="2"/></filter>
+  <filter id="blur5" filterUnits="userSpaceOnUse" x="-140" y="-140" width="280" height="280"><feGaussianBlur stdDeviation="5"/></filter>
+  <pattern id="haz" width="10" height="10" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+    <rect width="10" height="10" fill="#1b1a17"/><rect width="5" height="10" fill="#b08a2e"/>
+  </pattern>
+  <linearGradient id="steel" x1="0" y1="0" x2="1" y2="1">
+    <stop offset="0" stop-color="#5d646b"/><stop offset="1" stop-color="#2b2f34"/>
+  </linearGradient>
+  <linearGradient id="steelL" x1="0" y1="0" x2="1" y2="1">
+    <stop offset="0" stop-color="#737b82"/><stop offset="1" stop-color="#3b4046"/>
+  </linearGradient>
+  <linearGradient id="rail" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0" stop-color="#7a8288"/><stop offset="1" stop-color="#3c4247"/>
+  </linearGradient>
+  <linearGradient id="wall" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0" stop-color="#2c3035"/><stop offset=".6" stop-color="#1f2226"/><stop offset="1" stop-color="#5e4632"/>
+  </linearGradient>
+  <linearGradient id="dustV" x1="0" y1="0" x2="0" y2="1">
+    <stop offset=".45" stop-color="#a27b4f" stop-opacity="0"/><stop offset="1" stop-color="#a27b4f" stop-opacity=".5"/>
+  </linearGradient>
+  <linearGradient id="litOver" x1="0" y1="0" x2="1" y2="1">
+    <stop offset="0" stop-color="#ffffff" stop-opacity=".14"/><stop offset=".5" stop-color="#ffffff" stop-opacity="0"/><stop offset="1" stop-color="#000000" stop-opacity=".3"/>
+  </linearGradient>
+  <radialGradient id="rust">
+    <stop offset="0" stop-color="#a8521d" stop-opacity=".85"/><stop offset=".5" stop-color="#8a4318" stop-opacity=".5"/><stop offset="1" stop-color="#7a3a17" stop-opacity="0"/>
+  </radialGradient>
+  <radialGradient id="scorch">
+    <stop offset="0" stop-color="#0d0907" stop-opacity=".8"/><stop offset=".55" stop-color="#1a120c" stop-opacity=".4"/><stop offset="1" stop-color="#1a120c" stop-opacity="0"/>
+  </radialGradient>
+
+  <linearGradient id="mn-conc" x1="0" y1="0" x2="1" y2="1">
+    <stop offset="0" stop-color="#8f8a80"/><stop offset="1" stop-color="#5a564f"/>
+  </linearGradient>
+  <radialGradient id="mn-shaft" cx=".5" cy=".55" r=".6">
+    <stop offset="0" stop-color="#ff6a14" stop-opacity=".9"/><stop offset=".35" stop-color="#7a2a08"/><stop offset=".8" stop-color="#140806"/><stop offset="1" stop-color="#050404"/>
+  </radialGradient>
+  <linearGradient id="mn-cart" x1="0" y1="0" x2="1" y2="1">
+    <stop offset="0" stop-color="#6b5a48"/><stop offset="1" stop-color="#3a3029"/>
+  </linearGradient>
+</defs>
+<g transform="translate(124,120) scale(1.08)">
+  <g filter="url(#shadowB)">
+    <!-- rails -->
+    <g filter="url(#metal)">
+      <path d="M-10,56 V88 M2,56 V88 M14,56 V88 M26,56 V88 M38,56 V88 M50,56 V88 M62,56 V88 M74,56 V88 M86,56 V88 M98,56 V88" stroke="#5a4532" stroke-width="7"/>
+      <path d="M-16,62 H102 M-16,82 H102" stroke="#9aa2a8" stroke-width="4.5"/>
+    </g>
+    <!-- shaft collar -->
+    <g filter="url(#stone)">
+      <rect x="-80" y="18" width="94" height="12" fill="#4e4a44"/>
+      <rect x="-80" y="-70" width="94" height="88" rx="3" fill="url(#mn-conc)"/>
+    </g>
+    <g filter="url(#metal)">
+      <rect x="-66" y="-56" width="66" height="60" fill="url(#haz)"/>
+      <rect x="-60" y="-50" width="54" height="48" fill="url(#mn-shaft)"/>
+      <path d="M-60,-50 L-48,-38 H-18 L-6,-50 M-60,-2 L-48,-14 H-18 L-6,-2 M-48,-38 V-14 M-18,-38 V-14" fill="none" stroke="#1d0f08" stroke-width="2" opacity=".8"/>
+    </g>
+    <!-- gantry over the shaft -->
+    <g filter="url(#metal)">
+      <path d="M-92,-26 L-84,-48 M-92,-58 L-84,-48 M26,-26 L18,-48 M26,-58 L18,-48" stroke="#4b5157" stroke-width="5" stroke-linecap="round"/>
+      <rect x="-90" y="-56" width="112" height="4" fill="url(#rail)"/>
+      <rect x="-90" y="-42" width="112" height="4" fill="url(#rail)"/>
+      <path d="M-90,-54 L-80,-40 L-70,-54 L-60,-40 L-50,-54 L-40,-40 L-30,-54 L-20,-40 L-10,-54 L0,-40 L10,-54 L20,-40" fill="none" stroke="#6b737a" stroke-width="2"/>
+      <rect x="-48" y="-62" width="30" height="30" rx="3" fill="#3a3f45"/>
+      <rect x="-48" y="-62" width="30" height="6" fill="url(#haz)"/>
+      <circle cx="-33" cy="-44" r="8" fill="#22262a" stroke="#8d959b" stroke-width="2"/>
+      <rect x="-36" y="-36" width="6" height="22" fill="#9aa2a8"/>
+    </g>
+    <!-- ore cart -->
+    <g filter="url(#metal)">
+      <rect x="28" y="38" width="8" height="12" rx="2" fill="#16181b"/><rect x="76" y="38" width="8" height="12" rx="2" fill="#16181b"/>
+      <rect x="28" y="86" width="8" height="8" rx="2" fill="#16181b"/><rect x="76" y="86" width="8" height="8" rx="2" fill="#16181b"/>
+      <rect x="30" y="82" width="52" height="10" fill="url(#wall)"/>
+      <polygon points="26,40 86,40 82,82 30,82" fill="url(#mn-cart)"/>
+      <polygon points="32,46 80,46 77,76 35,76" fill="#1a1512"/>
+    </g>
+    <g filter="url(#stone)">
+      <polygon points="36,58 44,48 54,52 52,64 40,66" fill="#2b2826"/>
+      <polygon points="52,52 62,46 72,50 70,60 58,62" fill="#33302d"/>
+      <polygon points="40,66 52,64 58,72 46,76" fill="#242220"/>
+      <polygon points="58,62 70,60 76,70 64,74" fill="#2a2724"/>
+    </g>
+  </g>
+  <!-- molten orange accents -->
+  <g filter="url(#glow)" fill="none" stroke-linecap="round">
+    <path d="M40,58 L48,54 L52,60 M58,52 L66,56 L70,52 M48,70 L56,68 M62,66 L70,68" stroke="#ff7a1a" stroke-width="2.5"/>
+    <circle cx="-33" cy="-14" r="5" fill="#ffb347" stroke="none"/>
+  </g>
+  <g filter="url(#glow)" fill="#ff7a1a">
+    <circle cx="-86" cy="-56" r="4"/><circle cx="20" cy="-56" r="4"/><circle cx="14" cy="-66" r="3.5"/>
+  </g>
+</g>
+</svg>

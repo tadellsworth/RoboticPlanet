@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
+<defs>
+  <filter id="plateau" filterUnits="userSpaceOnUse" x="-128" y="-128" width="384" height="384" color-interpolation-filters="sRGB">
+    <feFlood flood-color="#4d3828" result="base"/>
+    <feTurbulence type="fractalNoise" baseFrequency="0.03125" numOctaves="3" seed="2" stitchTiles="stitch" x="0" y="0" width="128" height="128" result="n1"/>
+    <feTile in="n1" result="t1"/>
+    <feColorMatrix in="t1" type="matrix" values="0 0 0 0 0.18  0 0 0 0 0.12  0 0 0 0 0.08  2 0 0 0 -0.9" result="dark"/>
+    <feColorMatrix in="t1" type="matrix" values="0 0 0 0 0.45  0 0 0 0 0.34  0 0 0 0 0.24  0 -2 0 0 0.85" result="light"/>
+    <feTurbulence type="fractalNoise" baseFrequency="0.0390625" numOctaves="5" seed="5" stitchTiles="stitch" x="0" y="0" width="128" height="128" result="n2"/>
+    <feTile in="n2" result="t2"/>
+    <feDiffuseLighting in="t2" surfaceScale="7" diffuseConstant="1.25" lighting-color="#ffffff" result="lit">
+      <feDistantLight azimuth="225" elevation="45"/>
+    </feDiffuseLighting>
+    <feTurbulence type="turbulence" baseFrequency="0.03125" numOctaves="2" seed="11" stitchTiles="stitch" x="0" y="0" width="128" height="128" result="n3"/>
+    <feTile in="n3" result="t3"/>
+    <feColorMatrix in="t3" type="matrix" values="0 0 0 0 0.07  0 0 0 0 0.045  0 0 0 0 0.03  -9 0 0 0 1.15" result="cracks"/>
+    <feMerge result="col"><feMergeNode in="base"/><feMergeNode in="dark"/><feMergeNode in="light"/></feMerge>
+    <feComposite in="lit" in2="col" operator="arithmetic" k1="0.75" k2="0" k3="0.25" k4="0" result="shaded"/>
+    <feMerge><feMergeNode in="shaded"/><feMergeNode in="cracks"/></feMerge>
+  </filter>
+</defs>
+<rect width="128" height="128" fill="#4d3828"/>
+<rect x="-128" y="-128" width="384" height="384" filter="url(#plateau)"/>
+</svg>

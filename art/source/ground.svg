@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
+<defs>
+  <filter id="sand" filterUnits="userSpaceOnUse" x="-128" y="-128" width="384" height="384" color-interpolation-filters="sRGB">
+    <feFlood flood-color="#a6754a" result="base"/>
+    <feTurbulence type="fractalNoise" baseFrequency="0.03125" numOctaves="4" seed="4" stitchTiles="stitch" x="0" y="0" width="128" height="128" result="n1"/>
+    <feTile in="n1" result="t1"/>
+    <feColorMatrix in="t1" type="matrix" values="0 0 0 0 0.47  0 0 0 0 0.29  0 0 0 0 0.17  1.3 0 0 0 -0.64" result="mott"/>
+    <feColorMatrix in="t1" type="matrix" values="0 0 0 0 0.78  0 0 0 0 0.6  0 0 0 0 0.41  0 -1.8 0 0 0.8" result="pale"/>
+    <feTurbulence type="fractalNoise" baseFrequency="0.015625 0.078125" numOctaves="2" seed="9" stitchTiles="stitch" x="0" y="0" width="128" height="128" result="n2"/>
+    <feTile in="n2" result="t2"/>
+    <feDiffuseLighting in="t2" surfaceScale="2.2" diffuseConstant="1.3" lighting-color="#ffffff" result="lit">
+      <feDistantLight azimuth="225" elevation="55"/>
+    </feDiffuseLighting>
+    <feTurbulence type="fractalNoise" baseFrequency="0.5" numOctaves="2" seed="2" stitchTiles="stitch" x="0" y="0" width="128" height="128" result="n3"/>
+    <feTile in="n3" result="t3"/>
+    <feColorMatrix in="t3" type="matrix" values="0 0 0 0 0.3  0 0 0 0 0.18  0 0 0 0 0.1  1.5 0 0 0 -0.78" result="grainD"/>
+    <feColorMatrix in="t3" type="matrix" values="0 0 0 0 0.86  0 0 0 0 0.7  0 0 0 0 0.5  0 1.5 0 0 -0.8" result="grainL"/>
+    <feMerge result="col"><feMergeNode in="base"/><feMergeNode in="mott"/><feMergeNode in="pale"/><feMergeNode in="grainD"/><feMergeNode in="grainL"/></feMerge>
+    <feComposite in="lit" in2="col" operator="arithmetic" k1="0.3" k2="0" k3="0.7" k4="0"/>
+  </filter>
+</defs>
+<rect width="128" height="128" fill="#a6754a"/>
+<rect width="128" height="128" filter="url(#sand)"/>
+<g>
+  <ellipse cx="30.5" cy="22.5" rx="2.6" ry="1.9" fill="#3b2a1c" opacity=".35"/>
+  <ellipse cx="29" cy="21" rx="2.6" ry="1.9" fill="#8a7462"/><ellipse cx="28.3" cy="20.4" rx="1" ry=".7" fill="#c9b49c"/>
+  <ellipse cx="92.5" cy="38.5" rx="2" ry="1.5" fill="#3b2a1c" opacity=".35"/>
+  <ellipse cx="91" cy="37" rx="2" ry="1.5" fill="#7a6553"/><ellipse cx="90.5" cy="36.5" rx=".8" ry=".6" fill="#bfa78d"/>
+  <ellipse cx="62.5" cy="88.5" rx="3" ry="2.1" fill="#3b2a1c" opacity=".35"/>
+  <ellipse cx="61" cy="87" rx="3" ry="2.1" fill="#8d7b6b"/><ellipse cx="60.2" cy="86.3" rx="1.2" ry=".8" fill="#cbb8a3"/>
+  <ellipse cx="21.5" cy="101.5" rx="1.6" ry="1.2" fill="#3b2a1c" opacity=".35"/>
+  <ellipse cx="20.5" cy="100.5" rx="1.6" ry="1.2" fill="#6f5a48"/>
+  <ellipse cx="105.5" cy="105.5" rx="1.8" ry="1.3" fill="#3b2a1c" opacity=".35"/>
+  <ellipse cx="104.5" cy="104.5" rx="1.8" ry="1.3" fill="#86705d"/>
+  <ellipse cx="74" cy="56" rx="1.2" ry=".9" fill="#7d6856"/>
+  <ellipse cx="44" cy="62" rx="1.1" ry=".8" fill="#6c5644"/>
+</g>
+</svg>

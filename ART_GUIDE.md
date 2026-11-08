@@ -1,7 +1,8 @@
 # Botfall art guide
 
-Everything in the game currently uses placeholder art drawn in code. You can replace it **one
-piece at a time**: anything you don't replace keeps its placeholder, so the game always works.
+Every building, bot, resource and ground tile now uses custom art (batch 1). Anything without an
+image keeps a placeholder drawn in code, so art can still be added **one piece at a time**. The
+remaining pieces are listed under [Batch 2](#batch-2-terrain-levels-and-goods-icons).
 
 This guide has three parts:
 
@@ -136,11 +137,32 @@ Make them roughly in this order. The first few change the look of the game the m
 | `water` | Brine pool tile (128×128, **seamless, opaque**) | A seamless top-down texture of deep teal-blue alien brine water with faint ripples and mineral sheen. |
 | `rock` | Rock plateau tile (128×128, **seamless, opaque**) | A seamless top-down texture of dark brown cracked rock plateau, rough and impassable. |
 
+### Batch 2: terrain levels and goods icons
+
+The first 27 images are done and installed (sources are in `art/source/`). The game has since gained
+**terrain levels** (cliffs, slopes and a buildable Ramp) and the goods icons became swappable, so these
+are the remaining pieces. Use the same brief as before.
+
+| Key | Size | What it is | Prompt for Claude Design |
+|---|---|---|---|
+| `ramp` | 256×256, transparent | Build-menu icon and construction site for the Ramp | A short stepped ramp cut into a rock ledge, seen from above: sandstone steps rising toward the **top** of the image, rough rock walls on both sides, a few hazard-striped edge markers. Same angle and light as the buildings. |
+| `slope` | 128×128, **opaque** | The ground tile of a finished slope between two levels | A square ground tile showing a worn dirt-and-stone ramp rising toward the **top** of the tile: graded steps or tyre-packed switchback ruts, lighter at the top (higher), darker at the bottom, low rock edges along the left and right sides. Must sit naturally between the sand ground tiles. |
+| `cliff` | 128×48, **opaque** | The rock wall you see where higher ground drops to lower ground (stretched along the cliff) | A horizontal strip of layered sedimentary rock wall seen face-on: dark rust-brown strata, small cracks and loose stones, darker at the bottom where it meets the ground. Must tile seamlessly left to right. |
+| `icon-fiber` | 64×64, transparent | Fiber, in the top bar and menus | A small bundle of glowing teal plant fibre, tied. Bold, simple silhouette. |
+| `icon-stone` | 64×64, transparent | Stone | Two stacked pale grey cut stone blocks. |
+| `icon-ore` | 64×64, transparent | Ore | A dark rock chunk with glowing molten-orange veins. |
+| `icon-crystal` | 64×64, transparent | Crystal | A single violet hexagonal crystal, faintly glowing. |
+| `icon-alloy` | 64×64, transparent | Alloy | A stack of two brushed blue-steel ingots. |
+| `icon-chip` | 64×64, transparent | Chip | A small lime-green circuit chip with pins on all sides. |
+
+For the six icons: they show at 16 px, so make them flat-ish, bold and high-contrast, with a thin dark outline.
+They can be less detailed than the buildings.
+
 ### Not swappable yet (ask Claude Code if you want these)
 
-- The six goods icons in the top bar (Fiber, Stone, Ore, Crystal, Alloy, Chip)
-- Menu background, logo and app icon
+- Menu background and logo
 - Effects (laser beams, explosions, smoke)
+- App icon: to change it, replace `icons/icon-192.png` and `icons/icon-512.png` directly (square PNGs)
 
 ### Tips
 
