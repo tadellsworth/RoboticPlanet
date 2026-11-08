@@ -55,7 +55,7 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
 - Every production building needs one worker inside. Free workers haul goods and build construction sites.
   Run short and the game pulls workers off low-priority jobs, so build a Bot Foundry early.
 - Placing a construction site is free; workers bring the materials from storage.
-- **Paths** cost 1 Stone per tile (refunded if you remove one) and make bots move twice as fast. Bots
+- **Paths** cost a quarter Stone per tile (1 Stone paves 4; refunded if you remove them) and make bots move twice as fast. Bots
   plan routes that use them even when that means a short detour.
 - **Terrain levels:** the planet has terraces at different heights (lighter ground is higher). Bots
   can't climb cliffs; they use slopes at narrow passes, so some routes are long. Pave busy routes with

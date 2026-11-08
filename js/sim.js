@@ -1269,11 +1269,30 @@ function sendAttack(owner, target, count) {
 
 /* ------------------------------------------------------------------ paths */
 
+/*
+ * Path costs can be fractions of a good (a quarter Stone per tile). Each player keeps a small
+ * credit per good: paying for a tile draws on the credit first and only takes a whole good from
+ * storage when the credit runs out; removing a tile adds to the credit and refunds whole goods.
+ */
+function roadCredit(owner, g) {
+  const P = S.players[owner];
+  P.roadCredit = P.roadCredit || {};
+  return P.roadCredit[g] || 0;
+}
+
 /** Can `owner` afford one more path tile? */
 function canAffordRoad(owner) {
   const have = playerGoods(owner);
-  for (const g in ROAD_COST) if (have[g] < ROAD_COST[g]) return false;
+  for (const g in ROAD_COST) if (roadCredit(owner, g) + have[g] < ROAD_COST[g]) return false;
   return true;
+}
+
+/** How many more path tiles the player could lay right now. */
+function roadTilesAffordable(owner) {
+  const have = playerGoods(owner);
+  let n = Infinity;
+  for (const g in ROAD_COST) n = Math.min(n, Math.floor((roadCredit(owner, g) + have[g]) / ROAD_COST[g] + 1e-9));
+  return n;
 }
 
 /** Take a good from wherever the player has spare of it (storage or finished goods in buildings). */
@@ -1297,7 +1316,12 @@ function buildRoad(owner, i, j) {
   if (!canRoad(owner, i, j)) return 'You can only lay paths on open ground inside your border.';
   if (S.road[tIdx(i, j)]) return '';
   if (!canAffordRoad(owner)) return `Out of ${Object.keys(ROAD_COST).map((g) => GOOD[g].name).join(' and ')} for paths.`;
-  for (const g in ROAD_COST) takeGood(owner, g, ROAD_COST[g]);
+  const P = S.players[owner];
+  for (const g in ROAD_COST) {
+    let c = roadCredit(owner, g) - ROAD_COST[g];
+    while (c < -1e-9 && takeGood(owner, g, 1)) c += 1;
+    P.roadCredit[g] = Math.round(c * 1000) / 1000;
+  }
   setRoad(i, j, true);
   return '';
 }
@@ -1306,8 +1330,13 @@ function buildRoad(owner, i, j) {
 function removeRoad(owner, i, j) {
   if (!S.road[tIdx(i, j)]) return;
   setRoad(i, j, false);
+  const P = S.players[owner];
   const store = nearestStoreTo(owner, i + 0.5, j + 0.5);
-  if (store) for (const g in ROAD_COST) bump(store.stock, g, ROAD_COST[g]);
+  for (const g in ROAD_COST) {
+    let c = roadCredit(owner, g) + ROAD_COST[g];
+    while (c >= 1 - 1e-9 && store) { bump(store.stock, g, 1); c -= 1; }
+    P.roadCredit[g] = Math.round(c * 1000) / 1000;
+  }
 }
 
 /** Pausing a building sends its worker off to do other jobs until it is resumed. */

@@ -352,8 +352,8 @@ function onRoadPaint(i, j, first) {
 /** The Paths banner shows what a tile costs and how much you have left. */
 function showRoadBanner(problem) {
   const g = Object.keys(ROAD_COST)[0];
-  const have = playerGoods(0)[g];
-  const cost = `<b>${ROAD_COST[g]} ${GOOD[g].name}</b> per tile (you have ${have})`;
+  const per = Math.round(1 / ROAD_COST[g]);
+  const cost = `<b>1 ${GOOD[g].name} paves ${per} tiles</b> (enough for ${roadTilesAffordable(0)} more)`;
   showBanner((problem ? `<span class="err">${problem}</span> ` : '') +
     `Drag across open ground to lay <b>paths</b>: ${cost}. Bots move twice as fast on paths and go out of their way to use them. Tap a path to remove it and get the ${GOOD[g].name} back.`, null, 'Done');
 }
