@@ -31,6 +31,9 @@ Progress auto-saves in the browser every 20 seconds and whenever you leave the p
 
 ## How to play
 
+The full illustrated guide is **[how-to-play.html](how-to-play.html)** (open it in a browser; once GitHub
+Pages is on it is at `…/how-to-play.html` next to the game). The short version:
+
 | Building | Does |
 |---|---|
 | Harvester | A worker cuts teal stalk groves into **Fiber** |
