@@ -70,6 +70,28 @@ function nearestStoreTo(owner, x, y) {
   return best;
 }
 
+/** Building priority set by the player: high-priority buildings get workers and goods first. */
+function prioRank(b) { return b.prio === 'high' ? 0 : b.prio === 'low' ? 2 : 1; }
+
+/** Does storage building b take in good g? (Players can switch goods off or set it to empty out.) */
+function storeTakes(b, g) {
+  return storeAccepts(b) && b.smode !== 'empty' && !(b.reject && b.reject[g]);
+}
+
+/**
+ * Where should a unit of good g go? Storage set to "fill first" wins, then the nearest storage
+ * that takes the good. `except` is skipped (used when emptying a store out).
+ */
+function storeFor(owner, g, x, y, except) {
+  let best = null, bd = Infinity;
+  for (const b of S.buildings) {
+    if (b.dead || b.owner !== owner || b === except || !storeTakes(b, g)) continue;
+    const d = dist2(b.x + 0.5, b.y + 0.5, x, y) - (b.smode === 'fill' ? 1e6 : 0);
+    if (d < bd) { bd = d; best = b; }
+  }
+  return best;
+}
+
 function needsOf(b) {
   const def = BDEFS[b.type], out = [];
   if (!b.built) {
@@ -195,6 +217,8 @@ function dispatch(p) {
     return idle.splice(best, 1)[0];
   };
 
+  blds.sort((a, c) => prioRank(a) - prioRank(c) || a.born - c.born);
+
   // 1) A builder for every construction site that has materials waiting to be built with.
   for (const b of blds) {
     if (!idle.length) return;
@@ -212,7 +236,7 @@ function dispatch(p) {
   }
   const minFree = Math.max(MIN_FREE_WORKERS, Math.round(workers * 0.2));
   const staffQueue = blds.filter((b) => b.built && !b.paused && BDEFS[b.type].staff && !b.staff && !b.staffInc)
-    .sort((a, c) => staffPriority(a) - staffPriority(c) || a.born - c.born);
+    .sort((a, c) => prioRank(a) - prioRank(c) || staffPriority(a) - staffPriority(c) || a.born - c.born);
   if (free < minFree) {
     // Raids or new buildings left nobody to haul: take a worker off the least useful job.
     const cands = blds.filter((b) => b.built && b.staff && b.type !== 'foundry');
@@ -237,11 +261,11 @@ function dispatch(p) {
     assignStaff(take(b.x, b.y), b);
     free--;
   }
-  // 3) Deliveries. Construction first, then production inputs, one unit per request per pass.
+  // 3) Deliveries, one unit per request per pass. Player priority comes first; within the same
+  //    priority the Foundry goes first (new workers unblock everything), then construction.
   const reqs = [];
   for (const b of blds) {
-    // The Foundry comes first (new workers unblock everything), then construction, then the rest.
-    const pri = b.built && BDEFS[b.type].bots ? 0 : b.built ? 2 : 1;
+    const pri = prioRank(b) * 3 + (b.built && BDEFS[b.type].bots ? 0 : b.built ? 2 : 1);
     for (const [g, n] of needsOf(b)) if (n > 0) reqs.push({ b, g, n, pri, inc: sumValues(b.inc) });
   }
   reqs.sort((a, c) => a.pri - c.pri || a.inc - c.inc || a.b.born - c.b.born);
@@ -271,9 +295,19 @@ function dispatch(p) {
       if (!idle.length) return;
       const avail = supplyOf(b, g);
       if (avail >= 2 || (avail >= 1 && !b.staff)) {
-        const store = nearestStoreTo(p, b.x + 0.5, b.y + 0.5);
+        const store = storeFor(p, g, b.x + 0.5, b.y + 0.5);
         if (store) assignHaul(take(b.x, b.y), b, store, g);
       }
+    }
+  }
+  // 5) Empty out storage that no longer takes a good (set to "empty out" or the good switched off).
+  for (const b of blds) {
+    if (!storeAccepts(b) || (b.smode !== 'empty' && !b.reject)) continue;
+    for (const g of GOODS) {
+      if (!idle.length) return;
+      if (storeTakes(b, g) || supplyOf(b, g) <= 0) continue;
+      const store = storeFor(p, g, b.x + 0.5, b.y + 0.5, b);
+      if (store) assignHaul(take(b.x, b.y), b, store, g);
     }
   }
 }
@@ -337,7 +371,7 @@ function goHome(u) {
 }
 
 function stashCarry(u) {
-  const store = nearestStoreTo(u.owner, u.x, u.y);
+  const store = storeFor(u.owner, u.carry, u.x, u.y) || nearestStoreTo(u.owner, u.x, u.y);
   if (!store) { u.carry = null; return; }
   u.task = { type: 'haul', src: 0, dst: store.id, good: u.carry, phase: 'toDst' };
   bump(store.inc, u.carry, 1);
@@ -690,6 +724,7 @@ function captureBuilding(b, by) {
     return;
   }
   releaseBotsFrom(b, true);
+  delete b.prio; delete b.smode; delete b.reject; b.paused = false;
   b.owner = by;
   b.armor = Math.max(4, def.armor * 0.4);
   b.lastHit = S.time;
@@ -858,7 +893,7 @@ function unstaff(b) {
 /** Higher = released first when workers run short. */
 function releaseScore(b) {
   const def = BDEFS[b.type];
-  let s = b.born / 10000;
+  let s = b.born / 10000 + (prioRank(b) - 1) * 20;
   if (def.plant) s += 10;
   if (def.gather) s += (b.stock[RES[def.gather].good] || 0) >= def.out[RES[def.gather].good] ? 6 : 3;
   return s;

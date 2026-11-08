@@ -107,10 +107,12 @@ function bakeMap() {
   R.terrCtx = R.terr.getContext('2d');
   R.terrVer = -1;
   S.dirtyTiles.length = 0;
+  MM.dirty = true;
 }
 
 function flushDirtyTiles() {
   if (!S.dirtyTiles.length) return;
+  MM.dirty = true;
   const seen = new Set();
   for (const t of S.dirtyTiles) {
     if (seen.has(t)) continue;
@@ -701,6 +703,7 @@ function render(dtReal) {
         ctx.fillStyle = e.armor / def.armor > 0.4 ? '#ffd166' : '#ff5a5a';
         ctx.fillRect(cx - w / 2, cy - z * 0.62, (w * Math.max(0, e.armor)) / def.armor, Math.max(3, z * 0.08));
       }
+      if (e.owner === 0) drawBadge(ctx, e, cx - z * 0.32, cy - z * 0.32, z);
       if (e.paused) {
         ctx.fillStyle = 'rgba(0,0,0,0.65)';
         ctx.beginPath(); ctx.arc(cx + z * 0.3, cy - z * 0.3, z * 0.16, 0, Math.PI * 2); ctx.fill();
@@ -744,6 +747,32 @@ function render(dtReal) {
   }
 
   drawEffects(ctx, ox, oy, z);
+  if (typeof UI !== 'undefined' && UI.inGame) renderMinimap();
+}
+
+/** Small corner badge showing a player-set priority or storage mode. */
+function drawBadge(ctx, b, x, y, z) {
+  let kind = null;
+  if (b.prio === 'high') kind = 'up';
+  else if (b.prio === 'low') kind = 'down';
+  else if (b.smode === 'fill') kind = 'in';
+  else if (b.smode === 'empty') kind = 'out';
+  else if (b.reject) kind = 'filter';
+  if (!kind) return;
+  const r = Math.max(5, z * 0.15);
+  ctx.fillStyle = 'rgba(14,15,20,0.85)';
+  ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
+  ctx.strokeStyle = kind === 'up' ? '#ffc457' : kind === 'down' ? '#9ba4b4' : kind === 'out' ? '#ff8a3d' : '#38d4ff';
+  ctx.lineWidth = Math.max(1.5, r * 0.28);
+  ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  const k = r * 0.5;
+  ctx.beginPath();
+  if (kind === 'up') { ctx.moveTo(x - k, y + k * 0.4); ctx.lineTo(x, y - k * 0.6); ctx.lineTo(x + k, y + k * 0.4); }
+  else if (kind === 'down') { ctx.moveTo(x - k, y - k * 0.4); ctx.lineTo(x, y + k * 0.6); ctx.lineTo(x + k, y - k * 0.4); }
+  else if (kind === 'in') { ctx.moveTo(x, y - k); ctx.lineTo(x, y + k * 0.7); ctx.moveTo(x - k * 0.7, y); ctx.lineTo(x, y + k * 0.7); ctx.lineTo(x + k * 0.7, y); }
+  else if (kind === 'out') { ctx.moveTo(x, y + k); ctx.lineTo(x, y - k * 0.7); ctx.moveTo(x - k * 0.7, y); ctx.lineTo(x, y - k * 0.7); ctx.lineTo(x + k * 0.7, y); }
+  else { ctx.moveTo(x - k, y - k * 0.6); ctx.lineTo(x + k, y - k * 0.6); ctx.lineTo(x + k * 0.2, y + k * 0.1); ctx.lineTo(x + k * 0.2, y + k * 0.8); ctx.lineTo(x - k * 0.2, y + k * 0.6); ctx.lineTo(x - k * 0.2, y + k * 0.1); ctx.closePath(); }
+  ctx.stroke();
 }
 
 function drawRanges(ctx, type, x, y, ox, oy, z, owner) {
@@ -843,4 +872,91 @@ function buildingIcon(type, size, owner) {
   drawBuilding(ctx, type, size / 2, size / 2 + (type === 'lander' ? 0 : size * 0.02), type === 'lander' ? size * 0.55 : size * 0.86, owner || 0,
     { built: true, garrison: [], aim: -Math.PI / 4 });
   return c.toDataURL();
+}
+
+/* ------------------------------------------------------------------ minimap */
+
+const MM = { canvas: null, ctx: null, base: null, baseCtx: null, dirty: true, ver: -1, builtAt: -9, w: 0, h: 0, on: true };
+
+const MM_COLORS = {
+  ground: [169, 113, 74], water: [28, 75, 93], rock: [74, 51, 41],
+  [R_STALK]: [47, 174, 134], [R_BOULDER]: [160, 154, 145], [R_ORE]: [235, 120, 50], [R_CRYSTAL]: [150, 105, 245],
+};
+
+function initMinimap(canvas) {
+  MM.canvas = canvas;
+  MM.ctx = canvas.getContext('2d');
+}
+
+/** Size the minimap for the current screen and map. Returns its CSS width. */
+function layoutMinimap() {
+  if (!S || !MM.canvas) return 0;
+  MM.w = R.w >= 700 ? 156 : 100;
+  MM.h = Math.round((MM.w * S.H) / S.W);
+  MM.canvas.style.width = MM.w + 'px';
+  MM.canvas.style.height = MM.h + 'px';
+  MM.canvas.width = Math.round(MM.w * R.dpr);
+  MM.canvas.height = Math.round(MM.h * R.dpr);
+  MM.dirty = true;
+  return MM.w;
+}
+
+function rebuildMinimapBase() {
+  if (!MM.base || MM.base.width !== S.W || MM.base.height !== S.H) {
+    MM.base = document.createElement('canvas');
+    MM.base.width = S.W; MM.base.height = S.H;
+    MM.baseCtx = MM.base.getContext('2d');
+  }
+  const img = MM.baseCtx.createImageData(S.W, S.H);
+  const team = PLAYER_COLORS.map((c) => [parseInt(c.slice(1, 3), 16), parseInt(c.slice(3, 5), 16), parseInt(c.slice(5, 7), 16)]);
+  for (let t = 0; t < S.W * S.H; t++) {
+    const terr = S.terrain[t];
+    let c = terr === T_WATER ? MM_COLORS.water : terr === T_ROCK ? MM_COLORS.rock : S.res[t] ? MM_COLORS[S.res[t]] : MM_COLORS.ground;
+    const o = S.owner[t];
+    const k = o >= 0 && terr === T_GROUND ? 0.32 : 0;
+    const i = t * 4;
+    img.data[i] = c[0] + (k ? (team[o][0] - c[0]) * k : 0);
+    img.data[i + 1] = c[1] + (k ? (team[o][1] - c[1]) * k : 0);
+    img.data[i + 2] = c[2] + (k ? (team[o][2] - c[2]) * k : 0);
+    img.data[i + 3] = 255;
+  }
+  MM.baseCtx.putImageData(img, 0, 0);
+  MM.dirty = false;
+  MM.ver = S.territoryVer;
+  MM.builtAt = R.time;
+}
+
+function renderMinimap() {
+  if (!MM.on || !S || !MM.ctx || !MM.w) return;
+  if ((MM.dirty || MM.ver !== S.territoryVer) && R.time - MM.builtAt > 0.4) rebuildMinimapBase();
+  if (!MM.base) rebuildMinimapBase();
+  const ctx = MM.ctx, sx = MM.w / S.W, sy = MM.h / S.H;
+  ctx.setTransform(R.dpr, 0, 0, R.dpr, 0, 0);
+  ctx.imageSmoothingEnabled = false;
+  ctx.drawImage(MM.base, 0, 0, MM.w, MM.h);
+  for (const b of S.buildings) {
+    if (b.dead) continue;
+    const big = b.type === 'lander' ? 2.2 : 1.3;
+    const w = Math.max(2.5, sx * big), h = Math.max(2.5, sy * big);
+    const x = (b.x + 0.5) * sx - w / 2, y = (b.y + 0.5) * sy - h / 2;
+    ctx.fillStyle = b.built ? PLAYER_COLORS[b.owner] : 'rgba(255,255,255,0.7)';
+    ctx.fillRect(x, y, w, h);
+    if (b.type === 'lander') { ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 1; ctx.strokeRect(x - 0.5, y - 0.5, w + 1, h + 1); }
+  }
+  for (const u of S.bots) {
+    if (u.dead || u.inside || u.type !== 'warbot') continue;
+    ctx.fillStyle = u.owner === 0 ? '#bff2ff' : '#ffc2ca';
+    ctx.fillRect(u.x * sx - 1, u.y * sy - 1, 2, 2);
+  }
+  for (const b of S.buildings) {
+    if (b.dead || S.time - b.lastHit > 2) continue;
+    ctx.strokeStyle = (R.time * 4) % 2 < 1 ? '#ffffff' : '#ff5a6e';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.arc((b.x + 0.5) * sx, (b.y + 0.5) * sy, 4, 0, Math.PI * 2); ctx.stroke();
+  }
+  const a = screenToWorld(0, 0), c = screenToWorld(R.w, R.h);
+  ctx.strokeStyle = '#ffffff';
+  ctx.lineWidth = 1.5;
+  ctx.strokeRect(clamp(a.x, 0, S.W) * sx, clamp(a.y, 0, S.H) * sy,
+    (clamp(c.x, 0, S.W) - clamp(a.x, 0, S.W)) * sx, (clamp(c.y, 0, S.H) - clamp(a.y, 0, S.H)) * sy);
 }

@@ -67,6 +67,24 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .objective b { color: var(--accent); }
 .objective.small { opacity: 0.85; }
 
+/* ---------- minimap ---------- */
+.minimap {
+  position: fixed; right: calc(var(--safe-r) + 8px); top: calc(var(--safe-t) + 96px); z-index: 5;
+  border: 1px solid rgba(255, 255, 255, 0.2); border-radius: 10px; overflow: hidden; background: #0c0d11;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45); touch-action: none;
+}
+.minimap canvas { display: block; touch-action: none; cursor: crosshair; }
+.mm-hide {
+  position: absolute; top: 3px; right: 3px; width: 22px; height: 22px; padding: 0; border-radius: 7px; border: 0;
+  background: rgba(14, 15, 20, 0.72); color: var(--text); display: grid; place-items: center;
+}
+.mm-show { position: fixed; right: calc(var(--safe-r) + 8px); top: calc(var(--safe-t) + 96px); z-index: 5; min-height: 36px; }
+body.mm-on .objective { margin-right: calc(var(--mm-w, 100px) + 8px); }
+body.mm-off .objective { margin-right: 54px; }
+@media (max-width: 999px) {
+  body.mm-on #toasts { left: calc(var(--safe-l) + 8px); right: calc(var(--safe-r) + var(--mm-w, 100px) + 16px); width: auto; transform: none; }
+}
+
 /* ---------- toasts ---------- */
 #toasts {
   position: fixed; left: 50%; transform: translateX(-50%); top: calc(var(--safe-t) + 150px);
@@ -139,6 +157,11 @@ button { font: inherit; color: inherit; cursor: pointer; }
   background: rgba(255,255,255,0.06); font-variant-numeric: tabular-nums;
 }
 .gtag.short { color: var(--danger); }
+.gtag.toggle { border: 1px solid var(--line); }
+.gtag.toggle b { font-variant-numeric: tabular-nums; }
+.gtag.toggle.off { opacity: 0.4; text-decoration: line-through; }
+.hint { color: var(--muted); font-size: 13px; margin: 6px 0 4px; }
+.label-note { text-transform: none; letter-spacing: 0; font-weight: 500; margin-left: 6px; }
 .actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
 .actions .btn { flex: 1 1 auto; }
 .section-label { font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); margin: 10px 0 2px; font-weight: 700; }

@@ -72,6 +72,27 @@ function initUI() {
   $('banner-cancel').onclick = () => setMode('normal');
   $('banner-ok').onclick = () => confirmBanner();
 
+  // Minimap: tap or drag to move the view; the close button hides it (remembered per device).
+  initMinimap($('mm-canvas'));
+  const mmMove = (e) => {
+    const r = $('mm-canvas').getBoundingClientRect();
+    centerOn(((e.clientX - r.left) / r.width) * S.W, ((e.clientY - r.top) / r.height) * S.H);
+  };
+  $('mm-canvas').addEventListener('pointerdown', (e) => {
+    if (!UI.inGame) return;
+    $('mm-canvas').setPointerCapture(e.pointerId);
+    UI.mmDrag = true;
+    mmMove(e);
+  });
+  $('mm-canvas').addEventListener('pointermove', (e) => { if (UI.mmDrag) mmMove(e); });
+  const mmEnd = () => { UI.mmDrag = false; };
+  $('mm-canvas').addEventListener('pointerup', mmEnd);
+  $('mm-canvas').addEventListener('pointercancel', mmEnd);
+  $('mm-hide').onclick = () => { setMinimap(false); sfx('click'); };
+  $('mm-show').onclick = () => { setMinimap(true); sfx('click'); };
+  try { MM.on = localStorage.getItem('botfall.minimap') !== '0'; } catch (e) { MM.on = true; }
+  window.addEventListener('resize', () => { if (UI.inGame) { layoutMinimap(); placeMinimap(); } });
+
   document.addEventListener('visibilitychange', () => { if (document.hidden && UI.inGame) saveGame(); });
   window.addEventListener('pagehide', () => { if (UI.inGame) saveGame(); });
   setInterval(() => { if (UI.inGame && !UI.paused) saveGame(); }, 20000);
@@ -87,6 +108,28 @@ function syncMenu() {
     : 'Race a rival colony on a small planet. Build up, then capture its Lander to win.';
   $('m-seed').textContent = 'Planet #' + UI.menu.seed;
   $('m-continue').hidden = !hasSave();
+}
+
+/* ------------------------------------------------------------------ minimap */
+
+function setMinimap(on) {
+  MM.on = on;
+  try { localStorage.setItem('botfall.minimap', on ? '1' : '0'); } catch (e) { /* storage unavailable */ }
+  placeMinimap();
+}
+
+/** Keep the minimap just under the top bar, and make room for it beside the goal and messages. */
+function placeMinimap() {
+  const inGame = UI.inGame;
+  $('minimap').hidden = !inGame || !MM.on;
+  $('mm-show').hidden = !inGame || MM.on;
+  document.body.classList.toggle('mm-on', inGame && MM.on);
+  document.body.classList.toggle('mm-off', inGame && !MM.on);
+  if (!inGame) return;
+  const top = Math.round(document.querySelector('.toprow').getBoundingClientRect().bottom + 6) + 'px';
+  $('minimap').style.top = top;
+  $('mm-show').style.top = top;
+  document.documentElement.style.setProperty('--mm-w', MM.w + 'px');
 }
 
 /* ------------------------------------------------------------------ game flow */
@@ -121,6 +164,8 @@ function enterGame() {
   const L = getE(S.players[0].lander);
   R.cam.z = clamp(Math.min(R.w, 520) / 11, 26, 48);
   if (L) centerOn(L.x + 0.5, L.y - 1);
+  layoutMinimap();
+  placeMinimap();
   saveGame();
 }
 
@@ -130,6 +175,7 @@ function toMenu() {
   closeSheet();
   setMode('normal');
   $('hud').hidden = true;
+  placeMinimap();
   $('screen-menu').hidden = false;
   syncMenu();
   startDemo();
@@ -310,6 +356,17 @@ function openBuildingSheet(b) {
     <div class="owner"><span class="dot" style="background:${PLAYER_COLORS[b.owner]}"></span> ${mine ? 'Yours' : 'Rival'}</div></div></div>
     <p class="desc">${desc}</p><div class="status" id="sh-status"></div><div id="sh-dyn"></div>`;
   if (mine) {
+    if (def.store && b.built) {
+      html += `<div class="section-label">Storage</div><div class="seg" id="sh-smode">
+        <button data-v="normal">Normal</button><button data-v="fill">Fill first</button><button data-v="empty">Empty out</button></div>
+        <p class="hint" id="sh-smode-hint"></p>
+        <div class="section-label">Goods kept here <span class="label-note">tap to switch off</span></div>
+        <div class="goodlist" id="sh-accept">${GOODS.map((g) => `<button class="gtag toggle" data-g="${g}"><i class="gi ${g}"></i><span>${GOOD[g].name}</span> <b>0</b></button>`).join('')}</div>`;
+    } else if (b.type !== 'lander') {
+      html += `<div class="section-label">Priority</div><div class="seg" id="sh-prio">
+        <button data-v="low">Low</button><button data-v="normal">Normal</button><button data-v="high">High</button></div>
+        <p class="hint">${b.built ? 'High-priority buildings get workers and goods first; low ones last, and lose their worker first when workers run short.' : 'High-priority sites get their materials and a builder first.'}</p>`;
+    }
     if (b.type === 'foundry' && S.mode !== 'colony') {
       html += `<div class="section-label">Produce</div><div class="seg" id="sh-mode">
         <button data-v="worker">Workers</button><button data-v="alt">Both</button><button data-v="warbot">Warbots</button></div>`;
@@ -325,6 +382,16 @@ function openBuildingSheet(b) {
   }
   openSheet('bld', b.id, html);
   if (mine) {
+    if ($('sh-prio')) for (const btn of $('sh-prio').children) btn.onclick = () => { b.prio = btn.dataset.v === 'normal' ? undefined : btn.dataset.v; sfx('click'); refreshSheet(); };
+    if ($('sh-smode')) for (const btn of $('sh-smode').children) btn.onclick = () => { b.smode = btn.dataset.v === 'normal' ? undefined : btn.dataset.v; sfx('click'); refreshSheet(); };
+    if ($('sh-accept')) for (const btn of $('sh-accept').children) btn.onclick = () => {
+      const g = btn.dataset.g;
+      b.reject = b.reject || {};
+      if (b.reject[g]) delete b.reject[g]; else b.reject[g] = true;
+      if (!Object.keys(b.reject).length) delete b.reject;
+      sfx('click');
+      refreshSheet();
+    };
     const seg = $('sh-mode');
     if (seg) for (const btn of seg.children) btn.onclick = () => { b.mode = btn.dataset.v; sfx('click'); refreshSheet(); };
     if ($('sh-pause')) $('sh-pause').onclick = () => { setPaused(b, !b.paused); sfx('click'); refreshSheet(); };
@@ -387,8 +454,6 @@ function refreshBuildingSheet(b) {
       if (b.timer > 0 && b.status === 'Working') parts.push(`<div class="bar"><div style="width:${Math.round((b.timer / def.work) * 100)}%"></div></div>`);
     }
     if (def.store && mine) {
-      const list = GOODS.filter((g) => b.stock[g] > 0).map((g) => goodTag(g, b.stock[g])).join('') || '<span class="desc">Empty</span>';
-      parts.push(`<div class="section-label">Stored</div><div class="goodlist">${list}</div>`);
       let idle = 0;
       for (const u of S.bots) if (!u.dead && u.inside === b.id && u.type === 'worker') idle++;
       parts.push(`<div class="kv"><span>Workers resting here</span><span>${idle}</span></div>`);
@@ -399,6 +464,21 @@ function refreshBuildingSheet(b) {
   }
   $('sh-dyn').innerHTML = parts.join('');
   if ($('sh-pause')) $('sh-pause').textContent = b.paused ? 'Resume' : 'Pause';
+  if ($('sh-prio')) for (const btn of $('sh-prio').children) btn.classList.toggle('on', btn.dataset.v === (b.prio || 'normal'));
+  if ($('sh-smode')) {
+    const m = b.smode || 'normal';
+    for (const btn of $('sh-smode').children) btn.classList.toggle('on', btn.dataset.v === m);
+    $('sh-smode-hint').textContent = {
+      normal: 'Finished goods go to whichever storage is closest.',
+      fill: 'Workers bring finished goods here before any other storage, even if another is closer.',
+      empty: 'Takes nothing new and sends what it holds to your other storage. Good before demolishing it.',
+    }[m];
+  }
+  if ($('sh-accept')) for (const btn of $('sh-accept').children) {
+    const g = btn.dataset.g;
+    btn.classList.toggle('off', !!(b.reject && b.reject[g]) || b.smode === 'empty');
+    btn.lastElementChild.textContent = b.stock[g] || 0;
+  }
   if ($('sh-mode')) for (const btn of $('sh-mode').children) btn.classList.toggle('on', btn.dataset.v === b.mode);
   if ($('sh-send')) {
     const avail = attackAvailable(0, b);
@@ -566,6 +646,6 @@ function uiTick(dt) {
     toast(m.text, m.kind, m.x, m.y);
   }
   UI.hudT -= dt;
-  if (UI.hudT <= 0) { UI.hudT = 0.25; updateHUD(); refreshSheet(); }
+  if (UI.hudT <= 0) { UI.hudT = 0.25; updateHUD(); refreshSheet(); placeMinimap(); }
   if (S.winner >= 0 && !UI.overShown) showGameOver();
 }

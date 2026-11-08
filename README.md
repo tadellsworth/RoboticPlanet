@@ -46,6 +46,13 @@ Progress auto-saves in the browser every 20 seconds and whenever you leave the p
   Run short and the game pulls workers off low-priority jobs, so build a Bot Foundry early.
 - Placing a construction site is free; workers bring the materials from storage.
 - **Paths** make bots move almost twice as fast.
+- **Priorities:** tap a building or construction site and set it to Low, Normal or High. High-priority
+  buildings get workers and goods first; low ones are served last and lose their worker first when
+  workers run short. **Pause** frees a building's worker entirely.
+- **Storage:** tap your Lander or a Depot. *Fill first* makes workers bring finished goods there before
+  any other storage; *Empty out* takes nothing new and moves what it holds elsewhere (handy before
+  demolishing it). You can also switch individual goods off for that building.
+- **Minimap:** tap or drag it to jump around; red pulses mark buildings under attack. The × hides it.
 - You can only build inside your border. Outposts push it out. Capturing an enemy Outpost takes its land,
   and enemy buildings left outside their border are lost.
 - **Controls:** drag to pan, pinch or scroll to zoom, tap anything to inspect it.
@@ -106,8 +113,6 @@ each minute. The smoke test needs Playwright and a running local server.
 
 ## Ideas for next steps
 
-- Minimap for quick navigation
-- Player-set storage and building priorities
 - More building tiers and goods
 - Map size and resource richness options
 - Campaign of hand-made missions
