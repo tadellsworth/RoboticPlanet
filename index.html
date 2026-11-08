@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#14161d">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Botfall">
+<meta name="description" content="Land your robots on a strange planet, build supply chains and expand across the map.">
+<title>Botfall</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<canvas id="game"></canvas>
+
+<div id="hud" hidden>
+  <header id="topbar">
+    <div id="goods" class="goods"></div>
+    <div class="toprow">
+      <div id="pop" class="chip"></div>
+      <div id="clock" class="chip"></div>
+      <button id="btn-speed" class="chip chip-btn" aria-label="Game speed">1×</button>
+      <button id="btn-pause" class="chip chip-btn" aria-label="Pause menu">
+        <svg viewBox="0 0 24 24" width="16" height="16"><rect x="6" y="5" width="4" height="14" rx="1" fill="currentColor"/><rect x="14" y="5" width="4" height="14" rx="1" fill="currentColor"/></svg>
+      </button>
+    </div>
+    <button id="objective" class="objective"></button>
+  </header>
+
+  <div id="toasts" aria-live="polite"></div>
+
+  <div id="banner" hidden>
+    <div id="banner-text"></div>
+    <div class="banner-actions">
+      <button id="banner-ok" class="btn primary">Build here</button>
+      <button id="banner-cancel" class="btn">Cancel</button>
+    </div>
+  </div>
+
+  <section id="sheet" hidden>
+    <button id="sheet-close" class="sheet-close" aria-label="Close">
+      <svg viewBox="0 0 24 24" width="18" height="18"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/></svg>
+    </button>
+    <div id="sheet-body"></div>
+  </section>
+
+  <nav id="bottombar">
+    <button id="btn-build" class="tool">
+      <svg viewBox="0 0 24 24"><path d="M4 20h16M6 20V10l6-5 6 5v10M10 20v-5h4v5" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/></svg>
+      <span>Build</span>
+    </button>
+    <button id="btn-road" class="tool">
+      <svg viewBox="0 0 24 24"><path d="M8 3L5 21M16 3l3 18M12 4v3M12 10.5v3M12 17v3" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+      <span>Paths</span>
+    </button>
+    <button id="btn-attack" class="tool">
+      <svg viewBox="0 0 24 24"><path d="M5 19l9-9M14 4l6 6-3 3-6-6zM4 14l6 6M7 21l-4-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      <span>Attack</span>
+    </button>
+    <button id="btn-home" class="tool">
+      <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="7" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="12" cy="12" r="2.5" fill="currentColor"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+      <span>Base</span>
+    </button>
+  </nav>
+</div>
+
+<div id="screen-menu" class="screen">
+  <div class="card menu-card">
+    <h1 class="logo">BOTFALL</h1>
+    <p class="tagline">Land your bots. Build supply chains. Expand.</p>
+    <button id="m-continue" class="btn primary big" hidden>Continue</button>
+    <div class="field">
+      <span class="label">Mode</span>
+      <div class="seg" id="m-mode">
+        <button data-v="versus" class="on">Versus</button>
+        <button data-v="colony">Colony</button>
+      </div>
+    </div>
+    <p class="mode-desc" id="m-mode-desc"></p>
+    <div class="field" id="m-diff-field">
+      <span class="label">Rival</span>
+      <div class="seg" id="m-diff">
+        <button data-v="easy">Easy</button>
+        <button data-v="normal" class="on">Normal</button>
+        <button data-v="hard">Hard</button>
+      </div>
+    </div>
+    <div class="field">
+      <span class="label">Planet</span>
+      <div class="seed-row"><span id="m-seed" class="seed"></span><button id="m-reroll" class="btn small">New planet</button></div>
+    </div>
+    <button id="m-new" class="btn primary big">Start</button>
+    <button id="m-help" class="btn big ghost">How to play</button>
+  </div>
+</div>
+
+<div id="screen-pause" class="screen" hidden>
+  <div class="card">
+    <h2>Paused</h2>
+    <button id="p-resume" class="btn primary big">Resume</button>
+    <button id="p-sound" class="btn big">Sound: on</button>
+    <button id="p-help" class="btn big">How to play</button>
+    <button id="p-quit" class="btn big ghost">Save &amp; quit to menu</button>
+  </div>
+</div>
+
+<div id="screen-help" class="screen" hidden>
+  <div class="card help-card">
+    <h2>How to play</h2>
+    <div class="help-body">
+      <p>Your bots have landed on a small planet. Gather resources, link them into supply chains and grow your colony. In <b>Versus</b> you win by capturing the rival's Lander. In <b>Colony</b> there is no rival: just build and spread across the planet.</p>
+      <h3>The supply chain</h3>
+      <ul class="chain">
+        <li><b>Harvester</b> cuts teal stalk groves into <i class="g fiber"></i>Fiber</li>
+        <li><b>Quarry</b> breaks boulders into <i class="g stone"></i>Stone</li>
+        <li><b>Ore Mine</b> digs dark ore veins for <i class="g ore"></i>Ore</li>
+        <li><b>Crystal Tap</b> mines violet clusters for <i class="g crystal"></i>Crystal</li>
+        <li><b>Smelter</b>: Ore + Fiber → <i class="g alloy"></i>Alloy</li>
+        <li><b>Chip Fab</b>: Crystal + Alloy → <i class="g chip"></i>Chip</li>
+        <li><b>Bot Foundry</b>: Alloy + Chip → a new Worker or Warbot</li>
+      </ul>
+      <h3>Workers</h3>
+      <p>Every production building needs one worker inside. Free workers carry goods between buildings and build construction sites. If you run short, build a Bot Foundry and make more. You can pause a building to free its worker.</p>
+      <h3>Territory</h3>
+      <p>You can only build inside your border. <b>Outposts</b> push the border out and hold warbots. <b>Paths</b> make bots walk almost twice as fast. <b>Depots</b> are extra storage that shorten trips.</p>
+      <h3>Fighting (Versus)</h3>
+      <p>Warbots wait inside Outposts and your Lander and defend automatically. To attack, tap an enemy building and send warbots from garrisons within range. Capturing an Outpost takes its land, and enemy buildings left outside their border are lost. Pulse Turrets shoot intruders and use Crystal as ammo.</p>
+      <h3>Controls</h3>
+      <p>Drag to move the map and pinch (or scroll) to zoom. Tap anything to see what it is doing.</p>
+    </div>
+    <button id="h-close" class="btn primary big">Got it</button>
+  </div>
+</div>
+
+<div id="screen-over" class="screen" hidden>
+  <div class="card">
+    <h2 id="o-title">Victory</h2>
+    <p id="o-text"></p>
+    <div id="o-stats" class="stats"></div>
+    <button id="o-new" class="btn primary big">New game</button>
+    <button id="o-menu" class="btn big ghost">Main menu</button>
+  </div>
+</div>
+
+<script src="art/art-manifest.js"></script>
+<script src="js/util.js"></script>
+<script src="js/defs.js"></script>
+<script src="js/world.js"></script>
+<script src="js/path.js"></script>
+<script src="js/sim.js"></script>
+<script src="js/ai.js"></script>
+<script src="js/audio.js"></script>
+<script src="js/render.js"></script>
+<script src="js/input.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/main.js"></script>
+</body>
+</html>

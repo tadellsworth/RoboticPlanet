@@ -1,0 +1,16 @@
+{
+  "name": "Botfall",
+  "short_name": "Botfall",
+  "description": "Land your robots on a strange planet, build supply chains and expand across the map.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "fullscreen",
+  "orientation": "portrait",
+  "background_color": "#14161d",
+  "theme_color": "#14161d",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "icons/icon.svg", "sizes": "any", "type": "image/svg+xml" }
+  ]
+}
