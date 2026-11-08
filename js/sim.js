@@ -745,7 +745,7 @@ function produce(b, def, dt) {
     b.status = charging ? 'Worker is recharging' : b.staffInc || op ? 'Worker on the way' : 'Needs a worker';
     return;
   }
-  if (def.bots && b.mode === 'off' && !hasOrders(b)) { b.status = 'Stopped: no production orders'; return; }
+  if (def.bots && b.mode === 'off' && !hasOrders(b)) { b.status = 'Idle: tap it to order bots'; return; }
   dt *= batFactor(op);
   for (const g in def.inp) {
     if ((b.stock[g] || 0) < def.inp[g]) { b.status = 'Waiting for ' + GOOD[g].name; return; }
@@ -894,7 +894,7 @@ function captureBuilding(b, by) {
   b.armor = Math.max(4, def.armor * 0.4);
   b.lastHit = S.time;
   b.timer = 0;
-  b.mode = 'alt';
+  b.mode = S.players[by].ai ? 'alt' : 'off';
   S.players[by].stats.captured++;
   addFx('ring', b.x + 0.5, b.y + 0.5, { color: PLAYER_COLORS[by], r: 2 });
   sfx('capture');

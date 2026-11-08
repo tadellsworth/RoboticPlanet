@@ -389,11 +389,29 @@ function openBuildMenu() {
   const html = `<div class="sheet-title"><h3>Build</h3></div>
     <p class="desc">Placing a site is free; workers carry the materials over from storage. ${sites}/${MAX_SITES} sites in progress.</p>
     <div class="build-grid">${list.map((t) => `<button class="bcard" data-t="${t}" ${sites >= MAX_SITES ? 'disabled' : ''}>
-      <img src="${iconFor(t)}" alt=""><div class="bname">${BDEFS[t].name}</div><div class="bcost">${costHTML(BDEFS[t].cost, have)}</div></button>`).join('')}</div>`;
+      <img src="${iconFor(t)}" alt=""><div class="bname">${BDEFS[t].name}</div><div class="bcost">${costHTML(BDEFS[t].cost, have)}</div>
+      <div class="bhave">${ownedText(t)}</div></button>`).join('')}</div>`;
   openSheet('build', 0, html);
   for (const el of $('sheet-body').querySelectorAll('.bcard')) {
     el.onclick = () => { sfx('click'); enterPlaceMode(el.dataset.t); };
   }
+}
+
+/** How many of a building type the player has, for the build menu. */
+function ownedCount(type) {
+  let built = 0, sites = 0;
+  for (const b of S.buildings) {
+    if (b.dead || b.owner !== 0 || b.type !== type) continue;
+    if (b.built) built++; else sites++;
+  }
+  return { built, sites };
+}
+
+function ownedText(type) {
+  const { built, sites } = ownedCount(type);
+  if (type === 'ramp') return sites ? `${sites} being built` : '';
+  if (!built && !sites) return 'None yet';
+  return `You have ${built}` + (sites ? ` · ${sites} being built` : '');
 }
 
 function openBuildingSheet(b) {
@@ -418,12 +436,11 @@ function openBuildingSheet(b) {
     }
     if (b.type === 'foundry' && b.built) {
       const versus = S.mode !== 'colony';
-      const row = (k, label) => `<div class="order-row"><span>${label}</span><button class="btn" data-k="${k}" data-d="-1">−</button>
-        <span class="n" id="sh-o-${k}">0</span><button class="btn" data-k="${k}" data-d="1">+</button></div>`;
-      html += `<div class="section-label">Production orders</div><div id="sh-orders">${row('worker', 'Workers')}${versus ? row('warbot', 'Warbots') : ''}</div>
-        <p class="hint">Queued bots are built first, in turn.</p>
-        <div class="section-label">When the orders are done</div><div class="seg" id="sh-mode">
-        <button data-v="worker">Workers</button>${versus ? '<button data-v="alt">Both</button><button data-v="warbot">Warbots</button>' : ''}<button data-v="off">Stop</button></div>`;
+      const row = (k, label) => `<div class="order-row"><span>${label}<small id="sh-o-${k}">none queued</small></span>
+        <button class="btn" data-k="${k}" data-d="1">+1</button><button class="btn" data-k="${k}" data-d="5">+5</button>
+        <button class="btn ghost" data-k="${k}" data-d="0">Clear</button></div>`;
+      html += `<div class="section-label">Order bots</div><div id="sh-orders">${row('worker', 'Workers')}${versus ? row('warbot', 'Warbots') : ''}</div>
+        <p class="hint">The Foundry only builds the bots you order. Each one uses 1 Alloy and 1 Chip and takes ${def.work} s.${versus ? ' Mixed orders take turns.' : ''}</p>`;
     }
     if (def.missile && b.built) {
       html += `<p class="hint">To fire, tap <b>Army</b> and then a rival building within ${def.missile.range} tiles.</p>`;
@@ -454,9 +471,9 @@ function openBuildingSheet(b) {
     const seg = $('sh-mode');
     if (seg) for (const btn of seg.children) btn.onclick = () => { b.mode = btn.dataset.v; sfx('click'); refreshSheet(); };
     if ($('sh-orders')) for (const btn of $('sh-orders').querySelectorAll('button')) btn.onclick = () => {
-      const k = btn.dataset.k;
+      const k = btn.dataset.k, d = +btn.dataset.d;
       b.orders = b.orders || { worker: 0, warbot: 0 };
-      b.orders[k] = clamp((b.orders[k] || 0) + +btn.dataset.d, 0, 50);
+      b.orders[k] = d === 0 ? 0 : clamp((b.orders[k] || 0) + d, 0, 99);
       if (!hasOrders(b)) delete b.orders;
       sfx('click');
       refreshSheet();
@@ -523,7 +540,7 @@ function refreshBuildingSheet(b) {
       if (outs) parts.push(`<div class="section-label">Output</div><div class="goodlist">${outs}</div>`);
       if (def.bots) {
         const k = nextBotKind(b);
-        parts.push(`<div class="kv"><span>Next bot</span><span>${k === 'off' ? 'None (stopped)' : k === 'worker' ? 'Worker' : 'Warbot'}${hasOrders(b) ? ' (ordered)' : ''}</span></div>`);
+        parts.push(`<div class="kv"><span>Next bot</span><span>${k === 'off' ? 'Nothing ordered' : k === 'worker' ? 'Worker' : 'Warbot'}</span></div>`);
       }
       if (b.timer > 0 && b.status === 'Working') parts.push(`<div class="bar"><div style="width:${Math.round((b.timer / def.work) * 100)}%"></div></div>`);
     }
@@ -562,7 +579,11 @@ function refreshBuildingSheet(b) {
     btn.lastElementChild.textContent = b.stock[g] || 0;
   }
   if ($('sh-mode')) for (const btn of $('sh-mode').children) btn.classList.toggle('on', btn.dataset.v === b.mode);
-  for (const k of ['worker', 'warbot']) if ($('sh-o-' + k)) $('sh-o-' + k).textContent = (b.orders && b.orders[k]) || 0;
+  for (const k of ['worker', 'warbot']) {
+    if (!$('sh-o-' + k)) continue;
+    const n = (b.orders && b.orders[k]) || 0;
+    $('sh-o-' + k).textContent = n ? `${n} queued` : 'none queued';
+  }
   if ($('sh-fire')) {
     const silos = silosInRange(0, b), ready = silos.filter(siloReady);
     const minReload = silos.reduce((m, q) => (q.reload > 0 && q.stock.warhead > 0 ? Math.min(m, q.reload) : m), Infinity);
@@ -734,6 +755,7 @@ const OBJECTIVES = [
   { text: 'Build a <b>Smelter</b>: it turns Ore and Fiber into Alloy.', done: () => hasBuilt('smelter') },
   { text: 'Build a <b>Chip Fab</b>: it turns Crystal and Alloy into Chips.', done: () => hasBuilt('fab') },
   { text: 'Build a <b>Bot Foundry</b> so you can make more workers.', done: () => hasBuilt('foundry') },
+  { text: 'Tap your <b>Bot Foundry</b> and order some <b>Workers</b>: it only builds the bots you ask for.', done: () => S.players[0].stats.bots > START_WORKERS + START_WARBOTS || S.buildings.some((b) => !b.dead && b.owner === 0 && hasOrders(b)) },
   { text: 'Build an <b>Outpost</b> near your border to claim more land.', done: () => hasBuilt('outpost') },
   { text: 'Tap <b>Paths</b> and draw roads between busy buildings so workers move faster.', done: () => S.road.reduce((a, v) => a + v, 0) >= 6 },
 ];
@@ -781,6 +803,10 @@ function updateHUD() {
     for (const el of $('sheet-body').querySelectorAll('.bcard')) {
       const cost = BDEFS[el.dataset.t].cost;
       el.querySelector('.bcost').innerHTML = costHTML(cost, goods);
+      const have = el.querySelector('.bhave');
+      const txt = ownedText(el.dataset.t);
+      if (have.textContent !== txt) have.textContent = txt;
+      have.classList.toggle('some', txt !== 'None yet' && txt !== '');
     }
   }
 }

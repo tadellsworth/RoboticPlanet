@@ -74,8 +74,9 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
   ground to send warbots there to hold the area under a rally flag. Tap the flag to call them back.
 - **Missiles** wreck smaller buildings and knock Outposts and Landers down to almost no armor; warbots
   still have to walk in and capture them.
-- **Production orders:** queue an exact number of Workers and Warbots at the Bot Foundry, and choose what
-  it does when the queue is done (keep making workers, warbots, both, or stop).
+- **Ordering bots:** the Bot Foundry only builds the bots you order. Tap it and use +1 or +5 for Workers or
+  Warbots (Clear cancels the queue); with nothing queued it sits idle and uses no Alloy or Chips.
+- The **Build** menu shows how many of each building you already have, and how many are being built.
 - You can only build inside your border. Outposts push it out. Capturing an enemy Outpost takes its land,
   and enemy buildings left outside their border are lost.
 - **Controls:** drag to pan, pinch or scroll to zoom, tap anything to inspect it.

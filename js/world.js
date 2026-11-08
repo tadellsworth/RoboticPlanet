@@ -373,7 +373,8 @@ function addBuilding(owner, type, x, y, built) {
     garrison: [], garInc: 0,
     timer: 0, cd: 0, shots: 0, aim: -Math.PI / 2,
     armor: built ? def.armor : 4, lastHit: -99, lastAlert: -99,
-    mode: S.mode === 'colony' ? 'worker' : 'alt', altNext: 'worker', status: '', born: S.time,
+    // The player's Foundry builds only bots they order; an AI-run Foundry picks its own mode.
+    mode: !S.players[owner].ai ? 'off' : S.mode === 'colony' ? 'worker' : 'alt', altNext: 'worker', status: '', born: S.time,
   };
   S.buildings.push(b);
   S.byId.set(b.id, b);
@@ -742,7 +743,11 @@ function deserializeGame(json) {
   o.bAt = new Int32Array(o.W * o.H);
   o.byId = new Map();
   S = o;
-  for (const b of S.buildings) { S.byId.set(b.id, b); S.bAt[tIdx(b.x, b.y)] = b.id; }
+  for (const b of S.buildings) {
+    S.byId.set(b.id, b);
+    S.bAt[tIdx(b.x, b.y)] = b.id;
+    if (b.type === 'foundry' && !S.players[b.owner].ai) b.mode = 'off'; // older saves: build on order only
+  }
   for (const u of S.bots) S.byId.set(u.id, u);
   computeZones();
   return S;
