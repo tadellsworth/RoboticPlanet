@@ -8,11 +8,11 @@
 /** [building type, how many the AI wants]. Entries are tried in order. */
 const AI_PLAN = [
   ['harvester', 1], ['quarry', 1], ['harvester', 2], ['mine', 1], ['tap', 1], ['smelter', 1],
-  ['fab', 1], ['foundry', 1], ['outpost', 1], ['charger', 1], ['quarry', 2], ['grower', 1], ['mine', 2],
-  ['turret', 1], ['outpost', 2], ['smelter', 2], ['tap', 2], ['harvester', 3], ['outpost', 3],
-  ['munitions', 1], ['silo', 1], ['depot', 1], ['charger', 2], ['mine', 3], ['outpost', 4], ['turret', 2],
-  ['grower', 2], ['fab', 2], ['outpost', 5], ['quarry', 3], ['silo', 2], ['outpost', 6], ['charger', 3],
-  ['tap', 3], ['outpost', 8], ['turret', 3],
+  ['fab', 1], ['foundry', 1], ['outpost', 1], ['charger', 1], ['farm', 1], ['quarry', 2], ['grower', 1], ['mine', 2],
+  ['turret', 1], ['outpost', 2], ['smelter', 2], ['tap', 2], ['pump', 1], ['refinery', 1], ['harvester', 3], ['outpost', 3],
+  ['munitions', 1], ['silo', 1], ['depot', 1], ['charger', 2], ['farm', 2], ['mine', 3], ['outpost', 4], ['turret', 2],
+  ['grower', 2], ['fab', 2], ['outpost', 5], ['quarry', 3], ['silo', 2], ['outpost', 6], ['charger', 3], ['pump', 2],
+  ['tap', 3], ['farm', 3], ['outpost', 8], ['turret', 3],
 ];
 
 function aiThink(p) {
@@ -33,25 +33,55 @@ function aiThink(p) {
   let workers = 0, staffed = 0;
   for (const u of S.bots) if (!u.dead && u.owner === p && u.type === 'worker') workers++;
   for (const b of me) if (BDEFS[b.type].staff) staffed++;
-  const canStaffMore = staffed + Math.max(MIN_FREE_WORKERS, Math.round(workers * 0.2)) + 1 <= workers;
-  const plan = S.mode === 'colony' ? AI_PLAN.concat([['outpost', 40]]) : AI_PLAN;
+  // Keep about a third of the workers free for hauling: a colony with every worker staffed stalls.
+  const canStaffMore = staffed + Math.max(5, Math.round(workers * 0.35)) <= workers;
+  // Resources are in separate fields: when one kind runs short inside our land, expanding toward
+  // more of it comes before anything else.
+  const inLand = {};
+  for (let t = 0; t < S.W * S.H; t++) if (S.owner[t] === p && S.res[t]) inLand[S.res[t]] = (inLand[S.res[t]] || 0) + 1;
+  P.short = [R_STALK, R_BOULDER, R_ORE, R_CRYSTAL].filter((r) => (inLand[r] || 0) < 4);
+  // Cancel construction sites that have waited a long time for goods we don't have.
+  if (sites >= maxSites) {
+    const have = playerGoods(p);
+    for (const b of me) {
+      if (b.built || b.dead || S.time - b.born < 120) continue;
+      const cost = BDEFS[b.type].cost;
+      let stuck = false;
+      for (const g in cost) if ((b.stock[g] || 0) + (b.inc[g] || 0) < cost[g] && have[g] <= 0) stuck = true;
+      if (stuck) { demolish(b); sites--; break; }
+    }
+  }
+  let plan = S.mode === 'colony' ? AI_PLAN.concat([['outpost', 40]]) : AI_PLAN;
+  const outSite = me.some((b) => b.type === 'outpost' && !b.built);
+  if (P.short.length && !outSite && S.time - (P.lastExpand || -99) > 40) plan = [['outpost', (counts.outpost || 0) + 1]].concat(plan);
   if (sites < maxSites) {
     for (const [type, want0] of plan) {
       if (S.mode === 'colony' && BDEFS[type].war) continue;
-      // One more Charging Station for every three Outposts as the colony spreads out.
-      const want = type === 'charger' ? Math.max(want0, 1 + Math.floor((counts.outpost || 0) / 3)) : want0;
+      // One more Charging Station for every three Outposts as the colony spreads out, and a Bio
+      // Farm for every two stations to keep them in Fuel.
+      const nCh = Math.max(1 + Math.floor((counts.outpost || 0) / 3), 0);
+      const want = type === 'charger' ? Math.max(want0, nCh) : type === 'farm' && counts.charger ? Math.max(want0, Math.ceil((counts.charger || 0) / 2)) : want0;
+      if (type === 'refinery' && !counts.pump) continue;
+      // Plenty of Fuel in stock: no need for more farms or oil yet.
+      if ((type === 'farm' || type === 'pump' || type === 'refinery') && (counts[type] || 0) >= 1 && playerGoods(p).fuel > 10) continue;
       if ((counts[type] || 0) >= want) continue;
-      if (BDEFS[type].staff && !canStaffMore && type !== 'foundry') continue;
+      // The first of each staffed building is always allowed, so the production chain is complete.
+      if (BDEFS[type].staff && !canStaffMore && counts[type]) continue;
       if (!aiAffordable(p, type)) continue;
       const spot = aiFindSpot(p, type, lander);
-      if (spot && placeSite(p, type, spot.x, spot.y).ok) break;
+      if (spot && placeSite(p, type, spot.x, spot.y).ok) {
+        if (type === 'outpost') P.lastExpand = S.time;
+        break;
+      }
     }
   }
 
-  // 2) Retire gatherers that have run dry so their worker can be reused.
+  // 2) Retire gatherers and pumps that have run dry so their worker can be reused.
   for (const b of me) {
     const def = BDEFS[b.type];
-    if (b.built && def.gather && S.time - b.born > 30 && reachableRes(b.x, b.y, def.radius, def.gather) === 0 && !(b.stock[RES[def.gather].good] > 0)) {
+    if (b.built && def.gather && S.time - b.born > 30 && reachableRes(b.x, b.y, def.radius, def.gather) === 0 && !(b.stock[RES[def.gather].good] > 1)) {
+      demolish(b);
+    } else if (b.built && def.pump && pumpSeep(b) < 0 && !(b.stock.crude > 0)) {
       demolish(b);
     }
   }
@@ -149,8 +179,8 @@ function aiFindSpot(p, type, lander) {
 }
 
 function aiSearchSpot(p, type, lander) {
-  const def = BDEFS[type];
-  const sums = type === 'outpost' ? [R_ORE, R_CRYSTAL, R_STALK, R_BOULDER].map(resourceSums) : null;
+  const def = BDEFS[type], P = S.players[p];
+  const sums = type === 'outpost' ? [R_ORE, R_CRYSTAL, R_STALK, R_BOULDER, R_OIL].map(resourceSums) : null;
   const enemyL = getE(S.players[1 - p].lander);
   const ex = enemyL ? enemyL.x : S.W / 2, ey = enemyL ? enemyL.y : S.H / 2;
   const cands = [];
@@ -159,6 +189,7 @@ function aiSearchSpot(p, type, lander) {
   for (let j = 0; j < S.H; j++) {
     for (let i = 0; i < S.W; i++) {
       if (S.owner[j * S.W + i] !== p) continue;
+      if (S.fert[j * S.W + i] && type !== 'farm') continue; // keep fertile soil for farming
       if (avoid.some((a) => dist2(a.x, a.y, i, j) < 12)) continue;
       if (!canPlace(p, type, i, j, true).ok) continue;
       const dHome = dist(i, j, lander.x, lander.y);
@@ -174,8 +205,24 @@ function aiSearchSpot(p, type, lander) {
         s = -dh - countResIn(i, j, def.radius, R_STALK) * 0.2;
       } else if (type === 'outpost') {
         const ore = Math.min(sums[0](i, j, 5), 8), cry = Math.min(sums[1](i, j, 5), 8);
-        const rest = Math.min(sums[2](i, j, 5), 6) + Math.min(sums[3](i, j, 5), 6);
+        const rest = Math.min(sums[2](i, j, 5), 6) + Math.min(sums[3](i, j, 5), 6) + Math.min(sums[4](i, j, 5), 4) * 1.5;
         s = -dist(i, j, ex, ey) * 0.6 + dHome * 0.5 + ore * 1.6 + cry * 1.0 + rest * 0.3;
+        // Head for whatever we're running out of.
+        for (const r of P.short || []) s += Math.min(sums[[R_ORE, R_CRYSTAL, R_STALK, R_BOULDER].indexOf(r)](i, j, 5), 6) * 1.5;
+      } else if (def.farm) {
+        const n = fertileIn(i, j, def.radius);
+        if (n < 3) continue;
+        s = Math.min(n, 12) * 1.5 - dHome * 0.3;
+      } else if (def.pump) {
+        let oil = 0;
+        for (let dj = -1; dj <= 1; dj++) for (let di = -1; di <= 1; di++) {
+          if (inMap(i + di, j + dj) && S.res[tIdx(i + di, j + dj)] === R_OIL) oil += S.amt[tIdx(i + di, j + dj)];
+        }
+        s = oil * 0.2 - dHome * 0.3;
+      } else if (type === 'refinery') {
+        let dp = dHome;
+        for (const b of S.buildings) if (!b.dead && b.owner === p && b.type === 'pump') dp = Math.min(dp, dist(i, j, b.x, b.y));
+        s = -dp - dHome * 0.2;
       } else if (type === 'turret') {
         s = -Math.abs(dHome - 3.5) * 2 - dist(i, j, ex, ey) * 0.15;
       } else if (type === 'silo') {

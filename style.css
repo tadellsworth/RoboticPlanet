@@ -16,6 +16,7 @@
   --safe-l: env(safe-area-inset-left, 0px);
   --safe-r: env(safe-area-inset-right, 0px);
   --g-fiber: #3fd8a6; --g-stone: #c9c1b4; --g-ore: #ff8a3d; --g-crystal: #b98cff; --g-alloy: #8ec3e6; --g-chip: #c8f05a;
+  --g-crude: #b08a6e; --g-fuel: #ff5c8a;
 }
 
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
@@ -41,6 +42,8 @@ button { font: inherit; color: inherit; cursor: pointer; }
   background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
   padding: 5px 4px; font-weight: 700; font-variant-numeric: tabular-nums; font-size: 14px; min-width: 0;
 }
+.goods.two-rows { gap: 3px; }
+.goods.two-rows .res-chip { padding: 3px 4px; font-size: 13px; border-radius: 8px; }
 .res-chip.flash { animation: flash 0.6s; }
 @keyframes flash { from { background: rgba(126, 224, 138, 0.35); } }
 .gi { width: 12px; height: 12px; border-radius: 3px; flex: none; box-shadow: inset 0 -2px 0 rgba(0,0,0,0.25); }
@@ -49,6 +52,8 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .gi.ore { background: var(--g-ore); clip-path: polygon(15% 30%, 50% 0, 100% 25%, 85% 85%, 25% 100%); border-radius: 0; }
 .gi.crystal { background: var(--g-crystal); clip-path: polygon(50% 0, 100% 40%, 50% 100%, 0 40%); border-radius: 0; }
 .gi.alloy { background: var(--g-alloy); border-radius: 2px; height: 8px; }
+.gi.crude { background: #2a211b; border: 2px solid var(--g-crude); border-radius: 50% 50% 50% 50% / 60% 60% 40% 40%; width: 11px; height: 12px; }
+.gi.fuel { background: var(--g-fuel); border-radius: 3px 3px 2px 2px; width: 10px; height: 13px; box-shadow: inset 0 3px 0 rgba(255,255,255,0.35); }
 .gi.warhead { background: #ffcf4a; clip-path: polygon(50% 0, 85% 30%, 85% 100%, 15% 100%, 15% 30%); border-radius: 0; }
 .gi.chip { background: var(--g-chip); border-radius: 2px; outline: 2px dotted var(--g-chip); outline-offset: 1px; width: 9px; height: 9px; }
 .toprow { display: flex; gap: 6px; }
@@ -126,6 +131,8 @@ body.mm-off .objective { margin-right: 54px; }
 #banner-text .err { color: var(--danger); }
 #banner-text .ok { color: var(--good); }
 .banner-actions { display: flex; gap: 8px; }
+.banner-actions .road-seg { flex: 2; }
+.banner-actions .road-seg button { padding: 7px 4px; }
 .banner-actions .btn { flex: 1; }
 
 /* ---------- bottom sheet ---------- */
@@ -241,6 +248,7 @@ body.mm-off .objective { margin-right: 54px; }
 i.g { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin: 0 4px 0 2px; vertical-align: -1px; }
 i.g.fiber { background: var(--g-fiber); } i.g.stone { background: var(--g-stone); } i.g.ore { background: var(--g-ore); }
 i.g.crystal { background: var(--g-crystal); } i.g.alloy { background: var(--g-alloy); } i.g.chip { background: var(--g-chip); }
+i.g.crude { background: var(--g-crude); } i.g.fuel { background: var(--g-fuel); }
 .stats { display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; margin: 10px 0; font-size: 14px; }
 .stats span:nth-child(odd) { color: var(--muted); }
 .stats span:nth-child(even) { font-weight: 700; text-align: right; }

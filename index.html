@@ -47,6 +47,7 @@
   <div id="banner" hidden>
     <div id="banner-text"></div>
     <div class="banner-actions">
+      <div id="banner-seg" class="seg road-seg" hidden><button data-v="0">Two-way</button><button data-v="1">One-way</button></div>
       <button id="banner-ok" class="btn primary">Build here</button>
       <button id="banner-cancel" class="btn">Cancel</button>
     </div>
@@ -132,6 +133,7 @@
     <h2>How to play</h2>
     <div class="help-body">
       <p>Your bots have landed on a small planet. Gather resources, link them into supply chains and grow your colony. In <b>Versus</b> you win by capturing the rival's Lander. In <b>Colony</b> there is no rival: just build and spread across the planet.</p>
+      <p>Resources sit in separate <b>fields</b> with open ground between them. Your landing zone has a little of everything; the rich fields lie beyond your border, so you'll need Outposts to claim them.</p>
       <h3>The supply chain</h3>
       <ul class="chain">
         <li><b>Harvester</b> cuts teal stalk groves into <i class="g fiber"></i>Fiber</li>
@@ -141,13 +143,17 @@
         <li><b>Smelter</b>: Ore + Fiber → <i class="g alloy"></i>Alloy</li>
         <li><b>Chip Fab</b>: Crystal + Alloy → <i class="g chip"></i>Chip</li>
         <li><b>Bot Foundry</b>: Alloy + Chip → a new Worker or Warbot</li>
+        <li><b>Bio Farm</b> grows energy crops on dark fertile soil into <i class="g fuel"></i>Fuel</li>
+        <li><b>Oil Pump</b> (built on an oil seep) pumps <i class="g crude"></i>Crude; a <b>Refinery</b> turns 1 Crude into 2 Fuel</li>
       </ul>
       <h3>Workers</h3>
       <p>Every production building needs one worker inside. Free workers carry goods between buildings and build construction sites. If you run short, build a Bot Foundry and make more. You can pause a building to free its worker.</p>
       <h3>Territory</h3>
-      <p>You can only build inside your border. <b>Outposts</b> push the border out and hold warbots. <b>Paths</b> are cheap (1 Stone paves 4 tiles) and make bots walk twice as fast; bots go out of their way to use them. <b>Depots</b> are extra storage that shorten trips.</p>
+      <p>You can only build inside your border. <b>Outposts</b> push the border out and hold warbots. <b>Depots</b> are extra storage that shorten trips.</p>
+      <h3>Paths and traffic</h3>
+      <p>Bots are slow on open ground. <b>Paths</b> are cheap (1 Stone paves 4 tiles) and make bots walk twice as fast, and bots go out of their way to use them. On a busy two-way path, bots slow down whenever they meet traffic coming the other way. In the Paths banner, switch to <b>One-way</b> and drag along a path to point it the way you drag; tap a path to turn its arrow. A loop of one-way paths, one lane out and one back, keeps traffic flowing. Bots can still go the wrong way up a one-way path, but only at a crawl.</p>
       <h3>Batteries</h3>
-      <p>Every bot runs on a battery that drains as it walks, works and fights. Low bots recharge at your Lander or a <b>Charging Station</b>; warbots also recharge inside their garrison. A flat battery puts a bot in emergency mode: half speed, half power. Build Charging Stations near busy areas far from your Lander.</p>
+      <p>Every bot runs on a battery that drains as it walks, works and fights. Low bots recharge at your Lander (free) or a <b>Charging Station</b>; warbots also recharge inside their garrison. A flat battery puts a bot in emergency mode: half speed, half power. Build Charging Stations near busy areas far from your Lander. Stations burn <b>Fuel</b>: one Fuel recharges about one and a half batteries, so keep a Bio Farm or an Oil Pump and Refinery running.</p>
       <h3>Fighting (Versus)</h3>
       <p>Warbots wait inside Outposts and your Lander and defend automatically. Tap <b>Army</b>, then a rival building to attack it, or open ground to send warbots there to <b>hold the area</b> under a rally flag (tap the flag to call them back). Capturing an Outpost takes its land, and enemy buildings left outside their border are lost. Pulse Turrets shoot intruders and use Crystal as ammo.</p>
       <p><b>Missiles:</b> a Munitions Works turns Alloy and Crystal into Warheads, and a Missile Silo fires them at rival buildings up to 18 tiles away. Missiles wreck smaller buildings and knock Outposts and Landers down to almost no armor; warbots then capture them.</p>

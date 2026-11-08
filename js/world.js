@@ -54,65 +54,102 @@ function generateMap(seed, W, H, cfg) {
       elev[t] = lv;
     }
   }
-  // 2) Resources for the bottom half.
-  for (let j = half; j < H; j++) {
-    for (let i = 0; i < W; i++) {
-      const t = id(i, j);
-      if (terrain[t] !== T_GROUND) continue;
-      const r = hash2(i, j, sR);
-      const m = fbm(i / 6, j / 6, sM, 3);
-      const b = fbm(i / 5 + 40, j / 5 + 40, sB, 2);
-      const c = fbm(i / 4 + 90, j / 4 + 90, sC, 2);
-      const o = fbm(i / 4 + 20, j / 4 + 60, sO, 2);
-      let nearRock = false;
-      for (let dj = -1; dj <= 1; dj++) for (let di = -1; di <= 1; di++) {
-        const x = i + di, y = j + dj;
-        if (x >= 0 && y >= 0 && x < W && y < H && terrain[id(x, y)] === T_ROCK) nearRock = true;
-      }
-      if (m > 0.6 && r < Math.min(0.95, 0.62 * dens)) res[t] = R_STALK;
-      else if (nearRock && r < 0.22 * dens) res[t] = R_ORE;
-      else if (o > 0.75 && r < 0.45 * dens) res[t] = R_ORE;
-      else if (c > 0.72 && r < Math.min(0.95, 0.55 * dens)) res[t] = R_CRYSTAL;
-      else if (b > 0.66 && r < Math.min(0.95, 0.5 * dens)) res[t] = R_BOULDER;
-    }
-  }
-
-  // 3) Player 0 base: a flat landing zone and guaranteed starter resource patches.
+  // 2) Resources come in separate fields (clusters) with open ground between them, so holding
+  //    the land around a field matters. Fields are laid out on the bottom half, then mirrored.
   const rng = makeRng(seed ^ 0x5bd1e995);
   const bx = Math.floor(W / 2), by = H - 7;
+  const fert = new Uint8Array(N);
+  const F_FERTILE = 100;
   const stampDens = clamp(dens, 0.7, 1.15);
-  const stamp = (cx, cy, rad, type, density) => {
+  const fields = [];
+  // force: the field and a ring of ground around it become open land, so it is never cut off by
+  // water or crags (used for the guaranteed fields). Fields near the base sit on its terrace.
+  const field = (cx, cy, rad, type, fill, force) => {
+    fields.push({ x: cx, y: cy, r: rad });
+    const near = dist2(cx, cy, bx, by) < 100;
+    if (force && type !== -1) {
+      const m = rad + 1.5;
+      for (let j = Math.floor(cy - m); j <= Math.ceil(cy + m); j++) {
+        for (let i = Math.floor(cx - m); i <= Math.ceil(cx + m); i++) {
+          if (i < 1 || j < half || i >= W - 1 || j >= H - 1 || dist2(i, j, cx, cy) > m * m) continue;
+          terrain[id(i, j)] = T_GROUND;
+          if (near) elev[id(i, j)] = baseLevel;
+        }
+      }
+    }
     for (let j = Math.floor(cy - rad); j <= Math.ceil(cy + rad); j++) {
       for (let i = Math.floor(cx - rad); i <= Math.ceil(cx + rad); i++) {
-        if (i < 1 || j < half + 1 || i >= W - 1 || j >= H - 1) continue;
-        if (dist2(i, j, cx, cy) > rad * rad) continue;
+        if (i < 1 || j < half || i >= W - 1 || j >= H - 1) continue;
+        const d2 = dist2(i, j, cx, cy);
+        if (d2 > rad * rad) continue;
         const t = id(i, j);
-        terrain[t] = T_GROUND;
-        if (type === -1) { res[t] = R_NONE; elev[t] = baseLevel; continue; }
-        if (rng() < density * stampDens) res[t] = type;
+        if (force) terrain[t] = T_GROUND;
+        else if (terrain[t] !== T_GROUND) continue;
+        if (type === -1) { res[t] = R_NONE; fert[t] = 0; elev[t] = baseLevel; continue; }
+        // Denser in the middle of the field, thinning out at the edge.
+        if (rng() >= fill * (1 - 0.45 * d2 / (rad * rad + 0.01))) continue;
+        if (type === F_FERTILE) { fert[t] = 1; res[t] = R_NONE; } else { res[t] = type; fert[t] = 0; }
       }
     }
   };
   const jit = () => Math.floor(rng() * 3) - 1;
-  stamp(bx - 6 + jit(), by - 1 + jit(), 2.2, R_STALK, 0.75);
-  stamp(bx + 6 + jit(), by + jit(), 1.7, R_BOULDER, 0.7);
-  stamp(bx - 4 + jit(), by - 6, 1.4, R_ORE, 0.85);
-  stamp(bx + 4 + jit(), by - 6, 1.4, R_CRYSTAL, 0.85);
-  stamp(bx + 1, by + 4, 1.2, R_BOULDER, 0.6);
-  // Richer fields beyond the starting territory reward expanding with Outposts.
-  stamp(bx + 8 + jit(), by - 11 + jit(), 1.6, R_ORE, 0.8);
-  stamp(bx - 9 + jit(), by - 10 + jit(), 1.5, R_CRYSTAL, 0.8);
-  // Contested fields near the middle of the map (mirrored, so there is one on each side).
-  stamp(Math.floor(W / 2) - 6, half + 3, 1.7, R_ORE, 0.85);
-  stamp(Math.floor(W / 2) + 5, half + 2, 1.4, R_CRYSTAL, 0.85);
-  stamp(bx, by, 4.2, -1, 0);
+  // The landing zone is one flat terrace so the starter fields are always within easy reach.
+  for (let j = by - 7; j <= Math.min(H - 1, by + 7); j++) {
+    for (let i = bx - 7; i <= bx + 7; i++) if (dist2(i, j, bx, by) <= 49.5) elev[id(i, j)] = baseLevel;
+  }
+  // Starter fields inside the landing zone.
+  field(bx - 6 + jit(), by - 2 + jit(), 2.5, R_STALK, 0.85 * stampDens, true);
+  field(bx - 4, by + 4, 1.4, R_STALK, 0.8 * stampDens, true);
+  field(bx + 6 + jit(), by + jit(), 1.8, R_BOULDER, 0.8 * stampDens, true);
+  field(bx - 4 + jit(), by - 5, 1.3, R_ORE, 0.9 * stampDens, true);
+  field(bx + 4 + jit(), by - 5, 1.3, R_CRYSTAL, 0.9 * stampDens, true);
+  field(bx + 2, by + 4, 1.2, R_BOULDER, 0.7 * stampDens, true);
+  field(bx, by - 7.5, 2.0, F_FERTILE, 0.85, true);
+  // Richer fields just beyond the starting border reward expanding with Outposts.
+  field(bx + 8 + jit(), by - 11 + jit(), 1.6, R_ORE, 0.8 * stampDens, true);
+  field(bx - 9 + jit(), by - 10 + jit(), 1.5, R_CRYSTAL, 0.8 * stampDens, true);
+  field(bx + 1 + jit(), by - 13, 1.1, R_OIL, 0.9, true);
+  // Contested fields near the middle (mirrored, so there is one on each side) and an oil field
+  // right in the centre that both sides want.
+  field(Math.floor(W / 2) - 6, half + 3, 1.7, R_ORE, 0.85, true);
+  field(Math.floor(W / 2) + 5, half + 2, 1.4, R_CRYSTAL, 0.85, true);
+  field(Math.floor(W / 2) - 1, half + 1, 1.2, R_OIL, 0.9, true);
+  // More fields scattered over the rest of the half, kept apart from each other and the base.
+  // Richer settings mean more fields and slightly bigger ones. Rare fields are placed first so a
+  // crowded map never squeezes them out.
+  const areaK = (W * H) / (40 * 56), rK = Math.pow(dens, 0.25);
+  const want = (n) => { const x = n * areaK * Math.sqrt(dens); return Math.floor(x) + (rng() < x - Math.floor(x) ? 1 : 0); };
+  const bag = [];
+  const add = (n, type, r0, r1, fill) => { for (let k = want(n); k > 0; k--) bag.push({ type, r: (r0 + rng() * (r1 - r0)) * rK, fill }); };
+  add(0.6, R_OIL, 0.9, 1.2, 0.9);
+  add(1.5, F_FERTILE, 1.8, 2.5, 0.85);
+  add(2, R_ORE, 1.3, 1.7, 0.8);
+  add(2, R_CRYSTAL, 1.2, 1.6, 0.8);
+  add(4, R_BOULDER, 1.4, 2.0, 0.75);
+  add(5, R_STALK, 2.2, 3.0, 0.75);
+  for (const f of bag) {
+    for (let tries = 0, gap = 1.5; tries < 80; tries++) {
+      if (tries === 30) gap = 0; // crowded map: let fields sit closer together
+      if (tries === 55) gap = -1;
+      const x = 2 + rng() * (W - 5), y = half + 1 + rng() * (H - half - 3);
+      if (terrain[id(Math.floor(x), Math.floor(y))] !== T_GROUND) continue;
+      if (dist2(x, y, bx, by) < 64) continue;
+      if (fields.some((o) => dist2(x, y, o.x, o.y) < (o.r + f.r + gap) ** 2)) continue;
+      field(x, y, f.r, f.type, f.fill, false);
+      break;
+    }
+  }
+
+  // 3) Player 0 base: a flat landing zone.
+  field(bx, by, 3.4, -1, 0, true);
+  fields.pop();
 
   // 4) Mirror the bottom half onto the top half.
   const mirror = () => {
     for (let t = 0; t < N; t++) {
       if (((t / W) | 0) >= half) continue;
       const m2 = mir(t);
-      terrain[t] = terrain[m2]; res[t] = res[m2]; elev[t] = elev[m2];
+      terrain[t] = terrain[m2]; res[t] = res[m2]; elev[t] = elev[m2]; fert[t] = fert[m2];
     }
   };
   mirror();
@@ -256,7 +293,8 @@ function generateMap(seed, W, H, cfg) {
 
   for (let t = 0; t < N; t++) if (res[t]) amt[t] = clamp(Math.round(RES[res[t]].amount * RPR.amount), 1, 255);
   const grow = new Float32Array(N).fill(1);
-  return { terrain, res, amt, grow, elev, ramp, bases: [{ x: bx, y: by }, { x: W - 1 - bx, y: H - 1 - by }] };
+  for (let t = 0; t < N; t++) if (terrain[t] !== T_GROUND) fert[t] = 0;
+  return { terrain, res, amt, grow, elev, ramp, fert, bases: [{ x: bx, y: by }, { x: W - 1 - bx, y: H - 1 - by }] };
 }
 
 /* ------------------------------------------------------------------ new game */
@@ -278,7 +316,7 @@ function newGame(opts) {
   const m = generateMap(seed, W, H, settings);
   S = {
     v: 1, mode, seed, W, H, settings, difficulty: diff, time: 0, nextId: 1, winner: -1, milestone: 0,
-    terrain: m.terrain, res: m.res, amt: m.amt, grow: m.grow, elev: m.elev, ramp: m.ramp,
+    terrain: m.terrain, res: m.res, amt: m.amt, grow: m.grow, elev: m.elev, ramp: m.ramp, fert: m.fert,
     road: new Uint8Array(W * H),
     owner: new Int8Array(W * H).fill(-1),
     resRes: new Uint8Array(W * H),
@@ -488,6 +526,20 @@ function countResIn(cx, cy, radius, type, matureOnly, zone) {
   return n;
 }
 
+/** Fertile tiles around (cx, cy) a Bio Farm there could plant (not built on, same walkable area). */
+function fertileIn(cx, cy, radius) {
+  let n = 0;
+  const r2 = radius * radius + 0.3, zone = S.zone[tIdx(cx, cy)];
+  for (let j = Math.max(0, cy - radius); j <= Math.min(S.H - 1, cy + radius); j++) {
+    for (let i = Math.max(0, cx - radius); i <= Math.min(S.W - 1, cx + radius); i++) {
+      const t = j * S.W + i;
+      if (!S.fert[t] || S.bAt[t] || S.ramp[t] || S.zone[t] !== zone || (i === cx && j === cy)) continue;
+      if (dist2(i, j, cx, cy) <= r2) n++;
+    }
+  }
+  return n;
+}
+
 function isWalkable(i, j) {
   if (!inMap(i, j)) return false;
   const t = tIdx(i, j);
@@ -540,7 +592,9 @@ function canPlace(owner, type, i, j, skipBlockCheck) {
   const t = tIdx(i, j);
   if (S.owner[t] !== owner) return { ok: false, reason: 'You can only build inside your territory.' };
   if (S.terrain[t] !== T_GROUND) return { ok: false, reason: 'The ground here is not buildable.' };
-  if (S.res[t]) return { ok: false, reason: 'Clear the resources here first.' };
+  if (def.pump) {
+    if (S.res[t] !== R_OIL) return { ok: false, reason: 'Build an Oil Pump right on top of an oil seep.' };
+  } else if (S.res[t]) return { ok: false, reason: 'Clear the resources here first.' };
   if (S.bAt[t]) return { ok: false, reason: 'There is already a building here.' };
   if (S.ramp[t]) return { ok: false, reason: 'Too steep: this is a slope.' };
   if (S.zone[t] !== homeZone(owner)) return { ok: false, reason: 'Your bots cannot reach this spot. Find a slope up, or build a Ramp.' };
@@ -575,6 +629,7 @@ function canPlace(owner, type, i, j, skipBlockCheck) {
   if (def.gather && reachableRes(i, j, def.radius, def.gather) === 0) {
     return { ok: false, reason: `No ${RES[def.gather].name.toLowerCase()}s within reach.` };
   }
+  if (def.farm && fertileIn(i, j, def.radius) === 0) return { ok: false, reason: 'No fertile soil within reach.' };
   // The most expensive check goes last.
   if (!skipBlockCheck && wouldBlock(t)) return { ok: false, reason: 'That would block the only way through here.' };
   return { ok: true, reason: '' };
@@ -606,6 +661,15 @@ function setRoad(i, j, on) {
   const t = tIdx(i, j);
   if (!!S.road[t] === !!on) return;
   S.road[t] = on ? 1 : 0;
+  markDirty(i, j);
+  for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) if (inMap(i + di, j + dj)) markDirty(i + di, j + dj);
+}
+
+/** Make an existing path tile two-way (1) or one-way (2 east, 3 south, 4 west, 5 north). */
+function setRoadDir(i, j, v) {
+  const t = tIdx(i, j);
+  if (!S.road[t] || S.road[t] === v) return;
+  S.road[t] = v;
   markDirty(i, j);
   for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) if (inMap(i + di, j + dj)) markDirty(i + di, j + dj);
 }
@@ -717,7 +781,7 @@ function addFx(type, x, y, data) {
 const SAVE_KEY = 'botfall.save.v1';
 const TYPED_FIELDS = {
   terrain: Uint8Array, res: Uint8Array, amt: Uint8Array, grow: Float32Array, road: Uint8Array, owner: Int8Array,
-  resRes: Uint8Array, elev: Uint8Array, ramp: Uint8Array,
+  resRes: Uint8Array, elev: Uint8Array, ramp: Uint8Array, fert: Uint8Array,
 };
 
 function serializeGame() {
@@ -736,6 +800,21 @@ function deserializeGame(json) {
   if (!o || o.v !== 1) throw new Error('Unsupported save');
   // Saves from before elevation existed load as flat maps.
   if (!o.elev) { o.elev = new Array(o.W * o.H).fill(0); o.ramp = new Array(o.W * o.H).fill(0); }
+  // Saves from before fertile soil and oil existed get them from the map's generator, on tiles
+  // that are still free.
+  if (!o.fert) {
+    let m = null;
+    try { m = generateMap(o.seed, o.W, o.H, o.settings); } catch (e) { m = null; }
+    o.fert = new Array(o.W * o.H).fill(0);
+    if (m && m.fert.length === o.fert.length) {
+      const taken = new Set(o.buildings.map((b) => b.y * o.W + b.x));
+      for (let t = 0; t < o.fert.length; t++) {
+        if (o.terrain[t] !== T_GROUND || o.ramp[t] || taken.has(t)) continue;
+        if (m.fert[t] && !o.res[t]) o.fert[t] = 1;
+        if (m.res[t] === R_OIL && !o.res[t] && !(o.road && o.road[t])) { o.res[t] = R_OIL; o.amt[t] = m.amt[t]; }
+      }
+    }
+  }
   for (const k in TYPED_FIELDS) o[k] = TYPED_FIELDS[k].from(o[k]);
   o.fx = []; o.msgs = []; o.dirtyTiles = [];
   o.rallies = o.rallies || [];

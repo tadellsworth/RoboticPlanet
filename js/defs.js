@@ -9,13 +9,26 @@ const MAX_BOTS = 90;              // per player (versus)
 const MAX_BOTS_COLONY = 150;      // colony mode allows a bigger population
 const MAX_SITES = 6;              // simultaneous construction sites per player
 const ATTACK_RANGE = 14;          // tiles from a garrison to a target it can attack
-const WORKER_SPEED = 2.0;         // tiles per second
-const WARBOT_SPEED = 1.6; 
+const WORKER_SPEED = 1.4;         // tiles per second off paths: bots are unhurried, so paths matter
+const WARBOT_SPEED = 1.15;
 const ROAD_SPEED = 2.0;           // speed multiplier on paths
 const ROAD_PREFERENCE = 0.85;     // route planning treats paths as this much cheaper again, so bots go out of their way to use them
 const ROAD_COST = { stone: 0.25 }; // per path tile (1 Stone paves 4); refunded when a path is removed
 const SLOPE_SPEED = 0.65;         // speed multiplier on an unpaved ramp
+/*
+ * One-way paths and traffic. A path tile in S.road is 1 (two-way) or 2–5 (one-way, pointing
+ * east, south, west or north). Going the wrong way up a one-way path is allowed but crawls at
+ * ONEWAY_WRONG speed, so bots plan around it. On paths, every oncoming bot on the same or next
+ * tile slows a bot down (speed ÷ (1 + TRAFFIC_ONCOMING × oncoming)), and a crowd ahead going the
+ * same way slows it a little, so busy two-way paths jam while one-way loops keep flowing.
+ */
+const ROAD_DIRS = [null, null, [1, 0], [0, 1], [-1, 0], [0, -1]];
+const ONEWAY_WRONG = 0.5;
+const TRAFFIC_ONCOMING = 1.5;
+const TRAFFIC_CROWD = 0.2;
 const STALK_GROW_TIME = 70;       // seconds for a planted stalk grove to mature
+const CROP_GROW_TIME = 45;        // seconds for a planted energy crop to ripen
+const FUEL_ENERGY = 150;          // battery points one Fuel gives at a Charging Station (1.5 full charges)
 
 /*
  * Batteries (0–100). Bots drain while they move and work, and recharge inside a building with a
@@ -24,8 +37,8 @@ const STALK_GROW_TIME = 70;       // seconds for a planted stalk grove to mature
  * emergency mode: it moves and works at `slow` speed and warbots hit half as hard.
  */
 const BATTERY = {
-  workerMove: 0.85, workerWork: 1.2, workerInside: 0.25,
-  warbotMove: 0.5, warbotFight: 0.9, garrisonCharge: 4,
+  workerMove: 0.6, workerWork: 1.2, workerInside: 0.25,
+  warbotMove: 0.36, warbotFight: 0.9, garrisonCharge: 4,
   low: 30, critical: 12, slow: 0.5,
 };
 
@@ -49,7 +62,7 @@ const TERRAIN_PRESETS = [
   { name: 'Rugged', levels: 4, scale: 13, extra: 0.22, gap: 10, rock: 0.67 },
   { name: 'Mountainous', levels: 5, scale: 14, extra: 0.1, gap: 13, rock: 0.65 },
 ];
-/*   density  how many resource nodes   amount  how much each node holds */
+/*   density  how many resource fields   amount  how much each node holds */
 const RESOURCE_PRESETS = [
   { name: 'Scarce', density: 0.55, amount: 0.6 },
   { name: 'Sparse', density: 0.78, amount: 0.8 },
@@ -61,16 +74,19 @@ const DEFAULT_SIZE = { versus: 1, colony: 3 };
 const DEFAULT_ROUGH = 2;
 const DEFAULT_RICH = 2;
 
-// Resource nodes that sit on ground tiles
-const R_NONE = 0, R_STALK = 1, R_BOULDER = 2, R_ORE = 3, R_CRYSTAL = 4;
+// Resource nodes that sit on ground tiles. Energy crops are planted by a Bio Farm on fertile soil;
+// oil seeps are pumped by an Oil Pump built on top of one.
+const R_NONE = 0, R_STALK = 1, R_BOULDER = 2, R_ORE = 3, R_CRYSTAL = 4, R_CROP = 5, R_OIL = 6;
 const RES = {
   [R_STALK]:   { key: 'stalk',   name: 'Stalk grove',     good: 'fiber',   amount: 3, harvest: 2.5 },
   [R_BOULDER]: { key: 'boulder', name: 'Boulder',         good: 'stone',   amount: 6, harvest: 3 },
   [R_ORE]:     { key: 'ore',     name: 'Ore vein',        good: 'ore',     amount: 16, harvest: 3.5 },
   [R_CRYSTAL]: { key: 'crystal', name: 'Crystal cluster', good: 'crystal', amount: 12, harvest: 3.5 },
+  [R_CROP]:    { key: 'crop',    name: 'Energy crop',     good: 'fuel',    amount: 1, harvest: 2.5 },
+  [R_OIL]:     { key: 'oil',     name: 'Oil seep',        good: 'crude',   amount: 24, harvest: 0 },
 };
 
-const GOODS = ['fiber', 'stone', 'ore', 'crystal', 'alloy', 'chip', 'warhead'];
+const GOODS = ['fiber', 'stone', 'ore', 'crystal', 'alloy', 'chip', 'crude', 'fuel', 'warhead'];
 const GOOD = {
   fiber:   { name: 'Fiber',   color: '#3fd8a6', desc: 'Cut from stalk groves. Used for building and as smelter fuel.' },
   stone:   { name: 'Stone',   color: '#c9c1b4', desc: 'Broken from boulders. The main building material.' },
@@ -78,6 +94,8 @@ const GOOD = {
   crystal: { name: 'Crystal', color: '#b98cff', desc: 'Tapped from crystal clusters. Makes Chips and turret ammo.' },
   alloy:   { name: 'Alloy',   color: '#8ec3e6', desc: 'Smelted metal for advanced buildings, chips and bots.' },
   chip:    { name: 'Chip',    color: '#c8f05a', desc: 'Bot brains. Needed for every new bot.' },
+  crude:   { name: 'Crude',   color: '#b08a6e', desc: 'Crude oil from an Oil Pump. A Refinery turns it into Fuel.' },
+  fuel:    { name: 'Fuel',    color: '#ff5c8a', desc: 'Energy for Charging Stations. Grown at a Bio Farm or refined from Crude.' },
   warhead: { name: 'Warhead', color: '#ffcf4a', desc: 'Made at a Munitions Works. Missile Silos fire them at enemy buildings.' },
 };
 /** Goods that only matter when there is a rival (hidden in Colony mode). */
@@ -96,7 +114,10 @@ const PLAYER_NAMES = ['You', 'Rival'];
  *   out       output storage capacity per good
  *   store     acts as a warehouse (accepts and supplies every good)
  *   mil       military: claims territory of radius `terr` and garrisons warbots
- *   charger   bots inside recharge: `slots` bots at full `rate` (battery per second), more share it
+ *   charger   bots inside recharge: `slots` bots at full `rate` (battery per second), more share it;
+ *             with `fuel` it burns Fuel (FUEL_ENERGY battery points each, stockpiles up to fuelCap)
+ *   farm      plants energy crops on fertile soil within `radius` and harvests them into Fuel
+ *   pump      built on an oil seep; its worker pumps Crude from seep tiles within 1 tile
  *   ammo      good delivered as ammunition (up to ammoCap)
  *   missile   launches missiles: range (tiles), reload (s), damage to buildings, splash radius,
  *             damage to bots in the splash
@@ -163,8 +184,23 @@ const BDEFS = {
     missile: { range: 18, reload: 20, damage: 14, splash: 1.6, botDamage: 6 }, armor: 14, buildTime: 16, war: true,
   },
   charger: {
-    name: 'Charging Station', desc: 'Bots recharge their batteries here, four at a time. Build them near busy areas far from your Lander.',
-    cost: { stone: 3, alloy: 1 }, charger: { slots: 4, rate: 25 }, armor: 10, buildTime: 10,
+    name: 'Charging Station',
+    desc: 'Bots recharge their batteries here, four at a time. It burns Fuel: one Fuel recharges about one and a half batteries. Build them near busy areas far from your Lander.',
+    cost: { stone: 3, alloy: 1 }, charger: { slots: 4, rate: 25, fuel: true }, fuelCap: 4, armor: 10, buildTime: 10,
+  },
+  farm: {
+    name: 'Bio Farm', desc: 'A worker plants energy crops on fertile soil nearby and harvests them into Fuel. Crops take a while to ripen.',
+    cost: { fiber: 2, stone: 2 }, staff: true, farm: true, radius: 3, out: { fuel: 4 }, armor: 8, buildTime: 9,
+  },
+  pump: {
+    name: 'Oil Pump', desc: 'Built on top of an oil seep. Its worker pumps Crude until the seep runs dry.',
+    cost: { stone: 2, alloy: 2 }, staff: true, pump: true, inp: {}, make: { crude: 1 }, out: { crude: 4 },
+    work: 5, armor: 8, buildTime: 10,
+  },
+  refinery: {
+    name: 'Refinery', desc: 'Refines Crude into Fuel: two Fuel from every Crude.',
+    cost: { stone: 4, alloy: 3 }, staff: true, inp: { crude: 1 }, make: { fuel: 2 }, out: { fuel: 4 },
+    work: 6, armor: 10, buildTime: 12,
   },
   ramp: {
     name: 'Ramp', desc: 'Workers cut a slope into a low cliff so bots can climb between levels. Place it at the foot or top of a cliff.',
@@ -177,8 +213,8 @@ const BDEFS = {
 };
 
 /** Order of the build menu. */
-const BUILD_MENU = ['harvester', 'quarry', 'mine', 'tap', 'smelter', 'fab', 'foundry', 'charger', 'outpost', 'turret',
-  'munitions', 'silo', 'depot', 'ramp', 'grower'];
+const BUILD_MENU = ['harvester', 'quarry', 'mine', 'tap', 'smelter', 'fab', 'foundry', 'charger', 'farm', 'pump', 'refinery',
+  'outpost', 'turret', 'munitions', 'silo', 'depot', 'ramp', 'grower'];
 
 const INPUT_CAP = 3;   // how many of each input a production building stockpiles
 const AMMO_CAP = 3;    // crystals a turret stockpiles
@@ -191,7 +227,7 @@ const DIFFICULTY = {
 };
 
 /** Starting goods in each Lander. */
-const START_STOCK = { fiber: 16, stone: 16, alloy: 8, chip: 4, crystal: 4 };
+const START_STOCK = { fiber: 16, stone: 16, alloy: 8, chip: 4, crystal: 4, fuel: 4 };
 const START_WORKERS = 14;
 const START_WARBOTS = 4;
 const MIN_FREE_WORKERS = 3;   // workers always kept free for hauling and building

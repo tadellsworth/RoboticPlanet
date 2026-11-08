@@ -244,6 +244,7 @@ function drawTile(i, j) {
 
   if (terr === T_GROUND) drawElevation(ctx, i, j, x, y, t, n);
   else if (terr === T_WATER) drawCliffFace(ctx, i, j, x, y, t, true);
+  if (terr === T_GROUND && S.fert && S.fert[t] && !S.ramp[t]) drawFertile(ctx, i, j, x, y);
   if (S.road[t]) drawRoad(ctx, i, j, x, y);
   if (S.res[t]) drawResource(ctx, S.res[t], S.amt[t], S.grow[t], x + TP / 2, y + TP / 2, TP, i, j);
 }
@@ -363,15 +364,51 @@ function drawRoad(ctx, i, j, x, y) {
   for (let k = 0; k < 3; k++) ctx.fillRect(x + c - 3 + hash2(i, j, 8 + k) * 6, y + c - 3 + hash2(j, i, 11 + k) * 6, 1.5, 1.5);
   ctx.fillStyle = 'rgba(30,24,18,0.3)';
   ctx.fillRect(x + c - 0.5, y + c - 0.5, 1, 1);
+  // One-way paths carry an arrow showing which way traffic flows.
+  const r = S.road[t];
+  if (r >= 2) {
+    const a = Math.atan2(ROAD_DIRS[r][1], ROAD_DIRS[r][0]);
+    if (ART.oneway) { drawArt(ctx, ART.oneway, x + c, y + c, TP * 0.6, a); return; }
+    ctx.save();
+    ctx.translate(x + c, y + c);
+    ctx.rotate(a);
+    ctx.fillStyle = '#fff3d6';
+    ctx.strokeStyle = 'rgba(40,28,18,0.75)';
+    ctx.lineWidth = 1.2;
+    ctx.beginPath();
+    ctx.moveTo(6, 0); ctx.lineTo(-1, -5); ctx.lineTo(-1, -1.8); ctx.lineTo(-6, -1.8);
+    ctx.lineTo(-6, 1.8); ctx.lineTo(-1, 1.8); ctx.lineTo(-1, 5); ctx.closePath();
+    ctx.fill(); ctx.stroke();
+    ctx.restore();
+  }
 }
 
 /* ------------------------------------------------------------------ resources */
 
+/** Fertile soil: dark tilled earth with furrows, where a Bio Farm can plant energy crops. */
+function drawFertile(ctx, i, j, x, y) {
+  if (ART.fertile) { drawTexture(ctx, ART.fertile, i, j, x, y); return; }
+  const fert = (di, dj) => inMap(i + di, j + dj) && S.fert[tIdx(i + di, j + dj)];
+  const l = fert(-1, 0) ? 0 : 2, r = fert(1, 0) ? 0 : 2, tp = fert(0, -1) ? 0 : 2, b = fert(0, 1) ? 0 : 2;
+  ctx.fillStyle = 'rgba(52,40,22,0.62)';
+  ctx.fillRect(x + l, y + tp, TP - l - r, TP - tp - b);
+  ctx.fillStyle = 'rgba(96,120,44,0.28)';
+  ctx.fillRect(x + l, y + tp, TP - l - r, TP - tp - b);
+  // Furrows run east-west across the whole patch.
+  for (let k = 0; k < 4; k++) {
+    const yy = y + 4 + k * 8;
+    ctx.fillStyle = 'rgba(20,14,6,0.45)';
+    ctx.fillRect(x + l, yy, TP - l - r, 2);
+    ctx.fillStyle = 'rgba(160,180,90,0.22)';
+    ctx.fillRect(x + l, yy - 1.5, TP - l - r, 1);
+  }
+}
+
 function drawResource(ctx, type, amt, grow, cx, cy, s, i, j) {
   const art = ART[RES[type].key];
   if (art) {
-    const sc = type === R_STALK ? 0.5 + 0.5 * grow : 0.6 + 0.4 * (amt / RES[type].amount);
-    ctx.globalAlpha = type === R_STALK && grow < 1 ? 0.85 : 1;
+    const sc = type === R_STALK ? 0.5 + 0.5 * grow : type === R_CROP ? 0.35 + 0.65 * grow : 0.6 + 0.4 * Math.min(1, amt / RES[type].amount);
+    ctx.globalAlpha = (type === R_STALK || type === R_CROP) && grow < 1 ? 0.85 : 1;
     drawArt(ctx, art, cx, cy, s * sc);
     ctx.globalAlpha = 1;
     return;
@@ -426,6 +463,40 @@ function drawResource(ctx, type, amt, grow, cx, cy, s, i, j) {
       ctx.fillStyle = '#ffd08a';
       ctx.fillRect(bx - r * 0.2, by - r * 0.3, 1.6 * u, 1.6 * u);
     }
+  } else if (type === R_CROP) {
+    // Rows of leafy stems topped with glowing pink energy pods once ripe.
+    const g = 0.3 + 0.7 * grow, ripe = grow >= 1;
+    for (let k = 0; k < 4; k++) {
+      const bx = cx + (-9 + k * 6 + (h(k) - 0.5) * 2) * u, by = cy + (k % 2 ? 7 : 3) * u;
+      const hgt = (10 + h(k + 4) * 4) * g * u;
+      ctx.strokeStyle = ripe ? '#3f8a3a' : '#5c9a42';
+      ctx.lineWidth = 1.8 * u;
+      ctx.beginPath(); ctx.moveTo(bx, by); ctx.lineTo(bx + (h(k + 2) - 0.5) * 2 * u, by - hgt); ctx.stroke();
+      ctx.fillStyle = '#6fb24c';
+      ctx.beginPath(); ctx.ellipse(bx - 2.5 * u * g, by - hgt * 0.45, 3 * g * u, 1.4 * g * u, -0.5, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.ellipse(bx + 2.5 * u * g, by - hgt * 0.6, 3 * g * u, 1.4 * g * u, 0.5, 0, Math.PI * 2); ctx.fill();
+      if (grow > 0.5) {
+        const px = bx + (h(k + 2) - 0.5) * 2 * u, py = by - hgt;
+        ctx.fillStyle = ripe ? '#ff5c8a' : '#c88aa0';
+        ctx.beginPath(); ctx.arc(px, py, (ripe ? 2.8 : 1.8) * u, 0, Math.PI * 2); ctx.fill();
+        if (ripe) { ctx.fillStyle = '#ffd1e0'; ctx.beginPath(); ctx.arc(px - 0.8 * u, py - 0.8 * u, 1 * u, 0, Math.PI * 2); ctx.fill(); }
+      }
+    }
+  } else if (type === R_OIL) {
+    // A dark glossy pool with an oily rainbow sheen; it shrinks as it is pumped dry.
+    const f = 0.55 + 0.45 * Math.min(1, amt / RES[R_OIL].amount);
+    const rx = 12 * f * u, ry = 8.5 * f * u, ox = (h(1) - 0.5) * 3 * u, oy = (h(2) - 0.5) * 3 * u;
+    ctx.fillStyle = 'rgba(30,20,10,0.3)';
+    ctx.beginPath(); ctx.ellipse(cx + ox + 1.5 * u, cy + oy + 2 * u, rx, ry, 0.3, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#16120f';
+    ctx.beginPath(); ctx.ellipse(cx + ox, cy + oy, rx, ry, 0.3, 0, Math.PI * 2); ctx.fill();
+    ctx.lineWidth = 1.4 * u;
+    for (const [col, k] of [['rgba(255,92,138,0.55)', 0.7], ['rgba(56,212,255,0.45)', 0.55], ['rgba(200,240,90,0.35)', 0.4]]) {
+      ctx.strokeStyle = col;
+      ctx.beginPath(); ctx.ellipse(cx + ox - 2 * u, cy + oy - 1.5 * u, rx * k, ry * k, 0.3, Math.PI * 0.9, Math.PI * 1.9); ctx.stroke();
+    }
+    ctx.fillStyle = 'rgba(255,255,255,0.5)';
+    ctx.beginPath(); ctx.ellipse(cx + ox - rx * 0.4, cy + oy - ry * 0.35, 2 * u, 1 * u, 0.3, 0, Math.PI * 2); ctx.fill();
   } else if (type === R_CRYSTAL) {
     const n = Math.min(3, Math.ceil(amt / 4));
     const spots = [[0, 4, 13, 0], [-7, 6, 9, -0.35], [7, 7, 8, 0.4]];
@@ -660,6 +731,58 @@ function drawBuilding(ctx, type, cx, cy, s, owner, b) {
       ctx.fillStyle = '#ffffff';
       ctx.beginPath(); ctx.moveTo(cx + 1.5 * u, cy - 6 * u); ctx.lineTo(cx - 3 * u, cy + 1.5 * u); ctx.lineTo(cx, cy + 1.5 * u);
       ctx.lineTo(cx - 1.5 * u, cy + 7 * u); ctx.lineTo(cx + 3.5 * u, cy - 1 * u); ctx.lineTo(cx + 0.5 * u, cy - 1 * u); ctx.closePath(); ctx.fill();
+      break;
+    }
+    case 'farm': {
+      hullBase(ctx, cx, cy, s, color);
+      // Seed hoppers over a green bed of sprouts, with a pink Fuel tank.
+      ctx.fillStyle = '#3a2c1a';
+      ctx.fillRect(cx - 10 * u, cy - 3 * u, 20 * u, 11 * u);
+      ctx.fillStyle = '#6fb24c';
+      for (let k = 0; k < 5; k++) {
+        const sx = cx - 8 * u + k * 4 * u, sw = working ? Math.sin(t * 3 + k) * 0.6 * u : 0;
+        ctx.beginPath(); ctx.moveTo(sx, cy + 6 * u); ctx.lineTo(sx - 1.5 * u + sw, cy - 1 * u); ctx.lineTo(sx + 1.5 * u + sw, cy - 1 * u); ctx.closePath(); ctx.fill();
+      }
+      ctx.fillStyle = '#ff5c8a';
+      ctx.beginPath(); ctx.arc(cx + 6 * u, cy - 7 * u, 3.5 * u, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#d8dde4';
+      ctx.fillRect(cx - 9 * u, cy - 10 * u, 9 * u, 5 * u);
+      break;
+    }
+    case 'pump': {
+      hullBase(ctx, cx, cy, s, color, 'round');
+      // A pumpjack: a beam that nods up and down on an A-frame while it pumps.
+      const nod = working ? Math.sin(t * 3) * 0.35 : 0.15;
+      ctx.strokeStyle = '#8a8f99'; ctx.lineWidth = 2.2 * u;
+      ctx.beginPath(); ctx.moveTo(cx - 5 * u, cy + 8 * u); ctx.lineTo(cx, cy - 4 * u); ctx.lineTo(cx + 5 * u, cy + 8 * u); ctx.stroke();
+      ctx.save(); ctx.translate(cx, cy - 4 * u); ctx.rotate(nod);
+      ctx.fillStyle = '#ffcf4a';
+      ctx.fillRect(-11 * u, -1.8 * u, 22 * u, 3.6 * u);
+      ctx.fillStyle = '#d8dde4';
+      ctx.beginPath(); ctx.moveTo(-11 * u, -4 * u); ctx.lineTo(-14 * u, 0); ctx.lineTo(-11 * u, 4 * u); ctx.closePath(); ctx.fill();
+      ctx.restore();
+      ctx.fillStyle = '#16120f';
+      ctx.beginPath(); ctx.arc(cx - 10 * u, cy + 8 * u, 2.5 * u, 0, Math.PI * 2); ctx.fill();
+      break;
+    }
+    case 'refinery': {
+      hullBase(ctx, cx, cy, s, color);
+      // Two storage tanks joined by a pipe, and a flare stack that burns while refining.
+      for (const [ox, r0, c] of [[-5, 6, '#b08a6e'], [6, 4.5, '#ff5c8a']]) {
+        ctx.fillStyle = '#1a1d24';
+        ctx.beginPath(); ctx.arc(cx + ox * u, cy + 2 * u, (r0 + 1.2) * u, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = c;
+        ctx.beginPath(); ctx.arc(cx + ox * u, cy + 2 * u, r0 * u, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = 'rgba(255,255,255,0.35)';
+        ctx.beginPath(); ctx.arc(cx + (ox - r0 * 0.3) * u, cy + (2 - r0 * 0.3) * u, r0 * 0.35 * u, 0, Math.PI * 2); ctx.fill();
+      }
+      ctx.fillStyle = '#8a8f99';
+      ctx.fillRect(cx + 7 * u, cy - 12 * u, 2.5 * u, 9 * u);
+      if (working) {
+        const fl = 3 + Math.sin(t * 14) * 1;
+        ctx.fillStyle = '#ffcf4a';
+        ctx.beginPath(); ctx.ellipse(cx + 8.2 * u, cy - 13 * u - fl * 0.5 * u, 1.6 * u, fl * u, 0, 0, Math.PI * 2); ctx.fill();
+      }
       break;
     }
     case 'munitions': {
@@ -1178,6 +1301,7 @@ const MM = { canvas: null, ctx: null, base: null, baseCtx: null, dirty: true, ve
 const MM_COLORS = {
   ground: [169, 113, 74], water: [28, 75, 93], rock: [74, 51, 41], ramp: [235, 205, 150],
   [R_STALK]: [47, 174, 134], [R_BOULDER]: [160, 154, 145], [R_ORE]: [235, 120, 50], [R_CRYSTAL]: [150, 105, 245],
+  [R_CROP]: [255, 92, 138], [R_OIL]: [22, 18, 15], fertile: [92, 98, 40],
 };
 
 function initMinimap(canvas) {
@@ -1208,7 +1332,8 @@ function rebuildMinimapBase() {
   const team = PLAYER_COLORS.map((c) => [parseInt(c.slice(1, 3), 16), parseInt(c.slice(3, 5), 16), parseInt(c.slice(5, 7), 16)]);
   for (let t = 0; t < S.W * S.H; t++) {
     const terr = S.terrain[t];
-    let c = terr === T_WATER ? MM_COLORS.water : terr === T_ROCK ? MM_COLORS.rock : S.res[t] ? MM_COLORS[S.res[t]] : S.ramp[t] ? MM_COLORS.ramp : MM_COLORS.ground;
+    let c = terr === T_WATER ? MM_COLORS.water : terr === T_ROCK ? MM_COLORS.rock : S.res[t] ? MM_COLORS[S.res[t]] : S.ramp[t] ? MM_COLORS.ramp
+      : S.fert && S.fert[t] ? MM_COLORS.fertile : MM_COLORS.ground;
     if (terr === T_GROUND && !S.res[t] && !S.ramp[t]) {
       // Higher ground is lighter.
       const f = 0.8 + 0.09 * (S.elev[t] + (R.levelOffset || 0));

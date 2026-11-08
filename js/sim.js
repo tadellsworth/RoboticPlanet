@@ -16,6 +16,7 @@ function simStep(dt) {
     if (!b.dead) updateBuilding(b, dt);
   }
   countCharging();
+  countTraffic();
   for (let k = 0; k < S.bots.length; k++) {
     const u = S.bots[k];
     if (u.dead) continue;
@@ -49,12 +50,14 @@ function checkMilestones() {
   }
 }
 
+/** Planted stalk groves and energy crops grow until they are ripe (grow = 1). */
 function growStalks(dt) {
   const N = S.W * S.H;
   for (let t = 0; t < N; t++) {
-    if (S.res[t] !== R_STALK || S.grow[t] >= 1) continue;
+    const r = S.res[t];
+    if ((r !== R_STALK && r !== R_CROP) || S.grow[t] >= 1) continue;
     const before = Math.floor(S.grow[t] * 4);
-    S.grow[t] = Math.min(1, S.grow[t] + dt / STALK_GROW_TIME);
+    S.grow[t] = Math.min(1, S.grow[t] + dt / (r === R_CROP ? CROP_GROW_TIME : STALK_GROW_TIME));
     if (Math.floor(S.grow[t] * 4) !== before) S.dirtyTiles.push(t);
   }
 }
@@ -107,6 +110,8 @@ function needsOf(b) {
     for (const g in def.inp) out.push([g, INPUT_CAP - (b.stock[g] || 0) - (b.inc[g] || 0)]);
   } else if (def.ammo) {
     out.push([def.ammo, (def.ammoCap || AMMO_CAP) - (b.stock[def.ammo] || 0) - (b.inc[def.ammo] || 0)]);
+  } else if (def.fuelCap) {
+    out.push(['fuel', def.fuelCap - (b.stock.fuel || 0) - (b.inc.fuel || 0)]);
   }
   return out;
 }
@@ -137,7 +142,13 @@ function batFactor(u) { return (u.bat ?? 100) < BATTERY.critical ? BATTERY.slow 
 
 function insideCharger(u) {
   const b = u.inside ? getE(u.inside) : null;
-  return !!(b && b.built && BDEFS[b.type].charger);
+  return !!(b && b.built && BDEFS[b.type].charger && !chargerDry(b));
+}
+
+/** A Charging Station with no Fuel left can't charge anyone (the Lander's charger is free). */
+function chargerDry(b) {
+  const ch = BDEFS[b.type].charger;
+  return !!(ch && ch.fuel && b.built && (b.energy || 0) < 0.5 && !(b.stock.fuel > 0));
 }
 
 /** How many bots are charging in each charger this tick (they share its slots). */
@@ -157,7 +168,7 @@ function findCharger(u) {
   for (const b of S.buildings) {
     if (b.dead || b.owner !== u.owner || !b.built) continue;
     const ch = BDEFS[b.type].charger;
-    if (!ch || S.zone[tIdx(b.x, b.y)] !== zone) continue;
+    if (!ch || S.zone[tIdx(b.x, b.y)] !== zone || chargerDry(b)) continue;
     const s = dist(b.x + 0.5, b.y + 0.5, u.x, u.y) + Math.max(0, (b.charging || 0) - ch.slots) * 4;
     if (s < bs) { bs = s; best = b; }
   }
@@ -184,7 +195,16 @@ function workerBattery(u, dt) {
     const b = getE(u.inside);
     const ch = b && b.built && BDEFS[b.type].charger;
     if (ch) {
-      if (u.bat < 100) u.bat = Math.min(100, u.bat + ch.rate * Math.min(1, ch.slots / Math.max(1, b.charging)) * dt);
+      if (u.bat < 100) {
+        let gain = Math.min(100 - u.bat, ch.rate * Math.min(1, ch.slots / Math.max(1, b.charging)) * dt);
+        if (ch.fuel) {
+          // Charging Stations burn a Fuel whenever their energy runs low.
+          if ((b.energy || 0) < gain && (b.stock.fuel || 0) > 0) { bump(b.stock, 'fuel', -1); b.energy = (b.energy || 0) + FUEL_ENERGY; }
+          gain = Math.min(gain, b.energy || 0);
+          b.energy = (b.energy || 0) - gain;
+        }
+        u.bat += gain;
+      }
     } else if (b && b.working && u.task && u.task.type === 'staff') {
       u.bat = Math.max(0, u.bat - BATTERY.workerInside * dt);
     }
@@ -230,12 +250,51 @@ function goTo(u, x, y) {
   return true;
 }
 
+/*
+ * Traffic: how many bots are walking on each tile this tick, split by heading (east, south, west,
+ * north). Only the entries touched are cleared each tick, so this stays cheap on big maps.
+ */
+const TRAFFIC = { occ: null, n: 0, used: [] };
+
+function heading(face) { return ((Math.round(face / (Math.PI / 2)) % 4) + 4) % 4; }
+
+function countTraffic() {
+  const N = S.W * S.H;
+  if (TRAFFIC.n !== N) { TRAFFIC.occ = new Uint8Array(N * 4); TRAFFIC.n = N; TRAFFIC.used = []; }
+  const occ = TRAFFIC.occ;
+  for (const k of TRAFFIC.used) occ[k] = 0;
+  TRAFFIC.used.length = 0;
+  for (const u of S.bots) {
+    if (u.dead || u.inside || !u.path) continue;
+    const t = Math.floor(u.y) * S.W + Math.floor(u.x);
+    if (!S.road[t]) continue;
+    const k = t * 4 + heading(u.face);
+    if (!occ[k]) TRAFFIC.used.push(k);
+    if (occ[k] < 255) occ[k]++;
+  }
+}
+
+/** How much traffic slows bot u on path tile `here`, heading for tile `next` (0 = free flow). */
+function trafficJam(u, here, next) {
+  const d = heading(u.face), opp = (d + 2) & 3, occ = TRAFFIC.occ;
+  if (!occ || occ.length !== S.W * S.H * 4) return 0;
+  let oncoming = occ[here * 4 + opp], ahead = 0;
+  if (next !== here && S.road[next]) { oncoming += occ[next * 4 + opp]; ahead = occ[next * 4 + d]; }
+  return TRAFFIC_ONCOMING * oncoming + TRAFFIC_CROWD * Math.max(0, ahead - 1);
+}
+
 /** Walk along the current path. Returns true once the destination is reached. */
 function moveAlong(u, dt) {
   if (!u.path) return true;
   const here = Math.floor(u.y) * S.W + Math.floor(u.x);
   let speed = u.type === 'warbot' ? WARBOT_SPEED : WORKER_SPEED;
-  if (S.road[here]) speed *= ROAD_SPEED; else if (S.ramp[here]) speed *= SLOPE_SPEED; else if (S.res[here]) speed *= 0.75;
+  const r = S.road[here];
+  if (r) {
+    const next = u.path[u.pi];
+    const dx = (next % S.W) + 0.5 - u.x, dy = ((next / S.W) | 0) + 0.5 - u.y;
+    const wrong = r >= 2 && dx * ROAD_DIRS[r][0] + dy * ROAD_DIRS[r][1] < -0.1;
+    speed *= wrong ? ONEWAY_WRONG : ROAD_SPEED / (1 + trafficJam(u, here, next));
+  } else if (S.ramp[here]) speed *= SLOPE_SPEED; else if (S.res[here]) speed *= 0.75;
   let step = speed * batFactor(u) * dt;
   u.moved = 1;
   while (step > 0 && u.pi < u.path.length) {
@@ -348,10 +407,11 @@ function dispatch(p) {
     free--;
   }
   // 3) Deliveries, one unit per request per pass. Player priority comes first; within the same
-  //    priority the Foundry goes first (new workers unblock everything), then construction.
+  //    priority the Foundry goes first (new workers unblock everything), then construction sites
+  //    and production inputs share turns, whichever has the fewest goods on the way first.
   const reqs = [];
   for (const b of blds) {
-    const pri = prioRank(b) * 3 + (b.built && BDEFS[b.type].bots ? 0 : b.built ? 2 : 1);
+    const pri = prioRank(b) * 3 + (b.built && BDEFS[b.type].bots ? 0 : 1);
     for (const [g, n] of needsOf(b)) if (n > 0) reqs.push({ b, g, n, pri, inc: sumValues(b.inc) });
   }
   reqs.sort((a, c) => a.pri - c.pri || a.inc - c.inc || a.b.born - c.b.born);
@@ -457,7 +517,7 @@ function updateWorker(u, dt) {
     const c = getE(t.bld);
     if (!c || c.owner !== u.owner) { u.task = null; u.path = null; }
     else if (u.inside === c.id) {
-      if (u.bat >= 99.5) { u.task = null; if (!BDEFS[c.type].store) exitBuilding(u); }
+      if (u.bat >= 99.5 || chargerDry(c)) { u.task = null; if (!BDEFS[c.type].store) exitBuilding(u); }
     } else if (moveAlong(u, dt)) enterBuilding(u, c);
   } else if (t.type === 'haul') doHaul(u, t, dt);
   else if (t.type === 'build') doBuild(u, t, dt);
@@ -583,7 +643,7 @@ function findNode(b, type, radius) {
       const t = j * S.W + i;
       if (S.res[t] !== type || !S.amt[t] || S.resRes[t] || S.zone[t] !== zone) continue;
       if (S.owner[t] >= 0 && S.owner[t] !== b.owner) continue; // don't harvest on enemy land
-      if (type === R_STALK && S.grow[t] < 1) continue;
+      if ((type === R_STALK || type === R_CROP) && S.grow[t] < 1) continue;
       const d = dist2(i, j, b.x, b.y);
       if (d <= r2 && d < bd) { bd = d; best = t; }
     }
@@ -600,7 +660,7 @@ function findPlantSpot(b, radius) {
       const t = j * S.W + i;
       const d = dist2(i, j, b.x, b.y);
       if (d > r2 || d < 2.5) continue;
-      if (S.terrain[t] !== T_GROUND || S.res[t] || S.bAt[t] || S.road[t] || S.resRes[t] || S.ramp[t] || S.zone[t] !== zone) continue;
+      if (S.terrain[t] !== T_GROUND || S.res[t] || S.bAt[t] || S.road[t] || S.resRes[t] || S.ramp[t] || S.fert[t] || S.zone[t] !== zone) continue;
       if (S.owner[t] !== b.owner) continue;
       let near = 0, blocked = false;
       for (let dj = -1; dj <= 1; dj++) for (let di = -1; di <= 1; di++) {
@@ -613,6 +673,34 @@ function findPlantSpot(b, radius) {
       const s = near * 2 - Math.sqrt(d) * 0.5 + hash2(i, j, S.tick) * 0.5;
       if (s > bs) { bs = s; best = t; }
     }
+  }
+  return best;
+}
+
+/** The nearest empty patch of fertile soil where a Bio Farm can plant a crop. */
+function findCropSpot(b, radius) {
+  let best = -1, bd = Infinity;
+  const r2 = radius * radius + 0.3;
+  const zone = S.zone[tIdx(b.x, b.y)];
+  for (let j = Math.max(0, b.y - radius); j <= Math.min(S.H - 1, b.y + radius); j++) {
+    for (let i = Math.max(0, b.x - radius); i <= Math.min(S.W - 1, b.x + radius); i++) {
+      const t = j * S.W + i;
+      if (!S.fert[t] || S.res[t] || S.bAt[t] || S.road[t] || S.resRes[t] || S.ramp[t] || S.zone[t] !== zone) continue;
+      if (S.owner[t] !== b.owner) continue;
+      const d = dist2(i, j, b.x, b.y);
+      if (d <= r2 && d < bd) { bd = d; best = t; }
+    }
+  }
+  return best;
+}
+
+/** The oil seep tile an Oil Pump draws from next (its own tile or a neighbour), or -1 if dry. */
+function pumpSeep(b) {
+  let best = -1, most = 0;
+  for (let dj = -1; dj <= 1; dj++) for (let di = -1; di <= 1; di++) {
+    if (!inMap(b.x + di, b.y + dj)) continue;
+    const t = tIdx(b.x + di, b.y + dj);
+    if (S.res[t] === R_OIL && S.amt[t] > most) { most = S.amt[t]; best = t; }
   }
   return best;
 }
@@ -641,7 +729,7 @@ function doStaff(u, t, dt) {
         if (c && goTo(u, c.x, c.y)) { t.phase = 'toCharge'; t.charger = c.id; return; }
         t.wait = 3;
       }
-      if (!def.gather && !def.plant) return; // production happens in updateBuilding
+      if (!def.gather && !def.plant && !def.farm) return; // production happens in updateBuilding
       let node;
       if (def.gather) {
         const g = RES[def.gather].good;
@@ -649,6 +737,18 @@ function doStaff(u, t, dt) {
         node = findNode(b, def.gather, def.radius);
         if (node < 0) { b.status = `No ${RES[def.gather].name.toLowerCase()}s left in reach`; t.wait = 3; return; }
         b.status = 'Gathering ' + GOOD[g].name;
+      } else if (def.farm) {
+        // Harvest ripe crops first, then plant any empty fertile soil.
+        if ((b.stock.fuel || 0) >= def.out.fuel) { b.status = 'Storage full, waiting for pickup'; t.wait = 1; return; }
+        node = findNode(b, R_CROP, def.radius);
+        t.act = node >= 0 ? 'harvest' : 'plant';
+        if (node < 0) node = findCropSpot(b, def.radius);
+        if (node < 0) {
+          b.status = countResIn(b.x, b.y, def.radius, R_CROP) ? 'Crops are ripening' : 'No fertile soil free in reach';
+          t.wait = 2;
+          return;
+        }
+        b.status = t.act === 'harvest' ? 'Harvesting energy crops' : 'Planting energy crops';
       } else {
         if (reachableRes(b.x, b.y, def.radius, def.plant) >= 16) { b.status = 'The grove is full'; t.wait = 4; return; }
         node = findPlantSpot(b, def.radius);
@@ -667,14 +767,19 @@ function doStaff(u, t, dt) {
       if (moveAlong(u, dt)) { enterBuilding(u, c); t.phase = 'charging'; }
       return;
     }
-    case 'charging':
-      if ((u.bat ?? 100) >= 99.5) {
+    case 'charging': {
+      const c = getE(t.charger);
+      if ((u.bat ?? 100) >= 99.5 || !c || chargerDry(c)) {
         t.phase = 'back';
         if (!goTo(u, b.x, b.y)) { exitBuilding(u); u.x = b.x + 0.5; u.y = b.y + 0.5; u.path = null; }
       }
       return;
+    }
     case 'toNode':
-      if (moveAlong(u, dt)) { t.phase = 'work'; t.timer = def.gather ? RES[def.gather].harvest : 3; }
+      if (moveAlong(u, dt)) {
+        t.phase = 'work';
+        t.timer = def.gather ? RES[def.gather].harvest : def.farm ? (t.act === 'harvest' ? RES[R_CROP].harvest : 2) : 3;
+      }
       return;
     case 'work': {
       u.busy = 1;
@@ -689,6 +794,18 @@ function doStaff(u, t, dt) {
           if (S.amt[node] === 0) S.res[node] = R_NONE;
           markDirty(ni, nj);
           u.carry = RES[def.gather].good;
+        }
+      } else if (def.farm) {
+        if (t.act === 'harvest' && S.res[node] === R_CROP && S.grow[node] >= 1) {
+          S.res[node] = R_NONE;
+          S.amt[node] = 0;
+          markDirty(ni, nj);
+          u.carry = RES[R_CROP].good;
+        } else if (t.act === 'plant' && S.fert[node] && !S.res[node] && !S.bAt[node] && !S.road[node]) {
+          S.res[node] = R_CROP;
+          S.amt[node] = 1;
+          S.grow[node] = 0;
+          markDirty(ni, nj);
         }
       } else if (!S.res[node] && !S.bAt[node] && !S.road[node]) {
         S.res[node] = def.plant;
@@ -730,7 +847,18 @@ function updateBuilding(b, dt) {
   else if (def.missile) updateSilo(b, def);
   else if (def.ammo) updateTurret(b, def, dt);
   if (def.missile && b.reload > 0) b.reload = Math.max(0, b.reload - dt);
-  if (def.charger && !def.store) b.status = `Charging ${Math.min(b.charging || 0, def.charger.slots)} of ${def.charger.slots} bots` + ((b.charging || 0) > def.charger.slots ? ` (${b.charging - def.charger.slots} waiting)` : '');
+  if (def.charger && !def.store) {
+    if (chargerDry(b)) {
+      b.status = 'Out of Fuel: bots can\'t charge here';
+      const P = S.players[b.owner];
+      if (S.time - (P.lastFuelMsg || -999) > 120 && S.time - b.born > 20) {
+        P.lastFuelMsg = S.time;
+        postMsg(b.owner, 'A Charging Station is out of Fuel. Grow it at a Bio Farm on fertile soil, or pump oil and refine it.', b.x, b.y, 'warn');
+      }
+    } else {
+      b.status = `Charging ${Math.min(b.charging || 0, def.charger.slots)} of ${def.charger.slots} bots` + ((b.charging || 0) > def.charger.slots ? ` (${b.charging - def.charger.slots} waiting)` : '');
+    }
+  }
   if (def.mil) garrisonDefense(b, dt);
   if (def.staff && !def.inp) {
     const op = getE(b.staff);
@@ -746,6 +874,7 @@ function produce(b, def, dt) {
     return;
   }
   if (def.bots && b.mode === 'off' && !hasOrders(b)) { b.status = 'Idle: tap it to order bots'; return; }
+  if (def.pump && pumpSeep(b) < 0) { b.status = 'The oil seep has run dry'; return; }
   dt *= batFactor(op);
   for (const g in def.inp) {
     if ((b.stock[g] || 0) < def.inp[g]) { b.status = 'Waiting for ' + GOOD[g].name; return; }
@@ -762,6 +891,10 @@ function produce(b, def, dt) {
   if (b.timer < def.work) return;
   b.timer = 0;
   for (const g in def.inp) bump(b.stock, g, -def.inp[g]);
+  if (def.pump) {
+    const seep = pumpSeep(b);
+    if (--S.amt[seep] <= 0) { S.amt[seep] = 0; S.res[seep] = R_NONE; markDirty(seep % S.W, (seep / S.W) | 0); }
+  }
   if (def.make) {
     for (const g in def.make) bump(b.stock, g, def.make[g]);
     addFx('float', b.x + 0.5, b.y + 0.1, { text: '+1', color: GOOD[Object.keys(def.make)[0]].color });
@@ -1364,6 +1497,7 @@ function releaseScore(b) {
   const def = BDEFS[b.type];
   let s = b.born / 10000 + (prioRank(b) - 1) * 20;
   if (def.plant) s += 10;
+  if (def.farm) s += 4;
   if (def.gather) s += (b.stock[RES[def.gather].good] || 0) >= def.out[RES[def.gather].good] ? 6 : 3;
   return s;
 }

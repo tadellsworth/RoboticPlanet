@@ -2,7 +2,8 @@
 
 Every building, bot, resource and ground tile now uses custom art (batch 1). Anything without an
 image keeps a placeholder drawn in code, so art can still be added **one piece at a time**. The
-remaining pieces are listed under [Batch 2](#batch-2-terrain-levels-and-goods-icons).
+remaining pieces are listed under [Batch 2](#batch-2-terrain-levels-and-goods-icons), [Batch 3](#batch-3-missiles-batteries-and-army-orders)
+and [Batch 4](#batch-4-fuel-farms-and-oil).
 
 This guide has three parts:
 
@@ -170,6 +171,22 @@ New buildings, a new good and two new map markers. Same brief and angle as batch
 | `missile` | 128×128, transparent | A missile in flight (drawn facing **right**; the game rotates it) | A sleek missile seen from directly above, nose pointing right: grey body, yellow warhead band, small fins, and a short bright exhaust flame at the tail. |
 | `rally` | 128×128, transparent | Your rally flag where warbots hold an area | A small planted marker flag on a metal pole, cyan #38d4ff banner with a chevron symbol, a little tripod base. |
 | `icon-warhead` | 64×64, transparent | Warhead, in the top bar | A single yellow-tipped warhead shell. Bold, simple, thin dark outline. |
+
+### Batch 4: Fuel, farms and oil
+
+Charging Stations now burn Fuel, grown at a Bio Farm or refined from oil. Same brief and angle as batch 1.
+
+| Key | Size | What it is | Prompt for Claude Design |
+|---|---|---|---|
+| `farm` | 256×256, transparent | Bio Farm: a worker plants and harvests energy crops | A compact agri-bot station seen from above: a seed hopper and a small greenhouse dome with grow lights, a pink fuel tank with hoses, and a robotic arm folded at the side. Accent light: magenta #ff5c8a. |
+| `pump` | 256×256, transparent | Oil Pump, built on top of an oil seep | An industrial pumpjack seen from above at a slight angle: a nodding beam on an A-frame over a wellhead, black oil stains on the pad, yellow hazard paint on the beam. |
+| `refinery` | 256×256, transparent | Refinery: Crude → Fuel | A small refinery: two round storage tanks (one rust-brown for crude, one magenta for fuel) joined by pipes, a short distillation column and a flare stack with a small flame. |
+| `crop` | 128×128, transparent | Energy crop on fertile soil (drawn smaller while it ripens) | A small row of alien crop plants seen from above: green leafy stems topped with glowing pink energy pods. |
+| `oil` | 128×128, transparent | Oil seep | A dark, glossy pool of crude oil seeping out of cracked sand, with an oily rainbow sheen and a few bubbles. |
+| `fertile` | 256×256, seamless | Fertile soil (one image spans 4×4 map tiles) | Dark, rich tilled soil seen from directly above, with straight furrows running left to right and a hint of green moss. Must tile seamlessly. |
+| `oneway` | 64×64, transparent | Arrow painted on a one-way path (pointing **right**; the game rotates it) | A bold road-marking arrow pointing right, off-white paint with a slightly worn edge. |
+| `icon-crude` | 64×64, transparent | Crude, in the top bar | A small black oil drop with a brown rim highlight. Bold, simple, thin dark outline. |
+| `icon-fuel` | 64×64, transparent | Fuel, in the top bar | A small magenta fuel cell or canister with a white highlight. Bold, simple, thin dark outline. |
 
 ### Not swappable yet (ask Claude Code if you want these)
 

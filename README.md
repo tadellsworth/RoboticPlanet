@@ -8,7 +8,8 @@ across the map.
 - **Colony:** no rival. Settle the planet at your own pace, with colonization milestones.
 
 Before each game, sliders set the **map size** (Small to Huge), the **terrain** (Flat, Gentle,
-Rolling, Rugged, Mountainous) and the **resources** (Scarce to Abundant).
+Rolling, Rugged, Mountainous) and the **resources** (Scarce to Abundant). Resources come in separate
+fields: your landing zone has a little of everything, and the rich fields beyond it are worth fighting for.
 
 Botfall is an original game in the colony-logistics genre. It contains no code, art, sound or data from
 any other game.
@@ -48,7 +49,10 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
 | Pulse Turret | Shoots enemy bots; uses Crystal as ammo |
 | Depot | Extra storage, shortens hauling trips |
 | Ramp | Cuts a slope into a one-level cliff so bots can climb it |
-| Charging Station | Recharges bots' batteries, four at a time |
+| Charging Station | Recharges bots' batteries, four at a time; burns **Fuel** |
+| Bio Farm | A worker plants energy crops on fertile soil and harvests them into **Fuel** |
+| Oil Pump | Built on an oil seep; a worker pumps **Crude** until it runs dry |
+| Refinery | Crude → 2 **Fuel** |
 | Munitions Works | Alloy + Crystal → **Warhead** (Versus) |
 | Missile Silo | Fires missiles at rival buildings up to 18 tiles away (Versus) |
 
@@ -56,7 +60,10 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
   Run short and the game pulls workers off low-priority jobs, so build a Bot Foundry early.
 - Placing a construction site is free; workers bring the materials from storage.
 - **Paths** cost a quarter Stone per tile (1 Stone paves 4; refunded if you remove them) and make bots move twice as fast. Bots
-  plan routes that use them even when that means a short detour.
+  plan routes that use them even when that means a short detour. Bots are slow off paths.
+- **Traffic:** on a two-way path, bots slow down whenever they meet traffic coming the other way. Switch the Paths banner to
+  **One-way** and drag along a path to point it the way you drag (tap a path to turn its arrow). One-way loops keep busy
+  routes flowing; going the wrong way up a one-way path is allowed but crawls.
 - **Terrain levels:** the planet has terraces at different heights (lighter ground is higher). Bots
   can't climb cliffs; they use slopes at narrow passes, so some routes are long. Pave busy routes with
   Paths (slopes too) and build a **Ramp** to open your own way up. Buildings can't be placed where they
@@ -69,7 +76,8 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
   demolishing it). You can also switch individual goods off for that building.
 - **Minimap:** tap or drag it to jump around; red pulses mark buildings under attack. The × hides it.
 - **Batteries:** bots drain their battery walking, working and fighting, and recharge at the Lander, a
-  Charging Station or (warbots) inside their garrison. A flat battery means half speed and half power.
+  Charging Station or (warbots) inside their garrison. A flat battery means half speed and half power. The Lander charges
+  for free; Charging Stations burn Fuel (one Fuel is about one and a half full charges).
 - **Army orders:** tap **Army**, then a rival building to attack it with warbots or a missile, or open
   ground to send warbots there to hold the area under a rally flag. Tap the flag to call them back.
 - **Missiles** wreck smaller buildings and knock Outposts and Landers down to almost no armor; warbots

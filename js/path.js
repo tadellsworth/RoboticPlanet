@@ -2,7 +2,8 @@
 /*
  * Botfall — A* pathfinding on the tile grid (8 directions, no corner cutting).
  * Buildings block movement except for the start and goal tiles, so bots can walk out of
- * and into buildings. Paths make travel cheaper; resource tiles are slower to cross.
+ * and into buildings. Paths make travel cheaper (unless taken the wrong way up a one-way path);
+ * resource tiles are slower to cross.
  */
 
 const _pf = { n: 0, g: null, from: null, stamp: null, closed: null, gen: 0, heap: new MinHeap() };
@@ -17,8 +18,14 @@ function _pfEnsure(N) {
   _pf.gen = 0;
 }
 
-function tileCost(t) {
-  if (S.road[t]) return ROAD_PREFERENCE / ROAD_SPEED;
+/** Cost of crossing tile t while moving in direction (dx, dy). */
+function tileCost(t, dx, dy) {
+  const r = S.road[t];
+  if (r) {
+    // The wrong way up a one-way path: slow, plus a penalty so bots only do it when there's no other way.
+    if (r >= 2 && dx * ROAD_DIRS[r][0] + dy * ROAD_DIRS[r][1] < 0) return 1 / ONEWAY_WRONG + 2;
+    return ROAD_PREFERENCE / ROAD_SPEED;
+  }
   if (S.ramp[t]) return 1 / SLOPE_SPEED;
   return S.res[t] ? 1.5 : 1;
 }
@@ -71,7 +78,7 @@ function findPath(sx, sy, gx, gy, avoidFor) {
         const e = S.elev[cur];
         if (S.elev[nt] !== e || S.elev[a] !== e || S.elev[b] !== e) continue;
       } else if (!canStep(cur, nt)) continue; // cliffs block; ramps connect levels
-      let ng = g[cur] + dir[2] * (tileCost(cur) + tileCost(nt)) * 0.5;
+      let ng = g[cur] + dir[2] * (tileCost(cur, dir[0], dir[1]) + tileCost(nt, dir[0], dir[1])) * 0.5;
       // Workers steer clear of enemy territory unless there is no other way.
       if (avoidFor !== undefined) { const o = S.owner[nt]; if (o >= 0 && o !== avoidFor) ng += 6; }
       if (stamp[nt] !== gen || ng < g[nt]) {

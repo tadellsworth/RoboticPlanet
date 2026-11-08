@@ -182,7 +182,10 @@ function enterGame() {
   const colony = S.mode === 'colony';
   $('btn-attack').hidden = colony;
   for (const g of WAR_GOODS) UI.goodEls[g].hidden = colony;
-  $('goods').style.gridTemplateColumns = `repeat(${GOODS.length - (colony ? WAR_GOODS.length : 0)}, 1fr)`;
+  // More than seven goods don't fit one row on a phone: split them over two.
+  const nGoods = GOODS.length - (colony ? WAR_GOODS.length : 0);
+  $('goods').style.gridTemplateColumns = `repeat(${nGoods > 7 ? Math.ceil(nGoods / 2) : nGoods}, 1fr)`;
+  $('goods').classList.toggle('two-rows', nGoods > 7);
   $('bottombar').classList.toggle('three', colony);
   closeSheet();
   setMode('normal');
@@ -245,6 +248,7 @@ function setMode(mode) {
 
 function showBanner(html, okLabel, cancelLabel) {
   $('banner').hidden = false;
+  $('banner-seg').hidden = true;
   $('banner-text').innerHTML = html;
   $('banner-ok').hidden = !okLabel;
   if (okLabel) $('banner-ok').textContent = okLabel;
@@ -258,7 +262,8 @@ function enterPlaceMode(type) {
   refreshOverlay(type);
   showBanner(`Tap a highlighted spot to place a <b>${BDEFS[type].name}</b>.`, null, 'Cancel');
   if (!R.overlay.valid.some((v) => v)) {
-    showBanner(`<span class="err">There is no valid spot for a ${BDEFS[type].name} in your territory${BDEFS[type].gather ? ' near the right resource' : ''}. Expand with an Outpost.</span>`, null, 'Close');
+    const near = BDEFS[type].gather ? ' near the right resource' : BDEFS[type].farm ? ' near fertile soil' : BDEFS[type].pump ? ' on an oil seep' : '';
+    showBanner(`<span class="err">There is no valid spot for a ${BDEFS[type].name} in your territory${near}. Expand with an Outpost.</span>`, null, 'Close');
   }
 }
 
@@ -294,6 +299,8 @@ function onMapTap(i, j, wx, wy) {
       let extra = '';
       const def = BDEFS[type];
       if (def.gather) extra = ` <span class="ok">${reachableRes(i, j, def.radius, def.gather)} ${RES[def.gather].name.toLowerCase()}s in reach.</span>`;
+      if (def.farm) extra = ` <span class="ok">${fertileIn(i, j, def.radius)} fertile tiles in reach.</span>`;
+      if (def.pump) extra = ` <span class="ok">${oilAround(i, j)} Crude in this seep.</span>`;
       showBanner(`Place the <b>${def.name}</b> here?${extra}`, 'Build here', 'Cancel');
     } else {
       sfx('error');
@@ -304,7 +311,12 @@ function onMapTap(i, j, wx, wy) {
   if (R.mode === 'road') {
     if (!inMap(i, j)) return;
     const t = tIdx(i, j);
-    if (S.road[t]) { removeRoad(0, i, j); sfx('click'); showRoadBanner(); }
+    if (S.road[t] && UI.oneWay) {
+      // Turn the arrow: east, south, west, north, then back to two-way.
+      setRoadDir(i, j, S.road[t] >= 5 ? 1 : S.road[t] + 1);
+      sfx('click');
+      showRoadBanner();
+    } else if (S.road[t]) { removeRoad(0, i, j); sfx('click'); showRoadBanner(); }
     else {
       const why = buildRoad(0, i, j);
       if (why) { sfx('error'); showRoadBanner(why); } else { sfx('click'); showRoadBanner(); }
@@ -329,6 +341,7 @@ function onMapTap(i, j, wx, wy) {
   }
   if (bot) { sfx('click'); openBotSheet(bot); return; }
   if (inMap(i, j) && S.res[tIdx(i, j)]) { sfx('click'); openResourceSheet(tIdx(i, j)); return; }
+  if (inMap(i, j) && S.fert[tIdx(i, j)] && S.terrain[tIdx(i, j)] === T_GROUND) { sfx('click'); openSoilSheet(tIdx(i, j)); return; }
   closeSheet();
 }
 
@@ -337,25 +350,49 @@ function rallyAtTap(wx, wy) {
   return null;
 }
 
+/**
+ * Dragging lays path tiles along the drag. In one-way mode each tile also points the way the
+ * finger moved; in two-way mode dragging over one-way tiles makes them two-way again.
+ */
 function onRoadPaint(i, j, first) {
   if (R.mode !== 'road') return;
   const from = first || !UI.lastPaint ? { i, j } : UI.lastPaint;
-  for (const [x, y] of tileLine(from.i, from.j, i, j)) {
-    if (!canRoad(0, x, y) || S.road[tIdx(x, y)]) continue;
-    const why = buildRoad(0, x, y);
-    if (why) { if (!UI.roadWarned) { UI.roadWarned = true; sfx('error'); } showRoadBanner(why); break; }
+  const line = tileLine(from.i, from.j, i, j);
+  let prev = null;
+  for (const [x, y] of line) {
+    if (!inMap(x, y)) break;
+    const t = tIdx(x, y);
+    if (!S.road[t] && canRoad(0, x, y)) {
+      const why = buildRoad(0, x, y);
+      if (why) { if (!UI.roadWarned) { UI.roadWarned = true; sfx('error'); } showRoadBanner(why); break; }
+    }
+    if (S.road[t]) {
+      if (!UI.oneWay) setRoadDir(x, y, 1);
+      else if (prev) {
+        const v = 2 + [[1, 0], [0, 1], [-1, 0], [0, -1]].findIndex(([dx, dy]) => dx === x - prev[0] && dy === y - prev[1]);
+        if (v >= 2) { if (S.road[tIdx(prev[0], prev[1])]) setRoadDir(prev[0], prev[1], v); setRoadDir(x, y, v); }
+      }
+    }
+    prev = [x, y];
   }
   if (!UI.roadWarned) showRoadBanner();
   UI.lastPaint = { i, j };
 }
 
-/** The Paths banner shows what a tile costs and how much you have left. */
+/** The Paths banner: two-way or one-way, what a tile costs and how much you have left. */
 function showRoadBanner(problem) {
   const g = Object.keys(ROAD_COST)[0];
   const per = Math.round(1 / ROAD_COST[g]);
-  const cost = `<b>1 ${GOOD[g].name} paves ${per} tiles</b> (enough for ${roadTilesAffordable(0)} more)`;
-  showBanner((problem ? `<span class="err">${problem}</span> ` : '') +
-    `Drag across open ground to lay <b>paths</b>: ${cost}. Bots move twice as fast on paths and go out of their way to use them. Tap a path to remove it and get the ${GOOD[g].name} back.`, null, 'Done');
+  const cost = `<b>1 ${GOOD[g].name} paves ${per} tiles</b> (${roadTilesAffordable(0)} left)`;
+  const how = UI.oneWay
+    ? 'Drag along paths to point them the way you drag. <b>One-way</b> traffic never meets head-on. Tap a path to turn its arrow.'
+    : 'Drag to lay <b>paths</b>: bots go twice as fast on them, but slow down for oncoming traffic. Tap a path to remove it.';
+  showBanner((problem ? `<span class="err">${problem}</span> ` : '') + `${how} ${cost}.`, null, 'Done');
+  $('banner-seg').hidden = false;
+  for (const btn of $('banner-seg').children) {
+    btn.classList.toggle('on', (btn.dataset.v === '1') === !!UI.oneWay);
+    btn.onclick = () => { UI.oneWay = btn.dataset.v === '1'; sfx('click'); showRoadBanner(); };
+  }
 }
 
 /* ------------------------------------------------------------------ sheets */
@@ -531,7 +568,18 @@ function refreshBuildingSheet(b) {
       if (mine) parts.push(`<div class="kv"><span>Waiting for pickup</span><span>${goodTag(g, `${b.stock[g] || 0}/${def.out[g]}`)}</span></div>`);
     }
     if (def.plant) parts.push(`<div class="kv"><span>Stalk groves in reach</span><span>${reachableRes(b.x, b.y, def.radius, R_STALK)}</span></div>`);
-    if (def.inp && mine) {
+    if (def.farm) {
+      const crops = reachableRes(b.x, b.y, def.radius, R_CROP), ripe = countResIn(b.x, b.y, def.radius, R_CROP, true, S.zone[tIdx(b.x, b.y)]);
+      parts.push(`<div class="kv"><span>Fertile soil in reach</span><span>${fertileIn(b.x, b.y, def.radius)} tiles</span></div>`);
+      parts.push(`<div class="kv"><span>Crops planted</span><span>${crops}${crops ? ` (${ripe} ripe)` : ''}</span></div>`);
+      if (mine) parts.push(`<div class="kv"><span>Waiting for pickup</span><span>${goodTag('fuel', `${b.stock.fuel || 0}/${def.out.fuel}`)}</span></div>`);
+    }
+    if (def.pump) {
+      parts.push(`<div class="kv"><span>Crude left in the seep</span><span>${oilAround(b.x, b.y)}</span></div>`);
+      if (mine) parts.push(`<div class="kv"><span>Waiting for pickup</span><span>${goodTag('crude', `${b.stock.crude || 0}/${def.out.crude}`)}</span></div>`);
+      if (mine && b.timer > 0 && b.status === 'Working') parts.push(`<div class="bar"><div style="width:${Math.round((b.timer / def.work) * 100)}%"></div></div>`);
+    }
+    if (def.inp && mine && !def.pump) {
       const ins = Object.keys(def.inp).map((g) => goodTag(g, `${b.stock[g] || 0}/${INPUT_CAP}`, !(b.stock[g] > 0))).join('');
       const outs = def.make ? Object.keys(def.make).map((g) => goodTag(g, `${b.stock[g] || 0}/${def.out[g]}`)).join('') : '';
       const recipe = Object.keys(def.inp).map((g) => GOOD[g].name).join(' + ') + ' → ' + (def.make ? Object.keys(def.make).map((g) => GOOD[g].name).join('') : 'a new bot');
@@ -559,6 +607,13 @@ function refreshBuildingSheet(b) {
     }
     if (def.charger && mine) {
       parts.push(`<div class="kv"><span>Charging now</span><span>${b.charging || 0} (${def.charger.slots} at full speed)</span></div>`);
+      if (def.charger.fuel) {
+        const pct = Math.round(Math.min(100, ((b.energy || 0) / FUEL_ENERGY) * 100));
+        parts.push(`<div class="kv"><span>Fuel stocked</span><span>${goodTag('fuel', `${b.stock.fuel || 0}/${def.fuelCap}`, !(b.stock.fuel > 0))}</span></div>`);
+        parts.push(`<div class="kv"><span>Fuel burning</span><span>${pct}% left</span></div><div class="bar battery"><div style="width:${pct}%;background:var(--g-fuel)"></div></div>`);
+      } else {
+        parts.push('<div class="kv"><span>Fuel</span><span>Not needed: the Lander charges for free</span></div>');
+      }
     }
   }
   $('sh-dyn').innerHTML = parts.join('');
@@ -626,6 +681,9 @@ function botActivity(u) {
   if (t.type === 'staff') {
     const b = getE(t.bld), def = b ? BDEFS[b.type] : {};
     if (t.phase === 'go') return `Walking to its job at the ${nm(t.bld)}`;
+    if (def.farm && (t.phase === 'toNode' || t.phase === 'work')) {
+      return t.act === 'harvest' ? (t.phase === 'work' ? 'Harvesting an energy crop' : 'Heading out to harvest a crop') : (t.phase === 'work' ? 'Planting an energy crop' : 'Heading out to plant a crop');
+    }
     if (t.phase === 'toNode') return def.plant ? 'Heading out to plant a grove' : `Heading out to gather ${def.gather ? GOOD[RES[def.gather].good].name : ''}`;
     if (t.phase === 'work') return def.plant ? 'Planting a stalk grove' : `Harvesting ${def.gather ? RES[def.gather].name.toLowerCase() : ''}`;
     if (t.phase === 'back') return u.carry ? `Bringing ${GOOD[u.carry].name} back` : `Walking back to the ${nm(t.bld)}`;
@@ -701,11 +759,30 @@ function openResourceSheet(t) {
   R.selected = 0; R.selTile = t; UI.selBot = 0;
   const type = S.res[t], info = RES[type];
   const by = Object.keys(BDEFS).find((k) => BDEFS[k].gather === type);
+  const desc = type === R_CROP ? 'Planted by a Bio Farm on fertile soil. Once ripe, its worker harvests it into Fuel and plants a new one.'
+    : type === R_OIL ? 'Build an Oil Pump right on top of the seep to pump Crude (it also draws from seep tiles next to it). A Refinery turns Crude into Fuel.'
+    : `Gives ${GOOD[info.good].name}. Gathered by a ${BDEFS[by].name} within ${BDEFS[by].radius} tiles.${type === R_STALK ? ' A Grove Planter can grow more.' : ' It runs out eventually, so expand to find more.'}`;
   const html = `<div class="sheet-title"><div><h3>${info.name}</h3></div></div>
-    <p class="desc">Gives ${GOOD[info.good].name}. Gathered by a ${BDEFS[by].name} within ${BDEFS[by].radius} tiles.${type === R_STALK ? ' A Grove Planter can grow more.' : ' It runs out eventually, so expand to find more.'}</p>
+    <p class="desc">${desc}</p>
     <div id="sh-dyn"></div>`;
   openSheet('res', t, html);
   refreshSheet();
+}
+
+function openSoilSheet(t) {
+  R.selected = 0; R.selTile = t; UI.selBot = 0;
+  const html = `<div class="sheet-title"><div><h3>Fertile soil</h3></div></div>
+    <p class="desc">Dark, rich ground. A Bio Farm within ${BDEFS.farm.radius} tiles plants energy crops here and harvests them into Fuel for your Charging Stations. Paths and buildings on it leave less room to farm.</p>`;
+  openSheet('soil', t, html);
+}
+
+/** Crude left in the oil seep tiles around (i, j) that an Oil Pump there would draw from. */
+function oilAround(i, j) {
+  let n = 0;
+  for (let dj = -1; dj <= 1; dj++) for (let di = -1; di <= 1; di++) {
+    if (inMap(i + di, j + dj) && S.res[tIdx(i + di, j + dj)] === R_OIL) n += S.amt[tIdx(i + di, j + dj)];
+  }
+  return n;
 }
 
 function refreshSheet() {
@@ -741,8 +818,10 @@ function refreshSheet() {
   } else if (UI.sheetKind === 'res') {
     const t = UI.sheetFor;
     if (!S.res[t]) { closeSheet(); return; }
-    const grow = S.res[t] === R_STALK && S.grow[t] < 1 ? `<div class="kv"><span>Growing</span><span>${Math.round(S.grow[t] * 100)}%</span></div>` : '';
-    $('sh-dyn').innerHTML = `<div class="kv"><span>Harvests left</span><span>${S.amt[t]}</span></div>${grow}`;
+    const r = S.res[t];
+    const grow = (r === R_STALK || r === R_CROP) && S.grow[t] < 1 ? `<div class="kv"><span>${r === R_CROP ? 'Ripening' : 'Growing'}</span><span>${Math.round(S.grow[t] * 100)}%</span></div>` : '';
+    $('sh-dyn').innerHTML = r === R_CROP ? (grow || '<div class="kv"><span>Ripe</span><span>Ready to harvest</span></div>')
+      : `<div class="kv"><span>${r === R_OIL ? 'Crude left' : 'Harvests left'}</span><span>${S.amt[t]}</span></div>${grow}`;
   }
 }
 
@@ -757,7 +836,8 @@ const OBJECTIVES = [
   { text: 'Build a <b>Bot Foundry</b> so you can make more workers.', done: () => hasBuilt('foundry') },
   { text: 'Tap your <b>Bot Foundry</b> and order some <b>Workers</b>: it only builds the bots you ask for.', done: () => S.players[0].stats.bots > START_WORKERS + START_WARBOTS || S.buildings.some((b) => !b.dead && b.owner === 0 && hasOrders(b)) },
   { text: 'Build an <b>Outpost</b> near your border to claim more land.', done: () => hasBuilt('outpost') },
-  { text: 'Tap <b>Paths</b> and draw roads between busy buildings so workers move faster.', done: () => S.road.reduce((a, v) => a + v, 0) >= 6 },
+  { text: 'Tap <b>Paths</b> and draw roads between busy buildings so workers move faster.', done: () => S.road.reduce((a, v) => a + (v ? 1 : 0), 0) >= 6 },
+  { text: 'Charging Stations burn <b>Fuel</b>. Build a <b>Bio Farm</b> beside the dark fertile soil to grow it.', done: () => hasBuilt('farm') },
 ];
 
 function hasBuilt(type) {
