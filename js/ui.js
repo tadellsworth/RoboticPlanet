@@ -64,9 +64,14 @@ function initUI() {
   $('p-help').onclick = () => showHelp();
   $('p-quit').onclick = () => { saveGame(); $('screen-pause').hidden = true; toMenu(); };
 
-  // Game over
-  $('o-new').onclick = () => { $('screen-over').hidden = true; UI.menu.seed = randomSeed(); startNewGame(); };
-  $('o-menu').onclick = () => { $('screen-over').hidden = true; toMenu(); };
+  // Game over (missions swap in their own actions)
+  $('o-new').onclick = () => { $('screen-over').hidden = true; if (UI.overNew) UI.overNew(); else { UI.menu.seed = randomSeed(); startNewGame(); } };
+  $('o-menu').onclick = () => { $('screen-over').hidden = true; toMenu(); if (UI.overMenu) UI.overMenu(); };
+  $('m-missions').onclick = () => { sfx('click'); openMissions(); };
+  $('ms-close').onclick = () => { sfx('click'); if (UI.msSel != null) { UI.msSel = null; renderMissions(); } else $('screen-missions').hidden = true; };
+  $('o-statsbtn').onclick = () => { sfx('click'); openStats(); };
+  $('p-stats').onclick = () => { sfx('click'); openStats(); };
+  $('st-close').onclick = () => { sfx('click'); $('screen-stats').hidden = true; };
 
   // HUD tools
   $('btn-build').onclick = () => { sfx('click'); if (UI.sheetKind === 'build') closeSheet(); else { setMode('normal'); openBuildMenu(); } };
@@ -217,6 +222,10 @@ function showHelp() {
 function showGameOver() {
   UI.overShown = true;
   clearSave();
+  UI.overNew = null; UI.overMenu = null;
+  $('o-new').textContent = 'New game'; $('o-menu').textContent = 'Main menu';
+  $('o-code').hidden = true;
+  if (S.mission) { showMissionOver(); return; }
   const won = S.winner === 0;
   sfx(won ? 'win' : 'lose');
   $('o-title').textContent = won ? 'Victory!' : 'Defeat';
@@ -225,10 +234,194 @@ function showGameOver() {
     : 'The rival captured your Lander. Regroup and try again.';
   const st = S.players[0].stats;
   $('o-stats').innerHTML = [
-    ['Time', fmtTime(S.time)], ['Buildings completed', st.built], ['Bots built', st.bots - START_WORKERS - START_WARBOTS],
+    ['Time', fmtTime(S.time)], ['Buildings completed', st.built], ['Bots built', st.bots - (st.startBots || 0)],
     ['Enemy buildings captured', st.captured], ['Bots lost', st.lost],
   ].map(([k, v]) => `<span>${k}</span><span>${v}</span>`).join('');
   $('screen-over').hidden = false;
+}
+
+/* ------------------------------------------------------------------ missions */
+
+function openMissions() {
+  UI.msSel = null;
+  $('screen-missions').hidden = false;
+  renderMissions();
+}
+
+function missionMeta(def, diff) {
+  const size = SIZE_PRESETS[def.size].name, terr = TERRAIN_PRESETS[def.rough].name;
+  const limit = def.limit[diff] ? ` · ${def.limit[diff]} min limit` : '';
+  return def.mode === 'colony' ? `Colony · ${size} · ${terr}${limit}` : `Versus · ${size} · ${terr} · ${DIFFICULTY[def.rival[diff]].label} rival${limit}`;
+}
+
+function renderMissions(msg) {
+  const c = loadCampaign();
+  const body = $('ms-body');
+  if (UI.msSel == null) {
+    body.innerHTML = `<p class="desc">Eight missions with their own goals. Finish one to unlock the next. Each has three difficulty levels.</p>
+      <div class="ms-list">${MISSIONS.map((m, k) => {
+        const done = c.done[m.id] || [];
+        const marks = MISSION_DIFF_NAMES.map((n, d) => (done[d] ? `<span class="ms-done">${n} ✓</span>` : '')).filter(Boolean).join(' ');
+        return `<button class="ms-item" data-k="${k}" ${k > c.unlocked ? 'disabled' : ''}><span class="ms-num">${k + 1}</span>
+          <span class="ms-name">${m.name}</span><span class="ms-meta">${k > c.unlocked ? 'Locked' : marks || (m.mode === 'colony' ? 'Colony' : 'Versus')}</span></button>`;
+      }).join('')}</div>
+      <div class="section-label" style="margin-top:14px">Have an unlock code?</div>
+      <div class="ms-code"><input id="ms-input" maxlength="7" placeholder="ABC-123" autocomplete="off" autocapitalize="characters"><button class="btn" id="ms-redeem">Unlock</button></div>
+      <p class="hint" id="ms-msg">${msg || 'Finishing a mission shows the code for the next one, so you can unlock it on another device.'}</p>`;
+    for (const el of body.querySelectorAll('.ms-item')) el.onclick = () => { sfx('click'); UI.msSel = +el.dataset.k; UI.msDiff = UI.msDiff ?? 1; renderMissions(); };
+    $('ms-redeem').onclick = () => {
+      const k = redeemCode($('ms-input').value);
+      sfx(k >= 0 ? 'complete' : 'error');
+      renderMissions(k >= 0 ? `Unlocked mission ${k + 1}: ${MISSIONS[k].name}.` : 'That code didn\'t match any mission.');
+    };
+    return;
+  }
+  const k = UI.msSel, def = MISSIONS[k], diff = UI.msDiff ?? 1;
+  const done = c.done[def.id] || [];
+  body.innerHTML = `<p class="hint" style="margin-top:6px">Mission ${k + 1} of ${MISSIONS.length}</p>
+    <h3 style="margin:2px 0 6px;font-size:20px">${def.name}</h3>
+    <p class="desc">${def.brief}</p>
+    <div class="section-label" style="margin-top:12px">Difficulty</div>
+    <div class="seg" id="ms-diff">${MISSION_DIFF_NAMES.map((n, d) => `<button data-d="${d}" class="${d === diff ? 'on' : ''}">${n}${done[d] ? ' ✓' : ''}</button>`).join('')}</div>
+    <p class="hint">${missionMeta(def, diff)}</p>
+    <div class="section-label" style="margin-top:12px">Goals</div>
+    <ul class="ms-goals">${def.goals.map((g) => `<li>${goalText(g, diff)}</li>`).join('')}</ul>
+    <button class="btn primary big" id="ms-start">Start mission</button>`;
+  for (const btn of $('ms-diff').children) btn.onclick = () => { UI.msDiff = +btn.dataset.d; sfx('click'); renderMissions(); };
+  $('ms-start').onclick = () => { audioUnlock(); startMission(k, diff); };
+}
+
+/** A goal's description without a game running (for the mission briefing). */
+function goalText(g, diff) {
+  const n = goalNeed(g, diff);
+  switch (g.kind) {
+    case 'built': return n > 1 ? `Build ${n} ${BDEFS[g.type].name}s` : `Build ${aOrAn(BDEFS[g.type].name)}`;
+    case 'made': return `Make ${n} ${GOOD[g.good].name}`;
+    case 'bots': return `Build ${n} new ${g.type ? BOTS[g.type].plural : 'bots'} at the Foundry`;
+    case 'own': return `Have ${n} ${BOTS[g.type].plural}`;
+    case 'paths': return `${['', 'Lay', 'Pave', 'Surface'][g.tier]} ${n} ${['', 'path', 'concrete or asphalt road', 'asphalt road'][g.tier]} tiles`;
+    case 'oneway': return `Make ${n} path tiles one-way`;
+    case 'land': return `Claim ${n}% of the land`;
+    case 'outposts': return n > 1 ? `Capture ${n} rival Outposts` : 'Capture a rival Outpost';
+    case 'capture': return 'Capture the rival Lander';
+  }
+  return '';
+}
+
+function startMission(k, diff) {
+  clearSave();
+  $('screen-missions').hidden = true;
+  newGame(missionOptions(k, diff));
+  enterGame();
+  updateHUD();
+  placeMinimap();
+  UI.objCollapsed = false;
+  postMsg(0, `Mission ${k + 1}: ${MISSIONS[k].name}. ${MISSIONS[k].brief}`, 0, 0, 'info');
+}
+
+/** The goal banner during a mission: each goal with progress, and the clock if there's a limit. */
+function missionObjectiveHTML() {
+  const M = S.mission, def = MISSIONS[M.k];
+  const states = def.goals.map((g) => goalState(g, M.diff));
+  if (UI.objCollapsed) return `Mission ▸ ${states.filter((s) => s.done).length}/${states.length}`;
+  const left = M.limit ? Math.max(0, M.limit - S.time) : 0;
+  return `<b>${def.name}</b>${M.limit ? ` · ${fmtTime(left)} left` : ''}<ul class="obj-goals">${states.map((s) =>
+    `<li class="${s.done ? 'done' : ''}">${s.done ? '✓' : '○'} ${s.text}${s.need > 1 && !s.done ? ` (${s.have}/${s.need})` : ''}</li>`).join('')}</ul>`;
+}
+
+function showMissionOver() {
+  finishMission();
+  const M = S.mission, def = MISSIONS[M.k];
+  const won = M.result === 'won';
+  sfx(won ? 'win' : 'lose');
+  $('o-title').textContent = won ? 'Mission complete' : 'Mission failed';
+  $('o-text').textContent = won
+    ? `${def.name} (${MISSION_DIFF_NAMES[M.diff]}) done in ${fmtTime(S.time)}.`
+    : M.why === 'time' ? `${def.name}: time ran out before every goal was met.`
+      : M.why === 'lander' ? `${def.name}: the rival captured your Lander.` : `${def.name}: the game ended before every goal was met.`;
+  $('o-stats').innerHTML = def.goals.map((g) => { const s = goalState(g, M.diff); return `<span>${s.done ? '✓' : '✗'} ${s.text}</span><span>${s.need > 1 ? `${s.have}/${s.need}` : s.done ? 'Done' : '–'}</span>`; }).join('');
+  if (won) {
+    completeMission(M.k, M.diff);
+    if (M.k + 1 < MISSIONS.length) {
+      $('o-code').hidden = false;
+      $('o-code').innerHTML = `Mission ${M.k + 2}, <b style="font-size:inherit;letter-spacing:0;color:var(--text)">${MISSIONS[M.k + 1].name}</b>, is unlocked. Its code, to unlock it on another device: <br><b>${missionCode(M.k + 1)}</b>`;
+      $('o-new').textContent = 'Next mission';
+      UI.overNew = () => startMission(M.k + 1, M.diff);
+    } else {
+      $('o-code').hidden = false;
+      $('o-code').textContent = 'That was the last mission: the campaign is complete!';
+      $('o-new').textContent = 'Play it again';
+      UI.overNew = () => startMission(M.k, M.diff);
+    }
+  } else {
+    $('o-new').textContent = 'Try again';
+    UI.overNew = () => startMission(M.k, M.diff);
+  }
+  $('o-menu').textContent = 'Missions';
+  UI.overMenu = () => { openMissions(); UI.msSel = won && M.k + 1 < MISSIONS.length ? M.k + 1 : M.k; UI.msDiff = M.diff; renderMissions(); };
+  $('screen-over').hidden = false;
+}
+
+/* ------------------------------------------------------------------ statistics screen */
+
+function openStats() {
+  UI.stats = UI.stats || { good: 'alloy', type: null };
+  $('screen-stats').hidden = false;
+  renderStats();
+}
+
+function renderStats() {
+  const H = S.hist || { t: [], p: [{}, {}] };
+  const versus = S.mode !== 'colony';
+  const P = S.players[0], st = P.stats;
+  const made = Object.values(P.made || {}).reduce((a, v) => a + v, 0);
+  const tiles = [['Time', fmtTime(S.time)], ['Buildings built', st.built], ['Bots built', st.bots - (st.startBots || 0)],
+    ['Goods produced', made.toLocaleString()], versus ? ['Rival buildings taken', st.captured] : ['Land claimed', Math.round(landShare(0) * 100) + '%'],
+    ['Bots lost', st.lost]];
+  const players = versus ? [0, 1] : [0];
+  const names = ['You', 'Rival'];
+  const ser = (fn) => players.map((p) => ({ name: names[p], color: CHART.series[p], values: fn(H.p[p] || {}) }));
+  const goodsList = GOODS.filter((g) => versus || !WAR_GOODS.includes(g));
+  if (!goodsList.includes(UI.stats.good)) UI.stats.good = 'alloy';
+  const use = usageByType(0);
+  const rows = Object.keys(use).map((k) => ({ key: k, label: BDEFS[k].name, note: use[k].n > 1 ? '×' + use[k].n : '', value: Math.round((use[k].use / use[k].up) * 100) }))
+    .sort((a, b) => b.value - a.value);
+  if (!UI.stats.type || !use[UI.stats.type]) UI.stats.type = rows.length ? rows[0].key : null;
+  const botsSer = ser((h) => (h.civ || []).map((v, k) => v + ((h.war || [])[k] || 0)));
+  const landSer = ser((h) => h.land || []);
+  const goodSer = ser((h) => (h.goods && h.goods[UI.stats.good]) || []);
+  $('st-body').innerHTML = `
+    <div class="stat-tiles">${tiles.map(([k, v]) => `<div class="stat-tile"><span>${k}</span><b>${v}</b></div>`).join('')}</div>
+    <div class="chart-block"><h3>Bots</h3><p class="sub">Every bot you own, workers and warbots together. Drag across a chart to read it.</p>${chartLegend(botsSer)}<canvas class="chart" id="ch-bots"></canvas></div>
+    <div class="chart-block"><h3>Land claimed</h3><p class="sub">Share of the land bots can reach.</p>${chartLegend(landSer)}<canvas class="chart" id="ch-land"></canvas></div>
+    <div class="chart-block"><h3>Goods on hand</h3><p class="sub">In storage plus finished goods waiting in buildings.</p>
+      <div class="pick-row" id="st-goods">${goodsList.map((g) => `<button data-g="${g}" class="${g === UI.stats.good ? 'on' : ''}"><i class="gi ${g}"></i>${GOOD[g].name}</button>`).join('')}</div>
+      ${chartLegend(goodSer)}<canvas class="chart" id="ch-goods"></canvas></div>
+    <div class="chart-block"><h3>How busy your buildings were</h3><p class="sub">Share of the time each kind of building was working, over the whole game. Tap one to see it over time.</p>
+      <div id="st-bars">${barChartHTML(rows, UI.stats.type)}</div></div>
+    <div class="chart-block" id="st-use-block" ${UI.stats.type ? '' : 'hidden'}><h3 id="st-use-title"></h3><p class="sub">Average share of the time busy, per 15 seconds.</p><canvas class="chart" id="ch-use"></canvas></div>`;
+  const xs = H.t;
+  lineChart($('ch-bots'), { xs, series: botsSer });
+  lineChart($('ch-land'), { xs, series: landSer, unit: '%' });
+  lineChart($('ch-goods'), { xs, series: goodSer });
+  const drawUse = () => {
+    if (!UI.stats.type) return;
+    $('st-use-title').textContent = `${BDEFS[UI.stats.type].name}: busy over time`;
+    const vals = ((H.p[0] && H.p[0].use && H.p[0].use[UI.stats.type]) || []).slice();
+    while (vals.length < xs.length) vals.unshift(null);
+    lineChart($('ch-use'), { xs, series: [{ name: BDEFS[UI.stats.type].name, color: CHART.series[0], values: vals }], unit: '%', max: 100 });
+  };
+  drawUse();
+  for (const btn of $('st-goods').children) btn.onclick = () => {
+    UI.stats.good = btn.dataset.g; sfx('click');
+    for (const b2 of $('st-goods').children) b2.classList.toggle('on', b2 === btn);
+    lineChart($('ch-goods'), { xs, series: ser((h) => (h.goods && h.goods[UI.stats.good]) || []) });
+  };
+  for (const btn of $('st-bars').querySelectorAll('.hbar')) btn.onclick = () => {
+    UI.stats.type = btn.dataset.k; sfx('click');
+    for (const b2 of $('st-bars').querySelectorAll('.hbar')) b2.classList.toggle('on', b2 === btn);
+    drawUse();
+  };
 }
 
 /* ------------------------------------------------------------------ modes & banner */
@@ -311,14 +504,18 @@ function onMapTap(i, j, wx, wy) {
   if (R.mode === 'road') {
     if (!inMap(i, j)) return;
     const t = tIdx(i, j);
-    if (S.road[t] && UI.oneWay) {
+    const tier = UI.roadMode === 'concrete' ? 2 : 1;
+    if (S.road[t] && UI.roadMode !== 'arrows' && (S.pave[t] || 1) < tier) {
+      const why = buildRoad(0, i, j, tier);
+      if (why) { sfx('error'); showRoadBanner(why); } else { sfx('click'); showRoadBanner(); }
+    } else if (S.road[t] && UI.roadMode === 'arrows') {
       // Turn the arrow: east, south, west, north, then back to two-way.
       setRoadDir(i, j, S.road[t] >= 5 ? 1 : S.road[t] + 1);
       sfx('click');
       showRoadBanner();
     } else if (S.road[t]) { removeRoad(0, i, j); sfx('click'); showRoadBanner(); }
     else {
-      const why = buildRoad(0, i, j);
+      const why = buildRoad(0, i, j, UI.roadTier || 1);
       if (why) { sfx('error'); showRoadBanner(why); } else { sfx('click'); showRoadBanner(); }
     }
     return;
@@ -359,15 +556,17 @@ function onRoadPaint(i, j, first) {
   const from = first || !UI.lastPaint ? { i, j } : UI.lastPaint;
   const line = tileLine(from.i, from.j, i, j);
   let prev = null;
+  const arrows = UI.roadMode === 'arrows';
+  const tier = arrows ? UI.roadTier || 1 : UI.roadMode === 'concrete' ? 2 : 1;
   for (const [x, y] of line) {
     if (!inMap(x, y)) break;
     const t = tIdx(x, y);
-    if (!S.road[t] && canRoad(0, x, y)) {
-      const why = buildRoad(0, x, y);
+    if ((!S.road[t] && canRoad(0, x, y)) || (S.road[t] && !arrows && (S.pave[t] || 1) < tier)) {
+      const why = buildRoad(0, x, y, tier);
       if (why) { if (!UI.roadWarned) { UI.roadWarned = true; sfx('error'); } showRoadBanner(why); break; }
     }
     if (S.road[t]) {
-      if (!UI.oneWay) setRoadDir(x, y, 1);
+      if (!arrows) setRoadDir(x, y, 1);
       else if (prev) {
         const v = 2 + [[1, 0], [0, 1], [-1, 0], [0, -1]].findIndex(([dx, dy]) => dx === x - prev[0] && dy === y - prev[1]);
         if (v >= 2) { if (S.road[tIdx(prev[0], prev[1])]) setRoadDir(prev[0], prev[1], v); setRoadDir(x, y, v); }
@@ -379,19 +578,27 @@ function onRoadPaint(i, j, first) {
   UI.lastPaint = { i, j };
 }
 
-/** The Paths banner: two-way or one-way, what a tile costs and how much you have left. */
+/**
+ * The Paths banner: lay Gravel (Stone) or Concrete (Cement), or point paths one way with Arrows.
+ * Shows what a tile costs and how much you have left.
+ */
 function showRoadBanner(problem) {
-  const g = Object.keys(ROAD_COST)[0];
-  const per = Math.round(1 / ROAD_COST[g]);
-  const cost = `<b>1 ${GOOD[g].name} paves ${per} tiles</b> (${roadTilesAffordable(0)} left)`;
-  const how = UI.oneWay
-    ? 'Drag along paths to point them the way you drag. <b>One-way</b> traffic never meets head-on. Tap a path to turn its arrow.'
-    : 'Drag to lay <b>paths</b>: bots go twice as fast on them, but slow down for oncoming traffic. Tap a path to remove it.';
+  const mode = UI.roadMode || 'gravel';
+  const tier = mode === 'concrete' ? 2 : 1;
+  if (mode !== 'arrows') UI.roadTier = tier;
+  const g = Object.keys(paveCost(tier))[0];
+  const per = Math.round(1 / paveCost(tier)[g]);
+  const cost = `<b>1 ${GOOD[g].name} paves ${per} tiles</b> (${roadTilesAffordable(0, tier)} left)`;
+  const how = mode === 'arrows'
+    ? 'Drag along paths to point them the way you drag: <b>one-way</b> traffic never meets head-on. Tap a path to turn its arrow; drag in Gravel or Concrete to clear arrows.'
+    : mode === 'concrete'
+      ? 'Drag to lay <b>concrete</b> roads (2½× speed) or drag over gravel to upgrade it; its Stone comes back. A Roadworks can top them with asphalt (3×).'
+      : 'Drag to lay <b>gravel paths</b>: bots go twice as fast, but slow down for oncoming traffic. Tap a path to remove it.';
   showBanner((problem ? `<span class="err">${problem}</span> ` : '') + `${how} ${cost}.`, null, 'Done');
   $('banner-seg').hidden = false;
   for (const btn of $('banner-seg').children) {
-    btn.classList.toggle('on', (btn.dataset.v === '1') === !!UI.oneWay);
-    btn.onclick = () => { UI.oneWay = btn.dataset.v === '1'; sfx('click'); showRoadBanner(); };
+    btn.classList.toggle('on', btn.dataset.v === mode);
+    btn.onclick = () => { UI.roadMode = btn.dataset.v; sfx('click'); showRoadBanner(); };
   }
 }
 
@@ -476,8 +683,10 @@ function openBuildingSheet(b) {
       const row = (k, label) => `<div class="order-row"><span>${label}<small id="sh-o-${k}">none queued</small></span>
         <button class="btn" data-k="${k}" data-d="1">+1</button><button class="btn" data-k="${k}" data-d="5">+5</button>
         <button class="btn ghost" data-k="${k}" data-d="0">Clear</button></div>`;
-      html += `<div class="section-label">Order bots</div><div id="sh-orders">${row('worker', 'Workers')}${versus ? row('warbot', 'Warbots') : ''}</div>
-        <p class="hint">The Foundry only builds the bots you order. Each one uses 1 Alloy and 1 Chip and takes ${def.work} s.${versus ? ' Mixed orders take turns.' : ''}</p>`;
+      const kinds = BOT_ORDER.filter((k) => versus || !BOTS[k].war);
+      html += `<div class="section-label">Order bots</div><div id="sh-orders">${kinds.map((k) => row(k, BOTS[k].plural)).join('')}</div>
+        <p class="hint">The Foundry only builds the bots you order. Each one uses 1 Alloy and 1 Chip and takes ${def.work} s; mixed orders take turns.
+        <b>Haulers</b> carry two goods at a time, <b>Agribots</b> run Bio Farms and Grove Planters, and <b>Pavers</b> run the Roadworks.</p>`;
     }
     if (def.missile && b.built) {
       html += `<p class="hint">To fire, tap <b>Army</b> and then a rival building within ${def.missile.range} tiles.</p>`;
@@ -509,7 +718,7 @@ function openBuildingSheet(b) {
     if (seg) for (const btn of seg.children) btn.onclick = () => { b.mode = btn.dataset.v; sfx('click'); refreshSheet(); };
     if ($('sh-orders')) for (const btn of $('sh-orders').querySelectorAll('button')) btn.onclick = () => {
       const k = btn.dataset.k, d = +btn.dataset.d;
-      b.orders = b.orders || { worker: 0, warbot: 0 };
+      b.orders = b.orders || {};
       b.orders[k] = d === 0 ? 0 : clamp((b.orders[k] || 0) + d, 0, 99);
       if (!hasOrders(b)) delete b.orders;
       sfx('click');
@@ -560,7 +769,26 @@ function refreshBuildingSheet(b) {
       <div class="bar armor"><div style="width:${Math.max(0, (b.armor / def.armor) * 100)}%"></div></div>`);
     if (mine && def.staff) {
       const op = getE(b.staff);
-      parts.push(`<div class="kv"><span>Worker</span><span>${b.paused ? 'Paused' : op ? (op.inside === b.id ? 'Inside' : 'Out working') : b.staffInc ? 'On the way' : 'None yet'}</span></div>`);
+      parts.push(`<div class="kv"><span>${def.crew ? BOTS[def.crew].name : 'Worker'}</span><span>${b.paused ? 'Paused' : op ? (op.inside === b.id ? 'Inside' : 'Out working') : b.staffInc ? 'On the way' : 'None yet'}</span></div>`);
+    }
+    if (def.roadworks) {
+      let left = 0;
+      const r2 = def.radius * def.radius + 0.3;
+      for (let j = Math.max(0, b.y - def.radius); j <= Math.min(S.H - 1, b.y + def.radius); j++) {
+        for (let i = Math.max(0, b.x - def.radius); i <= Math.min(S.W - 1, b.x + def.radius); i++) {
+          const t = tIdx(i, j);
+          if (S.road[t] && S.pave[t] < 3 && S.owner[t] === b.owner && dist2(i, j, b.x, b.y) <= r2) left++;
+        }
+      }
+      parts.push(`<div class="kv"><span>Paths in reach still to surface</span><span>${left} tiles</span></div>`);
+      if (mine) parts.push(`<div class="kv"><span>Asphalt</span><span>${goodTag('asphalt', `${b.stock.asphalt || 0}/3`, !(b.stock.asphalt > 0) && !(b.charges > 0))} + ${b.charges || 0} tiles in the hopper</span></div>`);
+    }
+    if (def.ammoStock && mine && S.mode !== 'colony') {
+      parts.push(`<div class="kv"><span>Ammo for warbots</span><span>${goodTag('ammo', `${b.stock.ammo || 0}/${def.ammoStock}`, !(b.stock.ammo > 0))}</span></div>`);
+    }
+    if (b.upT > 30 && tracksUse(def)) {
+      const pct = Math.round(((b.useT || 0) / b.upT) * 100);
+      parts.push(`<div class="kv"><span>Busy</span><span>${pct}% of the time</span></div>${sparkline(b.useHist)}`);
     }
     if (def.gather) {
       const g = RES[def.gather].good;
@@ -588,7 +816,7 @@ function refreshBuildingSheet(b) {
       if (outs) parts.push(`<div class="section-label">Output</div><div class="goodlist">${outs}</div>`);
       if (def.bots) {
         const k = nextBotKind(b);
-        parts.push(`<div class="kv"><span>Next bot</span><span>${k === 'off' ? 'Nothing ordered' : k === 'worker' ? 'Worker' : 'Warbot'}</span></div>`);
+        parts.push(`<div class="kv"><span>Next bot</span><span>${BOTS[k] ? BOTS[k].name : 'Nothing ordered'}</span></div>`);
       }
       if (b.timer > 0 && b.status === 'Working') parts.push(`<div class="bar"><div style="width:${Math.round((b.timer / def.work) * 100)}%"></div></div>`);
     }
@@ -634,7 +862,7 @@ function refreshBuildingSheet(b) {
     btn.lastElementChild.textContent = b.stock[g] || 0;
   }
   if ($('sh-mode')) for (const btn of $('sh-mode').children) btn.classList.toggle('on', btn.dataset.v === b.mode);
-  for (const k of ['worker', 'warbot']) {
+  for (const k of BOT_ORDER) {
     if (!$('sh-o-' + k)) continue;
     const n = (b.orders && b.orders[k]) || 0;
     $('sh-o-' + k).textContent = n ? `${n} queued` : 'none queued';
@@ -684,6 +912,7 @@ function botActivity(u) {
     if (def.farm && (t.phase === 'toNode' || t.phase === 'work')) {
       return t.act === 'harvest' ? (t.phase === 'work' ? 'Harvesting an energy crop' : 'Heading out to harvest a crop') : (t.phase === 'work' ? 'Planting an energy crop' : 'Heading out to plant a crop');
     }
+    if (def.roadworks && (t.phase === 'toNode' || t.phase === 'work')) return t.phase === 'work' ? 'Laying asphalt' : 'Heading to a path to surface';
     if (t.phase === 'toNode') return def.plant ? 'Heading out to plant a grove' : `Heading out to gather ${def.gather ? GOOD[RES[def.gather].good].name : ''}`;
     if (t.phase === 'work') return def.plant ? 'Planting a stalk grove' : `Harvesting ${def.gather ? RES[def.gather].name.toLowerCase() : ''}`;
     if (t.phase === 'back') return u.carry ? `Bringing ${GOOD[u.carry].name} back` : `Walking back to the ${nm(t.bld)}`;
@@ -694,9 +923,9 @@ function botActivity(u) {
 
 function openBotSheet(u) {
   R.selected = 0; R.selTile = -1; UI.selBot = u.id;
-  const html = `<div class="sheet-title"><div><h3>${u.type === 'warbot' ? 'Warbot' : 'Worker'}</h3>
+  const html = `<div class="sheet-title"><div><h3>${BOTS[u.type].name}</h3>
     <div class="owner"><span class="dot" style="background:${PLAYER_COLORS[u.owner]}"></span> ${u.owner === 0 ? 'Yours' : 'Rival'}</div></div></div>
-    <p class="desc">${u.type === 'warbot' ? 'Fights enemy bots and captures enemy buildings.' : 'Carries goods, builds construction sites and runs buildings.'}</p>
+    <p class="desc">${BOTS[u.type].desc}</p>
     <div class="status" id="sh-status"></div><div id="sh-dyn"></div>
     ${u.owner === 0 && u.type === 'warbot' ? '<button class="btn big" id="sh-recall" hidden>Call back this squad</button>' : ''}`;
   openSheet('bot', u.id, html);
@@ -799,7 +1028,8 @@ function refreshSheet() {
     $('sh-dyn').innerHTML = `<div class="kv"><span>Health</span><span>${Math.ceil(u.hp)} / ${u.maxHp}</span></div>` +
       `<div class="kv"><span>Battery</span><span>${bat}%${bat < BATTERY.critical ? ' (flat: slow and weak)' : bat < BATTERY.low ? ' (low)' : ''}</span></div>` +
       `<div class="bar battery"><div style="width:${bat}%;background:${bat < BATTERY.critical ? '#ff4d4d' : bat < BATTERY.low ? '#ffb347' : '#7ee08a'}"></div></div>` +
-      (u.carry ? `<div class="kv"><span>Carrying</span><span>${goodTag(u.carry, GOOD[u.carry].name)}</span></div>` : '');
+      (u.type === 'warbot' ? `<div class="kv"><span>Ammo</span><span>${u.ammo ?? WARBOT_AMMO} / ${WARBOT_AMMO} shots${!u.ammo ? ' (out: hits much weaker)' : ''}</span></div>` : '') +
+      (u.carry ? `<div class="kv"><span>Carrying</span><span>${goodTag(u.carry, (u.carryN > 1 ? u.carryN + ' × ' : '') + GOOD[u.carry].name)}</span></div>` : '');
     if ($('sh-recall')) $('sh-recall').hidden = !(u.task && u.task.type === 'hold');
   } else if (UI.sheetKind === 'move') {
     const t = UI.sheetFor, i = t % S.W, j = (t / S.W) | 0;
@@ -834,10 +1064,11 @@ const OBJECTIVES = [
   { text: 'Build a <b>Smelter</b>: it turns Ore and Fiber into Alloy.', done: () => hasBuilt('smelter') },
   { text: 'Build a <b>Chip Fab</b>: it turns Crystal and Alloy into Chips.', done: () => hasBuilt('fab') },
   { text: 'Build a <b>Bot Foundry</b> so you can make more workers.', done: () => hasBuilt('foundry') },
-  { text: 'Tap your <b>Bot Foundry</b> and order some <b>Workers</b>: it only builds the bots you ask for.', done: () => S.players[0].stats.bots > START_WORKERS + START_WARBOTS || S.buildings.some((b) => !b.dead && b.owner === 0 && hasOrders(b)) },
+  { text: 'Tap your <b>Bot Foundry</b> and order some <b>Workers</b>: it only builds the bots you ask for.', done: () => S.players[0].stats.bots > S.players[0].stats.startBots || S.buildings.some((b) => !b.dead && b.owner === 0 && hasOrders(b)) },
   { text: 'Build an <b>Outpost</b> near your border to claim more land.', done: () => hasBuilt('outpost') },
   { text: 'Tap <b>Paths</b> and draw roads between busy buildings so workers move faster.', done: () => S.road.reduce((a, v) => a + (v ? 1 : 0), 0) >= 6 },
-  { text: 'Charging Stations burn <b>Fuel</b>. Build a <b>Bio Farm</b> beside the dark fertile soil to grow it.', done: () => hasBuilt('farm') },
+  { text: 'Charging Stations burn <b>Fuel</b>. Build a <b>Bio Farm</b> beside the dark fertile soil to grow it (your Agribot runs it).', done: () => hasBuilt('farm') },
+  { text: 'Warbots need <b>Ammo</b>. Build an <b>Ammo Plant</b>: workers stock your Lander and Outposts and warbots reload there.', done: () => S.mode === 'colony' || hasBuilt('armory') },
 ];
 
 function hasBuilt(type) {
@@ -846,6 +1077,7 @@ function hasBuilt(type) {
 }
 
 function objectiveText() {
+  if (S.mission) return missionObjectiveHTML();
   for (const o of OBJECTIVES) if (!o.done()) return o.text;
   if (S.mode === 'colony') {
     const pct = Math.round(landShare(0) * 100);
@@ -876,7 +1108,7 @@ function updateHUD() {
     (S.mode === 'colony' ? '' : ` <span class="dot" style="background:${PLAYER_COLORS[0]};border-radius:2px;transform:rotate(45deg)"></span>${war}`);
   $('clock').textContent = S.mode === 'colony' ? `${Math.round(landShare(0) * 100)}% land` : fmtTime(S.time);
   const obj = $('objective');
-  obj.innerHTML = UI.objCollapsed ? 'Goal ▸' : objectiveText();
+  obj.innerHTML = UI.objCollapsed && !S.mission ? 'Goal ▸' : objectiveText();
   obj.classList.toggle('small', UI.objCollapsed);
   if (UI.sheetKind === 'build') {
     // keep build-menu affordability current without rebuilding the buttons

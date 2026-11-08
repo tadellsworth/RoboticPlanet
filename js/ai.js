@@ -8,10 +8,10 @@
 /** [building type, how many the AI wants]. Entries are tried in order. */
 const AI_PLAN = [
   ['harvester', 1], ['quarry', 1], ['harvester', 2], ['mine', 1], ['tap', 1], ['smelter', 1],
-  ['fab', 1], ['foundry', 1], ['outpost', 1], ['charger', 1], ['farm', 1], ['quarry', 2], ['grower', 1], ['mine', 2],
+  ['fab', 1], ['foundry', 1], ['outpost', 1], ['armory', 1], ['charger', 1], ['farm', 1], ['quarry', 2], ['grower', 1], ['mine', 2],
   ['turret', 1], ['outpost', 2], ['smelter', 2], ['tap', 2], ['pump', 1], ['refinery', 1], ['harvester', 3], ['outpost', 3],
   ['munitions', 1], ['silo', 1], ['depot', 1], ['charger', 2], ['farm', 2], ['mine', 3], ['outpost', 4], ['turret', 2],
-  ['grower', 2], ['fab', 2], ['outpost', 5], ['quarry', 3], ['silo', 2], ['outpost', 6], ['charger', 3], ['pump', 2],
+  ['grower', 2], ['fab', 2], ['outpost', 5], ['armory', 2], ['quarry', 3], ['silo', 2], ['outpost', 6], ['charger', 3], ['pump', 2],
   ['tap', 3], ['farm', 3], ['outpost', 8], ['turret', 3],
 ];
 
@@ -31,8 +31,10 @@ function aiThink(p) {
   }
   const maxSites = p === 0 && P.ai ? 2 : lvl.maxSites;
   let workers = 0, staffed = 0;
-  for (const u of S.bots) if (!u.dead && u.owner === p && u.type === 'worker') workers++;
-  for (const b of me) if (BDEFS[b.type].staff) staffed++;
+  const kinds = {};
+  for (const u of S.bots) if (!u.dead && u.owner === p) kinds[u.type] = (kinds[u.type] || 0) + 1;
+  workers = kinds.worker || 0;
+  for (const b of me) if (BDEFS[b.type].staff && !BDEFS[b.type].crew) staffed++;
   // Keep about a third of the workers free for hauling: a colony with every worker staffed stalls.
   const canStaffMore = staffed + Math.max(5, Math.round(workers * 0.35)) <= workers;
   // Resources are in separate fields: when one kind runs short inside our land, expanding toward
@@ -66,7 +68,7 @@ function aiThink(p) {
       if ((type === 'farm' || type === 'pump' || type === 'refinery') && (counts[type] || 0) >= 1 && playerGoods(p).fuel > 10) continue;
       if ((counts[type] || 0) >= want) continue;
       // The first of each staffed building is always allowed, so the production chain is complete.
-      if (BDEFS[type].staff && !canStaffMore && counts[type]) continue;
+      if (BDEFS[type].staff && !BDEFS[type].crew && !canStaffMore && counts[type]) continue;
       if (!aiAffordable(p, type)) continue;
       const spot = aiFindSpot(p, type, lander);
       if (spot && placeSite(p, type, spot.x, spot.y).ok) {
@@ -86,10 +88,21 @@ function aiThink(p) {
     }
   }
 
-  // 3) Foundry: keep enough workers, then make warbots.
+  // 3) Foundry: keep enough workers, then make warbots. Order specialists when a building needs
+  //    one, and a Hauler for every four workers.
   const wantWorkers = staffed + 5 + Math.min(3, sites);
+  const crewNeed = {};
   for (const b of me) {
-    if (b.type === 'foundry') b.mode = S.mode === 'colony' ? 'worker' : workers < wantWorkers ? 'worker' : workers > wantWorkers + 4 ? 'warbot' : 'alt';
+    const crew = BDEFS[b.type].crew;
+    if (crew && b.built) crewNeed[crew] = (crewNeed[crew] || 0) + 1;
+  }
+  for (const b of me) {
+    if (b.type !== 'foundry' || !b.built) continue;
+    b.mode = S.mode === 'colony' ? 'worker' : workers < wantWorkers ? 'worker' : workers > wantWorkers + 4 ? 'warbot' : 'alt';
+    b.orders = b.orders || {};
+    for (const crew in crewNeed) if ((kinds[crew] || 0) < crewNeed[crew] && !(b.orders[crew] > 0)) b.orders[crew] = 1;
+    if ((kinds.hauler || 0) < Math.floor(workers / 4) && !(b.orders.hauler > 0)) b.orders.hauler = 1;
+    break;
   }
 
   // 4) Missiles: soften turrets and Outposts first, the Lander once the army is big.

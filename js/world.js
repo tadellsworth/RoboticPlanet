@@ -314,10 +314,11 @@ function newGame(opts) {
   const seed = opts.seed >>> 0;
   const diff = DIFFICULTY[opts.difficulty] ? opts.difficulty : 'normal';
   const m = generateMap(seed, W, H, settings);
+  if (opts.layout) opts.layout(m, W, H); // missions hand-place features on their planet
   S = {
     v: 1, mode, seed, W, H, settings, difficulty: diff, time: 0, nextId: 1, winner: -1, milestone: 0,
     terrain: m.terrain, res: m.res, amt: m.amt, grow: m.grow, elev: m.elev, ramp: m.ramp, fert: m.fert,
-    road: new Uint8Array(W * H),
+    road: new Uint8Array(W * H), pave: new Uint8Array(W * H),
     owner: new Int8Array(W * H).fill(-1),
     resRes: new Uint8Array(W * H),
     bAt: new Int32Array(W * H),
@@ -327,11 +328,12 @@ function newGame(opts) {
       ai: (p === 1 && mode !== 'colony') || (p === 0 && !!opts.autoplay),
       mult: p === 1 ? DIFFICULTY[diff].mult : 1,
       lander: 0,
-      stats: { built: 0, bots: 0, captured: 0, lost: 0 },
+      stats: { built: 0, bots: 0, captured: 0, lost: 0, outposts: 0, startBots: 0 },
+      made: {}, madeBots: {},
       aiT: 0, nextAttack: 0,
     })),
     buildings: [], bots: [], fx: [], msgs: [], rallies: [], missiles: [],
-    dirtyTiles: [], territoryVer: 0, tick: 0,
+    dirtyTiles: [], territoryVer: 0, tick: 0, hist: newHistory(),
   };
   if (opts.autoplay) S.players[0].mult = DIFFICULTY[diff].mult;
   S.byId = new Map();
@@ -341,14 +343,16 @@ function newGame(opts) {
     const L = addBuilding(p, 'lander', base.x, base.y, true);
     S.players[p].lander = L.id;
     for (const g in START_STOCK) L.stock[g] = START_STOCK[g] + (p === 1 ? DIFFICULTY[diff].bonus : 0);
-    for (let k = 0; k < START_WORKERS; k++) enterBuilding(addBot(p, 'worker', base.x, base.y), L);
+    for (const type in START_BOTS) for (let k = 0; k < START_BOTS[type]; k++) enterBuilding(addBot(p, type, base.x, base.y), L);
     for (let k = 0; k < (mode === 'colony' ? 0 : START_WARBOTS); k++) {
       const w = addBot(p, 'warbot', base.x, base.y);
       enterBuilding(w, L);
     }
+    S.players[p].stats.startBots = S.players[p].stats.bots;
   }
   computeZones();
   computeTerritory();
+  if (opts.setup) opts.setup(S);
   return S;
 }
 
@@ -421,13 +425,14 @@ function addBuilding(owner, type, x, y, built) {
 }
 
 function addBot(owner, type, x, y) {
-  const maxHp = type === 'warbot' ? 12 : 5;
+  const maxHp = BOTS[type].hp;
   const bot = {
     id: S.nextId++, ent: 'u', type, owner,
     x: x + 0.5, y: y + 0.5, path: null, pi: 0,
-    task: null, carry: null, hp: maxHp, maxHp,
+    task: null, carry: null, carryN: 0, hp: maxHp, maxHp,
     inside: 0, cd: 0, fight: 0, scanT: 0, idleT: 0, face: 0, busy: 0, bat: 100,
   };
+  if (type === 'warbot') bot.ammo = WARBOT_AMMO;
   S.bots.push(bot);
   S.byId.set(bot.id, bot);
   S.players[owner].stats.bots++;
@@ -661,8 +666,27 @@ function setRoad(i, j, on) {
   const t = tIdx(i, j);
   if (!!S.road[t] === !!on) return;
   S.road[t] = on ? 1 : 0;
+  S.pave[t] = on ? 1 : 0;
   markDirty(i, j);
   for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) if (inMap(i + di, j + dj)) markDirty(i + di, j + dj);
+}
+
+/** Set an existing path tile's surface: 1 gravel, 2 concrete, 3 asphalt. */
+function setPave(i, j, tier) {
+  const t = tIdx(i, j);
+  if (!S.road[t] || S.pave[t] === tier) return;
+  S.pave[t] = tier;
+  S.topPaveCache = 0;
+  markDirty(i, j);
+}
+
+/** The best path surface anywhere on the map (route planning needs it for an exact estimate). */
+function topPave() {
+  if (S.topPaveCache) return S.topPaveCache;
+  let top = 1;
+  for (let t = 0; t < S.W * S.H && top < 3; t++) if (S.road[t] && S.pave[t] > top) top = S.pave[t];
+  S.topPaveCache = top;
+  return top;
 }
 
 /** Make an existing path tile two-way (1) or one-way (2 east, 3 south, 4 west, 5 north). */
@@ -685,8 +709,8 @@ function cancelTask(bot) {
   switch (t.type) {
     case 'haul': {
       const src = getE(t.src), dst = getE(t.dst);
-      if (t.phase === 'toSrc' && src) bump(src.res, t.good, -1);
-      if (dst) bump(dst.inc, t.good, -1);
+      if (t.phase === 'toSrc' && src) bump(src.res, t.good, -(t.n || 1));
+      if (dst) bump(dst.inc, t.good, -(t.n || 1));
       break;
     }
     case 'build': {
@@ -781,7 +805,7 @@ function addFx(type, x, y, data) {
 const SAVE_KEY = 'botfall.save.v1';
 const TYPED_FIELDS = {
   terrain: Uint8Array, res: Uint8Array, amt: Uint8Array, grow: Float32Array, road: Uint8Array, owner: Int8Array,
-  resRes: Uint8Array, elev: Uint8Array, ramp: Uint8Array, fert: Uint8Array,
+  resRes: Uint8Array, elev: Uint8Array, ramp: Uint8Array, fert: Uint8Array, pave: Uint8Array,
 };
 
 function serializeGame() {
@@ -815,7 +839,11 @@ function deserializeGame(json) {
       }
     }
   }
+  // Saves from before road surfaces: every path is gravel.
+  if (!o.pave) o.pave = o.road.map((v) => (v ? 1 : 0));
   for (const k in TYPED_FIELDS) o[k] = TYPED_FIELDS[k].from(o[k]);
+  o.hist = o.hist || newHistory();
+  for (const P of o.players) { P.made = P.made || {}; P.madeBots = P.madeBots || {}; P.stats.outposts = P.stats.outposts || 0; P.stats.startBots = P.stats.startBots ?? 18; }
   o.fx = []; o.msgs = []; o.dirtyTiles = [];
   o.rallies = o.rallies || [];
   o.missiles = o.missiles || [];
@@ -827,7 +855,11 @@ function deserializeGame(json) {
     S.bAt[tIdx(b.x, b.y)] = b.id;
     if (b.type === 'foundry' && !S.players[b.owner].ai) b.mode = 'off'; // older saves: build on order only
   }
-  for (const u of S.bots) S.byId.set(u.id, u);
+  for (const u of S.bots) {
+    S.byId.set(u.id, u);
+    if (u.type === 'warbot' && u.ammo === undefined) u.ammo = WARBOT_AMMO;
+    u.carryN = u.carry ? u.carryN || 1 : 0;
+  }
   computeZones();
   return S;
 }

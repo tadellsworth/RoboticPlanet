@@ -345,11 +345,15 @@ function drawSlope(ctx, i, j, x, y, t, n) {
   else { ctx.fillRect(x, y, TP, 3); ctx.fillRect(x, y + TP - 3, TP, 3); }
 }
 
+/** Path surfaces: gravel (sandy grey), concrete (pale slabs), asphalt (near-black). */
+const ROAD_LOOK = [null, { edge: THEME.roadEdge, fill: THEME.road, w: 9 }, { edge: '#5d636b', fill: '#b9bec5', w: 11 }, { edge: '#15171b', fill: '#33363d', w: 12 }];
+
 function drawRoad(ctx, i, j, x, y) {
-  const c = TP / 2, w = 9;
+  const c = TP / 2;
   const t = tIdx(i, j);
+  const tier = S.pave[t] || 1, look = ROAD_LOOK[tier], w = look.w;
   const nb = [[0, -1], [1, 0], [0, 1], [-1, 0]].map(([di, dj]) => inMap(i + di, j + dj) && S.road[tIdx(i + di, j + dj)] && canStep(t, tIdx(i + di, j + dj)));
-  for (const [col, ww] of [[THEME.roadEdge, w + 4], [THEME.road, w]]) {
+  for (const [col, ww] of [[look.edge, w + 4], [look.fill, w]]) {
     ctx.fillStyle = col;
     ctx.beginPath();
     ctx.arc(x + c, y + c, ww / 2, 0, Math.PI * 2);
@@ -359,11 +363,22 @@ function drawRoad(ctx, i, j, x, y) {
     if (nb[2]) ctx.fillRect(x + c - ww / 2, y + c, ww, c);
     if (nb[3]) ctx.fillRect(x, y + c - ww / 2, c, ww);
   }
-  // Gravel flecks and a worn centre line so paths read clearly against sand.
-  ctx.fillStyle = 'rgba(255,245,225,0.35)';
-  for (let k = 0; k < 3; k++) ctx.fillRect(x + c - 3 + hash2(i, j, 8 + k) * 6, y + c - 3 + hash2(j, i, 11 + k) * 6, 1.5, 1.5);
-  ctx.fillStyle = 'rgba(30,24,18,0.3)';
-  ctx.fillRect(x + c - 0.5, y + c - 0.5, 1, 1);
+  if (tier === 1) {
+    // Gravel flecks and a worn centre so paths read clearly against sand.
+    ctx.fillStyle = 'rgba(255,245,225,0.35)';
+    for (let k = 0; k < 3; k++) ctx.fillRect(x + c - 3 + hash2(i, j, 8 + k) * 6, y + c - 3 + hash2(j, i, 11 + k) * 6, 1.5, 1.5);
+    ctx.fillStyle = 'rgba(30,24,18,0.3)';
+    ctx.fillRect(x + c - 0.5, y + c - 0.5, 1, 1);
+  } else if (tier === 2) {
+    // Concrete slabs with expansion joints across the run.
+    ctx.fillStyle = 'rgba(60,64,70,0.35)';
+    if (nb[0] || nb[2]) ctx.fillRect(x + c - w / 2, y + 1, w, 1);
+    if (nb[1] || nb[3]) ctx.fillRect(x + 1, y + c - w / 2, 1, w);
+  } else {
+    // Asphalt: a faint aggregate speckle.
+    ctx.fillStyle = 'rgba(255,255,255,0.10)';
+    for (let k = 0; k < 4; k++) ctx.fillRect(x + c - 4 + hash2(i, j, 30 + k) * 8, y + c - 4 + hash2(j, i, 40 + k) * 8, 1, 1);
+  }
   // One-way paths carry an arrow showing which way traffic flows.
   const r = S.road[t];
   if (r >= 2) {
@@ -785,6 +800,60 @@ function drawBuilding(ctx, type, cx, cy, s, owner, b) {
       }
       break;
     }
+    case 'kiln': {
+      hullBase(ctx, cx, cy, s, color);
+      // A rotary kiln drum and a chimney that puffs while it works.
+      ctx.save(); ctx.translate(cx - 2 * u, cy + 2 * u); ctx.rotate(-0.35);
+      ctx.fillStyle = '#8f969f'; roundRect(ctx, -10 * u, -4 * u, 20 * u, 8 * u, 3 * u); ctx.fill();
+      ctx.fillStyle = 'rgba(0,0,0,0.25)';
+      for (let k = -1; k <= 1; k++) ctx.fillRect((k * 6 - 0.8) * u, -4 * u, 1.6 * u, 8 * u);
+      ctx.restore();
+      ctx.fillStyle = '#5d636b'; ctx.fillRect(cx + 6 * u, cy - 12 * u, 4 * u, 9 * u);
+      if (working) {
+        const f = (t * 0.8) % 1;
+        ctx.fillStyle = `rgba(220,225,232,${0.6 * (1 - f)})`;
+        ctx.beginPath(); ctx.arc(cx + 8 * u + f * 4 * u, cy - 13 * u - f * 6 * u, (2 + f * 2.5) * u, 0, Math.PI * 2); ctx.fill();
+      }
+      break;
+    }
+    case 'tarworks': {
+      hullBase(ctx, cx, cy, s, color);
+      // A black tar tank over a burner, and a hopper of stone.
+      ctx.fillStyle = '#1a1c21';
+      ctx.beginPath(); ctx.arc(cx - 3 * u, cy + 1 * u, 7.5 * u, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = '#6b7280'; ctx.lineWidth = 1.5 * u;
+      ctx.beginPath(); ctx.arc(cx - 3 * u, cy + 1 * u, 7.5 * u, 0, Math.PI * 2); ctx.stroke();
+      ctx.fillStyle = working ? `rgba(255,${140 + Math.sin(t * 9) * 30},60,0.9)` : 'rgba(255,140,60,0.35)';
+      ctx.fillRect(cx - 7 * u, cy + 9 * u, 8 * u, 2 * u);
+      ctx.fillStyle = '#c9c1b4';
+      ctx.beginPath(); ctx.moveTo(cx + 6 * u, cy - 9 * u); ctx.lineTo(cx + 12 * u, cy - 9 * u); ctx.lineTo(cx + 10 * u, cy - 2 * u); ctx.lineTo(cx + 8 * u, cy - 2 * u); ctx.closePath(); ctx.fill();
+      break;
+    }
+    case 'roadworks': {
+      hullBase(ctx, cx, cy, s, color);
+      // A road roller: a striped drum and a small cab.
+      ctx.fillStyle = '#ffcf4a'; roundRect(ctx, cx - 11 * u, cy - 1 * u, 13 * u, 9 * u, 3 * u); ctx.fill();
+      ctx.save(); roundRect(ctx, cx - 11 * u, cy - 1 * u, 13 * u, 9 * u, 3 * u); ctx.clip();
+      ctx.fillStyle = '#1a1c21';
+      for (let k = -2; k < 4; k++) { ctx.beginPath(); ctx.moveTo(cx + (k * 5 - 11) * u, cy + 8 * u); ctx.lineTo(cx + (k * 5 - 8) * u, cy + 8 * u); ctx.lineTo(cx + (k * 5 - 3) * u, cy - 1 * u); ctx.lineTo(cx + (k * 5 - 6) * u, cy - 1 * u); ctx.closePath(); ctx.fill(); }
+      ctx.restore();
+      ctx.fillStyle = '#d8dde4'; ctx.fillRect(cx + 3 * u, cy - 8 * u, 7 * u, 8 * u);
+      ctx.fillStyle = '#33363d'; ctx.fillRect(cx + 4.5 * u, cy - 6.5 * u, 4 * u, 3 * u);
+      break;
+    }
+    case 'armory': {
+      hullBase(ctx, cx, cy, s, color);
+      // Three brass rounds standing on a tray.
+      ctx.fillStyle = '#2a2e38'; ctx.fillRect(cx - 10 * u, cy + 6 * u, 20 * u, 3 * u);
+      for (const ox of [-6, 0, 6]) {
+        ctx.fillStyle = '#e8c39e';
+        ctx.fillRect(cx + (ox - 2.2) * u, cy - 3 * u, 4.4 * u, 9 * u);
+        ctx.fillStyle = '#b8875a';
+        ctx.beginPath(); ctx.moveTo(cx + (ox - 2.2) * u, cy - 3 * u); ctx.lineTo(cx + ox * u, cy - 9 * u); ctx.lineTo(cx + (ox + 2.2) * u, cy - 3 * u); ctx.closePath(); ctx.fill();
+      }
+      if (working) { ctx.fillStyle = 'rgba(232,195,158,0.5)'; ctx.fillRect(cx - 10 * u, cy + 10 * u, 20 * u * ((t * 0.5) % 1), 1.5 * u); }
+      break;
+    }
     case 'munitions': {
       hullBase(ctx, cx, cy, s, color);
       // Two warhead shells on a rack.
@@ -892,11 +961,13 @@ function drawSite(ctx, type, cx, cy, s, owner, b) {
 
 function drawBot(ctx, u, sx, sy, s) {
   const color = PLAYER_COLORS[u.owner];
-  const art = artFor(u.type, u.owner);
+  const own = artFor(u.type, u.owner);
+  // Specialists use their own art when it exists, otherwise the worker's with a badge.
+  const art = own || (u.type !== 'warbot' ? artFor('worker', u.owner) : null);
   const bob = u.busy ? Math.sin(R.time * 18 + u.id) * s * 0.03 : 0;
   if (art) {
     drawArt(ctx, art, sx, sy + bob, s * (u.type === 'warbot' ? 0.6 : 0.5), u.face);
-  } else if (u.type === 'worker') {
+  } else if (u.type !== 'warbot') {
     const r = s * 0.16;
     ctx.fillStyle = 'rgba(20,10,5,0.3)';
     ctx.beginPath(); ctx.ellipse(sx + r * 0.3, sy + r * 0.6, r, r * 0.6, 0, 0, Math.PI * 2); ctx.fill();
@@ -919,12 +990,24 @@ function drawBot(ctx, u, sx, sy, s) {
     ctx.beginPath(); ctx.arc(r * 0.3, 0, r * 0.18, 0, Math.PI * 2); ctx.fill();
     ctx.restore();
   }
+  if (!own && u.type !== 'worker' && u.type !== 'warbot') drawBotBadge(ctx, u.type, sx + s * 0.16, sy + s * 0.14 + bob, s);
   if (u.carry) {
     const c = s * 0.1;
-    ctx.fillStyle = '#1b1e25';
-    ctx.fillRect(sx - c - 1, sy - s * 0.3 - c - 1 + bob, c * 2 + 2, c * 2 + 2);
-    ctx.fillStyle = GOOD[u.carry].color;
-    ctx.fillRect(sx - c, sy - s * 0.3 - c + bob, c * 2, c * 2);
+    for (let k = (u.carryN || 1) - 1; k >= 0; k--) {
+      const ox = k * c * 1.2, oy = -k * c * 0.9;
+      ctx.fillStyle = '#1b1e25';
+      ctx.fillRect(sx - c - 1 + ox, sy - s * 0.3 - c - 1 + bob + oy, c * 2 + 2, c * 2 + 2);
+      ctx.fillStyle = GOOD[u.carry].color;
+      ctx.fillRect(sx - c + ox, sy - s * 0.3 - c + bob + oy, c * 2, c * 2);
+    }
+  }
+  if (u.owner === 0 && u.type === 'warbot' && (u.ammo ?? WARBOT_AMMO) < WARBOT_AMMO * 0.3) {
+    // Low on ammo: a short brass bar under the bot (empty = grey outline only).
+    const w = s * 0.26, h = Math.max(2.5, s * 0.07), x = sx - w / 2, y = sy + s * 0.26;
+    ctx.fillStyle = 'rgba(0,0,0,0.7)';
+    ctx.fillRect(x - 1, y - 1, w + 2, h + 2);
+    ctx.fillStyle = '#e8c39e';
+    ctx.fillRect(x, y, (w * (u.ammo || 0)) / WARBOT_AMMO, h);
   }
   if (u.owner === 0 && (u.bat ?? 100) < BATTERY.low) {
     // Low battery: an orange bar; emergency mode: a flashing red one.
@@ -943,6 +1026,25 @@ function drawBot(ctx, u, sx, sy, s) {
     ctx.fillRect(sx - w / 2, sy - s * 0.36, w, 3);
     ctx.fillStyle = u.hp / u.maxHp > 0.5 ? '#7bea6b' : '#ff6b5a';
     ctx.fillRect(sx - w / 2, sy - s * 0.36, (w * u.hp) / u.maxHp, 3);
+  }
+}
+
+/** A small marker telling specialist bots apart when they share the worker's art. */
+function drawBotBadge(ctx, type, x, y, s) {
+  const r = Math.max(2.5, s * 0.075);
+  ctx.fillStyle = '#14161d';
+  ctx.beginPath(); ctx.arc(x, y, r + 1.5, 0, Math.PI * 2); ctx.fill();
+  if (type === 'hauler') {
+    ctx.fillStyle = '#f0a030';
+    ctx.fillRect(x - r * 0.8, y - r * 0.8, r * 1.6, r * 1.6);
+  } else if (type === 'agribot') {
+    ctx.fillStyle = '#6fd36a';
+    ctx.beginPath(); ctx.ellipse(x, y, r, r * 0.55, -0.7, 0, Math.PI * 2); ctx.fill();
+  } else {
+    ctx.fillStyle = '#ffcf4a';
+    ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = '#14161d'; ctx.lineWidth = Math.max(1, r * 0.45);
+    ctx.beginPath(); ctx.moveTo(x - r * 0.7, y + r * 0.7); ctx.lineTo(x + r * 0.7, y - r * 0.7); ctx.stroke();
   }
 }
 

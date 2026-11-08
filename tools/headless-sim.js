@@ -3,7 +3,7 @@
 const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
-const files = ['util.js', 'defs.js', 'world.js', 'path.js', 'sim.js', 'ai.js'];
+const files = ['util.js', 'defs.js', 'world.js', 'path.js', 'sim.js', 'ai.js', 'missions.js'];
 const ctx = { console, Math, JSON, Map, Array, Object, Number, String, Infinity, Uint8Array, Int8Array, Int32Array, Uint32Array, Float32Array };
 ctx.sfx = () => {};
 vm.createContext(ctx);
@@ -26,8 +26,9 @@ while (true) {
       const bl = S.buildings.filter((b) => !b.dead && b.owner === p);
       const bots = S.bots.filter((u) => !u.dead && u.owner === p);
       const g = api.playerGoods(p);
-      return `P${p}: bld ${bl.filter((b) => b.built).length}/${bl.length} wk ${bots.filter((u) => u.type === 'worker').length} wb ${bots.filter((u) => u.type === 'warbot').length} ` +
-        Object.entries(g).map(([k, v]) => k[0] + k[1] + v).join(' ');
+      const n = (t) => bots.filter((u) => u.type === t).length;
+      return `P${p}: bld ${bl.filter((b) => b.built).length}/${bl.length} wk ${n('worker')}+${n('hauler')}h+${n('agribot')}a+${n('paver')}p wb ${n('warbot')} ` +
+        Object.entries(g).map(([k, v]) => k.slice(0, 3) + v).join(' ');
     }).join(' | ');
     console.log(`t=${(S.time / 60).toFixed(0)}m ${line}` + (S.mode === 'colony' ? ` land ${Math.round(api.landShare(0) * 100)}%` : ''));
   }

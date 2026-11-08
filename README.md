@@ -4,8 +4,10 @@ A mobile-first colony and logistics strategy game that runs in the browser. Your
 a dusty alien planet: gather resources, link them into supply chains, build more robots and spread
 across the map.
 
-- **Versus:** race a rival AI colony across the planet. Capture its Lander to win (about 15–30 minutes).
+- **Versus:** race a rival AI colony across the planet. Capture its Lander to win (about 20–40 minutes).
 - **Colony:** no rival. Settle the planet at your own pace, with colonization milestones.
+- **Missions:** eight set challenges on hand-picked planets, each with its own goals and Easy, Normal and Hard
+  levels. Finishing one unlocks the next and shows an unlock code for it, so progress can move to another device.
 
 Before each game, sliders set the **map size** (Small to Huge), the **terrain** (Flat, Gentle,
 Rolling, Rugged, Mountainous) and the **resources** (Scarce to Abundant). Resources come in separate
@@ -53,17 +55,29 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
 | Bio Farm | A worker plants energy crops on fertile soil and harvests them into **Fuel** |
 | Oil Pump | Built on an oil seep; a worker pumps **Crude** until it runs dry |
 | Refinery | Crude → 2 **Fuel** |
+| Cement Works | 2 Stone → **Cement** (for concrete roads) |
+| Asphalt Plant | Crude + Stone → 2 **Asphalt** |
+| Roadworks | Its Paver lays Asphalt on your paths nearby (1 Asphalt covers 4 tiles) |
+| Ammo Plant | Alloy + Stone → 3 **Ammo**; warbots reload it in the Lander and Outposts (Versus) |
 | Munitions Works | Alloy + Crystal → **Warhead** (Versus) |
 | Missile Silo | Fires missiles at rival buildings up to 18 tiles away (Versus) |
 
 - Every production building needs one worker inside. Free workers haul goods and build construction sites.
   Run short and the game pulls workers off low-priority jobs, so build a Bot Foundry early.
+- **Robot types:** Workers do everything; **Haulers** carry two goods at a time and move a quarter faster but only
+  haul; **Agribots** are the only bots that can run Bio Farms and Grove Planters; **Pavers** run the Roadworks;
+  **Warbots** fight. You start with 12 Workers, 2 Haulers and an Agribot (plus 4 Warbots in Versus).
 - Placing a construction site is free; workers bring the materials from storage.
-- **Paths** cost a quarter Stone per tile (1 Stone paves 4; refunded if you remove them) and make bots move twice as fast. Bots
-  plan routes that use them even when that means a short detour. Bots are slow off paths.
+- **Paths** come in three surfaces: gravel (1 Stone paves 4 tiles, 2× speed), concrete (1 Cement paves 10 tiles, 2.5×)
+  and asphalt (3×, laid by a Roadworks on top of existing paths). Removing a path refunds its Stone or Cement. Bots plan
+  routes that use paths even when that means a short detour, and they are slow off them.
 - **Traffic:** on a two-way path, bots slow down whenever they meet traffic coming the other way. Switch the Paths banner to
-  **One-way** and drag along a path to point it the way you drag (tap a path to turn its arrow). One-way loops keep busy
+  **Arrows** and drag along a path to point it the way you drag (tap a path to turn its arrow). One-way loops keep busy
   routes flowing; going the wrong way up a one-way path is allowed but crawls.
+- **Ammo:** warbots carry 20 shots and reload in your Lander and Outposts, which workers stock from an Ammo Plant. Out of
+  ammo, a warbot hits at about a third of its strength.
+- **Statistics:** the pause menu and the end-of-game screen show graphs of bots, land and goods over time and how busy
+  each kind of building was; each building's panel shows its recent busy time.
 - **Terrain levels:** the planet has terraces at different heights (lighter ground is higher). Bots
   can't climb cliffs; they use slopes at narrow passes, so some routes are long. Pave busy routes with
   Paths (slopes too) and build a **Ramp** to open your own way up. Buildings can't be placed where they
@@ -114,6 +128,8 @@ js/world.js               map generation, game state, territory, placement rules
 js/path.js                A* pathfinding
 js/sim.js                 simulation: logistics, workers, production, combat
 js/ai.js                  rival AI
+js/missions.js            mission campaign: goals, hand-placed map features, unlock codes
+js/charts.js              line and bar charts for the statistics screen
 js/render.js              canvas renderer and placeholder art
 js/input.js               touch and mouse controls
 js/ui.js                  HUD, build menu, info panels, objectives
@@ -152,6 +168,6 @@ each minute. The smoke test needs Playwright and a running local server.
 
 ## Ideas for next steps
 
-- More building tiers and goods
-- Campaign of hand-made missions
+- Traffic lights at path crossings
+- Multiplayer and save export/import
 - Custom art for goods icons, menus and effects

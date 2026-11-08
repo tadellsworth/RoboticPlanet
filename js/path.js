@@ -24,7 +24,7 @@ function tileCost(t, dx, dy) {
   if (r) {
     // The wrong way up a one-way path: slow, plus a penalty so bots only do it when there's no other way.
     if (r >= 2 && dx * ROAD_DIRS[r][0] + dy * ROAD_DIRS[r][1] < 0) return 1 / ONEWAY_WRONG + 2;
-    return ROAD_PREFERENCE / ROAD_SPEED;
+    return ROAD_PREFERENCE / PAVE[S.pave[t] || 1].speed;
   }
   if (S.ramp[t]) return 1 / SLOPE_SPEED;
   return S.res[t] ? 1.5 : 1;
@@ -47,7 +47,7 @@ function findPath(sx, sy, gx, gy, avoidFor) {
   const gen = ++_pf.gen;
   const g = _pf.g, from = _pf.from, stamp = _pf.stamp, closed = _pf.closed, heap = _pf.heap;
   heap.clear();
-  const minStep = ROAD_PREFERENCE / ROAD_SPEED;
+  const minStep = ROAD_PREFERENCE / PAVE[topPave()].speed;
   const h = (i, j) => {
     const dx = Math.abs(i - gx), dy = Math.abs(j - gy);
     return (Math.max(dx, dy) + 0.4142 * Math.min(dx, dy)) * minStep;

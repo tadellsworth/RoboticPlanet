@@ -20,7 +20,7 @@ function simStep(dt) {
   for (let k = 0; k < S.bots.length; k++) {
     const u = S.bots[k];
     if (u.dead) continue;
-    if (u.type === 'worker') updateWorker(u, dt); else updateWarbot(u, dt);
+    if (u.type === 'warbot') updateWarbot(u, dt); else updateWorker(u, dt);
   }
   if (S.missiles.length) updateMissiles(dt);
   if (S.tick % 30 === 15) cleanRallies();
@@ -33,7 +33,9 @@ function simStep(dt) {
     S.buildings = S.buildings.filter((b) => !b.dead);
     S.bots = S.bots.filter((u) => !u.dead);
   }
-  if (S.mode === 'colony' && S.tick % 90 === 0) checkMilestones();
+  if (S.mode === 'colony' && !S.mission && S.tick % 90 === 0) checkMilestones();
+  if (S.tick % Math.round(HIST_STEP / SIM_STEP) === 0) recordHistory();
+  if (S.mission && S.tick % 30 === 0 && typeof checkMission === 'function') checkMission();
   for (const f of S.fx) f.t += dt;
   if (S.fx.length && S.tick % 6 === 0) S.fx = S.fx.filter((f) => f.t < f.life);
 }
@@ -112,6 +114,12 @@ function needsOf(b) {
     out.push([def.ammo, (def.ammoCap || AMMO_CAP) - (b.stock[def.ammo] || 0) - (b.inc[def.ammo] || 0)]);
   } else if (def.fuelCap) {
     out.push(['fuel', def.fuelCap - (b.stock.fuel || 0) - (b.inc.fuel || 0)]);
+  } else if (def.roadworks) {
+    out.push(['asphalt', 3 - (b.stock.asphalt || 0) - (b.inc.asphalt || 0)]);
+  }
+  // Garrisons keep Ammo for their warbots (Versus only).
+  if (def.ammoStock && b.built && S.mode !== 'colony') {
+    out.push(['ammo', def.ammoStock - (b.stock.ammo || 0) - (b.inc.ammo || 0)]);
   }
   return out;
 }
@@ -129,8 +137,9 @@ function botCount(owner) {
   return n;
 }
 
+/** A civilian bot (any type but warbot) with nothing to do and enough charge for a job. */
 function isIdleWorker(u) {
-  if (u.type !== 'worker' || u.dead || u.carry || (u.task && u.task.type !== 'home')) return false;
+  if (u.type === 'warbot' || u.dead || u.carry || (u.task && u.task.type !== 'home')) return false;
   // A worker that is charging finishes first; one that is running low goes to charge before new jobs.
   return (u.bat ?? 100) >= (insideCharger(u) ? 90 : BATTERY.low);
 }
@@ -155,7 +164,7 @@ function chargerDry(b) {
 function countCharging() {
   for (const b of S.buildings) if (BDEFS[b.type].charger) b.charging = 0;
   for (const u of S.bots) {
-    if (u.dead || !u.inside || u.type !== 'worker' || (u.bat ?? 100) >= 100) continue;
+    if (u.dead || !u.inside || u.type === 'warbot' || (u.bat ?? 100) >= 100) continue;
     const b = getE(u.inside);
     if (b && BDEFS[b.type].charger) b.charging++;
   }
@@ -243,7 +252,7 @@ function goTo(u, x, y) {
   const goal = y * S.W + x;
   // Don't hammer the pathfinder with a route that just failed.
   if (u.failGoal === goal && S.time < u.failUntil) return false;
-  const p = findPath(Math.floor(u.x), Math.floor(u.y), x, y, u.type === 'worker' ? u.owner : undefined);
+  const p = findPath(Math.floor(u.x), Math.floor(u.y), x, y, u.type !== 'warbot' ? u.owner : undefined);
   if (!p) { u.failGoal = goal; u.failUntil = S.time + 2; return false; }
   exitBuilding(u);
   u.path = p; u.pi = 0; u.idleT = 0; u.goal = y * S.W + x;
@@ -287,13 +296,13 @@ function trafficJam(u, here, next) {
 function moveAlong(u, dt) {
   if (!u.path) return true;
   const here = Math.floor(u.y) * S.W + Math.floor(u.x);
-  let speed = u.type === 'warbot' ? WARBOT_SPEED : WORKER_SPEED;
+  let speed = BOTS[u.type].speed;
   const r = S.road[here];
   if (r) {
     const next = u.path[u.pi];
     const dx = (next % S.W) + 0.5 - u.x, dy = ((next / S.W) | 0) + 0.5 - u.y;
     const wrong = r >= 2 && dx * ROAD_DIRS[r][0] + dy * ROAD_DIRS[r][1] < -0.1;
-    speed *= wrong ? ONEWAY_WRONG : ROAD_SPEED / (1 + trafficJam(u, here, next));
+    speed *= wrong ? ONEWAY_WRONG : PAVE[S.pave[here] || 1].speed / (1 + trafficJam(u, here, next));
   } else if (S.ramp[here]) speed *= SLOPE_SPEED; else if (S.res[here]) speed *= 0.75;
   let step = speed * batFactor(u) * dt;
   u.moved = 1;
@@ -348,15 +357,18 @@ function dispatch(p) {
 
   // Always keep a few workers free for hauling and building. If raids or new buildings took them
   // all, pull one off the least useful job — this must run even when nobody is idle.
-  let free = 0, workers = 0;
+  // Haulers take over carrying, so every two of them lower the number of free workers needed.
+  let free = 0, workers = 0, haulers = 0;
   for (const u of S.bots) {
-    if (u.dead || u.owner !== p || u.type !== 'worker') continue;
+    if (u.dead || u.owner !== p) continue;
+    if (u.type === 'hauler') haulers++;
+    if (u.type !== 'worker') continue;
     workers++;
     if (!(u.task && u.task.type === 'staff')) free++;
   }
-  const minFree = Math.max(MIN_FREE_WORKERS, Math.round(workers * 0.2));
+  const minFree = Math.max(1, Math.max(MIN_FREE_WORKERS, Math.round(workers * 0.2)) - Math.floor(haulers / 2));
   if (free < minFree) {
-    const cands = blds.filter((b) => b.built && b.staff && b.type !== 'foundry');
+    const cands = blds.filter((b) => b.built && b.staff && b.type !== 'foundry' && !BDEFS[b.type].crew);
     cands.sort((a, c) => releaseScore(c) - releaseScore(a));
     if (cands.length) {
       unstaff(cands[0]);
@@ -372,27 +384,49 @@ function dispatch(p) {
   for (const u of S.bots) if (u.owner === p && isIdleWorker(u)) idle.push(u);
   if (!idle.length) return;
 
-  const take = (x, y) => {
+  // role: 'build', 'haul', 'staff' (an ordinary building) or a crew name (a specialist's building).
+  const take = (x, y, role) => {
     let best = -1, bd = Infinity;
     for (let k = 0; k < idle.length; k++) {
-      const d = dist2(idle[k].x, idle[k].y, x + 0.5, y + 0.5);
-      // Only send a worker with enough charge for the trip there and back.
-      if ((idle[k].bat ?? 100) < BATTERY.low + 0.5 * Math.sqrt(d)) continue;
+      const u = idle[k], bt = BOTS[u.type];
+      if (role === 'haul' ? !bt.haul : role === 'build' ? !bt.build : role === 'staff' ? !bt.staff : bt.crew !== role) continue;
+      let d = dist2(u.x, u.y, x + 0.5, y + 0.5);
+      // Only send a bot with enough charge for the trip there and back.
+      if ((u.bat ?? 100) < BATTERY.low + 0.5 * Math.sqrt(d)) continue;
+      if (role === 'haul' && u.type === 'hauler') d *= 0.4; // haulers are the first choice for carrying
       if (d < bd) { bd = d; best = k; }
     }
     if (best < 0) return null;
     return idle.splice(best, 1)[0];
   };
+  const canCarry = (u, n) => (u ? Math.max(1, Math.min(n, BOTS[u.type].carry || 1)) : 1);
+
+  // 0) Specialist buildings get a bot of their crew.
+  for (const b of blds) {
+    const crew = BDEFS[b.type].crew;
+    if (!crew || !b.built || b.paused || b.staff || b.staffInc) continue;
+    const u = take(b.x, b.y, crew);
+    if (u) assignStaff(u, b);
+    else if (!S.bots.some((v) => !v.dead && v.owner === p && v.type === crew)) {
+      const P = S.players[p];
+      P.crewMsg = P.crewMsg || {};
+      if (S.time - (P.crewMsg[crew] || -999) > 120) {
+        P.crewMsg[crew] = S.time;
+        postMsg(p, `Your ${BDEFS[b.type].name} needs ${aOrAn(BOTS[crew].name)}. Order one at the Bot Foundry.`, b.x, b.y, 'warn');
+      }
+    }
+  }
+  if (!idle.length) return;
 
   // 1) A builder for every construction site that has materials waiting to be built with.
   for (const b of blds) {
     if (!idle.length) return;
     if (!b.built && !b.builder && deliveredCount(b) / sumValues(BDEFS[b.type].cost) > b.progress + 0.01) {
-      assignBuild(take(b.x, b.y), b);
+      assignBuild(take(b.x, b.y, 'build'), b);
     }
   }
   // 2) An operator for every finished building that needs one, while keeping minFree workers free.
-  const staffQueue = blds.filter((b) => b.built && !b.paused && BDEFS[b.type].staff && !b.staff && !b.staffInc)
+  const staffQueue = blds.filter((b) => b.built && !b.paused && BDEFS[b.type].staff && !BDEFS[b.type].crew && !b.staff && !b.staffInc)
     .sort((a, c) => prioRank(a) - prioRank(c) || staffPriority(a) - staffPriority(c) || a.born - c.born);
   for (const b of staffQueue) {
     if (!idle.length) return;
@@ -403,7 +437,9 @@ function dispatch(p) {
       }
       break;
     }
-    assignStaff(take(b.x, b.y), b);
+    const u = take(b.x, b.y, 'staff');
+    if (!u) break;
+    assignStaff(u, b);
     free--;
   }
   // 3) Deliveries, one unit per request per pass. Player priority comes first; within the same
@@ -428,8 +464,11 @@ function dispatch(p) {
         if (d < bd) { bd = d; src = s; }
       }
       if (!src) { r.n = 0; continue; }
-      assignHaul(take(src.x, src.y), src, r.b, r.g);
-      r.n--;
+      const u = take(src.x, src.y, 'haul');
+      if (!u) { r.n = 0; continue; }
+      const n = canCarry(u, Math.min(r.n, supplyOf(src, r.g)));
+      assignHaul(u, src, r.b, r.g, n);
+      r.n -= n;
       any = true;
     }
     if (!any) break;
@@ -443,7 +482,8 @@ function dispatch(p) {
       const avail = supplyOf(b, g);
       if (avail >= 2 || (avail >= 1 && !b.staff)) {
         const store = storeFor(p, g, b.x + 0.5, b.y + 0.5);
-        if (store) assignHaul(take(b.x, b.y), b, store, g);
+        const u = store && take(b.x, b.y, 'haul');
+        if (u) assignHaul(u, b, store, g, canCarry(u, avail));
       }
     }
   }
@@ -454,22 +494,27 @@ function dispatch(p) {
       if (!idle.length) return;
       if (storeTakes(b, g) || supplyOf(b, g) <= 0) continue;
       const store = storeFor(p, g, b.x + 0.5, b.y + 0.5, b);
-      if (store) assignHaul(take(b.x, b.y), b, store, g);
+      const u = store && take(b.x, b.y, 'haul');
+      if (u) assignHaul(u, b, store, g, canCarry(u, supplyOf(b, g)));
     }
   }
 }
+
+function aOrAn(word) { return (/^[AEIOU]/i.test(word) ? 'an ' : 'a ') + word; }
 
 /** Which idle buildings get an operator first (lower = sooner). */
 function staffPriority(b) {
   return b.type === 'foundry' ? 0 : b.type === 'grower' ? 2 : 1;
 }
 
-function assignHaul(u, src, dst, g) {
+/** Send bot u to carry n of good g from src to dst (n > 1 only for bots that carry more). */
+function assignHaul(u, src, dst, g, n) {
   if (!u) return;
   cancelTask(u);
-  u.task = { type: 'haul', src: src.id, dst: dst.id, good: g, phase: 'toSrc' };
-  bump(src.res, g, 1);
-  bump(dst.inc, g, 1);
+  n = n || 1;
+  u.task = { type: 'haul', src: src.id, dst: dst.id, good: g, phase: 'toSrc', n };
+  bump(src.res, g, n);
+  bump(dst.inc, g, n);
   if (!goTo(u, src.x, src.y)) { cancelTask(u); src.unreachUntil = S.time + 5; }
 }
 
@@ -533,10 +578,11 @@ function goHome(u) {
 
 function stashCarry(u) {
   const store = storeFor(u.owner, u.carry, u.x, u.y) || nearestStoreTo(u.owner, u.x, u.y);
-  if (!store) { u.carry = null; return; }
-  u.task = { type: 'haul', src: 0, dst: store.id, good: u.carry, phase: 'toDst' };
-  bump(store.inc, u.carry, 1);
-  if (!goTo(u, store.x, store.y)) { cancelTask(u); u.carry = null; }
+  if (!store) { u.carry = null; u.carryN = 0; return; }
+  const n = u.carryN || 1;
+  u.task = { type: 'haul', src: 0, dst: store.id, good: u.carry, phase: 'toDst', n };
+  bump(store.inc, u.carry, n);
+  if (!goTo(u, store.x, store.y)) { cancelTask(u); u.carry = null; u.carryN = 0; }
 }
 
 function doHaul(u, t, dt) {
@@ -544,25 +590,31 @@ function doHaul(u, t, dt) {
     const src = getE(t.src);
     if (!src || src.owner !== u.owner) { cancelTask(u); return; }
     if (!moveAlong(u, dt)) return;
-    bump(src.res, t.good, -1);
+    const n = t.n || 1;
+    bump(src.res, t.good, -n);
     const dst = getE(t.dst);
-    if ((src.stock[t.good] || 0) <= 0 || !dst) {
-      if (dst) bump(dst.inc, t.good, -1);
+    const got = Math.min(n, src.stock[t.good] || 0);
+    if (got <= 0 || !dst) {
+      if (dst) bump(dst.inc, t.good, -n);
       u.task = null;
       return;
     }
-    bump(src.stock, t.good, -1);
+    if (got < n) bump(dst.inc, t.good, got - n);
+    t.n = got;
+    bump(src.stock, t.good, -got);
     u.carry = t.good;
+    u.carryN = got;
     t.phase = 'toDst';
-    if (!goTo(u, dst.x, dst.y)) { bump(dst.inc, t.good, -1); u.task = null; dst.unreachUntil = S.time + 5; }
+    if (!goTo(u, dst.x, dst.y)) { bump(dst.inc, t.good, -got); u.task = null; dst.unreachUntil = S.time + 5; }
     return;
   }
   const dst = getE(t.dst);
   if (!dst || dst.owner !== u.owner) { cancelTask(u); return; }
   if (!moveAlong(u, dt)) return;
-  bump(dst.inc, t.good, -1);
-  bump(dst.stock, t.good, 1);
+  bump(dst.inc, t.good, -(t.n || 1));
+  bump(dst.stock, t.good, t.n || 1);
   u.carry = null;
+  u.carryN = 0;
   u.task = null;
   u.idleT = 0;
   if (BDEFS[dst.type].store) enterBuilding(u, dst);
@@ -694,6 +746,30 @@ function findCropSpot(b, radius) {
   return best;
 }
 
+/** The nearest path tile (to x, y) within a Roadworks' reach that isn't asphalt yet. */
+function findPaveSpot(b, x, y) {
+  const radius = BDEFS[b.type].radius, r2 = radius * radius + 0.3;
+  const zone = S.zone[tIdx(b.x, b.y)];
+  let best = -1, bd = Infinity;
+  for (let j = Math.max(0, b.y - radius); j <= Math.min(S.H - 1, b.y + radius); j++) {
+    for (let i = Math.max(0, b.x - radius); i <= Math.min(S.W - 1, b.x + radius); i++) {
+      const t = j * S.W + i;
+      if (!S.road[t] || S.pave[t] >= 3 || S.resRes[t] || S.owner[t] !== b.owner || S.zone[t] !== zone) continue;
+      if (dist2(i, j, b.x, b.y) > r2) continue;
+      const d = dist2(i, j, x, y);
+      if (d < bd) { bd = d; best = t; }
+    }
+  }
+  return best;
+}
+
+/** Count goods a player produced (for statistics and mission goals). */
+function madeGood(owner, g, n) {
+  const P = S.players[owner];
+  P.made = P.made || {};
+  P.made[g] = (P.made[g] || 0) + n;
+}
+
 /** The oil seep tile an Oil Pump draws from next (its own tile or a neighbour), or -1 if dry. */
 function pumpSeep(b) {
   let best = -1, most = 0;
@@ -729,7 +805,7 @@ function doStaff(u, t, dt) {
         if (c && goTo(u, c.x, c.y)) { t.phase = 'toCharge'; t.charger = c.id; return; }
         t.wait = 3;
       }
-      if (!def.gather && !def.plant && !def.farm) return; // production happens in updateBuilding
+      if (!def.gather && !def.plant && !def.farm && !def.roadworks) return; // production happens in updateBuilding
       let node;
       if (def.gather) {
         const g = RES[def.gather].good;
@@ -749,6 +825,15 @@ function doStaff(u, t, dt) {
           return;
         }
         b.status = t.act === 'harvest' ? 'Harvesting energy crops' : 'Planting energy crops';
+      } else if (def.roadworks) {
+        node = findPaveSpot(b, b.x, b.y);
+        if (node < 0) { b.status = 'Every path in reach is asphalt'; t.wait = 3; return; }
+        if (!(b.charges > 0)) {
+          if (!((b.stock.asphalt || 0) > 0)) { b.status = 'Waiting for Asphalt'; t.wait = 1; return; }
+          bump(b.stock, 'asphalt', -1);
+          b.charges = ASPHALT_TILES;
+        }
+        b.status = 'Laying asphalt';
       } else {
         if (reachableRes(b.x, b.y, def.radius, def.plant) >= 16) { b.status = 'The grove is full'; t.wait = 4; return; }
         node = findPlantSpot(b, def.radius);
@@ -776,13 +861,15 @@ function doStaff(u, t, dt) {
       return;
     }
     case 'toNode':
+      b.working = true;
       if (moveAlong(u, dt)) {
         t.phase = 'work';
-        t.timer = def.gather ? RES[def.gather].harvest : def.farm ? (t.act === 'harvest' ? RES[R_CROP].harvest : 2) : 3;
+        t.timer = def.gather ? RES[def.gather].harvest : def.farm ? (t.act === 'harvest' ? RES[R_CROP].harvest : 2) : def.roadworks ? 2.5 : 3;
       }
       return;
     case 'work': {
       u.busy = 1;
+      b.working = true;
       t.timer -= dt * mult * batFactor(u);
       if (t.timer > 0) return;
       const node = t.node, ni = node % S.W, nj = (node / S.W) | 0;
@@ -794,6 +881,8 @@ function doStaff(u, t, dt) {
           if (S.amt[node] === 0) S.res[node] = R_NONE;
           markDirty(ni, nj);
           u.carry = RES[def.gather].good;
+          u.carryN = 1;
+          madeGood(u.owner, u.carry, 1);
         }
       } else if (def.farm) {
         if (t.act === 'harvest' && S.res[node] === R_CROP && S.grow[node] >= 1) {
@@ -801,11 +890,24 @@ function doStaff(u, t, dt) {
           S.amt[node] = 0;
           markDirty(ni, nj);
           u.carry = RES[R_CROP].good;
+          u.carryN = 1;
+          madeGood(u.owner, u.carry, 1);
         } else if (t.act === 'plant' && S.fert[node] && !S.res[node] && !S.bAt[node] && !S.road[node]) {
           S.res[node] = R_CROP;
           S.amt[node] = 1;
           S.grow[node] = 0;
           markDirty(ni, nj);
+        }
+      } else if (def.roadworks) {
+        if (S.road[node] && S.pave[node] < 3) {
+          setPave(ni, nj, 3);
+          b.charges = Math.max(0, (b.charges || 0) - 1);
+          S.players[u.owner].paved = (S.players[u.owner].paved || 0) + 1;
+        }
+        // Keep going along the paths while there's asphalt left in the hopper.
+        if (b.charges > 0) {
+          const next = findPaveSpot(b, ni, nj);
+          if (next >= 0 && goTo(u, next % S.W, (next / S.W) | 0)) { S.resRes[next] = 1; t.node = next; t.phase = 'toNode'; return; }
         }
       } else if (!S.res[node] && !S.bAt[node] && !S.road[node]) {
         S.res[node] = def.plant;
@@ -818,9 +920,10 @@ function doStaff(u, t, dt) {
       return;
     }
     case 'back':
+      if (u.carry) b.working = true;
       if (moveAlong(u, dt)) {
         enterBuilding(u, b);
-        if (u.carry) { bump(b.stock, u.carry, 1); u.carry = null; }
+        if (u.carry) { bump(b.stock, u.carry, 1); u.carry = null; u.carryN = 0; }
         t.phase = 'in';
         t.wait = 0.3;
       }
@@ -832,6 +935,12 @@ function doStaff(u, t, dt) {
 
 function updateBuilding(b, dt) {
   const def = BDEFS[b.type];
+  // How busy is it? (statistics: last tick's working flag counts for this tick)
+  if (b.built && tracksUse(def)) {
+    b.upI = (b.upI || 0) + dt;
+    b.upT = (b.upT || 0) + dt;
+    if (b.working) { b.useI = (b.useI || 0) + dt; b.useT = (b.useT || 0) + dt; }
+  }
   b.working = false;
   if (!b.built) {
     if (sumValues(b.stock) + sumValues(b.inc) === 0) b.status = 'Waiting for materials';
@@ -857,14 +966,22 @@ function updateBuilding(b, dt) {
       }
     } else {
       b.status = `Charging ${Math.min(b.charging || 0, def.charger.slots)} of ${def.charger.slots} bots` + ((b.charging || 0) > def.charger.slots ? ` (${b.charging - def.charger.slots} waiting)` : '');
+      if (b.charging > 0) b.working = true;
     }
   }
   if (def.mil) garrisonDefense(b, dt);
   if (def.staff && !def.inp) {
     const op = getE(b.staff);
-    if (!op) b.status = b.staffInc ? 'Worker on the way' : 'Needs a worker';
+    const who = def.crew ? BOTS[def.crew].name : 'Worker';
+    if (!op) {
+      b.status = b.staffInc ? `${who} on the way` : `Needs ${aOrAn(def.crew ? who : 'worker')}`;
+      if (!b.staffInc && def.crew && !S.bots.some((v) => !v.dead && v.owner === b.owner && v.type === def.crew)) b.status += ': order one at the Bot Foundry';
+    }
   }
 }
+
+/** Buildings whose busy time is tracked for statistics. */
+function tracksUse(def) { return !!(def.staff || (def.charger && !def.store) || (def.ammo && !def.missile)); }
 
 function produce(b, def, dt) {
   const op = getE(b.staff);
@@ -896,27 +1013,39 @@ function produce(b, def, dt) {
     if (--S.amt[seep] <= 0) { S.amt[seep] = 0; S.res[seep] = R_NONE; markDirty(seep % S.W, (seep / S.W) | 0); }
   }
   if (def.make) {
-    for (const g in def.make) bump(b.stock, g, def.make[g]);
+    for (const g in def.make) { bump(b.stock, g, def.make[g]); madeGood(b.owner, g, def.make[g]); }
     addFx('float', b.x + 0.5, b.y + 0.1, { text: '+1', color: GOOD[Object.keys(def.make)[0]].color });
   }
   if (def.bots) spawnFromFoundry(b);
   if (b.owner === 0) sfx('produce');
 }
 
-function hasOrders(b) { return !!(b.orders && (b.orders.worker > 0 || b.orders.warbot > 0)); }
+function hasOrders(b) {
+  if (!b.orders) return false;
+  for (const k in b.orders) if (b.orders[k] > 0) return true;
+  return false;
+}
 
-/** What the Foundry builds next: queued orders first, then its standing mode. */
+/** What the Foundry builds next: queued orders first (types take turns), then its standing mode. */
 function nextBotKind(b) {
-  const o = b.orders;
-  if (hasOrders(b)) return o.worker > 0 && o.warbot > 0 ? b.altNext : o.worker > 0 ? 'worker' : 'warbot';
+  if (hasOrders(b)) {
+    const start = b.rr || 0;
+    for (let i = 0; i < BOT_ORDER.length; i++) {
+      const k = BOT_ORDER[(start + i) % BOT_ORDER.length];
+      if (b.orders[k] > 0) return k;
+    }
+  }
   return b.mode === 'alt' ? b.altNext : b.mode;
 }
 
 function spawnFromFoundry(b) {
   const kind = nextBotKind(b);
+  const P = S.players[b.owner];
+  P.madeBots = P.madeBots || {};
+  P.madeBots[kind] = (P.madeBots[kind] || 0) + 1;
   if (hasOrders(b)) {
     b.orders[kind]--;
-    if (b.orders.worker > 0 && b.orders.warbot > 0) b.altNext = kind === 'worker' ? 'warbot' : 'worker';
+    b.rr = (BOT_ORDER.indexOf(kind) + 1) % BOT_ORDER.length;
     if (!hasOrders(b)) {
       delete b.orders;
       postMsg(b.owner, 'The Bot Foundry finished its production orders.', b.x, b.y, 'good');
@@ -941,6 +1070,7 @@ function updateTurret(b, def, dt) {
     else { b.status = 'Out of ammo!'; b.cd = 0.5; return; }
   }
   b.shots--;
+  b.working = true;
   b.aim = Math.atan2(target.y - cy, target.x - cx);
   b.status = 'Firing';
   addFx('laser', cx, cy, { x2: target.x, y2: target.y, color: PLAYER_COLORS[b.owner] });
@@ -1038,6 +1168,7 @@ function captureBuilding(b, by) {
     return;
   }
   if (def.mil) {
+    S.players[by].stats.outposts = (S.players[by].stats.outposts || 0) + 1;
     postMsg(by, `Your warbots captured the enemy ${name}!`, b.x, b.y, 'good');
     postMsg(old, `The enemy captured your ${name}!`, b.x, b.y, 'bad');
     computeTerritory();
@@ -1052,6 +1183,7 @@ function updateWarbot(u, dt) {
   if (u.bat === undefined) u.bat = 100;
   if (u.inside) {
     if (u.bat < 100) u.bat = Math.min(100, u.bat + BATTERY.garrisonCharge * dt); // garrisons recharge their warbots
+    if ((u.ammo ?? WARBOT_AMMO) <= WARBOT_AMMO - AMMO_SHOTS) reloadAmmo(u, getE(u.inside));
     return;
   }
   u.moved = 0;
@@ -1092,7 +1224,8 @@ function warbotAct(u, dt) {
       u.face = Math.atan2(foe.y - u.y, foe.x - u.x);
       addFx('spark', (u.x + foe.x) / 2, (u.y + foe.y) / 2, { color: PLAYER_COLORS[u.owner] });
       if (u.owner === 0 || foe.owner === 0) sfx('hit');
-      damageBot(foe, Math.max(1, Math.round((2 + (hash2(u.id, S.tick, 7) < 0.5 ? 1 : 0)) * power)));
+      const armed = useAmmo(u);
+      damageBot(foe, Math.max(1, Math.round((2 + (hash2(u.id, S.tick, 7) < 0.5 ? 1 : 0)) * power * (armed ? 1 : NO_AMMO_POWER))));
       u.fought = 1;
     }
     u.path = null;
@@ -1150,11 +1283,36 @@ function strikeBuilding(u, b, dt, power) {
       u.cd = 1.0;
       u.fought = 1;
       addFx('spark', b.x + 0.5 + (hash2(u.id, S.tick, 3) - 0.5) * 0.6, b.y + 0.5 + (hash2(u.id, S.tick, 5) - 0.5) * 0.6, { color: PLAYER_COLORS[u.owner] });
-      hitBuilding(b, power, u.owner);
+      hitBuilding(b, power * (useAmmo(u) ? 1 : NO_AMMO_POWER), u.owner);
     }
     return true;
   }
   return travel(u, b.x, b.y, dt);
+}
+
+/** Fire one shot: true if the warbot had ammo, false if it's down to scuffling. */
+function useAmmo(u) {
+  if ((u.ammo ?? WARBOT_AMMO) > 0) { u.ammo = (u.ammo ?? WARBOT_AMMO) - 1; return true; }
+  const P = S.players[u.owner];
+  if (S.time - (P.lastAmmoMsg || -999) > 90) {
+    P.lastAmmoMsg = S.time;
+    postMsg(u.owner, 'Your warbots are out of Ammo and can barely fight. Build an Ammo Plant: workers stock your Lander and Outposts, where warbots reload.', Math.floor(u.x), Math.floor(u.y), 'warn');
+  }
+  return false;
+}
+
+/** Reload a warbot from a garrison's Ammo (one Ammo = AMMO_SHOTS shots). */
+function reloadAmmo(u, b) {
+  if (!b || b.owner !== u.owner || !BDEFS[b.type].mil || !((b.stock.ammo || 0) - (b.res.ammo || 0) > 0)) return false;
+  bump(b.stock, 'ammo', -1);
+  u.ammo = Math.min(WARBOT_AMMO, (u.ammo ?? 0) + AMMO_SHOTS);
+  return true;
+}
+
+/** Is there a garrison with Ammo this warbot can walk to? */
+function ammoNear(u) {
+  const zone = S.zone[tIdx(Math.floor(u.x), Math.floor(u.y))];
+  return S.buildings.some((b) => !b.dead && b.built && b.owner === u.owner && BDEFS[b.type].mil && (b.stock.ammo || 0) > 0 && S.zone[tIdx(b.x, b.y)] === zone);
 }
 
 /* ------------------------------------------------------------------ army orders (rally points) */
@@ -1176,14 +1334,15 @@ function cleanRallies() {
   S.rallies = S.rallies.filter((r) => used.has(r.id));
 }
 
-/** Nearest own building where a warbot can top up its battery (garrisons and chargers). */
-function rechargePoint(u) {
+/** Nearest own building where a warbot can top up its battery (garrisons and chargers), or reload. */
+function rechargePoint(u, needAmmo) {
   let best = null, bd = Infinity;
   const zone = S.zone[tIdx(Math.floor(u.x), Math.floor(u.y))];
   for (const b of S.buildings) {
     if (b.dead || b.owner !== u.owner || !b.built) continue;
     const def = BDEFS[b.type];
     if (!def.mil && !def.charger) continue;
+    if (needAmmo && !(def.mil && (b.stock.ammo || 0) > 0)) continue;
     if (S.zone[tIdx(b.x, b.y)] !== zone) continue;
     const d = dist2(b.x + 0.5, b.y + 0.5, u.x, u.y);
     if (d < bd) { bd = d; best = b; }
@@ -1200,14 +1359,18 @@ const RALLY_SPOTS = [[0, 0], [1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [-1, 1], 
  */
 function holdRally(u, t, r, dt, power) {
   if (!r) { u.task = null; return; }
-  if ((u.bat ?? 100) < BATTERY.critical && t.phase !== 'recharge') { t.phase = 'recharge'; u.path = null; }
+  if (t.phase !== 'recharge') {
+    const flat = (u.bat ?? 100) < BATTERY.critical;
+    if (flat || (u.ammo === 0 && S.tick % 15 === u.id % 15 && ammoNear(u))) { t.phase = 'recharge'; t.forAmmo = !flat; u.path = null; }
+  }
   if (t.phase === 'recharge') {
-    const home = rechargePoint(u);
+    const home = rechargePoint(u, t.forAmmo) || rechargePoint(u);
     if (!home) { t.phase = null; return; }
     if (dist2(u.x, u.y, home.x + 0.5, home.y + 0.5) <= 2.2) {
       u.path = null;
       u.bat = Math.min(100, (u.bat ?? 0) + 8 * dt);
-      if (u.bat >= 95) t.phase = null;
+      if ((u.ammo ?? WARBOT_AMMO) <= WARBOT_AMMO - AMMO_SHOTS) reloadAmmo(u, home);
+      if (u.bat >= 95 && (u.ammo > 0 || !reloadAmmo(u, home))) { t.phase = null; t.forAmmo = false; }
     } else if (travel(u, home.x, home.y, dt) === null) t.phase = null;
     return;
   }
@@ -1403,9 +1566,10 @@ function sendAttack(owner, target, count) {
 /* ------------------------------------------------------------------ paths */
 
 /*
- * Path costs can be fractions of a good (a quarter Stone per tile). Each player keeps a small
- * credit per good: paying for a tile draws on the credit first and only takes a whole good from
- * storage when the credit runs out; removing a tile adds to the credit and refunds whole goods.
+ * Path costs can be fractions of a good (a quarter Stone or a tenth of a Cement per tile). Each
+ * player keeps a small credit per good: paying for a tile draws on the credit first and only takes
+ * a whole good from storage when the credit runs out; removing a tile adds to the credit and
+ * refunds whole goods.
  */
 function roadCredit(owner, g) {
   const P = S.players[owner];
@@ -1413,18 +1577,21 @@ function roadCredit(owner, g) {
   return P.roadCredit[g] || 0;
 }
 
-/** Can `owner` afford one more path tile? */
-function canAffordRoad(owner) {
-  const have = playerGoods(owner);
-  for (const g in ROAD_COST) if (roadCredit(owner, g) + have[g] < ROAD_COST[g]) return false;
+/** What laying one tile of surface `tier` (1 gravel, 2 concrete) costs. */
+function paveCost(tier) { return PAVE[tier].cost || PAVE[2].cost; }
+
+/** Can `owner` afford one more tile of surface `tier`? */
+function canAffordRoad(owner, tier) {
+  const have = playerGoods(owner), cost = paveCost(tier || 1);
+  for (const g in cost) if (roadCredit(owner, g) + have[g] < cost[g] - 1e-9) return false;
   return true;
 }
 
-/** How many more path tiles the player could lay right now. */
-function roadTilesAffordable(owner) {
-  const have = playerGoods(owner);
+/** How many more tiles of surface `tier` the player could lay right now. */
+function roadTilesAffordable(owner, tier) {
+  const have = playerGoods(owner), cost = paveCost(tier || 1);
   let n = Infinity;
-  for (const g in ROAD_COST) n = Math.min(n, Math.floor((roadCredit(owner, g) + have[g]) / ROAD_COST[g] + 1e-9));
+  for (const g in cost) n = Math.min(n, Math.floor((roadCredit(owner, g) + have[g]) / cost[g] + 1e-9));
   return n;
 }
 
@@ -1444,32 +1611,51 @@ function takeGood(owner, g, n) {
   return true;
 }
 
-/** Lay a path tile, paying for it. Returns '' on success or a reason it couldn't be built. */
-function buildRoad(owner, i, j) {
-  if (!canRoad(owner, i, j)) return 'You can only lay paths on open ground inside your border.';
-  if (S.road[tIdx(i, j)]) return '';
-  if (!canAffordRoad(owner)) return `Out of ${Object.keys(ROAD_COST).map((g) => GOOD[g].name).join(' and ')} for paths.`;
+function payRoad(owner, cost) {
   const P = S.players[owner];
-  for (const g in ROAD_COST) {
-    let c = roadCredit(owner, g) - ROAD_COST[g];
+  for (const g in cost) {
+    let c = roadCredit(owner, g) - cost[g];
     while (c < -1e-9 && takeGood(owner, g, 1)) c += 1;
     P.roadCredit[g] = Math.round(c * 1000) / 1000;
   }
-  setRoad(i, j, true);
-  return '';
 }
 
-/** Remove a path tile and refund its cost to the nearest storage. */
-function removeRoad(owner, i, j) {
-  if (!S.road[tIdx(i, j)]) return;
-  setRoad(i, j, false);
+function refundRoad(owner, cost, i, j) {
   const P = S.players[owner];
   const store = nearestStoreTo(owner, i + 0.5, j + 0.5);
-  for (const g in ROAD_COST) {
-    let c = roadCredit(owner, g) + ROAD_COST[g];
+  for (const g in cost) {
+    let c = roadCredit(owner, g) + cost[g];
     while (c >= 1 - 1e-9 && store) { bump(store.stock, g, 1); c -= 1; }
     P.roadCredit[g] = Math.round(c * 1000) / 1000;
   }
+}
+
+/**
+ * Lay a path tile of surface `tier` (1 gravel, 2 concrete), or upgrade a gravel tile to concrete
+ * (its Stone is refunded). Returns '' on success or a reason it couldn't be done.
+ */
+function buildRoad(owner, i, j, tier) {
+  tier = tier || 1;
+  const t = tIdx(i, j);
+  const cur = S.road[t] ? S.pave[t] || 1 : 0;
+  if (cur >= tier) return '';
+  if (!cur && !canRoad(owner, i, j)) return 'You can only lay paths on open ground inside your border.';
+  if (cur && S.owner[t] !== owner) return 'You can only pave paths inside your border.';
+  if (!canAffordRoad(owner, tier)) return `Out of ${Object.keys(paveCost(tier)).map((g) => GOOD[g].name).join(' and ')} for ${PAVE[tier].name.toLowerCase()}s.`;
+  payRoad(owner, paveCost(tier));
+  if (cur) refundRoad(owner, paveCost(cur), i, j);
+  else setRoad(i, j, true);
+  setPave(i, j, tier);
+  return '';
+}
+
+/** Remove a path tile and refund what it was laid with (Asphalt on top isn't returned). */
+function removeRoad(owner, i, j) {
+  const t = tIdx(i, j);
+  if (!S.road[t]) return;
+  const tier = S.pave[t] || 1;
+  setRoad(i, j, false);
+  refundRoad(owner, paveCost(tier), i, j);
 }
 
 /** Pausing a building sends its worker off to do other jobs until it is resumed. */
@@ -1483,7 +1669,7 @@ function setPaused(b, paused) {
 function unstaff(b) {
   for (const u of S.bots) {
     if (!u.dead && u.task && u.task.type === 'staff' && u.task.bld === b.id) {
-      if (u.carry) { bump(b.stock, u.carry, 1); u.carry = null; }
+      if (u.carry) { bump(b.stock, u.carry, 1); u.carry = null; u.carryN = 0; }
       if (u.inside === b.id) exitBuilding(u);
       cancelTask(u);
     }
@@ -1497,7 +1683,6 @@ function releaseScore(b) {
   const def = BDEFS[b.type];
   let s = b.born / 10000 + (prioRank(b) - 1) * 20;
   if (def.plant) s += 10;
-  if (def.farm) s += 4;
   if (def.gather) s += (b.stock[RES[def.gather].good] || 0) >= def.out[RES[def.gather].good] ? 6 : 3;
   return s;
 }
@@ -1514,4 +1699,76 @@ function demolish(b) {
     }
   }
   destroyBuilding(b, false);
+}
+
+/* ------------------------------------------------------------------ statistics */
+
+/*
+ * Every HIST_STEP seconds each player's colony is sampled for the statistics screen: bots, buildings,
+ * land, goods on hand, and how busy each kind of building was during that stretch. Long games are
+ * thinned out (every other sample dropped) so the history stays small in the save.
+ */
+const HIST_MAX = 240;
+
+function newHistory() { return { t: [], p: [{}, {}] }; }
+
+function recordHistory() {
+  const H = S.hist || (S.hist = newHistory());
+  H.t.push(Math.round(S.time));
+  for (const P of S.players) {
+    if (P.absent) continue;
+    const h = H.p[P.id];
+    const push = (k, v) => (h[k] = h[k] || []).push(v);
+    let civ = 0, war = 0, blds = 0;
+    for (const u of S.bots) if (!u.dead && u.owner === P.id) { if (u.type === 'warbot') war++; else civ++; }
+    const use = {};
+    for (const b of S.buildings) {
+      if (b.dead || b.owner !== P.id || !b.built) continue;
+      blds++;
+      if (!(b.upI > 0)) continue;
+      const pct = Math.round(Math.min(1, (b.useI || 0) / b.upI) * 100);
+      (b.useHist = b.useHist || []).push(pct);
+      if (b.useHist.length > 40) b.useHist.shift();
+      (use[b.type] = use[b.type] || []).push(pct);
+      b.useI = 0; b.upI = 0;
+    }
+    push('civ', civ); push('war', war); push('blds', blds);
+    push('land', Math.round(landShare(P.id) * 1000) / 10);
+    const goods = playerGoods(P.id);
+    h.goods = h.goods || {};
+    h.use = h.use || {};
+    const n = H.t.length;
+    for (const g of GOODS) {
+      const arr = h.goods[g] = h.goods[g] || [];
+      while (arr.length < n - 1) arr.push(0);
+      arr.push(goods[g]);
+    }
+    for (const type in use) {
+      const arr = h.use[type] = h.use[type] || [];
+      while (arr.length < n - 1) arr.push(null);
+      arr.push(Math.round(use[type].reduce((a, v) => a + v, 0) / use[type].length));
+    }
+    for (const type in h.use) if (h.use[type].length < n) h.use[type].push(null);
+  }
+  if (H.t.length > HIST_MAX) {
+    const thin = (a) => a.filter((_, k) => k % 2 === 1);
+    H.t = thin(H.t);
+    for (const h of H.p) {
+      for (const k in h) {
+        if (Array.isArray(h[k])) h[k] = thin(h[k]);
+        else for (const g in h[k]) h[k][g] = thin(h[k][g]);
+      }
+    }
+  }
+}
+
+/** Share of the time (0..1) a player's buildings of each type were busy over the whole game. */
+function usageByType(p) {
+  const out = {};
+  for (const b of S.buildings) {
+    if (b.dead || b.owner !== p || !b.built || !(b.upT > 0)) continue;
+    const o = out[b.type] = out[b.type] || { up: 0, use: 0, n: 0 };
+    o.up += b.upT; o.use += b.useT || 0; o.n++;
+  }
+  return out;
 }

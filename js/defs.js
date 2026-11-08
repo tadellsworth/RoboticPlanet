@@ -5,15 +5,25 @@
 
 const COLONY_MILESTONES = [0.1, 0.25, 0.4, 0.6, 0.8];  // share of land claimed
 const SIM_STEP = 1 / 30;          // fixed simulation step, seconds
+const HIST_STEP = 15;             // seconds between statistics samples
 const MAX_BOTS = 90;              // per player (versus)
 const MAX_BOTS_COLONY = 150;      // colony mode allows a bigger population
 const MAX_SITES = 6;              // simultaneous construction sites per player
 const ATTACK_RANGE = 14;          // tiles from a garrison to a target it can attack
 const WORKER_SPEED = 1.4;         // tiles per second off paths: bots are unhurried, so paths matter
 const WARBOT_SPEED = 1.15;
-const ROAD_SPEED = 2.0;           // speed multiplier on paths
 const ROAD_PREFERENCE = 0.85;     // route planning treats paths as this much cheaper again, so bots go out of their way to use them
-const ROAD_COST = { stone: 0.25 }; // per path tile (1 Stone paves 4); refunded when a path is removed
+/*
+ * Path surfaces (S.pave): gravel is laid with Stone, concrete with Cement (both by painting, and
+ * refunded when removed), asphalt by a Roadworks' Paver on top of an existing path, using Asphalt.
+ * `speed` multiplies a bot's speed on that tile; `cost` is per tile.
+ */
+const PAVE = [null,
+  { key: 'gravel', name: 'Gravel path', speed: 2.0, cost: { stone: 0.25 } },
+  { key: 'concrete', name: 'Concrete road', speed: 2.5, cost: { cement: 0.1 } },
+  { key: 'asphalt', name: 'Asphalt road', speed: 3.0 },
+];
+const ASPHALT_TILES = 4;          // path tiles one Asphalt covers
 const SLOPE_SPEED = 0.65;         // speed multiplier on an unpaved ramp
 /*
  * One-way paths and traffic. A path tile in S.road is 1 (two-way) or 2–5 (one-way, pointing
@@ -41,6 +51,31 @@ const BATTERY = {
   warbotMove: 0.36, warbotFight: 0.9, garrisonCharge: 4,
   low: 30, critical: 12, slow: 0.5,
 };
+
+/*
+ * Robot types. Workers build, haul and run ordinary buildings. Specialists:
+ *   haul   can carry goods (carry = how many at once)   build  can build construction sites
+ *   staff  can run ordinary buildings                    crew   the only bots that can run
+ *                                                               buildings asking for this crew
+ */
+const BOTS = {
+  worker:  { name: 'Worker', plural: 'Workers', speed: WORKER_SPEED, hp: 5, build: true, haul: true, staff: true, carry: 1,
+    desc: 'Builds, carries goods and runs most buildings.' },
+  hauler:  { name: 'Hauler', plural: 'Haulers', speed: WORKER_SPEED * 1.25, hp: 5, haul: true, carry: 2,
+    desc: 'A transport bot: carries two goods at a time and moves a quarter faster, but only hauls.' },
+  agribot: { name: 'Agribot', plural: 'Agribots', speed: WORKER_SPEED, hp: 5, crew: 'agribot',
+    desc: 'A farm robot. Bio Farms and Grove Planters need one to run.' },
+  paver:   { name: 'Paver', plural: 'Pavers', speed: WORKER_SPEED, hp: 6, crew: 'paver',
+    desc: 'A road crew bot. A Roadworks needs one to lay asphalt on your paths.' },
+  warbot:  { name: 'Warbot', plural: 'Warbots', speed: WARBOT_SPEED, hp: 12, war: true,
+    desc: 'Fights enemy bots and captures enemy buildings. Shoots Ammo; with none it can only scuffle.' },
+};
+const BOT_ORDER = ['worker', 'hauler', 'agribot', 'paver', 'warbot'];
+
+/* Warbot ammunition: each warbot holds WARBOT_AMMO shots and reloads in a garrison stocked with Ammo. */
+const WARBOT_AMMO = 20;
+const AMMO_SHOTS = 10;            // shots in one Ammo
+const NO_AMMO_POWER = 0.35;       // how hard a warbot with no ammo hits
 
 // Terrain
 const T_GROUND = 0, T_WATER = 1, T_ROCK = 2;
@@ -86,7 +121,7 @@ const RES = {
   [R_OIL]:     { key: 'oil',     name: 'Oil seep',        good: 'crude',   amount: 24, harvest: 0 },
 };
 
-const GOODS = ['fiber', 'stone', 'ore', 'crystal', 'alloy', 'chip', 'crude', 'fuel', 'warhead'];
+const GOODS = ['fiber', 'stone', 'ore', 'crystal', 'alloy', 'chip', 'crude', 'fuel', 'cement', 'asphalt', 'ammo', 'warhead'];
 const GOOD = {
   fiber:   { name: 'Fiber',   color: '#3fd8a6', desc: 'Cut from stalk groves. Used for building and as smelter fuel.' },
   stone:   { name: 'Stone',   color: '#c9c1b4', desc: 'Broken from boulders. The main building material.' },
@@ -96,10 +131,13 @@ const GOOD = {
   chip:    { name: 'Chip',    color: '#c8f05a', desc: 'Bot brains. Needed for every new bot.' },
   crude:   { name: 'Crude',   color: '#b08a6e', desc: 'Crude oil from an Oil Pump. A Refinery turns it into Fuel.' },
   fuel:    { name: 'Fuel',    color: '#ff5c8a', desc: 'Energy for Charging Stations. Grown at a Bio Farm or refined from Crude.' },
+  cement:  { name: 'Cement',  color: '#a9b4c2', desc: 'Made from Stone at a Cement Works. Paves concrete roads: 1 Cement for 10 tiles.' },
+  asphalt: { name: 'Asphalt', color: '#6b7280', desc: 'Made from Crude and Stone. A Roadworks lays it on paths for the fastest roads.' },
+  ammo:    { name: 'Ammo',    color: '#e8c39e', desc: 'Made at an Ammo Plant. Warbots reload it in your Lander and Outposts.' },
   warhead: { name: 'Warhead', color: '#ffcf4a', desc: 'Made at a Munitions Works. Missile Silos fire them at enemy buildings.' },
 };
 /** Goods that only matter when there is a rival (hidden in Colony mode). */
-const WAR_GOODS = ['warhead'];
+const WAR_GOODS = ['ammo', 'warhead'];
 
 const PLAYER_COLORS = ['#38d4ff', '#ff5a6e'];
 const PLAYER_NAMES = ['You', 'Rival'];
@@ -118,6 +156,9 @@ const PLAYER_NAMES = ['You', 'Rival'];
  *             with `fuel` it burns Fuel (FUEL_ENERGY battery points each, stockpiles up to fuelCap)
  *   farm      plants energy crops on fertile soil within `radius` and harvests them into Fuel
  *   pump      built on an oil seep; its worker pumps Crude from seep tiles within 1 tile
+ *   crew      only bots of this crew (see BOTS) can run it
+ *   roadworks its Paver lays asphalt on paths within `radius`
+ *   ammoStock (Lander, Outposts) Ammo kept for warbots to reload
  *   ammo      good delivered as ammunition (up to ammoCap)
  *   missile   launches missiles: range (tiles), reload (s), damage to buildings, splash radius,
  *             damage to bots in the splash
@@ -127,7 +168,7 @@ const BDEFS = {
   lander: {
     name: 'Lander', short: 'Lander',
     desc: 'Your landing craft and main base. Stores goods and houses idle bots. If it is captured, you lose.',
-    store: true, mil: true, terr: 8, garrison: 40, armor: 30, charger: { slots: 3, rate: 15 },
+    store: true, mil: true, terr: 8, garrison: 40, armor: 30, charger: { slots: 3, rate: 15 }, ammoStock: 10,
   },
   harvester: {
     name: 'Harvester', desc: 'A worker cuts nearby stalk groves into Fiber.',
@@ -147,7 +188,7 @@ const BDEFS = {
   },
   grower: {
     name: 'Grove Planter', desc: 'A worker plants new stalk groves nearby so Fiber never runs out.',
-    cost: { fiber: 1, stone: 2 }, staff: true, plant: R_STALK, radius: 4, armor: 8, buildTime: 8,
+    cost: { fiber: 1, stone: 2 }, staff: true, crew: 'agribot', plant: R_STALK, radius: 4, armor: 8, buildTime: 8,
   },
   smelter: {
     name: 'Smelter', desc: 'Burns Fiber to smelt Ore into Alloy.',
@@ -166,11 +207,30 @@ const BDEFS = {
   },
   outpost: {
     name: 'Outpost', desc: 'Expands your territory and garrisons warbots for attack and defence.',
-    cost: { stone: 4, fiber: 2 }, mil: true, terr: 6, garrison: 10, armor: 16, buildTime: 12,
+    cost: { stone: 4, fiber: 2 }, mil: true, terr: 6, garrison: 10, armor: 16, buildTime: 12, ammoStock: 6,
   },
   turret: {
     name: 'Pulse Turret', desc: 'Shoots enemy bots in range. Uses Crystal as ammo (4 shots each).',
     cost: { stone: 2, alloy: 2 }, ammo: 'crystal', range: 5, armor: 12, buildTime: 10, war: true,
+  },
+  kiln: {
+    name: 'Cement Works', desc: 'Grinds and bakes Stone into Cement for concrete roads.',
+    cost: { stone: 4, fiber: 2 }, staff: true, inp: { stone: 2 }, make: { cement: 1 }, out: { cement: 4 },
+    work: 6, armor: 10, buildTime: 10,
+  },
+  tarworks: {
+    name: 'Asphalt Plant', desc: 'Cooks Crude and Stone into Asphalt for the fastest roads.',
+    cost: { stone: 3, alloy: 2 }, staff: true, inp: { crude: 1, stone: 1 }, make: { asphalt: 2 }, out: { asphalt: 4 },
+    work: 7, armor: 10, buildTime: 12,
+  },
+  roadworks: {
+    name: 'Roadworks', desc: 'Its Paver lays Asphalt on your paths nearby, turning them into the fastest roads. One Asphalt covers four tiles.',
+    cost: { stone: 3, alloy: 1, fiber: 2 }, staff: true, crew: 'paver', roadworks: true, radius: 7, armor: 8, buildTime: 10,
+  },
+  armory: {
+    name: 'Ammo Plant', desc: 'Packs Alloy and Stone into Ammo. Workers take it to your Lander and Outposts, where warbots reload.',
+    cost: { stone: 3, alloy: 2 }, staff: true, inp: { alloy: 1, stone: 1 }, make: { ammo: 3 }, out: { ammo: 6 },
+    work: 6, armor: 10, buildTime: 10, war: true,
   },
   munitions: {
     name: 'Munitions Works', desc: 'Packs Alloy and Crystal into Warheads for Missile Silos.',
@@ -190,7 +250,7 @@ const BDEFS = {
   },
   farm: {
     name: 'Bio Farm', desc: 'A worker plants energy crops on fertile soil nearby and harvests them into Fuel. Crops take a while to ripen.',
-    cost: { fiber: 2, stone: 2 }, staff: true, farm: true, radius: 3, out: { fuel: 4 }, armor: 8, buildTime: 9,
+    cost: { fiber: 2, stone: 2 }, staff: true, crew: 'agribot', farm: true, radius: 3, out: { fuel: 4 }, armor: 8, buildTime: 9,
   },
   pump: {
     name: 'Oil Pump', desc: 'Built on top of an oil seep. Its worker pumps Crude until the seep runs dry.',
@@ -214,7 +274,7 @@ const BDEFS = {
 
 /** Order of the build menu. */
 const BUILD_MENU = ['harvester', 'quarry', 'mine', 'tap', 'smelter', 'fab', 'foundry', 'charger', 'farm', 'pump', 'refinery',
-  'outpost', 'turret', 'munitions', 'silo', 'depot', 'ramp', 'grower'];
+  'kiln', 'tarworks', 'roadworks', 'outpost', 'turret', 'armory', 'munitions', 'silo', 'depot', 'ramp', 'grower'];
 
 const INPUT_CAP = 3;   // how many of each input a production building stockpiles
 const AMMO_CAP = 3;    // crystals a turret stockpiles
@@ -228,6 +288,6 @@ const DIFFICULTY = {
 
 /** Starting goods in each Lander. */
 const START_STOCK = { fiber: 16, stone: 16, alloy: 8, chip: 4, crystal: 4, fuel: 4 };
-const START_WORKERS = 14;
+const START_BOTS = { worker: 12, hauler: 2, agribot: 1 };
 const START_WARBOTS = 4;
 const MIN_FREE_WORKERS = 3;   // workers always kept free for hauling and building
