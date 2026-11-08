@@ -36,7 +36,7 @@ const THEME = {
   cliffTop: '#62402c', cliffBottom: '#3a2418', slope: '#d9b98a',
   water: '#1c4b5d', waterEdge: '#2e7684', foam: '#9fd9d0',
   rock: '#5d4134', rockTop: '#73513f', rockHi: '#94694f', rockShadow: '#36241d',
-  road: '#dcc193', roadEdge: '#a77f55',
+  road: '#8d8478', roadEdge: '#4f473f',
   hull: '#262a33', hullHi: '#3a404c', icon: '#eef2f6',
 };
 
@@ -358,8 +358,11 @@ function drawRoad(ctx, i, j, x, y) {
     if (nb[2]) ctx.fillRect(x + c - ww / 2, y + c, ww, c);
     if (nb[3]) ctx.fillRect(x, y + c - ww / 2, c, ww);
   }
-  ctx.fillStyle = 'rgba(120,80,40,0.25)';
-  ctx.fillRect(x + c - 1 + hash2(i, j, 8) * 3, y + c - 2, 2, 2);
+  // Gravel flecks and a worn centre line so paths read clearly against sand.
+  ctx.fillStyle = 'rgba(255,245,225,0.35)';
+  for (let k = 0; k < 3; k++) ctx.fillRect(x + c - 3 + hash2(i, j, 8 + k) * 6, y + c - 3 + hash2(j, i, 11 + k) * 6, 1.5, 1.5);
+  ctx.fillStyle = 'rgba(30,24,18,0.3)';
+  ctx.fillRect(x + c - 0.5, y + c - 0.5, 1, 1);
 }
 
 /* ------------------------------------------------------------------ resources */

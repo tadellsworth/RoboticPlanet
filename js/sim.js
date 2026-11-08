@@ -1267,6 +1267,49 @@ function sendAttack(owner, target, count) {
   return sent;
 }
 
+/* ------------------------------------------------------------------ paths */
+
+/** Can `owner` afford one more path tile? */
+function canAffordRoad(owner) {
+  const have = playerGoods(owner);
+  for (const g in ROAD_COST) if (have[g] < ROAD_COST[g]) return false;
+  return true;
+}
+
+/** Take a good from wherever the player has spare of it (storage or finished goods in buildings). */
+function takeGood(owner, g, n) {
+  while (n > 0) {
+    let best = null, most = 0;
+    for (const b of S.buildings) {
+      if (b.dead || b.owner !== owner) continue;
+      const a = supplyOf(b, g);
+      if (a > most) { most = a; best = b; }
+    }
+    if (!best) return false;
+    bump(best.stock, g, -1);
+    n--;
+  }
+  return true;
+}
+
+/** Lay a path tile, paying for it. Returns '' on success or a reason it couldn't be built. */
+function buildRoad(owner, i, j) {
+  if (!canRoad(owner, i, j)) return 'You can only lay paths on open ground inside your border.';
+  if (S.road[tIdx(i, j)]) return '';
+  if (!canAffordRoad(owner)) return `Out of ${Object.keys(ROAD_COST).map((g) => GOOD[g].name).join(' and ')} for paths.`;
+  for (const g in ROAD_COST) takeGood(owner, g, ROAD_COST[g]);
+  setRoad(i, j, true);
+  return '';
+}
+
+/** Remove a path tile and refund its cost to the nearest storage. */
+function removeRoad(owner, i, j) {
+  if (!S.road[tIdx(i, j)]) return;
+  setRoad(i, j, false);
+  const store = nearestStoreTo(owner, i + 0.5, j + 0.5);
+  if (store) for (const g in ROAD_COST) bump(store.stock, g, ROAD_COST[g]);
+}
+
 /** Pausing a building sends its worker off to do other jobs until it is resumed. */
 function setPaused(b, paused) {
   if (b.dead || !BDEFS[b.type].staff) return;

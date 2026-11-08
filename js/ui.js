@@ -239,7 +239,7 @@ function setMode(mode) {
   $('btn-attack').classList.toggle('on', mode === 'attack');
   if (mode === 'normal') { $('banner').hidden = true; return; }
   closeSheet();
-  if (mode === 'road') showBanner('Drag across open ground to lay <b>paths</b>; bots move almost twice as fast on them. Tap a path to remove it. Use two fingers to move the map.', null, 'Done');
+  if (mode === 'road') showRoadBanner();
   if (mode === 'attack') showBanner('Tap a <b>rival building</b> to attack it with warbots or missiles, or tap open ground to send warbots there to <b>hold the area</b>.', null, 'Cancel');
 }
 
@@ -304,9 +304,11 @@ function onMapTap(i, j, wx, wy) {
   if (R.mode === 'road') {
     if (!inMap(i, j)) return;
     const t = tIdx(i, j);
-    if (S.road[t]) { setRoad(i, j, false); sfx('click'); }
-    else if (canRoad(0, i, j)) { setRoad(i, j, true); sfx('click'); }
-    else sfx('error');
+    if (S.road[t]) { removeRoad(0, i, j); sfx('click'); showRoadBanner(); }
+    else {
+      const why = buildRoad(0, i, j);
+      if (why) { sfx('error'); showRoadBanner(why); } else { sfx('click'); showRoadBanner(); }
+    }
     return;
   }
   const rally = rallyAtTap(wx, wy);
@@ -338,8 +340,22 @@ function rallyAtTap(wx, wy) {
 function onRoadPaint(i, j, first) {
   if (R.mode !== 'road') return;
   const from = first || !UI.lastPaint ? { i, j } : UI.lastPaint;
-  for (const [x, y] of tileLine(from.i, from.j, i, j)) if (canRoad(0, x, y)) setRoad(x, y, true);
+  for (const [x, y] of tileLine(from.i, from.j, i, j)) {
+    if (!canRoad(0, x, y) || S.road[tIdx(x, y)]) continue;
+    const why = buildRoad(0, x, y);
+    if (why) { if (!UI.roadWarned) { UI.roadWarned = true; sfx('error'); } showRoadBanner(why); break; }
+  }
+  if (!UI.roadWarned) showRoadBanner();
   UI.lastPaint = { i, j };
+}
+
+/** The Paths banner shows what a tile costs and how much you have left. */
+function showRoadBanner(problem) {
+  const g = Object.keys(ROAD_COST)[0];
+  const have = playerGoods(0)[g];
+  const cost = `<b>${ROAD_COST[g]} ${GOOD[g].name}</b> per tile (you have ${have})`;
+  showBanner((problem ? `<span class="err">${problem}</span> ` : '') +
+    `Drag across open ground to lay <b>paths</b>: ${cost}. Bots move twice as fast on paths and go out of their way to use them. Tap a path to remove it and get the ${GOOD[g].name} back.`, null, 'Done');
 }
 
 /* ------------------------------------------------------------------ sheets */

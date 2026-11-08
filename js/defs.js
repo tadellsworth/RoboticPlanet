@@ -11,7 +11,9 @@ const MAX_SITES = 6;              // simultaneous construction sites per player
 const ATTACK_RANGE = 14;          // tiles from a garrison to a target it can attack
 const WORKER_SPEED = 2.0;         // tiles per second
 const WARBOT_SPEED = 1.6; 
-const ROAD_SPEED = 1.8;           // speed multiplier on paths
+const ROAD_SPEED = 2.0;           // speed multiplier on paths
+const ROAD_PREFERENCE = 0.85;     // route planning treats paths as this much cheaper again, so bots go out of their way to use them
+const ROAD_COST = { stone: 1 };   // per path tile, taken from storage; refunded when a path is removed
 const SLOPE_SPEED = 0.65;         // speed multiplier on an unpaved ramp
 const STALK_GROW_TIME = 70;       // seconds for a planted stalk grove to mature
 

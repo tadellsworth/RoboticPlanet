@@ -18,7 +18,7 @@ function _pfEnsure(N) {
 }
 
 function tileCost(t) {
-  if (S.road[t]) return 1 / ROAD_SPEED;
+  if (S.road[t]) return ROAD_PREFERENCE / ROAD_SPEED;
   if (S.ramp[t]) return 1 / SLOPE_SPEED;
   return S.res[t] ? 1.5 : 1;
 }
@@ -40,7 +40,7 @@ function findPath(sx, sy, gx, gy, avoidFor) {
   const gen = ++_pf.gen;
   const g = _pf.g, from = _pf.from, stamp = _pf.stamp, closed = _pf.closed, heap = _pf.heap;
   heap.clear();
-  const minStep = 1 / ROAD_SPEED;
+  const minStep = ROAD_PREFERENCE / ROAD_SPEED;
   const h = (i, j) => {
     const dx = Math.abs(i - gx), dy = Math.abs(j - gy);
     return (Math.max(dx, dy) + 0.4142 * Math.min(dx, dy)) * minStep;
