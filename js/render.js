@@ -22,8 +22,18 @@ const R = {
   time: 0,
 };
 
+// Ground colour pairs per elevation level, from canyon floor (0) up to the high mesas (4).
+const LEVEL_GROUND = [
+  ['#7a462d', '#93593a'],
+  ['#ad6f47', '#c99a66'],
+  ['#c88d5a', '#e0b07a'],
+  ['#d7a46e', '#ecc28c'],
+  ['#e3b781', '#f5d3a0'],
+];
+
 const THEME = {
   ground1: '#ad6f47', ground2: '#c99a66',
+  cliffTop: '#62402c', cliffBottom: '#3a2418', slope: '#d9b98a',
   water: '#1c4b5d', waterEdge: '#2e7684', foam: '#9fd9d0',
   rock: '#5d4134', rockTop: '#73513f', rockHi: '#94694f', rockShadow: '#36241d',
   road: '#dcc193', roadEdge: '#a77f55',
@@ -40,14 +50,38 @@ function loadArt(onChange) {
   for (const key in ART_MANIFEST) {
     const entry = typeof ART_MANIFEST[key] === 'string' ? { src: ART_MANIFEST[key] } : ART_MANIFEST[key];
     const img = new Image();
-    img.onload = () => { ART[key] = { img, scale: entry.scale || 0 }; artLoaded++; if (onChange) onChange(key); };
+    img.onload = () => {
+      ART[key] = { img, scale: entry.scale || 0 };
+      artLoaded++;
+      if (key.startsWith('icon-')) applyGoodIcons();
+      if (onChange) onChange(key);
+    };
     img.onerror = () => console.warn('Botfall: could not load art for', key, entry.src);
     img.src = /^(data:|https?:)/.test(entry.src) ? entry.src : 'art/' + entry.src;
   }
 }
 
+/** Goods icons in the HUD and menus are CSS shapes; custom 'icon-<good>' art replaces them. */
+function applyGoodIcons() {
+  let css = '';
+  for (const g of GOODS) {
+    const a = ART['icon-' + g];
+    if (a) css += `.gi.${g}{background:url("${a.img.src}") center/contain no-repeat!important;clip-path:none!important;border-radius:0!important;outline:none!important;box-shadow:none!important;width:16px!important;height:16px!important}`;
+  }
+  let el = document.getElementById('good-icon-art');
+  if (!el) { el = document.createElement('style'); el.id = 'good-icon-art'; document.head.appendChild(el); }
+  el.textContent = css;
+}
+
 function artFor(key, owner) {
   return ART[key + '@' + owner] || ART[key] || null;
+}
+
+/** Draw part of a seamless texture so one image spans 4×4 tiles (less visible repetition). */
+function drawTexture(ctx, art, i, j, x, y) {
+  const span = 4, img = art.img;
+  const sw = img.width / span, sh = img.height / span;
+  ctx.drawImage(img, (i % span) * sw, (j % span) * sh, sw, sh, x, y, TP, TP);
 }
 
 function drawArt(ctx, art, cx, cy, sizePx, angle) {
@@ -97,6 +131,10 @@ function worldToScreen(wx, wy) { return { x: (wx - R.cam.x) * R.cam.z + R.w / 2,
 /* ------------------------------------------------------------------ baked map */
 
 function bakeMap() {
+  // A completely flat map uses the mid-level colours.
+  let maxElev = 0;
+  for (let t = 0; t < S.W * S.H; t++) if (S.elev[t] > maxElev) maxElev = S.elev[t];
+  R.levelOffset = maxElev === 0 ? 1 : 0;
   R.map = document.createElement('canvas');
   R.map.width = S.W * TP;
   R.map.height = S.H * TP;
@@ -124,15 +162,24 @@ function flushDirtyTiles() {
 
 function terrAt(i, j) { return inMap(i, j) ? S.terrain[tIdx(i, j)] : T_ROCK; }
 
+function levelColor(e, n) {
+  const pal = LEVEL_GROUND[clamp(e + (R.levelOffset || 0), 0, LEVEL_GROUND.length - 1)];
+  return mixColor(pal[0], pal[1], clamp(n * 1.4 - 0.2, 0, 1));
+}
+
 function drawTile(i, j) {
   const ctx = R.mapCtx, x = i * TP, y = j * TP, t = tIdx(i, j);
   const terr = S.terrain[t];
   const n = fbm(i / 6, j / 6, 991, 3);
-  ctx.fillStyle = mixColor(THEME.ground1, THEME.ground2, clamp(n * 1.4 - 0.2, 0, 1));
+  ctx.fillStyle = levelColor(S.elev[t], n);
   ctx.fillRect(x, y, TP, TP);
-  const groundArt = ART.ground;
-  if (groundArt) ctx.drawImage(groundArt.img, x, y, TP, TP);
-  else {
+  if (ART.ground) {
+    drawTexture(ctx, ART.ground, i, j, x, y);
+    // Keep elevation readable on top of the texture: higher ground is lighter, canyons darker.
+    const d = S.elev[t] + (R.levelOffset || 0) - 1;
+    if (d > 0) { ctx.fillStyle = `rgba(255,236,205,${Math.min(0.34, 0.1 * d)})`; ctx.fillRect(x, y, TP, TP); }
+    else if (d < 0) { ctx.fillStyle = 'rgba(45,22,10,0.26)'; ctx.fillRect(x, y, TP, TP); }
+  } else {
     for (let k = 0; k < 5; k++) {
       const h = hash2(i * 7 + k, j * 3 - k, 41);
       const px = x + hash2(i, j * 5 + k, 11) * (TP - 3), py = y + hash2(i * 3 + k, j, 13) * (TP - 3);
@@ -142,8 +189,15 @@ function drawTile(i, j) {
   }
 
   if (terr === T_WATER) {
-    if (ART.water) ctx.drawImage(ART.water.img, x, y, TP, TP);
-    else {
+    if (ART.water) {
+      drawTexture(ctx, ART.water, i, j, x, y);
+      ctx.fillStyle = 'rgba(159,217,208,0.5)';
+      if (terrAt(i, j - 1) !== T_WATER) ctx.fillRect(x, y, TP, 2);
+      if (terrAt(i - 1, j) !== T_WATER) ctx.fillRect(x, y, 2, TP);
+      ctx.fillStyle = 'rgba(10,30,40,0.35)';
+      if (terrAt(i, j + 1) !== T_WATER) ctx.fillRect(x, y + TP - 2, TP, 2);
+      if (terrAt(i + 1, j) !== T_WATER) ctx.fillRect(x + TP - 2, y, 2, TP);
+    } else {
       ctx.fillStyle = THEME.water;
       ctx.fillRect(x, y, TP, TP);
       ctx.fillStyle = THEME.waterEdge;
@@ -161,8 +215,15 @@ function drawTile(i, j) {
       ctx.beginPath(); ctx.moveTo(rx, ry); ctx.quadraticCurveTo(rx + 4, ry - 3, rx + 8, ry); ctx.stroke();
     }
   } else if (terr === T_ROCK) {
-    if (ART.rock) ctx.drawImage(ART.rock.img, x, y, TP, TP);
-    else {
+    if (ART.rock) {
+      drawTexture(ctx, ART.rock, i, j, x, y);
+      ctx.fillStyle = 'rgba(255,225,190,0.22)';
+      if (terrAt(i, j - 1) !== T_ROCK) ctx.fillRect(x, y, TP, 2);
+      if (terrAt(i - 1, j) !== T_ROCK) ctx.fillRect(x, y, 2, TP);
+      ctx.fillStyle = 'rgba(15,8,4,0.45)';
+      if (terrAt(i, j + 1) !== T_ROCK) ctx.fillRect(x, y + TP - 4, TP, 4);
+      if (terrAt(i + 1, j) !== T_ROCK) ctx.fillRect(x + TP - 3, y, 3, TP);
+    } else {
       const up = terrAt(i, j - 1) === T_ROCK, dn = terrAt(i, j + 1) === T_ROCK;
       const lf = terrAt(i - 1, j) === T_ROCK, rt = terrAt(i + 1, j) === T_ROCK;
       const l = lf ? 0 : 3, r = rt ? 0 : 3, tp = up ? 0 : 3, b = dn ? 0 : 7;
@@ -181,13 +242,112 @@ function drawTile(i, j) {
     }
   }
 
+  if (terr === T_GROUND) drawElevation(ctx, i, j, x, y, t, n);
+  else if (terr === T_WATER) drawCliffFace(ctx, i, j, x, y, t, true);
   if (S.road[t]) drawRoad(ctx, i, j, x, y);
   if (S.res[t]) drawResource(ctx, S.res[t], S.amt[t], S.grow[t], x + TP / 2, y + TP / 2, TP, i, j);
 }
 
+/** Level of a neighbouring ground tile, or null for off-map / water / rock. */
+function groundElev(i, j) {
+  if (!inMap(i, j)) return null;
+  const u = tIdx(i, j);
+  return S.terrain[u] === T_GROUND ? S.elev[u] : null;
+}
+
+/** The rock face of a higher tile to the north, seen in front of this tile. */
+function drawCliffFace(ctx, i, j, x, y, t, waterOnly) {
+  const en = groundElev(i, j - 1);
+  if (en === null || en <= S.elev[t]) return;
+  if (!waterOnly && canStep(t, tIdx(i, j - 1))) return; // a ramp joins them; the slope is drawn instead
+  const h = Math.min(TP * 0.62, 14 * (en - S.elev[t]));
+  if (ART.cliff) {
+    const img = ART.cliff.img, sw = img.width / 4;
+    ctx.drawImage(img, (i % 4) * sw, 0, sw, img.height, x, y, TP, h);
+  } else {
+    const g = ctx.createLinearGradient(0, y, 0, y + h);
+    g.addColorStop(0, THEME.cliffTop);
+    g.addColorStop(1, THEME.cliffBottom);
+    ctx.fillStyle = g;
+    ctx.fillRect(x, y, TP, h);
+    ctx.fillStyle = 'rgba(0,0,0,0.18)';
+    for (let k = 3; k < h - 1; k += 4) ctx.fillRect(x, y + k, TP, 1);
+    ctx.fillStyle = 'rgba(255,220,180,0.12)';
+    for (let k = 0; k < 3; k++) ctx.fillRect(x + 4 + hash2(i, j, 50 + k) * (TP - 8), y + 1, 1.5, h - 2);
+  }
+  const sh = ctx.createLinearGradient(0, y + h, 0, y + h + 7);
+  sh.addColorStop(0, 'rgba(20,10,5,0.4)'); sh.addColorStop(1, 'rgba(20,10,5,0)');
+  ctx.fillStyle = sh;
+  ctx.fillRect(x, y + h, TP, 7);
+}
+
+/** Cliff edges, shadows and slopes that show which level a ground tile is on. */
+function drawElevation(ctx, i, j, x, y, t, n) {
+  const e = S.elev[t];
+  const N = groundElev(i, j - 1), Sv = groundElev(i, j + 1), Wv = groundElev(i - 1, j), E = groundElev(i + 1, j);
+  const linked = (di, dj) => canStep(t, tIdx(i + di, j + dj));
+  if (S.ramp[t]) { drawSlope(ctx, i, j, x, y, t, n); return; }
+  drawCliffFace(ctx, i, j, x, y, t, false);
+  // Higher ground to the west casts a shadow (light comes from the top-left).
+  if (Wv !== null && Wv > e && !linked(-1, 0)) {
+    const g = ctx.createLinearGradient(x, 0, x + 8, 0);
+    g.addColorStop(0, 'rgba(25,12,5,0.38)'); g.addColorStop(1, 'rgba(25,12,5,0)');
+    ctx.fillStyle = g; ctx.fillRect(x, y, 8, TP);
+  }
+  if (E !== null && E > e && !linked(1, 0)) { ctx.fillStyle = 'rgba(25,12,5,0.28)'; ctx.fillRect(x + TP - 3, y, 3, TP); }
+  // This tile is the top of a cliff: draw its lit rim and dark drop edges.
+  if (N !== null && N < e && !linked(0, -1)) { ctx.fillStyle = 'rgba(255,236,200,0.45)'; ctx.fillRect(x, y, TP, 2); }
+  if (Sv !== null && Sv < e && !linked(0, 1)) { ctx.fillStyle = 'rgba(255,236,200,0.3)'; ctx.fillRect(x, y + TP - 2, TP, 2); }
+  if (Wv !== null && Wv < e && !linked(-1, 0)) { ctx.fillStyle = 'rgba(255,236,200,0.35)'; ctx.fillRect(x, y, 2, TP); }
+  if (E !== null && E < e && !linked(1, 0)) { ctx.fillStyle = 'rgba(45,22,10,0.55)'; ctx.fillRect(x + TP - 3, y, 3, TP); }
+}
+
+/** A ramp: the ground rises toward the higher neighbour, with steps across it. */
+function drawSlope(ctx, i, j, x, y, t, n) {
+  const e = S.elev[t];
+  let dir = null;
+  for (const [di, dj] of [[0, -1], [0, 1], [-1, 0], [1, 0]]) {
+    const v = groundElev(i + di, j + dj);
+    if (v !== null && v !== e && canStep(t, tIdx(i + di, j + dj))) {
+      dir = v > e ? [di, dj] : [-di, -dj]; // always point uphill
+      if (v > e) break;
+    }
+  }
+  if (!dir) return;
+  if (ART.slope) {
+    // Custom slope art is drawn with uphill at the top of the image.
+    ctx.save();
+    ctx.translate(x + TP / 2, y + TP / 2);
+    ctx.rotate(Math.atan2(dir[1], dir[0]) + Math.PI / 2);
+    ctx.drawImage(ART.slope.img, -TP / 2, -TP / 2, TP, TP);
+    ctx.restore();
+    return;
+  }
+  const lowE = Math.min(e, ...[[0, -1], [0, 1], [-1, 0], [1, 0]].map(([di, dj]) => groundElev(i + di, j + dj) ?? e));
+  const highE = e + (groundElev(i + dir[0], j + dir[1]) > e ? 1 : 0);
+  const fromLow = levelColor(Math.max(lowE, highE - 1), n), toHigh = levelColor(highE, n);
+  const cx = x + TP / 2, cy = y + TP / 2;
+  const g = ctx.createLinearGradient(cx - dir[0] * TP / 2, cy - dir[1] * TP / 2, cx + dir[0] * TP / 2, cy + dir[1] * TP / 2);
+  g.addColorStop(0, mixColor(fromLow, '#000000', 0.12));
+  g.addColorStop(1, toHigh);
+  ctx.fillStyle = g;
+  ctx.fillRect(x, y, TP, TP);
+  // Steps across the slope and darker side walls along it.
+  ctx.fillStyle = 'rgba(40,20,8,0.28)';
+  for (let k = 1; k <= 4; k++) {
+    const f = k / 5;
+    if (dir[0] === 0) ctx.fillRect(x + 4, y + (dir[1] < 0 ? TP * (1 - f) : TP * f) - 1, TP - 8, 2);
+    else ctx.fillRect(x + (dir[0] < 0 ? TP * (1 - f) : TP * f) - 1, y + 4, 2, TP - 8);
+  }
+  ctx.fillStyle = 'rgba(40,20,8,0.4)';
+  if (dir[0] === 0) { ctx.fillRect(x, y, 3, TP); ctx.fillRect(x + TP - 3, y, 3, TP); }
+  else { ctx.fillRect(x, y, TP, 3); ctx.fillRect(x, y + TP - 3, TP, 3); }
+}
+
 function drawRoad(ctx, i, j, x, y) {
   const c = TP / 2, w = 9;
-  const nb = [[0, -1], [1, 0], [0, 1], [-1, 0]].map(([di, dj]) => inMap(i + di, j + dj) && S.road[tIdx(i + di, j + dj)]);
+  const t = tIdx(i, j);
+  const nb = [[0, -1], [1, 0], [0, 1], [-1, 0]].map(([di, dj]) => inMap(i + di, j + dj) && S.road[tIdx(i + di, j + dj)] && canStep(t, tIdx(i + di, j + dj)));
   for (const [col, ww] of [[THEME.roadEdge, w + 4], [THEME.road, w]]) {
     ctx.fillStyle = col;
     ctx.beginPath();
@@ -316,11 +476,13 @@ function drawBuilding(ctx, type, cx, cy, s, owner, b) {
   if (b && !b.built) { drawSite(ctx, type, cx, cy, s, owner, b); return; }
   const art = artFor(type, owner);
   if (art) {
-    if (!ART[type + '@' + owner]) {
+    if (!ART[type + '@' + owner] && type !== 'ramp') {
+      // Shared art: a thin team-coloured bar along the front edge shows whose building it is.
+      const w = s * 0.56, h = Math.max(2.5, s * 0.07), y = cy + s * 0.43;
+      ctx.fillStyle = 'rgba(10,10,14,0.7)';
+      ctx.fillRect(cx - w / 2 - 1, y - 1, w + 2, h + 2);
       ctx.fillStyle = color;
-      ctx.globalAlpha = 0.5;
-      ctx.beginPath(); ctx.ellipse(cx, cy + s * 0.35, s * 0.42, s * 0.14, 0, 0, Math.PI * 2); ctx.fill();
-      ctx.globalAlpha = 1;
+      ctx.fillRect(cx - w / 2, y, w, h);
     }
     // Turret art is drawn barrel-right and rotated to aim; everything else is drawn as-is.
     drawArt(ctx, art, cx, cy, s * (type === 'lander' && !art.scale ? 1.6 : 1), type === 'turret' && b ? b.aim : 0);
@@ -481,6 +643,23 @@ function drawBuilding(ctx, type, cx, cy, s, owner, b) {
           ctx.beginPath(); ctx.arc(cx + Math.cos(a) * 12 * u, cy + Math.sin(a) * 11 * u, 1.8 * u, 0, Math.PI * 2); ctx.fill();
         }
       }
+      break;
+    }
+    case 'ramp': {
+      // A stepped slope rising to the north.
+      ctx.fillStyle = 'rgba(20,10,5,0.3)';
+      ctx.fillRect(cx - 10 * u, cy - 9 * u, 22 * u, 22 * u);
+      const g = ctx.createLinearGradient(0, cy + 11 * u, 0, cy - 11 * u);
+      g.addColorStop(0, '#a86b44'); g.addColorStop(1, '#e4b67f');
+      ctx.fillStyle = g;
+      ctx.fillRect(cx - 11 * u, cy - 11 * u, 22 * u, 22 * u);
+      ctx.fillStyle = 'rgba(40,20,8,0.45)';
+      for (let k = 0; k < 4; k++) ctx.fillRect(cx - 8 * u, cy + (7 - k * 5) * u, 16 * u, 2 * u);
+      ctx.fillStyle = THEME.cliffBottom;
+      ctx.fillRect(cx - 11 * u, cy - 11 * u, 3 * u, 22 * u);
+      ctx.fillRect(cx + 8 * u, cy - 11 * u, 3 * u, 22 * u);
+      ctx.strokeStyle = color; ctx.lineWidth = 2 * u;
+      ctx.strokeRect(cx - 11 * u, cy - 11 * u, 22 * u, 22 * u);
       break;
     }
     case 'turret': {
@@ -662,7 +841,7 @@ function render(dtReal) {
 
   // Placement overlay
   if (R.mode === 'place' && R.overlay) {
-    if (R.time - R.overlay.at > 0.5) refreshOverlay(R.overlay.type);
+    if (R.time - R.overlay.at > 1.5) refreshOverlay(R.overlay.type);
     ctx.fillStyle = 'rgba(160,255,190,0.22)';
     for (let t = 0; t < S.W * S.H; t++) {
       if (!R.overlay.valid[t]) continue;
@@ -879,7 +1058,7 @@ function buildingIcon(type, size, owner) {
 const MM = { canvas: null, ctx: null, base: null, baseCtx: null, dirty: true, ver: -1, builtAt: -9, w: 0, h: 0, on: true };
 
 const MM_COLORS = {
-  ground: [169, 113, 74], water: [28, 75, 93], rock: [74, 51, 41],
+  ground: [169, 113, 74], water: [28, 75, 93], rock: [74, 51, 41], ramp: [235, 205, 150],
   [R_STALK]: [47, 174, 134], [R_BOULDER]: [160, 154, 145], [R_ORE]: [235, 120, 50], [R_CRYSTAL]: [150, 105, 245],
 };
 
@@ -911,7 +1090,12 @@ function rebuildMinimapBase() {
   const team = PLAYER_COLORS.map((c) => [parseInt(c.slice(1, 3), 16), parseInt(c.slice(3, 5), 16), parseInt(c.slice(5, 7), 16)]);
   for (let t = 0; t < S.W * S.H; t++) {
     const terr = S.terrain[t];
-    let c = terr === T_WATER ? MM_COLORS.water : terr === T_ROCK ? MM_COLORS.rock : S.res[t] ? MM_COLORS[S.res[t]] : MM_COLORS.ground;
+    let c = terr === T_WATER ? MM_COLORS.water : terr === T_ROCK ? MM_COLORS.rock : S.res[t] ? MM_COLORS[S.res[t]] : S.ramp[t] ? MM_COLORS.ramp : MM_COLORS.ground;
+    if (terr === T_GROUND && !S.res[t] && !S.ramp[t]) {
+      // Higher ground is lighter.
+      const f = 0.8 + 0.09 * (S.elev[t] + (R.levelOffset || 0));
+      c = [Math.min(255, c[0] * f), Math.min(255, c[1] * f), Math.min(255, c[2] * f)];
+    }
     const o = S.owner[t];
     const k = o >= 0 && terr === T_GROUND ? 0.32 : 0;
     const i = t * 4;

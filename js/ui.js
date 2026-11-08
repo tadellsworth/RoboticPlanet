@@ -5,7 +5,7 @@
 
 const UI = {
   inGame: false, paused: false, speed: 1, overShown: false,
-  menu: { mode: 'versus', diff: 'normal', seed: randomSeed() },
+  menu: { mode: 'versus', diff: 'normal', seed: randomSeed(), size: { ...DEFAULT_SIZE }, rough: DEFAULT_ROUGH, rich: DEFAULT_RICH },
   sheetKind: null, sheetFor: 0, sheetT: 0, hudT: 0,
   icons: {}, attackN: 0, demolishArm: 0, lastPaint: null, placeType: null,
   goodEls: {}, lastGoods: {}, objCollapsed: false, selBot: 0,
@@ -42,6 +42,14 @@ function initUI() {
   for (const btn of $('m-mode').children) btn.onclick = () => { UI.menu.mode = btn.dataset.v; syncMenu(); sfx('click'); };
   for (const btn of $('m-diff').children) btn.onclick = () => { UI.menu.diff = btn.dataset.v; syncMenu(); sfx('click'); };
   $('m-reroll').onclick = () => { UI.menu.seed = randomSeed(); syncMenu(); sfx('click'); };
+  // Map settings sliders (remembered on this device; map size is remembered per mode).
+  try { Object.assign(UI.menu, JSON.parse(localStorage.getItem('botfall.settings') || '{}')); } catch (e) { /* defaults */ }
+  const saveSettings = () => {
+    try { localStorage.setItem('botfall.settings', JSON.stringify({ size: UI.menu.size, rough: UI.menu.rough, rich: UI.menu.rich })); } catch (e) { /* storage unavailable */ }
+  };
+  $('m-size').oninput = () => { UI.menu.size[UI.menu.mode] = +$('m-size').value; syncMenu(); saveSettings(); };
+  $('m-rough').oninput = () => { UI.menu.rough = +$('m-rough').value; syncMenu(); saveSettings(); };
+  $('m-rich').oninput = () => { UI.menu.rich = +$('m-rich').value; syncMenu(); saveSettings(); };
   $('m-new').onclick = () => { audioUnlock(); startNewGame(); };
   $('m-continue').onclick = () => { audioUnlock(); continueGame(); };
   $('m-help').onclick = () => showHelp();
@@ -104,9 +112,16 @@ function syncMenu() {
   for (const btn of $('m-diff').children) btn.classList.toggle('on', btn.dataset.v === UI.menu.diff);
   $('m-diff-field').hidden = UI.menu.mode === 'colony';
   $('m-mode-desc').textContent = UI.menu.mode === 'colony'
-    ? 'No rival. A big planet to settle at your own pace. Build supply chains and spread across the whole map.'
-    : 'Race a rival colony on a small planet. Build up, then capture its Lander to win.';
+    ? 'No rival. Settle the planet at your own pace: build supply chains and spread across the whole map.'
+    : 'Race a rival colony across the planet. Build up, then capture its Lander to win.';
   $('m-seed').textContent = 'Planet #' + UI.menu.seed;
+  const size = UI.menu.size[UI.menu.mode] ?? DEFAULT_SIZE[UI.menu.mode];
+  $('m-size').value = size;
+  $('m-rough').value = UI.menu.rough;
+  $('m-rich').value = UI.menu.rich;
+  $('m-size-v').textContent = `${SIZE_PRESETS[size].name} · ${SIZE_PRESETS[size].w}×${SIZE_PRESETS[size].h}`;
+  $('m-rough-v').textContent = TERRAIN_PRESETS[UI.menu.rough].name;
+  $('m-rich-v').textContent = RESOURCE_PRESETS[UI.menu.rich].name;
   $('m-continue').hidden = !hasSave();
 }
 
@@ -126,6 +141,7 @@ function placeMinimap() {
   document.body.classList.toggle('mm-on', inGame && MM.on);
   document.body.classList.toggle('mm-off', inGame && !MM.on);
   if (!inGame) return;
+  $('toasts').style.top = Math.round($('topbar').getBoundingClientRect().bottom + 6) + 'px';
   const top = Math.round(document.querySelector('.toprow').getBoundingClientRect().bottom + 6) + 'px';
   $('minimap').style.top = top;
   $('mm-show').style.top = top;
@@ -136,8 +152,13 @@ function placeMinimap() {
 
 function startNewGame() {
   clearSave();
-  newGame({ seed: UI.menu.seed, difficulty: UI.menu.diff, mode: UI.menu.mode });
+  newGame({
+    seed: UI.menu.seed, difficulty: UI.menu.diff, mode: UI.menu.mode,
+    size: UI.menu.size[UI.menu.mode] ?? DEFAULT_SIZE[UI.menu.mode], rough: UI.menu.rough, rich: UI.menu.rich,
+  });
   enterGame();
+  updateHUD();
+  placeMinimap();
   postMsg(0, UI.menu.mode === 'colony'
     ? 'Your bots have landed. Build, expand and make this planet home.'
     : 'Your bots have landed. A rival colony landed to the north. Build up fast!', 0, 0, 'info');
@@ -268,7 +289,7 @@ function onMapTap(i, j, wx, wy) {
     if (chk.ok) {
       let extra = '';
       const def = BDEFS[type];
-      if (def.gather) extra = ` <span class="ok">${countResIn(i, j, def.radius, def.gather)} ${RES[def.gather].name.toLowerCase()}s in reach.</span>`;
+      if (def.gather) extra = ` <span class="ok">${reachableRes(i, j, def.radius, def.gather)} ${RES[def.gather].name.toLowerCase()}s in reach.</span>`;
       showBanner(`Place the <b>${def.name}</b> here?${extra}`, 'Build here', 'Cancel');
     } else {
       sfx('error');
@@ -439,10 +460,10 @@ function refreshBuildingSheet(b) {
     }
     if (def.gather) {
       const g = RES[def.gather].good;
-      parts.push(`<div class="kv"><span>${RES[def.gather].name}s in reach</span><span>${countResIn(b.x, b.y, def.radius, def.gather)}</span></div>`);
+      parts.push(`<div class="kv"><span>${RES[def.gather].name}s in reach</span><span>${reachableRes(b.x, b.y, def.radius, def.gather)}</span></div>`);
       if (mine) parts.push(`<div class="kv"><span>Waiting for pickup</span><span>${goodTag(g, `${b.stock[g] || 0}/${def.out[g]}`)}</span></div>`);
     }
-    if (def.plant) parts.push(`<div class="kv"><span>Stalk groves in reach</span><span>${countResIn(b.x, b.y, def.radius, R_STALK)}</span></div>`);
+    if (def.plant) parts.push(`<div class="kv"><span>Stalk groves in reach</span><span>${reachableRes(b.x, b.y, def.radius, R_STALK)}</span></div>`);
     if (def.inp && mine) {
       const ins = Object.keys(def.inp).map((g) => goodTag(g, `${b.stock[g] || 0}/${INPUT_CAP}`, !(b.stock[g] > 0))).join('');
       const outs = def.make ? Object.keys(def.make).map((g) => goodTag(g, `${b.stock[g] || 0}/${def.out[g]}`)).join('') : '';
@@ -632,7 +653,6 @@ function toast(text, kind, x, y) {
     return;
   }
   el.dataset.text = text;
-  box.style.top = Math.round(document.getElementById('topbar').getBoundingClientRect().bottom + 6) + 'px';
   box.appendChild(el);
   while (box.children.length > 2) box.removeChild(box.firstChild);
   setTimeout(() => { el.classList.add('out'); setTimeout(() => el.remove(), 450); }, 3800);

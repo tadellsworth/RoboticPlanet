@@ -3,10 +3,6 @@
  * Botfall — game data. Balance tweaks (costs, timings, ranges) live here.
  */
 
-const MAP_W = 40;                // versus map size, in tiles
-const MAP_H = 56;
-const COLONY_W = 60;             // colony mode map size
-const COLONY_H = 84;
 const COLONY_MILESTONES = [0.1, 0.25, 0.4, 0.6, 0.8];  // share of land claimed
 const SIM_STEP = 1 / 30;          // fixed simulation step, seconds
 const MAX_BOTS = 90;              // per player (versus)
@@ -16,10 +12,40 @@ const ATTACK_RANGE = 14;          // tiles from a garrison to a target it can at
 const WORKER_SPEED = 2.0;         // tiles per second
 const WARBOT_SPEED = 1.6; 
 const ROAD_SPEED = 1.8;           // speed multiplier on paths
+const SLOPE_SPEED = 0.65;         // speed multiplier on an unpaved ramp
 const STALK_GROW_TIME = 70;       // seconds for a planted stalk grove to mature
 
 // Terrain
 const T_GROUND = 0, T_WATER = 1, T_ROCK = 2;
+
+/* New-game map settings (each is a slider on the menu). */
+const SIZE_PRESETS = [
+  { name: 'Small', w: 30, h: 42 },
+  { name: 'Medium', w: 40, h: 56 },
+  { name: 'Large', w: 50, h: 70 },
+  { name: 'Huge', w: 60, h: 84 },
+];
+/*   levels  elevation levels (1 = flat)       scale  size of hills (smaller = more cliffs)
+ *   extra   chance of extra ramps per cliff  gap    min tiles between extra ramps
+ *   rock    noise height where rocky crags start (lower = more crags) */
+const TERRAIN_PRESETS = [
+  { name: 'Flat', levels: 1, scale: 12, extra: 0, gap: 0, rock: 0.73 },
+  { name: 'Gentle', levels: 2, scale: 14, extra: 0.5, gap: 6, rock: 0.71 },
+  { name: 'Rolling', levels: 3, scale: 12, extra: 0.35, gap: 8, rock: 0.69 },
+  { name: 'Rugged', levels: 4, scale: 13, extra: 0.22, gap: 10, rock: 0.67 },
+  { name: 'Mountainous', levels: 5, scale: 14, extra: 0.1, gap: 13, rock: 0.65 },
+];
+/*   density  how many resource nodes   amount  how much each node holds */
+const RESOURCE_PRESETS = [
+  { name: 'Scarce', density: 0.55, amount: 0.6 },
+  { name: 'Sparse', density: 0.78, amount: 0.8 },
+  { name: 'Normal', density: 1, amount: 1 },
+  { name: 'Rich', density: 1.3, amount: 1.3 },
+  { name: 'Abundant', density: 1.65, amount: 1.7 },
+];
+const DEFAULT_SIZE = { versus: 1, colony: 3 };
+const DEFAULT_ROUGH = 2;
+const DEFAULT_RICH = 2;
 
 // Resource nodes that sit on ground tiles
 const R_NONE = 0, R_STALK = 1, R_BOULDER = 2, R_ORE = 3, R_CRYSTAL = 4;
@@ -103,6 +129,10 @@ const BDEFS = {
     name: 'Pulse Turret', desc: 'Shoots enemy bots in range. Uses Crystal as ammo (4 shots each).',
     cost: { stone: 2, alloy: 2 }, ammo: 'crystal', range: 5, armor: 12, buildTime: 10,
   },
+  ramp: {
+    name: 'Ramp', desc: 'Workers cut a slope into a low cliff so bots can climb between levels. Place it at the foot or top of a cliff.',
+    cost: { stone: 3, fiber: 1 }, ramp: true, armor: 4, buildTime: 10,
+  },
   depot: {
     name: 'Depot', desc: 'Extra storage. Workers drop goods at the nearest storage, so depots shorten trips.',
     cost: { fiber: 3, stone: 2 }, store: true, armor: 10, buildTime: 8,
@@ -110,7 +140,7 @@ const BDEFS = {
 };
 
 /** Order of the build menu. */
-const BUILD_MENU = ['harvester', 'quarry', 'mine', 'tap', 'smelter', 'fab', 'foundry', 'outpost', 'turret', 'depot', 'grower'];
+const BUILD_MENU = ['harvester', 'quarry', 'mine', 'tap', 'smelter', 'fab', 'foundry', 'outpost', 'turret', 'depot', 'ramp', 'grower'];
 
 const INPUT_CAP = 3;   // how many of each input a production building stockpiles
 const AMMO_CAP = 3;    // crystals a turret stockpiles

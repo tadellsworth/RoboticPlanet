@@ -19,6 +19,7 @@ function _pfEnsure(N) {
 
 function tileCost(t) {
   if (S.road[t]) return 1 / ROAD_SPEED;
+  if (S.ramp[t]) return 1 / SLOPE_SPEED;
   return S.res[t] ? 1.5 : 1;
 }
 
@@ -26,9 +27,10 @@ const _DIRS = [[1, 0, 1], [-1, 0, 1], [0, 1, 1], [0, -1, 1], [1, 1, 1.4142], [1,
 
 /**
  * Returns an array of tile indices from the tile after (sx, sy) up to and including (gx, gy),
- * an empty array if already there, or null if the goal cannot be reached.
+ * an empty array if already there, or null if the goal cannot be reached. With `avoidFor` set to
+ * a player id, tiles in that player's enemies' territory cost much more.
  */
-function findPath(sx, sy, gx, gy) {
+function findPath(sx, sy, gx, gy, avoidFor) {
   const W = S.W, H = S.H, N = W * H;
   if (!inMap(gx, gy)) return null;
   const start = sy * W + sx, goal = gy * W + gx;
@@ -62,12 +64,16 @@ function findPath(sx, sy, gx, gy) {
       if (S.terrain[nt] !== T_GROUND) continue;
       if (S.bAt[nt] && nt !== goal) continue;
       if (dir[2] > 1) {
-        // No cutting corners past blocked tiles.
+        // Diagonal: only across flat ground, and no cutting corners past blocked tiles.
         const a = cj * W + ni, b = nj * W + ci;
         if (S.terrain[a] !== T_GROUND || S.terrain[b] !== T_GROUND) continue;
         if ((S.bAt[a] && a !== goal) || (S.bAt[b] && b !== goal)) continue;
-      }
-      const ng = g[cur] + dir[2] * (tileCost(cur) + tileCost(nt)) * 0.5;
+        const e = S.elev[cur];
+        if (S.elev[nt] !== e || S.elev[a] !== e || S.elev[b] !== e) continue;
+      } else if (!canStep(cur, nt)) continue; // cliffs block; ramps connect levels
+      let ng = g[cur] + dir[2] * (tileCost(cur) + tileCost(nt)) * 0.5;
+      // Workers steer clear of enemy territory unless there is no other way.
+      if (avoidFor !== undefined) { const o = S.owner[nt]; if (o >= 0 && o !== avoidFor) ng += 6; }
       if (stamp[nt] !== gen || ng < g[nt]) {
         stamp[nt] = gen; g[nt] = ng; from[nt] = cur;
         heap.push(nt, ng + h(ni, nj));

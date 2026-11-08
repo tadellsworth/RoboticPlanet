@@ -48,7 +48,7 @@ function aiThink(p) {
   // 2) Retire gatherers that have run dry so their worker can be reused.
   for (const b of me) {
     const def = BDEFS[b.type];
-    if (b.built && def.gather && S.time - b.born > 30 && countResIn(b.x, b.y, def.radius, def.gather) === 0 && !(b.stock[RES[def.gather].good] > 0)) {
+    if (b.built && def.gather && S.time - b.born > 30 && reachableRes(b.x, b.y, def.radius, def.gather) === 0 && !(b.stock[RES[def.gather].good] > 0)) {
       demolish(b);
     }
   }
@@ -76,6 +76,21 @@ function aiThink(p) {
   if (best) {
     sendAttack(p, best, bestAvail);
     P.nextAttack = S.time + 25;
+    P.lastAttack = S.time;
+    return;
+  }
+  // A big army with nothing in reach: push a forward Outpost toward the enemy Lander.
+  let army = 0;
+  for (const u of S.bots) if (!u.dead && u.owner === p && u.type === 'warbot') army++;
+  const enemyL = getE(S.players[enemy].lander);
+  if (enemyL && army >= lvl.threshold * 2 && S.time - (P.lastAttack || 0) > 60 && siteCount(p) < maxSites && aiAffordable(p, 'outpost')) {
+    let spot = null, bd = Infinity;
+    for (let j = 0; j < S.H; j++) for (let i = 0; i < S.W; i++) {
+      if (S.owner[j * S.W + i] !== p) continue;
+      const d = dist(i, j, enemyL.x, enemyL.y);
+      if (d < bd && canPlace(p, 'outpost', i, j, true).ok && !wouldBlock(j * S.W + i)) { bd = d; spot = { x: i, y: j }; }
+    }
+    if (spot) { placeSite(p, 'outpost', spot.x, spot.y); P.lastAttack = S.time - 30; }
   }
 }
 
@@ -87,23 +102,51 @@ function aiAffordable(p, type) {
   return true;
 }
 
+/** Square-window resource counts for every tile (summed-area table), for cheap Outpost scoring. */
+function resourceSums(type) {
+  const W = S.W, H = S.H, sum = new Int32Array((W + 1) * (H + 1));
+  for (let j = 0; j < H; j++) {
+    let row = 0;
+    for (let i = 0; i < W; i++) {
+      row += S.res[j * W + i] === type ? 1 : 0;
+      sum[(j + 1) * (W + 1) + i + 1] = sum[j * (W + 1) + i + 1] + row;
+    }
+  }
+  return (i, j, r) => {
+    const x0 = Math.max(0, i - r), y0 = Math.max(0, j - r), x1 = Math.min(W, i + r + 1), y1 = Math.min(H, j + r + 1);
+    return sum[y1 * (W + 1) + x1] - sum[y0 * (W + 1) + x1] - sum[y1 * (W + 1) + x0] + sum[y0 * (W + 1) + x0];
+  };
+}
+
 function aiFindSpot(p, type, lander) {
+  // A search that found nothing isn't repeated until the territory changes or 20 s pass.
+  const P = S.players[p];
+  P.noSpot = P.noSpot || {};
+  const miss = P.noSpot[type];
+  if (miss && miss.ver === S.territoryVer && S.time < miss.until) return null;
+  const spot = aiSearchSpot(p, type, lander);
+  if (!spot) P.noSpot[type] = { ver: S.territoryVer, until: S.time + 20 };
+  return spot;
+}
+
+function aiSearchSpot(p, type, lander) {
   const def = BDEFS[type];
+  const sums = type === 'outpost' ? [R_ORE, R_CRYSTAL, R_STALK, R_BOULDER].map(resourceSums) : null;
   const enemyL = getE(S.players[1 - p].lander);
   const ex = enemyL ? enemyL.x : S.W / 2, ey = enemyL ? enemyL.y : S.H / 2;
-  let best = null, bs = -Infinity;
+  const cands = [];
   const avoid = (S.players[p].avoid || []).filter((a) => a.until > S.time);
   S.players[p].avoid = avoid;
   for (let j = 0; j < S.H; j++) {
     for (let i = 0; i < S.W; i++) {
       if (S.owner[j * S.W + i] !== p) continue;
       if (avoid.some((a) => dist2(a.x, a.y, i, j) < 12)) continue;
-      if (!canPlace(p, type, i, j).ok) continue;
+      if (!canPlace(p, type, i, j, true).ok) continue;
       const dHome = dist(i, j, lander.x, lander.y);
       const jitter = hash2(i, j, S.seed + p) * 0.8;
       let s;
       if (def.gather) {
-        const n = countResIn(i, j, def.radius, def.gather);
+        const n = reachableRes(i, j, def.radius, def.gather);
         if (n < 2) continue;
         s = Math.min(n, 10) * 2 - dHome * 0.35;
       } else if (def.plant) {
@@ -111,8 +154,8 @@ function aiFindSpot(p, type, lander) {
         for (const b of S.buildings) if (!b.dead && b.owner === p && b.type === 'harvester') dh = Math.min(dh, dist(i, j, b.x, b.y));
         s = -dh - countResIn(i, j, def.radius, R_STALK) * 0.2;
       } else if (type === 'outpost') {
-        const ore = Math.min(countResIn(i, j, 6, R_ORE), 8), cry = Math.min(countResIn(i, j, 6, R_CRYSTAL), 8);
-        const rest = Math.min(countResIn(i, j, 6, R_STALK), 6) + Math.min(countResIn(i, j, 6, R_BOULDER), 6);
+        const ore = Math.min(sums[0](i, j, 5), 8), cry = Math.min(sums[1](i, j, 5), 8);
+        const rest = Math.min(sums[2](i, j, 5), 6) + Math.min(sums[3](i, j, 5), 6);
         s = -dist(i, j, ex, ey) * 0.6 + dHome * 0.5 + ore * 1.6 + cry * 1.0 + rest * 0.3;
       } else if (type === 'turret') {
         s = -Math.abs(dHome - 3.5) * 2 - dist(i, j, ex, ey) * 0.15;
@@ -120,8 +163,13 @@ function aiFindSpot(p, type, lander) {
         s = -dHome;
       }
       s += jitter;
-      if (s > bs) { bs = s; best = { x: i, y: j }; }
+      cands.push({ x: i, y: j, s });
     }
   }
-  return best;
+  // Only the best few spots get the (costly) check that a building won't block a pass.
+  cands.sort((a, b) => b.s - a.s);
+  for (let k = 0; k < Math.min(cands.length, 12); k++) {
+    if (!wouldBlock(tIdx(cands[k].x, cands[k].y))) return cands[k];
+  }
+  return null;
 }

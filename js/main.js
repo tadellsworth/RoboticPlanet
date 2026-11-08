@@ -48,7 +48,12 @@ function boot() {
   initRender(canvas);
   initInput(canvas, { onTap: onMapTap, onPaint: onRoadPaint, onPaintEnd: () => { UI.lastPaint = null; } });
   initUI();
-  loadArt(() => { UI.icons = {}; if (S && R.map) bakeMap(); });
+  // Custom art loads in the background; redraw once after a burst of images arrives.
+  let rebake = 0;
+  loadArt(() => {
+    clearTimeout(rebake);
+    rebake = setTimeout(() => { UI.icons = {}; if (S && R.map) bakeMap(); }, 120);
+  });
   startDemo();
   requestAnimationFrame(frame);
   if ('serviceWorker' in navigator && location.protocol.startsWith('http') && !window.BOTFALL_NO_SW) {

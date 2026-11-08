@@ -103,6 +103,14 @@
     <div class="field">
       <span class="label">Planet</span>
       <div class="seed-row"><span id="m-seed" class="seed"></span><button id="m-reroll" class="btn small">New planet</button></div>
+      <div class="sliders">
+        <label class="slider-row" for="m-size"><span>Map size</span><output id="m-size-v"></output>
+          <input type="range" id="m-size" min="0" max="3" step="1"></label>
+        <label class="slider-row" for="m-rough"><span>Terrain</span><output id="m-rough-v"></output>
+          <input type="range" id="m-rough" min="0" max="4" step="1"></label>
+        <label class="slider-row" for="m-rich"><span>Resources</span><output id="m-rich-v"></output>
+          <input type="range" id="m-rich" min="0" max="4" step="1"></label>
+      </div>
     </div>
     <button id="m-new" class="btn primary big">Start</button>
     <button id="m-help" class="btn big ghost">How to play</button>
@@ -140,6 +148,8 @@
       <p>You can only build inside your border. <b>Outposts</b> push the border out and hold warbots. <b>Paths</b> make bots walk almost twice as fast. <b>Depots</b> are extra storage that shorten trips.</p>
       <h3>Fighting (Versus)</h3>
       <p>Warbots wait inside Outposts and your Lander and defend automatically. To attack, tap an enemy building and send warbots from garrisons within range. Capturing an Outpost takes its land, and enemy buildings left outside their border are lost. Pulse Turrets shoot intruders and use Crystal as ammo.</p>
+      <h3>High ground</h3>
+      <p>The planet has several levels. Bots can't climb cliffs; they use <b>slopes</b> at narrow passes, so some trips are long. Lay <b>Paths</b> along busy routes, slopes included, and build a <b>Ramp</b> at the foot or top of a one-level cliff to cut your own way up. Lighter ground is higher.</p>
       <h3>Priorities and storage</h3>
       <p>Tap one of your buildings to set its <b>priority</b>. High-priority buildings and construction sites get workers and goods first, and low ones last. Tap your Lander or a Depot to choose how it stores goods: <b>Fill first</b> pulls finished goods there before any other storage, <b>Empty out</b> sends everything elsewhere, and you can switch individual goods off.</p>
       <h3>Controls</h3>

@@ -17,22 +17,44 @@ function getE(id) { return id ? S.byId.get(id) || null : null; }
 /**
  * Generates a point-symmetric map (rotated 180°) so both sides are equally fair.
  * Player 0 starts near the bottom, player 1 near the top.
+ *
+ * Terrain has several elevation levels. Cliffs between levels block bots; slopes (ramps)
+ * at a few narrow passes connect them, so every reachable area is linked but routes can be long.
+ * cfg.rough (0 flat … 4 mountainous) and cfg.rich (0 scarce … 4 abundant) come from the
+ * new-game settings.
  */
-function generateMap(seed, W, H) {
+function generateMap(seed, W, H, cfg) {
+  cfg = cfg || {};
+  const TPR = TERRAIN_PRESETS[cfg.rough ?? DEFAULT_ROUGH];
+  const RPR = RESOURCE_PRESETS[cfg.rich ?? DEFAULT_RICH];
   const N = W * H;
   const terrain = new Uint8Array(N), res = new Uint8Array(N), amt = new Uint8Array(N);
+  const elev = new Uint8Array(N), ramp = new Uint8Array(N);
   const id = (i, j) => j * W + i;
+  const mir = (t) => N - 1 - t; // the tile rotated 180° about the map centre
   const sH = seed * 7 + 11, sM = seed * 13 + 5, sB = seed * 31 + 9, sC = seed * 17 + 3, sR = seed * 3 + 1;
-  const half = H / 2;
+  const sE = seed * 19 + 23, sO = seed * 29 + 41;
+  const half = Math.floor(H / 2);
+  const L = TPR.levels;
+  const thresholds = [];
+  const step = L >= 5 ? 0.07 : L >= 4 ? 0.085 : 0.1;
+  for (let k = 0; k < L - 1; k++) thresholds.push(0.5 + (k - (L - 2) / 2) * step);
+  const baseLevel = Math.floor((L - 1) / 2);
+  const dens = RPR.density;
 
-  // 1) Terrain and resources for the bottom half.
+  // 1) Terrain and elevation for the bottom half.
   for (let j = half; j < H; j++) {
     for (let i = 0; i < W; i++) {
       const h = fbm(i / 8.5, j / 8.5, sH, 4);
       const t = id(i, j);
-      terrain[t] = h > 0.67 ? T_ROCK : h < 0.29 ? T_WATER : T_GROUND;
+      terrain[t] = h > TPR.rock ? T_ROCK : h < 0.29 ? T_WATER : T_GROUND;
+      const e = fbm(i / TPR.scale, j / TPR.scale, sE, 3);
+      let lv = 0;
+      for (const th of thresholds) if (e >= th) lv++;
+      elev[t] = lv;
     }
   }
+  // 2) Resources for the bottom half.
   for (let j = half; j < H; j++) {
     for (let i = 0; i < W; i++) {
       const t = id(i, j);
@@ -41,30 +63,33 @@ function generateMap(seed, W, H) {
       const m = fbm(i / 6, j / 6, sM, 3);
       const b = fbm(i / 5 + 40, j / 5 + 40, sB, 2);
       const c = fbm(i / 4 + 90, j / 4 + 90, sC, 2);
+      const o = fbm(i / 4 + 20, j / 4 + 60, sO, 2);
       let nearRock = false;
       for (let dj = -1; dj <= 1; dj++) for (let di = -1; di <= 1; di++) {
         const x = i + di, y = j + dj;
         if (x >= 0 && y >= 0 && x < W && y < H && terrain[id(x, y)] === T_ROCK) nearRock = true;
       }
-      if (m > 0.6 && r < 0.62) res[t] = R_STALK;
-      else if (nearRock && r < 0.22) res[t] = R_ORE;
-      else if (c > 0.72 && r < 0.55) res[t] = R_CRYSTAL;
-      else if (b > 0.66 && r < 0.5) res[t] = R_BOULDER;
+      if (m > 0.6 && r < Math.min(0.95, 0.62 * dens)) res[t] = R_STALK;
+      else if (nearRock && r < 0.22 * dens) res[t] = R_ORE;
+      else if (o > 0.75 && r < 0.45 * dens) res[t] = R_ORE;
+      else if (c > 0.72 && r < Math.min(0.95, 0.55 * dens)) res[t] = R_CRYSTAL;
+      else if (b > 0.66 && r < Math.min(0.95, 0.5 * dens)) res[t] = R_BOULDER;
     }
   }
 
-  // 2) Player 0 base: clear the landing zone and guarantee starter resource patches.
+  // 3) Player 0 base: a flat landing zone and guaranteed starter resource patches.
   const rng = makeRng(seed ^ 0x5bd1e995);
   const bx = Math.floor(W / 2), by = H - 7;
+  const stampDens = clamp(dens, 0.7, 1.15);
   const stamp = (cx, cy, rad, type, density) => {
     for (let j = Math.floor(cy - rad); j <= Math.ceil(cy + rad); j++) {
       for (let i = Math.floor(cx - rad); i <= Math.ceil(cx + rad); i++) {
         if (i < 1 || j < half + 1 || i >= W - 1 || j >= H - 1) continue;
         if (dist2(i, j, cx, cy) > rad * rad) continue;
         const t = id(i, j);
-        if (type === -1) { terrain[t] = T_GROUND; res[t] = R_NONE; continue; }
         terrain[t] = T_GROUND;
-        if (rng() < density) res[t] = type;
+        if (type === -1) { res[t] = R_NONE; elev[t] = baseLevel; continue; }
+        if (rng() < density * stampDens) res[t] = type;
       }
     }
   };
@@ -80,36 +105,43 @@ function generateMap(seed, W, H) {
   // Contested fields near the middle of the map (mirrored, so there is one on each side).
   stamp(Math.floor(W / 2) - 6, half + 3, 1.7, R_ORE, 0.85);
   stamp(Math.floor(W / 2) + 5, half + 2, 1.4, R_CRYSTAL, 0.85);
-  stamp(bx, by, 3.3, -1, 0);
+  stamp(bx, by, 4.2, -1, 0);
 
-  // 3) Mirror the bottom half onto the top half.
+  // 4) Mirror the bottom half onto the top half.
   const mirror = () => {
-    for (let j = 0; j < half; j++) for (let i = 0; i < W; i++) {
-      const s = id(W - 1 - i, H - 1 - j), t = id(i, j);
-      terrain[t] = terrain[s]; res[t] = res[s];
+    for (let t = 0; t < N; t++) {
+      if (((t / W) | 0) >= half) continue;
+      const m2 = mir(t);
+      terrain[t] = terrain[m2]; res[t] = res[m2]; elev[t] = elev[m2];
     }
   };
   mirror();
 
-  // 4) Make sure the two bases are connected by land; carve a winding corridor if not.
-  const passable = (t) => terrain[t] === T_GROUND;
-  const reach = () => {
+  const ground = (t) => terrain[t] === T_GROUND;
+  const orth = (t, fn) => {
+    const i = t % W, j = (t / W) | 0;
+    if (i > 0) fn(t - 1);
+    if (i < W - 1) fn(t + 1);
+    if (j > 0) fn(t - W);
+    if (j < H - 1) fn(t + W);
+  };
+  const reachable = (useElev) => {
     const seen = new Uint8Array(N), q = [id(bx, by)];
     seen[q[0]] = 1;
     while (q.length) {
-      const t = q.pop(), i = t % W, j = (t / W) | 0;
-      for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
-        const x = i + di, y = j + dj;
-        if (x < 0 || y < 0 || x >= W || y >= H) continue;
-        const u = id(x, y);
-        if (!seen[u] && passable(u)) { seen[u] = 1; q.push(u); }
-      }
+      const t = q.pop();
+      orth(t, (u) => {
+        if (seen[u] || !ground(u)) return;
+        if (useElev && elev[u] !== elev[t] && !(Math.abs(elev[u] - elev[t]) === 1 && (ramp[u] || ramp[t]))) return;
+        seen[u] = 1; q.push(u);
+      });
     }
-    return seen[id(W - 1 - bx, H - 1 - by)] === 1;
+    return seen;
   };
-  if (!reach()) {
+
+  // 5) Make sure the two bases are connected by land; carve a winding corridor if not.
+  if (!reachable(false)[id(W - 1 - bx, H - 1 - by)]) {
     let x = bx, y = by;
-    const tx = W / 2, ty = half;
     while (y >= half) {
       for (let dj = -1; dj <= 1; dj++) for (let di = -1; di <= 1; di++) {
         const i = Math.round(x) + di, j = Math.round(y) + dj;
@@ -118,14 +150,113 @@ function generateMap(seed, W, H) {
         }
       }
       y -= 1;
-      x += clamp((tx - x) * 0.25 + (rng() - 0.5) * 1.5, -1, 1);
+      x += clamp((W / 2 - x) * 0.25 + (rng() - 0.5) * 1.5, -1, 1);
     }
     mirror();
   }
 
-  for (let t = 0; t < N; t++) if (res[t]) amt[t] = RES[res[t]].amount;
+  // 6) Shape the levels into clean terraces, then connect them with ramps.
+  if (L > 1) {
+    const levelComponents = () => {
+      const comp = new Int32Array(N).fill(-1), sizes = [];
+      for (let t = 0; t < N; t++) {
+        if (!ground(t) || comp[t] >= 0) continue;
+        const c = sizes.length, q = [t];
+        comp[t] = c;
+        let n = 0;
+        while (q.length) {
+          const a = q.pop();
+          n++;
+          orth(a, (b) => { if (comp[b] < 0 && ground(b) && elev[b] === elev[a]) { comp[b] = c; q.push(b); } });
+        }
+        sizes.push(n);
+      }
+      return { comp, sizes };
+    };
+    // Absorb tiny specks of one level into their surroundings (decide for all, then apply,
+    // so the result stays symmetric).
+    for (let pass = 0; pass < 2; pass++) {
+      const { comp, sizes } = levelComponents();
+      const hist = new Map();
+      for (let t = 0; t < N; t++) {
+        if (!ground(t) || sizes[comp[t]] >= 10) continue;
+        const hc = hist.get(comp[t]) || {};
+        orth(t, (u) => { if (ground(u) && elev[u] !== elev[t]) hc[elev[u]] = (hc[elev[u]] || 0) + 1; });
+        hist.set(comp[t], hc);
+      }
+      const target = new Map();
+      for (const [c, hc] of hist) {
+        let best = -1, bn = 0;
+        for (const k in hc) if (hc[k] > bn || (hc[k] === bn && +k < best)) { bn = hc[k]; best = +k; }
+        if (best >= 0) target.set(c, best);
+      }
+      for (let t = 0; t < N; t++) if (ground(t) && target.has(comp[t])) elev[t] = target.get(comp[t]);
+    }
+    // Neighbouring tiles differ by at most one level, so every cliff is climbable with a ramp.
+    for (let changed = true; changed;) {
+      changed = false;
+      for (let t = 0; t < N; t++) {
+        if (!ground(t)) continue;
+        let m = elev[t];
+        orth(t, (u) => { if (ground(u) && elev[u] + 1 < m) m = elev[u] + 1; });
+        if (m < elev[t]) { elev[t] = m; changed = true; }
+      }
+    }
+    // Ramps: first the fewest needed to connect every level-area (narrow passes), then a few
+    // extras along long cliffs. Each ramp is placed together with its mirror image.
+    const { comp } = levelComponents();
+    const parent = [];
+    for (let c = 0; c < N; c++) parent.push(c);
+    const find = (c) => { while (parent[c] !== c) { parent[c] = parent[parent[c]]; c = parent[c]; } return c; };
+    const cands = [];
+    for (let t = 0; t < N; t++) {
+      if (!ground(t)) continue;
+      orth(t, (u) => {
+        if (!ground(u) || elev[u] !== elev[t] + 1) return;
+        const ct = Math.min(t, mir(t)), cu = ct === t ? u : mir(u);
+        cands.push({ t, u, key: hash2(ct, cu - ct + 3 * W, seed) });
+      });
+    }
+    cands.sort((a, b) => a.key - b.key || a.t - b.t);
+    const addRamp = (t, u) => {
+      for (const [a, b] of [[t, u], [mir(t), mir(u)]]) {
+        ramp[a] = 1;
+        res[a] = R_NONE;
+        parent[find(comp[a])] = find(comp[b]);
+      }
+      // Sometimes make the pass two tiles wide.
+      if (hash2(t, u, seed + 99) < 0.4) {
+        const p = Math.abs(u - t) === 1 ? W : 1;
+        for (const d of [p, -p]) {
+          const t2 = t + d, u2 = u + d;
+          if (t2 < 0 || u2 < 0 || t2 >= N || u2 >= N || Math.abs((t2 % W) - (t % W)) > 1) continue;
+          if (ground(t2) && ground(u2) && !ramp[t2] && elev[t2] === elev[t] && elev[u2] === elev[t] + 1) {
+            ramp[t2] = 1; res[t2] = R_NONE; ramp[mir(t2)] = 1; res[mir(t2)] = R_NONE;
+            break;
+          }
+        }
+      }
+    };
+    for (const c of cands) if (find(comp[c.t]) !== find(comp[c.u])) addRamp(c.t, c.u);
+    const nearRamp = (t, r) => {
+      const i = t % W, j = (t / W) | 0;
+      for (let y = Math.max(0, j - r); y <= Math.min(H - 1, j + r); y++) {
+        for (let x = Math.max(0, i - r); x <= Math.min(W - 1, i + r); x++) if (ramp[id(x, y)]) return true;
+      }
+      return false;
+    };
+    for (const c of cands) {
+      if (hash2(c.t, c.u, seed + 7) < TPR.extra && !nearRamp(c.t, TPR.gap) && !nearRamp(c.u, TPR.gap)) addRamp(c.t, c.u);
+    }
+    // Safety net: if the bases still can't reach each other, flatten the map.
+    if (!reachable(true)[id(W - 1 - bx, H - 1 - by)]) { elev.fill(baseLevel); ramp.fill(0); }
+  } else {
+    elev.fill(0);
+  }
+
+  for (let t = 0; t < N; t++) if (res[t]) amt[t] = clamp(Math.round(RES[res[t]].amount * RPR.amount), 1, 255);
   const grow = new Float32Array(N).fill(1);
-  return { terrain, res, amt, grow, bases: [{ x: bx, y: by }, { x: W - 1 - bx, y: H - 1 - by }] };
+  return { terrain, res, amt, grow, elev, ramp, bases: [{ x: bx, y: by }, { x: W - 1 - bx, y: H - 1 - by }] };
 }
 
 /* ------------------------------------------------------------------ new game */
@@ -136,13 +267,18 @@ function generateMap(seed, W, H) {
  */
 function newGame(opts) {
   const mode = opts.mode === 'colony' ? 'colony' : 'versus';
-  const W = mode === 'colony' ? COLONY_W : MAP_W, H = mode === 'colony' ? COLONY_H : MAP_H;
+  const settings = {
+    size: clamp(opts.size ?? DEFAULT_SIZE[mode], 0, SIZE_PRESETS.length - 1),
+    rough: clamp(opts.rough ?? DEFAULT_ROUGH, 0, TERRAIN_PRESETS.length - 1),
+    rich: clamp(opts.rich ?? DEFAULT_RICH, 0, RESOURCE_PRESETS.length - 1),
+  };
+  const W = SIZE_PRESETS[settings.size].w, H = SIZE_PRESETS[settings.size].h;
   const seed = opts.seed >>> 0;
   const diff = DIFFICULTY[opts.difficulty] ? opts.difficulty : 'normal';
-  const m = generateMap(seed, W, H);
+  const m = generateMap(seed, W, H, settings);
   S = {
-    v: 1, mode, seed, W, H, difficulty: diff, time: 0, nextId: 1, winner: -1, milestone: 0,
-    terrain: m.terrain, res: m.res, amt: m.amt, grow: m.grow,
+    v: 1, mode, seed, W, H, settings, difficulty: diff, time: 0, nextId: 1, winner: -1, milestone: 0,
+    terrain: m.terrain, res: m.res, amt: m.amt, grow: m.grow, elev: m.elev, ramp: m.ramp,
     road: new Uint8Array(W * H),
     owner: new Int8Array(W * H).fill(-1),
     resRes: new Uint8Array(W * H),
@@ -173,8 +309,56 @@ function newGame(opts) {
       enterBuilding(w, L);
     }
   }
+  computeZones();
   computeTerritory();
   return S;
+}
+
+/* ------------------------------------------------------------------ elevation */
+
+/**
+ * Can a bot step between orthogonally adjacent tiles a and b? Same level: yes. One level apart:
+ * only if either tile is a ramp. Cliffs of more than one level are never climbable.
+ */
+function canStep(a, b) {
+  if (S.terrain[a] !== T_GROUND || S.terrain[b] !== T_GROUND) return false;
+  const d = S.elev[a] - S.elev[b];
+  if (d === 0) return true;
+  return (d === 1 || d === -1) && (S.ramp[a] === 1 || S.ramp[b] === 1);
+}
+
+/** Label every walkable tile with the id of the area bots can reach from it (ignoring buildings). */
+function computeZones() {
+  const N = S.W * S.H, W = S.W;
+  const z = new Int32Array(N).fill(-1);
+  let next = 0;
+  for (let t = 0; t < N; t++) {
+    if (S.terrain[t] !== T_GROUND || z[t] >= 0) continue;
+    const q = [t];
+    z[t] = next;
+    while (q.length) {
+      const a = q.pop(), i = a % W;
+      const nb = [i > 0 ? a - 1 : -1, i < W - 1 ? a + 1 : -1, a - W, a + W];
+      for (const b of nb) {
+        if (b < 0 || b >= N || z[b] >= 0 || !canStep(a, b)) continue;
+        z[b] = next;
+        q.push(b);
+      }
+    }
+    next++;
+  }
+  S.zone = z;
+}
+
+/** The area a player's bots can reach (the one their Lander stands in). */
+function homeZone(p) {
+  const L = getE(S.players[p].lander);
+  return L && L.owner === p ? S.zone[tIdx(L.x, L.y)] : -2;
+}
+
+/** Count resource nodes in reach of (cx, cy) that bots there can actually walk to. */
+function reachableRes(cx, cy, radius, type) {
+  return countResIn(cx, cy, radius, type, false, S.zone[tIdx(cx, cy)]);
 }
 
 /* ------------------------------------------------------------------ entities */
@@ -279,8 +463,9 @@ function computeTerritory() {
 /** Share of the walkable land (ground tiles) a player has claimed, 0..1. */
 function landShare(p) {
   let land = 0, mine = 0;
+  const home = homeZone(p);
   for (let t = 0; t < S.W * S.H; t++) {
-    if (S.terrain[t] !== T_GROUND) continue;
+    if (S.terrain[t] !== T_GROUND || S.zone[t] !== home) continue;
     land++;
     if (S.owner[t] === p) mine++;
   }
@@ -289,12 +474,13 @@ function landShare(p) {
 
 /* ------------------------------------------------------------------ placement */
 
-function countResIn(cx, cy, radius, type, matureOnly) {
+function countResIn(cx, cy, radius, type, matureOnly, zone) {
   let n = 0;
   const r2 = radius * radius + 0.3;
   for (let j = Math.max(0, cy - radius); j <= Math.min(S.H - 1, cy + radius); j++) {
     for (let i = Math.max(0, cx - radius); i <= Math.min(S.W - 1, cx + radius); i++) {
       const t = j * S.W + i;
+      if (zone !== undefined && S.zone[t] !== zone) continue;
       if (S.res[t] === type && dist2(i, j, cx, cy) <= r2 && (!matureOnly || S.grow[t] >= 1)) n++;
     }
   }
@@ -307,8 +493,46 @@ function isWalkable(i, j) {
   return S.terrain[t] === T_GROUND && !S.bAt[t];
 }
 
+/**
+ * Would a building on tile t cut the walkable tiles around it off from each other (for example by
+ * plugging a narrow pass or the foot of a slope)? Checks a small window first, then the whole map.
+ */
+const _wb = { seen: null, gen: 0, q: null };
+
+function wouldBlock(t) {
+  const W = S.W, N = S.W * S.H;
+  const ti = t % W, tj = (t / W) | 0;
+  const nb = (a, k) => (k === 0 ? (a % W > 0 ? a - 1 : -1) : k === 1 ? (a % W < W - 1 ? a + 1 : -1) : k === 2 ? a - W : a + W);
+  const ends = [];
+  for (let k = 0; k < 4; k++) {
+    const u = nb(t, k);
+    if (u >= 0 && u < N && !S.bAt[u] && canStep(t, u)) ends.push(u);
+  }
+  if (ends.length <= 1) return false;
+  if (!_wb.seen || _wb.seen.length !== N) { _wb.seen = new Uint32Array(N); _wb.q = new Int32Array(N); _wb.gen = 0; }
+  const seen = _wb.seen, q = _wb.q;
+  const reachesAll = (limit) => {
+    const gen = ++_wb.gen;
+    let head = 0, tail = 0, left = ends.length - 1;
+    seen[ends[0]] = gen; q[tail++] = ends[0];
+    while (head < tail) {
+      const a = q[head++];
+      for (let k = 0; k < 4; k++) {
+        const b = nb(a, k);
+        if (b < 0 || b >= N || b === t || seen[b] === gen || S.bAt[b] || !canStep(a, b)) continue;
+        if (limit && (Math.abs((b % W) - ti) > limit || Math.abs(((b / W) | 0) - tj) > limit)) continue;
+        seen[b] = gen;
+        if (ends.indexOf(b) >= 0 && --left === 0) return true;
+        q[tail++] = b;
+      }
+    }
+    return false;
+  };
+  return !reachesAll(5) && !reachesAll(0);
+}
+
 /** Can `owner` start a `type` construction site at tile (i, j)? Returns {ok, reason}. */
-function canPlace(owner, type, i, j) {
+function canPlace(owner, type, i, j, skipBlockCheck) {
   const def = BDEFS[type];
   if (!def || !def.cost) return { ok: false, reason: 'Cannot build that.' };
   if (!inMap(i, j)) return { ok: false, reason: 'Outside the map.' };
@@ -317,6 +541,19 @@ function canPlace(owner, type, i, j) {
   if (S.terrain[t] !== T_GROUND) return { ok: false, reason: 'The ground here is not buildable.' };
   if (S.res[t]) return { ok: false, reason: 'Clear the resources here first.' };
   if (S.bAt[t]) return { ok: false, reason: 'There is already a building here.' };
+  if (S.ramp[t]) return { ok: false, reason: 'Too steep: this is a slope.' };
+  if (S.zone[t] !== homeZone(owner)) return { ok: false, reason: 'Your bots cannot reach this spot. Find a slope up, or build a Ramp.' };
+  if (def.ramp) {
+    let cliff = false;
+    for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+      if (!inMap(i + di, j + dj)) continue;
+      const u = tIdx(i + di, j + dj);
+      if (S.terrain[u] === T_GROUND && Math.abs(S.elev[u] - S.elev[t]) === 1 && !canStep(t, u)) cliff = true;
+    }
+    if (!cliff) return { ok: false, reason: 'Place a Ramp right at the foot or top of a one-level cliff.' };
+    if (!skipBlockCheck && wouldBlock(t)) return { ok: false, reason: 'That would block the only way through here.' };
+    return { ok: true, reason: '' };
+  }
   if (S.road[t]) return { ok: false, reason: 'There is a path here.' };
   let open = 0;
   for (let dj = -1; dj <= 1; dj++) for (let di = -1; di <= 1; di++) {
@@ -324,7 +561,7 @@ function canPlace(owner, type, i, j) {
     if (!inMap(i + di, j + dj)) continue;
     const u = tIdx(i + di, j + dj);
     if (S.bAt[u]) return { ok: false, reason: 'Too close to another building.' };
-    if ((di === 0 || dj === 0) && S.terrain[u] === T_GROUND) open++;
+    if ((di === 0 || dj === 0) && canStep(t, u)) open++;
   }
   if (open < 2) return { ok: false, reason: 'Bots could not reach this spot.' };
   if (def.mil) {
@@ -334,9 +571,11 @@ function canPlace(owner, type, i, j) {
       }
     }
   }
-  if (def.gather && countResIn(i, j, def.radius, def.gather) === 0) {
+  if (def.gather && reachableRes(i, j, def.radius, def.gather) === 0) {
     return { ok: false, reason: `No ${RES[def.gather].name.toLowerCase()}s within reach.` };
   }
+  // The most expensive check goes last.
+  if (!skipBlockCheck && wouldBlock(t)) return { ok: false, reason: 'That would block the only way through here.' };
   return { ok: true, reason: '' };
 }
 
@@ -475,12 +714,15 @@ function addFx(type, x, y, data) {
 /* ------------------------------------------------------------------ save / load */
 
 const SAVE_KEY = 'botfall.save.v1';
-const TYPED_FIELDS = { terrain: Uint8Array, res: Uint8Array, amt: Uint8Array, grow: Float32Array, road: Uint8Array, owner: Int8Array, resRes: Uint8Array };
+const TYPED_FIELDS = {
+  terrain: Uint8Array, res: Uint8Array, amt: Uint8Array, grow: Float32Array, road: Uint8Array, owner: Int8Array,
+  resRes: Uint8Array, elev: Uint8Array, ramp: Uint8Array,
+};
 
 function serializeGame() {
   const o = {};
   for (const k in S) {
-    if (k === 'byId' || k === 'fx' || k === 'msgs' || k === 'dirtyTiles' || k === 'bAt') continue;
+    if (k === 'byId' || k === 'fx' || k === 'msgs' || k === 'dirtyTiles' || k === 'bAt' || k === 'zone') continue;
     o[k] = TYPED_FIELDS[k] ? Array.from(S[k], (v) => (k === 'grow' ? Math.round(v * 100) / 100 : v)) : S[k];
   }
   o.buildings = S.buildings.filter((b) => !b.dead);
@@ -491,6 +733,8 @@ function serializeGame() {
 function deserializeGame(json) {
   const o = JSON.parse(json);
   if (!o || o.v !== 1) throw new Error('Unsupported save');
+  // Saves from before elevation existed load as flat maps.
+  if (!o.elev) { o.elev = new Array(o.W * o.H).fill(0); o.ramp = new Array(o.W * o.H).fill(0); }
   for (const k in TYPED_FIELDS) o[k] = TYPED_FIELDS[k].from(o[k]);
   o.fx = []; o.msgs = []; o.dirtyTiles = [];
   o.bAt = new Int32Array(o.W * o.H);
@@ -498,6 +742,7 @@ function deserializeGame(json) {
   S = o;
   for (const b of S.buildings) { S.byId.set(b.id, b); S.bAt[tIdx(b.x, b.y)] = b.id; }
   for (const u of S.bots) S.byId.set(u.id, u);
+  computeZones();
   return S;
 }
 

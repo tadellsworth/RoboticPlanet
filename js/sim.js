@@ -149,8 +149,11 @@ function nearestEnemyBot(owner, x, y, range, preferWar) {
 /* ------------------------------------------------------------------ movement */
 
 function goTo(u, x, y) {
-  const p = findPath(Math.floor(u.x), Math.floor(u.y), x, y);
-  if (!p) return false;
+  const goal = y * S.W + x;
+  // Don't hammer the pathfinder with a route that just failed.
+  if (u.failGoal === goal && S.time < u.failUntil) return false;
+  const p = findPath(Math.floor(u.x), Math.floor(u.y), x, y, u.type === 'worker' ? u.owner : undefined);
+  if (!p) { u.failGoal = goal; u.failUntil = S.time + 2; return false; }
   exitBuilding(u);
   u.path = p; u.pi = 0; u.idleT = 0; u.goal = y * S.W + x;
   return true;
@@ -161,7 +164,7 @@ function moveAlong(u, dt) {
   if (!u.path) return true;
   const here = Math.floor(u.y) * S.W + Math.floor(u.x);
   let speed = u.type === 'warbot' ? WARBOT_SPEED : WORKER_SPEED;
-  if (S.road[here]) speed *= ROAD_SPEED; else if (S.res[here]) speed *= 0.75;
+  if (S.road[here]) speed *= ROAD_SPEED; else if (S.ramp[here]) speed *= SLOPE_SPEED; else if (S.res[here]) speed *= 0.75;
   let step = speed * dt;
   while (step > 0 && u.pi < u.path.length) {
     const t = u.path[u.pi];
@@ -191,21 +194,51 @@ function moveDirect(u, x, y, dt) {
   u.face = Math.atan2(dy, dx);
   const s = Math.min(WARBOT_SPEED * dt, d);
   const nx = u.x + (dx / d) * s, ny = u.y + (dy / d) * s;
-  const ti = Math.floor(nx), tj = Math.floor(ny);
+  const ti = Math.floor(nx), tj = Math.floor(ny), ci = Math.floor(u.x), cj = Math.floor(u.y);
   if (!inMap(ti, tj)) return;
-  const t = tIdx(ti, tj);
-  const sameTile = ti === Math.floor(u.x) && tj === Math.floor(u.y);
-  if (S.terrain[t] === T_GROUND && (!S.bAt[t] || sameTile)) { u.x = nx; u.y = ny; }
+  const t = tIdx(ti, tj), c = tIdx(ci, cj);
+  if (t !== c) {
+    if (S.bAt[t]) return;
+    // Chasing can't jump down or up a cliff: the step must be walkable via an orthogonal neighbour.
+    const ok = ti === ci || tj === cj ? canStep(c, t)
+      : (canStep(c, tIdx(ti, cj)) && canStep(tIdx(ti, cj), t)) || (canStep(c, tIdx(ci, tj)) && canStep(tIdx(ci, tj), t));
+    if (!ok) return;
+  }
+  u.x = nx; u.y = ny;
 }
 
 /* ------------------------------------------------------------------ logistics */
 
 function dispatch(p) {
+  const blds = [];
+  for (const b of S.buildings) if (b.owner === p && !b.dead) blds.push(b);
+  blds.sort((a, c) => prioRank(a) - prioRank(c) || a.born - c.born);
+
+  // Always keep a few workers free for hauling and building. If raids or new buildings took them
+  // all, pull one off the least useful job — this must run even when nobody is idle.
+  let free = 0, workers = 0;
+  for (const u of S.bots) {
+    if (u.dead || u.owner !== p || u.type !== 'worker') continue;
+    workers++;
+    if (!(u.task && u.task.type === 'staff')) free++;
+  }
+  const minFree = Math.max(MIN_FREE_WORKERS, Math.round(workers * 0.2));
+  if (free < minFree) {
+    const cands = blds.filter((b) => b.built && b.staff && b.type !== 'foundry');
+    cands.sort((a, c) => releaseScore(c) - releaseScore(a));
+    if (cands.length) {
+      unstaff(cands[0]);
+      free++;
+      if (S.time - (S.players[p].lastShortMsg || -99) > 60) {
+        S.players[p].lastShortMsg = S.time;
+        postMsg(p, `Short on workers — the ${BDEFS[cands[0].type].name} worker was moved to hauling. Make more workers at a Bot Foundry.`, cands[0].x, cands[0].y, 'warn');
+      }
+    }
+  }
+
   const idle = [];
   for (const u of S.bots) if (u.owner === p && isIdleWorker(u)) idle.push(u);
   if (!idle.length) return;
-  const blds = [];
-  for (const b of S.buildings) if (b.owner === p && !b.dead) blds.push(b);
 
   const take = (x, y) => {
     let best = -1, bd = Infinity;
@@ -217,8 +250,6 @@ function dispatch(p) {
     return idle.splice(best, 1)[0];
   };
 
-  blds.sort((a, c) => prioRank(a) - prioRank(c) || a.born - c.born);
-
   // 1) A builder for every construction site that has materials waiting to be built with.
   for (const b of blds) {
     if (!idle.length) return;
@@ -226,29 +257,9 @@ function dispatch(p) {
       assignBuild(take(b.x, b.y), b);
     }
   }
-  // 2) An operator for every finished building that needs one — but always keep a few
-  //    workers free for hauling, otherwise the whole economy can lock up.
-  let free = 0, workers = 0;
-  for (const u of S.bots) {
-    if (u.dead || u.owner !== p || u.type !== 'worker') continue;
-    workers++;
-    if (!(u.task && u.task.type === 'staff')) free++;
-  }
-  const minFree = Math.max(MIN_FREE_WORKERS, Math.round(workers * 0.2));
+  // 2) An operator for every finished building that needs one, while keeping minFree workers free.
   const staffQueue = blds.filter((b) => b.built && !b.paused && BDEFS[b.type].staff && !b.staff && !b.staffInc)
     .sort((a, c) => prioRank(a) - prioRank(c) || staffPriority(a) - staffPriority(c) || a.born - c.born);
-  if (free < minFree) {
-    // Raids or new buildings left nobody to haul: take a worker off the least useful job.
-    const cands = blds.filter((b) => b.built && b.staff && b.type !== 'foundry');
-    cands.sort((a, c) => releaseScore(c) - releaseScore(a));
-    if (cands.length) {
-      unstaff(cands[0]);
-      if (S.time - (S.players[p].lastShortMsg || -99) > 60) {
-        S.players[p].lastShortMsg = S.time;
-        postMsg(p, `Short on workers — the ${BDEFS[cands[0].type].name} worker was moved to hauling. Make more workers at a Bot Foundry.`, cands[0].x, cands[0].y, 'warn');
-      }
-    }
-  }
   for (const b of staffQueue) {
     if (!idle.length) return;
     if (free <= minFree) {
@@ -275,8 +286,9 @@ function dispatch(p) {
       if (!idle.length) break;
       if (r.n <= 0) continue;
       let src = null, bd = Infinity;
+      if (!reachable(r.b)) { r.n = 0; continue; }
       for (const s of blds) {
-        if (s === r.b || supplyOf(s, r.g) <= 0) continue;
+        if (s === r.b || supplyOf(s, r.g) <= 0 || !reachable(s)) continue;
         const d = dist2(s.x, s.y, r.b.x, r.b.y);
         if (d < bd) { bd = d; src = s; }
       }
@@ -323,8 +335,11 @@ function assignHaul(u, src, dst, g) {
   u.task = { type: 'haul', src: src.id, dst: dst.id, good: g, phase: 'toSrc' };
   bump(src.res, g, 1);
   bump(dst.inc, g, 1);
-  if (!goTo(u, src.x, src.y)) cancelTask(u);
+  if (!goTo(u, src.x, src.y)) { cancelTask(u); src.unreachUntil = S.time + 5; }
 }
+
+/** Buildings bots recently failed to reach are skipped by the dispatcher for a few seconds. */
+function reachable(b) { return !(b.unreachUntil > S.time); }
 
 function assignBuild(u, site) {
   if (!u) return;
@@ -393,7 +408,7 @@ function doHaul(u, t, dt) {
     bump(src.stock, t.good, -1);
     u.carry = t.good;
     t.phase = 'toDst';
-    if (!goTo(u, dst.x, dst.y)) { bump(dst.inc, t.good, -1); u.task = null; }
+    if (!goTo(u, dst.x, dst.y)) { bump(dst.inc, t.good, -1); u.task = null; dst.unreachUntil = S.time + 5; }
     return;
   }
   const dst = getE(t.dst);
@@ -439,6 +454,7 @@ function doBuild(u, t, dt) {
 
 function completeBuilding(b) {
   const def = BDEFS[b.type];
+  if (def.ramp) { completeRamp(b); return; }
   b.built = true;
   b.progress = 1;
   b.stock = {};
@@ -455,13 +471,31 @@ function completeBuilding(b) {
   if (def.mil) computeTerritory();
 }
 
+/** A finished Ramp turns its tile into a slope and the construction site disappears. */
+function completeRamp(b) {
+  releaseBotsFrom(b, false);
+  b.dead = true;
+  S.byId.delete(b.id);
+  S.bAt[tIdx(b.x, b.y)] = 0;
+  S.ramp[tIdx(b.x, b.y)] = 1;
+  markDirty(b.x, b.y);
+  for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) if (inMap(b.x + di, b.y + dj)) markDirty(b.x + di, b.y + dj);
+  computeZones();
+  S.players[b.owner].stats.built++;
+  postMsg(b.owner, 'Ramp is complete. Bots can now climb the cliff here.', b.x, b.y, 'good');
+  if (b.owner === 0) sfx('complete');
+  addFx('ring', b.x + 0.5, b.y + 0.5, { color: PLAYER_COLORS[b.owner] });
+}
+
 function findNode(b, type, radius) {
   let best = -1, bd = Infinity;
   const r2 = radius * radius + 0.3;
+  const zone = S.zone[tIdx(b.x, b.y)];
   for (let j = Math.max(0, b.y - radius); j <= Math.min(S.H - 1, b.y + radius); j++) {
     for (let i = Math.max(0, b.x - radius); i <= Math.min(S.W - 1, b.x + radius); i++) {
       const t = j * S.W + i;
-      if (S.res[t] !== type || !S.amt[t] || S.resRes[t]) continue;
+      if (S.res[t] !== type || !S.amt[t] || S.resRes[t] || S.zone[t] !== zone) continue;
+      if (S.owner[t] >= 0 && S.owner[t] !== b.owner) continue; // don't harvest on enemy land
       if (type === R_STALK && S.grow[t] < 1) continue;
       const d = dist2(i, j, b.x, b.y);
       if (d <= r2 && d < bd) { bd = d; best = t; }
@@ -473,12 +507,13 @@ function findNode(b, type, radius) {
 function findPlantSpot(b, radius) {
   let best = -1, bs = -Infinity;
   const r2 = radius * radius + 0.3;
+  const zone = S.zone[tIdx(b.x, b.y)];
   for (let j = Math.max(0, b.y - radius); j <= Math.min(S.H - 1, b.y + radius); j++) {
     for (let i = Math.max(0, b.x - radius); i <= Math.min(S.W - 1, b.x + radius); i++) {
       const t = j * S.W + i;
       const d = dist2(i, j, b.x, b.y);
       if (d > r2 || d < 2.5) continue;
-      if (S.terrain[t] !== T_GROUND || S.res[t] || S.bAt[t] || S.road[t] || S.resRes[t]) continue;
+      if (S.terrain[t] !== T_GROUND || S.res[t] || S.bAt[t] || S.road[t] || S.resRes[t] || S.ramp[t] || S.zone[t] !== zone) continue;
       if (S.owner[t] !== b.owner) continue;
       let near = 0, blocked = false;
       for (let dj = -1; dj <= 1; dj++) for (let di = -1; di <= 1; di++) {
@@ -522,7 +557,7 @@ function doStaff(u, t, dt) {
         if (node < 0) { b.status = `No ${RES[def.gather].name.toLowerCase()}s left in reach`; t.wait = 3; return; }
         b.status = 'Gathering ' + GOOD[g].name;
       } else {
-        if (countResIn(b.x, b.y, def.radius, def.plant) >= 16) { b.status = 'The grove is full'; t.wait = 4; return; }
+        if (reachableRes(b.x, b.y, def.radius, def.plant) >= 16) { b.status = 'The grove is full'; t.wait = 4; return; }
         node = findPlantSpot(b, def.radius);
         if (node < 0) { b.status = 'No room left to plant'; t.wait = 4; return; }
         b.status = 'Planting stalk groves';
@@ -684,6 +719,7 @@ function goGarrison(u) {
   let best = null, bs = Infinity;
   for (const b of S.buildings) {
     if (b.dead || b.owner !== u.owner || !b.built || !BDEFS[b.type].mil) continue;
+    if (u.avoidB === b.id && S.time < u.avoidUntil) continue;
     const cap = BDEFS[b.type].garrison;
     const n = b.garrison.length + b.garInc;
     if (n >= cap) continue;
@@ -789,7 +825,7 @@ function updateWarbot(u, dt) {
     const b = getE(t.bld);
     if (!b || b.owner !== u.owner || !b.built) { cancelTask(u); return; }
     const r = travel(u, b.x, b.y, dt);
-    if (r === null) { cancelTask(u); return; }
+    if (r === null) { u.avoidB = b.id; u.avoidUntil = S.time + 15; cancelTask(u); return; }
     if (r) {
       cancelTask(u);
       if (b.garrison.length < BDEFS[b.type].garrison) enterBuilding(u, b);
@@ -839,8 +875,10 @@ function updateWarbot(u, dt) {
 
 function attackSources(owner, target) {
   const out = [];
+  const zone = S.zone[tIdx(target.x, target.y)];
   for (const b of S.buildings) {
     if (b.dead || b.owner !== owner || !b.built || !BDEFS[b.type].mil) continue;
+    if (S.zone[tIdx(b.x, b.y)] !== zone) continue; // warbots there can't walk to the target
     const d = dist(b.x, b.y, target.x, target.y);
     if (d <= ATTACK_RANGE && b.garrison.length > 1) out.push({ b, d });
   }

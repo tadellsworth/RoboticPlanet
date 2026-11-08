@@ -4,8 +4,11 @@ A mobile-first colony and logistics strategy game that runs in the browser. Your
 a dusty alien planet: gather resources, link them into supply chains, build more robots and spread
 across the map.
 
-- **Versus:** race a rival AI colony on a small planet. Capture its Lander to win (about 15–30 minutes).
-- **Colony:** no rival. A bigger planet to settle at your own pace, with colonization milestones.
+- **Versus:** race a rival AI colony across the planet. Capture its Lander to win (about 15–30 minutes).
+- **Colony:** no rival. Settle the planet at your own pace, with colonization milestones.
+
+Before each game, sliders set the **map size** (Small to Huge), the **terrain** (Flat, Gentle,
+Rolling, Rugged, Mountainous) and the **resources** (Scarce to Abundant).
 
 Botfall is an original game in the colony-logistics genre. It contains no code, art, sound or data from
 any other game.
@@ -41,11 +44,16 @@ Progress auto-saves in the browser every 20 seconds and whenever you leave the p
 | Outpost | Expands your territory and garrisons Warbots |
 | Pulse Turret | Shoots enemy bots; uses Crystal as ammo |
 | Depot | Extra storage, shortens hauling trips |
+| Ramp | Cuts a slope into a one-level cliff so bots can climb it |
 
 - Every production building needs one worker inside. Free workers haul goods and build construction sites.
   Run short and the game pulls workers off low-priority jobs, so build a Bot Foundry early.
 - Placing a construction site is free; workers bring the materials from storage.
 - **Paths** make bots move almost twice as fast.
+- **Terrain levels:** the planet has terraces at different heights (lighter ground is higher). Bots
+  can't climb cliffs; they use slopes at narrow passes, so some routes are long. Pave busy routes with
+  Paths (slopes too) and build a **Ramp** to open your own way up. Buildings can't be placed where they
+  would block the only way through a pass.
 - **Priorities:** tap a building or construction site and set it to Low, Normal or High. High-priority
   buildings get workers and goods first; low ones are served last and lose their worker first when
   workers run short. **Pause** frees a building's worker entirely.
@@ -59,9 +67,10 @@ Progress auto-saves in the browser every 20 seconds and whenever you leave the p
 
 ## Custom art
 
-All art is placeholder drawn in code, and every building, bot, resource and ground tile can be swapped for
-your own image without touching the code. See **[ART_GUIDE.md](ART_GUIDE.md)** for the full asset list,
-specs, style direction and ready-made prompts for Claude Design.
+Buildings, bots, resources and ground use custom art made in Claude Design (`art/`, with SVG sources in
+`art/source/`). Anything without an image falls back to placeholder art drawn in code, so new art can be
+added one piece at a time. See **[ART_GUIDE.md](ART_GUIDE.md)** for specs, the style brief and prompts,
+including the remaining pieces (Ramp, slope and cliff textures, goods icons).
 
 ## Enabling GitHub Pages
 
@@ -100,6 +109,12 @@ Plain JavaScript, no build step and no dependencies. Balance tweaks mostly live 
 node tools/headless-sim.js 12345 normal 40
 ```
 
+Optional extra arguments: mode (`versus`/`colony`), map size (0–3), terrain (0–4) and resources (0–4):
+
+```bash
+node tools/headless-sim.js 11 normal 45 versus 1 3 2
+```
+
 ```bash
 node tools/headless-sim.js 99 normal 40 colony
 ```
@@ -114,6 +129,5 @@ each minute. The smoke test needs Playwright and a running local server.
 ## Ideas for next steps
 
 - More building tiers and goods
-- Map size and resource richness options
 - Campaign of hand-made missions
 - Custom art for goods icons, menus and effects
