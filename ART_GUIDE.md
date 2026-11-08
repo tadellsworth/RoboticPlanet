@@ -158,6 +158,19 @@ are the remaining pieces. Use the same brief as before.
 For the six icons: they show at 16 px, so make them flat-ish, bold and high-contrast, with a thin dark outline.
 They can be less detailed than the buildings.
 
+### Batch 3: missiles, batteries and army orders
+
+New buildings, a new good and two new map markers. Same brief and angle as batch 1.
+
+| Key | Size | What it is | Prompt for Claude Design |
+|---|---|---|---|
+| `charger` | 256×256, transparent | Charging Station: bots recharge their batteries here | A compact charging bay seen from above: four docking pads around a central power pylon with heavy cables, glowing green charge indicators and warning stripes. |
+| `munitions` | 256×256, transparent | Munitions Works: packs Alloy and Crystal into Warheads | A small armoured munitions plant: a blast-proof bunker with a conveyor of yellow-tipped warhead shells, a loading crane and hazard markings. Accent light: amber. |
+| `silo@0`, `silo@1` | 256×256, transparent | Missile Silo (team versions) | A round armoured missile silo seen from above: a heavy split blast hatch, partly open, with a missile nose cone visible inside, launch-rail lights in the team colour, scorch marks around the rim. |
+| `missile` | 128×128, transparent | A missile in flight (drawn facing **right**; the game rotates it) | A sleek missile seen from directly above, nose pointing right: grey body, yellow warhead band, small fins, and a short bright exhaust flame at the tail. |
+| `rally` | 128×128, transparent | Your rally flag where warbots hold an area | A small planted marker flag on a metal pole, cyan #38d4ff banner with a chevron symbol, a little tripod base. |
+| `icon-warhead` | 64×64, transparent | Warhead, in the top bar | A single yellow-tipped warhead shell. Bold, simple, thin dark outline. |
+
 ### Not swappable yet (ask Claude Code if you want these)
 
 - Menu background and logo

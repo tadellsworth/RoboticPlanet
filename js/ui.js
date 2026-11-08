@@ -37,6 +37,8 @@ function initUI() {
     goods.appendChild(el);
     UI.goodEls[g] = el;
   }
+  // Rally / move / missile panels share the stepper markup below.
+  UI.moveN = 0;
 
   // Menu
   for (const btn of $('m-mode').children) btn.onclick = () => { UI.menu.mode = btn.dataset.v; syncMenu(); sfx('click'); };
@@ -179,6 +181,8 @@ function enterGame() {
   $('toasts').innerHTML = '';
   const colony = S.mode === 'colony';
   $('btn-attack').hidden = colony;
+  for (const g of WAR_GOODS) UI.goodEls[g].hidden = colony;
+  $('goods').style.gridTemplateColumns = `repeat(${GOODS.length - (colony ? WAR_GOODS.length : 0)}, 1fr)`;
   $('bottombar').classList.toggle('three', colony);
   closeSheet();
   setMode('normal');
@@ -236,7 +240,7 @@ function setMode(mode) {
   if (mode === 'normal') { $('banner').hidden = true; return; }
   closeSheet();
   if (mode === 'road') showBanner('Drag across open ground to lay <b>paths</b>; bots move almost twice as fast on them. Tap a path to remove it. Use two fingers to move the map.', null, 'Done');
-  if (mode === 'attack') showBanner('Tap a <b>rival building</b> to choose how many warbots to send.', null, 'Cancel');
+  if (mode === 'attack') showBanner('Tap a <b>rival building</b> to attack it with warbots or missiles, or tap open ground to send warbots there to <b>hold the area</b>.', null, 'Cancel');
 }
 
 function showBanner(html, okLabel, cancelLabel) {
@@ -305,10 +309,13 @@ function onMapTap(i, j, wx, wy) {
     else sfx('error');
     return;
   }
+  const rally = rallyAtTap(wx, wy);
+  if (rally) { sfx('click'); setMode('normal'); openRallySheet(rally); return; }
   const b = buildingAtTap(i, j, wx, wy);
   if (R.mode === 'attack') {
     if (b && b.owner !== 0) { setMode('normal'); openBuildingSheet(b); }
-    else { sfx('error'); showBanner('<span class="err">That is not a rival building. Tap one of theirs (red).</span>', null, 'Cancel'); }
+    else if (!b && inMap(i, j) && S.terrain[tIdx(i, j)] === T_GROUND) { setMode('normal'); openMoveSheet(i, j); }
+    else { sfx('error'); showBanner('<span class="err">Tap a rival building (red) or open ground.</span>', null, 'Cancel'); }
     return;
   }
   if (b) { sfx('click'); openBuildingSheet(b); return; }
@@ -321,6 +328,11 @@ function onMapTap(i, j, wx, wy) {
   if (bot) { sfx('click'); openBotSheet(bot); return; }
   if (inMap(i, j) && S.res[tIdx(i, j)]) { sfx('click'); openResourceSheet(tIdx(i, j)); return; }
   closeSheet();
+}
+
+function rallyAtTap(wx, wy) {
+  for (const r of S.rallies) if (r.owner === 0 && dist2(r.x + 0.1, r.y - 0.35, wx, wy) < 0.45) return r;
+  return null;
 }
 
 function onRoadPaint(i, j, first) {
@@ -357,7 +369,7 @@ function costHTML(cost, have) {
 function openBuildMenu() {
   const have = playerGoods(0);
   const sites = siteCount(0);
-  const list = BUILD_MENU.filter((t) => !(S.mode === 'colony' && t === 'turret'));
+  const list = BUILD_MENU.filter((t) => !(S.mode === 'colony' && BDEFS[t].war));
   const html = `<div class="sheet-title"><h3>Build</h3></div>
     <p class="desc">Placing a site is free; workers carry the materials over from storage. ${sites}/${MAX_SITES} sites in progress.</p>
     <div class="build-grid">${list.map((t) => `<button class="bcard" data-t="${t}" ${sites >= MAX_SITES ? 'disabled' : ''}>
@@ -388,18 +400,28 @@ function openBuildingSheet(b) {
         <button data-v="low">Low</button><button data-v="normal">Normal</button><button data-v="high">High</button></div>
         <p class="hint">${b.built ? 'High-priority buildings get workers and goods first; low ones last, and lose their worker first when workers run short.' : 'High-priority sites get their materials and a builder first.'}</p>`;
     }
-    if (b.type === 'foundry' && S.mode !== 'colony') {
-      html += `<div class="section-label">Produce</div><div class="seg" id="sh-mode">
-        <button data-v="worker">Workers</button><button data-v="alt">Both</button><button data-v="warbot">Warbots</button></div>`;
+    if (b.type === 'foundry' && b.built) {
+      const versus = S.mode !== 'colony';
+      const row = (k, label) => `<div class="order-row"><span>${label}</span><button class="btn" data-k="${k}" data-d="-1">−</button>
+        <span class="n" id="sh-o-${k}">0</span><button class="btn" data-k="${k}" data-d="1">+</button></div>`;
+      html += `<div class="section-label">Production orders</div><div id="sh-orders">${row('worker', 'Workers')}${versus ? row('warbot', 'Warbots') : ''}</div>
+        <p class="hint">Queued bots are built first, in turn.</p>
+        <div class="section-label">When the orders are done</div><div class="seg" id="sh-mode">
+        <button data-v="worker">Workers</button>${versus ? '<button data-v="alt">Both</button><button data-v="warbot">Warbots</button>' : ''}<button data-v="off">Stop</button></div>`;
+    }
+    if (def.missile && b.built) {
+      html += `<p class="hint">To fire, tap <b>Army</b> and then a rival building within ${def.missile.range} tiles.</p>`;
     }
     html += '<div class="actions">';
     if (def.staff && b.built) html += `<button class="btn" id="sh-pause"></button>`;
     if (b.type !== 'lander') html += `<button class="btn danger" id="sh-demolish">${b.built ? 'Demolish' : 'Cancel site'}</button>`;
     html += '</div>';
   } else if (S.mode !== 'colony') {
-    html += `<div class="section-label">Attack</div><div id="sh-attack"></div>
+    html += `<div class="section-label">Attack with warbots</div><div id="sh-attack"></div>
       <div class="stepper" id="sh-stepper"><button class="btn" id="sh-minus">−</button><span class="n" id="sh-n">0</span>
-      <button class="btn" id="sh-plus">+</button><button class="btn primary" id="sh-send" style="flex:1">Send warbots</button></div>`;
+      <button class="btn" id="sh-plus">+</button><button class="btn primary" id="sh-send" style="flex:1">Send warbots</button></div>
+      <div class="section-label">Missile strike</div><div id="sh-missile"></div>
+      <button class="btn primary big" id="sh-fire">Fire missile</button>`;
   }
   openSheet('bld', b.id, html);
   if (mine) {
@@ -415,6 +437,14 @@ function openBuildingSheet(b) {
     };
     const seg = $('sh-mode');
     if (seg) for (const btn of seg.children) btn.onclick = () => { b.mode = btn.dataset.v; sfx('click'); refreshSheet(); };
+    if ($('sh-orders')) for (const btn of $('sh-orders').querySelectorAll('button')) btn.onclick = () => {
+      const k = btn.dataset.k;
+      b.orders = b.orders || { worker: 0, warbot: 0 };
+      b.orders[k] = clamp((b.orders[k] || 0) + +btn.dataset.d, 0, 50);
+      if (!hasOrders(b)) delete b.orders;
+      sfx('click');
+      refreshSheet();
+    };
     if ($('sh-pause')) $('sh-pause').onclick = () => { setPaused(b, !b.paused); sfx('click'); refreshSheet(); };
     if ($('sh-demolish')) $('sh-demolish').onclick = () => {
       if (!UI.demolishArm) {
@@ -437,6 +467,10 @@ function openBuildingSheet(b) {
         toast(`${n} warbot${n > 1 ? 's' : ''} sent to attack the ${def.name}.`, 'info');
         closeSheet();
       }
+    };
+    $('sh-fire').onclick = () => {
+      if (fireMissile(0, b)) { toast(`Missile away: it will hit the ${def.name} in a few seconds.`, 'info'); refreshSheet(); }
+      else sfx('error');
     };
   }
   refreshSheet();
@@ -471,7 +505,10 @@ function refreshBuildingSheet(b) {
       parts.push(`<div class="kv"><span>Recipe</span><span>${recipe}, ${def.work}s</span></div>`);
       parts.push(`<div class="section-label">Inputs</div><div class="goodlist">${ins}</div>`);
       if (outs) parts.push(`<div class="section-label">Output</div><div class="goodlist">${outs}</div>`);
-      if (def.bots) parts.push(`<div class="kv"><span>Next bot</span><span>${b.mode === 'alt' ? (b.altNext === 'worker' ? 'Worker' : 'Warbot') : b.mode === 'worker' ? 'Worker' : 'Warbot'}</span></div>`);
+      if (def.bots) {
+        const k = nextBotKind(b);
+        parts.push(`<div class="kv"><span>Next bot</span><span>${k === 'off' ? 'None (stopped)' : k === 'worker' ? 'Worker' : 'Warbot'}${hasOrders(b) ? ' (ordered)' : ''}</span></div>`);
+      }
       if (b.timer > 0 && b.status === 'Working') parts.push(`<div class="bar"><div style="width:${Math.round((b.timer / def.work) * 100)}%"></div></div>`);
     }
     if (def.store && mine) {
@@ -481,7 +518,15 @@ function refreshBuildingSheet(b) {
     }
     if (def.mil) parts.push(`<div class="kv"><span>${mine ? 'Warbots inside' : 'Defenders inside'}</span><span>${b.garrison.length} / ${def.garrison}</span></div>`);
     if (def.mil && mine && S.mode !== 'colony') parts.push(`<div class="kv"><span>Territory radius</span><span>${def.terr} tiles</span></div>`);
-    if (def.ammo && mine) parts.push(`<div class="kv"><span>Ammo</span><span>${b.shots + (b.stock.crystal || 0) * SHOTS_PER_AMMO} shots</span></div>`);
+    if (def.ammo && mine && !def.missile) parts.push(`<div class="kv"><span>Ammo</span><span>${b.shots + (b.stock.crystal || 0) * SHOTS_PER_AMMO} shots</span></div>`);
+    if (def.missile && mine) {
+      parts.push(`<div class="kv"><span>Warheads loaded</span><span>${goodTag('warhead', `${b.stock.warhead || 0}/${def.ammoCap}`)}</span></div>`);
+      parts.push(`<div class="kv"><span>Reload</span><span>${b.reload > 0 ? Math.ceil(b.reload) + 's' : 'Ready'}</span></div>`);
+      parts.push(`<div class="kv"><span>Range</span><span>${def.missile.range} tiles</span></div>`);
+    }
+    if (def.charger && mine) {
+      parts.push(`<div class="kv"><span>Charging now</span><span>${b.charging || 0} (${def.charger.slots} at full speed)</span></div>`);
+    }
   }
   $('sh-dyn').innerHTML = parts.join('');
   if ($('sh-pause')) $('sh-pause').textContent = b.paused ? 'Resume' : 'Pause';
@@ -501,6 +546,17 @@ function refreshBuildingSheet(b) {
     btn.lastElementChild.textContent = b.stock[g] || 0;
   }
   if ($('sh-mode')) for (const btn of $('sh-mode').children) btn.classList.toggle('on', btn.dataset.v === b.mode);
+  for (const k of ['worker', 'warbot']) if ($('sh-o-' + k)) $('sh-o-' + k).textContent = (b.orders && b.orders[k]) || 0;
+  if ($('sh-fire')) {
+    const silos = silosInRange(0, b), ready = silos.filter(siloReady);
+    const minReload = silos.reduce((m, q) => (q.reload > 0 && q.stock.warhead > 0 ? Math.min(m, q.reload) : m), Infinity);
+    $('sh-fire').disabled = !ready.length;
+    $('sh-missile').innerHTML = `<p class="desc">${!silos.length
+      ? `No Missile Silo within ${BDEFS.silo.missile.range} tiles. Build a Silo near the front and a Munitions Works to make Warheads.`
+      : ready.length
+        ? `${ready.length} silo${ready.length > 1 ? 's' : ''} ready. A missile wrecks smaller buildings and knocks Outposts and Landers down to almost no armor, ready for warbots to capture.`
+        : minReload < Infinity ? `Silos in range are reloading (${Math.ceil(minReload)}s).` : 'Silos in range have no Warheads. Make them at a Munitions Works.'}</p>`;
+  }
   if ($('sh-send')) {
     const avail = attackAvailable(0, b);
     UI.attackN = clamp(UI.attackN || avail, Math.min(1, avail), avail);
@@ -521,8 +577,11 @@ function botActivity(u) {
     if (t.type === 'garrison') return `Marching to the ${nm(t.bld)}`;
     if (t.type === 'attack') return `Attacking the rival ${nm(t.target)}`;
     if (t.type === 'defend') return `Defending the ${nm(t.home)}`;
+    if (t.type === 'hold') return t.phase === 'recharge' ? 'Battery flat: going to recharge' : t.target ? `Attacking the rival ${nm(t.target)}` : 'Holding the rally point';
     return 'On patrol';
   }
+  if (t && t.type === 'charge') return u.inside ? 'Recharging its battery' : 'Going to recharge its battery';
+  if (t && t.type === 'staff' && (t.phase === 'toCharge' || t.phase === 'charging')) return t.phase === 'charging' ? 'Recharging its battery' : 'Going to recharge its battery';
   if (!t) return u.carry ? `Looking for somewhere to store ${GOOD[u.carry].name}` : u.inside ? 'Resting in storage' : 'Waiting for a job';
   if (t.type === 'home') return 'Heading back to storage';
   if (t.type === 'haul') return t.phase === 'toSrc' ? `Fetching ${GOOD[t.good].name} from the ${nm(t.src)}` : `Delivering ${GOOD[t.good].name} to the ${nm(t.dst)}`;
@@ -543,9 +602,62 @@ function openBotSheet(u) {
   const html = `<div class="sheet-title"><div><h3>${u.type === 'warbot' ? 'Warbot' : 'Worker'}</h3>
     <div class="owner"><span class="dot" style="background:${PLAYER_COLORS[u.owner]}"></span> ${u.owner === 0 ? 'Yours' : 'Rival'}</div></div></div>
     <p class="desc">${u.type === 'warbot' ? 'Fights enemy bots and captures enemy buildings.' : 'Carries goods, builds construction sites and runs buildings.'}</p>
-    <div class="status" id="sh-status"></div><div id="sh-dyn"></div>`;
+    <div class="status" id="sh-status"></div><div id="sh-dyn"></div>
+    ${u.owner === 0 && u.type === 'warbot' ? '<button class="btn big" id="sh-recall" hidden>Call back this squad</button>' : ''}`;
   openSheet('bot', u.id, html);
+  if ($('sh-recall')) $('sh-recall').onclick = () => {
+    if (u.task && u.task.type === 'hold') { const n = recallRally(u.task.rally); toast(`${n} warbot${n > 1 ? 's' : ''} called back.`, 'info'); }
+    closeSheet();
+  };
   refreshSheet();
+}
+
+/** Army order: send warbots to hold the area around an open tile. */
+function openMoveSheet(i, j) {
+  R.selected = 0; R.selTile = tIdx(i, j); UI.selBot = 0;
+  const html = `<div class="sheet-title"><div><h3>Send warbots here</h3></div></div>
+    <p class="desc">They plant a rally flag and hold the area: they fight enemy bots that come close and attack enemy buildings within 3 tiles, until you tap the flag and call them back.</p>
+    <div id="mv-info"></div>
+    <div class="stepper"><button class="btn" id="mv-minus">−</button><span class="n" id="mv-n">0</span>
+      <button class="btn" id="mv-plus">+</button><button class="btn primary" id="mv-send" style="flex:1">Send warbots</button></div>`;
+  openSheet('move', tIdx(i, j), html);
+  UI.moveN = Math.min(5, rallyAvailable(0, i, j));
+  $('mv-minus').onclick = () => { UI.moveN = Math.max(1, UI.moveN - 1); refreshSheet(); };
+  $('mv-plus').onclick = () => { UI.moveN = Math.min(rallyAvailable(0, i, j), UI.moveN + 1); refreshSheet(); };
+  $('mv-send').onclick = () => {
+    const res = sendToRally(0, i, j, UI.moveN);
+    if (res.sent) { sfx('alert'); toast(`${res.sent} warbot${res.sent > 1 ? 's are' : ' is'} on the way. Tap the flag to call them back.`, 'info'); closeSheet(); }
+    else sfx('error');
+  };
+  refreshSheet();
+}
+
+function openRallySheet(r) {
+  R.selected = 0; R.selTile = tIdx(Math.floor(r.x), Math.floor(r.y)); UI.selBot = 0;
+  const html = `<div class="sheet-title"><div><h3>Rally point</h3></div></div>
+    <p class="desc">Warbots here hold the area until you call them back. Ones with a flat battery walk to the nearest garrison to recharge, then return.</p>
+    <div id="rl-info"></div>
+    <button class="btn big" id="rl-recall">Call them back</button>
+    <div class="section-label">Send more</div>
+    <div class="stepper"><button class="btn" id="mv-minus">−</button><span class="n" id="mv-n">0</span>
+      <button class="btn" id="mv-plus">+</button><button class="btn primary" id="mv-send" style="flex:1">Send warbots</button></div>`;
+  openSheet('rally', r.id, html);
+  const i = Math.floor(r.x), j = Math.floor(r.y);
+  UI.moveN = Math.min(3, rallyAvailable(0, i, j));
+  $('rl-recall').onclick = () => { const n = recallRally(r.id); toast(`${n} warbot${n !== 1 ? 's' : ''} called back.`, 'info'); sfx('click'); closeSheet(); };
+  $('mv-minus').onclick = () => { UI.moveN = Math.max(1, UI.moveN - 1); refreshSheet(); };
+  $('mv-plus').onclick = () => { UI.moveN = Math.min(rallyAvailable(0, i, j), UI.moveN + 1); refreshSheet(); };
+  $('mv-send').onclick = () => { const res = sendToRally(0, i, j, UI.moveN); if (res.sent) { sfx('alert'); refreshSheet(); } else sfx('error'); };
+  refreshSheet();
+}
+
+/** Shared stepper refresh for the move and rally panels. */
+function refreshMoveStepper(i, j) {
+  const avail = rallyAvailable(0, i, j);
+  UI.moveN = clamp(UI.moveN || avail, Math.min(1, avail), avail);
+  $('mv-n').textContent = UI.moveN;
+  $('mv-send').disabled = avail === 0;
+  return avail;
 }
 
 function openResourceSheet(t) {
@@ -569,8 +681,26 @@ function refreshSheet() {
     const u = getE(UI.sheetFor);
     if (!u || u.inside) { closeSheet(); return; }
     $('sh-status').textContent = botActivity(u);
+    const bat = Math.round(u.bat ?? 100);
     $('sh-dyn').innerHTML = `<div class="kv"><span>Health</span><span>${Math.ceil(u.hp)} / ${u.maxHp}</span></div>` +
+      `<div class="kv"><span>Battery</span><span>${bat}%${bat < BATTERY.critical ? ' (flat: slow and weak)' : bat < BATTERY.low ? ' (low)' : ''}</span></div>` +
+      `<div class="bar battery"><div style="width:${bat}%;background:${bat < BATTERY.critical ? '#ff4d4d' : bat < BATTERY.low ? '#ffb347' : '#7ee08a'}"></div></div>` +
       (u.carry ? `<div class="kv"><span>Carrying</span><span>${goodTag(u.carry, GOOD[u.carry].name)}</span></div>` : '');
+    if ($('sh-recall')) $('sh-recall').hidden = !(u.task && u.task.type === 'hold');
+  } else if (UI.sheetKind === 'move') {
+    const t = UI.sheetFor, i = t % S.W, j = (t / S.W) | 0;
+    const avail = refreshMoveStepper(i, j);
+    $('mv-info').innerHTML = `<p class="desc">${avail
+      ? `${avail} warbot${avail > 1 ? 's' : ''} available in your garrisons (each keeps one at home).`
+      : S.zone[t] !== homeZone(0) ? 'Your warbots cannot walk there from your garrisons.' : 'No warbots available. Make some at the Bot Foundry; they gather in your Lander and Outposts.'}</p>`;
+  } else if (UI.sheetKind === 'rally') {
+    const r = rallyById(UI.sheetFor);
+    if (!r) { closeSheet(); return; }
+    const members = rallyMembers(r.id);
+    const low = members.filter((u) => (u.bat ?? 100) < BATTERY.low).length;
+    $('rl-info').innerHTML = `<div class="kv"><span>Warbots holding</span><span>${members.length}</span></div>` +
+      (low ? `<div class="kv"><span>Low battery</span><span>${low}</span></div>` : '');
+    refreshMoveStepper(Math.floor(r.x), Math.floor(r.y));
   } else if (UI.sheetKind === 'res') {
     const t = UI.sheetFor;
     if (!S.res[t]) { closeSheet(); return; }

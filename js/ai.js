@@ -8,10 +8,11 @@
 /** [building type, how many the AI wants]. Entries are tried in order. */
 const AI_PLAN = [
   ['harvester', 1], ['quarry', 1], ['harvester', 2], ['mine', 1], ['tap', 1], ['smelter', 1],
-  ['fab', 1], ['foundry', 1], ['outpost', 1], ['quarry', 2], ['grower', 1], ['mine', 2],
+  ['fab', 1], ['foundry', 1], ['outpost', 1], ['charger', 1], ['quarry', 2], ['grower', 1], ['mine', 2],
   ['turret', 1], ['outpost', 2], ['smelter', 2], ['tap', 2], ['harvester', 3], ['outpost', 3],
-  ['depot', 1], ['mine', 3], ['outpost', 4], ['turret', 2], ['grower', 2], ['fab', 2],
-  ['outpost', 5], ['quarry', 3], ['outpost', 6], ['tap', 3], ['outpost', 8], ['turret', 3],
+  ['munitions', 1], ['silo', 1], ['depot', 1], ['charger', 2], ['mine', 3], ['outpost', 4], ['turret', 2],
+  ['grower', 2], ['fab', 2], ['outpost', 5], ['quarry', 3], ['silo', 2], ['outpost', 6], ['charger', 3],
+  ['tap', 3], ['outpost', 8], ['turret', 3],
 ];
 
 function aiThink(p) {
@@ -35,8 +36,10 @@ function aiThink(p) {
   const canStaffMore = staffed + Math.max(MIN_FREE_WORKERS, Math.round(workers * 0.2)) + 1 <= workers;
   const plan = S.mode === 'colony' ? AI_PLAN.concat([['outpost', 40]]) : AI_PLAN;
   if (sites < maxSites) {
-    for (const [type, want] of plan) {
-      if (S.mode === 'colony' && type === 'turret') continue;
+    for (const [type, want0] of plan) {
+      if (S.mode === 'colony' && BDEFS[type].war) continue;
+      // One more Charging Station for every three Outposts as the colony spreads out.
+      const want = type === 'charger' ? Math.max(want0, 1 + Math.floor((counts.outpost || 0) / 3)) : want0;
       if ((counts[type] || 0) >= want) continue;
       if (BDEFS[type].staff && !canStaffMore && type !== 'foundry') continue;
       if (!aiAffordable(p, type)) continue;
@@ -59,9 +62,25 @@ function aiThink(p) {
     if (b.type === 'foundry') b.mode = S.mode === 'colony' ? 'worker' : workers < wantWorkers ? 'worker' : workers > wantWorkers + 4 ? 'warbot' : 'alt';
   }
 
-  // 4) Attack
-  if (S.time < lvl.grace || S.time < P.nextAttack) return;
+  // 4) Missiles: soften turrets and Outposts first, the Lander once the army is big.
   const enemy = 1 - p;
+  if (S.mode !== 'colony' && S.time >= lvl.grace) {
+    for (const silo of me) {
+      if (!siloReady(silo)) continue;
+      let best = null, bs = -Infinity;
+      for (const e of S.buildings) {
+        if (e.dead || e.owner !== enemy || !e.built) continue;
+        const d = dist(silo.x, silo.y, e.x, e.y);
+        if (d > BDEFS.silo.missile.range) continue;
+        const s = (e.type === 'turret' ? 10 : e.type === 'outpost' ? 8 : e.type === 'lander' ? 5 : e.type === 'silo' ? 9 : 3) - d * 0.1;
+        if (s > bs) { bs = s; best = e; }
+      }
+      if (best) fireMissile(p, best);
+    }
+  }
+
+  // 5) Attack
+  if (S.time < lvl.grace || S.time < P.nextAttack) return;
   let best = null, bestScore = -Infinity, bestAvail = 0;
   for (const b of S.buildings) {
     if (b.dead || b.owner !== enemy) continue;
@@ -159,6 +178,17 @@ function aiSearchSpot(p, type, lander) {
         s = -dist(i, j, ex, ey) * 0.6 + dHome * 0.5 + ore * 1.6 + cry * 1.0 + rest * 0.3;
       } else if (type === 'turret') {
         s = -Math.abs(dHome - 3.5) * 2 - dist(i, j, ex, ey) * 0.15;
+      } else if (type === 'silo') {
+        s = -dist(i, j, ex, ey); // as close to the enemy as our land allows
+      } else if (type === 'charger') {
+        // Spread chargers out, near where bots work.
+        let dc = 99, db = 99;
+        for (const b of S.buildings) {
+          if (b.dead || b.owner !== p) continue;
+          const d = dist(i, j, b.x, b.y);
+          if (BDEFS[b.type].charger) dc = Math.min(dc, d); else db = Math.min(db, d);
+        }
+        s = Math.min(dc, 12) - db * 0.8;
       } else {
         s = -dHome;
       }

@@ -16,6 +16,7 @@
  *
  * Keys
  *   Buildings: lander harvester quarry mine tap grower smelter fab foundry outpost turret depot
+ *              charger munitions silo
  *              site (a construction site)
  *   Bots:      worker warbot           (drawn facing right; the game rotates them)
  *   Resources: stalk boulder ore crystal
@@ -23,8 +24,9 @@
  *   Terrain:   slope  (a ramp tile, drawn with uphill at the top; the game rotates it)
  *              cliff  (the rock face below a higher level: a wide strip, about 128×48)
  *   Building:  ramp   (the Ramp's construction icon and site)
- *   Goods:     icon-fiber icon-stone icon-ore icon-crystal icon-alloy icon-chip
+ *   Goods:     icon-fiber icon-stone icon-ore icon-crystal icon-alloy icon-chip icon-warhead
  *              (small icons in the top bar and menus, 64x64)
+ *   Markers:   missile (in flight, facing right; 128x128)  rally (your rally flag; 128x128)
  *
  * Images should be square PNGs with transparent backgrounds, viewed from above.
  * 256x256 is plenty.
@@ -64,5 +66,6 @@ const ART_MANIFEST = {
   rock: 'tiles/rock.png',
 
   // Still to make (placeholders are drawn until these exist):
-  //   ramp, slope, cliff, icon-fiber, icon-stone, icon-ore, icon-crystal, icon-alloy, icon-chip
+  //   ramp, slope, cliff, icon-fiber, icon-stone, icon-ore, icon-crystal, icon-alloy, icon-chip,
+  //   charger, munitions, silo@0, silo@1, missile, rally, icon-warhead
 };

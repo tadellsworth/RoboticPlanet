@@ -645,6 +645,52 @@ function drawBuilding(ctx, type, cx, cy, s, owner, b) {
       }
       break;
     }
+    case 'charger': {
+      hullBase(ctx, cx, cy, s, color);
+      // A battery cell with a lightning bolt; pulses while charging.
+      const glow = b && b.charging ? 0.6 + 0.4 * Math.sin(t * 6) : 0.5;
+      ctx.fillStyle = '#1a1d24';
+      ctx.fillRect(cx - 6 * u, cy - 8 * u, 12 * u, 17 * u);
+      ctx.fillRect(cx - 2.5 * u, cy - 10.5 * u, 5 * u, 3 * u);
+      ctx.fillStyle = `rgba(126,224,138,${glow})`;
+      ctx.fillRect(cx - 4.5 * u, cy - 6.5 * u, 9 * u, 14 * u);
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath(); ctx.moveTo(cx + 1.5 * u, cy - 6 * u); ctx.lineTo(cx - 3 * u, cy + 1.5 * u); ctx.lineTo(cx, cy + 1.5 * u);
+      ctx.lineTo(cx - 1.5 * u, cy + 7 * u); ctx.lineTo(cx + 3.5 * u, cy - 1 * u); ctx.lineTo(cx + 0.5 * u, cy - 1 * u); ctx.closePath(); ctx.fill();
+      break;
+    }
+    case 'munitions': {
+      hullBase(ctx, cx, cy, s, color);
+      // Two warhead shells on a rack.
+      for (const ox of [-5, 5]) {
+        ctx.fillStyle = '#ffcf4a';
+        ctx.beginPath(); ctx.moveTo(cx + ox * u, cy - 9 * u); ctx.lineTo(cx + (ox + 3.5) * u, cy - 3 * u); ctx.lineTo(cx + (ox + 3.5) * u, cy + 7 * u);
+        ctx.lineTo(cx + (ox - 3.5) * u, cy + 7 * u); ctx.lineTo(cx + (ox - 3.5) * u, cy - 3 * u); ctx.closePath(); ctx.fill();
+        ctx.fillStyle = '#2a2e38';
+        ctx.fillRect(cx + (ox - 3.5) * u, cy + 1 * u, 7 * u, 2 * u);
+      }
+      if (working) { ctx.fillStyle = 'rgba(255,207,74,0.5)'; ctx.fillRect(cx - 10 * u, cy + 9 * u, 20 * u * ((t * 0.5) % 1), 2 * u); }
+      break;
+    }
+    case 'silo': {
+      hullBase(ctx, cx, cy, s, color, 'round');
+      // A blast hatch; a missile tip shows when loaded.
+      ctx.fillStyle = '#1a1d24';
+      ctx.beginPath(); ctx.arc(cx, cy, 8.5 * u, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = '#ffcf4a'; ctx.lineWidth = 1.5 * u; ctx.setLineDash([3 * u, 2.5 * u]);
+      ctx.beginPath(); ctx.arc(cx, cy, 8.5 * u, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]);
+      if (!b || (b.stock && b.stock.warhead > 0)) {
+        ctx.fillStyle = '#d8dde4';
+        ctx.beginPath(); ctx.arc(cx, cy, 4.5 * u, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = color;
+        ctx.beginPath(); ctx.arc(cx, cy, 2 * u, 0, Math.PI * 2); ctx.fill();
+      }
+      if (b && b.reload > 0) {
+        ctx.strokeStyle = color; ctx.lineWidth = 2 * u;
+        ctx.beginPath(); ctx.arc(cx, cy, 11 * u, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * (1 - b.reload / BDEFS.silo.missile.reload)); ctx.stroke();
+      }
+      break;
+    }
     case 'ramp': {
       // A stepped slope rising to the north.
       ctx.fillStyle = 'rgba(20,10,5,0.3)';
@@ -753,6 +799,17 @@ function drawBot(ctx, u, sx, sy, s) {
     ctx.fillRect(sx - c - 1, sy - s * 0.3 - c - 1 + bob, c * 2 + 2, c * 2 + 2);
     ctx.fillStyle = GOOD[u.carry].color;
     ctx.fillRect(sx - c, sy - s * 0.3 - c + bob, c * 2, c * 2);
+  }
+  if (u.owner === 0 && (u.bat ?? 100) < BATTERY.low) {
+    // Low battery: an orange bar; emergency mode: a flashing red one.
+    const crit = u.bat < BATTERY.critical;
+    if (!crit || Math.sin(R.time * 10) > -0.3) {
+      const w = s * 0.26, h = Math.max(3, s * 0.09), x = sx + s * 0.16, y = sy - s * 0.3;
+      ctx.fillStyle = 'rgba(0,0,0,0.7)';
+      ctx.fillRect(x - 1, y - 1, w + 3, h + 2);
+      ctx.fillStyle = crit ? '#ff4d4d' : '#ffb347';
+      ctx.fillRect(x, y, Math.max(1.5, (w * u.bat) / 100), h);
+    }
   }
   if (u.hp < u.maxHp) {
     const w = s * 0.4;
@@ -925,6 +982,8 @@ function render(dtReal) {
     ctx.strokeRect(ox + (R.selTile % S.W) * z + 1, oy + ((R.selTile / S.W) | 0) * z + 1, z - 2, z - 2);
   }
 
+  drawRallies(ctx, ox, oy, z);
+  drawMissiles(ctx, ox, oy, z);
   drawEffects(ctx, ox, oy, z);
   if (typeof UI !== 'undefined' && UI.inGame) renderMinimap();
 }
@@ -956,11 +1015,12 @@ function drawBadge(ctx, b, x, y, z) {
 
 function drawRanges(ctx, type, x, y, ox, oy, z, owner) {
   const def = BDEFS[type];
-  const r = def.gather || def.plant ? def.radius + 0.5 : def.range ? def.range : def.mil ? def.terr : 0;
+  const r = def.gather || def.plant ? def.radius + 0.5 : def.range ? def.range : def.missile ? def.missile.range : def.mil ? def.terr : 0;
   if (!r) return;
   const cx = ox + (x + 0.5) * z, cy = oy + (y + 0.5) * z;
-  ctx.fillStyle = def.range ? 'rgba(255,90,90,0.10)' : 'rgba(255,255,255,0.09)';
-  ctx.strokeStyle = def.range ? 'rgba(255,140,140,0.7)' : 'rgba(255,255,255,0.65)';
+  const hostile = def.range || def.missile;
+  ctx.fillStyle = hostile ? 'rgba(255,90,90,0.08)' : 'rgba(255,255,255,0.09)';
+  ctx.strokeStyle = hostile ? 'rgba(255,140,140,0.7)' : 'rgba(255,255,255,0.65)';
   ctx.lineWidth = 2;
   ctx.beginPath(); ctx.arc(cx, cy, r * z, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
   if (def.gather) {
@@ -975,6 +1035,61 @@ function drawRanges(ctx, type, x, y, ox, oy, z, owner) {
         }
       }
     }
+  }
+}
+
+/** Your rally flags, with how many warbots hold each one. */
+function drawRallies(ctx, ox, oy, z) {
+  for (const r of S.rallies) {
+    if (r.owner !== 0) continue;
+    const x = ox + r.x * z, y = oy + r.y * z;
+    const n = rallyMembers(r.id).length;
+    const art = ART.rally;
+    if (art) drawArt(ctx, art, x, y - z * 0.3, z * 0.9);
+    else {
+      ctx.strokeStyle = 'rgba(0,0,0,0.5)'; ctx.lineWidth = Math.max(2, z * 0.08);
+      ctx.beginPath(); ctx.moveTo(x + 1, y + 1); ctx.lineTo(x + 1, y - z * 0.75 + 1); ctx.stroke();
+      ctx.strokeStyle = '#eef2f6'; ctx.lineWidth = Math.max(1.5, z * 0.06);
+      ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x, y - z * 0.75); ctx.stroke();
+      const wave = Math.sin(R.time * 5) * z * 0.04;
+      ctx.fillStyle = PLAYER_COLORS[0];
+      ctx.beginPath(); ctx.moveTo(x, y - z * 0.75); ctx.lineTo(x + z * 0.45, y - z * 0.62 + wave); ctx.lineTo(x, y - z * 0.48); ctx.closePath(); ctx.fill();
+      ctx.fillStyle = 'rgba(0,0,0,0.35)';
+      ctx.beginPath(); ctx.ellipse(x + 2, y + 2, z * 0.18, z * 0.07, 0, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.font = `800 ${Math.max(10, z * 0.3)}px system-ui, sans-serif`;
+    ctx.textAlign = 'left';
+    ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(0,0,0,0.75)'; ctx.fillStyle = '#ffffff';
+    ctx.strokeText(String(n), x + z * 0.12, y - z * 0.05);
+    ctx.fillText(String(n), x + z * 0.12, y - z * 0.05);
+  }
+}
+
+/** Missiles fly in an arc: a shadow on the ground and the missile above it. */
+function drawMissiles(ctx, ox, oy, z) {
+  for (const m of S.missiles) {
+    const k = Math.min(1, m.t / m.dur), k2 = Math.min(1, (m.t + 0.05) / m.dur);
+    const gx = ox + lerp(m.x0, m.x1, k) * z, gy = oy + lerp(m.y0, m.y1, k) * z;
+    const hgt = Math.sin(k * Math.PI) * 2.5 * z;
+    const ang = Math.atan2((lerp(m.y0, m.y1, k2) - Math.sin(k2 * Math.PI) * 2.5) - (lerp(m.y0, m.y1, k) - Math.sin(k * Math.PI) * 2.5),
+      lerp(m.x0, m.x1, k2) - lerp(m.x0, m.x1, k));
+    ctx.fillStyle = 'rgba(0,0,0,0.3)';
+    ctx.beginPath(); ctx.ellipse(gx, gy, z * 0.2, z * 0.08, 0, 0, Math.PI * 2); ctx.fill();
+    // Target marker so the defender sees where it will land.
+    if (m.owner !== 0 || k > 0.5) {
+      ctx.strokeStyle = `rgba(255,90,90,${0.5 + 0.5 * Math.sin(R.time * 12)})`; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.arc(ox + m.x1 * z, oy + m.y1 * z, z * 0.7, 0, Math.PI * 2); ctx.stroke();
+    }
+    const art = ART.missile;
+    if (art) { drawArt(ctx, art, gx, gy - hgt, z * 0.7, ang); continue; }
+    ctx.save(); ctx.translate(gx, gy - hgt); ctx.rotate(ang);
+    ctx.fillStyle = '#ffcf4a';
+    ctx.beginPath(); ctx.ellipse(-z * 0.32, 0, z * 0.16 + Math.random() * z * 0.05, z * 0.07, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#d8dde4';
+    ctx.fillRect(-z * 0.22, -z * 0.06, z * 0.36, z * 0.12);
+    ctx.fillStyle = PLAYER_COLORS[m.owner];
+    ctx.beginPath(); ctx.moveTo(z * 0.14, -z * 0.06); ctx.lineTo(z * 0.26, 0); ctx.lineTo(z * 0.14, z * 0.06); ctx.closePath(); ctx.fill();
+    ctx.restore();
   }
 }
 
@@ -1137,6 +1252,18 @@ function renderMinimap() {
     ctx.strokeStyle = (R.time * 4) % 2 < 1 ? '#ffffff' : '#ff5a6e';
     ctx.lineWidth = 1.5;
     ctx.beginPath(); ctx.arc((b.x + 0.5) * sx, (b.y + 0.5) * sy, 4, 0, Math.PI * 2); ctx.stroke();
+  }
+  for (const r of S.rallies) {
+    if (r.owner !== 0) continue;
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(r.x * sx - 0.5, r.y * sy - 5, 1.5, 5);
+    ctx.fillStyle = PLAYER_COLORS[0];
+    ctx.fillRect(r.x * sx + 1, r.y * sy - 5, 3, 2.5);
+  }
+  for (const m of S.missiles) {
+    const k = Math.min(1, m.t / m.dur);
+    ctx.fillStyle = '#ffcf4a';
+    ctx.fillRect(lerp(m.x0, m.x1, k) * sx - 1.5, lerp(m.y0, m.y1, k) * sy - 1.5, 3, 3);
   }
   const a = screenToWorld(0, 0), c = screenToWorld(R.w, R.h);
   ctx.strokeStyle = '#ffffff';

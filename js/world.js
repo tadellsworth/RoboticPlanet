@@ -292,7 +292,7 @@ function newGame(opts) {
       stats: { built: 0, bots: 0, captured: 0, lost: 0 },
       aiT: 0, nextAttack: 0,
     })),
-    buildings: [], bots: [], fx: [], msgs: [],
+    buildings: [], bots: [], fx: [], msgs: [], rallies: [], missiles: [],
     dirtyTiles: [], territoryVer: 0, tick: 0,
   };
   if (opts.autoplay) S.players[0].mult = DIFFICULTY[diff].mult;
@@ -387,7 +387,7 @@ function addBot(owner, type, x, y) {
     id: S.nextId++, ent: 'u', type, owner,
     x: x + 0.5, y: y + 0.5, path: null, pi: 0,
     task: null, carry: null, hp: maxHp, maxHp,
-    inside: 0, cd: 0, fight: 0, scanT: 0, idleT: 0, face: 0, busy: 0,
+    inside: 0, cd: 0, fight: 0, scanT: 0, idleT: 0, face: 0, busy: 0, bat: 100,
   };
   S.bots.push(bot);
   S.byId.set(bot.id, bot);
@@ -737,6 +737,8 @@ function deserializeGame(json) {
   if (!o.elev) { o.elev = new Array(o.W * o.H).fill(0); o.ramp = new Array(o.W * o.H).fill(0); }
   for (const k in TYPED_FIELDS) o[k] = TYPED_FIELDS[k].from(o[k]);
   o.fx = []; o.msgs = []; o.dirtyTiles = [];
+  o.rallies = o.rallies || [];
+  o.missiles = o.missiles || [];
   o.bAt = new Int32Array(o.W * o.H);
   o.byId = new Map();
   S = o;

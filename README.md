@@ -45,6 +45,9 @@ Progress auto-saves in the browser every 20 seconds and whenever you leave the p
 | Pulse Turret | Shoots enemy bots; uses Crystal as ammo |
 | Depot | Extra storage, shortens hauling trips |
 | Ramp | Cuts a slope into a one-level cliff so bots can climb it |
+| Charging Station | Recharges bots' batteries, four at a time |
+| Munitions Works | Alloy + Crystal → **Warhead** (Versus) |
+| Missile Silo | Fires missiles at rival buildings up to 18 tiles away (Versus) |
 
 - Every production building needs one worker inside. Free workers haul goods and build construction sites.
   Run short and the game pulls workers off low-priority jobs, so build a Bot Foundry early.
@@ -61,6 +64,14 @@ Progress auto-saves in the browser every 20 seconds and whenever you leave the p
   any other storage; *Empty out* takes nothing new and moves what it holds elsewhere (handy before
   demolishing it). You can also switch individual goods off for that building.
 - **Minimap:** tap or drag it to jump around; red pulses mark buildings under attack. The × hides it.
+- **Batteries:** bots drain their battery walking, working and fighting, and recharge at the Lander, a
+  Charging Station or (warbots) inside their garrison. A flat battery means half speed and half power.
+- **Army orders:** tap **Army**, then a rival building to attack it with warbots or a missile, or open
+  ground to send warbots there to hold the area under a rally flag. Tap the flag to call them back.
+- **Missiles** wreck smaller buildings and knock Outposts and Landers down to almost no armor; warbots
+  still have to walk in and capture them.
+- **Production orders:** queue an exact number of Workers and Warbots at the Bot Foundry, and choose what
+  it does when the queue is done (keep making workers, warbots, both, or stop).
 - You can only build inside your border. Outposts push it out. Capturing an enemy Outpost takes its land,
   and enemy buildings left outside their border are lost.
 - **Controls:** drag to pan, pinch or scroll to zoom, tap anything to inspect it.

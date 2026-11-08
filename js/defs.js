@@ -15,6 +15,18 @@ const ROAD_SPEED = 1.8;           // speed multiplier on paths
 const SLOPE_SPEED = 0.65;         // speed multiplier on an unpaved ramp
 const STALK_GROW_TIME = 70;       // seconds for a planted stalk grove to mature
 
+/*
+ * Batteries (0–100). Bots drain while they move and work, and recharge inside a building with a
+ * charger (the Lander or a Charging Station); warbots also recharge inside their garrison.
+ * Below `low` a worker goes to recharge when it finishes its job; below `critical` a bot is in
+ * emergency mode: it moves and works at `slow` speed and warbots hit half as hard.
+ */
+const BATTERY = {
+  workerMove: 0.85, workerWork: 1.2, workerInside: 0.25,
+  warbotMove: 0.5, warbotFight: 0.9, garrisonCharge: 4,
+  low: 30, critical: 12, slow: 0.5,
+};
+
 // Terrain
 const T_GROUND = 0, T_WATER = 1, T_ROCK = 2;
 
@@ -56,7 +68,7 @@ const RES = {
   [R_CRYSTAL]: { key: 'crystal', name: 'Crystal cluster', good: 'crystal', amount: 12, harvest: 3.5 },
 };
 
-const GOODS = ['fiber', 'stone', 'ore', 'crystal', 'alloy', 'chip'];
+const GOODS = ['fiber', 'stone', 'ore', 'crystal', 'alloy', 'chip', 'warhead'];
 const GOOD = {
   fiber:   { name: 'Fiber',   color: '#3fd8a6', desc: 'Cut from stalk groves. Used for building and as smelter fuel.' },
   stone:   { name: 'Stone',   color: '#c9c1b4', desc: 'Broken from boulders. The main building material.' },
@@ -64,7 +76,10 @@ const GOOD = {
   crystal: { name: 'Crystal', color: '#b98cff', desc: 'Tapped from crystal clusters. Makes Chips and turret ammo.' },
   alloy:   { name: 'Alloy',   color: '#8ec3e6', desc: 'Smelted metal for advanced buildings, chips and bots.' },
   chip:    { name: 'Chip',    color: '#c8f05a', desc: 'Bot brains. Needed for every new bot.' },
+  warhead: { name: 'Warhead', color: '#ffcf4a', desc: 'Made at a Munitions Works. Missile Silos fire them at enemy buildings.' },
 };
+/** Goods that only matter when there is a rival (hidden in Colony mode). */
+const WAR_GOODS = ['warhead'];
 
 const PLAYER_COLORS = ['#38d4ff', '#ff5a6e'];
 const PLAYER_NAMES = ['You', 'Rival'];
@@ -79,12 +94,17 @@ const PLAYER_NAMES = ['You', 'Rival'];
  *   out       output storage capacity per good
  *   store     acts as a warehouse (accepts and supplies every good)
  *   mil       military: claims territory of radius `terr` and garrisons warbots
+ *   charger   bots inside recharge: `slots` bots at full `rate` (battery per second), more share it
+ *   ammo      good delivered as ammunition (up to ammoCap)
+ *   missile   launches missiles: range (tiles), reload (s), damage to buildings, splash radius,
+ *             damage to bots in the splash
+ *   war       only offered in Versus mode
  */
 const BDEFS = {
   lander: {
     name: 'Lander', short: 'Lander',
     desc: 'Your landing craft and main base. Stores goods and houses idle bots. If it is captured, you lose.',
-    store: true, mil: true, terr: 8, garrison: 40, armor: 30,
+    store: true, mil: true, terr: 8, garrison: 40, armor: 30, charger: { slots: 3, rate: 15 },
   },
   harvester: {
     name: 'Harvester', desc: 'A worker cuts nearby stalk groves into Fiber.',
@@ -127,7 +147,22 @@ const BDEFS = {
   },
   turret: {
     name: 'Pulse Turret', desc: 'Shoots enemy bots in range. Uses Crystal as ammo (4 shots each).',
-    cost: { stone: 2, alloy: 2 }, ammo: 'crystal', range: 5, armor: 12, buildTime: 10,
+    cost: { stone: 2, alloy: 2 }, ammo: 'crystal', range: 5, armor: 12, buildTime: 10, war: true,
+  },
+  munitions: {
+    name: 'Munitions Works', desc: 'Packs Alloy and Crystal into Warheads for Missile Silos.',
+    cost: { stone: 3, alloy: 2, chip: 1 }, staff: true, inp: { alloy: 1, crystal: 1 }, make: { warhead: 1 },
+    out: { warhead: 3 }, work: 9, armor: 10, buildTime: 12, war: true,
+  },
+  silo: {
+    name: 'Missile Silo',
+    desc: 'Fires missiles at enemy buildings far away. Missiles wreck smaller buildings and weaken Outposts and Landers so warbots can capture them. Uses Warheads.',
+    cost: { stone: 4, alloy: 3, chip: 1 }, ammo: 'warhead', ammoCap: 2,
+    missile: { range: 18, reload: 20, damage: 14, splash: 1.6, botDamage: 6 }, armor: 14, buildTime: 16, war: true,
+  },
+  charger: {
+    name: 'Charging Station', desc: 'Bots recharge their batteries here, four at a time. Build them near busy areas far from your Lander.',
+    cost: { stone: 3, alloy: 1 }, charger: { slots: 4, rate: 25 }, armor: 10, buildTime: 10,
   },
   ramp: {
     name: 'Ramp', desc: 'Workers cut a slope into a low cliff so bots can climb between levels. Place it at the foot or top of a cliff.',
@@ -140,7 +175,8 @@ const BDEFS = {
 };
 
 /** Order of the build menu. */
-const BUILD_MENU = ['harvester', 'quarry', 'mine', 'tap', 'smelter', 'fab', 'foundry', 'outpost', 'turret', 'depot', 'ramp', 'grower'];
+const BUILD_MENU = ['harvester', 'quarry', 'mine', 'tap', 'smelter', 'fab', 'foundry', 'charger', 'outpost', 'turret',
+  'munitions', 'silo', 'depot', 'ramp', 'grower'];
 
 const INPUT_CAP = 3;   // how many of each input a production building stockpiles
 const AMMO_CAP = 3;    // crystals a turret stockpiles

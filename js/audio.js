@@ -45,7 +45,7 @@ function _noise(dur, vol, cutoff) {
   src.start();
 }
 
-const SFX_GAP = { boom: 0.12, laser: 0.08, hit: 0.07, produce: 0.25, alert: 1.5, complete: 0.3 };
+const SFX_GAP = { launch: 0.3, boom: 0.12, laser: 0.08, hit: 0.07, produce: 0.25, alert: 1.5, complete: 0.3 };
 
 function sfx(name) {
   if (!AUDIO.on || AUDIO.suppress || !AUDIO.ctx || AUDIO.ctx.state !== 'running') return;
@@ -61,6 +61,7 @@ function sfx(name) {
     case 'hit': _tone(220, 0.05, 'square', 0.03, 120); break;
     case 'boom': _noise(0.35, 0.18, 700); break;
     case 'alert': _tone(880, 0.12, 'square', 0.05); _tone(660, 0.12, 'square', 0.05, null, 0.15); break;
+    case 'launch': _noise(0.6, 0.12, 2200); _tone(180, 0.6, 'sawtooth', 0.05, 520); break;
     case 'capture': _tone(392, 0.12, 'triangle', 0.09); _tone(587, 0.2, 'triangle', 0.09, null, 0.1); break;
     case 'error': _tone(200, 0.12, 'square', 0.05, 150); break;
     case 'win': [523, 659, 784, 1047].forEach((f, i) => _tone(f, 0.25, 'triangle', 0.09, null, i * 0.14)); break;
