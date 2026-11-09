@@ -286,7 +286,11 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
 - **Salvage:** a colony out of Stone or Fiber with no Quarry or Harvester that can still work salvages 1 every 20 s from
   its Command Base (up to 6), so it can always rebuild. Capturing an enemy Outpost takes its land,
   and enemy buildings left outside their border are lost.
-- **Controls:** drag to pan, pinch or scroll to zoom, tap anything to inspect it.
+- **Controls:** drag to pan, pinch or scroll to zoom, tap anything to inspect it. Wheel deltas are normalised and capped
+  per event (smooth on a Magic Mouse or trackpad); a Ctrl + wheel pinch zooms faster, a sideways swipe or Shift + wheel
+  pans, and Safari's trackpad pinch (`gesture*` events) zooms the map instead of the page. Drawing resolution is capped
+  at `RENDER_BUDGET` pixels (about 4K; a 5K iMac at 2× would be four times the work) and `watchFrameRate` lowers it,
+  down to 1×, if frames run below ~45 a second.
 - **Game speed:** the speed chip in the top bar opens 0.75×, 0.875×, 1×, 2× and 3×.
 - **Sound** (`js/audio.js`, all Web Audio, no audio files): a generative synthwave score that follows the game (menu,
   building, war when you're attacked or fighting, and an alarm while a nuke flies), written a bar at a time from chord
@@ -297,7 +301,8 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
   on the right. Drag a box to select warbots (Shift adds; a box round a garrison takes its spare warbots), right-click
   ground to hold it, a rival building to attack, or your garrison to station them. Ctrl/Shift+1–9 saves a control
   group, 1–9 recalls it (twice jumps to it). Pan with **WASD** or the arrow keys, the window edge, or right/middle drag; hover for
-  tooltips. Keys: **B** build then a building's letter (or **B R** to start laying roads), **R** (or **P**) opens and closes Paths
+  tooltips. Keys: **B** build then a building's key (a letter, or 1–7 for Smelter, Bio Farm, Roadworks, Depot, Ropeway, Rail
+  Station and Research Lab, so WASD keeps panning; or **B R** to start laying roads), **R** (or **P**) opens and closes Paths
   and inside it picks a tool (**R** roads, **G** bridges
   and tunnels, **V** ramps, **E** pave, **O** one-way arrows, **L** junctions, **X** walls, **T** traffic map), **Q** army, **C** recall all warbots, **F** select all warbots, **J** latest alert,
   **H** base, **[ ]** speed, **+/−** zoom, **M** minimap, **Space** pause, **Esc** back / clear selection.

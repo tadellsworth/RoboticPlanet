@@ -211,7 +211,7 @@ function hideGoodTip() {
 /* ------------------------------------------------------------------ keyboard (desktop) */
 
 /*
- * WASD or arrow keys pan · B build (then a building's letter, or R for roads) · R or P opens and closes Paths (inside
+ * WASD or arrow keys pan · B build (then a building's key: a letter, or 1–7; or R for roads) · R or P opens and closes Paths (inside
  * it: R roads, G bridges and tunnels, V ramps, E pave, O one-way arrows, L junctions, T traffic map) · Q army · H base · F select every warbot · 1–9 control groups (Ctrl or
  * Shift + digit to save) · J jump to the latest alert · Esc back / clear selection / pause ·
  * Space pause · [ ] game speed · + and - zoom · M minimap · ? help
@@ -219,10 +219,13 @@ function hideGoodTip() {
 const PAN_KEYS = { arrowleft: [-1, 0], arrowright: [1, 0], arrowup: [0, -1], arrowdown: [0, 1], a: [-1, 0], d: [1, 0], w: [0, -1], s: [0, 1] };
 
 /** Build-menu hotkeys: with the build menu open, a building's letter starts placing it (and R lays roads). */
+// W, A, S and D always pan the map, even with the build menu open, so the buildings that would want
+// those letters (and the ones added after the letters ran out) use number keys.
 const BUILD_KEYS = {
-  harvester: 'h', quarry: 'q', mine: 'm', tap: 'c', smelter: 's', fab: 'f', foundry: 'u', charger: 'e', farm: 'a',
-  pump: 'p', refinery: 'v', kiln: 'k', tarworks: 't', roadworks: 'w', outpost: 'o', turret: 'g', repair: 'x',
-  armory: 'i', munitions: 'n', silo: 'z', depot: 'd', grower: 'l', reactor: 'y', nukesilo: 'j',
+  harvester: 'h', quarry: 'q', mine: 'm', tap: 'c', smelter: '1', fab: 'f', foundry: 'u', charger: 'e', farm: '2',
+  pump: 'p', refinery: 'v', kiln: 'k', tarworks: 't', roadworks: '3', outpost: 'o', turret: 'g', repair: 'x',
+  armory: 'i', munitions: 'n', silo: 'z', depot: '4', grower: 'l', reactor: 'y', nukesilo: 'j',
+  ropeway: '5', station: '6', lab: '7',
 };
 
 /**
@@ -260,6 +263,13 @@ function initKeyboard() {
     // Control groups: Ctrl (or Shift) + 1–9 saves the selected warbots, 1–9 selects them again
     // (press twice to jump to them).
     const digit = /^Digit([1-9])$/.exec(e.code || '');
+    // In the build menu a plain number picks the building on that key instead.
+    if (digit && UI.sheetKind === 'build' && !e.ctrlKey && !e.metaKey && !e.shiftKey && !e.altKey) {
+      const type = Object.keys(BUILD_KEYS).find((t) => BUILD_KEYS[t] === digit[1]);
+      const card = type && $('sheet-body').querySelector(`.bcard[data-t="${type}"]`);
+      if (card && !card.disabled) { e.preventDefault(); card.click(); }
+      return;
+    }
     if (digit && !e.altKey && $('screen-pause').hidden) {
       e.preventDefault();
       if (e.ctrlKey || e.metaKey || e.shiftKey) saveGroup(+digit[1]); else recallGroup(+digit[1]);
@@ -275,8 +285,8 @@ function initKeyboard() {
       return;
     }
     if (overlay) return;
-    // In the build menu, a building's letter picks it (W, A, S and D included), and R goes
-    // straight to laying roads.
+    // In the build menu, a building's letter picks it, and R goes straight to laying roads. W, A, S
+    // and D still pan the map (no building uses them).
     if (UI.sheetKind === 'build' && k === 'r') { e.preventDefault(); openPaths('road'); return; }
     if (UI.sheetKind === 'build') {
       const type = Object.keys(BUILD_KEYS).find((t) => BUILD_KEYS[t] === k);

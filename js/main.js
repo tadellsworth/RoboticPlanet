@@ -29,6 +29,7 @@ function demoCamera(dt) {
 
 function frame(now) {
   const dt = Math.min(0.1, (now - _lastFrame) / 1000);
+  if (UI.inGame) watchFrameRate(now - _lastFrame);
   _lastFrame = now;
   if (S) {
     const running = UI.inGame ? !UI.paused && S.winner < 0 : true;

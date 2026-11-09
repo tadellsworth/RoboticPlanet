@@ -19,6 +19,7 @@ function initInput(canvas, handlers) {
   canvas.addEventListener('pointerup', onPointerUp);
   canvas.addEventListener('pointercancel', onPointerUp);
   canvas.addEventListener('wheel', onWheel, { passive: false });
+  initGestures();
   canvas.addEventListener('contextmenu', (e) => e.preventDefault());
   // Where the mouse is over the map (edge scrolling and hover tips); cleared when it leaves.
   canvas.addEventListener('pointerleave', (e) => { if (e.pointerType === 'mouse') R.mouse = null; });
@@ -125,13 +126,46 @@ function onPointerUp(e) {
   } else if (INPUT.pointers.size === 0) INPUT.gesture = null;
 }
 
-function onWheel(e) {
-  if (!S) return;
-  e.preventDefault();
-  const before = screenToWorld(e.clientX, e.clientY);
-  R.cam.z = clamp(R.cam.z * Math.exp(-e.deltaY * 0.0015), minZoom(), maxZoom());
-  const after = screenToWorld(e.clientX, e.clientY);
+/** Zoom to z, keeping the map point under screen point (sx, sy) where it is. */
+function zoomAt(sx, sy, z) {
+  const before = screenToWorld(sx, sy);
+  R.cam.z = clamp(z, minZoom(), maxZoom());
+  const after = screenToWorld(sx, sy);
   R.cam.x += before.x - after.x;
   R.cam.y += before.y - after.y;
   clampCam();
+}
+
+/**
+ * The mouse wheel zooms. Wheels that scroll by lines or pages (some mice, Firefox) count as
+ * pixels, and one event never jumps further than a normal wheel notch, so a Magic Mouse or trackpad
+ * flick with momentum zooms smoothly. A trackpad pinch (Ctrl + wheel in Chrome and Firefox) zooms
+ * faster; a sideways swipe (or Shift + wheel) pans.
+ */
+function onWheel(e) {
+  if (!S) return;
+  e.preventDefault();
+  const unit = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? 400 : 1;
+  let dx = e.deltaX * unit, dy = e.deltaY * unit;
+  if (e.shiftKey && !dx) { dx = dy; dy = 0; }
+  if (e.ctrlKey) { zoomAt(e.clientX, e.clientY, R.cam.z * Math.exp(-clamp(dy, -50, 50) * 0.01)); return; }
+  if (Math.abs(dx) > Math.abs(dy)) { R.cam.x += clamp(dx, -120, 120) / R.cam.z; clampCam(); return; }
+  zoomAt(e.clientX, e.clientY, R.cam.z * Math.exp(-clamp(dy, -120, 120) * 0.0015));
+}
+
+/**
+ * Safari on a Mac sends a trackpad pinch as gesture events, not wheel events, and would magnify the
+ * whole page: zoom the map instead. (On iPhone and iPad a pinch also arrives as two touches, which
+ * onPointerMove already handles, so there only the page zoom is stopped.)
+ */
+function initGestures() {
+  let g = null;
+  const opt = { passive: false };
+  document.addEventListener('gesturestart', (e) => { e.preventDefault(); g = S ? { z: R.cam.z, x: e.clientX || R.w / 2, y: e.clientY || R.h / 2 } : null; }, opt);
+  document.addEventListener('gesturechange', (e) => {
+    e.preventDefault();
+    if (!g || !S || INPUT.pointers.size) return;
+    zoomAt(g.x, g.y, g.z * e.scale);
+  }, opt);
+  document.addEventListener('gestureend', (e) => { e.preventDefault(); g = null; }, opt);
 }

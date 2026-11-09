@@ -335,18 +335,42 @@ function initRender(canvas) {
   if (window.visualViewport) window.visualViewport.addEventListener('resize', resizeRender);
 }
 
+// Drawing resolution. Retina screens draw at up to 2x, but never more than R.budget pixels (about a
+// 4K screen's worth): a 5K iMac at 2x would be 15 million pixels a frame, four times the work, and
+// drop to a few frames a second. If frames still come slowly, watchFrameRate lowers the budget.
+const RENDER_BUDGET = 8.3e6;
+
 function resizeRender() {
-  R.dpr = Math.min(2, window.devicePixelRatio || 1);
   // Installed web apps on iPhone sometimes report a viewport shorter than the screen; take the
   // largest of the measurements so the map always reaches the bottom edge.
   const vv = window.visualViewport;
   R.w = Math.max(window.innerWidth, document.documentElement.clientWidth);
   R.h = Math.max(window.innerHeight, document.documentElement.clientHeight, vv ? Math.round(vv.height) : 0);
+  const fit = Math.sqrt((R.budget || RENDER_BUDGET) / Math.max(1, R.w * R.h));
+  R.dpr = Math.min(2, window.devicePixelRatio || 1, Math.max(1, fit));
   R.canvas.width = Math.round(R.w * R.dpr);
   R.canvas.height = Math.round(R.h * R.dpr);
   R.canvas.style.width = R.w + 'px';
   R.canvas.style.height = R.h + 'px';
   if (S) clampCam();
+}
+
+/**
+ * Called every frame with the milliseconds since the last one. If the game runs below about 45
+ * frames a second for a couple of seconds while drawing at more than 1x, draw at a lower
+ * resolution (never below 1x; the buttons and text stay sharp, they aren't on the canvas).
+ */
+function watchFrameRate(ms) {
+  const fw = R.fw || (R.fw = { n: 0, sum: 0 });
+  if (ms > 250 || document.hidden) { fw.n = 0; fw.sum = 0; return; }
+  fw.n++; fw.sum += ms;
+  if (fw.n < 120) return;
+  const avg = fw.sum / fw.n;
+  fw.n = 0; fw.sum = 0;
+  if (avg > 22 && R.dpr > 1.05) {
+    R.budget = Math.max(R.w * R.h, R.w * R.h * R.dpr * R.dpr * 0.6);
+    resizeRender();
+  }
 }
 
 function minZoom() { return Math.max(8, Math.min(R.w / (S.W + 2), R.h / (S.H + 2))); }
