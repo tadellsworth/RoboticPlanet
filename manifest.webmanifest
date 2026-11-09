@@ -1,7 +1,7 @@
 {
   "name": "Terrafall",
   "short_name": "Terrafall",
-  "description": "Land your robots on a strange planet, build supply chains and expand across the map.",
+  "description": "Seize an alien planet with an army of robots: run supply lines to the front and crush the rival colony.",
   "start_url": "./",
   "scope": "./",
   "display": "fullscreen",
