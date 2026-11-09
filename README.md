@@ -62,6 +62,7 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
 | Ammo Plant | Alloy + Stone → 3 **Ammo**; warbots reload it in the Command Base and Outposts (Versus) |
 | Missile Factory | 2 Alloy + Chip + Fuel → **Missile** (20 s each; Versus) |
 | Missile Silo | Fires Missiles at rival buildings up to 18 tiles away; holds 2, reloads in 25 s (Versus) |
+| Repair Station | Fixes damaged bots three at a time; 1 **Alloy** repairs 12 health (Versus) |
 
 - **Cement builds the colony.** Nearly every building costs Cement, and so does every road. Only the Quarry (2 Fiber)
   and the Cement Works (4 Stone, 2 Fiber) are built from raw materials, so you can always restart. Stone's other uses
@@ -96,6 +97,9 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
 - **Top bar:** hover over (or tap) a goods counter to see its name and what it's for.
 - **Ammo:** warbots carry 20 shots and reload in your Command Base and Outposts, which haulers stock from an Ammo Plant. Out of
   ammo, a warbot can't fight at all: it heads back to a garrison to reload, and only armed warbots answer orders.
+- **Repairs:** nothing heals by itself. Damaged bots go to a Repair Station (workers below 60% health, warbots below
+  70% once their garrison is quiet), which uses 1 Alloy per 12 health. To fix a building, tap it and press **Repair**:
+  you pay 1 Cement for every 6 missing armor and a free worker restores it.
 - **Statistics:** the pause menu and the end-of-game screen show graphs of bots, land and goods over time and how busy
   each kind of building was; each building's panel shows its recent busy time.
 - **Terrain levels:** the planet has terraces at different heights (lighter ground is higher). Bots

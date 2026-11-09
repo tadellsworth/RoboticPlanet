@@ -788,6 +788,21 @@ function drawBuilding(ctx, type, cx, cy, s, owner, b) {
       ctx.lineTo(cx - 1.5 * u, cy + 7 * u); ctx.lineTo(cx + 3.5 * u, cy - 1 * u); ctx.lineTo(cx + 0.5 * u, cy - 1 * u); ctx.closePath(); ctx.fill();
       break;
     }
+    case 'repair': {
+      hullBase(ctx, cx, cy, s, color);
+      // A repair bay: a lit service pad with a crossed wrench and spanner; sparks while working.
+      ctx.fillStyle = '#1a1d24';
+      ctx.beginPath(); ctx.arc(cx, cy, 9 * u, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = working ? '#ffd166' : '#c9ced8'; ctx.lineWidth = 2.6 * u; ctx.lineCap = 'round';
+      ctx.beginPath(); ctx.moveTo(cx - 5 * u, cy + 5 * u); ctx.lineTo(cx + 5 * u, cy - 5 * u); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(cx + 5 * u, cy + 5 * u); ctx.lineTo(cx - 5 * u, cy - 5 * u); ctx.stroke();
+      ctx.lineWidth = 1.6 * u;
+      ctx.beginPath(); ctx.arc(cx + 5.5 * u, cy - 5.5 * u, 2.4 * u, 0, Math.PI * 2); ctx.stroke();
+      ctx.beginPath(); ctx.arc(cx - 5.5 * u, cy - 5.5 * u, 2.4 * u, 0, Math.PI * 2); ctx.stroke();
+      if (working && Math.sin(t * 13) > 0.3) { ctx.fillStyle = '#ffe9a8'; ctx.fillRect(cx + 2 * u, cy - 2 * u, 1.6 * u, 1.6 * u); }
+      ctx.lineCap = 'butt';
+      break;
+    }
     case 'farm': {
       hullBase(ctx, cx, cy, s, color);
       // Seed hoppers over a green bed of sprouts, with a pink Fuel tank.

@@ -12,7 +12,7 @@ const AI_PLAN = [
   ['harvester', 1], ['quarry', 1], ['kiln', 1], ['harvester', 2], ['mine', 1], ['tap', 1], ['smelter', 1],
   ['fab', 1], ['foundry', 1], ['outpost', 1], ['armory', 1], ['charger', 1], ['farm', 1], ['quarry', 2], ['grower', 1], ['mine', 2],
   ['kiln', 2],
-  ['turret', 1], ['outpost', 2], ['smelter', 2], ['tap', 2], ['pump', 1], ['refinery', 1], ['harvester', 3], ['outpost', 3],
+  ['turret', 1], ['repair', 1], ['outpost', 2], ['smelter', 2], ['tap', 2], ['pump', 1], ['refinery', 1], ['harvester', 3], ['outpost', 3],
   ['munitions', 1], ['silo', 1], ['depot', 1], ['charger', 2], ['farm', 2], ['mine', 3], ['outpost', 4], ['turret', 2],
   ['grower', 2], ['fab', 2], ['outpost', 5], ['armory', 2], ['quarry', 3], ['silo', 2], ['outpost', 6], ['charger', 3], ['pump', 2],
   ['tap', 3], ['farm', 3], ['outpost', 8], ['turret', 3],
@@ -135,6 +135,15 @@ function aiThink(p) {
         if (type === 'armory') placed.building.prio = 'low';
         break;
       }
+    }
+  }
+
+  // 1a) Repairs: damaged buildings get fixed once the fighting there stops (military ones first,
+  //     the rest only with Cement to spare).
+  if (S.mode !== 'colony') {
+    for (const b of me) {
+      if (!b.built || b.fixLeft > 0 || S.time - (b.lastHit || -99) < 6 || b.armor >= BDEFS[b.type].armor * 0.75) continue;
+      if (BDEFS[b.type].mil || playerGoods(p).cement >= repairCost(b) + 6) requestRepair(p, b);
     }
   }
 

@@ -978,6 +978,11 @@ function cancelTask(bot) {
     case 'pave':
       if (S.paveRes && S.paveRes[t.tile] === bot.id) delete S.paveRes[t.tile];
       break;
+    case 'fix': {
+      const b = getE(t.bld);
+      if (b && b.fixer === bot.id) b.fixer = 0;
+      break;
+    }
     case 'garrison': {
       const b = getE(t.bld);
       if (b) b.garInc = Math.max(0, b.garInc - 1);

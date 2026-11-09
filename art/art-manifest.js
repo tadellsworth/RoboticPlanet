@@ -22,7 +22,7 @@
  *
  * Keys
  *   Buildings: lander harvester quarry mine tap grower smelter fab foundry outpost turret depot
- *              charger munitions silo farm pump refinery kiln tarworks roadworks armory
+ *              charger munitions silo farm pump refinery kiln tarworks roadworks armory repair
  *              site (a construction site)
  *   Bots:      worker warbot hauler agribot paver  (drawn facing right; the game rotates them;
  *              without their own art, specialists use the worker's art with a small badge)

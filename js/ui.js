@@ -851,7 +851,7 @@ function openBuildingSheet(b) {
   const desc = !mine && b.type === 'lander' ? 'The rival\'s fortified headquarters. Capture it to win.' : def.desc;
   let html = `<div class="sheet-title"><img src="${iconFor(b.type, b.owner)}" alt=""><div><h3>${def.name}</h3>
     <div class="owner"><span class="dot" style="background:${PLAYER_COLORS[b.owner]}"></span> ${mine ? 'Yours' : 'Rival'}</div></div></div>
-    <p class="desc">${desc}</p><div class="status" id="sh-status"></div><div id="sh-dyn"></div>`;
+    <p class="desc">${desc}</p><div class="status" id="sh-status"></div><div id="sh-dyn"></div>${mine ? '<div id="sh-fix"></div>' : ''}`;
   if (mine) {
     if (def.store && b.built) {
       html += `<div class="section-label">Storage</div><div class="seg" id="sh-smode">
@@ -987,6 +987,32 @@ function openBuildingSheet(b) {
   refreshSheet();
 }
 
+/** The building sheet's repair control: a Repair button (with its Cement cost) when it's damaged. */
+function refreshFix(b) {
+  const el = $('sh-fix'), def = BDEFS[b.type];
+  let key, html = '';
+  if (!b.built || b.armor >= def.armor - 0.05) { key = 'ok'; }
+  else if (b.fixLeft > 0) {
+    const w = getE(b.fixer);
+    key = 'fixing' + (w && w.task && w.task.phase === 'work' ? 'w' : 'g') + Math.ceil(b.fixLeft);
+    html = `<div class="kv"><span>Repair</span><span class="ok">${w && w.task && w.task.phase === 'work' ? `Worker repairing: ${Math.ceil(b.fixLeft)} armor to go` : 'A worker is on the way'}</span></div>`;
+  } else {
+    const n = repairCost(b), can = playerGoods(0).cement >= n;
+    key = 'btn' + n + can + (S.time - (b.lastHit || -99) < 3);
+    html = `<button class="btn primary big" id="sh-fixbtn" ${can ? '' : 'disabled'}>Repair: ${n} Cement</button>
+      <p class="hint">${can ? 'A free worker comes and restores its armor.' : `Not enough Cement: repairing it takes ${n}.`}${S.time - (b.lastHit || -99) < 3 ? ' It is under attack right now.' : ''}</p>`;
+  }
+  if (el.dataset.key === key) return;
+  el.dataset.key = key;
+  el.innerHTML = html;
+  if ($('sh-fixbtn')) $('sh-fixbtn').onclick = () => {
+    const why = requestRepair(0, b);
+    if (why) { sfx('error'); toast(why, 'warn'); } else { sfx('click'); toast(`Repair ordered: a worker is coming to fix the ${def.name}.`, 'info'); }
+    el.dataset.key = '';
+    refreshSheet();
+  };
+}
+
 /** The building sheet's road section: linked, or what it would take to link it (with a button). */
 function refreshRoadLink(b) {
   const el = $('sh-road');
@@ -1110,6 +1136,13 @@ function refreshBuildingSheet(b) {
       parts.push(`<div class="kv"><span>Reload</span><span>${b.reload > 0 ? Math.ceil(b.reload) + 's' : 'Ready'}</span></div>`);
       parts.push(`<div class="kv"><span>Range</span><span>${def.missile.range} tiles</span></div>`);
     }
+    if (def.repair && mine) {
+      let inside = 0;
+      for (const u of S.bots) if (!u.dead && u.inside === b.id) inside++;
+      parts.push(`<div class="kv"><span>Robots being repaired</span><span>${inside} (${def.repair.slots} at full speed)</span></div>`);
+      parts.push(`<div class="kv"><span>Alloy stocked</span><span>${goodTag('alloy', `${b.stock.alloy || 0}/${def.alloyCap}`, !(b.stock.alloy > 0))}</span></div>`);
+      parts.push(`<div class="kv"><span>Repair left in the hopper</span><span>${Math.floor(b.repairPts || 0)} health</span></div>`);
+    }
     if (def.charger && mine) {
       parts.push(`<div class="kv"><span>Charging now</span><span>${b.charging || 0} (${def.charger.slots} at full speed)</span></div>`);
       if (def.charger.fuel) {
@@ -1123,6 +1156,7 @@ function refreshBuildingSheet(b) {
   }
   $('sh-dyn').innerHTML = parts.join('');
   if ($('sh-road')) refreshRoadLink(b);
+  if ($('sh-fix')) refreshFix(b);
   if ($('sh-aim')) {
     const why = !(b.stock.warhead > 0) ? 'No Missiles loaded yet: haulers bring them from a Missile Factory.' : b.reload > 0 ? `Reloading: ready in ${Math.ceil(b.reload)}s.` : '';
     $('sh-aim').disabled = !!why;

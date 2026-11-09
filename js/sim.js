@@ -154,6 +154,8 @@ function needsOf(b) {
     out.push([def.ammo, (def.ammoCap || AMMO_CAP) - (b.stock[def.ammo] || 0) - (b.inc[def.ammo] || 0)]);
   } else if (def.fuelCap) {
     out.push(['fuel', def.fuelCap - (b.stock.fuel || 0) - (b.inc.fuel || 0)]);
+  } else if (def.repair) {
+    out.push(['alloy', def.alloyCap - (b.stock.alloy || 0) - (b.inc.alloy || 0)]);
   } else if (def.roadworks) {
     out.push(['asphalt', 3 - (b.stock.asphalt || 0) - (b.inc.asphalt || 0)]);
   }
@@ -632,6 +634,14 @@ function dispatch(p) {
       assignBuild(take(b.x, b.y, 'build'), b);
     }
   }
+  // 1b) A worker for every building you've paid to repair.
+  for (const b of blds) {
+    if (!idle.length) return;
+    if (b.built && b.fixLeft > 0 && !b.fixer) {
+      const u = take(b.x, b.y, 'build');
+      if (u) assignFix(u, b);
+    }
+  }
   // 2) An operator for every finished building that needs one, while keeping minFree workers free.
   const staffQueue = blds.filter((b) => b.built && !b.paused && BDEFS[b.type].staff && !BDEFS[b.type].crew && !b.staff && !b.staffInc && !atLimit(b))
     .sort((a, c) => prioRank(a) - prioRank(c) || staffPriority(a) - staffPriority(c) || a.born - c.born);
@@ -716,6 +726,132 @@ function dispatch(p) {
       assignPave(u, t);
     }
   }
+}
+
+/* ------------------------------------------------------------------ repairs */
+
+/** Is robot u hurt enough to go for repairs (and is there anywhere to go)? */
+function wantsRepair(u) {
+  if (u.dead || S.mode === 'colony' || !u.maxHp) return false;
+  return u.hp < u.maxHp * (u.type === 'warbot' ? REPAIR_BELOW.warbot : REPAIR_BELOW.other);
+}
+
+/** A Repair Station with no Alloy left (and none in its hopper) can't fix anyone. */
+function repairDry(b) { return (b.repairPts || 0) < 0.5 && !(b.stock.alloy > 0); }
+
+/** Nearest Repair Station robot u can reach that has Alloy, avoiding crowded ones. */
+function findRepair(u) {
+  let best = null, bs = Infinity;
+  const zone = S.zone[tIdx(Math.floor(u.x), Math.floor(u.y))];
+  for (const b of S.buildings) {
+    if (b.dead || b.owner !== u.owner || !b.built || !BDEFS[b.type].repair || repairDry(b)) continue;
+    if (S.zone[tIdx(b.x, b.y)] !== zone) continue;
+    if (u.type !== 'warbot' && roadBound(u) && !botLinked(u, b)) continue;
+    let inside = 0;
+    for (const v of S.bots) if (!v.dead && (v.inside === b.id || (v.task && v.task.type === 'repair' && v.task.bld === b.id))) inside++;
+    const s = dist(b.x + 0.5, b.y + 0.5, u.x, u.y) + Math.max(0, inside - BDEFS[b.type].repair.slots) * 5;
+    if (s < bs) { bs = s; best = b; }
+  }
+  return best;
+}
+
+/** Send robot u to the nearest Repair Station. */
+function goRepair(u) {
+  const c = findRepair(u);
+  if (!c) return false;
+  if (u.type === 'warbot') {
+    exitBuilding(u);
+    u.task = { type: 'repair', bld: c.id };
+    u.path = null;
+    return true;
+  }
+  if (!goTo(u, c.x, c.y)) return false;
+  u.task = { type: 'repair', bld: c.id };
+  return true;
+}
+
+/** A Repair Station fixes up to `slots` robots inside it at once, burning Alloy as it goes. */
+function updateRepairStation(b, def, dt) {
+  const slots = def.repair.slots;
+  const hurt = [];
+  for (const u of S.bots) if (!u.dead && u.inside === b.id && u.hp < u.maxHp) hurt.push(u);
+  if (!hurt.length) {
+    b.status = repairDry(b) ? 'Out of Alloy: it can\'t repair robots' : 'Ready: damaged robots come here to be fixed';
+    return;
+  }
+  const share = Math.min(1, slots / hurt.length);
+  let fixing = 0;
+  for (const u of hurt) {
+    let gain = Math.min(u.maxHp - u.hp, def.repair.rate * share * dt * S.players[b.owner].mult);
+    if ((b.repairPts || 0) < gain && (b.stock.alloy || 0) > 0) { bump(b.stock, 'alloy', -1); b.repairPts = (b.repairPts || 0) + REPAIR_HP_PER_ALLOY; }
+    gain = Math.min(gain, b.repairPts || 0);
+    if (gain <= 0) continue;
+    b.repairPts -= gain;
+    u.hp += gain;
+    fixing++;
+  }
+  b.working = fixing > 0;
+  b.status = fixing
+    ? `Repairing ${Math.min(hurt.length, slots)} of ${slots} robots` + (hurt.length > slots ? ` (${hurt.length - slots} waiting)` : '')
+    : 'Out of Alloy: it can\'t repair robots';
+}
+
+/** Cement a full repair of building b would cost now, beyond any repair already paid for. */
+function repairCost(b) {
+  const missing = BDEFS[b.type].armor - b.armor - (b.fixLeft || 0);
+  return missing > 0.5 ? Math.ceil(missing / ARMOR_PER_CEMENT) : 0;
+}
+
+/** Pay for a building's repair: a free worker comes and restores its armor. '' or why not. */
+function requestRepair(owner, b) {
+  if (!b || b.dead || !b.built || b.owner !== owner) return 'Only your finished buildings can be repaired.';
+  const n = repairCost(b);
+  if (!n) return b.fixLeft > 0 ? 'A repair is already on the way.' : 'It isn\'t damaged.';
+  if (playerGoods(owner).cement < n) return `Repairing it takes ${n} Cement.`;
+  takeGood(owner, 'cement', n);
+  b.fixLeft = Math.min(BDEFS[b.type].armor - b.armor, (b.fixLeft || 0) + n * ARMOR_PER_CEMENT);
+  return '';
+}
+
+function assignFix(u, b) {
+  cancelTask(u);
+  u.task = { type: 'fix', bld: b.id, phase: 'go' };
+  b.fixer = u.id;
+  if (!goTo(u, b.x, b.y)) cancelTask(u);
+}
+
+/** A worker repairing a building: walk over, then restore armor until the paid repair is done. */
+function doFix(u, t, dt) {
+  const b = getE(t.bld);
+  if (!b || b.dead || !b.built || b.owner !== u.owner || !(b.fixLeft > 0)) { cancelTask(u); return; }
+  if (t.phase === 'go') {
+    if (moveAlong(u, dt)) t.phase = 'work';
+    return;
+  }
+  if ((u.bat ?? 100) < BATTERY.critical) { cancelTask(u); return; }
+  const def = BDEFS[b.type];
+  const gain = Math.min(b.fixLeft, def.armor - b.armor, FIX_RATE * dt * S.players[u.owner].mult * batFactor(u));
+  b.armor += gain;
+  b.fixLeft -= gain;
+  u.busy = 1;
+  if (b.fixLeft <= 0.01 || b.armor >= def.armor - 0.01) {
+    b.fixLeft = 0;
+    if (b.armor >= def.armor - 0.01) b.armor = def.armor;
+    cancelTask(u);
+    u.idleT = 0;
+    if (b.owner === 0) addFx('ring', b.x + 0.5, b.y + 0.5, { color: '#7ee08a' });
+  }
+}
+
+/** A gentle nudge when one of your buildings is left damaged after a fight. */
+function repairHint(b) {
+  if (b.owner !== 0 || S.mode === 'colony' || b.fixLeft > 0) return;
+  const def = BDEFS[b.type];
+  if (b.armor >= def.armor * 0.6 || S.time - (b.lastHit || -99) < 10) return;
+  const P = S.players[0];
+  if (S.time - (P.lastRepairHint || -999) < 150) return;
+  P.lastRepairHint = S.time;
+  postMsg(0, `Your ${def.name} is damaged. Tap it and press Repair: a worker fixes it for a little Cement.`, b.x, b.y, 'warn');
 }
 
 /* ------------------------------------------------------------------ salvage */
@@ -885,6 +1021,7 @@ function updateWorker(u, dt) {
   const t = u.task;
   if (!t) {
     if (u.carry) stashCarry(u);
+    else if (wantsRepair(u) && S.tick % 30 === u.id % 30 && goRepair(u)) { /* off to be fixed */ }
     else if ((u.bat ?? 100) < BATTERY.low && !insideCharger(u)) { if (!goCharge(u) && !u.inside) goHome(u); }
     else if (!insideCharger(u)) {
       // Waiting for work: top up the battery if it's below 70%, otherwise rest in storage.
@@ -907,6 +1044,13 @@ function updateWorker(u, dt) {
   } else if (t.type === 'haul') doHaul(u, t, dt);
   else if (t.type === 'build') doBuild(u, t, dt);
   else if (t.type === 'pave') doPave(u, t, dt);
+  else if (t.type === 'fix') doFix(u, t, dt);
+  else if (t.type === 'repair') {
+    const c = getE(t.bld);
+    if (!c || c.dead || c.owner !== u.owner) { u.task = null; u.path = null; }
+    else if (u.inside === c.id) { if (u.hp >= u.maxHp || repairDry(c)) { u.task = null; exitBuilding(u); } }
+    else if (moveAlong(u, dt)) enterBuilding(u, c);
+  }
   else if (t.type === 'staff') doStaff(u, t, dt);
   workerBattery(u, dt);
 }
@@ -921,7 +1065,7 @@ function needsRoad(b) {
   if (def.store) return true; // a Depot only helps if haulers can reach it from the Command Base
   if (!b.built) return true;
   if (def.mil) return S.mode !== 'colony'; // Ammo for the garrison
-  return !!(def.inp || def.out || def.ammo || def.charger || def.roadworks || def.bots);
+  return !!(def.inp || def.out || def.ammo || def.charger || def.roadworks || def.bots || def.repair);
 }
 
 /** Haulers on the road can only use storage they can reach by road. */
@@ -1322,7 +1466,7 @@ function updateBuilding(b, dt) {
     else b.status = 'Under construction';
     return;
   }
-  if (b.armor < def.armor && S.time - b.lastHit > 8) b.armor = Math.min(def.armor, b.armor + dt * 0.8);
+  repairHint(b);
   if (b.paused) { b.status = 'Paused — its worker is free for other jobs'; return; }
   if (def.mil) b.status = `Garrison: ${b.garrison.length} of ${def.garrison} warbots`;
   else if (def.store) b.status = 'Storing goods';
@@ -1344,6 +1488,7 @@ function updateBuilding(b, dt) {
     }
   }
   if (def.mil) garrisonDefense(b, dt);
+  if (def.repair) updateRepairStation(b, def, dt);
   if (def.staff && !def.inp) {
     const op = getE(b.staff);
     const who = def.crew ? BOTS[def.crew].name : 'Worker';
@@ -1355,7 +1500,7 @@ function updateBuilding(b, dt) {
 }
 
 /** Buildings whose busy time is tracked for statistics. */
-function tracksUse(def) { return !!(def.staff || (def.charger && !def.store) || (def.ammo && !def.missile)); }
+function tracksUse(def) { return !!(def.staff || (def.charger && !def.store) || (def.ammo && !def.missile) || def.repair); }
 
 function produce(b, def, dt) {
   const op = getE(b.staff);
@@ -1568,6 +1713,7 @@ function captureBuilding(b, by) {
   }
   releaseBotsFrom(b, true);
   delete b.prio; delete b.smode; delete b.reject; b.paused = false;
+  b.fixLeft = 0; b.fixer = 0;
   b.owner = by;
   b.armor = Math.max(4, def.armor * 0.4);
   b.lastHit = S.time;
@@ -1597,8 +1743,16 @@ function captureBuilding(b, by) {
 function updateWarbot(u, dt) {
   if (u.bat === undefined) u.bat = 100;
   if (u.inside) {
+    const home = getE(u.inside);
+    if (home && BDEFS[home.type].repair) {
+      // In a Repair Station: leave when fixed (or it has run out of Alloy).
+      if (u.hp >= u.maxHp || repairDry(home)) { exitBuilding(u); u.task = null; }
+      return;
+    }
     if (u.bat < 100) u.bat = Math.min(100, u.bat + BATTERY.garrisonCharge * dt); // garrisons recharge their warbots
-    if ((u.ammo ?? WARBOT_AMMO) <= WARBOT_AMMO - AMMO_SHOTS) reloadAmmo(u, getE(u.inside));
+    if ((u.ammo ?? WARBOT_AMMO) <= WARBOT_AMMO - AMMO_SHOTS) reloadAmmo(u, home);
+    // Damaged and the garrison is quiet: go and get fixed.
+    if (home && wantsRepair(u) && S.tick % 45 === u.id % 45 && S.time - (home.lastHit || -99) > 8 && home.garrison.length > 1) goRepair(u);
     return;
   }
   u.moved = 0;
@@ -1659,7 +1813,15 @@ function warbotAct(u, dt) {
     if (!pathing) u.path = null;
     return;
   }
-  if (!t) { goGarrison(u); return; }
+  if (!t) { if (!(wantsRepair(u) && goRepair(u))) goGarrison(u); return; }
+  if (t.type === 'repair') {
+    const c = getE(t.bld);
+    if (!c || c.dead || c.owner !== u.owner || repairDry(c)) { u.task = null; return; }
+    const r = travel(u, c.x, c.y, dt);
+    if (r === null) u.task = null;
+    else if (r) enterBuilding(u, c);
+    return;
+  }
   if (t.type === 'garrison') {
     const b = getE(t.bld);
     if (!b || b.owner !== u.owner || !b.built) { cancelTask(u); return; }

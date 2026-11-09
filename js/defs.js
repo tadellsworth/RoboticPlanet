@@ -48,6 +48,16 @@ const CROP_GROW_TIME = 45;        // seconds for a planted energy crop to ripen
  * combat, the rival) moves 15% slower than its raw numbers, for a calmer pace than an RTS.
  */
 const GAME_PACE = 0.85;
+/**
+ * Repairs (Versus). Robots get fixed at a Repair Station: one Alloy restores REPAIR_HP_PER_ALLOY
+ * health. Buildings don't mend on their own: Repair sends a worker with Cement, one Cement per
+ * ARMOR_PER_CEMENT armor, restoring FIX_RATE armor a second. Robots look for repairs below these
+ * shares of their health (warbots only while their garrison is quiet).
+ */
+const REPAIR_HP_PER_ALLOY = 12;
+const ARMOR_PER_CEMENT = 6;
+const FIX_RATE = 2;
+const REPAIR_BELOW = { warbot: 0.7, other: 0.6 };
 const FUEL_ENERGY = 75;           // battery points one Fuel gives at a Charging Station (3/4 of a full charge)
 
 /*
@@ -312,6 +322,11 @@ const BDEFS = {
     name: 'Ramp', desc: 'Workers cut a slope into a low cliff so bots can climb between levels. Place it at the foot or top of a cliff.',
     cost: { cement: 3, fiber: 1 }, ramp: true, armor: 4, buildTime: 10,
   },
+  repair: {
+    name: 'Repair Station',
+    desc: 'Damaged robots come here to be fixed, three at a time. It uses Alloy, which haulers bring: one Alloy repairs 12 health (a whole Warbot). Warbots come when their garrison is quiet.',
+    cost: { cement: 3, alloy: 2 }, repair: { slots: 3, rate: 1.5 }, alloyCap: 3, armor: 10, buildTime: 10, war: true,
+  },
   depot: {
     name: 'Depot', desc: 'Extra storage. Haulers drop goods at the nearest storage they can reach by road, so depots along your highways shorten trips.',
     cost: { fiber: 3, cement: 2 }, store: true, armor: 10, buildTime: 8,
@@ -320,7 +335,7 @@ const BDEFS = {
 
 /** Order of the build menu. */
 const BUILD_MENU = ['harvester', 'quarry', 'mine', 'tap', 'smelter', 'fab', 'foundry', 'charger', 'farm', 'pump', 'refinery',
-  'kiln', 'tarworks', 'roadworks', 'outpost', 'turret', 'armory', 'munitions', 'silo', 'depot', 'ramp', 'grower'];
+  'kiln', 'tarworks', 'roadworks', 'outpost', 'turret', 'repair', 'armory', 'munitions', 'silo', 'depot', 'ramp', 'grower'];
 
 const INPUT_CAP = 3;   // how many of each input a production building stockpiles
 const AMMO_CAP = 3;    // crystals a turret stockpiles

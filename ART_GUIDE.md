@@ -258,7 +258,7 @@ the game adds a thin team-coloured bar under it.
 
 **Size on the map** (Claude Code sets this in the manifest; listed so the proportions look right): the Command Base is
 the biggest, about 1.9 tiles wide; the Foundry, Refinery, Missile Factory, Outpost and Missile Silo are large, about
-1.5; most production buildings about 1.35; the Charging Station and Pulse Turret about 1.25. Keep these proportions
+1.5; most production buildings about 1.35; the Charging Station, Repair Station and Pulse Turret about 1.25. Keep these proportions
 between images too: a Charging Station should look smaller than a Foundry.
 
 **The buildings**
@@ -391,6 +391,13 @@ gantry crane and hazard markings. Accent colour: amber #ffcf4a.
 ```
 A missile silo: a round reinforced launch pad set into a raised concrete collar, split blast doors half open
 showing a missile nose cone, and team-coloured launch lights around the rim. Team colour: cyan #38d4ff.
+```
+
+`repair.png` (the Repair Station)
+```
+A robot repair bay: an open-sided service shed with three repair cradles on the pad, a robotic welding arm
+with a bright spark, a rack of spare plating and a small crane hoist. Smaller than the factories, about the size
+of the Charging Station. Accent colour: orange #ff9a3c.
 ```
 
 `site.png` (a construction site)
