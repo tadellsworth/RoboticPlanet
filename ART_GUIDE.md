@@ -4,7 +4,8 @@ Every building, bot, resource and ground tile now uses custom art (batch 1). Any
 image keeps a placeholder drawn in code, so art can still be added **one piece at a time**. The
 remaining pieces are listed under [Batch 2](#batch-2-terrain-levels-and-goods-icons), [Batch 3](#batch-3-missiles-batteries-and-army-orders)
 [Batch 4](#batch-4-fuel-farms-and-oil) and [Batch 5](#batch-5-robot-types-roads-and-ammo). To give every building a realistic 3D
-industrial look, see [Batch 6](#batch-6-realistic-3d-industrial-buildings-a-full-restyle).
+industrial look, see [Batch 6](#batch-6-realistic-3d-industrial-buildings-a-full-restyle). For Colony wildlife, the Research Lab
+and empty Silos, see [Batch 11](#batch-11-colony-wildlife-the-research-lab-and-empty-silos).
 
 This guide has three parts:
 
@@ -724,6 +725,92 @@ between them, and a striped barrier arm across the road (one version down, one r
 
 Send them in a zip like the earlier batches. Claude Code will hook them up: the game picks `wall-ew`, `wall-ns`
 or `wall-post` for each tile from its neighbours, and the Gate pieces from the road's direction.
+
+### Batch 11: Colony wildlife, the Research Lab and empty Silos
+
+Colony mode now has creature nests and two kinds of creature, the Research Lab, and Silos that look empty until a
+missile is ready. Until art arrives the game draws the nest, the creatures and the Lab itself, and uses edited
+copies of the Silo images for the empty ones. Make the Lab and the nests in the same Claude Design chat as Batch 6
+(paste the Batch 6 style brief first, and attach the Smelter as the style anchor); the creatures follow the Batch 8
+robot pattern (seen from straight above, facing right, four walking frames).
+
+| Key | Size | What |
+|---|---|---|
+| `lab` | 512×512, transparent | Research Lab (one version: the game adds the team bar) |
+| `nest-1`, `nest-2`, `nest-3` | 512×512, transparent | Creature Nest at levels 1, 2 and 3 |
+| `scuttler-f0` … `scuttler-f3` | 256×256, transparent | Scuttler walking frames, facing right, no shadow |
+| `brute-f0` … `brute-f3` | 256×256, transparent | Brute walking frames, facing right, no shadow |
+| `silo-empty@0`, `silo-empty@1` | 512×512, transparent | Missile Silo with no missile in it (team versions) |
+| `nukesilo-empty@0`, `nukesilo-empty@1` | 512×512, transparent | Nuclear Silo with no missile in it (team versions) |
+| `trader-ship` | 256×256, transparent | Optional: the trader ship that hovers over a Command Base during a Planet event |
+
+**`lab.png`** (after the Batch 6 style brief)
+```
+A Research Lab: a compact high-tech science station on the usual concrete and steel pad. A white-and-graphite
+observatory-style dome with a horizontal glowing band of windows, a small satellite dish and an antenna mast on
+the roof, a bank of server racks with blinking lights on one side and a sample bay with glass canisters on the
+other. Cleaner and more precise than the industrial buildings, but still a little dusty. Accent colour: violet
+#b98cff glow in the window band and canisters. Size class: about 1.35 tiles, like the production buildings.
+Same camera angle, lighting, materials and scale as the Smelter.
+```
+
+**`nest-1.png`, `nest-2.png`, `nest-3.png`**
+```
+A creature nest on the alien planet, in three growth stages, as three separate images with identical framing.
+It is organic, not built: a low mound of hardened dark purple-brown resin and fused rock, ribbed and knobbly
+like a termite mound crossed with a beetle shell, with three or four dark burrow holes, and a sticky purple
+creep spreading over the sand around its base. Clusters of pale glowing green eggs sit in hollows on the mound.
+No foundation pad: the mound's base sits on the bottom edge (about 4% margin) and spans about 75% of the width,
+like the buildings' pads. Same camera angle and lighting as the Smelter.
+Stage 1: small and low, a few eggs. Stage 2: bigger, with bony spikes starting to grow and more eggs.
+Stage 3: large and menacing, tall jagged spikes, many glowing eggs, a faint green glow from the burrows.
+Make it read as hostile and alive at 50 pixels wide: a strong dark silhouette with the green eggs as the accent.
+```
+
+**Creatures** (one chat; paste this first)
+```
+Creature sprites for the same game. Two alien creatures that raid the robot colony. Render each as a realistic
+3D model with an orthographic camera looking straight down and a soft sun from the top-left, like the robots in
+my game: seen from directly above, facing RIGHT (head at the right), centred on a 256x256 transparent canvas.
+No drop shadow and no ground: the game draws the shadow. The game turns each sprite round its centre to face
+where it walks, so keep the body centred.
+
+For each creature make 4 walking frames (f0 to f3): the legs step forward a quarter of a stride each frame so
+f0, f1, f2, f3 loop smoothly back to f0. Nothing else may change between frames.
+
+Scuttler (scuttler-f0 to f3): small and quick, about the size of a large dog next to the robots. A low beetle-
+like body with a glossy dark purple carapace (#55306a, lighter ridges), six thin jointed legs splayed out to the
+sides, short mandibles at the front and two small glowing magenta-pink eyes (#ff5fd2). The body fills about 45% of
+the canvas width with the legs reaching to about 65%.
+
+Brute (brute-f0 to f3): big, slow and armoured, about twice the Scuttler's size. A heavy six-legged creature with
+thick overlapping brown-bronze armour plates (#6b4430), pale bony spikes along its back and sides, big crushing
+mandibles and two glowing amber eyes (#ffb347). The body fills about 70% of the canvas width.
+
+Both should be clearly creatures, not robots, and read at 20-30 pixels wide: bold silhouettes, the glowing eyes
+as the accent.
+```
+
+**Empty Silos** (attach `silo@0.png`, `silo@1.png`, `nuclear-silo@0.png` and `nuclear-silo@1.png`)
+```
+Attached are four building images from my game: a Missile Silo and a Nuclear Silo, each in two team versions.
+Make a copy of each that is exactly the same image, pixel for pixel, except that the missile is gone: the launch
+pit is empty and dark inside, and its glowing ring and rim continue all the way round where the missile used to
+hide them. Keep the canvas, framing, lighting and everything else identical, so the two images can be swapped in
+place. Name them silo-empty@0, silo-empty@1, nuclear-silo-empty@0 and nuclear-silo-empty@1.
+```
+
+**`trader-ship.png`** (optional)
+```
+A small boxy cargo spaceship hovering in the air, seen from above at the same three-quarter angle and lighting
+as the buildings: a battered white-and-orange hull, two stubby thruster pods glowing pale blue underneath, a
+cargo hatch with a winch on its belly and blinking landing lights. 256x256 transparent PNG, the ship filling
+about 75% of the width, no shadow and no ground (it floats; the game draws its shadow).
+```
+
+Send them in a zip like the earlier batches (WebP or PNG). Claude Code will register them: the Lab and the nests
+with the same `B3D` sizing as the other buildings, the nest picked by its level, the creatures with `driveSet`-style
+walking frames played by distance walked, and the empty Silos replacing the current edited ones.
 
 ### Not swappable yet (ask Claude Code if you want these)
 
