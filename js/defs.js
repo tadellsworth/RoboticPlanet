@@ -164,6 +164,15 @@ const WEAR_TRAIN = 8;
  * paved road of the same length. Trucks can't use it.
  */
 const ROPE_MIN = 3, ROPE_MAX = 14, ROPE_SPEED = 1.8, ROPE_COST = 1.3;
+/**
+ * Viaduct: a level bridge straight across a valley, canyon or water between two clifftops VIA_MIN
+ * to VIA_MAX tiles apart (no more than VIA_RISE levels apart: the deck runs at the higher one and
+ * ramps down at the other), over ground lower than both ends. The ground below stays as it is:
+ * bots, roads and buildings down there carry on underneath. It costs VIA_COST for every tile it
+ * spans, paid up front, and a worker at the near end puts it up in VIA_TIME seconds a tile. Every
+ * bot can cross it, trucks and Road Trains included, and trains when track runs onto both ends.
+ */
+const VIA_MIN = 2, VIA_MAX = 12, VIA_RISE = 2, VIA_COST = { cement: 3, alloy: 1 }, VIA_TIME = 5;
 /*
  * Freight rail: track (S.rail) is laid in Paths (Rail), RAIL_COST a tile, paid when you build it and
  * laid at once, on open ground in your territory and on one level (trains can't climb). It can cross a
@@ -286,7 +295,7 @@ const SHAPE_PRESETS = [
   { name: 'Islands', w: 1.15, h: 1.45, islands: true, ffa: true, tip: 'Islands: the only way across is bridges. Push an Outpost out to your shore, then build a bridge in Paths (Bridges): it can reach out past your border.' },
   { name: 'Crater', w: 1, h: 1, crater: true, minLevels: 3, ffa: true, tip: 'Crater: the richest fields lie on the crater floor in the middle. One ramp leads down on your side; cut more in Paths (Ramps).' },
   { name: 'Plateaus', w: 1, h: 1, plateau: true, minLevels: 3, ffa: true, tip: 'Plateaus: your base stands on high ground with only two slopes down. Easy to hold: wall the slopes and push out.' },
-  { name: 'Sky islands', w: 1.15, h: 1.45, islands: true, sky: true, ffa: true, tip: 'Sky islands: towering mesas at different heights, cut apart by sheer, bottomless canyons. Cross with Sky bridges (Paths, Bridges), Ropeways, or rail bridges for Freight Trains.' },
+  { name: 'Sky islands', w: 1.15, h: 1.45, islands: true, sky: true, ffa: true, tip: 'Sky islands: towering mesas at different heights over a canyon floor far below, with sheer drops and no slopes down. Cross between clifftops with Viaducts (Build menu); a Ropeway can reach the floor, but there is little down there.' },
 ];
 const CHOKE_BAND = 3;   // Chokepoint maps: rows of crags each side of the middle line
 const CHOKE_APPROACH = 3; // ...and rows of open ground kept clear each side of the pass
@@ -526,6 +535,10 @@ const BDEFS = {
     name: 'Ropeway', desc: 'A cable line with gondolas, straight across anything: cliffs, water, rock. Tap one end, then the far end (up to 14 tiles away). Haulers bring the materials to the near end; once it is built the cable goes across and the far station goes up. Haulers, Workers and warbots ride it as part of your road network; Freight Trucks and Road Trains are too heavy and keep to the roads.',
     cost: { cement: 8, alloy: 6 }, ropeway: true, armor: 10, buildTime: 14,
   },
+  viaduct: {
+    name: 'Viaduct', desc: 'A level bridge straight across a valley or canyon, from one clifftop to another up to 12 tiles away, over ground lower than both ends: traffic down below carries on underneath. Tap one end, then the far end. It costs 3 Cement and 1 Alloy for every tile it spans, paid up front, and a worker builds it out from the near end. Every bot can cross, trucks and Road Trains included; lay track onto both ends and trains cross too.',
+    cost: { cement: 3, alloy: 1 }, viaduct: true, prepaid: true, armor: 24, buildTime: 10,
+  },
   lab: {
     name: 'Research Lab', desc: 'Researches upgrades for your whole colony, one at a time: pick one in its panel. The Chips, Crystal and Alloy are paid from storage when you start, and a worker inside does the research. Two Labs research twice as fast. Colony only.',
     cost: { cement: 6, alloy: 4, chip: 2 }, staff: true, lab: true, colony: true, armor: 10, buildTime: 14,
@@ -551,7 +564,7 @@ const BDEFS = {
 
 /** Order of the build menu. */
 const BUILD_MENU = ['harvester', 'quarry', 'mine', 'tap', 'smelter', 'fab', 'foundry', 'charger', 'farm', 'pump', 'refinery',
-  'kiln', 'tarworks', 'roadworks', 'ropeway', 'station', 'outpost', 'turret', 'repair', 'armory', 'munitions', 'silo', 'reactor', 'nukesilo', 'depot', 'grower', 'lab'];
+  'kiln', 'tarworks', 'roadworks', 'ropeway', 'viaduct', 'station', 'outpost', 'turret', 'repair', 'armory', 'munitions', 'silo', 'reactor', 'nukesilo', 'depot', 'grower', 'lab'];
 /** Ramps are planned in Paths (with roads), not from the build menu. */
 
 const INPUT_CAP = 3;   // how many of each input a production building stockpiles

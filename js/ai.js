@@ -96,7 +96,7 @@ function aiThink(p) {
     for (const b of me) {
       if (b.built || b.dead || S.time - b.born < 120 || (needArmory && b.type === 'armory')) continue;
       if ((b.type === 'silo' || b.type === 'munitions') && S.time - b.born < 420) continue; // saved up for: give it time
-      const cost = BDEFS[b.type].cost;
+      const cost = siteCost(b);
       let stuck = false;
       for (const g in cost) if ((b.stock[g] || 0) + (b.inc[g] || 0) < cost[g] && have[g] <= 0) stuck = true;
       if (stuck) { demolish(b); sites--; break; }
@@ -142,7 +142,7 @@ function aiThink(p) {
   // With Fiber nearly gone (no Harvester at work, or construction waiting for it), the Smelters
   // stop burning it until there's some to spare.
   const fiberNow = playerGoods(p).fiber;
-  const sitesWantFiber = me.some((b) => !b.built && (BDEFS[b.type].cost.fiber || 0) > (b.stock.fiber || 0) + (b.inc.fiber || 0));
+  const sitesWantFiber = me.some((b) => !b.built && (siteCost(b).fiber || 0) > (b.stock.fiber || 0) + (b.inc.fiber || 0));
   for (const b of me) {
     if (b.type !== 'smelter' || !b.built) continue;
     if (!b.paused && fiberNow < 3 && (!cutting || sitesWantFiber)) setPaused(b, true);
@@ -393,6 +393,8 @@ function aiBridge(p, maxSites) {
     if (S.time - P.bridgeSince[k] > 240) { cancelPlan(+k); delete P.bridgeSince[k]; } else pending = true;
   }
   if (pending) return;
+  // A Viaduct of ours is still going up.
+  if (S.buildings.some((v) => !v.dead && v.owner === p && v.type === 'viaduct' && !v.built)) return;
   const W = S.W, N = W * S.H;
   const nb = (t, fn) => { const i = t % W; if (i > 0) fn(t - 1); if (i < W - 1) fn(t + 1); if (t >= W) fn(t - W); if (t + W < N) fn(t + W); };
   const sea = (t) => bridgeable(t) && !S.road[t] && !S.plan[t] && !S.bAt[t] && !scorched(t);
@@ -426,12 +428,23 @@ function aiBridge(p, maxSites) {
     for (const t of tiles) { if (buildRoad(p, t % W, (t / W) | 0)) break; P.bridgeSince[t] = S.time; }
     return;
   }
+  // No water to bridge (Sky islands): a Viaduct from our clifftop across the canyon, onto a clifftop
+  // our border already reaches if there is one (so we can build there), else onto no-one's land.
+  const via = aiViaductSpot(p, home, E);
+  if (via && (via.owned || siteCount(p) >= maxSites || !aiAffordable(p, 'outpost'))) {
+    const cost = viaductCost(via.a % W, (via.a / W) | 0, via.b % W, (via.b / W) | 0);
+    if (!canPay(p, cost)) { P.bridgeWant = S.time; return; }
+    P.bridgeWant = 0;
+    placeViaduct(p, via.a % W, (via.a / W) | 0, via.b % W, (via.b / W) | 0);
+    return;
+  }
   // No crossing from inside our border yet: an Outpost on the shore facing the nearest land toward the enemy.
   if (siteCount(p) >= maxSites || !aiAffordable(p, 'outpost')) return;
   if (S.buildings.some((b) => !b.dead && b.owner === p && b.type === 'outpost' && !b.built)) return;
   let tx = -1, ty = -1, td = Infinity;
+  const lowest = S.elev[tIdx(L.x, L.y)] - VIA_RISE;
   for (let t = 0; t < N; t++) {
-    if (S.terrain[t] !== T_GROUND || S.zone[t] < 0 || S.zone[t] === home) continue;
+    if (S.terrain[t] !== T_GROUND || S.zone[t] < 0 || S.zone[t] === home || S.elev[t] < lowest) continue;
     const i = t % W, j = (t / W) | 0, d = dist(i, j, L.x, L.y) + dist(i, j, E.x, E.y) * 0.6;
     if (d < td) { td = d; tx = i; ty = j; }
   }
@@ -443,6 +456,38 @@ function aiBridge(p, maxSites) {
     const t = cands[k][1], i = t % W, j = (t / W) | 0;
     if (canPlace(p, 'outpost', i, j, true).ok && !wouldBlock(t)) { placeSite(p, 'outpost', i, j); return; }
   }
+}
+
+/**
+ * The best Viaduct for player p to put up toward enemy base E: from a clifftop tile of ours (in
+ * our border, where our bots go) straight across lower ground to a clifftop in another area, as
+ * close to the enemy as possible, and short. Far ends inside our border come first. {a, b, owned} or null.
+ */
+function aiViaductSpot(p, home, E) {
+  const W = S.W, N = W * S.H;
+  let best = null, bs = Infinity;
+  for (let a = 0; a < N; a++) {
+    if (S.owner[a] !== p || S.zone[a] !== home || S.terrain[a] !== T_GROUND || S.bAt[a] || S.res[a] || S.ramp[a]) continue;
+    const ai = a % W, aj = (a / W) | 0;
+    for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+      // Only from a rim: the next tile drops away.
+      if (!inMap(ai + di, aj + dj)) continue;
+      const n1 = tIdx(ai + di, aj + dj);
+      if (S.terrain[n1] === T_GROUND && S.elev[n1] >= S.elev[a]) continue;
+      for (let k = VIA_MIN; k <= VIA_MAX; k++) {
+        const bi = ai + di * k, bj = aj + dj * k;
+        if (!inMap(bi, bj)) break;
+        const b = tIdx(bi, bj);
+        if (S.terrain[b] !== T_GROUND || S.zone[b] === home || S.zone[b] < 0 || Math.abs(S.elev[b] - S.elev[a]) > VIA_RISE) continue;
+        if (viaductBlocked(p, ai, aj, bi, bj)) continue;
+        const owned = S.owner[b] === p;
+        const sc = dist(bi, bj, E.x, E.y) + k * 0.8 - (owned ? 20 : 0);
+        if (sc < bs && canPlace(p, 'viaduct', ai, aj, true).ok) { bs = sc; best = { a, b, owned }; }
+        break; // the first clifftop across is the one
+      }
+    }
+  }
+  return best;
 }
 
 /**

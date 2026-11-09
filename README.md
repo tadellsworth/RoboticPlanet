@@ -116,8 +116,8 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
   through it drops back to plain road. On a busy trunk road that's every 8–10 minutes. Tap any of your roads to see its
   wear and mark it. Removing a road refunds its Cement.
 - **Bridges and tunnels:** roads stop at water and rocky crags. The **Bridges** tool in Paths plans roads across them:
-  a bridge costs 2 Cement and 1 Alloy a tile, a tunnel 3 Cement and 1 Alloy, a Sky bridge over a canyon 3 Cement and
-  1 Alloy (`CROSS` in `js/defs.js`; `bridgeable`). Workers build them out from the shore or rock face (6–9 s a tile), and
+  a bridge costs 2 Cement and 1 Alloy a tile, a tunnel 3 Cement and 1 Alloy (`CROSS` in `js/defs.js`;
+  `bridgeable`; a Sky bridge over the old `T_CHASM` canyons, 3 Cement and 1 Alloy, survives for old saves). Workers build them out from the shore or rock face (6–9 s a tile), and
   they join land on any level. A bridge is drawn as one level span at the height of the highest clifftop it lands on
   (`deckLevel` in `js/render.js`), ramping down at a lower end; its piers, end towers and suspension cables reach past
   the tile, so `drawBridgeRigging` draws them each frame over the map. Lay road routes use them only when going round is much longer.
@@ -149,6 +149,14 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
   the far one goes up (`b.link` both ways). To the pathfinder a ride is an extra edge between the station tiles
   (`ROPE_COST` × a paved road of that length); zones and the road network join across it (`roadNet().comp`), but not for
   trucks (`compT`, `truckLinked`, `routeOpts.noRope`). Riders move at `ROPE_SPEED` (`u.ride`) and are drawn in gondolas.
+- **Viaducts** (`VIA_*` in `js/defs.js`; `viaductBlocked`, `placeViaduct`, `viaductAcross` in `js/sim.js`; `viaLink` in
+  `js/world.js`): two abutment buildings joined straight across lower ground, like a Ropeway's stations but level and
+  open to every bot. Paid up front (`prepaid`, its cost per site in `b.cost`, read with `siteCost`), built in
+  `VIA_TIME` seconds a tile spanned (`b.buildTime`). To the pathfinder it's an edge between the abutment tiles at
+  plain-road cost; zones, both road networks (`comp` and `compT`) and the railway (`railNbrs`) join across it. A bot
+  out on the deck drives as if on the abutment it left (`moveAlong`), so the ground below is untouched and its traffic
+  passes underneath. The deck, piers and girders are drawn each frame (`drawViaductDeck`). An abutment on no-one's
+  land survives `computeTerritory`; one inside another colony's land is lost.
 - **Freight rail** (`RAIL_*` in `js/defs.js`; the rail section of `js/world.js`; `layRail`, `deliverTrain` in
   `js/sim.js`): track is a tile layer (`S.rail`), laid instantly from the Paths **Rail** tool (`RAIL_COST` a tile,
   `RAIL_BRIDGE_COST` over water or canyon), level except on bridges (`railStep`). Rail Stations stand beside the track;
@@ -170,8 +178,10 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
   **Crater** sinks a crater one cliff below a rim in the middle, its floor holding rich fields (and Uranium in a
   Nuclear race), with one natural ramp in from each side. **Plateaus** stands each base on the top level, with a
   terrace one level down all round and only two natural slopes off it. Both force at least three levels.
-  **Sky islands** (`sky: true`) is Islands with the sea turned into bottomless canyons (`T_CHASM`) and each island
-  lifted (the middle one two levels, islets one); Sky bridges, Ropeways and rail bridges are the ways across.
+  **Sky islands** (`sky: true`) is Islands with the sea turned into a canyon floor at level 0 and every island lifted
+  into a mesa (home islands +3 levels, the middle one and the islets +4), so every drop is 3+ levels: no Ramp can
+  reach the floor, only a Ropeway. A thin scatter of boulders and ore lies down there. Viaducts cross between the
+  clifftops; the AI finds one with `aiViaductSpot`. (`T_CHASM`, the old bottomless canyon, is kept for old saves.)
 - **Loitering:** a warbot standing still in another player's territory for more than `BATTERY.waitGrace` (15 s) drains
   `BATTERY.warbotWait` a second; once flat it gives up its attack, or leaves its rally flag, to recharge at home.
 - **Raids:** armed warbots holding a rally flag in enemy land with nothing to fight tear up enemy roads (not bridges or

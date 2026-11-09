@@ -612,21 +612,41 @@ function generateMap(seed, W, H, cfg) {
     amt[t] = clamp(Math.round(RES[res[t]].amount * RPR.amount * rich), 1, 255);
   }
   const grow = new Float32Array(N).fill(1);
-  // Sky islands: no water anywhere: the sea becomes deep, sheer canyons, and the islands stand at
-  // different heights: the middle one highest, the islets a level up (the same for every player:
-  // they're mirrored or turned). Inland pools become canyon too.
+  // Sky islands: no water anywhere. The islands are towering mesas (the middle one and the islets a
+  // level higher than the home islands) standing over a canyon floor far below: real ground, at
+  // least three levels down, with sheer drops all round and no slopes, so no Ramp can reach it (a
+  // Ropeway can, for the few boulders and ore down there). Viaducts cross between the clifftops.
+  // Small inland pools fill in as land.
   if (SH.sky) {
-    for (let t = 0; t < N; t++) if (terrain[t] === T_WATER) { terrain[t] = T_CHASM; res[t] = R_NONE; }
+    const wl = new Int32Array(N).fill(-1);
+    for (let t = 0; t < N; t++) {
+      if (terrain[t] !== T_WATER || wl[t] >= 0) continue;
+      const q = [t];
+      wl[t] = t;
+      for (let h = 0; h < q.length; h++) orth(q[h], (u) => { if (wl[u] < 0 && terrain[u] === T_WATER) { wl[u] = t; q.push(u); } });
+      if (q.length >= 40) continue;
+      let lv = 99;
+      for (const a of q) orth(a, (u) => { if (terrain[u] === T_GROUND) lv = Math.min(lv, elev[u]); });
+      for (const a of q) { terrain[a] = T_GROUND; elev[a] = lv === 99 ? 0 : lv; res[a] = R_NONE; fert[a] = 0; ramp[a] = 0; }
+    }
     const lab = new Int32Array(N).fill(-1), span = Math.min(W, H);
     for (let t = 0; t < N; t++) {
-      if (terrain[t] === T_CHASM || lab[t] >= 0) continue;
+      if (terrain[t] === T_WATER || lab[t] >= 0) continue;
       const q = [t];
       lab[t] = t;
       let sx = 0, sy = 0;
-      for (let h = 0; h < q.length; h++) { const a = q[h]; sx += a % W; sy += (a / W) | 0; orth(a, (u) => { if (lab[u] < 0 && terrain[u] !== T_CHASM) { lab[u] = t; q.push(u); } }); }
+      for (let h = 0; h < q.length; h++) { const a = q[h]; sx += a % W; sy += (a / W) | 0; orth(a, (u) => { if (lab[u] < 0 && terrain[u] !== T_WATER) { lab[u] = t; q.push(u); } }); }
       const cx = sx / q.length, cy = sy / q.length;
-      const lift = dist(cx, cy, ccx, ccy) < span * 0.2 ? 2 : q.length < 70 ? 1 : 0;
-      if (lift) for (const a of q) elev[a] = Math.min(elev[a] + lift, 6);
+      const lift = dist(cx, cy, ccx, ccy) < span * 0.2 || q.length < 70 ? 4 : 3;
+      for (const a of q) elev[a] = Math.min(elev[a] + lift, 6);
+    }
+    const sd = (seed ^ 0x5c1) >>> 0;
+    for (let t = 0; t < N; t++) {
+      if (terrain[t] !== T_WATER) continue;
+      terrain[t] = T_GROUND; elev[t] = 0; ramp[t] = 0; res[t] = R_NONE; fert[t] = 0;
+      // A scatter of boulders and ore down on the floor (the same for both sides of the map).
+      const m = Math.min(t, N - 1 - t), h = hash2(m % W, (m / W) | 0, sd);
+      if (h < 0.014) { res[t] = h < 0.005 ? R_ORE : R_BOULDER; amt[t] = clamp(Math.round(RES[res[t]].amount * RPR.amount), 1, 255); }
     }
   }
   for (let t = 0; t < N; t++) if (terrain[t] !== T_GROUND) fert[t] = 0;
@@ -828,9 +848,22 @@ function passTile(t, who) {
   if (!id) return false;
   const b = getE(id);
   if (!b) return false;
-  if (b.type === 'outpost') return true;
+  if (b.type === 'outpost' || b.type === 'viaduct') return true;
   return (b.type === 'gate' || b.type === 'ropeway') && (who === undefined || who === b.owner);
 }
+
+/** The tile at the far end of the Viaduct whose abutment stands on tile t (both built), or -1. */
+function viaLink(t) {
+  const id = S.bAt[t];
+  if (!id) return -1;
+  const b = getE(id);
+  if (!b || b.type !== 'viaduct' || !b.built || !b.link) return -1;
+  const o = getE(b.link);
+  return o && !o.dead && o.built ? o.y * S.W + o.x : -1;
+}
+
+/** What a construction site needs in all: its own cost (a Viaduct's depends on its length) or its type's. */
+function siteCost(b) { return b.cost || BDEFS[b.type].cost; }
 
 /** The tile at the far end of the ropeway whose station stands on tile t (both built), or -1. */
 function ropeLink(t) {
@@ -893,9 +926,8 @@ function computeZones() {
         z[b] = next;
         q.push(b);
       }
-      // A Ropeway joins the areas at its two ends, whatever lies between.
-      const r = S.bAt[a] ? ropeLink(a) : -1;
-      if (r >= 0 && z[r] < 0) { z[r] = next; q.push(r); }
+      // A Ropeway or a Viaduct joins the areas at its two ends, whatever lies between.
+      if (S.bAt[a]) for (const r of [ropeLink(a), viaLink(a)]) if (r >= 0 && z[r] < 0) { z[r] = next; q.push(r); }
     }
     next++;
   }
@@ -932,7 +964,7 @@ function addBuilding(owner, type, x, y, built) {
   S.byId.set(b.id, b);
   S.bAt[tIdx(x, y)] = b.id;
   clearDecor(tIdx(x, y));
-  if (type === 'outpost' || type === 'gate' || type === 'ropeway') outpostRoads(x, y); // roads run through it
+  if (type === 'outpost' || type === 'gate' || type === 'ropeway' || type === 'viaduct') outpostRoads(x, y); // roads run through it
   return b;
 }
 
@@ -1012,6 +1044,9 @@ function computeTerritory() {
   S.territoryVer++;
   for (const b of S.buildings.slice()) {
     if (b.dead || BDEFS[b.type].mil || BDEFS[b.type].wild) continue;
+    // A Viaduct can land on no-one's ground (that's how you reach a new clifftop): it's only lost to
+    // another colony's land.
+    if (b.type === 'viaduct' && S.owner[tIdx(b.x, b.y)] < 0) continue;
     if (S.owner[tIdx(b.x, b.y)] !== b.owner) {
       postMsg(b.owner, `${BDEFS[b.type].name} was lost — it is no longer inside your territory.`, b.x, b.y, 'bad');
       destroyBuilding(b, true);
@@ -1141,7 +1176,7 @@ function canPlace(owner, type, i, j, skipBlockCheck) {
     return { ok: true, reason: '' };
   }
   // An Outpost or a Gate can stand on a road: the road runs through it.
-  if ((S.road[t] || S.plan[t]) && type !== 'outpost' && type !== 'gate' && type !== 'ropeway') {
+  if ((S.road[t] || S.plan[t]) && type !== 'outpost' && type !== 'gate' && type !== 'ropeway' && type !== 'viaduct') {
     return { ok: false, reason: def.barrier ? 'There is a road here: a wall line across a road gets a Gate there.' : S.road[t] ? 'There is a road here.' : 'A road is planned here.' };
   }
   if (def.barrier && (S.road[t] || S.plan[t]) && crossTile(t)) return { ok: false, reason: 'Not on a bridge or tunnel.' };
@@ -1242,7 +1277,7 @@ function missingGoods(owner, cost) {
   return Object.keys(cost).filter((g) => (have[g] || 0) < cost[g]).map((g) => GOOD[g].name).join(' or ') || 'materials';
 }
 
-function placeSite(owner, type, i, j) {
+function placeSite(owner, type, i, j, cost) {
   const chk = canPlace(owner, type, i, j);
   if (!chk.ok) return chk;
   const def = BDEFS[type];
@@ -1255,7 +1290,8 @@ function placeSite(owner, type, i, j) {
   const b = addBuilding(owner, type, i, j, false);
   if (type === 'gate' && onRoad) b.road = true;
   // Walls and Gates are paid for now, straight from storage: the site starts with its materials in.
-  if (def.prepaid) for (const g in def.cost) { takeGood(owner, g, def.cost[g]); b.stock[g] = def.cost[g]; }
+  if (cost) b.cost = cost;
+  if (def.prepaid) { const c = siteCost(b); for (const g in c) { takeGood(owner, g, c[g]); b.stock[g] = c[g]; } }
   markDirty(i, j);
   return { ok: true, building: b };
 }
@@ -1455,16 +1491,18 @@ function roadNet() {
     }
     next++;
   }
-  // Ropeways join networks for the light bots that ride them (comp); trucks keep to the roads (compT).
-  const compT = comp.slice(), parent = Array.from({ length: next }, (_, k) => k);
-  const find = (k) => { while (parent[k] !== k) { parent[k] = parent[parent[k]]; k = parent[k]; } return k; };
+  // Ropeways join networks for the light bots that ride them (comp); trucks keep to the roads
+  // (compT). Viaducts join both: anything can drive across one.
+  const compT = comp.slice(), parent = Array.from({ length: next }, (_, k) => k), parentT = parent.slice();
+  const find = (p, k) => { while (p[k] !== k) { p[k] = p[p[k]]; k = p[k]; } return k; };
   for (const b of S.buildings) {
-    if (b.dead || b.type !== 'ropeway' || !b.built) continue;
-    const t = b.y * W + b.x, o = ropeLink(t);
+    if (b.dead || !b.built || (b.type !== 'ropeway' && b.type !== 'viaduct')) continue;
+    const t = b.y * W + b.x, o = b.type === 'ropeway' ? ropeLink(t) : viaLink(t);
     if (o < 0 || comp[t] < 0 || comp[o] < 0) continue;
-    parent[find(comp[t])] = find(comp[o]);
+    parent[find(parent, comp[t])] = find(parent, comp[o]);
+    if (b.type === 'viaduct') parentT[find(parentT, compT[t])] = find(parentT, compT[o]);
   }
-  for (let t = 0; t < N; t++) if (comp[t] >= 0) comp[t] = find(comp[t]);
+  for (let t = 0; t < N; t++) if (comp[t] >= 0) { comp[t] = find(parent, comp[t]); compT[t] = find(parentT, compT[t]); }
   Object.assign(_rn, { of: S, ver: S.roadVer || 0, comp, compT, junc });
   _rn.bnet.clear();
   _rn.bnetT.clear();
@@ -1719,9 +1757,14 @@ function destroyBuilding(b, burn) {
   b.dead = true;
   S.byId.delete(b.id);
   S.bAt[tIdx(b.x, b.y)] = 0;
-  if (b.type === 'outpost' || b.type === 'gate' || b.type === 'ropeway') outpostRoads(b.x, b.y);
-  // A Ropeway is two stations: one going takes the other with it.
-  if (b.type === 'ropeway' && b.link) { const o = getE(b.link); b.link = 0; if (o && !o.dead) { o.link = 0; destroyBuilding(o, burn); } computeZones(); }
+  if (b.type === 'outpost' || b.type === 'gate' || b.type === 'ropeway' || b.type === 'viaduct') outpostRoads(b.x, b.y);
+  // A Ropeway is two stations, a Viaduct two abutments: one going takes the other with it.
+  if ((b.type === 'ropeway' || b.type === 'viaduct') && b.link) {
+    const o = getE(b.link); b.link = 0;
+    if (o && !o.dead) { o.link = 0; destroyBuilding(o, burn); }
+    S.roadVer = (S.roadVer || 0) + 1; S.railVer = (S.railVer || 0) + 1;
+    computeZones();
+  }
   // A Gate that stood on a road leaves the road behind when it goes.
   if (b.type === 'gate' && b.road) setRoad(b.x, b.y, true);
   markDirty(b.x, b.y);
@@ -1864,6 +1907,14 @@ function railPlatforms(i, j) {
 /** Can two neighbouring track tiles join? Trains stay on one level. */
 function railStep(a, b) { return S.rail[a] && S.rail[b] && (S.elev[a] === S.elev[b] || S.terrain[a] !== T_GROUND || S.terrain[b] !== T_GROUND); } // rail bridges join any level
 
+/** Track tiles a train can go to from track tile a: its neighbours, and the far end of a Viaduct with track on both ends. */
+function railNbrs(a) {
+  const W = S.W, N = W * S.H, ai = a % W, out = [];
+  for (const b of [ai > 0 ? a - 1 : -1, ai < W - 1 ? a + 1 : -1, a - W, a + W]) if (b >= 0 && b < N && railStep(a, b)) out.push(b);
+  if (S.bAt[a]) { const v = viaLink(a); if (v >= 0 && S.rail[v]) out.push(v); }
+  return out;
+}
+
 const _rail = { of: null, ver: -1, comp: null };
 /** Connected stretches of track (cached until track changes): comp[t] for every track tile, -1 elsewhere. */
 function railNet() {
@@ -1876,11 +1927,8 @@ function railNet() {
     if (!S.rail[t] || comp[t] >= 0) continue;
     comp[t] = next; q.length = 0; q.push(t);
     while (q.length) {
-      const a = q.pop(), ai = a % W;
-      for (const b of [ai > 0 ? a - 1 : -1, ai < W - 1 ? a + 1 : -1, a - W, a + W]) {
-        if (b < 0 || b >= N || comp[b] >= 0 || !railStep(a, b)) continue;
-        comp[b] = next; q.push(b);
-      }
+      const a = q.pop();
+      for (const b of railNbrs(a)) if (comp[b] < 0) { comp[b] = next; q.push(b); }
     }
     next++;
   }
@@ -1909,7 +1957,7 @@ function railBlocked(owner, t) {
   if (!inMap(i, j)) return 'Outside the map.';
   if (S.owner[t] !== owner) return 'Track only goes inside your border.';
   if (S.terrain[t] === T_ROCK) return 'Track can\'t go through rock.';
-  if (S.bAt[t]) return 'There is a building here.';
+  if (S.bAt[t] && getE(S.bAt[t]).type !== 'viaduct') return 'There is a building here.';
   if (S.res[t]) return 'Clear the resources here first.';
   if (S.ramp[t]) return 'Track can\'t go on a slope: trains stay on one level.';
   if (scorched(t)) return 'This ground is still scorched.';
@@ -1946,9 +1994,8 @@ function railRoute(u, x, y) {
   for (let k = 0; k < q.length && hit < 0; k++) {
     const a = q[k];
     if (isGoal.has(a)) { hit = a; break; }
-    const ai = a % W;
-    for (const b of [ai > 0 ? a - 1 : -1, ai < W - 1 ? a + 1 : -1, a - W, a + W]) {
-      if (b < 0 || b >= N || from[b] !== -2 || !railStep(a, b) || net[b] !== net[a]) continue;
+    for (const b of railNbrs(a)) {
+      if (from[b] !== -2 || net[b] !== net[a]) continue;
       from[b] = a; q.push(b);
     }
   }

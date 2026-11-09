@@ -225,7 +225,7 @@ const BUILD_KEYS = {
   harvester: 'h', quarry: 'q', mine: 'm', tap: 'c', smelter: '1', fab: 'f', foundry: 'u', charger: 'e', farm: '2',
   pump: 'p', refinery: 'v', kiln: 'k', tarworks: 't', roadworks: '3', outpost: 'o', turret: 'g', repair: 'x',
   armory: 'i', munitions: 'n', silo: 'z', depot: '4', grower: 'l', reactor: 'y', nukesilo: 'j',
-  ropeway: '5', station: '6', lab: '7',
+  ropeway: '5', station: '6', lab: '7', viaduct: '8',
 };
 
 /**
@@ -930,6 +930,7 @@ function enterPlaceMode(type) {
   UI.placeType = type;
   refreshOverlay(type);
   showBanner(type === 'ropeway' ? 'Tap a highlighted spot for the Ropeway\'s <b>near station</b>, where your roads are. Then tap the far end.'
+    : type === 'viaduct' ? 'Tap a highlighted spot on a clifftop for the Viaduct\'s <b>near end</b>, where your roads are. Then tap the far end, across the valley.'
     : `Tap a highlighted spot to place a <b>${BDEFS[type].name}</b>.`, null, 'Cancel');
   if (!R.overlay.valid.some((v) => v)) {
     const near = BDEFS[type].gather ? ' near the right resource' : BDEFS[type].farm ? ' near fertile soil' : BDEFS[type].pump ? ' on an oil seep' : '';
@@ -956,10 +957,10 @@ function confirmBanner() {
   if (R.mode === 'aim') { fireAimed(); return; }
   if (R.mode === 'attack') { recallAllWarbots(); return; }
   if (R.mode === 'road') { commitDraft(); return; }
-  if (R.mode === 'place' && UI.placeType === 'ropeway') {
+  if (R.mode === 'place' && (UI.placeType === 'ropeway' || UI.placeType === 'viaduct')) {
     const A = UI.ropeA, E = R.ropeEnd;
     if (!A || !E || !E.ok) return;
-    const res = placeRopeway(0, A.i, A.j, E.i, E.j);
+    const res = UI.placeType === 'viaduct' ? placeViaduct(0, A.i, A.j, E.i, E.j) : placeRopeway(0, A.i, A.j, E.i, E.j);
     if (!res.ok) { sfx('error'); showBanner(`<span class="err">${res.reason}</span>`, null, 'Cancel'); return; }
     sfx('place');
     addFx('ring', A.i + 0.5, A.j + 0.5, { color: PLAYER_COLORS[0] });
@@ -998,6 +999,31 @@ function ropewayTap(i, j) {
   showBanner(`A <b>Ropeway</b> ${len} tiles long${rise ? `, ${Math.abs(rise)} level${Math.abs(rise) > 1 ? 's' : ''} ${rise > 0 ? 'up' : 'down'}` : ''}? ${costHTML(BDEFS.ropeway.cost, playerGoods(0))}`, 'Build', 'Cancel');
 }
 
+/** Placing a Viaduct: the first tap picks the near end, the second the far end across the valley (tap it again to build). */
+function viaductTap(i, j) {
+  if (!UI.ropeA) {
+    const chk = canPlace(0, 'viaduct', i, j);
+    R.ghost = { type: 'viaduct', x: i, y: j, ok: chk.ok };
+    if (!chk.ok) { sfx('error'); showBanner(`<span class="err">${chk.reason}</span>`, null, 'Cancel'); return; }
+    UI.ropeA = { i, j };
+    refreshOverlay('viaduct');
+    sfx('click');
+    const any = R.overlay.valid.some((v) => v);
+    showBanner(any ? `Now tap the <b>far end</b> (highlighted): a clifftop in the same row or column, ${VIA_MIN} to ${VIA_MAX} tiles away, across ground lower than both ends.`
+      : '<span class="err">No valley to span from here: a Viaduct needs a clifftop across lower ground, in a straight line.</span> Tap another near end.', null, 'Cancel');
+    if (!any) { UI.ropeA = null; R.ghost = null; refreshOverlay('viaduct'); }
+    return;
+  }
+  const A = UI.ropeA;
+  if (R.ropeEnd && R.ropeEnd.i === i && R.ropeEnd.j === j && R.ropeEnd.ok) { confirmBanner(); return; }
+  const why = viaductBlocked(0, A.i, A.j, i, j);
+  R.ropeEnd = { i, j, ok: !why };
+  if (why) { sfx('error'); showBanner(`<span class="err">${why}</span> Tap another far end.`, null, 'Cancel'); return; }
+  const n = Math.abs(i - A.i) + Math.abs(j - A.j) - 1, cost = viaductCost(A.i, A.j, i, j);
+  const rise = S.elev[tIdx(i, j)] - S.elev[tIdx(A.i, A.j)];
+  showBanner(`A <b>Viaduct</b> spanning ${n} tile${n > 1 ? 's' : ''}${rise ? `, ${Math.abs(rise)} level${Math.abs(rise) > 1 ? 's' : ''} ${rise > 0 ? 'up' : 'down'} at the far end` : ''}? ${costHTML(cost, playerGoods(0))} (paid now)`, 'Build', 'Cancel');
+}
+
 function buildingAtTap(i, j, wx, wy) {
   if (inMap(i, j) && S.bAt[tIdx(i, j)]) return getE(S.bAt[tIdx(i, j)]);
   for (const b of S.buildings) {
@@ -1023,6 +1049,7 @@ function onMapTap(i, j, wx, wy) {
     if (!inMap(i, j)) return;
     const type = UI.placeType;
     if (type === 'ropeway') { ropewayTap(i, j); return; }
+    if (type === 'viaduct') { viaductTap(i, j); return; }
     if (R.ghost && R.ghost.x === i && R.ghost.y === j && R.ghost.ok) { confirmBanner(); return; }
     const chk = canPlace(0, type, i, j);
     R.ghost = { type, x: i, y: j, ok: chk.ok };
@@ -1525,7 +1552,7 @@ function openBuildMenu() {
     <div class="build-grid"><button class="bcard roads" id="build-roads"><kbd>R</kbd><svg viewBox="0 0 24 24"><path d="M8 3L5 21M16 3l3 18M12 4v3M12 10.5v3M12 17v3" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
       <div class="bname">Roads</div><div class="bhave">Plan roads, bridges and ramps</div></button>${warOn() ? `<button class="bcard walls" id="build-walls"><img src="${iconFor('wall')}" alt=""><div class="bname">Walls</div><div class="bcost">${costHTML(BDEFS.wall.cost, have)}</div>
       <div class="bhave">${wallCountText()}</div></button>` : ''}${list.map((t) => `<button class="bcard" data-t="${t}" ${sites >= MAX_SITES ? 'disabled' : ''}>
-      ${BUILD_KEYS[t] ? `<kbd>${BUILD_KEYS[t].toUpperCase()}</kbd>` : ''}<img src="${iconFor(t)}" alt=""><div class="bname">${BDEFS[t].name}</div><div class="bcost">${costHTML(BDEFS[t].cost, have)}</div>
+      ${BUILD_KEYS[t] ? `<kbd>${BUILD_KEYS[t].toUpperCase()}</kbd>` : ''}<img src="${iconFor(t)}" alt=""><div class="bname">${BDEFS[t].name}</div><div class="bcost">${costHTML(BDEFS[t].cost, have)}${t === 'viaduct' ? ' a tile' : ''}</div>
       <div class="bhave">${ownedText(t)}</div></button>`).join('')}</div>`;
   openSheet('build', 0, html);
   for (const el of $('sheet-body').querySelectorAll('.bcard[data-t]')) {
@@ -1835,7 +1862,7 @@ function refreshBuildingSheet(b) {
   if (!b.built) {
     parts.push(`<div class="bar"><div style="width:${Math.round(b.progress * 100)}%"></div></div>`);
     parts.push('<div class="section-label">Materials delivered</div><div class="goodlist">' +
-      Object.keys(def.cost).map((g) => goodTag(g, `${b.stock[g] || 0}/${def.cost[g]}`, (b.stock[g] || 0) < def.cost[g])).join('') + '</div>');
+      Object.keys(siteCost(b)).map((g) => goodTag(g, `${b.stock[g] || 0}/${siteCost(b)[g]}`, (b.stock[g] || 0) < siteCost(b)[g])).join('') + '</div>');
   } else {
     parts.push(`<div class="kv"><span>Armor</span><span>${Math.ceil(Math.max(0, b.armor))} / ${def.armor}</span></div>
       <div class="bar armor"><div style="width:${Math.max(0, (b.armor / def.armor) * 100)}%"></div></div>`);
@@ -2478,7 +2505,7 @@ function updateHUD() {
     // keep build-menu affordability current without rebuilding the buttons
     for (const el of $('sheet-body').querySelectorAll('.bcard[data-t]')) {
       const cost = BDEFS[el.dataset.t].cost;
-      el.querySelector('.bcost').innerHTML = costHTML(cost, goods);
+      el.querySelector('.bcost').innerHTML = costHTML(cost, goods) + (el.dataset.t === 'viaduct' ? ' a tile' : '');
       const have = el.querySelector('.bhave');
       const txt = ownedText(el.dataset.t);
       if (have.textContent !== txt) have.textContent = txt;

@@ -872,11 +872,11 @@ Send them in a zip like the earlier batches. Claude Code will register them: the
 line the cable up with the bull wheel), the gondola hanging from the cable, and the tractor and trailers in place of
 the drawn ones.
 
-### Batch 13: Crawler, Freight rail, 3D bridges and Sky islands canyons (the final big batch)
+### Batch 13: Crawler, Freight rail, 3D bridges, Viaducts and Sky islands cliffs (the final big batch)
 
 Everything added since Batch 10 in one go: the Crawler (with its treads, deploy sequence and spinning dish), the
-Freight Train, the Rail Station and track, a 3D bridge kit (water, canyon and rail) and the Sky islands canyon
-terrain, plus the Batch 11 and 12 assets if they aren't made yet. Until art arrives the game draws all of these
+Freight Train, the Rail Station and track, a 3D bridge kit (water and rail), the Viaduct and the Sky islands
+cliffs, plus the Batch 11 and 12 assets if they aren't made yet. Until art arrives the game draws all of these
 itself. A copy of every prompt from Batches 11 to 13, ready to paste in order, is in
 `design/claude-design-final-prompt.md`.
 
@@ -899,7 +899,7 @@ There are three kinds of image. Never mix their cameras:
    orthographic view looking STRAIGHT DOWN, the vehicle facing RIGHT (its front at the right), centred, with NO
    drop shadow and no ground (the game draws the shadow and turns the sprite to face where it drives). Soft sun
    from the top-left. 256x256 transparent unless I say otherwise.
-3. TILES (track, bridges, canyon): straight down like the vehicles, lit like the buildings. Each is a square that
+3. TILES (track, bridges, viaducts, cliffs): straight down like the vehicles, lit like the buildings. Each is a square that
    repeats on a grid, so anything that crosses an edge must cross at exactly the position I give, to join the
    next tile. 256x256.
 
@@ -929,13 +929,14 @@ lit-versus-shaded contrast, the team accent visible at that size. No text, logos
 | `station@0`, `station@1` | 512×512 | Rail Station (building camera) |
 | `rail-straight`, `rail-curve`, `rail-tee`, `rail-cross`, `rail-end` | 256×256 | Track tiles, transparent outside the ballast |
 | `rail-level-crossing`, `rail-barrier-up`, `rail-barrier-down`, `rail-lights-on` | 256×256 | Level crossing and its barrier overlays |
-| `bridge-…`, `skybridge-…`, `railbridge-…` (`-ew`, `-ns`, `-end-w/e/n/s`, `-ramp-w/e/n/s`) | 256×256 | The bridge kit in three styles |
-| `bridge-pier`, `skybridge-pier`, `railbridge-pier` | 256×512 | Piers below a deck tile |
-| `skybridge-tower`, `skybridge-tower-lamp` | 256×512 | Suspension tower and its lamp overlay |
-| `skybridge-cable` | 1024×256 | One sagging main cable with hangers, stretched across a span |
-| `chasm`, `chasm-wall`, `chasm-wall-2` | 256×256, opaque | Canyon floor and walls (Sky islands) |
-| `chasm-lip-w`, `chasm-lip-e`, `chasm-lip-n` | 256×256 | Canyon rim edge overlays |
-| `…-jungle`, `…-polar` | same | Optional biome versions of the canyon tiles |
+| `bridge-…`, `railbridge-…` (`-ew`, `-ns`, `-end-w/e/n/s`, `-ramp-w/e/n/s`) | 256×256 | The bridge kit in two styles |
+| `bridge-pier`, `railbridge-pier` | 256×512 | Piers below a deck tile |
+| `cliff-tall`, `cliff-tall-2`, `canyon-floor` | 256×256, opaque | Sky islands: tall cliff walls and the canyon floor |
+| `cliff-foot-w`, `cliff-foot-e` | 256×256 | Shadow at the foot of a mesa's side walls |
+| `…-jungle`, `…-polar` | same | Optional biome versions of the cliff tiles |
+| `viaduct-abutment@0/@1` | 256×256 | Viaduct end (faces right; the game turns it) |
+| `viaduct-deck-ew`, `viaduct-deck-ns` (+ `-rail`) | 256×256 | One tile of Viaduct deck |
+| `viaduct-pier` | 256×512 | A tall concrete pier, stretched to the drop |
 
 **`crawler`** (vehicle camera, 512×512: it is huge, 1.5 by 1 tiles on the map)
 ```
@@ -1041,62 +1042,72 @@ worn top, dark timber sleepers. The ballast bed is 70% of the tile wide and cent
 **Bridges** (tiles: the bridge kit)
 ```
 BRIDGES, 256x256 tiles, transparent wherever there is no bridge, seen straight down, lit from the top-left. A
-bridge holds one level all the way across, at clifftop height, and has to look high and solid: a thick deck slab,
-girders or truss showing below it along its south (bottom) side, railings with posts on both edges, and depth
-beneath it. The road deck is 56% of the tile wide and centred (its road surface 46%), and joins the next tile edge
-to edge. Draw no shadow: the game casts the bridge's shadow onto the water or canyon floor itself.
+bridge holds one level all the way across and has to look solid and raised: a thick deck slab, girders showing
+below it along its south (bottom) side, railings with posts on both edges, and depth beneath it. The road deck is
+56% of the tile wide and centred (its road surface 46%), and joins the next tile edge to edge. Draw no shadow: the
+game casts the bridge's shadow onto the water itself.
 
-Make three styles, each as the same set of pieces:
+Make two styles, each as the same set of pieces:
 1. bridge-...: a concrete-and-steel girder bridge low over WATER (pale concrete deck, steel girders, short piers).
-2. skybridge-...: a steel suspension bridge high over a bottomless CANYON (steel deck plates, a deep Warren truss
-   under it, tall piers, towers and cables).
-3. railbridge-...: a riveted steel truss bridge for the railway: its deck carries ballast for the track (no rails:
+2. railbridge-...: a riveted steel truss bridge for the railway: its deck carries ballast for the track (no rails:
    the game draws the track on top), with walkways and handrails along both sides.
 
 Pieces for each style:
 - -ew: a straight deck running left to right, edge to edge. Its south face shows: the slab edge, then the
-  girders (for skybridge and railbridge, a deep truss filling the tile below the deck).
+  girders (for railbridge, a deep riveted truss).
 - -ns: a straight deck running top to bottom, edge to edge. The south face is hidden; show the shaded east side
   of the girders as a narrow strip and a lit edge on the west.
 - -end-w, -end-e, -end-n, -end-s: the abutment where the deck meets land on that side: a concrete abutment
-  keyed into the clifftop or shore, the railings ending in squat bollards.
-- -ramp-w, -ramp-e, -ramp-n, -ramp-s: the last tile easing down onto a lower clifftop on that side: the same deck
+  keyed into the shore, the railings ending in squat bollards.
+- -ramp-w, -ramp-e, -ramp-n, -ramp-s: the last tile easing down onto lower land on that side: the same deck
   sloping down, with grip grooves across it and the railings stepping down.
 - -pier (256x512): the support under one deck tile, from the deck's underside at the top of the image downward.
-  bridge-pier: a stout concrete pier meeting the water at about a quarter of the way down in a ring of ripples.
-  skybridge-pier: twin steel columns with X-bracing plunging into the abyss, fading into dark haze by the bottom.
-  railbridge-pier: a lattice steel trestle tower fading the same way.
-- skybridge-tower (256x512): the portal tower at each end of a long canyon span: two tall steel legs standing at
-  the deck's edges, two cross beams, cable saddles at the top and a red aviation lamp on each leg; its base sits
-  on the deck at the bottom of the image. Plus skybridge-tower-lamp: only the two lamps, lit and glowing.
-- skybridge-cable (1024x256): one main suspension cable sagging from the top-left corner to the top-right corner
-  with its lowest point near the bottom in the middle, and thin vertical hangers dropping from it to a straight
-  deck-edge line along the bottom. The game stretches it across a span, one for each side of the deck.
+  bridge-pier: a stout concrete pier meeting the water about a quarter of the way down in a ring of ripples.
+  railbridge-pier: a lattice steel trestle meeting the water the same way.
 ```
 
-**Canyon terrain** (ground tiles for Sky islands, opaque and seamless)
+**Sky islands cliffs** (ground tiles, opaque and seamless)
 ```
-CANYON TERRAIN for the Sky islands map: no water anywhere, just mesas cut apart by sheer, bottomless canyons.
-256x256, opaque.
-- chasm: looking straight down into a bottomless canyon: near-black depths with a faint warm dust haze and a few
-  far-off motes of light, no visible floor. It must tile seamlessly in every direction with no repeating blobs.
-- chasm-wall: the sheer canyon wall just below an island's southern rim: the top edge is the rim (lit, crumbly
-  red-brown rock), dropping as a vertical face of banded sedimentary strata (rust, ochre and dark-brown bands, a
-  few vertical cracks and narrow ledges) that fades into the black depths by the bottom edge. It tiles left to
-  right with itself.
-- chasm-wall-2: the next tile down the same wall, continuing the strata from chasm-wall's bottom edge and fading
-  fully to black.
-- chasm-lip-w, chasm-lip-e, chasm-lip-n: thin overlays (transparent elsewhere) for the rim where the canyon meets
-  land on its other sides: a dark overhang shadow and a crumbled edge.
-Optional biome versions, the same images retinted: -jungle (darker rock, moss and hanging vines on the wall),
--polar (blue-grey rock, ice streaks, snow on the rim).
+SKY ISLANDS CLIFFS: on this map the islands are towering mesas standing over a canyon floor far below (three
+to five levels down), with sheer rock walls all round and no slopes. 256x256 tiles, seen straight down and lit
+from the top-left like the rest.
+- cliff-tall: the sheer wall seen just below a mesa's southern rim, filling the whole tile: the top edge is the
+  rim (a lit, crumbly red-brown lip), then a vertical face of banded sedimentary strata (rust, ochre and
+  dark-brown bands running straight across so the tile repeats left to right, a few vertical cracks and narrow
+  ledges), darkening as it goes down.
+- cliff-tall-2: the next tile further down the same wall, continuing the strata from cliff-tall's bottom edge,
+  darker still, ending in a band of deep shadow and a little scree where the wall meets the canyon floor.
+- cliff-foot-w, cliff-foot-e: thin overlays (transparent elsewhere) of the soft shadow a mesa throws on the floor
+  beside its west and east walls.
+- canyon-floor: the canyon floor itself: the same planet ground as everywhere else, but in deep shade (darker,
+  a little cooler), with scattered scree, dust drifts and a few fallen boulders. It must tile seamlessly in every
+  direction.
+Optional biome versions, the same images retinted: -jungle (darker rock, moss and hanging vines on the walls,
+a lush shaded floor), -polar (blue-grey rock with ice streaks, snow on the rims and drifts on the floor).
 ```
 
-Send them in zips by group (Crawler, train and station, track, bridges, canyon) like the earlier batches. Claude
+**Viaduct** (tiles and a building)
+```
+VIADUCT: a level concrete-and-steel bridge straight across a dry valley or canyon between two clifftops, carrying
+a road (or a railway) high over the ground below, where other traffic passes underneath.
+- viaduct-abutment@0 and @1 (256x256, straight down, lit from the top-left): the end of a Viaduct: a heavy
+  concrete abutment block keyed into the clifftop, the deck starting out of it toward the RIGHT edge (the game
+  turns it to face the span), squat bollards where the railings end, and a small team-colour lamp (cyan
+  #38d4ff; then red #ff5a6e).
+- viaduct-deck-ew, viaduct-deck-ns (256x256, transparent): one tile of the deck: a pale concrete road deck 56% of
+  the tile wide, railings with posts on both edges, and on the east-west piece the deck's slab edge and a steel
+  girder showing along its south side. A rail version of each (-rail) with ballast instead of the road surface.
+- viaduct-pier (256x512, transparent): one tall tapered concrete pier from the deck's underside at the top down to
+  a footing on the ground at the bottom, lit on its left, with formwork lines across it. The game stretches it to
+  the height of the drop.
+```
+
+Send them in zips by group (Crawler, train and station, track, bridges, viaduct, cliffs) like the earlier batches. Claude
 Code will register them: the Crawler frames played by distance driven with the dish layer spinning, the deploy
 sequence played on deploy and reversed on pack-up; train cars on the track's curve with the overlays faded in
 for headlights, braking and exhaust; track and bridge pieces picked by their joins (rotated where the piece
-allows); piers, towers and cables in the bridge rigging pass; the canyon tiles in place of the drawn canyon.
+allows); piers, towers and cables in the bridge rigging pass; the Viaduct deck and piers in its own pass; the cliff
+tiles in place of the drawn cliffs.
 
 ### Not swappable yet (ask Claude Code if you want these)
 

@@ -403,6 +403,7 @@ function bakeMap() {
   let maxElev = 0;
   for (let t = 0; t < S.W * S.H; t++) if (S.elev[t] > maxElev) maxElev = S.elev[t];
   R.levelOffset = maxElev === 0 ? 1 : 0;
+  R.skyFloor = !!(S.settings && SHAPE_PRESETS[S.settings.shape || 0] && SHAPE_PRESETS[S.settings.shape || 0].sky);
   applyBiome();
   R.map = document.createElement('canvas');
   R.map.width = S.W * TP;
@@ -630,6 +631,8 @@ function paintTile(ctx, i, j) {
 
   // Fine grain stands in for detail the ground texture lacks (none needed with 512 px art).
   if (terr === T_GROUND && !S.road[t] && !(tex.ground && tex.ground.img.width >= 256)) drawGrain(ctx, i, j, x, y);
+  // Sky islands: the canyon floor lies far below the mesas, in their shade.
+  if (terr === T_GROUND && S.elev[t] === 0 && R.skyFloor) { ctx.fillStyle = 'rgba(20,10,6,0.32)'; ctx.fillRect(x, y, TP, TP); }
   if (terr === T_GROUND) drawElevation(ctx, i, j, x, y, t, n);
   else if (terr === T_WATER) drawCliffFace(ctx, i, j, x, y, t, true);
   if (terr === T_GROUND && S.fert && S.fert[t] && !S.ramp[t]) drawFertile(ctx, i, j, x, y);
@@ -782,9 +785,18 @@ function groundElev(i, j) {
 
 /** The rock face of a higher tile to the north, seen in front of this tile. */
 function drawCliffFace(ctx, i, j, x, y, t, waterOnly) {
-  const en = groundElev(i, j - 1);
+  let en = groundElev(i, j - 1);
+  // A sheer drop of three levels or more (Sky islands) is too tall for one tile: its face carries on
+  // down the tile below as well.
+  const e2 = groundElev(i, j - 2);
+  if ((en === null || en <= S.elev[t]) && en === S.elev[t] && e2 !== null && e2 - S.elev[t] >= 3 && !S.ramp[t]) {
+    const d = e2 - S.elev[t], h2 = Math.min(TP, 10 * d + 8 - TP);
+    if (h2 > 0) tallFace(ctx, i, j, x, y, h2, d, true);
+    return;
+  }
   if (en === null || en <= S.elev[t]) return;
   if (!waterOnly && canStep(t, tIdx(i, j - 1))) return; // a ramp joins them; the slope is drawn instead
+  if (en - S.elev[t] >= 3) { tallFace(ctx, i, j, x, y, TP, en - S.elev[t], groundElev(i, j + 1) !== S.elev[t]); return; }
   const h = Math.min(TP * 0.62, 14 * (en - S.elev[t]));
   const cliffArt = R.tex ? R.tex.cliff : ART.cliff;
   if (cliffArt) {
@@ -805,6 +817,37 @@ function drawCliffFace(ctx, i, j, x, y, t, waterOnly) {
   sh.addColorStop(0, 'rgba(20,10,5,0.4)'); sh.addColorStop(1, 'rgba(20,10,5,0)');
   ctx.fillStyle = sh;
   ctx.fillRect(x, y + h, TP, 7);
+}
+
+/**
+ * Part of a tall cliff face (a drop of `d` levels): banded rock strata, cracks and a few ledges,
+ * darkening with depth, over the top `h` pixels of the tile. `foot`: this is where the face meets
+ * the ground, so it ends in a band of shadow (otherwise it carries on into the tile below).
+ */
+function tallFace(ctx, i, j, x, y, h, d, foot) {
+  const lower = foot && h < TP; // the second tile of a face
+  const g = ctx.createLinearGradient(0, y, 0, y + h);
+  g.addColorStop(0, lower ? THEME.cliffBottom || '#4a2e1e' : THEME.cliffTop || '#8a5c3e');
+  g.addColorStop(1, mixColor(THEME.cliffBottom || '#4a2e1e', '#1a0f0a', lower ? 0.6 : 0.25));
+  ctx.fillStyle = g;
+  ctx.fillRect(x, y, TP, h);
+  // Strata: alternating bands, the same height all along the cliff so they line up tile to tile.
+  for (let k = 0; k * 5 < h; k++) {
+    const yy = y + k * 5 + (lower ? 2 : 0);
+    if (yy > y + h - 1) break;
+    ctx.fillStyle = (k + j) % 3 === 0 ? 'rgba(255,215,170,0.1)' : (k + j) % 3 === 1 ? 'rgba(0,0,0,0.16)' : 'rgba(120,60,30,0.12)';
+    ctx.fillRect(x, yy, TP, 2);
+  }
+  // Vertical cracks and a ledge or two.
+  ctx.fillStyle = 'rgba(0,0,0,0.28)';
+  for (let n = 0; n < 3; n++) ctx.fillRect(x + 3 + hash2(i, j, 90 + n) * (TP - 6), y + hash2(j, i, 95 + n) * h * 0.4, 1.3, h * (0.35 + 0.4 * hash2(i, n, 99)));
+  if (hash2(i, j, 101) < 0.4) { ctx.fillStyle = 'rgba(255,225,190,0.16)'; ctx.fillRect(x + hash2(i, j, 102) * 18, y + h * (0.3 + 0.4 * hash2(i, j, 103)), 8 + hash2(i, j, 104) * 8, 1.5); }
+  // Where the face meets the ground: a deep shadow at its foot.
+  if (foot && h <= TP) {
+    const sh = ctx.createLinearGradient(0, y + h - 6, 0, y + h);
+    sh.addColorStop(0, 'rgba(15,8,4,0)'); sh.addColorStop(1, 'rgba(15,8,4,0.45)');
+    ctx.fillStyle = sh; ctx.fillRect(x, y + h - 6, TP, 6);
+  }
 }
 
 /**
@@ -855,11 +898,15 @@ function drawElevation(ctx, i, j, x, y, t, n) {
   drawCliffFace(ctx, i, j, x, y, t, false);
   // Higher ground to the west casts a shadow (light comes from the top-left).
   if (Wv !== null && Wv > e && !linked(-1, 0)) {
-    const g = ctx.createLinearGradient(x, 0, x + 8, 0);
-    g.addColorStop(0, 'rgba(25,12,5,0.38)'); g.addColorStop(1, 'rgba(25,12,5,0)');
-    ctx.fillStyle = g; ctx.fillRect(x, y, 8, TP);
+    const deep = Wv - e >= 3, w = deep ? 16 : 8;
+    const g = ctx.createLinearGradient(x, 0, x + w, 0);
+    g.addColorStop(0, `rgba(25,12,5,${deep ? 0.55 : 0.38})`); g.addColorStop(1, 'rgba(25,12,5,0)');
+    ctx.fillStyle = g; ctx.fillRect(x, y, w, TP);
   }
-  if (E !== null && E > e && !linked(1, 0)) { ctx.fillStyle = 'rgba(25,12,5,0.28)'; ctx.fillRect(x + TP - 3, y, 3, TP); }
+  if (E !== null && E > e && !linked(1, 0)) {
+    if (E - e >= 3) { const g = ctx.createLinearGradient(x + TP, 0, x + TP - 9, 0); g.addColorStop(0, 'rgba(25,12,5,0.45)'); g.addColorStop(1, 'rgba(25,12,5,0)'); ctx.fillStyle = g; ctx.fillRect(x + TP - 9, y, 9, TP); }
+    else { ctx.fillStyle = 'rgba(25,12,5,0.28)'; ctx.fillRect(x + TP - 3, y, 3, TP); }
+  }
   // This tile is the top of a cliff: draw its lit rim and dark drop edges.
   if (N !== null && N < e && !linked(0, -1)) { ctx.fillStyle = 'rgba(255,236,200,0.45)'; ctx.fillRect(x, y, TP, 2); }
   if (Sv !== null && Sv < e && !linked(0, 1)) { ctx.fillStyle = 'rgba(255,236,200,0.3)'; ctx.fillRect(x, y + TP - 2, TP, 2); }
@@ -1191,6 +1238,116 @@ function drawBridge(ctx, i, j, x, y, t, rail) {
     }
   }
   ctx.restore();
+}
+
+/**
+ * A Viaduct's deck from abutment a to abutment b (tile coords), drawn level at the higher end's
+ * height: its shadow far down on the ground below, concrete piers standing on that ground every
+ * other tile, the deck slab and girders (the south face of an east-west deck, the shaded east side
+ * of a north-south one), the road (or ballast and rails, with track on both ends), railings, and a
+ * ramp down at a lower end. frac < 1: still going up, built out that far from a.
+ */
+function drawViaductDeck(ctx, ox, oy, z, a, b, frac, building) {
+  const u = z / TP, W = S.W;
+  const ta = tIdx(a.x, a.y), tb = tIdx(b.x, b.y);
+  const ew = a.y === b.y, n = Math.abs(b.x - a.x) + Math.abs(b.y - a.y);
+  const di = Math.sign(b.x - a.x), dj = Math.sign(b.y - a.y);
+  const top = Math.max(S.elev[ta], S.elev[tb]);
+  let floor = top;
+  for (let k = 1; k < n; k++) { const t = tIdx(a.x + di * k, a.y + dj * k); floor = Math.min(floor, S.terrain[t] === T_GROUND ? S.elev[t] : 0); }
+  const drop = Math.max(1, top - floor), h = clamp(drop * 0.3, 0.3, 1.5) * z; // how high the deck stands, on screen
+  const rail = !!(S.rail && S.rail[ta] && S.rail[tb]);
+  const hw = (rail ? 10 : 9) * u;
+  // The deck as a screen rectangle from the middle of one abutment to (frac of the way to) the other.
+  const ax = ox + (a.x + 0.5) * z, ay = oy + (a.y + 0.5) * z;
+  const len = n * z * frac, ex = ax + di * len, ey = ay + dj * len;
+  const x0 = Math.min(ax, ex) - (ew ? 0 : hw), x1 = Math.max(ax, ex) + (ew ? 0 : hw);
+  const y0 = Math.min(ay, ey) - (ew ? hw : 0), y1 = Math.max(ay, ey) + (ew ? hw : 0);
+  if (x1 < -z * 2 || y1 < -z * 2 || x0 > R.w + z * 2 || y0 > R.h + z * 3) return;
+  // Shadow, down on the ground below: further off the higher the deck.
+  ctx.fillStyle = 'rgba(15,8,4,0.26)';
+  ctx.fillRect(x0 + h * 0.35, y0 + h * 0.6, x1 - x0, y1 - y0);
+  // Piers: tapered concrete columns down to a footing on the ground, every other tile.
+  for (let k = 1; k < n; k++) {
+    if (n > 3 && k % 2 === 0 && k !== n - 1) continue;
+    if (k > n * frac) break;
+    const px = ax + di * k * z, py = ay + dj * k * z;
+    const footY = py + (ew ? hw : 0) + h;
+    const wTop = (ew ? 7 : 5) * u, wBot = wTop * 1.35;
+    const g = ctx.createLinearGradient(px - wBot, 0, px + wBot, 0);
+    g.addColorStop(0, '#d5cfc4'); g.addColorStop(0.45, '#b3ada3'); g.addColorStop(1, '#6f6a62');
+    ctx.fillStyle = 'rgba(15,8,4,0.3)';
+    ctx.beginPath(); ctx.ellipse(px + wBot * 0.4, footY + 1.5 * u, wBot * 1.3, 3 * u, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.moveTo(px - wTop, py + (ew ? hw : 0)); ctx.lineTo(px + wTop, py + (ew ? hw : 0));
+    ctx.lineTo(px + wBot, footY); ctx.lineTo(px - wBot, footY); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = 'rgba(0,0,0,0.18)';
+    for (let s = 1; s < 4; s++) ctx.fillRect(px - wTop - (wBot - wTop) * s / 4, py + (ew ? hw : 0) + (footY - py - (ew ? hw : 0)) * s / 4, 2 * (wTop + (wBot - wTop) * s / 4), 1);
+  }
+  // Girders: the south face of an east-west deck (slab edge, then a truss); the shaded east side
+  // of a north-south one.
+  if (ew) {
+    ctx.fillStyle = rail ? '#6f655c' : '#8f969d'; ctx.fillRect(x0, y1, x1 - x0, 3 * u);
+    ctx.fillStyle = '#272c32'; ctx.fillRect(x0, y1 + 3 * u, x1 - x0, 6 * u);
+    ctx.strokeStyle = '#6a737d'; ctx.lineWidth = Math.max(1, u);
+    ctx.beginPath();
+    for (let x = x0, up = true; x < x1; x += 5 * u, up = !up) { ctx.moveTo(x, up ? y1 + 3.5 * u : y1 + 8.5 * u); ctx.lineTo(Math.min(x1, x + 5 * u), up ? y1 + 8.5 * u : y1 + 3.5 * u); }
+    ctx.stroke();
+  } else {
+    ctx.fillStyle = '#23272c'; ctx.fillRect(x1, y0, 5 * u, y1 - y0);
+    ctx.fillStyle = '#8f969d'; ctx.fillRect(x0 - 1.5 * u, y0, 1.5 * u, y1 - y0);
+  }
+  // The deck: road, or ballast with the track on it.
+  ctx.fillStyle = rail ? '#5b5047' : '#a3a9ae';
+  ctx.fillRect(x0, y0, x1 - x0, y1 - y0);
+  ctx.fillStyle = 'rgba(255,255,255,0.2)';
+  if (ew) ctx.fillRect(x0, y0, x1 - x0, 1); else ctx.fillRect(x0, y0, 1, y1 - y0);
+  ctx.fillStyle = 'rgba(20,22,26,0.4)'; // expansion joints at each tile
+  for (let k = 1; k < n * frac; k++) { const jx = ax + di * k * z - di * z / 2, jy = ay + dj * k * z - dj * z / 2; if (ew) ctx.fillRect(jx, y0, 1, y1 - y0); else ctx.fillRect(x0, jy, x1 - x0, 1); }
+  if (rail) {
+    ctx.fillStyle = '#33271e';
+    for (let s = 0; s < len; s += 8 * u) { const sx = ax + di * s, sy = ay + dj * s; if (ew) ctx.fillRect(sx - 2 * u, ay - 9 * u, 4 * u, 18 * u); else ctx.fillRect(ax - 9 * u, sy - 2 * u, 18 * u, 4 * u); }
+    ctx.strokeStyle = '#c9ced6'; ctx.lineWidth = Math.max(1, 2 * u);
+    ctx.beginPath();
+    for (const off of [-5.5, 5.5]) { if (ew) { ctx.moveTo(ax, ay + off * u); ctx.lineTo(ex, ay + off * u); } else { ctx.moveTo(ax + off * u, ay); ctx.lineTo(ax + off * u, ey); } }
+    ctx.stroke();
+  }
+  // A lower end: the last half-tile ramps down onto it.
+  for (const [p, q] of [[a, b], [b, a]]) {
+    const d = top - S.elev[tIdx(p.x, p.y)];
+    if (d <= 0 || (p === b && frac < 1)) continue;
+    const sx = ox + (p.x + 0.5) * z, sy = oy + (p.y + 0.5) * z, qx = Math.sign(q.x - p.x), qy = Math.sign(q.y - p.y);
+    const g = ctx.createLinearGradient(sx + qx * z, sy + qy * z, sx, sy);
+    g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(1, `rgba(0,0,0,${0.15 + 0.1 * d})`);
+    ctx.fillStyle = g;
+    if (ew) ctx.fillRect(Math.min(sx, sx + qx * z), y0, z, y1 - y0); else ctx.fillRect(x0, Math.min(sy, sy + qy * z), x1 - x0, z);
+  }
+  // Railings: posts and a top rail along both edges.
+  for (const side of [-1, 1]) {
+    const rx = ew ? null : (side < 0 ? x0 + 1 * u : x1 - 2.3 * u), ry = ew ? (side < 0 ? y0 + 1 * u : y1 - 1 * u) : null;
+    ctx.fillStyle = '#7d858e';
+    for (let s = 0; s <= len; s += 4 * u) { const sx = ax + di * s, sy = ay + dj * s; if (ew) ctx.fillRect(sx - 0.5 * u, ry - 2.5 * u, 1 * u, 3 * u); else ctx.fillRect(rx, sy - 2.5 * u, 1.3 * u, 3 * u); }
+    ctx.fillStyle = rail ? '#c4c0b8' : '#dfe3e8';
+    if (ew) ctx.fillRect(x0, ry - 3 * u, x1 - x0, 1.3 * u); else ctx.fillRect(rx, y0 - 2.5 * u, 1.3 * u, y1 - y0);
+  }
+  // Still going up: the rest of the span marked out.
+  if (building && frac < 1) {
+    ctx.strokeStyle = 'rgba(255,255,255,0.55)'; ctx.lineWidth = Math.max(1, 1.5 * u);
+    ctx.setLineDash([5 * u, 4 * u]);
+    const bx = ox + (b.x + 0.5) * z, by = oy + (b.y + 0.5) * z;
+    if (ew) ctx.strokeRect(Math.min(ex, bx), ay - hw, Math.abs(bx - ex), 2 * hw); else ctx.strokeRect(ax - hw, Math.min(ey, by), 2 * hw, Math.abs(by - ey));
+    ctx.setLineDash([]);
+  }
+}
+
+/** Every Viaduct's deck: each built pair once, and those still going up as far as they've got. */
+function drawViaducts(ctx, ox, oy, z) {
+  for (const b of S.buildings) {
+    if (b.dead || b.type !== 'viaduct' || b.far) continue;
+    if (b.link) { const o = getE(b.link); if (o && !o.dead) drawViaductDeck(ctx, ox, oy, z, b, o, 1, false); continue; }
+    if (b.viaTo >= 0) drawViaductDeck(ctx, ox, oy, z, b, { x: b.viaTo % S.W, y: (b.viaTo / S.W) | 0 }, b.built ? 1 : Math.max(0.04, b.progress), !b.built);
+  }
 }
 
 /** Every bridge tile on the map (kept until roads or rail change). */
@@ -1714,6 +1871,30 @@ function drawBuilding(ctx, type, cx, cy, s, owner, b) {
       break;
     }
     case 'crawlerbase': { drawCrawler(ctx, -Math.PI / 2, cx, cy, s, owner, true, 0, working); break; }
+    case 'viaduct': {
+      // An abutment: a concrete block keyed into the clifftop, the deck starting out of it toward
+      // the far end, bollards where the railings end and a team-coloured lamp.
+      let ax = 1, ay = 0;
+      const far = b && b.link ? getE(b.link) : null;
+      const to = far ? far.y * S.W + far.x : b && b.viaTo >= 0 ? b.viaTo : -1;
+      if (b && to >= 0) { const tx = to % S.W, ty = (to / S.W) | 0; ax = Math.sign(tx - b.x); ay = Math.sign(ty - b.y); }
+      const px = -ay, py = ax, hw = 9 * u;
+      ctx.fillStyle = 'rgba(20,10,5,0.3)';
+      ctx.fillRect(cx - 12 * u + 2 * u, cy - 12 * u + 3 * u, 24 * u, 24 * u);
+      ctx.fillStyle = '#7f7a72'; ctx.fillRect(cx - 12 * u, cy + 6 * u, 24 * u, 6 * u);   // the block's face
+      ctx.fillStyle = '#b8b2a7'; ctx.fillRect(cx - 12 * u, cy - 12 * u, 24 * u, 18 * u); // its top
+      ctx.fillStyle = 'rgba(255,255,255,0.25)'; ctx.fillRect(cx - 12 * u, cy - 12 * u, 24 * u, 1.5 * u);
+      // The deck from the middle of the block out to the span.
+      ctx.save(); ctx.translate(cx, cy); ctx.rotate(Math.atan2(ay, ax));
+      ctx.fillStyle = '#2a2f35'; ctx.fillRect(0, -hw - 1.5 * u, 16 * u, 2 * hw + 3 * u);
+      ctx.fillStyle = '#a3a9ae'; ctx.fillRect(-4 * u, -hw, 20 * u, 2 * hw);
+      ctx.fillStyle = '#dfe3e8'; ctx.fillRect(0, -hw, 16 * u, 1.3 * u); ctx.fillRect(0, hw - 1.3 * u, 16 * u, 1.3 * u);
+      ctx.restore();
+      ctx.fillStyle = '#e8e4dc';
+      for (const sgn of [-1, 1]) { ctx.beginPath(); ctx.arc(cx + px * sgn * (hw + 1 * u) - ax * 3 * u, cy + py * sgn * (hw + 1 * u) - ay * 3 * u, 2.2 * u, 0, Math.PI * 2); ctx.fill(); }
+      ctx.fillStyle = color; ctx.beginPath(); ctx.arc(cx - ax * 7 * u - px * 7 * u, cy - ay * 7 * u - py * 7 * u, 2 * u, 0, Math.PI * 2); ctx.fill();
+      break;
+    }
     case 'ropeway': {
       // A lattice pylon on a concrete footing, with the bull wheel the cable runs round on top.
       ctx.fillStyle = 'rgba(20,10,5,0.32)';
@@ -2776,6 +2957,16 @@ function updateTerritoryLayer() {
 
 function refreshOverlay(type) {
   const valid = new Uint8Array(S.W * S.H);
+  // A Viaduct's near end is picked: light up the far ends it could reach instead.
+  if (type === 'viaduct' && typeof UI !== 'undefined' && UI.ropeA) {
+    const A = UI.ropeA;
+    for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) for (let k = VIA_MIN; k <= VIA_MAX; k++) {
+      const i = A.i + di * k, j = A.j + dj * k;
+      if (inMap(i, j) && !viaductBlocked(0, A.i, A.j, i, j)) valid[j * S.W + i] = 1;
+    }
+    R.overlay = { type, valid, at: R.time };
+    return;
+  }
   for (let j = 0; j < S.H; j++) for (let i = 0; i < S.W; i++) {
     if (S.owner[j * S.W + i] === 0 && canPlace(0, type, i, j).ok) valid[j * S.W + i] = 1;
   }
@@ -2822,6 +3013,7 @@ function render(dtReal) {
   ctx.setLineDash([]);
   ctx.globalAlpha = 1;
   drawBridgeRigging(ctx, ox, oy, z, inView);
+  drawViaducts(ctx, ox, oy, z);
 
   // Placement overlay
   if (R.mode === 'place' && R.overlay) {
@@ -2964,6 +3156,15 @@ function render(dtReal) {
     }
   }
 
+  // Placing a Viaduct: the deck from the near end to the far end picked so far.
+  if (typeof UI !== 'undefined' && UI.ropeA && R.ropeEnd && UI.placeType === 'viaduct') {
+    const A = UI.ropeA, E = R.ropeEnd;
+    ctx.globalAlpha = E.ok ? 0.8 : 0.45;
+    drawViaductDeck(ctx, ox, oy, z, { x: A.i, y: A.j }, { x: E.i, y: E.j }, 1, false);
+    ctx.globalAlpha = 1;
+    ctx.strokeStyle = E.ok ? '#9dffb8' : '#ff6b6b'; ctx.lineWidth = 2;
+    ctx.strokeRect(ox + E.i * z + 1, oy + E.j * z + 1, z - 2, z - 2);
+  } else
   // Placing a Ropeway: the cable from the near station to the far end picked so far.
   if (typeof UI !== 'undefined' && UI.ropeA && R.ropeEnd) {
     const A = UI.ropeA, E = R.ropeEnd, ax = ox + (A.i + 0.5) * z, ay = oy + (A.j + 0.5) * z, bx = ox + (E.i + 0.5) * z, by = oy + (E.j + 0.5) * z;

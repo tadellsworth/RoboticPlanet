@@ -101,6 +101,18 @@ function findPath(sx, sy, gx, gy, avoidFor, opts) {
         heap.push(nt, ng + h(ni, nj));
       }
     }
+    // A Viaduct: drive straight across to the far abutment (anyone), at plain road cost.
+    if (S.bAt[cur]) {
+      const nt = viaLink(cur);
+      if (nt >= 0 && closed[nt] !== gen) {
+        const ni = nt % W, nj = (nt / W) | 0;
+        const ng = g[cur] + (Math.abs(ni - ci) + Math.abs(nj - cj)) * ROAD_PREFERENCE / PAVE[1].speed;
+        if (stamp[nt] !== gen || ng < g[nt]) {
+          stamp[nt] = gen; g[nt] = ng; from[nt] = cur;
+          heap.push(nt, ng + h(ni, nj));
+        }
+      }
+    }
     // A Ropeway station: ride the cable to the far station (light bots of its owner only).
     if (S.bAt[cur] && !(opts && opts.noRope)) {
       const nt = ropeLink(cur);

@@ -146,7 +146,8 @@ function atLimit(b) {
 function needsOf(b) {
   const def = BDEFS[b.type], out = [];
   if (!b.built) {
-    for (const g in def.cost) out.push([g, def.cost[g] - (b.stock[g] || 0) - (b.inc[g] || 0)]);
+    const cost = siteCost(b);
+    for (const g in cost) out.push([g, cost[g] - (b.stock[g] || 0) - (b.inc[g] || 0)]);
   } else if (b.paused) {
     return out;
   } else if (def.bots && b.mode === 'off' && !hasOrders(b)) {
@@ -192,7 +193,7 @@ function keepSupply(b, g) {
 /** Does building b use good g (as an input, ammo, fuel, repairs or construction)? */
 function usesGood(b, g) {
   const def = BDEFS[b.type];
-  if (!b.built) return (def.cost[g] || 0) > (b.stock[g] || 0);
+  if (!b.built) return (siteCost(b)[g] || 0) > (b.stock[g] || 0);
   return !!((def.inp && def.inp[g]) || def.ammo === g || (def.fuelCap && g === 'fuel') || (def.repair && g === 'alloy') ||
     (def.roadworks && g === 'asphalt') || (def.ammoStock && g === 'ammo') || (def.nukeSilo && NUKE.parts[g]) || (def.bots && (g === 'alloy' || g === 'chip')));
 }
@@ -610,7 +611,10 @@ function queueRoom(u) {
 /** Walk along the current path. Returns true once the destination is reached. */
 function moveAlong(u, dt) {
   if (!u.path) return true;
-  const here = Math.floor(u.y) * S.W + Math.floor(u.x);
+  let here = Math.floor(u.y) * S.W + Math.floor(u.x);
+  // Out on a Viaduct (between its abutments) a bot drives as if still on the abutment it left: on
+  // road, whatever lies down below.
+  if (u.pi > 0 && u.path[u.pi] !== undefined && S.bAt[u.path[u.pi - 1]] && viaLink(u.path[u.pi - 1]) === u.path[u.pi]) here = u.path[u.pi - 1];
   const bt = BOTS[u.type];
   // A Freight Train: down the track at its own speed, braking for curves and the end of its trip; it
   // never waits for road traffic (road traffic waits for it at level crossings).
@@ -878,7 +882,7 @@ function dispatch(p) {
   // 1) A builder for every construction site that has materials waiting to be built with.
   for (const b of blds) {
     if (!idle.length) return;
-    if (!b.built && !b.builder && deliveredCount(b) / sumValues(BDEFS[b.type].cost) > b.progress + 0.01) {
+    if (!b.built && !b.builder && deliveredCount(b) / sumValues(siteCost(b)) > b.progress + 0.01) {
       assignBuild(take(b.x, b.y, 'build'), b);
     }
   }
@@ -1499,7 +1503,7 @@ function doHaul(u, t, dt) {
 }
 
 function deliveredCount(site) {
-  const cost = BDEFS[site.type].cost;
+  const cost = siteCost(site);
   let n = 0;
   for (const g in cost) n += Math.min(site.stock[g] || 0, cost[g]);
   return n;
@@ -1514,9 +1518,9 @@ function doBuild(u, t, dt) {
   }
   if (mustRecharge(u)) { cancelTask(u); return; } // go recharge; another builder takes over
   const def = BDEFS[s.type];
-  const cap = deliveredCount(s) / sumValues(def.cost);
+  const cap = deliveredCount(s) / sumValues(siteCost(s));
   if (s.progress < cap) {
-    s.progress = Math.min(cap, s.progress + (dt * S.players[u.owner].mult * batFactor(u)) / def.buildTime);
+    s.progress = Math.min(cap, s.progress + (dt * S.players[u.owner].mult * batFactor(u)) / (s.buildTime || def.buildTime));
     u.busy = 1;
   }
   if (s.progress >= 0.9999) {
@@ -1531,10 +1535,11 @@ function doBuild(u, t, dt) {
 
 function completeBuilding(b) {
   const def = BDEFS[b.type];
-  if (!def.prepaid) for (const g in def.cost) usedGood(b.owner, g, def.cost[g]); // its materials are built in (a Wall's were counted when it was paid for)
+  if (!def.prepaid) { const c = siteCost(b); for (const g in c) usedGood(b.owner, g, c[g]); } // its materials are built in (a Wall's were counted when it was paid for)
   if (def.ramp) { completeRamp(b); return; }
   b.built = true;
   if (def.ropeway && !b.link) ropewayAcross(b);
+  if (def.viaduct && !b.link) viaductAcross(b);
   b.progress = 1;
   b.stock = {};
   b.inc = {};
@@ -1883,7 +1888,7 @@ function updateBuilding(b, dt) {
   b.working = false;
   if (def.wild) { updateNest(b); return; }
   if (!b.built) {
-    if (b.unlinked && sumValues(b.stock) < sumValues(def.cost)) b.status = 'No road to storage yet';
+    if (b.unlinked && sumValues(b.stock) < sumValues(siteCost(b))) b.status = 'No road to storage yet';
     else if (sumValues(b.stock) + sumValues(b.inc) === 0) b.status = 'Waiting for materials';
     else if (!b.builder) b.status = 'Waiting for a builder';
     else b.status = 'Under construction';
@@ -1914,6 +1919,10 @@ function updateBuilding(b, dt) {
   if (def.mil) garrisonDefense(b, dt);
   if (def.repair) updateRepairStation(b, def, dt);
   if (def.lab) updateLab(b, dt);
+  if (def.viaduct) {
+    if (!b.link && b.viaTo >= 0 && S.tick % 60 === b.id % 60) viaductAcross(b);
+    b.status = b.link ? 'Open: anything can drive across' : 'Waiting for the far end to be clear';
+  }
   if (def.ropeway) {
     if (!b.link && b.ropeTo >= 0 && S.tick % 60 === b.id % 60) ropewayAcross(b);
     b.status = b.link ? 'Running: light bots ride across' : 'Waiting for the far end to be clear';
@@ -3353,9 +3362,9 @@ function demolish(b) {
   const def = BDEFS[b.type];
   const store = nearestStoreTo(b.owner, b.x + 0.5, b.y + 0.5);
   if (store) {
-    const back = b.built ? def.cost : b.stock;
+    const back = b.built ? siteCost(b) : b.stock;
     for (const g in back) {
-      const n = b.built ? Math.floor(back[g] / 2) : Math.min(back[g], def.cost[g] || 0);
+      const n = b.built ? Math.floor(back[g] / 2) : Math.min(back[g], siteCost(b)[g] || 0);
       if (n > 0) bump(store.stock, g, n);
     }
     // Goods still inside a finished building (a Silo's Missiles, a pump's last Crude) go back to
@@ -4006,6 +4015,75 @@ function ropewayAcross(b) {
   f.link = b.id; b.link = f.id; f.far = true;
   computeZones();
   postMsg(b.owner, 'The Ropeway is running: Haulers and Workers ride it across.', b.x, b.y, 'good');
+}
+
+/* ------------------------------------------------------------------ viaducts */
+
+/**
+ * Could a Viaduct run from (ai, aj) to (bi, bj)? '' if so, otherwise why not. Straight along a row
+ * or column, VIA_MIN to VIA_MAX tiles, both ends open ground no more than VIA_RISE levels apart,
+ * and every tile between lower than both ends (or water or canyon). The far end can be beyond your
+ * border, but not in another player's land.
+ */
+function viaductBlocked(owner, ai, aj, bi, bj) {
+  if (!inMap(bi, bj)) return 'Outside the map.';
+  if (ai !== bi && aj !== bj) return 'A Viaduct runs straight: pick a far end in the same row or column.';
+  const n = Math.abs(bi - ai) + Math.abs(bj - aj);
+  if (n < VIA_MIN) return 'Too close: there has to be a valley between the ends.';
+  if (n > VIA_MAX) return `Too far: a Viaduct spans up to ${VIA_MAX} tiles.`;
+  const a = tIdx(ai, aj), t = tIdx(bi, bj);
+  if (S.terrain[t] !== T_GROUND || S.res[t] || S.ramp[t]) return 'The far end needs clear, open ground on a clifftop.';
+  if (S.bAt[t]) return 'There is a building at the far end.';
+  if (S.owner[t] >= 0 && S.owner[t] !== owner) return 'The far end is in another colony\'s land.';
+  if (Math.abs(S.elev[t] - S.elev[a]) > VIA_RISE) return `The two ends are more than ${VIA_RISE} levels apart.`;
+  const low = Math.min(S.elev[a], S.elev[t]), di = Math.sign(bi - ai), dj = Math.sign(bj - aj);
+  let dip = false;
+  for (let k = 1; k < n; k++) {
+    const u = tIdx(ai + di * k, aj + dj * k);
+    if (S.terrain[u] === T_GROUND || S.terrain[u] === T_ROCK) { if (S.elev[u] >= low) return 'The ground between has to be lower than both ends: a Viaduct spans a valley.'; dip = true; }
+    else if (bridgeable(u)) dip = true;
+  }
+  if (!dip) return 'There is no valley here to span.';
+  return '';
+}
+
+/** What a Viaduct from (ai, aj) to (bi, bj) costs: VIA_COST for every tile it spans. */
+function viaductCost(ai, aj, bi, bj) {
+  const n = Math.abs(bi - ai) + Math.abs(bj - aj) - 1, out = {};
+  for (const g in VIA_COST) out[g] = VIA_COST[g] * n;
+  return out;
+}
+
+/**
+ * Plan a Viaduct from (ai, aj) to (bi, bj): paid now, a construction site at the near end that a
+ * worker builds out across the gap; when it's done the far abutment goes up and it opens.
+ */
+function placeViaduct(owner, ai, aj, bi, bj) {
+  const chk = canPlace(owner, 'viaduct', ai, aj);
+  if (!chk.ok) return chk;
+  const why = viaductBlocked(owner, ai, aj, bi, bj);
+  if (why) return { ok: false, reason: why };
+  const cost = viaductCost(ai, aj, bi, bj);
+  if (!canPay(owner, cost)) return { ok: false, reason: `Not enough ${missingGoods(owner, cost)}: this Viaduct costs ${costText(cost)}.` };
+  const r = placeSite(owner, 'viaduct', ai, aj, cost);
+  if (r.ok) { r.building.viaTo = tIdx(bi, bj); r.building.buildTime = VIA_TIME * (Math.abs(bi - ai) + Math.abs(bj - aj) - 1); }
+  return r;
+}
+
+/** The near abutment is built: put up the far one and open the Viaduct (or wait while the far end is blocked). */
+function viaductAcross(b) {
+  if (!(b.viaTo >= 0)) return;
+  const i = b.viaTo % S.W, j = (b.viaTo / S.W) | 0, t = b.viaTo;
+  if (S.bAt[t] || S.terrain[t] !== T_GROUND || (S.owner[t] >= 0 && S.owner[t] !== b.owner)) {
+    if (S.time - (b.viaMsg || -99) > 30) { b.viaMsg = S.time; postMsg(b.owner, 'The Viaduct\'s far end is blocked: clear it and the deck goes across.', i, j, 'warn'); }
+    return;
+  }
+  if (S.plan[t]) cancelPlan(t);
+  const f = addBuilding(b.owner, 'viaduct', i, j, true);
+  f.link = b.id; b.link = f.id; f.far = true; f.cost = b.cost;
+  S.roadVer = (S.roadVer || 0) + 1; S.railVer = (S.railVer || 0) + 1;
+  computeZones();
+  postMsg(b.owner, 'The Viaduct is open: anything can drive across.', b.x, b.y, 'good');
 }
 
 /* ------------------------------------------------------------------ crawlers */
