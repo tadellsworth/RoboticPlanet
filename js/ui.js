@@ -1048,11 +1048,11 @@ function onMapTap(i, j, wx, wy) {
       sfx('error');
       showRoadBanner(`That's ${S.terrain[t] === T_WATER ? 'water' : 'rock'}. Pick <b>Bridges</b> to build a ${CROSS[S.terrain[t]].name.toLowerCase()} across it.`);
       return;
-    } else if (canRoad(0, i, j)) {
+    } else if (canRoad(0, i, j) || draftBridge(t)) {
       draftOp(stroke, t, 'add');
       if (crossTile(t)) note = `${CROSS[S.terrain[t]].name} tile: ${costText(CROSS[S.terrain[t]].cost)}.`;
       else if (S.res[t]) note = `Workers will clear the ${RES[S.res[t]].name.toLowerCase()} (${ROAD_CLEAR}× Cement).`;
-    } else { sfx('error'); showRoadBanner('You can only build roads inside your border.'); return; }
+    } else { sfx('error'); showRoadBanner('You can only build roads inside your border. A bridge can reach out over the water beyond it, from your shore or the end of a bridge.'); return; }
     if (stroke.length) d.strokes.push(stroke);
     sfx('click');
     showRoadBanner(note, true);
@@ -1107,6 +1107,12 @@ function rallyAtTap(wx, wy) {
  */
 function draftReset() { UI.draft = { add: [], addSet: new Set(), del: new Set(), ramps: new Set(), walls: new Map(), strokes: [] }; }
 function draftEmpty() { return !UI.draft || (!UI.draft.add.length && !UI.draft.del.size && !UI.draft.ramps.size && !UI.draft.walls.size); }
+
+/** A bridge sketched out past the border: water touching a tile already in the sketch. */
+function draftBridge(t) {
+  const d = UI.draft;
+  return S.terrain[t] === T_WATER && !S.bAt[t] && !scorched(t) && bridgeHead(0, t % S.W, (t / S.W) | 0, (u) => d.addSet.has(u) && S.terrain[u] === T_WATER);
+}
 
 /** What a wall line puts on tile t: a Gate on a road (or a planned one), a Wall anywhere else. */
 function wallKind(t) { return S.road[t] || S.plan[t] ? 'gate' : 'wall'; }
@@ -1252,7 +1258,7 @@ function onRoadPaint(i, j, first) {
     if (S.res[t]) { UI.paintSkipped = true; continue; }
     // Bridges and tunnels are dear: only the Bridges tool sketches them.
     if (crossTile(t) && UI.roadMode !== 'bridge') { UI.paintCross = true; continue; }
-    if (canRoad(0, x, y)) draftOp(UI.stroke, t, 'add');
+    if (canRoad(0, x, y) || draftBridge(t)) draftOp(UI.stroke, t, 'add');
   }
   UI.lastPaint = { i, j };
   if (pave) { showRoadBanner(); return; }

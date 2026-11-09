@@ -229,10 +229,14 @@ const RESOURCE_PRESETS = [
 const SHAPE_PRESETS = [
   { name: 'Standard', w: 1, h: 1 },
   { name: 'Long haul', w: 0.75, h: 1.7 },
-  { name: 'Chokepoint', w: 1, h: 1, choke: true },
+  { name: 'Chokepoint', w: 1, h: 1, choke: true, tip: 'Chokepoint: a single pass through the crags joins the two halves of the planet. Hold it: an Outpost nearby, then walls and turrets (Paths, Walls).' },
+  { name: 'Islands', w: 1.15, h: 1.45, islands: true, tip: 'Islands: the only way across is bridges. Push an Outpost out to your shore, then build a bridge in Paths (Bridges): it can reach out past your border.' },
+  { name: 'Crater', w: 1, h: 1, crater: true, minLevels: 3, tip: 'Crater: the richest fields lie on the crater floor in the middle. One ramp leads down on your side; cut more in Paths (Ramps).' },
+  { name: 'Plateaus', w: 1, h: 1, plateau: true, minLevels: 3, tip: 'Plateaus: your base stands on high ground with only two slopes down. Easy to hold: wall the slopes and push out.' },
 ];
 const CHOKE_BAND = 3;   // Chokepoint maps: rows of crags each side of the middle line
 const CHOKE_APPROACH = 3; // ...and rows of open ground kept clear each side of the pass
+const ISLE_GAP = 2.5;     // Islands maps: at least this much sea between islands
 // Walls and Gates: an enemy warbot plans a route through one as if it were this many extra tiles
 // long, plus one per point of armor left, so it walks round a short way and breaks through a long one.
 const BREACH_COST = 8;

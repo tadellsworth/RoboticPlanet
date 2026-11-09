@@ -713,8 +713,11 @@ function dispatch(p) {
   // Foundry can make more.
   const P = S.players[p];
   P.noHaulers = haulers === 0;
-  // Planned roads the border no longer covers are called off (and refunded).
-  for (const t of planList(p).slice()) if (S.owner[t] !== p || S.bAt[t]) cancelPlan(t);
+  // Planned roads the border no longer covers are called off (and refunded), except a bridge
+  // still reaching out over the water from our side.
+  for (const t of planList(p).slice()) {
+    if (S.bAt[t] || (S.owner[t] !== p && !(S.terrain[t] === T_WATER && bridgeHead(p, t % S.W, (t / S.W) | 0)))) cancelPlan(t);
+  }
   const linked = (a, b) => P.noHaulers || roadLinked(a, b);
   for (const b of blds) b.unlinked = !P.noHaulers && needsRoad(b) && !onHomeNet(b);
   const minFree = siteCount(p) > 0 ? MIN_FREE_WORKERS : 1;
@@ -2349,7 +2352,7 @@ function raidRoadsLeft(r, owner) {
     const i = ri + di, j = rj + dj;
     if (!inMap(i, j) || di * di + dj * dj > SABOTAGE_RANGE * SABOTAGE_RANGE + 0.01) continue;
     const t = tIdx(i, j);
-    if (S.road[t] && S.owner[t] >= 0 && S.owner[t] !== owner) { r.roadsLeft = true; break; }
+    if (S.road[t] && !crossTile(t) && S.owner[t] >= 0 && S.owner[t] !== owner) { r.roadsLeft = true; break; }
   }
   return r.roadsLeft;
 }
@@ -2368,7 +2371,7 @@ function sabotageRoads(u, r, dt) {
     const i = ri + di, j = rj + dj;
     if (!inMap(i, j)) continue;
     const t = tIdx(i, j);
-    if (!S.road[t] || S.owner[t] !== victim) continue;
+    if (!S.road[t] || S.owner[t] !== victim || crossTile(t)) continue; // bridges and tunnels are too solid to tear up (a Missile can crater them)
     const d = di * di + dj * dj - (isJunction(t) ? 1.5 : 0); // junctions first: they cut the most routes
     if (d < bd) { bd = d; best = t; }
   }

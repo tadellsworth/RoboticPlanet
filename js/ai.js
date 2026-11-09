@@ -32,8 +32,9 @@ function aiThink(p) {
     counts[b.type] = (counts[b.type] || 0) + 1;
     if (!b.built && !BDEFS[b.type].prepaid) sites++;
   }
-  aiWalls(p);
   const maxSites = p === 0 && P.ai ? 2 : lvl.maxSites;
+  aiWalls(p);
+  aiBridge(p, maxSites);
   // Warbots can't fight without Ammo: in a war, once the opening is done, an Ammo Plant comes
   // first, its site is never given up, and the Foundry rests so the Alloy reaches it.
   const needArmory = warOn() && S.time > 150 && !me.some((b) => b.type === 'armory' && b.built);
@@ -222,7 +223,9 @@ function aiThink(p) {
     // Saving up for missiles (or feeding the Missile Factory): the Foundry rests so Alloy and Chips
     // pile up, unless workers are badly short.
     // (Not while the army is well behind: warbots come first.)
-    if ((((saving || P.feedMissiles) && !armyBehind) || needArmory) && workers >= staffed + 3) { b.mode = 'off'; delete b.orders.hauler; delete b.orders.truck; }
+    // Saving for a bridge to the enemy's island too: until it's built the army can't reach anyone.
+    const bridging = P.bridgeWant > 0 && S.time - P.bridgeWant < 30;
+    if ((((saving || P.feedMissiles) && !armyBehind) || needArmory || bridging) && workers >= staffed + 3) { b.mode = 'off'; delete b.orders.hauler; delete b.orders.truck; }
     // Haulers when short; while the army is well behind, only when badly short.
     else if ((kinds.hauler || 0) < (armyBehind ? Math.min(wantHaulers, 6) : wantHaulers) && !(b.orders.hauler > 0)) b.orders.hauler = 1;
     // A forward Depot with supply orders gets a Freight Truck to keep it stocked.
@@ -317,6 +320,79 @@ function aiThink(p) {
       if (d < bd && canPlace(p, 'outpost', i, j, true).ok && !wouldBlock(j * S.W + i)) { bd = d; spot = { x: i, y: j }; }
     }
     if (spot) { placeSite(p, 'outpost', spot.x, spot.y); P.lastAttack = S.time - 30; }
+  }
+}
+
+/**
+ * Islands (or any war where the enemy can't be reached on foot): bridge the sea toward it. Plan
+ * the bridge from our shore that reaches other land for the least, weighted toward the enemy
+ * Command Base; if our border doesn't reach a shore facing it yet, put an Outpost there first.
+ * One bridge at a time.
+ */
+function aiBridge(p, maxSites) {
+  if (!warOn()) return;
+  const P = S.players[p], L = getE(P.lander), E = getE(S.players[1 - p].lander);
+  if (!L || !E || L.owner !== p) return;
+  const home = homeZone(p);
+  if (S.zone[tIdx(E.x, E.y)] === home || S.time - (P.lastBridge || -999) < 12) return;
+  P.lastBridge = S.time;
+  // One of our bridges is going up already (one its workers can't get to for a long while is called off).
+  P.bridgeSince = P.bridgeSince || {};
+  let pending = false;
+  for (const k in P.bridgeSince) {
+    if (S.plan[k] !== p + 1) { delete P.bridgeSince[k]; continue; }
+    if (S.time - P.bridgeSince[k] > 240) { cancelPlan(+k); delete P.bridgeSince[k]; } else pending = true;
+  }
+  if (pending) return;
+  const W = S.W, N = W * S.H;
+  const nb = (t, fn) => { const i = t % W; if (i > 0) fn(t - 1); if (i < W - 1) fn(t + 1); if (t >= W) fn(t - W); if (t + W < N) fn(t + W); };
+  const sea = (t) => S.terrain[t] === T_WATER && !S.road[t] && !S.plan[t] && !S.bAt[t] && !scorched(t);
+  const steps = new Int16Array(N).fill(-1), from = new Int32Array(N).fill(-1), q = [];
+  // Start from water at our own shore (our land, inside our border).
+  for (let t = 0; t < N; t++) {
+    if (!sea(t) || !canRoad(p, t % W, (t / W) | 0)) continue;
+    let shore = false;
+    nb(t, (u) => { if (S.terrain[u] === T_GROUND && S.zone[u] === home && S.owner[u] === p) shore = true; });
+    if (shore) { steps[t] = 1; q.push(t); }
+  }
+  let best = -1, bestS = Infinity;
+  for (let h = 0; h < q.length; h++) {
+    const t = q[h];
+    nb(t, (u) => {
+      if (S.terrain[u] === T_GROUND && S.zone[u] >= 0 && S.zone[u] !== home) {
+        const s = steps[t] * 3 + dist(u % W, (u / W) | 0, E.x, E.y);
+        if (s < bestS) { bestS = s; best = t; }
+      } else if (steps[t] < 9 && sea(u) && steps[u] < 0) { steps[u] = steps[t] + 1; from[u] = t; q.push(u); }
+    });
+  }
+  if (best >= 0) {
+    const tiles = [];
+    for (let t = best; t >= 0; t = from[t]) tiles.push(t);
+    tiles.reverse(); // from the shore out
+    const cost = {};
+    for (const t of tiles) for (const g in CROSS[T_WATER].cost) cost[g] = (cost[g] || 0) + CROSS[T_WATER].cost[g];
+    // Short of Cement or Alloy: the Foundry rests until the bridge is paid for (see aiThink).
+    if (!canAffordRoad(p, cost)) { P.bridgeWant = S.time; return; }
+    P.bridgeWant = 0;
+    for (const t of tiles) { if (buildRoad(p, t % W, (t / W) | 0)) break; P.bridgeSince[t] = S.time; }
+    return;
+  }
+  // No crossing from inside our border yet: an Outpost on the shore facing the nearest land toward the enemy.
+  if (siteCount(p) >= maxSites || !aiAffordable(p, 'outpost')) return;
+  if (S.buildings.some((b) => !b.dead && b.owner === p && b.type === 'outpost' && !b.built)) return;
+  let tx = -1, ty = -1, td = Infinity;
+  for (let t = 0; t < N; t++) {
+    if (S.terrain[t] !== T_GROUND || S.zone[t] < 0 || S.zone[t] === home) continue;
+    const i = t % W, j = (t / W) | 0, d = dist(i, j, L.x, L.y) + dist(i, j, E.x, E.y) * 0.6;
+    if (d < td) { td = d; tx = i; ty = j; }
+  }
+  if (tx < 0) return;
+  const cands = [];
+  for (let t = 0; t < N; t++) if (S.owner[t] === p && S.terrain[t] === T_GROUND && S.zone[t] === home && !S.bAt[t]) cands.push([dist(t % W, (t / W) | 0, tx, ty), t]);
+  cands.sort((a, b) => a[0] - b[0]);
+  for (let k = 0; k < Math.min(cands.length, 40); k++) {
+    const t = cands[k][1], i = t % W, j = (t / W) | 0;
+    if (canPlace(p, 'outpost', i, j, true).ok && !wouldBlock(t)) { placeSite(p, 'outpost', i, j); return; }
   }
 }
 

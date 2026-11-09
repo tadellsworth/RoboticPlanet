@@ -29,13 +29,23 @@ function generateMap(seed, W, H, cfg) {
   const RPR = RESOURCE_PRESETS[cfg.rich ?? DEFAULT_RICH];
   const N = W * H;
   const terrain = new Uint8Array(N), res = new Uint8Array(N), amt = new Uint8Array(N);
-  const elev = new Uint8Array(N), ramp = new Uint8Array(N);
+  const elev = new Uint8Array(N), ramp = new Uint8Array(N), fert = new Uint8Array(N);
+  const minE = new Int8Array(N).fill(-1); // shaped features (plateaus): the lowest a tile may be smoothed to
   const id = (i, j) => j * W + i;
+  const orth = (t, fn) => {
+    const i = t % W, j = (t / W) | 0;
+    if (i > 0) fn(t - 1);
+    if (i < W - 1) fn(t + 1);
+    if (j > 0) fn(t - W);
+    if (j < H - 1) fn(t + W);
+  };
   const mir = (t) => N - 1 - t; // the tile rotated 180° about the map centre
   const sH = seed * 7 + 11, sM = seed * 13 + 5, sB = seed * 31 + 9, sC = seed * 17 + 3, sR = seed * 3 + 1;
   const sE = seed * 19 + 23, sO = seed * 29 + 41;
   const half = Math.floor(H / 2);
-  const L = TPR.levels;
+  const SH = SHAPE_PRESETS[cfg.shape || 0] || SHAPE_PRESETS[0];
+  // Crater and Plateau maps need cliffs: at least three levels, the rest kept flat on Flat terrain.
+  const L = Math.max(TPR.levels, SH.minLevels || 1), flatRest = TPR.levels === 1 && L > 1;
   const thresholds = [];
   const step = L >= 5 ? 0.07 : L >= 4 ? 0.085 : 0.1;
   for (let k = 0; k < L - 1; k++) thresholds.push(0.5 + (k - (L - 2) / 2) * step);
@@ -51,14 +61,57 @@ function generateMap(seed, W, H, cfg) {
       const e = fbm(i / TPR.scale, j / TPR.scale, sE, 3);
       let lv = 0;
       for (const th of thresholds) if (e >= th) lv++;
-      elev[t] = lv;
+      elev[t] = flatRest ? baseLevel : lv;
     }
+  }
+  // Islands: the sea covers everything but a home island round each base, a big island in the
+  // middle and a few islets, so the only ways across are bridges. Land is kept at least
+  // ISLE_GAP tiles from any other island's shore. Applied to the bottom half after the fields are
+  // laid (anything left in the sea is cleared), then mirrored with the rest.
+  const ccx = (W - 1) / 2, ccy = (H - 1) / 2;
+  let isleCut = null;
+  if (SH.islands) {
+    const bx0 = Math.floor(W / 2), by0 = H - 7, halfH = H - half;
+    const homeTop = H - 21.5 - Math.max(0, (halfH - 41) * 0.5);
+    const cRy = clamp(homeTop - half - 4.5, 3, 16);
+    const gap = homeTop - half - cRy;
+    const isles = [
+      { x: bx0, y: (by0 + 6 + homeTop) / 2, rx: W * 0.4, ry: (by0 + 6 - homeTop) / 2 },
+      { x: ccx, y: ccy, rx: W * 0.3, ry: cRy + 0.5 },
+      { x: W * 0.08, y: half + cRy, rx: 2.4, ry: 2.4 },
+    ];
+    // A long crossing gets stepping-stone islets in it.
+    if (gap > 9) { const r = (gap - 5) / 2; isles.push({ x: W * 0.3, y: half + cRy + gap / 2, rx: r, ry: r }, { x: W * 0.72, y: half + cRy + gap / 2, rx: r, ry: r }); }
+    const out = (o, i, j) => (Math.sqrt(((i - o.x) / o.rx) ** 2 + ((j - o.y) / o.ry) ** 2) - 1) * Math.min(o.rx, o.ry);
+    isleCut = () => {
+      for (let j = half; j < H; j++) for (let i = 0; i < W; i++) {
+        const t = id(i, j), wob = (fbm(i / 4, j / 4, sO, 2) - 0.5) * 3;
+        let k = -1, best = Infinity;
+        isles.forEach((o, n) => { const d = out(o, i, j) - wob; if (d < best) { best = d; k = n; } });
+        const land = best <= 0 && isles.every((o, n) => n === k || out(o, i, j) >= ISLE_GAP + 1.5); // + the most a shore wobbles out
+        if (!land) { terrain[t] = T_WATER; res[t] = R_NONE; fert[t] = 0; }
+        else if (terrain[t] === T_WATER) terrain[t] = T_GROUND;
+      }
+      // Specks of land the wobble cut off from their island go under.
+      const lab = new Int32Array(N).fill(-1);
+      for (let t = half * W; t < N; t++) {
+        if (terrain[t] === T_WATER || lab[t] >= 0) continue;
+        const q = [t];
+        lab[t] = t;
+        let edge = false;
+        for (let h = 0; h < q.length; h++) orth(q[h], (u) => {
+          if (((u / W) | 0) < half) { edge = true; return; }
+          if (lab[u] < 0 && terrain[u] !== T_WATER) { lab[u] = t; q.push(u); }
+        });
+        if (!edge && q.length < 8) for (const u of q) { terrain[u] = T_WATER; res[u] = R_NONE; fert[u] = 0; }
+      }
+    };
+    isleCut();
   }
   // 2) Resources come in separate fields (clusters) with open ground between them, so holding
   //    the land around a field matters. Fields are laid out on the bottom half, then mirrored.
   const rng = makeRng(seed ^ 0x5bd1e995);
   const bx = Math.floor(W / 2), by = H - 7;
-  const fert = new Uint8Array(N);
   const F_FERTILE = 100;
   const stampDens = clamp(dens, 0.7, 1.15);
   const fields = [];
@@ -156,6 +209,7 @@ function generateMap(seed, W, H, cfg) {
   // 3) Player 0 base: a flat landing zone.
   field(bx, by, 3.4, -1, 0, true);
   fields.pop();
+  if (isleCut) isleCut(); // fields that spilled into the sea are trimmed back to the shore
 
   // 4) Mirror the bottom half onto the top half.
   const mirror = () => {
@@ -184,13 +238,6 @@ function generateMap(seed, W, H, cfg) {
   if (choke) chokeBand();
 
   const ground = (t) => terrain[t] === T_GROUND;
-  const orth = (t, fn) => {
-    const i = t % W, j = (t / W) | 0;
-    if (i > 0) fn(t - 1);
-    if (i < W - 1) fn(t + 1);
-    if (j > 0) fn(t - W);
-    if (j < H - 1) fn(t + W);
-  };
   const reachable = (useElev) => {
     const seen = new Uint8Array(N), q = [id(bx, by)];
     seen[q[0]] = 1;
@@ -205,8 +252,9 @@ function generateMap(seed, W, H, cfg) {
     return seen;
   };
 
-  // 5) Make sure the two bases are connected by land; carve a winding corridor if not.
-  if (!reachable(false)[id(W - 1 - bx, H - 1 - by)]) {
+  // 5) Make sure the two bases are connected by land; carve a winding corridor if not (except on
+  //    Islands, where bridges are the only way across).
+  if (!SH.islands && !reachable(false)[id(W - 1 - bx, H - 1 - by)]) {
     let x = bx, y = by;
     while (y >= half) {
       for (let dj = -1; dj <= 1; dj++) for (let di = -1; di <= 1; di++) {
@@ -220,6 +268,68 @@ function generateMap(seed, W, H, cfg) {
     }
     mirror();
     if (choke) chokeBand(); // the corridor never cuts a second way through the crags
+  }
+
+  // Crater maps: a sunken crater in the middle of the map, one level below a ring of rim, with the
+  // richest fields on its floor. The outline wobbles only with even harmonics, so it stays
+  // symmetric under the half-turn.
+  const crR = Math.max(5, Math.round(Math.min(W, H) * 0.18));
+  const crEdge = (i, j) => {
+    const a = Math.atan2(j - ccy, i - ccx);
+    return crR * (1 + 0.08 * Math.cos(2 * a + seed) + 0.05 * Math.sin(4 * a + seed * 0.7)) - Math.sqrt(dist2(i, j, ccx, ccy));
+  };
+  const floorLv = 0; // the lowest level, so nothing round it can wear the rim away
+  if (SH.crater) {
+    for (let t = 0; t < N; t++) {
+      const i = t % W, j = (t / W) | 0, e = crEdge(i, j);
+      // The crater floor is the only ground on the lowest level: everything else stands higher.
+      if (e < 0) { elev[t] = Math.max(elev[t], floorLv + 1); minE[t] = floorLv + 1; continue; }
+      terrain[t] = T_GROUND; res[t] = R_NONE; fert[t] = 0; ramp[t] = 0;
+      elev[t] = e >= 2 ? floorLv : floorLv + 1;
+      if (e < 2) minE[t] = floorLv + 1;
+    }
+    // Fields on the floor, each placed with its mirror image.
+    const stamp = (x, y, rad, type, fill) => {
+      for (let j = Math.floor(y - rad); j <= Math.ceil(y + rad); j++) for (let i = Math.floor(x - rad); i <= Math.ceil(x + rad); i++) {
+        if (i < 0 || j < 0 || i >= W || j >= H || dist2(i, j, x, y) > rad * rad || crEdge(i, j) < 2.5) continue;
+        if (rng() >= fill) continue;
+        res[id(i, j)] = type; res[mir(id(i, j))] = type;
+      }
+    };
+    stamp(ccx - crR * 0.35, ccy + crR * 0.3, 1.9, R_ORE, 0.8);
+    stamp(ccx + crR * 0.35, ccy + crR * 0.25, 1.7, R_CRYSTAL, 0.8);
+    stamp(ccx - crR * 0.05, ccy + crR * 0.5, 1.4, R_BOULDER, 0.7);
+    stamp(ccx + 0.5, ccy + 0.5, 1.0, R_OIL, 0.9);
+    if (cfg.nuke) stamp(ccx + crR * 0.15, ccy + crR * 0.1, 0.6, R_URANIUM, 1);
+  }
+  // Plateau maps: each base stands on a high plateau ringed by cliffs, with a terrace one level
+  // down all round it. (Shaped on the bottom half and mirrored.)
+  const P = L - 1;
+  const plR = 9.5, plEdge = (i, j) => {
+    const a = Math.atan2(j - by, i - bx);
+    return plR * (1 + 0.1 * Math.cos(3 * a + seed) + 0.05 * Math.sin(5 * a + seed * 1.3)) - Math.sqrt(dist2(i, j, bx, by));
+  };
+  if (SH.plateau) {
+    const low = new Int8Array(N).fill(-1), q = [];
+    for (let j = half; j < H; j++) for (let i = 0; i < W; i++) {
+      const t = id(i, j), e = plEdge(i, j);
+      if (e >= 0) { if (terrain[t] === T_WATER) terrain[t] = T_GROUND; elev[t] = P; low[t] = P; }
+      else if (e >= -2) { terrain[t] = T_GROUND; elev[t] = P - 1; low[t] = P - 1; q.push(t); }
+      else elev[t] = Math.min(elev[t], P - 1); // the plateaus are the only ground on the top level
+    }
+    // Below the terrace the ground steps down at most a level a tile, so smoothing the cliffs
+    // later can't wear the terraces away however low the land around them is.
+    for (let h = 0; h < q.length; h++) {
+      const t = q[h];
+      orth(t, (u) => {
+        if (((u / W) | 0) < half || low[u] >= low[t] - 1) return;
+        low[u] = low[t] - 1;
+        if (elev[u] < low[u]) elev[u] = low[u];
+        if (low[u] > 0) q.push(u);
+      });
+    }
+    for (let t = half * W; t < N; t++) if (low[t] >= 0) { minE[t] = low[t]; minE[mir(t)] = low[t]; }
+    mirror();
   }
 
   // 6) Shape the levels into clean terraces, then connect them with ramps.
@@ -257,7 +367,7 @@ function generateMap(seed, W, H, cfg) {
         for (const k in hc) if (hc[k] > bn || (hc[k] === bn && +k < best)) { bn = hc[k]; best = +k; }
         if (best >= 0) target.set(c, best);
       }
-      for (let t = 0; t < N; t++) if (ground(t) && target.has(comp[t])) elev[t] = target.get(comp[t]);
+      for (let t = 0; t < N; t++) if (ground(t) && target.has(comp[t])) elev[t] = Math.max(target.get(comp[t]), minE[t]);
     }
     // Neighbouring tiles differ by at most one level, so every cliff is climbable with a ramp.
     for (let changed = true; changed;) {
@@ -315,8 +425,62 @@ function generateMap(seed, W, H, cfg) {
     for (const c of cands) {
       if (hash2(c.t, c.u, seed + 7) < TPR.extra && !nearRamp(c.t, TPR.gap) && !nearRamp(c.u, TPR.gap)) addRamp(c.t, c.u);
     }
-    // Safety net: if the bases still can't reach each other, flatten the map.
-    if (!reachable(true)[id(W - 1 - bx, H - 1 - by)]) { elev.fill(baseLevel); ramp.fill(0); }
+    // Crater and Plateau maps: replace the ramps that happened to land on the crater's or the
+    // plateaus' cliffs with set ones: one into the crater on each side (facing each base) and two
+    // down off each plateau (one toward the middle, one to the side). Each is two tiles wide.
+    if (SH.crater || SH.plateau) {
+      const keep = ramp.slice();
+      const set = (t) => { ramp[t] = 1; res[t] = R_NONE; ramp[mir(t)] = 1; res[mir(t)] = R_NONE; };
+      // The lower tile of a cliff step on ray (x0,y0) → angle a, from `inside` to outside.
+      const rayRamp = (x0, y0, a, inside) => {
+        let prev = -1;
+        for (let k = 0; k < 30; k++) {
+          const i = Math.round(x0 + Math.cos(a) * k), j = Math.round(y0 + Math.sin(a) * k);
+          if (i < 1 || j < 1 || i >= W - 1 || j >= H - 1) return false;
+          const t = id(i, j);
+          if (prev >= 0 && !inside(i, j)) {
+            const lo = elev[t] < elev[prev] ? t : prev, hi = lo === t ? prev : t;
+            if (!ground(lo) || !ground(hi) || Math.abs(elev[t] - elev[prev]) !== 1) return false;
+            set(lo);
+            // A second lane beside it.
+            const side = Math.abs(hi - lo) === 1 ? W : 1;
+            for (const d of [side, -side]) if (ground(lo + d) && ground(hi + d) && elev[lo + d] === elev[lo] && elev[hi + d] === elev[hi]) { set(lo + d); break; }
+            return true;
+          }
+          prev = t;
+        }
+        return false;
+      };
+      // A crag in the way: try a little to either side.
+      const tryRamp = (x0, y0, a, inside) => { for (const d of [0, 0.15, -0.15, 0.3, -0.3, 0.5, -0.5]) if (rayRamp(x0, y0, a + d, inside)) return true; return false; };
+      if (SH.crater) {
+        // Clear every ramp onto the floor (on the floor, or on the rim right beside it).
+        for (let t = 0; t < N; t++) {
+          if (!ramp[t]) continue;
+          let onto = crEdge(t % W, (t / W) | 0) >= 2;
+          orth(t, (u) => { if (crEdge(u % W, (u / W) | 0) >= 2 && elev[u] + 1 === elev[t]) onto = true; });
+          if (onto) ramp[t] = 0;
+        }
+        // From the floor's centre out toward player 0's base (and its mirror toward player 1's).
+        tryRamp(ccx, ccy, Math.atan2(by - ccy, bx - ccx), (i, j) => crEdge(i, j) >= 2);
+      } else {
+        // Clear the ramps on the plateau's cliff (their lower tile is on the terrace below it).
+        for (let t = 0; t < N; t++) {
+          const i = t % W, j = (t / W) | 0;
+          if (!ramp[t] || j < half || plEdge(i, j) >= 0 || plEdge(i, j) < -1.5) continue;
+          let edge = false;
+          orth(t, (u) => { if (plEdge(u % W, (u / W) | 0) >= 0 && elev[u] === elev[t] + 1) edge = true; });
+          if (edge) { ramp[t] = 0; ramp[mir(t)] = 0; }
+        }
+        const side = hash2(seed, 5, 77) < 0.5 ? -1 : 1;
+        tryRamp(bx, by, -Math.PI / 2 + side * 0.35, (i, j) => plEdge(i, j) >= 0);
+        tryRamp(bx, by, -Math.PI / 2 - side * 1.25, (i, j) => plEdge(i, j) >= 0);
+      }
+      if (!reachable(true)[id(W - 1 - bx, H - 1 - by)]) ramp.set(keep);
+    }
+    // Safety net: if the bases still can't reach each other, flatten the map (Islands are joined
+    // by bridges, not land).
+    if (!SH.islands && !reachable(true)[id(W - 1 - bx, H - 1 - by)]) { elev.fill(baseLevel); ramp.fill(0); }
   } else {
     elev.fill(0);
   }
@@ -437,6 +601,9 @@ function newGame(opts) {
   for (const P of S.players) { const L = getE(P.lander); if (L) starterRoads(L); }
   if (opts.setup) opts.setup(S);
   S.decor = makeDecor();
+  // A word on how this kind of planet plays.
+  const L0 = getE(S.players[0].lander), tip = !S.mission && mode === 'versus' && SHAPE_PRESETS[settings.shape].tip;
+  if (tip && L0) postMsg(0, tip, L0.x, L0.y, 'info');
   return S;
 }
 
@@ -916,12 +1083,26 @@ function placeSite(owner, type, i, j) {
 /**
  * Roads can go on open ground inside your territory, and through resources (clearing them, at
  * ROAD_CLEAR times the cost), oil seeps included so a pump is never walled in; not through a node
- * a bot is working.
+ * a bot is working. Over water or rock a road is a bridge or tunnel; a bridge can also be pushed
+ * out over the water beyond your border, a tile at a time from your land or the end of a bridge
+ * (so a channel the enemy's border covers can still be crossed).
  */
 function canRoad(owner, i, j) {
   if (!inMap(i, j)) return false;
   const t = tIdx(i, j);
-  return S.owner[t] === owner && !S.bAt[t] && !S.resRes[t] && !scorched(t); // over water or rock it's a bridge or tunnel
+  if (S.bAt[t] || S.resRes[t] || scorched(t)) return false;
+  if (S.owner[t] === owner) return true;
+  return S.terrain[t] === T_WATER && bridgeHead(owner, i, j);
+}
+
+/** Does water tile (i, j) touch `owner`'s land, a bridge, or a bridge tile `owner` has planned (or `extra(t)`)? */
+function bridgeHead(owner, i, j, extra) {
+  for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+    if (!inMap(i + di, j + dj)) continue;
+    const u = tIdx(i + di, j + dj);
+    if (S.owner[u] === owner || (S.terrain[u] === T_WATER && (S.road[u] || S.plan[u] === owner + 1)) || (extra && extra(u))) return true;
+  }
+  return false;
 }
 
 /**

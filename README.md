@@ -12,7 +12,7 @@ how goods move.
   levels. Finishing one unlocks the next and shows an unlock code for it, so progress can move to another device.
 
 Before each game, sliders set the **map size** (Small to Huge), the **terrain** (Flat, Gentle,
-Rolling, Rugged, Mountainous), the **resources** (Scarce to Abundant), the **map shape** (Standard, Long haul or Chokepoint), the
+Rolling, Rugged, Mountainous), the **resources** (Scarce to Abundant), the **map shape** (Standard, Long haul, Chokepoint, Islands, Crater or Plateaus), the
 **biome** (Red desert, Jungle or Polar: scenery only, with plants that roads and buildings clear) and an optional
 **Nuclear race**. Resources come in separate
 fields: your landing zone has a little of everything, and the rich fields beyond it are worth fighting for.
@@ -108,6 +108,7 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
 - **Bridges and tunnels:** roads stop at water and rocky crags. The **Bridges** tool in Paths plans roads across them:
   a bridge costs 2 Cement and 1 Alloy a tile, a tunnel 3 Cement and 1 Alloy. Workers build them out from the shore or rock
   face (6–8 s a tile), and they join land on any level. Lay road routes use them only when going round is much longer.
+  A bridge can be pushed out over water past your border, a tile at a time from your land or a bridge (`bridgeHead`).
 - **Junctions, traffic lights and overpasses:** where three or four roads meet, bots slow down and give way to traffic
   already crossing. Switch the Paths banner to **Junctions** and tap a junction to put up a traffic light (1 Alloy): it
   lets one direction through at a time, switching when traffic waits the other way. On a busy crossing a light moves
@@ -127,7 +128,13 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
   middle of the map; rich deposits sparkle. **Map shape: Long haul** on the new-game screen makes a narrow, long planet
   (75% as wide, 170% as long) with the bases far apart; **Chokepoint** walls the middle of the map off with a band of
   crags and leaves one 4-tile pass between the two halves (`CHOKE_BAND`, `CHOKE_APPROACH` in `js/defs.js`).
-- **Raids:** armed warbots holding a rally flag in enemy land with nothing to fight tear up enemy roads near the flag,
+  **Islands** (a taller map) puts each base on its own island with a big middle island and islets, at least
+  `ISLE_GAP` tiles of sea apart, so the only way across is bridges; the AI bridges toward its rival (`aiBridge`).
+  **Crater** sinks a crater one cliff below a rim in the middle, its floor holding rich fields (and Uranium in a
+  Nuclear race), with one natural ramp in from each side. **Plateaus** stands each base on the top level, with a
+  terrace one level down all round and only two natural slopes off it. Both force at least three levels.
+- **Raids:** armed warbots holding a rally flag in enemy land with nothing to fight tear up enemy roads (not bridges or
+  tunnels, which only a Missile can crater) near the flag,
   one tile per 12 warbot-seconds. The rival raids your busiest road clear of turrets and garrisons every few minutes
   (Easy rarely, Hard often) once it has warbots to spare. Missiles crater the roads where they land.
 - **Traffic:** bots queue on roads, each waiting behind the bot ahead of it going the same way. On two-way roads each
