@@ -682,6 +682,49 @@ for now the resources look the same on every world.
 Bridges, tunnels and overpasses are drawn by the game itself for now (they have to join up with each other on any
 side); ask Claude Code if you'd like those as art too.
 
+### Batch 10: Walls and Gates
+
+Versus games now have **Walls** (a thick Cement block that stops every bot; enemy warbots have to shoot through
+it) and **Gates** (a gap in the wall with a road through it and a barrier arm that lifts for your own bots). They
+are planned in lines in Paths, so the pieces have to **join seamlessly** with their neighbours. Until art arrives the
+game draws them itself (pale concrete blocks with a team-colour stripe, Gate posts with team-colour lights).
+
+Make them in the same Claude Design chat as Batch 6 (paste the Batch 6 style brief first), with these changes:
+
+- **Orthographic camera** (no perspective), same high three-quarter angle as the buildings, square-on. Without
+  perspective, sections line up exactly when placed side by side.
+- **512×512 transparent PNG = exactly one map tile wide.** No foundation pad: the wall stands straight on the ground.
+- **Neutral colours** (weathered pale concrete, steel caps, hazard stripes). The game adds a team-colour stripe or
+  light on top, so leave a plain strip along the top of the wall, or ask for team versions (`@0` cyan, `@1` red).
+- Each straight section is cut off flat **exactly at the canvas edges**, so two of them side by side make one
+  unbroken wall.
+
+| Key | Size | What |
+|---|---|---|
+| `wall-post` | 512×512, transparent | A single square wall block, centred: where a wall ends or turns a corner |
+| `wall-ew` | 512×512, transparent | A straight wall running left to right, filling the full width, ends cut flat at both edges |
+| `wall-ns` | 512×512, transparent | A straight wall running away from the camera (top to bottom of the map), ends cut flat |
+| `gate-ew` | 512×512, transparent | A gate in a left-to-right wall: two posts with lights, a road running top to bottom between them, the barrier arm **down** across the road |
+| `gate-ew-open` | 512×512, transparent | The same with the barrier arm **raised** |
+| `gate-ns` | 512×512, transparent | A gate in a top-to-bottom wall, the road running left to right between the posts, arm down |
+| `gate-ns-open` | 512×512, transparent | The same, arm raised |
+| `wall-icon` | 256×256, transparent | Build-menu icon: a short stretch of wall with a gate, at the same angle |
+
+**Prompt (after the style brief):**
+
+```
+Wall pieces for the same game, as modular tiles that join seamlessly. Orthographic camera, same angle and light
+as the buildings. Each image is 512x512 with a transparent background and is exactly one map tile wide. A thick,
+squat defensive wall of weathered pale poured concrete about half a tile tall, with a steel cap rail along the
+top, bolted reinforcing bands, chipped edges and a few hazard stripes at the base. No foundation pad: it stands
+on the ground. Straight sections run edge to edge and are cut off flat exactly at the canvas edges so neighbouring
+tiles join into one wall. Gates: two heavier concrete posts with a small light on top of each, a paved road
+between them, and a striped barrier arm across the road (one version down, one raised).
+```
+
+Send them in a zip like the earlier batches. Claude Code will hook them up: the game picks `wall-ew`, `wall-ns`
+or `wall-post` for each tile from its neighbours, and the Gate pieces from the road's direction.
+
 ### Not swappable yet (ask Claude Code if you want these)
 
 - Menu background and logo

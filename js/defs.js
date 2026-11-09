@@ -233,6 +233,10 @@ const SHAPE_PRESETS = [
 ];
 const CHOKE_BAND = 3;   // Chokepoint maps: rows of crags each side of the middle line
 const CHOKE_APPROACH = 3; // ...and rows of open ground kept clear each side of the pass
+// Walls and Gates: an enemy warbot plans a route through one as if it were this many extra tiles
+// long, plus one per point of armor left, so it walks round a short way and breaks through a long one.
+const BREACH_COST = 8;
+const BREACH_PER_ARMOR = 1;
 const DEFAULT_SIZE = { versus: 1, colony: 3 };
 const DEFAULT_ROUGH = 2;
 const DEFAULT_RICH = 2;
@@ -315,6 +319,10 @@ const PLAYER_NAMES = ['You', 'Rival'];
  *   missile   launches missiles: range (tiles), reload (s), damage to the target, splash radius,
  *             damage to other buildings and to bots in the splash
  *   war       only offered in Versus mode
+ *   barrier   a Wall or Gate: blocks enemy bots, which break through it (see BREACH_COST); `gate`
+ *             lets its owner's bots through and carries a road
+ *   prepaid   its materials are taken from storage when it is planned (no Hauler needed) and it
+ *             doesn't count toward MAX_SITES
  *   limit     default stock limit: it stops making its product once you have this many (players
  *             can change it per building)
  */
@@ -434,6 +442,14 @@ const BDEFS = {
     name: 'Repair Station',
     desc: 'Damaged robots come here to be fixed, three at a time. It uses Alloy, which haulers bring: one Alloy repairs 12 health (a whole Warbot). Warbots come when their garrison is quiet.',
     cost: { cement: 3, alloy: 2 }, repair: { slots: 3, rate: 1.5 }, alloyCap: 3, armor: 10, buildTime: 10, war: true,
+  },
+  wall: {
+    name: 'Wall', desc: 'A thick block of Cement that nothing gets past. Enemy warbots have to go round or shoot their way through, and a Wall takes far more punishment than any other building (a Missile only dents it). Your own bots can\'t cross it either: leave a Gate. Planned in Paths (Walls); paid for when you plan it, so no Hauler or road is needed.',
+    cost: { cement: 5 }, barrier: true, prepaid: true, armor: 40, buildTime: 6, war: true,
+  },
+  gate: {
+    name: 'Gate', desc: 'A Wall with a door: your bots drive through, the enemy\'s have to break it down. A Gate on a road carries the road, so haulers keep running. Planned in Paths (Walls): where a wall line crosses a road, a Gate goes there.',
+    cost: { cement: 6, alloy: 2 }, barrier: true, gate: true, prepaid: true, armor: 32, buildTime: 8, war: true,
   },
   depot: {
     name: 'Depot', desc: 'Extra storage. Haulers drop goods at the nearest storage they can reach by road, so depots along your highways shorten trips. Give it supply orders to stock it from home: a forward base for building at the front.',

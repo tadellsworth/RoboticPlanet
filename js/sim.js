@@ -324,12 +324,40 @@ function haulerStranded(u) {
   return !S.road[t] && !S.bAt[t];
 }
 
-/** How bot u plans routes: haulers stick to roads; others pay more for off-road tiles. */
+/**
+ * How bot u plans routes: haulers stick to roads; others pay more for off-road tiles. Only its own
+ * Gates let a bot through, and an armed warbot will break through enemy Walls and Gates.
+ */
 function routeOpts(u) {
   const bt = BOTS[u.type];
-  if (bt.roadOnly && !haulerStranded(u)) return { roadOnly: true };
-  if ((bt.offroad || bt.roadOnly) && !harvestTrip(u)) return { offMul: 1 / OFFROAD_SLOW };
-  return null;
+  const o = { who: u.owner, breach: u.type === 'warbot' && (u.ammo ?? WARBOT_AMMO) > 0 };
+  if (bt.roadOnly && !haulerStranded(u)) o.roadOnly = true;
+  else if ((bt.offroad || bt.roadOnly) && !harvestTrip(u)) o.offMul = 1 / OFFROAD_SLOW;
+  return o;
+}
+
+/**
+ * Is the next tile of u's route blocked by a building (one put up since the route was planned, or
+ * an enemy Wall it means to break through)? The route's last tile, where it is going, never is.
+ */
+function blockedStep(u, t) {
+  return S.bAt[t] > 0 && t !== u.path[u.path.length - 1] && !passTile(t, u.owner);
+}
+
+/**
+ * A warbot at an enemy Wall or Gate in its way shoots it (like any building it attacks, one point
+ * of armor a shot); when it falls the warbot walks on through the gap.
+ */
+function breachHit(u, b) {
+  u.breach = b.id;
+  u.vel = 0;
+  u.face = Math.atan2(b.y + 0.5 - u.y, b.x + 0.5 - u.x);
+  if (u.cd > 0 || !useAmmo(u)) return;
+  u.cd = 1.0;
+  u.fought = 1;
+  addFx('spark', b.x + 0.5 + (hash2(u.id, S.tick, 3) - 0.5) * 0.6, b.y + 0.5 + (hash2(u.id, S.tick, 5) - 0.5) * 0.6, { color: PLAYER_COLORS[u.owner] });
+  if (u.owner === 0 || b.owner === 0) sfx('hit');
+  hitBuilding(b, (u.bat ?? 100) < BATTERY.critical ? 0.5 : 1, u.owner);
 }
 
 function goTo(u, x, y) {
@@ -337,6 +365,7 @@ function goTo(u, x, y) {
   // Don't hammer the pathfinder with a route that just failed.
   if (u.failGoal === goal && S.time < u.failUntil) return false;
   const p = findPath(Math.floor(u.x), Math.floor(u.y), x, y, u.type !== 'warbot' ? u.owner : undefined, routeOpts(u));
+  u.breach = 0;
   if (!p) { u.failGoal = goal; u.failUntil = S.time + 2; return false; }
   exitBuilding(u);
   u.path = p; u.pi = 0; u.idleT = 0; u.goal = y * S.W + x;
@@ -577,6 +606,20 @@ function moveAlong(u, dt) {
   while (step > 0 && u.pi < u.path.length) {
     const t = u.path[u.pi];
     const tx = (t % S.W) + 0.5, ty = ((t / S.W) | 0) + 0.5;
+    if (blockedStep(u, t) && tIdx(Math.floor(u.x), Math.floor(u.y)) !== t) {
+      // Something stands in the way. An armed warbot shoots through an enemy Wall or Gate; anyone
+      // else plans a new route (a Wall went up across this one), waits if there is none, and gives
+      // up the job after a while so it can be given another.
+      u.vel = 0;
+      u.moved = 0;
+      if (breachable(t, u.owner) && u.type === 'warbot' && (u.ammo ?? WARBOT_AMMO) > 0) { breachHit(u, getE(S.bAt[t])); return false; }
+      const g = u.path[u.path.length - 1], keep = u.path, pi = u.pi;
+      if (goTo(u, g % S.W, (g / S.W) | 0)) { u.blockT = 0; return false; }
+      u.path = keep; u.pi = pi;
+      u.blockT = (u.blockT || 0) + dt;
+      if (u.blockT > 10) { u.blockT = 0; cancelTask(u); u.task = null; u.path = null; }
+      return false;
+    }
     const dx = tx - u.x, dy = ty - u.y, d = Math.sqrt(dx * dx + dy * dy);
     if (d > 1e-4) u.face = Math.atan2(dy, dx);
     if (d <= step) { u.x = tx; u.y = ty; step -= d; u.pi++; }
@@ -1193,7 +1236,7 @@ function updateWorker(u, dt) {
  */
 function needsRoad(b) {
   const def = BDEFS[b.type];
-  if (b.type === 'lander') return false;
+  if (b.type === 'lander' || def.prepaid) return false; // Walls and Gates are paid for up front: no Hauler needed
   if (def.store) return true; // a Depot only helps if haulers can reach it from the Command Base
   if (!b.built) return true;
   if (def.mil) return warOn(); // Ammo for the garrison
@@ -1338,7 +1381,7 @@ function doBuild(u, t, dt) {
 
 function completeBuilding(b) {
   const def = BDEFS[b.type];
-  for (const g in def.cost) usedGood(b.owner, g, def.cost[g]); // its materials are built in
+  if (!def.prepaid) for (const g in def.cost) usedGood(b.owner, g, def.cost[g]); // its materials are built in (a Wall's were counted when it was paid for)
   if (def.ramp) { completeRamp(b); return; }
   b.built = true;
   b.progress = 1;

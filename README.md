@@ -169,6 +169,13 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
 - **Army orders:** tap **Army**, then a rival building to attack it with warbots or a missile, or open
   ground to send warbots there to hold the area under a rally flag. Tap the flag to call them back, or press
   **Recall all** in the Army banner (**C** on a computer) to end every attack and rally flag at once.
+- **Walls and Gates (Versus):** in Paths, **Walls** (**X**) sketches a wall line: a Wall on each tile (5 Cement, 40
+  armor) and a Gate where it crosses a road (6 Cement + 2 Alloy, 32 armor; tap a planned Wall to make it a Gate).
+  They're `prepaid` (paid from storage on Build, no Hauler or road, outside the site limit). Walls block every bot;
+  Gates let their owner's bots and road through (`passTile(t, who)`). Armed enemy warbots plan through a Wall or
+  Gate as if it were `BREACH_COST + armor` tiles long, so they go round a short way or stop and shoot through
+  (`breachHit`); a bot whose route gets walled off re-plans (`blockedStep`). On Chokepoint maps the AI walls its end
+  of the pass on Normal and Hard (`aiWalls`).
 - **Garrisons:** tap an Outpost or your Command Base to set its **garrison priority** (new warbots, and ones called back
   from a flag, fill High garrisons first and Low ones last) or to **station warbots** there: choose how many and they
   march over from your other garrisons (each keeps one at home) and stay until you move them.
@@ -207,7 +214,7 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
   group, 1–9 recalls it (twice jumps to it). Pan with **WASD** or the arrow keys, the window edge, or right/middle drag; hover for
   tooltips. Keys: **B** build then a building's letter (or **B R** to start laying roads), **R** (or **P**) opens and closes Paths
   and inside it picks a tool (**R** roads, **G** bridges
-  and tunnels, **V** ramps, **E** pave, **O** one-way arrows, **L** junctions, **T** traffic map), **Q** army, **C** recall all warbots, **F** select all warbots, **J** latest alert,
+  and tunnels, **V** ramps, **E** pave, **O** one-way arrows, **L** junctions, **X** walls, **T** traffic map), **Q** army, **C** recall all warbots, **F** select all warbots, **J** latest alert,
   **H** base, **[ ]** speed, **+/−** zoom, **M** minimap, **Space** pause, **Esc** back / clear selection.
   Phones and tablets keep the touch controls.
 

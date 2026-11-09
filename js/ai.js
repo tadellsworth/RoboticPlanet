@@ -30,8 +30,9 @@ function aiThink(p) {
   let sites = 0;
   for (const b of me) {
     counts[b.type] = (counts[b.type] || 0) + 1;
-    if (!b.built) sites++;
+    if (!b.built && !BDEFS[b.type].prepaid) sites++;
   }
+  aiWalls(p);
   const maxSites = p === 0 && P.ai ? 2 : lvl.maxSites;
   // Warbots can't fight without Ammo: in a war, once the opening is done, an Ammo Plant comes
   // first, its site is never given up, and the Foundry rests so the Alloy reaches it.
@@ -316,6 +317,33 @@ function aiThink(p) {
       if (d < bd && canPlace(p, 'outpost', i, j, true).ok && !wouldBlock(j * S.W + i)) { bd = d; spot = { x: i, y: j }; }
     }
     if (spot) { placeSite(p, 'outpost', spot.x, spot.y); P.lastAttack = S.time - 30; }
+  }
+}
+
+/**
+ * Chokepoint maps (Normal and Hard): once our end of the pass is inside our border, wall it off,
+ * with a Gate on our road through it (or in the middle), and put back any piece the enemy breaks.
+ * Cement for the colony comes first.
+ */
+function aiWalls(p) {
+  const cp = chokePass();
+  if (!cp || !warOn() || S.difficulty === 'easy' || S.time < 240) return;
+  const L = getE(S.players[p].lander);
+  if (!L) return;
+  const row = L.y > S.H / 2 ? cp.bot : cp.top;
+  const tiles = [];
+  for (let i = cp.p0; i <= cp.p1; i++) if (S.terrain[tIdx(i, row)] === T_GROUND) tiles.push(i);
+  if (!tiles.length || tiles.some((i) => S.owner[tIdx(i, row)] !== p)) return;
+  const at = (i) => getE(S.bAt[tIdx(i, row)]);
+  let gate = tiles.find((i) => at(i) && at(i).type === 'gate');
+  if (gate === undefined) gate = tiles.find((i) => S.road[tIdx(i, row)] || S.plan[tIdx(i, row)]);
+  if (gate === undefined) gate = tiles[Math.floor(tiles.length / 2)];
+  for (const i of tiles) {
+    const t = tIdx(i, row);
+    if (S.bAt[t]) continue;
+    const kind = i === gate || S.road[t] || S.plan[t] ? 'gate' : 'wall';
+    if (spendable(p).cement < BDEFS[kind].cost.cement + 10) return;
+    if (canPlace(p, kind, i, row).ok) placeSite(p, kind, i, row);
   }
 }
 

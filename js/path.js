@@ -39,9 +39,13 @@ const _DIRS = [[1, 0, 1], [-1, 0, 1], [0, 1, 1], [0, -1, 1], [1, 1, 1.4142], [1,
  * a player id, tiles in that player's enemies' territory cost much more.
  * opts.roadOnly: only road tiles (plus the start and goal), straight moves only (haulers).
  * opts.offMul: how many times more an off-road tile costs (bots that are slow off roads).
+ * opts.who: the player whose bot this is (only its own Gates let it through).
+ * opts.breach: an armed warbot: enemy Walls and Gates count as passable but dear (BREACH_COST plus
+ *   their armor), so it goes round a short way and plans to shoot through a long one.
  */
 function findPath(sx, sy, gx, gy, avoidFor, opts) {
   const roadOnly = !!(opts && opts.roadOnly), offMul = (opts && opts.offMul) || 1;
+  const who = opts ? opts.who : undefined, breach = !!(opts && opts.breach);
   const W = S.W, H = S.H, N = W * H;
   if (!inMap(gx, gy)) return null;
   const start = sy * W + sx, goal = gy * W + gx;
@@ -73,7 +77,11 @@ function findPath(sx, sy, gx, gy, avoidFor, opts) {
       const nt = nj * W + ni;
       if (closed[nt] === gen) continue;
       if (!walkable(nt)) continue; // open ground, bridges and tunnels
-      if (S.bAt[nt] && nt !== goal && !passTile(nt)) continue;
+      let wall = 0;
+      if (S.bAt[nt] && nt !== goal && !passTile(nt, who)) {
+        if (!breach || dir[2] > 1 || !breachable(nt, who)) continue;
+        wall = BREACH_COST + Math.max(0, getE(S.bAt[nt]).armor) * BREACH_PER_ARMOR;
+      }
       if (roadOnly && (dir[2] > 1 || (!roadLike(nt) && nt !== goal))) continue;
       if (dir[2] > 1) {
         // Bots follow roads round their corners: no cutting diagonally on or off a road.
@@ -85,7 +93,7 @@ function findPath(sx, sy, gx, gy, avoidFor, opts) {
         const e = S.elev[cur];
         if (S.elev[nt] !== e || S.elev[a] !== e || S.elev[b] !== e) continue;
       } else if (!canStep(cur, nt)) continue; // cliffs block; ramps connect levels
-      let ng = g[cur] + dir[2] * (tileCost(cur, dir[0], dir[1], offMul) + tileCost(nt, dir[0], dir[1], offMul)) * 0.5;
+      let ng = g[cur] + dir[2] * (tileCost(cur, dir[0], dir[1], offMul) + tileCost(nt, dir[0], dir[1], offMul)) * 0.5 + wall;
       // Workers steer clear of enemy territory unless there is no other way.
       if (avoidFor !== undefined) { const o = S.owner[nt]; if (o >= 0 && o !== avoidFor) ng += 6; }
       if (stamp[nt] !== gen || ng < g[nt]) {

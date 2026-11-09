@@ -274,6 +274,7 @@ function initKeyboard() {
       case 'e': openPaths('pave'); break;
       case 't': if (R.mode !== 'road') setMode('road'); R.traffic = !R.traffic; showRoadBanner(); sfx('click'); break;
       case 'l': openPaths('lights'); break;
+      case 'x': if (warOn()) openPaths('wall'); break;
       case 'q': if (!$('btn-attack').hidden) $('btn-attack').click(); break;
       case 'h': case 'home': $('btn-home').click(); break;
       case 'm': setMinimap(!MM.on); break;
@@ -1020,6 +1021,22 @@ function onMapTap(i, j, wx, wy) {
       showRoadBanner(note, !!note);
       return;
     }
+    if (UI.roadMode === 'wall') {
+      // Walls: a tap plans a Wall (a Gate on a road), taps again make it a Gate, then drop it.
+      const stroke = [], had = UI.draft.walls.get(t) || null;
+      const first = wallKind(t);
+      const next = !had ? first : had === 'wall' ? 'gate' : null;
+      if (next && !wallFits(t, next)) {
+        sfx('error');
+        showRoadBanner(S.bAt[t] ? 'There is already a building here.' : canPlace(0, next, i, j, true).reason);
+        return;
+      }
+      draftWall(stroke, t, next);
+      UI.draft.strokes.push(stroke);
+      sfx('click');
+      showRoadBanner(next === 'gate' && first === 'wall' ? 'A Gate on open ground: your bots walk through it, enemies have to break it.' : '', true);
+      return;
+    }
     // Roads and Bridges: a tap adds a tile to the plan or drops it, or marks a road to take up.
     const stroke = [];
     const d = UI.draft;
@@ -1088,8 +1105,22 @@ function rallyAtTap(wx, wy) {
  * tiles to lay, and existing or planned tiles to take up. Nothing is paid and no bot moves until
  * Build is tapped, so a stray swipe costs nothing (Undo or Clear takes it back).
  */
-function draftReset() { UI.draft = { add: [], addSet: new Set(), del: new Set(), ramps: new Set(), strokes: [] }; }
-function draftEmpty() { return !UI.draft || (!UI.draft.add.length && !UI.draft.del.size && !UI.draft.ramps.size); }
+function draftReset() { UI.draft = { add: [], addSet: new Set(), del: new Set(), ramps: new Set(), walls: new Map(), strokes: [] }; }
+function draftEmpty() { return !UI.draft || (!UI.draft.add.length && !UI.draft.del.size && !UI.draft.ramps.size && !UI.draft.walls.size); }
+
+/** What a wall line puts on tile t: a Gate on a road (or a planned one), a Wall anywhere else. */
+function wallKind(t) { return S.road[t] || S.plan[t] ? 'gate' : 'wall'; }
+
+/** Could a Wall or Gate (`kind`) go on tile t? (What it costs is checked for the whole plan.) */
+function wallFits(t, kind) { return !S.bAt[t] && canPlace(0, kind, t % S.W, (t / S.W) | 0, true).ok; }
+
+/** Plan a Wall or Gate on tile t, or drop it (kind null), remembering the change for Undo. */
+function draftWall(stroke, t, kind) {
+  const d = UI.draft, from = d.walls.get(t) || null;
+  if (from === kind) return;
+  if (kind) d.walls.set(t, kind); else d.walls.delete(t);
+  stroke.push({ t, op: 'setw', from, to: kind });
+}
 
 function draftOp(stroke, t, op) {
   const d = UI.draft;
@@ -1110,7 +1141,10 @@ function draftUndo() {
   do s = d.strokes.pop(); while (s && !s.length); // skip drags that added nothing
   if (!s) return;
   const back = { add: 'unadd', unadd: 'add', del: 'undel', undel: 'del', ramp: 'unramp', unramp: 'ramp' };
-  for (let k = s.length - 1; k >= 0; k--) draftOp([], s[k].t, back[s[k].op]);
+  for (let k = s.length - 1; k >= 0; k--) {
+    if (s[k].op === 'setw') { if (s[k].from) d.walls.set(s[k].t, s[k].from); else d.walls.delete(s[k].t); continue; }
+    draftOp([], s[k].t, back[s[k].op]);
+  }
 }
 
 /** What the plan costs (new tiles, less what taking up roads gives back) and how many tiles of each kind. */
@@ -1132,17 +1166,28 @@ function draftSummary() {
   }
   // Ramps are construction sites: their materials are delivered, but you need them in stock.
   for (const t of d.ramps) for (const g in BDEFS.ramp.cost) cost[g] = (cost[g] || 0) + BDEFS.ramp.cost[g];
+  // Walls and Gates are paid for from storage the moment you tap Build.
+  let walls = 0, gates = 0;
+  const wcost = {};
+  for (const [, kind] of d.walls) {
+    if (kind === 'gate') gates++; else walls++;
+    for (const g in BDEFS[kind].cost) { cost[g] = (cost[g] || 0) + BDEFS[kind].cost[g]; wcost[g] = (wcost[g] || 0) + BDEFS[kind].cost[g]; }
+  }
   const net = {};
   for (const g in cost) net[g] = Math.max(0, cost[g] - (back[g] || 0));
-  return { add, cross, clear, del: d.del.size, ramps: d.ramps.size, cost, back, net, can: canAffordRoad(0, net) };
+  return { add, cross, clear, del: d.del.size, ramps: d.ramps.size, walls, gates, cost, back, net, can: canAffordRoad(0, net) && canPay(0, wcost) };
 }
 
 /** Build the plan: take up the marked roads (their goods come back first), then plan the new tiles for workers to pave. */
 function commitDraft() {
   if (draftEmpty()) return;
   const d = UI.draft;
-  let removed = 0, laid = 0, ramps = 0, why = '';
+  let removed = 0, laid = 0, ramps = 0, walls = 0, gates = 0, why = '', wallWhy = '';
   for (const t of d.del) if (S.road[t] || S.plan[t] === 1) { removeRoad(0, t % S.W, (t / S.W) | 0); removed++; }
+  for (const [t, kind] of d.walls) {
+    const r = placeSite(0, kind, t % S.W, (t / S.W) | 0);
+    if (r.ok) { if (kind === 'gate') gates++; else walls++; } else if (!wallWhy) wallWhy = r.reason;
+  }
   for (const t of d.ramps) {
     const r = placeSite(0, 'ramp', t % S.W, (t / S.W) | 0);
     if (r.ok) ramps++; else { why = r.reason; break; }
@@ -1156,8 +1201,10 @@ function commitDraft() {
   draftReset();
   // Built: Paths closes, straight back to the map (unless something went wrong, to fix it).
   if (!why) setMode('normal');
+  const wallText = walls || gates ? ` ${[walls ? `${walls} Wall${walls === 1 ? '' : 's'}` : '', gates ? `${gates} Gate${gates === 1 ? '' : 's'}` : ''].filter(Boolean).join(' and ')} paid for: free workers will build ${walls + gates === 1 ? 'it' : 'them'}.` : '';
   if (why) { sfx('error'); toast(`Planned ${laid} tile${laid === 1 ? '' : 's'} before running short: ${why}`, 'warn'); }
-  else { sfx('place'); toast((laid ? `Planned ${laid} road tile${laid === 1 ? '' : 's'}: free workers will pave them.` : '') + (ramps ? ` ${ramps} Ramp site${ramps === 1 ? '' : 's'} started.` : '') + (removed ? ` Took up ${removed} tile${removed === 1 ? '' : 's'}.` : ''), 'info'); }
+  else { sfx('place'); toast((laid ? `Planned ${laid} road tile${laid === 1 ? '' : 's'}: free workers will pave them.` : '') + (ramps ? ` ${ramps} Ramp site${ramps === 1 ? '' : 's'} started.` : '') + wallText + (removed ? ` Took up ${removed} tile${removed === 1 ? '' : 's'}.` : ''), 'info'); }
+  if (wallWhy) toast(`Some of the wall couldn't go up: ${wallWhy}`, 'warn');
   if (why) showRoadBanner();
 }
 
@@ -1179,13 +1226,19 @@ function onRoadPaint(i, j, first) {
   const from = first || !UI.lastPaint ? { i, j } : UI.lastPaint;
   const line = tileLine(from.i, from.j, i, j);
   let prev = null;
-  const arrows = UI.roadMode === 'arrows', pave = UI.roadMode === 'pave';
+  const arrows = UI.roadMode === 'arrows', pave = UI.roadMode === 'pave', wall = UI.roadMode === 'wall';
   // Pave: the first road tile of a drag decides whether it marks roads or clears their marks.
   if (pave && first) UI.paveOn = !(inMap(i, j) && S.paveMark[tIdx(i, j)]);
   for (const [x, y] of line) {
     if (!inMap(x, y)) break;
     const t = tIdx(x, y);
     if (pave) { if (paveMarkable(t)) setPaveMark(0, x, y, UI.paveOn); continue; }
+    if (wall) {
+      if (UI.draft.walls.has(t)) continue;
+      const kind = wallKind(t);
+      if (wallFits(t, kind)) draftWall(UI.stroke, t, kind); else if (!S.bAt[t]) UI.paintSkipped = true;
+      continue;
+    }
     if (arrows) {
       if (S.road[t] && prev) {
         const v = 2 + [[1, 0], [0, 1], [-1, 0], [0, -1]].findIndex(([dx, dy]) => dx === x - prev[0] && dy === y - prev[1]);
@@ -1203,6 +1256,7 @@ function onRoadPaint(i, j, first) {
   }
   UI.lastPaint = { i, j };
   if (pave) { showRoadBanner(); return; }
+  if (wall) { showRoadBanner(UI.paintSkipped ? 'The wall skips tiles it can\'t go on (outside your border, resources, cliffs, or right beside your Command Base).' : '', true); return; }
   if (!arrows) {
     showRoadBanner(UI.paintCross ? 'Roads stop at water and rock: pick <b>Bridges</b> to cross.'
       : UI.paintSkipped ? 'Dragging goes round resources: tap a boulder, grove, ore or crystal tile to clear it for a road.' : '', true);
@@ -1214,11 +1268,15 @@ function onRoadPaint(i, j, first) {
  * Bridges show the plan and what it costs, with Undo, Clear and Build.
  */
 function showRoadBanner(problem, info) {
-  const mode = ['arrows', 'lights', 'bridge', 'ramp', 'pave'].includes(UI.roadMode) ? UI.roadMode : 'road';
+  const mode = ['arrows', 'lights', 'bridge', 'ramp', 'pave', 'wall'].includes(UI.roadMode) ? UI.roadMode : 'road';
   if (!UI.draft) draftReset();
   const have = playerGoods(0);
   let line, how;
-  if (mode === 'ramp' && draftEmpty()) {
+  if (mode === 'wall' && !UI.draft.walls.size) {
+    line = `<b>Sketch a wall</b> by dragging (${costText(BDEFS.wall.cost)} a tile); where it crosses a road a <b>Gate</b> goes (${costText(BDEFS.gate.cost)}). Tap a planned Wall to make it a Gate, again to drop it. Nothing is spent until you tap <b>Build</b>.`;
+    how = `Walls stop every bot. Enemy warbots go round if there is a short way, or stand and shoot their way through: a Wall takes ${BDEFS.wall.armor} hits (a Gate ${BDEFS.gate.armor}, a Missile does ${BDEFS.silo.missile.damage}), and every shot costs them Ammo, so turrets behind a wall pick them off while they work. ` +
+      'Your own bots drive through your Gates, so leave one wherever your roads or workers need to cross. Walls are paid for from storage when you tap Build (no Hauler or road needed), and free workers build them. Repair a damaged Wall from its panel.';
+  } else if (mode === 'ramp' && draftEmpty()) {
     line = `Tap a highlighted spot at the top or foot of a one-level cliff to plan a <b>Ramp</b> (${costText(BDEFS.ramp.cost)}). To get down from high ground, plan it on the cliff top. Nothing is spent until you tap <b>Build</b>.`;
     how = 'Workers cut a sloped road into the cliff; once it is done it is part of your road network, so haulers drive straight up it. A Ramp can\'t go where it would block the only way through a pass.';
   } else if (mode === 'pave') {
@@ -1254,11 +1312,14 @@ function showRoadBanner(problem, info) {
       if (sm.add) parts.push(`<b>${sm.add}</b> new tile${sm.add === 1 ? '' : 's'}` + (sm.cross ? ` (${sm.cross} bridge or tunnel)` : '') + (sm.clear ? ` (${sm.clear} through resources)` : ''));
       if (sm.del) parts.push(`<b>${sm.del}</b> to take up`);
       if (sm.ramps) parts.push(`<b>${sm.ramps}</b> Ramp${sm.ramps === 1 ? '' : 's'}`);
+      if (sm.walls) parts.push(`<b>${sm.walls}</b> Wall${sm.walls === 1 ? '' : 's'}`);
+      if (sm.gates) parts.push(`<b>${sm.gates}</b> Gate${sm.gates === 1 ? '' : 's'}`);
       const cost = Object.keys(sm.net).length && Object.values(sm.net).some((v) => v > 0) ? `costs <b>${costText(sm.net)}</b>` : 'costs nothing';
       line = `Plan: ${parts.join(', ')}; ${cost}` + (sm.can ? '.' : ` <span class="err">— not enough ${Object.keys(sm.net).filter((g) => !canAffordRoad(0, { [g]: sm.net[g] })).map((g) => GOOD[g].name).join(' or ')}.</span>`);
     }
     const waiting = planList(0).length;
-    how = `<b>Haulers only drive on roads</b>, so every building needs a road to storage. 1 Cement paves ${Math.round(1 / roadCost().cement)} tiles (${ROAD_CLEAR}× through resources); you have ${have.cement || 0} Cement` +
+    if (mode === 'wall') how = 'Walls and Gates are paid for when you tap Build and free workers put them up. Enemy warbots have to go round or shoot through; your bots pass your Gates.';
+    else how = `<b>Haulers only drive on roads</b>, so every building needs a road to storage. 1 Cement paves ${Math.round(1 / roadCost().cement)} tiles (${ROAD_CLEAR}× through resources); you have ${have.cement || 0} Cement` +
       (mode === 'bridge' ? ` and ${have.alloy || 0} Alloy. Workers build bridges and tunnels out from the shore or rock face, and they join land on any level.` : '.') +
       ` After you tap Build, free workers pave the road a tile at a time${waiting ? ` (<b>${waiting}</b> tile${waiting === 1 ? '' : 's'} waiting now)` : ''}.`;
   }
@@ -1268,6 +1329,7 @@ function showRoadBanner(problem, info) {
   $('banner-seg').hidden = false;
   for (const btn of $('banner-seg').children) {
     btn.classList.toggle('on', btn.dataset.v === mode);
+    if (btn.dataset.v === 'wall') btn.hidden = !warOn();
     btn.onclick = () => { UI.roadMode = btn.dataset.v; sfx('click'); showRoadBanner(); };
   }
   // Undo, Clear and Build for a plan.
@@ -1277,8 +1339,10 @@ function showRoadBanner(problem, info) {
   $('banner-ok').hidden = !drafting;
   if (drafting) {
     const sm = draftSummary();
-    $('banner-ok').textContent = sm.add ? `Build ${sm.add} tile${sm.add === 1 ? '' : 's'}` + (sm.ramps ? ` + ${sm.ramps} Ramp${sm.ramps === 1 ? '' : 's'}` : '')
-      : sm.ramps ? `Build ${sm.ramps} Ramp${sm.ramps === 1 ? '' : 's'}` : 'Take up';
+    const wl = sm.walls + sm.gates;
+    $('banner-ok').textContent = sm.add ? `Build ${sm.add} tile${sm.add === 1 ? '' : 's'}` + (sm.ramps ? ` + ${sm.ramps} Ramp${sm.ramps === 1 ? '' : 's'}` : '') + (wl ? ` + ${wl} wall` : '')
+      : sm.ramps ? `Build ${sm.ramps} Ramp${sm.ramps === 1 ? '' : 's'}` + (wl ? ` + ${wl} wall` : '')
+      : wl ? `Build ${sm.walls ? `${sm.walls} Wall${sm.walls === 1 ? '' : 's'}` : ''}${sm.walls && sm.gates ? ' + ' : ''}${sm.gates ? `${sm.gates} Gate${sm.gates === 1 ? '' : 's'}` : ''}` : 'Take up';
     $('banner-ok').disabled = !sm.can;
     $('banner-undo').onclick = () => { draftUndo(); sfx('click'); showRoadBanner(); };
     $('banner-clear').onclick = () => { draftReset(); sfx('click'); showRoadBanner(); };
@@ -1338,7 +1402,8 @@ function openBuildMenu() {
   const html = `<div class="sheet-title"><h3>Build</h3></div>
     <p class="desc">Placing a site is free; haulers bring the materials by road, so lay a road to it. ${sites}/${MAX_SITES} sites in progress.</p>
     <div class="build-grid"><button class="bcard roads" id="build-roads"><kbd>R</kbd><svg viewBox="0 0 24 24"><path d="M8 3L5 21M16 3l3 18M12 4v3M12 10.5v3M12 17v3" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
-      <div class="bname">Roads</div><div class="bhave">Plan roads, bridges and ramps</div></button>${list.map((t) => `<button class="bcard" data-t="${t}" ${sites >= MAX_SITES ? 'disabled' : ''}>
+      <div class="bname">Roads</div><div class="bhave">Plan roads, bridges and ramps</div></button>${warOn() ? `<button class="bcard walls" id="build-walls"><img src="${iconFor('wall')}" alt=""><div class="bname">Walls</div><div class="bcost">${costHTML(BDEFS.wall.cost, have)}</div>
+      <div class="bhave">${wallCountText()}</div></button>` : ''}${list.map((t) => `<button class="bcard" data-t="${t}" ${sites >= MAX_SITES ? 'disabled' : ''}>
       ${BUILD_KEYS[t] ? `<kbd>${BUILD_KEYS[t].toUpperCase()}</kbd>` : ''}<img src="${iconFor(t)}" alt=""><div class="bname">${BDEFS[t].name}</div><div class="bcost">${costHTML(BDEFS[t].cost, have)}</div>
       <div class="bhave">${ownedText(t)}</div></button>`).join('')}</div>`;
   openSheet('build', 0, html);
@@ -1346,6 +1411,15 @@ function openBuildMenu() {
     el.onclick = () => { sfx('click'); enterPlaceMode(el.dataset.t); };
   }
   $('build-roads').onclick = () => openPaths('road');
+  if ($('build-walls')) $('build-walls').onclick = () => openPaths('wall');
+}
+
+/** "4 Walls, 1 Gate" for the build menu's Walls card. */
+function wallCountText() {
+  const w = ownedCount('wall'), g = ownedCount('gate');
+  const nw = w.built + w.sites, ng = g.built + g.sites;
+  if (!nw && !ng) return 'Walls and Gates';
+  return [nw ? `${nw} Wall${nw === 1 ? '' : 's'}` : '', ng ? `${ng} Gate${ng === 1 ? '' : 's'}` : ''].filter(Boolean).join(', ');
 }
 
 /** How many of a building type the player has, for the build menu. */
@@ -1390,7 +1464,7 @@ function openBuildingSheet(b) {
           <button class="btn small ghost" id="sh-keep-all">${UI.keepAll ? 'Fewer goods' : 'More goods'}</button>
           <p class="hint" id="sh-keep-hint"></p>`;
       }
-    } else if (b.type !== 'lander') {
+    } else if (b.type !== 'lander' && !(b.built && BDEFS[b.type].barrier)) {
       html += `<div class="section-label">Priority</div><div class="seg" id="sh-prio">
         <button data-v="low">Low</button><button data-v="normal">Normal</button><button data-v="high">High</button></div>
         <p class="hint">${b.built ? 'High-priority buildings get workers and goods first; low ones last, and lose their worker first when workers run short.' : 'High-priority sites get their materials and a builder first. Once built, it goes back to Normal.'}</p>`;

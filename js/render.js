@@ -1151,6 +1151,7 @@ function drawBuilding(ctx, type, cx, cy, s, owner, b) {
   const u = s / 32;
   ctx.lineJoin = 'round';
   ctx.lineCap = 'round';
+  if (type === 'wall' || type === 'gate') { drawBarrier(ctx, type, cx, cy, s, owner, b); return; }
   switch (type) {
     case 'lander': {
       const r = s * 0.78;
@@ -1507,6 +1508,119 @@ function drawBuilding(ctx, type, cx, cy, s, owner, b) {
   }
 }
 
+/**
+ * Walls and Gates: raised Cement blocks that join up with the Walls and Gates beside them (same
+ * owner), with a team-coloured stripe along the top. A Gate is a gap in the wall with the road
+ * running through it and a barrier arm that lifts while one of its owner's bots goes through.
+ */
+function drawBarrier(ctx, type, cx, cy, s, owner, b) {
+  const color = PLAYER_COLORS[owner];
+  const has = b && b.x !== undefined;
+  const link = (di, dj) => {
+    if (!has || !inMap(b.x + di, b.y + dj)) return false;
+    const n = S.bAt[tIdx(b.x + di, b.y + dj)] ? getE(S.bAt[tIdx(b.x + di, b.y + dj)]) : null;
+    return !!n && n.owner === owner && !!BDEFS[n.type].barrier;
+  };
+  const roadAt = (di, dj) => has && inMap(b.x + di, b.y + dj) && roadLike(tIdx(b.x + di, b.y + dj));
+  // [north, east, south, west]
+  let c = [link(0, -1), link(1, 0), link(0, 1), link(-1, 0)];
+  if (!has) c = [false, true, false, true]; // menu icon: a stretch of wall
+  const half = s / 2, a = s * 0.3, h = s * 0.2, x0 = cx - half, y0 = cy - half;
+  const rects = [];
+  let lane = null; // a Gate's passage: 'v' (road runs north-south) or 'h'
+  if (type === 'gate') {
+    const rv = (roadAt(0, -1) ? 1 : 0) + (roadAt(0, 1) ? 1 : 0), rh = (roadAt(-1, 0) ? 1 : 0) + (roadAt(1, 0) ? 1 : 0);
+    lane = rv > rh ? 'v' : rh > rv ? 'h' : (c[1] || c[3]) ? 'v' : (c[0] || c[2]) ? 'h' : 'v';
+    // Road surface through the gap.
+    const rw = s * 0.44;
+    ctx.fillStyle = '#5d636b';
+    if (lane === 'v') ctx.fillRect(cx - rw / 2 - 2, y0, rw + 4, s); else ctx.fillRect(x0, cy - rw / 2 - 2, s, rw + 4);
+    ctx.fillStyle = '#b9bec5';
+    if (lane === 'v') ctx.fillRect(cx - rw / 2, y0, rw, s); else ctx.fillRect(x0, cy - rw / 2, s, rw);
+    // Two pillars either side of the road, reaching out to the wall on each side.
+    const p = s * 0.24;
+    if (lane === 'v') { rects.push([x0, cy - a, p, a * 2], [x0 + s - p, cy - a, p, a * 2]); }
+    else { rects.push([cx - a, y0, a * 2, p], [cx - a, y0 + s - p, a * 2, p]); }
+  } else {
+    rects.push([cx - a, cy - a, a * 2, a * 2]);
+    if (c[0]) rects.push([cx - a, y0, a * 2, half]);
+    if (c[2]) rects.push([cx - a, cy, a * 2, half]);
+    if (c[3]) rects.push([x0, cy - a, half, a * 2]);
+    if (c[1]) rects.push([cx, cy - a, half, a * 2]);
+  }
+  // Shadow, the front face (the block's base, seen below the raised top) and the top.
+  ctx.fillStyle = 'rgba(10,8,6,0.3)';
+  for (const r of rects) ctx.fillRect(r[0] + s * 0.06, r[1] + s * 0.05, r[2], r[3]);
+  ctx.fillStyle = '#6e7177';
+  for (const r of rects) ctx.fillRect(r[0], r[1], r[2], r[3]);
+  ctx.fillStyle = '#4f5257';
+  for (const r of rects) ctx.fillRect(r[0], r[1] + r[3] - Math.min(h * 0.45, r[3] * 0.4), r[2], Math.min(h * 0.45, r[3] * 0.4));
+  ctx.fillStyle = '#c3c6cb';
+  for (const r of rects) ctx.fillRect(r[0], r[1] - h, r[2], r[3]);
+  // Block joints and a light top edge.
+  ctx.strokeStyle = 'rgba(80,84,92,0.55)';
+  ctx.lineWidth = Math.max(1, s * 0.025);
+  ctx.beginPath();
+  for (const r of rects) {
+    if (r[2] >= r[3]) for (let k = 1; k < 3; k++) { const x = r[0] + (r[2] * k) / 3; ctx.moveTo(x, r[1] - h); ctx.lineTo(x, r[1] - h + r[3]); }
+    else for (let k = 1; k < 3; k++) { const y = r[1] - h + (r[3] * k) / 3; ctx.moveTo(r[0], y); ctx.lineTo(r[0] + r[2], y); }
+  }
+  ctx.stroke();
+  ctx.fillStyle = 'rgba(255,255,255,0.35)';
+  for (const r of rects) ctx.fillRect(r[0], r[1] - h, r[2], Math.max(1, s * 0.03));
+  // The owner's stripe along the top.
+  const st = Math.max(1.5, s * 0.07);
+  ctx.fillStyle = color;
+  if (type === 'gate') {
+    for (const r of rects) {
+      if (lane === 'v') ctx.fillRect(r[0], cy - h - st / 2, r[2], st);
+      else ctx.fillRect(cx - st / 2, r[1] - h, st, r[3]);
+    }
+    // Gate posts: taller, darker blocks either side of the road, each with a light in the owner's colour.
+    const pw = s * 0.24, ph = h * 0.9, posts = lane === 'v'
+      ? [[x0, cy - a * 1.05, pw, a * 2.1], [x0 + s - pw, cy - a * 1.05, pw, a * 2.1]]
+      : [[cx - a * 1.05, y0, a * 2.1, pw], [cx - a * 1.05, y0 + s - pw, a * 2.1, pw]];
+    for (const r of posts) {
+      ctx.fillStyle = '#3d4045';
+      ctx.fillRect(r[0], r[1] - h, r[2], r[3] + h);
+      ctx.fillStyle = '#8e939b';
+      ctx.fillRect(r[0], r[1] - h - ph, r[2], r[3]);
+      ctx.fillStyle = 'rgba(255,255,255,0.4)';
+      ctx.fillRect(r[0], r[1] - h - ph, r[2], Math.max(1, s * 0.03));
+      ctx.fillStyle = color;
+      ctx.beginPath(); ctx.arc(r[0] + r[2] / 2, r[1] + r[3] / 2 - h - ph, Math.max(1.5, s * 0.06), 0, Math.PI * 2); ctx.fill();
+    }
+    // The barrier arm: across the road, or lifted while a friendly bot passes.
+    let open = false;
+    if (has) for (const v of S.bots) if (!v.dead && !v.inside && v.owner === owner && Math.abs(v.x - (b.x + 0.5)) < 0.9 && Math.abs(v.y - (b.y + 0.5)) < 0.9) { open = true; break; }
+    const len = s - pw * 2, bh = Math.max(2, s * 0.09);
+    ctx.save();
+    if (lane === 'v') { ctx.translate(x0 + pw, cy - h * 1.2); if (open) ctx.rotate(-1.2); }
+    else { ctx.translate(cx, y0 + pw - h * 1.2); ctx.rotate(Math.PI / 2); if (open) ctx.rotate(-1.2); }
+    ctx.fillStyle = '#f2f2f2';
+    ctx.fillRect(0, -bh / 2, len, bh);
+    ctx.fillStyle = color;
+    for (let k = 0; k < 4; k++) if (k % 2 === 0) ctx.fillRect((len * k) / 4, -bh / 2, len / 4, bh);
+    ctx.restore();
+  } else {
+    ctx.fillRect(cx - st / 2, cy - h - st / 2, st, st);
+    if (c[0]) ctx.fillRect(cx - st / 2, y0 - h, st, half);
+    if (c[2]) ctx.fillRect(cx - st / 2, cy - h, st, half);
+    if (c[3]) ctx.fillRect(x0, cy - h - st / 2, half, st);
+    if (c[1]) ctx.fillRect(cx, cy - h - st / 2, half, st);
+  }
+  // Cracks once it has taken a beating.
+  if (b && b.built && b.armor < BDEFS[type].armor * 0.6) {
+    ctx.strokeStyle = 'rgba(30,30,34,0.75)';
+    ctx.lineWidth = Math.max(1, s * 0.03);
+    ctx.beginPath();
+    const r = rects[0];
+    ctx.moveTo(r[0] + r[2] * 0.2, r[1] - h + r[3] * 0.15); ctx.lineTo(r[0] + r[2] * 0.45, r[1] - h + r[3] * 0.5); ctx.lineTo(r[0] + r[2] * 0.35, r[1] - h + r[3] * 0.85);
+    if (b.armor < BDEFS[type].armor * 0.3) { ctx.moveTo(r[0] + r[2] * 0.8, r[1] - h + r[3] * 0.2); ctx.lineTo(r[0] + r[2] * 0.6, r[1] - h + r[3] * 0.55); }
+    ctx.stroke();
+  }
+}
+
 function drawSite(ctx, type, cx, cy, s, owner, b) {
   const color = PLAYER_COLORS[owner];
   const art = ART.site;
@@ -1523,7 +1637,7 @@ function drawSite(ctx, type, cx, cy, s, owner, b) {
     ctx.save();
     ctx.beginPath(); ctx.rect(cx - s, cy + s * 0.45 - s * 0.9 * b.progress, s * 2, s * 2); ctx.clip();
     ctx.globalAlpha = 0.85;
-    drawBuilding(ctx, type, cx, cy, s, owner, { built: true, garrison: [], aim: -Math.PI / 2 });
+    drawBuilding(ctx, type, cx, cy, s, owner, { built: true, garrison: [], aim: -Math.PI / 2, x: b.x, y: b.y });
     ctx.restore();
     ctx.globalAlpha = 1;
     // delivered materials
@@ -2155,7 +2269,25 @@ function drawLights(ctx, ox, oy, z, inView) {
  */
 function drawDraft(ctx, ox, oy, z, inView) {
   const d = typeof UI !== 'undefined' && UI.draft;
-  if (!d || (!d.add.length && !d.del.size && !d.ramps.size)) return;
+  if (!d || (!d.add.length && !d.del.size && !d.ramps.size && !(d.walls && d.walls.size))) return;
+  // Planned Walls (grey blocks) and Gates (a gap with a striped bar).
+  if (d.walls) for (const [t, kind] of d.walls) {
+    const i = t % S.W, j = (t / S.W) | 0;
+    if (!inView(i, j, 1)) continue;
+    const x = ox + i * z, y = oy + j * z;
+    ctx.fillStyle = 'rgba(200,204,210,0.6)';
+    ctx.strokeStyle = '#e6e8ec';
+    ctx.lineWidth = Math.max(1.5, z * 0.05);
+    if (kind === 'gate') {
+      ctx.fillRect(x + z * 0.06, y + z * 0.06, z * 0.24, z * 0.88); ctx.fillRect(x + z * 0.7, y + z * 0.06, z * 0.24, z * 0.88);
+      ctx.strokeRect(x + z * 0.06, y + z * 0.06, z * 0.88, z * 0.88);
+      ctx.fillStyle = '#ffd166';
+      ctx.fillRect(x + z * 0.3, y + z * 0.45, z * 0.4, z * 0.1);
+    } else {
+      ctx.fillRect(x + z * 0.06, y + z * 0.06, z * 0.88, z * 0.88);
+      ctx.strokeRect(x + z * 0.06, y + z * 0.06, z * 0.88, z * 0.88);
+    }
+  }
   // Planned Ramps: a yellow tile with chevrons pointing up the slope.
   for (const t of d.ramps) {
     const i = t % S.W, j = (t / S.W) | 0;

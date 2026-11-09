@@ -495,13 +495,30 @@ function canStep(a, b) {
 
 /**
  * Outposts stand astride roads: their tile joins the road network (a road can run straight through
- * one) and any bot can drive through it.
+ * one) and any bot can drive through it. Gates do too, but only for their owner's bots: pass `who`
+ * (a player) to ask whether that player's bots may cross; leave it out to ask about the road network.
  */
-function passTile(t) {
+function passTile(t, who) {
   const id = S.bAt[t];
   if (!id) return false;
   const b = getE(id);
-  return !!b && b.type === 'outpost';
+  if (!b) return false;
+  if (b.type === 'outpost') return true;
+  return b.type === 'gate' && (who === undefined || who === b.owner);
+}
+
+/** Chokepoint maps: where the pass runs through the crags (columns p0..p1, rows top..bot), or null. */
+function chokePass() {
+  const sh = SHAPE_PRESETS[(S.settings && S.settings.shape) || 0];
+  if (!sh || !sh.choke) return null;
+  const half = Math.floor(S.H / 2);
+  return { p0: Math.floor((S.W - 1) / 2) - 1, p1: Math.ceil((S.W - 1) / 2) + 1, top: half - CHOKE_BAND, bot: half + CHOKE_BAND - 1 };
+}
+
+/** Is the building on tile t an enemy Wall or Gate that player `who`'s warbots could break through? */
+function breachable(t, who) {
+  const b = S.bAt[t] ? getE(S.bAt[t]) : null;
+  return !!b && b.owner !== who && !!BDEFS[b.type].barrier;
 }
 
 /** An Outpost went up or came down: the road network changes, and the roads beside it redraw. */
@@ -577,7 +594,7 @@ function addBuilding(owner, type, x, y, built) {
   S.byId.set(b.id, b);
   S.bAt[tIdx(x, y)] = b.id;
   clearDecor(tIdx(x, y));
-  if (type === 'outpost') outpostRoads(x, y); // roads run through it
+  if (type === 'outpost' || type === 'gate') outpostRoads(x, y); // roads run through it
   return b;
 }
 
@@ -776,8 +793,11 @@ function canPlace(owner, type, i, j, skipBlockCheck) {
     if (!skipBlockCheck && wouldBlock(t)) return { ok: false, reason: 'That would block the only way through here.' };
     return { ok: true, reason: '' };
   }
-  // An Outpost can stand on a road: the road runs through it.
-  if ((S.road[t] || S.plan[t]) && type !== 'outpost') return { ok: false, reason: S.road[t] ? 'There is a road here.' : 'A road is planned here.' };
+  // An Outpost or a Gate can stand on a road: the road runs through it.
+  if ((S.road[t] || S.plan[t]) && type !== 'outpost' && type !== 'gate') {
+    return { ok: false, reason: def.barrier ? 'There is a road here: a wall line across a road gets a Gate there.' : S.road[t] ? 'There is a road here.' : 'A road is planned here.' };
+  }
+  if (def.barrier && (S.road[t] || S.plan[t]) && crossTile(t)) return { ok: false, reason: 'Not on a bridge or tunnel.' };
   // Buildings may stand side by side, as long as every building keeps at least one open side
   // that bots can walk in from (and the Command Base, which is bigger, keeps a clear ring around it).
   let open = 0, roadSide = 0;
@@ -794,6 +814,12 @@ function canPlace(owner, type, i, j, skipBlockCheck) {
     if (nb && nb.owner === owner && !keepsRoadSide(u, t)) return { ok: false, reason: `That would cut the ${BDEFS[nb.type].name} next to it off from roads.` };
   }
   if (open < 1) return { ok: false, reason: 'Bots could not reach this spot.' };
+  // Walls and Gates are meant to close a way through, and they need no road: workers build them
+  // with Cement paid up front.
+  if (def.barrier) {
+    if (def.prepaid && !skipBlockCheck && !canPay(owner, def.cost)) return { ok: false, reason: `Not enough ${missingGoods(owner, def.cost)}.` };
+    return { ok: true, reason: '' };
+  }
   if (!roadSide) return { ok: false, reason: 'Haulers need a road to every building: leave a side open where a road can go (open ground inside your border).' };
   if (def.mil) {
     for (const b of S.buildings) {
@@ -842,19 +868,47 @@ function keepsRoadSide(u, t) {
 
 function siteCount(owner) {
   let n = 0;
-  for (const b of S.buildings) if (!b.dead && b.owner === owner && !b.built) n++;
+  for (const b of S.buildings) if (!b.dead && b.owner === owner && !b.built && !BDEFS[b.type].prepaid) n++;
   return n;
+}
+
+/** What `owner` has on hand to spend of each good (storage and finished goods not already promised). */
+function spendable(owner) {
+  const have = {};
+  for (const b of S.buildings) {
+    if (b.dead || b.owner !== owner) continue;
+    for (const g in b.stock) { const n = supplyOf(b, g); if (n > 0) have[g] = (have[g] || 0) + n; }
+  }
+  return have;
+}
+
+/** Could `owner` pay `cost` right now, from storage? */
+function canPay(owner, cost) {
+  const have = spendable(owner);
+  for (const g in cost) if ((have[g] || 0) < cost[g]) return false;
+  return true;
+}
+
+/** The names of the goods in `cost` that `owner` doesn't have enough of, e.g. 'Cement or Alloy'. */
+function missingGoods(owner, cost) {
+  const have = spendable(owner);
+  return Object.keys(cost).filter((g) => (have[g] || 0) < cost[g]).map((g) => GOOD[g].name).join(' or ') || 'materials';
 }
 
 function placeSite(owner, type, i, j) {
   const chk = canPlace(owner, type, i, j);
   if (!chk.ok) return chk;
-  if (siteCount(owner) >= MAX_SITES) return { ok: false, reason: `Maximum of ${MAX_SITES} construction sites reached.` };
-  // An Outpost on a road takes the road's place (its Cement comes back); the road runs through it.
+  const def = BDEFS[type];
+  if (!def.prepaid && siteCount(owner) >= MAX_SITES) return { ok: false, reason: `Maximum of ${MAX_SITES} construction sites reached.` };
+  // An Outpost or Gate on a road takes the road's place (its Cement comes back); the road runs through it.
   const t = tIdx(i, j);
+  const onRoad = !!(S.road[t] || S.plan[t]);
   if (S.plan[t]) cancelPlan(t);
   if (S.road[t]) removeRoad(owner, i, j);
   const b = addBuilding(owner, type, i, j, false);
+  if (type === 'gate' && onRoad) b.road = true;
+  // Walls and Gates are paid for now, straight from storage: the site starts with its materials in.
+  if (def.prepaid) for (const g in def.cost) { takeGood(owner, g, def.cost[g]); b.stock[g] = def.cost[g]; }
   markDirty(i, j);
   return { ok: true, building: b };
 }
@@ -1264,7 +1318,9 @@ function destroyBuilding(b, burn) {
   b.dead = true;
   S.byId.delete(b.id);
   S.bAt[tIdx(b.x, b.y)] = 0;
-  if (b.type === 'outpost') outpostRoads(b.x, b.y);
+  if (b.type === 'outpost' || b.type === 'gate') outpostRoads(b.x, b.y);
+  // A Gate that stood on a road leaves the road behind when it goes.
+  if (b.type === 'gate' && b.road) setRoad(b.x, b.y, true);
   markDirty(b.x, b.y);
   addFx('boom', b.x + 0.5, b.y + 0.5, { r: 1.3 });
   if (burn) addFx('smoke', b.x + 0.5, b.y + 0.5, { r: 1 });
