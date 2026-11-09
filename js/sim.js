@@ -514,7 +514,7 @@ function moveAlong(u, dt) {
   const here = Math.floor(u.y) * S.W + Math.floor(u.x);
   const bt = BOTS[u.type];
   let speed = bt.speed;
-  const r = S.road[here];
+  const r = S.road[here] || (S.bAt[here] && passTile(here) ? 1 : 0); // driving through an Outpost counts as road
   if (r) {
     const next = u.path[u.pi];
     const dx = (next % S.W) + 0.5 - u.x, dy = ((next / S.W) | 0) + 0.5 - u.y;
@@ -1294,6 +1294,8 @@ function completeBuilding(b) {
   b.builder = 0;
   b.armor = def.armor;
   b.born = S.time;
+  // A priority set on the construction site was for building it: the finished building starts at Normal.
+  if (b.sitePrio) { delete b.prio; delete b.sitePrio; }
   S.players[b.owner].stats.built++;
   markDirty(b.x, b.y);
   postMsg(b.owner, `${def.name} is complete.`, b.x, b.y, 'good');

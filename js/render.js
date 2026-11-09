@@ -407,7 +407,7 @@ function drawRoad(ctx, i, j, x, y) {
   const c = TP / 2;
   const t = tIdx(i, j);
   const tier = S.pave[t] || 1, look = ROAD_LOOK[tier], w = look.w;
-  const nb = [[0, -1], [1, 0], [0, 1], [-1, 0]].map(([di, dj]) => inMap(i + di, j + dj) && S.road[tIdx(i + di, j + dj)] && canStep(t, tIdx(i + di, j + dj)));
+  const nb = [[0, -1], [1, 0], [0, 1], [-1, 0]].map(([di, dj]) => inMap(i + di, j + dj) && roadLike(tIdx(i + di, j + dj)) && canStep(t, tIdx(i + di, j + dj)));
   for (const [col, ww] of [[look.edge, w + 4], [look.fill, w]]) {
     ctx.fillStyle = col;
     ctx.beginPath();
@@ -1379,6 +1379,7 @@ function render(dtReal) {
     }
   }
   drawPlans(ctx, ox, oy, z, inView);
+  if (R.mode === 'road') drawDraft(ctx, ox, oy, z, inView);
   drawLights(ctx, ox, oy, z, inView);
   drawOverpasses(ctx, ox, oy, z, inView);
   if (R.traffic && R.mode === 'road') drawTraffic(ctx, ox, oy, z, inView);
@@ -1562,6 +1563,37 @@ function drawLights(ctx, ox, oy, z, inView) {
       ctx.fillStyle = go ? '#3dff8a' : '#ff4b4b';
       ctx.beginPath(); ctx.arc(px, py + dy * r, r * 0.8, 0, Math.PI * 2); ctx.fill();
     }
+  }
+}
+
+/**
+ * A road plan not yet built (Paths): sketched tiles in bright cyan (blue for bridges and tunnels),
+ * and roads marked to take up with a red cross.
+ */
+function drawDraft(ctx, ox, oy, z, inView) {
+  const d = typeof UI !== 'undefined' && UI.draft;
+  if (!d || (!d.add.length && !d.del.size)) return;
+  const pulse = 0.75 + 0.25 * Math.sin(R.time * 4);
+  ctx.lineWidth = Math.max(1.5, z * 0.05);
+  for (const t of d.add) {
+    const i = t % S.W, j = (t / S.W) | 0;
+    if (!inView(i, j, 1) || S.road[t] || S.plan[t]) continue;
+    const x = ox + i * z, y = oy + j * z, cross = crossTile(t);
+    ctx.fillStyle = cross ? `rgba(110,170,255,${0.45 * pulse})` : `rgba(120,230,255,${0.4 * pulse})`;
+    ctx.fillRect(x + z * 0.1, y + z * 0.1, z * 0.8, z * 0.8);
+    ctx.strokeStyle = cross ? '#7fb2ff' : '#7ae8ff';
+    ctx.strokeRect(x + z * 0.1, y + z * 0.1, z * 0.8, z * 0.8);
+  }
+  ctx.strokeStyle = '#ff5a6e';
+  ctx.lineWidth = Math.max(2, z * 0.08);
+  for (const t of d.del) {
+    const i = t % S.W, j = (t / S.W) | 0;
+    if (!inView(i, j, 1)) continue;
+    const x = ox + i * z, y = oy + j * z;
+    ctx.beginPath();
+    ctx.moveTo(x + z * 0.25, y + z * 0.25); ctx.lineTo(x + z * 0.75, y + z * 0.75);
+    ctx.moveTo(x + z * 0.75, y + z * 0.25); ctx.lineTo(x + z * 0.25, y + z * 0.75);
+    ctx.stroke();
   }
 }
 

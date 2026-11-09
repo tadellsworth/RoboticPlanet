@@ -26,7 +26,7 @@ function tileCost(t, dx, dy, offMul) {
     if (r >= 2 && dx * ROAD_DIRS[r][0] + dy * ROAD_DIRS[r][1] < 0) return 1 / ONEWAY_WRONG + 2;
     return ROAD_PREFERENCE / PAVE[S.pave[t] || 1].speed;
   }
-  if (S.bAt[t]) return 1; // the building a trip starts or ends at
+  if (S.bAt[t]) return passTile(t) ? ROAD_PREFERENCE / PAVE[1].speed : 1; // an Outpost a road runs through, or the building a trip starts or ends at
   if (S.ramp[t]) return offMul / SLOPE_SPEED;
   return (S.res[t] ? 1.5 : 1) * offMul;
 }
@@ -73,9 +73,11 @@ function findPath(sx, sy, gx, gy, avoidFor, opts) {
       const nt = nj * W + ni;
       if (closed[nt] === gen) continue;
       if (!walkable(nt)) continue; // open ground, bridges and tunnels
-      if (S.bAt[nt] && nt !== goal) continue;
-      if (roadOnly && (dir[2] > 1 || (!S.road[nt] && nt !== goal))) continue;
+      if (S.bAt[nt] && nt !== goal && !passTile(nt)) continue;
+      if (roadOnly && (dir[2] > 1 || (!roadLike(nt) && nt !== goal))) continue;
       if (dir[2] > 1) {
+        // Bots follow roads round their corners: no cutting diagonally on or off a road.
+        if (S.road[cur] || S.road[nt]) continue;
         // Diagonal: only across flat ground, and no cutting corners past blocked tiles.
         const a = cj * W + ni, b = nj * W + ci;
         if (S.terrain[a] !== T_GROUND || S.terrain[b] !== T_GROUND || S.terrain[nt] !== T_GROUND || S.terrain[cur] !== T_GROUND) continue;

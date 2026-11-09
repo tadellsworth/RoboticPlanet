@@ -409,6 +409,26 @@ function canStep(a, b) {
   return (d === 1 || d === -1) && (S.ramp[a] === 1 || S.ramp[b] === 1);
 }
 
+/**
+ * Outposts stand astride roads: their tile joins the road network (a road can run straight through
+ * one) and any bot can drive through it.
+ */
+function passTile(t) {
+  const id = S.bAt[t];
+  if (!id) return false;
+  const b = getE(id);
+  return !!b && b.type === 'outpost';
+}
+
+/** An Outpost went up or came down: the road network changes, and the roads beside it redraw. */
+function outpostRoads(x, y) {
+  S.roadVer = (S.roadVer || 0) + 1;
+  for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) if (inMap(x + di, y + dj) && S.dirtyTiles) S.dirtyTiles.push(tIdx(x + di, y + dj));
+}
+
+/** A road tile, or an Outpost the road runs through. */
+function roadLike(t) { return S.road[t] > 0 || (S.bAt[t] > 0 && passTile(t)); }
+
 /** Can bots walk on tile t? Open ground, or a bridge or tunnel. */
 function walkable(t) { return S.terrain[t] === T_GROUND || S.road[t] > 0; }
 
@@ -472,6 +492,7 @@ function addBuilding(owner, type, x, y, built) {
   S.buildings.push(b);
   S.byId.set(b.id, b);
   S.bAt[tIdx(x, y)] = b.id;
+  if (type === 'outpost') outpostRoads(x, y); // roads run through it
   return b;
 }
 
@@ -665,7 +686,8 @@ function canPlace(owner, type, i, j, skipBlockCheck) {
     if (!skipBlockCheck && wouldBlock(t)) return { ok: false, reason: 'That would block the only way through here.' };
     return { ok: true, reason: '' };
   }
-  if (S.road[t] || S.plan[t]) return { ok: false, reason: S.road[t] ? 'There is a road here.' : 'A road is planned here.' };
+  // An Outpost can stand on a road: the road runs through it.
+  if ((S.road[t] || S.plan[t]) && type !== 'outpost') return { ok: false, reason: S.road[t] ? 'There is a road here.' : 'A road is planned here.' };
   // Buildings may stand side by side, as long as every building keeps at least one open side
   // that bots can walk in from (and the Command Base, which is bigger, keeps a clear ring around it).
   let open = 0, roadSide = 0;
@@ -738,6 +760,10 @@ function placeSite(owner, type, i, j) {
   const chk = canPlace(owner, type, i, j);
   if (!chk.ok) return chk;
   if (siteCount(owner) >= MAX_SITES) return { ok: false, reason: `Maximum of ${MAX_SITES} construction sites reached.` };
+  // An Outpost on a road takes the road's place (its Cement comes back); the road runs through it.
+  const t = tIdx(i, j);
+  if (S.plan[t]) cancelPlan(t);
+  if (S.road[t]) removeRoad(owner, i, j);
   const b = addBuilding(owner, type, i, j, false);
   markDirty(i, j);
   return { ok: true, building: b };
@@ -850,17 +876,17 @@ function roadNet() {
   let next = 0;
   const q = [];
   for (let t = 0; t < N; t++) {
-    if (!S.road[t]) continue;
+    if (!roadLike(t)) continue;
     let k = 0;
     const i = t % W;
-    for (const u of [i > 0 ? t - 1 : -1, i < W - 1 ? t + 1 : -1, t - W, t + W]) if (u >= 0 && u < N && S.road[u] && canStep(t, u)) k++;
-    if (k >= 3) junc[t] = 1;
+    for (const u of [i > 0 ? t - 1 : -1, i < W - 1 ? t + 1 : -1, t - W, t + W]) if (u >= 0 && u < N && roadLike(u) && canStep(t, u)) k++;
+    if (k >= 3 && S.road[t]) junc[t] = 1;
     if (comp[t] >= 0) continue;
     comp[t] = next; q.length = 0; q.push(t);
     while (q.length) {
       const a = q.pop(), ai = a % W;
       for (const b of [ai > 0 ? a - 1 : -1, ai < W - 1 ? a + 1 : -1, a - W, a + W]) {
-        if (b < 0 || b >= N || comp[b] >= 0 || !S.road[b] || !canStep(a, b)) continue;
+        if (b < 0 || b >= N || comp[b] >= 0 || !roadLike(b) || !canStep(a, b)) continue;
         comp[b] = next; q.push(b);
       }
     }
@@ -878,10 +904,11 @@ function buildingNets(b) {
   if (nets) return nets;
   nets = [];
   const t = tIdx(b.x, b.y);
+  if (net.comp[t] >= 0) nets.push(net.comp[t]); // an Outpost is part of the road through it
   for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
     if (!inMap(b.x + di, b.y + dj)) continue;
     const u = tIdx(b.x + di, b.y + dj);
-    if (S.road[u] && canStep(t, u) && nets.indexOf(net.comp[u]) < 0) nets.push(net.comp[u]);
+    if (roadLike(u) && canStep(t, u) && nets.indexOf(net.comp[u]) < 0) nets.push(net.comp[u]);
   }
   if (b.id) net.bnet.set(b.id, nets);
   return nets;
@@ -939,7 +966,7 @@ function roadGoals(owner, except) {
  */
 const ROAD_AVOID = 10;
 function roadWeight(t) {
-  if (S.road[t] || S.plan[t]) return 0;
+  if (S.road[t] || S.plan[t] || (S.bAt[t] && passTile(t))) return 0;
   const c = CROSS[S.terrain[t]];
   return c ? c.weight : S.res[t] ? ROAD_AVOID : 1;
 }
@@ -949,14 +976,14 @@ function roadSearch(owner, seeds, done) {
   const cost = new Float32Array(N).fill(Infinity), prev = new Int32Array(N).fill(-2);
   const heap = new MinHeap();
   for (const t of seeds) { cost[t] = roadWeight(t); prev[t] = -1; heap.push(t, cost[t]); }
-  const open = (t) => S.road[t] || canRoad(owner, t % W, (t / W) | 0);
+  const open = (t) => S.road[t] || canRoad(owner, t % W, (t / W) | 0) || (S.bAt[t] > 0 && passTile(t));
   while (heap.size) {
     const c = heap.pri[0], t = heap.pop();
     if (c > cost[t]) continue;
     if (done && done(t)) return { cost, prev, end: t };
     const i = t % W;
     for (const u of [i > 0 ? t - 1 : -1, i < W - 1 ? t + 1 : -1, t - W, t + W]) {
-      if (u < 0 || u >= N || !open(u) || !(S.road[t] && S.road[u] ? canStep(t, u) : stepPlan(t, u))) continue;
+      if (u < 0 || u >= N || !open(u) || !(roadLike(t) && roadLike(u) ? canStep(t, u) : stepPlan(t, u))) continue;
       const nc = c + roadWeight(u);
       if (nc < cost[u]) { cost[u] = nc; prev[u] = t; heap.push(u, nc); }
     }
@@ -970,7 +997,7 @@ function roadSides(owner, x, y) {
   for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
     if (!inMap(x + di, y + dj)) continue;
     const u = tIdx(x + di, y + dj);
-    if ((S.road[u] || canRoad(owner, x + di, y + dj)) && (S.road[u] ? canStep(bt, u) : stepPlan(bt, u))) out.push(u);
+    if ((roadLike(u) || canRoad(owner, x + di, y + dj)) && (roadLike(u) ? canStep(bt, u) : stepPlan(bt, u))) out.push(u);
   }
   return out;
 }
@@ -985,13 +1012,13 @@ function roadRouteTo(owner, b) {
   if (!g.stores.length) return null;
   if (onHomeNet(b)) { const r = []; r.cost = 0; r.pending = 0; return r; }
   const net = roadNet();
-  const res = roadSearch(owner, roadSides(owner, b.x, b.y), (t) => (S.road[t] && g.nets.has(net.comp[t])) || g.next[t]);
+  const res = roadSearch(owner, roadSides(owner, b.x, b.y), (t) => (roadLike(t) && g.nets.has(net.comp[t])) || g.next[t]);
   if (res.end < 0) return null;
   const out = [];
   out.cost = 0; out.pending = 0; out.goods = {}; out.cross = 0;
   for (let k = res.end; k >= 0; k = res.prev[k]) {
     if (S.plan[k]) out.pending++; // already planned: waiting for workers to pave it
-    else if (!S.road[k]) {
+    else if (!roadLike(k)) {
       out.push(k); out.cost += roadTileMul(k);
       const c = roadTileCost(k);
       for (const g in c) out.goods[g] = (out.goods[g] || 0) + c[g];
@@ -1007,7 +1034,7 @@ function roadRouteTo(owner, b) {
  */
 function roadReach(owner) {
   const g = roadGoals(owner, null), net = roadNet(), seeds = [];
-  for (let t = 0; t < S.W * S.H; t++) if ((S.road[t] && g.nets.has(net.comp[t])) || g.next[t]) seeds.push(t);
+  for (let t = 0; t < S.W * S.H; t++) if ((roadLike(t) && g.nets.has(net.comp[t])) || g.next[t]) seeds.push(t);
   return roadSearch(owner, seeds, null).cost;
 }
 
@@ -1099,6 +1126,7 @@ function destroyBuilding(b, burn) {
   b.dead = true;
   S.byId.delete(b.id);
   S.bAt[tIdx(b.x, b.y)] = 0;
+  if (b.type === 'outpost') outpostRoads(b.x, b.y);
   markDirty(b.x, b.y);
   addFx('boom', b.x + 0.5, b.y + 0.5, { r: 1.3 });
   if (burn) addFx('smoke', b.x + 0.5, b.y + 0.5, { r: 1 });

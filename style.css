@@ -437,3 +437,22 @@ body.mode-aim .objective { display: none; }
   font-size: 13px; line-height: 1.35; box-shadow: 0 8px 22px rgba(0, 0, 0, 0.5); }
 .map-tip b { display: block; font-size: 14px; }
 .map-tip em { display: block; font-style: normal; color: var(--muted); }
+.pop-btn { cursor: pointer; }
+.pop-row span:last-child { text-align: right; color: var(--muted); font-size: 13px; }
+.pop-row b { color: var(--text); }
+
+/* Paths: the banner sits at the top so it never covers where you're drawing, and the plan buttons
+   sit three to a row (Undo, Clear, Build), then Traffic map and Done. */
+body.mode-road #banner { top: calc(var(--hud-top, 64px) + 6px); bottom: auto; }
+body.mode-road .objective { display: none; }
+.banner-actions .btn { flex: 1 1 28%; }
+#banner-text details.how { margin-top: 4px; color: var(--muted); font-size: 13px; }
+#banner-text details.how summary { cursor: pointer; color: var(--accent); font-weight: 600; font-size: 13px; }
+#banner-ok:disabled { opacity: 0.45; }
+@media (max-width: 699px) {
+  body.mode-road #banner { padding: 8px 10px; }
+  body.mode-road #banner-text { font-size: 13px; margin-bottom: 6px; line-height: 1.35; }
+  body.mode-road .banner-actions { gap: 6px; }
+  body.mode-road .banner-actions .btn { padding: 8px 6px; font-size: 14px; min-height: 0; }
+  body.mode-road .banner-actions .road-seg button { padding: 6px 2px; font-size: 13px; }
+}

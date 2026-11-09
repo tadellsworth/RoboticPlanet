@@ -81,7 +81,13 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
   site to that network (or to a Depot on it), or Haulers can't bring it materials or collect its goods. A red road badge
   marks buildings with no road: tap one and press **Lay road** to plan the shortest route (shown dashed), or plan your
   own. Placement keeps a side of every building open for a road.
-- **Roads** cost Cement (1 Cement paves 5 tiles), paid when you plan them. Planned tiles show dashed
+- **Planning roads:** in Paths, dragging and tapping only sketch a road (and tapping a road marks it to take up);
+  the banner, at the top of the screen, shows the cost, with **Undo**, **Clear** and **Build**. Nothing is spent until
+  Build, and leaving Paths drops an unbuilt sketch. Arrows and Junctions still act at once.
+- **Roads through Outposts:** an Outpost can stand on a road, and its tile joins the road network for every bot.
+  Bots follow roads round corners (no diagonal shortcuts on or off a road).
+- **Your robots:** tap the robot counter in the top bar for every robot by type and what they're doing.
+- **Roads** cost Cement (1 Cement paves 5 tiles), paid when you build the plan. Planned tiles show dashed
   until free workers pave them: 1.5 s a tile (3 s through resources), working out from the existing network, so long
   highways take planning and spare workers. Calling off a planned tile refunds it. Roads double a bot's speed. Dragging
   plans roads round resources; tap a boulder, grove, ore or crystal tile to clear it for a road at 3× the Cement. A Roadworks' Paver
@@ -127,7 +133,7 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
   would block the only way through a pass.
 - **Priorities:** tap a building or construction site and set it to Low, Normal or High. High-priority
   buildings get workers and goods first; low ones are served last and lose their worker first when
-  workers run short. **Pause** frees a building's worker entirely.
+  workers run short. A priority set on a construction site ends when it's built (back to Normal). **Pause** frees a building's worker entirely.
 - **Storage:** tap your Command Base or a Depot. *Fill first* makes haulers bring finished goods there before
   any other storage; *Empty out* takes nothing new and moves what it holds elsewhere (handy before
   demolishing it). You can also switch individual goods off for that building.
