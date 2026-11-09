@@ -22,7 +22,7 @@ function simStep(dt) {
   for (let k = 0; k < S.bots.length; k++) {
     const u = S.bots[k];
     if (u.dead) continue;
-    if (u.type === 'warbot') updateWarbot(u, dt); else if (BOTS[u.type].wild) updateCritter(u, dt); else updateWorker(u, dt);
+    if (u.type === 'warbot') updateWarbot(u, dt); else if (BOTS[u.type].wild) updateCritter(u, dt); else if (BOTS[u.type].crawler) updateCrawler(u, dt); else updateWorker(u, dt);
   }
   if (S.missiles.length) updateMissiles(dt);
   if (S.tick % 30 === 15) cleanRallies();
@@ -363,7 +363,7 @@ function haulerStranded(u) {
  */
 function routeOpts(u) {
   const bt = BOTS[u.type];
-  const o = { who: u.owner, breach: u.type === 'warbot' && (u.ammo ?? WARBOT_AMMO) > 0, noRope: !!(bt.truck || bt.wild) };
+  const o = { who: u.owner, breach: u.type === 'warbot' && (u.ammo ?? WARBOT_AMMO) > 0, noRope: !!(bt.truck || bt.wild || bt.crawler) };
   if (bt.roadOnly && !haulerStranded(u)) o.roadOnly = true;
   else if ((bt.offroad || bt.roadOnly) && !harvestTrip(u)) o.offMul = 1 / OFFROAD_SLOW;
   return o;
@@ -3949,4 +3949,88 @@ function ropewayAcross(b) {
   f.link = b.id; b.link = f.id; f.far = true;
   computeZones();
   postMsg(b.owner, 'The Ropeway is running: Haulers and Workers ride it across.', b.x, b.y, 'good');
+}
+
+/* ------------------------------------------------------------------ crawlers */
+
+/** Where a Crawler at (i, j) can deploy: the nearest clear, open tile within 2, not in another player's land. -1 if none. */
+function deploySpot(owner, i, j) {
+  let best = -1, bd = Infinity;
+  for (let dj = -2; dj <= 2; dj++) for (let di = -2; di <= 2; di++) {
+    const x = i + di, y = j + dj;
+    if (!inMap(x, y)) continue;
+    const t = tIdx(x, y);
+    if (S.terrain[t] !== T_GROUND || S.bAt[t] || S.road[t] || S.plan[t] || S.res[t] || S.ramp[t] || scorched(t)) continue;
+    if (S.owner[t] >= 0 && S.owner[t] !== owner) continue;
+    if (S.wildlife && S.buildings.some((e) => !e.dead && BDEFS[e.type].wild && Math.max(Math.abs(e.x - x), Math.abs(e.y - y)) <= WILD.clear)) continue;
+    const d = di * di + dj * dj;
+    if (d < bd) { bd = d; best = t; }
+  }
+  return best;
+}
+
+/** Take a bot off the map without a fight (a Crawler turning into its base). */
+function removeBot(u) {
+  cancelTask(u);
+  exitBuilding(u);
+  u.dead = true;
+  S.byId.delete(u.id);
+}
+
+/** Drive Crawler u to (i, j); it deploys when it gets there. '' if under way, otherwise why not. */
+function driveCrawler(u, i, j) {
+  if (!inMap(i, j)) return 'Outside the map.';
+  if (S.zone[tIdx(i, j)] !== S.zone[tIdx(Math.floor(u.x), Math.floor(u.y))]) return 'The Crawler can\'t roll there: it can\'t climb cliffs or cross water (it needs a slope, a Ramp or a bridge).';
+  if (deploySpot(u.owner, i, j) < 0) return 'No clear, open ground to deploy on there.';
+  u.task = { type: 'drive', x: i, y: j };
+  u.path = null;
+  return '';
+}
+
+/** A Crawler on the move. It doesn't need charging. */
+function updateCrawler(u, dt) {
+  u.bat = 100;
+  u.moved = 0;
+  const t = u.task;
+  if (!t || t.type !== 'drive') return;
+  const r = travel(u, t.x, t.y, dt);
+  if (r === null) { u.task = null; postMsg(u.owner, 'The Crawler can\'t find a way there.', t.x, t.y, 'warn'); return; }
+  if (!r && dist2(u.x, u.y, t.x + 0.5, t.y + 0.5) > 2) return;
+  u.task = null; u.path = null;
+  const why = deployCrawler(u);
+  if (why) postMsg(u.owner, why, Math.floor(u.x), Math.floor(u.y), 'warn');
+}
+
+/** The Crawler unfolds into its base where it stands (or on the nearest clear tile). '' if done. */
+function deployCrawler(u) {
+  const t = deploySpot(u.owner, Math.floor(u.x), Math.floor(u.y));
+  if (t < 0) return 'The Crawler needs clear, open ground to deploy: drive it somewhere level and empty.';
+  const b = addBuilding(u.owner, 'crawlerbase', t % S.W, (t / S.W) | 0, true);
+  b.stock = u.cargo || {};
+  b.armor = Math.max(4, BDEFS.crawlerbase.armor * (u.hp / u.maxHp));
+  if (u.cargoKeep) b.keep = u.cargoKeep;
+  removeBot(u);
+  computeTerritory();
+  addFx('ring', b.x + 0.5, b.y + 0.5, { color: PLAYER_COLORS[b.owner], r: 2.5 });
+  postMsg(b.owner, 'The Crawler is deployed: storage, charging and an Outpost\'s land, right here.', b.x, b.y, 'good');
+  if (b.owner === 0) sfx('complete');
+  return '';
+}
+
+/** Pack a deployed Crawler up to move: its goods (and supply orders) go along; its land goes. */
+function packCrawler(b) {
+  if (b.dead || !BDEFS[b.type].mobile) return null;
+  releaseBotsFrom(b, false);
+  const u = addBot(b.owner, 'crawler', b.x, b.y);
+  S.players[b.owner].stats.bots--; // the same machine, not a new bot
+  u.cargo = {};
+  for (const g in b.stock) if (b.stock[g] > 0) u.cargo[g] = b.stock[g];
+  if (b.keep) u.cargoKeep = b.keep;
+  u.hp = Math.max(1, Math.round(u.maxHp * clamp(b.armor / BDEFS[b.type].armor, 0.1, 1)));
+  b.dead = true;
+  S.byId.delete(b.id);
+  S.bAt[tIdx(b.x, b.y)] = 0;
+  markDirty(b.x, b.y);
+  computeTerritory();
+  return u;
 }

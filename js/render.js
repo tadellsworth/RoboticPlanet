@@ -1360,6 +1360,7 @@ function drawBuilding(ctx, type, cx, cy, s, owner, b) {
       break;
     }
     case 'nest': { drawNest(ctx, cx, cy, s, b); break; }
+    case 'crawlerbase': { drawCrawler(ctx, -Math.PI / 2, cx, cy, s, owner, true, 0, working); break; }
     case 'ropeway': {
       // A lattice pylon on a concrete footing, with the bull wheel the cable runs round on top.
       ctx.fillStyle = 'rgba(20,10,5,0.32)';
@@ -1791,6 +1792,59 @@ function drawSite(ctx, type, cx, cy, s, owner, b) {
 /* ------------------------------------------------------------------ bots */
 
 /**
+ * A Crawler: a colossal tracked hull with a cab at the front, a cargo deck and a mast. On the move
+ * its treads roll (odo); deployed it stands on four outrigger legs with charging pads lit on its deck.
+ */
+function drawCrawler(ctx, face, x, y, s, owner, deployed, odo, working) {
+  const color = PLAYER_COLORS[owner], L = s * 1.5, W = s * 0.95;
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.fillStyle = 'rgba(20,10,5,0.32)';
+  ctx.beginPath(); ctx.ellipse(s * 0.06, s * 0.1, L * 0.56, W * 0.6, face, 0, Math.PI * 2); ctx.fill();
+  ctx.rotate(face);
+  if (deployed) {
+    // Outrigger legs braced out at the corners.
+    ctx.strokeStyle = '#3c4148'; ctx.lineWidth = s * 0.07; ctx.lineCap = 'round';
+    for (const [sx, sy] of [[1, 1], [1, -1], [-1, 1], [-1, -1]]) { ctx.beginPath(); ctx.moveTo(sx * L * 0.38, sy * W * 0.4); ctx.lineTo(sx * L * 0.55, sy * W * 0.66); ctx.stroke(); }
+    ctx.fillStyle = '#8d939c';
+    for (const [sx, sy] of [[1, 1], [1, -1], [-1, 1], [-1, -1]]) { ctx.beginPath(); ctx.arc(sx * L * 0.55, sy * W * 0.66, s * 0.07, 0, Math.PI * 2); ctx.fill(); }
+  }
+  // Tracks with tread bars that roll as it drives.
+  ctx.fillStyle = '#16181c';
+  roundRect(ctx, -L / 2, -W / 2, L, W * 0.24, s * 0.06); ctx.fill();
+  roundRect(ctx, -L / 2, W / 2 - W * 0.24, L, W * 0.24, s * 0.06); ctx.fill();
+  ctx.strokeStyle = '#3a3e45'; ctx.lineWidth = Math.max(1, s * 0.02);
+  const step = L / 12, off = (-(odo * s * 0.8) % step + step) % step;
+  ctx.beginPath();
+  for (let k = -1; k < 13; k++) { const tx = -L / 2 + off + k * step; if (tx < -L / 2 || tx > L / 2) continue; ctx.moveTo(tx, -W / 2); ctx.lineTo(tx, -W / 2 + W * 0.24); ctx.moveTo(tx, W / 2 - W * 0.24); ctx.lineTo(tx, W / 2); }
+  ctx.stroke();
+  // Hull and deck.
+  ctx.fillStyle = '#4b525e';
+  roundRect(ctx, -L * 0.46, -W * 0.36, L * 0.92, W * 0.72, s * 0.08); ctx.fill();
+  ctx.fillStyle = '#6a7381';
+  roundRect(ctx, -L * 0.42, -W * 0.3, L * 0.6, W * 0.6, s * 0.05); ctx.fill();
+  // Cargo bays (or, deployed, charging pads).
+  for (let k = 0; k < 4; k++) {
+    const bx = -L * 0.39 + (k % 2) * L * 0.29, by = -W * 0.26 + Math.floor(k / 2) * W * 0.28;
+    ctx.fillStyle = deployed ? (working ? '#7ee08a' : '#3f6b4a') : '#3a4048';
+    roundRect(ctx, bx, by, L * 0.25, W * 0.22, s * 0.03); ctx.fill();
+  }
+  // Cab at the front, with the team colour and a windscreen.
+  ctx.fillStyle = color;
+  roundRect(ctx, L * 0.2, -W * 0.3, L * 0.24, W * 0.6, s * 0.06); ctx.fill();
+  ctx.fillStyle = '#16212b';
+  ctx.fillRect(L * 0.35, -W * 0.22, L * 0.06, W * 0.44);
+  // Mast with a dish (raised when deployed).
+  ctx.strokeStyle = '#d8dde4'; ctx.lineWidth = Math.max(1.2, s * 0.03);
+  ctx.beginPath(); ctx.moveTo(L * 0.08, 0); ctx.lineTo(L * 0.08, deployed ? -W * 0.55 : -W * 0.25); ctx.stroke();
+  ctx.fillStyle = '#d8dde4';
+  ctx.beginPath(); ctx.ellipse(L * 0.08, deployed ? -W * 0.6 : -W * 0.28, s * 0.12, s * 0.06, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = color;
+  ctx.beginPath(); ctx.arc(L * 0.08, deployed ? -W * 0.6 : -W * 0.28, s * 0.03, 0, Math.PI * 2); ctx.fill();
+  ctx.restore();
+}
+
+/**
  * Ropeways: a sagging cable between each pair of stations' wheels (high above everything), gondolas
  * carrying the bots riding it, and a dashed line to the far end while the near station is still a
  * construction site (red while the far end is blocked).
@@ -1918,6 +1972,7 @@ function drawCritter(ctx, u, x, y, s) {
 function drawBot(ctx, u, sx, sy, s) {
   if (BOTS[u.type].wild) { drawCritter(ctx, u, sx, sy, s); return; }
   if (BOTS[u.type].train) { drawRoadTrain(ctx, u, sx, sy, s); return; }
+  if (BOTS[u.type].crawler) { drawCrawler(ctx, u.face || 0, sx, sy, s, u.owner, false, u.odo || 0); return; }
   const color = PLAYER_COLORS[u.owner];
   const own = driveFrame(u) || artFor(u.type, u.owner);
   // Specialists use their own art when it exists, otherwise the worker's with a badge.

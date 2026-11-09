@@ -1652,6 +1652,8 @@ function killBot(bot, quiet) {
   if (bot.dead) return;
   // A warbot carrying loot drops its crate where it falls (anyone's warbots can pick it up).
   if (bot.loot && typeof addLoot === 'function' && inMap(Math.floor(bot.x), Math.floor(bot.y))) { addLoot(Math.floor(bot.x), Math.floor(bot.y), { [bot.loot]: 1 }); bot.loot = null; }
+  // A Crawler wrecked on the move spills the goods it was carrying.
+  if (bot.cargo && typeof addLoot === 'function' && inMap(Math.floor(bot.x), Math.floor(bot.y))) { addLoot(Math.floor(bot.x), Math.floor(bot.y), bot.cargo); bot.cargo = null; }
   cancelTask(bot);
   exitBuilding(bot);
   for (const b of S.buildings) {

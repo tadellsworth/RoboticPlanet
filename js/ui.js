@@ -997,6 +997,17 @@ function buildingAtTap(i, j, wx, wy) {
 
 function onMapTap(i, j, wx, wy) {
   if (!UI.inGame || UI.paused) return;
+  if (R.mode === 'crawl') {
+    const u = getE(UI.crawler);
+    if (!u || u.dead) { setMode('normal'); return; }
+    const why = driveCrawler(u, i, j);
+    if (why) { sfx('error'); showBanner(`<span class="err">${why}</span> Tap somewhere else.`, null, 'Cancel'); return; }
+    sfx('order');
+    addFx('ring', i + 0.5, j + 0.5, { color: PLAYER_COLORS[0] });
+    setMode('normal');
+    toast('The Crawler is on its way: it deploys when it gets there.', 'info');
+    return;
+  }
   if (R.mode === 'place') {
     if (!inMap(i, j)) return;
     const type = UI.placeType;
@@ -1581,7 +1592,8 @@ function openBuildingSheet(b) {
     if (needsRoad(b) || (b.unlinked !== undefined && !def.store)) html += '<div id="sh-road"></div>';
     html += '<div class="actions">';
     if (def.staff && b.built) html += `<button class="btn" id="sh-pause"></button>`;
-    if (b.type !== 'lander') html += `<button class="btn danger" id="sh-demolish">${b.built ? 'Demolish' : 'Cancel site'}</button>`;
+    if (BDEFS[b.type].mobile) html += '<button class="btn primary" id="sh-pack">Pack up to move</button>';
+    else if (b.type !== 'lander') html += `<button class="btn danger" id="sh-demolish">${b.built ? 'Demolish' : 'Cancel site'}</button>`;
     html += '</div>';
   } else if (S.mode !== 'colony' || def.wild) {
     html += `<div class="section-label">Attack with warbots</div><div id="sh-attack"></div>
@@ -1627,6 +1639,13 @@ function openBuildingSheet(b) {
       refreshSheet();
     };
     if ($('sh-pause')) $('sh-pause').onclick = () => { setPaused(b, !b.paused); sfx('click'); refreshSheet(); };
+    if ($('sh-pack')) $('sh-pack').onclick = () => {
+      const btn = $('sh-pack');
+      if (!btn.dataset.armed) { btn.dataset.armed = '1'; btn.textContent = 'Tap again: its land goes, and buildings only it covers are lost'; return; }
+      const u = packCrawler(b);
+      sfx('order');
+      if (u) openBotSheet(u); else closeSheet();
+    };
     if ($('sh-aim')) $('sh-aim').onclick = () => { sfx('click'); startAim(b); };
     if ($('sh-gprio')) for (const btn of $('sh-gprio').children) btn.onclick = () => { b.gprio = btn.dataset.v === 'normal' ? undefined : btn.dataset.v; sfx('click'); refreshSheet(); };
     if ($('sh-st-send')) {
@@ -2027,8 +2046,11 @@ function openBotSheet(u) {
     <div class="owner"><span class="dot" style="background:${PLAYER_COLORS[u.owner]}"></span> ${u.owner === 0 ? 'Yours' : playerName(u.owner)}</div></div></div>
     <p class="desc">${BOTS[u.type].desc}</p>
     <div class="status" id="sh-status"></div><div id="sh-dyn"></div>
-    ${u.owner === 0 && u.type === 'warbot' ? '<button class="btn big" id="sh-recall" hidden>Call back this squad</button>' : ''}`;
+    ${u.owner === 0 && u.type === 'warbot' ? '<button class="btn big" id="sh-recall" hidden>Call back this squad</button>' : ''}
+    ${u.owner === 0 && BOTS[u.type].crawler ? '<div class="actions"><button class="btn primary" id="sh-crawl">Drive somewhere</button><button class="btn" id="sh-deploy">Deploy here</button></div>' : ''}`;
   openSheet('bot', u.id, html);
+  if ($('sh-crawl')) $('sh-crawl').onclick = () => { sfx('click'); UI.crawler = u.id; setMode('crawl'); UI.crawler = u.id; showBanner('Tap where the <b>Crawler</b> should go: it rolls there (no road needed, but it can\'t climb cliffs or cross water) and deploys when it arrives.', null, 'Cancel'); };
+  if ($('sh-deploy')) $('sh-deploy').onclick = () => { const why = deployCrawler(u); if (why) { sfx('error'); toast(why, 'warn'); } else closeSheet(); };
   if ($('sh-recall')) $('sh-recall').onclick = () => {
     if (u.task && u.task.type === 'hold') { const n = recallRally(u.task.rally); toast(`${n} warbot${n > 1 ? 's' : ''} called back.`, 'info'); }
     closeSheet();
@@ -2299,7 +2321,8 @@ function refreshSheet() {
       `<div class="kv"><span>Battery</span><span>${bat}%${bat < BATTERY.critical ? ' (flat: slow and weak)' : bat < BATTERY.low ? ' (low)' : ''}</span></div>` +
       `<div class="bar battery"><div style="width:${bat}%;background:${bat < BATTERY.critical ? '#ff4d4d' : bat < BATTERY.low ? '#ffb347' : '#7ee08a'}"></div></div>` +
       (u.type === 'warbot' ? `<div class="kv"><span>Ammo</span><span>${u.ammo ?? WARBOT_AMMO} / ${WARBOT_AMMO} shots${!u.ammo ? ' (out: can\'t fight until it reloads)' : ''}</span></div>` : '') +
-      (u.carry ? `<div class="kv"><span>Carrying</span><span>${goodTag(u.carry, (u.carryN > 1 ? u.carryN + ' × ' : '') + GOOD[u.carry].name)}</span></div>` : '');
+      (u.carry ? `<div class="kv"><span>Carrying</span><span>${goodTag(u.carry, (u.carryN > 1 ? u.carryN + ' × ' : '') + GOOD[u.carry].name)}</span></div>` : '') +
+      (u.cargo && Object.keys(u.cargo).length ? `<div class="section-label">On board</div><div class="goodlist">${Object.keys(u.cargo).map((g) => goodTag(g, `${u.cargo[g]} ${GOOD[g].name}`)).join('')}</div>` : '');
     if ($('sh-recall')) $('sh-recall').hidden = !(u.task && u.task.type === 'hold');
   } else if (UI.sheetKind === 'move') {
     const t = UI.sheetFor, i = t % S.W, j = (t / S.W) | 0;
