@@ -60,7 +60,7 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
 | Oil Pump | Built on an oil seep; a worker pumps **Crude** until it runs dry (stops at 30 Crude by default) |
 | Refinery | Crude → **Fuel**, one for one (stops at 30 unless you change its stock limit) |
 | Cement Works | 1 Stone → 2 **Cement**, the main building material (stops at 40 unless you change its stock limit) |
-| Asphalt Plant | Crude + Stone → 2 **Asphalt** |
+| Asphalt Plant | Crude + Cement → 2 **Asphalt** |
 | Roadworks | Its Paver paves and maintains the roads you mark for asphalt (or every joined road), nearest first (1 Asphalt covers 4 tiles) |
 | Ammo Plant | Alloy + Cement → 3 **Ammo**; warbots reload it in the Command Base and Outposts, 5 shots per Ammo (Versus) |
 | Missile Factory | 2 Alloy + Chip + Fuel → **Missile** (20 s each; Versus) |
@@ -70,8 +70,8 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
 | Nuclear Silo | 6 Enriched Uranium + 4 Alloy + 2 Chips → one nuclear missile; fires 40 tiles (Nuclear race) |
 
 - **Cement builds the colony.** Nearly every building costs Cement, and so does every road. Only the Quarry (2 Fiber)
-  and the Cement Works (4 Stone, 2 Fiber) are built from raw materials, so you can always restart. Stone's other use
-  is Asphalt. You land with 24 Cement, 8 Stone, 16 Fiber, 8 Alloy, 4 Chips, 4 Crystal and 4 Fuel.
+  and the Cement Works (4 Stone, 2 Fiber) are built from raw materials, so you can always restart. Stone has no
+  other use: it only goes into Cement (2 per Stone). You land with 24 Cement, 8 Stone, 16 Fiber, 8 Alloy, 4 Chips, 4 Crystal and 4 Fuel.
 - **Stock limits:** tap a production building and set when it stops: once you have that much of its product it takes
   no more inputs and its worker goes off to other jobs until it's needed again. The Cement Works stops at 40, the
   Refinery and Oil Pump at 30 and the Asphalt Plant at 20 by default; the rest have no limit until you set one.

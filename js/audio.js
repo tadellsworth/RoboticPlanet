@@ -417,7 +417,7 @@ const MOODS = {
   menu: {
     bpm: 84, keys: [57, 55], scale: MINOR, chordBars: 2,
     progs: [[[0, 'm'], [8, 'M'], [3, 'M'], [10, 'M']], [[0, 'm7'], [5, 'm'], [8, 'M7'], [10, 'M']]],
-    arrange: [['pad', 'arp8'], ['pad', 'arp8', 'bassW'], ['pad', 'arp8', 'bassW', 'lead'], ['pad', 'lead', 'bassW']],
+    arrange: [['pad', 'arp8'], ['pad', 'arp8', 'bassW'], ['pad', 'arp8', 'bassW', 'shimmer'], ['pad', 'shimmer', 'bassW']],
   },
   build: {
     bpm: 96, keys: [57, 55, 59, 52], scale: MINOR, chordBars: 1,
@@ -535,6 +535,8 @@ function musicStep(t) {
     mArp(t, MUSIC.key + notes[i], s);
   }
   if (L.has('stab') && [0, 3, 6, 10].includes(s)) mStab(t, chord);
+  // Shimmer: a slow, high bell arpeggio drifting through the chord.
+  if (L.has('shimmer') && s % 4 === 0) { const hi = chord.map((n) => n + 24); mLead(t, MUSIC.key + hi[(s / 4 + MUSIC.bar) % hi.length], sd * 6, 0.6); }
   if (L.has('alarm') && s % 4 === 0) mAlarm(t, MUSIC.key + 12 + (s % 8 === 0 ? 0 : 6));
   // Melody
   if (L.has('lead') && MUSIC.melody) {
@@ -696,18 +698,22 @@ function mStab(t, chord) {
   lp.connect(g); sends(g, 1, 0.3, 0.2);
 }
 
-function mLead(t, n, dur) {
-  const ac = AUDIO.ctx, o = mOsc('sawtooth', midiHz(n), t), o2 = mOsc('triangle', midiHz(n + 12), t), lp = ac.createBiquadFilter(), g = ac.createGain();
-  // A touch of vibrato that comes in as the note holds.
-  const lfo = mOsc('sine', 5.5, t), lg = ac.createGain();
-  lg.gain.setValueAtTime(0, t); lg.gain.linearRampToValueAtTime(9, t + Math.min(0.4, dur));
-  lfo.connect(lg); lg.connect(o.detune); lg.connect(o2.detune);
-  lp.type = 'lowpass'; lp.frequency.value = 2300; lp.Q.value = 1.5;
-  env(g, t, 0.03, 0.055, Math.max(0.05, dur - 0.08), 0.18);
-  const g2 = ac.createGain(); g2.gain.value = 0.35;
-  o.connect(lp); o2.connect(g2).connect(lp); lp.connect(g);
-  sends(g, 1, 0.5, 0.35);
-  for (const x of [o, o2, lfo]) { x.start(t); x.stop(t + dur + 0.3); }
+/**
+ * The melody voice: a soft synth bell. A sine with a quiet octave above and a touch of filtered
+ * square for synth character, struck and left to ring out into the echo (no vibrato, no horn).
+ */
+function mLead(t, n, dur, vol) {
+  const ac = AUDIO.ctx, f = midiHz(n), g = ac.createGain(), lp = ac.createBiquadFilter();
+  const o = mOsc('sine', f, t), o2 = mOsc('sine', f * 2, t), o3 = mOsc('square', f, t);
+  const g2 = ac.createGain(), g3 = ac.createGain();
+  g2.gain.setValueAtTime(0.25, t); g2.gain.exponentialRampToValueAtTime(0.02, t + 0.4); // the octave fades first: a bell's strike
+  g3.gain.value = 0.12;
+  lp.type = 'lowpass'; lp.frequency.setValueAtTime(1800, t); lp.frequency.exponentialRampToValueAtTime(600, t + 0.5);
+  const ring = Math.min(1.6, Math.max(0.5, dur * 1.5));
+  env(g, t, 0.006, 0.05 * (vol || 1), 0.02, ring);
+  o.connect(g); o2.connect(g2).connect(g); o3.connect(g3).connect(lp).connect(g);
+  sends(g, 1, 0.55, 0.45);
+  for (const x of [o, o2, o3]) { x.start(t); x.stop(t + ring + 0.1); }
 }
 
 function mDrone(t, n, dur, bar) {

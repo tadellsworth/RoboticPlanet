@@ -33,6 +33,9 @@ function aiThink(p) {
     if (!b.built) sites++;
   }
   const maxSites = p === 0 && P.ai ? 2 : lvl.maxSites;
+  // Warbots can't fight without Ammo: in a war, once the opening is done, an Ammo Plant comes
+  // first, its site is never given up, and the Foundry rests so the Alloy reaches it.
+  const needArmory = warOn() && S.time > 150 && !me.some((b) => b.type === 'armory' && b.built);
   let workers = 0, staffed = 0;
   const kinds = {};
   for (const u of S.bots) if (!u.dead && u.owner === p) kinds[u.type] = (kinds[u.type] || 0) + 1;
@@ -55,7 +58,7 @@ function aiThink(p) {
   if (sites >= maxSites) {
     const have = playerGoods(p);
     for (const b of me) {
-      if (b.built || b.dead || S.time - b.born < 120) continue;
+      if (b.built || b.dead || S.time - b.born < 120 || (needArmory && b.type === 'armory')) continue;
       const cost = BDEFS[b.type].cost;
       let stuck = false;
       for (const g in cost) if ((b.stock[g] || 0) + (b.inc[g] || 0) < cost[g] && have[g] <= 0) stuck = true;
@@ -82,6 +85,7 @@ function aiThink(p) {
   // the building it saves for goes first and nothing else that costs Alloy or Chips is started.
   const saving = aiMissilePlan(p, me, counts, kinds, workers, staffed);
   if (saving) plan = [[saving, (counts[saving] || 0) + 1]].concat(plan);
+  if (needArmory) plan = [['armory', 1]].concat(plan);
   // Workers no longer haul, so spare ones go to work: another gatherer for the scarcest raw good.
   if (S.time > 150 && workers - staffed >= 4 && canStaffMore) {
     const have = playerGoods(p);
@@ -217,7 +221,7 @@ function aiThink(p) {
     // Saving up for missiles (or feeding the Missile Factory): the Foundry rests so Alloy and Chips
     // pile up, unless workers are badly short.
     // (Not while the army is well behind: warbots come first.)
-    if ((saving || P.feedMissiles) && workers >= staffed + 3 && !armyBehind) { b.mode = 'off'; delete b.orders.hauler; delete b.orders.truck; }
+    if ((((saving || P.feedMissiles) && !armyBehind) || needArmory) && workers >= staffed + 3) { b.mode = 'off'; delete b.orders.hauler; delete b.orders.truck; }
     // Haulers when short; while the army is well behind, only when badly short.
     else if ((kinds.hauler || 0) < (armyBehind ? Math.min(wantHaulers, 6) : wantHaulers) && !(b.orders.hauler > 0)) b.orders.hauler = 1;
     // A forward Depot with supply orders gets a Freight Truck to keep it stocked.

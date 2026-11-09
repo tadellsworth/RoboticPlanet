@@ -260,7 +260,7 @@ const RICH_TYPES = [R_BOULDER, R_ORE, R_CRYSTAL, R_OIL];
 const GOODS = ['fiber', 'stone', 'ore', 'crystal', 'alloy', 'chip', 'crude', 'fuel', 'cement', 'asphalt', 'ammo', 'warhead', 'uranium', 'fissile'];
 const GOOD = {
   fiber:   { name: 'Fiber',   color: '#3fd8a6', desc: 'Cut from stalk groves. Used for building and as smelter fuel.' },
-  stone:   { name: 'Stone',   color: '#c9c1b4', desc: 'Broken from boulders. A Cement Works turns it into Cement; the Asphalt Plant uses it too.' },
+  stone:   { name: 'Stone',   color: '#c9c1b4', desc: 'Broken from boulders. A Cement Works turns it into Cement (2 per Stone): that is its only use.' },
   ore:     { name: 'Ore',     color: '#ff8a3d', desc: 'Dug from ore veins. Smelted into Alloy.' },
   crystal: { name: 'Crystal', color: '#b98cff', desc: 'Tapped from crystal clusters. Makes Chips and turret ammo.' },
   alloy:   { name: 'Alloy',   color: '#8ec3e6', desc: 'Smelted metal for advanced buildings, chips and bots.' },
@@ -370,8 +370,8 @@ const BDEFS = {
     work: 5, armor: 10, buildTime: 10, limit: 40,
   },
   tarworks: {
-    name: 'Asphalt Plant', desc: 'Cooks Crude and Stone into Asphalt for the fastest roads.',
-    cost: { cement: 3, alloy: 2 }, staff: true, inp: { crude: 1, stone: 1 }, make: { asphalt: 2 }, out: { asphalt: 4 },
+    name: 'Asphalt Plant', desc: 'Cooks Crude and Cement into Asphalt for the fastest roads.',
+    cost: { cement: 3, alloy: 2 }, staff: true, inp: { crude: 1, cement: 1 }, make: { asphalt: 2 }, out: { asphalt: 4 },
     work: 7, armor: 10, buildTime: 12, limit: 20,
   },
   roadworks: {
