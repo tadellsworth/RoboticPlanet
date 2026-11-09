@@ -1217,7 +1217,8 @@ function render(dtReal) {
 
   // Selection rings drawn under buildings
   const sel = getE(R.selected);
-  if (sel) drawRanges(ctx, sel.type, sel.x, sel.y, ox, oy, z, sel.owner);
+  if (R.mode === 'aim') drawAim(ctx, ox, oy, z);
+  else if (sel) drawRanges(ctx, sel.type, sel.x, sel.y, ox, oy, z, sel.owner);
   if (R.ghost) drawRanges(ctx, R.ghost.type, R.ghost.x, R.ghost.y, ox, oy, z, 0);
 
   // Buildings and bots, sorted by y so lower things overlap upper ones.
@@ -1447,6 +1448,51 @@ function drawRanges(ctx, type, x, y, ox, oy, z, owner) {
       }
     }
   }
+}
+
+/**
+ * Aiming a Missile Silo: its range ring on the ground (everything outside it dimmed), and a target
+ * marker with the blast radius where you tapped (or where the mouse points).
+ */
+function drawAim(ctx, ox, oy, z) {
+  const silo = getE(typeof UI !== 'undefined' ? UI.aimSilo : 0);
+  if (!silo) return;
+  const md = BDEFS.silo.missile;
+  const cx = ox + (silo.x + 0.5) * z, cy = oy + (silo.y + 0.5) * z, rr = md.range * z;
+  ctx.save();
+  ctx.fillStyle = 'rgba(8,8,12,0.45)';
+  ctx.beginPath(); ctx.rect(0, 0, R.w, R.h); ctx.arc(cx, cy, rr, 0, Math.PI * 2, true); ctx.fill('evenodd');
+  ctx.restore();
+  ctx.fillStyle = 'rgba(255,90,90,0.07)';
+  ctx.strokeStyle = 'rgba(255,120,120,0.95)';
+  ctx.lineWidth = Math.max(2, z * 0.08);
+  ctx.setLineDash([z * 0.5, z * 0.3]);
+  ctx.lineDashOffset = -R.time * z;
+  ctx.beginPath(); ctx.arc(cx, cy, rr, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+  ctx.setLineDash([]); ctx.lineDashOffset = 0;
+  const spot = R.aim || R.aimHover;
+  if (!spot) return;
+  const t = missileTargetAt(silo.owner, spot.i, spot.j);
+  const tx = (t ? t.x : spot.i) + 0.5, ty = (t ? t.y : spot.j) + 0.5;
+  const ok = dist(silo.x, silo.y, tx - 0.5, ty - 0.5) <= md.range;
+  const px = ox + tx * z, py = oy + ty * z;
+  const col = !ok ? 'rgba(200,200,200,0.8)' : R.aim ? '#ff4b4b' : 'rgba(255,140,120,0.85)';
+  // Flight path, blast radius and crosshair.
+  ctx.strokeStyle = ok ? 'rgba(255,207,74,0.7)' : 'rgba(200,200,200,0.4)';
+  ctx.lineWidth = Math.max(1.5, z * 0.05);
+  ctx.setLineDash([z * 0.2, z * 0.2]);
+  ctx.beginPath(); ctx.moveTo(cx, cy); ctx.quadraticCurveTo((cx + px) / 2, Math.min(cy, py) - 3 * z, px, py); ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.fillStyle = ok ? 'rgba(255,75,75,0.18)' : 'rgba(200,200,200,0.12)';
+  ctx.strokeStyle = col;
+  ctx.lineWidth = Math.max(2, z * 0.07);
+  ctx.beginPath(); ctx.arc(px, py, md.splash * z, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+  const k = Math.max(6, z * 0.6);
+  ctx.beginPath();
+  ctx.moveTo(px - k, py); ctx.lineTo(px - k * 0.35, py); ctx.moveTo(px + k * 0.35, py); ctx.lineTo(px + k, py);
+  ctx.moveTo(px, py - k); ctx.lineTo(px, py - k * 0.35); ctx.moveTo(px, py + k * 0.35); ctx.lineTo(px, py + k);
+  ctx.stroke();
+  ctx.beginPath(); ctx.arc(px, py, k * 0.7, 0, Math.PI * 2); ctx.stroke();
 }
 
 /** Your rally flags, with how many warbots hold each one. */

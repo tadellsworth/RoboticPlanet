@@ -529,7 +529,8 @@ function renderStats() {
 
 function setMode(mode) {
   R.mode = mode;
-  for (const m of ['road', 'place', 'attack']) document.body.classList.toggle('mode-' + m, mode === m);
+  for (const m of ['road', 'place', 'attack', 'aim']) document.body.classList.toggle('mode-' + m, mode === m);
+  if (mode !== 'aim') { R.aim = null; R.aimHover = null; UI.aimSilo = 0; }
   R.ghost = null;
   R.overlay = null;
   UI.placeType = null;
@@ -539,6 +540,63 @@ function setMode(mode) {
   closeSheet();
   if (mode === 'road') showRoadBanner();
   if (mode === 'attack') showBanner('Tap a <b>rival building</b> to attack it with warbots or missiles, or tap open ground to send warbots there to <b>hold the area</b>.', null, 'Cancel');
+}
+
+/* ------------------------------------------------------------------ missile aiming */
+
+/** Aim a Silo: zoom out to show its range on the ground, then tap a spot inside it. */
+function startAim(silo) {
+  setMode('aim');
+  UI.aimSilo = silo.id;
+  R.selected = silo.id;
+  const range = BDEFS.silo.missile.range;
+  showAimBanner();
+  // Fit the whole range ring in the map area left between the top bar and the banner.
+  const top = $('topbar').getBoundingClientRect().bottom + 8;
+  const bottom = Math.min($('banner').getBoundingClientRect().top, $('bottombar').getBoundingClientRect().top) - 8;
+  const avail = Math.max(120, Math.min(R.w - 16, bottom - top));
+  R.cam.z = clamp(avail / (2 * range + 2), minZoom(), maxZoom());
+  centerOn(silo.x + 0.5, silo.y + 0.5 + (R.h / 2 - (top + bottom) / 2) / R.cam.z);
+}
+
+function showAimBanner(problem) {
+  const silo = getE(UI.aimSilo), md = BDEFS.silo.missile;
+  if (!silo) { setMode('normal'); return; }
+  let html = '', ok = null;
+  if (problem) html = `<span class="err">${problem}</span> `;
+  if (R.aim) {
+    const t = missileTargetAt(0, R.aim.i, R.aim.j);
+    html += t ? `Fire at the rival <b>${BDEFS[t.type].name}</b>? ${BDEFS[t.type].mil ? 'Its armor drops to almost nothing, ready for warbots to capture.' : 'A hit wrecks it.'}`
+      : 'Fire at this spot? The blast hurts rival buildings and bots within ' + md.splash + ' tiles.';
+    ok = 'Fire';
+  } else {
+    const w = silo.stock.warhead || 0;
+    html += `Tap where to fire, inside the red ring (${md.range} tiles). A hit wrecks most buildings; the blast hurts everything rival within ${md.splash} tiles. <b>${w}</b> Missile${w === 1 ? '' : 's'} loaded.`;
+  }
+  showBanner(html, ok, 'Cancel');
+}
+
+/** A tap while aiming: the first picks the spot, a second tap on it (or Fire) launches. */
+function aimTap(i, j) {
+  const silo = getE(UI.aimSilo);
+  if (!silo) { setMode('normal'); return; }
+  if (!inMap(i, j)) return;
+  const why = missileBlocked(silo, i, j);
+  if (why) { sfx('error'); R.aim = null; showAimBanner(why); return; }
+  if (R.aim && R.aim.i === i && R.aim.j === j) { fireAimed(); return; }
+  R.aim = { i, j };
+  sfx('click');
+  showAimBanner();
+}
+
+function fireAimed() {
+  const silo = getE(UI.aimSilo);
+  if (!silo || !R.aim) return;
+  const t = missileTargetAt(0, R.aim.i, R.aim.j);
+  if (fireMissileAt(silo, R.aim.i, R.aim.j)) {
+    toast(t ? `Missile away: it will hit the ${BDEFS[t.type].name} in a few seconds.` : 'Missile away.', 'info');
+    setMode('normal');
+  } else { sfx('error'); showAimBanner(missileBlocked(silo, R.aim.i, R.aim.j)); }
 }
 
 function showBanner(html, okLabel, cancelLabel) {
@@ -563,6 +621,7 @@ function enterPlaceMode(type) {
 }
 
 function confirmBanner() {
+  if (R.mode === 'aim') { fireAimed(); return; }
   if (R.mode !== 'place' || !R.ghost || !R.ghost.ok) return;
   const { type, x, y } = R.ghost;
   const res = placeSite(0, type, x, y);
@@ -626,6 +685,7 @@ function onMapTap(i, j, wx, wy) {
     }
     return;
   }
+  if (R.mode === 'aim') { aimTap(i, j); return; }
   const rally = rallyAtTap(wx, wy);
   if (rally) { sfx('click'); setMode('normal'); openRallySheet(rally); return; }
   const b = buildingAtTap(i, j, wx, wy);
@@ -650,6 +710,7 @@ function onMapTap(i, j, wx, wy) {
 
 /** With a mouse, placing a building previews it under the pointer; a click then places it. */
 function onMapHover(i, j) {
+  if (R.mode === 'aim') { R.aimHover = inMap(i, j) ? { i, j } : null; return; }
   if (R.mode !== 'place' || !R.overlay || !UI.placeType || !inMap(i, j)) return;
   R.ghost = { type: UI.placeType, x: i, y: j, ok: !!R.overlay.valid[tIdx(i, j)], hover: true };
 }
@@ -822,7 +883,8 @@ function openBuildingSheet(b) {
         <b>Haulers</b> carry two goods at a time, <b>Agribots</b> run Bio Farms and Grove Planters, and <b>Pavers</b> run the Roadworks.</p>`;
     }
     if (def.missile && b.built) {
-      html += `<p class="hint">To fire, tap <b>Army</b> and then a rival building within ${def.missile.range} tiles.</p>`;
+      html += `<button class="btn primary big" id="sh-aim">Aim missile</button>
+        <p class="hint" id="sh-aim-hint">Shows the Silo's ${def.missile.range}-tile range on the ground: tap any spot inside it to aim, then fire.</p>`;
     }
     const lg = limitGood(b);
     if (lg && b.built) {
@@ -867,6 +929,7 @@ function openBuildingSheet(b) {
       refreshSheet();
     };
     if ($('sh-pause')) $('sh-pause').onclick = () => { setPaused(b, !b.paused); sfx('click'); refreshSheet(); };
+    if ($('sh-aim')) $('sh-aim').onclick = () => { sfx('click'); startAim(b); };
     if ($('sh-gprio')) for (const btn of $('sh-gprio').children) btn.onclick = () => { b.gprio = btn.dataset.v === 'normal' ? undefined : btn.dataset.v; sfx('click'); refreshSheet(); };
     if ($('sh-st-send')) {
       UI.stationN = Math.min(5, stationAvailable(0, b));
@@ -1060,6 +1123,11 @@ function refreshBuildingSheet(b) {
   }
   $('sh-dyn').innerHTML = parts.join('');
   if ($('sh-road')) refreshRoadLink(b);
+  if ($('sh-aim')) {
+    const why = !(b.stock.warhead > 0) ? 'No Missiles loaded yet: haulers bring them from a Missile Factory.' : b.reload > 0 ? `Reloading: ready in ${Math.ceil(b.reload)}s.` : '';
+    $('sh-aim').disabled = !!why;
+    $('sh-aim-hint').textContent = why || `Shows the Silo's ${BDEFS.silo.missile.range}-tile range on the ground: tap any spot inside it to aim, then fire.`;
+  }
   if ($('sh-gprio')) for (const btn of $('sh-gprio').children) btn.classList.toggle('on', btn.dataset.v === (b.gprio || 'normal'));
   if ($('sh-st-n')) {
     const avail = stationAvailable(0, b), coming = b.garInc || 0;
@@ -1117,8 +1185,8 @@ function refreshBuildingSheet(b) {
     $('sh-n').textContent = UI.attackN;
     $('sh-send').disabled = avail === 0;
     $('sh-attack').innerHTML = avail
-      ? `<p class="desc">${avail} warbot${avail > 1 ? 's' : ''} can reach this from your garrisons (each garrison keeps one at home).</p>`
-      : `<p class="desc">No warbots in range. Warbots attack from Outposts or your Lander within ${ATTACK_RANGE} tiles. Build an Outpost closer and let warbots gather there.</p>`;
+      ? `<p class="desc">${avail} armed warbot${avail > 1 ? 's' : ''} can reach this from your garrisons (each garrison keeps one at home).</p>`
+      : `<p class="desc">No armed warbots in range. Warbots attack from Outposts or your Lander within ${ATTACK_RANGE} tiles, and only ones with Ammo go. Build an Outpost closer, and an Ammo Plant to keep garrisons stocked.</p>`;
   }
 }
 
@@ -1262,15 +1330,15 @@ function refreshSheet() {
     $('sh-dyn').innerHTML = `<div class="kv"><span>Health</span><span>${Math.ceil(u.hp)} / ${u.maxHp}</span></div>` +
       `<div class="kv"><span>Battery</span><span>${bat}%${bat < BATTERY.critical ? ' (flat: slow and weak)' : bat < BATTERY.low ? ' (low)' : ''}</span></div>` +
       `<div class="bar battery"><div style="width:${bat}%;background:${bat < BATTERY.critical ? '#ff4d4d' : bat < BATTERY.low ? '#ffb347' : '#7ee08a'}"></div></div>` +
-      (u.type === 'warbot' ? `<div class="kv"><span>Ammo</span><span>${u.ammo ?? WARBOT_AMMO} / ${WARBOT_AMMO} shots${!u.ammo ? ' (out: hits much weaker)' : ''}</span></div>` : '') +
+      (u.type === 'warbot' ? `<div class="kv"><span>Ammo</span><span>${u.ammo ?? WARBOT_AMMO} / ${WARBOT_AMMO} shots${!u.ammo ? ' (out: can\'t fight until it reloads)' : ''}</span></div>` : '') +
       (u.carry ? `<div class="kv"><span>Carrying</span><span>${goodTag(u.carry, (u.carryN > 1 ? u.carryN + ' × ' : '') + GOOD[u.carry].name)}</span></div>` : '');
     if ($('sh-recall')) $('sh-recall').hidden = !(u.task && u.task.type === 'hold');
   } else if (UI.sheetKind === 'move') {
     const t = UI.sheetFor, i = t % S.W, j = (t / S.W) | 0;
     const avail = refreshMoveStepper(i, j);
     $('mv-info').innerHTML = `<p class="desc">${avail
-      ? `${avail} warbot${avail > 1 ? 's' : ''} available in your garrisons (each keeps one at home).`
-      : S.zone[t] !== homeZone(0) ? 'Your warbots cannot walk there from your garrisons.' : 'No warbots available. Make some at the Bot Foundry; they gather in your Lander and Outposts.'}</p>`;
+      ? `${avail} armed warbot${avail > 1 ? 's' : ''} available in your garrisons (each keeps one at home).`
+      : S.zone[t] !== homeZone(0) ? 'Your warbots cannot walk there from your garrisons.' : 'No armed warbots available. Make some at the Bot Foundry, and keep your garrisons stocked with Ammo: warbots without it can\'t fight.'}</p>`;
   } else if (UI.sheetKind === 'rally') {
     const r = rallyById(UI.sheetFor);
     if (!r) { closeSheet(); return; }

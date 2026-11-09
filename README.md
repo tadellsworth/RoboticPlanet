@@ -95,7 +95,7 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
   going the wrong way up a one-way road is allowed but crawls.
 - **Top bar:** hover over (or tap) a goods counter to see its name and what it's for.
 - **Ammo:** warbots carry 20 shots and reload in your Lander and Outposts, which haulers stock from an Ammo Plant. Out of
-  ammo, a warbot hits at about a third of its strength.
+  ammo, a warbot can't fight at all: it heads back to a garrison to reload, and only armed warbots answer orders.
 - **Statistics:** the pause menu and the end-of-game screen show graphs of bots, land and goods over time and how busy
   each kind of building was; each building's panel shows its recent busy time.
 - **Terrain levels:** the planet has terraces at different heights (lighter ground is higher). Bots
@@ -121,6 +121,10 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
 - **Missiles** are built at a Missile Factory (2 Alloy, 1 Chip and 1 Fuel each, 20 seconds) and carried to Missile Silos
   by haulers. A hit does 24 damage, which wrecks most buildings outright, plus 5 to other rival buildings and 9 to bots
   within 2.2 tiles. Outposts and Landers drop to almost no armor; warbots still have to walk in and capture them.
+  To fire, tap a Silo and press **Aim missile**: its 18-tile range shows as a red ring; tap any spot inside it (a
+  building or open ground) to see the blast radius, then **Fire**. (Army → rival building → Fire missile also works.)
+- **Pace:** the whole game runs at 85% speed (`GAME_PACE` in `js/defs.js`) for a calmer feel; the speed button
+  gives 2× and 3×.
 - **Ordering bots:** the Bot Foundry only builds the bots you order. Tap it and use +1 or +5 for Workers or
   Warbots (Clear cancels the queue); with nothing queued it sits idle and uses no Alloy or Chips.
 - The **Build** menu shows how many of each building you already have, and how many are being built.
@@ -139,9 +143,10 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
 Buildings, bots, resources and ground use custom art made in Claude Design (`art/`, with SVG sources in
 `art/source/`). The production buildings, Depot, Outposts and construction sites use the pre-rendered 3D set
 (512×512, each on its own pad, placed by an `anchor` point in `art/art-manifest.js`), as do the Charging Station, Bio
-Farm, Oil Pump, Refinery, Cement Works, Asphalt Plant, Roadworks and Ramp. Still to make: Hauler, Agribot and Paver
-robots (they borrow the Worker's art with a badge), the Ammo Plant, Missile Factory and Silo, goods icons and a few
-terrain pieces. The app icon is in `icons/`. Anything without an image falls back to placeholder art drawn in code, so new art can be
+Farm, Oil Pump, Refinery, Cement Works, Asphalt Plant, Roadworks, Ramp, Ammo Plant, Missile Factory and Missile Silo
+(team versions for the military ones). All five robots (Worker, Warbot, Hauler, Agribot, Paver) have top-down art in
+both team colours. Still to make: 3D versions of the Lander and Pulse Turret, goods icons and a few terrain pieces.
+The app icon is in `icons/`. Anything without an image falls back to placeholder art drawn in code, so new art can be
 added one piece at a time. See **[ART_GUIDE.md](ART_GUIDE.md)** for specs, the style brief and prompts,
 including the remaining pieces (Ramp, slope and cliff textures, goods icons).
 

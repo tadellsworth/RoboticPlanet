@@ -58,6 +58,12 @@ const ART_MANIFEST = {
   'worker@1': 'bots/worker@1.png',
   'warbot@0': 'bots/warbot@0.png',
   'warbot@1': 'bots/warbot@1.png',
+  'hauler@0': 'bots/hauler@0.png',
+  'hauler@1': 'bots/hauler@1.png',
+  'agribot@0': 'bots/agribot@0.png',
+  'agribot@1': 'bots/agribot@1.png',
+  'paver@0': 'bots/paver@0.png',
+  'paver@1': 'bots/paver@1.png',
   ground: 'tiles/ground.png',
   stalk: 'resources/stalk.png',
   boulder: 'resources/boulder.png',
@@ -103,7 +109,6 @@ const ART_MANIFEST = {
   'silo@1': B3D('buildings/silo@1.png'),
 
   // Still to make (placeholders are drawn until these exist):
-  //   bots:      hauler@0/@1, agribot@0/@1, paver@0/@1 (they borrow the worker's art with a badge)
   //   buildings: 3D versions of lander@0/@1 and the turret (base + head frames)
   //   resources: crop, oil     ground: fertile, slope, cliff     markers: missile, rally, oneway
   //   goods:     icon-fiber … icon-warhead (12 HUD icons)

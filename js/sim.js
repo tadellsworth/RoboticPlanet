@@ -1499,10 +1499,10 @@ function garrisonDefense(b, dt) {
       if (u.type === 'warbot' && dist2(u.x, u.y, cx, cy) < 42) threats++;
     } else if (u.task && u.task.type === 'defend' && u.task.home === b.id) out++;
   }
-  let want = Math.min(b.garrison.length, threats + 1 - out);
+  let want = Math.min(armedIn(b), threats + 1 - out);
   while (want-- > 0) {
-    const u = getE(b.garrison.pop());
-    if (!u) continue;
+    const u = takeArmed(b); // only warbots with Ammo go out to fight
+    if (!u) break;
     u.inside = 0;
     u.task = { type: 'defend', home: b.id };
     u.path = null;
@@ -1526,7 +1526,8 @@ function goGarrison(u) {
     if (n >= cap) continue;
     const front = enemyL ? dist(b.x, b.y, enemyL.x, enemyL.y) : 0;
     // The player's garrison priority: High ones fill first, Low ones only when the rest are full.
-    const pr = b.gprio === 'high' ? -30 : b.gprio === 'low' ? 30 : 0;
+    const pr = (b.gprio === 'high' ? -30 : b.gprio === 'low' ? 30 : 0) +
+      ((u.ammo ?? WARBOT_AMMO) <= 0 && !(b.stock.ammo > 0) ? 25 : 0); // out of Ammo: go where it can reload
     const s = (n / Math.min(cap, 10)) * 12 + front * 0.25 + dist(b.x, b.y, u.x, u.y) * 0.05 + pr;
     if (s < bs) { bs = s; best = b; }
   }
@@ -1613,14 +1614,18 @@ function warbotAct(u, dt) {
   const defending = t && t.type === 'defend';
   const rally = t && t.type === 'hold' ? rallyById(t.rally) : null;
   const power = (u.bat ?? 100) < BATTERY.critical ? 0.5 : 1; // emergency mode hits half as hard
-  let foe = u.fight ? getE(u.fight) : null;
+  // Out of Ammo: it can't fight at all. It drops any fight and an attack or sortie, and goes back
+  // to a garrison to reload (one holding a rally flag reloads and comes back, see holdRally).
+  const armed = (u.ammo ?? WARBOT_AMMO) > 0;
+  if (!armed && t && (t.type === 'attack' || t.type === 'defend')) { cancelTask(u); u.path = null; u.fight = 0; return; }
+  let foe = armed && u.fight ? getE(u.fight) : null;
   const leash = defending ? 9 : rally ? 6 : 4;
   if (foe && (foe.dead || foe.inside || dist2(foe.x, foe.y, u.x, u.y) > leash * leash ||
       (rally && dist2(foe.x, foe.y, rally.x, rally.y) > 49))) foe = null;
   if (!foe) {
     u.fight = 0;
     u.scanT -= dt;
-    if (u.scanT <= 0) {
+    if (armed && u.scanT <= 0) {
       u.scanT = 0.3;
       foe = nearestEnemyBot(u.owner, u.x, u.y, rally ? 3.5 : 2.8, true);
       if (!foe && defending) {
@@ -1648,8 +1653,7 @@ function warbotAct(u, dt) {
       u.face = Math.atan2(foe.y - u.y, foe.x - u.x);
       addFx('spark', (u.x + foe.x) / 2, (u.y + foe.y) / 2, { color: PLAYER_COLORS[u.owner] });
       if (u.owner === 0 || foe.owner === 0) sfx('hit');
-      const armed = useAmmo(u);
-      damageBot(foe, Math.max(1, Math.round((2 + (hash2(u.id, S.tick, 7) < 0.5 ? 1 : 0)) * power * (armed ? 1 : NO_AMMO_POWER))));
+      if (useAmmo(u)) damageBot(foe, Math.max(1, Math.round((2 + (hash2(u.id, S.tick, 7) < 0.5 ? 1 : 0)) * power)));
       u.fought = 1;
     }
     if (!pathing) u.path = null;
@@ -1703,26 +1707,50 @@ function strikeBuilding(u, b, dt, power) {
   if (dist2(u.x, u.y, b.x + 0.5, b.y + 0.5) <= 1.7) {
     u.path = null;
     u.face = Math.atan2(b.y + 0.5 - u.y, b.x + 0.5 - u.x);
-    if (u.cd <= 0) {
+    if (u.cd <= 0 && useAmmo(u)) {
       u.cd = 1.0;
       u.fought = 1;
       addFx('spark', b.x + 0.5 + (hash2(u.id, S.tick, 3) - 0.5) * 0.6, b.y + 0.5 + (hash2(u.id, S.tick, 5) - 0.5) * 0.6, { color: PLAYER_COLORS[u.owner] });
-      hitBuilding(b, power * (useAmmo(u) ? 1 : NO_AMMO_POWER), u.owner);
+      hitBuilding(b, power, u.owner);
     }
     return true;
   }
   return travel(u, b.x, b.y, dt);
 }
 
-/** Fire one shot: true if the warbot had ammo, false if it's down to scuffling. */
+/** Fire one shot: true if the warbot had ammo (one is used), false if it has none left. */
 function useAmmo(u) {
-  if ((u.ammo ?? WARBOT_AMMO) > 0) { u.ammo = (u.ammo ?? WARBOT_AMMO) - 1; return true; }
-  const P = S.players[u.owner];
-  if (S.time - (P.lastAmmoMsg || -999) > 90) {
-    P.lastAmmoMsg = S.time;
-    postMsg(u.owner, 'Your warbots are out of Ammo and can barely fight. Build an Ammo Plant: haulers stock your Lander and Outposts, where warbots reload.', Math.floor(u.x), Math.floor(u.y), 'warn');
+  if ((u.ammo ?? WARBOT_AMMO) > 0) {
+    u.ammo = (u.ammo ?? WARBOT_AMMO) - 1;
+    if (u.ammo === 0) {
+      const P = S.players[u.owner];
+      if (S.time - (P.lastAmmoMsg || -999) > 90) {
+        P.lastAmmoMsg = S.time;
+        postMsg(u.owner, 'A warbot ran out of Ammo and can\'t fight until it reloads. Haulers stock your Lander and Outposts with Ammo from an Ammo Plant.', Math.floor(u.x), Math.floor(u.y), 'warn');
+      }
+    }
+    return true;
   }
   return false;
+}
+
+/** Warbots in garrison b that have Ammo. */
+function armedIn(b) {
+  let n = 0;
+  for (const id of b.garrison) { const u = getE(id); if (u && (u.ammo ?? WARBOT_AMMO) > 0) n++; }
+  return n;
+}
+
+/** How many armed warbots garrison b can send out (it always keeps one warbot at home). */
+function spareArmed(b) { return Math.max(0, Math.min(armedIn(b), b.garrison.length - 1)); }
+
+/** Take one armed warbot out of garrison b (or null). */
+function takeArmed(b) {
+  for (let k = b.garrison.length - 1; k >= 0; k--) {
+    const u = getE(b.garrison[k]);
+    if (u && (u.ammo ?? WARBOT_AMMO) > 0) { b.garrison.splice(k, 1); return u; }
+  }
+  return null;
 }
 
 /** Reload a warbot from a garrison's Ammo (one Ammo = AMMO_SHOTS shots). */
@@ -1786,6 +1814,7 @@ function holdRally(u, t, r, dt, power) {
   if (t.phase !== 'recharge') {
     const flat = (u.bat ?? 100) < BATTERY.critical;
     if (flat || (u.ammo === 0 && S.tick % 15 === u.id % 15 && ammoNear(u))) { t.phase = 'recharge'; t.forAmmo = !flat; u.path = null; }
+    if (u.ammo === 0 && t.phase !== 'recharge') t.target = 0; // no Ammo: it can only stand by the flag
   }
   if (t.phase === 'recharge') {
     const home = rechargePoint(u, t.forAmmo) || rechargePoint(u);
@@ -1799,7 +1828,8 @@ function holdRally(u, t, r, dt, power) {
     return;
   }
   let tgt = t.target ? getE(t.target) : null;
-  if (!tgt || tgt.owner === u.owner || dist2(tgt.x + 0.5, tgt.y + 0.5, r.x, r.y) > 10) {
+  if ((u.ammo ?? WARBOT_AMMO) <= 0) tgt = null;
+  else if (!tgt || tgt.owner === u.owner || dist2(tgt.x + 0.5, tgt.y + 0.5, r.x, r.y) > 10) {
     tgt = null;
     t.target = 0;
     u.scanT2 = (u.scanT2 || 0) - dt;
@@ -1833,7 +1863,7 @@ function rallySources(owner, i, j) {
   const zone = S.zone[tIdx(i, j)];
   const out = [];
   for (const b of S.buildings) {
-    if (b.dead || b.owner !== owner || !b.built || !BDEFS[b.type].mil || b.garrison.length < 2) continue;
+    if (b.dead || b.owner !== owner || !b.built || !BDEFS[b.type].mil || spareArmed(b) < 1) continue;
     if (S.zone[tIdx(b.x, b.y)] !== zone) continue;
     out.push({ b, d: dist(b.x, b.y, i, j) });
   }
@@ -1843,7 +1873,7 @@ function rallySources(owner, i, j) {
 
 function rallyAvailable(owner, i, j) {
   let n = 0;
-  for (const b of rallySources(owner, i, j)) n += b.garrison.length - 1;
+  for (const b of rallySources(owner, i, j)) n += spareArmed(b);
   return n;
 }
 
@@ -1853,9 +1883,9 @@ function sendToRally(owner, i, j, count) {
   if (!r) { r = { id: S.nextId++, owner, x: i + 0.5, y: j + 0.5 }; S.rallies.push(r); }
   let slot = rallyMembers(r.id).length, sent = 0;
   for (const b of rallySources(owner, i, j)) {
-    while (b.garrison.length > 1 && sent < count) {
-      const u = getE(b.garrison.pop());
-      if (!u) continue;
+    while (spareArmed(b) > 0 && sent < count) {
+      const u = takeArmed(b);
+      if (!u) break;
       u.inside = 0;
       u.task = { type: 'hold', rally: r.id, slot: slot++ };
       u.path = null;
@@ -1941,17 +1971,49 @@ function silosInRange(owner, target) {
 function fireMissile(owner, target) {
   const silo = silosInRange(owner, target).find(siloReady);
   if (!silo) return false;
-  const md = BDEFS[silo.type].missile;
+  return fireMissileAt(silo, target.x, target.y);
+}
+
+/** The rival building a missile aimed at tile (i, j) would hit directly, if any. */
+function missileTargetAt(owner, i, j) {
+  if (!inMap(i, j)) return null;
+  const b = getE(S.bAt[tIdx(i, j)]);
+  if (b && !b.dead && b.owner !== owner) return b;
+  for (const e of S.buildings) {
+    if (!e.dead && e.owner !== owner && e.type === 'lander' && Math.abs(e.x - i) <= 1 && Math.abs(e.y - j) <= 1) return e;
+  }
+  return null;
+}
+
+/** Can this silo fire at tile (i, j) now? '' if so, otherwise why not. */
+function missileBlocked(silo, i, j) {
+  if (!silo || silo.dead || !silo.built) return 'That Silo is gone.';
+  if (!(silo.stock.warhead > 0)) return 'This Silo has no Missiles: haulers bring them from a Missile Factory.';
+  if (silo.reload > 0) return `Reloading: ready in ${Math.ceil(silo.reload)}s.`;
+  if (dist(silo.x, silo.y, i, j) > BDEFS[silo.type].missile.range) return `Out of range: Missiles reach ${BDEFS[silo.type].missile.range} tiles.`;
+  return '';
+}
+
+/**
+ * Launch a Missile from `silo` at tile (i, j): any spot in range, not just a building. A rival
+ * building there takes the full hit; the blast hurts rival buildings and bots around it.
+ */
+function fireMissileAt(silo, i, j) {
+  if (missileBlocked(silo, i, j)) return false;
+  const owner = silo.owner, md = BDEFS[silo.type].missile;
+  const target = missileTargetAt(owner, i, j);
+  const tx = target ? target.x : i, ty = target ? target.y : j;
   bump(silo.stock, 'warhead', -1);
   silo.reload = md.reload;
-  const d = dist(silo.x, silo.y, target.x, target.y);
+  const d = dist(silo.x, silo.y, tx, ty);
   S.missiles.push({
-    owner, from: silo.id, target: target.id, t: 0, dur: Math.max(1.6, d / 8),
-    x0: silo.x + 0.5, y0: silo.y + 0.5, x1: target.x + 0.5, y1: target.y + 0.5,
+    owner, from: silo.id, target: target ? target.id : 0, t: 0, dur: Math.max(1.6, d / 8),
+    x0: silo.x + 0.5, y0: silo.y + 0.5, x1: tx + 0.5, y1: ty + 0.5,
   });
   addFx('ring', silo.x + 0.5, silo.y + 0.5, { color: '#ffcf4a', r: 1.2 });
   sfx('launch');
-  postMsg(target.owner, `Incoming missile! It is heading for your ${BDEFS[target.type].name}.`, target.x, target.y, 'bad');
+  if (target) postMsg(target.owner, `Incoming missile! It is heading for your ${BDEFS[target.type].name}.`, target.x, target.y, 'bad');
+  else postMsg(1 - owner, 'Incoming missile!', tx, ty, 'bad');
   return true;
 }
 
@@ -2017,25 +2079,25 @@ function attackSources(owner, target) {
     if (b.dead || b.owner !== owner || !b.built || !BDEFS[b.type].mil) continue;
     if (S.zone[tIdx(b.x, b.y)] !== zone) continue; // warbots there can't walk to the target
     const d = dist(b.x, b.y, target.x, target.y);
-    if (d <= ATTACK_RANGE && b.garrison.length > 1) out.push({ b, d });
+    if (d <= ATTACK_RANGE && spareArmed(b) > 0) out.push({ b, d });
   }
   out.sort((a, c) => a.d - c.d);
   return out.map((o) => o.b);
 }
 
-/** Warbots that could join an attack on `target` (each garrison keeps one at home). */
+/** Armed warbots that could join an attack on `target` (each garrison keeps one at home). */
 function attackAvailable(owner, target) {
   let n = 0;
-  for (const b of attackSources(owner, target)) n += b.garrison.length - 1;
+  for (const b of attackSources(owner, target)) n += spareArmed(b);
   return n;
 }
 
 function sendAttack(owner, target, count) {
   let sent = 0;
   for (const b of attackSources(owner, target)) {
-    while (b.garrison.length > 1 && sent < count) {
-      const u = getE(b.garrison.pop());
-      if (!u) continue;
+    while (spareArmed(b) > 0 && sent < count) {
+      const u = takeArmed(b);
+      if (!u) break;
       u.inside = 0;
       u.task = { type: 'attack', target: target.id };
       u.path = null;

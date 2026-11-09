@@ -32,7 +32,7 @@ function frame(now) {
   if (S) {
     const running = UI.inGame ? !UI.paused && S.winner < 0 : true;
     if (running) {
-      _acc += dt * (UI.inGame ? UI.speed : 1.5);
+      _acc += dt * (UI.inGame ? UI.speed : 1.5) * GAME_PACE;
       let n = 0;
       while (_acc >= SIM_STEP && n < 10) { simStep(SIM_STEP); _acc -= SIM_STEP; n++; }
       if (n >= 10) _acc = 0;

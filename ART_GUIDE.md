@@ -468,8 +468,8 @@ current art, so they can be swapped in a few at a time.
   grower, site, outpost@0/@1), and so is the second set (charger, farm, pump, refinery, kiln, tarworks, roadworks,
   ramp). They use `B3D(...)` in `art/art-manifest.js`: scale 1.4 and anchor [0.5, 0.615], the centre of the pad's top
   surface. New buildings in the same style can use the same helper
-- Still missing: robots `hauler`, `agribot` and `paver` (@0/@1; briefs in the robot table above), buildings `armory`,
-  `munitions` and `silo@0/@1` (and 3D versions of the Lander and turret), resources `crop` and `oil`, ground
+- Robots `hauler`, `agribot` and `paver` (@0/@1) and the military buildings are installed. Still missing: 3D versions
+  of the Lander and turret, resources `crop` and `oil`, ground
   `fertile`, `slope` and `cliff`, markers `missile`, `rally` and `oneway`, and the 12 goods icons
 
 ### Tips

@@ -43,6 +43,11 @@ const QUEUE_PATIENCE = 6;
 const LANE_OFFSET = 0.17;         // how far to the right of the centre line bots drive on two-way roads (drawing only)
 const STALK_GROW_TIME = 70;       // seconds for a planted stalk grove to mature
 const CROP_GROW_TIME = 45;        // seconds for a planted energy crop to ripen
+/**
+ * The whole game runs at this fraction of real time: everything (bots, building, production,
+ * combat, the rival) moves 15% slower than its raw numbers, for a calmer pace than an RTS.
+ */
+const GAME_PACE = 0.85;
 const FUEL_ENERGY = 75;           // battery points one Fuel gives at a Charging Station (3/4 of a full charge)
 
 /*
@@ -112,7 +117,7 @@ const LIGHT_CLEAR = 0.45;
 /* Warbot ammunition: each warbot holds WARBOT_AMMO shots and reloads in a garrison stocked with Ammo. */
 const WARBOT_AMMO = 20;
 const AMMO_SHOTS = 10;            // shots in one Ammo
-const NO_AMMO_POWER = 0.35;       // how hard a warbot with no ammo hits
+// A warbot with no ammo can't fight at all: it leaves the fight and goes back to reload.
 const WARBOT_RANGE = 1.2;         // tiles: how far a warbot shoots
 const WARBOT_RANGE_BLOCKED = 2.2; // ...and across a building or cliff that stops it closing in
 
