@@ -473,23 +473,62 @@ current art, so they can be swapped in a few at a time.
 
 ### Batch 7: Long haul
 
-| Key | Size | What it is | Prompt for Claude Design |
-|---|---|---|---|
-| `truck@0`, `truck@1` | 384×384, transparent | Freight Truck: a heavy road truck that carries 8 goods | See the full brief below. |
+The Freight Truck, with a driving animation and two overlays for speeding up and braking. Make it as a 3D-rendered
+model like the buildings, so the frames can be re-rendered with only the tyres turned. 13 files in all:
 
-`truck@0.png` and `truck@1.png`
+| Key | Size | What it is |
+|---|---|---|
+| `truck@0-f0` … `truck@0-f3` | 384×384, transparent | The truck (cyan), four driving frames; f0 is the main image |
+| `truck@1-f0` … `truck@1-f3` | 384×384, transparent | The same four frames, red |
+| `truck-brake` | 384×384, transparent | Overlay: rear brake lights glowing, shown while it slows down |
+| `truck-boost` | 384×384, transparent | Overlay: dust and motor glow, shown while it speeds up |
+
+**1. The truck** (`truck@0-f0.png`)
 ```
-A heavy robotic freight truck for the same game as the Hauler, seen from directly above (top-down, like the other
-robots), facing RIGHT. A driverless armoured cab at the right end with a dark sensor windscreen strip and a
-team-coloured roof panel, then a long flatbed behind it with low side rails and tie-down points, empty (the game
-draws the cargo crates on top), riding on three pairs of chunky wheels that show at the sides. About 2.2 times as
-long as it is wide; the whole truck spans about 85% of the image width, centred. Weathered gunmetal and off-white
-paint, yellow-and-black hazard stripes on the rear bumper, small amber marker lights at the corners. Same lighting
-as the other robots: sun from the top-left, short soft shadow down-right. 384x384 PNG, transparent background.
-Team colour: cyan #38d4ff.
+Make a top-down sprite of a heavy robotic Freight Truck for Terrafall, in the same style as the Hauler and the other
+robots: a realistic 3D-rendered model seen from directly above, facing RIGHT.
+
+Design: a driverless armoured cab at the right (front) end with a dark sensor windscreen strip across its nose and a
+team-coloured roof panel. Behind it, a long flatbed with low side rails and tie-down points, left EMPTY (the game
+draws the cargo crates on it). Three axles of chunky off-road tyres with deep, blocky treads showing at both sides.
+Weathered gunmetal and off-white panels, yellow-and-black hazard stripes on the rear bumper, small amber marker
+lights at the four corners, two small headlights at the front corners and two red brake lights at the rear corners
+(unlit).
+
+Proportions: about 2.2 times as long as it is wide. The truck spans 85% of the image width and sits exactly in the
+centre of the image (the game spins it around the centre as it turns).
+
+Lighting: soft sun from the top-left. NO drop shadow and no ground under it: the game draws the shadow itself, so
+it stays in place when the truck turns.
+
+Format: 384x384 PNG, transparent background. Team colour: cyan #38d4ff.
 ```
-Then the red version: *"Same image, but change every cyan accent to red #ff5a6e."* The game rotates the truck as it
-turns and draws its load on the flatbed, so keep the bed empty and flat.
+
+**2. Driving frames** (`truck@0-f1.png` to `truck@0-f3.png`)
+```
+Now make the driving animation: three more frames of exactly the same truck, f1, f2 and f3. In each frame, roll the
+tyres forward by a quarter of the gap between two tread blocks, so f0, f1, f2, f3 loop smoothly back into f0.
+Nothing else may change: same position, size, angle, colours and lighting, pixel for pixel, so the truck doesn't
+wobble when the frames play.
+```
+Then the red team: *"Same four frames, but change every cyan accent to red #ff5a6e"* (`truck@1-f0` to `truck@1-f3`).
+
+**3. Braking overlay** (`truck-brake.png`)
+```
+Make a braking overlay: a 384x384 transparent PNG with exactly the same framing as the truck, but with no truck in
+it. It's empty except for the two rear brake lights lit bright red, each with a soft red glow spilling a little onto
+the ground behind the truck. The lights must sit exactly over the truck's brake lights. The game lays this over the
+truck while it slows down.
+```
+
+**4. Speeding-up overlay** (`truck-boost.png`)
+```
+Make an acceleration overlay: a 384x384 transparent PNG with exactly the same framing as the truck, but with no
+truck in it. It's empty except for a puff of pale orange-brown dust kicked up behind the rear tyres, trailing off to
+the left, and a faint blue-white glow from motor vents at the back of the cab. The game shows it while the truck
+speeds up and fades it out once it's at full speed.
+```
+Before exporting the overlays, ask Claude Design to show each one on top of the truck to check they line up.
 
 Bridges, tunnels and overpasses are drawn by the game itself for now (they have to join up with each other on any
 side); ask Claude Code if you'd like those as art too.
@@ -505,7 +544,7 @@ side); ask Claude Code if you'd like those as art too.
   ramp). They use `B3D(...)` in `art/art-manifest.js`: scale 1.4 and anchor [0.5, 0.615], the centre of the pad's top
   surface. New buildings in the same style can use the same helper
 - Robots `hauler`, `agribot` and `paver` (@0/@1), the military buildings, the 3D Command Base and the Repair Bay
-  (`repair`) are installed. Still missing: the Freight Truck (`truck@0/@1`), a 3D turret, resources `crop` and `oil`, ground
+  (`repair`) are installed. Still missing: the Freight Truck (`truck@0/@1-f0…f3`, `truck-brake`, `truck-boost`), a 3D turret, resources `crop` and `oil`, ground
   `fertile`, `slope` and `cliff`, markers `missile`, `rally` and `oneway`, and the 12 goods icons
 
 ### Tips
