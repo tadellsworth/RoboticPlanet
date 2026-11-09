@@ -99,7 +99,7 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
   highways take planning and spare workers. Calling off a planned tile refunds it. Roads double a bot's speed. Dragging
   plans roads round resources; tap a boulder, grove, ore or crystal tile to clear it for a road at 3× the Cement. A Roadworks' Paver
   upgrades roads to asphalt (2.75×) with Asphalt, driving out along the roads joined to its Roadworks, however far.
-- **Paving and road wear:** Paths → **Pave** (W): drag along roads to mark them for asphalt (drag over marked road to
+- **Paving and road wear:** Paths → **Pave** (E): drag along roads to mark them for asphalt (drag over marked road to
   clear it). Roadworks pave the marked roads joined to them (or, set to *Every joined road*, everything; the AI uses
   that). Every bot driving onto asphalt wears it (`WEAR_BOT`, Freight Trucks `WEAR_TRUCK`, three times as much): past
   half worn it slows bots (to 2.3× when nearly through), at `REPAVE_AT` the Paver resurfaces marked road, and worn
@@ -193,10 +193,10 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
 - **Desktop (RTS controls):** on a wide screen the top bar is one row, the tools sit in a small dock and panels open
   on the right. Drag a box to select warbots (Shift adds; a box round a garrison takes its spare warbots), right-click
   ground to hold it, a rival building to attack, or your garrison to station them. Ctrl/Shift+1–9 saves a control
-  group, 1–9 recalls it (twice jumps to it). Pan with the arrow keys, the window edge, or right/middle drag; hover for
+  group, 1–9 recalls it (twice jumps to it). Pan with **WASD** or the arrow keys, the window edge, or right/middle drag; hover for
   tooltips. Keys: **B** build then a building's letter (or **B R** to start laying roads), **R** (or **P**) opens and closes Paths
   and inside it picks a tool (**R** roads, **G** bridges
-  and tunnels, **V** ramps, **W** pave, **O** one-way arrows, **L** junctions, **T** traffic map), **A** army, **F** select all warbots, **J** latest alert,
+  and tunnels, **V** ramps, **E** pave, **O** one-way arrows, **L** junctions, **T** traffic map), **Q** army, **F** select all warbots, **J** latest alert,
   **H** base, **[ ]** speed, **+/−** zoom, **M** minimap, **Space** pause, **Esc** back / clear selection.
   Phones and tablets keep the touch controls.
 

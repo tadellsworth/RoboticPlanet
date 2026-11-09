@@ -179,12 +179,12 @@ function hideGoodTip() {
 /* ------------------------------------------------------------------ keyboard (desktop) */
 
 /*
- * B build (then a building's letter, or R for roads) · R or P opens and closes Paths (inside it: R roads, G bridges and tunnels, V ramps, W pave, O one-way arrows,
- * L junctions, T traffic map) · A army · H base · F select every warbot · 1–9 control groups (Ctrl or
+ * WASD or arrow keys pan · B build (then a building's letter, or R for roads) · R or P opens and closes Paths (inside
+ * it: R roads, G bridges and tunnels, V ramps, E pave, O one-way arrows, L junctions, T traffic map) · Q army · H base · F select every warbot · 1–9 control groups (Ctrl or
  * Shift + digit to save) · J jump to the latest alert · Esc back / clear selection / pause ·
- * Space pause · [ ] game speed · arrow keys pan · + and - zoom · M minimap · ? help
+ * Space pause · [ ] game speed · + and - zoom · M minimap · ? help
  */
-const PAN_KEYS = { arrowleft: [-1, 0], arrowright: [1, 0], arrowup: [0, -1], arrowdown: [0, 1] };
+const PAN_KEYS = { arrowleft: [-1, 0], arrowright: [1, 0], arrowup: [0, -1], arrowdown: [0, 1], a: [-1, 0], d: [1, 0], w: [0, -1], s: [0, 1] };
 
 /** Build-menu hotkeys: with the build menu open, a building's letter starts placing it (and R lays roads). */
 const BUILD_KEYS = {
@@ -243,14 +243,16 @@ function initKeyboard() {
       return;
     }
     if (overlay) return;
-    if (PAN_KEYS[k]) { e.preventDefault(); R.keys.add(k); return; }
-    // In the build menu, a building's letter picks it, and R goes straight to laying roads.
+    // In the build menu, a building's letter picks it (W, A, S and D included), and R goes
+    // straight to laying roads.
     if (UI.sheetKind === 'build' && k === 'r') { e.preventDefault(); openPaths('road'); return; }
     if (UI.sheetKind === 'build') {
       const type = Object.keys(BUILD_KEYS).find((t) => BUILD_KEYS[t] === k);
       const card = type && $('sheet-body').querySelector(`.bcard[data-t="${type}"]`);
       if (card && !card.disabled) { e.preventDefault(); card.click(); return; }
     }
+    // WASD and the arrow keys pan the map while held.
+    if (PAN_KEYS[k]) { e.preventDefault(); R.keys.add(k); return; }
     switch (k) {
       case 'b': $('btn-build').click(); break;
       case 'p': $('btn-road').click(); break;
@@ -259,10 +261,10 @@ function initKeyboard() {
       case 'o': openPaths('arrows'); break;
       case 'g': openPaths('bridge'); break;
       case 'v': openPaths('ramp'); break;
-      case 'w': openPaths('pave'); break;
+      case 'e': openPaths('pave'); break;
       case 't': if (R.mode !== 'road') setMode('road'); R.traffic = !R.traffic; showRoadBanner(); sfx('click'); break;
       case 'l': openPaths('lights'); break;
-      case 'a': if (!$('btn-attack').hidden) $('btn-attack').click(); break;
+      case 'q': if (!$('btn-attack').hidden) $('btn-attack').click(); break;
       case 'h': case 'home': $('btn-home').click(); break;
       case 'm': setMinimap(!MM.on); break;
       case 'f': selectBots(armyIds(0), false); if (UI.sel.length) toast(`${UI.sel.length} warbots selected: right-click to give orders.`, 'info'); break;
