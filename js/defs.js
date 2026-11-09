@@ -93,6 +93,9 @@ const FUEL_ENERGY = 250;          // battery points one Fuel gives at a Charging
 const BATTERY = {
   workerMove: 0.52, workerWork: 1.2, workerInside: 0.25,
   warbotMove: 0.31, warbotFight: 0.9, garrisonCharge: 4,
+  // A warbot standing about in enemy land (not moving or fighting) for more than waitGrace seconds
+  // runs its battery down at warbotWait a second, so it has to go home to recharge before long.
+  warbotWait: 0.8, waitGrace: 15,
   low: 30, critical: 12, slow: 0.5,
 };
 

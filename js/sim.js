@@ -2266,7 +2266,13 @@ function updateWarbot(u, dt) {
   u.moved = 0;
   u.fought = 0;
   warbotAct(u, dt);
-  const d = (u.moved ? BATTERY.warbotMove : 0) + (u.fought ? BATTERY.warbotFight : 0);
+  let d = (u.moved ? BATTERY.warbotMove : 0) + (u.fought ? BATTERY.warbotFight : 0);
+  // Loitering in enemy land wears the battery down (see BATTERY.warbotWait).
+  const o = S.owner[tIdx(Math.floor(u.x), Math.floor(u.y))];
+  if (!u.moved && !u.fought && o >= 0 && o !== u.owner) {
+    u.waitT = (u.waitT || 0) + dt;
+    if (u.waitT > BATTERY.waitGrace) d += BATTERY.warbotWait;
+  } else u.waitT = 0;
   if (d) u.bat = Math.max(0, u.bat - d * dt);
 }
 
@@ -2280,6 +2286,11 @@ function warbotAct(u, dt) {
   // to a garrison to reload (one holding a rally flag reloads and comes back, see holdRally).
   const armed = (u.ammo ?? WARBOT_AMMO) > 0;
   if (!armed && t && (t.type === 'attack' || t.type === 'defend')) { cancelTask(u); u.path = null; u.fight = 0; return; }
+  // Battery all but flat out in enemy land with nothing to shoot at: give up the attack and go home to recharge.
+  if ((u.bat ?? 100) < BATTERY.critical && t && t.type === 'attack' && !u.fight) {
+    const o = S.owner[tIdx(Math.floor(u.x), Math.floor(u.y))];
+    if (o >= 0 && o !== u.owner) { cancelTask(u); u.path = null; return; }
+  }
   let foe = armed && u.fight ? getE(u.fight) : null;
   const leash = defending ? 9 : rally ? 6 : 4;
   if (foe && (foe.dead || foe.inside || dist2(foe.x, foe.y, u.x, u.y) > leash * leash ||
@@ -2507,7 +2518,13 @@ function holdRally(u, t, r, dt, power) {
   }
   if (t.phase === 'recharge') {
     const home = rechargePoint(u, t.forAmmo) || rechargePoint(u);
-    if (!home) { t.phase = null; return; }
+    if (!home) {
+      // Nowhere to recharge: a flat warbot in enemy land gives up the flag and goes back to a garrison.
+      const o = S.owner[tIdx(Math.floor(u.x), Math.floor(u.y))];
+      if (!t.forAmmo && o >= 0 && o !== u.owner) { cancelTask(u); u.path = null; return; }
+      t.phase = null;
+      return;
+    }
     if (dist2(u.x, u.y, home.x + 0.5, home.y + 0.5) <= 2.2) {
       u.path = null;
       const charges = home.type !== 'lander'; // the Command Base only reloads Ammo
