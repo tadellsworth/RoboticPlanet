@@ -58,6 +58,14 @@
  */
 function B3D(src) { return { src, scale: 1.4, anchor: [0.5, 0.615] }; }
 
+/** A biome's six decorative plants (shadows baked in, centred) and, except the desert, its ground, water, rock and cliff. */
+function biomeSet(b) {
+  const out = {};
+  for (let k = 1; k <= 6; k++) out[`plant-${b}-${k}`] = `biomes/${b}/plant-${k}.webp`;
+  if (b !== 'desert') for (const kind of ['ground', 'water', 'rock', 'cliff']) out[`${kind}-${b}`] = `biomes/${b}/${kind}.webp`;
+  return out;
+}
+
 /** A robot's driving frames for both teams plus its brake and boost overlays (WebP). */
 function driveSet(type) {
   const out = {};
@@ -76,7 +84,7 @@ const ART_MANIFEST = {
   // and brake / boost overlays; no shadow in the images, so `shadow` has the game draw it.
   // (The older single images, bots/<robot>@<team>.png, are no longer used.)
   ...driveSet('worker'), ...driveSet('warbot'), ...driveSet('hauler'), ...driveSet('agribot'), ...driveSet('paver'),
-  ground: 'tiles/ground.png',
+  ground: 'tiles/ground.webp',
   stalk: 'resources/stalk.png',
   boulder: 'resources/boulder.png',
   ore: 'resources/ore.png',
@@ -99,8 +107,8 @@ const ART_MANIFEST = {
   depot: B3D('buildings/depot.png'),
   grower: B3D('buildings/grower.png'),
   site: B3D('buildings/site.png'),
-  water: 'tiles/water.png',
-  rock: 'tiles/rock.png',
+  water: 'tiles/water.webp',
+  rock: 'tiles/rock.webp',
 
   // The second 3D set: the rest of the economy buildings, plus the Ramp (build menu and preview).
   charger: B3D('buildings/charger.png'),
@@ -134,10 +142,12 @@ const ART_MANIFEST = {
   'silo@0': B3D('buildings/silo@0.png'),
   'silo@1': B3D('buildings/silo@1.png'),
 
+  // Biomes: plants for the Red desert, Jungle and Polar worlds, and the Jungle and Polar terrain
+  // (512x512 seamless textures, one image per 4x4 tiles; cliffs 128x48). The desert tiles above are 512 too.
+  ...biomeSet('desert'), ...biomeSet('jungle'), ...biomeSet('polar'),
+
   // Still to make (placeholders are drawn until these exist):
   //   buildings: a 3D turret (base + head frames)
   //   resources: crop, oil, uranium     ground: fertile, slope, cliff     markers: missile, rally, oneway
   //   goods:     icon-fiber … icon-warhead (12 HUD icons)
-  //   biomes:    plant-<biome>-1 … 6 for desert, jungle and polar; ground/water/rock-jungle and -polar
-  //              (Claude Design prompts: ART_GUIDE.md, Batch 9)
 };

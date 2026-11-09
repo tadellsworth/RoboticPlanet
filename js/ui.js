@@ -179,7 +179,7 @@ function hideGoodTip() {
 /* ------------------------------------------------------------------ keyboard (desktop) */
 
 /*
- * B build (then a building's letter, or R for roads) · P paths (R roads, G bridges and tunnels, V ramps, W pave, O one-way arrows,
+ * B build (then a building's letter, or R for roads) · R or P opens and closes Paths (inside it: R roads, G bridges and tunnels, V ramps, W pave, O one-way arrows,
  * L junctions, T traffic map) · A army · H base · F select every warbot · 1–9 control groups (Ctrl or
  * Shift + digit to save) · J jump to the latest alert · Esc back / clear selection / pause ·
  * Space pause · [ ] game speed · arrow keys pan · + and - zoom · M minimap · ? help
@@ -244,7 +244,8 @@ function initKeyboard() {
     }
     if (overlay) return;
     if (PAN_KEYS[k]) { e.preventDefault(); R.keys.add(k); return; }
-    // In the build menu, a building's letter picks it.
+    // In the build menu, a building's letter picks it, and R goes straight to laying roads.
+    if (UI.sheetKind === 'build' && k === 'r') { e.preventDefault(); openPaths('road'); return; }
     if (UI.sheetKind === 'build') {
       const type = Object.keys(BUILD_KEYS).find((t) => BUILD_KEYS[t] === k);
       const card = type && $('sheet-body').querySelector(`.bcard[data-t="${type}"]`);
@@ -253,7 +254,8 @@ function initKeyboard() {
     switch (k) {
       case 'b': $('btn-build').click(); break;
       case 'p': $('btn-road').click(); break;
-      case 'r': openPaths('road'); break;
+      // R opens and closes the Paths menu (like P); inside Paths it picks the Roads tool first.
+      case 'r': if (R.mode === 'road' && UI.roadMode !== 'road') openPaths('road'); else $('btn-road').click(); break;
       case 'o': openPaths('arrows'); break;
       case 'g': openPaths('bridge'); break;
       case 'v': openPaths('ramp'); break;

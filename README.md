@@ -194,7 +194,8 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
   on the right. Drag a box to select warbots (Shift adds; a box round a garrison takes its spare warbots), right-click
   ground to hold it, a rival building to attack, or your garrison to station them. Ctrl/Shift+1–9 saves a control
   group, 1–9 recalls it (twice jumps to it). Pan with the arrow keys, the window edge, or right/middle drag; hover for
-  tooltips. Keys: **B** build then a building's letter (or **B R** for roads), **P** paths (**R** roads, **G** bridges
+  tooltips. Keys: **B** build then a building's letter (or **B R** to start laying roads), **R** (or **P**) opens and closes Paths
+  and inside it picks a tool (**R** roads, **G** bridges
   and tunnels, **V** ramps, **W** pave, **O** one-way arrows, **L** junctions, **T** traffic map), **A** army, **F** select all warbots, **J** latest alert,
   **H** base, **[ ]** speed, **+/−** zoom, **M** minimap, **Space** pause, **Esc** back / clear selection.
   Phones and tablets keep the touch controls.
@@ -209,8 +210,9 @@ Farm, Oil Pump, Refinery, Cement Works, Asphalt Plant, Roadworks, Ramp, Ammo Pla
 Nuclear Silo. All six robots (Worker, Warbot, Hauler, Agribot, Paver, Freight Truck) have four driving frames per team
 plus brake-light and boost overlays (WebP, `driveSet()` in the manifest); the frames advance with the distance driven.
 The nuclear missile, its 24-frame detonation sheet and the scorch mark are custom too. Still to make: a 3D Pulse
-Turret, goods icons, a few terrain pieces and the biome art (plants for each biome, and Jungle and Polar ground,
-water and rock; until then the game draws stand-in plants and recolours the desert textures). The app icon is in `icons/`. Anything without an image falls back to placeholder art drawn in code, so new art can be
+Turret, goods icons and a few terrain pieces. The biome art is in `art/biomes/` (six plants per biome with their
+shadows baked in, and the Jungle and Polar ground, water, rock and cliff), and the Red desert ground, water and rock
+are 512×512 (one image per 4×4 tiles, sharp on the zoomed-in map); all WebP to keep the single-file build small. The app icon is in `icons/`. Anything without an image falls back to placeholder art drawn in code, so new art can be
 added one piece at a time. See **[ART_GUIDE.md](ART_GUIDE.md)** for specs, the style brief and prompts,
 including the remaining pieces (Ramp, slope and cliff textures, goods icons).
 

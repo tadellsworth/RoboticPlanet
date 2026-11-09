@@ -586,6 +586,9 @@ over them, and a building, road or construction site simply clears the plants on
 The game draws placeholder plants and recoloured ground until your art arrives, so each piece can be swapped in
 on its own.
 
+**Installed:** all of Batch 9 is in the game (`art/biomes/`, and 512×512 desert tiles in `art/tiles/`), converted to
+WebP. Plants are drawn centred on the tile with their baked shadows; the minimap takes its colours from the textures.
+
 **What to make**
 
 | Keys | Size | What |

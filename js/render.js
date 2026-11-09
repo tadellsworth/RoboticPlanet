@@ -91,6 +91,25 @@ function applyBiome() {
   R.tex = {};
   for (const k of ['ground', 'water', 'rock']) R.tex[k] = biomeTexture(b, k);
   R.tex.cliff = b === 'desert' ? ART.cliff || null : ART['cliff-' + b] || null;
+  // The minimap takes its ground, water and rock colours from the textures themselves.
+  for (const k of ['ground', 'water', 'rock']) { const c = R.tex[k] && avgColor(R.tex[k]); if (c) MM_COLORS[k] = c; }
+}
+
+/** The average colour of an art image, [r, g, b] (or null if it can't be read). */
+function avgColor(art) {
+  if (art.avg !== undefined) return art.avg;
+  try {
+    const c = document.createElement('canvas');
+    c.width = c.height = 8;
+    const x = c.getContext('2d');
+    x.imageSmoothingQuality = 'high';
+    x.drawImage(art.img, 0, 0, 8, 8);
+    const d = x.getImageData(0, 0, 8, 8).data;
+    let r = 0, g = 0, bl = 0;
+    for (let k = 0; k < 64; k++) { r += d[k * 4]; g += d[k * 4 + 1]; bl += d[k * 4 + 2]; }
+    art.avg = [Math.round(r / 64), Math.round(g / 64), Math.round(bl / 64)];
+  } catch (e) { art.avg = null; }
+  return art.avg;
 }
 
 /** The biome's own texture, or the desert one recoloured to suit (made once and kept). */
@@ -504,7 +523,8 @@ function paintTile(ctx, i, j) {
     }
   }
 
-  if (terr === T_GROUND && !S.road[t]) drawGrain(ctx, i, j, x, y);
+  // Fine grain stands in for detail the ground texture lacks (none needed with 512 px art).
+  if (terr === T_GROUND && !S.road[t] && !(tex.ground && tex.ground.img.width >= 256)) drawGrain(ctx, i, j, x, y);
   if (terr === T_GROUND) drawElevation(ctx, i, j, x, y, t, n);
   else if (terr === T_WATER) drawCliffFace(ctx, i, j, x, y, t, true);
   if (terr === T_GROUND && S.fert && S.fert[t] && !S.ramp[t]) drawFertile(ctx, i, j, x, y);
@@ -522,11 +542,17 @@ function paintTile(ctx, i, j) {
  */
 function drawPlant(ctx, v, i, j, x, y) {
   const b = R.biome || 'desert', sd = 911;
-  const cx = x + TP / 2 + (hash2(i, j, sd) - 0.5) * TP * 0.22, cy = y + TP / 2 + (hash2(j, i, sd + 1) - 0.5) * TP * 0.22;
-  const sc = 0.78 + hash2(i, j, sd + 2) * 0.3;
   let n = 0;
   while (ART[`plant-${b}-${n + 1}`]) n++;
-  if (n) { drawArt(ctx, ART[`plant-${b}-${((v - 1) % n) + 1}`], cx, cy, TP * 0.92 * sc); return; }
+  if (n) {
+    // The art is centred with its shadow baked in: a small nudge and size change per tile, kept
+    // inside the tile so neighbouring tiles never cut it off.
+    const ax = x + TP / 2 + (hash2(i, j, sd) - 0.5) * TP * 0.1, ay = y + TP / 2 + (hash2(j, i, sd + 1) - 0.5) * TP * 0.1;
+    drawArt(ctx, ART[`plant-${b}-${((v - 1) % n) + 1}`], ax, ay, TP * (0.84 + hash2(i, j, sd + 2) * 0.14));
+    return;
+  }
+  const cx = x + TP / 2 + (hash2(i, j, sd) - 0.5) * TP * 0.22, cy = y + TP / 2 + (hash2(j, i, sd + 1) - 0.5) * TP * 0.22;
+  const sc = 0.78 + hash2(i, j, sd + 2) * 0.3;
   const u = (TP / 32) * sc, h = (k) => hash2(i * 7 + k, j * 11 - k, sd + 3);
   const P = (fill, f) => { ctx.fillStyle = fill; ctx.beginPath(); f(); ctx.fill(); };
   const E = (ex, ey, rx, ry, rot) => ctx.ellipse(ex, ey, rx, ry, rot || 0, 0, Math.PI * 2);
