@@ -11,7 +11,7 @@ function simStep(dt) {
   if (S.tick % 30 === 0) growStalks(30 * dt);
   if (S.tick % 30 === 15) for (let p = 0; p < S.players.length; p++) landerSalvage(p, 30 * dt);
   // Each player's bots are given work every 8 ticks, the players spread over those ticks.
-  for (let p = 0, n = S.players.length; p < n; p++) if (S.tick % 8 === Math.floor((p * 8) / n) && !S.players[p].out) dispatch(p);
+  for (let p = 0, n = S.players.length; p < n; p++) if (S.tick % 8 === Math.floor((p * 8) / n) && !S.players[p].out && !(S.wildlife && p === WILD_OWNER)) dispatch(p);
   for (let k = 0; k < S.buildings.length; k++) {
     const b = S.buildings[k];
     if (!b.dead) updateBuilding(b, dt);
@@ -22,12 +22,13 @@ function simStep(dt) {
   for (let k = 0; k < S.bots.length; k++) {
     const u = S.bots[k];
     if (u.dead) continue;
-    if (u.type === 'warbot') updateWarbot(u, dt); else updateWorker(u, dt);
+    if (u.type === 'warbot') updateWarbot(u, dt); else if (BOTS[u.type].wild) updateCritter(u, dt); else updateWorker(u, dt);
   }
   if (S.missiles.length) updateMissiles(dt);
   if (S.tick % 30 === 15) cleanRallies();
   if (S.tick % 30 === 20) updateLoot();
   if (S.events) updateEvents();
+  if (S.tick % 30 === 25) naniteRepair();
   for (const P of S.players) {
     if (!P.ai || P.out) continue;
     P.aiT -= dt;
@@ -273,7 +274,7 @@ function workerBattery(u, dt) {
     const ch = b && b.built && BDEFS[b.type].charger;
     if (ch) {
       if (u.bat < 100) {
-        let gain = Math.min(100 - u.bat, ch.rate * Math.min(1, ch.slots / Math.max(1, b.charging)) * dt);
+        let gain = Math.min(100 - u.bat, ch.rate * (tech(b.owner, 'charge') ? 1.5 : 1) * Math.min(1, ch.slots / Math.max(1, b.charging)) * dt);
         if (ch.fuel) {
           // Charging Stations burn a Fuel whenever their energy runs low.
           if ((b.energy || 0) < gain && (b.stock.fuel || 0) > 0) { bump(b.stock, 'fuel', -1); usedGood(b.owner, 'fuel', 1); b.energy = (b.energy || 0) + FUEL_ENERGY; }
@@ -288,7 +289,7 @@ function workerBattery(u, dt) {
     return;
   }
   const d = (u.moved ? BATTERY.workerMove : 0) + (u.busy ? BATTERY.workerWork : 0);
-  if (d) u.bat = Math.max(0, u.bat - d * dt * evDrain());
+  if (d) u.bat = Math.max(0, u.bat - d * dt * drainMul(u));
 }
 
 /** Goods the player can see: everything in storage plus finished goods waiting in buildings. */
@@ -312,7 +313,7 @@ function nearestEnemyBot(owner, x, y, range, preferWar, ownLand) {
     if (ownLand && u.type !== 'warbot' && S.owner[tIdx(Math.floor(u.x), Math.floor(u.y))] !== owner) continue;
     const d = dist2(u.x, u.y, x, y);
     if (d <= bd) { bd = d; best = u; }
-    if (preferWar && u.type === 'warbot' && d <= bwd) { bwd = d; bestWar = u; }
+    if (preferWar && (u.type === 'warbot' || BOTS[u.type].wild) && d <= bwd) { bwd = d; bestWar = u; }
   }
   return bestWar || best;
 }
@@ -369,7 +370,7 @@ function goTo(u, x, y) {
   const goal = y * S.W + x;
   // Don't hammer the pathfinder with a route that just failed.
   if (u.failGoal === goal && S.time < u.failUntil) return false;
-  const p = findPath(Math.floor(u.x), Math.floor(u.y), x, y, u.type !== 'warbot' ? u.owner : undefined, routeOpts(u));
+  const p = findPath(Math.floor(u.x), Math.floor(u.y), x, y, u.type !== 'warbot' && !BOTS[u.type].wild ? u.owner : undefined, routeOpts(u));
   u.breach = 0;
   if (!p) { u.failGoal = goal; u.failUntil = S.time + 2; return false; }
   exitBuilding(u);
@@ -571,7 +572,7 @@ function moveAlong(u, dt) {
       else if (bt.offroad && !harvestTrip(u)) speed *= OFFROAD_SLOW;
     }
   }
-  const vmax = speed * batFactor(u) * evSpeed();
+  const vmax = speed * batFactor(u) * speedMul(u);
   const want = vmax * dt;
   let lim = Infinity; // how far the bot can go before it must have stopped
   // Road junctions: stop before a red light, or give way to traffic already crossing the other way.
@@ -679,7 +680,7 @@ function moveDirect(u, x, y, dt) {
   const dx = x - u.x, dy = y - u.y, d = Math.sqrt(dx * dx + dy * dy);
   if (d < 1e-4) return true;
   u.face = Math.atan2(dy, dx);
-  const s = Math.min(WARBOT_SPEED * batFactor(u) * evSpeed() * dt, d);
+  const s = Math.min(WARBOT_SPEED * batFactor(u) * speedMul(u) * dt, d);
   const nx = u.x + (dx / d) * s, ny = u.y + (dy / d) * s;
   const ti = Math.floor(nx), tj = Math.floor(ny), ci = Math.floor(u.x), cj = Math.floor(u.y);
   if (!inMap(ti, tj)) return false;
@@ -763,7 +764,7 @@ function dispatch(p) {
     if (best < 0) return null;
     return idle.splice(best, 1)[0];
   };
-  const canCarry = (u, n) => (u ? Math.max(1, Math.min(n, BOTS[u.type].carry || 1)) : 1);
+  const canCarry = (u, n) => (u ? Math.max(1, Math.min(n, botCarry(u))) : 1);
 
   // 0) Specialist buildings get a bot of their crew.
   for (const b of blds) {
@@ -798,7 +799,7 @@ function dispatch(p) {
     }
   }
   // 2) An operator for every finished building that needs one, while keeping minFree workers free.
-  const staffQueue = blds.filter((b) => b.built && !b.paused && BDEFS[b.type].staff && !BDEFS[b.type].crew && !b.staff && !b.staffInc && !atLimit(b) && !pumpDry(b) && !b.depleted)
+  const staffQueue = blds.filter((b) => b.built && !b.paused && BDEFS[b.type].staff && !BDEFS[b.type].crew && !b.staff && !b.staffInc && !atLimit(b) && !pumpDry(b) && !b.depleted && !(BDEFS[b.type].lab && !P.research))
     .sort((a, c) => prioRank(a) - prioRank(c) || staffPriority(a) - staffPriority(c) || a.born - c.born);
   for (const b of staffQueue) {
     if (!idle.length) return;
@@ -1123,7 +1124,7 @@ function doPave(u, t, dt) {
     return;
   }
   if (mustRecharge(u)) { cancelTask(u); return; }
-  t.prog += dt * S.players[u.owner].mult * batFactor(u);
+  t.prog += dt * S.players[u.owner].mult * batFactor(u) * (tech(u.owner, 'paving') ? 1 / 0.6 : 1);
   u.busy = 1;
   const c = CROSS[S.terrain[tile]];
   if (c) u.face = Math.atan2(((tile / S.W) | 0) + 0.5 - u.y, (tile % S.W) + 0.5 - u.x);
@@ -1751,6 +1752,7 @@ function updateBuilding(b, dt) {
     if (b.working) { b.useI = (b.useI || 0) + dt; b.useT = (b.useT || 0) + dt; }
   }
   b.working = false;
+  if (def.wild) { updateNest(b); return; }
   if (!b.built) {
     if (b.unlinked && sumValues(b.stock) < sumValues(def.cost)) b.status = 'No road to storage yet';
     else if (sumValues(b.stock) + sumValues(b.inc) === 0) b.status = 'Waiting for materials';
@@ -1782,6 +1784,7 @@ function updateBuilding(b, dt) {
   }
   if (def.mil) garrisonDefense(b, dt);
   if (def.repair) updateRepairStation(b, def, dt);
+  if (def.lab) updateLab(b, dt);
   if ((def.gather || def.farm) && updateDepleted(b, def)) return;
   if (def.staff && !def.inp) {
     const op = getE(b.staff);
@@ -1930,12 +1933,12 @@ function spawnFromFoundry(b) {
 function updateTurret(b, def, dt) {
   b.cd -= dt;
   b.scanT = (b.scanT || 0) - dt;
-  const cx = b.x + 0.5, cy = b.y + 0.5, r2 = def.range * def.range;
+  const cx = b.x + 0.5, cy = b.y + 0.5, range = turretRange(b), r2 = range * range;
   let target = b.tgt ? getE(b.tgt) : null;
   if (target && (target.dead || target.inside || dist2(target.x, target.y, cx, cy) > r2)) target = null;
-  if (!target && b.scanT <= 0) { b.scanT = 0.3; target = nearestEnemyBot(b.owner, cx, cy, def.range, true); }
+  if (!target && b.scanT <= 0) { b.scanT = 0.3; target = nearestEnemyBot(b.owner, cx, cy, range, true); }
   b.tgt = target ? target.id : 0;
-  const ammo = b.shots + (b.stock.crystal || 0) * SHOTS_PER_AMMO;
+  const ammo = b.shots + (b.stock.crystal || 0) * shotsPer(b);
   if (!target) {
     b.sweepT = (b.sweepT || 0) + dt;
     if (b.sweepT > 4) { b.sweepT = 0; b.sweep = -(b.sweep || 1); }
@@ -1950,7 +1953,7 @@ function updateTurret(b, def, dt) {
   if (Math.abs(diff) > 0.15) { b.status = 'Turning to aim'; return; }
   if (b.cd > 0) return;
   if (b.shots <= 0) {
-    if ((b.stock.crystal || 0) > 0) { bump(b.stock, 'crystal', -1); usedGood(b.owner, 'crystal', 1); b.shots = SHOTS_PER_AMMO; }
+    if ((b.stock.crystal || 0) > 0) { bump(b.stock, 'crystal', -1); usedGood(b.owner, 'crystal', 1); b.shots = shotsPer(b); }
     else { b.status = 'Out of ammo!'; b.cd = 0.5; return; }
   }
   b.shots--;
@@ -1972,7 +1975,7 @@ function garrisonDefense(b, dt) {
   for (const u of S.bots) {
     if (u.dead || u.inside) continue;
     if (u.owner !== b.owner) {
-      if (u.type === 'warbot' && dist2(u.x, u.y, cx, cy) < 42) threats++;
+      if ((u.type === 'warbot' || BOTS[u.type].wild) && dist2(u.x, u.y, cx, cy) < 42) threats++;
     } else if (u.task && u.task.type === 'defend' && u.task.home === b.id) out++;
   }
   // Guards go out against enemy warbots (one more than there are), not to patrol.
@@ -2036,6 +2039,7 @@ function hitBuilding(b, dmg, by) {
 
 function captureBuilding(b, by) {
   const def = BDEFS[b.type], old = b.owner;
+  if (def.wild) { clearNest(b, by); return; }
   const name = def.name;
   if (!b.built) {
     (S.players[old].avoid = S.players[old].avoid || []).push({ x: b.x, y: b.y, until: S.time + 150 });
@@ -2274,7 +2278,7 @@ function updateWarbot(u, dt) {
     u.waitT = (u.waitT || 0) + dt;
     if (u.waitT > BATTERY.waitGrace) d += BATTERY.warbotWait;
   } else u.waitT = 0;
-  if (d) u.bat = Math.max(0, u.bat - d * dt * evDrain());
+  if (d) u.bat = Math.max(0, u.bat - d * dt * drainMul(u));
 }
 
 function warbotAct(u, dt) {
@@ -3509,4 +3513,322 @@ function acceptTrade(p) {
   o.done = true;
   if (p === 0) postMsg(0, `Deal done: ${o.m} ${GOOD[o.get].name} are in your Command Base.`, store.x, store.y, 'good');
   return '';
+}
+
+/* ------------------------------------------------------------------ research (Colony) */
+
+/** Has player p researched upgrade k (see TECHS)? */
+function tech(p, k) { const P = S.players[p]; return !!(P && P.tech && P.tech[k]); }
+/** Speed, battery drain and carrying for bot u, with planet events and research applied. */
+function speedMul(u) { return evSpeed() * (tech(u.owner, 'motors') ? 1.15 : 1); }
+function drainMul(u) { return evDrain() * (tech(u.owner, 'cells') ? 0.7 : 1); }
+function botCarry(u) { const c = BOTS[u.type].carry || 1; return tech(u.owner, 'cargo') && BOTS[u.type].haul ? c + (BOTS[u.type].truck ? 2 : 1) : c; }
+/** A Pulse Turret's reach and shots per Crystal. */
+function turretRange(b) { return BDEFS[b.type].range + (tech(b.owner, 'sentry') ? 1.5 : 0); }
+function shotsPer(b) { return tech(b.owner, 'sentry') ? 6 : SHOTS_PER_AMMO; }
+
+/** Start researching upgrade k: '' if started, or why not. */
+function startResearch(p, k) {
+  const P = S.players[p], def = TECHS[k];
+  if (!def) return 'Unknown upgrade.';
+  if (tech(p, k)) return 'Already researched.';
+  if (P.research) return `Already researching ${TECHS[P.research.key].name}.`;
+  if (!S.buildings.some((b) => !b.dead && b.owner === p && b.type === 'lab' && b.built)) return 'Build a Research Lab first.';
+  if (!canPay(p, def.cost)) return `Not enough ${missingGoods(p, def.cost)} in storage.`;
+  for (const g in def.cost) takeGood(p, g, def.cost[g]);
+  P.research = { key: k, t: 0 };
+  return '';
+}
+
+/** Call off the research under way; its cost comes back to storage. */
+function cancelResearch(p) {
+  const P = S.players[p], r = P.research;
+  if (!r) return;
+  const L = getE(P.lander), store = L && L.owner === p && !L.dead ? L : nearestStoreTo(p, S.W / 2, S.H / 2);
+  if (store) for (const g in TECHS[r.key].cost) bump(store.stock, g, TECHS[r.key].cost[g]);
+  P.research = null;
+}
+
+function finishResearch(p, lab) {
+  const P = S.players[p], k = P.research.key, def = TECHS[k];
+  (P.tech = P.tech || {})[k] = true;
+  P.research = null;
+  if (k === 'tools') P.mult *= 1.15;
+  postMsg(p, `Research complete: ${def.name}. ${def.desc}`, lab.x, lab.y, 'good');
+  if (p === 0) sfx('complete');
+}
+
+/** A Research Lab: a worker inside works on the colony's research. */
+function updateLab(b, dt) {
+  const P = S.players[b.owner], r = P.research;
+  if (!r) {
+    b.status = 'Idle: pick an upgrade to research';
+    if (b.staff || b.staffInc) unstaff(b);
+    return;
+  }
+  const op = getE(b.staff);
+  if (!op || op.inside !== b.id) return; // the worker is on the way (status set by updateBuilding)
+  b.working = true;
+  r.t += dt * P.mult;
+  const def = TECHS[r.key];
+  b.status = `Researching ${def.name}: ${Math.min(99, Math.floor((100 * r.t) / def.time))}%`;
+  if (r.t >= def.time) finishResearch(b.owner, b);
+}
+
+/** Nanite Repair: once a second, bots and buildings nothing has hit for a while mend a little. */
+function naniteRepair() {
+  for (const P of S.players) {
+    if (!P.tech || !P.tech.nanites) continue;
+    for (const u of S.bots) if (!u.dead && u.owner === P.id && u.hp < u.maxHp && S.time - (u.hurtT ?? -99) > 12) u.hp = Math.min(u.maxHp, u.hp + 0.3);
+    for (const b of S.buildings) {
+      if (b.dead || b.owner !== P.id || !b.built || b.fixLeft > 0) continue;
+      const max = BDEFS[b.type].armor;
+      if (b.armor < max && S.time - (b.lastHit ?? -99) > 15) b.armor = Math.min(max, b.armor + 0.25);
+    }
+  }
+}
+
+/* ------------------------------------------------------------------ wildlife (Colony) */
+
+function wildOn() { return !!(S && S.wildlife); }
+function isWildBot(u) { return !!BOTS[u.type].wild; }
+
+/**
+ * Scatter creature nests over the wilds at the start of a Colony game: one for every WILD.perTiles
+ * tiles (3 to 8), on open ground the colony can reach on foot, at least 16 tiles from the landing
+ * site and 9 from each other.
+ */
+function placeNests(seed) {
+  const L = getE(S.players[0].lander);
+  if (!L) return;
+  const rng = makeRng((seed ^ 0x6e357) >>> 0), zone = S.zone[tIdx(L.x, L.y)];
+  const want = clamp(Math.round((S.W * S.H) / WILD.perTiles), 3, 8), nests = [];
+  for (let tries = 0; tries < 4000 && nests.length < want; tries++) {
+    const i = 1 + Math.floor(rng() * (S.W - 2)), j = 1 + Math.floor(rng() * (S.H - 2)), t = tIdx(i, j);
+    if (S.terrain[t] !== T_GROUND || S.res[t] || S.fert[t] || S.ramp[t] || S.road[t] || S.bAt[t] || S.owner[t] >= 0 || S.zone[t] !== zone) continue;
+    if (dist(i, j, L.x, L.y) < 16 || nests.some((n) => dist(i, j, n.x, n.y) < 9)) continue;
+    let open = 0;
+    for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) if (walkable(tIdx(i + di, j + dj)) && !S.bAt[tIdx(i + di, j + dj)]) open++;
+    if (open < 3) continue;
+    const b = addBuilding(WILD_OWNER, 'nest', i, j, true);
+    b.level = 1;
+    b.raidAt = WILD.first + rng() * 120;
+    for (const g in WILD.loot) b.stock[g] = WILD.loot[g];
+    nests.push(b);
+    for (let k = 0; k < WILD.guards + 1; k++) spawnCritter(b, 'scuttler');
+  }
+}
+
+/** A new creature beside nest b. */
+function spawnCritter(b, type, task) {
+  let x = b.x, y = b.y;
+  for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [-1, -1], [1, -1], [-1, 1]]) {
+    const i = b.x + di, j = b.y + dj;
+    if (inMap(i, j) && walkable(tIdx(i, j)) && !S.bAt[tIdx(i, j)]) { x = i; y = j; break; }
+  }
+  const u = addBot(WILD_OWNER, type, x, y);
+  u.x += (hash2(u.id, 3, 5) - 0.5) * 0.5; u.y += (hash2(u.id, 4, 5) - 0.5) * 0.5;
+  u.nest = b.id;
+  u.task = task || { type: 'guard' };
+  return u;
+}
+
+/** Remove a creature without a fight (back in its nest, or its nest gone). */
+function despawnCritter(u) {
+  u.dead = true;
+  S.byId.delete(u.id);
+}
+
+/** What a nest's next pack goes for: the nearest building, road or bot the colony has within reach. */
+function wildTarget(b) {
+  let best = null, bd = WILD.reach * WILD.reach;
+  for (const e of S.buildings) {
+    if (e.dead || e.owner === WILD_OWNER) continue;
+    const d = dist2(e.x, e.y, b.x, b.y);
+    if (d < bd) { bd = d; best = { x: e.x, y: e.y }; }
+  }
+  const R0 = WILD.reach;
+  for (let j = Math.max(0, b.y - R0); j <= Math.min(S.H - 1, b.y + R0); j++) {
+    for (let i = Math.max(0, b.x - R0); i <= Math.min(S.W - 1, b.x + R0); i++) {
+      const t = j * S.W + i;
+      if (!S.road[t] || S.owner[t] < 0 || S.owner[t] === WILD_OWNER || crossTile(t)) continue;
+      const d = dist2(i, j, b.x, b.y);
+      if (d < bd) { bd = d; best = { x: i, y: j }; }
+    }
+  }
+  return best;
+}
+
+/** A nest: keeps its guards up, grows, and sends packs out at the colony. Runs once a second. */
+function updateNest(b) {
+  if (S.tick % 30 !== b.id % 30) return;
+  if (b.level < 3 && S.time - b.born >= b.level * WILD.grow) {
+    b.level++;
+    for (const g in WILD.loot) bump(b.stock, g, Math.round(WILD.loot[g] / 2));
+  }
+  let guards = 0;
+  for (const u of S.bots) if (!u.dead && u.nest === b.id && u.task && u.task.type === 'guard') guards++;
+  if (guards < WILD.guards + b.level && S.time >= (b.guardT || 0)) {
+    spawnCritter(b, 'scuttler');
+    b.guardT = S.time + WILD.guardEvery;
+  }
+  b.status = `Level ${b.level} nest · ${guards} on guard` + (b.raidAt > S.time ? '' : ' · ready to raid');
+  if (S.time < b.raidAt) return;
+  b.raidAt = S.time + 30; // nothing in reach: look again soon
+  const tgt = wildTarget(b);
+  if (!tgt) return;
+  let built = 0;
+  for (const e of S.buildings) if (!e.dead && e.owner === 0 && e.built) built++;
+  const size = Math.min(WILD.maxPack, 1 + b.level + Math.floor(built / WILD.perBuildings) + Math.floor(S.time / 1200));
+  const brutes = b.level >= 2 ? Math.max(1, Math.floor(size / 4)) : 0;
+  const until = S.time + dist(b.x, b.y, tgt.x, tgt.y) / 1.1 + WILD.raidTime;
+  for (let k = 0; k < size; k++) spawnCritter(b, k < brutes ? 'brute' : 'scuttler', { type: 'raid', x: tgt.x, y: tgt.y, until });
+  const gap = WILD.gap[0] + hash2(b.id, Math.floor(S.time), 41) * (WILD.gap[1] - WILD.gap[0]);
+  b.raidAt = S.time + gap;
+  postMsg(0, `A pack of ${size} creature${size === 1 ? '' : 's'}${brutes ? ` (${brutes} Brute${brutes === 1 ? '' : 's'})` : ''} is coming out of a nest!`, b.x, b.y, 'warn');
+  if (!S.wildWarned) { S.wildWarned = true; sfx('alert'); }
+}
+
+/** The nearest colony bot out in the open within r tiles of (x, y). */
+function wildPrey(x, y, r) {
+  let best = null, bd = r * r;
+  for (const v of S.bots) {
+    if (v.dead || v.inside || v.owner === WILD_OWNER) continue;
+    const d = dist2(v.x, v.y, x, y);
+    if (d < bd) { bd = d; best = v; }
+  }
+  return best;
+}
+
+/** A creature bites (a bot) or batters (a building) whatever it's next to. */
+function critterBite(u, foe) {
+  const bt = BOTS[u.type];
+  u.cd = WILD.bite;
+  u.face = Math.atan2(foe.y + (foe.ent === 'b' ? 0.5 : 0) - u.y, foe.x + (foe.ent === 'b' ? 0.5 : 0) - u.x);
+  u.fought = 1;
+  addFx('spark', (u.x + foe.x + (foe.ent === 'b' ? 0.5 : 0)) / 2, (u.y + foe.y + (foe.ent === 'b' ? 0.5 : 0)) / 2, { color: '#c77dff' });
+  if (foe.ent === 'b') {
+    foe.lastHit = S.time;
+    if (!foe.built) {
+      foe.armor -= bt.bite;
+      if (foe.armor <= 0) { postMsg(foe.owner, `Creatures wrecked your ${BDEFS[foe.type].name} construction site!`, foe.x, foe.y, 'bad'); destroyBuilding(foe, true); }
+    } else foe.armor = Math.max(1, foe.armor - bt.bite);
+    if (S.time - foe.lastAlert > 12) {
+      foe.lastAlert = S.time;
+      postMsg(foe.owner, `Creatures are attacking your ${BDEFS[foe.type].name}!`, foe.x, foe.y, 'bad');
+      if (foe.owner === 0) sfx('alert');
+    }
+    return;
+  }
+  if (foe.owner === 0) {
+    sfx('hit');
+    const P = S.players[0];
+    if (S.time - (P.lastWildMsg || -99) > 20) { P.lastWildMsg = S.time; postMsg(0, 'Creatures are attacking your bots!', Math.floor(foe.x), Math.floor(foe.y), 'bad'); }
+  }
+  damageBot(foe, bt.bite);
+}
+
+/** A colony building or road tile a Brute can get at within r tiles of (x, y). */
+function bruteTarget(u, r) {
+  let best = null, bd = r * r;
+  const ci = Math.floor(u.x), cj = Math.floor(u.y), R0 = Math.ceil(r);
+  for (let j = cj - R0; j <= cj + R0; j++) for (let i = ci - R0; i <= ci + R0; i++) {
+    if (!inMap(i, j)) continue;
+    const t = tIdx(i, j);
+    if (!S.road[t] || S.bAt[t] || crossTile(t) || S.owner[t] < 0 || S.owner[t] === WILD_OWNER) continue;
+    const d = dist2(i + 0.5, j + 0.5, u.x, u.y);
+    if (d < bd) { bd = d; best = { road: t, x: i, y: j }; }
+  }
+  for (const e of S.buildings) {
+    if (e.dead || e.owner === WILD_OWNER || BDEFS[e.type].barrier) continue;
+    const d = dist2(e.x + 0.5, e.y + 0.5, u.x, u.y);
+    if (d < bd * 0.6) { bd = d / 0.6; best = { bld: e, x: e.x, y: e.y }; }
+  }
+  return best;
+}
+
+/** One creature's turn: guard its nest, or run its raid, fighting whatever it catches. */
+function updateCritter(u, dt) {
+  const bt = BOTS[u.type], nest = getE(u.nest);
+  u.cd -= dt;
+  u.moved = 0; u.fought = 0;
+  if (!nest || nest.dead) { u.lostT = (u.lostT || 0) + dt; if (u.lostT > 6) despawnCritter(u); return; } // the nest is gone: it scatters
+  const t = u.task || (u.task = { type: 'guard' });
+  // Something to bite: guards only near the nest, raiders anywhere near them.
+  let foe = u.fight ? getE(u.fight) : null;
+  if (foe && (foe.dead || foe.inside || dist2(foe.x, foe.y, u.x, u.y) > 36 || (t.type === 'guard' && dist2(foe.x, foe.y, nest.x, nest.y) > 64))) foe = null;
+  if (!foe) {
+    u.fight = 0;
+    u.scanT -= dt;
+    if (u.scanT <= 0 && t.type !== 'home') {
+      u.scanT = 0.4;
+      foe = wildPrey(u.x, u.y, t.type === 'guard' ? 4 : 4.5);
+      if (foe && t.type === 'guard' && dist2(foe.x, foe.y, nest.x, nest.y) > 49) foe = null;
+      if (foe && foe.id === u.ignoreFoe && S.time < u.ignoreUntil) foe = null;
+      if (foe) u.fight = foe.id;
+    }
+  }
+  if (foe) {
+    if (dist(u.x, u.y, foe.x, foe.y) > 0.75) {
+      if (!moveDirect(u, foe.x, foe.y, dt) && travel(u, Math.floor(foe.x), Math.floor(foe.y), dt) === null) {
+        u.fight = 0; u.ignoreFoe = foe.id; u.ignoreUntil = S.time + 5;
+      }
+    } else if (u.cd <= 0) critterBite(u, foe);
+    return;
+  }
+  if (t.type === 'raid') {
+    if (S.time > t.until) { u.task = { type: 'home' }; u.path = null; return; }
+    if (!t.arrived) {
+      const r = travel(u, t.x, t.y, dt);
+      if (r === null || dist2(u.x, u.y, t.x + 0.5, t.y + 0.5) < 2.5) { t.arrived = true; u.path = null; }
+      return;
+    }
+    if (bt.smash) {
+      // A Brute: tear up the nearest road, or batter the nearest building.
+      let g = t.smash ? (t.smash.bld ? (t.smash.bld.dead ? null : t.smash) : (S.road[t.smash.road] ? t.smash : null)) : null;
+      if (!g) { g = bruteTarget(u, 6); t.smash = g; t.work = 0; }
+      if (!g) { t.until = Math.min(t.until, S.time + 8); return; }
+      const gx = g.x + 0.5, gy = g.y + 0.5;
+      if (dist2(u.x, u.y, gx, gy) > (g.bld ? 1.7 : 1.1)) {
+        if (!moveDirect(u, gx, gy, dt) && travel(u, g.x, g.y, dt) === null) t.smash = null;
+        return;
+      }
+      u.path = null;
+      u.face = Math.atan2(gy - u.y, gx - u.x);
+      if (g.bld) { if (u.cd <= 0) critterBite(u, g.bld); return; }
+      t.work += dt; u.fought = 1;
+      if (t.work >= WILD.roadEvery) { wreckRoad(g.road, S.owner[g.road], 'Creatures are tearing up your roads'); t.smash = null; }
+      return;
+    }
+    // A Scuttler: hunt for bots further out, or move on to the colony's next spot.
+    const prey = wildPrey(u.x, u.y, 12);
+    if (prey) { u.fight = prey.id; return; }
+    t.until = Math.min(t.until, S.time + 10);
+    return;
+  }
+  if (t.type === 'home') {
+    const r = travel(u, nest.x, nest.y, dt);
+    if (r || r === null || dist2(u.x, u.y, nest.x + 0.5, nest.y + 0.5) < 2.2) {
+      let guards = 0;
+      for (const v of S.bots) if (!v.dead && v.nest === nest.id && v.task && v.task.type === 'guard') guards++;
+      if (guards < WILD.guards + nest.level && u.type === 'scuttler') { u.task = { type: 'guard' }; u.path = null; } else despawnCritter(u);
+    }
+    return;
+  }
+  // On guard: stay close to the nest, shuffling about now and then.
+  if (dist2(u.x, u.y, nest.x + 0.5, nest.y + 0.5) > 9) { if (travel(u, nest.x, nest.y, dt) === null) u.path = null; return; }
+  u.path = null;
+  u.wanderT = (u.wanderT || 0) - dt;
+  if (u.wanderT <= 0) { u.wanderT = 2 + hash2(u.id, Math.floor(S.time), 3) * 4; u.wx = nest.x + 0.5 + (hash2(u.id, Math.floor(S.time), 5) - 0.5) * 4; u.wy = nest.y + 0.5 + (hash2(u.id, Math.floor(S.time), 6) - 0.5) * 4; }
+  if (u.wx !== undefined && dist2(u.x, u.y, u.wx, u.wy) > 0.04) { if (!moveDirect(u, u.wx, u.wy, dt * 0.5)) u.wx = undefined; }
+}
+
+/** A nest cleared by `by`'s warbots: its goods spill out and its creatures scatter. */
+function clearNest(b, by) {
+  const n = dropLoot(b);
+  postMsg(by, `Nest cleared!${n ? ` ${n} goods spilled out: your warbots carry them home, one each.` : ''} The land around it is free to build on.`, b.x, b.y, 'good');
+  addFx('ring', b.x + 0.5, b.y + 0.5, { color: '#c77dff', r: 2.4 });
+  if (by === 0) sfx('capture');
+  S.players[by].stats.captured++;
+  destroyBuilding(b, true);
 }

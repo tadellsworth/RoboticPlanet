@@ -1181,7 +1181,6 @@ function hullBase(ctx, cx, cy, s, color, shape) {
   if (shape !== 'round') { roundRect(ctx, cx - w / 2 + s * 0.08, cy - h / 2 + s * 0.07, w - s * 0.16, s * 0.12, s * 0.05); ctx.fill(); }
 }
 
-/** Draw one building at screen centre (cx, cy), tile size s px. `b` may be a stub for menu icons. */
 /**
  * How far a Silo's missile has risen into view: 0 while it isn't ready, climbing to 1 over
  * SILO_RISE seconds once it is (instantly for a Silo that was ready when first drawn).
@@ -1196,6 +1195,7 @@ function siloRise(b, ready) {
   return Math.min(1, (R.time - t0) / SILO_RISE);
 }
 
+/** Draw one building at screen centre (cx, cy), tile size s px. `b` may be a stub for menu icons. */
 function drawBuilding(ctx, type, cx, cy, s, owner, b) {
   const color = PLAYER_COLORS[owner];
   const t = R.time;
@@ -1357,6 +1357,34 @@ function drawBuilding(ctx, type, cx, cy, s, owner, b) {
       ctx.closePath(); ctx.fill();
       ctx.fillStyle = THEME.hull; ctx.beginPath(); ctx.arc(0, 0, 3.5 * u, 0, Math.PI * 2); ctx.fill();
       ctx.restore();
+      break;
+    }
+    case 'nest': { drawNest(ctx, cx, cy, s, b); break; }
+    case 'lab': {
+      // A research dome on a plinth, with a dish and a glowing band (brighter while it works).
+      ctx.fillStyle = 'rgba(20,10,5,0.32)';
+      ctx.beginPath(); ctx.ellipse(cx + 2 * u, cy + 9 * u, 15 * u, 8 * u, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#4b525e';
+      roundRect(ctx, cx - 14 * u, cy - 2 * u, 28 * u, 14 * u, 3 * u); ctx.fill();
+      ctx.fillStyle = '#6a7381';
+      roundRect(ctx, cx - 14 * u, cy - 4 * u, 28 * u, 10 * u, 3 * u); ctx.fill();
+      ctx.strokeStyle = color; ctx.lineWidth = Math.max(1.2, 1.6 * u);
+      ctx.beginPath(); ctx.moveTo(cx - 12 * u, cy + 7 * u); ctx.lineTo(cx + 12 * u, cy + 7 * u); ctx.stroke();
+      const dg = ctx.createRadialGradient(cx - 4 * u, cy - 12 * u, 2 * u, cx, cy - 6 * u, 13 * u);
+      dg.addColorStop(0, '#f4f7fb'); dg.addColorStop(1, '#8e9aab');
+      ctx.fillStyle = dg;
+      ctx.beginPath(); ctx.ellipse(cx, cy - 2 * u, 11 * u, 4 * u, 0, 0, Math.PI); ctx.lineTo(cx - 11 * u, cy - 2 * u);
+      ctx.ellipse(cx, cy - 2 * u, 11 * u, 13 * u, 0, Math.PI, Math.PI * 2); ctx.fill();
+      const glow = working ? 0.65 + 0.35 * Math.sin(t * 5) : 0.35;
+      ctx.strokeStyle = color; ctx.globalAlpha = glow; ctx.lineWidth = 2.2 * u;
+      ctx.beginPath(); ctx.ellipse(cx, cy - 6 * u, 10.4 * u, 3.2 * u, 0, 0, Math.PI); ctx.stroke();
+      ctx.globalAlpha = 1;
+      ctx.strokeStyle = '#d8dde4'; ctx.lineWidth = 1.4 * u;
+      ctx.beginPath(); ctx.moveTo(cx + 5 * u, cy - 13 * u); ctx.lineTo(cx + 9 * u, cy - 19 * u); ctx.stroke();
+      ctx.fillStyle = '#d8dde4';
+      ctx.beginPath(); ctx.ellipse(cx + 10 * u, cy - 20 * u, 4 * u, 2 * u, -0.6, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = working && Math.floor(t * 3) % 2 ? '#fff6b0' : color;
+      ctx.beginPath(); ctx.arc(cx - 6 * u, cy - 14 * u, 1.6 * u, 0, Math.PI * 2); ctx.fill();
       break;
     }
     case 'depot': {
@@ -1740,7 +1768,79 @@ function drawSite(ctx, type, cx, cy, s, owner, b) {
 
 /* ------------------------------------------------------------------ bots */
 
+/**
+ * A creature nest: a purple creep spreading round a mound with burrow holes and glowing eggs (more
+ * of them as it grows).
+ */
+function drawNest(ctx, cx, cy, s, b) {
+  const lv = (b && b.level) || 1, t = R.time;
+  const cg = ctx.createRadialGradient(cx, cy + s * 0.1, s * 0.1, cx, cy + s * 0.1, s * 1.05);
+  cg.addColorStop(0, 'rgba(92,40,110,0.55)'); cg.addColorStop(1, 'rgba(92,40,110,0)');
+  ctx.fillStyle = cg;
+  ctx.beginPath(); ctx.ellipse(cx, cy + s * 0.1, s * 1.05, s * 0.8, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = 'rgba(20,8,20,0.35)';
+  ctx.beginPath(); ctx.ellipse(cx + s * 0.05, cy + s * 0.22, s * 0.5, s * 0.22, 0, 0, Math.PI * 2); ctx.fill();
+  const mg = ctx.createRadialGradient(cx - s * 0.12, cy - s * 0.15, s * 0.05, cx, cy, s * 0.5);
+  mg.addColorStop(0, '#8c5a7e'); mg.addColorStop(1, '#3d2238');
+  ctx.fillStyle = mg;
+  ctx.beginPath();
+  for (let k = 0; k <= 16; k++) {
+    const a = (k / 16) * Math.PI * 2, r = s * (0.42 + 0.05 * Math.sin(a * 3 + 1.3));
+    const x = cx + Math.cos(a) * r, y = cy + Math.sin(a) * r * 0.72 + s * 0.02;
+    if (k) ctx.lineTo(x, y); else ctx.moveTo(x, y);
+  }
+  ctx.fill();
+  // Burrow holes.
+  ctx.fillStyle = '#12060f';
+  for (const [hx, hy, hr] of [[-0.16, -0.06, 0.09], [0.15, 0.04, 0.08], [-0.02, 0.16, 0.07]]) { ctx.beginPath(); ctx.ellipse(cx + hx * s, cy + hy * s, hr * s, hr * s * 0.6, 0, 0, Math.PI * 2); ctx.fill(); }
+  // Eggs, one more pair per level, pulsing.
+  for (let k = 0; k < 2 * lv; k++) {
+    const a = k * 2.4 + 0.5, r = s * (0.18 + 0.05 * (k % 3));
+    const ex = cx + Math.cos(a) * r, ey = cy - s * 0.12 + Math.sin(a) * r * 0.5;
+    ctx.globalAlpha = 0.75 + 0.25 * Math.sin(t * 3 + k);
+    ctx.fillStyle = '#c7ff8a';
+    ctx.beginPath(); ctx.ellipse(ex, ey, s * 0.05, s * 0.065, 0.3, 0, Math.PI * 2); ctx.fill();
+    ctx.globalAlpha = 1;
+  }
+}
+
+/** A creature (see WILD): a Scuttler is small and quick, a Brute big and armoured; legs scurry as it moves. */
+function drawCritter(ctx, u, x, y, s) {
+  const brute = u.type === 'brute', k = brute ? 1.7 : 1, face = u.face || 0;
+  const step = u.moved || u.fought ? Math.sin(R.time * (brute ? 12 : 22) + u.id) : 0;
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.fillStyle = 'rgba(20,8,20,0.3)';
+  ctx.beginPath(); ctx.ellipse(s * 0.03, s * 0.08, s * 0.17 * k, s * 0.1 * k, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.rotate(face);
+  ctx.strokeStyle = brute ? '#3b2418' : '#2a1430'; ctx.lineWidth = Math.max(1, s * 0.03 * k); ctx.lineCap = 'round';
+  ctx.beginPath();
+  for (let n = 0; n < 3; n++) {
+    const lx = (n - 1) * s * 0.07 * k, sw = (n % 2 ? step : -step) * s * 0.035 * k;
+    ctx.moveTo(lx, 0); ctx.lineTo(lx + sw, -s * 0.14 * k);
+    ctx.moveTo(lx, 0); ctx.lineTo(lx - sw, s * 0.14 * k);
+  }
+  ctx.stroke();
+  ctx.fillStyle = brute ? '#6b4430' : '#55306a';
+  ctx.beginPath(); ctx.ellipse(0, 0, s * 0.14 * k, s * 0.09 * k, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = brute ? '#8d5d41' : '#7a4a92';
+  ctx.beginPath(); ctx.ellipse(-s * 0.02 * k, 0, s * 0.08 * k, s * 0.05 * k, 0, 0, Math.PI * 2); ctx.fill();
+  if (brute) {
+    ctx.fillStyle = '#c9b18f';
+    for (const sy of [-1, 1]) { ctx.beginPath(); ctx.moveTo(-s * 0.05, sy * s * 0.12); ctx.lineTo(0, sy * s * 0.2); ctx.lineTo(s * 0.05, sy * s * 0.12); ctx.fill(); }
+  }
+  ctx.fillStyle = brute ? '#ffb347' : '#ff5fd2';
+  ctx.beginPath(); ctx.arc(s * 0.12 * k, -s * 0.03 * k, s * 0.022 * k, 0, Math.PI * 2); ctx.arc(s * 0.12 * k, s * 0.03 * k, s * 0.022 * k, 0, Math.PI * 2); ctx.fill();
+  ctx.restore();
+  if (u.hp < u.maxHp) {
+    const w = s * 0.34 * k;
+    ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fillRect(x - w / 2, y - s * 0.24 * k, w, Math.max(2, s * 0.05));
+    ctx.fillStyle = '#ff5a5a'; ctx.fillRect(x - w / 2, y - s * 0.24 * k, (w * Math.max(0, u.hp)) / u.maxHp, Math.max(2, s * 0.05));
+  }
+}
+
 function drawBot(ctx, u, sx, sy, s) {
+  if (BOTS[u.type].wild) { drawCritter(ctx, u, sx, sy, s); return; }
   const color = PLAYER_COLORS[u.owner];
   const own = driveFrame(u) || artFor(u.type, u.owner);
   // Specialists use their own art when it exists, otherwise the worker's with a badge.
@@ -2671,7 +2771,7 @@ function drawBadge(ctx, b, x, y, z) {
 
 function drawRanges(ctx, type, x, y, ox, oy, z, owner) {
   const def = BDEFS[type];
-  const r = def.gather || def.plant ? def.radius + 0.5 : def.range ? def.range : def.missile ? def.missile.range : def.mil ? def.terr : 0;
+  const r = def.gather || def.plant ? def.radius + 0.5 : def.range ? turretRange({ type, owner: owner || 0 }) : def.missile ? def.missile.range : def.mil ? def.terr : 0;
   if (!r) return;
   const cx = ox + (x + 0.5) * z, cy = oy + (y + 0.5) * z;
   const hostile = def.range || def.missile;

@@ -107,6 +107,20 @@ body::before {
 .event-card .ev-deal { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .event-card .ev-deal .gi { vertical-align: -3px; }
 .event-card .btn { padding: 4px 12px; }
+/* Research Lab panel */
+.research-now { margin-bottom: 8px; }
+.research-now .kv { align-items: center; }
+.tech-list { display: flex; flex-direction: column; gap: 6px; }
+.tech { border: 1px solid var(--line); border-radius: 10px; padding: 7px 10px; background: rgba(255, 255, 255, 0.03); }
+.tech.done { opacity: 0.6; }
+.tech.now { border-color: var(--accent); }
+.tech-head { display: flex; justify-content: space-between; gap: 8px; font-size: 14px; }
+.tech-head span { color: var(--muted); font-variant-numeric: tabular-nums; }
+.tech p { margin: 3px 0 0; font-size: 13px; line-height: 1.35; color: #c9cfdb; }
+.tech-foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 6px; }
+.tech-foot .bcost { display: flex; gap: 8px; font-size: 13px; font-weight: 700; }
+.tech-foot .bcost span { display: inline-flex; align-items: center; gap: 3px; }
+.tech-foot .bcost .short { color: #ff8a8a; }
 .objective.small { opacity: 0.85; }
 
 /* ---------- minimap ---------- */

@@ -5,7 +5,7 @@
 
 const UI = {
   inGame: false, paused: false, speed: 1, overShown: false,
-  menu: { mode: 'versus', diff: 'normal', seed: randomSeed(), size: { ...DEFAULT_SIZE }, rough: DEFAULT_ROUGH, rich: DEFAULT_RICH, shape: 0, style: 0, events: 1 },
+  menu: { mode: 'versus', diff: 'normal', seed: randomSeed(), size: { ...DEFAULT_SIZE }, rough: DEFAULT_ROUGH, rich: DEFAULT_RICH, shape: 0, style: 0, events: 1, wild: 1 },
   sheetKind: null, sheetFor: 0, sheetT: 0, hudT: 0,
   icons: {}, attackN: 0, demolishArm: 0, lastPaint: null, placeType: null,
   goodEls: {}, lastGoods: {}, objCollapsed: false, selBot: 0,
@@ -55,7 +55,7 @@ function initUI() {
   // Map settings sliders (remembered on this device; map size is remembered per mode).
   try { Object.assign(UI.menu, JSON.parse(localStorage.getItem('botfall.settings') || '{}')); } catch (e) { /* defaults */ }
   const saveSettings = () => {
-    try { localStorage.setItem('botfall.settings', JSON.stringify({ size: UI.menu.size, rough: UI.menu.rough, rich: UI.menu.rich, shape: UI.menu.shape, nuke: UI.menu.nuke, biome: UI.menu.biome, players: UI.menu.players, diff: UI.menu.diff, style: UI.menu.style, events: UI.menu.events })); } catch (e) { /* storage unavailable */ }
+    try { localStorage.setItem('botfall.settings', JSON.stringify({ size: UI.menu.size, rough: UI.menu.rough, rich: UI.menu.rich, shape: UI.menu.shape, nuke: UI.menu.nuke, biome: UI.menu.biome, players: UI.menu.players, diff: UI.menu.diff, style: UI.menu.style, events: UI.menu.events, wild: UI.menu.wild })); } catch (e) { /* storage unavailable */ }
   };
   $('m-size').oninput = () => { UI.menu.size[UI.menu.mode] = +$('m-size').value; syncMenu(); saveSettings(); };
   $('m-rough').oninput = () => { UI.menu.rough = +$('m-rough').value; syncMenu(); saveSettings(); };
@@ -63,6 +63,7 @@ function initUI() {
   $('m-nuke').oninput = () => { UI.menu.nuke = +$('m-nuke').value; syncMenu(); saveSettings(); };
   $('m-style').oninput = () => { UI.menu.style = +$('m-style').value; syncMenu(); saveSettings(); };
   $('m-events').oninput = () => { UI.menu.events = +$('m-events').value; syncMenu(); saveSettings(); };
+  $('m-wild').oninput = () => { UI.menu.wild = +$('m-wild').value; syncMenu(); saveSettings(); };
   $('m-biome').oninput = () => { UI.menu.biome = +$('m-biome').value; syncMenu(); saveSettings(); };
   $('m-rich').oninput = () => { UI.menu.rich = +$('m-rich').value; syncMenu(); saveSettings(); };
   $('m-new').onclick = () => { audioUnlock(); startNewGame(); };
@@ -153,7 +154,8 @@ function syncMenu() {
   $('m-players-note').hidden = ffaOk || UI.menu.players !== 3;
   $('m-players-note').textContent = `${SHAPE_PRESETS[UI.menu.shape || 0].name} maps are for two players only: pick Standard, Islands, Crater or Plateaus for a free-for-all.`;
   $('m-mode-desc').textContent = UI.menu.mode === 'colony'
-    ? 'No rival. Settle the planet at your own pace: build supply chains and spread across the whole map.'
+    ? (UI.menu.wild ? 'No rival, but creatures nest in the wilds and raid what you build near them. Build supply chains, research upgrades and spread across the whole map.'
+      : 'No rival. Settle the planet at your own pace: build supply chains, research upgrades and spread across the whole map.')
     : three ? 'Free-for-all: you and two rival colonies on a round planet. Capture a rival\'s Command Base and everything it built is yours. Last colony standing wins.'
       : 'Race a rival colony across the planet. Build up, then capture its Command Base to win.';
   $('m-seed').textContent = 'Planet #' + UI.menu.seed;
@@ -170,6 +172,9 @@ function syncMenu() {
   $('m-style-row').hidden = UI.menu.mode === 'colony';
   $('m-events').value = UI.menu.events ? 1 : 0;
   $('m-events-v').textContent = UI.menu.events ? 'On' : 'Off';
+  $('m-wild').value = UI.menu.wild ? 1 : 0;
+  $('m-wild-v').textContent = UI.menu.wild ? 'On: creature nests' : 'Off';
+  $('m-wild-row').hidden = UI.menu.mode !== 'colony';
 
   $('m-shape-v').textContent = SHAPE_PRESETS[UI.menu.shape || 0].name;
   $('m-biome').value = UI.menu.biome || 0;
@@ -541,7 +546,7 @@ function startNewGame() {
     seed: UI.menu.seed, difficulty: UI.menu.diff, mode: UI.menu.mode,
     size: UI.menu.size[UI.menu.mode] ?? DEFAULT_SIZE[UI.menu.mode], rough: UI.menu.rough, rich: UI.menu.rich, shape: UI.menu.shape || 0,
     nuke: !!UI.menu.nuke, biome: BIOME_ORDER[UI.menu.biome || 0], players: UI.menu.players === 3 ? 3 : 2,
-    style: UI.menu.style ? PERSONALITY_ORDER[UI.menu.style - 1] : 'random', events: !!UI.menu.events,
+    style: UI.menu.style ? PERSONALITY_ORDER[UI.menu.style - 1] : 'random', events: !!UI.menu.events, wildlife: !!UI.menu.wild,
   });
   enterGame();
   updateHUD();
@@ -555,6 +560,7 @@ function startNewGame() {
     const st = P.id !== 0 && P.ai && !P.absent && PERSONALITIES[P.style];
     if (st) postMsg(0, `${S.players.length > 2 ? 'The ' + playerName(P.id) : 'Your rival'} is ${st.noun}: it ${st.desc}.`, 0, 0, 'info');
   }
+  if (S.wildlife) postMsg(0, 'Creatures nest out in the wilds (red on the minimap). From about 7 minutes in they raid whatever you build near their nests. Pulse Turrets (with Crystal) and warbots keep them off; clear a nest with warbots to win the goods it hoards.', 0, 0, 'warn');
   if (nukeOn()) postMsg(0, `Nuclear race: a few uranium deposits glow green across the planet. Dig them with Ore Mines, enrich them at a Nuclear Reactor and build the bomb before ${S.players.length > 2 ? 'the rivals do' : 'the rival does'}.`, 0, 0, 'warn');
 }
 
@@ -1419,7 +1425,7 @@ function costHTML(cost, have) {
 function openBuildMenu() {
   const have = playerGoods(0);
   const sites = siteCount(0);
-  const list = BUILD_MENU.filter((t) => !(BDEFS[t].war && !warOn()) && !(BDEFS[t].nuke && !nukeOn()));
+  const list = BUILD_MENU.filter((t) => !(BDEFS[t].war && !warOn()) && !(BDEFS[t].nuke && !nukeOn()) && !(BDEFS[t].colony && (S.mode !== 'colony' || S.mission)));
   const html = `<div class="sheet-title"><h3>Build</h3></div>
     <p class="desc">Placing a site is free; haulers bring the materials by road, so lay a road to it. ${sites}/${MAX_SITES} sites in progress.</p>
     <div class="build-grid"><button class="bcard roads" id="build-roads"><kbd>R</kbd><svg viewBox="0 0 24 24"><path d="M8 3L5 21M16 3l3 18M12 4v3M12 10.5v3M12 17v3" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
@@ -1467,6 +1473,10 @@ function openBuildingSheet(b) {
   let desc = !mine && b.type === 'lander' ? (S.players.length > 2 ? `The ${playerName(b.owner)}'s fortified headquarters. Capture it and everything the ${playerName(b.owner)} built is yours.` : 'The rival\'s fortified headquarters. Capture it to win.') : def.desc;
   const style = !mine && b.type === 'lander' && S.players[b.owner] && S.players[b.owner].ai && PERSONALITIES[S.players[b.owner].style];
   if (style && S.mode !== 'colony' && !S.mission) desc += ` <b>${style.name}:</b> it ${style.desc}.`;
+  if (def.wild) {
+    const n = S.bots.filter((u) => !u.dead && u.nest === b.id).length;
+    desc += ` <b>Level ${b.level || 1} of 3</b>, ${n} creature${n === 1 ? '' : 's'} out and about. Hoarded: ${Object.keys(b.stock).filter((g) => b.stock[g] > 0).map((g) => `${b.stock[g]} ${GOOD[g].name}`).join(', ') || 'nothing'}.`;
+  }
   let html = `<div class="sheet-title"><img src="${iconFor(b.type, b.owner)}" alt=""><div><h3>${def.name}</h3>
     <div class="owner"><span class="dot" style="background:${PLAYER_COLORS[b.owner]}"></span> ${mine ? 'Yours' : playerName(b.owner)}</div></div></div>
     <p class="desc">${desc}</p><div class="status" id="sh-status"></div><div id="sh-dyn"></div>${mine ? '<div id="sh-fix"></div>' : ''}`;
@@ -1500,6 +1510,7 @@ function openBuildingSheet(b) {
         <button class="btn" id="sh-st-plus" aria-label="More">+</button><button class="btn primary" id="sh-st-send" style="flex:1">Station here</button></div>
         <p class="hint" id="sh-st-hint"></p>`;
     }
+    if (def.lab && b.built) html += '<div class="section-label">Research</div><div id="sh-research"></div>';
     if (b.type === 'foundry' && b.built) {
       const versus = warOn();
       const row = (k, label) => `<div class="order-row"><span>${label}<small id="sh-o-${k}">none queued</small></span>
@@ -1537,7 +1548,7 @@ function openBuildingSheet(b) {
     if (def.staff && b.built) html += `<button class="btn" id="sh-pause"></button>`;
     if (b.type !== 'lander') html += `<button class="btn danger" id="sh-demolish">${b.built ? 'Demolish' : 'Cancel site'}</button>`;
     html += '</div>';
-  } else if (S.mode !== 'colony') {
+  } else if (S.mode !== 'colony' || def.wild) {
     html += `<div class="section-label">Attack with warbots</div><div id="sh-attack"></div>
       <div class="stepper" id="sh-stepper"><button class="btn" id="sh-minus">−</button><span class="n" id="sh-n">0</span>
       <button class="btn" id="sh-plus">+</button><button class="btn primary" id="sh-send" style="flex:1">Send warbots</button></div>
@@ -1717,6 +1728,7 @@ function refreshBuildingSheet(b) {
   const def = BDEFS[b.type];
   const mine = b.owner === 0;
   const parts = [];
+  if (mine && def.lab && $('sh-research')) refreshResearch();
   $('sh-status').textContent = mine ? b.status || '' : (b.built ? '' : 'Construction site');
   if (!b.built) {
     parts.push(`<div class="bar"><div style="width:${Math.round(b.progress * 100)}%"></div></div>`);
@@ -1792,7 +1804,7 @@ function refreshBuildingSheet(b) {
     }
     if (def.mil) parts.push(`<div class="kv"><span>${mine ? 'Warbots inside' : 'Defenders inside'}</span><span>${b.garrison.length} / ${def.garrison}</span></div>`);
     if (def.mil && mine) parts.push(`<div class="kv"><span>Territory radius</span><span>${def.terr} tiles</span></div>`);
-    if (def.ammo && mine && !def.missile) parts.push(`<div class="kv"><span>Ammo</span><span>${b.shots + (b.stock.crystal || 0) * SHOTS_PER_AMMO} shots</span></div>`);
+    if (def.ammo && mine && !def.missile) parts.push(`<div class="kv"><span>Ammo</span><span>${b.shots + (b.stock.crystal || 0) * shotsPer(b)} shots</span></div>`);
     if (def.missile && mine) {
       parts.push(`<div class="kv"><span>Missiles loaded</span><span>${goodTag('warhead', `${b.stock.warhead || 0}/${def.ammoCap}`)}</span></div>`);
       parts.push(`<div class="kv"><span>Each hit</span><span>${def.missile.damage} damage, ${def.missile.splashDamage} to buildings within ${def.missile.splash} tiles</span></div>`);
@@ -1909,6 +1921,36 @@ function refreshBuildingSheet(b) {
       ? `<p class="desc">${avail} armed warbot${avail > 1 ? 's' : ''} can reach this from your garrisons (each garrison keeps one at home).</p>`
       : `<p class="desc">No armed warbots in range. Warbots attack from Outposts or your Command Base within ${ATTACK_RANGE} tiles, and only ones with Ammo go. Build an Outpost closer, and an Ammo Plant to keep garrisons stocked.</p>`;
   }
+}
+
+/**
+ * The Research Lab's panel: the upgrade under way (with a progress bar and Cancel), and every
+ * upgrade with its cost and a Research button. Rebuilt only when something changes, so a tap isn't
+ * lost to the progress bar moving.
+ */
+function refreshResearch() {
+  const el = $('sh-research'), P = S.players[0], r = P.research, have = spendable(0);
+  const key = (r ? r.key : '-') + TECH_ORDER.map((k) => (tech(0, k) ? 'd' : canPay(0, TECHS[k].cost) ? 'y' : 'n')).join('');
+  if (el.dataset.key !== key) {
+    el.dataset.key = key;
+    el.innerHTML = (r
+      ? `<div class="research-now"><div class="kv"><span>Researching <b>${TECHS[r.key].name}</b></span><button class="btn small ghost" id="sh-rcancel">Cancel</button></div><div class="bar"><div id="sh-rbar"></div></div></div>`
+      : '<p class="hint">Pick an upgrade: its cost comes out of storage now, and a worker in the Lab researches it. Every upgrade lasts the whole game.</p>') +
+      `<div class="tech-list">${TECH_ORDER.map((k) => {
+        const d = TECHS[k], done = tech(0, k), now = r && r.key === k;
+        return `<div class="tech${done ? ' done' : ''}${now ? ' now' : ''}"><div class="tech-head"><b>${d.name}</b><span>${done ? 'Done ✓' : `${d.time} s`}</span></div><p>${d.desc}</p>` +
+          (done ? '' : `<div class="tech-foot"><span class="bcost">${costHTML(d.cost, have)}</span>${now ? '<span class="ok">Under way</span>'
+            : `<button class="btn small${r ? '' : ' primary'}" data-k="${k}" ${r || !canPay(0, d.cost) ? 'disabled' : ''}>Research</button>`}</div>`) + '</div>';
+      }).join('')}</div>`;
+    for (const btn of el.querySelectorAll('button[data-k]')) btn.onclick = () => {
+      const why = startResearch(0, btn.dataset.k);
+      if (why) { sfx('error'); toast(why, 'warn'); } else { sfx('order'); toast(`Research started: ${TECHS[btn.dataset.k].name}.`, 'info'); }
+      el.dataset.key = '';
+      refreshSheet();
+    };
+    if ($('sh-rcancel')) $('sh-rcancel').onclick = () => { cancelResearch(0); sfx('click'); toast('Research called off: its cost is back in your Command Base.', 'info'); el.dataset.key = ''; refreshSheet(); };
+  }
+  if (r && $('sh-rbar')) $('sh-rbar').style.width = `${Math.min(100, (100 * r.t) / TECHS[r.key].time)}%`;
 }
 
 function botActivity(u) {

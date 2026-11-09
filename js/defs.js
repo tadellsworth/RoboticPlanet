@@ -118,6 +118,11 @@ const BOTS = {
     desc: 'A heavy road truck that carries eight goods at once on the long runs: between your Command Base and Depots, and to anything far away. Slower than a Hauler on concrete, fastest of all on asphalt.' },
   warbot:  { name: 'Warbot', plural: 'Warbots', speed: WARBOT_SPEED, hp: 12, war: true,
     desc: 'Fights enemy bots and captures enemy buildings. Shoots Ammo; with none it can only scuffle.' },
+  // Wildlife (Colony, see WILD): creatures from nests. Not built, never ordered.
+  scuttler: { name: 'Scuttler', plural: 'Scuttlers', speed: WORKER_SPEED * 1.1, hp: 6, wild: true, bite: 1,
+    desc: 'A quick, small creature. Scuttlers run in packs and go for any bot they catch out in the open.' },
+  brute:    { name: 'Brute', plural: 'Brutes', speed: WORKER_SPEED * 0.8, hp: 24, wild: true, bite: 3, smash: true,
+    desc: 'A big, slow, armoured creature. Brutes tear up roads and batter buildings, and bite hard.' },
 };
 const BOT_ORDER = ['worker', 'hauler', 'truck', 'agribot', 'paver', 'warbot'];
 /*
@@ -312,6 +317,7 @@ const PLAYER_NAMES = ['You', 'Rival'];
  */
 function playerName(p, the) {
   if (p === 0) return the ? 'you' : 'You';
+  if (typeof S !== 'undefined' && S && S.mode === 'colony' && p === 1) return the ? 'the wildlife' : 'Wildlife';
   const three = typeof S !== 'undefined' && S && S.players && S.players.length > 2;
   const n = three ? ['', 'Red', 'Green'][p] + ' rival' : the ? 'rival' : 'Rival';
   return the ? 'the ' + n : n;
@@ -470,6 +476,14 @@ const BDEFS = {
     name: 'Gate', desc: 'A Wall with a door: your bots drive through, the enemy\'s have to break it down. A Gate on a road carries the road, so haulers keep running. Planned in Paths (Walls): where a wall line crosses a road, a Gate goes there.',
     cost: { cement: 6, alloy: 2 }, barrier: true, gate: true, prepaid: true, armor: 32, buildTime: 8, war: true,
   },
+  lab: {
+    name: 'Research Lab', desc: 'Researches upgrades for your whole colony, one at a time: pick one in its panel. The Chips, Crystal and Alloy are paid from storage when you start, and a worker inside does the research. Two Labs research twice as fast. Colony only.',
+    cost: { cement: 6, alloy: 4, chip: 2 }, staff: true, lab: true, colony: true, armor: 10, buildTime: 14,
+  },
+  nest: {
+    name: 'Creature Nest', desc: 'Creatures breed here and raid whatever a colony builds within reach. It grows as time goes on, sending bigger packs. Send warbots to clear it: the goods it has hoarded spill out for them to carry home, and the land around it is free to build on.',
+    cost: {}, wild: true, armor: 45, buildTime: 1,
+  },
   depot: {
     name: 'Depot', desc: 'Extra storage. Haulers drop goods at the nearest storage they can reach by road, so depots along your highways shorten trips. Give it supply orders to stock it from home: a forward base for building at the front.',
     cost: { fiber: 3, cement: 2 }, store: true, armor: 10, buildTime: 8,
@@ -478,7 +492,7 @@ const BDEFS = {
 
 /** Order of the build menu. */
 const BUILD_MENU = ['harvester', 'quarry', 'mine', 'tap', 'smelter', 'fab', 'foundry', 'charger', 'farm', 'pump', 'refinery',
-  'kiln', 'tarworks', 'roadworks', 'outpost', 'turret', 'repair', 'armory', 'munitions', 'silo', 'reactor', 'nukesilo', 'depot', 'grower'];
+  'kiln', 'tarworks', 'roadworks', 'outpost', 'turret', 'repair', 'armory', 'munitions', 'silo', 'reactor', 'nukesilo', 'depot', 'grower', 'lab'];
 /** Ramps are planned in Paths (with roads), not from the build menu. */
 
 const INPUT_CAP = 3;   // how many of each input a production building stockpiles
@@ -550,6 +564,38 @@ const TRADE_GIVE = ['fiber', 'fuel', 'cement', 'alloy', 'stone', 'ore', 'crystal
 const TRADE_VALUE = { fiber: 1, stone: 1, ore: 1.2, crystal: 1.5, crude: 1.2, cement: 0.6, fuel: 1.5, alloy: 3 };
 const TRADE_KEEP = { fiber: 12, stone: 12, ore: 12, crystal: 10, crude: 10, cement: 20, fuel: 12, alloy: 10 };
 const TRADE_BONUS = 1.3;
+
+/*
+ * Wildlife (a Colony option, on by default; never in missions). Creature nests sit out in the wilds,
+ * owned by WILD_OWNER (the empty second player slot of a Colony game). Each keeps a few Scuttlers on
+ * guard (guards + its level) and, from `first` seconds on, sends a pack every `gap` seconds at the
+ * nearest thing the colony has built within `reach` tiles of it. The pack goes for bots in the open;
+ * Brutes (from level 2) tear up roads and batter buildings (never below 1 armor; construction sites
+ * are wrecked). After `raidTime` the pack heads home. A nest grows a level every `grow` seconds (up
+ * to 3): bigger packs and more hoarded goods. Packs also grow with the colony (one more creature for
+ * every `perBuildings` buildings). Nothing can be built within `clear` tiles of a nest.
+ */
+const WILD_OWNER = 1;
+const WILD = {
+  first: 420, gap: [260, 400], reach: 24, raidTime: 70, grow: 600, guards: 2, guardEvery: 45, perTiles: 800,
+  perBuildings: 14, maxPack: 9, bite: 1.1, roadEvery: 4, clear: 2, loot: { crystal: 8, ore: 8, alloy: 4 },
+};
+
+/*
+ * Research (Colony): a Research Lab researches one upgrade at a time for the whole colony. The cost
+ * is paid from storage when research starts; `time` is seconds of work by a staffed Lab.
+ */
+const TECHS = {
+  cargo:   { name: 'Cargo Racks', desc: 'Haulers carry 3 goods instead of 2, Freight Trucks 10 instead of 8.', cost: { chip: 4, crystal: 6, alloy: 6 }, time: 90 },
+  cells:   { name: 'Long-life Cells', desc: 'Bot batteries drain 30% slower.', cost: { chip: 4, crystal: 8 }, time: 90 },
+  charge:  { name: 'Fast Charging', desc: 'Charging Stations charge bots 50% faster.', cost: { chip: 4, crystal: 6, alloy: 4 }, time: 75 },
+  paving:  { name: 'Rapid Paving', desc: 'Roads, bridges and tunnels are laid 40% faster.', cost: { chip: 3, crystal: 4, alloy: 4 }, time: 60 },
+  sentry:  { name: 'Sentry Optics', desc: 'Pulse Turrets reach 1.5 tiles further and get 6 shots from each Crystal.', cost: { chip: 4, crystal: 10 }, time: 75 },
+  motors:  { name: 'Turbo Motors', desc: 'Every bot moves 15% faster.', cost: { chip: 6, crystal: 8, alloy: 8 }, time: 120 },
+  tools:   { name: 'Power Tools', desc: 'Workers build, gather and run buildings 15% faster.', cost: { chip: 6, crystal: 10, alloy: 6 }, time: 120 },
+  nanites: { name: 'Nanite Repair', desc: 'Bots and buildings slowly mend themselves once nothing has hit them for a while.', cost: { chip: 8, crystal: 12, alloy: 8 }, time: 150 },
+};
+const TECH_ORDER = ['cargo', 'cells', 'charge', 'paving', 'sentry', 'motors', 'tools', 'nanites'];
 
 /** Starting goods in each Command Base. */
 const START_STOCK = { fiber: 16, stone: 8, alloy: 8, chip: 4, crystal: 4, fuel: 10, cement: 24 };

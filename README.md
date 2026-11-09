@@ -14,14 +14,15 @@ how goods move.
   standing wins. Standard, Islands, Crater and Plateaus maps (`ffa: true` in `SHAPE_PRESETS`); the green team's
   art is the red team's recoloured at run time (`recolorArt`), and each AI fights its nearest rival (`rivalOf`).
 - **Colony:** no rival. Settle the planet at your own pace, with colonization milestones. Free play has the full
-  building roster, missiles and nuclear silos included, to experiment with.
+  building roster, missiles and nuclear silos included, to experiment with, plus the **Research Lab** and optional
+  **Wildlife** (creature nests that raid you; on by default).
 - **Missions:** eight set challenges on hand-picked planets, each with its own goals and Easy, Normal and Hard
   levels. All of them are open from the start; finishing one ticks it off at that difficulty.
 
 Before each game, sliders set the **map size** (Small to Huge), the **terrain** (Flat, Gentle,
 Rolling, Rugged, Mountainous), the **resources** (Scarce to Abundant), the **map shape** (Standard, Long haul, Chokepoint, Islands, Crater or Plateaus), the
 **biome** (Red desert, Jungle or Polar: scenery only, with plants that roads and buildings clear), the **rival style**,
-an optional **Nuclear race** and **Planet events** (on by default). Resources come in separate
+an optional **Nuclear race**, **Planet events** (on by default) and, in Colony, **Wildlife** (on by default). Resources come in separate
 fields: your landing zone has a little of everything, and the rich fields beyond it are worth fighting for.
 
 Terrafall is an original game in the colony-logistics genre. It contains no code, art, sound or data from
@@ -75,6 +76,7 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
 | Repair Station | Fixes damaged bots three at a time; 1 **Alloy** repairs 12 health (Versus) |
 | Nuclear Reactor | 2 Uranium → 1 **Enriched Uranium** (Nuclear race) |
 | Nuclear Silo | 6 Enriched Uranium + 4 Alloy + 2 Chips → one nuclear missile; fires 40 tiles (Nuclear race) |
+| Research Lab | Researches colony-wide upgrades with Chips, Crystal and Alloy (Colony) |
 
 - **Cement builds the colony.** Nearly every building costs Cement, and so does every road. Only the Quarry (2 Fiber)
   and the Cement Works (4 Stone, 2 Fiber) are built from raw materials, so you can always restart. Stone has no
@@ -207,6 +209,19 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
   faster (`econ`), it builds extra Smelters and Chip Fabs and goes for Missile Silos (up to three) once its Bot Foundry
   runs. With Random each rival gets a different one, picked from the seed; missions use Balanced. The landing messages
   and the rival Command Base's panel name it.
+- **Wildlife** (Colony; `WILD` in `js/defs.js`, `updateNest`/`updateCritter` in `js/sim.js`; new-game option, on by
+  default, never in missions): one creature nest per `WILD.perTiles` tiles (3–8), owned by `WILD_OWNER` (the empty
+  second player slot of a Colony game), at least 16 tiles from the landing site and reachable on foot. Each keeps
+  `guards + level` Scuttlers on guard and from `WILD.first` (7 min) sends a pack every 260–400 s at the nearest building,
+  road or bot the colony has within `WILD.reach` (24) tiles: Scuttlers (6 hp, bite 1) go for bots in the open; Brutes (24 hp,
+  bite 3; from level 2) tear up roads and batter buildings (never below 1 armor; construction sites are wrecked). Nests grow a
+  level every `WILD.grow` s (to 3); packs grow with the colony (`perBuildings`). Turrets, garrisons and warbots treat
+  creatures as enemies; warbots clear a nest (`clearNest`: its hoard spills as loot, its creatures scatter). Nothing can be
+  built within `WILD.clear` tiles of a nest.
+- **Research** (Colony; `TECHS` in `js/defs.js`, `startResearch`/`updateLab` in `js/sim.js`): a Research Lab (staffed)
+  researches one upgrade at a time, cost paid on start (Cancel refunds), progress `dt × mult` per staffed Lab. Upgrades:
+  Cargo Racks (`botCarry`), Long-life Cells (`drainMul`), Fast Charging, Rapid Paving, Sentry Optics (`turretRange`,
+  `shotsPer`), Turbo Motors (`speedMul`), Power Tools (`mult` × 1.15), Nanite Repair (`naniteRepair`).
 - **Planet events** (`EVENTS` in `js/defs.js`, `updateEvents` in `js/sim.js`; new-game option, never in missions): the
   first after 8 minutes, then one every 5–8 minutes, never one of the last two again, most with a 20 s warning. **Dust
   storm**: bots at `DUST_SPEED` (⅔) and every missile grounded (`missileBlocked`, `nukeBlocked`). **Meteor shower**:

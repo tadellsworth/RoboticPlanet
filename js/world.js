@@ -705,6 +705,8 @@ function newGame(opts) {
   if (opts.autoplay) S.players[0].mult = DIFFICULTY[diff].mult;
   // Planet events (see EVENTS): the first one comes after EVENT_FIRST seconds.
   if (opts.events) { S.events = true; S.event = null; S.nextEvent = EVENT_FIRST; }
+  // Wildlife (see WILD): Colony free play only; the nests go down once the landing site is in.
+  if (mode === 'colony' && opts.wildlife && !opts.layout && !opts.setup) S.wildlife = true;
   // Each rival AI's personality: the one asked for, or (with 'random') a different one each, picked
   // from the planet's seed. Missions and tests that don't ask get Balanced.
   {
@@ -737,6 +739,7 @@ function newGame(opts) {
   computeZones();
   computeTerritory();
   for (const P of S.players) { const L = getE(P.lander); if (L) starterRoads(L); }
+  if (S.wildlife) placeNests(seed);
   if (opts.setup) opts.setup(S);
   S.decor = makeDecor();
   // A word on how this kind of planet plays.
@@ -978,7 +981,7 @@ function computeTerritory() {
   }
   S.territoryVer++;
   for (const b of S.buildings.slice()) {
-    if (b.dead || BDEFS[b.type].mil) continue;
+    if (b.dead || BDEFS[b.type].mil || BDEFS[b.type].wild) continue;
     if (S.owner[tIdx(b.x, b.y)] !== b.owner) {
       postMsg(b.owner, `${BDEFS[b.type].name} was lost — it is no longer inside your territory.`, b.x, b.y, 'bad');
       destroyBuilding(b, true);
@@ -1085,6 +1088,10 @@ function canPlace(owner, type, i, j, skipBlockCheck) {
     if (S.res[t] !== R_OIL) return { ok: false, reason: 'Build an Oil Pump right on top of an oil seep.' };
   } else if (S.res[t]) return { ok: false, reason: 'Clear the resources here first.' };
   if (S.bAt[t]) return { ok: false, reason: 'There is already a building here.' };
+  if (def.colony && (S.mode !== 'colony' || S.mission)) return { ok: false, reason: 'Only in Colony free play.' };
+  if (S.wildlife) for (const e of S.buildings) {
+    if (!e.dead && BDEFS[e.type].wild && Math.max(Math.abs(e.x - i), Math.abs(e.y - j)) <= WILD.clear) return { ok: false, reason: 'Too close to a creature nest: clear it with warbots first.' };
+  }
   if (S.ramp[t]) return { ok: false, reason: 'Too steep: this is a slope.' };
   if (S.zone[t] !== homeZone(owner)) {
     return { ok: false, reason: def.ramp ? 'Your bots can\'t reach this side of the cliff yet: plan the Ramp on the other side, the top or the foot, where they can.'
