@@ -816,6 +816,14 @@ function openBuildingSheet(b) {
     if (def.missile && b.built) {
       html += `<p class="hint">To fire, tap <b>Army</b> and then a rival building within ${def.missile.range} tiles.</p>`;
     }
+    const lg = limitGood(b);
+    if (lg && b.built) {
+      html += `<div class="section-label">Stock limit</div>
+        <div class="limit-row"><span>Stop making ${GOOD[lg].name} at</span>
+        <div class="stepper"><button class="btn" id="sh-lim-minus" aria-label="Lower the limit">−</button><span class="n" id="sh-lim"></span>
+        <button class="btn" id="sh-lim-plus" aria-label="Raise the limit">+</button></div></div>
+        <div class="limit-row"><span class="hint" id="sh-lim-hint"></span><button class="btn small" id="sh-lim-off"></button></div>`;
+    }
     if (needsRoad(b) || (b.unlinked !== undefined && !def.store)) html += '<div id="sh-road"></div>';
     html += '<div class="actions">';
     if (def.staff && b.built) html += `<button class="btn" id="sh-pause"></button>`;
@@ -851,6 +859,22 @@ function openBuildingSheet(b) {
       refreshSheet();
     };
     if ($('sh-pause')) $('sh-pause').onclick = () => { setPaused(b, !b.paused); sfx('click'); refreshSheet(); };
+    if ($('sh-lim')) {
+      const step = (d) => {
+        const cur = stockLimit(b);
+        const base = cur === Infinity ? (BDEFS[b.type].limit || 20) - d : cur;
+        b.limit = clamp(Math.round((base + d) / 5) * 5, 5, 500);
+        sfx('click');
+        refreshSheet();
+      };
+      $('sh-lim-minus').onclick = () => step(-5);
+      $('sh-lim-plus').onclick = () => step(5);
+      $('sh-lim-off').onclick = () => {
+        b.limit = stockLimit(b) === Infinity ? BDEFS[b.type].limit || 20 : -1;
+        sfx('click');
+        refreshSheet();
+      };
+    }
     if ($('sh-demolish')) $('sh-demolish').onclick = () => {
       if (!UI.demolishArm) {
         UI.demolishArm = 1;
@@ -1017,6 +1041,14 @@ function refreshBuildingSheet(b) {
   }
   $('sh-dyn').innerHTML = parts.join('');
   if ($('sh-road')) refreshRoadLink(b);
+  if ($('sh-lim')) {
+    const lim = stockLimit(b), g = limitGood(b), have = goodTotal(0, g);
+    $('sh-lim').textContent = lim === Infinity ? '∞' : lim;
+    $('sh-lim-off').textContent = lim === Infinity ? 'Set a limit' : 'No limit';
+    $('sh-lim-hint').textContent = lim === Infinity
+      ? `No limit: it keeps going while it has inputs. You have ${have}.`
+      : `You have ${have}. ${have >= lim ? 'Stopped: it starts again when you drop below the limit.' : 'It stops (and takes no more inputs) when you reach the limit.'}`;
+  }
   if ($('sh-pause')) $('sh-pause').textContent = b.paused ? 'Resume' : 'Pause';
   if ($('sh-prio')) for (const btn of $('sh-prio').children) btn.classList.toggle('on', btn.dataset.v === (b.prio || 'normal'));
   if ($('sh-smode')) {
@@ -1233,13 +1265,13 @@ const OBJECTIVES = [
   { text: 'Tap <b>Build</b> and place a <b>Harvester</b> beside the teal stalk groves.', done: () => hasBuilt('harvester') || hasAny('harvester') },
   { text: '<b>Haulers only drive on roads.</b> Tap <b>Paths</b> and drag a road from the ring round your Lander to the Harvester site (or tap the site and choose <b>Lay road</b>). Free workers pave it.', done: () => hasBuilt('harvester') || S.buildings.some((b) => !b.dead && b.owner === 0 && b.type === 'harvester' && !b.unlinked) },
   { text: 'Build a <b>Quarry</b> near the grey boulders to get Stone.', done: () => hasBuilt('quarry') },
+  { text: 'Build a <b>Cement Works</b> near your Lander: it bakes Stone into <b>Cement</b>, which nearly every building and every road is made of.', done: () => hasBuilt('kiln') },
   { text: 'Build an <b>Ore Mine</b> by the dark ore veins and a <b>Crystal Tap</b> by the violet crystals.', done: () => hasBuilt('mine') && hasBuilt('tap') },
   { text: 'Build a <b>Smelter</b>: it turns Ore and Fiber into Alloy.', done: () => hasBuilt('smelter') },
   { text: 'Build a <b>Chip Fab</b>: it turns Crystal and Alloy into Chips.', done: () => hasBuilt('fab') },
   { text: 'Build a <b>Bot Foundry</b> so you can make more workers.', done: () => hasBuilt('foundry') },
   { text: 'Tap your <b>Bot Foundry</b> and order some <b>Workers</b>: it only builds the bots you ask for.', done: () => S.players[0].stats.bots > S.players[0].stats.startBots || S.buildings.some((b) => !b.dead && b.owner === 0 && hasOrders(b)) },
   { text: 'Build an <b>Outpost</b> near your border to claim more land.', done: () => hasBuilt('outpost') },
-  { text: 'Build a <b>Cement Works</b> to turn Stone into Cement: every new building needs a road, and long roads take a lot of it.', done: () => hasBuilt('kiln') },
   { text: 'Charging Stations burn <b>Fuel</b>. Build a <b>Bio Farm</b> beside the dark fertile soil to grow it (your Agribot runs it).', done: () => hasBuilt('farm') },
   { text: 'Busy crossings jam up. In <b>Paths</b>, choose <b>Lights</b> and put a traffic light on a junction where three or four roads meet.', done: () => Object.keys(S.lights).some((k) => S.lights[k].owner === 0) || !ownJunction() },
   { text: 'Warbots need <b>Ammo</b>. Build an <b>Ammo Plant</b>: haulers stock your Lander and Outposts and warbots reload there.', done: () => S.mode === 'colony' || hasBuilt('armory') },

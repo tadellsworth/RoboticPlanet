@@ -94,9 +94,17 @@ const ART_MANIFEST = {
   roadworks: B3D('buildings/roadworks.png'),
   ramp: B3D('buildings/ramp.png'),
 
+  // Military buildings (Versus), with team versions: @0 yours (cyan lights), @1 the rival's (red).
+  'armory@0': B3D('buildings/armory@0.png'),
+  'armory@1': B3D('buildings/armory@1.png'),
+  'munitions@0': B3D('buildings/munitions@0.png'),
+  'munitions@1': B3D('buildings/munitions@1.png'),
+  'silo@0': B3D('buildings/silo@0.png'),
+  'silo@1': B3D('buildings/silo@1.png'),
+
   // Still to make (placeholders are drawn until these exist):
   //   bots:      hauler@0/@1, agribot@0/@1, paver@0/@1 (they borrow the worker's art with a badge)
-  //   buildings: armory, munitions, silo@0/@1 (and 3D versions of lander@0/@1 and the turret)
+  //   buildings: 3D versions of lander@0/@1 and the turret (base + head frames)
   //   resources: crop, oil     ground: fertile, slope, cliff     markers: missile, rally, oneway
   //   goods:     icon-fiber … icon-warhead (12 HUD icons)
 };

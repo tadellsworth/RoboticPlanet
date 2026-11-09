@@ -614,6 +614,7 @@ function drawBuilding(ctx, type, cx, cy, s, owner, b) {
       const head = turretHead(owner, b ? b.aim : Math.PI / 4);
       if (head) drawArt(ctx, head, cx, cy, s);
     }
+    if (type === 'silo' && b && b.stock) drawSiloStatus(ctx, b, cx, cy, s, color);
     return;
   }
   const u = s / 32;
@@ -1355,6 +1356,26 @@ function drawLights(ctx, ox, oy, z, inView) {
       ctx.fillStyle = go ? '#3dff8a' : '#ff4b4b';
       ctx.beginPath(); ctx.arc(px, py + dy * r, r * 0.8, 0, Math.PI * 2); ctx.fill();
     }
+  }
+}
+
+/** On Missile Silo art: a pip for each Missile loaded and a ring while it reloads. */
+function drawSiloStatus(ctx, b, cx, cy, s, color) {
+  const cap = BDEFS.silo.ammoCap, n = b.stock.warhead || 0;
+  const r = Math.max(2.5, s * 0.055), gap = r * 2.8;
+  const x0 = cx - s * 0.36, y0 = cy + s * 0.34;
+  ctx.fillStyle = 'rgba(14,15,20,0.8)';
+  roundRect(ctx, x0 - r * 1.6, y0 - r * 1.6, gap * (cap - 1) + r * 3.2, r * 3.2, r * 1.2);
+  ctx.fill();
+  for (let k = 0; k < cap; k++) {
+    ctx.fillStyle = k < n ? '#ffcf4a' : 'rgba(255,255,255,0.18)';
+    ctx.beginPath(); ctx.arc(x0 + k * gap, y0, r, 0, Math.PI * 2); ctx.fill();
+  }
+  if (b.reload > 0) {
+    ctx.strokeStyle = color; ctx.lineWidth = Math.max(1.5, s * 0.035);
+    ctx.beginPath();
+    ctx.arc(cx, cy - s * 0.05, s * 0.3, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * (1 - b.reload / BDEFS.silo.missile.reload));
+    ctx.stroke();
   }
 }
 

@@ -89,7 +89,7 @@ const MISSIONS = [
       { kind: 'lights', n: [1, 2, 3] }],
     setup(S) {
       const L = getE(S.players[0].lander);
-      L.stock.cement = (L.stock.cement || 0) + 3;
+      L.stock.cement = (L.stock.cement || 0) + 6;
       // A depot of Stone on the far side of the landing zone.
       for (let r = 7; r >= 4; r--) for (const [dx, dy] of [[0, -r], [r, 0], [-r, 0]]) {
         if (S.buildings.some((b) => b.type === 'depot')) break;
@@ -102,11 +102,11 @@ const MISSIONS = [
     brief: 'The survey crews want proper roads. Bake Cement, lay roads, then send a Paver out with Asphalt made from the oil seep beside your base.',
     mode: 'colony', seed: 5501, size: 1, rough: 2, rich: 2, limit: [0, 0, 25],
     goals: [
-      { kind: 'made', good: 'cement', n: [6, 10, 14] }, { kind: 'paths', tier: 1, n: [23, 33, 43] },
+      { kind: 'made', good: 'cement', n: [12, 20, 28] }, { kind: 'paths', tier: 1, n: [23, 33, 43] },
       { kind: 'paths', tier: 2, n: [8, 14, 20] },
     ],
     layout(m, W) { const b = m.bases[0]; placeField(m, W, b.x + 5, b.y - 5, 1.2, R_OIL, 0.95, 9); },
-    setup(S) { const L = getE(S.players[0].lander); L.stock.stone += 10; L.stock.cement = 2; },
+    setup(S) { const L = getE(S.players[0].lander); L.stock.stone += 10; L.stock.cement = 8; },
   },
   {
     id: 'border', name: 'Border Dispute',

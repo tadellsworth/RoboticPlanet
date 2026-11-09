@@ -324,6 +324,12 @@ i.g.cement { background: var(--g-cement); } i.g.asphalt { background: var(--g-as
 .stats span:nth-child(odd) { color: var(--muted); }
 .stats span:nth-child(even) { font-weight: 700; text-align: right; }
 
+/* ---------- stock limit ---------- */
+.limit-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 4px 0; font-size: 14px; }
+.limit-row .stepper { margin: 0; }
+.limit-row .hint { margin: 0; flex: 1; }
+.limit-row .btn.small { flex: none; }
+
 /* ---------- roads ---------- */
 .road-warn {
   margin: 8px 0 4px; padding: 9px 11px; border-radius: 12px; font-size: 14px; color: #ffd9de;

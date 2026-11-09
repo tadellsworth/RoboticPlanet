@@ -6,11 +6,11 @@
  */
 
 /** [good, pause at, resume below]: producers the AI rests when it has plenty. */
-const AI_CAPS = { kiln: ['cement', 14, 6], fab: ['chip', 8, 3], armory: ['ammo', 18, 6], refinery: ['fuel', 30, 10] };
+const AI_CAPS = { fab: ['chip', 8, 3], armory: ['ammo', 18, 6], refinery: ['fuel', 30, 10] };
 /** [building type, how many the AI wants]. Entries are tried in order. */
 const AI_PLAN = [
-  ['harvester', 1], ['quarry', 1], ['harvester', 2], ['mine', 1], ['tap', 1], ['smelter', 1],
-  ['fab', 1], ['foundry', 1], ['kiln', 1], ['outpost', 1], ['armory', 1], ['charger', 1], ['farm', 1], ['quarry', 2], ['grower', 1], ['mine', 2],
+  ['harvester', 1], ['quarry', 1], ['kiln', 1], ['harvester', 2], ['mine', 1], ['tap', 1], ['smelter', 1],
+  ['fab', 1], ['foundry', 1], ['outpost', 1], ['armory', 1], ['charger', 1], ['farm', 1], ['quarry', 2], ['grower', 1], ['mine', 2],
   ['kiln', 2],
   ['turret', 1], ['outpost', 2], ['smelter', 2], ['tap', 2], ['pump', 1], ['refinery', 1], ['harvester', 3], ['outpost', 3],
   ['munitions', 1], ['silo', 1], ['depot', 1], ['charger', 2], ['farm', 2], ['mine', 3], ['outpost', 4], ['turret', 2],
@@ -48,9 +48,9 @@ function aiThink(p) {
   P.short = [R_STALK, R_BOULDER, R_ORE, R_CRYSTAL].filter((r) => (inLand[r] || 0) < (r === R_BOULDER ? 6 : 4));
   const stoneLow = (inLand[R_BOULDER] || 0) < 10;
   const quarrying = me.some((b) => b.type === 'quarry' && (!b.built || reachableRes(b.x, b.y, BDEFS.quarry.radius, R_BOULDER) > 0));
-  // While boulders run low, keep enough Stone for the Outpost that reaches new ones.
-  const reserveStone = stoneLow && playerGoods(p).stone < BDEFS.outpost.cost.stone + 2;
-  if (stoneLow && !quarrying) aiFreeStone(p, me);
+  // While boulders run low, keep enough Cement for the Outpost that reaches new ones.
+  const reserveCement = stoneLow && playerGoods(p).cement < BDEFS.outpost.cost.cement + 2;
+  if (stoneLow && !quarrying) aiFreeCement(p, me);
   // Cancel construction sites that have waited a long time for goods we don't have.
   if (sites >= maxSites) {
     const have = playerGoods(p);
@@ -63,9 +63,9 @@ function aiThink(p) {
     }
   }
   let plan = S.mode === 'colony' ? AI_PLAN.concat([['outpost', 40]]) : AI_PLAN;
-  // Out of Cement with no Cement Works: nothing new can get a road, so one comes first, even past
-  // the usual limit on sites.
-  const cementStarved = roadTilesAffordable(p) < 8 && !me.some((b) => b.type === 'kiln');
+  // No Cement Works: Cement builds nearly everything (and every road), so one comes first, even
+  // past the usual limit on sites.
+  const cementStarved = !me.some((b) => b.type === 'kiln');
   let siteCap = maxSites;
   if (cementStarved) { plan = [['kiln', 1]].concat(plan); siteCap = maxSites + 1; }
   const outSite = me.some((b) => b.type === 'outpost' && !b.built);
@@ -114,7 +114,7 @@ function aiThink(p) {
       // The first of each staffed building is always allowed, so the production chain is complete.
       if (BDEFS[type].staff && !BDEFS[type].crew && !canStaffMore && counts[type]) continue;
       if (Object.keys(BDEFS[type].cost).some((g) => held.has(g))) continue;
-      if (reserveStone && type !== 'outpost' && type !== 'quarry' && BDEFS[type].cost.stone) continue;
+      if (reserveCement && type !== 'outpost' && type !== 'quarry' && type !== 'kiln' && BDEFS[type].cost.cement) continue;
       if (type === 'kiln' && stoneLow && counts.kiln) continue;
       if (!aiAffordable(p, type)) {
         if (key(type) && (!counts[type] || type === 'outpost')) {
@@ -124,8 +124,12 @@ function aiThink(p) {
         continue;
       }
       const spot = aiFindSpot(p, type, lander);
-      if (spot && placeSite(p, type, spot.x, spot.y).ok) {
+      const placed = spot ? placeSite(p, type, spot.x, spot.y) : null;
+      if (placed && placed.ok) {
         if (type === 'outpost') P.lastExpand = S.time;
+        // The chain that makes new bots gets workers first; the Ammo Plant gives its worker up first.
+        if (['mine', 'smelter', 'fab', 'foundry'].includes(type) && !counts[type]) placed.building.prio = 'high';
+        if (type === 'armory') placed.building.prio = 'low';
         break;
       }
     }
@@ -140,8 +144,7 @@ function aiThink(p) {
   for (const b of me) {
     const cap = AI_CAPS[b.type];
     if (!cap || !b.built) continue;
-    let hi = cap[1] * (missiles && b.type === 'fab' ? 2 : 1), lo = cap[2];
-    if (b.type === 'kiln' && stoneLow) { hi = 4; lo = 2; } // Stone is precious: only a little Cement in hand
+    const hi = cap[1] * (missiles && b.type === 'fab' ? 2 : 1), lo = cap[2];
     const have = stockNow[cap[0]] || 0;
     if (!b.paused && have >= hi) setPaused(b, true);
     else if (b.paused && have < lo) setPaused(b, false);
@@ -270,9 +273,8 @@ function aiMissilePlan(p, me, counts, kinds, workers, staffed) {
  */
 function aiRoads(p, me) {
   const P = S.players[p];
-  const stores = me.filter((s) => storeAccepts(s));
   let budget = roadTilesAffordable(p), done = 0;
-  const todo = me.filter((b) => needsRoad(b) && !stores.some((s) => roadLinked(s, b)))
+  const todo = me.filter((b) => needsRoad(b) && !onHomeNet(b))
     .sort((a, b) => (a.built - b.built) || a.born - b.born);
   for (const b of todo) {
     if (done >= 3) break;
@@ -297,13 +299,14 @@ function aiRoads(p, me) {
 }
 
 /**
- * Last resort when the land has no boulders left and there isn't enough Stone for an Outpost to
- * reach new ones: take down a spare building (half its Stone comes back), at most once a minute.
+ * Last resort when the land has no boulders left and there isn't enough Cement for an Outpost to
+ * reach new ones: take down a spare building (half its Cement comes back), at most once a minute.
  */
-function aiFreeStone(p, me) {
+function aiFreeCement(p, me) {
   const P = S.players[p];
-  const need = BDEFS.outpost.cost.stone;
-  if (playerGoods(p).stone >= need || S.time - (P.stoneBreak || -999) < 60 || me.some((b) => b.type === 'outpost' && !b.built)) return;
+  const need = BDEFS.outpost.cost.cement;
+  const g = playerGoods(p);
+  if (g.cement + g.stone * 2 >= need || S.time - (P.stoneBreak || -999) < 60 || me.some((b) => b.type === 'outpost' && !b.built)) return;
   const spare = ['depot', 'grower', 'charger', 'turret', 'armory', 'refinery', 'farm', 'tarworks', 'roadworks', 'kiln'];
   let best = null, bs = -1;
   for (const b of me) {
@@ -312,7 +315,7 @@ function aiFreeStone(p, me) {
     if (k < 0) continue;
     if (b.type === 'kiln' && me.filter((x) => x.type === 'kiln').length < 2) continue; // never the last one: roads need Cement
     if ((b.type === 'charger' || b.type === 'farm') && me.filter((x) => x.type === b.type).length < 2) continue;
-    const back = Math.floor((BDEFS[b.type].cost.stone || 0) / 2);
+    const back = Math.floor((BDEFS[b.type].cost.cement || 0) / 2);
     const s = back * 10 - k;
     if (back > 0 && s > bs) { bs = s; best = b; }
   }

@@ -19,7 +19,7 @@ const ROAD_PREFERENCE = 0.85;     // route planning treats paths as this much ch
  * that tile; `cost` is per tile.
  */
 const PAVE = [null,
-  { key: 'road', name: 'Road', speed: 2.0, cost: { cement: 0.1 } },
+  { key: 'road', name: 'Road', speed: 2.0, cost: { cement: 0.2 } },
   { key: 'asphalt', name: 'Asphalt road', speed: 2.75 },
 ];
 const ASPHALT_TILES = 4;          // road tiles one Asphalt covers
@@ -163,14 +163,14 @@ const RES = {
 const GOODS = ['fiber', 'stone', 'ore', 'crystal', 'alloy', 'chip', 'crude', 'fuel', 'cement', 'asphalt', 'ammo', 'warhead'];
 const GOOD = {
   fiber:   { name: 'Fiber',   color: '#3fd8a6', desc: 'Cut from stalk groves. Used for building and as smelter fuel.' },
-  stone:   { name: 'Stone',   color: '#c9c1b4', desc: 'Broken from boulders. The main building material.' },
+  stone:   { name: 'Stone',   color: '#c9c1b4', desc: 'Broken from boulders. A Cement Works turns it into Cement; Asphalt and Ammo use it too.' },
   ore:     { name: 'Ore',     color: '#ff8a3d', desc: 'Dug from ore veins. Smelted into Alloy.' },
   crystal: { name: 'Crystal', color: '#b98cff', desc: 'Tapped from crystal clusters. Makes Chips and turret ammo.' },
   alloy:   { name: 'Alloy',   color: '#8ec3e6', desc: 'Smelted metal for advanced buildings, chips and bots.' },
   chip:    { name: 'Chip',    color: '#c8f05a', desc: 'Bot brains. Needed for every new bot.' },
   crude:   { name: 'Crude',   color: '#b08a6e', desc: 'Crude oil from an Oil Pump. A Refinery turns it into Fuel.' },
   fuel:    { name: 'Fuel',    color: '#ff5c8a', desc: 'Energy for Charging Stations. Grown at a Bio Farm or refined from Crude.' },
-  cement:  { name: 'Cement',  color: '#a9b4c2', desc: 'Made from Stone at a Cement Works. Paves roads: 1 Cement for 10 tiles.' },
+  cement:  { name: 'Cement',  color: '#a9b4c2', desc: 'The main building material, made from Stone at a Cement Works (2 per Stone). Builds nearly everything and paves roads: 1 Cement for 5 tiles.' },
   asphalt: { name: 'Asphalt', color: '#6b7280', desc: 'Made from Crude and Stone. A Roadworks upgrades roads with it to asphalt, the fastest surface.' },
   ammo:    { name: 'Ammo',    color: '#e8c39e', desc: 'Made at an Ammo Plant. Warbots reload it in your Lander and Outposts.' },
   warhead: { name: 'Missile', color: '#ffcf4a', desc: 'Built at a Missile Factory from Alloy, Chips and Fuel. Workers load them into Missile Silos, which fire them at rival buildings.' },
@@ -202,6 +202,8 @@ const PLAYER_NAMES = ['You', 'Rival'];
  *   missile   launches missiles: range (tiles), reload (s), damage to the target, splash radius,
  *             damage to other buildings and to bots in the splash
  *   war       only offered in Versus mode
+ *   limit     default stock limit: it stops making its product once you have this many (players
+ *             can change it per building)
  */
 const BDEFS = {
   lander: {
@@ -211,7 +213,7 @@ const BDEFS = {
   },
   harvester: {
     name: 'Harvester', desc: 'A worker cuts nearby stalk groves into Fiber.',
-    cost: { fiber: 2, stone: 1 }, staff: true, gather: R_STALK, radius: 5, out: { fiber: 4 }, armor: 8, buildTime: 8,
+    cost: { fiber: 2, cement: 1 }, staff: true, gather: R_STALK, radius: 5, out: { fiber: 4 }, armor: 8, buildTime: 8,
   },
   quarry: {
     name: 'Quarry', desc: 'A worker breaks nearby boulders into Stone.',
@@ -219,95 +221,95 @@ const BDEFS = {
   },
   mine: {
     name: 'Ore Mine', desc: 'A worker digs Ore from nearby veins.',
-    cost: { fiber: 2, stone: 2 }, staff: true, gather: R_ORE, radius: 4, out: { ore: 4 }, armor: 8, buildTime: 10,
+    cost: { fiber: 2, cement: 2 }, staff: true, gather: R_ORE, radius: 4, out: { ore: 4 }, armor: 8, buildTime: 10,
   },
   tap: {
     name: 'Crystal Tap', desc: 'A worker extracts Crystal from nearby clusters.',
-    cost: { fiber: 2, stone: 2 }, staff: true, gather: R_CRYSTAL, radius: 4, out: { crystal: 4 }, armor: 8, buildTime: 10,
+    cost: { fiber: 2, cement: 2 }, staff: true, gather: R_CRYSTAL, radius: 4, out: { crystal: 4 }, armor: 8, buildTime: 10,
   },
   grower: {
     name: 'Grove Planter', desc: 'A worker plants new stalk groves nearby so Fiber never runs out.',
-    cost: { fiber: 1, stone: 2 }, staff: true, crew: 'agribot', plant: R_STALK, radius: 4, armor: 8, buildTime: 8,
+    cost: { fiber: 1, cement: 2 }, staff: true, crew: 'agribot', plant: R_STALK, radius: 4, armor: 8, buildTime: 8,
   },
   smelter: {
     name: 'Smelter', desc: 'Burns Fiber to smelt Ore into Alloy.',
-    cost: { stone: 3, fiber: 2 }, staff: true, inp: { ore: 1, fiber: 1 }, make: { alloy: 1 }, out: { alloy: 4 },
+    cost: { cement: 3, fiber: 2 }, staff: true, inp: { ore: 1, fiber: 1 }, make: { alloy: 1 }, out: { alloy: 4 },
     work: 5, armor: 8, buildTime: 10,
   },
   fab: {
     name: 'Chip Fab', desc: 'Etches Crystal onto Alloy to make Chips.',
-    cost: { stone: 2, alloy: 2 }, staff: true, inp: { crystal: 1, alloy: 1 }, make: { chip: 1 }, out: { chip: 4 },
+    cost: { cement: 2, alloy: 2 }, staff: true, inp: { crystal: 1, alloy: 1 }, make: { chip: 1 }, out: { chip: 4 },
     work: 5, armor: 8, buildTime: 10,
   },
   foundry: {
     name: 'Bot Foundry', desc: 'Assembles new Workers and Warbots from Alloy and Chips.',
-    cost: { stone: 4, alloy: 3, chip: 1 }, staff: true, inp: { alloy: 1, chip: 1 }, bots: true,
+    cost: { cement: 4, alloy: 3, chip: 1 }, staff: true, inp: { alloy: 1, chip: 1 }, bots: true,
     work: 8, armor: 10, buildTime: 14,
   },
   outpost: {
     name: 'Outpost', desc: 'Expands your territory and garrisons warbots for attack and defence.',
-    cost: { stone: 4, fiber: 2 }, mil: true, terr: 7, garrison: 10, armor: 16, buildTime: 12, ammoStock: 6,
+    cost: { cement: 4, fiber: 2 }, mil: true, terr: 7, garrison: 10, armor: 16, buildTime: 12, ammoStock: 6,
   },
   turret: {
     name: 'Pulse Turret', desc: 'Shoots enemy bots in range. Uses Crystal as ammo (4 shots each).',
-    cost: { stone: 2, alloy: 2 }, ammo: 'crystal', range: 5, armor: 12, buildTime: 10, war: true,
+    cost: { cement: 2, alloy: 2 }, ammo: 'crystal', range: 5, armor: 12, buildTime: 10, war: true,
   },
   kiln: {
-    name: 'Cement Works', desc: 'Grinds and bakes Stone into Cement for roads.',
-    cost: { stone: 4, fiber: 2 }, staff: true, inp: { stone: 1 }, make: { cement: 1 }, out: { cement: 4 },
-    work: 6, armor: 10, buildTime: 10,
+    name: 'Cement Works', desc: 'Bakes Stone into Cement, the material nearly every building and road is made of: 2 Cement from each Stone. Costs raw Stone itself, so you can always build one.',
+    cost: { stone: 4, fiber: 2 }, staff: true, inp: { stone: 1 }, make: { cement: 2 }, out: { cement: 6 },
+    work: 5, armor: 10, buildTime: 10, limit: 40,
   },
   tarworks: {
     name: 'Asphalt Plant', desc: 'Cooks Crude and Stone into Asphalt for the fastest roads.',
-    cost: { stone: 3, alloy: 2 }, staff: true, inp: { crude: 1, stone: 1 }, make: { asphalt: 2 }, out: { asphalt: 4 },
-    work: 7, armor: 10, buildTime: 12,
+    cost: { cement: 3, alloy: 2 }, staff: true, inp: { crude: 1, stone: 1 }, make: { asphalt: 2 }, out: { asphalt: 4 },
+    work: 7, armor: 10, buildTime: 12, limit: 20,
   },
   roadworks: {
     name: 'Roadworks', desc: 'Its Paver upgrades your roads nearby to asphalt, the fastest surface. One Asphalt covers four tiles.',
-    cost: { stone: 3, alloy: 1, fiber: 2 }, staff: true, crew: 'paver', roadworks: true, radius: 7, armor: 8, buildTime: 10,
+    cost: { cement: 3, alloy: 1, fiber: 2 }, staff: true, crew: 'paver', roadworks: true, radius: 7, armor: 8, buildTime: 10,
   },
   armory: {
     name: 'Ammo Plant', desc: 'Packs Alloy and Stone into Ammo. Haulers take it to your Lander and Outposts, where warbots reload.',
-    cost: { stone: 3, alloy: 2 }, staff: true, inp: { alloy: 1, stone: 1 }, make: { ammo: 3 }, out: { ammo: 6 },
+    cost: { cement: 3, alloy: 2 }, staff: true, inp: { alloy: 1, stone: 1 }, make: { ammo: 3 }, out: { ammo: 6 },
     work: 6, armor: 10, buildTime: 10, war: true,
   },
   munitions: {
     name: 'Missile Factory', desc: 'Builds Missiles from 2 Alloy, 1 Chip and 1 Fuel each. They are slow and costly to make; haulers carry them to your Missile Silos.',
-    cost: { stone: 4, alloy: 4, chip: 2 }, staff: true, inp: { alloy: 2, chip: 1, fuel: 1 }, make: { warhead: 1 },
+    cost: { cement: 4, alloy: 4, chip: 2 }, staff: true, inp: { alloy: 2, chip: 1, fuel: 1 }, make: { warhead: 1 },
     out: { warhead: 2 }, work: 20, armor: 10, buildTime: 14, war: true,
   },
   silo: {
     name: 'Missile Silo',
     desc: 'Fires Missiles from a Missile Factory at rival buildings far away. A hit wrecks most buildings outright, damages the buildings and bots around it, and knocks Outposts and Landers down so warbots can capture them. Holds two Missiles.',
-    cost: { stone: 5, alloy: 4, chip: 2 }, ammo: 'warhead', ammoCap: 2,
+    cost: { cement: 5, alloy: 4, chip: 2 }, ammo: 'warhead', ammoCap: 2,
     missile: { range: 18, reload: 25, damage: 24, splash: 2.2, splashDamage: 5, botDamage: 9 }, armor: 14, buildTime: 16, war: true,
   },
   charger: {
     name: 'Charging Station',
     desc: 'Bots recharge their batteries here, four at a time. It burns Fuel: one Fuel recharges about one and a half batteries. Build them near busy areas far from your Lander.',
-    cost: { stone: 3, alloy: 1 }, charger: { slots: 4, rate: 25, fuel: true }, fuelCap: 4, armor: 10, buildTime: 10,
+    cost: { cement: 3, alloy: 1 }, charger: { slots: 4, rate: 25, fuel: true }, fuelCap: 4, armor: 10, buildTime: 10,
   },
   farm: {
     name: 'Bio Farm', desc: 'A worker plants energy crops on fertile soil nearby and harvests them into Fuel. Crops take a while to ripen.',
-    cost: { fiber: 2, stone: 2 }, staff: true, crew: 'agribot', farm: true, radius: 3, out: { fuel: 4 }, armor: 8, buildTime: 9,
+    cost: { fiber: 2, cement: 2 }, staff: true, crew: 'agribot', farm: true, radius: 3, out: { fuel: 4 }, armor: 8, buildTime: 9,
   },
   pump: {
     name: 'Oil Pump', desc: 'Built on top of an oil seep. Its worker pumps Crude until the seep runs dry.',
-    cost: { stone: 2, alloy: 2 }, staff: true, pump: true, inp: {}, make: { crude: 1 }, out: { crude: 4 },
+    cost: { cement: 2, alloy: 2 }, staff: true, pump: true, inp: {}, make: { crude: 1 }, out: { crude: 4 },
     work: 5, armor: 8, buildTime: 10,
   },
   refinery: {
     name: 'Refinery', desc: 'Refines Crude into Fuel: two Fuel from every Crude.',
-    cost: { stone: 4, alloy: 3 }, staff: true, inp: { crude: 1 }, make: { fuel: 2 }, out: { fuel: 4 },
+    cost: { cement: 4, alloy: 3 }, staff: true, inp: { crude: 1 }, make: { fuel: 2 }, out: { fuel: 4 },
     work: 6, armor: 10, buildTime: 12,
   },
   ramp: {
     name: 'Ramp', desc: 'Workers cut a slope into a low cliff so bots can climb between levels. Place it at the foot or top of a cliff.',
-    cost: { stone: 3, fiber: 1 }, ramp: true, armor: 4, buildTime: 10,
+    cost: { cement: 3, fiber: 1 }, ramp: true, armor: 4, buildTime: 10,
   },
   depot: {
     name: 'Depot', desc: 'Extra storage. Haulers drop goods at the nearest storage they can reach by road, so depots along your highways shorten trips.',
-    cost: { fiber: 3, stone: 2 }, store: true, armor: 10, buildTime: 8,
+    cost: { fiber: 3, cement: 2 }, store: true, armor: 10, buildTime: 8,
   },
 };
 
@@ -328,7 +330,7 @@ const DIFFICULTY = {
 };
 
 /** Starting goods in each Lander. */
-const START_STOCK = { fiber: 16, stone: 16, alloy: 8, chip: 4, crystal: 4, fuel: 4, cement: 6 };
-const START_BOTS = { worker: 9, hauler: 5, agribot: 1 };
+const START_STOCK = { fiber: 16, stone: 8, alloy: 8, chip: 4, crystal: 4, fuel: 4, cement: 24 };
+const START_BOTS = { worker: 10, hauler: 5, agribot: 1 };
 const START_WARBOTS = 4;
 const MIN_FREE_WORKERS = 2;   // workers always kept free for building

@@ -104,6 +104,41 @@ function storeFor(owner, g, x, y, except, from) {
   return best;
 }
 
+/** How much of good g player p has: storage, finished goods waiting in buildings, and goods on the way to storage. */
+function goodTotal(p, g) {
+  let n = 0;
+  for (const b of S.buildings) {
+    if (b.dead || b.owner !== p || !b.built) continue;
+    const def = BDEFS[b.type];
+    if (b.stock[g] && (def.store || (def.out && def.out[g]))) n += b.stock[g];
+  }
+  for (const u of S.bots) {
+    if (u.dead || u.owner !== p || u.carry !== g || !u.task || u.task.type !== 'haul') continue;
+    const dst = getE(u.task.dst);
+    if (dst && BDEFS[dst.type].store) n += u.carryN || 1;
+  }
+  return n;
+}
+
+/** The good a production building makes (its stock limit counts this), or null. */
+function limitGood(b) {
+  const def = BDEFS[b.type];
+  return def.make && !def.bots ? Object.keys(def.make)[0] : null;
+}
+
+/** When a production building stops: its own setting, else its type's default (Infinity = never). */
+function stockLimit(b) {
+  if (!limitGood(b)) return Infinity;
+  if (b.limit === undefined || b.limit === null) return BDEFS[b.type].limit ?? Infinity;
+  return b.limit < 0 ? Infinity : b.limit;
+}
+
+/** Has the player as much of this building's product as its stock limit asks for? */
+function atLimit(b) {
+  const lim = stockLimit(b);
+  return lim < Infinity && goodTotal(b.owner, limitGood(b)) >= lim;
+}
+
 function needsOf(b) {
   const def = BDEFS[b.type], out = [];
   if (!b.built) {
@@ -113,6 +148,7 @@ function needsOf(b) {
   } else if (def.bots && b.mode === 'off' && !hasOrders(b)) {
     return out; // a stopped Foundry doesn't stockpile parts
   } else if (def.inp) {
+    if (atLimit(b)) return out; // stopped at its stock limit: no more inputs for now
     for (const g in def.inp) out.push([g, INPUT_CAP - (b.stock[g] || 0) - (b.inc[g] || 0)]);
   } else if (def.ammo) {
     out.push([def.ammo, (def.ammoCap || AMMO_CAP) - (b.stock[def.ammo] || 0) - (b.inc[def.ammo] || 0)]);
@@ -533,7 +569,7 @@ function dispatch(p) {
   // Planned roads the border no longer covers are called off (and refunded).
   for (const t of planList(p).slice()) if (S.owner[t] !== p || S.bAt[t]) cancelPlan(t);
   const linked = (a, b) => P.noHaulers || roadLinked(a, b);
-  for (const b of blds) b.unlinked = !P.noHaulers && needsRoad(b) && !blds.some((s) => storeAccepts(s) && roadLinked(s, b));
+  for (const b of blds) b.unlinked = !P.noHaulers && needsRoad(b) && !onHomeNet(b);
   const minFree = siteCount(p) > 0 ? MIN_FREE_WORKERS : 1;
   if (free < minFree) {
     const cands = blds.filter((b) => b.built && b.staff && b.type !== 'foundry' && !BDEFS[b.type].crew);
@@ -597,7 +633,7 @@ function dispatch(p) {
     }
   }
   // 2) An operator for every finished building that needs one, while keeping minFree workers free.
-  const staffQueue = blds.filter((b) => b.built && !b.paused && BDEFS[b.type].staff && !BDEFS[b.type].crew && !b.staff && !b.staffInc)
+  const staffQueue = blds.filter((b) => b.built && !b.paused && BDEFS[b.type].staff && !BDEFS[b.type].crew && !b.staff && !b.staffInc && !atLimit(b))
     .sort((a, c) => prioRank(a) - prioRank(c) || staffPriority(a) - staffPriority(c) || a.born - c.born);
   for (const b of staffQueue) {
     if (!idle.length) return;
@@ -698,7 +734,9 @@ function landerSalvage(p, dt) {
     // A site only counts once its materials are in: one waiting for this very good never will be.
     const working = S.buildings.some((b) => !b.dead && b.owner === p && b.type === type &&
       (b.built ? reachableRes(b.x, b.y, BDEFS[type].radius, res) > 0 : sumValues(b.stock) >= sumValues(BDEFS[type].cost)));
-    if (working || (have[g] || 0) >= SALVAGE_BELOW) { P.salvageT[g] = 0; continue; }
+    // Cement is Stone already baked (2 per Stone), so it counts towards having enough.
+    const amount = (have[g] || 0) + (g === 'stone' ? (have.cement || 0) / 2 : 0);
+    if (working || amount >= SALVAGE_BELOW) { P.salvageT[g] = 0; continue; }
     P.salvageT[g] = (P.salvageT[g] || 0) + dt;
     if (P.salvageT[g] < SALVAGE_EVERY) continue;
     P.salvageT[g] = 0;
@@ -874,12 +912,13 @@ function updateWorker(u, dt) {
 }
 
 /**
- * Does building b need a road to storage? Construction sites always do (haulers bring their
- * materials), and so does any finished building that takes goods in or sends goods out.
+ * Does building b need a road to the Lander's network? Construction sites always do (haulers
+ * bring their materials), and so do Depots and any building that takes goods in or sends them out.
  */
 function needsRoad(b) {
   const def = BDEFS[b.type];
-  if (def.store) return false;
+  if (b.type === 'lander') return false;
+  if (def.store) return true; // a Depot only helps if haulers can reach it from the Lander
   if (!b.built) return true;
   if (def.mil) return S.mode !== 'colony'; // Ammo for the garrison
   return !!(def.inp || def.out || def.ammo || def.charger || def.roadworks || def.bots);
@@ -1320,6 +1359,11 @@ function tracksUse(def) { return !!(def.staff || (def.charger && !def.store) || 
 
 function produce(b, def, dt) {
   const op = getE(b.staff);
+  if (!op && !b.staffInc && atLimit(b)) {
+    const g = limitGood(b);
+    b.status = `Stopped: you have ${goodTotal(b.owner, g)} ${GOOD[g].name} (limit ${stockLimit(b)}); its worker is free for other jobs`;
+    return;
+  }
   if (!op || op.inside !== b.id) {
     const charging = op && op.task && (op.task.phase === 'toCharge' || op.task.phase === 'charging');
     b.status = charging ? 'Worker is recharging' : b.staffInc || op ? 'Worker on the way' : 'Needs a worker';
@@ -1327,6 +1371,15 @@ function produce(b, def, dt) {
   }
   if (def.bots && b.mode === 'off' && !hasOrders(b)) { b.status = 'Idle: tap it to order bots'; return; }
   if (def.pump && pumpSeep(b) < 0) { b.status = 'The oil seep has run dry'; return; }
+  if (!b.timer && atLimit(b)) {
+    const g = limitGood(b);
+    b.status = `Stopped: you have ${goodTotal(b.owner, g)} ${GOOD[g].name} (limit ${stockLimit(b)})`;
+    // After a little while its worker goes off to other jobs; one comes back when it's needed.
+    b.limitT = (b.limitT || 0) + dt;
+    if (b.limitT > 10) { unstaff(b); b.limitT = 0; }
+    return;
+  }
+  b.limitT = 0;
   dt *= batFactor(op);
   for (const g in def.inp) {
     if ((b.stock[g] || 0) < def.inp[g]) { b.status = 'Waiting for ' + GOOD[g].name; return; }
@@ -1349,7 +1402,8 @@ function produce(b, def, dt) {
   }
   if (def.make) {
     for (const g in def.make) { bump(b.stock, g, def.make[g]); madeGood(b.owner, g, def.make[g]); }
-    addFx('float', b.x + 0.5, b.y + 0.1, { text: '+1', color: GOOD[Object.keys(def.make)[0]].color });
+    const g0 = Object.keys(def.make)[0];
+    addFx('float', b.x + 0.5, b.y + 0.1, { text: '+' + def.make[g0], color: GOOD[g0].color });
   }
   if (def.bots) spawnFromFoundry(b);
   if (b.owner === 0) sfx('produce');

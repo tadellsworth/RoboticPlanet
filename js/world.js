@@ -842,9 +842,29 @@ function roadLinked(a, b) {
 
 function isJunction(t) { return !!roadNet().junc[t]; }
 
-/** Tiles next to the owner's storage buildings, and the road networks touching them. */
+/**
+ * The road networks joined to the owner's Lander(s). Goods only flow along roads, so a building
+ * (or a Depot) is linked to storage when it touches one of these.
+ */
+function homeNets(owner) {
+  const nets = [];
+  for (const L of S.buildings) {
+    if (L.dead || L.owner !== owner || L.type !== 'lander') continue;
+    for (const c of buildingNets(L)) if (nets.indexOf(c) < 0) nets.push(c);
+  }
+  return nets;
+}
+
+/** Is building b joined by road to its owner's Lander network? */
+function onHomeNet(b) {
+  const h = homeNets(b.owner);
+  for (const c of buildingNets(b)) if (h.indexOf(c) >= 0) return true;
+  return false;
+}
+
+/** Tiles next to the owner's Lander(s), and the road networks joined to them. */
 function roadGoals(owner, except) {
-  const stores = S.buildings.filter((s) => !s.dead && s.owner === owner && s.built && BDEFS[s.type].store && s !== except);
+  const stores = S.buildings.filter((s) => !s.dead && s.owner === owner && s.built && s.type === 'lander' && s !== except);
   const nets = new Set(), next = new Uint8Array(S.W * S.H);
   for (const s of stores) {
     for (const c of buildingNets(s)) nets.add(c);
@@ -904,7 +924,7 @@ function roadSides(owner, x, y) {
 function roadRouteTo(owner, b) {
   const g = roadGoals(owner, b);
   if (!g.stores.length) return null;
-  if (g.stores.some((s) => roadLinked(s, b))) { const r = []; r.cost = 0; r.pending = 0; return r; }
+  if (onHomeNet(b)) { const r = []; r.cost = 0; r.pending = 0; return r; }
   const net = roadNet();
   const res = roadSearch(owner, roadSides(owner, b.x, b.y), (t) => (S.road[t] && g.nets.has(net.comp[t])) || g.next[t]);
   if (res.end < 0) return null;

@@ -56,24 +56,31 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
 | Bio Farm | A worker plants energy crops on fertile soil and harvests them into **Fuel** |
 | Oil Pump | Built on an oil seep; a worker pumps **Crude** until it runs dry |
 | Refinery | Crude → 2 **Fuel** |
-| Cement Works | Stone → **Cement** (for roads) |
+| Cement Works | 1 Stone → 2 **Cement**, the main building material (stops at 40 unless you change its stock limit) |
 | Asphalt Plant | Crude + Stone → 2 **Asphalt** |
 | Roadworks | Its Paver lays Asphalt on your paths nearby (1 Asphalt covers 4 tiles) |
 | Ammo Plant | Alloy + Stone → 3 **Ammo**; warbots reload it in the Lander and Outposts (Versus) |
 | Missile Factory | 2 Alloy + Chip + Fuel → **Missile** (20 s each; Versus) |
 | Missile Silo | Fires Missiles at rival buildings up to 18 tiles away; holds 2, reloads in 25 s (Versus) |
 
+- **Cement builds the colony.** Nearly every building costs Cement, and so does every road. Only the Quarry (2 Fiber)
+  and the Cement Works (4 Stone, 2 Fiber) are built from raw materials, so you can always restart. Stone's other uses
+  are Asphalt and Ammo. You land with 24 Cement, 8 Stone, 16 Fiber, 8 Alloy, 4 Chips, 4 Crystal and 4 Fuel.
+- **Stock limits:** tap a production building and set when it stops: once you have that much of its product it takes
+  no more inputs and its worker goes off to other jobs until it's needed again. The Cement Works stops at 40 and the
+  Asphalt Plant at 20 by default; the rest have no limit until you set one.
+
 - **Workers and Haulers:** Workers run buildings (one inside each production building), go out to cut, dig and mine,
   and build construction sites. They can go anywhere, but off the road they move at 40% speed, except while out
   gathering for their building. **Haulers** move every good between buildings, two at a time, and **only drive on
   roads**. If every Hauler is lost, workers carry goods slowly until the Foundry makes more. **Agribots** run Bio Farms
-  and Grove Planters, **Pavers** run the Roadworks and **Warbots** fight. You start with 9 Workers, 5 Haulers and an
+  and Grove Planters, **Pavers** run the Roadworks and **Warbots** fight. You start with 10 Workers, 5 Haulers and an
   Agribot (plus 4 Warbots in Versus).
 - **Every building needs a road to storage.** Your Lander lands on a ring of road; join each building and construction
   site to that network (or to a Depot on it), or Haulers can't bring it materials or collect its goods. A red road badge
   marks buildings with no road: tap one and press **Lay road** to plan the shortest route (shown dashed), or plan your
   own. Placement keeps a side of every building open for a road.
-- **Roads** cost Cement (1 Cement paves 10 tiles; you land with 6), paid when you plan them. Planned tiles show dashed
+- **Roads** cost Cement (1 Cement paves 5 tiles), paid when you plan them. Planned tiles show dashed
   until free workers pave them: 1.5 s a tile (3 s through resources), working out from the existing network, so long
   highways take planning and spare workers. Calling off a planned tile refunds it. Roads double a bot's speed. Dragging
   plans roads round resources; tap a boulder, grove, ore or crystal tile to clear it for a road at 3× the Cement. A Roadworks' Paver
