@@ -277,6 +277,7 @@ function initKeyboard() {
       case 'q': if (!$('btn-attack').hidden) $('btn-attack').click(); break;
       case 'h': case 'home': $('btn-home').click(); break;
       case 'm': setMinimap(!MM.on); break;
+      case 'c': if (warOn()) recallAllWarbots(); break;
       case 'f': selectBots(armyIds(0), false); if (UI.sel.length) toast(`${UI.sel.length} warbots selected: right-click to give orders.`, 'info'); break;
       case 'j': if (UI.lastAlert) { centerOn(UI.lastAlert.x + 0.5, UI.lastAlert.y + 0.5); sfx('click'); } break;
       case '[': stepSpeed(-1); break;
@@ -803,7 +804,7 @@ function setMode(mode) {
   if (mode === 'normal') { $('banner').hidden = true; return; }
   closeSheet();
   if (mode === 'road') showRoadBanner();
-  if (mode === 'attack') showBanner('Tap a <b>rival building</b> to attack it with warbots or missiles, or tap open ground to send warbots there to <b>hold the area</b>.', null, 'Cancel');
+  if (mode === 'attack') showArmyBanner();
 }
 
 /* ------------------------------------------------------------------ missile aiming */
@@ -900,8 +901,24 @@ function enterPlaceMode(type) {
   }
 }
 
+/** The Army banner: what to tap, and Recall all when warbots are out in the field. */
+function showArmyBanner() {
+  const out = warbotsOut(0);
+  showBanner('Tap a <b>rival building</b> to attack it with warbots or missiles, or tap open ground to send warbots there to <b>hold the area</b>.' +
+    (out ? ` ${out} warbot${out > 1 ? 's are' : ' is'} out in the field: <b>Recall all</b> brings them home.` : ''), out ? 'Recall all' : null, 'Cancel');
+}
+
+/** Bring every warbot in the field home to its garrison. */
+function recallAllWarbots() {
+  const n = recallAll(0);
+  if (n) { sfx('order'); toast(`Recalled ${n} warbot${n > 1 ? 's' : ''}: they're heading back to their garrisons.`, 'info'); }
+  else { sfx('error'); toast('No warbots are out in the field.', 'info'); }
+  if (R.mode === 'attack') setMode('normal');
+}
+
 function confirmBanner() {
   if (R.mode === 'aim') { fireAimed(); return; }
+  if (R.mode === 'attack') { recallAllWarbots(); return; }
   if (R.mode === 'road') { commitDraft(); return; }
   if (R.mode !== 'place' || !R.ghost || !R.ghost.ok) return;
   const { type, x, y } = R.ghost;

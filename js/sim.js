@@ -2496,6 +2496,25 @@ function stationWarbots(owner, to, count) {
 }
 
 /** Call a rally point's warbots back to their garrisons. */
+/** Warbots out in the field (attacking, holding a rally flag, or out defending). */
+function warbotsOut(owner) {
+  let n = 0;
+  for (const u of S.bots) if (!u.dead && u.owner === owner && u.type === 'warbot' && !u.inside && u.task && ['attack', 'defend', 'hold'].includes(u.task.type)) n++;
+  return n;
+}
+
+/** Recall every warbot in the field: every rally flag comes down and they go back to their garrisons. */
+function recallAll(owner) {
+  let n = 0;
+  for (const r of S.rallies.slice()) if (r.owner === owner) n += recallRally(r.id);
+  for (const u of S.bots) {
+    if (u.dead || u.owner !== owner || u.type !== 'warbot' || u.inside || !u.task) continue;
+    if (!['attack', 'defend', 'hold'].includes(u.task.type)) continue;
+    cancelTask(u); u.task = null; u.path = null; u.fight = 0; n++;
+  }
+  return n;
+}
+
 function recallRally(id) {
   let n = 0;
   for (const u of rallyMembers(id)) { u.task = null; u.path = null; u.fight = 0; n++; }

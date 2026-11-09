@@ -167,6 +167,22 @@ function generateMap(seed, W, H, cfg) {
   };
   mirror();
 
+  // Chokepoint maps: a band of rocky crags right across the middle of the planet, broken by a
+  // single narrow pass in the centre, with open ground leading up to it from both sides. (Mirrored
+  // by construction: the rows and the pass are centred on the map.)
+  const choke = !!(SHAPE_PRESETS[cfg.shape || 0] && SHAPE_PRESETS[cfg.shape || 0].choke);
+  const chokeBand = () => {
+    const p0 = Math.floor((W - 1) / 2) - 1, p1 = Math.ceil((W - 1) / 2) + 1;
+    const top = half - CHOKE_BAND, bot = half + CHOKE_BAND - 1;
+    const passLevel = elev[id(Math.floor(W / 2), bot + CHOKE_APPROACH + 1)];
+    for (let j = top - CHOKE_APPROACH; j <= bot + CHOKE_APPROACH; j++) for (let i = 0; i < W; i++) {
+      const t = id(i, j), inBand = j >= top && j <= bot, inPass = i >= p0 && i <= p1;
+      if (inBand && !inPass) { terrain[t] = T_ROCK; res[t] = R_NONE; fert[t] = 0; continue; }
+      if (inPass) { terrain[t] = T_GROUND; res[t] = R_NONE; fert[t] = 0; elev[t] = passLevel; }
+    }
+  };
+  if (choke) chokeBand();
+
   const ground = (t) => terrain[t] === T_GROUND;
   const orth = (t, fn) => {
     const i = t % W, j = (t / W) | 0;
@@ -203,6 +219,7 @@ function generateMap(seed, W, H, cfg) {
       x += clamp((W / 2 - x) * 0.25 + (rng() - 0.5) * 1.5, -1, 1);
     }
     mirror();
+    if (choke) chokeBand(); // the corridor never cuts a second way through the crags
   }
 
   // 6) Shape the levels into clean terraces, then connect them with ramps.

@@ -12,7 +12,7 @@ how goods move.
   levels. Finishing one unlocks the next and shows an unlock code for it, so progress can move to another device.
 
 Before each game, sliders set the **map size** (Small to Huge), the **terrain** (Flat, Gentle,
-Rolling, Rugged, Mountainous), the **resources** (Scarce to Abundant), the **map shape** (Standard or Long haul), the
+Rolling, Rugged, Mountainous), the **resources** (Scarce to Abundant), the **map shape** (Standard, Long haul or Chokepoint), the
 **biome** (Red desert, Jungle or Polar: scenery only, with plants that roads and buildings clear) and an optional
 **Nuclear race**. Resources come in separate
 fields: your landing zone has a little of everything, and the rich fields beyond it are worth fighting for.
@@ -125,7 +125,8 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
   (`BOT_ACCEL`, `BOT_BRAKE`, `BOT_CORNER` in `js/defs.js`; trucks have their own, slower values).
 - **Frontier riches:** boulders, ore, crystal and oil hold more the further they are from the bases, up to 2.2× in the
   middle of the map; rich deposits sparkle. **Map shape: Long haul** on the new-game screen makes a narrow, long planet
-  (75% as wide, 170% as long) with the bases far apart.
+  (75% as wide, 170% as long) with the bases far apart; **Chokepoint** walls the middle of the map off with a band of
+  crags and leaves one 4-tile pass between the two halves (`CHOKE_BAND`, `CHOKE_APPROACH` in `js/defs.js`).
 - **Raids:** armed warbots holding a rally flag in enemy land with nothing to fight tear up enemy roads near the flag,
   one tile per 12 warbot-seconds. The rival raids your busiest road clear of turrets and garrisons every few minutes
   (Easy rarely, Hard often) once it has warbots to spare. Missiles crater the roads where they land.
@@ -166,7 +167,8 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
   still in a demolished building goes to storage). Harvesters, Quarries, Ore Mines, Crystal Taps and Bio Farms do the
   same with their own resource crossed out when nothing is left in reach (and go back to work if groves regrow).
 - **Army orders:** tap **Army**, then a rival building to attack it with warbots or a missile, or open
-  ground to send warbots there to hold the area under a rally flag. Tap the flag to call them back.
+  ground to send warbots there to hold the area under a rally flag. Tap the flag to call them back, or press
+  **Recall all** in the Army banner (**C** on a computer) to end every attack and rally flag at once.
 - **Garrisons:** tap an Outpost or your Command Base to set its **garrison priority** (new warbots, and ones called back
   from a flag, fill High garrisons first and Low ones last) or to **station warbots** there: choose how many and they
   march over from your other garrisons (each keeps one at home) and stay until you move them.
@@ -205,7 +207,7 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
   group, 1–9 recalls it (twice jumps to it). Pan with **WASD** or the arrow keys, the window edge, or right/middle drag; hover for
   tooltips. Keys: **B** build then a building's letter (or **B R** to start laying roads), **R** (or **P**) opens and closes Paths
   and inside it picks a tool (**R** roads, **G** bridges
-  and tunnels, **V** ramps, **E** pave, **O** one-way arrows, **L** junctions, **T** traffic map), **Q** army, **F** select all warbots, **J** latest alert,
+  and tunnels, **V** ramps, **E** pave, **O** one-way arrows, **L** junctions, **T** traffic map), **Q** army, **C** recall all warbots, **F** select all warbots, **J** latest alert,
   **H** base, **[ ]** speed, **+/−** zoom, **M** minimap, **Space** pause, **Esc** back / clear selection.
   Phones and tablets keep the touch controls.
 

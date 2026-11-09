@@ -229,7 +229,10 @@ const RESOURCE_PRESETS = [
 const SHAPE_PRESETS = [
   { name: 'Standard', w: 1, h: 1 },
   { name: 'Long haul', w: 0.75, h: 1.7 },
+  { name: 'Chokepoint', w: 1, h: 1, choke: true },
 ];
+const CHOKE_BAND = 3;   // Chokepoint maps: rows of crags each side of the middle line
+const CHOKE_APPROACH = 3; // ...and rows of open ground kept clear each side of the pass
 const DEFAULT_SIZE = { versus: 1, colony: 3 };
 const DEFAULT_ROUGH = 2;
 const DEFAULT_RICH = 2;
