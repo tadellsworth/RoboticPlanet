@@ -85,6 +85,18 @@ function drawTexture(ctx, art, i, j, x, y) {
 }
 
 /**
+ * The turret head image facing closest to `aim` (radians, 0 = right, clockwise on screen), from the
+ * art keys turret-head-0 … turret-head-7 (or -15 for 16 directions), team versions first. Null if
+ * there are none.
+ */
+function turretHead(owner, aim) {
+  const n = artFor('turret-head-15', owner) ? 16 : artFor('turret-head-7', owner) ? 8 : 0;
+  if (!n) return null;
+  const k = ((Math.round(aim / ((Math.PI * 2) / n)) % n) + n) % n;
+  return artFor('turret-head-' + k, owner);
+}
+
+/**
  * Draw an art image centred on (cx, cy) at sizePx × its scale. Art with anchor 'bottom' (buildings
  * drawn in a 3/4 view, rising above their tile) is lined up so the image's bottom edge sits on the
  * bottom edge of the tile instead.
@@ -579,9 +591,13 @@ function drawBuilding(ctx, type, cx, cy, s, owner, b) {
       ctx.fillStyle = color;
       ctx.fillRect(cx - w / 2, y, w, h);
     }
-    // Flat (top-down) turret art is drawn barrel-right and rotated to aim; 3/4-view art (anchored at
-    // the bottom) and everything else is drawn as-is.
+    // Flat (top-down) turret art is drawn barrel-right and rotated to aim. 3/4-view turret art
+    // (anchored at the bottom) is a fixed base plus a head image for each direction (see turretHead).
     drawArt(ctx, art, cx, cy, s * (type === 'lander' && !art.scale ? 1.6 : 1), type === 'turret' && b && art.anchor !== 'bottom' ? b.aim : 0);
+    if (type === 'turret' && art.anchor === 'bottom') {
+      const head = turretHead(owner, b ? b.aim : Math.PI / 4);
+      if (head) drawArt(ctx, head, cx, cy, s);
+    }
     return;
   }
   const u = s / 32;
@@ -1408,6 +1424,8 @@ function buildingIcon(type, size, owner) {
   const art = artFor(type, owner || 0);
   if (art) {
     ctx.drawImage(art.img, size * 0.04, size * 0.04, size * 0.92, size * 0.92);
+    const head = type === 'turret' && art.anchor === 'bottom' ? turretHead(owner || 0, Math.PI / 4) : null;
+    if (head) ctx.drawImage(head.img, size * 0.04, size * 0.04, size * 0.92, size * 0.92);
     return c.toDataURL();
   }
   drawBuilding(ctx, type, size / 2, size / 2 + (type === 'lander' ? 0 : size * 0.02), type === 'lander' ? size * 0.55 : size * 0.86, owner || 0,

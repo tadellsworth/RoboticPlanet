@@ -1115,20 +1115,37 @@ function spawnFromFoundry(b) {
   if (kind === 'warbot') goGarrison(u);
 }
 
+/**
+ * A Pulse Turret keeps tracking its target, turns its head toward it at TURRET_TURN radians per
+ * second and fires only once it is lined up. With nothing in range it sweeps slowly back and forth.
+ */
 function updateTurret(b, def, dt) {
   b.cd -= dt;
-  if (b.cd > 0) return;
-  const cx = b.x + 0.5, cy = b.y + 0.5;
-  const target = nearestEnemyBot(b.owner, cx, cy, def.range, true);
+  b.scanT = (b.scanT || 0) - dt;
+  const cx = b.x + 0.5, cy = b.y + 0.5, r2 = def.range * def.range;
+  let target = b.tgt ? getE(b.tgt) : null;
+  if (target && (target.dead || target.inside || dist2(target.x, target.y, cx, cy) > r2)) target = null;
+  if (!target && b.scanT <= 0) { b.scanT = 0.3; target = nearestEnemyBot(b.owner, cx, cy, def.range, true); }
+  b.tgt = target ? target.id : 0;
   const ammo = b.shots + (b.stock.crystal || 0) * SHOTS_PER_AMMO;
-  if (!target) { b.cd = 0.3; b.status = ammo ? `Watching (${ammo} shots)` : 'Needs Crystal for ammo'; return; }
+  if (!target) {
+    b.sweepT = (b.sweepT || 0) + dt;
+    if (b.sweepT > 4) { b.sweepT = 0; b.sweep = -(b.sweep || 1); }
+    b.aim = wrapAngle(b.aim + (b.sweep || 1) * TURRET_SWEEP * dt);
+    b.status = ammo ? `Watching (${ammo} shots)` : 'Needs Crystal for ammo';
+    return;
+  }
+  const want = Math.atan2(target.y - cy, target.x - cx);
+  const diff = wrapAngle(want - b.aim), turn = TURRET_TURN * dt;
+  b.aim = wrapAngle(b.aim + Math.max(-turn, Math.min(turn, diff)));
+  b.working = true;
+  if (Math.abs(diff) > 0.15) { b.status = 'Turning to aim'; return; }
+  if (b.cd > 0) return;
   if (b.shots <= 0) {
     if ((b.stock.crystal || 0) > 0) { bump(b.stock, 'crystal', -1); b.shots = SHOTS_PER_AMMO; }
     else { b.status = 'Out of ammo!'; b.cd = 0.5; return; }
   }
   b.shots--;
-  b.working = true;
-  b.aim = Math.atan2(target.y - cy, target.x - cx);
   b.status = 'Firing';
   addFx('laser', cx, cy, { x2: target.x, y2: target.y, color: PLAYER_COLORS[b.owner] });
   sfx('laser');
@@ -1180,6 +1197,9 @@ function goGarrison(u) {
   u.task = { type: 'garrison', bld: best.id };
   best.garInc++;
 }
+
+/** An angle folded into -π..π. */
+function wrapAngle(a) { return Math.atan2(Math.sin(a), Math.cos(a)); }
 
 function damageBot(u, dmg) {
   u.hp -= dmg;

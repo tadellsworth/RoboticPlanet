@@ -56,6 +56,10 @@ function aiThink(p) {
   let plan = S.mode === 'colony' ? AI_PLAN.concat([['outpost', 40]]) : AI_PLAN;
   const outSite = me.some((b) => b.type === 'outpost' && !b.built);
   if (P.short.length && !outSite && S.time - (P.lastExpand || -99) > 40) plan = [['outpost', (counts.outpost || 0) + 1]].concat(plan);
+  // Missiles are expensive, so the AI saves up for them (see aiMissilePlan): while it is saving,
+  // the building it saves for goes first and nothing else that costs Alloy or Chips is started.
+  const saving = aiMissilePlan(p, me, counts, kinds, workers, staffed);
+  if (saving) plan = [[saving, (counts[saving] || 0) + 1]].concat(plan);
   if (sites < maxSites) {
     for (const [type, want0] of plan) {
       if (S.mode === 'colony' && BDEFS[type].war) continue;
@@ -67,6 +71,7 @@ function aiThink(p) {
       // Plenty of Fuel in stock: no need for more farms or oil yet.
       if ((type === 'farm' || type === 'pump' || type === 'refinery') && (counts[type] || 0) >= 1 && playerGoods(p).fuel > 10) continue;
       if ((counts[type] || 0) >= want) continue;
+      if (saving && type !== saving && (BDEFS[type].cost.alloy || BDEFS[type].cost.chip)) continue;
       // The first of each staffed building is always allowed, so the production chain is complete.
       if (BDEFS[type].staff && !BDEFS[type].crew && !canStaffMore && counts[type]) continue;
       if (!aiAffordable(p, type)) continue;
@@ -101,7 +106,10 @@ function aiThink(p) {
     b.mode = S.mode === 'colony' ? 'worker' : workers < wantWorkers ? 'worker' : workers > wantWorkers + 4 ? 'warbot' : 'alt';
     b.orders = b.orders || {};
     for (const crew in crewNeed) if ((kinds[crew] || 0) < crewNeed[crew] && !(b.orders[crew] > 0)) b.orders[crew] = 1;
-    if ((kinds.hauler || 0) < Math.floor(workers / 4) && !(b.orders.hauler > 0)) b.orders.hauler = 1;
+    // Saving up for missiles (or feeding the Missile Factory): the Foundry rests so Alloy and Chips
+    // pile up, unless workers are badly short.
+    if ((saving || P.feedMissiles) && workers >= staffed + 3) { b.mode = 'off'; delete b.orders.hauler; }
+    else if ((kinds.hauler || 0) < Math.floor(workers / 4) && !(b.orders.hauler > 0)) b.orders.hauler = 1;
     break;
   }
 
@@ -154,6 +162,41 @@ function aiThink(p) {
     }
     if (spot) { placeSite(p, 'outpost', spot.x, spot.y); P.lastAttack = S.time - 30; }
   }
+}
+
+/**
+ * The AI's missile programme (Versus). Once it has an economy and an army (past most of the grace
+ * period, two Outposts, a few warbots and spare workers) it saves up for a Missile Factory, then a
+ * Silo (a second one later). It gives up for a while if saving drags on too long. With both built,
+ * it keeps the factory fed (P.feedMissiles pauses the Foundry) until its silos are nearly full.
+ * Returns the building type it is saving for, or null.
+ */
+function aiMissilePlan(p, me, counts, kinds, workers, staffed) {
+  const P = S.players[p], lvl = DIFFICULTY[S.difficulty];
+  P.feedMissiles = false;
+  if (S.mode === 'colony') return null;
+  const site = me.find((b) => !b.built && (b.type === 'munitions' || b.type === 'silo'));
+  if (site) return site.type; // keep the Foundry resting until the site has its materials
+  const ready = S.time >= lvl.grace * 0.7 && (counts.outpost || 0) >= 2 && (kinds.warbot || 0) >= lvl.threshold && workers >= staffed + 4;
+  if (!ready || S.time < (P.saveCooldown || 0)) { P.saveStart = 0; return null; }
+  let want = null;
+  if (!counts.munitions) want = 'munitions';
+  else if (!counts.silo || (counts.silo < 2 && S.time > lvl.grace * 2.5)) want = 'silo';
+  if (want) {
+    P.saveStart = P.saveStart || S.time;
+    if (S.time - P.saveStart > 180) { P.saveCooldown = S.time + 240; P.saveStart = 0; return null; }
+    return want;
+  }
+  P.saveStart = 0;
+  // Both built: feed the factory until the silos hold nearly two missiles each.
+  let stored = 0, silos = 0;
+  for (const b of me) {
+    if (!b.built) continue;
+    if (b.type === 'silo') { silos++; stored += (b.stock.warhead || 0) + (b.inc.warhead || 0); }
+    if (b.type === 'munitions') stored += b.stock.warhead || 0;
+  }
+  P.feedMissiles = silos > 0 && stored < silos * 2;
+  return null;
 }
 
 /** Only start a building when the needed materials exist somewhere (stops the AI hoarding sites). */

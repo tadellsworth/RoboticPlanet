@@ -373,12 +373,7 @@ A fortified outpost: a round armoured bunker with sloped walls, firing slits, fl
 flying a team-coloured flag. Team colour: cyan #38d4ff on the flag and lights.
 ```
 
-`turret@0.png` and `turret@1.png`
-```
-A defensive energy turret: a squat armoured base with a turret head and a twin-barrelled pulse cannon angled
-toward the lower right, with glowing team-coloured capacitor coils. Smaller than the factories. Team colour: cyan
-#38d4ff.
-```
+`turret@0.png` and `turret@1.png`: see **Turrets that turn** below; this is the base only.
 
 `armory.png`
 ```
@@ -403,6 +398,62 @@ showing a missile nose cone, and team-coloured launch lights around the rim. Tea
 A construction site: a square foundation pad with scaffolding, a small crane, stacked building materials and
 hazard tape. No finished building. Accent colour: yellow hazard stripes.
 ```
+
+**Turrets that turn**
+
+A 3D turret can't simply be spun like a flat picture: the lighting and the angle would turn with it and look
+wrong. So the turret is made in two layers, and the game swaps the head image as it aims:
+
+- a **base** that never moves: `turret@0.png` (cyan) and `turret@1.png` (red)
+- a **gun head** drawn facing **8 directions**: `turret-head-0@0.png` … `turret-head-7@0.png`, plus the same eight
+  with red accents as `turret-head-0@1.png` … `turret-head-7@1.png`
+
+In the game the head turns at a steady speed (about 140° a second), only fires once it's lined up, and slowly
+sweeps back and forth when there's nothing to shoot at. With 8 directions it steps every 45°; for smoother turning
+you can make 16 directions instead (`turret-head-0` … `turret-head-15`, 22.5° apart) and the game uses them
+automatically.
+
+The 8 directions, numbered clockwise as seen on screen:
+
+| Number | Gun points |
+|---|---|
+| 0 | right |
+| 1 | down-right (toward the viewer, to the right) |
+| 2 | straight down (toward the viewer) |
+| 3 | down-left |
+| 4 | left |
+| 5 | up-left (away from the viewer, to the left) |
+| 6 | straight up (away from the viewer) |
+| 7 | up-right |
+
+Step 1, the base:
+```
+The base of a defensive energy turret, without its gun head: a squat armoured octagonal plinth on the foundation
+pad, with a round turret ring on top where the head will sit, cable conduits, and glowing team-coloured capacitor
+cells on its sides. Leave the turret ring empty. Smaller than the factories. Team colour: cyan #38d4ff.
+```
+
+Step 2, the head pointing right (number 0):
+```
+Now only the turret's gun head, on its own: a rounded armoured head with a twin-barrelled pulse cannon and
+team-coloured glowing coils, pointing to the right. Put it on the same 512x512 transparent canvas, in exactly the
+position where it sits on the turret ring of the base you just made, so the two images stack perfectly. Nothing
+else in the image: no base, no pad, no shadow on the ground. Same camera, lighting and scale as before.
+```
+
+Step 3, the other seven: ask for each one in turn, for example:
+```
+The identical gun head, turned so the cannon points down-right (toward the viewer, to the right). Same canvas,
+same position on the turret ring, same lighting from the top-left: only the head has turned, the light has not.
+```
+Then the same for down, down-left, left, up-left, up and up-right. Check each new image against the last one: the
+round turret ring at the bottom of the head should stay in exactly the same spot, or the head will wobble on the
+base as it turns.
+
+Step 4, the red team: ask for the base and all eight heads again with every cyan accent changed to red `#ff5a6e`.
+
+If the heads drift between images, tell Claude Design which way and by how much ("the ring is 6 pixels too far
+left compared with the right-facing head") and ask it to fix that one.
 
 When these are in, the old flat versions of the same names are replaced; anything not yet redrawn keeps its
 current art, so they can be swapped in a few at a time.

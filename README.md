@@ -48,7 +48,7 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
 | Chip Fab | Crystal + Alloy → **Chip** |
 | Bot Foundry | Alloy + Chip → a new **Worker** or **Warbot** |
 | Outpost | Expands your territory and garrisons Warbots |
-| Pulse Turret | Shoots enemy bots; uses Crystal as ammo |
+| Pulse Turret | Turns to aim and shoots enemy bots; uses Crystal as ammo |
 | Depot | Extra storage, shortens hauling trips |
 | Ramp | Cuts a slope into a one-level cliff so bots can climb it |
 | Charging Station | Recharges bots' batteries, four at a time; burns **Fuel** |

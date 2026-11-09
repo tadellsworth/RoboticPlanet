@@ -285,6 +285,8 @@ const BUILD_MENU = ['harvester', 'quarry', 'mine', 'tap', 'smelter', 'fab', 'fou
 
 const INPUT_CAP = 3;   // how many of each input a production building stockpiles
 const AMMO_CAP = 3;    // crystals a turret stockpiles
+const TURRET_TURN = 2.4;   // radians per second a turret's head turns (about 140°)
+const TURRET_SWEEP = 0.35; // radians per second it sweeps while watching for targets
 const SHOTS_PER_AMMO = 4;
 
 const DIFFICULTY = {
