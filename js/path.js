@@ -101,6 +101,18 @@ function findPath(sx, sy, gx, gy, avoidFor, opts) {
         heap.push(nt, ng + h(ni, nj));
       }
     }
+    // A Ropeway station: ride the cable to the far station (light bots of its owner only).
+    if (S.bAt[cur] && !(opts && opts.noRope)) {
+      const nt = ropeLink(cur);
+      if (nt >= 0 && closed[nt] !== gen && passTile(nt, who)) {
+        const ni = nt % W, nj = (nt / W) | 0;
+        const ng = g[cur] + Math.sqrt((ni - ci) * (ni - ci) + (nj - cj) * (nj - cj)) * minStep * ROPE_COST;
+        if (stamp[nt] !== gen || ng < g[nt]) {
+          stamp[nt] = gen; g[nt] = ng; from[nt] = cur;
+          heap.push(nt, ng + h(ni, nj));
+        }
+      }
+    }
   }
   if (closed[goal] !== gen) return null;
   const path = [];

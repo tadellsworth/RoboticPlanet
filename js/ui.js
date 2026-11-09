@@ -820,6 +820,8 @@ function setMode(mode) {
   if (mode !== 'aim') { R.aim = null; R.aimHover = null; UI.aimSilo = 0; }
   R.ghost = null;
   R.overlay = null;
+  R.ropeEnd = null;
+  UI.ropeA = null;
   UI.placeType = null;
   $('btn-road').classList.toggle('on', mode === 'road');
   $('btn-attack').classList.toggle('on', mode === 'attack');
@@ -916,7 +918,8 @@ function enterPlaceMode(type) {
   setMode('place');
   UI.placeType = type;
   refreshOverlay(type);
-  showBanner(`Tap a highlighted spot to place a <b>${BDEFS[type].name}</b>.`, null, 'Cancel');
+  showBanner(type === 'ropeway' ? 'Tap a highlighted spot for the Ropeway\'s <b>near station</b>, where your roads are. Then tap the far end.'
+    : `Tap a highlighted spot to place a <b>${BDEFS[type].name}</b>.`, null, 'Cancel');
   if (!R.overlay.valid.some((v) => v)) {
     const near = BDEFS[type].gather ? ' near the right resource' : BDEFS[type].farm ? ' near fertile soil' : BDEFS[type].pump ? ' on an oil seep' : '';
     showBanner(`<span class="err">There is no valid spot for a ${BDEFS[type].name} in your territory${near}. Expand with an Outpost.</span>`, null, 'Close');
@@ -942,6 +945,16 @@ function confirmBanner() {
   if (R.mode === 'aim') { fireAimed(); return; }
   if (R.mode === 'attack') { recallAllWarbots(); return; }
   if (R.mode === 'road') { commitDraft(); return; }
+  if (R.mode === 'place' && UI.placeType === 'ropeway') {
+    const A = UI.ropeA, E = R.ropeEnd;
+    if (!A || !E || !E.ok) return;
+    const res = placeRopeway(0, A.i, A.j, E.i, E.j);
+    if (!res.ok) { sfx('error'); showBanner(`<span class="err">${res.reason}</span>`, null, 'Cancel'); return; }
+    sfx('place');
+    addFx('ring', A.i + 0.5, A.j + 0.5, { color: PLAYER_COLORS[0] });
+    setMode('normal');
+    return;
+  }
   if (R.mode !== 'place' || !R.ghost || !R.ghost.ok) return;
   const { type, x, y } = R.ghost;
   const res = placeSite(0, type, x, y);
@@ -952,6 +965,27 @@ function confirmBanner() {
 }
 
 /* ------------------------------------------------------------------ map taps */
+
+/** Placing a Ropeway: the first tap picks the near station, the second the far end (tap it again to build). */
+function ropewayTap(i, j) {
+  if (!UI.ropeA) {
+    const chk = canPlace(0, 'ropeway', i, j);
+    R.ghost = { type: 'ropeway', x: i, y: j, ok: chk.ok };
+    if (!chk.ok) { sfx('error'); showBanner(`<span class="err">${chk.reason}</span>`, null, 'Cancel'); return; }
+    UI.ropeA = { i, j };
+    sfx('click');
+    showBanner(`Now tap the <b>far end</b>: ${ROPE_MIN} to ${ROPE_MAX} tiles away, in your territory, across anything (cliffs, water, rock).`, null, 'Cancel');
+    return;
+  }
+  const A = UI.ropeA;
+  if (R.ropeEnd && R.ropeEnd.i === i && R.ropeEnd.j === j && R.ropeEnd.ok) { confirmBanner(); return; }
+  const why = ropeEndBlocked(0, A.i, A.j, i, j);
+  R.ropeEnd = { i, j, ok: !why };
+  if (why) { sfx('error'); showBanner(`<span class="err">${why}</span> Tap another far end.`, null, 'Cancel'); return; }
+  const len = Math.round(dist(A.i, A.j, i, j));
+  const rise = S.elev[tIdx(i, j)] - S.elev[tIdx(A.i, A.j)];
+  showBanner(`A <b>Ropeway</b> ${len} tiles long${rise ? `, ${Math.abs(rise)} level${Math.abs(rise) > 1 ? 's' : ''} ${rise > 0 ? 'up' : 'down'}` : ''}? ${costHTML(BDEFS.ropeway.cost, playerGoods(0))}`, 'Build', 'Cancel');
+}
 
 function buildingAtTap(i, j, wx, wy) {
   if (inMap(i, j) && S.bAt[tIdx(i, j)]) return getE(S.bAt[tIdx(i, j)]);
@@ -966,6 +1000,7 @@ function onMapTap(i, j, wx, wy) {
   if (R.mode === 'place') {
     if (!inMap(i, j)) return;
     const type = UI.placeType;
+    if (type === 'ropeway') { ropewayTap(i, j); return; }
     if (R.ghost && R.ghost.x === i && R.ghost.y === j && R.ghost.ok) { confirmBanner(); return; }
     const chk = canPlace(0, type, i, j);
     R.ghost = { type, x: i, y: j, ok: chk.ok };
@@ -1519,7 +1554,7 @@ function openBuildingSheet(b) {
       const kinds = BOT_ORDER.filter((k) => versus || !BOTS[k].war);
       html += `<div class="section-label">Order bots</div><div id="sh-orders">${kinds.map((k) => row(k, BOTS[k].plural)).join('')}</div>
         <p class="hint">The Foundry only builds the bots you order. Each one uses 1 Alloy and 1 Chip and takes ${def.work} s (a Freight Truck twice that); mixed orders take turns.
-        <b>Haulers</b> carry two goods at a time, <b>Freight Trucks</b> eight on the long runs to Depots, <b>Agribots</b> run Bio Farms and Grove Planters, and <b>Pavers</b> run the Roadworks.</p>`;
+        <b>Haulers</b> carry two goods on the short runs. <b>Freight Trucks</b> carry eight on the long runs (12 tiles or more), from far mines and factories as well as storage. <b>Road Trains</b> carry thirty between your Command Base and far Depots, best on asphalt. <b>Agribots</b> run Bio Farms and Grove Planters, and <b>Pavers</b> run the Roadworks.</p>`;
     }
     if (def.roadworks && b.built) {
       html += `<div class="section-label">Paves and maintains</div>

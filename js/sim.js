@@ -189,10 +189,37 @@ function keepSupply(b, g) {
   return Math.max(0, supplyOf(b, g) - ((b.keep && b.keep[g]) || 0));
 }
 
-/** Should a run from src to dst with n goods go by Freight Truck? Store to store, or a long delivery. */
-function truckRun(src, dst, n) {
-  if (!BDEFS[src.type].store) return false;
-  return !!BDEFS[dst.type].store || (n >= TRUCK_MIN_LOAD && dist2(src.x, src.y, dst.x, dst.y) >= TRUCK_MIN_DIST * TRUCK_MIN_DIST);
+/** Does building b use good g (as an input, ammo, fuel, repairs or construction)? */
+function usesGood(b, g) {
+  const def = BDEFS[b.type];
+  if (!b.built) return (def.cost[g] || 0) > (b.stock[g] || 0);
+  return !!((def.inp && def.inp[g]) || def.ammo === g || (def.fuelCap && g === 'fuel') || (def.repair && g === 'alloy') ||
+    (def.roadworks && g === 'asphalt') || (def.ammoStock && g === 'ammo') || (def.nukeSilo && NUKE.parts[g]) || (def.bots && (g === 'alloy' || g === 'chip')));
+}
+
+/**
+ * Trunk runs (see TRUCK_MIN_DIST): every store at least TRUCK_MIN_DIST from the Command Base sends home
+ * its spare goods (beyond its own supply orders and EXPORT_RESERVE) that no building nearer to it than
+ * to the Command Base uses, a load at a time: TRAIN_MIN_LOAD or more by Road Train, otherwise
+ * TRUCK_MIN_LOAD or more by Freight Truck.
+ */
+function trunkRuns(p, blds, take, canCarry, vans) {
+  const hub = getE(S.players[p].lander);
+  if (!hub || hub.dead || hub.owner !== p) return;
+  const far2 = TRUCK_MIN_DIST * TRUCK_MIN_DIST;
+  for (const R of blds) {
+    if (R === hub || !storeAccepts(R) || dist2(R.x, R.y, hub.x, hub.y) < far2 || !truckLinked(R, hub)) continue;
+    for (const g of GOODS) {
+      const spare = keepSupply(R, g) - EXPORT_RESERVE;
+      if (spare < TRUCK_MIN_LOAD || !storeTakes(hub, g)) continue;
+      if (blds.some((c) => c !== R && !BDEFS[c.type].store && usesGood(c, g) && dist2(c.x, c.y, R.x, R.y) < dist2(c.x, c.y, hub.x, hub.y))) continue;
+      let u = spare >= TRAIN_MIN_LOAD ? take(R.x, R.y, 'train', R) : null;
+      if (!u) u = take(R.x, R.y, 'truck', R);
+      if (!u && !vans) u = take(R.x, R.y, 'train', R); // no trucks: a Road Train takes the smaller loads too
+      if (!u) continue;
+      assignHaul(u, R, hub, g, canCarry(u, spare));
+    }
+  }
 }
 
 function botCount(owner) {
@@ -336,7 +363,7 @@ function haulerStranded(u) {
  */
 function routeOpts(u) {
   const bt = BOTS[u.type];
-  const o = { who: u.owner, breach: u.type === 'warbot' && (u.ammo ?? WARBOT_AMMO) > 0 };
+  const o = { who: u.owner, breach: u.type === 'warbot' && (u.ammo ?? WARBOT_AMMO) > 0, noRope: !!(bt.truck || bt.wild) };
   if (bt.roadOnly && !haulerStranded(u)) o.roadOnly = true;
   else if ((bt.offroad || bt.roadOnly) && !harvestTrip(u)) o.offMul = 1 / OFFROAD_SLOW;
   return o;
@@ -370,6 +397,13 @@ function goTo(u, x, y) {
   const goal = y * S.W + x;
   // Don't hammer the pathfinder with a route that just failed.
   if (u.failGoal === goal && S.time < u.failUntil) return false;
+  // Halfway across a Ropeway: finish the ride first, then go on from the far station.
+  if (u.ride >= 0 && u.path && u.path[u.pi] === u.ride) {
+    const st = u.ride, rest = st === goal ? [] : findPath(st % S.W, (st / S.W) | 0, x, y, u.type !== 'warbot' ? u.owner : undefined, routeOpts(u));
+    if (!rest) { u.failGoal = goal; u.failUntil = S.time + 2; return false; }
+    u.path = [st].concat(rest); u.pi = 0; u.idleT = 0; u.goal = goal; u.breach = 0;
+    return true;
+  }
   const p = findPath(Math.floor(u.x), Math.floor(u.y), x, y, u.type !== 'warbot' && !BOTS[u.type].wild ? u.owner : undefined, routeOpts(u));
   u.breach = 0;
   if (!p) { u.failGoal = goal; u.failUntil = S.time + 2; return false; }
@@ -545,7 +579,7 @@ function queueRoom(u) {
       if (Math.cos(v.face) * dx + Math.sin(v.face) * dy < 0.3) continue; // oncoming or crossing: other lane
       // Two bots on the same spot (say, both just out of the Command Base): the older one goes first.
       if (along <= 0.05) { if (v.id > u.id) continue; along = 0; }
-      room = Math.min(room, along - QUEUE_GAP - (BOTS[v.type].truck ? 0.25 : 0));
+      room = Math.min(room, along - QUEUE_GAP - (BOTS[v.type].train ? TRAIN_LEN : BOTS[v.type].truck ? 0.25 : 0));
     }
   }
   return Math.max(0, room);
@@ -556,6 +590,21 @@ function moveAlong(u, dt) {
   if (!u.path) return true;
   const here = Math.floor(u.y) * S.W + Math.floor(u.x);
   const bt = BOTS[u.type];
+  // Riding a Ropeway: from one station straight to the other at ROPE_SPEED, whatever lies below.
+  const nxt = u.path[u.pi];
+  if (!(u.ride >= 0) && nxt !== undefined && nxt !== here && (ropeLink(here) === nxt || (u.pi > 0 && ropeLink(u.path[u.pi - 1]) === nxt))) u.ride = nxt;
+  if (u.ride >= 0) {
+    if (nxt !== u.ride) u.ride = -1;
+    else {
+      const tx = (nxt % S.W) + 0.5, ty = ((nxt / S.W) | 0) + 0.5, dx = tx - u.x, dy = ty - u.y, d = Math.sqrt(dx * dx + dy * dy);
+      const step = ROPE_SPEED * evSpeed() * dt;
+      u.moved = 1; u.vel = 0; u.drive = 0;
+      if (d > 1e-4) u.face = Math.atan2(dy, dx);
+      if (d <= step) { u.x = tx; u.y = ty; u.pi++; u.ride = -1; } else { u.x += (dx / d) * step; u.y += (dy / d) * step; }
+      if (u.pi >= u.path.length) { u.path = null; return true; }
+      return false;
+    }
+  }
   let speed = bt.speed;
   const r = S.road[here] || (S.bAt[here] && passTile(here) ? 1 : 0); // driving through an Outpost counts as road
   if (r) {
@@ -563,7 +612,7 @@ function moveAlong(u, dt) {
     const dx = (next % S.W) + 0.5 - u.x, dy = ((next / S.W) | 0) + 0.5 - u.y;
     const wrong = r >= 2 && dx * ROAD_DIRS[r][0] + dy * ROAD_DIRS[r][1] < -0.1;
     speed *= wrong ? ONEWAY_WRONG : (S.pave[here] === 2 ? asphaltSpeed(S.wear[here]) : PAVE[S.pave[here] || 1].speed) / (1 + trafficJam(u, here, next));
-    if (bt.truck && S.pave[here] !== 2) speed *= TRUCK_ROAD; // heavy: only asphalt lets it run flat out
+    if (bt.truck && S.pave[here] !== 2) speed *= bt.train ? TRAIN_ROAD : TRUCK_ROAD; // heavy: only asphalt lets it run flat out
     if (isJunction(here) && !S.lights[here] && !S.over[here]) speed *= JUNCTION_SLOW; // crossing carefully
   } else {
     if (S.ramp[here]) speed *= SLOPE_SPEED; else if (S.res[here]) speed *= 0.75;
@@ -654,7 +703,7 @@ function driveSpeed(u, bt, vmax, lim, dt) {
   if (t1 !== undefined && d0 > 1e-3) {
     const bx = (t1 % S.W) - (t0 % S.W), by = ((t1 / S.W) | 0) - ((t0 / S.W) | 0);
     if ((dx0 * bx + dy0 * by) / (d0 * Math.sqrt(bx * bx + by * by)) < 0.7) {
-      const vc = vmax * (bt.truck ? TRUCK_CORNER : BOT_CORNER);
+      const vc = vmax * (bt.train ? TRAIN_CORNER : bt.truck ? TRUCK_CORNER : BOT_CORNER);
       cap = Math.min(cap, Math.sqrt(vc * vc + 2 * brk * d0));
     }
   }
@@ -706,11 +755,11 @@ function dispatch(p) {
 
   // Keep a worker or two free to build. If raids or new buildings took them all, pull one off the
   // least useful job — this must run even when nobody is idle.
-  let free = 0, workers = 0, haulers = 0, trucks = 0;
+  let free = 0, workers = 0, haulers = 0, trucks = 0, vans = 0;
   for (const u of S.bots) {
     if (u.dead || u.owner !== p) continue;
     if (u.type === 'hauler') haulers++;
-    if (BOTS[u.type].truck) trucks++;
+    if (BOTS[u.type].truck) { trucks++; if (!BOTS[u.type].train) vans++; }
     if (u.type !== 'worker') continue;
     workers++;
     if (!(u.task && u.task.type === 'staff')) free++;
@@ -752,8 +801,8 @@ function dispatch(p) {
     let best = -1, bd = Infinity;
     for (let k = 0; k < idle.length; k++) {
       const u = idle[k], bt = BOTS[u.type];
-      if (role === 'haul' || role === 'truck') {
-        if (!(bt.haul || (P.noHaulers && bt.build)) || !!bt.truck !== (role === 'truck')) continue;
+      if (role === 'haul' || role === 'truck' || role === 'train') {
+        if (!(bt.haul || (P.noHaulers && bt.build)) || (bt.train ? 'train' : bt.truck ? 'truck' : 'haul') !== role) continue;
         if (bt.roadOnly && src && !botLinked(u, src)) continue;
       } else if (role === 'build' ? !bt.build : role === 'staff' ? !bt.staff : bt.crew !== role) continue;
       const d = dist2(u.x, u.y, x + 0.5, y + 0.5);
@@ -840,14 +889,25 @@ function dispatch(p) {
         if (d < bd) { bd = d; src = s; }
       }
       if (!src) { r.n = 0; continue; }
-      // Long runs go by Freight Truck. Supply orders wait for one when you have any (haulers stay on
-      // the local work), and a truck only sets off with a worthwhile load.
-      const avail = Math.min(r.n, sup(src, r.g));
+      // Long runs go by Freight Truck (storage to storage by Road Train when the load is big), with a
+      // full load: a far factory or garrison gets up to LONG_BUFFER. Haulers stay on the short local
+      // runs; with trucks around they take a long one only when the building there is about to run
+      // dry. Supply orders wait for a truck when you have one.
+      const have = sup(src, r.g), avail = Math.min(r.n, have);
+      const long = dist2(src.x, src.y, r.b.x, r.b.y) >= TRUCK_MIN_DIST * TRUCK_MIN_DIST;
+      const s2s = !!BDEFS[src.type].store && !!BDEFS[r.b.type].store;
+      const bulk = Math.min(have, r.b.built && !BDEFS[r.b.type].store ? Math.max(r.n, LONG_BUFFER) : r.n);
       let u = null;
-      if (truckRun(src, r.b, r.n) && (avail >= TRUCK_MIN_LOAD || avail >= r.n)) u = take(src.x, src.y, 'truck', src);
-      if (!u && !(r.keep && trucks > 0)) u = take(src.x, src.y, 'haul', src);
+      const byRoad = truckLinked(src, r.b);
+      if (byRoad && s2s && long && bulk >= TRAIN_MIN_LOAD) u = take(src.x, src.y, 'train', src);
+      if (!u && byRoad && (s2s || long)) u = take(src.x, src.y, 'truck', src);
+      if (!u && byRoad && s2s && long && !vans && bulk >= TRUCK_MIN_LOAD) u = take(src.x, src.y, 'train', src); // no trucks: a smaller load
+      if (!u && !(r.keep && trucks > 0)) {
+        const starving = (r.b.built ? (r.b.stock[r.g] || 0) : 0) + (r.b.inc[r.g] || 0) <= 0;
+        if (!long || !vans || starving || !byRoad) u = take(src.x, src.y, 'haul', src);
+      }
       if (!u) { r.n = 0; continue; }
-      const n = canCarry(u, avail);
+      const n = canCarry(u, BOTS[u.type].truck ? bulk : avail);
       assignHaul(u, src, r.b, r.g, n);
       r.n -= n;
       any = true;
@@ -863,7 +923,15 @@ function dispatch(p) {
       const avail = supplyOf(b, g);
       if (avail >= 2 || (avail >= 1 && !b.staff)) {
         const store = storeFor(p, g, b.x + 0.5, b.y + 0.5, null, P.noHaulers ? null : b);
-        const u = store && take(b.x, b.y, 'haul', b);
+        if (!store) continue;
+        // Storage far away: a Freight Truck collects a load; Haulers only once the output is nearly
+        // full (so production never stalls), or when there are no trucks.
+        let u = null;
+        if (vans && dist2(b.x, b.y, store.x, store.y) >= TRUCK_MIN_DIST * TRUCK_MIN_DIST && truckLinked(b, store)) {
+          const full = avail >= def.out[g] - 1 || !b.staff;
+          if (avail >= TRUCK_MIN_LOAD || full) u = take(b.x, b.y, 'truck', b);
+          if (!u && full) u = take(b.x, b.y, 'haul', b);
+        } else u = take(b.x, b.y, 'haul', b);
         if (u) assignHaul(u, b, store, g, canCarry(u, avail));
       }
     }
@@ -880,6 +948,8 @@ function dispatch(p) {
       if (u) assignHaul(u, b, store, g, canCarry(u, avail));
     }
   }
+  // 4c) Trunk runs: a store far from the Command Base sends home, in bulk, what nothing near it uses.
+  if (trucks && idle.some((u) => BOTS[u.type].truck)) trunkRuns(p, blds, take, canCarry, vans);
   // 5) Empty out storage that no longer takes a good (set to "empty out" or the good switched off).
   for (const b of blds) {
     if (!storeAccepts(b) || (b.smode !== 'empty' && !b.reject)) continue;
@@ -887,7 +957,7 @@ function dispatch(p) {
       if (!idle.length) return;
       if (storeTakes(b, g) || supplyOf(b, g) <= 0) continue;
       const store = storeFor(p, g, b.x + 0.5, b.y + 0.5, b, P.noHaulers ? null : b);
-      const u = store && (take(b.x, b.y, 'truck', b) || take(b.x, b.y, 'haul', b));
+      const u = store && ((truckLinked(b, store) && take(b.x, b.y, 'truck', b)) || take(b.x, b.y, 'haul', b));
       if (u) assignHaul(u, b, store, g, canCarry(u, supplyOf(b, g)));
     }
   }
@@ -1175,16 +1245,17 @@ function assignHaul(u, src, dst, g, n) {
 
 /** The road networks bot u is on (or in the building it is inside); none if it is off the road. */
 function botNets(u) {
-  if (u.inside) { const b = getE(u.inside); return b ? buildingNets(b) : []; }
+  const tr = !!BOTS[u.type].truck; // trucks can't ride a Ropeway
+  if (u.inside) { const b = getE(u.inside); return b ? buildingNets(b, tr) : []; }
   const t = tIdx(Math.floor(u.x), Math.floor(u.y));
-  if (S.road[t]) return [roadNet().comp[t]];
-  if (S.bAt[t]) { const b = getE(S.bAt[t]); return b ? buildingNets(b) : []; }
+  if (S.road[t]) return [tr ? roadNet().compT[t] : roadNet().comp[t]];
+  if (S.bAt[t]) { const b = getE(S.bAt[t]); return b ? buildingNets(b, tr) : []; }
   return [];
 }
 
-/** Can bot u reach building b along roads? */
+/** Can bot u reach building b along roads (and, unless it's a truck, Ropeways)? */
 function botLinked(u, b) {
-  const a = botNets(u), n = buildingNets(b);
+  const a = botNets(u), n = buildingNets(b, !!BOTS[u.type].truck);
   for (const c of a) if (n.indexOf(c) >= 0) return true;
   return false;
 }
@@ -1406,6 +1477,7 @@ function completeBuilding(b) {
   if (!def.prepaid) for (const g in def.cost) usedGood(b.owner, g, def.cost[g]); // its materials are built in (a Wall's were counted when it was paid for)
   if (def.ramp) { completeRamp(b); return; }
   b.built = true;
+  if (def.ropeway && !b.link) ropewayAcross(b);
   b.progress = 1;
   b.stock = {};
   b.inc = {};
@@ -1785,6 +1857,10 @@ function updateBuilding(b, dt) {
   if (def.mil) garrisonDefense(b, dt);
   if (def.repair) updateRepairStation(b, def, dt);
   if (def.lab) updateLab(b, dt);
+  if (def.ropeway) {
+    if (!b.link && b.ropeTo >= 0 && S.tick % 60 === b.id % 60) ropewayAcross(b);
+    b.status = b.link ? 'Running: light bots ride across' : 'Waiting for the far end to be clear';
+  }
   if ((def.gather || def.farm) && updateDepleted(b, def)) return;
   if (def.staff && !def.inp) {
     const op = getE(b.staff);
@@ -3522,7 +3598,7 @@ function tech(p, k) { const P = S.players[p]; return !!(P && P.tech && P.tech[k]
 /** Speed, battery drain and carrying for bot u, with planet events and research applied. */
 function speedMul(u) { return evSpeed() * (tech(u.owner, 'motors') ? 1.15 : 1); }
 function drainMul(u) { return evDrain() * (tech(u.owner, 'cells') ? 0.7 : 1); }
-function botCarry(u) { const c = BOTS[u.type].carry || 1; return tech(u.owner, 'cargo') && BOTS[u.type].haul ? c + (BOTS[u.type].truck ? 2 : 1) : c; }
+function botCarry(u) { const bt = BOTS[u.type], c = bt.carry || 1; return tech(u.owner, 'cargo') && bt.haul ? c + (bt.train ? 6 : bt.truck ? 2 : 1) : c; }
 /** A Pulse Turret's reach and shots per Crystal. */
 function turretRange(b) { return BDEFS[b.type].range + (tech(b.owner, 'sentry') ? 1.5 : 0); }
 function shotsPer(b) { return tech(b.owner, 'sentry') ? 6 : SHOTS_PER_AMMO; }
@@ -3831,4 +3907,46 @@ function clearNest(b, by) {
   if (by === 0) sfx('capture');
   S.players[by].stats.captured++;
   destroyBuilding(b, true);
+}
+
+/* ------------------------------------------------------------------ ropeways */
+
+/** Is tile (i, j) a good far end for a Ropeway from (ai, aj)? '' if so, otherwise why not. */
+function ropeEndBlocked(owner, ai, aj, i, j) {
+  if (!inMap(i, j)) return 'Outside the map.';
+  const t = tIdx(i, j), d = dist(ai, aj, i, j);
+  if (d < ROPE_MIN) return `Too close: the far end has to be at least ${ROPE_MIN} tiles away.`;
+  if (d > ROPE_MAX) return `Too far: a Ropeway reaches ${ROPE_MAX} tiles.`;
+  if (S.owner[t] !== owner) return 'The far end has to be inside your territory.';
+  if (S.terrain[t] !== T_GROUND || S.res[t] || S.ramp[t]) return 'The far end needs clear, open ground.';
+  if (S.bAt[t]) return 'There is a building at the far end.';
+  return '';
+}
+
+/**
+ * Plan a Ropeway from (ai, aj) to (bi, bj): a construction site at the near end (it takes the whole
+ * cost); when it's built the cable goes across and the far station goes up.
+ */
+function placeRopeway(owner, ai, aj, bi, bj) {
+  const why = ropeEndBlocked(owner, ai, aj, bi, bj);
+  if (why) return { ok: false, reason: why };
+  const r = placeSite(owner, 'ropeway', ai, aj);
+  if (r.ok) r.building.ropeTo = tIdx(bi, bj);
+  return r;
+}
+
+/** The near station is built: put up the far one and join them (or wait while the far end is blocked). */
+function ropewayAcross(b) {
+  if (!(b.ropeTo >= 0)) return;
+  const i = b.ropeTo % S.W, j = (b.ropeTo / S.W) | 0, t = b.ropeTo;
+  if (S.bAt[t] || S.terrain[t] !== T_GROUND) {
+    if (S.time - (b.ropeMsg || -99) > 30) { b.ropeMsg = S.time; postMsg(b.owner, 'The Ropeway\'s far end is blocked: clear it and the cable goes across.', i, j, 'warn'); }
+    return;
+  }
+  if (S.road[t]) setRoad(i, j, false);
+  if (S.plan[t]) cancelPlan(t);
+  const f = addBuilding(b.owner, 'ropeway', i, j, true);
+  f.link = b.id; b.link = f.id; f.far = true;
+  computeZones();
+  postMsg(b.owner, 'The Ropeway is running: Haulers and Workers ride it across.', b.x, b.y, 'good');
 }

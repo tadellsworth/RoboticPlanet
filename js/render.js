@@ -1360,6 +1360,28 @@ function drawBuilding(ctx, type, cx, cy, s, owner, b) {
       break;
     }
     case 'nest': { drawNest(ctx, cx, cy, s, b); break; }
+    case 'ropeway': {
+      // A lattice pylon on a concrete footing, with the bull wheel the cable runs round on top.
+      ctx.fillStyle = 'rgba(20,10,5,0.32)';
+      ctx.beginPath(); ctx.ellipse(cx + 3 * u, cy + 10 * u, 12 * u, 5 * u, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#8d939c';
+      roundRect(ctx, cx - 11 * u, cy + 3 * u, 22 * u, 9 * u, 2 * u); ctx.fill();
+      ctx.fillStyle = '#6a7079';
+      ctx.fillRect(cx - 11 * u, cy + 9 * u, 22 * u, 3 * u);
+      ctx.strokeStyle = '#3c4148'; ctx.lineWidth = 2.2 * u;
+      ctx.beginPath();
+      ctx.moveTo(cx - 8 * u, cy + 6 * u); ctx.lineTo(cx - 2 * u, cy - ROPE_TOP * 32 * u);
+      ctx.moveTo(cx + 8 * u, cy + 6 * u); ctx.lineTo(cx + 2 * u, cy - ROPE_TOP * 32 * u);
+      for (let k = 0; k < 3; k++) { const y0 = cy + 4 * u - k * 7 * u, y1 = y0 - 7 * u, w0 = 7 - k * 1.8, w1 = w0 - 1.8; ctx.moveTo(cx - w0 * u, y0); ctx.lineTo(cx + w1 * u, y1); ctx.moveTo(cx + w0 * u, y0); ctx.lineTo(cx - w1 * u, y1); }
+      ctx.stroke();
+      ctx.fillStyle = color;
+      ctx.fillRect(cx - 7 * u, cy + 4 * u, 14 * u, 2 * u);
+      ctx.strokeStyle = '#d8dde4'; ctx.lineWidth = 2 * u;
+      ctx.beginPath(); ctx.arc(cx, cy - ROPE_TOP * 32 * u, 4 * u, 0, Math.PI * 2); ctx.stroke();
+      ctx.fillStyle = color;
+      ctx.beginPath(); ctx.arc(cx, cy - ROPE_TOP * 32 * u, 1.6 * u, 0, Math.PI * 2); ctx.fill();
+      break;
+    }
     case 'lab': {
       // A research dome on a plinth, with a dish and a glowing band (brighter while it works).
       ctx.fillStyle = 'rgba(20,10,5,0.32)';
@@ -1769,6 +1791,60 @@ function drawSite(ctx, type, cx, cy, s, owner, b) {
 /* ------------------------------------------------------------------ bots */
 
 /**
+ * Ropeways: a sagging cable between each pair of stations' wheels (high above everything), gondolas
+ * carrying the bots riding it, and a dashed line to the far end while the near station is still a
+ * construction site (red while the far end is blocked).
+ */
+const ROPE_TOP = 0.82; // how high (in tiles) the cable leaves the pylon
+function ropeCurve(ax, ay, bx, by, z) {
+  const len = Math.sqrt((bx - ax) * (bx - ax) + (by - ay) * (by - ay));
+  return { x0: ax, y0: ay - ROPE_TOP * z, x1: bx, y1: by - ROPE_TOP * z, cx: (ax + bx) / 2, cy: (ay + by) / 2 - ROPE_TOP * z + len * 0.08 };
+}
+function drawRopeways(ctx, ox, oy, z) {
+  for (const b of S.buildings) {
+    if (b.dead || b.type !== 'ropeway') continue;
+    const ax = ox + (b.x + 0.5) * z, ay = oy + (b.y + 0.5) * z;
+    if (b.link) {
+      const o = getE(b.link);
+      if (!o || b.id > o.id) continue; // each cable once
+      const c = ropeCurve(ax, ay, ox + (o.x + 0.5) * z, oy + (o.y + 0.5) * z, z);
+      ctx.strokeStyle = 'rgba(20,22,26,0.85)'; ctx.lineWidth = Math.max(1.5, z * 0.045);
+      for (const off of [-0.06, 0.06]) { ctx.beginPath(); ctx.moveTo(c.x0, c.y0 + off * z); ctx.quadraticCurveTo(c.cx, c.cy + off * z, c.x1, c.y1 + off * z); ctx.stroke(); }
+    } else if (b.ropeTo >= 0) {
+      const t = b.ropeTo, bx = ox + ((t % S.W) + 0.5) * z, by = oy + (((t / S.W) | 0) + 0.5) * z;
+      ctx.strokeStyle = b.built ? 'rgba(255,107,107,0.85)' : 'rgba(255,255,255,0.6)';
+      ctx.lineWidth = Math.max(1.5, z * 0.04);
+      ctx.setLineDash([z * 0.18, z * 0.12]);
+      const c = ropeCurve(ax, ay, bx, by, z);
+      ctx.beginPath(); ctx.moveTo(c.x0, c.y0); ctx.quadraticCurveTo(c.cx, c.cy, c.x1, c.y1); ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.globalAlpha = 0.45;
+      drawBuilding(ctx, 'ropeway', bx, by, z, b.owner, { built: true, garrison: [] });
+      ctx.globalAlpha = 1;
+    }
+  }
+  // Gondolas: each riding bot in a cabin hanging from the cable.
+  for (const u of S.bots) {
+    if (u.dead || !(u.ride >= 0) || !u.path) continue;
+    const to = u.ride, from = u.pi > 0 ? u.path[u.pi - 1] : ropeLink(to);
+    if (from < 0) continue;
+    const ax = (from % S.W) + 0.5, ay = ((from / S.W) | 0) + 0.5, bx = (to % S.W) + 0.5, by = ((to / S.W) | 0) + 0.5;
+    const L2 = (bx - ax) * (bx - ax) + (by - ay) * (by - ay) || 1;
+    const f = clamp(((u.x - ax) * (bx - ax) + (u.y - ay) * (by - ay)) / L2, 0, 1);
+    const c = ropeCurve(ox + ax * z, oy + ay * z, ox + bx * z, oy + by * z, z);
+    const px = (1 - f) * (1 - f) * c.x0 + 2 * (1 - f) * f * c.cx + f * f * c.x1, py = (1 - f) * (1 - f) * c.y0 + 2 * (1 - f) * f * c.cy + f * f * c.y1;
+    const w = z * 0.34, h = z * 0.28, top = py + z * 0.14;
+    ctx.strokeStyle = '#2a2e35'; ctx.lineWidth = Math.max(1, z * 0.03);
+    ctx.beginPath(); ctx.moveTo(px, py); ctx.lineTo(px, top); ctx.stroke();
+    ctx.fillStyle = PLAYER_COLORS[u.owner];
+    roundRect(ctx, px - w / 2, top, w, h, z * 0.05); ctx.fill();
+    ctx.fillStyle = '#16212b';
+    ctx.fillRect(px - w * 0.36, top + h * 0.18, w * 0.72, h * 0.34);
+    if (u.carry) { ctx.fillStyle = GOOD[u.carry].color; ctx.fillRect(px - w * 0.2, top + h * 0.6, w * 0.4, h * 0.28); }
+  }
+}
+
+/**
  * A creature nest: a purple creep spreading round a mound with burrow holes and glowing eggs (more
  * of them as it grows).
  */
@@ -1841,6 +1917,7 @@ function drawCritter(ctx, u, x, y, s) {
 
 function drawBot(ctx, u, sx, sy, s) {
   if (BOTS[u.type].wild) { drawCritter(ctx, u, sx, sy, s); return; }
+  if (BOTS[u.type].train) { drawRoadTrain(ctx, u, sx, sy, s); return; }
   const color = PLAYER_COLORS[u.owner];
   const own = driveFrame(u) || artFor(u.type, u.owner);
   // Specialists use their own art when it exists, otherwise the worker's with a badge.
@@ -2080,6 +2157,62 @@ function drawTruck(ctx, u, sx, sy, s, color, art) {
   drawTruckCargo(ctx, u, sx, sy, -L / 2 + s * 0.025, L * 0.62, Wd - s * 0.06, s);
 }
 
+/**
+ * A Road Train: the Freight Truck's tractor unit with two trailers behind it, each trailer following
+ * the road the cab took (a trail of the cab's recent positions, kept by the renderer). The load is
+ * spread over the cab's bed and both trailers.
+ */
+function drawRoadTrain(ctx, u, sx, sy, s) {
+  const color = PLAYER_COLORS[u.owner];
+  const trails = R.trails || (R.trails = new Map());
+  let tr = trails.get(u.id);
+  if (!tr) { tr = [{ x: u.x, y: u.y }]; for (let k = 1; k <= 6; k++) tr.push({ x: u.x - Math.cos(u.face || 0) * k * 0.3, y: u.y - Math.sin(u.face || 0) * k * 0.3 }); trails.set(u.id, tr); }
+  if (dist2(tr[0].x, tr[0].y, u.x, u.y) > 0.0025) tr.unshift({ x: u.x, y: u.y });
+  // Keep about 2.5 tiles of trail.
+  let len = 0;
+  for (let k = 1; k < tr.length; k++) { len += Math.sqrt(dist2(tr[k - 1].x, tr[k - 1].y, tr[k].x, tr[k].y)); if (len > 2.6) { tr.length = k + 1; break; } }
+  // The point `d` tiles back along the trail.
+  const at = (d) => {
+    let acc = 0;
+    for (let k = 1; k < tr.length; k++) {
+      const a = tr[k - 1], b = tr[k], l = Math.sqrt(dist2(a.x, a.y, b.x, b.y));
+      if (acc + l >= d && l > 0) { const f = (d - acc) / l; return { x: a.x + (b.x - a.x) * f, y: a.y + (b.y - a.y) * f }; }
+      acc += l;
+    }
+    const e = tr[tr.length - 1];
+    return { x: e.x, y: e.y };
+  };
+  const n = u.carry ? u.carryN || 1 : 0, cab = Math.min(8, n), rest = n - cab, t1 = Math.min(11, rest), t2 = rest - t1;
+  for (const [d, load] of [[1.22, t2], [0.66, t1]]) {
+    const p = at(d), f = at(d - 0.22), b = at(d + 0.22);
+    const ang = Math.atan2(f.y - b.y, f.x - b.x);
+    const x = sx + (p.x - u.x) * s, y = sy + (p.y - u.y) * s, Lt = s * 0.5, Wt = s * 0.27;
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.fillStyle = 'rgba(20,10,5,0.3)';
+    ctx.beginPath(); ctx.ellipse(s * 0.03, s * 0.05, Lt * 0.55, Wt * 0.62, ang, 0, Math.PI * 2); ctx.fill();
+    ctx.rotate(ang);
+    ctx.fillStyle = '#121418';
+    for (const wx of [-Lt * 0.32, -Lt * 0.12]) { ctx.fillRect(wx - s * 0.035, -Wt * 0.58, s * 0.07, Wt * 0.16); ctx.fillRect(wx - s * 0.035, Wt * 0.42, s * 0.07, Wt * 0.16); }
+    ctx.fillStyle = '#2b2f36';
+    roundRect(ctx, -Lt / 2, -Wt / 2, Lt, Wt, s * 0.025); ctx.fill();
+    ctx.fillStyle = '#5a616b';
+    ctx.fillRect(-Lt / 2 + s * 0.02, -Wt / 2 + s * 0.02, Lt - s * 0.04, Wt - s * 0.04);
+    ctx.fillStyle = color;
+    ctx.fillRect(-Lt / 2 + s * 0.02, -Wt / 2 + s * 0.01, Lt - s * 0.04, s * 0.018);
+    ctx.fillRect(-Lt / 2 + s * 0.02, Wt / 2 - s * 0.028, Lt - s * 0.04, s * 0.018);
+    // The hitch to the vehicle in front.
+    ctx.fillStyle = '#121418';
+    ctx.fillRect(Lt / 2, -s * 0.012, s * 0.07, s * 0.024);
+    if (u.drive < 0) { ctx.fillStyle = '#ff3b3b'; ctx.fillRect(-Lt / 2 - s * 0.01, -Wt * 0.45, s * 0.02, s * 0.035); ctx.fillRect(-Lt / 2 - s * 0.01, Wt * 0.45 - s * 0.035, s * 0.02, s * 0.035); }
+    ctx.restore();
+    if (load > 0) drawTruckCargo(ctx, { carry: u.carry, carryN: Math.ceil((load / 11) * 8), face: ang }, x, y, -Lt / 2 + s * 0.03, Lt - s * 0.06, Wt - s * 0.07, s);
+  }
+  // The cab: the Freight Truck's art (or its drawing), carrying the first crates.
+  const proxy = { ...u, type: 'truck', carryN: cab, carry: cab ? u.carry : null };
+  drawTruck(ctx, proxy, sx, sy, s, color, driveFrame(proxy) || artFor('truck', u.owner));
+}
+
 /** A load of crates on a flatbed starting `x0` behind the centre: `cols` × `rows` of them (truck 4 × 2, hauler 2 × 1). */
 function drawTruckCargo(ctx, u, sx, sy, x0, len, wid, s, cols, rows) {
   const n = u.carry ? u.carryN || 1 : 0;
@@ -2281,7 +2414,7 @@ function render(dtReal) {
   // Buildings and bots, sorted by y so lower things overlap upper ones.
   const items = [];
   for (const b of S.buildings) if (!b.dead && inView(b.x, b.y, 2)) items.push(b);
-  for (const u of S.bots) if (!u.dead && !u.inside && inView(u.x, u.y, 1)) items.push(u);
+  for (const u of S.bots) if (!u.dead && !u.inside && !(u.ride >= 0) && inView(u.x, u.y, 1)) items.push(u);
   items.sort((a, b) => (a.ent === 'b' ? a.y + 0.5 : a.y) - (b.ent === 'b' ? b.y + 0.5 : b.y));
   for (const e of items) {
     if (e.ent === 'b') {
@@ -2335,6 +2468,19 @@ function render(dtReal) {
     }
   }
 
+  // Placing a Ropeway: the cable from the near station to the far end picked so far.
+  if (typeof UI !== 'undefined' && UI.ropeA && R.ropeEnd) {
+    const A = UI.ropeA, E = R.ropeEnd, ax = ox + (A.i + 0.5) * z, ay = oy + (A.j + 0.5) * z, bx = ox + (E.i + 0.5) * z, by = oy + (E.j + 0.5) * z;
+    const c = ropeCurve(ax, ay, bx, by, z);
+    ctx.strokeStyle = E.ok ? '#9dffb8' : '#ff6b6b'; ctx.lineWidth = Math.max(2, z * 0.05);
+    ctx.setLineDash([z * 0.18, z * 0.12]);
+    ctx.beginPath(); ctx.moveTo(c.x0, c.y0); ctx.quadraticCurveTo(c.cx, c.cy, c.x1, c.y1); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.globalAlpha = 0.75;
+    drawBuilding(ctx, 'ropeway', bx, by, z, 0, { built: true, garrison: [] });
+    ctx.globalAlpha = 1;
+    ctx.strokeRect(ox + E.i * z + 1, oy + E.j * z + 1, z - 2, z - 2);
+  }
   if (R.ghost) {
     ctx.globalAlpha = 0.75;
     drawBuilding(ctx, R.ghost.type, ox + (R.ghost.x + 0.5) * z, oy + (R.ghost.y + 0.5) * z, z, 0, { built: true, garrison: [], aim: -Math.PI / 2 });
@@ -2370,6 +2516,7 @@ function render(dtReal) {
     ctx.strokeRect(ox + (R.selTile % S.W) * z + 1, oy + ((R.selTile / S.W) | 0) * z + 1, z - 2, z - 2);
   }
 
+  drawRopeways(ctx, ox, oy, z);
   drawLoot(ctx, ox, oy, z, inView);
   drawRallies(ctx, ox, oy, z);
   drawMissiles(ctx, ox, oy, z);

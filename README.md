@@ -77,6 +77,7 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
 | Nuclear Reactor | 2 Uranium → 1 **Enriched Uranium** (Nuclear race) |
 | Nuclear Silo | 6 Enriched Uranium + 4 Alloy + 2 Chips → one nuclear missile; fires 40 tiles (Nuclear race) |
 | Research Lab | Researches colony-wide upgrades with Chips, Crystal and Alloy (Colony) |
+| Ropeway | Two stations joined by a cable straight across cliffs, water or rock; light bots ride it |
 
 - **Cement builds the colony.** Nearly every building costs Cement, and so does every road. Only the Quarry (2 Fiber)
   and the Cement Works (4 Stone, 2 Fiber) are built from raw materials, so you can always restart. Stone has no
@@ -126,11 +127,25 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
 - **Traffic map:** **Traffic map** in the Paths banner (or **T**) tints each road green to red by how busy it has been
   over the last minute and rings the spots where bots stand waiting.
 - **Long hauls:** tap a Depot and set **supply orders** (how much of each good to keep there). Goods come from your other
-  storage, and anything nearby then draws on the Depot. **Freight Trucks** (2 Alloy and 2 Chips at the Foundry) carry
-  8 goods and take the long runs: storage to storage and deliveries of 3 or more over 12 tiles. Once you own a truck,
-  supply orders always wait for one and trucks only leave with 3 or more goods, so Haulers stay local. Idle trucks
-  spread out: each store keeps one waiting, and spare trucks park at the nearest Depot (or Command Base) with none. Trucks are
-  slower than Haulers on concrete (80%) and slow to accelerate, but fastest of all on asphalt.
+  storage, and anything nearby then draws on the Depot. Who carries what (see the comment above `TRUCK_MIN_DIST` in
+  `js/defs.js` and `dispatch` in `js/sim.js`): **Haulers** (2) do runs under `TRUCK_MIN_DIST` (12) tiles. **Freight
+  Trucks** (8; 2 Alloy and 2 Chips at the Foundry) do the long runs from any building, with a full load (a far
+  factory gets up to `LONG_BUFFER` of each input), and storage to storage. With trucks around, Haulers take a long run
+  only when the far building is about to run dry, and a far producer waits for a truck until its output is nearly
+  full. **Trunk runs** (`trunkRuns`): a store 12+ tiles from the Command Base sends home, in bulk, the goods nothing
+  nearer to it uses (beyond its supply orders and `EXPORT_RESERVE`), by truck or Road Train only. **Road Trains**
+  (30; 4 Alloy and 4 Chips) only do storage-to-storage runs 12+ tiles long, with `TRAIN_MIN_LOAD` (12) or more (any load
+  without trucks); `TRAIN_ROAD` (35%) on plain road, slow corners, `TRAIN_LEN` of queue behind them, `WEAR_TRAIN` wear.
+  On a straight asphalt trunk road one Road Train moves ~1.7× what two trucks do; on plain road about the same or less.
+  Idle trucks spread out: each store keeps one waiting, and spare trucks park at the nearest Depot (or Command Base)
+  with none. Trucks are slower than Haulers on concrete (80%) and slow to accelerate, but fastest of all on asphalt.
+  An audit of 35-minute autopilot games: trucks were busy 18–60% before these rules and 76–92% after, Haulers made
+  about half as many long trips, and about a quarter more goods moved.
+- **Ropeways** (`ROPE_*` in `js/defs.js`; `ropeLink`, `placeRopeway`, `ropewayAcross`): two stations 3–14 tiles apart
+  joined straight across anything. The near station is the construction site (it takes the whole cost); when it's built
+  the far one goes up (`b.link` both ways). To the pathfinder a ride is an extra edge between the station tiles
+  (`ROPE_COST` × a paved road of that length); zones and the road network join across it (`roadNet().comp`), but not for
+  trucks (`compT`, `truckLinked`, `routeOpts.noRope`). Riders move at `ROPE_SPEED` (`u.ride`) and are drawn in gondolas.
 - **Driving:** bots accelerate away from stops and brake for corners, junctions, red lights and the end of a trip
   (`BOT_ACCEL`, `BOT_BRAKE`, `BOT_CORNER` in `js/defs.js`; trucks have their own, slower values).
 - **Frontier riches:** boulders, ore, crystal and oil hold more the further they are from the bases, up to 2.2× in the

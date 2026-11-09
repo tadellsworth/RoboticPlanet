@@ -812,7 +812,17 @@ function passTile(t, who) {
   const b = getE(id);
   if (!b) return false;
   if (b.type === 'outpost') return true;
-  return b.type === 'gate' && (who === undefined || who === b.owner);
+  return (b.type === 'gate' || b.type === 'ropeway') && (who === undefined || who === b.owner);
+}
+
+/** The tile at the far end of the ropeway whose station stands on tile t (both built), or -1. */
+function ropeLink(t) {
+  const id = S.bAt[t];
+  if (!id) return -1;
+  const b = getE(id);
+  if (!b || b.type !== 'ropeway' || !b.built || !b.link) return -1;
+  const o = getE(b.link);
+  return o && !o.dead && o.built ? o.y * S.W + o.x : -1;
 }
 
 /** Chokepoint maps: where the pass runs through the crags (columns p0..p1, rows top..bot), or null. */
@@ -866,6 +876,9 @@ function computeZones() {
         z[b] = next;
         q.push(b);
       }
+      // A Ropeway joins the areas at its two ends, whatever lies between.
+      const r = S.bAt[a] ? ropeLink(a) : -1;
+      if (r >= 0 && z[r] < 0) { z[r] = next; q.push(r); }
     }
     next++;
   }
@@ -902,7 +915,7 @@ function addBuilding(owner, type, x, y, built) {
   S.byId.set(b.id, b);
   S.bAt[tIdx(x, y)] = b.id;
   clearDecor(tIdx(x, y));
-  if (type === 'outpost' || type === 'gate') outpostRoads(x, y); // roads run through it
+  if (type === 'outpost' || type === 'gate' || type === 'ropeway') outpostRoads(x, y); // roads run through it
   return b;
 }
 
@@ -1109,7 +1122,7 @@ function canPlace(owner, type, i, j, skipBlockCheck) {
     return { ok: true, reason: '' };
   }
   // An Outpost or a Gate can stand on a road: the road runs through it.
-  if ((S.road[t] || S.plan[t]) && type !== 'outpost' && type !== 'gate') {
+  if ((S.road[t] || S.plan[t]) && type !== 'outpost' && type !== 'gate' && type !== 'ropeway') {
     return { ok: false, reason: def.barrier ? 'There is a road here: a wall line across a road gets a Gate there.' : S.road[t] ? 'There is a road here.' : 'A road is planned here.' };
   }
   if (def.barrier && (S.road[t] || S.plan[t]) && crossTile(t)) return { ok: false, reason: 'Not on a bridge or tunnel.' };
@@ -1351,7 +1364,7 @@ function asphaltSpeed(w) {
 /** Wear asphalt as a bot drives onto it. Worn right through, it drops back to plain road. */
 function wearRoad(t, u) {
   if (S.pave[t] !== 2 || !S.wear) return;
-  const before = S.wear[t], w = Math.min(WEAR_MAX, before + (BOTS[u.type].truck ? WEAR_TRUCK : WEAR_BOT));
+  const before = S.wear[t], w = Math.min(WEAR_MAX, before + (BOTS[u.type].train ? WEAR_TRAIN : BOTS[u.type].truck ? WEAR_TRUCK : WEAR_BOT));
   S.wear[t] = w;
   const i = t % S.W, j = (t / S.W) | 0;
   if (w >= WEAR_MAX) {
@@ -1387,7 +1400,7 @@ function setPaveMark(owner, i, j, on) {
  * carry goods between buildings that touch the same network. A junction is a road tile with
  * roads on three or four sides. Labels are rebuilt lazily whenever S.roadVer changes.
  */
-const _rn = { ver: -1, of: null, comp: null, junc: null, bnet: new Map() };
+const _rn = { ver: -1, of: null, comp: null, compT: null, junc: null, bnet: new Map(), bnetT: new Map() };
 
 function roadNet() {
   const N = S.W * S.H;
@@ -1413,25 +1426,44 @@ function roadNet() {
     }
     next++;
   }
-  Object.assign(_rn, { of: S, ver: S.roadVer || 0, comp, junc });
+  // Ropeways join networks for the light bots that ride them (comp); trucks keep to the roads (compT).
+  const compT = comp.slice(), parent = Array.from({ length: next }, (_, k) => k);
+  const find = (k) => { while (parent[k] !== k) { parent[k] = parent[parent[k]]; k = parent[k]; } return k; };
+  for (const b of S.buildings) {
+    if (b.dead || b.type !== 'ropeway' || !b.built) continue;
+    const t = b.y * W + b.x, o = ropeLink(t);
+    if (o < 0 || comp[t] < 0 || comp[o] < 0) continue;
+    parent[find(comp[t])] = find(comp[o]);
+  }
+  for (let t = 0; t < N; t++) if (comp[t] >= 0) comp[t] = find(comp[t]);
+  Object.assign(_rn, { of: S, ver: S.roadVer || 0, comp, compT, junc });
   _rn.bnet.clear();
+  _rn.bnetT.clear();
   return _rn;
 }
 
+/** Can a Freight Truck or Road Train drive between buildings a and b (by road, not by ropeway)? */
+function truckLinked(a, b) {
+  if (a === b) return true;
+  const na = buildingNets(a, true), nb = buildingNets(b, true);
+  for (const c of na) if (nb.indexOf(c) >= 0) return true;
+  return false;
+}
+
 /** The road networks touching building b (the road tiles right next to it). */
-function buildingNets(b) {
-  const net = roadNet();
-  let nets = net.bnet.get(b.id);
+function buildingNets(b, trucks) {
+  const net = roadNet(), comp = trucks ? net.compT : net.comp, cache = trucks ? net.bnetT : net.bnet;
+  let nets = cache.get(b.id);
   if (nets) return nets;
   nets = [];
   const t = tIdx(b.x, b.y);
-  if (net.comp[t] >= 0) nets.push(net.comp[t]); // an Outpost is part of the road through it
+  if (comp[t] >= 0) nets.push(comp[t]); // an Outpost is part of the road through it
   for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
     if (!inMap(b.x + di, b.y + dj)) continue;
     const u = tIdx(b.x + di, b.y + dj);
-    if (roadLike(u) && canStep(t, u) && nets.indexOf(net.comp[u]) < 0) nets.push(net.comp[u]);
+    if (roadLike(u) && canStep(t, u) && nets.indexOf(comp[u]) < 0) nets.push(comp[u]);
   }
-  if (b.id) net.bnet.set(b.id, nets);
+  if (b.id) cache.set(b.id, nets);
   return nets;
 }
 
@@ -1656,7 +1688,9 @@ function destroyBuilding(b, burn) {
   b.dead = true;
   S.byId.delete(b.id);
   S.bAt[tIdx(b.x, b.y)] = 0;
-  if (b.type === 'outpost' || b.type === 'gate') outpostRoads(b.x, b.y);
+  if (b.type === 'outpost' || b.type === 'gate' || b.type === 'ropeway') outpostRoads(b.x, b.y);
+  // A Ropeway is two stations: one going takes the other with it.
+  if (b.type === 'ropeway' && b.link) { const o = getE(b.link); b.link = 0; if (o && !o.dead) { o.link = 0; destroyBuilding(o, burn); } computeZones(); }
   // A Gate that stood on a road leaves the road behind when it goes.
   if (b.type === 'gate' && b.road) setRoad(b.x, b.y, true);
   markDirty(b.x, b.y);

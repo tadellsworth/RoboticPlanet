@@ -114,6 +114,8 @@ const BOTS = {
     desc: 'A farm robot. Bio Farms and Grove Planters need one to run. Slow off roads, except while farming.' },
   paver:   { name: 'Paver', plural: 'Pavers', speed: WORKER_SPEED, hp: 6, crew: 'paver', offroad: true,
     desc: 'A road crew bot. A Roadworks needs one to lay asphalt on your roads.' },
+  roadtrain: { name: 'Road Train', plural: 'Road Trains', speed: WORKER_SPEED * 1.35, hp: 14, haul: true, truck: true, train: true, carry: 30, roadOnly: true, parts: 4, accel: 1.0, brake: 2.5,
+    desc: 'A truck pulling two trailers: 30 goods at once, for bulk runs between your Command Base and far Depots (filling supply orders, and bringing a far Depot\'s spare goods home). It only pays off on asphalt: on plain road it crawls. Slow to start and stop, it wears roads hard and holds up the traffic behind it.' },
   truck:   { name: 'Freight Truck', plural: 'Freight Trucks', speed: WORKER_SPEED * 1.35, hp: 8, haul: true, truck: true, carry: 8, roadOnly: true, parts: 2, accel: 1.5, brake: 3.5,
     desc: 'A heavy road truck that carries eight goods at once on the long runs: between your Command Base and Depots, and to anything far away. Slower than a Hauler on concrete, fastest of all on asphalt.' },
   warbot:  { name: 'Warbot', plural: 'Warbots', speed: WARBOT_SPEED, hp: 12, war: true,
@@ -124,17 +126,40 @@ const BOTS = {
   brute:    { name: 'Brute', plural: 'Brutes', speed: WORKER_SPEED * 0.8, hp: 24, wild: true, bite: 3, smash: true,
     desc: 'A big, slow, armoured creature. Brutes tear up roads and batter buildings, and bite hard.' },
 };
-const BOT_ORDER = ['worker', 'hauler', 'truck', 'agribot', 'paver', 'warbot'];
+const BOT_ORDER = ['worker', 'hauler', 'truck', 'roadtrain', 'agribot', 'paver', 'warbot'];
 /*
- * Freight trucks take the long runs: storage to storage (filling a Depot's supply orders, or
- * emptying a store), and deliveries of TRUCK_MIN_LOAD or more goods from storage to anything
- * TRUCK_MIN_DIST tiles or more away. Haulers do everything else, and the long runs when every truck
- * is busy. Trucks are heavy: on concrete they go at TRUCK_ROAD of their speed; asphalt is full speed.
- * A Depot's supply orders (b.keep) ask for goods to be kept there, up to KEEP_MAX of each.
+ * Who carries what (see dispatch):
+ * - Haulers (2 goods) do the short runs: between buildings less than TRUCK_MIN_DIST tiles apart.
+ * - Freight Trucks (8 goods) do the long runs, from any building: a far mine's output to storage,
+ *   storage to a far factory (which gets a bigger buffer, up to LONG_BUFFER of each input), and
+ *   storage to storage (a Depot's supply orders, emptying a store). With trucks around, Haulers take a
+ *   long run only when the building at the far end is about to run dry; a far producer waits for a
+ *   truck until its output is nearly full.
+ * - Trunk runs: a store TRUCK_MIN_DIST or more from the Command Base sends home the goods nothing near
+ *   it uses, keeping EXPORT_RESERVE of each, by Road Train or Freight Truck only (never by Hauler).
+ * - Road Trains (30 goods) only do storage-to-storage runs at least TRUCK_MIN_DIST long (supply
+ *   orders and trunk runs), and only with a load of TRAIN_MIN_LOAD or more (any load when there are
+ *   no Freight Trucks): a half-empty Road Train wastes its slow trip and wears the road.
+ * Trucks are heavy: on concrete they go at TRUCK_ROAD of their speed, Road Trains at TRAIN_ROAD;
+ * asphalt is full speed. A Depot's supply orders (b.keep) ask for goods to be kept there, up to
+ * KEEP_MAX of each.
  */
 const TRUCK_MIN_DIST = 12;
 const TRUCK_MIN_LOAD = 3;
 const TRUCK_ROAD = 0.8;
+const LONG_BUFFER = 8;
+const EXPORT_RESERVE = 4;
+const TRAIN_MIN_LOAD = 12;
+const TRAIN_ROAD = 0.35;   // a Road Train on plain road: it needs asphalt
+const TRAIN_CORNER = 0.36; // ...and takes corners slowly
+const TRAIN_LEN = 1.5;     // tiles of road it fills (cab and two trailers): traffic queues behind that
+const WEAR_TRAIN = 8;
+/*
+ * Ropeway: two stations ROPE_MIN to ROPE_MAX tiles apart, joined by a cable straight across anything.
+ * Light bots ride it at ROPE_SPEED tiles a second; to the pathfinder a ride costs ROPE_COST times a
+ * paved road of the same length. Trucks can't use it.
+ */
+const ROPE_MIN = 3, ROPE_MAX = 14, ROPE_SPEED = 1.8, ROPE_COST = 1.3;
 /**
  * Driving: bots speed up at BOT_ACCEL tiles/s² and brake at up to BOT_BRAKE, slowing to BOT_CORNER of
  * their speed for a corner. Trucks are heavier: they set their own accel and brake and slow to
@@ -476,6 +501,10 @@ const BDEFS = {
     name: 'Gate', desc: 'A Wall with a door: your bots drive through, the enemy\'s have to break it down. A Gate on a road carries the road, so haulers keep running. Planned in Paths (Walls): where a wall line crosses a road, a Gate goes there.',
     cost: { cement: 6, alloy: 2 }, barrier: true, gate: true, prepaid: true, armor: 32, buildTime: 8, war: true,
   },
+  ropeway: {
+    name: 'Ropeway', desc: 'A cable line with gondolas, straight across anything: cliffs, water, rock. Tap one end, then the far end (up to 14 tiles away). Haulers bring the materials to the near end; once it is built the cable goes across and the far station goes up. Haulers, Workers and warbots ride it as part of your road network; Freight Trucks and Road Trains are too heavy and keep to the roads.',
+    cost: { cement: 8, alloy: 6 }, ropeway: true, armor: 10, buildTime: 14,
+  },
   lab: {
     name: 'Research Lab', desc: 'Researches upgrades for your whole colony, one at a time: pick one in its panel. The Chips, Crystal and Alloy are paid from storage when you start, and a worker inside does the research. Two Labs research twice as fast. Colony only.',
     cost: { cement: 6, alloy: 4, chip: 2 }, staff: true, lab: true, colony: true, armor: 10, buildTime: 14,
@@ -492,7 +521,7 @@ const BDEFS = {
 
 /** Order of the build menu. */
 const BUILD_MENU = ['harvester', 'quarry', 'mine', 'tap', 'smelter', 'fab', 'foundry', 'charger', 'farm', 'pump', 'refinery',
-  'kiln', 'tarworks', 'roadworks', 'outpost', 'turret', 'repair', 'armory', 'munitions', 'silo', 'reactor', 'nukesilo', 'depot', 'grower', 'lab'];
+  'kiln', 'tarworks', 'roadworks', 'ropeway', 'outpost', 'turret', 'repair', 'armory', 'munitions', 'silo', 'reactor', 'nukesilo', 'depot', 'grower', 'lab'];
 /** Ramps are planned in Paths (with roads), not from the build menu. */
 
 const INPUT_CAP = 3;   // how many of each input a production building stockpiles
