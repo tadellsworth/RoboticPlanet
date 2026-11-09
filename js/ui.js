@@ -648,22 +648,14 @@ function renderMissions(msg) {
   const c = loadCampaign();
   const body = $('ms-body');
   if (UI.msSel == null) {
-    body.innerHTML = `<p class="desc">Eight missions with their own goals. Finish one to unlock the next. Each has three difficulty levels.</p>
+    body.innerHTML = `<p class="desc">Eight missions with their own goals, each with three difficulty levels. Play them in any order.</p>
       <div class="ms-list">${MISSIONS.map((m, k) => {
         const done = c.done[m.id] || [];
         const marks = MISSION_DIFF_NAMES.map((n, d) => (done[d] ? `<span class="ms-done">${n} ✓</span>` : '')).filter(Boolean).join(' ');
-        return `<button class="ms-item" data-k="${k}" ${k > c.unlocked ? 'disabled' : ''}><span class="ms-num">${k + 1}</span>
-          <span class="ms-name">${m.name}</span><span class="ms-meta">${k > c.unlocked ? 'Locked' : marks || (m.mode === 'colony' ? 'Colony' : 'Versus')}</span></button>`;
-      }).join('')}</div>
-      <div class="section-label" style="margin-top:14px">Have an unlock code?</div>
-      <div class="ms-code"><input id="ms-input" maxlength="7" placeholder="ABC-123" autocomplete="off" autocapitalize="characters"><button class="btn" id="ms-redeem">Unlock</button></div>
-      <p class="hint" id="ms-msg">${msg || 'Finishing a mission shows the code for the next one, so you can unlock it on another device.'}</p>`;
+        return `<button class="ms-item" data-k="${k}"><span class="ms-num">${k + 1}</span>
+          <span class="ms-name">${m.name}</span><span class="ms-meta">${marks || (m.mode === 'colony' ? 'Colony' : 'Versus')}</span></button>`;
+      }).join('')}</div>${msg ? `<p class="hint">${msg}</p>` : ''}`;
     for (const el of body.querySelectorAll('.ms-item')) el.onclick = () => { sfx('click'); UI.msSel = +el.dataset.k; UI.msDiff = UI.msDiff ?? 1; renderMissions(); };
-    $('ms-redeem').onclick = () => {
-      const k = redeemCode($('ms-input').value);
-      sfx(k >= 0 ? 'complete' : 'error');
-      renderMissions(k >= 0 ? `Unlocked mission ${k + 1}: ${MISSIONS[k].name}.` : 'That code didn\'t match any mission.');
-    };
     return;
   }
   const k = UI.msSel, def = MISSIONS[k], diff = UI.msDiff ?? 1;
@@ -734,7 +726,7 @@ function showMissionOver() {
     completeMission(M.k, M.diff);
     if (M.k + 1 < MISSIONS.length) {
       $('o-code').hidden = false;
-      $('o-code').innerHTML = `Mission ${M.k + 2}, <b style="font-size:inherit;letter-spacing:0;color:var(--text)">${MISSIONS[M.k + 1].name}</b>, is unlocked. Its code, to unlock it on another device: <br><b>${missionCode(M.k + 1)}</b>`;
+      $('o-code').innerHTML = `Next up: mission ${M.k + 2}, <b style="font-size:inherit;letter-spacing:0;color:var(--text)">${MISSIONS[M.k + 1].name}</b>.`;
       $('o-new').textContent = 'Next mission';
       UI.overNew = () => startMission(M.k + 1, M.diff);
     } else {

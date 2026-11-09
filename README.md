@@ -16,7 +16,7 @@ how goods move.
 - **Colony:** no rival. Settle the planet at your own pace, with colonization milestones. Free play has the full
   building roster, missiles and nuclear silos included, to experiment with.
 - **Missions:** eight set challenges on hand-picked planets, each with its own goals and Easy, Normal and Hard
-  levels. Finishing one unlocks the next and shows an unlock code for it, so progress can move to another device.
+  levels. All of them are open from the start; finishing one ticks it off at that difficulty.
 
 Before each game, sliders set the **map size** (Small to Huge), the **terrain** (Flat, Gentle,
 Rolling, Rugged, Mountainous), the **resources** (Scarce to Abundant), the **map shape** (Standard, Long haul, Chokepoint, Islands, Crater or Plateaus), the
@@ -295,7 +295,7 @@ js/world.js               map generation, game state, territory, placement rules
 js/path.js                A* pathfinding
 js/sim.js                 simulation: logistics, workers, production, combat
 js/ai.js                  rival AI
-js/missions.js            mission campaign: goals, hand-placed map features, unlock codes
+js/missions.js            mission campaign: goals, hand-placed map features, progress
 js/charts.js              line and bar charts for the statistics screen
 js/render.js              canvas renderer and placeholder art
 js/input.js               touch and mouse controls

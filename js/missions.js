@@ -2,8 +2,8 @@
 /*
  * Terrafall — the mission campaign. Eight missions on hand-picked planets, each with its own goals,
  * starting conditions and some hand-placed features. Every mission has three difficulty levels
- * (Easy / Normal / Hard: bigger goals, tighter clocks, tougher rivals). Finishing a mission unlocks
- * the next one and shows its unlock code, which unlocks it on another device too.
+ * (Easy / Normal / Hard: bigger goals, tighter clocks, tougher rivals). Every mission is open from the
+ * start; finishing one ticks it off at that difficulty.
  *
  * Goal kinds (n can be one number or [easy, normal, hard]):
  *   built     have `n` finished buildings of `type`
@@ -226,13 +226,14 @@ function missionOptions(k, diff) {
   };
 }
 
-/* --- campaign progress and unlock codes --- */
+/* --- campaign progress --- */
 
+/** The campaign: which missions are finished at which difficulty. Every mission is open. */
 function loadCampaign() {
   try {
     const c = JSON.parse(localStorage.getItem(CAMPAIGN_KEY) || '{}');
-    return { unlocked: Math.max(0, Math.min(MISSIONS.length - 1, c.unlocked | 0)), done: c.done || {} };
-  } catch (e) { return { unlocked: 0, done: {} }; }
+    return { unlocked: MISSIONS.length - 1, done: c.done || {} };
+  } catch (e) { return { unlocked: MISSIONS.length - 1, done: {} }; }
 }
 
 function saveCampaign(c) {
@@ -245,33 +246,7 @@ function completeMission(k, diff) {
   const id = MISSIONS[k].id;
   c.done[id] = c.done[id] || [false, false, false];
   c.done[id][diff] = true;
-  c.unlocked = Math.max(c.unlocked, Math.min(MISSIONS.length - 1, k + 1));
   saveCampaign(c);
   return c;
 }
 
-const CODE_CHARS = 'ACDEFGHJKMNPQRTVWXY34679';
-
-/** The unlock code for mission k (k >= 1): six characters, the same on every device. */
-function missionCode(k) {
-  let h = 2166136261 ^ (k * 977);
-  const key = 'botfall-campaign-' + MISSIONS[k].id;
-  for (let i = 0; i < key.length; i++) { h ^= key.charCodeAt(i); h = Math.imul(h, 16777619) >>> 0; }
-  let s = '';
-  for (let i = 0; i < 6; i++) { s += CODE_CHARS[h % CODE_CHARS.length]; h = Math.floor(h / CODE_CHARS.length) ^ Math.imul(h, 31 + i) >>> 0; h >>>= 0; }
-  return s.slice(0, 3) + '-' + s.slice(3);
-}
-
-/** Unlock the mission a code belongs to (and every mission before it). Returns its index or -1. */
-function redeemCode(code) {
-  const clean = String(code || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
-  for (let k = 1; k < MISSIONS.length; k++) {
-    if (missionCode(k).replace('-', '') === clean) {
-      const c = loadCampaign();
-      c.unlocked = Math.max(c.unlocked, k);
-      saveCampaign(c);
-      return k;
-    }
-  }
-  return -1;
-}
