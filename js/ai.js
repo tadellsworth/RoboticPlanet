@@ -204,7 +204,7 @@ function aiThink(p) {
   // A Freight Truck takes the long runs off the Haulers, but sits idle much of the time: it counts as one and a half.
   const wantHaulers = clamp(Math.ceil(me.length * 0.35), 4, 16) - Math.floor(1.5 * (kinds.truck || 0));
   const army = kinds.warbot || 0;
-  const wantArmy = S.mode === 'colony' ? 0 : aiWantArmy(lvl);
+  const wantArmy = S.mode === 'colony' ? 0 : aiWantArmy(lvl, p);
   const armyBehind = army < wantArmy - 2;
 
   const crewNeed = {};
@@ -304,8 +304,12 @@ function aiThink(p) {
         const i = tgt.x + di, j = tgt.y + dj;
         if (inMap(i, j) && walkable(tIdx(i, j)) && !S.bAt[tIdx(i, j)] && S.zone[tIdx(i, j)] === homeZone(p)) { spot = { i, j }; break; }
       }
-      if (spot && rallyAvailable(p, spot.i, spot.j) >= lvl.threshold * (crushing ? 1.5 : 2)) {
-        const { sent, rally } = sendToRally(p, spot.i, spot.j, Math.min(crushing ? 22 : 14, rallyAvailable(p, spot.i, spot.j) - 2));
+      // A march may empty the garrisons far behind the lines (a big empire keeps one warbot in each).
+      // Against a rival with next to no army, a small band is enough to finish it.
+      const avail = spot ? rallyAvailable(p, spot.i, spot.j, true) : 0;
+      const need = crushing ? Math.max(4, enemyArmy * 2 + 2) : lvl.threshold * 2;
+      if (spot && avail >= need) {
+        const { sent, rally } = sendToRally(p, spot.i, spot.j, Math.min(crushing ? 22 : 14, crushing ? avail : avail - 2), true);
         if (sent) { P.march = rally.id; P.lastMarch = S.time; return; }
       }
     }
@@ -450,8 +454,12 @@ function aiFireNuke(p, silo) {
  * more a minute (scaled by difficulty), up to AI_ARMY_MAX.
  */
 const AI_ARMY_FROM = 240, AI_ARMY_MAX = 30, AI_DEFENCE_AT = 300;
-function aiWantArmy(lvl) {
-  return Math.min(AI_ARMY_MAX, START_WARBOTS + 1 + Math.floor((Math.max(0, S.time - AI_ARMY_FROM) / 60) * lvl.mult));
+function aiWantArmy(lvl, p) {
+  // A colony with many garrisons (a free-for-all winner owns two colonies' worth) needs more
+  // warbots to man them all and still march.
+  let extra = 0;
+  if (p !== undefined) for (const b of S.buildings) if (!b.dead && b.owner === p && b.built && BDEFS[b.type].mil) extra++;
+  return Math.min(AI_ARMY_MAX + Math.max(0, extra - 8), START_WARBOTS + 1 + Math.floor((Math.max(0, S.time - AI_ARMY_FROM) / 60) * lvl.mult));
 }
 
 /**

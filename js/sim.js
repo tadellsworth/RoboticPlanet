@@ -2423,6 +2423,14 @@ function armedIn(b) {
 /** How many armed warbots garrison b can send out (it always keeps one warbot at home). */
 function spareArmed(b) { return Math.max(0, Math.min(armedIn(b), b.garrison.length - 1)); }
 
+/** A garrison far behind the lines (no rival building within 18 tiles): it can send its last warbot. */
+function rearGarrison(b) {
+  for (const e of S.buildings) if (!e.dead && e.owner !== b.owner && e.owner >= 0 && dist2(e.x, e.y, b.x, b.y) < 18 * 18) return false;
+  return true;
+}
+/** Warbots garrison b can send out: every armed one from the rear (with `rear`), else all but one. */
+function spareFrom(b, rear) { return rear && rearGarrison(b) ? armedIn(b) : spareArmed(b); }
+
 /** Take one armed warbot out of garrison b (or null). */
 function takeArmed(b) {
   for (let k = b.garrison.length - 1; k >= 0; k--) {
@@ -2601,11 +2609,11 @@ function wreckRoad(t, victim, why) {
 }
 
 /** Garrisons that can send warbots to tile (i, j): same walkable area, each keeps one at home. */
-function rallySources(owner, i, j) {
+function rallySources(owner, i, j, rear) {
   const zone = S.zone[tIdx(i, j)];
   const out = [];
   for (const b of S.buildings) {
-    if (b.dead || b.owner !== owner || !b.built || !BDEFS[b.type].mil || spareArmed(b) < 1) continue;
+    if (b.dead || b.owner !== owner || !b.built || !BDEFS[b.type].mil || spareFrom(b, rear) < 1) continue;
     if (S.zone[tIdx(b.x, b.y)] !== zone) continue;
     out.push({ b, d: dist(b.x, b.y, i, j) });
   }
@@ -2613,19 +2621,22 @@ function rallySources(owner, i, j) {
   return out.map((o) => o.b);
 }
 
-function rallyAvailable(owner, i, j) {
+function rallyAvailable(owner, i, j, rear) {
   let n = 0;
-  for (const b of rallySources(owner, i, j)) n += spareArmed(b);
+  for (const b of rallySources(owner, i, j, rear)) n += spareFrom(b, rear);
   return n;
 }
 
-/** Send warbots to hold the area around tile (i, j) until they are called back. */
-function sendToRally(owner, i, j, count) {
+/**
+ * Send warbots to hold the area around tile (i, j) until they are called back. With `rear` (the
+ * AI's marches), garrisons far behind the lines send their last warbot too.
+ */
+function sendToRally(owner, i, j, count, rear) {
   let r = S.rallies.find((q) => q.owner === owner && Math.abs(q.x - (i + 0.5)) < 1.5 && Math.abs(q.y - (j + 0.5)) < 1.5);
   if (!r) { r = { id: S.nextId++, owner, x: i + 0.5, y: j + 0.5 }; S.rallies.push(r); }
   let slot = rallyMembers(r.id).length, sent = 0;
-  for (const b of rallySources(owner, i, j)) {
-    while (spareArmed(b) > 0 && sent < count) {
+  for (const b of rallySources(owner, i, j, rear)) {
+    while (spareFrom(b, rear) > 0 && sent < count) {
       const u = takeArmed(b);
       if (!u) break;
       u.inside = 0;
