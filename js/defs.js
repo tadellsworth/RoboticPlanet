@@ -61,7 +61,7 @@ const REPAIR_HP_PER_ALLOY = 12;
 const ARMOR_PER_CEMENT = 6;
 const FIX_RATE = 2;
 const REPAIR_BELOW = { warbot: 0.7, other: 0.6 };
-const FUEL_ENERGY = 75;           // battery points one Fuel gives at a Charging Station (3/4 of a full charge)
+const FUEL_ENERGY = 250;          // battery points one Fuel gives at a Charging Station (2½ full charges)
 
 /*
  * Batteries (0–100). Bots drain while they move and work, and recharge inside a building with a
@@ -215,7 +215,7 @@ const DEFAULT_RICH = 2;
 
 // Resource nodes that sit on ground tiles. Energy crops are planted by a Bio Farm on fertile soil;
 // oil seeps are pumped by an Oil Pump built on top of one.
-const R_NONE = 0, R_STALK = 1, R_BOULDER = 2, R_ORE = 3, R_CRYSTAL = 4, R_CROP = 5, R_OIL = 6;
+const R_NONE = 0, R_STALK = 1, R_BOULDER = 2, R_ORE = 3, R_CRYSTAL = 4, R_CROP = 5, R_OIL = 6, R_URANIUM = 7;
 const RES = {
   [R_STALK]:   { key: 'stalk',   name: 'Stalk grove',     good: 'fiber',   amount: 3, harvest: 2.5 },
   [R_BOULDER]: { key: 'boulder', name: 'Boulder',         good: 'stone',   amount: 8, harvest: 3 },
@@ -223,6 +223,7 @@ const RES = {
   [R_CRYSTAL]: { key: 'crystal', name: 'Crystal cluster', good: 'crystal', amount: 12, harvest: 3.5 },
   [R_CROP]:    { key: 'crop',    name: 'Energy crop',     good: 'fuel',    amount: 1, harvest: 2.5 },
   [R_OIL]:     { key: 'oil',     name: 'Oil seep',        good: 'crude',   amount: 16, harvest: 0 },
+  [R_URANIUM]: { key: 'uranium', name: 'Uranium deposit', good: 'uranium', amount: 3, harvest: 5 },
 };
 
 /**
@@ -235,7 +236,7 @@ const RICH_FROM = 10;
 const RICH_MARK = 1.4;
 const RICH_TYPES = [R_BOULDER, R_ORE, R_CRYSTAL, R_OIL];
 
-const GOODS = ['fiber', 'stone', 'ore', 'crystal', 'alloy', 'chip', 'crude', 'fuel', 'cement', 'asphalt', 'ammo', 'warhead'];
+const GOODS = ['fiber', 'stone', 'ore', 'crystal', 'alloy', 'chip', 'crude', 'fuel', 'cement', 'asphalt', 'ammo', 'warhead', 'uranium', 'fissile'];
 const GOOD = {
   fiber:   { name: 'Fiber',   color: '#3fd8a6', desc: 'Cut from stalk groves. Used for building and as smelter fuel.' },
   stone:   { name: 'Stone',   color: '#c9c1b4', desc: 'Broken from boulders. A Cement Works turns it into Cement; Asphalt and Ammo use it too.' },
@@ -249,9 +250,22 @@ const GOOD = {
   asphalt: { name: 'Asphalt', color: '#6b7280', desc: 'Made from Crude and Stone. A Roadworks upgrades roads with it to asphalt, the fastest surface.' },
   ammo:    { name: 'Ammo',    color: '#e8c39e', desc: 'Made at an Ammo Plant. Warbots reload it in your Command Base and Outposts.' },
   warhead: { name: 'Missile', color: '#ffcf4a', desc: 'Built at a Missile Factory from Alloy, Chips and Fuel. Workers load them into Missile Silos, which fire them at rival buildings.' },
+  uranium: { name: 'Uranium', color: '#9dff3a', desc: 'Scarce radioactive ore (Nuclear race only). Ore Mines dig it from the few deposits on the planet; a Nuclear Reactor enriches it.' },
+  fissile: { name: 'Enriched Uranium', color: '#e6ff4a', desc: 'Made from 2 Uranium at a Nuclear Reactor. A Nuclear Silo needs 6 to build a nuclear missile.' },
 };
-/** Goods that only matter when there is a rival (hidden in Colony mode). */
+/** Goods that only matter when there is a rival (hidden in Colony mode), and in a Nuclear race. */
 const WAR_GOODS = ['ammo', 'warhead'];
+const NUKE_GOODS = ['uranium', 'fissile'];
+/**
+ * The Nuclear race (an optional Versus setting): a little uranium is sprinkled over the planet,
+ * URANIUM_DEPOSITS deposits on each side, out towards the middle. A Nuclear Reactor enriches it and a
+ * Nuclear Silo builds a nuclear missile from NUKE.parts (6 Enriched Uranium = 12 Uranium), which flies
+ * for NUKE.flight seconds (the target gets that long as a warning) and wipes out everything within
+ * NUKE.radius tiles. The ground there stays scorched (no building or roads) for NUKE.scorch seconds.
+ * A Command Base in the blast is left with almost no armor and no garrison, ready to be captured.
+ */
+const URANIUM_DEPOSITS = 6;
+const NUKE = { parts: { fissile: 6, alloy: 4, chip: 2 }, assemble: 60, range: 40, flight: 30, radius: 6, scorch: 240 };
 
 const PLAYER_COLORS = ['#38d4ff', '#ff5a6e'];
 const PLAYER_NAMES = ['You', 'Rival'];
@@ -271,7 +285,7 @@ const PLAYER_NAMES = ['You', 'Rival'];
  *   farm      plants energy crops on fertile soil within `radius` and harvests them into Fuel
  *   pump      built on an oil seep; its worker pumps Crude from seep tiles within 1 tile
  *   crew      only bots of this crew (see BOTS) can run it
- *   roadworks its Paver lays asphalt on paths within `radius`
+ *   roadworks its Paver lays asphalt on any road joined to it, nearest first
  *   ammoStock (Command Base, Outposts) Ammo kept for warbots to reload
  *   ammo      good delivered as ammunition (up to ammoCap)
  *   missile   launches missiles: range (tiles), reload (s), damage to the target, splash radius,
@@ -283,8 +297,8 @@ const PLAYER_NAMES = ['You', 'Rival'];
 const BDEFS = {
   lander: {
     name: 'Command Base', short: 'Base',
-    desc: 'Your fortified headquarters: the craft that brought the colony down, dug in and walled up. Stores goods, houses idle bots and recharges them for free. If it is captured, you lose.',
-    store: true, mil: true, terr: 8, garrison: 40, armor: 30, charger: { slots: 3, rate: 15 }, ammoStock: 10,
+    desc: 'Your fortified headquarters: the craft that brought the colony down, dug in and walled up. Stores goods and houses idle bots, but it does not charge them: that takes Charging Stations. If it is captured, you lose.',
+    store: true, mil: true, terr: 8, garrison: 40, armor: 30, ammoStock: 10,
   },
   harvester: {
     name: 'Harvester', desc: 'A worker cuts nearby stalk groves into Fiber.',
@@ -296,7 +310,7 @@ const BDEFS = {
   },
   mine: {
     name: 'Ore Mine', desc: 'A worker digs Ore from nearby veins.',
-    cost: { fiber: 2, cement: 2 }, staff: true, gather: R_ORE, radius: 4, out: { ore: 4 }, armor: 8, buildTime: 10,
+    cost: { fiber: 2, cement: 2 }, staff: true, gather: R_ORE, radius: 4, out: { ore: 4, uranium: 3 }, armor: 8, buildTime: 10,
   },
   tap: {
     name: 'Crystal Tap', desc: 'A worker extracts Crystal from nearby clusters.',
@@ -340,7 +354,7 @@ const BDEFS = {
     work: 7, armor: 10, buildTime: 12, limit: 20,
   },
   roadworks: {
-    name: 'Roadworks', desc: 'Its Paver upgrades your roads nearby to asphalt, the fastest surface. One Asphalt covers four tiles.',
+    name: 'Roadworks', desc: 'Its Paver upgrades your roads to asphalt, the fastest surface, working outwards along every road joined to the Roadworks, however far. One Asphalt covers four tiles.',
     cost: { cement: 3, alloy: 1, fiber: 2 }, staff: true, crew: 'paver', roadworks: true, radius: 7, armor: 8, buildTime: 10,
   },
   armory: {
@@ -358,6 +372,16 @@ const BDEFS = {
     desc: 'Fires Missiles from a Missile Factory at rival buildings far away. A hit wrecks most buildings outright, damages the buildings and bots around it, and knocks Outposts and Command Bases down so warbots can capture them. Holds two Missiles.',
     cost: { cement: 5, alloy: 4, chip: 2 }, ammo: 'warhead', ammoCap: 2,
     missile: { range: 18, reload: 25, damage: 24, splash: 2.2, splashDamage: 5, botDamage: 9 }, armor: 14, buildTime: 16, war: true,
+  },
+  reactor: {
+    name: 'Nuclear Reactor', desc: 'Enriches Uranium: 2 Uranium make 1 Enriched Uranium. Nuclear race only.',
+    cost: { cement: 6, alloy: 6, chip: 3 }, staff: true, inp: { uranium: 2 }, make: { fissile: 1 }, out: { fissile: 2 },
+    work: 25, armor: 14, buildTime: 20, war: true, nuke: true,
+  },
+  nukesilo: {
+    name: 'Nuclear Silo',
+    desc: 'Builds one nuclear missile at a time from 6 Enriched Uranium, 4 Alloy and 2 Chips, then fires it up to 40 tiles. It wipes out everything within 6 tiles. Nuclear race only.',
+    cost: { cement: 8, alloy: 6, chip: 4 }, nukeSilo: true, armor: 18, buildTime: 24, war: true, nuke: true,
   },
   charger: {
     name: 'Charging Station',
@@ -379,7 +403,7 @@ const BDEFS = {
     work: 6, armor: 10, buildTime: 12, limit: 30,
   },
   ramp: {
-    name: 'Ramp', desc: 'Workers cut a slope into a low cliff so bots can climb between levels. Place it at the foot or top of a cliff.',
+    name: 'Ramp', desc: 'Workers cut a sloped road into a low cliff so bots can climb between levels. Plan it in Paths, at the foot or top of a cliff.',
     cost: { cement: 3, fiber: 1 }, ramp: true, armor: 4, buildTime: 10,
   },
   repair: {
@@ -395,7 +419,8 @@ const BDEFS = {
 
 /** Order of the build menu. */
 const BUILD_MENU = ['harvester', 'quarry', 'mine', 'tap', 'smelter', 'fab', 'foundry', 'charger', 'farm', 'pump', 'refinery',
-  'kiln', 'tarworks', 'roadworks', 'outpost', 'turret', 'repair', 'armory', 'munitions', 'silo', 'depot', 'ramp', 'grower'];
+  'kiln', 'tarworks', 'roadworks', 'outpost', 'turret', 'repair', 'armory', 'munitions', 'silo', 'reactor', 'nukesilo', 'depot', 'grower'];
+/** Ramps are planned in Paths (with roads), not from the build menu. */
 
 const INPUT_CAP = 3;   // how many of each input a production building stockpiles
 const AMMO_CAP = 3;    // crystals a turret stockpiles
@@ -410,7 +435,9 @@ const DIFFICULTY = {
 };
 
 /** Starting goods in each Command Base. */
-const START_STOCK = { fiber: 16, stone: 8, alloy: 8, chip: 4, crystal: 4, fuel: 4, cement: 24 };
+const START_STOCK = { fiber: 16, stone: 8, alloy: 8, chip: 4, crystal: 4, fuel: 10, cement: 24 };
+/** Only Charging Stations charge robots (not the Command Base), so every colony lands with one beside it, stocked with Fuel. */
+const START_CHARGER_FUEL = 4;
 const START_BOTS = { worker: 10, hauler: 5, agribot: 1 };
 const START_WARBOTS = 4;
 const MIN_FREE_WORKERS = 2;   // workers always kept free for building

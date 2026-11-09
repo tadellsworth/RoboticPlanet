@@ -599,6 +599,24 @@ function drawResource(ctx, type, amt, grow, cx, cy, s, i, j) {
         if (ripe) { ctx.fillStyle = '#ffd1e0'; ctx.beginPath(); ctx.arc(px - 0.8 * u, py - 0.8 * u, 1 * u, 0, Math.PI * 2); ctx.fill(); }
       }
     }
+  } else if (type === R_URANIUM) {
+    // A dark rock studded with glowing green uranium crystals, on a faint green glow.
+    const g = ctx.createRadialGradient(cx, cy, 2 * u, cx, cy, 14 * u);
+    g.addColorStop(0, 'rgba(157,255,58,0.45)'); g.addColorStop(1, 'rgba(157,255,58,0)');
+    ctx.fillStyle = g;
+    ctx.beginPath(); ctx.arc(cx, cy, 14 * u, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#2b2a26';
+    ctx.beginPath(); ctx.ellipse(cx, cy + 2 * u, 9 * u, 6.5 * u, 0, 0, Math.PI * 2); ctx.fill();
+    const n = Math.max(1, Math.min(5, amt + 1));
+    for (let k = 0; k < n; k++) {
+      const a = -Math.PI / 2 + (k - (n - 1) / 2) * 0.55, len = (7 + h(k) * 4) * u;
+      const bx = cx + Math.cos(a + Math.PI / 2) * 3 * u * (k - (n - 1) / 2) * 0.6, by = cy + 2 * u;
+      ctx.fillStyle = k % 2 ? '#7be22b' : '#b8ff6a';
+      ctx.beginPath();
+      ctx.moveTo(bx - 2 * u, by); ctx.lineTo(bx + Math.cos(a) * len, by + Math.sin(a) * len); ctx.lineTo(bx + 2 * u, by); ctx.closePath(); ctx.fill();
+    }
+    ctx.fillStyle = 'rgba(240,255,200,0.8)';
+    ctx.beginPath(); ctx.arc(cx - 1 * u, cy - 4 * u, 1.2 * u, 0, Math.PI * 2); ctx.fill();
   } else if (type === R_OIL) {
     // A dark glossy pool with an oily rainbow sheen; it shrinks as it is pumped dry.
     const f = 0.55 + 0.45 * Math.min(1, amt / RES[R_OIL].amount);
@@ -1088,7 +1106,8 @@ function drawBot(ctx, u, sx, sy, s) {
   // Specialists use their own art when it exists, otherwise the worker's with a badge.
   const truck = u.type === 'truck';
   const art = own || (u.type !== 'warbot' && !truck ? artFor('worker', u.owner) : null);
-  const bob = u.busy ? Math.sin(R.time * 18 + u.id) * s * 0.03 : 0;
+  const acting = u.task && (u.task.type === 'build' || u.task.type === 'pave' || (u.task.type === 'staff' && u.task.phase === 'work' && u.task.node >= 0 && S.road[u.task.node]));
+  const bob = u.busy && !acting ? Math.sin(R.time * 18 + u.id) * s * 0.03 : 0;
   if (truck) {
     drawTruck(ctx, u, sx, sy, s, color, own);
   } else if (art) {
@@ -1120,7 +1139,10 @@ function drawBot(ctx, u, sx, sy, s) {
     ctx.restore();
   }
   if (!own && u.type !== 'worker' && u.type !== 'warbot' && !truck) drawBotBadge(ctx, u.type, sx + s * 0.16, sy + s * 0.14 + bob, s);
-  if (u.carry && !truck) {
+  // A Hauler with its own art carries its load on the flatbed (x 29–165, y 87–169 of the 256 image).
+  const bed = u.type === 'hauler' && own;
+  if (bed && u.carry) drawTruckCargo(ctx, u, sx, sy + bob, -0.387 * s * 0.5, 0.531 * s * 0.5, 0.32 * s * 0.5, s, 2, 1);
+  if (u.carry && !truck && !bed) {
     const c = s * 0.1;
     for (let k = (u.carryN || 1) - 1; k >= 0; k--) {
       const ox = k * c * 1.2, oy = -k * c * 0.9;
@@ -1188,6 +1210,94 @@ function drawBotShadow(ctx, u, x, y, along, across) {
   ctx.fill();
 }
 
+/*
+ * Work animations. A builder circles its construction site welding, with sparks flying off the
+ * frame; a worker paving a road tile spreads fresh concrete across it as it goes (bridge decks and
+ * tunnel linings too); a Paver drives across the tile laying hot asphalt that steams behind it.
+ */
+function workPose(u) {
+  const t = u.task;
+  if (!t || !u.busy) return null;
+  if (t.type === 'build' && t.phase === 'work') {
+    const a = R.time * 0.7 + u.id * 1.7, r = 0.33;
+    return { kind: 'weld', dx: Math.cos(a) * r, dy: Math.sin(a) * r * 0.8, face: a + Math.PI };
+  }
+  if (t.type === 'pave' && t.phase !== 'go') {
+    const c = CROSS[S.terrain[t.tile]], time = c ? c.time : S.res[t.tile] ? PAVE_CLEAR_TIME : PAVE_TIME;
+    return { kind: c ? 'deck' : 'concrete', tile: t.tile, prog: clamp(t.prog / time, 0, 1), dx: 0, dy: 0 };
+  }
+  if (t.type === 'staff' && t.phase === 'work' && t.node >= 0 && S.road[t.node]) {
+    const b = getE(t.bld);
+    if (b && BDEFS[b.type].roadworks) {
+      const prog = clamp(1 - t.timer / 2.5, 0, 1), along = (prog - 0.5) * 0.7;
+      return { kind: 'asphalt', tile: t.node, prog, dx: Math.cos(u.face) * along, dy: Math.sin(u.face) * along };
+    }
+  }
+  return null;
+}
+
+/** The road surface spreading across the tile being paved, from the side the bot came in. */
+function drawWorkUnder(ctx, u, pose, ox, oy, z) {
+  if (pose.tile === undefined) return;
+  const i = pose.tile % S.W, j = (pose.tile / S.W) | 0, x = ox + i * z, y = oy + j * z;
+  const horiz = Math.abs(Math.cos(u.face)) >= Math.abs(Math.sin(u.face));
+  const back = horiz ? (Math.cos(u.face) >= 0 ? 0 : 1) : (Math.sin(u.face) >= 0 ? 0 : 1); // fill starts at the edge behind it
+  const p = pose.prog, w = z * 0.62, inset = (z - w) / 2;
+  const fill = pose.kind === 'asphalt' ? '#2c2f35' : pose.kind === 'deck' ? '#8f979f' : '#c3c8cf';
+  ctx.fillStyle = fill;
+  if (horiz) {
+    const len = z * p, x0 = back === 0 ? x : x + z - len;
+    ctx.fillRect(x0, y + inset, len, w);
+  } else {
+    const len = z * p, y0 = back === 0 ? y : y + z - len;
+    ctx.fillRect(x + inset, y0, w, len);
+  }
+  if (pose.kind === 'concrete' || pose.kind === 'deck') {
+    // The wet edge: a brighter line where the fresh concrete is being spread.
+    ctx.fillStyle = 'rgba(255,255,255,0.55)';
+    const e = Math.max(1, z * 0.04), at = z * p;
+    if (horiz) ctx.fillRect(back === 0 ? x + at - e : x + z - at, y + inset, e, w);
+    else ctx.fillRect(x + inset, back === 0 ? y + at - e : y + z - at, w, e);
+  }
+}
+
+/** Sparks off a weld, dust off fresh concrete, steam off hot asphalt. */
+function drawWorkOver(ctx, u, pose, sx, sy, z) {
+  const T = R.time, seed = u.id * 7.31;
+  if (pose.kind === 'weld') {
+    // The arc: a hot white-blue point in front of the bot, flickering, and sparks spraying from it.
+    const fx = sx + Math.cos(pose.face) * z * 0.2, fy = sy + Math.sin(pose.face) * z * 0.2;
+    const flick = 0.6 + 0.4 * Math.sin(T * 40 + seed);
+    const g = ctx.createRadialGradient(fx, fy, 0, fx, fy, z * 0.22);
+    g.addColorStop(0, `rgba(235,250,255,${0.95 * flick})`); g.addColorStop(0.4, `rgba(140,210,255,${0.5 * flick})`); g.addColorStop(1, 'rgba(140,210,255,0)');
+    ctx.fillStyle = g;
+    ctx.beginPath(); ctx.arc(fx, fy, z * 0.22, 0, Math.PI * 2); ctx.fill();
+    for (let k = 0; k < 7; k++) {
+      const ph = (T * 2.6 + k / 7 + hash2(k, u.id, 3)) % 1;
+      const ang = pose.face + Math.PI + (hash2(k, Math.floor(T * 2.6 + k / 7), u.id) - 0.5) * 2.2;
+      const d = ph * z * 0.45;
+      const px = fx + Math.cos(ang) * d, py = fy + Math.sin(ang) * d + ph * ph * z * 0.35; // they arc and fall
+      ctx.fillStyle = `rgba(255,${200 + Math.round(55 * (1 - ph))},${90 + Math.round(120 * (1 - ph))},${1 - ph})`;
+      ctx.fillRect(px - 1, py - 1, Math.max(1.5, z * 0.045), Math.max(1.5, z * 0.045));
+    }
+  } else if (pose.kind === 'asphalt') {
+    // Steam curling up off the hot asphalt behind the Paver.
+    const bx = sx - Math.cos(u.face) * z * 0.3, by = sy - Math.sin(u.face) * z * 0.3;
+    for (let k = 0; k < 4; k++) {
+      const ph = (T * 0.9 + k / 4 + hash2(k, u.id, 5)) % 1;
+      ctx.fillStyle = `rgba(235,235,235,${0.35 * (1 - ph)})`;
+      ctx.beginPath(); ctx.arc(bx + Math.sin(ph * 6 + k) * z * 0.08 + (k - 1.5) * z * 0.1, by - ph * z * 0.6, z * (0.06 + ph * 0.12), 0, Math.PI * 2); ctx.fill();
+    }
+  } else {
+    // Concrete dust kicking up as it's spread.
+    for (let k = 0; k < 3; k++) {
+      const ph = (T * 1.4 + k / 3 + hash2(k, u.id, 9)) % 1;
+      ctx.fillStyle = `rgba(215,205,190,${0.4 * (1 - ph)})`;
+      ctx.beginPath(); ctx.arc(sx + (hash2(k, u.id, 2) - 0.5) * z * 0.5, sy + z * 0.15 - ph * z * 0.3, z * (0.05 + ph * 0.08), 0, Math.PI * 2); ctx.fill();
+    }
+  }
+}
+
 /** A Freight Truck seen from above: a team-coloured cab and a flatbed with its load of crates (over its art, if any). */
 function drawTruck(ctx, u, sx, sy, s, color, art) {
   const L = s * 0.62, Wd = s * 0.3;
@@ -1230,16 +1340,17 @@ function drawTruck(ctx, u, sx, sy, s, color, art) {
   drawTruckCargo(ctx, u, sx, sy, -L / 2 + s * 0.025, L * 0.62, Wd - s * 0.06, s);
 }
 
-/** Up to eight crates of the truck's load in two rows of four, on a bed starting `x0` behind the centre. */
-function drawTruckCargo(ctx, u, sx, sy, x0, len, wid, s) {
+/** A load of crates on a flatbed starting `x0` behind the centre: `cols` × `rows` of them (truck 4 × 2, hauler 2 × 1). */
+function drawTruckCargo(ctx, u, sx, sy, x0, len, wid, s, cols, rows) {
   const n = u.carry ? u.carryN || 1 : 0;
   if (!n) return;
+  cols = cols || 4; rows = rows || 2;
   ctx.save();
   ctx.translate(sx, sy);
   ctx.rotate(u.face);
-  const cw = len / 4, ch = wid / 2, m = Math.max(0.5, s * 0.006);
-  for (let k = 0; k < n; k++) {
-    const x = x0 + (k >> 1) * cw, y = -wid / 2 + (k & 1) * ch;
+  const cw = len / cols, ch = wid / rows, m = Math.max(0.5, s * 0.006);
+  for (let k = 0; k < Math.min(n, cols * rows); k++) {
+    const x = x0 + Math.floor(k / rows) * cw, y = -wid / 2 + (k % rows) * ch;
     ctx.fillStyle = '#1b1e25'; ctx.fillRect(x + m, y + m, cw - 2 * m, ch - 2 * m);
     ctx.fillStyle = GOOD[u.carry].color; ctx.fillRect(x + 2 * m, y + 2 * m, cw - 4 * m, ch - 4 * m);
   }
@@ -1316,7 +1427,9 @@ function render(dtReal) {
   flushDirtyTiles();
   updateTerritoryLayer();
 
-  const ox = R.w / 2 - R.cam.x * z, oy = R.h / 2 - R.cam.y * z;
+  let ox = R.w / 2 - R.cam.x * z, oy = R.h / 2 - R.cam.y * z;
+  // A nuclear blast shakes the screen for its first half second.
+  for (const f of S.fx) if (f.type === 'nuke' && f.t < 0.6) { const a = 9 * (1 - f.t / 0.6); ox += (Math.random() - 0.5) * a; oy += (Math.random() - 0.5) * a; }
   const v0 = screenToWorld(0, 0), v1 = screenToWorld(R.w, R.h);
   const inView = (x, y, m) => x > v0.x - m && x < v1.x + m && y > v0.y - m && y < v1.y + m;
 
@@ -1356,6 +1469,21 @@ function render(dtReal) {
   if (R.mode === 'road') {
     const lightsMode = typeof UI !== 'undefined' && UI.roadMode === 'lights';
     const bridgeMode = typeof UI !== 'undefined' && UI.roadMode === 'bridge';
+    const rampMode = typeof UI !== 'undefined' && UI.roadMode === 'ramp';
+    if (rampMode) {
+      // Where a Ramp can go: the foot or top of a one-level cliff (refreshed every couple of seconds).
+      if (!R.overlay || R.overlay.type !== 'ramp' || R.time - R.overlay.at > 2) refreshOverlay('ramp');
+      ctx.fillStyle = 'rgba(160,255,190,0.22)';
+      ctx.strokeStyle = 'rgba(160,255,190,0.7)';
+      ctx.lineWidth = 1.5;
+      for (let t = 0; t < S.W * S.H; t++) {
+        if (!R.overlay.valid[t]) continue;
+        const i = t % S.W, j = (t / S.W) | 0;
+        if (!inView(i, j, 1)) continue;
+        ctx.fillRect(ox + i * z + z * 0.12, oy + j * z + z * 0.12, z * 0.76, z * 0.76);
+        ctx.strokeRect(ox + i * z + z * 0.12, oy + j * z + z * 0.12, z * 0.76, z * 0.76);
+      }
+    } else if (R.overlay && R.overlay.type === 'ramp') R.overlay = null;
     ctx.lineWidth = 1;
     const net = roadNet();
     for (let t = 0; t < S.W * S.H; t++) {
@@ -1378,6 +1506,7 @@ function render(dtReal) {
       ctx.strokeRect(ox + i * z + 1.5, oy + j * z + 1.5, z - 3, z - 3);
     }
   }
+  drawScorch(ctx, ox, oy, z);
   drawPlans(ctx, ox, oy, z, inView);
   if (R.mode === 'road') drawDraft(ctx, ox, oy, z, inView);
   drawLights(ctx, ox, oy, z, inView);
@@ -1449,10 +1578,14 @@ function render(dtReal) {
         ctx.lineWidth = Math.max(1.5, z * 0.045);
         ctx.beginPath(); ctx.ellipse(ox + (e.x + jx) * z, oy + (e.y + jy) * z + z * 0.06, z * 0.3, z * 0.2, 0, 0, Math.PI * 2); ctx.stroke();
       }
+      // Working bots act out their job (building, paving): a pose, plus effects under and over them.
+      const pose = workPose(e);
+      if (pose) { jx += pose.dx; jy += pose.dy; drawWorkUnder(ctx, e, pose, ox, oy, z); }
       const face = e.face;
-      e.face = e.rface; // draw with the smoothed heading
+      e.face = pose && pose.face !== undefined ? pose.face : e.rface; // draw with the smoothed heading
       drawBot(ctx, e, ox + (e.x + jx) * z, oy + (e.y + jy) * z, z);
       e.face = face;
+      if (pose) drawWorkOver(ctx, e, pose, ox + (e.x + jx) * z, oy + (e.y + jy) * z, z);
     }
   }
 
@@ -1572,7 +1705,20 @@ function drawLights(ctx, ox, oy, z, inView) {
  */
 function drawDraft(ctx, ox, oy, z, inView) {
   const d = typeof UI !== 'undefined' && UI.draft;
-  if (!d || (!d.add.length && !d.del.size)) return;
+  if (!d || (!d.add.length && !d.del.size && !d.ramps.size)) return;
+  // Planned Ramps: a yellow tile with chevrons pointing up the slope.
+  for (const t of d.ramps) {
+    const i = t % S.W, j = (t / S.W) | 0;
+    if (!inView(i, j, 1)) continue;
+    const x = ox + i * z, y = oy + j * z;
+    ctx.fillStyle = 'rgba(255,209,102,0.45)';
+    ctx.fillRect(x + z * 0.08, y + z * 0.08, z * 0.84, z * 0.84);
+    ctx.strokeStyle = '#ffd166'; ctx.lineWidth = Math.max(1.5, z * 0.05);
+    ctx.strokeRect(x + z * 0.08, y + z * 0.08, z * 0.84, z * 0.84);
+    ctx.beginPath();
+    for (const k of [0.38, 0.6]) { ctx.moveTo(x + z * 0.28, y + z * (k + 0.12)); ctx.lineTo(x + z * 0.5, y + z * k); ctx.lineTo(x + z * 0.72, y + z * (k + 0.12)); }
+    ctx.stroke();
+  }
   const pulse = 0.75 + 0.25 * Math.sin(R.time * 4);
   ctx.lineWidth = Math.max(1.5, z * 0.05);
   for (const t of d.add) {
@@ -1747,7 +1893,8 @@ function drawRanges(ctx, type, x, y, ox, oy, z, owner) {
 function drawAim(ctx, ox, oy, z) {
   const silo = getE(typeof UI !== 'undefined' ? UI.aimSilo : 0);
   if (!silo) return;
-  const md = BDEFS.silo.missile;
+  const nuke = !!BDEFS[silo.type].nukeSilo;
+  const md = nuke ? { range: NUKE.range, splash: NUKE.radius } : BDEFS.silo.missile;
   const cx = ox + (silo.x + 0.5) * z, cy = oy + (silo.y + 0.5) * z, rr = md.range * z;
   ctx.save();
   ctx.fillStyle = 'rgba(8,8,12,0.45)';
@@ -1762,7 +1909,7 @@ function drawAim(ctx, ox, oy, z) {
   ctx.setLineDash([]); ctx.lineDashOffset = 0;
   const spot = R.aim || R.aimHover;
   if (!spot) return;
-  const t = missileTargetAt(silo.owner, spot.i, spot.j);
+  const t = nuke ? null : missileTargetAt(silo.owner, spot.i, spot.j);
   const tx = (t ? t.x : spot.i) + 0.5, ty = (t ? t.y : spot.j) + 0.5;
   const ok = dist(silo.x, silo.y, tx - 0.5, ty - 0.5) <= md.range;
   const px = ox + tx * z, py = oy + ty * z;
@@ -1815,6 +1962,7 @@ function drawRallies(ctx, ox, oy, z) {
 /** Missiles fly in an arc: a shadow on the ground and the missile above it. */
 function drawMissiles(ctx, ox, oy, z) {
   for (const m of S.missiles) {
+    if (m.nuke) { drawNukeFlight(ctx, m, ox, oy, z); continue; }
     const k = Math.min(1, m.t / m.dur), k2 = Math.min(1, (m.t + 0.05) / m.dur);
     const gx = ox + lerp(m.x0, m.x1, k) * z, gy = oy + lerp(m.y0, m.y1, k) * z;
     const hgt = Math.sin(k * Math.PI) * 2.5 * z;
@@ -1840,11 +1988,79 @@ function drawMissiles(ctx, ox, oy, z) {
   }
 }
 
+/**
+ * A nuclear missile in flight: a high, slow arc, and for everyone a pulsing red ring over the whole
+ * blast area with the seconds to impact.
+ */
+function drawNukeFlight(ctx, m, ox, oy, z) {
+  const k = Math.min(1, m.t / m.dur), k2 = Math.min(1, (m.t + 0.1) / m.dur), H = 7;
+  const at = (q) => ({ x: lerp(m.x0, m.x1, q), y: lerp(m.y0, m.y1, q) - Math.sin(q * Math.PI) * H });
+  const p = at(k), p2 = at(k2);
+  const tx = ox + m.x1 * z, ty = oy + m.y1 * z, rr = NUKE.radius * z, pulse = 0.5 + 0.5 * Math.sin(R.time * 8);
+  ctx.fillStyle = `rgba(255,40,40,${0.08 + 0.1 * pulse})`;
+  ctx.strokeStyle = `rgba(255,70,70,${0.6 + 0.4 * pulse})`;
+  ctx.lineWidth = Math.max(2, z * 0.1);
+  ctx.setLineDash([z * 0.4, z * 0.25]);
+  ctx.beginPath(); ctx.arc(tx, ty, rr, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+  ctx.setLineDash([]);
+  const secs = Math.max(0, Math.ceil(m.dur - m.t));
+  ctx.font = `800 ${Math.max(16, z * 0.9)}px system-ui, sans-serif`;
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.lineWidth = 4; ctx.strokeStyle = 'rgba(0,0,0,0.75)'; ctx.strokeText('☢ ' + secs, tx, ty);
+  ctx.fillStyle = '#ffd23d'; ctx.fillText('☢ ' + secs, tx, ty);
+  // Shadow on the ground, then the missile up in the air.
+  const gx = ox + lerp(m.x0, m.x1, k) * z, gy = oy + lerp(m.y0, m.y1, k) * z;
+  ctx.fillStyle = 'rgba(0,0,0,0.3)';
+  ctx.beginPath(); ctx.ellipse(gx, gy, z * 0.4, z * 0.14, 0, 0, Math.PI * 2); ctx.fill();
+  const ang = Math.atan2(p2.y - p.y, p2.x - p.x), sx = ox + p.x * z, sy = oy + p.y * z;
+  const art = ART['nuclear-missile'];
+  if (art) { drawArt(ctx, art, sx, sy, z * 1.6, ang); return; }
+  ctx.save(); ctx.translate(sx, sy); ctx.rotate(ang);
+  ctx.fillStyle = '#ff9a3c'; ctx.beginPath(); ctx.ellipse(-z * 0.6, 0, z * 0.3, z * 0.1, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = '#16171b'; ctx.fillRect(-z * 0.45, -z * 0.09, z * 0.8, z * 0.18);
+  ctx.fillStyle = '#ffd23d'; ctx.fillRect(z * 0.05, -z * 0.09, z * 0.12, z * 0.18);
+  ctx.restore();
+}
+
+/** Ground scorched by a nuclear blast: the crater art (or a dark burn) fading as the ground recovers. */
+function drawScorch(ctx, ox, oy, z) {
+  if (!S.blasts || !S.blasts.length) return;
+  for (const b of S.blasts) {
+    const left = b.until - S.time;
+    if (left <= 0) continue;
+    ctx.globalAlpha = clamp(left / 60, 0, 1);
+    const art = ART['nuke-scorch'], w = (NUKE.radius * 2 / 0.82) * z, x = ox + b.x * z, y = oy + b.y * z;
+    if (art) ctx.drawImage(art.img, x - w * 0.5, y - w * 0.52, w, w);
+    else {
+      const g = ctx.createRadialGradient(x, y, 0, x, y, NUKE.radius * z);
+      g.addColorStop(0, 'rgba(10,6,4,0.85)'); g.addColorStop(0.7, 'rgba(30,20,12,0.6)'); g.addColorStop(1, 'rgba(30,20,12,0)');
+      ctx.fillStyle = g;
+      ctx.beginPath(); ctx.arc(x, y, NUKE.radius * z, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+  }
+}
+
 function drawEffects(ctx, ox, oy, z) {
   for (const f of S.fx) {
     const k = f.t / f.life;
     const x = ox + f.x * z, y = oy + f.y * z;
     switch (f.type) {
+      case 'nuke': {
+        // The detonation: 24 frames from a 6×4 sheet at 12 fps, ground zero at [0.5, 0.7] of each
+        // frame, drawn so the shockwave (0.31 of the frame) reaches the blast radius.
+        const art = ART['nuke-blast'], fr = Math.floor(f.t * 12);
+        if (art && fr < 24) {
+          const fw = art.img.width / 6, fh = art.img.height / 4, w = (f.r / 0.31) * z;
+          ctx.globalAlpha = 1;
+          ctx.drawImage(art.img, (fr % 6) * fw, Math.floor(fr / 6) * fh, fw, fh, x - w * 0.5, y - w * 0.7, w, w);
+        } else if (!art) {
+          ctx.globalAlpha = Math.max(0, 1 - k);
+          ctx.fillStyle = '#fff6d8';
+          ctx.beginPath(); ctx.arc(x, y, f.r * z * Math.min(1, k * 3), 0, Math.PI * 2); ctx.fill();
+        }
+        break;
+      }
       case 'boom': {
         const r = (f.r || 0.6) * z * (0.3 + k);
         ctx.globalAlpha = 1 - k;
@@ -1930,7 +2146,7 @@ const MM = { canvas: null, ctx: null, base: null, baseCtx: null, dirty: true, ve
 const MM_COLORS = {
   ground: [169, 113, 74], water: [28, 75, 93], rock: [74, 51, 41], ramp: [235, 205, 150],
   [R_STALK]: [47, 174, 134], [R_BOULDER]: [160, 154, 145], [R_ORE]: [235, 120, 50], [R_CRYSTAL]: [150, 105, 245],
-  [R_CROP]: [255, 92, 138], [R_OIL]: [22, 18, 15], fertile: [92, 98, 40],
+  [R_CROP]: [255, 92, 138], [R_OIL]: [22, 18, 15], [R_URANIUM]: [157, 255, 58], fertile: [92, 98, 40],
 };
 
 function initMinimap(canvas) {

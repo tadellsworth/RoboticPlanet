@@ -63,6 +63,14 @@ function aiThink(p) {
     }
   }
   let plan = S.mode === 'colony' ? AI_PLAN.concat([['outpost', 40]]) : AI_PLAN;
+  // Nuclear race: a Reactor once there's Uranium to enrich (or a mine on a deposit), then a Nuclear Silo.
+  if (nukeOn()) {
+    const k = plan.findIndex(([t]) => t === 'munitions');
+    const nuke = [];
+    if (goodTotal(p, 'uranium') > 0 || me.some((b) => b.type === 'mine' && reachableRes(b.x, b.y, BDEFS.mine.radius, R_URANIUM) > 0)) nuke.push(['reactor', 1]);
+    if (counts.reactor && goodTotal(p, 'fissile') + goodTotal(p, 'uranium') / 2 >= 2) nuke.push(['nukesilo', 1]);
+    plan = plan.slice(0, k).concat(nuke, plan.slice(k));
+  }
   // No Cement Works: Cement builds nearly everything (and every road), so one comes first, even
   // past the usual limit on sites.
   const cementStarved = !me.some((b) => b.type === 'kiln');
@@ -98,8 +106,10 @@ function aiThink(p) {
   // Goods held back for a key building we can't afford yet: nothing that needs them starts first.
   const held = new Set();
   // Defences come first once the colony is running: the first Pulse Turret, then a Repair Station.
+  // In a Nuclear race the Reactor and Nuclear Silo get the same treatment: the race is the point.
   const defence = (type) => S.mode !== 'colony' && !counts[type] &&
-    ((type === 'turret' && S.time > AI_DEFENCE_AT) || (type === 'repair' && counts.turret && S.time > AI_DEFENCE_AT + 120));
+    ((type === 'turret' && S.time > AI_DEFENCE_AT) || (type === 'repair' && counts.turret && S.time > AI_DEFENCE_AT + 120) ||
+     (nukeOn() && (type === 'reactor' || type === 'nukesilo')));
   const key = (type) => type === 'foundry' || type === 'harvester' || type === 'quarry' || (type === 'kiln' && (playerGoods(p).cement || 0) < 3) || defence(type) ||
     (type === 'outpost' && P.short.length > 0);
   if (sites < siteCap) {
@@ -109,12 +119,14 @@ function aiThink(p) {
       // One more Charging Station for every three Outposts as the colony spreads out, and a Bio
       // Farm for every two stations to keep them in Fuel.
       const nCh = Math.max(1 + Math.floor((counts.outpost || 0) / 3), 0);
-      const want = type === 'charger' ? Math.max(want0, nCh) : type === 'farm' && counts.charger ? Math.max(want0, Math.ceil((counts.charger || 0) / 2)) : want0;
+      // Only Charging Stations charge, so Fuel scales with the colony: a Bio Farm for every 18 robots.
+      const nBots = S.bots.reduce((n, u) => n + (!u.dead && u.owner === p && u.type !== 'warbot' ? 1 : 0), 0);
+      const want = type === 'charger' ? Math.max(want0, nCh) : type === 'farm' && counts.charger ? Math.max(want0, Math.ceil((counts.charger || 0) / 2), Math.ceil(nBots / 18)) : want0;
       if (type === 'refinery' && !counts.pump) continue;
       // Plenty of Fuel in stock: no need for more farms or oil yet.
       if ((type === 'farm' || type === 'pump' || type === 'refinery') && (counts[type] || 0) >= 1 && playerGoods(p).fuel > 10) continue;
       if ((counts[type] || 0) >= want) continue;
-      if (saving && type !== saving && (BDEFS[type].cost.alloy || BDEFS[type].cost.chip)) continue;
+      if (saving && type !== saving && !BDEFS[type].nuke && (BDEFS[type].cost.alloy || BDEFS[type].cost.chip)) continue;
       // Keep enough Fiber for a Harvester while none is cutting: without Fiber there's no way back.
       if (type !== 'harvester' && fiberLow && (BDEFS[type].cost.fiber || 0) > 0 && playerGoods(p).fiber - BDEFS[type].cost.fiber < BDEFS.harvester.cost.fiber) continue;
       // The first of each staffed building is always allowed, so the production chain is complete.
@@ -124,7 +136,7 @@ function aiThink(p) {
       if (type === 'kiln' && stoneLow && counts.kiln) continue;
       // A turret or Repair Station is started as soon as the Cement is there: new Alloy goes straight
       // into factories, so it never piles up in storage; the high-priority site gets it delivered.
-      const defenceNow = defence(type) && counts.smelter && aiAffordable(p, type, ['alloy']);
+      const defenceNow = defence(type) && counts.smelter && aiAffordable(p, type, ['alloy', 'chip']);
       if (!aiAffordable(p, type) && !defenceNow) {
         if (key(type) && (!counts[type] || type === 'outpost')) {
           const have = playerGoods(p), cost = BDEFS[type].cost;
@@ -172,7 +184,7 @@ function aiThink(p) {
   // 2) Retire gatherers and pumps that have run dry so their worker can be reused.
   for (const b of me) {
     const def = BDEFS[b.type];
-    if (b.built && def.gather && S.time - b.born > 30 && reachableRes(b.x, b.y, def.radius, def.gather) === 0 && !(b.stock[RES[def.gather].good] > 1)) {
+    if (b.built && def.gather && S.time - b.born > 30 && gatherReach(b.x, b.y, b.type) === 0 && !(b.stock[RES[def.gather].good] > 1)) {
       demolish(b);
     } else if (b.built && def.pump && pumpSeep(b) < 0 && !(b.stock.crude > 0)) {
       demolish(b);
@@ -233,6 +245,9 @@ function aiThink(p) {
     }
   }
 
+  // 4a) Nuclear race: fire a ready nuclear missile where it destroys the most.
+  if (nukeOn()) for (const silo of me) if (silo.type === 'nukesilo' && silo.armed && silo.built) aiFireNuke(p, silo);
+
   // 4b) Raids on the enemy's supply lines, and answering the enemy's raids on ours.
   if (S.mode !== 'colony') aiCounterRaid(p);
   if (S.mode !== 'colony' && S.time >= lvl.grace) aiRaid(p, lvl);
@@ -290,6 +305,26 @@ function aiThink(p) {
     }
     if (spot) { placeSite(p, 'outpost', spot.x, spot.y); P.lastAttack = S.time - 30; }
   }
+}
+
+/**
+ * Pick the nuclear target: each rival building is a candidate centre; score what the blast would
+ * take (military buildings and the Command Base count extra), minus our own buildings caught in it.
+ */
+function aiFireNuke(p, silo) {
+  const R2 = NUKE.radius * NUKE.radius, enemy = 1 - p;
+  let best = null, bs = 3;
+  for (const c of S.buildings) {
+    if (c.dead || c.owner !== enemy || dist(silo.x, silo.y, c.x, c.y) > NUKE.range) continue;
+    let s = 0;
+    for (const b of S.buildings) {
+      if (b.dead || dist2(b.x, b.y, c.x, c.y) > R2) continue;
+      const w = b.type === 'lander' ? 6 : BDEFS[b.type].mil ? 3 : b.type === 'nukesilo' || b.type === 'reactor' ? 5 : 1;
+      s += b.owner === enemy ? w : -w * 2;
+    }
+    if (s > bs) { bs = s; best = c; }
+  }
+  if (best) fireNukeAt(silo, best.x, best.y);
 }
 
 /**
@@ -492,7 +527,7 @@ function aiFindSpot(p, type, lander) {
 
 function aiSearchSpot(p, type, lander) {
   const def = BDEFS[type], P = S.players[p];
-  const sums = type === 'outpost' ? [R_ORE, R_CRYSTAL, R_STALK, R_BOULDER, R_OIL].map(resourceSums) : null;
+  const sums = type === 'outpost' ? [R_ORE, R_CRYSTAL, R_STALK, R_BOULDER, R_OIL, R_URANIUM].map(resourceSums) : null;
   const enemyL = getE(S.players[1 - p].lander);
   const ex = enemyL ? enemyL.x : S.W / 2, ey = enemyL ? enemyL.y : S.H / 2;
   const cands = [];
@@ -516,8 +551,9 @@ function aiSearchSpot(p, type, lander) {
       let s;
       if (def.gather) {
         const n = reachableRes(i, j, def.radius, def.gather);
-        if (n < 2) continue;
-        s = Math.min(n, 10) * 2 - dHome * 0.35;
+        const u = type === 'mine' && nukeOn() ? reachableRes(i, j, def.radius, R_URANIUM) : 0;
+        if (n < 2 && !u) continue;
+        s = Math.min(n, 10) * 2 - dHome * 0.35 + u * 12; // a mine on uranium beats any ore field
       } else if (def.plant) {
         let dh = 99;
         for (const b of S.buildings) if (!b.dead && b.owner === p && b.type === 'harvester') dh = Math.min(dh, dist(i, j, b.x, b.y));
@@ -526,6 +562,7 @@ function aiSearchSpot(p, type, lander) {
         const ore = Math.min(sums[0](i, j, 5), 8), cry = Math.min(sums[1](i, j, 5), 8);
         const rest = Math.min(sums[2](i, j, 5), 6) + Math.min(sums[3](i, j, 5), 6) + Math.min(sums[4](i, j, 5), 4) * 1.5;
         s = -dist(i, j, ex, ey) * 0.6 + dHome * 0.5 + ore * 1.6 + cry * 1.0 + rest * 0.3;
+        if (nukeOn()) s += Math.min(sums[5](i, j, 6), 3) * 6; // the race for uranium
         // Head for whatever we're running out of.
         for (const r of P.short || []) s += Math.min(sums[[R_ORE, R_CRYSTAL, R_STALK, R_BOULDER].indexOf(r)](i, j, 5), 6) * 1.5;
       } else if (def.farm) {

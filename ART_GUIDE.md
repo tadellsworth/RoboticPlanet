@@ -530,6 +530,52 @@ speeds up and fades it out once it's at full speed.
 ```
 Before exporting the overlays, ask Claude Design to show each one on top of the truck to check they line up.
 
+### Batch 8: driving frames for the other robots
+
+The same pattern as the truck for the Worker, Hauler, Agribot, Paver and Warbot: four driving frames per team
+and two team-neutral overlays, 256×256, facing right, centred, **no drop shadow** (the game draws one). Attach the
+current robot images as the reference. Per robot: `<robot>@0-f0` … `f3`, `<robot>@1-f0` … `f3`,
+`<robot>-brake`, `<robot>-boost`.
+
+**Setup** (paste first, with the reference images attached)
+```
+I'm animating the robots in my game Terrafall. Attached are the current images: worker, hauler, agribot,
+paver and warbot, each in two team versions (@0 has cyan #38d4ff accents, @1 has red #ff5a6e). For each robot
+I need a short driving animation and two overlays that match the attached image exactly: same top-down view,
+same design, facing RIGHT, same size and position on a 256x256 transparent canvas, centred (the game spins
+each robot around the centre of the image as it turns).
+
+Two changes from the attached images:
+1. Remove the drop shadow completely: no shadow and no ground. The game draws the shadow itself so it stays
+   in place when the robot turns.
+2. Make the tracks or wheels clearly visible at the sides, with distinct track links or tread blocks, so
+   the movement reads at small size.
+
+Render each robot as a 3D model with an orthographic camera looking straight down and a soft sun from the
+top-left.
+```
+
+**Frames** (one robot at a time; the Hauler shown)
+```
+Hauler: make 4 frames of the hauler, hauler@0-f0 to hauler@0-f3. In each frame, roll every tyre forward by
+a quarter of the gap between two tread blocks, so f0, f1, f2, f3 loop smoothly back to f0. Nothing else may
+change between frames, pixel for pixel. Keep the cargo bed empty (the game draws the crates on it), and tell
+me the pixel rectangle of the bed inside its rails.
+```
+Worker, Agribot: the track links move a quarter of a link each frame. Paver: its tracks, and the front roller
+turns a quarter of its surface pattern. Warbot: tracks only. Then *"Same frames for every robot, with every cyan
+accent changed to red #ff5a6e"* for `@1`.
+
+**Overlays**
+```
+For each robot, make two overlays with exactly the same framing as that robot, but with no robot in them:
+- <robot>-brake.png: two small red brake lights at the back (the left end) lit up, with a faint red glow on
+  the ground just behind.
+- <robot>-boost.png: a small puff of pale orange-brown dust kicked up behind the tracks or wheels, trailing
+  off to the left.
+Show each overlay on top of its robot to check they line up before exporting.
+```
+
 Bridges, tunnels and overpasses are drawn by the game itself for now (they have to join up with each other on any
 side); ask Claude Code if you'd like those as art too.
 
@@ -543,9 +589,11 @@ side); ask Claude Code if you'd like those as art too.
   grower, site, outpost@0/@1), and so is the second set (charger, farm, pump, refinery, kiln, tarworks, roadworks,
   ramp). They use `B3D(...)` in `art/art-manifest.js`: scale 1.4 and anchor [0.5, 0.615], the centre of the pad's top
   surface. New buildings in the same style can use the same helper
-- Robots `hauler`, `agribot` and `paver` (@0/@1), the military buildings, the 3D Command Base, the Repair Bay
-  (`repair`) and the Freight Truck (`truck@0/@1-f0…f3`, `truck-brake`, `truck-boost`) are installed. Any robot can
-  use the truck's pattern: `<type>@<team>-f0…f3` driving frames (played by distance driven), `<type>-brake` and
+- All six robots now drive with Batch 8 frames (`worker`, `warbot`, `hauler`, `agribot`, `paver`, `truck`, each
+  `@0/@1-f0…f3` plus `-brake` and `-boost`, stored as WebP in `art/bots/` and listed with `driveSet()`); the hauler's
+  crates are drawn on its bed. The military buildings, the 3D Command Base, the Repair Bay (`repair`) and the nuclear
+  set (`reactor`, `nukesilo@0/@1`, `nuclear-missile`, the `nuke-blast` 6×4 sprite sheet and `nuke-scorch`) are
+  installed too. Any robot can use this pattern: `<type>@<team>-f0…f3` driving frames (played by distance driven), `<type>-brake` and
   `<type>-boost` overlays, and `shadow: true` in the manifest when the art has no shadow of its own.
   Still missing: a 3D turret, resources `crop` and `oil`, ground
   `fertile`, `slope` and `cliff`, markers `missile`, `rally` and `oneway`, and the 12 goods icons

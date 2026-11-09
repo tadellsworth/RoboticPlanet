@@ -39,7 +39,8 @@ function initUI() {
     // Hover (mouse) or tap (touch) shows the good's name and what it's for.
     el.onpointerenter = (e) => { if (e.pointerType === 'mouse') showGoodTip(g, el, 0); };
     el.onpointerleave = (e) => { if (e.pointerType === 'mouse') hideGoodTip(); };
-    el.onclick = () => showGoodTip(g, el, 2600);
+    // Tap (or click) opens the goods panel on this good: stock, rates, makers, users and shortfalls.
+    el.onclick = () => { hideGoodTip(); sfx('click'); if (UI.sheetKind === 'goods' && UI.goodSel === g) closeSheet(); else { setMode('normal'); openGoodsSheet(g); } };
     goods.appendChild(el);
     UI.goodEls[g] = el;
   }
@@ -53,11 +54,12 @@ function initUI() {
   // Map settings sliders (remembered on this device; map size is remembered per mode).
   try { Object.assign(UI.menu, JSON.parse(localStorage.getItem('botfall.settings') || '{}')); } catch (e) { /* defaults */ }
   const saveSettings = () => {
-    try { localStorage.setItem('botfall.settings', JSON.stringify({ size: UI.menu.size, rough: UI.menu.rough, rich: UI.menu.rich, shape: UI.menu.shape })); } catch (e) { /* storage unavailable */ }
+    try { localStorage.setItem('botfall.settings', JSON.stringify({ size: UI.menu.size, rough: UI.menu.rough, rich: UI.menu.rich, shape: UI.menu.shape, nuke: UI.menu.nuke })); } catch (e) { /* storage unavailable */ }
   };
   $('m-size').oninput = () => { UI.menu.size[UI.menu.mode] = +$('m-size').value; syncMenu(); saveSettings(); };
   $('m-rough').oninput = () => { UI.menu.rough = +$('m-rough').value; syncMenu(); saveSettings(); };
   $('m-shape').oninput = () => { UI.menu.shape = +$('m-shape').value; syncMenu(); saveSettings(); };
+  $('m-nuke').oninput = () => { UI.menu.nuke = +$('m-nuke').value; syncMenu(); saveSettings(); };
   $('m-rich').oninput = () => { UI.menu.rich = +$('m-rich').value; syncMenu(); saveSettings(); };
   $('m-new').onclick = () => { audioUnlock(); startNewGame(); };
   $('m-continue').onclick = () => { audioUnlock(); continueGame(); };
@@ -138,6 +140,9 @@ function syncMenu() {
   $('m-size').value = size;
   $('m-rough').value = UI.menu.rough;
   $('m-shape').value = UI.menu.shape || 0;
+  $('m-nuke').value = UI.menu.nuke || 0;
+  $('m-nuke-v').textContent = UI.menu.nuke ? 'On: race for uranium' : 'Off';
+
   $('m-shape-v').textContent = SHAPE_PRESETS[UI.menu.shape || 0].name;
   $('m-rich').value = UI.menu.rich;
   const dims = mapDims({ size, shape: UI.menu.shape || 0 });
@@ -171,19 +176,27 @@ function hideGoodTip() {
 /* ------------------------------------------------------------------ keyboard (desktop) */
 
 /*
- * B build (then a building's letter) · P paths (R roads, G bridges and tunnels, O one-way arrows,
+ * B build (then a building's letter, or R for roads) · P paths (R roads, G bridges and tunnels, O one-way arrows,
  * L junctions, T traffic map) · A army · H base · F select every warbot · 1–9 control groups (Ctrl or
  * Shift + digit to save) · J jump to the latest alert · Esc back / clear selection / pause ·
  * Space pause · [ ] game speed · arrow keys pan · + and - zoom · M minimap · ? help
  */
 const PAN_KEYS = { arrowleft: [-1, 0], arrowright: [1, 0], arrowup: [0, -1], arrowdown: [0, 1] };
 
-/** Build-menu hotkeys: with the build menu open, a building's letter starts placing it. */
+/** Build-menu hotkeys: with the build menu open, a building's letter starts placing it (and R lays roads). */
 const BUILD_KEYS = {
   harvester: 'h', quarry: 'q', mine: 'm', tap: 'c', smelter: 's', fab: 'f', foundry: 'u', charger: 'e', farm: 'a',
-  pump: 'p', refinery: 'r', kiln: 'k', tarworks: 't', roadworks: 'w', outpost: 'o', turret: 'g', repair: 'x',
-  armory: 'i', munitions: 'n', silo: 'z', depot: 'd', ramp: 'v', grower: 'l',
+  pump: 'p', refinery: 'v', kiln: 'k', tarworks: 't', roadworks: 'w', outpost: 'o', turret: 'g', repair: 'x',
+  armory: 'i', munitions: 'n', silo: 'z', depot: 'd', grower: 'l', reactor: 'y', nukesilo: 'j',
 };
+
+/** Open Paths on one of its tools (roads, bridges, ramps, arrows, junctions). */
+function openPaths(v) {
+  if (R.mode !== 'road') setMode('road');
+  UI.roadMode = v;
+  showRoadBanner();
+  sfx('click');
+}
 
 function initKeyboard() {
   window.addEventListener('keydown', (e) => {
@@ -215,15 +228,15 @@ function initKeyboard() {
       const card = type && $('sheet-body').querySelector(`.bcard[data-t="${type}"]`);
       if (card && !card.disabled) { e.preventDefault(); card.click(); return; }
     }
-    const pathMode = (v) => { if (R.mode !== 'road') setMode('road'); UI.roadMode = v; showRoadBanner(); sfx('click'); };
     switch (k) {
       case 'b': $('btn-build').click(); break;
       case 'p': $('btn-road').click(); break;
-      case 'r': pathMode('road'); break;
-      case 'o': pathMode('arrows'); break;
-      case 'g': pathMode('bridge'); break;
+      case 'r': openPaths('road'); break;
+      case 'o': openPaths('arrows'); break;
+      case 'g': openPaths('bridge'); break;
+      case 'v': openPaths('ramp'); break;
       case 't': if (R.mode !== 'road') setMode('road'); R.traffic = !R.traffic; showRoadBanner(); sfx('click'); break;
-      case 'l': pathMode('lights'); break;
+      case 'l': openPaths('lights'); break;
       case 'a': if (!$('btn-attack').hidden) $('btn-attack').click(); break;
       case 'h': case 'home': $('btn-home').click(); break;
       case 'm': setMinimap(!MM.on); break;
@@ -471,6 +484,7 @@ function startNewGame() {
   newGame({
     seed: UI.menu.seed, difficulty: UI.menu.diff, mode: UI.menu.mode,
     size: UI.menu.size[UI.menu.mode] ?? DEFAULT_SIZE[UI.menu.mode], rough: UI.menu.rough, rich: UI.menu.rich, shape: UI.menu.shape || 0,
+    nuke: !!UI.menu.nuke,
   });
   enterGame();
   updateHUD();
@@ -478,6 +492,7 @@ function startNewGame() {
   postMsg(0, UI.menu.mode === 'colony'
     ? 'Your bots have landed. Build, expand and make this planet home.'
     : 'Your bots have landed. A rival colony landed to the north. Build up fast!', 0, 0, 'info');
+  if (nukeOn()) postMsg(0, 'Nuclear race: a few uranium deposits glow green across the planet. Dig them with Ore Mines, enrich them at a Nuclear Reactor and build the bomb before the rival does.', 0, 0, 'warn');
 }
 
 function continueGame() {
@@ -495,13 +510,14 @@ function enterGame() {
   $('hud').hidden = false;
   $('toasts').innerHTML = '';
   const colony = S.mode === 'colony';
-  $('btn-attack').hidden = colony;
-  for (const g of WAR_GOODS) UI.goodEls[g].hidden = colony;
+  $('btn-attack').hidden = !warOn();
+  for (const g of WAR_GOODS) UI.goodEls[g].hidden = !warOn();
+  for (const g of NUKE_GOODS) UI.goodEls[g].hidden = !nukeOn();
   // More than seven goods don't fit one row on a phone: split them over two (widescreen: one row).
-  const nGoods = GOODS.length - (colony ? WAR_GOODS.length : 0);
+  const nGoods = GOODS.length - (warOn() ? 0 : WAR_GOODS.length) - (nukeOn() ? 0 : NUKE_GOODS.length);
   $('goods').style.setProperty('--goods-cols', nGoods > 7 ? Math.ceil(nGoods / 2) : nGoods);
   $('goods').classList.toggle('two-rows', nGoods > 7);
-  $('bottombar').classList.toggle('three', colony);
+  $('bottombar').classList.toggle('three', !warOn());
   closeSheet();
   setMode('normal');
   const L = getE(S.players[0].lander);
@@ -692,7 +708,7 @@ function renderStats() {
   const players = versus ? [0, 1] : [0];
   const names = ['You', 'Rival'];
   const ser = (fn) => players.map((p) => ({ name: names[p], color: CHART.series[p], values: fn(H.p[p] || {}) }));
-  const goodsList = GOODS.filter((g) => versus || !WAR_GOODS.includes(g));
+  const goodsList = GOODS.filter((g) => (warOn() || !WAR_GOODS.includes(g)) && (nukeOn() || !NUKE_GOODS.includes(g)));
   if (!goodsList.includes(UI.stats.good)) UI.stats.good = 'alloy';
   const use = usageByType(0);
   const rows = Object.keys(use).map((k) => ({ key: k, label: BDEFS[k].name, note: use[k].n > 1 ? '×' + use[k].n : '', value: Math.round((use[k].use / use[k].up) * 100) }))
@@ -760,7 +776,7 @@ function startAim(silo) {
   setMode('aim');
   UI.aimSilo = silo.id;
   R.selected = silo.id;
-  const range = BDEFS.silo.missile.range;
+  const range = BDEFS[silo.type].nukeSilo ? NUKE.range : BDEFS.silo.missile.range;
   showAimBanner();
   // Fit the whole range ring in the map area left between the top bar and the banner.
   const top = $('topbar').getBoundingClientRect().bottom + 8;
@@ -775,6 +791,13 @@ function showAimBanner(problem) {
   if (!silo) { setMode('normal'); return; }
   let html = '', ok = null;
   if (problem) html = `<span class="err">${problem}</span> `;
+  if (BDEFS[silo.type].nukeSilo) {
+    html += R.aim
+      ? `<b>Launch the nuclear missile here?</b> Everything within ${NUKE.radius} tiles is destroyed, yours included, and the ground stays scorched for ${Math.round(NUKE.scorch / 60)} minutes. It lands ${NUKE.flight} seconds after launch, and the rival sees it coming.`
+      : `Tap where to strike, inside the red ring (${NUKE.range} tiles). The red circle shows the ${NUKE.radius}-tile blast.`;
+    showBanner(html, R.aim ? 'Launch' : null, 'Cancel');
+    return;
+  }
   if (R.aim) {
     const t = missileTargetAt(0, R.aim.i, R.aim.j);
     html += t ? `Fire at the rival <b>${BDEFS[t.type].name}</b>? ${BDEFS[t.type].mil ? 'Its armor drops to almost nothing, ready for warbots to capture.' : 'A hit wrecks it.'}`
@@ -792,7 +815,7 @@ function aimTap(i, j) {
   const silo = getE(UI.aimSilo);
   if (!silo) { setMode('normal'); return; }
   if (!inMap(i, j)) return;
-  const why = missileBlocked(silo, i, j);
+  const why = BDEFS[silo.type].nukeSilo ? nukeBlocked(silo, i, j) : missileBlocked(silo, i, j);
   if (why) { sfx('error'); R.aim = null; showAimBanner(why); return; }
   if (R.aim && R.aim.i === i && R.aim.j === j) { fireAimed(); return; }
   R.aim = { i, j };
@@ -803,6 +826,11 @@ function aimTap(i, j) {
 function fireAimed() {
   const silo = getE(UI.aimSilo);
   if (!silo || !R.aim) return;
+  if (BDEFS[silo.type].nukeSilo) {
+    if (fireNukeAt(silo, R.aim.i, R.aim.j)) { setMode('normal'); sfx('alert'); }
+    else { sfx('error'); showAimBanner(nukeBlocked(silo, R.aim.i, R.aim.j)); }
+    return;
+  }
   const t = missileTargetAt(0, R.aim.i, R.aim.j);
   if (fireMissileAt(silo, R.aim.i, R.aim.j)) {
     toast(t ? `Missile away: it will hit the ${BDEFS[t.type].name} in a few seconds.` : 'Missile away.', 'info');
@@ -868,7 +896,10 @@ function onMapTap(i, j, wx, wy) {
     if (chk.ok) {
       let extra = '';
       const def = BDEFS[type];
-      if (def.gather) extra = ` <span class="ok">${reachableRes(i, j, def.radius, def.gather)} ${RES[def.gather].name.toLowerCase()}s in reach.</span>`;
+      if (def.gather) {
+        const un = type === 'mine' && nukeOn() ? reachableRes(i, j, def.radius, R_URANIUM) : 0;
+        extra = ` <span class="ok">${reachableRes(i, j, def.radius, def.gather)} ${RES[def.gather].name.toLowerCase()}s${un ? ` and <b>${un} uranium deposit${un > 1 ? 's' : ''}</b>` : ''} in reach.</span>`;
+      }
       if (def.farm) extra = ` <span class="ok">${fertileIn(i, j, def.radius)} fertile tiles in reach.</span>`;
       if (def.pump) extra = ` <span class="ok">${oilAround(i, j)} Crude in this seep.</span>`;
       showBanner(`Place the <b>${def.name}</b> here?${extra}`, 'Build here', 'Cancel');
@@ -899,8 +930,22 @@ function onMapTap(i, j, wx, wy) {
       if (S.road[t]) { setRoadDir(i, j, S.road[t] >= 5 ? 1 : S.road[t] + 1); sfx('click'); showRoadBanner(); }
       return;
     }
-    // Roads and Bridges: a tap adds a tile to the plan or drops it, or marks a road to take up.
     if (!UI.draft) draftReset();
+    if (UI.roadMode === 'ramp') {
+      // Ramps: tap a highlighted cliff edge to plan one there, tap it again to drop it.
+      const stroke = [];
+      if (UI.draft.ramps.has(t)) draftOp(stroke, t, 'unramp');
+      else {
+        const chk = canPlace(0, 'ramp', i, j);
+        if (!chk.ok) { sfx('error'); showRoadBanner(chk.reason); return; }
+        draftOp(stroke, t, 'ramp');
+      }
+      UI.draft.strokes.push(stroke);
+      sfx('click');
+      showRoadBanner();
+      return;
+    }
+    // Roads and Bridges: a tap adds a tile to the plan or drops it, or marks a road to take up.
     const stroke = [];
     const d = UI.draft;
     let note = '';
@@ -967,8 +1012,8 @@ function rallyAtTap(wx, wy) {
  * tiles to lay, and existing or planned tiles to take up. Nothing is paid and no bot moves until
  * Build is tapped, so a stray swipe costs nothing (Undo or Clear takes it back).
  */
-function draftReset() { UI.draft = { add: [], addSet: new Set(), del: new Set(), strokes: [] }; }
-function draftEmpty() { return !UI.draft || (!UI.draft.add.length && !UI.draft.del.size); }
+function draftReset() { UI.draft = { add: [], addSet: new Set(), del: new Set(), ramps: new Set(), strokes: [] }; }
+function draftEmpty() { return !UI.draft || (!UI.draft.add.length && !UI.draft.del.size && !UI.draft.ramps.size); }
 
 function draftOp(stroke, t, op) {
   const d = UI.draft;
@@ -976,6 +1021,8 @@ function draftOp(stroke, t, op) {
   else if (op === 'unadd') { if (!d.addSet.has(t)) return; d.addSet.delete(t); d.add.splice(d.add.indexOf(t), 1); }
   else if (op === 'del') { if (d.del.has(t)) return; d.del.add(t); }
   else if (op === 'undel') { if (!d.del.has(t)) return; d.del.delete(t); }
+  else if (op === 'ramp') { if (d.ramps.has(t)) return; d.ramps.add(t); }
+  else if (op === 'unramp') { if (!d.ramps.has(t)) return; d.ramps.delete(t); }
   stroke.push({ t, op });
 }
 
@@ -986,7 +1033,7 @@ function draftUndo() {
   let s;
   do s = d.strokes.pop(); while (s && !s.length); // skip drags that added nothing
   if (!s) return;
-  const back = { add: 'unadd', unadd: 'add', del: 'undel', undel: 'del' };
+  const back = { add: 'unadd', unadd: 'add', del: 'undel', undel: 'del', ramp: 'unramp', unramp: 'ramp' };
   for (let k = s.length - 1; k >= 0; k--) draftOp([], s[k].t, back[s[k].op]);
 }
 
@@ -1007,17 +1054,23 @@ function draftSummary() {
     const c = S.plan[t] ? roadTileCost(t) : crossTile(t) ? CROSS[S.terrain[t]].cost : roadCost();
     for (const g in c) back[g] = (back[g] || 0) + c[g];
   }
+  // Ramps are construction sites: their materials are delivered, but you need them in stock.
+  for (const t of d.ramps) for (const g in BDEFS.ramp.cost) cost[g] = (cost[g] || 0) + BDEFS.ramp.cost[g];
   const net = {};
   for (const g in cost) net[g] = Math.max(0, cost[g] - (back[g] || 0));
-  return { add, cross, clear, del: d.del.size, cost, back, net, can: canAffordRoad(0, net) };
+  return { add, cross, clear, del: d.del.size, ramps: d.ramps.size, cost, back, net, can: canAffordRoad(0, net) };
 }
 
 /** Build the plan: take up the marked roads (their goods come back first), then plan the new tiles for workers to pave. */
 function commitDraft() {
   if (draftEmpty()) return;
   const d = UI.draft;
-  let removed = 0, laid = 0, why = '';
+  let removed = 0, laid = 0, ramps = 0, why = '';
   for (const t of d.del) if (S.road[t] || S.plan[t] === 1) { removeRoad(0, t % S.W, (t / S.W) | 0); removed++; }
+  for (const t of d.ramps) {
+    const r = placeSite(0, 'ramp', t % S.W, (t / S.W) | 0);
+    if (r.ok) ramps++; else { why = r.reason; break; }
+  }
   for (const t of d.add) {
     if (S.road[t] || S.plan[t]) continue;
     why = buildRoad(0, t % S.W, (t / S.W) | 0);
@@ -1025,9 +1078,11 @@ function commitDraft() {
     laid++;
   }
   draftReset();
+  // Built: Paths closes, straight back to the map (unless something went wrong, to fix it).
+  if (!why) setMode('normal');
   if (why) { sfx('error'); toast(`Planned ${laid} tile${laid === 1 ? '' : 's'} before running short: ${why}`, 'warn'); }
-  else { sfx('place'); toast((laid ? `Planned ${laid} road tile${laid === 1 ? '' : 's'}: free workers will pave them.` : '') + (removed ? ` Took up ${removed} tile${removed === 1 ? '' : 's'}.` : ''), 'info'); }
-  showRoadBanner();
+  else { sfx('place'); toast((laid ? `Planned ${laid} road tile${laid === 1 ? '' : 's'}: free workers will pave them.` : '') + (ramps ? ` ${ramps} Ramp site${ramps === 1 ? '' : 's'} started.` : '') + (removed ? ` Took up ${removed} tile${removed === 1 ? '' : 's'}.` : ''), 'info'); }
+  if (why) showRoadBanner();
 }
 
 /** Leaving Paths with a plan that was never built: it's dropped (nothing was spent). */
@@ -1042,7 +1097,7 @@ function dropDraft() {
  * rock only with Bridges). In Arrows each road tile points the way the finger moved, at once.
  */
 function onRoadPaint(i, j, first) {
-  if (R.mode !== 'road' || UI.roadMode === 'lights') return;
+  if (R.mode !== 'road' || UI.roadMode === 'lights' || UI.roadMode === 'ramp') return;
   if (!UI.draft) draftReset();
   if (first) { UI.paintSkipped = false; UI.paintCross = false; UI.stroke = []; UI.draft.strokes.push(UI.stroke); }
   const from = first || !UI.lastPaint ? { i, j } : UI.lastPaint;
@@ -1079,11 +1134,14 @@ function onRoadPaint(i, j, first) {
  * Bridges show the plan and what it costs, with Undo, Clear and Build.
  */
 function showRoadBanner(problem, info) {
-  const mode = ['arrows', 'lights', 'bridge'].includes(UI.roadMode) ? UI.roadMode : 'road';
+  const mode = ['arrows', 'lights', 'bridge', 'ramp'].includes(UI.roadMode) ? UI.roadMode : 'road';
   if (!UI.draft) draftReset();
   const have = playerGoods(0);
   let line, how;
-  if (mode === 'arrows') {
+  if (mode === 'ramp' && draftEmpty()) {
+    line = `Tap a highlighted spot at the foot or top of a one-level cliff to plan a <b>Ramp</b> (${costText(BDEFS.ramp.cost)}). Nothing is spent until you tap <b>Build</b>.`;
+    how = 'Workers cut a sloped road into the cliff; once it is done it is part of your road network, so haulers drive straight up it. A Ramp can\'t go where it would block the only way through a pass.';
+  } else if (mode === 'arrows') {
     line = 'Drag along a road to make it <b>one-way</b> the way you drag. Tap a road to turn its arrow.';
     how = 'One-way traffic never meets head-on, so a loop of one-way roads (one lane out, one back) keeps busy routes flowing.';
   } else if (mode === 'lights') {
@@ -1104,6 +1162,7 @@ function showRoadBanner(problem, info) {
       const parts = [];
       if (sm.add) parts.push(`<b>${sm.add}</b> new tile${sm.add === 1 ? '' : 's'}` + (sm.cross ? ` (${sm.cross} bridge or tunnel)` : '') + (sm.clear ? ` (${sm.clear} through resources)` : ''));
       if (sm.del) parts.push(`<b>${sm.del}</b> to take up`);
+      if (sm.ramps) parts.push(`<b>${sm.ramps}</b> Ramp${sm.ramps === 1 ? '' : 's'}`);
       const cost = Object.keys(sm.net).length && Object.values(sm.net).some((v) => v > 0) ? `costs <b>${costText(sm.net)}</b>` : 'costs nothing';
       line = `Plan: ${parts.join(', ')}; ${cost}` + (sm.can ? '.' : ` <span class="err">— not enough ${Object.keys(sm.net).filter((g) => !canAffordRoad(0, { [g]: sm.net[g] })).map((g) => GOOD[g].name).join(' or ')}.</span>`);
     }
@@ -1127,7 +1186,8 @@ function showRoadBanner(problem, info) {
   $('banner-ok').hidden = !drafting;
   if (drafting) {
     const sm = draftSummary();
-    $('banner-ok').textContent = sm.add ? `Build ${sm.add} tile${sm.add === 1 ? '' : 's'}` : 'Take up';
+    $('banner-ok').textContent = sm.add ? `Build ${sm.add} tile${sm.add === 1 ? '' : 's'}` + (sm.ramps ? ` + ${sm.ramps} Ramp${sm.ramps === 1 ? '' : 's'}` : '')
+      : sm.ramps ? `Build ${sm.ramps} Ramp${sm.ramps === 1 ? '' : 's'}` : 'Take up';
     $('banner-ok').disabled = !sm.can;
     $('banner-undo').onclick = () => { draftUndo(); sfx('click'); showRoadBanner(); };
     $('banner-clear').onclick = () => { draftReset(); sfx('click'); showRoadBanner(); };
@@ -1183,16 +1243,18 @@ function costHTML(cost, have) {
 function openBuildMenu() {
   const have = playerGoods(0);
   const sites = siteCount(0);
-  const list = BUILD_MENU.filter((t) => !(S.mode === 'colony' && BDEFS[t].war));
+  const list = BUILD_MENU.filter((t) => !(BDEFS[t].war && !warOn()) && !(BDEFS[t].nuke && !nukeOn()));
   const html = `<div class="sheet-title"><h3>Build</h3></div>
     <p class="desc">Placing a site is free; haulers bring the materials by road, so lay a road to it. ${sites}/${MAX_SITES} sites in progress.</p>
-    <div class="build-grid">${list.map((t) => `<button class="bcard" data-t="${t}" ${sites >= MAX_SITES ? 'disabled' : ''}>
+    <div class="build-grid"><button class="bcard roads" id="build-roads"><kbd>R</kbd><svg viewBox="0 0 24 24"><path d="M8 3L5 21M16 3l3 18M12 4v3M12 10.5v3M12 17v3" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+      <div class="bname">Roads</div><div class="bhave">Plan roads, bridges and ramps</div></button>${list.map((t) => `<button class="bcard" data-t="${t}" ${sites >= MAX_SITES ? 'disabled' : ''}>
       ${BUILD_KEYS[t] ? `<kbd>${BUILD_KEYS[t].toUpperCase()}</kbd>` : ''}<img src="${iconFor(t)}" alt=""><div class="bname">${BDEFS[t].name}</div><div class="bcost">${costHTML(BDEFS[t].cost, have)}</div>
       <div class="bhave">${ownedText(t)}</div></button>`).join('')}</div>`;
   openSheet('build', 0, html);
-  for (const el of $('sheet-body').querySelectorAll('.bcard')) {
+  for (const el of $('sheet-body').querySelectorAll('.bcard[data-t]')) {
     el.onclick = () => { sfx('click'); enterPlaceMode(el.dataset.t); };
   }
+  $('build-roads').onclick = () => openPaths('road');
 }
 
 /** How many of a building type the player has, for the build menu. */
@@ -1226,11 +1288,11 @@ function openBuildingSheet(b) {
         <button data-v="normal">Normal</button><button data-v="fill">Fill first</button><button data-v="empty">Empty out</button></div>
         <p class="hint" id="sh-smode-hint"></p>
         <div class="section-label">Goods kept here <span class="label-note">tap to switch off</span></div>
-        <div class="goodlist" id="sh-accept">${GOODS.map((g) => `<button class="gtag toggle" data-g="${g}"><i class="gi ${g}"></i><span>${GOOD[g].name}</span> <b>0</b></button>`).join('')}</div>`;
+        <div class="goodlist" id="sh-accept">${GOODS.filter((g) => nukeOn() || !NUKE_GOODS.includes(g)).map((g) => `<button class="gtag toggle" data-g="${g}"><i class="gi ${g}"></i><span>${GOOD[g].name}</span> <b>0</b></button>`).join('')}</div>`;
       if (b.type !== 'lander') {
         // The goods a front line runs on, plus any already ordered; the rest behind "More goods".
-        const main = ['cement', 'fiber', 'stone', 'alloy', 'fuel'].concat(S.mode !== 'colony' ? ['ammo'] : []);
-        const goods = main.concat(GOODS.filter((g) => !main.includes(g))).filter((g) => (S.mode !== 'colony' || !WAR_GOODS.includes(g)) && (UI.keepAll || main.includes(g) || (b.keep && b.keep[g])));
+        const main = ['cement', 'fiber', 'stone', 'alloy', 'fuel'].concat(warOn() ? ['ammo'] : []);
+        const goods = main.concat(GOODS.filter((g) => !main.includes(g))).filter((g) => (warOn() || !WAR_GOODS.includes(g)) && (nukeOn() || !NUKE_GOODS.includes(g)) && (UI.keepAll || main.includes(g) || (b.keep && b.keep[g])));
         html += `<div class="section-label">Supply orders <span class="label-note">stock it from home</span></div>
           <div class="keep-list" id="sh-keep">${goods.map((g) => `<div class="keep-cell" data-g="${g}"><span class="kname"><i class="gi ${g}"></i>${GOOD[g].name}</span><b class="n">–</b>
             <button class="btn" data-d="-5" aria-label="Less ${GOOD[g].name}">−5</button><button class="btn" data-d="5" aria-label="More ${GOOD[g].name}">+5</button></div>`).join('')}</div>
@@ -1242,7 +1304,7 @@ function openBuildingSheet(b) {
         <button data-v="low">Low</button><button data-v="normal">Normal</button><button data-v="high">High</button></div>
         <p class="hint">${b.built ? 'High-priority buildings get workers and goods first; low ones last, and lose their worker first when workers run short.' : 'High-priority sites get their materials and a builder first. Once built, it goes back to Normal.'}</p>`;
     }
-    if (def.mil && b.built && S.mode !== 'colony') {
+    if (def.mil && b.built && warOn()) {
       html += `<div class="section-label">Warbots</div>
         <div class="seg" id="sh-gprio"><button data-v="low">Low</button><button data-v="normal">Normal</button><button data-v="high">High</button></div>
         <p class="hint">Garrison priority: new warbots from the Foundry, and ones called back from a rally flag, fill High garrisons first and Low ones last.</p>
@@ -1251,7 +1313,7 @@ function openBuildingSheet(b) {
         <p class="hint" id="sh-st-hint"></p>`;
     }
     if (b.type === 'foundry' && b.built) {
-      const versus = S.mode !== 'colony';
+      const versus = warOn();
       const row = (k, label) => `<div class="order-row"><span>${label}<small id="sh-o-${k}">none queued</small></span>
         <button class="btn" data-k="${k}" data-d="1">+1</button><button class="btn" data-k="${k}" data-d="5">+5</button>
         <button class="btn ghost" data-k="${k}" data-d="0">Clear</button></div>`;
@@ -1259,6 +1321,10 @@ function openBuildingSheet(b) {
       html += `<div class="section-label">Order bots</div><div id="sh-orders">${kinds.map((k) => row(k, BOTS[k].plural)).join('')}</div>
         <p class="hint">The Foundry only builds the bots you order. Each one uses 1 Alloy and 1 Chip and takes ${def.work} s (a Freight Truck twice that); mixed orders take turns.
         <b>Haulers</b> carry two goods at a time, <b>Freight Trucks</b> eight on the long runs to Depots, <b>Agribots</b> run Bio Farms and Grove Planters, and <b>Pavers</b> run the Roadworks.</p>`;
+    }
+    if (def.nukeSilo && b.built) {
+      html += `<button class="btn primary big danger-glow" id="sh-aim">Aim nuclear missile</button>
+        <p class="hint" id="sh-aim-hint"></p>`;
     }
     if (def.missile && b.built) {
       html += `<button class="btn primary big" id="sh-aim">Aim missile</button>
@@ -1464,18 +1530,14 @@ function refreshBuildingSheet(b) {
       parts.push(`<div class="kv"><span>${def.crew ? BOTS[def.crew].name : 'Worker'}</span><span>${b.paused ? 'Paused' : op ? (op.inside === b.id ? 'Inside' : 'Out working') : b.staffInc ? 'On the way' : 'None yet'}</span></div>`);
     }
     if (def.roadworks) {
+      // Everything on the road network joined to the Roadworks is in reach.
       let left = 0;
-      const r2 = def.radius * def.radius + 0.3;
-      for (let j = Math.max(0, b.y - def.radius); j <= Math.min(S.H - 1, b.y + def.radius); j++) {
-        for (let i = Math.max(0, b.x - def.radius); i <= Math.min(S.W - 1, b.x + def.radius); i++) {
-          const t = tIdx(i, j);
-          if (S.road[t] && S.pave[t] < 2 && S.owner[t] === b.owner && dist2(i, j, b.x, b.y) <= r2) left++;
-        }
-      }
-      parts.push(`<div class="kv"><span>Roads in reach still to surface</span><span>${left} tiles</span></div>`);
+      const nets = buildingNets(b), net = roadNet();
+      for (let t = 0; t < S.W * S.H; t++) if (S.road[t] && S.pave[t] < 2 && S.owner[t] === b.owner && nets.indexOf(net.comp[t]) >= 0) left++;
+      parts.push(`<div class="kv"><span>Joined roads still to surface</span><span>${left} tiles</span></div>`);
       if (mine) parts.push(`<div class="kv"><span>Asphalt</span><span>${goodTag('asphalt', `${b.stock.asphalt || 0}/3`, !(b.stock.asphalt > 0) && !(b.charges > 0))} + ${b.charges || 0} tiles in the hopper</span></div>`);
     }
-    if (def.ammoStock && mine && S.mode !== 'colony') {
+    if (def.ammoStock && mine && warOn()) {
       parts.push(`<div class="kv"><span>Ammo for warbots</span><span>${goodTag('ammo', `${b.stock.ammo || 0}/${def.ammoStock}`, !(b.stock.ammo > 0))}</span></div>`);
     }
     if (b.upT > 30 && tracksUse(def)) {
@@ -1485,6 +1547,7 @@ function refreshBuildingSheet(b) {
     if (def.gather) {
       const g = RES[def.gather].good;
       parts.push(`<div class="kv"><span>${RES[def.gather].name}s in reach</span><span>${reachableRes(b.x, b.y, def.radius, def.gather)}</span></div>`);
+      if (b.type === 'mine' && nukeOn()) parts.push(`<div class="kv"><span>Uranium deposits in reach</span><span>${reachableRes(b.x, b.y, def.radius, R_URANIUM)}</span></div>`);
       if (mine) parts.push(`<div class="kv"><span>Waiting for pickup</span><span>${goodTag(g, `${b.stock[g] || 0}/${def.out[g]}`)}</span></div>`);
     }
     if (def.plant) parts.push(`<div class="kv"><span>Stalk groves in reach</span><span>${reachableRes(b.x, b.y, def.radius, R_STALK)}</span></div>`);
@@ -1519,13 +1582,20 @@ function refreshBuildingSheet(b) {
       parts.push(`<div class="kv"><span>Workers resting here</span><span>${idle}</span></div>`);
     }
     if (def.mil) parts.push(`<div class="kv"><span>${mine ? 'Warbots inside' : 'Defenders inside'}</span><span>${b.garrison.length} / ${def.garrison}</span></div>`);
-    if (def.mil && mine && S.mode !== 'colony') parts.push(`<div class="kv"><span>Territory radius</span><span>${def.terr} tiles</span></div>`);
+    if (def.mil && mine) parts.push(`<div class="kv"><span>Territory radius</span><span>${def.terr} tiles</span></div>`);
     if (def.ammo && mine && !def.missile) parts.push(`<div class="kv"><span>Ammo</span><span>${b.shots + (b.stock.crystal || 0) * SHOTS_PER_AMMO} shots</span></div>`);
     if (def.missile && mine) {
       parts.push(`<div class="kv"><span>Missiles loaded</span><span>${goodTag('warhead', `${b.stock.warhead || 0}/${def.ammoCap}`)}</span></div>`);
       parts.push(`<div class="kv"><span>Each hit</span><span>${def.missile.damage} damage, ${def.missile.splashDamage} to buildings within ${def.missile.splash} tiles</span></div>`);
       parts.push(`<div class="kv"><span>Reload</span><span>${b.reload > 0 ? Math.ceil(b.reload) + 's' : 'Ready'}</span></div>`);
       parts.push(`<div class="kv"><span>Range</span><span>${def.missile.range} tiles</span></div>`);
+    }
+    if (def.nukeSilo && mine) {
+      parts.push(`<div class="section-label">Nuclear missile parts</div><div class="goodlist">${Object.keys(NUKE.parts).map((g) =>
+        goodTag(g, `${b.armed ? NUKE.parts[g] : Math.min(b.stock[g] || 0, NUKE.parts[g])}/${NUKE.parts[g]}`, !b.armed && (b.stock[g] || 0) < NUKE.parts[g])).join(' ')}</div>`);
+      if (!b.armed && b.timer > 0) parts.push(`<div class="bar"><div style="width:${Math.round((b.timer / NUKE.assemble) * 100)}%"></div></div>`);
+      parts.push(`<div class="kv"><span>Nuclear missile</span><span>${b.armed ? '<b>Ready to launch</b>' : 'Not built yet'}</span></div>`);
+      parts.push(`<div class="kv"><span>Range · blast</span><span>${NUKE.range} tiles · ${NUKE.radius} tiles</span></div>`);
     }
     if (def.repair && mine) {
       let inside = 0;
@@ -1540,15 +1610,16 @@ function refreshBuildingSheet(b) {
         const pct = Math.round(Math.min(100, ((b.energy || 0) / FUEL_ENERGY) * 100));
         parts.push(`<div class="kv"><span>Fuel stocked</span><span>${goodTag('fuel', `${b.stock.fuel || 0}/${def.fuelCap}`, !(b.stock.fuel > 0))}</span></div>`);
         parts.push(`<div class="kv"><span>Fuel burning</span><span>${pct}% left</span></div><div class="bar battery"><div style="width:${pct}%;background:var(--g-fuel)"></div></div>`);
-      } else {
-        parts.push('<div class="kv"><span>Fuel</span><span>Not needed: the Command Base charges for free</span></div>');
       }
     }
   }
   $('sh-dyn').innerHTML = parts.join('');
   if ($('sh-road')) refreshRoadLink(b);
   if ($('sh-fix')) refreshFix(b);
-  if ($('sh-aim')) {
+  if ($('sh-aim') && def.nukeSilo) {
+    $('sh-aim').disabled = !b.armed;
+    $('sh-aim-hint').textContent = b.armed ? `Shows its ${NUKE.range}-tile range: tap a spot inside it to see the ${NUKE.radius}-tile blast, then launch.` : 'Builds a nuclear missile once its parts are in.';
+  } else if ($('sh-aim')) {
     const why = !(b.stock.warhead > 0) ? 'No Missiles loaded yet: haulers bring them from a Missile Factory.' : b.reload > 0 ? `Reloading: ready in ${Math.ceil(b.reload)}s.` : '';
     $('sh-aim').disabled = !!why;
     $('sh-aim-hint').textContent = why || `Shows the Silo's ${BDEFS.silo.missile.range}-tile range on the ground: tap any spot inside it to aim, then fire.`;
@@ -1655,8 +1726,8 @@ function botActivity(u) {
       return t.act === 'harvest' ? (t.phase === 'work' ? 'Harvesting an energy crop' : 'Heading out to harvest a crop') : (t.phase === 'work' ? 'Planting an energy crop' : 'Heading out to plant a crop');
     }
     if (def.roadworks && (t.phase === 'toNode' || t.phase === 'work')) return t.phase === 'work' ? 'Laying asphalt' : 'Heading to a path to surface';
-    if (t.phase === 'toNode') return def.plant ? 'Heading out to plant a grove' : `Heading out to gather ${def.gather ? GOOD[RES[def.gather].good].name : ''}`;
-    if (t.phase === 'work') return def.plant ? 'Planting a stalk grove' : `Harvesting ${def.gather ? RES[def.gather].name.toLowerCase() : ''}`;
+    if (t.phase === 'toNode') return def.plant ? 'Heading out to plant a grove' : `Heading out to gather ${def.gather ? GOOD[RES[t.gtype || def.gather].good].name : ''}`;
+    if (t.phase === 'work') return def.plant ? 'Planting a stalk grove' : `Harvesting ${def.gather ? RES[t.gtype || def.gather].name.toLowerCase() : ''}`;
     if (t.phase === 'back') return u.carry ? `Bringing ${GOOD[u.carry].name} back` : `Walking back to the ${nm(t.bld)}`;
     return `Working at the ${nm(t.bld)}`;
   }
@@ -1730,7 +1801,8 @@ function openResourceSheet(t) {
   R.selected = 0; R.selTile = t; UI.selBot = 0;
   const type = S.res[t], info = RES[type];
   const by = Object.keys(BDEFS).find((k) => BDEFS[k].gather === type);
-  const desc = type === R_CROP ? 'Planted by a Bio Farm on fertile soil. Once ripe, its worker harvests it into Fuel and plants a new one.'
+  const desc = type === R_URANIUM ? 'Scarce and radioactive. An Ore Mine within 4 tiles digs it (before any ore); a Nuclear Reactor enriches it, and 12 Uranium make one nuclear missile. There are only a few deposits on the planet: whoever holds them wins the race.'
+    : type === R_CROP ? 'Planted by a Bio Farm on fertile soil. Once ripe, its worker harvests it into Fuel and plants a new one.'
     : type === R_OIL ? 'Build an Oil Pump right on top of the seep to pump Crude (it also draws from seep tiles next to it). A Refinery turns Crude into Fuel.'
     : `Gives ${GOOD[info.good].name}. Gathered by a ${BDEFS[by].name} within ${BDEFS[by].radius} tiles.${type === R_STALK ? ' A Grove Planter can grow more.' : ' It runs out eventually, so expand to find more.'}`;
   const rich = richRes(t) ? '<p class="desc"><b>Rich deposit:</b> it holds far more than the ones near your base. The frontier pays.</p>' : '';
@@ -1755,6 +1827,88 @@ function oilAround(i, j) {
     if (inMap(i + di, j + dj) && S.res[tIdx(i + di, j + dj)] === R_OIL) n += S.amt[tIdx(i + di, j + dj)];
   }
   return n;
+}
+
+/*
+ * The goods panel: for each good, how much you have, how fast it's made and used, what makes and
+ * uses it, and what's waiting for it. Tap a goods counter to open it; tap another good to switch.
+ */
+function openGoodsSheet(g) {
+  UI.goodSel = g;
+  const shown = GOODS.filter((k) => !UI.goodEls[k].hidden);
+  openSheet('goods', 0, `<div class="sheet-title"><div><h3>Goods</h3></div></div>
+    <div class="pick-row goods-pick" id="gs-pick">${shown.map((k) => `<button data-g="${k}"><i class="gi ${k}"></i>${GOOD[k].name}</button>`).join('')}</div>
+    <div id="gs-body"></div>`);
+  for (const btn of $('gs-pick').children) btn.onclick = () => { UI.goodSel = btn.dataset.g; sfx('click'); refreshGoodsSheet(true); };
+  refreshGoodsSheet(true);
+}
+
+function refreshGoodsSheet(full) {
+  const g = UI.goodSel, p = 0;
+  for (const btn of $('gs-pick').children) btn.classList.toggle('on', btn.dataset.g === g);
+  if (full) $('gs-pick').querySelector('.on')?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  const rate = goodRates(p)[g], net = rate.made - rate.used;
+  let stored = 0, waiting = 0;
+  for (const b of S.buildings) {
+    if (b.dead || b.owner !== p || !b.built) continue;
+    const def = BDEFS[b.type];
+    if (def.store) stored += b.stock[g] || 0;
+    else if (def.out && def.out[g]) waiting += b.stock[g] || 0;
+  }
+  const total = goodTotal(p, g);
+  // Who makes it, who uses it.
+  const makers = {}, users = {};
+  for (const b of S.buildings) {
+    if (b.dead || b.owner !== p) continue;
+    const def = BDEFS[b.type];
+    const makes = (def.make && def.make[g]) || (def.gather && gatherTypes(b.type).some((r) => RES[r].good === g)) || (def.farm && g === 'fuel');
+    if (makes) {
+      const m = makers[b.type] = makers[b.type] || { n: 0, working: 0, stopped: 0 };
+      m.n++;
+      if (b.built && b.working) m.working++;
+      else if (b.built && /^Stopped/.test(b.status || '')) m.stopped++;
+    }
+    const uses = (def.inp && def.inp[g]) || (def.charger && def.charger.fuel && g === 'fuel') || (def.repair && g === 'alloy') ||
+      (def.ammo === g) || (def.ammoStock && g === 'ammo') || (def.nukeSilo && NUKE.parts[g]) || (def.missile && g === 'warhead');
+    if (uses && b.built) { const u = users[b.type] = users[b.type] || { n: 0 }; u.n++; }
+  }
+  // What's waiting for it right now.
+  let wantN = 0, wantB = 0, sites = 0;
+  for (const b of S.buildings) {
+    if (b.dead || b.owner !== p) continue;
+    for (const [k, n] of needsOf(b)) {
+      if (k !== g || n <= 0) continue;
+      if ((b.stock[g] || 0) > 0 && b.built) continue; // stocked up, just topping up
+      wantN += n; wantB++;
+      if (!b.built) sites++;
+    }
+  }
+  const fmt = (v) => (v >= 10 ? Math.round(v) : Math.round(v * 10) / 10);
+  const runOut = net < -0.05 && total > 0 ? total / -net : Infinity;
+  const short = wantB > 0 && total <= 0;
+  const status = short ? `<div class="gs-alert bad"><b>Shortfall:</b> ${wantB} building${wantB === 1 ? '' : 's'}${sites ? ` (${sites} construction site${sites === 1 ? '' : 's'})` : ''} waiting for ${GOOD[g].name}, and none in stock.</div>`
+    : runOut < 5 ? `<div class="gs-alert warn"><b>Running low:</b> at this rate you run out in about ${Math.max(1, Math.round(runOut))} minute${Math.round(runOut) === 1 ? '' : 's'}.</div>`
+      : net > 0.05 ? '<div class="gs-alert good">Growing: you make more than you use.</div>' : '';
+  const list = (o, label) => Object.keys(o).length
+    ? Object.keys(o).map((t) => `<span class="gtag">${o[t].n} ${o[t].n === 1 ? BDEFS[t].name : BDEFS[t].name + (BDEFS[t].name.endsWith('s') ? '' : 's')}${o[t].working !== undefined ? ` <small>${o[t].working} working${o[t].stopped ? `, ${o[t].stopped} at limit` : ''}</small>` : ''}</span>`).join('')
+    : `<span class="hint">${label}</span>`;
+  const extraUse = g === 'cement' ? ' Also construction and roads.' : (BDEFS.depot.cost[g] || ['fiber', 'alloy', 'chip', 'stone'].includes(g)) ? ' Also construction.' : '';
+  $('gs-body').innerHTML = `<p class="desc">${GOOD[g].desc}</p>${status}
+    <div class="gs-stats">
+      <div><b>${fmt(total)}</b><span>on hand</span></div>
+      <div><b class="up">+${fmt(rate.made)}</b><span>made / min</span></div>
+      <div><b class="down">−${fmt(rate.used)}</b><span>used / min</span></div>
+      <div><b class="${net > 0.05 ? 'up' : net < -0.05 ? 'down' : ''}">${net >= 0 ? '+' : '−'}${fmt(Math.abs(net))}</b><span>net / min</span></div>
+    </div>
+    <div class="kv"><span>In storage</span><span>${stored}</span></div>
+    <div class="kv"><span>Waiting for pickup at buildings</span><span>${waiting}</span></div>
+    <div class="kv"><span>Wanted right now</span><span>${wantN ? `${wantN} by ${wantB} building${wantB === 1 ? '' : 's'}` : 'Nothing waiting'}</span></div>
+    <div class="section-label">Made by</div><div class="goodlist">${list(makers, g === 'cement' || g === 'alloy' ? 'Nothing yet.' : 'Nothing makes it yet.')}</div>
+    <div class="section-label">Used by</div><div class="goodlist">${list(users, 'No buildings use it.')}</div>${extraUse ? `<p class="hint">${extraUse.trim()}</p>` : ''}
+    <div class="section-label">On hand over time</div><canvas class="chart small" id="gs-chart"></canvas>
+    <p class="hint">Rates are over the last two minutes. The Statistics screen in the pause menu shows the whole game.</p>`;
+  const H = S.hist;
+  if (H && H.t.length > 1 && H.p[0].goods && H.p[0].goods[g]) lineChart($('gs-chart'), { xs: H.t, series: [{ name: GOOD[g].name, color: GOOD[g].color, values: H.p[0].goods[g] }] });
 }
 
 /** Your robots by type: how many, and what they're doing. Opened from the population chip. */
@@ -1784,7 +1938,7 @@ function refreshPopSheet() {
     else add(u.type, 'free');
   }
   const part = (o, k, label) => (o[k] ? `${o[k]} ${label}` : '');
-  const rows = BOT_ORDER.filter((k) => n[k] || (S.mode !== 'colony' || !BOTS[k].war)).map((k) => {
+  const rows = BOT_ORDER.filter((k) => n[k] || warOn() || !BOTS[k].war).map((k) => {
     const o = n[k] || { total: 0 };
     const bits = k === 'warbot'
       ? [part(o, 'garrison', 'in garrisons'), part(o, 'field', 'in the field'), part(o, 'noAmmo', 'out of Ammo')]
@@ -1799,6 +1953,7 @@ function refreshPopSheet() {
 function refreshSheet() {
   if (!UI.sheetKind || UI.sheetKind === 'build') return;
   if (UI.sheetKind === 'pop') { refreshPopSheet(); return; }
+  if (UI.sheetKind === 'goods') { refreshGoodsSheet(false); return; }
   if (UI.sheetKind === 'bld') {
     const b = getE(UI.sheetFor);
     if (!b) { closeSheet(); return; }
@@ -1905,17 +2060,17 @@ function updateHUD() {
     else if (u.type === 'hauler' || u.type === 'truck') haulers++;
     else if (u.type === 'worker') { workers++; if (isIdleWorker(u)) idle++; }
   }
-  $('pop').title = `${workers} workers (${idle} free), ${haulers} haulers and trucks` + (S.mode === 'colony' ? '' : `, ${war} warbots`) + '. Tap for every robot by type.';
+  $('pop').title = `${workers} workers (${idle} free), ${haulers} haulers and trucks` + (warOn() ? `, ${war} warbots` : '') + '. Tap for every robot by type.';
   $('pop').innerHTML = `<span class="dot" style="background:#ece6da;box-shadow:inset 0 0 0 2px ${PLAYER_COLORS[0]}"></span>${workers}<span class="wide"> workers</span> <span style="color:var(--muted)">(${idle} free)</span>` +
     ` <span class="dot" style="background:#ffb547;box-shadow:inset 0 0 0 2px ${PLAYER_COLORS[0]}"></span>${haulers}<span class="wide"> haulers</span>` +
-    (S.mode === 'colony' ? '' : ` <span class="dot" style="background:${PLAYER_COLORS[0]};border-radius:2px;transform:rotate(45deg)"></span>${war}`);
+    (warOn() ? ` <span class="dot" style="background:${PLAYER_COLORS[0]};border-radius:2px;transform:rotate(45deg)"></span>${war}` : '');
   $('clock').textContent = S.mode === 'colony' ? `${Math.round(landShare(0) * 100)}% land` : fmtTime(S.time);
   const obj = $('objective');
   obj.innerHTML = UI.objCollapsed && !S.mission ? 'Goal ▸' : objectiveText();
   obj.classList.toggle('small', UI.objCollapsed);
   if (UI.sheetKind === 'build') {
     // keep build-menu affordability current without rebuilding the buttons
-    for (const el of $('sheet-body').querySelectorAll('.bcard')) {
+    for (const el of $('sheet-body').querySelectorAll('.bcard[data-t]')) {
       const cost = BDEFS[el.dataset.t].cost;
       el.querySelector('.bcost').innerHTML = costHTML(cost, goods);
       const have = el.querySelector('.bhave');

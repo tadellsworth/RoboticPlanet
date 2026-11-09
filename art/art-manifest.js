@@ -23,12 +23,12 @@
  * Keys
  *   Buildings: lander harvester quarry mine tap grower smelter fab foundry outpost turret depot
  *              charger munitions silo farm pump refinery kiln tarworks roadworks armory repair
- *              site (a construction site)
+ *              reactor nukesilo  site (a construction site)
  *   Bots:      worker warbot hauler agribot paver truck  (drawn facing right; the game rotates them;
  *              any bot can have driving frames '<type>@<team>-f0' … '-f3' and overlays '<type>-brake' and
  *              '<type>-boost'; give a bot without a baked-in shadow `shadow: true`;
  *              without their own art, specialists use the worker's art with a small badge)
- *   Resources: stalk boulder ore crystal crop oil   (crop is drawn smaller while it ripens)
+ *   Resources: stalk boulder ore crystal crop oil uranium   (crop is drawn smaller while it ripens)
  *   Ground:    ground water rock fertile  (square seamless tiles; one image spans 4×4 map tiles)
  *   Terrain:   slope  (a ramp tile, drawn with uphill at the top; the game rotates it)
  *              cliff  (the rock face below a higher level: a wide strip, about 128×48)
@@ -40,8 +40,9 @@
  *              anchor 'bottom', a 3/4-view base only, plus head images turret-head-0@0 … turret-head-7@0
  *              (and @1): the gun head alone on the same canvas, facing right (0), then each 45° step
  *              clockwise on screen (1 down-right … 6 up/away, 7 up-right). 16 heads (0-15) also work.
- *   Markers:   missile (in flight, facing right; 128x128)  rally (your rally flag; 128x128)
+ *   Markers:   missile (in flight, facing right; 128x128)  nuclear-missile  rally (your rally flag; 128x128)
  *              oneway (arrow painted on a one-way path, pointing right; 64x64)
+ *   Effects:   nuke-blast (a 6×4 sprite sheet, 24 frames)  nuke-scorch (the scorched crater)
  *
  * Images should be square PNGs with transparent backgrounds, viewed from above.
  * 256x256 is plenty.
@@ -52,21 +53,24 @@
  */
 function B3D(src) { return { src, scale: 1.4, anchor: [0.5, 0.615] }; }
 
+/** A robot's driving frames for both teams plus its brake and boost overlays (WebP). */
+function driveSet(type) {
+  const out = {};
+  for (const team of [0, 1]) for (let f = 0; f < 4; f++) out[`${type}@${team}-f${f}`] = { src: `bots/${type}@${team}-f${f}.webp`, shadow: true };
+  out[`${type}-brake`] = `bots/${type}-brake.webp`;
+  out[`${type}-boost`] = `bots/${type}-boost.webp`;
+  return out;
+}
+
 const ART_MANIFEST = {
   // Priority 1: what you see constantly
   // The Command Base (internal key "lander"): a 3D fortified base on the shared pad, drawn bigger than the rest.
   'lander@0': { src: 'buildings/lander@0.png', scale: 2.4, anchor: [0.5, 0.615] },
   'lander@1': { src: 'buildings/lander@1.png', scale: 2.4, anchor: [0.5, 0.615] },
-  'worker@0': 'bots/worker@0.png',
-  'worker@1': 'bots/worker@1.png',
-  'warbot@0': 'bots/warbot@0.png',
-  'warbot@1': 'bots/warbot@1.png',
-  'hauler@0': 'bots/hauler@0.png',
-  'hauler@1': 'bots/hauler@1.png',
-  'agribot@0': 'bots/agribot@0.png',
-  'agribot@1': 'bots/agribot@1.png',
-  'paver@0': 'bots/paver@0.png',
-  'paver@1': 'bots/paver@1.png',
+  // Robots: four driving frames per team (bots/<robot>@<team>-f0 … f3, played by distance driven)
+  // and brake / boost overlays; no shadow in the images, so `shadow` has the game draw it.
+  // (The older single images, bots/<robot>@<team>.png, are no longer used.)
+  ...driveSet('worker'), ...driveSet('warbot'), ...driveSet('hauler'), ...driveSet('agribot'), ...driveSet('paver'),
   ground: 'tiles/ground.png',
   stalk: 'resources/stalk.png',
   boulder: 'resources/boulder.png',
@@ -104,18 +108,18 @@ const ART_MANIFEST = {
   ramp: B3D('buildings/ramp.png'),
   repair: B3D('buildings/repair-bay.png'),
 
-  // Freight Truck: four driving frames per team, played faster the faster it goes (bots/truck@0-f0 …),
-  // plus overlays for braking and speeding up. No shadow in the images: `shadow` has the game draw it.
-  'truck@0-f0': { src: 'bots/truck@0-f0.png', shadow: true },
-  'truck@0-f1': { src: 'bots/truck@0-f1.png', shadow: true },
-  'truck@0-f2': { src: 'bots/truck@0-f2.png', shadow: true },
-  'truck@0-f3': { src: 'bots/truck@0-f3.png', shadow: true },
-  'truck@1-f0': { src: 'bots/truck@1-f0.png', shadow: true },
-  'truck@1-f1': { src: 'bots/truck@1-f1.png', shadow: true },
-  'truck@1-f2': { src: 'bots/truck@1-f2.png', shadow: true },
-  'truck@1-f3': { src: 'bots/truck@1-f3.png', shadow: true },
-  'truck-brake': 'bots/truck-brake.png',
-  'truck-boost': 'bots/truck-boost.png',
+  // Nuclear race: the Reactor and Nuclear Silo (team versions), the nuclear missile in flight (nose
+  // right), the detonation (a 6×4 sheet of 24 frames, played once at 12 fps, ground zero at [0.5, 0.7])
+  // and the scorched crater it leaves.
+  reactor: B3D('buildings/nuclear-reactor.png'),
+  'nukesilo@0': B3D('buildings/nuclear-silo@0.png'),
+  'nukesilo@1': B3D('buildings/nuclear-silo@1.png'),
+  'nuclear-missile': 'markers/nuclear-missile.png',
+  'nuke-blast': 'effects/nuke-blast-sheet.webp',
+  'nuke-scorch': 'effects/nuke-scorch.png',
+
+  // Freight Truck: the same pattern, drawn bigger.
+  ...driveSet('truck'),
 
   // Military buildings (Versus), with team versions: @0 yours (cyan lights), @1 the rival's (red).
   'armory@0': B3D('buildings/armory@0.png'),
@@ -127,6 +131,6 @@ const ART_MANIFEST = {
 
   // Still to make (placeholders are drawn until these exist):
   //   buildings: a 3D turret (base + head frames)
-  //   resources: crop, oil     ground: fertile, slope, cliff     markers: missile, rally, oneway
+  //   resources: crop, oil, uranium     ground: fertile, slope, cliff     markers: missile, rally, oneway
   //   goods:     icon-fiber … icon-warhead (12 HUD icons)
 };

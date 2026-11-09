@@ -140,6 +140,19 @@ function generateMap(seed, W, H, cfg) {
     }
   }
 
+  // Nuclear race: a few single uranium deposits, mostly out towards the middle of the map.
+  if (cfg.nuke) {
+    let placed = 0;
+    for (let tries = 0; tries < 600 && placed < URANIUM_DEPOSITS; tries++) {
+      const x = 1 + Math.floor(rng() * (W - 2)), y = half + 1 + Math.floor(rng() * (H - half - 2));
+      const t = id(x, y), d = Math.sqrt(dist2(x, y, bx, by));
+      if (terrain[t] !== T_GROUND || res[t] || fert[t] || d < 11) continue;
+      if (rng() > clamp((d - 8) / 20, 0.25, 1)) continue; // deposits near the base are rarer
+      res[t] = R_URANIUM;
+      placed++;
+    }
+  }
+
   // 3) Player 0 base: a flat landing zone.
   field(bx, by, 3.4, -1, 0, true);
   fields.pop();
@@ -313,6 +326,32 @@ function mapDims(st) {
   return { W: Math.round(sz.w * sh.w), H: 2 * Math.round((sz.h * sh.h) / 2) };
 }
 
+/** Is this a Nuclear race (the optional Versus setting with uranium and nuclear missiles)? */
+function nukeOn() { return !!(S && S.settings && S.settings.nuke) && !S.mission; }
+
+/**
+ * Are military buildings, warbots and missiles available? Always in Versus; in Colony free play too
+ * (a sandbox to try everything); not in Colony missions, which are about building.
+ */
+function warOn() { return !!S && (S.mode !== 'colony' || !S.mission); }
+
+/** The resources a building of `type` gathers: its own, plus uranium for Ore Mines in a Nuclear race (uranium first). */
+function gatherTypes(type) {
+  const g = BDEFS[type].gather;
+  if (!g) return [];
+  return type === 'mine' && nukeOn() ? [R_URANIUM, g] : [g];
+}
+
+/** How many nodes a `type` gatherer at (i, j) could reach. */
+function gatherReach(i, j, type) {
+  let n = 0;
+  for (const r of gatherTypes(type)) n += reachableRes(i, j, BDEFS[type].radius, r);
+  return n;
+}
+
+/** Is tile t still scorched by a nuclear blast (nothing can be built or paved there)? */
+function scorched(t) { return !!(S.scorch && S.scorch[t] > S.time); }
+
 /** Is the resource on tile t a rich deposit (much more than usual, out towards the frontier)? */
 function richRes(t) {
   const r = S.res[t];
@@ -333,6 +372,7 @@ function newGame(opts) {
     rich: clamp(opts.rich ?? DEFAULT_RICH, 0, RESOURCE_PRESETS.length - 1),
   };
   settings.shape = clamp(opts.shape ?? 0, 0, SHAPE_PRESETS.length - 1);
+  settings.nuke = !!opts.nuke;
   const { W, H } = mapDims(settings);
   const seed = opts.seed >>> 0;
   const diff = DIFFICULTY[opts.difficulty] ? opts.difficulty : 'normal';
@@ -341,7 +381,7 @@ function newGame(opts) {
   S = {
     v: 1, mode, seed, W, H, settings, difficulty: diff, time: 0, nextId: 1, winner: -1, milestone: 0,
     terrain: m.terrain, res: m.res, amt: m.amt, grow: m.grow, elev: m.elev, ramp: m.ramp, fert: m.fert,
-    road: new Uint8Array(W * H), pave: new Uint8Array(W * H), oneRoad: true, roadVer: 0, lights: {}, over: {},
+    road: new Uint8Array(W * H), pave: new Uint8Array(W * H), oneRoad: true, roadVer: 0, lights: {}, over: {}, scorch: {},
     plan: new Uint8Array(W * H), planVer: 0, paveRes: {},
     owner: new Int8Array(W * H).fill(-1),
     resRes: new Uint8Array(W * H),
@@ -376,9 +416,22 @@ function newGame(opts) {
   }
   computeZones();
   computeTerritory();
-  for (const P of S.players) { const L = getE(P.lander); if (L) starterRoads(L); }
+  for (const P of S.players) { const L = getE(P.lander); if (L) { starterRoads(L); starterCharger(L); } }
   if (opts.setup) opts.setup(S);
   return S;
+}
+
+/** The Command Base doesn't charge robots, so every colony lands with a Charging Station beside it, on the road ring. */
+function starterCharger(L) {
+  // Beside a corner of the ring, so the straight roads out of the base stay clear.
+  for (const [dx, dy] of [[2, 1], [-2, 1], [2, -1], [-2, -1], [1, 2], [-1, 2], [1, -2], [-1, -2], [2, 0], [-2, 0], [0, 2], [0, -2]]) {
+    const x = L.x + dx, y = L.y + dy;
+    if (!canPlace(L.owner, 'charger', x, y, true).ok) continue;
+    const b = addBuilding(L.owner, 'charger', x, y, true);
+    b.stock.fuel = START_CHARGER_FUEL;
+    return b;
+  }
+  return null;
 }
 
 /** Every Command Base starts with a ring of road around it, the start of the colony's road network. */
@@ -669,6 +722,8 @@ function canPlace(owner, type, i, j, skipBlockCheck) {
   const t = tIdx(i, j);
   if (S.owner[t] !== owner) return { ok: false, reason: 'You can only build inside your territory.' };
   if (S.terrain[t] !== T_GROUND) return { ok: false, reason: 'The ground here is not buildable.' };
+  if (scorched(t)) return { ok: false, reason: 'This ground is still scorched from a nuclear blast.' };
+  if (def.nuke && !nukeOn()) return { ok: false, reason: 'Only in a Nuclear race.' };
   if (def.pump) {
     if (S.res[t] !== R_OIL) return { ok: false, reason: 'Build an Oil Pump right on top of an oil seep.' };
   } else if (S.res[t]) return { ok: false, reason: 'Clear the resources here first.' };
@@ -712,7 +767,7 @@ function canPlace(owner, type, i, j, skipBlockCheck) {
       }
     }
   }
-  if (def.gather && reachableRes(i, j, def.radius, def.gather) === 0) {
+  if (def.gather && gatherReach(i, j, type) === 0) {
     return { ok: false, reason: `No ${RES[def.gather].name.toLowerCase()}s within reach.` };
   }
   if (def.farm && fertileIn(i, j, def.radius) === 0) return { ok: false, reason: 'No fertile soil within reach.' };
@@ -777,7 +832,7 @@ function placeSite(owner, type, i, j) {
 function canRoad(owner, i, j) {
   if (!inMap(i, j)) return false;
   const t = tIdx(i, j);
-  return S.owner[t] === owner && !S.bAt[t] && !S.resRes[t]; // over water or rock it's a bridge or tunnel
+  return S.owner[t] === owner && !S.bAt[t] && !S.resRes[t] && !scorched(t); // over water or rock it's a bridge or tunnel
 }
 
 /**
@@ -1193,6 +1248,7 @@ function deserializeGame(json) {
   o.oneRoad = true;
   o.lights = o.lights || {};
   o.over = o.over || {};
+  o.scorch = o.scorch || {};
   o.roadVer = (o.roadVer || 0) + 1;
   // Saves from before roads were paved by workers have no planned roads.
   if (!o.plan) o.plan = new Array(o.W * o.H).fill(0);

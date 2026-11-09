@@ -16,7 +16,7 @@
   --safe-l: env(safe-area-inset-left, 0px);
   --safe-r: env(safe-area-inset-right, 0px);
   --g-fiber: #3fd8a6; --g-stone: #c9c1b4; --g-ore: #ff8a3d; --g-crystal: #b98cff; --g-alloy: #8ec3e6; --g-chip: #c8f05a;
-  --g-crude: #b08a6e; --g-fuel: #ff5c8a; --g-cement: #a9b4c2; --g-asphalt: #6b7280; --g-ammo: #e8c39e;
+  --g-crude: #b08a6e; --g-fuel: #ff5c8a; --g-cement: #a9b4c2; --g-asphalt: #6b7280; --g-ammo: #e8c39e; --g-uranium: #9dff3a; --g-fissile: #e6ff4a;
 }
 
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
@@ -74,6 +74,8 @@ body::before {
 .gi.ammo { width: 12px; height: 12px; border-radius: 0; box-shadow: none;
   background: linear-gradient(90deg, var(--g-ammo) 0 3px, transparent 3px 4.5px, var(--g-ammo) 4.5px 7.5px, transparent 7.5px 9px, var(--g-ammo) 9px 12px);
   clip-path: polygon(0 25%, 12.5% 0, 25% 25%, 37.5% 0, 50% 25%, 62.5% 0, 75% 25%, 87.5% 0, 100% 25%, 100% 100%, 0 100%); }
+.gi.uranium { background: var(--g-uranium); clip-path: polygon(50% 0, 80% 35%, 70% 100%, 30% 100%, 20% 35%); border-radius: 0; box-shadow: 0 0 6px var(--g-uranium); }
+.gi.fissile { background: radial-gradient(circle, #ffffff 0 22%, var(--g-fissile) 24% 60%, #7fa21a 62%); border-radius: 50%; box-shadow: 0 0 6px var(--g-fissile); }
 .gi.warhead { background: #ffcf4a; clip-path: polygon(50% 0, 85% 30%, 85% 100%, 15% 100%, 15% 30%); border-radius: 0; }
 .gi.chip { background: var(--g-chip); border-radius: 2px; outline: 2px dotted var(--g-chip); outline-offset: 1px; width: 9px; height: 9px; }
 .toprow { display: flex; gap: 6px; }
@@ -207,6 +209,8 @@ kbd {
   background: rgba(255,255,255,0.04); border: 1px solid var(--line); border-radius: 12px; padding: 8px;
 }
 .bcard img { width: 44px; height: 44px; grid-row: span 2; }
+.bcard.roads svg { width: 44px; height: 44px; grid-row: span 2; padding: 6px; color: var(--accent); }
+.bcard.roads { border-style: dashed; }
 .bcard .bname { font-weight: 700; font-size: 14px; line-height: 1.15; }
 .bcard .bcost { display: flex; gap: 6px; flex-wrap: wrap; font-size: 12px; font-weight: 600; }
 .bcard .bcost span { display: inline-flex; align-items: center; gap: 3px; }
@@ -327,6 +331,7 @@ i.g.fiber { background: var(--g-fiber); } i.g.stone { background: var(--g-stone)
 i.g.crystal { background: var(--g-crystal); } i.g.alloy { background: var(--g-alloy); } i.g.chip { background: var(--g-chip); }
 i.g.crude { background: var(--g-crude); } i.g.fuel { background: var(--g-fuel); }
 i.g.cement { background: var(--g-cement); } i.g.asphalt { background: var(--g-asphalt); } i.g.ammo { background: var(--g-ammo); }
+i.g.uranium { background: var(--g-uranium); } i.g.fissile { background: var(--g-fissile); }
 .stats { display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; margin: 10px 0; font-size: 14px; }
 .stats span:nth-child(odd) { color: var(--muted); }
 .stats span:nth-child(even) { font-weight: 700; text-align: right; }
@@ -456,3 +461,20 @@ body.mode-road .objective { display: none; }
   body.mode-road .banner-actions .btn { padding: 8px 6px; font-size: 14px; min-height: 0; }
   body.mode-road .banner-actions .road-seg button { padding: 6px 2px; font-size: 13px; }
 }
+.btn.danger-glow { background: #ff4b4b; color: #fff; border-color: #ff7a7a; box-shadow: 0 0 16px rgba(255, 75, 75, 0.45); }
+.btn.danger-glow:disabled { background: rgba(255, 75, 75, 0.25); box-shadow: none; color: #ffc9cf; }
+
+/* Goods panel */
+.goods-pick { display: flex; flex-wrap: nowrap; overflow-x: auto; gap: 6px; padding-bottom: 4px; margin: 2px 0 8px; scrollbar-width: thin; }
+.goods-pick button { flex: none; }
+.gs-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin: 8px 0 10px; }
+.gs-stats div { background: rgba(255,255,255,0.05); border-radius: 10px; padding: 8px 6px; text-align: center; }
+.gs-stats b { display: block; font-size: 20px; font-variant-numeric: tabular-nums; }
+.gs-stats b.up { color: var(--good); } .gs-stats b.down { color: var(--danger); }
+.gs-stats span { font-size: 11px; color: var(--muted); }
+.gs-alert { border-radius: 10px; padding: 8px 10px; margin: 6px 0; font-size: 13px; }
+.gs-alert.bad { background: rgba(255,90,110,0.14); color: #ffc0c8; }
+.gs-alert.warn { background: rgba(255,196,87,0.14); color: #ffe1a6; }
+.gs-alert.good { background: rgba(126,224,138,0.12); color: #c9f5cf; }
+.gtag small { color: var(--muted); font-weight: 600; margin-left: 4px; }
+canvas.chart.small { height: 110px; }

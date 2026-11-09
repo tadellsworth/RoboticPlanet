@@ -156,6 +156,9 @@ function needsOf(b) {
     out.push(['fuel', def.fuelCap - (b.stock.fuel || 0) - (b.inc.fuel || 0)]);
   } else if (def.repair) {
     out.push(['alloy', def.alloyCap - (b.stock.alloy || 0) - (b.inc.alloy || 0)]);
+  } else if (def.nukeSilo) {
+    // The parts for one nuclear missile, until it's built.
+    if (!b.armed) for (const g in NUKE.parts) out.push([g, NUKE.parts[g] - (b.stock[g] || 0) - (b.inc[g] || 0)]);
   } else if (def.roadworks) {
     out.push(['asphalt', 3 - (b.stock.asphalt || 0) - (b.inc.asphalt || 0)]);
   } else if (def.store && b.keep && b.smode !== 'empty') {
@@ -163,7 +166,7 @@ function needsOf(b) {
     for (const g in b.keep) out.push([g, b.keep[g] - ((b.stock[g] || 0) - (b.res[g] || 0)) - (b.inc[g] || 0), true]);
   }
   // Garrisons keep Ammo for their warbots (Versus only).
-  if (def.ammoStock && b.built && S.mode !== 'colony') {
+  if (def.ammoStock && b.built && warOn()) {
     out.push(['ammo', def.ammoStock - (b.stock.ammo || 0) - (b.inc.ammo || 0)]);
   }
   return out;
@@ -196,8 +199,9 @@ function botCount(owner) {
 /** A civilian bot (any type but warbot) with nothing to do and enough charge for a job. */
 function isIdleWorker(u) {
   if (u.type === 'warbot' || u.dead || u.carry || (u.task && u.task.type !== 'home')) return false;
-  // A worker that is charging finishes first; one that is running low goes to charge before new jobs.
-  return (u.bat ?? 100) >= (insideCharger(u) ? 90 : BATTERY.low);
+  // A worker that is charging finishes first; one that is running low goes to charge before new jobs,
+  // unless there's nowhere to charge: then it keeps working (slowly), or no one would bring the Fuel.
+  return (u.bat ?? 100) >= (insideCharger(u) ? 90 : BATTERY.low) || !S.players[u.owner].canCharge;
 }
 
 /* ------------------------------------------------------------------ batteries */
@@ -265,7 +269,7 @@ function workerBattery(u, dt) {
         let gain = Math.min(100 - u.bat, ch.rate * Math.min(1, ch.slots / Math.max(1, b.charging)) * dt);
         if (ch.fuel) {
           // Charging Stations burn a Fuel whenever their energy runs low.
-          if ((b.energy || 0) < gain && (b.stock.fuel || 0) > 0) { bump(b.stock, 'fuel', -1); b.energy = (b.energy || 0) + FUEL_ENERGY; }
+          if ((b.energy || 0) < gain && (b.stock.fuel || 0) > 0) { bump(b.stock, 'fuel', -1); usedGood(b.owner, 'fuel', 1); b.energy = (b.energy || 0) + FUEL_ENERGY; }
           gain = Math.min(gain, b.energy || 0);
           b.energy = (b.energy || 0) - gain;
         }
@@ -667,6 +671,8 @@ function dispatch(p) {
   const linked = (a, b) => P.noHaulers || roadLinked(a, b);
   for (const b of blds) b.unlinked = !P.noHaulers && needsRoad(b) && !onHomeNet(b);
   const minFree = siteCount(p) > 0 ? MIN_FREE_WORKERS : 1;
+  // Can this colony charge anywhere right now (a Charging Station with Fuel)?
+  P.canCharge = blds.some((b) => b.built && BDEFS[b.type].charger && !chargerDry(b));
   if (free < minFree) {
     const cands = blds.filter((b) => b.built && b.staff && b.type !== 'foundry' && !BDEFS[b.type].crew);
     cands.sort((a, c) => releaseScore(c) - releaseScore(a));
@@ -695,8 +701,8 @@ function dispatch(p) {
         if (bt.roadOnly && src && !botLinked(u, src)) continue;
       } else if (role === 'build' ? !bt.build : role === 'staff' ? !bt.staff : bt.crew !== role) continue;
       const d = dist2(u.x, u.y, x + 0.5, y + 0.5);
-      // Only send a bot with enough charge for the trip there and back.
-      if ((u.bat ?? 100) < BATTERY.low + 0.5 * Math.sqrt(d)) continue;
+      // Only send a bot with enough charge for the trip there and back (unless there's nowhere to charge).
+      if ((u.bat ?? 100) < BATTERY.low + 0.5 * Math.sqrt(d) && P.canCharge) continue;
       if (d < bd) { bd = d; best = k; }
     }
     if (best < 0) return null;
@@ -759,7 +765,9 @@ function dispatch(p) {
   const reqs = [];
   for (const b of blds) {
     const pri = prioRank(b) * 3 + (b.built && BDEFS[b.type].bots ? 0 : 1);
-    for (const [g, n, keep] of needsOf(b)) if (n > 0) reqs.push({ b, g, n, pri: keep ? prioRank(b) * 3 + 2 : pri, inc: sumValues(b.inc), keep });
+    // Fuel for an empty Charging Station comes before anything else: nothing moves without charge.
+    const dry = BDEFS[b.type].charger && b.built && chargerDry(b);
+    for (const [g, n, keep] of needsOf(b)) if (n > 0) reqs.push({ b, g, n, pri: dry ? -1 : keep ? prioRank(b) * 3 + 2 : pri, inc: sumValues(b.inc), keep });
   }
   reqs.sort((a, c) => a.pri - c.pri || a.inc - c.inc || a.b.born - c.b.born);
   for (let pass = 0; pass < 4 && idle.length; pass++) {
@@ -883,7 +891,7 @@ function updateRepairStation(b, def, dt) {
   let fixing = 0;
   for (const u of hurt) {
     let gain = Math.min(u.maxHp - u.hp, def.repair.rate * share * dt * S.players[b.owner].mult);
-    if ((b.repairPts || 0) < gain && (b.stock.alloy || 0) > 0) { bump(b.stock, 'alloy', -1); b.repairPts = (b.repairPts || 0) + REPAIR_HP_PER_ALLOY; }
+    if ((b.repairPts || 0) < gain && (b.stock.alloy || 0) > 0) { bump(b.stock, 'alloy', -1); usedGood(b.owner, 'alloy', 1); b.repairPts = (b.repairPts || 0) + REPAIR_HP_PER_ALLOY; }
     gain = Math.min(gain, b.repairPts || 0);
     if (gain <= 0) continue;
     b.repairPts -= gain;
@@ -1183,7 +1191,7 @@ function needsRoad(b) {
   if (b.type === 'lander') return false;
   if (def.store) return true; // a Depot only helps if haulers can reach it from the Command Base
   if (!b.built) return true;
-  if (def.mil) return S.mode !== 'colony'; // Ammo for the garrison
+  if (def.mil) return warOn(); // Ammo for the garrison
   return !!(def.inp || def.out || def.ammo || def.charger || def.roadworks || def.bots || def.repair);
 }
 
@@ -1285,6 +1293,7 @@ function doBuild(u, t, dt) {
 
 function completeBuilding(b) {
   const def = BDEFS[b.type];
+  for (const g in def.cost) usedGood(b.owner, g, def.cost[g]); // its materials are built in
   if (def.ramp) { completeRamp(b); return; }
   b.built = true;
   b.progress = 1;
@@ -1311,12 +1320,15 @@ function completeRamp(b) {
   S.byId.delete(b.id);
   S.bAt[tIdx(b.x, b.y)] = 0;
   S.ramp[tIdx(b.x, b.y)] = 1;
+  // A finished Ramp is a road tile too: haulers drive straight up it.
+  S.road[tIdx(b.x, b.y)] = 1;
+  S.pave[tIdx(b.x, b.y)] = 1;
   S.roadVer = (S.roadVer || 0) + 1;
   markDirty(b.x, b.y);
   for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) if (inMap(b.x + di, b.y + dj)) markDirty(b.x + di, b.y + dj);
   computeZones();
   S.players[b.owner].stats.built++;
-  postMsg(b.owner, 'Ramp is complete. Bots can now climb the cliff here.', b.x, b.y, 'good');
+  postMsg(b.owner, 'Ramp is complete: a road now climbs the cliff here.', b.x, b.y, 'good');
   if (b.owner === 0) sfx('complete');
   addFx('ring', b.x + 0.5, b.y + 0.5, { color: PLAYER_COLORS[b.owner] });
 }
@@ -1381,21 +1393,29 @@ function findCropSpot(b, radius) {
   return best;
 }
 
-/** The nearest road tile (to x, y) within a Roadworks' reach that isn't asphalt yet. */
+/**
+ * The nearest road tile (along the roads, from x, y) that isn't asphalt yet, anywhere on the road
+ * network joined to the Roadworks: its Paver follows the roads as far as they go.
+ */
+const _pave = { seen: null, gen: 0, q: null };
 function findPaveSpot(b, x, y) {
-  const radius = BDEFS[b.type].radius, r2 = radius * radius + 0.3;
-  const zone = S.zone[tIdx(b.x, b.y)];
-  let best = -1, bd = Infinity;
-  for (let j = Math.max(0, b.y - radius); j <= Math.min(S.H - 1, b.y + radius); j++) {
-    for (let i = Math.max(0, b.x - radius); i <= Math.min(S.W - 1, b.x + radius); i++) {
-      const t = j * S.W + i;
-      if (!S.road[t] || S.pave[t] >= 2 || S.resRes[t] || S.owner[t] !== b.owner || S.zone[t] !== zone) continue;
-      if (dist2(i, j, b.x, b.y) > r2) continue;
-      const d = dist2(i, j, x, y);
-      if (d < bd) { bd = d; best = t; }
-    }
+  const nets = buildingNets(b);
+  if (!nets.length) return -1;
+  const net = roadNet(), W = S.W, N = W * S.H;
+  if (!_pave.seen || _pave.seen.length !== N) { _pave.seen = new Uint32Array(N); _pave.q = new Int32Array(N); _pave.gen = 0; }
+  const seen = _pave.seen, q = _pave.q, gen = ++_pave.gen;
+  let head = 0, tail = 0;
+  const push = (t) => { if (t >= 0 && t < N && seen[t] !== gen && roadLike(t) && nets.indexOf(net.comp[t]) >= 0) { seen[t] = gen; q[tail++] = t; } };
+  // Start where the Paver is (or at the roads beside the Roadworks).
+  push(tIdx(x, y));
+  if (!tail) for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) if (inMap(b.x + di, b.y + dj)) push(tIdx(b.x + di, b.y + dj));
+  while (head < tail) {
+    const t = q[head++];
+    if (S.road[t] && S.pave[t] < 2 && !S.resRes[t] && S.owner[t] === b.owner) return t;
+    const i = t % W;
+    for (const u of [i > 0 ? t - 1 : -1, i < W - 1 ? t + 1 : -1, t - W, t + W]) if (u >= 0 && u < N && canStep(t, u)) push(u);
   }
-  return best;
+  return -1;
 }
 
 /** Count goods a player produced (for statistics and mission goals). */
@@ -1403,6 +1423,30 @@ function madeGood(owner, g, n) {
   const P = S.players[owner];
   P.made = P.made || {};
   P.made[g] = (P.made[g] || 0) + n;
+}
+
+/** Count goods a player used up: production inputs, construction, roads, Fuel burned, Ammo, Missiles. */
+function usedGood(owner, g, n) {
+  const P = S.players[owner];
+  if (!P) return;
+  P.used = P.used || {};
+  P.used[g] = (P.used[g] || 0) + n;
+}
+
+/**
+ * Made and used per minute for each good, over the last couple of minutes (from samples taken every
+ * HIST_STEP seconds, plus the totals right now).
+ */
+function goodRates(p) {
+  const P = S.players[p], log = P.rateLog || [], out = {};
+  const old = log[0];
+  const mins = old ? Math.max(0.25, (S.time - old.t) / 60) : Math.max(0.25, S.time / 60);
+  for (const g of GOODS) {
+    const made = ((P.made && P.made[g]) || 0) - ((old && old.made[g]) || 0);
+    const used = ((P.used && P.used[g]) || 0) - ((old && old.used[g]) || 0);
+    out[g] = { made: made / mins, used: used / mins };
+  }
+  return out;
 }
 
 /** The oil seep tile an Oil Pump draws from next (its own tile or a neighbour), or -1 if dry. */
@@ -1444,11 +1488,18 @@ function doStaff(u, t, dt) {
       if (!def.gather && !def.plant && !def.farm && !def.roadworks) return; // production happens in updateBuilding
       let node;
       if (def.gather) {
-        const g = RES[def.gather].good;
-        if ((b.stock[g] || 0) >= def.out[g]) { b.status = 'Storage full, waiting for pickup'; t.wait = 1; return; }
-        node = findNode(b, def.gather, def.radius);
+        // Ore Mines dig any uranium in reach first in a Nuclear race.
+        let full = false;
+        node = -1;
+        for (const ty of gatherTypes(b.type)) {
+          const g = RES[ty].good;
+          if ((b.stock[g] || 0) >= def.out[g]) { full = true; continue; }
+          node = findNode(b, ty, def.radius);
+          if (node >= 0) { t.gtype = ty; break; }
+        }
+        if (node < 0 && full) { b.status = 'Storage full, waiting for pickup'; t.wait = 1; return; }
         if (node < 0) { b.status = `No ${RES[def.gather].name.toLowerCase()}s left in reach`; t.wait = 3; return; }
-        b.status = 'Gathering ' + GOOD[g].name;
+        b.status = 'Gathering ' + GOOD[RES[t.gtype].good].name;
       } else if (def.farm) {
         // Harvest ripe crops first, then plant any empty fertile soil.
         if ((b.stock.fuel || 0) >= def.out.fuel) { b.status = 'Storage full, waiting for pickup'; t.wait = 1; return; }
@@ -1501,7 +1552,7 @@ function doStaff(u, t, dt) {
       b.working = true;
       if (moveAlong(u, dt)) {
         t.phase = 'work';
-        t.timer = def.gather ? RES[def.gather].harvest : def.farm ? (t.act === 'harvest' ? RES[R_CROP].harvest : 2) : def.roadworks ? 2.5 : 3;
+        t.timer = def.gather ? RES[t.gtype || def.gather].harvest : def.farm ? (t.act === 'harvest' ? RES[R_CROP].harvest : 2) : def.roadworks ? 2.5 : 3;
       }
       return;
     case 'work': {
@@ -1513,11 +1564,12 @@ function doStaff(u, t, dt) {
       S.resRes[node] = 0;
       t.node = -1;
       if (def.gather) {
-        if (S.res[node] === def.gather && S.amt[node] > 0) {
+        const ty = t.gtype || def.gather;
+        if (S.res[node] === ty && S.amt[node] > 0) {
           S.amt[node]--;
           if (S.amt[node] === 0) S.res[node] = R_NONE;
           markDirty(ni, nj);
-          u.carry = RES[def.gather].good;
+          u.carry = RES[ty].good;
           u.carryN = 1;
           madeGood(u.owner, u.carry, 1);
         }
@@ -1593,6 +1645,7 @@ function updateBuilding(b, dt) {
   else if (def.store) b.status = 'Storing goods';
   if (def.inp) produce(b, def, dt * S.players[b.owner].mult);
   else if (def.missile) updateSilo(b, def);
+  else if (def.nukeSilo) updateNukeSilo(b, dt * S.players[b.owner].mult);
   else if (def.ammo) updateTurret(b, def, dt);
   if (def.missile && b.reload > 0) b.reload = Math.max(0, b.reload - dt);
   if (def.charger && !def.store) {
@@ -1661,7 +1714,7 @@ function produce(b, def, dt) {
   b.timer += dt;
   if (b.timer < def.work) return;
   b.timer = 0;
-  for (const g in def.inp) bump(b.stock, g, -def.inp[g]);
+  for (const g in def.inp) { bump(b.stock, g, -def.inp[g]); usedGood(b.owner, g, def.inp[g]); }
   if (def.pump) {
     const seep = pumpSeep(b);
     if (--S.amt[seep] <= 0) { S.amt[seep] = 0; S.res[seep] = R_NONE; markDirty(seep % S.W, (seep / S.W) | 0); }
@@ -1745,7 +1798,7 @@ function updateTurret(b, def, dt) {
   if (Math.abs(diff) > 0.15) { b.status = 'Turning to aim'; return; }
   if (b.cd > 0) return;
   if (b.shots <= 0) {
-    if ((b.stock.crystal || 0) > 0) { bump(b.stock, 'crystal', -1); b.shots = SHOTS_PER_AMMO; }
+    if ((b.stock.crystal || 0) > 0) { bump(b.stock, 'crystal', -1); usedGood(b.owner, 'crystal', 1); b.shots = SHOTS_PER_AMMO; }
     else { b.status = 'Out of ammo!'; b.cd = 0.5; return; }
   }
   b.shots--;
@@ -1876,7 +1929,8 @@ function updateWarbot(u, dt) {
       if (u.hp >= u.maxHp || repairDry(home)) { exitBuilding(u); u.task = null; }
       return;
     }
-    if (u.bat < 100) u.bat = Math.min(100, u.bat + BATTERY.garrisonCharge * dt); // garrisons recharge their warbots
+    // Outposts recharge their warbots; the Command Base doesn't charge anyone.
+    if (u.bat < 100 && home && home.type !== 'lander') u.bat = Math.min(100, u.bat + BATTERY.garrisonCharge * dt);
     if ((u.ammo ?? WARBOT_AMMO) <= WARBOT_AMMO - AMMO_SHOTS) reloadAmmo(u, home);
     // Damaged and the garrison is quiet: go and get fixed.
     if (home && wantsRepair(u) && S.tick % 45 === u.id % 45 && S.time - (home.lastHit || -99) > 8 && home.garrison.length > 1) goRepair(u);
@@ -2047,6 +2101,7 @@ function takeArmed(b) {
 function reloadAmmo(u, b) {
   if (!b || b.owner !== u.owner || !BDEFS[b.type].mil || !((b.stock.ammo || 0) - (b.res.ammo || 0) > 0)) return false;
   bump(b.stock, 'ammo', -1);
+  usedGood(b.owner, 'ammo', 1);
   u.ammo = Math.min(WARBOT_AMMO, (u.ammo ?? 0) + AMMO_SHOTS);
   return true;
 }
@@ -2085,6 +2140,7 @@ function rechargePoint(u, needAmmo) {
     const def = BDEFS[b.type];
     if (!def.mil && !def.charger) continue;
     if (needAmmo && !(def.mil && (b.stock.ammo || 0) > 0)) continue;
+    if (!needAmmo && b.type === 'lander') continue; // it doesn't charge
     if (S.zone[tIdx(b.x, b.y)] !== zone) continue;
     const d = dist2(b.x + 0.5, b.y + 0.5, u.x, u.y);
     if (d < bd) { bd = d; best = b; }
@@ -2111,9 +2167,10 @@ function holdRally(u, t, r, dt, power) {
     if (!home) { t.phase = null; return; }
     if (dist2(u.x, u.y, home.x + 0.5, home.y + 0.5) <= 2.2) {
       u.path = null;
-      u.bat = Math.min(100, (u.bat ?? 0) + 8 * dt);
+      const charges = home.type !== 'lander'; // the Command Base only reloads Ammo
+      if (charges) u.bat = Math.min(100, (u.bat ?? 0) + 8 * dt);
       if ((u.ammo ?? WARBOT_AMMO) <= WARBOT_AMMO - AMMO_SHOTS) reloadAmmo(u, home);
-      if (u.bat >= 95 && (u.ammo > 0 || !reloadAmmo(u, home))) { t.phase = null; t.forAmmo = false; }
+      if ((u.bat >= 95 || !charges) && (u.ammo > 0 || !reloadAmmo(u, home))) { t.phase = null; t.forAmmo = false; }
     } else if (travel(u, home.x, home.y, dt) === null) t.phase = null;
     return;
   }
@@ -2415,6 +2472,7 @@ function fireMissileAt(silo, i, j) {
   const target = missileTargetAt(owner, i, j);
   const tx = target ? target.x : i, ty = target ? target.y : j;
   bump(silo.stock, 'warhead', -1);
+  usedGood(silo.owner, 'warhead', 1);
   silo.reload = md.reload;
   const d = dist(silo.x, silo.y, tx, ty);
   S.missiles.push({
@@ -2431,6 +2489,14 @@ function fireMissileAt(silo, i, j) {
 function updateMissiles(dt) {
   for (const m of S.missiles) {
     m.t += dt;
+    if (m.nuke) {
+      if (S.tick % 3 === 0) {
+        const k = Math.min(1, m.t / m.dur);
+        addFx('smoke', lerp(m.x0, m.x1, k), lerp(m.y0, m.y1, k) - Math.sin(k * Math.PI) * 7 + 0.2, { r: 0.35, life: 1.4 });
+      }
+      if (m.t >= m.dur) nukeImpact(m);
+      continue;
+    }
     if (S.tick % 3 === 0) {
       const k = Math.min(1, m.t / m.dur);
       addFx('smoke', lerp(m.x0, m.x1, k), lerp(m.y0, m.y1, k) - Math.sin(k * Math.PI) * 2.5, { r: 0.3, life: 0.9 });
@@ -2487,6 +2553,96 @@ function missileImpact(m) {
     const t = tIdx(i, j);
     if (S.plan[t]) cancelPlan(t);
     if (S.road[t] && S.owner[t] !== m.owner) wreckRoad(t, S.owner[t], '');
+  }
+}
+
+/* ------------------------------------------------------------------ nuclear race */
+
+/** A Nuclear Silo assembles its missile once all the parts are in, then waits to be fired. */
+function updateNukeSilo(b, dt) {
+  if (b.armed) { b.status = 'Nuclear missile ready to fire'; return; }
+  const missing = Object.keys(NUKE.parts).filter((g) => (b.stock[g] || 0) < NUKE.parts[g]);
+  if (missing.length) {
+    b.status = 'Waiting for ' + missing.map((g) => `${NUKE.parts[g] - (b.stock[g] || 0)} ${GOOD[g].name}`).join(', ');
+    b.timer = 0;
+    return;
+  }
+  b.working = true;
+  b.timer = (b.timer || 0) + dt;
+  b.status = `Assembling the nuclear missile (${Math.max(0, Math.ceil(NUKE.assemble - b.timer))}s)`;
+  if (b.timer < NUKE.assemble) return;
+  for (const g in NUKE.parts) { bump(b.stock, g, -NUKE.parts[g]); usedGood(b.owner, g, NUKE.parts[g]); }
+  b.timer = 0;
+  b.armed = 1;
+  postMsg(b.owner, 'Your nuclear missile is ready. Tap the Nuclear Silo to aim it.', b.x, b.y, 'good');
+  if (S.players[1 - b.owner] && !S.players[1 - b.owner].absent) postMsg(1 - b.owner, 'Intelligence: the rival has finished a nuclear missile!', b.x, b.y, 'bad');
+}
+
+/** Can this Nuclear Silo fire at tile (i, j)? '' if so, otherwise why not. */
+function nukeBlocked(silo, i, j) {
+  if (!silo || silo.dead || !silo.built) return 'That Silo is gone.';
+  if (!silo.armed) return 'No nuclear missile yet: it needs 6 Enriched Uranium, 4 Alloy and 2 Chips, then a minute to assemble.';
+  if (!inMap(i, j)) return 'Off the map.';
+  if (dist(silo.x, silo.y, i, j) > NUKE.range) return `Out of range: nuclear missiles reach ${NUKE.range} tiles.`;
+  return '';
+}
+
+/** Launch the nuclear missile at tile (i, j). It flies for NUKE.flight seconds: the target sees it coming. */
+function fireNukeAt(silo, i, j) {
+  if (nukeBlocked(silo, i, j)) return false;
+  silo.armed = 0;
+  S.missiles.push({
+    owner: silo.owner, from: silo.id, nuke: true, t: 0, dur: NUKE.flight,
+    x0: silo.x + 0.5, y0: silo.y + 0.5, x1: i + 0.5, y1: j + 0.5,
+  });
+  addFx('ring', silo.x + 0.5, silo.y + 0.5, { color: '#9dff3a', r: 2, life: 1.2 });
+  sfx('launch');
+  postMsg(silo.owner, `Nuclear missile launched: impact in ${NUKE.flight} seconds.`, i, j, 'good');
+  postMsg(1 - silo.owner, `NUCLEAR LAUNCH DETECTED! Impact in ${NUKE.flight} seconds: get your robots out of the red ring!`, i, j, 'bad');
+  return true;
+}
+
+/**
+ * The blast: every building within NUKE.radius tiles is destroyed (a Command Base is left with 1
+ * armor and an empty garrison, ready to capture), every robot dies, roads are wrecked, groves and
+ * crops burn, and the ground stays scorched for NUKE.scorch seconds.
+ */
+function nukeImpact(m) {
+  const cx = m.x1, cy = m.y1, R2 = NUKE.radius * NUKE.radius;
+  addFx('nuke', cx, cy, { life: 2, r: NUKE.radius });
+  sfx('boom');
+  const lost = [0, 0];
+  for (const b of S.buildings.slice()) {
+    if (b.dead || dist2(b.x + 0.5, b.y + 0.5, cx, cy) > R2) continue;
+    if (b.type === 'lander') {
+      for (const id of b.garrison.slice()) { const u = getE(id); if (u) killBot(u); }
+      b.garrison.length = 0;
+      for (const u of S.bots) if (!u.dead && u.inside === b.id) killBot(u);
+      b.armor = 1;
+      b.lastHit = S.time;
+    } else {
+      lost[b.owner]++;
+      destroyBuilding(b, true);
+    }
+  }
+  for (const u of S.bots) if (!u.dead && !u.inside && dist2(u.x, u.y, cx, cy) <= R2) killBot(u);
+  const ci = Math.floor(cx), cj = Math.floor(cy), R0 = NUKE.radius;
+  for (let dj = -R0; dj <= R0; dj++) for (let di = -R0; di <= R0; di++) {
+    const i = ci + di, j = cj + dj;
+    if (!inMap(i, j) || di * di + dj * dj > R2) continue;
+    const t = tIdx(i, j);
+    if (S.plan[t]) cancelPlan(t);
+    if (S.road[t]) wreckRoad(t, -1, '');
+    if (S.res[t] === R_STALK || S.res[t] === R_CROP) { S.res[t] = R_NONE; S.amt[t] = 0; markDirty(i, j); }
+    S.scorch[t] = S.time + NUKE.scorch;
+  }
+  S.blasts = (S.blasts || []).filter((b) => b.until > S.time).concat([{ x: cx, y: cy, until: S.time + NUKE.scorch }]);
+  computeTerritory();
+  for (const p of [0, 1]) {
+    if (S.players[p].absent) continue;
+    const mine = p === m.owner;
+    postMsg(p, mine ? `Nuclear strike! ${lost[1 - p]} rival building${lost[1 - p] === 1 ? '' : 's'} destroyed.` + (lost[p] ? ` You lost ${lost[p]} of your own.` : '')
+      : `A nuclear strike destroyed ${lost[p]} of your buildings!`, ci, cj, mine ? 'good' : 'bad');
   }
 }
 
@@ -2570,6 +2726,7 @@ function takeGood(owner, g, n) {
     }
     if (!best) return false;
     bump(best.stock, g, -1);
+    usedGood(owner, g, 1);
     n--;
   }
   return true;
@@ -2712,6 +2869,9 @@ function recordHistory() {
       b.useI = 0; b.upI = 0;
     }
     push('civ', civ); push('war', war); push('blds', blds);
+    // Totals made and used, kept for the last two minutes, for the goods panel's rates.
+    P.rateLog = (P.rateLog || []).concat([{ t: S.time, made: { ...(P.made || {}) }, used: { ...(P.used || {}) } }]);
+    while (P.rateLog.length > 9) P.rateLog.shift();
     push('land', Math.round(landShare(P.id) * 1000) / 10);
     const goods = playerGoods(P.id);
     h.goods = h.goods || {};

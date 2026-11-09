@@ -6,12 +6,14 @@ spread across the map. Roads are the heart of the game: Haulers only drive on th
 how goods move.
 
 - **Versus:** race a rival AI colony across the planet. Capture its Command Base to win (about 20–40 minutes).
-- **Colony:** no rival. Settle the planet at your own pace, with colonization milestones.
+- **Colony:** no rival. Settle the planet at your own pace, with colonization milestones. Free play has the full
+  building roster, missiles and nuclear silos included, to experiment with.
 - **Missions:** eight set challenges on hand-picked planets, each with its own goals and Easy, Normal and Hard
   levels. Finishing one unlocks the next and shows an unlock code for it, so progress can move to another device.
 
 Before each game, sliders set the **map size** (Small to Huge), the **terrain** (Flat, Gentle,
-Rolling, Rugged, Mountainous) and the **resources** (Scarce to Abundant). Resources come in separate
+Rolling, Rugged, Mountainous), the **resources** (Scarce to Abundant), the **map shape** (Standard or Long haul) and
+an optional **Nuclear race**. Resources come in separate
 fields: your landing zone has a little of everything, and the rich fields beyond it are worth fighting for.
 
 Terrafall is an original game in the colony-logistics genre. It contains no code, art, sound or data from
@@ -51,18 +53,20 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
 | Outpost | Expands your territory and garrisons Warbots |
 | Pulse Turret | Turns to aim and shoots enemy bots; uses Crystal as ammo |
 | Depot | Extra storage, shortens hauling trips; give it supply orders to stock it as a forward base |
-| Ramp | Cuts a slope into a one-level cliff so bots can climb it |
+| Ramp | Planned in Paths: cuts a slope into a one-level cliff so bots can climb it; counts as road |
 | Charging Station | Recharges bots' batteries, four at a time; burns **Fuel** |
 | Bio Farm | A worker plants energy crops on fertile soil and harvests them into **Fuel** |
 | Oil Pump | Built on an oil seep; a worker pumps **Crude** until it runs dry (stops at 30 Crude by default) |
 | Refinery | Crude → **Fuel**, one for one (stops at 30 unless you change its stock limit) |
 | Cement Works | 1 Stone → 2 **Cement**, the main building material (stops at 40 unless you change its stock limit) |
 | Asphalt Plant | Crude + Stone → 2 **Asphalt** |
-| Roadworks | Its Paver lays Asphalt on your paths nearby (1 Asphalt covers 4 tiles) |
+| Roadworks | Its Paver lays Asphalt along every road joined to it, nearest first (1 Asphalt covers 4 tiles) |
 | Ammo Plant | Alloy + Stone → 3 **Ammo**; warbots reload it in the Command Base and Outposts (Versus) |
 | Missile Factory | 2 Alloy + Chip + Fuel → **Missile** (20 s each; Versus) |
 | Missile Silo | Fires Missiles at rival buildings up to 18 tiles away; holds 2, reloads in 25 s (Versus) |
 | Repair Station | Fixes damaged bots three at a time; 1 **Alloy** repairs 12 health (Versus) |
+| Nuclear Reactor | 2 Uranium → 1 **Enriched Uranium** (Nuclear race) |
+| Nuclear Silo | 6 Enriched Uranium + 4 Alloy + 2 Chips → one nuclear missile; fires 40 tiles (Nuclear race) |
 
 - **Cement builds the colony.** Nearly every building costs Cement, and so does every road. Only the Quarry (2 Fiber)
   and the Cement Works (4 Stone, 2 Fiber) are built from raw materials, so you can always restart. Stone's other uses
@@ -83,7 +87,9 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
   own. Placement keeps a side of every building open for a road.
 - **Planning roads:** in Paths, dragging and tapping only sketch a road (and tapping a road marks it to take up);
   the banner, at the top of the screen, shows the cost, with **Undo**, **Clear** and **Build**. Nothing is spent until
-  Build, and leaving Paths drops an unbuilt sketch. Arrows and Junctions still act at once.
+  Build. Building closes Paths, straight back to the map; leaving Paths any other way drops an unbuilt sketch.
+  Arrows and Junctions still act at once. **Ramps** are planned in Paths too (tap the foot or top of a one-level
+  cliff) and count as road once built.
 - **Roads through Outposts:** an Outpost can stand on a road, and its tile joins the road network for every bot.
   Bots follow roads round corners (no diagonal shortcuts on or off a road).
 - **Your robots:** tap the robot counter in the top bar for every robot by type and what they're doing.
@@ -91,7 +97,7 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
   until free workers pave them: 1.5 s a tile (3 s through resources), working out from the existing network, so long
   highways take planning and spare workers. Calling off a planned tile refunds it. Roads double a bot's speed. Dragging
   plans roads round resources; tap a boulder, grove, ore or crystal tile to clear it for a road at 3× the Cement. A Roadworks' Paver
-  upgrades roads to asphalt (2.75×) with Asphalt. Removing a road refunds its Cement.
+  upgrades roads to asphalt (2.75×) with Asphalt, driving out along every road joined to its Roadworks, however far. Removing a road refunds its Cement.
 - **Bridges and tunnels:** roads stop at water and rocky crags. The **Bridges** tool in Paths plans roads across them:
   a bridge costs 2 Cement and 1 Alloy a tile, a tunnel 3 Cement and 1 Alloy. Workers build them out from the shore or rock
   face (6–8 s a tile), and they join land on any level. Lay road routes use them only when going round is much longer.
@@ -119,7 +125,9 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
   direction keeps to its own side, but passing oncoming traffic slows bots down. Switch the Paths banner to **Arrows** and
   drag along a road to point it the way you drag (tap a road to turn its arrow). One-way loops keep busy routes flowing;
   going the wrong way up a one-way road is allowed but crawls.
-- **Top bar:** hover over (or tap) a goods counter to see its name and what it's for.
+- **Goods panel:** tap a goods counter in the top bar for that good's stock, production and use per minute, net rate,
+  which buildings make and use it, and any shortfall (buildings waiting on it with none in stock). Switch goods at the
+  top of the panel.
 - **Ammo:** warbots carry 20 shots and reload in your Command Base and Outposts, which haulers stock from an Ammo Plant. Out of
   ammo, a warbot can't fight at all: it heads back to a garrison to reload, and only armed warbots answer orders.
 - **Repairs:** nothing heals by itself. Damaged bots go to a Repair Station (workers below 60% health, warbots below
@@ -138,9 +146,10 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
   any other storage; *Empty out* takes nothing new and moves what it holds elsewhere (handy before
   demolishing it). You can also switch individual goods off for that building.
 - **Minimap:** tap or drag it to jump around; red pulses mark buildings under attack. The × hides it.
-- **Batteries:** bots drain their battery walking, working and fighting, and recharge at the Command Base, a
-  Charging Station or (warbots) inside their garrison. A flat battery means half speed and half power. The Command Base charges
-  for free; Charging Stations burn Fuel (one Fuel is about three quarters of a full charge). A Bio Farm makes about
+- **Batteries:** bots drain their battery walking, working and fighting, and recharge only at a Charging Station (or,
+  for warbots, inside an Outpost). The Command Base doesn't charge anyone: you land with one Charging Station beside it
+  holding 4 Fuel. A flat battery means half speed and half power. Charging Stations burn Fuel (one Fuel is about
+  three quarters of a full charge). A Bio Farm makes about
   2–3 Fuel a minute; an Oil Pump and Refinery up to 10 a minute until the seep runs dry (both stop at 30 by default).
 - **Army orders:** tap **Army**, then a rival building to attack it with warbots or a missile, or open
   ground to send warbots there to hold the area under a rally flag. Tap the flag to call them back.
@@ -152,6 +161,12 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
   within 2.2 tiles. Outposts and Command Bases drop to almost no armor; warbots still have to walk in and capture them.
   To fire, tap a Silo and press **Aim missile**: its 18-tile range shows as a red ring; tap any spot inside it (a
   building or open ground) to see the blast radius, then **Fire**. (Army → rival building → Fire missile also works.)
+- **Nuclear race** (new-game option): six small Uranium deposits glow green across the map. An Ore Mine within 4 tiles
+  digs Uranium before ore; a Nuclear Reactor enriches it (2 → 1) and a Nuclear Silo assembles a missile from 6 Enriched
+  Uranium, 4 Alloy and 2 Chips (60 s), so 12 Uranium a bomb. It flies 30 s (the target is warned and sees the blast
+  ring) and wipes out every building, robot and road within 6 tiles, yours included; a Command Base survives with no
+  garrison and 1 armor. The ground stays scorched for 4 minutes: nothing can be built there. The AI races too.
+  Tunables: `NUKE` and `URANIUM_DEPOSITS` in `js/defs.js`.
 - **Pace:** the whole game runs at 85% speed (`GAME_PACE` in `js/defs.js`) for a calmer feel; the speed button
   gives 2× and 3×.
 - **Ordering bots:** the Bot Foundry only builds the bots you order. Tap it and use +1 or +5 for Workers or
@@ -167,8 +182,8 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
   on the right. Drag a box to select warbots (Shift adds; a box round a garrison takes its spare warbots), right-click
   ground to hold it, a rival building to attack, or your garrison to station them. Ctrl/Shift+1–9 saves a control
   group, 1–9 recalls it (twice jumps to it). Pan with the arrow keys, the window edge, or right/middle drag; hover for
-  tooltips. Keys: **B** build then a building's letter, **P** paths (**R** roads, **G** bridges and tunnels, **O**
-  one-way arrows, **L** junctions, **T** traffic map), **A** army, **F** select all warbots, **J** latest alert,
+  tooltips. Keys: **B** build then a building's letter (or **B R** for roads), **P** paths (**R** roads, **G** bridges
+  and tunnels, **V** ramps, **O** one-way arrows, **L** junctions, **T** traffic map), **A** army, **F** select all warbots, **J** latest alert,
   **H** base, **[ ]** speed, **+/−** zoom, **M** minimap, **Space** pause, **Esc** back / clear selection.
   Phones and tablets keep the touch controls.
 
@@ -178,9 +193,11 @@ Buildings, bots, resources and ground use custom art made in Claude Design (`art
 `art/source/`). The production buildings, Depot, Outposts and construction sites use the pre-rendered 3D set
 (512×512, each on its own pad, placed by an `anchor` point in `art/art-manifest.js`), as do the Charging Station, Bio
 Farm, Oil Pump, Refinery, Cement Works, Asphalt Plant, Roadworks, Ramp, Ammo Plant, Missile Factory and Missile Silo
-(team versions for the military ones). All five robots (Worker, Warbot, Hauler, Agribot, Paver) have top-down art in
-both team colours. Still to make: 3D versions of the Command Base and Pulse Turret, goods icons and a few terrain pieces.
-The app icon is in `icons/`. Anything without an image falls back to placeholder art drawn in code, so new art can be
+(team versions for the military ones), plus the Repair Station, the fortified Command Base, the Nuclear Reactor and
+Nuclear Silo. All six robots (Worker, Warbot, Hauler, Agribot, Paver, Freight Truck) have four driving frames per team
+plus brake-light and boost overlays (WebP, `driveSet()` in the manifest); the frames advance with the distance driven.
+The nuclear missile, its 24-frame detonation sheet and the scorch mark are custom too. Still to make: a 3D Pulse
+Turret, goods icons and a few terrain pieces. The app icon is in `icons/`. Anything without an image falls back to placeholder art drawn in code, so new art can be
 added one piece at a time. See **[ART_GUIDE.md](ART_GUIDE.md)** for specs, the style brief and prompts,
 including the remaining pieces (Ramp, slope and cliff textures, goods icons).
 
@@ -245,7 +262,7 @@ each minute. The smoke test needs Playwright and a running local server.
 
 ## Ideas for next steps
 
-See [IDEAS.md](IDEAS.md) for ideas waiting their turn (the optional nuclear setting and a fuller desktop RTS mode).
+See [IDEAS.md](IDEAS.md) for ideas waiting their turn.
 
 - Multiplayer and save export/import
 - Custom art for goods icons, menus and effects
