@@ -43,7 +43,7 @@ const QUEUE_PATIENCE = 6;
 const LANE_OFFSET = 0.17;         // how far to the right of the centre line bots drive on two-way roads (drawing only)
 const STALK_GROW_TIME = 70;       // seconds for a planted stalk grove to mature
 const CROP_GROW_TIME = 45;        // seconds for a planted energy crop to ripen
-const FUEL_ENERGY = 150;          // battery points one Fuel gives at a Charging Station (1.5 full charges)
+const FUEL_ENERGY = 75;           // battery points one Fuel gives at a Charging Station (3/4 of a full charge)
 
 /*
  * Batteries (0–100). Bots drain while they move and work, and recharge inside a building with a
@@ -157,7 +157,7 @@ const RES = {
   [R_ORE]:     { key: 'ore',     name: 'Ore vein',        good: 'ore',     amount: 16, harvest: 3.5 },
   [R_CRYSTAL]: { key: 'crystal', name: 'Crystal cluster', good: 'crystal', amount: 12, harvest: 3.5 },
   [R_CROP]:    { key: 'crop',    name: 'Energy crop',     good: 'fuel',    amount: 1, harvest: 2.5 },
-  [R_OIL]:     { key: 'oil',     name: 'Oil seep',        good: 'crude',   amount: 24, harvest: 0 },
+  [R_OIL]:     { key: 'oil',     name: 'Oil seep',        good: 'crude',   amount: 16, harvest: 0 },
 };
 
 const GOODS = ['fiber', 'stone', 'ore', 'crystal', 'alloy', 'chip', 'crude', 'fuel', 'cement', 'asphalt', 'ammo', 'warhead'];
@@ -286,7 +286,7 @@ const BDEFS = {
   },
   charger: {
     name: 'Charging Station',
-    desc: 'Bots recharge their batteries here, four at a time. It burns Fuel: one Fuel recharges about one and a half batteries. Build them near busy areas far from your Lander.',
+    desc: 'Bots recharge their batteries here, four at a time. It burns Fuel: one Fuel recharges about three quarters of a battery. Build them near busy areas far from your Lander.',
     cost: { cement: 3, alloy: 1 }, charger: { slots: 4, rate: 25, fuel: true }, fuelCap: 4, armor: 10, buildTime: 10,
   },
   farm: {
@@ -294,14 +294,14 @@ const BDEFS = {
     cost: { fiber: 2, cement: 2 }, staff: true, crew: 'agribot', farm: true, radius: 3, out: { fuel: 4 }, armor: 8, buildTime: 9,
   },
   pump: {
-    name: 'Oil Pump', desc: 'Built on top of an oil seep. Its worker pumps Crude until the seep runs dry.',
+    name: 'Oil Pump', desc: 'Built on top of an oil seep. Its worker pumps Crude until the seep runs dry, or until you have 30 (its stock limit).',
     cost: { cement: 2, alloy: 2 }, staff: true, pump: true, inp: {}, make: { crude: 1 }, out: { crude: 4 },
-    work: 5, armor: 8, buildTime: 10,
+    work: 6, armor: 8, buildTime: 10, limit: 30,
   },
   refinery: {
-    name: 'Refinery', desc: 'Refines Crude into Fuel: two Fuel from every Crude.',
-    cost: { cement: 4, alloy: 3 }, staff: true, inp: { crude: 1 }, make: { fuel: 2 }, out: { fuel: 4 },
-    work: 6, armor: 10, buildTime: 12,
+    name: 'Refinery', desc: 'Refines Crude into Fuel, one for one. Stops at 30 Fuel unless you change its stock limit.',
+    cost: { cement: 4, alloy: 3 }, staff: true, inp: { crude: 1 }, make: { fuel: 1 }, out: { fuel: 4 },
+    work: 6, armor: 10, buildTime: 12, limit: 30,
   },
   ramp: {
     name: 'Ramp', desc: 'Workers cut a slope into a low cliff so bots can climb between levels. Place it at the foot or top of a cliff.',

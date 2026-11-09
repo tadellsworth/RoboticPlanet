@@ -36,6 +36,12 @@ button { font: inherit; color: inherit; cursor: pointer; }
   display: flex; flex-direction: column; gap: 6px; pointer-events: none; z-index: 5;
 }
 #topbar > * { pointer-events: auto; }
+/* Installed on iPhone the page can run under the status bar: keep that strip solid (on every
+   screen), not the map seen through it. On other devices the inset is 0 and this draws nothing. */
+body::before {
+  content: ''; position: fixed; left: 0; right: 0; top: 0; height: var(--safe-t); background: #0b0c10;
+  pointer-events: none; z-index: 100;
+}
 .goods { display: grid; grid-template-columns: repeat(var(--goods-cols, 7), 1fr); gap: 4px; }
 .res-chip {
   display: flex; align-items: center; justify-content: center; gap: 5px;

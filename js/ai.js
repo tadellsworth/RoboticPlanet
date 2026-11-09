@@ -86,11 +86,14 @@ function aiThink(p) {
     (b.built ? reachableRes(b.x, b.y, BDEFS.harvester.radius, R_STALK) > 0 : sumValues(b.stock) >= sumValues(BDEFS.harvester.cost)));
   const fiberLow = !cutting || playerGoods(p).fiber < 4;
   if (!cutting) plan = [['harvester', (counts.harvester || 0) + 1]].concat(plan);
-  // With Fiber nearly gone and no Harvester at work, the Smelters stop burning it.
+  // With Fiber nearly gone (no Harvester at work, or construction waiting for it), the Smelters
+  // stop burning it until there's some to spare.
+  const fiberNow = playerGoods(p).fiber;
+  const sitesWantFiber = me.some((b) => !b.built && (BDEFS[b.type].cost.fiber || 0) > (b.stock.fiber || 0) + (b.inc.fiber || 0));
   for (const b of me) {
     if (b.type !== 'smelter' || !b.built) continue;
-    if (!b.paused && !cutting && playerGoods(p).fiber < 4) setPaused(b, true);
-    else if (b.paused && cutting) setPaused(b, false);
+    if (!b.paused && fiberNow < 3 && (!cutting || sitesWantFiber)) setPaused(b, true);
+    else if (b.paused && cutting && (fiberNow >= 6 || !sitesWantFiber)) setPaused(b, false);
   }
   // Goods held back for a key building we can't afford yet: nothing that needs them starts first.
   const held = new Set();

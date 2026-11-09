@@ -707,13 +707,14 @@ function placeSite(owner, type, i, j) {
 }
 
 /**
- * Roads can go on open ground inside your territory, and through boulders, groves, ore and
- * crystal (clearing them, at ROAD_CLEAR times the cost) but not oil seeps or a node being worked.
+ * Roads can go on open ground inside your territory, and through resources (clearing them, at
+ * ROAD_CLEAR times the cost), oil seeps included so a pump is never walled in; not through a node
+ * a bot is working.
  */
 function canRoad(owner, i, j) {
   if (!inMap(i, j)) return false;
   const t = tIdx(i, j);
-  return S.owner[t] === owner && S.terrain[t] === T_GROUND && !S.bAt[t] && S.res[t] !== R_OIL && !S.resRes[t];
+  return S.owner[t] === owner && S.terrain[t] === T_GROUND && !S.bAt[t] && !S.resRes[t];
 }
 
 /** Cement-cost multiplier for laying road on tile t (1, or ROAD_CLEAR through resources; 0 if it's already road or planned). */

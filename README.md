@@ -54,8 +54,8 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
 | Ramp | Cuts a slope into a one-level cliff so bots can climb it |
 | Charging Station | Recharges bots' batteries, four at a time; burns **Fuel** |
 | Bio Farm | A worker plants energy crops on fertile soil and harvests them into **Fuel** |
-| Oil Pump | Built on an oil seep; a worker pumps **Crude** until it runs dry |
-| Refinery | Crude → 2 **Fuel** |
+| Oil Pump | Built on an oil seep; a worker pumps **Crude** until it runs dry (stops at 30 Crude by default) |
+| Refinery | Crude → **Fuel**, one for one (stops at 30 unless you change its stock limit) |
 | Cement Works | 1 Stone → 2 **Cement**, the main building material (stops at 40 unless you change its stock limit) |
 | Asphalt Plant | Crude + Stone → 2 **Asphalt** |
 | Roadworks | Its Paver lays Asphalt on your paths nearby (1 Asphalt covers 4 tiles) |
@@ -67,8 +67,8 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
   and the Cement Works (4 Stone, 2 Fiber) are built from raw materials, so you can always restart. Stone's other uses
   are Asphalt and Ammo. You land with 24 Cement, 8 Stone, 16 Fiber, 8 Alloy, 4 Chips, 4 Crystal and 4 Fuel.
 - **Stock limits:** tap a production building and set when it stops: once you have that much of its product it takes
-  no more inputs and its worker goes off to other jobs until it's needed again. The Cement Works stops at 40 and the
-  Asphalt Plant at 20 by default; the rest have no limit until you set one.
+  no more inputs and its worker goes off to other jobs until it's needed again. The Cement Works stops at 40, the
+  Refinery and Oil Pump at 30 and the Asphalt Plant at 20 by default; the rest have no limit until you set one.
 
 - **Workers and Haulers:** Workers run buildings (one inside each production building), go out to cut, dig and mine,
   and build construction sites. They can go anywhere, but off the road they move at 40% speed, except while out
@@ -111,7 +111,8 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
 - **Minimap:** tap or drag it to jump around; red pulses mark buildings under attack. The × hides it.
 - **Batteries:** bots drain their battery walking, working and fighting, and recharge at the Lander, a
   Charging Station or (warbots) inside their garrison. A flat battery means half speed and half power. The Lander charges
-  for free; Charging Stations burn Fuel (one Fuel is about one and a half full charges).
+  for free; Charging Stations burn Fuel (one Fuel is about three quarters of a full charge). A Bio Farm makes about
+  2–3 Fuel a minute; an Oil Pump and Refinery up to 10 a minute until the seep runs dry (both stop at 30 by default).
 - **Army orders:** tap **Army**, then a rival building to attack it with warbots or a missile, or open
   ground to send warbots there to hold the area under a rally flag. Tap the flag to call them back.
 - **Missiles** are built at a Missile Factory (2 Alloy, 1 Chip and 1 Fuel each, 20 seconds) and carried to Missile Silos

@@ -2071,7 +2071,7 @@ function refundRoad(owner, cost, i, j, mul) {
 function buildRoad(owner, i, j) {
   const t = tIdx(i, j);
   if (S.road[t] || S.plan[t]) return '';
-  if (!canRoad(owner, i, j)) return S.res[t] === R_OIL ? 'Roads can\'t go over an oil seep.' : 'You can only lay roads on open ground inside your border.';
+  if (!canRoad(owner, i, j)) return 'You can only lay roads on open ground inside your border.';
   const mul = roadTileMul(t);
   if (!canAffordRoad(owner, mul)) return `Out of ${Object.keys(roadCost()).map((g) => GOOD[g].name).join(' and ')} for roads. Make more at a Cement Works.`;
   payRoad(owner, roadCost(), mul);
