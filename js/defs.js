@@ -116,6 +116,8 @@ const BOTS = {
     desc: 'A road crew bot. A Roadworks needs one to lay asphalt on your roads.' },
   roadtrain: { name: 'Road Train', plural: 'Road Trains', speed: WORKER_SPEED * 1.35, hp: 14, haul: true, truck: true, train: true, carry: 30, roadOnly: true, parts: 4, accel: 1.0, brake: 2.5,
     desc: 'A truck pulling two trailers: 30 goods at once, for bulk runs between your Command Base and far Depots (filling supply orders, and bringing a far Depot\'s spare goods home). It only pays off on asphalt: on plain road it crawls. Slow to start and stop, it wears roads hard and holds up the traffic behind it.' },
+  freight: { name: 'Freight Train', plural: 'Freight Trains', speed: WORKER_SPEED * 2.4, hp: 30, haul: true, rail: true, carry: 48, parts: 6, accel: 0.6, brake: 1.5,
+    desc: 'A locomotive and four wagons: 48 goods at once between Rail Stations on the same track, fast and with no traffic to wait for. It never needs charging. It rolls out at the nearest Rail Station when the Foundry finishes it.' },
   crawler: { name: 'Crawler', plural: 'Crawlers', speed: WORKER_SPEED * 0.45, hp: 80, crawler: true, parts: 8,
     desc: 'A colossal tracked base on the move. Drive it anywhere it can roll (no road needed) and it deploys where it stops: a Depot, a Charging Station and an Outpost in one, claiming the land around it. Pack it up to move on: it takes everything stored in it along.' },
   truck:   { name: 'Freight Truck', plural: 'Freight Trucks', speed: WORKER_SPEED * 1.35, hp: 8, haul: true, truck: true, carry: 8, roadOnly: true, parts: 2, accel: 1.5, brake: 3.5,
@@ -128,7 +130,7 @@ const BOTS = {
   brute:    { name: 'Brute', plural: 'Brutes', speed: WORKER_SPEED * 0.8, hp: 24, wild: true, bite: 3, smash: true,
     desc: 'A big, slow, armoured creature. Brutes tear up roads and batter buildings, and bite hard.' },
 };
-const BOT_ORDER = ['worker', 'hauler', 'truck', 'roadtrain', 'crawler', 'agribot', 'paver', 'warbot'];
+const BOT_ORDER = ['worker', 'hauler', 'truck', 'roadtrain', 'freight', 'crawler', 'agribot', 'paver', 'warbot'];
 /*
  * Who carries what (see dispatch):
  * - Haulers (2 goods) do the short runs: between buildings less than TRUCK_MIN_DIST tiles apart.
@@ -162,6 +164,17 @@ const WEAR_TRAIN = 8;
  * paved road of the same length. Trucks can't use it.
  */
 const ROPE_MIN = 3, ROPE_MAX = 14, ROPE_SPEED = 1.8, ROPE_COST = 1.3;
+/*
+ * Freight rail: track (S.rail) is laid in Paths (Rail), RAIL_COST a tile, paid when you build it and
+ * laid at once, on open ground in your territory and on one level (trains can't climb). It can cross a
+ * road: a level crossing, where road traffic waits while a train is within RAIL_CROSS_HOLD tiles.
+ * Rail Stations stand beside the track; Freight Trains (48 goods) run between stations on the same
+ * track: supply orders at a station (from another station first) and a far station's trunk runs to
+ * the station nearest the Command Base, with loads of RAIL_MIN_LOAD or more.
+ */
+const RAIL_COST = { cement: 1, alloy: 1 };
+const RAIL_MIN_LOAD = 10;
+const RAIL_CROSS_HOLD = 2.4;
 /**
  * Driving: bots speed up at BOT_ACCEL tiles/s² and brake at up to BOT_BRAKE, slowing to BOT_CORNER of
  * their speed for a corner. Trucks are heavier: they set their own accel and brake and slow to
@@ -223,7 +236,7 @@ const WARBOT_RANGE = 1.2;         // tiles: how far a warbot shoots
 const WARBOT_RANGE_BLOCKED = 2.2; // ...and across a building or cliff that stops it closing in
 
 // Terrain
-const T_GROUND = 0, T_WATER = 1, T_ROCK = 2;
+const T_GROUND = 0, T_WATER = 1, T_ROCK = 2, T_CHASM = 3; // a chasm: a deep, sheer canyon between islands (Sky islands)
 /**
  * Bridges and tunnels: a road over water is a bridge, a road through rocky crags a tunnel. Each tile
  * costs `cost` instead of road Cement, and workers take `time` seconds to build it, working out from
@@ -233,7 +246,12 @@ const T_GROUND = 0, T_WATER = 1, T_ROCK = 2;
 const CROSS = {
   [T_WATER]: { key: 'bridge', name: 'Bridge', cost: { cement: 2, alloy: 1 }, time: 6, weight: 14 },
   [T_ROCK]: { key: 'tunnel', name: 'Tunnel', cost: { cement: 3, alloy: 1 }, time: 8, weight: 18 },
+  [T_CHASM]: { key: 'skybridge', name: 'Sky bridge', cost: { cement: 3, alloy: 1 }, time: 9, weight: 16 },
 };
+/** Can a bridge (road or rail) go out over tile t? Water and chasms, not rock. */
+function bridgeable(t) { return S.terrain[t] === T_WATER || S.terrain[t] === T_CHASM; }
+/** Track over water or a chasm is a rail bridge, dearer than track on the ground. */
+const RAIL_BRIDGE_COST = { cement: 3, alloy: 2 };
 
 /* New-game map settings (each is a slider on the menu). */
 const SIZE_PRESETS = [
@@ -268,6 +286,7 @@ const SHAPE_PRESETS = [
   { name: 'Islands', w: 1.15, h: 1.45, islands: true, ffa: true, tip: 'Islands: the only way across is bridges. Push an Outpost out to your shore, then build a bridge in Paths (Bridges): it can reach out past your border.' },
   { name: 'Crater', w: 1, h: 1, crater: true, minLevels: 3, ffa: true, tip: 'Crater: the richest fields lie on the crater floor in the middle. One ramp leads down on your side; cut more in Paths (Ramps).' },
   { name: 'Plateaus', w: 1, h: 1, plateau: true, minLevels: 3, ffa: true, tip: 'Plateaus: your base stands on high ground with only two slopes down. Easy to hold: wall the slopes and push out.' },
+  { name: 'Sky islands', w: 1.15, h: 1.45, islands: true, sky: true, ffa: true, tip: 'Sky islands: towering mesas at different heights, cut apart by sheer, bottomless canyons. Cross with Sky bridges (Paths, Bridges), Ropeways, or rail bridges for Freight Trains.' },
 ];
 const CHOKE_BAND = 3;   // Chokepoint maps: rows of crags each side of the middle line
 const CHOKE_APPROACH = 3; // ...and rows of open ground kept clear each side of the pass
@@ -511,6 +530,10 @@ const BDEFS = {
     name: 'Research Lab', desc: 'Researches upgrades for your whole colony, one at a time: pick one in its panel. The Chips, Crystal and Alloy are paid from storage when you start, and a worker inside does the research. Two Labs research twice as fast. Colony only.',
     cost: { cement: 6, alloy: 4, chip: 2 }, staff: true, lab: true, colony: true, armor: 10, buildTime: 14,
   },
+  station: {
+    name: 'Rail Station', desc: 'Storage beside the railway: Freight Trains load and unload here. Build one at each end of a line (beside the track), give the far one supply orders, and trains keep it stocked from the stations on the same track; a far station also sends its spare goods home by train. Haulers serve it like a Depot.',
+    cost: { cement: 6, alloy: 4 }, store: true, station: true, armor: 12, buildTime: 12,
+  },
   crawlerbase: {
     name: 'Crawler', short: 'Crawler',
     desc: 'A deployed Crawler: storage, a Charging Station for four bots (burning the Fuel stored in it) and an Outpost claiming the land around it, all in one. Give it supply orders like a Depot (Fuel keeps its chargers going). Pack it up to drive it somewhere else: it takes its goods along, and gives up its land.',
@@ -528,7 +551,7 @@ const BDEFS = {
 
 /** Order of the build menu. */
 const BUILD_MENU = ['harvester', 'quarry', 'mine', 'tap', 'smelter', 'fab', 'foundry', 'charger', 'farm', 'pump', 'refinery',
-  'kiln', 'tarworks', 'roadworks', 'ropeway', 'outpost', 'turret', 'repair', 'armory', 'munitions', 'silo', 'reactor', 'nukesilo', 'depot', 'grower', 'lab'];
+  'kiln', 'tarworks', 'roadworks', 'ropeway', 'station', 'outpost', 'turret', 'repair', 'armory', 'munitions', 'silo', 'reactor', 'nukesilo', 'depot', 'grower', 'lab'];
 /** Ramps are planned in Paths (with roads), not from the build menu. */
 
 const INPUT_CAP = 3;   // how many of each input a production building stockpiles

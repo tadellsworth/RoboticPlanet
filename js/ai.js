@@ -395,7 +395,7 @@ function aiBridge(p, maxSites) {
   if (pending) return;
   const W = S.W, N = W * S.H;
   const nb = (t, fn) => { const i = t % W; if (i > 0) fn(t - 1); if (i < W - 1) fn(t + 1); if (t >= W) fn(t - W); if (t + W < N) fn(t + W); };
-  const sea = (t) => S.terrain[t] === T_WATER && !S.road[t] && !S.plan[t] && !S.bAt[t] && !scorched(t);
+  const sea = (t) => bridgeable(t) && !S.road[t] && !S.plan[t] && !S.bAt[t] && !scorched(t);
   const steps = new Int16Array(N).fill(-1), from = new Int32Array(N).fill(-1), q = [];
   // Start from water at our own shore (our land, inside our border).
   for (let t = 0; t < N; t++) {
@@ -419,7 +419,7 @@ function aiBridge(p, maxSites) {
     for (let t = best; t >= 0; t = from[t]) tiles.push(t);
     tiles.reverse(); // from the shore out
     const cost = {};
-    for (const t of tiles) for (const g in CROSS[T_WATER].cost) cost[g] = (cost[g] || 0) + CROSS[T_WATER].cost[g];
+    for (const t of tiles) for (const g in CROSS[S.terrain[t]].cost) cost[g] = (cost[g] || 0) + CROSS[S.terrain[t]].cost[g];
     // Short of Cement or Alloy: the Foundry rests until the bridge is paid for (see aiThink).
     if (!canAffordRoad(p, cost)) { P.bridgeWant = S.time; return; }
     P.bridgeWant = 0;

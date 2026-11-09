@@ -203,16 +203,29 @@ function usesGood(b, g) {
  * to the Command Base uses, a load at a time: TRAIN_MIN_LOAD or more by Road Train, otherwise
  * TRUCK_MIN_LOAD or more by Freight Truck.
  */
-function trunkRuns(p, blds, take, canCarry, vans) {
+function trunkRuns(p, blds, take, canCarry, vans, trains) {
   const hub = getE(S.players[p].lander);
   if (!hub || hub.dead || hub.owner !== p) return;
   const far2 = TRUCK_MIN_DIST * TRUCK_MIN_DIST;
   for (const R of blds) {
-    if (R === hub || !storeAccepts(R) || dist2(R.x, R.y, hub.x, hub.y) < far2 || !truckLinked(R, hub)) continue;
+    if (R === hub || !storeAccepts(R) || dist2(R.x, R.y, hub.x, hub.y) < far2) continue;
+    // A Rail Station sends home by train, to the station on its track nearest the Command Base.
+    let home = null;
+    if (trains && BDEFS[R.type].station) {
+      let hd = dist2(R.x, R.y, hub.x, hub.y) - far2;
+      for (const s of blds) if (s !== R && BDEFS[s.type].station && s.built && railLinked(R, s)) { const d = dist2(s.x, s.y, hub.x, hub.y); if (d < hd) { hd = d; home = s; } }
+    }
+    const byRoad = truckLinked(R, hub);
+    if (!home && !byRoad) continue;
     for (const g of GOODS) {
       const spare = keepSupply(R, g) - EXPORT_RESERVE;
       if (spare < TRUCK_MIN_LOAD || !storeTakes(hub, g)) continue;
       if (blds.some((c) => c !== R && !BDEFS[c.type].store && usesGood(c, g) && dist2(c.x, c.y, R.x, R.y) < dist2(c.x, c.y, hub.x, hub.y))) continue;
+      if (home && spare >= RAIL_MIN_LOAD && storeTakes(home, g)) {
+        const tu = take(R.x, R.y, 'rail', R);
+        if (tu) { assignHaul(tu, R, home, g, canCarry(tu, spare)); continue; }
+      }
+      if (!byRoad) continue;
       let u = spare >= TRAIN_MIN_LOAD ? take(R.x, R.y, 'train', R) : null;
       if (!u) u = take(R.x, R.y, 'truck', R);
       if (!u && !vans) u = take(R.x, R.y, 'train', R); // no trucks: a Road Train takes the smaller loads too
@@ -295,6 +308,7 @@ function goCharge(u) {
 }
 
 function workerBattery(u, dt) {
+  if (BOTS[u.type].rail) { u.bat = 100; return; } // trains run off the track's power
   if (u.bat === undefined) u.bat = 100;
   if (u.inside) {
     const b = getE(u.inside);
@@ -397,6 +411,14 @@ function goTo(u, x, y) {
   const goal = y * S.W + x;
   // Don't hammer the pathfinder with a route that just failed.
   if (u.failGoal === goal && S.time < u.failUntil) return false;
+  // Freight Trains keep to the track.
+  if (BOTS[u.type].rail) {
+    const p = railRoute(u, x, y);
+    if (!p) { u.failGoal = goal; u.failUntil = S.time + 2; return false; }
+    exitBuilding(u);
+    u.path = p; u.pi = 0; u.idleT = 0; u.goal = goal;
+    return true;
+  }
   // Halfway across a Ropeway: finish the ride first, then go on from the far station.
   if (u.ride >= 0 && u.path && u.path[u.pi] === u.ride) {
     const st = u.ride, rest = st === goal ? [] : findPath(st % S.W, (st / S.W) | 0, x, y, u.type !== 'warbot' ? u.owner : undefined, routeOpts(u));
@@ -590,6 +612,20 @@ function moveAlong(u, dt) {
   if (!u.path) return true;
   const here = Math.floor(u.y) * S.W + Math.floor(u.x);
   const bt = BOTS[u.type];
+  // A Freight Train: down the track at its own speed, braking for curves and the end of its trip; it
+  // never waits for road traffic (road traffic waits for it at level crossings).
+  if (bt.rail) {
+    let step = driveSpeed(u, bt, bt.speed * evSpeed(), Infinity, dt) * dt;
+    u.odo = ((u.odo || 0) + step) % 1000;
+    u.moved = step > 0 ? 1 : 0;
+    while (step > 0 && u.pi < u.path.length) {
+      const t = u.path[u.pi], tx = (t % S.W) + 0.5, ty = ((t / S.W) | 0) + 0.5, dx = tx - u.x, dy = ty - u.y, d = Math.sqrt(dx * dx + dy * dy);
+      if (d > 1e-4) u.face = Math.atan2(dy, dx);
+      if (d <= step) { u.x = tx; u.y = ty; step -= d; u.pi++; } else { u.x += (dx / d) * step; u.y += (dy / d) * step; step = 0; }
+    }
+    if (u.pi >= u.path.length) { u.path = null; u.vel = 0; u.drive = 0; return true; }
+    return false;
+  }
   // Riding a Ropeway: from one station straight to the other at ROPE_SPEED, whatever lies below.
   const nxt = u.path[u.pi];
   if (!(u.ride >= 0) && nxt !== undefined && nxt !== here && (ropeLink(here) === nxt || (u.pi > 0 && ropeLink(u.path[u.pi - 1]) === nxt))) u.ride = nxt;
@@ -642,6 +678,11 @@ function moveAlong(u, dt) {
     }
     if (!stop) u.crossT = 0;
     if (stop) lim = Math.min(lim, toEdge);
+  }
+  // A level crossing: wait short of the track while a train is coming through.
+  if (nx !== undefined && nx !== here && S.rail[nx] && trainNear(nx)) {
+    const cdx = (nx % S.W) + 0.5 - u.x, cdy = ((nx / S.W) | 0) + 0.5 - u.y;
+    lim = Math.min(lim, Math.max(0, Math.sqrt(cdx * cdx + cdy * cdy) - 0.6));
   }
   // On roads, wait behind the bot ahead instead of driving through it.
   if (r || S.road[u.path[u.pi]]) {
@@ -703,7 +744,7 @@ function driveSpeed(u, bt, vmax, lim, dt) {
   if (t1 !== undefined && d0 > 1e-3) {
     const bx = (t1 % S.W) - (t0 % S.W), by = ((t1 / S.W) | 0) - ((t0 / S.W) | 0);
     if ((dx0 * bx + dy0 * by) / (d0 * Math.sqrt(bx * bx + by * by)) < 0.7) {
-      const vc = vmax * (bt.train ? TRAIN_CORNER : bt.truck ? TRUCK_CORNER : BOT_CORNER);
+      const vc = vmax * (bt.rail ? 0.55 : bt.train ? TRAIN_CORNER : bt.truck ? TRUCK_CORNER : BOT_CORNER);
       cap = Math.min(cap, Math.sqrt(vc * vc + 2 * brk * d0));
     }
   }
@@ -755,10 +796,11 @@ function dispatch(p) {
 
   // Keep a worker or two free to build. If raids or new buildings took them all, pull one off the
   // least useful job — this must run even when nobody is idle.
-  let free = 0, workers = 0, haulers = 0, trucks = 0, vans = 0;
+  let free = 0, workers = 0, haulers = 0, trucks = 0, vans = 0, trains = 0;
   for (const u of S.bots) {
     if (u.dead || u.owner !== p) continue;
     if (u.type === 'hauler') haulers++;
+    if (BOTS[u.type].rail) trains++;
     if (BOTS[u.type].truck) { trucks++; if (!BOTS[u.type].train) vans++; }
     if (u.type !== 'worker') continue;
     workers++;
@@ -771,7 +813,7 @@ function dispatch(p) {
   // Planned roads the border no longer covers are called off (and refunded), except a bridge
   // still reaching out over the water from our side.
   for (const t of planList(p).slice()) {
-    if (S.bAt[t] || (S.owner[t] !== p && !(S.terrain[t] === T_WATER && bridgeHead(p, t % S.W, (t / S.W) | 0)))) cancelPlan(t);
+    if (S.bAt[t] || (S.owner[t] !== p && !(bridgeable(t) && bridgeHead(p, t % S.W, (t / S.W) | 0)))) cancelPlan(t);
   }
   const linked = (a, b) => P.noHaulers || roadLinked(a, b);
   for (const b of blds) b.unlinked = !P.noHaulers && needsRoad(b) && !onHomeNet(b);
@@ -801,8 +843,9 @@ function dispatch(p) {
     let best = -1, bd = Infinity;
     for (let k = 0; k < idle.length; k++) {
       const u = idle[k], bt = BOTS[u.type];
-      if (role === 'haul' || role === 'truck' || role === 'train') {
-        if (!(bt.haul || (P.noHaulers && bt.build)) || (bt.train ? 'train' : bt.truck ? 'truck' : 'haul') !== role) continue;
+      if (role === 'haul' || role === 'truck' || role === 'train' || role === 'rail') {
+        if (!(bt.haul || (P.noHaulers && bt.build)) || (bt.rail ? 'rail' : bt.train ? 'train' : bt.truck ? 'truck' : 'haul') !== role) continue;
+        if (bt.rail && src && !trainAt(u, src)) continue;
         if (bt.roadOnly && src && !botLinked(u, src)) continue;
       } else if (role === 'build' ? !bt.build : role === 'staff' ? !bt.staff : bt.crew !== role) continue;
       const d = dist2(u.x, u.y, x + 0.5, y + 0.5);
@@ -883,6 +926,17 @@ function dispatch(p) {
       let src = null, bd = Infinity;
       if (!reachable(r.b)) { r.n = 0; continue; }
       const sup = r.keep ? keepSupply : supplyOf;
+      // A Rail Station's supply orders come by Freight Train from another station on its track first.
+      if (trains && BDEFS[r.b.type].station && r.n >= Math.min(RAIL_MIN_LOAD, r.n)) {
+        let rs = null, rd = Infinity;
+        for (const s of blds) {
+          if (s === r.b || !BDEFS[s.type].station || !s.built || keepSupply(s, r.g) < Math.min(r.n, RAIL_MIN_LOAD) || !railLinked(s, r.b)) continue;
+          const d = dist2(s.x, s.y, r.b.x, r.b.y);
+          if (d < rd) { rd = d; rs = s; }
+        }
+        const tu = rs && take(rs.x, rs.y, 'rail', rs);
+        if (tu) { const n = canCarry(tu, Math.min(r.n, keepSupply(rs, r.g))); assignHaul(tu, rs, r.b, r.g, n); r.n -= n; any = true; continue; }
+      }
       for (const s of blds) {
         if (s === r.b || sup(s, r.g) <= 0 || !reachable(s) || !linked(s, r.b)) continue;
         const d = dist2(s.x, s.y, r.b.x, r.b.y);
@@ -949,7 +1003,7 @@ function dispatch(p) {
     }
   }
   // 4c) Trunk runs: a store far from the Command Base sends home, in bulk, what nothing near it uses.
-  if (trucks && idle.some((u) => BOTS[u.type].truck)) trunkRuns(p, blds, take, canCarry, vans);
+  if ((trucks || trains) && idle.some((u) => BOTS[u.type].truck || BOTS[u.type].rail)) trunkRuns(p, blds, take, canCarry, vans, trains);
   // 5) Empty out storage that no longer takes a good (set to "empty out" or the good switched off).
   for (const b of blds) {
     if (!storeAccepts(b) || (b.smode !== 'empty' && !b.reject)) continue;
@@ -1284,6 +1338,8 @@ function assignStaff(u, b) {
 function updateWorker(u, dt) {
   u.busy = 0;
   u.moved = 0;
+  // A new Freight Train rolls out at the nearest Rail Station (and waits at the Foundry until there is one).
+  if (BOTS[u.type].rail && !u.task && !onTrack(u) && S.tick % 30 === u.id % 30) { deliverTrain(u); return; }
   const t = u.task;
   if (!t) {
     if (u.carry) stashCarry(u);
@@ -1362,6 +1418,7 @@ function goHome(u) {
  * every store, extras wait at the nearest.
  */
 function parkingFor(u) {
+  if (BOTS[u.type].rail) return nearestStation(u);
   if (!BOTS[u.type].truck) return nearestReachableStore(u);
   const parked = trucksParked(u.owner, u.id);
   let near = null, nd = Infinity, empty = null, ed = Infinity;
@@ -1396,7 +1453,7 @@ function spreadTrucks(u) {
 }
 
 function stashCarry(u) {
-  let store = storeFor(u.owner, u.carry, u.x, u.y) || nearestStoreTo(u.owner, u.x, u.y);
+  let store = BOTS[u.type].rail ? nearestStation(u) : storeFor(u.owner, u.carry, u.x, u.y) || nearestStoreTo(u.owner, u.x, u.y);
   if (store && roadBound(u) && !botLinked(u, store)) store = nearestReachableStore(u);
   if (!store) return; // hold on to it until a road leads somewhere
   const n = u.carryN || 1;
@@ -3598,7 +3655,7 @@ function tech(p, k) { const P = S.players[p]; return !!(P && P.tech && P.tech[k]
 /** Speed, battery drain and carrying for bot u, with planet events and research applied. */
 function speedMul(u) { return evSpeed() * (tech(u.owner, 'motors') ? 1.15 : 1); }
 function drainMul(u) { return evDrain() * (tech(u.owner, 'cells') ? 0.7 : 1); }
-function botCarry(u) { const bt = BOTS[u.type], c = bt.carry || 1; return tech(u.owner, 'cargo') && bt.haul ? c + (bt.train ? 6 : bt.truck ? 2 : 1) : c; }
+function botCarry(u) { const bt = BOTS[u.type], c = bt.carry || 1; return tech(u.owner, 'cargo') && bt.haul ? c + (bt.rail ? 8 : bt.train ? 6 : bt.truck ? 2 : 1) : c; }
 /** A Pulse Turret's reach and shots per Crystal. */
 function turretRange(b) { return BDEFS[b.type].range + (tech(b.owner, 'sentry') ? 1.5 : 0); }
 function shotsPer(b) { return tech(b.owner, 'sentry') ? 6 : SHOTS_PER_AMMO; }
@@ -4033,4 +4090,78 @@ function packCrawler(b) {
   markDirty(b.x, b.y);
   computeTerritory();
   return u;
+}
+
+/* ------------------------------------------------------------------ freight trains */
+
+/** Is train u on the track (or parked in a station beside it)? */
+function onTrack(u) {
+  if (u.inside) { const b = getE(u.inside); return !!(b && BDEFS[b.type].station && railPlatforms(b.x, b.y).length); }
+  return !!S.rail[tIdx(Math.floor(u.x), Math.floor(u.y))];
+}
+
+/** Can train u get to building b along the track? */
+function trainAt(u, b) {
+  if (!BDEFS[b.type].station) return false;
+  const c = railNet().comp, mine = [];
+  if (u.inside) { const h = getE(u.inside); if (h) for (const k of railComps(h)) mine.push(k); }
+  else { const t = tIdx(Math.floor(u.x), Math.floor(u.y)); if (S.rail[t]) mine.push(c[t]); }
+  const theirs = railComps(b);
+  return mine.some((k) => theirs.indexOf(k) >= 0);
+}
+
+/** The nearest Rail Station train u can reach (or, off the track, the nearest one with track at all). */
+function nearestStation(u) {
+  let best = null, bd = Infinity;
+  for (const b of S.buildings) {
+    if (b.dead || b.owner !== u.owner || !b.built || !BDEFS[b.type].station) continue;
+    if (onTrack(u) ? !trainAt(u, b) : !railPlatforms(b.x, b.y).length) continue;
+    const d = dist2(b.x + 0.5, b.y + 0.5, u.x, u.y);
+    if (d < bd) { bd = d; best = b; }
+  }
+  return best;
+}
+
+/** Put a train that isn't on the track (just built) into the nearest Rail Station. */
+function deliverTrain(u) {
+  const st = nearestStation(u);
+  if (!st) {
+    const P = S.players[u.owner];
+    if (S.time - (P.trainMsg || -999) > 90) { P.trainMsg = S.time; postMsg(u.owner, 'A Freight Train is waiting at the Foundry: build a Rail Station beside some track and it rolls out there.', Math.floor(u.x), Math.floor(u.y), 'warn'); }
+    return;
+  }
+  exitBuilding(u);
+  enterBuilding(u, st);
+  addFx('ring', st.x + 0.5, st.y + 0.5, { color: PLAYER_COLORS[u.owner] });
+  postMsg(u.owner, 'A Freight Train is ready at a Rail Station.', st.x, st.y, 'good');
+}
+
+/** Is a train on or coming up to track tile t (a level crossing)? */
+function trainNear(t) {
+  const x = (t % S.W) + 0.5, y = ((t / S.W) | 0) + 0.5, r2 = RAIL_CROSS_HOLD * RAIL_CROSS_HOLD;
+  for (const v of S.bots) if (!v.dead && !v.inside && BOTS[v.type].rail && dist2(v.x, v.y, x, y) <= r2) return true;
+  return false;
+}
+
+/** Lay track on tile t, paying RAIL_COST from storage: '' if done, otherwise why not. */
+/** What a tile of track costs: a rail bridge over water or a chasm costs more. */
+function railCost(t) { return S.terrain[t] === T_GROUND ? RAIL_COST : RAIL_BRIDGE_COST; }
+
+function layRail(owner, t) {
+  if (S.rail[t]) return '';
+  const why = railBlocked(owner, t);
+  if (why) return why;
+  const cost = railCost(t);
+  if (!canPay(owner, cost)) return `Out of ${missingGoods(owner, cost)}: track costs ${costText(cost)} a tile here.`;
+  for (const g in cost) takeGood(owner, g, cost[g]);
+  setRail(t, true);
+  return '';
+}
+
+/** Take up the track on tile t: its Cement and Alloy go back to storage. */
+function takeUpRail(owner, t) {
+  if (!S.rail[t]) return;
+  setRail(t, false);
+  const store = nearestStoreTo(owner, (t % S.W) + 0.5, ((t / S.W) | 0) + 0.5), cost = railCost(t);
+  if (store) for (const g in cost) bump(store.stock, g, cost[g]);
 }

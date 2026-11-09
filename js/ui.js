@@ -152,7 +152,7 @@ function syncMenu() {
   $('m-players-field').hidden = UI.menu.mode === 'colony';
   for (const btn of $('m-players').children) { btn.classList.toggle('on', +btn.dataset.v === (three ? 3 : 2)); btn.disabled = btn.dataset.v === '3' && !ffaOk; }
   $('m-players-note').hidden = ffaOk || UI.menu.players !== 3;
-  $('m-players-note').textContent = `${SHAPE_PRESETS[UI.menu.shape || 0].name} maps are for two players only: pick Standard, Islands, Crater or Plateaus for a free-for-all.`;
+  $('m-players-note').textContent = `${SHAPE_PRESETS[UI.menu.shape || 0].name} maps are for two players only: pick Standard, Islands, Crater, Plateaus or Sky islands for a free-for-all.`;
   $('m-mode-desc').textContent = UI.menu.mode === 'colony'
     ? (UI.menu.wild ? 'No rival, but creatures nest in the wilds and raid what you build near them. Build supply chains, research upgrades and spread across the whole map.'
       : 'No rival. Settle the planet at your own pace: build supply chains, research upgrades and spread across the whole map.')
@@ -297,6 +297,7 @@ function initKeyboard() {
       case 't': if (R.mode !== 'road') setMode('road'); R.traffic = !R.traffic; showRoadBanner(); sfx('click'); break;
       case 'l': openPaths('lights'); break;
       case 'x': if (warOn()) openPaths('wall'); break;
+      case 'n': openPaths('rail'); break;
       case 'q': if (!$('btn-attack').hidden) $('btn-attack').click(); break;
       case 'h': case 'home': $('btn-home').click(); break;
       case 'm': setMinimap(!MM.on); break;
@@ -1088,6 +1089,18 @@ function onMapTap(i, j, wx, wy) {
       showRoadBanner(note, !!note);
       return;
     }
+    if (UI.roadMode === 'rail') {
+      // Rail: a tap adds a tile of track or drops it; tapping laid track marks it to take up.
+      const stroke = [];
+      if (UI.draft.rail.has(t)) draftOp(stroke, t, 'unrail');
+      else if (UI.draft.railDel.has(t)) draftOp(stroke, t, 'unraildel');
+      else if (S.rail[t]) draftOp(stroke, t, 'raildel');
+      else { const why = railBlocked(0, t); if (why) { sfx('error'); showRoadBanner(why); return; } draftOp(stroke, t, 'rail'); }
+      UI.draft.strokes.push(stroke);
+      sfx('click');
+      showRoadBanner();
+      return;
+    }
     if (UI.roadMode === 'wall') {
       // Walls: a tap plans a Wall (a Gate on a road), taps again make it a Gate, then drop it.
       const stroke = [], had = UI.draft.walls.get(t) || null;
@@ -1113,7 +1126,7 @@ function onMapTap(i, j, wx, wy) {
     else if (S.road[t] || S.plan[t] === 1) { draftOp(stroke, t, 'del'); note = S.plan[t] ? 'Planned tile marked to call off.' : 'Road marked to take up: its Cement comes back when you tap Build.'; }
     else if (crossTile(t) && UI.roadMode !== 'bridge') {
       sfx('error');
-      showRoadBanner(`That's ${S.terrain[t] === T_WATER ? 'water' : 'rock'}. Pick <b>Bridges</b> to build a ${CROSS[S.terrain[t]].name.toLowerCase()} across it.`);
+      showRoadBanner(`That's ${S.terrain[t] === T_WATER ? 'water' : S.terrain[t] === T_CHASM ? 'open sky' : 'rock'}. Pick <b>Bridges</b> to build a ${CROSS[S.terrain[t]].name.toLowerCase()} across it.`);
       return;
     } else if (canRoad(0, i, j) || draftBridge(t)) {
       draftOp(stroke, t, 'add');
@@ -1172,13 +1185,13 @@ function rallyAtTap(wx, wy) {
  * tiles to lay, and existing or planned tiles to take up. Nothing is paid and no bot moves until
  * Build is tapped, so a stray swipe costs nothing (Undo or Clear takes it back).
  */
-function draftReset() { UI.draft = { add: [], addSet: new Set(), del: new Set(), ramps: new Set(), walls: new Map(), strokes: [] }; }
-function draftEmpty() { return !UI.draft || (!UI.draft.add.length && !UI.draft.del.size && !UI.draft.ramps.size && !UI.draft.walls.size); }
+function draftReset() { UI.draft = { add: [], addSet: new Set(), del: new Set(), ramps: new Set(), walls: new Map(), rail: new Set(), railDel: new Set(), strokes: [] }; }
+function draftEmpty() { return !UI.draft || (!UI.draft.add.length && !UI.draft.del.size && !UI.draft.ramps.size && !UI.draft.walls.size && !UI.draft.rail.size && !UI.draft.railDel.size); }
 
 /** A bridge sketched out past the border: water touching a tile already in the sketch. */
 function draftBridge(t) {
   const d = UI.draft;
-  return S.terrain[t] === T_WATER && !S.bAt[t] && !scorched(t) && bridgeHead(0, t % S.W, (t / S.W) | 0, (u) => d.addSet.has(u) && S.terrain[u] === T_WATER);
+  return bridgeable(t) && !S.bAt[t] && !scorched(t) && bridgeHead(0, t % S.W, (t / S.W) | 0, (u) => d.addSet.has(u) && bridgeable(u));
 }
 
 /** What a wall line puts on tile t: a Gate on a road (or a planned one), a Wall anywhere else. */
@@ -1203,6 +1216,10 @@ function draftOp(stroke, t, op) {
   else if (op === 'undel') { if (!d.del.has(t)) return; d.del.delete(t); }
   else if (op === 'ramp') { if (d.ramps.has(t)) return; d.ramps.add(t); }
   else if (op === 'unramp') { if (!d.ramps.has(t)) return; d.ramps.delete(t); }
+  else if (op === 'rail') { if (d.rail.has(t)) return; d.rail.add(t); }
+  else if (op === 'unrail') { if (!d.rail.has(t)) return; d.rail.delete(t); }
+  else if (op === 'raildel') { if (d.railDel.has(t)) return; d.railDel.add(t); }
+  else if (op === 'unraildel') { if (!d.railDel.has(t)) return; d.railDel.delete(t); }
   stroke.push({ t, op });
 }
 
@@ -1213,7 +1230,7 @@ function draftUndo() {
   let s;
   do s = d.strokes.pop(); while (s && !s.length); // skip drags that added nothing
   if (!s) return;
-  const back = { add: 'unadd', unadd: 'add', del: 'undel', undel: 'del', ramp: 'unramp', unramp: 'ramp' };
+  const back = { add: 'unadd', unadd: 'add', del: 'undel', undel: 'del', ramp: 'unramp', unramp: 'ramp', rail: 'unrail', unrail: 'rail', raildel: 'unraildel', unraildel: 'raildel' };
   for (let k = s.length - 1; k >= 0; k--) {
     if (s[k].op === 'setw') { if (s[k].from) d.walls.set(s[k].t, s[k].from); else d.walls.delete(s[k].t); continue; }
     draftOp([], s[k].t, back[s[k].op]);
@@ -1246,9 +1263,12 @@ function draftSummary() {
     if (kind === 'gate') gates++; else walls++;
     for (const g in BDEFS[kind].cost) { cost[g] = (cost[g] || 0) + BDEFS[kind].cost[g]; wcost[g] = (wcost[g] || 0) + BDEFS[kind].cost[g]; }
   }
+  // Track is paid for from storage when you tap Build too; taking it up gives its Cement and Alloy back.
+  for (const t of d.rail) if (!S.rail[t]) { const rc = railCost(t); for (const g in rc) { cost[g] = (cost[g] || 0) + rc[g]; wcost[g] = (wcost[g] || 0) + rc[g]; } }
+  for (const t of d.railDel) if (S.rail[t]) { const rc = railCost(t); for (const g in rc) back[g] = (back[g] || 0) + rc[g]; }
   const net = {};
   for (const g in cost) net[g] = Math.max(0, cost[g] - (back[g] || 0));
-  return { add, cross, clear, del: d.del.size, ramps: d.ramps.size, walls, gates, cost, back, net, can: canAffordRoad(0, net) && canPay(0, wcost) };
+  return { add, cross, clear, del: d.del.size, ramps: d.ramps.size, walls, gates, rail: d.rail.size, railDel: d.railDel.size, cost, back, net, can: canAffordRoad(0, net) && canPay(0, wcost) };
 }
 
 /** Build the plan: take up the marked roads (their goods come back first), then plan the new tiles for workers to pave. */
@@ -1257,6 +1277,9 @@ function commitDraft() {
   const d = UI.draft;
   let removed = 0, laid = 0, ramps = 0, walls = 0, gates = 0, why = '', wallWhy = '';
   for (const t of d.del) if (S.road[t] || S.plan[t] === 1) { removeRoad(0, t % S.W, (t / S.W) | 0); removed++; }
+  let rails = 0, railsUp = 0, railWhy = '';
+  for (const t of d.railDel) if (S.rail[t]) { takeUpRail(0, t); railsUp++; }
+  for (const t of d.rail) { const w = layRail(0, t); if (w) { railWhy = railWhy || w; } else rails++; }
   for (const [t, kind] of d.walls) {
     const r = placeSite(0, kind, t % S.W, (t / S.W) | 0);
     if (r.ok) { if (kind === 'gate') gates++; else walls++; } else if (!wallWhy) wallWhy = r.reason;
@@ -1278,6 +1301,8 @@ function commitDraft() {
   if (why) { sfx('error'); toast(`Planned ${laid} tile${laid === 1 ? '' : 's'} before running short: ${why}`, 'warn'); }
   else { sfx('place'); toast((laid ? `Planned ${laid} road tile${laid === 1 ? '' : 's'}: free workers will pave them.` : '') + (ramps ? ` ${ramps} Ramp site${ramps === 1 ? '' : 's'} started.` : '') + wallText + (removed ? ` Took up ${removed} tile${removed === 1 ? '' : 's'}.` : ''), 'info'); }
   if (wallWhy) toast(`Some of the wall couldn't go up: ${wallWhy}`, 'warn');
+  if (rails || railsUp) toast(`${rails ? `Laid ${rails} tile${rails === 1 ? '' : 's'} of track.` : ''}${railsUp ? ` Took up ${railsUp} tile${railsUp === 1 ? '' : 's'} of track.` : ''}`, 'info');
+  if (railWhy) toast(`Some track couldn't go down: ${railWhy}`, 'warn');
   if (why) showRoadBanner();
 }
 
@@ -1299,13 +1324,18 @@ function onRoadPaint(i, j, first) {
   const from = first || !UI.lastPaint ? { i, j } : UI.lastPaint;
   const line = tileLine(from.i, from.j, i, j);
   let prev = null;
-  const arrows = UI.roadMode === 'arrows', pave = UI.roadMode === 'pave', wall = UI.roadMode === 'wall';
+  const arrows = UI.roadMode === 'arrows', pave = UI.roadMode === 'pave', wall = UI.roadMode === 'wall', rail = UI.roadMode === 'rail';
   // Pave: the first road tile of a drag decides whether it marks roads or clears their marks.
   if (pave && first) UI.paveOn = !(inMap(i, j) && S.paveMark[tIdx(i, j)]);
   for (const [x, y] of line) {
     if (!inMap(x, y)) break;
     const t = tIdx(x, y);
     if (pave) { if (paveMarkable(t)) setPaveMark(0, x, y, UI.paveOn); continue; }
+    if (rail) {
+      if (S.rail[t] || UI.draft.rail.has(t)) continue;
+      if (!railBlocked(0, t)) draftOp(UI.stroke, t, 'rail'); else UI.paintSkipped = true;
+      continue;
+    }
     if (wall) {
       if (UI.draft.walls.has(t)) continue;
       const kind = wallKind(t);
@@ -1330,6 +1360,7 @@ function onRoadPaint(i, j, first) {
   UI.lastPaint = { i, j };
   if (pave) { showRoadBanner(); return; }
   if (wall) { showRoadBanner(UI.paintSkipped ? 'The wall skips tiles it can\'t go on (outside your border, resources, cliffs, or right beside your Command Base).' : '', true); return; }
+  if (rail) { showRoadBanner(UI.paintSkipped ? 'Track skips tiles it can\'t go on: outside your border, resources, slopes, water and rock.' : '', true); return; }
   if (!arrows) {
     showRoadBanner(UI.paintCross ? 'Roads stop at water and rock: pick <b>Bridges</b> to cross.'
       : UI.paintSkipped ? 'Dragging goes round resources: tap a boulder, grove, ore or crystal tile to clear it for a road.' : '', true);
@@ -1341,11 +1372,14 @@ function onRoadPaint(i, j, first) {
  * Bridges show the plan and what it costs, with Undo, Clear and Build.
  */
 function showRoadBanner(problem, info) {
-  const mode = ['arrows', 'lights', 'bridge', 'ramp', 'pave', 'wall'].includes(UI.roadMode) ? UI.roadMode : 'road';
+  const mode = ['arrows', 'lights', 'bridge', 'ramp', 'pave', 'wall', 'rail'].includes(UI.roadMode) ? UI.roadMode : 'road';
   if (!UI.draft) draftReset();
   const have = playerGoods(0);
   let line, how;
-  if (mode === 'wall' && !UI.draft.walls.size) {
+  if (mode === 'rail' && !UI.draft.rail.size && !UI.draft.railDel.size) {
+    line = `<b>Lay railway track</b> by dragging (${costText(RAIL_COST)} a tile, paid when you tap Build and laid at once). Tap a tile to add or drop it, or tap track to take it up. Then put a <b>Rail Station</b> (Build menu) beside each end, and order a <b>Freight Train</b> at the Bot Foundry.`;
+    how = 'Freight Trains carry 40 goods between Rail Stations on the same track, fast and with no traffic to wait for, and never need charging. They keep a station\'s supply orders filled from the other stations on the line, and a far station sends its spare goods home to the station nearest your Command Base. Track goes on open ground in your territory and stays on one level (trains can\'t climb). It can cross a road: road traffic waits at the crossing while a train goes by.';
+  } else if (mode === 'wall' && !UI.draft.walls.size) {
     line = `<b>Sketch a wall</b> by dragging (${costText(BDEFS.wall.cost)} a tile); where it crosses a road a <b>Gate</b> goes (${costText(BDEFS.gate.cost)}). Tap a planned Wall to make it a Gate, again to drop it. Nothing is spent until you tap <b>Build</b>.`;
     how = `Walls stop every bot. Enemy warbots go round if there is a short way, or stand and shoot their way through: a Wall takes ${BDEFS.wall.armor} hits (a Gate ${BDEFS.gate.armor}, a Missile does ${BDEFS.silo.missile.damage}), and every shot costs them Ammo, so turrets behind a wall pick them off while they work. ` +
       'Your own bots drive through your Gates, so leave one wherever your roads or workers need to cross. Walls are paid for from storage when you tap Build (no Hauler or road needed), and free workers build them. Repair a damaged Wall from its panel.';
@@ -1387,11 +1421,14 @@ function showRoadBanner(problem, info) {
       if (sm.ramps) parts.push(`<b>${sm.ramps}</b> Ramp${sm.ramps === 1 ? '' : 's'}`);
       if (sm.walls) parts.push(`<b>${sm.walls}</b> Wall${sm.walls === 1 ? '' : 's'}`);
       if (sm.gates) parts.push(`<b>${sm.gates}</b> Gate${sm.gates === 1 ? '' : 's'}`);
+      if (sm.rail) parts.push(`<b>${sm.rail}</b> tile${sm.rail === 1 ? '' : 's'} of track`);
+      if (sm.railDel) parts.push(`<b>${sm.railDel}</b> of track to take up`);
       const cost = Object.keys(sm.net).length && Object.values(sm.net).some((v) => v > 0) ? `costs <b>${costText(sm.net)}</b>` : 'costs nothing';
       line = `Plan: ${parts.join(', ')}; ${cost}` + (sm.can ? '.' : ` <span class="err">— not enough ${Object.keys(sm.net).filter((g) => !canAffordRoad(0, { [g]: sm.net[g] })).map((g) => GOOD[g].name).join(' or ')}.</span>`);
     }
     const waiting = planList(0).length;
     if (mode === 'wall') how = 'Walls and Gates are paid for when you tap Build and free workers put them up. Enemy warbots have to go round or shoot through; your bots pass your Gates.';
+    else if (mode === 'rail') how = 'Track is paid for when you tap Build and goes down at once. Rail Stations stand beside it; Freight Trains run between stations on the same stretch of track.';
     else how = `<b>Haulers only drive on roads</b>, so every building needs a road to storage. 1 Cement paves ${Math.round(1 / roadCost().cement)} tiles (${ROAD_CLEAR}× through resources); you have ${have.cement || 0} Cement` +
       (mode === 'bridge' ? ` and ${have.alloy || 0} Alloy. Workers build bridges and tunnels out from the shore or rock face, and they join land on any level.` : '.') +
       ` After you tap Build, free workers pave the road a tile at a time${waiting ? ` (<b>${waiting}</b> tile${waiting === 1 ? '' : 's'} waiting now)` : ''}.`;
@@ -1415,7 +1452,8 @@ function showRoadBanner(problem, info) {
     const wl = sm.walls + sm.gates;
     $('banner-ok').textContent = sm.add ? `Build ${sm.add} tile${sm.add === 1 ? '' : 's'}` + (sm.ramps ? ` + ${sm.ramps} Ramp${sm.ramps === 1 ? '' : 's'}` : '') + (wl ? ` + ${wl} wall` : '')
       : sm.ramps ? `Build ${sm.ramps} Ramp${sm.ramps === 1 ? '' : 's'}` + (wl ? ` + ${wl} wall` : '')
-      : wl ? `Build ${sm.walls ? `${sm.walls} Wall${sm.walls === 1 ? '' : 's'}` : ''}${sm.walls && sm.gates ? ' + ' : ''}${sm.gates ? `${sm.gates} Gate${sm.gates === 1 ? '' : 's'}` : ''}` : 'Take up';
+      : wl ? `Build ${sm.walls ? `${sm.walls} Wall${sm.walls === 1 ? '' : 's'}` : ''}${sm.walls && sm.gates ? ' + ' : ''}${sm.gates ? `${sm.gates} Gate${sm.gates === 1 ? '' : 's'}` : ''}`
+      : sm.rail ? `Lay ${sm.rail} track tile${sm.rail === 1 ? '' : 's'}` : 'Take up';
     $('banner-ok').disabled = !sm.can;
     $('banner-undo').onclick = () => { draftUndo(); sfx('click'); showRoadBanner(); };
     $('banner-clear').onclick = () => { draftReset(); sfx('click'); showRoadBanner(); };
@@ -2154,7 +2192,7 @@ function openRoadSheet(t) {
 function refreshRoadSheet(t) {
   if (!S.road[t]) { closeSheet(); return; }
   const asphalt = S.pave[t] === 2, w = Math.round(S.wear[t] / 10);
-  const cross = crossTile(t) ? (S.terrain[t] === T_WATER ? ' bridge' : ' tunnel') : '';
+  const cross = crossTile(t) ? (S.terrain[t] === T_ROCK ? ' tunnel' : S.terrain[t] === T_CHASM ? ' sky bridge' : ' bridge') : '';
   $('rd-name').textContent = (asphalt ? 'Asphalt' : 'Concrete') + (cross || ' road');
   const speed = asphalt ? asphaltSpeed(S.wear[t]) : PAVE[1].speed;
   $('sh-dyn').innerHTML = `<div class="kv"><span>Speed</span><span>${Math.round(speed * 100) / 100}× off-road</span></div>` +

@@ -574,6 +574,8 @@ function paintTile(ctx, i, j) {
       const rx = x + 8 + hash2(i, j, 3) * 12, ry = y + 10 + hash2(i, j, 4) * 12;
       ctx.beginPath(); ctx.moveTo(rx, ry); ctx.quadraticCurveTo(rx + 4, ry - 3, rx + 8, ry); ctx.stroke();
     }
+  } else if (terr === T_CHASM) {
+    drawChasm(ctx, i, j, x, y);
   } else if (terr === T_ROCK) {
     if (tex.rock) {
       drawTexture(ctx, tex.rock, i, j, x, y);
@@ -609,6 +611,7 @@ function paintTile(ctx, i, j) {
   if (terr === T_GROUND && S.fert && S.fert[t] && !S.ramp[t]) drawFertile(ctx, i, j, x, y);
   if (S.decor && S.decor[t] && !S.road[t] && !S.res[t] && !S.plan[t] && !S.bAt[t]) drawPlant(ctx, S.decor[t], i, j, x, y);
   if (S.road[t]) { if (terr === T_GROUND) drawRoad(ctx, i, j, x, y); else drawCrossing(ctx, i, j, x, y, t); }
+  if (S.rail && S.rail[t]) { if (!S.road[t] && bridgeable(t)) drawBridge(ctx, i, j, x, y, t, true); drawRail(ctx, i, j, x, y, t); }
   if (S.res[t]) {
     drawResource(ctx, S.res[t], S.amt[t], S.grow[t], x + TP / 2, y + TP / 2, TP, i, j);
     if (richRes(t)) drawGlint(ctx, x, y, i, j);
@@ -778,6 +781,45 @@ function drawCliffFace(ctx, i, j, x, y, t, waterOnly) {
   sh.addColorStop(0, 'rgba(20,10,5,0.4)'); sh.addColorStop(1, 'rgba(20,10,5,0)');
   ctx.fillStyle = sh;
   ctx.fillRect(x, y + h, TP, 7);
+}
+
+/**
+ * A deep, steep canyon between the islands: near-black depths with a faint haze of dust far below,
+ * sheer rock walls dropping from every island edge (tallest under the southern rims, the faces you
+ * look into), with bands of strata, and a dark lip along the other edges.
+ */
+function drawChasm(ctx, i, j, x, y) {
+  const k = fbm(i / 6, j / 6, 4242, 2);
+  const g = ctx.createLinearGradient(0, y, 0, y + TP);
+  g.addColorStop(0, `rgb(${22 + 10 * k},${16 + 7 * k},${14 + 6 * k})`);
+  g.addColorStop(1, `rgb(${12 + 6 * k},${9 + 4 * k},${9 + 4 * k})`);
+  ctx.fillStyle = g;
+  ctx.fillRect(x, y, TP, TP);
+  // Faint motes of dust drifting in the depths.
+  for (let n = 0; n < 3; n++) {
+    if (hash2(i * 5 + n, j * 3, 717) > 0.35) continue;
+    ctx.fillStyle = `rgba(190,150,110,${0.06 + 0.08 * hash2(i, j + n, 718)})`;
+    ctx.fillRect(x + hash2(i + n, j, 719) * TP, y + hash2(i, j + n, 720) * TP, 1.5, 1);
+  }
+  // The canyon wall under an island's southern rim: a sheer face of banded rock falling away into the dark.
+  if (terrAt(i, j - 1) === T_GROUND) {
+    const h = TP;
+    const rg = ctx.createLinearGradient(0, y, 0, y + h);
+    rg.addColorStop(0, THEME.cliffTop || '#8a5c3e'); rg.addColorStop(0.5, THEME.cliffBottom || '#4a2e1e'); rg.addColorStop(1, 'rgba(14,10,9,0)');
+    ctx.fillStyle = rg;
+    ctx.fillRect(x, y, TP, h);
+    for (let b = 0; b < 4; b++) {
+      ctx.fillStyle = b % 2 ? 'rgba(0,0,0,0.18)' : 'rgba(255,215,170,0.08)';
+      ctx.fillRect(x, y + 3 + b * 6 + hash2(i, b, 61) * 2, TP, 2);
+    }
+    ctx.fillStyle = 'rgba(0,0,0,0.25)';
+    for (let n = 0; n < 3; n++) ctx.fillRect(x + 3 + hash2(i, j, 70 + n) * (TP - 6), y + 2, 1.5, h * (0.4 + 0.4 * hash2(j, i, 80 + n)));
+  }
+  // The rim on the other sides: a dark lip with a sliver of lit edge.
+  const rim = (dx, dy, fx, fy, fw, fh) => { if (terrAt(i + dx, j + dy) !== T_GROUND) return; ctx.fillStyle = 'rgba(0,0,0,0.55)'; ctx.fillRect(fx, fy, fw, fh); };
+  rim(-1, 0, x, y, 5, TP);
+  rim(1, 0, x + TP - 5, y, 5, TP);
+  rim(0, 1, x, y + TP - 4, TP, 4);
 }
 
 /** Cliff edges, shadows and slopes that show which level a ground tile is on. */
@@ -955,12 +997,299 @@ function drawRoadArrow(ctx, t, x, y) {
   }
 }
 
+/* ------------------------------------------------------------------ bridges */
+
+const ARM_DIRS = [[0, -1], [1, 0], [0, 1], [-1, 0]]; // N E S W
+
+/** Is tile t a bridge: a road or railway out over water or a canyon? */
+function onBridge(t) { return bridgeable(t) && (S.road[t] > 0 || (!!S.rail && S.rail[t] > 0)); }
+
+/** Which sides (N E S W) bridge tile t carries on to: more bridge, or a landing on the shore. */
+function bridgeArms(i, j, t) {
+  return ARM_DIRS.map(([di, dj]) => {
+    if (!inMap(i + di, j + dj)) return false;
+    const u = tIdx(i + di, j + dj);
+    return (S.road[t] > 0 && S.road[u] > 0 && canStep(t, u)) || (!!S.rail && railStep(t, u));
+  });
+}
+
 /**
- * A bridge (road over water: a steel deck on piers with railings) or a tunnel (road through rock:
+ * The level a bridge's deck runs at. A bridge holds one height all the way across: that of the
+ * highest clifftop it lands on (where the other end lands lower, its last stretch ramps down to
+ * it). Worked out once per span and kept until roads or rail change.
+ */
+function deckLevel(t) {
+  const ver = (S.roadVer || 0) + '/' + (S.railVer || 0);
+  if (!R.deck || R.deck.ver !== ver || R.deck.of !== S) R.deck = { ver, of: S, at: new Map() };
+  const hit = R.deck.at.get(t);
+  if (hit !== undefined) return hit;
+  const W = S.W, q = [t], seen = new Set(q);
+  let top = -1, rim = 0;
+  for (let h = 0; h < q.length && h < 600; h++) {
+    const a = q[h], i = a % W, j = (a / W) | 0, arms = bridgeArms(i, j, a);
+    ARM_DIRS.forEach(([di, dj], k) => {
+      if (!inMap(i + di, j + dj)) return;
+      const u = tIdx(i + di, j + dj);
+      if (S.terrain[u] === T_GROUND) { rim = Math.max(rim, S.elev[u]); if (arms[k]) top = Math.max(top, S.elev[u]); }
+      else if (arms[k] && onBridge(u) && !seen.has(u)) { seen.add(u); q.push(u); }
+    });
+  }
+  const lv = top >= 0 ? top : rim;
+  for (const a of q) R.deck.at.set(a, lv);
+  return lv;
+}
+
+/**
+ * A bridge tile, lit like the cliffs (from the top-left): a level deck at clifftop height with
+ * railings on both edges, the deck slab and its girders showing along the south side, and the
+ * bridge's shadow far below on a canyon floor (or close by on water). A rail bridge carries
+ * ballast for the track. Where the deck meets a lower clifftop it ramps down onto it. Piers,
+ * towers and cables reach out past the tile, so drawBridgeRigging draws those every frame.
+ */
+function drawBridge(ctx, i, j, x, y, t, rail) {
+  const c = TP / 2, deep = S.terrain[t] === T_CHASM, arms = bridgeArms(i, j, t);
+  if (!arms.some(Boolean)) arms[1] = arms[3] = true; // a lone stub lies east-west
+  const hw = rail ? 10 : 9, asphalt = !rail && S.pave[t] === 2, lv = deckLevel(t);
+  const rects = (w, ox, oy) => {
+    const out = [[x + c - w + ox, y + c - w + oy, 2 * w, 2 * w]];
+    if (arms[0]) out.push([x + c - w + ox, y + oy, 2 * w, c]);
+    if (arms[1]) out.push([x + c + ox, y + c - w + oy, c, 2 * w]);
+    if (arms[2]) out.push([x + c - w + ox, y + c + oy, 2 * w, c]);
+    if (arms[3]) out.push([x + ox, y + c - w + oy, c, 2 * w]);
+    return out;
+  };
+  const fill = (style, list) => { ctx.fillStyle = style; for (const r of list) ctx.fillRect(r[0], r[1], r[2], r[3]); };
+  ctx.save();
+  ctx.beginPath(); ctx.rect(x, y, TP, TP); ctx.clip();
+  // Shadow: soft and far off to the south-east on a canyon floor, close by on water.
+  if (deep) { fill('rgba(0,0,0,0.22)', rects(hw + 3, 8, 16)); fill('rgba(0,0,0,0.22)', rects(hw, 8, 16)); }
+  else fill('rgba(0,18,28,0.4)', rects(hw + 1, 2, 5));
+  // The south face, where the deck's south edge is open: slab edge, then the girders.
+  const y0 = y + c + hw, spans = [];
+  if (!arms[2]) spans.push([arms[3] ? x : x + c - hw, arms[1] ? x + TP : x + c + hw]);
+  else { if (arms[3]) spans.push([x, x + c - hw]); if (arms[1]) spans.push([x + c + hw, x + TP]); }
+  for (const [a, b] of spans) {
+    ctx.fillStyle = rail ? '#6f655c' : '#8f969d'; ctx.fillRect(a, y0, b - a, 3);              // slab edge
+    ctx.fillStyle = 'rgba(255,255,255,0.22)'; ctx.fillRect(a, y0, b - a, 1);
+    const gh = deep ? y + TP - (y0 + 3) : 3;
+    ctx.fillStyle = '#272c32'; ctx.fillRect(a, y0 + 3, b - a, gh);                          // girders
+    if (deep) {
+      // A Warren truss: chords top and bottom, diagonals between.
+      ctx.strokeStyle = '#6a737d'; ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(a, y0 + 3.5); ctx.lineTo(b, y0 + 3.5);
+      ctx.moveTo(a, y + TP - 0.5); ctx.lineTo(b, y + TP - 0.5);
+      for (let px = Math.ceil((a - x) / 4) * 4 + x; px < b; px += 4) {
+        const up = ((px - x) / 4) % 2 === 0;
+        ctx.moveTo(px, up ? y0 + 3.5 : y + TP - 0.5); ctx.lineTo(Math.min(b, px + 4), up ? y + TP - 0.5 : y0 + 3.5);
+      }
+      ctx.stroke();
+    }
+  }
+  // Girders under the deck show along its sides (more on the shaded east side), then the deck.
+  fill('#2a2f35', rects(hw + 1.5, 0.8, 0));
+  // A north-south deck shows its truss down the shaded east side and a lit edge on the west.
+  if (arms[0] || arms[2]) {
+    const a = arms[0] ? y : y + c - hw, b = arms[2] ? y + TP : y + c + hw, ex = x + c + hw;
+    ctx.fillStyle = '#23272c'; ctx.fillRect(ex, a, deep ? 5 : 3, b - a);
+    if (deep) {
+      ctx.strokeStyle = '#5f6872'; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(ex + 4.5, a); ctx.lineTo(ex + 4.5, b);
+      for (let py = Math.ceil((a - y) / 4) * 4 + y; py < b; py += 4) { const up = ((py - y) / 4) % 2 === 0; ctx.moveTo(up ? ex : ex + 4.5, py); ctx.lineTo(up ? ex + 4.5 : ex, Math.min(b, py + 4)); }
+      ctx.stroke();
+    }
+    ctx.fillStyle = '#8f969d'; ctx.fillRect(x + c - hw - 1.5, a, 1.5, b - a);
+  }
+  fill(rail ? '#5b5047' : asphalt ? '#34373e' : '#a3a9ae', rects(hw, 0, 0));
+  if (rail) {
+    // Ballast: gravel for the sleepers to sit in.
+    for (let k = 0; k < 14; k++) {
+      const gx = x + hash2(i * 9 + k, j, 301) * TP, gy = y + hash2(i, j * 9 + k, 302) * TP;
+      ctx.fillStyle = k % 2 ? 'rgba(0,0,0,0.25)' : 'rgba(255,235,210,0.14)';
+      ctx.fillRect(gx, gy, 1.5, 1.5);
+    }
+  } else {
+    // Deck plates with seams, and expansion joints where one span meets the next.
+    ctx.fillStyle = asphalt ? 'rgba(255,255,255,0.07)' : 'rgba(40,46,52,0.3)';
+    const along = arms[1] || arms[3];
+    for (let k = 4; k < TP; k += 8) { if (along) ctx.fillRect(x + k, y + c - hw, 1, 2 * hw); else ctx.fillRect(x + c - hw, y + k, 2 * hw, 1); }
+    ctx.fillStyle = 'rgba(20,22,26,0.55)';
+    if (arms[1]) ctx.fillRect(x + TP - 1, y + c - hw, 1, 2 * hw);
+    if (arms[2]) ctx.fillRect(x + c - hw, y + TP - 1, 2 * hw, 1);
+    if (asphalt) {
+      ctx.fillStyle = 'rgba(240,210,110,0.55)';
+      if (arms[1] || arms[3]) for (let k = 2; k < TP; k += 8) if ((arms[3] || k >= c) && (arms[1] || k <= c)) ctx.fillRect(x + k, y + c - 0.5, 4, 1);
+      if (arms[0] || arms[2]) for (let k = 2; k < TP; k += 8) if ((arms[0] || k >= c) && (arms[2] || k <= c)) ctx.fillRect(x + c - 0.5, y + k, 1, 4);
+    }
+  }
+  // Lit north and west edges of the deck.
+  ctx.fillStyle = 'rgba(255,255,255,0.2)';
+  for (const r of rects(hw, 0, 0)) { if (r[2] > r[3] || r[2] === r[3]) ctx.fillRect(r[0], r[1], r[2], 1); if (r[3] >= r[2]) ctx.fillRect(r[0], r[1], 1, r[3]); }
+  // A lower clifftop: the deck's last stretch ramps down onto it.
+  ARM_DIRS.forEach(([di, dj], k) => {
+    if (!arms[k] || !inMap(i + di, j + dj)) return;
+    const u = tIdx(i + di, j + dj);
+    if (S.terrain[u] !== T_GROUND || S.elev[u] >= lv) return;
+    const ex = x + c + di * c, ey = y + c + dj * c;
+    const g = ctx.createLinearGradient(x + c, y + c, ex, ey);
+    g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(1, `rgba(0,0,0,${0.18 + 0.1 * Math.min(3, lv - S.elev[u])})`);
+    ctx.fillStyle = g;
+    if (di) ctx.fillRect(Math.min(x + c, ex), y + c - hw, c, 2 * hw); else ctx.fillRect(x + c - hw, Math.min(y + c, ey), 2 * hw, c);
+    ctx.fillStyle = 'rgba(255,240,210,0.28)'; // grooves across the ramp
+    for (let s = 4; s < c; s += 4) { if (di) ctx.fillRect(x + c + di * s, y + c - hw + 1, 1, 2 * hw - 2); else ctx.fillRect(x + c - hw + 1, y + c + dj * s, 2 * hw - 2, 1); }
+  });
+  // Railings along the open edges: posts with a rail on top, standing up off the deck.
+  const segs = [];
+  const H = (y1, a, b) => segs.push([0, y1, a, b]), V = (x1, a, b) => segs.push([1, x1, a, b]);
+  if (arms[0]) { V(x + c - hw, y, y + c - hw); V(x + c + hw, y, y + c - hw); }
+  if (arms[2]) { V(x + c - hw, y + c + hw, y + TP); V(x + c + hw, y + c + hw, y + TP); }
+  if (arms[1]) { H(y + c - hw, x + c + hw, x + TP); H(y + c + hw, x + c + hw, x + TP); }
+  if (arms[3]) { H(y + c - hw, x, x + c - hw); H(y + c + hw, x, x + c - hw); }
+  if (!arms[0]) H(y + c - hw, x + c - hw, x + c + hw);
+  if (!arms[2]) H(y + c + hw, x + c - hw, x + c + hw);
+  if (!arms[3]) V(x + c - hw, y + c - hw, y + c + hw);
+  if (!arms[1]) V(x + c + hw, y + c - hw, y + c + hw);
+  const railC = rail ? '#c4c0b8' : '#dfe3e8', lift = 2.5;
+  for (const [vert, p, a, b] of segs) {
+    if (b - a < 0.5) continue;
+    if (!vert) {
+      const yy = p + (p < y + c ? 1 : -1);
+      ctx.fillStyle = 'rgba(0,0,0,0.3)'; ctx.fillRect(a, yy + 0.5, b - a, 1);          // its shadow on the deck
+      ctx.fillStyle = '#7d858e';
+      for (let px = Math.ceil((a - x) / 4) * 4 + x; px <= b; px += 4) ctx.fillRect(px - 0.5, yy - lift, 1, lift + 0.5); // posts
+      ctx.fillStyle = railC; ctx.fillRect(a, yy - lift - 0.5, b - a, 1.3);               // top rail
+    } else {
+      const xx = p + (p < x + c ? 1 : -1.5);
+      ctx.fillStyle = 'rgba(0,0,0,0.3)'; ctx.fillRect(xx + 1, a + 1, 1, b - a);
+      ctx.fillStyle = '#7d858e';
+      for (let py = Math.ceil((a - y) / 4) * 4 + y; py <= b; py += 4) ctx.fillRect(xx - 0.5, py - lift, 1.5, lift + 0.5);
+      ctx.fillStyle = railC; ctx.fillRect(xx, a - lift, 1.3, b - a);
+    }
+  }
+  ctx.restore();
+}
+
+/** Every bridge tile on the map (kept until roads or rail change). */
+function bridgeList() {
+  const ver = (S.roadVer || 0) + '/' + (S.railVer || 0);
+  if (R.bridges && R.bridges.ver === ver && R.bridges.of === S) return R.bridges.list;
+  const list = [];
+  for (let t = 0; t < S.W * S.H; t++) if (onBridge(t)) list.push(t);
+  R.bridges = { ver, of: S, list };
+  return list;
+}
+
+/**
+ * The tall parts of bridges, drawn each frame over the map but under bots and buildings: piers
+ * dropping from the deck deep into the canyon (or a short way into the water), and, on canyon
+ * spans of three tiles or more, a tower at each end hung with suspension cables and hangers that
+ * meet at mid-span. The deck stays level: heights here are drawn straight up the screen.
+ */
+function drawBridgeRigging(ctx, ox, oy, z, inView) {
+  const list = bridgeList();
+  if (!list.length) return;
+  const W = S.W, u = z / TP;
+  const towers = [];
+  for (const t of list) {
+    const i = t % W, j = (t / W) | 0;
+    if (!inView(i, j, 6)) continue;
+    const arms = bridgeArms(i, j, t), deep = S.terrain[t] === T_CHASM, hw = (S.road[t] ? 9 : 10) * u;
+    const x = ox + i * z, y = oy + j * z, cx = x + z / 2;
+    const below = inMap(i, j + 1) ? tIdx(i, j + 1) : -1;
+    const ew = arms[1] || arms[3] || !arms.some(Boolean);
+    // Piers below a deck whose south side is open (every other tile along a straight run).
+    if (ew && !arms[2] && below >= 0 && bridgeable(below) && !onBridge(below) && (i % 2 === 0 || !(arms[1] && arms[3]))) {
+      if (deep) {
+        const len = z * 1.15;
+        for (const s of [-1, 1]) {
+          const px = cx + s * 5 * u - 2 * u;
+          const g = ctx.createLinearGradient(0, y + z, 0, y + z + len);
+          g.addColorStop(0, '#6c747d'); g.addColorStop(0.55, 'rgba(48,46,46,0.75)'); g.addColorStop(1, 'rgba(14,10,9,0)');
+          ctx.fillStyle = g; ctx.fillRect(px, y + z, 4 * u, len);
+          ctx.fillStyle = 'rgba(255,240,215,0.18)'; ctx.fillRect(px, y + z, 1 * u, len * 0.6); // lit west side
+        }
+        // Cross-bracing between the two columns.
+        ctx.strokeStyle = 'rgba(110,118,128,0.8)'; ctx.lineWidth = Math.max(1, u);
+        ctx.beginPath();
+        for (const k of [0, 1]) {
+          const a = y + z + (2 + k * 9) * u, b = a + 8 * u;
+          ctx.moveTo(cx - 3 * u, a); ctx.lineTo(cx + 3 * u, b); ctx.moveTo(cx + 3 * u, a); ctx.lineTo(cx - 3 * u, b);
+        }
+        ctx.stroke();
+      } else {
+        ctx.fillStyle = '#5c646d'; ctx.fillRect(cx - 4 * u, y + z, 8 * u, 6 * u);
+        ctx.fillStyle = 'rgba(255,255,255,0.15)'; ctx.fillRect(cx - 4 * u, y + z, 2 * u, 6 * u);
+        ctx.strokeStyle = 'rgba(220,240,240,0.35)'; ctx.lineWidth = Math.max(1, u);
+        ctx.beginPath(); ctx.ellipse(cx, y + z + 6 * u, 7 * u, 2 * u, 0, 0, Math.PI * 2); ctx.stroke();
+      }
+    }
+    if (!deep) continue;
+    // Towers: at a canyon span's landing ends, where the span runs straight on for 3+ tiles.
+    ARM_DIRS.forEach(([di, dj], k) => {
+      if (!arms[k] || !inMap(i + di, j + dj) || S.terrain[tIdx(i + di, j + dj)] !== T_GROUND) return;
+      let L = 1, ci = i, cj = j, landed = false;
+      while (L < 40) {
+        const ni = ci - di, nj = cj - dj;
+        if (!inMap(ni, nj)) break;
+        const nt = tIdx(ni, nj);
+        if (!bridgeArms(ci, cj, tIdx(ci, cj))[ARM_DIRS.findIndex(([a, b]) => a === -di && b === -dj)]) break;
+        if (S.terrain[nt] === T_GROUND) { landed = true; break; }
+        if (!onBridge(nt)) break;
+        ci = ni; cj = nj; L++;
+      }
+      if (L < 3) return;
+      towers.push({ x: cx, y: y + z / 2, di, dj, L, landed, hw });
+    });
+  }
+  // Back towers first (the north and west ones), so nearer ones stand in front.
+  towers.sort((a, b) => a.y - b.y);
+  for (const tw of towers) {
+    const ax = -tw.di, ay = -tw.dj;            // along the span, out from the landing
+    const pxv = -ay, pyv = ax;                 // across it
+    const bx = tw.x - ax * (z / 2 - 5 * u), by = tw.y - ay * (z / 2 - 5 * u);
+    const Ht = z * 0.75, hMin = z * 0.1, D = tw.L * z / 2 - 5 * u;
+    const sides = [-1, 1].map((s) => ({ x: bx + pxv * s * (tw.hw + 1.5 * u), y: by + pyv * s * (tw.hw + 1.5 * u) })).sort((a, b) => a.y - b.y);
+    // Cables and hangers to mid-span (the far tower draws the other half).
+    if (tw.landed) {
+      for (const p of sides) {
+        const at = (s) => ({ x: p.x + ax * D * s, y: p.y + ay * D * s, h: hMin + (Ht - hMin) * (1 - s) * (1 - s) });
+        ctx.strokeStyle = 'rgba(205,212,220,0.55)'; ctx.lineWidth = Math.max(0.75, 0.6 * u);
+        ctx.beginPath();
+        for (let s = 0.12; s < 1; s += 0.5 / tw.L) { const q = at(s); ctx.moveTo(q.x, q.y - q.h); ctx.lineTo(q.x, q.y); }
+        ctx.stroke();
+        ctx.strokeStyle = '#d9dee4'; ctx.lineWidth = Math.max(1, 1.3 * u);
+        ctx.beginPath();
+        for (let k = 0; k <= 16; k++) { const q = at(k / 16); if (k) ctx.lineTo(q.x, q.y - q.h); else ctx.moveTo(q.x, q.y - q.h); }
+        ctx.stroke();
+      }
+    }
+    // The two legs, then the portal beams across their tops.
+    for (const p of sides) {
+      const g = ctx.createLinearGradient(p.x - 2 * u, 0, p.x + 2 * u, 0);
+      g.addColorStop(0, '#c9ced4'); g.addColorStop(1, '#5d656e');
+      ctx.fillStyle = 'rgba(0,0,0,0.3)'; ctx.fillRect(p.x - 1.5 * u, p.y - 1 * u, 5 * u, 3 * u);
+      ctx.fillStyle = g; ctx.fillRect(p.x - 2 * u, p.y - Ht, 4 * u, Ht);
+      ctx.fillStyle = '#e9edf1'; ctx.fillRect(p.x - 2.5 * u, p.y - Ht - 1.5 * u, 5 * u, 2 * u);
+    }
+    ctx.strokeStyle = '#9aa2ab'; ctx.lineWidth = Math.max(1.5, 2.2 * u);
+    ctx.beginPath();
+    for (const f of [1, 0.62]) { ctx.moveTo(sides[0].x, sides[0].y - Ht * f); ctx.lineTo(sides[1].x, sides[1].y - Ht * f); }
+    ctx.stroke();
+    // A red warning lamp on each tower top, blinking slowly.
+    if (Math.sin(R.time * 2.4 + tw.x * 0.01) > -0.2) {
+      ctx.fillStyle = 'rgba(255,70,60,0.9)';
+      for (const p of sides) { ctx.beginPath(); ctx.arc(p.x, p.y - Ht - 2 * u, 1.3 * u + 0.5, 0, Math.PI * 2); ctx.fill(); }
+    }
+  }
+}
+
+/**
+ * A bridge (road over water or a canyon: drawn by drawBridge) or a tunnel (road through rock:
  * a dark bore with lamps, and a concrete portal where it comes out of the crags).
  */
 function drawCrossing(ctx, i, j, x, y, t) {
-  const c = TP / 2, water = S.terrain[t] === T_WATER;
+  const c = TP / 2;
+  if (S.terrain[t] !== T_ROCK) { drawBridge(ctx, i, j, x, y, t, false); drawRoadArrow(ctx, t, x, y); return; }
   const sides = [[0, -1], [1, 0], [0, 1], [-1, 0]];
   const nb = sides.map(([di, dj]) => inMap(i + di, j + dj) && S.road[tIdx(i + di, j + dj)] > 0 && canStep(t, tIdx(i + di, j + dj)));
   const shape = (w, ox, oy) => {
@@ -971,24 +1300,7 @@ function drawCrossing(ctx, i, j, x, y, t) {
     if (nb[3]) ctx.fillRect(x + ox, y + c - w / 2 + oy, c, w);
   };
   const asphalt = S.pave[t] === 2;
-  if (water) {
-    ctx.fillStyle = 'rgba(0,18,28,0.38)'; shape(20, 2, 4);              // shadow on the water
-    ctx.fillStyle = '#2f353c'; shape(20, 0, 0);                         // girders
-    ctx.fillStyle = asphalt ? '#34373e' : '#9aa1a8'; shape(14, 0, 0);   // deck
-    ctx.fillStyle = asphalt ? 'rgba(255,255,255,0.08)' : 'rgba(40,46,52,0.35)';
-    const along = nb[1] || nb[3];
-    for (let k = 3; k < TP; k += 5) { if (along) ctx.fillRect(x + k, y + c - 7, 1, 14); else ctx.fillRect(x + c - 7, y + k, 14, 1); }
-    // Railings on both edges of the deck, with posts.
-    ctx.fillStyle = '#d9dde2';
-    const rail = (vertical, off) => {
-      if (vertical) { ctx.fillRect(x + c + off, y + (nb[0] ? 0 : c - 9), 1.5, (nb[0] ? c : 9) + (nb[2] ? c : 9)); }
-      else { ctx.fillRect(x + (nb[3] ? 0 : c - 9), y + c + off, (nb[3] ? c : 9) + (nb[1] ? c : 9), 1.5); }
-    };
-    if (nb[0] || nb[2] || !(nb[1] || nb[3])) { rail(true, -9); rail(true, 7.5); }
-    if (nb[1] || nb[3]) { rail(false, -9); rail(false, 7.5); }
-    ctx.fillStyle = '#5c646d'; // piers
-    if (!(nb[0] && nb[2]) && !(nb[1] && nb[3])) ctx.fillRect(x + c - 3, y + c + 8, 6, 3);
-  } else {
+  {
     ctx.fillStyle = 'rgba(8,5,3,0.78)'; shape(18, 0, 0);                // the bore
     ctx.fillStyle = asphalt ? '#26282d' : '#4b4e54'; shape(10, 0, 0);   // roadway
     ctx.fillStyle = 'rgba(255,214,120,0.85)';                           // lamps
@@ -1360,6 +1672,23 @@ function drawBuilding(ctx, type, cx, cy, s, owner, b) {
       break;
     }
     case 'nest': { drawNest(ctx, cx, cy, s, b); break; }
+    case 'station': {
+      // A platform with a canopy beside the track, crates stacked under it and the team colour on the roof.
+      hullBase(ctx, cx, cy, s, color);
+      ctx.fillStyle = '#9aa1ab';
+      ctx.fillRect(cx - 12 * u, cy - 3 * u, 24 * u, 12 * u);
+      ctx.fillStyle = '#c99a66';
+      for (const [bx, by] of [[-9, 0], [-4, 0], [-9, 4]]) ctx.fillRect(cx + bx * u, cy + by * u, 4 * u, 3.5 * u);
+      ctx.fillStyle = '#3c4148';
+      ctx.fillRect(cx - 13 * u, cy - 11 * u, 26 * u, 7 * u);
+      ctx.fillStyle = color;
+      ctx.fillRect(cx - 13 * u, cy - 11 * u, 26 * u, 2 * u);
+      ctx.strokeStyle = '#3c4148'; ctx.lineWidth = 1.6 * u;
+      ctx.beginPath(); ctx.moveTo(cx - 11 * u, cy - 4 * u); ctx.lineTo(cx - 11 * u, cy + 9 * u); ctx.moveTo(cx + 11 * u, cy - 4 * u); ctx.lineTo(cx + 11 * u, cy + 9 * u); ctx.stroke();
+      ctx.fillStyle = '#ffd166';
+      ctx.fillRect(cx + 3 * u, cy + 2 * u, 7 * u, 2 * u);
+      break;
+    }
     case 'crawlerbase': { drawCrawler(ctx, -Math.PI / 2, cx, cy, s, owner, true, 0, working); break; }
     case 'ropeway': {
       // A lattice pylon on a concrete footing, with the bull wheel the cable runs round on top.
@@ -1792,6 +2121,92 @@ function drawSite(ctx, type, cx, cy, s, owner, b) {
 /* ------------------------------------------------------------------ bots */
 
 /**
+ * Railway track on the baked map: sleepers and two rails toward every joined neighbour (a level
+ * crossing over a road keeps the road showing between the rails).
+ */
+function drawRail(ctx, i, j, x, y, t) {
+  const dirs = [];
+  for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+    if (!inMap(i + di, j + dj)) continue;
+    if (railStep(t, tIdx(i + di, j + dj))) dirs.push([di, dj]);
+  }
+  if (!dirs.length) dirs.push([1, 0], [-1, 0]);
+  const c = TP / 2, road = S.road[t];
+  for (const [di, dj] of dirs) {
+    // Sleepers across the half-tile toward this neighbour.
+    ctx.fillStyle = road ? 'rgba(70,74,82,0.85)' : bridgeable(t) ? '#33271e' : '#5e4a3a';
+    for (let k = 0; k < 3; k++) {
+      const f = (k + 0.5) / 3 * 0.5;
+      const sx = x + c + di * TP * f, sy = y + c + dj * TP * f;
+      if (di) ctx.fillRect(sx - 2, y + c - 9, 4, 18); else ctx.fillRect(x + c - 9, sy - 2, 18, 4);
+    }
+  }
+  for (const [di, dj] of dirs) {
+    for (const off of [-5.5, 5.5]) {
+      ctx.strokeStyle = 'rgba(20,20,24,0.55)'; ctx.lineWidth = 3;
+      ctx.beginPath();
+      if (di) { ctx.moveTo(x + c, y + c + off + 1); ctx.lineTo(x + c + di * c, y + c + off + 1); } else { ctx.moveTo(x + c + off + 1, y + c); ctx.lineTo(x + c + off + 1, y + c + dj * c); }
+      ctx.stroke();
+      ctx.strokeStyle = '#c9ced6'; ctx.lineWidth = 2;
+      ctx.beginPath();
+      if (di) { ctx.moveTo(x + c, y + c + off); ctx.lineTo(x + c + di * c, y + c + off); } else { ctx.moveTo(x + c + off, y + c); ctx.lineTo(x + c + off, y + c + dj * c); }
+      ctx.stroke();
+    }
+  }
+}
+
+/**
+ * A Freight Train: a locomotive and four wagons, each wagon following the track the locomotive took
+ * (the same trail as a Road Train's trailers). The load is spread over the wagons.
+ */
+function drawFreightTrain(ctx, u, sx, sy, s) {
+  const color = PLAYER_COLORS[u.owner];
+  const trails = R.trails || (R.trails = new Map());
+  let tr = trails.get(u.id);
+  if (!tr) { tr = [{ x: u.x, y: u.y }]; for (let k = 1; k <= 12; k++) tr.push({ x: u.x - Math.cos(u.face || 0) * k * 0.3, y: u.y - Math.sin(u.face || 0) * k * 0.3 }); trails.set(u.id, tr); }
+  if (dist2(tr[0].x, tr[0].y, u.x, u.y) > 0.0025) tr.unshift({ x: u.x, y: u.y });
+  let len = 0;
+  for (let k = 1; k < tr.length; k++) { len += Math.sqrt(dist2(tr[k - 1].x, tr[k - 1].y, tr[k].x, tr[k].y)); if (len > 3.6) { tr.length = k + 1; break; } }
+  const at = (d) => {
+    let acc = 0;
+    for (let k = 1; k < tr.length; k++) {
+      const a = tr[k - 1], b = tr[k], l = Math.sqrt(dist2(a.x, a.y, b.x, b.y));
+      if (acc + l >= d && l > 0) { const f = (d - acc) / l; return { x: a.x + (b.x - a.x) * f, y: a.y + (b.y - a.y) * f }; }
+      acc += l;
+    }
+    const e = tr[tr.length - 1];
+    return { x: e.x, y: e.y };
+  };
+  const n = u.carry ? u.carryN || 1 : 0;
+  const car = (d, loco, load) => {
+    const p = at(d), f = at(Math.max(0, d - 0.25)), b = at(d + 0.25);
+    const ang = Math.atan2(f.y - b.y, f.x - b.x);
+    const x = sx + (p.x - u.x) * s, y = sy + (p.y - u.y) * s, Lc = s * 0.62, Wc = s * 0.32;
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.fillStyle = 'rgba(20,10,5,0.3)';
+    ctx.beginPath(); ctx.ellipse(s * 0.03, s * 0.05, Lc * 0.55, Wc * 0.6, ang, 0, Math.PI * 2); ctx.fill();
+    ctx.rotate(ang);
+    ctx.fillStyle = '#2b2f36';
+    roundRect(ctx, -Lc / 2, -Wc / 2, Lc, Wc, s * 0.04); ctx.fill();
+    if (loco) {
+      ctx.fillStyle = '#5a616b'; roundRect(ctx, -Lc / 2 + s * 0.03, -Wc / 2 + s * 0.03, Lc * 0.62, Wc - s * 0.06, s * 0.03); ctx.fill();
+      ctx.fillStyle = color; roundRect(ctx, Lc * 0.12, -Wc / 2, Lc * 0.38, Wc, s * 0.05); ctx.fill();
+      ctx.fillStyle = '#16212b'; ctx.fillRect(Lc * 0.36, -Wc * 0.34, Lc * 0.08, Wc * 0.68);
+      ctx.fillStyle = '#fff6b0'; ctx.beginPath(); ctx.arc(Lc / 2, 0, s * 0.03, 0, Math.PI * 2); ctx.fill();
+    } else {
+      ctx.fillStyle = '#5a616b'; ctx.fillRect(-Lc / 2 + s * 0.03, -Wc / 2 + s * 0.03, Lc - s * 0.06, Wc - s * 0.06);
+      ctx.fillStyle = color; ctx.fillRect(-Lc / 2 + s * 0.03, -Wc / 2 + s * 0.02, Lc - s * 0.06, s * 0.02);
+    }
+    ctx.restore();
+    if (load > 0) drawTruckCargo(ctx, { carry: u.carry, carryN: load, face: ang }, x, y, -Lc / 2 + s * 0.05, Lc - s * 0.1, Wc - s * 0.08, s);
+  };
+  // Wagons back to front, then the locomotive on top.
+  for (let k = 4; k >= 1; k--) car(k * 0.68, false, Math.max(0, Math.min(8, Math.ceil((n - (k - 1) * 10) * 0.8))));
+  car(0, true, 0);
+}
+
+/**
  * A Crawler: a colossal tracked hull with a cab at the front, a cargo deck and a mast. On the move
  * its treads roll (odo); deployed it stands on four outrigger legs with charging pads lit on its deck.
  */
@@ -1971,6 +2386,7 @@ function drawCritter(ctx, u, x, y, s) {
 
 function drawBot(ctx, u, sx, sy, s) {
   if (BOTS[u.type].wild) { drawCritter(ctx, u, sx, sy, s); return; }
+  if (BOTS[u.type].rail) { drawFreightTrain(ctx, u, sx, sy, s); return; }
   if (BOTS[u.type].train) { drawRoadTrain(ctx, u, sx, sy, s); return; }
   if (BOTS[u.type].crawler) { drawCrawler(ctx, u.face || 0, sx, sy, s, u.owner, false, u.odo || 0); return; }
   const color = PLAYER_COLORS[u.owner];
@@ -2381,6 +2797,7 @@ function render(dtReal) {
   }
   ctx.setLineDash([]);
   ctx.globalAlpha = 1;
+  drawBridgeRigging(ctx, ox, oy, z, inView);
 
   // Placement overlay
   if (R.mode === 'place' && R.overlay) {
@@ -2740,7 +3157,25 @@ function drawLights(ctx, ox, oy, z, inView) {
  */
 function drawDraft(ctx, ox, oy, z, inView) {
   const d = typeof UI !== 'undefined' && UI.draft;
-  if (!d || (!d.add.length && !d.del.size && !d.ramps.size && !(d.walls && d.walls.size))) return;
+  if (!d || (!d.add.length && !d.del.size && !d.ramps.size && !(d.walls && d.walls.size) && !(d.rail && d.rail.size) && !(d.railDel && d.railDel.size))) return;
+  // Planned track: pale sleepers; track marked to take up: a red cross.
+  if (d.rail) for (const t of d.rail) {
+    const i = t % S.W, j = (t / S.W) | 0;
+    if (!inView(i, j, 1) || S.rail[t]) continue;
+    const x = ox + i * z, y = oy + j * z;
+    ctx.fillStyle = 'rgba(255,214,140,0.35)';
+    ctx.fillRect(x + z * 0.1, y + z * 0.1, z * 0.8, z * 0.8);
+    ctx.strokeStyle = '#ffd68c'; ctx.lineWidth = Math.max(1.5, z * 0.05);
+    ctx.strokeRect(x + z * 0.1, y + z * 0.1, z * 0.8, z * 0.8);
+    ctx.beginPath(); ctx.moveTo(x + z * 0.3, y + z * 0.5); ctx.lineTo(x + z * 0.7, y + z * 0.5); ctx.moveTo(x + z * 0.5, y + z * 0.3); ctx.lineTo(x + z * 0.5, y + z * 0.7); ctx.stroke();
+  }
+  if (d.railDel) for (const t of d.railDel) {
+    const i = t % S.W, j = (t / S.W) | 0;
+    if (!inView(i, j, 1)) continue;
+    const x = ox + i * z, y = oy + j * z;
+    ctx.strokeStyle = '#ff5a6e'; ctx.lineWidth = Math.max(2, z * 0.08);
+    ctx.beginPath(); ctx.moveTo(x + z * 0.25, y + z * 0.25); ctx.lineTo(x + z * 0.75, y + z * 0.75); ctx.moveTo(x + z * 0.75, y + z * 0.25); ctx.lineTo(x + z * 0.25, y + z * 0.75); ctx.stroke();
+  }
   // Planned Walls (grey blocks) and Gates (a gap with a striped bar).
   if (d.walls) for (const [t, kind] of d.walls) {
     const i = t % S.W, j = (t / S.W) | 0;
@@ -3302,7 +3737,7 @@ function buildingIcon(type, size, owner) {
 const MM = { canvas: null, ctx: null, base: null, baseCtx: null, dirty: true, ver: -1, builtAt: -9, w: 0, h: 0, on: true };
 
 const MM_COLORS = {
-  ground: [169, 113, 74], water: [28, 75, 93], rock: [74, 51, 41], ramp: [235, 205, 150],
+  ground: [169, 113, 74], water: [28, 75, 93], rock: [74, 51, 41], ramp: [235, 205, 150], chasm: [18, 12, 10],
   [R_STALK]: [47, 174, 134], [R_BOULDER]: [160, 154, 145], [R_ORE]: [235, 120, 50], [R_CRYSTAL]: [150, 105, 245],
   [R_CROP]: [255, 92, 138], [R_OIL]: [22, 18, 15], [R_URANIUM]: [157, 255, 58], fertile: [92, 98, 40],
 };
@@ -3335,7 +3770,7 @@ function rebuildMinimapBase() {
   const team = PLAYER_COLORS.map((c) => [parseInt(c.slice(1, 3), 16), parseInt(c.slice(3, 5), 16), parseInt(c.slice(5, 7), 16)]);
   for (let t = 0; t < S.W * S.H; t++) {
     const terr = S.terrain[t];
-    let c = terr === T_WATER ? MM_COLORS.water : terr === T_ROCK ? MM_COLORS.rock : S.res[t] ? MM_COLORS[S.res[t]] : S.ramp[t] ? MM_COLORS.ramp
+    let c = terr === T_WATER ? MM_COLORS.water : terr === T_CHASM ? MM_COLORS.chasm : terr === T_ROCK ? MM_COLORS.rock : S.res[t] ? MM_COLORS[S.res[t]] : S.ramp[t] ? MM_COLORS.ramp
       : S.fert && S.fert[t] ? MM_COLORS.fertile : MM_COLORS.ground;
     if (terr === T_GROUND && !S.res[t] && !S.ramp[t]) {
       // Higher ground is lighter.

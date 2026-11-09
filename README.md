@@ -11,7 +11,7 @@ how goods move.
   **Players: Free-for-all · 3** adds a second rival (red and green): a round planet with the three starts 120° apart
   (player 0's third is generated and turned round onto the others, resources placed tile for tile so each third
   has as many). Capturing a Command Base hands over everything its owner built (`eliminate`); the last colony
-  standing wins. Standard, Islands, Crater and Plateaus maps (`ffa: true` in `SHAPE_PRESETS`); the green team's
+  standing wins. Standard, Islands, Crater, Plateaus and Sky islands maps (`ffa: true` in `SHAPE_PRESETS`); the green team's
   art is the red team's recoloured at run time (`recolorArt`), and each AI fights its nearest rival (`rivalOf`).
 - **Colony:** no rival. Settle the planet at your own pace, with colonization milestones. Free play has the full
   building roster, missiles and nuclear silos included, to experiment with, plus the **Research Lab** and optional
@@ -20,7 +20,7 @@ how goods move.
   levels. All of them are open from the start; finishing one ticks it off at that difficulty.
 
 Before each game, sliders set the **map size** (Small to Huge), the **terrain** (Flat, Gentle,
-Rolling, Rugged, Mountainous), the **resources** (Scarce to Abundant), the **map shape** (Standard, Long haul, Chokepoint, Islands, Crater or Plateaus), the
+Rolling, Rugged, Mountainous), the **resources** (Scarce to Abundant), the **map shape** (Standard, Long haul, Chokepoint, Islands, Crater, Plateaus or Sky islands), the
 **biome** (Red desert, Jungle or Polar: scenery only, with plants that roads and buildings clear), the **rival style**,
 an optional **Nuclear race**, **Planet events** (on by default) and, in Colony, **Wildlife** (on by default). Resources come in separate
 fields: your landing zone has a little of everything, and the rich fields beyond it are worth fighting for.
@@ -116,8 +116,11 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
   through it drops back to plain road. On a busy trunk road that's every 8–10 minutes. Tap any of your roads to see its
   wear and mark it. Removing a road refunds its Cement.
 - **Bridges and tunnels:** roads stop at water and rocky crags. The **Bridges** tool in Paths plans roads across them:
-  a bridge costs 2 Cement and 1 Alloy a tile, a tunnel 3 Cement and 1 Alloy. Workers build them out from the shore or rock
-  face (6–8 s a tile), and they join land on any level. Lay road routes use them only when going round is much longer.
+  a bridge costs 2 Cement and 1 Alloy a tile, a tunnel 3 Cement and 1 Alloy, a Sky bridge over a canyon 3 Cement and
+  1 Alloy (`CROSS` in `js/defs.js`; `bridgeable`). Workers build them out from the shore or rock face (6–9 s a tile), and
+  they join land on any level. A bridge is drawn as one level span at the height of the highest clifftop it lands on
+  (`deckLevel` in `js/render.js`), ramping down at a lower end; its piers, end towers and suspension cables reach past
+  the tile, so `drawBridgeRigging` draws them each frame over the map. Lay road routes use them only when going round is much longer.
   A bridge can be pushed out over water past your border, a tile at a time from your land or a bridge (`bridgeHead`).
 - **Junctions, traffic lights and overpasses:** where three or four roads meet, bots slow down and give way to traffic
   already crossing. Switch the Paths banner to **Junctions** and tap a junction to put up a traffic light (1 Alloy): it
@@ -146,6 +149,16 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
   the far one goes up (`b.link` both ways). To the pathfinder a ride is an extra edge between the station tiles
   (`ROPE_COST` × a paved road of that length); zones and the road network join across it (`roadNet().comp`), but not for
   trucks (`compT`, `truckLinked`, `routeOpts.noRope`). Riders move at `ROPE_SPEED` (`u.ride`) and are drawn in gondolas.
+- **Freight rail** (`RAIL_*` in `js/defs.js`; the rail section of `js/world.js`; `layRail`, `deliverTrain` in
+  `js/sim.js`): track is a tile layer (`S.rail`), laid instantly from the Paths **Rail** tool (`RAIL_COST` a tile,
+  `RAIL_BRIDGE_COST` over water or canyon), level except on bridges (`railStep`). Rail Stations stand beside the track;
+  their platforms are the track tiles next to them (`railPlatforms`), and `railNet` groups stations by line. Freight
+  Trains (48 goods) take the dispatch role `'rail'`: trunk runs from a far station to the home station and supply orders
+  between stations on one line, `RAIL_MIN_LOAD` (10) or more; `railRoute` plans along the track. Road bots wait at a
+  level crossing while a train is near (`trainNear`, `RAIL_CROSS_HOLD`). Trains never need charging.
+- **Crawlers** (`updateCrawler`, `deployCrawler`, `packCrawler`): a slow tracked bot that drives off-road and deploys
+  into the `crawlerbase` building (store, 4-slot charger burning its Fuel, Outpost territory, garrison 4). Packing up
+  turns it back into a bot carrying the store's goods (`u.cargo`); if it's destroyed on the move they spill as loot.
 - **Driving:** bots accelerate away from stops and brake for corners, junctions, red lights and the end of a trip
   (`BOT_ACCEL`, `BOT_BRAKE`, `BOT_CORNER` in `js/defs.js`; trucks have their own, slower values).
 - **Frontier riches:** boulders, ore, crystal and oil hold more the further they are from the bases, up to 2.2× in the
@@ -157,6 +170,8 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
   **Crater** sinks a crater one cliff below a rim in the middle, its floor holding rich fields (and Uranium in a
   Nuclear race), with one natural ramp in from each side. **Plateaus** stands each base on the top level, with a
   terrace one level down all round and only two natural slopes off it. Both force at least three levels.
+  **Sky islands** (`sky: true`) is Islands with the sea turned into bottomless canyons (`T_CHASM`) and each island
+  lifted (the middle one two levels, islets one); Sky bridges, Ropeways and rail bridges are the ways across.
 - **Loitering:** a warbot standing still in another player's territory for more than `BATTERY.waitGrace` (15 s) drains
   `BATTERY.warbotWait` a second; once flat it gives up its attack, or leaves its rally flag, to recharge at home.
 - **Raids:** armed warbots holding a rally flag in enemy land with nothing to fight tear up enemy roads (not bridges or

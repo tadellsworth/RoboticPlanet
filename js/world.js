@@ -612,6 +612,23 @@ function generateMap(seed, W, H, cfg) {
     amt[t] = clamp(Math.round(RES[res[t]].amount * RPR.amount * rich), 1, 255);
   }
   const grow = new Float32Array(N).fill(1);
+  // Sky islands: no water anywhere: the sea becomes deep, sheer canyons, and the islands stand at
+  // different heights: the middle one highest, the islets a level up (the same for every player:
+  // they're mirrored or turned). Inland pools become canyon too.
+  if (SH.sky) {
+    for (let t = 0; t < N; t++) if (terrain[t] === T_WATER) { terrain[t] = T_CHASM; res[t] = R_NONE; }
+    const lab = new Int32Array(N).fill(-1), span = Math.min(W, H);
+    for (let t = 0; t < N; t++) {
+      if (terrain[t] === T_CHASM || lab[t] >= 0) continue;
+      const q = [t];
+      lab[t] = t;
+      let sx = 0, sy = 0;
+      for (let h = 0; h < q.length; h++) { const a = q[h]; sx += a % W; sy += (a / W) | 0; orth(a, (u) => { if (lab[u] < 0 && terrain[u] !== T_CHASM) { lab[u] = t; q.push(u); } }); }
+      const cx = sx / q.length, cy = sy / q.length;
+      const lift = dist(cx, cy, ccx, ccy) < span * 0.2 ? 2 : q.length < 70 ? 1 : 0;
+      if (lift) for (const a of q) elev[a] = Math.min(elev[a] + lift, 6);
+    }
+  }
   for (let t = 0; t < N; t++) if (terrain[t] !== T_GROUND) fert[t] = 0;
   return { terrain, res, amt, grow, elev, ramp, fert, bases };
 }
@@ -684,7 +701,7 @@ function newGame(opts) {
   S = {
     v: 1, mode, seed, W, H, settings, difficulty: diff, time: 0, nextId: 1, winner: -1, milestone: 0,
     terrain: m.terrain, res: m.res, amt: m.amt, grow: m.grow, elev: m.elev, ramp: m.ramp, fert: m.fert,
-    road: new Uint8Array(W * H), pave: new Uint8Array(W * H), wear: new Uint16Array(W * H), paveMark: new Uint8Array(W * H), oneRoad: true, roadVer: 0, lights: {}, over: {}, scorch: {},
+    road: new Uint8Array(W * H), rail: new Uint8Array(W * H), pave: new Uint8Array(W * H), wear: new Uint16Array(W * H), paveMark: new Uint8Array(W * H), oneRoad: true, roadVer: 0, lights: {}, over: {}, scorch: {},
     plan: new Uint8Array(W * H), planVer: 0, paveRes: {},
     owner: new Int8Array(W * H).fill(-1),
     resRes: new Uint8Array(W * H),
@@ -1102,6 +1119,8 @@ function canPlace(owner, type, i, j, skipBlockCheck) {
   } else if (S.res[t]) return { ok: false, reason: 'Clear the resources here first.' };
   if (S.bAt[t]) return { ok: false, reason: 'There is already a building here.' };
   if (def.colony && (S.mode !== 'colony' || S.mission)) return { ok: false, reason: 'Only in Colony free play.' };
+  if (S.rail && S.rail[t]) return { ok: false, reason: 'There is railway track here.' };
+  if (def.station && !railPlatforms(i, j).length) return { ok: false, reason: 'A Rail Station goes right beside the track: lay rail first (Paths, Rail).' };
   if (S.wildlife) for (const e of S.buildings) {
     if (!e.dead && BDEFS[e.type].wild && Math.max(Math.abs(e.x - i), Math.abs(e.y - j)) <= WILD.clear) return { ok: false, reason: 'Too close to a creature nest: clear it with warbots first.' };
   }
@@ -1253,7 +1272,7 @@ function canRoad(owner, i, j) {
   const t = tIdx(i, j);
   if (S.bAt[t] || S.resRes[t] || scorched(t)) return false;
   if (S.owner[t] === owner) return true;
-  return S.terrain[t] === T_WATER && bridgeHead(owner, i, j);
+  return bridgeable(t) && bridgeHead(owner, i, j);
 }
 
 /** Does water tile (i, j) touch `owner`'s land, a bridge, or a bridge tile `owner` has planned (or `extra(t)`)? */
@@ -1261,7 +1280,7 @@ function bridgeHead(owner, i, j, extra) {
   for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
     if (!inMap(i + di, j + dj)) continue;
     const u = tIdx(i + di, j + dj);
-    if (S.owner[u] === owner || (S.terrain[u] === T_WATER && (S.road[u] || S.plan[u] === owner + 1)) || (extra && extra(u))) return true;
+    if (S.owner[u] === owner || (bridgeable(u) && (S.road[u] || S.plan[u] === owner + 1)) || (extra && extra(u))) return true;
   }
   return false;
 }
@@ -1318,6 +1337,7 @@ function setRoad(i, j, on) {
   S.roadVer = (S.roadVer || 0) + 1;
   markDirty(i, j);
   for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) if (inMap(i + di, j + dj)) markDirty(i + di, j + dj);
+  dirtySpan(t);
 }
 
 /** Set an existing road tile's surface: 1 road, 2 asphalt (fresh). */
@@ -1349,6 +1369,15 @@ function setRoadDir(i, j, v) {
 }
 
 function markDirty(i, j) { S.dirtyTiles.push(tIdx(i, j)); }
+
+/** A bridge is drawn as one level span (see deckLevel), so a change at either end repaints all of it. */
+function dirtySpan(t) {
+  const W = S.W, N = W * S.H, seen = new Set(), q = [];
+  const add = (u) => { if (u >= 0 && u < N && !seen.has(u) && bridgeable(u) && (S.road[u] || (S.rail && S.rail[u]))) { seen.add(u); q.push(u); } };
+  const around = (a) => { const i = a % W; add(a); if (i > 0) add(a - 1); if (i < W - 1) add(a + 1); add(a - W); add(a + W); };
+  around(t);
+  for (let h = 0; h < q.length && h < 400; h++) { const a = q[h]; markDirty(a % W, (a / W) | 0); around(a); }
+}
 
 /** How a Roadworks chooses roads: 'marked' (the roads marked in Paths) or 'all' joined to it. */
 function paveMode(b) { return b.pmode || (S.players[b.owner].ai ? 'all' : 'marked'); }
@@ -1721,7 +1750,7 @@ const SAVE_KEY = 'botfall.save.v1'; // the game's first name: kept so saves carr
 const TYPED_FIELDS = {
   terrain: Uint8Array, res: Uint8Array, amt: Uint8Array, grow: Float32Array, road: Uint8Array, owner: Int8Array,
   resRes: Uint8Array, elev: Uint8Array, ramp: Uint8Array, fert: Uint8Array, pave: Uint8Array, plan: Uint8Array,
-  wear: Uint16Array, paveMark: Uint8Array, decor: Uint8Array,
+  wear: Uint16Array, paveMark: Uint8Array, decor: Uint8Array, rail: Uint8Array,
 };
 
 function serializeGame() {
@@ -1763,6 +1792,7 @@ function deserializeGame(json) {
   // Saves from before road wear: fresh asphalt, nothing marked, and Roadworks keep paving every road.
   if (!o.wear) o.wear = new Array(o.W * o.H).fill(0);
   if (!o.decor) o.decor = new Array(o.W * o.H).fill(0); // saves from before biomes: no plants
+  if (!o.rail) o.rail = new Array(o.W * o.H).fill(0); // saves from before railways
   if (!o.paveMark) { o.paveMark = new Array(o.W * o.H).fill(0); for (const b of o.buildings) if (b.type === 'roadworks' && !b.pmode) b.pmode = 'all'; }
   o.lights = o.lights || {};
   o.over = o.over || {};
@@ -1815,4 +1845,118 @@ function loadGame() {
 
 function clearSave() {
   try { localStorage.removeItem(SAVE_KEY); } catch (e) { /* storage unavailable */ }
+}
+
+/* ------------------------------------------------------------------ railways */
+
+/** The track tiles right beside tile (i, j): where a train stops for a Rail Station there. */
+function railPlatforms(i, j) {
+  const out = [];
+  if (!S.rail) return out;
+  for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+    if (!inMap(i + di, j + dj)) continue;
+    const t = tIdx(i + di, j + dj);
+    if (S.rail[t]) out.push(t);
+  }
+  return out;
+}
+
+/** Can two neighbouring track tiles join? Trains stay on one level. */
+function railStep(a, b) { return S.rail[a] && S.rail[b] && (S.elev[a] === S.elev[b] || S.terrain[a] !== T_GROUND || S.terrain[b] !== T_GROUND); } // rail bridges join any level
+
+const _rail = { of: null, ver: -1, comp: null };
+/** Connected stretches of track (cached until track changes): comp[t] for every track tile, -1 elsewhere. */
+function railNet() {
+  const N = S.W * S.H, W = S.W;
+  if (_rail.of === S && _rail.ver === (S.railVer || 0) && _rail.comp && _rail.comp.length === N) return _rail;
+  const comp = new Int32Array(N).fill(-1);
+  let next = 0;
+  const q = [];
+  for (let t = 0; t < N; t++) {
+    if (!S.rail[t] || comp[t] >= 0) continue;
+    comp[t] = next; q.length = 0; q.push(t);
+    while (q.length) {
+      const a = q.pop(), ai = a % W;
+      for (const b of [ai > 0 ? a - 1 : -1, ai < W - 1 ? a + 1 : -1, a - W, a + W]) {
+        if (b < 0 || b >= N || comp[b] >= 0 || !railStep(a, b)) continue;
+        comp[b] = next; q.push(b);
+      }
+    }
+    next++;
+  }
+  Object.assign(_rail, { of: S, ver: S.railVer || 0, comp });
+  return _rail;
+}
+
+/** The stretches of track a building's platforms (or a train inside it) touch. */
+function railComps(b) {
+  const c = railNet().comp, out = [];
+  for (const t of railPlatforms(b.x, b.y)) if (out.indexOf(c[t]) < 0) out.push(c[t]);
+  return out;
+}
+
+/** Are Rail Stations a and b on the same track? */
+function railLinked(a, b) {
+  if (!S.rail || !BDEFS[a.type].station || !BDEFS[b.type].station || a === b) return false;
+  const ca = railComps(a), cb = railComps(b);
+  for (const c of ca) if (cb.indexOf(c) >= 0) return true;
+  return false;
+}
+
+/** Could `owner` lay track on tile t? '' if so, otherwise why not. */
+function railBlocked(owner, t) {
+  const i = t % S.W, j = (t / S.W) | 0;
+  if (!inMap(i, j)) return 'Outside the map.';
+  if (S.owner[t] !== owner) return 'Track only goes inside your border.';
+  if (S.terrain[t] === T_ROCK) return 'Track can\'t go through rock.';
+  if (S.bAt[t]) return 'There is a building here.';
+  if (S.res[t]) return 'Clear the resources here first.';
+  if (S.ramp[t]) return 'Track can\'t go on a slope: trains stay on one level.';
+  if (scorched(t)) return 'This ground is still scorched.';
+  return '';
+}
+
+/** Lay (on) or take up (off) the track on tile t. */
+function setRail(t, on) {
+  if (!!S.rail[t] === !!on) return;
+  S.rail[t] = on ? 1 : 0;
+  if (on) clearDecor(t);
+  S.railVer = (S.railVer || 0) + 1;
+  const i = t % S.W, j = (t / S.W) | 0;
+  markDirty(i, j);
+  for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) if (inMap(i + di, j + dj)) markDirty(i + di, j + dj);
+  dirtySpan(t);
+}
+
+/**
+ * A train's route along the track from where it is (on the track, or inside a station: from its
+ * platforms) to the platform of the building at (x, y) (or to track tile (x, y)). Null if there is none.
+ */
+function railRoute(u, x, y) {
+  const W = S.W, N = W * S.H, net = railNet().comp;
+  let starts = [];
+  if (u.inside) { const b = getE(u.inside); if (b) starts = railPlatforms(b.x, b.y); }
+  else { const t = tIdx(Math.floor(u.x), Math.floor(u.y)); if (S.rail[t]) starts = [t]; }
+  if (!starts.length) return null;
+  const g = tIdx(x, y), goals = S.bAt[g] ? railPlatforms(x, y) : S.rail[g] ? [g] : [];
+  if (!goals.length) return null;
+  const isGoal = new Set(goals), from = new Int32Array(N).fill(-2), q = [];
+  for (const s of starts) { from[s] = -1; q.push(s); }
+  let hit = -1;
+  for (let k = 0; k < q.length && hit < 0; k++) {
+    const a = q[k];
+    if (isGoal.has(a)) { hit = a; break; }
+    const ai = a % W;
+    for (const b of [ai > 0 ? a - 1 : -1, ai < W - 1 ? a + 1 : -1, a - W, a + W]) {
+      if (b < 0 || b >= N || from[b] !== -2 || !railStep(a, b) || net[b] !== net[a]) continue;
+      from[b] = a; q.push(b);
+    }
+  }
+  if (hit < 0) return null;
+  const path = [];
+  for (let t = hit; t >= 0; t = from[t]) path.push(t);
+  path.reverse();
+  // A train inside a station starts by rolling onto its platform; one already on the track skips its own tile.
+  if (!u.inside && path[0] === tIdx(Math.floor(u.x), Math.floor(u.y))) path.shift();
+  return path;
 }
