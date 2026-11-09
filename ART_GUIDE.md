@@ -269,11 +269,17 @@ A smelter: a squat brick-lined furnace with a glowing orange mouth, a tall chimn
 hopper on one side and a stack of pale blue alloy ingots on the other. Accent colour: orange furnace glow.
 ```
 
-`lander@0.png` and `lander@1.png`
+`lander@0.png` and `lander@1.png` (the Command Base; the files keep the old name)
 ```
-The colony's landing craft and main base, the biggest building: a heavy hexagonal descent module on four extended
-landing legs with large foot pads, a domed command section with a glowing team-coloured core window, cargo bay
-doors open at the front with a ramp down, scorch marks around the base. Its footprint fills about 90% of the width.
+The colony's Command Base, the biggest and most important building: a fortified command center built around the
+landing craft that brought the colony down. A thick, low octagonal wall of armoured concrete and riveted steel
+plating runs around the whole pad, with a squat round bastion at each corner topped by a small twin-barrelled gun.
+Inside the walls rises a stepped, heavily armoured command block (the old landing craft, its legs sunk into the
+concrete and plated over) with a slanted band of glowing team-coloured windows and a tall communications mast
+with a radar dish and a beacon light on top. A heavy blast gate in the front wall stands half open over a short
+ramp, flanked by concrete barriers and yellow-and-black hazard stripes. In the courtyard between the wall and the
+command block: a row of three charging docks with glowing cells, stacked supply crates and a few fuel drums.
+Team-coloured lights run along the top of the wall. It should look like a stronghold, not a spacecraft.
 Team colour: cyan #38d4ff.
 ```
 
