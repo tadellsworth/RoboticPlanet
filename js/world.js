@@ -1729,7 +1729,7 @@ function deserializeGame(json) {
   }
   for (const u of S.bots) {
     S.byId.set(u.id, u);
-    if (u.type === 'warbot' && u.ammo === undefined) u.ammo = WARBOT_AMMO;
+    if (u.type === 'warbot') u.ammo = u.ammo === undefined ? WARBOT_AMMO : Math.min(u.ammo, WARBOT_AMMO); // older saves carried more
     u.carryN = u.carry ? u.carryN || 1 : 0;
   }
   computeZones();

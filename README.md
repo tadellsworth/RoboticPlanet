@@ -149,7 +149,7 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
 - **Goods panel:** tap a goods counter in the top bar for that good's stock, production and use per minute, net rate,
   which buildings make and use it, and any shortfall (buildings waiting on it with none in stock). Switch goods at the
   top of the panel.
-- **Ammo:** warbots carry 20 shots (each Ammo reloads 5) and reload in your Command Base and Outposts, which haulers stock from an Ammo Plant. Out of
+- **Ammo:** warbots carry 10 shots (each Ammo reloads 5) and reload in your Command Base and Outposts, which haulers stock from an Ammo Plant. Out of
   ammo, a warbot can't fight at all: it heads back to a garrison to reload, and only armed warbots answer orders.
 - **Repairs:** nothing heals by itself. Damaged bots go to a Repair Station (workers below 60% health, warbots below
   70% once their garrison is quiet), which uses 1 Alloy per 12 health. To fix a building, tap it and press **Repair**:

@@ -173,7 +173,7 @@ const LIGHT_MAX_GREEN = 9;
 const LIGHT_CLEAR = 0.45;
 
 /* Warbot ammunition: each warbot holds WARBOT_AMMO shots and reloads in a garrison stocked with Ammo. */
-const WARBOT_AMMO = 20;
+const WARBOT_AMMO = 10;      // a full load: two Ammo's worth, so warbots go back to reload often
 const AMMO_SHOTS = 5;             // shots in one Ammo
 // A warbot with no ammo can't fight at all: it leaves the fight and goes back to reload.
 /**
