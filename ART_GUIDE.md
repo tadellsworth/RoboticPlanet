@@ -5,7 +5,8 @@ image keeps a placeholder drawn in code, so art can still be added **one piece a
 remaining pieces are listed under [Batch 2](#batch-2-terrain-levels-and-goods-icons), [Batch 3](#batch-3-missiles-batteries-and-army-orders)
 [Batch 4](#batch-4-fuel-farms-and-oil) and [Batch 5](#batch-5-robot-types-roads-and-ammo). To give every building a realistic 3D
 industrial look, see [Batch 6](#batch-6-realistic-3d-industrial-buildings-a-full-restyle). For Colony wildlife, the Research Lab
-and empty Silos, see [Batch 11](#batch-11-colony-wildlife-the-research-lab-and-empty-silos).
+and empty Silos, see [Batch 11](#batch-11-colony-wildlife-the-research-lab-and-empty-silos); for the Ropeway and Road Train,
+[Batch 12](#batch-12-ropeway-and-road-train).
 
 This guide has three parts:
 
@@ -811,6 +812,65 @@ about 75% of the width, no shadow and no ground (it floats; the game draws its s
 Send them in a zip like the earlier batches (WebP or PNG). Claude Code will register them: the Lab and the nests
 with the same `B3D` sizing as the other buildings, the nest picked by its level, the creatures with `driveSet`-style
 walking frames played by distance walked, and the empty Silos replacing the current edited ones.
+
+### Batch 12: Ropeway and Road Train
+
+The Ropeway (two pylon stations joined by a cable, with gondolas) and the Road Train (a tractor unit pulling two
+flatbed trailers). Until art arrives the game draws them itself: the Road Train uses the Freight Truck's art for its
+cab. Make the Ropeway pieces in the Batch 6 buildings chat and the Road Train in the Batch 8 robots chat.
+
+| Key | Size | What |
+|---|---|---|
+| `ropeway@0`, `ropeway@1` | 512×512, transparent | Ropeway station (team versions) |
+| `gondola@0`, `gondola@1` | 256×256, transparent | A gondola hanging from the cable (team versions) |
+| `roadtrain@0-f0` … `f3`, `roadtrain@1-f0` … `f3` | 256×256, transparent | Road Train tractor unit, driving frames, facing right, no shadow |
+| `roadtrain-trailer@0`, `roadtrain-trailer@1` | 256×256, transparent | Flatbed trailer, facing right, no shadow |
+| `roadtrain-brake` | 256×256, transparent | Brake-light overlay for the tractor (optional) |
+
+**`ropeway@0.png`, `ropeway@1.png`** (after the Batch 6 style brief)
+```
+A ropeway station: a slim steel lattice pylon tower on a small concrete footing pad, rising to about 80% of the image
+height, with a large grooved bull wheel mounted at the very top for the haul cable, a small machine house with the drive
+motor and a team-coloured status light at the foot of the tower, and a short loading platform with railings and
+yellow-and-black hazard stripes. The bull wheel's centre must sit on the image's horizontal centre line, about 10% from
+the top edge: the game attaches the cable there. Slimmer than the production buildings (about 1.1 tiles wide at its
+pad). Team light cyan #38d4ff; then "Same image, but change every cyan accent to red #ff5a6e".
+Same camera angle, lighting, materials and scale as the Smelter.
+```
+
+**`gondola@0.png`, `gondola@1.png`**
+```
+A small cargo gondola for the same ropeway, seen at the same three-quarter angle and lighting as the buildings: a grip
+clamp at the very top centre of the image (about 8% from the top edge, where the cable passes), a short steel hanger
+arm down from it, and below that an open-topped steel cargo cabin with a team-colour stripe (cyan #38d4ff; then the
+same in red #ff5a6e) and a small crate rack. 256x256 transparent PNG, the cabin about 45% of the width, no shadow
+and no ground (it hangs in the air).
+```
+
+**Road Train** (in the robots chat; attach the Freight Truck images `truck@0-f0` and `truck@1-f0` as the reference)
+```
+A Road Train for the same game, matching the attached Freight Truck exactly in camera, lighting, scale and style:
+a realistic 3D model with an orthographic camera looking straight down, facing RIGHT, centred on a 256x256
+transparent canvas, no drop shadow and no ground.
+
+1. The tractor unit (roadtrain@0-f0 to f3, then the same with every cyan accent changed to red #ff5a6e for @1):
+a heavy cab-over-engine prime mover, a little longer than the Freight Truck, with three axles, twin exhaust stacks
+behind the cab, a fifth-wheel coupling plate at the back (no bed), and team-colour cyan #38d4ff stripes and roof
+lights. 4 driving frames: roll every tyre forward a quarter of the gap between tread blocks each frame so f0 to f3
+loop; nothing else changes.
+
+2. The trailer (roadtrain-trailer@0, then @1 in red): a long flatbed trailer with low side rails, two axles at the
+rear and a kingpin hitch at the RIGHT end, with a team-colour stripe along each side. Keep the bed empty (the game
+draws the crates on it) and tell me the pixel rectangle of the bed inside the rails. The trailer about 60% of the
+canvas width, centred.
+
+3. Optional: roadtrain-brake.png, an overlay with the tractor's framing but no tractor in it: two small red brake
+lights lit at its back (the left end) with a faint red glow just behind.
+```
+
+Send them in a zip like the earlier batches. Claude Code will register them: the station with the `B3D` sizing (and
+line the cable up with the bull wheel), the gondola hanging from the cable, and the tractor and trailers in place of
+the drawn ones.
 
 ### Not swappable yet (ask Claude Code if you want these)
 
