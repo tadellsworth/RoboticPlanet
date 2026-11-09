@@ -118,7 +118,8 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
 - **Long hauls:** tap a Depot and set **supply orders** (how much of each good to keep there). Goods come from your other
   storage, and anything nearby then draws on the Depot. **Freight Trucks** (2 Alloy and 2 Chips at the Foundry) carry
   8 goods and take the long runs: storage to storage and deliveries of 3 or more over 12 tiles. Once you own a truck,
-  supply orders always wait for one and trucks only leave with 3 or more goods, so Haulers stay local. Trucks are
+  supply orders always wait for one and trucks only leave with 3 or more goods, so Haulers stay local. Idle trucks
+  spread out: each store keeps one waiting, and spare trucks park at the nearest Depot (or Command Base) with none. Trucks are
   slower than Haulers on concrete (80%) and slow to accelerate, but fastest of all on asphalt.
 - **Driving:** bots accelerate away from stops and brake for corners, junctions, red lights and the end of a trip
   (`BOT_ACCEL`, `BOT_BRAKE`, `BOT_CORNER` in `js/defs.js`; trucks have their own, slower values).

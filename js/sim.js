@@ -1161,6 +1161,7 @@ function updateWorker(u, dt) {
         u.idleT = 0;
         if (!((u.bat ?? 100) < 70 && goCharge(u)) && !u.inside) goHome(u);
       }
+      if (u.inside && BOTS[u.type].truck && S.tick % 450 === u.id % 450) spreadTrucks(u);
     }
   } else if (t.type === 'home') {
     const h = getE(t.bld);
@@ -1214,9 +1215,49 @@ function nearestReachableStore(u) {
 }
 
 function goHome(u) {
-  const store = nearestReachableStore(u);
+  const store = parkingFor(u);
   u.idleT = 0;
   if (store && goTo(u, store.x, store.y)) u.task = { type: 'home', bld: store.id };
+}
+
+/**
+ * Where an idle bot waits: the nearest storage it can reach. Freight Trucks spread out: a store
+ * keeps one idle truck, and an extra one goes to the nearest Command Base or Depot with none, so
+ * spare trucks wait out along the network, ready for the long runs from there. With a truck at
+ * every store, extras wait at the nearest.
+ */
+function parkingFor(u) {
+  if (!BOTS[u.type].truck) return nearestReachableStore(u);
+  const parked = trucksParked(u.owner, u.id);
+  let near = null, nd = Infinity, empty = null, ed = Infinity;
+  for (const b of S.buildings) {
+    if (b.dead || b.owner !== u.owner || !storeAccepts(b) || !botLinked(u, b)) continue;
+    const d = dist2(b.x + 0.5, b.y + 0.5, u.x, u.y);
+    if (d < nd) { nd = d; near = b; }
+    if (!parked.get(b.id) && d < ed) { ed = d; empty = b; }
+  }
+  return near && parked.get(near.id) && empty ? empty : near;
+}
+
+/** Idle Freight Trucks at each store (parked inside or on their way to park), other than `except`. */
+function trucksParked(owner, except) {
+  const m = new Map();
+  for (const v of S.bots) {
+    if (v.dead || v.owner !== owner || v.id === except || !BOTS[v.type].truck) continue;
+    const at = v.task ? (v.task.type === 'home' ? v.task.bld : 0) : v.inside;
+    if (at) m.set(at, (m.get(at) || 0) + 1);
+  }
+  return m;
+}
+
+/** Every 15 s, a spare truck waiting where others wait too moves on to a store with none, if there is one. */
+function spreadTrucks(u) {
+  const here = getE(u.inside);
+  if (!here || !BDEFS[here.type].store || (u.bat ?? 100) < 50) return;
+  const parked = trucksParked(u.owner, u.id);
+  if (!parked.get(here.id)) return;
+  const to = parkingFor(u);
+  if (to && to !== here && !parked.get(to.id) && goTo(u, to.x, to.y)) u.task = { type: 'home', bld: to.id };
 }
 
 function stashCarry(u) {
