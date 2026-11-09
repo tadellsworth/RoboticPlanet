@@ -872,6 +872,232 @@ Send them in a zip like the earlier batches. Claude Code will register them: the
 line the cable up with the bull wheel), the gondola hanging from the cable, and the tractor and trailers in place of
 the drawn ones.
 
+### Batch 13: Crawler, Freight rail, 3D bridges and Sky islands canyons (the final big batch)
+
+Everything added since Batch 10 in one go: the Crawler (with its treads, deploy sequence and spinning dish), the
+Freight Train, the Rail Station and track, a 3D bridge kit (water, canyon and rail) and the Sky islands canyon
+terrain, plus the Batch 11 and 12 assets if they aren't made yet. Until art arrives the game draws all of these
+itself. A copy of every prompt from Batches 11 to 13, ready to paste in order, is in
+`design/claude-design-final-prompt.md`.
+
+**Master brief (paste this first in a new Claude Design chat; attach the Smelter and the Freight Truck
+`truck@0-f0` as style anchors)**
+```
+I'm making the last set of sprites and tiles for Terrafall, a top-down sci-fi colony and logistics strategy game
+for phones and desktop: robots build a mining colony on a dusty orange-brown alien planet, move goods by road,
+rail, ropeway and bridge, and fight rival colonies. Attached are two finished assets as the style anchors: the
+Smelter (a building) and the Freight Truck (a vehicle). Everything new must look like it belongs with them:
+realistic, pre-rendered 3D models, like detailed miniatures photographed in warm sunlight. Materials: weathered
+painted steel in gunmetal, warm grey and faded off-white, riveted panels, concrete, hydraulics, cable runs,
+yellow-and-black hazard stripes, a little dust and rust. One glowing team-colour accent per asset.
+
+There are three kinds of image. Never mix their cameras:
+1. BUILDINGS (stations, nests, the Lab): the Smelter's camera, a high three-quarter view looking down at about
+   55-60 degrees, square-on. Warm sun from the top-left, a short soft shadow down-right onto the pad. 512x512
+   transparent; the foundation pad sits on the bottom edge (about 4% margin) and spans about 75% of the width.
+2. VEHICLES and CREATURES (Crawler, train cars, Road Train, creatures): the Freight Truck's camera, an
+   orthographic view looking STRAIGHT DOWN, the vehicle facing RIGHT (its front at the right), centred, with NO
+   drop shadow and no ground (the game draws the shadow and turns the sprite to face where it drives). Soft sun
+   from the top-left. 256x256 transparent unless I say otherwise.
+3. TILES (track, bridges, canyon): straight down like the vehicles, lit like the buildings. Each is a square that
+   repeats on a grid, so anything that crosses an edge must cross at exactly the position I give, to join the
+   next tile. 256x256.
+
+Team colours: player cyan #38d4ff, rival coral red #ff5a6e. For every team asset make the cyan version first,
+then "the same image with every cyan accent changed to red #ff5a6e" (@0 and @1). The game recolours a third,
+green team itself.
+
+Animation: each frame is a separate image with an identical canvas, framing and lighting. Only the moving parts
+change, and the last frame must loop smoothly back into the first. Driving frames are named -f0, -f1...;
+one-off sequences -d0, -d1...; overlays (lights, glows, dust) are separate transparent layers with the same
+framing that the game fades in and out.
+
+Readability: a map tile is only 30-45 pixels wide on a phone. Bold silhouettes, a few large details, strong
+lit-versus-shaded contrast, the team accent visible at that size. No text, logos, letters or people.
+```
+
+| Key | Size | What |
+|---|---|---|
+| `crawler@0-f0` … `f7`, `crawler@1-f0` … `f7` | 512×512 | Crawler driving frames (8, treads rolling), facing right, no shadow |
+| `crawler-dish` | 512×512 | Sensor dish layer the game spins (team-neutral) |
+| `crawler-lights`, `crawler-dust` | 512×512 | Headlight and beacon glow; dust plume behind the treads |
+| `crawler-deploy@0-d0` … `d9`, `@1-…` | 512×512 | Deploy sequence (played backwards to pack up) |
+| `crawlerbase@0`, `crawlerbase@1` | 512×512 | The deployed Crawler (vehicle camera, facing right) |
+| `freight-loco@0-f0` … `f3`, `@1-…` | 256×256 | Locomotive driving frames, facing right, no shadow |
+| `freight-loco-lights`, `-brake`, `-exhaust` | 256×256 | Locomotive overlays |
+| `freight-wagon-flat@0/@1`, `freight-wagon-hopper@0/@1` | 256×256 | Wagons, facing right, no shadow, empty |
+| `station@0`, `station@1` | 512×512 | Rail Station (building camera) |
+| `rail-straight`, `rail-curve`, `rail-tee`, `rail-cross`, `rail-end` | 256×256 | Track tiles, transparent outside the ballast |
+| `rail-level-crossing`, `rail-barrier-up`, `rail-barrier-down`, `rail-lights-on` | 256×256 | Level crossing and its barrier overlays |
+| `bridge-…`, `skybridge-…`, `railbridge-…` (`-ew`, `-ns`, `-end-w/e/n/s`, `-ramp-w/e/n/s`) | 256×256 | The bridge kit in three styles |
+| `bridge-pier`, `skybridge-pier`, `railbridge-pier` | 256×512 | Piers below a deck tile |
+| `skybridge-tower`, `skybridge-tower-lamp` | 256×512 | Suspension tower and its lamp overlay |
+| `skybridge-cable` | 1024×256 | One sagging main cable with hangers, stretched across a span |
+| `chasm`, `chasm-wall`, `chasm-wall-2` | 256×256, opaque | Canyon floor and walls (Sky islands) |
+| `chasm-lip-w`, `chasm-lip-e`, `chasm-lip-n` | 256×256 | Canyon rim edge overlays |
+| `…-jungle`, `…-polar` | same | Optional biome versions of the canyon tiles |
+
+**`crawler`** (vehicle camera, 512×512: it is huge, 1.5 by 1 tiles on the map)
+```
+THE CRAWLER: a colossal tracked mobile base, part mining crawler-transporter, part sci-fi command vehicle, seen
+straight down and facing right. Two enormous tread units run the full length of both sides: wide steel track
+plates with chunky grousers, with the drive sprockets and idler wheels showing at the ends. Between them a long
+armoured hull: a raised command cab at the RIGHT (front) end with a wraparound tinted window band, a flat cargo
+deck in the middle with stacked containers and cargo bay hatches, two folded charging arms clamped along the
+sides, and a short folded sensor mast with a dish near the back. Weathered off-white and gunmetal, hazard
+stripes on the corners, cyan #38d4ff running lights along the hull and on the cab roof. It fills about 90% of
+the canvas width and 60% of its height, centred.
+
+a) Driving frames crawler@0-f0 to f7: the treads crawl forward. Each frame moves every track plate forward
+   (to the right) by exactly 1/8 of the gap between plates, and the sprockets and idlers turn to match, so f7
+   loops into f0. Add a slight weight-shift: on f2 and f6 the hull sits one pixel further back and lower, as if
+   the suspension settles over the plates. Nothing else changes.
+b) Overlays, same framing, transparent everywhere else:
+   - crawler-dish: only the sensor dish and its mast head, seen from above. Put the mast's pivot at canvas pixel
+     (180, 256) and say so: the game spins this layer slowly on that point while the Crawler drives.
+   - crawler-lights: only the light: two warm headlight pools spreading ahead of the cab past the right edge,
+     and an amber rotating-beacon glow on the cab roof. Bright on transparent, so it can be added on top.
+   - crawler-dust: a soft red-brown dust plume streaming back from the rear of both treads toward the left edge.
+c) Deploy sequence crawler-deploy@0-d0 to d9, same camera and framing (the game plays it over about two
+   seconds when the Crawler stops, and backwards when it packs up):
+   d0 identical to crawler@0-f0.
+   d1-d3 four heavy hydraulic outrigger legs swing out diagonally from the hull's corners and stamp down on round
+         foot pads; small dust puffs burst at the pads on d3.
+   d4 the hull lifts a little on its jacks: draw it very slightly larger and crisper, with darker contact
+         shadows round the four foot pads.
+   d5-d6 the side cargo panels fold down and out like wings, opening storage racks and four charging bays whose
+         pads glow cyan.
+   d7 the two charging arms swing out over the bays.
+   d8 the sensor mast telescopes up and its dish opens (it reads as rising because the dish grows a little and
+         its shadow on the deck lengthens toward the bottom-right).
+   d9 fully deployed: identical to crawlerbase@0.
+d) crawlerbase@0: the deployed Crawler as a standing base: outriggers planted, wings open with containers in the
+   racks, four lit charging bays, mast up with a cyan beacon. Keep the vehicle camera (straight down, facing
+   right) so the game can turn it to the way the Crawler was parked.
+Then the team versions in red #ff5a6e (@1) of the frames, the deploy sequence and the base. The dish, lights and
+dust layers are shared.
+```
+
+**`freight`** (vehicle camera; each car is its own sprite so the train bends round curves)
+```
+THE FREIGHT TRAIN: a locomotive and two kinds of wagon, each a separate 256x256 sprite seen straight down and
+facing right, about 80% of the canvas wide and 40% tall (0.62 by 0.32 tiles in the game), centred. Each car has
+a coupler at both ends exactly on the horizontal centre line, so the cars line up nose to tail. Keep every car
+symmetric about that centre line: the game rolls each car along the curve of the track and rocks it a little on
+curves.
+
+a) Locomotive freight-loco@0-f0 to f3: a heavy modern freight locomotive from directly above: a long roof with two
+   big round radiator fans under grilles, a folded pantograph, an exhaust hatch, walkways with yellow handrails
+   down both sides, and a sloped nose at the RIGHT with a wide dark windscreen and twin headlights. Cyan #38d4ff
+   livery band along both sides and across the nose. Frames: both roof fans turn a quarter of the way between
+   their blades each frame, and the bogie side-frames peeking out under the walkways shift by a quarter of a
+   wheel turn, so f3 loops into f0.
+b) Overlays for the locomotive, same framing, transparent elsewhere:
+   - freight-loco-lights: two long soft headlight beams spreading ahead of the nose off the right edge, warm white.
+   - freight-loco-brake: red brake and marker lights at the rear (left) end with a faint glow.
+   - freight-loco-exhaust: a thin heat shimmer and smoke wisp rising from the exhaust hatch, drifting toward the
+     bottom-right.
+c) Wagons, no frames, empty (the game draws the load on them):
+   - freight-wagon-flat@0: a long flat container car with low end bulkheads and stake pockets along the sides.
+     Leave the deck empty and tell me the pixel rectangle of the empty deck.
+   - freight-wagon-hopper@0: an open-topped ore hopper with ribbed sides and a dark empty interior. Tell me the
+     pixel rectangle of the opening.
+   Both with a cyan stripe along each side. The game alternates them along the train.
+Then all of them again in red #ff5a6e (@1). The overlays are shared.
+```
+
+**`station@0.png`, `station@1.png`** (building camera)
+```
+A freight Rail Station: a low steel goods shed with a long barrel-vaulted roof, an overhead gantry crane
+spanning a loading strip along its front (south) edge with a container hanging from it, stacked containers and
+pallets, loading ramps at both ends and a signal mast with a cyan #38d4ff team light. About 1.2 tiles wide at its
+pad. The game draws the railway beside it, so no rails in the image. Same camera angle, lighting, materials and
+scale as the Smelter. Then the same image with every cyan accent changed to red #ff5a6e.
+```
+
+**Track tiles** (tiles)
+```
+RAIL TRACK TILES, 256x256, transparent outside the track bed, seen straight down and lit from the top-left (the
+rails cast thin shadows down-right). Standard track on a grey-brown gravel ballast bed: steel rails with a bright
+worn top, dark timber sleepers. The ballast bed is 70% of the tile wide and centred; the two rails sit at exactly
+33% and 67% across the tile so every tile joins its neighbours.
+- rail-straight: running left to right, edge to edge (the game turns it for north-south).
+- rail-curve: a 90-degree curve coming in through the left edge and leaving through the bottom edge, at the same
+  rail positions.
+- rail-tee: straight left to right, with a branch leaving through the bottom edge through a set of points, with
+  the switch blades and a small lever box.
+- rail-cross: a flat diamond crossing of two lines, left-right and top-bottom.
+- rail-end: a buffer stop at the right end (a red-and-white striped buffer beam on a steel frame), track coming in
+  from the left.
+- rail-level-crossing: the track running left to right across a concrete road that runs top to bottom (the road
+  56% of the tile wide), with rubber crossing panels between the rails and white stop lines on the road.
+- rail-barrier-up and rail-barrier-down: overlays for the level crossing: a barrier post at each road edge with a
+  red-and-white striped arm, raised (seen from above as a short stub at the post) or lowered across its half of
+  the road.
+- rail-lights-on: only the two red warning lamps on the posts, lit and glowing (the game flashes it while a train
+  passes).
+```
+
+**Bridges** (tiles: the bridge kit)
+```
+BRIDGES, 256x256 tiles, transparent wherever there is no bridge, seen straight down, lit from the top-left. A
+bridge holds one level all the way across, at clifftop height, and has to look high and solid: a thick deck slab,
+girders or truss showing below it along its south (bottom) side, railings with posts on both edges, and depth
+beneath it. The road deck is 56% of the tile wide and centred (its road surface 46%), and joins the next tile edge
+to edge. Draw no shadow: the game casts the bridge's shadow onto the water or canyon floor itself.
+
+Make three styles, each as the same set of pieces:
+1. bridge-...: a concrete-and-steel girder bridge low over WATER (pale concrete deck, steel girders, short piers).
+2. skybridge-...: a steel suspension bridge high over a bottomless CANYON (steel deck plates, a deep Warren truss
+   under it, tall piers, towers and cables).
+3. railbridge-...: a riveted steel truss bridge for the railway: its deck carries ballast for the track (no rails:
+   the game draws the track on top), with walkways and handrails along both sides.
+
+Pieces for each style:
+- -ew: a straight deck running left to right, edge to edge. Its south face shows: the slab edge, then the
+  girders (for skybridge and railbridge, a deep truss filling the tile below the deck).
+- -ns: a straight deck running top to bottom, edge to edge. The south face is hidden; show the shaded east side
+  of the girders as a narrow strip and a lit edge on the west.
+- -end-w, -end-e, -end-n, -end-s: the abutment where the deck meets land on that side: a concrete abutment
+  keyed into the clifftop or shore, the railings ending in squat bollards.
+- -ramp-w, -ramp-e, -ramp-n, -ramp-s: the last tile easing down onto a lower clifftop on that side: the same deck
+  sloping down, with grip grooves across it and the railings stepping down.
+- -pier (256x512): the support under one deck tile, from the deck's underside at the top of the image downward.
+  bridge-pier: a stout concrete pier meeting the water at about a quarter of the way down in a ring of ripples.
+  skybridge-pier: twin steel columns with X-bracing plunging into the abyss, fading into dark haze by the bottom.
+  railbridge-pier: a lattice steel trestle tower fading the same way.
+- skybridge-tower (256x512): the portal tower at each end of a long canyon span: two tall steel legs standing at
+  the deck's edges, two cross beams, cable saddles at the top and a red aviation lamp on each leg; its base sits
+  on the deck at the bottom of the image. Plus skybridge-tower-lamp: only the two lamps, lit and glowing.
+- skybridge-cable (1024x256): one main suspension cable sagging from the top-left corner to the top-right corner
+  with its lowest point near the bottom in the middle, and thin vertical hangers dropping from it to a straight
+  deck-edge line along the bottom. The game stretches it across a span, one for each side of the deck.
+```
+
+**Canyon terrain** (ground tiles for Sky islands, opaque and seamless)
+```
+CANYON TERRAIN for the Sky islands map: no water anywhere, just mesas cut apart by sheer, bottomless canyons.
+256x256, opaque.
+- chasm: looking straight down into a bottomless canyon: near-black depths with a faint warm dust haze and a few
+  far-off motes of light, no visible floor. It must tile seamlessly in every direction with no repeating blobs.
+- chasm-wall: the sheer canyon wall just below an island's southern rim: the top edge is the rim (lit, crumbly
+  red-brown rock), dropping as a vertical face of banded sedimentary strata (rust, ochre and dark-brown bands, a
+  few vertical cracks and narrow ledges) that fades into the black depths by the bottom edge. It tiles left to
+  right with itself.
+- chasm-wall-2: the next tile down the same wall, continuing the strata from chasm-wall's bottom edge and fading
+  fully to black.
+- chasm-lip-w, chasm-lip-e, chasm-lip-n: thin overlays (transparent elsewhere) for the rim where the canyon meets
+  land on its other sides: a dark overhang shadow and a crumbled edge.
+Optional biome versions, the same images retinted: -jungle (darker rock, moss and hanging vines on the wall),
+-polar (blue-grey rock, ice streaks, snow on the rim).
+```
+
+Send them in zips by group (Crawler, train and station, track, bridges, canyon) like the earlier batches. Claude
+Code will register them: the Crawler frames played by distance driven with the dish layer spinning, the deploy
+sequence played on deploy and reversed on pack-up; train cars on the track's curve with the overlays faded in
+for headlights, braking and exhaust; track and bridge pieces picked by their joins (rotated where the piece
+allows); piers, towers and cables in the bridge rigging pass; the canyon tiles in place of the drawn canyon.
+
 ### Not swappable yet (ask Claude Code if you want these)
 
 - Menu background and logo
