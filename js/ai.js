@@ -195,7 +195,8 @@ function aiThink(p) {
   // 3) Foundry: keep enough workers, then grow the army. Order specialists when a building needs
   //    one, and enough Haulers (a Freight Truck counts as three) to carry every good in the colony.
   const wantWorkers = staffed + 3 + Math.min(3, sites);
-  const wantHaulers = clamp(Math.ceil(me.length * 0.35), 4, 16) - 3 * (kinds.truck || 0);
+  // A Freight Truck takes the long runs off the Haulers, but sits idle much of the time: it counts as one and a half.
+  const wantHaulers = clamp(Math.ceil(me.length * 0.35), 4, 16) - Math.floor(1.5 * (kinds.truck || 0));
   const army = kinds.warbot || 0;
   const wantArmy = S.mode === 'colony' ? 0 : aiWantArmy(lvl);
   const armyBehind = army < wantArmy - 2;
@@ -215,7 +216,8 @@ function aiThink(p) {
     for (const crew in crewNeed) if ((kinds[crew] || 0) < crewNeed[crew] && !(b.orders[crew] > 0)) b.orders[crew] = 1;
     // Saving up for missiles (or feeding the Missile Factory): the Foundry rests so Alloy and Chips
     // pile up, unless workers are badly short.
-    if ((saving || P.feedMissiles) && workers >= staffed + 3) { b.mode = 'off'; delete b.orders.hauler; delete b.orders.truck; }
+    // (Not while the army is well behind: warbots come first.)
+    if ((saving || P.feedMissiles) && workers >= staffed + 3 && !armyBehind) { b.mode = 'off'; delete b.orders.hauler; delete b.orders.truck; }
     // Haulers when short; while the army is well behind, only when badly short.
     else if ((kinds.hauler || 0) < (armyBehind ? Math.min(wantHaulers, 6) : wantHaulers) && !(b.orders.hauler > 0)) b.orders.hauler = 1;
     // A forward Depot with supply orders gets a Freight Truck to keep it stocked.
@@ -273,10 +275,15 @@ function aiThink(p) {
     return;
   }
   // A big army with nothing in reach marches on the nearest enemy garrison (a rally flag beside it:
-  // the warbots fight what they meet and attack what stands there).
-  if (army >= lvl.threshold * 3 && S.time - (P.lastMarch || -999) > 120 && !(P.march && rallyById(P.march))) {
+  // the warbots fight what they meet and attack what stands there). With twice the enemy's army it
+  // goes for the enemy Command Base itself.
+  const enemyArmy = S.bots.reduce((n, u) => n + (!u.dead && u.owner === enemy && u.type === 'warbot' ? 1 : 0), 0);
+  const crushing = army >= lvl.threshold * 2 && army >= enemyArmy * 2 + 2;
+  if (army >= lvl.threshold * 2 && S.time - (P.lastMarch || -999) > 120 && !(P.march && rallyById(P.march))) {
     let tgt = null, bd = Infinity;
-    for (const b of S.buildings) {
+    const enemyBase = getE(S.players[enemy].lander);
+    if (crushing && enemyBase && !enemyBase.dead && enemyBase.owner === enemy) tgt = enemyBase;
+    else for (const b of S.buildings) {
       if (b.dead || b.owner !== enemy || !b.built || !BDEFS[b.type].mil) continue;
       const d = dist2(b.x, b.y, lander.x, lander.y);
       if (d < bd) { bd = d; tgt = b; }
@@ -287,8 +294,8 @@ function aiThink(p) {
         const i = tgt.x + di, j = tgt.y + dj;
         if (inMap(i, j) && walkable(tIdx(i, j)) && !S.bAt[tIdx(i, j)] && S.zone[tIdx(i, j)] === homeZone(p)) { spot = { i, j }; break; }
       }
-      if (spot && rallyAvailable(p, spot.i, spot.j) >= lvl.threshold * 2) {
-        const { sent, rally } = sendToRally(p, spot.i, spot.j, Math.min(14, rallyAvailable(p, spot.i, spot.j) - 2));
+      if (spot && rallyAvailable(p, spot.i, spot.j) >= lvl.threshold * (crushing ? 1.5 : 2)) {
+        const { sent, rally } = sendToRally(p, spot.i, spot.j, Math.min(crushing ? 22 : 14, rallyAvailable(p, spot.i, spot.j) - 2));
         if (sent) { P.march = rally.id; P.lastMarch = S.time; return; }
       }
     }
