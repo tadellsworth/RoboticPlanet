@@ -478,3 +478,6 @@ body.mode-road .objective { display: none; }
 .gs-alert.good { background: rgba(126,224,138,0.12); color: #c9f5cf; }
 .gtag small { color: var(--muted); font-weight: 600; margin-left: 4px; }
 canvas.chart.small { height: 110px; }
+
+/* sound volume sliders in the pause menu */
+.sound-sliders { display: grid; gap: 6px; margin-top: 8px; padding: 8px 12px; border: 1px solid var(--line); border-radius: 12px; background: rgba(255,255,255,0.03); text-align: left; }

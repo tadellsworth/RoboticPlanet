@@ -43,6 +43,7 @@ function frame(now) {
   }
   render(dt);
   uiTick(dt);
+  audioTick(dt);
   requestAnimationFrame(frame);
 }
 

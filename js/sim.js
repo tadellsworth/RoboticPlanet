@@ -2620,6 +2620,7 @@ function fireNukeAt(silo, i, j) {
   });
   addFx('ring', silo.x + 0.5, silo.y + 0.5, { color: '#9dff3a', r: 2, life: 1.2 });
   sfx('launch');
+  if (silo.owner !== 0 && !S.players[0].absent) sfx('siren');
   postMsg(silo.owner, `Nuclear missile launched: impact in ${NUKE.flight} seconds.`, i, j, 'good');
   postMsg(1 - silo.owner, `NUCLEAR LAUNCH DETECTED! Impact in ${NUKE.flight} seconds: get your robots out of the red ring!`, i, j, 'bad');
   return true;
@@ -2633,7 +2634,7 @@ function fireNukeAt(silo, i, j) {
 function nukeImpact(m) {
   const cx = m.x1, cy = m.y1, R2 = NUKE.radius * NUKE.radius;
   addFx('nuke', cx, cy, { life: 2, r: NUKE.radius });
-  sfx('boom');
+  sfx('nuke');
   const lost = [0, 0];
   for (const b of S.buildings.slice()) {
     if (b.dead || dist2(b.x + 0.5, b.y + 0.5, cx, cy) > R2) continue;

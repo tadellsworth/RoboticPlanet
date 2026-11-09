@@ -190,6 +190,11 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
   and enemy buildings left outside their border are lost.
 - **Controls:** drag to pan, pinch or scroll to zoom, tap anything to inspect it.
 - **Game speed:** the speed chip in the top bar opens 0.75×, 0.875×, 1×, 2× and 3×.
+- **Sound** (`js/audio.js`, all Web Audio, no audio files): a generative synthwave score that follows the game (menu,
+  building, war when you're attacked or fighting, and an alarm while a nuke flies), written a bar at a time from chord
+  progressions, arpeggios, bass, drums and short melodies in 8-bar sections. Effects include radio blips for orders, a
+  nuke siren and blast, and sounds from the map when on screen (traffic hum, welding, concrete, asphalt, truck air
+  brakes and horns, biome wind, jungle birds and insects). Music and Effects volumes are in the pause menu.
 - **Desktop (RTS controls):** on a wide screen the top bar is one row, the tools sit in a small dock and panels open
   on the right. Drag a box to select warbots (Shift adds; a box round a garrison takes its spare warbots), right-click
   ground to hold it, a rival building to attack, or your garrison to station them. Ctrl/Shift+1–9 saves a control

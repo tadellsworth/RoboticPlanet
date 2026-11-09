@@ -70,7 +70,17 @@ function initUI() {
   // Pause menu
   $('btn-pause').onclick = () => { UI.paused = true; $('screen-pause').hidden = false; sfx('click'); };
   $('p-resume').onclick = () => { UI.paused = false; $('screen-pause').hidden = true; };
-  $('p-sound').onclick = () => { AUDIO.on = !AUDIO.on; $('p-sound').textContent = 'Sound: ' + (AUDIO.on ? 'on' : 'off'); };
+  // Music and Effects volume (remembered on this device).
+  const syncVol = () => {
+    for (const [id, k] of [['p-music', 'music'], ['p-fx', 'fx']]) {
+      $(id).value = Math.round(AUDIO[k] * 100);
+      $(id + '-v').textContent = AUDIO[k] > 0 ? Math.round(AUDIO[k] * 100) + '%' : 'Off';
+    }
+  };
+  $('p-music').oninput = () => { setVolume('music', $('p-music').value / 100); syncVol(); };
+  $('p-fx').oninput = () => { setVolume('fx', $('p-fx').value / 100); syncVol(); };
+  $('p-fx').onchange = () => sfx('place');
+  syncVol();
   $('p-help').onclick = () => showHelp();
   $('p-quit').onclick = () => { saveGame(); $('screen-pause').hidden = true; toMenu(); };
 
@@ -346,7 +356,7 @@ function onMapCommand(i, j, wx, wy) {
     toast(b && b.owner === 0 ? 'That garrison is full.' : 'None of the selected warbots have Ammo: they reload in a garrison first.', 'warn');
     return;
   }
-  sfx('alert');
+  sfx('order');
   addFx('ring', (b ? b.x : i) + 0.5, (b ? b.y : j) + 0.5, { color: b && b.owner !== 0 ? '#ff5a6e' : '#7dffa0' });
   toast(`${n} warbot${n > 1 ? 's' : ''} ${what}.`, 'info');
   refreshSelection();
@@ -1465,7 +1475,7 @@ function openBuildingSheet(b) {
       $('sh-st-plus').onclick = () => { UI.stationN = Math.min(stationAvailable(0, b), UI.stationN + 1); refreshSheet(); };
       $('sh-st-send').onclick = () => {
         const n = stationWarbots(0, b, UI.stationN);
-        if (n) { sfx('alert'); toast(`${n} warbot${n > 1 ? 's' : ''} on the way to the ${def.name}.`, 'info'); } else sfx('error');
+        if (n) { sfx('order'); toast(`${n} warbot${n > 1 ? 's' : ''} on the way to the ${def.name}.`, 'info'); } else sfx('error');
         refreshSheet();
       };
     }
@@ -1502,7 +1512,7 @@ function openBuildingSheet(b) {
     $('sh-send').onclick = () => {
       const n = sendAttack(0, b, UI.attackN);
       if (n > 0) {
-        sfx('alert');
+        sfx('order');
         toast(`${n} warbot${n > 1 ? 's' : ''} sent to attack the ${def.name}.`, 'info');
         closeSheet();
       }
@@ -1842,7 +1852,7 @@ function openMoveSheet(i, j) {
   $('mv-plus').onclick = () => { UI.moveN = Math.min(rallyAvailable(0, i, j), UI.moveN + 1); refreshSheet(); };
   $('mv-send').onclick = () => {
     const res = sendToRally(0, i, j, UI.moveN);
-    if (res.sent) { sfx('alert'); toast(`${res.sent} warbot${res.sent > 1 ? 's are' : ' is'} on the way. Tap the flag to call them back.`, 'info'); closeSheet(); }
+    if (res.sent) { sfx('order'); toast(`${res.sent} warbot${res.sent > 1 ? 's are' : ' is'} on the way. Tap the flag to call them back.`, 'info'); closeSheet(); }
     else sfx('error');
   };
   refreshSheet();
@@ -1863,7 +1873,7 @@ function openRallySheet(r) {
   $('rl-recall').onclick = () => { const n = recallRally(r.id); toast(`${n} warbot${n !== 1 ? 's' : ''} called back.`, 'info'); sfx('click'); closeSheet(); };
   $('mv-minus').onclick = () => { UI.moveN = Math.max(1, UI.moveN - 1); refreshSheet(); };
   $('mv-plus').onclick = () => { UI.moveN = Math.min(rallyAvailable(0, i, j), UI.moveN + 1); refreshSheet(); };
-  $('mv-send').onclick = () => { const res = sendToRally(0, i, j, UI.moveN); if (res.sent) { sfx('alert'); refreshSheet(); } else sfx('error'); };
+  $('mv-send').onclick = () => { const res = sendToRally(0, i, j, UI.moveN); if (res.sent) { sfx('order'); refreshSheet(); } else sfx('error'); };
   refreshSheet();
 }
 
