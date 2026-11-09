@@ -345,8 +345,8 @@ function drawSlope(ctx, i, j, x, y, t, n) {
   else { ctx.fillRect(x, y, TP, 3); ctx.fillRect(x, y + TP - 3, TP, 3); }
 }
 
-/** Path surfaces: gravel (sandy grey), concrete (pale slabs), asphalt (near-black). */
-const ROAD_LOOK = [null, { edge: THEME.roadEdge, fill: THEME.road, w: 9 }, { edge: '#5d636b', fill: '#b9bec5', w: 11 }, { edge: '#15171b', fill: '#33363d', w: 12 }];
+/** Road surfaces: concrete (pale slabs) and asphalt (near-black). */
+const ROAD_LOOK = [null, { edge: '#5d636b', fill: '#b9bec5', w: 12 }, { edge: '#15171b', fill: '#33363d', w: 12 }];
 
 function drawRoad(ctx, i, j, x, y) {
   const c = TP / 2;
@@ -364,12 +364,6 @@ function drawRoad(ctx, i, j, x, y) {
     if (nb[3]) ctx.fillRect(x, y + c - ww / 2, c, ww);
   }
   if (tier === 1) {
-    // Gravel flecks and a worn centre so paths read clearly against sand.
-    ctx.fillStyle = 'rgba(255,245,225,0.35)';
-    for (let k = 0; k < 3; k++) ctx.fillRect(x + c - 3 + hash2(i, j, 8 + k) * 6, y + c - 3 + hash2(j, i, 11 + k) * 6, 1.5, 1.5);
-    ctx.fillStyle = 'rgba(30,24,18,0.3)';
-    ctx.fillRect(x + c - 0.5, y + c - 0.5, 1, 1);
-  } else if (tier === 2) {
     // Concrete slabs with expansion joints across the run.
     ctx.fillStyle = 'rgba(60,64,70,0.35)';
     if (nb[0] || nb[2]) ctx.fillRect(x + c - w / 2, y + 1, w, 1);
@@ -1176,7 +1170,13 @@ function render(dtReal) {
         ctx.fillRect(cx + z * 0.32, cy - z * 0.38, z * 0.035, z * 0.16);
       }
     } else {
-      const jx = (hash2(e.id, 1, 9) - 0.5) * 0.25, jy = (hash2(e.id, 2, 9) - 0.5) * 0.25;
+      // Off-road bots spread out a little; on roads they drive in lanes (keep right on two-way roads).
+      let jx = (hash2(e.id, 1, 9) - 0.5) * 0.25, jy = (hash2(e.id, 2, 9) - 0.5) * 0.25;
+      const rt = S.road[tIdx(Math.floor(e.x), Math.floor(e.y))];
+      if (rt && e.path) {
+        const lane = rt === 1 ? LANE_OFFSET : 0;
+        jx = -Math.sin(e.face) * lane; jy = Math.cos(e.face) * lane;
+      }
       drawBot(ctx, e, ox + (e.x + jx) * z, oy + (e.y + jy) * z, z);
     }
   }

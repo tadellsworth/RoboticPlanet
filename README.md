@@ -55,7 +55,7 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
 | Bio Farm | A worker plants energy crops on fertile soil and harvests them into **Fuel** |
 | Oil Pump | Built on an oil seep; a worker pumps **Crude** until it runs dry |
 | Refinery | Crude → 2 **Fuel** |
-| Cement Works | 2 Stone → **Cement** (for concrete roads) |
+| Cement Works | 2 Stone → **Cement** (for roads) |
 | Asphalt Plant | Crude + Stone → 2 **Asphalt** |
 | Roadworks | Its Paver lays Asphalt on your paths nearby (1 Asphalt covers 4 tiles) |
 | Ammo Plant | Alloy + Stone → 3 **Ammo**; warbots reload it in the Lander and Outposts (Versus) |
@@ -68,12 +68,14 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
   haul; **Agribots** are the only bots that can run Bio Farms and Grove Planters; **Pavers** run the Roadworks;
   **Warbots** fight. You start with 12 Workers, 2 Haulers and an Agribot (plus 4 Warbots in Versus).
 - Placing a construction site is free; workers bring the materials from storage.
-- **Paths** come in three surfaces: gravel (1 Stone paves 4 tiles, 2× speed), concrete (1 Cement paves 10 tiles, 2.5×)
-  and asphalt (3×, laid by a Roadworks on top of existing paths). Removing a path refunds its Stone or Cement. Bots plan
-  routes that use paths even when that means a short detour, and they are slow off them.
-- **Traffic:** on a two-way path, bots slow down whenever they meet traffic coming the other way. Switch the Paths banner to
-  **Arrows** and drag along a path to point it the way you drag (tap a path to turn its arrow). One-way loops keep busy
-  routes flowing; going the wrong way up a one-way path is allowed but crawls.
+- **Roads** cost Cement (1 Cement paves 10 tiles; you land with 3) and double a bot's speed. A Roadworks' Paver upgrades
+  them to asphalt (2.75×) with Asphalt. Removing a road refunds its Cement. Bots plan routes that use roads even when
+  that means a short detour, and they are slow off them.
+- **Traffic:** bots queue on roads, each waiting behind the bot ahead of it going the same way. On two-way roads each
+  direction keeps to its own side, but passing oncoming traffic slows bots down. Switch the Paths banner to **Arrows** and
+  drag along a road to point it the way you drag (tap a road to turn its arrow). One-way loops keep busy routes flowing;
+  going the wrong way up a one-way road is allowed but crawls.
+- **Top bar:** hover over (or tap) a goods counter to see its name and what it's for.
 - **Ammo:** warbots carry 20 shots and reload in your Lander and Outposts, which workers stock from an Ammo Plant. Out of
   ammo, a warbot hits at about a third of its strength.
 - **Statistics:** the pause menu and the end-of-game screen show graphs of bots, land and goods over time and how busy

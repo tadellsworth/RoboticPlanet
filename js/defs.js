@@ -10,32 +10,37 @@ const MAX_BOTS = 90;              // per player (versus)
 const MAX_BOTS_COLONY = 150;      // colony mode allows a bigger population
 const MAX_SITES = 6;              // simultaneous construction sites per player
 const ATTACK_RANGE = 14;          // tiles from a garrison to a target it can attack
-const WORKER_SPEED = 1.4;         // tiles per second off paths: bots are unhurried, so paths matter
-const WARBOT_SPEED = 1.15;
+const WORKER_SPEED = 1.2;         // tiles per second off roads: bots are unhurried, so roads matter
+const WARBOT_SPEED = 1.0;
 const ROAD_PREFERENCE = 0.85;     // route planning treats paths as this much cheaper again, so bots go out of their way to use them
 /*
- * Path surfaces (S.pave): gravel is laid with Stone, concrete with Cement (both by painting, and
- * refunded when removed), asphalt by a Roadworks' Paver on top of an existing path, using Asphalt.
- * `speed` multiplies a bot's speed on that tile; `cost` is per tile.
+ * Road surfaces (S.pave): roads are laid with Cement by painting them (refunded when removed);
+ * a Roadworks' Paver upgrades them to asphalt using Asphalt. `speed` multiplies a bot's speed on
+ * that tile; `cost` is per tile.
  */
 const PAVE = [null,
-  { key: 'gravel', name: 'Gravel path', speed: 2.0, cost: { stone: 0.25 } },
-  { key: 'concrete', name: 'Concrete road', speed: 2.5, cost: { cement: 0.1 } },
-  { key: 'asphalt', name: 'Asphalt road', speed: 3.0 },
+  { key: 'road', name: 'Road', speed: 2.0, cost: { cement: 0.1 } },
+  { key: 'asphalt', name: 'Asphalt road', speed: 2.75 },
 ];
-const ASPHALT_TILES = 4;          // path tiles one Asphalt covers
+const ASPHALT_TILES = 4;          // road tiles one Asphalt covers
 const SLOPE_SPEED = 0.65;         // speed multiplier on an unpaved ramp
 /*
- * One-way paths and traffic. A path tile in S.road is 1 (two-way) or 2–5 (one-way, pointing
- * east, south, west or north). Going the wrong way up a one-way path is allowed but crawls at
- * ONEWAY_WRONG speed, so bots plan around it. On paths, every oncoming bot on the same or next
- * tile slows a bot down (speed ÷ (1 + TRAFFIC_ONCOMING × oncoming)), and a crowd ahead going the
- * same way slows it a little, so busy two-way paths jam while one-way loops keep flowing.
+ * One-way roads and traffic. A road tile in S.road is 1 (two-way) or 2–5 (one-way, pointing
+ * east, south, west or north). Going the wrong way up a one-way road is allowed but crawls at
+ * ONEWAY_WRONG speed, so bots plan around it.
+ * On roads, bots queue: a bot never closes to within QUEUE_GAP tiles of the bot ahead of it going
+ * the same way, so a slow or stopped bot backs up the ones behind it. On two-way roads each
+ * direction keeps to its own side, and passing oncoming traffic slows both bots a little
+ * (speed ÷ (1 + TRAFFIC_ONCOMING × oncoming)), so busy two-way roads back up while one-way loops
+ * keep flowing. A bot stuck in a queue for QUEUE_PATIENCE seconds squeezes past, so traffic can
+ * never lock up for good.
  */
 const ROAD_DIRS = [null, null, [1, 0], [0, 1], [-1, 0], [0, -1]];
 const ONEWAY_WRONG = 0.5;
-const TRAFFIC_ONCOMING = 1.5;
-const TRAFFIC_CROWD = 0.2;
+const TRAFFIC_ONCOMING = 0.8;
+const QUEUE_GAP = 0.6;
+const QUEUE_PATIENCE = 6;
+const LANE_OFFSET = 0.17;         // how far to the right of the centre line bots drive on two-way roads (drawing only)
 const STALK_GROW_TIME = 70;       // seconds for a planted stalk grove to mature
 const CROP_GROW_TIME = 45;        // seconds for a planted energy crop to ripen
 const FUEL_ENERGY = 150;          // battery points one Fuel gives at a Charging Station (1.5 full charges)
@@ -47,8 +52,8 @@ const FUEL_ENERGY = 150;          // battery points one Fuel gives at a Charging
  * emergency mode: it moves and works at `slow` speed and warbots hit half as hard.
  */
 const BATTERY = {
-  workerMove: 0.6, workerWork: 1.2, workerInside: 0.25,
-  warbotMove: 0.36, warbotFight: 0.9, garrisonCharge: 4,
+  workerMove: 0.52, workerWork: 1.2, workerInside: 0.25,
+  warbotMove: 0.31, warbotFight: 0.9, garrisonCharge: 4,
   low: 30, critical: 12, slow: 0.5,
 };
 
@@ -76,6 +81,8 @@ const BOT_ORDER = ['worker', 'hauler', 'agribot', 'paver', 'warbot'];
 const WARBOT_AMMO = 20;
 const AMMO_SHOTS = 10;            // shots in one Ammo
 const NO_AMMO_POWER = 0.35;       // how hard a warbot with no ammo hits
+const WARBOT_RANGE = 1.2;         // tiles: how far a warbot shoots
+const WARBOT_RANGE_BLOCKED = 2.2; // ...and across a building or cliff that stops it closing in
 
 // Terrain
 const T_GROUND = 0, T_WATER = 1, T_ROCK = 2;
@@ -131,8 +138,8 @@ const GOOD = {
   chip:    { name: 'Chip',    color: '#c8f05a', desc: 'Bot brains. Needed for every new bot.' },
   crude:   { name: 'Crude',   color: '#b08a6e', desc: 'Crude oil from an Oil Pump. A Refinery turns it into Fuel.' },
   fuel:    { name: 'Fuel',    color: '#ff5c8a', desc: 'Energy for Charging Stations. Grown at a Bio Farm or refined from Crude.' },
-  cement:  { name: 'Cement',  color: '#a9b4c2', desc: 'Made from Stone at a Cement Works. Paves concrete roads: 1 Cement for 10 tiles.' },
-  asphalt: { name: 'Asphalt', color: '#6b7280', desc: 'Made from Crude and Stone. A Roadworks lays it on paths for the fastest roads.' },
+  cement:  { name: 'Cement',  color: '#a9b4c2', desc: 'Made from Stone at a Cement Works. Paves roads: 1 Cement for 10 tiles.' },
+  asphalt: { name: 'Asphalt', color: '#6b7280', desc: 'Made from Crude and Stone. A Roadworks upgrades roads with it to asphalt, the fastest surface.' },
   ammo:    { name: 'Ammo',    color: '#e8c39e', desc: 'Made at an Ammo Plant. Warbots reload it in your Lander and Outposts.' },
   warhead: { name: 'Warhead', color: '#ffcf4a', desc: 'Made at a Munitions Works. Missile Silos fire them at enemy buildings.' },
 };
@@ -214,7 +221,7 @@ const BDEFS = {
     cost: { stone: 2, alloy: 2 }, ammo: 'crystal', range: 5, armor: 12, buildTime: 10, war: true,
   },
   kiln: {
-    name: 'Cement Works', desc: 'Grinds and bakes Stone into Cement for concrete roads.',
+    name: 'Cement Works', desc: 'Grinds and bakes Stone into Cement for roads.',
     cost: { stone: 4, fiber: 2 }, staff: true, inp: { stone: 2 }, make: { cement: 1 }, out: { cement: 4 },
     work: 6, armor: 10, buildTime: 10,
   },
@@ -224,7 +231,7 @@ const BDEFS = {
     work: 7, armor: 10, buildTime: 12,
   },
   roadworks: {
-    name: 'Roadworks', desc: 'Its Paver lays Asphalt on your paths nearby, turning them into the fastest roads. One Asphalt covers four tiles.',
+    name: 'Roadworks', desc: 'Its Paver upgrades your roads nearby to asphalt, the fastest surface. One Asphalt covers four tiles.',
     cost: { stone: 3, alloy: 1, fiber: 2 }, staff: true, crew: 'paver', roadworks: true, radius: 7, armor: 8, buildTime: 10,
   },
   armory: {
@@ -287,7 +294,7 @@ const DIFFICULTY = {
 };
 
 /** Starting goods in each Lander. */
-const START_STOCK = { fiber: 16, stone: 16, alloy: 8, chip: 4, crystal: 4, fuel: 4 };
+const START_STOCK = { fiber: 16, stone: 16, alloy: 8, chip: 4, crystal: 4, fuel: 4, cement: 3 };
 const START_BOTS = { worker: 12, hauler: 2, agribot: 1 };
 const START_WARBOTS = 4;
 const MIN_FREE_WORKERS = 3;   // workers always kept free for hauling and building

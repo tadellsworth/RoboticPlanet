@@ -318,7 +318,7 @@ function newGame(opts) {
   S = {
     v: 1, mode, seed, W, H, settings, difficulty: diff, time: 0, nextId: 1, winner: -1, milestone: 0,
     terrain: m.terrain, res: m.res, amt: m.amt, grow: m.grow, elev: m.elev, ramp: m.ramp, fert: m.fert,
-    road: new Uint8Array(W * H), pave: new Uint8Array(W * H),
+    road: new Uint8Array(W * H), pave: new Uint8Array(W * H), oneRoad: true,
     owner: new Int8Array(W * H).fill(-1),
     resRes: new Uint8Array(W * H),
     bAt: new Int32Array(W * H),
@@ -671,7 +671,7 @@ function setRoad(i, j, on) {
   for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) if (inMap(i + di, j + dj)) markDirty(i + di, j + dj);
 }
 
-/** Set an existing path tile's surface: 1 gravel, 2 concrete, 3 asphalt. */
+/** Set an existing road tile's surface: 1 road, 2 asphalt. */
 function setPave(i, j, tier) {
   const t = tIdx(i, j);
   if (!S.road[t] || S.pave[t] === tier) return;
@@ -684,7 +684,7 @@ function setPave(i, j, tier) {
 function topPave() {
   if (S.topPaveCache) return S.topPaveCache;
   let top = 1;
-  for (let t = 0; t < S.W * S.H && top < 3; t++) if (S.road[t] && S.pave[t] > top) top = S.pave[t];
+  for (let t = 0; t < S.W * S.H && top < 2; t++) if (S.road[t] && S.pave[t] > top) top = S.pave[t];
   S.topPaveCache = top;
   return top;
 }
@@ -839,8 +839,11 @@ function deserializeGame(json) {
       }
     }
   }
-  // Saves from before road surfaces: every path is gravel.
+  // Saves from before road surfaces: every path is a road. Saves with three surfaces (gravel,
+  // concrete, asphalt): gravel and concrete both become roads.
   if (!o.pave) o.pave = o.road.map((v) => (v ? 1 : 0));
+  else if (!o.oneRoad) o.pave = o.pave.map((v) => (v >= 3 ? 2 : v ? 1 : 0));
+  o.oneRoad = true;
   for (const k in TYPED_FIELDS) o[k] = TYPED_FIELDS[k].from(o[k]);
   o.hist = o.hist || newHistory();
   for (const P of o.players) { P.made = P.made || {}; P.madeBots = P.madeBots || {}; P.stats.outposts = P.stats.outposts || 0; P.stats.startBots = P.stats.startBots ?? 18; }

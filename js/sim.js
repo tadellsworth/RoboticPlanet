@@ -260,19 +260,24 @@ function goTo(u, x, y) {
 }
 
 /*
- * Traffic: how many bots are walking on each tile this tick, split by heading (east, south, west,
- * north). Only the entries touched are cleared each tick, so this stays cheap on big maps.
+ * Traffic: every tick, the bots travelling on road tiles are listed per tile (a linked list through
+ * TRAFFIC.next) and counted per tile by heading (east, south, west, north). Only the entries
+ * touched are cleared each tick, so this stays cheap on big maps.
  */
-const TRAFFIC = { occ: null, n: 0, used: [] };
+const TRAFFIC = { occ: null, head: null, n: 0, used: [], cells: [], bots: [], next: [] };
 
 function heading(face) { return ((Math.round(face / (Math.PI / 2)) % 4) + 4) % 4; }
 
 function countTraffic() {
   const N = S.W * S.H;
-  if (TRAFFIC.n !== N) { TRAFFIC.occ = new Uint8Array(N * 4); TRAFFIC.n = N; TRAFFIC.used = []; }
-  const occ = TRAFFIC.occ;
+  if (TRAFFIC.n !== N) {
+    TRAFFIC.occ = new Uint8Array(N * 4); TRAFFIC.head = new Int32Array(N).fill(-1); TRAFFIC.n = N;
+    TRAFFIC.used = []; TRAFFIC.cells = [];
+  }
+  const occ = TRAFFIC.occ, head = TRAFFIC.head;
   for (const k of TRAFFIC.used) occ[k] = 0;
-  TRAFFIC.used.length = 0;
+  for (const t of TRAFFIC.cells) head[t] = -1;
+  TRAFFIC.used.length = 0; TRAFFIC.cells.length = 0; TRAFFIC.bots.length = 0; TRAFFIC.next.length = 0;
   for (const u of S.bots) {
     if (u.dead || u.inside || !u.path) continue;
     const t = Math.floor(u.y) * S.W + Math.floor(u.x);
@@ -280,16 +285,56 @@ function countTraffic() {
     const k = t * 4 + heading(u.face);
     if (!occ[k]) TRAFFIC.used.push(k);
     if (occ[k] < 255) occ[k]++;
+    if (head[t] < 0) TRAFFIC.cells.push(t);
+    TRAFFIC.next.push(head[t]);
+    head[t] = TRAFFIC.bots.length;
+    TRAFFIC.bots.push(u);
   }
 }
 
-/** How much traffic slows bot u on path tile `here`, heading for tile `next` (0 = free flow). */
+/** How much oncoming traffic slows bot u on road tile `here`, heading for tile `next` (0 = free flow). */
 function trafficJam(u, here, next) {
   const d = heading(u.face), opp = (d + 2) & 3, occ = TRAFFIC.occ;
   if (!occ || occ.length !== S.W * S.H * 4) return 0;
-  let oncoming = occ[here * 4 + opp], ahead = 0;
-  if (next !== here && S.road[next]) { oncoming += occ[next * 4 + opp]; ahead = occ[next * 4 + d]; }
-  return TRAFFIC_ONCOMING * oncoming + TRAFFIC_CROWD * Math.max(0, ahead - 1);
+  let oncoming = occ[here * 4 + opp];
+  if (next !== here && S.road[next]) oncoming += occ[next * 4 + opp];
+  return TRAFFIC_ONCOMING * oncoming;
+}
+
+/**
+ * How far bot u may move before it closes in on the bot ahead of it in its lane: the nearest bot on
+ * the road ahead (within a tile and a bit, roughly in line) that is travelling the same way.
+ * Infinity when the road ahead is clear.
+ */
+function queueRoom(u) {
+  const head = TRAFFIC.head;
+  if (!head || head.length !== S.W * S.H || u.squeezeUntil > S.time) return Infinity;
+  let t0 = u.path[u.pi];
+  let dx = (t0 % S.W) + 0.5 - u.x, dy = ((t0 / S.W) | 0) + 0.5 - u.y, d = Math.sqrt(dx * dx + dy * dy);
+  if (d < 1e-3) {
+    if (u.pi + 1 >= u.path.length) return Infinity;
+    t0 = u.path[u.pi + 1];
+    dx = (t0 % S.W) + 0.5 - u.x; dy = ((t0 / S.W) | 0) + 0.5 - u.y; d = Math.sqrt(dx * dx + dy * dy);
+  }
+  dx /= d; dy /= d;
+  let room = Infinity;
+  const here = Math.floor(u.y) * S.W + Math.floor(u.x);
+  for (const t of [here, u.path[u.pi], u.path[u.pi + 1]]) {
+    if (t === undefined || !S.road[t]) continue;
+    for (let k = head[t]; k >= 0; k = TRAFFIC.next[k]) {
+      const v = TRAFFIC.bots[k];
+      if (v === u || v.dead || v.inside || !v.path) continue;
+      const rx = v.x - u.x, ry = v.y - u.y;
+      let along = rx * dx + ry * dy;
+      if (along < -0.05 || along > 1.4) continue;                        // behind us, or far ahead
+      if (Math.abs(rx * dy - ry * dx) > 0.35) continue;                  // off to the side
+      if (Math.cos(v.face) * dx + Math.sin(v.face) * dy < 0.3) continue; // oncoming or crossing: other lane
+      // Two bots on the same spot (say, both just out of the Lander): the older one goes first.
+      if (along <= 0.05) { if (v.id > u.id) continue; along = 0; }
+      room = Math.min(room, along - QUEUE_GAP);
+    }
+  }
+  return Math.max(0, room);
 }
 
 /** Walk along the current path. Returns true once the destination is reached. */
@@ -305,7 +350,18 @@ function moveAlong(u, dt) {
     speed *= wrong ? ONEWAY_WRONG : PAVE[S.pave[here] || 1].speed / (1 + trafficJam(u, here, next));
   } else if (S.ramp[here]) speed *= SLOPE_SPEED; else if (S.res[here]) speed *= 0.75;
   let step = speed * batFactor(u) * dt;
-  u.moved = 1;
+  // On roads, wait behind the bot ahead instead of driving through it.
+  if (r || S.road[u.path[u.pi]]) {
+    const room = queueRoom(u);
+    if (room < step) {
+      if (room < step * 0.25) {
+        u.queueT = (u.queueT || 0) + dt;
+        if (u.queueT > QUEUE_PATIENCE) { u.squeezeUntil = S.time + 1.5; u.queueT = 0; } // jammed solid: squeeze past
+      }
+      step = room;
+    } else u.queueT = 0;
+  }
+  u.moved = step > 0 ? 1 : 0;
   while (step > 0 && u.pi < u.path.length) {
     const t = u.path[u.pi];
     const tx = (t % S.W) + 0.5, ty = ((t / S.W) | 0) + 0.5;
@@ -330,22 +386,23 @@ function travel(u, x, y, dt) {
 /** Straight-line step used while chasing in combat. */
 function moveDirect(u, x, y, dt) {
   const dx = x - u.x, dy = y - u.y, d = Math.sqrt(dx * dx + dy * dy);
-  if (d < 1e-4) return;
+  if (d < 1e-4) return true;
   u.face = Math.atan2(dy, dx);
   const s = Math.min(WARBOT_SPEED * batFactor(u) * dt, d);
   const nx = u.x + (dx / d) * s, ny = u.y + (dy / d) * s;
-  u.moved = 1;
   const ti = Math.floor(nx), tj = Math.floor(ny), ci = Math.floor(u.x), cj = Math.floor(u.y);
-  if (!inMap(ti, tj)) return;
+  if (!inMap(ti, tj)) return false;
   const t = tIdx(ti, tj), c = tIdx(ci, cj);
   if (t !== c) {
-    if (S.bAt[t]) return;
+    if (S.bAt[t]) return false;
     // Chasing can't jump down or up a cliff: the step must be walkable via an orthogonal neighbour.
     const ok = ti === ci || tj === cj ? canStep(c, t)
       : (canStep(c, tIdx(ti, cj)) && canStep(tIdx(ti, cj), t)) || (canStep(c, tIdx(ci, tj)) && canStep(tIdx(ci, tj), t));
-    if (!ok) return;
+    if (!ok) return false;
   }
+  u.moved = 1;
   u.x = nx; u.y = ny;
+  return true;
 }
 
 /* ------------------------------------------------------------------ logistics */
@@ -746,7 +803,7 @@ function findCropSpot(b, radius) {
   return best;
 }
 
-/** The nearest path tile (to x, y) within a Roadworks' reach that isn't asphalt yet. */
+/** The nearest road tile (to x, y) within a Roadworks' reach that isn't asphalt yet. */
 function findPaveSpot(b, x, y) {
   const radius = BDEFS[b.type].radius, r2 = radius * radius + 0.3;
   const zone = S.zone[tIdx(b.x, b.y)];
@@ -754,7 +811,7 @@ function findPaveSpot(b, x, y) {
   for (let j = Math.max(0, b.y - radius); j <= Math.min(S.H - 1, b.y + radius); j++) {
     for (let i = Math.max(0, b.x - radius); i <= Math.min(S.W - 1, b.x + radius); i++) {
       const t = j * S.W + i;
-      if (!S.road[t] || S.pave[t] >= 3 || S.resRes[t] || S.owner[t] !== b.owner || S.zone[t] !== zone) continue;
+      if (!S.road[t] || S.pave[t] >= 2 || S.resRes[t] || S.owner[t] !== b.owner || S.zone[t] !== zone) continue;
       if (dist2(i, j, b.x, b.y) > r2) continue;
       const d = dist2(i, j, x, y);
       if (d < bd) { bd = d; best = t; }
@@ -899,8 +956,8 @@ function doStaff(u, t, dt) {
           markDirty(ni, nj);
         }
       } else if (def.roadworks) {
-        if (S.road[node] && S.pave[node] < 3) {
-          setPave(ni, nj, 3);
+        if (S.road[node] && S.pave[node] < 2) {
+          setPave(ni, nj, 2);
           b.charges = Math.max(0, (b.charges || 0) - 1);
           S.players[u.owner].paved = (S.players[u.owner].paved || 0) + 1;
         }
@@ -1213,13 +1270,23 @@ function warbotAct(u, dt) {
         const h = getE(t.home);
         if (h) foe = nearestEnemyBot(u.owner, h.x + 0.5, h.y + 0.5, 6.5, true);
       }
+      if (foe && foe.id === u.ignoreFoe && S.time < u.ignoreUntil) foe = null;
       if (foe) u.fight = foe.id;
     }
   }
   if (foe) {
+    // Warbots shoot from just over a tile away; across an obstacle they can reach a bit further.
+    // If something blocks the way and the foe is further off, walk round to it, or give up on it.
     const d = dist(u.x, u.y, foe.x, foe.y);
-    if (d > 0.7) moveDirect(u, foe.x, foe.y, dt);
-    else if (u.cd <= 0) {
+    let inReach = d <= WARBOT_RANGE, pathing = false;
+    if (!inReach && !moveDirect(u, foe.x, foe.y, dt)) {
+      if (d <= WARBOT_RANGE_BLOCKED) inReach = true;
+      else {
+        pathing = true;
+        if (travel(u, Math.floor(foe.x), Math.floor(foe.y), dt) === null) { u.fight = 0; u.ignoreFoe = foe.id; u.ignoreUntil = S.time + 5; }
+      }
+    }
+    if (inReach && u.cd <= 0) {
       u.cd = 0.9;
       u.face = Math.atan2(foe.y - u.y, foe.x - u.x);
       addFx('spark', (u.x + foe.x) / 2, (u.y + foe.y) / 2, { color: PLAYER_COLORS[u.owner] });
@@ -1228,7 +1295,7 @@ function warbotAct(u, dt) {
       damageBot(foe, Math.max(1, Math.round((2 + (hash2(u.id, S.tick, 7) < 0.5 ? 1 : 0)) * power * (armed ? 1 : NO_AMMO_POWER))));
       u.fought = 1;
     }
-    u.path = null;
+    if (!pathing) u.path = null;
     return;
   }
   if (!t) { goGarrison(u); return; }
@@ -1577,19 +1644,19 @@ function roadCredit(owner, g) {
   return P.roadCredit[g] || 0;
 }
 
-/** What laying one tile of surface `tier` (1 gravel, 2 concrete) costs. */
-function paveCost(tier) { return PAVE[tier].cost || PAVE[2].cost; }
+/** What laying one road tile costs. */
+function roadCost() { return PAVE[1].cost; }
 
-/** Can `owner` afford one more tile of surface `tier`? */
-function canAffordRoad(owner, tier) {
-  const have = playerGoods(owner), cost = paveCost(tier || 1);
+/** Can `owner` afford one more road tile? */
+function canAffordRoad(owner) {
+  const have = playerGoods(owner), cost = roadCost();
   for (const g in cost) if (roadCredit(owner, g) + have[g] < cost[g] - 1e-9) return false;
   return true;
 }
 
-/** How many more tiles of surface `tier` the player could lay right now. */
-function roadTilesAffordable(owner, tier) {
-  const have = playerGoods(owner), cost = paveCost(tier || 1);
+/** How many more road tiles the player could lay right now. */
+function roadTilesAffordable(owner) {
+  const have = playerGoods(owner), cost = roadCost();
   let n = Infinity;
   for (const g in cost) n = Math.min(n, Math.floor((roadCredit(owner, g) + have[g]) / cost[g] + 1e-9));
   return n;
@@ -1630,32 +1697,21 @@ function refundRoad(owner, cost, i, j) {
   }
 }
 
-/**
- * Lay a path tile of surface `tier` (1 gravel, 2 concrete), or upgrade a gravel tile to concrete
- * (its Stone is refunded). Returns '' on success or a reason it couldn't be done.
- */
-function buildRoad(owner, i, j, tier) {
-  tier = tier || 1;
-  const t = tIdx(i, j);
-  const cur = S.road[t] ? S.pave[t] || 1 : 0;
-  if (cur >= tier) return '';
-  if (!cur && !canRoad(owner, i, j)) return 'You can only lay paths on open ground inside your border.';
-  if (cur && S.owner[t] !== owner) return 'You can only pave paths inside your border.';
-  if (!canAffordRoad(owner, tier)) return `Out of ${Object.keys(paveCost(tier)).map((g) => GOOD[g].name).join(' and ')} for ${PAVE[tier].name.toLowerCase()}s.`;
-  payRoad(owner, paveCost(tier));
-  if (cur) refundRoad(owner, paveCost(cur), i, j);
-  else setRoad(i, j, true);
-  setPave(i, j, tier);
+/** Lay a road tile, paying its Cement. Returns '' on success or a reason it couldn't be done. */
+function buildRoad(owner, i, j) {
+  if (S.road[tIdx(i, j)]) return '';
+  if (!canRoad(owner, i, j)) return 'You can only lay roads on open ground inside your border.';
+  if (!canAffordRoad(owner)) return `Out of ${Object.keys(roadCost()).map((g) => GOOD[g].name).join(' and ')} for roads. Make more at a Cement Works.`;
+  payRoad(owner, roadCost());
+  setRoad(i, j, true);
   return '';
 }
 
-/** Remove a path tile and refund what it was laid with (Asphalt on top isn't returned). */
+/** Remove a road tile and refund its Cement (Asphalt on top isn't returned). */
 function removeRoad(owner, i, j) {
-  const t = tIdx(i, j);
-  if (!S.road[t]) return;
-  const tier = S.pave[t] || 1;
+  if (!S.road[tIdx(i, j)]) return;
   setRoad(i, j, false);
-  refundRoad(owner, paveCost(tier), i, j);
+  refundRoad(owner, roadCost(), i, j);
 }
 
 /** Pausing a building sends its worker off to do other jobs until it is resumed. */

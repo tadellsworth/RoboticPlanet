@@ -47,7 +47,7 @@
   <div id="banner" hidden>
     <div id="banner-text"></div>
     <div class="banner-actions">
-      <div id="banner-seg" class="seg road-seg" hidden><button data-v="gravel">Gravel</button><button data-v="concrete">Concrete</button><button data-v="arrows">Arrows</button></div>
+      <div id="banner-seg" class="seg road-seg" hidden><button data-v="road">Lay roads</button><button data-v="arrows">Arrows</button></div>
       <button id="banner-ok" class="btn primary">Build here</button>
       <button id="banner-cancel" class="btn">Cancel</button>
     </div>
@@ -171,9 +171,9 @@
       <p>The Foundry also builds specialists: <b>Haulers</b> carry two goods at a time and move faster but only haul; <b>Agribots</b> are the only bots that can run Bio Farms and Grove Planters; <b>Pavers</b> run the Roadworks. You start with two Haulers and one Agribot.</p>
       <h3>Territory</h3>
       <p>You can only build inside your border. <b>Outposts</b> push the border out and hold warbots. <b>Depots</b> are extra storage that shorten trips.</p>
-      <h3>Paths and traffic</h3>
-      <p>Bots are slow on open ground. Paths come in three surfaces: <b>gravel</b> (1 Stone paves 4 tiles, 2× speed), <b>concrete</b> (1 Cement paves 10 tiles, 2½×) and <b>asphalt</b> (3×), which a <b>Roadworks</b> lays on top of your paths using Asphalt. In the Paths banner pick Gravel or Concrete and drag; dragging concrete over gravel upgrades it and returns the Stone.</p>
-      <p>On a busy two-way path, bots slow down whenever they meet traffic coming the other way. Pick <b>Arrows</b> and drag along a path to make it one-way; tap a path to turn its arrow. A loop of one-way paths, one lane out and one back, keeps traffic flowing. Bots can still go the wrong way up a one-way path, but only at a crawl.</p>
+      <h3>Roads and traffic</h3>
+      <p>Bots are slow on open ground. Tap <b>Paths</b> and drag to lay <b>roads</b>: they cost Cement (1 Cement paves 10 tiles; you land with 3, and a <b>Cement Works</b> makes more from Stone) and double a bot's speed. A <b>Roadworks</b> with a Paver upgrades roads nearby to <b>asphalt</b> (2¾× speed) using Asphalt from an Asphalt Plant. Tap a road to remove it and get its Cement back.</p>
+      <p>Bots queue on roads: each one waits behind the bot ahead of it going the same way, so a slow or stopped bot backs up the line. On two-way roads each direction keeps to its own side, but passing oncoming traffic slows bots down. Pick <b>Arrows</b> and drag along a road to make it one-way; tap a road to turn its arrow. A loop of one-way roads, one lane out and one back, keeps traffic flowing. Bots can still go the wrong way up a one-way road, but only at a crawl.</p>
       <h3>Batteries</h3>
       <p>Every bot runs on a battery that drains as it walks, works and fights. Low bots recharge at your Lander (free) or a <b>Charging Station</b>; warbots also recharge inside their garrison. A flat battery puts a bot in emergency mode: half speed, half power. Build Charging Stations near busy areas far from your Lander. Stations burn <b>Fuel</b>: one Fuel recharges about one and a half batteries, so keep a Bio Farm or an Oil Pump and Refinery running.</p>
       <h3>Fighting (Versus)</h3>
@@ -188,7 +188,7 @@
       <h3>Statistics</h3>
       <p>The pause menu and the end-of-game screen have <b>Statistics</b>: graphs of your bots, land and goods over time (against the rival in Versus), and how busy each kind of building was. Tap a building type to see its busy time over the game. Each building's panel also shows how busy it has been lately.</p>
       <h3>Controls</h3>
-      <p>Drag to move the map and pinch (or scroll) to zoom. Tap or drag on the minimap to jump around. Tap anything to see what it is doing.</p>
+      <p>Drag to move the map and pinch (or scroll) to zoom. Tap or drag on the minimap to jump around. Tap anything to see what it is doing. Hover over (or tap) a counter in the top bar to see which good it is.</p>
     </div>
     <button id="h-close" class="btn primary big">Got it</button>
   </div>

@@ -10,8 +10,8 @@
  *   made      produce `n` of `good` over the mission
  *   bots      build `n` new bots at the Foundry (any type, or `type`)
  *   own       have `n` bots of `type` at once
- *   paths     have `n` path tiles of surface `tier` or better (1 gravel, 2 concrete, 3 asphalt)
- *   oneway    have `n` one-way path tiles
+ *   paths     have `n` road tiles of surface `tier` or better (1 road, 2 asphalt)
+ *   oneway    have `n` one-way road tiles
  *   land      claim `n` percent of the land
  *   outposts  capture `n` rival Outposts
  *   capture   capture the rival Lander
@@ -83,11 +83,12 @@ const MISSIONS = [
   },
   {
     id: 'rushhour', name: 'Rush Hour',
-    brief: 'A supply depot landed far from your Lander and the traffic is already backing up. Order Haulers and lay paths, with one-way lanes to keep goods flowing.',
+    brief: 'A supply depot landed far from your Lander and the traffic is already backing up. Order Haulers and lay roads, with one-way lanes to keep goods flowing.',
     mode: 'colony', seed: 4409, size: 1, rough: 0, rich: 2, limit: [0, 0, 20],
     goals: [{ kind: 'own', type: 'hauler', n: [3, 4, 5] }, { kind: 'paths', tier: 1, n: [24, 32, 40] }, { kind: 'oneway', n: [8, 12, 16] }],
     setup(S) {
       const L = getE(S.players[0].lander);
+      L.stock.cement = (L.stock.cement || 0) + 3;
       // A depot of Stone on the far side of the landing zone.
       for (let r = 7; r >= 4; r--) for (const [dx, dy] of [[0, -r], [r, 0], [-r, 0]]) {
         if (S.buildings.some((b) => b.type === 'depot')) break;
@@ -97,11 +98,11 @@ const MISSIONS = [
   },
   {
     id: 'blacktop', name: 'Blacktop',
-    brief: 'The survey crews want proper roads. Bake Cement, pave concrete, then send a Paver out with Asphalt from the oil seep beside your base.',
+    brief: 'The survey crews want proper roads. Bake Cement, lay roads, then send a Paver out with Asphalt made from the oil seep beside your base.',
     mode: 'colony', seed: 5501, size: 1, rough: 2, rich: 2, limit: [0, 0, 25],
     goals: [
-      { kind: 'made', good: 'cement', n: [6, 10, 14] }, { kind: 'paths', tier: 2, n: [15, 25, 35] },
-      { kind: 'paths', tier: 3, n: [8, 14, 20] },
+      { kind: 'made', good: 'cement', n: [6, 10, 14] }, { kind: 'paths', tier: 1, n: [15, 25, 35] },
+      { kind: 'paths', tier: 2, n: [8, 14, 20] },
     ],
     layout(m, W) { const b = m.bases[0]; placeField(m, W, b.x + 5, b.y - 5, 1.2, R_OIL, 0.95, 9); },
     setup(S) { const L = getE(S.players[0].lander); L.stock.stone += 10; L.stock.cement = 2; },
@@ -157,11 +158,11 @@ function goalState(g, diff) {
       break;
     case 'paths':
       for (let t = 0; t < S.W * S.H; t++) if (S.road[t] && S.owner[t] === 0 && (S.pave[t] || 1) >= g.tier) have++;
-      text = `${['', 'Lay', 'Pave', 'Surface'][g.tier]} ${need} ${['', 'path', 'concrete or asphalt road', 'asphalt road'][g.tier]} tiles`;
+      text = `${['', 'Lay', 'Surface'][g.tier]} ${need} ${['', 'road', 'asphalt road'][g.tier]} tiles`;
       break;
     case 'oneway':
       for (let t = 0; t < S.W * S.H; t++) if (S.road[t] >= 2 && S.owner[t] === 0) have++;
-      text = `Make ${need} path tiles one-way`;
+      text = `Make ${need} road tiles one-way`;
       break;
     case 'land':
       have = Math.floor(landShare(0) * 100);

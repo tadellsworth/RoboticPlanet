@@ -32,8 +32,13 @@ function initUI() {
   for (const g of GOODS) {
     const el = document.createElement('div');
     el.className = 'res-chip';
-    el.title = GOOD[g].name;
+    el.setAttribute('aria-label', GOOD[g].name);
+    el.dataset.g = g;
     el.innerHTML = `<i class="gi ${g}"></i><span>0</span>`;
+    // Hover (mouse) or tap (touch) shows the good's name and what it's for.
+    el.onpointerenter = (e) => { if (e.pointerType === 'mouse') showGoodTip(g, el, 0); };
+    el.onpointerleave = (e) => { if (e.pointerType === 'mouse') hideGoodTip(); };
+    el.onclick = () => showGoodTip(g, el, 2600);
     goods.appendChild(el);
     UI.goodEls[g] = el;
   }
@@ -132,6 +137,27 @@ function syncMenu() {
   $('m-continue').hidden = !hasSave();
 }
 
+/* ------------------------------------------------------------------ goods tooltip */
+
+/** A small label under a goods counter: the good's name, how many you have and what it's for. */
+function showGoodTip(g, el, ms) {
+  let tip = $('good-tip');
+  if (!tip) { tip = document.createElement('div'); tip.id = 'good-tip'; tip.setAttribute('role', 'tooltip'); document.body.appendChild(tip); }
+  clearTimeout(UI.tipTimer);
+  tip.innerHTML = `<b>${GOOD[g].name}</b> <em>${el.lastChild.textContent}</em><span>${GOOD[g].desc}</span>`;
+  tip.hidden = false;
+  tip.dataset.g = g;
+  const r = el.getBoundingClientRect(), w = tip.offsetWidth;
+  tip.style.top = Math.round(r.bottom + 6) + 'px';
+  tip.style.left = Math.round(clamp(r.left + r.width / 2 - w / 2, 8, window.innerWidth - w - 8)) + 'px';
+  if (ms) UI.tipTimer = setTimeout(hideGoodTip, ms);
+}
+
+function hideGoodTip() {
+  clearTimeout(UI.tipTimer);
+  if ($('good-tip')) $('good-tip').hidden = true;
+}
+
 /* ------------------------------------------------------------------ minimap */
 
 function setMinimap(on) {
@@ -203,6 +229,7 @@ function enterGame() {
 }
 
 function toMenu() {
+  hideGoodTip();
   UI.inGame = false;
   UI.paused = false;
   closeSheet();
@@ -299,8 +326,8 @@ function goalText(g, diff) {
     case 'made': return `Make ${n} ${GOOD[g.good].name}`;
     case 'bots': return `Build ${n} new ${g.type ? BOTS[g.type].plural : 'bots'} at the Foundry`;
     case 'own': return `Have ${n} ${BOTS[g.type].plural}`;
-    case 'paths': return `${['', 'Lay', 'Pave', 'Surface'][g.tier]} ${n} ${['', 'path', 'concrete or asphalt road', 'asphalt road'][g.tier]} tiles`;
-    case 'oneway': return `Make ${n} path tiles one-way`;
+    case 'paths': return `${['', 'Lay', 'Surface'][g.tier]} ${n} ${['', 'road', 'asphalt road'][g.tier]} tiles`;
+    case 'oneway': return `Make ${n} road tiles one-way`;
     case 'land': return `Claim ${n}% of the land`;
     case 'outposts': return n > 1 ? `Capture ${n} rival Outposts` : 'Capture a rival Outpost';
     case 'capture': return 'Capture the rival Lander';
@@ -504,18 +531,14 @@ function onMapTap(i, j, wx, wy) {
   if (R.mode === 'road') {
     if (!inMap(i, j)) return;
     const t = tIdx(i, j);
-    const tier = UI.roadMode === 'concrete' ? 2 : 1;
-    if (S.road[t] && UI.roadMode !== 'arrows' && (S.pave[t] || 1) < tier) {
-      const why = buildRoad(0, i, j, tier);
-      if (why) { sfx('error'); showRoadBanner(why); } else { sfx('click'); showRoadBanner(); }
-    } else if (S.road[t] && UI.roadMode === 'arrows') {
+    if (S.road[t] && UI.roadMode === 'arrows') {
       // Turn the arrow: east, south, west, north, then back to two-way.
       setRoadDir(i, j, S.road[t] >= 5 ? 1 : S.road[t] + 1);
       sfx('click');
       showRoadBanner();
     } else if (S.road[t]) { removeRoad(0, i, j); sfx('click'); showRoadBanner(); }
     else {
-      const why = buildRoad(0, i, j, UI.roadTier || 1);
+      const why = buildRoad(0, i, j);
       if (why) { sfx('error'); showRoadBanner(why); } else { sfx('click'); showRoadBanner(); }
     }
     return;
@@ -548,8 +571,8 @@ function rallyAtTap(wx, wy) {
 }
 
 /**
- * Dragging lays path tiles along the drag. In one-way mode each tile also points the way the
- * finger moved; in two-way mode dragging over one-way tiles makes them two-way again.
+ * Dragging lays road tiles along the drag. In Arrows mode each tile also points the way the
+ * finger moved; in Road mode dragging over one-way tiles makes them two-way again.
  */
 function onRoadPaint(i, j, first) {
   if (R.mode !== 'road') return;
@@ -557,12 +580,11 @@ function onRoadPaint(i, j, first) {
   const line = tileLine(from.i, from.j, i, j);
   let prev = null;
   const arrows = UI.roadMode === 'arrows';
-  const tier = arrows ? UI.roadTier || 1 : UI.roadMode === 'concrete' ? 2 : 1;
   for (const [x, y] of line) {
     if (!inMap(x, y)) break;
     const t = tIdx(x, y);
-    if ((!S.road[t] && canRoad(0, x, y)) || (S.road[t] && !arrows && (S.pave[t] || 1) < tier)) {
-      const why = buildRoad(0, x, y, tier);
+    if (!S.road[t] && canRoad(0, x, y)) {
+      const why = buildRoad(0, x, y);
       if (why) { if (!UI.roadWarned) { UI.roadWarned = true; sfx('error'); } showRoadBanner(why); break; }
     }
     if (S.road[t]) {
@@ -579,21 +601,17 @@ function onRoadPaint(i, j, first) {
 }
 
 /**
- * The Paths banner: lay Gravel (Stone) or Concrete (Cement), or point paths one way with Arrows.
+ * The Paths banner: lay roads (Cement), or point them one way with Arrows.
  * Shows what a tile costs and how much you have left.
  */
 function showRoadBanner(problem) {
-  const mode = UI.roadMode || 'gravel';
-  const tier = mode === 'concrete' ? 2 : 1;
-  if (mode !== 'arrows') UI.roadTier = tier;
-  const g = Object.keys(paveCost(tier))[0];
-  const per = Math.round(1 / paveCost(tier)[g]);
-  const cost = `<b>1 ${GOOD[g].name} paves ${per} tiles</b> (${roadTilesAffordable(0, tier)} left)`;
+  const mode = UI.roadMode === 'arrows' ? 'arrows' : 'road';
+  const g = Object.keys(roadCost())[0];
+  const per = Math.round(1 / roadCost()[g]);
+  const cost = `<b>1 ${GOOD[g].name} paves ${per} tiles</b> (${roadTilesAffordable(0)} left)`;
   const how = mode === 'arrows'
-    ? 'Drag along paths to point them the way you drag: <b>one-way</b> traffic never meets head-on. Tap a path to turn its arrow; drag in Gravel or Concrete to clear arrows.'
-    : mode === 'concrete'
-      ? 'Drag to lay <b>concrete</b> roads (2½× speed) or drag over gravel to upgrade it; its Stone comes back. A Roadworks can top them with asphalt (3×).'
-      : 'Drag to lay <b>gravel paths</b>: bots go twice as fast, but slow down for oncoming traffic. Tap a path to remove it.';
+    ? 'Drag along roads to point them the way you drag: <b>one-way</b> traffic never meets head-on. Tap a road to turn its arrow; drag in Road mode to clear arrows.'
+    : 'Drag to lay <b>roads</b>: bots go twice as fast on them and queue behind each other. A Roadworks upgrades them to asphalt. Tap a road to remove it.';
   showBanner((problem ? `<span class="err">${problem}</span> ` : '') + `${how} ${cost}.`, null, 'Done');
   $('banner-seg').hidden = false;
   for (const btn of $('banner-seg').children) {
@@ -777,10 +795,10 @@ function refreshBuildingSheet(b) {
       for (let j = Math.max(0, b.y - def.radius); j <= Math.min(S.H - 1, b.y + def.radius); j++) {
         for (let i = Math.max(0, b.x - def.radius); i <= Math.min(S.W - 1, b.x + def.radius); i++) {
           const t = tIdx(i, j);
-          if (S.road[t] && S.pave[t] < 3 && S.owner[t] === b.owner && dist2(i, j, b.x, b.y) <= r2) left++;
+          if (S.road[t] && S.pave[t] < 2 && S.owner[t] === b.owner && dist2(i, j, b.x, b.y) <= r2) left++;
         }
       }
-      parts.push(`<div class="kv"><span>Paths in reach still to surface</span><span>${left} tiles</span></div>`);
+      parts.push(`<div class="kv"><span>Roads in reach still to surface</span><span>${left} tiles</span></div>`);
       if (mine) parts.push(`<div class="kv"><span>Asphalt</span><span>${goodTag('asphalt', `${b.stock.asphalt || 0}/3`, !(b.stock.asphalt > 0) && !(b.charges > 0))} + ${b.charges || 0} tiles in the hopper</span></div>`);
     }
     if (def.ammoStock && mine && S.mode !== 'colony') {
@@ -1066,7 +1084,8 @@ const OBJECTIVES = [
   { text: 'Build a <b>Bot Foundry</b> so you can make more workers.', done: () => hasBuilt('foundry') },
   { text: 'Tap your <b>Bot Foundry</b> and order some <b>Workers</b>: it only builds the bots you ask for.', done: () => S.players[0].stats.bots > S.players[0].stats.startBots || S.buildings.some((b) => !b.dead && b.owner === 0 && hasOrders(b)) },
   { text: 'Build an <b>Outpost</b> near your border to claim more land.', done: () => hasBuilt('outpost') },
-  { text: 'Tap <b>Paths</b> and draw roads between busy buildings so workers move faster.', done: () => S.road.reduce((a, v) => a + (v ? 1 : 0), 0) >= 6 },
+  { text: 'Tap <b>Paths</b> and lay roads between busy buildings so workers move faster. 1 Cement paves 10 tiles.', done: () => S.road.reduce((a, v) => a + (v ? 1 : 0), 0) >= 6 },
+  { text: 'Build a <b>Cement Works</b> to turn Stone into Cement for more roads.', done: () => hasBuilt('kiln') },
   { text: 'Charging Stations burn <b>Fuel</b>. Build a <b>Bio Farm</b> beside the dark fertile soil to grow it (your Agribot runs it).', done: () => hasBuilt('farm') },
   { text: 'Warbots need <b>Ammo</b>. Build an <b>Ammo Plant</b>: workers stock your Lander and Outposts and warbots reload there.', done: () => S.mode === 'colony' || hasBuilt('armory') },
 ];

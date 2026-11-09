@@ -45,6 +45,15 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .goods.two-rows { gap: 3px; }
 .goods.two-rows .res-chip { padding: 3px 4px; font-size: 13px; border-radius: 8px; }
 .res-chip.flash { animation: flash 0.6s; }
+.res-chip { cursor: default; }
+#good-tip {
+  position: fixed; z-index: 19; max-width: 230px; pointer-events: none;
+  background: #0d0f15; border: 1px solid rgba(255, 255, 255, 0.16); border-radius: 10px; padding: 7px 10px;
+  font-size: 13px; line-height: 1.35; box-shadow: 0 8px 22px rgba(0, 0, 0, 0.5);
+}
+#good-tip b { font-size: 14px; }
+#good-tip em { font-style: normal; color: var(--muted); font-variant-numeric: tabular-nums; }
+#good-tip span { display: block; color: #c9d0db; margin-top: 2px; }
 @keyframes flash { from { background: rgba(126, 224, 138, 0.35); } }
 .gi { width: 12px; height: 12px; border-radius: 3px; flex: none; box-shadow: inset 0 -2px 0 rgba(0,0,0,0.25); }
 .gi.fiber { background: var(--g-fiber); border-radius: 50% 50% 50% 0; }
@@ -136,7 +145,7 @@ body.mm-off .objective { margin-right: 54px; }
 #banner-text .err { color: var(--danger); }
 #banner-text .ok { color: var(--good); }
 .banner-actions { display: flex; gap: 8px; }
-.banner-actions .road-seg { flex: 3; }
+.banner-actions .road-seg { flex: 2; }
 .banner-actions .road-seg button { padding: 7px 4px; }
 .banner-actions .btn { flex: 1; }
 
