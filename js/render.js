@@ -62,7 +62,10 @@ const BIOME_LOOK = {
     theme: { cliffTop: '#33402a', cliffBottom: '#1b2215', slope: '#7b8a52', water: '#22402f', waterEdge: '#3d6a4a',
       rock: '#2b3329', rockTop: '#3a4636', rockHi: '#55664c', rockShadow: '#161c15' },
     tex: { ground: ['#1f2a14', '#3f5726', '#7f9a4c'], water: ['#16281d', '#2f5240', '#6f9478'], rock: ['#15190f', '#33402c', '#6b7d5d'] },
-    hi: '220,255,190', lo: 'rgba(8,22,6,0.32)',
+    // The jungle art is very dark: lift the ground to a lighter moss green (and the water to a clear
+    // teal) so roads, plants, resources and bots stand out. Rock and cliffs stay dark for contrast.
+    adjust: { ground: { mul: [1.25, 1.5, 1.2], add: [44, 56, 38] }, water: { mul: [0.7, 1.1, 1.45], add: [10, 22, 32] } },
+    hi: '220,255,190', lo: 'rgba(8,22,6,0.2)',
     grain: ['rgba(20,32,10,0.28)', 'rgba(200,230,150,0.14)', 'rgba(120,90,50,0.55)', 'rgba(10,18,6,0.35)'],
     mm: { ground: [66, 96, 46], water: [34, 64, 47], rock: [43, 51, 41], ramp: [123, 138, 82] },
   },
@@ -115,12 +118,14 @@ function avgColor(art) {
 /** The biome's own texture, or the desert one recoloured to suit (made once and kept). */
 function biomeTexture(b, kind) {
   if (b === 'desert') return ART[kind] || null;
-  if (ART[kind + '-' + b]) return ART[kind + '-' + b];
-  const src = ART[kind], stops = BIOME_LOOK[b].tex && BIOME_LOOK[b].tex[kind];
-  if (!src || !stops) return null;
+  const own = ART[kind + '-' + b], adj = BIOME_LOOK[b].adjust && BIOME_LOOK[b].adjust[kind];
+  if (own && !adj) return own;
+  const src = own || ART[kind], stops = !own && BIOME_LOOK[b].tex && BIOME_LOOK[b].tex[kind];
+  if (!src || !(stops || adj)) return null;
   R.texCache = R.texCache || {};
   const key = b + ':' + kind;
   if (R.texCache[key] && R.texCache[key].from === src.img) return R.texCache[key];
+  if (own) return (R.texCache[key] = adjustArt(own, adj));
   const img = src.img, w = img.width, h = img.height;
   const c = document.createElement('canvas');
   c.width = w; c.height = h;
@@ -138,6 +143,21 @@ function biomeTexture(b, kind) {
   }
   x.putImageData(d, 0, 0);
   return (R.texCache[key] = { img: c, scale: 0, anchor: '', from: img });
+}
+
+/** A copy of an art image with each colour channel scaled and lifted: { mul: [r, g, b], add: [r, g, b] }. */
+function adjustArt(art, adj) {
+  const img = art.img, w = img.width, h = img.height;
+  const c = document.createElement('canvas');
+  c.width = w; c.height = h;
+  const x = c.getContext('2d');
+  x.drawImage(img, 0, 0);
+  try {
+    const d = x.getImageData(0, 0, w, h), px = d.data;
+    for (let k = 0; k < px.length; k += 4) for (let ch = 0; ch < 3; ch++) px[k + ch] = px[k + ch] * adj.mul[ch] + adj.add[ch];
+    x.putImageData(d, 0, 0);
+  } catch (e) { return art; }
+  return { img: c, scale: art.scale || 0, anchor: art.anchor || '', from: img };
 }
 
 /* ------------------------------------------------------------------ custom art */
