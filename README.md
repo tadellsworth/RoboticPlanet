@@ -186,6 +186,8 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
 - **Ordering bots:** the Bot Foundry only builds the bots you order. Tap it and use +1 or +5 for Workers or
   Warbots (Clear cancels the queue); with nothing queued it sits idle and uses no Alloy or Chips.
 - The **Build** menu shows how many of each building you already have, and how many are being built.
+- **Demolishing** returns half a building's materials, and anything inside it goes to the nearest storage (a Silo's
+  Missiles, a Nuclear Silo's finished missile as its parts).
 - You can only build inside your border. Outposts push it out (7 tiles around them).
 - **Salvage:** a colony out of Stone or Fiber with no Quarry or Harvester that can still work salvages 1 every 20 s from
   its Command Base (up to 6), so it can always rebuild. Capturing an enemy Outpost takes its land,

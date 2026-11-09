@@ -2922,8 +2922,10 @@ function demolish(b) {
       const n = b.built ? Math.floor(back[g] / 2) : Math.min(back[g], def.cost[g] || 0);
       if (n > 0) bump(store.stock, g, n);
     }
-    // Goods still inside a finished building (a pump's last Crude, say) go back to storage too.
+    // Goods still inside a finished building (a Silo's Missiles, a pump's last Crude) go back to
+    // storage too, and a Nuclear Silo's finished missile comes apart into its parts.
     if (b.built && !def.store) for (const g in b.stock) if (b.stock[g] > 0 && GOOD[g]) bump(store.stock, g, b.stock[g]);
+    if (b.built && def.nukeSilo && b.armed) for (const g in NUKE.parts) bump(store.stock, g, NUKE.parts[g]);
   }
   destroyBuilding(b, false);
 }

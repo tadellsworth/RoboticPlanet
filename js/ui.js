@@ -1501,9 +1501,13 @@ function openBuildingSheet(b) {
         $('sh-demolish').textContent = BDEFS[b.type].mil && b.built ? 'Tap again: buildings outside your border will be lost' : 'Tap again to confirm';
         return;
       }
+      // Say what went back to storage: half the building, and anything that was inside it.
+      const def = BDEFS[b.type], goods = b.built ? Object.keys(b.stock).filter((g) => b.stock[g] > 0 && GOOD[g]).map((g) => `${b.stock[g]} ${GOOD[g].name}`) : [];
+      const nuke = b.built && def.nukeSilo && b.armed;
       demolish(b);
       sfx('boom');
       closeSheet();
+      if (b.built) toast(`${def.name} demolished: half its materials` + (goods.length ? `, and the ${goods.join(', ')} inside it,` : '') + (nuke ? ' and its nuclear missile\'s parts' : '') + ' went back to storage.', 'info', b.x, b.y);
     };
   } else if ($('sh-send')) {
     UI.attackN = attackAvailable(0, b);
