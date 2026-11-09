@@ -174,7 +174,7 @@ const LIGHT_CLEAR = 0.45;
 
 /* Warbot ammunition: each warbot holds WARBOT_AMMO shots and reloads in a garrison stocked with Ammo. */
 const WARBOT_AMMO = 20;
-const AMMO_SHOTS = 10;            // shots in one Ammo
+const AMMO_SHOTS = 5;             // shots in one Ammo
 // A warbot with no ammo can't fight at all: it leaves the fight and goes back to reload.
 /**
  * Raiding: armed warbots holding a rally flag in enemy land, with nothing there to fight, tear up the
@@ -240,11 +240,11 @@ const R_NONE = 0, R_STALK = 1, R_BOULDER = 2, R_ORE = 3, R_CRYSTAL = 4, R_CROP =
 const RES = {
   [R_STALK]:   { key: 'stalk',   name: 'Stalk grove',     good: 'fiber',   amount: 3, harvest: 2.5 },
   [R_BOULDER]: { key: 'boulder', name: 'Boulder',         good: 'stone',   amount: 8, harvest: 3 },
-  [R_ORE]:     { key: 'ore',     name: 'Ore vein',        good: 'ore',     amount: 16, harvest: 3.5 },
+  [R_ORE]:     { key: 'ore',     name: 'Ore vein',        good: 'ore',     amount: 24, harvest: 3.5 },
   [R_CRYSTAL]: { key: 'crystal', name: 'Crystal cluster', good: 'crystal', amount: 12, harvest: 3.5 },
   [R_CROP]:    { key: 'crop',    name: 'Energy crop',     good: 'fuel',    amount: 1, harvest: 2.5 },
   [R_OIL]:     { key: 'oil',     name: 'Oil seep',        good: 'crude',   amount: 16, harvest: 0 },
-  [R_URANIUM]: { key: 'uranium', name: 'Uranium deposit', good: 'uranium', amount: 3, harvest: 5 },
+  [R_URANIUM]: { key: 'uranium', name: 'Uranium deposit', good: 'uranium', amount: 4, harvest: 5 },
 };
 
 /**
@@ -260,7 +260,7 @@ const RICH_TYPES = [R_BOULDER, R_ORE, R_CRYSTAL, R_OIL];
 const GOODS = ['fiber', 'stone', 'ore', 'crystal', 'alloy', 'chip', 'crude', 'fuel', 'cement', 'asphalt', 'ammo', 'warhead', 'uranium', 'fissile'];
 const GOOD = {
   fiber:   { name: 'Fiber',   color: '#3fd8a6', desc: 'Cut from stalk groves. Used for building and as smelter fuel.' },
-  stone:   { name: 'Stone',   color: '#c9c1b4', desc: 'Broken from boulders. A Cement Works turns it into Cement; Asphalt and Ammo use it too.' },
+  stone:   { name: 'Stone',   color: '#c9c1b4', desc: 'Broken from boulders. A Cement Works turns it into Cement; the Asphalt Plant uses it too.' },
   ore:     { name: 'Ore',     color: '#ff8a3d', desc: 'Dug from ore veins. Smelted into Alloy.' },
   crystal: { name: 'Crystal', color: '#b98cff', desc: 'Tapped from crystal clusters. Makes Chips and turret ammo.' },
   alloy:   { name: 'Alloy',   color: '#8ec3e6', desc: 'Smelted metal for advanced buildings, chips and bots.' },
@@ -323,19 +323,19 @@ const BDEFS = {
   },
   harvester: {
     name: 'Harvester', desc: 'A worker cuts nearby stalk groves into Fiber.',
-    cost: { fiber: 2, cement: 1 }, staff: true, gather: R_STALK, radius: 5, out: { fiber: 4 }, armor: 8, buildTime: 8,
+    cost: { fiber: 2, cement: 1 }, staff: true, gather: R_STALK, radius: 5, out: { fiber: 6 }, armor: 8, buildTime: 8,
   },
   quarry: {
     name: 'Quarry', desc: 'A worker breaks nearby boulders into Stone.',
-    cost: { fiber: 2 }, staff: true, gather: R_BOULDER, radius: 5, out: { stone: 4 }, armor: 8, buildTime: 8,
+    cost: { fiber: 2 }, staff: true, gather: R_BOULDER, radius: 5, out: { stone: 6 }, armor: 8, buildTime: 8,
   },
   mine: {
     name: 'Ore Mine', desc: 'A worker digs Ore from nearby veins.',
-    cost: { fiber: 2, cement: 2 }, staff: true, gather: R_ORE, radius: 4, out: { ore: 4, uranium: 3 }, armor: 8, buildTime: 10,
+    cost: { fiber: 2, cement: 2 }, staff: true, gather: R_ORE, radius: 4, out: { ore: 6, uranium: 3 }, armor: 8, buildTime: 10,
   },
   tap: {
     name: 'Crystal Tap', desc: 'A worker extracts Crystal from nearby clusters.',
-    cost: { fiber: 2, cement: 2 }, staff: true, gather: R_CRYSTAL, radius: 4, out: { crystal: 4 }, armor: 8, buildTime: 10,
+    cost: { fiber: 2, cement: 2 }, staff: true, gather: R_CRYSTAL, radius: 4, out: { crystal: 6 }, armor: 8, buildTime: 10,
   },
   grower: {
     name: 'Grove Planter', desc: 'A worker plants new stalk groves nearby so Fiber never runs out.',
@@ -379,8 +379,8 @@ const BDEFS = {
     cost: { cement: 3, alloy: 1, fiber: 2 }, staff: true, crew: 'paver', roadworks: true, radius: 7, armor: 8, buildTime: 10,
   },
   armory: {
-    name: 'Ammo Plant', desc: 'Packs Alloy and Stone into Ammo. Haulers take it to your Command Base and Outposts, where warbots reload.',
-    cost: { cement: 3, alloy: 2 }, staff: true, inp: { alloy: 1, stone: 1 }, make: { ammo: 3 }, out: { ammo: 6 },
+    name: 'Ammo Plant', desc: 'Packs Alloy and Cement into Ammo. Haulers take it to your Command Base and Outposts, where warbots reload.',
+    cost: { cement: 3, alloy: 2 }, staff: true, inp: { alloy: 1, cement: 1 }, make: { ammo: 3 }, out: { ammo: 6 },
     work: 6, armor: 10, buildTime: 10, war: true,
   },
   munitions: {
@@ -397,7 +397,7 @@ const BDEFS = {
   reactor: {
     name: 'Nuclear Reactor', desc: 'Enriches Uranium: 2 Uranium make 1 Enriched Uranium. Nuclear race only.',
     cost: { cement: 6, alloy: 6, chip: 3 }, staff: true, inp: { uranium: 2 }, make: { fissile: 1 }, out: { fissile: 2 },
-    work: 25, armor: 14, buildTime: 20, war: true, nuke: true,
+    work: 20, armor: 14, buildTime: 20, war: true, nuke: true,
   },
   nukesilo: {
     name: 'Nuclear Silo',
@@ -411,7 +411,7 @@ const BDEFS = {
   },
   farm: {
     name: 'Bio Farm', desc: 'A worker plants energy crops on fertile soil nearby and harvests them into Fuel. Crops take a while to ripen.',
-    cost: { fiber: 2, cement: 2 }, staff: true, crew: 'agribot', farm: true, radius: 3, out: { fuel: 4 }, armor: 8, buildTime: 9,
+    cost: { fiber: 2, cement: 2 }, staff: true, crew: 'agribot', farm: true, radius: 3, out: { fuel: 6 }, armor: 8, buildTime: 9,
   },
   pump: {
     name: 'Oil Pump', desc: 'Built on top of an oil seep. Its worker pumps Crude until the seep runs dry, or until you have 30 (its stock limit).',
