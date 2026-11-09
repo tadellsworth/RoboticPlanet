@@ -744,7 +744,10 @@ function canPlace(owner, type, i, j, skipBlockCheck) {
   } else if (S.res[t]) return { ok: false, reason: 'Clear the resources here first.' };
   if (S.bAt[t]) return { ok: false, reason: 'There is already a building here.' };
   if (S.ramp[t]) return { ok: false, reason: 'Too steep: this is a slope.' };
-  if (S.zone[t] !== homeZone(owner)) return { ok: false, reason: 'Your bots cannot reach this spot. Find a slope up, or build a Ramp.' };
+  if (S.zone[t] !== homeZone(owner)) {
+    return { ok: false, reason: def.ramp ? 'Your bots can\'t reach this side of the cliff yet: plan the Ramp on the other side, the top or the foot, where they can.'
+      : 'Your bots cannot reach this spot. Find a slope, or build a Ramp from the side they can reach.' };
+  }
   if (def.ramp) {
     let cliff = false;
     for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
@@ -752,7 +755,7 @@ function canPlace(owner, type, i, j, skipBlockCheck) {
       const u = tIdx(i + di, j + dj);
       if (S.terrain[u] === T_GROUND && Math.abs(S.elev[u] - S.elev[t]) === 1 && !canStep(t, u)) cliff = true;
     }
-    if (!cliff) return { ok: false, reason: 'Place a Ramp right at the foot or top of a one-level cliff.' };
+    if (!cliff) return { ok: false, reason: 'Place a Ramp right at the top or foot of a one-level cliff.' };
     if (!skipBlockCheck && wouldBlock(t)) return { ok: false, reason: 'That would block the only way through here.' };
     return { ok: true, reason: '' };
   }

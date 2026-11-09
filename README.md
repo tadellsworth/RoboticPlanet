@@ -144,7 +144,7 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
   each kind of building was; each building's panel shows its recent busy time.
 - **Terrain levels:** the planet has terraces at different heights (lighter ground is higher). Bots
   can't climb cliffs; they use slopes at narrow passes, so some routes are long. Pave busy routes with
-  Paths (slopes too) and build a **Ramp** to open your own way up. Buildings can't be placed where they
+  Paths (slopes too) and build a **Ramp** (Paths, Ramps) on the top or at the foot of a cliff to open your own way up or down; tap ground your bots can't reach yet and it's planned on the side they can. Buildings can't be placed where they
   would block the only way through a pass.
 - **Priorities:** tap a building or construction site and set it to Low, Normal or High. High-priority
   buildings get workers and goods first; low ones are served last and lose their worker first when
@@ -161,6 +161,8 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
   build the first one straight away (it runs on the 10 Fuel you land with). A flat battery means half speed and half power. Charging Stations burn Fuel (one Fuel is about
   three quarters of a full charge). A Bio Farm makes about
   2–3 Fuel a minute; an Oil Pump and Refinery up to 10 a minute until the seep runs dry (both stop at 30 by default).
+  A dry Oil Pump shows a crossed-out oil drop over it, frees its worker and says so once: demolish it (any Crude
+  still in a demolished building goes to storage).
 - **Army orders:** tap **Army**, then a rival building to attack it with warbots or a missile, or open
   ground to send warbots there to hold the area under a rally flag. Tap the flag to call them back.
 - **Garrisons:** tap an Outpost or your Command Base to set its **garrison priority** (new warbots, and ones called back

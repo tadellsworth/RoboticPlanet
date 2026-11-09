@@ -193,6 +193,25 @@ const BUILD_KEYS = {
   armory: 'i', munitions: 'n', silo: 'z', depot: 'd', grower: 'l', reactor: 'y', nukesilo: 'j',
 };
 
+/**
+ * Tapped a spot where a Ramp can't go: if it's beside a one-level cliff and the tile on the other
+ * side can take one (your bots can reach it), that tile. Otherwise -1.
+ */
+function rampPartner(i, j) {
+  if (!inMap(i, j)) return -1;
+  const t = tIdx(i, j);
+  if (S.terrain[t] !== T_GROUND) return -1;
+  let best = -1;
+  for (const [di, dj] of [[0, -1], [0, 1], [-1, 0], [1, 0]]) {
+    if (!inMap(i + di, j + dj)) continue;
+    const u = tIdx(i + di, j + dj);
+    if (S.terrain[u] !== T_GROUND || Math.abs(S.elev[u] - S.elev[t]) !== 1 || canStep(t, u)) continue;
+    if (!canPlace(0, 'ramp', i + di, j + dj).ok) continue;
+    if (best < 0 || UI.draft.ramps.has(u)) best = u;
+  }
+  return best;
+}
+
 /** Open Paths on one of its tools (roads, bridges, ramps, arrows, junctions). */
 function openPaths(v) {
   if (R.mode !== 'road') setMode('road');
@@ -946,15 +965,28 @@ function onMapTap(i, j, wx, wy) {
     if (UI.roadMode === 'ramp') {
       // Ramps: tap a highlighted cliff edge to plan one there, tap it again to drop it.
       const stroke = [];
+      let note = '';
       if (UI.draft.ramps.has(t)) draftOp(stroke, t, 'unramp');
       else {
+        let at = t;
         const chk = canPlace(0, 'ramp', i, j);
-        if (!chk.ok) { sfx('error'); showRoadBanner(chk.reason); return; }
-        draftOp(stroke, t, 'ramp');
+        if (!chk.ok) {
+          // The other side of the cliff (often ground your bots can't reach yet, below or above):
+          // plan the Ramp on the side they can reach, cut toward the tile you tapped.
+          const alt = rampPartner(i, j);
+          if (alt < 0) { sfx('error'); showRoadBanner(chk.reason); return; }
+          if (UI.draft.ramps.has(alt)) { draftOp(stroke, alt, 'unramp'); at = -1; }
+          else {
+            at = alt;
+            note = S.elev[alt] > S.elev[t] ? 'Planned on the cliff top: workers cut the Ramp down from there to the ground you tapped.'
+              : 'Planned at the foot of the cliff: workers cut the Ramp up from there to the ground you tapped.';
+          }
+        }
+        if (at >= 0) draftOp(stroke, at, 'ramp');
       }
       UI.draft.strokes.push(stroke);
       sfx('click');
-      showRoadBanner();
+      showRoadBanner(note, !!note);
       return;
     }
     // Roads and Bridges: a tap adds a tile to the plan or drops it, or marks a road to take up.
@@ -1156,7 +1188,7 @@ function showRoadBanner(problem, info) {
   const have = playerGoods(0);
   let line, how;
   if (mode === 'ramp' && draftEmpty()) {
-    line = `Tap a highlighted spot at the foot or top of a one-level cliff to plan a <b>Ramp</b> (${costText(BDEFS.ramp.cost)}). Nothing is spent until you tap <b>Build</b>.`;
+    line = `Tap a highlighted spot at the top or foot of a one-level cliff to plan a <b>Ramp</b> (${costText(BDEFS.ramp.cost)}). To get down from high ground, plan it on the cliff top. Nothing is spent until you tap <b>Build</b>.`;
     how = 'Workers cut a sloped road into the cliff; once it is done it is part of your road network, so haulers drive straight up it. A Ramp can\'t go where it would block the only way through a pass.';
   } else if (mode === 'pave') {
     const c = paveCounts(0);
@@ -1599,6 +1631,7 @@ function refreshBuildingSheet(b) {
       if (mine) parts.push(`<div class="kv"><span>Waiting for pickup</span><span>${goodTag('fuel', `${b.stock.fuel || 0}/${def.out.fuel}`)}</span></div>`);
     }
     if (def.pump) {
+      if (mine && pumpDry(b)) parts.push('<p class="desc err"><b>This seep has run dry.</b> Demolish the pump (below) for half its materials back; any Crude still in it goes to storage. Then build a new Oil Pump on another oil seep.</p>');
       parts.push(`<div class="kv"><span>Crude left in the seep</span><span>${oilAround(b.x, b.y)}</span></div>`);
       if (mine) parts.push(`<div class="kv"><span>Waiting for pickup</span><span>${goodTag('crude', `${b.stock.crude || 0}/${def.out.crude}`)}</span></div>`);
       if (mine && b.timer > 0 && b.status === 'Working') parts.push(`<div class="bar"><div style="width:${Math.round((b.timer / def.work) * 100)}%"></div></div>`);

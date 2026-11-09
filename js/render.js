@@ -1956,6 +1956,7 @@ function render(dtReal) {
       }
       if (e.owner === 0) drawBadge(ctx, e, cx - z * 0.32, cy - z * 0.32, z);
       if (e.owner === 0 && e.unlinked) drawNoRoad(ctx, cx + z * 0.32, cy + z * 0.3, z);
+      if (e.owner === 0 && e.type === 'pump' && pumpDry(e)) drawDryOil(ctx, cx, cy - z * 0.55, z);
       if (e.paused) {
         ctx.fillStyle = 'rgba(0,0,0,0.65)';
         ctx.beginPath(); ctx.arc(cx + z * 0.3, cy - z * 0.3, z * 0.16, 0, Math.PI * 2); ctx.fill();
@@ -2233,6 +2234,32 @@ function drawNoRoad(ctx, x, y, z) {
   ctx.moveTo(x + r * 0.35, y - r * 0.6); ctx.lineTo(x + r * 0.35, y + r * 0.6);
   ctx.stroke();
   ctx.lineWidth = Math.max(1.5, r * 0.22);
+  ctx.beginPath(); ctx.moveTo(x - r * 0.62, y + r * 0.62); ctx.lineTo(x + r * 0.62, y - r * 0.62); ctx.stroke();
+  ctx.globalAlpha = 1;
+}
+
+/** A dry Oil Pump: a pulsing empty oil drop, struck through, floating over it (demolish me). */
+function drawDryOil(ctx, x, y, z) {
+  const r = Math.max(8, z * 0.24), bob = Math.sin(R.time * 3) * r * 0.08;
+  y += bob;
+  ctx.globalAlpha = 0.8 + 0.2 * Math.sin(R.time * 4);
+  ctx.fillStyle = 'rgba(20,16,14,0.85)';
+  ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
+  ctx.strokeStyle = '#ffb547';
+  ctx.lineWidth = Math.max(1.2, r * 0.12);
+  ctx.stroke();
+  // The drop, drawn hollow: no oil left.
+  const d = r * 0.55;
+  ctx.beginPath();
+  ctx.moveTo(x, y - d);
+  ctx.bezierCurveTo(x + d * 0.2, y - d * 0.55, x + d * 0.75, y - d * 0.05, x + d * 0.75, y + d * 0.35);
+  ctx.arc(x, y + d * 0.35, d * 0.75, 0, Math.PI);
+  ctx.bezierCurveTo(x - d * 0.75, y - d * 0.05, x - d * 0.2, y - d * 0.55, x, y - d);
+  ctx.strokeStyle = '#e8d8c0';
+  ctx.lineWidth = Math.max(1.2, r * 0.13);
+  ctx.stroke();
+  ctx.strokeStyle = '#ff5a5a';
+  ctx.lineWidth = Math.max(1.5, r * 0.16);
   ctx.beginPath(); ctx.moveTo(x - r * 0.62, y + r * 0.62); ctx.lineTo(x + r * 0.62, y - r * 0.62); ctx.stroke();
   ctx.globalAlpha = 1;
 }

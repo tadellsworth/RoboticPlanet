@@ -747,7 +747,7 @@ function dispatch(p) {
     }
   }
   // 2) An operator for every finished building that needs one, while keeping minFree workers free.
-  const staffQueue = blds.filter((b) => b.built && !b.paused && BDEFS[b.type].staff && !BDEFS[b.type].crew && !b.staff && !b.staffInc && !atLimit(b))
+  const staffQueue = blds.filter((b) => b.built && !b.paused && BDEFS[b.type].staff && !BDEFS[b.type].crew && !b.staff && !b.staffInc && !atLimit(b) && !pumpDry(b))
     .sort((a, c) => prioRank(a) - prioRank(c) || staffPriority(a) - staffPriority(c) || a.born - c.born);
   for (const b of staffQueue) {
     if (!idle.length) return;
@@ -1455,6 +1455,9 @@ function goodRates(p) {
   return out;
 }
 
+/** A built Oil Pump whose seep has run dry: it can't pump again, so it's flagged for demolition. */
+function pumpDry(b) { return !!BDEFS[b.type].pump && b.built && pumpSeep(b) < 0; }
+
 /** The oil seep tile an Oil Pump draws from next (its own tile or a neighbour), or -1 if dry. */
 function pumpSeep(b) {
   let best = -1, most = 0;
@@ -1688,6 +1691,16 @@ function updateBuilding(b, dt) {
 function tracksUse(def) { return !!(def.staff || (def.charger && !def.store) || (def.ammo && !def.missile) || def.repair); }
 
 function produce(b, def, dt) {
+  if (def.pump && pumpSeep(b) < 0) {
+    // Dry for good: free its worker, and tell the player once.
+    b.status = 'The oil seep has run dry: demolish this pump';
+    if (b.staff || b.staffInc) unstaff(b);
+    if (!b.dryMsg) {
+      b.dryMsg = 1;
+      postMsg(b.owner, 'An Oil Pump has run dry. Demolish it for half its materials back, and pump another seep.', b.x, b.y, 'warn');
+    }
+    return;
+  }
   const op = getE(b.staff);
   if (!op && !b.staffInc && atLimit(b)) {
     const g = limitGood(b);
@@ -1700,7 +1713,6 @@ function produce(b, def, dt) {
     return;
   }
   if (def.bots && b.mode === 'off' && !hasOrders(b)) { b.status = 'Idle: tap it to order bots'; return; }
-  if (def.pump && pumpSeep(b) < 0) { b.status = 'The oil seep has run dry'; return; }
   if (!b.timer && atLimit(b)) {
     const g = limitGood(b);
     b.status = `Stopped: you have ${goodTotal(b.owner, g)} ${GOOD[g].name} (limit ${stockLimit(b)})`;
@@ -2844,6 +2856,8 @@ function demolish(b) {
       const n = b.built ? Math.floor(back[g] / 2) : Math.min(back[g], def.cost[g] || 0);
       if (n > 0) bump(store.stock, g, n);
     }
+    // Goods still inside a finished building (a pump's last Crude, say) go back to storage too.
+    if (b.built && !def.store) for (const g in b.stock) if (b.stock[g] > 0 && GOOD[g]) bump(store.stock, g, b.stock[g]);
   }
   destroyBuilding(b, false);
 }
