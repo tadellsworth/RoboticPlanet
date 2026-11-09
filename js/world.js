@@ -699,7 +699,7 @@ function newGame(opts) {
       made: {}, madeBots: {},
       aiT: 0, nextAttack: 0,
     })),
-    buildings: [], bots: [], fx: [], msgs: [], rallies: [], missiles: [],
+    buildings: [], bots: [], fx: [], msgs: [], rallies: [], missiles: [], loot: [],
     dirtyTiles: [], territoryVer: 0, tick: 0, hist: newHistory(settings.players),
   };
   if (opts.autoplay) S.players[0].mult = DIFFICULTY[diff].mult;
@@ -1575,6 +1575,13 @@ function cancelTask(bot) {
       if (b) b.garInc = Math.max(0, b.garInc - 1);
       break;
     }
+    case 'loot': {
+      // Called off: release its claim on the pile, and put down any crate it was carrying.
+      const l = t.phase === 'pick' && S.loot && S.loot.find((x) => x.id === t.pile);
+      if (l) l.claimed = Math.max(0, (l.claimed || 0) - 1);
+      if (bot.loot && typeof addLoot === 'function') { addLoot(Math.floor(bot.x), Math.floor(bot.y), { [bot.loot]: 1 }); bot.loot = null; }
+      break;
+    }
   }
   bot.task = null;
   bot.path = null;
@@ -1587,6 +1594,8 @@ function taskRefs(task, id) {
 
 function killBot(bot, quiet) {
   if (bot.dead) return;
+  // A warbot carrying loot drops its crate where it falls (anyone's warbots can pick it up).
+  if (bot.loot && typeof addLoot === 'function' && inMap(Math.floor(bot.x), Math.floor(bot.y))) { addLoot(Math.floor(bot.x), Math.floor(bot.y), { [bot.loot]: 1 }); bot.loot = null; }
   cancelTask(bot);
   exitBuilding(bot);
   for (const b of S.buildings) {
@@ -1708,6 +1717,7 @@ function deserializeGame(json) {
   for (const P of o.players) { P.made = P.made || {}; P.madeBots = P.madeBots || {}; P.stats.outposts = P.stats.outposts || 0; P.stats.startBots = P.stats.startBots ?? 18; }
   o.fx = []; o.msgs = []; o.dirtyTiles = [];
   o.rallies = o.rallies || [];
+  o.loot = o.loot || [];
   o.missiles = o.missiles || [];
   o.bAt = new Int32Array(o.W * o.H);
   o.byId = new Map();

@@ -181,6 +181,10 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
 - **Army orders:** tap **Army**, then a rival building to attack it with warbots or a missile, or open
   ground to send warbots there to hold the area under a rally flag. Tap the flag to call them back, or press
   **Recall all** in the Army banner (**C** on a computer) to end every attack and rally flag at once.
+- **Loot:** goods inside a building warbots wreck spill out as a crate pile (`dropLoot`, up to `LOOT_MAX`); idle or
+  victorious warbots nearby carry one crate each to their side's nearest garrison and go back for more (`doLoot`).
+  Crates left at an Outpost (`b.loot`) are hauled on to storage; a warbot killed carrying one drops it; piles rot
+  after `LOOT_TIME`.
 - **Walls and Gates (Versus):** in Paths, **Walls** (**X**) sketches a wall line: a Wall on each tile (5 Cement, 40
   armor) and a Gate where it crosses a road (6 Cement + 2 Alloy, 32 armor; tap a planned Wall to make it a Gate).
   They're `prepaid` (paid from storage on Build, no Hauler or road, outside the site limit). Walls block every bot;

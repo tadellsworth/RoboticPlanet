@@ -237,6 +237,8 @@ const SHAPE_PRESETS = [
 const CHOKE_BAND = 3;   // Chokepoint maps: rows of crags each side of the middle line
 const CHOKE_APPROACH = 3; // ...and rows of open ground kept clear each side of the pass
 const ISLE_GAP = 2.5;     // Islands maps: at least this much sea between islands
+const LOOT_MAX = 60;      // most crates a wrecked building spills
+const LOOT_TIME = 300;    // seconds a loot pile lies before it rots away
 // Walls and Gates: an enemy warbot plans a route through one as if it were this many extra tiles
 // long, plus one per point of armor left, so it walks round a short way and breaks through a long one.
 const BREACH_COST = 8;

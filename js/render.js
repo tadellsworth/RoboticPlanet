@@ -2207,6 +2207,7 @@ function render(dtReal) {
       const face = e.face;
       e.face = pose && pose.face !== undefined ? pose.face : e.rface; // draw with the smoothed heading
       drawBot(ctx, e, ox + (e.x + jx) * z, oy + (e.y + jy) * z, z);
+      if (e.loot) drawCrate(ctx, ox + (e.x + jx) * z, oy + (e.y + jy) * z - z * 0.22, z * 0.2, e.loot);
       e.face = face;
       if (pose) drawWorkOver(ctx, e, pose, ox + (e.x + jx) * z, oy + (e.y + jy) * z, z);
     }
@@ -2247,6 +2248,7 @@ function render(dtReal) {
     ctx.strokeRect(ox + (R.selTile % S.W) * z + 1, oy + ((R.selTile / S.W) | 0) * z + 1, z - 2, z - 2);
   }
 
+  drawLoot(ctx, ox, oy, z, inView);
   drawRallies(ctx, ox, oy, z);
   drawMissiles(ctx, ox, oy, z);
   drawEffects(ctx, ox, oy, z);
@@ -2631,6 +2633,44 @@ function drawAim(ctx, ox, oy, z) {
 }
 
 /** Your rally flags, with how many warbots hold each one. */
+/** A supply crate (side s px) marked with the colour of the good in it. */
+function drawCrate(ctx, cx, cy, s, g) {
+  ctx.fillStyle = 'rgba(0,0,0,0.35)';
+  ctx.fillRect(cx - s / 2 + s * 0.12, cy - s / 2 + s * 0.12, s, s);
+  ctx.fillStyle = '#9a6b3c';
+  ctx.fillRect(cx - s / 2, cy - s / 2, s, s);
+  ctx.strokeStyle = '#5b3c1e';
+  ctx.lineWidth = Math.max(1, s * 0.1);
+  ctx.strokeRect(cx - s / 2, cy - s / 2, s, s);
+  ctx.beginPath(); ctx.moveTo(cx - s / 2, cy - s / 2); ctx.lineTo(cx + s / 2, cy + s / 2); ctx.stroke();
+  ctx.fillStyle = (GOOD[g] && GOOD[g].color) || '#fff';
+  ctx.beginPath(); ctx.arc(cx, cy, s * 0.24, 0, Math.PI * 2); ctx.fill();
+}
+
+/** Loot piles: a few crates (more for a bigger pile) with a count, fading in their last half minute. */
+function drawLoot(ctx, ox, oy, z, inView) {
+  if (!S.loot || !S.loot.length) return;
+  for (const l of S.loot) {
+    if (!inView(l.x, l.y, 1)) continue;
+    const n = lootLeft(l);
+    if (n <= 0) continue;
+    const kinds = Object.keys(l.goods).filter((g) => l.goods[g] > 0);
+    const cx = ox + (l.x + 0.5) * z, cy = oy + (l.y + 0.5) * z, s = z * 0.26;
+    ctx.globalAlpha = clamp((l.until - S.time) / 30, 0.35, 1);
+    const spots = [[-0.18, 0.1], [0.16, 0.12], [0, -0.1], [-0.2, -0.16], [0.2, -0.14]];
+    for (let k = 0; k < Math.min(spots.length, 1 + Math.floor(n / 4)); k++) drawCrate(ctx, cx + spots[k][0] * z, cy + spots[k][1] * z, s, kinds[k % kinds.length]);
+    ctx.globalAlpha = 1;
+    if (z >= 14) {
+      ctx.font = `700 ${Math.max(9, z * 0.24)}px system-ui, sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(0,0,0,0.7)';
+      ctx.strokeText(String(n), cx, cy - z * 0.3);
+      ctx.fillStyle = '#ffe9a8';
+      ctx.fillText(String(n), cx, cy - z * 0.3);
+    }
+  }
+}
+
 function drawRallies(ctx, ox, oy, z) {
   for (const r of S.rallies) {
     if (r.owner !== 0) continue;

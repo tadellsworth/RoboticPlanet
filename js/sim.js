@@ -26,6 +26,7 @@ function simStep(dt) {
   }
   if (S.missiles.length) updateMissiles(dt);
   if (S.tick % 30 === 15) cleanRallies();
+  if (S.tick % 30 === 20) updateLoot();
   for (const P of S.players) {
     if (!P.ai || P.out) continue;
     P.aiT -= dt;
@@ -111,6 +112,7 @@ function goodTotal(p, g) {
     if (b.dead || b.owner !== p || !b.built) continue;
     const def = BDEFS[b.type];
     if (b.stock[g] && (def.store || (def.out && def.out[g]))) n += b.stock[g];
+    else if (b.loot && b.loot[g]) n += Math.min(b.loot[g], b.stock[g] || 0);
   }
   for (const u of S.bots) {
     if (u.dead || u.owner !== p || u.carry !== g || !u.task || u.task.type !== 'haul') continue;
@@ -176,6 +178,7 @@ function supplyOf(b, g) {
   if (!b.built || b.dead) return 0;
   const def = BDEFS[b.type];
   if (def.store || (def.out && def.out[g])) return (b.stock[g] || 0) - (b.res[g] || 0);
+  if (b.loot && b.loot[g]) return Math.max(0, Math.min(b.loot[g], b.stock[g] || 0) - (b.res[g] || 0)); // loot warbots left here
   return 0;
 }
 
@@ -295,6 +298,7 @@ function playerGoods(p) {
     if (b.dead || b.owner !== p || !b.built) continue;
     const def = BDEFS[b.type];
     for (const g in b.stock) if (def.store || (def.out && def.out[g])) tot[g] += b.stock[g];
+    if (b.loot) for (const g in b.loot) if (!def.store && !(def.out && def.out[g])) tot[g] += Math.min(b.loot[g], b.stock[g] || 0);
   }
   return tot;
 }
@@ -862,6 +866,18 @@ function dispatch(p) {
       }
     }
   }
+  // 4b) Goods warbots brought back to an Outpost go on to storage.
+  for (const b of blds) {
+    if (!b.loot || !b.built) continue;
+    for (const g in b.loot) {
+      if (!idle.length) return;
+      const avail = supplyOf(b, g);
+      if (avail < 1) continue;
+      const store = storeFor(p, g, b.x + 0.5, b.y + 0.5, b, P.noHaulers ? null : b);
+      const u = store && take(b.x, b.y, 'haul', b);
+      if (u) assignHaul(u, b, store, g, canCarry(u, avail));
+    }
+  }
   // 5) Empty out storage that no longer takes a good (set to "empty out" or the good switched off).
   for (const b of blds) {
     if (!storeAccepts(b) || (b.smode !== 'empty' && !b.reject)) continue;
@@ -1333,6 +1349,7 @@ function doHaul(u, t, dt) {
     if (got < n) bump(dst.inc, t.good, got - n);
     t.n = got;
     bump(src.stock, t.good, -got);
+    if (src.loot && src.loot[t.good]) { src.loot[t.good] = Math.max(0, src.loot[t.good] - got); if (!src.loot[t.good]) delete src.loot[t.good]; }
     u.carry = t.good;
     u.carryN = got;
     t.phase = 'toDst';
@@ -2048,10 +2065,119 @@ function captureBuilding(b, by) {
     postMsg(old, `The enemy captured your ${name}!`, b.x, b.y, 'bad');
     computeTerritory();
   } else {
-    postMsg(by, `Your warbots wrecked the enemy ${name}.`, b.x, b.y, 'good');
-    postMsg(old, `Enemy warbots wrecked your ${name}!`, b.x, b.y, 'bad');
+    const n = dropLoot(b);
+    postMsg(by, `Your warbots wrecked the enemy ${name}.` + (n ? ` ${n} good${n === 1 ? '' : 's'} spilled out: your warbots carry them home, one each.` : ''), b.x, b.y, 'good');
+    postMsg(old, `Enemy warbots wrecked your ${name}!` + (n ? ' They are carrying off what was inside.' : ''), b.x, b.y, 'bad');
     destroyBuilding(b, true);
   }
+}
+
+/*
+ * Loot. Goods inside a building warbots wreck spill out as a pile of crates on its tile. Any
+ * warbot near a pile with nothing better to do picks up one crate and carries it to its side's
+ * nearest garrison (Outpost or Command Base); a warbot shot down while carrying drops its crate.
+ * Crates in an Outpost are taken on to storage by Haulers. A pile left alone rots away.
+ */
+function dropLoot(b) {
+  let n = 0;
+  const goods = {};
+  for (const g in b.stock) {
+    const k = Math.min(Math.floor(b.stock[g] || 0), LOOT_MAX - n);
+    if (k > 0 && GOOD[g]) { goods[g] = k; n += k; }
+  }
+  if (n) addLoot(b.x, b.y, goods);
+  return n;
+}
+
+function addLoot(x, y, goods) {
+  S.loot = S.loot || [];
+  const pile = S.loot.find((l) => l.x === x && l.y === y);
+  if (pile) { for (const g in goods) bump(pile.goods, g, goods[g]); pile.until = S.time + LOOT_TIME; return; }
+  S.loot.push({ id: S.nextId++, x, y, goods: { ...goods }, until: S.time + LOOT_TIME });
+}
+
+function lootLeft(pile) { let n = 0; for (const g in pile.goods) n += pile.goods[g]; return n; }
+
+function updateLoot() {
+  if (!S.loot || !S.loot.length) return;
+  S.loot = S.loot.filter((l) => l.until > S.time && lootLeft(l) > 0);
+}
+
+/** A loot pile within `range` tiles of warbot u that it could walk to, or null. */
+function lootNear(u, range) {
+  if (!S.loot || !S.loot.length || u.loot) return null;
+  const zone = S.zone[tIdx(Math.floor(u.x), Math.floor(u.y))];
+  let best = null, bd = range * range;
+  for (const l of S.loot) {
+    const d = dist2(l.x + 0.5, l.y + 0.5, u.x, u.y);
+    if (d > bd || lootLeft(l) <= (l.claimed || 0) || S.zone[tIdx(l.x, l.y)] !== zone) continue;
+    bd = d; best = l;
+  }
+  return best;
+}
+
+/** Send warbot u to pick up a crate from pile l. */
+function goLoot(u, l) {
+  cancelTask(u);
+  u.task = { type: 'loot', pile: l.id, phase: 'pick' };
+  l.claimed = (l.claimed || 0) + 1;
+  u.path = null;
+}
+
+/** Its side's nearest garrison warbot u can walk to (to drop loot at), or null. */
+function lootHome(u) {
+  const zone = S.zone[tIdx(Math.floor(u.x), Math.floor(u.y))];
+  let best = null, bd = Infinity;
+  for (const b of S.buildings) {
+    if (b.dead || b.owner !== u.owner || !b.built || !BDEFS[b.type].mil || S.zone[tIdx(b.x, b.y)] !== zone) continue;
+    const d = dist2(b.x, b.y, u.x, u.y);
+    if (d < bd) { bd = d; best = b; }
+  }
+  return best;
+}
+
+/** The loot run: walk to the pile, take a crate, carry it to the nearest garrison and leave it there. */
+function doLoot(u, t, dt) {
+  if (t.phase === 'pick') {
+    const l = S.loot && S.loot.find((x) => x.id === t.pile);
+    if (!l || lootLeft(l) <= 0) { if (l) l.claimed = Math.max(0, (l.claimed || 0) - 1); u.task = null; return; }
+    const r = travel(u, l.x, l.y, dt);
+    if (r === null) { l.claimed = Math.max(0, (l.claimed || 0) - 1); u.task = null; return; }
+    if (!r) return;
+    l.claimed = Math.max(0, (l.claimed || 0) - 1);
+    // The good there is most of.
+    let g = null;
+    for (const k in l.goods) if (l.goods[k] > 0 && (!g || l.goods[k] > l.goods[g])) g = k;
+    if (!g) { u.task = null; return; }
+    l.goods[g]--;
+    u.loot = g;
+    const home = lootHome(u);
+    if (!home) { addLoot(l.x, l.y, { [g]: 1 }); u.loot = null; u.task = null; return; }
+    t.phase = 'home'; t.home = home.id; u.path = null;
+    return;
+  }
+  const home = getE(t.home);
+  if (!home || home.dead || home.owner !== u.owner) {
+    const h2 = lootHome(u);
+    if (!h2) { addLoot(Math.floor(u.x), Math.floor(u.y), { [u.loot]: 1 }); u.loot = null; u.task = null; return; }
+    t.home = h2.id; u.path = null;
+    return;
+  }
+  const r = travel(u, home.x, home.y, dt);
+  if (r === null) { addLoot(Math.floor(u.x), Math.floor(u.y), { [u.loot]: 1 }); u.loot = null; u.task = null; return; }
+  if (!r) return;
+  const g = u.loot;
+  u.loot = null;
+  bump(home.stock, g, 1);
+  // Not storage (an Outpost): mark it as loot for Haulers to take on. Ammo stays for the garrison.
+  if (!BDEFS[home.type].store && g !== 'ammo') bump(home.loot = home.loot || {}, g, 1);
+  madeGood(u.owner, g, 1);
+  S.players[u.owner].stats.looted = (S.players[u.owner].stats.looted || 0) + 1;
+  u.task = null;
+  // More crates still lying there: back for another (a warbot only carries one at a time).
+  const more = (u.ammo ?? WARBOT_AMMO) > 0 && !wantsRepair(u) && lootNear(u, 50);
+  if (more) { goLoot(u, more); return; }
+  if (home.garrison.length + home.garInc < BDEFS[home.type].garrison && !wantsRepair(u)) enterBuilding(u, home);
 }
 
 /**
@@ -2091,8 +2217,9 @@ function eliminate(old, by) {
 /**
  * The rival `p` is up against (the only one, with two players). With three, each AI picks its own
  * and sticks with it for a minute and a half: the nearest one, but whoever attacked it lately
- * comes first, a rival pulling well ahead draws everyone's attention, and a little whim (changing
- * every five minutes) settles the near ties, so nobody can count on the other two fighting.
+ * comes first, a rival pulling well ahead draws everyone's attention, one left with almost no army
+ * gets finished off, and a little whim (changing every five minutes) settles the near ties, so
+ * nobody can count on the other two fighting.
  */
 function rivalOf(p) {
   if (S.players.length === 2) return 1 - p;
@@ -2109,7 +2236,9 @@ function rivalOf(p) {
     let s = L && E ? dist(L.x, L.y, E.x, E.y) : 1;
     s *= 0.8 + 0.4 * hash2(p * 7 + Q.id, Math.floor(S.time / 300), S.seed);
     if (S.time - (hit[Q.id] ?? -999) < 120) s *= 0.6;
-    if (army(Q.id) > mine + 6) s *= 0.8;
+    const theirs = army(Q.id);
+    if (theirs > mine + 6) s *= 0.8;
+    if (theirs <= 3 && mine >= 10) s *= 0.45; // all but defenceless: finish it off and take everything it has
     if (s < bs) { bs = s; best = Q.id; }
   }
   if (best < 0) return p === 0 ? 1 : 0;
@@ -2193,7 +2322,13 @@ function warbotAct(u, dt) {
     if (!pathing) u.path = null;
     return;
   }
-  if (!t) { if (!(wantsRepair(u) && goRepair(u))) goGarrison(u); return; }
+  if (!t) {
+    const l = lootNear(u, 6);
+    if (l) { goLoot(u, l); return; }
+    if (!(wantsRepair(u) && goRepair(u))) goGarrison(u);
+    return;
+  }
+  if (t.type === 'loot') { doLoot(u, t, dt); return; }
   if (t.type === 'repair') {
     const c = getE(t.bld);
     if (!c || c.dead || c.owner !== u.owner || repairDry(c)) { u.task = null; return; }
@@ -2214,9 +2349,11 @@ function warbotAct(u, dt) {
   } else if (t.type === 'attack') {
     const b = getE(t.target);
     if (!b || b.owner === u.owner) {
-      // Target taken. Hold a captured military building, otherwise press on to the next
-      // enemy building close by before heading home.
+      // Target taken. Hold a captured military building, otherwise carry off a crate of what was
+      // inside, or press on to the next enemy building close by before heading home.
       u.task = null;
+      const l = lootNear(u, 4);
+      if (l && !(b && BDEFS[b.type].mil)) { goLoot(u, l); return; }
       if (b) {
         const def = BDEFS[b.type];
         if (def.mil && b.garrison.length + b.garInc < def.garrison) { u.task = { type: 'garrison', bld: b.id }; b.garInc++; return; }
