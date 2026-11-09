@@ -3,7 +3,8 @@
 Every building, bot, resource and ground tile now uses custom art (batch 1). Anything without an
 image keeps a placeholder drawn in code, so art can still be added **one piece at a time**. The
 remaining pieces are listed under [Batch 2](#batch-2-terrain-levels-and-goods-icons), [Batch 3](#batch-3-missiles-batteries-and-army-orders)
-[Batch 4](#batch-4-fuel-farms-and-oil) and [Batch 5](#batch-5-robot-types-roads-and-ammo).
+[Batch 4](#batch-4-fuel-farms-and-oil) and [Batch 5](#batch-5-robot-types-roads-and-ammo). To give every building a realistic 3D
+industrial look, see [Batch 6](#batch-6-realistic-3d-industrial-buildings-a-full-restyle).
 
 This guide has three parts:
 
@@ -206,6 +207,205 @@ with a small coloured badge (amber crate, green leaf, yellow stripe).
 | `icon-cement` | 64×64, transparent | Cement, in the top bar | A small grey cement sack. Bold, simple, thin dark outline. |
 | `icon-asphalt` | 64×64, transparent | Asphalt, in the top bar | A small dark tar block with a glossy highlight. Bold, simple, thin dark outline. |
 | `icon-ammo` | 64×64, transparent | Ammo, in the top bar | Three brass bullets side by side. Bold, simple, thin dark outline. |
+
+### Batch 6: realistic 3D industrial buildings (a full restyle)
+
+This batch redraws **every building** as a realistic, 3D-rendered industrial model seen from a high three-quarter
+angle, so buildings look solid and tall instead of flat. They are our own designs; the brief below sets the
+look. Do them in one Claude Design chat so camera, lighting and scale stay consistent.
+
+**How to work through it**
+
+1. Paste the **style brief** below first.
+2. Make the **Smelter** first and check it in the game before doing the rest. It is the "style anchor".
+3. For every other building, paste its prompt and add: *"Same camera angle, lighting, materials and scale as the
+   Smelter."*
+4. Export each one as a 512×512 PNG with a transparent background, named as listed (for example `smelter.png`,
+   `outpost@0.png`), and send them over in a zip. Claude Code will register them in the manifest with the right
+   size for each.
+
+**Style brief (paste this first)**
+
+```
+I'm making building sprites for Botfall, a mobile colony-logistics strategy game on a dusty orange-brown alien
+planet. Every building should look like a realistic, pre-rendered 3D industrial model: like a detailed miniature
+photographed in warm sunlight. Each one is a compact robotic industrial facility standing on a square concrete
+and steel foundation pad.
+
+Camera: a high three-quarter view looking down at about 55-60 degrees, square-on to the viewer (not turned to a
+diagonal), so the roof and the front face are both visible. Use exactly the same camera for every building.
+
+Lighting: warm sun from the top-left, soft ambient fill, a short soft shadow falling down-right onto the pad. No
+shadow beyond the pad.
+
+Materials: weathered painted steel in gunmetal, warm grey and faded off-white; ribbed and riveted panels;
+concrete; pipes, ducts, vents and cable runs; catwalks with railings; yellow-and-black hazard stripes; a little
+dust and rust on the edges. Each building has one accent light colour that matches what it makes; I'll give it
+with each building.
+
+Format: 512x512 PNG with a transparent background. The foundation pad sits on the bottom edge (about 4% margin)
+and spans about 75% of the width; the structure rises upward from it, and nothing touches the top or the sides.
+No ground around the pad, no text, no logos, no people or robots.
+
+Readability: it is shown at about 50 pixels wide on a phone, so give it a strong, distinctive silhouette, chunky
+forms, clear contrast between lit and shaded faces, and a few large details rather than many tiny ones.
+```
+
+**Team colours.** The Lander, Outpost, Pulse Turret and Missile Silo need two versions: `@0` with cyan `#38d4ff`
+accents (lights, flags, stripes) and `@1` with red `#ff5a6e` accents, everything else identical. Ask for the second
+one with: *"Same image, but change every cyan accent to red #ff5a6e."* Every other building is a single version;
+the game adds a thin team-coloured bar under it.
+
+**Size on the map** (Claude Code sets this in the manifest; listed so the proportions look right): the Lander is
+the biggest, about 1.9 tiles wide; the Foundry, Refinery, Missile Factory, Outpost and Missile Silo are large, about
+1.5; most production buildings about 1.35; the Charging Station and Pulse Turret about 1.25. Keep these proportions
+between images too: a Charging Station should look smaller than a Foundry.
+
+**The buildings**
+
+`smelter.png` (make this first)
+```
+A smelter: a squat brick-lined furnace with a glowing orange mouth, a tall chimney with a faint heat haze, an ore
+hopper on one side and a stack of pale blue alloy ingots on the other. Accent colour: orange furnace glow.
+```
+
+`lander@0.png` and `lander@1.png`
+```
+The colony's landing craft and main base, the biggest building: a heavy hexagonal descent module on four extended
+landing legs with large foot pads, a domed command section with a glowing team-coloured core window, cargo bay
+doors open at the front with a ramp down, scorch marks around the base. Its footprint fills about 90% of the width.
+Team colour: cyan #38d4ff.
+```
+
+`harvester.png`
+```
+A harvesting station: a compact shed with an articulated cutting arm and a conveyor feeding a hopper of bundled
+teal-green plant fibre. Accent colour: teal #3fd8a6.
+```
+
+`quarry.png`
+```
+A stone quarry rig: a jaw crusher with an intake chute, a short conveyor, and pallets of cut grey stone blocks.
+Accent colour: warm white work lights.
+```
+
+`mine.png`
+```
+An ore mine head: a steel headframe tower with a winch wheel over a shaft, an ore skip, and a heap of dark ore
+with glowing orange flecks. Accent colour: orange #ff8a3d.
+```
+
+`tap.png`
+```
+A crystal extraction station: a drilling rig with a cluster of insulated probes and a glass-walled containment
+tank holding violet crystal shards. Accent colour: violet #b98cff.
+```
+
+`fab.png`
+```
+A clean-room chip fabrication plant: a sealed white-and-grey building with ribbed air handlers on the roof, a
+small loading door and a lime-green status light strip. Accent colour: lime #c8f05a.
+```
+
+`foundry.png`
+```
+A robot factory: a large hangar with a wide roll-up door, a robotic assembly arm visible inside, and a gantry
+crane across the roof. A little bigger than the other production buildings. Accent colour: sky blue #8ec3e6.
+```
+
+`grower.png`
+```
+A plant nursery: rows of seedling trays under a small arched greenhouse frame, a water tank and a seed-sowing arm.
+Accent colour: soft green.
+```
+
+`farm.png`
+```
+An agricultural station: a hydroponic greenhouse with grow lights, a harvesting gantry, and a pink fuel tank with
+pipes. Accent colour: magenta #ff5c8a.
+```
+
+`charger.png`
+```
+A robot charging bay: a central power pylon with heavy cables running to four charging cradles on the pad, green
+charge indicator lights and a small transformer box. Smaller than the factories. Accent colour: green #7ee08a.
+```
+
+`pump.png`
+```
+An oil pumpjack: a nodding beam on an A-frame over a wellhead, a counterweight, a short pipe to a storage drum, and
+dark oil stains on the pad. Accent colour: amber.
+```
+
+`refinery.png`
+```
+A compact refinery: a tall distillation column with ladders, two round storage tanks (rust-brown for crude,
+magenta for fuel) joined by pipes, and a small flare stack with a flame. Accent colour: magenta #ff5c8a.
+```
+
+`kiln.png`
+```
+A cement plant: an angled rotary kiln drum on rollers, a tall preheater tower, a storage silo and stacked grey
+cement sacks. Accent colour: pale grey-blue #a9b4c2.
+```
+
+`tarworks.png`
+```
+An asphalt plant: a black insulated tar tank over a burner with an orange glow, a stone hopper, a mixing drum and
+dark tar stains. Accent colour: amber.
+```
+
+`roadworks.png`
+```
+A road maintenance yard: a small depot shed, a parked yellow road roller, stacked traffic cones and a striped
+barrier. Accent colour: yellow #ffcf4a.
+```
+
+`depot.png`
+```
+A storage depot: an open-sided steel warehouse with stacked crates and barrels and a loading bay. Accent colour:
+warm white.
+```
+
+`outpost@0.png` and `outpost@1.png`
+```
+A fortified outpost: a round armoured bunker with sloped walls, firing slits, floodlights, and a tall antenna mast
+flying a team-coloured flag. Team colour: cyan #38d4ff on the flag and lights.
+```
+
+`turret@0.png` and `turret@1.png`
+```
+A defensive energy turret: a squat armoured base with a turret head and a twin-barrelled pulse cannon angled
+toward the lower right, with glowing team-coloured capacitor coils. Smaller than the factories. Team colour: cyan
+#38d4ff.
+```
+
+`armory.png`
+```
+An ammunition plant: an armoured press building with a conveyor carrying brass cartridges, ammo crates stacked by
+the door and an amber warning light. Accent colour: brass #e8c39e.
+```
+
+`munitions.png` (the Missile Factory)
+```
+A missile assembly hall: a long armoured hall with an open bay showing a half-assembled missile on a cradle, a
+gantry crane and hazard markings. Accent colour: amber #ffcf4a.
+```
+
+`silo@0.png` and `silo@1.png`
+```
+A missile silo: a round reinforced launch pad set into a raised concrete collar, split blast doors half open
+showing a missile nose cone, and team-coloured launch lights around the rim. Team colour: cyan #38d4ff.
+```
+
+`site.png` (a construction site)
+```
+A construction site: a square foundation pad with scaffolding, a small crane, stacked building materials and
+hazard tape. No finished building. Accent colour: yellow hazard stripes.
+```
+
+When these are in, the old flat versions of the same names are replaced; anything not yet redrawn keeps its
+current art, so they can be swapped in a few at a time.
 
 ### Not swappable yet (ask Claude Code if you want these)
 

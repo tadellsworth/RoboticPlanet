@@ -8,6 +8,9 @@
  *
  *   key: 'path/inside/art/folder.png'
  *   key: { src: 'path.png', scale: 1.4 }      // scale = size in tiles (default 1, Lander 1.6)
+ *   key: { src: 'path.png', scale: 1.4, anchor: 'bottom' }
+ *        // for buildings drawn in a 3/4 view that rise above their tile: the image's bottom edge
+ *        // sits on the bottom of the tile, and the building grows upward
  *
  * Team-specific versions: add '@0' (you, cyan) or '@1' (rival, red) to the key, e.g.
  *   'outpost@0': 'buildings/outpost-blue.png',

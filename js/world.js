@@ -614,16 +614,21 @@ function canPlace(owner, type, i, j, skipBlockCheck) {
     if (!skipBlockCheck && wouldBlock(t)) return { ok: false, reason: 'That would block the only way through here.' };
     return { ok: true, reason: '' };
   }
-  if (S.road[t]) return { ok: false, reason: 'There is a path here.' };
+  if (S.road[t]) return { ok: false, reason: 'There is a road here.' };
+  // Buildings may stand side by side, as long as every building keeps at least one open side
+  // that bots can walk in from (and the Lander, which is bigger, keeps a clear ring around it).
   let open = 0;
   for (let dj = -1; dj <= 1; dj++) for (let di = -1; di <= 1; di++) {
     if (!di && !dj) continue;
     if (!inMap(i + di, j + dj)) continue;
     const u = tIdx(i + di, j + dj);
-    if (S.bAt[u]) return { ok: false, reason: 'Too close to another building.' };
-    if ((di === 0 || dj === 0) && canStep(t, u)) open++;
+    const nb = S.bAt[u] ? getE(S.bAt[u]) : null;
+    if (nb && nb.type === 'lander') return { ok: false, reason: 'Too close to the Lander.' };
+    if (di !== 0 && dj !== 0) continue;
+    if (!nb && canStep(t, u)) open++;
+    if (nb && !keepsAccess(u, t)) return { ok: false, reason: `That would wall in the ${BDEFS[nb.type].name} next to it.` };
   }
-  if (open < 2) return { ok: false, reason: 'Bots could not reach this spot.' };
+  if (open < 1) return { ok: false, reason: 'Bots could not reach this spot.' };
   if (def.mil) {
     for (const b of S.buildings) {
       if (!b.dead && b.owner === owner && BDEFS[b.type].mil && dist2(b.x, b.y, i, j) < 16) {
@@ -638,6 +643,17 @@ function canPlace(owner, type, i, j, skipBlockCheck) {
   // The most expensive check goes last.
   if (!skipBlockCheck && wouldBlock(t)) return { ok: false, reason: 'That would block the only way through here.' };
   return { ok: true, reason: '' };
+}
+
+/** Would building u still have an open side bots can walk in from if tile t were built on? */
+function keepsAccess(u, t) {
+  const ui = u % S.W, uj = (u / S.W) | 0;
+  for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+    if (!inMap(ui + di, uj + dj)) continue;
+    const v = tIdx(ui + di, uj + dj);
+    if (v !== t && !S.bAt[v] && canStep(u, v)) return true;
+  }
+  return false;
 }
 
 function siteCount(owner) {

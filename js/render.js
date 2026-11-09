@@ -51,7 +51,7 @@ function loadArt(onChange) {
     const entry = typeof ART_MANIFEST[key] === 'string' ? { src: ART_MANIFEST[key] } : ART_MANIFEST[key];
     const img = new Image();
     img.onload = () => {
-      ART[key] = { img, scale: entry.scale || 0 };
+      ART[key] = { img, scale: entry.scale || 0, anchor: entry.anchor || '' };
       artLoaded++;
       if (key.startsWith('icon-')) applyGoodIcons();
       if (onChange) onChange(key);
@@ -84,8 +84,14 @@ function drawTexture(ctx, art, i, j, x, y) {
   ctx.drawImage(img, (i % span) * sw, (j % span) * sh, sw, sh, x, y, TP, TP);
 }
 
+/**
+ * Draw an art image centred on (cx, cy) at sizePx × its scale. Art with anchor 'bottom' (buildings
+ * drawn in a 3/4 view, rising above their tile) is lined up so the image's bottom edge sits on the
+ * bottom edge of the tile instead.
+ */
 function drawArt(ctx, art, cx, cy, sizePx, angle) {
   const s = sizePx * (art.scale || 1);
+  if (art.anchor === 'bottom' && !angle) cy += (sizePx - s) / 2;
   if (angle) {
     ctx.save(); ctx.translate(cx, cy); ctx.rotate(angle);
     ctx.drawImage(art.img, -s / 2, -s / 2, s, s);
@@ -100,12 +106,18 @@ function initRender(canvas) {
   R.ctx = canvas.getContext('2d');
   resizeRender();
   window.addEventListener('resize', resizeRender);
+  window.addEventListener('orientationchange', () => setTimeout(resizeRender, 250));
+  window.addEventListener('pageshow', resizeRender);
+  if (window.visualViewport) window.visualViewport.addEventListener('resize', resizeRender);
 }
 
 function resizeRender() {
   R.dpr = Math.min(2, window.devicePixelRatio || 1);
-  R.w = window.innerWidth;
-  R.h = window.innerHeight;
+  // Installed web apps on iPhone sometimes report a viewport shorter than the screen; take the
+  // largest of the measurements so the map always reaches the bottom edge.
+  const vv = window.visualViewport;
+  R.w = Math.max(window.innerWidth, document.documentElement.clientWidth);
+  R.h = Math.max(window.innerHeight, document.documentElement.clientHeight, vv ? Math.round(vv.height) : 0);
   R.canvas.width = Math.round(R.w * R.dpr);
   R.canvas.height = Math.round(R.h * R.dpr);
   R.canvas.style.width = R.w + 'px';
@@ -567,8 +579,9 @@ function drawBuilding(ctx, type, cx, cy, s, owner, b) {
       ctx.fillStyle = color;
       ctx.fillRect(cx - w / 2, y, w, h);
     }
-    // Turret art is drawn barrel-right and rotated to aim; everything else is drawn as-is.
-    drawArt(ctx, art, cx, cy, s * (type === 'lander' && !art.scale ? 1.6 : 1), type === 'turret' && b ? b.aim : 0);
+    // Flat (top-down) turret art is drawn barrel-right and rotated to aim; 3/4-view art (anchored at
+    // the bottom) and everything else is drawn as-is.
+    drawArt(ctx, art, cx, cy, s * (type === 'lander' && !art.scale ? 1.6 : 1), type === 'turret' && b && art.anchor !== 'bottom' ? b.aim : 0);
     return;
   }
   const u = s / 32;
@@ -1391,6 +1404,12 @@ function buildingIcon(type, size, owner) {
   const c = document.createElement('canvas');
   c.width = c.height = size;
   const ctx = c.getContext('2d');
+  // Custom art is fitted to the icon whole, whatever its scale or anchor on the map.
+  const art = artFor(type, owner || 0);
+  if (art) {
+    ctx.drawImage(art.img, size * 0.04, size * 0.04, size * 0.92, size * 0.92);
+    return c.toDataURL();
+  }
   drawBuilding(ctx, type, size / 2, size / 2 + (type === 'lander' ? 0 : size * 0.02), type === 'lander' ? size * 0.55 : size * 0.86, owner || 0,
     { built: true, garrison: [], aim: -Math.PI / 4 });
   return c.toDataURL();
