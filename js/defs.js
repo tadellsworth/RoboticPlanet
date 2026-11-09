@@ -90,7 +90,7 @@ const BOTS = {
     desc: 'A farm robot. Bio Farms and Grove Planters need one to run. Slow off roads, except while farming.' },
   paver:   { name: 'Paver', plural: 'Pavers', speed: WORKER_SPEED, hp: 6, crew: 'paver', offroad: true,
     desc: 'A road crew bot. A Roadworks needs one to lay asphalt on your roads.' },
-  truck:   { name: 'Freight Truck', plural: 'Freight Trucks', speed: WORKER_SPEED * 1.35, hp: 8, haul: true, truck: true, carry: 8, roadOnly: true, parts: 2,
+  truck:   { name: 'Freight Truck', plural: 'Freight Trucks', speed: WORKER_SPEED * 1.35, hp: 8, haul: true, truck: true, carry: 8, roadOnly: true, parts: 2, accel: 1.5, brake: 3.5,
     desc: 'A heavy road truck that carries eight goods at once on the long runs: between your Command Base and Depots, and to anything far away. Slower than a Hauler on concrete, fastest of all on asphalt.' },
   warbot:  { name: 'Warbot', plural: 'Warbots', speed: WARBOT_SPEED, hp: 12, war: true,
     desc: 'Fights enemy bots and captures enemy buildings. Shoots Ammo; with none it can only scuffle.' },
@@ -106,6 +106,15 @@ const BOT_ORDER = ['worker', 'hauler', 'truck', 'agribot', 'paver', 'warbot'];
 const TRUCK_MIN_DIST = 12;
 const TRUCK_MIN_LOAD = 3;
 const TRUCK_ROAD = 0.8;
+/**
+ * Driving: bots speed up at BOT_ACCEL tiles/s² and brake at up to BOT_BRAKE, slowing to BOT_CORNER of
+ * their speed for a corner. Trucks are heavier: they set their own accel and brake and slow to
+ * TRUCK_CORNER for corners.
+ */
+const BOT_ACCEL = 4.5;
+const BOT_BRAKE = 8;
+const BOT_CORNER = 0.6;
+const TRUCK_CORNER = 0.42;
 const KEEP_MAX = 60;
 
 /*

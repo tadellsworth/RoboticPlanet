@@ -98,8 +98,11 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
   over the last minute and rings the spots where bots stand waiting.
 - **Long hauls:** tap a Depot and set **supply orders** (how much of each good to keep there). Goods come from your other
   storage, and anything nearby then draws on the Depot. **Freight Trucks** (2 Alloy and 2 Chips at the Foundry) carry
-  8 goods and take the long runs: storage to storage and deliveries of 3 or more over 12 tiles. They're slower than
-  Haulers on concrete (80%) and fastest of all on asphalt.
+  8 goods and take the long runs: storage to storage and deliveries of 3 or more over 12 tiles. Once you own a truck,
+  supply orders always wait for one and trucks only leave with 3 or more goods, so Haulers stay local. Trucks are
+  slower than Haulers on concrete (80%) and slow to accelerate, but fastest of all on asphalt.
+- **Driving:** bots accelerate away from stops and brake for corners, junctions, red lights and the end of a trip
+  (`BOT_ACCEL`, `BOT_BRAKE`, `BOT_CORNER` in `js/defs.js`; trucks have their own, slower values).
 - **Frontier riches:** boulders, ore, crystal and oil hold more the further they are from the bases, up to 2.2× in the
   middle of the map; rich deposits sparkle. **Map shape: Long haul** on the new-game screen makes a narrow, long planet
   (75% as wide, 170% as long) with the bases far apart.
@@ -153,10 +156,15 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
   its Command Base (up to 6), so it can always rebuild. Capturing an enemy Outpost takes its land,
   and enemy buildings left outside their border are lost.
 - **Controls:** drag to pan, pinch or scroll to zoom, tap anything to inspect it.
-- **Desktop:** on a wide screen the top bar is one row, the tools sit in a small dock and panels open on the right.
-  Right-drag pans in every mode; a building being placed follows the mouse. Keys: **B** build, **P** paths
-  (**R** roads, **G** bridges and tunnels, **O** one-way arrows, **L** junctions, **T** traffic map), **A** army, **H** base, arrows/WASD pan, **+/−** zoom,
-  **1–3** speed, **M** minimap, **Space** pause, **Esc** back.
+- **Game speed:** the speed chip in the top bar opens 0.75×, 0.875×, 1×, 2× and 3×.
+- **Desktop (RTS controls):** on a wide screen the top bar is one row, the tools sit in a small dock and panels open
+  on the right. Drag a box to select warbots (Shift adds; a box round a garrison takes its spare warbots), right-click
+  ground to hold it, a rival building to attack, or your garrison to station them. Ctrl/Shift+1–9 saves a control
+  group, 1–9 recalls it (twice jumps to it). Pan with the arrow keys, the window edge, or right/middle drag; hover for
+  tooltips. Keys: **B** build then a building's letter, **P** paths (**R** roads, **G** bridges and tunnels, **O**
+  one-way arrows, **L** junctions, **T** traffic map), **A** army, **F** select all warbots, **J** latest alert,
+  **H** base, **[ ]** speed, **+/−** zoom, **M** minimap, **Space** pause, **Esc** back / clear selection.
+  Phones and tablets keep the touch controls.
 
 ## Custom art
 

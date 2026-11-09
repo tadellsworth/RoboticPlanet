@@ -139,7 +139,7 @@ body.mm-off .objective { margin-right: 54px; }
   background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); font-size: 12px; font-weight: 600;
 }
 .tool svg { width: 24px; height: 24px; }
-.tool kbd, .seg kbd { display: none; }
+.tool kbd, .seg kbd, .bcard kbd, #banner-traffic kbd { display: none; }
 kbd {
   display: inline-block; min-width: 1.5em; padding: 0 5px; border-radius: 5px; border: 1px solid rgba(255,255,255,0.25);
   border-bottom-width: 2px; font: 600 12px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; text-align: center; color: var(--text);
@@ -374,6 +374,9 @@ i.g.cement { background: var(--g-cement); } i.g.asphalt { background: var(--g-as
   .tool kbd { display: inline-block; margin-left: 2px; opacity: 0.7; }
   .tool.on kbd { border-color: rgba(6, 35, 48, 0.4); color: var(--accent-ink); }
   .seg kbd { display: inline-block; margin-left: 6px; opacity: 0.6; font-size: 11px; }
+  .bcard { position: relative; }
+  .bcard kbd { display: inline-block; position: absolute; top: 6px; left: 6px; opacity: 0.75; font-size: 11px; }
+  #banner-traffic kbd { display: inline-block; margin-left: 6px; opacity: 0.6; font-size: 11px; }
   .tool:hover { border-color: rgba(255, 255, 255, 0.25); }
   /* With a panel open on the right, the dock and messages centre on the map that's left. */
   body.sheet-open #bottombar, body.sheet-open #toasts { left: calc((100% - 444px) / 2); }
@@ -410,3 +413,27 @@ body.mode-aim .objective { display: none; }
 .traffic-key b { color: var(--text); }
 .tk { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin: 0 3px 0 6px; vertical-align: -1px; }
 .tk.q { background: #3ddc84; } .tk.b { background: #ffd23d; } .tk.p { background: #ff4b4b; }
+
+/* Game speed menu */
+.speed-menu { position: fixed; z-index: 30; display: flex; flex-direction: column; gap: 3px; padding: 5px;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 10px 26px rgba(0,0,0,0.5); }
+.speed-menu button { border: 0; background: transparent; color: var(--text); font-weight: 700; font-size: 15px;
+  padding: 9px 18px; border-radius: 8px; font-variant-numeric: tabular-nums; text-align: center; min-width: 84px; }
+.speed-menu button.on { background: var(--accent); color: var(--accent-ink); }
+#btn-speed.slow { color: var(--good); }
+#btn-speed.fast { color: var(--warn); }
+
+/* Desktop: selected warbots and hover tips */
+.selbar { position: fixed; z-index: 16; left: 16px; bottom: calc(var(--safe-b) + 84px); max-width: 360px;
+  background: var(--panel); border: 1px solid rgba(125, 255, 160, 0.45); border-radius: 12px; padding: 9px 40px 9px 12px;
+  font-size: 13px; line-height: 1.4; box-shadow: 0 8px 22px rgba(0, 0, 0, 0.45); }
+.selbar b { color: #7dffa0; }
+.selbar .hint { display: block; color: var(--muted); margin-top: 3px; }
+.selbar .err { color: var(--danger); }
+.selbar .muted { color: var(--muted); }
+.selbar #selbar-clear { position: absolute; top: 6px; right: 6px; padding: 4px 8px; min-height: 0; }
+.map-tip { position: fixed; z-index: 18; pointer-events: none; max-width: 260px;
+  background: #0d0f15; border: 1px solid rgba(255, 255, 255, 0.16); border-radius: 10px; padding: 7px 10px;
+  font-size: 13px; line-height: 1.35; box-shadow: 0 8px 22px rgba(0, 0, 0, 0.5); }
+.map-tip b { display: block; font-size: 14px; }
+.map-tip em { display: block; font-style: normal; color: var(--muted); }

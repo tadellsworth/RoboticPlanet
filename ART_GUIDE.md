@@ -543,8 +543,11 @@ side); ask Claude Code if you'd like those as art too.
   grower, site, outpost@0/@1), and so is the second set (charger, farm, pump, refinery, kiln, tarworks, roadworks,
   ramp). They use `B3D(...)` in `art/art-manifest.js`: scale 1.4 and anchor [0.5, 0.615], the centre of the pad's top
   surface. New buildings in the same style can use the same helper
-- Robots `hauler`, `agribot` and `paver` (@0/@1), the military buildings, the 3D Command Base and the Repair Bay
-  (`repair`) are installed. Still missing: the Freight Truck (`truck@0/@1-f0…f3`, `truck-brake`, `truck-boost`), a 3D turret, resources `crop` and `oil`, ground
+- Robots `hauler`, `agribot` and `paver` (@0/@1), the military buildings, the 3D Command Base, the Repair Bay
+  (`repair`) and the Freight Truck (`truck@0/@1-f0…f3`, `truck-brake`, `truck-boost`) are installed. Any robot can
+  use the truck's pattern: `<type>@<team>-f0…f3` driving frames (played by distance driven), `<type>-brake` and
+  `<type>-boost` overlays, and `shadow: true` in the manifest when the art has no shadow of its own.
+  Still missing: a 3D turret, resources `crop` and `oil`, ground
   `fertile`, `slope` and `cliff`, markers `missile`, `rally` and `oneway`, and the 12 goods icons
 
 ### Tips

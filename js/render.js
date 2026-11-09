@@ -54,7 +54,7 @@ function loadArt(onChange) {
     const entry = typeof ART_MANIFEST[key] === 'string' ? { src: ART_MANIFEST[key] } : ART_MANIFEST[key];
     const img = new Image();
     img.onload = () => {
-      ART[key] = { img, scale: entry.scale || 0, anchor: entry.anchor || '' };
+      ART[key] = { img, scale: entry.scale || 0, anchor: entry.anchor || '', shadow: !!entry.shadow };
       artLoaded++;
       if (key.startsWith('icon-')) applyGoodIcons();
       if (onChange) onChange(key);
@@ -1084,7 +1084,7 @@ function drawSite(ctx, type, cx, cy, s, owner, b) {
 
 function drawBot(ctx, u, sx, sy, s) {
   const color = PLAYER_COLORS[u.owner];
-  const own = artFor(u.type, u.owner);
+  const own = driveFrame(u) || artFor(u.type, u.owner);
   // Specialists use their own art when it exists, otherwise the worker's with a badge.
   const truck = u.type === 'truck';
   const art = own || (u.type !== 'warbot' && !truck ? artFor('worker', u.owner) : null);
@@ -1092,7 +1092,10 @@ function drawBot(ctx, u, sx, sy, s) {
   if (truck) {
     drawTruck(ctx, u, sx, sy, s, color, own);
   } else if (art) {
-    drawArt(ctx, art, sx, sy + bob, s * (u.type === 'warbot' ? 0.6 : 0.5), u.face);
+    const size = s * (u.type === 'warbot' ? 0.6 : 0.5);
+    if (art.shadow) drawBotShadow(ctx, u, sx, sy, size * 0.42, size * 0.3);
+    drawArt(ctx, art, sx, sy + bob, size, u.face);
+    if (art === own) drawDriveOverlays(ctx, u, sx, sy + bob, size);
   } else if (u.type !== 'warbot') {
     const r = s * 0.16;
     ctx.fillStyle = 'rgba(20,10,5,0.3)';
@@ -1155,40 +1158,90 @@ function drawBot(ctx, u, sx, sy, s) {
   }
 }
 
+/* Driving animation: frames step every FRAME_STEP tiles driven. */
+const FRAME_STEP = 1 / 12;
+
+/** The driving frame bot u shows now ('<type>@<team>-f0' …), or null if it has no frames. */
+function driveFrame(u) {
+  const base = u.type + '@' + u.owner + '-f';
+  if (!ART[base + '0']) return null;
+  let n = 1;
+  while (ART[base + n]) n++;
+  return ART[base + (Math.floor((u.odo || 0) / FRAME_STEP) % n)];
+}
+
+/** Brake lights while it slows or waits, a puff of dust while it speeds up (fading towards full speed). */
+function drawDriveOverlays(ctx, u, x, y, size) {
+  if (u.drive < 0 && ART[u.type + '-brake']) drawArt(ctx, ART[u.type + '-brake'], x, y, size, u.face);
+  else if (u.drive > 0 && ART[u.type + '-boost']) {
+    ctx.globalAlpha = clamp(1 - (u.vel || 0) / (u.vtop || 1), 0.2, 1);
+    drawArt(ctx, ART[u.type + '-boost'], x, y, size, u.face);
+    ctx.globalAlpha = 1;
+  }
+}
+
+/** A soft shadow under a bot, cast down-right whichever way the bot faces (for art without one). */
+function drawBotShadow(ctx, u, x, y, along, across) {
+  ctx.fillStyle = 'rgba(20,10,5,0.32)';
+  ctx.beginPath();
+  ctx.ellipse(x + along * 0.12, y + along * 0.16, along, across, u.face, 0, Math.PI * 2);
+  ctx.fill();
+}
+
 /** A Freight Truck seen from above: a team-coloured cab and a flatbed with its load of crates (over its art, if any). */
 function drawTruck(ctx, u, sx, sy, s, color, art) {
   const L = s * 0.62, Wd = s * 0.3;
+  if (art) {
+    // The art's flatbed (inside the side rails) runs from 10% to 64% of the image's width.
+    const size = s * 0.9;
+    if (art.shadow) drawBotShadow(ctx, u, sx, sy, size * 0.44, size * 0.17);
+    drawArt(ctx, art, sx, sy, size, u.face);
+    drawDriveOverlays(ctx, u, sx, sy, size);
+    drawTruckCargo(ctx, u, sx, sy, -size * 0.392, size * 0.54, size * 0.24, s);
+    return;
+  }
   ctx.save();
   ctx.translate(sx, sy);
-  if (art) {
-    drawArt(ctx, art, 0, 0, s * 0.72, u.face);
-    ctx.rotate(u.face);
-  } else {
-    ctx.fillStyle = 'rgba(20,10,5,0.3)';
-    ctx.beginPath(); ctx.ellipse(s * 0.04, s * 0.06, L * 0.55, Wd * 0.62, u.face, 0, Math.PI * 2); ctx.fill();
-    ctx.rotate(u.face);
-    // Wheels, chassis, flatbed.
-    ctx.fillStyle = '#121418';
-    for (const x of [-L * 0.36, -L * 0.12, L * 0.3]) { ctx.fillRect(x - s * 0.04, -Wd * 0.58, s * 0.08, Wd * 0.16); ctx.fillRect(x - s * 0.04, Wd * 0.42, s * 0.08, Wd * 0.16); }
-    ctx.fillStyle = '#2b2f36';
-    roundRect(ctx, -L / 2, -Wd / 2, L, Wd, s * 0.03); ctx.fill();
-    ctx.fillStyle = '#5a616b';
-    ctx.fillRect(-L / 2 + s * 0.02, -Wd / 2 + s * 0.025, L * 0.66, Wd - s * 0.05);
-    // Cab at the front, with a windscreen.
-    ctx.fillStyle = color;
-    roundRect(ctx, L * 0.2, -Wd / 2, L * 0.3, Wd, s * 0.04); ctx.fill();
-    ctx.fillStyle = '#16212b';
-    ctx.fillRect(L * 0.38, -Wd * 0.36, L * 0.08, Wd * 0.72);
+  ctx.fillStyle = 'rgba(20,10,5,0.3)';
+  ctx.beginPath(); ctx.ellipse(s * 0.04, s * 0.06, L * 0.55, Wd * 0.62, u.face, 0, Math.PI * 2); ctx.fill();
+  ctx.rotate(u.face);
+  // Wheels, chassis, flatbed.
+  ctx.fillStyle = '#121418';
+  for (const x of [-L * 0.36, -L * 0.12, L * 0.3]) { ctx.fillRect(x - s * 0.04, -Wd * 0.58, s * 0.08, Wd * 0.16); ctx.fillRect(x - s * 0.04, Wd * 0.42, s * 0.08, Wd * 0.16); }
+  ctx.fillStyle = '#2b2f36';
+  roundRect(ctx, -L / 2, -Wd / 2, L, Wd, s * 0.03); ctx.fill();
+  ctx.fillStyle = '#5a616b';
+  ctx.fillRect(-L / 2 + s * 0.02, -Wd / 2 + s * 0.025, L * 0.66, Wd - s * 0.05);
+  // Cab at the front, with a windscreen.
+  ctx.fillStyle = color;
+  roundRect(ctx, L * 0.2, -Wd / 2, L * 0.3, Wd, s * 0.04); ctx.fill();
+  ctx.fillStyle = '#16212b';
+  ctx.fillRect(L * 0.38, -Wd * 0.36, L * 0.08, Wd * 0.72);
+  // Brake lights while it slows or waits; a puff of dust from the rear wheels as it pulls away.
+  if (u.drive < 0) {
+    ctx.fillStyle = '#ff3b3b';
+    ctx.fillRect(-L / 2 - s * 0.012, -Wd * 0.45, s * 0.025, s * 0.04);
+    ctx.fillRect(-L / 2 - s * 0.012, Wd * 0.45 - s * 0.04, s * 0.025, s * 0.04);
+  } else if (u.drive > 0 && (u.vel || 0) < (u.vtop || 1) * 0.8) {
+    ctx.fillStyle = 'rgba(214,170,120,0.45)';
+    for (const k of [-1, 1]) { ctx.beginPath(); ctx.arc(-L * 0.62, k * Wd * 0.4, s * 0.05, 0, Math.PI * 2); ctx.fill(); }
   }
-  // Cargo: up to eight crates, two rows of four.
+  ctx.restore();
+  drawTruckCargo(ctx, u, sx, sy, -L / 2 + s * 0.025, L * 0.62, Wd - s * 0.06, s);
+}
+
+/** Up to eight crates of the truck's load in two rows of four, on a bed starting `x0` behind the centre. */
+function drawTruckCargo(ctx, u, sx, sy, x0, len, wid, s) {
   const n = u.carry ? u.carryN || 1 : 0;
-  if (n) {
-    const cw = (L * 0.62) / 4, ch = (Wd - s * 0.06) / 2;
-    for (let k = 0; k < n; k++) {
-      const x = -L / 2 + s * 0.025 + (k >> 1) * cw, y = -Wd / 2 + s * 0.03 + (k & 1) * ch;
-      ctx.fillStyle = '#1b1e25'; ctx.fillRect(x, y, cw - 0.5, ch - 0.5);
-      ctx.fillStyle = GOOD[u.carry].color; ctx.fillRect(x + 1, y + 1, cw - 2.5, ch - 2.5);
-    }
+  if (!n) return;
+  ctx.save();
+  ctx.translate(sx, sy);
+  ctx.rotate(u.face);
+  const cw = len / 4, ch = wid / 2, m = Math.max(0.5, s * 0.006);
+  for (let k = 0; k < n; k++) {
+    const x = x0 + (k >> 1) * cw, y = -wid / 2 + (k & 1) * ch;
+    ctx.fillStyle = '#1b1e25'; ctx.fillRect(x + m, y + m, cw - 2 * m, ch - 2 * m);
+    ctx.fillStyle = GOOD[u.carry].color; ctx.fillRect(x + 2 * m, y + 2 * m, cw - 4 * m, ch - 4 * m);
   }
   ctx.restore();
 }
@@ -1389,6 +1442,12 @@ function render(dtReal) {
         const lane = rt === 1 ? LANE_OFFSET : 0;
         jx = -Math.sin(e.rface) * lane; jy = Math.cos(e.rface) * lane;
       }
+      if (typeof UI !== 'undefined' && UI.selSet && UI.selSet.has(e.id)) {
+        // Selected (desktop): a green ring on the ground under it.
+        ctx.strokeStyle = 'rgba(125,255,160,0.95)';
+        ctx.lineWidth = Math.max(1.5, z * 0.045);
+        ctx.beginPath(); ctx.ellipse(ox + (e.x + jx) * z, oy + (e.y + jy) * z + z * 0.06, z * 0.3, z * 0.2, 0, 0, Math.PI * 2); ctx.stroke();
+      }
       const face = e.face;
       e.face = e.rface; // draw with the smoothed heading
       drawBot(ctx, e, ox + (e.x + jx) * z, oy + (e.y + jy) * z, z);
@@ -1434,6 +1493,15 @@ function render(dtReal) {
   drawRallies(ctx, ox, oy, z);
   drawMissiles(ctx, ox, oy, z);
   drawEffects(ctx, ox, oy, z);
+  if (R.box) {
+    // The selection box being dragged (desktop).
+    const b = R.box, x = Math.min(b.x0, b.x1), y = Math.min(b.y0, b.y1), w = Math.abs(b.x1 - b.x0), h = Math.abs(b.y1 - b.y0);
+    ctx.fillStyle = 'rgba(125,255,160,0.1)';
+    ctx.fillRect(x, y, w, h);
+    ctx.strokeStyle = 'rgba(125,255,160,0.9)';
+    ctx.lineWidth = 1.5;
+    ctx.strokeRect(x + 0.5, y + 0.5, w, h);
+  }
   if (typeof UI !== 'undefined' && UI.inGame) renderMinimap();
 }
 

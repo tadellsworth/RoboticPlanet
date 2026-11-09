@@ -25,6 +25,8 @@
  *              charger munitions silo farm pump refinery kiln tarworks roadworks armory repair
  *              site (a construction site)
  *   Bots:      worker warbot hauler agribot paver truck  (drawn facing right; the game rotates them;
+ *              any bot can have driving frames '<type>@<team>-f0' … '-f3' and overlays '<type>-brake' and
+ *              '<type>-boost'; give a bot without a baked-in shadow `shadow: true`;
  *              without their own art, specialists use the worker's art with a small badge)
  *   Resources: stalk boulder ore crystal crop oil   (crop is drawn smaller while it ripens)
  *   Ground:    ground water rock fertile  (square seamless tiles; one image spans 4×4 map tiles)
@@ -101,6 +103,19 @@ const ART_MANIFEST = {
   roadworks: B3D('buildings/roadworks.png'),
   ramp: B3D('buildings/ramp.png'),
   repair: B3D('buildings/repair-bay.png'),
+
+  // Freight Truck: four driving frames per team, played faster the faster it goes (bots/truck@0-f0 …),
+  // plus overlays for braking and speeding up. No shadow in the images: `shadow` has the game draw it.
+  'truck@0-f0': { src: 'bots/truck@0-f0.png', shadow: true },
+  'truck@0-f1': { src: 'bots/truck@0-f1.png', shadow: true },
+  'truck@0-f2': { src: 'bots/truck@0-f2.png', shadow: true },
+  'truck@0-f3': { src: 'bots/truck@0-f3.png', shadow: true },
+  'truck@1-f0': { src: 'bots/truck@1-f0.png', shadow: true },
+  'truck@1-f1': { src: 'bots/truck@1-f1.png', shadow: true },
+  'truck@1-f2': { src: 'bots/truck@1-f2.png', shadow: true },
+  'truck@1-f3': { src: 'bots/truck@1-f3.png', shadow: true },
+  'truck-brake': 'bots/truck-brake.png',
+  'truck-boost': 'bots/truck-boost.png',
 
   // Military buildings (Versus), with team versions: @0 yours (cyan lights), @1 the rival's (red).
   'armory@0': B3D('buildings/armory@0.png'),

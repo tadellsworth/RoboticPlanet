@@ -292,10 +292,12 @@ function playerGoods(p) {
   return tot;
 }
 
-function nearestEnemyBot(owner, x, y, range, preferWar) {
+/** Nearest enemy bot within range (warbots first with preferWar). With ownLand, civilian bots only count inside owner's land. */
+function nearestEnemyBot(owner, x, y, range, preferWar, ownLand) {
   let best = null, bd = range * range, bestWar = null, bwd = range * range;
   for (const u of S.bots) {
     if (u.dead || u.owner === owner || u.inside) continue;
+    if (ownLand && u.type !== 'warbot' && S.owner[tIdx(Math.floor(u.x), Math.floor(u.y))] !== owner) continue;
     const d = dist2(u.x, u.y, x, y);
     if (d <= bd) { bd = d; best = u; }
     if (preferWar && u.type === 'warbot' && d <= bwd) { bwd = d; bestWar = u; }
@@ -527,7 +529,9 @@ function moveAlong(u, dt) {
       else if (bt.offroad && !harvestTrip(u)) speed *= OFFROAD_SLOW;
     }
   }
-  let step = speed * batFactor(u) * dt;
+  const vmax = speed * batFactor(u);
+  const want = vmax * dt;
+  let lim = Infinity; // how far the bot can go before it must have stopped
   // Road junctions: stop before a red light, or give way to traffic already crossing the other way.
   const nx = u.path[u.pi];
   if (nx !== undefined && nx !== here && S.road[nx] && isJunction(nx) && !S.over[nx]) {
@@ -545,19 +549,22 @@ function moveAlong(u, dt) {
       if (u.crossT > 4) { u.crossUntil = S.time + 1; u.crossT = 0; } // never wait forever
     }
     if (!stop) u.crossT = 0;
-    if (stop && toEdge < step) step = toEdge;
+    if (stop) lim = Math.min(lim, toEdge);
   }
   // On roads, wait behind the bot ahead instead of driving through it.
   if (r || S.road[u.path[u.pi]]) {
     const room = queueRoom(u);
-    if (room < step) {
-      if (room < step * 0.25) {
+    if (room < want) {
+      if (room < want * 0.25) {
         u.queueT = (u.queueT || 0) + dt;
         if (u.queueT > QUEUE_PATIENCE) { u.squeezeUntil = S.time + 1.5; u.queueT = 0; } // jammed solid: squeeze past
       }
-      step = room;
     } else u.queueT = 0;
+    lim = Math.min(lim, room);
   }
+  let step = driveSpeed(u, bt, vmax, lim, dt) * dt;
+  if (step > lim) step = lim;
+  u.odo = ((u.odo || 0) + step) % 1000; // distance driven: turns the wheels in drive animations
   u.moved = step > 0 ? 1 : 0;
   while (step > 0 && u.pi < u.path.length) {
     const t = u.path[u.pi];
@@ -567,8 +574,39 @@ function moveAlong(u, dt) {
     if (d <= step) { u.x = tx; u.y = ty; step -= d; u.pi++; }
     else { u.x += (dx / d) * step; u.y += (dy / d) * step; step = 0; }
   }
-  if (u.pi >= u.path.length) { u.path = null; return true; }
+  if (u.pi >= u.path.length) { u.path = null; u.vel = 0; u.drive = 0; return true; }
   return false;
+}
+
+/**
+ * Speeding up and slowing down: a bot's speed (u.vel, tiles a second) climbs towards vmax at its
+ * acceleration, and it brakes in time to stop at `lim` (a red light, the bot ahead, the end of its
+ * trip) and to take the next corner at a safe speed. Sets u.drive: 1 speeding up, -1 braking or
+ * held up, 0 cruising (for brake lights and dust). Returns the speed to move at this tick.
+ */
+function driveSpeed(u, bt, vmax, lim, dt) {
+  const acc = bt.accel || BOT_ACCEL, brk = bt.brake || BOT_BRAKE;
+  const v0 = u.vel || 0;
+  let cap = vmax;
+  // The end of the trip: come to a stop there.
+  const t0 = u.path[u.pi], last = u.pi >= u.path.length - 2;
+  const dx0 = (t0 % S.W) + 0.5 - u.x, dy0 = ((t0 / S.W) | 0) + 0.5 - u.y, d0 = Math.sqrt(dx0 * dx0 + dy0 * dy0);
+  if (last) lim = Math.min(lim, d0 + (u.pi === u.path.length - 2 ? 1 : 0));
+  // A corner at the next waypoint: slow to corner speed by the time we reach it.
+  const t1 = u.path[u.pi + 1];
+  if (t1 !== undefined && d0 > 1e-3) {
+    const bx = (t1 % S.W) - (t0 % S.W), by = ((t1 / S.W) | 0) - ((t0 / S.W) | 0);
+    if ((dx0 * bx + dy0 * by) / (d0 * Math.sqrt(bx * bx + by * by)) < 0.7) {
+      const vc = vmax * (bt.truck ? TRUCK_CORNER : BOT_CORNER);
+      cap = Math.min(cap, Math.sqrt(vc * vc + 2 * brk * d0));
+    }
+  }
+  if (lim < Infinity) cap = Math.min(cap, Math.sqrt(2 * brk * Math.max(0, lim)));
+  const v = cap > v0 ? Math.min(cap, v0 + acc * dt) : cap;
+  u.drive = v > v0 + 1e-3 ? 1 : v < v0 - 1e-3 || (v < 0.05 && lim < 0.05) ? -1 : 0;
+  u.vel = v;
+  u.vtop = vmax;
+  return v;
 }
 
 /** Path to (x, y) if not already heading there, then move. true = arrived, null = unreachable. */
@@ -611,10 +649,11 @@ function dispatch(p) {
 
   // Keep a worker or two free to build. If raids or new buildings took them all, pull one off the
   // least useful job — this must run even when nobody is idle.
-  let free = 0, workers = 0, haulers = 0;
+  let free = 0, workers = 0, haulers = 0, trucks = 0;
   for (const u of S.bots) {
     if (u.dead || u.owner !== p) continue;
     if (u.type === 'hauler') haulers++;
+    if (BOTS[u.type].truck) trucks++;
     if (u.type !== 'worker') continue;
     workers++;
     if (!(u.task && u.task.type === 'staff')) free++;
@@ -737,9 +776,14 @@ function dispatch(p) {
         if (d < bd) { bd = d; src = s; }
       }
       if (!src) { r.n = 0; continue; }
-      const u = (truckRun(src, r.b, r.n) && take(src.x, src.y, 'truck', src)) || take(src.x, src.y, 'haul', src);
+      // Long runs go by Freight Truck. Supply orders wait for one when you have any (haulers stay on
+      // the local work), and a truck only sets off with a worthwhile load.
+      const avail = Math.min(r.n, sup(src, r.g));
+      let u = null;
+      if (truckRun(src, r.b, r.n) && (avail >= TRUCK_MIN_LOAD || avail >= r.n)) u = take(src.x, src.y, 'truck', src);
+      if (!u && !(r.keep && trucks > 0)) u = take(src.x, src.y, 'haul', src);
       if (!u) { r.n = 0; continue; }
-      const n = canCarry(u, Math.min(r.n, sup(src, r.g)));
+      const n = canCarry(u, avail);
       assignHaul(u, src, r.b, r.g, n);
       r.n -= n;
       any = true;
@@ -1724,7 +1768,8 @@ function garrisonDefense(b, dt) {
       if (u.type === 'warbot' && dist2(u.x, u.y, cx, cy) < 42) threats++;
     } else if (u.task && u.task.type === 'defend' && u.task.home === b.id) out++;
   }
-  let want = Math.min(armedIn(b), threats + 1 - out);
+  // Guards go out against enemy warbots (one more than there are), not to patrol.
+  let want = threats ? Math.min(armedIn(b), threats + 1 - out) : 0;
   while (want-- > 0) {
     const u = takeArmed(b); // only warbots with Ammo go out to fight
     if (!u) break;
@@ -1861,10 +1906,11 @@ function warbotAct(u, dt) {
     u.scanT -= dt;
     if (armed && u.scanT <= 0) {
       u.scanT = 0.3;
-      foe = nearestEnemyBot(u.owner, u.x, u.y, rally ? 3.5 : 2.8, true);
+      // Guards (defending their garrison) only chase civilians inside their own land.
+      foe = nearestEnemyBot(u.owner, u.x, u.y, rally ? 3.5 : 2.8, true, defending);
       if (!foe && defending) {
         const h = getE(t.home);
-        if (h) foe = nearestEnemyBot(u.owner, h.x + 0.5, h.y + 0.5, 6.5, true);
+        if (h) foe = nearestEnemyBot(u.owner, h.x + 0.5, h.y + 0.5, 6.5, true, true);
       }
       if (foe && foe.id === u.ignoreFoe && S.time < u.ignoreUntil) foe = null;
       if (foe) u.fight = foe.id;
@@ -2196,6 +2242,67 @@ function sendToRally(owner, i, j, count) {
   }
   if (!sent) cleanRallies();
   return { sent, rally: r };
+}
+
+/* ------------------------------------------------------------------ direct orders (desktop selection) */
+
+/** The warbots among `ids` that `owner` can give orders to. */
+function orderable(owner, ids) {
+  return ids.map(getE).filter((u) => u && !u.dead && u.owner === owner && u.type === 'warbot');
+}
+
+/** Take a warbot out of its garrison and off its current job, ready for a new order. */
+function readyForOrder(u) {
+  exitBuilding(u);
+  cancelTask(u);
+  u.fight = 0;
+  u.path = null;
+}
+
+/** Send selected warbots to hold the ground at (i, j) under a rally flag. Only armed ones go. */
+function orderMove(owner, ids, i, j) {
+  if (!inMap(i, j) || !walkable(tIdx(i, j))) return 0;
+  const bots = orderable(owner, ids).filter((u) => (u.ammo ?? WARBOT_AMMO) > 0);
+  if (!bots.length) return 0;
+  let r = S.rallies.find((q) => q.owner === owner && Math.abs(q.x - (i + 0.5)) < 1.5 && Math.abs(q.y - (j + 0.5)) < 1.5);
+  if (!r) { r = { id: S.nextId++, owner, x: i + 0.5, y: j + 0.5 }; S.rallies.push(r); }
+  let slot = rallyMembers(r.id).length;
+  for (const u of bots) { readyForOrder(u); u.task = { type: 'hold', rally: r.id, slot: slot++ }; }
+  return bots.length;
+}
+
+/** Send selected warbots to attack an enemy building. Only armed ones go. */
+function orderAttack(owner, ids, target) {
+  if (!target || target.dead || target.owner === owner) return 0;
+  const bots = orderable(owner, ids).filter((u) => (u.ammo ?? WARBOT_AMMO) > 0);
+  for (const u of bots) { readyForOrder(u); u.task = { type: 'attack', target: target.id }; }
+  return bots.length;
+}
+
+/** Station selected warbots in one of your garrisons, as many as it has room for. */
+function orderStation(owner, ids, to) {
+  if (!to || !to.built || to.dead || to.owner !== owner || !BDEFS[to.type].mil) return 0;
+  let room = garrisonRoom(to), sent = 0;
+  for (const u of orderable(owner, ids)) {
+    if (room <= 0) break;
+    if (u.inside === to.id || (u.task && u.task.type === 'garrison' && u.task.bld === to.id)) continue;
+    readyForOrder(u);
+    u.task = { type: 'garrison', bld: to.id };
+    to.garInc = (to.garInc || 0) + 1;
+    room--; sent++;
+  }
+  return sent;
+}
+
+/** Every warbot `owner` could send out: those in the field, and all but one in each garrison. */
+function armyIds(owner) {
+  const ids = [];
+  for (const u of S.bots) if (!u.dead && u.owner === owner && u.type === 'warbot' && !u.inside) ids.push(u.id);
+  for (const b of S.buildings) {
+    if (b.dead || b.owner !== owner || !b.garrison || b.garrison.length < 2) continue;
+    for (let k = 1; k < b.garrison.length; k++) ids.push(b.garrison[k]);
+  }
+  return ids;
 }
 
 /* ------------------------------------------------------------------ stationing warbots */

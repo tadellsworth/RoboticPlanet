@@ -9,6 +9,7 @@ const UI = {
   sheetKind: null, sheetFor: 0, sheetT: 0, hudT: 0,
   icons: {}, attackN: 0, demolishArm: 0, lastPaint: null, placeType: null,
   goodEls: {}, lastGoods: {}, objCollapsed: false, selBot: 0,
+  sel: [], groups: {}, lastGroup: { k: 0, at: 0 }, lastAlert: null, tipKey: '',
 };
 
 const $ = (id) => document.getElementById(id);
@@ -87,7 +88,10 @@ function initUI() {
     const L = getE(S.players[0].lander);
     if (L) { centerOn(L.x + 0.5, L.y + 0.5); openBuildingSheet(L); }
   };
-  $('btn-speed').onclick = () => { UI.speed = UI.speed >= 3 ? 1 : UI.speed + 1; $('btn-speed').textContent = UI.speed + '×'; sfx('click'); };
+  $('btn-speed').onclick = (e) => { e.stopPropagation(); sfx('click'); toggleSpeedMenu(); };
+  window.addEventListener('pointerdown', (e) => {
+    if (!$('speed-menu').hidden && !$('speed-menu').contains(e.target) && e.target !== $('btn-speed')) $('speed-menu').hidden = true;
+  });
   $('objective').onclick = () => { UI.objCollapsed = !UI.objCollapsed; UI.hudT = 0; };
   $('sheet-close').onclick = () => closeSheet();
   $('banner-cancel').onclick = () => setMode('normal');
@@ -166,18 +170,35 @@ function hideGoodTip() {
 /* ------------------------------------------------------------------ keyboard (desktop) */
 
 /*
- * B build · P paths (R roads, G bridges and tunnels, O one-way arrows, L junctions, T traffic map) · A army · H base · Esc back / pause ·
- * Space pause · 1 2 3 game speed · arrows or WASD pan · + and - zoom · M minimap · ? help
+ * B build (then a building's letter) · P paths (R roads, G bridges and tunnels, O one-way arrows,
+ * L junctions, T traffic map) · A army · H base · F select every warbot · 1–9 control groups (Ctrl or
+ * Shift + digit to save) · J jump to the latest alert · Esc back / clear selection / pause ·
+ * Space pause · [ ] game speed · arrow keys pan · + and - zoom · M minimap · ? help
  */
-const PAN_KEYS = { arrowleft: [-1, 0], a: [-1, 0], arrowright: [1, 0], d: [1, 0], arrowup: [0, -1], w: [0, -1], arrowdown: [0, 1], s: [0, 1] };
+const PAN_KEYS = { arrowleft: [-1, 0], arrowright: [1, 0], arrowup: [0, -1], arrowdown: [0, 1] };
+
+/** Build-menu hotkeys: with the build menu open, a building's letter starts placing it. */
+const BUILD_KEYS = {
+  harvester: 'h', quarry: 'q', mine: 'm', tap: 'c', smelter: 's', fab: 'f', foundry: 'u', charger: 'e', farm: 'a',
+  pump: 'p', refinery: 'r', kiln: 'k', tarworks: 't', roadworks: 'w', outpost: 'o', turret: 'g', repair: 'x',
+  armory: 'i', munitions: 'n', silo: 'z', depot: 'd', ramp: 'v', grower: 'l',
+};
 
 function initKeyboard() {
   window.addEventListener('keydown', (e) => {
-    if (e.ctrlKey || e.metaKey || e.altKey) return;
     const tag = (e.target && e.target.tagName) || '';
     if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
-    const k = e.key.toLowerCase();
     if (!UI.inGame) return;
+    // Control groups: Ctrl (or Shift) + 1–9 saves the selected warbots, 1–9 selects them again
+    // (press twice to jump to them).
+    const digit = /^Digit([1-9])$/.exec(e.code || '');
+    if (digit && !e.altKey && $('screen-pause').hidden) {
+      e.preventDefault();
+      if (e.ctrlKey || e.metaKey || e.shiftKey) saveGroup(+digit[1]); else recallGroup(+digit[1]);
+      return;
+    }
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
+    const k = e.key.toLowerCase();
     if (k === 'escape') { e.preventDefault(); escapeKey(); return; }
     const overlay = !$('screen-pause').hidden || !$('screen-help').hidden || !$('screen-stats').hidden || !$('screen-over').hidden;
     if (k === ' ' || k === 'spacebar') {
@@ -187,6 +208,12 @@ function initKeyboard() {
     }
     if (overlay) return;
     if (PAN_KEYS[k]) { e.preventDefault(); R.keys.add(k); return; }
+    // In the build menu, a building's letter picks it.
+    if (UI.sheetKind === 'build') {
+      const type = Object.keys(BUILD_KEYS).find((t) => BUILD_KEYS[t] === k);
+      const card = type && $('sheet-body').querySelector(`.bcard[data-t="${type}"]`);
+      if (card && !card.disabled) { e.preventDefault(); card.click(); return; }
+    }
     const pathMode = (v) => { if (R.mode !== 'road') setMode('road'); UI.roadMode = v; showRoadBanner(); sfx('click'); };
     switch (k) {
       case 'b': $('btn-build').click(); break;
@@ -199,7 +226,10 @@ function initKeyboard() {
       case 'a': if (!$('btn-attack').hidden) $('btn-attack').click(); break;
       case 'h': case 'home': $('btn-home').click(); break;
       case 'm': setMinimap(!MM.on); break;
-      case '1': case '2': case '3': UI.speed = +k; $('btn-speed').textContent = UI.speed + '×'; sfx('click'); break;
+      case 'f': selectBots(armyIds(0), false); if (UI.sel.length) toast(`${UI.sel.length} warbots selected: right-click to give orders.`, 'info'); break;
+      case 'j': if (UI.lastAlert) { centerOn(UI.lastAlert.x + 0.5, UI.lastAlert.y + 0.5); sfx('click'); } break;
+      case '[': stepSpeed(-1); break;
+      case ']': stepSpeed(1); break;
       case '+': case '=': zoomBy(1.25); break;
       case '-': case '_': zoomBy(0.8); break;
       case '?': $('screen-help').hidden = false; UI.paused = true; break;
@@ -211,14 +241,178 @@ function initKeyboard() {
   window.addEventListener('blur', () => R.keys.clear());
 }
 
+/* ------------------------------------------------------------------ selecting and ordering warbots (mouse) */
+
+const EDGE_SCROLL = 6; // pixels from the window edge where the map scrolls
+
+/** Select these warbots (or add them to the selection). */
+function selectBots(ids, add) {
+  const mine = orderable(0, ids).map((u) => u.id);
+  UI.sel = add ? [...new Set(UI.sel.concat(mine))] : mine;
+  refreshSelection();
+}
+
+/** Drop dead or captured warbots from the selection and update the selection bar. */
+function refreshSelection() {
+  if (UI.sel.length) UI.sel = orderable(0, UI.sel).map((u) => u.id);
+  UI.selSet = new Set(UI.sel);
+  const bar = $('selbar');
+  if (!UI.sel.length || !UI.inGame) { bar.hidden = true; return; }
+  let inside = 0, empty = 0;
+  for (const u of orderable(0, UI.sel)) { if (u.inside) inside++; if ((u.ammo ?? WARBOT_AMMO) <= 0) empty++; }
+  const html = `<b>${UI.sel.length} warbot${UI.sel.length > 1 ? 's' : ''} selected</b>` +
+    (inside ? ` <span class="muted">(${inside} in garrisons)</span>` : '') + (empty ? ` <span class="err">${empty} out of Ammo</span>` : '') +
+    `<span class="hint">Right-click open ground to hold it, a rival building to attack, or your Outpost to station them. Esc clears.</span>
+    <button class="btn small ghost" id="selbar-clear" aria-label="Clear selection">✕</button>`;
+  if (bar.dataset.html !== html) {
+    bar.dataset.html = html;
+    bar.innerHTML = html;
+    $('selbar-clear').onclick = () => { sfx('click'); selectBots([], false); };
+  }
+  bar.hidden = false;
+}
+
+/** A drag box (screen pixels) selects your warbots inside it; with Shift it adds to the selection. */
+function onSelectBox(box, add) {
+  const x0 = Math.min(box.x0, box.x1), x1 = Math.max(box.x0, box.x1), y0 = Math.min(box.y0, box.y1), y1 = Math.max(box.y0, box.y1);
+  const ids = [];
+  for (const u of S.bots) {
+    if (u.dead || u.owner !== 0 || u.type !== 'warbot' || u.inside) continue;
+    const p = worldToScreen(u.x, u.y);
+    if (p.x >= x0 && p.x <= x1 && p.y >= y0 && p.y <= y1) ids.push(u.id);
+  }
+  // A box round your own garrisons picks up their spare warbots too (each keeps one at home).
+  for (const b of S.buildings) {
+    if (b.dead || b.owner !== 0 || !b.garrison || b.garrison.length < 2) continue;
+    const p = worldToScreen(b.x + 0.5, b.y + 0.5);
+    if (p.x >= x0 && p.x <= x1 && p.y >= y0 && p.y <= y1) ids.push(...b.garrison.slice(1));
+  }
+  selectBots(ids, add);
+  if (ids.length) sfx('click');
+}
+
+/** Right-click: order the selected warbots to whatever is under the pointer. */
+function onMapCommand(i, j, wx, wy) {
+  if (!UI.inGame || UI.paused || !UI.sel.length || R.mode !== 'normal') return;
+  const b = buildingAtTap(i, j, wx, wy);
+  let n = 0, what = '';
+  if (b && b.owner !== 0) { n = orderAttack(0, UI.sel, b); what = `attacking the ${BDEFS[b.type].name}`; }
+  else if (b && BDEFS[b.type].mil && b.built) { n = orderStation(0, UI.sel, b); what = `heading to the ${BDEFS[b.type].name}`; }
+  else if (inMap(i, j) && walkable(tIdx(i, j)) && !b) { n = orderMove(0, UI.sel, i, j); what = 'moving to hold that ground'; }
+  else { sfx('error'); toast('Right-click open ground, a rival building or one of your garrisons.', 'warn'); return; }
+  if (!n) {
+    sfx('error');
+    toast(b && b.owner === 0 ? 'That garrison is full.' : 'None of the selected warbots have Ammo: they reload in a garrison first.', 'warn');
+    return;
+  }
+  sfx('alert');
+  addFx('ring', (b ? b.x : i) + 0.5, (b ? b.y : j) + 0.5, { color: b && b.owner !== 0 ? '#ff5a6e' : '#7dffa0' });
+  toast(`${n} warbot${n > 1 ? 's' : ''} ${what}.`, 'info');
+  refreshSelection();
+}
+
+/** Control groups: Ctrl/Shift + digit saves the selection; the digit selects it again, twice to jump there. */
+function saveGroup(k) {
+  if (!UI.sel.length) { toast(`Select warbots first (drag a box round them), then Ctrl+${k} saves them as group ${k}.`, 'info'); return; }
+  UI.groups[k] = UI.sel.slice();
+  sfx('click');
+  toast(`Group ${k}: ${UI.sel.length} warbot${UI.sel.length > 1 ? 's' : ''}. Press ${k} to select them again.`, 'info');
+}
+
+function recallGroup(k) {
+  const ids = orderable(0, UI.groups[k] || []).map((u) => u.id);
+  if (!ids.length) return;
+  const twice = UI.lastGroup.k === k && performance.now() - UI.lastGroup.at < 450;
+  UI.lastGroup = { k, at: performance.now() };
+  selectBots(ids, false);
+  sfx('click');
+  if (twice) {
+    let x = 0, y = 0;
+    for (const u of orderable(0, ids)) { x += u.x; y += u.y; }
+    centerOn(x / ids.length, y / ids.length);
+  }
+}
+
+/** On a computer, resting the mouse on a building or bot shows what it is and what it's doing. */
+function updateMapTip() {
+  const tip = $('map-tip'), m = R.mouse;
+  if (!m || !UI.inGame || UI.sheetKind || R.mode !== 'normal' || INPUT.gesture || performance.now() - m.at < 350) { tip.hidden = true; UI.tipKey = ''; return; }
+  const w = screenToWorld(m.x, m.y), i = Math.floor(w.x), j = Math.floor(w.y);
+  let html = '', key = '';
+  const b = buildingAtTap(i, j, w.x, w.y);
+  if (b) {
+    const def = BDEFS[b.type];
+    key = 'b' + b.id;
+    html = `<b>${b.owner === 0 ? '' : 'Rival '}${def.name}</b>` + (b.owner === 0 && b.status ? `<em>${b.status}</em>` : '') +
+      (def.mil && !(b.owner === 0 && b.status) ? `<em>${b.garrison.length} warbot${b.garrison.length === 1 ? '' : 's'} inside</em>` : '') +
+      (b.armor < def.armor ? `<em>Armor ${Math.ceil(b.armor)}/${def.armor}</em>` : '');
+  } else {
+    let bot = null, bd = 0.3;
+    for (const u of S.bots) {
+      if (u.dead || u.inside) continue;
+      const d = dist2(u.x, u.y, w.x, w.y);
+      if (d < bd) { bd = d; bot = u; }
+    }
+    if (bot) {
+      key = 'u' + bot.id;
+      html = `<b>${bot.owner === 0 ? '' : 'Rival '}${BOTS[bot.type].name}</b>` + (bot.owner === 0 ? `<em>${botActivity(bot)}</em>` : '') +
+        `<em>Health ${Math.ceil(bot.hp)}/${bot.maxHp}${bot.owner === 0 ? ` · battery ${Math.round(bot.bat ?? 100)}%` : ''}</em>`;
+    } else if (inMap(i, j) && S.res[tIdx(i, j)]) {
+      const t = tIdx(i, j);
+      key = 'r' + t;
+      html = `<b>${richRes(t) ? 'Rich ' + RES[S.res[t]].name.toLowerCase() : RES[S.res[t]].name}</b><em>${S.amt[t]} ${GOOD[RES[S.res[t]].good].name} left</em>`;
+    }
+  }
+  if (!html) { tip.hidden = true; UI.tipKey = ''; return; }
+  if (UI.tipKey !== key + html) { UI.tipKey = key + html; tip.innerHTML = html; }
+  tip.hidden = false;
+  tip.style.left = Math.round(Math.min(m.x + 16, window.innerWidth - tip.offsetWidth - 8)) + 'px';
+  tip.style.top = Math.round(Math.min(m.y + 18, window.innerHeight - tip.offsetHeight - 8)) + 'px';
+}
+
+/* ------------------------------------------------------------------ game speed */
+
+/** Game speeds on offer: two slower than normal for a calmer game, two faster for waiting on something. */
+const SPEEDS = [0.75, 0.875, 1, 2, 3];
+
+function setSpeed(v, quiet) {
+  UI.speed = v;
+  $('btn-speed').textContent = v + '×';
+  $('btn-speed').classList.toggle('slow', v < 1);
+  $('btn-speed').classList.toggle('fast', v > 1);
+  if (!quiet) sfx('click');
+  if (!$('speed-menu').hidden) toggleSpeedMenu(true);
+}
+
+/** Step to the next slower (-1) or faster (+1) speed. */
+function stepSpeed(d) {
+  const k = SPEEDS.indexOf(UI.speed);
+  setSpeed(SPEEDS[clamp((k < 0 ? 2 : k) + d, 0, SPEEDS.length - 1)]);
+  toast(`Game speed ${UI.speed}×`, 'info');
+}
+
+/** The speed menu under the speed chip in the top bar. */
+function toggleSpeedMenu(refresh) {
+  const m = $('speed-menu');
+  if (!refresh && !m.hidden) { m.hidden = true; return; }
+  m.innerHTML = SPEEDS.map((v) => `<button role="menuitemradio" aria-checked="${v === UI.speed}" class="${v === UI.speed ? 'on' : ''}" data-v="${v}">${v}×</button>`).join('');
+  for (const b of m.children) b.onclick = () => { setSpeed(+b.dataset.v); m.hidden = true; };
+  const r = $('btn-speed').getBoundingClientRect();
+  m.hidden = false;
+  m.style.top = Math.round(r.bottom + 6) + 'px';
+  m.style.left = Math.round(clamp(r.left + r.width / 2 - m.offsetWidth / 2, 8, window.innerWidth - m.offsetWidth - 8)) + 'px';
+}
+
 /** Esc steps back: close a panel, leave a mode, close a screen, or open the pause menu. */
 function escapeKey() {
+  if (!$('speed-menu').hidden) { $('speed-menu').hidden = true; return; }
   if (!$('screen-help').hidden) { $('h-close').click(); return; }
   if (!$('screen-stats').hidden) { $('st-close').click(); return; }
   if (!$('screen-pause').hidden) { $('p-resume').click(); return; }
   if (!$('screen-over').hidden) return;
   if (UI.sheetKind) { closeSheet(); return; }
   if (R.mode !== 'normal') { setMode('normal'); return; }
+  if (UI.sel.length) { selectBots([], false); return; }
   $('btn-pause').click();
 }
 
@@ -229,9 +423,16 @@ function zoomBy(f) {
 
 /** Held arrow / WASD keys pan the map (called every frame). */
 function keyPan(dt) {
-  if (!R.keys.size || !UI.inGame) return;
+  if (!UI.inGame) return;
   let dx = 0, dy = 0;
   for (const k of R.keys) if (PAN_KEYS[k]) { dx += PAN_KEYS[k][0]; dy += PAN_KEYS[k][1]; }
+  // Edge scrolling on a computer: the map moves when the mouse rests at the edge of the window.
+  const m = R.mouse, E = EDGE_SCROLL;
+  if (m && isWide() && !INPUT.gesture && document.hasFocus()) {
+    if (m.x <= E) dx -= 1; else if (m.x >= window.innerWidth - 1 - E) dx += 1;
+    if (m.y <= E) dy -= 1; else if (m.y >= window.innerHeight - 1 - E) dy += 1;
+  }
+  if (!dx && !dy) return;
   const sp = (Math.max(R.w, R.h) * 0.9 * dt) / R.cam.z;
   R.cam.x += dx * sp; R.cam.y += dy * sp;
   clampCam();
@@ -285,8 +486,9 @@ function continueGame() {
 
 function enterGame() {
   bakeMap();
-  UI.inGame = true; UI.paused = false; UI.overShown = false; UI.speed = 1;
-  $('btn-speed').textContent = '1×';
+  UI.inGame = true; UI.paused = false; UI.overShown = false;
+  UI.sel = []; UI.groups = {}; UI.lastAlert = null;
+  setSpeed(1, true);
   $('screen-menu').hidden = true;
   $('hud').hidden = false;
   $('toasts').innerHTML = '';
@@ -727,7 +929,13 @@ function onMapTap(i, j, wx, wy) {
     const d = dist2(u.x, u.y, wx, wy);
     if (d < bd) { bd = d; bot = u; }
   }
-  if (bot) { sfx('click'); openBotSheet(bot); return; }
+  if (bot) {
+    sfx('click');
+    if (INPUT.mouse && bot.owner === 0 && bot.type === 'warbot') selectBots([bot.id], INPUT.shift);
+    openBotSheet(bot);
+    return;
+  }
+  if (INPUT.mouse && UI.sel.length && !INPUT.shift) selectBots([], false);
   if (inMap(i, j) && S.res[tIdx(i, j)]) { sfx('click'); openResourceSheet(tIdx(i, j)); return; }
   if (inMap(i, j) && S.fert[tIdx(i, j)] && S.terrain[tIdx(i, j)] === T_GROUND) { sfx('click'); openSoilSheet(tIdx(i, j)); return; }
   closeSheet();
@@ -873,7 +1081,7 @@ function openBuildMenu() {
   const html = `<div class="sheet-title"><h3>Build</h3></div>
     <p class="desc">Placing a site is free; haulers bring the materials by road, so lay a road to it. ${sites}/${MAX_SITES} sites in progress.</p>
     <div class="build-grid">${list.map((t) => `<button class="bcard" data-t="${t}" ${sites >= MAX_SITES ? 'disabled' : ''}>
-      <img src="${iconFor(t)}" alt=""><div class="bname">${BDEFS[t].name}</div><div class="bcost">${costHTML(BDEFS[t].cost, have)}</div>
+      ${BUILD_KEYS[t] ? `<kbd>${BUILD_KEYS[t].toUpperCase()}</kbd>` : ''}<img src="${iconFor(t)}" alt=""><div class="bname">${BDEFS[t].name}</div><div class="bcost">${costHTML(BDEFS[t].cost, have)}</div>
       <div class="bhave">${ownedText(t)}</div></button>`).join('')}</div>`;
   openSheet('build', 0, html);
   for (const el of $('sheet-body').querySelectorAll('.bcard')) {
@@ -1592,8 +1800,10 @@ function uiTick(dt) {
   while (S.msgs.length) {
     const m = S.msgs.shift();
     toast(m.text, m.kind, m.x, m.y);
+    if ((m.kind === 'bad' || m.kind === 'warn') && (m.x || m.y)) UI.lastAlert = { x: m.x, y: m.y };
   }
+  updateMapTip();
   UI.hudT -= dt;
-  if (UI.hudT <= 0) { UI.hudT = 0.25; updateHUD(); refreshSheet(); placeMinimap(); }
+  if (UI.hudT <= 0) { UI.hudT = 0.25; updateHUD(); refreshSheet(); placeMinimap(); refreshSelection(); }
   if (S.winner >= 0 && !UI.overShown) showGameOver();
 }

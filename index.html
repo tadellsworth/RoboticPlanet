@@ -24,7 +24,7 @@
     <div class="toprow">
       <div id="pop" class="chip"></div>
       <div id="clock" class="chip"></div>
-      <button id="btn-speed" class="chip chip-btn" aria-label="Game speed">1×</button>
+      <button id="btn-speed" class="chip chip-btn" aria-label="Game speed" aria-haspopup="true">1×</button>
       <button id="btn-pause" class="chip chip-btn" aria-label="Pause menu">
         <svg viewBox="0 0 24 24" width="16" height="16"><rect x="6" y="5" width="4" height="14" rx="1" fill="currentColor"/><rect x="14" y="5" width="4" height="14" rx="1" fill="currentColor"/></svg>
       </button>
@@ -42,6 +42,9 @@
     <svg viewBox="0 0 24 24" width="18" height="18"><path d="M3 6l6-2 6 2 6-2v14l-6 2-6-2-6 2z M9 4v14 M15 6v14" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>
   </button>
 
+  <div id="speed-menu" class="speed-menu" role="menu" hidden></div>
+  <div id="selbar" class="selbar" hidden></div>
+  <div id="map-tip" class="map-tip" hidden></div>
   <div id="toasts" aria-live="polite"></div>
 
   <div id="banner" hidden>
@@ -184,10 +187,11 @@
       <p><b>Bridges and tunnels:</b> roads stop at water and rocky crags. Pick <b>Bridges</b> in Paths and drag across to build a <b>bridge</b> over water (2 Cement and 1 Alloy a tile) or dig a <b>tunnel</b> through rock (3 Cement and 1 Alloy). Free workers build them out from the shore or rock face, 6 to 8 seconds a tile, and they join land on any level.</p>
       <p><b>Junctions</b> — where three or four roads meet — slow bots down as they cross carefully and give way to traffic already crossing. Pick <b>Junctions</b> in Paths and tap one to put up a <b>traffic light</b> (1 Alloy): it lets one direction through at a time and switches when traffic waits the other way. Tap the light again to upgrade it to an <b>overpass</b> (4 Cement and 3 Alloy): one road passes over the other and nobody slows down or waits. Tap again to clear it. Long, straight highways with few junctions, one-way loops and overpasses at the big crossings move goods fastest.</p>
       <p><b>Traffic map:</b> in Paths, tap <b>Traffic map</b> (or press <kbd>T</kbd>) to tint every road by how busy it has been over the last minute, green to red, with pulsing rings where bots stand waiting. The banner shows how many Haulers and Freight Trucks are busy.</p>
+      <p>Bots speed up and slow down like real vehicles: they accelerate away from a stop, brake for corners, junctions and red lights, and stop gently at the end of a trip. Every stop costs time, which is why straight roads, one-way loops, lights and overpasses pay off, especially for slow-starting trucks.</p>
       <p>Bots queue on roads: each one waits behind the bot ahead of it going the same way, so a slow or stopped bot backs up the line. On two-way roads each direction keeps to its own side, but passing oncoming traffic slows bots down. Pick <b>Arrows</b> and drag along a road to make it one-way; tap a road to turn its arrow. A loop of one-way roads, one lane out and one back, keeps traffic flowing. Bots can still go the wrong way up a one-way road, but only at a crawl.</p>
       <h3>Long hauls</h3>
       <p>To push far from home, build a <b>Depot</b> near the front and give it <b>supply orders</b>: tap it and use <b>+5</b> to set how much Cement, Fiber, Stone, Alloy, Fuel or Ammo to keep there. Goods are brought from your other storage, and construction, factories and garrisons near the Depot then draw on it instead of waiting on the Command Base.</p>
-      <p><b>Freight Trucks</b> (ordered at the Bot Foundry; each takes two rounds of parts, so 2 Alloy and 2 Chips) carry eight goods at once and take the long runs: filling supply orders, moving goods between storage, and big deliveries more than 12 tiles from storage. Haulers do the local work and help out when every truck is busy. Trucks are heavy: slower than a Hauler on concrete, fastest of all on asphalt, so pave your highways.</p>
+      <p><b>Freight Trucks</b> (ordered at the Bot Foundry; each takes two rounds of parts, so 2 Alloy and 2 Chips) carry eight goods at once and take the long runs: filling supply orders, moving goods between storage, and deliveries of 3 or more goods more than 12 tiles from storage. Once you own a truck, supply orders always wait for one, and a truck only sets off with at least 3 goods, so haulers stay on the short local trips (they still help with long deliveries when every truck is busy). Trucks are heavy: slower than a Hauler on concrete and slow to get going, but fastest of all on asphalt, so pave your highways and keep them free of stops.</p>
       <h3>Batteries</h3>
       <p>Every bot runs on a battery that drains as it walks, works and fights. Low bots recharge at your Command Base (free) or a <b>Charging Station</b>; warbots also recharge inside their garrison. A flat battery puts a bot in emergency mode: half speed, half power. Build Charging Stations near busy areas far from your Command Base. Stations burn <b>Fuel</b>: one Fuel recharges about three quarters of a battery, so keep a Bio Farm or an Oil Pump and Refinery running. Oil is rich but runs out: each seep holds a limited amount of Crude, and the Oil Pump and Refinery stop at 30 (their stock limits) so a surplus stays in the ground.</p>
       <h3>Fighting (Versus)</h3>
@@ -206,8 +210,9 @@
       <p>The pause menu and the end-of-game screen have <b>Statistics</b>: graphs of your bots, land and goods over time (against the rival in Versus), and how busy each kind of building was. Tap a building type to see its busy time over the game. Each building's panel also shows how busy it has been lately.</p>
       <h3>Controls</h3>
       <p>Drag to move the map and pinch (or scroll) to zoom. Tap or drag on the minimap to jump around. Tap anything to see what it is doing. Hover over (or tap) a counter in the top bar to see which good it is.</p>
-      <p>The game runs at a steady, unhurried pace. Use the <b>1×</b> button in the top bar for 2× or 3× speed when you're waiting on something.</p>
-      <p><b>On a computer:</b> scroll to zoom, drag (or right-drag, which also works while laying roads) to pan, and click to select. While placing a building it follows the pointer; click to place it. Keys: <kbd>B</kbd> build, <kbd>P</kbd> paths (<kbd>R</kbd> roads, <kbd>G</kbd> bridges and tunnels, <kbd>O</kbd> one-way arrows, <kbd>L</kbd> junctions, <kbd>T</kbd> traffic map), <kbd>A</kbd> army, <kbd>H</kbd> base, arrow keys or <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> pan, <kbd>+</kbd>/<kbd>−</kbd> zoom, <kbd>1</kbd>–<kbd>3</kbd> game speed, <kbd>M</kbd> minimap, <kbd>Space</kbd> pause, <kbd>Esc</kbd> back.</p>
+      <p>The game runs at a steady, unhurried pace. Tap the <b>1×</b> button in the top bar to pick a speed: <b>0.75×</b> or <b>0.875×</b> for a calmer game, or 2× and 3× when you're waiting on something.</p>
+      <p><b>On a computer</b> it plays like a classic RTS. Scroll to zoom; pan with the arrow keys, by resting the mouse at the edge of the window, or by right- or middle-dragging. Click to select; rest the mouse on anything to see what it is. <b>Drag a box</b> round your warbots to select them (a box round a garrison takes its spare warbots too; Shift adds to the selection), then <b>right-click</b>: open ground to hold it, a rival building to attack it, or your Outpost or Command Base to station them there. <kbd>Ctrl</kbd> (or <kbd>Shift</kbd>) + <kbd>1</kbd>–<kbd>9</kbd> saves the selection as a group; <kbd>1</kbd>–<kbd>9</kbd> selects it again, twice to jump to it.</p>
+      <p>Keys: <kbd>B</kbd> build, then a building's letter (shown on its card) to place it; <kbd>P</kbd> paths (<kbd>R</kbd> roads, <kbd>G</kbd> bridges and tunnels, <kbd>O</kbd> one-way arrows, <kbd>L</kbd> junctions, <kbd>T</kbd> traffic map); <kbd>A</kbd> army; <kbd>F</kbd> select every warbot; <kbd>J</kbd> jump to the latest alert; <kbd>H</kbd> base; <kbd>[</kbd> <kbd>]</kbd> game speed; <kbd>+</kbd>/<kbd>−</kbd> zoom; <kbd>M</kbd> minimap; <kbd>Space</kbd> pause; <kbd>Esc</kbd> back or clear the selection.</p>
     </div>
     <button id="h-close" class="btn primary big">Got it</button>
   </div>

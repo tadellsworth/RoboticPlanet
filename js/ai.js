@@ -11,8 +11,8 @@ const AI_CAPS = { fab: ['chip', 8, 3], armory: ['ammo', 18, 6], refinery: ['fuel
 const AI_PLAN = [
   ['harvester', 1], ['quarry', 1], ['kiln', 1], ['harvester', 2], ['mine', 1], ['tap', 1], ['smelter', 1],
   ['fab', 1], ['foundry', 1], ['outpost', 1], ['armory', 1], ['charger', 1], ['farm', 1], ['quarry', 2], ['grower', 1], ['mine', 2],
-  ['kiln', 2],
-  ['turret', 1], ['repair', 1], ['outpost', 2], ['smelter', 2], ['tap', 2], ['pump', 1], ['refinery', 1], ['harvester', 3], ['outpost', 3],
+  ['smelter', 2], ['kiln', 2],
+  ['turret', 1], ['repair', 1], ['outpost', 2], ['tap', 2], ['pump', 1], ['refinery', 1], ['harvester', 3], ['outpost', 3],
   ['munitions', 1], ['silo', 1], ['depot', 1], ['charger', 2], ['farm', 2], ['mine', 3], ['outpost', 4], ['turret', 2],
   ['grower', 2], ['fab', 2], ['outpost', 5], ['armory', 2], ['quarry', 3], ['silo', 2], ['outpost', 6], ['charger', 3], ['pump', 2],
   ['tap', 3], ['farm', 3], ['outpost', 8], ['turret', 3],
@@ -97,7 +97,10 @@ function aiThink(p) {
   }
   // Goods held back for a key building we can't afford yet: nothing that needs them starts first.
   const held = new Set();
-  const key = (type) => type === 'foundry' || type === 'harvester' || type === 'quarry' || (type === 'kiln' && (playerGoods(p).cement || 0) < 3) ||
+  // Defences come first once the colony is running: the first Pulse Turret, then a Repair Station.
+  const defence = (type) => S.mode !== 'colony' && !counts[type] &&
+    ((type === 'turret' && S.time > AI_DEFENCE_AT) || (type === 'repair' && counts.turret && S.time > AI_DEFENCE_AT + 120));
+  const key = (type) => type === 'foundry' || type === 'harvester' || type === 'quarry' || (type === 'kiln' && (playerGoods(p).cement || 0) < 3) || defence(type) ||
     (type === 'outpost' && P.short.length > 0);
   if (sites < siteCap) {
     for (const [type, want0] of plan) {
@@ -119,7 +122,10 @@ function aiThink(p) {
       if (Object.keys(BDEFS[type].cost).some((g) => held.has(g))) continue;
       if (reserveCement && type !== 'outpost' && type !== 'quarry' && type !== 'kiln' && BDEFS[type].cost.cement) continue;
       if (type === 'kiln' && stoneLow && counts.kiln) continue;
-      if (!aiAffordable(p, type)) {
+      // A turret or Repair Station is started as soon as the Cement is there: new Alloy goes straight
+      // into factories, so it never piles up in storage; the high-priority site gets it delivered.
+      const defenceNow = defence(type) && counts.smelter && aiAffordable(p, type, ['alloy']);
+      if (!aiAffordable(p, type) && !defenceNow) {
         if (key(type) && (!counts[type] || type === 'outpost')) {
           const have = playerGoods(p), cost = BDEFS[type].cost;
           for (const g in cost) if (have[g] < cost[g]) held.add(g);
@@ -133,6 +139,7 @@ function aiThink(p) {
         // The chain that makes new bots gets workers first; the Ammo Plant gives its worker up first.
         if (['mine', 'smelter', 'fab', 'foundry'].includes(type) && !counts[type]) placed.building.prio = 'high';
         if (type === 'armory') placed.building.prio = 'low';
+        if (defenceNow || defence(type)) placed.building.prio = 'high';
         break;
       }
     }
@@ -172,10 +179,14 @@ function aiThink(p) {
     }
   }
 
-  // 3) Foundry: keep enough workers, then make warbots. Order specialists when a building needs
-  //    one, and plenty of Haulers: they carry every good in the colony.
+  // 3) Foundry: keep enough workers, then grow the army. Order specialists when a building needs
+  //    one, and enough Haulers (a Freight Truck counts as three) to carry every good in the colony.
   const wantWorkers = staffed + 3 + Math.min(3, sites);
-  const wantHaulers = Math.max(4, Math.ceil(me.length * 0.45));
+  const wantHaulers = clamp(Math.ceil(me.length * 0.35), 4, 16) - 3 * (kinds.truck || 0);
+  const army = kinds.warbot || 0;
+  const wantArmy = S.mode === 'colony' ? 0 : aiWantArmy(lvl);
+  const armyBehind = army < wantArmy - 2;
+
   const crewNeed = {};
   for (const b of me) {
     const crew = BDEFS[b.type].crew;
@@ -183,13 +194,17 @@ function aiThink(p) {
   }
   for (const b of me) {
     if (b.type !== 'foundry' || !b.built) continue;
-    b.mode = S.mode === 'colony' ? 'worker' : workers < wantWorkers ? 'worker' : workers > wantWorkers + 4 ? 'warbot' : 'alt';
+    // Workers first while buildings stand empty; then the army gets its share as the game goes on.
+    b.mode = S.mode === 'colony' ? 'worker' : workers < staffed + MIN_FREE_WORKERS ? 'worker'
+      : army < wantArmy ? (workers < wantWorkers ? 'alt' : 'warbot')
+        : workers < wantWorkers ? 'worker' : workers > wantWorkers + 4 ? 'warbot' : 'alt';
     b.orders = b.orders || {};
     for (const crew in crewNeed) if ((kinds[crew] || 0) < crewNeed[crew] && !(b.orders[crew] > 0)) b.orders[crew] = 1;
     // Saving up for missiles (or feeding the Missile Factory): the Foundry rests so Alloy and Chips
     // pile up, unless workers are badly short.
     if ((saving || P.feedMissiles) && workers >= staffed + 3) { b.mode = 'off'; delete b.orders.hauler; delete b.orders.truck; }
-    else if ((kinds.hauler || 0) < wantHaulers && !(b.orders.hauler > 0)) b.orders.hauler = 1;
+    // Haulers when short; while the army is well behind, only when badly short.
+    else if ((kinds.hauler || 0) < (armyBehind ? Math.min(wantHaulers, 6) : wantHaulers) && !(b.orders.hauler > 0)) b.orders.hauler = 1;
     // A forward Depot with supply orders gets a Freight Truck to keep it stocked.
     else if (me.some((d) => d.keep && d.built) && (kinds.truck || 0) < 1 + Math.floor(me.length / 35) && !(b.orders.truck > 0)) b.orders.truck = 1;
     break;
@@ -218,7 +233,8 @@ function aiThink(p) {
     }
   }
 
-  // 4b) Raids on the enemy's supply lines.
+  // 4b) Raids on the enemy's supply lines, and answering the enemy's raids on ours.
+  if (S.mode !== 'colony') aiCounterRaid(p);
   if (S.mode !== 'colony' && S.time >= lvl.grace) aiRaid(p, lvl);
 
   // 5) Attack
@@ -240,9 +256,30 @@ function aiThink(p) {
     P.lastAttack = S.time;
     return;
   }
+  // A big army with nothing in reach marches on the nearest enemy garrison (a rally flag beside it:
+  // the warbots fight what they meet and attack what stands there).
+  if (army >= lvl.threshold * 3 && S.time - (P.lastMarch || -999) > 120 && !(P.march && rallyById(P.march))) {
+    let tgt = null, bd = Infinity;
+    for (const b of S.buildings) {
+      if (b.dead || b.owner !== enemy || !b.built || !BDEFS[b.type].mil) continue;
+      const d = dist2(b.x, b.y, lander.x, lander.y);
+      if (d < bd) { bd = d; tgt = b; }
+    }
+    if (tgt) {
+      let spot = null;
+      for (const [di, dj] of [[1, 1], [-1, 1], [1, -1], [-1, -1], [2, 0], [-2, 0], [0, 2], [0, -2]]) {
+        const i = tgt.x + di, j = tgt.y + dj;
+        if (inMap(i, j) && walkable(tIdx(i, j)) && !S.bAt[tIdx(i, j)] && S.zone[tIdx(i, j)] === homeZone(p)) { spot = { i, j }; break; }
+      }
+      if (spot && rallyAvailable(p, spot.i, spot.j) >= lvl.threshold * 2) {
+        const { sent, rally } = sendToRally(p, spot.i, spot.j, Math.min(14, rallyAvailable(p, spot.i, spot.j) - 2));
+        if (sent) { P.march = rally.id; P.lastMarch = S.time; return; }
+      }
+    }
+  }
+  // Recall a march that has nothing left to fight.
+  if (P.march && rallyById(P.march) && S.time - (P.lastMarch || 0) > 150) { recallRally(P.march); P.march = 0; }
   // A big army with nothing in reach: push a forward Outpost toward the enemy Command Base.
-  let army = 0;
-  for (const u of S.bots) if (!u.dead && u.owner === p && u.type === 'warbot') army++;
   const enemyL = getE(S.players[enemy].lander);
   if (enemyL && army >= lvl.threshold * 2 && S.time - (P.lastAttack || 0) > 60 && siteCount(p) < maxSites && aiAffordable(p, 'outpost')) {
     let spot = null, bd = Infinity;
@@ -256,11 +293,22 @@ function aiThink(p) {
 }
 
 /**
+ * The army the AI aims for: its starting warbots until AI_ARMY_FROM seconds in, then about one
+ * more a minute (scaled by difficulty), up to AI_ARMY_MAX.
+ */
+const AI_ARMY_FROM = 240, AI_ARMY_MAX = 30, AI_DEFENCE_AT = 300;
+function aiWantArmy(lvl) {
+  return Math.min(AI_ARMY_MAX, START_WARBOTS + 1 + Math.floor((Math.max(0, S.time - AI_ARMY_FROM) / 60) * lvl.mult));
+}
+
+/**
  * Raids: every few minutes a small band of warbots goes to the enemy's busiest road clear of its
  * turrets and garrisons, shoots up passing haulers, tears up the road (then hits whatever stands
  * near it), and comes home.
  */
-const RAID_GAP = { easy: 320, normal: 170, hard: 115 };
+const RAID_GAP = { easy: 320, normal: 180, hard: 120 };
+const RAID_TIME = 60;    // seconds a raid lasts before the raiders head home
+const RAID_FIRST = 200;  // the first raid comes this long after the grace period
 function aiRaid(p, lvl) {
   const P = S.players[p], enemy = 1 - p;
   if (P.raid) {
@@ -272,12 +320,12 @@ function aiRaid(p, lvl) {
     }
     return;
   }
-  if (S.time < (P.nextRaid || lvl.grace + 90)) return;
+  if (S.time < (P.nextRaid || lvl.grace + RAID_FIRST)) return;
   P.nextRaid = S.time + 30; // nothing worth raiding yet: look again soon
   if (HEAT.of !== S || !HEAT.flow) return;
   // Keep clear of turrets, and of garrisons with warbots in them.
   const guards = S.buildings.filter((b) => !b.dead && b.owner === enemy && b.built && (b.type === 'turret' || (BDEFS[b.type].mil && armedIn(b) >= 2)))
-    .map((b) => ({ x: b.x, y: b.y, r2: b.type === 'turret' ? 36 : 20 }));
+    .map((b) => ({ x: b.x, y: b.y, r2: b.type === 'turret' ? 36 : 56 })); // turret range, and beyond where a garrison sorties
   let best = -1, bs = 0;
   for (let t = 0; t < S.W * S.H; t++) {
     if (!S.road[t] || S.owner[t] !== enemy || HEAT.flow[t] < 1) continue;
@@ -290,7 +338,30 @@ function aiRaid(p, lvl) {
   const i = best % S.W, j = (best / S.W) | 0;
   if (rallyAvailable(p, i, j) < 5) return; // keep enough warbots at home
   const { sent, rally } = sendToRally(p, i, j, 3);
-  if (sent) { rally.raid = true; P.raid = { id: rally.id, until: S.time + 80 }; }
+  if (sent) { rally.raid = true; P.raid = { id: rally.id, until: S.time + RAID_TIME }; }
+}
+
+/**
+ * Answer raids: an enemy rally flag inside our land with warbots at it gets twice as many of ours
+ * sent to the same spot (they fight whatever is there), called home once the raiders are gone.
+ */
+function aiCounterRaid(p) {
+  const P = S.players[p];
+  P.counters = (P.counters || []).filter((c) => {
+    const theirs = rallyById(c.enemy), ours = rallyById(c.mine);
+    const over = !theirs || !rallyMembers(c.enemy).length || S.time - c.at > 120;
+    if (over && ours) recallRally(c.mine);
+    return !over && ours;
+  });
+  for (const r of S.rallies) {
+    if (r.owner === p || P.counters.some((c) => c.enemy === r.id)) continue;
+    const i = Math.floor(r.x), j = Math.floor(r.y);
+    if (!inMap(i, j) || S.owner[tIdx(i, j)] !== p) continue;
+    const raiders = rallyMembers(r.id).length;
+    if (!raiders) continue;
+    const { sent, rally } = sendToRally(p, i, j, raiders * 2);
+    if (sent) P.counters.push({ enemy: r.id, mine: rally.id, at: S.time });
+  }
 }
 
 /**
@@ -384,10 +455,11 @@ function aiFreeCement(p, me) {
 }
 
 /** Only start a building when the needed materials exist somewhere (stops the AI hoarding sites). */
-function aiAffordable(p, type) {
+/** Can player p pay for a `type` site now (ignoring the goods in `except`)? */
+function aiAffordable(p, type, except) {
   const have = playerGoods(p);
   const cost = BDEFS[type].cost;
-  for (const g in cost) if (have[g] < cost[g]) return false;
+  for (const g in cost) if (have[g] < cost[g] && !(except && except.includes(g))) return false;
   return true;
 }
 
