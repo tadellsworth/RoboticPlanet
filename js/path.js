@@ -1,6 +1,6 @@
 'use strict';
 /*
- * Botfall — A* pathfinding on the tile grid (8 directions, no corner cutting).
+ * Terrafall — A* pathfinding on the tile grid (8 directions, no corner cutting).
  * Buildings block movement except for the start and goal tiles, so bots can walk out of
  * and into buildings. Paths make travel cheaper (unless taken the wrong way up a one-way path);
  * resource tiles are slower to cross.
@@ -46,7 +46,7 @@ function findPath(sx, sy, gx, gy, avoidFor, opts) {
   if (!inMap(gx, gy)) return null;
   const start = sy * W + sx, goal = gy * W + gx;
   if (start === goal) return [];
-  if (S.terrain[goal] !== T_GROUND) return null;
+  if (!walkable(goal)) return null;
   _pfEnsure(N);
   const gen = ++_pf.gen;
   const g = _pf.g, from = _pf.from, stamp = _pf.stamp, closed = _pf.closed, heap = _pf.heap;
@@ -72,13 +72,13 @@ function findPath(sx, sy, gx, gy, avoidFor, opts) {
       if (ni < 0 || nj < 0 || ni >= W || nj >= H) continue;
       const nt = nj * W + ni;
       if (closed[nt] === gen) continue;
-      if (S.terrain[nt] !== T_GROUND) continue;
+      if (!walkable(nt)) continue; // open ground, bridges and tunnels
       if (S.bAt[nt] && nt !== goal) continue;
       if (roadOnly && (dir[2] > 1 || (!S.road[nt] && nt !== goal))) continue;
       if (dir[2] > 1) {
         // Diagonal: only across flat ground, and no cutting corners past blocked tiles.
         const a = cj * W + ni, b = nj * W + ci;
-        if (S.terrain[a] !== T_GROUND || S.terrain[b] !== T_GROUND) continue;
+        if (S.terrain[a] !== T_GROUND || S.terrain[b] !== T_GROUND || S.terrain[nt] !== T_GROUND || S.terrain[cur] !== T_GROUND) continue;
         if ((S.bAt[a] && a !== goal) || (S.bAt[b] && b !== goal)) continue;
         const e = S.elev[cur];
         if (S.elev[nt] !== e || S.elev[a] !== e || S.elev[b] !== e) continue;

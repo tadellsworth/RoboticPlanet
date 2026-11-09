@@ -1,7 +1,7 @@
-// Botfall service worker: network first (so updates show up right away), cache as offline fallback.
+// Terrafall service worker: network first (so updates show up right away), cache as offline fallback.
 // `no-cache` makes every request check with the server for a newer copy (cheap: unchanged files
 // come back as "not modified"), so a freshly published version is used the next time the game opens.
-const CACHE = 'botfall-v1';
+const CACHE = 'botfall-v1'; // the game's first name, kept for the cache
 self.addEventListener('install', (e) => self.skipWaiting());
 self.addEventListener('activate', (e) => e.waitUntil(self.clients.claim()));
 self.addEventListener('fetch', (e) => {

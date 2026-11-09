@@ -1,6 +1,6 @@
 'use strict';
 /*
- * Botfall — tiny synthesized sound effects (Web Audio, no audio files needed).
+ * Terrafall — tiny synthesized sound effects (Web Audio, no audio files needed).
  */
 
 const AUDIO = { ctx: null, on: true, last: {} };

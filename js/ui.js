@@ -1,11 +1,11 @@
 'use strict';
 /*
- * Botfall — HTML interface: menus, HUD, build menu, info sheets, objectives, messages.
+ * Terrafall — HTML interface: menus, HUD, build menu, info sheets, objectives, messages.
  */
 
 const UI = {
   inGame: false, paused: false, speed: 1, overShown: false,
-  menu: { mode: 'versus', diff: 'normal', seed: randomSeed(), size: { ...DEFAULT_SIZE }, rough: DEFAULT_ROUGH, rich: DEFAULT_RICH },
+  menu: { mode: 'versus', diff: 'normal', seed: randomSeed(), size: { ...DEFAULT_SIZE }, rough: DEFAULT_ROUGH, rich: DEFAULT_RICH, shape: 0 },
   sheetKind: null, sheetFor: 0, sheetT: 0, hudT: 0,
   icons: {}, attackN: 0, demolishArm: 0, lastPaint: null, placeType: null,
   goodEls: {}, lastGoods: {}, objCollapsed: false, selBot: 0,
@@ -52,10 +52,11 @@ function initUI() {
   // Map settings sliders (remembered on this device; map size is remembered per mode).
   try { Object.assign(UI.menu, JSON.parse(localStorage.getItem('botfall.settings') || '{}')); } catch (e) { /* defaults */ }
   const saveSettings = () => {
-    try { localStorage.setItem('botfall.settings', JSON.stringify({ size: UI.menu.size, rough: UI.menu.rough, rich: UI.menu.rich })); } catch (e) { /* storage unavailable */ }
+    try { localStorage.setItem('botfall.settings', JSON.stringify({ size: UI.menu.size, rough: UI.menu.rough, rich: UI.menu.rich, shape: UI.menu.shape })); } catch (e) { /* storage unavailable */ }
   };
   $('m-size').oninput = () => { UI.menu.size[UI.menu.mode] = +$('m-size').value; syncMenu(); saveSettings(); };
   $('m-rough').oninput = () => { UI.menu.rough = +$('m-rough').value; syncMenu(); saveSettings(); };
+  $('m-shape').oninput = () => { UI.menu.shape = +$('m-shape').value; syncMenu(); saveSettings(); };
   $('m-rich').oninput = () => { UI.menu.rich = +$('m-rich').value; syncMenu(); saveSettings(); };
   $('m-new').onclick = () => { audioUnlock(); startNewGame(); };
   $('m-continue').onclick = () => { audioUnlock(); continueGame(); };
@@ -131,8 +132,11 @@ function syncMenu() {
   const size = UI.menu.size[UI.menu.mode] ?? DEFAULT_SIZE[UI.menu.mode];
   $('m-size').value = size;
   $('m-rough').value = UI.menu.rough;
+  $('m-shape').value = UI.menu.shape || 0;
+  $('m-shape-v').textContent = SHAPE_PRESETS[UI.menu.shape || 0].name;
   $('m-rich').value = UI.menu.rich;
-  $('m-size-v').textContent = `${SIZE_PRESETS[size].name} · ${SIZE_PRESETS[size].w}×${SIZE_PRESETS[size].h}`;
+  const dims = mapDims({ size, shape: UI.menu.shape || 0 });
+  $('m-size-v').textContent = `${SIZE_PRESETS[size].name} · ${dims.W}×${dims.H}`;
   $('m-rough-v').textContent = TERRAIN_PRESETS[UI.menu.rough].name;
   $('m-rich-v').textContent = RESOURCE_PRESETS[UI.menu.rich].name;
   $('m-continue').hidden = !hasSave();
@@ -162,7 +166,7 @@ function hideGoodTip() {
 /* ------------------------------------------------------------------ keyboard (desktop) */
 
 /*
- * B build · P paths (R roads, O one-way arrows, L lights) · A army · H base · Esc back / pause ·
+ * B build · P paths (R roads, G bridges and tunnels, O one-way arrows, L junctions, T traffic map) · A army · H base · Esc back / pause ·
  * Space pause · 1 2 3 game speed · arrows or WASD pan · + and - zoom · M minimap · ? help
  */
 const PAN_KEYS = { arrowleft: [-1, 0], a: [-1, 0], arrowright: [1, 0], d: [1, 0], arrowup: [0, -1], w: [0, -1], arrowdown: [0, 1], s: [0, 1] };
@@ -189,6 +193,8 @@ function initKeyboard() {
       case 'p': $('btn-road').click(); break;
       case 'r': pathMode('road'); break;
       case 'o': pathMode('arrows'); break;
+      case 'g': pathMode('bridge'); break;
+      case 't': if (R.mode !== 'road') setMode('road'); R.traffic = !R.traffic; showRoadBanner(); sfx('click'); break;
       case 'l': pathMode('lights'); break;
       case 'a': if (!$('btn-attack').hidden) $('btn-attack').click(); break;
       case 'h': case 'home': $('btn-home').click(); break;
@@ -261,7 +267,7 @@ function startNewGame() {
   clearSave();
   newGame({
     seed: UI.menu.seed, difficulty: UI.menu.diff, mode: UI.menu.mode,
-    size: UI.menu.size[UI.menu.mode] ?? DEFAULT_SIZE[UI.menu.mode], rough: UI.menu.rough, rich: UI.menu.rich,
+    size: UI.menu.size[UI.menu.mode] ?? DEFAULT_SIZE[UI.menu.mode], rough: UI.menu.rough, rich: UI.menu.rich, shape: UI.menu.shape || 0,
   });
   enterGame();
   updateHUD();
@@ -602,6 +608,7 @@ function fireAimed() {
 function showBanner(html, okLabel, cancelLabel) {
   $('banner').hidden = false;
   $('banner-seg').hidden = true;
+  $('banner-traffic').hidden = true;
   $('banner-text').innerHTML = html;
   $('banner-ok').hidden = !okLabel;
   if (okLabel) $('banner-ok').textContent = okLabel;
@@ -666,12 +673,24 @@ function onMapTap(i, j, wx, wy) {
     if (!inMap(i, j)) return;
     const t = tIdx(i, j);
     if (UI.roadMode === 'lights') {
-      if (S.lights[t]) { removeLight(t); sfx('click'); showRoadBanner(); return; }
+      // Each tap steps a junction along: traffic light, then overpass, then plain junction again.
+      if (S.over[t]) { removeOverpass(t); markDirty(i, j); sfx('click'); showRoadBanner('Overpass taken down: its Cement and Alloy are back.', true); return; }
+      if (S.lights[t]) {
+        const why = placeOverpass(0, i, j);
+        if (why) { removeLight(t); sfx('click'); showRoadBanner(`Light taken down. ${why}`, true); }
+        else { sfx('place'); addFx('ring', i + 0.5, j + 0.5, { color: '#ffd166' }); showRoadBanner('Overpass built: traffic flows through without stopping.', true); }
+        return;
+      }
       const why = placeLight(0, i, j);
       if (why) { sfx('error'); showRoadBanner(why); } else { sfx('place'); addFx('ring', i + 0.5, j + 0.5, { color: '#7dffa0' }); showRoadBanner(); }
       return;
     }
-    if (S.plan[t] === 1) { removeRoad(0, i, j); sfx('click'); showRoadBanner('Planned road tile called off: its Cement is back.', true); return; }
+    if (S.plan[t] === 1) { removeRoad(0, i, j); sfx('click'); showRoadBanner(`Planned ${crossTile(t) ? CROSS[S.terrain[t]].name.toLowerCase() : 'road'} tile called off: its ${crossTile(t) ? 'Cement and Alloy are' : 'Cement is'} back.`, true); return; }
+    if (!S.road[t] && crossTile(t) && UI.roadMode !== 'bridge') {
+      sfx('error');
+      showRoadBanner(`That's ${S.terrain[t] === T_WATER ? 'water' : 'rock'}. Pick <b>Bridges</b> to build a ${CROSS[S.terrain[t]].name.toLowerCase()} across it.`);
+      return;
+    }
     if (S.road[t] && UI.roadMode === 'arrows') {
       // Turn the arrow: east, south, west, north, then back to two-way.
       setRoadDir(i, j, S.road[t] >= 5 ? 1 : S.road[t] + 1);
@@ -680,8 +699,14 @@ function onMapTap(i, j, wx, wy) {
     } else if (S.road[t]) { removeRoad(0, i, j); sfx('click'); showRoadBanner(); }
     else {
       const cleared = S.res[t] ? RES[S.res[t]].name.toLowerCase() : '';
+      const cross = CROSS[S.terrain[t]];
       const why = buildRoad(0, i, j);
-      if (why) { sfx('error'); showRoadBanner(why); } else { sfx('click'); showRoadBanner(cleared ? `Workers will clear the ${cleared} and pave it (${ROAD_CLEAR}× Cement).` : '', !!cleared); }
+      if (why) { sfx('error'); showRoadBanner(why); }
+      else {
+        sfx('click');
+        showRoadBanner(cross ? `${cross.name} tile planned (${costText(cross.cost)}): workers build it out from the ${S.terrain[t] === T_WATER ? 'shore' : 'rock face'}.`
+          : cleared ? `Workers will clear the ${cleared} and pave it (${ROAD_CLEAR}× Cement).` : '', !!(cleared || cross));
+      }
     }
     return;
   }
@@ -726,7 +751,7 @@ function rallyAtTap(wx, wy) {
  */
 function onRoadPaint(i, j, first) {
   if (R.mode !== 'road' || UI.roadMode === 'lights') return;
-  if (first) UI.paintSkipped = false;
+  if (first) { UI.paintSkipped = false; UI.paintCross = false; }
   const from = first || !UI.lastPaint ? { i, j } : UI.lastPaint;
   const line = tileLine(from.i, from.j, i, j);
   let prev = null;
@@ -736,6 +761,8 @@ function onRoadPaint(i, j, first) {
     const t = tIdx(x, y);
     // Dragging never bulldozes resources by accident: tap a resource tile to clear it for a road.
     if (!S.road[t] && !S.plan[t] && S.res[t]) { UI.paintSkipped = true; prev = null; continue; }
+    // Bridges and tunnels are dear: only the Bridges tool builds them.
+    if (!S.road[t] && !S.plan[t] && crossTile(t) && UI.roadMode !== 'bridge') { UI.paintCross = true; prev = null; continue; }
     if (!S.road[t] && !S.plan[t] && canRoad(0, x, y)) {
       const why = buildRoad(0, x, y);
       if (why) { if (!UI.roadWarned) { UI.roadWarned = true; sfx('error'); } showRoadBanner(why); break; }
@@ -749,7 +776,10 @@ function onRoadPaint(i, j, first) {
     }
     prev = [x, y];
   }
-  if (!UI.roadWarned) showRoadBanner(UI.paintSkipped ? `Roads go round resources when you drag. Tap a boulder, grove, ore or crystal tile to clear it for a road (${ROAD_CLEAR}× Cement).` : '', true);
+  if (!UI.roadWarned) {
+    showRoadBanner(UI.paintCross ? 'Roads stop at water and rock. Pick <b>Bridges</b> to build across.'
+      : UI.paintSkipped ? `Roads go round resources when you drag. Tap a boulder, grove, ore or crystal tile to clear it for a road (${ROAD_CLEAR}× Cement).` : '', true);
+  }
   UI.lastPaint = { i, j };
 }
 
@@ -758,20 +788,25 @@ function onRoadPaint(i, j, first) {
  * Shows what a tile costs and how much you have left.
  */
 function showRoadBanner(problem, info) {
-  const mode = UI.roadMode === 'arrows' || UI.roadMode === 'lights' ? UI.roadMode : 'road';
+  const mode = ['arrows', 'lights', 'bridge'].includes(UI.roadMode) ? UI.roadMode : 'road';
   const g = Object.keys(roadCost())[0];
   const per = Math.round(1 / roadCost()[g]);
   let cost = `<b>1 ${GOOD[g].name} paves ${per} tiles</b> (${roadTilesAffordable(0)} left)`;
   let how;
-  if (mode === 'arrows') {
+  if (mode === 'bridge') {
+    const have = playerGoods(0);
+    how = 'Drag across <b>water</b> to build a <b>bridge</b>, or through <b>rocky crags</b> to dig a <b>tunnel</b>. Free workers build them out from the shore or rock face, a tile at a time, and they join land on any level.';
+    cost = `Bridge <b>${costText(CROSS[T_WATER].cost)}</b> a tile, tunnel <b>${costText(CROSS[T_ROCK].cost)}</b> (you have ${have.cement || 0} Cement, ${have.alloy || 0} Alloy)`;
+  } else if (mode === 'arrows') {
     how = 'Drag along roads to point them the way you drag: <b>one-way</b> traffic never meets head-on. Tap a road to turn its arrow; drag in Road mode to clear arrows.';
   } else if (mode === 'lights') {
-    let lights = 0, junctions = 0;
+    let lights = 0, junctions = 0, overs = 0;
     for (const k in S.lights) if (S.lights[k].owner === 0) lights++;
+    for (const k in S.over) if (S.over[k].owner === 0) overs++;
     const net = roadNet();
     for (let t = 0; t < S.W * S.H; t++) if (net.junc[t] && S.owner[t] === 0) junctions++;
-    how = 'Tap a <b>junction</b> (a road with roads on three or four sides) to put up a <b>traffic light</b>. It lets one direction through at a time, so busy crossings flow instead of every bot creeping through. Tap a light to take it down.';
-    cost = `<b>${LIGHT_COST.alloy} Alloy</b> each (${lights} light${lights === 1 ? '' : 's'}, ${junctions} junction${junctions === 1 ? '' : 's'})`;
+    how = 'Tap a <b>junction</b> (a road with roads on three or four sides) to put up a <b>traffic light</b>: one direction goes at a time, so busy crossings flow instead of every bot creeping through. Tap the light to upgrade it to an <b>overpass</b>, where one road passes over the other and nobody stops. Tap again to clear it.';
+    cost = `Light <b>${costText(LIGHT_COST)}</b>, overpass <b>${costText(OVERPASS_COST)}</b> (${lights} light${lights === 1 ? '' : 's'}, ${overs} overpass${overs === 1 ? '' : 'es'}, ${junctions} junction${junctions === 1 ? '' : 's'})`;
   } else {
     const waiting = planList(0).length;
     how = '<b>Haulers only drive on roads</b>, so every building needs a road to storage. Drag to plan roads: free workers pave them. Tap a road or a planned tile to remove it.';
@@ -783,6 +818,25 @@ function showRoadBanner(problem, info) {
     btn.classList.toggle('on', btn.dataset.v === mode);
     btn.onclick = () => { UI.roadMode = btn.dataset.v; sfx('click'); showRoadBanner(); };
   }
+  const tb = $('banner-traffic');
+  tb.hidden = false;
+  tb.classList.toggle('on', !!R.traffic);
+  tb.onclick = () => { R.traffic = !R.traffic; sfx('click'); showRoadBanner(); };
+  if (R.traffic) $('banner-text').innerHTML += ` <span class="traffic-key">${trafficSummary()}</span>`;
+}
+
+/** Traffic map legend plus how busy the haulers and trucks are. */
+function trafficSummary() {
+  const n = { hauler: [0, 0], truck: [0, 0] };
+  for (const u of S.bots) {
+    if (u.dead || u.owner !== 0 || !n[u.type]) continue;
+    n[u.type][0]++;
+    if (u.task && u.task.type === 'haul') n[u.type][1]++;
+  }
+  let jams = 0;
+  if (HEAT.jam) for (let t = 0; t < S.W * S.H; t++) if (HEAT.jam[t] > TRAFFIC_JAM && S.owner[t] === 0) jams++;
+  return `<b>Traffic map:</b> <i class="tk q"></i>quiet <i class="tk b"></i>busy <i class="tk p"></i>packed; pulsing rings mark jams (${jams} now). `
+    + `Haulers ${n.hauler[1]} of ${n.hauler[0]} busy` + (n.truck[0] ? `, Freight Trucks ${n.truck[1]} of ${n.truck[0]}` : '') + '.';
 }
 
 /* ------------------------------------------------------------------ sheets */
@@ -859,6 +913,16 @@ function openBuildingSheet(b) {
         <p class="hint" id="sh-smode-hint"></p>
         <div class="section-label">Goods kept here <span class="label-note">tap to switch off</span></div>
         <div class="goodlist" id="sh-accept">${GOODS.map((g) => `<button class="gtag toggle" data-g="${g}"><i class="gi ${g}"></i><span>${GOOD[g].name}</span> <b>0</b></button>`).join('')}</div>`;
+      if (b.type !== 'lander') {
+        // The goods a front line runs on, plus any already ordered; the rest behind "More goods".
+        const main = ['cement', 'fiber', 'stone', 'alloy', 'fuel'].concat(S.mode !== 'colony' ? ['ammo'] : []);
+        const goods = main.concat(GOODS.filter((g) => !main.includes(g))).filter((g) => (S.mode !== 'colony' || !WAR_GOODS.includes(g)) && (UI.keepAll || main.includes(g) || (b.keep && b.keep[g])));
+        html += `<div class="section-label">Supply orders <span class="label-note">stock it from home</span></div>
+          <div class="keep-list" id="sh-keep">${goods.map((g) => `<div class="keep-cell" data-g="${g}"><span class="kname"><i class="gi ${g}"></i>${GOOD[g].name}</span><b class="n">–</b>
+            <button class="btn" data-d="-5" aria-label="Less ${GOOD[g].name}">−5</button><button class="btn" data-d="5" aria-label="More ${GOOD[g].name}">+5</button></div>`).join('')}</div>
+          <button class="btn small ghost" id="sh-keep-all">${UI.keepAll ? 'Fewer goods' : 'More goods'}</button>
+          <p class="hint" id="sh-keep-hint"></p>`;
+      }
     } else if (b.type !== 'lander') {
       html += `<div class="section-label">Priority</div><div class="seg" id="sh-prio">
         <button data-v="low">Low</button><button data-v="normal">Normal</button><button data-v="high">High</button></div>
@@ -879,8 +943,8 @@ function openBuildingSheet(b) {
         <button class="btn ghost" data-k="${k}" data-d="0">Clear</button></div>`;
       const kinds = BOT_ORDER.filter((k) => versus || !BOTS[k].war);
       html += `<div class="section-label">Order bots</div><div id="sh-orders">${kinds.map((k) => row(k, BOTS[k].plural)).join('')}</div>
-        <p class="hint">The Foundry only builds the bots you order. Each one uses 1 Alloy and 1 Chip and takes ${def.work} s; mixed orders take turns.
-        <b>Haulers</b> carry two goods at a time, <b>Agribots</b> run Bio Farms and Grove Planters, and <b>Pavers</b> run the Roadworks.</p>`;
+        <p class="hint">The Foundry only builds the bots you order. Each one uses 1 Alloy and 1 Chip and takes ${def.work} s (a Freight Truck twice that); mixed orders take turns.
+        <b>Haulers</b> carry two goods at a time, <b>Freight Trucks</b> eight on the long runs to Depots, <b>Agribots</b> run Bio Farms and Grove Planters, and <b>Pavers</b> run the Roadworks.</p>`;
     }
     if (def.missile && b.built) {
       html += `<button class="btn primary big" id="sh-aim">Aim missile</button>
@@ -915,6 +979,13 @@ function openBuildingSheet(b) {
       b.reject = b.reject || {};
       if (b.reject[g]) delete b.reject[g]; else b.reject[g] = true;
       if (!Object.keys(b.reject).length) delete b.reject;
+      sfx('click');
+      refreshSheet();
+    };
+    if ($('sh-keep-all')) $('sh-keep-all').onclick = () => { UI.keepAll = !UI.keepAll; sfx('click'); openBuildingSheet(b); };
+    if ($('sh-keep')) for (const btn of $('sh-keep').querySelectorAll('button')) btn.onclick = () => {
+      const g = btn.parentElement.dataset.g;
+      setKeep(b, g, ((b.keep && b.keep[g]) || 0) + +btn.dataset.d);
       sfx('click');
       refreshSheet();
     };
@@ -1035,15 +1106,15 @@ function refreshRoadLink(b) {
     return;
   }
   R.routePreview = route;
-  const g = Object.keys(roadCost())[0];
-  const need = Math.round(route.cost * roadCost()[g] * 10) / 10;
-  const can = roadTilesAffordable(0) >= route.cost;
+  const can = canAffordRoad(0, route.goods);
   const key = route.join(',');
   if (el.dataset.key === key + can) return;
   el.dataset.key = key + can;
-  el.innerHTML = `<div class="road-warn"><b>No road to storage.</b> ${what}. The dashed tiles show the shortest road${route.pending ? ` (${route.pending} more already planned)` : ''}; free workers pave it once it's planned.
-    <button class="btn primary" id="sh-layroad" ${can ? '' : 'disabled'}>Lay road: ${route.length} tile${route.length === 1 ? '' : 's'}, ${need} ${GOOD[g].name}</button>
-    ${can ? '' : `<span class="err">Not enough ${GOOD[g].name}: build a Cement Works.</span>`}</div>`;
+  const short = Object.keys(route.goods).filter((g) => !canAffordRoad(0, { [g]: route.goods[g] })).map((g) => GOOD[g].name);
+  const cross = route.cross ? ` It crosses water or rock: ${route.cross} tile${route.cross === 1 ? '' : 's'} of bridge or tunnel.` : '';
+  el.innerHTML = `<div class="road-warn"><b>No road to storage.</b> ${what}. The dashed tiles show the shortest road${route.pending ? ` (${route.pending} more already planned)` : ''}; free workers pave it once it's planned.${cross}
+    <button class="btn primary" id="sh-layroad" ${can ? '' : 'disabled'}>Lay road: ${route.length} tile${route.length === 1 ? '' : 's'}, ${costText(route.goods)}</button>
+    ${can ? '' : `<span class="err">Not enough ${short.join(' or ')}${short.includes('Cement') ? ': build a Cement Works' : ''}.</span>`}</div>`;
   $('sh-layroad').onclick = () => {
     let laid = 0, why = '';
     for (const t of roadRouteTo(0, b) || []) {
@@ -1118,7 +1189,8 @@ function refreshBuildingSheet(b) {
       if (outs) parts.push(`<div class="section-label">Output</div><div class="goodlist">${outs}</div>`);
       if (def.bots) {
         const k = nextBotKind(b);
-        parts.push(`<div class="kv"><span>Next bot</span><span>${BOTS[k] ? BOTS[k].name : 'Nothing ordered'}</span></div>`);
+        const need = (BOTS[k] && BOTS[k].parts) || 1;
+        parts.push(`<div class="kv"><span>Next bot</span><span>${BOTS[k] ? BOTS[k].name + (need > 1 ? ` (part ${Math.min(need, (b.parts || 0) + 1)} of ${need})` : '') : 'Nothing ordered'}</span></div>`);
       }
       if (b.timer > 0 && b.status === 'Working') parts.push(`<div class="bar"><div style="width:${Math.round((b.timer / def.work) * 100)}%"></div></div>`);
     }
@@ -1196,6 +1268,21 @@ function refreshBuildingSheet(b) {
     const g = btn.dataset.g;
     btn.classList.toggle('off', !!(b.reject && b.reject[g]) || b.smode === 'empty');
     btn.lastElementChild.textContent = b.stock[g] || 0;
+  }
+  if ($('sh-keep')) {
+    let want = 0, short = 0;
+    for (const cell of $('sh-keep').children) {
+      const g = cell.dataset.g, k = (b.keep && b.keep[g]) || 0, have = b.stock[g] || 0;
+      cell.querySelector('.n').textContent = k ? `${Math.min(have, k)}/${k}` : '–';
+      cell.classList.toggle('on', k > 0);
+      cell.classList.toggle('short', k > 0 && have < k);
+      if (k) { want++; if (have < k) short++; }
+    }
+    let trucks = 0;
+    for (const u of S.bots) if (!u.dead && u.owner === 0 && BOTS[u.type].truck) trucks++;
+    $('sh-keep-hint').textContent = !want
+      ? 'Set how much of each good to keep here, and haulers and Freight Trucks bring it from your other storage. Buildings and roads near here then draw on it.'
+      : `${short ? `Filling ${short} order${short > 1 ? 's' : ''}` : 'Fully stocked'}. ` + (trucks ? `${trucks} Freight Truck${trucks > 1 ? 's' : ''} take the runs; haulers help when they're busy.` : 'Haulers bring it two at a time: order Freight Trucks at the Bot Foundry to carry eight.');
   }
   if ($('sh-mode')) for (const btn of $('sh-mode').children) btn.classList.toggle('on', btn.dataset.v === b.mode);
   for (const k of BOT_ORDER) {
@@ -1327,8 +1414,9 @@ function openResourceSheet(t) {
   const desc = type === R_CROP ? 'Planted by a Bio Farm on fertile soil. Once ripe, its worker harvests it into Fuel and plants a new one.'
     : type === R_OIL ? 'Build an Oil Pump right on top of the seep to pump Crude (it also draws from seep tiles next to it). A Refinery turns Crude into Fuel.'
     : `Gives ${GOOD[info.good].name}. Gathered by a ${BDEFS[by].name} within ${BDEFS[by].radius} tiles.${type === R_STALK ? ' A Grove Planter can grow more.' : ' It runs out eventually, so expand to find more.'}`;
-  const html = `<div class="sheet-title"><div><h3>${info.name}</h3></div></div>
-    <p class="desc">${desc}</p>
+  const rich = richRes(t) ? '<p class="desc"><b>Rich deposit:</b> it holds far more than the ones near your base. The frontier pays.</p>' : '';
+  const html = `<div class="sheet-title"><div><h3>${richRes(t) ? 'Rich ' + info.name.toLowerCase() : info.name}</h3></div></div>
+    <p class="desc">${desc}</p>${rich}
     <div id="sh-dyn"></div>`;
   openSheet('res', t, html);
   refreshSheet();

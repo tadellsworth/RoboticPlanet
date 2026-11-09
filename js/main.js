@@ -1,6 +1,6 @@
 'use strict';
 /*
- * Botfall — boot and main loop. Behind the main menu an AI-vs-AI demo game plays as a backdrop.
+ * Terrafall — boot and main loop. Behind the main menu an AI-vs-AI demo game plays as a backdrop.
  */
 
 let _lastFrame = performance.now();

@@ -1,6 +1,6 @@
 'use strict';
 /*
- * Botfall — small chart helpers for the statistics screen and building panels.
+ * Terrafall — small chart helpers for the statistics screen and building panels.
  *
  * Line charts are drawn on a canvas with one y-axis, 2px lines, an end dot and a direct label per
  * series, recessive hairline gridlines, and a crosshair + tooltip that follows a finger or mouse.

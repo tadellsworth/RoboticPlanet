@@ -1,6 +1,6 @@
 'use strict';
 /*
- * Botfall — rival AI. It plays by the same rules as the player: it places construction sites
+ * Terrafall — rival AI. It plays by the same rules as the player: it places construction sites
  * from a build plan, picks good spots, balances worker/warbot production and attacks once it
  * has gathered enough warbots near a target.
  */
@@ -188,9 +188,17 @@ function aiThink(p) {
     for (const crew in crewNeed) if ((kinds[crew] || 0) < crewNeed[crew] && !(b.orders[crew] > 0)) b.orders[crew] = 1;
     // Saving up for missiles (or feeding the Missile Factory): the Foundry rests so Alloy and Chips
     // pile up, unless workers are badly short.
-    if ((saving || P.feedMissiles) && workers >= staffed + 3) { b.mode = 'off'; delete b.orders.hauler; }
+    if ((saving || P.feedMissiles) && workers >= staffed + 3) { b.mode = 'off'; delete b.orders.hauler; delete b.orders.truck; }
     else if ((kinds.hauler || 0) < wantHaulers && !(b.orders.hauler > 0)) b.orders.hauler = 1;
+    // A forward Depot with supply orders gets a Freight Truck to keep it stocked.
+    else if (me.some((d) => d.keep && d.built) && (kinds.truck || 0) < 1 + Math.floor(me.length / 35) && !(b.orders.truck > 0)) b.orders.truck = 1;
     break;
+  }
+  // Depots out towards the front keep Cement for building there.
+  for (const d of me) {
+    if (d.type !== 'depot' || !d.built || d.keep || dist(d.x, d.y, lander.x, lander.y) < 12) continue;
+    setKeep(d, 'cement', 12);
+    if (S.mode !== 'colony') setKeep(d, 'ammo', 4);
   }
 
   // 4) Missiles: soften turrets and Outposts first, the Command Base once the army is big.
@@ -209,6 +217,9 @@ function aiThink(p) {
       if (best) fireMissile(p, best);
     }
   }
+
+  // 4b) Raids on the enemy's supply lines.
+  if (S.mode !== 'colony' && S.time >= lvl.grace) aiRaid(p, lvl);
 
   // 5) Attack
   if (S.time < lvl.grace || S.time < P.nextAttack) return;
@@ -242,6 +253,44 @@ function aiThink(p) {
     }
     if (spot) { placeSite(p, 'outpost', spot.x, spot.y); P.lastAttack = S.time - 30; }
   }
+}
+
+/**
+ * Raids: every few minutes a small band of warbots goes to the enemy's busiest road clear of its
+ * turrets and garrisons, shoots up passing haulers, tears up the road (then hits whatever stands
+ * near it), and comes home.
+ */
+const RAID_GAP = { easy: 320, normal: 170, hard: 115 };
+function aiRaid(p, lvl) {
+  const P = S.players[p], enemy = 1 - p;
+  if (P.raid) {
+    const r = rallyById(P.raid.id);
+    if (!r || S.time > P.raid.until || !rallyMembers(P.raid.id).length) {
+      if (r) recallRally(P.raid.id);
+      P.raid = null;
+      P.nextRaid = S.time + (RAID_GAP[S.difficulty] || 170);
+    }
+    return;
+  }
+  if (S.time < (P.nextRaid || lvl.grace + 90)) return;
+  P.nextRaid = S.time + 30; // nothing worth raiding yet: look again soon
+  if (HEAT.of !== S || !HEAT.flow) return;
+  // Keep clear of turrets, and of garrisons with warbots in them.
+  const guards = S.buildings.filter((b) => !b.dead && b.owner === enemy && b.built && (b.type === 'turret' || (BDEFS[b.type].mil && armedIn(b) >= 2)))
+    .map((b) => ({ x: b.x, y: b.y, r2: b.type === 'turret' ? 36 : 20 }));
+  let best = -1, bs = 0;
+  for (let t = 0; t < S.W * S.H; t++) {
+    if (!S.road[t] || S.owner[t] !== enemy || HEAT.flow[t] < 1) continue;
+    const i = t % S.W, j = (t / S.W) | 0;
+    if (guards.some((g) => dist2(g.x, g.y, i, j) < g.r2)) continue;
+    const s = HEAT.flow[t] - dist(i, j, S.W / 2, S.H / 2) * 0.05;
+    if (s > bs) { bs = s; best = t; }
+  }
+  if (best < 0) return;
+  const i = best % S.W, j = (best / S.W) | 0;
+  if (rallyAvailable(p, i, j) < 5) return; // keep enough warbots at home
+  const { sent, rally } = sendToRally(p, i, j, 3);
+  if (sent) { rally.raid = true; P.raid = { id: rally.id, until: S.time + 80 }; }
 }
 
 /**
@@ -298,7 +347,7 @@ function aiRoads(p, me) {
       }
       continue;
     }
-    if (route.cost > budget) {
+    if (route.cost > budget || !canAffordRoad(p, route.goods)) {
       P.roadShort = S.time;
       // A site that has waited long for a road we can't pay for is given up (its goods come back).
       if (!b.built && S.time - b.born > 150) demolish(b);
@@ -425,6 +474,9 @@ function aiSearchSpot(p, type, lander) {
         s = -Math.abs(dHome - 3.5) * 2 - dist(i, j, ex, ey) * 0.15;
       } else if (type === 'silo') {
         s = -dist(i, j, ex, ey); // as close to the enemy as our land allows
+      } else if (type === 'depot') {
+        // A forward base: out towards the Outposts, but on the road network.
+        s = Math.min(dHome, 18) * 0.6 - dist(i, j, ex, ey) * 0.1;
       } else if (type === 'charger') {
         // Spread chargers out, near where bots work.
         let dc = 99, db = 99;

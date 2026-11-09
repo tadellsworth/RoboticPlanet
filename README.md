@@ -1,4 +1,4 @@
-# Botfall
+# Terrafall
 
 A colony and logistics strategy game that runs in the browser, on phones and on desktop widescreens. Your robots land
 on a dusty alien planet: gather resources, link them into supply chains with a network of roads, build more robots and
@@ -14,7 +14,7 @@ Before each game, sliders set the **map size** (Small to Huge), the **terrain** 
 Rolling, Rugged, Mountainous) and the **resources** (Scarce to Abundant). Resources come in separate
 fields: your landing zone has a little of everything, and the rich fields beyond it are worth fighting for.
 
-Botfall is an original game in the colony-logistics genre. It contains no code, art, sound or data from
+Terrafall is an original game in the colony-logistics genre. It contains no code, art, sound or data from
 any other game.
 
 ## Play it
@@ -28,7 +28,7 @@ any other game.
   python3 -m http.server 8000
   ```
 
-- **Single file:** `node tools/build-single.js` writes `dist/botfall.html`, the whole game in one file you
+- **Single file:** `node tools/build-single.js` writes `dist/terrafall.html`, the whole game in one file you
   can open directly or send to someone.
 
 Progress auto-saves in the browser every 20 seconds and whenever you leave the page.
@@ -50,7 +50,7 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
 | Bot Foundry | Alloy + Chip → a new **Worker** or **Warbot** |
 | Outpost | Expands your territory and garrisons Warbots |
 | Pulse Turret | Turns to aim and shoots enemy bots; uses Crystal as ammo |
-| Depot | Extra storage, shortens hauling trips |
+| Depot | Extra storage, shortens hauling trips; give it supply orders to stock it as a forward base |
 | Ramp | Cuts a slope into a one-level cliff so bots can climb it |
 | Charging Station | Recharges bots' batteries, four at a time; burns **Fuel** |
 | Bio Farm | A worker plants energy crops on fertile soil and harvests them into **Fuel** |
@@ -86,10 +86,26 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
   highways take planning and spare workers. Calling off a planned tile refunds it. Roads double a bot's speed. Dragging
   plans roads round resources; tap a boulder, grove, ore or crystal tile to clear it for a road at 3× the Cement. A Roadworks' Paver
   upgrades roads to asphalt (2.75×) with Asphalt. Removing a road refunds its Cement.
-- **Junctions and traffic lights:** where three or four roads meet, bots slow down and give way to traffic already
-  crossing. Switch the Paths banner to **Lights** and tap a junction to put up a traffic light (1 Alloy): it lets one
-  direction through at a time, switching when traffic waits the other way. On a busy crossing a light moves about half
-  as many goods again; on a quiet one it costs nothing.
+- **Bridges and tunnels:** roads stop at water and rocky crags. The **Bridges** tool in Paths plans roads across them:
+  a bridge costs 2 Cement and 1 Alloy a tile, a tunnel 3 Cement and 1 Alloy. Workers build them out from the shore or rock
+  face (6–8 s a tile), and they join land on any level. Lay road routes use them only when going round is much longer.
+- **Junctions, traffic lights and overpasses:** where three or four roads meet, bots slow down and give way to traffic
+  already crossing. Switch the Paths banner to **Junctions** and tap a junction to put up a traffic light (1 Alloy): it
+  lets one direction through at a time, switching when traffic waits the other way. On a busy crossing a light moves
+  about half as many goods again; on a quiet one it costs nothing. Tap the light again for an **overpass** (4 Cement,
+  3 Alloy): one road passes over the other and nobody slows or waits. Tap again to clear it.
+- **Traffic map:** **Traffic map** in the Paths banner (or **T**) tints each road green to red by how busy it has been
+  over the last minute and rings the spots where bots stand waiting.
+- **Long hauls:** tap a Depot and set **supply orders** (how much of each good to keep there). Goods come from your other
+  storage, and anything nearby then draws on the Depot. **Freight Trucks** (2 Alloy and 2 Chips at the Foundry) carry
+  8 goods and take the long runs: storage to storage and deliveries of 3 or more over 12 tiles. They're slower than
+  Haulers on concrete (80%) and fastest of all on asphalt.
+- **Frontier riches:** boulders, ore, crystal and oil hold more the further they are from the bases, up to 2.2× in the
+  middle of the map; rich deposits sparkle. **Map shape: Long haul** on the new-game screen makes a narrow, long planet
+  (75% as wide, 170% as long) with the bases far apart.
+- **Raids:** armed warbots holding a rally flag in enemy land with nothing to fight tear up enemy roads near the flag,
+  one tile per 12 warbot-seconds. The rival raids your busiest road clear of turrets and garrisons every few minutes
+  (Easy rarely, Hard often) once it has warbots to spare. Missiles crater the roads where they land.
 - **Traffic:** bots queue on roads, each waiting behind the bot ahead of it going the same way. On two-way roads each
   direction keeps to its own side, but passing oncoming traffic slows bots down. Switch the Paths banner to **Arrows** and
   drag along a road to point it the way you drag (tap a road to turn its arrow). One-way loops keep busy routes flowing;
@@ -139,7 +155,7 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
 - **Controls:** drag to pan, pinch or scroll to zoom, tap anything to inspect it.
 - **Desktop:** on a wide screen the top bar is one row, the tools sit in a small dock and panels open on the right.
   Right-drag pans in every mode; a building being placed follows the mouse. Keys: **B** build, **P** paths
-  (**R** roads, **O** one-way arrows, **L** lights), **A** army, **H** base, arrows/WASD pan, **+/−** zoom,
+  (**R** roads, **G** bridges and tunnels, **O** one-way arrows, **L** junctions, **T** traffic map), **A** army, **H** base, arrows/WASD pan, **+/−** zoom,
   **1–3** speed, **M** minimap, **Space** pause, **Esc** back.
 
 ## Custom art
@@ -185,7 +201,7 @@ js/main.js                boot and main loop
 art/art-manifest.js       register custom art here
 tools/headless-sim.js     AI-vs-AI balance test without a browser
 tools/smoke-test.js       browser test on a phone-sized screen (Playwright)
-tools/build-single.js     bundles everything into dist/botfall.html
+tools/build-single.js     bundles everything into dist/terrafall.html
 ```
 
 Plain JavaScript, no build step and no dependencies. Balance tweaks mostly live in `js/defs.js`.
@@ -214,6 +230,8 @@ The first two play complete AI-vs-AI games (or an AI colony) in a few seconds an
 each minute. The smoke test needs Playwright and a running local server.
 
 ## Ideas for next steps
+
+See [IDEAS.md](IDEAS.md) for ideas waiting their turn (the optional nuclear setting and a fuller desktop RTS mode).
 
 - Multiplayer and save export/import
 - Custom art for goods icons, menus and effects

@@ -1,4 +1,4 @@
-# Botfall art guide
+# Terrafall art guide
 
 Every building, bot, resource and ground tile now uses custom art (batch 1). Anything without an
 image keeps a placeholder drawn in code, so art can still be added **one piece at a time**. The
@@ -78,7 +78,7 @@ worn and dirty, lit by a few glowing neon accents.
 
 ### Brief to paste into Claude Design first
 
-> I'm making sprite art for a mobile strategy game called **Botfall**. Robots run a mining colony on a
+> I'm making sprite art for a mobile strategy game called **Terrafall**. Robots run a mining colony on a
 > dusty alien planet. The style is **cyberpunk industrial realism**: weathered gunmetal and graphite machinery,
 > rust, dust, cables and hazard stripes, lit by glowing neon accent lights. It should feel gritty and grounded,
 > not cartoony.
@@ -227,7 +227,7 @@ look. Do them in one Claude Design chat so camera, lighting and scale stay consi
 **Style brief (paste this first)**
 
 ```
-I'm making building sprites for Botfall, a mobile colony-logistics strategy game on a dusty orange-brown alien
+I'm making building sprites for Terrafall, a mobile colony-logistics strategy game on a dusty orange-brown alien
 planet. Every building should look like a realistic, pre-rendered 3D industrial model: like a detailed miniature
 photographed in warm sunlight. Each one is a compact robotic industrial facility standing on a square concrete
 and steel foundation pad.
@@ -471,6 +471,29 @@ left compared with the right-facing head") and ask it to fix that one.
 When these are in, the old flat versions of the same names are replaced; anything not yet redrawn keeps its
 current art, so they can be swapped in a few at a time.
 
+### Batch 7: Long haul
+
+| Key | Size | What it is | Prompt for Claude Design |
+|---|---|---|---|
+| `truck@0`, `truck@1` | 384×384, transparent | Freight Truck: a heavy road truck that carries 8 goods | See the full brief below. |
+
+`truck@0.png` and `truck@1.png`
+```
+A heavy robotic freight truck for the same game as the Hauler, seen from directly above (top-down, like the other
+robots), facing RIGHT. A driverless armoured cab at the right end with a dark sensor windscreen strip and a
+team-coloured roof panel, then a long flatbed behind it with low side rails and tie-down points, empty (the game
+draws the cargo crates on top), riding on three pairs of chunky wheels that show at the sides. About 2.2 times as
+long as it is wide; the whole truck spans about 85% of the image width, centred. Weathered gunmetal and off-white
+paint, yellow-and-black hazard stripes on the rear bumper, small amber marker lights at the corners. Same lighting
+as the other robots: sun from the top-left, short soft shadow down-right. 384x384 PNG, transparent background.
+Team colour: cyan #38d4ff.
+```
+Then the red version: *"Same image, but change every cyan accent to red #ff5a6e."* The game rotates the truck as it
+turns and draws its load on the flatbed, so keep the bed empty and flat.
+
+Bridges, tunnels and overpasses are drawn by the game itself for now (they have to join up with each other on any
+side); ask Claude Code if you'd like those as art too.
+
 ### Not swappable yet (ask Claude Code if you want these)
 
 - Menu background and logo
@@ -481,8 +504,8 @@ current art, so they can be swapped in a few at a time.
   grower, site, outpost@0/@1), and so is the second set (charger, farm, pump, refinery, kiln, tarworks, roadworks,
   ramp). They use `B3D(...)` in `art/art-manifest.js`: scale 1.4 and anchor [0.5, 0.615], the centre of the pad's top
   surface. New buildings in the same style can use the same helper
-- Robots `hauler`, `agribot` and `paver` (@0/@1) and the military buildings are installed. Still missing: 3D versions
-  of the Command Base and turret, resources `crop` and `oil`, ground
+- Robots `hauler`, `agribot` and `paver` (@0/@1), the military buildings, the 3D Command Base and the Repair Bay
+  (`repair`) are installed. Still missing: the Freight Truck (`truck@0/@1`), a 3D turret, resources `crop` and `oil`, ground
   `fertile`, `slope` and `cliff`, markers `missile`, `rally` and `oneway`, and the 12 goods icons
 
 ### Tips

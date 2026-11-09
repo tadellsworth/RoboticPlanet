@@ -1,6 +1,6 @@
 'use strict';
 /*
- * Botfall — world state: map generation, entities, territory, placement rules, save/load.
+ * Terrafall — world state: map generation, entities, territory, placement rules, save/load.
  *
  * All game state lives in the global `S` and is plain JSON-friendly data (entities refer to
  * each other by numeric id, never by object reference), so saving is just serialising S.
@@ -291,13 +291,35 @@ function generateMap(seed, W, H, cfg) {
     elev.fill(0);
   }
 
-  for (let t = 0; t < N; t++) if (res[t]) amt[t] = clamp(Math.round(RES[res[t]].amount * RPR.amount), 1, 255);
+  // Richer deposits out towards the middle of the map, so pushing out pays.
+  const ox = W - 1 - bx, oy = H - 1 - by, reach = Math.max(1, dist(bx, by, ox, oy) / 2 - RICH_FROM);
+  for (let t = 0; t < N; t++) {
+    if (!res[t]) continue;
+    const i = t % W, j = (t / W) | 0;
+    const d = Math.min(dist(i, j, bx, by), dist(i, j, ox, oy));
+    const rich = RICH_TYPES.includes(res[t]) ? 1 + FRONTIER_RICH * clamp((d - RICH_FROM) / reach, 0, 1) : 1;
+    amt[t] = clamp(Math.round(RES[res[t]].amount * RPR.amount * rich), 1, 255);
+  }
   const grow = new Float32Array(N).fill(1);
   for (let t = 0; t < N; t++) if (terrain[t] !== T_GROUND) fert[t] = 0;
   return { terrain, res, amt, grow, elev, ramp, fert, bases: [{ x: bx, y: by }, { x: W - 1 - bx, y: H - 1 - by }] };
 }
 
 /* ------------------------------------------------------------------ new game */
+
+/** Map width and height for these settings (size and shape); the height stays even so the map mirrors cleanly. */
+function mapDims(st) {
+  const sz = SIZE_PRESETS[st.size], sh = SHAPE_PRESETS[st.shape || 0];
+  return { W: Math.round(sz.w * sh.w), H: 2 * Math.round((sz.h * sh.h) / 2) };
+}
+
+/** Is the resource on tile t a rich deposit (much more than usual, out towards the frontier)? */
+function richRes(t) {
+  const r = S.res[t];
+  if (!r || !RICH_TYPES.includes(r)) return false;
+  const pr = RESOURCE_PRESETS[(S.settings && S.settings.rich) ?? DEFAULT_RICH] || RESOURCE_PRESETS[DEFAULT_RICH];
+  return S.amt[t] >= RES[r].amount * pr.amount * RICH_MARK;
+}
 
 /**
  * opts.mode: 'versus' (race a rival AI to capture its Command Base) or 'colony' (no rival, a bigger
@@ -310,7 +332,8 @@ function newGame(opts) {
     rough: clamp(opts.rough ?? DEFAULT_ROUGH, 0, TERRAIN_PRESETS.length - 1),
     rich: clamp(opts.rich ?? DEFAULT_RICH, 0, RESOURCE_PRESETS.length - 1),
   };
-  const W = SIZE_PRESETS[settings.size].w, H = SIZE_PRESETS[settings.size].h;
+  settings.shape = clamp(opts.shape ?? 0, 0, SHAPE_PRESETS.length - 1);
+  const { W, H } = mapDims(settings);
   const seed = opts.seed >>> 0;
   const diff = DIFFICULTY[opts.difficulty] ? opts.difficulty : 'normal';
   const m = generateMap(seed, W, H, settings);
@@ -318,7 +341,7 @@ function newGame(opts) {
   S = {
     v: 1, mode, seed, W, H, settings, difficulty: diff, time: 0, nextId: 1, winner: -1, milestone: 0,
     terrain: m.terrain, res: m.res, amt: m.amt, grow: m.grow, elev: m.elev, ramp: m.ramp, fert: m.fert,
-    road: new Uint8Array(W * H), pave: new Uint8Array(W * H), oneRoad: true, roadVer: 0, lights: {},
+    road: new Uint8Array(W * H), pave: new Uint8Array(W * H), oneRoad: true, roadVer: 0, lights: {}, over: {},
     plan: new Uint8Array(W * H), planVer: 0, paveRes: {},
     owner: new Int8Array(W * H).fill(-1),
     resRes: new Uint8Array(W * H),
@@ -377,10 +400,24 @@ function starterRoads(L) {
  * only if either tile is a ramp. Cliffs of more than one level are never climbable.
  */
 function canStep(a, b) {
-  if (S.terrain[a] !== T_GROUND || S.terrain[b] !== T_GROUND) return false;
+  if (S.terrain[a] !== T_GROUND || S.terrain[b] !== T_GROUND) {
+    // Bridges and tunnels (road over water or through rock) join any neighbour, whatever its level.
+    return (S.terrain[a] === T_GROUND || S.road[a] > 0) && (S.terrain[b] === T_GROUND || S.road[b] > 0);
+  }
   const d = S.elev[a] - S.elev[b];
   if (d === 0) return true;
   return (d === 1 || d === -1) && (S.ramp[a] === 1 || S.ramp[b] === 1);
+}
+
+/** Can bots walk on tile t? Open ground, or a bridge or tunnel. */
+function walkable(t) { return S.terrain[t] === T_GROUND || S.road[t] > 0; }
+
+/** Is tile t water or rock, where a road would be a bridge or tunnel? */
+function crossTile(t) { return S.terrain[t] !== T_GROUND; }
+
+/** Could bots step between a and b once roads are on them? (Planning: water and rock count as bridges and tunnels.) */
+function stepPlan(a, b) {
+  return S.terrain[a] !== T_GROUND || S.terrain[b] !== T_GROUND ? true : canStep(a, b);
 }
 
 /** Label every walkable tile with the id of the area bots can reach from it (ignoring buildings). */
@@ -389,7 +426,7 @@ function computeZones() {
   const z = new Int32Array(N).fill(-1);
   let next = 0;
   for (let t = 0; t < N; t++) {
-    if (S.terrain[t] !== T_GROUND || z[t] >= 0) continue;
+    if (!walkable(t) || z[t] >= 0) continue;
     const q = [t];
     z[t] = next;
     while (q.length) {
@@ -562,7 +599,7 @@ function fertileIn(cx, cy, radius) {
 function isWalkable(i, j) {
   if (!inMap(i, j)) return false;
   const t = tIdx(i, j);
-  return S.terrain[t] === T_GROUND && !S.bAt[t];
+  return walkable(t) && !S.bAt[t];
 }
 
 /**
@@ -714,11 +751,28 @@ function placeSite(owner, type, i, j) {
 function canRoad(owner, i, j) {
   if (!inMap(i, j)) return false;
   const t = tIdx(i, j);
-  return S.owner[t] === owner && S.terrain[t] === T_GROUND && !S.bAt[t] && !S.resRes[t];
+  return S.owner[t] === owner && !S.bAt[t] && !S.resRes[t]; // over water or rock it's a bridge or tunnel
 }
 
-/** Cement-cost multiplier for laying road on tile t (1, or ROAD_CLEAR through resources; 0 if it's already road or planned). */
-function roadTileMul(t) { return S.road[t] || S.plan[t] ? 0 : S.res[t] ? ROAD_CLEAR : 1; }
+/**
+ * What a new road on tile t costs in road tiles' worth of Cement: 1, ROAD_CLEAR through resources,
+ * a bridge's or tunnel's Cement over water or rock (which also take Alloy), 0 if it's already road or planned.
+ */
+function roadTileMul(t) {
+  if (S.road[t] || S.plan[t]) return 0;
+  const c = CROSS[S.terrain[t]];
+  if (c) return c.cost.cement / PAVE[1].cost.cement;
+  return S.res[t] ? ROAD_CLEAR : 1;
+}
+
+/** Everything a new road tile on t costs: road Cement, or a bridge's or tunnel's Cement and Alloy. */
+function roadTileCost(t) {
+  const c = CROSS[S.terrain[t]];
+  if (c) return c.cost;
+  const mul = S.res[t] ? ROAD_CLEAR : 1, out = {};
+  for (const g in PAVE[1].cost) out[g] = PAVE[1].cost[g] * mul;
+  return out;
+}
 
 /* Planned roads: S.plan[t] is owner + 1 on tiles waiting for workers to pave them. */
 
@@ -884,7 +938,11 @@ function roadGoals(owner, except) {
  * everything if done is null). Returns { cost, prev, end }.
  */
 const ROAD_AVOID = 10;
-function roadWeight(t) { return S.road[t] || S.plan[t] ? 0 : S.res[t] ? ROAD_AVOID : 1; }
+function roadWeight(t) {
+  if (S.road[t] || S.plan[t]) return 0;
+  const c = CROSS[S.terrain[t]];
+  return c ? c.weight : S.res[t] ? ROAD_AVOID : 1;
+}
 
 function roadSearch(owner, seeds, done) {
   const W = S.W, N = S.W * S.H;
@@ -898,7 +956,7 @@ function roadSearch(owner, seeds, done) {
     if (done && done(t)) return { cost, prev, end: t };
     const i = t % W;
     for (const u of [i > 0 ? t - 1 : -1, i < W - 1 ? t + 1 : -1, t - W, t + W]) {
-      if (u < 0 || u >= N || !open(u) || !canStep(t, u)) continue;
+      if (u < 0 || u >= N || !open(u) || !(S.road[t] && S.road[u] ? canStep(t, u) : stepPlan(t, u))) continue;
       const nc = c + roadWeight(u);
       if (nc < cost[u]) { cost[u] = nc; prev[u] = t; heap.push(u, nc); }
     }
@@ -912,7 +970,7 @@ function roadSides(owner, x, y) {
   for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
     if (!inMap(x + di, y + dj)) continue;
     const u = tIdx(x + di, y + dj);
-    if ((S.road[u] || canRoad(owner, x + di, y + dj)) && canStep(bt, u)) out.push(u);
+    if ((S.road[u] || canRoad(owner, x + di, y + dj)) && (S.road[u] ? canStep(bt, u) : stepPlan(bt, u))) out.push(u);
   }
   return out;
 }
@@ -930,10 +988,15 @@ function roadRouteTo(owner, b) {
   const res = roadSearch(owner, roadSides(owner, b.x, b.y), (t) => (S.road[t] && g.nets.has(net.comp[t])) || g.next[t]);
   if (res.end < 0) return null;
   const out = [];
-  out.cost = 0; out.pending = 0;
+  out.cost = 0; out.pending = 0; out.goods = {}; out.cross = 0;
   for (let k = res.end; k >= 0; k = res.prev[k]) {
     if (S.plan[k]) out.pending++; // already planned: waiting for workers to pave it
-    else if (!S.road[k]) { out.push(k); out.cost += roadTileMul(k); }
+    else if (!S.road[k]) {
+      out.push(k); out.cost += roadTileMul(k);
+      const c = roadTileCost(k);
+      for (const g in c) out.goods[g] = (out.goods[g] || 0) + c[g];
+      if (crossTile(k)) out.cross++;
+    }
   }
   return out;
 }
@@ -1058,7 +1121,7 @@ function addFx(type, x, y, data) {
 
 /* ------------------------------------------------------------------ save / load */
 
-const SAVE_KEY = 'botfall.save.v1';
+const SAVE_KEY = 'botfall.save.v1'; // the game's first name: kept so saves carry over
 const TYPED_FIELDS = {
   terrain: Uint8Array, res: Uint8Array, amt: Uint8Array, grow: Float32Array, road: Uint8Array, owner: Int8Array,
   resRes: Uint8Array, elev: Uint8Array, ramp: Uint8Array, fert: Uint8Array, pave: Uint8Array, plan: Uint8Array,
@@ -1101,6 +1164,7 @@ function deserializeGame(json) {
   else if (!o.oneRoad) o.pave = o.pave.map((v) => (v >= 3 ? 2 : v ? 1 : 0));
   o.oneRoad = true;
   o.lights = o.lights || {};
+  o.over = o.over || {};
   o.roadVer = (o.roadVer || 0) + 1;
   // Saves from before roads were paved by workers have no planned roads.
   if (!o.plan) o.plan = new Array(o.W * o.H).fill(0);

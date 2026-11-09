@@ -1,6 +1,6 @@
 'use strict';
 /*
- * Botfall — custom art manifest.
+ * Terrafall — custom art manifest.
  *
  * Every building, bot and resource has placeholder art drawn in code. To replace one with
  * your own image, put the file in this folder and add a line below. Anything not listed keeps
@@ -24,7 +24,7 @@
  *   Buildings: lander harvester quarry mine tap grower smelter fab foundry outpost turret depot
  *              charger munitions silo farm pump refinery kiln tarworks roadworks armory repair
  *              site (a construction site)
- *   Bots:      worker warbot hauler agribot paver  (drawn facing right; the game rotates them;
+ *   Bots:      worker warbot hauler agribot paver truck  (drawn facing right; the game rotates them;
  *              without their own art, specialists use the worker's art with a small badge)
  *   Resources: stalk boulder ore crystal crop oil   (crop is drawn smaller while it ripens)
  *   Ground:    ground water rock fertile  (square seamless tiles; one image spans 4×4 map tiles)
@@ -52,8 +52,9 @@ function B3D(src) { return { src, scale: 1.4, anchor: [0.5, 0.615] }; }
 
 const ART_MANIFEST = {
   // Priority 1: what you see constantly
-  'lander@0': { src: 'buildings/lander@0.png', scale: 1.6 },
-  'lander@1': { src: 'buildings/lander@1.png', scale: 1.6 },
+  // The Command Base (internal key "lander"): a 3D fortified base on the shared pad, drawn bigger than the rest.
+  'lander@0': { src: 'buildings/lander@0.png', scale: 2.4, anchor: [0.5, 0.615] },
+  'lander@1': { src: 'buildings/lander@1.png', scale: 2.4, anchor: [0.5, 0.615] },
   'worker@0': 'bots/worker@0.png',
   'worker@1': 'bots/worker@1.png',
   'warbot@0': 'bots/warbot@0.png',
@@ -99,6 +100,7 @@ const ART_MANIFEST = {
   tarworks: B3D('buildings/tarworks.png'),
   roadworks: B3D('buildings/roadworks.png'),
   ramp: B3D('buildings/ramp.png'),
+  repair: B3D('buildings/repair-bay.png'),
 
   // Military buildings (Versus), with team versions: @0 yours (cyan lights), @1 the rival's (red).
   'armory@0': B3D('buildings/armory@0.png'),
@@ -109,7 +111,7 @@ const ART_MANIFEST = {
   'silo@1': B3D('buildings/silo@1.png'),
 
   // Still to make (placeholders are drawn until these exist):
-  //   buildings: 3D versions of lander@0/@1 and the turret (base + head frames)
+  //   buildings: a 3D turret (base + head frames)
   //   resources: crop, oil     ground: fertile, slope, cliff     markers: missile, rally, oneway
   //   goods:     icon-fiber … icon-warhead (12 HUD icons)
 };

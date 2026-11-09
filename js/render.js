@@ -1,6 +1,6 @@
 'use strict';
 /*
- * Botfall — canvas renderer. Terrain, paths and resources are baked into an offscreen image
+ * Terrafall — canvas renderer. Terrain, paths and resources are baked into an offscreen image
  * (only changed tiles are redrawn); buildings, bots and effects are drawn every frame.
  *
  * Placeholder art is drawn with canvas shapes. Any piece listed in art/art-manifest.js is
@@ -59,7 +59,7 @@ function loadArt(onChange) {
       if (key.startsWith('icon-')) applyGoodIcons();
       if (onChange) onChange(key);
     };
-    img.onerror = () => console.warn('Botfall: could not load art for', key, entry.src);
+    img.onerror = () => console.warn('Terrafall: could not load art for', key, entry.src);
     img.src = /^(data:|https?:)/.test(entry.src) ? entry.src : 'art/' + entry.src;
   }
 }
@@ -285,8 +285,23 @@ function drawTile(i, j) {
   if (terr === T_GROUND) drawElevation(ctx, i, j, x, y, t, n);
   else if (terr === T_WATER) drawCliffFace(ctx, i, j, x, y, t, true);
   if (terr === T_GROUND && S.fert && S.fert[t] && !S.ramp[t]) drawFertile(ctx, i, j, x, y);
-  if (S.road[t]) drawRoad(ctx, i, j, x, y);
-  if (S.res[t]) drawResource(ctx, S.res[t], S.amt[t], S.grow[t], x + TP / 2, y + TP / 2, TP, i, j);
+  if (S.road[t]) { if (terr === T_GROUND) drawRoad(ctx, i, j, x, y); else drawCrossing(ctx, i, j, x, y, t); }
+  if (S.res[t]) {
+    drawResource(ctx, S.res[t], S.amt[t], S.grow[t], x + TP / 2, y + TP / 2, TP, i, j);
+    if (richRes(t)) drawGlint(ctx, x, y, i, j);
+  }
+}
+
+/** A rich deposit sparkles: two little four-pointed stars. */
+function drawGlint(ctx, x, y, i, j) {
+  ctx.fillStyle = 'rgba(255,250,215,0.95)';
+  for (let k = 0; k < 2; k++) {
+    const cx = x + 6 + hash2(i, j, 70 + k) * (TP - 12), cy = y + 5 + hash2(j, i, 80 + k) * (TP - 14), r = k ? 2.5 : 3.5;
+    ctx.beginPath();
+    ctx.moveTo(cx, cy - r); ctx.lineTo(cx + r * 0.3, cy - r * 0.3); ctx.lineTo(cx + r, cy); ctx.lineTo(cx + r * 0.3, cy + r * 0.3);
+    ctx.lineTo(cx, cy + r); ctx.lineTo(cx - r * 0.3, cy + r * 0.3); ctx.lineTo(cx - r, cy); ctx.lineTo(cx - r * 0.3, cy - r * 0.3);
+    ctx.closePath(); ctx.fill();
+  }
 }
 
 /** Level of a neighbouring ground tile, or null for off-map / water / rock. */
@@ -413,8 +428,12 @@ function drawRoad(ctx, i, j, x, y) {
     ctx.fillStyle = 'rgba(255,255,255,0.10)';
     for (let k = 0; k < 4; k++) ctx.fillRect(x + c - 4 + hash2(i, j, 30 + k) * 8, y + c - 4 + hash2(j, i, 40 + k) * 8, 1, 1);
   }
-  // One-way paths carry an arrow showing which way traffic flows.
-  const r = S.road[t];
+  drawRoadArrow(ctx, t, x, y);
+}
+
+/** One-way paths carry an arrow showing which way traffic flows. */
+function drawRoadArrow(ctx, t, x, y) {
+  const c = TP / 2, r = S.road[t];
   if (r >= 2) {
     const a = Math.atan2(ROAD_DIRS[r][1], ROAD_DIRS[r][0]);
     if (ART.oneway) { drawArt(ctx, ART.oneway, x + c, y + c, TP * 0.6, a); return; }
@@ -430,6 +449,55 @@ function drawRoad(ctx, i, j, x, y) {
     ctx.fill(); ctx.stroke();
     ctx.restore();
   }
+}
+
+/**
+ * A bridge (road over water: a steel deck on piers with railings) or a tunnel (road through rock:
+ * a dark bore with lamps, and a concrete portal where it comes out of the crags).
+ */
+function drawCrossing(ctx, i, j, x, y, t) {
+  const c = TP / 2, water = S.terrain[t] === T_WATER;
+  const sides = [[0, -1], [1, 0], [0, 1], [-1, 0]];
+  const nb = sides.map(([di, dj]) => inMap(i + di, j + dj) && S.road[tIdx(i + di, j + dj)] > 0 && canStep(t, tIdx(i + di, j + dj)));
+  const shape = (w, ox, oy) => {
+    ctx.fillRect(x + c - w / 2 + ox, y + c - w / 2 + oy, w, w);
+    if (nb[0]) ctx.fillRect(x + c - w / 2 + ox, y + oy, w, c);
+    if (nb[1]) ctx.fillRect(x + c + ox, y + c - w / 2 + oy, c, w);
+    if (nb[2]) ctx.fillRect(x + c - w / 2 + ox, y + c + oy, w, c);
+    if (nb[3]) ctx.fillRect(x + ox, y + c - w / 2 + oy, c, w);
+  };
+  const asphalt = S.pave[t] === 2;
+  if (water) {
+    ctx.fillStyle = 'rgba(0,18,28,0.38)'; shape(20, 2, 4);              // shadow on the water
+    ctx.fillStyle = '#2f353c'; shape(20, 0, 0);                         // girders
+    ctx.fillStyle = asphalt ? '#34373e' : '#9aa1a8'; shape(14, 0, 0);   // deck
+    ctx.fillStyle = asphalt ? 'rgba(255,255,255,0.08)' : 'rgba(40,46,52,0.35)';
+    const along = nb[1] || nb[3];
+    for (let k = 3; k < TP; k += 5) { if (along) ctx.fillRect(x + k, y + c - 7, 1, 14); else ctx.fillRect(x + c - 7, y + k, 14, 1); }
+    // Railings on both edges of the deck, with posts.
+    ctx.fillStyle = '#d9dde2';
+    const rail = (vertical, off) => {
+      if (vertical) { ctx.fillRect(x + c + off, y + (nb[0] ? 0 : c - 9), 1.5, (nb[0] ? c : 9) + (nb[2] ? c : 9)); }
+      else { ctx.fillRect(x + (nb[3] ? 0 : c - 9), y + c + off, (nb[3] ? c : 9) + (nb[1] ? c : 9), 1.5); }
+    };
+    if (nb[0] || nb[2] || !(nb[1] || nb[3])) { rail(true, -9); rail(true, 7.5); }
+    if (nb[1] || nb[3]) { rail(false, -9); rail(false, 7.5); }
+    ctx.fillStyle = '#5c646d'; // piers
+    if (!(nb[0] && nb[2]) && !(nb[1] && nb[3])) ctx.fillRect(x + c - 3, y + c + 8, 6, 3);
+  } else {
+    ctx.fillStyle = 'rgba(8,5,3,0.78)'; shape(18, 0, 0);                // the bore
+    ctx.fillStyle = asphalt ? '#26282d' : '#4b4e54'; shape(10, 0, 0);   // roadway
+    ctx.fillStyle = 'rgba(255,214,120,0.85)';                           // lamps
+    ctx.fillRect(x + c - 1, y + c - 1, 2, 2);
+    // Portals where the tunnel meets open ground.
+    ctx.fillStyle = '#b8b0a3';
+    sides.forEach(([di, dj], k) => {
+      if (!nb[k] || terrAt(i + di, j + dj) === T_ROCK) return;
+      if (dj) ctx.fillRect(x + c - 11, y + (dj < 0 ? 0 : TP - 4), 22, 4);
+      else ctx.fillRect(x + (di < 0 ? 0 : TP - 4), y + c - 11, 4, 22);
+    });
+  }
+  drawRoadArrow(ctx, t, x, y);
 }
 
 /* ------------------------------------------------------------------ resources */
@@ -1018,9 +1086,12 @@ function drawBot(ctx, u, sx, sy, s) {
   const color = PLAYER_COLORS[u.owner];
   const own = artFor(u.type, u.owner);
   // Specialists use their own art when it exists, otherwise the worker's with a badge.
-  const art = own || (u.type !== 'warbot' ? artFor('worker', u.owner) : null);
+  const truck = u.type === 'truck';
+  const art = own || (u.type !== 'warbot' && !truck ? artFor('worker', u.owner) : null);
   const bob = u.busy ? Math.sin(R.time * 18 + u.id) * s * 0.03 : 0;
-  if (art) {
+  if (truck) {
+    drawTruck(ctx, u, sx, sy, s, color, own);
+  } else if (art) {
     drawArt(ctx, art, sx, sy + bob, s * (u.type === 'warbot' ? 0.6 : 0.5), u.face);
   } else if (u.type !== 'warbot') {
     const r = s * 0.16;
@@ -1045,8 +1116,8 @@ function drawBot(ctx, u, sx, sy, s) {
     ctx.beginPath(); ctx.arc(r * 0.3, 0, r * 0.18, 0, Math.PI * 2); ctx.fill();
     ctx.restore();
   }
-  if (!own && u.type !== 'worker' && u.type !== 'warbot') drawBotBadge(ctx, u.type, sx + s * 0.16, sy + s * 0.14 + bob, s);
-  if (u.carry) {
+  if (!own && u.type !== 'worker' && u.type !== 'warbot' && !truck) drawBotBadge(ctx, u.type, sx + s * 0.16, sy + s * 0.14 + bob, s);
+  if (u.carry && !truck) {
     const c = s * 0.1;
     for (let k = (u.carryN || 1) - 1; k >= 0; k--) {
       const ox = k * c * 1.2, oy = -k * c * 0.9;
@@ -1082,6 +1153,44 @@ function drawBot(ctx, u, sx, sy, s) {
     ctx.fillStyle = u.hp / u.maxHp > 0.5 ? '#7bea6b' : '#ff6b5a';
     ctx.fillRect(sx - w / 2, sy - s * 0.36, (w * u.hp) / u.maxHp, 3);
   }
+}
+
+/** A Freight Truck seen from above: a team-coloured cab and a flatbed with its load of crates (over its art, if any). */
+function drawTruck(ctx, u, sx, sy, s, color, art) {
+  const L = s * 0.62, Wd = s * 0.3;
+  ctx.save();
+  ctx.translate(sx, sy);
+  if (art) {
+    drawArt(ctx, art, 0, 0, s * 0.72, u.face);
+    ctx.rotate(u.face);
+  } else {
+    ctx.fillStyle = 'rgba(20,10,5,0.3)';
+    ctx.beginPath(); ctx.ellipse(s * 0.04, s * 0.06, L * 0.55, Wd * 0.62, u.face, 0, Math.PI * 2); ctx.fill();
+    ctx.rotate(u.face);
+    // Wheels, chassis, flatbed.
+    ctx.fillStyle = '#121418';
+    for (const x of [-L * 0.36, -L * 0.12, L * 0.3]) { ctx.fillRect(x - s * 0.04, -Wd * 0.58, s * 0.08, Wd * 0.16); ctx.fillRect(x - s * 0.04, Wd * 0.42, s * 0.08, Wd * 0.16); }
+    ctx.fillStyle = '#2b2f36';
+    roundRect(ctx, -L / 2, -Wd / 2, L, Wd, s * 0.03); ctx.fill();
+    ctx.fillStyle = '#5a616b';
+    ctx.fillRect(-L / 2 + s * 0.02, -Wd / 2 + s * 0.025, L * 0.66, Wd - s * 0.05);
+    // Cab at the front, with a windscreen.
+    ctx.fillStyle = color;
+    roundRect(ctx, L * 0.2, -Wd / 2, L * 0.3, Wd, s * 0.04); ctx.fill();
+    ctx.fillStyle = '#16212b';
+    ctx.fillRect(L * 0.38, -Wd * 0.36, L * 0.08, Wd * 0.72);
+  }
+  // Cargo: up to eight crates, two rows of four.
+  const n = u.carry ? u.carryN || 1 : 0;
+  if (n) {
+    const cw = (L * 0.62) / 4, ch = (Wd - s * 0.06) / 2;
+    for (let k = 0; k < n; k++) {
+      const x = -L / 2 + s * 0.025 + (k >> 1) * cw, y = -Wd / 2 + s * 0.03 + (k & 1) * ch;
+      ctx.fillStyle = '#1b1e25'; ctx.fillRect(x, y, cw - 0.5, ch - 0.5);
+      ctx.fillStyle = GOOD[u.carry].color; ctx.fillRect(x + 1, y + 1, cw - 2.5, ch - 2.5);
+    }
+  }
+  ctx.restore();
 }
 
 /** A small marker telling specialist bots apart when they share the worker's art. */
@@ -1145,6 +1254,7 @@ function refreshOverlay(type) {
 
 function render(dtReal) {
   R.time += dtReal;
+  R.dt = dtReal;
   const ctx = R.ctx, z = R.cam.z;
   ctx.setTransform(R.dpr, 0, 0, R.dpr, 0, 0);
   ctx.fillStyle = '#120f14';
@@ -1192,6 +1302,7 @@ function render(dtReal) {
   }
   if (R.mode === 'road') {
     const lightsMode = typeof UI !== 'undefined' && UI.roadMode === 'lights';
+    const bridgeMode = typeof UI !== 'undefined' && UI.roadMode === 'bridge';
     ctx.lineWidth = 1;
     const net = roadNet();
     for (let t = 0; t < S.W * S.H; t++) {
@@ -1208,12 +1319,16 @@ function render(dtReal) {
         continue;
       }
       if (S.road[t] || !canRoad(0, i, j)) continue;
-      ctx.strokeStyle = S.res[t] ? 'rgba(255,170,90,0.28)' : 'rgba(255,240,200,0.18)';
+      const cross = crossTile(t);
+      if (cross && !bridgeMode) continue;
+      ctx.strokeStyle = cross ? 'rgba(140,215,255,0.5)' : S.res[t] ? 'rgba(255,170,90,0.28)' : 'rgba(255,240,200,0.18)';
       ctx.strokeRect(ox + i * z + 1.5, oy + j * z + 1.5, z - 3, z - 3);
     }
   }
   drawPlans(ctx, ox, oy, z, inView);
   drawLights(ctx, ox, oy, z, inView);
+  drawOverpasses(ctx, ox, oy, z, inView);
+  if (R.traffic && R.mode === 'road') drawTraffic(ctx, ox, oy, z, inView);
   if (R.routePreview) {
     // The road a building's "Lay road" button would pave.
     ctx.strokeStyle = '#ffd166';
@@ -1263,14 +1378,21 @@ function render(dtReal) {
         ctx.fillRect(cx + z * 0.32, cy - z * 0.38, z * 0.035, z * 0.16);
       }
     } else {
+      // Bots swing round to a new heading instead of snapping to it (long trucks turn slower).
+      const turn = (BOTS[e.type].truck ? 5 : 11) * Math.min(0.1, R.dt || 0) * ((typeof UI !== 'undefined' && UI.speed) || 1);
+      const want = e.face || 0;
+      e.rface = e.rface === undefined ? want : e.rface + clamp(wrapAngle(want - e.rface), -turn, turn);
       // Off-road bots spread out a little; on roads they drive in lanes (keep right on two-way roads).
       let jx = (hash2(e.id, 1, 9) - 0.5) * 0.25, jy = (hash2(e.id, 2, 9) - 0.5) * 0.25;
       const rt = S.road[tIdx(Math.floor(e.x), Math.floor(e.y))];
       if (rt && e.path) {
         const lane = rt === 1 ? LANE_OFFSET : 0;
-        jx = -Math.sin(e.face) * lane; jy = Math.cos(e.face) * lane;
+        jx = -Math.sin(e.rface) * lane; jy = Math.cos(e.rface) * lane;
       }
+      const face = e.face;
+      e.face = e.rface; // draw with the smoothed heading
       drawBot(ctx, e, ox + (e.x + jx) * z, oy + (e.y + jy) * z, z);
+      e.face = face;
     }
   }
 
@@ -1372,6 +1494,59 @@ function drawLights(ctx, ox, oy, z, inView) {
       ctx.fillStyle = go ? '#3dff8a' : '#ff4b4b';
       ctx.beginPath(); ctx.arc(px, py + dy * r, r * 0.8, 0, Math.PI * 2); ctx.fill();
     }
+  }
+}
+
+/** The traffic map: each road tile tinted green (quiet) to red (packed), with pulsing rings on jams. */
+function drawTraffic(ctx, ox, oy, z, inView) {
+  if (!HEAT.flow || HEAT.of !== S) return;
+  const pulse = 0.5 + 0.5 * Math.sin(R.time * 6);
+  for (let t = 0; t < S.W * S.H; t++) {
+    if (!S.road[t]) continue;
+    const i = t % S.W, j = (t / S.W) | 0;
+    if (!inView(i, j, 1)) continue;
+    const v = clamp(HEAT.flow[t] / TRAFFIC_BUSY, 0, 1);
+    const col = v < 0.5 ? mixColor('#3ddc84', '#ffd23d', v * 2) : mixColor('#ffd23d', '#ff4b4b', (v - 0.5) * 2);
+    ctx.globalAlpha = 0.35 + 0.5 * v;
+    ctx.fillStyle = col;
+    ctx.fillRect(ox + i * z + z * 0.22, oy + j * z + z * 0.22, z * 0.56, z * 0.56);
+    ctx.globalAlpha = 1;
+    if (HEAT.jam[t] > TRAFFIC_JAM) {
+      ctx.strokeStyle = `rgba(255,75,75,${0.5 + 0.5 * pulse})`;
+      ctx.lineWidth = Math.max(2, z * 0.07);
+      ctx.beginPath(); ctx.arc(ox + i * z + z / 2, oy + j * z + z / 2, z * (0.42 + 0.08 * pulse), 0, Math.PI * 2); ctx.stroke();
+    }
+  }
+}
+
+/**
+ * Overpasses: the east-west road rises onto a short deck over the junction (ramps reaching into the
+ * tiles either side), casting a shadow on the road below.
+ */
+function drawOverpasses(ctx, ox, oy, z, inView) {
+  for (const k in S.over) {
+    const t = +k, i = t % S.W, j = (t / S.W) | 0;
+    if (!inView(i, j, 2)) continue;
+    const x = ox + i * z, y = oy + j * z;
+    const w = z * 0.46, y0 = y + (z - w) / 2, e = Math.max(1, z * 0.04);
+    // Shadow cast on the road underneath.
+    ctx.fillStyle = 'rgba(0,0,0,0.38)';
+    ctx.fillRect(x - z * 0.12, y0 + z * 0.17, z * 1.24, w);
+    // Approach ramps either side, then the raised deck over the junction.
+    for (const [rx, rw] of [[x - z * 0.55, z * 0.45], [x + z * 1.1, z * 0.45]]) {
+      ctx.fillStyle = '#9aa1a9'; ctx.fillRect(rx, y0 + e, rw, w - 2 * e);
+      ctx.fillStyle = '#4a5058'; ctx.fillRect(rx, y0, rw, e); ctx.fillRect(rx, y0 + w - e, rw, e);
+    }
+    ctx.fillStyle = '#3c4249';
+    ctx.fillRect(x - z * 0.12, y0 - e, z * 1.24, w + 2 * e);
+    ctx.fillStyle = '#c9ced5';
+    ctx.fillRect(x - z * 0.1, y0 + e, z * 1.2, w - 2 * e);
+    // Railings and a centre line.
+    ctx.fillStyle = '#f2f4f7';
+    ctx.fillRect(x - z * 0.1, y0 + e, z * 1.2, e);
+    ctx.fillRect(x - z * 0.1, y0 + w - 2 * e, z * 1.2, e);
+    ctx.fillStyle = 'rgba(255,209,102,0.85)';
+    for (let k2 = 0; k2 < 3; k2++) ctx.fillRect(x + z * (0.05 + k2 * 0.36), y + z / 2 - e / 2, z * 0.18, e);
   }
 }
 

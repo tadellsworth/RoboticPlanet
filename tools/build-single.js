@@ -1,4 +1,4 @@
-// Packs the game into one self-contained HTML file (dist/botfall.html): CSS, scripts and any
+// Packs the game into one self-contained HTML file (dist/terrafall.html): CSS, scripts and any
 // custom art listed in art/art-manifest.js are all inlined. Handy for sharing the game as a
 // single file or hosting it anywhere. Usage: node tools/build-single.js
 const fs = require('fs');
@@ -38,6 +38,6 @@ html = html
   .replace(/(<script src="[^"]+"><\/script>\n?)+/, () => `<script>\nwindow.BOTFALL_NO_SW = true;\n${code.replace(/<\/script/g, '<\\/script')}\n</script>\n`);
 
 fs.mkdirSync(path.join(root, 'dist'), { recursive: true });
-const out = path.join(root, 'dist', 'botfall.html');
+const out = path.join(root, 'dist', 'terrafall.html');
 fs.writeFileSync(out, html);
 console.log(`wrote ${path.relative(root, out)} (${Math.round(html.length / 1024)} KB, ${Object.keys(inlined).length} custom art files)`);

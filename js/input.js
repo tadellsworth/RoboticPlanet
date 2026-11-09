@@ -1,6 +1,6 @@
 'use strict';
 /*
- * Botfall — touch and mouse input on the map.
+ * Terrafall — touch and mouse input on the map.
  *   one finger / mouse drag : pan (or paint paths in path mode)
  *   right / middle drag     : pan, in every mode
  *   two fingers             : pinch zoom + pan

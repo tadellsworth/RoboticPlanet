@@ -155,8 +155,9 @@ kbd {
 #banner-text { font-size: 14px; margin-bottom: 8px; }
 #banner-text .err { color: var(--danger); }
 #banner-text .ok { color: var(--good); }
-.banner-actions { display: flex; gap: 8px; }
-.banner-actions .road-seg { flex: 2; }
+.banner-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.banner-actions .road-seg { flex: 1 1 100%; }
+#banner-traffic.on { background: var(--accent); color: var(--accent-ink); }
 .banner-actions .road-seg button { padding: 7px 4px; }
 .banner-actions .btn { flex: 1; }
 
@@ -302,7 +303,7 @@ canvas.chart { display: block; width: 100%; height: 170px; touch-action: pan-y; 
 }
 .card h2 { margin: 0 0 8px; font-size: 24px; }
 .logo {
-  margin: 0; font-size: 46px; letter-spacing: 0.08em; font-weight: 900; text-align: center;
+  margin: 0; font-size: clamp(34px, 11vw, 46px); letter-spacing: 0.08em; font-weight: 900; text-align: center;
   background: linear-gradient(180deg, #ffffff, var(--accent)); -webkit-background-clip: text; background-clip: text; color: transparent;
 }
 .tagline { text-align: center; color: var(--muted); margin: 4px 0 14px; }
@@ -394,3 +395,18 @@ i.g.cement { background: var(--g-cement); } i.g.asphalt { background: var(--g-as
 @media (pointer: fine) { body.mode-road canvas#game, body.mode-place canvas#game, body.mode-attack canvas#game, body.mode-aim canvas#game { cursor: crosshair; } }
 /* Aiming a Missile Silo: keep the map clear to tap. */
 body.mode-aim .objective { display: none; }
+
+/* Depot supply orders */
+.keep-list { display: flex; flex-direction: column; gap: 5px; margin: 4px 0 6px; }
+.keep-cell { display: grid; grid-template-columns: 1fr 64px 52px 52px; align-items: center; gap: 6px; padding: 3px 4px 3px 10px;
+  border: 1px solid var(--line); border-radius: 10px; font-size: 14px; font-weight: 600; }
+.keep-cell .kname { display: flex; align-items: center; gap: 6px; min-width: 0; white-space: nowrap; }
+.keep-cell .btn { padding: 7px 0; font-size: 14px; min-height: 0; }
+.keep-cell .n { text-align: right; font-variant-numeric: tabular-nums; color: var(--muted); }
+.keep-cell.on { border-color: var(--accent); }
+.keep-cell.on .n { color: var(--text); }
+.keep-cell.on.short .n { color: var(--warn); }
+.traffic-key { display: block; margin-top: 4px; color: var(--muted); }
+.traffic-key b { color: var(--text); }
+.tk { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin: 0 3px 0 6px; vertical-align: -1px; }
+.tk.q { background: #3ddc84; } .tk.b { background: #ffd23d; } .tk.p { background: #ff4b4b; }

@@ -1,6 +1,6 @@
 'use strict';
 /*
- * Botfall — shared helpers: seeded RNG, value noise, a binary heap, small math utils.
+ * Terrafall — shared helpers: seeded RNG, value noise, a binary heap, small math utils.
  * Every script in js/ is a plain (non-module) script that shares the global scope,
  * so the game runs from file://, any static host, or bundled into one HTML file.
  */

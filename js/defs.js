@@ -1,6 +1,6 @@
 'use strict';
 /*
- * Botfall — game data. Balance tweaks (costs, timings, ranges) live here.
+ * Terrafall — game data. Balance tweaks (costs, timings, ranges) live here.
  */
 
 const COLONY_MILESTONES = [0.1, 0.25, 0.4, 0.6, 0.8];  // share of land claimed
@@ -40,6 +40,9 @@ const ONEWAY_WRONG = 0.5;
 const TRAFFIC_ONCOMING = 0.8;
 const QUEUE_GAP = 0.6;
 const QUEUE_PATIENCE = 6;
+/** Traffic map: bot-seconds a minute on a road tile that show as packed (red), and seconds a minute of standing still that mark a jam. */
+const TRAFFIC_BUSY = 25;
+const TRAFFIC_JAM = 6;
 const LANE_OFFSET = 0.17;         // how far to the right of the centre line bots drive on two-way roads (drawing only)
 const STALK_GROW_TIME = 70;       // seconds for a planted stalk grove to mature
 const CROP_GROW_TIME = 45;        // seconds for a planted energy crop to ripen
@@ -87,10 +90,23 @@ const BOTS = {
     desc: 'A farm robot. Bio Farms and Grove Planters need one to run. Slow off roads, except while farming.' },
   paver:   { name: 'Paver', plural: 'Pavers', speed: WORKER_SPEED, hp: 6, crew: 'paver', offroad: true,
     desc: 'A road crew bot. A Roadworks needs one to lay asphalt on your roads.' },
+  truck:   { name: 'Freight Truck', plural: 'Freight Trucks', speed: WORKER_SPEED * 1.35, hp: 8, haul: true, truck: true, carry: 8, roadOnly: true, parts: 2,
+    desc: 'A heavy road truck that carries eight goods at once on the long runs: between your Command Base and Depots, and to anything far away. Slower than a Hauler on concrete, fastest of all on asphalt.' },
   warbot:  { name: 'Warbot', plural: 'Warbots', speed: WARBOT_SPEED, hp: 12, war: true,
     desc: 'Fights enemy bots and captures enemy buildings. Shoots Ammo; with none it can only scuffle.' },
 };
-const BOT_ORDER = ['worker', 'hauler', 'agribot', 'paver', 'warbot'];
+const BOT_ORDER = ['worker', 'hauler', 'truck', 'agribot', 'paver', 'warbot'];
+/*
+ * Freight trucks take the long runs: storage to storage (filling a Depot's supply orders, or
+ * emptying a store), and deliveries of TRUCK_MIN_LOAD or more goods from storage to anything
+ * TRUCK_MIN_DIST tiles or more away. Haulers do everything else, and the long runs when every truck
+ * is busy. Trucks are heavy: on concrete they go at TRUCK_ROAD of their speed; asphalt is full speed.
+ * A Depot's supply orders (b.keep) ask for goods to be kept there, up to KEEP_MAX of each.
+ */
+const TRUCK_MIN_DIST = 12;
+const TRUCK_MIN_LOAD = 3;
+const TRUCK_ROAD = 0.8;
+const KEEP_MAX = 60;
 
 /*
  * Roads are the backbone. Haulers (the only bots that carry goods) can't leave the road; a hauler
@@ -120,6 +136,8 @@ const SALVAGE_EVERY = 20;
 const HAULER_STRANDED = 0.25;
 const JUNCTION_SLOW = 0.55;
 const LIGHT_COST = { alloy: 1 };
+/** An overpass lifts one road over the other at a junction: nobody slows down or gives way there. */
+const OVERPASS_COST = { cement: 4, alloy: 3 };
 const LIGHT_MIN_GREEN = 2;
 const LIGHT_MAX_GREEN = 9;
 const LIGHT_CLEAR = 0.45;
@@ -128,11 +146,29 @@ const LIGHT_CLEAR = 0.45;
 const WARBOT_AMMO = 20;
 const AMMO_SHOTS = 10;            // shots in one Ammo
 // A warbot with no ammo can't fight at all: it leaves the fight and goes back to reload.
+/**
+ * Raiding: armed warbots holding a rally flag in enemy land, with nothing there to fight, tear up the
+ * enemy's roads within SABOTAGE_RANGE tiles of the flag: one tile per SABOTAGE_WORK warbot-seconds.
+ * A missile also wrecks the roads within MISSILE_ROAD tiles of where it lands.
+ */
+const SABOTAGE_RANGE = 2.5;
+const SABOTAGE_WORK = 12;
+const MISSILE_ROAD = 1.5;
 const WARBOT_RANGE = 1.2;         // tiles: how far a warbot shoots
 const WARBOT_RANGE_BLOCKED = 2.2; // ...and across a building or cliff that stops it closing in
 
 // Terrain
 const T_GROUND = 0, T_WATER = 1, T_ROCK = 2;
+/**
+ * Bridges and tunnels: a road over water is a bridge, a road through rocky crags a tunnel. Each tile
+ * costs `cost` instead of road Cement, and workers take `time` seconds to build it, working out from
+ * the shore (or the rock face). They join tiles on any level, and route planning only uses them when
+ * the way round is longer than about `weight` road tiles.
+ */
+const CROSS = {
+  [T_WATER]: { key: 'bridge', name: 'Bridge', cost: { cement: 2, alloy: 1 }, time: 6, weight: 14 },
+  [T_ROCK]: { key: 'tunnel', name: 'Tunnel', cost: { cement: 3, alloy: 1 }, time: 8, weight: 18 },
+};
 
 /* New-game map settings (each is a slider on the menu). */
 const SIZE_PRESETS = [
@@ -159,6 +195,11 @@ const RESOURCE_PRESETS = [
   { name: 'Rich', density: 1.3, amount: 1.3 },
   { name: 'Abundant', density: 1.65, amount: 1.7 },
 ];
+/* Map shape: a Long haul map is narrower and much longer, with the bases far apart. */
+const SHAPE_PRESETS = [
+  { name: 'Standard', w: 1, h: 1 },
+  { name: 'Long haul', w: 0.75, h: 1.7 },
+];
 const DEFAULT_SIZE = { versus: 1, colony: 3 };
 const DEFAULT_ROUGH = 2;
 const DEFAULT_RICH = 2;
@@ -174,6 +215,16 @@ const RES = {
   [R_CROP]:    { key: 'crop',    name: 'Energy crop',     good: 'fuel',    amount: 1, harvest: 2.5 },
   [R_OIL]:     { key: 'oil',     name: 'Oil seep',        good: 'crude',   amount: 16, harvest: 0 },
 };
+
+/**
+ * Deposits get richer away from the bases: boulders, ore, crystal and oil hold up to 1 + FRONTIER_RICH
+ * times as much out in the middle of the map, starting RICH_FROM tiles from a base. A node holding
+ * RICH_MARK times its usual amount shows as a rich deposit.
+ */
+const FRONTIER_RICH = 1.2;
+const RICH_FROM = 10;
+const RICH_MARK = 1.4;
+const RICH_TYPES = [R_BOULDER, R_ORE, R_CRYSTAL, R_OIL];
 
 const GOODS = ['fiber', 'stone', 'ore', 'crystal', 'alloy', 'chip', 'crude', 'fuel', 'cement', 'asphalt', 'ammo', 'warhead'];
 const GOOD = {
@@ -328,7 +379,7 @@ const BDEFS = {
     cost: { cement: 3, alloy: 2 }, repair: { slots: 3, rate: 1.5 }, alloyCap: 3, armor: 10, buildTime: 10, war: true,
   },
   depot: {
-    name: 'Depot', desc: 'Extra storage. Haulers drop goods at the nearest storage they can reach by road, so depots along your highways shorten trips.',
+    name: 'Depot', desc: 'Extra storage. Haulers drop goods at the nearest storage they can reach by road, so depots along your highways shorten trips. Give it supply orders to stock it from home: a forward base for building at the front.',
     cost: { fiber: 3, cement: 2 }, store: true, armor: 10, buildTime: 8,
   },
 };

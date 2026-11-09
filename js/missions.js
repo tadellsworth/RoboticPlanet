@@ -1,6 +1,6 @@
 'use strict';
 /*
- * Botfall — the mission campaign. Eight missions on hand-picked planets, each with its own goals,
+ * Terrafall — the mission campaign. Eight missions on hand-picked planets, each with its own goals,
  * starting conditions and some hand-placed features. Every mission has three difficulty levels
  * (Easy / Normal / Hard: bigger goals, tighter clocks, tougher rivals). Finishing a mission unlocks
  * the next one and shows its unlock code, which unlocks it on another device too.

@@ -1,6 +1,6 @@
 'use strict';
 /*
- * Botfall — simulation: logistics dispatcher, worker and warbot behaviour, production, combat.
+ * Terrafall — simulation: logistics dispatcher, worker and warbot behaviour, production, combat.
  * simStep(dt) advances the world by one fixed step.
  */
 
@@ -158,6 +158,9 @@ function needsOf(b) {
     out.push(['alloy', def.alloyCap - (b.stock.alloy || 0) - (b.inc.alloy || 0)]);
   } else if (def.roadworks) {
     out.push(['asphalt', 3 - (b.stock.asphalt || 0) - (b.inc.asphalt || 0)]);
+  } else if (def.store && b.keep && b.smode !== 'empty') {
+    // A Depot's supply orders: keep this much of each good here (goods already promised to someone don't count).
+    for (const g in b.keep) out.push([g, b.keep[g] - ((b.stock[g] || 0) - (b.res[g] || 0)) - (b.inc[g] || 0), true]);
   }
   // Garrisons keep Ammo for their warbots (Versus only).
   if (def.ammoStock && b.built && S.mode !== 'colony') {
@@ -171,6 +174,17 @@ function supplyOf(b, g) {
   const def = BDEFS[b.type];
   if (def.store || (def.out && def.out[g])) return (b.stock[g] || 0) - (b.res[g] || 0);
   return 0;
+}
+
+/** What b can spare of g to fill another Depot's supply order: never dipping into its own order. */
+function keepSupply(b, g) {
+  return Math.max(0, supplyOf(b, g) - ((b.keep && b.keep[g]) || 0));
+}
+
+/** Should a run from src to dst with n goods go by Freight Truck? Store to store, or a long delivery. */
+function truckRun(src, dst, n) {
+  if (!BDEFS[src.type].store) return false;
+  return !!BDEFS[dst.type].store || (n >= TRUCK_MIN_LOAD && dist2(src.x, src.y, dst.x, dst.y) >= TRUCK_MIN_DIST * TRUCK_MIN_DIST);
 }
 
 function botCount(owner) {
@@ -329,6 +343,14 @@ const TRAFFIC = { occ: null, head: null, n: 0, used: [], cells: [], bots: [], ne
 
 function heading(face) { return ((Math.round(face / (Math.PI / 2)) % 4) + 4) % 4; }
 
+/*
+ * The traffic map: for every road tile, how many bot-seconds of traffic passed over it (flow) and
+ * how long bots stood still on it waiting (jam), both fading with a time constant of about a minute.
+ * Kept outside the save; it rebuilds within a minute of loading.
+ */
+const HEAT = { n: 0, of: null, flow: null, jam: null };
+const HEAT_FADE = Math.exp(-1 / 60);
+
 function countTraffic() {
   const N = S.W * S.H;
   if (TRAFFIC.n !== N) {
@@ -339,10 +361,14 @@ function countTraffic() {
   for (const k of TRAFFIC.used) occ[k] = 0;
   for (const t of TRAFFIC.cells) head[t] = -1;
   TRAFFIC.used.length = 0; TRAFFIC.cells.length = 0; TRAFFIC.bots.length = 0; TRAFFIC.next.length = 0;
+  if (HEAT.of !== S || HEAT.n !== N) { HEAT.flow = new Float32Array(N); HEAT.jam = new Float32Array(N); HEAT.n = N; HEAT.of = S; }
+  if (S.tick % 30 === 0) for (let t = 0; t < N; t++) if (HEAT.flow[t]) { HEAT.flow[t] *= HEAT_FADE; HEAT.jam[t] *= HEAT_FADE; if (HEAT.flow[t] < 0.01) HEAT.flow[t] = HEAT.jam[t] = 0; }
   for (const u of S.bots) {
     if (u.dead || u.inside || !u.path) continue;
     const t = Math.floor(u.y) * S.W + Math.floor(u.x);
     if (!S.road[t]) continue;
+    HEAT.flow[t] += SIM_STEP;
+    if (!u.moved) HEAT.jam[t] += SIM_STEP;
     const k = t * 4 + heading(u.face);
     if (!occ[k]) TRAFFIC.used.push(k);
     if (occ[k] < 255) occ[k]++;
@@ -363,6 +389,7 @@ function countTraffic() {
  * LIGHT_CLEAR seconds of all-red in between.
  */
 function updateLights(dt) {
+  if (S.tick % 15 === 0) for (const k in S.over) if (!S.road[+k] || !isJunction(+k)) removeOverpass(+k);
   for (const k in S.lights) {
     const t = +k, L = S.lights[k];
     if (!S.road[t] || !isJunction(t)) { removeLight(t); continue; }
@@ -381,7 +408,7 @@ function updateLights(dt) {
 /** Put a traffic light on the junction at (i, j). Returns '' or the reason it can't. */
 function placeLight(owner, i, j) {
   const t = tIdx(i, j);
-  if (S.lights[t]) return '';
+  if (S.lights[t] || S.over[t]) return '';
   if (!S.road[t] || !isJunction(t)) return 'Traffic lights go on road junctions: a road tile with roads on three or four sides.';
   if (S.owner[t] !== owner) return 'You can only put traffic lights inside your border.';
   const have = playerGoods(owner);
@@ -389,6 +416,33 @@ function placeLight(owner, i, j) {
   for (const g in LIGHT_COST) takeGood(owner, g, LIGHT_COST[g]);
   S.lights[t] = { owner, ph: 0, tm: 0, clr: 0 };
   return '';
+}
+
+/** Build an overpass on the junction at (i, j), replacing any traffic light there. Returns '' or the reason it can't. */
+function placeOverpass(owner, i, j) {
+  const t = tIdx(i, j);
+  if (S.over[t]) return '';
+  if (!S.road[t] || !isJunction(t) || crossTile(t)) return 'Overpasses go on road junctions on open ground: a road tile with roads on three or four sides.';
+  if (S.owner[t] !== owner) return 'You can only build overpasses inside your border.';
+  const have = playerGoods(owner), light = S.lights[t];
+  for (const g in OVERPASS_COST) {
+    const back = light && LIGHT_COST[g] ? LIGHT_COST[g] : 0;
+    if ((have[g] || 0) + back < OVERPASS_COST[g]) return `An overpass costs ${costText(OVERPASS_COST)}.`;
+  }
+  if (light) removeLight(t);
+  for (const g in OVERPASS_COST) takeGood(owner, g, OVERPASS_COST[g]);
+  S.over[t] = { owner };
+  markDirty(i, j);
+  return '';
+}
+
+/** Take an overpass down and refund it to the nearest storage. */
+function removeOverpass(t) {
+  const o = S.over[t];
+  if (!o) return;
+  delete S.over[t];
+  const store = nearestStoreTo(o.owner, (t % S.W) + 0.5, ((t / S.W) | 0) + 0.5);
+  if (store) for (const g in OVERPASS_COST) bump(store.stock, g, OVERPASS_COST[g]);
 }
 
 /** Take a traffic light down and refund it to the nearest storage. */
@@ -446,7 +500,7 @@ function queueRoom(u) {
       if (Math.cos(v.face) * dx + Math.sin(v.face) * dy < 0.3) continue; // oncoming or crossing: other lane
       // Two bots on the same spot (say, both just out of the Command Base): the older one goes first.
       if (along <= 0.05) { if (v.id > u.id) continue; along = 0; }
-      room = Math.min(room, along - QUEUE_GAP);
+      room = Math.min(room, along - QUEUE_GAP - (BOTS[v.type].truck ? 0.25 : 0));
     }
   }
   return Math.max(0, room);
@@ -464,7 +518,8 @@ function moveAlong(u, dt) {
     const dx = (next % S.W) + 0.5 - u.x, dy = ((next / S.W) | 0) + 0.5 - u.y;
     const wrong = r >= 2 && dx * ROAD_DIRS[r][0] + dy * ROAD_DIRS[r][1] < -0.1;
     speed *= wrong ? ONEWAY_WRONG : PAVE[S.pave[here] || 1].speed / (1 + trafficJam(u, here, next));
-    if (isJunction(here) && !S.lights[here]) speed *= JUNCTION_SLOW; // crossing carefully
+    if (bt.truck && S.pave[here] !== 2) speed *= TRUCK_ROAD; // heavy: only asphalt lets it run flat out
+    if (isJunction(here) && !S.lights[here] && !S.over[here]) speed *= JUNCTION_SLOW; // crossing carefully
   } else {
     if (S.ramp[here]) speed *= SLOPE_SPEED; else if (S.res[here]) speed *= 0.75;
     if (!S.bAt[here]) {
@@ -475,7 +530,7 @@ function moveAlong(u, dt) {
   let step = speed * batFactor(u) * dt;
   // Road junctions: stop before a red light, or give way to traffic already crossing the other way.
   const nx = u.path[u.pi];
-  if (nx !== undefined && nx !== here && S.road[nx] && isJunction(nx)) {
+  if (nx !== undefined && nx !== here && S.road[nx] && isJunction(nx) && !S.over[nx]) {
     const jdx = (nx % S.W) + 0.5 - u.x, jdy = ((nx / S.W) | 0) + 0.5 - u.y;
     const axis = Math.abs(jdx) >= Math.abs(jdy) ? 0 : 1;
     const toEdge = Math.max(0, Math.sqrt(jdx * jdx + jdy * jdy) - 0.55);
@@ -596,8 +651,8 @@ function dispatch(p) {
     let best = -1, bd = Infinity;
     for (let k = 0; k < idle.length; k++) {
       const u = idle[k], bt = BOTS[u.type];
-      if (role === 'haul') {
-        if (!(bt.haul || (P.noHaulers && bt.build))) continue;
+      if (role === 'haul' || role === 'truck') {
+        if (!(bt.haul || (P.noHaulers && bt.build)) || !!bt.truck !== (role === 'truck')) continue;
         if (bt.roadOnly && src && !botLinked(u, src)) continue;
       } else if (role === 'build' ? !bt.build : role === 'staff' ? !bt.staff : bt.crew !== role) continue;
       const d = dist2(u.x, u.y, x + 0.5, y + 0.5);
@@ -665,7 +720,7 @@ function dispatch(p) {
   const reqs = [];
   for (const b of blds) {
     const pri = prioRank(b) * 3 + (b.built && BDEFS[b.type].bots ? 0 : 1);
-    for (const [g, n] of needsOf(b)) if (n > 0) reqs.push({ b, g, n, pri, inc: sumValues(b.inc) });
+    for (const [g, n, keep] of needsOf(b)) if (n > 0) reqs.push({ b, g, n, pri: keep ? prioRank(b) * 3 + 2 : pri, inc: sumValues(b.inc), keep });
   }
   reqs.sort((a, c) => a.pri - c.pri || a.inc - c.inc || a.b.born - c.b.born);
   for (let pass = 0; pass < 4 && idle.length; pass++) {
@@ -675,15 +730,16 @@ function dispatch(p) {
       if (r.n <= 0) continue;
       let src = null, bd = Infinity;
       if (!reachable(r.b)) { r.n = 0; continue; }
+      const sup = r.keep ? keepSupply : supplyOf;
       for (const s of blds) {
-        if (s === r.b || supplyOf(s, r.g) <= 0 || !reachable(s) || !linked(s, r.b)) continue;
+        if (s === r.b || sup(s, r.g) <= 0 || !reachable(s) || !linked(s, r.b)) continue;
         const d = dist2(s.x, s.y, r.b.x, r.b.y);
         if (d < bd) { bd = d; src = s; }
       }
       if (!src) { r.n = 0; continue; }
-      const u = take(src.x, src.y, 'haul', src);
+      const u = (truckRun(src, r.b, r.n) && take(src.x, src.y, 'truck', src)) || take(src.x, src.y, 'haul', src);
       if (!u) { r.n = 0; continue; }
-      const n = canCarry(u, Math.min(r.n, supplyOf(src, r.g)));
+      const n = canCarry(u, Math.min(r.n, sup(src, r.g)));
       assignHaul(u, src, r.b, r.g, n);
       r.n -= n;
       any = true;
@@ -711,7 +767,7 @@ function dispatch(p) {
       if (!idle.length) return;
       if (storeTakes(b, g) || supplyOf(b, g) <= 0) continue;
       const store = storeFor(p, g, b.x + 0.5, b.y + 0.5, b, P.noHaulers ? null : b);
-      const u = store && take(b.x, b.y, 'haul', b);
+      const u = store && (take(b.x, b.y, 'truck', b) || take(b.x, b.y, 'haul', b));
       if (u) assignHaul(u, b, store, g, canCarry(u, supplyOf(b, g)));
     }
   }
@@ -898,12 +954,15 @@ function nextPaveTile(u, p, maxD) {
   for (const t of planList(p)) {
     const by = S.paveRes[t];
     if (by && getE(by) && !getE(by).dead) continue;
-    if (S.zone[t] !== zone || skip[t] > S.time) continue;
+    if (skip[t] > S.time) continue;
+    const cross = crossTile(t);
+    // A bridge or tunnel is built from the tile next to it: the shore, the rock face, or the deck so far.
+    if (cross ? paveStand(t, zone) < 0 : S.zone[t] !== zone) continue;
     const i = t % W, j = (t / W) | 0;
     const d = Math.abs(i + 0.5 - ux) + Math.abs(j + 0.5 - uy);
     if (maxD >= 0 && d > maxD) continue;
-    let joins = false;
-    for (const v of [i > 0 ? t - 1 : -1, i < W - 1 ? t + 1 : -1, t - W, t + W]) {
+    let joins = cross;
+    for (const v of cross ? [] : [i > 0 ? t - 1 : -1, i < W - 1 ? t + 1 : -1, t - W, t + W]) {
       if (v >= 0 && v < W * S.H && (S.road[v] || S.bAt[v]) && canStep(t, v)) { joins = true; break; }
     }
     const s = d + (joins ? 0 : 8);
@@ -912,11 +971,24 @@ function nextPaveTile(u, p, maxD) {
   return best;
 }
 
+/** Where a worker stands to build bridge or tunnel tile t: a walkable neighbour in `zone` (road first), or -1. */
+function paveStand(t, zone) {
+  const W = S.W, i = t % W;
+  let best = -1;
+  for (const v of [i > 0 ? t - 1 : -1, i < W - 1 ? t + 1 : -1, t - W, t + W]) {
+    if (v < 0 || v >= W * S.H || !walkable(v) || S.bAt[v] || S.zone[v] !== zone) continue;
+    if (S.road[v]) return v;
+    if (best < 0) best = v;
+  }
+  return best;
+}
+
 function assignPave(u, t) {
   cancelTask(u);
+  const stand = crossTile(t) ? paveStand(t, homeZone(u.owner)) : t;
   u.task = { type: 'pave', tile: t, phase: 'go', prog: 0 };
   S.paveRes[t] = u.id;
-  if (!goTo(u, t % S.W, (t / S.W) | 0)) {
+  if (stand < 0 || !goTo(u, stand % S.W, (stand / S.W) | 0)) {
     const P = S.players[u.owner];
     P.paveSkip = P.paveSkip || {};
     P.paveSkip[t] = S.time + 15;
@@ -934,7 +1006,9 @@ function doPave(u, t, dt) {
   if ((u.bat ?? 100) < BATTERY.critical) { cancelTask(u); return; }
   t.prog += dt * S.players[u.owner].mult * batFactor(u);
   u.busy = 1;
-  if (t.prog < (S.res[tile] ? PAVE_CLEAR_TIME : PAVE_TIME)) return;
+  const c = CROSS[S.terrain[tile]];
+  if (c) u.face = Math.atan2(((tile / S.W) | 0) + 0.5 - u.y, (tile % S.W) + 0.5 - u.x);
+  if (t.prog < (c ? c.time : S.res[tile] ? PAVE_CLEAR_TIME : PAVE_TIME)) return;
   layRoad(tile);
   cancelTask(u);
   u.idleT = 0;
@@ -949,15 +1023,16 @@ function layRoad(t) {
   setPlan(t, -1);
   if (S.paveRes) delete S.paveRes[t];
   setRoad(t % S.W, (t / S.W) | 0, true);
+  if (crossTile(t)) computeZones(); // a bridge or tunnel joins new land
 }
 
 /** Call off a planned road tile and refund its Cement. */
 function cancelPlan(t) {
   const owner = S.plan[t] - 1;
   if (owner < 0) return;
-  const mul = S.res[t] ? ROAD_CLEAR : 1;
+  const cost = roadTileCost(t);
   setPlan(t, -1);
-  refundRoad(owner, roadCost(), t % S.W, (t / S.W) | 0, mul);
+  refundRoad(owner, cost, t % S.W, (t / S.W) | 0);
 }
 
 function aOrAn(word) { return (/^[AEIOU]/i.test(word) ? 'an ' : 'a ') + word; }
@@ -1550,7 +1625,12 @@ function produce(b, def, dt) {
     const g0 = Object.keys(def.make)[0];
     addFx('float', b.x + 0.5, b.y + 0.1, { text: '+' + def.make[g0], color: GOOD[g0].color });
   }
-  if (def.bots) spawnFromFoundry(b);
+  if (def.bots) {
+    // Big bots (Freight Trucks) take several rounds of parts before they roll out.
+    const kind = nextBotKind(b);
+    b.parts = (b.parts || 0) + 1;
+    if (b.parts >= ((BOTS[kind] && BOTS[kind].parts) || 1)) { b.parts = 0; spawnFromFoundry(b); }
+  }
   if (b.owner === 0) sfx('produce');
 }
 
@@ -1990,7 +2070,7 @@ function holdRally(u, t, r, dt, power) {
     return;
   }
   let tgt = t.target ? getE(t.target) : null;
-  if ((u.ammo ?? WARBOT_AMMO) <= 0) tgt = null;
+  if ((u.ammo ?? WARBOT_AMMO) <= 0 || (r.raid && raidRoadsLeft(r, u.owner))) tgt = null; // raiders cut the road first
   else if (!tgt || tgt.owner === u.owner || dist2(tgt.x + 0.5, tgt.y + 0.5, r.x, r.y) > 10) {
     tgt = null;
     t.target = 0;
@@ -2016,8 +2096,68 @@ function holdRally(u, t, r, dt, power) {
   if (!inMap(gx, gy) || !isWalkable(gx, gy) || S.zone[tIdx(gx, gy)] !== S.zone[tIdx(Math.floor(r.x), Math.floor(r.y))]) {
     gx = Math.floor(r.x); gy = Math.floor(r.y);
   }
-  if (Math.floor(u.x) === gx && Math.floor(u.y) === gy && !u.path) return;
+  if (Math.floor(u.x) === gx && Math.floor(u.y) === gy && !u.path) {
+    if ((u.ammo ?? WARBOT_AMMO) > 0 && !u.fight) sabotageRoads(u, r, dt);
+    return;
+  }
   if (travel(u, gx, gy, dt) === null) t.slot = 0;
+}
+
+/** Is there enemy road left near raid flag r to tear up? (Checked once a second.) */
+function raidRoadsLeft(r, owner) {
+  if (S.time - (r.roadsT || -9) < 1) return r.roadsLeft;
+  r.roadsT = S.time;
+  r.roadsLeft = false;
+  const ri = Math.floor(r.x), rj = Math.floor(r.y), R0 = Math.ceil(SABOTAGE_RANGE);
+  for (let dj = -R0; dj <= R0 && !r.roadsLeft; dj++) for (let di = -R0; di <= R0; di++) {
+    const i = ri + di, j = rj + dj;
+    if (!inMap(i, j) || di * di + dj * dj > SABOTAGE_RANGE * SABOTAGE_RANGE + 0.01) continue;
+    const t = tIdx(i, j);
+    if (S.road[t] && S.owner[t] >= 0 && S.owner[t] !== owner) { r.roadsLeft = true; break; }
+  }
+  return r.roadsLeft;
+}
+
+/** A raiding warbot at its post in enemy land tears up the enemy road tile nearest the flag. */
+function sabotageRoads(u, r, dt) {
+  const ri = Math.floor(r.x), rj = Math.floor(r.y);
+  if (!inMap(ri, rj)) return;
+  const victim = S.owner[tIdx(ri, rj)];
+  if (victim < 0 || victim === u.owner) return;
+  r.sab = (r.sab || 0) + dt;
+  if (r.sab < SABOTAGE_WORK) return;
+  let best = -1, bd = SABOTAGE_RANGE * SABOTAGE_RANGE + 0.01;
+  const R0 = Math.ceil(SABOTAGE_RANGE);
+  for (let dj = -R0; dj <= R0; dj++) for (let di = -R0; di <= R0; di++) {
+    const i = ri + di, j = rj + dj;
+    if (!inMap(i, j)) continue;
+    const t = tIdx(i, j);
+    if (!S.road[t] || S.owner[t] !== victim) continue;
+    const d = di * di + dj * dj - (isJunction(t) ? 1.5 : 0); // junctions first: they cut the most routes
+    if (d < bd) { bd = d; best = t; }
+  }
+  if (best < 0) { r.sab = SABOTAGE_WORK; return; } // nothing left here to wreck
+  r.sab = 0;
+  u.face = Math.atan2(((best / S.W) | 0) + 0.5 - u.y, (best % S.W) + 0.5 - u.x);
+  wreckRoad(best, victim, 'Raiders are tearing up your roads');
+}
+
+/** Destroy a road tile (no refund): raids and missiles. Lights and overpasses on it go too. */
+function wreckRoad(t, victim, why) {
+  const i = t % S.W, j = (t / S.W) | 0, cross = crossTile(t);
+  setRoad(i, j, false);
+  delete S.lights[t];
+  delete S.over[t];
+  if (cross) computeZones();
+  addFx('smoke', i + 0.5, j + 0.5, { r: 0.6 });
+  if (victim >= 0 && why) {
+    const P = S.players[victim];
+    if (S.time - (P.lastRaidMsg || -99) > 25) {
+      P.lastRaidMsg = S.time;
+      postMsg(victim, `${why}! Send warbots to drive them off, then re-lay the road.`, i, j, 'bad');
+      if (victim === 0) sfx('alert');
+    }
+  }
 }
 
 /** Garrisons that can send warbots to tile (i, j): same walkable area, each keeps one at home. */
@@ -2230,6 +2370,15 @@ function missileImpact(m) {
   for (const u of S.bots) {
     if (!u.dead && !u.inside && u.owner !== m.owner && dist2(u.x, u.y, m.x1, m.y1) <= md.splash * md.splash) damageBot(u, md.botDamage);
   }
+  // The blast craters the roads around it.
+  const ci = Math.floor(m.x1), cj = Math.floor(m.y1), R0 = Math.ceil(MISSILE_ROAD);
+  for (let dj = -R0; dj <= R0; dj++) for (let di = -R0; di <= R0; di++) {
+    const i = ci + di, j = cj + dj;
+    if (!inMap(i, j) || di * di + dj * dj > MISSILE_ROAD * MISSILE_ROAD) continue;
+    const t = tIdx(i, j);
+    if (S.plan[t]) cancelPlan(t);
+    if (S.road[t] && S.owner[t] !== m.owner) wreckRoad(t, S.owner[t], '');
+  }
 }
 
 /* ------------------------------------------------------------------ player commands */
@@ -2286,10 +2435,10 @@ function roadCredit(owner, g) {
 /** What laying one road tile costs. */
 function roadCost() { return PAVE[1].cost; }
 
-/** Can `owner` afford one more road tile (`mul` of them, for a tile through resources)? */
-function canAffordRoad(owner, mul) {
-  const have = playerGoods(owner), cost = roadCost();
-  for (const g in cost) if (roadCredit(owner, g) + have[g] < cost[g] * (mul || 1) - 1e-9) return false;
+/** Can `owner` afford road costs `cost` (one tile's, or a whole route's), counting the credit left from earlier tiles? */
+function canAffordRoad(owner, cost) {
+  const have = playerGoods(owner);
+  for (const g in cost) if (roadCredit(owner, g) + (have[g] || 0) < cost[g] - 1e-9) return false;
   return true;
 }
 
@@ -2343,20 +2492,40 @@ function refundRoad(owner, cost, i, j, mul) {
 function buildRoad(owner, i, j) {
   const t = tIdx(i, j);
   if (S.road[t] || S.plan[t]) return '';
-  if (!canRoad(owner, i, j)) return 'You can only lay roads on open ground inside your border.';
-  const mul = roadTileMul(t);
-  if (!canAffordRoad(owner, mul)) return `Out of ${Object.keys(roadCost()).map((g) => GOOD[g].name).join(' and ')} for roads. Make more at a Cement Works.`;
-  payRoad(owner, roadCost(), mul);
+  if (!canRoad(owner, i, j)) return 'You can only lay roads inside your border.';
+  const cost = roadTileCost(t), c = CROSS[S.terrain[t]];
+  if (!canAffordRoad(owner, cost)) {
+    return c ? `A ${c.name.toLowerCase()} tile costs ${costText(cost)}.` : `Out of ${Object.keys(roadCost()).map((g) => GOOD[g].name).join(' and ')} for roads. Make more at a Cement Works.`;
+  }
+  payRoad(owner, cost);
   setPlan(t, owner); // free workers come and pave it
   return '';
 }
 
+/** "2 Cement, 1 Alloy" */
+function costText(cost) {
+  return Object.keys(cost).map((g) => `${Math.round(cost[g] * 10) / 10} ${GOOD[g].name}`).join(', ');
+}
+
 /** Remove a road tile, or call off a planned one, and refund its Cement (Asphalt on top isn't returned). */
 function removeRoad(owner, i, j) {
-  if (S.plan[tIdx(i, j)] === owner + 1) { cancelPlan(tIdx(i, j)); return; }
-  if (!S.road[tIdx(i, j)]) return;
+  const t = tIdx(i, j);
+  if (S.plan[t] === owner + 1) { cancelPlan(t); return; }
+  if (!S.road[t]) return;
+  const cross = crossTile(t);
   setRoad(i, j, false);
-  refundRoad(owner, roadCost(), i, j);
+  if (S.over && S.over[t]) removeOverpass(t);
+  refundRoad(owner, cross ? CROSS[S.terrain[t]].cost : roadCost(), i, j);
+  if (cross) computeZones();
+}
+
+/** Set a Depot's supply order for good g (0 clears it). Ordering a good also switches it back on there. */
+function setKeep(b, g, n) {
+  n = clamp(Math.round(n), 0, KEEP_MAX);
+  b.keep = b.keep || {};
+  if (n > 0) { b.keep[g] = n; if (b.reject) { delete b.reject[g]; if (!Object.keys(b.reject).length) delete b.reject; } }
+  else delete b.keep[g];
+  if (!Object.keys(b.keep).length) delete b.keep;
 }
 
 /** Pausing a building sends its worker off to do other jobs until it is resumed. */

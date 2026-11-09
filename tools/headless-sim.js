@@ -1,5 +1,5 @@
 // Runs a full AI-vs-AI game in Node without graphics, to sanity-check the simulation.
-// Usage: node tools/headless-sim.js [seed] [difficulty] [maxMinutes] [versus|colony] [size 0-3] [terrain 0-4] [resources 0-4]
+// Usage: node tools/headless-sim.js [seed] [difficulty] [maxMinutes] [versus|colony] [size 0-3] [terrain 0-4] [resources 0-4] [shape 0-1]
 const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
@@ -14,7 +14,7 @@ const api = ctx.__api;
 const seed = +(process.argv[2] || 12345), diff = process.argv[3] || 'normal', maxMin = +(process.argv[4] || 40);
 const mode = process.argv[5] || 'versus';
 const num = (k) => (process.argv[k] === undefined ? undefined : +process.argv[k]);
-api.newGame({ seed, difficulty: diff, autoplay: true, mode, size: num(6), rough: num(7), rich: num(8) });
+api.newGame({ seed, difficulty: diff, autoplay: true, mode, size: num(6), rough: num(7), rich: num(8), shape: num(9) });
 const t0 = Date.now();
 let lastReport = 0;
 while (true) {
