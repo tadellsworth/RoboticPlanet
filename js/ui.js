@@ -1631,6 +1631,9 @@ function refreshBuildingSheet(b) {
       const pct = Math.round(((b.useT || 0) / b.upT) * 100);
       parts.push(`<div class="kv"><span>Busy</span><span>${pct}% of the time</span></div>${sparkline(b.useHist)}`);
     }
+    if ((def.gather || def.farm) && mine && b.depleted) {
+      parts.push(`<p class="desc err"><b>Nothing left to ${def.farm ? 'farm' : 'gather'} in reach.</b> Demolish it (below) for half its materials back; anything still in it goes to storage. Then build a new ${def.name} ${def.farm ? 'beside open fertile soil' : `by a fresh field of ${RES[def.gather].name.toLowerCase()}s`}.</p>`);
+    }
     if (def.gather) {
       const g = RES[def.gather].good;
       parts.push(`<div class="kv"><span>${RES[def.gather].name}s in reach</span><span>${reachableRes(b.x, b.y, def.radius, def.gather)}</span></div>`);

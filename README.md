@@ -163,7 +163,8 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
   three quarters of a full charge). A Bio Farm makes about
   2–3 Fuel a minute; an Oil Pump and Refinery up to 10 a minute until the seep runs dry (both stop at 30 by default).
   A dry Oil Pump shows a crossed-out oil drop over it, frees its worker and says so once: demolish it (any Crude
-  still in a demolished building goes to storage).
+  still in a demolished building goes to storage). Harvesters, Quarries, Ore Mines, Crystal Taps and Bio Farms do the
+  same with their own resource crossed out when nothing is left in reach (and go back to work if groves regrow).
 - **Army orders:** tap **Army**, then a rival building to attack it with warbots or a missile, or open
   ground to send warbots there to hold the area under a rally flag. Tap the flag to call them back.
 - **Garrisons:** tap an Outpost or your Command Base to set its **garrison priority** (new warbots, and ones called back

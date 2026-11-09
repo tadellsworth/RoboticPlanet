@@ -717,7 +717,7 @@ function dispatch(p) {
   // 0) Specialist buildings get a bot of their crew.
   for (const b of blds) {
     const crew = BDEFS[b.type].crew;
-    if (!crew || !b.built || b.paused || b.staff || b.staffInc) continue;
+    if (!crew || !b.built || b.paused || b.staff || b.staffInc || b.depleted) continue;
     const u = take(b.x, b.y, crew);
     if (u) assignStaff(u, b);
     else if (!S.bots.some((v) => !v.dead && v.owner === p && v.type === crew)) {
@@ -747,7 +747,7 @@ function dispatch(p) {
     }
   }
   // 2) An operator for every finished building that needs one, while keeping minFree workers free.
-  const staffQueue = blds.filter((b) => b.built && !b.paused && BDEFS[b.type].staff && !BDEFS[b.type].crew && !b.staff && !b.staffInc && !atLimit(b) && !pumpDry(b))
+  const staffQueue = blds.filter((b) => b.built && !b.paused && BDEFS[b.type].staff && !BDEFS[b.type].crew && !b.staff && !b.staffInc && !atLimit(b) && !pumpDry(b) && !b.depleted)
     .sort((a, c) => prioRank(a) - prioRank(c) || staffPriority(a) - staffPriority(c) || a.born - c.born);
   for (const b of staffQueue) {
     if (!idle.length) return;
@@ -1718,6 +1718,7 @@ function updateBuilding(b, dt) {
   }
   if (def.mil) garrisonDefense(b, dt);
   if (def.repair) updateRepairStation(b, def, dt);
+  if ((def.gather || def.farm) && updateDepleted(b, def)) return;
   if (def.staff && !def.inp) {
     const op = getE(b.staff);
     const who = def.crew ? BOTS[def.crew].name : 'Worker';
@@ -1726,6 +1727,29 @@ function updateBuilding(b, dt) {
       if (!b.staffInc && def.crew && !S.bots.some((v) => !v.dead && v.owner === b.owner && v.type === def.crew)) b.status += ': order one at the Bot Foundry';
     }
   }
+}
+
+/**
+ * A gatherer or Bio Farm with nothing left to work in reach (checked every couple of seconds):
+ * flagged so the map shows an icon over it, its worker freed, and the player told once. If
+ * resources come back in reach (a Grove Planter's new groves), it goes back to work.
+ */
+function updateDepleted(b, def) {
+  if (S.tick % 60 === b.id % 60) {
+    b.depleted = def.gather ? gatherReach(b.x, b.y, b.type) === 0
+      : fertileIn(b.x, b.y, def.radius) === 0 && reachableRes(b.x, b.y, def.radius, R_CROP) === 0;
+    if (b.depleted && !b.dryMsg && S.time - b.born > 20) {
+      b.dryMsg = 1;
+      postMsg(b.owner, def.gather
+        ? `Your ${def.name} has no ${RES[def.gather].name.toLowerCase()}s left in reach. Demolish it for half its materials back, and build one by a fresh field.`
+        : 'Your Bio Farm has no fertile soil left in reach. Demolish it and build one beside open fertile soil.', b.x, b.y, 'warn');
+    }
+    if (!b.depleted) b.dryMsg = 0;
+  }
+  if (!b.depleted) return false;
+  b.status = def.gather ? `No ${RES[def.gather].name.toLowerCase()}s left in reach: demolish it` : 'No fertile soil left in reach: demolish it';
+  if (b.staff || b.staffInc) unstaff(b);
+  return true;
 }
 
 /** Buildings whose busy time is tracked for statistics. */
