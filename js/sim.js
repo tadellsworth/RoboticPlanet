@@ -9,6 +9,7 @@ function simStep(dt) {
   S.time += dt;
   S.tick++;
   if (S.tick % 30 === 0) growStalks(30 * dt);
+  if (S.tick % 30 === 15) for (let p = 0; p < 2; p++) landerSalvage(p, 30 * dt);
   if (S.tick % 8 === 0) dispatch(0);
   if (S.tick % 8 === 4) dispatch(1);
   for (let k = 0; k < S.buildings.length; k++) {
@@ -529,6 +530,8 @@ function dispatch(p) {
   // Foundry can make more.
   const P = S.players[p];
   P.noHaulers = haulers === 0;
+  // Planned roads the border no longer covers are called off (and refunded).
+  for (const t of planList(p).slice()) if (S.owner[t] !== p || S.bAt[t]) cancelPlan(t);
   const linked = (a, b) => P.noHaulers || roadLinked(a, b);
   for (const b of blds) b.unlinked = !P.noHaulers && needsRoad(b) && !blds.some((s) => storeAccepts(s) && roadLinked(s, b));
   const minFree = siteCount(p) > 0 ? MIN_FREE_WORKERS : 1;
@@ -666,6 +669,121 @@ function dispatch(p) {
       if (u) assignHaul(u, b, store, g, canCarry(u, supplyOf(b, g)));
     }
   }
+  // 6) Free workers pave planned roads.
+  if (planList(p).length) {
+    for (let k = idle.length - 1; k >= 0; k--) {
+      const u = idle[k];
+      if (!BOTS[u.type].build) continue;
+      const t = nextPaveTile(u, p, -1);
+      if (t < 0) break;
+      idle.splice(k, 1);
+      assignPave(u, t);
+    }
+  }
+}
+
+/* ------------------------------------------------------------------ salvage */
+
+/**
+ * A colony that has run out of Stone or Fiber with no Quarry or Harvester that can still work
+ * (so it couldn't build one) slowly salvages it from its Lander, enough to get going again.
+ */
+function landerSalvage(p, dt) {
+  const P = S.players[p];
+  const L = getE(P.lander);
+  if (P.absent || !L || L.owner !== p || L.dead) return;
+  P.salvageT = P.salvageT || {};
+  const have = playerGoods(p);
+  for (const [g, type, res] of [['stone', 'quarry', R_BOULDER], ['fiber', 'harvester', R_STALK]]) {
+    // A site only counts once its materials are in: one waiting for this very good never will be.
+    const working = S.buildings.some((b) => !b.dead && b.owner === p && b.type === type &&
+      (b.built ? reachableRes(b.x, b.y, BDEFS[type].radius, res) > 0 : sumValues(b.stock) >= sumValues(BDEFS[type].cost)));
+    if (working || (have[g] || 0) >= SALVAGE_BELOW) { P.salvageT[g] = 0; continue; }
+    P.salvageT[g] = (P.salvageT[g] || 0) + dt;
+    if (P.salvageT[g] < SALVAGE_EVERY) continue;
+    P.salvageT[g] = 0;
+    bump(L.stock, g, 1);
+    if (S.time - ((P.salvageMsg || {})[g] || -999) > 180) {
+      P.salvageMsg = P.salvageMsg || {};
+      P.salvageMsg[g] = S.time;
+      postMsg(p, `Out of ${GOOD[g].name}: your Lander's crew is salvaging a little from the landing craft. Build ${aOrAn(BDEFS[type].name)} by ${type === 'quarry' ? 'boulders' : 'stalk groves'}, or expand with an Outpost to reach some.`, L.x, L.y, 'warn');
+    }
+  }
+}
+
+/* ------------------------------------------------------------------ paving */
+
+/**
+ * The planned road tile worker u should pave next: the nearest one nobody else is paving,
+ * preferring tiles that join the road network (so a road grows out from it, usable as it goes).
+ * With maxD >= 0, only tiles that close to the worker count (carrying on along the same road).
+ */
+function nextPaveTile(u, p, maxD) {
+  const W = S.W, ux = u.x, uy = u.y, zone = homeZone(p), skip = S.players[p].paveSkip || {};
+  let best = -1, bs = Infinity;
+  for (const t of planList(p)) {
+    const by = S.paveRes[t];
+    if (by && getE(by) && !getE(by).dead) continue;
+    if (S.zone[t] !== zone || skip[t] > S.time) continue;
+    const i = t % W, j = (t / W) | 0;
+    const d = Math.abs(i + 0.5 - ux) + Math.abs(j + 0.5 - uy);
+    if (maxD >= 0 && d > maxD) continue;
+    let joins = false;
+    for (const v of [i > 0 ? t - 1 : -1, i < W - 1 ? t + 1 : -1, t - W, t + W]) {
+      if (v >= 0 && v < W * S.H && (S.road[v] || S.bAt[v]) && canStep(t, v)) { joins = true; break; }
+    }
+    const s = d + (joins ? 0 : 8);
+    if (s < bs) { bs = s; best = t; }
+  }
+  return best;
+}
+
+function assignPave(u, t) {
+  cancelTask(u);
+  u.task = { type: 'pave', tile: t, phase: 'go', prog: 0 };
+  S.paveRes[t] = u.id;
+  if (!goTo(u, t % S.W, (t / S.W) | 0)) {
+    const P = S.players[u.owner];
+    P.paveSkip = P.paveSkip || {};
+    P.paveSkip[t] = S.time + 15;
+    cancelTask(u);
+  }
+}
+
+function doPave(u, t, dt) {
+  const tile = t.tile;
+  if (S.plan[tile] !== u.owner + 1) { cancelTask(u); return; } // called off, or already paved
+  if (t.phase === 'go') {
+    if (moveAlong(u, dt)) t.phase = 'work';
+    return;
+  }
+  if ((u.bat ?? 100) < BATTERY.critical) { cancelTask(u); return; }
+  t.prog += dt * S.players[u.owner].mult * batFactor(u);
+  u.busy = 1;
+  if (t.prog < (S.res[tile] ? PAVE_CLEAR_TIME : PAVE_TIME)) return;
+  layRoad(tile);
+  cancelTask(u);
+  u.idleT = 0;
+  // Carry on with the next planned tile close by, so a crew works its way along the road.
+  const next = nextPaveTile(u, u.owner, 4);
+  if (next >= 0) assignPave(u, next);
+}
+
+/** Finish a road tile: clear any resource on it and make it road (its Cement was paid when planned). */
+function layRoad(t) {
+  if (S.res[t]) { S.res[t] = 0; S.amt[t] = 0; if (S.grow) S.grow[t] = 1; }
+  setPlan(t, -1);
+  if (S.paveRes) delete S.paveRes[t];
+  setRoad(t % S.W, (t / S.W) | 0, true);
+}
+
+/** Call off a planned road tile and refund its Cement. */
+function cancelPlan(t) {
+  const owner = S.plan[t] - 1;
+  if (owner < 0) return;
+  const mul = S.res[t] ? ROAD_CLEAR : 1;
+  setPlan(t, -1);
+  refundRoad(owner, roadCost(), t % S.W, (t / S.W) | 0, mul);
 }
 
 function aOrAn(word) { return (/^[AEIOU]/i.test(word) ? 'an ' : 'a ') + word; }
@@ -750,6 +868,7 @@ function updateWorker(u, dt) {
     } else if (moveAlong(u, dt)) enterBuilding(u, c);
   } else if (t.type === 'haul') doHaul(u, t, dt);
   else if (t.type === 'build') doBuild(u, t, dt);
+  else if (t.type === 'pave') doPave(u, t, dt);
   else if (t.type === 'staff') doStaff(u, t, dt);
   workerBattery(u, dt);
 }
@@ -924,7 +1043,7 @@ function findPlantSpot(b, radius) {
       const t = j * S.W + i;
       const d = dist2(i, j, b.x, b.y);
       if (d > r2 || d < 2.5) continue;
-      if (S.terrain[t] !== T_GROUND || S.res[t] || S.bAt[t] || S.road[t] || S.resRes[t] || S.ramp[t] || S.fert[t] || S.zone[t] !== zone) continue;
+      if (S.terrain[t] !== T_GROUND || S.res[t] || S.bAt[t] || S.road[t] || S.plan[t] || S.resRes[t] || S.ramp[t] || S.fert[t] || S.zone[t] !== zone) continue;
       if (S.owner[t] !== b.owner) continue;
       let near = 0, blocked = false;
       for (let dj = -1; dj <= 1; dj++) for (let di = -1; di <= 1; di++) {
@@ -949,7 +1068,7 @@ function findCropSpot(b, radius) {
   for (let j = Math.max(0, b.y - radius); j <= Math.min(S.H - 1, b.y + radius); j++) {
     for (let i = Math.max(0, b.x - radius); i <= Math.min(S.W - 1, b.x + radius); i++) {
       const t = j * S.W + i;
-      if (!S.fert[t] || S.res[t] || S.bAt[t] || S.road[t] || S.resRes[t] || S.ramp[t] || S.zone[t] !== zone) continue;
+      if (!S.fert[t] || S.res[t] || S.bAt[t] || S.road[t] || S.plan[t] || S.resRes[t] || S.ramp[t] || S.zone[t] !== zone) continue;
       if (S.owner[t] !== b.owner) continue;
       const d = dist2(i, j, b.x, b.y);
       if (d <= r2 && d < bd) { bd = d; best = t; }
@@ -1106,7 +1225,7 @@ function doStaff(u, t, dt) {
           u.carry = RES[R_CROP].good;
           u.carryN = 1;
           madeGood(u.owner, u.carry, 1);
-        } else if (t.act === 'plant' && S.fert[node] && !S.res[node] && !S.bAt[node] && !S.road[node]) {
+        } else if (t.act === 'plant' && S.fert[node] && !S.res[node] && !S.bAt[node] && !S.road[node] && !S.plan[node]) {
           S.res[node] = R_CROP;
           S.amt[node] = 1;
           S.grow[node] = 0;
@@ -1123,7 +1242,7 @@ function doStaff(u, t, dt) {
           const next = findPaveSpot(b, ni, nj);
           if (next >= 0 && goTo(u, next % S.W, (next / S.W) | 0)) { S.resRes[next] = 1; t.node = next; t.phase = 'toNode'; return; }
         }
-      } else if (!S.res[node] && !S.bAt[node] && !S.road[node]) {
+      } else if (!S.res[node] && !S.bAt[node] && !S.road[node] && !S.plan[node]) {
         S.res[node] = def.plant;
         S.amt[node] = RES[def.plant].amount;
         S.grow[node] = 0;
@@ -1881,34 +2000,34 @@ function payRoad(owner, cost, mul) {
   }
 }
 
-function refundRoad(owner, cost, i, j) {
+function refundRoad(owner, cost, i, j, mul) {
   const P = S.players[owner];
   const store = nearestStoreTo(owner, i + 0.5, j + 0.5);
   for (const g in cost) {
-    let c = roadCredit(owner, g) + cost[g];
+    let c = roadCredit(owner, g) + cost[g] * (mul || 1);
     while (c >= 1 - 1e-9 && store) { bump(store.stock, g, 1); c -= 1; }
     P.roadCredit[g] = Math.round(c * 1000) / 1000;
   }
 }
 
 /**
- * Lay a road tile, paying its Cement (ROAD_CLEAR times as much through resources, which it clears).
- * Returns '' on success or a reason it couldn't be done.
+ * Plan a road tile, paying its Cement (ROAD_CLEAR times as much through resources, which paving
+ * clears). Free workers then pave it. Returns '' on success or a reason it couldn't be done.
  */
 function buildRoad(owner, i, j) {
   const t = tIdx(i, j);
-  if (S.road[t]) return '';
+  if (S.road[t] || S.plan[t]) return '';
   if (!canRoad(owner, i, j)) return S.res[t] === R_OIL ? 'Roads can\'t go over an oil seep.' : 'You can only lay roads on open ground inside your border.';
   const mul = roadTileMul(t);
   if (!canAffordRoad(owner, mul)) return `Out of ${Object.keys(roadCost()).map((g) => GOOD[g].name).join(' and ')} for roads. Make more at a Cement Works.`;
   payRoad(owner, roadCost(), mul);
-  if (S.res[t]) { S.res[t] = 0; S.amt[t] = 0; if (S.grow) S.grow[t] = 0; }
-  setRoad(i, j, true);
+  setPlan(t, owner); // free workers come and pave it
   return '';
 }
 
-/** Remove a road tile and refund its Cement (Asphalt on top isn't returned). */
+/** Remove a road tile, or call off a planned one, and refund its Cement (Asphalt on top isn't returned). */
 function removeRoad(owner, i, j) {
+  if (S.plan[tIdx(i, j)] === owner + 1) { cancelPlan(tIdx(i, j)); return; }
   if (!S.road[tIdx(i, j)]) return;
   setRoad(i, j, false);
   refundRoad(owner, roadCost(), i, j);

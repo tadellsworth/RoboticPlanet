@@ -330,6 +330,8 @@ i.g.cement { background: var(--g-cement); } i.g.asphalt { background: var(--g-as
   background: rgba(224, 71, 92, 0.14); border: 1px solid rgba(224, 71, 92, 0.45);
 }
 .road-warn b { color: #ffb3bd; }
+.road-warn.paving { color: #ffe9b8; background: rgba(255, 196, 87, 0.12); border-color: rgba(255, 196, 87, 0.45); }
+.road-warn.paving b { color: var(--warn); }
 .road-warn .btn { display: block; width: 100%; margin-top: 8px; }
 .road-warn .err { display: block; margin-top: 6px; color: var(--danger); font-size: 13px; }
 .kv .ok, .status .ok { color: var(--good); }

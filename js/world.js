@@ -319,6 +319,7 @@ function newGame(opts) {
     v: 1, mode, seed, W, H, settings, difficulty: diff, time: 0, nextId: 1, winner: -1, milestone: 0,
     terrain: m.terrain, res: m.res, amt: m.amt, grow: m.grow, elev: m.elev, ramp: m.ramp, fert: m.fert,
     road: new Uint8Array(W * H), pave: new Uint8Array(W * H), oneRoad: true, roadVer: 0, lights: {},
+    plan: new Uint8Array(W * H), planVer: 0, paveRes: {},
     owner: new Int8Array(W * H).fill(-1),
     resRes: new Uint8Array(W * H),
     bAt: new Int32Array(W * H),
@@ -627,7 +628,7 @@ function canPlace(owner, type, i, j, skipBlockCheck) {
     if (!skipBlockCheck && wouldBlock(t)) return { ok: false, reason: 'That would block the only way through here.' };
     return { ok: true, reason: '' };
   }
-  if (S.road[t]) return { ok: false, reason: 'There is a road here.' };
+  if (S.road[t] || S.plan[t]) return { ok: false, reason: S.road[t] ? 'There is a road here.' : 'A road is planned here.' };
   // Buildings may stand side by side, as long as every building keeps at least one open side
   // that bots can walk in from (and the Lander, which is bigger, keeps a clear ring around it).
   let open = 0, roadSide = 0;
@@ -715,8 +716,28 @@ function canRoad(owner, i, j) {
   return S.owner[t] === owner && S.terrain[t] === T_GROUND && !S.bAt[t] && S.res[t] !== R_OIL && !S.resRes[t];
 }
 
-/** Cement-cost multiplier for laying road on tile t (1, or ROAD_CLEAR through resources). */
-function roadTileMul(t) { return S.road[t] ? 0 : S.res[t] ? ROAD_CLEAR : 1; }
+/** Cement-cost multiplier for laying road on tile t (1, or ROAD_CLEAR through resources; 0 if it's already road or planned). */
+function roadTileMul(t) { return S.road[t] || S.plan[t] ? 0 : S.res[t] ? ROAD_CLEAR : 1; }
+
+/* Planned roads: S.plan[t] is owner + 1 on tiles waiting for workers to pave them. */
+
+function setPlan(t, owner) {
+  const v = owner < 0 ? 0 : owner + 1;
+  if (S.plan[t] === v) return;
+  S.plan[t] = v;
+  S.planVer = (S.planVer || 0) + 1;
+}
+
+const _plans = { ver: -1, of: null, lists: [[], []] };
+/** The tiles `owner` has planned roads on (cached until a plan changes). */
+function planList(owner) {
+  if (_plans.of !== S || _plans.ver !== S.planVer) {
+    _plans.lists = [[], []];
+    for (let t = 0; t < S.W * S.H; t++) if (S.plan[t]) _plans.lists[S.plan[t] - 1].push(t);
+    _plans.of = S; _plans.ver = S.planVer;
+  }
+  return _plans.lists[owner];
+}
 
 function setRoad(i, j, on) {
   const t = tIdx(i, j);
@@ -842,7 +863,7 @@ function roadGoals(owner, except) {
  * everything if done is null). Returns { cost, prev, end }.
  */
 const ROAD_AVOID = 10;
-function roadWeight(t) { return S.road[t] ? 0 : S.res[t] ? ROAD_AVOID : 1; }
+function roadWeight(t) { return S.road[t] || S.plan[t] ? 0 : S.res[t] ? ROAD_AVOID : 1; }
 
 function roadSearch(owner, seeds, done) {
   const W = S.W, N = S.W * S.H;
@@ -883,13 +904,16 @@ function roadSides(owner, x, y) {
 function roadRouteTo(owner, b) {
   const g = roadGoals(owner, b);
   if (!g.stores.length) return null;
-  if (g.stores.some((s) => roadLinked(s, b))) { const r = []; r.cost = 0; return r; }
+  if (g.stores.some((s) => roadLinked(s, b))) { const r = []; r.cost = 0; r.pending = 0; return r; }
   const net = roadNet();
   const res = roadSearch(owner, roadSides(owner, b.x, b.y), (t) => (S.road[t] && g.nets.has(net.comp[t])) || g.next[t]);
   if (res.end < 0) return null;
   const out = [];
-  out.cost = 0;
-  for (let k = res.end; k >= 0; k = res.prev[k]) if (!S.road[k]) { out.push(k); out.cost += roadTileMul(k); }
+  out.cost = 0; out.pending = 0;
+  for (let k = res.end; k >= 0; k = res.prev[k]) {
+    if (S.plan[k]) out.pending++; // already planned: waiting for workers to pave it
+    else if (!S.road[k]) { out.push(k); out.cost += roadTileMul(k); }
+  }
   return out;
 }
 
@@ -930,6 +954,9 @@ function cancelTask(bot) {
       if (t.node >= 0) S.resRes[t.node] = 0;
       break;
     }
+    case 'pave':
+      if (S.paveRes && S.paveRes[t.tile] === bot.id) delete S.paveRes[t.tile];
+      break;
     case 'garrison': {
       const b = getE(t.bld);
       if (b) b.garInc = Math.max(0, b.garInc - 1);
@@ -1008,7 +1035,7 @@ function addFx(type, x, y, data) {
 const SAVE_KEY = 'botfall.save.v1';
 const TYPED_FIELDS = {
   terrain: Uint8Array, res: Uint8Array, amt: Uint8Array, grow: Float32Array, road: Uint8Array, owner: Int8Array,
-  resRes: Uint8Array, elev: Uint8Array, ramp: Uint8Array, fert: Uint8Array, pave: Uint8Array,
+  resRes: Uint8Array, elev: Uint8Array, ramp: Uint8Array, fert: Uint8Array, pave: Uint8Array, plan: Uint8Array,
 };
 
 function serializeGame() {
@@ -1049,6 +1076,10 @@ function deserializeGame(json) {
   o.oneRoad = true;
   o.lights = o.lights || {};
   o.roadVer = (o.roadVer || 0) + 1;
+  // Saves from before roads were paved by workers have no planned roads.
+  if (!o.plan) o.plan = new Array(o.W * o.H).fill(0);
+  o.planVer = (o.planVer || 0) + 1;
+  o.paveRes = {};
   for (const k in TYPED_FIELDS) o[k] = TYPED_FIELDS[k].from(o[k]);
   o.hist = o.hist || newHistory();
   for (const P of o.players) { P.made = P.made || {}; P.madeBots = P.madeBots || {}; P.stats.outposts = P.stats.outposts || 0; P.stats.startBots = P.stats.startBots ?? 18; }

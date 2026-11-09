@@ -90,6 +90,18 @@ const BOT_ORDER = ['worker', 'hauler', 'agribot', 'paver', 'warbot'];
 const OFFROAD_SLOW = 0.4;
 /** A road laid through boulders, groves, ore or crystal clears them and costs this many times more Cement. */
 const ROAD_CLEAR = 3;
+/**
+ * Roads are planned (and paid for) at once, then free workers pave them: PAVE_TIME seconds per
+ * tile, PAVE_CLEAR_TIME through resources. Crews start where the road network already reaches.
+ */
+const PAVE_TIME = 1.5;
+const PAVE_CLEAR_TIME = 3;
+/**
+ * Safety net: a colony with less than SALVAGE_BELOW of Stone or Fiber and nothing able to make it
+ * gets 1 every SALVAGE_EVERY seconds, salvaged from the Lander, so it can always rebuild.
+ */
+const SALVAGE_BELOW = 6;
+const SALVAGE_EVERY = 20;
 const HAULER_STRANDED = 0.25;
 const JUNCTION_SLOW = 0.55;
 const LIGHT_COST = { alloy: 1 };
@@ -141,7 +153,7 @@ const DEFAULT_RICH = 2;
 const R_NONE = 0, R_STALK = 1, R_BOULDER = 2, R_ORE = 3, R_CRYSTAL = 4, R_CROP = 5, R_OIL = 6;
 const RES = {
   [R_STALK]:   { key: 'stalk',   name: 'Stalk grove',     good: 'fiber',   amount: 3, harvest: 2.5 },
-  [R_BOULDER]: { key: 'boulder', name: 'Boulder',         good: 'stone',   amount: 6, harvest: 3 },
+  [R_BOULDER]: { key: 'boulder', name: 'Boulder',         good: 'stone',   amount: 8, harvest: 3 },
   [R_ORE]:     { key: 'ore',     name: 'Ore vein',        good: 'ore',     amount: 16, harvest: 3.5 },
   [R_CRYSTAL]: { key: 'crystal', name: 'Crystal cluster', good: 'crystal', amount: 12, harvest: 3.5 },
   [R_CROP]:    { key: 'crop',    name: 'Energy crop',     good: 'fuel',    amount: 1, harvest: 2.5 },
@@ -234,7 +246,7 @@ const BDEFS = {
   },
   outpost: {
     name: 'Outpost', desc: 'Expands your territory and garrisons warbots for attack and defence.',
-    cost: { stone: 4, fiber: 2 }, mil: true, terr: 6, garrison: 10, armor: 16, buildTime: 12, ammoStock: 6,
+    cost: { stone: 4, fiber: 2 }, mil: true, terr: 7, garrison: 10, armor: 16, buildTime: 12, ammoStock: 6,
   },
   turret: {
     name: 'Pulse Turret', desc: 'Shoots enemy bots in range. Uses Crystal as ammo (4 shots each).',
@@ -316,7 +328,7 @@ const DIFFICULTY = {
 };
 
 /** Starting goods in each Lander. */
-const START_STOCK = { fiber: 16, stone: 16, alloy: 8, chip: 4, crystal: 4, fuel: 4, cement: 10 };
+const START_STOCK = { fiber: 16, stone: 16, alloy: 8, chip: 4, crystal: 4, fuel: 4, cement: 6 };
 const START_BOTS = { worker: 9, hauler: 5, agribot: 1 };
 const START_WARBOTS = 4;
 const MIN_FREE_WORKERS = 2;   // workers always kept free for building

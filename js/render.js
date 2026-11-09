@@ -483,7 +483,7 @@ function drawResource(ctx, type, amt, grow, cx, cy, s, i, j) {
       ctx.beginPath(); ctx.ellipse(tx - 1.5 * u, ty - 1.2 * u, 2.2 * g * u, 1.5 * g * u, 0, 0, Math.PI * 2); ctx.fill();
     }
   } else if (type === R_BOULDER) {
-    const n = Math.ceil(amt / 2);
+    const n = Math.min(3, Math.ceil((amt * 3) / RES[R_BOULDER].amount));
     const spots = [[-5, 3, 7], [6, -3, 6], [3, 7, 5]];
     for (let k = 0; k < n; k++) {
       const [ox, oy, r0] = spots[k];
@@ -1196,6 +1196,7 @@ function render(dtReal) {
       ctx.strokeRect(ox + i * z + 1.5, oy + j * z + 1.5, z - 3, z - 3);
     }
   }
+  drawPlans(ctx, ox, oy, z, inView);
   drawLights(ctx, ox, oy, z, inView);
   if (R.routePreview) {
     // The road a building's "Lay road" button would pave.
@@ -1295,6 +1296,35 @@ function render(dtReal) {
   drawMissiles(ctx, ox, oy, z);
   drawEffects(ctx, ox, oy, z);
   if (typeof UI !== 'undefined' && UI.inGame) renderMinimap();
+}
+
+/**
+ * Planned roads waiting for workers: a faint road with a dashed outline (amber for yours), and a
+ * bar filling up while a worker paves it.
+ */
+function drawPlans(ctx, ox, oy, z, inView) {
+  for (let p = 0; p < 2; p++) {
+    const list = planList(p);
+    if (!list.length) continue;
+    ctx.lineWidth = Math.max(1, z * 0.04);
+    ctx.setLineDash([z * 0.12, z * 0.09]);
+    for (const t of list) {
+      const i = t % S.W, j = (t / S.W) | 0;
+      if (!inView(i, j, 1)) continue;
+      const x = ox + i * z, y = oy + j * z, m = z * 0.16;
+      ctx.fillStyle = p === 0 ? 'rgba(200,206,214,0.32)' : 'rgba(200,206,214,0.16)';
+      ctx.fillRect(x + m, y + m, z - 2 * m, z - 2 * m);
+      ctx.strokeStyle = p === 0 ? 'rgba(255,209,102,0.9)' : 'rgba(255,120,120,0.5)';
+      ctx.strokeRect(x + m, y + m, z - 2 * m, z - 2 * m);
+      const by = getE(S.paveRes[t]);
+      if (by && by.task && by.task.type === 'pave' && by.task.tile === t && by.task.phase === 'work') {
+        const f = Math.min(1, by.task.prog / (S.res[t] ? PAVE_CLEAR_TIME : PAVE_TIME));
+        ctx.fillStyle = 'rgba(169,180,194,0.9)';
+        ctx.fillRect(x + m, y + z - m - z * 0.12, (z - 2 * m) * f, z * 0.12);
+      }
+    }
+    ctx.setLineDash([]);
+  }
 }
 
 /**

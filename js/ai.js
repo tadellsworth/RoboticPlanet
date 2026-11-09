@@ -44,7 +44,13 @@ function aiThink(p) {
   // more of it comes before anything else.
   const inLand = {};
   for (let t = 0; t < S.W * S.H; t++) if (S.owner[t] === p && S.res[t]) inLand[S.res[t]] = (inLand[S.res[t]] || 0) + 1;
-  P.short = [R_STALK, R_BOULDER, R_ORE, R_CRYSTAL].filter((r) => (inLand[r] || 0) < 4);
+  // Stone goes into nearly everything (and Cement for roads), so boulders count as running short sooner.
+  P.short = [R_STALK, R_BOULDER, R_ORE, R_CRYSTAL].filter((r) => (inLand[r] || 0) < (r === R_BOULDER ? 6 : 4));
+  const stoneLow = (inLand[R_BOULDER] || 0) < 10;
+  const quarrying = me.some((b) => b.type === 'quarry' && (!b.built || reachableRes(b.x, b.y, BDEFS.quarry.radius, R_BOULDER) > 0));
+  // While boulders run low, keep enough Stone for the Outpost that reaches new ones.
+  const reserveStone = stoneLow && playerGoods(p).stone < BDEFS.outpost.cost.stone + 2;
+  if (stoneLow && !quarrying) aiFreeStone(p, me);
   // Cancel construction sites that have waited a long time for goods we don't have.
   if (sites >= maxSites) {
     const have = playerGoods(p);
@@ -57,6 +63,11 @@ function aiThink(p) {
     }
   }
   let plan = S.mode === 'colony' ? AI_PLAN.concat([['outpost', 40]]) : AI_PLAN;
+  // Out of Cement with no Cement Works: nothing new can get a road, so one comes first, even past
+  // the usual limit on sites.
+  const cementStarved = roadTilesAffordable(p) < 8 && !me.some((b) => b.type === 'kiln');
+  let siteCap = maxSites;
+  if (cementStarved) { plan = [['kiln', 1]].concat(plan); siteCap = maxSites + 1; }
   const outSite = me.some((b) => b.type === 'outpost' && !b.built);
   if (P.short.length && !outSite && S.time - (P.lastExpand || -99) > 40) plan = [['outpost', (counts.outpost || 0) + 1]].concat(plan);
   // Missiles are expensive, so the AI saves up for them (see aiMissilePlan): while it is saving,
@@ -70,7 +81,9 @@ function aiThink(p) {
       .sort((a, c) => (have[RES[BDEFS[a].gather].good] || 0) - (have[RES[BDEFS[c].gather].good] || 0));
     if (g.length) plan = [[g[0], (counts[g[0]] || 0) + 1]].concat(plan);
   }
-  const cutting = me.some((b) => b.type === 'harvester' && (!b.built || reachableRes(b.x, b.y, BDEFS.harvester.radius, R_STALK) > 0));
+  // A Harvester site only counts once its materials are in: one waiting for Fiber never gets any.
+  const cutting = me.some((b) => b.type === 'harvester' &&
+    (b.built ? reachableRes(b.x, b.y, BDEFS.harvester.radius, R_STALK) > 0 : sumValues(b.stock) >= sumValues(BDEFS.harvester.cost)));
   const fiberLow = !cutting || playerGoods(p).fiber < 4;
   if (!cutting) plan = [['harvester', (counts.harvester || 0) + 1]].concat(plan);
   // With Fiber nearly gone and no Harvester at work, the Smelters stop burning it.
@@ -83,8 +96,9 @@ function aiThink(p) {
   const held = new Set();
   const key = (type) => type === 'foundry' || type === 'harvester' || type === 'quarry' || (type === 'kiln' && (playerGoods(p).cement || 0) < 3) ||
     (type === 'outpost' && P.short.length > 0);
-  if (sites < maxSites) {
+  if (sites < siteCap) {
     for (const [type, want0] of plan) {
+      if (cementStarved && sites >= maxSites && type !== 'kiln') continue;
       if (S.mode === 'colony' && BDEFS[type].war) continue;
       // One more Charging Station for every three Outposts as the colony spreads out, and a Bio
       // Farm for every two stations to keep them in Fuel.
@@ -100,6 +114,8 @@ function aiThink(p) {
       // The first of each staffed building is always allowed, so the production chain is complete.
       if (BDEFS[type].staff && !BDEFS[type].crew && !canStaffMore && counts[type]) continue;
       if (Object.keys(BDEFS[type].cost).some((g) => held.has(g))) continue;
+      if (reserveStone && type !== 'outpost' && type !== 'quarry' && BDEFS[type].cost.stone) continue;
+      if (type === 'kiln' && stoneLow && counts.kiln) continue;
       if (!aiAffordable(p, type)) {
         if (key(type) && (!counts[type] || type === 'outpost')) {
           const have = playerGoods(p), cost = BDEFS[type].cost;
@@ -124,9 +140,11 @@ function aiThink(p) {
   for (const b of me) {
     const cap = AI_CAPS[b.type];
     if (!cap || !b.built) continue;
-    const have = stockNow[cap[0]] || 0, hi = cap[1] * (missiles && b.type === 'fab' ? 2 : 1);
+    let hi = cap[1] * (missiles && b.type === 'fab' ? 2 : 1), lo = cap[2];
+    if (b.type === 'kiln' && stoneLow) { hi = 4; lo = 2; } // Stone is precious: only a little Cement in hand
+    const have = stockNow[cap[0]] || 0;
     if (!b.paused && have >= hi) setPaused(b, true);
-    else if (b.paused && have < cap[2]) setPaused(b, false);
+    else if (b.paused && have < lo) setPaused(b, false);
   }
 
   // 2) Retire gatherers and pumps that have run dry so their worker can be reused.
@@ -266,11 +284,39 @@ function aiRoads(p, me) {
       }
       continue;
     }
-    if (route.cost > budget) { P.roadShort = S.time; continue; }
+    if (route.cost > budget) {
+      P.roadShort = S.time;
+      // A site that has waited long for a road we can't pay for is given up (its goods come back).
+      if (!b.built && S.time - b.born > 150) demolish(b);
+      continue;
+    }
     for (const t of route) buildRoad(p, t % S.W, (t / S.W) | 0);
     budget -= route.cost;
     done++;
   }
+}
+
+/**
+ * Last resort when the land has no boulders left and there isn't enough Stone for an Outpost to
+ * reach new ones: take down a spare building (half its Stone comes back), at most once a minute.
+ */
+function aiFreeStone(p, me) {
+  const P = S.players[p];
+  const need = BDEFS.outpost.cost.stone;
+  if (playerGoods(p).stone >= need || S.time - (P.stoneBreak || -999) < 60 || me.some((b) => b.type === 'outpost' && !b.built)) return;
+  const spare = ['depot', 'grower', 'charger', 'turret', 'armory', 'refinery', 'farm', 'tarworks', 'roadworks', 'kiln'];
+  let best = null, bs = -1;
+  for (const b of me) {
+    if (!b.built || b.dead) continue;
+    const k = spare.indexOf(b.type);
+    if (k < 0) continue;
+    if (b.type === 'kiln' && me.filter((x) => x.type === 'kiln').length < 2) continue; // never the last one: roads need Cement
+    if ((b.type === 'charger' || b.type === 'farm') && me.filter((x) => x.type === b.type).length < 2) continue;
+    const back = Math.floor((BDEFS[b.type].cost.stone || 0) / 2);
+    const s = back * 10 - k;
+    if (back > 0 && s > bs) { bs = s; best = b; }
+  }
+  if (best) { P.stoneBreak = S.time; demolish(best); }
 }
 
 /** Only start a building when the needed materials exist somewhere (stops the AI hoarding sites). */

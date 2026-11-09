@@ -71,10 +71,12 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
   Agribot (plus 4 Warbots in Versus).
 - **Every building needs a road to storage.** Your Lander lands on a ring of road; join each building and construction
   site to that network (or to a Depot on it), or Haulers can't bring it materials or collect its goods. A red road badge
-  marks buildings with no road: tap one and press **Lay road** to pave the shortest route (shown dashed), or plan your
+  marks buildings with no road: tap one and press **Lay road** to plan the shortest route (shown dashed), or plan your
   own. Placement keeps a side of every building open for a road.
-- **Roads** cost Cement (1 Cement paves 10 tiles; you land with 10) and double a bot's speed. Dragging lays roads round
-  resources; tap a boulder, grove, ore or crystal tile to clear it for a road at 3× the Cement. A Roadworks' Paver
+- **Roads** cost Cement (1 Cement paves 10 tiles; you land with 6), paid when you plan them. Planned tiles show dashed
+  until free workers pave them: 1.5 s a tile (3 s through resources), working out from the existing network, so long
+  highways take planning and spare workers. Calling off a planned tile refunds it. Roads double a bot's speed. Dragging
+  plans roads round resources; tap a boulder, grove, ore or crystal tile to clear it for a road at 3× the Cement. A Roadworks' Paver
   upgrades roads to asphalt (2.75×) with Asphalt. Removing a road refunds its Cement.
 - **Junctions and traffic lights:** where three or four roads meet, bots slow down and give way to traffic already
   crossing. Switch the Paths banner to **Lights** and tap a junction to put up a traffic light (1 Alloy): it lets one
@@ -111,7 +113,9 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
 - **Ordering bots:** the Bot Foundry only builds the bots you order. Tap it and use +1 or +5 for Workers or
   Warbots (Clear cancels the queue); with nothing queued it sits idle and uses no Alloy or Chips.
 - The **Build** menu shows how many of each building you already have, and how many are being built.
-- You can only build inside your border. Outposts push it out. Capturing an enemy Outpost takes its land,
+- You can only build inside your border. Outposts push it out (7 tiles around them).
+- **Salvage:** a colony out of Stone or Fiber with no Quarry or Harvester that can still work salvages 1 every 20 s from
+  its Lander (up to 6), so it can always rebuild. Capturing an enemy Outpost takes its land,
   and enemy buildings left outside their border are lost.
 - **Controls:** drag to pan, pinch or scroll to zoom, tap anything to inspect it.
 - **Desktop:** on a wide screen the top bar is one row, the tools sit in a small dock and panels open on the right.
@@ -123,7 +127,10 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
 
 Buildings, bots, resources and ground use custom art made in Claude Design (`art/`, with SVG sources in
 `art/source/`). The production buildings, Depot, Outposts and construction sites use the pre-rendered 3D set
-(512×512, each on its own pad, placed by an `anchor` point in `art/art-manifest.js`). The app icon is in `icons/`. Anything without an image falls back to placeholder art drawn in code, so new art can be
+(512×512, each on its own pad, placed by an `anchor` point in `art/art-manifest.js`), as do the Charging Station, Bio
+Farm, Oil Pump, Refinery, Cement Works, Asphalt Plant, Roadworks and Ramp. Still to make: Hauler, Agribot and Paver
+robots (they borrow the Worker's art with a badge), the Ammo Plant, Missile Factory and Silo, goods icons and a few
+terrain pieces. The app icon is in `icons/`. Anything without an image falls back to placeholder art drawn in code, so new art can be
 added one piece at a time. See **[ART_GUIDE.md](ART_GUIDE.md)** for specs, the style brief and prompts,
 including the remaining pieces (Ramp, slope and cliff textures, goods icons).
 

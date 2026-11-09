@@ -24,7 +24,8 @@ const out = process.argv[3] || '.';
   await page.screenshot({ path: `${out}/03-build-menu.png` });
   await page.click('.bcard[data-t="harvester"]');
   await page.waitForTimeout(300);
-  // Tap the best valid tile (found in page) twice: once to preview, once to confirm.
+  // Point at the best valid tile (found in page): with a mouse the building follows the pointer and
+  // a click places it. (On touch screens a first tap previews and a second confirms.)
   const spot = await page.evaluate(() => {
     let best = null, bs = -1;
     for (let t = 0; t < S.W * S.H; t++) if (R.overlay.valid[t]) {
@@ -36,11 +37,14 @@ const out = process.argv[3] || '.';
     return { x: p.x, y: p.y };
   });
   await page.waitForTimeout(100);
-  await page.mouse.click(spot.x, spot.y);
+  await page.mouse.move(spot.x - 4, spot.y);
+  await page.mouse.move(spot.x, spot.y);
   await page.waitForTimeout(300);
   await page.screenshot({ path: `${out}/04-place-preview.png` });
-  await page.click('#banner-ok');
+  await page.mouse.click(spot.x, spot.y);
   await page.waitForTimeout(300);
+  const sites = await page.evaluate(() => S.buildings.filter((b) => b.owner === 0 && !b.built).length);
+  if (!sites) throw new Error('clicking a valid spot did not place the building');
 
   // Let the player AI help build a bit, then fast forward.
   await page.evaluate(() => { S.players[0].ai = true; for (let k = 0; k < 30 * 240; k++) simStep(SIM_STEP); S.players[0].ai = false; });

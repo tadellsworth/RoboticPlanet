@@ -84,7 +84,19 @@ const ART_MANIFEST = {
   water: 'tiles/water.png',
   rock: 'tiles/rock.png',
 
+  // The second 3D set: the rest of the economy buildings, plus the Ramp (build menu and preview).
+  charger: B3D('buildings/charger.png'),
+  farm: B3D('buildings/farm.png'),
+  pump: B3D('buildings/pump.png'),
+  refinery: B3D('buildings/refinery.png'),
+  kiln: B3D('buildings/kiln.png'),
+  tarworks: B3D('buildings/tarworks.png'),
+  roadworks: B3D('buildings/roadworks.png'),
+  ramp: B3D('buildings/ramp.png'),
+
   // Still to make (placeholders are drawn until these exist):
-  //   ramp, slope, cliff, icon-fiber, icon-stone, icon-ore, icon-crystal, icon-alloy, icon-chip,
-  //   charger, munitions, silo@0, silo@1, missile, rally, icon-warhead
+  //   bots:      hauler@0/@1, agribot@0/@1, paver@0/@1 (they borrow the worker's art with a badge)
+  //   buildings: armory, munitions, silo@0/@1 (and 3D versions of lander@0/@1 and the turret)
+  //   resources: crop, oil     ground: fertile, slope, cliff     markers: missile, rally, oneway
+  //   goods:     icon-fiber … icon-warhead (12 HUD icons)
 };

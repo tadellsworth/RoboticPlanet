@@ -612,6 +612,7 @@ function onMapTap(i, j, wx, wy) {
       if (why) { sfx('error'); showRoadBanner(why); } else { sfx('place'); addFx('ring', i + 0.5, j + 0.5, { color: '#7dffa0' }); showRoadBanner(); }
       return;
     }
+    if (S.plan[t] === 1) { removeRoad(0, i, j); sfx('click'); showRoadBanner('Planned road tile called off: its Cement is back.', true); return; }
     if (S.road[t] && UI.roadMode === 'arrows') {
       // Turn the arrow: east, south, west, north, then back to two-way.
       setRoadDir(i, j, S.road[t] >= 5 ? 1 : S.road[t] + 1);
@@ -621,7 +622,7 @@ function onMapTap(i, j, wx, wy) {
     else {
       const cleared = S.res[t] ? RES[S.res[t]].name.toLowerCase() : '';
       const why = buildRoad(0, i, j);
-      if (why) { sfx('error'); showRoadBanner(why); } else { sfx('click'); showRoadBanner(cleared ? `Cleared the ${cleared} for the road (${ROAD_CLEAR}× Cement).` : '', !!cleared); }
+      if (why) { sfx('error'); showRoadBanner(why); } else { sfx('click'); showRoadBanner(cleared ? `Workers will clear the ${cleared} and pave it (${ROAD_CLEAR}× Cement).` : '', !!cleared); }
     }
     return;
   }
@@ -673,8 +674,8 @@ function onRoadPaint(i, j, first) {
     if (!inMap(x, y)) break;
     const t = tIdx(x, y);
     // Dragging never bulldozes resources by accident: tap a resource tile to clear it for a road.
-    if (!S.road[t] && S.res[t]) { UI.paintSkipped = true; prev = null; continue; }
-    if (!S.road[t] && canRoad(0, x, y)) {
+    if (!S.road[t] && !S.plan[t] && S.res[t]) { UI.paintSkipped = true; prev = null; continue; }
+    if (!S.road[t] && !S.plan[t] && canRoad(0, x, y)) {
       const why = buildRoad(0, x, y);
       if (why) { if (!UI.roadWarned) { UI.roadWarned = true; sfx('error'); } showRoadBanner(why); break; }
     }
@@ -711,8 +712,9 @@ function showRoadBanner(problem, info) {
     how = 'Tap a <b>junction</b> (a road with roads on three or four sides) to put up a <b>traffic light</b>. It lets one direction through at a time, so busy crossings flow instead of every bot creeping through. Tap a light to take it down.';
     cost = `<b>${LIGHT_COST.alloy} Alloy</b> each (${lights} light${lights === 1 ? '' : 's'}, ${junctions} junction${junctions === 1 ? '' : 's'})`;
   } else {
-    how = '<b>Haulers only drive on roads</b>, so every building needs a road to storage. Workers crawl off-road. Drag to lay roads; tap one to remove it.';
-    cost += `, ${ROAD_CLEAR}× through resources`;
+    const waiting = planList(0).length;
+    how = '<b>Haulers only drive on roads</b>, so every building needs a road to storage. Drag to plan roads: free workers pave them. Tap a road or a planned tile to remove it.';
+    cost += `, ${ROAD_CLEAR}× through resources` + (waiting ? `; <b>${waiting}</b> tile${waiting === 1 ? '' : 's'} waiting to be paved` : '');
   }
   showBanner((problem ? `<span class="${info ? 'ok' : 'err'}">${problem}</span> ` : '') + `${how} ${cost}.`, null, 'Done');
   $('banner-seg').hidden = false;
@@ -890,6 +892,12 @@ function refreshRoadLink(b) {
   }
   const route = roadRouteTo(0, b);
   const what = b.built ? 'Haulers can\'t collect from it or bring it anything' : 'Haulers can\'t bring its materials';
+  if (route && !route.length && route.pending) {
+    R.routePreview = null;
+    el.dataset.key = '';
+    el.innerHTML = `<div class="road-warn paving"><b>Road being paved:</b> ${route.pending} tile${route.pending === 1 ? '' : 's'} to go. Free workers are on it; haulers start once it reaches storage.</div>`;
+    return;
+  }
   if (!route) {
     el.innerHTML = `<div class="road-warn"><b>No road to storage.</b> ${what}, and no road can reach it through your land. Expand your border or build a Ramp.</div>`;
     return;
@@ -901,7 +909,7 @@ function refreshRoadLink(b) {
   const key = route.join(',');
   if (el.dataset.key === key + can) return;
   el.dataset.key = key + can;
-  el.innerHTML = `<div class="road-warn"><b>No road to storage.</b> ${what}. The dashed tiles show the shortest road.
+  el.innerHTML = `<div class="road-warn"><b>No road to storage.</b> ${what}. The dashed tiles show the shortest road${route.pending ? ` (${route.pending} more already planned)` : ''}; free workers pave it once it's planned.
     <button class="btn primary" id="sh-layroad" ${can ? '' : 'disabled'}>Lay road: ${route.length} tile${route.length === 1 ? '' : 's'}, ${need} ${GOOD[g].name}</button>
     ${can ? '' : `<span class="err">Not enough ${GOOD[g].name}: build a Cement Works.</span>`}</div>`;
   $('sh-layroad').onclick = () => {
@@ -911,7 +919,7 @@ function refreshRoadLink(b) {
       if (why) break;
       laid++;
     }
-    if (why) { sfx('error'); toast(why, 'warn'); } else { sfx('place'); toast(`Laid ${laid} road tile${laid === 1 ? '' : 's'}.`, 'info'); }
+    if (why) { sfx('error'); toast(why, 'warn'); } else { sfx('place'); toast(`Planned ${laid} road tile${laid === 1 ? '' : 's'}: free workers will pave them.`, 'info'); }
     el.dataset.key = '';
     refreshSheet();
   };
@@ -1223,7 +1231,7 @@ function refreshSheet() {
 
 const OBJECTIVES = [
   { text: 'Tap <b>Build</b> and place a <b>Harvester</b> beside the teal stalk groves.', done: () => hasBuilt('harvester') || hasAny('harvester') },
-  { text: '<b>Haulers only drive on roads.</b> Tap <b>Paths</b> and drag a road from the ring round your Lander to the Harvester site (or tap the site and choose <b>Lay road</b>).', done: () => hasBuilt('harvester') || S.buildings.some((b) => !b.dead && b.owner === 0 && b.type === 'harvester' && !b.unlinked) },
+  { text: '<b>Haulers only drive on roads.</b> Tap <b>Paths</b> and drag a road from the ring round your Lander to the Harvester site (or tap the site and choose <b>Lay road</b>). Free workers pave it.', done: () => hasBuilt('harvester') || S.buildings.some((b) => !b.dead && b.owner === 0 && b.type === 'harvester' && !b.unlinked) },
   { text: 'Build a <b>Quarry</b> near the grey boulders to get Stone.', done: () => hasBuilt('quarry') },
   { text: 'Build an <b>Ore Mine</b> by the dark ore veins and a <b>Crystal Tap</b> by the violet crystals.', done: () => hasBuilt('mine') && hasBuilt('tap') },
   { text: 'Build a <b>Smelter</b>: it turns Ore and Fiber into Alloy.', done: () => hasBuilt('smelter') },
