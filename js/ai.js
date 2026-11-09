@@ -9,8 +9,8 @@
 const AI_CAPS = { fab: ['chip', 8, 3], armory: ['ammo', 18, 6], refinery: ['fuel', 30, 10] };
 /** [building type, how many the AI wants]. Entries are tried in order. */
 const AI_PLAN = [
-  ['harvester', 1], ['quarry', 1], ['kiln', 1], ['harvester', 2], ['mine', 1], ['tap', 1], ['smelter', 1],
-  ['fab', 1], ['foundry', 1], ['outpost', 1], ['armory', 1], ['charger', 1], ['farm', 1], ['quarry', 2], ['grower', 1], ['mine', 2],
+  ['charger', 1], ['harvester', 1], ['quarry', 1], ['kiln', 1], ['harvester', 2], ['mine', 1], ['tap', 1], ['smelter', 1],
+  ['fab', 1], ['foundry', 1], ['outpost', 1], ['armory', 1], ['farm', 1], ['quarry', 2], ['grower', 1], ['mine', 2],
   ['smelter', 2], ['kiln', 2],
   ['turret', 1], ['repair', 1], ['outpost', 2], ['tap', 2], ['pump', 1], ['refinery', 1], ['harvester', 3], ['outpost', 3],
   ['munitions', 1], ['silo', 1], ['depot', 1], ['charger', 2], ['farm', 2], ['mine', 3], ['outpost', 4], ['turret', 2],
@@ -110,7 +110,8 @@ function aiThink(p) {
   const defence = (type) => S.mode !== 'colony' && !counts[type] &&
     ((type === 'turret' && S.time > AI_DEFENCE_AT) || (type === 'repair' && counts.turret && S.time > AI_DEFENCE_AT + 120) ||
      (nukeOn() && (type === 'reactor' || type === 'nukesilo')));
-  const key = (type) => type === 'foundry' || type === 'harvester' || type === 'quarry' || (type === 'kiln' && (playerGoods(p).cement || 0) < 3) || defence(type) ||
+  // Only Charging Stations charge robots: the first one comes before anything else.
+  const key = (type) => (type === 'charger' && !counts.charger) || type === 'foundry' || type === 'harvester' || type === 'quarry' || (type === 'kiln' && (playerGoods(p).cement || 0) < 3) || defence(type) ||
     (type === 'outpost' && P.short.length > 0);
   if (sites < siteCap) {
     for (const [type, want0] of plan) {

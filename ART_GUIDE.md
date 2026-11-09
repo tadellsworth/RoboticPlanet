@@ -576,6 +576,106 @@ For each robot, make two overlays with exactly the same framing as that robot, b
 Show each overlay on top of its robot to check they line up before exporting.
 ```
 
+### Batch 9: biomes and plant life
+
+New games get a **Biome** choice: the current **Red desert** (the default), a **Jungle** world and a **Polar**
+world. Each biome has its own ground, water and rock, and its own **decorative plants** scattered over open
+ground: sparse in the desert and on the ice, thick in the jungle. Plants are scenery only. Bots drive straight
+over them, and a building, road or construction site simply clears the plants on its tiles.
+
+The game draws placeholder plants and recoloured ground until your art arrives, so each piece can be swapped in
+on its own.
+
+**What to make**
+
+| Keys | Size | What |
+|---|---|---|
+| `plant-desert-1` … `plant-desert-6` | 256×256, transparent | Six decorative plants for the Red desert |
+| `plant-jungle-1` … `plant-jungle-6` | 256×256, transparent | Six for the Jungle |
+| `plant-polar-1` … `plant-polar-6` | 256×256, transparent | Six for the Polar world |
+| `ground-jungle`, `ground-polar` | 512×512, **opaque, seamless** | Open ground. One image covers 4×4 map tiles |
+| `water-jungle`, `water-polar` | 512×512, **opaque, seamless** | Water |
+| `rock-jungle`, `rock-polar` | 512×512, **opaque, seamless** | Rocky crags (impassable rock) |
+| `cliff-jungle`, `cliff-polar` (optional) | 128×48, opaque, tiles left to right | The rock wall below a higher level |
+
+The Red desert keeps today's `ground`, `water`, `rock` and `cliff`. Six plants per biome is a good set; the game
+uses however many you give it (even one), numbered from 1. Save them as `art/biomes/<biome>/plant-1.png` and so on,
+or just send the zip as before.
+
+**Rules for the plants** (paste these with the brief)
+```
+These are background decoration, not resources, so they must never be mistaken for one:
+- No glowing teal mushroom stalks (that's the Fiber plant), no violet crystals, no grey boulders, and no
+  glowing orange veins (that's ore).
+- Muted, natural colours, a little darker and less saturated than the resource art, so they sit in the
+  background. Small accents (a flower, a few berries) are fine.
+- Same camera as everything else: three-quarter overhead at about 70°, light from the top-left, a soft
+  shadow falling down-right kept inside the canvas.
+- Vary the sizes: some low and flat (filling about 40% of the canvas), some taller and bushier (up to 80%).
+  Keep every plant inside its own canvas (nothing touching the edges), centred.
+- They show at about 32 to 45 pixels on a phone, so use clear, simple silhouettes. Check each at 40×40.
+- In the Jungle, a third of all open tiles have a plant, so the six must look good packed side by side.
+```
+
+**Red desert plants** (`plant-desert-1` to `-6`)
+```
+Six hardy alien desert plants for the rust-ochre sand of a dusty frontier world, as a matching set:
+1. A flat crust of rust-red and dull-orange lichen spreading over the sand, low and irregular.
+2. A small spiny succulent rosette in dark maroon and dusty olive, thick pointed leaves.
+3. A dry, wiry scrub bush, bleached pale grey-tan, thin tangled branches.
+4. A low creeper with a few dark, leathery seed pods.
+5. A fan-shaped dry plant like dead coral, faded brick red.
+6. A few tufts of stiff, pale ochre grass.
+```
+
+**Jungle plants** (`plant-jungle-1` to `-6`)
+```
+Six lush alien jungle plants for a humid, overgrown world, as a matching set, deep emeralds, olives and
+moss greens with a few warm accents:
+1. A clump of broad fern fronds radiating from the centre.
+2. A giant leaf rosette: big olive leaves with burgundy veins.
+3. A flowering shrub with a few magenta and orange blossoms.
+4. A small tree seen from above: a round, leafy canopy with darker shade underneath.
+5. A soft moss mat with tiny yellow-green spore heads.
+6. A tangle of creeping vines with a couple of plump pitcher pods.
+```
+
+**Polar plants** (`plant-polar-1` to `-6`)
+```
+Six hardy plants for a frozen polar world, as a matching set, frosty blue-greys and dark greens dusted with
+snow, with a little pale lilac and rust from lichen:
+1. A frost-rimed shrub, blue-grey branches tipped with ice.
+2. A small snow drift with dry grass blades poking through.
+3. A small conifer seen from above, a dark green star of branches dusted with snow.
+4. A low stone patched with pale lilac and rust-orange lichen.
+5. A clump of frozen reeds crusted with ice.
+6. A frost flower: a delicate pale blue-white crystalline bloom, low to the ground (pale ice blue, not violet).
+```
+
+**Ground, water and rock** (one prompt per image)
+```
+A seamless, tileable square ground texture seen straight from above, 512x512, no objects, no shadows from
+objects, even lighting, for a strategy game map (it repeats across the whole map, so no obvious features
+that would show the repeat):
+- ground-jungle: dark, damp loamy soil with patches of short moss and scattered leaf litter, deep greens and browns.
+- water-jungle: a slow, murky jungle river, olive-green and brown, faint ripples.
+- rock-jungle: dark wet basalt crags with moss growing in the cracks.
+- ground-polar: packed snow and wind-scoured ice, white with pale blue shadows and a few grey grit streaks.
+- water-polar: dark, cold blue-black water with thin plates of floating ice.
+- rock-polar: grey granite crags with snow lying in the cracks.
+```
+Optional cliffs: *"A horizontal strip of layered rock wall seen face-on, 128x48, tiling seamlessly left to right,
+darker at the bottom: mossy dark basalt dripping with vines"* (`cliff-jungle`) and *"grey granite with snow
+ledges and icicles"* (`cliff-polar`).
+
+**Sharper Red desert ground** (for the HD map): today's `ground`, `water` and `rock` are only 128×128 for 4×4
+tiles, so they look soft when zoomed in. Re-export the same three textures at **512×512** (same look, just more
+detail), with the same seamless-tile prompt as above: *"rust-ochre sandy ground"*, *"deep teal brine water"*,
+*"dark brown rock plateau, cracked"*.
+
+Ask Claude Code if you'd like biome versions of the resources too (snow-capped boulders, mossy ore and so on);
+for now the resources look the same on every world.
+
 Bridges, tunnels and overpasses are drawn by the game itself for now (they have to join up with each other on any
 side); ask Claude Code if you'd like those as art too.
 

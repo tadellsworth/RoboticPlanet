@@ -29,7 +29,12 @@
  *              '<type>-boost'; give a bot without a baked-in shadow `shadow: true`;
  *              without their own art, specialists use the worker's art with a small badge)
  *   Resources: stalk boulder ore crystal crop oil uranium   (crop is drawn smaller while it ripens)
- *   Ground:    ground water rock fertile  (square seamless tiles; one image spans 4×4 map tiles)
+ *   Ground:    ground water rock fertile  (square seamless tiles; one image spans 4×4 map tiles;
+ *              512x512 keeps them sharp when zoomed in)
+ *   Biomes:    ground-jungle water-jungle rock-jungle cliff-jungle, and the same with -polar
+ *              (the Red desert uses ground, water, rock and cliff; without these the desert ones are recoloured)
+ *   Plants:    plant-desert-1 … plant-desert-6, plant-jungle-1 …, plant-polar-1 …  (decorative scenery,
+ *              256x256, transparent; any number from 1 works)
  *   Terrain:   slope  (a ramp tile, drawn with uphill at the top; the game rotates it)
  *              cliff  (the rock face below a higher level: a wide strip, about 128×48)
  *   Building:  ramp   (the Ramp's construction icon and site)
@@ -133,4 +138,6 @@ const ART_MANIFEST = {
   //   buildings: a 3D turret (base + head frames)
   //   resources: crop, oil, uranium     ground: fertile, slope, cliff     markers: missile, rally, oneway
   //   goods:     icon-fiber … icon-warhead (12 HUD icons)
+  //   biomes:    plant-<biome>-1 … 6 for desert, jungle and polar; ground/water/rock-jungle and -polar
+  //              (Claude Design prompts: ART_GUIDE.md, Batch 9)
 };

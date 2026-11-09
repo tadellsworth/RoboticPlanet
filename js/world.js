@@ -373,6 +373,7 @@ function newGame(opts) {
   };
   settings.shape = clamp(opts.shape ?? 0, 0, SHAPE_PRESETS.length - 1);
   settings.nuke = !!opts.nuke;
+  settings.biome = BIOMES[opts.biome] ? opts.biome : 'desert';
   const { W, H } = mapDims(settings);
   const seed = opts.seed >>> 0;
   const diff = DIFFICULTY[opts.difficulty] ? opts.difficulty : 'normal';
@@ -381,7 +382,7 @@ function newGame(opts) {
   S = {
     v: 1, mode, seed, W, H, settings, difficulty: diff, time: 0, nextId: 1, winner: -1, milestone: 0,
     terrain: m.terrain, res: m.res, amt: m.amt, grow: m.grow, elev: m.elev, ramp: m.ramp, fert: m.fert,
-    road: new Uint8Array(W * H), pave: new Uint8Array(W * H), oneRoad: true, roadVer: 0, lights: {}, over: {}, scorch: {},
+    road: new Uint8Array(W * H), pave: new Uint8Array(W * H), wear: new Uint16Array(W * H), paveMark: new Uint8Array(W * H), oneRoad: true, roadVer: 0, lights: {}, over: {}, scorch: {},
     plan: new Uint8Array(W * H), planVer: 0, paveRes: {},
     owner: new Int8Array(W * H).fill(-1),
     resRes: new Uint8Array(W * H),
@@ -416,22 +417,35 @@ function newGame(opts) {
   }
   computeZones();
   computeTerritory();
-  for (const P of S.players) { const L = getE(P.lander); if (L) { starterRoads(L); starterCharger(L); } }
+  for (const P of S.players) { const L = getE(P.lander); if (L) starterRoads(L); }
   if (opts.setup) opts.setup(S);
+  S.decor = makeDecor();
   return S;
 }
 
-/** The Command Base doesn't charge robots, so every colony lands with a Charging Station beside it, on the road ring. */
-function starterCharger(L) {
-  // Beside a corner of the ring, so the straight roads out of the base stay clear.
-  for (const [dx, dy] of [[2, 1], [-2, 1], [2, -1], [-2, -1], [1, 2], [-1, 2], [1, -2], [-1, -2], [2, 0], [-2, 0], [0, 2], [0, -2]]) {
-    const x = L.x + dx, y = L.y + dy;
-    if (!canPlace(L.owner, 'charger', x, y, true).ok) continue;
-    const b = addBuilding(L.owner, 'charger', x, y, true);
-    b.stock.fuel = START_CHARGER_FUEL;
-    return b;
+/** The biome of the current game. */
+function biome() { return (S && S.settings && S.settings.biome) || 'desert'; }
+
+/**
+ * Decorative plants (scenery only): a plant variety 1..PLANT_KINDS on some open ground tiles, in
+ * loose patches. Made from the seed with a hash, so the map itself is the same in every biome.
+ */
+function makeDecor() {
+  const W = S.W, H = S.H, d = new Uint8Array(W * H), dens = BIOMES[biome()].plants, sd = S.seed % 100000;
+  for (let j = 0; j < H; j++) for (let i = 0; i < W; i++) {
+    const t = j * W + i;
+    if (S.terrain[t] !== T_GROUND || S.res[t] || S.fert[t] || S.ramp[t] || S.road[t] || S.plan[t] || S.bAt[t]) continue;
+    if (j > 0 && S.terrain[t - W] === T_GROUND && S.elev[t - W] > S.elev[t]) continue; // the foot of a cliff
+    const patch = fbm(i / 5, j / 5, sd + 77, 2);
+    if (hash2(i, j, sd + 501) > dens * (0.25 + 1.5 * patch)) continue;
+    d[t] = 1 + Math.floor(hash2(i * 3 + 1, j * 5 + 2, sd + 733) * PLANT_KINDS);
   }
-  return null;
+  return d;
+}
+
+/** A road, planned road or building clears the plants on its tile for good. */
+function clearDecor(t) {
+  if (S.decor && S.decor[t]) { S.decor[t] = 0; S.dirtyTiles.push(t); }
 }
 
 /** Every Command Base starts with a ring of road around it, the start of the colony's road network. */
@@ -545,6 +559,7 @@ function addBuilding(owner, type, x, y, built) {
   S.buildings.push(b);
   S.byId.set(b.id, b);
   S.bAt[tIdx(x, y)] = b.id;
+  clearDecor(tIdx(x, y));
   if (type === 'outpost') outpostRoads(x, y); // roads run through it
   return b;
 }
@@ -861,6 +876,7 @@ function setPlan(t, owner) {
   const v = owner < 0 ? 0 : owner + 1;
   if (S.plan[t] === v) return;
   S.plan[t] = v;
+  if (v) clearDecor(t);
   S.planVer = (S.planVer || 0) + 1;
 }
 
@@ -880,16 +896,20 @@ function setRoad(i, j, on) {
   if (!!S.road[t] === !!on) return;
   S.road[t] = on ? 1 : 0;
   S.pave[t] = on ? 1 : 0;
+  if (S.wear) S.wear[t] = 0;
+  if (on) clearDecor(t);
+  if (!on && S.paveMark) S.paveMark[t] = 0;
   S.roadVer = (S.roadVer || 0) + 1;
   markDirty(i, j);
   for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) if (inMap(i + di, j + dj)) markDirty(i + di, j + dj);
 }
 
-/** Set an existing road tile's surface: 1 road, 2 asphalt. */
+/** Set an existing road tile's surface: 1 road, 2 asphalt (fresh). */
 function setPave(i, j, tier) {
   const t = tIdx(i, j);
   if (!S.road[t] || S.pave[t] === tier) return;
   S.pave[t] = tier;
+  if (S.wear) S.wear[t] = 0;
   S.topPaveCache = 0;
   markDirty(i, j);
 }
@@ -913,6 +933,49 @@ function setRoadDir(i, j, v) {
 }
 
 function markDirty(i, j) { S.dirtyTiles.push(tIdx(i, j)); }
+
+/** How a Roadworks chooses roads: 'marked' (the roads marked in Paths) or 'all' joined to it. */
+function paveMode(b) { return b.pmode || (S.players[b.owner].ai ? 'all' : 'marked'); }
+
+/** Does this tile want a Paver: a road not yet asphalt, or asphalt worn enough to resurface? */
+function needsPaving(t) { return S.road[t] && (S.pave[t] < 2 || S.wear[t] >= REPAVE_AT); }
+
+/** Speed multiplier for a bot on asphalt with this much wear. */
+function asphaltSpeed(w) {
+  return w <= WEAR_SLOW ? PAVE[2].speed : PAVE[2].speed - (PAVE[2].speed - WEAR_WORN_SPEED) * (w - WEAR_SLOW) / (WEAR_MAX - WEAR_SLOW);
+}
+
+/** Wear asphalt as a bot drives onto it. Worn right through, it drops back to plain road. */
+function wearRoad(t, u) {
+  if (S.pave[t] !== 2 || !S.wear) return;
+  const before = S.wear[t], w = Math.min(WEAR_MAX, before + (BOTS[u.type].truck ? WEAR_TRUCK : WEAR_BOT));
+  S.wear[t] = w;
+  const i = t % S.W, j = (t / S.W) | 0;
+  if (w >= WEAR_MAX) {
+    setPave(i, j, 1);
+    const P = S.players[S.owner[t]];
+    if (P && !P.ai && S.owner[t] === 0 && !S.paveMark[t] && S.time - (P.wornMsgAt || -1e9) > 240) {
+      P.wornMsgAt = S.time;
+      postMsg(0, 'Busy asphalt has worn back to plain road. Mark roads in Paths (Pave) and a Roadworks will keep them surfaced.', i, j, 'warn');
+    }
+  } else if ((before / 250 | 0) !== (w / 250 | 0)) markDirty(i, j); // shows its cracks
+}
+
+/** How many of this player's road tiles are marked for asphalt. */
+function roadsMarked(owner) {
+  let n = 0;
+  for (let t = 0; t < S.W * S.H; t++) if (S.paveMark[t] && S.road[t] && S.owner[t] === owner) n++;
+  return n;
+}
+
+/** Mark (or unmark) a road for asphalt: a Roadworks paves and maintains marked roads. */
+function setPaveMark(owner, i, j, on) {
+  const t = tIdx(i, j);
+  if (!S.road[t] || S.owner[t] !== owner || !!S.paveMark[t] === !!on) return false;
+  S.paveMark[t] = on ? 1 : 0;
+  markDirty(i, j);
+  return true;
+}
 
 /* ------------------------------------------------------------------ road network */
 
@@ -1208,6 +1271,7 @@ const SAVE_KEY = 'botfall.save.v1'; // the game's first name: kept so saves carr
 const TYPED_FIELDS = {
   terrain: Uint8Array, res: Uint8Array, amt: Uint8Array, grow: Float32Array, road: Uint8Array, owner: Int8Array,
   resRes: Uint8Array, elev: Uint8Array, ramp: Uint8Array, fert: Uint8Array, pave: Uint8Array, plan: Uint8Array,
+  wear: Uint16Array, paveMark: Uint8Array, decor: Uint8Array,
 };
 
 function serializeGame() {
@@ -1246,6 +1310,10 @@ function deserializeGame(json) {
   if (!o.pave) o.pave = o.road.map((v) => (v ? 1 : 0));
   else if (!o.oneRoad) o.pave = o.pave.map((v) => (v >= 3 ? 2 : v ? 1 : 0));
   o.oneRoad = true;
+  // Saves from before road wear: fresh asphalt, nothing marked, and Roadworks keep paving every road.
+  if (!o.wear) o.wear = new Array(o.W * o.H).fill(0);
+  if (!o.decor) o.decor = new Array(o.W * o.H).fill(0); // saves from before biomes: no plants
+  if (!o.paveMark) { o.paveMark = new Array(o.W * o.H).fill(0); for (const b of o.buildings) if (b.type === 'roadworks' && !b.pmode) b.pmode = 'all'; }
   o.lights = o.lights || {};
   o.over = o.over || {};
   o.scorch = o.scorch || {};

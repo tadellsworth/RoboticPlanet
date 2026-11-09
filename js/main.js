@@ -8,7 +8,8 @@ let _acc = 0;
 let _demoT = 0;
 
 function startDemo() {
-  newGame({ seed: randomSeed(), difficulty: 'normal', autoplay: true });
+  const seed = randomSeed();
+  newGame({ seed, difficulty: 'normal', autoplay: true, biome: BIOME_ORDER[seed % BIOME_ORDER.length] });
   bakeMap();
   // Zoomed in enough that the planet fills the whole screen behind the menu, even on widescreens.
   R.cam.z = Math.min(maxZoom(), Math.max(minZoom() * 1.6, R.w / (S.W - 6), R.h / (S.H - 6)));

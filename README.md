@@ -12,8 +12,9 @@ how goods move.
   levels. Finishing one unlocks the next and shows an unlock code for it, so progress can move to another device.
 
 Before each game, sliders set the **map size** (Small to Huge), the **terrain** (Flat, Gentle,
-Rolling, Rugged, Mountainous), the **resources** (Scarce to Abundant), the **map shape** (Standard or Long haul) and
-an optional **Nuclear race**. Resources come in separate
+Rolling, Rugged, Mountainous), the **resources** (Scarce to Abundant), the **map shape** (Standard or Long haul), the
+**biome** (Red desert, Jungle or Polar: scenery only, with plants that roads and buildings clear) and an optional
+**Nuclear race**. Resources come in separate
 fields: your landing zone has a little of everything, and the rich fields beyond it are worth fighting for.
 
 Terrafall is an original game in the colony-logistics genre. It contains no code, art, sound or data from
@@ -60,7 +61,7 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
 | Refinery | Crude → **Fuel**, one for one (stops at 30 unless you change its stock limit) |
 | Cement Works | 1 Stone → 2 **Cement**, the main building material (stops at 40 unless you change its stock limit) |
 | Asphalt Plant | Crude + Stone → 2 **Asphalt** |
-| Roadworks | Its Paver lays Asphalt along every road joined to it, nearest first (1 Asphalt covers 4 tiles) |
+| Roadworks | Its Paver paves and maintains the roads you mark for asphalt (or every joined road), nearest first (1 Asphalt covers 4 tiles) |
 | Ammo Plant | Alloy + Stone → 3 **Ammo**; warbots reload it in the Command Base and Outposts (Versus) |
 | Missile Factory | 2 Alloy + Chip + Fuel → **Missile** (20 s each; Versus) |
 | Missile Silo | Fires Missiles at rival buildings up to 18 tiles away; holds 2, reloads in 25 s (Versus) |
@@ -97,7 +98,13 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
   until free workers pave them: 1.5 s a tile (3 s through resources), working out from the existing network, so long
   highways take planning and spare workers. Calling off a planned tile refunds it. Roads double a bot's speed. Dragging
   plans roads round resources; tap a boulder, grove, ore or crystal tile to clear it for a road at 3× the Cement. A Roadworks' Paver
-  upgrades roads to asphalt (2.75×) with Asphalt, driving out along every road joined to its Roadworks, however far. Removing a road refunds its Cement.
+  upgrades roads to asphalt (2.75×) with Asphalt, driving out along the roads joined to its Roadworks, however far.
+- **Paving and road wear:** Paths → **Pave** (W): drag along roads to mark them for asphalt (drag over marked road to
+  clear it). Roadworks pave the marked roads joined to them (or, set to *Every joined road*, everything; the AI uses
+  that). Every bot driving onto asphalt wears it (`WEAR_BOT`, Freight Trucks `WEAR_TRUCK`, three times as much): past
+  half worn it slows bots (to 2.3× when nearly through), at `REPAVE_AT` the Paver resurfaces marked road, and worn
+  through it drops back to plain road. On a busy trunk road that's every 8–10 minutes. Tap any of your roads to see its
+  wear and mark it. Removing a road refunds its Cement.
 - **Bridges and tunnels:** roads stop at water and rocky crags. The **Bridges** tool in Paths plans roads across them:
   a bridge costs 2 Cement and 1 Alloy a tile, a tunnel 3 Cement and 1 Alloy. Workers build them out from the shore or rock
   face (6–8 s a tile), and they join land on any level. Lay road routes use them only when going round is much longer.
@@ -146,9 +153,12 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
   any other storage; *Empty out* takes nothing new and moves what it holds elsewhere (handy before
   demolishing it). You can also switch individual goods off for that building.
 - **Minimap:** tap or drag it to jump around; red pulses mark buildings under attack. The × hides it.
+- **Sharp map:** the map is baked once at 32 px a tile for zoomed-out views; zoomed in, the part on screen is baked
+  again in 8×8-tile chunks at 64 or 128 px a tile (a few per frame, least recently seen dropped), and big art images
+  keep half-size copies so they shrink cleanly (`drawMapLayer`, `artMip` in `js/render.js`).
 - **Batteries:** bots drain their battery walking, working and fighting, and recharge only at a Charging Station (or,
-  for warbots, inside an Outpost). The Command Base doesn't charge anyone: you land with one Charging Station beside it
-  holding 4 Fuel. A flat battery means half speed and half power. Charging Stations burn Fuel (one Fuel is about
+  for warbots, inside an Outpost). The Command Base doesn't charge anyone and you land without a Charging Station, so
+  build the first one straight away (it runs on the 10 Fuel you land with). A flat battery means half speed and half power. Charging Stations burn Fuel (one Fuel is about
   three quarters of a full charge). A Bio Farm makes about
   2–3 Fuel a minute; an Oil Pump and Refinery up to 10 a minute until the seep runs dry (both stop at 30 by default).
 - **Army orders:** tap **Army**, then a rival building to attack it with warbots or a missile, or open
@@ -183,7 +193,7 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
   ground to hold it, a rival building to attack, or your garrison to station them. Ctrl/Shift+1–9 saves a control
   group, 1–9 recalls it (twice jumps to it). Pan with the arrow keys, the window edge, or right/middle drag; hover for
   tooltips. Keys: **B** build then a building's letter (or **B R** for roads), **P** paths (**R** roads, **G** bridges
-  and tunnels, **V** ramps, **O** one-way arrows, **L** junctions, **T** traffic map), **A** army, **F** select all warbots, **J** latest alert,
+  and tunnels, **V** ramps, **W** pave, **O** one-way arrows, **L** junctions, **T** traffic map), **A** army, **F** select all warbots, **J** latest alert,
   **H** base, **[ ]** speed, **+/−** zoom, **M** minimap, **Space** pause, **Esc** back / clear selection.
   Phones and tablets keep the touch controls.
 
@@ -197,7 +207,8 @@ Farm, Oil Pump, Refinery, Cement Works, Asphalt Plant, Roadworks, Ramp, Ammo Pla
 Nuclear Silo. All six robots (Worker, Warbot, Hauler, Agribot, Paver, Freight Truck) have four driving frames per team
 plus brake-light and boost overlays (WebP, `driveSet()` in the manifest); the frames advance with the distance driven.
 The nuclear missile, its 24-frame detonation sheet and the scorch mark are custom too. Still to make: a 3D Pulse
-Turret, goods icons and a few terrain pieces. The app icon is in `icons/`. Anything without an image falls back to placeholder art drawn in code, so new art can be
+Turret, goods icons, a few terrain pieces and the biome art (plants for each biome, and Jungle and Polar ground,
+water and rock; until then the game draws stand-in plants and recolours the desert textures). The app icon is in `icons/`. Anything without an image falls back to placeholder art drawn in code, so new art can be
 added one piece at a time. See **[ART_GUIDE.md](ART_GUIDE.md)** for specs, the style brief and prompts,
 including the remaining pieces (Ramp, slope and cliff textures, goods icons).
 

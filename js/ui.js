@@ -54,12 +54,13 @@ function initUI() {
   // Map settings sliders (remembered on this device; map size is remembered per mode).
   try { Object.assign(UI.menu, JSON.parse(localStorage.getItem('botfall.settings') || '{}')); } catch (e) { /* defaults */ }
   const saveSettings = () => {
-    try { localStorage.setItem('botfall.settings', JSON.stringify({ size: UI.menu.size, rough: UI.menu.rough, rich: UI.menu.rich, shape: UI.menu.shape, nuke: UI.menu.nuke })); } catch (e) { /* storage unavailable */ }
+    try { localStorage.setItem('botfall.settings', JSON.stringify({ size: UI.menu.size, rough: UI.menu.rough, rich: UI.menu.rich, shape: UI.menu.shape, nuke: UI.menu.nuke, biome: UI.menu.biome })); } catch (e) { /* storage unavailable */ }
   };
   $('m-size').oninput = () => { UI.menu.size[UI.menu.mode] = +$('m-size').value; syncMenu(); saveSettings(); };
   $('m-rough').oninput = () => { UI.menu.rough = +$('m-rough').value; syncMenu(); saveSettings(); };
   $('m-shape').oninput = () => { UI.menu.shape = +$('m-shape').value; syncMenu(); saveSettings(); };
   $('m-nuke').oninput = () => { UI.menu.nuke = +$('m-nuke').value; syncMenu(); saveSettings(); };
+  $('m-biome').oninput = () => { UI.menu.biome = +$('m-biome').value; syncMenu(); saveSettings(); };
   $('m-rich').oninput = () => { UI.menu.rich = +$('m-rich').value; syncMenu(); saveSettings(); };
   $('m-new').onclick = () => { audioUnlock(); startNewGame(); };
   $('m-continue').onclick = () => { audioUnlock(); continueGame(); };
@@ -144,6 +145,8 @@ function syncMenu() {
   $('m-nuke-v').textContent = UI.menu.nuke ? 'On: race for uranium' : 'Off';
 
   $('m-shape-v').textContent = SHAPE_PRESETS[UI.menu.shape || 0].name;
+  $('m-biome').value = UI.menu.biome || 0;
+  $('m-biome-v').textContent = BIOMES[BIOME_ORDER[UI.menu.biome || 0]].name;
   $('m-rich').value = UI.menu.rich;
   const dims = mapDims({ size, shape: UI.menu.shape || 0 });
   $('m-size-v').textContent = `${SIZE_PRESETS[size].name} · ${dims.W}×${dims.H}`;
@@ -176,7 +179,7 @@ function hideGoodTip() {
 /* ------------------------------------------------------------------ keyboard (desktop) */
 
 /*
- * B build (then a building's letter, or R for roads) · P paths (R roads, G bridges and tunnels, O one-way arrows,
+ * B build (then a building's letter, or R for roads) · P paths (R roads, G bridges and tunnels, V ramps, W pave, O one-way arrows,
  * L junctions, T traffic map) · A army · H base · F select every warbot · 1–9 control groups (Ctrl or
  * Shift + digit to save) · J jump to the latest alert · Esc back / clear selection / pause ·
  * Space pause · [ ] game speed · arrow keys pan · + and - zoom · M minimap · ? help
@@ -235,6 +238,7 @@ function initKeyboard() {
       case 'o': openPaths('arrows'); break;
       case 'g': openPaths('bridge'); break;
       case 'v': openPaths('ramp'); break;
+      case 'w': openPaths('pave'); break;
       case 't': if (R.mode !== 'road') setMode('road'); R.traffic = !R.traffic; showRoadBanner(); sfx('click'); break;
       case 'l': openPaths('lights'); break;
       case 'a': if (!$('btn-attack').hidden) $('btn-attack').click(); break;
@@ -484,7 +488,7 @@ function startNewGame() {
   newGame({
     seed: UI.menu.seed, difficulty: UI.menu.diff, mode: UI.menu.mode,
     size: UI.menu.size[UI.menu.mode] ?? DEFAULT_SIZE[UI.menu.mode], rough: UI.menu.rough, rich: UI.menu.rich, shape: UI.menu.shape || 0,
-    nuke: !!UI.menu.nuke,
+    nuke: !!UI.menu.nuke, biome: BIOME_ORDER[UI.menu.biome || 0],
   });
   enterGame();
   updateHUD();
@@ -925,6 +929,14 @@ function onMapTap(i, j, wx, wy) {
       if (why) { sfx('error'); showRoadBanner(why); } else { sfx('place'); addFx('ring', i + 0.5, j + 0.5, { color: '#7dffa0' }); showRoadBanner(); }
       return;
     }
+    if (UI.roadMode === 'pave') {
+      // Mark a road for asphalt, or clear its mark.
+      if (!paveMarkable(t)) { sfx('error'); showRoadBanner('Mark your own roads (or planned roads) for asphalt.'); return; }
+      setPaveMark(0, i, j, !S.paveMark[t]);
+      sfx('click');
+      showRoadBanner();
+      return;
+    }
     if (UI.roadMode === 'arrows') {
       // Turn the arrow: east, south, west, north, then back to two-way.
       if (S.road[t]) { setRoadDir(i, j, S.road[t] >= 5 ? 1 : S.road[t] + 1); sfx('click'); showRoadBanner(); }
@@ -992,6 +1004,7 @@ function onMapTap(i, j, wx, wy) {
   if (INPUT.mouse && UI.sel.length && !INPUT.shift) selectBots([], false);
   if (inMap(i, j) && S.res[tIdx(i, j)]) { sfx('click'); openResourceSheet(tIdx(i, j)); return; }
   if (inMap(i, j) && S.fert[tIdx(i, j)] && S.terrain[tIdx(i, j)] === T_GROUND) { sfx('click'); openSoilSheet(tIdx(i, j)); return; }
+  if (inMap(i, j) && S.road[tIdx(i, j)] && S.owner[tIdx(i, j)] === 0) { sfx('click'); openRoadSheet(tIdx(i, j)); return; }
   closeSheet();
 }
 
@@ -1103,10 +1116,13 @@ function onRoadPaint(i, j, first) {
   const from = first || !UI.lastPaint ? { i, j } : UI.lastPaint;
   const line = tileLine(from.i, from.j, i, j);
   let prev = null;
-  const arrows = UI.roadMode === 'arrows';
+  const arrows = UI.roadMode === 'arrows', pave = UI.roadMode === 'pave';
+  // Pave: the first road tile of a drag decides whether it marks roads or clears their marks.
+  if (pave && first) UI.paveOn = !(inMap(i, j) && S.paveMark[tIdx(i, j)]);
   for (const [x, y] of line) {
     if (!inMap(x, y)) break;
     const t = tIdx(x, y);
+    if (pave) { if (paveMarkable(t)) setPaveMark(0, x, y, UI.paveOn); continue; }
     if (arrows) {
       if (S.road[t] && prev) {
         const v = 2 + [[1, 0], [0, 1], [-1, 0], [0, -1]].findIndex(([dx, dy]) => dx === x - prev[0] && dy === y - prev[1]);
@@ -1123,6 +1139,7 @@ function onRoadPaint(i, j, first) {
     if (canRoad(0, x, y)) draftOp(UI.stroke, t, 'add');
   }
   UI.lastPaint = { i, j };
+  if (pave) { showRoadBanner(); return; }
   if (!arrows) {
     showRoadBanner(UI.paintCross ? 'Roads stop at water and rock: pick <b>Bridges</b> to cross.'
       : UI.paintSkipped ? 'Dragging goes round resources: tap a boulder, grove, ore or crystal tile to clear it for a road.' : '', true);
@@ -1134,13 +1151,24 @@ function onRoadPaint(i, j, first) {
  * Bridges show the plan and what it costs, with Undo, Clear and Build.
  */
 function showRoadBanner(problem, info) {
-  const mode = ['arrows', 'lights', 'bridge', 'ramp'].includes(UI.roadMode) ? UI.roadMode : 'road';
+  const mode = ['arrows', 'lights', 'bridge', 'ramp', 'pave'].includes(UI.roadMode) ? UI.roadMode : 'road';
   if (!UI.draft) draftReset();
   const have = playerGoods(0);
   let line, how;
   if (mode === 'ramp' && draftEmpty()) {
     line = `Tap a highlighted spot at the foot or top of a one-level cliff to plan a <b>Ramp</b> (${costText(BDEFS.ramp.cost)}). Nothing is spent until you tap <b>Build</b>.`;
     how = 'Workers cut a sloped road into the cliff; once it is done it is part of your road network, so haulers drive straight up it. A Ramp can\'t go where it would block the only way through a pass.';
+  } else if (mode === 'pave') {
+    const c = paveCounts(0);
+    let works = 0;
+    for (const b of S.buildings) if (!b.dead && b.owner === 0 && b.type === 'roadworks') works++;
+    line = `Drag along roads to mark them for <b>asphalt</b>; drag over marked road to clear it. Marked: <b>${c.marked}</b> tile${c.marked === 1 ? '' : 's'}` +
+      (c.marked ? ` (${c.fresh} asphalt, ${c.worn} worn, ${c.todo} to pave)` : '') + '.' +
+      (works ? '' : ' <span class="err">Build a Roadworks to pave them.</span>');
+    how = `Asphalt is the fastest surface (${PAVE[2].speed}× speed, and Freight Trucks need it to run flat out). A Roadworks' Paver lays it on the marked roads joined to it, nearest first, using 1 Asphalt for every ${ASPHALT_TILES} tiles. ` +
+      'Asphalt <b>wears</b> as traffic drives over it, heavy Freight Trucks three times as fast: worn asphalt fades, cracks and slows bots a little, and worn right through it drops back to plain road. ' +
+      'The Paver resurfaces marked roads once they are half worn, so a Roadworks near your busiest roads keeps them fast. Red outlines show worn asphalt. ' +
+      `Marking is free; you have ${works} Roadworks.`;
   } else if (mode === 'arrows') {
     line = 'Drag along a road to make it <b>one-way</b> the way you drag. Tap a road to turn its arrow.';
     how = 'One-way traffic never meets head-on, so a loop of one-way roads (one lane out, one back) keeps busy routes flowing.';
@@ -1322,6 +1350,12 @@ function openBuildingSheet(b) {
         <p class="hint">The Foundry only builds the bots you order. Each one uses 1 Alloy and 1 Chip and takes ${def.work} s (a Freight Truck twice that); mixed orders take turns.
         <b>Haulers</b> carry two goods at a time, <b>Freight Trucks</b> eight on the long runs to Depots, <b>Agribots</b> run Bio Farms and Grove Planters, and <b>Pavers</b> run the Roadworks.</p>`;
     }
+    if (def.roadworks && b.built) {
+      html += `<div class="section-label">Paves and maintains</div>
+        <div class="seg" id="sh-pmode"><button data-v="marked">Marked roads</button><button data-v="all">Every joined road</button></div>
+        <button class="btn" id="sh-pmark">Mark roads to pave</button>
+        <p class="hint">Mark roads in Paths (Pave) and the Paver keeps just those surfaced, resurfacing them as traffic wears them down: put the Roadworks near the roads that matter. <i>Every joined road</i> paves everything it can reach.</p>`;
+    }
     if (def.nukeSilo && b.built) {
       html += `<button class="btn primary big danger-glow" id="sh-aim">Aim nuclear missile</button>
         <p class="hint" id="sh-aim-hint"></p>`;
@@ -1367,6 +1401,8 @@ function openBuildingSheet(b) {
       sfx('click');
       refreshSheet();
     };
+    if ($('sh-pmode')) for (const btn of $('sh-pmode').children) btn.onclick = () => { b.pmode = btn.dataset.v; sfx('click'); refreshSheet(); };
+    if ($('sh-pmark')) $('sh-pmark').onclick = () => openPaths('pave');
     if ($('sh-keep-all')) $('sh-keep-all').onclick = () => { UI.keepAll = !UI.keepAll; sfx('click'); openBuildingSheet(b); };
     if ($('sh-keep')) for (const btn of $('sh-keep').querySelectorAll('button')) btn.onclick = () => {
       const g = btn.parentElement.dataset.g;
@@ -1530,11 +1566,16 @@ function refreshBuildingSheet(b) {
       parts.push(`<div class="kv"><span>${def.crew ? BOTS[def.crew].name : 'Worker'}</span><span>${b.paused ? 'Paused' : op ? (op.inside === b.id ? 'Inside' : 'Out working') : b.staffInc ? 'On the way' : 'None yet'}</span></div>`);
     }
     if (def.roadworks) {
-      // Everything on the road network joined to the Roadworks is in reach.
-      let left = 0;
-      const nets = buildingNets(b), net = roadNet();
-      for (let t = 0; t < S.W * S.H; t++) if (S.road[t] && S.pave[t] < 2 && S.owner[t] === b.owner && nets.indexOf(net.comp[t]) >= 0) left++;
-      parts.push(`<div class="kv"><span>Joined roads still to surface</span><span>${left} tiles</span></div>`);
+      // Everything on the road network joined to the Roadworks is in reach (or just the marked roads).
+      let fresh = 0, worn = 0, todo = 0;
+      const nets = buildingNets(b), net = roadNet(), all = paveMode(b) === 'all';
+      for (let t = 0; t < S.W * S.H; t++) {
+        if (!S.road[t] || S.owner[t] !== b.owner || !(all || S.paveMark[t]) || nets.indexOf(net.comp[t]) < 0) continue;
+        if (S.pave[t] !== 2) todo++; else if (S.wear[t] >= REPAVE_AT) worn++; else fresh++;
+      }
+      parts.push(`<div class="kv"><span>${all ? 'Joined roads' : 'Marked roads joined to it'}</span><span>${fresh + worn + todo} tiles</span></div>
+        <div class="kv"><span>Asphalt in good repair</span><span>${fresh}</span></div>
+        <div class="kv"><span>To pave · worn, to resurface</span><span>${todo} · ${worn}</span></div>`);
       if (mine) parts.push(`<div class="kv"><span>Asphalt</span><span>${goodTag('asphalt', `${b.stock.asphalt || 0}/3`, !(b.stock.asphalt > 0) && !(b.charges > 0))} + ${b.charges || 0} tiles in the hopper</span></div>`);
     }
     if (def.ammoStock && mine && warOn()) {
@@ -1645,6 +1686,7 @@ function refreshBuildingSheet(b) {
   }
   if ($('sh-pause')) $('sh-pause').textContent = b.paused ? 'Resume' : 'Pause';
   if ($('sh-prio')) for (const btn of $('sh-prio').children) btn.classList.toggle('on', btn.dataset.v === (b.prio || 'normal'));
+  if ($('sh-pmode')) for (const btn of $('sh-pmode').children) btn.classList.toggle('on', btn.dataset.v === paveMode(b));
   if ($('sh-smode')) {
     const m = b.smode || 'normal';
     for (const btn of $('sh-smode').children) btn.classList.toggle('on', btn.dataset.v === m);
@@ -1813,6 +1855,50 @@ function openResourceSheet(t) {
   refreshSheet();
 }
 
+/** Can the player mark this tile for asphalt? Their own roads, and roads they've planned. */
+function paveMarkable(t) {
+  return S.owner[t] === 0 && (S.road[t] || S.plan[t] === 1);
+}
+
+/** The player's roads marked for asphalt: how many, and how many are fresh, worn or still to pave. */
+function paveCounts(owner) {
+  const c = { marked: 0, fresh: 0, worn: 0, todo: 0 };
+  for (let t = 0; t < S.W * S.H; t++) {
+    if (!S.paveMark[t] || S.owner[t] !== owner || !(S.road[t] || S.plan[t] === owner + 1)) continue;
+    c.marked++;
+    if (S.pave[t] !== 2) c.todo++;
+    else if (S.wear[t] >= REPAVE_AT) c.worn++;
+    else c.fresh++;
+  }
+  return c;
+}
+
+/** Tap one of your roads: its surface, how worn it is, and whether a Roadworks looks after it. */
+function openRoadSheet(t) {
+  R.selected = 0; R.selTile = t; UI.selBot = 0;
+  const html = `<div class="sheet-title"><div><h3 id="rd-name"></h3></div></div><div id="sh-dyn"></div>
+    <div class="actions"><button class="btn" id="rd-mark"></button><button class="btn ghost" id="rd-paths">Mark more roads</button></div>`;
+  openSheet('road', t, html);
+  $('rd-mark').onclick = () => { setPaveMark(0, t % S.W, (t / S.W) | 0, !S.paveMark[t]); sfx('click'); refreshSheet(); };
+  $('rd-paths').onclick = () => openPaths('pave');
+  refreshSheet();
+}
+
+function refreshRoadSheet(t) {
+  if (!S.road[t]) { closeSheet(); return; }
+  const asphalt = S.pave[t] === 2, w = Math.round(S.wear[t] / 10);
+  const cross = crossTile(t) ? (S.terrain[t] === T_WATER ? ' bridge' : ' tunnel') : '';
+  $('rd-name').textContent = (asphalt ? 'Asphalt' : 'Concrete') + (cross || ' road');
+  const speed = asphalt ? asphaltSpeed(S.wear[t]) : PAVE[1].speed;
+  $('sh-dyn').innerHTML = `<div class="kv"><span>Speed</span><span>${Math.round(speed * 100) / 100}× off-road</span></div>` +
+    (asphalt ? `<div class="kv"><span>Wear</span><span>${w}%${S.wear[t] >= REPAVE_AT ? ' (due for resurfacing)' : ''}</span></div>
+      <div class="bar"><div style="width:${w}%;background:${w >= 75 ? '#ff4d4d' : w >= 50 ? '#ffb347' : '#7ee08a'}"></div></div>` : '') +
+    `<p class="desc">${S.paveMark[t] ? 'Marked for asphalt: a Roadworks joined to it paves it and resurfaces it as it wears.'
+      : asphalt ? 'Not marked: once it wears through it drops back to plain road. Mark it to have a Roadworks maintain it.'
+      : 'Mark it for asphalt and a Roadworks joined to it will pave it (2¾× speed).'} Busy roads wear fastest, and Freight Trucks wear them three times as fast as other bots.</p>`;
+  $('rd-mark').textContent = S.paveMark[t] ? 'Clear the asphalt mark' : 'Mark for asphalt';
+}
+
 function openSoilSheet(t) {
   R.selected = 0; R.selTile = t; UI.selBot = 0;
   const html = `<div class="sheet-title"><div><h3>Fertile soil</h3></div></div>
@@ -1954,6 +2040,7 @@ function refreshSheet() {
   if (!UI.sheetKind || UI.sheetKind === 'build') return;
   if (UI.sheetKind === 'pop') { refreshPopSheet(); return; }
   if (UI.sheetKind === 'goods') { refreshGoodsSheet(false); return; }
+  if (UI.sheetKind === 'road') { refreshRoadSheet(UI.sheetFor); return; }
   if (UI.sheetKind === 'bld') {
     const b = getE(UI.sheetFor);
     if (!b) { closeSheet(); return; }
@@ -1996,6 +2083,7 @@ function refreshSheet() {
 /* ------------------------------------------------------------------ HUD */
 
 const OBJECTIVES = [
+  { text: 'Robots run on batteries, and your Command Base can\'t charge them. Tap <b>Build</b> and place a <b>Charging Station</b> beside the road ring round your base: it runs on the Fuel you landed with.', done: () => hasBuilt('charger') || hasAny('charger') },
   { text: 'Tap <b>Build</b> and place a <b>Harvester</b> beside the teal stalk groves.', done: () => hasBuilt('harvester') || hasAny('harvester') },
   { text: '<b>Haulers only drive on roads.</b> Tap <b>Paths</b>, sketch a road from the ring round your Command Base to the Harvester site and tap <b>Build</b> (or tap the site and choose <b>Lay road</b>). Free workers pave it.', done: () => hasBuilt('harvester') || S.buildings.some((b) => !b.dead && b.owner === 0 && b.type === 'harvester' && !b.unlinked) },
   { text: 'Build a <b>Quarry</b> near the grey boulders to get Stone.', done: () => hasBuilt('quarry') },

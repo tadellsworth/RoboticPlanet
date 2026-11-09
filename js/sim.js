@@ -207,6 +207,9 @@ function isIdleWorker(u) {
 /* ------------------------------------------------------------------ batteries */
 
 /** Emergency mode: a flat battery halves speed and work rate. */
+/** A flat bot drops its job to recharge, but only if a Charging Station somewhere can charge it. */
+function mustRecharge(u) { return (u.bat ?? 100) < BATTERY.critical && S.players[u.owner].canCharge; }
+
 function batFactor(u) { return (u.bat ?? 100) < BATTERY.critical ? BATTERY.slow : 1; }
 
 function insideCharger(u) {
@@ -214,7 +217,7 @@ function insideCharger(u) {
   return !!(b && b.built && BDEFS[b.type].charger && !chargerDry(b));
 }
 
-/** A Charging Station with no Fuel left can't charge anyone (the Command Base's charger is free). */
+/** A Charging Station with no Fuel left can't charge anyone. */
 function chargerDry(b) {
   const ch = BDEFS[b.type].charger;
   return !!(ch && ch.fuel && b.built && (b.energy || 0) < 0.5 && !(b.stock.fuel > 0));
@@ -373,6 +376,7 @@ function countTraffic() {
     if (u.dead || u.inside || !u.path) continue;
     const t = Math.floor(u.y) * S.W + Math.floor(u.x);
     if (!S.road[t]) continue;
+    if (u.wt !== t) { u.wt = t; if (S.pave[t] === 2) wearRoad(t, u); }
     HEAT.flow[t] += SIM_STEP;
     if (!u.moved) HEAT.jam[t] += SIM_STEP;
     const k = t * 4 + heading(u.face);
@@ -523,7 +527,7 @@ function moveAlong(u, dt) {
     const next = u.path[u.pi];
     const dx = (next % S.W) + 0.5 - u.x, dy = ((next / S.W) | 0) + 0.5 - u.y;
     const wrong = r >= 2 && dx * ROAD_DIRS[r][0] + dy * ROAD_DIRS[r][1] < -0.1;
-    speed *= wrong ? ONEWAY_WRONG : PAVE[S.pave[here] || 1].speed / (1 + trafficJam(u, here, next));
+    speed *= wrong ? ONEWAY_WRONG : (S.pave[here] === 2 ? asphaltSpeed(S.wear[here]) : PAVE[S.pave[here] || 1].speed) / (1 + trafficJam(u, here, next));
     if (bt.truck && S.pave[here] !== 2) speed *= TRUCK_ROAD; // heavy: only asphalt lets it run flat out
     if (isJunction(here) && !S.lights[here] && !S.over[here]) speed *= JUNCTION_SLOW; // crossing carefully
   } else {
@@ -936,7 +940,7 @@ function doFix(u, t, dt) {
     if (moveAlong(u, dt)) t.phase = 'work';
     return;
   }
-  if ((u.bat ?? 100) < BATTERY.critical) { cancelTask(u); return; }
+  if (mustRecharge(u)) { cancelTask(u); return; }
   const def = BDEFS[b.type];
   const gain = Math.min(b.fixLeft, def.armor - b.armor, FIX_RATE * dt * S.players[u.owner].mult * batFactor(u));
   b.armor += gain;
@@ -1055,7 +1059,7 @@ function doPave(u, t, dt) {
     if (moveAlong(u, dt)) t.phase = 'work';
     return;
   }
-  if ((u.bat ?? 100) < BATTERY.critical) { cancelTask(u); return; }
+  if (mustRecharge(u)) { cancelTask(u); return; }
   t.prog += dt * S.players[u.owner].mult * batFactor(u);
   u.busy = 1;
   const c = CROSS[S.terrain[tile]];
@@ -1274,7 +1278,7 @@ function doBuild(u, t, dt) {
     if (moveAlong(u, dt)) t.phase = 'work';
     return;
   }
-  if ((u.bat ?? 100) < BATTERY.critical) { cancelTask(u); return; } // go recharge; another builder takes over
+  if (mustRecharge(u)) { cancelTask(u); return; } // go recharge; another builder takes over
   const def = BDEFS[s.type];
   const cap = deliveredCount(s) / sumValues(def.cost);
   if (s.progress < cap) {
@@ -1307,7 +1311,7 @@ function completeBuilding(b) {
   if (b.sitePrio) { delete b.prio; delete b.sitePrio; }
   S.players[b.owner].stats.built++;
   markDirty(b.x, b.y);
-  postMsg(b.owner, `${def.name} is complete.`, b.x, b.y, 'good');
+  postMsg(b.owner, `${def.name} is complete.` + (def.roadworks && paveMode(b) === 'marked' && !roadsMarked(b.owner) ? ' Mark the roads it should pave in Paths (Pave).' : ''), b.x, b.y, 'good');
   if (b.owner === 0) sfx('complete');
   addFx('ring', b.x + 0.5, b.y + 0.5, { color: PLAYER_COLORS[b.owner] });
   if (def.mil) computeTerritory();
@@ -1394,8 +1398,9 @@ function findCropSpot(b, radius) {
 }
 
 /**
- * The nearest road tile (along the roads, from x, y) that isn't asphalt yet, anywhere on the road
- * network joined to the Roadworks: its Paver follows the roads as far as they go.
+ * The nearest road tile (along the roads, from x, y) that needs asphalt (not surfaced yet, or worn
+ * enough to resurface), anywhere on the road network joined to the Roadworks: its Paver follows the
+ * roads as far as they go. A Roadworks set to marked roads only looks after the roads marked in Paths.
  */
 const _pave = { seen: null, gen: 0, q: null };
 function findPaveSpot(b, x, y) {
@@ -1405,13 +1410,14 @@ function findPaveSpot(b, x, y) {
   if (!_pave.seen || _pave.seen.length !== N) { _pave.seen = new Uint32Array(N); _pave.q = new Int32Array(N); _pave.gen = 0; }
   const seen = _pave.seen, q = _pave.q, gen = ++_pave.gen;
   let head = 0, tail = 0;
+  const all = paveMode(b) === 'all';
   const push = (t) => { if (t >= 0 && t < N && seen[t] !== gen && roadLike(t) && nets.indexOf(net.comp[t]) >= 0) { seen[t] = gen; q[tail++] = t; } };
   // Start where the Paver is (or at the roads beside the Roadworks).
   push(tIdx(x, y));
   if (!tail) for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) if (inMap(b.x + di, b.y + dj)) push(tIdx(b.x + di, b.y + dj));
   while (head < tail) {
     const t = q[head++];
-    if (S.road[t] && S.pave[t] < 2 && !S.resRes[t] && S.owner[t] === b.owner) return t;
+    if (needsPaving(t) && (all || S.paveMark[t]) && !S.resRes[t] && S.owner[t] === b.owner) return t;
     const i = t % W;
     for (const u of [i > 0 ? t - 1 : -1, i < W - 1 ? t + 1 : -1, t - W, t + W]) if (u >= 0 && u < N && canStep(t, u)) push(u);
   }
@@ -1514,7 +1520,12 @@ function doStaff(u, t, dt) {
         b.status = t.act === 'harvest' ? 'Harvesting energy crops' : 'Planting energy crops';
       } else if (def.roadworks) {
         node = findPaveSpot(b, b.x, b.y);
-        if (node < 0) { b.status = 'Every path in reach is asphalt'; t.wait = 3; return; }
+        if (node < 0) {
+          b.status = paveMode(b) === 'all' ? 'Every joined road is asphalt, in good repair'
+            : roadsMarked(b.owner) ? 'Every marked road is asphalt, in good repair' : 'No roads marked: mark roads to pave in Paths (Pave)';
+          t.wait = 3;
+          return;
+        }
         if (!(b.charges > 0)) {
           if (!((b.stock.asphalt || 0) > 0)) { b.status = 'Waiting for Asphalt'; t.wait = 1; return; }
           bump(b.stock, 'asphalt', -1);
@@ -1588,8 +1599,8 @@ function doStaff(u, t, dt) {
           markDirty(ni, nj);
         }
       } else if (def.roadworks) {
-        if (S.road[node] && S.pave[node] < 2) {
-          setPave(ni, nj, 2);
+        if (needsPaving(node)) {
+          if (S.pave[node] < 2) setPave(ni, nj, 2); else { S.wear[node] = 0; markDirty(ni, nj); }
           b.charges = Math.max(0, (b.charges || 0) - 1);
           S.players[u.owner].paved = (S.players[u.owner].paved || 0) + 1;
         }

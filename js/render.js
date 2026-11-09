@@ -43,6 +43,84 @@ const THEME = {
   hull: '#262a33', hullHi: '#3a404c', icon: '#eef2f6',
 };
 
+/* ------------------------------------------------------------------ biomes */
+
+/**
+ * How each biome looks. Ground, water and rock use the biome's own art (ground-jungle and so on)
+ * when it exists, otherwise the Red desert textures recoloured with `tex` (dark, mid, light).
+ */
+const BIOME_LOOK = {
+  desert: {
+    level: [['#7a462d', '#93593a'], ['#ad6f47', '#c99a66'], ['#c88d5a', '#e0b07a'], ['#d7a46e', '#ecc28c'], ['#e3b781', '#f5d3a0']],
+    theme: {},
+    hi: '255,236,205', lo: 'rgba(45,22,10,0.26)',
+    grain: ['rgba(62,32,14,0.2)', 'rgba(255,238,212,0.18)', 'rgba(238,214,180,0.55)', 'rgba(40,20,8,0.3)'],
+    mm: { ground: [169, 113, 74], water: [28, 75, 93], rock: [74, 51, 41], ramp: [235, 205, 150] },
+  },
+  jungle: {
+    level: [['#22301a', '#2c3d20'], ['#33492a', '#425d31'], ['#40592f', '#516f3a'], ['#4d6a36', '#5f8043'], ['#5b7a40', '#6f914e']],
+    theme: { cliffTop: '#33402a', cliffBottom: '#1b2215', slope: '#7b8a52', water: '#22402f', waterEdge: '#3d6a4a',
+      rock: '#2b3329', rockTop: '#3a4636', rockHi: '#55664c', rockShadow: '#161c15' },
+    tex: { ground: ['#1f2a14', '#3f5726', '#7f9a4c'], water: ['#16281d', '#2f5240', '#6f9478'], rock: ['#15190f', '#33402c', '#6b7d5d'] },
+    hi: '220,255,190', lo: 'rgba(8,22,6,0.32)',
+    grain: ['rgba(20,32,10,0.28)', 'rgba(200,230,150,0.14)', 'rgba(120,90,50,0.55)', 'rgba(10,18,6,0.35)'],
+    mm: { ground: [66, 96, 46], water: [34, 64, 47], rock: [43, 51, 41], ramp: [123, 138, 82] },
+  },
+  polar: {
+    level: [['#9fb0c2', '#aebfd0'], ['#c3d0dd', '#d3dee9'], ['#d6e0ea', '#e4ecf3'], ['#e2eaf2', '#eef3f8'], ['#ecf2f7', '#f8fbfd']],
+    theme: { cliffTop: '#7d8b99', cliffBottom: '#4c5866', slope: '#e3eaf1', water: '#132a3f', waterEdge: '#2c5878',
+      rock: '#5a6470', rockTop: '#727d8a', rockHi: '#a3aebb', rockShadow: '#323a44' },
+    tex: { ground: ['#9fb2c6', '#d6e1ec', '#fbfdff'], water: ['#0a1a2a', '#1d4566', '#7fa9c8'], rock: ['#3b434d', '#6c7682', '#c3ccd6'] },
+    hi: '255,255,255', lo: 'rgba(30,50,80,0.22)',
+    grain: ['rgba(70,95,125,0.16)', 'rgba(255,255,255,0.45)', 'rgba(120,130,140,0.6)', 'rgba(40,60,90,0.25)'],
+    mm: { ground: [214, 225, 236], water: [22, 52, 78], rock: [96, 106, 118], ramp: [227, 234, 241] },
+  },
+};
+const THEME_DESERT = {};
+const MM_DESERT = {};
+
+/** Switch the palette, textures and minimap colours to the current game's biome (at every bake). */
+function applyBiome() {
+  const b = typeof biome === 'function' && S ? biome() : 'desert';
+  const look = BIOME_LOOK[b] || BIOME_LOOK.desert;
+  if (!THEME_DESERT.cliffTop) { Object.assign(THEME_DESERT, THEME); Object.assign(MM_DESERT, { ground: MM_COLORS.ground, water: MM_COLORS.water, rock: MM_COLORS.rock, ramp: MM_COLORS.ramp }); }
+  Object.assign(THEME, THEME_DESERT, look.theme);
+  Object.assign(MM_COLORS, MM_DESERT, look.mm);
+  R.biome = b;
+  R.look = look;
+  R.tex = {};
+  for (const k of ['ground', 'water', 'rock']) R.tex[k] = biomeTexture(b, k);
+  R.tex.cliff = b === 'desert' ? ART.cliff || null : ART['cliff-' + b] || null;
+}
+
+/** The biome's own texture, or the desert one recoloured to suit (made once and kept). */
+function biomeTexture(b, kind) {
+  if (b === 'desert') return ART[kind] || null;
+  if (ART[kind + '-' + b]) return ART[kind + '-' + b];
+  const src = ART[kind], stops = BIOME_LOOK[b].tex && BIOME_LOOK[b].tex[kind];
+  if (!src || !stops) return null;
+  R.texCache = R.texCache || {};
+  const key = b + ':' + kind;
+  if (R.texCache[key] && R.texCache[key].from === src.img) return R.texCache[key];
+  const img = src.img, w = img.width, h = img.height;
+  const c = document.createElement('canvas');
+  c.width = w; c.height = h;
+  const x = c.getContext('2d');
+  x.drawImage(img, 0, 0);
+  let d;
+  try { d = x.getImageData(0, 0, w, h); } catch (e) { return null; }
+  const px = d.data, n = w * h, L = new Float32Array(n);
+  let lo = 255, hi = 0;
+  for (let k = 0; k < n; k++) { const l = 0.3 * px[k * 4] + 0.59 * px[k * 4 + 1] + 0.11 * px[k * 4 + 2]; L[k] = l; if (l < lo) lo = l; if (l > hi) hi = l; }
+  const rgb = stops.map((s) => [parseInt(s.slice(1, 3), 16), parseInt(s.slice(3, 5), 16), parseInt(s.slice(5, 7), 16)]);
+  for (let k = 0; k < n; k++) {
+    const f = hi > lo ? (L[k] - lo) / (hi - lo) : 0.5, a = f < 0.5 ? rgb[0] : rgb[1], b2 = f < 0.5 ? rgb[1] : rgb[2], g = f < 0.5 ? f * 2 : f * 2 - 1;
+    px[k * 4] = a[0] + (b2[0] - a[0]) * g; px[k * 4 + 1] = a[1] + (b2[1] - a[1]) * g; px[k * 4 + 2] = a[2] + (b2[2] - a[2]) * g;
+  }
+  x.putImageData(d, 0, 0);
+  return (R.texCache[key] = { img: c, scale: 0, anchor: '', from: img });
+}
+
 /* ------------------------------------------------------------------ custom art */
 
 const ART = {};
@@ -107,16 +185,44 @@ function turretHead(owner, aim) {
  */
 function drawArt(ctx, art, cx, cy, sizePx, angle) {
   const s = sizePx * (art.scale || 1);
+  const img = artMip(art, s * (R.drawScale || 1));
   if (Array.isArray(art.anchor) && !angle) {
-    ctx.drawImage(art.img, cx - art.anchor[0] * s, cy - art.anchor[1] * s, s, s);
+    ctx.drawImage(img, cx - art.anchor[0] * s, cy - art.anchor[1] * s, s, s);
     return;
   }
   if (art.anchor === 'bottom' && !angle) cy += (sizePx - s) / 2;
   if (angle) {
     ctx.save(); ctx.translate(cx, cy); ctx.rotate(angle);
-    ctx.drawImage(art.img, -s / 2, -s / 2, s, s);
+    ctx.drawImage(img, -s / 2, -s / 2, s, s);
     ctx.restore();
-  } else ctx.drawImage(art.img, cx - s / 2, cy - s / 2, s, s);
+  } else ctx.drawImage(img, cx - s / 2, cy - s / 2, s, s);
+}
+
+/**
+ * The copy of an art image to draw at `px` device pixels wide. Big images shrunk a long way in one
+ * step come out jagged and shimmer as they move, so each image keeps a chain of half-size copies
+ * (made once, smoothly) and draws from the smallest one that is still at least as big as needed.
+ */
+function artMip(art, px) {
+  const img = art.img;
+  if (px >= img.width * 0.75 || img.width < 64) return img;
+  if (!art.mips) {
+    art.mips = [];
+    let src = img, w = img.width, h = img.height;
+    while (w >= 48) {
+      w = Math.round(w / 2); h = Math.round(h / 2);
+      const c = document.createElement('canvas');
+      c.width = w; c.height = h;
+      const cx = c.getContext('2d');
+      cx.imageSmoothingQuality = 'high';
+      cx.drawImage(src, 0, 0, w, h);
+      art.mips.push(c);
+      src = c;
+    }
+  }
+  let best = img;
+  for (const m of art.mips) { if (m.width >= px) best = m; else break; }
+  return best;
 }
 
 /* ------------------------------------------------------------------ setup */
@@ -175,10 +281,13 @@ function bakeMap() {
   let maxElev = 0;
   for (let t = 0; t < S.W * S.H; t++) if (S.elev[t] > maxElev) maxElev = S.elev[t];
   R.levelOffset = maxElev === 0 ? 1 : 0;
+  applyBiome();
   R.map = document.createElement('canvas');
   R.map.width = S.W * TP;
   R.map.height = S.H * TP;
   R.mapCtx = R.map.getContext('2d');
+  R.mapCtx.hdScale = 1;
+  hdReset();
   for (let j = 0; j < S.H; j++) for (let i = 0; i < S.W; i++) drawTile(i, j);
   R.terr = document.createElement('canvas');
   R.terr.width = S.W; R.terr.height = S.H;
@@ -192,33 +301,146 @@ function flushDirtyTiles() {
   if (!S.dirtyTiles.length) return;
   MM.dirty = true;
   const seen = new Set();
+  const chunks = R.hd ? [...R.hd.chunks.values()] : [];
   for (const t of S.dirtyTiles) {
     if (seen.has(t)) continue;
     seen.add(t);
-    drawTile(t % S.W, (t / S.W) | 0);
+    const i = t % S.W, j = (t / S.W) | 0;
+    drawTile(i, j);
+    for (const ch of chunks) if (i >= ch.i0 && i < ch.i0 + HD_CHUNK && j >= ch.j0 && j < ch.j0 + HD_CHUNK) drawTile(i, j, ch.ctx);
   }
   S.dirtyTiles.length = 0;
+}
+
+/* ------------------------------------------------------------------ sharp map (HD chunks) */
+
+// The whole map is baked once at TP pixels a tile, which is cheap to draw zoomed out. Zoomed in, the
+// part on screen is baked again in chunks at 64 or 128 pixels a tile, so resources, roads, cliffs and
+// plants stay sharp instead of being stretched. Chunks are made a few at a time, nearest the middle
+// of the screen first, and the least recently seen are dropped to keep memory in check.
+const HD_CHUNK = 8;      // tiles along each side of a chunk
+const HD_SPARE = 10e6;   // pixels of off-screen chunks kept for when you pan back
+const HD_BAKE_MS = 6;    // baking time allowed per frame
+
+function hdReset() {
+  if (R.hd) for (const ch of R.hd.chunks.values()) ch.c.width = 0;
+  R.hd = { chunks: new Map(), px: 0, frame: 0 };
+}
+
+/** Pixels a tile for the sharp map at this zoom (0: the whole-map bake is sharp enough). */
+function hdLevel(z) {
+  const px = z * R.dpr;
+  return px <= TP * 1.2 ? 0 : px <= 64 * 1.25 ? 64 : 128;
+}
+
+function hdBake(level, cx, cy) {
+  const n = HD_CHUNK * level, k = level / TP;
+  const c = document.createElement('canvas');
+  c.width = n; c.height = n;
+  const ctx = c.getContext('2d');
+  ctx.hdScale = k;
+  ctx.setTransform(k, 0, 0, k, -cx * n, -cy * n);
+  const i0 = cx * HD_CHUNK, j0 = cy * HD_CHUNK;
+  // One tile of margin, so plants and resources leaning over the chunk's edge aren't cut off.
+  for (let j = j0 - 1; j <= j0 + HD_CHUNK; j++) for (let i = i0 - 1; i <= i0 + HD_CHUNK; i++) if (inMap(i, j)) drawTile(i, j, ctx);
+  return { c, ctx, level, i0, j0, used: 0 };
+}
+
+/** Draw the baked ground: the whole-map bake, with sharp chunks over it when zoomed in. */
+function drawMapLayer(ctx, ox, oy, z) {
+  ctx.imageSmoothingEnabled = true;
+  ctx.drawImage(R.map, ox, oy, S.W * z, S.H * z);
+  const level = hdLevel(z);
+  if (!level) return;
+  if (!R.hd) hdReset();
+  const hd = R.hd, C = HD_CHUNK, d = R.dpr;
+  hd.frame++;
+  const v0 = screenToWorld(0, 0), v1 = screenToWorld(R.w, R.h);
+  const nx = Math.ceil(S.W / C), ny = Math.ceil(S.H / C);
+  const cx0 = Math.floor(v0.x / C), cx1 = Math.floor(v1.x / C), cy0 = Math.floor(v0.y / C), cy1 = Math.floor(v1.y / C);
+  const key = (lv, cx, cy) => (lv * 4096 + cy) * 4096 + cx;
+  const draw = (ch) => {
+    // Snap to whole device pixels so neighbouring chunks meet without a seam.
+    const x0 = Math.round((ox + ch.i0 * z) * d) / d, y0 = Math.round((oy + ch.j0 * z) * d) / d;
+    const x1 = Math.round((ox + (ch.i0 + C) * z) * d) / d, y1 = Math.round((oy + (ch.j0 + C) * z) * d) / d;
+    ctx.drawImage(ch.c, x0, y0, x1 - x0, y1 - y0);
+  };
+  const todo = [], ring = [];
+  for (let cy = cy0 - 1; cy <= cy1 + 1; cy++) for (let cx = cx0 - 1; cx <= cx1 + 1; cx++) {
+    if (cx < 0 || cy < 0 || cx >= nx || cy >= ny) continue;
+    const onScreen = cx >= cx0 && cx <= cx1 && cy >= cy0 && cy <= cy1;
+    const ch = hd.chunks.get(key(level, cx, cy));
+    if (ch) { if (onScreen) { ch.used = hd.frame; draw(ch); } continue; }
+    if (!onScreen) { ring.push([cx, cy]); continue; }
+    // Not made yet: show the other sharpness level meanwhile, if there is one.
+    const alt = hd.chunks.get(key(level === 64 ? 128 : 64, cx, cy));
+    if (alt) { alt.used = hd.frame; draw(alt); }
+    todo.push([cx, cy]);
+  }
+  const mx = R.cam.x / C - 0.5, my = R.cam.y / C - 0.5;
+  const near = (a, b) => Math.hypot(a[0] - mx, a[1] - my) - Math.hypot(b[0] - mx, b[1] - my);
+  todo.sort(near); ring.sort(near);
+  const t0 = performance.now(), size = (C * level) ** 2;
+  for (const [cx, cy] of todo) {
+    if (performance.now() - t0 > HD_BAKE_MS) break;
+    const ch = hdBake(level, cx, cy);
+    ch.used = hd.frame;
+    hd.chunks.set(key(level, cx, cy), ch);
+    hd.px += size;
+    draw(ch);
+  }
+  // Spare time: get the chunks just off screen ready for panning.
+  let spare = 0;
+  for (const ch of hd.chunks.values()) if (ch.used !== hd.frame) spare += ch.c.width * ch.c.height;
+  for (const [cx, cy] of ring) {
+    if (performance.now() - t0 > HD_BAKE_MS || spare + size > HD_SPARE) break;
+    const ch = hdBake(level, cx, cy);
+    ch.used = hd.frame - 1;
+    hd.chunks.set(key(level, cx, cy), ch);
+    hd.px += size; spare += size;
+  }
+  // Drop the least recently seen off-screen chunks beyond the allowance.
+  if (spare > HD_SPARE) {
+    const old = [...hd.chunks.entries()].filter(([, ch]) => ch.used < hd.frame - 1).sort((a, b) => a[1].used - b[1].used);
+    for (const [k, ch] of old) {
+      if (spare <= HD_SPARE) break;
+      const px = ch.c.width * ch.c.height;
+      spare -= px; hd.px -= px;
+      ch.c.width = 0;
+      hd.chunks.delete(k);
+    }
+  }
 }
 
 function terrAt(i, j) { return inMap(i, j) ? S.terrain[tIdx(i, j)] : T_ROCK; }
 
 function levelColor(e, n) {
-  const pal = LEVEL_GROUND[clamp(e + (R.levelOffset || 0), 0, LEVEL_GROUND.length - 1)];
+  const lv = (R.look && R.look.level) || LEVEL_GROUND;
+  const pal = lv[clamp(e + (R.levelOffset || 0), 0, lv.length - 1)];
   return mixColor(pal[0], pal[1], clamp(n * 1.4 - 0.2, 0, 1));
 }
 
-function drawTile(i, j) {
-  const ctx = R.mapCtx, x = i * TP, y = j * TP, t = tIdx(i, j);
+/** Draw tile (i, j) of the baked map into ctx (the whole-map canvas, or a sharp chunk). */
+function drawTile(i, j, ctx = R.mapCtx) {
+  const prev = R.drawScale;
+  R.drawScale = ctx.hdScale || 1;
+  paintTile(ctx, i, j);
+  R.drawScale = prev;
+}
+
+function paintTile(ctx, i, j) {
+  const x = i * TP, y = j * TP, t = tIdx(i, j);
   const terr = S.terrain[t];
   const n = fbm(i / 6, j / 6, 991, 3);
   ctx.fillStyle = levelColor(S.elev[t], n);
   ctx.fillRect(x, y, TP, TP);
-  if (ART.ground) {
-    drawTexture(ctx, ART.ground, i, j, x, y);
+  const tex = R.tex || {}, look = R.look || BIOME_LOOK.desert;
+  if (tex.ground) {
+    drawTexture(ctx, tex.ground, i, j, x, y);
     // Keep elevation readable on top of the texture: higher ground is lighter, canyons darker.
     const d = S.elev[t] + (R.levelOffset || 0) - 1;
-    if (d > 0) { ctx.fillStyle = `rgba(255,236,205,${Math.min(0.34, 0.1 * d)})`; ctx.fillRect(x, y, TP, TP); }
-    else if (d < 0) { ctx.fillStyle = 'rgba(45,22,10,0.26)'; ctx.fillRect(x, y, TP, TP); }
+    if (d > 0) { ctx.fillStyle = `rgba(${look.hi},${Math.min(0.34, 0.1 * d)})`; ctx.fillRect(x, y, TP, TP); }
+    else if (d < 0) { ctx.fillStyle = look.lo; ctx.fillRect(x, y, TP, TP); }
   } else {
     for (let k = 0; k < 5; k++) {
       const h = hash2(i * 7 + k, j * 3 - k, 41);
@@ -229,8 +451,8 @@ function drawTile(i, j) {
   }
 
   if (terr === T_WATER) {
-    if (ART.water) {
-      drawTexture(ctx, ART.water, i, j, x, y);
+    if (tex.water) {
+      drawTexture(ctx, tex.water, i, j, x, y);
       ctx.fillStyle = 'rgba(159,217,208,0.5)';
       if (terrAt(i, j - 1) !== T_WATER) ctx.fillRect(x, y, TP, 2);
       if (terrAt(i - 1, j) !== T_WATER) ctx.fillRect(x, y, 2, TP);
@@ -255,8 +477,8 @@ function drawTile(i, j) {
       ctx.beginPath(); ctx.moveTo(rx, ry); ctx.quadraticCurveTo(rx + 4, ry - 3, rx + 8, ry); ctx.stroke();
     }
   } else if (terr === T_ROCK) {
-    if (ART.rock) {
-      drawTexture(ctx, ART.rock, i, j, x, y);
+    if (tex.rock) {
+      drawTexture(ctx, tex.rock, i, j, x, y);
       ctx.fillStyle = 'rgba(255,225,190,0.22)';
       if (terrAt(i, j - 1) !== T_ROCK) ctx.fillRect(x, y, TP, 2);
       if (terrAt(i - 1, j) !== T_ROCK) ctx.fillRect(x, y, 2, TP);
@@ -282,13 +504,128 @@ function drawTile(i, j) {
     }
   }
 
+  if (terr === T_GROUND && !S.road[t]) drawGrain(ctx, i, j, x, y);
   if (terr === T_GROUND) drawElevation(ctx, i, j, x, y, t, n);
   else if (terr === T_WATER) drawCliffFace(ctx, i, j, x, y, t, true);
   if (terr === T_GROUND && S.fert && S.fert[t] && !S.ramp[t]) drawFertile(ctx, i, j, x, y);
+  if (S.decor && S.decor[t] && !S.road[t] && !S.res[t] && !S.plan[t] && !S.bAt[t]) drawPlant(ctx, S.decor[t], i, j, x, y);
   if (S.road[t]) { if (terr === T_GROUND) drawRoad(ctx, i, j, x, y); else drawCrossing(ctx, i, j, x, y, t); }
   if (S.res[t]) {
     drawResource(ctx, S.res[t], S.amt[t], S.grow[t], x + TP / 2, y + TP / 2, TP, i, j);
     if (richRes(t)) drawGlint(ctx, x, y, i, j);
+  }
+}
+
+/**
+ * A decorative plant on open ground: the biome's art (plant-<biome>-1 …) if there is any, otherwise
+ * a simple drawn stand-in. Each tile's plant sits a little off-centre at its own size.
+ */
+function drawPlant(ctx, v, i, j, x, y) {
+  const b = R.biome || 'desert', sd = 911;
+  const cx = x + TP / 2 + (hash2(i, j, sd) - 0.5) * TP * 0.22, cy = y + TP / 2 + (hash2(j, i, sd + 1) - 0.5) * TP * 0.22;
+  const sc = 0.78 + hash2(i, j, sd + 2) * 0.3;
+  let n = 0;
+  while (ART[`plant-${b}-${n + 1}`]) n++;
+  if (n) { drawArt(ctx, ART[`plant-${b}-${((v - 1) % n) + 1}`], cx, cy, TP * 0.92 * sc); return; }
+  const u = (TP / 32) * sc, h = (k) => hash2(i * 7 + k, j * 11 - k, sd + 3);
+  const P = (fill, f) => { ctx.fillStyle = fill; ctx.beginPath(); f(); ctx.fill(); };
+  const E = (ex, ey, rx, ry, rot) => ctx.ellipse(ex, ey, rx, ry, rot || 0, 0, Math.PI * 2);
+  const shadow = (r, a) => P(`rgba(0,0,0,${a || 0.2})`, () => E(cx + 1.8 * u, cy + 2 * u, r * u, r * 0.6 * u));
+  const leaf = (ang, len, wid, fill) => P(fill, () => E(cx + Math.cos(ang) * len * 0.5 * u, cy + Math.sin(ang) * len * 0.5 * u, len * 0.5 * u, wid * u, ang));
+  const line = (col, w, pts) => { ctx.strokeStyle = col; ctx.lineWidth = w * u; ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(cx + pts[0] * u, cy + pts[1] * u); for (let k = 2; k < pts.length; k += 2) ctx.lineTo(cx + pts[k] * u, cy + pts[k + 1] * u); ctx.stroke(); };
+  const rot = h(0) * Math.PI * 2;
+  if (b === 'jungle') {
+    if (v === 1) { // fern
+      shadow(9);
+      for (let k = 0; k < 7; k++) { const a = rot + k * 0.9; leaf(a, 11, 2.2, '#2c5426'); line('rgba(150,190,110,0.5)', 0.5, [0, 0, Math.cos(a) * 10, Math.sin(a) * 10]); }
+    } else if (v === 2) { // giant leaves
+      shadow(9);
+      for (let k = 0; k < 5; k++) { const a = rot + k * 1.25; leaf(a, 12, 4, k % 2 ? '#56692e' : '#4b5f28'); line('rgba(120,30,40,0.55)', 0.6, [0, 0, Math.cos(a) * 11, Math.sin(a) * 11]); }
+    } else if (v === 3) { // flowering shrub
+      shadow(8);
+      for (let k = 0; k < 6; k++) P(k % 2 ? '#2f5a2b' : '#3c6b33', () => E(cx + (h(k) - 0.5) * 9 * u, cy + (h(k + 6) - 0.5) * 8 * u, 4.4 * u, 3.8 * u));
+      for (let k = 0; k < 5; k++) P(k % 2 ? '#e0559a' : '#f29a3a', () => E(cx + (h(k + 20) - 0.5) * 10 * u, cy + (h(k + 30) - 0.5) * 8 * u, 1.3 * u, 1.3 * u));
+    } else if (v === 4) { // small tree canopy
+      shadow(11, 0.28);
+      P('#244a24', () => E(cx, cy, 10 * u, 9 * u));
+      for (let k = 0; k < 5; k++) P('#356b32', () => E(cx + (h(k) - 0.6) * 8 * u, cy + (h(k + 5) - 0.6) * 7 * u, 4.5 * u, 4 * u));
+      P('rgba(150,200,110,0.35)', () => E(cx - 3 * u, cy - 3 * u, 3.5 * u, 2.6 * u));
+    } else if (v === 5) { // moss mat with spore heads
+      P('rgba(0,0,0,0.12)', () => E(cx + 1 * u, cy + 1.2 * u, 9 * u, 6 * u));
+      for (let k = 0; k < 4; k++) P('#45622a', () => E(cx + (h(k) - 0.5) * 8 * u, cy + (h(k + 4) - 0.5) * 5 * u, 5 * u, 3.4 * u));
+      for (let k = 0; k < 7; k++) P('#b5c94a', () => E(cx + (h(k + 10) - 0.5) * 12 * u, cy + (h(k + 17) - 0.5) * 7 * u, 0.8 * u, 0.8 * u));
+    } else { // vines with pitcher pods
+      shadow(8);
+      line('#3c5a26', 1.3, [-9, 3, -4, -2, 1, 2, 6, -3, 9, 1]);
+      line('#34502a', 1.1, [-7, -5, -2, 0, 4, 5]);
+      for (let k = 0; k < 2; k++) { const px = (k ? 5 : -3) * u, py = (k ? -1 : 3) * u; P('#8a6b3a', () => E(cx + px, cy + py, 2.4 * u, 3.2 * u)); P('#2a1c10', () => E(cx + px, cy + py - 1.6 * u, 1.5 * u, 0.9 * u)); }
+    }
+  } else if (b === 'polar') {
+    if (v === 1) { // frost-rimed shrub
+      shadow(7);
+      for (let k = 0; k < 7; k++) { const a = rot + k * 0.9, l = 6 + h(k) * 4; line('#5f7184', 1.1, [0, 0, Math.cos(a) * l, Math.sin(a) * l]); P('#eef6ff', () => E(cx + Math.cos(a) * l * u, cy + Math.sin(a) * l * u, 1.1 * u, 1.1 * u)); }
+    } else if (v === 2) { // snow drift with grass
+      P('rgba(60,85,120,0.25)', () => E(cx + 1.5 * u, cy + 2 * u, 8 * u, 4.5 * u));
+      P('#f6f9fc', () => E(cx, cy, 8 * u, 4.5 * u));
+      for (let k = 0; k < 5; k++) line('#a08a5e', 0.7, [(h(k) - 0.5) * 9, 1, (h(k) - 0.5) * 9 + (h(k + 5) - 0.5) * 3, -5 - h(k + 9) * 3]);
+    } else if (v === 3) { // conifer seen from above
+      shadow(9, 0.26);
+      for (let k = 0; k < 8; k++) { const a = rot + k * Math.PI / 4; P('#1f3b2b', () => { ctx.moveTo(cx + Math.cos(a - 0.35) * 3 * u, cy + Math.sin(a - 0.35) * 3 * u); ctx.lineTo(cx + Math.cos(a) * 9 * u, cy + Math.sin(a) * 9 * u); ctx.lineTo(cx + Math.cos(a + 0.35) * 3 * u, cy + Math.sin(a + 0.35) * 3 * u); }); }
+      P('#2c5039', () => E(cx, cy, 3.5 * u, 3.5 * u));
+      for (let k = 0; k < 6; k++) P('rgba(245,250,255,0.85)', () => E(cx + (h(k) - 0.5) * 12 * u, cy + (h(k + 6) - 0.5) * 12 * u, 1.2 * u, 0.9 * u));
+    } else if (v === 4) { // lichen-covered stone
+      shadow(7, 0.25);
+      P('#868d96', () => E(cx, cy, 6.5 * u, 5 * u));
+      P('#a4abb4', () => E(cx - 1.5 * u, cy - 1.5 * u, 4 * u, 2.8 * u));
+      for (let k = 0; k < 4; k++) P(k % 2 ? '#b9a3c9' : '#c27a4a', () => E(cx + (h(k) - 0.5) * 8 * u, cy + (h(k + 4) - 0.5) * 6 * u, 1.4 * u, 1.1 * u));
+      P('rgba(250,252,255,0.9)', () => E(cx - 1 * u, cy - 3.6 * u, 3.4 * u, 1.2 * u));
+    } else if (v === 5) { // frozen reeds
+      shadow(6, 0.16);
+      for (let k = 0; k < 6; k++) { const bx = (h(k) - 0.5) * 8, l = 6 + h(k + 6) * 4; line('#8d9a82', 0.9, [bx, 3, bx + (h(k + 12) - 0.5) * 3, 3 - l]); line('rgba(240,248,255,0.9)', 0.6, [bx, 1, bx + (h(k + 12) - 0.5) * 2, 1 - l * 0.5]); }
+    } else { // frost flower
+      P('rgba(60,90,130,0.18)', () => E(cx + 1 * u, cy + 1.5 * u, 6 * u, 4 * u));
+      for (let k = 0; k < 6; k++) leaf(rot + k * Math.PI / 3, 8, 2, '#cfe6f6');
+      P('#ffffff', () => E(cx, cy, 2 * u, 2 * u));
+    }
+  } else {
+    if (v === 1) { // lichen crust
+      for (let k = 0; k < 5; k++) P(k % 2 ? 'rgba(150,62,38,0.6)' : 'rgba(190,110,58,0.5)', () => E(cx + (h(k) - 0.5) * 10 * u, cy + (h(k + 5) - 0.5) * 7 * u, (2.5 + h(k + 9) * 2.5) * u, (1.8 + h(k + 13) * 1.6) * u, h(k) * 3));
+    } else if (v === 2) { // spiny succulent rosette
+      shadow(7);
+      for (let k = 0; k < 8; k++) { const a = rot + k * Math.PI / 4; P(k % 2 ? '#6b2f2a' : '#7a3a2c', () => { ctx.moveTo(cx + Math.cos(a - 0.5) * 1.5 * u, cy + Math.sin(a - 0.5) * 1.5 * u); ctx.lineTo(cx + Math.cos(a) * 7.5 * u, cy + Math.sin(a) * 7.5 * u); ctx.lineTo(cx + Math.cos(a + 0.5) * 1.5 * u, cy + Math.sin(a + 0.5) * 1.5 * u); }); }
+      P('#7a7340', () => E(cx, cy, 2.4 * u, 2.4 * u));
+    } else if (v === 3) { // dry scrub
+      shadow(7, 0.16);
+      for (let k = 0; k < 9; k++) { const a = rot + k * 0.7, l = 5 + h(k) * 4; line('#b9a383', 0.7, [0, 0, Math.cos(a) * l * 0.6 + (h(k + 9) - 0.5) * 2, Math.sin(a) * l * 0.6, Math.cos(a) * l, Math.sin(a) * l]); }
+    } else if (v === 4) { // creeper with seed pods
+      line('#6a4a30', 1, [-8, 2, -3, -1, 2, 2, 8, -2]);
+      for (let k = 0; k < 3; k++) { const px = (-6 + k * 6) * u, py = (k % 2 ? 1.5 : -1) * u; P('rgba(0,0,0,0.2)', () => E(cx + px + 0.8 * u, cy + py + 1 * u, 2 * u, 1.3 * u)); P('#3b2a22', () => E(cx + px, cy + py, 2 * u, 1.4 * u)); }
+    } else if (v === 5) { // dry coral fan
+      shadow(7, 0.16);
+      for (let k = 0; k < 5; k++) { const a = -Math.PI / 2 + (k - 2) * 0.38, l = 6 + h(k) * 3; line('#9a4a38', 1.2, [0, 4, Math.cos(a) * l * 0.5, 4 + Math.sin(a) * l * 0.5, Math.cos(a) * l, 4 + Math.sin(a) * l]); }
+    } else { // grass tufts
+      for (let g = 0; g < 2; g++) {
+        const gx = (g ? 4 : -4) + (h(g) - 0.5) * 3, gy = (g ? -2 : 2);
+        P('rgba(0,0,0,0.15)', () => E(cx + (gx + 1) * u, cy + (gy + 1) * u, 3.5 * u, 1.6 * u));
+        for (let k = 0; k < 6; k++) line('#c9a86a', 0.6, [gx, gy, gx + (k - 2.5) * 1.1, gy - 4 - h(k + g * 6) * 3]);
+      }
+    }
+  }
+}
+
+/** Fine grain on open ground (tiny grit and pebbles), crisp on the sharp map when zoomed in. */
+function drawGrain(ctx, i, j, x, y) {
+  const gr = (R.look || BIOME_LOOK.desert).grain;
+  for (let k = 0; k < 10; k++) {
+    const h = hash2(i * 11 + k, j * 17 - k, 57);
+    const px = x + 1 + hash2(i * 5 + k, j * 3, 61) * (TP - 2), py = y + 1 + hash2(i * 3, j * 5 + k, 67) * (TP - 2);
+    const r = 0.3 + h * 0.55;
+    if (h > 0.9) { // a pebble, lit from the top-left
+      ctx.fillStyle = gr[3];
+      ctx.beginPath(); ctx.arc(px + 0.35, py + 0.35, r + 0.25, 0, 6.283); ctx.fill();
+      ctx.fillStyle = gr[2];
+    } else ctx.fillStyle = h < 0.5 ? gr[0] : gr[1];
+    ctx.beginPath(); ctx.arc(px, py, r, 0, 6.283); ctx.fill();
   }
 }
 
@@ -317,8 +654,9 @@ function drawCliffFace(ctx, i, j, x, y, t, waterOnly) {
   if (en === null || en <= S.elev[t]) return;
   if (!waterOnly && canStep(t, tIdx(i, j - 1))) return; // a ramp joins them; the slope is drawn instead
   const h = Math.min(TP * 0.62, 14 * (en - S.elev[t]));
-  if (ART.cliff) {
-    const img = ART.cliff.img, sw = img.width / 4;
+  const cliffArt = R.tex ? R.tex.cliff : ART.cliff;
+  if (cliffArt) {
+    const img = cliffArt.img, sw = img.width / 4;
     ctx.drawImage(img, (i % 4) * sw, 0, sw, img.height, x, y, TP, h);
   } else {
     const g = ctx.createLinearGradient(0, y, 0, y + h);
@@ -427,8 +765,69 @@ function drawRoad(ctx, i, j, x, y) {
     // Asphalt: a faint aggregate speckle.
     ctx.fillStyle = 'rgba(255,255,255,0.10)';
     for (let k = 0; k < 4; k++) ctx.fillRect(x + c - 4 + hash2(i, j, 30 + k) * 8, y + c - 4 + hash2(j, i, 40 + k) * 8, 1, 1);
+    const band = S.wear ? (S.wear[t] / 250) | 0 : 0;
+    if (band) drawWear(ctx, i, j, x, y, w, nb, band);
   }
   drawRoadArrow(ctx, t, x, y);
+}
+
+/** Roads marked for asphalt (amber), and worn asphalt that's due for resurfacing (red outline). */
+function drawPaveMarks(ctx, ox, oy, z, inView) {
+  const pulse = 0.75 + 0.25 * Math.sin(R.time * 3);
+  ctx.lineWidth = Math.max(1.5, z * 0.05);
+  for (let t = 0; t < S.W * S.H; t++) {
+    if (S.owner[t] !== 0 || !(S.road[t] || S.plan[t] === 1)) continue;
+    const worn = S.road[t] && S.pave[t] === 2 && S.wear[t] >= REPAVE_AT;
+    if (!S.paveMark[t] && !worn) continue;
+    const i = t % S.W, j = (t / S.W) | 0;
+    if (!inView(i, j, 1)) continue;
+    const x = ox + i * z, y = oy + j * z;
+    if (S.paveMark[t]) {
+      ctx.fillStyle = S.pave[t] === 2 ? 'rgba(255,196,70,0.16)' : 'rgba(255,196,70,0.34)';
+      ctx.fillRect(x + z * 0.08, y + z * 0.08, z * 0.84, z * 0.84);
+      ctx.strokeStyle = `rgba(255,196,70,${0.7 * pulse})`;
+      ctx.strokeRect(x + z * 0.08, y + z * 0.08, z * 0.84, z * 0.84);
+    }
+    if (worn) {
+      ctx.strokeStyle = `rgba(255,80,60,${0.9 * pulse})`;
+      ctx.strokeRect(x + z * 0.18, y + z * 0.18, z * 0.64, z * 0.64);
+    }
+  }
+}
+
+/** Worn asphalt: it fades grey, cracks, and finally breaks into potholes. */
+function drawWear(ctx, i, j, x, y, w, nb, band) {
+  const c = TP / 2, h = (k) => hash2(i * 7 + k, j * 13 - k, 90);
+  // Keep the marks on the road: inside the centre square and the arms that join neighbours.
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(x + c - w / 2, y + c - w / 2, w, w);
+  if (nb[0]) ctx.rect(x + c - w / 2, y, w, c);
+  if (nb[1]) ctx.rect(x + c, y + c - w / 2, c, w);
+  if (nb[2]) ctx.rect(x + c - w / 2, y + c, w, c);
+  if (nb[3]) ctx.rect(x, y + c - w / 2, c, w);
+  ctx.clip();
+  ctx.fillStyle = `rgba(170,165,155,${0.07 * band})`;
+  ctx.fillRect(x, y, TP, TP);
+  ctx.strokeStyle = 'rgba(8,8,10,0.75)';
+  ctx.lineWidth = 0.7;
+  ctx.lineCap = 'round';
+  for (let k = 0; k < band + 1; k++) {
+    let px = x + c + (h(k) - 0.5) * w, py = y + c + (h(k + 9) - 0.5) * w;
+    ctx.beginPath(); ctx.moveTo(px, py);
+    for (let s = 0; s < 3; s++) { px += (h(k * 5 + s) - 0.5) * 9; py += (h(k * 5 + s + 20) - 0.5) * 9; ctx.lineTo(px, py); }
+    ctx.stroke();
+  }
+  if (band >= 3) {
+    for (let k = 0; k < 2; k++) {
+      const px = x + c + (h(40 + k) - 0.5) * w * 0.7, py = y + c + (h(50 + k) - 0.5) * w * 0.7, r = 1.4 + h(60 + k) * 1.4;
+      ctx.fillStyle = 'rgba(150,140,125,0.55)';
+      ctx.beginPath(); ctx.ellipse(px + 0.4, py + 0.5, r + 0.6, (r + 0.6) * 0.75, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#0b0b0d';
+      ctx.beginPath(); ctx.ellipse(px, py, r, r * 0.75, 0, 0, Math.PI * 2); ctx.fill();
+    }
+  }
+  ctx.restore();
 }
 
 /** One-way paths carry an arrow showing which way traffic flows. */
@@ -1421,6 +1820,7 @@ function render(dtReal) {
   R.dt = dtReal;
   const ctx = R.ctx, z = R.cam.z;
   ctx.setTransform(R.dpr, 0, 0, R.dpr, 0, 0);
+  R.drawScale = R.dpr;
   ctx.fillStyle = '#120f14';
   ctx.fillRect(0, 0, R.w, R.h);
   if (!S || !R.map) return;
@@ -1433,9 +1833,7 @@ function render(dtReal) {
   const v0 = screenToWorld(0, 0), v1 = screenToWorld(R.w, R.h);
   const inView = (x, y, m) => x > v0.x - m && x < v1.x + m && y > v0.y - m && y < v1.y + m;
 
-  ctx.imageSmoothingEnabled = z < TP;
-  ctx.drawImage(R.map, ox, oy, S.W * z, S.H * z);
-  ctx.imageSmoothingEnabled = true;
+  drawMapLayer(ctx, ox, oy, z);
   ctx.drawImage(R.terr, ox, oy, S.W * z, S.H * z);
 
   // Territory borders
@@ -1470,6 +1868,7 @@ function render(dtReal) {
     const lightsMode = typeof UI !== 'undefined' && UI.roadMode === 'lights';
     const bridgeMode = typeof UI !== 'undefined' && UI.roadMode === 'bridge';
     const rampMode = typeof UI !== 'undefined' && UI.roadMode === 'ramp';
+    const paveMode = typeof UI !== 'undefined' && UI.roadMode === 'pave';
     if (rampMode) {
       // Where a Ramp can go: the foot or top of a one-level cliff (refreshed every couple of seconds).
       if (!R.overlay || R.overlay.type !== 'ramp' || R.time - R.overlay.at > 2) refreshOverlay('ramp');
@@ -1499,7 +1898,7 @@ function render(dtReal) {
         ctx.setLineDash([]);
         continue;
       }
-      if (S.road[t] || !canRoad(0, i, j)) continue;
+      if (paveMode || S.road[t] || !canRoad(0, i, j)) continue;
       const cross = crossTile(t);
       if (cross && !bridgeMode) continue;
       ctx.strokeStyle = cross ? 'rgba(140,215,255,0.5)' : S.res[t] ? 'rgba(255,170,90,0.28)' : 'rgba(255,240,200,0.18)';
@@ -1508,6 +1907,10 @@ function render(dtReal) {
   }
   drawScorch(ctx, ox, oy, z);
   drawPlans(ctx, ox, oy, z, inView);
+  if (typeof UI !== 'undefined') {
+    const selB = getE(R.selected);
+    if ((R.mode === 'road' && UI.roadMode === 'pave') || (selB && selB.type === 'roadworks' && selB.owner === 0) || UI.sheetKind === 'road') drawPaveMarks(ctx, ox, oy, z, inView);
+  }
   if (R.mode === 'road') drawDraft(ctx, ox, oy, z, inView);
   drawLights(ctx, ox, oy, z, inView);
   drawOverpasses(ctx, ox, oy, z, inView);
@@ -2030,7 +2433,7 @@ function drawScorch(ctx, ox, oy, z) {
     if (left <= 0) continue;
     ctx.globalAlpha = clamp(left / 60, 0, 1);
     const art = ART['nuke-scorch'], w = (NUKE.radius * 2 / 0.82) * z, x = ox + b.x * z, y = oy + b.y * z;
-    if (art) ctx.drawImage(art.img, x - w * 0.5, y - w * 0.52, w, w);
+    if (art) ctx.drawImage(artMip(art, w * R.dpr), x - w * 0.5, y - w * 0.52, w, w);
     else {
       const g = ctx.createRadialGradient(x, y, 0, x, y, NUKE.radius * z);
       g.addColorStop(0, 'rgba(10,6,4,0.85)'); g.addColorStop(0.7, 'rgba(30,20,12,0.6)'); g.addColorStop(1, 'rgba(30,20,12,0)');
@@ -2129,9 +2532,9 @@ function buildingIcon(type, size, owner) {
   // Custom art is fitted to the icon whole, whatever its scale or anchor on the map.
   const art = artFor(type, owner || 0);
   if (art) {
-    ctx.drawImage(art.img, size * 0.04, size * 0.04, size * 0.92, size * 0.92);
+    ctx.drawImage(artMip(art, size * 0.92), size * 0.04, size * 0.04, size * 0.92, size * 0.92);
     const head = type === 'turret' && art.anchor === 'bottom' ? turretHead(owner || 0, Math.PI / 4) : null;
-    if (head) ctx.drawImage(head.img, size * 0.04, size * 0.04, size * 0.92, size * 0.92);
+    if (head) ctx.drawImage(artMip(head, size * 0.92), size * 0.04, size * 0.04, size * 0.92, size * 0.92);
     return c.toDataURL();
   }
   drawBuilding(ctx, type, size / 2, size / 2 + (type === 'lander' ? 0 : size * 0.02), type === 'lander' ? size * 0.55 : size * 0.86, owner || 0,

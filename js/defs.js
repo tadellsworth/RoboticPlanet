@@ -22,7 +22,28 @@ const PAVE = [null,
   { key: 'road', name: 'Road', speed: 2.0, cost: { cement: 0.2 } },
   { key: 'asphalt', name: 'Asphalt road', speed: 2.75 },
 ];
+/**
+ * Biomes: the look of the planet, chosen on the new-game screen. Purely cosmetic: ground, water,
+ * rock and decorative plants (`plants` is the share of open tiles with one). Plants never block
+ * anything; a road, planned road or building clears the plants on its tile.
+ */
+const BIOMES = {
+  desert: { name: 'Red desert', plants: 0.07 },
+  jungle: { name: 'Jungle', plants: 0.34 },
+  polar: { name: 'Polar', plants: 0.1 },
+};
+const BIOME_ORDER = ['desert', 'jungle', 'polar'];
+const PLANT_KINDS = 6; // decorative plant varieties per biome
+
 const ASPHALT_TILES = 4;          // road tiles one Asphalt covers
+// Asphalt wears with traffic: every bot driving onto a tile adds wear (per mille), heavy Freight
+// Trucks three times as much. Past half worn it slows bots a little, at REPAVE_AT a Roadworks
+// resurfaces it, and worn right through it drops back to plain road.
+const WEAR_BOT = 1, WEAR_TRUCK = 3;
+const WEAR_SLOW = 500;            // wear where asphalt starts to slow bots
+const WEAR_WORN_SPEED = 2.3;      // asphalt speed when it's about to wear through (fresh: 2.75)
+const REPAVE_AT = 500;            // wear at which a Paver resurfaces a tile
+const WEAR_MAX = 1000;            // worn through: back to plain road
 const SLOPE_SPEED = 0.65;         // speed multiplier on an unpaved ramp
 /*
  * One-way roads and traffic. A road tile in S.road is 1 (two-way) or 2–5 (one-way, pointing
@@ -436,8 +457,6 @@ const DIFFICULTY = {
 
 /** Starting goods in each Command Base. */
 const START_STOCK = { fiber: 16, stone: 8, alloy: 8, chip: 4, crystal: 4, fuel: 10, cement: 24 };
-/** Only Charging Stations charge robots (not the Command Base), so every colony lands with one beside it, stocked with Fuel. */
-const START_CHARGER_FUEL = 4;
 const START_BOTS = { worker: 10, hauler: 5, agribot: 1 };
 const START_WARBOTS = 4;
 const MIN_FREE_WORKERS = 2;   // workers always kept free for building

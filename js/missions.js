@@ -73,7 +73,7 @@ const MISSIONS = [
   {
     id: 'greenfuel', name: 'Green Fuel',
     brief: 'The landing burned the fuel reserve and the colony is spread thin. Grow Fuel on the fertile flats and keep two Charging Stations running.',
-    mode: 'colony', seed: 3307, size: 1, rough: 1, rich: 2, limit: [0, 0, 20],
+    mode: 'colony', seed: 3307, size: 1, rough: 1, rich: 2, limit: [0, 0, 25], biome: 'jungle',
     goals: [
       { kind: 'built', type: 'farm', n: 1 }, { kind: 'made', good: 'fuel', n: [15, 25, 35] },
       { kind: 'built', type: 'charger', n: 2 },
@@ -99,7 +99,7 @@ const MISSIONS = [
   },
   {
     id: 'blacktop', name: 'Blacktop',
-    brief: 'The survey crews want proper roads. Bake Cement, lay roads, then send a Paver out with Asphalt made from the oil seep beside your base.',
+    brief: 'The survey crews want proper roads. Bake Cement, lay roads, then mark them for asphalt in Paths (Pave) and send a Paver out with Asphalt made from the oil seep beside your base.',
     mode: 'colony', seed: 5501, size: 1, rough: 2, rich: 2, limit: [0, 0, 25],
     goals: [
       { kind: 'made', good: 'cement', n: [12, 20, 28] }, { kind: 'paths', tier: 1, n: [23, 33, 43] },
@@ -122,14 +122,14 @@ const MISSIONS = [
   {
     id: 'supply', name: 'Supply Lines',
     brief: 'Warbots win nothing on empty magazines. Build an Ammo Plant, keep your garrisons stocked, and capture the rival Command Base.',
-    mode: 'versus', seed: 7707, size: 1, rough: 2, rich: 2, rival: ['easy', 'normal', 'hard'], limit: [0, 40, 35],
+    mode: 'versus', seed: 7707, size: 1, rough: 2, rich: 2, rival: ['easy', 'normal', 'hard'], limit: [0, 40, 35], biome: 'jungle',
     goals: [{ kind: 'made', good: 'ammo', n: [15, 25, 35] }, { kind: 'capture' }],
     setup(S) { for (const u of S.bots) if (u.type === 'warbot' && u.owner === 0) u.ammo = 4; },
   },
   {
     id: 'descent', name: 'Final Descent',
     brief: 'A deep canyon world and a veteran rival. Every route is long, so plan your roads, Fuel and Ammo well. Capture the rival Command Base.',
-    mode: 'versus', seed: 8803, size: 2, rough: 3, rich: 2, rival: ['normal', 'hard', 'hard'], rivalBonus: [0, 0, 6], limit: [0, 0, 50],
+    mode: 'versus', seed: 8803, size: 2, rough: 3, rich: 2, rival: ['normal', 'hard', 'hard'], rivalBonus: [0, 0, 6], limit: [0, 0, 50], biome: 'polar',
     goals: [{ kind: 'capture' }],
   },
 ];
@@ -208,7 +208,7 @@ function finishMission() {
 function missionOptions(k, diff) {
   const def = MISSIONS[k];
   return {
-    seed: def.seed, mode: def.mode, size: def.size, rough: def.rough, rich: def.rich,
+    seed: def.seed, mode: def.mode, size: def.size, rough: def.rough, rich: def.rich, biome: def.biome,
     difficulty: def.rival ? def.rival[diff] : 'normal',
     layout: def.layout,
     setup(S) {
