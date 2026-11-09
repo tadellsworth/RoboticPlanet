@@ -126,7 +126,7 @@ function syncMenu() {
   $('m-diff-field').hidden = UI.menu.mode === 'colony';
   $('m-mode-desc').textContent = UI.menu.mode === 'colony'
     ? 'No rival. Settle the planet at your own pace: build supply chains and spread across the whole map.'
-    : 'Race a rival colony across the planet. Build up, then capture its Lander to win.';
+    : 'Race a rival colony across the planet. Build up, then capture its Command Base to win.';
   $('m-seed').textContent = 'Planet #' + UI.menu.seed;
   const size = UI.menu.size[UI.menu.mode] ?? DEFAULT_SIZE[UI.menu.mode];
   $('m-size').value = size;
@@ -331,8 +331,8 @@ function showGameOver() {
   sfx(won ? 'win' : 'lose');
   $('o-title').textContent = won ? 'Victory!' : 'Defeat';
   $('o-text').textContent = won
-    ? 'Your warbots captured the rival Lander. The planet is yours.'
-    : 'The rival captured your Lander. Regroup and try again.';
+    ? 'Your warbots captured the rival Command Base. The planet is yours.'
+    : 'The rival captured your Command Base. Regroup and try again.';
   const st = S.players[0].stats;
   $('o-stats').innerHTML = [
     ['Time', fmtTime(S.time)], ['Buildings completed', st.built], ['Bots built', st.bots - (st.startBots || 0)],
@@ -404,7 +404,7 @@ function goalText(g, diff) {
     case 'oneway': return `Make ${n} road tiles one-way`;
     case 'land': return `Claim ${n}% of the land`;
     case 'outposts': return n > 1 ? `Capture ${n} rival Outposts` : 'Capture a rival Outpost';
-    case 'capture': return 'Capture the rival Lander';
+    case 'capture': return 'Capture the rival Command Base';
   }
   return '';
 }
@@ -439,7 +439,7 @@ function showMissionOver() {
   $('o-text').textContent = won
     ? `${def.name} (${MISSION_DIFF_NAMES[M.diff]}) done in ${fmtTime(S.time)}.`
     : M.why === 'time' ? `${def.name}: time ran out before every goal was met.`
-      : M.why === 'lander' ? `${def.name}: the rival captured your Lander.` : `${def.name}: the game ended before every goal was met.`;
+      : M.why === 'lander' ? `${def.name}: the rival captured your Command Base.` : `${def.name}: the game ended before every goal was met.`;
   $('o-stats').innerHTML = def.goals.map((g) => { const s = goalState(g, M.diff); return `<span>${s.done ? '✓' : '✗'} ${s.text}</span><span>${s.need > 1 ? `${s.have}/${s.need}` : s.done ? 'Done' : '–'}</span>`; }).join('');
   if (won) {
     completeMission(M.k, M.diff);
@@ -848,7 +848,7 @@ function openBuildingSheet(b) {
   const def = BDEFS[b.type];
   const mine = b.owner === 0;
   R.selected = b.id; R.selTile = -1; UI.selBot = 0;
-  const desc = !mine && b.type === 'lander' ? 'The rival\'s landing craft and main base. Capture it to win.' : def.desc;
+  const desc = !mine && b.type === 'lander' ? 'The rival\'s fortified headquarters. Capture it to win.' : def.desc;
   let html = `<div class="sheet-title"><img src="${iconFor(b.type, b.owner)}" alt=""><div><h3>${def.name}</h3>
     <div class="owner"><span class="dot" style="background:${PLAYER_COLORS[b.owner]}"></span> ${mine ? 'Yours' : 'Rival'}</div></div></div>
     <p class="desc">${desc}</p><div class="status" id="sh-status"></div><div id="sh-dyn"></div>`;
@@ -1117,7 +1117,7 @@ function refreshBuildingSheet(b) {
         parts.push(`<div class="kv"><span>Fuel stocked</span><span>${goodTag('fuel', `${b.stock.fuel || 0}/${def.fuelCap}`, !(b.stock.fuel > 0))}</span></div>`);
         parts.push(`<div class="kv"><span>Fuel burning</span><span>${pct}% left</span></div><div class="bar battery"><div style="width:${pct}%;background:var(--g-fuel)"></div></div>`);
       } else {
-        parts.push('<div class="kv"><span>Fuel</span><span>Not needed: the Lander charges for free</span></div>');
+        parts.push('<div class="kv"><span>Fuel</span><span>Not needed: the Command Base charges for free</span></div>');
       }
     }
   }
@@ -1176,7 +1176,7 @@ function refreshBuildingSheet(b) {
     $('sh-missile').innerHTML = `<p class="desc">${!silos.length
       ? `No Missile Silo within ${BDEFS.silo.missile.range} tiles. Build a Silo near the front and a Missile Factory to make Missiles.`
       : ready.length
-        ? `${ready.length} silo${ready.length > 1 ? 's' : ''} ready. A missile wrecks smaller buildings and knocks Outposts and Landers down to almost no armor, ready for warbots to capture.`
+        ? `${ready.length} silo${ready.length > 1 ? 's' : ''} ready. A missile wrecks smaller buildings and knocks Outposts and Command Bases down to almost no armor, ready for warbots to capture.`
         : minReload < Infinity ? `Silos in range are reloading (${Math.ceil(minReload)}s).` : 'Silos in range have no Missiles. Build them at a Missile Factory (Alloy, Chips and Fuel).'}</p>`;
   }
   if ($('sh-send')) {
@@ -1186,7 +1186,7 @@ function refreshBuildingSheet(b) {
     $('sh-send').disabled = avail === 0;
     $('sh-attack').innerHTML = avail
       ? `<p class="desc">${avail} armed warbot${avail > 1 ? 's' : ''} can reach this from your garrisons (each garrison keeps one at home).</p>`
-      : `<p class="desc">No armed warbots in range. Warbots attack from Outposts or your Lander within ${ATTACK_RANGE} tiles, and only ones with Ammo go. Build an Outpost closer, and an Ammo Plant to keep garrisons stocked.</p>`;
+      : `<p class="desc">No armed warbots in range. Warbots attack from Outposts or your Command Base within ${ATTACK_RANGE} tiles, and only ones with Ammo go. Build an Outpost closer, and an Ammo Plant to keep garrisons stocked.</p>`;
   }
 }
 
@@ -1361,9 +1361,9 @@ function refreshSheet() {
 
 const OBJECTIVES = [
   { text: 'Tap <b>Build</b> and place a <b>Harvester</b> beside the teal stalk groves.', done: () => hasBuilt('harvester') || hasAny('harvester') },
-  { text: '<b>Haulers only drive on roads.</b> Tap <b>Paths</b> and drag a road from the ring round your Lander to the Harvester site (or tap the site and choose <b>Lay road</b>). Free workers pave it.', done: () => hasBuilt('harvester') || S.buildings.some((b) => !b.dead && b.owner === 0 && b.type === 'harvester' && !b.unlinked) },
+  { text: '<b>Haulers only drive on roads.</b> Tap <b>Paths</b> and drag a road from the ring round your Command Base to the Harvester site (or tap the site and choose <b>Lay road</b>). Free workers pave it.', done: () => hasBuilt('harvester') || S.buildings.some((b) => !b.dead && b.owner === 0 && b.type === 'harvester' && !b.unlinked) },
   { text: 'Build a <b>Quarry</b> near the grey boulders to get Stone.', done: () => hasBuilt('quarry') },
-  { text: 'Build a <b>Cement Works</b> near your Lander: it bakes Stone into <b>Cement</b>, which nearly every building and every road is made of.', done: () => hasBuilt('kiln') },
+  { text: 'Build a <b>Cement Works</b> near your Command Base: it bakes Stone into <b>Cement</b>, which nearly every building and every road is made of.', done: () => hasBuilt('kiln') },
   { text: 'Build an <b>Ore Mine</b> by the dark ore veins and a <b>Crystal Tap</b> by the violet crystals.', done: () => hasBuilt('mine') && hasBuilt('tap') },
   { text: 'Build a <b>Smelter</b>: it turns Ore and Fiber into Alloy.', done: () => hasBuilt('smelter') },
   { text: 'Build a <b>Chip Fab</b>: it turns Crystal and Alloy into Chips.', done: () => hasBuilt('fab') },
@@ -1372,7 +1372,7 @@ const OBJECTIVES = [
   { text: 'Build an <b>Outpost</b> near your border to claim more land.', done: () => hasBuilt('outpost') },
   { text: 'Charging Stations burn <b>Fuel</b>. Build a <b>Bio Farm</b> beside the dark fertile soil to grow it (your Agribot runs it).', done: () => hasBuilt('farm') || hasBuilt('refinery') || playerGoods(0).fuel >= 20 },
   { text: 'Busy crossings jam up. In <b>Paths</b>, choose <b>Lights</b> and put a traffic light on a junction where three or four roads meet.', done: () => Object.keys(S.lights).some((k) => S.lights[k].owner === 0) || !ownJunction() },
-  { text: 'Warbots need <b>Ammo</b>. Build an <b>Ammo Plant</b>: haulers stock your Lander and Outposts and warbots reload there.', done: () => S.mode === 'colony' || hasBuilt('armory') },
+  { text: 'Warbots need <b>Ammo</b>. Build an <b>Ammo Plant</b>: haulers stock your Command Base and Outposts and warbots reload there.', done: () => S.mode === 'colony' || hasBuilt('armory') },
 ];
 
 function ownJunction() {
@@ -1405,7 +1405,7 @@ function objectiveText() {
       ? `Colonize the planet: <b>${pct}%</b> claimed. Next milestone at ${Math.round(next * 100)}%.`
       : `<b>${pct}%</b> of the planet colonized. Every milestone reached!`;
   }
-  return 'Gather warbots in Outposts near the rival, then tap the <b>rival Lander</b> and send them in to capture it.';
+  return 'Gather warbots in Outposts near the rival, then tap the <b>rival Command Base</b> and send them in to capture it.';
 }
 
 function updateHUD() {

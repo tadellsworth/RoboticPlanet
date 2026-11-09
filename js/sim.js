@@ -194,7 +194,7 @@ function insideCharger(u) {
   return !!(b && b.built && BDEFS[b.type].charger && !chargerDry(b));
 }
 
-/** A Charging Station with no Fuel left can't charge anyone (the Lander's charger is free). */
+/** A Charging Station with no Fuel left can't charge anyone (the Command Base's charger is free). */
 function chargerDry(b) {
   const ch = BDEFS[b.type].charger;
   return !!(ch && ch.fuel && b.built && (b.energy || 0) < 0.5 && !(b.stock.fuel > 0));
@@ -442,7 +442,7 @@ function queueRoom(u) {
       if (along < -0.05 || along > 1.4) continue;                        // behind us, or far ahead
       if (Math.abs(rx * dy - ry * dx) > 0.35) continue;                  // off to the side
       if (Math.cos(v.face) * dx + Math.sin(v.face) * dy < 0.3) continue; // oncoming or crossing: other lane
-      // Two bots on the same spot (say, both just out of the Lander): the older one goes first.
+      // Two bots on the same spot (say, both just out of the Command Base): the older one goes first.
       if (along <= 0.05) { if (v.id > u.id) continue; along = 0; }
       room = Math.min(room, along - QUEUE_GAP);
     }
@@ -722,7 +722,7 @@ function dispatch(p) {
 
 /**
  * A colony that has run out of Stone or Fiber with no Quarry or Harvester that can still work
- * (so it couldn't build one) slowly salvages it from its Lander, enough to get going again.
+ * (so it couldn't build one) slowly salvages it from its Command Base, enough to get going again.
  */
 function landerSalvage(p, dt) {
   const P = S.players[p];
@@ -744,7 +744,7 @@ function landerSalvage(p, dt) {
     if (S.time - ((P.salvageMsg || {})[g] || -999) > 180) {
       P.salvageMsg = P.salvageMsg || {};
       P.salvageMsg[g] = S.time;
-      postMsg(p, `Out of ${GOOD[g].name}: your Lander's crew is salvaging a little from the landing craft. Build ${aOrAn(BDEFS[type].name)} by ${type === 'quarry' ? 'boulders' : 'stalk groves'}, or expand with an Outpost to reach some.`, L.x, L.y, 'warn');
+      postMsg(p, `Out of ${GOOD[g].name}: your Command Base's crew is salvaging a little from its own stores. Build ${aOrAn(BDEFS[type].name)} by ${type === 'quarry' ? 'boulders' : 'stalk groves'}, or expand with an Outpost to reach some.`, L.x, L.y, 'warn');
     }
   }
 }
@@ -912,13 +912,13 @@ function updateWorker(u, dt) {
 }
 
 /**
- * Does building b need a road to the Lander's network? Construction sites always do (haulers
+ * Does building b need a road to the Command Base's network? Construction sites always do (haulers
  * bring their materials), and so do Depots and any building that takes goods in or sends them out.
  */
 function needsRoad(b) {
   const def = BDEFS[b.type];
   if (b.type === 'lander') return false;
-  if (def.store) return true; // a Depot only helps if haulers can reach it from the Lander
+  if (def.store) return true; // a Depot only helps if haulers can reach it from the Command Base
   if (!b.built) return true;
   if (def.mil) return S.mode !== 'colony'; // Ammo for the garrison
   return !!(def.inp || def.out || def.ammo || def.charger || def.roadworks || def.bots);
@@ -1577,8 +1577,8 @@ function captureBuilding(b, by) {
   addFx('ring', b.x + 0.5, b.y + 0.5, { color: PLAYER_COLORS[by], r: 2 });
   sfx('capture');
   if (b.type === 'lander') {
-    postMsg(by, 'Your warbots captured the enemy Lander!', b.x, b.y, 'good');
-    postMsg(old, 'The enemy captured your Lander!', b.x, b.y, 'bad');
+    postMsg(by, 'Your warbots captured the enemy Command Base!', b.x, b.y, 'good');
+    postMsg(old, 'The enemy captured your Command Base!', b.x, b.y, 'bad');
     S.winner = by;
     return;
   }
@@ -1726,7 +1726,7 @@ function useAmmo(u) {
       const P = S.players[u.owner];
       if (S.time - (P.lastAmmoMsg || -999) > 90) {
         P.lastAmmoMsg = S.time;
-        postMsg(u.owner, 'A warbot ran out of Ammo and can\'t fight until it reloads. Haulers stock your Lander and Outposts with Ammo from an Ammo Plant.', Math.floor(u.x), Math.floor(u.y), 'warn');
+        postMsg(u.owner, 'A warbot ran out of Ammo and can\'t fight until it reloads. Haulers stock your Command Base and Outposts with Ammo from an Ammo Plant.', Math.floor(u.x), Math.floor(u.y), 'warn');
       }
     }
     return true;
@@ -2030,7 +2030,7 @@ function updateMissiles(dt) {
 }
 
 /**
- * A missile hits its target hard (most buildings are wrecked outright; Outposts and Landers drop to
+ * A missile hits its target hard (most buildings are wrecked outright; Outposts and Command Bases drop to
  * no less than 1 armor so warbots can take them), and the blast damages nearby rival buildings
  * and bots.
  */

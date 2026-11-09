@@ -14,7 +14,7 @@
  *   oneway    have `n` one-way road tiles
  *   land      claim `n` percent of the land
  *   outposts  capture `n` rival Outposts
- *   capture   capture the rival Lander
+ *   capture   capture the rival Command Base
  */
 
 const CAMPAIGN_KEY = 'botfall.campaign';
@@ -83,7 +83,7 @@ const MISSIONS = [
   },
   {
     id: 'rushhour', name: 'Rush Hour',
-    brief: 'A supply depot landed far from your Lander and the traffic is already backing up. Order more Haulers, run a road out to the depot, add one-way lanes and put traffic lights on the busy crossings.',
+    brief: 'A supply depot landed far from your Command Base and the traffic is already backing up. Order more Haulers, run a road out to the depot, add one-way lanes and put traffic lights on the busy crossings.',
     mode: 'colony', seed: 4409, size: 1, rough: 0, rich: 2, limit: [0, 0, 20],
     goals: [{ kind: 'own', type: 'hauler', n: [7, 8, 10] }, { kind: 'paths', tier: 1, n: [32, 40, 48] }, { kind: 'oneway', n: [8, 12, 16] },
       { kind: 'lights', n: [1, 2, 3] }],
@@ -121,14 +121,14 @@ const MISSIONS = [
   },
   {
     id: 'supply', name: 'Supply Lines',
-    brief: 'Warbots win nothing on empty magazines. Build an Ammo Plant, keep your garrisons stocked, and capture the rival Lander.',
+    brief: 'Warbots win nothing on empty magazines. Build an Ammo Plant, keep your garrisons stocked, and capture the rival Command Base.',
     mode: 'versus', seed: 7707, size: 1, rough: 2, rich: 2, rival: ['easy', 'normal', 'hard'], limit: [0, 40, 35],
     goals: [{ kind: 'made', good: 'ammo', n: [15, 25, 35] }, { kind: 'capture' }],
     setup(S) { for (const u of S.bots) if (u.type === 'warbot' && u.owner === 0) u.ammo = 4; },
   },
   {
     id: 'descent', name: 'Final Descent',
-    brief: 'A deep canyon world and a veteran rival. Every route is long, so plan your roads, Fuel and Ammo well. Capture the rival Lander.',
+    brief: 'A deep canyon world and a veteran rival. Every route is long, so plan your roads, Fuel and Ammo well. Capture the rival Command Base.',
     mode: 'versus', seed: 8803, size: 2, rough: 3, rich: 2, rival: ['normal', 'hard', 'hard'], rivalBonus: [0, 0, 6], limit: [0, 0, 50],
     goals: [{ kind: 'capture' }],
   },
@@ -179,7 +179,7 @@ function goalState(g, diff) {
       break;
     case 'capture':
       have = S.winner === 0 ? 1 : 0;
-      text = 'Capture the rival Lander';
+      text = 'Capture the rival Command Base';
       break;
   }
   return { have: Math.min(have, need), need, done: have >= need, text };
@@ -195,7 +195,7 @@ function checkMission() {
   if (M.limit && S.time >= M.limit) { M.result = 'lost'; M.why = 'time'; S.winner = 1; }
 }
 
-/** Settle the result when the game ends some other way (a Lander captured). */
+/** Settle the result when the game ends some other way (a Command Base captured). */
 function finishMission() {
   const M = S.mission;
   if (!M || M.result) return;
@@ -212,7 +212,7 @@ function missionOptions(k, diff) {
     difficulty: def.rival ? def.rival[diff] : 'normal',
     layout: def.layout,
     setup(S) {
-      // Easy starts with more in the Lander, Hard with less.
+      // Easy starts with more in the Command Base, Hard with less.
       const L = getE(S.players[0].lander);
       const k2 = [1.5, 1, 0.75][diff];
       for (const g in L.stock) L.stock[g] = Math.round(L.stock[g] * k2);

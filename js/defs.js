@@ -52,7 +52,7 @@ const FUEL_ENERGY = 75;           // battery points one Fuel gives at a Charging
 
 /*
  * Batteries (0–100). Bots drain while they move and work, and recharge inside a building with a
- * charger (the Lander or a Charging Station); warbots also recharge inside their garrison.
+ * charger (the Command Base or a Charging Station); warbots also recharge inside their garrison.
  * Below `low` a worker goes to recharge when it finishes its job; below `critical` a bot is in
  * emergency mode: it moves and works at `slow` speed and warbots hit half as hard.
  */
@@ -103,7 +103,7 @@ const PAVE_TIME = 1.5;
 const PAVE_CLEAR_TIME = 3;
 /**
  * Safety net: a colony with less than SALVAGE_BELOW of Stone or Fiber and nothing able to make it
- * gets 1 every SALVAGE_EVERY seconds, salvaged from the Lander, so it can always rebuild.
+ * gets 1 every SALVAGE_EVERY seconds, salvaged from the Command Base, so it can always rebuild.
  */
 const SALVAGE_BELOW = 6;
 const SALVAGE_EVERY = 20;
@@ -177,7 +177,7 @@ const GOOD = {
   fuel:    { name: 'Fuel',    color: '#ff5c8a', desc: 'Energy for Charging Stations. Grown at a Bio Farm or refined from Crude.' },
   cement:  { name: 'Cement',  color: '#a9b4c2', desc: 'The main building material, made from Stone at a Cement Works (2 per Stone). Builds nearly everything and paves roads: 1 Cement for 5 tiles.' },
   asphalt: { name: 'Asphalt', color: '#6b7280', desc: 'Made from Crude and Stone. A Roadworks upgrades roads with it to asphalt, the fastest surface.' },
-  ammo:    { name: 'Ammo',    color: '#e8c39e', desc: 'Made at an Ammo Plant. Warbots reload it in your Lander and Outposts.' },
+  ammo:    { name: 'Ammo',    color: '#e8c39e', desc: 'Made at an Ammo Plant. Warbots reload it in your Command Base and Outposts.' },
   warhead: { name: 'Missile', color: '#ffcf4a', desc: 'Built at a Missile Factory from Alloy, Chips and Fuel. Workers load them into Missile Silos, which fire them at rival buildings.' },
 };
 /** Goods that only matter when there is a rival (hidden in Colony mode). */
@@ -202,7 +202,7 @@ const PLAYER_NAMES = ['You', 'Rival'];
  *   pump      built on an oil seep; its worker pumps Crude from seep tiles within 1 tile
  *   crew      only bots of this crew (see BOTS) can run it
  *   roadworks its Paver lays asphalt on paths within `radius`
- *   ammoStock (Lander, Outposts) Ammo kept for warbots to reload
+ *   ammoStock (Command Base, Outposts) Ammo kept for warbots to reload
  *   ammo      good delivered as ammunition (up to ammoCap)
  *   missile   launches missiles: range (tiles), reload (s), damage to the target, splash radius,
  *             damage to other buildings and to bots in the splash
@@ -212,8 +212,8 @@ const PLAYER_NAMES = ['You', 'Rival'];
  */
 const BDEFS = {
   lander: {
-    name: 'Lander', short: 'Lander',
-    desc: 'Your landing craft and main base. Stores goods and houses idle bots. If it is captured, you lose.',
+    name: 'Command Base', short: 'Base',
+    desc: 'Your fortified headquarters: the craft that brought the colony down, dug in and walled up. Stores goods, houses idle bots and recharges them for free. If it is captured, you lose.',
     store: true, mil: true, terr: 8, garrison: 40, armor: 30, charger: { slots: 3, rate: 15 }, ammoStock: 10,
   },
   harvester: {
@@ -274,7 +274,7 @@ const BDEFS = {
     cost: { cement: 3, alloy: 1, fiber: 2 }, staff: true, crew: 'paver', roadworks: true, radius: 7, armor: 8, buildTime: 10,
   },
   armory: {
-    name: 'Ammo Plant', desc: 'Packs Alloy and Stone into Ammo. Haulers take it to your Lander and Outposts, where warbots reload.',
+    name: 'Ammo Plant', desc: 'Packs Alloy and Stone into Ammo. Haulers take it to your Command Base and Outposts, where warbots reload.',
     cost: { cement: 3, alloy: 2 }, staff: true, inp: { alloy: 1, stone: 1 }, make: { ammo: 3 }, out: { ammo: 6 },
     work: 6, armor: 10, buildTime: 10, war: true,
   },
@@ -285,13 +285,13 @@ const BDEFS = {
   },
   silo: {
     name: 'Missile Silo',
-    desc: 'Fires Missiles from a Missile Factory at rival buildings far away. A hit wrecks most buildings outright, damages the buildings and bots around it, and knocks Outposts and Landers down so warbots can capture them. Holds two Missiles.',
+    desc: 'Fires Missiles from a Missile Factory at rival buildings far away. A hit wrecks most buildings outright, damages the buildings and bots around it, and knocks Outposts and Command Bases down so warbots can capture them. Holds two Missiles.',
     cost: { cement: 5, alloy: 4, chip: 2 }, ammo: 'warhead', ammoCap: 2,
     missile: { range: 18, reload: 25, damage: 24, splash: 2.2, splashDamage: 5, botDamage: 9 }, armor: 14, buildTime: 16, war: true,
   },
   charger: {
     name: 'Charging Station',
-    desc: 'Bots recharge their batteries here, four at a time. It burns Fuel: one Fuel recharges about three quarters of a battery. Build them near busy areas far from your Lander.',
+    desc: 'Bots recharge their batteries here, four at a time. It burns Fuel: one Fuel recharges about three quarters of a battery. Build them near busy areas far from your Command Base.',
     cost: { cement: 3, alloy: 1 }, charger: { slots: 4, rate: 25, fuel: true }, fuelCap: 4, armor: 10, buildTime: 10,
   },
   farm: {
@@ -334,7 +334,7 @@ const DIFFICULTY = {
   hard:   { label: 'Hard',   mult: 1.3,  grace: 150, threshold: 4, maxSites: 3, think: 1.5, bonus: 6 },
 };
 
-/** Starting goods in each Lander. */
+/** Starting goods in each Command Base. */
 const START_STOCK = { fiber: 16, stone: 8, alloy: 8, chip: 4, crystal: 4, fuel: 4, cement: 24 };
 const START_BOTS = { worker: 10, hauler: 5, agribot: 1 };
 const START_WARBOTS = 4;

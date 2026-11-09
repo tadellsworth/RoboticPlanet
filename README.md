@@ -5,7 +5,7 @@ on a dusty alien planet: gather resources, link them into supply chains with a n
 spread across the map. Roads are the heart of the game: Haulers only drive on them, so where your roads go decides
 how goods move.
 
-- **Versus:** race a rival AI colony across the planet. Capture its Lander to win (about 20–40 minutes).
+- **Versus:** race a rival AI colony across the planet. Capture its Command Base to win (about 20–40 minutes).
 - **Colony:** no rival. Settle the planet at your own pace, with colonization milestones.
 - **Missions:** eight set challenges on hand-picked planets, each with its own goals and Easy, Normal and Hard
   levels. Finishing one unlocks the next and shows an unlock code for it, so progress can move to another device.
@@ -59,7 +59,7 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
 | Cement Works | 1 Stone → 2 **Cement**, the main building material (stops at 40 unless you change its stock limit) |
 | Asphalt Plant | Crude + Stone → 2 **Asphalt** |
 | Roadworks | Its Paver lays Asphalt on your paths nearby (1 Asphalt covers 4 tiles) |
-| Ammo Plant | Alloy + Stone → 3 **Ammo**; warbots reload it in the Lander and Outposts (Versus) |
+| Ammo Plant | Alloy + Stone → 3 **Ammo**; warbots reload it in the Command Base and Outposts (Versus) |
 | Missile Factory | 2 Alloy + Chip + Fuel → **Missile** (20 s each; Versus) |
 | Missile Silo | Fires Missiles at rival buildings up to 18 tiles away; holds 2, reloads in 25 s (Versus) |
 
@@ -76,7 +76,7 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
   roads**. If every Hauler is lost, workers carry goods slowly until the Foundry makes more. **Agribots** run Bio Farms
   and Grove Planters, **Pavers** run the Roadworks and **Warbots** fight. You start with 10 Workers, 5 Haulers and an
   Agribot (plus 4 Warbots in Versus).
-- **Every building needs a road to storage.** Your Lander lands on a ring of road; join each building and construction
+- **Every building needs a road to storage.** Your Command Base starts with a ring of road around it; join each building and construction
   site to that network (or to a Depot on it), or Haulers can't bring it materials or collect its goods. A red road badge
   marks buildings with no road: tap one and press **Lay road** to plan the shortest route (shown dashed), or plan your
   own. Placement keeps a side of every building open for a road.
@@ -94,7 +94,7 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
   drag along a road to point it the way you drag (tap a road to turn its arrow). One-way loops keep busy routes flowing;
   going the wrong way up a one-way road is allowed but crawls.
 - **Top bar:** hover over (or tap) a goods counter to see its name and what it's for.
-- **Ammo:** warbots carry 20 shots and reload in your Lander and Outposts, which haulers stock from an Ammo Plant. Out of
+- **Ammo:** warbots carry 20 shots and reload in your Command Base and Outposts, which haulers stock from an Ammo Plant. Out of
   ammo, a warbot can't fight at all: it heads back to a garrison to reload, and only armed warbots answer orders.
 - **Statistics:** the pause menu and the end-of-game screen show graphs of bots, land and goods over time and how busy
   each kind of building was; each building's panel shows its recent busy time.
@@ -105,22 +105,22 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
 - **Priorities:** tap a building or construction site and set it to Low, Normal or High. High-priority
   buildings get workers and goods first; low ones are served last and lose their worker first when
   workers run short. **Pause** frees a building's worker entirely.
-- **Storage:** tap your Lander or a Depot. *Fill first* makes haulers bring finished goods there before
+- **Storage:** tap your Command Base or a Depot. *Fill first* makes haulers bring finished goods there before
   any other storage; *Empty out* takes nothing new and moves what it holds elsewhere (handy before
   demolishing it). You can also switch individual goods off for that building.
 - **Minimap:** tap or drag it to jump around; red pulses mark buildings under attack. The × hides it.
-- **Batteries:** bots drain their battery walking, working and fighting, and recharge at the Lander, a
-  Charging Station or (warbots) inside their garrison. A flat battery means half speed and half power. The Lander charges
+- **Batteries:** bots drain their battery walking, working and fighting, and recharge at the Command Base, a
+  Charging Station or (warbots) inside their garrison. A flat battery means half speed and half power. The Command Base charges
   for free; Charging Stations burn Fuel (one Fuel is about three quarters of a full charge). A Bio Farm makes about
   2–3 Fuel a minute; an Oil Pump and Refinery up to 10 a minute until the seep runs dry (both stop at 30 by default).
 - **Army orders:** tap **Army**, then a rival building to attack it with warbots or a missile, or open
   ground to send warbots there to hold the area under a rally flag. Tap the flag to call them back.
-- **Garrisons:** tap an Outpost or your Lander to set its **garrison priority** (new warbots, and ones called back
+- **Garrisons:** tap an Outpost or your Command Base to set its **garrison priority** (new warbots, and ones called back
   from a flag, fill High garrisons first and Low ones last) or to **station warbots** there: choose how many and they
   march over from your other garrisons (each keeps one at home) and stay until you move them.
 - **Missiles** are built at a Missile Factory (2 Alloy, 1 Chip and 1 Fuel each, 20 seconds) and carried to Missile Silos
   by haulers. A hit does 24 damage, which wrecks most buildings outright, plus 5 to other rival buildings and 9 to bots
-  within 2.2 tiles. Outposts and Landers drop to almost no armor; warbots still have to walk in and capture them.
+  within 2.2 tiles. Outposts and Command Bases drop to almost no armor; warbots still have to walk in and capture them.
   To fire, tap a Silo and press **Aim missile**: its 18-tile range shows as a red ring; tap any spot inside it (a
   building or open ground) to see the blast radius, then **Fire**. (Army → rival building → Fire missile also works.)
 - **Pace:** the whole game runs at 85% speed (`GAME_PACE` in `js/defs.js`) for a calmer feel; the speed button
@@ -130,7 +130,7 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
 - The **Build** menu shows how many of each building you already have, and how many are being built.
 - You can only build inside your border. Outposts push it out (7 tiles around them).
 - **Salvage:** a colony out of Stone or Fiber with no Quarry or Harvester that can still work salvages 1 every 20 s from
-  its Lander (up to 6), so it can always rebuild. Capturing an enemy Outpost takes its land,
+  its Command Base (up to 6), so it can always rebuild. Capturing an enemy Outpost takes its land,
   and enemy buildings left outside their border are lost.
 - **Controls:** drag to pan, pinch or scroll to zoom, tap anything to inspect it.
 - **Desktop:** on a wide screen the top bar is one row, the tools sit in a small dock and panels open on the right.
@@ -145,7 +145,7 @@ Buildings, bots, resources and ground use custom art made in Claude Design (`art
 (512×512, each on its own pad, placed by an `anchor` point in `art/art-manifest.js`), as do the Charging Station, Bio
 Farm, Oil Pump, Refinery, Cement Works, Asphalt Plant, Roadworks, Ramp, Ammo Plant, Missile Factory and Missile Silo
 (team versions for the military ones). All five robots (Worker, Warbot, Hauler, Agribot, Paver) have top-down art in
-both team colours. Still to make: 3D versions of the Lander and Pulse Turret, goods icons and a few terrain pieces.
+both team colours. Still to make: 3D versions of the Command Base and Pulse Turret, goods icons and a few terrain pieces.
 The app icon is in `icons/`. Anything without an image falls back to placeholder art drawn in code, so new art can be
 added one piece at a time. See **[ART_GUIDE.md](ART_GUIDE.md)** for specs, the style brief and prompts,
 including the remaining pieces (Ramp, slope and cliff textures, goods icons).

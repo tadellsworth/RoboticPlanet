@@ -184,7 +184,7 @@ function aiThink(p) {
     break;
   }
 
-  // 4) Missiles: soften turrets and Outposts first, the Lander once the army is big.
+  // 4) Missiles: soften turrets and Outposts first, the Command Base once the army is big.
   const enemy = 1 - p;
   if (S.mode !== 'colony' && S.time >= lvl.grace) {
     for (const silo of me) {
@@ -220,7 +220,7 @@ function aiThink(p) {
     P.lastAttack = S.time;
     return;
   }
-  // A big army with nothing in reach: push a forward Outpost toward the enemy Lander.
+  // A big army with nothing in reach: push a forward Outpost toward the enemy Command Base.
   let army = 0;
   for (const u of S.bots) if (!u.dead && u.owner === p && u.type === 'warbot') army++;
   const enemyL = getE(S.players[enemy].lander);

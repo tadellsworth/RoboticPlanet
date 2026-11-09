@@ -300,7 +300,7 @@ function generateMap(seed, W, H, cfg) {
 /* ------------------------------------------------------------------ new game */
 
 /**
- * opts.mode: 'versus' (race a rival AI to capture its Lander) or 'colony' (no rival, a bigger
+ * opts.mode: 'versus' (race a rival AI to capture its Command Base) or 'colony' (no rival, a bigger
  * map to settle at your own pace). opts.difficulty applies to versus only.
  */
 function newGame(opts) {
@@ -358,7 +358,7 @@ function newGame(opts) {
   return S;
 }
 
-/** Every Lander touches down on a ring of road, the start of the colony's road network. */
+/** Every Command Base starts with a ring of road around it, the start of the colony's road network. */
 function starterRoads(L) {
   const lt = tIdx(L.x, L.y);
   for (let dj = -1; dj <= 1; dj++) for (let di = -1; di <= 1; di++) {
@@ -406,7 +406,7 @@ function computeZones() {
   S.zone = z;
 }
 
-/** The area a player's bots can reach (the one their Lander stands in). */
+/** The area a player's bots can reach (the one their Command Base stands in). */
 function homeZone(p) {
   const L = getE(S.players[p].lander);
   return L && L.owner === p ? S.zone[tIdx(L.x, L.y)] : -2;
@@ -476,7 +476,7 @@ function playerBots(p) { return S.bots.filter((u) => u.owner === p && !u.dead); 
 /* ------------------------------------------------------------------ territory */
 
 /**
- * Each tile belongs to the nearest military building (Lander/Outpost) whose radius covers it.
+ * Each tile belongs to the nearest military building (Command Base/Outpost) whose radius covers it.
  * A tile holding a player's building stays theirs as long as one of their military buildings
  * still covers it — so buildings are only lost when the military building protecting them falls.
  * Non-military buildings left outside their owner's territory are destroyed.
@@ -630,14 +630,14 @@ function canPlace(owner, type, i, j, skipBlockCheck) {
   }
   if (S.road[t] || S.plan[t]) return { ok: false, reason: S.road[t] ? 'There is a road here.' : 'A road is planned here.' };
   // Buildings may stand side by side, as long as every building keeps at least one open side
-  // that bots can walk in from (and the Lander, which is bigger, keeps a clear ring around it).
+  // that bots can walk in from (and the Command Base, which is bigger, keeps a clear ring around it).
   let open = 0, roadSide = 0;
   for (let dj = -1; dj <= 1; dj++) for (let di = -1; di <= 1; di++) {
     if (!di && !dj) continue;
     if (!inMap(i + di, j + dj)) continue;
     const u = tIdx(i + di, j + dj);
     const nb = S.bAt[u] ? getE(S.bAt[u]) : null;
-    if (nb && nb.type === 'lander') return { ok: false, reason: 'Too close to the Lander.' };
+    if (nb && nb.type === 'lander') return { ok: false, reason: 'Too close to the Command Base.' };
     if (di !== 0 && dj !== 0) continue;
     if (!nb && canStep(t, u)) open++;
     if (!nb && canStep(t, u) && (S.road[u] || canRoad(owner, i + di, j + dj))) roadSide++;
@@ -844,7 +844,7 @@ function roadLinked(a, b) {
 function isJunction(t) { return !!roadNet().junc[t]; }
 
 /**
- * The road networks joined to the owner's Lander(s). Goods only flow along roads, so a building
+ * The road networks joined to the owner's Command Base(s). Goods only flow along roads, so a building
  * (or a Depot) is linked to storage when it touches one of these.
  */
 function homeNets(owner) {
@@ -856,14 +856,14 @@ function homeNets(owner) {
   return nets;
 }
 
-/** Is building b joined by road to its owner's Lander network? */
+/** Is building b joined by road to its owner's Command Base network? */
 function onHomeNet(b) {
   const h = homeNets(b.owner);
   for (const c of buildingNets(b)) if (h.indexOf(c) >= 0) return true;
   return false;
 }
 
-/** Tiles next to the owner's Lander(s), and the road networks joined to them. */
+/** Tiles next to the owner's Command Base(s), and the road networks joined to them. */
 function roadGoals(owner, except) {
   const stores = S.buildings.filter((s) => !s.dead && s.owner === owner && s.built && s.type === 'lander' && s !== except);
   const nets = new Set(), next = new Uint8Array(S.W * S.H);

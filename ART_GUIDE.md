@@ -35,13 +35,13 @@ bots you can either:
 - make **one** image with neutral (white or grey) lights, and the game draws a coloured team marker
   under it, or
 - make **two** versions and register them as `smelter@0` (yours, cyan lights) and `smelter@1`
-  (rival, red lights). This looks best for Warbots, Outposts and the Lander.
+  (rival, red lights). This looks best for Warbots, Outposts and the Command Base.
 
 If it's easier, just send the finished files to Claude Code and ask it to wire them in.
 
 ### Technical specs (all assets)
 
-| | Buildings and bots | Lander | Resources | Ground tiles |
+| | Buildings and bots | Command Base | Resources | Ground tiles |
 |---|---|---|---|---|
 | Canvas | 256 × 256 px | 512 × 512 px | 256 × 256 px | 128 × 128 px |
 | Background | transparent | transparent | transparent | **opaque, seamless** |
@@ -251,12 +251,12 @@ Readability: it is shown at about 50 pixels wide on a phone, so give it a strong
 forms, clear contrast between lit and shaded faces, and a few large details rather than many tiny ones.
 ```
 
-**Team colours.** The Lander, Outpost, Pulse Turret and Missile Silo need two versions: `@0` with cyan `#38d4ff`
+**Team colours.** The Command Base, Outpost, Pulse Turret and Missile Silo need two versions: `@0` with cyan `#38d4ff`
 accents (lights, flags, stripes) and `@1` with red `#ff5a6e` accents, everything else identical. Ask for the second
 one with: *"Same image, but change every cyan accent to red #ff5a6e."* Every other building is a single version;
 the game adds a thin team-coloured bar under it.
 
-**Size on the map** (Claude Code sets this in the manifest; listed so the proportions look right): the Lander is
+**Size on the map** (Claude Code sets this in the manifest; listed so the proportions look right): the Command Base is
 the biggest, about 1.9 tiles wide; the Foundry, Refinery, Missile Factory, Outpost and Missile Silo are large, about
 1.5; most production buildings about 1.35; the Charging Station and Pulse Turret about 1.25. Keep these proportions
 between images too: a Charging Station should look smaller than a Foundry.
@@ -469,12 +469,12 @@ current art, so they can be swapped in a few at a time.
   ramp). They use `B3D(...)` in `art/art-manifest.js`: scale 1.4 and anchor [0.5, 0.615], the centre of the pad's top
   surface. New buildings in the same style can use the same helper
 - Robots `hauler`, `agribot` and `paver` (@0/@1) and the military buildings are installed. Still missing: 3D versions
-  of the Lander and turret, resources `crop` and `oil`, ground
+  of the Command Base and turret, resources `crop` and `oil`, ground
   `fertile`, `slope` and `cliff`, markers `missile`, `rally` and `oneway`, and the 12 goods icons
 
 ### Tips
 
-- Make the Worker and Lander first, then check them in the game before doing the rest. It's much easier
+- Make the Worker and Command Base first, then check them in the game before doing the rest. It's much easier
   to adjust angle, lighting and scale with two assets than with twenty.
 - If a building looks too small or too big in the game, change its `scale` in the manifest rather than
   re-exporting. `scale: 1.2` draws it 20% larger.
