@@ -10,7 +10,7 @@
  */
 
 const CHART = {
-  series: ['#1d9fcc', '#e0475c'],   // you, rival
+  series: ['#1d9fcc', '#e0475c', '#3fb854'],   // you, rival (red), green rival
   surface: '#161820',
   grid: 'rgba(255,255,255,0.08)',
   axis: 'rgba(255,255,255,0.18)',

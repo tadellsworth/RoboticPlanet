@@ -239,8 +239,10 @@ function aiThink(p) {
     if (S.mode !== 'colony') setKeep(d, 'ammo', 4);
   }
 
-  // 4) Missiles: soften turrets and Outposts first, the Command Base once the army is big.
-  const enemy = 1 - p;
+  // 4) Missiles: soften turrets and Outposts first, the Command Base once the army is big. (With
+  //    two rivals, the one it's up against is the nearest still in the game.)
+  const enemy = rivalOf(p);
+  const rival = (o) => o >= 0 && o !== p && !S.players[o].out && !S.players[o].absent;
   if (S.mode !== 'colony' && S.time >= lvl.grace) {
     for (const silo of me) {
       if (!siloReady(silo)) continue;
@@ -267,7 +269,7 @@ function aiThink(p) {
   if (S.time < lvl.grace || S.time < P.nextAttack) return;
   let best = null, bestScore = -Infinity, bestAvail = 0;
   for (const b of S.buildings) {
-    if (b.dead || b.owner !== enemy) continue;
+    if (b.dead || !rival(b.owner)) continue; // whichever rival's building is in reach
     const avail = attackAvailable(p, b);
     const need = b.built ? Math.max(lvl.threshold, Math.ceil(b.garrison.length * 1.3) + 2) : 2;
     if (avail < need) continue;
@@ -331,7 +333,7 @@ function aiThink(p) {
  */
 function aiBridge(p, maxSites) {
   if (!warOn()) return;
-  const P = S.players[p], L = getE(P.lander), E = getE(S.players[1 - p].lander);
+  const P = S.players[p], L = getE(P.lander), E = getE(S.players[rivalOf(p)].lander);
   if (!L || !E || L.owner !== p) return;
   const home = homeZone(p);
   if (S.zone[tIdx(E.x, E.y)] === home || S.time - (P.lastBridge || -999) < 12) return;
@@ -428,7 +430,7 @@ function aiWalls(p) {
  * take (military buildings and the Command Base count extra), minus our own buildings caught in it.
  */
 function aiFireNuke(p, silo) {
-  const R2 = NUKE.radius * NUKE.radius, enemy = 1 - p;
+  const R2 = NUKE.radius * NUKE.radius, enemy = rivalOf(p);
   let best = null, bs = 3;
   for (const c of S.buildings) {
     if (c.dead || c.owner !== enemy || dist(silo.x, silo.y, c.x, c.y) > NUKE.range) continue;
@@ -461,7 +463,7 @@ const RAID_GAP = { easy: 320, normal: 180, hard: 120 };
 const RAID_TIME = 60;    // seconds a raid lasts before the raiders head home
 const RAID_FIRST = 200;  // the first raid comes this long after the grace period
 function aiRaid(p, lvl) {
-  const P = S.players[p], enemy = 1 - p;
+  const P = S.players[p], enemy = rivalOf(p);
   if (P.raid) {
     const r = rallyById(P.raid.id);
     if (!r || S.time > P.raid.until || !rallyMembers(P.raid.id).length) {
@@ -644,7 +646,7 @@ function aiFindSpot(p, type, lander) {
 function aiSearchSpot(p, type, lander) {
   const def = BDEFS[type], P = S.players[p];
   const sums = type === 'outpost' ? [R_ORE, R_CRYSTAL, R_STALK, R_BOULDER, R_OIL, R_URANIUM].map(resourceSums) : null;
-  const enemyL = getE(S.players[1 - p].lander);
+  const enemyL = getE(S.players[rivalOf(p)].lander);
   const ex = enemyL ? enemyL.x : S.W / 2, ey = enemyL ? enemyL.y : S.H / 2;
   const cands = [];
   // Every building needs a road to storage: skip spots no road can reach, and (except for

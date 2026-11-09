@@ -173,6 +173,16 @@ function loadArt(onChange) {
     img.onload = () => {
       ART[key] = { img, scale: entry.scale || 0, anchor: entry.anchor || '', shadow: !!entry.shadow };
       artLoaded++;
+      // The third team (green) gets the rival's red art recoloured, made the first time it's asked for.
+      if (key.includes('@1')) {
+        const k2 = key.replace('@1', '@2');
+        if (!Object.prototype.hasOwnProperty.call(ART, k2)) {
+          Object.defineProperty(ART, k2, {
+            configurable: true, enumerable: false,
+            get() { const v = recolorArt(ART[key], ART[key.replace('@1', '@0')]); Object.defineProperty(ART, k2, { value: v, writable: true, configurable: true, enumerable: false }); return v; },
+          });
+        }
+      }
       if (key.startsWith('icon-')) applyGoodIcons();
       if (onChange) onChange(key);
     };
@@ -191,6 +201,55 @@ function applyGoodIcons() {
   let el = document.getElementById('good-icon-art');
   if (!el) { el = document.createElement('style'); el.id = 'good-icon-art'; document.head.appendChild(el); }
   el.textContent = css;
+}
+
+/**
+ * The green team's art, made from the other two teams' versions: wherever the red (@1) and cyan
+ * (@0) versions differ (the team lights, stripes and glow), the cyan pixel is turned green;
+ * everything else is left as it is. Without a cyan version, strongly red pixels are turned green.
+ */
+function recolorArt(red, cyan) {
+  if (!red) return null;
+  const img = red.img, w = img.width, h = img.height;
+  const c = document.createElement('canvas');
+  c.width = w; c.height = h;
+  const x = c.getContext('2d');
+  x.drawImage(img, 0, 0);
+  try {
+    const d = x.getImageData(0, 0, w, h), px = d.data;
+    let cy = null;
+    if (cyan && cyan.img.width === w && cyan.img.height === h) {
+      const c2 = document.createElement('canvas');
+      c2.width = w; c2.height = h;
+      const x2 = c2.getContext('2d');
+      x2.drawImage(cyan.img, 0, 0);
+      cy = x2.getImageData(0, 0, w, h).data;
+    }
+    for (let k = 0; k < px.length; k += 4) {
+      if (px[k + 3] < 8) continue;
+      let r = px[k], g = px[k + 1], b = px[k + 2], f;
+      if (cy) {
+        const diff = Math.abs(r - cy[k]) + Math.abs(g - cy[k + 1]) + Math.abs(b - cy[k + 2]);
+        if (diff < 40) continue;
+        // Start from the cyan pixel: cyan-blue light becomes green light of the same brightness.
+        r = cy[k]; g = cy[k + 1]; b = cy[k + 2];
+        f = Math.min(1, (diff - 40) / 80);
+        const v = Math.max(r, g, b), lo = Math.min(r, g, b);
+        const ng = v, nr = lo + (v - lo) * 0.38, nb = lo + (v - lo) * 0.3;
+        px[k] = px[k] + (nr - px[k]) * f; px[k + 1] = px[k + 1] + (ng - px[k + 1]) * f; px[k + 2] = px[k + 2] + (nb - px[k + 2]) * f;
+        px[k + 3] = px[k + 3] + (cy[k + 3] - px[k + 3]) * f;
+      } else {
+        if (r < 80 || r < g * 1.55 || r < b * 1.1) continue;
+        const mn = Math.min(g, b), sat = (r - mn) / r;
+        if (sat < 0.35) continue;
+        f = Math.min(1, (sat - 0.35) / 0.25);
+        const ng = r * 0.92, nr = mn + (r - mn) * 0.32, nb = mn + (r - mn) * 0.38;
+        px[k] = r + (nr - r) * f; px[k + 1] = g + (ng - g) * f; px[k + 2] = b + (nb - b) * f;
+      }
+    }
+    x.putImageData(d, 0, 0);
+  } catch (e) { return red; }
+  return { img: c, scale: red.scale, anchor: red.anchor, shadow: red.shadow };
 }
 
 function artFor(key, owner) {
@@ -1999,7 +2058,7 @@ function render(dtReal) {
   // Territory borders
   ctx.lineWidth = Math.max(1.5, z * 0.07);
   ctx.setLineDash([z * 0.28, z * 0.18]);
-  for (let p = 0; p < 2; p++) {
+  for (let p = 0; p < S.players.length; p++) {
     ctx.strokeStyle = PLAYER_COLORS[p];
     ctx.globalAlpha = 0.85;
     ctx.beginPath();
@@ -2208,7 +2267,7 @@ function render(dtReal) {
  * bar filling up while a worker paves it.
  */
 function drawPlans(ctx, ox, oy, z, inView) {
-  for (let p = 0; p < 2; p++) {
+  for (let p = 0; p < S.players.length; p++) {
     const list = planList(p);
     if (!list.length) continue;
     ctx.lineWidth = Math.max(1, z * 0.04);

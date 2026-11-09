@@ -242,6 +242,7 @@ kbd {
 .seg { display: flex; background: rgba(255,255,255,0.06); border-radius: 12px; padding: 3px; gap: 3px; }
 .seg button { flex: 1; border: 0; background: transparent; padding: 9px 6px; border-radius: 9px; font-weight: 700; color: var(--muted); }
 .seg button.on { background: var(--panel-2); color: var(--text); box-shadow: 0 1px 0 rgba(255,255,255,0.08) inset; }
+.seg button:disabled { opacity: 0.4; cursor: not-allowed; }
 
 /* ---------- full screens ---------- */
 .screen {

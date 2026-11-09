@@ -9,9 +9,9 @@ function simStep(dt) {
   S.time += dt;
   S.tick++;
   if (S.tick % 30 === 0) growStalks(30 * dt);
-  if (S.tick % 30 === 15) for (let p = 0; p < 2; p++) landerSalvage(p, 30 * dt);
-  if (S.tick % 8 === 0) dispatch(0);
-  if (S.tick % 8 === 4) dispatch(1);
+  if (S.tick % 30 === 15) for (let p = 0; p < S.players.length; p++) landerSalvage(p, 30 * dt);
+  // Each player's bots are given work every 8 ticks, the players spread over those ticks.
+  for (let p = 0, n = S.players.length; p < n; p++) if (S.tick % 8 === Math.floor((p * 8) / n) && !S.players[p].out) dispatch(p);
   for (let k = 0; k < S.buildings.length; k++) {
     const b = S.buildings[k];
     if (!b.dead) updateBuilding(b, dt);
@@ -27,7 +27,7 @@ function simStep(dt) {
   if (S.missiles.length) updateMissiles(dt);
   if (S.tick % 30 === 15) cleanRallies();
   for (const P of S.players) {
-    if (!P.ai) continue;
+    if (!P.ai || P.out) continue;
     P.aiT -= dt;
     if (P.aiT <= 0) { P.aiT = DIFFICULTY[S.difficulty].think; aiThink(P.id); }
   }
@@ -1975,7 +1975,7 @@ function garrisonDefense(b, dt) {
  * player's garrison priority (b.gprio 'high' / 'low').
  */
 function goGarrison(u) {
-  const enemyL = getE(S.players[1 - u.owner].lander);
+  const enemyL = getE(S.players[rivalOf(u.owner)].lander);
   let best = null, bs = Infinity;
   for (const b of S.buildings) {
     if (b.dead || b.owner !== u.owner || !b.built || !BDEFS[b.type].mil) continue;
@@ -2007,6 +2007,7 @@ function damageBot(u, dmg) {
 function hitBuilding(b, dmg, by) {
   b.armor -= dmg;
   b.lastHit = S.time;
+  if (by >= 0 && by !== b.owner) (S.players[b.owner].hitBy = S.players[b.owner].hitBy || {})[by] = S.time; // remembered: see rivalOf
   if (S.time - b.lastAlert > 12) {
     b.lastAlert = S.time;
     postMsg(b.owner, `Enemy warbots are attacking your ${BDEFS[b.type].name}!`, b.x, b.y, 'bad');
@@ -2036,10 +2037,9 @@ function captureBuilding(b, by) {
   S.players[by].stats.captured++;
   addFx('ring', b.x + 0.5, b.y + 0.5, { color: PLAYER_COLORS[by], r: 2 });
   sfx('capture');
-  if (b.type === 'lander') {
-    postMsg(by, 'Your warbots captured the enemy Command Base!', b.x, b.y, 'good');
-    postMsg(old, 'The enemy captured your Command Base!', b.x, b.y, 'bad');
-    S.winner = by;
+  // Only a colony's own Command Base knocks it out; one it captured earlier just changes hands.
+  if (b.type === 'lander' && S.players[old].lander === b.id) {
+    eliminate(old, by);
     return;
   }
   if (def.mil) {
@@ -2052,6 +2052,70 @@ function captureBuilding(b, by) {
     postMsg(old, `Enemy warbots wrecked your ${name}!`, b.x, b.y, 'bad');
     destroyBuilding(b, true);
   }
+}
+
+/**
+ * Player `old` has lost its Command Base to `by`: every building it had passes to `by` (empty,
+ * lightly armored), its robots shut down for good, and its rally flags come down. The last player
+ * left standing wins; if that's not you, losing your own Command Base ends your game.
+ */
+function eliminate(old, by) {
+  const P = S.players[old];
+  P.out = true;
+  for (const u of S.bots) if (!u.dead && u.owner === old) killBot(u, true);
+  sfx('boom');
+  S.rallies = S.rallies.filter((r) => r.owner !== old);
+  for (const e of S.buildings) {
+    if (e.dead || e.owner !== old) continue;
+    if (!e.built) { destroyBuilding(e, true); continue; }
+    releaseBotsFrom(e, true);
+    delete e.prio; delete e.smode; delete e.reject; e.paused = false;
+    e.fixLeft = 0; e.fixer = 0; e.timer = 0; e.garrison = []; e.garInc = 0;
+    e.owner = by;
+    e.armor = Math.max(4, Math.min(e.armor, BDEFS[e.type].armor * 0.4));
+    e.mode = S.players[by].ai ? 'alt' : 'off';
+    markDirty(e.x, e.y);
+  }
+  for (const t of planList(old).slice()) setPlan(t, -1);
+  computeTerritory();
+  const L = getE(P.lander);
+  const x = L ? L.x : 0, y = L ? L.y : 0;
+  postMsg(by, S.players.length > 2 ? `Your warbots captured ${playerName(old, true)}'s Command Base! Everything ${playerName(old, true)} built is yours.` : 'Your warbots captured the enemy Command Base!', x, y, 'good');
+  if (old === 0) postMsg(0, 'The enemy captured your Command Base!', x, y, 'bad');
+  else if (by !== 0) postMsg(0, `The ${playerName(by)} captured ${playerName(old, true)}'s Command Base and took over everything it had.`, x, y, 'warn');
+  const left = S.players.filter((Q) => !Q.absent && !Q.out);
+  if (left.length === 1) S.winner = left[0].id;
+  else if (old === 0) S.winner = by;
+}
+
+/**
+ * The rival `p` is up against (the only one, with two players). With three, each AI picks its own
+ * and sticks with it for a minute and a half: the nearest one, but whoever attacked it lately
+ * comes first, a rival pulling well ahead draws everyone's attention, and a little whim (changing
+ * every five minutes) settles the near ties, so nobody can count on the other two fighting.
+ */
+function rivalOf(p) {
+  if (S.players.length === 2) return 1 - p;
+  const P = S.players[p];
+  const keep = P.rival >= 0 && S.players[P.rival] && !S.players[P.rival].out && S.time < (P.rivalUntil || 0);
+  if (keep) return P.rival;
+  const L = getE(P.lander), hit = P.hitBy || {};
+  const army = (o) => { let n = 0; for (const u of S.bots) if (!u.dead && u.owner === o && u.type === 'warbot') n++; return n; };
+  const mine = army(p);
+  let best = -1, bs = Infinity;
+  for (const Q of S.players) {
+    if (Q.id === p || Q.absent || Q.out) continue;
+    const E = getE(Q.lander);
+    let s = L && E ? dist(L.x, L.y, E.x, E.y) : 1;
+    s *= 0.8 + 0.4 * hash2(p * 7 + Q.id, Math.floor(S.time / 300), S.seed);
+    if (S.time - (hit[Q.id] ?? -999) < 120) s *= 0.6;
+    if (army(Q.id) > mine + 6) s *= 0.8;
+    if (s < bs) { bs = s; best = Q.id; }
+  }
+  if (best < 0) return p === 0 ? 1 : 0;
+  P.rival = best;
+  P.rivalUntil = S.time + 90;
+  return best;
 }
 
 function updateWarbot(u, dt) {
@@ -2635,7 +2699,7 @@ function fireMissileAt(silo, i, j) {
   addFx('ring', silo.x + 0.5, silo.y + 0.5, { color: '#ffcf4a', r: 1.2 });
   sfx('launch');
   if (target) postMsg(target.owner, `Incoming missile! It is heading for your ${BDEFS[target.type].name}.`, target.x, target.y, 'bad');
-  else postMsg(1 - owner, 'Incoming missile!', tx, ty, 'bad');
+  else if (S.owner[tIdx(tx, ty)] >= 0 && S.owner[tIdx(tx, ty)] !== owner) postMsg(S.owner[tIdx(tx, ty)], 'Incoming missile!', tx, ty, 'bad');
   return true;
 }
 
@@ -2728,7 +2792,7 @@ function updateNukeSilo(b, dt) {
   b.timer = 0;
   b.armed = 1;
   postMsg(b.owner, 'Your nuclear missile is ready. Tap the Nuclear Silo to aim it.', b.x, b.y, 'good');
-  if (S.players[1 - b.owner] && !S.players[1 - b.owner].absent) postMsg(1 - b.owner, 'Intelligence: the rival has finished a nuclear missile!', b.x, b.y, 'bad');
+  for (const P of S.players) if (P.id !== b.owner && !P.absent && !P.out) postMsg(P.id, `Intelligence: ${playerName(b.owner, true)} has finished a nuclear missile!`, b.x, b.y, 'bad');
 }
 
 /** Can this Nuclear Silo fire at tile (i, j)? '' if so, otherwise why not. */
@@ -2765,7 +2829,7 @@ function nukeImpact(m) {
   const cx = m.x1, cy = m.y1, R2 = NUKE.radius * NUKE.radius;
   addFx('nuke', cx, cy, { life: 2, r: NUKE.radius });
   sfx('nuke');
-  const lost = [0, 0];
+  const lost = S.players.map(() => 0);
   for (const b of S.buildings.slice()) {
     if (b.dead || dist2(b.x + 0.5, b.y + 0.5, cx, cy) > R2) continue;
     if (b.type === 'lander') {
@@ -2792,10 +2856,12 @@ function nukeImpact(m) {
   }
   S.blasts = (S.blasts || []).filter((b) => b.until > S.time).concat([{ x: cx, y: cy, until: S.time + NUKE.scorch }]);
   computeTerritory();
-  for (const p of [0, 1]) {
-    if (S.players[p].absent) continue;
+  const theirs = lost.reduce((a, n, p) => a + (p === m.owner ? 0 : n), 0);
+  for (const P of S.players) {
+    const p = P.id;
+    if (P.absent || P.out) continue;
     const mine = p === m.owner;
-    postMsg(p, mine ? `Nuclear strike! ${lost[1 - p]} rival building${lost[1 - p] === 1 ? '' : 's'} destroyed.` + (lost[p] ? ` You lost ${lost[p]} of your own.` : '')
+    postMsg(p, mine ? `Nuclear strike! ${theirs} rival building${theirs === 1 ? '' : 's'} destroyed.` + (lost[p] ? ` You lost ${lost[p]} of your own.` : '')
       : `A nuclear strike destroyed ${lost[p]} of your buildings!`, ci, cj, mine ? 'good' : 'bad');
   }
 }
@@ -3004,14 +3070,14 @@ function demolish(b) {
  */
 const HIST_MAX = 240;
 
-function newHistory() { return { t: [], p: [{}, {}] }; }
+function newHistory(n) { return { t: [], p: Array.from({ length: n || 2 }, () => ({})) }; }
 
 function recordHistory() {
   const H = S.hist || (S.hist = newHistory());
   H.t.push(Math.round(S.time));
   for (const P of S.players) {
     if (P.absent) continue;
-    const h = H.p[P.id];
+    const h = H.p[P.id] || (H.p[P.id] = {});
     const push = (k, v) => (h[k] = h[k] || []).push(v);
     let civ = 0, war = 0, blds = 0;
     for (const u of S.bots) if (!u.dead && u.owner === P.id) { if (u.type === 'warbot') war++; else civ++; }

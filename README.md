@@ -6,6 +6,11 @@ spread across the map. Roads are the heart of the game: Haulers only drive on th
 how goods move.
 
 - **Versus:** race a rival AI colony across the planet. Capture its Command Base to win (about 20–40 minutes).
+  **Players: Free-for-all · 3** adds a second rival (red and green): a round planet with the three starts 120° apart
+  (player 0's third is generated and turned round onto the others, resources placed tile for tile so each third
+  has as many). Capturing a Command Base hands over everything its owner built (`eliminate`); the last colony
+  standing wins. Standard, Islands, Crater and Plateaus maps (`ffa: true` in `SHAPE_PRESETS`); the green team's
+  art is the red team's recoloured at run time (`recolorArt`), and each AI fights its nearest rival (`rivalOf`).
 - **Colony:** no rival. Settle the planet at your own pace, with colonization milestones. Free play has the full
   building roster, missiles and nuclear silos included, to experiment with.
 - **Missions:** eight set challenges on hand-picked planets, each with its own goals and Easy, Normal and Hard

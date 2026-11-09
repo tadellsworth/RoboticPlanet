@@ -50,11 +50,12 @@ function initUI() {
   // Menu
   for (const btn of $('m-mode').children) btn.onclick = () => { UI.menu.mode = btn.dataset.v; syncMenu(); sfx('click'); };
   for (const btn of $('m-diff').children) btn.onclick = () => { UI.menu.diff = btn.dataset.v; syncMenu(); sfx('click'); };
+  for (const btn of $('m-players').children) btn.onclick = () => { UI.menu.players = +btn.dataset.v; syncMenu(); saveSettings(); sfx('click'); };
   $('m-reroll').onclick = () => { UI.menu.seed = randomSeed(); syncMenu(); sfx('click'); };
   // Map settings sliders (remembered on this device; map size is remembered per mode).
   try { Object.assign(UI.menu, JSON.parse(localStorage.getItem('botfall.settings') || '{}')); } catch (e) { /* defaults */ }
   const saveSettings = () => {
-    try { localStorage.setItem('botfall.settings', JSON.stringify({ size: UI.menu.size, rough: UI.menu.rough, rich: UI.menu.rich, shape: UI.menu.shape, nuke: UI.menu.nuke, biome: UI.menu.biome })); } catch (e) { /* storage unavailable */ }
+    try { localStorage.setItem('botfall.settings', JSON.stringify({ size: UI.menu.size, rough: UI.menu.rough, rich: UI.menu.rich, shape: UI.menu.shape, nuke: UI.menu.nuke, biome: UI.menu.biome, players: UI.menu.players })); } catch (e) { /* storage unavailable */ }
   };
   $('m-size').oninput = () => { UI.menu.size[UI.menu.mode] = +$('m-size').value; syncMenu(); saveSettings(); };
   $('m-rough').oninput = () => { UI.menu.rough = +$('m-rough').value; syncMenu(); saveSettings(); };
@@ -143,9 +144,16 @@ function syncMenu() {
   for (const btn of $('m-mode').children) btn.classList.toggle('on', btn.dataset.v === UI.menu.mode);
   for (const btn of $('m-diff').children) btn.classList.toggle('on', btn.dataset.v === UI.menu.diff);
   $('m-diff-field').hidden = UI.menu.mode === 'colony';
+  // Free-for-all (you and two rivals) on the map shapes with room for three.
+  const ffaOk = !!SHAPE_PRESETS[UI.menu.shape || 0].ffa, three = UI.menu.mode === 'versus' && UI.menu.players === 3 && ffaOk;
+  $('m-players-field').hidden = UI.menu.mode === 'colony';
+  for (const btn of $('m-players').children) { btn.classList.toggle('on', +btn.dataset.v === (three ? 3 : 2)); btn.disabled = btn.dataset.v === '3' && !ffaOk; }
+  $('m-players-note').hidden = ffaOk || UI.menu.players !== 3;
+  $('m-players-note').textContent = `${SHAPE_PRESETS[UI.menu.shape || 0].name} maps are for two players only: pick Standard, Islands, Crater or Plateaus for a free-for-all.`;
   $('m-mode-desc').textContent = UI.menu.mode === 'colony'
     ? 'No rival. Settle the planet at your own pace: build supply chains and spread across the whole map.'
-    : 'Race a rival colony across the planet. Build up, then capture its Command Base to win.';
+    : three ? 'Free-for-all: you and two rival colonies on a round planet. Capture a rival\'s Command Base and everything it built is yours. Last colony standing wins.'
+      : 'Race a rival colony across the planet. Build up, then capture its Command Base to win.';
   $('m-seed').textContent = 'Planet #' + UI.menu.seed;
   const size = UI.menu.size[UI.menu.mode] ?? DEFAULT_SIZE[UI.menu.mode];
   $('m-size').value = size;
@@ -158,7 +166,7 @@ function syncMenu() {
   $('m-biome').value = UI.menu.biome || 0;
   $('m-biome-v').textContent = BIOMES[BIOME_ORDER[UI.menu.biome || 0]].name;
   $('m-rich').value = UI.menu.rich;
-  const dims = mapDims({ size, shape: UI.menu.shape || 0 });
+  const dims = mapDims({ size, shape: UI.menu.shape || 0, players: three ? 3 : 2 });
   $('m-size-v').textContent = `${SIZE_PRESETS[size].name} · ${dims.W}×${dims.H}`;
   $('m-rough-v').textContent = TERRAIN_PRESETS[UI.menu.rough].name;
   $('m-rich-v').textContent = RESOURCE_PRESETS[UI.menu.rich].name;
@@ -396,7 +404,7 @@ function updateMapTip() {
   if (b) {
     const def = BDEFS[b.type];
     key = 'b' + b.id;
-    html = `<b>${b.owner === 0 ? '' : 'Rival '}${def.name}</b>` + (b.owner === 0 && b.status ? `<em>${b.status}</em>` : '') +
+    html = `<b>${b.owner === 0 ? '' : playerName(b.owner) + ' '}${def.name}</b>` + (b.owner === 0 && b.status ? `<em>${b.status}</em>` : '') +
       (def.mil && !(b.owner === 0 && b.status) ? `<em>${b.garrison.length} warbot${b.garrison.length === 1 ? '' : 's'} inside</em>` : '') +
       (b.armor < def.armor ? `<em>Armor ${Math.ceil(b.armor)}/${def.armor}</em>` : '');
   } else {
@@ -408,7 +416,7 @@ function updateMapTip() {
     }
     if (bot) {
       key = 'u' + bot.id;
-      html = `<b>${bot.owner === 0 ? '' : 'Rival '}${BOTS[bot.type].name}</b>` + (bot.owner === 0 ? `<em>${botActivity(bot)}</em>` : '') +
+      html = `<b>${bot.owner === 0 ? '' : playerName(bot.owner) + ' '}${BOTS[bot.type].name}</b>` + (bot.owner === 0 ? `<em>${botActivity(bot)}</em>` : '') +
         `<em>Health ${Math.ceil(bot.hp)}/${bot.maxHp}${bot.owner === 0 ? ` · battery ${Math.round(bot.bat ?? 100)}%` : ''}</em>`;
     } else if (inMap(i, j) && S.res[tIdx(i, j)]) {
       const t = tIdx(i, j);
@@ -523,15 +531,16 @@ function startNewGame() {
   newGame({
     seed: UI.menu.seed, difficulty: UI.menu.diff, mode: UI.menu.mode,
     size: UI.menu.size[UI.menu.mode] ?? DEFAULT_SIZE[UI.menu.mode], rough: UI.menu.rough, rich: UI.menu.rich, shape: UI.menu.shape || 0,
-    nuke: !!UI.menu.nuke, biome: BIOME_ORDER[UI.menu.biome || 0],
+    nuke: !!UI.menu.nuke, biome: BIOME_ORDER[UI.menu.biome || 0], players: UI.menu.players === 3 ? 3 : 2,
   });
   enterGame();
   updateHUD();
   placeMinimap();
   postMsg(0, UI.menu.mode === 'colony'
     ? 'Your bots have landed. Build, expand and make this planet home.'
-    : 'Your bots have landed. A rival colony landed to the north. Build up fast!', 0, 0, 'info');
-  if (nukeOn()) postMsg(0, 'Nuclear race: a few uranium deposits glow green across the planet. Dig them with Ore Mines, enrich them at a Nuclear Reactor and build the bomb before the rival does.', 0, 0, 'warn');
+    : S.players.length > 2 ? 'Your bots have landed. Two rival colonies landed too, one to the north-west (red) and one to the north-east (green). Build up fast!'
+      : 'Your bots have landed. A rival colony landed to the north. Build up fast!', 0, 0, 'info');
+  if (nukeOn()) postMsg(0, `Nuclear race: a few uranium deposits glow green across the planet. Dig them with Ore Mines, enrich them at a Nuclear Reactor and build the bomb before ${S.players.length > 2 ? 'the rivals do' : 'the rival does'}.`, 0, 0, 'warn');
 }
 
 function continueGame() {
@@ -596,8 +605,8 @@ function showGameOver() {
   sfx(won ? 'win' : 'lose');
   $('o-title').textContent = won ? 'Victory!' : 'Defeat';
   $('o-text').textContent = won
-    ? 'Your warbots captured the rival Command Base. The planet is yours.'
-    : 'The rival captured your Command Base. Regroup and try again.';
+    ? (S.players.length > 2 ? 'Both rival Command Bases are yours: the last colony standing. The planet is yours.' : 'Your warbots captured the rival Command Base. The planet is yours.')
+    : `The ${S.players.length > 2 ? playerName(S.winner) : 'rival'} ${S.players[0].out ? 'captured your Command Base' : 'took the planet'}. Regroup and try again.`;
   const st = S.players[0].stats;
   $('o-stats').innerHTML = [
     ['Time', fmtTime(S.time)], ['Buildings completed', st.built], ['Bots built', st.bots - (st.startBots || 0)],
@@ -737,16 +746,15 @@ function openStats() {
 }
 
 function renderStats() {
-  const H = S.hist || { t: [], p: [{}, {}] };
+  const H = S.hist || newHistory(S.players.length);
   const versus = S.mode !== 'colony';
   const P = S.players[0], st = P.stats;
   const made = Object.values(P.made || {}).reduce((a, v) => a + v, 0);
   const tiles = [['Time', fmtTime(S.time)], ['Buildings built', st.built], ['Bots built', st.bots - (st.startBots || 0)],
     ['Goods produced', made.toLocaleString()], versus ? ['Rival buildings taken', st.captured] : ['Land claimed', Math.round(landShare(0) * 100) + '%'],
     ['Bots lost', st.lost]];
-  const players = versus ? [0, 1] : [0];
-  const names = ['You', 'Rival'];
-  const ser = (fn) => players.map((p) => ({ name: names[p], color: CHART.series[p], values: fn(H.p[p] || {}) }));
+  const players = versus ? S.players.map((P) => P.id) : [0];
+  const ser = (fn) => players.map((p) => ({ name: playerName(p), color: CHART.series[p], values: fn(H.p[p] || {}) }));
   const goodsList = GOODS.filter((g) => (warOn() || !WAR_GOODS.includes(g)) && (nukeOn() || !NUKE_GOODS.includes(g)));
   if (!goodsList.includes(UI.stats.good)) UI.stats.good = 'alloy';
   const use = usageByType(0);
@@ -839,7 +847,7 @@ function showAimBanner(problem) {
   }
   if (R.aim) {
     const t = missileTargetAt(0, R.aim.i, R.aim.j);
-    html += t ? `Fire at the rival <b>${BDEFS[t.type].name}</b>? ${BDEFS[t.type].mil ? 'Its armor drops to almost nothing, ready for warbots to capture.' : 'A hit wrecks it.'}`
+    html += t ? `Fire at the ${playerName(t.owner)} <b>${BDEFS[t.type].name}</b>? ${BDEFS[t.type].mil ? 'Its armor drops to almost nothing, ready for warbots to capture.' : 'A hit wrecks it.'}`
       : 'Fire at this spot? The blast hurts rival buildings and bots within ' + md.splash + ' tiles.';
     ok = 'Fire';
   } else {
@@ -1065,7 +1073,7 @@ function onMapTap(i, j, wx, wy) {
   if (R.mode === 'attack') {
     if (b && b.owner !== 0) { setMode('normal'); openBuildingSheet(b); }
     else if (!b && inMap(i, j) && S.terrain[tIdx(i, j)] === T_GROUND) { setMode('normal'); openMoveSheet(i, j); }
-    else { sfx('error'); showBanner('<span class="err">Tap a rival building (red) or open ground.</span>', null, 'Cancel'); }
+    else { sfx('error'); showBanner(`<span class="err">Tap a rival building (${S.players.length > 2 ? 'red or green' : 'red'}) or open ground.</span>`, null, 'Cancel'); }
     return;
   }
   if (b) { sfx('click'); openBuildingSheet(b); return; }
@@ -1449,9 +1457,9 @@ function openBuildingSheet(b) {
   const def = BDEFS[b.type];
   const mine = b.owner === 0;
   R.selected = b.id; R.selTile = -1; UI.selBot = 0;
-  const desc = !mine && b.type === 'lander' ? 'The rival\'s fortified headquarters. Capture it to win.' : def.desc;
+  const desc = !mine && b.type === 'lander' ? (S.players.length > 2 ? `The ${playerName(b.owner)}'s fortified headquarters. Capture it and everything the ${playerName(b.owner)} built is yours.` : 'The rival\'s fortified headquarters. Capture it to win.') : def.desc;
   let html = `<div class="sheet-title"><img src="${iconFor(b.type, b.owner)}" alt=""><div><h3>${def.name}</h3>
-    <div class="owner"><span class="dot" style="background:${PLAYER_COLORS[b.owner]}"></span> ${mine ? 'Yours' : 'Rival'}</div></div></div>
+    <div class="owner"><span class="dot" style="background:${PLAYER_COLORS[b.owner]}"></span> ${mine ? 'Yours' : playerName(b.owner)}</div></div></div>
     <p class="desc">${desc}</p><div class="status" id="sh-status"></div><div id="sh-dyn"></div>${mine ? '<div id="sh-fix"></div>' : ''}`;
   if (mine) {
     if (def.store && b.built) {
@@ -1930,7 +1938,7 @@ function botActivity(u) {
 function openBotSheet(u) {
   R.selected = 0; R.selTile = -1; UI.selBot = u.id;
   const html = `<div class="sheet-title"><div><h3>${BOTS[u.type].name}</h3>
-    <div class="owner"><span class="dot" style="background:${PLAYER_COLORS[u.owner]}"></span> ${u.owner === 0 ? 'Yours' : 'Rival'}</div></div></div>
+    <div class="owner"><span class="dot" style="background:${PLAYER_COLORS[u.owner]}"></span> ${u.owner === 0 ? 'Yours' : playerName(u.owner)}</div></div></div>
     <p class="desc">${BOTS[u.type].desc}</p>
     <div class="status" id="sh-status"></div><div id="sh-dyn"></div>
     ${u.owner === 0 && u.type === 'warbot' ? '<button class="btn big" id="sh-recall" hidden>Call back this squad</button>' : ''}`;
@@ -2280,7 +2288,8 @@ function objectiveText() {
       ? `Colonize the planet: <b>${pct}%</b> claimed. Next milestone at ${Math.round(next * 100)}%.`
       : `<b>${pct}%</b> of the planet colonized. Every milestone reached!`;
   }
-  return 'Gather warbots in Outposts near the rival, then tap the <b>rival Command Base</b> and send them in to capture it.';
+  return S.players.length > 2 ? 'Gather warbots in Outposts near a rival, then tap its <b>Command Base</b> and send them in. Take both rival Command Bases to win.'
+    : 'Gather warbots in Outposts near the rival, then tap the <b>rival Command Base</b> and send them in to capture it.';
 }
 
 function updateHUD() {
