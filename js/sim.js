@@ -1511,7 +1511,10 @@ function garrisonDefense(b, dt) {
 
 /* ------------------------------------------------------------------ warbots & combat */
 
-/** Send a warbot to the military building that most needs it, favouring the front line. */
+/**
+ * Send a warbot to the military building that most needs it, favouring the front line and the
+ * player's garrison priority (b.gprio 'high' / 'low').
+ */
 function goGarrison(u) {
   const enemyL = getE(S.players[1 - u.owner].lander);
   let best = null, bs = Infinity;
@@ -1522,7 +1525,9 @@ function goGarrison(u) {
     const n = b.garrison.length + b.garInc;
     if (n >= cap) continue;
     const front = enemyL ? dist(b.x, b.y, enemyL.x, enemyL.y) : 0;
-    const s = (n / Math.min(cap, 10)) * 12 + front * 0.25 + dist(b.x, b.y, u.x, u.y) * 0.05;
+    // The player's garrison priority: High ones fill first, Low ones only when the rest are full.
+    const pr = b.gprio === 'high' ? -30 : b.gprio === 'low' ? 30 : 0;
+    const s = (n / Math.min(cap, 10)) * 12 + front * 0.25 + dist(b.x, b.y, u.x, u.y) * 0.05 + pr;
     if (s < bs) { bs = s; best = b; }
   }
   if (!best) return;
@@ -1859,6 +1864,49 @@ function sendToRally(owner, i, j, count) {
   }
   if (!sent) cleanRallies();
   return { sent, rally: r };
+}
+
+/* ------------------------------------------------------------------ stationing warbots */
+
+/** Room left in a garrison, counting warbots already on their way. */
+function garrisonRoom(b) { return Math.max(0, BDEFS[b.type].garrison - b.garrison.length - (b.garInc || 0)); }
+
+/** Other garrisons that can spare warbots for building `to` (each keeps one at home), nearest first. */
+function stationSources(owner, to) {
+  const zone = S.zone[tIdx(to.x, to.y)], out = [];
+  for (const b of S.buildings) {
+    if (b === to || b.dead || b.owner !== owner || !b.built || !BDEFS[b.type].mil || b.garrison.length < 2) continue;
+    if (S.zone[tIdx(b.x, b.y)] !== zone) continue; // they couldn't walk there
+    out.push({ b, d: dist(b.x, b.y, to.x, to.y) });
+  }
+  out.sort((a, c) => a.d - c.d);
+  return out.map((o) => o.b);
+}
+
+/** How many warbots could be stationed at `to` right now. */
+function stationAvailable(owner, to) {
+  let n = 0;
+  for (const b of stationSources(owner, to)) n += b.garrison.length - 1;
+  return Math.min(n, garrisonRoom(to));
+}
+
+/** Move warbots from the nearest other garrisons into `to`, where they stay until moved again. */
+function stationWarbots(owner, to, count) {
+  if (!to.built || to.dead || to.owner !== owner || !BDEFS[to.type].mil) return 0;
+  count = Math.min(count, garrisonRoom(to));
+  let sent = 0;
+  for (const b of stationSources(owner, to)) {
+    while (b.garrison.length > 1 && sent < count) {
+      const u = getE(b.garrison.pop());
+      if (!u) continue;
+      u.inside = 0;
+      u.task = { type: 'garrison', bld: to.id };
+      u.path = null;
+      to.garInc = (to.garInc || 0) + 1;
+      sent++;
+    }
+  }
+  return sent;
 }
 
 /** Call a rally point's warbots back to their garrisons. */

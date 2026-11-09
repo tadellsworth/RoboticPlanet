@@ -115,6 +115,9 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
   2–3 Fuel a minute; an Oil Pump and Refinery up to 10 a minute until the seep runs dry (both stop at 30 by default).
 - **Army orders:** tap **Army**, then a rival building to attack it with warbots or a missile, or open
   ground to send warbots there to hold the area under a rally flag. Tap the flag to call them back.
+- **Garrisons:** tap an Outpost or your Lander to set its **garrison priority** (new warbots, and ones called back
+  from a flag, fill High garrisons first and Low ones last) or to **station warbots** there: choose how many and they
+  march over from your other garrisons (each keeps one at home) and stay until you move them.
 - **Missiles** are built at a Missile Factory (2 Alloy, 1 Chip and 1 Fuel each, 20 seconds) and carried to Missile Silos
   by haulers. A hit does 24 damage, which wrecks most buildings outright, plus 5 to other rival buildings and 9 to bots
   within 2.2 tiles. Outposts and Landers drop to almost no armor; warbots still have to walk in and capture them.

@@ -803,6 +803,14 @@ function openBuildingSheet(b) {
         <button data-v="low">Low</button><button data-v="normal">Normal</button><button data-v="high">High</button></div>
         <p class="hint">${b.built ? 'High-priority buildings get workers and goods first; low ones last, and lose their worker first when workers run short.' : 'High-priority sites get their materials and a builder first.'}</p>`;
     }
+    if (def.mil && b.built && S.mode !== 'colony') {
+      html += `<div class="section-label">Warbots</div>
+        <div class="seg" id="sh-gprio"><button data-v="low">Low</button><button data-v="normal">Normal</button><button data-v="high">High</button></div>
+        <p class="hint">Garrison priority: new warbots from the Foundry, and ones called back from a rally flag, fill High garrisons first and Low ones last.</p>
+        <div class="stepper"><button class="btn" id="sh-st-minus" aria-label="Fewer">−</button><span class="n" id="sh-st-n">0</span>
+        <button class="btn" id="sh-st-plus" aria-label="More">+</button><button class="btn primary" id="sh-st-send" style="flex:1">Station here</button></div>
+        <p class="hint" id="sh-st-hint"></p>`;
+    }
     if (b.type === 'foundry' && b.built) {
       const versus = S.mode !== 'colony';
       const row = (k, label) => `<div class="order-row"><span>${label}<small id="sh-o-${k}">none queued</small></span>
@@ -859,6 +867,17 @@ function openBuildingSheet(b) {
       refreshSheet();
     };
     if ($('sh-pause')) $('sh-pause').onclick = () => { setPaused(b, !b.paused); sfx('click'); refreshSheet(); };
+    if ($('sh-gprio')) for (const btn of $('sh-gprio').children) btn.onclick = () => { b.gprio = btn.dataset.v === 'normal' ? undefined : btn.dataset.v; sfx('click'); refreshSheet(); };
+    if ($('sh-st-send')) {
+      UI.stationN = Math.min(5, stationAvailable(0, b));
+      $('sh-st-minus').onclick = () => { UI.stationN = Math.max(1, UI.stationN - 1); refreshSheet(); };
+      $('sh-st-plus').onclick = () => { UI.stationN = Math.min(stationAvailable(0, b), UI.stationN + 1); refreshSheet(); };
+      $('sh-st-send').onclick = () => {
+        const n = stationWarbots(0, b, UI.stationN);
+        if (n) { sfx('alert'); toast(`${n} warbot${n > 1 ? 's' : ''} on the way to the ${def.name}.`, 'info'); } else sfx('error');
+        refreshSheet();
+      };
+    }
     if ($('sh-lim')) {
       const step = (d) => {
         const cur = stockLimit(b);
@@ -1041,6 +1060,17 @@ function refreshBuildingSheet(b) {
   }
   $('sh-dyn').innerHTML = parts.join('');
   if ($('sh-road')) refreshRoadLink(b);
+  if ($('sh-gprio')) for (const btn of $('sh-gprio').children) btn.classList.toggle('on', btn.dataset.v === (b.gprio || 'normal'));
+  if ($('sh-st-n')) {
+    const avail = stationAvailable(0, b), coming = b.garInc || 0;
+    UI.stationN = clamp(UI.stationN || 0, avail ? 1 : 0, avail);
+    $('sh-st-n').textContent = UI.stationN;
+    $('sh-st-send').disabled = !avail;
+    $('sh-st-hint').textContent = (avail
+      ? `Bring up to ${avail} warbot${avail > 1 ? 's' : ''} from your other garrisons (each keeps one at home). They stay here until you move them.`
+      : !garrisonRoom(b) ? 'This garrison is full.' : 'No spare warbots in your other garrisons: each keeps one at home.')
+      + (coming ? ` ${coming} on the way.` : '');
+  }
   if ($('sh-lim')) {
     const lim = stockLimit(b), g = limitGood(b), have = goodTotal(0, g);
     $('sh-lim').textContent = lim === Infinity ? '∞' : lim;

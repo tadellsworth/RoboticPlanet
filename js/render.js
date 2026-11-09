@@ -1402,6 +1402,8 @@ function drawBadge(ctx, b, x, y, z) {
   let kind = null;
   if (b.prio === 'high') kind = 'up';
   else if (b.prio === 'low') kind = 'down';
+  else if (b.gprio === 'high') kind = 'up';
+  else if (b.gprio === 'low') kind = 'down';
   else if (b.smode === 'fill') kind = 'in';
   else if (b.smode === 'empty') kind = 'out';
   else if (b.reject) kind = 'filter';
