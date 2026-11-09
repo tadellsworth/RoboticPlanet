@@ -1182,12 +1182,33 @@ function hullBase(ctx, cx, cy, s, color, shape) {
 }
 
 /** Draw one building at screen centre (cx, cy), tile size s px. `b` may be a stub for menu icons. */
+/**
+ * How far a Silo's missile has risen into view: 0 while it isn't ready, climbing to 1 over
+ * SILO_RISE seconds once it is (instantly for a Silo that was ready when first drawn).
+ */
+const SILO_RISE = 0.8;
+function siloRise(b, ready) {
+  const m = R.siloSeen || (R.siloSeen = new Map());
+  if (!ready) { m.set(b.id, -1); return 0; }
+  let t0 = m.get(b.id);
+  if (t0 === undefined) { m.set(b.id, -Infinity); return 1; }
+  if (t0 === -1) { t0 = R.time; m.set(b.id, t0); }
+  return Math.min(1, (R.time - t0) / SILO_RISE);
+}
+
 function drawBuilding(ctx, type, cx, cy, s, owner, b) {
   const color = PLAYER_COLORS[owner];
   const t = R.time;
   const working = b && b.working;
   if (b && !b.built) { drawSite(ctx, type, cx, cy, s, owner, b); return; }
-  const art = artFor(type, owner);
+  let art = artFor(type, owner), full = null, fade = 1;
+  // A Silo shows its missile only once it's ready to fire (a Nuclear Silo: once it's armed); the
+  // missile fades in as it's raised.
+  if (art && b && b.built && (type === 'silo' || type === 'nukesilo')) {
+    const empty = artFor(type + '-empty', owner);
+    const k = siloRise(b, type === 'silo' ? siloReady(b) : !!b.armed);
+    if (empty && k < 1) { full = k > 0 ? art : null; fade = k; art = empty; }
+  }
   if (art) {
     if (!ART[type + '@' + owner] && type !== 'ramp') {
       // Shared art: a thin team-coloured bar along the front edge shows whose building it is.
@@ -1200,6 +1221,7 @@ function drawBuilding(ctx, type, cx, cy, s, owner, b) {
     // Flat (top-down) turret art is drawn barrel-right and rotated to aim. 3/4-view turret art
     // (anchored at the bottom) is a fixed base plus a head image for each direction (see turretHead).
     drawArt(ctx, art, cx, cy, s * (type === 'lander' && !art.scale ? 1.6 : 1), type === 'turret' && b && art.anchor !== 'bottom' ? b.aim : 0);
+    if (full) { ctx.globalAlpha = fade; drawArt(ctx, full, cx, cy, s); ctx.globalAlpha = 1; }
     if (type === 'turret' && art.anchor === 'bottom') {
       const head = turretHead(owner, b ? b.aim : Math.PI / 4);
       if (head) drawArt(ctx, head, cx, cy, s);
@@ -1520,7 +1542,7 @@ function drawBuilding(ctx, type, cx, cy, s, owner, b) {
       ctx.beginPath(); ctx.arc(cx, cy, 8.5 * u, 0, Math.PI * 2); ctx.fill();
       ctx.strokeStyle = '#ffcf4a'; ctx.lineWidth = 1.5 * u; ctx.setLineDash([3 * u, 2.5 * u]);
       ctx.beginPath(); ctx.arc(cx, cy, 8.5 * u, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]);
-      if (!b || (b.stock && b.stock.warhead > 0)) {
+      if (!b || (b.stock && siloReady(b))) {
         ctx.fillStyle = '#d8dde4';
         ctx.beginPath(); ctx.arc(cx, cy, 4.5 * u, 0, Math.PI * 2); ctx.fill();
         ctx.fillStyle = color;
@@ -2252,6 +2274,7 @@ function render(dtReal) {
   drawRallies(ctx, ox, oy, z);
   drawMissiles(ctx, ox, oy, z);
   drawEffects(ctx, ox, oy, z);
+  if (S.event) drawEvent(ctx, ox, oy, z);
   if (R.box) {
     // The selection box being dragged (desktop).
     const b = R.box, x = Math.min(b.x0, b.x1), y = Math.min(b.y0, b.y1), w = Math.abs(b.x1 - b.x0), h = Math.abs(b.y1 - b.y0);
@@ -2262,6 +2285,91 @@ function render(dtReal) {
     ctx.strokeRect(x + 0.5, y + 0.5, w, h);
   }
   if (typeof UI !== 'undefined' && UI.inGame) renderMinimap();
+}
+
+/**
+ * Planet events on screen: a dust storm's haze and blowing grit, a solar flare's glare, meteors
+ * streaking down onto their marked spots, and the trader ship hovering over each Command Base.
+ */
+function drawEvent(ctx, ox, oy, z) {
+  const E = S.event, now = S.time;
+  // How far in the event is (0..1 over its first and last 4 seconds), for fading in and out.
+  const fade = clamp(Math.min((now - E.t0) / 4, (E.t1 - now) / 4), 0, 1);
+  if (E.type === 'dust' && fade > 0) {
+    ctx.fillStyle = `rgba(176,128,72,${0.34 * fade})`;
+    ctx.fillRect(0, 0, R.w, R.h);
+    // Thicker at the edges of the view: you can't see far.
+    const v = ctx.createRadialGradient(R.w / 2, R.h / 2, Math.min(R.w, R.h) * 0.25, R.w / 2, R.h / 2, Math.max(R.w, R.h) * 0.75);
+    v.addColorStop(0, 'rgba(150,104,56,0)'); v.addColorStop(1, `rgba(150,104,56,${0.45 * fade})`);
+    ctx.fillStyle = v;
+    ctx.fillRect(0, 0, R.w, R.h);
+    ctx.strokeStyle = `rgba(240,206,150,${0.6 * fade})`;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    for (let n = 0; n < 90; n++) {
+      const h1 = hash2(n, 7, 31), h2 = hash2(n, 13, 77), sp = 260 + h2 * 300;
+      const x = ((h1 * (R.w + 200) + R.time * sp) % (R.w + 200)) - 100, y = ((h2 * R.h + R.time * sp * 0.18) % R.h);
+      ctx.moveTo(x, y); ctx.lineTo(x - 14 - h1 * 18, y - 3);
+    }
+    ctx.stroke();
+  } else if (E.type === 'flare' && fade > 0) {
+    const g = ctx.createLinearGradient(R.w, 0, R.w * 0.3, R.h * 0.8);
+    const pulse = 0.85 + 0.15 * Math.sin(R.time * 2.4);
+    g.addColorStop(0, `rgba(255,240,190,${0.55 * fade * pulse})`);
+    g.addColorStop(1, 'rgba(255,240,190,0)');
+    ctx.save();
+    ctx.globalCompositeOperation = 'screen';
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, R.w, R.h);
+    ctx.fillStyle = `rgba(255,214,120,${0.1 * fade * pulse})`;
+    ctx.fillRect(0, 0, R.w, R.h);
+    ctx.restore();
+  } else if (E.type === 'meteor' && E.hits) {
+    for (const h of E.hits) {
+      const dt = h.at - now;
+      if (h.done || dt > 3) continue;
+      const x = ox + (h.x + 0.5) * z, y = oy + (h.y + 0.5) * z;
+      // The spot it will hit: a pulsing red ring.
+      ctx.globalAlpha = 0.5 + 0.4 * Math.sin(R.time * 12);
+      ctx.strokeStyle = '#ff5a3d'; ctx.lineWidth = 2;
+      ctx.setLineDash([z * 0.15, z * 0.1]);
+      ctx.beginPath(); ctx.arc(x, y, z * (0.6 + dt * 0.2), 0, Math.PI * 2); ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.globalAlpha = 1;
+      if (dt > 1.3) continue;
+      // The meteor itself, falling in from high up.
+      const k = dt / 1.3, hx = x + E.dir * k * z * 6, hy = y - k * z * 10;
+      const g = ctx.createLinearGradient(hx, hy, hx + E.dir * z * 2.4, hy - z * 4);
+      g.addColorStop(0, 'rgba(255,230,160,0.95)'); g.addColorStop(1, 'rgba(255,120,40,0)');
+      ctx.strokeStyle = g; ctx.lineWidth = Math.max(3, z * 0.22); ctx.lineCap = 'round';
+      ctx.beginPath(); ctx.moveTo(hx, hy); ctx.lineTo(hx + E.dir * z * 2.4, hy - z * 4); ctx.stroke();
+      ctx.lineCap = 'butt';
+      ctx.fillStyle = '#fff3c4';
+      ctx.beginPath(); ctx.arc(hx, hy, Math.max(2.5, z * 0.16), 0, Math.PI * 2); ctx.fill();
+    }
+  } else if (E.type === 'trader' && E.started && E.offers) {
+    for (const p in E.offers) {
+      const L = getE(S.players[p].lander);
+      if (!L || L.dead) continue;
+      const o = E.offers[p], bob = Math.sin(R.time * 2 + +p) * z * 0.12;
+      const x = ox + (L.x + 0.5) * z, y = oy + (L.y + 0.5) * z - z * 2.4 + bob, w = z * 1.3;
+      if (o.done && now < E.t1) {
+        // The tractor beam that lowered the goods.
+        ctx.fillStyle = 'rgba(127,227,255,0.18)';
+        ctx.beginPath(); ctx.moveTo(x - w * 0.3, y + z * 0.2); ctx.lineTo(x + w * 0.3, y + z * 0.2); ctx.lineTo(x + w * 0.6, y + z * 2.3); ctx.lineTo(x - w * 0.6, y + z * 2.3); ctx.fill();
+      }
+      ctx.fillStyle = 'rgba(0,0,0,0.25)';
+      ctx.beginPath(); ctx.ellipse(x, oy + (L.y + 0.5) * z + z * 0.2, w * 0.45, z * 0.15, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#9fb3c4';
+      ctx.beginPath(); ctx.ellipse(x, y, w * 0.5, z * 0.22, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#7fe3ff';
+      ctx.beginPath(); ctx.ellipse(x, y - z * 0.12, w * 0.22, z * 0.2, 0, Math.PI, Math.PI * 2); ctx.fill();
+      for (let n = 0; n < 4; n++) {
+        ctx.fillStyle = (Math.floor(R.time * 4) + n) % 4 === 0 ? '#fff6b0' : '#ffb547';
+        ctx.beginPath(); ctx.arc(x + (n - 1.5) * w * 0.22, y + z * 0.06, Math.max(1.5, z * 0.05), 0, Math.PI * 2); ctx.fill();
+      }
+    }
+  }
 }
 
 /**
@@ -2836,6 +2944,16 @@ function drawEffects(ctx, ox, oy, z) {
           ctx.lineTo(x + Math.cos(a) * r, y + Math.sin(a) * r);
         }
         ctx.stroke();
+        break;
+      }
+      case 'crater': {
+        // A meteor's scorch mark, glowing embers fading out.
+        ctx.globalAlpha = 0.55 * (1 - k);
+        ctx.fillStyle = '#2a211c';
+        ctx.beginPath(); ctx.ellipse(x, y, z * 0.75, z * 0.55, 0, 0, Math.PI * 2); ctx.fill();
+        ctx.globalAlpha = 0.8 * Math.max(0, 1 - k * 2);
+        ctx.fillStyle = '#ff7a2e';
+        for (let n = 0; n < 5; n++) { const a = n * 1.26 + f.x; ctx.beginPath(); ctx.arc(x + Math.cos(a) * z * 0.35, y + Math.sin(a) * z * 0.25, z * 0.05, 0, Math.PI * 2); ctx.fill(); }
         break;
       }
       case 'ring': {

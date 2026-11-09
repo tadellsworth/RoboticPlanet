@@ -27,6 +27,7 @@ function simStep(dt) {
   if (S.missiles.length) updateMissiles(dt);
   if (S.tick % 30 === 15) cleanRallies();
   if (S.tick % 30 === 20) updateLoot();
+  if (S.events) updateEvents();
   for (const P of S.players) {
     if (!P.ai || P.out) continue;
     P.aiT -= dt;
@@ -287,7 +288,7 @@ function workerBattery(u, dt) {
     return;
   }
   const d = (u.moved ? BATTERY.workerMove : 0) + (u.busy ? BATTERY.workerWork : 0);
-  if (d) u.bat = Math.max(0, u.bat - d * dt);
+  if (d) u.bat = Math.max(0, u.bat - d * dt * evDrain());
 }
 
 /** Goods the player can see: everything in storage plus finished goods waiting in buildings. */
@@ -570,7 +571,7 @@ function moveAlong(u, dt) {
       else if (bt.offroad && !harvestTrip(u)) speed *= OFFROAD_SLOW;
     }
   }
-  const vmax = speed * batFactor(u);
+  const vmax = speed * batFactor(u) * evSpeed();
   const want = vmax * dt;
   let lim = Infinity; // how far the bot can go before it must have stopped
   // Road junctions: stop before a red light, or give way to traffic already crossing the other way.
@@ -678,7 +679,7 @@ function moveDirect(u, x, y, dt) {
   const dx = x - u.x, dy = y - u.y, d = Math.sqrt(dx * dx + dy * dy);
   if (d < 1e-4) return true;
   u.face = Math.atan2(dy, dx);
-  const s = Math.min(WARBOT_SPEED * batFactor(u) * dt, d);
+  const s = Math.min(WARBOT_SPEED * batFactor(u) * evSpeed() * dt, d);
   const nx = u.x + (dx / d) * s, ny = u.y + (dy / d) * s;
   const ti = Math.floor(nx), tj = Math.floor(ny), ci = Math.floor(u.x), cj = Math.floor(u.y);
   if (!inMap(ti, tj)) return false;
@@ -2273,7 +2274,7 @@ function updateWarbot(u, dt) {
     u.waitT = (u.waitT || 0) + dt;
     if (u.waitT > BATTERY.waitGrace) d += BATTERY.warbotWait;
   } else u.waitT = 0;
-  if (d) u.bat = Math.max(0, u.bat - d * dt);
+  if (d) u.bat = Math.max(0, u.bat - d * dt * evDrain());
 }
 
 function warbotAct(u, dt) {
@@ -2840,6 +2841,7 @@ function missileBlocked(silo, i, j) {
   if (!silo || silo.dead || !silo.built) return 'That Silo is gone.';
   if (!(silo.stock.warhead > 0)) return 'This Silo has no Missiles: haulers bring them from a Missile Factory.';
   if (silo.reload > 0) return `Reloading: ready in ${Math.ceil(silo.reload)}s.`;
+  if (eventNow('dust')) return `A dust storm grounds every Missile: ${Math.ceil(S.event.t1 - S.time)}s until it blows over.`;
   if (dist(silo.x, silo.y, i, j) > BDEFS[silo.type].missile.range) return `Out of range: Missiles reach ${BDEFS[silo.type].missile.range} tiles.`;
   return '';
 }
@@ -2966,6 +2968,7 @@ function nukeBlocked(silo, i, j) {
   if (!silo.armed) return 'No nuclear missile yet: it needs 6 Enriched Uranium, 4 Alloy and 2 Chips, then a minute to assemble.';
   if (!inMap(i, j)) return 'Off the map.';
   if (dist(silo.x, silo.y, i, j) > NUKE.range) return `Out of range: nuclear missiles reach ${NUKE.range} tiles.`;
+  if (eventNow('dust')) return `A dust storm grounds every missile: ${Math.ceil(S.event.t1 - S.time)}s until it blows over.`;
   return '';
 }
 
@@ -3299,4 +3302,211 @@ function usageByType(p) {
     o.up += b.upT; o.use += b.useT || 0; o.n++;
   }
   return out;
+}
+
+/* ------------------------------------------------------------------ planet events */
+
+/** The planet event under way (past its warning), of `type` if given, or null. */
+function eventNow(type) {
+  const E = S.event;
+  return E && S.time >= E.t0 && (!type || E.type === type) ? E : null;
+}
+/** Bot speed in a dust storm. */
+function evSpeed() { return S.event && S.event.type === 'dust' && S.time >= S.event.t0 ? DUST_SPEED : 1; }
+/** Battery drain in a solar flare. */
+function evDrain() { return S.event && S.event.type === 'flare' && S.time >= S.event.t0 ? FLARE_DRAIN : 1; }
+
+/** Start, run and end planet events (see EVENTS). */
+function updateEvents() {
+  if (!S.events || S.mission) return;
+  const E = S.event;
+  if (E) {
+    if (!E.started && S.time >= E.t0) startEvent(E);
+    if (E.type === 'meteor' && E.started) for (const h of E.hits) if (!h.done && S.time >= h.at) { h.done = 1; meteorImpact(E, h); }
+    if (S.time >= E.t1) endEvent(E);
+    return;
+  }
+  if (S.time < (S.nextEvent ?? EVENT_FIRST)) return;
+  S.evN = (S.evN || 0) + 1;
+  const rng = makeRng(((S.seed ^ 0x51ed27) + S.evN * 7919) >>> 0);
+  const recent = S.recentEvents || [];
+  const pool = EVENT_ORDER.filter((k) => !recent.includes(k)); // never one of the last two again
+  const type = pool[Math.floor(rng() * pool.length)], def = EVENTS[type];
+  const t0 = S.time + (def.warn ? EVENT_WARN : 0), dur = def.dur[0] + rng() * (def.dur[1] - def.dur[0]);
+  S.event = { type, t0, t1: t0 + dur, n: S.evN };
+  if (type === 'meteor') { S.event.hits = meteorPlan(rng, t0, dur); S.event.dir = rng() < 0.5 ? -1 : 1; S.event.cratered = {}; S.event.relaid = {}; }
+  if (def.warn) {
+    postMsg(0, type === 'dust' ? `A dust storm is blowing in (${EVENT_WARN}s): bots will slow down and Missiles will be grounded.`
+      : type === 'meteor' ? `Meteor shower in ${EVENT_WARN}s! Meteors will crater roads, but leave rich Ore and Crystal where they land.`
+        : `Solar flare in ${EVENT_WARN}s: bot batteries will drain twice as fast. Keep your Charging Stations fuelled.`, undefined, undefined, 'warn');
+    sfx('alert');
+  }
+}
+
+function startEvent(E) {
+  E.started = true;
+  if (E.type === 'trader') {
+    E.offers = {};
+    for (const P of S.players) {
+      if (P.absent || P.out) continue;
+      const o = traderOffer(P.id);
+      if (!o) continue;
+      E.offers[P.id] = o;
+      // A rival takes the deal when its land is running short of what's on offer.
+      if (P.ai && P.id !== 0 && o.short) acceptTrade(P.id);
+    }
+    const o = E.offers[0];
+    postMsg(0, o ? `A trader ship is in orbit for ${Math.round(E.t1 - E.t0)}s: it offers ${o.m} ${GOOD[o.get].name} (your land is running lowest on it) for ${o.n} of your ${GOOD[o.give].name}. Tap Trade to take it.`
+      : 'A trader ship is in orbit, but it wants nothing you have spare.', undefined, undefined, 'info');
+    sfx('order');
+  } else if (E.type === 'dust') postMsg(0, 'The dust storm is here: bots crawl and Missiles are grounded until it blows over.', undefined, undefined, 'warn');
+  else if (E.type === 'flare') postMsg(0, 'Solar flare! Bot batteries are draining twice as fast.', undefined, undefined, 'warn');
+}
+
+function endEvent(E) {
+  S.recentEvents = (S.recentEvents || []).concat(E.type).slice(-2);
+  S.event = null;
+  const rng = makeRng(((S.seed ^ 0x3c1f) + E.n * 104729) >>> 0);
+  S.nextEvent = S.time + EVENT_GAP[0] + rng() * (EVENT_GAP[1] - EVENT_GAP[0]);
+  if (E.type === 'dust') postMsg(0, 'The dust storm has blown over.', undefined, undefined, 'info');
+  else if (E.type === 'flare') postMsg(0, 'The solar flare has passed.', undefined, undefined, 'info');
+  else if (E.type === 'trader') postMsg(0, 'The trader ship has left orbit.', undefined, undefined, 'info');
+  else if (E.type === 'meteor') {
+    const n = E.cratered[0] || 0, k = E.relaid[0] || 0;
+    postMsg(0, 'The meteor shower is over. Rich Ore and Crystal lie where the meteors fell' +
+      (n ? `; ${n} road tile${n > 1 ? 's were' : ' was'} cratered${k === n ? ' and your workers will re-lay them.' : k ? `: ${k} planned again, the rest need Cement.` : ': re-lay them when you have the Cement.'}` : '.'), undefined, undefined, 'info');
+  }
+}
+
+/**
+ * Where a meteor shower's meteors fall: METEOR_HITS spots on player 0's share of the planet (half
+ * of them near its landing site), each copied to the same spot on every other colony's share
+ * (mirrored with two players, turned with three), so the shower is fair.
+ */
+function meteorPlan(rng, t0, dur) {
+  const W = S.W, H = S.H, np = S.players.length, alone = S.mode === 'colony';
+  const ccx = (W - 1) / 2, ccy = (H - 1) / 2, SEC = (2 * Math.PI) / 3;
+  const sector = (x, y) => { let a = Math.atan2(y - ccy, x - ccx) - Math.PI / 6; a = ((a % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI); return Math.floor(a / SEC) % 3; };
+  const mine = (i, j) => alone || (np === 2 ? j >= H / 2 : sector(i, j) === 0);
+  const L = getE(S.players[0].lander), hits = [], n = METEOR_HITS * (alone ? 2 : 1);
+  for (let k = 0; k < n; k++) {
+    let x = -1, y = -1;
+    for (let tries = 0; tries < 40 && x < 0; tries++) {
+      let i, j;
+      if (L && k % 2 === 0) { const a = rng() * Math.PI * 2, r = 4 + rng() * 14; i = Math.round(L.x + Math.cos(a) * r); j = Math.round(L.y + Math.sin(a) * r); } else { i = Math.floor(rng() * W); j = Math.floor(rng() * H); }
+      if (inMap(i, j) && mine(i, j) && S.terrain[tIdx(i, j)] === T_GROUND) { x = i; y = j; }
+    }
+    if (x < 0) continue;
+    const at = t0 + 1.5 + ((k + rng() * 0.8) * (dur - 4)) / n, roll = rng();
+    const spots = [[x, y]];
+    if (!alone && np === 2) spots.push([W - 1 - x, H - 1 - y]);
+    if (!alone && np === 3) for (let r = 1; r < 3; r++) {
+      const a = r * SEC, c = Math.cos(a), s = Math.sin(a), dx = x - ccx, dy = y - ccy;
+      spots.push([Math.round(ccx + dx * c - dy * s), Math.round(ccy + dx * s + dy * c)]);
+    }
+    for (const [i, j] of spots) if (inMap(i, j)) hits.push({ x: i, y: j, at, roll, done: 0 });
+  }
+  return hits;
+}
+
+/** A meteor lands on tile (h.x, h.y). */
+function meteorImpact(E, h) {
+  const cx = h.x + 0.5, cy = h.y + 0.5, owner = S.owner[tIdx(h.x, h.y)];
+  addFx('boom', cx, cy, { r: 1.7 });
+  addFx('smoke', cx, cy, { r: 1 });
+  addFx('crater', cx, cy, { life: 6 });
+  if (owner === 0) {
+    sfx('boom');
+    if (S.time - (E.msgT || -99) > 12) { E.msgT = S.time; postMsg(0, 'A meteor struck your land!', h.x, h.y, 'bad'); }
+  }
+  // Roads on the spot and next to it are cratered (bridges and tunnels are too solid).
+  const wrecked = [];
+  for (let dj = -1; dj <= 1; dj++) for (let di = -1; di <= 1; di++) {
+    const i = h.x + di, j = h.y + dj;
+    if (Math.abs(di) + Math.abs(dj) > 1 || !inMap(i, j)) continue;
+    const t = tIdx(i, j);
+    if (!S.road[t] || S.bAt[t] || crossTile(t)) continue;
+    const o = S.owner[t];
+    wreckRoad(t, o, '');
+    if (o >= 0) { wrecked.push([o, i, j]); E.cratered[o] = (E.cratered[o] || 0) + 1; }
+  }
+  // Buildings and bots close by are dented (never wrecked).
+  for (const b of S.buildings) {
+    if (b.dead || dist2(b.x + 0.5, b.y + 0.5, cx, cy) > 2.6) continue;
+    b.armor = Math.max(1, b.armor - METEOR_DAMAGE);
+  }
+  for (const u of S.bots) if (!u.dead && !u.inside && dist2(u.x, u.y, cx, cy) <= 2.6) damageBot(u, METEOR_BOT_DAMAGE);
+  // A rich deposit where it fell: Ore or Crystal (sometimes Uranium, in a Nuclear race).
+  const r = nukeOn() && h.roll < 0.2 ? R_URANIUM : h.roll < 0.6 ? R_ORE : R_CRYSTAL;
+  const pr = RESOURCE_PRESETS[(S.settings && S.settings.rich) ?? DEFAULT_RICH] || RESOURCE_PRESETS[DEFAULT_RICH];
+  const amt = Math.min(255, Math.round(RES[r].amount * (r === R_URANIUM ? 1 : pr.amount * METEOR_RICH)));
+  const spots = [];
+  for (let dj = -1; dj <= 1; dj++) for (let di = -1; di <= 1; di++) spots.push([di * di + dj * dj, h.x + di, h.y + dj]);
+  spots.sort((a, b) => a[0] - b[0]);
+  let placed = 0;
+  for (const [, i, j] of spots) {
+    if (placed >= (r === R_URANIUM ? 1 : 3) || !inMap(i, j)) continue;
+    const t = tIdx(i, j);
+    if (S.terrain[t] !== T_GROUND || S.res[t] || S.bAt[t] || S.road[t] || S.plan[t] || S.ramp[t] || S.fert[t]) continue;
+    if (wrecked.some(([, wi, wj]) => wi === i && wj === j)) continue;
+    S.res[t] = r; S.amt[t] = amt;
+    if (S.grow) S.grow[t] = 1;
+    clearDecor(t);
+    markDirty(i, j);
+    placed++;
+  }
+  // Cratered roads are planned again straight away, as far as the Cement goes.
+  for (const [o, i, j] of wrecked) {
+    const P = S.players[o];
+    if (!P || P.absent || P.out) continue;
+    if (!buildRoad(o, i, j)) E.relaid[o] = (E.relaid[o] || 0) + 1;
+  }
+}
+
+/**
+ * The trader's offer to player p (see TRADE_GET): the raw good p is closest to running out of, for
+ * some of a good p has plenty of. null if p has nothing much to spare.
+ */
+function traderOffer(p) {
+  const have = spendable(p);
+  // What's left of each raw good: in stock, and in the ground on p's land.
+  const left = {};
+  for (const g in TRADE_GET) left[g] = have[g] || 0;
+  for (let t = 0; t < S.W * S.H; t++) {
+    if (S.owner[t] !== p || !S.res[t]) continue;
+    for (const g in TRADE_GET) if (S.res[t] === TRADE_GET[g]) left[g] += S.amt[t];
+  }
+  let get = null, lv = Infinity;
+  for (const g in TRADE_GET) {
+    if (g === 'crude' && !S.buildings.some((b) => !b.dead && b.owner === p && b.type === 'pump')) continue; // no use for it yet
+    const v = left[g] / TRADE_LEFT[g];
+    if (v < lv) { lv = v; get = g; }
+  }
+  // What it asks for: the good furthest over what the colony likes to keep (at least half again).
+  let give = null, gv = 1.5;
+  for (const g of TRADE_GIVE) {
+    if (g === get) continue;
+    const v = (have[g] || 0) / TRADE_KEEP[g];
+    if ((have[g] || 0) >= 8 && v > gv) { gv = v; give = g; }
+  }
+  if (!give || !get) return null;
+  const n = clamp(Math.round((have[give] - TRADE_KEEP[give]) * 0.6), 6, 40);
+  const m = Math.max(3, Math.round((n * TRADE_VALUE[give] * TRADE_BONUS) / TRADE_VALUE[get]));
+  return { give, n, get, m, short: lv < 1, done: false };
+}
+
+/** Take the trader's offer: '' if done, or why not. */
+function acceptTrade(p) {
+  const E = eventNow('trader'), o = E && E.offers && E.offers[p];
+  if (!o || o.done) return 'The trader has gone.';
+  if ((spendable(p)[o.give] || 0) < o.n) return `You need ${o.n} ${GOOD[o.give].name} in storage.`;
+  const L = getE(S.players[p].lander);
+  const store = L && !L.dead && L.owner === p ? L : nearestStoreTo(p, S.W / 2, S.H / 2);
+  if (!store) return 'You have nowhere to store the goods.';
+  takeGood(p, o.give, o.n);
+  bump(store.stock, o.get, o.m);
+  madeGood(p, o.get, o.m);
+  o.done = true;
+  if (p === 0) postMsg(0, `Deal done: ${o.m} ${GOOD[o.get].name} are in your Command Base.`, store.x, store.y, 'good');
+  return '';
 }

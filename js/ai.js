@@ -18,9 +18,42 @@ const AI_PLAN = [
   ['tap', 3], ['farm', 3], ['outpost', 8], ['turret', 3],
 ];
 
+/** Rival p's personality (see PERSONALITIES). */
+function aiStyle(p) { return PERSONALITIES[S.players[p].style] || PERSONALITIES.balanced; }
+
+/** Rival p's difficulty settings with its personality applied (later or earlier attacks, bigger or smaller). */
+function aiLevel(p) {
+  const base = DIFFICULTY[S.difficulty], st = aiStyle(p);
+  return { ...base, grace: base.grace * (st.grace || 1), threshold: Math.max(3, Math.round(base.threshold * (st.threshold || 1))) };
+}
+
+/**
+ * A Turtle walls its base in: a square ring six tiles out from its Command Base, a Wall on each
+ * free tile and a Gate where a road crosses, a few pieces at a time while Cement allows.
+ */
+function aiTurtleWalls(p) {
+  if (!aiStyle(p).walls || !warOn() || S.time < 360) return;
+  const P = S.players[p];
+  if (S.time - (P.wallT || 0) < 20) return;
+  P.wallT = S.time;
+  const L = getE(P.lander);
+  if (!L || L.owner !== p || spendable(p).cement < 30) return;
+  const R = 6;
+  let placed = 0;
+  for (let d = -R; d <= R && placed < 3; d++) {
+    for (const [i, j] of [[L.x + d, L.y - R], [L.x + d, L.y + R], [L.x - R, L.y + d], [L.x + R, L.y + d]]) {
+      if (placed >= 3 || !inMap(i, j)) continue;
+      const t = tIdx(i, j);
+      if (S.bAt[t] || S.owner[t] !== p || S.terrain[t] !== T_GROUND) continue;
+      const kind = S.road[t] || S.plan[t] ? 'gate' : 'wall';
+      if (canPlace(p, kind, i, j).ok) { placeSite(p, kind, i, j); placed++; }
+    }
+  }
+}
+
 function aiThink(p) {
   const P = S.players[p];
-  const lvl = DIFFICULTY[S.difficulty];
+  const lvl = aiLevel(p), st = aiStyle(p);
   const me = playerBuildings(p);
   const lander = getE(P.lander);
   if (!lander || lander.owner !== p) return;
@@ -34,6 +67,7 @@ function aiThink(p) {
   }
   const maxSites = p === 0 && P.ai ? 2 : lvl.maxSites;
   aiWalls(p);
+  aiTurtleWalls(p);
   aiBridge(p, maxSites);
   // Warbots can't fight without Ammo: in a war, once the opening is done, an Ammo Plant comes
   // first, its site is never given up, and the Foundry rests so the Alloy reaches it.
@@ -61,6 +95,7 @@ function aiThink(p) {
     const have = playerGoods(p);
     for (const b of me) {
       if (b.built || b.dead || S.time - b.born < 120 || (needArmory && b.type === 'armory')) continue;
+      if ((b.type === 'silo' || b.type === 'munitions') && S.time - b.born < 420) continue; // saved up for: give it time
       const cost = BDEFS[b.type].cost;
       let stuck = false;
       for (const g in cost) if ((b.stock[g] || 0) + (b.inc[g] || 0) < cost[g] && have[g] <= 0) stuck = true;
@@ -68,6 +103,10 @@ function aiThink(p) {
     }
   }
   let plan = S.mode === 'colony' ? AI_PLAN.concat([['outpost', 40]]) : AI_PLAN;
+  // A Turtle wants twice the turrets (and its first one early); a Tycoon a bigger industry and a
+  // second Silo straight after the first Ammo Plant.
+  if (st.turrets) plan = plan.map(([t, n]) => (t === 'turret' ? [t, n * 2] : [t, n]));
+  if (st.missiles) { const k = plan.findIndex(([t]) => t === 'armory') + 1; plan = plan.slice(0, k).concat([['smelter', 2], ['fab', 2], ['munitions', 1], ['silo', 2]], plan.slice(k)); }
   // Nuclear race: a Reactor once there's Uranium to enrich (or a mine on a deposit), then a Nuclear Silo.
   if (nukeOn()) {
     const k = plan.findIndex(([t]) => t === 'munitions');
@@ -113,8 +152,10 @@ function aiThink(p) {
   const held = new Set();
   // Defences come first once the colony is running: the first Pulse Turret, then a Repair Station.
   // In a Nuclear race the Reactor and Nuclear Silo get the same treatment: the race is the point.
-  const defence = (type) => S.mode !== 'colony' && !counts[type] &&
-    ((type === 'turret' && S.time > AI_DEFENCE_AT) || (type === 'repair' && counts.turret && S.time > AI_DEFENCE_AT + 120) ||
+  // A Turtle keeps adding turrets: one more every four minutes, up to six.
+  const turretsWanted = st.turrets ? Math.min(6, 1 + Math.floor(Math.max(0, S.time - AI_DEFENCE_AT * 0.5) / 240)) : 1;
+  const defence = (type) => S.mode !== 'colony' && (type === 'turret' ? (counts.turret || 0) < turretsWanted : !counts[type]) &&
+    ((type === 'turret' && S.time > AI_DEFENCE_AT * (st.turrets ? 0.5 : 1)) || (type === 'repair' && counts.turret && S.time > AI_DEFENCE_AT + 120) ||
      (nukeOn() && (type === 'reactor' || type === 'nukesilo')));
   // Only Charging Stations charge robots: the first one comes before anything else.
   const key = (type) => (type === 'charger' && !counts.charger) || type === 'foundry' || type === 'harvester' || type === 'quarry' || (type === 'kiln' && (playerGoods(p).cement || 0) < 3) || defence(type) ||
@@ -225,7 +266,9 @@ function aiThink(p) {
     // (Not while the army is well behind: warbots come first.)
     // Saving for a bridge to the enemy's island too: until it's built the army can't reach anyone.
     const bridging = P.bridgeWant > 0 && S.time - P.bridgeWant < 30;
-    if ((((saving || P.feedMissiles) && !armyBehind) || needArmory || bridging) && workers >= staffed + 3) { b.mode = 'off'; delete b.orders.hauler; delete b.orders.truck; }
+    // A Tycoon rests it for missiles even with a small army (as long as a few warbots stand guard).
+    const forMissiles = (saving || P.feedMissiles) && (!armyBehind || (st.missiles && army >= wantArmy * 0.7));
+    if ((forMissiles || needArmory || bridging) && workers >= staffed + 3) { b.mode = 'off'; delete b.orders.hauler; delete b.orders.truck; }
     // Haulers when short; while the army is well behind, only when badly short.
     else if ((kinds.hauler || 0) < (armyBehind ? Math.min(wantHaulers, 6) : wantHaulers) && !(b.orders.hauler > 0)) b.orders.hauler = 1;
     // A forward Depot with supply orders gets a Freight Truck to keep it stocked.
@@ -409,7 +452,7 @@ function aiBridge(p, maxSites) {
  */
 function aiWalls(p) {
   const cp = chokePass();
-  if (!cp || !warOn() || S.difficulty === 'easy' || S.time < 240) return;
+  if (!cp || !warOn() || (S.difficulty === 'easy' && !aiStyle(p).walls) || S.time < 240) return;
   const L = getE(S.players[p].lander);
   if (!L) return;
   const row = L.y > S.H / 2 ? cp.bot : cp.top;
@@ -456,10 +499,12 @@ function aiFireNuke(p, silo) {
 const AI_ARMY_FROM = 240, AI_ARMY_MAX = 30, AI_DEFENCE_AT = 300;
 function aiWantArmy(lvl, p) {
   // A colony with many garrisons (a free-for-all winner owns two colonies' worth) needs more
-  // warbots to man them all and still march.
+  // warbots to man them all and still march. Its personality sets how fast the army grows.
   let extra = 0;
   if (p !== undefined) for (const b of S.buildings) if (!b.dead && b.owner === p && b.built && BDEFS[b.type].mil) extra++;
-  return Math.min(AI_ARMY_MAX + Math.max(0, extra - 8), START_WARBOTS + 1 + Math.floor((Math.max(0, S.time - AI_ARMY_FROM) / 60) * lvl.mult));
+  const st = p !== undefined ? aiStyle(p) : PERSONALITIES.balanced;
+  const from = AI_ARMY_FROM * (st.armyFrom || 1), rate = lvl.mult * (st.army || 1);
+  return Math.min(AI_ARMY_MAX + Math.max(0, extra - 8), START_WARBOTS + 1 + Math.floor((Math.max(0, S.time - from) / 60) * rate));
 }
 
 /**
@@ -467,7 +512,7 @@ function aiWantArmy(lvl, p) {
  * turrets and garrisons, shoots up passing haulers, tears up the road (then hits whatever stands
  * near it), and comes home.
  */
-const RAID_GAP = { easy: 320, normal: 180, hard: 120 };
+const RAID_GAP = { easy: 320, medium: 250, normal: 180, hard: 120 };
 const RAID_TIME = 60;    // seconds a raid lasts before the raiders head home
 const RAID_FIRST = 200;  // the first raid comes this long after the grace period
 function aiRaid(p, lvl) {
@@ -477,11 +522,12 @@ function aiRaid(p, lvl) {
     if (!r || S.time > P.raid.until || !rallyMembers(P.raid.id).length) {
       if (r) recallRally(P.raid.id);
       P.raid = null;
-      P.nextRaid = S.time + (RAID_GAP[S.difficulty] || 170);
+      P.nextRaid = S.time + (RAID_GAP[S.difficulty] || 170) / (aiStyle(p).raids || 1);
     }
     return;
   }
-  if (S.time < (P.nextRaid || lvl.grace + RAID_FIRST)) return;
+  const st = aiStyle(p);
+  if (S.time < (P.nextRaid || lvl.grace + RAID_FIRST * (st.raidFirst || 1))) return;
   P.nextRaid = S.time + 30; // nothing worth raiding yet: look again soon
   if (HEAT.of !== S || !HEAT.flow) return;
   // Keep clear of turrets, and of garrisons with warbots in them.
@@ -497,8 +543,9 @@ function aiRaid(p, lvl) {
   }
   if (best < 0) return;
   const i = best % S.W, j = (best / S.W) | 0;
-  if (rallyAvailable(p, i, j) < 5) return; // keep enough warbots at home
-  const { sent, rally } = sendToRally(p, i, j, 3);
+  const size = st.raidSize || 3;
+  if (rallyAvailable(p, i, j) < size + (st.raidKeep ?? 2)) return; // keep enough warbots at home (a Raider sends all it can spare)
+  const { sent, rally } = sendToRally(p, i, j, size);
   if (sent) { rally.raid = true; P.raid = { id: rally.id, until: S.time + RAID_TIME }; }
 }
 
@@ -533,19 +580,27 @@ function aiCounterRaid(p) {
  * Returns the building type it is saving for, or null.
  */
 function aiMissilePlan(p, me, counts, kinds, workers, staffed) {
-  const P = S.players[p], lvl = DIFFICULTY[S.difficulty];
+  const P = S.players[p], lvl = aiLevel(p), st = aiStyle(p);
   P.feedMissiles = false;
   if (S.mode === 'colony') return null;
   const site = me.find((b) => !b.built && (b.type === 'munitions' || b.type === 'silo'));
-  if (site) return site.type; // keep the Foundry resting until the site has its materials
-  const ready = S.time >= lvl.grace * 0.7 && (counts.outpost || 0) >= 2 && (kinds.warbot || 0) >= lvl.threshold && workers >= staffed + 4;
+  // A Silo site waiting for Alloy: the Missile Factory stops eating it until the Silo stands.
+  for (const b of me) if (b.type === 'munitions' && b.built && !!b.paused !== (site && site.type === 'silo')) setPaused(b, !!(site && site.type === 'silo'));
+  if (site) { site.prio = 'high'; return site.type; } // keep the Foundry resting (and goods coming here first) until the site has its materials
+  // A Tycoon goes for missiles sooner, with fewer warbots at home, once its Bot Foundry runs. The
+  // others start no sooner than a Balanced rival would (a Rusher spends on warbots instead).
+  const base = DIFFICULTY[S.difficulty];
+  const ready = (st.missiles
+    ? S.time >= base.grace * 0.8 && me.some((b) => b.type === 'foundry' && b.built) && (kinds.warbot || 0) >= 3
+    : S.time >= base.grace * 0.7 * Math.max(1, st.grace || 1) && (kinds.warbot || 0) >= Math.max(base.threshold, lvl.threshold)) &&
+    (counts.outpost || 0) >= 2 && workers >= staffed + 4;
   if (!ready || S.time < (P.saveCooldown || 0)) { P.saveStart = 0; return null; }
   let want = null;
   if (!counts.munitions) want = 'munitions';
-  else if (!counts.silo || (counts.silo < 2 && S.time > lvl.grace * 2.5)) want = 'silo';
+  else if (!counts.silo || (counts.silo < (st.missiles ? 3 : 2) && S.time > lvl.grace * (st.missiles ? 1.2 : 2.5))) want = 'silo';
   if (want) {
     P.saveStart = P.saveStart || S.time;
-    if (S.time - P.saveStart > 180) { P.saveCooldown = S.time + 240; P.saveStart = 0; return null; }
+    if (S.time - P.saveStart > (st.missiles ? 300 : 180)) { P.saveCooldown = S.time + (st.missiles ? 120 : 240); P.saveStart = 0; return null; }
     return want;
   }
   P.saveStart = 0;

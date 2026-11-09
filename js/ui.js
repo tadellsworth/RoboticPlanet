@@ -5,7 +5,7 @@
 
 const UI = {
   inGame: false, paused: false, speed: 1, overShown: false,
-  menu: { mode: 'versus', diff: 'normal', seed: randomSeed(), size: { ...DEFAULT_SIZE }, rough: DEFAULT_ROUGH, rich: DEFAULT_RICH, shape: 0 },
+  menu: { mode: 'versus', diff: 'normal', seed: randomSeed(), size: { ...DEFAULT_SIZE }, rough: DEFAULT_ROUGH, rich: DEFAULT_RICH, shape: 0, style: 0, events: 1 },
   sheetKind: null, sheetFor: 0, sheetT: 0, hudT: 0,
   icons: {}, attackN: 0, demolishArm: 0, lastPaint: null, placeType: null,
   goodEls: {}, lastGoods: {}, objCollapsed: false, selBot: 0,
@@ -49,18 +49,20 @@ function initUI() {
 
   // Menu
   for (const btn of $('m-mode').children) btn.onclick = () => { UI.menu.mode = btn.dataset.v; syncMenu(); sfx('click'); };
-  for (const btn of $('m-diff').children) btn.onclick = () => { UI.menu.diff = btn.dataset.v; syncMenu(); sfx('click'); };
+  for (const btn of $('m-diff').children) btn.onclick = () => { UI.menu.diff = btn.dataset.v; syncMenu(); saveSettings(); sfx('click'); };
   for (const btn of $('m-players').children) btn.onclick = () => { UI.menu.players = +btn.dataset.v; syncMenu(); saveSettings(); sfx('click'); };
   $('m-reroll').onclick = () => { UI.menu.seed = randomSeed(); syncMenu(); sfx('click'); };
   // Map settings sliders (remembered on this device; map size is remembered per mode).
   try { Object.assign(UI.menu, JSON.parse(localStorage.getItem('botfall.settings') || '{}')); } catch (e) { /* defaults */ }
   const saveSettings = () => {
-    try { localStorage.setItem('botfall.settings', JSON.stringify({ size: UI.menu.size, rough: UI.menu.rough, rich: UI.menu.rich, shape: UI.menu.shape, nuke: UI.menu.nuke, biome: UI.menu.biome, players: UI.menu.players })); } catch (e) { /* storage unavailable */ }
+    try { localStorage.setItem('botfall.settings', JSON.stringify({ size: UI.menu.size, rough: UI.menu.rough, rich: UI.menu.rich, shape: UI.menu.shape, nuke: UI.menu.nuke, biome: UI.menu.biome, players: UI.menu.players, diff: UI.menu.diff, style: UI.menu.style, events: UI.menu.events })); } catch (e) { /* storage unavailable */ }
   };
   $('m-size').oninput = () => { UI.menu.size[UI.menu.mode] = +$('m-size').value; syncMenu(); saveSettings(); };
   $('m-rough').oninput = () => { UI.menu.rough = +$('m-rough').value; syncMenu(); saveSettings(); };
   $('m-shape').oninput = () => { UI.menu.shape = +$('m-shape').value; syncMenu(); saveSettings(); };
   $('m-nuke').oninput = () => { UI.menu.nuke = +$('m-nuke').value; syncMenu(); saveSettings(); };
+  $('m-style').oninput = () => { UI.menu.style = +$('m-style').value; syncMenu(); saveSettings(); };
+  $('m-events').oninput = () => { UI.menu.events = +$('m-events').value; syncMenu(); saveSettings(); };
   $('m-biome').oninput = () => { UI.menu.biome = +$('m-biome').value; syncMenu(); saveSettings(); };
   $('m-rich').oninput = () => { UI.menu.rich = +$('m-rich').value; syncMenu(); saveSettings(); };
   $('m-new').onclick = () => { audioUnlock(); startNewGame(); };
@@ -161,6 +163,13 @@ function syncMenu() {
   $('m-shape').value = UI.menu.shape || 0;
   $('m-nuke').value = UI.menu.nuke || 0;
   $('m-nuke-v').textContent = UI.menu.nuke ? 'On: race for uranium' : 'Off';
+  // Rival style: 0 is a random personality for each rival, then each one in PERSONALITY_ORDER.
+  const style = Math.min(PERSONALITY_ORDER.length, UI.menu.style || 0);
+  $('m-style').value = style;
+  $('m-style-v').textContent = style ? PERSONALITIES[PERSONALITY_ORDER[style - 1]].name : 'Random';
+  $('m-style-row').hidden = UI.menu.mode === 'colony';
+  $('m-events').value = UI.menu.events ? 1 : 0;
+  $('m-events-v').textContent = UI.menu.events ? 'On' : 'Off';
 
   $('m-shape-v').textContent = SHAPE_PRESETS[UI.menu.shape || 0].name;
   $('m-biome').value = UI.menu.biome || 0;
@@ -532,6 +541,7 @@ function startNewGame() {
     seed: UI.menu.seed, difficulty: UI.menu.diff, mode: UI.menu.mode,
     size: UI.menu.size[UI.menu.mode] ?? DEFAULT_SIZE[UI.menu.mode], rough: UI.menu.rough, rich: UI.menu.rich, shape: UI.menu.shape || 0,
     nuke: !!UI.menu.nuke, biome: BIOME_ORDER[UI.menu.biome || 0], players: UI.menu.players === 3 ? 3 : 2,
+    style: UI.menu.style ? PERSONALITY_ORDER[UI.menu.style - 1] : 'random', events: !!UI.menu.events,
   });
   enterGame();
   updateHUD();
@@ -540,6 +550,11 @@ function startNewGame() {
     ? 'Your bots have landed. Build, expand and make this planet home.'
     : S.players.length > 2 ? 'Your bots have landed. Two rival colonies landed too, one to the north-west (red) and one to the north-east (green). Build up fast!'
       : 'Your bots have landed. A rival colony landed to the north. Build up fast!', 0, 0, 'info');
+  // Name each rival's personality, so you know what's coming.
+  if (S.mode !== 'colony') for (const P of S.players) {
+    const st = P.id !== 0 && P.ai && !P.absent && PERSONALITIES[P.style];
+    if (st) postMsg(0, `${S.players.length > 2 ? 'The ' + playerName(P.id) : 'Your rival'} is ${st.noun}: it ${st.desc}.`, 0, 0, 'info');
+  }
   if (nukeOn()) postMsg(0, `Nuclear race: a few uranium deposits glow green across the planet. Dig them with Ore Mines, enrich them at a Nuclear Reactor and build the bomb before ${S.players.length > 2 ? 'the rivals do' : 'the rival does'}.`, 0, 0, 'warn');
 }
 
@@ -1457,7 +1472,9 @@ function openBuildingSheet(b) {
   const def = BDEFS[b.type];
   const mine = b.owner === 0;
   R.selected = b.id; R.selTile = -1; UI.selBot = 0;
-  const desc = !mine && b.type === 'lander' ? (S.players.length > 2 ? `The ${playerName(b.owner)}'s fortified headquarters. Capture it and everything the ${playerName(b.owner)} built is yours.` : 'The rival\'s fortified headquarters. Capture it to win.') : def.desc;
+  let desc = !mine && b.type === 'lander' ? (S.players.length > 2 ? `The ${playerName(b.owner)}'s fortified headquarters. Capture it and everything the ${playerName(b.owner)} built is yours.` : 'The rival\'s fortified headquarters. Capture it to win.') : def.desc;
+  const style = !mine && b.type === 'lander' && S.players[b.owner] && S.players[b.owner].ai && PERSONALITIES[S.players[b.owner].style];
+  if (style && S.mode !== 'colony' && !S.mission) desc += ` <b>${style.name}:</b> it ${style.desc}.`;
   let html = `<div class="sheet-title"><img src="${iconFor(b.type, b.owner)}" alt=""><div><h3>${def.name}</h3>
     <div class="owner"><span class="dot" style="background:${PLAYER_COLORS[b.owner]}"></span> ${mine ? 'Yours' : playerName(b.owner)}</div></div></div>
     <p class="desc">${desc}</p><div class="status" id="sh-status"></div><div id="sh-dyn"></div>${mine ? '<div id="sh-fix"></div>' : ''}`;
@@ -2316,6 +2333,7 @@ function updateHUD() {
   const obj = $('objective');
   obj.innerHTML = UI.objCollapsed && !S.mission ? 'Goal ▸' : objectiveText();
   obj.classList.toggle('small', UI.objCollapsed);
+  updateEventCard();
   if (UI.sheetKind === 'build') {
     // keep build-menu affordability current without rebuilding the buttons
     for (const el of $('sheet-body').querySelectorAll('.bcard[data-t]')) {
@@ -2327,6 +2345,41 @@ function updateHUD() {
       have.classList.toggle('some', txt !== 'None yet' && txt !== '');
     }
   }
+}
+
+/**
+ * The planet event card under the top bar: what's coming or under way, a countdown, and (for the
+ * trader ship) the deal on offer with a Trade button. Rebuilt only when its content changes, so a
+ * tap on Trade isn't lost to the countdown ticking.
+ */
+function updateEventCard() {
+  const el = $('event-card'), E = S.events ? S.event : null;
+  if (!E) { el.hidden = true; el.dataset.key = ''; return; }
+  const def = EVENTS[E.type], soon = S.time < E.t0, o = E.offers && E.offers[0];
+  const key = `${E.n}|${soon}|${o ? (o.done ? 'done' : 'open') : 'none'}|${!!E.started}`;
+  if (el.dataset.key !== key) {
+    el.dataset.key = key;
+    el.className = 'event-card' + (E.type === 'trader' ? ' trader' : '');
+    let html = `<div class="ev-head"><span class="ev-dot" style="background:${def.color};color:${def.color}"></span><b>${soon ? def.name + ' coming' : def.name}</b><span class="ev-time"></span></div>`;
+    if (E.type !== 'trader') html += `<div class="ev-desc">${def.desc}</div>`;
+    else if (!E.started) html += '';
+    else if (!o) html += '<div class="ev-desc">It wants nothing you have spare.</div>';
+    else if (o.done) html += `<div class="ev-desc">Deal done: ${o.m} ${GOOD[o.get].name} delivered to your Command Base.</div>`;
+    else {
+      html += `<div class="ev-deal"><span>Give <b>${o.n}</b> <i class="gi ${o.give}"></i> ${GOOD[o.give].name}, get <b>${o.m}</b> <i class="gi ${o.get}"></i> ${GOOD[o.get].name}</span>` +
+        '<button class="btn small primary" id="ev-trade">Trade</button></div>';
+    }
+    el.innerHTML = html;
+    const btn = $('ev-trade');
+    if (btn) btn.onclick = () => {
+      const why = acceptTrade(0);
+      if (why) { sfx('error'); toast(why, 'bad'); } else sfx('complete');
+      updateHUD();
+    };
+  }
+  const left = Math.max(0, Math.ceil((soon ? E.t0 : E.t1) - S.time));
+  el.querySelector('.ev-time').textContent = soon ? `in ${left}s` : `${left}s`;
+  el.hidden = false;
 }
 
 function toast(text, kind, x, y) {

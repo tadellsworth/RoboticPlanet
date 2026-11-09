@@ -93,6 +93,20 @@ body::before {
   box-shadow: 0 4px 14px rgba(0, 0, 0, 0.3);
 }
 .objective b { color: var(--accent); }
+/* Planet event under way (or coming): name, countdown, what it does; the trader's deal. */
+.event-card {
+  align-self: flex-start; max-width: min(100%, 420px); background: #2a2216; border: 1px solid rgba(255, 196, 120, 0.45);
+  border-radius: 10px; padding: 6px 10px; font-size: 13px; color: #ffeedd; box-shadow: 0 4px 14px rgba(0, 0, 0, 0.3);
+  display: flex; flex-direction: column; gap: 3px;
+}
+.event-card.trader { background: #10303a; border-color: rgba(127, 227, 255, 0.5); color: #dff8ff; }
+.event-card .ev-head { display: flex; align-items: center; gap: 7px; }
+.event-card .ev-dot { width: 10px; height: 10px; border-radius: 50%; flex: none; box-shadow: 0 0 8px currentColor; }
+.event-card .ev-time { margin-left: auto; font-variant-numeric: tabular-nums; opacity: 0.85; font-weight: 700; }
+.event-card .ev-desc { opacity: 0.9; line-height: 1.3; }
+.event-card .ev-deal { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.event-card .ev-deal .gi { vertical-align: -3px; }
+.event-card .btn { padding: 4px 12px; }
 .objective.small { opacity: 0.85; }
 
 /* ---------- minimap ---------- */

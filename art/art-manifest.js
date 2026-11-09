@@ -127,6 +127,9 @@ const ART_MANIFEST = {
   reactor: B3D('buildings/nuclear-reactor.png'),
   'nukesilo@0': B3D('buildings/nuclear-silo@0.png'),
   'nukesilo@1': B3D('buildings/nuclear-silo@1.png'),
+  // The same Silos with no missile in them: drawn until one is armed and ready to fire.
+  'nukesilo-empty@0': B3D('buildings/nuclear-silo-empty@0.webp'),
+  'nukesilo-empty@1': B3D('buildings/nuclear-silo-empty@1.webp'),
   'nuclear-missile': 'markers/nuclear-missile.png',
   'nuke-blast': 'effects/nuke-blast-sheet.webp',
   'nuke-scorch': 'effects/nuke-scorch.png',
@@ -141,6 +144,8 @@ const ART_MANIFEST = {
   'munitions@1': B3D('buildings/munitions@1.png'),
   'silo@0': B3D('buildings/silo@0.png'),
   'silo@1': B3D('buildings/silo@1.png'),
+  'silo-empty@0': B3D('buildings/silo-empty@0.webp'),
+  'silo-empty@1': B3D('buildings/silo-empty@1.webp'),
 
   // Biomes: plants for the Red desert, Jungle and Polar worlds, and the Jungle and Polar terrain
   // (512x512 seamless textures, one image per 4x4 tiles; cliffs 128x48). The desert tiles above are 512 too.

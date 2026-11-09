@@ -6,6 +6,8 @@ spread across the map. Roads are the heart of the game: Haulers only drive on th
 how goods move.
 
 - **Versus:** race a rival AI colony across the planet. Capture its Command Base to win (about 20–40 minutes).
+  The rival is **Easy**, **Medium** (between Easy and Normal), **Normal** or **Hard**, and has a **personality**
+  (Rival style: Random, Balanced, Turtle, Raider, Rusher or Tycoon; see below).
   **Players: Free-for-all · 3** adds a second rival (red and green): a round planet with the three starts 120° apart
   (player 0's third is generated and turned round onto the others, resources placed tile for tile so each third
   has as many). Capturing a Command Base hands over everything its owner built (`eliminate`); the last colony
@@ -18,8 +20,8 @@ how goods move.
 
 Before each game, sliders set the **map size** (Small to Huge), the **terrain** (Flat, Gentle,
 Rolling, Rugged, Mountainous), the **resources** (Scarce to Abundant), the **map shape** (Standard, Long haul, Chokepoint, Islands, Crater or Plateaus), the
-**biome** (Red desert, Jungle or Polar: scenery only, with plants that roads and buildings clear) and an optional
-**Nuclear race**. Resources come in separate
+**biome** (Red desert, Jungle or Polar: scenery only, with plants that roads and buildings clear), the **rival style**,
+an optional **Nuclear race** and **Planet events** (on by default). Resources come in separate
 fields: your landing zone has a little of everything, and the rich fields beyond it are worth fighting for.
 
 Terrafall is an original game in the colony-logistics genre. It contains no code, art, sound or data from
@@ -143,7 +145,7 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
 - **Raids:** armed warbots holding a rally flag in enemy land with nothing to fight tear up enemy roads (not bridges or
   tunnels, which only a Missile can crater) near the flag,
   one tile per 12 warbot-seconds. The rival raids your busiest road clear of turrets and garrisons every few minutes
-  (Easy rarely, Hard often) once it has warbots to spare. Missiles crater the roads where they land.
+  (Easy rarely, Hard often; a Raider far more) once it has warbots to spare. Missiles crater the roads where they land.
 - **Traffic:** bots queue on roads, each waiting behind the bot ahead of it going the same way. On two-way roads each
   direction keeps to its own side, but passing oncoming traffic slows bots down. Switch the Paths banner to **Arrows** and
   drag along a road to point it the way you drag (tap a road to turn its arrow). One-way loops keep busy routes flowing;
@@ -197,9 +199,29 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
 - **Garrisons:** tap an Outpost or your Command Base to set its **garrison priority** (new warbots, and ones called back
   from a flag, fill High garrisons first and Low ones last) or to **station warbots** there: choose how many and they
   march over from your other garrisons (each keeps one at home) and stay until you move them.
+- **Rival personalities** (`PERSONALITIES` in `js/defs.js`, applied by `aiStyle`/`aiLevel` in `js/ai.js`): each scales
+  the difficulty's grace period, attack threshold, army growth and raid rate. **Balanced** is the plain AI. **Turtle**:
+  later and bigger attacks, rare raids, a square ring of Walls and Gates six tiles round its Command Base
+  (`aiTurtleWalls`) and a turret more every four minutes (up to six). **Raider**: raids three times as often from early on,
+  sending every warbot it can spare. **Rusher**: attacks early with a fast-growing army. **Tycoon**: its bots work 15%
+  faster (`econ`), it builds extra Smelters and Chip Fabs and goes for Missile Silos (up to three) once its Bot Foundry
+  runs. With Random each rival gets a different one, picked from the seed; missions use Balanced. The landing messages
+  and the rival Command Base's panel name it.
+- **Planet events** (`EVENTS` in `js/defs.js`, `updateEvents` in `js/sim.js`; new-game option, never in missions): the
+  first after 8 minutes, then one every 5–8 minutes, never one of the last two again, most with a 20 s warning. **Dust
+  storm**: bots at `DUST_SPEED` (⅔) and every missile grounded (`missileBlocked`, `nukeBlocked`). **Meteor shower**:
+  `METEOR_HITS` strikes on each colony's share (mirrored with two players, turned with three: `meteorPlan`), each
+  cratering roads (re-planned at once if the Cement allows), denting buildings and bots (never below 1 armor) and
+  leaving a rich Ore or Crystal deposit (Uranium sometimes in a Nuclear race). **Solar flare**: battery drain ×
+  `FLARE_DRAIN` (2). **Trader ship**: 75 s; offers the raw good that runs out (Ore, Crystal, Stone or Crude: the one
+  lowest in stock plus deposits left on your land, `TRADE_GET`/`TRADE_LEFT`) for a good you hold well over
+  `TRADE_KEEP` of (never Chips, Ammo or Missiles) at `TRADE_BONUS` (1.3×) its worth; the AI takes its deal when short.
+  An event card under the top bar shows it with a countdown and the Trade button.
 - **Missiles** are built at a Missile Factory (2 Alloy, 1 Chip and 1 Fuel each, 20 seconds) and carried to Missile Silos
   by haulers. A hit does 24 damage, which wrecks most buildings outright, plus 5 to other rival buildings and 9 to bots
   within 2.2 tiles. Outposts and Command Bases drop to almost no armor; warbots still have to walk in and capture them.
+  A Silo is drawn with its launch pit empty until it's ready to fire (loaded and not reloading; a Nuclear Silo once
+  armed), then the missile fades in (`siloRise`; art `silo-empty`, `nukesilo-empty`).
   To fire, tap a Silo and press **Aim missile**: its 18-tile range shows as a red ring; tap any spot inside it (a
   building or open ground) to see the blast radius, then **Fire**. (Army → rival building → Fire missile also works.)
 - **Nuclear race** (new-game option): six small Uranium deposits glow green across the map. An Ore Mine within 4 tiles

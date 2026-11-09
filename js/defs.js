@@ -489,9 +489,67 @@ const SHOTS_PER_AMMO = 4;
 
 const DIFFICULTY = {
   easy:   { label: 'Easy',   mult: 0.7,  grace: 330, threshold: 7, maxSites: 1, think: 3.0, bonus: 0 },
+  medium: { label: 'Medium', mult: 0.85, grace: 275, threshold: 6, maxSites: 2, think: 2.5, bonus: 0 },
   normal: { label: 'Normal', mult: 1.0,  grace: 220, threshold: 5, maxSites: 2, think: 2.0, bonus: 0 },
   hard:   { label: 'Hard',   mult: 1.3,  grace: 150, threshold: 4, maxSites: 3, think: 1.5, bonus: 6 },
 };
+
+/**
+ * Rival personalities: how a rival AI plays, on top of its difficulty. grace, threshold, army
+ * (warbots a minute), armyFrom (when the army starts growing), raids (how often), raidFirst and
+ * raidSize multiply or replace the difficulty's settings; turrets, walls and missiles switch on
+ * extra habits. Balanced plays the plain difficulty.
+ */
+/*
+ * Rival personalities. Each scales the rival's difficulty settings: grace (when it starts attacking),
+ * threshold (warbots it gathers before an attack), army (how fast its army grows; armyFrom, when it
+ * starts), raids (how often it raids; raidFirst, the first raid; raidSize and raidKeep, how many go
+ * and stay home), econ (how fast its bots work). turrets, walls and missiles switch on its habits.
+ */
+const PERSONALITIES = {
+  balanced: { noun: 'an all-rounder', name: 'Balanced', desc: 'builds up, defends and attacks in good measure' },
+  turtle: { noun: 'a Turtle', name: 'Turtle', desc: 'walls its base in and covers its land with turrets, then comes late with a big army', grace: 1.5, threshold: 1.5, army: 0.9, raids: 0.3, turrets: true, walls: true },
+  raider: { noun: 'a Raider', name: 'Raider', desc: 'sends small bands of warbots to cut your supply lines, again and again', raids: 3, raidFirst: 0.4, raidSize: 3, raidKeep: 0, army: 1.15, armyFrom: 0.7 },
+  rusher: { noun: 'a Rusher', name: 'Rusher', desc: 'comes for you early with warbots, before its economy is big', grace: 0.6, threshold: 0.8, army: 1.35, armyFrom: 0.4, raids: 0.6 },
+  tycoon: { noun: 'a Tycoon', name: 'Tycoon', desc: 'builds a big economy first, then rains Missiles on you (or a nuke, in a Nuclear race)', grace: 1.15, army: 0.9, missiles: true, econ: 1.15 },
+};
+const PERSONALITY_ORDER = ['balanced', 'turtle', 'raider', 'rusher', 'tycoon'];
+
+/*
+ * Planet events (a menu option, on by default; never in missions): every five to eight minutes the
+ * planet throws something at every colony alike, with a warning EVENT_WARN seconds ahead.
+ *   dust    Dust storm: bots move at DUST_SPEED and no Missile can be fired until it blows over.
+ *   meteor  Meteor shower: METEOR_HITS strikes on each colony's share of the planet (the same spots
+ *           mirrored or turned for every colony), each cratering the roads it lands on, denting
+ *           buildings and bots near it, and leaving a rich deposit of Ore or Crystal (sometimes
+ *           Uranium, in a Nuclear race). Cratered roads are planned again straight away.
+ *   flare   Solar flare: bot batteries drain FLARE_DRAIN times as fast.
+ *   trader  Trader ship: for 75 seconds a trader in orbit offers each colony a swap at a good rate:
+ *           some of a good it has plenty of for the raw good (Ore, Crystal, Stone or Crude) its
+ *           land is closest to running out of.
+ */
+const EVENTS = {
+  dust:   { name: 'Dust storm',    color: '#d9a86a', dur: [60, 90], warn: true,  desc: 'Bots move at two-thirds speed and Missiles are grounded until it blows over.' },
+  meteor: { name: 'Meteor shower', color: '#ff8a3d', dur: [30, 30], warn: true,  desc: 'Meteors crater roads and dent what they hit, but leave rich Ore and Crystal behind.' },
+  flare:  { name: 'Solar flare',   color: '#ffe36b', dur: [45, 60], warn: true,  desc: 'Bot batteries drain twice as fast: keep your Charging Stations fuelled.' },
+  trader: { name: 'Trader ship',   color: '#7fe3ff', dur: [75, 75], warn: false, desc: 'A trader in orbit swaps spare goods for the Ore, Crystal, Stone or Crude your land is running out of.' },
+};
+const EVENT_ORDER = ['dust', 'meteor', 'flare', 'trader'];
+const EVENT_FIRST = 480, EVENT_GAP = [300, 480], EVENT_WARN = 20;
+const DUST_SPEED = 0.65, FLARE_DRAIN = 2;
+const METEOR_HITS = 6, METEOR_DAMAGE = 4, METEOR_BOT_DAMAGE = 1.5, METEOR_RICH = 2;
+/**
+ * The trader brings the raw goods dug from deposits that run out (TRADE_GET: the one a colony has
+ * least of, in stock and left in the ground on its land, against TRADE_LEFT), and takes a good it
+ * has well over TRADE_KEEP of (TRADE_GIVE: never Chips, Ammo or Missiles). It pays TRADE_BONUS times
+ * the worth (TRADE_VALUE) of what it takes.
+ */
+const TRADE_GET = { ore: R_ORE, crystal: R_CRYSTAL, stone: R_BOULDER, crude: R_OIL };
+const TRADE_LEFT = { ore: 80, crystal: 50, stone: 80, crude: 60 };
+const TRADE_GIVE = ['fiber', 'fuel', 'cement', 'alloy', 'stone', 'ore', 'crystal', 'crude'];
+const TRADE_VALUE = { fiber: 1, stone: 1, ore: 1.2, crystal: 1.5, crude: 1.2, cement: 0.6, fuel: 1.5, alloy: 3 };
+const TRADE_KEEP = { fiber: 12, stone: 12, ore: 12, crystal: 10, crude: 10, cement: 20, fuel: 12, alloy: 10 };
+const TRADE_BONUS = 1.3;
 
 /** Starting goods in each Command Base. */
 const START_STOCK = { fiber: 16, stone: 8, alloy: 8, chip: 4, crystal: 4, fuel: 10, cement: 24 };

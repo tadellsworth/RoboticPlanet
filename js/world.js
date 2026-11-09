@@ -703,6 +703,23 @@ function newGame(opts) {
     dirtyTiles: [], territoryVer: 0, tick: 0, hist: newHistory(settings.players),
   };
   if (opts.autoplay) S.players[0].mult = DIFFICULTY[diff].mult;
+  // Planet events (see EVENTS): the first one comes after EVENT_FIRST seconds.
+  if (opts.events) { S.events = true; S.event = null; S.nextEvent = EVENT_FIRST; }
+  // Each rival AI's personality: the one asked for, or (with 'random') a different one each, picked
+  // from the planet's seed. Missions and tests that don't ask get Balanced.
+  {
+    const rng = makeRng(seed ^ 0x2f6a1c3b);
+    const pool = PERSONALITY_ORDER.slice();
+    for (const P of S.players) {
+      if (!P.ai || P.absent) continue;
+      if (P.id === 0) { P.style = 'balanced'; continue; }
+      if (PERSONALITIES[opts.style]) { P.style = opts.style; continue; }
+      if (opts.style !== 'random') { P.style = 'balanced'; continue; }
+      const k = Math.floor(rng() * pool.length);
+      P.style = pool.splice(k, 1)[0];
+    }
+    for (const P of S.players) if (P.style && PERSONALITIES[P.style].econ) P.mult *= PERSONALITIES[P.style].econ;
+  }
   S.byId = new Map();
   for (let p = 0; p < S.players.length; p++) {
     if (S.players[p].absent) continue;
