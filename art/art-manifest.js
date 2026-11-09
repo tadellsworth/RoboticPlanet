@@ -11,6 +11,9 @@
  *   key: { src: 'path.png', scale: 1.4, anchor: 'bottom' }
  *        // for buildings drawn in a 3/4 view that rise above their tile: the image's bottom edge
  *        // sits on the bottom of the tile, and the building grows upward
+ *   key: { src: 'path.png', scale: 1.4, anchor: [0.5, 0.615] }
+ *        // or the exact point in the image (fractions of its width and height) that sits on the
+ *        // tile's centre: for the 3D set, the centre of the pad's top surface
  *
  * Team-specific versions: add '@0' (you, cyan) or '@1' (rival, red) to the key, e.g.
  *   'outpost@0': 'buildings/outpost-blue.png',
@@ -41,6 +44,12 @@
  * Images should be square PNGs with transparent backgrounds, viewed from above.
  * 256x256 is plenty.
  */
+/**
+ * The 3D building set (512x512, 57° three-quarter view): each building stands on its own pad, and
+ * the centre of the pad's top surface sits on the tile centre. Tune the size for all of them here.
+ */
+function B3D(src) { return { src, scale: 1.4, anchor: [0.5, 0.615] }; }
+
 const ART_MANIFEST = {
   // Priority 1: what you see constantly
   'lander@0': { src: 'buildings/lander@0.png', scale: 1.6 },
@@ -56,22 +65,22 @@ const ART_MANIFEST = {
   crystal: 'resources/crystal.png',
 
   // Priority 2: production buildings
-  harvester: 'buildings/harvester.png',
-  quarry: 'buildings/quarry.png',
-  mine: 'buildings/mine.png',
-  tap: 'buildings/tap.png',
-  smelter: 'buildings/smelter.png',
-  fab: 'buildings/fab.png',
-  foundry: 'buildings/foundry.png',
+  harvester: B3D('buildings/harvester.png'),
+  quarry: B3D('buildings/quarry.png'),
+  mine: B3D('buildings/mine.png'),
+  tap: B3D('buildings/tap.png'),
+  smelter: B3D('buildings/smelter.png'),
+  fab: B3D('buildings/fab.png'),
+  foundry: B3D('buildings/foundry.png'),
 
   // Priority 3: the rest
-  'outpost@0': 'buildings/outpost@0.png',
-  'outpost@1': 'buildings/outpost@1.png',
+  'outpost@0': B3D('buildings/outpost@0.png'),
+  'outpost@1': B3D('buildings/outpost@1.png'),
   'turret@0': 'buildings/turret@0.png',
   'turret@1': 'buildings/turret@1.png',
-  depot: 'buildings/depot.png',
-  grower: 'buildings/grower.png',
-  site: 'buildings/site.png',
+  depot: B3D('buildings/depot.png'),
+  grower: B3D('buildings/grower.png'),
+  site: B3D('buildings/site.png'),
   water: 'tiles/water.png',
   rock: 'tiles/rock.png',
 

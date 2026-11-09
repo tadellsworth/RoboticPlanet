@@ -36,7 +36,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
   display: flex; flex-direction: column; gap: 6px; pointer-events: none; z-index: 5;
 }
 #topbar > * { pointer-events: auto; }
-.goods { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
+.goods { display: grid; grid-template-columns: repeat(var(--goods-cols, 7), 1fr); gap: 4px; }
 .res-chip {
   display: flex; align-items: center; justify-content: center; gap: 5px;
   background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
@@ -133,6 +133,11 @@ body.mm-off .objective { margin-right: 54px; }
   background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); font-size: 12px; font-weight: 600;
 }
 .tool svg { width: 24px; height: 24px; }
+.tool kbd, .seg kbd { display: none; }
+kbd {
+  display: inline-block; min-width: 1.5em; padding: 0 5px; border-radius: 5px; border: 1px solid rgba(255,255,255,0.25);
+  border-bottom-width: 2px; font: 600 12px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; text-align: center; color: var(--text);
+}
 .tool.on { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
 
 /* ---------- banner (placement / path / attack modes) ---------- */
@@ -318,3 +323,58 @@ i.g.cement { background: var(--g-cement); } i.g.asphalt { background: var(--g-as
 .stats { display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; margin: 10px 0; font-size: 14px; }
 .stats span:nth-child(odd) { color: var(--muted); }
 .stats span:nth-child(even) { font-weight: 700; text-align: right; }
+
+/* ---------- roads ---------- */
+.road-warn {
+  margin: 8px 0 4px; padding: 9px 11px; border-radius: 12px; font-size: 14px; color: #ffd9de;
+  background: rgba(224, 71, 92, 0.14); border: 1px solid rgba(224, 71, 92, 0.45);
+}
+.road-warn b { color: #ffb3bd; }
+.road-warn .btn { display: block; width: 100%; margin-top: 8px; }
+.road-warn .err { display: block; margin-top: 6px; color: var(--danger); font-size: 13px; }
+.kv .ok, .status .ok { color: var(--good); }
+.objective .err { color: #ff9aa8; font-weight: 700; }
+@media (max-width: 499px) { #pop .wide { display: none; } }
+
+/* ---------- widescreen (desktop, laptop, landscape tablet) ---------- */
+@media (min-width: 1000px) and (min-height: 520px) {
+  /* One compact top row: goods on the left, colony, clock, speed and pause on the right. */
+  #topbar { display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "goods row" "obj obj";
+    align-items: start; gap: 8px 10px; padding-top: calc(var(--safe-t) + 8px); }
+  .goods, .goods.two-rows { grid-area: goods; display: flex; flex-wrap: wrap; gap: 4px; }
+  .res-chip, .goods.two-rows .res-chip { min-width: 62px; padding: 6px 10px; font-size: 14px; border-radius: 10px; }
+  .toprow { grid-area: row; }
+  #pop { flex: none; }
+  .objective { grid-area: obj; justify-self: start; max-width: 560px; font-size: 14px; padding: 7px 12px; }
+  body.mm-on .objective, body.mm-off .objective { margin-right: 0; }
+  .minimap { right: calc(var(--safe-r) + 12px); }
+  #toasts { top: auto; width: 440px; left: 50%; transform: translateX(-50%); }
+
+  /* Tools: a small dock at the bottom centre, with their keyboard keys. */
+  #bottombar { left: 50%; right: auto; transform: translateX(-50%); width: auto; display: flex; gap: 8px; background: none;
+    padding: 0 0 calc(var(--safe-b) + 14px); }
+  .tool { flex-direction: row; gap: 8px; padding: 10px 16px; font-size: 15px; min-width: 128px; justify-content: center;
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35); }
+  .tool svg { width: 20px; height: 20px; }
+  .tool kbd { display: inline-block; margin-left: 2px; opacity: 0.7; }
+  .tool.on kbd { border-color: rgba(6, 35, 48, 0.4); color: var(--accent-ink); }
+  .seg kbd { display: inline-block; margin-left: 6px; opacity: 0.6; font-size: 11px; }
+  .tool:hover { border-color: rgba(255, 255, 255, 0.25); }
+  /* With a panel open on the right, the dock and messages centre on the map that's left. */
+  body.sheet-open #bottombar, body.sheet-open #toasts { left: calc((100% - 444px) / 2); }
+
+  /* Panels dock on the right instead of covering the middle of the map. */
+  #sheet { left: auto; right: calc(var(--safe-r) + 12px); top: var(--hud-top, 70px); bottom: calc(var(--safe-b) + 14px);
+    width: 420px; max-height: none; transform: none; border: 1px solid var(--line); border-radius: 16px;
+    padding: 14px 16px 16px; animation: panelIn 0.18s ease-out; }
+  @keyframes panelIn { from { transform: translateX(24px); opacity: 0.4; } }
+  .sheet-close { right: 10px; }
+  .build-grid { grid-template-columns: repeat(2, 1fr); }
+  #banner { bottom: calc(var(--safe-b) + 80px); width: 600px; }
+
+  .help-card { width: min(100%, 780px); }
+  .card.stats-card { width: min(100%, 860px); }
+  .card.missions-card { width: min(100%, 680px); }
+  .btn:hover:not(:disabled), .chip-btn:hover, .seg button:hover:not(.on) { filter: brightness(1.15); }
+}
+@media (pointer: fine) { body.mode-road canvas#game, body.mode-place canvas#game, body.mode-attack canvas#game { cursor: crosshair; } }

@@ -56,7 +56,7 @@ function mirrored(W, H, x, y, fn) { fn(x, y); fn(W - 1 - x, H - 1 - y); }
 const MISSIONS = [
   {
     id: 'touchdown', name: 'Touchdown',
-    brief: 'A sheltered valley with everything close at hand. Get the colony running: cut Fiber, break Stone and smelt your first Alloy.',
+    brief: 'A sheltered valley with everything close at hand. Get the colony running: cut Fiber, break Stone and smelt your first Alloy. Haulers only drive on roads, so lay one to every building.',
     mode: 'colony', seed: 1101, size: 0, rough: 1, rich: 2, limit: [0, 0, 14],
     goals: [
       { kind: 'built', type: 'harvester', n: 1 }, { kind: 'built', type: 'quarry', n: 1 },
@@ -83,9 +83,10 @@ const MISSIONS = [
   },
   {
     id: 'rushhour', name: 'Rush Hour',
-    brief: 'A supply depot landed far from your Lander and the traffic is already backing up. Order Haulers and lay roads, with one-way lanes to keep goods flowing.',
+    brief: 'A supply depot landed far from your Lander and the traffic is already backing up. Order more Haulers, run a road out to the depot, add one-way lanes and put traffic lights on the busy crossings.',
     mode: 'colony', seed: 4409, size: 1, rough: 0, rich: 2, limit: [0, 0, 20],
-    goals: [{ kind: 'own', type: 'hauler', n: [3, 4, 5] }, { kind: 'paths', tier: 1, n: [24, 32, 40] }, { kind: 'oneway', n: [8, 12, 16] }],
+    goals: [{ kind: 'own', type: 'hauler', n: [7, 8, 10] }, { kind: 'paths', tier: 1, n: [32, 40, 48] }, { kind: 'oneway', n: [8, 12, 16] },
+      { kind: 'lights', n: [1, 2, 3] }],
     setup(S) {
       const L = getE(S.players[0].lander);
       L.stock.cement = (L.stock.cement || 0) + 3;
@@ -101,7 +102,7 @@ const MISSIONS = [
     brief: 'The survey crews want proper roads. Bake Cement, lay roads, then send a Paver out with Asphalt made from the oil seep beside your base.',
     mode: 'colony', seed: 5501, size: 1, rough: 2, rich: 2, limit: [0, 0, 25],
     goals: [
-      { kind: 'made', good: 'cement', n: [6, 10, 14] }, { kind: 'paths', tier: 1, n: [15, 25, 35] },
+      { kind: 'made', good: 'cement', n: [6, 10, 14] }, { kind: 'paths', tier: 1, n: [23, 33, 43] },
       { kind: 'paths', tier: 2, n: [8, 14, 20] },
     ],
     layout(m, W) { const b = m.bases[0]; placeField(m, W, b.x + 5, b.y - 5, 1.2, R_OIL, 0.95, 9); },
@@ -163,6 +164,10 @@ function goalState(g, diff) {
     case 'oneway':
       for (let t = 0; t < S.W * S.H; t++) if (S.road[t] >= 2 && S.owner[t] === 0) have++;
       text = `Make ${need} road tiles one-way`;
+      break;
+    case 'lights':
+      for (const k in S.lights) if (S.lights[k].owner === 0) have++;
+      text = need > 1 ? `Put up ${need} traffic lights` : 'Put up a traffic light';
       break;
     case 'land':
       have = Math.floor(landShare(0) * 100);

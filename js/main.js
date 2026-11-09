@@ -10,7 +10,8 @@ let _demoT = 0;
 function startDemo() {
   newGame({ seed: randomSeed(), difficulty: 'normal', autoplay: true });
   bakeMap();
-  R.cam.z = minZoom() * 1.6;
+  // Zoomed in enough that the planet fills the whole screen behind the menu, even on widescreens.
+  R.cam.z = Math.min(maxZoom(), Math.max(minZoom() * 1.6, R.w / (S.W - 6), R.h / (S.H - 6)));
   centerOn(S.W / 2, S.H / 2);
   _demoT = 0;
   // Fast-forward a little so the demo already has a colony going.
@@ -37,6 +38,7 @@ function frame(now) {
       if (n >= 10) _acc = 0;
     }
     if (!UI.inGame) demoCamera(dt);
+    else keyPan(dt);
   }
   render(dt);
   uiTick(dt);
@@ -46,7 +48,7 @@ function frame(now) {
 function boot() {
   const canvas = document.getElementById('game');
   initRender(canvas);
-  initInput(canvas, { onTap: onMapTap, onPaint: onRoadPaint, onPaintEnd: () => { UI.lastPaint = null; UI.roadWarned = false; } });
+  initInput(canvas, { onTap: onMapTap, onPaint: onRoadPaint, onPaintEnd: () => { UI.lastPaint = null; UI.roadWarned = false; }, onHover: onMapHover });
   initUI();
   // Custom art loads in the background; redraw once after a burst of images arrives.
   let rebake = 0;

@@ -318,7 +318,7 @@ function newGame(opts) {
   S = {
     v: 1, mode, seed, W, H, settings, difficulty: diff, time: 0, nextId: 1, winner: -1, milestone: 0,
     terrain: m.terrain, res: m.res, amt: m.amt, grow: m.grow, elev: m.elev, ramp: m.ramp, fert: m.fert,
-    road: new Uint8Array(W * H), pave: new Uint8Array(W * H), oneRoad: true,
+    road: new Uint8Array(W * H), pave: new Uint8Array(W * H), oneRoad: true, roadVer: 0, lights: {},
     owner: new Int8Array(W * H).fill(-1),
     resRes: new Uint8Array(W * H),
     bAt: new Int32Array(W * H),
@@ -352,8 +352,21 @@ function newGame(opts) {
   }
   computeZones();
   computeTerritory();
+  for (const P of S.players) { const L = getE(P.lander); if (L) starterRoads(L); }
   if (opts.setup) opts.setup(S);
   return S;
+}
+
+/** Every Lander touches down on a ring of road, the start of the colony's road network. */
+function starterRoads(L) {
+  const lt = tIdx(L.x, L.y);
+  for (let dj = -1; dj <= 1; dj++) for (let di = -1; di <= 1; di++) {
+    if ((!di && !dj) || !inMap(L.x + di, L.y + dj)) continue;
+    const t = tIdx(L.x + di, L.y + dj);
+    if (S.terrain[t] !== T_GROUND || S.elev[t] !== S.elev[lt] || S.res[t] || S.bAt[t]) continue;
+    S.road[t] = 1; S.pave[t] = 1;
+  }
+  S.roadVer = (S.roadVer || 0) + 1;
 }
 
 /* ------------------------------------------------------------------ elevation */
@@ -617,7 +630,7 @@ function canPlace(owner, type, i, j, skipBlockCheck) {
   if (S.road[t]) return { ok: false, reason: 'There is a road here.' };
   // Buildings may stand side by side, as long as every building keeps at least one open side
   // that bots can walk in from (and the Lander, which is bigger, keeps a clear ring around it).
-  let open = 0;
+  let open = 0, roadSide = 0;
   for (let dj = -1; dj <= 1; dj++) for (let di = -1; di <= 1; di++) {
     if (!di && !dj) continue;
     if (!inMap(i + di, j + dj)) continue;
@@ -626,9 +639,12 @@ function canPlace(owner, type, i, j, skipBlockCheck) {
     if (nb && nb.type === 'lander') return { ok: false, reason: 'Too close to the Lander.' };
     if (di !== 0 && dj !== 0) continue;
     if (!nb && canStep(t, u)) open++;
+    if (!nb && canStep(t, u) && (S.road[u] || canRoad(owner, i + di, j + dj))) roadSide++;
     if (nb && !keepsAccess(u, t)) return { ok: false, reason: `That would wall in the ${BDEFS[nb.type].name} next to it.` };
+    if (nb && nb.owner === owner && !keepsRoadSide(u, t)) return { ok: false, reason: `That would cut the ${BDEFS[nb.type].name} next to it off from roads.` };
   }
   if (open < 1) return { ok: false, reason: 'Bots could not reach this spot.' };
+  if (!roadSide) return { ok: false, reason: 'Haulers need a road to every building: leave a side open where a road can go (open ground inside your border).' };
   if (def.mil) {
     for (const b of S.buildings) {
       if (!b.dead && b.owner === owner && BDEFS[b.type].mil && dist2(b.x, b.y, i, j) < 16) {
@@ -656,6 +672,24 @@ function keepsAccess(u, t) {
   return false;
 }
 
+/**
+ * Would building u keep a side where a road is or could go if tile t were built on? (Only asked
+ * when it has one now.)
+ */
+function keepsRoadSide(u, t) {
+  const ui = u % S.W, uj = (u / S.W) | 0, b = getE(S.bAt[u]);
+  if (!b) return true;
+  let had = false;
+  for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+    if (!inMap(ui + di, uj + dj)) continue;
+    const v = tIdx(ui + di, uj + dj);
+    if (S.bAt[v] || !canStep(u, v) || !(S.road[v] || canRoad(b.owner, ui + di, uj + dj))) continue;
+    if (v !== t) return true;
+    had = true;
+  }
+  return !had;
+}
+
 function siteCount(owner) {
   let n = 0;
   for (const b of S.buildings) if (!b.dead && b.owner === owner && !b.built) n++;
@@ -671,18 +705,25 @@ function placeSite(owner, type, i, j) {
   return { ok: true, building: b };
 }
 
-/** Paths (roads) speed up bots. They can be painted on open ground inside your territory. */
+/**
+ * Roads can go on open ground inside your territory, and through boulders, groves, ore and
+ * crystal (clearing them, at ROAD_CLEAR times the cost) but not oil seeps or a node being worked.
+ */
 function canRoad(owner, i, j) {
   if (!inMap(i, j)) return false;
   const t = tIdx(i, j);
-  return S.owner[t] === owner && S.terrain[t] === T_GROUND && !S.bAt[t] && !S.res[t];
+  return S.owner[t] === owner && S.terrain[t] === T_GROUND && !S.bAt[t] && S.res[t] !== R_OIL && !S.resRes[t];
 }
+
+/** Cement-cost multiplier for laying road on tile t (1, or ROAD_CLEAR through resources). */
+function roadTileMul(t) { return S.road[t] ? 0 : S.res[t] ? ROAD_CLEAR : 1; }
 
 function setRoad(i, j, on) {
   const t = tIdx(i, j);
   if (!!S.road[t] === !!on) return;
   S.road[t] = on ? 1 : 0;
   S.pave[t] = on ? 1 : 0;
+  S.roadVer = (S.roadVer || 0) + 1;
   markDirty(i, j);
   for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) if (inMap(i + di, j + dj)) markDirty(i + di, j + dj);
 }
@@ -715,6 +756,152 @@ function setRoadDir(i, j, v) {
 }
 
 function markDirty(i, j) { S.dirtyTiles.push(tIdx(i, j)); }
+
+/* ------------------------------------------------------------------ road network */
+
+/*
+ * Road tiles joined along roads (respecting cliffs and ramps) form networks. Haulers can only
+ * carry goods between buildings that touch the same network. A junction is a road tile with
+ * roads on three or four sides. Labels are rebuilt lazily whenever S.roadVer changes.
+ */
+const _rn = { ver: -1, of: null, comp: null, junc: null, bnet: new Map() };
+
+function roadNet() {
+  const N = S.W * S.H;
+  if (_rn.of === S && _rn.ver === (S.roadVer || 0) && _rn.comp && _rn.comp.length === N) return _rn;
+  const comp = new Int32Array(N).fill(-1), junc = new Uint8Array(N);
+  const W = S.W;
+  let next = 0;
+  const q = [];
+  for (let t = 0; t < N; t++) {
+    if (!S.road[t]) continue;
+    let k = 0;
+    const i = t % W;
+    for (const u of [i > 0 ? t - 1 : -1, i < W - 1 ? t + 1 : -1, t - W, t + W]) if (u >= 0 && u < N && S.road[u] && canStep(t, u)) k++;
+    if (k >= 3) junc[t] = 1;
+    if (comp[t] >= 0) continue;
+    comp[t] = next; q.length = 0; q.push(t);
+    while (q.length) {
+      const a = q.pop(), ai = a % W;
+      for (const b of [ai > 0 ? a - 1 : -1, ai < W - 1 ? a + 1 : -1, a - W, a + W]) {
+        if (b < 0 || b >= N || comp[b] >= 0 || !S.road[b] || !canStep(a, b)) continue;
+        comp[b] = next; q.push(b);
+      }
+    }
+    next++;
+  }
+  Object.assign(_rn, { of: S, ver: S.roadVer || 0, comp, junc });
+  _rn.bnet.clear();
+  return _rn;
+}
+
+/** The road networks touching building b (the road tiles right next to it). */
+function buildingNets(b) {
+  const net = roadNet();
+  let nets = net.bnet.get(b.id);
+  if (nets) return nets;
+  nets = [];
+  const t = tIdx(b.x, b.y);
+  for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+    if (!inMap(b.x + di, b.y + dj)) continue;
+    const u = tIdx(b.x + di, b.y + dj);
+    if (S.road[u] && canStep(t, u) && nets.indexOf(net.comp[u]) < 0) nets.push(net.comp[u]);
+  }
+  if (b.id) net.bnet.set(b.id, nets);
+  return nets;
+}
+
+/** Do buildings a and b share a road network (can haulers carry goods between them)? */
+function roadLinked(a, b) {
+  if (a === b) return true;
+  const na = buildingNets(a), nb = buildingNets(b);
+  for (const c of na) if (nb.indexOf(c) >= 0) return true;
+  return false;
+}
+
+function isJunction(t) { return !!roadNet().junc[t]; }
+
+/** Tiles next to the owner's storage buildings, and the road networks touching them. */
+function roadGoals(owner, except) {
+  const stores = S.buildings.filter((s) => !s.dead && s.owner === owner && s.built && BDEFS[s.type].store && s !== except);
+  const nets = new Set(), next = new Uint8Array(S.W * S.H);
+  for (const s of stores) {
+    for (const c of buildingNets(s)) nets.add(c);
+    const st = tIdx(s.x, s.y);
+    for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+      if (inMap(s.x + di, s.y + dj)) { const u = tIdx(s.x + di, s.y + dj); if (canStep(st, u)) next[u] = 1; }
+    }
+  }
+  return { stores, nets, next };
+}
+
+/*
+ * Cheapest road through the owner's land, by Dijkstra: existing road is free, open ground costs 1
+ * and resources (which a road clears) ROAD_AVOID, so routes go round fields unless the detour is
+ * long. Starting from `seeds`, stopping at the first tile where done(t) holds (or exploring
+ * everything if done is null). Returns { cost, prev, end }.
+ */
+const ROAD_AVOID = 10;
+function roadWeight(t) { return S.road[t] ? 0 : S.res[t] ? ROAD_AVOID : 1; }
+
+function roadSearch(owner, seeds, done) {
+  const W = S.W, N = S.W * S.H;
+  const cost = new Float32Array(N).fill(Infinity), prev = new Int32Array(N).fill(-2);
+  const heap = new MinHeap();
+  for (const t of seeds) { cost[t] = roadWeight(t); prev[t] = -1; heap.push(t, cost[t]); }
+  const open = (t) => S.road[t] || canRoad(owner, t % W, (t / W) | 0);
+  while (heap.size) {
+    const c = heap.pri[0], t = heap.pop();
+    if (c > cost[t]) continue;
+    if (done && done(t)) return { cost, prev, end: t };
+    const i = t % W;
+    for (const u of [i > 0 ? t - 1 : -1, i < W - 1 ? t + 1 : -1, t - W, t + W]) {
+      if (u < 0 || u >= N || !open(u) || !canStep(t, u)) continue;
+      const nc = c + roadWeight(u);
+      if (nc < cost[u]) { cost[u] = nc; prev[u] = t; heap.push(u, nc); }
+    }
+  }
+  return { cost, prev, end: -1 };
+}
+
+/** The open sides of tile (x, y) where a road is or could go. */
+function roadSides(owner, x, y) {
+  const out = [], bt = tIdx(x, y);
+  for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+    if (!inMap(x + di, y + dj)) continue;
+    const u = tIdx(x + di, y + dj);
+    if ((S.road[u] || canRoad(owner, x + di, y + dj)) && canStep(bt, u)) out.push(u);
+  }
+  return out;
+}
+
+/**
+ * The cheapest run of new road tiles that would link building b to one of its owner's storage
+ * buildings by road: a list of tiles to pave (empty if it is already linked), or null if there is
+ * no way through the owner's land. `.cost` is its price in road tiles (resources cost more).
+ */
+function roadRouteTo(owner, b) {
+  const g = roadGoals(owner, b);
+  if (!g.stores.length) return null;
+  if (g.stores.some((s) => roadLinked(s, b))) { const r = []; r.cost = 0; return r; }
+  const net = roadNet();
+  const res = roadSearch(owner, roadSides(owner, b.x, b.y), (t) => (S.road[t] && g.nets.has(net.comp[t])) || g.next[t]);
+  if (res.end < 0) return null;
+  const out = [];
+  out.cost = 0;
+  for (let k = res.end; k >= 0; k = res.prev[k]) if (!S.road[k]) { out.push(k); out.cost += roadTileMul(k); }
+  return out;
+}
+
+/**
+ * For every tile, how many road tiles (in Cement terms) it would take to link it to storage:
+ * a map for choosing building spots a road can reach cheaply.
+ */
+function roadReach(owner) {
+  const g = roadGoals(owner, null), net = roadNet(), seeds = [];
+  for (let t = 0; t < S.W * S.H; t++) if ((S.road[t] && g.nets.has(net.comp[t])) || g.next[t]) seeds.push(t);
+  return roadSearch(owner, seeds, null).cost;
+}
 
 /* ------------------------------------------------------------------ removal */
 
@@ -860,6 +1047,8 @@ function deserializeGame(json) {
   if (!o.pave) o.pave = o.road.map((v) => (v ? 1 : 0));
   else if (!o.oneRoad) o.pave = o.pave.map((v) => (v >= 3 ? 2 : v ? 1 : 0));
   o.oneRoad = true;
+  o.lights = o.lights || {};
+  o.roadVer = (o.roadVer || 0) + 1;
   for (const k in TYPED_FIELDS) o[k] = TYPED_FIELDS[k].from(o[k]);
   o.hist = o.hist || newHistory();
   for (const P of o.players) { P.made = P.made || {}; P.madeBots = P.madeBots || {}; P.stats.outposts = P.stats.outposts || 0; P.stats.startBots = P.stats.startBots ?? 18; }

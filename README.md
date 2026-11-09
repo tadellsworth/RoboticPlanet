@@ -1,8 +1,9 @@
 # Botfall
 
-A mobile-first colony and logistics strategy game that runs in the browser. Your robots land on
-a dusty alien planet: gather resources, link them into supply chains, build more robots and spread
-across the map.
+A colony and logistics strategy game that runs in the browser, on phones and on desktop widescreens. Your robots land
+on a dusty alien planet: gather resources, link them into supply chains with a network of roads, build more robots and
+spread across the map. Roads are the heart of the game: Haulers only drive on them, so where your roads go decides
+how goods move.
 
 - **Versus:** race a rival AI colony across the planet. Capture its Lander to win (about 20–40 minutes).
 - **Colony:** no rival. Settle the planet at your own pace, with colonization milestones.
@@ -55,28 +56,36 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
 | Bio Farm | A worker plants energy crops on fertile soil and harvests them into **Fuel** |
 | Oil Pump | Built on an oil seep; a worker pumps **Crude** until it runs dry |
 | Refinery | Crude → 2 **Fuel** |
-| Cement Works | 2 Stone → **Cement** (for roads) |
+| Cement Works | Stone → **Cement** (for roads) |
 | Asphalt Plant | Crude + Stone → 2 **Asphalt** |
 | Roadworks | Its Paver lays Asphalt on your paths nearby (1 Asphalt covers 4 tiles) |
 | Ammo Plant | Alloy + Stone → 3 **Ammo**; warbots reload it in the Lander and Outposts (Versus) |
 | Missile Factory | 2 Alloy + Chip + Fuel → **Missile** (20 s each; Versus) |
 | Missile Silo | Fires Missiles at rival buildings up to 18 tiles away; holds 2, reloads in 25 s (Versus) |
 
-- Every production building needs one worker inside. Free workers haul goods and build construction sites.
-  Run short and the game pulls workers off low-priority jobs, so build a Bot Foundry early.
-- **Robot types:** Workers do everything; **Haulers** carry two goods at a time and move a quarter faster but only
-  haul; **Agribots** are the only bots that can run Bio Farms and Grove Planters; **Pavers** run the Roadworks;
-  **Warbots** fight. You start with 12 Workers, 2 Haulers and an Agribot (plus 4 Warbots in Versus).
-- Placing a construction site is free; workers bring the materials from storage.
-- **Roads** cost Cement (1 Cement paves 10 tiles; you land with 3) and double a bot's speed. A Roadworks' Paver upgrades
-  them to asphalt (2.75×) with Asphalt. Removing a road refunds its Cement. Bots plan routes that use roads even when
-  that means a short detour, and they are slow off them.
+- **Workers and Haulers:** Workers run buildings (one inside each production building), go out to cut, dig and mine,
+  and build construction sites. They can go anywhere, but off the road they move at 40% speed, except while out
+  gathering for their building. **Haulers** move every good between buildings, two at a time, and **only drive on
+  roads**. If every Hauler is lost, workers carry goods slowly until the Foundry makes more. **Agribots** run Bio Farms
+  and Grove Planters, **Pavers** run the Roadworks and **Warbots** fight. You start with 9 Workers, 5 Haulers and an
+  Agribot (plus 4 Warbots in Versus).
+- **Every building needs a road to storage.** Your Lander lands on a ring of road; join each building and construction
+  site to that network (or to a Depot on it), or Haulers can't bring it materials or collect its goods. A red road badge
+  marks buildings with no road: tap one and press **Lay road** to pave the shortest route (shown dashed), or plan your
+  own. Placement keeps a side of every building open for a road.
+- **Roads** cost Cement (1 Cement paves 10 tiles; you land with 10) and double a bot's speed. Dragging lays roads round
+  resources; tap a boulder, grove, ore or crystal tile to clear it for a road at 3× the Cement. A Roadworks' Paver
+  upgrades roads to asphalt (2.75×) with Asphalt. Removing a road refunds its Cement.
+- **Junctions and traffic lights:** where three or four roads meet, bots slow down and give way to traffic already
+  crossing. Switch the Paths banner to **Lights** and tap a junction to put up a traffic light (1 Alloy): it lets one
+  direction through at a time, switching when traffic waits the other way. On a busy crossing a light moves about half
+  as many goods again; on a quiet one it costs nothing.
 - **Traffic:** bots queue on roads, each waiting behind the bot ahead of it going the same way. On two-way roads each
   direction keeps to its own side, but passing oncoming traffic slows bots down. Switch the Paths banner to **Arrows** and
   drag along a road to point it the way you drag (tap a road to turn its arrow). One-way loops keep busy routes flowing;
   going the wrong way up a one-way road is allowed but crawls.
 - **Top bar:** hover over (or tap) a goods counter to see its name and what it's for.
-- **Ammo:** warbots carry 20 shots and reload in your Lander and Outposts, which workers stock from an Ammo Plant. Out of
+- **Ammo:** warbots carry 20 shots and reload in your Lander and Outposts, which haulers stock from an Ammo Plant. Out of
   ammo, a warbot hits at about a third of its strength.
 - **Statistics:** the pause menu and the end-of-game screen show graphs of bots, land and goods over time and how busy
   each kind of building was; each building's panel shows its recent busy time.
@@ -87,7 +96,7 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
 - **Priorities:** tap a building or construction site and set it to Low, Normal or High. High-priority
   buildings get workers and goods first; low ones are served last and lose their worker first when
   workers run short. **Pause** frees a building's worker entirely.
-- **Storage:** tap your Lander or a Depot. *Fill first* makes workers bring finished goods there before
+- **Storage:** tap your Lander or a Depot. *Fill first* makes haulers bring finished goods there before
   any other storage; *Empty out* takes nothing new and moves what it holds elsewhere (handy before
   demolishing it). You can also switch individual goods off for that building.
 - **Minimap:** tap or drag it to jump around; red pulses mark buildings under attack. The × hides it.
@@ -97,7 +106,7 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
 - **Army orders:** tap **Army**, then a rival building to attack it with warbots or a missile, or open
   ground to send warbots there to hold the area under a rally flag. Tap the flag to call them back.
 - **Missiles** are built at a Missile Factory (2 Alloy, 1 Chip and 1 Fuel each, 20 seconds) and carried to Missile Silos
-  by workers. A hit does 24 damage, which wrecks most buildings outright, plus 5 to other rival buildings and 9 to bots
+  by haulers. A hit does 24 damage, which wrecks most buildings outright, plus 5 to other rival buildings and 9 to bots
   within 2.2 tiles. Outposts and Landers drop to almost no armor; warbots still have to walk in and capture them.
 - **Ordering bots:** the Bot Foundry only builds the bots you order. Tap it and use +1 or +5 for Workers or
   Warbots (Clear cancels the queue); with nothing queued it sits idle and uses no Alloy or Chips.
@@ -105,11 +114,16 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
 - You can only build inside your border. Outposts push it out. Capturing an enemy Outpost takes its land,
   and enemy buildings left outside their border are lost.
 - **Controls:** drag to pan, pinch or scroll to zoom, tap anything to inspect it.
+- **Desktop:** on a wide screen the top bar is one row, the tools sit in a small dock and panels open on the right.
+  Right-drag pans in every mode; a building being placed follows the mouse. Keys: **B** build, **P** paths
+  (**R** roads, **O** one-way arrows, **L** lights), **A** army, **H** base, arrows/WASD pan, **+/−** zoom,
+  **1–3** speed, **M** minimap, **Space** pause, **Esc** back.
 
 ## Custom art
 
 Buildings, bots, resources and ground use custom art made in Claude Design (`art/`, with SVG sources in
-`art/source/`). Anything without an image falls back to placeholder art drawn in code, so new art can be
+`art/source/`). The production buildings, Depot, Outposts and construction sites use the pre-rendered 3D set
+(512×512, each on its own pad, placed by an `anchor` point in `art/art-manifest.js`). The app icon is in `icons/`. Anything without an image falls back to placeholder art drawn in code, so new art can be
 added one piece at a time. See **[ART_GUIDE.md](ART_GUIDE.md)** for specs, the style brief and prompts,
 including the remaining pieces (Ramp, slope and cliff textures, goods icons).
 
@@ -174,6 +188,5 @@ each minute. The smoke test needs Playwright and a running local server.
 
 ## Ideas for next steps
 
-- Traffic lights at path crossings
 - Multiplayer and save export/import
 - Custom art for goods icons, menus and effects

@@ -16,6 +16,7 @@ function simStep(dt) {
     if (!b.dead) updateBuilding(b, dt);
   }
   countCharging();
+  updateLights(dt);
   countTraffic();
   for (let k = 0; k < S.bots.length; k++) {
     const u = S.bots[k];
@@ -88,12 +89,14 @@ function storeTakes(b, g) {
 
 /**
  * Where should a unit of good g go? Storage set to "fill first" wins, then the nearest storage
- * that takes the good. `except` is skipped (used when emptying a store out).
+ * that takes the good. `except` is skipped (used when emptying a store out); with `from` set, only
+ * storage linked to that building by road counts.
  */
-function storeFor(owner, g, x, y, except) {
+function storeFor(owner, g, x, y, except, from) {
   let best = null, bd = Infinity;
   for (const b of S.buildings) {
     if (b.dead || b.owner !== owner || b === except || !storeTakes(b, g)) continue;
+    if (from && !roadLinked(b, from)) continue;
     const d = dist2(b.x + 0.5, b.y + 0.5, x, y) - (b.smode === 'fill' ? 1e6 : 0);
     if (d < bd) { bd = d; best = b; }
   }
@@ -178,6 +181,7 @@ function findCharger(u) {
     if (b.dead || b.owner !== u.owner || !b.built) continue;
     const ch = BDEFS[b.type].charger;
     if (!ch || S.zone[tIdx(b.x, b.y)] !== zone || chargerDry(b)) continue;
+    if (roadBound(u) && !botLinked(u, b)) continue;
     const s = dist(b.x + 0.5, b.y + 0.5, u.x, u.y) + Math.max(0, (b.charging || 0) - ch.slots) * 4;
     if (s < bs) { bs = s; best = b; }
   }
@@ -248,11 +252,29 @@ function nearestEnemyBot(owner, x, y, range, preferWar) {
 
 /* ------------------------------------------------------------------ movement */
 
+/** Is bot u out on a gathering, farming or paving trip from the building it runs? (no off-road slowdown) */
+function harvestTrip(u) { return !!(u.task && u.task.type === 'staff' && u.task.trip); }
+
+/** A hauler that is off the road (and not in a building), e.g. after its road was removed. */
+function haulerStranded(u) {
+  if (u.inside) return false;
+  const t = tIdx(Math.floor(u.x), Math.floor(u.y));
+  return !S.road[t] && !S.bAt[t];
+}
+
+/** How bot u plans routes: haulers stick to roads; others pay more for off-road tiles. */
+function routeOpts(u) {
+  const bt = BOTS[u.type];
+  if (bt.roadOnly && !haulerStranded(u)) return { roadOnly: true };
+  if ((bt.offroad || bt.roadOnly) && !harvestTrip(u)) return { offMul: 1 / OFFROAD_SLOW };
+  return null;
+}
+
 function goTo(u, x, y) {
   const goal = y * S.W + x;
   // Don't hammer the pathfinder with a route that just failed.
   if (u.failGoal === goal && S.time < u.failUntil) return false;
-  const p = findPath(Math.floor(u.x), Math.floor(u.y), x, y, u.type !== 'warbot' ? u.owner : undefined);
+  const p = findPath(Math.floor(u.x), Math.floor(u.y), x, y, u.type !== 'warbot' ? u.owner : undefined, routeOpts(u));
   if (!p) { u.failGoal = goal; u.failUntil = S.time + 2; return false; }
   exitBuilding(u);
   u.path = p; u.pi = 0; u.idleT = 0; u.goal = y * S.W + x;
@@ -290,6 +312,60 @@ function countTraffic() {
     head[t] = TRAFFIC.bots.length;
     TRAFFIC.bots.push(u);
   }
+}
+
+/* ------------------------------------------------------------------ traffic lights */
+
+/*
+ * A traffic light on a road junction lets one axis through at a time (ph 0 = east-west green,
+ * 1 = north-south green). Bots heading into the junction count as approaching (app) and, when
+ * held at red, as waiting (dem); the light switches when traffic waits on the red axis, after at
+ * least LIGHT_MIN_GREEN seconds, once the green axis is clear or LIGHT_MAX_GREEN has passed, with
+ * LIGHT_CLEAR seconds of all-red in between.
+ */
+function updateLights(dt) {
+  for (const k in S.lights) {
+    const t = +k, L = S.lights[k];
+    if (!S.road[t] || !isJunction(t)) { removeLight(t); continue; }
+    const dem = L.dem || [0, 0], app = L.app || [0, 0];
+    if (L.clr > 0) {
+      L.clr -= dt;
+      if (L.clr <= 0) { L.clr = 0; L.ph = 1 - L.ph; L.tm = 0; }
+    } else {
+      L.tm = (L.tm || 0) + dt;
+      if (dem[1 - L.ph] > 0 && L.tm >= LIGHT_MIN_GREEN && (app[L.ph] === 0 || L.tm >= LIGHT_MAX_GREEN)) L.clr = LIGHT_CLEAR;
+    }
+    L.dem = [0, 0]; L.app = [0, 0];
+  }
+}
+
+/** Put a traffic light on the junction at (i, j). Returns '' or the reason it can't. */
+function placeLight(owner, i, j) {
+  const t = tIdx(i, j);
+  if (S.lights[t]) return '';
+  if (!S.road[t] || !isJunction(t)) return 'Traffic lights go on road junctions: a road tile with roads on three or four sides.';
+  if (S.owner[t] !== owner) return 'You can only put traffic lights inside your border.';
+  const have = playerGoods(owner);
+  for (const g in LIGHT_COST) if (have[g] < LIGHT_COST[g]) return `A traffic light costs ${LIGHT_COST[g]} ${GOOD[g].name}.`;
+  for (const g in LIGHT_COST) takeGood(owner, g, LIGHT_COST[g]);
+  S.lights[t] = { owner, ph: 0, tm: 0, clr: 0 };
+  return '';
+}
+
+/** Take a traffic light down and refund it to the nearest storage. */
+function removeLight(t) {
+  const L = S.lights[t];
+  if (!L) return;
+  delete S.lights[t];
+  const store = nearestStoreTo(L.owner, (t % S.W) + 0.5, ((t / S.W) | 0) + 0.5);
+  if (store) for (const g in LIGHT_COST) bump(store.stock, g, LIGHT_COST[g]);
+}
+
+/** Is a bot crossing junction t along the other axis (0 = east-west, 1 = north-south) right now? */
+function crossTraffic(t, axis) {
+  const occ = TRAFFIC.occ;
+  if (!occ || occ.length !== S.W * S.H * 4) return false;
+  return axis === 0 ? occ[t * 4 + 1] + occ[t * 4 + 3] > 0 : occ[t * 4] + occ[t * 4 + 2] > 0;
 }
 
 /** How much oncoming traffic slows bot u on road tile `here`, heading for tile `next` (0 = free flow). */
@@ -341,15 +417,42 @@ function queueRoom(u) {
 function moveAlong(u, dt) {
   if (!u.path) return true;
   const here = Math.floor(u.y) * S.W + Math.floor(u.x);
-  let speed = BOTS[u.type].speed;
+  const bt = BOTS[u.type];
+  let speed = bt.speed;
   const r = S.road[here];
   if (r) {
     const next = u.path[u.pi];
     const dx = (next % S.W) + 0.5 - u.x, dy = ((next / S.W) | 0) + 0.5 - u.y;
     const wrong = r >= 2 && dx * ROAD_DIRS[r][0] + dy * ROAD_DIRS[r][1] < -0.1;
     speed *= wrong ? ONEWAY_WRONG : PAVE[S.pave[here] || 1].speed / (1 + trafficJam(u, here, next));
-  } else if (S.ramp[here]) speed *= SLOPE_SPEED; else if (S.res[here]) speed *= 0.75;
+    if (isJunction(here) && !S.lights[here]) speed *= JUNCTION_SLOW; // crossing carefully
+  } else {
+    if (S.ramp[here]) speed *= SLOPE_SPEED; else if (S.res[here]) speed *= 0.75;
+    if (!S.bAt[here]) {
+      if (bt.roadOnly) speed *= HAULER_STRANDED; // a hauler caught off the road crawls back to it
+      else if (bt.offroad && !harvestTrip(u)) speed *= OFFROAD_SLOW;
+    }
+  }
   let step = speed * batFactor(u) * dt;
+  // Road junctions: stop before a red light, or give way to traffic already crossing the other way.
+  const nx = u.path[u.pi];
+  if (nx !== undefined && nx !== here && S.road[nx] && isJunction(nx)) {
+    const jdx = (nx % S.W) + 0.5 - u.x, jdy = ((nx / S.W) | 0) + 0.5 - u.y;
+    const axis = Math.abs(jdx) >= Math.abs(jdy) ? 0 : 1;
+    const toEdge = Math.max(0, Math.sqrt(jdx * jdx + jdy * jdy) - 0.55);
+    const L = S.lights[nx];
+    let stop = false;
+    if (L) {
+      (L.app || (L.app = [0, 0]))[axis]++;
+      if (L.clr > 0 || L.ph !== axis) { stop = true; (L.dem || (L.dem = [0, 0]))[axis]++; }
+    } else if (crossTraffic(nx, axis) && !(u.crossUntil > S.time)) {
+      stop = true;
+      u.crossT = (u.crossT || 0) + dt;
+      if (u.crossT > 4) { u.crossUntil = S.time + 1; u.crossT = 0; } // never wait forever
+    }
+    if (!stop) u.crossT = 0;
+    if (stop && toEdge < step) step = toEdge;
+  }
   // On roads, wait behind the bot ahead instead of driving through it.
   if (r || S.road[u.path[u.pi]]) {
     const room = queueRoom(u);
@@ -412,9 +515,8 @@ function dispatch(p) {
   for (const b of S.buildings) if (b.owner === p && !b.dead) blds.push(b);
   blds.sort((a, c) => prioRank(a) - prioRank(c) || a.born - c.born);
 
-  // Always keep a few workers free for hauling and building. If raids or new buildings took them
-  // all, pull one off the least useful job — this must run even when nobody is idle.
-  // Haulers take over carrying, so every two of them lower the number of free workers needed.
+  // Keep a worker or two free to build. If raids or new buildings took them all, pull one off the
+  // least useful job — this must run even when nobody is idle.
   let free = 0, workers = 0, haulers = 0;
   for (const u of S.bots) {
     if (u.dead || u.owner !== p) continue;
@@ -423,7 +525,13 @@ function dispatch(p) {
     workers++;
     if (!(u.task && u.task.type === 'staff')) free++;
   }
-  const minFree = Math.max(1, Math.max(MIN_FREE_WORKERS, Math.round(workers * 0.2)) - Math.floor(haulers / 2));
+  // Only haulers carry goods, on roads. If every hauler is lost, workers carry (slowly) until the
+  // Foundry can make more.
+  const P = S.players[p];
+  P.noHaulers = haulers === 0;
+  const linked = (a, b) => P.noHaulers || roadLinked(a, b);
+  for (const b of blds) b.unlinked = !P.noHaulers && needsRoad(b) && !blds.some((s) => storeAccepts(s) && roadLinked(s, b));
+  const minFree = siteCount(p) > 0 ? MIN_FREE_WORKERS : 1;
   if (free < minFree) {
     const cands = blds.filter((b) => b.built && b.staff && b.type !== 'foundry' && !BDEFS[b.type].crew);
     cands.sort((a, c) => releaseScore(c) - releaseScore(a));
@@ -432,7 +540,7 @@ function dispatch(p) {
       free++;
       if (S.time - (S.players[p].lastShortMsg || -99) > 60) {
         S.players[p].lastShortMsg = S.time;
-        postMsg(p, `Short on workers — the ${BDEFS[cands[0].type].name} worker was moved to hauling. Make more workers at a Bot Foundry.`, cands[0].x, cands[0].y, 'warn');
+        postMsg(p, `Short on workers — the ${BDEFS[cands[0].type].name} worker was moved to building. Make more workers at a Bot Foundry.`, cands[0].x, cands[0].y, 'warn');
       }
     }
   }
@@ -442,15 +550,18 @@ function dispatch(p) {
   if (!idle.length) return;
 
   // role: 'build', 'haul', 'staff' (an ordinary building) or a crew name (a specialist's building).
-  const take = (x, y, role) => {
+  // For 'haul', `src` is where the goods are: a hauler must be able to reach it by road.
+  const take = (x, y, role, src) => {
     let best = -1, bd = Infinity;
     for (let k = 0; k < idle.length; k++) {
       const u = idle[k], bt = BOTS[u.type];
-      if (role === 'haul' ? !bt.haul : role === 'build' ? !bt.build : role === 'staff' ? !bt.staff : bt.crew !== role) continue;
-      let d = dist2(u.x, u.y, x + 0.5, y + 0.5);
+      if (role === 'haul') {
+        if (!(bt.haul || (P.noHaulers && bt.build))) continue;
+        if (bt.roadOnly && src && !botLinked(u, src)) continue;
+      } else if (role === 'build' ? !bt.build : role === 'staff' ? !bt.staff : bt.crew !== role) continue;
+      const d = dist2(u.x, u.y, x + 0.5, y + 0.5);
       // Only send a bot with enough charge for the trip there and back.
       if ((u.bat ?? 100) < BATTERY.low + 0.5 * Math.sqrt(d)) continue;
-      if (role === 'haul' && u.type === 'hauler') d *= 0.4; // haulers are the first choice for carrying
       if (d < bd) { bd = d; best = k; }
     }
     if (best < 0) return null;
@@ -516,12 +627,12 @@ function dispatch(p) {
       let src = null, bd = Infinity;
       if (!reachable(r.b)) { r.n = 0; continue; }
       for (const s of blds) {
-        if (s === r.b || supplyOf(s, r.g) <= 0 || !reachable(s)) continue;
+        if (s === r.b || supplyOf(s, r.g) <= 0 || !reachable(s) || !linked(s, r.b)) continue;
         const d = dist2(s.x, s.y, r.b.x, r.b.y);
         if (d < bd) { bd = d; src = s; }
       }
       if (!src) { r.n = 0; continue; }
-      const u = take(src.x, src.y, 'haul');
+      const u = take(src.x, src.y, 'haul', src);
       if (!u) { r.n = 0; continue; }
       const n = canCarry(u, Math.min(r.n, supplyOf(src, r.g)));
       assignHaul(u, src, r.b, r.g, n);
@@ -538,8 +649,8 @@ function dispatch(p) {
       if (!idle.length) return;
       const avail = supplyOf(b, g);
       if (avail >= 2 || (avail >= 1 && !b.staff)) {
-        const store = storeFor(p, g, b.x + 0.5, b.y + 0.5);
-        const u = store && take(b.x, b.y, 'haul');
+        const store = storeFor(p, g, b.x + 0.5, b.y + 0.5, null, P.noHaulers ? null : b);
+        const u = store && take(b.x, b.y, 'haul', b);
         if (u) assignHaul(u, b, store, g, canCarry(u, avail));
       }
     }
@@ -550,8 +661,8 @@ function dispatch(p) {
     for (const g of GOODS) {
       if (!idle.length) return;
       if (storeTakes(b, g) || supplyOf(b, g) <= 0) continue;
-      const store = storeFor(p, g, b.x + 0.5, b.y + 0.5, b);
-      const u = store && take(b.x, b.y, 'haul');
+      const store = storeFor(p, g, b.x + 0.5, b.y + 0.5, b, P.noHaulers ? null : b);
+      const u = store && take(b.x, b.y, 'haul', b);
       if (u) assignHaul(u, b, store, g, canCarry(u, supplyOf(b, g)));
     }
   }
@@ -573,6 +684,22 @@ function assignHaul(u, src, dst, g, n) {
   bump(src.res, g, n);
   bump(dst.inc, g, n);
   if (!goTo(u, src.x, src.y)) { cancelTask(u); src.unreachUntil = S.time + 5; }
+}
+
+/** The road networks bot u is on (or in the building it is inside); none if it is off the road. */
+function botNets(u) {
+  if (u.inside) { const b = getE(u.inside); return b ? buildingNets(b) : []; }
+  const t = tIdx(Math.floor(u.x), Math.floor(u.y));
+  if (S.road[t]) return [roadNet().comp[t]];
+  if (S.bAt[t]) { const b = getE(S.bAt[t]); return b ? buildingNets(b) : []; }
+  return [];
+}
+
+/** Can bot u reach building b along roads? */
+function botLinked(u, b) {
+  const a = botNets(u), n = buildingNets(b);
+  for (const c of a) if (n.indexOf(c) >= 0) return true;
+  return false;
 }
 
 /** Buildings bots recently failed to reach are skipped by the dispatcher for a few seconds. */
@@ -627,15 +754,42 @@ function updateWorker(u, dt) {
   workerBattery(u, dt);
 }
 
+/**
+ * Does building b need a road to storage? Construction sites always do (haulers bring their
+ * materials), and so does any finished building that takes goods in or sends goods out.
+ */
+function needsRoad(b) {
+  const def = BDEFS[b.type];
+  if (def.store) return false;
+  if (!b.built) return true;
+  if (def.mil) return S.mode !== 'colony'; // Ammo for the garrison
+  return !!(def.inp || def.out || def.ammo || def.charger || def.roadworks || def.bots);
+}
+
+/** Haulers on the road can only use storage they can reach by road. */
+function roadBound(u) { return BOTS[u.type].roadOnly && !haulerStranded(u); }
+
+function nearestReachableStore(u) {
+  let best = null, bd = Infinity;
+  for (const b of S.buildings) {
+    if (b.dead || b.owner !== u.owner || !storeAccepts(b)) continue;
+    if (roadBound(u) && !botLinked(u, b)) continue;
+    const d = dist2(b.x + 0.5, b.y + 0.5, u.x, u.y);
+    if (d < bd) { bd = d; best = b; }
+  }
+  return best;
+}
+
 function goHome(u) {
-  const store = nearestStoreTo(u.owner, u.x, u.y);
+  const store = nearestReachableStore(u);
   u.idleT = 0;
   if (store && goTo(u, store.x, store.y)) u.task = { type: 'home', bld: store.id };
 }
 
 function stashCarry(u) {
-  const store = storeFor(u.owner, u.carry, u.x, u.y) || nearestStoreTo(u.owner, u.x, u.y);
-  if (!store) { u.carry = null; u.carryN = 0; return; }
+  let store = storeFor(u.owner, u.carry, u.x, u.y) || nearestStoreTo(u.owner, u.x, u.y);
+  if (store && roadBound(u) && !botLinked(u, store)) store = nearestReachableStore(u);
+  if (!store) return; // hold on to it until a road leads somewhere
   const n = u.carryN || 1;
   u.task = { type: 'haul', src: 0, dst: store.id, good: u.carry, phase: 'toDst', n };
   bump(store.inc, u.carry, n);
@@ -734,6 +888,7 @@ function completeRamp(b) {
   S.byId.delete(b.id);
   S.bAt[tIdx(b.x, b.y)] = 0;
   S.ramp[tIdx(b.x, b.y)] = 1;
+  S.roadVer = (S.roadVer || 0) + 1;
   markDirty(b.x, b.y);
   for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) if (inMap(b.x + di, b.y + dj)) markDirty(b.x + di, b.y + dj);
   computeZones();
@@ -859,6 +1014,7 @@ function doStaff(u, t, dt) {
       if ((u.bat ?? 100) < BATTERY.low) {
         // Step out to recharge, then come back to this job.
         const c = findCharger(u);
+        t.trip = false;
         if (c && goTo(u, c.x, c.y)) { t.phase = 'toCharge'; t.charger = c.id; return; }
         t.wait = 3;
       }
@@ -897,7 +1053,8 @@ function doStaff(u, t, dt) {
         if (node < 0) { b.status = 'No room left to plant'; t.wait = 4; return; }
         b.status = 'Planting stalk groves';
       }
-      if (!goTo(u, node % S.W, (node / S.W) | 0)) { t.wait = 2; return; }
+      t.trip = true; // out gathering: no off-road slowdown
+      if (!goTo(u, node % S.W, (node / S.W) | 0)) { t.trip = false; t.wait = 2; return; }
       S.resRes[node] = 1;
       t.node = node;
       t.phase = 'toNode';
@@ -982,6 +1139,7 @@ function doStaff(u, t, dt) {
         enterBuilding(u, b);
         if (u.carry) { bump(b.stock, u.carry, 1); u.carry = null; u.carryN = 0; }
         t.phase = 'in';
+        t.trip = false;
         t.wait = 0.3;
       }
       return;
@@ -1000,7 +1158,8 @@ function updateBuilding(b, dt) {
   }
   b.working = false;
   if (!b.built) {
-    if (sumValues(b.stock) + sumValues(b.inc) === 0) b.status = 'Waiting for materials';
+    if (b.unlinked && sumValues(b.stock) < sumValues(def.cost)) b.status = 'No road to storage yet';
+    else if (sumValues(b.stock) + sumValues(b.inc) === 0) b.status = 'Waiting for materials';
     else if (!b.builder) b.status = 'Waiting for a builder';
     else b.status = 'Under construction';
     return;
@@ -1383,7 +1542,7 @@ function useAmmo(u) {
   const P = S.players[u.owner];
   if (S.time - (P.lastAmmoMsg || -999) > 90) {
     P.lastAmmoMsg = S.time;
-    postMsg(u.owner, 'Your warbots are out of Ammo and can barely fight. Build an Ammo Plant: workers stock your Lander and Outposts, where warbots reload.', Math.floor(u.x), Math.floor(u.y), 'warn');
+    postMsg(u.owner, 'Your warbots are out of Ammo and can barely fight. Build an Ammo Plant: haulers stock your Lander and Outposts, where warbots reload.', Math.floor(u.x), Math.floor(u.y), 'warn');
   }
   return false;
 }
@@ -1682,10 +1841,10 @@ function roadCredit(owner, g) {
 /** What laying one road tile costs. */
 function roadCost() { return PAVE[1].cost; }
 
-/** Can `owner` afford one more road tile? */
-function canAffordRoad(owner) {
+/** Can `owner` afford one more road tile (`mul` of them, for a tile through resources)? */
+function canAffordRoad(owner, mul) {
   const have = playerGoods(owner), cost = roadCost();
-  for (const g in cost) if (roadCredit(owner, g) + have[g] < cost[g] - 1e-9) return false;
+  for (const g in cost) if (roadCredit(owner, g) + have[g] < cost[g] * (mul || 1) - 1e-9) return false;
   return true;
 }
 
@@ -1713,10 +1872,10 @@ function takeGood(owner, g, n) {
   return true;
 }
 
-function payRoad(owner, cost) {
+function payRoad(owner, cost, mul) {
   const P = S.players[owner];
   for (const g in cost) {
-    let c = roadCredit(owner, g) - cost[g];
+    let c = roadCredit(owner, g) - cost[g] * (mul || 1);
     while (c < -1e-9 && takeGood(owner, g, 1)) c += 1;
     P.roadCredit[g] = Math.round(c * 1000) / 1000;
   }
@@ -1732,12 +1891,18 @@ function refundRoad(owner, cost, i, j) {
   }
 }
 
-/** Lay a road tile, paying its Cement. Returns '' on success or a reason it couldn't be done. */
+/**
+ * Lay a road tile, paying its Cement (ROAD_CLEAR times as much through resources, which it clears).
+ * Returns '' on success or a reason it couldn't be done.
+ */
 function buildRoad(owner, i, j) {
-  if (S.road[tIdx(i, j)]) return '';
-  if (!canRoad(owner, i, j)) return 'You can only lay roads on open ground inside your border.';
-  if (!canAffordRoad(owner)) return `Out of ${Object.keys(roadCost()).map((g) => GOOD[g].name).join(' and ')} for roads. Make more at a Cement Works.`;
-  payRoad(owner, roadCost());
+  const t = tIdx(i, j);
+  if (S.road[t]) return '';
+  if (!canRoad(owner, i, j)) return S.res[t] === R_OIL ? 'Roads can\'t go over an oil seep.' : 'You can only lay roads on open ground inside your border.';
+  const mul = roadTileMul(t);
+  if (!canAffordRoad(owner, mul)) return `Out of ${Object.keys(roadCost()).map((g) => GOOD[g].name).join(' and ')} for roads. Make more at a Cement Works.`;
+  payRoad(owner, roadCost(), mul);
+  if (S.res[t]) { S.res[t] = 0; S.amt[t] = 0; if (S.grow) S.grow[t] = 0; }
   setRoad(i, j, true);
   return '';
 }

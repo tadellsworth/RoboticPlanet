@@ -5,10 +5,13 @@
  * has gathered enough warbots near a target.
  */
 
+/** [good, pause at, resume below]: producers the AI rests when it has plenty. */
+const AI_CAPS = { kiln: ['cement', 14, 6], fab: ['chip', 8, 3], armory: ['ammo', 18, 6], refinery: ['fuel', 30, 10] };
 /** [building type, how many the AI wants]. Entries are tried in order. */
 const AI_PLAN = [
   ['harvester', 1], ['quarry', 1], ['harvester', 2], ['mine', 1], ['tap', 1], ['smelter', 1],
-  ['fab', 1], ['foundry', 1], ['outpost', 1], ['armory', 1], ['charger', 1], ['farm', 1], ['quarry', 2], ['grower', 1], ['mine', 2],
+  ['fab', 1], ['foundry', 1], ['kiln', 1], ['outpost', 1], ['armory', 1], ['charger', 1], ['farm', 1], ['quarry', 2], ['grower', 1], ['mine', 2],
+  ['kiln', 2],
   ['turret', 1], ['outpost', 2], ['smelter', 2], ['tap', 2], ['pump', 1], ['refinery', 1], ['harvester', 3], ['outpost', 3],
   ['munitions', 1], ['silo', 1], ['depot', 1], ['charger', 2], ['farm', 2], ['mine', 3], ['outpost', 4], ['turret', 2],
   ['grower', 2], ['fab', 2], ['outpost', 5], ['armory', 2], ['quarry', 3], ['silo', 2], ['outpost', 6], ['charger', 3], ['pump', 2],
@@ -35,8 +38,8 @@ function aiThink(p) {
   for (const u of S.bots) if (!u.dead && u.owner === p) kinds[u.type] = (kinds[u.type] || 0) + 1;
   workers = kinds.worker || 0;
   for (const b of me) if (BDEFS[b.type].staff && !BDEFS[b.type].crew) staffed++;
-  // Keep about a third of the workers free for hauling: a colony with every worker staffed stalls.
-  const canStaffMore = staffed + Math.max(5, Math.round(workers * 0.35)) <= workers;
+  // Keep a few workers free to build: a colony with every worker staffed stalls.
+  const canStaffMore = staffed + Math.max(3, Math.round(workers * 0.2)) <= workers;
   // Resources are in separate fields: when one kind runs short inside our land, expanding toward
   // more of it comes before anything else.
   const inLand = {};
@@ -60,6 +63,26 @@ function aiThink(p) {
   // the building it saves for goes first and nothing else that costs Alloy or Chips is started.
   const saving = aiMissilePlan(p, me, counts, kinds, workers, staffed);
   if (saving) plan = [[saving, (counts[saving] || 0) + 1]].concat(plan);
+  // Workers no longer haul, so spare ones go to work: another gatherer for the scarcest raw good.
+  if (S.time > 150 && workers - staffed >= 4 && canStaffMore) {
+    const have = playerGoods(p);
+    const g = ['harvester', 'quarry', 'mine', 'tap'].filter((t) => (counts[t] || 0) < 3 && (have[RES[BDEFS[t].gather].good] || 0) < 8)
+      .sort((a, c) => (have[RES[BDEFS[a].gather].good] || 0) - (have[RES[BDEFS[c].gather].good] || 0));
+    if (g.length) plan = [[g[0], (counts[g[0]] || 0) + 1]].concat(plan);
+  }
+  const cutting = me.some((b) => b.type === 'harvester' && (!b.built || reachableRes(b.x, b.y, BDEFS.harvester.radius, R_STALK) > 0));
+  const fiberLow = !cutting || playerGoods(p).fiber < 4;
+  if (!cutting) plan = [['harvester', (counts.harvester || 0) + 1]].concat(plan);
+  // With Fiber nearly gone and no Harvester at work, the Smelters stop burning it.
+  for (const b of me) {
+    if (b.type !== 'smelter' || !b.built) continue;
+    if (!b.paused && !cutting && playerGoods(p).fiber < 4) setPaused(b, true);
+    else if (b.paused && cutting) setPaused(b, false);
+  }
+  // Goods held back for a key building we can't afford yet: nothing that needs them starts first.
+  const held = new Set();
+  const key = (type) => type === 'foundry' || type === 'harvester' || type === 'quarry' || (type === 'kiln' && (playerGoods(p).cement || 0) < 3) ||
+    (type === 'outpost' && P.short.length > 0);
   if (sites < maxSites) {
     for (const [type, want0] of plan) {
       if (S.mode === 'colony' && BDEFS[type].war) continue;
@@ -72,15 +95,38 @@ function aiThink(p) {
       if ((type === 'farm' || type === 'pump' || type === 'refinery') && (counts[type] || 0) >= 1 && playerGoods(p).fuel > 10) continue;
       if ((counts[type] || 0) >= want) continue;
       if (saving && type !== saving && (BDEFS[type].cost.alloy || BDEFS[type].cost.chip)) continue;
+      // Keep enough Fiber for a Harvester while none is cutting: without Fiber there's no way back.
+      if (type !== 'harvester' && fiberLow && (BDEFS[type].cost.fiber || 0) > 0 && playerGoods(p).fiber - BDEFS[type].cost.fiber < BDEFS.harvester.cost.fiber) continue;
       // The first of each staffed building is always allowed, so the production chain is complete.
       if (BDEFS[type].staff && !BDEFS[type].crew && !canStaffMore && counts[type]) continue;
-      if (!aiAffordable(p, type)) continue;
+      if (Object.keys(BDEFS[type].cost).some((g) => held.has(g))) continue;
+      if (!aiAffordable(p, type)) {
+        if (key(type) && (!counts[type] || type === 'outpost')) {
+          const have = playerGoods(p), cost = BDEFS[type].cost;
+          for (const g in cost) if (have[g] < cost[g]) held.add(g);
+        }
+        continue;
+      }
       const spot = aiFindSpot(p, type, lander);
       if (spot && placeSite(p, type, spot.x, spot.y).ok) {
         if (type === 'outpost') P.lastExpand = S.time;
         break;
       }
     }
+  }
+
+  // 1b) Roads: haulers only travel on roads, so every building needs one to storage. The Cement
+  //     Works rests while there is plenty of Cement, so it doesn't burn all the Stone.
+  aiRoads(p, me);
+  // Producers rest once there's plenty of what they make, so they don't eat inputs other
+  // buildings need (Chips and Ammo would otherwise swallow all the Alloy the Foundry needs).
+  const stockNow = playerGoods(p), missiles = !!(saving || P.feedMissiles);
+  for (const b of me) {
+    const cap = AI_CAPS[b.type];
+    if (!cap || !b.built) continue;
+    const have = stockNow[cap[0]] || 0, hi = cap[1] * (missiles && b.type === 'fab' ? 2 : 1);
+    if (!b.paused && have >= hi) setPaused(b, true);
+    else if (b.paused && have < cap[2]) setPaused(b, false);
   }
 
   // 2) Retire gatherers and pumps that have run dry so their worker can be reused.
@@ -94,8 +140,9 @@ function aiThink(p) {
   }
 
   // 3) Foundry: keep enough workers, then make warbots. Order specialists when a building needs
-  //    one, and a Hauler for every four workers.
-  const wantWorkers = staffed + 5 + Math.min(3, sites);
+  //    one, and plenty of Haulers: they carry every good in the colony.
+  const wantWorkers = staffed + 3 + Math.min(3, sites);
+  const wantHaulers = Math.max(4, Math.ceil(me.length * 0.45));
   const crewNeed = {};
   for (const b of me) {
     const crew = BDEFS[b.type].crew;
@@ -109,7 +156,7 @@ function aiThink(p) {
     // Saving up for missiles (or feeding the Missile Factory): the Foundry rests so Alloy and Chips
     // pile up, unless workers are badly short.
     if ((saving || P.feedMissiles) && workers >= staffed + 3) { b.mode = 'off'; delete b.orders.hauler; }
-    else if ((kinds.hauler || 0) < Math.floor(workers / 4) && !(b.orders.hauler > 0)) b.orders.hauler = 1;
+    else if ((kinds.hauler || 0) < wantHaulers && !(b.orders.hauler > 0)) b.orders.hauler = 1;
     break;
   }
 
@@ -199,6 +246,33 @@ function aiMissilePlan(p, me, counts, kinds, workers, staffed) {
   return null;
 }
 
+/**
+ * Lay roads from storage to buildings that have none, construction sites first, as far as the
+ * Cement allows. A site that no road can reach is given up after a while.
+ */
+function aiRoads(p, me) {
+  const P = S.players[p];
+  const stores = me.filter((s) => storeAccepts(s));
+  let budget = roadTilesAffordable(p), done = 0;
+  const todo = me.filter((b) => needsRoad(b) && !stores.some((s) => roadLinked(s, b)))
+    .sort((a, b) => (a.built - b.built) || a.born - b.born);
+  for (const b of todo) {
+    if (done >= 3) break;
+    const route = roadRouteTo(p, b);
+    if (!route) {
+      if (!b.built && S.time - b.born > 60) {
+        P.avoid = (P.avoid || []).concat([{ x: b.x, y: b.y, until: S.time + 240 }]);
+        demolish(b);
+      }
+      continue;
+    }
+    if (route.cost > budget) { P.roadShort = S.time; continue; }
+    for (const t of route) buildRoad(p, t % S.W, (t / S.W) | 0);
+    budget -= route.cost;
+    done++;
+  }
+}
+
 /** Only start a building when the needed materials exist somewhere (stops the AI hoarding sites). */
 function aiAffordable(p, type) {
   const have = playerGoods(p);
@@ -240,6 +314,10 @@ function aiSearchSpot(p, type, lander) {
   const enemyL = getE(S.players[1 - p].lander);
   const ex = enemyL ? enemyL.x : S.W / 2, ey = enemyL ? enemyL.y : S.H / 2;
   const cands = [];
+  // Every building needs a road to storage: skip spots no road can reach, and (except for
+  // Outposts and Silos, which want to be far out) prefer spots close to the roads we have.
+  const reach = roadReach(p), budget = roadTilesAffordable(p) + 10;
+  const far = type === 'outpost' || type === 'silo';
   const avoid = (S.players[p].avoid || []).filter((a) => a.until > S.time);
   S.players[p].avoid = avoid;
   for (let j = 0; j < S.H; j++) {
@@ -248,6 +326,9 @@ function aiSearchSpot(p, type, lander) {
       if (S.fert[j * S.W + i] && type !== 'farm') continue; // keep fertile soil for farming
       if (avoid.some((a) => dist2(a.x, a.y, i, j) < 12)) continue;
       if (!canPlace(p, type, i, j, true).ok) continue;
+      let rc = Infinity;
+      for (const u of roadSides(p, i, j)) rc = Math.min(rc, reach[u]);
+      if (rc > budget) continue;
       const dHome = dist(i, j, lander.x, lander.y);
       const jitter = hash2(i, j, S.seed + p) * 0.8;
       let s;
@@ -295,11 +376,13 @@ function aiSearchSpot(p, type, lander) {
       } else {
         s = -dHome;
       }
+      s -= Math.min(rc, 30) * (far ? 0.05 : 0.35);
       s += jitter;
       cands.push({ x: i, y: j, s });
     }
   }
-  // Only the best few spots get the (costly) check that a building won't block a pass.
+  // Only the best few spots get the (costly) checks that a building won't block a pass and that
+  // a road can reach it.
   cands.sort((a, b) => b.s - a.s);
   for (let k = 0; k < Math.min(cands.length, 12); k++) {
     if (!wouldBlock(tIdx(cands[k].x, cands[k].y))) return cands[k];

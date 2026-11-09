@@ -18,16 +18,17 @@ function _pfEnsure(N) {
   _pf.gen = 0;
 }
 
-/** Cost of crossing tile t while moving in direction (dx, dy). */
-function tileCost(t, dx, dy) {
+/** Cost of crossing tile t while moving in direction (dx, dy); off-road tiles cost `offMul` times more. */
+function tileCost(t, dx, dy, offMul) {
   const r = S.road[t];
   if (r) {
-    // The wrong way up a one-way path: slow, plus a penalty so bots only do it when there's no other way.
+    // The wrong way up a one-way road: slow, plus a penalty so bots only do it when there's no other way.
     if (r >= 2 && dx * ROAD_DIRS[r][0] + dy * ROAD_DIRS[r][1] < 0) return 1 / ONEWAY_WRONG + 2;
     return ROAD_PREFERENCE / PAVE[S.pave[t] || 1].speed;
   }
-  if (S.ramp[t]) return 1 / SLOPE_SPEED;
-  return S.res[t] ? 1.5 : 1;
+  if (S.bAt[t]) return 1; // the building a trip starts or ends at
+  if (S.ramp[t]) return offMul / SLOPE_SPEED;
+  return (S.res[t] ? 1.5 : 1) * offMul;
 }
 
 const _DIRS = [[1, 0, 1], [-1, 0, 1], [0, 1, 1], [0, -1, 1], [1, 1, 1.4142], [1, -1, 1.4142], [-1, 1, 1.4142], [-1, -1, 1.4142]];
@@ -36,8 +37,11 @@ const _DIRS = [[1, 0, 1], [-1, 0, 1], [0, 1, 1], [0, -1, 1], [1, 1, 1.4142], [1,
  * Returns an array of tile indices from the tile after (sx, sy) up to and including (gx, gy),
  * an empty array if already there, or null if the goal cannot be reached. With `avoidFor` set to
  * a player id, tiles in that player's enemies' territory cost much more.
+ * opts.roadOnly: only road tiles (plus the start and goal), straight moves only (haulers).
+ * opts.offMul: how many times more an off-road tile costs (bots that are slow off roads).
  */
-function findPath(sx, sy, gx, gy, avoidFor) {
+function findPath(sx, sy, gx, gy, avoidFor, opts) {
+  const roadOnly = !!(opts && opts.roadOnly), offMul = (opts && opts.offMul) || 1;
   const W = S.W, H = S.H, N = W * H;
   if (!inMap(gx, gy)) return null;
   const start = sy * W + sx, goal = gy * W + gx;
@@ -70,6 +74,7 @@ function findPath(sx, sy, gx, gy, avoidFor) {
       if (closed[nt] === gen) continue;
       if (S.terrain[nt] !== T_GROUND) continue;
       if (S.bAt[nt] && nt !== goal) continue;
+      if (roadOnly && (dir[2] > 1 || (!S.road[nt] && nt !== goal))) continue;
       if (dir[2] > 1) {
         // Diagonal: only across flat ground, and no cutting corners past blocked tiles.
         const a = cj * W + ni, b = nj * W + ci;
@@ -78,7 +83,7 @@ function findPath(sx, sy, gx, gy, avoidFor) {
         const e = S.elev[cur];
         if (S.elev[nt] !== e || S.elev[a] !== e || S.elev[b] !== e) continue;
       } else if (!canStep(cur, nt)) continue; // cliffs block; ramps connect levels
-      let ng = g[cur] + dir[2] * (tileCost(cur, dir[0], dir[1]) + tileCost(nt, dir[0], dir[1])) * 0.5;
+      let ng = g[cur] + dir[2] * (tileCost(cur, dir[0], dir[1], offMul) + tileCost(nt, dir[0], dir[1], offMul)) * 0.5;
       // Workers steer clear of enemy territory unless there is no other way.
       if (avoidFor !== undefined) { const o = S.owner[nt]; if (o >= 0 && o !== avoidFor) ng += 6; }
       if (stamp[nt] !== gen || ng < g[nt]) {

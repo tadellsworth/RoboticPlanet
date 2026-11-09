@@ -64,18 +64,38 @@ const BATTERY = {
  *                                                               buildings asking for this crew
  */
 const BOTS = {
-  worker:  { name: 'Worker', plural: 'Workers', speed: WORKER_SPEED, hp: 5, build: true, haul: true, staff: true, carry: 1,
-    desc: 'Builds, carries goods and runs most buildings.' },
-  hauler:  { name: 'Hauler', plural: 'Haulers', speed: WORKER_SPEED * 1.25, hp: 5, haul: true, carry: 2,
-    desc: 'A transport bot: carries two goods at a time and moves a quarter faster, but only hauls.' },
-  agribot: { name: 'Agribot', plural: 'Agribots', speed: WORKER_SPEED, hp: 5, crew: 'agribot',
-    desc: 'A farm robot. Bio Farms and Grove Planters need one to run.' },
-  paver:   { name: 'Paver', plural: 'Pavers', speed: WORKER_SPEED, hp: 6, crew: 'paver',
-    desc: 'A road crew bot. A Roadworks needs one to lay asphalt on your paths.' },
+  worker:  { name: 'Worker', plural: 'Workers', speed: WORKER_SPEED, hp: 5, build: true, staff: true, carry: 1, offroad: true,
+    desc: 'Runs buildings, gathers resources and builds construction sites. Slow off roads, except while out gathering.' },
+  hauler:  { name: 'Hauler', plural: 'Haulers', speed: WORKER_SPEED * 1.25, hp: 5, haul: true, carry: 2, roadOnly: true,
+    desc: 'Carries goods between buildings, two at a time. It only travels on roads, so every building needs a road to it.' },
+  agribot: { name: 'Agribot', plural: 'Agribots', speed: WORKER_SPEED, hp: 5, crew: 'agribot', offroad: true,
+    desc: 'A farm robot. Bio Farms and Grove Planters need one to run. Slow off roads, except while farming.' },
+  paver:   { name: 'Paver', plural: 'Pavers', speed: WORKER_SPEED, hp: 6, crew: 'paver', offroad: true,
+    desc: 'A road crew bot. A Roadworks needs one to lay asphalt on your roads.' },
   warbot:  { name: 'Warbot', plural: 'Warbots', speed: WARBOT_SPEED, hp: 12, war: true,
     desc: 'Fights enemy bots and captures enemy buildings. Shoots Ammo; with none it can only scuffle.' },
 };
 const BOT_ORDER = ['worker', 'hauler', 'agribot', 'paver', 'warbot'];
+
+/*
+ * Roads are the backbone. Haulers (the only bots that carry goods) can't leave the road; a hauler
+ * caught off it crawls back at HAULER_STRANDED speed. Workers and other civilian bots move at
+ * OFFROAD_SLOW of their speed off roads, except while out gathering, farming or paving.
+ * Road junctions (a road tile with roads on three or four sides) slow bots to JUNCTION_SLOW and
+ * make them give way to crossing traffic, unless a traffic light runs the junction: then one axis
+ * at a time drives through at full speed. A light stays green at least LIGHT_MIN_GREEN seconds,
+ * switches when traffic waits on the other axis (at the latest after LIGHT_MAX_GREEN), with
+ * LIGHT_CLEAR seconds of all-red in between.
+ */
+const OFFROAD_SLOW = 0.4;
+/** A road laid through boulders, groves, ore or crystal clears them and costs this many times more Cement. */
+const ROAD_CLEAR = 3;
+const HAULER_STRANDED = 0.25;
+const JUNCTION_SLOW = 0.55;
+const LIGHT_COST = { alloy: 1 };
+const LIGHT_MIN_GREEN = 2;
+const LIGHT_MAX_GREEN = 9;
+const LIGHT_CLEAR = 0.45;
 
 /* Warbot ammunition: each warbot holds WARBOT_AMMO shots and reloads in a garrison stocked with Ammo. */
 const WARBOT_AMMO = 20;
@@ -222,7 +242,7 @@ const BDEFS = {
   },
   kiln: {
     name: 'Cement Works', desc: 'Grinds and bakes Stone into Cement for roads.',
-    cost: { stone: 4, fiber: 2 }, staff: true, inp: { stone: 2 }, make: { cement: 1 }, out: { cement: 4 },
+    cost: { stone: 4, fiber: 2 }, staff: true, inp: { stone: 1 }, make: { cement: 1 }, out: { cement: 4 },
     work: 6, armor: 10, buildTime: 10,
   },
   tarworks: {
@@ -235,12 +255,12 @@ const BDEFS = {
     cost: { stone: 3, alloy: 1, fiber: 2 }, staff: true, crew: 'paver', roadworks: true, radius: 7, armor: 8, buildTime: 10,
   },
   armory: {
-    name: 'Ammo Plant', desc: 'Packs Alloy and Stone into Ammo. Workers take it to your Lander and Outposts, where warbots reload.',
+    name: 'Ammo Plant', desc: 'Packs Alloy and Stone into Ammo. Haulers take it to your Lander and Outposts, where warbots reload.',
     cost: { stone: 3, alloy: 2 }, staff: true, inp: { alloy: 1, stone: 1 }, make: { ammo: 3 }, out: { ammo: 6 },
     work: 6, armor: 10, buildTime: 10, war: true,
   },
   munitions: {
-    name: 'Missile Factory', desc: 'Builds Missiles from 2 Alloy, 1 Chip and 1 Fuel each. They are slow and costly to make; workers carry them to your Missile Silos.',
+    name: 'Missile Factory', desc: 'Builds Missiles from 2 Alloy, 1 Chip and 1 Fuel each. They are slow and costly to make; haulers carry them to your Missile Silos.',
     cost: { stone: 4, alloy: 4, chip: 2 }, staff: true, inp: { alloy: 2, chip: 1, fuel: 1 }, make: { warhead: 1 },
     out: { warhead: 2 }, work: 20, armor: 10, buildTime: 14, war: true,
   },
@@ -274,7 +294,7 @@ const BDEFS = {
     cost: { stone: 3, fiber: 1 }, ramp: true, armor: 4, buildTime: 10,
   },
   depot: {
-    name: 'Depot', desc: 'Extra storage. Workers drop goods at the nearest storage, so depots shorten trips.',
+    name: 'Depot', desc: 'Extra storage. Haulers drop goods at the nearest storage they can reach by road, so depots along your highways shorten trips.',
     cost: { fiber: 3, stone: 2 }, store: true, armor: 10, buildTime: 8,
   },
 };
@@ -296,7 +316,7 @@ const DIFFICULTY = {
 };
 
 /** Starting goods in each Lander. */
-const START_STOCK = { fiber: 16, stone: 16, alloy: 8, chip: 4, crystal: 4, fuel: 4, cement: 3 };
-const START_BOTS = { worker: 12, hauler: 2, agribot: 1 };
+const START_STOCK = { fiber: 16, stone: 16, alloy: 8, chip: 4, crystal: 4, fuel: 4, cement: 10 };
+const START_BOTS = { worker: 9, hauler: 5, agribot: 1 };
 const START_WARBOTS = 4;
-const MIN_FREE_WORKERS = 3;   // workers always kept free for hauling and building
+const MIN_FREE_WORKERS = 2;   // workers always kept free for building

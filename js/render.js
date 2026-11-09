@@ -18,6 +18,9 @@ const R = {
   ghost: null,            // { type, x, y, ok }
   selected: 0,            // building id
   selTile: -1,            // tile index of a selected resource
+  hover: -1,              // tile under the mouse pointer
+  routePreview: null,     // tiles a building's "Lay road" button would pave
+  keys: new Set(),        // arrow / WASD keys held down (desktop panning)
   mode: 'normal',
   time: 0,
 };
@@ -99,10 +102,15 @@ function turretHead(owner, aim) {
 /**
  * Draw an art image centred on (cx, cy) at sizePx × its scale. Art with anchor 'bottom' (buildings
  * drawn in a 3/4 view, rising above their tile) is lined up so the image's bottom edge sits on the
- * bottom edge of the tile instead.
+ * bottom edge of the tile instead; an anchor [ax, ay] puts that point of the image (fractions of
+ * its size) on (cx, cy).
  */
 function drawArt(ctx, art, cx, cy, sizePx, angle) {
   const s = sizePx * (art.scale || 1);
+  if (Array.isArray(art.anchor) && !angle) {
+    ctx.drawImage(art.img, cx - art.anchor[0] * s, cy - art.anchor[1] * s, s, s);
+    return;
+  }
   if (art.anchor === 'bottom' && !angle) cy += (sizePx - s) / 2;
   if (angle) {
     ctx.save(); ctx.translate(cx, cy); ctx.rotate(angle);
@@ -144,9 +152,17 @@ function clampCam() {
   const c = R.cam;
   c.z = clamp(c.z, minZoom(), maxZoom());
   const hw = R.w / 2 / c.z, hh = R.h / 2 / c.z;
-  c.x = S.W / 2 <= hw ? S.W / 2 : clamp(c.x, hw - 1, S.W - hw + 1);
-  c.y = S.H / 2 <= hh ? S.H / 2 : clamp(c.y, hh - 1.5, S.H - hh + 2.5);
+  // The map may scroll a little past its edges so the edge tiles can be brought out from under
+  // the top bar, the banner and the side panel.
+  const wide = isWide();
+  const padX = Math.max(1, Math.min(R.w * 0.3, 440) / c.z), padT = Math.max(1.5, (R.h * (wide ? 0.12 : 0.22)) / c.z);
+  const padB = Math.max(2.5, (R.h * (wide ? 0.08 : 0.4)) / c.z);
+  c.x = S.W / 2 <= hw ? S.W / 2 : clamp(c.x, hw - padX, S.W - hw + padX);
+  c.y = S.H / 2 <= hh ? S.H / 2 : clamp(c.y, hh - padT, S.H - hh + padB);
 }
+
+/** Desktop / widescreen layout (matches the CSS media query). */
+function isWide() { return R.w >= 1000 && R.h >= 520; }
 
 function centerOn(x, y) { R.cam.x = x; R.cam.y = y; clampCam(); }
 function screenToWorld(sx, sy) { return { x: (sx - R.w / 2) / R.cam.z + R.cam.x, y: (sy - R.h / 2) / R.cam.z + R.cam.y }; }
@@ -1159,13 +1175,42 @@ function render(dtReal) {
     }
   }
   if (R.mode === 'road') {
-    ctx.strokeStyle = 'rgba(255,240,200,0.18)';
+    const lightsMode = typeof UI !== 'undefined' && UI.roadMode === 'lights';
     ctx.lineWidth = 1;
+    const net = roadNet();
     for (let t = 0; t < S.W * S.H; t++) {
       const i = t % S.W, j = (t / S.W) | 0;
-      if (!inView(i, j, 1) || !canRoad(0, i, j)) continue;
+      if (!inView(i, j, 1)) continue;
+      if (lightsMode) {
+        // Junctions that can take a light.
+        if (!net.junc[t] || S.owner[t] !== 0 || S.lights[t]) continue;
+        ctx.strokeStyle = 'rgba(125,255,160,0.9)';
+        ctx.lineWidth = 2;
+        ctx.setLineDash([z * 0.12, z * 0.08]);
+        ctx.strokeRect(ox + i * z + 2, oy + j * z + 2, z - 4, z - 4);
+        ctx.setLineDash([]);
+        continue;
+      }
+      if (S.road[t] || !canRoad(0, i, j)) continue;
+      ctx.strokeStyle = S.res[t] ? 'rgba(255,170,90,0.28)' : 'rgba(255,240,200,0.18)';
       ctx.strokeRect(ox + i * z + 1.5, oy + j * z + 1.5, z - 3, z - 3);
     }
+  }
+  drawLights(ctx, ox, oy, z, inView);
+  if (R.routePreview) {
+    // The road a building's "Lay road" button would pave.
+    ctx.strokeStyle = '#ffd166';
+    ctx.lineWidth = Math.max(1.5, z * 0.06);
+    ctx.setLineDash([z * 0.14, z * 0.1]);
+    ctx.lineDashOffset = -R.time * z * 0.4;
+    for (const t of R.routePreview) {
+      const i = t % S.W, j = (t / S.W) | 0;
+      ctx.fillStyle = S.res[t] ? 'rgba(255,140,80,0.25)' : 'rgba(255,209,102,0.18)';
+      ctx.fillRect(ox + i * z + z * 0.1, oy + j * z + z * 0.1, z * 0.8, z * 0.8);
+      ctx.strokeRect(ox + i * z + z * 0.1, oy + j * z + z * 0.1, z * 0.8, z * 0.8);
+    }
+    ctx.setLineDash([]);
+    ctx.lineDashOffset = 0;
   }
 
   // Selection rings drawn under buildings
@@ -1191,6 +1236,7 @@ function render(dtReal) {
         ctx.fillRect(cx - w / 2, cy - z * 0.62, (w * Math.max(0, e.armor)) / def.armor, Math.max(3, z * 0.08));
       }
       if (e.owner === 0) drawBadge(ctx, e, cx - z * 0.32, cy - z * 0.32, z);
+      if (e.owner === 0 && e.unlinked) drawNoRoad(ctx, cx + z * 0.32, cy + z * 0.3, z);
       if (e.paused) {
         ctx.fillStyle = 'rgba(0,0,0,0.65)';
         ctx.beginPath(); ctx.arc(cx + z * 0.3, cy - z * 0.3, z * 0.16, 0, Math.PI * 2); ctx.fill();
@@ -1233,6 +1279,12 @@ function render(dtReal) {
     ctx.lineWidth = 2;
     ctx.beginPath(); ctx.arc(ox + sb.x * z, oy + sb.y * z, z * 0.32, 0, Math.PI * 2); ctx.stroke();
   }
+  // Mouse hover: outline the tile under the pointer while laying roads or placing lights.
+  if (R.hover >= 0 && R.mode === 'road') {
+    ctx.strokeStyle = 'rgba(255,255,255,0.85)';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(ox + (R.hover % S.W) * z + 1, oy + ((R.hover / S.W) | 0) * z + 1, z - 2, z - 2);
+  }
   if (R.selTile >= 0) {
     ctx.strokeStyle = '#ffffff';
     ctx.lineWidth = 2;
@@ -1243,6 +1295,55 @@ function render(dtReal) {
   drawMissiles(ctx, ox, oy, z);
   drawEffects(ctx, ox, oy, z);
   if (typeof UI !== 'undefined' && UI.inGame) renderMinimap();
+}
+
+/**
+ * Traffic lights: a stop line on each road leading into the junction, green for the direction
+ * that may go, red for the other (both red while the junction clears), and a small signal post.
+ */
+function drawLights(ctx, ox, oy, z, inView) {
+  for (const k in S.lights) {
+    const t = +k, L = S.lights[k], i = t % S.W, j = (t / S.W) | 0;
+    if (!inView(i, j, 1)) continue;
+    const x = ox + i * z, y = oy + j * z;
+    const w = Math.max(2, z * 0.09), len = z * 0.42;
+    for (const [di, dj, axis] of [[1, 0, 0], [-1, 0, 0], [0, 1, 1], [0, -1, 1]]) {
+      if (!inMap(i + di, j + dj) || !S.road[tIdx(i + di, j + dj)]) continue;
+      const go = !(L.clr > 0) && L.ph === axis;
+      ctx.fillStyle = go ? '#3dff8a' : L.clr > 0 && L.ph === axis ? '#ffc23d' : '#ff4b4b';
+      // A bar across the entry, just inside the junction tile.
+      if (axis === 0) ctx.fillRect(x + (di > 0 ? z - w - z * 0.04 : z * 0.04), y + (z - len) / 2, w, len);
+      else ctx.fillRect(x + (z - len) / 2, y + (dj > 0 ? z - w - z * 0.04 : z * 0.04), len, w);
+    }
+    // Signal head on the corner: two lamps showing the east-west and north-south state.
+    const px = x + z * 0.86, py = y + z * 0.14, r = Math.max(2, z * 0.07);
+    ctx.fillStyle = 'rgba(20,22,28,0.9)';
+    roundRect(ctx, px - r * 1.5, py - r * 2.6, r * 3, r * 5.2, r);
+    ctx.fill();
+    for (const [axis, dy] of [[0, -1.2], [1, 1.2]]) {
+      const go = !(L.clr > 0) && L.ph === axis;
+      ctx.fillStyle = go ? '#3dff8a' : '#ff4b4b';
+      ctx.beginPath(); ctx.arc(px, py + dy * r, r * 0.8, 0, Math.PI * 2); ctx.fill();
+    }
+  }
+}
+
+/** A red badge on a building with no road to storage: a road with a slash through it. */
+function drawNoRoad(ctx, x, y, z) {
+  const r = Math.max(6, z * 0.17);
+  const pulse = 0.75 + 0.25 * Math.sin(R.time * 4);
+  ctx.globalAlpha = pulse;
+  ctx.fillStyle = '#e0475c';
+  ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
+  ctx.strokeStyle = '#fff';
+  ctx.lineWidth = Math.max(1.2, r * 0.16);
+  ctx.beginPath();
+  ctx.moveTo(x - r * 0.35, y - r * 0.6); ctx.lineTo(x - r * 0.35, y + r * 0.6);
+  ctx.moveTo(x + r * 0.35, y - r * 0.6); ctx.lineTo(x + r * 0.35, y + r * 0.6);
+  ctx.stroke();
+  ctx.lineWidth = Math.max(1.5, r * 0.22);
+  ctx.beginPath(); ctx.moveTo(x - r * 0.62, y + r * 0.62); ctx.lineTo(x + r * 0.62, y - r * 0.62); ctx.stroke();
+  ctx.globalAlpha = 1;
 }
 
 /** Small corner badge showing a player-set priority or storage mode. */

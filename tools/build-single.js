@@ -29,11 +29,11 @@ const code = scripts.map((src) => (src === 'art/art-manifest.js'
   ? `const ART_MANIFEST = ${JSON.stringify(inlined)};`
   : read(src))).join('\n;\n');
 
-const icon = `data:image/svg+xml;base64,${Buffer.from(read('icons/icon.svg')).toString('base64')}`;
+const icon = `data:image/png;base64,${fs.readFileSync(path.join(root, 'icons/favicon-32.png')).toString('base64')}`;
 html = html
   .replace(/<link rel="manifest"[^>]*>\n/, '')
   .replace(/<link rel="apple-touch-icon"[^>]*>\n/, '')
-  .replace(/<link rel="icon"[^>]*>/, `<link rel="icon" href="${icon}" type="image/svg+xml">`)
+  .replace(/<link rel="icon"[^>]*>/, `<link rel="icon" href="${icon}" type="image/png">`)
   .replace('<link rel="stylesheet" href="style.css">', () => `<style>\n${read('style.css')}</style>`)
   .replace(/(<script src="[^"]+"><\/script>\n?)+/, () => `<script>\nwindow.BOTFALL_NO_SW = true;\n${code.replace(/<\/script/g, '<\\/script')}\n</script>\n`);
 
