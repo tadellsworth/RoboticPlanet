@@ -141,7 +141,7 @@ const GOOD = {
   cement:  { name: 'Cement',  color: '#a9b4c2', desc: 'Made from Stone at a Cement Works. Paves roads: 1 Cement for 10 tiles.' },
   asphalt: { name: 'Asphalt', color: '#6b7280', desc: 'Made from Crude and Stone. A Roadworks upgrades roads with it to asphalt, the fastest surface.' },
   ammo:    { name: 'Ammo',    color: '#e8c39e', desc: 'Made at an Ammo Plant. Warbots reload it in your Lander and Outposts.' },
-  warhead: { name: 'Warhead', color: '#ffcf4a', desc: 'Made at a Munitions Works. Missile Silos fire them at enemy buildings.' },
+  warhead: { name: 'Missile', color: '#ffcf4a', desc: 'Built at a Missile Factory from Alloy, Chips and Fuel. Workers load them into Missile Silos, which fire them at rival buildings.' },
 };
 /** Goods that only matter when there is a rival (hidden in Colony mode). */
 const WAR_GOODS = ['ammo', 'warhead'];
@@ -167,8 +167,8 @@ const PLAYER_NAMES = ['You', 'Rival'];
  *   roadworks its Paver lays asphalt on paths within `radius`
  *   ammoStock (Lander, Outposts) Ammo kept for warbots to reload
  *   ammo      good delivered as ammunition (up to ammoCap)
- *   missile   launches missiles: range (tiles), reload (s), damage to buildings, splash radius,
- *             damage to bots in the splash
+ *   missile   launches missiles: range (tiles), reload (s), damage to the target, splash radius,
+ *             damage to other buildings and to bots in the splash
  *   war       only offered in Versus mode
  */
 const BDEFS = {
@@ -240,15 +240,15 @@ const BDEFS = {
     work: 6, armor: 10, buildTime: 10, war: true,
   },
   munitions: {
-    name: 'Munitions Works', desc: 'Packs Alloy and Crystal into Warheads for Missile Silos.',
-    cost: { stone: 3, alloy: 2, chip: 1 }, staff: true, inp: { alloy: 1, crystal: 1 }, make: { warhead: 1 },
-    out: { warhead: 3 }, work: 9, armor: 10, buildTime: 12, war: true,
+    name: 'Missile Factory', desc: 'Builds Missiles from 2 Alloy, 1 Chip and 1 Fuel each. They are slow and costly to make; workers carry them to your Missile Silos.',
+    cost: { stone: 4, alloy: 4, chip: 2 }, staff: true, inp: { alloy: 2, chip: 1, fuel: 1 }, make: { warhead: 1 },
+    out: { warhead: 2 }, work: 20, armor: 10, buildTime: 14, war: true,
   },
   silo: {
     name: 'Missile Silo',
-    desc: 'Fires missiles at enemy buildings far away. Missiles wreck smaller buildings and weaken Outposts and Landers so warbots can capture them. Uses Warheads.',
-    cost: { stone: 4, alloy: 3, chip: 1 }, ammo: 'warhead', ammoCap: 2,
-    missile: { range: 18, reload: 20, damage: 14, splash: 1.6, botDamage: 6 }, armor: 14, buildTime: 16, war: true,
+    desc: 'Fires Missiles from a Missile Factory at rival buildings far away. A hit wrecks most buildings outright, damages the buildings and bots around it, and knocks Outposts and Landers down so warbots can capture them. Holds two Missiles.',
+    cost: { stone: 5, alloy: 4, chip: 2 }, ammo: 'warhead', ammoCap: 2,
+    missile: { range: 18, reload: 25, damage: 24, splash: 2.2, splashDamage: 5, botDamage: 9 }, armor: 14, buildTime: 16, war: true,
   },
   charger: {
     name: 'Charging Station',

@@ -850,7 +850,7 @@ function drawBuilding(ctx, type, cx, cy, s, owner, b) {
     }
     case 'munitions': {
       hullBase(ctx, cx, cy, s, color);
-      // Two warhead shells on a rack.
+      // Two missiles on an assembly rack.
       for (const ox of [-5, 5]) {
         ctx.fillStyle = '#ffcf4a';
         ctx.beginPath(); ctx.moveTo(cx + ox * u, cy - 9 * u); ctx.lineTo(cx + (ox + 3.5) * u, cy - 3 * u); ctx.lineTo(cx + (ox + 3.5) * u, cy + 7 * u);

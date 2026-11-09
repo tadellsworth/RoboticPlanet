@@ -1521,7 +1521,7 @@ function recallRally(id) {
 
 function updateSilo(b, def) {
   const w = b.stock.warhead || 0;
-  b.status = !w ? 'Needs Warheads' : b.reload > 0 ? `Reloading (${Math.ceil(b.reload)}s)` : `Ready to fire (${w} Warhead${w > 1 ? 's' : ''})`;
+  b.status = !w ? 'Needs Missiles from a Missile Factory' : b.reload > 0 ? `Reloading (${Math.ceil(b.reload)}s)` : `Ready to fire (${w} Missile${w > 1 ? 's' : ''})`;
 }
 
 function siloReady(b) { return b.built && !b.dead && (b.stock.warhead || 0) > 0 && !(b.reload > 0); }
@@ -1567,7 +1567,11 @@ function updateMissiles(dt) {
   S.missiles = S.missiles.filter((m) => m.t < m.dur);
 }
 
-/** Missiles wreck ordinary buildings; Outposts and Landers drop to 1 armor so warbots can take them. */
+/**
+ * A missile hits its target hard (most buildings are wrecked outright; Outposts and Landers drop to
+ * no less than 1 armor so warbots can take them), and the blast damages nearby rival buildings
+ * and bots.
+ */
 function missileImpact(m) {
   const md = BDEFS.silo.missile;
   addFx('boom', m.x1, m.y1, { r: 2.2 });
@@ -1586,6 +1590,17 @@ function missileImpact(m) {
       if (b.armor <= 0) b.armor = 1;
       postMsg(m.owner, `Missile hit the enemy ${name}${b.armor <= 1 ? ': its armor is down, send warbots to capture it!' : '.'}`, b.x, b.y, 'good');
       postMsg(b.owner, `A missile hit your ${name}!`, b.x, b.y, 'bad');
+    }
+  }
+  for (const e of S.buildings.slice()) {
+    if (e === b || e.dead || e.owner === m.owner || dist2(e.x + 0.5, e.y + 0.5, m.x1, m.y1) > md.splash * md.splash) continue;
+    e.armor -= md.splashDamage;
+    e.lastHit = S.time;
+    if (e.armor <= 0) {
+      if (!e.built || !BDEFS[e.type].mil) {
+        postMsg(e.owner, `The blast wrecked your ${BDEFS[e.type].name}!`, e.x, e.y, 'bad');
+        destroyBuilding(e, true);
+      } else e.armor = 1;
     }
   }
   for (const u of S.bots) {

@@ -847,7 +847,8 @@ function refreshBuildingSheet(b) {
     if (def.mil && mine && S.mode !== 'colony') parts.push(`<div class="kv"><span>Territory radius</span><span>${def.terr} tiles</span></div>`);
     if (def.ammo && mine && !def.missile) parts.push(`<div class="kv"><span>Ammo</span><span>${b.shots + (b.stock.crystal || 0) * SHOTS_PER_AMMO} shots</span></div>`);
     if (def.missile && mine) {
-      parts.push(`<div class="kv"><span>Warheads loaded</span><span>${goodTag('warhead', `${b.stock.warhead || 0}/${def.ammoCap}`)}</span></div>`);
+      parts.push(`<div class="kv"><span>Missiles loaded</span><span>${goodTag('warhead', `${b.stock.warhead || 0}/${def.ammoCap}`)}</span></div>`);
+      parts.push(`<div class="kv"><span>Each hit</span><span>${def.missile.damage} damage, ${def.missile.splashDamage} to buildings within ${def.missile.splash} tiles</span></div>`);
       parts.push(`<div class="kv"><span>Reload</span><span>${b.reload > 0 ? Math.ceil(b.reload) + 's' : 'Ready'}</span></div>`);
       parts.push(`<div class="kv"><span>Range</span><span>${def.missile.range} tiles</span></div>`);
     }
@@ -890,10 +891,10 @@ function refreshBuildingSheet(b) {
     const minReload = silos.reduce((m, q) => (q.reload > 0 && q.stock.warhead > 0 ? Math.min(m, q.reload) : m), Infinity);
     $('sh-fire').disabled = !ready.length;
     $('sh-missile').innerHTML = `<p class="desc">${!silos.length
-      ? `No Missile Silo within ${BDEFS.silo.missile.range} tiles. Build a Silo near the front and a Munitions Works to make Warheads.`
+      ? `No Missile Silo within ${BDEFS.silo.missile.range} tiles. Build a Silo near the front and a Missile Factory to make Missiles.`
       : ready.length
         ? `${ready.length} silo${ready.length > 1 ? 's' : ''} ready. A missile wrecks smaller buildings and knocks Outposts and Landers down to almost no armor, ready for warbots to capture.`
-        : minReload < Infinity ? `Silos in range are reloading (${Math.ceil(minReload)}s).` : 'Silos in range have no Warheads. Make them at a Munitions Works.'}</p>`;
+        : minReload < Infinity ? `Silos in range are reloading (${Math.ceil(minReload)}s).` : 'Silos in range have no Missiles. Build them at a Missile Factory (Alloy, Chips and Fuel).'}</p>`;
   }
   if ($('sh-send')) {
     const avail = attackAvailable(0, b);

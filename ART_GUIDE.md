@@ -166,11 +166,11 @@ New buildings, a new good and two new map markers. Same brief and angle as batch
 | Key | Size | What it is | Prompt for Claude Design |
 |---|---|---|---|
 | `charger` | 256×256, transparent | Charging Station: bots recharge their batteries here | A compact charging bay seen from above: four docking pads around a central power pylon with heavy cables, glowing green charge indicators and warning stripes. |
-| `munitions` | 256×256, transparent | Munitions Works: packs Alloy and Crystal into Warheads | A small armoured munitions plant: a blast-proof bunker with a conveyor of yellow-tipped warhead shells, a loading crane and hazard markings. Accent light: amber. |
+| `munitions` | 256×256, transparent | Missile Factory: builds Missiles from Alloy, Chips and Fuel | A small armoured missile factory seen from above: a blast-proof assembly hall with a half-built missile on a cradle, a loading crane and hazard markings. Accent light: amber. |
 | `silo@0`, `silo@1` | 256×256, transparent | Missile Silo (team versions) | A round armoured missile silo seen from above: a heavy split blast hatch, partly open, with a missile nose cone visible inside, launch-rail lights in the team colour, scorch marks around the rim. |
 | `missile` | 128×128, transparent | A missile in flight (drawn facing **right**; the game rotates it) | A sleek missile seen from directly above, nose pointing right: grey body, yellow warhead band, small fins, and a short bright exhaust flame at the tail. |
 | `rally` | 128×128, transparent | Your rally flag where warbots hold an area | A small planted marker flag on a metal pole, cyan #38d4ff banner with a chevron symbol, a little tripod base. |
-| `icon-warhead` | 64×64, transparent | Warhead, in the top bar | A single yellow-tipped warhead shell. Bold, simple, thin dark outline. |
+| `icon-warhead` | 64×64, transparent | Missile, in the top bar | A single small missile pointing up, grey body with a yellow nose band. Bold, simple, thin dark outline. |
 
 ### Batch 4: Fuel, farms and oil
 

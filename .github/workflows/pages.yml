@@ -1,9 +1,10 @@
-# Publishes the game to GitHub Pages on every push to main.
+# Publishes the game to GitHub Pages on every push to main or to the development branch (the
+# repository's default branch), so the installed app picks up each update.
 # One-time setup: repo Settings → Pages → Build and deployment → Source: "GitHub Actions".
 name: Deploy to GitHub Pages
 on:
   push:
-    branches: [main]
+    branches: [main, claude/elegant-cori-a8yj96]
   workflow_dispatch:
 permissions:
   contents: read

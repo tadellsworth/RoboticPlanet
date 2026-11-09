@@ -18,8 +18,8 @@ any other game.
 
 ## Play it
 
-- **Hosted:** once GitHub Pages is enabled (see below) the game lives at
-  `https://<your-user>.github.io/<repo>/`. On a phone, open it and use **Add to Home Screen**: it runs
+- **Hosted:** once GitHub Pages is enabled (see below) the game lives at https://tadellsworth.github.io/RoboticPlanet/ (in general
+  `https://<your-user>.github.io/<repo>/`). On a phone, open it and use **Add to Home Screen**: it runs
   full-screen like an app and works offline.
 - **Locally:** from this folder run a static server and open the address it prints:
 
@@ -59,8 +59,8 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
 | Asphalt Plant | Crude + Stone → 2 **Asphalt** |
 | Roadworks | Its Paver lays Asphalt on your paths nearby (1 Asphalt covers 4 tiles) |
 | Ammo Plant | Alloy + Stone → 3 **Ammo**; warbots reload it in the Lander and Outposts (Versus) |
-| Munitions Works | Alloy + Crystal → **Warhead** (Versus) |
-| Missile Silo | Fires missiles at rival buildings up to 18 tiles away (Versus) |
+| Missile Factory | 2 Alloy + Chip + Fuel → **Missile** (20 s each; Versus) |
+| Missile Silo | Fires Missiles at rival buildings up to 18 tiles away; holds 2, reloads in 25 s (Versus) |
 
 - Every production building needs one worker inside. Free workers haul goods and build construction sites.
   Run short and the game pulls workers off low-priority jobs, so build a Bot Foundry early.
@@ -96,8 +96,9 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
   for free; Charging Stations burn Fuel (one Fuel is about one and a half full charges).
 - **Army orders:** tap **Army**, then a rival building to attack it with warbots or a missile, or open
   ground to send warbots there to hold the area under a rally flag. Tap the flag to call them back.
-- **Missiles** wreck smaller buildings and knock Outposts and Landers down to almost no armor; warbots
-  still have to walk in and capture them.
+- **Missiles** are built at a Missile Factory (2 Alloy, 1 Chip and 1 Fuel each, 20 seconds) and carried to Missile Silos
+  by workers. A hit does 24 damage, which wrecks most buildings outright, plus 5 to other rival buildings and 9 to bots
+  within 2.2 tiles. Outposts and Landers drop to almost no armor; warbots still have to walk in and capture them.
 - **Ordering bots:** the Bot Foundry only builds the bots you order. Tap it and use +1 or +5 for Workers or
   Warbots (Clear cancels the queue); with nothing queued it sits idle and uses no Alloy or Chips.
 - The **Build** menu shows how many of each building you already have, and how many are being built.
@@ -114,9 +115,12 @@ including the remaining pieces (Ramp, slope and cliff textures, goods icons).
 
 ## Enabling GitHub Pages
 
-1. Merge this branch into `main`.
-2. In the repository: **Settings → Pages → Build and deployment → Source: GitHub Actions**.
-3. The workflow in `.github/workflows/pages.yml` publishes the game on every push to `main`.
+1. In the repository: **Settings → Pages → Build and deployment → Source: GitHub Actions**.
+2. The workflow in `.github/workflows/pages.yml` publishes the game on every push to `main` or to the development
+   branch `claude/elegant-cori-a8yj96`. To publish right away without a push, open **Actions → Deploy to GitHub Pages →
+   Run workflow**.
+3. Installed copies (Add to Home Screen) check for a newer version each time they open with internet, so they update
+   by themselves.
 
 (GitHub Pages on a private repository needs a paid GitHub plan; on a public repository it is free.)
 
