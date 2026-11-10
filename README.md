@@ -481,8 +481,11 @@ The nuclear missile, its 24-frame detonation sheet and the scorch mark are custo
 Disruptor Tower and Mortar Pit (with their firing overlays, the Mortar's tube in 16 directions and morning, evening
 and night sets), the streetlamps along roads (`streetLamps`: posts sorted with buildings and bots, lit heads and
 light pools at dusk and night) and the Pulse Turret's twin violet laser and hit burst (`fx-pulse-laser`,
-`fx-pulse-hit`). Still to make: a 3D Pulse Turret by day (the night sets and its charge-up sheets are made for it),
-goods icons and a few terrain pieces. The biome art is in `art/biomes/` (six plants per biome with their
+`fx-pulse-hit`), the 3D Pulse Turret (a base and its gun head in 16 directions, with its violet charge-up,
+`turret-charge-0…15`, and the beam leaving the barrel tips in `PULSE_MUZZLES`), the electrified Walls and Gates
+(`drawBarrierArt`: posts, arms, hubs and gates layered per tile, sparks crackling along them now and then), the
+Viaduct's abutment tiles (`viaduct-abut-*`) and the working loops of the Oil Pump (its beam nodding over `pump-base`),
+Refinery and Smelter. Still to make: goods icons and a few terrain pieces. The biome art is in `art/biomes/` (six plants per biome with their
 shadows baked in, and the Jungle and Polar ground, water, rock and cliff), and the Red desert ground, water and rock
 are 512×512 (one image per 4×4 tiles, sharp on the zoomed-in map); all WebP to keep the single-file build small. The app icon is in `icons/`. Anything without an image falls back to placeholder art drawn in code, so new art can be
 added one piece at a time. See **[ART_GUIDE.md](ART_GUIDE.md)** for specs, the style brief and prompts,
@@ -522,14 +525,17 @@ night; a display setting kept on the device).
   next one over a transition (`todVariant`); only the sets in use now and next are loaded (`todFrame`). The single-file
   build puts each set in a bundle beside the page (`dist/tod-<time>.js`, loaded when needed).
 - **Graded in code** (`out = in × multiply + add`, values from the kit's `art/tod/shared/time-of-day.json`): the baked
-  ground, roads, plants, resources and territory tint (`todGradeGround`), Walls and Gates (`todColor`), and any sprite
-  without a re-lit version or whose set hasn't loaded yet (`todGraded`). Light overlays (brake lights, boost glow,
+  ground, roads, track, pipes, plants, resources and territory tint (`todGradeGround`), and any sprite without a
+  re-lit version or whose set hasn't loaded yet (`todGraded`). Tile art drawn over the graded ground (bridge piers,
+  towers and cables, Viaduct decks, level-crossing barriers) goes through `withTod`, like `drawArt`. Light overlays (brake lights, boost glow,
   lamps), the UI and nuke blasts are never graded.
 - **Evening and night:** vehicles' headlights (`drawHeadlights`, the kit's overlays at 3× the sprite), a glow in team
   colour under every finished building (`drawLightPool`), and bots' drop shadows lean left at dawn, right at dusk and
   fade at night (`todShadow`).
-- The kit's 3D turret (base and rotating heads) and wall pieces aren't used: the game's day art has the flat turret and
-  draws Walls in code, so they're graded instead.
+- Every building and robot has a re-lit set (lit windows, beacons and team-colour glows; headlights on everything that
+  drives), including the 3D Pulse Turret and its heads, every Wall and Gate piece, the Viaduct's abutments and the
+  moving parts of the Generator's and Oil Pump's working loops. Light loops (the Smelter's furnace, the Refinery's
+  column lights, the turret's charge-up, the walls' sparks) are never graded.
 
 ## Project layout
 

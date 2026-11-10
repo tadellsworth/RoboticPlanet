@@ -1,5 +1,6 @@
 // Bridge kit, three styles, seen from above with the south faces showing (oblique projection, like the map's cliffs).
 //   ?style = water | sky | rail      ?piece = ew | ns | end-w|e|n|s | ramp-w|e|n|s | pier | tower | lamp | cable
+//   | abut-w|e|n|s (a Viaduct's abutment tile on the clifftop; abut-e: its span leaves eastward)
 // One tile = 10 world units = 256 px. The deck top is at y = 0, centred, 56 % of the tile wide (z = ±2.8).
 // Projection: screen_x = x - KX*y, screen_y(down) = z - KY*y, so things below the deck appear lower on screen.
 const P = new URLSearchParams(location.search);
@@ -7,7 +8,7 @@ const STYLE = P.get('style') || 'water', PIECE = P.get('piece') || 'ew';
 export const config = PIECE === 'pier' || PIECE === 'tower' || PIECE === 'lamp' ? { pad: false, w: 512, h: 1024 }
   : PIECE === 'cable' ? { pad: false, w: 2048, h: 512 } : { pad: false, size: 512 };
 const KY = 1.0;
-const NSP = /^(ns|end-n|end-s|ramp-n|ramp-s)$/.test(PIECE);
+const NSP = /^(ns|end-n|end-s|ramp-n|ramp-s|abut-n|abut-s)$/.test(PIECE);
 const KX = NSP ? 0.14 : 0;
 const HW = 2.8, RW = 2.3;                              // deck half-width, road half-width
 
@@ -122,11 +123,11 @@ export default function (L) {
   }
 
   // abutment where the deck meets land at local x = xe .. 5
-  function abutment(g, xe) {
+  function abutment(g, xe, o = {}) {
     const len = 5 - xe, cx = (xe + 5) / 2;
     box(len, 1.2, HW * 2 + 0.9, conc, cx, -1.2, 0, { parent: g, dirtH: 0.6 });                       // the abutment block
     box(0.5, 1.6, HW * 2 + 1.0, M.rough('#857e72'), xe + 0.25, -1.6, 0, { parent: g, dirtH: 0.6 });   // bearing shelf facing the gap
-    for (const s of [-1, 1]) {                                                                         // angled wing walls
+    if (o.wings !== false) for (const s of [-1, 1]) {                                                  // angled wing walls
       const wg = new THREE.BoxGeometry(len * 1.05, 1.0, 0.4); wg.translate(len * 0.52, -0.6, 0);
       const w = mesh(wg, conc, xe, 0, s * (HW + 0.35), { parent: g, dirtH: 0.5 }); w.rotation.y = -s * 0.22;
     }
@@ -147,6 +148,20 @@ export default function (L) {
     const dir = PIECE.slice(4), g = group(0, 0, 0, ROT[dir]);
     span(g, dir === 's' ? -7.6 : dir === 'n' ? -5.7 : -5, 0.9, { bollards: [0.9] });
     abutment(g, 0.9);
+  } else if (PIECE.startsWith('abut-')) {
+    // A Viaduct's abutment, its own tile on the clifftop: the abutment block across the whole tile, the
+    // deck's road running over it toward the span, bollards at the edge facing the span and a lamp post
+    // each side (lit at night).
+    cam(-5, 5, -5, 5);
+    const a = ROT[{ e: 'w', w: 'e', n: 's', s: 'n' }[PIECE.slice(5)]], g = group(0, 0, 0, a);
+    abutment(g, -5, { wings: false });
+    for (const s of [-1, 1]) {
+      const z = s * (HW - 0.12);
+      cyl(0.26, 0.55, conc, -4.3, 0.12, z, { parent: g, seg: 16, dirt: 0.3 }); cyl(0.27, 0.1, M.hazard, -4.3, 0.42, z, { parent: g, seg: 16, dirt: 0 });
+      box(0.12, 1.6, 0.12, railingMat, -2.6, 0.14, z, { parent: g, dirt: 0 });
+      const wx = -2.6 * Math.cos(a) + z * Math.sin(a), wz = 2.6 * Math.sin(a) + z * Math.cos(a);
+      lamp(wx, 1.84, wz, '#ffd59a', { size: 0.24, k: 3, intensity: 5, dist: 5 });
+    }
   } else if (PIECE.startsWith('ramp-')) {
     cam(-5, 5, -5, 5);
     const dir = PIECE.slice(5), g = group(0, 0, 0, ROT[dir]);

@@ -1551,6 +1551,96 @@ art/roads/streetlamp-asphalt.png	main	streetlamp:::streetlamp-asphalt:kind=aspha
 art/roads/streetlamp-asphalt-lit.png	main	streetlamp:::streetlamp-road:kind=road streetlamp:::streetlamp-road-lit:kind=road&lit=1 streetlamp:::streetlamp-asphalt:kind=asphalt streetlamp:::streetlamp-asphalt-lit:kind=asphalt&lit=1	compose_any.py --b1 4 --b2 10 --glow 1.3 | post/lamps_post.py {raw} {fin}
 art/roads/streetlamp-asphalt-pool.png	main	streetlamp:::streetlamp-road:kind=road streetlamp:::streetlamp-road-lit:kind=road&lit=1 streetlamp:::streetlamp-asphalt:kind=asphalt streetlamp:::streetlamp-asphalt-lit:kind=asphalt&lit=1	compose_any.py --b1 4 --b2 10 --glow 1.3 | post/lamps_post.py {raw} {fin}
 
+## Viaduct abutments (the Viaduct's own tiles; abut-e: its span leaves eastward)
+art/bridges/viaduct-abut-w.png	main	bridge:::viaduct-abut-w:style=sky&piece=abut-w	compose2.py --b1 4 --b2 12
+art/bridges/viaduct-abut-e.png	main	bridge:::viaduct-abut-e:style=sky&piece=abut-e	compose2.py --b1 4 --b2 12
+art/bridges/viaduct-abut-n.png	main	bridge:::viaduct-abut-n:style=sky&piece=abut-n	compose2.py --b1 4 --b2 12
+art/bridges/viaduct-abut-s.png	main	bridge:::viaduct-abut-s:style=sky&piece=abut-s	compose2.py --b1 4 --b2 12
+art/tod/morning/bridges/viaduct-abut-w.png	main	bridge:::viaduct-abut-w:style=sky&piece=abut-w&tod=morning	compose2.py --b1 4 --b2 12
+art/tod/morning/bridges/viaduct-abut-e.png	main	bridge:::viaduct-abut-e:style=sky&piece=abut-e&tod=morning	compose2.py --b1 4 --b2 12
+art/tod/morning/bridges/viaduct-abut-n.png	main	bridge:::viaduct-abut-n:style=sky&piece=abut-n&tod=morning	compose2.py --b1 4 --b2 12
+art/tod/morning/bridges/viaduct-abut-s.png	main	bridge:::viaduct-abut-s:style=sky&piece=abut-s&tod=morning	compose2.py --b1 4 --b2 12
+art/tod/evening/bridges/viaduct-abut-w.png	main	bridge:::viaduct-abut-w:style=sky&piece=abut-w&tod=evening	compose2.py --b1 4 --b2 12
+art/tod/evening/bridges/viaduct-abut-e.png	main	bridge:::viaduct-abut-e:style=sky&piece=abut-e&tod=evening	compose2.py --b1 4 --b2 12
+art/tod/evening/bridges/viaduct-abut-n.png	main	bridge:::viaduct-abut-n:style=sky&piece=abut-n&tod=evening	compose2.py --b1 4 --b2 12
+art/tod/evening/bridges/viaduct-abut-s.png	main	bridge:::viaduct-abut-s:style=sky&piece=abut-s&tod=evening	compose2.py --b1 4 --b2 12
+art/tod/night/bridges/viaduct-abut-w.png	main	bridge:::viaduct-abut-w:style=sky&piece=abut-w&tod=night	compose2.py --b1 4 --b2 12
+art/tod/night/bridges/viaduct-abut-e.png	main	bridge:::viaduct-abut-e:style=sky&piece=abut-e&tod=night	compose2.py --b1 4 --b2 12
+art/tod/night/bridges/viaduct-abut-n.png	main	bridge:::viaduct-abut-n:style=sky&piece=abut-n&tod=night	compose2.py --b1 4 --b2 12
+art/tod/night/bridges/viaduct-abut-s.png	main	bridge:::viaduct-abut-s:style=sky&piece=abut-s&tod=night	compose2.py --b1 4 --b2 12
+
+## Working loops and pipe tiles, morning, evening and night (the parts that aren't light: the Generator's
+## and Oil Pump's moving parts, the pump without its beam, and the pipeline tiles)
+art/tod/morning/buildings/pump-base.png	main	oilpump:#ffa030::pump-base:part=base&tod=morning	compose.py
+art/tod/morning/buildings/pump-work-0.png	main	oilpump:#ffa030::pump-work-0:part=work&f=0&tod=morning	compose.py
+art/tod/morning/buildings/pump-work-1.png	main	oilpump:#ffa030::pump-work-1:part=work&f=1&tod=morning	compose.py
+art/tod/morning/buildings/pump-work-2.png	main	oilpump:#ffa030::pump-work-2:part=work&f=2&tod=morning	compose.py
+art/tod/morning/buildings/pump-work-3.png	main	oilpump:#ffa030::pump-work-3:part=work&f=3&tod=morning	compose.py
+art/tod/morning/buildings/pump-work-4.png	main	oilpump:#ffa030::pump-work-4:part=work&f=4&tod=morning	compose.py
+art/tod/morning/buildings/pump-work-5.png	main	oilpump:#ffa030::pump-work-5:part=work&f=5&tod=morning	compose.py
+art/tod/morning/buildings/pump-work-6.png	main	oilpump:#ffa030::pump-work-6:part=work&f=6&tod=morning	compose.py
+art/tod/morning/buildings/pump-work-7.png	main	oilpump:#ffa030::pump-work-7:part=work&f=7&tod=morning	compose.py
+art/tod/morning/buildings/generator-work-0.png	main	generator:#ffe23d::generator-work-0:part=work&f=0&tod=morning	compose.py
+art/tod/morning/buildings/generator-work-1.png	main	generator:#ffe23d::generator-work-1:part=work&f=1&tod=morning	compose.py
+art/tod/morning/buildings/generator-work-2.png	main	generator:#ffe23d::generator-work-2:part=work&f=2&tod=morning	compose.py
+art/tod/morning/buildings/generator-work-3.png	main	generator:#ffe23d::generator-work-3:part=work&f=3&tod=morning	compose.py
+art/tod/morning/buildings/generator-work-4.png	main	generator:#ffe23d::generator-work-4:part=work&f=4&tod=morning	compose.py
+art/tod/morning/buildings/generator-work-5.png	main	generator:#ffe23d::generator-work-5:part=work&f=5&tod=morning	compose.py
+art/tod/morning/buildings/generator-work-6.png	main	generator:#ffe23d::generator-work-6:part=work&f=6&tod=morning	compose.py
+art/tod/morning/buildings/generator-work-7.png	main	generator:#ffe23d::generator-work-7:part=work&f=7&tod=morning	compose.py
+art/tod/morning/pipes/pipe-straight.png	main	pipe:::pipe-straight:piece=straight&tod=morning	compose_any.py --b1 4 --b2 10
+art/tod/morning/pipes/pipe-corner.png	main	pipe:::pipe-corner:piece=corner&tod=morning	compose_any.py --b1 4 --b2 10
+art/tod/morning/pipes/pipe-tee.png	main	pipe:::pipe-tee:piece=tee&tod=morning	compose_any.py --b1 4 --b2 10
+art/tod/morning/pipes/pipe-cross.png	main	pipe:::pipe-cross:piece=cross&tod=morning	compose_any.py --b1 4 --b2 10
+art/tod/morning/pipes/pipe-end.png	main	pipe:::pipe-end:piece=end&tod=morning	compose_any.py --b1 4 --b2 10
+art/tod/morning/pipes/pipe-raised.png	main	pipe:::pipe-raised:piece=raised&tod=morning	compose_any.py --b1 4 --b2 10
+art/tod/evening/buildings/pump-base.png	main	oilpump:#ffa030::pump-base:part=base&tod=evening	compose.py
+art/tod/evening/buildings/pump-work-0.png	main	oilpump:#ffa030::pump-work-0:part=work&f=0&tod=evening	compose.py
+art/tod/evening/buildings/pump-work-1.png	main	oilpump:#ffa030::pump-work-1:part=work&f=1&tod=evening	compose.py
+art/tod/evening/buildings/pump-work-2.png	main	oilpump:#ffa030::pump-work-2:part=work&f=2&tod=evening	compose.py
+art/tod/evening/buildings/pump-work-3.png	main	oilpump:#ffa030::pump-work-3:part=work&f=3&tod=evening	compose.py
+art/tod/evening/buildings/pump-work-4.png	main	oilpump:#ffa030::pump-work-4:part=work&f=4&tod=evening	compose.py
+art/tod/evening/buildings/pump-work-5.png	main	oilpump:#ffa030::pump-work-5:part=work&f=5&tod=evening	compose.py
+art/tod/evening/buildings/pump-work-6.png	main	oilpump:#ffa030::pump-work-6:part=work&f=6&tod=evening	compose.py
+art/tod/evening/buildings/pump-work-7.png	main	oilpump:#ffa030::pump-work-7:part=work&f=7&tod=evening	compose.py
+art/tod/evening/buildings/generator-work-0.png	main	generator:#ffe23d::generator-work-0:part=work&f=0&tod=evening	compose.py
+art/tod/evening/buildings/generator-work-1.png	main	generator:#ffe23d::generator-work-1:part=work&f=1&tod=evening	compose.py
+art/tod/evening/buildings/generator-work-2.png	main	generator:#ffe23d::generator-work-2:part=work&f=2&tod=evening	compose.py
+art/tod/evening/buildings/generator-work-3.png	main	generator:#ffe23d::generator-work-3:part=work&f=3&tod=evening	compose.py
+art/tod/evening/buildings/generator-work-4.png	main	generator:#ffe23d::generator-work-4:part=work&f=4&tod=evening	compose.py
+art/tod/evening/buildings/generator-work-5.png	main	generator:#ffe23d::generator-work-5:part=work&f=5&tod=evening	compose.py
+art/tod/evening/buildings/generator-work-6.png	main	generator:#ffe23d::generator-work-6:part=work&f=6&tod=evening	compose.py
+art/tod/evening/buildings/generator-work-7.png	main	generator:#ffe23d::generator-work-7:part=work&f=7&tod=evening	compose.py
+art/tod/evening/pipes/pipe-straight.png	main	pipe:::pipe-straight:piece=straight&tod=evening	compose_any.py --b1 4 --b2 10
+art/tod/evening/pipes/pipe-corner.png	main	pipe:::pipe-corner:piece=corner&tod=evening	compose_any.py --b1 4 --b2 10
+art/tod/evening/pipes/pipe-tee.png	main	pipe:::pipe-tee:piece=tee&tod=evening	compose_any.py --b1 4 --b2 10
+art/tod/evening/pipes/pipe-cross.png	main	pipe:::pipe-cross:piece=cross&tod=evening	compose_any.py --b1 4 --b2 10
+art/tod/evening/pipes/pipe-end.png	main	pipe:::pipe-end:piece=end&tod=evening	compose_any.py --b1 4 --b2 10
+art/tod/evening/pipes/pipe-raised.png	main	pipe:::pipe-raised:piece=raised&tod=evening	compose_any.py --b1 4 --b2 10
+art/tod/night/buildings/pump-base.png	main	oilpump:#ffa030::pump-base:part=base&tod=night	compose.py
+art/tod/night/buildings/pump-work-0.png	main	oilpump:#ffa030::pump-work-0:part=work&f=0&tod=night	compose.py
+art/tod/night/buildings/pump-work-1.png	main	oilpump:#ffa030::pump-work-1:part=work&f=1&tod=night	compose.py
+art/tod/night/buildings/pump-work-2.png	main	oilpump:#ffa030::pump-work-2:part=work&f=2&tod=night	compose.py
+art/tod/night/buildings/pump-work-3.png	main	oilpump:#ffa030::pump-work-3:part=work&f=3&tod=night	compose.py
+art/tod/night/buildings/pump-work-4.png	main	oilpump:#ffa030::pump-work-4:part=work&f=4&tod=night	compose.py
+art/tod/night/buildings/pump-work-5.png	main	oilpump:#ffa030::pump-work-5:part=work&f=5&tod=night	compose.py
+art/tod/night/buildings/pump-work-6.png	main	oilpump:#ffa030::pump-work-6:part=work&f=6&tod=night	compose.py
+art/tod/night/buildings/pump-work-7.png	main	oilpump:#ffa030::pump-work-7:part=work&f=7&tod=night	compose.py
+art/tod/night/buildings/generator-work-0.png	main	generator:#ffe23d::generator-work-0:part=work&f=0&tod=night	compose.py
+art/tod/night/buildings/generator-work-1.png	main	generator:#ffe23d::generator-work-1:part=work&f=1&tod=night	compose.py
+art/tod/night/buildings/generator-work-2.png	main	generator:#ffe23d::generator-work-2:part=work&f=2&tod=night	compose.py
+art/tod/night/buildings/generator-work-3.png	main	generator:#ffe23d::generator-work-3:part=work&f=3&tod=night	compose.py
+art/tod/night/buildings/generator-work-4.png	main	generator:#ffe23d::generator-work-4:part=work&f=4&tod=night	compose.py
+art/tod/night/buildings/generator-work-5.png	main	generator:#ffe23d::generator-work-5:part=work&f=5&tod=night	compose.py
+art/tod/night/buildings/generator-work-6.png	main	generator:#ffe23d::generator-work-6:part=work&f=6&tod=night	compose.py
+art/tod/night/buildings/generator-work-7.png	main	generator:#ffe23d::generator-work-7:part=work&f=7&tod=night	compose.py
+art/tod/night/pipes/pipe-straight.png	main	pipe:::pipe-straight:piece=straight&tod=night	compose_any.py --b1 4 --b2 10
+art/tod/night/pipes/pipe-corner.png	main	pipe:::pipe-corner:piece=corner&tod=night	compose_any.py --b1 4 --b2 10
+art/tod/night/pipes/pipe-tee.png	main	pipe:::pipe-tee:piece=tee&tod=night	compose_any.py --b1 4 --b2 10
+art/tod/night/pipes/pipe-cross.png	main	pipe:::pipe-cross:piece=cross&tod=night	compose_any.py --b1 4 --b2 10
+art/tod/night/pipes/pipe-end.png	main	pipe:::pipe-end:piece=end&tod=night	compose_any.py --b1 4 --b2 10
+art/tod/night/pipes/pipe-raised.png	main	pipe:::pipe-raised:piece=raised&tod=night	compose_any.py --b1 4 --b2 10
+
 ## 2D effect sheets (Python, transparent)
 art/effects/fx-explosion.png	-	-	fx/explosion.py {fin}
 art/effects/fx-chimney-smoke.png	-	-	fx/particles.py {fin}

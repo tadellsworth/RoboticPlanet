@@ -296,6 +296,21 @@ function drawArt(ctx, art, cx, cy, sizePx, angle) {
   drawArtRaw(ctx, art, cx, cy, sizePx, angle);
 }
 
+/**
+ * Draw art that goes over the already-graded ground (bridge piers, towers and cables, Viaduct decks,
+ * level-crossing barriers) in the current light: draw(entry) gets the time's re-lit version of `art`
+ * (or a graded copy), and again the next time's at its share while the light changes.
+ */
+function withTod(ctx, art, draw) {
+  if (!TOD.active || R.inMap || !art) { draw(art); return; }
+  const st = TOD.state, A = todVariant(art, st.a);
+  draw(A);
+  if (st.f > 0.002 && st.b !== st.a) {
+    const B = todVariant(art, st.b);
+    if (B !== A) { const ga = ctx.globalAlpha; ctx.globalAlpha = ga * st.f; draw(B); ctx.globalAlpha = ga; }
+  }
+}
+
 function drawArtRaw(ctx, art, cx, cy, sizePx, angle) {
   const s = sizePx * (art.scale || 1);
   const img = artMip(art, s * (R.drawScale || 1));
@@ -1482,18 +1497,21 @@ function drawViaductDeckArt(ctx, ox, oy, z, a, b, frac, building) {
   // Piers under an east–west deck, stretched down to the ground.
   const pier = ART[style + 'pier'];
   if (ew && pier) {
-    const img = artMip(pier, z * (R.drawScale || 1));
-    for (let k = 1; k <= built; k++) {
-      if (n > 3 && k % 2 === 0 && k !== n - 1) continue;
-      ctx.drawImage(img, 0, img.height * 0.25, img.width, img.height * 0.75, X(k), Y(k) + z, z, Math.min(1.6 * z, h + 0.35 * z));
-    }
+    withTod(ctx, pier, (v) => {
+      const img = artMip(v, z * (R.drawScale || 1));
+      for (let k = 1; k <= built; k++) {
+        if (n > 3 && k % 2 === 0 && k !== n - 1) continue;
+        ctx.drawImage(img, 0, img.height * 0.25, img.width, img.height * 0.75, X(k), Y(k) + z, z, Math.min(1.6 * z, h + 0.35 * z));
+      }
+    });
   }
   for (let k = 1; k <= built; k++) {
     const art = ART[style + piece(k)] || ART[style + (ew ? 'ew' : 'ns')];
-    if (art) ctx.drawImage(artMip(art, z * (R.drawScale || 1)), X(k), Y(k), z, z);
+    if (art) withTod(ctx, art, (v) => ctx.drawImage(artMip(v, z * (R.drawScale || 1)), X(k), Y(k), z, z));
     if (rail && ART['rail-straight']) {
-      const img = artMip(ART['rail-straight'], z * (R.drawScale || 1));
-      ctx.save(); ctx.translate(X(k) + z / 2, Y(k) + z / 2); if (!ew) ctx.rotate(Math.PI / 2); ctx.drawImage(img, -z / 2, -z / 2, z, z); ctx.restore();
+      ctx.save(); ctx.translate(X(k) + z / 2, Y(k) + z / 2); if (!ew) ctx.rotate(Math.PI / 2);
+      withTod(ctx, ART['rail-straight'], (v) => ctx.drawImage(artMip(v, z * (R.drawScale || 1)), -z / 2, -z / 2, z, z));
+      ctx.restore();
     }
   }
   // Suspension towers by each end, cables between them, on spans of four deck tiles or more.
@@ -1676,9 +1694,9 @@ function drawCrossingGates(ctx, ox, oy, z, inView) {
     const i = t % S.W, j = (t / S.W) | 0;
     if (!inView(i, j, 2)) continue;
     const near = trainNear(t), x = ox + i * z, y = oy + j * z;
-    const art = ART[near ? 'rail-barrier-down' : 'rail-barrier-up'], img = artMip(art, z * (R.drawScale || 1));
+    const art = ART[near ? 'rail-barrier-down' : 'rail-barrier-up'];
     ctx.save(); ctx.translate(x + z / 2, y + z / 2); ctx.rotate((q * Math.PI) / 2);
-    ctx.drawImage(img, -z / 2, -z / 2, z, z);
+    withTod(ctx, art, (v) => ctx.drawImage(artMip(v, z * (R.drawScale || 1)), -z / 2, -z / 2, z, z));
     if (near && Math.sin(R.time * 9) > 0 && ART['rail-lights-on']) ctx.drawImage(artMip(ART['rail-lights-on'], z * (R.drawScale || 1)), -z / 2, -z / 2, z, z);
     ctx.restore();
   }
@@ -1692,19 +1710,18 @@ function drawCrossingGates(ctx, ox, oy, z, inView) {
  */
 function drawTowerArt(ctx, towers, z) {
   const tower = ART['skybridge-tower'], cable = ART['skybridge-cable'], lamp = ART['skybridge-tower-lamp'];
-  const timg = artMip(tower, z * (R.drawScale || 1));
   // East–west spans: one cable pair per span, from its west tower.
   const spans = towers.filter((tw) => tw.landed && tw.dj === 0 && tw.di < 0);
   const cab = (tw, north) => {
     if (!cable) return;
     const x0 = tw.x, x1 = tw.x + (tw.L - 1) * z, top = tw.y - z / 2;
     const y0 = north ? top - 0.84 * z : top - 0.26 * z, h = north ? 1.06 * z : 1.04 * z;
-    ctx.drawImage(artMip(cable, (x1 - x0) * (R.drawScale || 1)), x0, y0, x1 - x0, h);
+    withTod(ctx, cable, (v) => ctx.drawImage(artMip(v, (x1 - x0) * (R.drawScale || 1)), x0, y0, x1 - x0, h));
   };
   for (const tw of spans) cab(tw, true);
   for (const tw of towers) {
     const x = tw.x - z / 2, y = tw.y + z / 2 - 2 * z;
-    ctx.drawImage(timg, x, y, z, 2 * z);
+    withTod(ctx, tower, (v) => ctx.drawImage(artMip(v, z * (R.drawScale || 1)), x, y, z, 2 * z));
     if (lamp && Math.sin(R.time * 2.4 + tw.x * 0.01) > -0.2) ctx.drawImage(artMip(lamp, z * (R.drawScale || 1)), x, y, z, 2 * z);
   }
   for (const tw of spans) cab(tw, false);
@@ -1744,8 +1761,7 @@ function drawBridgeRigging(ctx, ox, oy, z, inView) {
       // quarter hides behind the deck, so only what hangs below the tile is drawn).
       const part = ART[(S.road[t] ? (deep ? 'skybridge' : 'bridge') : 'railbridge') + '-pier'];
       if (part) {
-        const img = artMip(part, z * (R.drawScale || 1));
-        ctx.drawImage(img, 0, img.height * 0.25, img.width, img.height * 0.75, x, y + z, z, z * 1.5);
+        withTod(ctx, part, (v) => { const img = artMip(v, z * (R.drawScale || 1)); ctx.drawImage(img, 0, img.height * 0.25, img.width, img.height * 0.75, x, y + z, z, z * 1.5); });
       } else if (deep) {
         const len = z * 1.15;
         for (const s of [-1, 1]) {
@@ -2102,6 +2118,14 @@ function drawBuilding(ctx, type, cx, cy, s, owner, b) {
     const k = siloRise(b, type === 'silo' ? siloReady(b) : !!b.armed);
     if (empty && k < 1) { full = k > 0 ? art : null; fade = k; art = empty; }
   }
+  // A Viaduct's abutment: the tile facing its span (viaduct-abut-e: the span leaves eastward).
+  if (type === 'viaduct' && ART['viaduct-abut-e']) {
+    const [ax, ay] = viaductDir(b);
+    art = ART['viaduct-abut-' + (ax > 0 ? 'e' : ax < 0 ? 'w' : ay > 0 ? 's' : 'n')] || art;
+  }
+  // A building whose loop moves a part away from where its image shows it (the Oil Pump's beam) is drawn
+  // without that part ('<type>-base') while the loop plays.
+  if (art && b && b.built && working && ART[type + '-base'] && ART[type + '-work-0']) art = ART[type + '-base'];
   if (art) {
     if (!ART[type + '@' + owner] && type !== 'ramp') {
       // Shared art: a thin team-coloured bar along the front edge shows whose building it is.
@@ -2113,11 +2137,11 @@ function drawBuilding(ctx, type, cx, cy, s, owner, b) {
     }
     // Flat (top-down) turret art is drawn barrel-right and rotated to aim. 3/4-view turret art
     // (anchored at the bottom) is a fixed base plus a head image for each direction (see turretHead).
-    drawArt(ctx, art, cx, cy, s * (type === 'lander' && !art.scale ? 1.6 : 1), type === 'turret' && b && art.anchor !== 'bottom' ? b.aim : 0);
+    drawArt(ctx, art, cx, cy, s * (type === 'lander' && !art.scale ? 1.6 : 1), type === 'turret' && b && !art.anchor ? b.aim : 0);
     // A working loop (<type>-work-0…7, only the parts that move), played at 8 frames a second while it works.
     if (b && b.built && working && ART[type + '-work-0']) drawArt(ctx, ART[`${type}-work-${Math.floor(t * 8) % 8}`] || ART[type + '-work-0'], cx, cy, s);
     if (full) { ctx.globalAlpha = fade; drawArt(ctx, full, cx, cy, s); ctx.globalAlpha = 1; }
-    if (type === 'turret' && art.anchor === 'bottom') {
+    if (type === 'turret' && art.anchor) {
       const head = turretHead(owner, b ? b.aim : Math.PI / 4);
       if (head) drawArt(ctx, head, cx, cy, s);
     }
@@ -2141,7 +2165,7 @@ function drawBuilding(ctx, type, cx, cy, s, owner, b) {
   const u = s / 32;
   ctx.lineJoin = 'round';
   ctx.lineCap = 'round';
-  if (type === 'wall' || type === 'gate') { drawBarrier(ctx, type, cx, cy, s, owner, b); return; }
+  if (type === 'wall' || type === 'gate') { (ART['wall-post@0'] ? drawBarrierArt : drawBarrier)(ctx, type, cx, cy, s, owner, b); return; }
   switch (type) {
     case 'lander': {
       const r = s * 0.78;
@@ -2290,10 +2314,7 @@ function drawBuilding(ctx, type, cx, cy, s, owner, b) {
     case 'viaduct': {
       // An abutment: a concrete block keyed into the clifftop, the deck starting out of it toward
       // the far end, bollards where the railings end and a team-coloured lamp.
-      let ax = 1, ay = 0;
-      const far = b && b.link ? getE(b.link) : null;
-      const to = far ? far.y * S.W + far.x : b && b.viaTo >= 0 ? b.viaTo : -1;
-      if (b && to >= 0) { const tx = to % S.W, ty = (to / S.W) | 0; ax = Math.sign(tx - b.x); ay = Math.sign(ty - b.y); }
+      const [ax, ay] = viaductDir(b);
       const px = -ay, py = ax, hw = 9 * u;
       ctx.fillStyle = 'rgba(20,10,5,0.3)';
       ctx.fillRect(cx - 12 * u + 2 * u, cy - 12 * u + 3 * u, 24 * u, 24 * u);
@@ -2676,6 +2697,83 @@ function drawBuilding(ctx, type, cx, cy, s, owner, b) {
       ctx.beginPath(); ctx.arc(cx, cy, 2.5 * u, 0, Math.PI * 2); ctx.fill();
       break;
     }
+  }
+}
+
+/** Is the barrier (Wall or Gate) at tile (x, y) its owner's? */
+function barrierAt(x, y, owner) {
+  if (!inMap(x, y)) return null;
+  const id = S.bAt[tIdx(x, y)], n = id ? getE(id) : null;
+  return n && !n.dead && n.owner === owner && BDEFS[n.type].barrier ? n : null;
+}
+
+/**
+ * The way a Gate's road runs through it: 'v' (north-south, so the gate stands in an east-west wall) or
+ * 'h'. From the roads beside it, else the wall it stands in.
+ */
+function gateLane(g) {
+  const road = (di, dj) => inMap(g.x + di, g.y + dj) && roadLike(tIdx(g.x + di, g.y + dj));
+  const rv = (road(0, -1) ? 1 : 0) + (road(0, 1) ? 1 : 0), rh = (road(-1, 0) ? 1 : 0) + (road(1, 0) ? 1 : 0);
+  if (rv !== rh) return rv > rh ? 'v' : 'h';
+  if (barrierAt(g.x + 1, g.y, g.owner) || barrierAt(g.x - 1, g.y, g.owner)) return 'v';
+  if (barrierAt(g.x, g.y + 1, g.owner) || barrierAt(g.x, g.y - 1, g.owner)) return 'h';
+  return 'v';
+}
+
+/** Is a friendly bot passing through Gate g (its barrier lifts)? */
+function gateOpen(g) {
+  for (const v of S.bots) if (!v.dead && !v.inside && v.owner === g.owner && Math.abs(v.x - (g.x + 0.5)) < 0.9 && Math.abs(v.y - (g.y + 0.5)) < 0.9) return true;
+  return false;
+}
+
+/** Which way a Viaduct's span leaves its abutment b: [dx, dy] (east when it isn't known yet). */
+function viaductDir(b) {
+  const far = b && b.link ? getE(b.link) : null;
+  const to = far ? far.y * S.W + far.x : b && b.viaTo >= 0 ? b.viaTo : -1;
+  if (!b || to < 0 || b.x === undefined) return [1, 0];
+  const tx = to % S.W, ty = (to / S.W) | 0;
+  return [Math.sign(tx - b.x), Math.sign(ty - b.y)];
+}
+
+/**
+ * Walls and Gates from the 3D set (renderer/walls; keys in WALL_PIECES). A Wall tile is layered on one
+ * canvas: an arm toward each joined neighbour (north, west, east), then a post, or on every other tile of a
+ * straight run a hub, then the south arm. A Wall joins a Gate only along the Gate's own wall line. A Gate
+ * is one image across its wall, its barrier raised while one of its owner's bots goes through. Every now
+ * and then sparks crackle along the live rail (six frames of light, the same by day and night).
+ */
+function drawBarrierArt(ctx, type, cx, cy, s, owner, b) {
+  const has = b && b.x !== undefined, piece = (k) => artFor(k, owner);
+  const layers = [];
+  if (type === 'gate') {
+    const lane = has ? gateLane(b) : 'v';
+    layers.push(`gate-${lane === 'v' ? 'ew' : 'ns'}-${has && gateOpen(b) ? 'open' : 'closed'}`);
+  } else {
+    const joins = (di, dj) => {
+      if (!has) return dj === 0; // the build menu's icon: a stretch of wall
+      const n = barrierAt(b.x + di, b.y + dj, owner);
+      return !!n && (n.type !== 'gate' || (gateLane(n) === 'v') === (dj === 0));
+    };
+    const N = joins(0, -1), E = joins(1, 0), Sd = joins(0, 1), W = joins(-1, 0);
+    if (N) layers.push('wall-n');
+    if (W) layers.push('wall-w');
+    if (E) layers.push('wall-e');
+    const ew = E && W && !N && !Sd, ns = N && Sd && !E && !W;
+    layers.push((ew || ns) && has && (b.x + b.y) % 2 === 1 ? (ew ? 'wall-hub-ew' : 'wall-hub-ns') : 'wall-post');
+    if (Sd) layers.push('wall-s');
+  }
+  // Sparks: a 0.4 s burst every 3 to 7 seconds, each tile on its own beat.
+  let spark = -1;
+  if (has && b.built) {
+    const period = 3 + 4 * hash2(b.x, b.y, 91), ph = (R.time + period * hash2(b.y, b.x, 37)) % period;
+    if (ph < 0.4) spark = Math.floor(ph / 0.4 * 6);
+  }
+  for (const k of layers) {
+    const art = piece(k);
+    if (!art) continue;
+    drawArt(ctx, art, cx, cy, s);
+    const sp = spark >= 0 && ART[`${k}@${owner}-spark-f${spark}`];
+    if (sp) drawArt(ctx, sp, cx, cy, s);
   }
 }
 
@@ -4822,8 +4920,20 @@ function drawPulseCharges(ctx, ox, oy, z, inView) {
   ctx.save();
   ctx.globalCompositeOperation = 'lighter';
   for (const b of S.buildings) {
-    if (b.type !== 'turret' || b.dead || !b.built || !(b.chg > 0.01) || !inView(b.x, b.y, 2)) continue;
-    const lv = Math.min(1, b.chg / PULSE_CHARGE), m = pulseMuzzle(b, b.aim), x = ox + m.x * z, y = oy + m.y * z;
+    if (b.type !== 'turret' || b.dead || !b.built || !inView(b.x, b.y, 2)) continue;
+    const fired = S.time - (b.shotAt ?? -9) < 0.12;
+    if (!(b.chg > 0.01) && !fired) continue;
+    const lv = Math.min(1, (b.chg || 0) / PULSE_CHARGE), m = pulseMuzzle(b, b.aim), x = ox + m.x * z, y = oy + m.y * z;
+    // The 3D turret's own charge-up (turret-charge-K, on its head's canvas): the coils and barrel tips
+    // lighting violet as the shot builds (frames 0-6), then the discharge flash (frame 7).
+    const base = artFor('turret', b.owner), k = ((Math.round(b.aim / (Math.PI / 8)) % 16) + 16) % 16, sheet = ART['turret-charge-' + k];
+    if (sheet && base && base.anchor && ART['turret-head-0@0']) {
+      const w = z * 1.4;
+      ctx.globalAlpha = 1;
+      drawSheetFrame(ctx, sheet, fired ? 7 : Math.min(6, Math.floor(lv * 7)), ox + (b.x + 0.5) * z, oy + (b.y + 0.5) * z + (0.5 - 0.615) * w, w, w, 0);
+      continue;
+    }
+    if (!(b.chg > 0.01)) continue;
     // Violet, like the laser art, when it's installed; otherwise the team colour.
     const color = ART['fx-pulse-laser'] ? '#aa5cff' : PLAYER_COLORS[b.owner], flick = 0.85 + 0.15 * Math.sin(R.time * 60 + b.id);
     // Sparks drawn in toward the muzzle.
@@ -5145,7 +5255,7 @@ function buildingIcon(type, size, owner) {
   const art = artFor(type, owner || 0);
   if (art) {
     ctx.drawImage(artMip(art, size * 0.92), size * 0.04, size * 0.04, size * 0.92, size * 0.92);
-    const head = type === 'turret' && art.anchor === 'bottom' ? turretHead(owner || 0, Math.PI / 4) : null;
+    const head = type === 'turret' && art.anchor ? turretHead(owner || 0, Math.PI / 4) : null;
     if (head) ctx.drawImage(artMip(head, size * 0.92), size * 0.04, size * 0.04, size * 0.92, size * 0.92);
     return c.toDataURL();
   }

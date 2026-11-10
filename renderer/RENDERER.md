@@ -128,7 +128,7 @@ Parameters the scenes read:
 | `d=k` | crawler | Deploy frame 1–9. Frame 9 is the deployed base. |
 | `c=scuttler\|brute` | creature | Which creature. |
 | `s=1..3` | nest | Nest size. |
-| `piece=` | rail, bridge, pipe | The tile piece (pipe: straight, corner, tee, cross, end, raised). Rail also has `lights-on`; bridges also have `lamp`. |
+| `piece=` | rail, bridge, pipe | The tile piece (pipe: straight, corner, tee, cross, end, raised). Rail also has `lights-on`; bridges also have `lamp`, and `abut-w/e/n/s` (a Viaduct's abutment tile; `abut-e`: its span leaves eastward). |
 | `style=water\|sky\|rail` | bridge | The bridge type. |
 | `kind=road\|asphalt`, `lit=1` | streetlamp | Which lamp, and whether to render only the lit head. |
 | `mk=[[name,x,y,z],…]` | `lib.js` | Extra marks at world points, reported in `geom.json`. `post/emitters.py` uses this. |

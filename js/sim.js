@@ -2512,7 +2512,18 @@ function boostRival(p, kind) {
  */
 const PULSE_CHARGE = 0.45;
 /** Where a Pulse Turret's beam leaves its barrel, turned to `aim`. */
-function pulseMuzzle(b, aim) { return { x: b.x + 0.5 + Math.cos(aim) * 0.36, y: b.y + 0.5 + Math.sin(aim) * 0.36 }; }
+/**
+ * Where a Pulse Turret's beam leaves it: with the 3D turret art, between its two barrel tips for the head
+ * direction nearest `aim` (PULSE_MUZZLES, pixels in the head's 512 canvas, drawn 1.4 tiles across with
+ * [0.5, 0.615] on the tile centre); otherwise a little way out from the centre. Only where it's drawn.
+ */
+function pulseMuzzle(b, aim) {
+  if (typeof PULSE_MUZZLES !== 'undefined' && typeof ART !== 'undefined' && ART['turret-head-0@0'] && ART['turret@0'] && ART['turret@0'].anchor) {
+    const k = ((Math.round(aim / (Math.PI / 8)) % 16) + 16) % 16, m = PULSE_MUZZLES[k];
+    return { x: b.x + 0.5 + (m[0] / 512 - 0.5) * 1.4, y: b.y + 0.5 + (m[1] / 512 - 0.615) * 1.4 };
+  }
+  return { x: b.x + 0.5 + Math.cos(aim) * 0.36, y: b.y + 0.5 + Math.sin(aim) * 0.36 };
+}
 
 function updateTurret(b, def, dt) {
   b.cd -= dt;
@@ -2555,6 +2566,7 @@ function updateTurret(b, def, dt) {
   damageBot(target, 4);
   b.cd = 1.1;
   b.chg = 0;
+  b.shotAt = S.time; // (the charge-up art's discharge frame)
 }
 
 /**

@@ -41,8 +41,8 @@
  *   Goods:     icon-fiber icon-stone icon-ore icon-crystal icon-alloy icon-chip icon-crude icon-fuel
  *              icon-cement icon-asphalt icon-ammo icon-warhead
  *              (small icons in the top bar and menus, 64x64)
- *   Turrets:   turret@0/@1 can be flat art (drawn gun-right; the game rotates it) or, with
- *              anchor 'bottom', a 3/4-view base only, plus head images turret-head-0@0 … turret-head-7@0
+ *   Turrets:   turret@0/@1 can be flat art (drawn gun-right; the game rotates it) or, with an
+ *              anchor ('bottom' or [x, y]), a 3/4-view base only, plus head images turret-head-0@0 … turret-head-7@0
  *              (and @1): the gun head alone on the same canvas, facing right (0), then each 45° step
  *              clockwise on screen (1 down-right … 6 up/away, 7 up-right). 16 heads (0-15) also work.
  *   Markers:   missile (in flight, facing right; 128x128)  nuclear-missile  rally (your rally flag; 128x128)
@@ -87,6 +87,17 @@ function frames(type, n) {
 }
 
 /** Several images in one folder, keyed by their names. */
+/** The Walls and Gates set: every piece for both teams, and its six spark frames. */
+const WALL_PIECES = ['wall-post', 'wall-n', 'wall-e', 'wall-s', 'wall-w', 'wall-hub-ew', 'wall-hub-ns', 'gate-ew-closed', 'gate-ew-open', 'gate-ns-closed', 'gate-ns-open'];
+const WALL_ART = (() => {
+  const o = {};
+  for (const p of WALL_PIECES) for (const t of [0, 1]) {
+    o[`${p}@${t}`] = B3D(`buildings/walls/${p}@${t}.webp`);
+    for (let f = 0; f < 6; f++) o[`${p}@${t}-spark-f${f}`] = B3D(`buildings/walls/${p}@${t}-spark-f${f}.webp`);
+  }
+  return o;
+})();
+
 function files(dir, keys) {
   const out = {};
   for (const k of keys) out[k] = `${dir}/${k}.webp`;
@@ -120,8 +131,10 @@ const ART_MANIFEST = {
   // Priority 3: the rest
   'outpost@0': B3D('buildings/outpost@0.webp'),
   'outpost@1': B3D('buildings/outpost@1.webp'),
-  'turret@0': 'buildings/turret@0.webp',
-  'turret@1': 'buildings/turret@1.webp',
+  // The Pulse Turret in 3D: a fixed base and the gun head in 16 directions (0 = right, then clockwise on
+  // screen), each team's own, on the base's canvas.
+  'turret@0': B3D('buildings/turret@0.webp'), 'turret@1': B3D('buildings/turret@1.webp'),
+  ...(() => { const o = {}; for (const t of [0, 1]) for (let k = 0; k < 16; k++) o[`turret-head-${k}@${t}`] = B3D(`buildings/turret-head-${k}@${t}.webp`); return o; })(),
   depot: B3D('buildings/depot.webp'),
   grower: B3D('buildings/grower.webp'),
   site: B3D('buildings/site.webp'),
@@ -158,6 +171,11 @@ const ART_MANIFEST = {
   // Generator (one version for both teams, like the factories), and its working loop: fans and power bus.
   generator: B3D('buildings/generator.webp'),
   ...Object.fromEntries([0, 1, 2, 3, 4, 5, 6, 7].map((k) => [`generator-work-${k}`, B3D(`buildings/generator-work-${k}.webp`)])),
+  // Working loops (8 frames, played while the building works): the Smelter's furnace glow and embers and
+  // the Refinery's blinking column lights (both light), and the Oil Pump's walking beam nodding through
+  // a stroke, drawn over the pump without its beam ('pump-base') while it pumps.
+  ...Object.fromEntries(['smelter', 'refinery', 'pump'].flatMap((b) => [0, 1, 2, 3, 4, 5, 6, 7].map((k) => [`${b}-work-${k}`, B3D(`buildings/${b}-work-${k}.webp`)]))),
+  'pump-base': B3D('buildings/pump-base.webp'),
   // Diesel smoke: 12 frames of 64 x 64 (4 x 3), one puff each, seen from above. Not fx- names: they're
   // graded with the light at dusk and night like other smoke.
   'smoke-exhaust': { src: 'effects/fx-exhaust.webp', frames: 12, cols: 4 },
@@ -213,6 +231,8 @@ const ART_MANIFEST = {
   // towers 128x256, the suspension cable 512x128) and the Sky islands canyon set.
   ...files('rail', ['rail-straight', 'rail-curve', 'rail-tee', 'rail-cross', 'rail-end', 'rail-level-crossing', 'rail-barrier-up', 'rail-barrier-down', 'rail-lights-on']),
   ...files('bridges', ['bridge', 'skybridge', 'railbridge'].flatMap((k) => ['ew', 'ns', 'end-w', 'end-e', 'end-n', 'end-s', 'ramp-w', 'ramp-e', 'ramp-n', 'ramp-s', 'pier'].map((p) => `${k}-${p}`)).concat(['skybridge-tower', 'skybridge-tower-lamp', 'skybridge-cable'])),
+  // A Viaduct's abutment tile (renderer/b/bridge.js piece abut-*): viaduct-abut-e when its span leaves eastward.
+  ...files('bridges', ['viaduct-abut-w', 'viaduct-abut-e', 'viaduct-abut-n', 'viaduct-abut-s']),
   ...files('canyon', ['', '-jungle', '-polar'].flatMap((b) => ['chasm', 'chasm-wall', 'chasm-wall-2', 'chasm-lip-n', 'chasm-lip-w', 'chasm-lip-e'].map((k) => k + b))),
 
   // Bunker, Disruptor Tower and Mortar Pit (ART_GUIDE Batch 14), drawn at their size classes (1.2,
@@ -233,10 +253,18 @@ const ART_MANIFEST = {
   // target) and the burst where it hits (6 frames of 128x128 in a row).
   'fx-pulse-laser': { src: 'effects/fx-pulse-laser.webp', frames: 6, cols: 1 },
   'fx-pulse-hit': { src: 'effects/fx-pulse-hit.webp', frames: 6, cols: 6 },
+  // Its charge-up: for each of the 16 head directions, 8 frames (4 x 2) of the coils and barrel tips
+  // lighting violet, on the head's canvas and anchor (barrel tips in PULSE_MUZZLES, art/emitters.js).
+  ...Object.fromEntries([...Array(16).keys()].map((k) => [`turret-charge-${k}`, { ...B3D(`effects/turret-charge/turret-charge-${k}.webp`), frames: 8, cols: 4 }])),
+
+  // Walls and Gates (renderer/walls): an electrified wall, each tile built up from layers on one canvas
+  // (1.4 tiles, anchor [0.5, 0.615], no pad): the arms toward each joined neighbour (n, w, e, then s,
+  // drawn round) a post, or on every other tile of a straight run a hub; a Gate is one image, across an
+  // east-west wall (gate-ew, the road running north-south) or a north-south one, its barrier down or up.
+  // Each piece has six spark frames (light, flickered over it now and then).
+  ...WALL_ART,
 
   // Still to make (placeholders are drawn until these exist):
-  //   buildings: a 3D turret by day (base + head frames: the morning, evening and night sets exist,
-  //              and the Pulse Turret's charge-up sheets, turret-charge-0…15, are made to sit on it)
   //   resources: crop, oil, uranium     ground: fertile, slope, cliff     markers: missile, rally, oneway
   //   goods:     icon-fiber … icon-warhead (12 HUD icons)
 };

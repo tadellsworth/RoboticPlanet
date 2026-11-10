@@ -1436,9 +1436,14 @@ slow, tell Claude Code: each effect's length is one number in the code.
   installed too. Any robot can use this pattern: `<type>@<team>-f0…f3` driving frames (played by distance driven), `<type>-brake` and
   `<type>-boost` overlays, and `shadow: true` in the manifest when the art has no shadow of its own.
   Installed since: the Batch 14 defences, streetlamps (`streetlamp-road`/`-asphalt`, `-lit`, `-pool`) and the Pulse
-  Turret's `fx-pulse-laser` and `fx-pulse-hit`. The Pulse Turret's charge-up sheets (`turret-charge-0…15`) wait for
-  a **3D turret by day** (`turret@0/@1` base and `turret-head-0…15@0/@1`, anchor [0.5, 0.615], scale 1.4): the
-  morning, evening and night sets exist, but the day art is still the flat top-down turret.
+  Turret's `fx-pulse-laser` and `fx-pulse-hit`. Rendered here with `renderer/` and installed: the **3D Pulse
+  Turret** (`turret@0/@1` base and `turret-head-0…15@0/@1`, anchor [0.5, 0.615], scale 1.4, every time of day) with
+  its charge-up sheets (`turret-charge-0…15`, 8 frames each) and barrel tips (`PULSE_MUZZLES` in `art/emitters.js`);
+  the electrified **Walls and Gates** (`renderer/walls`: `wall-post`, `wall-n/e/s/w`, `wall-hub-ew/ns`,
+  `gate-ew/ns-closed/open`, each `@0/@1` with six spark frames, every time of day); the **Viaduct's abutment**
+  (`viaduct-abut-w/e/n/s`, the bridge scene's `abut-*` piece); and the working loops of the **Oil Pump**
+  (`pump-base` plus `pump-work-0…7`, re-lit too), **Refinery** and **Smelter** (`refinery-work-`, `smelter-work-0…7`,
+  light).
   Installed from the Fuel update: the **Tanker** (`tanker@0/@1-f0…f3`, `-brake`, `-boost`, time-of-day frames and
   `tanker-headlights`), the **Generator** (`generator`, time-of-day versions and the working loop `generator-work-0…7`,
   played at 8 fps while it runs; any building with `<type>-work-0…7` art gets the same), new **Freight Truck** frames
@@ -1455,7 +1460,7 @@ slow, tell Claude Code: each effect's length is one number in the code.
   sprites can be rendered in the same style right here.
   **Design system:** the Terrafall design system for making new art lives at
   https://claude.ai/artifact/GAdLBz6kefeJeTRz57TTV7 (it can be added to the Claude Code chat so art is designed there).
-  Still missing: a 3D turret by day, resources `crop` and `oil`, ground
+  Still missing: resources `crop` and `oil`, ground
   `fertile`, `slope` and `cliff`, markers `missile`, `rally` and `oneway`, and the 12 goods icons
 
 ### Tips
