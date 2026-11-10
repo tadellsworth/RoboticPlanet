@@ -109,7 +109,7 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
   the banner, at the top of the screen, shows the cost, with **Undo**, **Clear** and **Build**. Nothing is spent until
   Build. Building closes Paths, straight back to the map; leaving Paths any other way drops an unbuilt sketch.
   Arrows and Junctions still act at once. **Ramps** are planned in Paths too (tap the foot or top of a one-level
-  cliff) and count as road once built.
+  cliff, or just drag a road or track up it: `dragCliff`) and count as road once built.
 - **Roads through Outposts:** an Outpost can stand on a road, and its tile joins the road network. Like a Gate it only
   lets its owner's bots through (`passTile`); an armed enemy warbot breaks in (`breachable`), which captures it.
   Bots follow roads round corners (no diagonal shortcuts on or off a road).
@@ -142,11 +142,13 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
   first, and `settlePlans` (once a second, and right after you plan) pays for what it can from storage; a good an
   older plan is still waiting for isn't spent on a newer one. Road tiles waiting for their goods are flagged in
   `S.owe` (workers pave only paid tiles: `planList` vs `planAll`), track waiting to go down in `S.railPlan`, and
-  store-paid sites (`prepaid` Walls, Gates and Viaducts, and Ramps a rail drag plans, `b.fromStore`) take their goods a
+  store-paid sites (`prepaid` Walls, Gates and Viaducts, and every Ramp planned in Paths, `b.fromStore`) take their goods a
   unit at a time (`payInto`) and are built as far as their goods go. Calling off an unpaid tile gives nothing back; a
   half-paid site gives back what it holds. The computer still pays up front (`canPlace` keeps its check for AI players).
-  Dragging track across a one-level cliff plans a Ramp there (`UI.draft.railRamps`), and the track over it waits in the
-  queue until the Ramp is finished.
+  Dragging a road or track across a one-level cliff plans a Ramp there (`dragCliff`: on whichever side can take one,
+  preferring a tile with no road or track yet; two levels or more, or no room, says so in the banner). The Ramp is the
+  road on its tile, and the track over one waits in the queue until it's finished. Ramps don't count against
+  `MAX_SITES` (they're part of a path), so a plan never quietly loses its Ramp when six buildings are going up.
 - **Junctions, traffic lights and overpasses:** where three or four roads meet, bots slow down and give way to traffic
   already crossing. Switch the Paths banner to **Junctions** and tap a junction to put up a traffic light (1 Alloy): it
   lets one direction through at a time, switching when traffic waits the other way. On a busy crossing a light moves
@@ -308,6 +310,9 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
 - **Army orders:** tap **Army**, then a rival building to attack it with warbots or a missile, or open
   ground to send warbots there to hold the area under a rally flag. Tap the flag to call them back, or press
   **Recall all** in the Army banner (**C** on a computer) to end every attack and rally flag at once.
+- **Gates on track:** a Gate can stand across railway track (`canPlace`; a wall line crossing track puts one there,
+  `wallKind`), and track can be laid through your own Gate (`railBlocked`). Your trains run straight through it (rail
+  routes ignore it; it's `passTile` for its owner); enemy robots can't walk through.
 - **Through traffic:** an Outpost or Gate a road runs through counts as the best road leading into it, never worn
   (`throughPave`), for speed and route planning, so it never slows the traffic going through: asphalt on either side
   makes it asphalt (Freight Trucks and Road Trains keep their speed).

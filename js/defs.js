@@ -573,7 +573,7 @@ const BDEFS = {
     cost: { cement: 5 }, barrier: true, prepaid: true, armor: 40, buildTime: 6, war: true,
   },
   gate: {
-    name: 'Gate', desc: 'A Wall with a door: your bots drive through, the enemy\'s have to break it down. A Gate on a road carries the road, so haulers keep running. Planned in Paths (Walls): where a wall line crosses a road, a Gate goes there.',
+    name: 'Gate', desc: 'A Wall with a door: your bots drive through, the enemy\'s have to break it down. A Gate on a road carries the road, so haulers keep running, and across railway track your trains run through it. Planned in Paths (Walls): where a wall line crosses a road or track, a Gate goes there.',
     cost: { cement: 6, alloy: 2 }, barrier: true, gate: true, prepaid: true, armor: 32, buildTime: 8, war: true,
   },
   ropeway: {

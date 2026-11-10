@@ -1406,8 +1406,8 @@ function draftBridge(t) {
   return bridgeable(t) && !S.bAt[t] && !scorched(t) && bridgeHead(0, t % S.W, (t / S.W) | 0, (u) => d.addSet.has(u) && bridgeable(u));
 }
 
-/** What a wall line puts on tile t: a Gate on a road (or a planned one), a Wall anywhere else. */
-function wallKind(t) { return S.road[t] || S.plan[t] ? 'gate' : 'wall'; }
+/** What a wall line puts on tile t: a Gate on a road or track (or a planned one), a Wall anywhere else. */
+function wallKind(t) { return S.road[t] || S.plan[t] || S.rail[t] || (S.railPlan && S.railPlan[t]) || (UI.draft && UI.draft.rail.has(t)) ? 'gate' : 'wall'; }
 
 /** Could a Wall or Gate (`kind`) go on tile t? (What it costs is checked for the whole plan.) */
 function wallFits(t, kind) { return !S.bAt[t] && canPlace(0, kind, t % S.W, (t / S.W) | 0, true).ok; }
@@ -1454,7 +1454,7 @@ function draftSummary() {
   const d = UI.draft, cost = {}, back = {};
   let add = 0, cross = 0, clear = 0;
   for (const t of d.add) {
-    if (S.road[t] || S.plan[t]) continue;
+    if (S.road[t] || S.plan[t] || d.ramps.has(t)) continue; // (a planned Ramp is the road there)
     add++;
     if (crossTile(t)) cross++; else if (S.res[t]) clear++;
     const c = roadTileCost(t);
@@ -1466,7 +1466,7 @@ function draftSummary() {
     const c = S.plan[t] ? (S.owe[t] ? {} : roadTileCost(t)) : crossTile(t) ? CROSS[S.terrain[t]].cost : roadCost(); // a tile still waiting for its goods gives nothing back
     for (const g in c) back[g] = (back[g] || 0) + c[g];
   }
-  // Ramps are construction sites: their materials are delivered, but you need them in stock.
+  // Ramps are paid for from storage as the goods come in, like the rest of the plan.
   for (const t of d.ramps) for (const g in BDEFS.ramp.cost) cost[g] = (cost[g] || 0) + BDEFS.ramp.cost[g];
   // Walls and Gates are paid for from storage the moment you tap Build.
   let walls = 0, gates = 0;
@@ -1493,18 +1493,20 @@ function commitDraft() {
   for (const t of d.del) if (S.road[t] || S.plan[t] === 1) { removeRoad(0, t % S.W, (t / S.W) | 0); removed++; }
   let rails = 0, railsUp = 0, railWhy = '';
   for (const t of d.railDel) if (S.rail[t] || S.railPlan[t] === 1) { takeUpRail(0, t); railsUp++; }
-  // Ramps first, so track planned over one waits for it. A Ramp a rail line needs is paid straight
-  // from storage (it rarely has a road for haulers).
+  // Ramps first, so the road or track planned over one waits for it. Like everything else in Paths
+  // they're paid straight from storage (the cliff rarely has a road to it yet for haulers), and
+  // they don't count against the construction-site limit.
+  let rampWhy = '';
   for (const t of d.ramps) {
-    const r = placeSite(0, 'ramp', t % S.W, (t / S.W) | 0, null, d.railRamps.has(t) || d.rail.has(t));
-    if (r.ok) ramps++; else { why = r.reason; break; }
+    const r = placeSite(0, 'ramp', t % S.W, (t / S.W) | 0, null, true);
+    if (r.ok) ramps++; else if (!rampWhy) rampWhy = r.reason;
   }
   for (const [t, kind] of d.walls) {
     const r = placeSite(0, kind, t % S.W, (t / S.W) | 0);
     if (r.ok) { if (kind === 'gate') gates++; else walls++; } else if (!wallWhy) wallWhy = r.reason;
   }
   for (const t of d.add) {
-    if (S.road[t] || S.plan[t]) continue;
+    if (S.road[t] || S.plan[t] || d.ramps.has(t)) continue; // (a planned Ramp is the road there)
     why = buildRoad(0, t % S.W, (t / S.W) | 0, true);
     if (why) break;
     laid++;
@@ -1520,6 +1522,7 @@ function commitDraft() {
   if (why) { sfx('error'); toast(`Planned ${laid} tile${laid === 1 ? '' : 's'} before running short: ${why}`, 'warn'); }
   else { sfx('place'); toast((laid ? `Planned ${laid} road tile${laid === 1 ? '' : 's'}: free workers will pave them.` : '') + (ramps ? ` ${ramps} Ramp site${ramps === 1 ? '' : 's'} started.` : '') + wallText + (removed ? ` Took up ${removed} tile${removed === 1 ? '' : 's'}.` : ''), 'info'); }
   if (wallWhy) toast(`Some of the wall couldn't go up: ${wallWhy}`, 'warn');
+  if (rampWhy) toast(`A Ramp couldn't be planned: ${rampWhy} The road or track there won't climb the cliff until one is.`, 'warn');
   if (rails || railsUp) toast(`${rails ? `Planned ${rails} tile${rails === 1 ? '' : 's'} of track.` : ''}${railsUp ? ` Took up ${railsUp} tile${railsUp === 1 ? '' : 's'} of track.` : ''}`, 'info');
   if (owedN) toast(`Waiting for goods: ${costText(wp.owed)} more. It's paid from storage as the goods come in, oldest plans first, and built as it's paid for.`, 'info');
   if (railWhy) toast(`Some track couldn't go down: ${railWhy}`, 'warn');
@@ -1534,13 +1537,34 @@ function dropDraft() {
 }
 
 /**
+ * A road or track drag stepping from tile p to tile t up or down a cliff: plan a Ramp there, on
+ * whichever side can take one (the side your bots can reach), preferring a tile with no road or
+ * track on it yet so nothing is cut while it's built (paid straight from storage, like everything
+ * planned in Paths). Returns 'ramp' (one is planned there), 'nope' (no room on either side), 'steep' (two
+ * levels or more: no Ramp can climb it) or '' (no cliff between them).
+ */
+function dragCliff(stroke, p, t) {
+  if (S.terrain[t] !== T_GROUND || S.terrain[p] !== T_GROUND) return '';
+  const d = Math.abs(S.elev[t] - S.elev[p]);
+  if (!d || canStep(p, t)) return '';
+  if (d > 1) return 'steep';
+  if (UI.draft.ramps.has(t) || UI.draft.ramps.has(p)) return 'ramp';
+  const busy = (u) => (S.road[u] || S.plan[u] || (S.rail && S.rail[u]) ? 1 : 0);
+  const ok = [t, p].filter((u) => canPlace(0, 'ramp', u % S.W, (u / S.W) | 0).ok).sort((a, b) => busy(a) - busy(b));
+  if (!ok.length) return 'nope';
+  draftOp(stroke, ok[0], 'ramp');
+  return 'ramp';
+}
+
+/**
  * Dragging: in Roads and Bridges it sketches new road along the drag (round resources; water and
- * rock only with Bridges). In Arrows each road tile points the way the finger moved, at once.
+ * rock only with Bridges), planning a Ramp wherever it climbs a one-level cliff. In Arrows each
+ * road tile points the way the finger moved, at once.
  */
 function onRoadPaint(i, j, first) {
   if (R.mode !== 'road' || UI.roadMode === 'lights' || UI.roadMode === 'ramp') return;
   if (!UI.draft) draftReset();
-  if (first) { UI.paintSkipped = false; UI.paintCross = false; UI.paintCliff = false; UI.paintRamp = false; UI.stroke = []; UI.draft.strokes.push(UI.stroke); }
+  if (first) { UI.paintSkipped = false; UI.paintCross = false; UI.paintCliff = false; UI.paintRamp = false; UI.paintSteep = false; UI.stroke = []; UI.draft.strokes.push(UI.stroke); }
   const from = first || !UI.lastPaint ? { i, j } : UI.lastPaint;
   const line = tileLine(from.i, from.j, i, j);
   let prev = null;
@@ -1552,14 +1576,10 @@ function onRoadPaint(i, j, first) {
     const t = tIdx(x, y);
     if (pave) { if (paveMarkable(t)) setPaveMark(0, x, y, UI.paveOn); continue; }
     if (rail) {
-      // Climbing a one-level cliff with no Ramp: plan one for the track, on whichever side of the
-      // cliff can take it (your bots can reach it). If neither can, say so in the banner.
+      // Climbing a one-level cliff with no Ramp: plan one for the track (see dragCliff).
       if (prev) {
-        const p = tIdx(prev[0], prev[1]);
-        if (S.terrain[t] === T_GROUND && S.terrain[p] === T_GROUND && Math.abs(S.elev[t] - S.elev[p]) === 1 && !canStep(p, t) && !UI.draft.ramps.has(t) && !UI.draft.ramps.has(p)) {
-          const at = [t, p].find((u) => canPlace(0, 'ramp', u % S.W, (u / S.W) | 0).ok);
-          if (at !== undefined) { draftOp(UI.stroke, at, 'ramp'); UI.draft.railRamps.add(at); UI.paintRamp = true; } else UI.paintCliff = true;
-        }
+        const c = dragCliff(UI.stroke, tIdx(prev[0], prev[1]), t);
+        if (c === 'ramp') UI.paintRamp = true; else if (c === 'nope') UI.paintCliff = true; else if (c === 'steep') UI.paintSteep = true;
       }
       prev = [x, y];
       if (S.rail[t] || UI.draft.rail.has(t)) continue;
@@ -1580,7 +1600,20 @@ function onRoadPaint(i, j, first) {
       prev = [x, y];
       continue;
     }
-    if (S.road[t] || S.plan[t] || roadLike(t)) continue;
+    // Climbing a one-level cliff: plan a Ramp there (see dragCliff). The Ramp is a road when it's
+    // done, so no road is laid on its own tile.
+    const pt = prev ? tIdx(prev[0], prev[1]) : -1;
+    prev = [x, y];
+    if (pt >= 0) {
+      const c = dragCliff(UI.stroke, pt, t);
+      if (c === 'ramp') {
+        UI.paintRamp = true;
+        if (UI.draft.ramps.has(pt)) draftOp(UI.stroke, pt, 'unadd');
+        if (UI.draft.ramps.has(t)) continue;
+      } else if (c === 'nope') UI.paintCliff = true;
+      else if (c === 'steep') UI.paintSteep = true;
+    }
+    if (S.road[t] || S.plan[t] || roadLike(t) || UI.draft.ramps.has(t)) continue;
     // Dragging never bulldozes resources by accident: tap a resource tile to clear it for a road.
     if (S.res[t]) { UI.paintSkipped = true; continue; }
     // Bridges and tunnels are dear: only the Bridges tool sketches them.
@@ -1590,10 +1623,15 @@ function onRoadPaint(i, j, first) {
   UI.lastPaint = { i, j };
   if (pave) { showRoadBanner(); return; }
   if (wall) { showRoadBanner(UI.paintSkipped ? 'The wall skips tiles it can\'t go on (outside your border, resources, cliffs, or right beside your Command Base).' : '', true); return; }
-  if (rail) { showRoadBanner(UI.paintCliff ? 'Track climbs a level only over a <b>Ramp</b>, and there\'s no room for one where you crossed this cliff: try a tile or two along it.' : UI.paintRamp ? 'A <b>Ramp</b> is planned where the track climbs the cliff: workers build it, and the track on it goes down when it\'s done.' : UI.paintSkipped ? 'Track skips tiles it can\'t go on: outside your border, resources, rock or buildings.' : '', true); return; }
+  const what = rail ? 'Track' : 'A road';
+  const cliffNote = UI.paintSteep ? `${what} can't climb a cliff two levels high, and no Ramp can: go round it to a one-level step (or bridge the valley with a Viaduct).`
+    : UI.paintCliff ? `${what} climbs a level only over a <b>Ramp</b>, and there's no room for one where you crossed this cliff (resources, a building, or it would block the only way through): try a tile or two along it.`
+      : '';
+  if (rail) { showRoadBanner(cliffNote || (UI.paintRamp ? 'A <b>Ramp</b> is planned where the track climbs the cliff: workers build it, paid from storage, and the track on it goes down when it\'s done.' : UI.paintSkipped ? 'Track skips tiles it can\'t go on: outside your border, resources, rock or buildings.' : ''), true); return; }
   if (!arrows) {
-    showRoadBanner(UI.paintCross ? 'Roads stop at water and rock: pick <b>Bridges</b> to cross.'
-      : UI.paintSkipped ? 'Dragging goes round resources: tap a boulder, grove, ore or crystal tile to clear it for a road.' : '', true);
+    showRoadBanner(cliffNote || (UI.paintRamp ? 'A <b>Ramp</b> is planned where the road climbs the cliff: workers cut it, paid from storage, and it carries the road up when it\'s done.'
+      : UI.paintCross ? 'Roads stop at water and rock: pick <b>Bridges</b> to cross.'
+        : UI.paintSkipped ? 'Dragging goes round resources: tap a boulder, grove, ore or crystal tile to clear it for a road.' : ''), true);
   }
 }
 
@@ -1610,12 +1648,12 @@ function showRoadBanner(problem, info) {
     line = `<b>Lay railway track</b> by dragging (${costText(RAIL_COST)} a tile, laid when you tap Build if you have the goods, otherwise as they come in). Tap a tile to add or drop it, or tap track to take it up. Then put a <b>Rail Station</b> (Build menu) beside each end, and order a <b>Freight Train</b> at the Bot Foundry.`;
     how = 'Freight Trains carry 56 goods between Rail Stations on the same track, fast and with no traffic to wait for, and never need charging. They keep a station\'s supply orders filled from the other stations on the line, and a far station sends its spare goods home to the station nearest your Command Base. Track goes on open ground in your territory. It climbs a level at a time over a Ramp (a natural slope, or one you build in Paths), like a road, with trains slowing on the grade; over water it\'s a rail bridge, and across a valley it runs over a Viaduct. It can cross a road: road traffic waits at the crossing while a train goes by.';
   } else if (mode === 'wall' && !UI.draft.walls.size) {
-    line = `<b>Sketch a wall</b> by dragging (${costText(BDEFS.wall.cost)} a tile); where it crosses a road a <b>Gate</b> goes (${costText(BDEFS.gate.cost)}). Tap a planned Wall to make it a Gate, again to drop it. Nothing is spent until you tap <b>Build</b>.`;
+    line = `<b>Sketch a wall</b> by dragging (${costText(BDEFS.wall.cost)} a tile); where it crosses a road or track a <b>Gate</b> goes (${costText(BDEFS.gate.cost)}). Tap a planned Wall to make it a Gate, again to drop it. Nothing is spent until you tap <b>Build</b>.`;
     how = `Walls stop every bot. Enemy warbots go round if there is a short way, or stand and shoot their way through: a Wall takes ${BDEFS.wall.armor} hits (a Gate ${BDEFS.gate.armor}, a Missile does ${BDEFS.silo.missile.damage}), and every shot costs them Ammo, so turrets behind a wall pick them off while they work. ` +
       'Your own bots drive through your Gates, so leave one wherever your roads or workers need to cross. Walls are paid straight from storage (no Hauler or road needed): what you have goes in when you tap Build, the rest as it comes in, and free workers build them. Repair a damaged Wall from its panel.';
   } else if (mode === 'ramp' && draftEmpty()) {
-    line = `Tap a highlighted spot at the top or foot of a one-level cliff to plan a <b>Ramp</b> (${costText(BDEFS.ramp.cost)}). To get down from high ground, plan it on the cliff top. Nothing is spent until you tap <b>Build</b>.`;
-    how = 'Workers cut a sloped road into the cliff; once it is done it is part of your road network, so haulers drive straight up it. A Ramp can\'t go where it would block the only way through a pass.';
+    line = `Tap a highlighted spot at the top or foot of a one-level cliff to plan a <b>Ramp</b> (${costText(BDEFS.ramp.cost)}). To get down from high ground, plan it on the cliff top. You rarely need this tool: dragging a road or track up a cliff plans one for you. Nothing is spent until you tap <b>Build</b>.`;
+    how = 'Workers cut a sloped road into the cliff; once it is done it is part of your road network, so haulers drive straight up it, and track can run over it. Ramps are paid straight from storage (as the goods come in) and don\'t count against the construction-site limit. A Ramp can\'t go on resources or a building, or where it would block the only way through a pass, and no Ramp can climb a cliff two levels high.';
   } else if (mode === 'pave') {
     const c = paveCounts(0);
     let works = 0;

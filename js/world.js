@@ -1398,7 +1398,8 @@ function canPlace(owner, type, i, j, skipBlockCheck) {
   } else if (S.res[t]) return { ok: false, reason: 'Clear the resources here first.' };
   if (S.bAt[t]) return { ok: false, reason: 'There is already a building here.' };
   if (def.colony && (S.mode !== 'colony' || S.mission)) return { ok: false, reason: 'Only in Colony free play.' };
-  if (S.rail && S.rail[t] && !def.ramp) return { ok: false, reason: 'There is railway track here.' }; // (a Ramp can go under track, to carry it up a level)
+  // A Ramp can go under track (to carry it up a level), and a Gate across it (your trains run through, as on a road).
+  if (S.rail && (S.rail[t] || (S.railPlan && S.railPlan[t])) && !def.ramp && !def.gate) return { ok: false, reason: S.rail[t] ? 'There is railway track here.' : 'Track is planned here.' };
   if (def.station && !railPlatforms(i, j).length) return { ok: false, reason: 'A Rail Station goes right beside the track: lay rail first (Paths, Rail).' };
   if (S.wildlife) for (const e of S.buildings) {
     if (!e.dead && BDEFS[e.type].wild && Math.max(Math.abs(e.x - i), Math.abs(e.y - j)) <= WILD.clear) return { ok: false, reason: 'Too close to a creature nest: clear it with warbots first.' };
@@ -1495,7 +1496,7 @@ function keepsRoadSide(u, t) {
 
 function siteCount(owner) {
   let n = 0;
-  for (const b of S.buildings) if (!b.dead && b.owner === owner && !b.built && !BDEFS[b.type].prepaid) n++;
+  for (const b of S.buildings) if (!b.dead && b.owner === owner && !b.built && !BDEFS[b.type].prepaid && !BDEFS[b.type].ramp) n++; // Ramps are part of a path, like roads
   return n;
 }
 
@@ -1526,7 +1527,7 @@ function placeSite(owner, type, i, j, cost, fromStore) {
   const chk = canPlace(owner, type, i, j);
   if (!chk.ok) return chk;
   const def = BDEFS[type];
-  if (!def.prepaid && siteCount(owner) >= MAX_SITES) return { ok: false, reason: `Maximum of ${MAX_SITES} construction sites reached.` };
+  if (!def.prepaid && !def.ramp && siteCount(owner) >= MAX_SITES) return { ok: false, reason: `Maximum of ${MAX_SITES} construction sites reached.` };
   // An Outpost or Gate on a road takes the road's place (its Cement comes back); the road runs through it.
   const t = tIdx(i, j);
   const onRoad = !!(S.road[t] || S.plan[t]);
@@ -2349,7 +2350,7 @@ function railBlocked(owner, t) {
   const via = S.bAt[t] ? getE(S.bAt[t]) : null;
   if (S.owner[t] !== owner && !(via && via.type === 'viaduct' && via.owner === owner)) return 'Track only goes inside your border.';
   if (S.terrain[t] === T_ROCK) return 'Track can\'t go through rock.';
-  if (S.bAt[t] && getE(S.bAt[t]).type !== 'viaduct') return 'There is a building here.';
+  if (S.bAt[t] && !(via && via.type === 'viaduct') && !(via && via.type === 'gate' && via.owner === owner)) return 'There is a building here.'; // track runs through your own Gates
   if (S.res[t]) return 'Clear the resources here first.';
   if (scorched(t)) return 'This ground is still scorched.';
   return '';
