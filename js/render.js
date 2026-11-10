@@ -1558,10 +1558,59 @@ function strokeSegs(ctx, segs, filter) {
   ctx.stroke();
 }
 
+/**
+ * Which pipe tile art goes on tile t (see renderer/b/pipe.js) and how far it's turned (quarter turns,
+ * clockwise): it joins the pipe of the same owner beside it and the buildings it feeds. Pipe over a road,
+ * track or water is the raised piece.
+ */
+const PIPE_SIDES = [[0, -1], [1, 0], [0, 1], [-1, 0]]; // N, E, S, W
+function pipePiece(t, has) {
+  const own = has(t), i = t % S.W, j = (t / S.W) | 0, on = [];
+  for (let d = 0; d < 4; d++) {
+    const [di, dj] = PIPE_SIDES[d];
+    if (!inMap(i + di, j + dj)) { on.push(false); continue; }
+    const u = tIdx(i + di, j + dj), b = S.bAt[u] && getE(S.bAt[u]);
+    on.push(has(u) === own || !!(b && b.owner === own - 1 && pipeEnd(b)));
+  }
+  const n = on.filter(Boolean).length;
+  if (n === 4) return { key: 'pipe-cross', q: 0 };
+  if (n === 3) return { key: 'pipe-tee', q: on.indexOf(false) };
+  if (n === 2) {
+    if (on[1] && on[3]) return { key: S.road[t] || (S.rail && S.rail[t]) || bridgeable(t) ? 'pipe-raised' : 'pipe-straight', q: 0 };
+    if (on[0] && on[2]) return { key: S.road[t] || (S.rail && S.rail[t]) || bridgeable(t) ? 'pipe-raised' : 'pipe-straight', q: 1 };
+    // the art's elbow joins W and S; turned q quarters it joins (3 + q) % 4 and (2 + q) % 4
+    for (let q = 0; q < 4; q++) if (on[(3 + q) % 4] && on[(2 + q) % 4]) return { key: 'pipe-corner', q };
+  }
+  if (n === 1) return { key: 'pipe-end', q: (on.indexOf(true) + 1) % 4 }; // the art's end comes in from the W
+  return { key: 'pipe-end', q: 0 };
+}
+
 function drawPipes(ctx, ox, oy, z, inView) {
   if (!S.pipe) return;
   const net = pipeNet();
-  if (net.n) {
+  if (net.n && ART['pipe-straight']) {
+    // The rendered tiles (renderer/b/pipe.js), then Crude pulsing along lines that are flowing.
+    const has = (t) => S.pipe[t];
+    for (let t = 0; t < S.W * S.H; t++) {
+      if (!S.pipe[t]) continue;
+      const i = t % S.W, j = (t / S.W) | 0;
+      if (!inView(i, j, 1)) continue;
+      const pc = pipePiece(t, has), art = ART[pc.key] || ART['pipe-straight'];
+      const img = artMip(art, z * (R.drawScale || 1));
+      ctx.save(); ctx.translate(ox + (i + 0.5) * z, oy + (j + 0.5) * z); if (pc.q) ctx.rotate((pc.q * Math.PI) / 2);
+      ctx.drawImage(img, -z / 2, -z / 2, z, z);
+      ctx.restore();
+    }
+    const now = S.time, flowing = (g) => now - (net.flow[net.comp[g[4]]] ?? -99) < 2;
+    const { segs } = pipeSegments(has, inView, ox, oy, z, true);
+    if (segs.some(flowing)) {
+      ctx.save(); ctx.lineCap = 'round';
+      ctx.strokeStyle = GOOD.crude.color; ctx.lineWidth = Math.max(1, z * 0.05);
+      ctx.setLineDash([z * 0.1, z * 0.3]); ctx.lineDashOffset = -R.time * z * 0.9;
+      strokeSegs(ctx, segs, flowing);
+      ctx.restore();
+    }
+  } else if (net.n) {
     const { segs, posts, caps } = pipeSegments((t) => S.pipe[t], inView, ox, oy, z, true);
     ctx.save();
     ctx.lineCap = 'round';
@@ -4809,6 +4858,17 @@ function drawEffects(ctx, ox, oy, z) {
     if (f.t < 0) continue; // a delayed effect (a building's second blast) not started yet
     const k = f.t / f.life;
     const x = ox + f.x * z, y = oy + f.y * z;
+    // A fuel blast (renderer/fx/fuelblast.py): ground zero is 2/3 down its frame; the fireball spans about
+    // 0.55 of the frame, so the frame is drawn 3.6 blast radii wide.
+    if (f.type === 'fuelblast') {
+      const art = ART['fx-fuel-blast'];
+      if (!art) continue;
+      const w = z * (f.r || 1) * 3.6;
+      ctx.globalAlpha = 1;
+      drawSheetFrame(ctx, art, Math.floor(k * art.frames), x, y - w / 6, w, 0, 0);
+      if (TOD.active && typeof drawLightPool === 'function' && k < 0.6) { ctx.globalAlpha = 1 - k / 0.6; drawLightPool(ctx, x, y, w * 0.6, '#ff8a2a'); ctx.globalAlpha = 1; }
+      continue;
+    }
     // Effect art, if a sprite sheet for this effect is installed.
     const sheet = FX_ART[f.type] && ART[FX_ART[f.type]];
     // Pulse-laser glows and coloured sparks (scuffles, creatures) stay drawn in code, in their own colour.

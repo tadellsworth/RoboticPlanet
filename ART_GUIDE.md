@@ -1446,8 +1446,11 @@ slow, tell Claude Code: each effect's length is one number in the code.
   `smoke-exhaust-heavy`). Smoke points live in `art/emitters.js`: `EXHAUST_POINTS` (truck, tanker, Road Train stack
   tips) and `BUILDING_EMITTERS` (chimneys and vents, from the animation brief's `building-emitters.json`). Smoke and
   black smoke and steam use the exhaust sheets for now; flame, sparks and dust points wait for their own sheets.
-  Still to make: the **pipe pieces** and the **fuel blast** (`fx-fuel-blast`, `oil-scorch`): prompts in
-  `design/claude-design-fuel.md`.
+  Rendered here with `renderer/`: the **pipe pieces** (`art/pipes/pipe-straight`, `-corner`, `-tee`, `-cross`,
+  `-end`, `-raised`: 256 px tiles, straight down, from `renderer/b/pipe.js`; the game picks the piece and turns it from
+  the pipe's neighbours, and uses the raised one on a gantry where the pipe crosses a road, track or water) and the
+  **fuel blast** (`fx-fuel-blast`, 16 frames in a 4 x 4 grid from `renderer/fx/fuelblast.py`, played over 1.15 s
+  and scaled to the blast). Still to make: `oil-scorch` (the blast leaves the ordinary scorch mark for now).
   **Renderer:** the three.js renderer that made all the 3D art is in `renderer/` (see `renderer/RENDERER.md`), so new
   sprites can be rendered in the same style right here.
   **Design system:** the Terrafall design system for making new art lives at

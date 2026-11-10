@@ -161,6 +161,11 @@ const ART_MANIFEST = {
   // Diesel smoke: 12 frames of 64 x 64 (4 x 3), one puff each, seen from above. Not fx- names: they're
   // graded with the light at dusk and night like other smoke.
   'smoke-exhaust': { src: 'effects/fx-exhaust.webp', frames: 12, cols: 4 },
+  // A fuel blast (a Tanker or Refinery going up): 16 frames of 256 x 256 (4 x 4), ground zero 2/3 down. Made with
+  // renderer/fx/fuelblast.py.
+  'fx-fuel-blast': { src: 'effects/fx-fuel-blast.webp', frames: 16, cols: 4 },
+  // Pipeline tiles (renderer/b/pipe.js), 256 px straight down, turned to fit like the rail pieces.
+  ...files('pipes', ['pipe-straight', 'pipe-corner', 'pipe-tee', 'pipe-cross', 'pipe-end', 'pipe-raised']),
   'smoke-exhaust-heavy': { src: 'effects/fx-exhaust-heavy.webp', frames: 12, cols: 4 },
 
   // Military buildings (Versus), with team versions: @0 yours (cyan lights), @1 the rival's (red).

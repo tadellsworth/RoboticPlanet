@@ -574,6 +574,14 @@ art/rail/rail-barrier-up.png	main	rail:::rail-barrier-up:piece=barrier-up	compos
 art/rail/rail-barrier-down.png	main	rail:::rail-barrier-down:piece=barrier-down	compose_any.py --b1 4 --b2 10
 art/rail/rail-lights-on.png	main	rail:::rail-lights-on:piece=lights-on	compose_any.py --b1 4 --b2 10
 
+## Pipeline tiles (day; one set serves every time of day, like the road tiles)
+art/pipes/pipe-straight.png	main	pipe:::pipe-straight:piece=straight	compose_any.py --b1 4 --b2 10
+art/pipes/pipe-corner.png	main	pipe:::pipe-corner:piece=corner	compose_any.py --b1 4 --b2 10
+art/pipes/pipe-tee.png	main	pipe:::pipe-tee:piece=tee	compose_any.py --b1 4 --b2 10
+art/pipes/pipe-cross.png	main	pipe:::pipe-cross:piece=cross	compose_any.py --b1 4 --b2 10
+art/pipes/pipe-end.png	main	pipe:::pipe-end:piece=end	compose_any.py --b1 4 --b2 10
+art/pipes/pipe-raised.png	main	pipe:::pipe-raised:piece=raised	compose_any.py --b1 4 --b2 10
+
 ## Bridges (day)
 art/bridges/bridge-ew.png	main	bridge:::bridge-ew:style=water&piece=ew	compose2.py --b1 4 --b2 12
 art/bridges/bridge-ns.png	main	bridge:::bridge-ns:style=water&piece=ns	compose2.py --b1 4 --b2 12
@@ -1551,6 +1559,7 @@ art/effects/fx-black-smoke.png	-	-	fx/particles.py {fin}
 art/effects/fx-flare.png	-	-	fx/particles.py {fin}
 art/effects/fx-exhaust.png	-	-	fx/exhaust.py {fin}
 art/effects/fx-exhaust-heavy.png	-	-	fx/exhaust.py {fin}
+art/effects/fx-fuel-blast.png	-	-	fx/fuelblast.py {fin}
 
 ## Point files (pixel positions read off the renders)
 art/buildings/building-emitters.json	-	-	post/emitters.py {raw}/emit {fin}/building-emitters.json

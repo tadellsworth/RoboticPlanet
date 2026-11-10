@@ -64,8 +64,10 @@ than the building-explosion sheet; the game scales it to the blast's size (1 to 
 oil-scorch.png: a ground mark, 128 x 128, transparent: a black oily burn with a glossy sheen, ragged edges.
 ```
 
-**Installed:** the Tanker, the Generator (with its working loop and smoke) and the exhaust smoke. Still to make:
-the pipe pieces and the fuel blast. New art can now be made with the Terrafall design system:
+**Installed:** the Tanker, the Generator (with its working loop and smoke), the exhaust smoke, and (rendered with
+the renderer in `renderer/`) the pipe pieces (`renderer/b/pipe.js`; no stub or team band: pipe joins buildings by
+running under them) and the fuel blast (`renderer/fx/fuelblast.py`, 16 frames in a 4 x 4 grid). Still to make:
+`oil-scorch`. New art can now be made with the Terrafall design system:
 https://claude.ai/artifact/GAdLBz6kefeJeTRz57TTV7
 
 **Order to make them in:** the Tanker first (it's on every map from the start), then the pipe pieces, the Generator,

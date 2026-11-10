@@ -14,7 +14,7 @@ This folder is the complete setup behind the Terrafall art. It covers every 3D s
 | `compose.py`, `compose_any.py`, `compose2.py` | Add bloom from the glow pass and downsample 2×. |
 | `walls/` | The wall and gate renderer: `run.js`, `index.html`, `wlib.js`, `b/wall.js`, `b/gate.js`, `compose_walls.py`, and `layout.py` (test layouts). |
 | `post/` | Python that finishes renders: light overlays, the Pulse Cannon effects, working-loop embers, lamp heads, time-of-day extras, headlights and emitter points. |
-| `fx/` | The 2D effect library (`fxlib.py`) and the sheets made with it: explosion, smoke, steam, flare and exhaust. |
+| `fx/` | The 2D effect library (`fxlib.py`) and the sheets made with it: explosion, fuel blast, smoke, steam, flare and exhaust. |
 | `terrain/` | The pure-Python terrain renderer: ground, water, rock, cliffs, plants and canyon tiles. `tex.py` is also used by `fx/fxlib.py`. |
 | `preview/` | The review videos and mock-ups. These don't ship. |
 | `tools/` | `catalogue.py` writes `jobs.txt`; `rerender.py` rebuilds and checks files; `points.py` writes the point files; `check-webgl.js` reports your Chrome and WebGL. |
@@ -29,7 +29,7 @@ This folder is the complete setup behind the Terrafall art. It covers every 3D s
 | Military and nuclear | silo, missilefactory, ammoplant (the shared `missile.js`), nreactor, nsilo (the shared `nuke.js`), nukeblast |
 | Command Base and outposts | hq (the Command Base, shipped as `lander@T`), outpost. `commandbase.js` is the older compound version, kept for reference and not shipped. |
 | Defences | pulseturret (base, heads, charge mask), bunker, disruptor, mortar (`milkit.js` holds sandbags and frames) |
-| Rail and roads | station, rail (track tiles), bridge (water, sky and rail bridges), streetlamp |
+| Rail and roads | station, rail (track tiles), bridge (water, sky and rail bridges), streetlamp, pipe (pipeline tiles) |
 | Ropeway | ropeway (the station), gondola |
 | Vehicles | truck, tanker, roadtrain, freight (loco and wagons), crawler, trader |
 | Robots | rob_worker, rob_hauler, rob_agribot, rob_paver, rob_warbot (the shared `robkit.js`) |
@@ -128,7 +128,7 @@ Parameters the scenes read:
 | `d=k` | crawler | Deploy frame 1–9. Frame 9 is the deployed base. |
 | `c=scuttler\|brute` | creature | Which creature. |
 | `s=1..3` | nest | Nest size. |
-| `piece=` | rail, bridge | The tile piece. Rail also has `lights-on`; bridges also have `lamp`. |
+| `piece=` | rail, bridge, pipe | The tile piece (pipe: straight, corner, tee, cross, end, raised). Rail also has `lights-on`; bridges also have `lamp`. |
 | `style=water\|sky\|rail` | bridge | The bridge type. |
 | `kind=road\|asphalt`, `lit=1` | streetlamp | Which lamp, and whether to render only the lit head. |
 | `mk=[[name,x,y,z],…]` | `lib.js` | Extra marks at world points, reported in `geom.json`. `post/emitters.py` uses this. |
@@ -165,6 +165,7 @@ node walls/run.js out/w 'wall:wall-post@0:piece=post&team=%2338d4ff&frames=6&tod
 | Robots, Road Train, train cars, gondola, creatures, trader | 256 | Straight down, 10 units across |
 | Crawler | 512 | Straight down, 20 units across |
 | Rail tiles | 256 | Straight down |
+| Pipe tiles | 256 | Straight down |
 | Bridges | 512, or 512 × 1024 for piers, towers and the lamp | The 57° view |
 | Nuke blast | 512 | The 57° view, no pad |
 | App icon | 2048 render | Its own camera, no pad |
@@ -239,6 +240,7 @@ Its noise comes from `terrain/tex.py`. The scripts that use it are:
 - `fx/explosion.py`;
 - `fx/particles.py`: chimney smoke, steam, black smoke and the flare;
 - `fx/exhaust.py`: light and heavy truck exhaust.
+- `fx/fuelblast.py`: the fuel blast (`fx-fuel-blast`: a Tanker or Refinery going up), 16 frames in a 4 x 4 grid.
 
 Each writes into the folder you give it (default `out/fx`). Every sheet has a transparent background, and its grid reads left to right, then top to bottom.
 

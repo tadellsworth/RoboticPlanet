@@ -1825,6 +1825,7 @@ function completeBuilding(b) {
   if (def.ropeway && !b.link) ropewayAcross(b);
   if (def.viaduct && !b.link) viaductAcross(b);
   b.progress = 1;
+  b.status = ''; // (a site's "Under construction" mustn't outlive it)
   b.stock = {};
   b.inc = {};
   b.res = {};
@@ -2229,6 +2230,10 @@ function updateBuilding(b, dt) {
   if (b.paused) { b.status = 'Paused — its worker is free for other jobs'; return; }
   if (def.mil) b.status = `Garrison: ${b.garrison.length} of ${def.garrison} warbots`;
   else if (def.store) b.status = 'Storing goods';
+  else if (def.gate) b.status = 'Open to your bots; enemies have to break it down';
+  else if (def.barrier) b.status = 'Holding the line: enemies have to go round or break through';
+  else if (def.ropeway) b.status = b.link ? 'Carrying bots across' : 'Waiting for its far station';
+  else if (def.viaduct) b.status = 'Open to traffic';
   if (def.inp) produce(b, def, dt * S.players[b.owner].mult);
   else if (def.missile) updateSilo(b, def);
   else if (def.nukeSilo) updateNukeSilo(b, dt * S.players[b.owner].mult);
@@ -2799,9 +2804,15 @@ function captureBuilding(b, by) {
  */
 function fuelBlast(x, y, kind, full, owner) {
   const B = BLAST[kind], r = B.r0 + B.r1 * clamp(full || 0, 0, 1), r2 = r * r, rb = r + 0.5;
-  blastFx(x, y, r);
-  blastFx(x + 0.2, y - 0.25, r * 0.6, { small: true, delay: 0.18 });
-  addFx('smoke', x, y - 0.2, { r: r * 0.9, life: 5, dark: true });
+  if (typeof ART !== 'undefined' && ART['fx-fuel-blast']) {
+    // The rendered fuel blast (renderer/fx/fuelblast.py): fireball, black oily smoke, burning fuel on the ground.
+    addFx('fuelblast', x, y, { r, life: 1.15 });
+    addDecal('scorch', x, y, Math.max(0.5, r * 0.8), 90);
+  } else {
+    blastFx(x, y, r);
+    blastFx(x + 0.2, y - 0.25, r * 0.6, { small: true, delay: 0.18 });
+    addFx('smoke', x, y - 0.2, { r: r * 0.9, life: 5, dark: true });
+  }
   sfx('boom');
   const later = (k) => S.time + BLAST.chain[0] + (BLAST.chain[1] - BLAST.chain[0]) * hash2(Math.floor(x * 13) + k, Math.floor(y * 7), S.tick);
   for (const u of S.bots) {
