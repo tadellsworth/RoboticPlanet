@@ -265,13 +265,14 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
   (75% as wide, 170% as long) with the bases far apart; **Chokepoint** walls the middle of the map off with a ragged belt of
   crags (2 to 5 tiles deep, rough outcrops in front) and one to three narrow channels winding through it to a gallery
   along the middle line, different every game (`chokeBand`; the mouths are kept in `S.choke`, see `chokePass`).
-  **Islands** (a taller map) puts each base on its own island, with two or three medium islands in the middle (by
-  the seed: a facing pair, or one in the middle and a pair out to the sides; one on a Small map; for a free-for-all,
-  three between the homes out toward the rim, sized to leave as much sea as a two-way map, round an islet in the
-  middle) and a couple of little islets, at least `ISLE_GAP` (4) tiles of sea apart (5 to 8 bridge tiles), so a crossing is a long, dear bridge (`bridgeMul`) or a ship; the AI bridges toward its rival
-  (`aiBridge`) and makes beach landings (`aiNaval`: its landed warbots march on once the beach is clear, idle ones
-  across the water go after the nearest enemy building there, and with the enemy's army nearly gone it lands by the
-  enemy Command Base; warbots stranded across the water out of Ammo don't stop its Foundry, as unarmed ones at home
+  **Islands** (a taller map) puts each base on its own island, with two or three medium islands in the middle (by the
+  seed: a facing pair, or one in the middle and a pair out to the sides; one on a Small map; for a free-for-all, three
+  between the homes out toward the rim, sized to leave as much sea as a two-way map, round an islet in the middle) and
+  a couple of little islets, at least `ISLE_GAP` (4) tiles of sea apart (5 to 10 bridge tiles), so a crossing is a
+  long, dear bridge (`bridgeMul`) or a ship; the AI bridges toward its rival (`aiBridge`) and makes beach landings
+  (`aiNaval`: its landed warbots march on once the beach is clear, idle ones across the water go after the nearest
+  enemy building there, and once a rival's army is nearly gone (the weakest one, in a free-for-all) it lands by that
+  rival's Command Base; warbots stranded across the water out of Ammo don't stop its Foundry, as unarmed ones at home
   do). Specks of land under 8 tiles go under.
   On Islands and Sky islands each home island (or mesa) is topped up to `HOME_STONE` (300) Stone with a boulder field
   near the base, since Cement comes from Stone alone and every crossing costs Cement; on Sky islands boulders also

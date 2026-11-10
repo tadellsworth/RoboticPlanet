@@ -495,10 +495,15 @@ function aiNaval(p, me, kinds, lvl, lander, canBuild) {
   // how little guards it (turrets and garrisons within 6 tiles count against it).
   let foes = S.buildings.filter((b) => !b.dead && b.owner >= 0 && b.owner !== p && !BDEFS[b.type].wild && S.players[b.owner] && !S.players[b.owner].out);
   if (!foes.length) return;
-  // The enemy has next to no army left: land right by its Command Base to finish it.
-  const enemy = rivalOf(p), eL = getE(S.players[enemy].lander);
-  const enemyArmy = S.bots.reduce((n, u) => n + (!u.dead && u.owner === enemy && u.type === 'warbot' ? 1 : 0), 0);
-  if (eL && !eL.dead && eL.owner === enemy && enemyArmy <= 3) foes = [eL];
+  // A rival with next to no army left (the weakest, in a free-for-all): land right by its Command Base to finish it.
+  let weak = -1, wa = 4;
+  for (let o = 0; o < S.players.length; o++) {
+    const eL = getE(S.players[o].lander);
+    if (o === p || S.players[o].out || !eL || eL.dead || eL.owner !== o) continue;
+    const n = S.bots.reduce((k, u) => k + (!u.dead && u.owner === o && u.type === 'warbot' ? 1 : 0), 0);
+    if (n < wa) { wa = n; weak = o; }
+  }
+  if (weak >= 0) foes = [getE(S.players[weak].lander)];
   const guard = (i, j) => foes.reduce((n, b) => n + (dist2(b.x, b.y, i, j) <= 36 ? (BDEFS[b.type].range ? 3 : 0) + (b.garrison ? b.garrison.length : 0) : 0), 0);
   let best = null, bs = Infinity;
   for (let j = 1; j < S.H - 1; j++) for (let i = 1; i < S.W - 1; i++) {
