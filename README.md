@@ -266,7 +266,8 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
 - **Ammo:** warbots carry 10 shots (each Ammo reloads 5) and reload in your Command Base and Outposts, which haulers stock from an Ammo Plant. Out of
   ammo, a warbot can't fight at all: it heads back to a garrison to reload, and only armed warbots answer orders.
 - **Repairs:** nothing heals by itself. Damaged bots go to a Repair Station (workers below 60% health, warbots below
-  70% once their garrison is quiet), which uses 1 Alloy per 12 health. To fix a building, tap it and press **Repair**:
+  70% once their garrison is quiet; Colony free play too), which uses 1 Alloy per 12 health. Haulers keep up to 3 Alloy
+  in it, and an empty one gets the first Alloy that reaches storage (like an empty Charging Station's Fuel). To fix a building, tap it and press **Repair**:
   you pay 1 Cement for every 6 missing armor and a free worker restores it.
 - **Statistics:** the pause menu and the end-of-game screen show graphs of bots, land and goods over time and how busy
   each kind of building was; each building's panel shows its recent busy time.
@@ -363,8 +364,8 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
 - **Ordering bots:** the Bot Foundry only builds the bots you order. Tap it and use +1 or +5 for Workers or
   Warbots (Clear cancels the queue); with nothing queued it sits idle and uses no Alloy or Chips.
 - The **Build** menu shows how many of each building you already have, and how many are being built.
-- **Demolishing** returns half a building's materials, and anything inside it goes to the nearest storage (a Silo's
-  Missiles, a Nuclear Silo's finished missile as its parts).
+- **Demolishing** returns half a building's materials, and anything inside it goes to the nearest other storage (a Silo's
+  Missiles, a Nuclear Silo's finished missile as its parts, the whole stock of a Depot or Rail Station).
 - You can only build inside your border. Outposts push it out (7 tiles around them).
 - **Salvage:** a colony out of Stone or Fiber with no Quarry or Harvester that can still work salvages 1 every 20 s from
   its Command Base (up to 6), so it can always rebuild. Capturing an enemy Outpost takes its land,
@@ -414,6 +415,9 @@ including the remaining pieces (Ramp, slope and cliff textures, goods icons).
 Weapon effects are drawn in code: muzzle flashes, tracers, gun smoke, dust kicks and bullet pockmarks round each
 target (sparks on buildings), the Disruptor's arcs, and blasts with a fireball, flying debris, smoke and a scorch mark.
 A destroyed building shakes, leans and sinks into the ground in a dust cloud, with secondary blasts, and leaves rubble.
+A Pulse Turret charges for 0.45 s before each shot (`PULSE_CHARGE`; the charge builds while it reloads, so its rate of
+fire is unchanged), energy gathering at its muzzle, then fires a thick electric beam wrapped in arcs. At night,
+streetlights light every third road tile (`drawStreetLights`): sodium orange over concrete, white over asphalt.
 Ground marks fade over a minute or so (at most 350 at once). Each effect can be swapped for a sprite sheet
 (`frames` and `cols` in the manifest; `FX_ART` and `DECAL_ART` in `js/render.js`): see ART_GUIDE Batch 15.
 

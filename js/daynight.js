@@ -223,6 +223,52 @@ function drawHeadlights(ctx, kind, x, y, spritePx, angle) {
   ctx.restore();
 }
 
+/*
+ * Streetlights at dusk and night: a lamp over every third tile of road (always the same tiles, so
+ * they don't flicker as you scroll), sodium orange over concrete roads and a brighter, whiter light
+ * over asphalt. Tunnels keep their own lamps.
+ */
+const STREETLIGHT = {
+  road: { rgb: [255, 146, 52], r: 1.3, a: 0.6, head: '#ffc27a' },
+  asphalt: { rgb: [228, 238, 255], r: 1.6, a: 0.7, head: '#ffffff' },
+};
+
+function streetGlow(kind) {
+  TOD.street = TOD.street || {};
+  if (TOD.street[kind]) return TOD.street[kind];
+  const [r, g, b] = STREETLIGHT[kind].rgb, n = 128, c = document.createElement('canvas');
+  c.width = c.height = n;
+  const x = c.getContext('2d'), gr = x.createRadialGradient(n / 2, n / 2, 0, n / 2, n / 2, n / 2);
+  gr.addColorStop(0, `rgba(${r},${g},${b},1)`); gr.addColorStop(0.2, `rgba(${r},${g},${b},0.7)`);
+  gr.addColorStop(0.55, `rgba(${r},${g},${b},0.22)`); gr.addColorStop(1, `rgba(${r},${g},${b},0)`);
+  x.fillStyle = gr; x.fillRect(0, 0, n, n);
+  return (TOD.street[kind] = c);
+}
+
+function drawStreetLights(ctx, ox, oy, z, v0, v1) {
+  if (!TOD.active || !(TOD.state.lights > 0.01) || !S.road) return;
+  const i0 = Math.max(0, Math.floor(v0.x) - 2), i1 = Math.min(S.W - 1, Math.ceil(v1.x) + 2);
+  const j0 = Math.max(0, Math.floor(v0.y) - 2), j1 = Math.min(S.H - 1, Math.ceil(v1.y) + 2);
+  const on = TOD.state.lights, head = Math.max(1.2, z * 0.05);
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  for (let j = j0; j <= j1; j++) {
+    const rem = (i0 + 2 * j) % 3; // lamps where (i + 2j) is a multiple of 3: every third tile, any way a road runs
+    for (let i = rem ? i0 + 3 - rem : i0; i <= i1; i += 3) {
+      const t = tIdx(i, j);
+      if (!S.road[t] || S.terrain[t] === T_ROCK) continue;
+      const kind = S.pave[t] === 2 ? 'asphalt' : 'road', L = STREETLIGHT[kind], w = z * L.r * 2;
+      const x = ox + (i + 0.5) * z, y = oy + (j + 0.5) * z;
+      ctx.globalAlpha = on * L.a;
+      ctx.drawImage(streetGlow(kind), x - w / 2, y - w * 0.4, w, w * 0.8); // seen at an angle: a little squashed
+      ctx.globalAlpha = on;
+      ctx.fillStyle = L.head;
+      ctx.beginPath(); ctx.arc(x, y, head, 0, Math.PI * 2); ctx.fill();
+    }
+  }
+  ctx.restore();
+}
+
 /** At dusk and night, a glow in the building's team colour on the ground round its pad. */
 function drawLightPool(ctx, x, y, z, color) {
   if (!TOD.active || !(TOD.state.pools > 0.01)) return;

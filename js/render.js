@@ -3444,6 +3444,7 @@ function render(dtReal) {
   drawMapLayer(ctx, ox, oy, z);
   ctx.drawImage(R.terr, ox, oy, S.W * z, S.H * z);
   todGradeGround(ctx); // morning, evening and night light on the ground and its territory tint (buildings and bots have their own re-lit art)
+  drawStreetLights(ctx, ox, oy, z, v0, v1);
 
   // Territory borders
   ctx.lineWidth = Math.max(1.5, z * 0.07);
@@ -3675,6 +3676,7 @@ function render(dtReal) {
   drawLoot(ctx, ox, oy, z, inView);
   drawRallies(ctx, ox, oy, z);
   drawMissiles(ctx, ox, oy, z);
+  drawPulseCharges(ctx, ox, oy, z, inView);
   drawEffects(ctx, ox, oy, z);
   if (S.event) drawEvent(ctx, ox, oy, z);
   if (R.box) {
@@ -4438,6 +4440,74 @@ function drawDecals(ctx, ox, oy, z, inView) {
   }
 }
 
+/** A soft round glow, white at the core and `color` round it, cached per colour (drawn with 'lighter'). */
+function glowSprite(color) {
+  R.glows = R.glows || {};
+  if (R.glows[color]) return R.glows[color];
+  const n = 128, c = document.createElement('canvas');
+  c.width = c.height = n;
+  const g = c.getContext('2d'), gr = g.createRadialGradient(n / 2, n / 2, 0, n / 2, n / 2, n / 2);
+  gr.addColorStop(0, 'rgba(255,255,255,1)'); gr.addColorStop(0.16, 'rgba(255,255,255,0.9)');
+  gr.addColorStop(0.32, color); gr.addColorStop(1, 'rgba(0,0,0,0)');
+  g.fillStyle = gr; g.fillRect(0, 0, n, n);
+  // Fade the colour out toward the edge (a gradient stop can't take an alpha onto a named colour).
+  g.globalCompositeOperation = 'destination-in';
+  const fade = g.createRadialGradient(n / 2, n / 2, 0, n / 2, n / 2, n / 2);
+  fade.addColorStop(0, 'rgba(0,0,0,1)'); fade.addColorStop(0.45, 'rgba(0,0,0,0.55)'); fade.addColorStop(1, 'rgba(0,0,0,0)');
+  g.fillStyle = fade; g.fillRect(0, 0, n, n);
+  return (R.glows[color] = c);
+}
+
+/** A jagged electric bolt from (x1, y1) to (x2, y2), `amp` px of jitter, re-formed with each `seed`. */
+function boltPath(ctx, x1, y1, x2, y2, amp, seed, segs) {
+  const dx = x2 - x1, dy = y2 - y1, len = Math.hypot(dx, dy) || 1, nx = -dy / len, ny = dx / len;
+  const n = segs || Math.max(4, Math.min(18, Math.round(len / 9)));
+  ctx.moveTo(x1, y1);
+  for (let s = 1; s < n; s++) {
+    const f = s / n, off = (hash2(seed, s * 7, 3) - 0.5) * 2 * amp * Math.sin(f * Math.PI);
+    ctx.lineTo(x1 + dx * f + nx * off, y1 + dy * f + ny * off);
+  }
+  ctx.lineTo(x2, y2);
+}
+
+/**
+ * Pulse Turrets charging up: energy gathers at the muzzle as b.chg fills (see updateTurret), sparks
+ * streaming in, a glow swelling in the team colour and little arcs crackling round it.
+ */
+function drawPulseCharges(ctx, ox, oy, z, inView) {
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  for (const b of S.buildings) {
+    if (b.type !== 'turret' || b.dead || !b.built || !(b.chg > 0.01) || !inView(b.x, b.y, 2)) continue;
+    const lv = Math.min(1, b.chg / PULSE_CHARGE), m = pulseMuzzle(b, b.aim), x = ox + m.x * z, y = oy + m.y * z;
+    const color = PLAYER_COLORS[b.owner], flick = 0.85 + 0.15 * Math.sin(R.time * 60 + b.id);
+    // Sparks drawn in toward the muzzle.
+    ctx.strokeStyle = color; ctx.lineWidth = Math.max(1, z * 0.025);
+    for (let n = 0; n < 7; n++) {
+      const ph = (R.time * 2.6 + n / 7) % 1, a = (b.id * 1.7 + n * 2.39) + Math.floor(R.time * 2.6 + n / 7) * 1.3;
+      const r0 = z * (0.55 - 0.45 * ph), r1 = r0 + z * 0.08;
+      ctx.globalAlpha = lv * ph;
+      ctx.beginPath(); ctx.moveTo(x + Math.cos(a) * r1, y + Math.sin(a) * r1); ctx.lineTo(x + Math.cos(a) * r0, y + Math.sin(a) * r0); ctx.stroke();
+    }
+    // The swelling glow, and a white-hot core.
+    const g = glowSprite(color), s = z * (0.35 + 0.75 * lv) * flick;
+    ctx.globalAlpha = 0.35 + 0.65 * lv;
+    ctx.drawImage(g, x - s / 2, y - s / 2, s, s);
+    // Arcs crackling round it once it's well charged.
+    if (lv > 0.35) {
+      const seed = Math.floor(R.time * 24) + b.id * 13;
+      ctx.strokeStyle = '#e6f7ff'; ctx.lineWidth = Math.max(1, z * 0.02); ctx.globalAlpha = lv;
+      ctx.beginPath();
+      for (let n = 0; n < 3; n++) {
+        const a = hash2(seed, n, 1) * Math.PI * 2, r = z * (0.18 + 0.22 * hash2(seed, n, 2));
+        boltPath(ctx, x, y, x + Math.cos(a) * r, y + Math.sin(a) * r, z * 0.05, seed + n, 4);
+      }
+      ctx.stroke();
+    }
+  }
+  ctx.restore();
+}
+
 function drawEffects(ctx, ox, oy, z) {
   for (const f of S.fx) {
     if (f.t < 0) continue; // a delayed effect (a building's second blast) not started yet
@@ -4591,6 +4661,51 @@ function drawEffects(ctx, ox, oy, z) {
           ctx.globalAlpha = 0.5 * (1 - kk);
           ctx.beginPath(); ctx.arc(x + (n - 1) * z * 0.15, y - kk * z * 0.9, z * (0.15 + kk * 0.3), 0, Math.PI * 2); ctx.fill();
         }
+        break;
+      }
+      case 'pulsebeam': {
+        // The Pulse Turret's blast: a thick beam with a white-hot core in a team-colour glow, wrapped
+        // in crackling arcs, thinning out as it fades.
+        const x2 = ox + f.x2 * z, y2 = oy + f.y2 * z, w = Math.pow(1 - k, 1.4), seed = f.seed + Math.floor(f.t * 30) * 17;
+        ctx.save();
+        ctx.globalCompositeOperation = 'lighter';
+        ctx.lineCap = 'round';
+        ctx.strokeStyle = f.color;
+        ctx.globalAlpha = 0.28 * w; ctx.lineWidth = z * 0.5 * w + 2;
+        ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x2, y2); ctx.stroke();
+        ctx.globalAlpha = 0.85 * w; ctx.lineWidth = z * 0.2 * w + 1;
+        ctx.stroke();
+        ctx.strokeStyle = '#ffffff'; ctx.globalAlpha = w; ctx.lineWidth = z * 0.07 * (0.4 + 0.6 * w) + 1;
+        ctx.stroke();
+        // Arcs twisting round the beam, re-formed every frame or two.
+        for (let n = 0; n < 3; n++) {
+          ctx.strokeStyle = n === 1 ? f.color : '#dff6ff'; ctx.globalAlpha = (n === 1 ? 0.9 : 0.75) * Math.min(1, w * 1.4);
+          ctx.lineWidth = Math.max(1, z * 0.03);
+          ctx.beginPath(); boltPath(ctx, x, y, x2, y2, z * (0.16 + n * 0.05) * (0.5 + w), seed + n * 101); ctx.stroke();
+        }
+        // The flare at the muzzle.
+        const g = glowSprite(f.color), s = z * (0.6 + 0.5 * w);
+        ctx.globalAlpha = w; ctx.drawImage(g, x - s / 2, y - s / 2, s, s);
+        ctx.restore();
+        break;
+      }
+      case 'pulsehit': {
+        // Where the blast lands: a flash, a shock ring and sparks thrown out.
+        const g = glowSprite(f.color), s = z * (0.7 + 0.6 * k);
+        ctx.save();
+        ctx.globalCompositeOperation = 'lighter';
+        ctx.globalAlpha = (1 - k) * 0.95; ctx.drawImage(g, x - s / 2, y - s / 2, s, s);
+        ctx.strokeStyle = f.color; ctx.lineWidth = Math.max(1, z * 0.05 * (1 - k));
+        ctx.globalAlpha = 1 - k;
+        ctx.beginPath(); ctx.ellipse(x, y, z * 0.65 * k + 2, z * 0.5 * k + 2, 0, 0, Math.PI * 2); ctx.stroke();
+        ctx.strokeStyle = '#e6f7ff'; ctx.lineWidth = Math.max(1, z * 0.025);
+        ctx.beginPath();
+        for (let n = 0; n < 5; n++) {
+          const a = hash2(f.seed, n, 5) * Math.PI * 2, r0 = z * 0.12, r1 = z * (0.3 + 0.4 * k) * (0.6 + hash2(f.seed, n, 6) * 0.6);
+          boltPath(ctx, x + Math.cos(a) * r0, y + Math.sin(a) * r0, x + Math.cos(a) * r1, y + Math.sin(a) * r1, z * 0.04, f.seed + n * 7 + Math.floor(f.t * 30), 3);
+        }
+        ctx.stroke();
+        ctx.restore();
         break;
       }
       case 'laser': {

@@ -77,10 +77,10 @@ function growStalks(dt) {
 
 function storeAccepts(b) { return b.built && !b.dead && BDEFS[b.type].store; }
 
-function nearestStoreTo(owner, x, y) {
+function nearestStoreTo(owner, x, y, except) {
   let best = null, bd = Infinity;
   for (const b of S.buildings) {
-    if (b.dead || b.owner !== owner || !storeAccepts(b) || evacuated(b)) continue;
+    if (b === except || b.dead || b.owner !== owner || !storeAccepts(b) || evacuated(b)) continue;
     const d = dist2(b.x + 0.5, b.y + 0.5, x, y);
     if (d < bd) { bd = d; best = b; }
   }
@@ -1011,7 +1011,9 @@ function dispatch(p) {
   for (const b of blds) {
     const pri = prioRank(b) * 3 + (b.built && BDEFS[b.type].bots ? 0 : 1);
     // Fuel for an empty Charging Station comes before anything else: nothing moves without charge.
-    const dry = BDEFS[b.type].charger && b.built && chargerDry(b);
+    // So does one Alloy for an empty Repair Station, so it always has some on hand for the next robot.
+    const dry = (BDEFS[b.type].charger && b.built && chargerDry(b)) ||
+      (BDEFS[b.type].repair && b.built && !(b.stock.alloy > 0) && !(b.inc.alloy > 0) && (b.repairPts || 0) < REPAIR_HP_PER_ALLOY / 2);
     for (const [g, n, keep] of needsOf(b)) if (n > 0) reqs.push({ b, g, n, pri: dry ? -1 : keep ? prioRank(b) * 3 + 2 : pri, inc: sumValues(b.inc), keep });
   }
   reqs.sort((a, c) => a.pri - c.pri || a.inc - c.inc || a.b.born - c.b.born);
@@ -1139,7 +1141,7 @@ function dispatch(p) {
 
 /** Is robot u hurt enough to go for repairs (and is there anywhere to go)? */
 function wantsRepair(u) {
-  if (u.dead || S.mode === 'colony' || !u.maxHp) return false;
+  if (u.dead || !warOn() || !u.maxHp) return false; // Colony free play has Repair Stations too (wildlife bites)
   return u.hp < u.maxHp * (u.type === 'warbot' ? REPAIR_BELOW.warbot : REPAIR_BELOW.other);
 }
 
@@ -2238,7 +2240,14 @@ function spawnFromFoundry(b) {
 /**
  * A Pulse Turret keeps tracking its target, turns its head toward it at TURRET_TURN radians per
  * second and fires only once it is lined up. With nothing in range it sweeps slowly back and forth.
+ * It charges for PULSE_CHARGE seconds before each shot (b.chg, drawn as energy gathering at the
+ * muzzle); the charge starts while it reloads, so only a first shot at a target already in its
+ * sights waits for it.
  */
+const PULSE_CHARGE = 0.45;
+/** Where a Pulse Turret's beam leaves its barrel, turned to `aim`. */
+function pulseMuzzle(b, aim) { return { x: b.x + 0.5 + Math.cos(aim) * 0.36, y: b.y + 0.5 + Math.sin(aim) * 0.36 }; }
+
 function updateTurret(b, def, dt) {
   b.cd -= dt;
   b.scanT = (b.scanT || 0) - dt;
@@ -2249,6 +2258,7 @@ function updateTurret(b, def, dt) {
   b.tgt = target ? target.id : 0;
   const ammo = b.shots + (b.stock.crystal || 0) * shotsPer(b);
   if (!target) {
+    b.chg = 0;
     b.sweepT = (b.sweepT || 0) + dt;
     if (b.sweepT > 4) { b.sweepT = 0; b.sweep = -(b.sweep || 1); }
     b.aim = wrapAngle(b.aim + (b.sweep || 1) * TURRET_SWEEP * dt);
@@ -2259,19 +2269,26 @@ function updateTurret(b, def, dt) {
   const diff = wrapAngle(want - b.aim), turn = TURRET_TURN * dt;
   b.aim = wrapAngle(b.aim + Math.max(-turn, Math.min(turn, diff)));
   b.working = true;
+  const loaded = b.shots > 0 || (b.stock.crystal || 0) > 0;
+  b.chg = loaded && b.cd <= PULSE_CHARGE ? Math.min(PULSE_CHARGE, (b.chg || 0) + dt) : 0;
   if (Math.abs(diff) > 0.15) { b.status = 'Turning to aim'; return; }
   if (b.cd > 0) return;
+  if (loaded && b.chg < PULSE_CHARGE - 1e-6) { b.status = 'Charging'; return; }
   if (b.shots <= 0) {
     if ((b.stock.crystal || 0) > 0) { bump(b.stock, 'crystal', -1); usedGood(b.owner, 'crystal', 1); b.shots = shotsPer(b); }
     else { b.status = 'Out of ammo!'; b.cd = 0.5; return; }
   }
   b.shots--;
   b.status = 'Firing';
-  addFx('laser', cx, cy, { x2: target.x, y2: target.y, color: PLAYER_COLORS[b.owner] });
-  shotFx(cx, cy - 0.2, target.x, target.y, { color: PLAYER_COLORS[b.owner], pulse: true });
+  // The blast: a thick electric beam from the muzzle, crackling arcs round it, a burst where it hits.
+  const m = pulseMuzzle(b, b.aim), color = PLAYER_COLORS[b.owner];
+  addFx('pulsebeam', m.x, m.y, { x2: target.x, y2: target.y, color, life: 0.42, seed: S.tick + b.id });
+  addFx('pulsehit', target.x, target.y, { color, life: 0.4, seed: S.tick + b.id * 3 });
+  shotFx(m.x - Math.cos(b.aim) * 0.32, m.y - Math.sin(b.aim) * 0.32, target.x, target.y, { color, pulse: true });
   sfx('laser');
   damageBot(target, 4);
   b.cd = 1.1;
+  b.chg = 0;
 }
 
 /**
@@ -3922,22 +3939,30 @@ function releaseScore(b) {
   return s;
 }
 
+/**
+ * Take building b down. Half its materials (or, for a site, what was delivered) go to your nearest
+ * other storage, and so does everything inside it: a Silo's Missiles, a pump's last Crude, the whole
+ * stock of a Depot or Rail Station. A Nuclear Silo's finished missile comes apart into its parts.
+ * Returns what went back ({ goods, to }), or null if you have no other storage to take it.
+ */
 function demolish(b) {
-  if (b.dead || b.type === 'lander') return;
+  if (b.dead || b.type === 'lander') return null;
   const def = BDEFS[b.type];
-  const store = nearestStoreTo(b.owner, b.x + 0.5, b.y + 0.5);
+  // Never into itself: a Depot used to be its own nearest storage, and lost everything.
+  const store = nearestStoreTo(b.owner, b.x + 0.5, b.y + 0.5, b);
+  let out = null;
   if (store) {
-    const back = b.built ? siteCost(b) : b.stock;
-    for (const g in back) {
-      const n = b.built ? Math.floor(back[g] / 2) : Math.min(back[g], siteCost(b)[g] || 0);
-      if (n > 0) bump(store.stock, g, n);
-    }
-    // Goods still inside a finished building (a Silo's Missiles, a pump's last Crude) go back to
-    // storage too, and a Nuclear Silo's finished missile comes apart into its parts.
-    if (b.built && !def.store) for (const g in b.stock) if (b.stock[g] > 0 && GOOD[g]) bump(store.stock, g, b.stock[g]);
-    if (b.built && def.nukeSilo && b.armed) for (const g in NUKE.parts) bump(store.stock, g, NUKE.parts[g]);
+    out = { goods: {}, to: store.id };
+    const give = (g, n) => { if (n > 0 && GOOD[g]) { bump(store.stock, g, n); bump(out.goods, g, n); } };
+    const cost = siteCost(b);
+    if (b.built) {
+      for (const g in cost) give(g, Math.floor(cost[g] / 2));
+      for (const g in b.stock) give(g, Math.floor(b.stock[g] || 0));
+      if (def.nukeSilo && b.armed) for (const g in NUKE.parts) give(g, NUKE.parts[g]);
+    } else for (const g in b.stock) give(g, Math.min(b.stock[g], cost[g] || 0));
   }
   destroyBuilding(b, false);
+  return out;
 }
 
 /* ------------------------------------------------------------------ statistics */
