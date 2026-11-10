@@ -272,7 +272,8 @@ function aiThink(p) {
     const bridging = P.bridgeWant > 0 && S.time - P.bridgeWant < 30;
     // A Tycoon rests it for missiles even with a small army (as long as a few warbots stand guard).
     const forMissiles = (saving || P.feedMissiles) && (!armyBehind || (st.missiles && army >= wantArmy * 0.7));
-    if ((forMissiles || needArmory || bridging) && workers >= staffed + 3) { b.mode = 'off'; delete b.orders.hauler; delete b.orders.truck; }
+    // (Saving for a crossing with a fair army already: the Foundry rests even if workers are short.)
+    if (((forMissiles || needArmory || bridging) && workers >= staffed + 3) || (bridging && P.bridgeNeed && army >= Math.min(wantArmy, 8))) { b.mode = 'off'; delete b.orders.hauler; delete b.orders.truck; }
     // Haulers when short; while the army is well behind, only when badly short.
     else if ((kinds.hauler || 0) < (armyBehind ? Math.min(wantHaulers, 6) : wantHaulers) && !(b.orders.hauler > 0)) b.orders.hauler = 1;
     // A forward Depot with supply orders gets a Freight Truck to keep it stocked.

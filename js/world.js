@@ -721,6 +721,29 @@ function generateMap(seed, W, H, cfg) {
       const h = hash2(mi, mj, sd);
       if (h < 0.006) { res[t] = h < 0.002 ? R_ORE : R_BOULDER; amt[t] = clamp(Math.round(RES[res[t]].amount * RPR.amount), 1, 255); }
     }
+    // The canyons cut away part of each base's fields: every home mesa is topped up to a working
+    // minimum of Ore and Crystal, a compact field a few tiles out from the base (the same for every side).
+    for (const bs of bases) {
+      const b0 = id(Math.round(bs.x), Math.round(bs.y)), mesa = new Uint8Array(N), q = [b0];
+      mesa[b0] = 1;
+      for (let h = 0; h < q.length; h++) orth(q[h], (u) => { if (!mesa[u] && !isFloor[u] && terrain[u] !== T_WATER) { mesa[u] = 1; q.push(u); } });
+      const free = (t) => mesa[t] && !rim[t] && terrain[t] === T_GROUND && !res[t] && !ramp[t] && elev[t] === elev[b0];
+      const sym = (t) => { const m = Math.min(t, N - 1 - t); return hash2(m % W, (m / W) | 0, sd + 41); };
+      for (const [r, want] of [[R_ORE, 10], [R_CRYSTAL, 8]]) {
+        let have = 0;
+        for (const t of q) if (res[t] === r) have++;
+        if (have >= want) continue;
+        const ring = q.filter((t) => { const d = dist(t % W, (t / W) | 0, bs.x, bs.y); return d >= 5 && d <= 7.5 && free(t); });
+        if (!ring.length) continue;
+        ring.sort((a, c) => sym(a) - sym(c));
+        const c0 = ring[0], cx = c0 % W, cy = (c0 / W) | 0;
+        const near = q.filter((t) => free(t) && dist(t % W, (t / W) | 0, bs.x, bs.y) >= 3.5)
+          .sort((a, c) => (dist2(a % W, (a / W) | 0, cx, cy) - dist2(c % W, (c / W) | 0, cx, cy)) || (sym(a) - sym(c)));
+        for (let k = 0; k < near.length && have < want; k++, have++) { res[near[k]] = r; amt[near[k]] = clamp(Math.round(RES[r].amount * RPR.amount), 1, 255); }
+      }
+    }
+    // Half the resource fields fall into the canyons: what's left on the mesas holds more.
+    for (let t = 0; t < N; t++) if (!isFloor[t] && (res[t] === R_ORE || res[t] === R_CRYSTAL || res[t] === R_STALK)) amt[t] = clamp(Math.round(amt[t] * SKY_RES_MUL), 1, 255);
   }
   for (let t = 0; t < N; t++) if (terrain[t] !== T_GROUND) fert[t] = 0;
   return { terrain, res, amt, grow, elev, ramp, fert, bases };
@@ -767,7 +790,8 @@ function richRes(t) {
   const r = S.res[t];
   if (!r || !RICH_TYPES.includes(r)) return false;
   const pr = RESOURCE_PRESETS[(S.settings && S.settings.rich) ?? DEFAULT_RICH] || RESOURCE_PRESETS[DEFAULT_RICH];
-  return S.amt[t] >= RES[r].amount * pr.amount * RICH_MARK;
+  const sky = S.settings && SHAPE_PRESETS[S.settings.shape || 0].sky && (r === R_ORE || r === R_CRYSTAL || r === R_STALK) ? SKY_RES_MUL : 1;
+  return S.amt[t] >= RES[r].amount * pr.amount * RICH_MARK * sky;
 }
 
 /**

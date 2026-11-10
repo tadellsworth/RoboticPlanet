@@ -205,10 +205,13 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
   kept narrow by `SKY_GAP`, so the typical Viaduct spans 4 tiles and the route between bases never needs one over 6), then turns the sea into a canyon floor at level 0 and lifts every
   island into a mesa (home islands +3 levels, the rest +4; small ones flattened to one level), so every drop is 3+ levels: no Ramp can
   reach the floor, only a Ropeway. The outermost rim of every mesa is kept clear of resources (moved up to 3 tiles inland)
-  and crags so a Viaduct can start or land anywhere on it. The floor gets low rises, rock formations, plants and a thin scatter of boulders and ore. Viaducts
+  and crags so a Viaduct can start or land anywhere on it. Each home mesa is topped up to at least 10 Ore and 8 Crystal tiles (a
+  compact field 5–7 tiles out, placed the same for every side), and Ore, Crystal and Stalk on the mesas hold
+  `SKY_RES_MUL` (1.8) times the usual amount, since half the fields fall into the canyons (`richRes` scales its mark to
+  match). The floor gets low rises, rock formations, plants and a thin scatter of boulders and ore. Viaducts
   cross between the clifftops; the AI finds one with `aiViaductSpot` (only spans that bring it closer to its rival),
-  puts an Outpost on each mesa it lands on, and rests its Ammo Plant and Chip Fab while it saves the Alloy for the
-  next span. (`T_CHASM`, the old bottomless canyon, is kept for old saves.)
+  puts an Outpost on each mesa it lands on, and rests its Ammo Plant and Chip Fab (and, with a fair army, its Foundry)
+  while it saves the Alloy for the next span. (`T_CHASM`, the old bottomless canyon, is kept for old saves.)
 - **Shooting across a canyon:** a warbot that can't close in shoots from up to `WARBOT_RANGE_BLOCKED` (2.2) across
   a building or cliff, and up to `WARBOT_RANGE_GAP` (3.6) from a clifftop across lower ground (`overGap`: a narrow
   canyon with no rock, water or building in the line), so garrisons facing each other across a Sky islands canyon

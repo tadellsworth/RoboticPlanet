@@ -4156,7 +4156,8 @@ function placeViaduct(owner, ai, aj, bi, bj) {
 function viaductAcross(b) {
   if (!(b.viaTo >= 0)) return;
   const i = b.viaTo % S.W, j = (b.viaTo / S.W) | 0, t = b.viaTo;
-  if (S.bAt[t] || S.terrain[t] !== T_GROUND || (S.owner[t] >= 0 && S.owner[t] !== b.owner)) {
+  // (The far end may be in a rival's land: a bridgehead. It only needs to be clear.)
+  if (S.bAt[t] || S.terrain[t] !== T_GROUND) {
     if (S.time - (b.viaMsg || -99) > 30) { b.viaMsg = S.time; postMsg(b.owner, 'The Viaduct\'s far end is blocked: clear it and the deck goes across.', i, j, 'warn'); }
     return;
   }
