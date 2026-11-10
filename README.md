@@ -157,7 +157,8 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
   `VIA_TIME` seconds a tile spanned (`b.buildTime`). To the pathfinder it's an edge between the abutment tiles at
   plain-road cost; zones, both road networks (`comp` and `compT`) and the railway (`railNbrs`) join across it. A bot
   out on the deck drives as if on the abutment it left (`moveAlong`), so the ground below is untouched and its traffic
-  passes underneath. The deck, piers and girders are drawn each frame (`drawViaductDeck`). A far end may land on
+  passes underneath. The deck, piers and girders are drawn each frame (`drawViaductDeck`). On Sky islands both ends must be
+  mesa tops (level 3+), so a Viaduct never reaches the floor or its low rises. A far end may land on
   no-one's land or in a rival's (a bridgehead); `computeTerritory` keeps a Viaduct while either end stands in its
   owner's land (or the abutment is on no-one's), and takes it down once neither does. When one comes down, `offDeck`
   moves any bot on its deck to the nearer end, and a bot whose route jumps a Viaduct or Ropeway that's gone drops the

@@ -4116,6 +4116,8 @@ function viaductBlocked(owner, ai, aj, bi, bj) {
   if (S.terrain[t] !== T_GROUND || S.res[t] || S.ramp[t]) return 'The far end needs clear, open ground on a clifftop.';
   if (S.bAt[t]) return 'There is a building at the far end.';
   if (Math.abs(S.elev[t] - S.elev[a]) > VIA_RISE) return `The two ends are more than ${VIA_RISE} levels apart.`;
+  // Sky islands: the canyon floor (and its low rises) is only reached by Ropeway.
+  if (S.settings && SHAPE_PRESETS[S.settings.shape || 0].sky && Math.min(S.elev[a], S.elev[t]) < 3) return 'On Sky islands a Viaduct runs from mesa top to mesa top: only a Ropeway reaches the canyon floor.';
   const low = Math.min(S.elev[a], S.elev[t]), di = Math.sign(bi - ai), dj = Math.sign(bj - aj);
   let dip = false;
   for (let k = 1; k < n; k++) {
