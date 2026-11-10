@@ -1075,7 +1075,7 @@ function dispatch(p) {
   // 1) A builder for every construction site that has materials waiting to be built with.
   for (const b of blds) {
     if (!idle.length) return;
-    if (!b.built && !b.builder && deliveredCount(b) / sumValues(siteCost(b)) > b.progress + 0.01) {
+    if (!b.built && !b.builder && siteFrac(b) > b.progress + 0.01) {
       assignBuild(take(b.x, b.y, 'build'), b);
     }
   }
@@ -1789,6 +1789,9 @@ function doHaul(u, t, dt) {
   if (BDEFS[dst.type].store) enterBuilding(u, dst);
 }
 
+/** How much of a site's materials have arrived (0..1); a site that costs nothing (a building being moved) has all of them. */
+function siteFrac(site) { const total = sumValues(siteCost(site)); return total > 0 ? deliveredCount(site) / total : 1; }
+
 function deliveredCount(site) {
   const cost = siteCost(site);
   let n = 0;
@@ -1805,7 +1808,7 @@ function doBuild(u, t, dt) {
   }
   if (mustRecharge(u)) { cancelTask(u); return; } // go recharge; another builder takes over
   const def = BDEFS[s.type];
-  const cap = deliveredCount(s) / sumValues(siteCost(s));
+  const cap = siteFrac(s);
   if (s.progress < cap) {
     s.progress = Math.min(cap, s.progress + (dt * S.players[u.owner].mult * batFactor(u)) / (s.buildTime || def.buildTime));
     u.busy = 1;
@@ -1842,6 +1845,7 @@ function completeBuilding(b) {
   postMsg(b.owner, `${def.name} is complete.` + (def.roadworks && paveMode(b) === 'marked' && !roadsMarked(b.owner) ? ' Mark the roads it should pave in Paths (Pave).' : ''), b.x, b.y, 'good');
   if (b.owner === 0) sfx('complete');
   addFx('ring', b.x + 0.5, b.y + 0.5, { color: PLAYER_COLORS[b.owner] });
+  if (b.moveFrom) finishMove(b);
   if (def.mil) computeTerritory();
 }
 
@@ -2224,7 +2228,7 @@ function updateBuilding(b, dt) {
   if (def.wild) { updateNest(b); return; }
   if (!b.built) {
     const owed = storeFunded(b) ? stillOwed(b) : null;
-    if (owed && Object.keys(owed).length && !(b.builder && deliveredCount(b) / sumValues(siteCost(b)) > b.progress + 0.01)) b.status = `Waiting for ${costText(owed)} from storage`;
+    if (owed && Object.keys(owed).length && !(b.builder && siteFrac(b) > b.progress + 0.01)) b.status = `Waiting for ${costText(owed)} from storage`;
     else if (b.unlinked && sumValues(b.stock) < sumValues(siteCost(b))) b.status = 'No road to storage yet';
     else if (sumValues(b.stock) + sumValues(b.inc) === 0) b.status = 'Waiting for materials';
     else if (!b.builder) b.status = 'Waiting for a builder';
@@ -4643,6 +4647,9 @@ function releaseScore(b) {
  */
 function demolish(b) {
   if (b.dead || b.type === 'lander') return null;
+  // A building on the move: demolishing either end calls the move off (the old one stays as it was).
+  if (b.moveFrom && !b.built) { const o = getE(b.moveFrom); if (o) o.moving = 0; b.moveFrom = 0; destroyBuilding(b, false, true); return { goods: {}, to: 0, crates: 0 }; }
+  if (b.moving) cancelMove(b);
   const def = BDEFS[b.type];
   // Never into itself: a Depot used to be its own nearest storage, and lost everything.
   const store = nearestStoreTo(b.owner, b.x + 0.5, b.y + 0.5, b);
@@ -4659,6 +4666,58 @@ function demolish(b) {
   } else out.crates = dropLoot(b);
   destroyBuilding(b, false);
   return out;
+}
+
+/* ------------------------------------------------------------------ moving buildings */
+
+/** Settings a building keeps when it moves. */
+const MOVE_KEEPS = ['prio', 'limit', 'paused', 'keep', 'smode', 'reject', 'order', 'orders', 'omode', 'mode', 'gprio', 'keepW', 'pmode'];
+
+/**
+ * Can building b be moved? Any finished one of yours, except the Command Base and Outposts (they hold
+ * your land: build another, then demolish the old), and things joined to the land or each other (Walls,
+ * Gates, Ramps, Viaducts, Ropeways, a deployed Crawler).
+ */
+function movable(b) {
+  const def = BDEFS[b.type];
+  return !!(b.built && !b.dead && !b.moving && b.type !== 'lander' && !(def.mil && !def.bunker) && !def.barrier && !def.viaduct && !def.ropeway && !def.ramp && !def.mobile && !def.wild);
+}
+
+/**
+ * Move building b to tile (i, j): a construction site of the same kind goes up there, costing nothing,
+ * that workers put together in its usual build time. b keeps working meanwhile; when the new one is
+ * finished it takes over b's goods, settings and warbots, and b is taken down (see finishMove).
+ */
+function startMove(owner, b, i, j) {
+  if (!b || b.owner !== owner || !movable(b)) return { ok: false, reason: 'This building can\'t be moved.' };
+  if (b.x === i && b.y === j) return { ok: false, reason: 'That\'s where it is now.' };
+  const res = placeSite(owner, b.type, i, j, {});
+  if (!res.ok) return res;
+  res.building.moveFrom = b.id;
+  b.moving = res.building.id;
+  return res;
+}
+
+/** Call off building b's move: the site at the new spot comes down (nothing was spent on it). */
+function cancelMove(b) {
+  const s = getE(b.moving);
+  b.moving = 0;
+  if (s && !s.dead && !s.built && s.moveFrom === b.id) { s.moveFrom = 0; destroyBuilding(s, false, true); }
+}
+
+/** The moved building nb is finished: it takes over from the old one, which is taken down. */
+function finishMove(nb) {
+  const old = getE(nb.moveFrom);
+  nb.moveFrom = 0;
+  if (!old || old.dead || old.owner !== nb.owner) return;
+  old.moving = 0;
+  for (const k of MOVE_KEEPS) if (old[k] !== undefined) nb[k] = old[k] && typeof old[k] === 'object' ? JSON.parse(JSON.stringify(old[k])) : old[k];
+  for (const g in old.stock) if (old.stock[g] > 0) bump(nb.stock, g, old.stock[g]);
+  old.stock = {}; old.res = {}; old.loot = undefined;
+  for (const u of S.bots) if (!u.dead && u.owner === nb.owner && (u.post === old.id || (u.inside === old.id && u.type === 'warbot'))) u.post = nb.id;
+  destroyBuilding(old, false, true);
+  addFx('smoke', old.x + 0.5, old.y + 0.5, { r: 0.7 });
+  postMsg(nb.owner, `The ${BDEFS[nb.type].name} has moved here.`, nb.x, nb.y, 'good');
 }
 
 /* ------------------------------------------------------------------ statistics */

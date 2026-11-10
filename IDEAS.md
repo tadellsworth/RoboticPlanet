@@ -5,6 +5,23 @@ and biomes started here and are now in the game.)
 
 ## Held for later
 
+- **New map shapes** (suggested alongside the Chokepoint rework; each would be a `SHAPE_PRESETS` entry with its own
+  generator step, mirrored for fairness like the others):
+  - **Rift:** a sheer chasm splits the planet (the Sky islands canyon floor, far below), crossed only by two or three
+    natural rock arches at random spots. Arches can't be walled off without leaving a gap, so they're held with
+    turrets and Mortar Pits; Viaducts are the slow way to open a new crossing.
+  - **Ring valley:** an impassable massif fills the middle and a valley rings round it, the bases on opposite sides.
+    Two long ways round, so the question is which one to fortify and which to raid along.
+  - **Terraces:** the land climbs in steps toward a summit in the middle, a ramp or two per step, the richest fields
+    (and a Nuclear race's Uranium) on top. Whoever holds the high ground sees and shoots down onto the rest.
+  - **Oases:** mostly barren, crag-strewn waste with a scatter of rich fertile pockets joined by narrow passes. An
+    expansion race: grab and link the oases before the rival does, with long supply lines to guard.
+  - **Twin rivers:** two rivers run the length of the map, splitting it into three lanes joined by shallow fords
+    that bots wade slowly (and that a Planet event can flood). Bridges are worth their price here.
+  - **Crossroads:** four quarters walled apart by ridges, meeting at an open plaza in the middle; the bases hold two
+    opposite quarters and the other two are rich and unclaimed. Fights over the plaza, flanks through the empty ones.
+  - **Lakes:** a land of many small lakes, roads weaving between them, a natural home for the ferries and tanker
+    ships below.
 - Multiplayer, and exporting/importing saves between devices.
 - **Fuel, after the Tanker update.** Built: Tankers, explosions with chain reactions, Crude pipelines, the Generator
   and trucks burning Fuel (see the README). Still open: Fuel pipelines (only Crude flows today), a Generator that

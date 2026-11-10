@@ -330,18 +330,75 @@ function generateMap(seed, W, H, cfg) {
   const symmetrize = np === 2 ? mirror : turn;
   symmetrize();
 
-  // Chokepoint maps: a band of rocky crags right across the middle of the planet, broken by a
-  // single narrow pass in the centre, with open ground leading up to it from both sides. (Mirrored
-  // by construction: the rows and the pass are centred on the map.)
+  // Chokepoint maps: a ragged belt of crags across the middle of the planet, a few tiles thick (more
+  // here, less there), with scattered outcrops in front of it, and one to three narrow channels winding
+  // through it, different every game. The channels come out into a gallery along the middle line, so
+  // whichever mouth you go in by, you come out by one of the rival's. Built on player 0's (bottom) half
+  // and copied onto the other, turned half round: both sides get the same crags. Its own random
+  // numbers (from the seed), so carving it again after a corridor is cut gives the same belt.
   const choke = np === 2 && !!(SHAPE_PRESETS[cfg.shape || 0] && SHAPE_PRESETS[cfg.shape || 0].choke);
+  const chokeInfo = [];
   const chokeBand = () => {
-    const p0 = Math.floor((W - 1) / 2) - 1, p1 = Math.ceil((W - 1) / 2) + 1;
-    const top = half - CHOKE_BAND, bot = half + CHOKE_BAND - 1;
-    const passLevel = elev[id(Math.floor(W / 2), bot + CHOKE_APPROACH + 1)];
-    for (let j = top - CHOKE_APPROACH; j <= bot + CHOKE_APPROACH; j++) for (let i = 0; i < W; i++) {
-      const t = id(i, j), inBand = j >= top && j <= bot, inPass = i >= p0 && i <= p1;
-      if (inBand && !inPass) { terrain[t] = T_ROCK; res[t] = R_NONE; fert[t] = 0; continue; }
-      if (inPass) { terrain[t] = T_GROUND; res[t] = R_NONE; fert[t] = 0; elev[t] = passLevel; }
+    const cr = makeRng(seed ^ 0x6c3a9e15), set = (t, kind, lv) => {
+      for (const u of [t, mir(t)]) {
+        terrain[u] = kind; res[u] = R_NONE; fert[u] = 0;
+        if (kind === T_GROUND && lv !== undefined) elev[u] = lv;
+      }
+    };
+    chokeInfo.length = 0;
+    const a1 = cr() * 6.28, a2 = cr() * 6.28, f1 = 0.18 + cr() * 0.12, f2 = 0.45 + cr() * 0.2;
+    const thick = (i) => clamp(Math.round(3 + 1.3 * (0.65 * Math.sin(i * f1 + a1) + 0.35 * Math.sin(i * f2 + a2))), 2, 5);
+    // The level the passes run at: the commonest ground just in front of the belt.
+    const count = {};
+    for (let i = 0; i < W; i++) for (let j = half + thick(i); j < Math.min(H, half + thick(i) + 4); j++) { const t = id(i, j); if (terrain[t] === T_GROUND) count[elev[t]] = (count[elev[t]] || 0) + 1; }
+    const lv = +(Object.keys(count).sort((a, b) => count[b] - count[a])[0] ?? elev[id(Math.floor(W / 2), Math.min(H - 1, half + 6))]);
+    // The belt, and rough outcrops in front of it (thinning out with distance).
+    for (let i = 0; i < W; i++) {
+      const th = thick(i);
+      for (let j = half; j < half + th && j < H; j++) set(id(i, j), T_ROCK);
+      [0.42, 0.24, 0.1].forEach((pr, d) => { const j = half + th + d; if (j < H && cr() < pr) set(id(i, j), T_ROCK); });
+    }
+    // The channels: their mouths spread across the belt, each winding up to the middle line.
+    const n = 1 + (cr() < 0.65 ? 1 : 0) + (W >= 46 && cr() < 0.3 ? 1 : 0);
+    const mouths = [];
+    for (let tries = 0; mouths.length < n && tries < 200; tries++) {
+      const x = 3 + Math.floor(cr() * (W - 6));
+      if (mouths.every((m) => Math.abs(m - x) >= Math.max(5, W / (n + 1.5)))) mouths.push(x);
+    }
+    const ca = Math.floor((W - 1) / 2), cb = Math.ceil((W - 1) / 2), carved = new Set(), channels = [];
+    const cut = (t, mine) => { set(t, T_GROUND, lv); carved.add(t); mine.add(t); };
+    for (const x0 of mouths) {
+      let x = x0;
+      const tiles = new Set();
+      // Clear the way up to the mouth through the outcrops.
+      for (let j = half + thick(x0); j < Math.min(H, half + thick(x0) + 3); j++) for (let di = -1; di <= 1; di++) {
+        const i = x0 + di;
+        if (i >= 0 && i < W && Math.abs(di) + (j - half - thick(x0)) <= 2) set(id(i, j), T_GROUND, lv);
+      }
+      for (let j = half + thick(x0) - 1; j >= half; j--) {
+        cut(id(x, j), tiles);
+        // Sometimes two tiles wide.
+        if (cr() < 0.3) { const w = x + (cr() < 0.5 ? -1 : 1); if (w > 0 && w < W - 1) cut(id(w, j), tiles); }
+        if (j > half) {
+          const nx = clamp(x + (cr() < 0.25 ? -1 : cr() < 0.33 ? 1 : 0), 2, W - 3);
+          if (nx !== x) { cut(id(nx, j), tiles); x = nx; }
+        }
+      }
+      // Along the middle line to the centre, where it meets the rival's half of the gallery.
+      for (let i = Math.min(x, ca); i <= Math.max(x, cb); i++) cut(id(i, half), tiles);
+      channels.push(tiles);
+    }
+    // Each channel's mouth: its tiles that open onto ground outside the channels on this side (where
+    // a wall closes it off; the AI walls them, see aiWalls).
+    for (const tiles of channels) {
+      const mouth = [];
+      for (const t of tiles) {
+        if (((t / W) | 0) <= half) continue;
+        let open = false;
+        orth(t, (u) => { if (((u / W) | 0) >= half && terrain[u] === T_GROUND && !carved.has(u)) open = true; });
+        if (open) mouth.push(t);
+      }
+      if (mouth.length) chokeInfo.push(mouth.sort((a, b) => a - b));
     }
   };
   if (choke) chokeBand();
@@ -389,7 +446,9 @@ function generateMap(seed, W, H, cfg) {
         }
       }
       y -= 1;
-      x += clamp((W / 2 - x) * 0.25 + (rng() - 0.5) * 1.5, -1, 1);
+      // Up to the middle of the map, or on Chokepoint maps to a channel's mouth (where the way through is).
+      const tx = choke && chokeInfo.length && chokeInfo[0].length ? chokeInfo[0][0] % W : W / 2;
+      x += clamp((tx - x) * 0.25 + (rng() - 0.5) * 1.5, -1, 1);
     }
     mirror();
     if (choke) chokeBand(); // the corridor never cuts a second way through the crags
@@ -787,7 +846,7 @@ function generateMap(seed, W, H, cfg) {
     }
   }
   for (let t = 0; t < N; t++) if (terrain[t] !== T_GROUND) fert[t] = 0;
-  return { terrain, res, amt, grow, elev, ramp, fert, bases };
+  return { terrain, res, amt, grow, elev, ramp, fert, bases, choke: choke ? chokeInfo.map((ts) => ts.slice()) : null };
 }
 
 /* ------------------------------------------------------------------ new game */
@@ -887,7 +946,7 @@ function newGame(opts) {
   if (opts.layout) opts.layout(m, W, H); // missions hand-place features on their planet
   S = {
     v: 1, mode, seed, W, H, settings, difficulty: diff, time: 0, nextId: 1, winner: -1, milestone: 0,
-    terrain: m.terrain, res: m.res, amt: m.amt, grow: m.grow, elev: m.elev, ramp: m.ramp, fert: m.fert,
+    terrain: m.terrain, res: m.res, amt: m.amt, grow: m.grow, elev: m.elev, ramp: m.ramp, fert: m.fert, choke: m.choke,
     road: new Uint8Array(W * H), rail: new Uint8Array(W * H), pave: new Uint8Array(W * H), wear: new Uint16Array(W * H), paveMark: new Uint8Array(W * H), oneRoad: true, roadVer: 0, lights: {}, over: {}, scorch: {},
     plan: new Uint8Array(W * H), planVer: 0, paveRes: {}, owe: new Uint8Array(W * H), railPlan: new Uint8Array(W * H), planQ: [], junPlan: {},
     pipe: new Uint8Array(W * H), pipePlan: new Uint8Array(W * H), pipeVer: 0,
@@ -1058,7 +1117,15 @@ function chokePass() {
   const sh = SHAPE_PRESETS[(S.settings && S.settings.shape) || 0];
   if (!sh || !sh.choke) return null;
   const half = Math.floor(S.H / 2);
-  return { p0: Math.floor((S.W - 1) / 2) - 1, p1: Math.ceil((S.W - 1) / 2) + 1, top: half - CHOKE_BAND, bot: half + CHOKE_BAND - 1 };
+  // The channels' mouths on each side (the bottom half's from the map generator, the top's their twins).
+  if (S.choke) {
+    const N = S.W * S.H;
+    return { mouths: S.choke.flatMap((ts) => [ts, ts.map((t) => N - 1 - t)]) };
+  }
+  // An older save: the single pass straight through the middle.
+  const p0 = Math.floor((S.W - 1) / 2) - 1, p1 = Math.ceil((S.W - 1) / 2) + 1, top = half - CHOKE_BAND, bot = half + CHOKE_BAND - 1, mouths = [];
+  for (const row of [top, bot]) { const ts = []; for (let i = p0; i <= p1; i++) ts.push(row * S.W + i); mouths.push(ts); }
+  return { mouths };
 }
 
 /**
@@ -2096,8 +2163,11 @@ function offDeck(a, c) {
 }
 
 /** Remove a building. `burn` = destroyed by force (bots inside die); otherwise bots walk out. */
-function destroyBuilding(b, burn) {
+function destroyBuilding(b, burn, quiet) {
   if (b.dead) return;
+  // A building on the move: losing the old one calls the move off; a cancelled new site frees the old.
+  if (b.moving && typeof cancelMove === 'function') cancelMove(b);
+  if (b.moveFrom && !b.built) { const o = getE(b.moveFrom); if (o) o.moving = 0; b.moveFrom = 0; }
   // A Refinery destroyed by force explodes: its Crude and Fuel burn in the blast (see fuelBlast).
   const boom = burn && b.built && BDEFS[b.type].explodes && typeof burnLiquids === 'function' ? burnLiquids(b) : -1;
   // Whatever was inside spills out as crates on its tile, for haulers (or raiding warbots) to collect.
@@ -2118,8 +2188,7 @@ function destroyBuilding(b, burn) {
   // A Gate that stood on a road leaves the road behind when it goes.
   if (b.type === 'gate' && b.road) setRoad(b.x, b.y, true);
   markDirty(b.x, b.y);
-  collapseFx(b, burn);
-  sfx('boom');
+  if (!quiet) { collapseFx(b, burn); sfx('boom'); } // (taken down on purpose, as when a building moves: no wreck)
   if (BDEFS[b.type].mil && b.built) computeTerritory();
   if (boom >= 0) fuelBlast(b.x + 0.5, b.y + 0.5, b.type, boom, b.owner);
 }

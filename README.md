@@ -237,8 +237,9 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
   (`BOT_ACCEL`, `BOT_BRAKE`, `BOT_CORNER` in `js/defs.js`; trucks have their own, slower values).
 - **Frontier riches:** boulders, ore, crystal and oil hold more the further they are from the bases, up to 2.2× in the
   middle of the map; rich deposits sparkle. **Map shape: Long haul** on the new-game screen makes a narrow, long planet
-  (75% as wide, 170% as long) with the bases far apart; **Chokepoint** walls the middle of the map off with a band of
-  crags and leaves one 4-tile pass between the two halves (`CHOKE_BAND`, `CHOKE_APPROACH` in `js/defs.js`).
+  (75% as wide, 170% as long) with the bases far apart; **Chokepoint** walls the middle of the map off with a ragged belt of
+  crags (2 to 5 tiles deep, rough outcrops in front) and one to three narrow channels winding through it to a gallery
+  along the middle line, different every game (`chokeBand`; the mouths are kept in `S.choke`, see `chokePass`).
   **Islands** (a taller map) puts each base on its own island with a big middle island and islets, at least
   `ISLE_GAP` tiles of sea apart, so the only way across is bridges; the AI bridges toward its rival (`aiBridge`).
   On Islands and Sky islands each home island (or mesa) is topped up to `HOME_STONE` (300) Stone with a boulder field
@@ -321,6 +322,16 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
   rock face in reach (`rockFace`: ground against a crag or a cliff; 8 s a Stone, about 4 a minute) or, with none,
   digs it at the Quarry (20 s, about 2½ a minute), against about 8 a minute from boulders. It rests while the colony
   has `bedrock.rest` (40) Stone or more, so renewable Stone only flows when it's needed.
+- **Moving buildings:** tap Move on one of your finished buildings (`movable`: not the Command Base or Outposts, which
+  hold your land, nor Walls, Gates, Ramps, Viaducts, Ropeways or a deployed Crawler), then the new spot. `startMove`
+  puts a site of the same kind there that costs nothing (`siteFrac` treats it as fully supplied); workers put it
+  together in its build time while the old one keeps working, and `finishMove` hands over its goods, settings
+  (`MOVE_KEEPS`) and stationed warbots, then takes the old one down quietly. Calling the move off, demolishing either
+  end or losing the old one takes the site down (`cancelMove`), so no building comes free.
+- **Saved planets:** **Save** beside the planet number (More settings), or **Save this planet** in the pause menu, keeps
+  the seed and the settings that shape the map (shape, size, terrain, resources, biome, players) on this device
+  (`terrafall.planets` in localStorage, newest first, up to 40). Tap one in Saved planets to set the menu to it; ×
+  forgets it (`savedPlanets`, `renderPlanets` in `js/ui.js`).
 - **Alloy** (balance audit, AI games): Alloy income was set by how much Ore reached the Smelters, not how many Smelters
   there were. A Smelter eats Ore much faster than a Mine worker, who walks out and back for every Ore, can bring it, so
   extra Smelters just sat idle. Now a Smelter makes 3 Alloy from 2 Ore and 2 Fiber (the same 12 a minute flat out, a
@@ -385,8 +396,8 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
   They're `prepaid` (paid from storage on Build, no Hauler or road, outside the site limit). Walls block every bot;
   Gates let their owner's bots and road through (`passTile(t, who)`). Armed enemy warbots plan through a Wall or
   Gate as if it were `BREACH_COST + armor` tiles long, so they go round a short way or stop and shoot through
-  (`breachHit`); a bot whose route gets walled off re-plans (`blockedStep`). On Chokepoint maps the AI walls its end
-  of the pass on Normal and Hard (`aiWalls`).
+  (`breachHit`); a bot whose route gets walled off re-plans (`blockedStep`). On Chokepoint maps the AI walls the mouth
+  of each channel on its side on Normal and Hard (`aiWalls`).
 - **Garrisons and posts** (yours, `usesPosts`; the AI spreads its own to the front as before): every warbot belongs
   somewhere. `u.post` is the Outpost or Bunker it was stationed at; with none it belongs to the Command Base. All your
   warbots stay at the Command Base until you station some: tap an Outpost and **Station here** (how many; from the

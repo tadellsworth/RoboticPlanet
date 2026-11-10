@@ -351,7 +351,7 @@ const RESOURCE_PRESETS = [
 const SHAPE_PRESETS = [
   { name: 'Standard', w: 1, h: 1, ffa: true },
   { name: 'Long haul', w: 0.75, h: 1.7 },
-  { name: 'Chokepoint', w: 1, h: 1, choke: true, tip: 'Chokepoint: a single pass through the crags joins the two halves of the planet. Hold it: an Outpost nearby, then walls and turrets (Paths, Walls).' },
+  { name: 'Chokepoint', w: 1, h: 1, choke: true, tip: 'Chokepoint: a belt of crags splits the planet, with one to three narrow channels winding through it (different every game). Find where yours come out, and hold them: an Outpost nearby, then walls and turrets (Paths, Walls).' },
   { name: 'Islands', w: 1.15, h: 1.45, islands: true, ffa: true, tip: 'Islands: the only way across is bridges. Push an Outpost out to your shore, then build a bridge in Paths (Bridges): it can reach out past your border.' },
   { name: 'Crater', w: 1, h: 1, crater: true, minLevels: 3, ffa: true, tip: 'Crater: the richest fields lie on the crater floor in the middle. One ramp leads down on your side; cut more in Paths (Ramps).' },
   { name: 'Plateaus', w: 1, h: 1, plateau: true, minLevels: 3, ffa: true, tip: 'Plateaus: your base stands on high ground with only two slopes down. Easy to hold: wall the slopes and push out.' },

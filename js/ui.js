@@ -55,6 +55,8 @@ function initUI() {
   for (const btn of $('m-diff').children) btn.onclick = () => { UI.menu.diff = btn.dataset.v; syncMenu(); saveSettings(); sfx('click'); };
   for (const btn of $('m-players').children) btn.onclick = () => { UI.menu.players = +btn.dataset.v; syncMenu(); saveSettings(); sfx('click'); };
   $('m-reroll').onclick = () => { UI.menu.seed = randomSeed(); syncMenu(); sfx('click'); };
+  $('m-saveplanet').onclick = () => { savePlanet(menuPlanet()); sfx('place'); toast(`Saved Planet #${UI.menu.seed}: pick it from Saved planets any time.`, 'good'); syncMenu(); };
+  $('p-saveplanet').onclick = () => { if (!S) return; savePlanet(gamePlanet()); sfx('place'); toast(`Saved Planet #${S.seed}: start it again from Saved planets in the new-game menu.`, 'good'); };
   // Map settings sliders (remembered on this device; map size is remembered per mode).
   // Settings from before v2 drop their rival style, Nuclear race and Planet events, so the new defaults
   // (a Balanced rival, Nuclear race on, Planet events off) reach every device once.
@@ -184,7 +186,7 @@ function initUI() {
 const SHAPE_BLURB = [
   'Open ground with hills, cliffs and resource fields between the bases.',
   'A narrow planet with the bases far apart: built for long supply lines (trucks, Road Trains and rail).',
-  'A wall of crags across the middle with a single pass: whoever holds the pass holds the map.',
+  'A belt of crags across the middle with one to three narrow channels winding through it, different every game: whoever holds them holds the map.',
   'Each base on its own island, with a big island in the middle: the only way across is bridges.',
   'The richest fields lie in a sunken crater in the middle, with one ramp down on each side.',
   'Each base on a high plateau ringed by cliffs, with only two slopes down: easy to hold, slow to break out of.',
@@ -207,6 +209,7 @@ function syncMenu() {
     : three ? 'Free-for-all: you and two rival colonies on a round planet. Capture a rival\'s Command Base and everything it built is yours. Last colony standing wins.'
       : 'Race a rival colony across the planet. Build up, then capture its Command Base to win.';
   $('m-seed').textContent = 'Planet #' + UI.menu.seed;
+  renderPlanets();
   const size = UI.menu.size[UI.menu.mode] ?? DEFAULT_SIZE[UI.menu.mode], shape = UI.menu.shape || 0;
   for (const id of ['m-shape', 'm-size', 'm-biome', 'm-rough', 'm-rich', 'm-style']) {
     const el = $(id), v = el._get();
@@ -732,6 +735,60 @@ function placeMinimap() {
   document.documentElement.style.setProperty('--mm-w', MM.w + 'px');
 }
 
+/* ------------------------------------------------------------------ saved planets */
+
+/*
+ * Planets you liked, kept on this device (localStorage): a seed with the map settings that shape it
+ * (map shape, size, terrain, resources, biome, players), newest first. Tap one in the new-game menu's
+ * More settings to set the menu to it; × forgets it.
+ */
+const PLANETS_KEY = 'terrafall.planets', PLANETS_MAX = 40;
+function savedPlanets() {
+  try { const l = JSON.parse(localStorage.getItem(PLANETS_KEY) || '[]'); return Array.isArray(l) ? l : []; } catch (e) { return []; }
+}
+function writePlanets(list) { try { localStorage.setItem(PLANETS_KEY, JSON.stringify(list.slice(0, PLANETS_MAX))); } catch (e) { /* storage unavailable */ } }
+const planetKey = (p) => [p.seed, p.shape, p.size, p.rough, p.rich, p.biome, p.players].join(':');
+function savePlanet(p) { writePlanets([{ ...p, at: Date.now() }].concat(savedPlanets().filter((q) => planetKey(q) !== planetKey(p)))); }
+/** The planet the new-game menu is set to. */
+function menuPlanet() {
+  return { seed: UI.menu.seed, shape: UI.menu.shape || 0, size: UI.menu.size[UI.menu.mode] ?? DEFAULT_SIZE[UI.menu.mode], rough: UI.menu.rough, rich: UI.menu.rich,
+    biome: UI.menu.biome || 0, players: UI.menu.players === 3 ? 3 : 2 };
+}
+/** The planet being played. */
+function gamePlanet() {
+  const st = S.settings;
+  return { seed: S.seed, shape: st.shape || 0, size: st.size, rough: st.rough, rich: st.rich, biome: Math.max(0, BIOME_ORDER.indexOf(st.biome)), players: st.players || 2 };
+}
+function planetLabel(p) {
+  const bits = [SHAPE_PRESETS[p.shape] ? SHAPE_PRESETS[p.shape].name : 'Standard', SIZE_PRESETS[p.size] ? SIZE_PRESETS[p.size].name : '', BIOMES[BIOME_ORDER[p.biome || 0]].name];
+  if (p.rough !== DEFAULT_ROUGH && TERRAIN_PRESETS[p.rough]) bits.push(TERRAIN_PRESETS[p.rough].name + ' terrain');
+  if (p.rich !== DEFAULT_RICH && RESOURCE_PRESETS[p.rich]) bits.push(RESOURCE_PRESETS[p.rich].name + ' resources');
+  if (p.players === 3) bits.push('3 players');
+  return `<b>Planet #${p.seed}</b> · ${bits.filter(Boolean).join(' · ')}`;
+}
+function renderPlanets() {
+  const el = $('m-planets');
+  if (!el) return;
+  const list = savedPlanets(), cur = planetKey(menuPlanet());
+  el.hidden = !list.length;
+  el.innerHTML = list.length ? '<span class="planets-title">Saved planets</span>' + list.map((p, k) =>
+    `<div class="planet-row"><button class="btn small ghost use${planetKey(p) === cur ? ' on' : ''}" data-use="${k}">${planetLabel(p)}</button><button class="btn small ghost del" data-del="${k}" aria-label="Forget Planet #${p.seed}" title="Forget this planet">×</button></div>`).join('') : '';
+  for (const b of el.querySelectorAll('[data-use]')) b.onclick = () => {
+    const p = savedPlanets()[+b.dataset.use];
+    if (!p) return;
+    Object.assign(UI.menu, { seed: p.seed, shape: p.shape, rough: p.rough, rich: p.rich, biome: p.biome, players: p.players || 2 });
+    UI.menu.size[UI.menu.mode] = p.size;
+    sfx('click'); syncMenu();
+    toast(`Set to Planet #${p.seed}. Tap Start to play it.`, 'info');
+  };
+  for (const b of el.querySelectorAll('[data-del]')) b.onclick = () => {
+    const list2 = savedPlanets(), p = list2[+b.dataset.del];
+    list2.splice(+b.dataset.del, 1); writePlanets(list2);
+    sfx('click'); renderPlanets();
+    if (p) toast(`Forgot Planet #${p.seed}.`, 'info');
+  };
+}
+
 /* ------------------------------------------------------------------ game flow */
 
 function startNewGame() {
@@ -1017,6 +1074,7 @@ function setMode(mode) {
   R.ropeEnd = null;
   UI.ropeA = null;
   UI.placeType = null;
+  UI.moveFrom = 0;
   $('btn-road').classList.toggle('on', mode === 'road');
   $('btn-attack').classList.toggle('on', mode === 'attack');
   if (mode === 'normal') { $('banner').hidden = true; return; }
@@ -1107,13 +1165,15 @@ function showBanner(html, okLabel, cancelLabel) {
   $('banner-cancel').textContent = cancelLabel || 'Cancel';
 }
 
-function enterPlaceMode(type) {
+function enterPlaceMode(type, moveFrom) {
   closeSheet();
   setMode('place');
   UI.placeType = type;
+  UI.moveFrom = moveFrom || 0;
   refreshOverlay(type);
   showBanner(type === 'ropeway' ? 'Tap a highlighted spot for the Ropeway\'s <b>near station</b>, where your roads are. Then tap the far end.'
     : type === 'viaduct' ? 'Tap a highlighted spot on a clifftop for the Viaduct\'s <b>near end</b>, where your roads are. Then tap the far end, across the valley.'
+    : moveFrom ? `Tap a highlighted spot to move the <b>${BDEFS[type].name}</b> to. It's put together there for free (it takes its build time), and the old one keeps working until then.`
     : `Tap a highlighted spot to place a <b>${BDEFS[type].name}</b>.`, null, 'Cancel');
   if (!R.overlay.valid.some((v) => v)) {
     const near = BDEFS[type].gather ? ' near the right resource' : BDEFS[type].farm ? ' near fertile soil' : BDEFS[type].pump ? ' on an oil seep' : '';
@@ -1165,8 +1225,11 @@ function confirmBanner() {
   }
   if (R.mode !== 'place' || !R.ghost || !R.ghost.ok) return;
   const { type, x, y } = R.ghost;
-  const res = placeSite(0, type, x, y);
+  const from = UI.moveFrom ? getE(UI.moveFrom) : null;
+  const res = from ? startMove(0, from, x, y) : placeSite(0, type, x, y);
   if (!res.ok) { sfx('error'); showBanner(`<span class="err">${res.reason}</span>`, null, 'Cancel'); return; }
+  if (from) toast(`Moving the ${BDEFS[type].name}: workers put it together here (no goods needed), and the old one keeps working until it's ready.`, 'good');
+  UI.moveFrom = 0;
   sfx('place');
   addFx('ring', x + 0.5, y + 0.5, { color: PLAYER_COLORS[0] });
   setMode('normal');
@@ -2072,6 +2135,7 @@ function openBuildingSheet(b) {
     if (needsRoad(b) || (b.unlinked !== undefined && !def.store)) html += '<div id="sh-road"></div>';
     html += '<div class="actions">';
     if (pausable(b) && b.built) html += `<button class="btn" id="sh-pause"></button>`;
+    if (b.owner === 0 && (movable(b) || b.moving)) html += `<button class="btn" id="sh-move">${b.moving ? 'Call off the move' : 'Move'}</button><p class="hint" id="sh-move-hint">${b.moving ? 'Its new site is going up: when it\'s finished, everything here moves over and this one comes down.' : 'Put it somewhere else: no goods needed, just its build time. It keeps working until the new one is ready.'}</p>`;
     if (BDEFS[b.type].mobile) html += '<button class="btn primary" id="sh-pack">Pack up to move</button>';
     else if (b.type !== 'lander') html += `<button class="btn danger" id="sh-demolish">${b.built ? 'Demolish' : 'Cancel site'}</button>`;
     html += '</div>';
@@ -2113,6 +2177,10 @@ function openBuildingSheet(b) {
     if ($('sh-orders')) renderFoundryOrders(b);
     if ($('sh-omode')) for (const btn of $('sh-omode').children) btn.onclick = () => { b.omode = btn.dataset.v === 'first' ? 'first' : undefined; sfx('click'); refreshSheet(); };
     if ($('sh-pause')) $('sh-pause').onclick = () => { setPaused(b, !b.paused); sfx('click'); refreshSheet(); };
+    if ($('sh-move')) $('sh-move').onclick = () => {
+      if (b.moving) { cancelMove(b); sfx('click'); toast(`Move called off: the ${def.name} stays where it is.`, 'info'); openBuildingSheet(b); return; }
+      sfx('click'); enterPlaceMode(b.type, b.id);
+    };
     if ($('sh-pack')) $('sh-pack').onclick = () => {
       const btn = $('sh-pack');
       if (!btn.dataset.armed) { btn.dataset.armed = '1'; btn.textContent = 'Tap again: its land goes, and buildings only it covers are lost'; return; }

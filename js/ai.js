@@ -568,8 +568,9 @@ function aiViaductSpot(p, home, E) {
 }
 
 /**
- * Chokepoint maps (Normal and Hard): once our end of the pass is inside our border, wall it off,
- * with a Gate on our road through it (or in the middle), and put back any piece the enemy breaks.
+ * Chokepoint maps (Normal and Hard): once the mouth of a channel through the crags on our side is
+ * inside our border, wall it off, with a Gate on our road through it (or in the middle), and put back
+ * any piece the enemy breaks.
  * Cement for the colony comes first.
  */
 function aiWalls(p) {
@@ -577,20 +578,22 @@ function aiWalls(p) {
   if (!cp || !warOn() || (S.difficulty === 'easy' && !aiStyle(p).walls) || S.time < 240) return;
   const L = getE(S.players[p].lander);
   if (!L) return;
-  const row = L.y > S.H / 2 ? cp.bot : cp.top;
-  const tiles = [];
-  for (let i = cp.p0; i <= cp.p1; i++) if (S.terrain[tIdx(i, row)] === T_GROUND) tiles.push(i);
-  if (!tiles.length || tiles.some((i) => S.owner[tIdx(i, row)] !== p)) return;
-  const at = (i) => getE(S.bAt[tIdx(i, row)]);
-  let gate = tiles.find((i) => at(i) && at(i).type === 'gate');
-  if (gate === undefined) gate = tiles.find((i) => S.road[tIdx(i, row)] || S.plan[tIdx(i, row)]);
-  if (gate === undefined) gate = tiles[Math.floor(tiles.length / 2)];
-  for (const i of tiles) {
-    const t = tIdx(i, row);
-    if (S.bAt[t]) continue;
-    const kind = i === gate || S.road[t] || S.plan[t] ? 'gate' : 'wall';
-    if (spendable(p).cement < BDEFS[kind].cost.cement + 10) return;
-    if (canPlace(p, kind, i, row).ok) placeSite(p, kind, i, row);
+  const bottom = L.y > S.H / 2;
+  // Each channel's mouth on our side of the crags, once it's inside our border.
+  for (const mouth of cp.mouths) {
+    const tiles = mouth.filter((t) => (((t / S.W) | 0) > S.H / 2) === bottom && S.terrain[t] === T_GROUND);
+    if (!tiles.length || tiles.some((t) => S.owner[t] !== p)) continue;
+    const at = (t) => getE(S.bAt[t]);
+    let gate = tiles.find((t) => at(t) && at(t).type === 'gate');
+    if (gate === undefined) gate = tiles.find((t) => S.road[t] || S.plan[t]);
+    if (gate === undefined) gate = tiles[Math.floor(tiles.length / 2)];
+    for (const t of tiles) {
+      if (S.bAt[t]) continue;
+      const kind = t === gate || S.road[t] || S.plan[t] ? 'gate' : 'wall';
+      if (spendable(p).cement < BDEFS[kind].cost.cement + 10) return;
+      const i = t % S.W, j = (t / S.W) | 0;
+      if (canPlace(p, kind, i, j).ok) placeSite(p, kind, i, j);
+    }
   }
 }
 
