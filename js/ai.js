@@ -259,6 +259,21 @@ function aiThink(p) {
     }
   }
 
+  // 2b) Pipelines: an Oil Pump gets pipe to the nearest Refinery (cheap, and its Crude never waits
+  //     for a Tanker), one pump at a time, while there's Cement and Alloy to spare.
+  if (S.time - (P.pipeT || -99) > 15) {
+    P.pipeT = S.time;
+    const have = spendable(p);
+    for (const b of me) {
+      if (!b.built || !BDEFS[b.type].pump || pumpDry(b)) continue;
+      const r = pipeToRefinery(p, b);
+      if (r.why || r.tiles.length > 40) continue;
+      if ((have.cement || 0) < 6 + (r.cost.cement || 0) || (have.alloy || 0) < 3 + (r.cost.alloy || 0)) continue;
+      pipeUp(p, r.tiles);
+      break;
+    }
+  }
+
   // 3) Foundry: keep enough workers, then grow the army. Order specialists when a building needs
   //    one, and enough Haulers (a Freight Truck counts as one and a half) to carry every good in the colony.
   const wantWorkers = staffed + 3 + Math.min(3, sites);

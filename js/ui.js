@@ -489,6 +489,7 @@ function initKeyboard() {
       case 'l': openPaths('lights'); break;
       case 'x': if (warOn()) openPaths('wall'); break;
       case 'n': openPaths('rail'); break;
+      case 'k': openPaths('pipe'); break;
       case 'q': if (!$('btn-attack').hidden) $('btn-attack').click(); break;
       case 'h': case 'home': $('btn-home').click(); break;
       case 'm': setMinimap(!MM.on); break;
@@ -1336,6 +1337,28 @@ function onMapTap(i, j, wx, wy) {
       showRoadBanner(note, !!note);
       return;
     }
+    if (UI.roadMode === 'pipe') {
+      // Pipes: tap an Oil Pump to pipe it to the nearest Refinery; tap a tile to add or drop pipe there,
+      // or tap laid pipe to take it up.
+      const stroke = [], bb = S.bAt[t] && getE(S.bAt[t]);
+      if (bb && bb.owner === 0 && BDEFS[bb.type].pump) {
+        const r = pipeToRefinery(0, bb);
+        if (r.why) { sfx('error'); showRoadBanner(r.why); return; }
+        for (const u of r.tiles) if (!UI.draft.pipe.has(u)) draftOp(stroke, u, 'pipe');
+        UI.draft.strokes.push(stroke);
+        sfx('click');
+        showRoadBanner(`Pipe from the Oil Pump to the Refinery: ${r.tiles.length} tile${r.tiles.length === 1 ? '' : 's'}.`, true);
+        return;
+      }
+      if (UI.draft.pipe.has(t)) draftOp(stroke, t, 'unpipe');
+      else if (UI.draft.pipeDel.has(t)) draftOp(stroke, t, 'unpipedel');
+      else if (S.pipe[t] === 1 || S.pipePlan[t] === 1) draftOp(stroke, t, 'pipedel');
+      else { const why = pipeBlocked(0, t); if (why) { sfx('error'); showRoadBanner(why); return; } draftOp(stroke, t, 'pipe'); }
+      UI.draft.strokes.push(stroke);
+      sfx('click');
+      showRoadBanner();
+      return;
+    }
     if (UI.roadMode === 'rail') {
       // Rail: a tap adds a tile of track or drops it; tapping laid track marks it to take up.
       const stroke = [];
@@ -1434,8 +1457,8 @@ function rallyAtTap(wx, wy) {
  * tiles to lay, and existing or planned tiles to take up. Nothing is paid and no bot moves until
  * Build is tapped, so a stray swipe costs nothing (Undo or Clear takes it back).
  */
-function draftReset() { UI.draft = { add: [], addSet: new Set(), del: new Set(), ramps: new Set(), railRamps: new Set(), walls: new Map(), rail: new Set(), railDel: new Set(), strokes: [] }; }
-function draftEmpty() { return !UI.draft || (!UI.draft.add.length && !UI.draft.del.size && !UI.draft.ramps.size && !UI.draft.walls.size && !UI.draft.rail.size && !UI.draft.railDel.size); }
+function draftReset() { UI.draft = { add: [], addSet: new Set(), del: new Set(), ramps: new Set(), railRamps: new Set(), walls: new Map(), rail: new Set(), railDel: new Set(), pipe: new Set(), pipeDel: new Set(), strokes: [] }; }
+function draftEmpty() { return !UI.draft || (!UI.draft.add.length && !UI.draft.del.size && !UI.draft.ramps.size && !UI.draft.walls.size && !UI.draft.rail.size && !UI.draft.railDel.size && !UI.draft.pipe.size && !UI.draft.pipeDel.size); }
 
 /** A bridge sketched out past the border: water touching a tile already in the sketch. */
 function draftBridge(t) {
@@ -1469,6 +1492,10 @@ function draftOp(stroke, t, op) {
   else if (op === 'unrail') { if (!d.rail.has(t)) return; d.rail.delete(t); }
   else if (op === 'raildel') { if (d.railDel.has(t)) return; d.railDel.add(t); }
   else if (op === 'unraildel') { if (!d.railDel.has(t)) return; d.railDel.delete(t); }
+  else if (op === 'pipe') { if (d.pipe.has(t)) return; d.pipe.add(t); }
+  else if (op === 'unpipe') { if (!d.pipe.has(t)) return; d.pipe.delete(t); }
+  else if (op === 'pipedel') { if (d.pipeDel.has(t)) return; d.pipeDel.add(t); }
+  else if (op === 'unpipedel') { if (!d.pipeDel.has(t)) return; d.pipeDel.delete(t); }
   stroke.push({ t, op });
 }
 
@@ -1479,7 +1506,7 @@ function draftUndo() {
   let s;
   do s = d.strokes.pop(); while (s && !s.length); // skip drags that added nothing
   if (!s) return;
-  const back = { add: 'unadd', unadd: 'add', del: 'undel', undel: 'del', ramp: 'unramp', unramp: 'ramp', rail: 'unrail', unrail: 'rail', raildel: 'unraildel', unraildel: 'raildel' };
+  const back = { add: 'unadd', unadd: 'add', del: 'undel', undel: 'del', ramp: 'unramp', unramp: 'ramp', rail: 'unrail', unrail: 'rail', raildel: 'unraildel', unraildel: 'raildel', pipe: 'unpipe', unpipe: 'pipe', pipedel: 'unpipedel', unpipedel: 'pipedel' };
   for (let k = s.length - 1; k >= 0; k--) {
     if (s[k].op === 'setw') { if (s[k].from) d.walls.set(s[k].t, s[k].from); else d.walls.delete(s[k].t); continue; }
     draftOp([], s[k].t, back[s[k].op]);
@@ -1515,10 +1542,14 @@ function draftSummary() {
   // Track is paid for from storage when you tap Build too; taking it up gives its Cement and Alloy back.
   for (const t of d.rail) if (!S.rail[t]) { const rc = railCost(t); for (const g in rc) cost[g] = (cost[g] || 0) + rc[g]; }
   for (const t of d.railDel) if (S.rail[t]) { const rc = railCost(t); for (const g in rc) back[g] = (back[g] || 0) + rc[g]; }
+  // Pipe too: paid when you tap Build (or as the goods come in); taken up, it gives its goods back.
+  for (const t of d.pipe) if (!S.pipe[t]) for (const g in PIPE_COST) cost[g] = (cost[g] || 0) + PIPE_COST[g];
+  for (const t of d.pipeDel) if (S.pipe[t]) for (const g in PIPE_COST) back[g] = (back[g] || 0) + PIPE_COST[g];
   const net = {};
   for (const g in cost) net[g] = Math.max(0, cost[g] - (back[g] || 0));
   // Anything you can't pay for yet waits for the goods (settlePlans): the plan can always be built.
-  return { add, cross, clear, del: d.del.size, ramps: d.ramps.size, walls, gates, rail: d.rail.size, railDel: d.railDel.size, cost, back, net, can: true,
+  for (const g in net) net[g] = Math.round(net[g] * 100) / 100;
+  return { add, cross, clear, del: d.del.size, ramps: d.ramps.size, walls, gates, rail: d.rail.size, railDel: d.railDel.size, pipe: d.pipe.size, pipeDel: d.pipeDel.size, cost, back, net, can: true,
     short: Object.keys(net).filter((g) => net[g] > 0 && !canAffordRoad(0, { [g]: net[g] })) };
 }
 
@@ -1549,9 +1580,12 @@ function commitDraft() {
     laid++;
   }
   for (const t of d.rail) { const w = queueRail(0, t); if (w) { railWhy = railWhy || w; } else rails++; }
+  let pipes = 0, pipesUp = 0;
+  for (const t of d.pipeDel) if (S.pipe[t] === 1 || S.pipePlan[t] === 1) { takeUpPipe(0, t); pipesUp++; }
+  for (const t of d.pipe) if (!queuePipe(0, t)) pipes++;
   // Pay for what we can now, oldest plans first; the rest waits for the goods.
   settlePlans();
-  const wp = plansWaiting(0), owedN = wp.tiles + wp.track + wp.sites;
+  const wp = plansWaiting(0), owedN = wp.tiles + wp.track + wp.pipes + wp.sites;
   draftReset();
   // Built: Paths closes, straight back to the map (unless something went wrong, to fix it).
   if (!why) setMode('normal');
@@ -1561,6 +1595,7 @@ function commitDraft() {
   if (wallWhy) toast(`Some of the wall couldn't go up: ${wallWhy}`, 'warn');
   if (rampWhy) toast(`A Ramp couldn't be planned: ${rampWhy} The road or track there won't climb the cliff until one is.`, 'warn');
   if (rails || railsUp) toast(`${rails ? `Planned ${rails} tile${rails === 1 ? '' : 's'} of track.` : ''}${railsUp ? ` Took up ${railsUp} tile${railsUp === 1 ? '' : 's'} of track.` : ''}`, 'info');
+  if (pipes || pipesUp) toast(`${pipes ? `Laid ${pipes} tile${pipes === 1 ? '' : 's'} of pipe: Crude flows along it as soon as it's paid for.` : ''}${pipesUp ? ` Took up ${pipesUp} tile${pipesUp === 1 ? '' : 's'} of pipe.` : ''}`, 'info');
   if (owedN) toast(`Waiting for goods: ${costText(wp.owed)} more. It's paid from storage as the goods come in, oldest plans first, and built as it's paid for.`, 'info');
   if (railWhy) toast(`Some track couldn't go down: ${railWhy}`, 'warn');
   if (why) showRoadBanner();
@@ -1606,6 +1641,7 @@ function onRoadPaint(i, j, first) {
   const line = tileLine(from.i, from.j, i, j);
   let prev = null;
   const arrows = UI.roadMode === 'arrows', pave = UI.roadMode === 'pave', wall = UI.roadMode === 'wall', rail = UI.roadMode === 'rail';
+  if (UI.roadMode === 'pipe') { pipeDrag(i, j, first); return; }
   // Pave: the first road tile of a drag decides whether it marks roads or clears their marks.
   if (pave && first) UI.paveOn = !(inMap(i, j) && S.paveMark[tIdx(i, j)]);
   for (const [x, y] of line) {
@@ -1673,15 +1709,65 @@ function onRoadPaint(i, j, first) {
 }
 
 /**
+ * Pipes: a drag runs pipe from where it started to where the finger is now, finding its own way
+ * (over roads and track, round buildings and water, inside your border): the route redraws as you move.
+ * Starting or ending on a building runs the pipe up beside it.
+ */
+function pipeDrag(i, j, first) {
+  const d = UI.draft;
+  if (first) { UI.pipeFrom = inMap(i, j) ? tIdx(i, j) : -1; UI.pipeWhy = ''; } // (onRoadPaint started this drag's stroke)
+  if (UI.pipeFrom < 0 || !inMap(i, j)) return;
+  // Take back this drag's route so far, then find it again to the new end.
+  for (let k = UI.stroke.length - 1; k >= 0; k--) draftOp([], UI.stroke[k].t, 'unpipe');
+  UI.stroke.length = 0;
+  const a = UI.pipeFrom, b = tIdx(i, j);
+  let route = a === b ? (pipeBlocked(0, a) ? null : [a]) : pipeRoute(0, a, (t) => t === b, 400);
+  UI.pipeWhy = route ? '' : pipeBlocked(0, b) || pipeBlocked(0, a) || 'No way to run pipe there inside your border.';
+  if (route && route.length > 1) {
+    // Up to the buildings at either end, not under them.
+    if (S.bAt[route[0]]) route = route.slice(1);
+    if (route.length > 1 && S.bAt[route[route.length - 1]]) route = route.slice(0, -1);
+  }
+  if (route) for (const t of route) if (!S.pipe[t] && !d.pipe.has(t)) draftOp(UI.stroke, t, 'pipe');
+  UI.lastPaint = { i, j };
+  showRoadBanner(UI.pipeWhy, !UI.pipeWhy);
+}
+
+/** Every Oil Pump of yours that isn't piped to a Refinery yet gets a pipe to the nearest one, in the plan. */
+function pipeAllPumps() {
+  if (!UI.draft) draftReset();
+  const stroke = [];
+  let n = 0, why = '';
+  for (const b of S.buildings) {
+    if (b.dead || b.owner !== 0 || !BDEFS[b.type].pump) continue;
+    const r = pipeToRefinery(0, b);
+    if (r.why) { if (!/already/.test(r.why)) why = r.why; continue; }
+    for (const t of r.tiles) if (!UI.draft.pipe.has(t)) draftOp(stroke, t, 'pipe');
+    n++;
+  }
+  UI.draft.strokes.push(stroke);
+  sfx(n ? 'click' : 'error');
+  showRoadBanner(n ? `Pipe planned for ${n} Oil Pump${n === 1 ? '' : 's'}: tap Build to lay it.` : why || 'Every Oil Pump is piped already.', !!n || !why);
+}
+
+/**
  * The Paths banner, at the top of the screen so it never covers where you're drawing. Roads and
  * Bridges show the plan and what it costs, with Undo, Clear and Build.
  */
 function showRoadBanner(problem, info) {
-  const mode = ['arrows', 'lights', 'bridge', 'ramp', 'pave', 'wall', 'rail'].includes(UI.roadMode) ? UI.roadMode : 'road';
+  const mode = ['arrows', 'lights', 'bridge', 'ramp', 'pave', 'wall', 'rail', 'pipe'].includes(UI.roadMode) ? UI.roadMode : 'road';
   if (!UI.draft) draftReset();
   const have = playerGoods(0);
   let line, how;
-  if (mode === 'rail' && !UI.draft.rail.size && !UI.draft.railDel.size) {
+  const pipeHow = `Pipelines carry Crude, nothing else. Every second each line moves up to ${PIPE_RATE} Crude from its Oil Pumps to the Refineries (and Asphalt Plants) on it, then into any storage on it; storage on a line feeds its Refineries too. A pump on a pipeline never waits for a Tanker. Pipe goes anywhere inside your border: over roads and track, under buildings, up cliffs; a pipe joins every building it runs beside or under. Raiders and missiles can break it: broken pipe is relaid as soon as it's paid for again.`;
+  if (mode === 'pipe' && !UI.draft.pipe.size && !UI.draft.pipeDel.size) {
+    let unpiped = 0;
+    const joined = refineryPipes(0);
+    for (const b of S.buildings) if (!b.dead && b.owner === 0 && BDEFS[b.type].pump && !buildingPipes(b).some((c) => joined.has(c))) unpiped++;
+    line = `<b>Drag from an Oil Pump to a Refinery</b> and the pipe finds its own way there, over roads and track (${costText(PIPE_COST)} a tile, laid when you tap Build). Or tap a pump to pipe it to the nearest Refinery. Tap pipe to take it up.` +
+      (unpiped ? ` <button class="btn" id="pipe-all">Pipe every Oil Pump (${unpiped})</button>` : '');
+    how = pipeHow;
+  } else if (mode === 'rail' && !UI.draft.rail.size && !UI.draft.railDel.size) {
     line = `<b>Lay railway track</b> by dragging (${costText(RAIL_COST)} a tile, laid when you tap Build if you have the goods, otherwise as they come in). Tap a tile to add or drop it, or tap track to take it up. Then put a <b>Rail Station</b> (Build menu) beside each end, and order a <b>Freight Train</b> at the Bot Foundry.`;
     how = 'Freight Trains carry 56 goods between Rail Stations on the same track, fast and with no traffic to wait for, and never need charging. They keep a station\'s supply orders filled from the other stations on the line, and a far station sends its spare goods home to the station nearest your Command Base. Track goes on open ground in your territory. It climbs a level at a time over a Ramp (a natural slope, or one you build in Paths), like a road, with trains slowing on the grade; over water it\'s a rail bridge, and across a valley it runs over a Viaduct. It can cross a road: road traffic waits at the crossing while a train goes by.';
   } else if (mode === 'wall' && !UI.draft.walls.size) {
@@ -1729,12 +1815,15 @@ function showRoadBanner(problem, info) {
       if (sm.gates) parts.push(`<b>${sm.gates}</b> Gate${sm.gates === 1 ? '' : 's'}`);
       if (sm.rail) parts.push(`<b>${sm.rail}</b> tile${sm.rail === 1 ? '' : 's'} of track`);
       if (sm.railDel) parts.push(`<b>${sm.railDel}</b> of track to take up`);
+      if (sm.pipe) parts.push(`<b>${sm.pipe}</b> tile${sm.pipe === 1 ? '' : 's'} of pipe`);
+      if (sm.pipeDel) parts.push(`<b>${sm.pipeDel}</b> of pipe to take up`);
       const cost = Object.keys(sm.net).length && Object.values(sm.net).some((v) => v > 0) ? `costs <b>${costText(sm.net)}</b>` : 'costs nothing';
       line = `Plan: ${parts.join(', ')}; ${cost}` + (!sm.short.length ? '.' : `. <span class="ok">Short of ${sm.short.map((g) => GOOD[g].name).join(' and ')} for now: what you can't pay for waits and is paid from storage as the goods come in, oldest plans first.</span>`);
     }
-    const waiting = planList(0).length, wp = plansWaiting(0), owedN = wp.tiles + wp.track + wp.sites;
-    const owedText = owedN ? ` <b>Waiting for goods now:</b> ${[wp.tiles ? `${wp.tiles} road tile${wp.tiles === 1 ? '' : 's'}` : '', wp.track ? `${wp.track} of track` : '', wp.sites ? `${wp.sites} site${wp.sites === 1 ? '' : 's'}` : ''].filter(Boolean).join(', ')} (${costText(wp.owed)} to go).` : '';
-    if (mode === 'wall') how = 'Walls and Gates are paid straight from storage, no Hauler needed: what you have now goes in when you tap Build, the rest as the goods come in (oldest plans first), and free workers put each piece up as far as its goods go. Enemy warbots have to go round or shoot through; your bots pass your Gates.' + owedText;
+    const waiting = planList(0).length, wp = plansWaiting(0), owedN = wp.tiles + wp.track + wp.pipes + wp.sites;
+    const owedText = owedN ? ` <b>Waiting for goods now:</b> ${[wp.tiles ? `${wp.tiles} road tile${wp.tiles === 1 ? '' : 's'}` : '', wp.track ? `${wp.track} of track` : '', wp.pipes ? `${wp.pipes} of pipe` : '', wp.sites ? `${wp.sites} site${wp.sites === 1 ? '' : 's'}` : ''].filter(Boolean).join(', ')} (${costText(wp.owed)} to go).` : '';
+    if (mode === 'pipe') how = pipeHow + owedText;
+    else if (mode === 'wall') how = 'Walls and Gates are paid straight from storage, no Hauler needed: what you have now goes in when you tap Build, the rest as the goods come in (oldest plans first), and free workers put each piece up as far as its goods go. Enemy warbots have to go round or shoot through; your bots pass your Gates.' + owedText;
     else if (mode === 'rail') how = 'Track you can pay for goes down when you tap Build; the rest goes down as the goods come in (oldest plans first). Where the track climbs a one-level cliff, a Ramp is planned for it (paid from storage, no road needed) and the track on it goes down once workers finish the Ramp. Rail Stations stand beside the track; Freight Trains run between stations on the same stretch of track.' + owedText;
     else how = `<b>Haulers only drive on roads</b>, so every building needs a road to storage. 1 Cement paves ${Math.round(1 / roadCost().cement)} tiles (${ROAD_CLEAR}× through resources); you have ${have.cement || 0} Cement` +
       (mode === 'bridge' ? ` and ${have.alloy || 0} Alloy. Workers build bridges and tunnels out from the shore or rock face, and they join land on any level.` : '.') +
@@ -1760,11 +1849,12 @@ function showRoadBanner(problem, info) {
     $('banner-ok').textContent = sm.add ? `Build ${sm.add} tile${sm.add === 1 ? '' : 's'}` + (sm.ramps ? ` + ${sm.ramps} Ramp${sm.ramps === 1 ? '' : 's'}` : '') + (wl ? ` + ${wl} wall` : '')
       : sm.ramps ? `Build ${sm.ramps} Ramp${sm.ramps === 1 ? '' : 's'}` + (wl ? ` + ${wl} wall` : '')
       : wl ? `Build ${sm.walls ? `${sm.walls} Wall${sm.walls === 1 ? '' : 's'}` : ''}${sm.walls && sm.gates ? ' + ' : ''}${sm.gates ? `${sm.gates} Gate${sm.gates === 1 ? '' : 's'}` : ''}`
-      : sm.rail ? `Build ${sm.rail} track tile${sm.rail === 1 ? '' : 's'}` : 'Take up';
+      : sm.rail ? `Build ${sm.rail} track tile${sm.rail === 1 ? '' : 's'}` : sm.pipe ? `Lay ${sm.pipe} pipe tile${sm.pipe === 1 ? '' : 's'}` : 'Take up';
     $('banner-ok').disabled = !sm.can;
     $('banner-undo').onclick = () => { draftUndo(); sfx('click'); showRoadBanner(); };
     $('banner-clear').onclick = () => { draftReset(); sfx('click'); showRoadBanner(); };
   }
+  if ($('pipe-all')) $('pipe-all').onclick = (e) => { e.stopPropagation(); pipeAllPumps(); };
   const tb = $('banner-traffic');
   tb.hidden = false;
   tb.classList.toggle('on', !!R.traffic);
@@ -1941,6 +2031,11 @@ function openBuildingSheet(b) {
         <button class="btn" id="sh-pmark">Mark roads to pave</button>
         <p class="hint">Mark roads in Paths (Pave) and the Paver keeps just those surfaced, resurfacing them as traffic wears them down: put the Roadworks near the roads that matter. <i>Every joined road</i> paves everything it can reach.</p>`;
     }
+    if (def.pump && b.built && b.owner === 0) {
+      const pr = pipeToRefinery(0, b);
+      if (!pr.why) html += `<button class="btn" id="sh-pipe">Pipe it to the Refinery: ${pr.tiles.length} tile${pr.tiles.length === 1 ? '' : 's'}, ${costText(pr.cost)}</button>
+        <p class="hint">A pipeline sends its Crude straight to the Refinery, every second, so it never waits for a Tanker. It runs over roads and track; raiders can break it.</p>`;
+    }
     if (def.nukeSilo && b.built) {
       html += `<button class="btn primary big danger-glow" id="sh-aim">Aim nuclear missile</button>
         <p class="hint" id="sh-aim-hint"></p>`;
@@ -2015,6 +2110,14 @@ function openBuildingSheet(b) {
       if (u) openBotSheet(u); else closeSheet();
     };
     if ($('sh-aim')) $('sh-aim').onclick = () => { sfx('click'); startAim(b); };
+    if ($('sh-pipe')) $('sh-pipe').onclick = () => {
+      const r = pipeToRefinery(0, b);
+      if (r.why) { sfx('error'); toast(r.why, 'warn'); return; }
+      const n = pipeUp(0, r.tiles), owed = r.tiles.filter((t) => S.pipePlan[t] === 1).length;
+      sfx('place');
+      toast(`Pipe laid from the Oil Pump to the Refinery (${n} tile${n === 1 ? '' : 's'}).` + (owed ? ` ${owed} tile${owed === 1 ? '' : 's'} wait for goods, paid from storage as they come in.` : ''), 'good');
+      $('sh-pipe').hidden = true;
+    };
     if ($('sh-gprio')) for (const btn of $('sh-gprio').children) btn.onclick = () => { b.gprio = btn.dataset.v === 'normal' ? undefined : btn.dataset.v; sfx('click'); refreshSheet(); };
     if ($('sh-keepw')) for (const btn of $('sh-keepw').children) btn.onclick = () => { b.keepW = btn.dataset.v === 'auto' ? undefined : +btn.dataset.v; sfx('click'); refreshSheet(); };
     if ($('sh-st-send')) {
@@ -2207,6 +2310,10 @@ function refreshBuildingSheet(b) {
       if (mine && pumpDry(b)) parts.push('<p class="desc err"><b>This seep has run dry.</b> Demolish the pump (below) for half its materials back; any Crude still in it goes to storage. Then build a new Oil Pump on another oil seep.</p>');
       parts.push(`<div class="kv"><span>Crude left in the seep</span><span>${oilAround(b.x, b.y)}</span></div>`);
       if (mine) parts.push(`<div class="kv"><span>Waiting for pickup</span><span>${goodTag('crude', `${b.stock.crude || 0}/${def.out.crude}`)}</span></div>`);
+      if (mine) {
+        const joined = refineryPipes(0), ns = buildingPipes(b);
+        parts.push(`<div class="kv"><span>Pipeline</span><span>${ns.some((c) => joined.has(c)) ? 'to a Refinery' : b.piped ? 'to storage' : ns.length ? 'goes nowhere yet' : 'none: a Tanker collects'}</span></div>`);
+      }
       if (mine && b.timer > 0 && b.status === 'Working') parts.push(`<div class="bar"><div style="width:${Math.round((b.timer / def.work) * 100)}%"></div></div>`);
     }
     if (def.inp && mine && !def.pump) {

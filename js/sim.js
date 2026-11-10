@@ -11,6 +11,7 @@ function simStep(dt) {
   S.tick++;
   if (S.tick % 30 === 0) growStalks(30 * dt);
   if (S.tick % 30 === 7) settlePlans();
+  if (S.tick % 30 === 11) updatePipes();
   if (S.tick % 30 === 15) for (let p = 0; p < S.players.length; p++) landerSalvage(p, 30 * dt);
   if (S.tick % 30 === 22) updateEvac();
   if (S.tick % 60 === 33 && S.decals && S.decals.length) S.decals = S.decals.filter((d) => S.time - d.t0 < d.life); // old ground marks fade away
@@ -3390,6 +3391,7 @@ function raidRoadsLeft(r, owner) {
     if (!inMap(i, j) || di * di + dj * dj > SABOTAGE_RANGE * SABOTAGE_RANGE + 0.01) continue;
     const t = tIdx(i, j);
     if (S.road[t] && !crossTile(t) && S.owner[t] >= 0 && S.owner[t] !== owner) { r.roadsLeft = true; break; }
+    if (S.pipe[t] && S.pipe[t] !== owner + 1) { r.roadsLeft = true; break; }
   }
   return r.roadsLeft;
 }
@@ -3408,13 +3410,24 @@ function sabotageRoads(u, r, dt) {
     const i = ri + di, j = rj + dj;
     if (!inMap(i, j)) continue;
     const t = tIdx(i, j);
-    if (!S.road[t] || S.owner[t] !== victim || crossTile(t)) continue; // bridges and tunnels are too solid to tear up (a Missile can crater them)
-    const d = di * di + dj * dj - (isJunction(t) ? 1.5 : 0); // junctions first: they cut the most routes
+    const pipe = S.pipe[t] === victim + 1; // a pipeline is worth cutting too
+    if (!pipe && (!S.road[t] || S.owner[t] !== victim || crossTile(t))) continue; // bridges and tunnels are too solid to tear up (a Missile can crater them)
+    const d = di * di + dj * dj - (pipe ? 1 : S.road[t] && isJunction(t) ? 1.5 : 0); // junctions first: they cut the most routes
     if (d < bd) { bd = d; best = t; }
   }
   if (best < 0) { r.sab = SABOTAGE_WORK; return; } // nothing left here to wreck
   r.sab = 0;
   u.face = Math.atan2(((best / S.W) | 0) + 0.5 - u.y, (best % S.W) + 0.5 - u.x);
+  if (S.pipe[best] === victim + 1) {
+    breakPipe(best);
+    const P = S.players[victim];
+    if (S.time - (P.lastPipeMsg || -99) > 25) {
+      P.lastPipeMsg = S.time;
+      postMsg(victim, 'Raiders are cutting your pipeline! It\'s relaid once they\'re driven off and it\'s paid for.', best % S.W, (best / S.W) | 0, 'bad');
+      if (victim === 0) sfx('alert');
+    }
+    return;
+  }
   wreckRoad(best, victim, 'Raiders are tearing up your roads');
 }
 
@@ -3757,6 +3770,7 @@ function missileImpact(m) {
     const t = tIdx(i, j);
     if (S.plan[t]) cancelPlan(t);
     if (S.road[t] && S.owner[t] !== m.owner) wreckRoad(t, S.owner[t], '');
+    if (S.pipe[t] && S.pipe[t] !== m.owner + 1) breakPipe(t);
   }
 }
 
@@ -3959,6 +3973,7 @@ function nukeImpact(m) {
     const t = tIdx(i, j);
     if (S.plan[t]) cancelPlan(t);
     if (S.road[t]) wreckRoad(t, -1, '');
+    if (S.pipe[t] || S.pipePlan[t]) { setPipe(t, 0); S.pipePlan[t] = 0; } // gone for good: the ground is scorched
     if (S.res[t] === R_STALK || S.res[t] === R_CROP) { S.res[t] = R_NONE; S.amt[t] = 0; markDirty(i, j); }
     S.scorch[t] = S.time + NUKE.scorch;
   }
@@ -4127,7 +4142,11 @@ function settlePlans() {
       continue;
     }
     let cost;
-    if (kind === 'r') {
+    if (kind === 'p') {
+      if (S.pipePlan[t] !== o + 1) continue;
+      if (S.pipe[t] || pipeBlocked(o, t)) { S.pipePlan[t] = 0; continue; } // laid already, or can't go there any more: dropped
+      cost = PIPE_COST;
+    } else if (kind === 'r') {
       if (S.plan[t] !== o + 1 || !S.owe[t]) continue;
       cost = roadTileCost(t);
     } else {
@@ -4148,7 +4167,8 @@ function settlePlans() {
       continue;
     }
     payRoad(o, cost);
-    if (kind === 'r') setOwe(t, 0);
+    if (kind === 'p') { S.pipePlan[t] = 0; setPipe(t, o + 1); }
+    else if (kind === 'r') setOwe(t, 0);
     else { setRailPlan(t, 0); setRail(t, true); }
   }
   S.planQ = keep;
@@ -4156,12 +4176,13 @@ function settlePlans() {
 
 /** How many of `owner`'s plans are waiting for goods: { tiles, track, sites, owed: {good: n} }. */
 function plansWaiting(owner) {
-  const out = { tiles: 0, track: 0, sites: 0, junctions: 0, owed: {} };
+  const out = { tiles: 0, track: 0, pipes: 0, sites: 0, junctions: 0, owed: {} };
   for (const [kind, ref, o] of S.planQ || []) {
     if (o !== owner) continue;
     let c = null;
     if (kind === 'r' && S.plan[ref] === o + 1 && S.owe[ref]) { out.tiles++; c = roadTileCost(ref); }
     else if (kind === 't' && S.railPlan[ref] === o + 1) { out.track++; c = railCost(ref); }
+    else if (kind === 'p' && S.pipePlan[ref] === o + 1 && !S.pipe[ref]) { out.pipes++; c = PIPE_COST; }
     else if (kind === 'b') { const b = getE(ref); if (b && !b.dead && !b.built && Object.keys(stillOwed(b)).length) { out.sites++; c = stillOwed(b); } }
     else if (kind === 'j') { const P = junPlanAt(ref); if (P && P.owner === o) { out.junctions++; c = junPlanCost(ref, P); } }
     if (c) for (const g in c) out.owed[g] = (out.owed[g] || 0) + c[g];
@@ -5109,6 +5130,190 @@ function packCrawler(b) {
   markDirty(b.x, b.y);
   computeTerritory();
   return u;
+}
+
+/* ------------------------------------------------------------------ pipelines */
+
+/** Pipe networks (see PIPE_COST): comp[t] is the network of pipe tile t (-1 for none), rebuilt when pipe changes. */
+const PIPE_NET = { ver: -1, of: null, comp: null, n: 0, flow: [] };
+function pipeNet() {
+  if (PIPE_NET.of === S && PIPE_NET.ver === S.pipeVer) return PIPE_NET;
+  const N = S.W * S.H, comp = new Int32Array(N).fill(-1), q = [];
+  let n = 0;
+  for (let s = 0; s < N; s++) {
+    if (!S.pipe[s] || comp[s] >= 0) continue;
+    comp[s] = n; q.length = 0; q.push(s);
+    while (q.length) {
+      const t = q.pop(), i = t % S.W;
+      for (const u of [t - 1, t + 1, t - S.W, t + S.W]) {
+        if (u < 0 || u >= N || (u === t - 1 && i === 0) || (u === t + 1 && i === S.W - 1)) continue;
+        if (S.pipe[u] === S.pipe[s] && comp[u] < 0) { comp[u] = n; q.push(u); }
+      }
+    }
+    n++;
+  }
+  PIPE_NET.ver = S.pipeVer; PIPE_NET.of = S; PIPE_NET.comp = comp; PIPE_NET.n = n; PIPE_NET.flow = [];
+  return PIPE_NET;
+}
+
+/** The pipe networks building b is joined to: its owner's pipe under it or beside it. */
+function buildingPipes(b, net) {
+  const out = [], own = b.owner + 1, comp = (net || pipeNet()).comp;
+  for (const [di, dj] of [[0, 0], [1, 0], [-1, 0], [0, 1], [0, -1]]) {
+    if (!inMap(b.x + di, b.y + dj)) continue;
+    const t = tIdx(b.x + di, b.y + dj);
+    if (S.pipe[t] === own && out.indexOf(comp[t]) < 0) out.push(comp[t]);
+  }
+  return out;
+}
+
+/** Can pipe carry Crude to or from b? Oil Pumps, buildings that use Crude, and storage. */
+function pipeEnd(b) { const d = BDEFS[b.type]; return !!(d.pump || (d.inp && d.inp.crude) || d.store); }
+
+/** How much more Crude pipe can bring building b (a Refinery stocks PIPE_FILL, an Asphalt Plant its usual inputs). */
+function pipeRoom(b) { return (BDEFS[b.type].explodes ? PIPE_FILL : INPUT_CAP) - (b.stock.crude || 0) - (b.inc.crude || 0); }
+
+/** Every second: each pipeline moves Crude from its pumps (and storage) to where it's used (see PIPE_COST). */
+function updatePipes() {
+  const net = pipeNet();
+  const nets = new Map();
+  for (const b of S.buildings) {
+    if (b.piped) b.piped = false;
+    if (b.dead || !b.built || !net.n || !pipeEnd(b)) continue;
+    const def = BDEFS[b.type], kind = def.pump ? 'pumps' : def.store ? 'stores' : 'users';
+    for (const c of buildingPipes(b, net)) {
+      let N = nets.get(c);
+      if (!N) nets.set(c, (N = { pumps: [], users: [], stores: [] }));
+      if (N[kind].indexOf(b) < 0) N[kind].push(b);
+    }
+  }
+  for (const [c, N] of nets) {
+    let left = PIPE_RATE, moved = 0;
+    const give = (from, to, n) => { bump(from.stock, 'crude', -n); bump(to.stock, 'crude', n); left -= n; moved += n; };
+    const stores = N.stores.filter((s) => storeTakes(s, 'crude'));
+    for (const p of N.pumps) {
+      if (N.users.length || stores.length) p.piped = true; // its Crude goes by pipe: no Tanker needed
+      for (const u of N.users) { const n = Math.min(Math.floor(supplyOf(p, 'crude')), Math.floor(pipeRoom(u)), left); if (n > 0) give(p, u, n); }
+      for (const s of stores) { const n = Math.min(Math.floor(supplyOf(p, 'crude')), left); if (n > 0) give(p, s, n); }
+    }
+    for (const u of N.users) for (const s of N.stores) { const n = Math.min(Math.floor(supplyOf(s, 'crude')), Math.floor(pipeRoom(u)), left); if (n > 0) give(s, u, n); }
+    if (moved) net.flow[c] = S.time; // (drawn: Crude pulsing along the pipe)
+  }
+}
+
+/** Plan pipe on tile t (paid from storage as the goods come in, laid when paid): '' if planned, otherwise why not. */
+function queuePipe(owner, t) {
+  if (S.pipe[t] === owner + 1 || S.pipePlan[t] === owner + 1) return '';
+  const why = pipeBlocked(owner, t);
+  if (why) return why;
+  S.pipePlan[t] = owner + 1;
+  queuePlan('p', t, owner);
+  return '';
+}
+
+/** Take up the pipe on tile t (its Cement and Alloy come back; planned pipe not yet laid is just dropped). */
+function takeUpPipe(owner, t) {
+  if (S.pipePlan[t] === owner + 1 && !S.pipe[t]) { S.pipePlan[t] = 0; return; }
+  if (S.pipe[t] !== owner + 1) return;
+  setPipe(t, 0);
+  refundRoad(owner, PIPE_COST, t % S.W, (t / S.W) | 0);
+}
+
+/** Pipe broken by a raid, a missile or a blast (no refund): it's planned again at once, to be relaid when paid for. */
+function breakPipe(t) {
+  const o = S.pipe[t] - 1;
+  if (o < 0) return;
+  setPipe(t, 0);
+  addFx('smoke', (t % S.W) + 0.5, ((t / S.W) | 0) + 0.5, { r: 0.4, dark: true });
+  addDecal('scorch', (t % S.W) + 0.5, ((t / S.W) | 0) + 0.5, 0.3, 40);
+  if (!pipeBlocked(o, t)) { S.pipePlan[t] = o + 1; queuePlan('p', t, o); }
+}
+
+/** A fuel blast breaks the pipe close to it (within half its reach). */
+function blastPipes(x, y, r) {
+  const h = r * 0.5, R0 = Math.ceil(h);
+  for (let dj = -R0; dj <= R0; dj++) for (let di = -R0; di <= R0; di++) {
+    const i = Math.floor(x) + di, j = Math.floor(y) + dj;
+    if (inMap(i, j) && S.pipe[tIdx(i, j)] && dist2(i + 0.5, j + 0.5, x, y) <= h * h) breakPipe(tIdx(i, j));
+  }
+}
+
+/**
+ * The cheapest way to run pipe for `owner` from tile `from` to the first tile `goal(t)` accepts: over
+ * ground it can pipe (see pipeBlocked), along its own pipe where that helps, round buildings where it
+ * can (pipe can run under them, but each one it passes under joins the line), and with few bends.
+ * Returns the tiles from start to goal, or null if there's no way.
+ */
+function pipeRoute(owner, from, goal, maxLen) {
+  const N = S.W * S.H, W = S.W;
+  if (pipeBlocked(owner, from)) return null;
+  const best = new Float32Array(N * 4).fill(Infinity), prev = new Int32Array(N * 4).fill(-1);
+  const heap = [];
+  const push = (c, s) => { heap.push([c, s]); let k = heap.length - 1; while (k > 0) { const p = (k - 1) >> 1; if (heap[p][0] <= heap[k][0]) break; [heap[p], heap[k]] = [heap[k], heap[p]]; k = p; } };
+  const pop = () => { const top = heap[0], last = heap.pop(); if (heap.length) { heap[0] = last; let k = 0; for (;;) { const l = 2 * k + 1, r = l + 1; let m = k; if (l < heap.length && heap[l][0] < heap[m][0]) m = l; if (r < heap.length && heap[r][0] < heap[m][0]) m = r; if (m === k) break; [heap[m], heap[k]] = [heap[k], heap[m]]; k = m; } } return top; };
+  const DIRS = [1, W, -1, -W];
+  for (let d = 0; d < 4; d++) { best[from * 4 + d] = 0; push(0, from * 4 + d); }
+  let end = -1, steps = 0;
+  const cap = maxLen || Infinity;
+  while (heap.length) {
+    const [c, s] = pop();
+    if (c > best[s]) continue;
+    const t = s >> 2, d = s & 3;
+    if (t !== from && goal(t)) { end = s; break; }
+    if (++steps > 200000 || c > cap) break;
+    const i = t % W;
+    for (let nd = 0; nd < 4; nd++) {
+      const u = t + DIRS[nd];
+      if (u < 0 || u >= N || (nd === 0 && i === W - 1) || (nd === 2 && i === 0)) continue;
+      if (pipeBlocked(owner, u)) continue;
+      const step = (S.pipe[u] === owner + 1 ? 0.15 : 1) + (nd !== d && t !== from ? 0.35 : 0) + (S.bAt[u] && !goal(u) ? 5 : 0);
+      const ns = u * 4 + nd, nc = c + step;
+      if (nc < best[ns]) { best[ns] = nc; prev[ns] = s; push(nc, ns); }
+    }
+  }
+  if (end < 0) return null;
+  const out = [];
+  for (let s = end; s >= 0; s = prev[s]) { out.push(s >> 2); if ((s >> 2) === from) break; }
+  return out.reverse();
+}
+
+/** The pipe networks (of `owner`) joined to a Refinery, built or still going up. */
+function refineryPipes(owner) {
+  const net = pipeNet(), out = new Set();
+  for (const b of S.buildings) if (!b.dead && b.owner === owner && BDEFS[b.type].explodes) for (const c of buildingPipes(b, net)) out.add(c);
+  return out;
+}
+
+/**
+ * Pipe for building b (an Oil Pump) to the nearest Refinery: to a tile beside one, or to pipe already
+ * joined to one. Returns { tiles (the new pipe to lay), cost, to (the Refinery, if it goes straight to
+ * one) } or { why } when there's no way (or no Refinery).
+ */
+function pipeToRefinery(owner, b) {
+  const refs = S.buildings.filter((r) => !r.dead && r.owner === owner && BDEFS[r.type].explodes);
+  if (!refs.length) return { why: 'Build a Refinery first: the pipe runs from the pump to it.' };
+  const net = pipeNet(), joined = refineryPipes(owner), mine = buildingPipes(b, net);
+  if (mine.some((c) => joined.has(c))) return { why: 'This pump is already piped to a Refinery.' };
+  const beside = new Set();
+  for (const r of refs) for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1], [0, 0]]) if (inMap(r.x + di, r.y + dj)) beside.add(tIdx(r.x + di, r.y + dj));
+  const start = tIdx(b.x, b.y);
+  const route = pipeRoute(owner, start, (t) => beside.has(t) || (S.pipe[t] === owner + 1 && joined.has(net.comp[t])), 80);
+  if (!route) return { why: 'No way to run pipe from here to a Refinery inside your border (water or rock in the way?).' };
+  // No pipe under the pump itself unless it stands right beside the line's end.
+  const tiles = route.filter((t, k) => !S.pipe[t] && !(k === 0 && route.length > 1) && !(S.bAt[t] && k === route.length - 1 && route.length > 1 && BDEFS[getE(S.bAt[t]).type].explodes));
+  // A pump right beside its Refinery: one tile of pipe under the pump joins them.
+  if (!tiles.length && !route.some((t) => S.pipe[t])) tiles.push(start);
+  const cost = {};
+  for (const g in PIPE_COST) cost[g] = Math.round(PIPE_COST[g] * tiles.length * 100) / 100;
+  return { tiles, cost };
+}
+
+/** Lay (plan) the pipe pipeToRefinery found: what's paid for goes down at once, the rest as goods come in. Returns tiles planned. */
+function pipeUp(owner, tiles) {
+  let n = 0;
+  for (const t of tiles) if (!queuePipe(owner, t)) n++;
+  settlePlans();
+  return n;
 }
 
 /* ------------------------------------------------------------------ freight trains */

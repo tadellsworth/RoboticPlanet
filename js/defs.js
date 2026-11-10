@@ -213,6 +213,19 @@ const VIA_CLAIM = 3; // a Viaduct's far end claims the no-one's ground this far 
  */
 const RAIL_COST = { cement: 1.5, alloy: 0.25 }; // mostly Cement (sleepers and ballast): Alloy is too scarce for a long line to cost a bar a tile
 const RAIL_MIN_LOAD = 10;
+/*
+ * Pipelines carry Crude (nothing else). Pipe is laid in Paths (Pipes): drag from one building to
+ * another and it finds its own way there. PIPE_COST a tile, paid from storage and laid at once (or as
+ * the goods come in), on any ground in your territory: over roads and track, under buildings, up and
+ * down cliffs. A pipe joins every building it runs under or beside. Every second each pipeline moves
+ * up to PIPE_RATE Crude: from Oil Pumps to the Refineries and Asphalt Plants on it (a Refinery keeps
+ * up to PIPE_FILL), then to storage on it; and from storage on it to its Refineries. A piped pump's
+ * Crude never waits for a Tanker. Raids, missiles and fuel blasts break pipe: a broken tile is planned
+ * again at once and relaid when it's paid for.
+ */
+const PIPE_COST = { cement: 0.25, alloy: 0.1 };
+const PIPE_RATE = 4;
+const PIPE_FILL = 6;
 const RAIL_CROSS_HOLD = 2.4;
 /**
  * Driving: bots speed up at BOT_ACCEL tiles/s² and brake at up to BOT_BRAKE, slowing to BOT_CORNER of

@@ -1518,6 +1518,92 @@ function drawViaducts(ctx, ox, oy, z) {
 }
 
 /**
+ * Pipelines: a steel pipe along the tile centres, joined to the pipe and buildings beside it, raised
+ * on posts where it crosses a road or track. Crude pulses along a line that moved some in the last
+ * couple of seconds. In Paths (Pipes), Oil Pumps are ringed: green when piped to a Refinery, orange
+ * when not. Drawn every frame over the map, under buildings and bots.
+ */
+const PIPE_DIRS = [[1, 0], [0, 1], [-1, 0], [0, -1]];
+function pipeSegments(has, inView, ox, oy, z, endsToo) {
+  const segs = [], posts = [], caps = [];
+  for (let t = 0; t < S.W * S.H; t++) {
+    const own = has(t);
+    if (!own) continue;
+    const i = t % S.W, j = (t / S.W) | 0;
+    if (!inView(i, j, 1)) continue;
+    const cx = ox + (i + 0.5) * z, cy = oy + (j + 0.5) * z;
+    let links = 0;
+    for (const [di, dj] of PIPE_DIRS) {
+      if (!inMap(i + di, j + dj)) continue;
+      const u = tIdx(i + di, j + dj);
+      if (has(u) === own) { if (di > 0 || dj > 0) segs.push([cx, cy, cx + di * z, cy + dj * z, t]); links++; continue; }
+      const b = endsToo && S.bAt[u] && getE(S.bAt[u]);
+      if (b && b.owner === own - 1 && pipeEnd(b)) { segs.push([cx, cy, cx + di * z * 0.55, cy + dj * z * 0.55, t]); links++; }
+    }
+    if (links !== 2 || ((i + j) % 4 === 0)) caps.push([cx, cy, own]);
+    if (!links) segs.push([cx - z * 0.22, cy, cx + z * 0.22, cy, t]);
+    if (S.road[t] || (S.rail && S.rail[t])) posts.push([cx, cy]);
+  }
+  return { segs, posts, caps };
+}
+
+function strokeSegs(ctx, segs, filter) {
+  ctx.beginPath();
+  for (const g of segs) { if (filter && !filter(g)) continue; ctx.moveTo(g[0], g[1]); ctx.lineTo(g[2], g[3]); }
+  ctx.stroke();
+}
+
+function drawPipes(ctx, ox, oy, z, inView) {
+  if (!S.pipe) return;
+  const net = pipeNet();
+  if (net.n) {
+    const { segs, posts, caps } = pipeSegments((t) => S.pipe[t], inView, ox, oy, z, true);
+    ctx.save();
+    ctx.lineCap = 'round';
+    // Posts under raised pipe (over a road or track), and its shadow on the road.
+    ctx.fillStyle = 'rgba(15,10,6,0.28)';
+    for (const [x, y] of posts) ctx.fillRect(x - z * 0.3, y + z * 0.1, z * 0.6, z * 0.07);
+    ctx.fillStyle = '#3a3f46';
+    for (const [x, y] of posts) { ctx.fillRect(x - z * 0.3, y - z * 0.02, z * 0.06, z * 0.13); ctx.fillRect(x + z * 0.24, y - z * 0.02, z * 0.06, z * 0.13); }
+    ctx.strokeStyle = '#262a30'; ctx.lineWidth = Math.max(2.5, z * 0.2);
+    strokeSegs(ctx, segs);
+    ctx.strokeStyle = '#9aa2ab'; ctx.lineWidth = Math.max(1.5, z * 0.13);
+    strokeSegs(ctx, segs);
+    ctx.strokeStyle = 'rgba(255,255,255,0.38)'; ctx.lineWidth = Math.max(0.8, z * 0.035);
+    ctx.save(); ctx.translate(-z * 0.015, -z * 0.03); strokeSegs(ctx, segs); ctx.restore();
+    // Crude on the move.
+    const now = S.time, flowing = (g) => now - (net.flow[net.comp[g[4]]] ?? -99) < 2;
+    if (segs.some(flowing)) {
+      ctx.strokeStyle = GOOD.crude.color; ctx.lineWidth = Math.max(1, z * 0.06);
+      ctx.setLineDash([z * 0.1, z * 0.3]); ctx.lineDashOffset = -R.time * z * 0.9;
+      strokeSegs(ctx, segs, flowing);
+      ctx.setLineDash([]);
+    }
+    // Flanges at joints and bends, banded in the owner's colour.
+    for (const [x, y, own] of caps) {
+      ctx.fillStyle = '#262a30'; ctx.fillRect(x - z * 0.11, y - z * 0.11, z * 0.22, z * 0.22);
+      ctx.fillStyle = PLAYER_COLORS[own - 1] || '#9aa2ab'; ctx.fillRect(x - z * 0.075, y - z * 0.075, z * 0.15, z * 0.15);
+    }
+    ctx.restore();
+  }
+  // In Paths (Pipes): which Oil Pumps reach a Refinery by pipe, and the Refineries.
+  if (R.mode === 'road' && typeof UI !== 'undefined' && UI.roadMode === 'pipe') {
+    const joined = refineryPipes(0);
+    ctx.lineWidth = Math.max(2, z * 0.07);
+    for (const b of S.buildings) {
+      if (b.dead || b.owner !== 0 || !inView(b.x, b.y, 1)) continue;
+      const def = BDEFS[b.type];
+      if (!def.pump && !def.explodes) continue;
+      const ok = def.explodes || buildingPipes(b).some((c) => joined.has(c));
+      ctx.strokeStyle = def.explodes ? 'rgba(140,215,255,0.9)' : ok ? 'rgba(125,255,160,0.95)' : 'rgba(255,170,90,0.95)';
+      ctx.setLineDash(ok ? [] : [z * 0.12, z * 0.08]);
+      ctx.beginPath(); ctx.arc(ox + (b.x + 0.5) * z, oy + (b.y + 0.5) * z, z * 0.62, 0, Math.PI * 2); ctx.stroke();
+    }
+    ctx.setLineDash([]);
+  }
+}
+
+/**
  * Level crossings (the art's): barriers down and red lamps flashing while a train is near, up
  * otherwise. Drawn every frame over the map.
  */
@@ -3498,6 +3584,7 @@ function render(dtReal) {
   drawBridgeRigging(ctx, ox, oy, z, inView);
   drawViaducts(ctx, ox, oy, z);
   drawCrossingGates(ctx, ox, oy, z, inView);
+  drawPipes(ctx, ox, oy, z, inView);
 
   // Placement overlay
   if (R.mode === 'place' && R.overlay) {
@@ -3840,6 +3927,16 @@ function drawPlans(ctx, ox, oy, z, inView) {
     }
     ctx.setLineDash([]);
   }
+  // Planned pipe waiting for its goods: a dashed ghost of the pipe.
+  if (S.planQ && S.planQ.some((it) => it[0] === 'p')) {
+    const { segs } = pipeSegments((t) => (S.pipePlan[t] && !S.pipe[t] ? S.pipePlan[t] : 0), inView, ox, oy, z, true);
+    ctx.save();
+    ctx.lineCap = 'round';
+    ctx.setLineDash([z * 0.14, z * 0.1]);
+    ctx.strokeStyle = 'rgba(255,170,90,0.9)'; ctx.lineWidth = Math.max(1.5, z * 0.11);
+    strokeSegs(ctx, segs);
+    ctx.restore();
+  }
   // Planned track waiting to go down (for its goods, or for a Ramp to be finished under it).
   if (S.planQ && S.planQ.length) {
     ctx.lineWidth = Math.max(1, z * 0.04);
@@ -3930,7 +4027,25 @@ function drawLights(ctx, ox, oy, z, inView) {
  */
 function drawDraft(ctx, ox, oy, z, inView) {
   const d = typeof UI !== 'undefined' && UI.draft;
-  if (!d || (!d.add.length && !d.del.size && !d.ramps.size && !(d.walls && d.walls.size) && !(d.rail && d.rail.size) && !(d.railDel && d.railDel.size))) return;
+  if (!d || (!d.add.length && !d.del.size && !d.ramps.size && !(d.walls && d.walls.size) && !(d.rail && d.rail.size) && !(d.railDel && d.railDel.size) && !(d.pipe && d.pipe.size) && !(d.pipeDel && d.pipeDel.size))) return;
+  // Sketched pipe: a pale pipe joined to the pipe it meets; pipe marked to take up: a red cross.
+  if (d.pipe && d.pipe.size) {
+    const { segs } = pipeSegments((t) => (d.pipe.has(t) || S.pipe[t] === 1 ? 1 : 0), inView, ox, oy, z, true);
+    ctx.save();
+    ctx.lineCap = 'round';
+    ctx.strokeStyle = 'rgba(30,24,16,0.6)'; ctx.lineWidth = Math.max(2.5, z * 0.2);
+    strokeSegs(ctx, segs, (g) => d.pipe.has(g[4]));
+    ctx.strokeStyle = '#ffd68c'; ctx.lineWidth = Math.max(1.5, z * 0.12);
+    strokeSegs(ctx, segs, (g) => d.pipe.has(g[4]));
+    ctx.restore();
+  }
+  if (d.pipeDel) for (const t of d.pipeDel) {
+    const i = t % S.W, j = (t / S.W) | 0;
+    if (!inView(i, j, 1)) continue;
+    const x = ox + i * z, y = oy + j * z;
+    ctx.strokeStyle = '#ff5a6e'; ctx.lineWidth = Math.max(2, z * 0.08);
+    ctx.beginPath(); ctx.moveTo(x + z * 0.25, y + z * 0.25); ctx.lineTo(x + z * 0.75, y + z * 0.75); ctx.moveTo(x + z * 0.75, y + z * 0.25); ctx.lineTo(x + z * 0.25, y + z * 0.75); ctx.stroke();
+  }
   // Planned track: pale sleepers; track marked to take up: a red cross.
   if (d.rail) for (const t of d.rail) {
     const i = t % S.W, j = (t / S.W) | 0;

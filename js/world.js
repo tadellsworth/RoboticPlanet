@@ -890,6 +890,7 @@ function newGame(opts) {
     terrain: m.terrain, res: m.res, amt: m.amt, grow: m.grow, elev: m.elev, ramp: m.ramp, fert: m.fert,
     road: new Uint8Array(W * H), rail: new Uint8Array(W * H), pave: new Uint8Array(W * H), wear: new Uint16Array(W * H), paveMark: new Uint8Array(W * H), oneRoad: true, roadVer: 0, lights: {}, over: {}, scorch: {},
     plan: new Uint8Array(W * H), planVer: 0, paveRes: {}, owe: new Uint8Array(W * H), railPlan: new Uint8Array(W * H), planQ: [], junPlan: {},
+    pipe: new Uint8Array(W * H), pipePlan: new Uint8Array(W * H), pipeVer: 0,
     owner: new Int8Array(W * H).fill(-1),
     resRes: new Uint8Array(W * H),
     bAt: new Int32Array(W * H),
@@ -1634,6 +1635,23 @@ function setOwe(t, v) {
 /** Planned track waiting to go down on tile t: its owner + 1, or 0. */
 function setRailPlan(t, v) { S.railPlan[t] = v; }
 
+/** Pipe on tile t: its owner + 1, or 0 (none). */
+function setPipe(t, v) {
+  if ((S.pipe[t] || 0) === v) return;
+  S.pipe[t] = v;
+  S.pipeVer = (S.pipeVer || 0) + 1;
+}
+
+/** Why `owner` can't run pipe over tile t ('' if it can): its own ground, open or carrying a road or track. */
+function pipeBlocked(owner, t) {
+  if (t < 0 || t >= S.W * S.H) return 'That\'s off the map.';
+  if (S.owner[t] !== owner) return 'Pipe only goes inside your border.';
+  if (scorched(t)) return 'The ground there is still scorched.';
+  if (S.terrain[t] !== T_GROUND && !S.road[t] && !(S.rail && S.rail[t])) return S.terrain[t] === T_WATER ? 'Pipe can\'t cross open water: run it over a bridge.' : 'Pipe can\'t go through rock.';
+  if (S.pipe[t] && S.pipe[t] !== owner + 1) return 'Someone else\'s pipe runs here.';
+  return '';
+}
+
 function setRoad(i, j, on) {
   const t = tIdx(i, j);
   if (!!S.road[t] === !!on) return;
@@ -2190,6 +2208,7 @@ const TYPED_FIELDS = {
   terrain: Uint8Array, res: Uint8Array, amt: Uint8Array, grow: Float32Array, road: Uint8Array, owner: Int8Array,
   resRes: Uint8Array, elev: Uint8Array, ramp: Uint8Array, fert: Uint8Array, pave: Uint8Array, plan: Uint8Array,
   wear: Uint16Array, paveMark: Uint8Array, decor: Uint8Array, rail: Uint8Array, owe: Uint8Array, railPlan: Uint8Array,
+  pipe: Uint8Array, pipePlan: Uint8Array,
 };
 
 function serializeGame() {
@@ -2235,6 +2254,9 @@ function deserializeGame(json) {
   // Saves from before plans could wait for goods: everything planned was paid for.
   if (!o.owe) o.owe = new Array(o.W * o.H).fill(0);
   if (!o.railPlan) o.railPlan = new Array(o.W * o.H).fill(0);
+  if (!o.pipe) o.pipe = new Array(o.W * o.H).fill(0); // saves from before pipelines
+  if (!o.pipePlan) o.pipePlan = new Array(o.W * o.H).fill(0);
+  o.pipeVer = (o.pipeVer || 0) + 1;
   o.planQ = o.planQ || [];
   o.junPlan = o.junPlan || {};
   if (!o.paveMark) { o.paveMark = new Array(o.W * o.H).fill(0); for (const b of o.buildings) if (b.type === 'roadworks' && !b.pmode) b.pmode = 'all'; }
