@@ -2736,6 +2736,43 @@ function viaductDir(b) {
 }
 
 /**
+ * A Pulse Turret's searchlight at dusk and night: a cone of white light along the ground ahead of its gun
+ * (b.aim, so it sweeps as the turret scans and swings onto whatever it fires at), brightest where it
+ * lands. From the gun head's height on the 3D art, near the middle of the tile otherwise.
+ */
+function drawSearchlight(ctx, b, ox, oy, z) {
+  const k = TOD.state.lights;
+  if (!(k > 0.01)) return;
+  const a = b.aim ?? Math.PI / 4, art = artFor('turret', b.owner);
+  const lift = art && art.anchor ? 0.18 : 0; // the head stands a little above the pad on the 3D art
+  const cx = ox + (b.x + 0.5) * z, cy = oy + (b.y + 0.5 - lift) * z, len = z * 4.4, half = 0.3;
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  ctx.globalAlpha = k * 0.9;
+  ctx.translate(cx, cy);
+  ctx.rotate(a);
+  const g = ctx.createLinearGradient(z * 0.3, 0, len, 0);
+  g.addColorStop(0, 'rgba(255,250,228,0.34)');
+  g.addColorStop(0.55, 'rgba(255,246,214,0.16)');
+  g.addColorStop(1, 'rgba(255,240,200,0)');
+  ctx.fillStyle = g;
+  ctx.beginPath();
+  ctx.moveTo(z * 0.3, -z * 0.06);
+  ctx.lineTo(len * Math.cos(half), -len * Math.sin(half));
+  ctx.quadraticCurveTo(len * 1.08, 0, len * Math.cos(half), len * Math.sin(half));
+  ctx.lineTo(z * 0.3, z * 0.06);
+  ctx.closePath();
+  ctx.fill();
+  // The bright spot where the beam meets the ground.
+  const sx = len * 0.72, r = z * 0.9, spot = ctx.createRadialGradient(sx, 0, 0, sx, 0, r);
+  spot.addColorStop(0, 'rgba(255,252,236,0.32)');
+  spot.addColorStop(1, 'rgba(255,248,224,0)');
+  ctx.fillStyle = spot;
+  ctx.beginPath(); ctx.ellipse(sx, 0, r, r * 0.62, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.restore();
+}
+
+/**
  * Walls and Gates from the 3D set (renderer/walls; keys in WALL_PIECES). A Wall tile is layered on one
  * canvas: an arm toward each joined neighbour (north, west, east), then a post, or on every other tile of a
  * straight run a hub, then the south arm. A Wall joins a Gate only along the Gate's own wall line. A Gate
@@ -3966,11 +4003,14 @@ function render(dtReal) {
   if (ART['streetlamp-road']) for (const l of streetLamps(v0, v1)) items.push(l); // posts stand among buildings and bots
   items.sort((a, b) => (a.ent === 'b' ? a.y + 0.5 : a.y) - (b.ent === 'b' ? b.y + 0.5 : b.y));
   // At dusk and night, every finished building's lights spill onto the ground round its pad.
+  // Walls glow a little along their live rail, Gates more; Pulse Turrets sweep searchlights.
   if (TOD.active && TOD.state.pools > 0.01) {
     for (const e of items) {
-      if (e.ent !== 'b' || !e.built || BDEFS[e.type].barrier || BDEFS[e.type].viaduct) continue;
-      drawLightPool(ctx, ox + (e.x + 0.5) * z, oy + (e.y + 0.5) * z, z * (e.type === 'lander' ? 1.5 : 1), BDEFS[e.type].wild ? '#9dff6a' : PLAYER_COLORS[e.owner] || '#ffd9a0');
+      if (e.ent !== 'b' || !e.built || BDEFS[e.type].viaduct) continue;
+      const size = e.type === 'lander' ? 1.5 : e.type === 'wall' ? 0.45 : e.type === 'gate' ? 0.8 : 1;
+      drawLightPool(ctx, ox + (e.x + 0.5) * z, oy + (e.y + 0.5) * z, z * size, BDEFS[e.type].wild ? '#9dff6a' : PLAYER_COLORS[e.owner] || '#ffd9a0');
     }
+    for (const e of items) if (e.ent === 'b' && e.type === 'turret' && e.built && !e.paused) drawSearchlight(ctx, e, ox, oy, z);
   }
   for (const e of items) {
     if (e.ent === 'lamp') { drawStreetLamp(ctx, e, ox, oy, z); continue; }

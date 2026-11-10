@@ -57,10 +57,10 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
 |---|---|
 | Harvester | A worker cuts teal stalk groves into **Fiber** |
 | Quarry | A worker breaks boulders into **Stone**; with none left it cuts Stone from a rock face in reach, or digs it (never runs out) |
-| Ore Mine | A worker digs **Ore** from dark veins |
+| Ore Mine | A worker digs **Ore** from dark veins, two at a time (`dig`) |
 | Crystal Tap | A worker taps violet clusters for **Crystal** |
 | Grove Planter | A worker plants new stalk groves |
-| Smelter | Ore + Fiber → **Alloy** |
+| Smelter | 2 Ore + 2 Fiber → 3 **Alloy** (15 s; it keeps 6 of each on hand, `hopper`) |
 | Chip Fab | Crystal + Alloy → **Chip** |
 | Bot Foundry | Alloy + Chip → a new **Worker** or **Warbot** |
 | Outpost | Expands your territory and garrisons Warbots |
@@ -301,7 +301,7 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
   would block the only way through a pass.
 - **Priorities:** tap a building or construction site and set it to Low, Normal or High. High-priority
   buildings get workers and goods first; low ones are served last and lose their worker first when
-  workers run short. A priority set on a construction site ends when it's built (back to Normal). **Pause** frees a building's worker entirely.
+  workers run short. A priority set on a construction site ends when it's built (back to Normal). **Pause** frees a building's worker entirely. A Generator, Mortar Pit or Pulse Turret can be **turned off** (`pausable`, `setPaused`): it burns no Fuel, or holds its fire, and nothing more is hauled to it until it's back on.
 - **Storage:** tap your Command Base or a Depot. *Fill first* makes haulers bring finished goods there before
   any other storage; *Empty out* takes nothing new and moves what it holds elsewhere (handy before
   demolishing it). You can also switch individual goods off for that building.
@@ -321,6 +321,11 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
   rock face in reach (`rockFace`: ground against a crag or a cliff; 8 s a Stone, about 4 a minute) or, with none,
   digs it at the Quarry (20 s, about 2½ a minute), against about 8 a minute from boulders. It rests while the colony
   has `bedrock.rest` (40) Stone or more, so renewable Stone only flows when it's needed.
+- **Alloy** (balance audit, AI games): Alloy income was set by how much Ore reached the Smelters, not how many Smelters
+  there were. A Smelter eats Ore much faster than a Mine worker, who walks out and back for every Ore, can bring it, so
+  extra Smelters just sat idle. Now a Smelter makes 3 Alloy from 2 Ore and 2 Fiber (the same 12 a minute flat out, a
+  third less Ore per Alloy), keeps 6 of each on hand, and a Mine worker digs two Ore a trip: about 50 to 80% more Alloy
+  by the 20-minute mark. Two or three Ore Mines keep a Smelter busy; a Smelter waiting for Ore says so.
 - **Fuel, Tankers and pipelines:** Crude and Fuel are liquids (`LIQUID` in `js/defs.js`): only **Tankers** carry them
   (10 at a time, near or far; `take(…, g)` in `dispatch` hands every liquid job to a Tanker that can reach it). Haulers
   carry a liquid only when no Tanker can get there (none left, or none on that road network), one at a time, so nothing
@@ -543,7 +548,8 @@ night; a display setting kept on the device).
   towers and cables, Viaduct decks, level-crossing barriers) goes through `withTod`, like `drawArt`. Light overlays (brake lights, boost glow,
   lamps), the UI and nuke blasts are never graded.
 - **Evening and night:** vehicles' headlights (`drawHeadlights`, the kit's overlays at 3× the sprite), a glow in team
-  colour under every finished building (`drawLightPool`), and bots' drop shadows lean left at dawn, right at dusk and
+  colour under every finished building (`drawLightPool`; small ones along Walls, bigger at Gates), a searchlight
+  sweeping ahead of every Pulse Turret's gun as it turns (`drawSearchlight`), and bots' drop shadows lean left at dawn, right at dusk and
   fade at night (`todShadow`).
 - Every building and robot has a re-lit set (lit windows, beacons and team-colour glows; headlights on everything that
   drives), including the 3D Pulse Turret and its heads, every Wall and Gate piece, the Viaduct's abutments and the

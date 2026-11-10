@@ -1126,7 +1126,7 @@ function showArmyBanner() {
   const out = warbotsOut(0), k = S.players[0].keepW ?? 0;
   showBanner('Tap a <b>rival building</b> to attack it with warbots or missiles, or tap open ground to send warbots there to <b>hold the area</b>.' +
     (out ? ` ${out} warbot${out > 1 ? 's are' : ' is'} out in the field: <b>Recall all</b> brings them home.` : '') +
-    `<span class="keep-all">Every Outpost keeps <span class="seg">${[0, 1, 2].map((v) => `<button data-k="${v}" class="${v === k ? 'on' : ''}">${v}</button>`).join('')}</span> warbot${k === 1 ? '' : 's'}, sent from your Command Base</span>`,
+    `<span class="keep-all">Every Outpost keeps <span class="seg">${[0, 1, 2, 5].map((v) => `<button data-k="${v}" class="${v === k ? 'on' : ''}">${v}</button>`).join('')}</span> warbot${k === 1 ? '' : 's'}, sent from your Command Base</span>`,
     out ? 'Recall all' : null, 'Cancel');
   for (const btn of $('banner-text').querySelectorAll('[data-k]')) btn.onclick = (e) => { e.stopPropagation(); setKeepAll(+btn.dataset.k); showArmyBanner(); };
 }
@@ -2030,7 +2030,7 @@ function openBuildingSheet(b) {
         (b.type === 'lander' ? '<p class="hint" id="sh-posted"></p>' : `<div class="kv"><span>Stationed here</span><span id="sh-posted"></span></div>
         <button class="btn small ghost" id="sh-unpost">Send them back to the Command Base</button>`) +
         (def.bunker ? '' : `<div class="section-label">Keep here</div>
-        <div class="seg" id="sh-keepw"><button data-v="auto">Auto (${b.type === 'lander' ? 1 : S.players[0].keepW ?? 0})</button><button data-v="0">0</button><button data-v="1">1</button><button data-v="2">2</button><button data-v="4">4</button></div>
+        <div class="seg" id="sh-keepw"><button data-v="auto">Auto (${b.type === 'lander' ? 1 : S.players[0].keepW ?? 0})</button><button data-v="0">0</button><button data-v="1">1</button><button data-v="2">2</button><button data-v="5">5</button><button data-v="${def.garrison}">${def.garrison}</button></div>
         <p class="hint">${b.type === 'lander' ? 'Warbots the Command Base always keeps at home: attacks, rallies and stationing never take the last of them.'
           : 'Warbots stationed here: your Command Base sends them, and replaces any that are lost. Attacks and rally flags never take warbots stationed at an Outpost (select them to send them anywhere), and after a fight they come back here. <i>Auto</i> follows the setting for every Outpost in Army.'}</p>`);
     }
@@ -2071,7 +2071,7 @@ function openBuildingSheet(b) {
     }
     if (needsRoad(b) || (b.unlinked !== undefined && !def.store)) html += '<div id="sh-road"></div>';
     html += '<div class="actions">';
-    if (def.staff && b.built) html += `<button class="btn" id="sh-pause"></button>`;
+    if (pausable(b) && b.built) html += `<button class="btn" id="sh-pause"></button>`;
     if (BDEFS[b.type].mobile) html += '<button class="btn primary" id="sh-pack">Pack up to move</button>';
     else if (b.type !== 'lander') html += `<button class="btn danger" id="sh-demolish">${b.built ? 'Demolish' : 'Cancel site'}</button>`;
     html += '</div>';
@@ -2137,7 +2137,7 @@ function openBuildingSheet(b) {
       refreshSheet();
     };
     if ($('sh-st-send')) {
-      UI.stationN = Math.min(5, stationAvailable(0, b));
+      UI.stationN = stationAvailable(0, b); // as many as it has room for and you can spare
       $('sh-st-minus').onclick = () => { UI.stationN = Math.max(1, UI.stationN - 1); refreshSheet(); };
       $('sh-st-plus').onclick = () => { UI.stationN = Math.min(stationAvailable(0, b), UI.stationN + 1); refreshSheet(); };
       $('sh-st-send').onclick = () => {
@@ -2410,10 +2410,9 @@ function refreshBuildingSheet(b) {
     UI.stationN = clamp(UI.stationN || 0, avail ? 1 : 0, avail);
     $('sh-st-n').textContent = UI.stationN;
     $('sh-st-send').disabled = !avail;
-    $('sh-st-hint').textContent = (avail
-      ? `Bring up to ${avail} warbot${avail > 1 ? 's' : ''}, from your Command Base first. They're stationed here: after a fight or a trip for repairs they come back here, until you send them elsewhere.`
-      : !garrisonRoom(b) ? 'This garrison is full.' : 'No spare warbots: your Command Base keeps its last one, and warbots stationed at other Outposts stay there (send some back to the Command Base first).')
-      + (coming ? ` ${coming} on the way.` : '');
+    $('sh-st-hint').textContent = `It holds ${BDEFS[b.type].garrison} warbots: ${b.garrison.length} inside${coming ? `, ${coming} on the way` : ''}. ` + (avail
+      ? `Bring up to ${avail} more, from your Command Base first. They're stationed here: after a fight or a trip for repairs they come back here, until you send them elsewhere.`
+      : !garrisonRoom(b) ? 'It\'s full.' : 'No spare warbots: your Command Base keeps its last one, and warbots stationed at other Outposts stay there (send some back to the Command Base first).');
   }
   if ($('sh-posted')) {
     if (b.type === 'lander') {
@@ -2435,7 +2434,7 @@ function refreshBuildingSheet(b) {
       ? `No limit: it keeps going while it has inputs. You have ${have}.`
       : `You have ${have}. ${have >= lim ? 'Stopped: it starts again when you drop below the limit.' : 'It stops (and takes no more inputs) when you reach the limit.'}`;
   }
-  if ($('sh-pause')) $('sh-pause').textContent = b.paused ? 'Resume' : 'Pause';
+  if ($('sh-pause')) $('sh-pause').textContent = def.staff ? (b.paused ? 'Resume' : 'Pause') : (b.paused ? 'Turn on' : 'Turn off');
   if ($('sh-prio')) for (const btn of $('sh-prio').children) btn.classList.toggle('on', btn.dataset.v === (b.prio || 'normal'));
   if ($('sh-pmode')) for (const btn of $('sh-pmode').children) btn.classList.toggle('on', btn.dataset.v === paveMode(b));
   if ($('sh-smode')) {

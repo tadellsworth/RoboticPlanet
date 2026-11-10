@@ -503,8 +503,8 @@ const BDEFS = {
     bedrock: { face: 8, dig: 20, rest: 40 },
   },
   mine: {
-    name: 'Ore Mine', desc: 'A worker digs Ore from nearby veins.',
-    cost: { fiber: 2, cement: 2 }, staff: true, gather: R_ORE, radius: 4, out: { ore: 6, uranium: 3 }, armor: 8, buildTime: 10,
+    name: 'Ore Mine', desc: 'A worker digs Ore from nearby veins, two at a time.',
+    cost: { fiber: 2, cement: 2 }, staff: true, gather: R_ORE, radius: 4, dig: 2, out: { ore: 6, uranium: 3 }, armor: 8, buildTime: 10,
   },
   tap: {
     name: 'Crystal Tap', desc: 'A worker extracts Crystal from nearby clusters.',
@@ -515,9 +515,9 @@ const BDEFS = {
     cost: { fiber: 1, cement: 2 }, staff: true, crew: 'agribot', plant: R_STALK, radius: 4, armor: 8, buildTime: 8,
   },
   smelter: {
-    name: 'Smelter', desc: 'Burns Fiber to smelt Ore into Alloy.',
-    cost: { cement: 3, fiber: 2 }, staff: true, inp: { ore: 1, fiber: 1 }, make: { alloy: 1 }, out: { alloy: 4 },
-    work: 5, armor: 8, buildTime: 10,
+    name: 'Smelter', desc: 'Burns Fiber to smelt Ore into Alloy: 3 Alloy from 2 Ore and 2 Fiber. It can turn out 12 Alloy a minute: feed it from two or three Ore Mines.',
+    cost: { cement: 3, fiber: 2 }, staff: true, inp: { ore: 2, fiber: 2 }, make: { alloy: 3 }, out: { alloy: 6 },
+    work: 15, hopper: 6, armor: 8, buildTime: 10,
   },
   fab: {
     name: 'Chip Fab', desc: 'Etches Crystal onto Alloy to make Chips.',
@@ -676,7 +676,7 @@ const BUILD_GROUPS = [
 const BUNKER_FIRE = 0.9; // seconds between shots for each warbot in a Bunker
 /** Ramps are planned in Paths (with roads), not from the build menu. */
 
-const INPUT_CAP = 3;   // how many of each input a production building stockpiles
+const INPUT_CAP = 3;   // how many of each input a production building stockpiles (its def.hopper instead, if it has one)
 const AMMO_CAP = 3;    // crystals a turret stockpiles
 const TURRET_TURN = 2.4;   // radians per second a turret's head turns (about 140°)
 const TURRET_SWEEP = 0.35; // radians per second it sweeps while watching for targets

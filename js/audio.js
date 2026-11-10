@@ -167,7 +167,7 @@ function _noise(dur, vol, o) {
 }
 
 const SFX_GAP = {
-  launch: 0.3, boom: 0.12, laser: 0.08, hit: 0.07, produce: 0.25, alert: 1.5, complete: 0.3, order: 0.15,
+  launch: 0.3, boom: 0.12, shellhit: 0.09, missilehit: 0.2, laser: 0.08, hit: 0.07, produce: 0.25, alert: 1.5, complete: 0.3, order: 0.15,
   weld: 0.25, scrape: 0.3, hiss: 0.6, airbrake: 1.2, honk: 2.5, nuke: 2, siren: 4,
 };
 
@@ -196,8 +196,35 @@ function sfx(name, dest) {
       _tone(110, 0.35, 'sine', 0.16, 38, 0, D);
       duckMusic(0.6, 0.6);
       break;
+    // A mortar shell landing: a sharp crack, the blast tearing through the mids, a low thump under it,
+    // and a patter of debris coming down.
+    case 'shellhit':
+      _noise(0.06, 0.22, { type: 'highpass', freq: 2500, attack: 0.002, dest: D });
+      _noise(0.55, 0.2, { type: 'bandpass', freq: 1400, to: 220, q: 0.7, attack: 0.004, dest: D });
+      _noise(0.7, 0.16, { freq: 700, to: 90, attack: 0.01, dest: D });
+      _tone(85, 0.45, 'sine', 0.2, 32, 0, D);
+      for (let k = 0; k < 6; k++) _noise(0.03 + Math.random() * 0.05, 0.03 + Math.random() * 0.03, { type: 'bandpass', freq: 1800 + Math.random() * 2400, q: 2, delay: 0.18 + Math.random() * 0.5, dest: D });
+      duckMusic(0.7, 0.4);
+      break;
+    // A missile hitting home: the crack, a long rolling blast and a sub drop you feel, then debris.
+    case 'missilehit':
+      _noise(0.08, 0.3, { type: 'highpass', freq: 2000, attack: 0.002, dest: D });
+      _noise(1.3, 0.3, { freq: 1600, to: 70, attack: 0.006, dest: D });
+      _noise(0.8, 0.16, { type: 'bandpass', freq: 900, to: 160, q: 0.6, attack: 0.01, delay: 0.05, dest: D });
+      _tone(62, 1.1, 'sine', 0.3, 24, 0, D);
+      _tone(124, 0.5, 'triangle', 0.1, 40, 0.02, D);
+      for (let k = 0; k < 9; k++) _noise(0.04 + Math.random() * 0.06, 0.035 + Math.random() * 0.035, { type: 'bandpass', freq: 1500 + Math.random() * 2500, q: 2, delay: 0.3 + Math.random() * 0.9, dest: D });
+      duckMusic(0.4, 1.4);
+      break;
     case 'alert': _tone(880, 0.12, 'square', 0.05, null, 0, D); _tone(660, 0.12, 'square', 0.05, null, 0.15, D); break;
-    case 'launch': _noise(0.6, 0.12, { freq: 2200, to: 600, dest: D }); _tone(180, 0.6, 'sawtooth', 0.05, 520, 0, D); break;
+    // A missile leaving its Silo: the ignition pop, then the motor's roar climbing as it rises away.
+    case 'launch':
+      _noise(0.07, 0.18, { type: 'highpass', freq: 1500, attack: 0.002, dest: D });
+      _tone(70, 0.3, 'sine', 0.16, 40, 0, D);
+      _noise(1.6, 0.16, { type: 'bandpass', freq: 380, to: 3200, q: 0.9, attack: 0.18, delay: 0.05, dest: D });
+      _noise(1.4, 0.1, { freq: 400, to: 160, attack: 0.1, delay: 0.05, dest: D });
+      _tone(110, 1.3, 'sawtooth', 0.035, 620, 0.08, D);
+      break;
     case 'capture': _tone(392, 0.12, 'triangle', 0.09, null, 0, D); _tone(587, 0.2, 'triangle', 0.09, null, 0.1, D); break;
     case 'error': _tone(200, 0.12, 'square', 0.05, 150, 0, D); break;
     case 'win': [523, 659, 784, 1047].forEach((f, i) => _tone(f, 0.25, 'triangle', 0.09, null, i * 0.14, D)); break;

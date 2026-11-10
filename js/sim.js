@@ -161,7 +161,7 @@ function needsOf(b) {
     return out; // a stopped Foundry doesn't stockpile parts
   } else if (def.inp) {
     if (atLimit(b)) return out; // stopped at its stock limit: no more inputs for now
-    for (const g in def.inp) out.push([g, INPUT_CAP - (b.stock[g] || 0) - (b.inc[g] || 0)]);
+    for (const g in def.inp) out.push([g, (def.hopper || INPUT_CAP) - (b.stock[g] || 0) - (b.inc[g] || 0)]);
   } else if (def.ammo) {
     out.push([def.ammo, (def.ammoCap || AMMO_CAP) - (b.stock[def.ammo] || 0) - (b.inc[def.ammo] || 0)]);
   } else if (def.fuelCap) {
@@ -2119,7 +2119,7 @@ function doStaff(u, t, dt) {
       b.working = true;
       if (moveAlong(u, dt)) {
         t.phase = 'work';
-        t.timer = t.face ? def.bedrock.face : def.gather ? RES[t.gtype || def.gather].harvest : def.farm ? (t.act === 'harvest' ? RES[R_CROP].harvest : 2) : def.roadworks ? 2.5 : 3;
+        t.timer = t.face ? def.bedrock.face : def.gather ? RES[t.gtype || def.gather].harvest * (def.dig || 1) : def.farm ? (t.act === 'harvest' ? RES[R_CROP].harvest : 2) : def.roadworks ? 2.5 : 3;
       }
       return;
     case 'work': {
@@ -2140,12 +2140,14 @@ function doStaff(u, t, dt) {
       } else if (def.gather) {
         const ty = t.gtype || def.gather;
         if (S.res[node] === ty && S.amt[node] > 0) {
-          S.amt[node]--;
+          // An Ore Mine's worker digs two before the walk back (def.dig): the walk is most of the trip.
+          const n = Math.min(def.dig || 1, S.amt[node]);
+          S.amt[node] -= n;
           if (S.amt[node] === 0) S.res[node] = R_NONE;
           markDirty(ni, nj);
           u.carry = RES[ty].good;
-          u.carryN = 1;
-          madeGood(u.owner, u.carry, 1);
+          u.carryN = n;
+          madeGood(u.owner, u.carry, n);
         }
       } else if (def.farm) {
         if (t.act === 'harvest' && S.res[node] === R_CROP && S.grow[node] >= 1) {
@@ -2199,7 +2201,7 @@ function doStaff(u, t, dt) {
       if (u.carry) b.working = true;
       if (moveAlong(u, dt)) {
         enterBuilding(u, b);
-        if (u.carry) { bump(b.stock, u.carry, 1); u.carry = null; u.carryN = 0; }
+        if (u.carry) { bump(b.stock, u.carry, u.carryN || 1); u.carry = null; u.carryN = 0; }
         t.phase = 'in';
         t.trip = false;
         t.wait = 0.3;
@@ -2230,7 +2232,11 @@ function updateBuilding(b, dt) {
     return;
   }
   repairHint(b);
-  if (b.paused) { b.status = 'Paused — its worker is free for other jobs'; return; }
+  if (b.paused) {
+    b.status = def.burner ? 'Off: burning no Fuel (nothing round it is boosted)' : def.mortar ? 'Off: not firing, and saving its Ammo'
+      : b.type === 'turret' ? 'Off: not firing, and saving its Crystal' : 'Paused — its worker is free for other jobs';
+    return;
+  }
   if (def.mil) b.status = `Garrison: ${b.garrison.length} of ${def.garrison} warbots`;
   else if (def.store) b.status = 'Storing goods';
   else if (def.gate) b.status = 'Open to your bots; enemies have to break it down';
@@ -2371,7 +2377,7 @@ function produce(b, def, dt) {
   b.limitT = 0;
   dt *= batFactor(op);
   for (const g in def.inp) {
-    if ((b.stock[g] || 0) < def.inp[g]) { b.status = 'Waiting for ' + GOOD[g].name; return; }
+    if ((b.stock[g] || 0) < def.inp[g]) { b.status = 'Waiting for ' + GOOD[g].name + (b.type === 'smelter' && g === 'ore' ? ': it smelts 8 Ore a minute, so two or three Ore Mines keep one busy' : ''); return; }
   }
   if (def.make) {
     for (const g in def.make) {
@@ -2673,7 +2679,7 @@ function updateMortar(b, def, dt) {
 function shellImpact(m) {
   const md = BDEFS.mortar.mortar;
   blastFx(m.x1, m.y1, md.splash * 0.5, { small: true });
-  sfx('boom');
+  sfx('shellhit');
   for (const u of S.bots) {
     if (u.dead || u.inside || u.owner === m.owner) continue;
     const d2 = dist2(u.x, u.y, m.x1, m.y1);
@@ -4069,7 +4075,7 @@ function missileFloor(b) { return Math.max(1, Math.round(BDEFS[b.type].armor * M
 function missileImpact(m) {
   const md = BDEFS.silo.missile;
   blastFx(m.x1, m.y1, 2.2);
-  sfx('boom');
+  sfx('missilehit');
   const b = getE(m.target);
   if (b && !b.dead && b.owner !== m.owner) {
     const name = BDEFS[b.type].name;
@@ -4591,11 +4597,19 @@ function setKeep(b, g, n) {
   if (!Object.keys(b.keep).length) delete b.keep;
 }
 
-/** Pausing a building sends its worker off to do other jobs until it is resumed. */
+/** Can building b be paused (or, for a Generator or a gun, turned off)? */
+function pausable(b) { const def = BDEFS[b.type]; return !!(def.staff || def.burner || def.mortar || b.type === 'turret'); }
+
+/**
+ * Pausing a building sends its worker off to do other jobs until it is resumed. A Generator turned off
+ * burns no Fuel; a Mortar Pit or Pulse Turret turned off holds its fire and takes no more Ammo or
+ * Crystal (none is hauled to it while it's off).
+ */
 function setPaused(b, paused) {
-  if (b.dead || !BDEFS[b.type].staff) return;
+  if (b.dead || !pausable(b)) return;
   b.paused = !!paused;
-  if (b.paused) unstaff(b);
+  if (b.paused && BDEFS[b.type].staff) unstaff(b);
+  if (b.paused) { b.working = false; b.chg = 0; }
 }
 
 /** Send a building's operator off to other work. */
