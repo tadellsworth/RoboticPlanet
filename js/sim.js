@@ -427,6 +427,14 @@ function goTo(u, x, y) {
     u.path = [st].concat(rest); u.pi = 0; u.idleT = 0; u.goal = goal; u.breach = 0;
     return true;
   }
+  // Out on a Viaduct's deck: the route starts at its nearer end (the ground below doesn't count).
+  const deck = deckEnds(u);
+  if (deck) {
+    const e = deck[0], rest = e === goal ? [] : findPath(e % S.W, (e / S.W) | 0, x, y, u.type !== 'warbot' && !BOTS[u.type].wild ? u.owner : undefined, routeOpts(u));
+    if (!rest) { u.failGoal = goal; u.failUntil = S.time + 2; return false; }
+    u.path = [e].concat(rest); u.pi = 0; u.idleT = 0; u.goal = goal; u.breach = 0;
+    return true;
+  }
   const p = findPath(Math.floor(u.x), Math.floor(u.y), x, y, u.type !== 'warbot' && !BOTS[u.type].wild ? u.owner : undefined, routeOpts(u));
   u.breach = 0;
   if (!p) { u.failGoal = goal; u.failUntil = S.time + 2; return false; }
@@ -613,8 +621,10 @@ function moveAlong(u, dt) {
   if (!u.path) return true;
   let here = Math.floor(u.y) * S.W + Math.floor(u.x);
   // Out on a Viaduct (between its abutments) a bot drives as if still on the abutment it left: on
-  // road, whatever lies down below.
-  if (u.pi > 0 && u.path[u.pi] !== undefined && S.bAt[u.path[u.pi - 1]] && viaLink(u.path[u.pi - 1]) === u.path[u.pi]) here = u.path[u.pi - 1];
+  // road, whatever lies down below. It remembers the two ends (u.deck) until it reaches one, so
+  // whatever else it's told to do meanwhile starts from the deck, not the ground below.
+  if (u.pi > 0 && u.path[u.pi] !== undefined && S.bAt[u.path[u.pi - 1]] && viaLink(u.path[u.pi - 1]) === u.path[u.pi]) { here = u.path[u.pi - 1]; u.deck = [here, u.path[u.pi]]; }
+  else deckEnds(u);
   const bt = BOTS[u.type];
   // A Freight Train: down the track at its own speed, braking for curves and the end of its trip; it
   // never waits for road traffic (road traffic waits for it at level crossings).
@@ -769,8 +779,23 @@ function travel(u, x, y, dt) {
   return moveAlong(u, dt);
 }
 
+/**
+ * A bot out on a Viaduct's deck (u.deck, set while crossing): its two ends, the nearer first. Null
+ * (and u.deck cleared) once it stands on either end.
+ */
+function deckEnds(u) {
+  if (!u.deck) return null;
+  const t = tIdx(Math.floor(u.x), Math.floor(u.y)), [a, b] = u.deck;
+  if (t === a || t === b) { u.deck = null; return null; }
+  const d = (e) => dist2(u.x, u.y, (e % S.W) + 0.5, ((e / S.W) | 0) + 0.5);
+  return d(a) <= d(b) ? [a, b] : [b, a];
+}
+
 /** Straight-line step used while chasing in combat. */
 function moveDirect(u, x, y, dt) {
+  // On a Viaduct's deck there's nowhere to go but along it: head for its nearer end.
+  const deck = deckEnds(u);
+  if (deck) { x = (deck[0] % S.W) + 0.5; y = ((deck[0] / S.W) | 0) + 0.5; }
   const dx = x - u.x, dy = y - u.y, d = Math.sqrt(dx * dx + dy * dy);
   if (d < 1e-4) return true;
   u.face = Math.atan2(dy, dx);
@@ -779,7 +804,9 @@ function moveDirect(u, x, y, dt) {
   const ti = Math.floor(nx), tj = Math.floor(ny), ci = Math.floor(u.x), cj = Math.floor(u.y);
   if (!inMap(ti, tj)) return false;
   const t = tIdx(ti, tj), c = tIdx(ci, cj);
-  if (t !== c) {
+  if (t !== c && deck) {
+    if (S.bAt[t] && t !== deck[0]) return false;
+  } else if (t !== c) {
     if (S.bAt[t]) return false;
     // Chasing can't jump down or up a cliff: the step must be walkable via an orthogonal neighbour.
     const ok = ti === ci || tj === cj ? canStep(c, t)
