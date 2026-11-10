@@ -189,6 +189,10 @@ kbd {
 .banner-actions .road-seg { flex: 1 1 100%; }
 #banner-traffic.on { background: var(--accent); color: var(--accent-ink); }
 .banner-actions .road-seg button { padding: 7px 4px; }
+/* The Paths tools wrap onto a second row instead of running off the side (the page can't be swiped
+   sideways: touches go to the map). */
+.banner-actions .road-seg { flex-wrap: wrap; }
+.banner-actions .road-seg button { flex: 1 0 auto; min-width: 64px; }
 .banner-actions .btn { flex: 1; }
 
 /* ---------- bottom sheet ---------- */
@@ -486,7 +490,7 @@ body.mode-road .objective { display: none; }
   body.mode-road #banner-text { font-size: 13px; margin-bottom: 6px; line-height: 1.35; }
   body.mode-road .banner-actions { gap: 6px; }
   body.mode-road .banner-actions .btn { padding: 8px 6px; font-size: 14px; min-height: 0; }
-  body.mode-road .banner-actions .road-seg button { padding: 6px 2px; font-size: 13px; }
+  body.mode-road .banner-actions .road-seg button { padding: 6px 2px; font-size: 13px; flex: 1 0 calc(25% - 3px); min-width: 0; }
 }
 .btn.danger-glow { background: #ff4b4b; color: #fff; border-color: #ff7a7a; box-shadow: 0 0 16px rgba(255, 75, 75, 0.45); }
 .btn.danger-glow:disabled { background: rgba(255, 75, 75, 0.25); box-shadow: none; color: #ffc9cf; }
