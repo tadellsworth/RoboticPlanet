@@ -404,7 +404,7 @@ const BUILD_KEYS = {
   harvester: 'h', quarry: 'q', mine: 'm', tap: 'c', smelter: '1', fab: 'f', foundry: 'u', charger: 'e', farm: '2',
   pump: 'p', refinery: 'v', kiln: 'k', tarworks: 't', roadworks: '3', outpost: 'o', turret: 'g', repair: 'x',
   armory: 'i', munitions: 'n', silo: 'z', depot: '4', grower: 'l', reactor: 'y', nukesilo: 'j',
-  ropeway: '5', station: '6', lab: '7', viaduct: '8', bunker: '9', disruptor: '0', mortar: '.',
+  ropeway: '5', station: '6', lab: '7', viaduct: '8', bunker: '9', disruptor: '0', mortar: '.', generator: ',',
 };
 
 /**
@@ -2509,6 +2509,7 @@ function botActivity(u) {
     return 'On patrol';
   }
   if (t && t.type === 'charge') return u.inside ? 'Recharging its battery' : 'Going to recharge its battery';
+  if (t && t.type === 'refuel') return 'Going to fill up with Fuel';
   if (t && t.type === 'staff' && (t.phase === 'toCharge' || t.phase === 'charging')) return t.phase === 'charging' ? 'Recharging its battery' : 'Going to recharge its battery';
   if (!t) return u.carry ? `Looking for somewhere to store ${GOOD[u.carry].name}` : u.inside ? 'Resting in storage' : 'Waiting for a job';
   if (t.type === 'home') return 'Heading back to storage';
@@ -2772,7 +2773,7 @@ function refreshPopSheet() {
     if (u.type === 'warbot') {
       add(u.type, u.inside ? 'garrison' : 'field');
       if ((u.ammo ?? WARBOT_AMMO) <= 0) n.warbot.noAmmo = (n.warbot.noAmmo || 0) + 1;
-    } else if (tt === 'charge' || (u.inside && insideCharger(u) && !tt && (u.bat ?? 100) < 99)) add(u.type, 'charging');
+    } else if (tt === 'charge' || tt === 'refuel' || (u.inside && insideCharger(u) && !tt && (u.bat ?? 100) < 99)) add(u.type, 'charging');
     else if (tt === 'haul') add(u.type, 'carrying');
     else if (tt === 'staff') add(u.type, 'running');
     else if (tt === 'build' || tt === 'pave' || tt === 'fix') add(u.type, 'building');
@@ -2807,7 +2808,7 @@ function refreshSheet() {
     $('sh-status').textContent = botActivity(u);
     const bat = Math.round(u.bat ?? 100);
     $('sh-dyn').innerHTML = `<div class="kv"><span>Health</span><span>${Math.ceil(u.hp)} / ${u.maxHp}</span></div>` +
-      `<div class="kv"><span>Battery</span><span>${bat}%${bat < BATTERY.critical ? ' (flat: slow and weak)' : bat < BATTERY.low ? ' (low)' : ''}</span></div>` +
+      `<div class="kv"><span>${BOTS[u.type].truck ? 'Fuel tank' : 'Battery'}</span><span>${bat}%${bat < BATTERY.critical ? (BOTS[u.type].truck ? ' (empty: crawling)' : ' (flat: slow and weak)') : bat < BATTERY.low ? ' (low)' : ''}</span></div>` +
       `<div class="bar battery"><div style="width:${bat}%;background:${bat < BATTERY.critical ? '#ff4d4d' : bat < BATTERY.low ? '#ffb347' : '#7ee08a'}"></div></div>` +
       (u.type === 'warbot' ? `<div class="kv"><span>Ammo</span><span>${u.ammo ?? WARBOT_AMMO} / ${WARBOT_AMMO} shots${!u.ammo ? ' (out: can\'t fight until it reloads)' : ''}</span></div>` : '') +
       (u.carry ? `<div class="kv"><span>Carrying</span><span>${goodTag(u.carry, (u.carryN > 1 ? u.carryN + ' × ' : '') + GOOD[u.carry].name)}</span></div>` : '') +

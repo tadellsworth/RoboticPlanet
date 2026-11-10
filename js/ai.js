@@ -12,10 +12,10 @@ const AI_PLAN = [
   ['charger', 1], ['harvester', 1], ['quarry', 1], ['kiln', 1], ['harvester', 2], ['mine', 1], ['tap', 1], ['smelter', 1],
   ['fab', 1], ['foundry', 1], ['outpost', 1], ['armory', 1], ['farm', 1], ['quarry', 2], ['grower', 1], ['mine', 2],
   ['smelter', 2], ['kiln', 2],
-  ['turret', 1], ['repair', 1], ['outpost', 2], ['tap', 2], ['pump', 1], ['refinery', 1], ['harvester', 3], ['outpost', 3],
+  ['turret', 1], ['repair', 1], ['outpost', 2], ['tap', 2], ['pump', 1], ['refinery', 1], ['harvester', 3], ['outpost', 3], ['generator', 1],
   ['munitions', 1], ['silo', 1], ['depot', 1], ['charger', 2], ['farm', 2], ['mine', 3], ['outpost', 4], ['turret', 2], ['bunker', 1],
   ['grower', 2], ['fab', 2], ['outpost', 5], ['mortar', 1], ['disruptor', 1], ['armory', 2], ['quarry', 3], ['silo', 2], ['outpost', 6], ['bunker', 2], ['charger', 3], ['pump', 2],
-  ['tap', 3], ['farm', 3], ['outpost', 8], ['turret', 3], ['mortar', 2], ['bunker', 3],
+  ['tap', 3], ['farm', 3], ['generator', 2], ['outpost', 8], ['turret', 3], ['mortar', 2], ['bunker', 3],
 ];
 
 /** Rival p's personality (see PERSONALITIES). */
@@ -171,6 +171,8 @@ function aiThink(p) {
       const nBots = S.bots.reduce((n, u) => n + (!u.dead && u.owner === p && u.type !== 'warbot' ? 1 : 0), 0);
       const want = type === 'charger' ? Math.max(want0, nCh) : type === 'farm' && counts.charger ? Math.max(want0, Math.ceil((counts.charger || 0) / 2), Math.ceil(nBots / 18)) : want0;
       if (type === 'refinery' && !counts.pump) continue;
+      // A Generator only once there's Fuel to spare for it (and a refinery or farm to keep it coming).
+      if (type === 'generator' && ((playerGoods(p).fuel || 0) < 15 || !(counts.refinery || (counts.farm || 0) >= 2))) continue;
       // Plenty of Fuel in stock: no need for more farms or oil yet.
       if ((type === 'farm' || type === 'pump' || type === 'refinery') && (counts[type] || 0) >= 1 && playerGoods(p).fuel > 10) continue;
       if ((counts[type] || 0) >= want) continue;
@@ -268,7 +270,7 @@ function aiThink(p) {
       if (!b.built || !BDEFS[b.type].pump || pumpDry(b)) continue;
       const r = pipeToRefinery(p, b);
       if (r.why || r.tiles.length > 40) continue;
-      if ((have.cement || 0) < 6 + (r.cost.cement || 0) || (have.alloy || 0) < 3 + (r.cost.alloy || 0)) continue;
+      if ((have.cement || 0) < 6 + (r.cost.cement || 0) || (have.alloy || 0) < (r.cost.alloy || 0)) continue;
       pipeUp(p, r.tiles);
       break;
     }
@@ -906,6 +908,17 @@ function aiSearchSpot(p, type, lander) {
           if (inMap(i + di, j + dj) && S.res[tIdx(i + di, j + dj)] === R_OIL) oil += S.amt[tIdx(i + di, j + dj)];
         }
         s = oil * 0.2 - dHome * 0.3;
+      } else if (type === 'generator') {
+        // Among the factories: the most buildings it can power, not beside another Generator.
+        let n = 0, dg = 99;
+        for (const b of S.buildings) {
+          if (b.dead || b.owner !== p) continue;
+          const d2 = dist2(i, j, b.x, b.y);
+          if (BDEFS[b.type].work && d2 <= 16) n++;
+          if (b.type === 'generator') dg = Math.min(dg, Math.sqrt(d2));
+        }
+        if (n < 3 || dg < 5) continue;
+        s = n * 3 - dHome * 0.2;
       } else if (type === 'refinery') {
         let dp = dHome;
         for (const b of S.buildings) if (!b.dead && b.owner === p && b.type === 'pump') dp = Math.min(dp, dist(i, j, b.x, b.y));

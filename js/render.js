@@ -2311,6 +2311,34 @@ function drawBuilding(ctx, type, cx, cy, s, owner, b) {
       ctx.lineTo(cx - 1.5 * u, cy + 7 * u); ctx.lineTo(cx + 3.5 * u, cy - 1 * u); ctx.lineTo(cx + 0.5 * u, cy - 1 * u); ctx.closePath(); ctx.fill();
       break;
     }
+    case 'generator': {
+      hullBase(ctx, cx, cy, s, color);
+      // An engine block with two exhaust stacks and a coil that glows and hums while it powers its neighbours.
+      ctx.fillStyle = '#1a1d24';
+      roundRect(ctx, cx - 10 * u, cy - 5 * u, 20 * u, 13 * u, 2 * u); ctx.fill();
+      ctx.fillStyle = '#5d646e';
+      roundRect(ctx, cx - 9 * u, cy - 4 * u, 18 * u, 11 * u, 1.5 * u); ctx.fill();
+      ctx.fillStyle = '#3a3f46';
+      for (const k of [-6, -3, 0]) ctx.fillRect(cx + k * u, cy - 3 * u, 1.6 * u, 9 * u);
+      const glow = working ? 0.55 + 0.45 * Math.sin(t * 9) : 0.18;
+      ctx.fillStyle = `rgba(255,214,102,${glow})`;
+      ctx.beginPath(); ctx.arc(cx + 5 * u, cy + 1.5 * u, 3.4 * u, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = '#1a1d24'; ctx.lineWidth = Math.max(1, u);
+      ctx.beginPath(); ctx.arc(cx + 5 * u, cy + 1.5 * u, 3.4 * u, 0, Math.PI * 2); ctx.stroke();
+      ctx.fillStyle = '#8a8f99';
+      ctx.fillRect(cx - 8 * u, cy - 13 * u, 2.5 * u, 9 * u);
+      ctx.fillRect(cx - 3.5 * u, cy - 11 * u, 2.5 * u, 7 * u);
+      if (working) {
+        ctx.fillStyle = 'rgba(70,66,62,0.55)';
+        for (const [x0, h0] of [[-6.75, 13], [-2.25, 11]]) {
+          const k = (t * 0.8 + x0 * 0.1) % 1;
+          ctx.globalAlpha = 0.6 * (1 - k);
+          ctx.beginPath(); ctx.arc(cx + x0 * u + k * 2 * u, cy - (h0 + k * 8) * u, (1.5 + k * 3) * u, 0, Math.PI * 2); ctx.fill();
+        }
+        ctx.globalAlpha = 1;
+      }
+      break;
+    }
     case 'repair': {
       hullBase(ctx, cx, cy, s, color);
       // A repair bay: a lit service pad with a crossed wrench and spanner; sparks while working.

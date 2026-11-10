@@ -293,18 +293,22 @@ function isIdleWorker(u) {
   if (u.type === 'warbot' || u.dead || u.carry || (u.task && u.task.type !== 'home')) return false;
   // A worker that is charging finishes first; one that is running low goes to charge before new jobs,
   // unless there's nowhere to charge: then it keeps working (slowly), or no one would bring the Fuel.
-  return (u.bat ?? 100) >= (insideCharger(u) ? 90 : BATTERY.low) || !S.players[u.owner].canCharge;
+  return (u.bat ?? 100) >= (insideCharger(u) ? 90 : BATTERY.low) || !canTopUp(u);
 }
 
 /* ------------------------------------------------------------------ batteries */
 
 /** Emergency mode: a flat battery halves speed and work rate. */
 /** A flat bot drops its job to recharge, but only if a Charging Station somewhere can charge it. */
-function mustRecharge(u) { return (u.bat ?? 100) < BATTERY.critical && S.players[u.owner].canCharge; }
+function mustRecharge(u) { return (u.bat ?? 100) < BATTERY.critical && canTopUp(u); }
+
+/** Is there anywhere bot u could top up: a Charging Station with Fuel, or (a truck) Fuel in storage? */
+function canTopUp(u) { const P = S.players[u.owner]; return BOTS[u.type].truck ? P.canRefuel !== false : !!P.canCharge; }
 
 function batFactor(u) { return (u.bat ?? 100) < BATTERY.critical ? BATTERY.slow : 1; }
 
 function insideCharger(u) {
+  if (BOTS[u.type].truck) return false; // trucks fill up with Fuel instead
   const b = u.inside ? getE(u.inside) : null;
   return !!(b && b.built && BDEFS[b.type].charger && !chargerDry(b));
 }
@@ -319,7 +323,7 @@ function chargerDry(b) {
 function countCharging() {
   for (const b of S.buildings) if (BDEFS[b.type].charger) b.charging = 0;
   for (const u of S.bots) {
-    if (u.dead || !u.inside || u.type === 'warbot' || (u.bat ?? 100) >= 100) continue;
+    if (u.dead || !u.inside || u.type === 'warbot' || BOTS[u.type].truck || (u.bat ?? 100) >= 100) continue;
     const b = getE(u.inside);
     if (b && BDEFS[b.type].charger) b.charging++;
   }
@@ -340,7 +344,50 @@ function findCharger(u) {
   return best;
 }
 
+/**
+ * A truck low on Fuel (see TRUCK_BURN) fills up: at the nearest storage or Charging Station with Fuel
+ * that it can drive to. False if there's none.
+ */
+function findFuel(u) {
+  let best = null, bd = Infinity;
+  for (const b of S.buildings) {
+    if (b.dead || b.owner !== u.owner || !b.built || evacuated(b)) continue;
+    const def = BDEFS[b.type];
+    if (!(def.store || def.charger) || ((b.stock.fuel || 0) - (b.res.fuel || 0)) < 1) continue;
+    if (!botLinked(u, b)) continue;
+    const d = dist2(b.x + 0.5, b.y + 0.5, u.x, u.y);
+    if (d < bd) { bd = d; best = b; }
+  }
+  return best;
+}
+
+/** Fill truck u's tank from building b's Fuel (one Fuel, a full tank). */
+function refuel(u, b) {
+  if (!b || ((b.stock.fuel || 0) - (b.res.fuel || 0)) < 1) return false;
+  bump(b.stock, 'fuel', -1);
+  usedGood(u.owner, 'fuel', 1);
+  u.bat = 100;
+  return true;
+}
+
+function goRefuel(u) {
+  // Parked where there's Fuel: fill up on the spot.
+  if (u.inside && refuel(u, getE(u.inside))) return true;
+  const c = findFuel(u);
+  if (!c || !goTo(u, c.x, c.y)) {
+    const P = S.players[u.owner];
+    if (S.time - (P.lastTruckFuelMsg || -99) > 90) {
+      P.lastTruckFuelMsg = S.time;
+      postMsg(u.owner, 'Your trucks are running on empty: there\'s no Fuel in storage they can reach. They crawl at half speed until a Tanker brings some.', Math.floor(u.x), Math.floor(u.y), 'warn');
+    }
+    return false;
+  }
+  u.task = { type: 'refuel', bld: c.id };
+  return true;
+}
+
 function goCharge(u) {
+  if (BOTS[u.type].truck) return goRefuel(u);
   const c = findCharger(u);
   if (!c || !goTo(u, c.x, c.y)) {
     const P = S.players[u.owner];
@@ -357,6 +404,8 @@ function goCharge(u) {
 function workerBattery(u, dt) {
   if (BOTS[u.type].rail) { u.bat = 100; return; } // trains run off the track's power
   if (u.bat === undefined) u.bat = 100;
+  // Trucks burn Fuel as they drive (see TRUCK_BURN); they fill up rather than charge.
+  if (BOTS[u.type].truck) { if (u.moved && !u.inside) u.bat = Math.max(0, u.bat - (BOTS[u.type].train ? TRAIN_BURN : TRUCK_BURN) * dt * drainMul(u)); return; }
   if (u.inside) {
     const b = getE(u.inside);
     const ch = b && b.built && BDEFS[b.type].charger;
@@ -952,8 +1001,9 @@ function dispatch(p) {
   const linked = (a, b) => P.noHaulers || roadLinked(a, b);
   for (const b of blds) b.unlinked = !P.noHaulers && needsRoad(b) && !onHomeNet(b);
   const minFree = siteCount(p) > 0 ? MIN_FREE_WORKERS : 1;
-  // Can this colony charge anywhere right now (a Charging Station with Fuel)?
+  // Can this colony charge anywhere right now (a Charging Station with Fuel)? Can its trucks fill up?
   P.canCharge = blds.some((b) => b.built && BDEFS[b.type].charger && !chargerDry(b));
+  P.canRefuel = blds.some((b) => b.built && (BDEFS[b.type].store || BDEFS[b.type].charger) && (b.stock.fuel || 0) - (b.res.fuel || 0) >= 1);
   if (free < minFree) {
     const cands = blds.filter((b) => b.built && b.staff && b.type !== 'foundry' && !BDEFS[b.type].crew);
     cands.sort((a, c) => releaseScore(c) - releaseScore(a));
@@ -988,8 +1038,8 @@ function dispatch(p) {
         if (bt.roadOnly && src && !botLinked(u, src)) continue;
       } else if (role === 'build' ? !bt.build : role === 'staff' ? !bt.staff : bt.crew !== role) continue;
       const d = dist2(u.x, u.y, x + 0.5, y + 0.5);
-      // Only send a bot with enough charge for the trip there and back (unless there's nowhere to charge).
-      if ((u.bat ?? 100) < BATTERY.low + 0.5 * Math.sqrt(d) && P.canCharge) continue;
+      // Only send a bot with enough charge (a truck, Fuel) for the trip there and back (unless there's nowhere to top up).
+      if ((u.bat ?? 100) < BATTERY.low + 0.5 * Math.sqrt(d) && (bt.truck ? P.canRefuel : P.canCharge)) continue;
       if (d < bd) { bd = d; best = k; }
     }
     if (best < 0) return null;
@@ -1123,8 +1173,9 @@ function dispatch(p) {
         if (!long || !vans || starving || !byRoad || isLiquid(r.g)) u = take(src.x, src.y, 'haul', src, r.g);
       }
       if (!u) { r.n = 0; continue; }
-      // (A Tanker on a short run brings what's asked for; trucks bring a full load on the long runs.)
-      const n = canCarry(u, BOTS[u.type].truck && (long || s2s || !BOTS[u.type].tanker) ? bulk : avail, r.g);
+      // (Trucks bring a full load on the long runs. A Tanker brings a factory a full buffer too, near or
+      // far, and anything else what it asks for.)
+      const tank = BOTS[u.type].tanker, n = canCarry(u, BOTS[u.type].truck && (long || s2s || !tank || (r.b.built && BDEFS[r.b.type].inp)) ? bulk : avail, r.g);
       assignHaul(u, src, r.b, r.g, n);
       r.n -= n;
       any = true;
@@ -1194,7 +1245,7 @@ function dispatch(p) {
             if (want === 'tanker' ? !bt.tanker : bt.tanker || (want === 'truck') !== !!bt.truck) continue;
             if (bt.roadOnly && !botNets(u).some((n) => (bt.truck ? netsT : nets).indexOf(n) >= 0)) continue;
             const d = dist2(u.x, u.y, l.x + 0.5, l.y + 0.5);
-            if ((u.bat ?? 100) < BATTERY.low + 0.5 * Math.sqrt(d) && P.canCharge) continue;
+            if ((u.bat ?? 100) < BATTERY.low + 0.5 * Math.sqrt(d) && (bt.truck ? P.canRefuel : P.canCharge)) continue;
             if (d < bd) { bd = d; best = k; }
           }
           if (best >= 0) break;
@@ -1558,7 +1609,8 @@ function updateWorker(u, dt) {
       u.idleT += dt;
       if (u.idleT > 1.5) {
         u.idleT = 0;
-        if (!((u.bat ?? 100) < 70 && goCharge(u)) && !u.inside) goHome(u);
+        // (A truck tops up only when it's low: a Fuel fills the tank whatever is left in it.)
+        if (!((u.bat ?? 100) < (BOTS[u.type].truck ? 45 : 70) && goCharge(u)) && !u.inside) goHome(u);
       }
       if (u.inside && BOTS[u.type].truck && S.tick % 450 === u.id % 450) spreadTrucks(u);
     }
@@ -1566,6 +1618,14 @@ function updateWorker(u, dt) {
     const h = getE(t.bld);
     if (!h || h.owner !== u.owner) { u.task = null; u.path = null; }
     else if (moveAlong(u, dt)) { u.task = null; enterBuilding(u, h); }
+  } else if (t.type === 'refuel') {
+    const c = getE(t.bld);
+    if (!c || c.dead || c.owner !== u.owner) { u.task = null; u.path = null; }
+    else if (moveAlong(u, dt)) {
+      u.task = null;
+      if (!refuel(u, c)) goRefuel(u); // someone took the last of it: on to the next
+      else if (BDEFS[c.type].store) enterBuilding(u, c);
+    }
   } else if (t.type === 'charge') {
     const c = getE(t.bld);
     if (!c || c.owner !== u.owner) { u.task = null; u.path = null; }
@@ -1597,7 +1657,7 @@ function needsRoad(b) {
   if (def.store) return true; // a Depot only helps if haulers can reach it from the Command Base
   if (!b.built) return true;
   if (def.mil) return warOn(); // Ammo for the garrison
-  return !!(def.inp || def.out || def.ammo || def.charger || def.roadworks || def.bots || def.repair);
+  return !!(def.inp || def.out || def.ammo || def.charger || def.roadworks || def.bots || def.repair || def.burner);
 }
 
 /** Haulers on the road can only use storage they can reach by road. */
@@ -2172,6 +2232,7 @@ function updateBuilding(b, dt) {
       if (b.charging > 0) b.working = true;
     }
   }
+  if (def.burner) updateGenerator(b, def);
   if (def.bunker) bunkerFire(b, def, dt);
   else if (def.mil) garrisonDefense(b, dt);
   if (def.repair) updateRepairStation(b, def, dt);
@@ -2220,7 +2281,35 @@ function updateDepleted(b, def) {
 }
 
 /** Buildings whose busy time is tracked for statistics. */
-function tracksUse(def) { return !!(def.staff || (def.charger && !def.store) || (def.ammo && !def.missile) || def.repair); }
+function tracksUse(def) { return !!(def.staff || (def.charger && !def.store) || (def.ammo && !def.missile) || def.repair || def.burner); }
+
+/**
+ * A Generator (see BDEFS.generator): once a second, if anything that makes goods within its reach is
+ * working, it burns its Fuel (one every perFuel seconds) and powers them all for the next second.
+ */
+function updateGenerator(b, def) {
+  if ((S.tick + b.id) % 30) { if (b.powered > S.time) b.working = true; return; }
+  const G = def.burner, step = 30 * SIM_STEP, r2 = G.radius * G.radius, near = [];
+  let busy = 0;
+  for (const c of S.buildings) {
+    if (c === b || c.dead || c.owner !== b.owner || !c.built || !BDEFS[c.type].work) continue;
+    if (dist2(c.x, c.y, b.x, b.y) > r2) continue;
+    near.push(c);
+    if (c.working || /^Working/.test(c.status || '')) busy++;
+  }
+  if (!near.length) { b.status = 'Nothing in reach to power: build it among your factories'; return; }
+  if (!busy) { b.status = `Idle: nothing in reach is working (${near.length} building${near.length === 1 ? '' : 's'} in reach)`; return; }
+  if (!((b.energy || 0) > 0)) {
+    if (!(b.stock.fuel > 0)) { b.status = 'Out of Fuel: a Tanker brings it'; return; }
+    bump(b.stock, 'fuel', -1); usedGood(b.owner, 'fuel', 1);
+    b.energy = G.perFuel;
+  }
+  b.energy -= step;
+  b.powered = S.time + step + 0.1;
+  b.working = true;
+  b.status = `Powering ${busy} working building${busy === 1 ? '' : 's'} (${near.length} in reach)`;
+  for (const c of near) c.boostUntil = S.time + step + 0.15;
+}
 
 function produce(b, def, dt) {
   if (def.pump && pumpSeep(b) < 0) {
@@ -2264,9 +2353,9 @@ function produce(b, def, dt) {
     }
   }
   if (def.bots && botCount(b.owner) >= (S.mode === 'colony' ? MAX_BOTS_COLONY : MAX_BOTS)) { b.status = 'Bot limit reached'; return; }
-  b.status = 'Working';
+  b.status = b.boostUntil > S.time ? 'Working (powered by a Generator)' : 'Working';
   b.working = true;
-  b.timer += dt;
+  b.timer += dt * (b.boostUntil > S.time ? 1 + BDEFS.generator.burner.boost : 1);
   if (b.timer < def.work) return;
   b.timer = 0;
   for (const g in def.inp) { bump(b.stock, g, -def.inp[g]); usedGood(b.owner, g, def.inp[g]); }
@@ -5247,7 +5336,7 @@ function blastPipes(x, y, r) {
 function pipeRoute(owner, from, goal, maxLen) {
   const N = S.W * S.H, W = S.W;
   if (pipeBlocked(owner, from)) return null;
-  const best = new Float32Array(N * 4).fill(Infinity), prev = new Int32Array(N * 4).fill(-1);
+  const best = new Float64Array(N * 4).fill(Infinity), prev = new Int32Array(N * 4).fill(-1);
   const heap = [];
   const push = (c, s) => { heap.push([c, s]); let k = heap.length - 1; while (k > 0) { const p = (k - 1) >> 1; if (heap[p][0] <= heap[k][0]) break; [heap[p], heap[k]] = [heap[k], heap[p]]; k = p; } };
   const pop = () => { const top = heap[0], last = heap.pop(); if (heap.length) { heap[0] = last; let k = 0; for (;;) { const l = 2 * k + 1, r = l + 1; let m = k; if (l < heap.length && heap[l][0] < heap[m][0]) m = l; if (r < heap.length && heap[r][0] < heap[m][0]) m = r; if (m === k) break; [heap[m], heap[k]] = [heap[k], heap[m]]; k = m; } } return top; };

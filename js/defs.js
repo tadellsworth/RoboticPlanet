@@ -84,6 +84,13 @@ const ARMOR_PER_CEMENT = 6;
 const FIX_RATE = 2;
 const REPAIR_BELOW = { warbot: 0.7, other: 0.6 };
 const FUEL_ENERGY = 250;          // battery points one Fuel gives at a Charging Station (2½ full charges)
+/*
+ * Trucks burn Fuel. Freight Trucks, Road Trains and Tankers have a fuel tank instead of a battery
+ * (u.bat, 0–100): it drains TRUCK_BURN a second while they drive (a Road Train TRAIN_BURN), and
+ * when it's low they fill up at the nearest storage or Charging Station holding Fuel they can drive
+ * to: one Fuel fills the tank, in a moment. With no Fuel anywhere they limp along at half speed.
+ */
+const TRUCK_BURN = 0.4, TRAIN_BURN = 0.6;
 
 /*
  * Batteries (0–100). Bots drain while they move and work, and recharge inside a building with a
@@ -223,7 +230,7 @@ const RAIL_MIN_LOAD = 10;
  * Crude never waits for a Tanker. Raids, missiles and fuel blasts break pipe: a broken tile is planned
  * again at once and relaid when it's paid for.
  */
-const PIPE_COST = { cement: 0.25, alloy: 0.1 };
+const PIPE_COST = { cement: 0.3 }; // cheap, and no Alloy (always the scarce one)
 const PIPE_RATE = 4;
 const PIPE_FILL = 6;
 const RAIL_CROSS_HOLD = 2.4;
@@ -576,6 +583,10 @@ const BDEFS = {
     desc: 'Builds one nuclear missile at a time from 6 Enriched Uranium, 4 Alloy and 2 Chips, then fires it up to 40 tiles. It wipes out everything within 6 tiles. Nuclear race only.',
     cost: { cement: 8, alloy: 6, chip: 4 }, nukeSilo: true, armor: 18, buildTime: 24, war: true, nuke: true,
   },
+  generator: {
+    name: 'Generator', desc: 'Burns Fuel to power the buildings round it: every factory, Refinery, Oil Pump and Bot Foundry within 4 tiles works a third faster while it runs. It burns one Fuel every 40 seconds, and only while something in reach is working. Tankers bring its Fuel.',
+    cost: { cement: 3, alloy: 2 }, burner: { radius: 4, boost: 1 / 3, perFuel: 40 }, fuelCap: 4, armor: 8, buildTime: 10,
+  },
   charger: {
     name: 'Charging Station',
     desc: 'Bots recharge their batteries here, four at a time. It burns Fuel: one Fuel recharges about two and a half full batteries. Build them near busy areas far from your Command Base.',
@@ -644,12 +655,12 @@ const BDEFS = {
 };
 
 /** Order of the build menu. */
-const BUILD_MENU = ['harvester', 'quarry', 'mine', 'tap', 'smelter', 'fab', 'foundry', 'charger', 'farm', 'pump', 'refinery',
+const BUILD_MENU = ['harvester', 'quarry', 'mine', 'tap', 'smelter', 'fab', 'foundry', 'charger', 'farm', 'pump', 'refinery', 'generator',
   'kiln', 'tarworks', 'roadworks', 'ropeway', 'viaduct', 'station', 'outpost', 'turret', 'bunker', 'disruptor', 'mortar', 'repair', 'armory', 'munitions', 'silo', 'reactor', 'nukesilo', 'depot', 'grower', 'lab'];
 /** Build-menu tabs: what each building is for. */
 const BUILD_GROUPS = [
   { key: 'gather', name: 'Gather', types: ['harvester', 'quarry', 'mine', 'tap', 'grower', 'farm', 'pump'] },
-  { key: 'make', name: 'Make', types: ['kiln', 'smelter', 'fab', 'refinery', 'tarworks', 'foundry', 'armory', 'munitions', 'reactor', 'lab'] },
+  { key: 'make', name: 'Make', types: ['kiln', 'smelter', 'fab', 'refinery', 'tarworks', 'foundry', 'armory', 'munitions', 'reactor', 'lab', 'generator'] },
   { key: 'move', name: 'Move', types: ['charger', 'depot', 'roadworks', 'ropeway', 'viaduct', 'station'], roads: true },
   { key: 'defend', name: 'Defend', types: ['outpost', 'turret', 'bunker', 'disruptor', 'mortar', 'repair', 'silo', 'nukesilo'], walls: true },
 ];
