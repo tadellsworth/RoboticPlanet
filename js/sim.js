@@ -729,7 +729,7 @@ function queueRoom(u) {
     if (t === undefined || !S.road[t]) continue;
     for (let k = head[t]; k >= 0; k = TRAFFIC.next[k]) {
       const v = TRAFFIC.bots[k];
-      if (v === u || v.dead || v.inside || !v.path) continue;
+      if (v === u || v.dead || v.inside || !v.path || v.type === 'warbot') continue; // soldiers step aside: nobody queues behind one
       const rx = v.x - u.x, ry = v.y - u.y;
       let along = rx * dx + ry * dy;
       if (along < -0.05 || along > 1.4) continue;                        // behind us, or far ahead
@@ -818,8 +818,9 @@ function moveAlong(u, dt) {
   const want = vmax * dt;
   let lim = Infinity; // how far the bot can go before it must have stopped
   // Road junctions: stop before a red light, or give way to traffic already crossing the other way.
-  const nx = u.path[u.pi];
-  if (nx !== undefined && nx !== here && S.road[nx] && isJunction(nx) && !S.over[nx]) {
+  // Warbots don't: soldiers on foot go straight through (they still wait for trains).
+  const nx = u.path[u.pi], soldier = u.type === 'warbot';
+  if (!soldier && nx !== undefined && nx !== here && S.road[nx] && isJunction(nx) && !S.over[nx]) {
     const jdx = (nx % S.W) + 0.5 - u.x, jdy = ((nx / S.W) | 0) + 0.5 - u.y;
     const axis = Math.abs(jdx) >= Math.abs(jdy) ? 0 : 1;
     const toEdge = Math.max(0, Math.sqrt(jdx * jdx + jdy * jdy) - 0.55);
@@ -841,8 +842,10 @@ function moveAlong(u, dt) {
     const cdx = (nx % S.W) + 0.5 - u.x, cdy = ((nx / S.W) | 0) + 0.5 - u.y;
     lim = Math.min(lim, Math.max(0, Math.sqrt(cdx * cdx + cdy * cdy) - 0.6));
   }
-  // On roads, wait behind the bot ahead instead of driving through it.
-  if (r || S.road[u.path[u.pi]]) {
+  // On roads, wait behind the bot ahead instead of driving through it (warbots don't queue: a squad
+  // marching along a road, or massing at a Gate it means to break down, would stand in a line with
+  // only the front one doing anything).
+  if (!soldier && (r || S.road[u.path[u.pi]])) {
     const room = queueRoom(u);
     if (room < want) {
       if (room < want * 0.25) {
@@ -865,7 +868,7 @@ function moveAlong(u, dt) {
       // up the job after a while so it can be given another.
       u.vel = 0;
       u.moved = 0;
-      if (breachable(t, u.owner) && u.type === 'warbot' && (u.ammo ?? WARBOT_AMMO) > 0) { breachHit(u, getE(S.bAt[t])); return false; }
+      if (breachable(t, u.owner) && u.type === 'warbot' && (u.ammo ?? WARBOT_AMMO) > 0) { breachHit(u, getE(S.bAt[t])); spreadOut(u, dt); return false; }
       const g = u.path[u.path.length - 1], keep = u.path, pi = u.pi;
       if (goTo(u, g % S.W, (g / S.W) | 0)) { u.blockT = 0; return false; }
       u.path = keep; u.pi = pi;
@@ -2257,6 +2260,7 @@ function updateBuilding(b, dt) {
   if (def.burner) updateGenerator(b, def);
   if (def.bunker) bunkerFire(b, def, dt);
   else if (def.mil) garrisonDefense(b, dt);
+  if (def.mil && b.type !== 'lander' && usesPosts(b.owner)) stockPost(b, dt);
   if (def.repair) updateRepairStation(b, def, dt);
   if (def.lab) updateLab(b, dt);
   if (def.viaduct) {
@@ -2711,6 +2715,15 @@ function garrisonDefense(b, dt) {
  * player's garrison priority (b.gprio 'high' / 'low').
  */
 function goGarrison(u) {
+  // Yours go back to their post, or the Command Base (anywhere else only if neither has room).
+  if (usesPosts(u.owner)) {
+    const zone = S.zone[tIdx(Math.floor(u.x), Math.floor(u.y))];
+    const ok = (b) => b && !b.dead && b.owner === u.owner && b.built && BDEFS[b.type].mil && !evacuated(b) && S.zone[tIdx(b.x, b.y)] === zone &&
+      b.garrison.length + b.garInc < BDEFS[b.type].garrison && !(u.avoidB === b.id && S.time < u.avoidUntil);
+    const post = postOf(u), L = getE(S.players[u.owner].lander);
+    const to = ok(post) ? post : ok(L) ? L : null;
+    if (to) { u.task = { type: 'garrison', bld: to.id }; to.garInc++; return; }
+  }
   const enemyL = getE(S.players[rivalOf(u.owner)].lander);
   let best = null, bs = Infinity, spare = null, ss = Infinity;
   for (const b of S.buildings) {
@@ -3232,7 +3245,8 @@ function warbotAct(u, dt) {
         const h = getE(t.home);
         if (h) foe = nearestEnemyBot(u.owner, h.x + 0.5, h.y + 0.5, 6.5, true, true);
       }
-      if (foe && foe.id === u.ignoreFoe && S.time < u.ignoreUntil) foe = null;
+      // A foe it gave up chasing is left alone, unless it comes close enough to shoot.
+      if (foe && foe.id === u.ignoreFoe && S.time < u.ignoreUntil && dist2(foe.x, foe.y, u.x, u.y) > WARBOT_RANGE_BLOCKED * WARBOT_RANGE_BLOCKED) foe = null;
       if (foe) u.fight = foe.id;
     }
   }
@@ -3241,13 +3255,29 @@ function warbotAct(u, dt) {
     // If something blocks the way and the foe is further off, walk round to it, or give up on it.
     const d = dist(u.x, u.y, foe.x, foe.y);
     let inReach = d <= WARBOT_RANGE, pathing = false;
-    if (!inReach && !moveDirect(u, foe.x, foe.y, dt)) {
+    // Closing in: straight at it while the way is clear. Once something blocks the straight line it
+    // follows a route round for a moment (u.viaT) instead of flicking back to the straight line at the
+    // first step that looks clear, which had it rocking on the spot; and the route is only planned
+    // again when the foe has moved off its end, not every time it crosses into another tile.
+    // It goes straight only when the whole line to the foe is walkable (not just the next step, which
+    // had it walking up to a cliff edge, turning back for the way round, then trying the edge again).
+    const routed = u.viaT > S.time && !!u.path;
+    if (!inReach && (routed || !clearLine(u.x, u.y, foe.x, foe.y) || !moveDirect(u, foe.x, foe.y, dt))) {
       if (d <= WARBOT_RANGE_BLOCKED || (d <= WARBOT_RANGE_GAP && overGap(u, foe))) inReach = true;
       else {
         pathing = true;
-        if (travel(u, Math.floor(foe.x), Math.floor(foe.y), dt) === null) { u.fight = 0; u.ignoreFoe = foe.id; u.ignoreUntil = S.time + 5; }
+        const fi = Math.floor(foe.x), fj = Math.floor(foe.y), g = u.goal;
+        const still = routed && g !== undefined && Math.max(Math.abs((g % S.W) - fi), Math.abs(((g / S.W) | 0) - fj)) <= 1;
+        let r = still ? moveAlong(u, dt) : travel(u, fi, fj, dt);
+        // A long way round (a ramp far off): not worth leaving its post for.
+        if (!still && r === false && u.path && u.path.length - u.pi > Math.max(8, 3 * d)) { u.path = null; r = null; }
+        // Can't get at it (across water or a cliff with no way round): leave it alone for a good while.
+        if (r === null) { u.fight = 0; u.ignoreFoe = foe.id; u.ignoreUntil = S.time + 12; u.viaT = 0; }
+        else if (r) u.viaT = 0;
+        else if (!routed) u.viaT = S.time + 1.5;
       }
     }
+    if (inReach) spreadOut(u, dt);
     if (inReach && u.cd <= 0) {
       u.cd = 0.9;
       u.face = Math.atan2(foe.y - u.y, foe.x - u.x);
@@ -3332,6 +3362,55 @@ function warbotAct(u, dt) {
 }
 
 /**
+ * Could a bot walk the straight line from (x0, y0) to (x1, y1): no building, water, cliff or chasm
+ * across it (ramps and diagonal steps round no corner, as in moveDirect)?
+ */
+function clearLine(x0, y0, x1, y1) {
+  const n = Math.ceil(dist(x0, y0, x1, y1) / 0.25);
+  let ci = Math.floor(x0), cj = Math.floor(y0);
+  for (let k = 1; k <= n; k++) {
+    const i = Math.floor(x0 + ((x1 - x0) * k) / n), j = Math.floor(y0 + ((y1 - y0) * k) / n);
+    if (i === ci && j === cj) continue;
+    if (!inMap(i, j)) return false;
+    const c = tIdx(ci, cj), t = tIdx(i, j);
+    if (S.bAt[t] && k < n) return false;
+    const ok = i === ci || j === cj ? canStep(c, t)
+      : (canStep(c, tIdx(i, cj)) && canStep(tIdx(i, cj), t)) || (canStep(c, tIdx(ci, j)) && canStep(tIdx(ci, j), t));
+    if (!ok) return false;
+    ci = i; cj = j;
+  }
+  return true;
+}
+
+/**
+ * A warbot holding one spot (shooting, breaking down a wall, standing guard) edges away from its own
+ * side's warbots right on top of it, so a squad doesn't pile onto a single point (and can be counted).
+ * It stays on its tile, or steps only onto open ground it could walk to.
+ */
+function spreadOut(u, dt) {
+  let fx = 0, fy = 0, n = 0;
+  for (const v of S.bots) {
+    if (v === u || v.type !== 'warbot' || v.dead || v.inside || v.owner !== u.owner) continue;
+    const dx = u.x - v.x, dy = u.y - v.y, d2 = dx * dx + dy * dy;
+    if (d2 >= 0.16) continue;
+    const d = Math.sqrt(d2), w = 1 - d / 0.4;
+    if (d < 1e-3) { const a = (u.id * 2.39996) % (Math.PI * 2); fx += Math.cos(a); fy += Math.sin(a); } else { fx += (dx / d) * w; fy += (dy / d) * w; }
+    n++;
+  }
+  if (!n) return;
+  const L = Math.sqrt(fx * fx + fy * fy);
+  if (L < 1e-4) return;
+  const s = 0.5 * dt, nx = u.x + (fx / L) * s, ny = u.y + (fy / L) * s;
+  const ci = Math.floor(u.x), cj = Math.floor(u.y), ti = Math.floor(nx), tj = Math.floor(ny);
+  if (!inMap(ti, tj)) return;
+  if (ti !== ci || tj !== cj) {
+    const c = tIdx(ci, cj), t = tIdx(ti, tj);
+    if (S.bAt[t] || !walkable(t) || ti !== ci && tj !== cj || !canStep(c, t)) return;
+  }
+  u.x = nx; u.y = ny;
+}
+
+/**
  * Do bots a and b face each other across a drop (a canyon or valley lower than both of them), with
  * no rock, water or building in the way? Warbots shoot across one from the edge.
  */
@@ -3353,6 +3432,7 @@ function overGap(a, b) {
 function strikeBuilding(u, b, dt, power) {
   if (dist2(u.x, u.y, b.x + 0.5, b.y + 0.5) <= 1.7) {
     u.path = null;
+    spreadOut(u, dt);
     u.face = Math.atan2(b.y + 0.5 - u.y, b.x + 0.5 - u.x);
     if (u.cd <= 0 && useAmmo(u)) {
       u.cd = 1.0;
@@ -3399,11 +3479,71 @@ function keepAt(b) {
   if (b.keepW !== undefined) return b.keepW;
   if (b.type === 'lander') return 1;
   const P = S.players[b.owner];
-  return P && P.keepW !== undefined ? P.keepW : 1;
+  return P && P.keepW !== undefined ? P.keepW : usesPosts(b.owner) ? 0 : 1; // yours keep none unless you say
 }
 
-/** How many armed warbots garrison b can send out (all but its Keep). */
-function spareArmed(b) { return BDEFS[b.type].bunker ? 0 : Math.max(0, Math.min(armedIn(b), b.garrison.length - keepAt(b))); }
+/*
+ * Posts (your warbots; the AI spreads its own to the front instead). Every warbot belongs somewhere:
+ * u.post is the garrison it was stationed at (Station here, or an Outpost's Keep), and with none it
+ * belongs at the Command Base. Wherever it goes (a fight, a rally flag, an attack, repairs), it comes
+ * back to its post. Attacks and rallies draw on the Command Base (and anyone in a garrison that isn't
+ * posted there), never on warbots stationed at an Outpost; select those to send them anywhere.
+ */
+function usesPosts(owner) { const P = S.players[owner]; return !!P && !P.ai; }
+
+/** Warbot u's post, if it still has one (cleared once that garrison is lost). */
+function postOf(u) {
+  if (!u.post) return null;
+  const g = getE(u.post);
+  if (!g || g.dead || g.owner !== u.owner || !BDEFS[g.type].mil) { u.post = 0; return null; }
+  return g;
+}
+
+/** How many warbots are posted to garrison b (inside it or out). */
+function postedAt(b) {
+  let n = 0;
+  for (const u of S.bots) if (!u.dead && u.post === b.id && u.owner === b.owner) n++;
+  return n;
+}
+
+/** May warbot u be sent out of garrison b (it isn't stationed there)? */
+function freeToGo(u, b) { return !usesPosts(b.owner) || b.type === 'lander' || u.post !== b.id; }
+
+/**
+ * A garrison of yours keeps its Keep: short of that many posted to it (after losses too), it's topped
+ * up from the Command Base's armed warbots (the Base keeps its own Keep). Warbots already inside without
+ * a post (from an older save, or ones that came in when the Base was full) count as its own.
+ */
+function stockPost(b, dt) {
+  b.stockT = (b.stockT || 0) - dt;
+  if (b.stockT > 0) return;
+  b.stockT = 2;
+  for (const id of b.garrison) { const u = getE(id); if (u && !postOf(u)) u.post = b.id; }
+  const k = keepAt(b);
+  let have = postedAt(b);
+  if (have >= k) return;
+  const L = getE(S.players[b.owner].lander);
+  if (!L || L.dead || L.owner !== b.owner || !L.built || S.zone[tIdx(L.x, L.y)] !== S.zone[tIdx(b.x, b.y)]) return;
+  while (have < k && garrisonRoom(b) > 0 && L.garrison.length > keepAt(L)) {
+    const u = takeArmed(L);
+    if (!u) break;
+    u.inside = 0; u.post = b.id; u.path = null;
+    u.task = { type: 'garrison', bld: b.id };
+    b.garInc = (b.garInc || 0) + 1;
+    have++;
+  }
+}
+
+/** How many armed warbots garrison b can send out (all but its Keep; of yours, only those not posted there). */
+function spareArmed(b) {
+  if (BDEFS[b.type].bunker) return 0;
+  if (usesPosts(b.owner) && b.type !== 'lander') {
+    let n = 0;
+    for (const id of b.garrison) { const u = getE(id); if (u && (u.ammo ?? WARBOT_AMMO) > 0 && u.post !== b.id) n++; }
+    return n;
+  }
+  return Math.max(0, Math.min(armedIn(b), b.garrison.length - keepAt(b)));
+}
 
 /** A garrison far behind the lines (no rival building within 18 tiles): it can send its last warbot. */
 function rearGarrison(b) {
@@ -3411,13 +3551,13 @@ function rearGarrison(b) {
   return true;
 }
 /** Warbots garrison b can send out: every armed one from the rear (with `rear`), else all but one. */
-function spareFrom(b, rear) { return BDEFS[b.type].bunker ? 0 : rear && rearGarrison(b) ? armedIn(b) : spareArmed(b); }
+function spareFrom(b, rear) { return BDEFS[b.type].bunker ? 0 : rear && !usesPosts(b.owner) && rearGarrison(b) ? armedIn(b) : spareArmed(b); }
 
 /** Take one armed warbot out of garrison b (or null). */
 function takeArmed(b) {
   for (let k = b.garrison.length - 1; k >= 0; k--) {
     const u = getE(b.garrison[k]);
-    if (u && (u.ammo ?? WARBOT_AMMO) > 0) { b.garrison.splice(k, 1); return u; }
+    if (u && (u.ammo ?? WARBOT_AMMO) > 0 && freeToGo(u, b)) { b.garrison.splice(k, 1); return u; }
   }
   return null;
 }
@@ -3533,6 +3673,7 @@ function holdRally(u, t, r, dt, power) {
     gx = Math.floor(r.x); gy = Math.floor(r.y);
   }
   if (Math.floor(u.x) === gx && Math.floor(u.y) === gy && !u.path) {
+    spreadOut(u, dt);
     if ((u.ammo ?? WARBOT_AMMO) > 0 && !u.fight) sabotageRoads(u, r, dt);
     return;
   }
@@ -3694,6 +3835,7 @@ function orderStation(owner, ids, to) {
     if (u.inside === to.id || (u.task && u.task.type === 'garrison' && u.task.bld === to.id)) continue;
     readyForOrder(u);
     u.task = { type: 'garrison', bld: to.id };
+    if (usesPosts(owner)) u.post = to.type === 'lander' ? 0 : to.id; // stationed there from now on
     to.garInc = (to.garInc || 0) + 1;
     room--; sent++;
   }
@@ -3716,35 +3858,50 @@ function armyIds(owner) {
 /** Room left in a garrison, counting warbots already on their way. */
 function garrisonRoom(b) { return Math.max(0, BDEFS[b.type].garrison - b.garrison.length - (b.garInc || 0)); }
 
-/** Other garrisons that can spare warbots for building `to` (each keeps one at home), nearest first. */
+/**
+ * Garrisons that can spare warbots for building `to`, the order to take them in: yours, the Command
+ * Base first and then the nearest (only warbots not stationed there); the AI's, nearest first, each
+ * keeping one at home.
+ */
 function stationSources(owner, to) {
   const zone = S.zone[tIdx(to.x, to.y)], out = [];
   for (const b of S.buildings) {
-    if (b === to || b.dead || b.owner !== owner || !b.built || !BDEFS[b.type].mil || b.garrison.length < 2) continue;
+    if (b === to || b.dead || b.owner !== owner || !b.built || !BDEFS[b.type].mil || BDEFS[b.type].bunker || !stationSpare(b)) continue;
     if (S.zone[tIdx(b.x, b.y)] !== zone) continue; // they couldn't walk there
-    out.push({ b, d: dist(b.x, b.y, to.x, to.y) });
+    out.push({ b, d: (usesPosts(owner) && b.type === 'lander' ? -1e6 : 0) + dist(b.x, b.y, to.x, to.y) });
   }
   out.sort((a, c) => a.d - c.d);
   return out.map((o) => o.b);
 }
 
+/** Warbots garrison b can give up to be stationed elsewhere. */
+function stationSpare(b) {
+  if (!usesPosts(b.owner)) return Math.max(0, b.garrison.length - 1);
+  if (b.type === 'lander') return Math.max(0, b.garrison.length - 1);
+  let n = 0;
+  for (const id of b.garrison) { const u = getE(id); if (u && u.post !== b.id) n++; }
+  return n;
+}
+
 /** How many warbots could be stationed at `to` right now. */
 function stationAvailable(owner, to) {
   let n = 0;
-  for (const b of stationSources(owner, to)) n += b.garrison.length - 1;
+  for (const b of stationSources(owner, to)) n += stationSpare(b);
   return Math.min(n, garrisonRoom(to));
 }
 
-/** Move warbots from the nearest other garrisons into `to`, where they stay until moved again. */
+/** Move warbots (from the Command Base first) into `to`: they're posted there, and stay until moved again. */
 function stationWarbots(owner, to, count) {
   if (!to.built || to.dead || to.owner !== owner || !BDEFS[to.type].mil) return 0;
   count = Math.min(count, garrisonRoom(to));
   let sent = 0;
   for (const b of stationSources(owner, to)) {
-    while (b.garrison.length > 1 && sent < count) {
-      const u = getE(b.garrison.pop());
-      if (!u) continue;
+    for (let k = b.garrison.length - 1; k >= 0 && sent < count && stationSpare(b) > 0; k--) {
+      const u = getE(b.garrison[k]);
+      if (!u || !freeToGo(u, b)) continue;
+      b.garrison.splice(k, 1);
       u.inside = 0;
+      u.post = to.id;
       u.task = { type: 'garrison', bld: to.id };
       u.path = null;
       to.garInc = (to.garInc || 0) + 1;
@@ -3752,6 +3909,26 @@ function stationWarbots(owner, to, count) {
     }
   }
   return sent;
+}
+
+/**
+ * Release every warbot posted to garrison b back to the Command Base (its Keep goes to 0, so it isn't
+ * stocked again). Returns how many were posted there.
+ */
+function unstation(owner, b) {
+  let n = 0;
+  const L = getE(S.players[owner].lander);
+  b.keepW = 0;
+  for (const u of S.bots) {
+    if (u.dead || u.owner !== owner || u.post !== b.id) continue;
+    u.post = 0; n++;
+    if (u.inside === b.id && L && !L.dead && L.owner === owner) {
+      b.garrison = b.garrison.filter((id) => id !== u.id);
+      u.inside = 0;
+      u.task = { type: 'garrison', bld: L.id }; u.path = null; L.garInc = (L.garInc || 0) + 1;
+    }
+  }
+  return n;
 }
 
 /** Call a rally point's warbots back to their garrisons. */

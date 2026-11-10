@@ -1123,10 +1123,10 @@ function enterPlaceMode(type) {
 
 /** The Army banner: what to tap, and Recall all when warbots are out in the field. */
 function showArmyBanner() {
-  const out = warbotsOut(0), k = S.players[0].keepW ?? 1;
+  const out = warbotsOut(0), k = S.players[0].keepW ?? 0;
   showBanner('Tap a <b>rival building</b> to attack it with warbots or missiles, or tap open ground to send warbots there to <b>hold the area</b>.' +
     (out ? ` ${out} warbot${out > 1 ? 's are' : ' is'} out in the field: <b>Recall all</b> brings them home.` : '') +
-    `<span class="keep-all">Outposts keep <span class="seg">${[0, 1, 2].map((v) => `<button data-k="${v}" class="${v === k ? 'on' : ''}">${v}</button>`).join('')}</span> warbot${k === 1 ? '' : 's'} at home</span>`,
+    `<span class="keep-all">Every Outpost keeps <span class="seg">${[0, 1, 2].map((v) => `<button data-k="${v}" class="${v === k ? 'on' : ''}">${v}</button>`).join('')}</span> warbot${k === 1 ? '' : 's'}, sent from your Command Base</span>`,
     out ? 'Recall all' : null, 'Cancel');
   for (const btn of $('banner-text').querySelectorAll('[data-k]')) btn.onclick = (e) => { e.stopPropagation(); setKeepAll(+btn.dataset.k); showArmyBanner(); };
 }
@@ -1136,8 +1136,8 @@ function setKeepAll(v) {
   S.players[0].keepW = v;
   for (const b of S.buildings) if (!b.dead && b.owner === 0 && BDEFS[b.type].mil && b.type !== 'lander') delete b.keepW;
   sfx('click');
-  toast(v === 0 ? 'Outposts keep no warbots at home now: every warbot can be sent out, and new ones wait at your Command Base.'
-    : `Every Outpost now keeps ${v} warbot${v === 1 ? '' : 's'} at home.`, 'info');
+  toast(v === 0 ? 'Outposts keep no warbots now: your warbots stay at the Command Base unless you station some at an Outpost.'
+    : `Every Outpost now keeps ${v} warbot${v === 1 ? '' : 's'}, sent from your Command Base (and replaced if lost).`, 'info');
 }
 
 /** Bring every warbot in the field home to its garrison. */
@@ -2027,9 +2027,12 @@ function openBuildingSheet(b) {
         <div class="stepper"><button class="btn" id="sh-st-minus" aria-label="Fewer">−</button><span class="n" id="sh-st-n">0</span>
         <button class="btn" id="sh-st-plus" aria-label="More">+</button><button class="btn primary" id="sh-st-send" style="flex:1">Station here</button></div>
         <p class="hint" id="sh-st-hint"></p>` +
+        (b.type === 'lander' ? '<p class="hint" id="sh-posted"></p>' : `<div class="kv"><span>Stationed here</span><span id="sh-posted"></span></div>
+        <button class="btn small ghost" id="sh-unpost">Send them back to the Command Base</button>`) +
         (def.bunker ? '' : `<div class="section-label">Keep here</div>
-        <div class="seg" id="sh-keepw"><button data-v="auto">Auto (${b.type === 'lander' ? 1 : S.players[0].keepW ?? 1})</button><button data-v="0">0</button><button data-v="1">1</button><button data-v="2">2</button><button data-v="4">4</button></div>
-        <p class="hint">Warbots this garrison keeps at home: attacks and rallies leave them behind, and new warbots fill it up to this first. <b>0</b>: nothing is held back, and idle warbots don't come here (they wait at your Command Base). <i>Auto</i> follows the setting for all Outposts in Army.</p>`);
+        <div class="seg" id="sh-keepw"><button data-v="auto">Auto (${b.type === 'lander' ? 1 : S.players[0].keepW ?? 0})</button><button data-v="0">0</button><button data-v="1">1</button><button data-v="2">2</button><button data-v="4">4</button></div>
+        <p class="hint">${b.type === 'lander' ? 'Warbots the Command Base always keeps at home: attacks, rallies and stationing never take the last of them.'
+          : 'Warbots stationed here: your Command Base sends them, and replaces any that are lost. Attacks and rally flags never take warbots stationed at an Outpost (select them to send them anywhere), and after a fight they come back here. <i>Auto</i> follows the setting for every Outpost in Army.'}</p>`);
     }
     if (def.lab && b.built) html += '<div class="section-label">Research</div><div id="sh-research"></div>';
     if (b.type === 'foundry' && b.built) {
@@ -2127,7 +2130,12 @@ function openBuildingSheet(b) {
       $('sh-pipe').hidden = true;
     };
     if ($('sh-gprio')) for (const btn of $('sh-gprio').children) btn.onclick = () => { b.gprio = btn.dataset.v === 'normal' ? undefined : btn.dataset.v; sfx('click'); refreshSheet(); };
-    if ($('sh-keepw')) for (const btn of $('sh-keepw').children) btn.onclick = () => { b.keepW = btn.dataset.v === 'auto' ? undefined : +btn.dataset.v; sfx('click'); refreshSheet(); };
+    if ($('sh-keepw')) for (const btn of $('sh-keepw').children) btn.onclick = () => { b.keepW = btn.dataset.v === 'auto' ? undefined : +btn.dataset.v; b.stockT = 0; sfx('click'); refreshSheet(); };
+    if ($('sh-unpost')) $('sh-unpost').onclick = () => {
+      const n = unstation(0, b);
+      if (n) { sfx('order'); toast(`${n} warbot${n > 1 ? 's' : ''} heading back to the Command Base. This ${def.name} now keeps none.`, 'info'); } else sfx('error');
+      refreshSheet();
+    };
     if ($('sh-st-send')) {
       UI.stationN = Math.min(5, stationAvailable(0, b));
       $('sh-st-minus').onclick = () => { UI.stationN = Math.max(1, UI.stationN - 1); refreshSheet(); };
@@ -2403,9 +2411,21 @@ function refreshBuildingSheet(b) {
     $('sh-st-n').textContent = UI.stationN;
     $('sh-st-send').disabled = !avail;
     $('sh-st-hint').textContent = (avail
-      ? `Bring up to ${avail} warbot${avail > 1 ? 's' : ''} from your other garrisons (each keeps its Keep at home). They stay here until you move them.`
-      : !garrisonRoom(b) ? 'This garrison is full.' : 'No spare warbots in your other garrisons: each keeps its Keep at home (set it on the garrison, or for all Outposts in Army).')
+      ? `Bring up to ${avail} warbot${avail > 1 ? 's' : ''}, from your Command Base first. They're stationed here: after a fight or a trip for repairs they come back here, until you send them elsewhere.`
+      : !garrisonRoom(b) ? 'This garrison is full.' : 'No spare warbots: your Command Base keeps its last one, and warbots stationed at other Outposts stay there (send some back to the Command Base first).')
       + (coming ? ` ${coming} on the way.` : '');
+  }
+  if ($('sh-posted')) {
+    if (b.type === 'lander') {
+      let home = 0, out = 0;
+      for (const u of S.bots) if (!u.dead && u.owner === 0 && u.type === 'warbot' && !postOf(u)) { if (u.inside === b.id) home++; else out++; }
+      $('sh-posted').textContent = `${home} warbot${home === 1 ? '' : 's'} here${out ? `, ${out} more out or on the way (they belong here)` : ''}. Warbots not stationed at an Outpost belong to the Command Base.`;
+    } else {
+      let inside = 0, out = 0;
+      for (const u of S.bots) if (!u.dead && u.owner === 0 && u.post === b.id) { if (u.inside === b.id) inside++; else out++; }
+      $('sh-posted').textContent = inside + out ? `${inside + out} (${inside} inside${out ? `, ${out} out or on the way` : ''})` : 'None';
+      if ($('sh-unpost')) $('sh-unpost').disabled = !(inside + out);
+    }
   }
   if ($('sh-lim')) {
     const lim = stockLimit(b), g = limitGood(b), have = goodTotal(0, g);
@@ -2545,13 +2565,21 @@ function botActivity(u) {
   const t = u.task;
   const nm = (id) => { const b = getE(id); return b ? BDEFS[b.type].name : 'a building'; };
   if (u.type === 'warbot') {
-    if (u.fight) return 'Fighting!';
-    if (!t) return u.inside ? 'Standing guard inside' : 'Waiting for orders';
-    if (t.type === 'garrison') return `Marching to the ${nm(t.bld)}`;
-    if (t.type === 'attack') return `Attacking the rival ${nm(t.target)}`;
-    if (t.type === 'defend') return `Defending the ${nm(t.home)}`;
-    if (t.type === 'hold') return t.phase === 'recharge' ? 'Battery flat: going to recharge' : t.target ? `Attacking the rival ${nm(t.target)}` : 'Holding the rally point';
-    return 'On patrol';
+    const p = u.owner === 0 && usesPosts(0) ? postOf(u) : null;
+    const where = u.owner !== 0 ? '' : p ? ` (stationed at the ${BDEFS[p.type].name})` : ' (belongs to the Command Base)';
+    const what = (() => {
+      if (u.fight) return 'Fighting!';
+      if (!t) return u.inside ? 'Standing guard inside' : 'Waiting for orders: no garrison with room';
+      if (t.type === 'garrison') return `Marching to the ${nm(t.bld)}`;
+      if (t.type === 'attack') return `Attacking the rival ${nm(t.target)}`;
+      if (t.type === 'defend') return `Defending the ${nm(t.home)}`;
+      if (t.type === 'hold') return t.phase === 'recharge' ? 'Battery flat: going to recharge' : t.target ? `Attacking the rival ${nm(t.target)}` : 'Holding the rally point';
+      if (t.type === 'repair') return 'Going for repairs';
+      if (t.type === 'topup') return 'Topping up its battery';
+      if (t.type === 'loot') return t.phase === 'home' ? 'Carrying a crate of loot home' : 'Going to pick up loot';
+      return 'On patrol';
+    })();
+    return what + where;
   }
   if (t && t.type === 'charge') return u.inside ? 'Recharging its battery' : 'Going to recharge its battery';
   if (t && t.type === 'refuel') return 'Going to fill up with Fuel';
@@ -2835,7 +2863,54 @@ function refreshPopSheet() {
     return `<div class="kv pop-row"><span><b>${o.total}</b> ${o.total === 1 ? BOTS[k].name : BOTS[k].plural}</span><span>${bits.filter(Boolean).join(' · ') || '–'}</span></div>`;
   });
   const cap = S.mode === 'colony' ? MAX_BOTS_COLONY : MAX_BOTS;
-  $('sh-pop').innerHTML = rows.join('') + `<div class="kv"><span>All robots</span><span><b>${total}</b> of ${cap} (the limit)</span></div>`;
+  let wb = '';
+  if (warOn() && n.warbot) {
+    const g = warbotGroups();
+    wb = '<div class="section-label">Where your warbots are</div>' + WARBOT_PLACES.filter(([k]) => g[k].length).map(([k, label]) =>
+      `<div class="kv pop-row"><span>${label}</span><span><b>${g[k].length}</b> <button class="btn small ghost" data-wb="${k}">Show</button></span></div>`).join('') +
+      '<p class="hint">Show takes you to each in turn. Warbots stationed at an Outpost come back to it after a fight; every other one belongs to the Command Base.</p>';
+  }
+  $('sh-pop').innerHTML = rows.join('') + `<div class="kv"><span>All robots</span><span><b>${total}</b> of ${cap} (the limit)</span></div>` + wb;
+  for (const btn of $('sh-pop').querySelectorAll('[data-wb]')) btn.onclick = () => showWarbots(btn.dataset.wb);
+}
+
+const WARBOT_PLACES = [['base', 'At the Command Base'], ['posted', 'In Outposts and Bunkers'], ['home', 'Heading back to a garrison'], ['attack', 'Attacking'],
+  ['hold', 'Holding a rally flag'], ['defend', 'Out guarding a garrison'], ['fix', 'Being repaired or recharging'], ['loot', 'Carrying loot home'],
+  ['idle', 'Standing in the field (no garrison with room)']];
+
+/** Your warbots sorted by where they are and what they're doing (WARBOT_PLACES). */
+function warbotGroups() {
+  const g = {};
+  for (const [k] of WARBOT_PLACES) g[k] = [];
+  for (const u of S.bots) {
+    if (u.dead || u.owner !== 0 || u.type !== 'warbot') continue;
+    const tt = u.task && u.task.type, inB = u.inside ? getE(u.inside) : null;
+    if (inB && inB.type === 'lander') g.base.push(u);
+    else if (inB && BDEFS[inB.type].repair) g.fix.push(u);
+    else if (inB) g.posted.push(u);
+    else if (tt === 'attack') g.attack.push(u);
+    else if (tt === 'hold') g.hold.push(u);
+    else if (tt === 'defend') g.defend.push(u);
+    else if (tt === 'repair' || tt === 'topup') g.fix.push(u);
+    else if (tt === 'loot') g.loot.push(u);
+    else if (tt === 'garrison') g.home.push(u);
+    else g.idle.push(u);
+  }
+  return g;
+}
+
+/** Take the camera to the next of your warbots in group k (each tap, the next one) and open its panel. */
+function showWarbots(k) {
+  const list = warbotGroups()[k];
+  if (!list || !list.length) return;
+  UI.wbShow = UI.wbShow || {};
+  const i = (UI.wbShow[k] || 0) % list.length;
+  UI.wbShow[k] = i + 1;
+  const u = list[i], inB = u.inside ? getE(u.inside) : null;
+  closeSheet();
+  if (inB) { centerOn(inB.x + 0.5, inB.y + 0.5); openBuildingSheet(inB); }
+  else { centerOn(u.x, u.y); openBotSheet(u); }
+  toast(`${WARBOT_PLACES.find((p) => p[0] === k)[1]}: warbot ${i + 1} of ${list.length}. Tap Show again in Your robots for the next.`, 'info');
 }
 
 function refreshSheet() {

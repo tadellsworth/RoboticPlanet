@@ -270,6 +270,13 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
   tunnels, which only a Missile can crater) near the flag,
   one tile per 12 warbot-seconds. The rival raids your busiest road clear of turrets and garrisons every few minutes
   (Easy rarely, Hard often; a Raider far more) once it has warbots to spare. Missiles crater the roads where they land.
+- **Warbot movement:** warbots don't queue in road traffic, give way at junctions or stop at red lights (they still wait
+  for trains), and nobody queues behind one, so a squad marching along a road or massing at a Gate it means to break
+  down all keeps going (and all shoot). Chasing a foe, a warbot goes straight only when the whole line to it is
+  walkable (`clearLine`); otherwise it follows a route (`viaT`: committed for 1.5 s, re-planned only when the foe moves
+  off its end), gives up on foes that are only reachable the long way round (more than 3 times the distance) or not at
+  all (left alone for 12 s, unless they come within shooting reach), and squads holding one spot edge apart
+  (`spreadOut`) instead of stacking on a single point.
 - **Traffic:** bots queue on roads, each waiting behind the bot ahead of it going the same way. On two-way roads each
   direction keeps to its own side, but passing oncoming traffic slows bots down. Switch the Paths banner to **Arrows** and
   drag along a road to point it the way you drag (tap a road to turn its arrow). One-way loops keep busy routes flowing;
@@ -375,13 +382,19 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
   Gate as if it were `BREACH_COST + armor` tiles long, so they go round a short way or stop and shoot through
   (`breachHit`); a bot whose route gets walled off re-plans (`blockedStep`). On Chokepoint maps the AI walls its end
   of the pass on Normal and Hard (`aiWalls`).
-- **Garrisons:** tap an Outpost or your Command Base to set its **garrison priority** (new warbots, and ones called back
-  from a flag, fill High garrisons first and Low ones last) or to **station warbots** there: choose how many and they
-  march over from your other garrisons and stay until you move them. **Keep** (`keepAt`): how many warbots a garrison
-  holds back (1 unless set): attacks and rallies leave them behind (`spareArmed`), and idle warbots fill garrisons up to
-  their Keep first (`goGarrison`). At 0 nothing is held back and idle warbots skip it (they wait at the Command Base)
-  unless nowhere else has room. Set per garrison (`b.keepW`, Auto/0/1/2/4) or for every Outpost in the Army banner
-  (`P.keepW`, 0/1/2; resets the per-Outpost settings). A Bunker always keeps its two; the AI keeps one.
+- **Garrisons and posts** (yours, `usesPosts`; the AI spreads its own to the front as before): every warbot belongs
+  somewhere. `u.post` is the Outpost or Bunker it was stationed at; with none it belongs to the Command Base. All your
+  warbots stay at the Command Base until you station some: tap an Outpost and **Station here** (how many; from the
+  Command Base first, `stationSources`), select warbots and order them in (`orderStation`), or set the Outpost's
+  **Keep** (`keepAt`; 0 unless set, per garrison `b.keepW` Auto/0/1/2/4 or for every Outpost in the Army banner
+  `P.keepW`): `stockPost` keeps that many posted there, sent from the Command Base and replaced when lost. Wherever a
+  warbot goes (a sortie, a rally flag, an attack, repairs, a loot run), it comes back to its post (`goGarrison`).
+  Attacks and rally flags draw on the Command Base (which keeps its own Keep, 1), never on warbots stationed at an
+  Outpost (`spareArmed`, `takeArmed`, `freeToGo`); **Send them back to the Command Base** (`unstation`) releases an
+  Outpost's warbots and sets its Keep to 0. A Bunker always keeps its two (stocked the same way). **Your robots** (the
+  population chip) lists where your warbots are (`warbotGroups`: at the Command Base, in Outposts, heading home,
+  attacking, on a rally flag, guarding, being repaired, carrying loot, or standing with nowhere to go), and **Show**
+  takes you to each in turn. Garrison priority (High/Low) still orders the AI's and any warbot with nowhere else to go.
 - **Rival personalities** (`PERSONALITIES` in `js/defs.js`, applied by `aiStyle`/`aiLevel` in `js/ai.js`): each scales
   the difficulty's grace period, attack threshold, army growth and raid rate. **Balanced** is the plain AI. **Turtle**:
   later and bigger attacks, rare raids, a square ring of Walls and Gates six tiles round its Command Base
