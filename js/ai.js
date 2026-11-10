@@ -237,6 +237,16 @@ function aiThink(p) {
     else if (b.paused && have < lo) setPaused(b, false);
   }
 
+  // Fuel first: a Grove Planter gives up its Agribot while a Bio Farm has none (and takes one back
+  // once every farm has its own).
+  const farmWaits = me.some((b) => b.built && b.type === 'farm' && !b.paused && !b.staff && !b.staffInc);
+  const farms = me.filter((b) => b.built && b.type === 'farm').length;
+  for (const b of me) {
+    if (b.type !== 'grower' || !b.built) continue;
+    if (farmWaits && !b.paused && (b.staff || b.staffInc)) setPaused(b, true);
+    else if (b.paused && !farmWaits && (kinds.agribot || 0) > farms) setPaused(b, false);
+  }
+
   // 2) Retire gatherers and pumps that have run dry so their worker can be reused.
   for (const b of me) {
     const def = BDEFS[b.type];
@@ -254,6 +264,10 @@ function aiThink(p) {
   const wantWorkers = staffed + 3 + Math.min(3, sites);
   // A Freight Truck takes the long runs off the Haulers, but sits idle much of the time: it counts as one and a half.
   const wantHaulers = clamp(Math.ceil(me.length * 0.35), 4, 16) - Math.floor(1.5 * (kinds.truck || 0));
+  // Tankers carry every drop of Crude and Fuel: one, and another for every five buildings that make or burn them.
+  const liquidBlds = me.filter((b) => b.built && (BDEFS[b.type].charger || BDEFS[b.type].pump || BDEFS[b.type].burner ||
+    ['refinery', 'farm', 'munitions', 'tarworks', 'disruptor'].includes(b.type))).length;
+  const wantTankers = Math.min(4, 1 + Math.floor(liquidBlds / 5));
   const army = kinds.warbot || 0;
   const wantArmy = S.mode === 'colony' ? 0 : aiWantArmy(lvl, p);
   const armyBehind = army < wantArmy - 2;
@@ -275,6 +289,8 @@ function aiThink(p) {
     if (unarmed >= Math.max(4, army / 3) && (b.mode === 'warbot' || b.mode === 'alt')) b.mode = workers < wantWorkers ? 'worker' : 'off';
     b.orders = b.orders || {};
     for (const crew in crewNeed) if ((kinds[crew] || 0) < crewNeed[crew] && !(b.orders[crew] > 0)) b.orders[crew] = 1;
+    // No Tanker left: Fuel only trickles by Hauler, so a new one comes before anything else.
+    if (!(kinds.tanker > 0) && !(b.orders.tanker > 0)) b.orders.tanker = 1;
     // Saving up for missiles (or feeding the Missile Factory): the Foundry rests so Alloy and Chips
     // pile up, unless workers are badly short.
     // (Not while the army is well behind: warbots come first.)
@@ -286,6 +302,7 @@ function aiThink(p) {
     if (((forMissiles || needArmory || bridging) && workers >= staffed + 3) || (bridging && P.bridgeNeed && army >= Math.min(wantArmy, 8))) { b.mode = 'off'; delete b.orders.hauler; delete b.orders.truck; }
     // Haulers when short; while the army is well behind, only when badly short.
     else if ((kinds.hauler || 0) < (armyBehind ? Math.min(wantHaulers, 6) : wantHaulers) && !(b.orders.hauler > 0)) b.orders.hauler = 1;
+    else if ((kinds.tanker || 0) < wantTankers && !(b.orders.tanker > 0)) b.orders.tanker = 1;
     // A forward Depot with supply orders gets a Freight Truck to keep it stocked.
     else if (me.some((d) => d.keep && d.built) && (kinds.truck || 0) < 1 + Math.floor(me.length / 35) && !(b.orders.truck > 0)) b.orders.truck = 1;
     break;

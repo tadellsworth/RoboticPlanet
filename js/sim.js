@@ -29,6 +29,7 @@ function simStep(dt) {
     if (u.type === 'warbot') updateWarbot(u, dt); else if (BOTS[u.type].wild) updateCritter(u, dt); else if (BOTS[u.type].crawler) updateCrawler(u, dt); else updateWorker(u, dt);
   }
   if (S.missiles.length) updateMissiles(dt);
+  if (S.blowing > 0) updateBlasts();
   if (S.tick % 30 === 15) cleanRallies();
   if (S.tick % 30 === 20) updateLoot();
   if (S.events) updateEvents();
@@ -227,13 +228,14 @@ function backhaul(u, R) {
   if (!hub || hub.dead || hub === R || hub.owner !== u.owner || !farApart(R, hub) || !truckLinked(R, hub)) return false;
   let best = null, bs = TRUCK_MIN_LOAD - 1;
   for (const g of GOODS) {
+    if (isLiquid(g) !== !!BOTS[u.type].tanker) continue; // a Tanker takes home Crude or Fuel, a truck anything else
     const spare = keepSupply(R, g) - EXPORT_RESERVE;
     if (spare <= bs || !storeTakes(hub, g)) continue;
     if (S.buildings.some((c) => !c.dead && c.owner === u.owner && c !== R && !BDEFS[c.type].store && usesGood(c, g) && dist2(c.x, c.y, R.x, R.y) < dist2(c.x, c.y, hub.x, hub.y))) continue;
     bs = spare; best = g;
   }
   if (!best) return false;
-  assignHaul(u, R, hub, best, Math.max(1, Math.min(bs, botCarry(u))));
+  assignHaul(u, R, hub, best, Math.max(1, Math.min(bs, carryOf(u, best))));
   return !!u.task;
 }
 
@@ -261,19 +263,20 @@ function trunkRuns(p, blds, take, canCarry, vans, trains) {
       const spare = keepSupply(R, g) - EXPORT_RESERVE;
       if (spare < TRUCK_MIN_LOAD || !storeTakes(hub, g)) continue;
       if (blds.some((c) => c !== R && !BDEFS[c.type].store && usesGood(c, g) && dist2(c.x, c.y, R.x, R.y) < dist2(c.x, c.y, hub.x, hub.y))) continue;
-      if (home && spare >= RAIL_MIN_LOAD && storeTakes(home, g)) {
+      const liq = isLiquid(g); // Crude and Fuel go home by Tanker only
+      if (home && !liq && spare >= RAIL_MIN_LOAD && storeTakes(home, g)) {
         const tu = take(R.x, R.y, 'rail', R);
         if (tu) { assignHaul(tu, R, home, g, canCarry(tu, spare)); continue; }
       }
       if (!byRoad) continue;
-      let u = spare >= TRAIN_MIN_LOAD ? take(R.x, R.y, 'train', R) : null;
+      let u = !liq && spare >= TRAIN_MIN_LOAD ? take(R.x, R.y, 'train', R) : null;
       // A Road Train that can get here takes the trunk runs: Freight Trucks leave the load to build up
       // to a train load (they still help once it has, if the train is busy).
-      if (!u && spare < TRAIN_MIN_LOAD && roadTrainFor(p, R)) continue;
-      if (!u) u = take(R.x, R.y, 'truck', R);
-      if (!u && !vans) u = take(R.x, R.y, 'train', R); // no trucks: a Road Train takes the smaller loads too
+      if (!u && !liq && spare < TRAIN_MIN_LOAD && roadTrainFor(p, R)) continue;
+      if (!u) u = take(R.x, R.y, 'truck', R, g);
+      if (!u && !vans && !liq) u = take(R.x, R.y, 'train', R); // no trucks: a Road Train takes the smaller loads too
       if (!u) continue;
-      assignHaul(u, R, hub, g, canCarry(u, spare));
+      assignHaul(u, R, hub, g, canCarry(u, spare, g));
     }
   }
 }
@@ -923,12 +926,15 @@ function dispatch(p) {
 
   // Keep a worker or two free to build. If raids or new buildings took them all, pull one off the
   // least useful job — this must run even when nobody is idle.
-  let free = 0, workers = 0, haulers = 0, trucks = 0, vans = 0, trains = 0;
+  let free = 0, workers = 0, haulers = 0, trucks = 0, vans = 0, trains = 0, tankers = 0;
+  // The road networks (truck networks: no Ropeways) a Tanker of ours is on: liquids there wait for a Tanker.
+  const tankNets = new Set();
   for (const u of S.bots) {
     if (u.dead || u.owner !== p) continue;
     if (u.type === 'hauler') haulers++;
     if (BOTS[u.type].rail) trains++;
-    if (BOTS[u.type].truck) { trucks++; if (!BOTS[u.type].train) vans++; }
+    if (BOTS[u.type].tanker) { tankers++; for (const n of botNets(u)) tankNets.add(n); }
+    else if (BOTS[u.type].truck) { trucks++; if (!BOTS[u.type].train) vans++; }
     if (u.type !== 'worker') continue;
     workers++;
     if (!(u.task && u.task.type === 'staff')) free++;
@@ -966,12 +972,17 @@ function dispatch(p) {
 
   // role: 'build', 'haul', 'staff' (an ordinary building) or a crew name (a specialist's building).
   // For 'haul', `src` is where the goods are: a hauler must be able to reach it by road.
-  const take = (x, y, role, src) => {
+  // With good `g`: Crude and Fuel (liquids) go by Tanker, whatever the role asked for (never by train),
+  // or by Hauler, one at a time, when no Tanker can get to `src`. Tankers carry nothing else.
+  const take = (x, y, role, src, g) => {
     let best = -1, bd = Infinity;
+    const liq = isLiquid(g), tank = liq && src && tankerReach(src);
     for (let k = 0; k < idle.length; k++) {
       const u = idle[k], bt = BOTS[u.type];
       if (role === 'haul' || role === 'truck' || role === 'train' || role === 'rail') {
-        if (!(bt.haul || (P.noHaulers && bt.build)) || (bt.rail ? 'rail' : bt.train ? 'train' : bt.truck ? 'truck' : 'haul') !== role) continue;
+        if (bt.tanker) { if (!tank || role === 'rail') continue; }
+        else if (liq && (tank || role !== 'haul')) continue;
+        else if (!(bt.haul || (P.noHaulers && bt.build)) || (bt.rail ? 'rail' : bt.train ? 'train' : bt.truck ? 'truck' : 'haul') !== role) continue;
         if (bt.rail && src && !trainAt(u, src)) continue;
         if (bt.roadOnly && src && !botLinked(u, src)) continue;
       } else if (role === 'build' ? !bt.build : role === 'staff' ? !bt.staff : bt.crew !== role) continue;
@@ -983,7 +994,12 @@ function dispatch(p) {
     if (best < 0) return null;
     return idle.splice(best, 1)[0];
   };
-  const canCarry = (u, n) => (u ? Math.max(1, Math.min(n, botCarry(u))) : 1);
+  const canCarry = (u, n, g) => (u ? Math.max(1, Math.min(n, carryOf(u, g))) : 1);
+  function tankerReach(b) {
+    if (!tankNets.size) return false;
+    for (const n of buildingNets(b, true)) if (tankNets.has(n)) return true;
+    return false;
+  }
 
   // 0) Specialist buildings get a bot of their crew.
   for (const b of blds) {
@@ -1058,7 +1074,7 @@ function dispatch(p) {
       // A Rail Station's supply orders come by Freight Train from another station on its track first,
       // a worthwhile load at a time (RAIL_MIN_LOAD or more). A station nearer the Command Base lends
       // the goods it keeps for its own supply orders: that's how the home station feeds the line.
-      if (trains && BDEFS[r.b.type].station && r.n >= RAIL_MIN_LOAD) {
+      if (trains && BDEFS[r.b.type].station && r.n >= RAIL_MIN_LOAD && !isLiquid(r.g)) {
         const L = getE(P.lander), dh = (s) => (L ? dist2(s.x, s.y, L.x, L.y) : 0);
         const railHas = (s) => (dh(s) < dh(r.b) ? supplyOf(s, r.g) : keepSupply(s, r.g));
         let rs = null, rd = Infinity;
@@ -1092,21 +1108,22 @@ function dispatch(p) {
       // for a load worth its trip (TRAIN_MIN_LOAD) instead of going by truck a few at a time, until the
       // Depot is down to a third. Smaller orders go by truck as before.
       const trainWait = r.keep && byRoad && s2s && long && keepAmt >= 2 * TRAIN_MIN_LOAD && bulk < TRAIN_MIN_LOAD && have >= TRAIN_MIN_LOAD &&
-        held * 3 >= keepAmt && roadTrainFor(p, src);
+        held * 3 >= keepAmt && !isLiquid(r.g) && roadTrainFor(p, src);
       // A supply order sends a truck for a worthwhile load (TRUCK_KEEP_LOAD, or half the order if that's
       // less), or when the store has run dry.
       const truckLoad = !trainWait && (!r.keep || starving || bulk >= Math.min(TRUCK_KEEP_LOAD, Math.ceil(keepAmt / 2)));
-      if (byRoad && s2s && long && bulk >= TRAIN_MIN_LOAD) u = take(src.x, src.y, 'train', src);
-      if (!u && byRoad && (s2s || long) && truckLoad) u = take(src.x, src.y, 'truck', src);
-      if (!u && byRoad && s2s && long && !vans && bulk >= TRUCK_MIN_LOAD) u = take(src.x, src.y, 'train', src); // no trucks: a smaller load
+      if (byRoad && s2s && long && bulk >= TRAIN_MIN_LOAD) u = take(src.x, src.y, 'train', src, r.g);
+      if (!u && byRoad && (s2s || long) && truckLoad) u = take(src.x, src.y, 'truck', src, r.g);
+      if (!u && byRoad && s2s && long && !vans && bulk >= TRUCK_MIN_LOAD) u = take(src.x, src.y, 'train', src, r.g); // no trucks: a smaller load
       // A long supply run waits for a Freight Truck when one can get there by road (unless the store
       // has run dry); otherwise Haulers take it (a Road Train only takes big loads, and no truck rides
       // a Ropeway).
       if (!u && !trainWait && !(r.keep && long && vans > 0 && byRoad && !starving)) {
-        if (!long || !vans || starving || !byRoad) u = take(src.x, src.y, 'haul', src);
+        if (!long || !vans || starving || !byRoad || isLiquid(r.g)) u = take(src.x, src.y, 'haul', src, r.g);
       }
       if (!u) { r.n = 0; continue; }
-      const n = canCarry(u, BOTS[u.type].truck ? bulk : avail);
+      // (A Tanker on a short run brings what's asked for; trucks bring a full load on the long runs.)
+      const n = canCarry(u, BOTS[u.type].truck && (long || s2s || !BOTS[u.type].tanker) ? bulk : avail, r.g);
       assignHaul(u, src, r.b, r.g, n);
       r.n -= n;
       any = true;
@@ -1126,12 +1143,17 @@ function dispatch(p) {
         // Storage far away: a Freight Truck collects a load; Haulers only once the output is nearly
         // full (so production never stalls), or when there are no trucks.
         let u = null;
-        if (vans && farApart(b, store) && truckLinked(b, store)) {
+        if (isLiquid(g)) {
+          // Crude and Fuel: a Tanker comes for a load (or a Hauler, a can at a time, if no Tanker can get here).
+          if (b.piped && g === 'crude') continue; // a pipeline takes it
+          const full = avail >= def.out[g] - 1 || !b.staff;
+          if (avail >= TRUCK_MIN_LOAD || full || !tankerReach(b)) u = take(b.x, b.y, 'haul', b, g);
+        } else if (vans && farApart(b, store) && truckLinked(b, store)) {
           const full = avail >= def.out[g] - 1 || !b.staff;
           if (avail >= TRUCK_MIN_LOAD || full) u = take(b.x, b.y, 'truck', b);
           if (!u && full) u = take(b.x, b.y, 'haul', b);
         } else u = take(b.x, b.y, 'haul', b);
-        if (u) assignHaul(u, b, store, g, canCarry(u, avail));
+        if (u) assignHaul(u, b, store, g, canCarry(u, avail, g));
       }
     }
   }
@@ -1143,8 +1165,8 @@ function dispatch(p) {
       const avail = supplyOf(b, g);
       if (avail < 1) continue;
       const store = storeFor(p, g, b.x + 0.5, b.y + 0.5, b, P.noHaulers ? null : b);
-      const u = store && take(b.x, b.y, 'haul', b);
-      if (u) assignHaul(u, b, store, g, canCarry(u, avail));
+      const u = store && take(b.x, b.y, 'haul', b, g);
+      if (u) assignHaul(u, b, store, g, canCarry(u, avail, g));
     }
   }
   // 4d) Crates lying on our land (spilled from a wrecked or demolished building, or dropped by a
@@ -1161,11 +1183,14 @@ function dispatch(p) {
         for (const k in l.goods) { const a = l.goods[k] - ((l.held && l.held[k]) || 0); if (a > left) { left = a; g = k; } }
         if (!g || lootLeft(l) - (l.claimed || 0) <= 0) break;
         // A Freight Truck for a big pile, else a Hauler (or, with no Haulers, a worker), that can get there.
+        // Barrels of Crude or Fuel wait for a Tanker, if one can get there.
         let best = -1, bd = Infinity;
-        for (const want of left >= TRUCK_MIN_LOAD * 2 ? ['truck', 'haul'] : ['haul']) {
+        const liq = isLiquid(g), wants = liq ? [netsT.some((n) => tankNets.has(n)) ? 'tanker' : 'haul'] : left >= TRUCK_MIN_LOAD * 2 ? ['truck', 'haul'] : ['haul'];
+        for (const want of wants) {
           for (let k = 0; k < idle.length; k++) {
             const u = idle[k], bt = BOTS[u.type];
-            if (bt.rail || bt.train || (want === 'truck') !== !!bt.truck || !(bt.haul || (P.noHaulers && bt.build))) continue;
+            if (bt.rail || bt.train || !(bt.haul || (P.noHaulers && bt.build))) continue;
+            if (want === 'tanker' ? !bt.tanker : bt.tanker || (want === 'truck') !== !!bt.truck) continue;
             if (bt.roadOnly && !botNets(u).some((n) => (bt.truck ? netsT : nets).indexOf(n) >= 0)) continue;
             const d = dist2(u.x, u.y, l.x + 0.5, l.y + 0.5);
             if ((u.bat ?? 100) < BATTERY.low + 0.5 * Math.sqrt(d) && P.canCharge) continue;
@@ -1175,12 +1200,12 @@ function dispatch(p) {
         }
         if (best < 0) break;
         const u = idle.splice(best, 1)[0];
-        if (!assignCrate(u, l, g, Math.max(1, Math.min(left, botCarry(u))))) break;
+        if (!assignCrate(u, l, g, Math.max(1, Math.min(left, carryOf(u, g))))) break;
       }
     }
   }
   // 4c) Trunk runs: a store far from the Command Base sends home, in bulk, what nothing near it uses.
-  if ((trucks || trains) && idle.some((u) => BOTS[u.type].truck || BOTS[u.type].rail)) trunkRuns(p, blds, take, canCarry, vans, trains);
+  if ((trucks || trains || tankers) && idle.some((u) => BOTS[u.type].truck || BOTS[u.type].rail)) trunkRuns(p, blds, take, canCarry, vans, trains);
   // 5) Empty out storage that no longer takes a good (set to "empty out" or the good switched off).
   for (const b of blds) {
     if (!storeAccepts(b) || (b.smode !== 'empty' && !b.reject)) continue;
@@ -1188,8 +1213,8 @@ function dispatch(p) {
       if (!idle.length) return;
       if (storeTakes(b, g) || supplyOf(b, g) <= 0) continue;
       const store = storeFor(p, g, b.x + 0.5, b.y + 0.5, b, P.noHaulers ? null : b);
-      const u = store && ((truckLinked(b, store) && take(b.x, b.y, 'truck', b)) || take(b.x, b.y, 'haul', b));
-      if (u) assignHaul(u, b, store, g, canCarry(u, supplyOf(b, g)));
+      const u = store && ((truckLinked(b, store) && take(b.x, b.y, 'truck', b, g)) || take(b.x, b.y, 'haul', b, g));
+      if (u) assignHaul(u, b, store, g, canCarry(u, supplyOf(b, g), g));
     }
   }
   // 6) Free workers pave planned roads.
@@ -1471,7 +1496,7 @@ function staffPriority(b) {
 function assignHaul(u, src, dst, g, n) {
   if (!u) return;
   cancelTask(u);
-  n = n || 1;
+  n = Math.min(n || 1, carryOf(u, g));
   u.task = { type: 'haul', src: src.id, dst: dst.id, good: g, phase: 'toSrc', n };
   bump(src.res, g, n);
   bump(dst.inc, g, n);
@@ -1603,7 +1628,7 @@ function goHome(u) {
 function parkingFor(u) {
   if (BOTS[u.type].rail) return nearestStation(u);
   if (!BOTS[u.type].truck) return nearestReachableStore(u);
-  const parked = trucksParked(u.owner, u.id);
+  const parked = trucksParked(u.owner, u.id, !!BOTS[u.type].tanker);
   let near = null, nd = Infinity, empty = null, ed = Infinity;
   for (const b of S.buildings) {
     if (b.dead || b.owner !== u.owner || !storeAccepts(b) || !botLinked(u, b) || evacuated(b)) continue;
@@ -1614,11 +1639,11 @@ function parkingFor(u) {
   return near && parked.get(near.id) && empty ? empty : near;
 }
 
-/** Idle Freight Trucks at each store (parked inside or on their way to park), other than `except`. */
-function trucksParked(owner, except) {
+/** Idle Freight Trucks (or, with `tank`, Tankers) at each store (parked inside or on their way to park), other than `except`. */
+function trucksParked(owner, except, tank) {
   const m = new Map();
   for (const v of S.bots) {
-    if (v.dead || v.owner !== owner || v.id === except || !BOTS[v.type].truck) continue;
+    if (v.dead || v.owner !== owner || v.id === except || !BOTS[v.type].truck || !!BOTS[v.type].tanker !== !!tank) continue;
     const at = v.task ? (v.task.type === 'home' ? v.task.bld : 0) : v.inside;
     if (at) m.set(at, (m.get(at) || 0) + 1);
   }
@@ -1629,7 +1654,7 @@ function trucksParked(owner, except) {
 function spreadTrucks(u) {
   const here = getE(u.inside);
   if (!here || !BDEFS[here.type].store || (u.bat ?? 100) < 50) return;
-  const parked = trucksParked(u.owner, u.id);
+  const parked = trucksParked(u.owner, u.id, !!BOTS[u.type].tanker);
   if (!parked.get(here.id)) return;
   const to = parkingFor(u);
   if (to && to !== here && !parked.get(to.id) && goTo(u, to.x, to.y)) u.task = { type: 'home', bld: to.id };
@@ -2619,11 +2644,85 @@ function captureBuilding(b, by) {
     postMsg(old, `The enemy captured your ${name}!`, b.x, b.y, 'bad');
     computeTerritory();
   } else {
+    if (def.explodes) burnLiquids(b); // a Refinery's Crude and Fuel go up with it
     const n = dropLoot(b);
     postMsg(by, `Your warbots wrecked the enemy ${name}.` + (n ? ` ${n} good${n === 1 ? '' : 's'} spilled out in crates: your warbots carry them home, one each.` : ''), b.x, b.y, 'good');
     postMsg(old, `Enemy warbots wrecked your ${name}!` + (n ? ' What was inside spilled out in crates: your haulers collect them once the enemy has gone, unless the raiders carry them off first.' : ''), b.x, b.y, 'bad');
     destroyBuilding(b, true);
   }
+}
+
+/* ------------------------------------------------------------------ fuel blasts */
+
+/**
+ * A fuel blast at (x, y) (see BLAST): `kind` is 'tanker' or 'refinery', `full` how full it was (0–1).
+ * It hurts every robot out in the open and every building in reach, anyone's, less towards the edge;
+ * loaded Tankers and Refineries holding Crude or Fuel aren't just hurt, they go up a moment later.
+ * Forts (Outposts, Command Bases) are never knocked out by a blast: they keep at least 1 armor.
+ */
+function fuelBlast(x, y, kind, full, owner) {
+  const B = BLAST[kind], r = B.r0 + B.r1 * clamp(full || 0, 0, 1), r2 = r * r, rb = r + 0.5;
+  blastFx(x, y, r);
+  blastFx(x + 0.2, y - 0.25, r * 0.6, { small: true, delay: 0.18 });
+  addFx('smoke', x, y - 0.2, { r: r * 0.9, life: 5, dark: true });
+  sfx('boom');
+  const later = (k) => S.time + BLAST.chain[0] + (BLAST.chain[1] - BLAST.chain[0]) * hash2(Math.floor(x * 13) + k, Math.floor(y * 7), S.tick);
+  for (const u of S.bots) {
+    if (u.dead || u.inside || u.blowAt > 0) continue;
+    const d2 = dist2(u.x, u.y, x, y);
+    if (d2 > r2) continue;
+    if (BOTS[u.type].tanker && u.carry && u.carryN > 0) { u.blowAt = later(u.id); S.blowing = (S.blowing || 0) + 1; continue; }
+    damageBot(u, B.bot * (1 - (0.5 * Math.sqrt(d2)) / r));
+  }
+  for (const b of S.buildings.slice()) {
+    if (b.dead || b.blowAt > 0) continue;
+    const d2 = dist2(b.x + 0.5, b.y + 0.5, x, y);
+    if (d2 > rb * rb) continue;
+    if (BDEFS[b.type].explodes && b.built && liquidIn(b) > 0) { b.blowAt = later(b.id); S.blowing = (S.blowing || 0) + 1; continue; }
+    b.armor -= B.bld * (1 - (0.5 * Math.sqrt(d2)) / rb);
+    b.lastHit = S.time;
+    if (b.armor > 0) continue;
+    if (b.built && BDEFS[b.type].mil) { b.armor = 1; continue; }
+    postMsg(b.owner, `An explosion wrecked your ${BDEFS[b.type].name}!`, b.x, b.y, 'bad');
+    destroyBuilding(b, true);
+  }
+  if (typeof blastPipes === 'function') blastPipes(x, y, r);
+}
+
+/** Crude and Fuel held in building b (what feeds a Refinery's blast). */
+function liquidIn(b) { return (b.stock && ((b.stock.crude || 0) + (b.stock.fuel || 0))) || 0; }
+
+/**
+ * A Refinery about to be wrecked: its Crude and Fuel burn (they don't spill as crates), and how full
+ * it was sets the size of its blast. Kept on b.boomFull for destroyBuilding.
+ */
+function burnLiquids(b) {
+  if (b.boomFull !== undefined) return b.boomFull;
+  const def = BDEFS[b.type], cap = INPUT_CAP + ((def.out && def.out.fuel) || 0) + ((def.out && def.out.crude) || 0);
+  b.boomFull = Math.min(1, liquidIn(b) / Math.max(1, cap));
+  delete b.stock.crude; delete b.stock.fuel;
+  return b.boomFull;
+}
+
+/** Chain reactions: Tankers and Refineries caught in a blast go up when their moment comes. */
+function updateBlasts() {
+  let left = 0;
+  for (const u of S.bots) {
+    if (!(u.blowAt > 0)) continue;
+    if (u.dead) { u.blowAt = 0; continue; }
+    if (S.time < u.blowAt) { left++; continue; }
+    u.blowAt = 0;
+    if (u.carry && u.carryN > 0) killBot(u);
+  }
+  for (const b of S.buildings) {
+    if (!(b.blowAt > 0)) continue;
+    if (b.dead) { b.blowAt = 0; continue; }
+    if (S.time < b.blowAt) { left++; continue; }
+    b.blowAt = 0;
+    postMsg(b.owner, `Your ${BDEFS[b.type].name} caught fire in the blast and exploded!`, b.x, b.y, 'bad');
+    destroyBuilding(b, true);
+  }
+  S.blowing = left;
 }
 
 /*
@@ -2715,9 +2814,9 @@ function doCrate(u, t, dt) {
     if (!r) return;
     unclaimCrate(l, t.good, t.n);
     let g = l.goods[t.good] > 0 ? t.good : null;
-    if (!g) for (const k in l.goods) if (l.goods[k] > 0 && (!g || l.goods[k] > l.goods[g])) g = k;
+    if (!g) for (const k in l.goods) if (l.goods[k] > 0 && isLiquid(k) === isLiquid(t.good) && (!g || l.goods[k] > l.goods[g])) g = k;
     if (!g) { u.task = null; return; }
-    const got = Math.min(t.n, l.goods[g]);
+    const got = Math.min(t.n, l.goods[g], carryOf(u, g));
     l.goods[g] -= got;
     u.carry = g; u.carryN = got; t.good = g; t.n = got;
     const dst = crateStore(u, g, l);
@@ -4481,6 +4580,8 @@ function tech(p, k) { const P = S.players[p]; return !!(P && P.tech && P.tech[k]
 function speedMul(u) { return evSpeed() * (tech(u.owner, 'motors') ? 1.15 : 1); }
 function drainMul(u) { return evDrain() * (tech(u.owner, 'cells') ? 0.7 : 1); }
 function botCarry(u) { const bt = BOTS[u.type], c = bt.carry || 1; return tech(u.owner, 'cargo') && bt.haul ? c + (bt.rail ? 8 : bt.train ? 6 : bt.truck ? 2 : 1) : c; }
+/** How many of good g bot u can carry at once: anything but a Tanker carries Crude and Fuel one at a time. */
+function carryOf(u, g) { return isLiquid(g) && !BOTS[u.type].tanker ? 1 : botCarry(u); }
 /** A Pulse Turret's reach and shots per Crystal. */
 function turretRange(b) { return BDEFS[b.type].range + (b.type === 'turret' && tech(b.owner, 'sentry') ? 1.5 : 0); }
 function shotsPer(b) { return tech(b.owner, 'sentry') ? 6 : SHOTS_PER_AMMO; }

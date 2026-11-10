@@ -123,6 +123,8 @@ const BOTS = {
     desc: 'A colossal tracked base on the move. Drive it anywhere it can roll (no road needed) and it deploys where it stops: a Depot, a Charging Station and an Outpost in one, claiming the land around it. Pack it up to move on: it takes everything stored in it along.' },
   truck:   { name: 'Freight Truck', plural: 'Freight Trucks', speed: WORKER_SPEED * 1.35, hp: 8, haul: true, truck: true, carry: 8, roadOnly: true, parts: 2, accel: 1.5, brake: 3.5,
     desc: 'A heavy road truck that carries eight goods at once on the long runs: between your Command Base and Depots, and to anything far away. Slower than a Hauler on concrete, fastest of all on asphalt.' },
+  tanker:  { name: 'Tanker', plural: 'Tankers', speed: WORKER_SPEED * 1.35, hp: 8, haul: true, truck: true, tanker: true, carry: 10, roadOnly: true, parts: 2, accel: 1.4, brake: 3.2,
+    desc: 'A tank truck, the only vehicle that carries Crude and Fuel: ten at a time, wherever they need to go (Haulers carry them only when no Tanker can get there, one at a time). Fastest on asphalt. Destroyed with a load on board, it explodes, hurting everything round it, and can set off other Tankers nearby.' },
   warbot:  { name: 'Warbot', plural: 'Warbots', speed: WARBOT_SPEED, hp: 12, war: true,
     desc: 'Fights enemy bots and captures enemy buildings. Shoots Ammo; with none it can only scuffle.' },
   // Wildlife (Colony, see WILD): creatures from nests. Not built, never ordered.
@@ -131,7 +133,7 @@ const BOTS = {
   brute:    { name: 'Brute', plural: 'Brutes', speed: WORKER_SPEED * 0.8, hp: 24, wild: true, bite: 3, smash: true,
     desc: 'A big, slow, armoured creature. Brutes tear up roads and batter buildings, and bite hard.' },
 };
-const BOT_ORDER = ['worker', 'hauler', 'truck', 'roadtrain', 'freight', 'crawler', 'agribot', 'paver', 'warbot'];
+const BOT_ORDER = ['worker', 'hauler', 'truck', 'tanker', 'roadtrain', 'freight', 'crawler', 'agribot', 'paver', 'warbot'];
 /*
  * Who carries what (see dispatch):
  * - Haulers (2 goods) do the short runs: between buildings less than TRUCK_MIN_DIST tiles apart.
@@ -152,6 +154,27 @@ const BOT_ORDER = ['worker', 'hauler', 'truck', 'roadtrain', 'freight', 'crawler
  * asphalt is full speed. A Depot's supply orders (b.keep) ask for goods to be kept there, up to
  * KEEP_MAX of each.
  */
+/*
+ * Liquids: Crude and Fuel only travel by Tanker (and Crude by pipeline, see PIPE). Haulers, Freight
+ * Trucks, Road Trains and Freight Trains can't carry them. When no Tanker can get to the goods (none
+ * left, or none on that road network), Haulers carry them one at a time, so nothing ever locks up.
+ * Tankers do every liquid run, near or far; a production building's Crude or Fuel waits for a load of
+ * TRUCK_MIN_LOAD (or until its output is nearly full).
+ */
+const LIQUID = { crude: true, fuel: true };
+function isLiquid(g) { return !!LIQUID[g]; }
+/*
+ * Fuel is dangerous. A Tanker destroyed with a load on board, or a Refinery destroyed (by fire, a
+ * missile or a nuke, not demolished), explodes: radius r0 + r1 × how full it was, hurting every robot
+ * (bot) and building (bld) in it, whoever's they are, at full strength in the middle and half at the
+ * edge. Loaded Tankers and Refineries caught in a blast go up too, chain[0] to chain[1] seconds later.
+ * A wrecked Refinery's Crude and Fuel burn in the blast instead of spilling.
+ */
+const BLAST = {
+  tanker: { r0: 0.7, r1: 0.6, bot: 4.5, bld: 3 },
+  refinery: { r0: 1.5, r1: 0.9, bot: 6, bld: 5 },
+  chain: [0.25, 0.7],
+};
 const TRUCK_MIN_DIST = 12;
 const TRUCK_MIN_LOAD = 3;
 const TRUCK_KEEP_LOAD = 4;     // a truck fills a supply order with at least this many (half a load; or half the order), unless the store has run dry
@@ -359,8 +382,8 @@ const GOOD = {
   crystal: { name: 'Crystal', color: '#b98cff', desc: 'Tapped from crystal clusters. Makes Chips and turret ammo.' },
   alloy:   { name: 'Alloy',   color: '#8ec3e6', desc: 'Smelted metal for advanced buildings, chips and bots.' },
   chip:    { name: 'Chip',    color: '#c8f05a', desc: 'Bot brains. Needed for every new bot.' },
-  crude:   { name: 'Crude',   color: '#b08a6e', desc: 'Crude oil from an Oil Pump. A Refinery turns it into Fuel.' },
-  fuel:    { name: 'Fuel',    color: '#ff5c8a', desc: 'Energy for Charging Stations. Grown at a Bio Farm or refined from Crude.' },
+  crude:   { name: 'Crude',   color: '#b08a6e', desc: 'Crude oil from an Oil Pump. A Refinery turns it into Fuel. A liquid: only Tankers and pipelines move it.' },
+  fuel:    { name: 'Fuel',    color: '#ff5c8a', desc: 'Energy for Charging Stations, Generators and every truck. Grown at a Bio Farm or refined from Crude. A liquid: only Tankers move it.' },
   cement:  { name: 'Cement',  color: '#a9b4c2', desc: 'The main building material, made from Stone at a Cement Works (2 per Stone). Builds nearly everything and paves roads: 1 Cement for 5 tiles.' },
   asphalt: { name: 'Asphalt', color: '#6b7280', desc: 'Made from Crude and Cement. A Roadworks upgrades roads with it to asphalt, the fastest surface.' },
   ammo:    { name: 'Ammo',    color: '#e8c39e', desc: 'Made at an Ammo Plant. Warbots reload it in your Command Base and Outposts.' },
@@ -551,12 +574,12 @@ const BDEFS = {
   },
   pump: {
     name: 'Oil Pump', desc: 'Built on top of an oil seep. Its worker pumps Crude until the seep runs dry, or until you have 30 (its stock limit).',
-    cost: { cement: 2, alloy: 2 }, staff: true, pump: true, inp: {}, make: { crude: 1 }, out: { crude: 4 },
+    cost: { cement: 2, alloy: 2 }, staff: true, pump: true, inp: {}, make: { crude: 1 }, out: { crude: 6 },
     work: 6, armor: 8, buildTime: 10, limit: 30,
   },
   refinery: {
-    name: 'Refinery', desc: 'Refines Crude into Fuel, one for one. Stops at 30 Fuel unless you change its stock limit.',
-    cost: { cement: 4, alloy: 3 }, staff: true, inp: { crude: 1 }, make: { fuel: 1 }, out: { fuel: 4 },
+    name: 'Refinery', desc: 'Refines Crude into Fuel, one for one. Stops at 30 Fuel unless you change its stock limit. Keep it out of harm\'s way: destroyed, it explodes, the fuller the bigger, hurting everything round it.',
+    cost: { cement: 4, alloy: 3 }, staff: true, inp: { crude: 1 }, make: { fuel: 1 }, out: { fuel: 8 }, explodes: true,
     work: 6, armor: 10, buildTime: 12, limit: 30,
   },
   ramp: {
@@ -725,6 +748,6 @@ const TECH_ORDER = ['cargo', 'cells', 'paving', 'sentry', 'motors', 'tools', 'na
 
 /** Starting goods in each Command Base. */
 const START_STOCK = { fiber: 16, stone: 8, alloy: 8, chip: 4, crystal: 4, fuel: 10, cement: 24 };
-const START_BOTS = { worker: 10, hauler: 5, agribot: 1 };
+const START_BOTS = { worker: 10, hauler: 5, tanker: 1, agribot: 1 };
 const START_WARBOTS = 4;
 const MIN_FREE_WORKERS = 2;   // workers always kept free for building

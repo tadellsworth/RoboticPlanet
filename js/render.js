@@ -3016,12 +3016,13 @@ function drawBot(ctx, u, sx, sy, s) {
   const color = PLAYER_COLORS[u.owner];
   const own = driveFrame(u) || artFor(u.type, u.owner);
   // Specialists use their own art when it exists, otherwise the worker's with a badge.
-  const truck = u.type === 'truck';
+  const tanker = u.type === 'tanker', truck = u.type === 'truck' || tanker;
   const art = own || (u.type !== 'warbot' && !truck ? artFor('worker', u.owner) : null);
   const acting = u.task && (u.task.type === 'build' || u.task.type === 'pave' || (u.task.type === 'staff' && u.task.phase === 'work' && u.task.node >= 0 && S.road[u.task.node]));
   const bob = u.busy && !acting ? Math.sin(R.time * 18 + u.id) * s * 0.03 : 0;
   if (truck) {
-    drawTruck(ctx, u, sx, sy, s, color, own);
+    if (tanker && !own) drawTanker(ctx, u, sx, sy, s, color);
+    else drawTruck(ctx, u, sx, sy, s, color, own);
   } else if (art) {
     const size = s * (u.type === 'warbot' ? 0.6 : 0.5);
     if (art.shadow) drawBotShadow(ctx, u, sx, sy, size * 0.42, size * 0.3);
@@ -3254,6 +3255,36 @@ function drawTruck(ctx, u, sx, sy, s, color, art) {
   }
   ctx.restore();
   drawTruckCargo(ctx, u, sx, sy, -L / 2 + s * 0.025, L * 0.62, Wd - s * 0.06, s);
+}
+
+/**
+ * A Tanker, until it has art of its own: the Freight Truck with a steel tank on its bed (a cap in the
+ * colour of what it carries when it has a load on board).
+ */
+function drawTanker(ctx, u, sx, sy, s, color) {
+  const proxy = { ...u, type: 'truck', carry: null, carryN: 0 };
+  const art = driveFrame(proxy) || artFor('truck', u.owner);
+  drawTruck(ctx, proxy, sx, sy, s, color, art);
+  const size = s * 0.9;
+  const x0 = art ? -size * 0.392 : -s * 0.285, len = art ? size * 0.54 : s * 0.385, wid = art ? size * 0.24 : s * 0.24;
+  const r = wid * 0.5;
+  ctx.save();
+  ctx.translate(sx, sy);
+  ctx.rotate(u.face || 0);
+  const gr = ctx.createLinearGradient(0, -r, 0, r);
+  gr.addColorStop(0, '#f1f3f6'); gr.addColorStop(0.45, '#b9c0c9'); gr.addColorStop(1, '#5d646e');
+  ctx.fillStyle = gr;
+  roundRect(ctx, x0, -r, len, wid, r * 0.9); ctx.fill();
+  ctx.strokeStyle = 'rgba(30,34,40,0.55)'; ctx.lineWidth = Math.max(0.6, s * 0.008);
+  for (const f of [0.33, 0.66]) { ctx.beginPath(); ctx.moveTo(x0 + len * f, -r * 0.92); ctx.lineTo(x0 + len * f, r * 0.92); ctx.stroke(); }
+  // A stripe in the team colour, and the filler cap: the load's colour when it's carrying one.
+  ctx.fillStyle = color;
+  ctx.fillRect(x0 + len * 0.06, -r * 0.12, len * 0.88, r * 0.24);
+  ctx.fillStyle = '#2a2e35';
+  ctx.beginPath(); ctx.arc(x0 + len * 0.5, 0, r * 0.42, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = u.carry && GOOD[u.carry] ? GOOD[u.carry].color : '#7c838c';
+  ctx.beginPath(); ctx.arc(x0 + len * 0.5, 0, r * 0.28, 0, Math.PI * 2); ctx.fill();
+  ctx.restore();
 }
 
 /**
@@ -4660,7 +4691,7 @@ function drawEffects(ctx, ox, oy, z) {
         break;
       }
       case 'smoke': {
-        ctx.fillStyle = '#5a524c';
+        ctx.fillStyle = f.dark ? '#2e2925' : '#5a524c'; // a fuel fire's smoke is black
         for (let n = 0; n < 3; n++) {
           const kk = (k + n * 0.3) % 1;
           ctx.globalAlpha = 0.5 * (1 - kk);

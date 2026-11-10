@@ -2005,7 +2005,11 @@ function killBot(bot, quiet) {
   if (bot.loot && typeof addLoot === 'function' && inMap(Math.floor(bot.x), Math.floor(bot.y))) { addLoot(Math.floor(bot.x), Math.floor(bot.y), { [bot.loot]: 1 }); bot.loot = null; }
   // A Crawler wrecked on the move spills the goods it was carrying.
   if (bot.cargo && typeof addLoot === 'function' && inMap(Math.floor(bot.x), Math.floor(bot.y))) { addLoot(Math.floor(bot.x), Math.floor(bot.y), bot.cargo); bot.cargo = null; }
-  // So does a hauler, truck or train with goods on board.
+  // A Tanker with a load on board explodes (see fuelBlast), and its load burns. Any other hauler, truck
+  // or train with goods on board drops them.
+  const boom = !quiet && BOTS[bot.type].tanker && bot.carry && bot.carryN > 0 && typeof fuelBlast === 'function' ? Math.min(1, bot.carryN / BOTS[bot.type].carry) : -1;
+  const load = boom >= 0 ? GOOD[bot.carry].name : '';
+  if (boom >= 0) { bot.carry = null; bot.carryN = 0; }
   if (bot.carry && typeof dropCarried === 'function') dropCarried(bot);
   cancelTask(bot);
   exitBuilding(bot);
@@ -2017,6 +2021,11 @@ function killBot(bot, quiet) {
   bot.dead = true;
   S.byId.delete(bot.id);
   S.players[bot.owner].stats.lost++;
+  if (boom >= 0) {
+    postMsg(bot.owner, `A Tanker carrying ${load} exploded!`, Math.floor(bot.x), Math.floor(bot.y), 'bad');
+    fuelBlast(bot.x, bot.y, 'tanker', boom, bot.owner);
+    return;
+  }
   blastFx(bot.x, bot.y, bot.type === 'warbot' ? 0.6 : 0.4, { small: true });
   if (!quiet) sfx('boom');
 }
@@ -2059,6 +2068,8 @@ function offDeck(a, c) {
 /** Remove a building. `burn` = destroyed by force (bots inside die); otherwise bots walk out. */
 function destroyBuilding(b, burn) {
   if (b.dead) return;
+  // A Refinery destroyed by force explodes: its Crude and Fuel burn in the blast (see fuelBlast).
+  const boom = burn && b.built && BDEFS[b.type].explodes && typeof burnLiquids === 'function' ? burnLiquids(b) : -1;
   // Whatever was inside spills out as crates on its tile, for haulers (or raiding warbots) to collect.
   if (typeof dropLoot === 'function') dropLoot(b);
   releaseBotsFrom(b, !!burn);
@@ -2080,6 +2091,7 @@ function destroyBuilding(b, burn) {
   collapseFx(b, burn);
   sfx('boom');
   if (BDEFS[b.type].mil && b.built) computeTerritory();
+  if (boom >= 0) fuelBlast(b.x + 0.5, b.y + 0.5, b.type, boom, b.owner);
 }
 
 /* ------------------------------------------------------------------ messages & effects */

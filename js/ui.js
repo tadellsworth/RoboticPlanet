@@ -1774,7 +1774,7 @@ function showRoadBanner(problem, info) {
 
 /** Traffic map legend plus how busy the haulers and trucks are. */
 function trafficSummary() {
-  const n = { hauler: [0, 0], truck: [0, 0] };
+  const n = { hauler: [0, 0], truck: [0, 0], tanker: [0, 0] };
   for (const u of S.bots) {
     if (u.dead || u.owner !== 0 || !n[u.type]) continue;
     n[u.type][0]++;
@@ -1783,7 +1783,7 @@ function trafficSummary() {
   let jams = 0;
   if (HEAT.jam) for (let t = 0; t < S.W * S.H; t++) if (HEAT.jam[t] > TRAFFIC_JAM && S.owner[t] === 0) jams++;
   return `<b>Traffic map:</b> <i class="tk q"></i>quiet <i class="tk b"></i>busy <i class="tk p"></i>packed; pulsing rings mark jams (${jams} now). `
-    + `Haulers ${n.hauler[1]} of ${n.hauler[0]} busy` + (n.truck[0] ? `, Freight Trucks ${n.truck[1]} of ${n.truck[0]}` : '') + '.';
+    + `Haulers ${n.hauler[1]} of ${n.hauler[0]} busy` + (n.truck[0] ? `, Freight Trucks ${n.truck[1]} of ${n.truck[0]}` : '') + (n.tanker[0] ? `, Tankers ${n.tanker[1]} of ${n.tanker[0]}` : '') + '.';
 }
 
 /* ------------------------------------------------------------------ sheets */
@@ -1932,8 +1932,8 @@ function openBuildingSheet(b) {
         <button class="btn ghost" data-k="${k}" data-d="0">Clear</button></div>`;
       const kinds = BOT_ORDER.filter((k) => versus || !BOTS[k].war);
       html += `<div class="section-label">Order bots</div><div id="sh-orders">${kinds.map((k) => row(k, BOTS[k].plural)).join('')}</div>
-        <p class="hint">The Foundry only builds the bots you order. Each one uses 1 Alloy and 1 Chip a round, ${def.work} s each (a Freight Truck takes ${BOTS.truck.parts} rounds, a Road Train ${BOTS.roadtrain.parts}, a Freight Train ${BOTS.freight.parts}, a Crawler ${BOTS.crawler.parts}); mixed orders take turns.
-        <b>Haulers</b> carry two goods on the short runs. <b>Freight Trucks</b> carry eight on the long runs (12 tiles or more), from far mines and factories as well as storage. <b>Road Trains</b> carry thirty between your Command Base and far Depots, best on asphalt. <b>Agribots</b> run Bio Farms and Grove Planters, and <b>Pavers</b> run the Roadworks.</p>`;
+        <p class="hint">The Foundry only builds the bots you order. Each one uses 1 Alloy and 1 Chip a round, ${def.work} s each (a Freight Truck or Tanker takes ${BOTS.truck.parts} rounds, a Road Train ${BOTS.roadtrain.parts}, a Freight Train ${BOTS.freight.parts}, a Crawler ${BOTS.crawler.parts}); mixed orders take turns.
+        <b>Haulers</b> carry two goods on the short runs. <b>Freight Trucks</b> carry eight on the long runs (12 tiles or more), from far mines and factories as well as storage. <b>Tankers</b> are the only vehicles that carry Crude and Fuel, ten at a time (they explode if they're destroyed full). <b>Road Trains</b> carry thirty between your Command Base and far Depots, best on asphalt. <b>Agribots</b> run Bio Farms and Grove Planters, and <b>Pavers</b> run the Roadworks.</p>`;
     }
     if (def.roadworks && b.built) {
       html += `<div class="section-label">Paves and maintains</div>
@@ -2327,7 +2327,7 @@ function refreshBuildingSheet(b) {
       if (k) { want++; if (have < k) short++; }
     }
     let trucks = 0;
-    for (const u of S.bots) if (!u.dead && u.owner === 0 && BOTS[u.type].truck && !BOTS[u.type].train) trucks++; // Road Trains only run to far Depots
+    for (const u of S.bots) if (!u.dead && u.owner === 0 && BOTS[u.type].truck && !BOTS[u.type].train && !BOTS[u.type].tanker) trucks++; // Road Trains only run to far Depots
     $('sh-keep-hint').textContent = !want
       ? 'Set how much of each good to keep here, and haulers and Freight Trucks bring it from your other storage. Buildings and roads near here then draw on it.'
       : `${short ? `Filling ${short} order${short > 1 ? 's' : ''}` : 'Fully stocked'}. ` + (trucks ? `${trucks} Freight Truck${trucks > 1 ? 's' : ''} take the runs; haulers help when they're busy.` : 'Haulers bring it two at a time: order Freight Trucks at the Bot Foundry to carry eight.');
@@ -2796,10 +2796,10 @@ function updateHUD() {
   for (const u of S.bots) {
     if (u.dead || u.owner !== 0) continue;
     if (u.type === 'warbot') war++;
-    else if (u.type === 'hauler' || u.type === 'truck') haulers++;
+    else if (u.type === 'hauler' || u.type === 'truck' || u.type === 'tanker') haulers++;
     else if (u.type === 'worker') { workers++; if (isIdleWorker(u)) idle++; }
   }
-  $('pop').title = `${workers} workers (${idle} free), ${haulers} haulers and trucks` + (warOn() ? `, ${war} warbots` : '') + '. Tap for every robot by type.';
+  $('pop').title = `${workers} workers (${idle} free), ${haulers} haulers, trucks and Tankers` + (warOn() ? `, ${war} warbots` : '') + '. Tap for every robot by type.';
   $('pop').innerHTML = `<span class="dot" style="background:#ece6da;box-shadow:inset 0 0 0 2px ${PLAYER_COLORS[0]}"></span>${workers}<span class="wide"> workers</span> <span style="color:var(--muted)">(${idle} free)</span>` +
     ` <span class="dot" style="background:#ffb547;box-shadow:inset 0 0 0 2px ${PLAYER_COLORS[0]}"></span>${haulers}<span class="wide"> haulers</span>` +
     (warOn() ? ` <span class="dot" style="background:${PLAYER_COLORS[0]};border-radius:2px;transform:rotate(45deg)"></span>${war}` : '');
