@@ -65,6 +65,9 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
 | Bot Foundry | Alloy + Chip → a new **Worker** or **Warbot** |
 | Outpost | Expands your territory and garrisons Warbots |
 | Pulse Turret | Turns to aim and shoots enemy bots; uses Crystal as ammo |
+| Bunker | A pillbox for 2 warbots who fire out (3½ tiles) with their own Ammo; claims no land; wrecked, not captured |
+| Disruptor Tower | A pulse every 2½ s drains 10 battery from enemy robots within 4½ tiles; 1 Fuel per 4 pulses |
+| Mortar Pit | Shells where enemies bunch up, 3–10 tiles out: 6 damage, 3 within 1½ tiles; 3 shells per Ammo |
 | Depot | Extra storage, shortens hauling trips; give it supply orders to stock it as a forward base |
 | Ramp | Planned in Paths: cuts a slope into a one-level cliff so bots can climb it; counts as road |
 | Charging Station | Recharges bots' batteries, four at a time; burns **Fuel** |

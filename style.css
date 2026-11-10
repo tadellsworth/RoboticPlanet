@@ -241,6 +241,13 @@ kbd {
 
 /* build menu */
 .build-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; margin-top: 8px; }
+.build-grid .bcard[hidden] { display: none; }
+/* Build menu tabs (All, Gather, Make, Move, Defend), each with how many buildings it holds. */
+.build-tabs { margin-top: 6px; overflow-x: auto; scrollbar-width: none; }
+.build-tabs::-webkit-scrollbar { display: none; }
+.build-tabs button { white-space: nowrap; padding: 8px 10px; display: inline-flex; align-items: center; justify-content: center; gap: 5px; }
+.build-tabs .n { font-size: 11px; font-weight: 700; opacity: 0.65; background: rgba(255,255,255,0.08); border-radius: 8px; padding: 1px 6px; }
+@media (max-width: 480px) { .build-tabs button { padding: 8px 4px; font-size: 13px; } .build-tabs .n { display: none; } }
 .bcard {
   display: grid; grid-template-columns: 44px 1fr; gap: 2px 8px; align-items: center; text-align: left;
   background: rgba(255,255,255,0.04); border: 1px solid var(--line); border-radius: 12px; padding: 8px;

@@ -13,9 +13,9 @@ const AI_PLAN = [
   ['fab', 1], ['foundry', 1], ['outpost', 1], ['armory', 1], ['farm', 1], ['quarry', 2], ['grower', 1], ['mine', 2],
   ['smelter', 2], ['kiln', 2],
   ['turret', 1], ['repair', 1], ['outpost', 2], ['tap', 2], ['pump', 1], ['refinery', 1], ['harvester', 3], ['outpost', 3],
-  ['munitions', 1], ['silo', 1], ['depot', 1], ['charger', 2], ['farm', 2], ['mine', 3], ['outpost', 4], ['turret', 2],
-  ['grower', 2], ['fab', 2], ['outpost', 5], ['armory', 2], ['quarry', 3], ['silo', 2], ['outpost', 6], ['charger', 3], ['pump', 2],
-  ['tap', 3], ['farm', 3], ['outpost', 8], ['turret', 3],
+  ['munitions', 1], ['silo', 1], ['depot', 1], ['charger', 2], ['farm', 2], ['mine', 3], ['outpost', 4], ['turret', 2], ['bunker', 1],
+  ['grower', 2], ['fab', 2], ['outpost', 5], ['mortar', 1], ['disruptor', 1], ['armory', 2], ['quarry', 3], ['silo', 2], ['outpost', 6], ['bunker', 2], ['charger', 3], ['pump', 2],
+  ['tap', 3], ['farm', 3], ['outpost', 8], ['turret', 3], ['mortar', 2], ['bunker', 3],
 ];
 
 /** Rival p's personality (see PERSONALITIES). */
@@ -315,7 +315,8 @@ function aiThink(p) {
         if (d > BDEFS.silo.missile.range) continue;
         const left = e.armor - (coming.get(e.id) || 0);
         if (BDEFS[e.type].mil ? left <= missileFloor(e) + 2 : left <= 0) continue;
-        const s = (e.type === 'turret' ? 10 : e.type === 'nukesilo' ? 12 : e.type === 'silo' || e.type === 'reactor' ? 9 : e.type === 'outpost' ? 8 : e.type === 'lander' ? 5 : 3) - d * 0.1;
+        const s = (e.type === 'turret' ? 10 : e.type === 'nukesilo' ? 12 : e.type === 'silo' || e.type === 'reactor' ? 9 : e.type === 'outpost' ? 8 :
+          e.type === 'mortar' || e.type === 'disruptor' || e.type === 'bunker' ? 7 : e.type === 'lander' ? 5 : 3) - d * 0.1;
         if (s > bs) { bs = s; best = e; }
       }
       if (best && fireMissile(p, best)) coming.set(best.id, (coming.get(best.id) || 0) + dmg);
@@ -604,7 +605,14 @@ function aiWantArmy(lvl, p) {
  */
 function guardsNear(b) {
   let n = 0;
-  for (const e of S.buildings) if (!e.dead && e.owner === b.owner && e.built && e.type === 'turret' && dist2(e.x, e.y, b.x, b.y) <= 36) n += 3;
+  for (const e of S.buildings) {
+    if (e.dead || e.owner !== b.owner || !e.built || e === b) continue;
+    const d2 = dist2(e.x, e.y, b.x, b.y);
+    if (e.type === 'turret' && d2 <= 36) n += 3;
+    else if (e.type === 'bunker' && d2 <= 25) n += e.garrison.length * 2;
+    else if (e.type === 'disruptor' && d2 <= 25) n += 2;
+    else if (e.type === 'mortar' && d2 <= 100) n += 2;
+  }
   for (const u of S.bots) if (!u.dead && !u.inside && u.owner === b.owner && u.type === 'warbot' && dist2(u.x, u.y, b.x + 0.5, b.y + 0.5) <= 49) n++;
   return n;
 }
@@ -872,6 +880,18 @@ function aiSearchSpot(p, type, lander) {
         s = -dp - dHome * 0.2;
       } else if (type === 'turret') {
         s = -Math.abs(dHome - 3.5) * 2 - dist(i, j, ex, ey) * 0.15;
+      } else if (type === 'bunker' || type === 'disruptor' || type === 'mortar') {
+        // Out at the front: beside the fort nearest the enemy (a Mortar a little behind it, to reach
+        // over it), and spread out from others of its kind.
+        let df = 99, dk = 99;
+        for (const b of S.buildings) {
+          if (b.dead || b.owner !== p) continue;
+          const d = dist(i, j, b.x, b.y);
+          if (BDEFS[b.type].mil && !BDEFS[b.type].bunker) df = Math.min(df, d + dist(b.x, b.y, ex, ey) * 0.25);
+          if (b.type === type) dk = Math.min(dk, d);
+        }
+        const want = type === 'mortar' ? 4 : 2.5;
+        s = -Math.abs(df - want - 0) * 1.5 - dist(i, j, ex, ey) * 0.25 + Math.min(dk, 8) * 0.5;
       } else if (type === 'silo') {
         s = -dist(i, j, ex, ey); // as close to the enemy as our land allows
       } else if (type === 'depot') {

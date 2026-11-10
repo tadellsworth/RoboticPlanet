@@ -187,6 +187,10 @@ function sfx(name, dest) {
     case 'produce': _tone(980, 0.05, 'sine', 0.035, null, 0, D); break;
     case 'laser': _tone(1400, 0.14, 'sawtooth', 0.035, 300, 0, D); break;
     case 'hit': _tone(220, 0.05, 'square', 0.03, 120, 0, D); break;
+    // A Disruptor Tower's pulse: an electric crackle sweeping down.
+    case 'zap': _tone(2400, 0.22, 'sawtooth', 0.025, 180, 0, D); _noise(0.18, 0.03, { type: 'highpass', freq: 4000, to: 1500, dest: D }); break;
+    // A Mortar Pit firing: a deep hollow thump.
+    case 'thump': _tone(90, 0.22, 'sine', 0.14, 45, 0, D); _noise(0.12, 0.05, { freq: 500, to: 120, dest: D }); break;
     case 'boom':
       _noise(0.45, 0.2, { freq: 900, to: 120, dest: D });
       _tone(110, 0.35, 'sine', 0.16, 38, 0, D);

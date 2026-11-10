@@ -260,7 +260,7 @@ const BUILD_KEYS = {
   harvester: 'h', quarry: 'q', mine: 'm', tap: 'c', smelter: '1', fab: 'f', foundry: 'u', charger: 'e', farm: '2',
   pump: 'p', refinery: 'v', kiln: 'k', tarworks: 't', roadworks: '3', outpost: 'o', turret: 'g', repair: 'x',
   armory: 'i', munitions: 'n', silo: 'z', depot: '4', grower: 'l', reactor: 'y', nukesilo: 'j',
-  ropeway: '5', station: '6', lab: '7', viaduct: '8',
+  ropeway: '5', station: '6', lab: '7', viaduct: '8', bunker: '9', disruptor: '0', mortar: '.',
 };
 
 /**
@@ -1616,15 +1616,27 @@ function costHTML(cost, have) {
   return Object.keys(cost).map((g) => `<span class="${have && have[g] < cost[g] ? 'short' : ''}"><i class="gi ${g}"></i>${Math.round(cost[g] * 100) / 100}</span>`).join('');
 }
 
+/**
+ * The build menu: tabs across the top (All, and the BUILD_GROUPS: Gather, Make, Move, Defend), the
+ * last one used remembered. Every card is in the page whichever tab is showing (the others are just
+ * hidden), so a building's hotkey works from any tab.
+ */
 function openBuildMenu() {
   const have = playerGoods(0);
   const sites = siteCount(0);
   const list = BUILD_MENU.filter((t) => !(BDEFS[t].war && !warOn()) && !(BDEFS[t].nuke && !nukeOn()) && !(BDEFS[t].colony && (S.mode !== 'colony' || S.mission)));
+  const groupOf = (t) => (BUILD_GROUPS.find((g) => g.types.includes(t)) || BUILD_GROUPS[0]).key;
+  const ordered = BUILD_GROUPS.flatMap((g) => g.types).filter((t) => list.includes(t));
+  if (!UI.buildTab) { try { UI.buildTab = localStorage.getItem('botfall.buildTab') || 'all'; } catch (e) { UI.buildTab = 'all'; } }
+  const groups = BUILD_GROUPS.filter((g) => ordered.some((t) => groupOf(t) === g.key));
+  if (UI.buildTab !== 'all' && !groups.some((g) => g.key === UI.buildTab)) UI.buildTab = 'all';
+  const tabs = `<div class="seg build-tabs" id="build-tabs"><button data-g="all">All</button>${groups.map((g) => `<button data-g="${g.key}">${g.name}<span class="n">${ordered.filter((t) => groupOf(t) === g.key).length}</span></button>`).join('')}</div>`;
   const html = `<div class="sheet-title"><h3>Build</h3></div>
     <p class="desc">Placing a site is free; haulers bring the materials by road, so lay a road to it. ${sites}/${MAX_SITES} sites in progress.</p>
-    <div class="build-grid"><button class="bcard roads" id="build-roads"><kbd>R</kbd><svg viewBox="0 0 24 24"><path d="M8 3L5 21M16 3l3 18M12 4v3M12 10.5v3M12 17v3" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
-      <div class="bname">Roads</div><div class="bhave">Plan roads, bridges and ramps</div></button>${warOn() ? `<button class="bcard walls" id="build-walls"><img src="${iconFor('wall')}" alt=""><div class="bname">Walls</div><div class="bcost">${costHTML(BDEFS.wall.cost, have)}</div>
-      <div class="bhave">${wallCountText()}</div></button>` : ''}${list.map((t) => `<button class="bcard" data-t="${t}" ${sites >= MAX_SITES ? 'disabled' : ''}>
+    ${tabs}
+    <div class="build-grid"><button class="bcard roads" id="build-roads" data-g="move"><kbd>R</kbd><svg viewBox="0 0 24 24"><path d="M8 3L5 21M16 3l3 18M12 4v3M12 10.5v3M12 17v3" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+      <div class="bname">Roads</div><div class="bhave">Plan roads, bridges and ramps</div></button>${warOn() ? `<button class="bcard walls" id="build-walls" data-g="defend"><img src="${iconFor('wall')}" alt=""><div class="bname">Walls</div><div class="bcost">${costHTML(BDEFS.wall.cost, have)}</div>
+      <div class="bhave">${wallCountText()}</div></button>` : ''}${ordered.map((t) => `<button class="bcard" data-t="${t}" data-g="${groupOf(t)}" ${sites >= MAX_SITES ? 'disabled' : ''}>
       ${BUILD_KEYS[t] ? `<kbd>${BUILD_KEYS[t].toUpperCase()}</kbd>` : ''}<img src="${iconFor(t)}" alt=""><div class="bname">${BDEFS[t].name}</div><div class="bcost">${costHTML(BDEFS[t].cost, have)}${t === 'viaduct' ? ' a tile' : ''}</div>
       <div class="bhave">${ownedText(t)}</div></button>`).join('')}</div>`;
   openSheet('build', 0, html);
@@ -1633,6 +1645,14 @@ function openBuildMenu() {
   }
   $('build-roads').onclick = () => openPaths('road');
   if ($('build-walls')) $('build-walls').onclick = () => openPaths('wall');
+  const show = (g) => {
+    UI.buildTab = g;
+    try { localStorage.setItem('botfall.buildTab', g); } catch (e) { /* private mode: not remembered */ }
+    for (const btn of $('build-tabs').children) btn.classList.toggle('on', btn.dataset.g === g);
+    for (const el of $('sheet-body').querySelectorAll('.build-grid .bcard')) el.hidden = g !== 'all' && el.dataset.g !== g;
+  };
+  for (const btn of $('build-tabs').children) btn.onclick = () => { sfx('click'); show(btn.dataset.g); };
+  show(UI.buildTab);
 }
 
 /** "4 Walls, 1 Gate" for the build menu's Walls card. */
@@ -2006,8 +2026,17 @@ function refreshBuildingSheet(b) {
       parts.push(`<div class="kv"><span>Workers resting here</span><span>${idle}</span></div>`);
     }
     if (def.mil) parts.push(`<div class="kv"><span>${mine ? 'Warbots inside' : 'Defenders inside'}</span><span>${b.garrison.length} / ${def.garrison}</span></div>`);
-    if (def.mil && mine) parts.push(`<div class="kv"><span>Territory radius</span><span>${def.terr} tiles</span></div>`);
-    if (def.ammo && mine && !def.missile) parts.push(`<div class="kv"><span>Ammo</span><span>${b.shots + (b.stock.crystal || 0) * shotsPer(b)} shots</span></div>`);
+    if (def.mil && mine && !def.bunker) parts.push(`<div class="kv"><span>Territory radius</span><span>${def.terr} tiles</span></div>`);
+    if (def.bunker) parts.push(`<div class="kv"><span>Fires at</span><span>enemy robots within ${def.range} tiles</span></div>`);
+    if (def.disrupt && mine) {
+      parts.push(`<div class="kv"><span>Fuel</span><span>${goodTag('fuel', `${b.stock.fuel || 0}/${def.ammoCap}`, !(b.stock.fuel > 0))} + ${b.pulses || 0} pulse${b.pulses === 1 ? '' : 's'} charged</span></div>`);
+      parts.push(`<div class="kv"><span>Each pulse</span><span>drains ${def.disrupt.drain} battery from enemy robots within ${def.range} tiles, every ${def.disrupt.every}s</span></div>`);
+    }
+    if (def.mortar && mine) {
+      parts.push(`<div class="kv"><span>Shells</span><span>${(b.shells || 0) + (b.stock.ammo || 0) * def.mortar.shells} (${goodTag('ammo', `${b.stock.ammo || 0}/${def.ammoCap}`, !(b.stock.ammo > 0))})</span></div>`);
+      parts.push(`<div class="kv"><span>Each shell</span><span>${def.mortar.damage} damage, ${def.mortar.splashDamage} within ${def.mortar.splash} tiles; ${def.minRange} to ${def.range} tiles out</span></div>`);
+    }
+    if (def.ammo && mine && !def.missile && !def.disrupt && !def.mortar) parts.push(`<div class="kv"><span>Ammo</span><span>${b.shots + (b.stock.crystal || 0) * shotsPer(b)} shots</span></div>`);
     if (def.missile && mine) {
       parts.push(`<div class="kv"><span>Missiles loaded</span><span>${goodTag('warhead', `${b.stock.warhead || 0}/${def.ammoCap}`)}</span></div>`);
       parts.push(`<div class="kv"><span>Each hit</span><span>${def.missile.damage} damage, ${def.missile.splashDamage} to buildings within ${def.missile.splash} tiles</span></div>`);

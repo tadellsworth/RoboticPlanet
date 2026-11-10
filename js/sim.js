@@ -2055,6 +2055,8 @@ function updateBuilding(b, dt) {
   if (def.inp) produce(b, def, dt * S.players[b.owner].mult);
   else if (def.missile) updateSilo(b, def);
   else if (def.nukeSilo) updateNukeSilo(b, dt * S.players[b.owner].mult);
+  else if (def.disrupt) updateDisruptor(b, def, dt);
+  else if (def.mortar) updateMortar(b, def, dt);
   else if (def.ammo) updateTurret(b, def, dt);
   if (def.missile && b.reload > 0) b.reload = Math.max(0, b.reload - dt);
   if (def.charger && !def.store) {
@@ -2070,7 +2072,8 @@ function updateBuilding(b, dt) {
       if (b.charging > 0) b.working = true;
     }
   }
-  if (def.mil) garrisonDefense(b, dt);
+  if (def.bunker) bunkerFire(b, def, dt);
+  else if (def.mil) garrisonDefense(b, dt);
   if (def.repair) updateRepairStation(b, def, dt);
   if (def.lab) updateLab(b, dt);
   if (def.viaduct) {
@@ -2269,6 +2272,112 @@ function updateTurret(b, def, dt) {
   b.cd = 1.1;
 }
 
+/**
+ * A Bunker: each armed warbot inside shoots the nearest enemy robot within range (warbots first)
+ * every BUNKER_FIRE seconds, with its own Ammo, from cover. (They reload from the Bunker's Ammo and
+ * recharge inside, like any garrison: see updateWarbot.)
+ */
+function bunkerFire(b, def, dt) {
+  b.cd = (b.cd || 0) - dt;
+  if (b.cd > 0) return;
+  b.cd = BUNKER_FIRE;
+  const cx = b.x + 0.5, cy = b.y + 0.5;
+  const target = nearestEnemyBot(b.owner, cx, cy, def.range, true);
+  if (!target) return;
+  let fired = 0;
+  for (const id of b.garrison) {
+    const u = getE(id);
+    if (!u || u.dead || target.dead || !useAmmo(u)) continue;
+    const power = (u.bat ?? 100) < BATTERY.critical ? 0.5 : 1;
+    damageBot(target, Math.max(1, Math.round((2 + (hash2(u.id, S.tick, 7) < 0.5 ? 1 : 0)) * power)));
+    fired++;
+  }
+  if (!fired) { b.status = 'Out of Ammo: haulers bring it from storage'; return; }
+  b.aim = Math.atan2(target.y - cy, target.x - cx);
+  b.flash = S.time;
+  b.working = true;
+  b.status = `Firing (${fired} warbot${fired > 1 ? 's' : ''})`;
+  addFx('laser', cx, cy, { x2: target.x, y2: target.y, color: PLAYER_COLORS[b.owner] });
+  if (b.owner === 0 || target.owner === 0) sfx('hit');
+}
+
+/** A Disruptor Tower: a pulse that drains enemy robots' batteries in range, burning Fuel (see BDEFS.disruptor). */
+function updateDisruptor(b, def, dt) {
+  const d = def.disrupt;
+  b.cd = (b.cd || 0) - dt;
+  if (b.cd > 0) return;
+  const cx = b.x + 0.5, cy = b.y + 0.5, r2 = def.range * def.range;
+  const hit = S.bots.filter((u) => !u.dead && !u.inside && u.owner !== b.owner && !BOTS[u.type].wild && !BOTS[u.type].rail && dist2(u.x, u.y, cx, cy) <= r2);
+  if (!hit.length) { b.status = (b.pulses || 0) + (b.stock.fuel || 0) > 0 ? 'Watching for enemy robots' : 'No Fuel: haulers bring it from storage'; b.cd = 0.5; return; }
+  if (!(b.pulses > 0)) {
+    if (!((b.stock.fuel || 0) > 0)) { b.status = 'No Fuel to pulse with: haulers bring it from storage'; b.cd = 1; return; }
+    bump(b.stock, 'fuel', -1);
+    usedGood(b.owner, 'fuel', 1);
+    b.pulses = d.perFuel;
+  }
+  b.pulses--;
+  b.cd = d.every;
+  b.working = true;
+  b.flash = S.time;
+  b.status = `Draining ${hit.length} enemy robot${hit.length > 1 ? 's' : ''}`;
+  for (const u of hit) {
+    u.bat = Math.max(0, (u.bat ?? 100) - d.drain);
+    addFx('spark', u.x, u.y, { color: '#8fd8ff' });
+  }
+  addFx('ring', cx, cy, { color: '#8fd8ff', r: def.range / 1.3, life: 0.6 }); // grows out to its range
+  if (b.owner === 0 || hit.some((u) => u.owner === 0)) sfx('zap');
+}
+
+/**
+ * A Mortar Pit: every `reload` seconds it lobs a shell at the spot in range (but not too close) where
+ * the most enemy robots stand within `splash` of it, warbots counting double. Shells fly `flight`
+ * seconds (see shellImpact); one Ammo makes `shells` shells.
+ */
+function updateMortar(b, def, dt) {
+  const m = def.mortar;
+  b.cd = (b.cd || 0) - dt;
+  if (b.cd > 0) return;
+  const cx = b.x + 0.5, cy = b.y + 0.5, r2 = def.range * def.range, min2 = def.minRange * def.minRange, s2 = m.splash * m.splash;
+  const foes = S.bots.filter((u) => !u.dead && !u.inside && u.owner !== b.owner && !BOTS[u.type].rail);
+  let best = null, bs = 0;
+  for (const u of foes) {
+    const d = dist2(u.x, u.y, cx, cy);
+    if (d > r2 || d < min2) continue;
+    let s = 0;
+    for (const v of foes) if (dist2(u.x, u.y, v.x, v.y) <= s2) s += v.type === 'warbot' ? 2 : 1;
+    if (s > bs) { bs = s; best = u; }
+  }
+  if (!best) { b.status = (b.shells || 0) + (b.stock.ammo || 0) > 0 ? 'Watching for targets (3 to 10 tiles out)' : 'No Ammo: haulers bring it from storage'; b.cd = 0.5; return; }
+  if (!(b.shells > 0)) {
+    if (!((b.stock.ammo || 0) > 0)) { b.status = 'No Ammo for shells: haulers bring it from storage'; b.cd = 1; return; }
+    bump(b.stock, 'ammo', -1);
+    usedGood(b.owner, 'ammo', 1);
+    b.shells = m.shells;
+  }
+  b.shells--;
+  b.cd = m.reload;
+  b.aim = Math.atan2(best.y - cy, best.x - cx);
+  b.flash = S.time;
+  b.working = true;
+  b.status = 'Firing';
+  S.missiles.push({ owner: b.owner, from: b.id, shell: true, t: 0, dur: m.flight, x0: cx, y0: cy, x1: best.x, y1: best.y });
+  addFx('smoke', cx + Math.cos(b.aim) * 0.3, cy + Math.sin(b.aim) * 0.3 - 0.2, { r: 0.4, life: 0.7 });
+  sfx('thump');
+}
+
+/** A mortar shell lands: it hurts every rival robot in the open within the splash, most at the middle. */
+function shellImpact(m) {
+  const md = BDEFS.mortar.mortar;
+  addFx('boom', m.x1, m.y1, { r: md.splash * 0.45 });
+  sfx('boom');
+  for (const u of S.bots) {
+    if (u.dead || u.inside || u.owner === m.owner) continue;
+    const d2 = dist2(u.x, u.y, m.x1, m.y1);
+    if (d2 > md.splash * md.splash) continue;
+    damageBot(u, d2 <= 0.36 ? md.damage : md.splashDamage);
+  }
+}
+
 /** Military buildings send warbots out when enemy warbots come close. */
 function garrisonDefense(b, dt) {
   b.cd -= dt;
@@ -2346,6 +2455,14 @@ function hitBuilding(b, dmg, by) {
 function captureBuilding(b, by) {
   const def = BDEFS[b.type], old = b.owner;
   if (def.wild) { clearNest(b, by); return; }
+  if (def.bunker && b.built) {
+    // There's no land to take: a fallen Bunker is wrecked, and the warbots inside walk out.
+    dropLoot(b);
+    postMsg(by, 'Your warbots wrecked an enemy Bunker.', b.x, b.y, 'good');
+    postMsg(old, 'Enemy warbots wrecked your Bunker!', b.x, b.y, 'bad');
+    destroyBuilding(b, false);
+    return;
+  }
   const name = def.name;
   if (!b.built) {
     (S.players[old].avoid = S.players[old].avoid || []).push({ x: b.x, y: b.y, until: S.time + 150 });
@@ -2779,7 +2896,7 @@ function armedIn(b) {
 }
 
 /** How many armed warbots garrison b can send out (it always keeps one warbot at home). */
-function spareArmed(b) { return Math.max(0, Math.min(armedIn(b), b.garrison.length - 1)); }
+function spareArmed(b) { return BDEFS[b.type].bunker ? 0 : Math.max(0, Math.min(armedIn(b), b.garrison.length - 1)); } // a Bunker's two stay put
 
 /** A garrison far behind the lines (no rival building within 18 tiles): it can send its last warbot. */
 function rearGarrison(b) {
@@ -2787,7 +2904,7 @@ function rearGarrison(b) {
   return true;
 }
 /** Warbots garrison b can send out: every armed one from the rear (with `rear`), else all but one. */
-function spareFrom(b, rear) { return rear && rearGarrison(b) ? armedIn(b) : spareArmed(b); }
+function spareFrom(b, rear) { return BDEFS[b.type].bunker ? 0 : rear && rearGarrison(b) ? armedIn(b) : spareArmed(b); }
 
 /** Take one armed warbot out of garrison b (or null). */
 function takeArmed(b) {
@@ -3220,6 +3337,7 @@ function fireMissileAt(silo, i, j) {
 function updateMissiles(dt) {
   for (const m of S.missiles) {
     m.t += dt;
+    if (m.shell) { if (m.t >= m.dur) shellImpact(m); continue; }
     if (m.nuke) {
       if (S.tick % 3 === 0) {
         const k = Math.min(1, m.t / m.dur);
@@ -4104,7 +4222,7 @@ function speedMul(u) { return evSpeed() * (tech(u.owner, 'motors') ? 1.15 : 1); 
 function drainMul(u) { return evDrain() * (tech(u.owner, 'cells') ? 0.7 : 1); }
 function botCarry(u) { const bt = BOTS[u.type], c = bt.carry || 1; return tech(u.owner, 'cargo') && bt.haul ? c + (bt.rail ? 8 : bt.train ? 6 : bt.truck ? 2 : 1) : c; }
 /** A Pulse Turret's reach and shots per Crystal. */
-function turretRange(b) { return BDEFS[b.type].range + (tech(b.owner, 'sentry') ? 1.5 : 0); }
+function turretRange(b) { return BDEFS[b.type].range + (b.type === 'turret' && tech(b.owner, 'sentry') ? 1.5 : 0); }
 function shotsPer(b) { return tech(b.owner, 'sentry') ? 6 : SHOTS_PER_AMMO; }
 
 /** Start researching upgrade k: '' if started, or why not. */

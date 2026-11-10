@@ -1122,6 +1122,97 @@ for headlights, braking and exhaust; track and bridge pieces picked by their joi
 allows); piers, towers and cables in the bridge rigging pass; the Viaduct deck and piers in its own pass; the cliff
 tiles in place of the drawn cliffs.
 
+### Batch 14: Bunker, Disruptor Tower and Mortar Pit
+
+Three new defences for the Build menu's **Defend** tab. Until their art arrives the game draws simple placeholders.
+Make them in the same Claude Design chat as Batch 6: paste the Batch 6 style brief first and attach the **Smelter**
+as the style anchor, plus the **Outpost** so the three read as part of the same military family. Every image is a
+**512×512 PNG with a transparent background**, the foundation pad on the bottom edge like the other 3D buildings
+(Claude Code registers them with `B3D(...)`). Make the cyan version of each, then "the same image with every cyan
+accent changed to red #ff5a6e" (the game recolours a third, green team itself).
+
+| Key | What | Needed? |
+|---|---|---|
+| `bunker@0`, `bunker@1` | Bunker | yes |
+| `bunker-fire@0`, `bunker-fire@1` | Overlay: muzzle flashes at its firing slit, flashed as it shoots | optional |
+| `disruptor@0`, `disruptor@1` | Disruptor Tower | yes |
+| `disruptor-pulse` | Overlay: coils and orb lit up, faded in and out with each pulse (one version: the pulse colour is the same for every team) | optional |
+| `mortar@0`, `mortar@1` | Mortar Pit, the pit and sandbags with **no tube** | yes |
+| `mortar-head-0` … `mortar-head-7` | The tube on its own in 8 directions, swapped as it aims (one set, no team colour; or 16 directions, `-0` … `-15`) | yes, with the pit |
+
+The 8 directions are numbered like the turret heads: 0 right, 1 down-right, 2 down (toward the viewer), 3 down-left,
+4 left, 5 up-left, 6 up (away from the viewer), 7 up-right.
+
+**`bunker@0.png`**
+```
+A Bunker: a low, squat reinforced-concrete pillbox for two robots, on the usual concrete and steel foundation pad.
+Thick sloped walls of weathered grey concrete with chipped edges and rust-streaked steel plates bolted over them,
+a flat armoured roof with a small sensor dome and a periscope, and one long horizontal firing slit across the front
+(south) face, dark inside. Concrete blocks and a few sandbags banked against the corners, yellow-and-black hazard
+stripes along the roof edge. Team colour cyan #38d4ff in two small status lights on the roof and a thin light strip
+just above the firing slit. It should hug the ground: lower and wider than the Outpost, about two thirds of its
+height. Size class: about 1.2 tiles. Same camera angle, lighting, materials and scale as the Smelter.
+```
+
+**`bunker-fire@0.png`** (optional, right after the Bunker)
+```
+Now only the muzzle flashes, on their own: two bright yellow-white muzzle flashes with a few orange sparks bursting
+out of the firing slit of the Bunker you just made, one left of centre and one right of centre, where its two gun
+barrels would be. Same 512x512 canvas and exactly the same position as the Bunker, so the two images stack
+perfectly. Transparent everywhere else: no bunker, no pad, no shadow.
+```
+
+**`disruptor@0.png`**
+```
+A Disruptor Tower: an electromagnetic pulse emitter on the foundation pad. A slim armoured mast of dark graphite
+steel rises from a heavy octagonal base packed with capacitor banks, cable bundles and a small cooling fan. Three
+stacked copper-and-steel induction coils wrap the mast, smaller toward the top, with ceramic insulators between
+them, and a glass-and-steel orb crowns it. Warning stripes on the base. The coils and the orb glow a soft electric
+ice blue #8fd8ff (the pulse colour, the same for every team); team colour cyan #38d4ff in a light band around the
+base. Taller and thinner than the other buildings, with a strong vertical silhouette, on the usual pad. Size class:
+about 1.3 tiles. Same camera angle, lighting, materials and scale as the Smelter.
+```
+
+**`disruptor-pulse.png`** (optional, right after the tower)
+```
+Now only the pulse glow, on its own: the three coils and the orb of the Disruptor Tower you just made, lit up
+blindingly bright ice blue fading to white at the core, with a soft blue halo round them and a few thin electric arcs
+jumping between the coils. Same 512x512 canvas and exactly the same position as the tower, so the two images stack
+perfectly. Transparent everywhere else: no tower body, no pad, no shadow.
+```
+
+**`mortar@0.png`** (the pit, without its tube)
+```
+A Mortar Pit, without its gun: a round, sunken artillery emplacement on the foundation pad. A ring of stacked
+sandbags and concrete blocks around a dug-in pit, ammunition crates stacked against the inside wall, a small
+rangefinder on a tripod and a few spent shell casings on the floor. In the middle of the pit leave a round steel
+turntable plate empty: the mortar tube sits there. Accents: team colour cyan #38d4ff on a small signal lamp and a
+stripe on the crates, and a warm amber #ffb347 lamp on the rangefinder. Low and wide: the sandbag ring is barely
+higher than the Bunker. Size class: about 1.3 tiles. Same camera angle, lighting, materials and scale as the Smelter.
+```
+
+**`mortar-head-0.png`** (the tube pointing right)
+```
+Now only the mortar itself, on its own: a heavy, stubby mortar tube of dark gunmetal on a bipod and a round base
+plate, tilted steeply up at about 60 degrees, its muzzle leaning to the right, with a sight on the side and a scuffed
+hazard stripe round the muzzle. Put it on the same 512x512 transparent canvas, in exactly the position where it sits
+on the empty turntable of the pit you just made, so the two images stack perfectly. Nothing else in the image: no
+pit, no pad, no shadow on the ground. Same camera, lighting and scale as before.
+```
+
+Then the other seven, one at a time, for example:
+```
+The identical mortar, turned on its turntable so the muzzle leans down-right (toward the viewer, to the right).
+Same canvas, same position on the turntable, same lighting from the top-left: only the mortar has turned, the light
+has not.
+```
+…and the same for down, down-left, left, up-left, up and up-right. The round base plate at the bottom of the tube must
+stay in exactly the same spot in all eight, or the tube will wobble as it turns.
+
+**Day and night.** If you also make the re-lit morning, evening and night versions (see "Day and night art" above),
+do them for `bunker`, `disruptor` and `mortar` (both teams) and the mortar heads; the overlays glow on their own and
+don't need them.
+
 ### Not swappable yet (ask Claude Code if you want these)
 
 - Menu background and logo

@@ -268,11 +268,12 @@ function drawTexture(ctx, art, i, j, x, y) {
  * art keys turret-head-0 … turret-head-7 (or -15 for 16 directions), team versions first. Null if
  * there are none.
  */
-function turretHead(owner, aim) {
-  const n = artFor('turret-head-15', owner) ? 16 : artFor('turret-head-7', owner) ? 8 : 0;
+function turretHead(owner, aim, type) {
+  const key = (type || 'turret') + '-head-';
+  const n = artFor(key + '15', owner) ? 16 : artFor(key + '7', owner) ? 8 : 0;
   if (!n) return null;
   const k = ((Math.round(aim / ((Math.PI * 2) / n)) % n) + n) % n;
-  return artFor('turret-head-' + k, owner);
+  return artFor(key + k, owner);
 }
 
 /**
@@ -1915,6 +1916,18 @@ function drawBuilding(ctx, type, cx, cy, s, owner, b) {
       const head = turretHead(owner, b ? b.aim : Math.PI / 4);
       if (head) drawArt(ctx, head, cx, cy, s);
     }
+    // The new defences' art: the Mortar Pit's tube turns like a turret head (mortar-head-0…7, or 0…15),
+    // and optional overlays light up as they fire: bunker-fire (muzzle flashes at the slit) and
+    // disruptor-pulse (the coils and orb glowing), faded out over a moment.
+    if (type === 'mortar') {
+      const head = turretHead(owner, b && b.aim !== undefined ? b.aim : -Math.PI / 4, 'mortar');
+      if (head) drawArt(ctx, head, cx, cy, s);
+    }
+    const fx = type === 'bunker' ? ['bunker-fire', 0.15] : type === 'disruptor' ? ['disruptor-pulse', 0.6] : type === 'mortar' ? ['mortar-flash', 0.15] : null;
+    if (fx && b && b.flash && S.time - b.flash < fx[1]) {
+      const over = artFor(fx[0], owner);
+      if (over) { ctx.globalAlpha = 1 - (S.time - b.flash) / fx[1]; drawArt(ctx, over, cx, cy, s); ctx.globalAlpha = 1; }
+    }
     if (type === 'silo' && b && b.stock) drawSiloStatus(ctx, b, cx, cy, s, color);
     return;
   }
@@ -2350,6 +2363,67 @@ function drawBuilding(ctx, type, cx, cy, s, owner, b) {
       ctx.fillRect(cx + 8 * u, cy - 11 * u, 3 * u, 22 * u);
       ctx.strokeStyle = color; ctx.lineWidth = 2 * u;
       ctx.strokeRect(cx - 11 * u, cy - 11 * u, 22 * u, 22 * u);
+      break;
+    }
+    // Bunker, Disruptor Tower and Mortar Pit: drawn in a three-quarter view (top and front faces) so
+    // they sit with the 3D building art until their own art is made.
+    case 'bunker': {
+      const w = s * 0.84, top = s * 0.42, face = s * 0.24, x0 = cx - w / 2, y0 = cy - s * 0.3;
+      ctx.fillStyle = 'rgba(20,10,5,0.32)';
+      roundRect(ctx, x0 + s * 0.05, y0 + s * 0.12, w, top + face, s * 0.14); ctx.fill();
+      ctx.fillStyle = '#5f646b'; roundRect(ctx, x0, y0 + top * 0.55, w, top * 0.45 + face, s * 0.12); ctx.fill(); // front face
+      ctx.fillStyle = '#9ca2a8'; roundRect(ctx, x0, y0, w, top, s * 0.14); ctx.fill(); // roof
+      ctx.fillStyle = '#b6bbc0'; roundRect(ctx, x0 + s * 0.06, y0 + s * 0.04, w - s * 0.12, top * 0.3, s * 0.06); ctx.fill();
+      // The firing slit, flashing when its warbots shoot.
+      const slitY = y0 + top + face * 0.32, hot = b && b.flash && S.time - b.flash < 0.12;
+      ctx.fillStyle = hot ? '#fff3b0' : '#16181d';
+      roundRect(ctx, cx - w * 0.36, slitY, w * 0.72, face * 0.3, s * 0.03); ctx.fill();
+      ctx.fillStyle = color; ctx.fillRect(x0 + s * 0.06, y0 + top * 0.82, w - s * 0.12, Math.max(2, s * 0.05)); // team stripe
+      const n = b && b.garrison ? b.garrison.length : 0;
+      for (let k = 0; k < 2; k++) {
+        ctx.fillStyle = k < n ? color : 'rgba(0,0,0,0.45)';
+        ctx.beginPath(); ctx.arc(cx + (k ? 0.12 : -0.12) * s, y0 + top * 0.42, s * 0.05, 0, Math.PI * 2); ctx.fill();
+      }
+      break;
+    }
+    case 'disruptor': {
+      const by = cy + s * 0.18, glow = b && b.flash ? Math.max(0, 1 - (S.time - b.flash) / 0.6) : 0;
+      ctx.fillStyle = 'rgba(20,10,5,0.32)';
+      ctx.beginPath(); ctx.ellipse(cx + s * 0.05, by + s * 0.08, s * 0.36, s * 0.16, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#4a4f58'; roundRect(ctx, cx - s * 0.32, by - s * 0.08, s * 0.64, s * 0.2, s * 0.06); ctx.fill(); // plinth
+      ctx.fillStyle = '#7a808a'; ctx.beginPath(); ctx.ellipse(cx, by - s * 0.08, s * 0.32, s * 0.12, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = color; ctx.fillRect(cx - s * 0.28, by + s * 0.04, s * 0.56, Math.max(2, s * 0.045));
+      ctx.fillStyle = '#c7ccd2'; ctx.fillRect(cx - s * 0.045, cy - s * 0.38, s * 0.09, s * 0.5); // mast
+      for (let k = 0; k < 3; k++) { // coils
+        const yy = cy - s * (0.26 - k * 0.12);
+        ctx.strokeStyle = glow > 0 ? `rgba(160,225,255,${0.6 + 0.4 * glow})` : '#6fa7c4'; ctx.lineWidth = Math.max(1.5, s * 0.05);
+        ctx.beginPath(); ctx.ellipse(cx, yy, s * (0.17 - k * 0.025), s * 0.05, 0, 0, Math.PI * 2); ctx.stroke();
+      }
+      const orb = ctx.createRadialGradient(cx, cy - s * 0.42, 0, cx, cy - s * 0.42, s * (0.12 + 0.1 * glow));
+      orb.addColorStop(0, '#ffffff'); orb.addColorStop(0.45, '#8fd8ff'); orb.addColorStop(1, 'rgba(143,216,255,0)');
+      ctx.fillStyle = orb; ctx.beginPath(); ctx.arc(cx, cy - s * 0.42, s * (0.12 + 0.1 * glow), 0, Math.PI * 2); ctx.fill();
+      break;
+    }
+    case 'mortar': {
+      const py = cy + s * 0.08, rx = s * 0.4, ry = s * 0.26;
+      ctx.fillStyle = 'rgba(20,10,5,0.3)';
+      ctx.beginPath(); ctx.ellipse(cx + s * 0.04, py + s * 0.06, rx + s * 0.04, ry + s * 0.04, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#3a2f26'; ctx.beginPath(); ctx.ellipse(cx, py, rx * 0.8, ry * 0.75, 0, 0, Math.PI * 2); ctx.fill(); // the pit
+      for (let k = 0; k < 12; k++) { // sandbags round the rim
+        const a = (k / 12) * Math.PI * 2, bx = cx + Math.cos(a) * rx * 0.9, byy = py + Math.sin(a) * ry * 0.9;
+        ctx.fillStyle = k % 2 ? '#b9a27a' : '#a68f68';
+        ctx.beginPath(); ctx.ellipse(bx, byy, s * 0.085, s * 0.055, a, 0, Math.PI * 2); ctx.fill();
+      }
+      ctx.fillStyle = color; ctx.beginPath(); ctx.ellipse(cx, py + ry * 0.9, s * 0.085, s * 0.055, 0, 0, Math.PI * 2); ctx.fill();
+      // The tube: tilted up and turned toward its last target.
+      const a = b && b.aim !== undefined ? b.aim : -Math.PI / 4, len = s * 0.34;
+      const tx = cx + Math.cos(a) * len * 0.55, ty = py + Math.sin(a) * len * 0.35 - len * 0.75;
+      ctx.strokeStyle = '#2a2d33'; ctx.lineWidth = s * 0.13; ctx.lineCap = 'round';
+      ctx.beginPath(); ctx.moveTo(cx, py); ctx.lineTo(tx, ty); ctx.stroke();
+      ctx.strokeStyle = '#5c616a'; ctx.lineWidth = s * 0.07;
+      ctx.beginPath(); ctx.moveTo(cx, py); ctx.lineTo(tx, ty); ctx.stroke();
+      ctx.fillStyle = '#1b1d22'; ctx.beginPath(); ctx.arc(tx, ty, s * 0.05, 0, Math.PI * 2); ctx.fill();
+      if (b && b.flash && S.time - b.flash < 0.15) { ctx.fillStyle = '#ffd27a'; ctx.beginPath(); ctx.arc(tx, ty, s * 0.1, 0, Math.PI * 2); ctx.fill(); }
       break;
     }
     case 'turret': {
@@ -4041,6 +4115,10 @@ function drawBadge(ctx, b, x, y, z) {
 function drawRanges(ctx, type, x, y, ox, oy, z, owner) {
   const def = BDEFS[type];
   const r = def.gather || def.plant ? def.radius + 0.5 : def.range ? turretRange({ type, owner: owner || 0 }) : def.missile ? def.missile.range : def.mil ? def.terr : 0;
+  if (def.minRange) { // a Mortar Pit's blind zone
+    ctx.strokeStyle = 'rgba(255,140,140,0.5)'; ctx.setLineDash([4, 4]); ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.arc(ox + (x + 0.5) * z, oy + (y + 0.5) * z, def.minRange * z, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]);
+  }
   if (!r) return;
   const cx = ox + (x + 0.5) * z, cy = oy + (y + 0.5) * z;
   const hostile = def.range || def.missile;
@@ -4178,6 +4256,16 @@ function drawRallies(ctx, ox, oy, z) {
 function drawMissiles(ctx, ox, oy, z) {
   for (const m of S.missiles) {
     if (m.nuke) { drawNukeFlight(ctx, m, ox, oy, z); continue; }
+    if (m.shell) {
+      // A mortar shell: a dark ball high on its arc, and its shadow on the ground.
+      const k = Math.min(1, m.t / m.dur), gx = ox + lerp(m.x0, m.x1, k) * z, gy = oy + lerp(m.y0, m.y1, k) * z;
+      const hgt = Math.sin(k * Math.PI) * 2.2 * z;
+      ctx.fillStyle = 'rgba(0,0,0,0.28)';
+      ctx.beginPath(); ctx.ellipse(gx, gy, z * 0.12, z * 0.05, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#23262c';
+      ctx.beginPath(); ctx.arc(gx, gy - hgt, z * 0.1, 0, Math.PI * 2); ctx.fill();
+      continue;
+    }
     const k = Math.min(1, m.t / m.dur), k2 = Math.min(1, (m.t + 0.05) / m.dur);
     const gx = ox + lerp(m.x0, m.x1, k) * z, gy = oy + lerp(m.y0, m.y1, k) * z;
     const hgt = Math.sin(k * Math.PI) * 2.5 * z;

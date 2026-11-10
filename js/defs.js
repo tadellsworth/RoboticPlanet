@@ -472,6 +472,21 @@ const BDEFS = {
     name: 'Pulse Turret', desc: 'Shoots enemy bots in range. Uses Crystal as ammo (4 shots each).',
     cost: { cement: 2, alloy: 2 }, ammo: 'crystal', range: 5, armor: 12, buildTime: 10, war: true,
   },
+  // Defences that work alongside the Pulse Turret (see BUNKER, and `disrupt` and `mortar` below).
+  bunker: {
+    name: 'Bunker', desc: 'A concrete pillbox for 2 warbots. From behind its walls they shoot enemy robots within 3½ tiles with their own Ammo (it keeps a little to reload them) and recharge, and nothing can shoot them back until the Bunker falls. It claims no land, so it can go anywhere in your territory: on a wall line, beside a Gate, at a bridgehead. Shot down, it\'s wrecked and its warbots walk out.',
+    cost: { cement: 6, alloy: 2 }, mil: true, bunker: true, terr: 0, garrison: 2, armor: 32, buildTime: 14, ammoStock: 4, range: 3.5, war: true,
+  },
+  disruptor: {
+    name: 'Disruptor Tower', desc: 'Every few seconds it sends out a pulse that drains the batteries of enemy robots within 4½ tiles: drained warbots slow down, hit at half power and have to go home to recharge. It burns Fuel (one for every 4 pulses), only while enemies are in range.',
+    cost: { cement: 4, alloy: 3, crystal: 3 }, ammo: 'fuel', ammoCap: 4, range: 4.5, armor: 12, buildTime: 12, war: true,
+    disrupt: { every: 2.5, drain: 10, perFuel: 4 },
+  },
+  mortar: {
+    name: 'Mortar Pit', desc: 'Lobs shells at enemy robots 3 to 10 tiles away, aiming where they bunch up: each shell hurts every robot within a tile and a half of where it lands. Slow to reload, and it can\'t hit anything closer than 3 tiles. Fires Ammo (3 shells each).',
+    cost: { cement: 5, alloy: 3 }, ammo: 'ammo', ammoCap: 4, range: 10, minRange: 3, armor: 14, buildTime: 12, war: true,
+    mortar: { reload: 5, shells: 3, damage: 6, splash: 1.5, splashDamage: 3, flight: 1.6 },
+  },
   kiln: {
     name: 'Cement Works', desc: 'Bakes Stone into Cement, the material nearly every building and road is made of: 2 Cement from each Stone. Costs raw Stone itself, so you can always build one.',
     cost: { stone: 4, fiber: 2 }, staff: true, inp: { stone: 1 }, make: { cement: 2 }, out: { cement: 6 },
@@ -581,7 +596,15 @@ const BDEFS = {
 
 /** Order of the build menu. */
 const BUILD_MENU = ['harvester', 'quarry', 'mine', 'tap', 'smelter', 'fab', 'foundry', 'charger', 'farm', 'pump', 'refinery',
-  'kiln', 'tarworks', 'roadworks', 'ropeway', 'viaduct', 'station', 'outpost', 'turret', 'repair', 'armory', 'munitions', 'silo', 'reactor', 'nukesilo', 'depot', 'grower', 'lab'];
+  'kiln', 'tarworks', 'roadworks', 'ropeway', 'viaduct', 'station', 'outpost', 'turret', 'bunker', 'disruptor', 'mortar', 'repair', 'armory', 'munitions', 'silo', 'reactor', 'nukesilo', 'depot', 'grower', 'lab'];
+/** Build-menu tabs: what each building is for. */
+const BUILD_GROUPS = [
+  { key: 'gather', name: 'Gather', types: ['harvester', 'quarry', 'mine', 'tap', 'grower', 'farm', 'pump'] },
+  { key: 'make', name: 'Make', types: ['kiln', 'smelter', 'fab', 'refinery', 'tarworks', 'foundry', 'armory', 'munitions', 'reactor', 'lab'] },
+  { key: 'move', name: 'Move', types: ['charger', 'depot', 'roadworks', 'ropeway', 'viaduct', 'station'], roads: true },
+  { key: 'defend', name: 'Defend', types: ['outpost', 'turret', 'bunker', 'disruptor', 'mortar', 'repair', 'silo', 'nukesilo'], walls: true },
+];
+const BUNKER_FIRE = 0.9; // seconds between shots for each warbot in a Bunker
 /** Ramps are planned in Paths (with roads), not from the build menu. */
 
 const INPUT_CAP = 3;   // how many of each input a production building stockpiles

@@ -1198,7 +1198,7 @@ function computeTerritory() {
   const N = W * H;
   const d = S.players.map(() => new Float32Array(N).fill(Infinity));
   for (const b of S.buildings) {
-    if (b.dead || !b.built || !BDEFS[b.type].mil) continue;
+    if (b.dead || !b.built || !BDEFS[b.type].mil || BDEFS[b.type].bunker) continue; // a Bunker claims no land
     const r = BDEFS[b.type].terr, r2 = r * r + 0.3;
     for (let j = Math.max(0, b.y - r); j <= Math.min(H - 1, b.y + r); j++) {
       for (let i = Math.max(0, b.x - r); i <= Math.min(W - 1, b.x + r); i++) {
@@ -1266,7 +1266,7 @@ function computeTerritory() {
   }
   S.territoryVer++;
   for (const b of S.buildings.slice()) {
-    if (b.dead || BDEFS[b.type].mil || BDEFS[b.type].wild) continue;
+    if (b.dead || (BDEFS[b.type].mil && !BDEFS[b.type].bunker) || BDEFS[b.type].wild) continue;
     // A Viaduct can land on no-one's ground (that's how you reach a new clifftop) or in a rival's
     // land (a bridgehead for an attack): it's only lost once neither end stands in its owner's land.
     if (b.type === 'viaduct') {
@@ -1432,9 +1432,9 @@ function canPlace(owner, type, i, j, skipBlockCheck) {
     return { ok: true, reason: '' };
   }
   if (!roadSide) return { ok: false, reason: 'Haulers need a road to every building: leave a side open where a road can go (open ground inside your border).' };
-  if (def.mil) {
+  if (def.mil && !def.bunker) { // Bunkers can go right beside Outposts (and each other)
     for (const b of S.buildings) {
-      if (!b.dead && b.owner === owner && BDEFS[b.type].mil && dist2(b.x, b.y, i, j) < 16) {
+      if (!b.dead && b.owner === owner && BDEFS[b.type].mil && !BDEFS[b.type].bunker && dist2(b.x, b.y, i, j) < 16) {
         return { ok: false, reason: 'Too close to another military building.' };
       }
     }
