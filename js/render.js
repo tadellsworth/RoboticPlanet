@@ -826,6 +826,20 @@ function drawCliffFace(ctx, i, j, x, y, t, waterOnly) {
  */
 function tallFace(ctx, i, j, x, y, h, d, foot) {
   const lower = foot && h < TP; // the second tile of a face
+  // The art: the canyon wall (its rim at the top) under the rim; below that, the wall's lower half
+  // carrying on, darkening into a shadow at the foot.
+  const wall = canyonArt('chasm-wall');
+  if (wall) {
+    const img = artMip(wall, TP * (ctx.hdScale || 1) * (R.drawScale || 1));
+    if (!lower) ctx.drawImage(img, x, y, TP, h);
+    else ctx.drawImage(img, 0, img.height * 0.45, img.width, img.height * 0.55, x, y, TP, h);
+    if (foot) {
+      const sh = ctx.createLinearGradient(0, y + h * 0.4, 0, y + h);
+      sh.addColorStop(0, 'rgba(15,8,4,0)'); sh.addColorStop(1, 'rgba(15,8,4,0.6)');
+      ctx.fillStyle = sh; ctx.fillRect(x, y + h * 0.4, TP, h * 0.6);
+    }
+    return;
+  }
   const g = ctx.createLinearGradient(0, y, 0, y + h);
   g.addColorStop(0, lower ? THEME.cliffBottom || '#4a2e1e' : THEME.cliffTop || '#8a5c3e');
   g.addColorStop(1, mixColor(THEME.cliffBottom || '#4a2e1e', '#1a0f0a', lower ? 0.6 : 0.25));
@@ -855,7 +869,20 @@ function tallFace(ctx, i, j, x, y, h, d, foot) {
  * sheer rock walls dropping from every island edge (tallest under the southern rims, the faces you
  * look into), with bands of strata, and a dark lip along the other edges.
  */
+/** A canyon art image for this planet's biome (the desert's when there's no biome version). */
+function canyonArt(key) {
+  const b = biome();
+  return (b !== 'desert' && ART[key + '-' + b]) || ART[key] || null;
+}
+
 function drawChasm(ctx, i, j, x, y) {
+  // The art: a wall below an island's rim, the wall carrying on below that, or the depths.
+  const ca = canyonArt('chasm');
+  if (ca) {
+    const key = terrAt(i, j - 1) === T_GROUND ? 'chasm-wall' : terrAt(i, j - 2) === T_GROUND && terrAt(i, j - 1) === T_CHASM ? 'chasm-wall-2' : 'chasm';
+    drawTileArt(ctx, canyonArt(key) || ca, x, y, 0);
+    return;
+  }
   const k = fbm(i / 6, j / 6, 4242, 2);
   const g = ctx.createLinearGradient(0, y, 0, y + TP);
   g.addColorStop(0, `rgb(${22 + 10 * k},${16 + 7 * k},${14 + 6 * k})`);
@@ -889,9 +916,23 @@ function drawChasm(ctx, i, j, x, y) {
   rim(0, 1, x, y + TP - 4, TP, 4);
 }
 
+/** Crumbled rims on the clifftop's edges over a sheer drop (3+ levels, or a canyon) to the north, west or east. */
+function drawRimLips(ctx, i, j, x, y, e) {
+  if (!canyonArt('chasm-lip-n')) return;
+  const drop = (di, dj) => {
+    if (!inMap(i + di, j + dj)) return false;
+    const u = tIdx(i + di, j + dj);
+    return S.terrain[u] === T_CHASM || (S.terrain[u] === T_GROUND && e - S.elev[u] >= 3);
+  };
+  if (drop(0, -1)) drawTileArt(ctx, canyonArt('chasm-lip-n'), x, y, 0);
+  if (drop(-1, 0)) drawTileArt(ctx, canyonArt('chasm-lip-w'), x, y, 0);
+  if (drop(1, 0)) drawTileArt(ctx, canyonArt('chasm-lip-e'), x, y, 0);
+}
+
 /** Cliff edges, shadows and slopes that show which level a ground tile is on. */
 function drawElevation(ctx, i, j, x, y, t, n) {
   const e = S.elev[t];
+  if (e >= 3 || S.terrain[t] === T_GROUND) drawRimLips(ctx, i, j, x, y, e);
   const N = groundElev(i, j - 1), Sv = groundElev(i, j + 1), Wv = groundElev(i - 1, j), E = groundElev(i + 1, j);
   const linked = (di, dj) => canStep(t, tIdx(i + di, j + dj));
   if (S.ramp[t]) { drawSlope(ctx, i, j, x, y, t, n); return; }
@@ -1111,6 +1152,23 @@ function deckLevel(t) {
 }
 
 /**
+ * The bridge art piece for tile (i, j) with these arms: 'ew' or 'ns' along a straight run, 'end-<side>'
+ * where it meets land on that side, 'ramp-<side>' where that land is lower than the deck. Null at a
+ * corner or junction.
+ */
+function bridgePiece(i, j, arms, lv) {
+  const ew = arms[1] || arms[3], ns = arms[0] || arms[2];
+  if (ew && ns) return null;
+  const sides = ew ? [[3, -1, 0, 'w'], [1, 1, 0, 'e']] : [[0, 0, -1, 'n'], [2, 0, 1, 's']];
+  const land = sides.filter(([k, di, dj]) => arms[k] && inMap(i + di, j + dj) && S.terrain[tIdx(i + di, j + dj)] === T_GROUND);
+  if (land.length === 1) {
+    const [, di, dj, side] = land[0];
+    return (S.elev[tIdx(i + di, j + dj)] < lv ? 'ramp-' : 'end-') + side;
+  }
+  return ew || !ns ? 'ew' : 'ns';
+}
+
+/**
  * A bridge tile, lit like the cliffs (from the top-left): a level deck at clifftop height with
  * railings on both edges, the deck slab and its girders showing along the south side, and the
  * bridge's shadow far below on a canyon floor (or close by on water). A rail bridge carries
@@ -1135,6 +1193,9 @@ function drawBridge(ctx, i, j, x, y, t, rail) {
   // Shadow: soft and far off to the south-east on a canyon floor, close by on water.
   if (deep) { fill('rgba(0,0,0,0.22)', rects(hw + 3, 8, 16)); fill('rgba(0,0,0,0.22)', rects(hw, 8, 16)); }
   else fill('rgba(0,18,28,0.4)', rects(hw + 1, 2, 5));
+  // The bridge art, for straight runs and their ends (corners and junctions are drawn).
+  const piece = bridgePiece(i, j, arms, lv), bart = piece && ART[(rail ? 'railbridge-' : deep ? 'skybridge-' : 'bridge-') + piece];
+  if (bart) { ctx.drawImage(artMip(bart, TP * (ctx.hdScale || 1) * (R.drawScale || 1)), x, y, TP, TP); ctx.restore(); return; }
   // The south face, where the deck's south edge is open: slab edge, then the girders.
   const y0 = y + c + hw, spans = [];
   if (!arms[2]) spans.push([arms[3] ? x : x + c - hw, arms[1] ? x + TP : x + c + hw]);
@@ -1248,6 +1309,7 @@ function drawBridge(ctx, i, j, x, y, t, rail) {
  * ramp down at a lower end. frac < 1: still going up, built out that far from a.
  */
 function drawViaductDeck(ctx, ox, oy, z, a, b, frac, building) {
+  if (ART['skybridge-ew']) { drawViaductDeckArt(ctx, ox, oy, z, a, b, frac, building); return; }
   const u = z / TP, W = S.W;
   const ta = tIdx(a.x, a.y), tb = tIdx(b.x, b.y);
   const ew = a.y === b.y, n = Math.abs(b.x - a.x) + Math.abs(b.y - a.y);
@@ -1341,6 +1403,67 @@ function drawViaductDeck(ctx, ox, oy, z, a, b, frac, building) {
   }
 }
 
+/**
+ * A Viaduct's deck from the Sky bridge art (or the rail bridge's, with track on both ends): its
+ * shadow down below, piers on the ground every other tile (stretched to the drop), the deck tiles
+ * (an abutment piece at each end, or a ramp where that end is lower), the track if any, and on spans
+ * of four tiles or more, suspension towers by each end with cables between them.
+ */
+function drawViaductDeckArt(ctx, ox, oy, z, a, b, frac, building) {
+  const ta = tIdx(a.x, a.y), tb = tIdx(b.x, b.y), ew = a.y === b.y;
+  const n = Math.abs(b.x - a.x) + Math.abs(b.y - a.y), di = Math.sign(b.x - a.x), dj = Math.sign(b.y - a.y);
+  const top = Math.max(S.elev[ta], S.elev[tb]);
+  let floor = top;
+  for (let k = 1; k < n; k++) { const t = tIdx(a.x + di * k, a.y + dj * k); floor = Math.min(floor, S.terrain[t] === T_GROUND ? S.elev[t] : 0); }
+  const h = clamp(Math.max(1, top - floor) * 0.3, 0.3, 1.5) * z;
+  const rail = !!(S.rail && S.rail[ta] && S.rail[tb]), style = rail ? 'railbridge-' : 'skybridge-';
+  const built = Math.min(n - 1, Math.max(0, Math.ceil(n * frac - 0.5)));
+  const X = (k) => ox + (a.x + di * k) * z, Y = (k) => oy + (a.y + dj * k) * z;
+  const x0 = Math.min(X(1), X(n - 1)), y0 = Math.min(Y(1), Y(n - 1));
+  if (x0 > R.w + 2 * z || y0 > R.h + 3 * z || Math.max(X(1), X(n - 1)) < -2 * z || Math.max(Y(1), Y(n - 1)) < -3 * z) return;
+  const sideA = ew ? (di > 0 ? 'w' : 'e') : (dj > 0 ? 'n' : 's'), sideB = ew ? (di > 0 ? 'e' : 'w') : (dj > 0 ? 's' : 'n');
+  const piece = (k) => {
+    if (n - 1 > 1 && k === 1) return (S.elev[ta] < top ? 'ramp-' : 'end-') + sideA;
+    if (n - 1 > 1 && k === n - 1) return (S.elev[tb] < top ? 'ramp-' : 'end-') + sideB;
+    return ew ? 'ew' : 'ns';
+  };
+  // Shadow, down on the ground below.
+  ctx.fillStyle = 'rgba(15,8,4,0.26)';
+  for (let k = 1; k <= built; k++) ctx.fillRect(X(k) + h * 0.35 + (ew ? 0 : z * 0.22), Y(k) + h * 0.6 + (ew ? z * 0.22 : 0), ew ? z : z * 0.56, ew ? z * 0.56 : z);
+  // Piers under an east–west deck, stretched down to the ground.
+  const pier = ART[style + 'pier'];
+  if (ew && pier) {
+    const img = artMip(pier, z * (R.drawScale || 1));
+    for (let k = 1; k <= built; k++) {
+      if (n > 3 && k % 2 === 0 && k !== n - 1) continue;
+      ctx.drawImage(img, 0, img.height * 0.25, img.width, img.height * 0.75, X(k), Y(k) + z, z, Math.min(1.6 * z, h + 0.35 * z));
+    }
+  }
+  for (let k = 1; k <= built; k++) {
+    const art = ART[style + piece(k)] || ART[style + (ew ? 'ew' : 'ns')];
+    if (art) ctx.drawImage(artMip(art, z * (R.drawScale || 1)), X(k), Y(k), z, z);
+    if (rail && ART['rail-straight']) {
+      const img = artMip(ART['rail-straight'], z * (R.drawScale || 1));
+      ctx.save(); ctx.translate(X(k) + z / 2, Y(k) + z / 2); if (!ew) ctx.rotate(Math.PI / 2); ctx.drawImage(img, -z / 2, -z / 2, z, z); ctx.restore();
+    }
+  }
+  // Suspension towers by each end, cables between them, on spans of four deck tiles or more.
+  if (built === n - 1 && n - 1 >= 4 && !rail) {
+    const t1 = { x: X(2) + z / 2, y: Y(2) + z / 2, di: ew ? -1 : 0, dj: ew ? 0 : -1, L: n - 3, landed: true };
+    const t2 = { x: X(n - 2) + z / 2, y: Y(n - 2) + z / 2, di: ew ? 1 : 0, dj: ew ? 0 : 1, L: n - 3, landed: true };
+    if (!ew || di > 0) drawTowerArt(ctx, [t1, t2].sort((p, q) => p.y - q.y), z);
+    else drawTowerArt(ctx, [{ ...t2, di: -1 }, { ...t1, di: 1 }], z);
+  }
+  // Still going up: the rest of the span marked out.
+  if (building && built < n - 1) {
+    ctx.strokeStyle = 'rgba(255,255,255,0.55)'; ctx.lineWidth = Math.max(1, z * 0.05);
+    ctx.setLineDash([z * 0.15, z * 0.12]);
+    const k0 = built + 1, xa = Math.min(X(k0), X(n - 1)), ya = Math.min(Y(k0), Y(n - 1));
+    if (ew) ctx.strokeRect(xa, Y(1) + z * 0.22, Math.abs(X(n - 1) - X(k0)) + z, z * 0.56); else ctx.strokeRect(X(1) + z * 0.22, ya, z * 0.56, Math.abs(Y(n - 1) - Y(k0)) + z);
+    ctx.setLineDash([]);
+  }
+}
+
 /** Every Viaduct's deck: each built pair once, and those still going up as far as they've got. */
 function drawViaducts(ctx, ox, oy, z) {
   for (const b of S.buildings) {
@@ -1348,6 +1471,56 @@ function drawViaducts(ctx, ox, oy, z) {
     if (b.link) { const o = getE(b.link); if (o && !o.dead) drawViaductDeck(ctx, ox, oy, z, b, o, 1, false); continue; }
     if (b.viaTo >= 0) drawViaductDeck(ctx, ox, oy, z, b, { x: b.viaTo % S.W, y: (b.viaTo / S.W) | 0 }, b.built ? 1 : Math.max(0.04, b.progress), !b.built);
   }
+}
+
+/**
+ * Level crossings (the art's): barriers down and red lamps flashing while a train is near, up
+ * otherwise. Drawn every frame over the map.
+ */
+function drawCrossingGates(ctx, ox, oy, z, inView) {
+  if (!ART['rail-barrier-up']) return;
+  const ver = (S.roadVer || 0) + '/' + (S.railVer || 0);
+  if (!R.xings || R.xings.ver !== ver || R.xings.of !== S) {
+    const list = [];
+    for (let t = 0; t < S.W * S.H; t++) if (S.rail[t] && S.road[t] && !S.bAt[t]) { const pc = railPiece(t); if (pc.key === 'rail-level-crossing') list.push([t, pc.q]); }
+    R.xings = { ver, of: S, list };
+  }
+  for (const [t, q] of R.xings.list) {
+    const i = t % S.W, j = (t / S.W) | 0;
+    if (!inView(i, j, 2)) continue;
+    const near = trainNear(t), x = ox + i * z, y = oy + j * z;
+    const art = ART[near ? 'rail-barrier-down' : 'rail-barrier-up'], img = artMip(art, z * (R.drawScale || 1));
+    ctx.save(); ctx.translate(x + z / 2, y + z / 2); ctx.rotate((q * Math.PI) / 2);
+    ctx.drawImage(img, -z / 2, -z / 2, z, z);
+    if (near && Math.sin(R.time * 9) > 0 && ART['rail-lights-on']) ctx.drawImage(artMip(ART['rail-lights-on'], z * (R.drawScale || 1)), -z / 2, -z / 2, z, z);
+    ctx.restore();
+  }
+}
+
+/**
+ * Suspension towers and cables from the art. A tower is one tile wide and two tall, standing on its
+ * deck tile's bottom edge. On an east–west span, a cable is stretched from tower to tower on each
+ * side: the north one (from 8% down the towers to the deck's north edge, 22% down its tile) behind
+ * the towers, the south one (37% down to the 78% line) in front.
+ */
+function drawTowerArt(ctx, towers, z) {
+  const tower = ART['skybridge-tower'], cable = ART['skybridge-cable'], lamp = ART['skybridge-tower-lamp'];
+  const timg = artMip(tower, z * (R.drawScale || 1));
+  // East–west spans: one cable pair per span, from its west tower.
+  const spans = towers.filter((tw) => tw.landed && tw.dj === 0 && tw.di < 0);
+  const cab = (tw, north) => {
+    if (!cable) return;
+    const x0 = tw.x, x1 = tw.x + (tw.L - 1) * z, top = tw.y - z / 2;
+    const y0 = north ? top - 0.84 * z : top - 0.26 * z, h = north ? 1.06 * z : 1.04 * z;
+    ctx.drawImage(artMip(cable, (x1 - x0) * (R.drawScale || 1)), x0, y0, x1 - x0, h);
+  };
+  for (const tw of spans) cab(tw, true);
+  for (const tw of towers) {
+    const x = tw.x - z / 2, y = tw.y + z / 2 - 2 * z;
+    ctx.drawImage(timg, x, y, z, 2 * z);
+    if (lamp && Math.sin(R.time * 2.4 + tw.x * 0.01) > -0.2) ctx.drawImage(artMip(lamp, z * (R.drawScale || 1)), x, y, z, 2 * z);
+  }
+  for (const tw of spans) cab(tw, false);
 }
 
 /** Every bridge tile on the map (kept until roads or rail change). */
@@ -1380,7 +1553,13 @@ function drawBridgeRigging(ctx, ox, oy, z, inView) {
     const ew = arms[1] || arms[3] || !arms.some(Boolean);
     // Piers below a deck whose south side is open (every other tile along a straight run).
     if (ew && !arms[2] && below >= 0 && bridgeable(below) && !onBridge(below) && (i % 2 === 0 || !(arms[1] && arms[3]))) {
-      if (deep) {
+      // The art's pier: one tile wide, two tall, its top on the deck tile's centre line (the top
+      // quarter hides behind the deck, so only what hangs below the tile is drawn).
+      const part = ART[(S.road[t] ? (deep ? 'skybridge' : 'bridge') : 'railbridge') + '-pier'];
+      if (part) {
+        const img = artMip(part, z * (R.drawScale || 1));
+        ctx.drawImage(img, 0, img.height * 0.25, img.width, img.height * 0.75, x, y + z, z, z * 1.5);
+      } else if (deep) {
         const len = z * 1.15;
         for (const s of [-1, 1]) {
           const px = cx + s * 5 * u - 2 * u;
@@ -1424,6 +1603,7 @@ function drawBridgeRigging(ctx, ox, oy, z, inView) {
   }
   // Back towers first (the north and west ones), so nearer ones stand in front.
   towers.sort((a, b) => a.y - b.y);
+  if (ART['skybridge-tower']) { drawTowerArt(ctx, towers, z); return; }
   for (const tw of towers) {
     const ax = -tw.di, ay = -tw.dj;            // along the span, out from the landing
     const pxv = -ay, pyv = ax;                 // across it
@@ -1694,7 +1874,8 @@ function drawBuilding(ctx, type, cx, cy, s, owner, b) {
   const t = R.time;
   const working = b && b.working;
   if (b && !b.built) { drawSite(ctx, type, cx, cy, s, owner, b); return; }
-  let art = artFor(type, owner), full = null, fade = 1;
+  // A deployed Crawler is drawn as the vehicle (turned the way it parked, unfolding), not as a building image.
+  let art = type === 'crawlerbase' ? null : artFor(type, owner), full = null, fade = 1;
   // A Silo shows its missile only once it's ready to fire (a Nuclear Silo: once it's armed); the
   // missile fades in as it's raised.
   if (art && b && b.built && (type === 'silo' || type === 'nukesilo')) {
@@ -1870,7 +2051,7 @@ function drawBuilding(ctx, type, cx, cy, s, owner, b) {
       ctx.fillRect(cx + 3 * u, cy + 2 * u, 7 * u, 2 * u);
       break;
     }
-    case 'crawlerbase': { drawCrawler(ctx, -Math.PI / 2, cx, cy, s, owner, true, 0, working); break; }
+    case 'crawlerbase': { drawCrawler(ctx, b && b.face !== undefined ? b.face : -Math.PI / 2, cx, cy, s, owner, true, 0, working, b); break; }
     case 'viaduct': {
       // An abutment: a concrete block keyed into the clifftop, the deck starting out of it toward
       // the far end, bollards where the railings end and a team-coloured lamp.
@@ -2329,7 +2510,43 @@ function drawSite(ctx, type, cx, cy, s, owner, b) {
  * Railway track on the baked map: sleepers and two rails toward every joined neighbour (a level
  * crossing over a road keeps the road showing between the rails).
  */
+/** Draw art image `art` over tile (x, y), turned `quarter` quarter-turns clockwise. */
+function drawTileArt(ctx, art, x, y, quarter) {
+  const img = artMip(art, TP * (ctx.hdScale || 1) * (R.drawScale || 1));
+  if (!quarter) { ctx.drawImage(img, x, y, TP, TP); return; }
+  ctx.save(); ctx.translate(x + TP / 2, y + TP / 2); ctx.rotate((quarter * Math.PI) / 2);
+  ctx.drawImage(img, -TP / 2, -TP / 2, TP, TP);
+  ctx.restore();
+}
+
+/**
+ * Which track piece tile t needs, and how far to turn it (quarter turns clockwise), from the art's
+ * pieces: straight (west–east), curve (west–south), tee (west–east and south), cross, end (track from
+ * the west), and a level crossing (track west–east over a road running north–south). Null for no track.
+ */
+function railPiece(t) {
+  const i = t % S.W, j = (t / S.W) | 0;
+  const has = (di, dj) => {
+    if (!inMap(i + di, j + dj)) return false;
+    const u = tIdx(i + di, j + dj);
+    return railStep(t, u) || (S.bAt[t] > 0 && viaLink(t) >= 0 && Math.sign((viaLink(t) % S.W) - i) === di && Math.sign(((viaLink(t) / S.W) | 0) - j) === dj);
+  };
+  const N = has(0, -1), E = has(1, 0), So = has(0, 1), Wd = has(-1, 0), n = N + E + So + Wd;
+  if (S.road[t] && n <= 2 && !((N || So) && (E || Wd))) return { key: 'rail-level-crossing', q: N || So ? 1 : 0 };
+  if (n === 0) return { key: 'rail-straight', q: 0 };
+  if (n === 1) return { key: 'rail-end', q: Wd ? 0 : N ? 1 : E ? 2 : 3 };
+  if (n === 2) {
+    if (E && Wd) return { key: 'rail-straight', q: 0 };
+    if (N && So) return { key: 'rail-straight', q: 1 };
+    return { key: 'rail-curve', q: Wd && So ? 0 : N && Wd ? 1 : E && N ? 2 : 3 };
+  }
+  if (n === 3) return { key: 'rail-tee', q: !N ? 0 : !E ? 1 : !So ? 2 : 3 };
+  return { key: 'rail-cross', q: 0 };
+}
+
 function drawRail(ctx, i, j, x, y, t) {
+  const pc = ART['rail-straight'] ? railPiece(t) : null;
+  if (pc && ART[pc.key]) { drawTileArt(ctx, ART[pc.key], x, y, pc.q); return; }
   const dirs = [];
   for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
     if (!inMap(i + di, j + dj)) continue;
@@ -2383,6 +2600,31 @@ function drawFreightTrain(ctx, u, sx, sy, s) {
     return { x: e.x, y: e.y };
   };
   const n = u.carry ? u.carryN || 1 : 0;
+  // The art: each car is 8 of its frame's 10 units coupler to coupler (0.62 tiles), so cars sit 0.62
+  // tiles apart along the track, each turned to its own bit of the curve. Flat cars and hoppers alternate.
+  const loco = ART['freight-loco@' + u.owner + '-f0'];
+  if (loco) {
+    const size = s * 0.775, n = u.carry ? u.carryN || 1 : 0;
+    const cars = [];
+    for (let k = 0; k <= 4; k++) {
+      const d = k * 0.62, p = at(d), f = at(Math.max(0, d - 0.25)), b = at(d + 0.25);
+      cars.push({ k, x: sx + (p.x - u.x) * s, y: sy + (p.y - u.y) * s, ang: Math.atan2(f.y - b.y, f.x - b.x) });
+    }
+    for (const c of cars) drawBotShadow(ctx, { face: c.ang }, c.x, c.y, size * 0.42, size * 0.2);
+    for (let k = 4; k >= 1; k--) {
+      const c = cars[k], hopper = k % 2 === 0, art = artFor(hopper ? 'freight-wagon-hopper' : 'freight-wagon-flat', u.owner);
+      drawArt(ctx, art, c.x, c.y, size, c.ang);
+      const load = Math.max(0, Math.min(14, n - (k - 1) * 14));
+      // Load: the flat car's deck (x 40–216, y 81–175) or the hopper's opening (x 45–211, y 82–174).
+      if (load > 0) drawTruckCargo(ctx, { carry: u.carry, carryN: Math.ceil((load / 14) * 8), face: c.ang }, c.x, c.y, ((hopper ? 45 : 40) - 128) / 256 * size, (hopper ? 166 : 176) / 256 * size, (hopper ? 92 : 94) / 256 * size, s);
+    }
+    const fr = ART['freight-loco@' + u.owner + '-f' + (Math.floor((u.odo || 0) / FRAME_STEP) % 4)] || loco;
+    drawArt(ctx, fr, sx, sy, size, u.face || 0);
+    if (ART['freight-loco-lights']) drawArt(ctx, ART['freight-loco-lights'], sx, sy, size, u.face || 0);
+    if (u.drive < 0 && ART['freight-loco-brake']) drawArt(ctx, ART['freight-loco-brake'], sx, sy, size, u.face || 0);
+    if (u.drive > 0 && ART['freight-loco-exhaust']) { ctx.globalAlpha = clamp(1 - (u.vel || 0) / (u.vtop || 1), 0.3, 1); drawArt(ctx, ART['freight-loco-exhaust'], sx, sy, size, u.face || 0); ctx.globalAlpha = 1; }
+    return;
+  }
   const car = (d, loco, load) => {
     const p = at(d), f = at(Math.max(0, d - 0.25)), b = at(d + 0.25);
     const ang = Math.atan2(f.y - b.y, f.x - b.x);
@@ -2412,10 +2654,46 @@ function drawFreightTrain(ctx, u, sx, sy, s) {
 }
 
 /**
+ * The Crawler's art (straight down, facing right; the frame is 20 units, the Crawler 18, so 1.67
+ * tiles for its 1.5): eight tread frames by distance driven, with the sensor dish spinning on its
+ * pivot (180, 256 of 512) and the headlights and dust on top; for two seconds after it stops it plays
+ * its unfolding (deploy frames d0–d9, the dish easing back to straight ahead; d8 on have the raised
+ * dish built in), and the same backwards when it packs up; deployed, the standing base.
+ */
+const CRAWLER_UNFOLD = 2;
+function drawCrawlerArt(ctx, face, x, y, s, owner, deployed, odo, e) {
+  const size = s * 1.67;
+  let d = -1;
+  if (deployed) {
+    const k = e && e.deployedAt !== undefined ? (S.time - e.deployedAt) / CRAWLER_UNFOLD : 1;
+    d = k >= 1 ? 9 : clamp(Math.floor(k * 10), 0, 9);
+  } else if (e && e.packedAt !== undefined && S.time - e.packedAt < CRAWLER_UNFOLD) {
+    d = clamp(9 - Math.floor(((S.time - e.packedAt) / CRAWLER_UNFOLD) * 10), 0, 9);
+  }
+  ctx.fillStyle = 'rgba(20,10,5,0.3)';
+  ctx.beginPath(); ctx.ellipse(x + s * 0.08, y + s * 0.12, size * 0.47, size * 0.33, face, 0, Math.PI * 2); ctx.fill();
+  const moving = !deployed && d < 0 && e && e.moved;
+  if (moving && ART['crawler-dust']) { ctx.globalAlpha = 0.75; drawArt(ctx, ART['crawler-dust'], x, y, size, face); ctx.globalAlpha = 1; }
+  const art = d === 9 && deployed ? artFor('crawlerbase', owner)
+    : d >= 0 ? ART['crawler-deploy@' + owner + '-d' + d]
+    : ART['crawler@' + owner + '-f' + (Math.floor((odo || 0) / (FRAME_STEP * 0.5)) % 8)];
+  if (art) drawArt(ctx, art, x, y, size, face);
+  if (d < 8 && ART['crawler-dish']) {
+    const spin = d >= 0 ? 0 : R.time * 0.9;
+    const img = artMip(ART['crawler-dish'], size * (R.drawScale || 1));
+    ctx.save(); ctx.translate(x, y); ctx.rotate(face); ctx.translate((180 / 512 - 0.5) * size, 0); ctx.rotate(spin);
+    ctx.drawImage(img, (-180 / 512) * size, (-256 / 512) * size, size, size);
+    ctx.restore();
+  }
+  if (!deployed && d < 0 && ART['crawler-lights']) drawArt(ctx, ART['crawler-lights'], x, y, size, face);
+}
+
+/**
  * A Crawler: a colossal tracked hull with a cab at the front, a cargo deck and a mast. On the move
  * its treads roll (odo); deployed it stands on four outrigger legs with charging pads lit on its deck.
  */
-function drawCrawler(ctx, face, x, y, s, owner, deployed, odo, working) {
+function drawCrawler(ctx, face, x, y, s, owner, deployed, odo, working, e) {
+  if (ART['crawler@' + owner + '-f0']) { drawCrawlerArt(ctx, face, x, y, s, owner, deployed, odo, e); return; }
   const color = PLAYER_COLORS[owner], L = s * 1.5, W = s * 0.95;
   ctx.save();
   ctx.translate(x, y);
@@ -2470,9 +2748,12 @@ function drawCrawler(ctx, face, x, y, s, owner, deployed, odo, working) {
  * construction site (red while the far end is blocked).
  */
 const ROPE_TOP = 0.82; // how high (in tiles) the cable leaves the pylon
+/** How high above its tile centre the cable leaves a station: the art's bull wheel (0.10 down an image anchored at 0.615, 1.47 tiles tall), or the drawn pylon's top. */
+function ropeTop() { return ART['ropeway@0'] ? (0.615 - 0.1) * 1.47 : ROPE_TOP; }
 function ropeCurve(ax, ay, bx, by, z) {
   const len = Math.sqrt((bx - ax) * (bx - ax) + (by - ay) * (by - ay));
-  return { x0: ax, y0: ay - ROPE_TOP * z, x1: bx, y1: by - ROPE_TOP * z, cx: (ax + bx) / 2, cy: (ay + by) / 2 - ROPE_TOP * z + len * 0.08 };
+  const top = ropeTop();
+  return { x0: ax, y0: ay - top * z, x1: bx, y1: by - top * z, cx: (ax + bx) / 2, cy: (ay + by) / 2 - top * z + len * 0.08 };
 }
 function drawRopeways(ctx, ox, oy, z) {
   for (const b of S.buildings) {
@@ -2507,6 +2788,14 @@ function drawRopeways(ctx, ox, oy, z) {
     const f = clamp(((u.x - ax) * (bx - ax) + (u.y - ay) * (by - ay)) / L2, 0, 1);
     const c = ropeCurve(ox + ax * z, oy + ay * z, ox + bx * z, oy + by * z, z);
     const px = (1 - f) * (1 - f) * c.x0 + 2 * (1 - f) * f * c.cx + f * f * c.x1, py = (1 - f) * (1 - f) * c.y0 + 2 * (1 - f) * f * c.cy + f * f * c.y1;
+    const gart = artFor('gondola', u.owner);
+    if (gart) {
+      // The gondola art hangs by its grip clamp, at (0.5, 0.08) of the image, from the cable.
+      const sz = z * 0.8, img = artMip(gart, sz * (R.drawScale || 1));
+      ctx.drawImage(img, px - sz * 0.5, py - sz * 0.08, sz, sz);
+      if (u.carry) { ctx.fillStyle = '#1b1e25'; ctx.fillRect(px - sz * 0.09, py + sz * 0.36, sz * 0.18, sz * 0.12); ctx.fillStyle = GOOD[u.carry].color; ctx.fillRect(px - sz * 0.075, py + sz * 0.37, sz * 0.15, sz * 0.1); }
+      continue;
+    }
     const w = z * 0.34, h = z * 0.28, top = py + z * 0.14;
     ctx.strokeStyle = '#2a2e35'; ctx.lineWidth = Math.max(1, z * 0.03);
     ctx.beginPath(); ctx.moveTo(px, py); ctx.lineTo(px, top); ctx.stroke();
@@ -2524,6 +2813,8 @@ function drawRopeways(ctx, ox, oy, z) {
  */
 function drawNest(ctx, cx, cy, s, b) {
   const lv = (b && b.level) || 1, t = R.time;
+  const art = ART['nest-' + Math.min(3, lv)];
+  if (art) { drawArt(ctx, art, cx, cy, s); return; }
   const cg = ctx.createRadialGradient(cx, cy + s * 0.1, s * 0.1, cx, cy + s * 0.1, s * 1.05);
   cg.addColorStop(0, 'rgba(92,40,110,0.55)'); cg.addColorStop(1, 'rgba(92,40,110,0)');
   ctx.fillStyle = cg;
@@ -2562,6 +2853,12 @@ function drawCritter(ctx, u, x, y, s) {
   ctx.translate(x, y);
   ctx.fillStyle = 'rgba(20,8,20,0.3)';
   ctx.beginPath(); ctx.ellipse(s * 0.03, s * 0.08, s * 0.17 * k, s * 0.1 * k, 0, 0, Math.PI * 2); ctx.fill();
+  // The art: four walking frames, stepping while it moves or fights.
+  const walk = ART[u.type + '-f0'] ? ART[u.type + '-f' + (u.moved || u.fought ? Math.floor(R.time * (brute ? 6 : 10) + u.id) % 4 : 0)] : null;
+  if (walk) {
+    ctx.restore();
+    drawArt(ctx, walk, x, y, s * (brute ? 0.82 : 0.62), face);
+  } else {
   ctx.rotate(face);
   ctx.strokeStyle = brute ? '#3b2418' : '#2a1430'; ctx.lineWidth = Math.max(1, s * 0.03 * k); ctx.lineCap = 'round';
   ctx.beginPath();
@@ -2582,6 +2879,7 @@ function drawCritter(ctx, u, x, y, s) {
   ctx.fillStyle = brute ? '#ffb347' : '#ff5fd2';
   ctx.beginPath(); ctx.arc(s * 0.12 * k, -s * 0.03 * k, s * 0.022 * k, 0, Math.PI * 2); ctx.arc(s * 0.12 * k, s * 0.03 * k, s * 0.022 * k, 0, Math.PI * 2); ctx.fill();
   ctx.restore();
+  }
   if (u.hp < u.maxHp) {
     const w = s * 0.34 * k;
     ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fillRect(x - w / 2, y - s * 0.24 * k, w, Math.max(2, s * 0.05));
@@ -2593,7 +2891,7 @@ function drawBot(ctx, u, sx, sy, s) {
   if (BOTS[u.type].wild) { drawCritter(ctx, u, sx, sy, s); return; }
   if (BOTS[u.type].rail) { drawFreightTrain(ctx, u, sx, sy, s); return; }
   if (BOTS[u.type].train) { drawRoadTrain(ctx, u, sx, sy, s); return; }
-  if (BOTS[u.type].crawler) { drawCrawler(ctx, u.face || 0, sx, sy, s, u.owner, false, u.odo || 0); return; }
+  if (BOTS[u.type].crawler) { drawCrawler(ctx, u.face || 0, sx, sy, s, u.owner, false, u.odo || 0, false, u); return; }
   const color = PLAYER_COLORS[u.owner];
   const own = driveFrame(u) || artFor(u.type, u.owner);
   // Specialists use their own art when it exists, otherwise the worker's with a badge.
@@ -2859,6 +3157,30 @@ function drawRoadTrain(ctx, u, sx, sy, s) {
     return { x: e.x, y: e.y };
   };
   const n = u.carry ? u.carryN || 1 : 0, cab = Math.min(8, n), rest = n - cab, t1 = Math.min(11, rest), t2 = rest - t1;
+  // The art: the tractor, then two flatbeds, each trailer's kingpin on the fifth wheel of the one in
+  // front (5.3 of the frame's 10 units apart: 0.477 tiles at the Freight Truck's size), drawn in that
+  // order so each trailer's nose rides over the coupling. All the load is on the trailers.
+  const tractor = driveFrame(u), trailerArt = artFor('roadtrain-trailer', u.owner);
+  if (tractor && trailerArt) {
+    const size = s * 0.9, gap = 0.477, l1 = Math.min(15, n), l2 = n - l1;
+    const cars = [{ x: sx, y: sy, ang: u.face || 0 }];
+    for (const d of [gap, gap * 2]) {
+      const p = at(d), f = at(d - 0.2), b = at(d + 0.2);
+      cars.push({ x: sx + (p.x - u.x) * s, y: sy + (p.y - u.y) * s, ang: Math.atan2(f.y - b.y, f.x - b.x) });
+    }
+    for (const c of cars) drawBotShadow(ctx, { face: c.ang }, c.x, c.y, size * 0.4, size * 0.16);
+    drawArt(ctx, tractor, sx, sy, size, u.face);
+    [l1, l2].forEach((load, k) => {
+      const c = cars[k + 1];
+      drawArt(ctx, trailerArt, c.x, c.y, size, c.ang);
+      // The bed inside the rails: x 53–184, y 92–164 of the 256 frame.
+      if (load > 0) drawTruckCargo(ctx, { carry: u.carry, carryN: Math.ceil((load / 15) * 8), face: c.ang }, c.x, c.y, (-75 / 256) * size, (131 / 256) * size, (72 / 256) * size, s);
+    });
+    // Brake lights on the last trailer (the tractor's own are hidden under the first).
+    const last = cars[2];
+    if (u.drive < 0 && ART['roadtrain-brake']) drawArt(ctx, ART['roadtrain-brake'], last.x + Math.cos(last.ang) * (35.8 / 256) * size, last.y + Math.sin(last.ang) * (35.8 / 256) * size, size, last.ang);
+    return;
+  }
   for (const [d, load] of [[1.22, t2], [0.66, t1]]) {
     const p = at(d), f = at(d - 0.22), b = at(d + 0.22);
     const ang = Math.atan2(f.y - b.y, f.x - b.x);
@@ -3014,6 +3336,7 @@ function render(dtReal) {
   ctx.globalAlpha = 1;
   drawBridgeRigging(ctx, ox, oy, z, inView);
   drawViaducts(ctx, ox, oy, z);
+  drawCrossingGates(ctx, ox, oy, z, inView);
 
   // Placement overlay
   if (R.mode === 'place' && R.overlay) {
@@ -3304,6 +3627,7 @@ function drawEvent(ctx, ox, oy, z) {
       }
       ctx.fillStyle = 'rgba(0,0,0,0.25)';
       ctx.beginPath(); ctx.ellipse(x, oy + (L.y + 0.5) * z + z * 0.2, w * 0.45, z * 0.15, 0, 0, Math.PI * 2); ctx.fill();
+      if (ART['trader-ship']) { drawArt(ctx, ART['trader-ship'], x, y, w * 1.25); continue; }
       ctx.fillStyle = '#9fb3c4';
       ctx.beginPath(); ctx.ellipse(x, y, w * 0.5, z * 0.22, 0, 0, Math.PI * 2); ctx.fill();
       ctx.fillStyle = '#7fe3ff';

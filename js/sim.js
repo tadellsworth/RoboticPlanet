@@ -438,6 +438,10 @@ function goTo(u, x, y) {
   const p = findPath(Math.floor(u.x), Math.floor(u.y), x, y, u.type !== 'warbot' && !BOTS[u.type].wild ? u.owner : undefined, routeOpts(u));
   u.breach = 0;
   if (!p) { u.failGoal = goal; u.failUntil = S.time + 2; return false; }
+  // Starting on a Viaduct's abutment straight across it: keep the abutment in the route, so the
+  // crossing is seen as one (see moveAlong) from the moment it leaves.
+  const st = tIdx(Math.floor(u.x), Math.floor(u.y));
+  if (p.length && S.bAt[st] && viaLink(st) === p[0]) p.unshift(st);
   exitBuilding(u);
   u.path = p; u.pi = 0; u.idleT = 0; u.goal = y * S.W + x;
   return true;
@@ -785,9 +789,10 @@ function travel(u, x, y, dt) {
  */
 function deckEnds(u) {
   if (!u.deck) return null;
-  const t = tIdx(Math.floor(u.x), Math.floor(u.y)), [a, b] = u.deck;
-  if (t === a || t === b) { u.deck = null; return null; }
+  const [a, b] = u.deck;
   const d = (e) => dist2(u.x, u.y, (e % S.W) + 0.5, ((e / S.W) | 0) + 0.5);
+  // Off the deck only once it's well onto an end, not just over its edge.
+  if (d(a) < 0.1 || d(b) < 0.1) { u.deck = null; return null; }
   return d(a) <= d(b) ? [a, b] : [b, a];
 }
 
@@ -4168,6 +4173,7 @@ function deployCrawler(u) {
   const t = deploySpot(u.owner, Math.floor(u.x), Math.floor(u.y));
   if (t < 0) return 'The Crawler needs clear, open ground to deploy: drive it somewhere level and empty.';
   const b = addBuilding(u.owner, 'crawlerbase', t % S.W, (t / S.W) | 0, true);
+  b.face = u.face || 0; b.deployedAt = S.time; // for the drawing: which way it's parked, and the unfolding
   b.stock = u.cargo || {};
   b.armor = Math.max(4, BDEFS.crawlerbase.armor * (u.hp / u.maxHp));
   if (u.cargoKeep) b.keep = u.cargoKeep;
@@ -4184,6 +4190,7 @@ function packCrawler(b) {
   if (b.dead || !BDEFS[b.type].mobile) return null;
   releaseBotsFrom(b, false);
   const u = addBot(b.owner, 'crawler', b.x, b.y);
+  u.face = b.face || 0; u.packedAt = S.time; // folding back up (drawn)
   S.players[b.owner].stats.bots--; // the same machine, not a new bot
   u.cargo = {};
   for (const g in b.stock) if (b.stock[g] > 0) u.cargo[g] = b.stock[g];

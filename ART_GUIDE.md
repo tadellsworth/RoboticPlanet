@@ -874,6 +874,12 @@ the drawn ones.
 
 ### Batch 13: Crawler, Freight rail, 3D bridges, Viaducts and Sky islands cliffs (the final big batch)
 
+**Installed** (from the first version of this prompt): Batches 11–13 are all in the game as WebP, sized to how big
+they're drawn. The canyon set's `chasm-wall` serves as the Sky islands tall cliff face (its lower half carries on down
+the second tile) and the `chasm-lip-*` overlays as the crumbled rims; the Sky bridge pieces, piers, towers and cables
+dress the Viaducts (the rail bridge pieces when track runs across), and the old bottomless-canyon tiles still draw
+`T_CHASM` in older saves. The Sky islands cliff and Viaduct prompts below weren't needed.
+
 Everything added since Batch 10 in one go: the Crawler (with its treads, deploy sequence and spinning dish), the
 Freight Train, the Rail Station and track, a 3D bridge kit (water and rail), the Viaduct and the Sky islands
 cliffs, plus the Batch 11 and 12 assets if they aren't made yet. Until art arrives the game draws all of these

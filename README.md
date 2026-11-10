@@ -190,8 +190,9 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
   **Crater** sinks a crater one cliff below a rim in the middle, its floor holding rich fields (and Uranium in a
   Nuclear race), with one natural ramp in from each side. **Plateaus** stands each base on the top level, with a
   terrace one level down all round and only two natural slopes off it. Both force at least three levels.
-  **Sky islands** (`sky: true`) is Islands with the sea turned into a canyon floor at level 0 and every island lifted
-  into a mesa (home islands +3 levels, the middle one and the islets +4), so every drop is 3+ levels: no Ramp can
+  **Sky islands** (`sky: true`) lays out a smaller home island per side, a small middle one and a jittered grid of
+  small islands between (the same for every side), then turns the sea into a canyon floor at level 0 and lifts every
+  island into a mesa (home islands +3 levels, the rest +4; small ones flattened to one level), so every drop is 3+ levels: no Ramp can
   reach the floor, only a Ropeway. A thin scatter of boulders and ore lies down there. Viaducts cross between the
   clifftops; the AI finds one with `aiViaductSpot`. (`T_CHASM`, the old bottomless canyon, is kept for old saves.)
 - **Loitering:** a warbot standing still in another player's territory for more than `BATTERY.waitGrace` (15 s) drains

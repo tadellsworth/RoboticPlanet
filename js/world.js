@@ -108,6 +108,23 @@ function generateMap(seed, W, H, cfg) {
       isles = [{ x: ccx, y: ccy, rx: cr, ry: cr }];
       for (const o of base) for (let k = 0; k < 3; k++) { const [x, y] = rot(o.x, o.y, k); isles.push({ x, y, rx: o.rx, ry: o.ry }); }
     }
+    // Sky islands: a smaller home island, a small mesa in the middle and a scatter of small mesas
+    // between (laid out the same for every side), so there's a lot to bridge.
+    if (SH.sky) {
+      const srng = makeRng((seed ^ 0x51c7) >>> 0);
+      const sym = (o) => np === 2 ? [o, { x: W - 1 - o.x, y: H - 1 - o.y, rx: o.rx, ry: o.ry }]
+        : [0, 1, 2].map((k) => { const [x, y] = rot(o.x, o.y, k); return { x, y, rx: o.rx, ry: o.ry }; });
+      const home = np === 2 ? { x: bx0, y: by0 - 3, rx: Math.min(W * 0.27, 11), ry: 8 } : { x: bx0, y: by0 - 4, rx: 8.5, ry: 8.5 };
+      isles = [...sym(home), { x: ccx, y: ccy, rx: 4, ry: 4 }];
+      const cell = 9;
+      for (let gy = cell / 2; gy < H; gy += cell) for (let gx = cell / 2; gx < W; gx += cell) {
+        const x = gx + (srng() - 0.5) * 4, y = gy + (srng() - 0.5) * 4, r = 2.6 + srng() * 1.8, sq = 0.8 + srng() * 0.4;
+        const ci = Math.round(x), cj = Math.round(y);
+        if (ci < 2 || cj < 2 || ci > W - 3 || cj > H - 3 || !canon(ci, cj)) continue;
+        if (isles.some((o) => dist(x, y, o.x, o.y) < Math.max(o.rx, o.ry) + r + 2.5)) continue;
+        isles.push(...sym({ x, y, rx: r, ry: r * sq }));
+      }
+    }
     const out = (o, i, j) => (Math.sqrt(((i - o.x) / o.rx) ** 2 + ((j - o.y) / o.ry) ** 2) - 1) * Math.min(o.rx, o.ry);
     isleCut = () => {
       for (let j = half; j < H; j++) for (let i = 0; i < W; i++) {
@@ -638,6 +655,13 @@ function generateMap(seed, W, H, cfg) {
       for (let h = 0; h < q.length; h++) { const a = q[h]; sx += a % W; sy += (a / W) | 0; orth(a, (u) => { if (lab[u] < 0 && terrain[u] !== T_WATER) { lab[u] = t; q.push(u); } }); }
       const cx = sx / q.length, cy = sy / q.length;
       const lift = dist(cx, cy, ccx, ccy) < span * 0.2 || q.length < 70 ? 4 : 3;
+      // A small mesa is flat-topped (its most common level), so no part of it is cut off by a cliff.
+      if (q.length < 140) {
+        const n = {};
+        for (const a of q) n[elev[a]] = (n[elev[a]] || 0) + 1;
+        const lv = +Object.keys(n).sort((p, r) => n[r] - n[p])[0];
+        for (const a of q) { elev[a] = lv; ramp[a] = 0; }
+      }
       for (const a of q) elev[a] = Math.min(elev[a] + lift, 6);
     }
     const sd = (seed ^ 0x5c1) >>> 0;
