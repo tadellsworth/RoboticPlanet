@@ -308,8 +308,9 @@ const ISLE_GAP = 2.5;     // Islands maps: at least this much sea between island
 const SKY_GAP = 1;        // Sky islands: canyons between mesas are narrower (short Viaducts)
 const SKY_RES_MUL = 1.8;  // Sky islands: Ore, Crystal, Stalk and Stone hold this much more (half the fields fall in the canyons)
 const HOME_STONE = 300;   // Islands and Sky islands: Stone each home island or mesa holds at the start (topped up near the base)
-const LOOT_MAX = 60;      // most crates a wrecked building spills
-const LOOT_TIME = 300;    // seconds a loot pile lies before it rots away
+const LOOT_MAX = 500;     // most crates a wrecked or demolished building spills (everything that was inside it)
+const LOOT_TIME = 300;    // seconds a pile of crates on no-one's land lies before it rots away (on claimed land it stays)
+const CRATE_SAFE = 6;     // haulers collect crates on their own land only with no enemy robot (or gun) within this many tiles
 // Walls and Gates: an enemy warbot plans a route through one as if it were this many extra tiles
 // long, plus one per point of armor left, so it walks round a short way and breaks through a long one.
 const BREACH_COST = 8;

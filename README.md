@@ -303,10 +303,14 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
 - **Army orders:** tap **Army**, then a rival building to attack it with warbots or a missile, or open
   ground to send warbots there to hold the area under a rally flag. Tap the flag to call them back, or press
   **Recall all** in the Army banner (**C** on a computer) to end every attack and rally flag at once.
-- **Loot:** goods inside a building warbots wreck spill out as a crate pile (`dropLoot`, up to `LOOT_MAX`); idle or
-  victorious warbots nearby carry one crate each to their side's nearest garrison and go back for more (`doLoot`).
-  Crates left at an Outpost (`b.loot`) are hauled on to storage; a warbot killed carrying one drops it; piles rot
-  after `LOOT_TIME`.
+- **Crates and loot:** goods inside any building that's wrecked, blown up, lost or demolished spill out as a crate
+  pile on its tile (`dropLoot`, called by `destroyBuilding`; up to `LOOT_MAX`), and a robot destroyed with a load
+  drops it (`dropCarried`). On a player's own land its Haulers (a Freight Truck for a big pile; workers with no
+  Haulers) collect piles and take them to storage (`dispatch` step 4d, `doCrate`) while no enemy robot or gun is
+  within `CRATE_SAFE` tiles (`foesNear`). Idle or victorious warbots nearby carry one crate each to their side's
+  nearest garrison and go back for more (`doLoot`). Crates left at an Outpost (`b.loot`) are hauled on to storage.
+  Piles on claimed land stay; on no-one's land they rot after `LOOT_TIME`. Claims on a pile are recounted from the
+  bots' tasks every second (`updateLoot`), so a run called off never leaves a pile looking taken.
 - **Walls and Gates (Versus):** in Paths, **Walls** (**X**) sketches a wall line: a Wall on each tile (5 Cement, 40
   armor) and a Gate where it crosses a road (6 Cement + 2 Alloy, 32 armor; tap a planned Wall to make it a Gate).
   They're `prepaid` (paid from storage on Build, no Hauler or road, outside the site limit). Walls block every bot;
@@ -367,8 +371,9 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
 - **Ordering bots:** the Bot Foundry only builds the bots you order. Tap it and use +1 or +5 for Workers or
   Warbots (Clear cancels the queue); with nothing queued it sits idle and uses no Alloy or Chips.
 - The **Build** menu shows how many of each building you already have, and how many are being built.
-- **Demolishing** returns half a building's materials, and anything inside it goes to the nearest other storage (a Silo's
-  Missiles, a Nuclear Silo's finished missile as its parts, the whole stock of a Depot or Rail Station).
+- **Demolishing** returns half a building's materials straight to the nearest other storage; anything inside it (a
+  Silo's Missiles, a Nuclear Silo's finished missile as its parts, a Depot's whole stock) spills out in crates for the
+  Haulers to collect.
 - You can only build inside your border. Outposts push it out (7 tiles around them).
 - **Salvage:** a colony out of Stone or Fiber with no Quarry or Harvester that can still work salvages 1 every 20 s from
   its Command Base (up to 6), so it can always rebuild. Capturing an enemy Outpost takes its land,

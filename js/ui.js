@@ -1971,14 +1971,14 @@ function openBuildingSheet(b) {
         return;
       }
       // Say what went back to storage: half the building, and anything that was inside it.
-      const def = BDEFS[b.type], inside = b.built ? Object.keys(b.stock).filter((g) => b.stock[g] >= 1 && GOOD[g]).map((g) => `${Math.floor(b.stock[g])} ${GOOD[g].name}`) : [];
-      const nuke = b.built && def.nukeSilo && b.armed;
+      const def = BDEFS[b.type];
       const out = demolish(b);
       sfx('boom');
       closeSheet();
-      if (!b.built) return;
-      if (!out) toast(`${def.name} demolished. You have no other storage, so its materials and contents were lost.`, 'warn', b.x, b.y);
-      else toast(`${def.name} demolished: half its materials` + (inside.length ? `, and the ${inside.join(', ')} inside it,` : '') + (nuke ? ' and its nuclear missile\'s parts' : '') + ` went to your ${BDEFS[getE(out.to).type].name}.`, 'info', b.x, b.y);
+      if (!b.built || !out) return;
+      const to = out.to && getE(out.to);
+      toast(`${def.name} demolished: ` + (to ? `half its materials went to your ${BDEFS[to.type].name}` : 'with no other storage, its materials were lost') +
+        (out.crates ? `, and the ${out.crates} good${out.crates === 1 ? '' : 's'} inside spilled out in crates for your haulers to collect.` : '.'), 'info', b.x, b.y);
     };
   } else if ($('sh-send')) {
     UI.attackN = attackAvailable(0, b);

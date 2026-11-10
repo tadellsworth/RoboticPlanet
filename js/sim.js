@@ -1111,6 +1111,38 @@ function dispatch(p) {
       if (u) assignHaul(u, b, store, g, canCarry(u, avail));
     }
   }
+  // 4d) Crates lying on our land (spilled from a wrecked or demolished building, or dropped by a
+  //     robot) go to storage, a load at a time, unless enemy robots or guns are about.
+  if (S.loot && S.loot.length) {
+    for (const l of S.loot) {
+      if (!idle.length) return;
+      if (S.owner[tIdx(l.x, l.y)] !== p || (l.noReach && l.noReach[p] > S.time)) continue;
+      if (lootLeft(l) - (l.claimed || 0) <= 0 || foesNear(p, l.x + 0.5, l.y + 0.5, CRATE_SAFE)) continue;
+      const nets = pileNets(l, false), netsT = pileNets(l, true);
+      for (let guard = 0; guard < 12 && idle.length; guard++) {
+        // The good there's most of, not yet promised to a hauler.
+        let g = null, left = 0;
+        for (const k in l.goods) { const a = l.goods[k] - ((l.held && l.held[k]) || 0); if (a > left) { left = a; g = k; } }
+        if (!g || lootLeft(l) - (l.claimed || 0) <= 0) break;
+        // A Freight Truck for a big pile, else a Hauler (or, with no Haulers, a worker), that can get there.
+        let best = -1, bd = Infinity;
+        for (const want of left >= TRUCK_MIN_LOAD * 2 ? ['truck', 'haul'] : ['haul']) {
+          for (let k = 0; k < idle.length; k++) {
+            const u = idle[k], bt = BOTS[u.type];
+            if (bt.rail || bt.train || (want === 'truck') !== !!bt.truck || !(bt.haul || (P.noHaulers && bt.build))) continue;
+            if (bt.roadOnly && !botNets(u).some((n) => (bt.truck ? netsT : nets).indexOf(n) >= 0)) continue;
+            const d = dist2(u.x, u.y, l.x + 0.5, l.y + 0.5);
+            if ((u.bat ?? 100) < BATTERY.low + 0.5 * Math.sqrt(d) && P.canCharge) continue;
+            if (d < bd) { bd = d; best = k; }
+          }
+          if (best >= 0) break;
+        }
+        if (best < 0) break;
+        const u = idle.splice(best, 1)[0];
+        if (!assignCrate(u, l, g, Math.max(1, Math.min(left, botCarry(u))))) break;
+      }
+    }
+  }
   // 4c) Trunk runs: a store far from the Command Base sends home, in bulk, what nothing near it uses.
   if ((trucks || trains) && idle.some((u) => BOTS[u.type].truck || BOTS[u.type].rail)) trunkRuns(p, blds, take, canCarry, vans, trains);
   // 5) Empty out storage that no longer takes a good (set to "empty out" or the good switched off).
@@ -1479,6 +1511,7 @@ function updateWorker(u, dt) {
       if (u.bat >= 99.5 || chargerDry(c)) { u.task = null; if (!BDEFS[c.type].store) exitBuilding(u); }
     } else if (moveAlong(u, dt)) enterBuilding(u, c);
   } else if (t.type === 'haul') doHaul(u, t, dt);
+  else if (t.type === 'crate') doCrate(u, t, dt);
   else if (t.type === 'build') doBuild(u, t, dt);
   else if (t.type === 'pave') doPave(u, t, dt);
   else if (t.type === 'fix') doFix(u, t, dt);
@@ -2543,27 +2576,122 @@ function captureBuilding(b, by) {
     computeTerritory();
   } else {
     const n = dropLoot(b);
-    postMsg(by, `Your warbots wrecked the enemy ${name}.` + (n ? ` ${n} good${n === 1 ? '' : 's'} spilled out: your warbots carry them home, one each.` : ''), b.x, b.y, 'good');
-    postMsg(old, `Enemy warbots wrecked your ${name}!` + (n ? ' They are carrying off what was inside.' : ''), b.x, b.y, 'bad');
+    postMsg(by, `Your warbots wrecked the enemy ${name}.` + (n ? ` ${n} good${n === 1 ? '' : 's'} spilled out in crates: your warbots carry them home, one each.` : ''), b.x, b.y, 'good');
+    postMsg(old, `Enemy warbots wrecked your ${name}!` + (n ? ' What was inside spilled out in crates: your haulers collect them once the enemy has gone, unless the raiders carry them off first.' : ''), b.x, b.y, 'bad');
     destroyBuilding(b, true);
   }
 }
 
 /*
- * Loot. Goods inside a building warbots wreck spill out as a pile of crates on its tile. Any
- * warbot near a pile with nothing better to do picks up one crate and carries it to its side's
- * nearest garrison (Outpost or Command Base); a warbot shot down while carrying drops its crate.
- * Crates in an Outpost are taken on to storage by Haulers. A pile left alone rots away.
+ * Loot and crates. Goods inside a building that is wrecked, blown up or demolished spill out as a
+ * pile of crates on its tile, and a robot destroyed with a load drops it the same way. On your own
+ * land your haulers collect the crates and take them to storage, a load at a time, as long as no
+ * enemy robot is near (see dispatch, step 4d). Any warbot near a pile with nothing better to do
+ * picks up one crate and carries it to its side's nearest garrison (Outpost or Command Base); a
+ * warbot shot down while carrying drops its crate. Crates in an Outpost are taken on to storage by
+ * Haulers. A pile on no-one's land rots away after LOOT_TIME; on claimed land it stays.
  */
 function dropLoot(b) {
   let n = 0;
   const goods = {};
   for (const g in b.stock) {
     const k = Math.min(Math.floor(b.stock[g] || 0), LOOT_MAX - n);
-    if (k > 0 && GOOD[g]) { goods[g] = k; n += k; }
+    if (k > 0 && GOOD[g]) { goods[g] = k; n += k; b.stock[g] -= k; }
   }
+  if (b.loot) b.loot = null;
   if (n) addLoot(b.x, b.y, goods);
   return n;
+}
+
+/** A robot's load (a hauler's or truck's goods) put down in crates where it stands. */
+function dropCarried(u) {
+  if (u.carry && u.carryN > 0 && GOOD[u.carry] && inMap(Math.floor(u.x), Math.floor(u.y))) addLoot(Math.floor(u.x), Math.floor(u.y), { [u.carry]: Math.floor(u.carryN) });
+  u.carry = null;
+  u.carryN = 0;
+}
+
+function unclaimCrate(l, g, n) {
+  l.claimed = Math.max(0, (l.claimed || 0) - n);
+  if (l.held) l.held[g] = Math.max(0, (l.held[g] || 0) - n);
+}
+
+/** Is anything hostile to player p about: an enemy robot within r tiles of (x, y), or an enemy gun in range of it? */
+function foesNear(p, x, y, r) {
+  for (const u of S.bots) if (!u.dead && !u.inside && u.owner !== p && dist2(u.x, u.y, x, y) <= r * r) return true;
+  for (const b of S.buildings) {
+    if (b.dead || !b.built || b.owner === p || !BDEFS[b.type].range) continue;
+    const rr = BDEFS[b.type].range + 1;
+    if (dist2(b.x + 0.5, b.y + 0.5, x, y) <= rr * rr) return true;
+  }
+  return false;
+}
+
+/** The road networks a pile of crates can be reached from (its own tile, or a road beside it). */
+function pileNets(l, trucks) {
+  const net = roadNet(), comp = trucks ? net.compT : net.comp, t = tIdx(l.x, l.y), nets = [];
+  if (comp[t] >= 0) nets.push(comp[t]);
+  for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+    if (!inMap(l.x + di, l.y + dj)) continue;
+    const u = tIdx(l.x + di, l.y + dj);
+    if (roadLike(u) && comp[u] >= 0 && nets.indexOf(comp[u]) < 0) nets.push(comp[u]);
+  }
+  return nets;
+}
+
+/** Send bot u for n crates of good g from pile l. */
+function assignCrate(u, l, g, n) {
+  cancelTask(u);
+  u.task = { type: 'crate', pile: l.id, good: g, n, phase: 'toPile' };
+  l.claimed = (l.claimed || 0) + n;
+  bump(l.held = l.held || {}, g, n);
+  if (!goTo(u, l.x, l.y)) { cancelTask(u); (l.noReach = l.noReach || {})[u.owner] = S.time + 20; return false; }
+  return true;
+}
+
+/** The nearest storage that takes good g and that bot u, standing at pile l, can reach. */
+function crateStore(u, g, l) {
+  const bt = BOTS[u.type], nets = bt.roadOnly ? pileNets(l, !!bt.truck) : null;
+  let best = null, bd = Infinity;
+  for (const b of S.buildings) {
+    if (b.dead || b.owner !== u.owner || !storeTakes(b, g) || evacuated(b)) continue;
+    if (nets && !buildingNets(b, !!bt.truck).some((k) => nets.indexOf(k) >= 0)) continue;
+    const d = dist2(b.x + 0.5, b.y + 0.5, l.x + 0.5, l.y + 0.5);
+    if (d < bd) { bd = d; best = b; }
+  }
+  return best;
+}
+
+/** The crate run: to the pile, load up, and on to storage. Enemies turning up call it off. */
+function doCrate(u, t, dt) {
+  if (t.phase === 'toPile') {
+    const l = S.loot && S.loot.find((x) => x.id === t.pile);
+    if (!l) { u.task = null; return; }
+    if (S.tick % 15 === u.id % 15 && foesNear(u.owner, l.x + 0.5, l.y + 0.5, CRATE_SAFE)) { cancelTask(u); return; }
+    const r = moveAlong(u, dt);
+    if (!r) return;
+    unclaimCrate(l, t.good, t.n);
+    let g = l.goods[t.good] > 0 ? t.good : null;
+    if (!g) for (const k in l.goods) if (l.goods[k] > 0 && (!g || l.goods[k] > l.goods[g])) g = k;
+    if (!g) { u.task = null; return; }
+    const got = Math.min(t.n, l.goods[g]);
+    l.goods[g] -= got;
+    u.carry = g; u.carryN = got; t.good = g; t.n = got;
+    const dst = crateStore(u, g, l);
+    if (!dst) { dropCarried(u); u.task = null; return; }
+    t.dst = dst.id; t.phase = 'toDst';
+    bump(dst.inc, g, got);
+    if (!goTo(u, dst.x, dst.y)) { bump(dst.inc, g, -got); dropCarried(u); u.task = null; }
+    return;
+  }
+  const dst = getE(t.dst);
+  if (!dst || dst.dead || dst.owner !== u.owner) { cancelTask(u); return; }
+  if (!moveAlong(u, dt)) return;
+  bump(dst.inc, t.good, -t.n);
+  bump(dst.stock, t.good, t.n);
+  u.carry = null; u.carryN = 0;
+  u.task = null;
+  u.idleT = 0;
+  if (BDEFS[dst.type].store) enterBuilding(u, dst);
 }
 
 function addLoot(x, y, goods) {
@@ -2577,6 +2705,17 @@ function lootLeft(pile) { let n = 0; for (const g in pile.goods) n += pile.goods
 
 function updateLoot() {
   if (!S.loot || !S.loot.length) return;
+  // Crates on someone's land wait for their haulers; only those on no-one's land rot away.
+  for (const l of S.loot) if (S.owner[tIdx(l.x, l.y)] >= 0) l.until = Math.max(l.until, S.time + 60);
+  // Count again who is on the way for crates (a warbot called off to fight could leave its claim behind).
+  const byId = new Map();
+  for (const l of S.loot) { l.claimed = 0; l.held = {}; byId.set(l.id, l); }
+  for (const u of S.bots) {
+    const t = u.task, l = !u.dead && t && byId.get(t.pile);
+    if (!l) continue;
+    if (t.type === 'loot' && t.phase === 'pick') l.claimed++;
+    else if (t.type === 'crate' && t.phase === 'toPile') { l.claimed += t.n; bump(l.held, t.good, t.n); }
+  }
   S.loot = S.loot.filter((l) => l.until > S.time && lootLeft(l) > 0);
 }
 
@@ -3968,27 +4107,28 @@ function releaseScore(b) {
 }
 
 /**
- * Take building b down. Half its materials (or, for a site, what was delivered) go to your nearest
- * other storage, and so does everything inside it: a Silo's Missiles, a pump's last Crude, the whole
- * stock of a Depot or Rail Station. A Nuclear Silo's finished missile comes apart into its parts.
- * Returns what went back ({ goods, to }), or null if you have no other storage to take it.
+ * Take building b down. Half its materials go straight to your nearest other storage (a cancelled
+ * site's delivered materials all go back). Everything inside a finished building (a Silo's
+ * Missiles, a pump's last Crude, a Depot's whole stock, a Nuclear Silo's missile as its parts)
+ * spills out in crates on its tile, and your haulers carry them to storage.
+ * Returns { goods: what went to storage, to: that storage's id (0 if you have none), crates }.
  */
 function demolish(b) {
   if (b.dead || b.type === 'lander') return null;
   const def = BDEFS[b.type];
   // Never into itself: a Depot used to be its own nearest storage, and lost everything.
   const store = nearestStoreTo(b.owner, b.x + 0.5, b.y + 0.5, b);
-  let out = null;
-  if (store) {
-    out = { goods: {}, to: store.id };
-    const give = (g, n) => { if (n > 0 && GOOD[g]) { bump(store.stock, g, n); bump(out.goods, g, n); } };
-    const cost = siteCost(b);
-    if (b.built) {
-      for (const g in cost) give(g, Math.floor(cost[g] / 2));
-      for (const g in b.stock) give(g, Math.floor(b.stock[g] || 0));
-      if (def.nukeSilo && b.armed) for (const g in NUKE.parts) give(g, NUKE.parts[g]);
-    } else for (const g in b.stock) give(g, Math.min(b.stock[g], cost[g] || 0));
-  }
+  const out = { goods: {}, to: store ? store.id : 0, crates: 0 };
+  const give = (g, n) => { if (store && n > 0 && GOOD[g]) { bump(store.stock, g, n); bump(out.goods, g, n); } };
+  const cost = siteCost(b);
+  if (b.built) {
+    for (const g in cost) give(g, Math.floor(cost[g] / 2));
+    if (def.nukeSilo && b.armed) { for (const g in NUKE.parts) bump(b.stock, g, NUKE.parts[g]); b.armed = 0; }
+    out.crates = dropLoot(b);
+  } else if (store) {
+    for (const g in b.stock) give(g, Math.min(b.stock[g], cost[g] || 0));
+    b.stock = {};
+  } else out.crates = dropLoot(b);
   destroyBuilding(b, false);
   return out;
 }

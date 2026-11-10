@@ -1927,6 +1927,15 @@ function cancelTask(bot) {
       const src = getE(t.src), dst = getE(t.dst);
       if (t.phase === 'toSrc' && src) bump(src.res, t.good, -(t.n || 1));
       if (dst) bump(dst.inc, t.good, -(t.n || 1));
+      dropCarried(bot); // called off with a load on board: it's put down in crates, not lost
+      break;
+    }
+    case 'crate': {
+      const l = t.phase === 'toPile' && S.loot && S.loot.find((x) => x.id === t.pile);
+      if (l) unclaimCrate(l, t.good, t.n);
+      const dst = t.phase === 'toDst' && getE(t.dst);
+      if (dst) bump(dst.inc, t.good, -t.n);
+      dropCarried(bot);
       break;
     }
     case 'build': {
@@ -1979,6 +1988,8 @@ function killBot(bot, quiet) {
   if (bot.loot && typeof addLoot === 'function' && inMap(Math.floor(bot.x), Math.floor(bot.y))) { addLoot(Math.floor(bot.x), Math.floor(bot.y), { [bot.loot]: 1 }); bot.loot = null; }
   // A Crawler wrecked on the move spills the goods it was carrying.
   if (bot.cargo && typeof addLoot === 'function' && inMap(Math.floor(bot.x), Math.floor(bot.y))) { addLoot(Math.floor(bot.x), Math.floor(bot.y), bot.cargo); bot.cargo = null; }
+  // So does a hauler, truck or train with goods on board.
+  if (bot.carry && typeof dropCarried === 'function') dropCarried(bot);
   cancelTask(bot);
   exitBuilding(bot);
   for (const b of S.buildings) {
@@ -2031,6 +2042,8 @@ function offDeck(a, c) {
 /** Remove a building. `burn` = destroyed by force (bots inside die); otherwise bots walk out. */
 function destroyBuilding(b, burn) {
   if (b.dead) return;
+  // Whatever was inside spills out as crates on its tile, for haulers (or raiding warbots) to collect.
+  if (typeof dropLoot === 'function') dropLoot(b);
   releaseBotsFrom(b, !!burn);
   b.dead = true;
   S.byId.delete(b.id);

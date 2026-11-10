@@ -6,6 +6,12 @@ and biomes started here and are now in the game.)
 ## Held for later
 
 - Multiplayer, and exporting/importing saves between devices.
+- **Fuel that's worth fighting for (next up, after the current tasks).** Make Fuel more useful and harder to get:
+  it moves only by a special **tanker truck**, which explodes and damages everything around it when it's shot
+  and destroyed. That opens the way to **pipelines**: oil always comes in clusters, so a pipeline could carry
+  Crude quickly from a cluster of Oil Pumps to a Refinery, and the **Refinery explodes** and does damage if it's
+  destroyed. To think through: what new uses make Fuel valuable, how pipelines are laid (like roads or rail?), what
+  they cost, whether they can be cut by raiders, and how the AI handles tankers and pipelines.
 
 ## Open balance questions (from the November audit)
 
