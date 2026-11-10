@@ -1547,7 +1547,7 @@ function pipeSegments(has, inView, ox, oy, z, endsToo) {
     }
     if (links !== 2 || ((i + j) % 4 === 0)) caps.push([cx, cy, own]);
     if (!links) segs.push([cx - z * 0.22, cy, cx + z * 0.22, cy, t]);
-    if (S.road[t] || (S.rail && S.rail[t])) posts.push([cx, cy]);
+    if (S.road[t] || (S.rail && S.rail[t]) || bridgeable(t)) posts.push([cx, cy]); // raised over roads, track and water
   }
   return { segs, posts, caps };
 }

@@ -231,6 +231,13 @@ const RAIL_MIN_LOAD = 10;
  * again at once and relaid when it's paid for.
  */
 const PIPE_COST = { cement: 0.3 }; // cheap, and no Alloy (always the scarce one)
+// Pipe across open water or a canyon (on stilts) or through rock (bored) costs more a tile; the route
+// finder weighs a crossing tile PIPE_CROSS_WEIGHT times a land tile (the price ratio), so it goes round
+// water or rock when that's cheaper, and straight across when it isn't.
+const PIPE_CROSS_COST = { cement: 1.2 };
+const PIPE_CROSS_WEIGHT = 4;
+/** What a tile of pipe on tile t costs. */
+function pipeCost(t) { return S.terrain[t] === T_GROUND || S.road[t] || (S.rail && S.rail[t]) ? PIPE_COST : PIPE_CROSS_COST; }
 const PIPE_RATE = 4;
 const PIPE_FILL = 6;
 const RAIL_CROSS_HOLD = 2.4;

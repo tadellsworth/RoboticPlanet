@@ -1660,7 +1660,6 @@ function pipeBlocked(owner, t) {
   if (t < 0 || t >= S.W * S.H) return 'That\'s off the map.';
   if (S.owner[t] !== owner) return 'Pipe only goes inside your border.';
   if (scorched(t)) return 'The ground there is still scorched.';
-  if (S.terrain[t] !== T_GROUND && !S.road[t] && !(S.rail && S.rail[t])) return S.terrain[t] === T_WATER ? 'Pipe can\'t cross open water: run it over a bridge.' : 'Pipe can\'t go through rock.';
   if (S.pipe[t] && S.pipe[t] !== owner + 1) return 'Someone else\'s pipe runs here.';
   return '';
 }

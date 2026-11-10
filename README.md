@@ -325,7 +325,9 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
   spilling as crates. Loaded Tankers and Refineries caught in a blast go up a moment later (a chain reaction). Forts
   never fall to a blast (they keep 1 armor). Demolishing a Refinery is safe.
   **Pipelines** (Paths → **Pipes**, K) carry Crude only. Drag from an Oil Pump to a Refinery and the pipe routes itself
-  (`pipeRoute`: inside your border, over roads and track, under buildings if it must, up cliffs, with few bends); tap a
+  (`pipeRoute`: inside your border, over roads and track, under buildings if it must, up cliffs, across water on stilts
+  and bored through rock at `PIPE_CROSS_COST` (1.2 Cement) a tile, weighed by price so it goes round only when that's
+  cheaper, with few bends); tap a
   pump to pipe it to the nearest Refinery, or **Pipe every Oil Pump** in the banner; an Oil Pump's panel has a one-tap
   **Pipe it to the Refinery** too. Pipe costs 0.3 Cement a tile (`PIPE_COST`), laid at once when you tap Build (or as
   the Cement comes in). A pipe joins every building it runs under or beside; each second each line moves up to 4 Crude

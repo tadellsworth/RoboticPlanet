@@ -4281,7 +4281,7 @@ function settlePlans() {
     if (kind === 'p') {
       if (S.pipePlan[t] !== o + 1) continue;
       if (S.pipe[t] || pipeBlocked(o, t)) { S.pipePlan[t] = 0; continue; } // laid already, or can't go there any more: dropped
-      cost = PIPE_COST;
+      cost = pipeCost(t);
     } else if (kind === 'r') {
       if (S.plan[t] !== o + 1 || !S.owe[t]) continue;
       cost = roadTileCost(t);
@@ -4318,7 +4318,7 @@ function plansWaiting(owner) {
     let c = null;
     if (kind === 'r' && S.plan[ref] === o + 1 && S.owe[ref]) { out.tiles++; c = roadTileCost(ref); }
     else if (kind === 't' && S.railPlan[ref] === o + 1) { out.track++; c = railCost(ref); }
-    else if (kind === 'p' && S.pipePlan[ref] === o + 1 && !S.pipe[ref]) { out.pipes++; c = PIPE_COST; }
+    else if (kind === 'p' && S.pipePlan[ref] === o + 1 && !S.pipe[ref]) { out.pipes++; c = pipeCost(ref); }
     else if (kind === 'b') { const b = getE(ref); if (b && !b.dead && !b.built && Object.keys(stillOwed(b)).length) { out.sites++; c = stillOwed(b); } }
     else if (kind === 'j') { const P = junPlanAt(ref); if (P && P.owner === o) { out.junctions++; c = junPlanCost(ref, P); } }
     if (c) for (const g in c) out.owed[g] = (out.owed[g] || 0) + c[g];
@@ -5352,7 +5352,7 @@ function takeUpPipe(owner, t) {
   if (S.pipePlan[t] === owner + 1 && !S.pipe[t]) { S.pipePlan[t] = 0; return; }
   if (S.pipe[t] !== owner + 1) return;
   setPipe(t, 0);
-  refundRoad(owner, PIPE_COST, t % S.W, (t / S.W) | 0);
+  refundRoad(owner, pipeCost(t), t % S.W, (t / S.W) | 0);
 }
 
 /** Pipe broken by a raid, a missile or a blast (no refund): it's planned again at once, to be relaid when paid for. */
@@ -5402,7 +5402,8 @@ function pipeRoute(owner, from, goal, maxLen) {
       const u = t + DIRS[nd];
       if (u < 0 || u >= N || (nd === 0 && i === W - 1) || (nd === 2 && i === 0)) continue;
       if (pipeBlocked(owner, u)) continue;
-      const step = (S.pipe[u] === owner + 1 ? 0.15 : 1) + (nd !== d && t !== from ? 0.35 : 0) + (S.bAt[u] && !goal(u) ? 5 : 0);
+      const land = S.terrain[u] === T_GROUND || S.road[u] || (S.rail && S.rail[u]);
+      const step = (S.pipe[u] === owner + 1 ? 0.15 : land ? 1 : PIPE_CROSS_WEIGHT) + (nd !== d && t !== from ? 0.35 : 0) + (S.bAt[u] && !goal(u) ? 5 : 0);
       const ns = u * 4 + nd, nc = c + step;
       if (nc < best[ns]) { best[ns] = nc; prev[ns] = s; push(nc, ns); }
     }
@@ -5440,7 +5441,8 @@ function pipeToRefinery(owner, b) {
   // A pump right beside its Refinery: one tile of pipe under the pump joins them.
   if (!tiles.length && !route.some((t) => S.pipe[t])) tiles.push(start);
   const cost = {};
-  for (const g in PIPE_COST) cost[g] = Math.round(PIPE_COST[g] * tiles.length * 100) / 100;
+  for (const t of tiles) { const c = pipeCost(t); for (const g in c) cost[g] = (cost[g] || 0) + c[g]; }
+  for (const g in cost) cost[g] = Math.round(cost[g] * 100) / 100;
   return { tiles, cost };
 }
 

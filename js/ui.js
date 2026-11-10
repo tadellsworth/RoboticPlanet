@@ -1544,8 +1544,8 @@ function draftSummary() {
   for (const t of d.rail) if (!S.rail[t]) { const rc = railCost(t); for (const g in rc) cost[g] = (cost[g] || 0) + rc[g]; }
   for (const t of d.railDel) if (S.rail[t]) { const rc = railCost(t); for (const g in rc) back[g] = (back[g] || 0) + rc[g]; }
   // Pipe too: paid when you tap Build (or as the goods come in); taken up, it gives its goods back.
-  for (const t of d.pipe) if (!S.pipe[t]) for (const g in PIPE_COST) cost[g] = (cost[g] || 0) + PIPE_COST[g];
-  for (const t of d.pipeDel) if (S.pipe[t]) for (const g in PIPE_COST) back[g] = (back[g] || 0) + PIPE_COST[g];
+  for (const t of d.pipe) if (!S.pipe[t]) { const pc = pipeCost(t); for (const g in pc) cost[g] = (cost[g] || 0) + pc[g]; }
+  for (const t of d.pipeDel) if (S.pipe[t]) { const pc = pipeCost(t); for (const g in pc) back[g] = (back[g] || 0) + pc[g]; }
   const net = {};
   for (const g in cost) net[g] = Math.max(0, cost[g] - (back[g] || 0));
   // Anything you can't pay for yet waits for the goods (settlePlans): the plan can always be built.
@@ -1744,7 +1744,10 @@ function pipeDrag(i, j, first) {
   }
   if (route) for (const t of route) if (!S.pipe[t] && !d.pipe.has(t)) draftOp(UI.stroke, t, 'pipe');
   UI.lastPaint = { i, j };
-  showRoadBanner(UI.pipeWhy, !UI.pipeWhy);
+  // Crossing water or rock: say so, with what it costs.
+  const wet = UI.stroke.some((s) => bridgeable(s.t) && !S.road[s.t]), rock = UI.stroke.some((s) => S.terrain[s.t] === T_ROCK && !S.road[s.t] && !(S.rail && S.rail[s.t]));
+  const cross = wet || rock ? `The pipe ${[wet ? 'crosses the water on stilts' : '', rock ? 'is bored through the rock' : ''].filter(Boolean).join(' and ')}: ${costText(PIPE_CROSS_COST)} a tile there.` : '';
+  showRoadBanner(UI.pipeWhy || cross, !UI.pipeWhy);
 }
 
 /** Every Oil Pump of yours that isn't piped to a Refinery yet gets a pipe to the nearest one, in the plan. */
@@ -1773,12 +1776,12 @@ function showRoadBanner(problem, info) {
   if (!UI.draft) draftReset();
   const have = playerGoods(0);
   let line, how;
-  const pipeHow = `Pipelines carry Crude, nothing else. Every second each line moves up to ${PIPE_RATE} Crude from its Oil Pumps to the Refineries (and Asphalt Plants) on it, then into any storage on it; storage on a line feeds its Refineries too. A pump on a pipeline never waits for a Tanker. Pipe goes anywhere inside your border: over roads and track, under buildings, up cliffs; a pipe joins every building it runs beside or under. Raiders and missiles can break it: broken pipe is relaid as soon as it's paid for again.`;
+  const pipeHow = `Pipelines carry Crude, nothing else. Every second each line moves up to ${PIPE_RATE} Crude from its Oil Pumps to the Refineries (and Asphalt Plants) on it, then into any storage on it; storage on a line feeds its Refineries too. A pump on a pipeline never waits for a Tanker. Pipe goes anywhere inside your border: over roads and track, under buildings, up cliffs, across water on stilts and bored through rock (those tiles cost more, so a drag goes round a small pond); a pipe joins every building it runs beside or under. Raiders and missiles can break it: broken pipe is relaid as soon as it's paid for again.`;
   if (mode === 'pipe' && !UI.draft.pipe.size && !UI.draft.pipeDel.size) {
     let unpiped = 0;
     const joined = refineryPipes(0);
     for (const b of S.buildings) if (!b.dead && b.owner === 0 && BDEFS[b.type].pump && !buildingPipes(b).some((c) => joined.has(c))) unpiped++;
-    line = `<b>Drag from an Oil Pump to a Refinery</b> and the pipe finds its own way there, over roads and track (${costText(PIPE_COST)} a tile, laid when you tap Build). Or tap a pump to pipe it to the nearest Refinery. Tap pipe to take it up.` +
+    line = `<b>Drag from an Oil Pump to a Refinery</b> and the pipe finds its own way there, over roads and track, across water and through rock (${costText(PIPE_COST)} a tile, ${costText(PIPE_CROSS_COST)} across water or rock; laid when you tap Build). Or tap a pump to pipe it to the nearest Refinery. Tap pipe to take it up.` +
       (unpiped ? ` <button class="btn" id="pipe-all">Pipe every Oil Pump (${unpiped})</button>` : '');
     how = pipeHow;
   } else if (mode === 'rail' && !UI.draft.rail.size && !UI.draft.railDel.size) {
