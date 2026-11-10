@@ -1301,7 +1301,7 @@ function draftSummary() {
     for (const g in BDEFS[kind].cost) { cost[g] = (cost[g] || 0) + BDEFS[kind].cost[g]; wcost[g] = (wcost[g] || 0) + BDEFS[kind].cost[g]; }
   }
   // Track is paid for from storage when you tap Build too; taking it up gives its Cement and Alloy back.
-  for (const t of d.rail) if (!S.rail[t]) { const rc = railCost(t); for (const g in rc) { cost[g] = (cost[g] || 0) + rc[g]; wcost[g] = (wcost[g] || 0) + rc[g]; } }
+  for (const t of d.rail) if (!S.rail[t]) { const rc = railCost(t); for (const g in rc) cost[g] = (cost[g] || 0) + rc[g]; }
   for (const t of d.railDel) if (S.rail[t]) { const rc = railCost(t); for (const g in rc) back[g] = (back[g] || 0) + rc[g]; }
   const net = {};
   for (const g in cost) net[g] = Math.max(0, cost[g] - (back[g] || 0));
@@ -1540,7 +1540,7 @@ function closeSheet() {
 }
 
 function costHTML(cost, have) {
-  return Object.keys(cost).map((g) => `<span class="${have && have[g] < cost[g] ? 'short' : ''}"><i class="gi ${g}"></i>${cost[g]}</span>`).join('');
+  return Object.keys(cost).map((g) => `<span class="${have && have[g] < cost[g] ? 'short' : ''}"><i class="gi ${g}"></i>${Math.round(cost[g] * 100) / 100}</span>`).join('');
 }
 
 function openBuildMenu() {

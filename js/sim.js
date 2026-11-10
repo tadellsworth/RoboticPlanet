@@ -3304,7 +3304,7 @@ function buildRoad(owner, i, j) {
 
 /** "2 Cement, 1 Alloy" */
 function costText(cost) {
-  return Object.keys(cost).map((g) => `${Math.round(cost[g] * 10) / 10} ${GOOD[g].name}`).join(', ');
+  return Object.keys(cost).map((g) => `${Math.round(cost[g] * 100) / 100} ${GOOD[g].name}`).join(', ');
 }
 
 /** Remove a road tile, or call off a planned one, and refund its Cement (Asphalt on top isn't returned). */
@@ -4230,8 +4230,8 @@ function layRail(owner, t) {
   const why = railBlocked(owner, t);
   if (why) return why;
   const cost = railCost(t);
-  if (!canPay(owner, cost)) return `Out of ${missingGoods(owner, cost)}: track costs ${costText(cost)} a tile here.`;
-  for (const g in cost) takeGood(owner, g, cost[g]);
+  if (!canAffordRoad(owner, cost)) return `Out of ${missingGoods(owner, cost)}: track costs ${costText(cost)} a tile here.`;
+  payRoad(owner, cost); // fractions of a good are kept as credit, like a road's Cement
   setRail(t, true);
   return '';
 }
@@ -4240,6 +4240,5 @@ function layRail(owner, t) {
 function takeUpRail(owner, t) {
   if (!S.rail[t]) return;
   setRail(t, false);
-  const store = nearestStoreTo(owner, (t % S.W) + 0.5, ((t / S.W) | 0) + 0.5), cost = railCost(t);
-  if (store) for (const g in cost) bump(store.stock, g, cost[g]);
+  refundRoad(owner, railCost(t), t % S.W, (t / S.W) | 0);
 }

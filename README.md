@@ -158,8 +158,9 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
   passes underneath. The deck, piers and girders are drawn each frame (`drawViaductDeck`). An abutment on no-one's
   land survives `computeTerritory`; one inside another colony's land is lost.
 - **Freight rail** (`RAIL_*` in `js/defs.js`; the rail section of `js/world.js`; `layRail`, `deliverTrain` in
-  `js/sim.js`): track is a tile layer (`S.rail`), laid instantly from the Paths **Rail** tool (`RAIL_COST` a tile,
-  `RAIL_BRIDGE_COST` over water or canyon), level except on bridges (`railStep`). Rail Stations stand beside the track;
+  `js/sim.js`): track is a tile layer (`S.rail`), laid instantly from the Paths **Rail** tool (`RAIL_COST` a tile, mostly
+  Cement with a quarter of an Alloy, paid through the same credit as road Cement; `RAIL_BRIDGE_COST` over water), level
+  except on bridges (`railStep`) and across a Viaduct with track on both abutments (`railNbrs`). Rail Stations stand beside the track;
   their platforms are the track tiles next to them (`railPlatforms`), and `railNet` groups stations by line. Freight
   Trains (56 goods) take the dispatch role `'rail'`: trunk runs from a far station to the home station and supply orders
   between stations on one line, `RAIL_MIN_LOAD` (10) or more; `railRoute` plans along the track. Road bots wait at a
@@ -174,6 +175,7 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
 
   Four trucks and a Road Train on plain road do worst of all (the Road Train holds up the trucks). The rail line ran
   15% longer than the road in these tests (it went round obstacles), and costs `RAIL_COST` a tile plus two stations.
+  The Freight Trains were measured at 6 rounds of parts each; they're 5 now, so two cost 10 rounds, not 12.
 - **Crawlers** (`updateCrawler`, `deployCrawler`, `packCrawler`): a slow tracked bot that drives off-road and deploys
   into the `crawlerbase` building (store, 4-slot charger burning its Fuel, Outpost territory, garrison 4). Packing up
   turns it back into a bot carrying the store's goods (`u.cargo`); if it's destroyed on the move they spill as loot.

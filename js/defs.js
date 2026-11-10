@@ -116,7 +116,7 @@ const BOTS = {
     desc: 'A road crew bot. A Roadworks needs one to lay asphalt on your roads.' },
   roadtrain: { name: 'Road Train', plural: 'Road Trains', speed: WORKER_SPEED * 1.35, hp: 14, haul: true, truck: true, train: true, carry: 30, roadOnly: true, parts: 4, accel: 1.0, brake: 2.5,
     desc: 'A truck pulling two trailers: 30 goods at once, for bulk runs between your Command Base and far Depots (filling supply orders, and bringing a far Depot\'s spare goods home). It only pays off on asphalt: on plain road it crawls. Slow to start and stop, it wears roads hard and holds up the traffic behind it.' },
-  freight: { name: 'Freight Train', plural: 'Freight Trains', speed: WORKER_SPEED * 3.4, hp: 30, haul: true, rail: true, carry: 56, parts: 6, accel: 0.85, brake: 1.6,
+  freight: { name: 'Freight Train', plural: 'Freight Trains', speed: WORKER_SPEED * 3.4, hp: 30, haul: true, rail: true, carry: 56, parts: 5, accel: 0.85, brake: 1.6,
     desc: 'A locomotive and four wagons: 56 goods at once between Rail Stations on the same track, fast and with no traffic to wait for. It never needs charging. It rolls out at the nearest Rail Station when the Foundry finishes it.' },
   crawler: { name: 'Crawler', plural: 'Crawlers', speed: WORKER_SPEED * 0.45, hp: 80, crawler: true, parts: 8,
     desc: 'A colossal tracked base on the move. Drive it anywhere it can roll (no road needed) and it deploys where it stops: a Depot, a Charging Station and an Outpost in one, claiming the land around it. Pack it up to move on: it takes everything stored in it along.' },
@@ -181,7 +181,7 @@ const VIA_MIN = 2, VIA_MAX = 12, VIA_RISE = 2, VIA_COST = { cement: 3, alloy: 1 
  * track: supply orders at a station (from another station first) and a far station's trunk runs to
  * the station nearest the Command Base, with loads of RAIL_MIN_LOAD or more.
  */
-const RAIL_COST = { cement: 1, alloy: 1 };
+const RAIL_COST = { cement: 1.5, alloy: 0.25 }; // mostly Cement (sleepers and ballast): Alloy is too scarce for a long line to cost a bar a tile
 const RAIL_MIN_LOAD = 10;
 const RAIL_CROSS_HOLD = 2.4;
 /**
@@ -260,7 +260,7 @@ const CROSS = {
 /** Can a bridge (road or rail) go out over tile t? Water and chasms, not rock. */
 function bridgeable(t) { return S.terrain[t] === T_WATER || S.terrain[t] === T_CHASM; }
 /** Track over water or a chasm is a rail bridge, dearer than track on the ground. */
-const RAIL_BRIDGE_COST = { cement: 3, alloy: 2 };
+const RAIL_BRIDGE_COST = { cement: 3, alloy: 1 };
 
 /* New-game map settings (each is a slider on the menu). */
 const SIZE_PRESETS = [
@@ -545,7 +545,7 @@ const BDEFS = {
   },
   station: {
     name: 'Rail Station', desc: 'Storage beside the railway: Freight Trains load and unload here. Build one at each end of a line (beside the track), give the far one supply orders, and trains keep it stocked from the stations on the same track; a far station also sends its spare goods home by train. Haulers serve it like a Depot.',
-    cost: { cement: 6, alloy: 4 }, store: true, station: true, armor: 12, buildTime: 12,
+    cost: { cement: 6, alloy: 2 }, store: true, station: true, armor: 12, buildTime: 12,
   },
   crawlerbase: {
     name: 'Crawler', short: 'Crawler',

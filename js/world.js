@@ -1955,7 +1955,8 @@ function railLinked(a, b) {
 function railBlocked(owner, t) {
   const i = t % S.W, j = (t / S.W) | 0;
   if (!inMap(i, j)) return 'Outside the map.';
-  if (S.owner[t] !== owner) return 'Track only goes inside your border.';
+  const via = S.bAt[t] ? getE(S.bAt[t]) : null;
+  if (S.owner[t] !== owner && !(via && via.type === 'viaduct' && via.owner === owner)) return 'Track only goes inside your border.';
   if (S.terrain[t] === T_ROCK) return 'Track can\'t go through rock.';
   if (S.bAt[t] && getE(S.bAt[t]).type !== 'viaduct') return 'There is a building here.';
   if (S.res[t]) return 'Clear the resources here first.';
