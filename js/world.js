@@ -647,6 +647,7 @@ function generateMap(seed, W, H, cfg) {
   // least three levels down, with sheer drops all round and no slopes, so no Ramp can reach it (a
   // Ropeway can, for the few boulders and ore down there). Viaducts cross between the clifftops.
   // Small inland pools fill in as land.
+  let floorMask = null; // Sky islands: the canyon floor (see below)
   if (SH.sky) {
     const wl = new Int32Array(N).fill(-1);
     for (let t = 0; t < N; t++) {
@@ -678,6 +679,7 @@ function generateMap(seed, W, H, cfg) {
       for (const a of q) elev[a] = Math.min(elev[a] + lift, 6);
     }
     const sd = (seed ^ 0x5c1) >>> 0, isFloor = new Uint8Array(N);
+    floorMask = isFloor;
     for (let t = 0; t < N; t++) {
       if (terrain[t] !== T_WATER) continue;
       terrain[t] = T_GROUND; elev[t] = 0; ramp[t] = 0; res[t] = R_NONE; fert[t] = 0; isFloor[t] = 1;
@@ -743,7 +745,46 @@ function generateMap(seed, W, H, cfg) {
       }
     }
     // Half the resource fields fall into the canyons: what's left on the mesas holds more.
-    for (let t = 0; t < N; t++) if (!isFloor[t] && (res[t] === R_ORE || res[t] === R_CRYSTAL || res[t] === R_STALK)) amt[t] = clamp(Math.round(amt[t] * SKY_RES_MUL), 1, 255);
+    for (let t = 0; t < N; t++) if (!isFloor[t] && SKY_RICH.includes(res[t])) amt[t] = clamp(Math.round(amt[t] * SKY_RES_MUL), 1, 255);
+  }
+  // Island maps: Cement is made from Stone alone, and every crossing to more land costs Cement, so
+  // each home island (or mesa) is topped up to HOME_STONE near the base: a compact boulder field on
+  // free, level ground a few tiles out, placed the same way for every side (by distance from the base
+  // and angle from the way to the middle of the map).
+  if (SH.islands) {
+    const per = clamp(Math.round(RES[R_BOULDER].amount * RPR.amount * (SH.sky ? SKY_RES_MUL : 1)), 1, 255);
+    const target = Math.round(HOME_STONE * RPR.amount);
+    for (const bs of bases) {
+      const b0 = id(Math.round(bs.x), Math.round(bs.y)), land = new Uint8Array(N), q = [b0];
+      land[b0] = 1;
+      for (let h = 0; h < q.length; h++) orth(q[h], (u) => { if (!land[u] && terrain[u] !== T_WATER && !(floorMask && floorMask[u])) { land[u] = 1; q.push(u); } });
+      let have = 0;
+      for (const t of q) if (res[t] === R_BOULDER) have += amt[t];
+      if (have >= target) continue;
+      const level = (t) => { let ok = true; orth(t, (u) => { if (!land[u] || terrain[u] !== T_GROUND || elev[u] !== elev[t]) ok = false; }); return ok; };
+      const free = (t) => land[t] && terrain[t] === T_GROUND && !res[t] && !ramp[t] && !fert[t] && elev[t] === elev[b0] && level(t) &&
+        dist(t % W, (t / W) | 0, bs.x, bs.y) >= 4;
+      // Each tile's place relative to the base, turned so the way to the middle of the map is +x: the
+      // same for every side, so ties are broken the same way everywhere and the map stays symmetric.
+      const a0 = Math.atan2(ccy - bs.y, ccx - bs.x), ca = Math.cos(-a0), sa = Math.sin(-a0);
+      const rel = (t) => { const dx = (t % W) - bs.x, dy = ((t / W) | 0) - bs.y; return [Math.round((dx * ca - dy * sa) * 100), Math.round((dx * sa + dy * ca) * 100)]; };
+      const before = (a, b) => { const ra = rel(a), rb = rel(b); return ra[0] - rb[0] || ra[1] - rb[1]; };
+      const side = (t) => { const r = rel(t); return Math.abs(Math.abs(Math.atan2(r[1], r[0])) - Math.PI / 2); };
+      // The field's centre: the free tile 5 to 9 out with the most free ground round it, off to the side.
+      let c = -1, cs = -Infinity;
+      for (const t of q) {
+        const d = dist(t % W, (t / W) | 0, bs.x, bs.y);
+        if (d < 5 || d > 9 || !free(t)) continue;
+        let room = 0;
+        for (const u of q) if (free(u) && dist2(u % W, (u / W) | 0, t % W, (t / W) | 0) <= 5) room++;
+        const sc = Math.round((room * 10 - side(t) * 3 - Math.abs(d - 6.5)) * 1000);
+        if (sc > cs || (sc === cs && before(t, c) < 0)) { cs = sc; c = t; }
+      }
+      if (c < 0) continue;
+      const cx = c % W, cy = (c / W) | 0;
+      const spots = q.filter(free).sort((a, b) => (dist2(a % W, (a / W) | 0, cx, cy) - dist2(b % W, (b / W) | 0, cx, cy)) || before(a, b));
+      for (let k = 0; k < spots.length && have < target; k++) { res[spots[k]] = R_BOULDER; amt[spots[k]] = per; have += per; }
+    }
   }
   for (let t = 0; t < N; t++) if (terrain[t] !== T_GROUND) fert[t] = 0;
   return { terrain, res, amt, grow, elev, ramp, fert, bases };
@@ -790,7 +831,7 @@ function richRes(t) {
   const r = S.res[t];
   if (!r || !RICH_TYPES.includes(r)) return false;
   const pr = RESOURCE_PRESETS[(S.settings && S.settings.rich) ?? DEFAULT_RICH] || RESOURCE_PRESETS[DEFAULT_RICH];
-  const sky = S.settings && SHAPE_PRESETS[S.settings.shape || 0].sky && (r === R_ORE || r === R_CRYSTAL || r === R_STALK) ? SKY_RES_MUL : 1;
+  const sky = S.settings && SHAPE_PRESETS[S.settings.shape || 0].sky && SKY_RICH.includes(r) ? SKY_RES_MUL : 1;
   return S.amt[t] >= RES[r].amount * pr.amount * RICH_MARK * sky;
 }
 

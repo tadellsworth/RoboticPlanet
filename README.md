@@ -123,7 +123,7 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
   through it drops back to plain road. On a busy trunk road that's every 8–10 minutes. Tap any of your roads to see its
   wear and mark it. Removing a road refunds its Cement.
 - **Bridges and tunnels:** roads stop at water and rocky crags. The **Bridges** tool in Paths plans roads across them:
-  a bridge costs 3 Cement and half an Alloy a tile (as a Viaduct span), a tunnel 3 Cement and 1 Alloy (`CROSS` in `js/defs.js`;
+  a bridge costs 2 Cement and half an Alloy a tile (cheaper than a Viaduct span: Islands live on bridges), a tunnel 3 Cement and 1 Alloy (`CROSS` in `js/defs.js`;
   `bridgeable`; a Sky bridge over the old `T_CHASM` canyons, 3 Cement and half an Alloy, survives for old saves). Workers build them out from the shore or rock face (6–9 s a tile), and
   they join land on any level. A bridge is drawn as one level span at the height of the highest clifftop it lands on
   (`deckLevel` in `js/render.js`), ramping down at a lower end; its piers, end towers and suspension cables reach past
@@ -224,6 +224,9 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
   crags and leaves one 4-tile pass between the two halves (`CHOKE_BAND`, `CHOKE_APPROACH` in `js/defs.js`).
   **Islands** (a taller map) puts each base on its own island with a big middle island and islets, at least
   `ISLE_GAP` tiles of sea apart, so the only way across is bridges; the AI bridges toward its rival (`aiBridge`).
+  On Islands and Sky islands each home island (or mesa) is topped up to `HOME_STONE` (300) Stone with a boulder field
+  near the base, since Cement comes from Stone alone and every crossing costs Cement; on Sky islands boulders also
+  get `SKY_RES_MUL` like the other mesa deposits.
   **Crater** sinks a crater one cliff below a rim in the middle, its floor holding rich fields (and Uranium in a
   Nuclear race), with one natural ramp in from each side. **Plateaus** stands each base on the top level, with a
   terrace one level down all round and only two natural slopes off it. Both force at least three levels.

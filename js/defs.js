@@ -258,7 +258,7 @@ const T_GROUND = 0, T_WATER = 1, T_ROCK = 2, T_CHASM = 3; // a chasm: a deep, sh
  * the way round is longer than about `weight` road tiles.
  */
 const CROSS = {
-  [T_WATER]: { key: 'bridge', name: 'Bridge', cost: { cement: 3, alloy: 0.5 }, time: 6, weight: 14 },
+  [T_WATER]: { key: 'bridge', name: 'Bridge', cost: { cement: 2, alloy: 0.5 }, time: 6, weight: 14 }, // cheaper than a Viaduct span: Islands live on bridges
   [T_ROCK]: { key: 'tunnel', name: 'Tunnel', cost: { cement: 3, alloy: 1 }, time: 8, weight: 18 },
   [T_CHASM]: { key: 'skybridge', name: 'Sky bridge', cost: { cement: 3, alloy: 0.5 }, time: 9, weight: 16 },
 };
@@ -306,7 +306,8 @@ const CHOKE_BAND = 3;   // Chokepoint maps: rows of crags each side of the middl
 const CHOKE_APPROACH = 3; // ...and rows of open ground kept clear each side of the pass
 const ISLE_GAP = 2.5;     // Islands maps: at least this much sea between islands
 const SKY_GAP = 1;        // Sky islands: canyons between mesas are narrower (short Viaducts)
-const SKY_RES_MUL = 1.8;  // Sky islands: Ore, Crystal and Stalk hold this much more (half the fields fall in the canyons)
+const SKY_RES_MUL = 1.8;  // Sky islands: Ore, Crystal, Stalk and Stone hold this much more (half the fields fall in the canyons)
+const HOME_STONE = 300;   // Islands and Sky islands: Stone each home island or mesa holds at the start (topped up near the base)
 const LOOT_MAX = 60;      // most crates a wrecked building spills
 const LOOT_TIME = 300;    // seconds a loot pile lies before it rots away
 // Walls and Gates: an enemy warbot plans a route through one as if it were this many extra tiles
@@ -325,6 +326,7 @@ const DEFAULT_RICH = 2;
 // Resource nodes that sit on ground tiles. Energy crops are planted by a Bio Farm on fertile soil;
 // oil seeps are pumped by an Oil Pump built on top of one.
 const R_NONE = 0, R_STALK = 1, R_BOULDER = 2, R_ORE = 3, R_CRYSTAL = 4, R_CROP = 5, R_OIL = 6, R_URANIUM = 7;
+const SKY_RICH = [R_ORE, R_CRYSTAL, R_STALK, R_BOULDER]; // the deposits SKY_RES_MUL makes richer on Sky islands' mesas
 const RES = {
   [R_STALK]:   { key: 'stalk',   name: 'Stalk grove',     good: 'fiber',   amount: 3, harvest: 2.5 },
   [R_BOULDER]: { key: 'boulder', name: 'Boulder',         good: 'stone',   amount: 8, harvest: 3 },
