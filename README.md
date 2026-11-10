@@ -468,7 +468,10 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
 ## Custom art
 
 Buildings, bots, resources and ground use custom art made in Claude Design (`art/`, with SVG sources in
-`art/source/`). The production buildings, Depot, Outposts and construction sites use the pre-rendered 3D set
+`art/source/`). The renderer that made the 3D art (three.js scenes in headless Chrome, plus the compose, effect and
+terrain scripts, and `jobs.txt` with the recipe for every shipped file) is in `renderer/`: see `renderer/RENDERER.md`
+to render new sprites in the same style. The art rules are in the Terrafall design system
+(https://claude.ai/artifact/GAdLBz6kefeJeTRz57TTV7). The production buildings, Depot, Outposts and construction sites use the pre-rendered 3D set
 (512×512, each on its own pad, placed by an `anchor` point in `art/art-manifest.js`), as do the Fuel Station, Bio
 Farm, Oil Pump, Refinery, Cement Works, Asphalt Plant, Roadworks, Ramp, Ammo Plant, Missile Factory and Missile Silo
 (team versions for the military ones), plus the Repair Station, the fortified Command Base, the Nuclear Reactor and

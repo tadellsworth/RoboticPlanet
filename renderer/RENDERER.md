@@ -335,6 +335,25 @@ Set `TERRAFALL_ART` to the folder. It's laid out like the game: `art/<group>/`, 
 - **Not packed:** `node_modules/` and `./chrome` (run `npm ci` and `npm run install-chrome`), and the rendered art itself, apart from `example/smelter.png`.
 - **The Chrome download:** I couldn't fetch the Chrome zip from this workspace, because the network is restricted. The browser these renders came from reports itself as Chrome for Testing 153.0.8010.12, which is the build `npm run install-chrome` asks for.
 
+## In a Claude Code cloud session
+
+The game's repository keeps this folder as `renderer/`. A cloud session already has the right Node (22.23.4), Python
+(3.13.18), numpy and Pillow, and its pre-installed Playwright browser is Chrome for Testing 153.0.8010.12, which
+`chrome.js` finds by itself. To set up:
+
+```
+cd renderer
+npm ci
+pip install scipy==1.18.1
+node tools/check-webgl.js        # Chrome/153.0.8010.12, SwiftShader
+```
+
+Checked there (November): the walkthrough Smelter, the Generator (day, night and a working-loop frame), the Freight
+Truck and the Tanker (day and night) all re-render with the same outline and alpha as the shipped files, and colour
+within a level or two (a mean difference under 0.11 of a level, a handful of pixels up to 12): SwiftShader's
+floating point varies a little between processors (that machine has AVX-512). Two renders on the same machine are
+byte-identical. The 2D effect sheets (`fx-exhaust`, `fx-exhaust-heavy`) are pixel for pixel identical.
+
 ## What was checked
 
 I unpacked the zip into an empty folder, ran `npm ci`, and ran the walkthrough above. The Smelter came out identical to `example/smelter.png`.

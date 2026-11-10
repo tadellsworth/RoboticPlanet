@@ -1448,6 +1448,8 @@ slow, tell Claude Code: each effect's length is one number in the code.
   black smoke and steam use the exhaust sheets for now; flame, sparks and dust points wait for their own sheets.
   Still to make: the **pipe pieces** and the **fuel blast** (`fx-fuel-blast`, `oil-scorch`): prompts in
   `design/claude-design-fuel.md`.
+  **Renderer:** the three.js renderer that made all the 3D art is in `renderer/` (see `renderer/RENDERER.md`), so new
+  sprites can be rendered in the same style right here.
   **Design system:** the Terrafall design system for making new art lives at
   https://claude.ai/artifact/GAdLBz6kefeJeTRz57TTV7 (it can be added to the Claude Code chat so art is designed there).
   Still missing: a 3D turret by day, resources `crop` and `oil`, ground
