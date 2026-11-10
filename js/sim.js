@@ -527,9 +527,11 @@ function updateLights(dt) {
 /** Put a traffic light on the junction at (i, j). Returns '' or the reason it can't. */
 function placeLight(owner, i, j) {
   const t = tIdx(i, j);
-  if (S.lights[t] || S.over[t]) return '';
+  if (S.lights[t] || S.over[t] || junPlanAt(t)) return '';
   if (!S.road[t] || !isJunction(t)) return 'Traffic lights go on road junctions: a road tile with roads on three or four sides.';
   if (S.owner[t] !== owner) return 'You can only put traffic lights inside your border.';
+  // Yours is planned and goes up once it's paid for (settlePlans); the computer pays up front.
+  if (!S.players[owner].ai) { planJunction(owner, t, 'light'); return ''; }
   const have = playerGoods(owner);
   for (const g in LIGHT_COST) if (have[g] < LIGHT_COST[g]) return `A traffic light costs ${LIGHT_COST[g]} ${GOOD[g].name}.`;
   for (const g in LIGHT_COST) takeGood(owner, g, LIGHT_COST[g]);
@@ -543,6 +545,9 @@ function placeOverpass(owner, i, j) {
   if (S.over[t]) return '';
   if (!S.road[t] || !isJunction(t) || crossTile(t)) return 'Overpasses go on road junctions on open ground: a road tile with roads on three or four sides.';
   if (S.owner[t] !== owner) return 'You can only build overpasses inside your border.';
+  // Yours is planned (a planned light becomes a planned overpass) and goes up once it's paid for; a
+  // light already standing keeps working meanwhile, and its Alloy counts toward the overpass.
+  if (!S.players[owner].ai) { const P = junPlanAt(t); if (P) P.kind = 'over'; else planJunction(owner, t, 'over'); settlePlans(); return ''; }
   const have = playerGoods(owner), light = S.lights[t];
   for (const g in OVERPASS_COST) {
     const back = light && LIGHT_COST[g] ? LIGHT_COST[g] : 0;
@@ -553,6 +558,27 @@ function placeOverpass(owner, i, j) {
   S.over[t] = { owner };
   markDirty(i, j);
   return '';
+}
+
+/** The traffic light or overpass planned on junction t, still waiting for its goods ({ owner, kind }), or null. */
+function junPlanAt(t) { return (S.junPlan && S.junPlan[t]) || null; }
+
+/** Plan a traffic light or overpass ('light' / 'over') on junction t: it joins the queue of plans waiting for goods. */
+function planJunction(owner, t, kind) {
+  S.junPlan = S.junPlan || {};
+  S.junPlan[t] = { owner, kind };
+  queuePlan('j', t, owner);
+  settlePlans();
+}
+
+/** Call off a planned light or overpass (nothing was paid for it yet). */
+function cancelJunPlan(t) { if (S.junPlan) delete S.junPlan[t]; }
+
+/** What finishing the planned light or overpass on junction t still costs (an overpass counts the light standing there). */
+function junPlanCost(t, P) {
+  const full = P.kind === 'over' ? OVERPASS_COST : LIGHT_COST, out = {};
+  for (const g in full) { const n = full[g] - (P.kind === 'over' && S.lights[t] ? LIGHT_COST[g] || 0 : 0); if (n > 0) out[g] = n; }
+  return out;
 }
 
 /** Take an overpass down and refund it to the nearest storage. */
@@ -3352,7 +3378,11 @@ function takeGood(owner, g, n) {
  * workers only build what's paid for (a site builds as far as its goods go). A good an older plan
  * is still waiting for isn't spent on a newer one.
  */
-function queuePlan(kind, ref, owner) { (S.planQ || (S.planQ = [])).push([kind, ref, owner]); }
+function queuePlan(kind, ref, owner) {
+  // Planned again (say, called off and planned anew): it goes to the back of the queue, once.
+  S.planQ = (S.planQ || []).filter((it) => !(it[0] === kind && it[1] === ref));
+  S.planQ.push([kind, ref, owner]);
+}
 
 /** Is site b paid for straight from storage (no Hauler, no road), a unit at a time? */
 function storeFunded(b) { return !!(BDEFS[b.type].prepaid || b.fromStore); }
@@ -3390,6 +3420,21 @@ function settlePlans() {
       continue;
     }
     const t = ref;
+    if (kind === 'j') {
+      // A planned light or overpass: paid all at once, then it goes up. Dropped if the junction is gone.
+      const P = junPlanAt(t);
+      if (!P || P.owner !== o) continue;
+      if (!S.road[t] || !isJunction(t) || S.owner[t] !== o || S.over[t] || (P.kind === 'light' && S.lights[t]) || (P.kind === 'over' && crossTile(t))) { cancelJunPlan(t); continue; }
+      const cost = junPlanCost(t, P), have = spendable(o);
+      if (Object.keys(cost).some((g) => sh.has(g))) { keep.push(it); continue; }
+      const lack = Object.keys(cost).filter((g) => (have[g] || 0) < cost[g]);
+      if (lack.length) { for (const g of lack) sh.add(g); keep.push(it); continue; }
+      for (const g in cost) takeGood(o, g, cost[g]);
+      if (P.kind === 'over') { delete S.lights[t]; S.over[t] = { owner: o }; markDirty(t % S.W, (t / S.W) | 0); }
+      else S.lights[t] = { owner: o, ph: 0, tm: 0, clr: 0 };
+      cancelJunPlan(t);
+      continue;
+    }
     let cost;
     if (kind === 'r') {
       if (S.plan[t] !== o + 1 || !S.owe[t]) continue;
@@ -3420,13 +3465,14 @@ function settlePlans() {
 
 /** How many of `owner`'s plans are waiting for goods: { tiles, track, sites, owed: {good: n} }. */
 function plansWaiting(owner) {
-  const out = { tiles: 0, track: 0, sites: 0, owed: {} };
+  const out = { tiles: 0, track: 0, sites: 0, junctions: 0, owed: {} };
   for (const [kind, ref, o] of S.planQ || []) {
     if (o !== owner) continue;
     let c = null;
     if (kind === 'r' && S.plan[ref] === o + 1 && S.owe[ref]) { out.tiles++; c = roadTileCost(ref); }
     else if (kind === 't' && S.railPlan[ref] === o + 1) { out.track++; c = railCost(ref); }
     else if (kind === 'b') { const b = getE(ref); if (b && !b.dead && !b.built && Object.keys(stillOwed(b)).length) { out.sites++; c = stillOwed(b); } }
+    else if (kind === 'j') { const P = junPlanAt(ref); if (P && P.owner === o) { out.junctions++; c = junPlanCost(ref, P); } }
     if (c) for (const g in c) out.owed[g] = (out.owed[g] || 0) + c[g];
   }
   return out;

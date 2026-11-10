@@ -1078,15 +1078,27 @@ function onMapTap(i, j, wx, wy) {
     const t = tIdx(i, j);
     if (UI.roadMode === 'lights') {
       // Each tap steps a junction along: traffic light, then overpass, then plain junction again.
+      // Ones you can't pay for yet are planned and go up once they're paid for (oldest plans first).
+      const P = junPlanAt(t);
       if (S.over[t]) { removeOverpass(t); markDirty(i, j); sfx('click'); showRoadBanner('Overpass taken down: its Cement and Alloy are back.', true); return; }
-      if (S.lights[t]) {
+      if (P && P.kind === 'over') {
+        cancelJunPlan(t);
+        const lit = !!S.lights[t];
+        if (lit) removeLight(t);
+        sfx('click'); showRoadBanner(`Planned overpass called off (nothing was spent on it yet)${lit ? '; the light is taken down and its Alloy is back' : ''}.`, true);
+        return;
+      }
+      if (S.lights[t] || P) {
         const why = placeOverpass(0, i, j);
-        if (why) { removeLight(t); sfx('click'); showRoadBanner(`Light taken down. ${why}`, true); }
-        else { sfx('place'); addFx('ring', i + 0.5, j + 0.5, { color: '#ffd166' }); showRoadBanner('Overpass built: traffic flows through without stopping.', true); }
+        if (why) { if (S.lights[t]) removeLight(t); cancelJunPlan(t); sfx('click'); showRoadBanner(`Light taken down. ${why}`, true); }
+        else if (S.over[t]) { sfx('place'); addFx('ring', i + 0.5, j + 0.5, { color: '#ffd166' }); showRoadBanner('Overpass built: traffic flows through without stopping.', true); }
+        else { sfx('place'); showRoadBanner(`Overpass planned: it goes up once its ${costText(junPlanCost(t, junPlanAt(t)))} is paid for from storage (oldest plans first)${S.lights[t] ? '; the light keeps working meanwhile' : ''}.`, true); }
         return;
       }
       const why = placeLight(0, i, j);
-      if (why) { sfx('error'); showRoadBanner(why); } else { sfx('place'); addFx('ring', i + 0.5, j + 0.5, { color: '#7dffa0' }); showRoadBanner(); }
+      if (why) { sfx('error'); showRoadBanner(why); }
+      else if (S.lights[t]) { sfx('place'); addFx('ring', i + 0.5, j + 0.5, { color: '#7dffa0' }); showRoadBanner(); }
+      else { sfx('place'); showRoadBanner(`Traffic light planned: it goes up once its ${costText(LIGHT_COST)} is paid for from storage (oldest plans first).`, true); }
       return;
     }
     if (UI.roadMode === 'pave') {
@@ -1466,7 +1478,8 @@ function showRoadBanner(problem, info) {
     const net = roadNet();
     for (let t = 0; t < S.W * S.H; t++) if (net.junc[t] && S.owner[t] === 0) junctions++;
     line = `Tap a <b>junction</b> for a traffic light (${costText(LIGHT_COST)}), tap the light for an <b>overpass</b> (${costText(OVERPASS_COST)}), tap again to clear it.`;
-    how = `A light lets one direction through at a time: it pays where two busy roads cross (50 to 85% more goods through), and costs a little on a quiet crossing. On an overpass nobody stops: best everywhere, and more than twice as much on a jammed crossing. You have ${lights} light${lights === 1 ? '' : 's'}, ${overs} overpass${overs === 1 ? '' : 'es'} and ${junctions} junction${junctions === 1 ? '' : 's'}.`;
+    const jp = plansWaiting(0).junctions;
+    how = `A light lets one direction through at a time: it pays where two busy roads cross (50 to 85% more goods through), and costs a little on a quiet crossing. On an overpass nobody stops: best everywhere, and more than twice as much on a jammed crossing. Short of Alloy? Tap anyway: the light or overpass is planned (a dashed orange marker) and goes up once it's paid for from storage, oldest plans first${jp ? ` (<b>${jp}</b> waiting now)` : ''}. You have ${lights} light${lights === 1 ? '' : 's'}, ${overs} overpass${overs === 1 ? '' : 'es'} and ${junctions} junction${junctions === 1 ? '' : 's'}.`;
   } else {
     const sm = draftSummary();
     if (draftEmpty()) {

@@ -3704,6 +3704,28 @@ function drawPlans(ctx, ox, oy, z, inView) {
  * that may go, red for the other (both red while the junction clears), and a small signal post.
  */
 function drawLights(ctx, ox, oy, z, inView) {
+  // A light or overpass planned but still waiting for its goods: a dashed orange outline with a
+  // small signal (a light) or an arch (an overpass).
+  if (S.junPlan) for (const k in S.junPlan) {
+    const t = +k, P = S.junPlan[k], i = t % S.W, j = (t / S.W) | 0;
+    if (!inView(i, j, 1)) continue;
+    const x = ox + i * z, y = oy + j * z, mine = P.owner === 0;
+    ctx.save();
+    ctx.lineWidth = Math.max(1.5, z * 0.05);
+    ctx.setLineDash([z * 0.08, z * 0.08]);
+    ctx.strokeStyle = mine ? 'rgba(255,150,60,0.95)' : 'rgba(255,120,120,0.5)';
+    ctx.strokeRect(x + z * 0.06, y + z * 0.06, z * 0.88, z * 0.88);
+    ctx.setLineDash([]);
+    ctx.fillStyle = mine ? 'rgba(255,170,90,0.85)' : 'rgba(255,170,90,0.4)';
+    if (P.kind === 'over') {
+      ctx.beginPath(); ctx.arc(x + z * 0.5, y + z * 0.72, z * 0.26, Math.PI, 0); ctx.strokeStyle = ctx.fillStyle; ctx.lineWidth = Math.max(1.5, z * 0.07); ctx.stroke();
+    } else {
+      ctx.fillRect(x + z * 0.42, y + z * 0.26, z * 0.16, z * 0.42);
+      ctx.fillStyle = 'rgba(30,30,36,0.8)';
+      for (const k2 of [0.33, 0.47, 0.61]) { ctx.beginPath(); ctx.arc(x + z * 0.5, y + z * k2, z * 0.04, 0, Math.PI * 2); ctx.fill(); }
+    }
+    ctx.restore();
+  }
   for (const k in S.lights) {
     const t = +k, L = S.lights[k], i = t % S.W, j = (t / S.W) | 0;
     if (!inView(i, j, 1)) continue;

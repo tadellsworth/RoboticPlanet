@@ -129,7 +129,8 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
   border or shore; land only, never water or anyone's land), so an Outpost can go on the new island, even right at the
   end of the bridge. Territory is recomputed whenever a bridge tile is built or removed.
 - **Plans that wait for goods** (`settlePlans`, `S.planQ` in `js/sim.js`): anything you plan in Paths (road, bridge and
-  tunnel tiles, track, Walls, Gates, Ramps) and Viaducts can be planned without the goods. Each joins a queue, oldest
+  tunnel tiles, track, Walls, Gates, Ramps, traffic lights and overpasses) and Viaducts can be planned without the goods.
+  Planning the same thing again moves it to the back of the queue, once (`queuePlan`). Each joins a queue, oldest
   first, and `settlePlans` (once a second, and right after you plan) pays for what it can from storage; a good an
   older plan is still waiting for isn't spent on a newer one. Road tiles waiting for their goods are flagged in
   `S.owe` (workers pave only paid tiles: `planList` vs `planAll`), track waiting to go down in `S.railPlan`, and
@@ -143,7 +144,10 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
   lets one direction through at a time, switching when traffic waits the other way. On a busy crossing a light moves
   half as many goods again or more, while on a quiet one it costs a few percent (a light switches as soon as nobody is
   coming on green; `LIGHT_MIN_GREEN` only holds while green traffic is still coming). Tap the light again for an **overpass** (4 Cement,
-  3 Alloy): one road passes over the other and nobody slows or waits. Tap again to clear it.
+  3 Alloy): one road passes over the other and nobody slows or waits. Tap again to clear it. Short of goods, a tap
+  plans the light or overpass instead (`S.junPlan`, a `'j'` entry in `S.planQ`): it's paid all at once when the goods
+  are in (oldest plans first) and goes up then; a light already standing keeps working while its overpass waits, and its
+  Alloy counts toward it (`junPlanCost`). Calling a plan off gives nothing back; the AI pays up front.
 - **Traffic map:** **Traffic map** in the Paths banner (or **T**) tints each road green to red by how busy it has been
   over the last minute and rings the spots where bots stand waiting.
 - **Long hauls:** tap a Depot and set **supply orders** (how much of each good to keep there). Goods come from your other
