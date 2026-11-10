@@ -5163,7 +5163,7 @@ function drawPulseCharges(ctx, ox, oy, z, inView) {
 function drawEffects(ctx, ox, oy, z) {
   for (const f of S.fx) {
     if (f.t < 0) continue; // a delayed effect (a building's second blast) not started yet
-    if (f.type === 'flak') continue; // up in the air: see drawAirLayer
+    if (f.type === 'flak' || f.type === 'crateland') continue; // see drawAirLayer
     const k = f.t / f.life;
     const x = ox + f.x * z, y = oy + f.y * z;
     // A fuel blast (renderer/fx/fuelblast.py): ground zero is 2/3 down its frame; the fireball spans about
@@ -5726,32 +5726,100 @@ function drawWreck(ctx, d, ox, oy, z) {
   ctx.restore();
 }
 
+/*
+ * Air-drop art (renderer/b/airdrop.js, seen from a little above, 6.4 world units across the frame): chute-fall@T
+ * (a crate under its canopy; the crate's foot sits CHUTE_FOOT of the frame below its centre), chute@T (a canopy),
+ * crate-drop@T (a landed crate) and chute-flat@T (a spent parachute lying flat).
+ */
+const CHUTE_FOOT = 0.4;
+
+/** One supply crate coming down under its parachute: foot at (x, y) on screen, `h` px up, swaying. */
+function drawFallingCrate(ctx, owner, x, y, h, z, sway, p) {
+  const art = artFor('chute-fall', owner), S2 = z * 1.15;
+  ctx.fillStyle = `rgba(0,0,0,${0.1 + 0.25 * p})`;
+  ctx.beginPath(); ctx.ellipse(x + h * 0.25, y + h * 0.35, z * (0.12 + 0.1 * p), z * (0.07 + 0.05 * p), 0, 0, Math.PI * 2); ctx.fill();
+  if (art) {
+    // The whole rig swings from the canopy: rotate about the canopy, the crate's foot lands on (x, y - h).
+    const cx = x + Math.sin(sway) * S2 * CHUTE_FOOT, cy = y - h - Math.cos(sway) * S2 * CHUTE_FOOT;
+    drawArt(ctx, art, cx, cy, S2, sway);
+    return;
+  }
+  drawCanopy(ctx, x + Math.sin(sway) * z * 0.3, y - h - z * 0.5, z * 0.3, y - h - z * 0.1, PLAYER_COLORS[owner]);
+  drawCrate(ctx, x, y - h - z * 0.05, z * 0.24, 'cement');
+}
+
+/** A canopy (art, or drawn) for a robot or a Drop Outpost coming down: its skirt at (x, y), lines to (x, ly). */
+function drawChute(ctx, owner, x, y, s, ly, color) {
+  const art = artFor('chute', owner);
+  if (!art) { drawCanopy(ctx, x, y, s, ly, color); return; }
+  ctx.strokeStyle = 'rgba(40,40,40,0.55)'; ctx.lineWidth = Math.max(0.6, s * 0.05);
+  ctx.beginPath(); for (const k of [-0.85, -0.3, 0.3, 0.85]) { ctx.moveTo(x + k * s, y); ctx.lineTo(x, ly); } ctx.stroke();
+  drawArt(ctx, art, x, y - s * 0.2, s * 3.3, 0);
+}
+
+/**
+ * Supply crates down beside a building (a 'crateland' effect): a puff of dust as each hits the ground, its parachute
+ * collapsing out flat beside it, then, after a moment, the crate taken in (they fade).
+ */
+function drawCrateLanding(ctx, f, ox, oy, z) {
+  const fade = f.t > f.life - 0.9 ? Math.max(0, (f.life - f.t) / 0.9) : 1, crate = artFor('crate-drop', f.owner), flat = artFor('chute-flat', f.owner);
+  for (const c of f.crates) {
+    const t = f.t - c.lag * 0.4;
+    if (t < 0) continue;
+    const x = ox + (f.x + c.dx) * z, y = oy + (f.y + c.dy) * z;
+    // the dust kicked up
+    if (t < 0.7) {
+      const q = t / 0.7;
+      for (let n = 0; n < 5; n++) {
+        const a = (n / 5) * Math.PI * 2 + c.dx * 3, r = z * (0.08 + 0.3 * q);
+        ctx.fillStyle = `rgba(196,170,130,${0.45 * (1 - q)})`;
+        ctx.beginPath(); ctx.arc(x + Math.cos(a) * r, y + Math.sin(a) * r * 0.5, z * (0.07 + 0.07 * q), 0, Math.PI * 2); ctx.fill();
+      }
+    }
+    ctx.globalAlpha = fade;
+    // the parachute settling out flat downwind of it (it grows out from the crate as it collapses)
+    const k = Math.min(1, t / 0.6);
+    if (flat) drawArt(ctx, flat, x + z * (0.15 + 0.28 * k), y - z * 0.02, z * (0.45 + 0.55 * k), 0);
+    else { ctx.fillStyle = PLAYER_COLORS[f.owner]; ctx.beginPath(); ctx.ellipse(x + z * 0.35 * k, y, z * 0.3 * k, z * 0.1, 0, 0, Math.PI * 2); ctx.fill(); }
+    if (crate) drawArt(ctx, crate, x, y - z * 0.06, z * 1.1, 0);
+    else drawCrate(ctx, x, y - z * 0.08, z * 0.24, 'cement');
+    ctx.globalAlpha = 1;
+  }
+}
+
 /** Cargo Planes in the air, parachutes and wrecks coming down, flak bursting: drawn over everything on the ground. */
 function drawAirLayer(ctx, ox, oy, z, inView) {
+  for (const f of S.fx) if (f.type === 'crateland' && f.t >= 0 && inView(f.x, f.y, 2)) drawCrateLanding(ctx, f, ox, oy, z);
   for (const d of S.drops || []) {
     if (d.kind === 'wreck') { if (inView(d.x, d.y, 4)) drawWreck(ctx, d, ox, oy, z); continue; }
+    if (d.kind === 'supply') {
+      if (!inView(d.i, d.j, 4)) continue;
+      for (const c of d.crates || [{ dx: 0, dy: 0.62, lag: 0 }]) {
+        const p = clamp((S.time - d.t0 - c.lag) / AIR_DROP_FALL, 0, 1);
+        if (S.time - d.t0 - c.lag < 0) continue;
+        const tx = d.i + 0.5 + c.dx, ty = d.j + 0.5 + c.dy, x = d.x + (tx - d.x) * p, y = d.y + (ty - d.y) * p;
+        const h = (1 - p) * (1 - p * 0.3) * 1.5 * z, sway = Math.sin((S.time - d.t0) * 2.6 + c.lag * 5) * 0.16 * (1 - p * 0.7);
+        if (p < 1) drawFallingCrate(ctx, d.owner, ox + x * z, oy + y * z, h, z, sway, p);
+      }
+      continue;
+    }
     const p = clamp((S.time - d.t0) / AIR_DROP_FALL, 0, 1), tx = d.i + 0.5, ty = d.j + 0.5;
     const x = d.x + (tx - d.x) * p, y = d.y + (ty - d.y) * p, h = (1 - p) * (1 - p * 0.3) * 1.5;
     if (!inView(x, y, 3)) continue;
     const sx = ox + x * z, sy = oy + y * z, py = sy - h * z;
     ctx.fillStyle = `rgba(0,0,0,${0.12 + 0.22 * p})`;
     ctx.beginPath(); ctx.ellipse(sx + h * z * 0.25, sy + h * z * 0.35, z * (0.22 + 0.16 * p), z * (0.12 + 0.08 * p), 0, 0, Math.PI * 2); ctx.fill();
-    const chute = ['#e9e4d8', '#d8c58a', PLAYER_COLORS[d.owner]][d.id % 3];
     if (d.kind === 'outpost') {
       // The outpost, packed, under a big cluster of canopies.
-      for (const k of [-1, 0, 1]) drawCanopy(ctx, sx + k * z * 0.42, py - z * (0.85 + (k ? 0 : 0.12)), z * 0.3, py - z * 0.18, k ? '#e9e4d8' : PLAYER_COLORS[d.owner]);
+      for (const k of [-1, 0, 1]) drawChute(ctx, d.owner, sx + k * z * 0.42, py - z * (0.85 + (k ? 0 : 0.12)), z * 0.3, py - z * 0.18, k ? '#e9e4d8' : PLAYER_COLORS[d.owner]);
       ctx.globalAlpha = 0.95;
       drawBuilding(ctx, 'dropost', sx, py, z * 0.75, d.owner, { built: true, garrison: [], stock: {}, packed: true });
       ctx.globalAlpha = 1;
-    } else if (d.kind === 'supply') {
-      const goods = Object.keys(d.goods || {});
-      drawCanopy(ctx, sx, py - z * 0.62, z * 0.32, py - z * 0.12, chute);
-      drawCrate(ctx, sx, py, z * 0.26, goods[0]);
     } else {
       const bots = (d.bots || []).map(getE).filter((v) => v && !v.dead);
       bots.forEach((v, k) => {
         const bx = sx + (bots.length > 1 ? (k ? 0.28 : -0.28) : 0) * z;
-        drawCanopy(ctx, bx, py - z * 0.62, z * 0.27, py - z * 0.2, k ? '#e9e4d8' : PLAYER_COLORS[d.owner]);
+        drawChute(ctx, d.owner, bx, py - z * 0.62, z * 0.27, py - z * 0.2, k ? '#e9e4d8' : PLAYER_COLORS[d.owner]);
         drawBot(ctx, { ...v, face: Math.PI / 2, rface: Math.PI / 2, path: null, vel: 0 }, bx, py, z);
       });
     }

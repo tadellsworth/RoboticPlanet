@@ -1865,3 +1865,35 @@ art/tod/night/buildings/flak-head-12.png	main	flak:::flak-head-12:part=head&rot=
 art/tod/night/buildings/flak-head-13.png	main	flak:::flak-head-13:part=head&rot=13&n=16&tod=night	compose.py
 art/tod/night/buildings/flak-head-14.png	main	flak:::flak-head-14:part=head&rot=14&n=16&tod=night	compose.py
 art/tod/night/buildings/flak-head-15.png	main	flak:::flak-head-15:part=head&rot=15&n=16&tod=night	compose.py
+art/bots/chute-fall@0.png	main	airdrop::#38d4ff:chute-fall@0:part=fall	compose_any.py --b1 4 --b2 10
+art/bots/chute@0.png	main	airdrop::#38d4ff:chute@0:part=canopy	compose_any.py --b1 4 --b2 10
+art/bots/crate-drop@0.png	main	airdrop::#38d4ff:crate-drop@0:part=crate	compose_any.py --b1 4 --b2 10
+art/bots/chute-flat@0.png	main	airdrop::#38d4ff:chute-flat@0:part=flat	compose_any.py --b1 4 --b2 10
+art/bots/chute-fall@1.png	main	airdrop::#ff5a6e:chute-fall@1:part=fall	compose_any.py --b1 4 --b2 10
+art/bots/chute@1.png	main	airdrop::#ff5a6e:chute@1:part=canopy	compose_any.py --b1 4 --b2 10
+art/bots/crate-drop@1.png	main	airdrop::#ff5a6e:crate-drop@1:part=crate	compose_any.py --b1 4 --b2 10
+art/bots/chute-flat@1.png	main	airdrop::#ff5a6e:chute-flat@1:part=flat	compose_any.py --b1 4 --b2 10
+art/tod/morning/bots/chute-fall@0.png	main	airdrop::#38d4ff:chute-fall@0:part=fall&tod=morning	compose_any.py --b1 4 --b2 10
+art/tod/morning/bots/chute@0.png	main	airdrop::#38d4ff:chute@0:part=canopy&tod=morning	compose_any.py --b1 4 --b2 10
+art/tod/morning/bots/crate-drop@0.png	main	airdrop::#38d4ff:crate-drop@0:part=crate&tod=morning	compose_any.py --b1 4 --b2 10
+art/tod/morning/bots/chute-flat@0.png	main	airdrop::#38d4ff:chute-flat@0:part=flat&tod=morning	compose_any.py --b1 4 --b2 10
+art/tod/morning/bots/chute-fall@1.png	main	airdrop::#ff5a6e:chute-fall@1:part=fall&tod=morning	compose_any.py --b1 4 --b2 10
+art/tod/morning/bots/chute@1.png	main	airdrop::#ff5a6e:chute@1:part=canopy&tod=morning	compose_any.py --b1 4 --b2 10
+art/tod/morning/bots/crate-drop@1.png	main	airdrop::#ff5a6e:crate-drop@1:part=crate&tod=morning	compose_any.py --b1 4 --b2 10
+art/tod/morning/bots/chute-flat@1.png	main	airdrop::#ff5a6e:chute-flat@1:part=flat&tod=morning	compose_any.py --b1 4 --b2 10
+art/tod/evening/bots/chute-fall@0.png	main	airdrop::#38d4ff:chute-fall@0:part=fall&tod=evening	compose_any.py --b1 4 --b2 10
+art/tod/evening/bots/chute@0.png	main	airdrop::#38d4ff:chute@0:part=canopy&tod=evening	compose_any.py --b1 4 --b2 10
+art/tod/evening/bots/crate-drop@0.png	main	airdrop::#38d4ff:crate-drop@0:part=crate&tod=evening	compose_any.py --b1 4 --b2 10
+art/tod/evening/bots/chute-flat@0.png	main	airdrop::#38d4ff:chute-flat@0:part=flat&tod=evening	compose_any.py --b1 4 --b2 10
+art/tod/evening/bots/chute-fall@1.png	main	airdrop::#ff5a6e:chute-fall@1:part=fall&tod=evening	compose_any.py --b1 4 --b2 10
+art/tod/evening/bots/chute@1.png	main	airdrop::#ff5a6e:chute@1:part=canopy&tod=evening	compose_any.py --b1 4 --b2 10
+art/tod/evening/bots/crate-drop@1.png	main	airdrop::#ff5a6e:crate-drop@1:part=crate&tod=evening	compose_any.py --b1 4 --b2 10
+art/tod/evening/bots/chute-flat@1.png	main	airdrop::#ff5a6e:chute-flat@1:part=flat&tod=evening	compose_any.py --b1 4 --b2 10
+art/tod/night/bots/chute-fall@0.png	main	airdrop::#38d4ff:chute-fall@0:part=fall&tod=night	compose_any.py --b1 4 --b2 10
+art/tod/night/bots/chute@0.png	main	airdrop::#38d4ff:chute@0:part=canopy&tod=night	compose_any.py --b1 4 --b2 10
+art/tod/night/bots/crate-drop@0.png	main	airdrop::#38d4ff:crate-drop@0:part=crate&tod=night	compose_any.py --b1 4 --b2 10
+art/tod/night/bots/chute-flat@0.png	main	airdrop::#38d4ff:chute-flat@0:part=flat&tod=night	compose_any.py --b1 4 --b2 10
+art/tod/night/bots/chute-fall@1.png	main	airdrop::#ff5a6e:chute-fall@1:part=fall&tod=night	compose_any.py --b1 4 --b2 10
+art/tod/night/bots/chute@1.png	main	airdrop::#ff5a6e:chute@1:part=canopy&tod=night	compose_any.py --b1 4 --b2 10
+art/tod/night/bots/crate-drop@1.png	main	airdrop::#ff5a6e:crate-drop@1:part=crate&tod=night	compose_any.py --b1 4 --b2 10
+art/tod/night/bots/chute-flat@1.png	main	airdrop::#ff5a6e:chute-flat@1:part=flat&tod=night	compose_any.py --b1 4 --b2 10

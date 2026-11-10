@@ -218,7 +218,11 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
   two robots (Warbots from garrisons as for a march, or idle Workers, who board at the Airfield: the `board` task and
   `ferryWait`, as for a Ferry) anywhere, the enemy's land too, or up to 8 goods (`u.cargo`) for a place **supplied by
   air** (`b.airSupply`: any building with needs, construction sites too; a Drop Outpost and sites in its land have it
-  on). Each place is served from its nearest Airfield with a plane (`airBaseNear`); that Airfield keeps what they're
+  on). The places take turns (`airSupplyRun`: the one served longest ago, `c.airAt`, or run dry of something, first). A
+  supply drop comes down as a crate for every few goods (`d.crates`), swaying under team parachutes, and lands in front of
+  the building with a puff of dust, its parachute collapsing out flat beside it, before it's taken in (`crateland`;
+  art from `renderer/b/airdrop.js`: chute-fall, chute, crate-drop, chute-flat). Each place is served from its nearest
+  Airfield with a plane (`airBaseNear`); that Airfield keeps what they're
   short of (`airWant`, up to `AIR_KEEP` of each) plus `AIRFIELD_FUEL` for its plane (`airKeep`), and haulers bring it.
   A flight (`flyStep`): it rolls down the runway from its head gathering speed (`ROLL_ACCEL`), lifts off at the far end,
   climbs (`PLANE_CLIMB` s) and turns at up to `PLANE_TURN` (never circling a spot it can't turn onto: `steerPlane`), drops

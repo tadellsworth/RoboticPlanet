@@ -180,6 +180,8 @@ const ART_MANIFEST = {
   'dropost@1': B3D('buildings/dropost@1.webp', 2.3),
   'flak@0': B3D('buildings/flak@0.webp', 1.3), 'flak@1': B3D('buildings/flak@1.webp', 1.3),
   ...(() => { const o = {}; for (let k = 0; k < 16; k++) o[`flak-head-${k}`] = B3D(`buildings/flak-head-${k}.webp`, 1.3); return o; })(),
+  // Air drops (renderer/b/airdrop.js): a crate under its parachute, a canopy, a landed crate, a spent parachute.
+  ...Object.fromEntries(['chute-fall', 'chute', 'crate-drop', 'chute-flat'].flatMap((k) => [0, 1].map((t) => [`${k}@${t}`, `bots/${k}@${t}.webp`]))),
   'cargoplane@0': 'bots/cargoplane@0.webp',
   'cargoplane@1': 'bots/cargoplane@1.webp',
   // Generator (one version for both teams, like the factories), and its working loop: fans and power bus.

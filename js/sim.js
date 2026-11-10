@@ -6617,7 +6617,9 @@ function airSupplyRun(u, b) {
     // Worth a flight: a good load, all it's short of, or something it has run out of.
     const dry = Object.keys(load).some((g) => !((c.stock[g] || 0) > 0));
     if (!n || (n < Math.min(cap / 2, short) && !dry)) continue;
-    const sc = n * 4 - Math.sqrt(dist2(c.x, c.y, b.x, b.y)) * 0.05;
+    // The places take turns: the one served longest ago (or run dry) goes first, a bigger load counting for a bit.
+    const waited = Math.min(120, S.time - (c.airAt ?? c.born ?? 0));
+    const sc = n * 2 + waited * 0.5 + (dry ? 30 : 0) - Math.sqrt(dist2(c.x, c.y, b.x, b.y)) * 0.05;
     if (sc > bs) { bs = sc; best = { c, load, n }; }
   }
   return best;
@@ -6659,6 +6661,7 @@ function updatePlane(u, dt) {
     const run = airSupplyRun(u, base);
     if (!run) return;
     for (const g in run.load) { bump(base.stock, g, -run.load[g]); bump(run.c.inc, g, run.load[g]); }
+    run.c.airAt = S.time;
     u.cargo = run.load;
     u.mission = { kind: 'supply', to: run.c.id, x: run.c.x, y: run.c.y, phase: 'load', since: S.time };
     return;
@@ -6695,7 +6698,14 @@ function airDrop(u) {
   const M = u.mission;
   S.drops = S.drops || [];
   const d = { id: S.nextId++, owner: u.owner, kind: M.kind, x: u.x, y: u.y, i: M.x, j: M.y, t0: S.time };
-  if (M.kind === 'supply') { d.to = M.to; d.goods = u.cargo || {}; u.cargo = null; }
+  if (M.kind === 'supply') {
+    d.to = M.to; d.goods = u.cargo || {}; u.cargo = null;
+    // A crate for every four goods or so, out of the door a moment apart, landing just in front of the building.
+    const n = Math.max(1, Math.min(3, Math.ceil(sumValues(d.goods) / 4)));
+    d.crates = [];
+    for (let k = 0; k < n; k++) d.crates.push({ dx: n === 1 ? 0 : (k / (n - 1) - 0.5) * 0.62, dy: 0.62 + 0.08 * (k % 2), lag: k * 0.32 });
+    d.dur = AIR_DROP_FALL + (n - 1) * 0.32;
+  }
   else if (M.kind === 'warbot' || M.kind === 'worker') {
     d.bots = [];
     for (const v of ferryAboard(u)) { v.ferryWait = null; v.inside = 0; v.x = u.x; v.y = u.y; v.path = null; v.task = null; v.dropping = d.id; d.bots.push(v.id); }
@@ -6732,7 +6742,7 @@ function planeLost(u, keep) {
 function updateDrops() {
   if (!S.drops || !S.drops.length) return;
   S.drops = S.drops.filter((d) => {
-    const p = clamp((S.time - d.t0) / AIR_DROP_FALL, 0, 1);
+    const p = clamp((S.time - d.t0) / (d.dur || AIR_DROP_FALL), 0, 1);
     const tx = d.i + 0.5, ty = d.j + 0.5;
     if (d.bots) for (const id of d.bots) { const v = getE(id); if (v && !v.dead) { v.x = d.x + (tx - d.x) * p; v.y = d.y + (ty - d.y) * p; } }
     if (p < 1) return true;
@@ -6754,7 +6764,10 @@ function landDrop(d) {
     const c = getE(d.to);
     let n = 0;
     for (const g in d.goods) { n += d.goods[g]; if (c && !c.dead && c.owner === d.owner) { bump(c.inc, g, -d.goods[g]); bump(c.stock, g, d.goods[g]); } }
-    if (c && !c.dead && c.owner === d.owner && d.owner === 0 && n) addFx('ring', c.x + 0.5, c.y + 0.5, { color: PLAYER_COLORS[d.owner] });
+    // The crates sit a moment where they came down, their parachutes collapsing beside them, then they're taken in.
+    addFx('crateland', d.i + 0.5, d.j + 0.5, { life: 2.8, owner: d.owner, crates: d.crates || [{ dx: 0, dy: 0.62, lag: 0 }], seed: d.id % 97 });
+    if (d.owner === 0) sfx('thump');
+    void n;
     return;
   }
   if (d.kind === 'outpost') {
