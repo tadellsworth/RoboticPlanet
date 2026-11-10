@@ -9,6 +9,18 @@ and biomes started here and are now in the game.)
 - **Fuel, after the Tanker update.** Built: Tankers, explosions with chain reactions, Crude pipelines, the Generator
   and trucks burning Fuel (see the README). Still open: Fuel pipelines (only Crude flows today), a Generator that
   explodes too, and the AI using oil more (it mostly lives on Bio Farms: about one colony in four builds a Refinery).
+- **Ships and ports (for a new water-heavy map).** A map shape that is mostly sea, where shipping is the way to
+  move things between islands:
+  - **Port:** a new building on the shore, where ships load and unload. It works as storage, like a Rail Station,
+    so goods come and go by road.
+  - **Container ships:** bulk goods between ports, like Freight Trains at sea.
+  - **Ferries:** carry robots and trucks (Freight Trucks, Road Trains, Tankers) across to another port.
+  - **Tanker ships:** Crude and Fuel between ports (liquids still only travel by tanker).
+  - **Expensive bridges:** on this map, long bridges cost so much that ships are the better choice. Short hops
+    stay bridgeable. For example, the cost per tile could rise steeply past a few tiles of open water.
+  - **To think through:** how ships move (open water only, their own routes, docking time); whether raiders or
+    turrets can sink them, and whether a tanker ship explodes like a Tanker; what each ship and the Port cost; how
+    the AI plans ports and shipping; and how ferries pick who boards.
 
 ## AI stalemates (seen while checking Road Trains, November)
 
