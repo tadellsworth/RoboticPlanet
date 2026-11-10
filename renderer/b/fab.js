@@ -1,0 +1,66 @@
+// Chip fab: sealed clean-room block, glowing lime circuit pattern on the roof, roof fans, cooling-fin bank, airlock.
+export default function (L) {
+  const { box, cyl, hcyl, beam, pipe, lamp, pointLight, ao, mesh, canvasTex, group, sphere, M, THREE, ACCENT, ladder } = L;
+  const gun = M.paint('#50565c'), warm = M.paint('#8c8579'), off = M.paint('#c9c5ba', { panelW: 128, panelH: 256 });
+  L.seed(51);
+  const bx = -0.5, bz = -0.9, W = 6.8, D = 5.4, H = 3.1;
+
+  box(W, H, D, off, bx, 0, bz); ao(bx, bz, W, D);
+  box(W + 0.2, 0.3, 0.22, warm, bx, H, bz + D / 2, { dirt: 0 }); box(W + 0.2, 0.3, 0.22, warm, bx, H, bz - D / 2, { dirt: 0 });
+  box(0.22, 0.3, D, warm, bx - W / 2, H, bz, { dirt: 0 }); box(0.22, 0.3, D, warm, bx + W / 2, H, bz, { dirt: 0 });
+  box(W - 0.4, 0.1, 0.06, M.emit(ACCENT, 2.2), bx, H - 0.45, bz + D / 2 + 0.01, { cast: false });
+
+  // circuit-pattern roof panel (emissive map)
+  const circuit = canvasTex(1024, (g, n) => {
+    g.fillStyle = '#000'; g.fillRect(0, 0, n, n); g.strokeStyle = '#b4ff3c'; g.fillStyle = '#b4ff3c'; g.lineCap = 'square';
+    const d0 = n * 0.38, d1 = n * 0.62, m = 60;
+    g.lineWidth = 10; g.strokeRect(d0, d0, d1 - d0, d1 - d0);
+    g.globalAlpha = 0.55; for (let k = d0 + 24; k < d1 - 10; k += 24) { g.fillRect(d0 + 18, k, d1 - d0 - 36, 4); } g.globalAlpha = 1;
+    const side = (rot) => { g.save(); g.translate(n / 2, n / 2); g.rotate(rot); g.translate(-n / 2, -n / 2);
+      for (let i = 0; i < 6; i++) { const x0 = d0 + (i + 0.5) * (d1 - d0) / 6, off = (i - 2.5) * 46; g.lineWidth = 9;
+        g.beginPath(); g.moveTo(x0, d0); g.lineTo(x0, d0 - 50 - Math.abs(i - 2.5) * 12); g.lineTo(x0 + off, d0 - 110 - Math.abs(i - 2.5) * 12); g.lineTo(x0 + off, m + 22); g.stroke();
+        g.fillRect(x0 + off - 16, m, 32, 32); }
+      g.restore(); };
+    for (let r = 0; r < 4; r++) side(r * Math.PI / 2);
+    g.globalAlpha = 0.35; g.lineWidth = 4; for (let i = 0; i < 14; i++) { const y = 120 + i * 55; g.beginPath(); g.moveTo(m, y); g.lineTo(n * 0.22, y); g.lineTo(n * 0.26, y + 30); g.stroke(); g.beginPath(); g.moveTo(n - m, y); g.lineTo(n * 0.78, y); g.lineTo(n * 0.74, y - 30); g.stroke(); } g.globalAlpha = 1;
+  });
+  const panelBase = canvasTex(256, (g, n) => { g.fillStyle = '#1b1f1d'; g.fillRect(0, 0, n, n); g.strokeStyle = '#2a302c'; g.lineWidth = 2; for (let k = 0; k <= n; k += 32) { g.beginPath(); g.moveTo(k, 0); g.lineTo(k, n); g.moveTo(0, k); g.lineTo(n, k); g.stroke(); } });
+  const pm = new THREE.MeshStandardMaterial({ map: panelBase, emissiveMap: circuit, emissive: ACCENT, emissiveIntensity: 2.0, roughness: 0.35, metalness: 0.5 }); pm.userData.glow = ACCENT;
+  const pgeo = new THREE.PlaneGeometry(4.0, 3.0); pgeo.rotateX(-Math.PI / 2); mesh(pgeo, pm, bx - 0.3, H + 0.09, bz + 0.45, { cast: false, dirt: 0 });
+  box(4.2, 0.06, 3.2, gun, bx - 0.3, H, bz + 0.45, { dirt: 0, cast: false });
+  pointLight(ACCENT, 5, bx - 0.3, H + 1.2, bz + 0.6, 4);
+
+  // roof fans and a duct unit
+  for (const fx of [bx - 2.3, bx + 2.1]) {
+    const fz = bz - 2.0;
+    cyl(0.78, 0.6, gun, fx, H, fz, { dirt: 0 }); cyl(0.66, 0.02, M.dark, fx, H + 0.6, fz, { dirt: 0, cast: false });
+    for (let k = 0; k < 4; k++) { const g = group(fx, H + 0.63, fz); g.rotation.y = k * Math.PI / 4 + 0.3; box(1.2, 0.03, 0.16, M.steel, 0, 0, 0, { parent: g, dirt: 0 }); }
+    cyl(0.14, 0.08, M.steel, fx, H + 0.6, fz, { dirt: 0 });
+  }
+  box(1.2, 0.7, 0.9, M.grille(), bx + 2.5, H, bz + 1.6);
+  ladder(bx - W / 2 - 0.05, 0, H + 0.3, bz + 1.2, { ry: Math.PI / 2 });
+
+  // cooling-fin bank on the right side
+  const kx = bx + W / 2 + 0.7;
+  box(1.2, 0.4, 4.8, gun, kx, 0, bz, { dirt: 0.6 });
+  for (let i = 0; i < 18; i++) box(1.0, 2.0, 0.08, M.steel, kx, 0.4, bz - 2.3 + i * 0.27, { dirt: 0.4 });
+  box(1.2, 0.12, 4.8, warm, kx, 2.4, bz, { dirt: 0 });
+  pipe([[bx + W / 2, 1.2, bz - 1.6], [kx - 0.5, 1.2, bz - 1.6]], 0.14, M.steel);
+
+  // airlock vestibule (front)
+  const ax = bx - 0.6, az = bz + D / 2 + 0.6;
+  box(1.9, 2.4, 1.2, off, ax, 0, az); box(2.1, 0.16, 1.4, warm, ax, 2.4, az, { dirt: 0 });
+  box(1.0, 1.9, 0.06, M.dark, ax, 0, az + 0.6, { dirt: 0.4 });
+  box(1.15, 0.08, 0.08, M.emit(ACCENT, 2.6), ax, 2.0, az + 0.62, { cast: false });
+  box(1.9, 0.08, 0.5, M.hazard, ax, 0, az + 0.85, { dirt: 0 });
+  lamp(ax + 0.75, 1.5, az + 0.62, ACCENT, { size: 0.12, intensity: 2, dist: 2, k: 3 });
+
+  // process-gas tanks (back left) give the block a taller silhouette
+  for (const tz of [-3.3, -2.0]) { cyl(0.52, 3.9, M.paint('#d3cfc4', { rivets: false }), -4.35, 0, tz, { seg: 28 }); L.hoop(0.54, 0.05, M.steel, -4.35, 1.3, tz); L.hoop(0.54, 0.05, M.steel, -4.35, 2.6, tz); sphere(0.52, M.paint('#d3cfc4', { rivets: false }), -4.35, 3.9, tz, { dome: true }); }
+  L.ao(-4.35, -2.65, 1.1, 2.4, 0.5);
+  pipe([[-4.35, 3.2, -2.65], [bx - W / 2, 3.2, -2.65]], 0.1, M.steel);
+
+  // utility skid on the left with pipes into the wall
+  box(1.4, 1.1, 1.6, gun, -4.35, 0, 1.9); hcyl(0.42, 1.4, M.paint('#9fa4a6'), -4.35, 1.5, 1.9, { axis: 'z' });
+  pipe([[-4.35, 0.8, 1.1], [-4.35, 0.8, 0.4], [bx - W / 2, 0.8, 0.4]], 0.12, M.steel);
+}

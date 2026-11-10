@@ -1,0 +1,16 @@
+{
+  "name": "terrafall-renderer",
+  "version": "1.0.0",
+  "private": true,
+  "description": "The three.js renderer behind every Terrafall 3D sprite: scenes, render runner, compose and effects.",
+  "license": "UNLICENSED",
+  "engines": { "node": ">=18" },
+  "scripts": {
+    "install-chrome": "npx @puppeteer/browsers install chrome@153.0.8010.12 --path ./chrome",
+    "example": "node run.js out/example 'smelter:#ff8a1e::smelter' && python3 compose.py out/example smelter"
+  },
+  "dependencies": {
+    "puppeteer-core": "23.11.1",
+    "three": "0.160.0"
+  }
+}

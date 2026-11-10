@@ -1,0 +1,5 @@
+# Python 3.13.18 was used for every image. Exact versions:
+numpy==2.5.3
+Pillow==12.3.0
+scipy==1.18.1
+# Only for the preview videos (not a pip package): ffmpeg 6.1.1

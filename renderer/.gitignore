@@ -1,0 +1,4 @@
+node_modules/
+chrome/
+out/
+__pycache__/

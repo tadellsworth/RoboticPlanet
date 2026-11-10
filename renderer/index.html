@@ -1,0 +1,16 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<script type="importmap">{"imports":{"three":"/node_modules/three/build/three.module.js","three/addons/":"/node_modules/three/examples/jsm/"}}</script>
+</head>
+<body style="margin:0;background:transparent">
+<script type="module">
+import * as L from './lib.js';
+const p = new URLSearchParams(location.search);
+try {
+  const mod = await import('./b/' + p.get('b') + '.js?v=' + Date.now());
+  L.init(mod.config || {});
+  mod.default(L);
+  L.finish(mod);
+} catch (e) { window.result = { error: String(e && e.stack || e) }; }
+</script>
+</body></html>
