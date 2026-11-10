@@ -291,7 +291,10 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
   Warbots or 3 Workers at its Command Base (`BOOST` in `js/defs.js`, `boostRival` in `js/sim.js`), for a game you're
   winning too easily. The game pauses while it's open.
 - **Repairs:** nothing heals by itself. Damaged bots go to a Repair Station (workers below 60% health, warbots below
-  70% once their garrison is quiet; Colony free play too), which uses 1 Alloy per 12 health. Haulers keep up to 3 Alloy
+  70% once their garrison is quiet; Colony free play too), which uses 1 Alloy per 12 health. A warbot below 35%
+  (`REPAIR_RETREAT`) on an attack, a rally flag or a sortie pulls out of the fight for repairs when a Repair Station can
+  fix it (otherwise it fights on), takes no new fights on the way (`u.retreat`), and goes back to its attack or flag
+  once mended (`u.resume`, `resumeAfterRepair`; the flag stays up meanwhile, and Recall cancels the return). Haulers keep up to 3 Alloy
   in it, and an empty one gets the first Alloy that reaches storage (like an empty Fuel Station's Fuel). To fix a building, tap it and press **Repair**:
   you pay 1 Cement for every 6 missing armor and a free worker restores it.
 - **Statistics:** the pause menu and the end-of-game screen show graphs of bots, land and goods over time and how busy

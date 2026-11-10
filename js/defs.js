@@ -83,6 +83,7 @@ const REPAIR_HP_PER_ALLOY = 12;
 const ARMOR_PER_CEMENT = 6;
 const FIX_RATE = 2;
 const REPAIR_BELOW = { warbot: 0.7, other: 0.6 };
+const REPAIR_RETREAT = 0.35;      // a warbot this badly hurt pulls out of a fight for repairs (if a Repair Station can fix it)
 const FUEL_ENERGY = 250;          // battery points one Fuel gives at a Fuel Station (2½ full charges)
 /*
  * Trucks burn Fuel. Freight Trucks, Road Trains and Tankers have a fuel tank instead of a battery

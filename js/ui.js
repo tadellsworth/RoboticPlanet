@@ -2641,7 +2641,7 @@ function botActivity(u) {
       if (t.type === 'attack') return `Attacking the rival ${nm(t.target)}`;
       if (t.type === 'defend') return `Defending the ${nm(t.home)}`;
       if (t.type === 'hold') return t.phase === 'recharge' ? 'Battery flat: going to recharge' : t.target ? `Attacking the rival ${nm(t.target)}` : 'Holding the rally point';
-      if (t.type === 'repair') return 'Going for repairs';
+      if (t.type === 'repair') return u.retreat ? 'Badly hurt: pulling out of the fight for repairs' + (u.resume ? ', then back to it' : '') : 'Going for repairs';
       if (t.type === 'topup') return 'Topping up its battery';
       if (t.type === 'loot') return t.phase === 'home' ? 'Carrying a crate of loot home' : 'Going to pick up loot';
       return 'On patrol';

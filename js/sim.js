@@ -1312,6 +1312,15 @@ function findRepair(u) {
   return best;
 }
 
+/** A warbot that pulled out of a fight for repairs goes back to its attack or rally flag, if they're still on. */
+function resumeAfterRepair(u) {
+  const r = u.resume;
+  u.resume = null; u.retreat = false;
+  if (!r || u.type !== 'warbot' || !((u.ammo ?? WARBOT_AMMO) > 0)) return;
+  if (r.type === 'attack') { const b = getE(r.target); if (b && !b.dead && b.owner !== u.owner) u.task = { type: 'attack', target: r.target }; }
+  else if (r.type === 'hold' && rallyById(r.rally)) u.task = { type: 'hold', rally: r.rally, slot: r.slot };
+}
+
 /** Send robot u to the nearest Repair Station. */
 function goRepair(u) {
   const c = findRepair(u);
@@ -3197,7 +3206,7 @@ function updateWarbot(u, dt) {
     const home = getE(u.inside);
     if (home && BDEFS[home.type].repair) {
       // In a Repair Station: leave when fixed (or it has run out of Alloy).
-      if (u.hp >= u.maxHp || repairDry(home)) { exitBuilding(u); u.task = null; }
+      if (u.hp >= u.maxHp || repairDry(home)) { exitBuilding(u); u.task = null; resumeAfterRepair(u); }
       return;
     }
     // Outposts recharge their warbots; the Command Base doesn't charge anyone, so a low warbot in it
@@ -3240,14 +3249,32 @@ function warbotAct(u, dt) {
     const o = S.owner[tIdx(Math.floor(u.x), Math.floor(u.y))];
     if (o >= 0 && o !== u.owner) { cancelTask(u); u.path = null; return; }
   }
-  let foe = armed && u.fight ? getE(u.fight) : null;
+  // Badly hurt on an attack, a rally flag or a sortie: pull out to the nearest Repair Station that can
+  // fix it (when there is one; otherwise fight on), taking no new fights on the way, and go back to the
+  // attack or the flag once it's mended (resumeAfterRepair).
+  if (u.retreat && !(t && t.type === 'repair')) { u.retreat = false; u.resume = null; } // (its Repair Station went: no going back hurt)
+  if (t && (t.type === 'attack' || t.type === 'hold' || t.type === 'defend') && u.hp < u.maxHp * REPAIR_RETREAT && S.tick % 10 === u.id % 10 && findRepair(u)) {
+    const back = t.type === 'attack' ? { type: 'attack', target: t.target } : t.type === 'hold' ? { type: 'hold', rally: t.rally, slot: t.slot } : null;
+    cancelTask(u); u.task = null; u.fight = 0; u.path = null;
+    if (goRepair(u)) {
+      u.retreat = true; u.resume = back;
+      const P = S.players[u.owner];
+      if (S.time - (P.lastRetreatMsg || -99) > 45) {
+        P.lastRetreatMsg = S.time;
+        postMsg(u.owner, 'A badly damaged warbot is pulling out of the fight for repairs. It goes back once it\'s fixed.', Math.floor(u.x), Math.floor(u.y), 'warn');
+      }
+      return;
+    }
+    if (back) u.task = back; // couldn't set off after all: carry on
+  }
+  let foe = armed && u.fight && !u.retreat ? getE(u.fight) : null;
   const leash = defending ? 9 : rally ? 6 : 4;
   if (foe && (foe.dead || foe.inside || dist2(foe.x, foe.y, u.x, u.y) > leash * leash ||
       (rally && dist2(foe.x, foe.y, rally.x, rally.y) > 49))) foe = null;
   if (!foe) {
     u.fight = 0;
     u.scanT -= dt;
-    if (armed && u.scanT <= 0) {
+    if (armed && u.scanT <= 0 && !u.retreat) {
       u.scanT = 0.3;
       // Guards (defending their garrison) only chase civilians inside their own land.
       foe = nearestEnemyBot(u.owner, u.x, u.y, rally ? 3.5 : 2.8, true, defending);
@@ -3602,7 +3629,11 @@ function rallyMembers(id) {
 function cleanRallies() {
   if (!S.rallies.length) return;
   const used = new Set();
-  for (const u of S.bots) if (!u.dead && u.task && u.task.type === 'hold') used.add(u.task.rally);
+  for (const u of S.bots) {
+    if (u.dead) continue;
+    if (u.task && u.task.type === 'hold') used.add(u.task.rally);
+    if (u.resume && u.resume.type === 'hold') used.add(u.resume.rally); // away for repairs: the flag waits for it
+  }
   S.rallies = S.rallies.filter((r) => used.has(r.id));
 }
 
@@ -3954,7 +3985,9 @@ function recallAll(owner) {
   let n = 0;
   for (const r of S.rallies.slice()) if (r.owner === owner) n += recallRally(r.id);
   for (const u of S.bots) {
-    if (u.dead || u.owner !== owner || u.type !== 'warbot' || u.inside || !u.task) continue;
+    if (u.dead || u.owner !== owner || u.type !== 'warbot') continue;
+    u.resume = null; // away for repairs: home afterwards, not back to the fight
+    if (u.inside || !u.task) continue;
     if (!['attack', 'defend', 'hold'].includes(u.task.type)) continue;
     cancelTask(u); u.task = null; u.path = null; u.fight = 0; n++;
   }
@@ -3964,6 +3997,7 @@ function recallAll(owner) {
 function recallRally(id) {
   let n = 0;
   for (const u of rallyMembers(id)) { u.task = null; u.path = null; u.fight = 0; n++; }
+  for (const u of S.bots) if (u.resume && u.resume.type === 'hold' && u.resume.rally === id) u.resume = null; // away for repairs: not going back
   S.rallies = S.rallies.filter((r) => r.id !== id);
   return n;
 }
