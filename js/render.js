@@ -682,7 +682,12 @@ function paintTile(ctx, i, j) {
   if (terr === T_GROUND && S.fert && S.fert[t] && !S.ramp[t]) drawFertile(ctx, i, j, x, y);
   if (S.decor && S.decor[t] && !S.road[t] && !S.res[t] && !S.plan[t] && !S.bAt[t]) drawPlant(ctx, S.decor[t], i, j, x, y);
   if (S.road[t]) { if (terr === T_GROUND) drawRoad(ctx, i, j, x, y); else drawCrossing(ctx, i, j, x, y, t); }
-  if (S.rail && S.rail[t]) { if (!S.road[t] && bridgeable(t)) drawBridge(ctx, i, j, x, y, t, true); drawRail(ctx, i, j, x, y, t); }
+  if (S.rail && S.rail[t]) {
+    if (!S.road[t] && bridgeable(t)) drawBridge(ctx, i, j, x, y, t, true);
+    else if (!S.road[t] && terr === T_ROCK) drawRailTunnel(ctx, i, j, x, y, t);
+    drawRail(ctx, i, j, x, y, t);
+    if (!S.road[t] && terr === T_ROCK) drawRailTunnel(ctx, i, j, x, y, t, true);
+  }
   if (S.res[t]) {
     drawResource(ctx, S.res[t], S.amt[t], S.grow[t], x + TP / 2, y + TP / 2, TP, i, j);
     if (richRes(t)) drawGlint(ctx, x, y, i, j);
@@ -1808,6 +1813,38 @@ function drawCrossing(ctx, i, j, x, y, t) {
     });
   }
   drawRoadArrow(ctx, t, x, y);
+}
+
+/**
+ * A rail tunnel through rock: a dark bore along the track, then (`over`, drawn on top of the track) the
+ * shade of the roof over it and a concrete portal where it comes out into the open.
+ */
+function drawRailTunnel(ctx, i, j, x, y, t, over) {
+  const c = TP / 2, sides = [[0, -1], [1, 0], [0, 1], [-1, 0]];
+  const nb = sides.map(([di, dj]) => inMap(i + di, j + dj) && railStep(t, tIdx(i + di, j + dj)));
+  if (!nb.some(Boolean)) { nb[1] = nb[3] = true; }
+  const shape = (w) => {
+    ctx.fillRect(x + c - w / 2, y + c - w / 2, w, w);
+    if (nb[0]) ctx.fillRect(x + c - w / 2, y, w, c);
+    if (nb[1]) ctx.fillRect(x + c, y + c - w / 2, c, w);
+    if (nb[2]) ctx.fillRect(x + c - w / 2, y + c, w, c);
+    if (nb[3]) ctx.fillRect(x, y + c - w / 2, c, w);
+  };
+  if (!over) { ctx.fillStyle = 'rgba(8,5,3,0.8)'; shape(20); ctx.fillStyle = '#3d342c'; shape(13); return; } // bore, ballast
+  // The crag over the track (its texture, mostly opaque), so the line runs under the rock.
+  const rock = R.tex && R.tex.rock;
+  if (rock) { ctx.globalAlpha = 0.82; drawTexture(ctx, rock, i, j, x, y); ctx.globalAlpha = 1; ctx.fillStyle = 'rgba(10,7,5,0.25)'; shape(TP); }
+  else { ctx.fillStyle = 'rgba(10,7,5,0.55)'; shape(TP); }
+  sides.forEach(([di, dj], k) => {
+    if (!nb[k] || terrAt(i + di, j + dj) === T_ROCK) return;
+    // A concrete portal across the mouth, with a dark arch line under it.
+    ctx.fillStyle = '#c4bcae';
+    if (dj) ctx.fillRect(x + 1, y + (dj < 0 ? 0 : TP - 5), TP - 2, 5);
+    else ctx.fillRect(x + (di < 0 ? 0 : TP - 5), y + 1, 5, TP - 2);
+    ctx.fillStyle = 'rgba(0,0,0,0.5)';
+    if (dj) ctx.fillRect(x + 3, y + (dj < 0 ? 5 : TP - 7), TP - 6, 2);
+    else ctx.fillRect(x + (di < 0 ? 5 : TP - 7), y + 3, 2, TP - 6);
+  });
 }
 
 /* ------------------------------------------------------------------ resources */

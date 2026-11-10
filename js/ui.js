@@ -1657,7 +1657,11 @@ function onRoadPaint(i, j, first) {
       }
       prev = [x, y];
       if (S.rail[t] || UI.draft.rail.has(t)) continue;
-      if (!railBlocked(0, t)) draftOp(UI.stroke, t, 'rail'); else UI.paintSkipped = true;
+      if (!railBlocked(0, t)) {
+        draftOp(UI.stroke, t, 'rail');
+        // Over water the track is a rail bridge, through rock a rail tunnel: dearer, so the banner says so.
+        if (crossTile(t)) { if (bridgeable(t)) UI.paintBridge = true; else UI.paintTunnel = true; }
+      } else UI.paintSkipped = true;
       continue;
     }
     if (wall) {
@@ -1703,7 +1707,12 @@ function onRoadPaint(i, j, first) {
   const cliffNote = UI.paintSteep ? `${what} can't climb a cliff two levels high, and no Ramp can: go round it to a one-level step (or bridge the valley with a Viaduct).`
     : UI.paintCliff ? `${what} climbs a level only over a <b>Ramp</b>, and there's no room for one where you crossed this cliff (resources, a building, or it would block the only way through): try a tile or two along it.`
       : '';
-  if (rail) { showRoadBanner(cliffNote || (UI.paintRamp ? 'A <b>Ramp</b> is planned where the track climbs the cliff: workers build it, paid from storage, and the track on it goes down when it\'s done.' : UI.paintSkipped ? 'Track skips tiles it can\'t go on: outside your border, resources, rock or buildings.' : ''), true); return; }
+  if (rail) {
+    const crossNote = [UI.paintBridge ? `Over the water it's a <b>rail bridge</b> (${costText(RAIL_BRIDGE_COST)} a tile).` : '', UI.paintTunnel ? `Through the rock it's a <b>rail tunnel</b> (${costText(RAIL_TUNNEL_COST)} a tile).` : ''].filter(Boolean).join(' ');
+    showRoadBanner(cliffNote || [UI.paintRamp ? 'A <b>Ramp</b> is planned where the track climbs the cliff: workers build it, paid from storage, and the track on it goes down when it\'s done.' : '', crossNote,
+      UI.paintSkipped ? 'Track skips tiles it can\'t go on: outside your border, resources or buildings.' : ''].filter(Boolean).join(' '), true);
+    return;
+  }
   if (!arrows) {
     showRoadBanner(cliffNote || (UI.paintRamp ? 'A <b>Ramp</b> is planned where the road climbs the cliff: workers cut it, paid from storage, and it carries the road up when it\'s done.'
       : UI.paintBridge || UI.paintTunnel ? [UI.paintBridge ? `The road crosses the water as a <b>bridge</b>: ${costText(CROSS[T_WATER].cost)} a tile, built out from the shore.` : '',
@@ -1774,7 +1783,7 @@ function showRoadBanner(problem, info) {
     how = pipeHow;
   } else if (mode === 'rail' && !UI.draft.rail.size && !UI.draft.railDel.size) {
     line = `<b>Lay railway track</b> by dragging (${costText(RAIL_COST)} a tile, laid when you tap Build if you have the goods, otherwise as they come in). Tap a tile to add or drop it, or tap track to take it up. Then put a <b>Rail Station</b> (Build menu) beside each end, and order a <b>Freight Train</b> at the Bot Foundry.`;
-    how = 'Freight Trains carry 56 goods between Rail Stations on the same track, fast and with no traffic to wait for, and never need charging. They keep a station\'s supply orders filled from the other stations on the line, and a far station sends its spare goods home to the station nearest your Command Base. Track goes on open ground in your territory. It climbs a level at a time over a Ramp (a natural slope, or one you build in Paths), like a road, with trains slowing on the grade; over water it\'s a rail bridge, and across a valley it runs over a Viaduct. It can cross a road: road traffic waits at the crossing while a train goes by.';
+    how = 'Freight Trains carry 56 goods between Rail Stations on the same track, fast and with no traffic to wait for, and never need charging. They keep a station\'s supply orders filled from the other stations on the line, and a far station sends its spare goods home to the station nearest your Command Base. Track goes on open ground in your territory. It climbs a level at a time over a Ramp (a natural slope, or one you build in Paths), like a road, with trains slowing on the grade; over water it\'s a rail bridge, through rock a rail tunnel (a drag carries straight on into both), and across a valley it runs over a Viaduct. It can cross a road: road traffic waits at the crossing while a train goes by.';
   } else if (mode === 'wall' && !UI.draft.walls.size) {
     line = `<b>Sketch a wall</b> by dragging (${costText(BDEFS.wall.cost)} a tile); where it crosses a road or track a <b>Gate</b> goes (${costText(BDEFS.gate.cost)}). Tap a planned Wall to make it a Gate, again to drop it. Nothing is spent until you tap <b>Build</b>.`;
     how = `Walls stop every bot. Enemy warbots go round if there is a short way, or stand and shoot their way through: a Wall takes ${BDEFS.wall.armor} hits (a Gate ${BDEFS.gate.armor}, a Missile does ${BDEFS.silo.missile.damage}), and every shot costs them Ammo, so turrets behind a wall pick them off while they work. ` +

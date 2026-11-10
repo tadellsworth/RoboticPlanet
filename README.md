@@ -209,7 +209,8 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
   `u.deck` (the two ends) until it reaches one, so a new order or a chase starts from the deck, not the ground below.
 - **Freight rail** (`RAIL_*` in `js/defs.js`; the rail section of `js/world.js`; `layRail`, `deliverTrain` in
   `js/sim.js`): track is a tile layer (`S.rail`), laid instantly from the Paths **Rail** tool (`RAIL_COST` a tile, mostly
-  Cement with a quarter of an Alloy, paid through the same credit as road Cement; `RAIL_BRIDGE_COST` over water). Track
+  Cement with a quarter of an Alloy, paid through the same credit as road Cement; `RAIL_BRIDGE_COST` over water,
+  `RAIL_TUNNEL_COST` through rock: a Rail drag carries straight on over water and through crags, `drawRailTunnel`). Track
   joins where a road would (`railStep` uses `canStep`): on one level, or a level up or down over a Ramp (natural or
   built in Paths), where trains drop to `RAIL_GRADE` (0.55) of their speed and brake for it in advance (`driveSpeed`);
   rail bridges join any level, and a Viaduct with track on both abutments joins its ends (`railNbrs`). Dragging track

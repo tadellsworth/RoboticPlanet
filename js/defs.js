@@ -312,6 +312,8 @@ const CROSS = {
 function bridgeable(t) { return S.terrain[t] === T_WATER || S.terrain[t] === T_CHASM; }
 /** Track over water or a chasm is a rail bridge, dearer than track on the ground. */
 const RAIL_BRIDGE_COST = { cement: 3, alloy: 0.5 }; // the same as a Viaduct's span
+/** Track through rocky crags is a rail tunnel, bored like a road tunnel and costing the same. */
+const RAIL_TUNNEL_COST = { cement: 3, alloy: 1 };
 
 /* New-game map settings (each is a slider on the menu). */
 const SIZE_PRESETS = [

@@ -5505,7 +5505,7 @@ function trainNear(t) {
 
 /** Lay track on tile t, paying RAIL_COST from storage: '' if done, otherwise why not. */
 /** What a tile of track costs: a rail bridge over water or a chasm costs more. */
-function railCost(t) { return S.terrain[t] === T_GROUND ? RAIL_COST : RAIL_BRIDGE_COST; }
+function railCost(t) { return S.terrain[t] === T_GROUND ? RAIL_COST : S.terrain[t] === T_ROCK ? RAIL_TUNNEL_COST : RAIL_BRIDGE_COST; }
 
 function layRail(owner, t) {
   if (S.rail[t]) return '';

@@ -2396,7 +2396,6 @@ function railBlocked(owner, t) {
   if (!inMap(i, j)) return 'Outside the map.';
   const via = S.bAt[t] ? getE(S.bAt[t]) : null;
   if (S.owner[t] !== owner && !(via && via.type === 'viaduct' && via.owner === owner)) return 'Track only goes inside your border.';
-  if (S.terrain[t] === T_ROCK) return 'Track can\'t go through rock.';
   if (S.bAt[t] && !(via && via.type === 'viaduct') && !(via && via.type === 'gate' && via.owner === owner)) return 'There is a building here.'; // track runs through your own Gates
   if (S.res[t]) return 'Clear the resources here first.';
   if (scorched(t)) return 'This ground is still scorched.';
