@@ -187,7 +187,7 @@ const SHAPE_BLURB = [
   'Open ground with hills, cliffs and resource fields between the bases.',
   'A narrow planet with the bases far apart: built for long supply lines (trucks, Road Trains and rail).',
   'A belt of crags across the middle with one to three narrow channels winding through it, different every game: whoever holds them holds the map.',
-  'Each base on its own island, with a big island in the middle: the only way across is bridges.',
+  'Each base on its own island, with two or three medium islands between, a wide sea apart: cross by ship, or by long, dear bridges.',
   'The richest fields lie in a sunken crater in the middle, with one ramp down on each side.',
   'Each base on a high plateau ringed by cliffs, with only two slopes down: easy to hold, slow to break out of.',
   'Mesas standing over a canyon floor far below: cross between the clifftops on Viaducts.',

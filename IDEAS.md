@@ -27,6 +27,12 @@ and biomes started here and are now in the game.)
   and an **anti-aircraft gun** to shoot it down. Aircraft burn Fuel like ships and trucks (refuelling at the Airfield). To think through: what
   the bomber costs and carries, how far it flies and how long it takes to rearm, how the AA gun trades with turrets
   and walls, and how the AI uses both.
+  More aircraft worth weighing once the first three work: a **fighter** (shoots down bombers and escorts its own,
+  so the air war isn't only AA guns), a **transport helicopter** (drops a few warbots anywhere, like a beach landing
+  but over walls and cliffs, slower and fragile), a **cargo plane** (fast, small loads between Airfields, dear in
+  Fuel, for a cut-off island or an Outpost under siege), a **gunship / attack drone** (circles a spot and
+  shoots warbots there for a while; close support rather than one strike), and a **radar station** (warns of
+  incoming aircraft and lets AA guns fire further). A recon plane only matters if the map ever gets fog of war.
 - **Graphics polish (after air).** Go over every building, robot, terrain tile, effect and icon against the design
   system and bring anything rough or out of style up to the same finish.
 

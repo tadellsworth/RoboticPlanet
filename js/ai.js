@@ -289,7 +289,9 @@ function aiThink(p) {
   const wantArmy = S.mode === 'colony' ? 0 : aiWantArmy(lvl, p);
   const armyBehind = army < wantArmy - 2;
   let unarmed = 0;
-  for (const u of S.bots) if (!u.dead && u.owner === p && u.type === 'warbot' && (u.ammo ?? WARBOT_AMMO) <= 0) unarmed++;
+  // (Warbots stranded across the water, say landed on an enemy shore, can't get home to rearm: they don't count.)
+  const hzA = homeZone(p);
+  for (const u of S.bots) if (!u.dead && u.owner === p && u.type === 'warbot' && (u.ammo ?? WARBOT_AMMO) <= 0 && (u.inside || S.zone[tIdx(Math.floor(u.x), Math.floor(u.y))] === hzA)) unarmed++;
 
   const crewNeed = {};
   for (const b of me) {
@@ -444,6 +446,36 @@ function aiThink(p) {
  */
 function aiNaval(p, me, kinds, lvl, lander, canBuild) {
   const P = S.players[p];
+  // Warbots it landed march on from the beach once there's nothing left to fight round the flag: the
+  // nearest enemy building they can walk to (the enemy Command Base if it's not much further).
+  for (const r of S.rallies) {
+    if (r.owner !== p || !r.landing || S.time - r.landing < 15) continue;
+    if (S.buildings.some((b) => !b.dead && b.owner !== p && b.owner >= 0 && dist2(b.x + 0.5, b.y + 0.5, r.x, r.y) < 16)) continue;
+    const z = S.zone[tIdx(Math.floor(r.x), Math.floor(r.y))];
+    let tgt = null, bd = Infinity;
+    for (const b of S.buildings) {
+      if (b.dead || b.owner === p || b.owner < 0 || BDEFS[b.type].wild || S.zone[tIdx(b.x, b.y)] !== z) continue;
+      const d = dist(b.x, b.y, r.x, r.y) - (b.type === 'lander' ? 8 : 0);
+      if (d < bd) { bd = d; tgt = b; }
+    }
+    if (tgt) for (const u of rallyMembers(r.id)) if (!(u.task && u.task.type === 'attack' && u.task.target === tgt.id)) { u.task = { type: 'attack', target: tgt.id }; u.path = null; }
+  }
+  // Armed warbots of ours left idle across the water (landed, with no garrison of ours there to go to)
+  // go after the nearest enemy building on their island.
+  const hz = homeZone(p);
+  for (const u of S.bots) {
+    if (u.dead || u.owner !== p || u.type !== 'warbot' || u.inside || u.ferryWait || (u.ammo ?? WARBOT_AMMO) <= 0) continue;
+    if (u.task && u.task.type !== 'garrison') continue;
+    const z = S.zone[tIdx(Math.floor(u.x), Math.floor(u.y))], gb = u.task && getE(u.task.bld);
+    if (z === hz || (gb && S.zone[tIdx(gb.x, gb.y)] === z)) continue;
+    let tgt = null, bd = Infinity;
+    for (const b of S.buildings) {
+      if (b.dead || b.owner === p || b.owner < 0 || BDEFS[b.type].wild || S.zone[tIdx(b.x, b.y)] !== z) continue;
+      const d = dist(b.x, b.y, u.x, u.y) - (b.type === 'lander' ? 8 : 0);
+      if (d < bd) { bd = d; tgt = b; }
+    }
+    if (tgt) { cancelTask(u); u.task = { type: 'attack', target: tgt.id }; u.path = null; }
+  }
   if (S.time < 240 || !me.some((b) => b.type === 'foundry' && b.built)) return;
   const ports = me.filter((b) => BDEFS[b.type].port);
   if (!ports.length) {
@@ -461,8 +493,12 @@ function aiNaval(p, me, kinds, lvl, lander, canBuild) {
   if (avail < 4 || army < lvl.threshold + 2) return;
   // The beach: a shore tile the Ferry can reach beside an enemy building, scored by how close it is and
   // how little guards it (turrets and garrisons within 6 tiles count against it).
-  const foes = S.buildings.filter((b) => !b.dead && b.owner >= 0 && b.owner !== p && !BDEFS[b.type].wild && S.players[b.owner] && !S.players[b.owner].out);
+  let foes = S.buildings.filter((b) => !b.dead && b.owner >= 0 && b.owner !== p && !BDEFS[b.type].wild && S.players[b.owner] && !S.players[b.owner].out);
   if (!foes.length) return;
+  // The enemy has next to no army left: land right by its Command Base to finish it.
+  const enemy = rivalOf(p), eL = getE(S.players[enemy].lander);
+  const enemyArmy = S.bots.reduce((n, u) => n + (!u.dead && u.owner === enemy && u.type === 'warbot' ? 1 : 0), 0);
+  if (eL && !eL.dead && eL.owner === enemy && enemyArmy <= 3) foes = [eL];
   const guard = (i, j) => foes.reduce((n, b) => n + (dist2(b.x, b.y, i, j) <= 36 ? (BDEFS[b.type].range ? 3 : 0) + (b.garrison ? b.garrison.length : 0) : 0), 0);
   let best = null, bs = Infinity;
   for (let j = 1; j < S.H - 1; j++) for (let i = 1; i < S.W - 1; i++) {

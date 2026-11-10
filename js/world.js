@@ -81,31 +81,52 @@ function generateMap(seed, W, H, cfg) {
       elev[t] = flatRest ? baseLevel : lv;
     }
   }
-  // Islands: the sea covers everything but a home island round each base, a big island in the
-  // middle and a few islets, so the only ways across are bridges. Land is kept at least
+  // Islands: the sea covers everything but a home island round each base, two or three medium
+  // islands between and a few islets, so the ways across are ships or long bridges. Land is kept at least
   // ISLE_GAP tiles from any other island's shore. Applied to the bottom half after the fields are
   // laid (anything left in the sea is cleared), then mirrored with the rest.
   let isleCut = null;
   if (SH.islands) {
     const bx0 = Math.floor(W / 2), by0 = H - 7, halfH = H - half;
     let isles;
+    const edgeD = (o, x, y) => (Math.sqrt(((x - o.x) / o.rx) ** 2 + ((y - o.y) / o.ry) ** 2) - 1) * Math.min(o.rx, o.ry);
+    const irng = makeRng((seed ^ 0x1514) >>> 0);
     if (np === 2) {
+      // A home island each, and in the middle two or three medium islands (by the seed) with a couple of
+      // little islets out in the open sea, everything a wide sea apart: ships, or long, dear bridges.
       const homeTop = H - 21.5 - Math.max(0, (halfH - 41) * 0.5);
-      const cRy = clamp(homeTop - half - 4.5, 3, 16);
-      const gap = homeTop - half - cRy;
-      isles = [
-        { x: bx0, y: (by0 + 6 + homeTop) / 2, rx: W * 0.4, ry: (by0 + 6 - homeTop) / 2 },
-        { x: ccx, y: ccy, rx: W * 0.3, ry: cRy + 0.5 },
-        { x: W * 0.08, y: half + cRy, rx: 2.4, ry: 2.4 },
-      ];
-      // A long crossing gets stepping-stone islets in it.
-      if (gap > 9) { const r = (gap - 5) / 2; isles.push({ x: W * 0.3, y: half + cRy + gap / 2, rx: r, ry: r }, { x: W * 0.72, y: half + cRy + gap / 2, rx: r, ry: r }); }
+      const gapH = homeTop - half;
+      const sym2 = (o) => [o, { x: W - 1 - o.x, y: H - 1 - o.y, rx: o.rx, ry: o.ry }];
+      isles = [{ x: bx0, y: (by0 + 6 + homeTop) / 2, rx: W * 0.4, ry: (by0 + 6 - homeTop) / 2 }];
+      if (gapH < 12) {
+        // A small planet: one medium island in the middle.
+        isles.push({ x: ccx, y: ccy, rx: W * 0.24, ry: Math.max(2.5, gapH - ISLE_GAP - 1) });
+      } else if (irng() < 0.5) {
+        // Two: a pair facing each other across the middle, each a few tiles off a home island.
+        const ry = clamp(gapH * 0.32, 3.5, 9);
+        isles.push(...sym2({ x: W * (0.36 + irng() * 0.04), y: homeTop - ISLE_GAP - 2.5 - ry, rx: clamp(W * 0.2, 5, 13), ry }));
+      } else {
+        // Three: one in the middle, and a pair out to the sides nearer the home islands.
+        isles.push({ x: ccx, y: ccy, rx: clamp(W * 0.17, 4.5, 11), ry: clamp(Math.min(W * 0.13, gapH * 0.32), 3.5, 8) });
+        const ry = clamp(gapH * 0.27, 3, 7);
+        isles.push(...sym2({ x: W * (0.2 + irng() * 0.04), y: homeTop - ISLE_GAP - 2.5 - ry, rx: clamp(W * 0.15, 4, 9), ry }));
+      }
+      for (let k = 0, tries = 0; k < 2 && tries < 400; tries++) {
+        const r = 2.1 + irng() * 0.7, x = 3 + irng() * (W - 6), y = half + 1 + irng() * Math.max(1, gapH - 2);
+        if (isles.some((o) => edgeD(o, x, y) < r + ISLE_GAP + 3.5)) continue;
+        isles.push(...sym2({ x, y, rx: r, ry: r }));
+        k++;
+      }
     } else {
-      // Three home islands round a central one, and an islet out on each side of every home island.
-      const dB = dist(bx0, by0, ccx, ccy), hr = clamp(dB * 0.42, 9, 13), cr = Math.max(3, dB - 4 - hr - 4.5);
-      const base = [{ x: bx0, y: by0 - 4, rx: hr, ry: hr }];
-      for (const a of [Math.PI / 4, (3 * Math.PI) / 4]) base.push({ x: ccx + Math.cos(a) * discR * 0.66, y: ccy + Math.sin(a) * discR * 0.66, rx: 2.6, ry: 2.6 });
-      isles = [{ x: ccx, y: ccy, rx: cr, ry: cr }];
+      // Three home islands, three medium islands between them (one between each pair) and an islet in the middle.
+      // The medium islands sit out toward the rim, sized to leave about the same sea to each home island
+      // as on a two-way map, with open sea round an islet in the middle.
+      const dB = dist(bx0, by0, ccx, ccy), hr = clamp(dB * 0.42, 9, 15.5), r1 = dist(bx0, by0 - 4, ccx, ccy);
+      const homeA = Math.atan2(by0 - 4 - ccy, bx0 - ccx), mA = homeA + Math.PI / 3, cR = clamp(dB * 0.1, 2.6, 4);
+      const toHome = (m) => Math.sqrt(r1 * r1 + m * m - r1 * m), size = (m) => clamp(toHome(m) - hr - ISLE_GAP - 2.5, 3.5, 11);
+      const mD = Math.min(dB * 0.95, ccy - 2 - size(dB * 0.95)), mR = size(mD);   // (a copy of it points at the top edge)
+      const base = [{ x: bx0, y: by0 - 4, rx: hr, ry: hr }, { x: ccx + Math.cos(mA) * mD, y: ccy + Math.sin(mA) * mD, rx: mR, ry: mR }];
+      isles = [{ x: ccx, y: ccy, rx: cR, ry: cR }];
       for (const o of base) for (let k = 0; k < 3; k++) { const [x, y] = rot(o.x, o.y, k); isles.push({ x, y, rx: o.rx, ry: o.ry }); }
     }
     // Sky islands: a home island, a small mesa in the middle and a dozen or so smaller mesas
@@ -892,6 +913,17 @@ function generateMap(seed, W, H, cfg) {
     elev.fill(0);
   }
 
+  // Islands: specks of land too small to hold anything (left by the shoreline's wobble) go under.
+  if (SH.islands && !SH.sky) {
+    const lab = new Int32Array(N).fill(-1);
+    for (let t = 0; t < N; t++) {
+      if (terrain[t] === T_WATER || lab[t] >= 0) continue;
+      const q = [t];
+      lab[t] = t;
+      for (let h = 0; h < q.length; h++) orth(q[h], (u) => { if (lab[u] < 0 && terrain[u] !== T_WATER) { lab[u] = t; q.push(u); } });
+      if (q.length < 8 && !q.some((u) => bases.some((b) => id(b.x, b.y) === u))) for (const u of q) { terrain[u] = T_WATER; res[u] = R_NONE; fert[u] = 0; ramp[u] = 0; }
+    }
+  }
   // Richer deposits out towards the middle of the map, so pushing out pays.
   const ox = W - 1 - bx, oy = H - 1 - by, reach = Math.max(1, (np === 2 ? dist(bx, by, ox, oy) / 2 : dist(bx, by, ccx, ccy)) - RICH_FROM);
   for (let t = 0; t < N; t++) {

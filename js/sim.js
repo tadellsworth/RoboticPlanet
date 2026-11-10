@@ -6194,6 +6194,7 @@ function doLanding(u, dt) {
   const ox = L.x + 0.5, oy = L.y + 0.5;
   let r = S.rallies.find((q) => q.owner === u.owner && Math.abs(q.x - ox) < 1.5 && Math.abs(q.y - oy) < 1.5);
   if (!r) { r = { id: S.nextId++, owner: u.owner, x: ox, y: oy }; S.rallies.push(r); }
+  r.landing = S.time;
   let slot = rallyMembers(r.id).length, n = 0;
   for (const v of ferryAboard(u)) {
     v.ferryWait = null; v.inside = 0; v.x = ox; v.y = oy; v.path = null; v.vel = 0;
