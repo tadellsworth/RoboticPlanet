@@ -1200,8 +1200,10 @@ function computeTerritory() {
       if (S.owner[tIdx(b.x, b.y)] < 0 || own(b) || own(o)) continue;
     }
     if (S.owner[tIdx(b.x, b.y)] !== b.owner) {
-      postMsg(b.owner, `${BDEFS[b.type].name} was lost — it is no longer inside your territory.`, b.x, b.y, 'bad');
-      destroyBuilding(b, true);
+      // Lost like a wrecked building: what was inside spills out as loot, and its crew walks away.
+      const n = dropLoot(b);
+      postMsg(b.owner, `${BDEFS[b.type].name} was lost — it is no longer inside your territory.` + (n ? ' What was inside spilled out.' : ''), b.x, b.y, 'bad');
+      destroyBuilding(b, false);
     }
   }
 }
@@ -1522,6 +1524,14 @@ function _planLists() {
 function planList(owner) { _planLists(); return _plans.lists[owner]; }
 /** Every road tile `owner` has planned, paid for or still waiting for its goods. */
 function planAll(owner) { _planLists(); return _plans.all[owner]; }
+
+/**
+ * Is the road (or track) on tile t `owner`'s to change: inside its border, or a bridge it has pushed
+ * out past the border (unclaimed water joined to its land or bridges)? A rival's roads aren't.
+ */
+function roadOwnedBy(owner, t) {
+  return S.owner[t] === owner || (S.owner[t] < 0 && crossTile(t) && bridgeHead(owner, t % S.W, (t / S.W) | 0));
+}
 
 /** Mark planned road tile t as waiting for its goods (1) or paid for (0). */
 function setOwe(t, v) {

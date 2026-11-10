@@ -84,11 +84,13 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
 | Ropeway | Two stations joined by a cable straight across cliffs, water or rock; light bots ride it |
 
 - **Cement builds the colony.** Nearly every building costs Cement, and so does every road. Only the Quarry (2 Fiber)
-  and the Cement Works (4 Stone, 2 Fiber) are built from raw materials, so you can always restart. Stone has no
-  other use: it only goes into Cement (2 per Stone). You land with 24 Cement, 8 Stone, 16 Fiber, 8 Alloy, 4 Chips, 4 Crystal and 4 Fuel.
+  and the Cement Works (4 Stone, 2 Fiber) are built from raw materials, so you can always restart. Stone goes into
+  Cement (2 per Stone) and new Cement Works. You land with 24 Cement, 8 Stone, 16 Fiber, 8 Alloy, 4 Chips, 4 Crystal and 10 Fuel.
 - **Stock limits:** tap a production building and set when it stops: once you have that much of its product it takes
-  no more inputs and its worker goes off to other jobs until it's needed again. The Cement Works stops at 40, the
-  Refinery and Oil Pump at 30 and the Asphalt Plant at 20 by default; the rest have no limit until you set one.
+  no more inputs and its worker goes off to other jobs until it's needed again. By default the Cement Works stops at
+  40, the Refinery and Oil Pump at 30, the Ammo Plant at 24, the Asphalt Plant at 20, the Chip Fab at 10 and the Missile
+  Factory at 4 (so Chips and Ammo don't swallow the Foundry's Alloy); the rest have no limit until you set one.
+  Gatherers and Bio Farms have none (they make no recipe): pause them if their goods pile up.
 
 - **Workers and Haulers:** Workers run buildings (one inside each production building), go out to cut, dig and mine,
   and build construction sites. They can go anywhere, but off the road they move at 40% speed, except while out
@@ -120,8 +122,8 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
   through it drops back to plain road. On a busy trunk road that's every 8–10 minutes. Tap any of your roads to see its
   wear and mark it. Removing a road refunds its Cement.
 - **Bridges and tunnels:** roads stop at water and rocky crags. The **Bridges** tool in Paths plans roads across them:
-  a bridge costs 2 Cement and 1 Alloy a tile, a tunnel 3 Cement and 1 Alloy (`CROSS` in `js/defs.js`;
-  `bridgeable`; a Sky bridge over the old `T_CHASM` canyons, 3 Cement and 1 Alloy, survives for old saves). Workers build them out from the shore or rock face (6–9 s a tile), and
+  a bridge costs 3 Cement and half an Alloy a tile (as a Viaduct span), a tunnel 3 Cement and 1 Alloy (`CROSS` in `js/defs.js`;
+  `bridgeable`; a Sky bridge over the old `T_CHASM` canyons, 3 Cement and half an Alloy, survives for old saves). Workers build them out from the shore or rock face (6–9 s a tile), and
   they join land on any level. A bridge is drawn as one level span at the height of the highest clifftop it lands on
   (`deckLevel` in `js/render.js`), ramping down at a lower end; its piers, end towers and suspension cables reach past
   the tile, so `drawBridgeRigging` draws them each frame over the map. Lay road routes use them only when going round is much longer.
@@ -160,9 +162,9 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
   only when the far building is about to run dry, and a far producer waits for a truck until its output is nearly
   full. **Trunk runs** (`trunkRuns`): a store 12+ tiles from the Command Base sends home, in bulk, the goods nothing
   nearer to it uses (beyond its supply orders and `EXPORT_RESERVE`), by truck or Road Train only. **Road Trains**
-  (30; 4 Alloy and 4 Chips) only do storage-to-storage runs 12+ tiles long, with `TRAIN_MIN_LOAD` (12) or more (any load
+  (30; 4 Alloy and 4 Chips) only do storage-to-storage runs 12+ tiles long, with `TRAIN_MIN_LOAD` (18) or more (any load
   without trucks); `TRAIN_ROAD` (35%) on plain road, slow corners, `TRAIN_LEN` of queue behind them, `WEAR_TRAIN` wear.
-  On a straight asphalt trunk road one Road Train moves ~1.7× what two trucks do; on plain road about the same or less.
+  On a straight asphalt trunk road one Road Train moves 1.5–1.75× what two trucks do; on plain road about the same or less.
   Idle trucks spread out: each store keeps one waiting, and spare trucks park at the nearest Depot (or Command Base)
   with none. Trucks are slower than Haulers on concrete (80%) and slow to accelerate, but fastest of all on asphalt.
   An audit of 35-minute autopilot games: trucks were busy 18–60% before these rules and 76–92% after, Haulers made
@@ -318,7 +320,7 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
   built within `WILD.clear` tiles of a nest.
 - **Research** (Colony; `TECHS` in `js/defs.js`, `startResearch`/`updateLab` in `js/sim.js`): a Research Lab (staffed)
   researches one upgrade at a time, cost paid on start (Cancel refunds), progress `dt × mult` per staffed Lab. Upgrades:
-  Cargo Racks (`botCarry`), Long-life Cells (`drainMul`), Fast Charging, Rapid Paving, Sentry Optics (`turretRange`,
+  Cargo Racks (`botCarry`), Long-life Cells (`drainMul`, and chargers 50% faster; the old Fast Charging upgrade is folded into it), Rapid Paving, Sentry Optics (`turretRange`,
   `shotsPer`), Turbo Motors (`speedMul`), Power Tools (`mult` × 1.15), Nanite Repair (`naniteRepair`).
 - **Planet events** (`EVENTS` in `js/defs.js`, `updateEvents` in `js/sim.js`; new-game option, never in missions): the
   first after 8 minutes, then one every 5–8 minutes, never one of the last two again, most with a 20 s warning. **Dust
@@ -332,7 +334,7 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
   An event card under the top bar shows it with a countdown and the Trade button.
 - **Missiles** are built at a Missile Factory (2 Alloy, 1 Chip and 1 Fuel each, 20 seconds) and carried to Missile Silos
   by haulers. A hit does 24 damage, which wrecks most buildings outright, plus 5 to other rival buildings and 9 to bots
-  within 2.2 tiles. Outposts and Command Bases drop to almost no armor; warbots still have to walk in and capture them.
+  within 2.2 tiles. Outposts and Command Bases drop no lower than `MISSILE_FLOOR` (35%) of their armor; warbots still have to shoot their way in. A fort under `SORTIE_ARMOR` (25%) sends every armed warbot inside out to fight, and capturing one ejects whoever is left inside instead of killing them.
   A Silo is drawn with its launch pit empty until it's ready to fire (loaded and not reloading; a Nuclear Silo once
   armed), then the missile fades in (`siloRise`; art `silo-empty`, `nukesilo-empty`).
   To fire, tap a Silo and press **Aim missile**: its 18-tile range shows as a red ring; tap any spot inside it (a

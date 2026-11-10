@@ -164,9 +164,9 @@ function aiThink(p) {
     for (const [type, want0] of plan) {
       if (cementStarved && sites >= maxSites && type !== 'kiln') continue;
       if (S.mode === 'colony' && BDEFS[type].war) continue;
-      // One more Charging Station for every three Outposts as the colony spreads out, and a Bio
+      // One more Charging Station for every four Outposts as the colony spreads out, and a Bio
       // Farm for every two stations to keep them in Fuel.
-      const nCh = Math.max(1 + Math.floor((counts.outpost || 0) / 3), 0);
+      const nCh = 1 + Math.floor((counts.outpost || 0) / 4);
       // Only Charging Stations charge, so Fuel scales with the colony: a Bio Farm for every 18 robots.
       const nBots = S.bots.reduce((n, u) => n + (!u.dead && u.owner === p && u.type !== 'warbot' ? 1 : 0), 0);
       const want = type === 'charger' ? Math.max(want0, nCh) : type === 'farm' && counts.charger ? Math.max(want0, Math.ceil((counts.charger || 0) / 2), Math.ceil(nBots / 18)) : want0;
@@ -244,7 +244,7 @@ function aiThink(p) {
   }
 
   // 3) Foundry: keep enough workers, then grow the army. Order specialists when a building needs
-  //    one, and enough Haulers (a Freight Truck counts as three) to carry every good in the colony.
+  //    one, and enough Haulers (a Freight Truck counts as one and a half) to carry every good in the colony.
   const wantWorkers = staffed + 3 + Math.min(3, sites);
   // A Freight Truck takes the long runs off the Haulers, but sits idle much of the time: it counts as one and a half.
   const wantHaulers = clamp(Math.ceil(me.length * 0.35), 4, 16) - Math.floor(1.5 * (kinds.truck || 0));
@@ -292,6 +292,10 @@ function aiThink(p) {
   const enemy = rivalOf(p);
   const rival = (o) => o >= 0 && o !== p && !S.players[o].out && !S.players[o].absent;
   if (S.mode !== 'colony' && S.time >= lvl.grace) {
+    // Damage already on its way: never two missiles for a target one wrecks, nor a fort a missile can
+    // knock no lower (see missileFloor).
+    const dmg = BDEFS.silo.missile.damage, coming = new Map();
+    for (const m of S.missiles) if (m.owner === p && m.target && !m.nuke) coming.set(m.target, (coming.get(m.target) || 0) + dmg);
     for (const silo of me) {
       if (!siloReady(silo)) continue;
       let best = null, bs = -Infinity;
@@ -299,10 +303,12 @@ function aiThink(p) {
         if (e.dead || e.owner !== enemy || !e.built) continue;
         const d = dist(silo.x, silo.y, e.x, e.y);
         if (d > BDEFS.silo.missile.range) continue;
-        const s = (e.type === 'turret' ? 10 : e.type === 'outpost' ? 8 : e.type === 'lander' ? 5 : e.type === 'silo' ? 9 : 3) - d * 0.1;
+        const left = e.armor - (coming.get(e.id) || 0);
+        if (BDEFS[e.type].mil ? left <= missileFloor(e) + 2 : left <= 0) continue;
+        const s = (e.type === 'turret' ? 10 : e.type === 'nukesilo' ? 12 : e.type === 'silo' || e.type === 'reactor' ? 9 : e.type === 'outpost' ? 8 : e.type === 'lander' ? 5 : 3) - d * 0.1;
         if (s > bs) { bs = s; best = e; }
       }
-      if (best) fireMissile(p, best);
+      if (best && fireMissile(p, best)) coming.set(best.id, (coming.get(best.id) || 0) + dmg);
     }
   }
 
@@ -319,8 +325,12 @@ function aiThink(p) {
   for (const b of S.buildings) {
     if (b.dead || !rival(b.owner)) continue; // whichever rival's building is in reach
     const avail = attackAvailable(p, b);
-    const need = b.built ? Math.max(lvl.threshold, Math.ceil(b.garrison.length * 1.3) + 2) : 2;
-    if (avail < need) continue;
+    if (avail < 2) continue;
+    // Enough for the garrison, the turrets covering it and any warbots standing guard nearby; a fort
+    // already shot down to a quarter of its armor needs only the usual band.
+    const weak = b.built && BDEFS[b.type].mil && b.armor <= BDEFS[b.type].armor * SORTIE_ARMOR;
+    const base = !b.built ? 2 : weak ? lvl.threshold : Math.max(lvl.threshold, Math.ceil(b.garrison.length * 1.3) + 2);
+    if (avail < base || (b.built && !weak && avail < Math.ceil(b.garrison.length * 1.3) + 2 + guardsNear(b))) continue;
     const def = BDEFS[b.type];
     let score = (def.mil ? 12 : 0) + (b.type === 'lander' ? 25 : 0) - dist(b.x, b.y, lander.x, lander.y) * 0.4 - b.garrison.length * 2;
     if (!b.built) score -= 8;
@@ -569,7 +579,22 @@ function aiWantArmy(lvl, p) {
   if (p !== undefined) for (const b of S.buildings) if (!b.dead && b.owner === p && b.built && BDEFS[b.type].mil) extra++;
   const st = p !== undefined ? aiStyle(p) : PERSONALITIES.balanced;
   const from = AI_ARMY_FROM * (st.armyFrom || 1), rate = lvl.mult * (st.army || 1);
-  return Math.min(AI_ARMY_MAX + Math.max(0, extra - 8), START_WARBOTS + 1 + Math.floor((Math.max(0, S.time - from) / 60) * rate));
+  // ...and never stops short of the rival's army: it keeps up with it, and a few more.
+  let rivalArmy = 0;
+  if (p !== undefined) { const e = rivalOf(p); for (const u of S.bots) if (!u.dead && u.owner === e && u.type === 'warbot') rivalArmy++; }
+  const cap = Math.max(AI_ARMY_MAX, rivalArmy + 6) + Math.max(0, extra - 8);
+  return Math.min(cap, START_WARBOTS + 1 + Math.floor((Math.max(0, S.time - from) / 60) * rate));
+}
+
+/**
+ * What stands guard round building b besides its garrison: 3 for each of its owner's turrets within 6
+ * tiles, plus its owner's warbots out in the field within 7 (on a rally flag, say).
+ */
+function guardsNear(b) {
+  let n = 0;
+  for (const e of S.buildings) if (!e.dead && e.owner === b.owner && e.built && e.type === 'turret' && dist2(e.x, e.y, b.x, b.y) <= 36) n += 3;
+  for (const u of S.bots) if (!u.dead && !u.inside && u.owner === b.owner && u.type === 'warbot' && dist2(u.x, u.y, b.x + 0.5, b.y + 0.5) <= 49) n++;
+  return n;
 }
 
 /**

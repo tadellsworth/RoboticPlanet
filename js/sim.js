@@ -173,9 +173,11 @@ function needsOf(b) {
     // A Depot's supply orders: keep this much of each good here (goods already promised to someone don't count).
     for (const g in b.keep) out.push([g, b.keep[g] - ((b.stock[g] || 0) - (b.res[g] || 0)) - (b.inc[g] || 0), true]);
   }
-  // Garrisons keep Ammo for their warbots (Versus only).
+  // Garrisons keep Ammo for their warbots (Versus only): an Outpost a full reload (2) for each warbot
+  // stationed there (at least 2), up to its ammoStock, so empty Outposts don't tie up Alloy.
   if (def.ammoStock && b.built && warOn()) {
-    out.push(['ammo', def.ammoStock - (b.stock.ammo || 0) - (b.inc.ammo || 0)]);
+    const want = def.store ? def.ammoStock : Math.min(def.ammoStock, Math.max(2, 2 * (b.garrison.length + (b.garInc || 0))));
+    out.push(['ammo', want - (b.stock.ammo || 0) - (b.inc.ammo || 0)]);
   }
   return out;
 }
@@ -207,12 +209,18 @@ function usesGood(b, g) {
  * to the Command Base uses, a load at a time: TRAIN_MIN_LOAD or more by Road Train, otherwise
  * TRUCK_MIN_LOAD or more by Freight Truck.
  */
+/**
+ * Are two buildings a long run apart (TRUCK_MIN_DIST or more)? Measured across plus down, as roads
+ * follow the grid: a road between them is never shorter than that.
+ */
+function farApart(a, b) { return Math.abs(a.x - b.x) + Math.abs(a.y - b.y) >= TRUCK_MIN_DIST; }
+
 function trunkRuns(p, blds, take, canCarry, vans, trains) {
   const hub = getE(S.players[p].lander);
   if (!hub || hub.dead || hub.owner !== p) return;
   const far2 = TRUCK_MIN_DIST * TRUCK_MIN_DIST;
   for (const R of blds) {
-    if (R === hub || !storeAccepts(R) || dist2(R.x, R.y, hub.x, hub.y) < far2) continue;
+    if (R === hub || !storeAccepts(R) || !farApart(R, hub)) continue;
     // A Rail Station sends home by train, to the station on its track nearest the Command Base.
     let home = null;
     if (trains && BDEFS[R.type].station) {
@@ -319,7 +327,7 @@ function workerBattery(u, dt) {
     const ch = b && b.built && BDEFS[b.type].charger;
     if (ch) {
       if (u.bat < 100) {
-        let gain = Math.min(100 - u.bat, ch.rate * (tech(b.owner, 'charge') ? 1.5 : 1) * Math.min(1, ch.slots / Math.max(1, b.charging)) * dt);
+        let gain = Math.min(100 - u.bat, ch.rate * (tech(b.owner, 'cells') || tech(b.owner, 'charge') ? 1.5 : 1) * Math.min(1, ch.slots / Math.max(1, b.charging)) * dt);
         if (ch.fuel) {
           // Charging Stations burn a Fuel whenever their energy runs low.
           if ((b.energy || 0) < gain && (b.stock.fuel || 0) > 0) { bump(b.stock, 'fuel', -1); usedGood(b.owner, 'fuel', 1); b.energy = (b.energy || 0) + FUEL_ENERGY; }
@@ -676,7 +684,7 @@ function moveAlong(u, dt) {
   // A Freight Train: down the track at its own speed, braking for curves and the end of its trip; it
   // never waits for road traffic (road traffic waits for it at level crossings).
   if (bt.rail) {
-    let step = driveSpeed(u, bt, bt.speed * evSpeed() * (S.ramp[here] ? RAIL_GRADE : 1), Infinity, dt) * dt;
+    let step = driveSpeed(u, bt, bt.speed * speedMul(u) * (S.ramp[here] ? RAIL_GRADE : 1), Infinity, dt) * dt;
     u.odo = ((u.odo || 0) + step) % 1000;
     u.moved = step > 0 ? 1 : 0;
     while (step > 0 && u.pi < u.path.length) {
@@ -708,8 +716,10 @@ function moveAlong(u, dt) {
     const next = u.path[u.pi];
     const dx = (next % S.W) + 0.5 - u.x, dy = ((next / S.W) | 0) + 0.5 - u.y;
     const wrong = r >= 2 && dx * ROAD_DIRS[r][0] + dy * ROAD_DIRS[r][1] < -0.1;
-    speed *= wrong ? ONEWAY_WRONG : (S.pave[here] === 2 ? asphaltSpeed(S.wear[here]) : PAVE[S.pave[here] || 1].speed) / (1 + trafficJam(u, here, next));
-    if (bt.truck && S.pave[here] !== 2) speed *= bt.train ? TRAIN_ROAD : TRUCK_ROAD; // heavy: only asphalt lets it run flat out
+    const deck = !S.road[here] && viaLink(here) >= 0; // a Viaduct's deck is smooth concrete: as good as fresh asphalt
+    const pv = deck ? 2 : S.pave[here];
+    speed *= wrong ? ONEWAY_WRONG : (pv === 2 ? asphaltSpeed(deck ? 0 : S.wear[here]) : PAVE[pv || 1].speed) / (1 + trafficJam(u, here, next));
+    if (bt.truck && pv !== 2) speed *= bt.train ? TRAIN_ROAD : TRUCK_ROAD; // heavy: only asphalt lets it run flat out
     if (isJunction(here) && !S.lights[here] && !S.over[here]) speed *= JUNCTION_SLOW; // crossing carefully
   } else {
     if (S.ramp[here]) speed *= SLOPE_SPEED; else if (S.res[here]) speed *= 0.75;
@@ -1010,16 +1020,20 @@ function dispatch(p) {
       let src = null, bd = Infinity;
       if (!reachable(r.b)) { r.n = 0; continue; }
       const sup = r.keep ? keepSupply : supplyOf;
-      // A Rail Station's supply orders come by Freight Train from another station on its track first.
-      if (trains && BDEFS[r.b.type].station && r.n >= Math.min(RAIL_MIN_LOAD, r.n)) {
+      // A Rail Station's supply orders come by Freight Train from another station on its track first,
+      // a worthwhile load at a time (RAIL_MIN_LOAD or more). A station nearer the Command Base lends
+      // the goods it keeps for its own supply orders: that's how the home station feeds the line.
+      if (trains && BDEFS[r.b.type].station && r.n >= RAIL_MIN_LOAD) {
+        const L = getE(P.lander), dh = (s) => (L ? dist2(s.x, s.y, L.x, L.y) : 0);
+        const railHas = (s) => (dh(s) < dh(r.b) ? supplyOf(s, r.g) : keepSupply(s, r.g));
         let rs = null, rd = Infinity;
         for (const s of blds) {
-          if (s === r.b || !BDEFS[s.type].station || !s.built || keepSupply(s, r.g) < Math.min(r.n, RAIL_MIN_LOAD) || !railLinked(s, r.b)) continue;
+          if (s === r.b || !BDEFS[s.type].station || !s.built || railHas(s) < RAIL_MIN_LOAD || !railLinked(s, r.b)) continue;
           const d = dist2(s.x, s.y, r.b.x, r.b.y);
           if (d < rd) { rd = d; rs = s; }
         }
         const tu = rs && take(rs.x, rs.y, 'rail', rs);
-        if (tu) { const n = canCarry(tu, Math.min(r.n, keepSupply(rs, r.g))); assignHaul(tu, rs, r.b, r.g, n); r.n -= n; any = true; continue; }
+        if (tu) { const n = canCarry(tu, Math.min(r.n, railHas(rs))); assignHaul(tu, rs, r.b, r.g, n); r.n -= n; any = true; continue; }
       }
       for (const s of blds) {
         if (s === r.b || sup(s, r.g) <= 0 || !reachable(s) || !linked(s, r.b)) continue;
@@ -1032,16 +1046,22 @@ function dispatch(p) {
       // runs; with trucks around they take a long one only when the building there is about to run
       // dry. Supply orders wait for a truck when you have one.
       const have = sup(src, r.g), avail = Math.min(r.n, have);
-      const long = dist2(src.x, src.y, r.b.x, r.b.y) >= TRUCK_MIN_DIST * TRUCK_MIN_DIST;
+      const long = farApart(src, r.b);
       const s2s = !!BDEFS[src.type].store && !!BDEFS[r.b.type].store;
       const bulk = Math.min(have, r.b.built && !BDEFS[r.b.type].store ? Math.max(r.n, LONG_BUFFER) : r.n);
       let u = null;
       const byRoad = truckLinked(src, r.b);
+      const starving = (r.b.built ? (r.b.stock[r.g] || 0) : 0) + (r.b.inc[r.g] || 0) <= 0;
+      // A supply order sends a truck for a worthwhile load (TRUCK_KEEP_LOAD, or half the order if that's
+      // less), or when the store has run dry.
+      const truckLoad = !r.keep || starving || bulk >= Math.min(TRUCK_KEEP_LOAD, Math.ceil(((r.b.keep && r.b.keep[r.g]) || 0) / 2));
       if (byRoad && s2s && long && bulk >= TRAIN_MIN_LOAD) u = take(src.x, src.y, 'train', src);
-      if (!u && byRoad && (s2s || long)) u = take(src.x, src.y, 'truck', src);
+      if (!u && byRoad && (s2s || long) && truckLoad) u = take(src.x, src.y, 'truck', src);
       if (!u && byRoad && s2s && long && !vans && bulk >= TRUCK_MIN_LOAD) u = take(src.x, src.y, 'train', src); // no trucks: a smaller load
-      if (!u && !(r.keep && trucks > 0)) {
-        const starving = (r.b.built ? (r.b.stock[r.g] || 0) : 0) + (r.b.inc[r.g] || 0) <= 0;
+      // A long supply run waits for a Freight Truck when one can get there by road (unless the store
+      // has run dry); otherwise Haulers take it (a Road Train only takes big loads, and no truck rides
+      // a Ropeway).
+      if (!u && !(r.keep && long && vans > 0 && byRoad && !starving)) {
         if (!long || !vans || starving || !byRoad) u = take(src.x, src.y, 'haul', src);
       }
       if (!u) { r.n = 0; continue; }
@@ -1065,7 +1085,7 @@ function dispatch(p) {
         // Storage far away: a Freight Truck collects a load; Haulers only once the output is nearly
         // full (so production never stalls), or when there are no trucks.
         let u = null;
-        if (vans && dist2(b.x, b.y, store.x, store.y) >= TRUCK_MIN_DIST * TRUCK_MIN_DIST && truckLinked(b, store)) {
+        if (vans && farApart(b, store) && truckLinked(b, store)) {
           const full = avail >= def.out[g] - 1 || !b.staff;
           if (avail >= TRUCK_MIN_LOAD || full) u = take(b.x, b.y, 'truck', b);
           if (!u && full) u = take(b.x, b.y, 'haul', b);
@@ -1182,8 +1202,11 @@ function updateRepairStation(b, def, dt) {
 
 /** Cement a full repair of building b would cost now, beyond any repair already paid for. */
 function repairCost(b) {
-  const missing = BDEFS[b.type].armor - b.armor - (b.fixLeft || 0);
-  return missing > 0.5 ? Math.ceil(missing / ARMOR_PER_CEMENT) : 0;
+  const def = BDEFS[b.type], missing = def.armor - b.armor - (b.fixLeft || 0);
+  if (missing <= 0.5) return 0;
+  // Never dearer than putting up a new one (a battered Wall costs no more than a fresh Wall's 5 Cement).
+  const whole = sumValues(def.cost || {}) || Infinity;
+  return Math.max(1, Math.ceil(Math.min(missing / ARMOR_PER_CEMENT, (whole * missing) / def.armor - 1e-9)));
 }
 
 /** Pay for a building's repair: a free worker comes and restores its armor. '' or why not. */
@@ -1193,7 +1216,7 @@ function requestRepair(owner, b) {
   if (!n) return b.fixLeft > 0 ? 'A repair is already on the way.' : 'It isn\'t damaged.';
   if (playerGoods(owner).cement < n) return `Repairing it takes ${n} Cement.`;
   takeGood(owner, 'cement', n);
-  b.fixLeft = Math.min(BDEFS[b.type].armor - b.armor, (b.fixLeft || 0) + n * ARMOR_PER_CEMENT);
+  b.fixLeft = BDEFS[b.type].armor - b.armor; // paid in full
   return '';
 }
 
@@ -2105,10 +2128,11 @@ function produce(b, def, dt) {
     addFx('float', b.x + 0.5, b.y + 0.1, { text: '+' + def.make[g0], color: GOOD[g0].color });
   }
   if (def.bots) {
-    // Big bots (Freight Trucks) take several rounds of parts before they roll out.
-    const kind = nextBotKind(b);
-    b.parts = (b.parts || 0) + 1;
-    if (b.parts >= ((BOTS[kind] && BOTS[kind].parts) || 1)) { b.parts = 0; spawnFromFoundry(b); }
+    // Big bots (Freight Trucks) take several rounds of parts before they roll out. Parts are kept
+    // per kind, so changing the orders halfway through a truck doesn't throw its parts away.
+    const kind = nextBotKind(b), have = foundryParts(b, kind) + 1;
+    if (have >= ((BOTS[kind] && BOTS[kind].parts) || 1)) { delete b.partsBy[kind]; spawnFromFoundry(b); }
+    else b.partsBy[kind] = have;
   }
   if (b.owner === 0) sfx('produce');
 }
@@ -2117,6 +2141,13 @@ function hasOrders(b) {
   if (!b.orders) return false;
   for (const k in b.orders) if (b.orders[k] > 0) return true;
   return false;
+}
+
+/** Rounds of parts the Foundry has already put into its next `kind` of bot. */
+function foundryParts(b, kind) {
+  if (!b.partsBy) b.partsBy = {};
+  if (b.parts) { b.partsBy[nextBotKind(b)] = b.parts; b.parts = 0; } // a save from before parts were kept per kind
+  return b.partsBy[kind] || 0;
 }
 
 /** What the Foundry builds next: queued orders first (types take turns), then its standing mode. */
@@ -2203,8 +2234,9 @@ function garrisonDefense(b, dt) {
       if ((u.type === 'warbot' || BOTS[u.type].wild) && dist2(u.x, u.y, cx, cy) < 42) threats++;
     } else if (u.task && u.task.type === 'defend' && u.task.home === b.id) out++;
   }
-  // Guards go out against enemy warbots (one more than there are), not to patrol.
-  let want = threats ? Math.min(armedIn(b), threats + 1 - out) : 0;
+  // Guards go out against enemy warbots (one more than there are), not to patrol; when the walls are
+  // about to fall (under SORTIE_ARMOR of its armor), every armed warbot inside goes out.
+  let want = !threats ? 0 : b.armor < BDEFS[b.type].armor * SORTIE_ARMOR ? armedIn(b) : Math.min(armedIn(b), threats + 1 - out);
   while (want-- > 0) {
     const u = takeArmed(b); // only warbots with Ammo go out to fight
     if (!u) break;
@@ -2273,7 +2305,7 @@ function captureBuilding(b, by) {
     destroyBuilding(b, true);
     return;
   }
-  releaseBotsFrom(b, true);
+  releaseBotsFrom(b, false); // whoever was inside (out of Ammo, or the crew) flees: they aren't killed
   delete b.prio; delete b.smode; delete b.reject; b.paused = false;
   b.fixLeft = 0; b.fixer = 0;
   b.owner = by;
@@ -2487,8 +2519,13 @@ function updateWarbot(u, dt) {
       if (u.hp >= u.maxHp || repairDry(home)) { exitBuilding(u); u.task = null; }
       return;
     }
-    // Outposts recharge their warbots; the Command Base doesn't charge anyone.
+    // Outposts recharge their warbots; the Command Base doesn't charge anyone, so a low warbot in it
+    // slips out to the nearest Outpost or Charging Station for a top-up while the Base is quiet.
     if (u.bat < 100 && home && home.type !== 'lander') u.bat = Math.min(100, u.bat + BATTERY.garrisonCharge * dt);
+    if (home && home.type === 'lander' && u.bat < BATTERY.low && S.tick % 45 === u.id % 45 && S.time - (home.lastHit || -99) > 8) {
+      const c = rechargePoint(u);
+      if (c) { exitBuilding(u); u.task = { type: 'topup', bld: c.id }; u.path = null; return; }
+    }
     if ((u.ammo ?? WARBOT_AMMO) <= WARBOT_AMMO - AMMO_SHOTS) reloadAmmo(u, home);
     // Damaged and the garrison is quiet: go and get fixed.
     if (home && wantsRepair(u) && S.tick % 45 === u.id % 45 && S.time - (home.lastHit || -99) > 8 && home.garrison.length > 1) goRepair(u);
@@ -2571,6 +2608,17 @@ function warbotAct(u, dt) {
     return;
   }
   if (t.type === 'loot') { doLoot(u, t, dt); return; }
+  if (t.type === 'topup') {
+    // Out of the Command Base to recharge beside an Outpost or Charging Station, then back on guard.
+    const c = getE(t.bld);
+    if (!c || c.dead || c.owner !== u.owner || !c.built) { u.task = null; return; }
+    if (dist2(u.x, u.y, c.x + 0.5, c.y + 0.5) <= 2.2) {
+      u.path = null;
+      u.bat = Math.min(100, (u.bat ?? 0) + 8 * dt);
+      if (u.bat >= 95) u.task = null;
+    } else if (travel(u, c.x, c.y, dt) === null) u.task = null;
+    return;
+  }
   if (t.type === 'repair') {
     const c = getE(t.bld);
     if (!c || c.dead || c.owner !== u.owner || repairDry(c)) { u.task = null; return; }
@@ -3141,9 +3189,15 @@ function updateMissiles(dt) {
 
 /**
  * A missile hits its target hard (most buildings are wrecked outright; Outposts and Command Bases drop to
- * no less than 1 armor so warbots can take them), and the blast damages nearby rival buildings
+ * no less than MISSILE_FLOOR of their armor, so warbots still have to fight their way in), and the blast damages nearby rival buildings
  * and bots.
  */
+/**
+ * Missiles can't take a fort (Outpost, Command Base) below MISSILE_FLOOR of its armor: they soften
+ * it up, and warbots still have to shoot their way in past the garrison that comes out to meet them.
+ */
+function missileFloor(b) { return Math.max(1, Math.round(BDEFS[b.type].armor * MISSILE_FLOOR)); }
+
 function missileImpact(m) {
   const md = BDEFS.silo.missile;
   addFx('boom', m.x1, m.y1, { r: 2.2 });
@@ -3159,8 +3213,9 @@ function missileImpact(m) {
       postMsg(b.owner, `A missile wrecked your ${name}!`, b.x, b.y, 'bad');
       destroyBuilding(b, true);
     } else {
-      if (b.armor <= 0) b.armor = 1;
-      postMsg(m.owner, `Missile hit the enemy ${name}${b.armor <= 1 ? ': its armor is down, send warbots to capture it!' : '.'}`, b.x, b.y, 'good');
+      const floor = missileFloor(b);
+      if (b.armor <= floor) b.armor = Math.min(floor, b.armor + md.damage);
+      postMsg(m.owner, `Missile hit the enemy ${name}${b.armor <= floor ? ': its armor is down, send warbots to capture it!' : '.'}`, b.x, b.y, 'good');
       postMsg(b.owner, `A missile hit your ${name}!`, b.x, b.y, 'bad');
     }
   }
@@ -3168,12 +3223,10 @@ function missileImpact(m) {
     if (e === b || e.dead || e.owner === m.owner || dist2(e.x + 0.5, e.y + 0.5, m.x1, m.y1) > md.splash * md.splash) continue;
     e.armor -= md.splashDamage;
     e.lastHit = S.time;
-    if (e.armor <= 0) {
-      if (!e.built || !BDEFS[e.type].mil) {
-        postMsg(e.owner, `The blast wrecked your ${BDEFS[e.type].name}!`, e.x, e.y, 'bad');
-        destroyBuilding(e, true);
-      } else e.armor = 1;
-    }
+    if (e.armor <= 0 && (!e.built || !BDEFS[e.type].mil)) {
+      postMsg(e.owner, `The blast wrecked your ${BDEFS[e.type].name}!`, e.x, e.y, 'bad');
+      destroyBuilding(e, true);
+    } else if (e.built && BDEFS[e.type].mil && e.armor < missileFloor(e)) e.armor = Math.min(missileFloor(e), e.armor + md.splashDamage);
   }
   for (const u of S.bots) {
     if (!u.dead && !u.inside && u.owner !== m.owner && dist2(u.x, u.y, m.x1, m.y1) <= md.splash * md.splash) damageBot(u, md.botDamage);
@@ -3526,7 +3579,7 @@ function costText(cost) {
 function removeRoad(owner, i, j) {
   const t = tIdx(i, j);
   if (S.plan[t] === owner + 1) { cancelPlan(t); return; }
-  if (!S.road[t]) return;
+  if (!S.road[t] || !roadOwnedBy(owner, t)) return; // only your own roads (a rival's are wrecked by raids or Missiles)
   const cross = crossTile(t);
   setRoad(i, j, false);
   if (S.terrain[t] === T_WATER || S.terrain[t] === T_CHASM) computeTerritory();
@@ -4257,7 +4310,7 @@ function unlimitedTopUp(p) {
  * Could a Viaduct run from (ai, aj) to (bi, bj)? '' if so, otherwise why not. Straight along a row
  * or column, VIA_MIN to VIA_MAX tiles, both ends open ground no more than VIA_RISE levels apart,
  * and every tile between lower than both ends (or water or canyon). The far end can be beyond your
- * border, but not in another player's land.
+ * border, on no-one's land or in a rival's (a bridgehead: see computeTerritory).
  */
 function viaductBlocked(owner, ai, aj, bi, bj) {
   if (!inMap(bi, bj)) return 'Outside the map.';
@@ -4492,7 +4545,7 @@ function queueRail(owner, t) {
 /** Take up the track on tile t: its Cement and Alloy go back to storage (planned track not yet down is just dropped). */
 function takeUpRail(owner, t) {
   if (!S.rail[t] && S.railPlan[t] === owner + 1) { setRailPlan(t, 0); return; }
-  if (!S.rail[t]) return;
+  if (!S.rail[t] || !roadOwnedBy(owner, t)) return;
   setRail(t, false);
   refundRoad(owner, railCost(t), t % S.W, (t / S.W) | 0);
 }

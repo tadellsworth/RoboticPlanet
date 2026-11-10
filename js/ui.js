@@ -1112,6 +1112,7 @@ function onMapTap(i, j, wx, wy) {
       // Each tap steps a junction along: traffic light, then overpass, then plain junction again.
       // Ones you can't pay for yet are planned and go up once they're paid for (oldest plans first).
       const P = junPlanAt(t);
+      if ((S.over[t] && S.over[t].owner !== 0) || (S.lights[t] && S.lights[t].owner !== 0) || (!S.over[t] && !S.lights[t] && S.road[t] && S.owner[t] !== 0)) { sfx('error'); showRoadBanner('That junction isn\'t yours: you can only change junctions in your own land.'); return; }
       if (S.over[t]) { removeOverpass(t); markDirty(i, j); sfx('click'); showRoadBanner('Overpass taken down: its Cement and Alloy are back.', true); return; }
       if (P && P.kind === 'over') {
         cancelJunPlan(t);
@@ -1143,6 +1144,7 @@ function onMapTap(i, j, wx, wy) {
     }
     if (UI.roadMode === 'arrows') {
       // Turn the arrow: east, south, west, north, then back to two-way.
+      if (S.road[t] && !roadOwnedBy(0, t)) { sfx('error'); showRoadBanner('That road isn\'t yours: you can only change roads in your own land.'); return; }
       if (S.road[t]) { setRoadDir(i, j, S.road[t] >= 5 ? 1 : S.road[t] + 1); sfx('click'); showRoadBanner(); }
       return;
     }
@@ -1179,6 +1181,7 @@ function onMapTap(i, j, wx, wy) {
       const stroke = [];
       if (UI.draft.rail.has(t)) draftOp(stroke, t, 'unrail');
       else if (UI.draft.railDel.has(t)) draftOp(stroke, t, 'unraildel');
+      else if (S.rail[t] && !roadOwnedBy(0, t)) { sfx('error'); showRoadBanner('That track isn\'t yours: you can only take up track in your own land.'); return; }
       else if (S.rail[t] || S.railPlan[t] === 1) draftOp(stroke, t, 'raildel');
       else { const why = railBlocked(0, t); if (why) { sfx('error'); showRoadBanner(why); return; } draftOp(stroke, t, 'rail'); }
       UI.draft.strokes.push(stroke);
@@ -1208,6 +1211,7 @@ function onMapTap(i, j, wx, wy) {
     let note = '';
     if (d.addSet.has(t)) draftOp(stroke, t, 'unadd');
     else if (d.del.has(t)) draftOp(stroke, t, 'undel');
+    else if (S.road[t] && !roadOwnedBy(0, t) && S.plan[t] !== 1) { sfx('error'); showRoadBanner('That road isn\'t yours: you can only take up roads in your own land.'); return; }
     else if (S.road[t] || S.plan[t] === 1) { draftOp(stroke, t, 'del'); note = S.plan[t] ? 'Planned tile marked to call off.' : 'Road marked to take up: its Cement comes back when you tap Build.'; }
     else if (crossTile(t) && UI.roadMode !== 'bridge') {
       sfx('error');
@@ -1448,7 +1452,7 @@ function onRoadPaint(i, j, first) {
     if (arrows) {
       if (S.road[t] && prev) {
         const v = 2 + [[1, 0], [0, 1], [-1, 0], [0, -1]].findIndex(([dx, dy]) => dx === x - prev[0] && dy === y - prev[1]);
-        if (v >= 2) { if (S.road[tIdx(prev[0], prev[1])]) setRoadDir(prev[0], prev[1], v); setRoadDir(x, y, v); }
+        if (v >= 2 && roadOwnedBy(0, t)) { if (S.road[tIdx(prev[0], prev[1])] && roadOwnedBy(0, tIdx(prev[0], prev[1]))) setRoadDir(prev[0], prev[1], v); setRoadDir(x, y, v); }
       }
       prev = [x, y];
       continue;
@@ -1707,7 +1711,7 @@ function openBuildingSheet(b) {
         <button class="btn ghost" data-k="${k}" data-d="0">Clear</button></div>`;
       const kinds = BOT_ORDER.filter((k) => versus || !BOTS[k].war);
       html += `<div class="section-label">Order bots</div><div id="sh-orders">${kinds.map((k) => row(k, BOTS[k].plural)).join('')}</div>
-        <p class="hint">The Foundry only builds the bots you order. Each one uses 1 Alloy and 1 Chip a round, ${def.work} s each (a Freight Truck takes 2 rounds, a Road Train 4, a Freight Train 5, a Crawler 8); mixed orders take turns.
+        <p class="hint">The Foundry only builds the bots you order. Each one uses 1 Alloy and 1 Chip a round, ${def.work} s each (a Freight Truck takes ${BOTS.truck.parts} rounds, a Road Train ${BOTS.roadtrain.parts}, a Freight Train ${BOTS.freight.parts}, a Crawler ${BOTS.crawler.parts}); mixed orders take turns.
         <b>Haulers</b> carry two goods on the short runs. <b>Freight Trucks</b> carry eight on the long runs (12 tiles or more), from far mines and factories as well as storage. <b>Road Trains</b> carry thirty between your Command Base and far Depots, best on asphalt. <b>Agribots</b> run Bio Farms and Grove Planters, and <b>Pavers</b> run the Roadworks.</p>`;
     }
     if (def.roadworks && b.built) {
@@ -1990,7 +1994,7 @@ function refreshBuildingSheet(b) {
       if (def.bots) {
         const k = nextBotKind(b);
         const need = (BOTS[k] && BOTS[k].parts) || 1;
-        parts.push(`<div class="kv"><span>Next bot</span><span>${BOTS[k] ? BOTS[k].name + (need > 1 ? ` (part ${Math.min(need, (b.parts || 0) + 1)} of ${need})` : '') : 'Nothing ordered'}</span></div>`);
+        parts.push(`<div class="kv"><span>Next bot</span><span>${BOTS[k] ? BOTS[k].name + (need > 1 ? ` (part ${Math.min(need, foundryParts(b, k) + 1)} of ${need})` : '') : 'Nothing ordered'}</span></div>`);
       }
       if (b.timer > 0 && b.status === 'Working') parts.push(`<div class="bar"><div style="width:${Math.round((b.timer / def.work) * 100)}%"></div></div>`);
     }
@@ -2088,7 +2092,7 @@ function refreshBuildingSheet(b) {
       if (k) { want++; if (have < k) short++; }
     }
     let trucks = 0;
-    for (const u of S.bots) if (!u.dead && u.owner === 0 && BOTS[u.type].truck) trucks++;
+    for (const u of S.bots) if (!u.dead && u.owner === 0 && BOTS[u.type].truck && !BOTS[u.type].train) trucks++; // Road Trains only run to far Depots
     $('sh-keep-hint').textContent = !want
       ? 'Set how much of each good to keep here, and haulers and Freight Trucks bring it from your other storage. Buildings and roads near here then draw on it.'
       : `${short ? `Filling ${short} order${short > 1 ? 's' : ''}` : 'Fully stocked'}. ` + (trucks ? `${trucks} Freight Truck${trucks > 1 ? 's' : ''} take the runs; haulers help when they're busy.` : 'Haulers bring it two at a time: order Freight Trucks at the Bot Foundry to carry eight.');
@@ -2106,7 +2110,7 @@ function refreshBuildingSheet(b) {
     $('sh-missile').innerHTML = `<p class="desc">${!silos.length
       ? `No Missile Silo within ${BDEFS.silo.missile.range} tiles. Build a Silo near the front and a Missile Factory to make Missiles.`
       : ready.length
-        ? `${ready.length} silo${ready.length > 1 ? 's' : ''} ready. A missile wrecks smaller buildings and knocks Outposts and Command Bases down to almost no armor, ready for warbots to capture.`
+        ? `${ready.length} silo${ready.length > 1 ? 's' : ''} ready. A missile wrecks smaller buildings and knocks Outposts and Command Bases down to a third of their armor, ready for warbots to finish off.`
         : minReload < Infinity ? `Silos in range are reloading (${Math.ceil(minReload)}s).` : 'Silos in range have no Missiles. Build them at a Missile Factory (Alloy, Chips and Fuel).'}</p>`;
   }
   if ($('sh-send')) {

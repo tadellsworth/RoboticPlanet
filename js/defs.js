@@ -119,7 +119,7 @@ const BOTS = {
     desc: 'A truck pulling two trailers: 30 goods at once, for bulk runs between your Command Base and far Depots (filling supply orders, and bringing a far Depot\'s spare goods home). It only pays off on asphalt: on plain road it crawls. Slow to start and stop, it wears roads hard and holds up the traffic behind it.' },
   freight: { name: 'Freight Train', plural: 'Freight Trains', speed: WORKER_SPEED * 3.4, hp: 30, haul: true, rail: true, carry: 56, parts: 5, accel: 0.85, brake: 1.6,
     desc: 'A locomotive and four wagons: 56 goods at once between Rail Stations on the same track, fast and with no traffic to wait for. It never needs charging. It rolls out at the nearest Rail Station when the Foundry finishes it.' },
-  crawler: { name: 'Crawler', plural: 'Crawlers', speed: WORKER_SPEED * 0.45, hp: 80, crawler: true, parts: 8,
+  crawler: { name: 'Crawler', plural: 'Crawlers', speed: WORKER_SPEED * 0.45, hp: 80, crawler: true, parts: 6,
     desc: 'A colossal tracked base on the move. Drive it anywhere it can roll (no road needed) and it deploys where it stops: a Depot, a Charging Station and an Outpost in one, claiming the land around it. Pack it up to move on: it takes everything stored in it along.' },
   truck:   { name: 'Freight Truck', plural: 'Freight Trucks', speed: WORKER_SPEED * 1.35, hp: 8, haul: true, truck: true, carry: 8, roadOnly: true, parts: 2, accel: 1.5, brake: 3.5,
     desc: 'A heavy road truck that carries eight goods at once on the long runs: between your Command Base and Depots, and to anything far away. Slower than a Hauler on concrete, fastest of all on asphalt.' },
@@ -151,10 +151,11 @@ const BOT_ORDER = ['worker', 'hauler', 'truck', 'roadtrain', 'freight', 'crawler
  */
 const TRUCK_MIN_DIST = 12;
 const TRUCK_MIN_LOAD = 3;
+const TRUCK_KEEP_LOAD = 4;     // a truck fills a supply order with at least this many (half a load; or half the order), unless the store has run dry
 const TRUCK_ROAD = 0.8;
 const LONG_BUFFER = 8;
 const EXPORT_RESERVE = 4;
-const TRAIN_MIN_LOAD = 12;
+const TRAIN_MIN_LOAD = 18;     // (on plain road a Road Train only beats a truck with 18 or more)
 const TRAIN_ROAD = 0.35;   // a Road Train on plain road: it needs asphalt
 const TRAIN_CORNER = 0.36; // ...and takes corners slowly
 const TRAIN_LEN = 1.5;     // tiles of road it fills (cab and two trailers): traffic queues behind that
@@ -257,14 +258,14 @@ const T_GROUND = 0, T_WATER = 1, T_ROCK = 2, T_CHASM = 3; // a chasm: a deep, sh
  * the way round is longer than about `weight` road tiles.
  */
 const CROSS = {
-  [T_WATER]: { key: 'bridge', name: 'Bridge', cost: { cement: 2, alloy: 1 }, time: 6, weight: 14 },
+  [T_WATER]: { key: 'bridge', name: 'Bridge', cost: { cement: 3, alloy: 0.5 }, time: 6, weight: 14 },
   [T_ROCK]: { key: 'tunnel', name: 'Tunnel', cost: { cement: 3, alloy: 1 }, time: 8, weight: 18 },
-  [T_CHASM]: { key: 'skybridge', name: 'Sky bridge', cost: { cement: 3, alloy: 1 }, time: 9, weight: 16 },
+  [T_CHASM]: { key: 'skybridge', name: 'Sky bridge', cost: { cement: 3, alloy: 0.5 }, time: 9, weight: 16 },
 };
 /** Can a bridge (road or rail) go out over tile t? Water and chasms, not rock. */
 function bridgeable(t) { return S.terrain[t] === T_WATER || S.terrain[t] === T_CHASM; }
 /** Track over water or a chasm is a rail bridge, dearer than track on the ground. */
-const RAIL_BRIDGE_COST = { cement: 3, alloy: 1 };
+const RAIL_BRIDGE_COST = { cement: 3, alloy: 0.5 }; // the same as a Viaduct's span
 
 /* New-game map settings (each is a slider on the menu). */
 const SIZE_PRESETS = [
@@ -312,6 +313,11 @@ const LOOT_TIME = 300;    // seconds a loot pile lies before it rots away
 // long, plus one per point of armor left, so it walks round a short way and breaks through a long one.
 const BREACH_COST = 8;
 const BREACH_PER_ARMOR = 1;
+// Forts (Outposts, the Command Base): a missile can't take one below MISSILE_FLOOR of its armor, and
+// once it's under SORTIE_ARMOR every armed warbot inside goes out to fight. Taking one ejects whoever
+// is still inside instead of killing them.
+const MISSILE_FLOOR = 0.35;
+const SORTIE_ARMOR = 0.25;
 const DEFAULT_SIZE = { versus: 1, colony: 3 };
 const DEFAULT_ROUGH = 2;
 const DEFAULT_RICH = 2;
@@ -342,7 +348,7 @@ const RICH_TYPES = [R_BOULDER, R_ORE, R_CRYSTAL, R_OIL];
 const GOODS = ['fiber', 'stone', 'ore', 'crystal', 'alloy', 'chip', 'crude', 'fuel', 'cement', 'asphalt', 'ammo', 'warhead', 'uranium', 'fissile'];
 const GOOD = {
   fiber:   { name: 'Fiber',   color: '#3fd8a6', desc: 'Cut from stalk groves. Used for building and as smelter fuel.' },
-  stone:   { name: 'Stone',   color: '#c9c1b4', desc: 'Broken from boulders. A Cement Works turns it into Cement (2 per Stone): that is its only use.' },
+  stone:   { name: 'Stone',   color: '#c9c1b4', desc: 'Broken from boulders. A Cement Works turns it into Cement (2 per Stone), and new Cement Works are built from it.' },
   ore:     { name: 'Ore',     color: '#ff8a3d', desc: 'Dug from ore veins. Smelted into Alloy.' },
   crystal: { name: 'Crystal', color: '#b98cff', desc: 'Tapped from crystal clusters. Makes Chips and turret ammo.' },
   alloy:   { name: 'Alloy',   color: '#8ec3e6', desc: 'Smelted metal for advanced buildings, chips and bots.' },
@@ -371,7 +377,6 @@ const URANIUM_DEPOSITS = 6;
 const NUKE = { parts: { fissile: 6, alloy: 4, chip: 2 }, assemble: 60, range: 40, flight: 30, radius: 6, scorch: 240 };
 
 const PLAYER_COLORS = ['#38d4ff', '#ff5a6e', '#5be06c'];
-const PLAYER_NAMES = ['You', 'Rival'];
 /**
  * What to call player p. Label: 'You', 'Rival' (two players), 'Red rival' or 'Green rival' (three).
  * In a sentence (the = true): 'you', 'the rival', 'the Red rival', 'the Green rival'.
@@ -446,10 +451,10 @@ const BDEFS = {
   fab: {
     name: 'Chip Fab', desc: 'Etches Crystal onto Alloy to make Chips.',
     cost: { cement: 2, alloy: 2 }, staff: true, inp: { crystal: 1, alloy: 1 }, make: { chip: 1 }, out: { chip: 4 },
-    work: 5, armor: 8, buildTime: 10,
+    work: 5, armor: 8, buildTime: 10, limit: 10,
   },
   foundry: {
-    name: 'Bot Foundry', desc: 'Assembles new Workers and Warbots from Alloy and Chips.',
+    name: 'Bot Foundry', desc: 'Assembles every kind of bot and vehicle from Alloy and Chips, one round of parts at a time.',
     cost: { cement: 4, alloy: 3, chip: 1 }, staff: true, inp: { alloy: 1, chip: 1 }, bots: true,
     work: 8, armor: 10, buildTime: 14,
   },
@@ -473,17 +478,17 @@ const BDEFS = {
   },
   roadworks: {
     name: 'Roadworks', desc: 'Its Paver upgrades your roads to asphalt, the fastest surface, working outwards along the roads you mark in Paths (Pave), however far along joined roads (or every joined road, if you choose). One Asphalt covers four tiles.',
-    cost: { cement: 3, alloy: 1, fiber: 2 }, staff: true, crew: 'paver', roadworks: true, radius: 7, armor: 8, buildTime: 10,
+    cost: { cement: 3, alloy: 1, fiber: 2 }, staff: true, crew: 'paver', roadworks: true, armor: 8, buildTime: 10,
   },
   armory: {
     name: 'Ammo Plant', desc: 'Packs Alloy and Cement into Ammo. Haulers take it to your Command Base and Outposts, where warbots reload.',
     cost: { cement: 3, alloy: 2 }, staff: true, inp: { alloy: 1, cement: 1 }, make: { ammo: 3 }, out: { ammo: 6 },
-    work: 6, armor: 10, buildTime: 10, war: true,
+    work: 6, armor: 10, buildTime: 10, war: true, limit: 24,
   },
   munitions: {
     name: 'Missile Factory', desc: 'Builds Missiles from 2 Alloy, 1 Chip and 1 Fuel each. They are slow and costly to make; haulers carry them to your Missile Silos.',
     cost: { cement: 4, alloy: 4, chip: 2 }, staff: true, inp: { alloy: 2, chip: 1, fuel: 1 }, make: { warhead: 1 },
-    out: { warhead: 2 }, work: 20, armor: 10, buildTime: 14, war: true,
+    out: { warhead: 2 }, work: 20, armor: 10, buildTime: 14, war: true, limit: 4,
   },
   silo: {
     name: 'Missile Silo',
@@ -556,7 +561,7 @@ const BDEFS = {
   crawlerbase: {
     name: 'Crawler', short: 'Crawler',
     desc: 'A deployed Crawler: storage, a Charging Station for four bots (burning the Fuel stored in it) and an Outpost claiming the land around it, all in one. Give it supply orders like a Depot (Fuel keeps its chargers going). Pack it up to drive it somewhere else: it takes its goods along, and gives up its land.',
-    cost: {}, store: true, mil: true, terr: 6, garrison: 4, ammoStock: 4, charger: { slots: 4, rate: 25, fuel: true }, armor: 40, mobile: true,
+    cost: {}, store: true, mil: true, terr: 6, garrison: 4, ammoStock: 4, charger: { slots: 4, rate: 25, fuel: true }, armor: 24, mobile: true,
   },
   nest: {
     name: 'Creature Nest', desc: 'Creatures breed here and raid whatever a colony builds within reach. It grows as time goes on, sending bigger packs. Send warbots to clear it: the goods it has hoarded spill out for them to carry home, and the land around it is free to build on.',
@@ -639,7 +644,7 @@ const METEOR_HITS = 6, METEOR_DAMAGE = 4, METEOR_BOT_DAMAGE = 1.5, METEOR_RICH =
 const TRADE_GET = { ore: R_ORE, crystal: R_CRYSTAL, stone: R_BOULDER, crude: R_OIL };
 const TRADE_LEFT = { ore: 80, crystal: 50, stone: 80, crude: 60 };
 const TRADE_GIVE = ['fiber', 'fuel', 'cement', 'alloy', 'stone', 'ore', 'crystal', 'crude'];
-const TRADE_VALUE = { fiber: 1, stone: 1, ore: 1.2, crystal: 1.5, crude: 1.2, cement: 0.6, fuel: 1.5, alloy: 3 };
+const TRADE_VALUE = { fiber: 1, stone: 1, ore: 1.2, crystal: 1.5, crude: 1.2, cement: 0.5, fuel: 1.5, alloy: 2.2 }; // Alloy = an Ore and a Fiber, Cement = half a Stone
 const TRADE_KEEP = { fiber: 12, stone: 12, ore: 12, crystal: 10, crude: 10, cement: 20, fuel: 12, alloy: 10 };
 const TRADE_BONUS = 1.3;
 
@@ -665,15 +670,16 @@ const WILD = {
  */
 const TECHS = {
   cargo:   { name: 'Cargo Racks', desc: 'Haulers carry 3 goods instead of 2, Freight Trucks 10 instead of 8, Road Trains 36 instead of 30 and Freight Trains 64 instead of 56.', cost: { chip: 4, crystal: 6, alloy: 6 }, time: 90 },
-  cells:   { name: 'Long-life Cells', desc: 'Bot batteries drain 30% slower.', cost: { chip: 4, crystal: 8 }, time: 90 },
+  cells:   { name: 'Long-life Cells', desc: 'Bot batteries drain 30% slower, and Charging Stations charge them 50% faster.', cost: { chip: 4, crystal: 8 }, time: 90 },
+  // No longer offered (folded into Long-life Cells: bots spend under 1% of their time charging); kept for old saves.
   charge:  { name: 'Fast Charging', desc: 'Charging Stations charge bots 50% faster.', cost: { chip: 4, crystal: 6, alloy: 4 }, time: 75 },
   paving:  { name: 'Rapid Paving', desc: 'Roads, bridges and tunnels take 40% less time to lay.', cost: { chip: 3, crystal: 4, alloy: 4 }, time: 60 },
   sentry:  { name: 'Sentry Optics', desc: 'Pulse Turrets reach 1.5 tiles further and get 6 shots from each Crystal.', cost: { chip: 4, crystal: 10 }, time: 75 },
   motors:  { name: 'Turbo Motors', desc: 'Every bot moves 15% faster.', cost: { chip: 6, crystal: 8, alloy: 8 }, time: 120 },
   tools:   { name: 'Power Tools', desc: 'Workers build, gather and run buildings 15% faster.', cost: { chip: 6, crystal: 10, alloy: 6 }, time: 120 },
-  nanites: { name: 'Nanite Repair', desc: 'Bots and buildings slowly mend themselves once nothing has hit them for a while.', cost: { chip: 8, crystal: 12, alloy: 8 }, time: 150 },
+  nanites: { name: 'Nanite Repair', desc: 'Bots and buildings slowly mend themselves once nothing has hit them for a while.', cost: { chip: 4, crystal: 8, alloy: 4 }, time: 100 },
 };
-const TECH_ORDER = ['cargo', 'cells', 'charge', 'paving', 'sentry', 'motors', 'tools', 'nanites'];
+const TECH_ORDER = ['cargo', 'cells', 'paving', 'sentry', 'motors', 'tools', 'nanites'];
 
 /** Starting goods in each Command Base. */
 const START_STOCK = { fiber: 16, stone: 8, alloy: 8, chip: 4, crystal: 4, fuel: 10, cement: 24 };
