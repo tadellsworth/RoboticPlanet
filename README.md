@@ -70,7 +70,7 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
 | Mortar Pit | Shells where enemies bunch up, 3–10 tiles out: 6 damage, 3 within 1½ tiles; 3 shells per Ammo |
 | Depot | Extra storage, shortens hauling trips; give it supply orders to stock it as a forward base |
 | Ramp | Planned in Paths: cuts a slope into a one-level cliff so bots can climb it; counts as road |
-| Charging Station | Recharges bots' batteries, four at a time; burns **Fuel** |
+| Fuel Station | Recharges bots' batteries, four at a time; burns **Fuel** |
 | Bio Farm | A worker plants energy crops on fertile soil and harvests them into **Fuel** |
 | Oil Pump | Built on an oil seep; a worker pumps **Crude** until it runs dry (stops at 30 Crude by default) |
 | Refinery | Crude → **Fuel**, one for one (stops at 30 unless you change its stock limit); explodes when destroyed |
@@ -115,6 +115,10 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
   lets its owner's bots through (`passTile`); an armed enemy warbot breaks in (`breachable`), which captures it.
   Bots follow roads round corners (no diagonal shortcuts on or off a road).
 - **Your robots:** tap the robot counter in the top bar for every robot by type and what they're doing.
+- **Bot Foundry build order:** its panel lists every bot type with ▲ ▼ arrows to move it up or down (`b.order`,
+  `foundryList`, `moveFoundryOrder`), and a choice of **Take turns** (one of each ordered type in turn, in the list's
+  order) or **Top of the list first** (`b.omode = 'first'`: every bot of the top ordered type before the next). The
+  type being built is highlighted. The AI keeps the default order, taking turns.
 - **Roads** cost Cement (1 Cement paves 5 tiles), paid when you build the plan. Planned tiles show dashed
   until free workers pave them: 1.5 s a tile (3 s through resources), working out from the existing network, so long
   highways take planning and spare workers. Calling off a planned tile refunds it. Roads double a bot's speed. Dragging
@@ -278,7 +282,7 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
   winning too easily. The game pauses while it's open.
 - **Repairs:** nothing heals by itself. Damaged bots go to a Repair Station (workers below 60% health, warbots below
   70% once their garrison is quiet; Colony free play too), which uses 1 Alloy per 12 health. Haulers keep up to 3 Alloy
-  in it, and an empty one gets the first Alloy that reaches storage (like an empty Charging Station's Fuel). To fix a building, tap it and press **Repair**:
+  in it, and an empty one gets the first Alloy that reaches storage (like an empty Fuel Station's Fuel). To fix a building, tap it and press **Repair**:
   you pay 1 Cement for every 6 missing armor and a free worker restores it.
 - **Statistics:** the pause menu and the end-of-game screen show graphs of bots, land and goods over time and how busy
   each kind of building was; each building's panel shows its recent busy time.
@@ -296,9 +300,9 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
 - **Sharp map:** the map is baked once at 32 px a tile for zoomed-out views; zoomed in, the part on screen is baked
   again in 8×8-tile chunks at 64 or 128 px a tile (a few per frame, least recently seen dropped), and big art images
   keep half-size copies so they shrink cleanly (`drawMapLayer`, `artMip` in `js/render.js`).
-- **Batteries:** bots drain their battery walking, working and fighting, and recharge only at a Charging Station (or,
-  for warbots, inside an Outpost). The Command Base doesn't charge anyone and you land without a Charging Station, so
-  build the first one straight away (it runs on the 10 Fuel you land with). A flat battery means half speed and half power. Charging Stations burn Fuel (one Fuel is about
+- **Batteries:** bots drain their battery walking, working and fighting, and recharge only at a Fuel Station (or,
+  for warbots, inside an Outpost). The Command Base doesn't charge anyone and you land without a Fuel Station, so
+  build the first one straight away (it runs on the 10 Fuel you land with). A flat battery means half speed and half power. Fuel Stations burn Fuel (one Fuel is about
   two and a half full charges, `FUEL_ENERGY`). A Bio Farm makes about
   2–3 Fuel a minute; an Oil Pump and Refinery up to 10 a minute until the seep runs dry (both stop at 30 by default).
   A dry Oil Pump shows a crossed-out oil drop over it, frees its worker and says so once: demolish it (any Crude
@@ -328,14 +332,14 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
   for them), missiles and fuel blasts break it; broken pipe is planned again at once and relaid when it's paid for.
   **Trucks burn Fuel** (`TRUCK_BURN`): Freight Trucks, Road Trains and Tankers have a fuel tank instead of a battery,
   draining as they drive (a full tank lasts about 4 minutes of driving, a Road Train's under 3); low, they fill up at the
-  nearest storage or Charging Station holding Fuel (one Fuel fills the tank). With no Fuel anywhere they crawl at half
+  nearest storage or Fuel Station holding Fuel (one Fuel fills the tank). With no Fuel anywhere they crawl at half
   speed. A **Generator** (Build → Make) burns a Fuel every 40 s while anything in its reach is working, and makes every
   factory, Refinery, Oil Pump and Foundry within 4 tiles work a third faster.
   **Smoke:** trucks puff diesel exhaust from their stacks (light while idling or cruising, thick black smoke pulling
   away), and working buildings smoke and steam from their chimneys (`vehicleSmoke`, `buildingSmoke` in
   `js/render.js`; the points are in `art/emitters.js`). The Generator plays its working loop (`generator-work-0…7`).
   Balance (`fuelprobe.js` AI games over every map shape, 45 minutes): colonies use a bit over half the Fuel they make,
-  Charging Stations stand dry about 2% of the time and trucks run empty almost never; trucks take about a tenth of the
+  Fuel Stations stand dry about 2% of the time and trucks run empty almost never; trucks take about a tenth of the
   Fuel, a Generator a fifth where there is one.
 - **Army orders:** tap **Army**, then a rival building to attack it with warbots or a missile, or open
   ground to send warbots there to hold the area under a rally flag. Tap the flag to call them back, or press
@@ -461,7 +465,7 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
 
 Buildings, bots, resources and ground use custom art made in Claude Design (`art/`, with SVG sources in
 `art/source/`). The production buildings, Depot, Outposts and construction sites use the pre-rendered 3D set
-(512×512, each on its own pad, placed by an `anchor` point in `art/art-manifest.js`), as do the Charging Station, Bio
+(512×512, each on its own pad, placed by an `anchor` point in `art/art-manifest.js`), as do the Fuel Station, Bio
 Farm, Oil Pump, Refinery, Cement Works, Asphalt Plant, Roadworks, Ramp, Ammo Plant, Missile Factory and Missile Silo
 (team versions for the military ones), plus the Repair Station, the fortified Command Base, the Nuclear Reactor and
 Nuclear Silo. All six robots (Worker, Warbot, Hauler, Agribot, Paver, Freight Truck) have four driving frames per team

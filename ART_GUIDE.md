@@ -177,7 +177,7 @@ New buildings, a new good and two new map markers. Same brief and angle as batch
 
 | Key | Size | What it is | Prompt for Claude Design |
 |---|---|---|---|
-| `charger` | 256×256, transparent | Charging Station: bots recharge their batteries here | A compact charging bay seen from above: four docking pads around a central power pylon with heavy cables, glowing green charge indicators and warning stripes. |
+| `charger` | 256×256, transparent | Fuel Station: bots recharge their batteries here | A compact charging bay seen from above: four docking pads around a central power pylon with heavy cables, glowing green charge indicators and warning stripes. |
 | `munitions` | 256×256, transparent | Missile Factory: builds Missiles from Alloy, Chips and Fuel | A small armoured missile factory seen from above: a blast-proof assembly hall with a half-built missile on a cradle, a loading crane and hazard markings. Accent light: amber. |
 | `silo@0`, `silo@1` | 256×256, transparent | Missile Silo (team versions) | A round armoured missile silo seen from above: a heavy split blast hatch, partly open, with a missile nose cone visible inside, launch-rail lights in the team colour, scorch marks around the rim. |
 | `missile` | 128×128, transparent | A missile in flight (drawn facing **right**; the game rotates it) | A sleek missile seen from directly above, nose pointing right: grey body, yellow warhead band, small fins, and a short bright exhaust flame at the tail. |
@@ -186,7 +186,7 @@ New buildings, a new good and two new map markers. Same brief and angle as batch
 
 ### Batch 4: Fuel, farms and oil
 
-Charging Stations now burn Fuel, grown at a Bio Farm or refined from oil. Same brief and angle as batch 1.
+Fuel Stations now burn Fuel, grown at a Bio Farm or refined from oil. Same brief and angle as batch 1.
 
 | Key | Size | What it is | Prompt for Claude Design |
 |---|---|---|---|
@@ -269,8 +269,8 @@ the game adds a thin team-coloured bar under it.
 
 **Size on the map** (Claude Code sets this in the manifest; listed so the proportions look right): the Command Base is
 the biggest, about 1.9 tiles wide; the Foundry, Refinery, Missile Factory, Outpost and Missile Silo are large, about
-1.5; most production buildings about 1.35; the Charging Station, Repair Station and Pulse Turret about 1.25. Keep these proportions
-between images too: a Charging Station should look smaller than a Foundry.
+1.5; most production buildings about 1.35; the Fuel Station, Repair Station and Pulse Turret about 1.25. Keep these proportions
+between images too: a Fuel Station should look smaller than a Foundry.
 
 **The buildings**
 
@@ -414,7 +414,7 @@ showing a missile nose cone, and team-coloured launch lights around the rim. Tea
 ```
 A robot repair bay: an open-sided service shed with three repair cradles on the pad, a robotic welding arm
 with a bright spark, a rack of spare plating and a small crane hoist. Smaller than the factories, about the size
-of the Charging Station. Accent colour: orange #ff9a3c.
+of the Fuel Station. Accent colour: orange #ff9a3c.
 ```
 
 `site.png` (a construction site)

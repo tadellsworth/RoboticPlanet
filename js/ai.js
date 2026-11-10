@@ -157,17 +157,17 @@ function aiThink(p) {
   const defence = (type) => S.mode !== 'colony' && (type === 'turret' ? (counts.turret || 0) < turretsWanted : !counts[type]) &&
     ((type === 'turret' && S.time > AI_DEFENCE_AT * (st.turrets ? 0.5 : 1)) || (type === 'repair' && counts.turret && S.time > AI_DEFENCE_AT + 120) ||
      (nukeOn() && (type === 'reactor' || type === 'nukesilo')));
-  // Only Charging Stations charge robots: the first one comes before anything else.
+  // Only Fuel Stations charge robots: the first one comes before anything else.
   const key = (type) => (type === 'charger' && !counts.charger) || type === 'foundry' || type === 'harvester' || type === 'quarry' || (type === 'kiln' && (playerGoods(p).cement || 0) < 3) || defence(type) ||
     (type === 'outpost' && P.short.length > 0);
   if (sites < siteCap) {
     for (const [type, want0] of plan) {
       if (cementStarved && sites >= maxSites && type !== 'kiln') continue;
       if (S.mode === 'colony' && BDEFS[type].war) continue;
-      // One more Charging Station for every four Outposts as the colony spreads out, and a Bio
+      // One more Fuel Station for every four Outposts as the colony spreads out, and a Bio
       // Farm for every two stations to keep them in Fuel.
       const nCh = 1 + Math.floor((counts.outpost || 0) / 4);
-      // Only Charging Stations charge, so Fuel scales with the colony: a Bio Farm for every 18 robots.
+      // Only Fuel Stations charge, so Fuel scales with the colony: a Bio Farm for every 18 robots.
       const nBots = S.bots.reduce((n, u) => n + (!u.dead && u.owner === p && u.type !== 'warbot' ? 1 : 0), 0);
       const want = type === 'charger' ? Math.max(want0, nCh) : type === 'farm' && counts.charger ? Math.max(want0, Math.ceil((counts.charger || 0) / 2), Math.ceil(nBots / 18)) : want0;
       if (type === 'refinery' && !counts.pump) continue;

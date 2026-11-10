@@ -72,7 +72,7 @@ const MISSIONS = [
   },
   {
     id: 'greenfuel', name: 'Green Fuel',
-    brief: 'The landing burned the fuel reserve and the colony is spread thin. Grow Fuel on the fertile flats and keep two Charging Stations running.',
+    brief: 'The landing burned the fuel reserve and the colony is spread thin. Grow Fuel on the fertile flats and keep two Fuel Stations running.',
     mode: 'colony', seed: 3307, size: 1, rough: 1, rich: 2, limit: [0, 0, 25], biome: 'jungle',
     goals: [
       { kind: 'built', type: 'farm', n: 1 }, { kind: 'made', good: 'fuel', n: [15, 25, 35] },

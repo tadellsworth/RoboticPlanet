@@ -83,18 +83,18 @@ const REPAIR_HP_PER_ALLOY = 12;
 const ARMOR_PER_CEMENT = 6;
 const FIX_RATE = 2;
 const REPAIR_BELOW = { warbot: 0.7, other: 0.6 };
-const FUEL_ENERGY = 250;          // battery points one Fuel gives at a Charging Station (2½ full charges)
+const FUEL_ENERGY = 250;          // battery points one Fuel gives at a Fuel Station (2½ full charges)
 /*
  * Trucks burn Fuel. Freight Trucks, Road Trains and Tankers have a fuel tank instead of a battery
  * (u.bat, 0–100): it drains TRUCK_BURN a second while they drive (a Road Train TRAIN_BURN), and
- * when it's low they fill up at the nearest storage or Charging Station holding Fuel they can drive
+ * when it's low they fill up at the nearest storage or Fuel Station holding Fuel they can drive
  * to: one Fuel fills the tank, in a moment. With no Fuel anywhere they limp along at half speed.
  */
 const TRUCK_BURN = 0.4, TRAIN_BURN = 0.6;
 
 /*
  * Batteries (0–100). Bots drain while they move and work, and recharge inside a building with a
- * charger (the Command Base or a Charging Station); warbots also recharge inside their garrison.
+ * charger (the Command Base or a Fuel Station); warbots also recharge inside their garrison.
  * Below `low` a worker goes to recharge when it finishes its job; below `critical` a bot is in
  * emergency mode: it moves and works at `slow` speed and warbots hit half as hard.
  */
@@ -127,7 +127,7 @@ const BOTS = {
   freight: { name: 'Freight Train', plural: 'Freight Trains', speed: WORKER_SPEED * 3.4, hp: 30, haul: true, rail: true, carry: 56, parts: 5, accel: 0.85, brake: 1.6,
     desc: 'A locomotive and four wagons: 56 goods at once between Rail Stations on the same track, fast and with no traffic to wait for. It never needs charging. It rolls out at the nearest Rail Station when the Foundry finishes it.' },
   crawler: { name: 'Crawler', plural: 'Crawlers', speed: WORKER_SPEED * 0.45, hp: 80, crawler: true, parts: 6,
-    desc: 'A colossal tracked base on the move. Drive it anywhere it can roll (no road needed) and it deploys where it stops: a Depot, a Charging Station and an Outpost in one, claiming the land around it. Pack it up to move on: it takes everything stored in it along.' },
+    desc: 'A colossal tracked base on the move. Drive it anywhere it can roll (no road needed) and it deploys where it stops: a Depot, a Fuel Station and an Outpost in one, claiming the land around it. Pack it up to move on: it takes everything stored in it along.' },
   truck:   { name: 'Freight Truck', plural: 'Freight Trucks', speed: WORKER_SPEED * 1.35, hp: 8, haul: true, truck: true, carry: 8, roadOnly: true, parts: 2, accel: 1.5, brake: 3.5,
     desc: 'A heavy road truck that carries eight goods at once on the long runs: between your Command Base and Depots, and to anything far away. Slower than a Hauler on concrete, fastest of all on asphalt.' },
   tanker:  { name: 'Tanker', plural: 'Tankers', speed: WORKER_SPEED * 1.35, hp: 8, haul: true, truck: true, tanker: true, carry: 10, roadOnly: true, parts: 2, accel: 1.4, brake: 3.2,
@@ -403,7 +403,7 @@ const GOOD = {
   alloy:   { name: 'Alloy',   color: '#8ec3e6', desc: 'Smelted metal for advanced buildings, chips and bots.' },
   chip:    { name: 'Chip',    color: '#c8f05a', desc: 'Bot brains. Needed for every new bot.' },
   crude:   { name: 'Crude',   color: '#b08a6e', desc: 'Crude oil from an Oil Pump. A Refinery turns it into Fuel. A liquid: only Tankers and pipelines move it.' },
-  fuel:    { name: 'Fuel',    color: '#ff5c8a', desc: 'Energy for Charging Stations, Generators and every truck. Grown at a Bio Farm or refined from Crude. A liquid: only Tankers move it.' },
+  fuel:    { name: 'Fuel',    color: '#ff5c8a', desc: 'Energy for Fuel Stations, Generators and every truck. Grown at a Bio Farm or refined from Crude. A liquid: only Tankers move it.' },
   cement:  { name: 'Cement',  color: '#a9b4c2', desc: 'The main building material, made from Stone at a Cement Works (2 per Stone). Builds nearly everything and paves roads: 1 Cement for 5 tiles.' },
   asphalt: { name: 'Asphalt', color: '#6b7280', desc: 'Made from Crude and Cement. A Roadworks upgrades roads with it to asphalt, the fastest surface.' },
   ammo:    { name: 'Ammo',    color: '#e8c39e', desc: 'Made at an Ammo Plant. Warbots reload it in your Command Base and Outposts.' },
@@ -479,7 +479,7 @@ function playerName(p, the) {
 const BDEFS = {
   lander: {
     name: 'Command Base', short: 'Base',
-    desc: 'Your fortified headquarters: the craft that brought the colony down, dug in and walled up. Stores goods and houses idle bots, but it does not charge them: that takes Charging Stations. If it is captured, you lose.',
+    desc: 'Your fortified headquarters: the craft that brought the colony down, dug in and walled up. Stores goods and houses idle bots, but it does not charge them: that takes Fuel Stations. If it is captured, you lose.',
     store: true, mil: true, terr: 8, garrison: 40, armor: 30, ammoStock: 10,
   },
   harvester: {
@@ -588,8 +588,8 @@ const BDEFS = {
     cost: { cement: 3, alloy: 2 }, burner: { radius: 4, boost: 1 / 3, perFuel: 40 }, fuelCap: 4, armor: 8, buildTime: 10,
   },
   charger: {
-    name: 'Charging Station',
-    desc: 'Bots recharge their batteries here, four at a time. It burns Fuel: one Fuel recharges about two and a half full batteries. Build them near busy areas far from your Command Base.',
+    name: 'Fuel Station',
+    desc: 'Bots recharge their batteries here, four at a time, and trucks fill their fuel tanks. It burns Fuel: one Fuel recharges about two and a half full batteries, or fills one truck. Build them near busy areas far from your Command Base.',
     cost: { cement: 3, alloy: 1 }, charger: { slots: 4, rate: 25, fuel: true }, fuelCap: 4, armor: 10, buildTime: 10,
   },
   farm: {
@@ -641,7 +641,7 @@ const BDEFS = {
   },
   crawlerbase: {
     name: 'Crawler', short: 'Crawler',
-    desc: 'A deployed Crawler: storage, a Charging Station for four bots (burning the Fuel stored in it) and an Outpost claiming the land around it, all in one. Give it supply orders like a Depot (Fuel keeps its chargers going). Pack it up to drive it somewhere else: it takes its goods along, and gives up its land.',
+    desc: 'A deployed Crawler: storage, a Fuel Station for four bots (burning the Fuel stored in it) and an Outpost claiming the land around it, all in one. Give it supply orders like a Depot (Fuel keeps its chargers going). Pack it up to drive it somewhere else: it takes its goods along, and gives up its land.',
     cost: {}, store: true, mil: true, terr: 6, garrison: 4, ammoStock: 4, charger: { slots: 4, rate: 25, fuel: true }, armor: 24, mobile: true,
   },
   nest: {
@@ -717,7 +717,7 @@ const PERSONALITY_ORDER = ['balanced', 'turtle', 'raider', 'rusher', 'tycoon'];
 const EVENTS = {
   dust:   { name: 'Dust storm',    color: '#d9a86a', dur: [60, 90], warn: true,  desc: 'Bots move at two-thirds speed and Missiles are grounded until it blows over.' },
   meteor: { name: 'Meteor shower', color: '#ff8a3d', dur: [30, 30], warn: true,  desc: 'Meteors crater roads and dent what they hit, but leave rich Ore and Crystal behind.' },
-  flare:  { name: 'Solar flare',   color: '#ffe36b', dur: [45, 60], warn: true,  desc: 'Bot batteries drain twice as fast: keep your Charging Stations fuelled.' },
+  flare:  { name: 'Solar flare',   color: '#ffe36b', dur: [45, 60], warn: true,  desc: 'Bot batteries drain twice as fast: keep your Fuel Stations fuelled.' },
   trader: { name: 'Trader ship',   color: '#7fe3ff', dur: [75, 75], warn: false, desc: 'A trader in orbit swaps spare goods for the Ore, Crystal, Stone or Crude your land is running out of.' },
 };
 const EVENT_ORDER = ['dust', 'meteor', 'flare', 'trader'];
@@ -759,9 +759,9 @@ const WILD = {
  */
 const TECHS = {
   cargo:   { name: 'Cargo Racks', desc: 'Haulers carry 3 goods instead of 2, Freight Trucks 10 instead of 8, Road Trains 36 instead of 30 and Freight Trains 64 instead of 56.', cost: { chip: 4, crystal: 6, alloy: 6 }, time: 90 },
-  cells:   { name: 'Long-life Cells', desc: 'Bot batteries drain 30% slower, and Charging Stations charge them 50% faster.', cost: { chip: 4, crystal: 8 }, time: 90 },
+  cells:   { name: 'Long-life Cells', desc: 'Bot batteries drain 30% slower, and Fuel Stations charge them 50% faster.', cost: { chip: 4, crystal: 8 }, time: 90 },
   // No longer offered (folded into Long-life Cells: bots spend under 1% of their time charging); kept for old saves.
-  charge:  { name: 'Fast Charging', desc: 'Charging Stations charge bots 50% faster.', cost: { chip: 4, crystal: 6, alloy: 4 }, time: 75 },
+  charge:  { name: 'Fast Charging', desc: 'Fuel Stations charge bots 50% faster.', cost: { chip: 4, crystal: 6, alloy: 4 }, time: 75 },
   paving:  { name: 'Rapid Paving', desc: 'Roads, bridges and tunnels take 40% less time to lay.', cost: { chip: 3, crystal: 4, alloy: 4 }, time: 60 },
   sentry:  { name: 'Sentry Optics', desc: 'Pulse Turrets reach 1.5 tiles further and get 6 shots from each Crystal.', cost: { chip: 4, crystal: 10 }, time: 75 },
   motors:  { name: 'Turbo Motors', desc: 'Every bot moves 15% faster.', cost: { chip: 6, crystal: 8, alloy: 8 }, time: 120 },

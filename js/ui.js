@@ -2021,13 +2021,10 @@ function openBuildingSheet(b) {
     }
     if (def.lab && b.built) html += '<div class="section-label">Research</div><div id="sh-research"></div>';
     if (b.type === 'foundry' && b.built) {
-      const versus = warOn();
-      const row = (k, label) => `<div class="order-row"><span>${label}<small id="sh-o-${k}">none queued</small></span>
-        <button class="btn" data-k="${k}" data-d="1">+1</button><button class="btn" data-k="${k}" data-d="5">+5</button>
-        <button class="btn ghost" data-k="${k}" data-d="0">Clear</button></div>`;
-      const kinds = BOT_ORDER.filter((k) => versus || !BOTS[k].war);
-      html += `<div class="section-label">Order bots</div><div id="sh-orders">${kinds.map((k) => row(k, BOTS[k].plural)).join('')}</div>
-        <p class="hint">The Foundry only builds the bots you order. Each one uses 1 Alloy and 1 Chip a round, ${def.work} s each (a Freight Truck or Tanker takes ${BOTS.truck.parts} rounds, a Road Train ${BOTS.roadtrain.parts}, a Freight Train ${BOTS.freight.parts}, a Crawler ${BOTS.crawler.parts}); mixed orders take turns.
+      html += `<div class="section-label">Order bots</div>
+        <div class="seg" id="sh-omode"><button data-v="turns">Take turns</button><button data-v="first">Top of the list first</button></div>
+        <div id="sh-orders"></div>
+        <p class="hint">The Foundry only builds the bots you order, from the top of this list down. <b>Take turns</b>: one of each type you've ordered in turn. <b>Top of the list first</b>: every bot of the top type you've ordered, then the next. Move a type up or down with the arrows. Each bot uses 1 Alloy and 1 Chip a round, ${def.work} s each (a Freight Truck or Tanker takes ${BOTS.truck.parts} rounds, a Road Train ${BOTS.roadtrain.parts}, a Freight Train ${BOTS.freight.parts}, a Crawler ${BOTS.crawler.parts}).
         <b>Haulers</b> carry two goods on the short runs. <b>Freight Trucks</b> carry eight on the long runs (12 tiles or more), from far mines and factories as well as storage. <b>Tankers</b> are the only vehicles that carry Crude and Fuel, ten at a time (they explode if they're destroyed full). <b>Road Trains</b> carry thirty between your Command Base and far Depots, best on asphalt. <b>Agribots</b> run Bio Farms and Grove Planters, and <b>Pavers</b> run the Roadworks.</p>`;
     }
     if (def.roadworks && b.built) {
@@ -2098,14 +2095,8 @@ function openBuildingSheet(b) {
     };
     const seg = $('sh-mode');
     if (seg) for (const btn of seg.children) btn.onclick = () => { b.mode = btn.dataset.v; sfx('click'); refreshSheet(); };
-    if ($('sh-orders')) for (const btn of $('sh-orders').querySelectorAll('button')) btn.onclick = () => {
-      const k = btn.dataset.k, d = +btn.dataset.d;
-      b.orders = b.orders || {};
-      b.orders[k] = d === 0 ? 0 : clamp((b.orders[k] || 0) + d, 0, 99);
-      if (!hasOrders(b)) delete b.orders;
-      sfx('click');
-      refreshSheet();
-    };
+    if ($('sh-orders')) renderFoundryOrders(b);
+    if ($('sh-omode')) for (const btn of $('sh-omode').children) btn.onclick = () => { b.omode = btn.dataset.v === 'first' ? 'first' : undefined; sfx('click'); refreshSheet(); };
     if ($('sh-pause')) $('sh-pause').onclick = () => { setPaused(b, !b.paused); sfx('click'); refreshSheet(); };
     if ($('sh-pack')) $('sh-pack').onclick = () => {
       const btn = $('sh-pack');
@@ -2445,6 +2436,12 @@ function refreshBuildingSheet(b) {
       : `${short ? `Filling ${short} order${short > 1 ? 's' : ''}` : 'Fully stocked'}. ` + (trucks ? `${trucks} Freight Truck${trucks > 1 ? 's' : ''} take the runs; haulers help when they're busy.` : 'Haulers bring it two at a time: order Freight Trucks at the Bot Foundry to carry eight.');
   }
   if ($('sh-mode')) for (const btn of $('sh-mode').children) btn.classList.toggle('on', btn.dataset.v === b.mode);
+  if ($('sh-omode')) for (const btn of $('sh-omode').children) btn.classList.toggle('on', btn.dataset.v === (b.omode === 'first' ? 'first' : 'turns'));
+  if ($('sh-orders')) {
+    // The bot being built now (or next) is marked in the list.
+    const next = hasOrders(b) ? nextBotKind(b) : null;
+    for (const row of $('sh-orders').children) row.classList.toggle('next', row.dataset.k === next);
+  }
   for (const k of BOT_ORDER) {
     if (!$('sh-o-' + k)) continue;
     const n = (b.orders && b.orders[k]) || 0;
@@ -2499,6 +2496,37 @@ function refreshResearch() {
     if ($('sh-rcancel')) $('sh-rcancel').onclick = () => { cancelResearch(0); sfx('click'); toast('Research called off: its cost is back in your Command Base.', 'info'); el.dataset.key = ''; refreshSheet(); };
   }
   if (r && $('sh-rbar')) $('sh-rbar').style.width = `${Math.min(100, (100 * r.t) / TECHS[r.key].time)}%`;
+}
+
+/**
+ * The Foundry's order list: every bot type in its build order, each with arrows to move it up or down,
+ * how many are queued, and +1, +5 and Clear.
+ */
+function renderFoundryOrders(b) {
+  const el = $('sh-orders');
+  if (!el) return;
+  const versus = warOn(), kinds = foundryList(b).filter((k) => versus || !BOTS[k].war);
+  el.innerHTML = kinds.map((k, i) => `<div class="order-row" data-k="${k}">
+    <span class="order-move"><button class="btn ghost" data-k="${k}" data-m="-1" aria-label="Move ${BOTS[k].plural} up" ${i ? '' : 'disabled'}>▲</button><button class="btn ghost" data-k="${k}" data-m="1" aria-label="Move ${BOTS[k].plural} down" ${i < kinds.length - 1 ? '' : 'disabled'}>▼</button></span>
+    <span>${BOTS[k].plural}<small id="sh-o-${k}">none queued</small></span>
+    <button class="btn" data-k="${k}" data-d="1">+1</button><button class="btn" data-k="${k}" data-d="5">+5</button>
+    <button class="btn ghost" data-k="${k}" data-d="0">Clear</button></div>`).join('');
+  for (const btn of el.querySelectorAll('button')) btn.onclick = () => {
+    const k = btn.dataset.k;
+    if (btn.dataset.m) {
+      moveFoundryOrder(b, k, +btn.dataset.m, (x) => versus || !BOTS[x].war);
+      sfx('click');
+      renderFoundryOrders(b);
+      refreshSheet();
+      return;
+    }
+    const d = +btn.dataset.d;
+    b.orders = b.orders || {};
+    b.orders[k] = d === 0 ? 0 : clamp((b.orders[k] || 0) + d, 0, 99);
+    if (!hasOrders(b)) delete b.orders;
+    sfx('click');
+    refreshSheet();
+  };
 }
 
 function botActivity(u) {
@@ -2664,7 +2692,7 @@ function refreshRoadSheet(t) {
 function openSoilSheet(t) {
   R.selected = 0; R.selTile = t; UI.selBot = 0;
   const html = `<div class="sheet-title"><div><h3>Fertile soil</h3></div></div>
-    <p class="desc">Dark, rich ground. A Bio Farm within ${BDEFS.farm.radius} tiles plants energy crops here and harvests them into Fuel for your Charging Stations. Paths and buildings on it leave less room to farm.</p>`;
+    <p class="desc">Dark, rich ground. A Bio Farm within ${BDEFS.farm.radius} tiles plants energy crops here and harvests them into Fuel for your Fuel Stations. Paths and buildings on it leave less room to farm.</p>`;
   openSheet('soil', t, html);
 }
 
@@ -2846,7 +2874,7 @@ function refreshSheet() {
 /* ------------------------------------------------------------------ HUD */
 
 const OBJECTIVES = [
-  { text: 'Robots run on batteries, and your Command Base can\'t charge them. Tap <b>Build</b> and place a <b>Charging Station</b> beside the road ring round your base: it runs on the Fuel you landed with.', done: () => hasBuilt('charger') || hasAny('charger') },
+  { text: 'Robots run on batteries, and your Command Base can\'t charge them. Tap <b>Build</b> and place a <b>Fuel Station</b> beside the road ring round your base: it runs on the Fuel you landed with.', done: () => hasBuilt('charger') || hasAny('charger') },
   { text: 'Tap <b>Build</b> and place a <b>Harvester</b> beside the teal stalk groves.', done: () => hasBuilt('harvester') || hasAny('harvester') },
   { text: '<b>Haulers only drive on roads.</b> Tap <b>Paths</b>, sketch a road from the ring round your Command Base to the Harvester site and tap <b>Build</b> (or tap the site and choose <b>Lay road</b>). Free workers pave it.', done: () => hasBuilt('harvester') || S.buildings.some((b) => !b.dead && b.owner === 0 && b.type === 'harvester' && !b.unlinked) },
   { text: 'Build a <b>Quarry</b> near the grey boulders to get Stone.', done: () => hasBuilt('quarry') },
@@ -2857,7 +2885,7 @@ const OBJECTIVES = [
   { text: 'Build a <b>Bot Foundry</b> so you can make more workers.', done: () => hasBuilt('foundry') },
   { text: 'Tap your <b>Bot Foundry</b> and order some <b>Workers</b>: it only builds the bots you ask for.', done: () => S.players[0].stats.bots > S.players[0].stats.startBots || S.buildings.some((b) => !b.dead && b.owner === 0 && hasOrders(b)) },
   { text: 'Build an <b>Outpost</b> near your border to claim more land.', done: () => hasBuilt('outpost') },
-  { text: 'Charging Stations burn <b>Fuel</b>. Build a <b>Bio Farm</b> beside the dark fertile soil to grow it (your Agribot runs it).', done: () => hasBuilt('farm') || hasBuilt('refinery') || playerGoods(0).fuel >= 20 },
+  { text: 'Fuel Stations burn <b>Fuel</b>. Build a <b>Bio Farm</b> beside the dark fertile soil to grow it (your Agribot runs it).', done: () => hasBuilt('farm') || hasBuilt('refinery') || playerGoods(0).fuel >= 20 },
   { text: 'Busy crossings jam up. In <b>Paths</b>, choose <b>Junctions</b> and put a traffic light on a junction where three or four roads meet.', done: () => Object.keys(S.lights).some((k) => S.lights[k].owner === 0) || !ownJunction() },
   { text: 'Warbots need <b>Ammo</b>. Build an <b>Ammo Plant</b>: haulers stock your Command Base and Outposts and warbots reload there.', done: () => S.mode === 'colony' || hasBuilt('armory') },
 ];

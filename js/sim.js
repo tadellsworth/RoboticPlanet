@@ -299,10 +299,10 @@ function isIdleWorker(u) {
 /* ------------------------------------------------------------------ batteries */
 
 /** Emergency mode: a flat battery halves speed and work rate. */
-/** A flat bot drops its job to recharge, but only if a Charging Station somewhere can charge it. */
+/** A flat bot drops its job to recharge, but only if a Fuel Station somewhere can charge it. */
 function mustRecharge(u) { return (u.bat ?? 100) < BATTERY.critical && canTopUp(u); }
 
-/** Is there anywhere bot u could top up: a Charging Station with Fuel, or (a truck) Fuel in storage? */
+/** Is there anywhere bot u could top up: a Fuel Station with Fuel, or (a truck) Fuel in storage? */
 function canTopUp(u) { const P = S.players[u.owner]; return BOTS[u.type].truck ? P.canRefuel !== false : !!P.canCharge; }
 
 function batFactor(u) { return (u.bat ?? 100) < BATTERY.critical ? BATTERY.slow : 1; }
@@ -313,7 +313,7 @@ function insideCharger(u) {
   return !!(b && b.built && BDEFS[b.type].charger && !chargerDry(b));
 }
 
-/** A Charging Station with no Fuel left can't charge anyone. */
+/** A Fuel Station with no Fuel left can't charge anyone. */
 function chargerDry(b) {
   const ch = BDEFS[b.type].charger;
   return !!(ch && ch.fuel && b.built && (b.energy || 0) < 0.5 && !(b.stock.fuel > 0));
@@ -345,7 +345,7 @@ function findCharger(u) {
 }
 
 /**
- * A truck low on Fuel (see TRUCK_BURN) fills up: at the nearest storage or Charging Station with Fuel
+ * A truck low on Fuel (see TRUCK_BURN) fills up: at the nearest storage or Fuel Station with Fuel
  * that it can drive to. False if there's none.
  */
 function findFuel(u) {
@@ -393,7 +393,7 @@ function goCharge(u) {
     const P = S.players[u.owner];
     if (S.time - (P.lastChargeMsg || -99) > 90) {
       P.lastChargeMsg = S.time;
-      postMsg(u.owner, 'Bots are running flat with no charger they can reach. Build a Charging Station nearby.', Math.floor(u.x), Math.floor(u.y), 'warn');
+      postMsg(u.owner, 'Bots are running flat with no charger they can reach. Build a Fuel Station nearby.', Math.floor(u.x), Math.floor(u.y), 'warn');
     }
     return false;
   }
@@ -413,7 +413,7 @@ function workerBattery(u, dt) {
       if (u.bat < 100) {
         let gain = Math.min(100 - u.bat, ch.rate * (tech(b.owner, 'cells') || tech(b.owner, 'charge') ? 1.5 : 1) * Math.min(1, ch.slots / Math.max(1, b.charging)) * dt);
         if (ch.fuel) {
-          // Charging Stations burn a Fuel whenever their energy runs low.
+          // Fuel Stations burn a Fuel whenever their energy runs low.
           if ((b.energy || 0) < gain && (b.stock.fuel || 0) > 0) { bump(b.stock, 'fuel', -1); usedGood(b.owner, 'fuel', 1); b.energy = (b.energy || 0) + FUEL_ENERGY; }
           gain = Math.min(gain, b.energy || 0);
           b.energy = (b.energy || 0) - gain;
@@ -1001,7 +1001,7 @@ function dispatch(p) {
   const linked = (a, b) => P.noHaulers || roadLinked(a, b);
   for (const b of blds) b.unlinked = !P.noHaulers && needsRoad(b) && !onHomeNet(b);
   const minFree = siteCount(p) > 0 ? MIN_FREE_WORKERS : 1;
-  // Can this colony charge anywhere right now (a Charging Station with Fuel)? Can its trucks fill up?
+  // Can this colony charge anywhere right now (a Fuel Station with Fuel)? Can its trucks fill up?
   P.canCharge = blds.some((b) => b.built && BDEFS[b.type].charger && !chargerDry(b));
   P.canRefuel = blds.some((b) => b.built && (BDEFS[b.type].store || BDEFS[b.type].charger) && (b.stock.fuel || 0) - (b.res.fuel || 0) >= 1);
   if (free < minFree) {
@@ -1107,7 +1107,7 @@ function dispatch(p) {
   const reqs = [];
   for (const b of blds) {
     const pri = prioRank(b) * 3 + (b.built && BDEFS[b.type].bots ? 0 : 1);
-    // Fuel for an empty Charging Station comes before anything else: nothing moves without charge.
+    // Fuel for an empty Fuel Station comes before anything else: nothing moves without charge.
     // So does one Alloy for an empty Repair Station, so it always has some on hand for the next robot.
     const dry = (BDEFS[b.type].charger && b.built && chargerDry(b)) ||
       (BDEFS[b.type].repair && b.built && !(b.stock.alloy > 0) && !(b.inc.alloy > 0) && (b.repairPts || 0) < REPAIR_HP_PER_ALLOY / 2);
@@ -2225,7 +2225,7 @@ function updateBuilding(b, dt) {
       const P = S.players[b.owner];
       if (S.time - (P.lastFuelMsg || -999) > 120 && S.time - b.born > 20) {
         P.lastFuelMsg = S.time;
-        postMsg(b.owner, 'A Charging Station is out of Fuel. Grow it at a Bio Farm on fertile soil, or pump oil and refine it.', b.x, b.y, 'warn');
+        postMsg(b.owner, 'A Fuel Station is out of Fuel. Grow it at a Bio Farm on fertile soil, or pump oil and refine it.', b.x, b.y, 'warn');
       }
     } else {
       b.status = `Charging ${Math.min(b.charging || 0, def.charger.slots)} of ${def.charger.slots} bots` + ((b.charging || 0) > def.charger.slots ? ` (${b.charging - def.charger.slots} waiting)` : '');
@@ -2391,12 +2391,41 @@ function foundryParts(b, kind) {
   return b.partsBy[kind] || 0;
 }
 
-/** What the Foundry builds next: queued orders first (types take turns), then its standing mode. */
+/**
+ * The Foundry's build order: the bot types in the order its owner arranged them (b.order), every type
+ * once (types it doesn't list follow in the usual order). Without one, BOT_ORDER.
+ */
+function foundryList(b) {
+  if (!Array.isArray(b.order) || !b.order.length) return BOT_ORDER;
+  const list = b.order.filter((k, i) => BOT_ORDER.includes(k) && b.order.indexOf(k) === i);
+  for (const k of BOT_ORDER) if (!list.includes(k)) list.push(k);
+  return list;
+}
+
+/**
+ * Move bot type k up (d = -1) or down (d = 1) in Foundry b's build order: it swaps places with the next
+ * type above or below it that `shown` accepts (in Colony the panel leaves warbots out).
+ */
+function moveFoundryOrder(b, k, d, shown) {
+  const list = foundryList(b).slice(), i = list.indexOf(k);
+  let j = i + d;
+  while (j >= 0 && j < list.length && shown && !shown(list[j])) j += d;
+  if (i < 0 || j < 0 || j >= list.length) return;
+  [list[i], list[j]] = [list[j], list[i]];
+  b.order = list;
+}
+
+/**
+ * What the Foundry builds next: queued orders first, then its standing mode. Orders take turns, one
+ * bot of each type in its build order, or (b.omode 'first') all of the top type first, then the next.
+ */
 function nextBotKind(b) {
   if (hasOrders(b)) {
+    const list = foundryList(b);
+    if (b.omode === 'first') { for (const k of list) if (b.orders[k] > 0) return k; }
     const start = b.rr || 0;
-    for (let i = 0; i < BOT_ORDER.length; i++) {
-      const k = BOT_ORDER[(start + i) % BOT_ORDER.length];
+    for (let i = 0; i < list.length; i++) {
+      const k = list[(start + i) % list.length];
       if (b.orders[k] > 0) return k;
     }
   }
@@ -2410,7 +2439,8 @@ function spawnFromFoundry(b) {
   P.madeBots[kind] = (P.madeBots[kind] || 0) + 1;
   if (hasOrders(b)) {
     b.orders[kind]--;
-    b.rr = (BOT_ORDER.indexOf(kind) + 1) % BOT_ORDER.length;
+    const list = foundryList(b);
+    b.rr = (list.indexOf(kind) + 1) % list.length;
     if (!hasOrders(b)) {
       delete b.orders;
       postMsg(b.owner, 'The Bot Foundry finished its production orders.', b.x, b.y, 'good');
@@ -3108,7 +3138,7 @@ function updateWarbot(u, dt) {
       return;
     }
     // Outposts recharge their warbots; the Command Base doesn't charge anyone, so a low warbot in it
-    // slips out to the nearest Outpost or Charging Station for a top-up while the Base is quiet.
+    // slips out to the nearest Outpost or Fuel Station for a top-up while the Base is quiet.
     if (u.bat < 100 && home && home.type !== 'lander') u.bat = Math.min(100, u.bat + BATTERY.garrisonCharge * dt);
     if (home && home.type === 'lander' && u.bat < BATTERY.low && S.tick % 45 === u.id % 45 && S.time - (home.lastHit || -99) > 8) {
       const c = rechargePoint(u);
@@ -3199,7 +3229,7 @@ function warbotAct(u, dt) {
   }
   if (t.type === 'loot') { doLoot(u, t, dt); return; }
   if (t.type === 'topup') {
-    // Out of the Command Base to recharge beside an Outpost or Charging Station, then back on guard.
+    // Out of the Command Base to recharge beside an Outpost or Fuel Station, then back on guard.
     const c = getE(t.bld);
     if (!c || c.dead || c.owner !== u.owner || !c.built) { u.task = null; return; }
     if (dist2(u.x, u.y, c.x + 0.5, c.y + 0.5) <= 2.2) {
@@ -4509,7 +4539,7 @@ function updateEvents() {
   if (def.warn) {
     postMsg(0, type === 'dust' ? `A dust storm is blowing in (${EVENT_WARN}s): bots will slow down and Missiles will be grounded.`
       : type === 'meteor' ? `Meteor shower in ${EVENT_WARN}s! Meteors will crater roads, but leave rich Ore and Crystal where they land.`
-        : `Solar flare in ${EVENT_WARN}s: bot batteries will drain twice as fast. Keep your Charging Stations fuelled.`, undefined, undefined, 'warn');
+        : `Solar flare in ${EVENT_WARN}s: bot batteries will drain twice as fast. Keep your Fuel Stations fuelled.`, undefined, undefined, 'warn');
     sfx('alert');
   }
 }
