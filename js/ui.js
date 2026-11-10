@@ -1072,8 +1072,10 @@ function renderStats() {
 function setMode(mode) {
   if (R.mode === 'road' && mode !== 'road') dropDraft(); // a plan that was never built costs nothing
   R.mode = mode;
-  for (const m of ['road', 'place', 'attack', 'aim']) document.body.classList.toggle('mode-' + m, mode === m);
-  if (mode !== 'aim') { R.aim = null; R.aimHover = null; UI.aimSilo = 0; }
+  for (const m of ['road', 'place', 'attack', 'aim', 'land']) document.body.classList.toggle('mode-' + m, mode === m);
+  if (mode !== 'aim') { R.aim = null; UI.aimSilo = 0; }
+  if (mode !== 'aim' && mode !== 'land') R.aimHover = null;
+  if (mode !== 'land') { R.landAt = null; UI.landFerry = 0; }
   R.ghost = null;
   R.overlay = null;
   R.ropeEnd = null;
@@ -1091,6 +1093,90 @@ function setMode(mode) {
 /* ------------------------------------------------------------------ missile aiming */
 
 /** Aim a Silo: zoom out to show its range on the ground, then tap a spot inside it. */
+/* ------------------------------------------------------------------ Ports: ferry lines and beach landings */
+
+/** "14 tiles north-east" from building a to building b. */
+function dirText(a, b) {
+  const dx = b.x - a.x, dy = b.y - a.y, d = Math.round(Math.hypot(dx, dy));
+  const ns = dy < -Math.abs(dx) * 0.4 ? 'north' : dy > Math.abs(dx) * 0.4 ? 'south' : '';
+  const ew = dx > Math.abs(dy) * 0.4 ? 'east' : dx < -Math.abs(dy) * 0.4 ? 'west' : '';
+  return `${d} tile${d === 1 ? '' : 's'} ${ns && ew ? ns + '-' + ew : ns || ew || 'away'}`;
+}
+
+/** A Ferry of yours tied up at Port b, free for a beach landing. */
+function portFerry(b) { return S.bots.find((u) => !u.dead && u.owner === b.owner && BOTS[u.type].ferry && u.inside === b.id && !u.landing) || null; }
+
+/** Which ships are tied up at Port b, and who serves its ferry line. */
+function portShipsText(b) {
+  const here = {};
+  for (const u of S.bots) if (!u.dead && u.owner === b.owner && BOTS[u.type].sea && u.inside === b.id) here[u.type] = (here[u.type] || 0) + 1;
+  const list = Object.keys(here).map((k) => `${here[k]} ${here[k] === 1 ? BOTS[k].name : BOTS[k].plural}`);
+  return (list.length ? `Tied up here: ${list.join(', ')}.` : 'No ships tied up here.') +
+    ' Container Ships and Tanker Ships fill this Port\'s supply orders from your other Ports on the same water, and a far Port sends its spare goods home by ship. Order ships at the Bot Foundry.';
+}
+
+/** The Port panel's ship sections: ships here, its ferry line, and a beach landing. */
+function portSection(b) {
+  let html = '<div class="section-label">Ships</div><p class="hint" id="sh-port-ships"></p>';
+  const other = b.ferryTo ? getE(b.ferryTo) : null;
+  const ferries = S.bots.filter((u) => !u.dead && u.owner === b.owner && BOTS[u.type].ferry);
+  html += '<div class="section-label">Ferry line</div><div id="sh-ferry">';
+  if (other && !other.dead) {
+    const served = ferries.some((u) => u.home === b.id || u.home === other.id);
+    html += `<p class="hint">A ferry line runs to the Port ${dirText(b, other)}: your robots and trucks take the ferry whenever it's the shorter way.${served ? '' : ' <b>No Ferry serves it yet</b>: order one at the Bot Foundry.'}</p><button class="btn" data-to="0">Stop the ferry line</button>`;
+  } else {
+    const ports = S.buildings.filter((o) => o !== b && !o.dead && o.built && o.owner === b.owner && BDEFS[o.type].port && seaLinked(b, o));
+    html += ports.length ? `<p class="hint">Run a ferry between this Port and another: your robots and trucks take it whenever it's the shorter way (a Ferry from the Bot Foundry serves it).</p>${ports.map((o) => `<button class="btn" data-to="${o.id}">Ferry to the Port ${dirText(b, o)}</button>`).join('')}`
+      : '<p class="hint">Build another Port on the same water to run a ferry line between them.</p>';
+  }
+  html += '</div>';
+  const f = portFerry(b);
+  html += '<div class="section-label">Beach landing</div>';
+  html += f ? `<div class="stepper"><button class="btn" id="sh-land-minus" aria-label="Fewer warbots">−</button><span class="n" id="sh-land-n">3</span><button class="btn" id="sh-land-plus" aria-label="More warbots">+</button><button class="btn primary" id="sh-land" style="flex:1">Choose the beach</button></div>
+    <p class="hint">The Ferry here takes up to ${FERRY_SEATS} armed warbots from your garrisons and lands them on any shore it can sail to, the rival's too. They hold the beach under a rally flag.</p>`
+    : `<p class="hint">A Ferry tied up here can land up to ${FERRY_SEATS} warbots on any shore, the rival's too.</p>`;
+  return html;
+}
+
+/** Beach landing: pick the shore tile on the map (a second tap there, or Land, sends them). */
+function startLanding(f, n) {
+  setMode('land');
+  UI.landFerry = f.id;
+  UI.landN = n;
+  R.landAt = null;
+  showLandBanner();
+}
+
+function showLandBanner(problem) {
+  const f = getE(UI.landFerry);
+  if (!f || f.dead) { setMode('normal'); return; }
+  const html = (problem ? `<span class="err">${problem}</span> ` : '') + (R.landAt
+    ? `Land up to <b>${UI.landN}</b> warbot${UI.landN === 1 ? '' : 's'} here? The Ferry waits for them at its Port, then sails.`
+    : `Tap a spot on the shore where the Ferry can land up to <b>${UI.landN}</b> warbot${UI.landN === 1 ? '' : 's'}: open ground right at the water's edge, the rival's shore too.`);
+  showBanner(html, R.landAt ? 'Land' : null, 'Cancel');
+}
+
+function landTap(i, j) {
+  const f = getE(UI.landFerry);
+  if (!f) { setMode('normal'); return; }
+  const why = landingBlocked(0, f, i, j);
+  if (why) { sfx('error'); R.landAt = null; showLandBanner(why); return; }
+  if (R.landAt && R.landAt.i === i && R.landAt.j === j) { confirmLanding(); return; }
+  R.landAt = { i, j };
+  sfx('click');
+  showLandBanner();
+}
+
+function confirmLanding() {
+  const f = getE(UI.landFerry), at = R.landAt;
+  if (!f || !at) return;
+  const why = orderLanding(0, f, at.i, at.j, UI.landN);
+  if (why) { sfx('error'); showLandBanner(why); return; }
+  sfx('order');
+  toast('Beach landing ordered: the warbots head for the Ferry, and it sails once they\'re aboard.', 'good');
+  setMode('normal');
+}
+
 function startAim(silo) {
   setMode('aim');
   UI.aimSilo = silo.id;
@@ -1215,6 +1301,7 @@ function recallAllWarbots() {
 
 function confirmBanner() {
   if (R.mode === 'aim') { fireAimed(); return; }
+  if (R.mode === 'land') { confirmLanding(); return; }
   if (R.mode === 'attack') { recallAllWarbots(); return; }
   if (R.mode === 'road') { commitDraft(); return; }
   if (R.mode === 'place' && (UI.placeType === 'ropeway' || UI.placeType === 'viaduct')) {
@@ -1260,7 +1347,7 @@ function ropewayTap(i, j) {
   if (why) { sfx('error'); showBanner(`<span class="err">${why}</span> Tap another far end.`, null, 'Cancel'); return; }
   const len = Math.round(dist(A.i, A.j, i, j));
   const rise = S.elev[tIdx(i, j)] - S.elev[tIdx(A.i, A.j)];
-  showBanner(`A <b>Ropeway</b> ${len} tiles long${rise ? `, ${Math.abs(rise)} level${Math.abs(rise) > 1 ? 's' : ''} ${rise > 0 ? 'up' : 'down'}` : ''}? ${costHTML(BDEFS.ropeway.cost, playerGoods(0))}`, 'Build', 'Cancel');
+  showBanner(`A <b>Ropeway</b> ${len} tiles long${rise ? `, ${Math.abs(rise)} level${Math.abs(rise) > 1 ? 's' : ''} ${rise > 0 ? 'up' : 'down'}` : ''}? ${costInline(BDEFS.ropeway.cost, playerGoods(0))}`, 'Build', 'Cancel');
 }
 
 /** Placing a Viaduct: the first tap picks the near end, the second the far end across the valley (tap it again to build). */
@@ -1285,7 +1372,7 @@ function viaductTap(i, j) {
   if (why) { sfx('error'); showBanner(`<span class="err">${why}</span> Tap another far end.`, null, 'Cancel'); return; }
   const n = Math.abs(i - A.i) + Math.abs(j - A.j) - 1, cost = viaductCost(A.i, A.j, i, j);
   const rise = S.elev[tIdx(i, j)] - S.elev[tIdx(A.i, A.j)];
-  showBanner(`A <b>Viaduct</b> spanning ${n} tile${n > 1 ? 's' : ''}${rise ? `, ${Math.abs(rise)} level${Math.abs(rise) > 1 ? 's' : ''} ${rise > 0 ? 'up' : 'down'} at the far end` : ''}? ${costHTML(cost, playerGoods(0))} (${canPay(0, cost) ? 'paid now' : 'paid from storage as the goods come in'})`, 'Build', 'Cancel');
+  showBanner(`A <b>Viaduct</b> spanning ${n} tile${n > 1 ? 's' : ''}${rise ? `, ${Math.abs(rise)} level${Math.abs(rise) > 1 ? 's' : ''} ${rise > 0 ? 'up' : 'down'} at the far end` : ''}? ${costInline(cost, playerGoods(0))} (${canPay(0, cost) ? 'paid now' : 'paid from storage as the goods come in'})`, 'Build', 'Cancel');
 }
 
 function buildingAtTap(i, j, wx, wy) {
@@ -1480,6 +1567,7 @@ function onMapTap(i, j, wx, wy) {
     return;
   }
   if (R.mode === 'aim') { aimTap(i, j); return; }
+  if (R.mode === 'land') { landTap(i, j); return; }
   const rally = rallyAtTap(wx, wy);
   if (rally) { sfx('click'); setMode('normal'); openRallySheet(rally); return; }
   const b = buildingAtTap(i, j, wx, wy);
@@ -1511,7 +1599,7 @@ function onMapTap(i, j, wx, wy) {
 
 /** With a mouse, placing a building previews it under the pointer; a click then places it. */
 function onMapHover(i, j) {
-  if (R.mode === 'aim') { R.aimHover = inMap(i, j) ? { i, j } : null; return; }
+  if (R.mode === 'aim' || R.mode === 'land') { R.aimHover = inMap(i, j) ? { i, j } : null; return; }
   if (R.mode !== 'place' || !R.overlay || !UI.placeType || !inMap(i, j)) return;
   R.ghost = { type: UI.placeType, x: i, y: j, ok: !!R.overlay.valid[tIdx(i, j)], hover: true };
 }
@@ -1988,6 +2076,11 @@ function costHTML(cost, have) {
   return Object.keys(cost).map((g) => `<span class="${have && have[g] < cost[g] ? 'short' : ''}"><i class="gi ${g}"></i>${Math.round(cost[g] * 100) / 100}</span>`).join('');
 }
 
+/** A cost written out in a sentence: each good's icon, amount and name ("15 Cement, 3 Alloy"), short ones in red. */
+function costInline(cost, have) {
+  return `<span class="cost-inline">${Object.keys(cost).map((g) => `<span class="${have && have[g] < cost[g] ? 'short' : ''}"><i class="gi ${g}"></i>${Math.round(cost[g] * 100) / 100} ${GOOD[g].name}</span>`).join(', ')}</span>`;
+}
+
 /**
  * The build menu: tabs across the top (All, and the BUILD_GROUPS: Gather, Make, Move, Defend), the
  * last one used remembered. Every card is in the page whichever tab is showing (the others are just
@@ -2083,6 +2176,7 @@ function openBuildingSheet(b) {
           <button class="btn small ghost" id="sh-keep-all">${UI.keepAll ? 'Fewer goods' : 'More goods'}</button>
           <p class="hint" id="sh-keep-hint"></p>`;
       }
+      if (BDEFS[b.type].port && b.built && b.owner === 0) html += portSection(b);
     } else if (b.type !== 'lander' && !(b.built && BDEFS[b.type].barrier)) {
       html += `<div class="section-label">Priority</div><div class="seg" id="sh-prio">
         <button data-v="low">Low</button><button data-v="normal">Normal</button><button data-v="high">High</button></div>
@@ -2200,6 +2294,18 @@ function openBuildingSheet(b) {
       sfx('place'); toast('The Wall is now a Gate: your bots can pass through it.', 'good'); openBuildingSheet(b);
     };
     if ($('sh-aim')) $('sh-aim').onclick = () => { sfx('click'); startAim(b); };
+    for (const btn of document.querySelectorAll('#sh-ferry button[data-to]')) btn.onclick = () => {
+      const to = +btn.dataset.to ? getE(+btn.dataset.to) : null;
+      const why = setFerryLine(b, to);
+      if (why) { sfx('error'); toast(why, 'warn'); return; }
+      sfx('click'); toast(to ? 'Ferry line set: your bots take the ferry when it\'s the shorter way.' : 'Ferry line stopped.', 'info'); openBuildingSheet(b);
+    };
+    if ($('sh-land')) {
+      UI.landN = clamp(UI.landN || 3, 1, FERRY_SEATS);
+      $('sh-land-minus').onclick = () => { UI.landN = Math.max(1, UI.landN - 1); refreshSheet(); };
+      $('sh-land-plus').onclick = () => { UI.landN = Math.min(FERRY_SEATS, UI.landN + 1); refreshSheet(); };
+      $('sh-land').onclick = () => { const f = portFerry(b); if (!f) return; sfx('click'); startLanding(f, UI.landN); };
+    }
     if ($('sh-pipe')) $('sh-pipe').onclick = () => {
       const r = pipeToRefinery(0, b);
       if (r.why) { sfx('error'); toast(r.why, 'warn'); return; }
@@ -2530,6 +2636,8 @@ function refreshBuildingSheet(b) {
     btn.classList.toggle('off', !!(b.reject && b.reject[g]) || b.smode === 'empty');
     btn.lastElementChild.textContent = b.stock[g] || 0;
   }
+  if ($('sh-land-n')) $('sh-land-n').textContent = UI.landN || 3;
+  if ($('sh-port-ships')) $('sh-port-ships').textContent = portShipsText(b);
   if ($('sh-keep')) {
     let want = 0, short = 0;
     for (const cell of $('sh-keep').children) {

@@ -178,6 +178,8 @@ function needsOf(b) {
     // A Depot's supply orders: keep this much of each good here (goods already promised to someone don't count).
     for (const g in b.keep) out.push([g, b.keep[g] - ((b.stock[g] || 0) - (b.res[g] || 0)) - (b.inc[g] || 0), true]);
   }
+  // A Port keeps a little Fuel for its owner's ships to fill up from (once there are ships).
+  if (def.port && b.built && S.bots.some((u) => !u.dead && u.owner === b.owner && BOTS[u.type].sea)) out.push(['fuel', PORT_FUEL - (b.stock.fuel || 0) - (b.inc.fuel || 0), true]);
   // Garrisons keep Ammo for their warbots (Versus only): an Outpost a full reload (2) for each warbot
   // stationed there (at least 2), up to its ammoStock, so empty Outposts don't tie up Alloy.
   if (def.ammoStock && b.built && warOn()) {
@@ -314,7 +316,7 @@ function isIdleWorker(u) {
 function mustRecharge(u) { return (u.bat ?? 100) < BATTERY.critical && canTopUp(u); }
 
 /** Is there anywhere bot u could top up: a Fuel Station with Fuel, or (a truck) Fuel in storage? */
-function canTopUp(u) { const P = S.players[u.owner]; return BOTS[u.type].truck ? P.canRefuel !== false : !!P.canCharge; }
+function canTopUp(u) { const P = S.players[u.owner]; return BOTS[u.type].truck || BOTS[u.type].sea ? P.canRefuel !== false : !!P.canCharge; }
 
 function batFactor(u) { return (u.bat ?? 100) < BATTERY.critical ? BATTERY.slow : 1; }
 
@@ -361,11 +363,12 @@ function findCharger(u) {
  */
 function findFuel(u) {
   let best = null, bd = Infinity;
+  const ship = !!BOTS[u.type].sea;
   for (const b of S.buildings) {
     if (b.dead || b.owner !== u.owner || !b.built || evacuated(b)) continue;
     const def = BDEFS[b.type];
     if (!(def.store || def.charger) || ((b.stock.fuel || 0) - (b.res.fuel || 0)) < 1) continue;
-    if (!botLinked(u, b)) continue;
+    if (ship ? !shipAt(u, b) : !botLinked(u, b)) continue; // a ship fills up at a Port on its water
     const d = dist2(b.x + 0.5, b.y + 0.5, u.x, u.y);
     if (d < bd) { bd = d; best = b; }
   }
@@ -387,9 +390,11 @@ function goRefuel(u) {
   const c = findFuel(u);
   if (!c || !goTo(u, c.x, c.y)) {
     const P = S.players[u.owner];
-    if (S.time - (P.lastTruckFuelMsg || -99) > 90) {
-      P.lastTruckFuelMsg = S.time;
-      postMsg(u.owner, 'Your trucks are running on empty: there\'s no Fuel in storage they can reach. They crawl at half speed until a Tanker brings some.', Math.floor(u.x), Math.floor(u.y), 'warn');
+    const ship = !!BOTS[u.type].sea, k = ship ? 'lastShipFuelMsg' : 'lastTruckFuelMsg';
+    if (S.time - (P[k] || -99) > 90) {
+      P[k] = S.time;
+      postMsg(u.owner, ship ? 'Your ships are running on empty: none of your Ports on their water holds any Fuel. They crawl at half speed until some is brought to a Port.'
+        : 'Your trucks are running on empty: there\'s no Fuel in storage they can reach. They crawl at half speed until a Tanker brings some.', Math.floor(u.x), Math.floor(u.y), 'warn');
     }
     return false;
   }
@@ -398,7 +403,7 @@ function goRefuel(u) {
 }
 
 function goCharge(u) {
-  if (BOTS[u.type].truck) return goRefuel(u);
+  if (BOTS[u.type].truck || BOTS[u.type].sea) return goRefuel(u);
   const c = findCharger(u);
   if (!c || !goTo(u, c.x, c.y)) {
     const P = S.players[u.owner];
@@ -413,9 +418,16 @@ function goCharge(u) {
 }
 
 function workerBattery(u, dt) {
-  if (BOTS[u.type].rail || BOTS[u.type].sea) { // trains run off the track's power; ships don't need charging
-    u.bat = 100;
-    if (BOTS[u.type].sea && u.inside && u.hp < u.maxHp) u.hp = Math.min(u.maxHp, u.hp + SHIP_MEND * dt); // a ship tied up in Port is mended
+  if (BOTS[u.type].rail) { u.bat = 100; return; } // trains run off the track's power
+  // Ships burn Fuel under way (SHIP_BURN) and fill up from a Port's Fuel when they tie up there with
+  // their tank under SHIP_REFUEL; a ship tied up in Port is mended too.
+  if (BOTS[u.type].sea) {
+    if (u.bat === undefined) u.bat = 100;
+    if (u.inside) {
+      const b = getE(u.inside);
+      if (u.hp < u.maxHp) u.hp = Math.min(u.maxHp, u.hp + SHIP_MEND * dt);
+      if (u.bat < SHIP_REFUEL && b && BDEFS[b.type].port && S.tick % 15 === u.id % 15) refuel(u, b);
+    } else if (u.moved || u.path) u.bat = Math.max(0, u.bat - SHIP_BURN * dt * drainMul(u));
     return;
   }
   if (u.bat === undefined) u.bat = 100;
@@ -458,10 +470,11 @@ function playerGoods(p) {
 }
 
 /** Nearest enemy bot within range (warbots first with preferWar). With ownLand, civilian bots only count inside owner's land. */
-function nearestEnemyBot(owner, x, y, range, preferWar, ownLand) {
+function nearestEnemyBot(owner, x, y, range, preferWar, ownLand, land) {
   let best = null, bd = range * range, bestWar = null, bwd = range * range;
   for (const u of S.bots) {
     if (u.dead || u.owner === owner || u.inside) continue;
+    if (land && BOTS[u.type].sea) continue; // warbots can't go after ships (guns on the shore can)
     if (ownLand && u.type !== 'warbot' && S.owner[tIdx(Math.floor(u.x), Math.floor(u.y))] !== owner) continue;
     const d = dist2(u.x, u.y, x, y);
     if (d <= bd) { bd = d; best = u; }
@@ -799,7 +812,7 @@ function moveAlong(u, dt) {
       if (Math.abs((t % S.W) + 0.5 - u.x) < 1e-3 && Math.abs(((t / S.W) | 0) + 0.5 - u.y) < 1e-3) u.pi++; else break;
     }
     if (u.pi >= u.path.length) { u.path = null; u.vel = 0; u.drive = 0; return true; }
-    let step = driveSpeed(u, bt, bt.speed * (bt.sea ? evSpeed() : speedMul(u)) * (bt.rail && S.ramp[here] ? RAIL_GRADE : 1), Infinity, dt) * dt;
+    let step = driveSpeed(u, bt, bt.speed * (bt.sea ? evSpeed() * batFactor(u) : speedMul(u)) * (bt.rail && S.ramp[here] ? RAIL_GRADE : 1), Infinity, dt) * dt;
     u.odo = ((u.odo || 0) + step) % 1000;
     u.moved = step > 0 ? 1 : 0;
     while (step > 0 && u.pi < u.path.length) {
@@ -1086,7 +1099,7 @@ function dispatch(p) {
       } else if (role === 'build' ? !bt.build : role === 'staff' ? !bt.staff : bt.crew !== role) continue;
       const d = dist2(u.x, u.y, x + 0.5, y + 0.5);
       // Only send a bot with enough charge (a truck, Fuel) for the trip there and back (unless there's nowhere to top up).
-      if ((u.bat ?? 100) < BATTERY.low + 0.5 * Math.sqrt(d) && (bt.truck ? P.canRefuel : P.canCharge)) continue;
+      if ((u.bat ?? 100) < BATTERY.low + 0.5 * Math.sqrt(d) && (bt.truck || bt.sea ? P.canRefuel : P.canCharge)) continue;
       if (d < bd) { bd = d; best = k; }
     }
     if (best < 0) return null;
@@ -1688,7 +1701,7 @@ function updateWorker(u, dt) {
   if (BOTS[u.type].rail && !u.task && !onTrack(u) && S.tick % 30 === u.id % 30) { deliverTrain(u); return; }
   // A new ship puts to sea at the nearest Port (and waits at the Foundry until there is one).
   if (BOTS[u.type].sea && !afloat(u)) { if (S.tick % 30 === u.id % 30) deliverShip(u); return; }
-  if (BOTS[u.type].ferry) { updateFerry(u, dt); return; }
+  if (BOTS[u.type].ferry) { updateFerry(u, dt); workerBattery(u, dt); return; }
   const t = u.task;
   if (!t) {
     if (u.carry) stashCarry(u);
@@ -3351,10 +3364,10 @@ function warbotAct(u, dt) {
     if (armed && u.scanT <= 0 && !u.retreat) {
       u.scanT = 0.3;
       // Guards (defending their garrison) only chase civilians inside their own land.
-      foe = nearestEnemyBot(u.owner, u.x, u.y, rally ? 3.5 : 2.8, true, defending);
+      foe = nearestEnemyBot(u.owner, u.x, u.y, rally ? 3.5 : 2.8, true, defending, true);
       if (!foe && defending) {
         const h = getE(t.home);
-        if (h) foe = nearestEnemyBot(u.owner, h.x + 0.5, h.y + 0.5, 6.5, true, true);
+        if (h) foe = nearestEnemyBot(u.owner, h.x + 0.5, h.y + 0.5, 6.5, true, true, true);
       }
       // A foe it gave up chasing is left alone, unless it comes close enough to shoot.
       if (foe && foe.id === u.ignoreFoe && S.time < u.ignoreUntil && dist2(foe.x, foe.y, u.x, u.y) > WARBOT_RANGE_BLOCKED * WARBOT_RANGE_BLOCKED) foe = null;
@@ -6111,7 +6124,8 @@ function setFerryLine(b, to) {
  * that can get to that Port and lands them on shore tile (i, j), anyone's shore: they hold the ground
  * there under a rally flag, and the Ferry goes back to its line. Returns '' or why not.
  */
-function orderLanding(owner, f, i, j, count) {
+/** Why Ferry f can't land warbots on shore tile (i, j), or '' if it can. */
+function landingBlocked(owner, f, i, j) {
   if (!f || f.dead || f.owner !== owner || !BOTS[f.type].ferry) return 'Pick one of your Ferries.';
   if (f.landing) return 'That Ferry is already on a landing.';
   const port = f.inside ? getE(f.inside) : null;
@@ -6122,11 +6136,19 @@ function orderLanding(owner, f, i, j, count) {
   const docks = portDocks(i, j), comps = shipComps(f), comp = seaNet().comp;
   if (!docks.length) return 'Pick a spot right at the water\'s edge.';
   if (!docks.some((d) => comps.includes(comp[d]))) return 'The Ferry can\'t sail there from this Port.';
+  return '';
+}
+
+function orderLanding(owner, f, i, j, count) {
+  const why = landingBlocked(owner, f, i, j);
+  if (why) return why;
+  const port = getE(f.inside);
   count = Math.min(count || FERRY_SEATS, FERRY_SEATS);
   let sent = 0;
+  const rear = !usesPosts(owner); // the rival may send the last warbot from a garrison far behind the lines, as for a march
   for (const posted of usesPosts(owner) ? [false, true] : [false]) {
-    for (const b of rallySources(owner, port.x, port.y, false, posted)) {
-      while (spareFrom(b, false, posted) > 0 && sent < count) {
+    for (const b of rallySources(owner, port.x, port.y, rear, posted)) {
+      while (spareFrom(b, rear, posted) > 0 && sent < count) {
         const u = takeArmed(b, posted);
         if (!u) break;
         u.inside = 0; u.path = null;

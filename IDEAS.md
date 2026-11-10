@@ -19,21 +19,12 @@ and biomes started here and are now in the game.)
 - **Fuel, after the Tanker update.** Built: Tankers, explosions with chain reactions, Crude pipelines, the Generator
   and trucks burning Fuel (see the README). Still open: Fuel pipelines (only Crude flows today), a Generator that
   explodes too, and the AI using oil more (it mostly lives on Bio Farms: about one colony in four builds a Refinery).
-- **Ships and ports (next).** Only on maps marked `naval` (Islands and Lakes), where shipping is the way to move
-  things between islands and round the lakes:
-  - **Port:** a new building on the shore, where ships load and unload. It works as storage, like a Rail Station,
-    so goods come and go by road.
-  - **Container ships:** bulk goods between ports, like Freight Trains at sea.
-  - **Ferries:** carry robots and trucks (Freight Trucks, Road Trains, Tankers) across to another port.
-  - **Tanker ships:** Crude and Fuel between ports (liquids still only travel by tanker).
-  - **Expensive bridges:** on this map, long bridges cost so much that ships are the better choice. Short hops
-    stay bridgeable. For example, the cost per tile could rise steeply past a few tiles of open water.
-  - **To think through:** how ships move (open water only, their own routes, docking time); whether raiders or
-    turrets can sink them, and whether a tanker ship explodes like a Tanker; what each ship and the Port cost; how
-    the AI plans ports and shipping; and how ferries pick who boards.
+- **Ships, after the first version** (Ports, Container Ships, Tanker Ships, Ferries and beach landings are in the game):
+  a gunboat or patrol boat to escort ships and shell the shore; the rival using Container Ships and ferry lines
+  (today it only builds a Port and makes beach landings).
 - **Air (after ships).** An **Airfield**, a **strike bomber** for precision strikes (a smaller, faster, cheaper hit
   than a Missile, on a building you pick, or on a moving target such as a Tanker on the road, which then explodes),
-  and an **anti-aircraft gun** to shoot it down. To think through: what
+  and an **anti-aircraft gun** to shoot it down. Aircraft burn Fuel like ships and trucks (refuelling at the Airfield). To think through: what
   the bomber costs and carries, how far it flies and how long it takes to rearm, how the AA gun trades with turrets
   and walls, and how the AI uses both.
 - **Graphics polish (after air).** Go over every building, robot, terrain tile, effect and icon against the design

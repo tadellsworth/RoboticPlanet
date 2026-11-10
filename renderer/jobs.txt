@@ -1737,3 +1737,35 @@ art/canyon/chasm-lip-e-polar.png	-	-	terrain/canyon.py out/canyon
 art/canyon/chasm-lip-n.png	-	-	terrain/canyon.py out/canyon
 art/canyon/chasm-lip-n-jungle.png	-	-	terrain/canyon.py out/canyon
 art/canyon/chasm-lip-n-polar.png	-	-	terrain/canyon.py out/canyon
+art/buildings/port@0.png	main	port::#38d4ff:port@0	compose.py
+art/bots/cargoship@0.png	main	ship::#38d4ff:cargoship@0:kind=cargo	compose_any.py --b1 5 --b2 15
+art/bots/tankship@0.png	main	ship::#38d4ff:tankship@0:kind=tank	compose_any.py --b1 5 --b2 15
+art/bots/ferry@0.png	main	ship::#38d4ff:ferry@0:kind=ferry	compose_any.py --b1 5 --b2 15
+art/buildings/port@1.png	main	port::#ff5a6e:port@1	compose.py
+art/bots/cargoship@1.png	main	ship::#ff5a6e:cargoship@1:kind=cargo	compose_any.py --b1 5 --b2 15
+art/bots/tankship@1.png	main	ship::#ff5a6e:tankship@1:kind=tank	compose_any.py --b1 5 --b2 15
+art/bots/ferry@1.png	main	ship::#ff5a6e:ferry@1:kind=ferry	compose_any.py --b1 5 --b2 15
+art/tod/morning/buildings/port@0.png	main	port::#38d4ff:port@0:tod=morning	compose.py
+art/tod/morning/bots/cargoship@0.png	main	ship::#38d4ff:cargoship@0:kind=cargo&tod=morning	compose_any.py --b1 5 --b2 15
+art/tod/morning/bots/tankship@0.png	main	ship::#38d4ff:tankship@0:kind=tank&tod=morning	compose_any.py --b1 5 --b2 15
+art/tod/morning/bots/ferry@0.png	main	ship::#38d4ff:ferry@0:kind=ferry&tod=morning	compose_any.py --b1 5 --b2 15
+art/tod/morning/buildings/port@1.png	main	port::#ff5a6e:port@1:tod=morning	compose.py
+art/tod/morning/bots/cargoship@1.png	main	ship::#ff5a6e:cargoship@1:kind=cargo&tod=morning	compose_any.py --b1 5 --b2 15
+art/tod/morning/bots/tankship@1.png	main	ship::#ff5a6e:tankship@1:kind=tank&tod=morning	compose_any.py --b1 5 --b2 15
+art/tod/morning/bots/ferry@1.png	main	ship::#ff5a6e:ferry@1:kind=ferry&tod=morning	compose_any.py --b1 5 --b2 15
+art/tod/evening/buildings/port@0.png	main	port::#38d4ff:port@0:tod=evening	compose.py
+art/tod/evening/bots/cargoship@0.png	main	ship::#38d4ff:cargoship@0:kind=cargo&tod=evening	compose_any.py --b1 5 --b2 15
+art/tod/evening/bots/tankship@0.png	main	ship::#38d4ff:tankship@0:kind=tank&tod=evening	compose_any.py --b1 5 --b2 15
+art/tod/evening/bots/ferry@0.png	main	ship::#38d4ff:ferry@0:kind=ferry&tod=evening	compose_any.py --b1 5 --b2 15
+art/tod/evening/buildings/port@1.png	main	port::#ff5a6e:port@1:tod=evening	compose.py
+art/tod/evening/bots/cargoship@1.png	main	ship::#ff5a6e:cargoship@1:kind=cargo&tod=evening	compose_any.py --b1 5 --b2 15
+art/tod/evening/bots/tankship@1.png	main	ship::#ff5a6e:tankship@1:kind=tank&tod=evening	compose_any.py --b1 5 --b2 15
+art/tod/evening/bots/ferry@1.png	main	ship::#ff5a6e:ferry@1:kind=ferry&tod=evening	compose_any.py --b1 5 --b2 15
+art/tod/night/buildings/port@0.png	main	port::#38d4ff:port@0:tod=night	compose.py
+art/tod/night/bots/cargoship@0.png	main	ship::#38d4ff:cargoship@0:kind=cargo&tod=night	compose_any.py --b1 5 --b2 15
+art/tod/night/bots/tankship@0.png	main	ship::#38d4ff:tankship@0:kind=tank&tod=night	compose_any.py --b1 5 --b2 15
+art/tod/night/bots/ferry@0.png	main	ship::#38d4ff:ferry@0:kind=ferry&tod=night	compose_any.py --b1 5 --b2 15
+art/tod/night/buildings/port@1.png	main	port::#ff5a6e:port@1:tod=night	compose.py
+art/tod/night/bots/cargoship@1.png	main	ship::#ff5a6e:cargoship@1:kind=cargo&tod=night	compose_any.py --b1 5 --b2 15
+art/tod/night/bots/tankship@1.png	main	ship::#ff5a6e:tankship@1:kind=tank&tod=night	compose_any.py --b1 5 --b2 15
+art/tod/night/bots/ferry@1.png	main	ship::#ff5a6e:ferry@1:kind=ferry&tod=night	compose_any.py --b1 5 --b2 15

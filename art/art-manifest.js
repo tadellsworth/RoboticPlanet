@@ -168,6 +168,11 @@ const ART_MANIFEST = {
   // Freight Truck: the same pattern, drawn bigger. The Tanker is its twin with a fuel tank on the chassis.
   ...driveSet('truck'),
   ...driveSet('tanker'),
+  // Naval maps: the Port (team versions, like the Rail Station) and the ships, top-down facing right
+  // (Container Ship, Tanker Ship, Ferry; 20 world units across the image, drawn about two tiles wide).
+  'port@0': B3D('buildings/port@0.webp', 1.6),
+  'port@1': B3D('buildings/port@1.webp', 1.6),
+  ...Object.fromEntries(['cargoship', 'tankship', 'ferry'].flatMap((k) => [0, 1].map((t) => [`${k}@${t}`, `bots/${k}@${t}.webp`]))),
   // Generator (one version for both teams, like the factories), and its working loop: fans and power bus.
   generator: B3D('buildings/generator.webp'),
   ...Object.fromEntries([0, 1, 2, 3, 4, 5, 6, 7].map((k) => [`generator-work-${k}`, B3D(`buildings/generator-work-${k}.webp`)])),

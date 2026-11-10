@@ -362,6 +362,9 @@ function aiThink(p) {
   if (nukeOn()) for (const silo of me) if (silo.type === 'nukesilo' && silo.armed && silo.built) aiFireNuke(p, silo);
   if (S.missiles.some((m) => m.nuke) && nukesThreatening(p).some((m) => !evacuating(p, m))) startEvac(p);
 
+  // 4c) Naval maps: a Port, a Ferry, and beach landings on the enemy's shore.
+  if (S.mode !== 'colony' && navalMap()) aiNaval(p, me, kinds, lvl, lander, sites < maxSites);
+
   // 4b) Raids on the enemy's supply lines, and answering the enemy's raids on ours.
   if (S.mode !== 'colony') aiCounterRaid(p);
   if (S.mode !== 'colony' && S.time >= lvl.grace) aiRaid(p, lvl);
@@ -432,6 +435,48 @@ function aiThink(p) {
     }
     if (spot) { placeSite(p, 'outpost', spot.x, spot.y); P.lastAttack = S.time - 30; }
   }
+}
+
+/**
+ * Naval maps: once the colony runs (a Foundry, a few minutes in), a Port on its shore; with a fair army,
+ * a Ferry for it; and every few minutes, with warbots to spare, a beach landing of up to six of them on
+ * the shore beside the enemy building the Ferry can reach that's least covered by turrets and garrisons.
+ */
+function aiNaval(p, me, kinds, lvl, lander, canBuild) {
+  const P = S.players[p];
+  if (S.time < 240 || !me.some((b) => b.type === 'foundry' && b.built)) return;
+  const ports = me.filter((b) => BDEFS[b.type].port);
+  if (!ports.length) {
+    if (canBuild && aiAffordable(p, 'port')) { const spot = aiFindSpot(p, 'port', lander); if (spot) placeSite(p, 'port', spot.x, spot.y); }
+    return;
+  }
+  const army = kinds.warbot || 0;
+  const foundry = me.find((b) => b.type === 'foundry' && b.built);
+  const ferry = S.bots.find((u) => !u.dead && u.owner === p && BOTS[u.type].ferry);
+  if (!ferry && foundry && army >= lvl.threshold && ports.some((b) => b.built)) { foundry.orders = foundry.orders || {}; if (!(foundry.orders.ferry > 0)) foundry.orders.ferry = 1; }
+  if (!ferry || ferry.landing || !ferry.inside || S.time < lvl.grace || S.time - (P.lastLanding || -999) < 150) return;
+  const port = getE(ferry.inside);
+  if (!port || !BDEFS[port.type].port) return;
+  const avail = rallyAvailable(p, port.x, port.y, true);
+  if (avail < 4 || army < lvl.threshold + 2) return;
+  // The beach: a shore tile the Ferry can reach beside an enemy building, scored by how close it is and
+  // how little guards it (turrets and garrisons within 6 tiles count against it).
+  const foes = S.buildings.filter((b) => !b.dead && b.owner >= 0 && b.owner !== p && !BDEFS[b.type].wild && S.players[b.owner] && !S.players[b.owner].out);
+  if (!foes.length) return;
+  const guard = (i, j) => foes.reduce((n, b) => n + (dist2(b.x, b.y, i, j) <= 36 ? (BDEFS[b.type].range ? 3 : 0) + (b.garrison ? b.garrison.length : 0) : 0), 0);
+  let best = null, bs = Infinity;
+  for (let j = 1; j < S.H - 1; j++) for (let i = 1; i < S.W - 1; i++) {
+    const t = j * S.W + i, o = S.owner[t];
+    if (o === p || S.terrain[t] !== T_GROUND || S.bAt[t]) continue;
+    let near = Infinity;
+    for (const b of foes) { const d = dist2(b.x, b.y, i, j); if (d < near) near = d; }
+    if (near > 49 || landingBlocked(p, ferry, i, j)) continue;
+    const sc = Math.sqrt(near) + guard(i, j) * 2;
+    if (sc < bs) { bs = sc; best = { i, j }; }
+  }
+  if (!best) { P.lastLanding = S.time - 100; return; }
+  if (!orderLanding(p, ferry, best.i, best.j, Math.min(FERRY_SEATS, avail))) P.lastLanding = S.time;
+  else P.lastLanding = S.time - 100;
 }
 
 /**

@@ -208,6 +208,30 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
   and `wouldBlock` / `canPlace` treat Outposts and Viaduct ends as walkable. A far end claims the no-one's ground
   within `VIA_CLAIM` (3) tiles, never anyone's land, so a new mesa can take an Outpost. A bot out on a deck keeps
   `u.deck` (the two ends) until it reaches one, so a new order or a chase starts from the deck, not the ground below.
+- **Ships and Ports** (naval maps only: Islands and Lakes, `naval` in `SHAPE_PRESETS`, `navalMap`; `NAVAL_ON` switches them
+  off everywhere): a **Port** (8 Cement, 3 Alloy; Build → Move) is storage on land beside water at least `SEA_MIN` (20)
+  tiles big (`portDocks`; `seaNet` labels the bodies of water). Ships come from the Bot Foundry and put to sea at the
+  nearest Port (`deliverShip`); they sail open water by `seaRoute` (8-way A*, never cutting a corner of land, under
+  bridges) and move like trains. They burn Fuel under way (`SHIP_BURN`, a tank of 100 like a truck's) and fill up from a
+  Port's Fuel when they tie up below `SHIP_REFUEL` (each Port with ships keeps `PORT_FUEL`, 4, which haulers bring;
+  running low, an idle ship sails to a Port with Fuel, `findFuel`; empty, it crawls at half speed); they're mended
+  while tied up (`SHIP_MEND`). **Container Ships** (40
+  goods) and **Tanker Ships** (40 Crude or Fuel) take the dispatch role `'sea'` (`shipAt`): a Port's supply orders are
+  filled by ship from another Port on its water, and a far Port sends its spare goods home to the Port nearest the
+  Command Base, `SHIP_MIN_LOAD` (8) or more. A sunk ship's load goes down with it; a Tanker Ship explodes like a Tanker.
+  A **Ferry** serves a ferry line (`b.ferryTo` on both Ports, `setFerryLine`): `ferryLink` makes the line a link in its
+  owner's routes (`findPath`, at `FERRY_COST` times the distance plus `FERRY_BOARD`) and joins the zones at its ends. A
+  bot whose route crosses waits in the Port (`u.ferryWait`, `ferryPassenger`), boards (six seats, `seatsFor`: a truck
+  two, a Road Train three), sails and carries on from the far Port (`updateFerry`, `unloadFerry`); it gives up after
+  `FERRY_GIVEUP` s. **Beach landings** (`orderLanding`, `doLanding`): a Ferry tied up at a Port takes up to six armed
+  warbots (free ones first, then stationed ones) and lands them on any shore tile it can reach, where they hold a rally
+  flag; `LANDING_GATHER` s after the order it sails with whoever is aboard. A Ferry sunk with bots aboard takes them
+  down. Turrets, Bunkers, Mortar Pits and Missiles hit ships; warbots don't chase them (`nearestEnemyBot` with `land`).
+  The rival builds a Port once its Foundry runs, a Ferry with a fair army, and every few minutes lands six warbots
+  beside whichever enemy building it can reach that's least guarded (`aiNaval`). The art is top-down like the trucks
+  (`renderer/b/ship.js`, `renderer/b/port.js`), drawn two tiles wide with a wake under way (`drawShip`); a ship tied
+  up is drawn at its Port's dock. On naval maps a bridge tile costs more the further it is from shore (`bridgeMul`:
+  `BRIDGE_NEAR` 2 tiles at the usual price, then `BRIDGE_STEP` 1.5 times more for each tile further).
 - **Freight rail** (`RAIL_*` in `js/defs.js`; the rail section of `js/world.js`; `layRail`, `deliverTrain` in
   `js/sim.js`): track is a tile layer (`S.rail`), laid instantly from the Paths **Rail** tool (`RAIL_COST` a tile, mostly
   Cement with a quarter of an Alloy, paid through the same credit as road Cement; `RAIL_BRIDGE_COST` over water,

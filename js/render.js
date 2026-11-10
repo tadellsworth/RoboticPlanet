@@ -3361,8 +3361,61 @@ function drawCritter(ctx, u, x, y, s) {
   }
 }
 
+/**
+ * A ship on the water (top-down art facing right, 20 world units across, drawn two tiles wide): a soft
+ * shadow on the water, and under way a wake (foam churned up at the stern, two spreading arms) and a
+ * bow wave. Tied up at a Port it's drawn at its dock (see the items in render).
+ */
+const SHIP_SHAPE = { cargoship: [0.43, 0.1], tankship: [0.43, 0.1], ferry: [0.31, 0.12] }; // half-length, half-beam (fractions of the art size)
+function drawShip(ctx, u, sx, sy, s) {
+  const size = s * 2, f = u.face || 0, [hl, hb] = SHIP_SHAPE[u.type] || [0.4, 0.1];
+  const L = size * hl, B = size * hb, v = u.docked ? 0 : Math.min(1, (u.vel || 0) / Math.max(0.01, BOTS[u.type].speed * 0.6));
+  ctx.save();
+  ctx.translate(sx, sy);
+  ctx.rotate(f);
+  if (v > 0.05) {
+    // The wake: two arms spreading back from the stern, and churned foam right behind it.
+    const run = s * (0.9 + 0.8 * v), spread = 0.36;
+    for (let k = 0; k < 3; k++) {
+      ctx.strokeStyle = `rgba(235,248,255,${(0.32 - k * 0.09) * v})`;
+      ctx.lineWidth = Math.max(1, s * (0.06 - k * 0.015));
+      ctx.beginPath();
+      ctx.moveTo(-L * 0.85, -B * 0.9); ctx.lineTo(-L - run * (1 + k * 0.3), -B - run * spread * (1 + k * 0.3));
+      ctx.moveTo(-L * 0.85, B * 0.9); ctx.lineTo(-L - run * (1 + k * 0.3), B + run * spread * (1 + k * 0.3));
+      ctx.stroke();
+    }
+    const g = ctx.createLinearGradient(-L, 0, -L - run * 0.8, 0);
+    g.addColorStop(0, `rgba(240,250,255,${0.45 * v})`); g.addColorStop(1, 'rgba(240,250,255,0)');
+    ctx.fillStyle = g;
+    ctx.beginPath(); ctx.moveTo(-L * 0.95, -B * 0.85); ctx.lineTo(-L - run * 0.8, -B * 0.4); ctx.lineTo(-L - run * 0.8, B * 0.4); ctx.lineTo(-L * 0.95, B * 0.85); ctx.closePath(); ctx.fill();
+    // The bow wave.
+    ctx.strokeStyle = `rgba(240,250,255,${0.4 * v})`; ctx.lineWidth = Math.max(1, s * 0.04);
+    ctx.beginPath(); ctx.moveTo(L * 1.02, 0); ctx.quadraticCurveTo(L * 0.8, -B * 1.4, L * 0.45, -B * 1.6); ctx.moveTo(L * 1.02, 0); ctx.quadraticCurveTo(L * 0.8, B * 1.4, L * 0.45, B * 1.6); ctx.stroke();
+  }
+  // Its shadow on the water.
+  ctx.fillStyle = 'rgba(4,14,24,0.3)';
+  ctx.beginPath(); ctx.ellipse(s * 0.05, s * 0.07, L * 1.02, B * 1.15, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.restore();
+  const art = artFor(u.type, u.owner);
+  if (art) drawArt(ctx, art, sx, sy, size, f);
+  else {
+    ctx.save(); ctx.translate(sx, sy); ctx.rotate(f);
+    ctx.fillStyle = '#3c4248';
+    ctx.beginPath(); ctx.moveTo(L, 0); ctx.lineTo(L * 0.7, -B); ctx.lineTo(-L, -B); ctx.lineTo(-L, B); ctx.lineTo(L * 0.7, B); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = PLAYER_COLORS[u.owner];
+    ctx.fillRect(-L * 0.95, -B * 0.6, L * 0.3, B * 1.2);
+    ctx.restore();
+  }
+  if (u.hp < u.maxHp) {
+    const w = s * 0.6;
+    ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fillRect(sx - w / 2, sy - s * 0.42, w, Math.max(2, s * 0.05));
+    ctx.fillStyle = '#ff5a5a'; ctx.fillRect(sx - w / 2, sy - s * 0.42, (w * Math.max(0, u.hp)) / u.maxHp, Math.max(2, s * 0.05));
+  }
+}
+
 function drawBot(ctx, u, sx, sy, s) {
   if (BOTS[u.type].wild) { drawCritter(ctx, u, sx, sy, s); return; }
+  if (BOTS[u.type].sea) { drawShip(ctx, u, sx, sy, s); return; }
   if (BOTS[u.type].rail) { drawFreightTrain(ctx, u, sx, sy, s); return; }
   if (BOTS[u.type].train) { drawRoadTrain(ctx, u, sx, sy, s); return; }
   if (BOTS[u.type].crawler) { drawCrawler(ctx, u.face || 0, sx, sy, s, u.owner, false, u.odo || 0, false, u); return; }
@@ -4006,6 +4059,7 @@ function render(dtReal) {
   // Selection rings drawn under buildings
   const sel = getE(R.selected);
   if (R.mode === 'aim') drawAim(ctx, ox, oy, z);
+  else if (R.mode === 'land') drawLandingPick(ctx, ox, oy, z);
   else if (sel) drawRanges(ctx, sel.type, sel.x, sel.y, ox, oy, z, sel.owner);
   if (R.ghost) drawRanges(ctx, R.ghost.type, R.ghost.x, R.ghost.y, ox, oy, z, 0);
 
@@ -4013,6 +4067,15 @@ function render(dtReal) {
   const items = [];
   for (const b of S.buildings) if (!b.dead && inView(b.x, b.y, 2)) items.push(b);
   for (const u of S.bots) if (!u.dead && !u.inside && !(u.ride >= 0) && inView(u.x, u.y, 1)) items.push(u);
+  // A ship tied up at a Port is drawn at its dock, along the shore (one a Port).
+  for (const b of S.buildings) {
+    if (b.dead || !BDEFS[b.type].port || !b.built || !inView(b.x, b.y, 3)) continue;
+    const sh = S.bots.find((u) => !u.dead && u.inside === b.id && BOTS[u.type].sea);
+    const dock = sh && portDocks(b.x, b.y)[0];
+    if (dock === undefined || dock === null || !sh) continue;
+    const dx = (dock % S.W) - b.x, dy = ((dock / S.W) | 0) - b.y;
+    { const face = Math.atan2(dx, -dy); items.push({ ...sh, ent: 'u', docked: true, x: b.x + 0.5 + dx * 1.05, y: b.y + 0.5 + dy * 1.05, face, rface: face, path: null, vel: 0 }); }
+  }
   if (ART['streetlamp-road']) for (const l of streetLamps(v0, v1)) items.push(l); // posts stand among buildings and bots
   items.sort((a, b) => (a.ent === 'b' ? a.y + 0.5 : a.y) - (b.ent === 'b' ? b.y + 0.5 : b.y));
   // At dusk and night, every finished building's lights spill onto the ground round its pad.
@@ -4051,7 +4114,7 @@ function render(dtReal) {
       }
     } else {
       // Bots swing round to a new heading instead of snapping to it (long trucks turn slower).
-      const turn = (BOTS[e.type].truck ? 5 : 11) * Math.min(0.1, R.dt || 0) * ((typeof UI !== 'undefined' && UI.speed) || 1);
+      const turn = (BOTS[e.type].sea ? 2.5 : BOTS[e.type].truck ? 5 : 11) * Math.min(0.1, R.dt || 0) * ((typeof UI !== 'undefined' && UI.speed) || 1);
       const want = e.face || 0;
       e.rface = e.rface === undefined ? want : e.rface + clamp(wrapAngle(want - e.rface), -turn, turn);
       // Off-road bots spread out a little; on roads they drive in lanes (keep right on two-way roads).
@@ -4707,6 +4770,27 @@ function drawBoosted(ctx, type, x, y, owner, ox, oy, z) {
     ctx.fill();
   }
   ctx.restore();
+}
+
+/** Picking a beach for a landing: the spot under the pointer, and the one picked (with an anchor-like marker). */
+function drawLandingPick(ctx, ox, oy, z) {
+  const f = getE(typeof UI !== 'undefined' ? UI.landFerry : 0);
+  if (!f) return;
+  for (const [spot, picked] of [[R.aimHover, false], [R.landAt, true]]) {
+    if (!spot) continue;
+    const ok = !landingBlocked(0, f, spot.i, spot.j), x = ox + spot.i * z, y = oy + spot.j * z;
+    ctx.strokeStyle = !ok ? 'rgba(255,107,107,0.9)' : picked ? '#9dffb8' : 'rgba(157,255,184,0.6)';
+    ctx.lineWidth = picked ? Math.max(2.5, z * 0.08) : 2;
+    ctx.setLineDash(picked ? [] : [z * 0.15, z * 0.1]);
+    ctx.strokeRect(x + 2, y + 2, z - 4, z - 4);
+    ctx.setLineDash([]);
+    if (picked && ok) {
+      ctx.fillStyle = 'rgba(157,255,184,0.18)'; ctx.fillRect(x + 2, y + 2, z - 4, z - 4);
+      ctx.fillStyle = '#9dffb8';
+      ctx.beginPath(); ctx.moveTo(x + z * 0.5, y + z * 0.2); ctx.lineTo(x + z * 0.68, y + z * 0.5); ctx.lineTo(x + z * 0.5, y + z * 0.42); ctx.lineTo(x + z * 0.32, y + z * 0.5); ctx.closePath(); ctx.fill();
+      ctx.fillRect(x + z * 0.47, y + z * 0.42, z * 0.06, z * 0.38);
+    }
+  }
 }
 
 /**
