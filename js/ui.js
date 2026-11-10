@@ -97,7 +97,7 @@ function initUI() {
   $('h-close').onclick = () => { $('screen-help').hidden = true; UI.paused = !$('screen-pause').hidden; };
 
   // Pause menu
-  $('btn-pause').onclick = () => { UI.paused = true; $('screen-pause').hidden = false; sfx('click'); };
+  $('btn-pause').onclick = () => { UI.paused = true; $('screen-pause').hidden = false; syncSaved(); sfx('click'); };
   $('p-resume').onclick = () => { UI.paused = false; $('screen-pause').hidden = true; };
   // The hidden rival boost: tap the clock three times quickly (or press ` on a keyboard).
   $('clock').addEventListener('click', () => {
@@ -174,9 +174,9 @@ function initUI() {
   window.addEventListener('resize', () => { if (UI.inGame) { layoutMinimap(); placeMinimap(); } });
 
   initKeyboard();
-  document.addEventListener('visibilitychange', () => { if (document.hidden && UI.inGame) saveGame(); });
-  window.addEventListener('pagehide', () => { if (UI.inGame) saveGame(); });
-  setInterval(() => { if (UI.inGame && !UI.paused) saveGame(); }, 20000);
+  document.addEventListener('visibilitychange', () => { if (document.hidden && UI.inGame) autoSave(); });
+  window.addEventListener('pagehide', () => { if (UI.inGame) autoSave(); });
+  setInterval(() => { if (UI.inGame && !UI.paused) autoSave(); }, AUTOSAVE_EVERY * 1000);
   syncMenu();
 }
 
@@ -238,6 +238,31 @@ function syncMenu() {
   if (UI.menu.unlimited) sum.push('Unlimited resources');
   $('m-more-sum').textContent = sum.length ? sum.join(' · ') : 'Planet, biome, terrain, resources, rival style, options';
   $('m-continue').hidden = !hasSave();
+}
+
+/* ------------------------------------------------------------------ autosave */
+
+/*
+ * The game saves itself every AUTOSAVE_EVERY seconds while you play (and whenever you switch away
+ * or close it), so a long game is never lost: Continue on the main menu picks it up. The pause menu
+ * says when it last saved; if a save fails (storage full or blocked), you're told once.
+ */
+const AUTOSAVE_EVERY = 20;
+function autoSave() {
+  if (!S || S.winner >= 0 || S.players[0].ai) return;
+  if (saveGame()) { UI.savedAt = Date.now(); UI.saveFailed = false; }
+  else if (!UI.saveFailed) {
+    UI.saveFailed = true;
+    toast('Couldn\'t save the game: this browser\'s storage is full or blocked. Keep this tab open to keep playing.', 'warn');
+  }
+}
+
+function syncSaved() {
+  const el = $('p-saved');
+  if (!el) return;
+  const s = UI.savedAt ? Math.round((Date.now() - UI.savedAt) / 1000) : -1;
+  el.textContent = UI.saveFailed ? 'Saving isn\'t working in this browser right now: keep this tab open.'
+    : `Your game saves itself every ${AUTOSAVE_EVERY} seconds` + (s >= 0 ? ` (last saved ${s < 5 ? 'just now' : s < 60 ? s + ' s ago' : Math.round(s / 60) + ' min ago'})` : '') + '. If it closes, tap Continue on the main menu.';
 }
 
 /* ------------------------------------------------------------------ rival boost (hidden) */

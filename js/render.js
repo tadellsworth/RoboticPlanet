@@ -2601,7 +2601,7 @@ function drawSite(ctx, type, cx, cy, s, owner, b) {
     ctx.save();
     ctx.beginPath(); ctx.rect(cx - s, cy + s * 0.45 - s * 0.9 * b.progress, s * 2, s * 2); ctx.clip();
     ctx.globalAlpha = 0.85;
-    drawBuilding(ctx, type, cx, cy, s, owner, { built: true, garrison: [], aim: -Math.PI / 2, x: b.x, y: b.y });
+    drawBuilding(ctx, type, cx, cy, s, owner, { built: true, garrison: [], stock: {}, aim: -Math.PI / 2, x: b.x, y: b.y });
     ctx.restore();
     ctx.globalAlpha = 1;
     // delivered materials
@@ -2893,7 +2893,7 @@ function drawRopeways(ctx, ox, oy, z) {
       ctx.beginPath(); ctx.moveTo(c.x0, c.y0); ctx.quadraticCurveTo(c.cx, c.cy, c.x1, c.y1); ctx.stroke();
       ctx.setLineDash([]);
       ctx.globalAlpha = 0.45;
-      drawBuilding(ctx, 'ropeway', bx, by, z, b.owner, { built: true, garrison: [] });
+      drawBuilding(ctx, 'ropeway', bx, by, z, b.owner, { built: true, garrison: [], stock: {} });
       ctx.globalAlpha = 1;
     }
   }
@@ -3633,13 +3633,13 @@ function render(dtReal) {
     ctx.beginPath(); ctx.moveTo(c.x0, c.y0); ctx.quadraticCurveTo(c.cx, c.cy, c.x1, c.y1); ctx.stroke();
     ctx.setLineDash([]);
     ctx.globalAlpha = 0.75;
-    drawBuilding(ctx, 'ropeway', bx, by, z, 0, { built: true, garrison: [] });
+    drawBuilding(ctx, 'ropeway', bx, by, z, 0, { built: true, garrison: [], stock: {} });
     ctx.globalAlpha = 1;
     ctx.strokeRect(ox + E.i * z + 1, oy + E.j * z + 1, z - 2, z - 2);
   }
   if (R.ghost) {
     ctx.globalAlpha = 0.75;
-    drawBuilding(ctx, R.ghost.type, ox + (R.ghost.x + 0.5) * z, oy + (R.ghost.y + 0.5) * z, z, 0, { built: true, garrison: [], aim: -Math.PI / 2 });
+    drawBuilding(ctx, R.ghost.type, ox + (R.ghost.x + 0.5) * z, oy + (R.ghost.y + 0.5) * z, z, 0, { built: true, garrison: [], stock: {}, aim: -Math.PI / 2 });
     ctx.globalAlpha = 1;
     ctx.strokeStyle = R.ghost.ok ? '#9dffb8' : '#ff6b6b';
     ctx.lineWidth = 2.5;
@@ -4626,7 +4626,7 @@ function drawEffects(ctx, ox, oy, z) {
         ctx.beginPath(); ctx.rect(x - z * 3, y - z * 4, z * 6, ground - (y - z * 4)); ctx.clip();
         ctx.globalAlpha = k > 0.75 ? Math.max(0, (1 - k) / 0.25) : 1;
         ctx.translate(x + shake, ground); ctx.rotate(lean); ctx.translate(-x, -ground + ease * z * 1.1 * s);
-        drawBuilding(ctx, f.btype, x, y, z, f.owner, { built: true, garrison: [], aim: f.aim !== undefined ? f.aim : -Math.PI / 4 });
+        drawBuilding(ctx, f.btype, x, y, z, f.owner, { built: true, garrison: [], stock: {}, aim: f.aim !== undefined ? f.aim : -Math.PI / 4 });
         ctx.restore();
         break;
       }
@@ -4774,7 +4774,7 @@ function buildingIcon(type, size, owner) {
     return c.toDataURL();
   }
   drawBuilding(ctx, type, size / 2, size / 2 + (type === 'lander' ? 0 : size * 0.02), type === 'lander' ? size * 0.55 : size * 0.86, owner || 0,
-    { built: true, garrison: [], aim: -Math.PI / 4 });
+    { built: true, garrison: [], stock: {}, aim: -Math.PI / 4 });
   return c.toDataURL();
 }
 

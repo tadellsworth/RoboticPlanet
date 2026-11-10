@@ -28,6 +28,21 @@ function demoCamera(dt) {
 }
 
 function frame(now) {
+  // The next frame is booked first: a bug in one frame (drawing, say) can never stop the game.
+  requestAnimationFrame(frame);
+  try { step(now); } catch (e) { frameError(e); }
+}
+
+/** Report a frame's error once (it may repeat every frame), and carry on. */
+const _frameErrs = new Set();
+function frameError(e) {
+  const k = String(e && e.message);
+  if (_frameErrs.has(k)) return;
+  _frameErrs.add(k);
+  console.error('Terrafall: a frame failed and the game carried on.', e);
+}
+
+function step(now) {
   const dt = Math.min(0.1, (now - _lastFrame) / 1000);
   if (UI.inGame) watchFrameRate(now - _lastFrame);
   _lastFrame = now;
@@ -45,7 +60,6 @@ function frame(now) {
   render(dt);
   uiTick(dt);
   audioTick(dt);
-  requestAnimationFrame(frame);
 }
 
 function boot() {

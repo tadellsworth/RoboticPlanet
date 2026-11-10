@@ -310,6 +310,12 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
 - **Army orders:** tap **Army**, then a rival building to attack it with warbots or a missile, or open
   ground to send warbots there to hold the area under a rally flag. Tap the flag to call them back, or press
   **Recall all** in the Army banner (**C** on a computer) to end every attack and rally flag at once.
+- **Saving:** the game saves itself every `AUTOSAVE_EVERY` (20) seconds while you play, and when you switch away or
+  close it (`autoSave`); Continue on the main menu picks it up. The pause menu says when it last saved, and a failed
+  save (storage full or blocked) is reported once. A long game's save is about 250–300 KB.
+- **A failed frame never stops the game:** `frame` books the next frame before running this one and catches its errors
+  (reported once each to the console). A Missile Silo's placement preview used to throw (`siloReady` on a stand-in
+  with no stock), which stopped the drawing loop: the game froze when you went to place one.
 - **Gates on track:** a Gate can stand across railway track (`canPlace`; a wall line crossing track puts one there,
   `wallKind`), and track can be laid through your own Gate (`railBlocked`). Your trains run straight through it (rail
   routes ignore it; it's `passTile` for its owner); enemy robots can't walk through.

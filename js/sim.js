@@ -3516,7 +3516,7 @@ function updateSilo(b, def) {
   b.status = !w ? 'Needs Missiles from a Missile Factory' : b.reload > 0 ? `Reloading (${Math.ceil(b.reload)}s)` : `Ready to fire (${w} Missile${w > 1 ? 's' : ''})`;
 }
 
-function siloReady(b) { return b.built && !b.dead && (b.stock.warhead || 0) > 0 && !(b.reload > 0); }
+function siloReady(b) { return !!(b.built && !b.dead && b.stock && (b.stock.warhead || 0) > 0 && !(b.reload > 0)); } // (a preview has no stock: see drawBuilding)
 
 /** The player's silos that can reach `target`, ready ones first, then nearest. */
 function silosInRange(owner, target) {
