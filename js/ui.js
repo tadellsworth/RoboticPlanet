@@ -2577,6 +2577,7 @@ function updateHUD() {
   obj.innerHTML = UI.objCollapsed && !S.mission ? 'Goal ▸' : objectiveText();
   obj.classList.toggle('small', UI.objCollapsed);
   updateEventCard();
+  updateNukeCard();
   if (UI.sheetKind === 'build') {
     // keep build-menu affordability current without rebuilding the buttons
     for (const el of $('sheet-body').querySelectorAll('.bcard[data-t]')) {
@@ -2622,6 +2623,41 @@ function updateEventCard() {
   }
   const left = Math.max(0, Math.ceil((soon ? E.t0 : E.t1) - S.time));
   el.querySelector('.ev-time').textContent = soon ? `in ${left}s` : `${left}s`;
+  el.hidden = false;
+}
+
+/**
+ * A nuclear missile heading for something of yours: where and when it lands, and an Evacuate button
+ * that sends every robot in the blast ring out of it (garrisons too) until it has gone off.
+ */
+function updateNukeCard() {
+  const el = $('nuke-card');
+  const threats = S.missiles && S.missiles.some((m) => m.nuke) ? nukesThreatening(0) : [];
+  if (!threats.length) { el.hidden = true; el.dataset.key = ''; return; }
+  const m = threats.reduce((a, c) => (c.dur - c.t < a.dur - a.t ? c : a));
+  const done = threats.every((n) => evacuating(0, n)), mine = m.owner === 0;
+  const inRing = S.bots.filter((u) => !u.dead && u.owner === 0 && !BOTS[u.type].rail && !(u.task && u.task.type === 'flee') &&
+    dist2(u.inside ? getE(u.inside).x + 0.5 : u.x, u.inside ? getE(u.inside).y + 0.5 : u.y, m.x1, m.y1) <= (NUKE.radius + EVAC_MARGIN) ** 2).length;
+  const fleeing = S.bots.filter((u) => !u.dead && u.owner === 0 && u.task && u.task.type === 'flee').length;
+  const key = `${done}|${mine}|${threats.length}`;
+  if (el.dataset.key !== key) {
+    el.dataset.key = key;
+    el.classList.toggle('safe', done);
+    el.innerHTML = `<div class="ev-head"><span class="ev-dot" style="background:#ff5a5a;color:#ff5a5a"></span><b>${mine ? 'Your nuclear missile' : 'Nuclear missile incoming'}</b><span class="ev-time"></span></div>` +
+      `<div class="ev-deal"><span class="ev-desc nk-text"></span>${done ? '' : '<button class="btn small primary" id="nk-evac">Evacuate</button>'}</div>`;
+    const btn = $('nk-evac');
+    if (btn) btn.onclick = () => {
+      const n = startEvac(0);
+      sfx(n ? 'click' : 'error');
+      toast(n ? `Evacuating: ${n} robot${n === 1 ? '' : 's'} leaving the blast ring.` : 'The blast ring is clear: robots will keep out until it lands.', 'warn', Math.floor(m.x1), Math.floor(m.y1));
+      updateNukeCard();
+    };
+    el.onclick = (e) => { if (e.target.id !== 'nk-evac') centerOn(m.x1, m.y1); };
+  }
+  el.querySelector('.ev-time').textContent = `${Math.max(0, Math.ceil(m.dur - m.t))}s`;
+  el.querySelector('.nk-text').textContent = done
+    ? (fleeing ? `Evacuating: ${fleeing} robot${fleeing === 1 ? '' : 's'} clearing the red ring.` : 'The red ring is clear. Robots keep out until it lands.')
+    : `${inRing} of your robots ${inRing === 1 ? 'is' : 'are'} in the red ring (garrisons too).`;
   el.hidden = false;
 }
 

@@ -375,6 +375,7 @@ const NUKE_GOODS = ['uranium', 'fissile'];
  */
 const URANIUM_DEPOSITS = 6;
 const NUKE = { parts: { fissile: 6, alloy: 4, chip: 2 }, assemble: 60, range: 40, flight: 30, radius: 6, scorch: 240 };
+const EVAC_MARGIN = 1.5; // an evacuation clears this much beyond the blast radius
 
 const PLAYER_COLORS = ['#38d4ff', '#ff5a6e', '#5be06c'];
 /**
@@ -459,7 +460,7 @@ const BDEFS = {
     work: 8, armor: 10, buildTime: 14,
   },
   outpost: {
-    name: 'Outpost', desc: 'Expands your territory and garrisons warbots for attack and defence.',
+    name: 'Outpost', desc: 'Expands your territory and garrisons warbots for attack and defence. A road can run through it, for your own bots only: enemies have to break in.',
     cost: { cement: 4, fiber: 2 }, mil: true, terr: 7, garrison: 10, armor: 16, buildTime: 12, ammoStock: 6,
   },
   turret: {

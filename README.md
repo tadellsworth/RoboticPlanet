@@ -107,7 +107,8 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
   Build. Building closes Paths, straight back to the map; leaving Paths any other way drops an unbuilt sketch.
   Arrows and Junctions still act at once. **Ramps** are planned in Paths too (tap the foot or top of a one-level
   cliff) and count as road once built.
-- **Roads through Outposts:** an Outpost can stand on a road, and its tile joins the road network for every bot.
+- **Roads through Outposts:** an Outpost can stand on a road, and its tile joins the road network. Like a Gate it only
+  lets its owner's bots through (`passTile`); an armed enemy warbot breaks in (`breachable`), which captures it.
   Bots follow roads round corners (no diagonal shortcuts on or off a road).
 - **Your robots:** tap the robot counter in the top bar for every robot by type and what they're doing.
 - **Roads** cost Cement (1 Cement paves 5 tiles), paid when you build the plan. Planned tiles show dashed
@@ -343,7 +344,8 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
 - **Nuclear race** (new-game option): six small Uranium deposits glow green across the map. An Ore Mine within 4 tiles
   digs Uranium before ore; a Nuclear Reactor enriches it (2 → 1) and a Nuclear Silo assembles a missile from 6 Enriched
   Uranium, 4 Alloy and 2 Chips (60 s), so 12 Uranium a bomb. It flies 30 s (the target is warned and sees the blast
-  ring) and wipes out every building, robot and road within 6 tiles, yours included; a Command Base survives with no
+  ring; the **Evacuate** button on the incoming-nuke card, or the AI by itself, sends every robot in the ring plus
+  `EVAC_MARGIN` out of it and holds jobs there until the blast: `startEvac`, `evacSweep`, `doFlee`) and wipes out every building, robot and road within 6 tiles, yours included; a Command Base survives with no
   garrison and 1 armor. The ground stays scorched for 4 minutes: nothing can be built there. The AI races too.
   Tunables: `NUKE` and `URANIUM_DEPOSITS` in `js/defs.js`.
 - **Pace:** the whole game runs at 85% speed (`GAME_PACE` in `js/defs.js`) for a calmer feel; the speed button

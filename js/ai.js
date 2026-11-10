@@ -320,8 +320,10 @@ function aiThink(p) {
     }
   }
 
-  // 4a) Nuclear race: fire a ready nuclear missile where it destroys the most.
+  // 4a) Nuclear race: fire a ready nuclear missile where it destroys the most, and clear out of the
+  //     blast ring of any heading this way.
   if (nukeOn()) for (const silo of me) if (silo.type === 'nukesilo' && silo.armed && silo.built) aiFireNuke(p, silo);
+  if (S.missiles.some((m) => m.nuke) && nukesThreatening(p).some((m) => !evacuating(p, m))) startEvac(p);
 
   // 4b) Raids on the enemy's supply lines, and answering the enemy's raids on ours.
   if (S.mode !== 'colony') aiCounterRaid(p);

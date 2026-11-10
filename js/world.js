@@ -946,16 +946,17 @@ function canStep(a, b) {
 
 /**
  * Outposts stand astride roads: their tile joins the road network (a road can run straight through
- * one) and any bot can drive through it. Gates do too, but only for their owner's bots: pass `who`
- * (a player) to ask whether that player's bots may cross; leave it out to ask about the road network.
+ * one), but like Gates only their owner's bots go through: an enemy has to break in (capture it).
+ * Pass `who` (a player) to ask whether that player's bots may cross; leave it out to ask about the
+ * road network. A Viaduct's abutment is open to everyone.
  */
 function passTile(t, who) {
   const id = S.bAt[t];
   if (!id) return false;
   const b = getE(id);
   if (!b) return false;
-  if (b.type === 'outpost' || b.type === 'viaduct') return true;
-  return (b.type === 'gate' || b.type === 'ropeway') && (who === undefined || who === b.owner);
+  if (b.type === 'viaduct') return true;
+  return (b.type === 'outpost' || b.type === 'gate' || b.type === 'ropeway') && (who === undefined || who === b.owner);
 }
 
 /** The tile at the far end of the Viaduct whose abutment stands on tile t (both built), or -1. */
@@ -989,10 +990,13 @@ function chokePass() {
   return { p0: Math.floor((S.W - 1) / 2) - 1, p1: Math.ceil((S.W - 1) / 2) + 1, top: half - CHOKE_BAND, bot: half + CHOKE_BAND - 1 };
 }
 
-/** Is the building on tile t an enemy Wall or Gate that player `who`'s warbots could break through? */
+/**
+ * Is the building on tile t an enemy Wall, Gate or Outpost that player `who`'s warbots could break
+ * through? (Shooting an Outpost down to nothing captures it, and then it lets them through.)
+ */
 function breachable(t, who) {
   const b = S.bAt[t] ? getE(S.bAt[t]) : null;
-  return !!b && b.owner !== who && !!BDEFS[b.type].barrier;
+  return !!b && b.owner !== who && (!!BDEFS[b.type].barrier || (b.type === 'outpost' && b.built));
 }
 
 /** An Outpost went up or came down: the road network changes, and the roads beside it redraw. */
@@ -1923,7 +1927,8 @@ function killBot(bot, quiet) {
 function releaseBotsFrom(b, killInside) {
   for (const u of S.bots) {
     if (u.dead) continue;
-    if (taskRefs(u.task, b.id)) cancelTask(u);
+    // Its owner's bots drop jobs there; attackers keep their orders (an attack moves on, a march goes on).
+    if (u.owner === b.owner && taskRefs(u.task, b.id)) cancelTask(u);
     if (u.inside === b.id) {
       if (killInside && (u.type === 'warbot' || b.staff === u.id)) { killBot(u); continue; }
       exitBuilding(u);

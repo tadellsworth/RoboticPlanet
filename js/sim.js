@@ -12,6 +12,7 @@ function simStep(dt) {
   if (S.tick % 30 === 0) growStalks(30 * dt);
   if (S.tick % 30 === 7) settlePlans();
   if (S.tick % 30 === 15) for (let p = 0; p < S.players.length; p++) landerSalvage(p, 30 * dt);
+  if (S.tick % 30 === 22) updateEvac();
   // Each player's bots are given work every 8 ticks, the players spread over those ticks.
   for (let p = 0, n = S.players.length; p < n; p++) if (S.tick % 8 === Math.floor((p * 8) / n) && !S.players[p].out && !(S.wildlife && p === WILD_OWNER)) dispatch(p);
   for (let k = 0; k < S.buildings.length; k++) {
@@ -78,7 +79,7 @@ function storeAccepts(b) { return b.built && !b.dead && BDEFS[b.type].store; }
 function nearestStoreTo(owner, x, y) {
   let best = null, bd = Infinity;
   for (const b of S.buildings) {
-    if (b.dead || b.owner !== owner || !storeAccepts(b)) continue;
+    if (b.dead || b.owner !== owner || !storeAccepts(b) || evacuated(b)) continue;
     const d = dist2(b.x + 0.5, b.y + 0.5, x, y);
     if (d < bd) { bd = d; best = b; }
   }
@@ -297,7 +298,7 @@ function findCharger(u) {
   for (const b of S.buildings) {
     if (b.dead || b.owner !== u.owner || !b.built) continue;
     const ch = BDEFS[b.type].charger;
-    if (!ch || S.zone[tIdx(b.x, b.y)] !== zone || chargerDry(b)) continue;
+    if (!ch || S.zone[tIdx(b.x, b.y)] !== zone || chargerDry(b) || evacuated(b)) continue;
     if (roadBound(u) && !botLinked(u, b)) continue;
     const s = dist(b.x + 0.5, b.y + 0.5, u.x, u.y) + Math.max(0, (b.charging || 0) - ch.slots) * 4;
     if (s < bs) { bs = s; best = b; }
@@ -724,7 +725,8 @@ function moveAlong(u, dt) {
   } else {
     if (S.ramp[here]) speed *= SLOPE_SPEED; else if (S.res[here]) speed *= 0.75;
     if (!S.bAt[here]) {
-      if (bt.roadOnly) speed *= HAULER_STRANDED; // a hauler caught off the road crawls back to it
+      const fleeing = u.task && u.task.type === 'flee'; // running from a nuclear blast: no time to keep to the roads
+      if (bt.roadOnly) speed *= fleeing ? OFFROAD_SLOW : HAULER_STRANDED; // a hauler caught off the road crawls back to it
       else if (bt.offroad && !harvestTrip(u)) speed *= OFFROAD_SLOW;
     }
   }
@@ -774,7 +776,7 @@ function moveAlong(u, dt) {
     const t = u.path[u.pi];
     const tx = (t % S.W) + 0.5, ty = ((t / S.W) | 0) + 0.5;
     if (blockedStep(u, t) && tIdx(Math.floor(u.x), Math.floor(u.y)) !== t) {
-      // Something stands in the way. An armed warbot shoots through an enemy Wall or Gate; anyone
+      // Something stands in the way. An armed warbot shoots through an enemy Wall, Gate or Outpost; anyone
       // else plans a new route (a Wall went up across this one), waits if there is none, and gives
       // up the job after a while so it can be given another.
       u.vel = 0;
@@ -885,7 +887,7 @@ function moveDirect(u, x, y, dt) {
 
 function dispatch(p) {
   const blds = [];
-  for (const b of S.buildings) if (b.owner === p && !b.dead) blds.push(b);
+  for (const b of S.buildings) if (b.owner === p && !b.dead && !evacuated(b)) blds.push(b); // nothing inside a blast ring being evacuated
   blds.sort((a, c) => prioRank(a) - prioRank(c) || a.born - c.born);
 
   // Keep a worker or two free to build. If raids or new buildings took them all, pull one off the
@@ -1148,7 +1150,7 @@ function findRepair(u) {
   let best = null, bs = Infinity;
   const zone = S.zone[tIdx(Math.floor(u.x), Math.floor(u.y))];
   for (const b of S.buildings) {
-    if (b.dead || b.owner !== u.owner || !b.built || !BDEFS[b.type].repair || repairDry(b)) continue;
+    if (b.dead || b.owner !== u.owner || !b.built || !BDEFS[b.type].repair || repairDry(b) || evacuated(b)) continue;
     if (S.zone[tIdx(b.x, b.y)] !== zone) continue;
     if (u.type !== 'warbot' && roadBound(u) && !botLinked(u, b)) continue;
     let inside = 0;
@@ -1446,6 +1448,7 @@ function assignStaff(u, b) {
 function updateWorker(u, dt) {
   u.busy = 0;
   u.moved = 0;
+  if (u.task && u.task.type === 'flee') { doFlee(u, dt); return; }
   // A new Freight Train rolls out at the nearest Rail Station (and waits at the Foundry until there is one).
   if (BOTS[u.type].rail && !u.task && !onTrack(u) && S.tick % 30 === u.id % 30) { deliverTrain(u); return; }
   const t = u.task;
@@ -1505,7 +1508,7 @@ function roadBound(u) { return BOTS[u.type].roadOnly && !haulerStranded(u); }
 function nearestReachableStore(u) {
   let best = null, bd = Infinity;
   for (const b of S.buildings) {
-    if (b.dead || b.owner !== u.owner || !storeAccepts(b)) continue;
+    if (b.dead || b.owner !== u.owner || !storeAccepts(b) || evacuated(b)) continue;
     if (roadBound(u) && !botLinked(u, b)) continue;
     const d = dist2(b.x + 0.5, b.y + 0.5, u.x, u.y);
     if (d < bd) { bd = d; best = b; }
@@ -1531,7 +1534,7 @@ function parkingFor(u) {
   const parked = trucksParked(u.owner, u.id);
   let near = null, nd = Infinity, empty = null, ed = Infinity;
   for (const b of S.buildings) {
-    if (b.dead || b.owner !== u.owner || !storeAccepts(b) || !botLinked(u, b)) continue;
+    if (b.dead || b.owner !== u.owner || !storeAccepts(b) || !botLinked(u, b) || evacuated(b)) continue;
     const d = dist2(b.x + 0.5, b.y + 0.5, u.x, u.y);
     if (d < nd) { nd = d; near = b; }
     if (!parked.get(b.id) && d < ed) { ed = d; empty = b; }
@@ -2256,7 +2259,7 @@ function goGarrison(u) {
   const enemyL = getE(S.players[rivalOf(u.owner)].lander);
   let best = null, bs = Infinity;
   for (const b of S.buildings) {
-    if (b.dead || b.owner !== u.owner || !b.built || !BDEFS[b.type].mil) continue;
+    if (b.dead || b.owner !== u.owner || !b.built || !BDEFS[b.type].mil || evacuated(b)) continue;
     if (u.avoidB === b.id && S.time < u.avoidUntil) continue;
     const cap = BDEFS[b.type].garrison;
     const n = b.garrison.length + b.garInc;
@@ -2512,6 +2515,7 @@ function rivalOf(p) {
 
 function updateWarbot(u, dt) {
   if (u.bat === undefined) u.bat = 100;
+  if (u.task && u.task.type === 'flee') { doFlee(u, dt); return; }
   if (u.inside) {
     const home = getE(u.inside);
     if (home && BDEFS[home.type].repair) {
@@ -3287,8 +3291,122 @@ function fireNukeAt(silo, i, j) {
   if (silo.owner !== 0 && !S.players[0].absent) sfx('siren');
   postMsg(silo.owner, `Nuclear missile launched: impact in ${NUKE.flight} seconds.`, i, j, 'good');
   // Every launch by a rival is detected (in a free-for-all too), wherever it's aimed.
-  if (silo.owner !== 0) postMsg(0, `NUCLEAR LAUNCH DETECTED! Impact in ${NUKE.flight} seconds: get your robots out of the red ring!`, i, j, 'bad');
+  if (silo.owner !== 0) {
+    const atUs = nukesThreatening(0).includes(S.missiles[S.missiles.length - 1]);
+    postMsg(0, `NUCLEAR LAUNCH DETECTED! Impact in ${NUKE.flight} seconds` + (atUs ? ': press Evacuate to get your robots out of the red ring!' : ', aimed at a rival.'), i, j, 'bad');
+  }
   return true;
+}
+
+/*
+ * Evacuation: while a nuclear missile is in flight, a player can clear its blast ring (the AI does so
+ * by itself). S.evac[p] lists that player's rings ({x, y, r, until}); every robot of theirs inside one,
+ * in the open or inside a building there, runs to the nearest safe ground outside it and waits until
+ * the blast, and no job is handed out at a building inside it meanwhile.
+ */
+function evacZones(p) {
+  const z = S.evac && S.evac[p];
+  if (!z || !z.length) return null;
+  const live = z.filter((e) => e.until > S.time);
+  if (live.length !== z.length) S.evac[p] = live;
+  return live.length ? live : null;
+}
+
+/** Is (x, y) inside one of player p's rings being evacuated? */
+function inEvac(p, x, y) {
+  const z = evacZones(p);
+  return !!z && z.some((e) => dist2(x, y, e.x, e.y) <= e.r * e.r);
+}
+
+/** Is building b inside a blast ring its owner is evacuating? */
+function evacuated(b) { return !!(S.evac && S.evac[b.owner] && S.evac[b.owner].length) && inEvac(b.owner, b.x + 0.5, b.y + 0.5); }
+
+/** Nuclear missiles in flight whose blast would catch something of player p's. */
+function nukesThreatening(p) {
+  const out = [];
+  const R = NUKE.radius + EVAC_MARGIN, R2 = R * R;
+  for (const m of S.missiles) {
+    if (!m.nuke || m.t >= m.dur) continue;
+    const hit = S.buildings.some((b) => !b.dead && b.owner === p && dist2(b.x + 0.5, b.y + 0.5, m.x1, m.y1) <= R2) ||
+      S.bots.some((u) => !u.dead && u.owner === p && dist2(u.x, u.y, m.x1, m.y1) <= R2);
+    if (hit) out.push(m);
+  }
+  return out;
+}
+
+/** Is player p already clearing the ring of missile m? */
+function evacuating(p, m) { const z = evacZones(p); return !!z && z.some((e) => e.x === m.x1 && e.y === m.y1); }
+
+/** Player p clears the blast rings of every nuclear missile heading for its things. Returns how many robots left. */
+function startEvac(p) {
+  S.evac = S.evac || {};
+  for (const m of nukesThreatening(p)) {
+    if (evacuating(p, m)) continue;
+    (S.evac[p] = S.evac[p] || []).push({ x: m.x1, y: m.y1, r: NUKE.radius + EVAC_MARGIN, until: S.time + (m.dur - m.t) + 1 });
+  }
+  return evacSweep(p);
+}
+
+/**
+ * Send every robot of player p inside a ring out of it, and call off jobs at buildings inside one.
+ * Run when the evacuation starts and then every second, for bots that wander in.
+ */
+function evacSweep(p) {
+  if (!evacZones(p)) return 0;
+  let n = 0;
+  for (const u of S.bots) {
+    if (u.dead || u.owner !== p || BOTS[u.type].rail || BOTS[u.type].crawler || (u.task && u.task.type === 'flee')) continue;
+    const home = u.inside ? getE(u.inside) : null;
+    const x = home ? home.x + 0.5 : u.x, y = home ? home.y + 0.5 : u.y;
+    if (inEvac(p, x, y)) { fleeFrom(u); n++; continue; }
+    // Outside, but on its way to a job in there: drop the job.
+    const t = u.task;
+    if (t && t.type !== 'attack' && t.type !== 'hold') {
+      for (const id of [t.src, t.dst, t.site, t.bld, t.home]) {
+        const b = id ? getE(id) : null;
+        if (b && b.owner === p && evacuated(b)) { cancelTask(u); u.task = null; u.path = null; break; }
+      }
+    }
+  }
+  return n;
+}
+
+/** Robot u runs for the nearest safe ground outside the rings (out of whatever building it's in). */
+function fleeFrom(u) {
+  const home = u.inside ? getE(u.inside) : null;
+  if (home) { exitBuilding(u); u.x = home.x + 0.5; u.y = home.y + 0.5; }
+  cancelTask(u);
+  u.fight = 0; u.ride = -1; u.deck = null;
+  const spot = safeSpot(u);
+  u.task = { type: 'flee' };
+  u.path = spot >= 0 ? findPath(Math.floor(u.x), Math.floor(u.y), spot % S.W, (spot / S.W) | 0, undefined, { who: u.owner }) : null;
+  u.pi = 0; u.goal = spot;
+}
+
+/** The nearest tile u can walk to that lies outside its owner's evacuation rings, or -1. */
+function safeSpot(u) {
+  const W = S.W, N = W * S.H, start = tIdx(Math.floor(u.x), Math.floor(u.y));
+  const seen = new Uint8Array(N), q = [start];
+  seen[start] = 1;
+  for (let h = 0; h < q.length && h < 6000; h++) {
+    const t = q[h], i = t % W, j = (t / W) | 0;
+    if (t !== start && !inEvac(u.owner, i + 0.5, j + 0.5) && !S.bAt[t] && !scorched(t)) return t;
+    for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+      if (!inMap(i + di, j + dj)) continue;
+      const v = tIdx(i + di, j + dj);
+      if (seen[v] || !walkable(v) || !canStep(t, v) || (S.bAt[v] && !passTile(v, u.owner))) continue;
+      seen[v] = 1; q.push(v);
+    }
+  }
+  return -1;
+}
+
+/** A robot evacuating: out to its safe spot, then it waits there until the blast. */
+function doFlee(u, dt) {
+  u.busy = 0;
+  if (!evacZones(u.owner)) { u.task = null; u.path = null; return; } // all clear: back to work
+  if (u.path) { if (moveAlong(u, dt)) { u.path = null; u.vel = 0; } }
+  else { u.vel = 0; u.moved = 0; }
 }
 
 /**
@@ -3296,6 +3414,11 @@ function fireNukeAt(silo, i, j) {
  * armor and an empty garrison, ready to capture), every robot dies, roads are wrecked, groves and
  * crops burn, and the ground stays scorched for NUKE.scorch seconds.
  */
+function updateEvac() {
+  if (!S.evac) return;
+  for (const p in S.evac) if (evacZones(+p)) evacSweep(+p);
+}
+
 function nukeImpact(m) {
   const cx = m.x1, cy = m.y1, R2 = NUKE.radius * NUKE.radius;
   addFx('nuke', cx, cy, { life: 2, r: NUKE.radius });
