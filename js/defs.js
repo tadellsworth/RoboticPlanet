@@ -350,7 +350,7 @@ const GOOD = {
   crude:   { name: 'Crude',   color: '#b08a6e', desc: 'Crude oil from an Oil Pump. A Refinery turns it into Fuel.' },
   fuel:    { name: 'Fuel',    color: '#ff5c8a', desc: 'Energy for Charging Stations. Grown at a Bio Farm or refined from Crude.' },
   cement:  { name: 'Cement',  color: '#a9b4c2', desc: 'The main building material, made from Stone at a Cement Works (2 per Stone). Builds nearly everything and paves roads: 1 Cement for 5 tiles.' },
-  asphalt: { name: 'Asphalt', color: '#6b7280', desc: 'Made from Crude and Stone. A Roadworks upgrades roads with it to asphalt, the fastest surface.' },
+  asphalt: { name: 'Asphalt', color: '#6b7280', desc: 'Made from Crude and Cement. A Roadworks upgrades roads with it to asphalt, the fastest surface.' },
   ammo:    { name: 'Ammo',    color: '#e8c39e', desc: 'Made at an Ammo Plant. Warbots reload it in your Command Base and Outposts.' },
   warhead: { name: 'Missile', color: '#ffcf4a', desc: 'Built at a Missile Factory from Alloy, Chips and Fuel. Workers load them into Missile Silos, which fire them at rival buildings.' },
   uranium: { name: 'Uranium', color: '#9dff3a', desc: 'Scarce radioactive ore (Nuclear race only). Ore Mines dig it from the few deposits on the planet; a Nuclear Reactor enriches it.' },
@@ -435,7 +435,7 @@ const BDEFS = {
     cost: { fiber: 2, cement: 2 }, staff: true, gather: R_CRYSTAL, radius: 4, out: { crystal: 6 }, armor: 8, buildTime: 10,
   },
   grower: {
-    name: 'Grove Planter', desc: 'A worker plants new stalk groves nearby so Fiber never runs out.',
+    name: 'Grove Planter', desc: 'An Agribot plants new stalk groves nearby so Fiber never runs out.',
     cost: { fiber: 1, cement: 2 }, staff: true, crew: 'agribot', plant: R_STALK, radius: 4, armor: 8, buildTime: 8,
   },
   smelter: {
@@ -472,7 +472,7 @@ const BDEFS = {
     work: 7, armor: 10, buildTime: 12, limit: 20,
   },
   roadworks: {
-    name: 'Roadworks', desc: 'Its Paver upgrades your roads to asphalt, the fastest surface, working outwards along every road joined to the Roadworks, however far. One Asphalt covers four tiles.',
+    name: 'Roadworks', desc: 'Its Paver upgrades your roads to asphalt, the fastest surface, working outwards along the roads you mark in Paths (Pave), however far along joined roads (or every joined road, if you choose). One Asphalt covers four tiles.',
     cost: { cement: 3, alloy: 1, fiber: 2 }, staff: true, crew: 'paver', roadworks: true, radius: 7, armor: 8, buildTime: 10,
   },
   armory: {
@@ -503,11 +503,11 @@ const BDEFS = {
   },
   charger: {
     name: 'Charging Station',
-    desc: 'Bots recharge their batteries here, four at a time. It burns Fuel: one Fuel recharges about three quarters of a battery. Build them near busy areas far from your Command Base.',
+    desc: 'Bots recharge their batteries here, four at a time. It burns Fuel: one Fuel recharges about two and a half full batteries. Build them near busy areas far from your Command Base.',
     cost: { cement: 3, alloy: 1 }, charger: { slots: 4, rate: 25, fuel: true }, fuelCap: 4, armor: 10, buildTime: 10,
   },
   farm: {
-    name: 'Bio Farm', desc: 'A worker plants energy crops on fertile soil nearby and harvests them into Fuel. Crops take a while to ripen.',
+    name: 'Bio Farm', desc: 'An Agribot plants energy crops on fertile soil nearby and harvests them into Fuel. Crops take a while to ripen.',
     cost: { fiber: 2, cement: 2 }, staff: true, crew: 'agribot', farm: true, radius: 3, out: { fuel: 6 }, armor: 8, buildTime: 9,
   },
   pump: {
@@ -530,7 +530,7 @@ const BDEFS = {
     cost: { cement: 3, alloy: 2 }, repair: { slots: 3, rate: 1.5 }, alloyCap: 3, armor: 10, buildTime: 10, war: true,
   },
   wall: {
-    name: 'Wall', desc: 'A thick block of Cement that nothing gets past. Enemy warbots have to go round or shoot their way through, and a Wall takes far more punishment than any other building (a Missile only dents it). Your own bots can\'t cross it either: leave a Gate. Planned in Paths (Walls); paid for when you plan it, so no Hauler or road is needed.',
+    name: 'Wall', desc: 'A thick block of Cement that nothing gets past. Enemy warbots have to go round or shoot their way through, and a Wall takes far more punishment than any other building (a Missile knocks off 24: two break it). Your own bots can\'t cross it either: leave a Gate. Planned in Paths (Walls); paid straight from storage (as the goods come in), so no Hauler or road is needed.',
     cost: { cement: 5 }, barrier: true, prepaid: true, armor: 40, buildTime: 6, war: true,
   },
   gate: {
@@ -664,10 +664,10 @@ const WILD = {
  * is paid from storage when research starts; `time` is seconds of work by a staffed Lab.
  */
 const TECHS = {
-  cargo:   { name: 'Cargo Racks', desc: 'Haulers carry 3 goods instead of 2, Freight Trucks 10 instead of 8.', cost: { chip: 4, crystal: 6, alloy: 6 }, time: 90 },
+  cargo:   { name: 'Cargo Racks', desc: 'Haulers carry 3 goods instead of 2, Freight Trucks 10 instead of 8, Road Trains 36 instead of 30 and Freight Trains 64 instead of 56.', cost: { chip: 4, crystal: 6, alloy: 6 }, time: 90 },
   cells:   { name: 'Long-life Cells', desc: 'Bot batteries drain 30% slower.', cost: { chip: 4, crystal: 8 }, time: 90 },
   charge:  { name: 'Fast Charging', desc: 'Charging Stations charge bots 50% faster.', cost: { chip: 4, crystal: 6, alloy: 4 }, time: 75 },
-  paving:  { name: 'Rapid Paving', desc: 'Roads, bridges and tunnels are laid 40% faster.', cost: { chip: 3, crystal: 4, alloy: 4 }, time: 60 },
+  paving:  { name: 'Rapid Paving', desc: 'Roads, bridges and tunnels take 40% less time to lay.', cost: { chip: 3, crystal: 4, alloy: 4 }, time: 60 },
   sentry:  { name: 'Sentry Optics', desc: 'Pulse Turrets reach 1.5 tiles further and get 6 shots from each Crystal.', cost: { chip: 4, crystal: 10 }, time: 75 },
   motors:  { name: 'Turbo Motors', desc: 'Every bot moves 15% faster.', cost: { chip: 6, crystal: 8, alloy: 8 }, time: 120 },
   tools:   { name: 'Power Tools', desc: 'Workers build, gather and run buildings 15% faster.', cost: { chip: 6, crystal: 10, alloy: 6 }, time: 120 },

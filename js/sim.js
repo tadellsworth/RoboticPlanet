@@ -3233,7 +3233,8 @@ function fireNukeAt(silo, i, j) {
   sfx('launch');
   if (silo.owner !== 0 && !S.players[0].absent) sfx('siren');
   postMsg(silo.owner, `Nuclear missile launched: impact in ${NUKE.flight} seconds.`, i, j, 'good');
-  postMsg(1 - silo.owner, `NUCLEAR LAUNCH DETECTED! Impact in ${NUKE.flight} seconds: get your robots out of the red ring!`, i, j, 'bad');
+  // Every launch by a rival is detected (in a free-for-all too), wherever it's aimed.
+  if (silo.owner !== 0) postMsg(0, `NUCLEAR LAUNCH DETECTED! Impact in ${NUKE.flight} seconds: get your robots out of the red ring!`, i, j, 'bad');
   return true;
 }
 

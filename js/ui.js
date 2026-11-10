@@ -1463,7 +1463,7 @@ function onRoadPaint(i, j, first) {
   UI.lastPaint = { i, j };
   if (pave) { showRoadBanner(); return; }
   if (wall) { showRoadBanner(UI.paintSkipped ? 'The wall skips tiles it can\'t go on (outside your border, resources, cliffs, or right beside your Command Base).' : '', true); return; }
-  if (rail) { showRoadBanner(UI.paintCliff ? 'Track climbs a level only over a <b>Ramp</b>, and there\'s no room for one where you crossed this cliff: try a tile or two along it.' : UI.paintRamp ? 'A <b>Ramp</b> is planned where the track climbs the cliff: workers build it, and the track on it goes down when it\'s done.' : UI.paintSkipped ? 'Track skips tiles it can\'t go on: outside your border, resources, water and rock.' : '', true); return; }
+  if (rail) { showRoadBanner(UI.paintCliff ? 'Track climbs a level only over a <b>Ramp</b>, and there\'s no room for one where you crossed this cliff: try a tile or two along it.' : UI.paintRamp ? 'A <b>Ramp</b> is planned where the track climbs the cliff: workers build it, and the track on it goes down when it\'s done.' : UI.paintSkipped ? 'Track skips tiles it can\'t go on: outside your border, resources, rock or buildings.' : '', true); return; }
   if (!arrows) {
     showRoadBanner(UI.paintCross ? 'Roads stop at water and rock: pick <b>Bridges</b> to cross.'
       : UI.paintSkipped ? 'Dragging goes round resources: tap a boulder, grove, ore or crystal tile to clear it for a road.' : '', true);
@@ -1480,12 +1480,12 @@ function showRoadBanner(problem, info) {
   const have = playerGoods(0);
   let line, how;
   if (mode === 'rail' && !UI.draft.rail.size && !UI.draft.railDel.size) {
-    line = `<b>Lay railway track</b> by dragging (${costText(RAIL_COST)} a tile, paid when you tap Build and laid at once). Tap a tile to add or drop it, or tap track to take it up. Then put a <b>Rail Station</b> (Build menu) beside each end, and order a <b>Freight Train</b> at the Bot Foundry.`;
+    line = `<b>Lay railway track</b> by dragging (${costText(RAIL_COST)} a tile, laid when you tap Build if you have the goods, otherwise as they come in). Tap a tile to add or drop it, or tap track to take it up. Then put a <b>Rail Station</b> (Build menu) beside each end, and order a <b>Freight Train</b> at the Bot Foundry.`;
     how = 'Freight Trains carry 56 goods between Rail Stations on the same track, fast and with no traffic to wait for, and never need charging. They keep a station\'s supply orders filled from the other stations on the line, and a far station sends its spare goods home to the station nearest your Command Base. Track goes on open ground in your territory. It climbs a level at a time over a Ramp (a natural slope, or one you build in Paths), like a road, with trains slowing on the grade; over water it\'s a rail bridge, and across a valley it runs over a Viaduct. It can cross a road: road traffic waits at the crossing while a train goes by.';
   } else if (mode === 'wall' && !UI.draft.walls.size) {
     line = `<b>Sketch a wall</b> by dragging (${costText(BDEFS.wall.cost)} a tile); where it crosses a road a <b>Gate</b> goes (${costText(BDEFS.gate.cost)}). Tap a planned Wall to make it a Gate, again to drop it. Nothing is spent until you tap <b>Build</b>.`;
     how = `Walls stop every bot. Enemy warbots go round if there is a short way, or stand and shoot their way through: a Wall takes ${BDEFS.wall.armor} hits (a Gate ${BDEFS.gate.armor}, a Missile does ${BDEFS.silo.missile.damage}), and every shot costs them Ammo, so turrets behind a wall pick them off while they work. ` +
-      'Your own bots drive through your Gates, so leave one wherever your roads or workers need to cross. Walls are paid for from storage when you tap Build (no Hauler or road needed), and free workers build them. Repair a damaged Wall from its panel.';
+      'Your own bots drive through your Gates, so leave one wherever your roads or workers need to cross. Walls are paid straight from storage (no Hauler or road needed): what you have goes in when you tap Build, the rest as it comes in, and free workers build them. Repair a damaged Wall from its panel.';
   } else if (mode === 'ramp' && draftEmpty()) {
     line = `Tap a highlighted spot at the top or foot of a one-level cliff to plan a <b>Ramp</b> (${costText(BDEFS.ramp.cost)}). To get down from high ground, plan it on the cliff top. Nothing is spent until you tap <b>Build</b>.`;
     how = 'Workers cut a sloped road into the cliff; once it is done it is part of your road network, so haulers drive straight up it. A Ramp can\'t go where it would block the only way through a pass.';
@@ -1707,7 +1707,7 @@ function openBuildingSheet(b) {
         <button class="btn ghost" data-k="${k}" data-d="0">Clear</button></div>`;
       const kinds = BOT_ORDER.filter((k) => versus || !BOTS[k].war);
       html += `<div class="section-label">Order bots</div><div id="sh-orders">${kinds.map((k) => row(k, BOTS[k].plural)).join('')}</div>
-        <p class="hint">The Foundry only builds the bots you order. Each one uses 1 Alloy and 1 Chip and takes ${def.work} s (a Freight Truck twice that); mixed orders take turns.
+        <p class="hint">The Foundry only builds the bots you order. Each one uses 1 Alloy and 1 Chip a round, ${def.work} s each (a Freight Truck takes 2 rounds, a Road Train 4, a Freight Train 5, a Crawler 8); mixed orders take turns.
         <b>Haulers</b> carry two goods on the short runs. <b>Freight Trucks</b> carry eight on the long runs (12 tiles or more), from far mines and factories as well as storage. <b>Road Trains</b> carry thirty between your Command Base and far Depots, best on asphalt. <b>Agribots</b> run Bio Farms and Grove Planters, and <b>Pavers</b> run the Roadworks.</p>`;
     }
     if (def.roadworks && b.built) {
