@@ -13,6 +13,13 @@ and biomes started here and are now in the game.)
   destroyed. To think through: what new uses make Fuel valuable, how pipelines are laid (like roads or rail?), what
   they cost, whether they can be cut by raiders, and how the AI handles tankers and pipelines.
 
+## AI stalemates (seen while checking Road Trains, November)
+
+About a quarter of fresh-seed AI-vs-AI games still run the full hour without a winner (6 of 8 decisive, the same before
+and after the Road Train change). In the ones looked at, late in the game both rivals' Smelters sit "Waiting for Ore"
+while 75–100 Ore lies in storage, so Alloy, then Ammo, run short and armies stall with warbots out of Ammo. Worth a
+look: why Ore in storage doesn't reach the Smelters (distance, haulers, trucks, or the AI's placement).
+
 ## Open balance questions (from the November audit)
 
 Measured, but left for a decision rather than changed:

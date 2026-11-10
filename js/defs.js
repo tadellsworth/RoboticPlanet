@@ -144,7 +144,10 @@ const BOT_ORDER = ['worker', 'hauler', 'truck', 'roadtrain', 'freight', 'crawler
  *   it uses, keeping EXPORT_RESERVE of each, by Road Train or Freight Truck only (never by Hauler).
  * - Road Trains (30 goods) only do storage-to-storage runs at least TRUCK_MIN_DIST long (supply
  *   orders and trunk runs), and only with a load of TRAIN_MIN_LOAD or more (any load when there are
- *   no Freight Trucks): a half-empty Road Train wastes its slow trip and wears the road.
+ *   no Freight Trucks): a half-empty Road Train wastes its slow trip and wears the road. Freight Trucks
+ *   leave those loads to a Road Train that can get there: trunk loads build up to TRAIN_MIN_LOAD, and a
+ *   supply order of twice that or more waits for a train load until the Depot is down to a third.
+ * - Backhauls: a truck or Road Train that delivers to far storage takes home what's waiting there.
  * Trucks are heavy: on concrete they go at TRUCK_ROAD of their speed, Road Trains at TRAIN_ROAD;
  * asphalt is full speed. A Depot's supply orders (b.keep) ask for goods to be kept there, up to
  * KEEP_MAX of each.

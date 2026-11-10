@@ -211,6 +211,32 @@ function usesGood(b, g) {
  */
 function farApart(a, b) { return Math.abs(a.x - b.x) + Math.abs(a.y - b.y) >= TRUCK_MIN_DIST; }
 
+/** Does player p have a Road Train that can drive to building b? */
+function roadTrainFor(p, b) {
+  for (const v of S.bots) if (!v.dead && v.owner === p && BOTS[v.type].train && botLinked(v, b)) return true;
+  return false;
+}
+
+/**
+ * A truck or Road Train that has just delivered to far storage takes home what's waiting to go there
+ * (the trunk-run goods: spare, and used by nothing nearer), rather than driving back empty. True if it
+ * took a load.
+ */
+function backhaul(u, R) {
+  const hub = getE(S.players[u.owner].lander);
+  if (!hub || hub.dead || hub === R || hub.owner !== u.owner || !farApart(R, hub) || !truckLinked(R, hub)) return false;
+  let best = null, bs = TRUCK_MIN_LOAD - 1;
+  for (const g of GOODS) {
+    const spare = keepSupply(R, g) - EXPORT_RESERVE;
+    if (spare <= bs || !storeTakes(hub, g)) continue;
+    if (S.buildings.some((c) => !c.dead && c.owner === u.owner && c !== R && !BDEFS[c.type].store && usesGood(c, g) && dist2(c.x, c.y, R.x, R.y) < dist2(c.x, c.y, hub.x, hub.y))) continue;
+    bs = spare; best = g;
+  }
+  if (!best) return false;
+  assignHaul(u, R, hub, best, Math.max(1, Math.min(bs, botCarry(u))));
+  return !!u.task;
+}
+
 /**
  * Trunk runs (see TRUCK_MIN_DIST): every store at least TRUCK_MIN_DIST from the Command Base sends home
  * its spare goods (beyond its own supply orders and EXPORT_RESERVE) that no building nearer to it than
@@ -241,6 +267,9 @@ function trunkRuns(p, blds, take, canCarry, vans, trains) {
       }
       if (!byRoad) continue;
       let u = spare >= TRAIN_MIN_LOAD ? take(R.x, R.y, 'train', R) : null;
+      // A Road Train that can get here takes the trunk runs: Freight Trucks leave the load to build up
+      // to a train load (they still help once it has, if the train is busy).
+      if (!u && spare < TRAIN_MIN_LOAD && roadTrainFor(p, R)) continue;
       if (!u) u = take(R.x, R.y, 'truck', R);
       if (!u && !vans) u = take(R.x, R.y, 'train', R); // no trucks: a Road Train takes the smaller loads too
       if (!u) continue;
@@ -1057,17 +1086,23 @@ function dispatch(p) {
       const bulk = Math.min(have, r.b.built && !BDEFS[r.b.type].store ? Math.max(r.n, LONG_BUFFER) : r.n);
       let u = null;
       const byRoad = truckLinked(src, r.b);
-      const starving = (r.b.built ? (r.b.stock[r.g] || 0) : 0) + (r.b.inc[r.g] || 0) <= 0;
+      const held = (r.b.built ? (r.b.stock[r.g] || 0) : 0) + (r.b.inc[r.g] || 0), starving = held <= 0;
+      const keepAmt = (r.b.keep && r.b.keep[r.g]) || 0;
+      // With a Road Train that can make the run, a big supply order (twice a train load or more) waits
+      // for a load worth its trip (TRAIN_MIN_LOAD) instead of going by truck a few at a time, until the
+      // Depot is down to a third. Smaller orders go by truck as before.
+      const trainWait = r.keep && byRoad && s2s && long && keepAmt >= 2 * TRAIN_MIN_LOAD && bulk < TRAIN_MIN_LOAD && have >= TRAIN_MIN_LOAD &&
+        held * 3 >= keepAmt && roadTrainFor(p, src);
       // A supply order sends a truck for a worthwhile load (TRUCK_KEEP_LOAD, or half the order if that's
       // less), or when the store has run dry.
-      const truckLoad = !r.keep || starving || bulk >= Math.min(TRUCK_KEEP_LOAD, Math.ceil(((r.b.keep && r.b.keep[r.g]) || 0) / 2));
+      const truckLoad = !trainWait && (!r.keep || starving || bulk >= Math.min(TRUCK_KEEP_LOAD, Math.ceil(keepAmt / 2)));
       if (byRoad && s2s && long && bulk >= TRAIN_MIN_LOAD) u = take(src.x, src.y, 'train', src);
       if (!u && byRoad && (s2s || long) && truckLoad) u = take(src.x, src.y, 'truck', src);
       if (!u && byRoad && s2s && long && !vans && bulk >= TRUCK_MIN_LOAD) u = take(src.x, src.y, 'train', src); // no trucks: a smaller load
       // A long supply run waits for a Freight Truck when one can get there by road (unless the store
       // has run dry); otherwise Haulers take it (a Road Train only takes big loads, and no truck rides
       // a Ropeway).
-      if (!u && !(r.keep && long && vans > 0 && byRoad && !starving)) {
+      if (!u && !trainWait && !(r.keep && long && vans > 0 && byRoad && !starving)) {
         if (!long || !vans || starving || !byRoad) u = take(src.x, src.y, 'haul', src);
       }
       if (!u) { r.n = 0; continue; }
@@ -1643,6 +1678,8 @@ function doHaul(u, t, dt) {
   u.carryN = 0;
   u.task = null;
   u.idleT = 0;
+  // A truck at far storage takes home what's waiting there instead of driving back empty.
+  if (BOTS[u.type].truck && BDEFS[dst.type].store && backhaul(u, dst)) return;
   if (BDEFS[dst.type].store) enterBuilding(u, dst);
 }
 

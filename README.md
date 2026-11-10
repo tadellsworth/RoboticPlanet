@@ -168,7 +168,12 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
   unless the store has run dry. "Long" means 12+ tiles across plus down (`farApart`), as roads follow the grid. **Trunk runs** (`trunkRuns`): a store 12+ tiles from the Command Base sends home, in bulk, the goods nothing
   nearer to it uses (beyond its supply orders and `EXPORT_RESERVE`), by truck or Road Train only. **Road Trains**
   (30; 4 Alloy and 4 Chips) only do storage-to-storage runs 12+ tiles long, with `TRAIN_MIN_LOAD` (18) or more (any load
-  without trucks); `TRAIN_ROAD` (35%) on plain road, slow corners, `TRAIN_LEN` of queue behind them, `WEAR_TRAIN` wear.
+  without trucks). Trucks leave those loads to a Road Train that can get there (`roadTrainFor`): trunk loads build up
+  to `TRAIN_MIN_LOAD`, and a supply order of twice that or more waits for a train load until the Depot is down to a
+  third. **Backhauls** (`backhaul`): a truck or Road Train that delivers to far storage takes home what's waiting there
+  (the trunk-run goods) instead of driving back empty. Measured on a 30-tile asphalt run with 2 trucks and a Road Train:
+  missed supply at the far Depot fell from 63 to 11 uses in 10 minutes; trucks alone brought home 178 goods instead of 24. On plain road a Road Train runs at `TRAIN_ROAD` (35%); it takes corners slowly, holds `TRAIN_LEN` of
+  queue behind it and wears the road by `WEAR_TRAIN`.
   On a straight asphalt trunk road one Road Train moves 1.5–1.75× what two trucks do; on plain road about the same or less.
   Idle trucks spread out: each store keeps one waiting, and spare trucks park at the nearest Depot (or Command Base)
   with none. Trucks are slower than Haulers on concrete (80%) and slow to accelerate, but fastest of all on asphalt.
