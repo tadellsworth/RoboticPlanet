@@ -57,16 +57,31 @@ function initUI() {
   const saveSettings = () => {
     try { localStorage.setItem('botfall.settings', JSON.stringify({ size: UI.menu.size, rough: UI.menu.rough, rich: UI.menu.rich, shape: UI.menu.shape, nuke: UI.menu.nuke, biome: UI.menu.biome, players: UI.menu.players, diff: UI.menu.diff, style: UI.menu.style, events: UI.menu.events, wild: UI.menu.wild, unlimited: UI.menu.unlimited })); } catch (e) { /* storage unavailable */ }
   };
-  $('m-size').oninput = () => { UI.menu.size[UI.menu.mode] = +$('m-size').value; syncMenu(); saveSettings(); };
-  $('m-rough').oninput = () => { UI.menu.rough = +$('m-rough').value; syncMenu(); saveSettings(); };
-  $('m-shape').oninput = () => { UI.menu.shape = +$('m-shape').value; syncMenu(); saveSettings(); };
-  $('m-nuke').oninput = () => { UI.menu.nuke = +$('m-nuke').value; syncMenu(); saveSettings(); };
-  $('m-style').oninput = () => { UI.menu.style = +$('m-style').value; syncMenu(); saveSettings(); };
-  $('m-events').oninput = () => { UI.menu.events = +$('m-events').value; syncMenu(); saveSettings(); };
-  $('m-unlimited').oninput = () => { UI.menu.unlimited = +$('m-unlimited').value; syncMenu(); saveSettings(); };
-  $('m-wild').oninput = () => { UI.menu.wild = +$('m-wild').value; syncMenu(); saveSettings(); };
-  $('m-biome').oninput = () => { UI.menu.biome = +$('m-biome').value; syncMenu(); saveSettings(); };
-  $('m-rich').oninput = () => { UI.menu.rich = +$('m-rich').value; syncMenu(); saveSettings(); };
+  // Choices are buttons (all the options in view, easy to tap), and On/Off settings are switches.
+  const choice = (id, labels, get, set) => {
+    const el = $(id);
+    el.innerHTML = '';
+    labels.forEach((lab, v) => {
+      const b = document.createElement('button');
+      b.type = 'button'; b.dataset.v = v; b.textContent = lab; b.setAttribute('role', 'radio');
+      b.onclick = () => { set(v); syncMenu(); saveSettings(); sfx('click'); };
+      el.appendChild(b);
+    });
+    el._get = get;
+  };
+  choice('m-shape', SHAPE_PRESETS.map((p) => p.name), () => UI.menu.shape || 0, (v) => { UI.menu.shape = v; });
+  choice('m-size', SIZE_PRESETS.map((p) => p.name), () => UI.menu.size[UI.menu.mode] ?? DEFAULT_SIZE[UI.menu.mode], (v) => { UI.menu.size[UI.menu.mode] = v; });
+  choice('m-biome', BIOME_ORDER.map((k) => BIOMES[k].name), () => UI.menu.biome || 0, (v) => { UI.menu.biome = v; });
+  choice('m-rough', TERRAIN_PRESETS.map((p) => p.name), () => UI.menu.rough, (v) => { UI.menu.rough = v; });
+  choice('m-rich', RESOURCE_PRESETS.map((p) => p.name), () => UI.menu.rich, (v) => { UI.menu.rich = v; });
+  choice('m-style', ['Random', ...PERSONALITY_ORDER.map((k) => PERSONALITIES[k].name)], () => Math.min(PERSONALITY_ORDER.length, UI.menu.style || 0), (v) => { UI.menu.style = v; });
+  for (const [id, k] of [['m-nuke', 'nuke'], ['m-wild', 'wild'], ['m-events', 'events'], ['m-unlimited', 'unlimited']]) {
+    $(id).onchange = () => { UI.menu[k] = $(id).checked ? 1 : 0; syncMenu(); saveSettings(); sfx('click'); };
+  }
+  $('m-daynight').onchange = () => { setTodEnabled($('m-daynight').checked); syncMenu(); sfx('click'); };
+  // More settings opens and closes; it's remembered on this device.
+  try { $('m-more').open = localStorage.getItem('botfall.moreOpen') === '1'; } catch (e) { /* storage unavailable */ }
+  $('m-more').ontoggle = () => { try { localStorage.setItem('botfall.moreOpen', $('m-more').open ? '1' : '0'); } catch (e) { /* storage unavailable */ } };
   $('m-new').onclick = () => { audioUnlock(); startNewGame(); };
   $('m-continue').onclick = () => { audioUnlock(); continueGame(); };
   $('m-help').onclick = () => showHelp();
@@ -147,6 +162,17 @@ function initUI() {
   syncMenu();
 }
 
+/** A line under the map shape choice: what each shape plays like. */
+const SHAPE_BLURB = [
+  'Open ground with hills, cliffs and resource fields between the bases.',
+  'A narrow planet with the bases far apart: built for long supply lines (trucks, Road Trains and rail).',
+  'A wall of crags across the middle with a single pass: whoever holds the pass holds the map.',
+  'Each base on its own island, with a big island in the middle: the only way across is bridges.',
+  'The richest fields lie in a sunken crater in the middle, with one ramp down on each side.',
+  'Each base on a high plateau ringed by cliffs, with only two slopes down: easy to hold, slow to break out of.',
+  'Mesas standing over a canyon floor far below: cross between the clifftops on Viaducts.',
+];
+
 function syncMenu() {
   for (const btn of $('m-mode').children) btn.classList.toggle('on', btn.dataset.v === UI.menu.mode);
   for (const btn of $('m-diff').children) btn.classList.toggle('on', btn.dataset.v === UI.menu.diff);
@@ -163,33 +189,36 @@ function syncMenu() {
     : three ? 'Free-for-all: you and two rival colonies on a round planet. Capture a rival\'s Command Base and everything it built is yours. Last colony standing wins.'
       : 'Race a rival colony across the planet. Build up, then capture its Command Base to win.';
   $('m-seed').textContent = 'Planet #' + UI.menu.seed;
-  const size = UI.menu.size[UI.menu.mode] ?? DEFAULT_SIZE[UI.menu.mode];
-  $('m-size').value = size;
-  $('m-rough').value = UI.menu.rough;
-  $('m-shape').value = UI.menu.shape || 0;
-  $('m-nuke').value = UI.menu.nuke || 0;
-  $('m-nuke-v').textContent = UI.menu.nuke ? 'On: race for uranium' : 'Off';
+  const size = UI.menu.size[UI.menu.mode] ?? DEFAULT_SIZE[UI.menu.mode], shape = UI.menu.shape || 0;
+  for (const id of ['m-shape', 'm-size', 'm-biome', 'm-rough', 'm-rich', 'm-style']) {
+    const el = $(id), v = el._get();
+    for (const b of el.children) { const on = +b.dataset.v === v; b.classList.toggle('on', on); b.setAttribute('aria-checked', on ? 'true' : 'false'); }
+  }
+  $('m-shape-desc').textContent = SHAPE_BLURB[shape] || '';
+  const dims = mapDims({ size, shape, players: three ? 3 : 2 });
+  $('m-size-v').textContent = `${dims.W}×${dims.H} tiles`;
   // Rival style: 0 is a random personality for each rival, then each one in PERSONALITY_ORDER.
-  const style = Math.min(PERSONALITY_ORDER.length, UI.menu.style || 0);
-  $('m-style').value = style;
-  $('m-style-v').textContent = style ? PERSONALITIES[PERSONALITY_ORDER[style - 1]].name : 'Random';
+  const style = Math.min(PERSONALITY_ORDER.length, UI.menu.style || 0), P = style && PERSONALITIES[PERSONALITY_ORDER[style - 1]];
+  $('m-style-desc').textContent = P ? `${P.name}: ${P.desc}.` : 'Each rival gets a personality at random: Balanced, Turtle, Raider, Rusher or Tycoon.';
   $('m-style-row').hidden = UI.menu.mode === 'colony';
-  $('m-events').value = UI.menu.events ? 1 : 0;
-  $('m-events-v').textContent = UI.menu.events ? 'On' : 'Off';
-  $('m-unlimited').value = UI.menu.unlimited ? 1 : 0;
-  $('m-unlimited-v').textContent = UI.menu.unlimited ? 'On: for testing' : 'Off';
-  $('m-wild').value = UI.menu.wild ? 1 : 0;
-  $('m-wild-v').textContent = UI.menu.wild ? 'On: creature nests' : 'Off';
   $('m-wild-row').hidden = UI.menu.mode !== 'colony';
-
-  $('m-shape-v').textContent = SHAPE_PRESETS[UI.menu.shape || 0].name;
-  $('m-biome').value = UI.menu.biome || 0;
-  $('m-biome-v').textContent = BIOMES[BIOME_ORDER[UI.menu.biome || 0]].name;
-  $('m-rich').value = UI.menu.rich;
-  const dims = mapDims({ size, shape: UI.menu.shape || 0, players: three ? 3 : 2 });
-  $('m-size-v').textContent = `${SIZE_PRESETS[size].name} · ${dims.W}×${dims.H}`;
-  $('m-rough-v').textContent = TERRAIN_PRESETS[UI.menu.rough].name;
-  $('m-rich-v').textContent = RESOURCE_PRESETS[UI.menu.rich].name;
+  $('m-nuke').checked = !!UI.menu.nuke;
+  $('m-wild').checked = !!UI.menu.wild;
+  $('m-events').checked = !!UI.menu.events;
+  $('m-unlimited').checked = !!UI.menu.unlimited;
+  $('m-daynight').checked = todEnabled();
+  // What More settings holds that isn't the default, so it's clear at a glance with it closed.
+  const sum = [];
+  if (UI.menu.biome) sum.push(BIOMES[BIOME_ORDER[UI.menu.biome]].name);
+  if (UI.menu.rough !== DEFAULT_ROUGH) sum.push(TERRAIN_PRESETS[UI.menu.rough].name + ' terrain');
+  if (UI.menu.rich !== DEFAULT_RICH) sum.push(RESOURCE_PRESETS[UI.menu.rich].name + ' resources');
+  if (P && UI.menu.mode !== 'colony') sum.push(P.name + ' rival');
+  if (UI.menu.nuke) sum.push('Nuclear race');
+  if (UI.menu.mode === 'colony' && !UI.menu.wild) sum.push('no wildlife');
+  if (!UI.menu.events) sum.push('no planet events');
+  if (!todEnabled()) sum.push('always day');
+  if (UI.menu.unlimited) sum.push('Unlimited resources');
+  $('m-more-sum').textContent = sum.length ? sum.join(' · ') : 'Planet, biome, terrain, resources, rival style, options';
   $('m-continue').hidden = !hasSave();
 }
 

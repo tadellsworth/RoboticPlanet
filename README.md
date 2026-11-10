@@ -19,12 +19,14 @@ how goods move.
 - **Missions:** eight set challenges on hand-picked planets, each with its own goals and Easy, Normal and Hard
   levels. All of them are open from the start; finishing one ticks it off at that difficulty.
 
-Before each game, sliders set the **map size** (Small to Huge), the **terrain** (Flat, Gentle,
-Rolling, Rugged, Mountainous), the **resources** (Scarce to Abundant), the **map shape** (Standard, Long haul, Chokepoint, Islands, Crater, Plateaus or Sky islands), **Unlimited
-resources** (a testing switch: `unlimitedTopUp` keeps your Command Base at `UNLIMITED_STOCK` of every good and fills
-whatever your buildings are waiting for, once a second), the
-**biome** (Red desert, Jungle or Polar: scenery only, with plants that roads and buildings clear), the **rival style**,
-an optional **Nuclear race**, **Planet events** (on by default) and, in Colony, **Wildlife** (on by default). Resources come in separate
+Before each game, the new-game screen picks the mode, players and rival, the **map shape** (Standard, Long haul,
+Chokepoint, Islands, Crater, Plateaus or Sky islands, as buttons with a line on each) and the **map size** (Small to
+Huge). **More settings** (a collapsible section, its summary listing whatever isn't the default) holds the planet
+number, the **biome** (Red desert, Jungle or Polar: scenery only, with plants that roads and buildings clear), the
+**terrain** (Flat, Gentle, Rolling, Rugged, Mountainous), the **resources** (Scarce to Abundant), the **rival style**,
+and switches for an optional **Nuclear race**, **Planet events** (on by default), **Wildlife** (Colony; on by default),
+**Day and night** and **Unlimited resources** (a testing switch: `unlimitedTopUp` keeps your Command Base at
+`UNLIMITED_STOCK` of every good and fills whatever your buildings are waiting for, once a second). Resources come in separate
 fields: your landing zone has a little of everything, and the rich fields beyond it are worth fighting for.
 
 Terrafall is an original game in the colony-logistics genre. It contains no code, art, sound or data from

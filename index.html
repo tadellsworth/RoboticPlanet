@@ -120,31 +120,45 @@
       </div>
     </div>
     <div class="field">
-      <span class="label">Planet</span>
-      <div class="seed-row"><span id="m-seed" class="seed"></span><button id="m-reroll" class="btn small">New planet</button></div>
-      <div class="sliders">
-        <label class="slider-row" for="m-size"><span>Map size</span><output id="m-size-v"></output>
-          <input type="range" id="m-size" min="0" max="3" step="1"></label>
-        <label class="slider-row" for="m-shape"><span>Map shape</span><output id="m-shape-v"></output>
-          <input type="range" id="m-shape" min="0" max="6" step="1"></label>
-        <label class="slider-row" for="m-biome"><span>Biome</span><output id="m-biome-v"></output>
-          <input type="range" id="m-biome" min="0" max="2" step="1"></label>
-        <label class="slider-row" for="m-style" id="m-style-row"><span>Rival style</span><output id="m-style-v"></output>
-          <input type="range" id="m-style" min="0" max="5" step="1"></label>
-        <label class="slider-row" for="m-nuke" id="m-nuke-row"><span>Nuclear race</span><output id="m-nuke-v"></output>
-          <input type="range" id="m-nuke" min="0" max="1" step="1"></label>
-        <label class="slider-row" for="m-wild" id="m-wild-row"><span>Wildlife</span><output id="m-wild-v"></output>
-          <input type="range" id="m-wild" min="0" max="1" step="1"></label>
-        <label class="slider-row" for="m-events" id="m-events-row"><span>Planet events</span><output id="m-events-v"></output>
-          <input type="range" id="m-events" min="0" max="1" step="1"></label>
-        <label class="slider-row" for="m-rough"><span>Terrain</span><output id="m-rough-v"></output>
-          <input type="range" id="m-rough" min="0" max="4" step="1"></label>
-        <label class="slider-row" for="m-rich"><span>Resources</span><output id="m-rich-v"></output>
-          <input type="range" id="m-rich" min="0" max="4" step="1"></label>
-        <label class="slider-row" for="m-unlimited"><span>Unlimited resources</span><output id="m-unlimited-v"></output>
-          <input type="range" id="m-unlimited" min="0" max="1" step="1"></label>
-      </div>
+      <span class="label">Map</span>
+      <div class="chips" id="m-shape" role="radiogroup" aria-label="Map shape"></div>
+      <p class="mode-desc" id="m-shape-desc"></p>
     </div>
+    <div class="field">
+      <span class="label">Map size <output id="m-size-v" class="label-v"></output></span>
+      <div class="seg" id="m-size" role="radiogroup" aria-label="Map size"></div>
+    </div>
+    <details class="more" id="m-more">
+      <summary><span class="more-title">More settings</span><span class="more-sum" id="m-more-sum"></span></summary>
+      <div class="field">
+        <span class="label">Planet</span>
+        <div class="seed-row"><span id="m-seed" class="seed"></span><button id="m-reroll" class="btn small">New planet</button></div>
+      </div>
+      <div class="field">
+        <span class="label">Biome</span>
+        <div class="seg" id="m-biome" role="radiogroup" aria-label="Biome"></div>
+      </div>
+      <div class="field">
+        <span class="label">Terrain</span>
+        <div class="chips" id="m-rough" role="radiogroup" aria-label="Terrain"></div>
+      </div>
+      <div class="field">
+        <span class="label">Resources</span>
+        <div class="chips" id="m-rich" role="radiogroup" aria-label="Resources"></div>
+      </div>
+      <div class="field" id="m-style-row">
+        <span class="label">Rival style</span>
+        <div class="chips" id="m-style" role="radiogroup" aria-label="Rival style"></div>
+        <p class="mode-desc" id="m-style-desc"></p>
+      </div>
+      <div class="toggles">
+        <label class="toggle-row" id="m-nuke-row"><span>Nuclear race<small id="m-nuke-v">Race for uranium and nuclear missiles</small></span><input type="checkbox" id="m-nuke" role="switch"></label>
+        <label class="toggle-row" id="m-wild-row"><span>Wildlife<small id="m-wild-v">Creature nests raid what you build near them</small></span><input type="checkbox" id="m-wild" role="switch"></label>
+        <label class="toggle-row" id="m-events-row"><span>Planet events<small id="m-events-v">Dust storms, quakes, meteors and more, every few minutes</small></span><input type="checkbox" id="m-events" role="switch"></label>
+        <label class="toggle-row" id="m-daynight-row"><span>Day and night<small>Morning to night, 12 minutes round (looks only)</small></span><input type="checkbox" id="m-daynight" role="switch"></label>
+        <label class="toggle-row" id="m-unlimited-row"><span>Unlimited resources<small id="m-unlimited-v">For trying things out: 500 of everything</small></span><input type="checkbox" id="m-unlimited" role="switch"></label>
+      </div>
+    </details>
     <button id="m-new" class="btn primary big">Start</button>
     <button id="m-help" class="btn big ghost">How to play</button>
   </div>
