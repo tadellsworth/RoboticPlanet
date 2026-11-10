@@ -646,7 +646,7 @@ function moveAlong(u, dt) {
   // A Freight Train: down the track at its own speed, braking for curves and the end of its trip; it
   // never waits for road traffic (road traffic waits for it at level crossings).
   if (bt.rail) {
-    let step = driveSpeed(u, bt, bt.speed * evSpeed(), Infinity, dt) * dt;
+    let step = driveSpeed(u, bt, bt.speed * evSpeed() * (S.ramp[here] ? RAIL_GRADE : 1), Infinity, dt) * dt;
     u.odo = ((u.odo || 0) + step) % 1000;
     u.moved = step > 0 ? 1 : 0;
     while (step > 0 && u.pi < u.path.length) {
@@ -778,6 +778,11 @@ function driveSpeed(u, bt, vmax, lim, dt) {
       const vc = vmax * (bt.rail ? 0.55 : bt.train ? TRAIN_CORNER : bt.truck ? TRUCK_CORNER : BOT_CORNER);
       cap = Math.min(cap, Math.sqrt(vc * vc + 2 * brk * d0));
     }
+  }
+  // A Freight Train coming up to a Ramp brakes to its grade speed by the time it gets there.
+  if (bt.rail && S.ramp[t0] && !S.ramp[Math.floor(u.y) * S.W + Math.floor(u.x)]) {
+    const vr = vmax * RAIL_GRADE;
+    cap = Math.min(cap, Math.sqrt(vr * vr + 2 * brk * Math.max(0, d0 - 0.5)));
   }
   if (lim < Infinity) cap = Math.min(cap, Math.sqrt(2 * brk * Math.max(0, lim)));
   const v = cap > v0 ? Math.min(cap, v0 + acc * dt) : cap;

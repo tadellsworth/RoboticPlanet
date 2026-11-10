@@ -1360,7 +1360,7 @@ function dropDraft() {
 function onRoadPaint(i, j, first) {
   if (R.mode !== 'road' || UI.roadMode === 'lights' || UI.roadMode === 'ramp') return;
   if (!UI.draft) draftReset();
-  if (first) { UI.paintSkipped = false; UI.paintCross = false; UI.stroke = []; UI.draft.strokes.push(UI.stroke); }
+  if (first) { UI.paintSkipped = false; UI.paintCross = false; UI.paintCliff = false; UI.stroke = []; UI.draft.strokes.push(UI.stroke); }
   const from = first || !UI.lastPaint ? { i, j } : UI.lastPaint;
   const line = tileLine(from.i, from.j, i, j);
   let prev = null;
@@ -1372,6 +1372,9 @@ function onRoadPaint(i, j, first) {
     const t = tIdx(x, y);
     if (pave) { if (paveMarkable(t)) setPaveMark(0, x, y, UI.paveOn); continue; }
     if (rail) {
+      // Across a one-level cliff with no Ramp: the track can't join there (say so in the banner).
+      if (prev) { const p = tIdx(prev[0], prev[1]); if (S.terrain[t] === T_GROUND && S.terrain[p] === T_GROUND && S.elev[t] !== S.elev[p] && !canStep(p, t)) UI.paintCliff = true; }
+      prev = [x, y];
       if (S.rail[t] || UI.draft.rail.has(t)) continue;
       if (!railBlocked(0, t)) draftOp(UI.stroke, t, 'rail'); else UI.paintSkipped = true;
       continue;
@@ -1400,7 +1403,7 @@ function onRoadPaint(i, j, first) {
   UI.lastPaint = { i, j };
   if (pave) { showRoadBanner(); return; }
   if (wall) { showRoadBanner(UI.paintSkipped ? 'The wall skips tiles it can\'t go on (outside your border, resources, cliffs, or right beside your Command Base).' : '', true); return; }
-  if (rail) { showRoadBanner(UI.paintSkipped ? 'Track skips tiles it can\'t go on: outside your border, resources, slopes, water and rock.' : '', true); return; }
+  if (rail) { showRoadBanner(UI.paintCliff ? 'Track climbs a level only over a <b>Ramp</b>: build one at this cliff (Paths, Ramps), then lay the track over it.' : UI.paintSkipped ? 'Track skips tiles it can\'t go on: outside your border, resources, water and rock.' : '', true); return; }
   if (!arrows) {
     showRoadBanner(UI.paintCross ? 'Roads stop at water and rock: pick <b>Bridges</b> to cross.'
       : UI.paintSkipped ? 'Dragging goes round resources: tap a boulder, grove, ore or crystal tile to clear it for a road.' : '', true);
@@ -1418,7 +1421,7 @@ function showRoadBanner(problem, info) {
   let line, how;
   if (mode === 'rail' && !UI.draft.rail.size && !UI.draft.railDel.size) {
     line = `<b>Lay railway track</b> by dragging (${costText(RAIL_COST)} a tile, paid when you tap Build and laid at once). Tap a tile to add or drop it, or tap track to take it up. Then put a <b>Rail Station</b> (Build menu) beside each end, and order a <b>Freight Train</b> at the Bot Foundry.`;
-    how = 'Freight Trains carry 40 goods between Rail Stations on the same track, fast and with no traffic to wait for, and never need charging. They keep a station\'s supply orders filled from the other stations on the line, and a far station sends its spare goods home to the station nearest your Command Base. Track goes on open ground in your territory and stays on one level (trains can\'t climb). It can cross a road: road traffic waits at the crossing while a train goes by.';
+    how = 'Freight Trains carry 56 goods between Rail Stations on the same track, fast and with no traffic to wait for, and never need charging. They keep a station\'s supply orders filled from the other stations on the line, and a far station sends its spare goods home to the station nearest your Command Base. Track goes on open ground in your territory. It climbs a level at a time over a Ramp (a natural slope, or one you build in Paths), like a road, with trains slowing on the grade; over water it\'s a rail bridge, and across a valley it runs over a Viaduct. It can cross a road: road traffic waits at the crossing while a train goes by.';
   } else if (mode === 'wall' && !UI.draft.walls.size) {
     line = `<b>Sketch a wall</b> by dragging (${costText(BDEFS.wall.cost)} a tile); where it crosses a road a <b>Gate</b> goes (${costText(BDEFS.gate.cost)}). Tap a planned Wall to make it a Gate, again to drop it. Nothing is spent until you tap <b>Build</b>.`;
     how = `Walls stop every bot. Enemy warbots go round if there is a short way, or stand and shoot their way through: a Wall takes ${BDEFS.wall.armor} hits (a Gate ${BDEFS.gate.armor}, a Missile does ${BDEFS.silo.missile.damage}), and every shot costs them Ammo, so turrets behind a wall pick them off while they work. ` +

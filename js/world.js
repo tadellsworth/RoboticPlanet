@@ -2079,8 +2079,11 @@ function railPlatforms(i, j) {
   return out;
 }
 
-/** Can two neighbouring track tiles join? Trains stay on one level. */
-function railStep(a, b) { return S.rail[a] && S.rail[b] && (S.elev[a] === S.elev[b] || S.terrain[a] !== T_GROUND || S.terrain[b] !== T_GROUND); } // rail bridges join any level
+/**
+ * Can two neighbouring track tiles join? On one level, or one level up or down over a Ramp (a
+ * natural slope or one built in Paths), like a road; rail bridges join any level.
+ */
+function railStep(a, b) { return S.rail[a] && S.rail[b] && (S.terrain[a] !== T_GROUND || S.terrain[b] !== T_GROUND || canStep(a, b)); }
 
 /** Track tiles a train can go to from track tile a: its neighbours, and the far end of a Viaduct with track on both ends. */
 function railNbrs(a) {
@@ -2135,7 +2138,6 @@ function railBlocked(owner, t) {
   if (S.terrain[t] === T_ROCK) return 'Track can\'t go through rock.';
   if (S.bAt[t] && getE(S.bAt[t]).type !== 'viaduct') return 'There is a building here.';
   if (S.res[t]) return 'Clear the resources here first.';
-  if (S.ramp[t]) return 'Track can\'t go on a slope: trains stay on one level.';
   if (scorched(t)) return 'This ground is still scorched.';
   return '';
 }

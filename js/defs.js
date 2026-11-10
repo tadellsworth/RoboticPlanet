@@ -45,6 +45,7 @@ const WEAR_WORN_SPEED = 2.3;      // asphalt speed when it's about to wear throu
 const REPAVE_AT = 500;            // wear at which a Paver resurfaces a tile
 const WEAR_MAX = 1000;            // worn through: back to plain road
 const SLOPE_SPEED = 0.65;         // speed multiplier on an unpaved ramp
+const RAIL_GRADE = 0.55;          // a Freight Train's top speed on a Ramp (climbing or braking down a level)
 /*
  * One-way roads and traffic. A road tile in S.road is 1 (two-way) or 2–5 (one-way, pointing
  * east, south, west or north). Going the wrong way up a one-way road is allowed but crawls at
@@ -176,7 +177,8 @@ const VIA_MIN = 2, VIA_MAX = 12, VIA_RISE = 2, VIA_COST = { cement: 3, alloy: 0.
 const VIA_CLAIM = 3; // a Viaduct's far end claims the no-one's ground this far round it
 /*
  * Freight rail: track (S.rail) is laid in Paths (Rail), RAIL_COST a tile, paid when you build it and
- * laid at once, on open ground in your territory and on one level (trains can't climb). It can cross a
+ * laid at once, on open ground in your territory; it climbs a level at a time over a Ramp (RAIL_GRADE
+ * speed there), like a road. It can cross a
  * road: a level crossing, where road traffic waits while a train is within RAIL_CROSS_HOLD tiles.
  * Rail Stations stand beside the track; Freight Trains (56 goods) run between stations on the same
  * track: supply orders at a station (from another station first) and a far station's trunk runs to

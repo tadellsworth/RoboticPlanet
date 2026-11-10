@@ -172,8 +172,11 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
   `u.deck` (the two ends) until it reaches one, so a new order or a chase starts from the deck, not the ground below.
 - **Freight rail** (`RAIL_*` in `js/defs.js`; the rail section of `js/world.js`; `layRail`, `deliverTrain` in
   `js/sim.js`): track is a tile layer (`S.rail`), laid instantly from the Paths **Rail** tool (`RAIL_COST` a tile, mostly
-  Cement with a quarter of an Alloy, paid through the same credit as road Cement; `RAIL_BRIDGE_COST` over water), level
-  except on bridges (`railStep`) and across a Viaduct with track on both abutments (`railNbrs`). Rail Stations stand beside the track;
+  Cement with a quarter of an Alloy, paid through the same credit as road Cement; `RAIL_BRIDGE_COST` over water). Track
+  joins where a road would (`railStep` uses `canStep`): on one level, or a level up or down over a Ramp (natural or
+  built in Paths), where trains drop to `RAIL_GRADE` (0.55) of their speed and brake for it in advance (`driveSpeed`);
+  rail bridges join any level, and a Viaduct with track on both abutments joins its ends (`railNbrs`). Dragging track
+  across a one-level cliff with no Ramp says to build one there. Rail Stations stand beside the track;
   their platforms are the track tiles next to them (`railPlatforms`), and `railNet` groups stations by line. Freight
   Trains (56 goods) take the dispatch role `'rail'`: trunk runs from a far station to the home station and supply orders
   between stations on one line, `RAIL_MIN_LOAD` (10) or more; `railRoute` plans along the track. Road bots wait at a
