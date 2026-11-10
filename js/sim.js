@@ -2532,7 +2532,7 @@ function garrisonDefense(b, dt) {
  */
 function goGarrison(u) {
   const enemyL = getE(S.players[rivalOf(u.owner)].lander);
-  let best = null, bs = Infinity;
+  let best = null, bs = Infinity, spare = null, ss = Infinity;
   for (const b of S.buildings) {
     if (b.dead || b.owner !== u.owner || !b.built || !BDEFS[b.type].mil || evacuated(b)) continue;
     if (u.avoidB === b.id && S.time < u.avoidUntil) continue;
@@ -2540,12 +2540,17 @@ function goGarrison(u) {
     const n = b.garrison.length + b.garInc;
     if (n >= cap) continue;
     const front = enemyL ? dist(b.x, b.y, enemyL.x, enemyL.y) : 0;
-    // The player's garrison priority: High ones fill first, Low ones only when the rest are full.
-    const pr = (b.gprio === 'high' ? -30 : b.gprio === 'low' ? 30 : 0) +
+    const keep = keepAt(b);
+    // The player's garrison priority: High ones fill first, Low ones only when the rest are full; and
+    // every garrison fills up to its Keep before any goes past it.
+    const pr = (b.gprio === 'high' ? -30 : b.gprio === 'low' ? 30 : 0) + (n < keep ? -60 : 0) +
       ((u.ammo ?? WARBOT_AMMO) <= 0 && !(b.stock.ammo > 0) ? 25 : 0); // out of Ammo: go where it can reload
     const s = (n / Math.min(cap, 10)) * 12 + front * 0.25 + dist(b.x, b.y, u.x, u.y) * 0.05 + pr;
+    // A garrison set to keep none isn't stocked: only if nowhere else has room.
+    if (keep === 0 && b.type !== 'lander') { if (s < ss) { ss = s; spare = b; } continue; }
     if (s < bs) { bs = s; best = b; }
   }
+  best = best || spare;
   if (!best) return;
   u.task = { type: 'garrison', bld: best.id };
   best.garInc++;
@@ -3123,8 +3128,22 @@ function armedIn(b) {
   return n;
 }
 
-/** How many armed warbots garrison b can send out (it always keeps one warbot at home). */
-function spareArmed(b) { return BDEFS[b.type].bunker ? 0 : Math.max(0, Math.min(armedIn(b), b.garrison.length - 1)); } // a Bunker's two stay put
+/**
+ * How many warbots garrison b keeps at home: attacks and rallies leave them behind, and idle warbots
+ * fill a garrison up to its Keep first. Set per garrison (b.keepW), or for all Outposts at once in
+ * the Army banner (P.keepW); 1 unless set. At 0 nothing is held back and idle warbots don't go there
+ * (they wait at the Command Base, or garrisons that keep some) unless nowhere else has room.
+ */
+function keepAt(b) {
+  if (BDEFS[b.type].bunker) return BDEFS[b.type].garrison; // a Bunker's two stay put
+  if (b.keepW !== undefined) return b.keepW;
+  if (b.type === 'lander') return 1;
+  const P = S.players[b.owner];
+  return P && P.keepW !== undefined ? P.keepW : 1;
+}
+
+/** How many armed warbots garrison b can send out (all but its Keep). */
+function spareArmed(b) { return BDEFS[b.type].bunker ? 0 : Math.max(0, Math.min(armedIn(b), b.garrison.length - keepAt(b))); }
 
 /** A garrison far behind the lines (no rival building within 18 tiles): it can send its last warbot. */
 function rearGarrison(b) {

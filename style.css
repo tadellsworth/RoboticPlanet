@@ -189,6 +189,8 @@ kbd {
 }
 #banner-text { font-size: 14px; margin-bottom: 8px; }
 #banner-text .err { color: var(--danger); }
+#banner-text .keep-all { display: flex; align-items: center; gap: 8px; margin-top: 8px; color: var(--muted); font-size: 13px; }
+#banner-text .keep-all .seg button { padding: 4px 12px; }
 #banner-text .ok { color: var(--good); }
 .banner-actions { display: flex; gap: 8px; flex-wrap: wrap; }
 .banner-actions .road-seg { flex: 1 1 100%; }

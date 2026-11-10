@@ -523,7 +523,7 @@ function onSelectBox(box, add) {
     const p = worldToScreen(u.x, u.y);
     if (p.x >= x0 && p.x <= x1 && p.y >= y0 && p.y <= y1) ids.push(u.id);
   }
-  // A box round your own garrisons picks up their spare warbots too (each keeps one at home).
+  // A box round your own garrisons picks up their spare warbots too (each keeps its Keep at home).
   for (const b of S.buildings) {
     if (b.dead || b.owner !== 0 || !b.garrison || b.garrison.length < 2) continue;
     const p = worldToScreen(b.x + 0.5, b.y + 0.5);
@@ -1097,9 +1097,21 @@ function enterPlaceMode(type) {
 
 /** The Army banner: what to tap, and Recall all when warbots are out in the field. */
 function showArmyBanner() {
-  const out = warbotsOut(0);
+  const out = warbotsOut(0), k = S.players[0].keepW ?? 1;
   showBanner('Tap a <b>rival building</b> to attack it with warbots or missiles, or tap open ground to send warbots there to <b>hold the area</b>.' +
-    (out ? ` ${out} warbot${out > 1 ? 's are' : ' is'} out in the field: <b>Recall all</b> brings them home.` : ''), out ? 'Recall all' : null, 'Cancel');
+    (out ? ` ${out} warbot${out > 1 ? 's are' : ' is'} out in the field: <b>Recall all</b> brings them home.` : '') +
+    `<span class="keep-all">Outposts keep <span class="seg">${[0, 1, 2].map((v) => `<button data-k="${v}" class="${v === k ? 'on' : ''}">${v}</button>`).join('')}</span> warbot${k === 1 ? '' : 's'} at home</span>`,
+    out ? 'Recall all' : null, 'Cancel');
+  for (const btn of $('banner-text').querySelectorAll('[data-k]')) btn.onclick = (e) => { e.stopPropagation(); setKeepAll(+btn.dataset.k); showArmyBanner(); };
+}
+
+/** Every Outpost keeps v warbots at home (each one's own setting is reset to follow this). */
+function setKeepAll(v) {
+  S.players[0].keepW = v;
+  for (const b of S.buildings) if (!b.dead && b.owner === 0 && BDEFS[b.type].mil && b.type !== 'lander') delete b.keepW;
+  sfx('click');
+  toast(v === 0 ? 'Outposts keep no warbots at home now: every warbot can be sent out, and new ones wait at your Command Base.'
+    : `Every Outpost now keeps ${v} warbot${v === 1 ? '' : 's'} at home.`, 'info');
 }
 
 /** Bring every warbot in the field home to its garrison. */
@@ -1882,7 +1894,10 @@ function openBuildingSheet(b) {
         <p class="hint">Garrison priority: new warbots from the Foundry, and ones called back from a rally flag, fill High garrisons first and Low ones last.</p>
         <div class="stepper"><button class="btn" id="sh-st-minus" aria-label="Fewer">−</button><span class="n" id="sh-st-n">0</span>
         <button class="btn" id="sh-st-plus" aria-label="More">+</button><button class="btn primary" id="sh-st-send" style="flex:1">Station here</button></div>
-        <p class="hint" id="sh-st-hint"></p>`;
+        <p class="hint" id="sh-st-hint"></p>` +
+        (def.bunker ? '' : `<div class="section-label">Keep here</div>
+        <div class="seg" id="sh-keepw"><button data-v="auto">Auto (${b.type === 'lander' ? 1 : S.players[0].keepW ?? 1})</button><button data-v="0">0</button><button data-v="1">1</button><button data-v="2">2</button><button data-v="4">4</button></div>
+        <p class="hint">Warbots this garrison keeps at home: attacks and rallies leave them behind, and new warbots fill it up to this first. <b>0</b>: nothing is held back, and idle warbots don't come here (they wait at your Command Base). <i>Auto</i> follows the setting for all Outposts in Army.</p>`);
     }
     if (def.lab && b.built) html += '<div class="section-label">Research</div><div id="sh-research"></div>';
     if (b.type === 'foundry' && b.built) {
@@ -1976,6 +1991,7 @@ function openBuildingSheet(b) {
     };
     if ($('sh-aim')) $('sh-aim').onclick = () => { sfx('click'); startAim(b); };
     if ($('sh-gprio')) for (const btn of $('sh-gprio').children) btn.onclick = () => { b.gprio = btn.dataset.v === 'normal' ? undefined : btn.dataset.v; sfx('click'); refreshSheet(); };
+    if ($('sh-keepw')) for (const btn of $('sh-keepw').children) btn.onclick = () => { b.keepW = btn.dataset.v === 'auto' ? undefined : +btn.dataset.v; sfx('click'); refreshSheet(); };
     if ($('sh-st-send')) {
       UI.stationN = Math.min(5, stationAvailable(0, b));
       $('sh-st-minus').onclick = () => { UI.stationN = Math.max(1, UI.stationN - 1); refreshSheet(); };
@@ -2240,14 +2256,15 @@ function refreshBuildingSheet(b) {
     $('sh-aim-hint').textContent = why || `Shows the Silo's ${BDEFS.silo.missile.range}-tile range on the ground: tap any spot inside it to aim, then fire.`;
   }
   if ($('sh-gprio')) for (const btn of $('sh-gprio').children) btn.classList.toggle('on', btn.dataset.v === (b.gprio || 'normal'));
+  if ($('sh-keepw')) for (const btn of $('sh-keepw').children) btn.classList.toggle('on', btn.dataset.v === (b.keepW === undefined ? 'auto' : String(b.keepW)));
   if ($('sh-st-n')) {
     const avail = stationAvailable(0, b), coming = b.garInc || 0;
     UI.stationN = clamp(UI.stationN || 0, avail ? 1 : 0, avail);
     $('sh-st-n').textContent = UI.stationN;
     $('sh-st-send').disabled = !avail;
     $('sh-st-hint').textContent = (avail
-      ? `Bring up to ${avail} warbot${avail > 1 ? 's' : ''} from your other garrisons (each keeps one at home). They stay here until you move them.`
-      : !garrisonRoom(b) ? 'This garrison is full.' : 'No spare warbots in your other garrisons: each keeps one at home.')
+      ? `Bring up to ${avail} warbot${avail > 1 ? 's' : ''} from your other garrisons (each keeps its Keep at home). They stay here until you move them.`
+      : !garrisonRoom(b) ? 'This garrison is full.' : 'No spare warbots in your other garrisons: each keeps its Keep at home (set it on the garrison, or for all Outposts in Army).')
       + (coming ? ` ${coming} on the way.` : '');
   }
   if ($('sh-lim')) {
@@ -2312,7 +2329,7 @@ function refreshBuildingSheet(b) {
     $('sh-n').textContent = UI.attackN;
     $('sh-send').disabled = avail === 0;
     $('sh-attack').innerHTML = avail
-      ? `<p class="desc">${avail} armed warbot${avail > 1 ? 's' : ''} can reach this from your garrisons (each garrison keeps one at home).</p>`
+      ? `<p class="desc">${avail} armed warbot${avail > 1 ? 's' : ''} can reach this from your garrisons (each garrison keeps its Keep at home).</p>`
       : `<p class="desc">No armed warbots in range. Warbots attack from Outposts or your Command Base within ${ATTACK_RANGE} tiles, and only ones with Ammo go. Build an Outpost closer, and an Ammo Plant to keep garrisons stocked.</p>`;
   }
 }
@@ -2668,7 +2685,7 @@ function refreshSheet() {
     const t = UI.sheetFor, i = t % S.W, j = (t / S.W) | 0;
     const avail = refreshMoveStepper(i, j);
     $('mv-info').innerHTML = `<p class="desc">${avail
-      ? `${avail} armed warbot${avail > 1 ? 's' : ''} available in your garrisons (each keeps one at home).`
+      ? `${avail} armed warbot${avail > 1 ? 's' : ''} available in your garrisons (each keeps its Keep at home).`
       : S.zone[t] !== homeZone(0) ? 'Your warbots cannot walk there from your garrisons.' : 'No armed warbots available. Make some at the Bot Foundry, and keep your garrisons stocked with Ammo: warbots without it can\'t fight.'}</p>`;
   } else if (UI.sheetKind === 'rally') {
     const r = rallyById(UI.sheetFor);

@@ -333,7 +333,11 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
   of the pass on Normal and Hard (`aiWalls`).
 - **Garrisons:** tap an Outpost or your Command Base to set its **garrison priority** (new warbots, and ones called back
   from a flag, fill High garrisons first and Low ones last) or to **station warbots** there: choose how many and they
-  march over from your other garrisons (each keeps one at home) and stay until you move them.
+  march over from your other garrisons and stay until you move them. **Keep** (`keepAt`): how many warbots a garrison
+  holds back (1 unless set): attacks and rallies leave them behind (`spareArmed`), and idle warbots fill garrisons up to
+  their Keep first (`goGarrison`). At 0 nothing is held back and idle warbots skip it (they wait at the Command Base)
+  unless nowhere else has room. Set per garrison (`b.keepW`, Auto/0/1/2/4) or for every Outpost in the Army banner
+  (`P.keepW`, 0/1/2; resets the per-Outpost settings). A Bunker always keeps its two; the AI keeps one.
 - **Rival personalities** (`PERSONALITIES` in `js/defs.js`, applied by `aiStyle`/`aiLevel` in `js/ai.js`): each scales
   the difficulty's grace period, attack threshold, army growth and raid rate. **Balanced** is the plain AI. **Turtle**:
   later and bigger attacks, rare raids, a square ring of Walls and Gates six tiles round its Command Base
