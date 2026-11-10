@@ -516,7 +516,9 @@ function updateLights(dt) {
       if (L.clr <= 0) { L.clr = 0; L.ph = 1 - L.ph; L.tm = 0; }
     } else {
       L.tm = (L.tm || 0) + dt;
-      if (dem[1 - L.ph] > 0 && L.tm >= LIGHT_MIN_GREEN && (app[L.ph] === 0 || L.tm >= LIGHT_MAX_GREEN)) L.clr = LIGHT_CLEAR;
+      // Someone waits on red: switch as soon as nobody is coming on green (or after the longest green);
+      // the shortest green only holds while green traffic is still coming through.
+      if (dem[1 - L.ph] > 0 && (app[L.ph] === 0 || L.tm >= LIGHT_MAX_GREEN)) L.clr = LIGHT_CLEAR;
     }
     L.dem = [0, 0]; L.app = [0, 0];
   }

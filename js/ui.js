@@ -1466,7 +1466,7 @@ function showRoadBanner(problem, info) {
     const net = roadNet();
     for (let t = 0; t < S.W * S.H; t++) if (net.junc[t] && S.owner[t] === 0) junctions++;
     line = `Tap a <b>junction</b> for a traffic light (${costText(LIGHT_COST)}), tap the light for an <b>overpass</b> (${costText(OVERPASS_COST)}), tap again to clear it.`;
-    how = `A light lets one direction through at a time; on an overpass nobody stops. You have ${lights} light${lights === 1 ? '' : 's'}, ${overs} overpass${overs === 1 ? '' : 'es'} and ${junctions} junction${junctions === 1 ? '' : 's'}.`;
+    how = `A light lets one direction through at a time: it pays where two busy roads cross (50 to 85% more goods through), and costs a little on a quiet crossing. On an overpass nobody stops: best everywhere, and more than twice as much on a jammed crossing. You have ${lights} light${lights === 1 ? '' : 's'}, ${overs} overpass${overs === 1 ? '' : 'es'} and ${junctions} junction${junctions === 1 ? '' : 's'}.`;
   } else {
     const sm = draftSummary();
     if (draftEmpty()) {

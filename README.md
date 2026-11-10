@@ -141,7 +141,8 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
 - **Junctions, traffic lights and overpasses:** where three or four roads meet, bots slow down and give way to traffic
   already crossing. Switch the Paths banner to **Junctions** and tap a junction to put up a traffic light (1 Alloy): it
   lets one direction through at a time, switching when traffic waits the other way. On a busy crossing a light moves
-  about half as many goods again; on a quiet one it costs nothing. Tap the light again for an **overpass** (4 Cement,
+  half as many goods again or more, while on a quiet one it costs a few percent (a light switches as soon as nobody is
+  coming on green; `LIGHT_MIN_GREEN` only holds while green traffic is still coming). Tap the light again for an **overpass** (4 Cement,
   3 Alloy): one road passes over the other and nobody slows or waits. Tap again to clear it.
 - **Traffic map:** **Traffic map** in the Paths banner (or **T**) tints each road green to red by how busy it has been
   over the last minute and rings the spots where bots stand waiting.
