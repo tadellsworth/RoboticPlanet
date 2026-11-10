@@ -816,6 +816,35 @@ function gatherTypes(type) {
   return type === 'mine' && nukeOn() ? [R_URANIUM, g] : [g];
 }
 
+/**
+ * A rock face: open ground right against a crag or a cliff (a neighbour a level up or down with no
+ * slope between), where a Quarry's worker can cut Stone that never runs out.
+ */
+function rockFace(t) {
+  if (S.terrain[t] !== T_GROUND || S.bAt[t] || S.res[t]) return false;
+  const W = S.W, i = t % W, j = (t / W) | 0;
+  for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+    if (!inMap(i + di, j + dj)) continue;
+    const u = tIdx(i + di, j + dj);
+    if (S.terrain[u] === T_ROCK) return true;
+    if (S.terrain[u] === T_GROUND && S.elev[u] !== S.elev[t] && !canStep(t, u)) return true;
+  }
+  return false;
+}
+
+/** Rock faces within `radius` of (cx, cy) that bots from there can walk to. */
+function rockFacesIn(cx, cy, radius) {
+  const zone = S.zone[tIdx(cx, cy)], r2 = radius * radius + 0.3;
+  let n = 0;
+  for (let j = Math.max(0, cy - radius); j <= Math.min(S.H - 1, cy + radius); j++) {
+    for (let i = Math.max(0, cx - radius); i <= Math.min(S.W - 1, cx + radius); i++) {
+      const t = j * S.W + i;
+      if (dist2(i, j, cx, cy) <= r2 && S.zone[t] === zone && rockFace(t)) n++;
+    }
+  }
+  return n;
+}
+
 /** How many nodes a `type` gatherer at (i, j) could reach. */
 function gatherReach(i, j, type) {
   let n = 0;

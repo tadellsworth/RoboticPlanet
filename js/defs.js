@@ -431,8 +431,9 @@ const BDEFS = {
     cost: { fiber: 2, cement: 1 }, staff: true, gather: R_STALK, radius: 5, out: { fiber: 6 }, armor: 8, buildTime: 8,
   },
   quarry: {
-    name: 'Quarry', desc: 'A worker breaks nearby boulders into Stone.',
+    name: 'Quarry', desc: 'A worker breaks nearby boulders into Stone. With none left in reach it keeps going: it cuts Stone from a cliff or crag in reach, or failing that digs it out of the ground, more slowly. That never runs out.',
     cost: { fiber: 2 }, staff: true, gather: R_BOULDER, radius: 5, out: { stone: 6 }, armor: 8, buildTime: 8,
+    bedrock: { face: 6, dig: 15 }, // seconds of work for a Stone cut from a rock face in reach, or dug at the Quarry
   },
   mine: {
     name: 'Ore Mine', desc: 'A worker digs Ore from nearby veins.',

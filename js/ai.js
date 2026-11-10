@@ -86,7 +86,7 @@ function aiThink(p) {
   // Stone goes into nearly everything (and Cement for roads), so boulders count as running short sooner.
   P.short = [R_STALK, R_BOULDER, R_ORE, R_CRYSTAL].filter((r) => (inLand[r] || 0) < (r === R_BOULDER ? 6 : 4));
   const stoneLow = (inLand[R_BOULDER] || 0) < 10;
-  const quarrying = me.some((b) => b.type === 'quarry' && (!b.built || reachableRes(b.x, b.y, BDEFS.quarry.radius, R_BOULDER) > 0));
+  const quarrying = me.some((b) => b.type === 'quarry'); // a Quarry always has Stone to cut or dig (see BDEFS.quarry.bedrock)
   // While boulders run low, keep enough Cement for the Outpost that reaches new ones.
   const reserveCement = stoneLow && playerGoods(p).cement < BDEFS.outpost.cost.cement + 2;
   if (stoneLow && !quarrying) aiFreeCement(p, me);
@@ -241,6 +241,8 @@ function aiThink(p) {
   for (const b of me) {
     const def = BDEFS[b.type];
     if (b.built && def.gather && S.time - b.born > 30 && gatherReach(b.x, b.y, b.type) === 0 && !(b.stock[RES[def.gather].good] > 1)) {
+      // A Quarry out of boulders still cuts or digs Stone: it's only moved if there's a boulder field to go to.
+      if (def.bedrock && (rockFacesIn(b.x, b.y, def.radius) > 0 || !aiFindSpot(p, b.type, lander))) continue;
       demolish(b);
     } else if (b.built && def.pump && pumpSeep(b) < 0 && !(b.stock.crude > 0)) {
       demolish(b);
@@ -836,8 +838,13 @@ function aiSearchSpot(p, type, lander) {
       if (def.gather) {
         const n = reachableRes(i, j, def.radius, def.gather);
         const u = type === 'mine' && nukeOn() ? reachableRes(i, j, def.radius, R_URANIUM) : 0;
-        if (n < 2 && !u) continue;
-        s = Math.min(n, 10) * 2 - dHome * 0.35 + u * 12; // a mine on uranium beats any ore field
+        if (n < 2 && !u) {
+          // No boulders left anywhere near: a Quarry by a cliff or crag cuts Stone from it instead.
+          if (!def.bedrock) continue;
+          const f = rockFacesIn(i, j, def.radius);
+          if (f < 3) continue;
+          s = Math.min(f, 10) * 0.6 - dHome * 0.35 - 8;
+        } else s = Math.min(n, 10) * 2 - dHome * 0.35 + u * 12; // a mine on uranium beats any ore field
       } else if (def.plant) {
         let dh = 99;
         for (const b of S.buildings) if (!b.dead && b.owner === p && b.type === 'harvester') dh = Math.min(dh, dist(i, j, b.x, b.y));

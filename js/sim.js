@@ -1278,7 +1278,7 @@ function landerSalvage(p, dt) {
   for (const [g, type, res] of [['stone', 'quarry', R_BOULDER], ['fiber', 'harvester', R_STALK]]) {
     // A site only counts once its materials are in: one waiting for this very good never will be.
     const working = S.buildings.some((b) => !b.dead && b.owner === p && b.type === type &&
-      (b.built ? reachableRes(b.x, b.y, BDEFS[type].radius, res) > 0 : sumValues(b.stock) >= sumValues(BDEFS[type].cost)));
+      (b.built ? BDEFS[type].bedrock || reachableRes(b.x, b.y, BDEFS[type].radius, res) > 0 : sumValues(b.stock) >= sumValues(BDEFS[type].cost))); // a Quarry can always cut or dig
     // Cement is Stone already baked (2 per Stone), so it counts towards having enough.
     const amount = (have[g] || 0) + (g === 'stone' ? (have.cement || 0) / 2 : 0);
     if (working || amount >= SALVAGE_BELOW) { P.salvageT[g] = 0; continue; }
@@ -1684,6 +1684,20 @@ function completeRamp(b) {
   addFx('ring', b.x + 0.5, b.y + 0.5, { color: PLAYER_COLORS[b.owner] });
 }
 
+/** The nearest rock face (see rockFace) a Quarry's worker can cut Stone from, in its owner's or no-one's land. */
+function findFace(b, radius) {
+  let best = -1, bd = Infinity;
+  const r2 = radius * radius + 0.3, zone = S.zone[tIdx(b.x, b.y)];
+  for (let j = Math.max(0, b.y - radius); j <= Math.min(S.H - 1, b.y + radius); j++) {
+    for (let i = Math.max(0, b.x - radius); i <= Math.min(S.W - 1, b.x + radius); i++) {
+      const t = j * S.W + i, d = dist2(i, j, b.x, b.y);
+      if (d > r2 || d >= bd || S.zone[t] !== zone || S.resRes[t] || (S.owner[t] >= 0 && S.owner[t] !== b.owner) || !rockFace(t)) continue;
+      bd = d; best = t;
+    }
+  }
+  return best;
+}
+
 function findNode(b, type, radius) {
   let best = -1, bd = Infinity;
   const r2 = radius * radius + 0.3;
@@ -1854,8 +1868,16 @@ function doStaff(u, t, dt) {
           if (node >= 0) { t.gtype = ty; break; }
         }
         if (node < 0 && full) { b.status = 'Storage full, waiting for pickup'; t.wait = 1; return; }
-        if (node < 0) { b.status = `No ${RES[def.gather].name.toLowerCase()}s left in reach`; t.wait = 3; return; }
-        b.status = 'Gathering ' + GOOD[RES[t.gtype].good].name;
+        t.face = false;
+        if (node < 0 && def.bedrock) {
+          // A Quarry out of boulders keeps going: Stone cut from a rock face in reach, or dug out of the ground.
+          node = findFace(b, def.radius);
+          t.gtype = def.gather;
+          if (node < 0) { b.status = 'Digging Stone out of the ground (slow; it never runs out)'; t.phase = 'dig'; t.timer = def.bedrock.dig; return; }
+          t.face = true;
+          b.status = 'Cutting Stone from the rock face (it never runs out)';
+        } else if (node < 0) { b.status = `No ${RES[def.gather].name.toLowerCase()}s left in reach`; t.wait = 3; return; }
+        else b.status = 'Gathering ' + GOOD[RES[t.gtype].good].name;
       } else if (def.farm) {
         // Harvest ripe crops first, then plant any empty fertile soil.
         if ((b.stock.fuel || 0) >= def.out.fuel) { b.status = 'Storage full, waiting for pickup'; t.wait = 1; return; }
@@ -1913,7 +1935,7 @@ function doStaff(u, t, dt) {
       b.working = true;
       if (moveAlong(u, dt)) {
         t.phase = 'work';
-        t.timer = def.gather ? RES[t.gtype || def.gather].harvest : def.farm ? (t.act === 'harvest' ? RES[R_CROP].harvest : 2) : def.roadworks ? 2.5 : 3;
+        t.timer = t.face ? def.bedrock.face : def.gather ? RES[t.gtype || def.gather].harvest : def.farm ? (t.act === 'harvest' ? RES[R_CROP].harvest : 2) : def.roadworks ? 2.5 : 3;
       }
       return;
     case 'work': {
@@ -1924,7 +1946,14 @@ function doStaff(u, t, dt) {
       const node = t.node, ni = node % S.W, nj = (node / S.W) | 0;
       S.resRes[node] = 0;
       t.node = -1;
-      if (def.gather) {
+      if (def.gather && t.face) {
+        // Cut from the rock face: Stone, and the face is still there for next time.
+        u.carry = RES[def.gather].good;
+        u.carryN = 1;
+        madeGood(u.owner, u.carry, 1);
+        addFx('smoke', ni + 0.5, nj + 0.5, { r: 0.35, life: 0.8 });
+        t.face = false;
+      } else if (def.gather) {
         const ty = t.gtype || def.gather;
         if (S.res[node] === ty && S.amt[node] > 0) {
           S.amt[node]--;
@@ -1967,6 +1996,19 @@ function doStaff(u, t, dt) {
       }
       t.phase = 'back';
       if (!goTo(u, b.x, b.y)) { u.x = b.x + 0.5; u.y = b.y + 0.5; u.path = null; }
+      return;
+    }
+    case 'dig': {
+      // Digging Stone out of the ground beside the Quarry: slow, but it never runs out.
+      u.busy = 1;
+      b.working = true;
+      if ((b.stock.stone || 0) >= def.out.stone) { b.status = 'Storage full, waiting for pickup'; t.phase = 'in'; t.wait = 1; return; }
+      t.timer -= dt * mult * batFactor(u);
+      if (t.timer > 0) return;
+      bump(b.stock, 'stone', 1);
+      madeGood(u.owner, 'stone', 1);
+      t.phase = 'in';
+      t.wait = 0.3;
       return;
     }
     case 'back':
@@ -2053,6 +2095,7 @@ function updateBuilding(b, dt) {
  * resources come back in reach (a Grove Planter's new groves), it goes back to work.
  */
 function updateDepleted(b, def) {
+  if (def.bedrock) { b.depleted = false; return false; } // a Quarry always has Stone to cut or dig
   if (S.tick % 60 === b.id % 60) {
     b.depleted = def.gather ? gatherReach(b.x, b.y, b.type) === 0
       : fertileIn(b.x, b.y, def.radius) === 0 && reachableRes(b.x, b.y, def.radius, R_CROP) === 0;

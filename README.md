@@ -56,7 +56,7 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
 | Building | Does |
 |---|---|
 | Harvester | A worker cuts teal stalk groves into **Fiber** |
-| Quarry | A worker breaks boulders into **Stone** |
+| Quarry | A worker breaks boulders into **Stone**; with none left it cuts Stone from a rock face in reach, or digs it (never runs out) |
 | Ore Mine | A worker digs **Ore** from dark veins |
 | Crystal Tap | A worker taps violet clusters for **Crystal** |
 | Grove Planter | A worker plants new stalk groves |
@@ -287,8 +287,11 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
   three quarters of a full charge). A Bio Farm makes about
   2–3 Fuel a minute; an Oil Pump and Refinery up to 10 a minute until the seep runs dry (both stop at 30 by default).
   A dry Oil Pump shows a crossed-out oil drop over it, frees its worker and says so once: demolish it (any Crude
-  still in a demolished building goes to storage). Harvesters, Quarries, Ore Mines, Crystal Taps and Bio Farms do the
+  still in a demolished building goes to storage). Harvesters, Ore Mines, Crystal Taps and Bio Farms do the
   same with their own resource crossed out when nothing is left in reach (and go back to work if groves regrow).
+  A Quarry never runs dry (`bedrock` in its definition): out of boulders, its worker cuts Stone from the nearest
+  rock face in reach (`rockFace`: ground against a crag or a cliff; 6 s a Stone, about 5 a minute) or, with none,
+  digs it at the Quarry (15 s, about 3½ a minute), against about 8 a minute from boulders.
 - **Army orders:** tap **Army**, then a rival building to attack it with warbots or a missile, or open
   ground to send warbots there to hold the area under a rally flag. Tap the flag to call them back, or press
   **Recall all** in the Army banner (**C** on a computer) to end every attack and rally flag at once.
