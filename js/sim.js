@@ -2381,7 +2381,7 @@ function updateTurret(b, def, dt) {
   b.status = 'Firing';
   // The blast: a thick electric beam from the muzzle, crackling arcs round it, a burst where it hits.
   const m = pulseMuzzle(b, b.aim), color = PLAYER_COLORS[b.owner];
-  addFx('pulsebeam', m.x, m.y, { x2: target.x, y2: target.y, color, life: 0.42, seed: S.tick + b.id });
+  addFx('pulsebeam', m.x, m.y, { x2: target.x, y2: target.y, color, life: 0.4, seed: S.tick + b.id });
   addFx('pulsehit', target.x, target.y, { color, life: 0.4, seed: S.tick + b.id * 3 });
   shotFx(m.x - Math.cos(b.aim) * 0.32, m.y - Math.sin(b.aim) * 0.32, target.x, target.y, { color, pulse: true });
   sfx('laser');
@@ -2408,7 +2408,8 @@ function bunkerFire(b, def, dt) {
     if (!u || u.dead || target.dead || !useAmmo(u)) continue;
     const power = (u.bat ?? 100) < BATTERY.critical ? 0.5 : 1;
     damageBot(target, Math.max(1, Math.round((2 + (hash2(u.id, S.tick, 7) < 0.5 ? 1 : 0)) * power)));
-    shotFx(cx + (fired ? 0.18 : -0.18), cy + 0.1, target.x, target.y, { color: PLAYER_COLORS[b.owner] }); // one gun each side of the slit
+    // One gun each side of the slit (the muzzles in the Bunker's art: 219 and 293, 373.5 px of its 512 canvas at scale 1.2).
+    shotFx(cx + (fired ? 0.087 : -0.087), cy + 0.137, target.x, target.y, { color: PLAYER_COLORS[b.owner] });
     fired++;
   }
   if (!fired) { b.status = 'Out of Ammo: haulers bring it from storage'; return; }
@@ -2440,7 +2441,7 @@ function updateDisruptor(b, def, dt) {
   b.status = `Draining ${hit.length} enemy robot${hit.length > 1 ? 's' : ''}`;
   for (const u of hit) {
     u.bat = Math.max(0, (u.bat ?? 100) - d.drain);
-    arcFx(cx, cy - 0.45, u.x, u.y);
+    arcFx(cx, cy - 0.62, u.x, u.y); // from the orb (71 px down its 512 canvas, at scale 1.3)
     addFx('spark', u.x, u.y, { color: '#8fd8ff' });
   }
   addFx('ring', cx, cy, { color: '#8fd8ff', r: def.range / 1.3, life: 0.6 }); // grows out to its range

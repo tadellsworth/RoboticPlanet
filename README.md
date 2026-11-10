@@ -436,8 +436,12 @@ Farm, Oil Pump, Refinery, Cement Works, Asphalt Plant, Roadworks, Ramp, Ammo Pla
 (team versions for the military ones), plus the Repair Station, the fortified Command Base, the Nuclear Reactor and
 Nuclear Silo. All six robots (Worker, Warbot, Hauler, Agribot, Paver, Freight Truck) have four driving frames per team
 plus brake-light and boost overlays (WebP, `driveSet()` in the manifest); the frames advance with the distance driven.
-The nuclear missile, its 24-frame detonation sheet and the scorch mark are custom too. Still to make: a 3D Pulse
-Turret, goods icons and a few terrain pieces. The biome art is in `art/biomes/` (six plants per biome with their
+The nuclear missile, its 24-frame detonation sheet and the scorch mark are custom too, and so are the Bunker,
+Disruptor Tower and Mortar Pit (with their firing overlays, the Mortar's tube in 16 directions and morning, evening
+and night sets), the streetlamps along roads (`streetLamps`: posts sorted with buildings and bots, lit heads and
+light pools at dusk and night) and the Pulse Turret's twin violet laser and hit burst (`fx-pulse-laser`,
+`fx-pulse-hit`). Still to make: a 3D Pulse Turret by day (the night sets and its charge-up sheets are made for it),
+goods icons and a few terrain pieces. The biome art is in `art/biomes/` (six plants per biome with their
 shadows baked in, and the Jungle and Polar ground, water, rock and cliff), and the Red desert ground, water and rock
 are 512×512 (one image per 4×4 tiles, sharp on the zoomed-in map); all WebP to keep the single-file build small. The app icon is in `icons/`. Anything without an image falls back to placeholder art drawn in code, so new art can be
 added one piece at a time. See **[ART_GUIDE.md](ART_GUIDE.md)** for specs, the style brief and prompts,

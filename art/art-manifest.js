@@ -60,7 +60,7 @@
  * The 3D building set (512x512, 57° three-quarter view): each building stands on its own pad, and
  * the centre of the pad's top surface sits on the tile centre. Tune the size for all of them here.
  */
-function B3D(src) { return { src, scale: 1.4, anchor: [0.5, 0.615] }; }
+function B3D(src, scale) { return { src, scale: scale || 1.4, anchor: [0.5, 0.615] }; }
 
 /** A biome's six decorative plants (shadows baked in, centred) and, except the desert, its ground, water, rock and cliff. */
 function biomeSet(b) {
@@ -202,8 +202,28 @@ const ART_MANIFEST = {
   ...files('bridges', ['bridge', 'skybridge', 'railbridge'].flatMap((k) => ['ew', 'ns', 'end-w', 'end-e', 'end-n', 'end-s', 'ramp-w', 'ramp-e', 'ramp-n', 'ramp-s', 'pier'].map((p) => `${k}-${p}`)).concat(['skybridge-tower', 'skybridge-tower-lamp', 'skybridge-cable'])),
   ...files('canyon', ['', '-jungle', '-polar'].flatMap((b) => ['chasm', 'chasm-wall', 'chasm-wall-2', 'chasm-lip-n', 'chasm-lip-w', 'chasm-lip-e'].map((k) => k + b))),
 
+  // Bunker, Disruptor Tower and Mortar Pit (ART_GUIDE Batch 14), drawn at their size classes (1.2,
+  // 1.3 and 1.3 tiles). The overlays (flashed as they fire) and the Mortar's tube in 16 directions
+  // share their building's canvas and anchor.
+  'bunker@0': B3D('buildings/bunker@0.webp', 1.2), 'bunker@1': B3D('buildings/bunker@1.webp', 1.2),
+  'bunker-fire@0': B3D('buildings/bunker-fire@0.webp', 1.2), 'bunker-fire@1': B3D('buildings/bunker-fire@1.webp', 1.2),
+  'disruptor@0': B3D('buildings/disruptor@0.webp', 1.3), 'disruptor@1': B3D('buildings/disruptor@1.webp', 1.3),
+  'disruptor-pulse': B3D('buildings/disruptor-pulse.webp', 1.3),
+  'mortar@0': B3D('buildings/mortar@0.webp', 1.3), 'mortar@1': B3D('buildings/mortar@1.webp', 1.3),
+  ...(() => { const o = {}; for (let k = 0; k < 16; k++) o[`mortar-head-${k}`] = B3D(`buildings/mortar-head-${k}.webp`, 1.3); return o; })(),
+  // Streetlamps (256x256, foot at [0.5, 0.914], drawn 1 tile across; arm to the right): a sodium lamp
+  // on concrete roads, a white highway lamp on asphalt; '-lit' is the glowing head alone, and '-pool'
+  // the light it throws on the road.
+  ...(() => { const o = {}; for (const k of ['streetlamp-road', 'streetlamp-road-lit', 'streetlamp-asphalt', 'streetlamp-asphalt-lit']) o[k] = { src: `roads/${k}.webp`, scale: 1, anchor: [0.5, 0.914] }; return o; })(),
+  ...files('roads', ['streetlamp-road-pool', 'streetlamp-asphalt-pool']),
+  // The Pulse Turret's twin violet laser (6 frames of 512x64, stacked; points right, stretched to the
+  // target) and the burst where it hits (6 frames of 128x128 in a row).
+  'fx-pulse-laser': { src: 'effects/fx-pulse-laser.webp', frames: 6, cols: 1 },
+  'fx-pulse-hit': { src: 'effects/fx-pulse-hit.webp', frames: 6, cols: 6 },
+
   // Still to make (placeholders are drawn until these exist):
-  //   buildings: a 3D turret (base + head frames)
+  //   buildings: a 3D turret by day (base + head frames: the morning, evening and night sets exist,
+  //              and the Pulse Turret's charge-up sheets, turret-charge-0…15, are made to sit on it)
   //   resources: crop, oil, uranium     ground: fertile, slope, cliff     markers: missile, rally, oneway
   //   goods:     icon-fiber … icon-warhead (12 HUD icons)
 };

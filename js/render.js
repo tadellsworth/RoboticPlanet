@@ -1951,10 +1951,12 @@ function drawBuilding(ctx, type, cx, cy, s, owner, b) {
       const head = turretHead(owner, b && b.aim !== undefined ? b.aim : -Math.PI / 4, 'mortar');
       if (head) drawArt(ctx, head, cx, cy, s);
     }
-    const fx = type === 'bunker' ? ['bunker-fire', 0.15] : type === 'disruptor' ? ['disruptor-pulse', 0.6] : type === 'mortar' ? ['mortar-flash', 0.15] : null;
+    const fx = type === 'bunker' ? ['bunker-fire', 0.1] : type === 'disruptor' ? ['disruptor-pulse', 0.4] : type === 'mortar' ? ['mortar-flash', 0.15] : null;
     if (fx && b && b.flash && S.time - b.flash < fx[1]) {
-      const over = artFor(fx[0], owner);
-      if (over) { ctx.globalAlpha = 1 - (S.time - b.flash) / fx[1]; drawArt(ctx, over, cx, cy, s); ctx.globalAlpha = 1; }
+      const over = artFor(fx[0], owner), t = S.time - b.flash;
+      // The Disruptor's coils blaze up over 0.1 s and die away over 0.3 s; muzzle flashes just fade.
+      const a = type === 'disruptor' ? (t < 0.1 ? t / 0.1 : 1 - (t - 0.1) / 0.3) : 1 - t / fx[1];
+      if (over) { ctx.globalAlpha = Math.max(0, a); drawArt(ctx, over, cx, cy, s); ctx.globalAlpha = 1; }
     }
     if (type === 'silo' && b && b.stock) drawSiloStatus(ctx, b, cx, cy, s, color);
     return;
@@ -3555,6 +3557,7 @@ function render(dtReal) {
   const items = [];
   for (const b of S.buildings) if (!b.dead && inView(b.x, b.y, 2)) items.push(b);
   for (const u of S.bots) if (!u.dead && !u.inside && !(u.ride >= 0) && inView(u.x, u.y, 1)) items.push(u);
+  if (ART['streetlamp-road']) for (const l of streetLamps(v0, v1)) items.push(l); // posts stand among buildings and bots
   items.sort((a, b) => (a.ent === 'b' ? a.y + 0.5 : a.y) - (b.ent === 'b' ? b.y + 0.5 : b.y));
   // At dusk and night, every finished building's lights spill onto the ground round its pad.
   if (TOD.active && TOD.state.pools > 0.01) {
@@ -3564,6 +3567,7 @@ function render(dtReal) {
     }
   }
   for (const e of items) {
+    if (e.ent === 'lamp') { drawStreetLamp(ctx, e, ox, oy, z); continue; }
     if (e.ent === 'b') {
       const cx = ox + (e.x + 0.5) * z, cy = oy + (e.y + 0.5) * z;
       drawBuilding(ctx, e.type, cx, cy, z, e.owner, e);
@@ -4480,7 +4484,8 @@ function drawPulseCharges(ctx, ox, oy, z, inView) {
   for (const b of S.buildings) {
     if (b.type !== 'turret' || b.dead || !b.built || !(b.chg > 0.01) || !inView(b.x, b.y, 2)) continue;
     const lv = Math.min(1, b.chg / PULSE_CHARGE), m = pulseMuzzle(b, b.aim), x = ox + m.x * z, y = oy + m.y * z;
-    const color = PLAYER_COLORS[b.owner], flick = 0.85 + 0.15 * Math.sin(R.time * 60 + b.id);
+    // Violet, like the laser art, when it's installed; otherwise the team colour.
+    const color = ART['fx-pulse-laser'] ? '#aa5cff' : PLAYER_COLORS[b.owner], flick = 0.85 + 0.15 * Math.sin(R.time * 60 + b.id);
     // Sparks drawn in toward the muzzle.
     ctx.strokeStyle = color; ctx.lineWidth = Math.max(1, z * 0.025);
     for (let n = 0; n < 7; n++) {
@@ -4664,9 +4669,21 @@ function drawEffects(ctx, ox, oy, z) {
         break;
       }
       case 'pulsebeam': {
-        // The Pulse Turret's blast: a thick beam with a white-hot core in a team-colour glow, wrapped
-        // in crackling arcs, thinning out as it fades.
         const x2 = ox + f.x2 * z, y2 = oy + f.y2 * z, w = Math.pow(1 - k, 1.4), seed = f.seed + Math.floor(f.t * 30) * 17;
+        const laser = ART['fx-pulse-laser'];
+        if (laser) {
+          // The art: twin violet beams, one from each barrel (0.09 tiles apart), 0.13 tiles thick,
+          // stretched to the target; frames held 0.05, 0.1, 0.1, 0.05, 0.05 and 0.05 of its 0.4 s.
+          const at = (k * 0.4), ends = [0.05, 0.15, 0.25, 0.3, 0.35, 0.4], fr = Math.max(0, ends.findIndex((e) => at < e));
+          const dx = x2 - x, dy = y2 - y, len = Math.hypot(dx, dy) || 1, a = Math.atan2(dy, dx), px = (-dy / len) * z * 0.045, py = (dx / len) * z * 0.045;
+          ctx.globalAlpha = 1;
+          for (const s of [-1, 1]) drawSheetFrame(ctx, laser, fr < 0 ? 5 : fr, (x + x2) / 2 + px * s, (y + y2) / 2 + py * s, len, z * 0.13, a);
+          // At night the blast lights up the ground at the muzzle.
+          if (TOD.active && typeof drawLightPool === 'function') { ctx.globalAlpha = 1 - k; drawLightPool(ctx, x, y, z * 0.8, '#aa5cff'); ctx.globalAlpha = 1; }
+          break;
+        }
+        // Drawn in code: a thick beam with a white-hot core in a team-colour glow, wrapped in
+        // crackling arcs, thinning out as it fades.
         ctx.save();
         ctx.globalCompositeOperation = 'lighter';
         ctx.lineCap = 'round';
@@ -4690,6 +4707,14 @@ function drawEffects(ctx, ox, oy, z) {
         break;
       }
       case 'pulsehit': {
+        const hit = ART['fx-pulse-hit'];
+        if (hit) {
+          // The art: a violet burst over the beam's 0.4 s, 0.65 tiles across (and light on the ground at night).
+          ctx.globalAlpha = 1;
+          drawSheetFrame(ctx, hit, Math.min(5, Math.floor(k * 6)), x, y, z * 0.65, 0, 0);
+          if (TOD.active && typeof drawLightPool === 'function') { ctx.globalAlpha = 1 - k; drawLightPool(ctx, x, y, z, '#aa5cff'); ctx.globalAlpha = 1; }
+          break;
+        }
         // Where the blast lands: a flash, a shock ring and sparks thrown out.
         const g = glowSprite(f.color), s = z * (0.7 + 0.6 * k);
         ctx.save();

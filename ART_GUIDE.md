@@ -1126,7 +1126,10 @@ tiles in place of the drawn cliffs.
 
 ### Batch 14: Bunker, Disruptor Tower and Mortar Pit
 
-Three new defences for the Build menu's **Defend** tab. Until their art arrives the game draws simple placeholders.
+**Installed** (November): all three, both teams, the overlays, the Mortar's 16 tube directions and the morning, evening
+and night sets. The brief is kept below for reference.
+
+Three new defences for the Build menu's **Defend** tab.
 Make them in the same Claude Design chat as Batch 6: paste the Batch 6 style brief first and attach the **Smelter**
 as the style anchor, plus the **Outpost** so the three read as part of the same military family. Every image is a
 **512×512 PNG with a transparent background**, the foundation pad on the bottom edge like the other 3D buildings
@@ -1432,7 +1435,11 @@ slow, tell Claude Code: each effect's length is one number in the code.
   set (`reactor`, `nukesilo@0/@1`, `nuclear-missile`, the `nuke-blast` 6×4 sprite sheet and `nuke-scorch`) are
   installed too. Any robot can use this pattern: `<type>@<team>-f0…f3` driving frames (played by distance driven), `<type>-brake` and
   `<type>-boost` overlays, and `shadow: true` in the manifest when the art has no shadow of its own.
-  Still missing: a 3D turret, resources `crop` and `oil`, ground
+  Installed since: the Batch 14 defences, streetlamps (`streetlamp-road`/`-asphalt`, `-lit`, `-pool`) and the Pulse
+  Turret's `fx-pulse-laser` and `fx-pulse-hit`. The Pulse Turret's charge-up sheets (`turret-charge-0…15`) wait for
+  a **3D turret by day** (`turret@0/@1` base and `turret-head-0…15@0/@1`, anchor [0.5, 0.615], scale 1.4): the
+  morning, evening and night sets exist, but the day art is still the flat top-down turret.
+  Still missing: a 3D turret by day, resources `crop` and `oil`, ground
   `fertile`, `slope` and `cliff`, markers `missile`, `rally` and `oneway`, and the 12 goods icons
 
 ### Tips

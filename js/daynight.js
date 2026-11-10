@@ -26,7 +26,7 @@ const TOD_TIMES = {
 const TOD_CYCLE = [['morning', 1.5], ['morning', 'day', 0.5], ['day', 4], ['day', 'evening', 0.5], ['evening', 1.5], ['evening', 'night', 0.5], ['night', 3], ['night', 'morning', 0.5]];
 const TOD_NAMES = { morning: 'Morning', day: 'Day', evening: 'Evening', night: 'Night' };
 /** Sprites that are light (or UI) and are never re-lit or graded. */
-const TOD_NEVER = /(-brake|-boost|-lights|-headlights|-spark|-lamp|^rail-lights-on|^light-pool|^icon-|^nuke-blast|^rally|^oneway)/;
+const TOD_NEVER = /(-brake|-boost|-lights|-headlights|-spark|-lamp|^rail-lights-on|^light-pool|^icon-|^nuke-blast|^rally|^oneway|^bunker-fire|^disruptor-pulse|^mortar-flash|^streetlamp-.*-(lit|pool)|^fx-)/;
 const TOD_VEHICLES = ['truck', 'roadtrain', 'freight-loco', 'crawler', 'worker', 'hauler', 'agribot', 'paver', 'warbot'];
 
 const TOD = { on: true, state: null, active: false, sets: {}, shared: {}, keys: null, poolTint: {} };
@@ -245,26 +245,55 @@ function streetGlow(kind) {
   return (TOD.street[kind] = c);
 }
 
-function drawStreetLights(ctx, ox, oy, z, v0, v1) {
-  if (!TOD.active || !(TOD.state.lights > 0.01) || !S.road) return;
+/**
+ * The streetlamps in view (every third tile of road on open ground, the same tiles always): the
+ * tile, its kind ('road' concrete or 'asphalt'), and where the post's foot stands. A road running
+ * east–west has its lamps in the south verge (the head then shows right over the road); any other
+ * in the west verge, the arm reaching out over it.
+ */
+function streetLamps(v0, v1) {
+  const out = [];
+  if (!S.road) return out;
   const i0 = Math.max(0, Math.floor(v0.x) - 2), i1 = Math.min(S.W - 1, Math.ceil(v1.x) + 2);
   const j0 = Math.max(0, Math.floor(v0.y) - 2), j1 = Math.min(S.H - 1, Math.ceil(v1.y) + 2);
-  const on = TOD.state.lights, head = Math.max(1.2, z * 0.05);
-  ctx.save();
-  ctx.globalCompositeOperation = 'lighter';
+  const road = (i, j) => inMap(i, j) && roadLike(tIdx(i, j));
   for (let j = j0; j <= j1; j++) {
     const rem = (i0 + 2 * j) % 3; // lamps where (i + 2j) is a multiple of 3: every third tile, any way a road runs
     for (let i = rem ? i0 + 3 - rem : i0; i <= i1; i += 3) {
       const t = tIdx(i, j);
-      if (!S.road[t] || S.terrain[t] === T_ROCK) continue;
-      const kind = S.pave[t] === 2 ? 'asphalt' : 'road', L = STREETLIGHT[kind], w = z * L.r * 2;
-      const x = ox + (i + 0.5) * z, y = oy + (j + 0.5) * z;
-      ctx.globalAlpha = on * L.a;
-      ctx.drawImage(streetGlow(kind), x - w / 2, y - w * 0.4, w, w * 0.8); // seen at an angle: a little squashed
-      ctx.globalAlpha = on;
-      ctx.fillStyle = L.head;
-      ctx.beginPath(); ctx.arc(x, y, head, 0, Math.PI * 2); ctx.fill();
+      if (!S.road[t] || S.terrain[t] !== T_GROUND || S.bAt[t]) continue;
+      const ew = (road(i - 1, j) || road(i + 1, j)) && !road(i, j - 1) && !road(i, j + 1);
+      out.push({ ent: 'lamp', i, j, kind: S.pave[t] === 2 ? 'asphalt' : 'road', x: ew ? i + 0.5 : i + 0.125, y: ew ? j + 0.875 : j + 0.5 });
     }
+  }
+  return out;
+}
+
+/** A streetlamp's post (graded for the time of day like any sprite) and, at dusk and night, its lit head. */
+function drawStreetLamp(ctx, e, ox, oy, z) {
+  const post = ART['streetlamp-' + e.kind];
+  if (!post) return;
+  const x = ox + e.x * z, y = oy + e.y * z;
+  drawArt(ctx, post, x, y, z);
+  const on = TOD.active ? TOD.state.lights : 0, lit = ART['streetlamp-' + e.kind + '-lit'];
+  if (on > 0.01 && lit) { const ga = ctx.globalAlpha; ctx.globalAlpha = ga * on; drawArtRaw(ctx, lit, x, y, z); ctx.globalAlpha = ga; }
+}
+
+function drawStreetLights(ctx, ox, oy, z, v0, v1) {
+  if (!TOD.active || !(TOD.state.lights > 0.01) || !S.road) return;
+  const on = TOD.state.lights, head = Math.max(1.2, z * 0.05);
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  for (const e of streetLamps(v0, v1)) {
+    const L = STREETLIGHT[e.kind], w = z * L.r * 2, pool = ART['streetlamp-' + e.kind + '-pool'];
+    const x = ox + (e.i + 0.5) * z, y = oy + (e.j + 0.5) * z;
+    ctx.globalAlpha = on * L.a;
+    if (pool) ctx.drawImage(pool.img, x - w / 2, y - w * 0.4, w, w * 0.8);
+    else ctx.drawImage(streetGlow(e.kind), x - w / 2, y - w * 0.4, w, w * 0.8); // seen at an angle: a little squashed
+    if (ART['streetlamp-' + e.kind]) continue; // the post's own lit head shows the lamp
+    ctx.globalAlpha = on;
+    ctx.fillStyle = L.head;
+    ctx.beginPath(); ctx.arc(x, y, head, 0, Math.PI * 2); ctx.fill();
   }
   ctx.restore();
 }
