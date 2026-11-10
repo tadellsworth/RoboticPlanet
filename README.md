@@ -130,8 +130,8 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
   half worn it slows bots (to 2.3× when nearly through), at `REPAVE_AT` the Paver resurfaces marked road, and worn
   through it drops back to plain road. On a busy trunk road that's every 8–10 minutes. Tap any of your roads to see its
   wear and mark it. Removing a road refunds its Cement.
-- **Bridges and tunnels:** a road dragged out over water (or a canyon) in Roads carries on as a bridge, so there's no
-  need to switch tools; rocky crags stop it. The **Bridges** tool in Paths plans roads across both:
+- **Bridges and tunnels:** a road dragged out over water (or a canyon) in Roads carries on as a bridge, and through
+  rocky crags as a tunnel, so there's no need to switch tools. The **Bridges** tool in Paths plans them too:
   a bridge costs 2 Cement and half an Alloy a tile (cheaper than a Viaduct span: Islands live on bridges), a tunnel 3 Cement and 1 Alloy (`CROSS` in `js/defs.js`;
   `bridgeable`; a Sky bridge over the old `T_CHASM` canyons, 3 Cement and half an Alloy, survives for old saves). Workers build them out from the shore or rock face (6–9 s a tile), and
   they join land on any level. A bridge is drawn as one level span at the height of the highest clifftop it lands on

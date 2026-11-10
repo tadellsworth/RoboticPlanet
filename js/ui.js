@@ -1401,11 +1401,7 @@ function onMapTap(i, j, wx, wy) {
     else if (d.del.has(t)) draftOp(stroke, t, 'undel');
     else if (S.road[t] && !roadOwnedBy(0, t) && S.plan[t] !== 1) { sfx('error'); showRoadBanner('That road isn\'t yours: you can only take up roads in your own land.'); return; }
     else if (S.road[t] || S.plan[t] === 1) { draftOp(stroke, t, 'del'); note = S.plan[t] ? 'Planned tile marked to call off.' : 'Road marked to take up: its Cement comes back when you tap Build.'; }
-    else if (crossTile(t) && UI.roadMode !== 'bridge' && !bridgeable(t)) {
-      sfx('error');
-      showRoadBanner(`That's rock. Pick <b>Bridges</b> to build a ${CROSS[S.terrain[t]].name.toLowerCase()} through it.`);
-      return;
-    } else if (canRoad(0, i, j) || draftBridge(t)) {
+    else if (canRoad(0, i, j) || draftBridge(t)) {
       draftOp(stroke, t, 'add');
       if (crossTile(t)) note = `${CROSS[S.terrain[t]].name} tile: ${costText(CROSS[S.terrain[t]].cost)}.`;
       else if (S.res[t]) note = `Workers will clear the ${RES[S.res[t]].name.toLowerCase()} (${ROAD_CLEAR}× Cement).`;
@@ -1641,7 +1637,7 @@ function dragCliff(stroke, p, t) {
 function onRoadPaint(i, j, first) {
   if (R.mode !== 'road' || UI.roadMode === 'lights' || UI.roadMode === 'ramp') return;
   if (!UI.draft) draftReset();
-  if (first) { UI.paintSkipped = false; UI.paintCross = false; UI.paintBridge = false; UI.paintCliff = false; UI.paintRamp = false; UI.paintSteep = false; UI.stroke = []; UI.draft.strokes.push(UI.stroke); }
+  if (first) { UI.paintSkipped = false; UI.paintCross = false; UI.paintBridge = false; UI.paintTunnel = false; UI.paintCliff = false; UI.paintRamp = false; UI.paintSteep = false; UI.stroke = []; UI.draft.strokes.push(UI.stroke); }
   const from = first || !UI.lastPaint ? { i, j } : UI.lastPaint;
   const line = tileLine(from.i, from.j, i, j);
   let prev = null;
@@ -1694,10 +1690,11 @@ function onRoadPaint(i, j, first) {
     if (S.road[t] || S.plan[t] || roadLike(t) || UI.draft.ramps.has(t)) continue;
     // Dragging never bulldozes resources by accident: tap a resource tile to clear it for a road.
     if (S.res[t]) { UI.paintSkipped = true; continue; }
-    // A road dragged out over water (or a canyon) carries on as a bridge; tunnels through rock are dear,
-    // so only the Bridges tool sketches them.
-    if (crossTile(t) && UI.roadMode !== 'bridge' && !bridgeable(t)) { UI.paintCross = true; continue; }
-    if (canRoad(0, x, y) || draftBridge(t)) { draftOp(UI.stroke, t, 'add'); if (bridgeable(t) && UI.roadMode !== 'bridge') UI.paintBridge = true; }
+    // A road dragged out over water (or a canyon) carries on as a bridge, and through rock as a tunnel.
+    if (canRoad(0, x, y) || draftBridge(t)) {
+      draftOp(UI.stroke, t, 'add');
+      if (crossTile(t) && UI.roadMode !== 'bridge') { if (bridgeable(t)) UI.paintBridge = true; else UI.paintTunnel = true; }
+    } else if (crossTile(t)) UI.paintCross = true;
   }
   UI.lastPaint = { i, j };
   if (pave) { showRoadBanner(); return; }
@@ -1709,8 +1706,9 @@ function onRoadPaint(i, j, first) {
   if (rail) { showRoadBanner(cliffNote || (UI.paintRamp ? 'A <b>Ramp</b> is planned where the track climbs the cliff: workers build it, paid from storage, and the track on it goes down when it\'s done.' : UI.paintSkipped ? 'Track skips tiles it can\'t go on: outside your border, resources, rock or buildings.' : ''), true); return; }
   if (!arrows) {
     showRoadBanner(cliffNote || (UI.paintRamp ? 'A <b>Ramp</b> is planned where the road climbs the cliff: workers cut it, paid from storage, and it carries the road up when it\'s done.'
-      : UI.paintBridge ? `The road crosses the water as a <b>bridge</b>: ${costText(CROSS[T_WATER].cost)} a tile, built out from the shore.` + (UI.paintCross ? ' It stops at rock: pick <b>Bridges</b> to tunnel through.' : '')
-      : UI.paintCross ? 'Roads stop at rock: pick <b>Bridges</b> to tunnel through it.'
+      : UI.paintBridge || UI.paintTunnel ? [UI.paintBridge ? `The road crosses the water as a <b>bridge</b>: ${costText(CROSS[T_WATER].cost)} a tile, built out from the shore.` : '',
+        UI.paintTunnel ? `The road goes through the rock as a <b>tunnel</b>: ${costText(CROSS[T_ROCK].cost)} a tile, dug in from the rock face.` : ''].filter(Boolean).join(' ')
+      : UI.paintCross ? 'A road stops at your border: only a bridge can reach out past it, over water.'
         : UI.paintSkipped ? 'Dragging goes round resources: tap a boulder, grove, ore or crystal tile to clear it for a road.' : ''), true);
   }
 }
@@ -1833,7 +1831,7 @@ function showRoadBanner(problem, info) {
     else if (mode === 'wall') how = 'Walls and Gates are paid straight from storage, no Hauler needed: what you have now goes in when you tap Build, the rest as the goods come in (oldest plans first), and free workers put each piece up as far as its goods go. Enemy warbots have to go round or shoot through; your bots pass your Gates.' + owedText;
     else if (mode === 'rail') how = 'Track you can pay for goes down when you tap Build; the rest goes down as the goods come in (oldest plans first). Where the track climbs a one-level cliff, a Ramp is planned for it (paid from storage, no road needed) and the track on it goes down once workers finish the Ramp. Rail Stations stand beside the track; Freight Trains run between stations on the same stretch of track.' + owedText;
     else how = `<b>Haulers only drive on roads</b>, so every building needs a road to storage. 1 Cement paves ${Math.round(1 / roadCost().cement)} tiles (${ROAD_CLEAR}× through resources); you have ${have.cement || 0} Cement` +
-      (mode === 'bridge' ? ` and ${have.alloy || 0} Alloy. Workers build bridges and tunnels out from the shore or rock face, and they join land on any level.` : `. Drag a road out over water and it carries on as a bridge (${costText(CROSS[T_WATER].cost)} a tile); tunnels through rock need <b>Bridges</b>.`) +
+      (mode === 'bridge' ? ` and ${have.alloy || 0} Alloy. Workers build bridges and tunnels out from the shore or rock face, and they join land on any level.` : `. Drag a road out over water and it carries on as a bridge (${costText(CROSS[T_WATER].cost)} a tile), and through rock as a tunnel (${costText(CROSS[T_ROCK].cost)}).`) +
       ` After you tap Build, free workers pave the road a tile at a time${waiting ? ` (<b>${waiting}</b> tile${waiting === 1 ? '' : 's'} waiting now)` : ''}. Short of Cement or Alloy? Plan it anyway: tiles you can't pay for yet wait (an orange outline) and are paid from storage as the goods come in, oldest plans first.` + owedText;
   }
   const text = (problem ? `<span class="${info ? 'ok' : 'err'}">${problem}</span> ` : '') + line +
