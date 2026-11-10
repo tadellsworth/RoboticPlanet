@@ -5,7 +5,7 @@
 
 const UI = {
   inGame: false, paused: false, speed: 1, overShown: false,
-  menu: { mode: 'versus', diff: 'normal', seed: randomSeed(), size: { ...DEFAULT_SIZE }, rough: DEFAULT_ROUGH, rich: DEFAULT_RICH, shape: 0, style: 0, events: 1, wild: 1 },
+  menu: { mode: 'versus', diff: 'normal', seed: randomSeed(), size: { ...DEFAULT_SIZE }, rough: DEFAULT_ROUGH, rich: DEFAULT_RICH, shape: 0, style: 0, events: 1, wild: 1, unlimited: 0 },
   sheetKind: null, sheetFor: 0, sheetT: 0, hudT: 0,
   icons: {}, attackN: 0, demolishArm: 0, lastPaint: null, placeType: null,
   goodEls: {}, lastGoods: {}, objCollapsed: false, selBot: 0,
@@ -55,7 +55,7 @@ function initUI() {
   // Map settings sliders (remembered on this device; map size is remembered per mode).
   try { Object.assign(UI.menu, JSON.parse(localStorage.getItem('botfall.settings') || '{}')); } catch (e) { /* defaults */ }
   const saveSettings = () => {
-    try { localStorage.setItem('botfall.settings', JSON.stringify({ size: UI.menu.size, rough: UI.menu.rough, rich: UI.menu.rich, shape: UI.menu.shape, nuke: UI.menu.nuke, biome: UI.menu.biome, players: UI.menu.players, diff: UI.menu.diff, style: UI.menu.style, events: UI.menu.events, wild: UI.menu.wild })); } catch (e) { /* storage unavailable */ }
+    try { localStorage.setItem('botfall.settings', JSON.stringify({ size: UI.menu.size, rough: UI.menu.rough, rich: UI.menu.rich, shape: UI.menu.shape, nuke: UI.menu.nuke, biome: UI.menu.biome, players: UI.menu.players, diff: UI.menu.diff, style: UI.menu.style, events: UI.menu.events, wild: UI.menu.wild, unlimited: UI.menu.unlimited })); } catch (e) { /* storage unavailable */ }
   };
   $('m-size').oninput = () => { UI.menu.size[UI.menu.mode] = +$('m-size').value; syncMenu(); saveSettings(); };
   $('m-rough').oninput = () => { UI.menu.rough = +$('m-rough').value; syncMenu(); saveSettings(); };
@@ -63,6 +63,7 @@ function initUI() {
   $('m-nuke').oninput = () => { UI.menu.nuke = +$('m-nuke').value; syncMenu(); saveSettings(); };
   $('m-style').oninput = () => { UI.menu.style = +$('m-style').value; syncMenu(); saveSettings(); };
   $('m-events').oninput = () => { UI.menu.events = +$('m-events').value; syncMenu(); saveSettings(); };
+  $('m-unlimited').oninput = () => { UI.menu.unlimited = +$('m-unlimited').value; syncMenu(); saveSettings(); };
   $('m-wild').oninput = () => { UI.menu.wild = +$('m-wild').value; syncMenu(); saveSettings(); };
   $('m-biome').oninput = () => { UI.menu.biome = +$('m-biome').value; syncMenu(); saveSettings(); };
   $('m-rich').oninput = () => { UI.menu.rich = +$('m-rich').value; syncMenu(); saveSettings(); };
@@ -172,6 +173,8 @@ function syncMenu() {
   $('m-style-row').hidden = UI.menu.mode === 'colony';
   $('m-events').value = UI.menu.events ? 1 : 0;
   $('m-events-v').textContent = UI.menu.events ? 'On' : 'Off';
+  $('m-unlimited').value = UI.menu.unlimited ? 1 : 0;
+  $('m-unlimited-v').textContent = UI.menu.unlimited ? 'On: for testing' : 'Off';
   $('m-wild').value = UI.menu.wild ? 1 : 0;
   $('m-wild-v').textContent = UI.menu.wild ? 'On: creature nests' : 'Off';
   $('m-wild-row').hidden = UI.menu.mode !== 'colony';
@@ -557,7 +560,7 @@ function startNewGame() {
     seed: UI.menu.seed, difficulty: UI.menu.diff, mode: UI.menu.mode,
     size: UI.menu.size[UI.menu.mode] ?? DEFAULT_SIZE[UI.menu.mode], rough: UI.menu.rough, rich: UI.menu.rich, shape: UI.menu.shape || 0,
     nuke: !!UI.menu.nuke, biome: BIOME_ORDER[UI.menu.biome || 0], players: UI.menu.players === 3 ? 3 : 2,
-    style: UI.menu.style ? PERSONALITY_ORDER[UI.menu.style - 1] : 'random', events: !!UI.menu.events, wildlife: !!UI.menu.wild,
+    style: UI.menu.style ? PERSONALITY_ORDER[UI.menu.style - 1] : 'random', events: !!UI.menu.events, wildlife: !!UI.menu.wild, unlimited: !!UI.menu.unlimited,
   });
   enterGame();
   updateHUD();

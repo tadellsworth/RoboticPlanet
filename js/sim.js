@@ -5,6 +5,7 @@
  */
 
 function simStep(dt) {
+  if (S.unlimited && S.tick % 30 === 0) unlimitedTopUp(0);
   if (S.winner >= 0) return;
   S.time += dt;
   S.tick++;
@@ -4049,6 +4050,24 @@ function ropewayAcross(b) {
   postMsg(b.owner, 'The Ropeway is running: Haulers and Workers ride it across.', b.x, b.y, 'good');
 }
 
+/* ------------------------------------------------------------------ unlimited resources */
+
+/**
+ * Unlimited resources, a testing option: once a second, player p's Command Base is stocked with
+ * UNLIMITED_STOCK of every good, and each of p's buildings gets whatever it is waiting for (a
+ * construction site its materials, a factory its inputs, a charger its Fuel, a garrison its Ammo),
+ * so nothing waits on hauling. Rivals play as usual.
+ */
+const UNLIMITED_STOCK = 500;
+function unlimitedTopUp(p) {
+  const L = getE(S.players[p].lander);
+  if (L && !L.dead && L.owner === p) for (const g of GOODS) if ((L.stock[g] || 0) < UNLIMITED_STOCK) L.stock[g] = UNLIMITED_STOCK;
+  for (const b of S.buildings) {
+    if (b.dead || b.owner !== p || b === L) continue;
+    for (const [g, n] of needsOf(b)) if (n > 0) b.stock[g] = (b.stock[g] || 0) + Math.ceil(n);
+  }
+}
+
 /* ------------------------------------------------------------------ viaducts */
 
 /**
@@ -4115,6 +4134,7 @@ function viaductAcross(b) {
   f.link = b.id; b.link = f.id; f.far = true; f.cost = b.cost;
   S.roadVer = (S.roadVer || 0) + 1; S.railVer = (S.railVer || 0) + 1;
   computeZones();
+  computeTerritory(); // the far end claims a little no-one's ground round it
   postMsg(b.owner, 'The Viaduct is open: anything can drive across.', b.x, b.y, 'good');
 }
 

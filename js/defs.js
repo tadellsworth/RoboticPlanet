@@ -173,6 +173,7 @@ const ROPE_MIN = 3, ROPE_MAX = 14, ROPE_SPEED = 1.8, ROPE_COST = 1.3;
  * bot can cross it, trucks and Road Trains included, and trains when track runs onto both ends.
  */
 const VIA_MIN = 2, VIA_MAX = 12, VIA_RISE = 2, VIA_COST = { cement: 3, alloy: 1 }, VIA_TIME = 5;
+const VIA_CLAIM = 3; // a Viaduct's far end claims the no-one's ground this far round it
 /*
  * Freight rail: track (S.rail) is laid in Paths (Rail), RAIL_COST a tile, paid when you build it and
  * laid at once, on open ground in your territory and on one level (trains can't climb). It can cross a

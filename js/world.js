@@ -766,6 +766,8 @@ function newGame(opts) {
   if (opts.autoplay) S.players[0].mult = DIFFICULTY[diff].mult;
   // Planet events (see EVENTS): the first one comes after EVENT_FIRST seconds.
   if (opts.events) { S.events = true; S.event = null; S.nextEvent = EVENT_FIRST; }
+  // Unlimited resources (a testing option on the new-game screen): see unlimitedTopUp.
+  if (opts.unlimited && !opts.mission) S.unlimited = true;
   // Wildlife (see WILD): Colony free play only; the nests go down once the landing site is in.
   if (mode === 'colony' && opts.wildlife && !opts.layout && !opts.setup) S.wildlife = true;
   // Each rival AI's personality: the one asked for, or (with 'random') a different one each, picked
@@ -854,8 +856,13 @@ function starterRoads(L) {
  */
 function canStep(a, b) {
   if (S.terrain[a] !== T_GROUND || S.terrain[b] !== T_GROUND) {
-    // Bridges and tunnels (road over water or through rock) join any neighbour, whatever its level.
-    return (S.terrain[a] === T_GROUND || S.road[a] > 0) && (S.terrain[b] === T_GROUND || S.road[b] > 0);
+    // Bridges and tunnels (road over water or through rock) join any neighbour, whatever its level,
+    // except that a tunnel can't come out on ground more than two levels from the crag it runs
+    // through: no digging down a sheer cliff (Sky islands' canyon walls).
+    if (!((S.terrain[a] === T_GROUND || S.road[a] > 0) && (S.terrain[b] === T_GROUND || S.road[b] > 0))) return false;
+    if (S.terrain[a] === T_ROCK && S.terrain[b] === T_GROUND && Math.abs(S.elev[b] - S.elev[a]) > 2) return false;
+    if (S.terrain[b] === T_ROCK && S.terrain[a] === T_GROUND && Math.abs(S.elev[a] - S.elev[b]) > 2) return false;
+    return true;
   }
   const d = S.elev[a] - S.elev[b];
   if (d === 0) return true;
@@ -930,6 +937,8 @@ function crossTile(t) { return S.terrain[t] !== T_GROUND; }
 
 /** Could bots step between a and b once roads are on them? (Planning: water and rock count as bridges and tunnels.) */
 function stepPlan(a, b) {
+  if (S.terrain[a] === T_ROCK && S.terrain[b] === T_GROUND && Math.abs(S.elev[b] - S.elev[a]) > 2) return false;
+  if (S.terrain[b] === T_ROCK && S.terrain[a] === T_GROUND && Math.abs(S.elev[a] - S.elev[b]) > 2) return false;
   return S.terrain[a] !== T_GROUND || S.terrain[b] !== T_GROUND ? true : canStep(a, b);
 }
 
@@ -1064,6 +1073,18 @@ function computeTerritory() {
     }
     if (who < 0) S.owner[t] = -1;
     else if (!tie) S.owner[t] = who;
+  }
+  // A Viaduct's far end claims the no-one's ground within VIA_CLAIM of it (never anyone's land), so
+  // a new mesa can be built on: an Outpost there claims the rest.
+  for (const b of S.buildings) {
+    if (b.dead || !b.built || b.type !== 'viaduct' || !b.far) continue;
+    const r = VIA_CLAIM, r2 = r * r + 0.3;
+    for (let j = Math.max(0, b.y - r); j <= Math.min(H - 1, b.y + r); j++) {
+      for (let i = Math.max(0, b.x - r); i <= Math.min(W - 1, b.x + r); i++) {
+        const t = j * W + i;
+        if (S.owner[t] < 0 && dist2(i, j, b.x, b.y) <= r2) S.owner[t] = b.owner;
+      }
+    }
   }
   S.territoryVer++;
   for (const b of S.buildings.slice()) {

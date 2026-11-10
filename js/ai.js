@@ -431,7 +431,7 @@ function aiBridge(p, maxSites) {
   // No water to bridge (Sky islands): a Viaduct from our clifftop across the canyon, onto a clifftop
   // our border already reaches if there is one (so we can build there), else onto no-one's land.
   const via = aiViaductSpot(p, home, E);
-  if (via && (via.owned || siteCount(p) >= maxSites || !aiAffordable(p, 'outpost'))) {
+  if (via) {
     const cost = viaductCost(via.a % W, (via.a / W) | 0, via.b % W, (via.b / W) | 0);
     if (!canPay(p, cost)) { P.bridgeWant = S.time; return; }
     P.bridgeWant = 0;

@@ -20,7 +20,9 @@ how goods move.
   levels. All of them are open from the start; finishing one ticks it off at that difficulty.
 
 Before each game, sliders set the **map size** (Small to Huge), the **terrain** (Flat, Gentle,
-Rolling, Rugged, Mountainous), the **resources** (Scarce to Abundant), the **map shape** (Standard, Long haul, Chokepoint, Islands, Crater, Plateaus or Sky islands), the
+Rolling, Rugged, Mountainous), the **resources** (Scarce to Abundant), the **map shape** (Standard, Long haul, Chokepoint, Islands, Crater, Plateaus or Sky islands), **Unlimited
+resources** (a testing switch: `unlimitedTopUp` keeps your Command Base at `UNLIMITED_STOCK` of every good and fills
+whatever your buildings are waiting for, once a second), the
 **biome** (Red desert, Jungle or Polar: scenery only, with plants that roads and buildings clear), the **rival style**,
 an optional **Nuclear race**, **Planet events** (on by default) and, in Colony, **Wildlife** (on by default). Resources come in separate
 fields: your landing zone has a little of everything, and the rich fields beyond it are worth fighting for.
@@ -156,7 +158,9 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
   plain-road cost; zones, both road networks (`comp` and `compT`) and the railway (`railNbrs`) join across it. A bot
   out on the deck drives as if on the abutment it left (`moveAlong`), so the ground below is untouched and its traffic
   passes underneath. The deck, piers and girders are drawn each frame (`drawViaductDeck`). An abutment on no-one's
-  land survives `computeTerritory`; one inside another colony's land is lost.
+  land survives `computeTerritory`; one inside another colony's land is lost. A far end claims the no-one's ground
+  within `VIA_CLAIM` (3) tiles, never anyone's land, so a new mesa can take an Outpost. A bot out on a deck keeps
+  `u.deck` (the two ends) until it reaches one, so a new order or a chase starts from the deck, not the ground below.
 - **Freight rail** (`RAIL_*` in `js/defs.js`; the rail section of `js/world.js`; `layRail`, `deliverTrain` in
   `js/sim.js`): track is a tile layer (`S.rail`), laid instantly from the Paths **Rail** tool (`RAIL_COST` a tile, mostly
   Cement with a quarter of an Alloy, paid through the same credit as road Cement; `RAIL_BRIDGE_COST` over water), level
