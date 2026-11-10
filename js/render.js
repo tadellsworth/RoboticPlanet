@@ -3416,6 +3416,7 @@ function drawShip(ctx, u, sx, sy, s) {
 function drawBot(ctx, u, sx, sy, s) {
   if (BOTS[u.type].wild) { drawCritter(ctx, u, sx, sy, s); return; }
   if (BOTS[u.type].sea) { drawShip(ctx, u, sx, sy, s); return; }
+  if (BOTS[u.type].air) { drawPlane(ctx, u, sx, sy, s, 0); return; }
   if (BOTS[u.type].rail) { drawFreightTrain(ctx, u, sx, sy, s); return; }
   if (BOTS[u.type].train) { drawRoadTrain(ctx, u, sx, sy, s); return; }
   if (BOTS[u.type].crawler) { drawCrawler(ctx, u.face || 0, sx, sy, s, u.owner, false, u.odo || 0, false, u); return; }
@@ -4056,17 +4057,25 @@ function render(dtReal) {
     ctx.lineDashOffset = 0;
   }
 
+  drawRunways(ctx, ox, oy, z, inView);
   // Selection rings drawn under buildings
   const sel = getE(R.selected);
   if (R.mode === 'aim') drawAim(ctx, ox, oy, z);
   else if (R.mode === 'land') drawLandingPick(ctx, ox, oy, z);
+  else if (R.mode === 'airdrop') drawAirdropPick(ctx, ox, oy, z);
   else if (sel) drawRanges(ctx, sel.type, sel.x, sel.y, ox, oy, z, sel.owner);
   if (R.ghost) drawRanges(ctx, R.ghost.type, R.ghost.x, R.ghost.y, ox, oy, z, 0);
 
   // Buildings and bots, sorted by y so lower things overlap upper ones.
   const items = [];
   for (const b of S.buildings) if (!b.dead && inView(b.x, b.y, 2)) items.push(b);
-  for (const u of S.bots) if (!u.dead && !u.inside && !(u.ride >= 0) && inView(u.x, u.y, 1)) items.push(u);
+  for (const u of S.bots) if (!u.dead && !u.inside && !(u.ride >= 0) && !u.dropping && !(BOTS[u.type].air && u.flight) && inView(u.x, u.y, 1)) items.push(u);
+  // A Cargo Plane parked at its Airfield stands on the apron (one an Airfield).
+  for (const b of S.buildings) {
+    if (b.dead || !BDEFS[b.type].airfield || !b.built || !inView(b.x, b.y, 3)) continue;
+    const pl = S.bots.find((u) => !u.dead && u.inside === b.id && BOTS[u.type].air);
+    if (pl) { const E = runwayEnds(b), f = Math.atan2(E.dy, E.dx); items.push({ ...pl, ent: 'u', parked: true, x: E.x0, y: E.y0, face: f, rface: f, path: null, vel: 0 }); }
+  }
   // A ship tied up at a Port is drawn at its dock, along the shore (one a Port).
   for (const b of S.buildings) {
     if (b.dead || !BDEFS[b.type].port || !b.built || !inView(b.x, b.y, 3)) continue;
@@ -4114,7 +4123,7 @@ function render(dtReal) {
       }
     } else {
       // Bots swing round to a new heading instead of snapping to it (long trucks turn slower).
-      const turn = (BOTS[e.type].sea ? 2.5 : BOTS[e.type].truck ? 5 : 11) * Math.min(0.1, R.dt || 0) * ((typeof UI !== 'undefined' && UI.speed) || 1);
+      const turn = (BOTS[e.type].sea ? 2.5 : BOTS[e.type].air ? 3 : BOTS[e.type].truck ? 5 : 11) * Math.min(0.1, R.dt || 0) * ((typeof UI !== 'undefined' && UI.speed) || 1);
       const want = e.face || 0;
       e.rface = e.rface === undefined ? want : e.rface + clamp(wrapAngle(want - e.rface), -turn, turn);
       // Off-road bots spread out a little; on roads they drive in lanes (keep right on two-way roads).
@@ -4144,6 +4153,7 @@ function render(dtReal) {
   }
 
   drawSmoke(ctx, ox, oy, z, inView);
+  drawAirLayer(ctx, ox, oy, z, inView);
 
   // Placing a Viaduct: the deck from the near end to the far end picked so far.
   if (typeof UI !== 'undefined' && UI.ropeA && R.ropeEnd && UI.placeType === 'viaduct') {
@@ -4166,6 +4176,10 @@ function render(dtReal) {
     drawBuilding(ctx, 'ropeway', bx, by, z, 0, { built: true, garrison: [], stock: {} });
     ctx.globalAlpha = 1;
     ctx.strokeRect(ox + E.i * z + 1, oy + E.j * z + 1, z - 2, z - 2);
+  }
+  if (R.ghost && R.ghost.type === 'airfield' && inMap(R.ghost.x, R.ghost.y)) {
+    const rwy = runwayDir(0, R.ghost.x, R.ghost.y);
+    if (rwy) { ctx.globalAlpha = 0.7; drawRunway(ctx, ox, oy, z, R.ghost.x, R.ghost.y, rwy, true); ctx.globalAlpha = 1; }
   }
   if (R.ghost) {
     ctx.globalAlpha = 0.75;
@@ -5546,4 +5560,204 @@ function renderMinimap() {
   ctx.lineWidth = 1.5;
   ctx.strokeRect(clamp(a.x, 0, S.W) * sx, clamp(a.y, 0, S.H) * sy,
     (clamp(c.x, 0, S.W) - clamp(a.x, 0, S.W)) * sx, (clamp(c.y, 0, S.H) - clamp(a.y, 0, S.H)) * sy);
+}
+
+
+/* ------------------------------------------------------------------ aircraft */
+
+/** A Cargo Plane's outline, facing +x (in tiles, for one 2.4 tiles long): fuselage, high swept wing, T-tail. */
+function planeOutline(ctx, L) {
+  const W = L * 0.98; // wingspan about the length, like the real thing
+  ctx.beginPath();
+  // fuselage
+  ctx.moveTo(L * 0.5, 0);
+  ctx.quadraticCurveTo(L * 0.47, -L * 0.055, L * 0.38, -L * 0.07);
+  ctx.lineTo(-L * 0.3, -L * 0.07); ctx.lineTo(-L * 0.47, -L * 0.03); ctx.lineTo(-L * 0.47, L * 0.03); ctx.lineTo(-L * 0.3, L * 0.07);
+  ctx.lineTo(L * 0.38, L * 0.07); ctx.quadraticCurveTo(L * 0.47, L * 0.055, L * 0.5, 0);
+  ctx.closePath();
+  // wing, swept back
+  ctx.moveTo(L * 0.12, -L * 0.06); ctx.lineTo(-L * 0.06, -W / 2); ctx.lineTo(-L * 0.15, -W / 2); ctx.lineTo(-L * 0.12, -L * 0.06); ctx.closePath();
+  ctx.moveTo(L * 0.12, L * 0.06); ctx.lineTo(-L * 0.06, W / 2); ctx.lineTo(-L * 0.15, W / 2); ctx.lineTo(-L * 0.12, L * 0.06); ctx.closePath();
+  // T-tail's stabiliser
+  ctx.moveTo(-L * 0.36, -L * 0.02); ctx.lineTo(-L * 0.47, -L * 0.2); ctx.lineTo(-L * 0.53, -L * 0.2); ctx.lineTo(-L * 0.5, -L * 0.02); ctx.closePath();
+  ctx.moveTo(-L * 0.36, L * 0.02); ctx.lineTo(-L * 0.47, L * 0.2); ctx.lineTo(-L * 0.53, L * 0.2); ctx.lineTo(-L * 0.5, L * 0.02); ctx.closePath();
+}
+
+/**
+ * A Cargo Plane at (sx, sy): on the ground (alt 0) or up to cruising height (alt 1), when it looks a little
+ * bigger and its shadow falls further off down the sun. Engine trails stream behind it in the air.
+ */
+function drawPlane(ctx, u, sx, sy, s, alt) {
+  const f = u.rface ?? u.face ?? 0, L = s * (1.6 + 0.85 * alt), off = s * (0.07 + 1.1 * alt);
+  ctx.save();
+  ctx.translate(sx + off * 0.7, sy + off);
+  ctx.rotate(f);
+  ctx.fillStyle = `rgba(4,10,16,${0.34 - 0.14 * alt})`;
+  planeOutline(ctx, L * (1 - 0.06 * alt));
+  ctx.fill();
+  ctx.restore();
+  if (alt > 0.15) {
+    // Engine trails: four faint streaks from the engines under the wing.
+    ctx.save(); ctx.translate(sx, sy); ctx.rotate(f);
+    const run = L * (0.5 + 0.6 * alt);
+    for (const k of [-0.3, -0.17, 0.17, 0.3]) {
+      const g = ctx.createLinearGradient(-L * 0.05, 0, -L * 0.05 - run, 0);
+      g.addColorStop(0, `rgba(240,246,255,${0.32 * alt})`); g.addColorStop(1, 'rgba(240,246,255,0)');
+      ctx.strokeStyle = g; ctx.lineWidth = Math.max(1, s * 0.05);
+      ctx.beginPath(); ctx.moveTo(-L * 0.05 + Math.abs(k) * L * 0.18, k * L); ctx.lineTo(-L * 0.05 - run, k * L * 1.02); ctx.stroke();
+    }
+    ctx.restore();
+  }
+  const art = artFor(u.type, u.owner);
+  if (art) drawArt(ctx, art, sx, sy, L, f);
+  else {
+    ctx.save(); ctx.translate(sx, sy); ctx.rotate(f);
+    ctx.fillStyle = '#6d757c'; planeOutline(ctx, L); ctx.fill();
+    ctx.fillStyle = PLAYER_COLORS[u.owner];
+    ctx.fillRect(-L * 0.5, -L * 0.03, L * 0.1, L * 0.06);
+    ctx.fillStyle = '#3d444a';
+    for (const k of [-0.3, -0.17, 0.17, 0.3]) ctx.fillRect(-L * 0.02 + Math.abs(k) * L * 0.18, k * L - L * 0.018, L * 0.09, L * 0.036);
+    ctx.restore();
+  }
+  if (u.hp < u.maxHp && !u.parked) {
+    const w = s * 0.6;
+    ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fillRect(sx - w / 2, sy - s * 0.6, w, Math.max(2, s * 0.05));
+    ctx.fillStyle = '#ff5a5a'; ctx.fillRect(sx - w / 2, sy - s * 0.6, (w * Math.max(0, u.hp)) / u.maxHp, Math.max(2, s * 0.05));
+  }
+}
+
+/** A parachute canopy at (x, y) (its bottom edge), size s, with its lines down to (x, ly). */
+function drawCanopy(ctx, x, y, s, ly, color) {
+  ctx.strokeStyle = 'rgba(30,30,30,0.55)'; ctx.lineWidth = Math.max(0.6, s * 0.05);
+  ctx.beginPath();
+  for (const k of [-0.9, -0.35, 0.35, 0.9]) { ctx.moveTo(x + k * s, y); ctx.lineTo(x, ly); }
+  ctx.stroke();
+  ctx.fillStyle = color;
+  ctx.beginPath(); ctx.ellipse(x, y, s, s * 0.62, 0, Math.PI, 0); ctx.closePath(); ctx.fill();
+  ctx.fillStyle = 'rgba(255,255,255,0.28)';
+  ctx.beginPath(); ctx.ellipse(x - s * 0.25, y - s * 0.12, s * 0.42, s * 0.3, -0.3, Math.PI, 0); ctx.closePath(); ctx.fill();
+  ctx.strokeStyle = 'rgba(0,0,0,0.25)'; ctx.lineWidth = Math.max(0.6, s * 0.04);
+  ctx.beginPath(); for (const k of [-0.5, 0, 0.5]) { ctx.moveTo(x + k * s * 0.9, y); ctx.lineTo(x + k * s * 0.45, y - s * 0.6); } ctx.stroke();
+}
+
+/** Cargo Planes in the air, and parachutes coming down: drawn over everything on the ground. */
+function drawAirLayer(ctx, ox, oy, z, inView) {
+  for (const d of S.drops || []) {
+    const p = clamp((S.time - d.t0) / AIR_DROP_FALL, 0, 1), tx = d.i + 0.5, ty = d.j + 0.5;
+    const x = d.x + (tx - d.x) * p, y = d.y + (ty - d.y) * p, h = (1 - p) * (1 - p * 0.3) * 1.5;
+    if (!inView(x, y, 3)) continue;
+    const sx = ox + x * z, sy = oy + y * z, py = sy - h * z;
+    ctx.fillStyle = `rgba(0,0,0,${0.12 + 0.22 * p})`;
+    ctx.beginPath(); ctx.ellipse(sx + h * z * 0.25, sy + h * z * 0.35, z * (0.22 + 0.16 * p), z * (0.12 + 0.08 * p), 0, 0, Math.PI * 2); ctx.fill();
+    const chute = ['#e9e4d8', '#d8c58a', PLAYER_COLORS[d.owner]][d.id % 3];
+    if (d.kind === 'outpost') {
+      // The outpost, packed, under a big cluster of canopies.
+      for (const k of [-1, 0, 1]) drawCanopy(ctx, sx + k * z * 0.42, py - z * (0.85 + (k ? 0 : 0.12)), z * 0.3, py - z * 0.18, k ? '#e9e4d8' : PLAYER_COLORS[d.owner]);
+      ctx.globalAlpha = 0.95;
+      drawBuilding(ctx, 'dropost', sx, py, z * 0.75, d.owner, { built: true, garrison: [], stock: {}, packed: true });
+      ctx.globalAlpha = 1;
+    } else if (d.kind === 'supply') {
+      const goods = Object.keys(d.goods || {});
+      drawCanopy(ctx, sx, py - z * 0.62, z * 0.32, py - z * 0.12, chute);
+      drawCrate(ctx, sx, py, z * 0.26, goods[0]);
+    } else {
+      const bots = (d.bots || []).map(getE).filter((v) => v && !v.dead);
+      bots.forEach((v, k) => {
+        const bx = sx + (bots.length > 1 ? (k ? 0.28 : -0.28) : 0) * z;
+        drawCanopy(ctx, bx, py - z * 0.62, z * 0.27, py - z * 0.2, k ? '#e9e4d8' : PLAYER_COLORS[d.owner]);
+        drawBot(ctx, { ...v, face: Math.PI / 2, rface: Math.PI / 2, path: null, vel: 0 }, bx, py, z);
+      });
+    }
+  }
+  for (const u of S.bots) {
+    if (u.dead || !BOTS[u.type].air || !u.flight || !inView(u.x, u.y, 4)) continue;
+    const want = u.face || 0, turn = 3 * Math.min(0.1, R.dt || 0) * ((typeof UI !== 'undefined' && UI.speed) || 1);
+    u.rface = u.rface === undefined ? want : u.rface + clamp(wrapAngle(want - u.rface), -turn, turn);
+    drawPlane(ctx, u, ox + u.x * z, oy + u.y * z, z, planeAlt(u));
+  }
+}
+
+/** Air drop: the plane's reach round its Airfield, and the spot under the pointer or picked. */
+function drawAirdropPick(ctx, ox, oy, z) {
+  const u = getE(typeof UI !== 'undefined' ? UI.dropPlane : 0), base = u && planeBase(u);
+  if (!u || !base) return;
+  const bx = ox + (base.x + 0.5) * z, by = oy + (base.y + 0.5) * z, reach = planeReach(u) * z;
+  ctx.strokeStyle = 'rgba(157,255,184,0.55)'; ctx.lineWidth = 2; ctx.setLineDash([z * 0.3, z * 0.2]);
+  ctx.beginPath(); ctx.arc(bx, by, reach, 0, Math.PI * 2); ctx.stroke();
+  ctx.setLineDash([]);
+  for (const [spot, picked] of [[R.aimHover, false], [R.dropAt, true]]) {
+    if (!spot) continue;
+    const ok = !airdropBlocked(0, u, UI.dropKind, spot.i, spot.j), x = ox + spot.i * z, y = oy + spot.j * z;
+    ctx.strokeStyle = ok ? 'rgba(157,255,184,0.5)' : 'rgba(255,107,107,0.5)'; ctx.lineWidth = Math.max(1.5, z * 0.04);
+    ctx.setLineDash([z * 0.2, z * 0.15]);
+    ctx.beginPath(); ctx.moveTo(bx, by); ctx.lineTo(x + z / 2, y + z / 2); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.strokeStyle = !ok ? 'rgba(255,107,107,0.9)' : picked ? '#9dffb8' : 'rgba(157,255,184,0.6)';
+    ctx.lineWidth = picked ? Math.max(2.5, z * 0.08) : 2;
+    if (UI.dropKind === 'outpost' && ok) { ctx.beginPath(); ctx.arc(x + z / 2, y + z / 2, (BDEFS.dropost.terr + 0.5) * z, 0, Math.PI * 2); ctx.stroke(); }
+    ctx.strokeRect(x + 2, y + 2, z - 4, z - 4);
+    if (picked && ok) { ctx.fillStyle = 'rgba(157,255,184,0.18)'; ctx.fillRect(x + 2, y + 2, z - 4, z - 4); drawCanopy(ctx, x + z / 2, y + z * 0.3, z * 0.28, y + z * 0.75, '#9dffb8'); }
+  }
+}
+
+
+/** Every Airfield's runway, on the ground under buildings and bots. */
+function drawRunways(ctx, ox, oy, z, inView) {
+  for (const b of S.buildings) {
+    if (b.dead || !BDEFS[b.type].airfield || !b.rwy) continue;
+    const r = b.rwy;
+    if (!inView(b.x + r.dx * RUNWAY_LEN / 2, b.y + r.dy * RUNWAY_LEN / 2, RUNWAY_LEN)) continue;
+    drawRunway(ctx, ox, oy, z, b.x, b.y, r, !b.built);
+  }
+}
+
+/**
+ * A runway from the hangar at tile (i, j) out RUNWAY_LEN tiles in direction r: asphalt with white edge lines,
+ * threshold bars at both ends, a dashed centre line and the aiming-point blocks; edge lights at dusk and night
+ * (green at the head, red at the far end). A runway still being built is just its outline, pegged out.
+ */
+function drawRunway(ctx, ox, oy, z, i, j, r, planned) {
+  const n = RUNWAY_LEN, x0 = ox + (i + 0.5 + r.dx * 0.5) * z, y0 = oy + (j + 0.5 + r.dy * 0.5) * z;
+  ctx.save();
+  ctx.translate(x0, y0);
+  ctx.rotate(Math.atan2(r.dy, r.dx));
+  const len = n * z, w = z * 0.84, hw = w / 2;
+  if (planned) {
+    ctx.strokeStyle = 'rgba(255,255,255,0.55)'; ctx.lineWidth = Math.max(1, z * 0.04); ctx.setLineDash([z * 0.2, z * 0.14]);
+    ctx.strokeRect(0, -hw, len, w); ctx.setLineDash([]);
+    ctx.restore();
+    return;
+  }
+  ctx.fillStyle = todColor('#2f3236');
+  ctx.fillRect(0, -hw, len, w);
+  // patched, worn asphalt and tyre marks at both touchdown zones
+  ctx.fillStyle = todColor('#383b40');
+  for (let k = 0; k < n; k++) ctx.fillRect(k * z + z * 0.1, -hw + z * ((k * 37) % 7) * 0.08, z * 0.5, z * 0.16);
+  ctx.fillStyle = 'rgba(10,10,12,0.35)';
+  for (const [a, b] of [[z * 0.7, z * 1.6], [len - z * 1.6, len - z * 0.7]]) for (const o of [-0.16, 0.16]) ctx.fillRect(a, o * z - z * 0.03, b - a, z * 0.06);
+  const paint = todColor('#e9ebe6');
+  ctx.fillStyle = paint;
+  // edge lines
+  ctx.fillRect(z * 0.05, -hw + z * 0.04, len - z * 0.1, Math.max(1, z * 0.025));
+  ctx.fillRect(z * 0.05, hw - z * 0.04 - Math.max(1, z * 0.025), len - z * 0.1, Math.max(1, z * 0.025));
+  // threshold bars at both ends
+  for (const x of [z * 0.1, len - z * 0.32]) for (let k = -3; k <= 3; k++) if (k) ctx.fillRect(x, k * w * 0.12 - w * 0.035, z * 0.22, w * 0.07);
+  // centre line dashes and the aiming-point blocks
+  for (let x = z * 0.55; x < len - z * 0.6; x += z * 0.42) ctx.fillRect(x, -Math.max(0.5, z * 0.012), z * 0.22, Math.max(1, z * 0.024));
+  for (const x of [z * 1.05, len - z * 1.35]) for (const o of [-1, 1]) ctx.fillRect(x, o * w * 0.2 - w * 0.06, z * 0.3, w * 0.12);
+  // edge lights after dark
+  const lit = TOD.active ? TOD.state.pools || 0 : 0;
+  if (lit > 0.02) {
+    ctx.globalCompositeOperation = 'lighter';
+    for (let k = 0; k <= n * 2; k++) {
+      const x = (k / (n * 2)) * len, col = k === 0 ? '120,255,140' : k === n * 2 ? '255,90,80' : '255,236,190';
+      for (const yy of [-hw, hw]) {
+        const g = ctx.createRadialGradient(x, yy, 0, x, yy, z * 0.12);
+        g.addColorStop(0, `rgba(${col},${0.95 * lit})`); g.addColorStop(1, `rgba(${col},0)`);
+        ctx.fillStyle = g; ctx.fillRect(x - z * 0.12, yy - z * 0.12, z * 0.24, z * 0.24);
+      }
+    }
+    ctx.globalCompositeOperation = 'source-over';
+  }
+  ctx.restore();
 }

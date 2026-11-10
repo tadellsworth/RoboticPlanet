@@ -28,8 +28,10 @@ function simStep(dt) {
     const u = S.bots[k];
     if (u.dead) continue;
     if (u.ferryWait) { ferryPassenger(u); continue; }
+    if (u.dropping) continue; // coming down by parachute (see updateDrops)
     if (u.type === 'warbot') updateWarbot(u, dt); else if (BOTS[u.type].wild) updateCritter(u, dt); else if (BOTS[u.type].crawler) updateCrawler(u, dt); else updateWorker(u, dt);
   }
+  if (S.drops && S.drops.length) updateDrops();
   if (S.missiles.length) updateMissiles(dt);
   if (S.blowing > 0) updateBlasts();
   if (S.tick % 30 === 15) cleanRallies();
@@ -180,6 +182,13 @@ function needsOf(b) {
   }
   // A Port keeps a little Fuel for its owner's ships to fill up from (once there are ships).
   if (def.port && b.built && S.bots.some((u) => !u.dead && u.owner === b.owner && BOTS[u.type].sea)) out.push(['fuel', PORT_FUEL - (b.stock.fuel || 0) - (b.inc.fuel || 0), true]);
+  // An Airfield keeps Fuel for its planes, and what the places it supplies by air are short of.
+  if (def.airfield && b.built) {
+    for (const [g, k] of Object.entries(airKeep(b))) {
+      const n = k - ((b.stock[g] || 0) - (b.res[g] || 0)) - (b.inc[g] || 0), e = out.find((o) => o[0] === g);
+      if (e) e[1] = Math.max(e[1], n); else out.push([g, n, true]);
+    }
+  }
   // Garrisons keep Ammo for their warbots (Versus only): an Outpost a full reload (2) for each warbot
   // stationed there (at least 2), up to its ammoStock, so empty Outposts don't tie up Alloy.
   if (def.ammoStock && b.built && warOn()) {
@@ -199,7 +208,14 @@ function supplyOf(b, g) {
 
 /** What b can spare of g to fill another Depot's supply order: never dipping into its own order. */
 function keepSupply(b, g) {
-  return Math.max(0, supplyOf(b, g) - ((b.keep && b.keep[g]) || 0));
+  return Math.max(0, supplyOf(b, g) - Math.max((b.keep && b.keep[g]) || 0, BDEFS[b.type].airfield ? airKeep(b)[g] || 0 : 0));
+}
+
+/** What Airfield b holds on to: Fuel for its planes, and what the places it supplies by air are short of. */
+function airKeep(b) {
+  const w = Object.assign({}, airWant(b) || {});
+  if (S.bots.some((u) => !u.dead && u.home === b.id && BOTS[u.type].air)) w.fuel = (w.fuel || 0) + AIRFIELD_FUEL;
+  return w;
 }
 
 /** Does building b use good g (as an input, ammo, fuel, repairs or construction)? */
@@ -473,7 +489,7 @@ function playerGoods(p) {
 function nearestEnemyBot(owner, x, y, range, preferWar, ownLand, land) {
   let best = null, bd = range * range, bestWar = null, bwd = range * range;
   for (const u of S.bots) {
-    if (u.dead || u.owner === owner || u.inside) continue;
+    if (u.dead || u.owner === owner || u.inside || u.dropping || BOTS[u.type].air) continue; // nothing shoots aircraft yet
     if (land && BOTS[u.type].sea) continue; // warbots can't go after ships (guns on the shore can)
     if (ownLand && u.type !== 'warbot' && S.owner[tIdx(Math.floor(u.x), Math.floor(u.y))] !== owner) continue;
     const d = dist2(u.x, u.y, x, y);
@@ -1055,8 +1071,12 @@ function dispatch(p) {
   for (const t of planAll(p).slice()) {
     if (S.bAt[t] || (S.owner[t] !== p && !(bridgeable(t) && bridgeHead(p, t % S.W, (t / S.W) | 0)))) cancelPlan(t);
   }
-  const linked = (a, b) => P.noHaulers || roadLinked(a, b);
-  for (const b of blds) b.unlinked = !P.noHaulers && needsRoad(b) && !onHomeNet(b);
+  // Out past the roads (a foothold dropped by air), Workers carry goods by hand between buildings no
+  // Hauler's road reaches, over ground they can walk: a Drop Outpost's goods to a site beside it.
+  const zoneAt = (x, y) => S.zone[tIdx(Math.floor(x), Math.floor(y))];
+  const footLinked = (a, b) => dist2(a.x, a.y, b.x, b.y) <= FOOT_CARRY * FOOT_CARRY && !onHomeNet(a) && !onHomeNet(b) && zoneAt(a.x, a.y) === zoneAt(b.x, b.y);
+  const linked = (a, b) => P.noHaulers || roadLinked(a, b) || footLinked(a, b);
+  for (const b of blds) b.unlinked = !P.noHaulers && needsRoad(b) && !onHomeNet(b) && !b.airSupply;
   const minFree = siteCount(p) > 0 ? MIN_FREE_WORKERS : 1;
   // Can this colony charge anywhere right now (a Fuel Station with Fuel)? Can its trucks fill up?
   P.canCharge = blds.some((b) => b.built && BDEFS[b.type].charger && !chargerDry(b));
@@ -1093,7 +1113,7 @@ function dispatch(p) {
         else if (role === 'sea') continue;
         else if (bt.tanker) { if (!tank || role === 'rail') continue; }
         else if (liq && (tank || role !== 'haul')) continue;
-        else if (!(bt.haul || (P.noHaulers && bt.build)) || (bt.rail ? 'rail' : bt.train ? 'train' : bt.truck ? 'truck' : 'haul') !== role) continue;
+        else if (!(bt.haul || (bt.build && (P.noHaulers || (src && !onHomeNet(src) && zoneAt(u.x, u.y) === zoneAt(src.x, src.y) && dist2(u.x, u.y, src.x, src.y) <= FOOT_CARRY * FOOT_CARRY)))) || (bt.rail ? 'rail' : bt.train ? 'train' : bt.truck ? 'truck' : 'haul') !== role) continue;
         if (bt.rail && src && !trainAt(u, src)) continue;
         if (bt.roadOnly && src && !botLinked(u, src)) continue;
       } else if (role === 'build' ? !bt.build : role === 'staff' ? !bt.staff : bt.crew !== role) continue;
@@ -1370,10 +1390,11 @@ function repairDry(b) { return (b.repairPts || 0) < 0.5 && !(b.stock.alloy > 0);
 /** Nearest Repair Station robot u can reach that has Alloy, avoiding crowded ones. */
 function findRepair(u) {
   let best = null, bs = Infinity;
-  const zone = S.zone[tIdx(Math.floor(u.x), Math.floor(u.y))];
+  const zone = S.zone[tIdx(Math.floor(u.x), Math.floor(u.y))], far = u.type === 'warbot' ? secludedPost(u) : null;
   for (const b of S.buildings) {
     if (b.dead || b.owner !== u.owner || !b.built || !BDEFS[b.type].repair || repairDry(b) || evacuated(b)) continue;
     if (S.zone[tIdx(b.x, b.y)] !== zone) continue;
+    if (far && dist2(b.x, b.y, far.x, far.y) > SECLUDED_REACH * SECLUDED_REACH) continue; // no long walk home from a cut-off post
     if (u.type !== 'warbot' && roadBound(u) && !botLinked(u, b)) continue;
     let inside = 0;
     for (const v of S.bots) if (!v.dead && (v.inside === b.id || (v.task && v.task.type === 'repair' && v.task.bld === b.id))) inside++;
@@ -1696,6 +1717,7 @@ function assignStaff(u, b) {
 function updateWorker(u, dt) {
   u.busy = 0;
   u.moved = 0;
+  if (BOTS[u.type].air) { updatePlane(u, dt); return; }
   if (u.task && u.task.type === 'flee') { doFlee(u, dt); return; }
   // A new Freight Train rolls out at the nearest Rail Station (and waits at the Foundry until there is one).
   if (BOTS[u.type].rail && !u.task && !onTrack(u) && S.tick % 30 === u.id % 30) { deliverTrain(u); return; }
@@ -1736,6 +1758,7 @@ function updateWorker(u, dt) {
       if (u.bat >= 99.5 || chargerDry(c)) { u.task = null; if (!BDEFS[c.type].store) exitBuilding(u); }
     } else if (moveAlong(u, dt)) enterBuilding(u, c);
   } else if (t.type === 'haul') doHaul(u, t, dt);
+  else if (t.type === 'board') doBoard(u, t, dt);
   else if (t.type === 'crate') doCrate(u, t, dt);
   else if (t.type === 'build') doBuild(u, t, dt);
   else if (t.type === 'pave') doPave(u, t, dt);
@@ -2815,6 +2838,12 @@ function goGarrison(u) {
     const ok = (b) => b && !b.dead && b.owner === u.owner && b.built && BDEFS[b.type].mil && !evacuated(b) && S.zone[tIdx(b.x, b.y)] === zone &&
       b.garrison.length + b.garInc < BDEFS[b.type].garrison && !(u.avoidB === b.id && S.time < u.avoidUntil);
     const post = postOf(u), L = getE(S.players[u.owner].lander);
+    // Posted to a cut-off post it can walk to: back there (if it's full, it waits beside it).
+    if (post && secluded(post) && S.zone[tIdx(post.x, post.y)] === zone) {
+      if (ok(post)) { u.task = { type: 'garrison', bld: post.id }; post.garInc++; }
+      else if (dist2(u.x, u.y, post.x + 0.5, post.y + 0.5) > 9) u.task = { type: 'defend', home: post.id };
+      return;
+    }
     const to = ok(post) ? post : ok(L) ? L : null;
     if (to) { u.task = { type: 'garrison', bld: to.id }; to.garInc++; return; }
   }
@@ -2847,6 +2876,7 @@ function goGarrison(u) {
 function wrapAngle(a) { return Math.atan2(Math.sin(a), Math.cos(a)); }
 
 function damageBot(u, dmg) {
+  if (u.dropping || (BOTS[u.type].air && u.flight && planeAlt(u) > 0.3)) return; // up in the air: out of reach
   u.hp -= dmg;
   u.hurtT = S.time;
   if (u.hp <= 0) killBot(u);
@@ -3474,14 +3504,8 @@ function warbotAct(u, dt) {
     if (strikeBuilding(u, b, dt, power) === null) u.task = null;
   } else if (t.type === 'hold') {
     holdRally(u, t, rally, dt, power);
-  } else if (t.type === 'board') {
-    // Off to a Port to board a Ferry for a beach landing: it waits there to be taken aboard.
-    const port = getE(t.port), f = getE(t.ferry);
-    if (!port || port.dead || port.owner !== u.owner || !f || f.dead || !f.landing || f.landing.phase !== 'gather') { u.task = null; return; }
-    const r = travel(u, port.x, port.y, dt);
-    if (r) { u.task = null; u.ferryWait = { at: port.id, to: 0, landing: f.id, since: S.time, ferry: 0 }; u.inside = port.id; u.x = port.x + 0.5; u.y = port.y + 0.5; u.path = null; }
-    else if (r === null) u.task = null;
-  } else if (t.type === 'defend') {
+  } else if (t.type === 'board') doBoard(u, t, dt); // to a Port for a beach landing, or an Airfield for an air drop
+  else if (t.type === 'defend') {
     const h = getE(t.home);
     if (!h || h.owner !== u.owner) { u.task = null; return; }
     const r = travel(u, h.x, h.y, dt);
@@ -3630,6 +3654,21 @@ function postOf(u) {
   if (!g || g.dead || g.owner !== u.owner || !BDEFS[g.type].mil) { u.post = 0; return null; }
   return g;
 }
+
+/**
+ * Is garrison b cut off from home: a Drop Outpost (or anything supplied by air), or out where its warbots
+ * can't walk to the Command Base? Warbots posted there stay with it: they recharge and reload there, get
+ * repaired only at a Repair Station close by, and only orders close by (SECLUDED_REACH) take them out.
+ */
+function secluded(b) {
+  if (!b || b.dead || !BDEFS[b.type].mil || b.type === 'lander') return false;
+  if (b.airSupply || BDEFS[b.type].airdrop) return true;
+  const L = getE(S.players[b.owner] && S.players[b.owner].lander);
+  return !L || L.dead || S.zone[tIdx(L.x, L.y)] !== S.zone[tIdx(b.x, b.y)];
+}
+
+/** Warbot u's post, when that post is cut off from home (see secluded). */
+function secludedPost(u) { const p = postOf(u); return p && secluded(p) ? p : null; }
 
 /** How many warbots are posted to garrison b (inside it or out). */
 function postedAt(b) {
@@ -3898,6 +3937,7 @@ function rallySources(owner, i, j, rear, posted) {
   for (const b of S.buildings) {
     if (b.dead || b.owner !== owner || !b.built || !BDEFS[b.type].mil || spareFrom(b, rear, posted) < 1) continue;
     if (S.zone[tIdx(b.x, b.y)] !== zone) continue;
+    if (secluded(b) && usesPosts(owner) && dist2(b.x, b.y, i, j) > SECLUDED_REACH * SECLUDED_REACH) continue; // a cut-off post keeps its warbots
     out.push({ b, d: dist(b.x, b.y, i, j) });
   }
   out.sort((a, c) => a.d - c.d);
@@ -4368,7 +4408,7 @@ function evacSweep(p) {
   if (!evacZones(p)) return 0;
   let n = 0;
   for (const u of S.bots) {
-    if (u.dead || u.owner !== p || BOTS[u.type].rail || BOTS[u.type].sea || BOTS[u.type].crawler || (u.task && u.task.type === 'flee')) continue;
+    if (u.dead || u.owner !== p || BOTS[u.type].rail || BOTS[u.type].sea || BOTS[u.type].air || BOTS[u.type].crawler || u.dropping || (u.task && u.task.type === 'flee')) continue;
     const home = u.inside ? getE(u.inside) : null;
     const x = home ? home.x + 0.5 : u.x, y = home ? home.y + 0.5 : u.y;
     if (inEvac(p, x, y)) { fleeFrom(u); n++; continue; }
@@ -4483,6 +4523,7 @@ function attackSources(owner, target, posted) {
     if (b.dead || b.owner !== owner || !b.built || !BDEFS[b.type].mil) continue;
     if (S.zone[tIdx(b.x, b.y)] !== zone) continue; // warbots there can't walk to the target
     const d = dist(b.x, b.y, target.x, target.y);
+    if (secluded(b) && usesPosts(owner) && d > SECLUDED_REACH) continue; // a cut-off post keeps its warbots
     if (d <= ATTACK_RANGE && spareArmed(b, posted) > 0) out.push({ b, d });
   }
   out.sort((a, c) => a.d - c.d);
@@ -4844,7 +4885,7 @@ function demolish(b) {
 /* ------------------------------------------------------------------ moving buildings */
 
 /** Settings a building keeps when it moves. */
-const MOVE_KEEPS = ['prio', 'limit', 'paused', 'keep', 'smode', 'reject', 'order', 'orders', 'omode', 'mode', 'gprio', 'keepW', 'pmode'];
+const MOVE_KEEPS = ['prio', 'limit', 'paused', 'keep', 'smode', 'reject', 'order', 'orders', 'omode', 'mode', 'gprio', 'keepW', 'pmode', 'airSupply'];
 
 /**
  * Can building b be moved? Any finished one of yours, except the Command Base and Outposts (they hold
@@ -4888,6 +4929,8 @@ function finishMove(nb) {
   for (const g in old.stock) if (old.stock[g] > 0) bump(nb.stock, g, old.stock[g]);
   old.stock = {}; old.res = {}; old.loot = undefined;
   for (const u of S.bots) if (!u.dead && u.owner === nb.owner && (u.post === old.id || (u.inside === old.id && u.type === 'warbot'))) u.post = nb.id;
+  // An Airfield's planes move with it (one parked there taxis over).
+  for (const u of S.bots) if (!u.dead && u.owner === nb.owner && BOTS[u.type].air && u.home === old.id) { u.home = nb.id; if (u.inside === old.id) { exitBuilding(u); enterBuilding(u, nb); } if (u.flight) u.flight.base = nb.id; }
   destroyBuilding(old, false, true);
   addFx('smoke', old.x + 0.5, old.y + 0.5, { r: 0.7 });
   postMsg(nb.owner, `The ${BDEFS[nb.type].name} has moved here.`, nb.x, nb.y, 'good');
@@ -5637,7 +5680,7 @@ function deploySpot(owner, i, j) {
     const x = i + di, y = j + dj;
     if (!inMap(x, y)) continue;
     const t = tIdx(x, y);
-    if (S.terrain[t] !== T_GROUND || S.bAt[t] || S.road[t] || S.plan[t] || S.res[t] || S.ramp[t] || scorched(t)) continue;
+    if (S.terrain[t] !== T_GROUND || S.bAt[t] || S.road[t] || S.plan[t] || S.res[t] || S.ramp[t] || scorched(t) || runwayAt(t)) continue;
     if (S.owner[t] >= 0 && S.owner[t] !== owner) continue;
     if (S.wildlife && S.buildings.some((e) => !e.dead && BDEFS[e.type].wild && Math.max(Math.abs(e.x - x), Math.abs(e.y - y)) <= WILD.clear)) continue;
     const d = di * di + dj * dj;
@@ -6028,7 +6071,7 @@ function ferryPassenger(u) {
     return;
   }
   const at = getE(w.at);
-  if (w.landing) { const f = getE(w.landing); if (!at || at.dead || !f || f.dead || !f.landing) leaveFerryQueue(u); return; }
+  if (w.landing) { const f = getE(w.landing); if (!at || at.dead || !f || f.dead || !(f.landing || f.mission)) leaveFerryQueue(u); return; }
   if (!at || at.dead || S.time - w.since > FERRY_GIVEUP || ferryLines().get(w.at) === undefined) leaveFerryQueue(u);
 }
 
@@ -6259,4 +6302,499 @@ function takeUpRail(owner, t) {
   if (!S.rail[t] || !roadOwnedBy(owner, t)) return;
   setRail(t, false);
   refundRoad(owner, railCost(t), t % S.W, (t / S.W) | 0);
+}
+
+/* ------------------------------------------------------------------ air: Airfields, Cargo Planes and air drops */
+
+/**
+ * A Cargo Plane is based at an Airfield (u.home), parked there (u.inside) between flights. Each flight it
+ * carries one load (u.mission): a Drop Outpost kit ('outpost'), two robots ('bots': Warbots or Workers,
+ * aboard as passengers in u.aboard) or up to its `carry` of goods ('supply', u.cargo) for a place supplied
+ * by air (b.airSupply). It loads (phase 'load'), flies straight out (u.flight) and drops the load by
+ * parachute over the spot ('out': S.drops come down AIR_DROP_FALL s later), then flies home ('back').
+ */
+
+let AIRW = null; // per tick: what each Airfield should keep for the places it supplies by air
+
+/** Owner's built Airfield nearest (x, y) with a Cargo Plane based there, or null. */
+function airBaseNear(owner, x, y) {
+  let best = null, bd = Infinity;
+  for (const b of S.buildings) {
+    if (b.dead || !b.built || b.owner !== owner || !BDEFS[b.type].airfield) continue;
+    if (!S.bots.some((u) => !u.dead && u.home === b.id && BOTS[u.type].air)) continue;
+    const d = dist2(b.x, b.y, x, y);
+    if (d < bd) { bd = d; best = b; }
+  }
+  return best;
+}
+
+/** The Airfield plane u is based at, if it still stands. */
+function planeBase(u) {
+  const b = getE(u.home);
+  return b && !b.dead && b.built && b.owner === u.owner && BDEFS[b.type].airfield ? b : null;
+}
+
+/** Of the plane's tank (0–100), what a flight of d tiles burns. */
+function flightFuel(u, d) { return (d / BOTS[u.type].speed) * PLANE_BURN; }
+
+/** How far out (and back) a plane gets on a full tank, in tiles. */
+function planeReach(u) { return Math.floor(((88 / PLANE_BURN) * BOTS[u.type].speed - 2 * RUNWAY_LEN - 34) / 2); }
+
+/** What Airfield b keeps for the places it supplies by air: {good: n}, or null. */
+function airWant(b) {
+  if (!AIRW || AIRW.S !== S || AIRW.tick !== S.tick) {
+    const m = new Map();
+    for (const c of S.buildings) {
+      if (c.dead || !c.airSupply || !airSuppliable(c)) continue;
+      const base = airBaseNear(c.owner, c.x, c.y);
+      if (!base) continue;
+      let w = m.get(base.id);
+      if (!w) m.set(base.id, (w = {}));
+      for (const [g, n] of needsOf(c)) if (n >= 1) w[g] = Math.min(AIR_KEEP, (w[g] || 0) + Math.ceil(n));
+    }
+    AIRW = { S, tick: S.tick, m };
+  }
+  return AIRW.m.get(b.id) || null;
+}
+
+/**
+ * Can place b be supplied by air: a construction site (not one paid from storage), or a building that
+ * keeps goods (storage, a garrison's Ammo, a factory's inputs, a Silo's missiles, a Fuel Station's Fuel...)?
+ * Not an Airfield, the Command Base, or anything wild.
+ */
+function airSuppliable(b) {
+  const def = b && BDEFS[b.type];
+  if (!def || b.dead || def.airfield || def.wild || b.type === 'lander') return false;
+  if (!b.built) return !storeFunded(b);
+  return !!(def.store || def.ammoStock || def.inp || def.ammo || def.fuelCap || def.repair || def.nukeSilo || def.roadworks || def.charger || def.bots);
+}
+
+/** Does Airfield b have room for plane u (each holds AIRFIELD_HOLDS of a type)? */
+function airfieldRoom(b, u) {
+  let n = 0;
+  for (const v of S.bots) if (v !== u && !v.dead && v.home === b.id && v.type === u.type) n++;
+  return n < (AIRFIELD_HOLDS[u.type] || 1);
+}
+
+/** Owner's nearest built Airfield with room for plane u, or null. */
+function freeAirfield(u) {
+  let st = null, bd = Infinity;
+  for (const b of S.buildings) {
+    if (b.dead || b.owner !== u.owner || !b.built || !BDEFS[b.type].airfield || !airfieldRoom(b, u)) continue;
+    const d = dist2(b.x + 0.5, b.y + 0.5, u.x, u.y);
+    if (d < bd) { bd = d; st = b; }
+  }
+  return st;
+}
+
+/** A new plane (still at the Foundry) goes to its owner's nearest Airfield with room for it, and waits until there is one. */
+function deliverPlane(u) {
+  const st = freeAirfield(u);
+  if (!st) {
+    const P = S.players[u.owner];
+    if (S.time - (P.planeMsg || -999) > 90) { P.planeMsg = S.time; postMsg(u.owner, `A ${BOTS[u.type].name} is waiting at the Foundry: each Airfield holds one, so build another Airfield and it goes there.`, Math.floor(u.x), Math.floor(u.y), 'warn'); }
+    return;
+  }
+  if (u.flown) { headHome(u); return; } // put down in the field when its own Airfield went: it flies to this one
+  u.home = st.id;
+  exitBuilding(u);
+  enterBuilding(u, st);
+  addFx('ring', st.x + 0.5, st.y + 0.5, { color: PLAYER_COLORS[u.owner] });
+  postMsg(u.owner, `A ${BOTS[u.type].name} is ready on an Airfield.`, st.x, st.y, 'good');
+}
+
+/*
+ * Flight (u.flight.ph): 'roll' down the runway from its head, gathering speed (ROLL_ACCEL), off the ground at
+ * the far end; 'air', climbing (PLANE_CLIMB s) and turning (PLANE_TURN) toward u.flight's spot; 'final', lined
+ * up on the runway and coming down to touch down at its far end; 'rollout', braking (ROLL_BRAKE) back to the
+ * head, where it parks; 'ditch', down in the field when there's no Airfield left to land on.
+ */
+
+/** Plane u, parked at Airfield base, starts its takeoff roll, bound for (tx, ty). */
+function startTakeoff(u, base, tx, ty) {
+  const R = runwayEnds(base);
+  exitBuilding(u);
+  u.x = R.x0; u.y = R.y0; u.face = Math.atan2(R.dy, R.dx); u.vel = 0; u.alt = 0; u.path = null;
+  u.flight = { ph: 'roll', tx, ty, base: base.id };
+  u.flown = 1;
+}
+
+/** Plane u in the air turns for home: out past its runway's far end (two fixes, to line up), then in to land. */
+function headHome(u) {
+  const base = planeBase(u) || freeAirfield(u);
+  if (!base) { u.flight = { ph: 'ditch' }; return; }
+  u.home = base.id;
+  const R = runwayEnds(base), px = -R.dy, py = R.dx;
+  // Already out past the far end: straight onto the final approach. Otherwise round the pattern: out abeam
+  // the far end on its side, then in onto the extended centre line, turning in toward the runway.
+  const along = (u.x - R.x1) * R.dx + (u.y - R.y1) * R.dy, side = (u.x - R.x1) * px + (u.y - R.y1) * py >= 0 ? 1 : -1;
+  const fixes = along > 4 ? [[R.x1 + R.dx * 6, R.y1 + R.dy * 6]]
+    : [[R.x1 + R.dx * 5 + px * side * 5, R.y1 + R.dy * 5 + py * side * 5], [R.x1 + R.dx * 8, R.y1 + R.dy * 8]];
+  u.flight = { ph: 'air', home: true, base: base.id, fixes };
+  [u.flight.tx, u.flight.ty] = u.flight.fixes.shift();
+}
+
+/**
+ * Turn plane u toward (tx, ty) at up to PLANE_TURN (times k). A spot inside the circle it would turn on can't
+ * be reached by turning: it flies on straight until it can (so it never circles a spot forever).
+ */
+function steerPlane(u, tx, ty, dt, k) {
+  const f = u.face || 0, err = wrapAngle(Math.atan2(ty - u.y, tx - u.x) - f), w = PLANE_TURN * (k || 1);
+  const r = Math.max(0.3, (u.vel || 0) / w), side = err >= 0 ? 1 : -1;
+  const cx = u.x - Math.sin(f) * r * side, cy = u.y + Math.cos(f) * r * side; // the centre of its turn toward the spot
+  if (Math.abs(err) > 0.2 && Math.hypot(tx - cx, ty - cy) < r * 0.98) return; // too tight: straight on for now
+  u.face = wrapAngle(f + clamp(err, -w * dt, w * dt));
+}
+
+function movePlane(u, dt) {
+  const step = (u.vel || 0) * dt;
+  u.x += Math.cos(u.face) * step; u.y += Math.sin(u.face) * step;
+  u.x = clamp(u.x, 0.2, S.W - 0.2); u.y = clamp(u.y, 0.2, S.H - 0.2);
+  u.moved = step > 0 ? 1 : 0;
+  u.odo = ((u.odo || 0) + step) % 1000;
+}
+
+/** One step of plane u's flight: 'over' on reaching its spot in the air, 'parked' at the end of its rollout. */
+function flyStep(u, dt) {
+  const F = u.flight, bt = BOTS[u.type], vmax = bt.speed * evSpeed() * (u.bat > 0.5 ? 1 : BATTERY.slow);
+  const base = F.base ? getE(F.base) : null, R = base && !base.dead ? runwayEnds(base) : null;
+  if (F.ph === 'roll') {
+    u.vel = Math.min(vmax, (u.vel || 0) + ROLL_ACCEL * dt);
+    u.alt = 0;
+    movePlane(u, dt);
+    if (!R || (u.x - R.x0) * R.dx + (u.y - R.y0) * R.dy >= RUNWAY_LEN - 1) F.ph = 'air'; // off the far end
+    return null;
+  }
+  if (F.ph === 'air') {
+    u.vel = Math.min(vmax, (u.vel || 0) + bt.accel * dt);
+    u.alt = Math.min(1, (u.alt || 0) + dt / PLANE_CLIMB);
+    steerPlane(u, F.tx, F.ty, dt);
+    movePlane(u, dt);
+    const dx = F.tx - u.x, dy = F.ty - u.y, d = Math.hypot(dx, dy);
+    if (d < 0.6 || (d < 1.5 && dx * Math.cos(u.face) + dy * Math.sin(u.face) < 0)) return 'over';
+    return null;
+  }
+  if (F.ph === 'final') {
+    if (!R) { headHome(u); return null; }
+    const d = Math.hypot(R.x1 - u.x, R.y1 - u.y);
+    steerPlane(u, R.x1, R.y1, dt, 1.8);
+    u.vel = Math.max(Math.min(vmax, 2.4), u.vel - bt.brake * dt);
+    u.alt = Math.min(u.alt || 0, clamp(d / 3, 0, 1));
+    movePlane(u, dt);
+    if (d < 0.35 || (d < 1.5 && (R.x1 - u.x) * Math.cos(u.face) + (R.y1 - u.y) * Math.sin(u.face) < 0)) {
+      F.ph = 'rollout'; u.alt = 0; u.x = R.x1; u.y = R.y1; u.face = Math.atan2(-R.dy, -R.dx);
+    }
+    return null;
+  }
+  if (F.ph === 'rollout') {
+    if (!R) { u.flight = { ph: 'ditch' }; return null; }
+    const left = (u.x - R.x0) * R.dx + (u.y - R.y0) * R.dy; // still to go back to the head
+    u.vel = Math.max(Math.min(u.vel, Math.sqrt(2 * ROLL_BRAKE * Math.max(0, left)) + 0.15), 0);
+    u.vel = Math.max(0, u.vel - ROLL_BRAKE * dt * 0.5);
+    u.alt = 0;
+    movePlane(u, dt);
+    if (left <= 0.08 || u.vel < 0.05) { u.x = R.x0; u.y = R.y0; u.vel = 0; u.face = Math.atan2(R.dy, R.dx); return 'parked'; }
+    return null;
+  }
+  // Ditching: down where it is, to wait for an Airfield.
+  u.vel = Math.max(0, (u.vel || 0) - bt.brake * dt * 0.6);
+  u.alt = Math.max(0, (u.alt || 0) - dt / PLANE_CLIMB);
+  movePlane(u, dt);
+  if (!u.alt && !u.vel) { u.flight = null; postMsg(u.owner, 'A Cargo Plane with no Airfield to go back to came down in the field: build an Airfield and it flies there.', Math.floor(u.x), Math.floor(u.y), 'warn'); }
+  return null;
+}
+
+/** How high plane u flies (0 on the ground, 1 cruising). */
+function planeAlt(u) { return u.flight ? u.alt || 0 : 0; }
+
+/** Top up plane u's tank from Airfield b's Fuel, one Fuel (PLANE_FILL) at a time, to at least `want`. */
+function fuelPlane(u, b, want) {
+  while (u.bat < want - 1e-6 && (b.stock.fuel || 0) - (b.res.fuel || 0) >= 1) {
+    bump(b.stock, 'fuel', -1);
+    usedGood(u.owner, 'fuel', 1);
+    u.bat = Math.min(100, u.bat + PLANE_FILL);
+  }
+  return u.bat >= want - 1e-6;
+}
+
+/** What a sortie from base b to (x, y) and back needs in the tank (with a margin). */
+function sortieFuel(u, b, x, y) { return Math.min(100, flightFuel(u, 2 * dist(b.x + 0.5, b.y + 0.5, x, y) + 2 * RUNWAY_LEN + 34) + 6); }
+
+/** Why owner's plane u can't drop `kind` ('outpost', 'warbot' or 'worker') at tile (i, j); '' if it can. */
+function airdropBlocked(owner, u, kind, i, j) {
+  if (!u || u.dead || u.owner !== owner || !BOTS[u.type].air) return 'Pick one of your Cargo Planes.';
+  const base = planeBase(u);
+  if (!base || u.inside !== base.id) return 'The plane must be parked at its Airfield.';
+  if (u.mission) return 'That plane is already on a flight.';
+  if (!inMap(i, j)) return 'Outside the map.';
+  const t = tIdx(i, j);
+  if (kind === 'outpost') {
+    if (S.terrain[t] !== T_GROUND || S.bAt[t] || S.road[t] || S.plan[t] || S.res[t] || S.ramp[t] || (S.rail && S.rail[t]) || scorched(t) || runwayAt(t)) return 'Drop it on open, empty ground (no road, track, runway or deposit).';
+    if (S.owner[t] >= 0 && S.owner[t] !== owner) return 'Not on land someone else holds.';
+    if (S.wildlife && S.buildings.some((e) => !e.dead && BDEFS[e.type].wild && Math.max(Math.abs(e.x - i), Math.abs(e.y - j)) <= WILD.clear)) return 'Too close to a creature nest.';
+    if (!canAffordRoad(owner, BDEFS.dropost.cost)) return `A Drop Outpost costs ${costText(BDEFS.dropost.cost)}: not enough ${missingGoods(owner, BDEFS.dropost.cost)} in storage.`;
+  } else {
+    const b = S.bAt[t] ? getE(S.bAt[t]) : null;
+    const into = b && b.owner === owner && kind === 'warbot' && BDEFS[b.type].garrison && b.built;
+    if (!into && (S.terrain[t] !== T_GROUND || S.bAt[t] || !walkable(t))) return kind === 'warbot' ? 'Drop them on open ground, or onto a garrison of yours.' : 'Drop them on open ground.';
+  }
+  if (sortieFuel(u, base, i + 0.5, j + 0.5) > 99.5) return `Too far: a full tank takes the plane ${planeReach(u)} tiles out and back.`;
+  return '';
+}
+
+/**
+ * Order owner's plane u to drop `kind` at (i, j): a Drop Outpost (paid from storage now), or up to `n`
+ * robots of that type (Warbots from garrisons, as for a march; idle Workers) who make their way to the
+ * Airfield to board. Returns '' or why not.
+ */
+function orderAirdrop(owner, u, kind, i, j, n) {
+  const why = airdropBlocked(owner, u, kind, i, j);
+  if (why) return why;
+  const base = planeBase(u), seats = BOTS[u.type].seats;
+  u.aboard = [];
+  if (kind === 'outpost') {
+    payRoad(owner, BDEFS.dropost.cost);
+    u.mission = { kind, x: i, y: j, phase: 'load', since: S.time };
+    return '';
+  }
+  n = clamp(n || seats, 1, seats);
+  let sent = 0;
+  if (kind === 'warbot') {
+    const rear = !usesPosts(owner);
+    for (const posted of usesPosts(owner) ? [false, true] : [false]) {
+      for (const b of rallySources(owner, base.x, base.y, rear, posted)) {
+        while (spareFrom(b, rear, posted) > 0 && sent < n) {
+          const v = takeArmed(b, posted);
+          if (!v) break;
+          v.inside = 0; v.path = null;
+          v.task = { type: 'board', port: base.id, ferry: u.id };
+          sent++;
+        }
+      }
+    }
+    if (!sent) return 'No armed warbots to spare that can get to this Airfield.';
+  } else {
+    const zone = S.zone[tIdx(base.x, base.y)];
+    const cands = S.bots.filter((v) => !v.dead && v.owner === owner && v.type === 'worker' && !v.carry && !v.ferryWait && (!v.task || v.task.type === 'home') && S.zone[tIdx(Math.floor(v.x), Math.floor(v.y))] === zone);
+    cands.sort((a, c) => dist2(a.x, a.y, base.x, base.y) - dist2(c.x, c.y, base.x, base.y));
+    for (const v of cands.slice(0, n)) { cancelTask(v); exitBuilding(v); v.path = null; v.task = { type: 'board', port: base.id, ferry: u.id }; sent++; }
+    if (!sent) return 'No idle Workers that can get to this Airfield.';
+  }
+  u.mission = { kind, x: i, y: j, phase: 'load', since: S.time, n: sent };
+  return '';
+}
+
+/** Off to an Airfield (or a Port) to board a plane (or a Ferry on a beach landing): it waits there to be taken aboard. */
+function doBoard(u, t, dt) {
+  const port = getE(t.port), f = getE(t.ferry);
+  const open = f && !f.dead && (BOTS[f.type].air ? f.mission && f.mission.phase === 'load' : f.landing && f.landing.phase === 'gather');
+  if (!port || port.dead || port.owner !== u.owner || !open) { u.task = null; return; }
+  const r = travel(u, port.x, port.y, dt);
+  if (r) { u.task = null; u.ferryWait = { at: port.id, to: 0, landing: f.id, since: S.time, ferry: 0 }; u.inside = port.id; u.x = port.x + 0.5; u.y = port.y + 0.5; u.path = null; }
+  else if (r === null) u.task = null;
+}
+
+/** A supply run for plane u from base b, if a place it serves is short of goods b has: {c, load, n}, or null. */
+function airSupplyRun(u, b) {
+  const cap = BOTS[u.type].carry;
+  let best = null, bs = -Infinity;
+  for (const c of S.buildings) {
+    if (c.dead || c.owner !== u.owner || !c.airSupply || c === b || !airSuppliable(c)) continue;
+    if (airBaseNear(c.owner, c.x, c.y) !== b) continue; // a place is supplied from its nearest Airfield
+    if (S.bots.some((v) => v !== u && !v.dead && v.mission && v.mission.to === c.id)) continue; // one plane at a time
+    const load = {};
+    let n = 0, short = 0;
+    for (const [g, k] of needsOf(c)) {
+      const want = Math.floor(k);
+      if (want < 1) continue;
+      short += want;
+      const take = Math.min(want, Math.floor(supplyOf(b, g)), cap - n);
+      if (take > 0) { load[g] = (load[g] || 0) + take; n += take; }
+      if (n >= cap) break;
+    }
+    // Worth a flight: a good load, all it's short of, or something it has run out of.
+    const dry = Object.keys(load).some((g) => !((c.stock[g] || 0) > 0));
+    if (!n || (n < Math.min(cap / 2, short) && !dry)) continue;
+    const sc = n * 4 - Math.sqrt(dist2(c.x, c.y, b.x, b.y)) * 0.05;
+    if (sc > bs) { bs = sc; best = { c, load, n }; }
+  }
+  return best;
+}
+
+function updatePlane(u, dt) {
+  if (u.bat === undefined) u.bat = 100;
+  const M = u.mission;
+  // In the air: burn Fuel, fly on.
+  if (u.flight) {
+    u.bat = Math.max(0, u.bat - PLANE_BURN * dt * drainMul(u));
+    const F = u.flight, ev = flyStep(u, dt);
+    if (ev === 'over') {
+      if (M && M.phase === 'out' && !F.home) airDrop(u);
+      else if (F.fixes && F.fixes.length) [F.tx, F.ty] = F.fixes.shift();
+      else if (F.home) F.ph = 'final';
+    } else if (ev === 'parked') {
+      const b = getE(F.base);
+      u.flight = null;
+      if (b && !b.dead && b.owner === u.owner && BDEFS[b.type].airfield) { enterBuilding(u, b); u.home = b.id; landed(u, b); }
+    }
+    return;
+  }
+  const base = planeBase(u);
+  // Not at an Airfield (just built, or its own was lost): fly to the nearest.
+  if (!base || u.inside !== base.id) {
+    if (S.tick % 30 === u.id % 30) {
+      if (M) planeLost(u, true);
+      u.home = 0;
+      deliverPlane(u);
+    }
+    return;
+  }
+  // Parked: mended, and Fuel topped up when it's low.
+  if (u.hp < u.maxHp) u.hp = Math.min(u.maxHp, u.hp + PLANE_MEND * dt);
+  if (!M) {
+    if (u.bat < 100 - PLANE_FILL + 1 && S.tick % 15 === u.id % 15) fuelPlane(u, base, 100 - PLANE_FILL + 1);
+    if (S.tick % 30 !== u.id % 30) return;
+    const run = airSupplyRun(u, base);
+    if (!run) return;
+    for (const g in run.load) { bump(base.stock, g, -run.load[g]); bump(run.c.inc, g, run.load[g]); }
+    u.cargo = run.load;
+    u.mission = { kind: 'supply', to: run.c.id, x: run.c.x, y: run.c.y, phase: 'load', since: S.time };
+    return;
+  }
+  if (M.phase !== 'load') return;
+  // Loading: robots come aboard (it goes with whoever's aboard once nobody else is coming, or after PLANE_GATHER s).
+  if (M.kind === 'warbot' || M.kind === 'worker') {
+    for (const v of S.bots) {
+      const w = v.ferryWait;
+      if (!v.dead && w && w.landing === u.id && !w.ferry && w.at === base.id) { w.ferry = u.id; u.aboard.push(v.id); }
+    }
+    const aboard = ferryAboard(u).length;
+    const coming = S.bots.some((v) => !v.dead && v.task && v.task.type === 'board' && v.task.ferry === u.id);
+    if (!aboard) { if (!coming && S.time - M.since > 3) { u.mission = null; postMsg(u.owner, 'Nobody came aboard the Cargo Plane: the drop is called off.', base.x, base.y, 'warn'); } return; }
+    if (coming && S.time - M.since < PLANE_GATHER) return;
+    for (const v of S.bots) if (!v.dead && v.task && v.task.type === 'board' && v.task.ferry === u.id) v.task = null; // too late: they stay behind
+  } else if (S.time - M.since < PLANE_LOAD) return;
+  // Fuel for the trip out and back (it waits for some to be brought).
+  const tx = M.x + 0.5, ty = M.y + 0.5;
+  if (!fuelPlane(u, base, sortieFuel(u, base, tx, ty))) {
+    const P = S.players[u.owner];
+    M.noFuel = 1;
+    if (S.time - (P.planeFuelMsg || -999) > 90) { P.planeFuelMsg = S.time; postMsg(u.owner, 'A Cargo Plane is waiting for Fuel at its Airfield: it needs some for the flight.', base.x, base.y, 'warn'); }
+    return;
+  }
+  M.noFuel = 0;
+  M.phase = 'out';
+  startTakeoff(u, base, tx, ty);
+  if (u.owner === 0) sfx('takeoff');
+}
+
+/** Plane u is over its drop point: the load goes out on parachutes, and it turns for home. */
+function airDrop(u) {
+  const M = u.mission;
+  S.drops = S.drops || [];
+  const d = { id: S.nextId++, owner: u.owner, kind: M.kind, x: u.x, y: u.y, i: M.x, j: M.y, t0: S.time };
+  if (M.kind === 'supply') { d.to = M.to; d.goods = u.cargo || {}; u.cargo = null; }
+  else if (M.kind === 'warbot' || M.kind === 'worker') {
+    d.bots = [];
+    for (const v of ferryAboard(u)) { v.ferryWait = null; v.inside = 0; v.x = u.x; v.y = u.y; v.path = null; v.task = null; v.dropping = d.id; d.bots.push(v.id); }
+    u.aboard = [];
+  }
+  S.drops.push(d);
+  if (u.owner === 0) sfx('chute');
+  u.mission = null;
+  headHome(u);
+}
+
+/** A plane parked at Airfield b after a flight: anything it still carries is unloaded there. */
+function landed(u, b) {
+  if (u.cargo) { for (const g in u.cargo) bump(b.stock, g, u.cargo[g]); u.cargo = null; }
+}
+
+/** Plane u lost its flight (shot down, or its base went): reserved goods are let go, a kit is refunded, passengers get off. */
+function planeLost(u, keep) {
+  const M = u.mission;
+  if (M) {
+    if (M.kind === 'supply' && u.cargo) { const c = getE(M.to); if (c) for (const g in u.cargo) bump(c.inc, g, -u.cargo[g]); }
+    if (M.kind === 'outpost' && M.phase !== 'done') refundRoad(u.owner, BDEFS.dropost.cost, Math.floor(u.x), Math.floor(u.y));
+  }
+  if (keep) {
+    for (const v of ferryAboard(u)) { v.ferryWait = null; v.inside = 0; v.task = null; v.x = u.x; v.y = u.y; }
+    u.aboard = [];
+    for (const v of S.bots) if (!v.dead && v.task && v.task.type === 'board' && v.task.ferry === u.id) v.task = null;
+    u.cargo = null;
+  }
+  u.mission = null;
+}
+
+/** Parachutes coming down: once one lands, its load is there. */
+function updateDrops() {
+  if (!S.drops || !S.drops.length) return;
+  S.drops = S.drops.filter((d) => {
+    const p = clamp((S.time - d.t0) / AIR_DROP_FALL, 0, 1);
+    const tx = d.i + 0.5, ty = d.j + 0.5;
+    if (d.bots) for (const id of d.bots) { const v = getE(id); if (v && !v.dead) { v.x = d.x + (tx - d.x) * p; v.y = d.y + (ty - d.y) * p; } }
+    if (p < 1) return true;
+    landDrop(d);
+    return false;
+  });
+}
+
+function landDrop(d) {
+  const t = tIdx(d.i, d.j);
+  if (d.kind === 'supply') {
+    const c = getE(d.to);
+    let n = 0;
+    for (const g in d.goods) { n += d.goods[g]; if (c && !c.dead && c.owner === d.owner) { bump(c.inc, g, -d.goods[g]); bump(c.stock, g, d.goods[g]); } }
+    if (c && !c.dead && c.owner === d.owner && d.owner === 0 && n) addFx('ring', c.x + 0.5, c.y + 0.5, { color: PLAYER_COLORS[d.owner] });
+    return;
+  }
+  if (d.kind === 'outpost') {
+    let at = t;
+    if (S.bAt[at] || S.terrain[at] !== T_GROUND || (S.owner[at] >= 0 && S.owner[at] !== d.owner)) at = deploySpot(d.owner, d.i, d.j);
+    if (at < 0) { refundRoad(d.owner, BDEFS.dropost.cost, d.i, d.j); postMsg(d.owner, 'The Drop Outpost came down where it couldn\'t stand: its goods went back into storage.', d.i, d.j, 'warn'); return; }
+    if (S.plan[at]) cancelPlan(at);
+    const b = addBuilding(d.owner, 'dropost', at % S.W, (at / S.W) | 0, true);
+    b.airSupply = true;
+    b.keep = { fuel: 3 };
+    b.deployedAt = S.time;
+    computeTerritory();
+    computeZones();
+    addFx('ring', b.x + 0.5, b.y + 0.5, { color: PLAYER_COLORS[b.owner], r: 2 });
+    postMsg(b.owner, 'A Drop Outpost is down: it claims the land around it and is supplied by air from your Airfield.', b.x, b.y, 'good');
+    if (b.owner === 0) sfx('complete');
+    const foe = S.owner[at];
+    if (foe >= 0 && foe !== b.owner) postMsg(foe, 'The enemy dropped an outpost nearby!', b.x, b.y, 'bad');
+    return;
+  }
+  // Robots: warbots join a garrison of ours they came down on (if there's room), or hold the spot under a rally
+  // flag; either way, dropped beside a garrison of ours (a Drop Outpost), that's their post: they stay with it.
+  const into = S.bAt[t] ? getE(S.bAt[t]) : null;
+  let near = null, nd = 6 * 6;
+  for (const g of S.buildings) {
+    if (g.dead || g.owner !== d.owner || !g.built || !BDEFS[g.type].garrison || g.type === 'lander' || S.zone[tIdx(g.x, g.y)] !== S.zone[t]) continue;
+    const dd = dist2(g.x, g.y, d.i, d.j);
+    if (dd <= nd) { nd = dd; near = g; }
+  }
+  const bots = (d.bots || []).map(getE).filter((v) => v && !v.dead);
+  let r = null, slot = 0;
+  for (const v of bots) {
+    v.dropping = 0; v.x = d.i + 0.5; v.y = d.j + 0.5; v.vel = 0;
+    if (v.type === 'warbot') {
+      if (into && !into.dead && into.owner === v.owner && BDEFS[into.type].garrison && into.garrison.length < BDEFS[into.type].garrison) { if (usesPosts(v.owner)) v.post = into.id; enterBuilding(v, into); continue; }
+      if (near && usesPosts(v.owner)) v.post = near.id;
+      if (into) { const s = deploySpot(v.owner, d.i, d.j); if (s >= 0) { v.x = (s % S.W) + 0.5; v.y = ((s / S.W) | 0) + 0.5; } }
+      if (!r) {
+        r = S.rallies.find((q) => q.owner === v.owner && Math.abs(q.x - v.x) < 1.5 && Math.abs(q.y - v.y) < 1.5);
+        if (!r) { r = { id: S.nextId++, owner: v.owner, x: v.x, y: v.y }; S.rallies.push(r); }
+        slot = rallyMembers(r.id).length;
+      }
+      v.task = { type: 'hold', rally: r.id, slot: slot++ };
+    } else v.task = null;
+  }
+  if (bots.length) {
+    postMsg(d.owner, `${bots.length} ${bots.length === 1 ? BOTS[bots[0].type].name : BOTS[bots[0].type].plural} parachuted in.`, d.i, d.j, 'good');
+    const foe = S.owner[t];
+    if (foe >= 0 && foe !== d.owner && bots.some((v) => v.type === 'warbot')) { postMsg(foe, 'Enemy warbots parachuted into your land!', d.i, d.j, 'bad'); if (foe === 0) sfx('alert'); }
+    computeZones();
+  }
 }

@@ -173,6 +173,13 @@ const ART_MANIFEST = {
   'port@0': B3D('buildings/port@0.webp', 1.6),
   'port@1': B3D('buildings/port@1.webp', 1.6),
   ...Object.fromEntries(['cargoship', 'tankship', 'ferry'].flatMap((k) => [0, 1].map((t) => [`${k}@${t}`, `bots/${k}@${t}.webp`]))),
+  // Air: the Airfield's hangar end (its runway is drawn in code), the Drop Outpost, the Cargo Plane (top-down, facing +x).
+  'airfield@0': B3D('buildings/airfield@0.webp', 1.6),
+  'airfield@1': B3D('buildings/airfield@1.webp', 1.6),
+  'dropost@0': B3D('buildings/dropost@0.webp', 2.3),
+  'dropost@1': B3D('buildings/dropost@1.webp', 2.3),
+  'cargoplane@0': 'bots/cargoplane@0.webp',
+  'cargoplane@1': 'bots/cargoplane@1.webp',
   // Generator (one version for both teams, like the factories), and its working loop: fans and power bus.
   generator: B3D('buildings/generator.webp'),
   ...Object.fromEntries([0, 1, 2, 3, 4, 5, 6, 7].map((k) => [`generator-work-${k}`, B3D(`buildings/generator-work-${k}.webp`)])),

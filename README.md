@@ -208,6 +208,28 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
   and `wouldBlock` / `canPlace` treat Outposts and Viaduct ends as walkable. A far end claims the no-one's ground
   within `VIA_CLAIM` (3) tiles, never anyone's land, so a new mesa can take an Outpost. A bot out on a deck keeps
   `u.deck` (the two ends) until it reaches one, so a new order or a chase starts from the deck, not the ground below.
+- **Air: Airfields, the Cargo Plane and air drops** (every map). An **Airfield** (10 Cement, 4 Alloy; Build → Move) is
+  a hangar with a runway `RUNWAY_LEN` (5) tiles long running straight out from it (`runwayDir`: the first of east, west,
+  south, north with open, level ground of yours; kept in `b.rwy`, and nothing else goes on it: `runwayAt`). It is storage
+  like a Depot. A **Cargo Plane** (6 rounds at the Bot Foundry; `AIRFIELD_HOLDS`: one per Airfield, a spare waits at the
+  Foundry) is based there (`u.home`, parked at the runway head). One load a flight (`u.mission`), dropped by parachute
+  (`S.drops`, `AIR_DROP_FALL` s to come down): a **Drop Outpost** kit (6 Cement, 3 Alloy, paid from storage: a small
+  outpost on any open ground nobody else holds; `terr` 4, garrison 2, `ammoStock` 4, storage, a 2-slot Fuel charger),
+  two robots (Warbots from garrisons as for a march, or idle Workers, who board at the Airfield: the `board` task and
+  `ferryWait`, as for a Ferry) anywhere, the enemy's land too, or up to 8 goods (`u.cargo`) for a place **supplied by
+  air** (`b.airSupply`: any building with needs, construction sites too; a Drop Outpost and sites in its land have it
+  on). Each place is served from its nearest Airfield with a plane (`airBaseNear`); that Airfield keeps what they're
+  short of (`airWant`, up to `AIR_KEEP` of each) plus `AIRFIELD_FUEL` for its plane (`airKeep`), and haulers bring it.
+  A flight (`flyStep`): it rolls down the runway from its head gathering speed (`ROLL_ACCEL`), lifts off at the far end,
+  climbs (`PLANE_CLIMB` s) and turns at up to `PLANE_TURN` (never circling a spot it can't turn onto: `steerPlane`), drops
+  over the spot, flies a circuit round to line up with the runway (`headHome`), comes down on final, touches down at the
+  far end and brakes (`ROLL_BRAKE`) back to the head. It burns `PLANE_BURN` of its tank a second (one Fuel at the
+  Airfield puts back `PLANE_FILL`; `sortieFuel`, `planeReach`); with no Airfield left it comes down in the field and
+  flies to the next one built. Nothing shoots aircraft yet. Off the road network, within `FOOT_CARRY` (12) tiles,
+  Workers carry goods by hand between buildings no Hauler reaches (a Drop Outpost's goods to a site beside it).
+  Warbots posted to a cut-off post (`secluded`: supplied by air, or where they can't walk to the Command Base) stay with
+  it: they recharge and reload there, go for repairs, rally flags and attacks only within `SECLUDED_REACH` (16) of it,
+  and dropped beside a garrison of yours they're posted to it.
 - **Ships and Ports** (naval maps only: Islands and Lakes, `naval` in `SHAPE_PRESETS`, `navalMap`; `NAVAL_ON` switches them
   off everywhere): a **Port** (8 Cement, 3 Alloy; Build → Move) is storage on land beside water at least `SEA_MIN` (20)
   tiles big (`portDocks`; `seaNet` labels the bodies of water). Ships come from the Bot Foundry and put to sea at the

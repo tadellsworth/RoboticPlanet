@@ -169,7 +169,7 @@ function _noise(dur, vol, o) {
 }
 
 const SFX_GAP = {
-  launch: 0.3, boom: 0.12, shellhit: 0.09, missilehit: 0.2, laser: 0.08, pulse: 0.14, hit: 0.07, produce: 0.25, alert: 1.5, complete: 0.3, order: 0.15,
+  launch: 0.3, takeoff: 1.5, chute: 0.4, boom: 0.12, shellhit: 0.09, missilehit: 0.2, laser: 0.08, pulse: 0.14, hit: 0.07, produce: 0.25, alert: 1.5, complete: 0.3, order: 0.15,
   weld: 0.25, scrape: 0.3, hiss: 0.6, airbrake: 1.2, honk: 2.5, nuke: 2, siren: 4,
 };
 
@@ -256,6 +256,18 @@ function sfx(name, dest) {
       _noise(1.6, 0.16, { type: 'bandpass', freq: 380, to: 3200, q: 0.9, attack: 0.18, delay: 0.05, dest: D });
       _noise(1.4, 0.1, { freq: 400, to: 160, attack: 0.1, delay: 0.05, dest: D });
       _tone(110, 1.3, 'sawtooth', 0.035, 620, 0.08, D);
+      break;
+    // A Cargo Plane taking off: four turboprops spooling up, a deep drone and a rising roar that fades away.
+    case 'takeoff':
+      _noise(2.6, 0.11, { type: 'bandpass', freq: 220, to: 900, q: 0.7, attack: 0.6, dest: D });
+      _noise(2.2, 0.06, { type: 'highpass', freq: 1800, to: 3200, attack: 0.9, delay: 0.3, dest: D });
+      _tone(58, 2.4, 'sawtooth', 0.03, 92, 0, D);
+      _tone(87, 2.2, 'triangle', 0.025, 140, 0.15, D);
+      break;
+    // Parachutes opening: a cloth crack and the rush of air.
+    case 'chute':
+      _noise(0.09, 0.12, { type: 'bandpass', freq: 900, q: 1.2, attack: 0.003, dest: D });
+      _noise(0.7, 0.05, { type: 'lowpass', freq: 700, to: 300, attack: 0.05, delay: 0.06, dest: D });
       break;
     case 'capture': _tone(392, 0.12, 'triangle', 0.09, null, 0, D); _tone(587, 0.2, 'triangle', 0.09, null, 0.1, D); break;
     case 'error': _tone(200, 0.12, 'square', 0.05, 150, 0, D); break;

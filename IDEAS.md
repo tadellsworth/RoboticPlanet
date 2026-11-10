@@ -22,7 +22,10 @@ and biomes started here and are now in the game.)
 - **Ships, after the first version** (Ports, Container Ships, Tanker Ships, Ferries and beach landings are in the game):
   a gunboat or patrol boat to escort ships and shell the shore; the rival using Container Ships and ferry lines
   (today it only builds a Port and makes beach landings).
-- **Air (after ships).** An **Airfield**, a **strike bomber** for precision strikes (a smaller, faster, cheaper hit
+- **Air (after ships).** An **Airfield** (done, with the Cargo Plane and air drops), a **strike bomber** (styled after a
+  MiG-31: a long, slab-sided twin-engine interceptor with big rectangular intakes, a thin swept wing, twin fins; up to
+  two per Airfield beside its one Cargo Plane; each hits one target a sortie, then needs a while on the ground to rearm
+  and refuel) for precision strikes (a smaller, faster, cheaper hit
   than a Missile, on a building you pick, or on a moving target such as a Tanker on the road, which then explodes),
   and an **anti-aircraft gun** to shoot it down. Aircraft burn Fuel like ships and trucks (refuelling at the Airfield). To think through: what
   the bomber costs and carries, how far it flies and how long it takes to rearm, how the AA gun trades with turrets

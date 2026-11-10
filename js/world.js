@@ -1698,6 +1698,48 @@ function wouldBlock(t) {
 }
 
 /** Can `owner` start a `type` construction site at tile (i, j)? Returns {ok, reason}. */
+/* ------------------------------------------------------------------ Airfield runways */
+
+/** The Airfield whose runway covers tile t (built or being built), or null. */
+function runwayAt(t) {
+  if (!S.buildings.some((b) => !b.dead && b.rwy)) return null;
+  const i = t % S.W, j = (t / S.W) | 0;
+  for (const b of S.buildings) {
+    if (b.dead || !b.rwy || !BDEFS[b.type].airfield) continue;
+    const r = b.rwy, k = r.dx ? (i - b.x) * r.dx : (j - b.y) * r.dy;
+    if (k >= 1 && k <= RUNWAY_LEN && (r.dx ? j === b.y : i === b.x)) return b;
+  }
+  return null;
+}
+
+/** Could a runway run from a hangar at (i, j) in direction (dx, dy): RUNWAY_LEN tiles of open, level ground of the owner's? */
+function runwayFits(owner, i, j, dx, dy, self) {
+  if (!inMap(i, j)) return false;
+  const lv = S.elev[tIdx(i, j)];
+  for (let k = 1; k <= RUNWAY_LEN; k++) {
+    const x = i + dx * k, y = j + dy * k;
+    if (!inMap(x, y)) return false;
+    const t = tIdx(x, y);
+    if (S.terrain[t] !== T_GROUND || S.elev[t] !== lv || S.bAt[t] || S.road[t] || S.plan[t] || S.res[t] || S.ramp[t] || scorched(t) || S.owner[t] !== owner) return false;
+    if (S.rail && (S.rail[t] || (S.railPlan && S.railPlan[t]))) return false;
+    const o = runwayAt(t);
+    if (o && o !== self) return false;
+  }
+  return true;
+}
+
+/** Which way a runway can run from (i, j): east, west, south or north (the first that fits), or null. */
+function runwayDir(owner, i, j, self) {
+  for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) if (runwayFits(owner, i, j, dx, dy, self)) return { dx, dy };
+  return null;
+}
+
+/** Airfield b's runway: its head (x0, y0), where planes park and start their roll, its far end (x1, y1), and direction. */
+function runwayEnds(b) {
+  const r = b.rwy || (b.rwy = runwayDir(b.owner, b.x, b.y, b)) || { dx: 1, dy: 0 };
+  return { x0: b.x + 0.5 + r.dx * 1.45, y0: b.y + 0.5 + r.dy * 1.45, x1: b.x + 0.5 + r.dx * RUNWAY_LEN, y1: b.y + 0.5 + r.dy * RUNWAY_LEN, dx: r.dx, dy: r.dy };
+}
+
 function canPlace(owner, type, i, j, skipBlockCheck) {
   const def = BDEFS[type];
   if (!def || !def.cost) return { ok: false, reason: 'Cannot build that.' };
@@ -1711,6 +1753,7 @@ function canPlace(owner, type, i, j, skipBlockCheck) {
     if (S.res[t] !== R_OIL) return { ok: false, reason: 'Build an Oil Pump right on top of an oil seep.' };
   } else if (S.res[t]) return { ok: false, reason: 'Clear the resources here first.' };
   if (S.bAt[t]) return { ok: false, reason: 'There is already a building here.' };
+  if (runwayAt(t)) return { ok: false, reason: 'That\'s an Airfield\'s runway: keep it clear.' };
   if (def.colony && (S.mode !== 'colony' || S.mission)) return { ok: false, reason: 'Only in Colony free play.' };
   // A Ramp can go under track (to carry it up a level), and a Gate across it (your trains run through, as on a road).
   if (S.rail && (S.rail[t] || (S.railPlan && S.railPlan[t])) && !def.ramp && !def.gate) return { ok: false, reason: S.rail[t] ? 'There is railway track here.' : 'Track is planned here.' };
@@ -1766,6 +1809,11 @@ function canPlace(owner, type, i, j, skipBlockCheck) {
     return { ok: true, reason: '' };
   }
   if (!roadSide) return { ok: false, reason: 'Haulers need a road to every building: leave a side open where a road can go (open ground inside your border).' };
+  if (def.airfield) {
+    const rwy = runwayDir(owner, i, j);
+    if (!rwy) return { ok: false, reason: `An Airfield needs room for its runway: ${RUNWAY_LEN} tiles of open, level ground of yours in a straight line from it (east, west, north or south), with no road, deposit or building.` };
+    return { ok: true, reason: '', rwy };
+  }
   if (def.mil && !def.bunker) { // Bunkers can go right beside Outposts (and each other)
     for (const b of S.buildings) {
       if (!b.dead && b.owner === owner && BDEFS[b.type].mil && !BDEFS[b.type].bunker && dist2(b.x, b.y, i, j) < 16) {
@@ -1852,10 +1900,13 @@ function placeSite(owner, type, i, j, cost, fromStore) {
   if (S.road[t]) removeRoad(owner, i, j);
   const b = addBuilding(owner, type, i, j, false);
   if (type === 'gate' && onRoad) b.road = true;
+  if (chk.rwy) b.rwy = chk.rwy; // an Airfield's runway is kept clear from now on
   // Walls, Gates, Viaducts (and Ramps a rail line needs) are paid straight from storage: the
   // computer pays now; your plans queue and are paid for as the goods come in (settlePlans).
   if (cost) b.cost = cost;
   if (fromStore) b.fromStore = true;
+  // A site in the land of a Drop Outpost no road reaches is supplied by air, like the outpost.
+  if (!storeFunded(b) && S.buildings.some((d) => !d.dead && d.owner === owner && d.airSupply && BDEFS[d.type].airdrop && dist2(d.x, d.y, i, j) <= (BDEFS[d.type].terr + 1) ** 2 && !onHomeNet(d))) b.airSupply = true;
   if (storeFunded(b)) {
     if (S.players[owner].ai) { if (!payInto(b)) queuePlan('b', b.id, owner); }
     else { queuePlan('b', b.id, owner); settlePlans(); } // what storage has goes in now (after older plans)
@@ -1874,7 +1925,7 @@ function placeSite(owner, type, i, j, cost, fromStore) {
 function canRoad(owner, i, j) {
   if (!inMap(i, j)) return false;
   const t = tIdx(i, j);
-  if (S.bAt[t] || S.resRes[t] || scorched(t)) return false;
+  if (S.bAt[t] || S.resRes[t] || scorched(t) || runwayAt(t)) return false;
   if (S.owner[t] === owner) return true;
   return bridgeable(t) && bridgeHead(owner, i, j);
 }
@@ -2457,6 +2508,7 @@ function killBot(bot, quiet) {
   const load = boom >= 0 ? GOOD[bot.carry].name : '';
   if (boom >= 0 || BOTS[bot.type].sea) { bot.carry = null; bot.carryN = 0; } // a ship's load goes down with it
   // A Ferry sunk with bots aboard takes them down with it; anyone waiting for a ferry stops.
+  if (BOTS[bot.type].air && typeof planeLost === 'function') planeLost(bot);
   if (bot.aboard) for (const id of bot.aboard) { const v = getE(id); if (v && !v.dead) { v.ferryWait = null; killBot(v, true); } }
   if (bot.ferryWait) bot.ferryWait = null;
   const wasFerry = BOTS[bot.type].ferry;
@@ -2488,7 +2540,7 @@ function releaseBotsFrom(b, killInside) {
     // Its owner's bots drop jobs there; attackers keep their orders (an attack moves on, a march goes on).
     if (u.owner === b.owner && taskRefs(u.task, b.id)) cancelTask(u);
     if (u.inside === b.id) {
-      if (killInside && (u.type === 'warbot' || b.staff === u.id)) { killBot(u); continue; }
+      if (killInside && (u.type === 'warbot' || b.staff === u.id || BOTS[u.type].air)) { killBot(u); continue; } // a plane parked in a hangar goes with it
       exitBuilding(u);
     }
   }
@@ -2821,6 +2873,7 @@ function railBlocked(owner, t) {
   if (S.bAt[t] && !(via && via.type === 'viaduct') && !(via && via.type === 'gate' && via.owner === owner)) return 'There is a building here.'; // track runs through your own Gates
   if (S.res[t]) return 'Clear the resources here first.';
   if (scorched(t)) return 'This ground is still scorched.';
+  if (runwayAt(t)) return 'That\'s an Airfield\'s runway.';
   return '';
 }
 

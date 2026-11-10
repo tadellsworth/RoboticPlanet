@@ -1769,3 +1769,27 @@ art/tod/night/buildings/port@1.png	main	port::#ff5a6e:port@1:tod=night	compose.p
 art/tod/night/bots/cargoship@1.png	main	ship::#ff5a6e:cargoship@1:kind=cargo&tod=night	compose_any.py --b1 5 --b2 15
 art/tod/night/bots/tankship@1.png	main	ship::#ff5a6e:tankship@1:kind=tank&tod=night	compose_any.py --b1 5 --b2 15
 art/tod/night/bots/ferry@1.png	main	ship::#ff5a6e:ferry@1:kind=ferry&tod=night	compose_any.py --b1 5 --b2 15
+art/buildings/airfield@0.png	main	airfield::#38d4ff:airfield@0	compose.py
+art/buildings/dropost@0.png	main	dropost::#38d4ff:dropost@0	compose.py
+art/bots/cargoplane@0.png	main	plane::#38d4ff:cargoplane@0	compose_any.py --b1 5 --b2 15
+art/buildings/airfield@1.png	main	airfield::#ff5a6e:airfield@1	compose.py
+art/buildings/dropost@1.png	main	dropost::#ff5a6e:dropost@1	compose.py
+art/bots/cargoplane@1.png	main	plane::#ff5a6e:cargoplane@1	compose_any.py --b1 5 --b2 15
+art/tod/morning/buildings/airfield@0.png	main	airfield::#38d4ff:airfield@0:tod=morning	compose.py
+art/tod/morning/buildings/dropost@0.png	main	dropost::#38d4ff:dropost@0:tod=morning	compose.py
+art/tod/morning/bots/cargoplane@0.png	main	plane::#38d4ff:cargoplane@0:tod=morning	compose_any.py --b1 5 --b2 15
+art/tod/morning/buildings/airfield@1.png	main	airfield::#ff5a6e:airfield@1:tod=morning	compose.py
+art/tod/morning/buildings/dropost@1.png	main	dropost::#ff5a6e:dropost@1:tod=morning	compose.py
+art/tod/morning/bots/cargoplane@1.png	main	plane::#ff5a6e:cargoplane@1:tod=morning	compose_any.py --b1 5 --b2 15
+art/tod/evening/buildings/airfield@0.png	main	airfield::#38d4ff:airfield@0:tod=evening	compose.py
+art/tod/evening/buildings/dropost@0.png	main	dropost::#38d4ff:dropost@0:tod=evening	compose.py
+art/tod/evening/bots/cargoplane@0.png	main	plane::#38d4ff:cargoplane@0:tod=evening	compose_any.py --b1 5 --b2 15
+art/tod/evening/buildings/airfield@1.png	main	airfield::#ff5a6e:airfield@1:tod=evening	compose.py
+art/tod/evening/buildings/dropost@1.png	main	dropost::#ff5a6e:dropost@1:tod=evening	compose.py
+art/tod/evening/bots/cargoplane@1.png	main	plane::#ff5a6e:cargoplane@1:tod=evening	compose_any.py --b1 5 --b2 15
+art/tod/night/buildings/airfield@0.png	main	airfield::#38d4ff:airfield@0:tod=night	compose.py
+art/tod/night/buildings/dropost@0.png	main	dropost::#38d4ff:dropost@0:tod=night	compose.py
+art/tod/night/bots/cargoplane@0.png	main	plane::#38d4ff:cargoplane@0:tod=night	compose_any.py --b1 5 --b2 15
+art/tod/night/buildings/airfield@1.png	main	airfield::#ff5a6e:airfield@1:tod=night	compose.py
+art/tod/night/buildings/dropost@1.png	main	dropost::#ff5a6e:dropost@1:tod=night	compose.py
+art/tod/night/bots/cargoplane@1.png	main	plane::#ff5a6e:cargoplane@1:tod=night	compose_any.py --b1 5 --b2 15

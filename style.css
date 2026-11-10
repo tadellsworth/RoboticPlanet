@@ -483,9 +483,12 @@ i.g.uranium { background: var(--g-uranium); } i.g.fissile { background: var(--g-
   .card.missions-card { width: min(100%, 680px); }
   .btn:hover:not(:disabled), .chip-btn:hover, .seg button:hover:not(.on) { filter: brightness(1.15); }
 }
-@media (pointer: fine) { body.mode-road canvas#game, body.mode-place canvas#game, body.mode-attack canvas#game, body.mode-aim canvas#game, body.mode-land canvas#game { cursor: crosshair; } }
+@media (pointer: fine) { body.mode-road canvas#game, body.mode-place canvas#game, body.mode-attack canvas#game, body.mode-aim canvas#game, body.mode-land canvas#game, body.mode-airdrop canvas#game { cursor: crosshair; } }
 /* Aiming a Missile Silo: keep the map clear to tap. */
-body.mode-aim .objective, body.mode-land .objective { display: none; }
+body.mode-aim .objective, body.mode-land .objective, body.mode-airdrop .objective { display: none; }
+.air-drops { display: flex; flex-wrap: wrap; gap: 6px; }
+.air-drops .btn { flex: 1 1 auto; }
+.air-drops .cost-inline { display: block; font-size: 0.85em; opacity: 0.85; }
 
 /* Depot supply orders */
 .keep-list { display: flex; flex-direction: column; gap: 5px; margin: 4px 0 6px; }

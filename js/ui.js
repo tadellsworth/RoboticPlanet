@@ -1072,10 +1072,11 @@ function renderStats() {
 function setMode(mode) {
   if (R.mode === 'road' && mode !== 'road') dropDraft(); // a plan that was never built costs nothing
   R.mode = mode;
-  for (const m of ['road', 'place', 'attack', 'aim', 'land']) document.body.classList.toggle('mode-' + m, mode === m);
+  for (const m of ['road', 'place', 'attack', 'aim', 'land', 'airdrop']) document.body.classList.toggle('mode-' + m, mode === m);
   if (mode !== 'aim') { R.aim = null; UI.aimSilo = 0; }
-  if (mode !== 'aim' && mode !== 'land') R.aimHover = null;
+  if (mode !== 'aim' && mode !== 'land' && mode !== 'airdrop') R.aimHover = null;
   if (mode !== 'land') { R.landAt = null; UI.landFerry = 0; }
+  if (mode !== 'airdrop') { R.dropAt = null; UI.dropPlane = 0; }
   R.ghost = null;
   R.overlay = null;
   R.ropeEnd = null;
@@ -1174,6 +1175,103 @@ function confirmLanding() {
   if (why) { sfx('error'); showLandBanner(why); return; }
   sfx('order');
   toast('Beach landing ordered: the warbots head for the Ferry, and it sails once they\'re aboard.', 'good');
+  setMode('normal');
+}
+
+/* ------------------------------------------------------------------ Airfields: Cargo Planes and air drops */
+
+/** Your Cargo Planes based at Airfield b. */
+function basePlanes(b) { return S.bots.filter((u) => !u.dead && u.owner === b.owner && BOTS[u.type].air && u.home === b.id); }
+
+/** A Cargo Plane parked at Airfield b with nothing to do, or null. */
+function freePlane(b) { return basePlanes(b).find((u) => u.inside === b.id && !u.mission && !u.flight) || null; }
+
+/** What a plane is doing, in a few words. */
+function planeStatus(u) {
+  const M = u.mission, load = (m) => (m.kind === 'outpost' ? 'a Drop Outpost' : m.kind === 'supply' ? 'supplies' : `${m.n} ${m.n === 1 ? BOTS[m.kind].name : BOTS[m.kind].plural}`);
+  if (u.flight) return M && M.phase === 'out' ? `flying out with ${load(M)}` : 'flying home';
+  if (M && M.phase === 'load') {
+    if (M.noFuel) return 'waiting for Fuel to fly';
+    if (M.kind === 'warbot' || M.kind === 'worker') return `boarding ${BOTS[M.kind].plural}: ${ferryAboard(u).length} of ${M.n} aboard`;
+    return `loading ${load(M)}`;
+  }
+  return `parked, Fuel ${Math.round(u.bat ?? 100)}%`;
+}
+
+/** The Airfield panel's sections: its planes, air drops, and the places it supplies by air. */
+function airfieldSection(b) {
+  const planes = basePlanes(b), f = freePlane(b);
+  let html = '<div class="section-label">Cargo Planes</div><p class="hint" id="sh-air-planes"></p>';
+  html += '<div class="section-label">Air drop <span class="label-note">by parachute</span></div>';
+  if (f) {
+    html += `<div class="air-drops" id="sh-air">
+      <button class="btn primary" data-k="outpost">Drop Outpost ${costInline(BDEFS.dropost.cost)}</button>
+      ${warOn() ? '<button class="btn" data-k="warbot">Drop 2 Warbots</button>' : ''}<button class="btn" data-k="worker">Drop 2 Workers</button></div>
+      <p class="hint">Then tap the spot. A Drop Outpost lands on any open ground nobody else holds (paid from storage now): it claims a little land, holds 2 warbots, stores goods, charges 2 bots and is supplied by air. Robots board here first (Warbots from your garrisons, idle Workers) and can be dropped anywhere, the enemy's land too. A full tank reaches ${planeReach(f)} tiles out and back.</p>`;
+  } else html += `<p class="hint">${planes.length ? 'Its planes are all out on flights.' : 'No Cargo Plane is based here yet: order one at the Bot Foundry.'}</p>`;
+  html += '<div class="section-label">Supplied by air</div><p class="hint" id="sh-air-places"></p>';
+  return html;
+}
+
+function airPlacesText(b) {
+  const list = S.buildings.filter((c) => !c.dead && c.built && c.owner === b.owner && c.airSupply && airSuppliable(c) && airBaseNear(c.owner, c.x, c.y) === b);
+  const keep = airKeep(b), short = Object.keys(keep).filter((g) => keep[g] > 0).map((g) => `${keep[g]} ${GOOD[g].name}`);
+  return (list.length ? `From here: ${list.map((c) => `the ${BDEFS[c.type].short || BDEFS[c.type].name} ${dirText(b, c)}`).join(', ')}. ` : 'Nothing yet: switch on Supply by air in a Depot\'s or Outpost\'s panel (a Drop Outpost has it on). ') +
+    `A plane flies them what they're short of (their supply orders, Ammo for their warbots), ${BOTS.cargoplane.carry} goods a flight.` + (short.length ? ` This Airfield keeps ${short.join(', ')} for its planes and those places: haulers bring it.` : '');
+}
+
+/** The "Supply by air" switch for one of your Depots, Outposts and the like, once you have an Airfield. */
+function airSupplySection(b) {
+  if (!airSuppliable(b) || !b.built || b.owner !== 0 || !S.buildings.some((o) => !o.dead && o.built && o.owner === 0 && BDEFS[o.type].airfield)) return '';
+  return '<div class="section-label">Supply by air</div><div class="seg" id="sh-airsup"><button data-v="1">On</button><button data-v="0">Off</button></div><p class="hint" id="sh-airsup-hint"></p>';
+}
+
+function airSupplyHint(b) {
+  const base = airBaseNear(b.owner, b.x, b.y);
+  if (!b.airSupply) return 'On: a Cargo Plane from your nearest Airfield keeps this place stocked by parachute (its supply orders, Ammo for its warbots), wherever it is. For a place no road reaches.';
+  if (!base) return 'Waiting for a Cargo Plane: none is based at an Airfield yet (order one at the Bot Foundry).';
+  const coming = S.bots.some((u) => !u.dead && u.owner === b.owner && u.mission && u.mission.to === b.id);
+  return `Supplied from the Airfield ${dirText(b, base)}, ${BOTS.cargoplane.carry} goods a flight.` + (coming ? ' A plane is on its way.' : '');
+}
+
+/** Air drop: pick the spot on the map (a second tap there, or Drop, sends the plane). */
+function startAirdrop(u, kind) {
+  setMode('airdrop');
+  UI.dropPlane = u.id;
+  UI.dropKind = kind;
+  R.dropAt = null;
+  showAirdropBanner();
+}
+
+function airdropWhat(kind) { return kind === 'outpost' ? 'a Drop Outpost' : `2 ${BOTS[kind].plural}`; }
+
+function showAirdropBanner(problem) {
+  const u = getE(UI.dropPlane);
+  if (!u || u.dead) { setMode('normal'); return; }
+  const html = (problem ? `<span class="err">${problem}</span> ` : '') + (R.dropAt
+    ? `Drop ${airdropWhat(UI.dropKind)} here?` + (UI.dropKind === 'outpost' ? '' : ' They board the plane at the Airfield first.')
+    : `Tap where to drop ${airdropWhat(UI.dropKind)}: ` + (UI.dropKind === 'outpost' ? 'open ground nobody else holds, as far as the plane can reach.' : 'open ground anywhere the plane can reach' + (UI.dropKind === 'warbot' ? ', the enemy\'s land too, or one of your garrisons.' : '.')));
+  showBanner(html, R.dropAt ? 'Drop' : null, 'Cancel');
+}
+
+function airdropTap(i, j) {
+  const u = getE(UI.dropPlane);
+  if (!u) { setMode('normal'); return; }
+  const why = airdropBlocked(0, u, UI.dropKind, i, j);
+  if (why) { sfx('error'); R.dropAt = null; showAirdropBanner(why); return; }
+  if (R.dropAt && R.dropAt.i === i && R.dropAt.j === j) { confirmAirdrop(); return; }
+  R.dropAt = { i, j };
+  sfx('click');
+  showAirdropBanner();
+}
+
+function confirmAirdrop() {
+  const u = getE(UI.dropPlane), at = R.dropAt;
+  if (!u || !at) return;
+  const why = orderAirdrop(0, u, UI.dropKind, at.i, at.j, BOTS[u.type].seats);
+  if (why) { sfx('error'); showAirdropBanner(why); return; }
+  sfx('order');
+  toast(UI.dropKind === 'outpost' ? 'Drop Outpost loading: the plane takes off in a moment.' : `The ${BOTS[UI.dropKind].plural} head for the Airfield: the plane takes off once they're aboard.`, 'good');
   setMode('normal');
 }
 
@@ -1302,6 +1400,7 @@ function recallAllWarbots() {
 function confirmBanner() {
   if (R.mode === 'aim') { fireAimed(); return; }
   if (R.mode === 'land') { confirmLanding(); return; }
+  if (R.mode === 'airdrop') { confirmAirdrop(); return; }
   if (R.mode === 'attack') { recallAllWarbots(); return; }
   if (R.mode === 'road') { commitDraft(); return; }
   if (R.mode === 'place' && (UI.placeType === 'ropeway' || UI.placeType === 'viaduct')) {
@@ -1568,6 +1667,7 @@ function onMapTap(i, j, wx, wy) {
   }
   if (R.mode === 'aim') { aimTap(i, j); return; }
   if (R.mode === 'land') { landTap(i, j); return; }
+  if (R.mode === 'airdrop') { airdropTap(i, j); return; }
   const rally = rallyAtTap(wx, wy);
   if (rally) { sfx('click'); setMode('normal'); openRallySheet(rally); return; }
   const b = buildingAtTap(i, j, wx, wy);
@@ -1599,7 +1699,7 @@ function onMapTap(i, j, wx, wy) {
 
 /** With a mouse, placing a building previews it under the pointer; a click then places it. */
 function onMapHover(i, j) {
-  if (R.mode === 'aim' || R.mode === 'land') { R.aimHover = inMap(i, j) ? { i, j } : null; return; }
+  if (R.mode === 'aim' || R.mode === 'land' || R.mode === 'airdrop') { R.aimHover = inMap(i, j) ? { i, j } : null; return; }
   if (R.mode !== 'place' || !R.overlay || !UI.placeType || !inMap(i, j)) return;
   R.ghost = { type: UI.placeType, x: i, y: j, ok: !!R.overlay.valid[tIdx(i, j)], hover: true };
 }
@@ -2160,6 +2260,7 @@ function openBuildingSheet(b) {
     <div class="owner"><span class="dot" style="background:${PLAYER_COLORS[b.owner]}"></span> ${mine ? 'Yours' : playerName(b.owner)}</div></div></div>
     <p class="desc">${desc}</p><div class="status" id="sh-status"></div><div id="sh-dyn"></div>${mine ? '<div id="sh-fix"></div>' : ''}`;
   if (mine) {
+    if (def.airfield && b.built && b.owner === 0) html += airfieldSection(b); // its planes and air drops first
     if (def.store && b.built) {
       html += `<div class="section-label">Storage</div><div class="seg" id="sh-smode">
         <button data-v="normal">Normal</button><button data-v="fill">Fill first</button><button data-v="empty">Empty out</button></div>
@@ -2182,6 +2283,7 @@ function openBuildingSheet(b) {
         <button data-v="low">Low</button><button data-v="normal">Normal</button><button data-v="high">High</button></div>
         <p class="hint">${b.built ? 'High-priority buildings get workers and goods first; low ones last, and lose their worker first when workers run short.' : 'High-priority sites get their materials and a builder first. Once built, it goes back to Normal.'}</p>`;
     }
+    html += airSupplySection(b);
     if (def.mil && b.built && warOn()) {
       html += `<div class="section-label">Warbots</div>
         <div class="seg" id="sh-gprio"><button data-v="low">Low</button><button data-v="normal">Normal</button><button data-v="high">High</button></div>
@@ -2201,7 +2303,7 @@ function openBuildingSheet(b) {
       html += `<div class="section-label">Order bots</div>
         <div class="seg" id="sh-omode"><button data-v="turns">Take turns</button><button data-v="first">Top of the list first</button></div>
         <div id="sh-orders"></div>
-        <p class="hint">The Foundry only builds the bots you order, from the top of this list down. <b>Take turns</b>: one of each type you've ordered in turn. <b>Top of the list first</b>: every bot of the top type you've ordered, then the next. Move a type up or down with the arrows. Each bot uses 1 Alloy and 1 Chip a round, ${def.work} s each (a Freight Truck or Tanker takes ${BOTS.truck.parts} rounds, a Road Train ${BOTS.roadtrain.parts}, a Freight Train ${BOTS.freight.parts}, a Crawler ${BOTS.crawler.parts}).
+        <p class="hint">The Foundry only builds the bots you order, from the top of this list down. <b>Take turns</b>: one of each type you've ordered in turn. <b>Top of the list first</b>: every bot of the top type you've ordered, then the next. Move a type up or down with the arrows. Each bot uses 1 Alloy and 1 Chip a round, ${def.work} s each (a Freight Truck or Tanker takes ${BOTS.truck.parts} rounds, a Road Train ${BOTS.roadtrain.parts}, a Freight Train ${BOTS.freight.parts}, a Crawler ${BOTS.crawler.parts}, a Cargo Plane ${BOTS.cargoplane.parts}).
         <b>Haulers</b> carry two goods on the short runs. <b>Freight Trucks</b> carry eight on the long runs (12 tiles or more), from far mines and factories as well as storage. <b>Tankers</b> are the only vehicles that carry Crude and Fuel, ten at a time (they explode if they're destroyed full). <b>Road Trains</b> carry thirty between your Command Base and far Depots, best on asphalt. <b>Agribots</b> run Bio Farms and Grove Planters, and <b>Pavers</b> run the Roadworks.</p>`;
     }
     if (def.roadworks && b.built) {
@@ -2300,6 +2402,8 @@ function openBuildingSheet(b) {
       if (why) { sfx('error'); toast(why, 'warn'); return; }
       sfx('click'); toast(to ? 'Ferry line set: your bots take the ferry when it\'s the shorter way.' : 'Ferry line stopped.', 'info'); openBuildingSheet(b);
     };
+    if ($('sh-air')) for (const btn of $('sh-air').querySelectorAll('button[data-k]')) btn.onclick = () => { const f = freePlane(b); if (!f) return; sfx('click'); startAirdrop(f, btn.dataset.k); };
+    if ($('sh-airsup')) for (const btn of $('sh-airsup').children) btn.onclick = () => { b.airSupply = btn.dataset.v === '1'; sfx('click'); refreshSheet(); };
     if ($('sh-land')) {
       UI.landN = clamp(UI.landN || 3, 1, FERRY_SEATS);
       $('sh-land-minus').onclick = () => { UI.landN = Math.max(1, UI.landN - 1); refreshSheet(); };
@@ -2638,6 +2742,9 @@ function refreshBuildingSheet(b) {
   }
   if ($('sh-land-n')) $('sh-land-n').textContent = UI.landN || 3;
   if ($('sh-port-ships')) $('sh-port-ships').textContent = portShipsText(b);
+  if ($('sh-air-planes')) { const ps = basePlanes(b); $('sh-air-planes').textContent = ps.length ? ps.map((u, k) => `${ps.length > 1 ? `Plane ${k + 1}: ` : 'Its plane is '}${planeStatus(u)}.`).join(' ') : 'None based here: order a Cargo Plane at the Bot Foundry and it flies to the nearest Airfield.'; }
+  if ($('sh-air-places')) $('sh-air-places').textContent = airPlacesText(b);
+  if ($('sh-airsup')) { for (const btn of $('sh-airsup').children) btn.classList.toggle('on', (btn.dataset.v === '1') === !!b.airSupply); $('sh-airsup-hint').textContent = airSupplyHint(b); }
   if ($('sh-keep')) {
     let want = 0, short = 0;
     for (const cell of $('sh-keep').children) {
@@ -2651,7 +2758,8 @@ function refreshBuildingSheet(b) {
     for (const u of S.bots) if (!u.dead && u.owner === 0 && BOTS[u.type].truck && !BOTS[u.type].train && !BOTS[u.type].tanker) trucks++; // Road Trains only run to far Depots
     $('sh-keep-hint').textContent = !want
       ? 'Set how much of each good to keep here, and haulers and Freight Trucks bring it from your other storage. Buildings and roads near here then draw on it.'
-      : `${short ? `Filling ${short} order${short > 1 ? 's' : ''}` : 'Fully stocked'}. ` + (trucks ? `${trucks} Freight Truck${trucks > 1 ? 's' : ''} take the runs; haulers help when they're busy.` : 'Haulers bring it two at a time: order Freight Trucks at the Bot Foundry to carry eight.');
+      : `${short ? `Filling ${short} order${short > 1 ? 's' : ''}` : 'Fully stocked'}. ` + (b.airSupply && !onHomeNet(b) ? `A Cargo Plane flies them in, ${BOTS.cargoplane.carry} goods a flight (see Supply by air).`
+        : trucks ? `${trucks} Freight Truck${trucks > 1 ? 's' : ''} take the runs; haulers help when they're busy.` : 'Haulers bring it two at a time: order Freight Trucks at the Bot Foundry to carry eight.');
   }
   if ($('sh-mode')) for (const btn of $('sh-mode').children) btn.classList.toggle('on', btn.dataset.v === b.mode);
   if ($('sh-omode')) for (const btn of $('sh-omode').children) btn.classList.toggle('on', btn.dataset.v === (b.omode === 'first' ? 'first' : 'turns'));
@@ -2749,6 +2857,7 @@ function renderFoundryOrders(b) {
 
 function botActivity(u) {
   const t = u.task;
+  if (BOTS[u.type].air) { const b = getE(u.home); return `${planeStatus(u)[0].toUpperCase()}${planeStatus(u).slice(1)}` + (b && !b.dead ? ` (based at the Airfield ${dirText(getE(S.players[u.owner].lander) || b, b)} from the Command Base)` : ' (no Airfield yet)'); }
   const nm = (id) => { const b = getE(id); return b ? BDEFS[b.type].name : 'a building'; };
   if (u.type === 'warbot') {
     const p = u.owner === 0 && usesPosts(0) ? postOf(u) : null;
