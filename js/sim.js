@@ -1580,7 +1580,24 @@ function assignBuild(u, site) {
   cancelTask(u);
   u.task = { type: 'build', site: site.id, phase: 'go' };
   site.builder = u.id;
-  if (!goTo(u, site.x, site.y)) cancelTask(u);
+  const at = BDEFS[site.type].ramp ? rampStand(u, site) : tIdx(site.x, site.y);
+  if (at < 0 || !goTo(u, at % S.W, (at / S.W) | 0)) cancelTask(u);
+}
+
+/**
+ * Where a worker builds Ramp b from: on its tile, or from the top or foot of the cliff beside it (it cuts
+ * the slope from either side), whichever is the shorter trip from where the worker is. So a Ramp down off
+ * your plateau is built from the top: nobody drives all the way round to the bottom. -1 if neither.
+ */
+function rampStand(u, b) {
+  const t = tIdx(b.x, b.y), sx = Math.floor(u.x), sy = Math.floor(u.y);
+  let best = -1, bl = Infinity;
+  for (const c of [t, ...rampSides(t)]) {
+    if (c !== t && S.bAt[c]) continue;
+    const p = findPath(sx, sy, c % S.W, (c / S.W) | 0, u.owner, routeOpts(u));
+    if (p && p.length < bl) { bl = p.length; best = c; }
+  }
+  return best;
 }
 
 function assignStaff(u, b) {

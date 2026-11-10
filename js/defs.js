@@ -607,7 +607,7 @@ const BDEFS = {
     work: 6, armor: 10, buildTime: 12, limit: 30,
   },
   ramp: {
-    name: 'Ramp', desc: 'Workers cut a sloped road into a low cliff so bots can climb between levels. Plan it in Paths, on the top or at the foot of a cliff: whichever side your bots can reach.',
+    name: 'Ramp', desc: 'Workers cut a sloped road into a low cliff so bots can climb between levels. Plan it in Paths, on the top or at the foot of a cliff. A worker builds it from whichever side is the shorter trip, so a Ramp down off high ground is built from the top: nobody drives all the way round.',
     cost: { cement: 3, fiber: 1 }, ramp: true, armor: 4, buildTime: 10,
   },
   repair: {

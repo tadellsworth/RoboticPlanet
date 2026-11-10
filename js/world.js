@@ -1134,6 +1134,18 @@ function computeZones() {
 }
 
 /** The area a player's bots can reach (the one their Command Base stands in). */
+/** The tiles across the cliff from tile t: open ground one level up or down that bots can't step to from t. */
+function rampSides(t) {
+  const out = [], i = t % S.W, j = (t / S.W) | 0;
+  if (S.terrain[t] !== T_GROUND) return out;
+  for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+    if (!inMap(i + di, j + dj)) continue;
+    const u = tIdx(i + di, j + dj);
+    if (S.terrain[u] === T_GROUND && Math.abs(S.elev[u] - S.elev[t]) === 1 && !canStep(t, u)) out.push(u);
+  }
+  return out;
+}
+
 function homeZone(p) {
   const L = getE(S.players[p].lander);
   return L && L.owner === p ? S.zone[tIdx(L.x, L.y)] : -2;
@@ -1406,8 +1418,9 @@ function canPlace(owner, type, i, j, skipBlockCheck) {
     if (!e.dead && BDEFS[e.type].wild && Math.max(Math.abs(e.x - i), Math.abs(e.y - j)) <= WILD.clear) return { ok: false, reason: 'Too close to a creature nest: clear it with warbots first.' };
   }
   if (S.ramp[t]) return { ok: false, reason: 'Too steep: this is a slope.' };
-  if (S.zone[t] !== homeZone(owner)) {
-    return { ok: false, reason: def.ramp ? 'Your bots can\'t reach this side of the cliff yet: plan the Ramp on the other side, the top or the foot, where they can.'
+  // A Ramp is built from either side of its cliff (see rampStands), so it only needs one side your bots can reach.
+  if (S.zone[t] !== homeZone(owner) && !(def.ramp && rampSides(t).some((u) => S.zone[u] === homeZone(owner) && !S.bAt[u]))) {
+    return { ok: false, reason: def.ramp ? 'Your bots can\'t reach either side of this cliff yet.'
       : 'Your bots cannot reach this spot. Find a slope, or build a Ramp from the side they can reach.' };
   }
   if (def.ramp) {
