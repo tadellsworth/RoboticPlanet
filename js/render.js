@@ -2791,12 +2791,19 @@ function drawBarrierArt(ctx, type, cx, cy, s, owner, b) {
       const n = barrierAt(b.x + di, b.y + dj, owner);
       return !!n && (n.type !== 'gate' || (gateLane(n) === 'v') === (dj === 0));
     };
-    const N = joins(0, -1), E = joins(1, 0), Sd = joins(0, 1), W = joins(-1, 0);
+    let N = joins(0, -1), E = joins(1, 0), Sd = joins(0, 1), W = joins(-1, 0), alone = false;
+    if (has && !N && !E && !Sd && !W) {
+      // A Wall on its own fills its tile as a full section rather than a lone post: across whatever
+      // it stands between (cliffs, water, rock or buildings on two sides), east-west otherwise.
+      const shut = (di, dj) => { const i = b.x + di, j = b.y + dj; if (!inMap(i, j)) return 1; const t = tIdx(i, j); return S.bAt[t] || !walkable(t) || !canStep(tIdx(b.x, b.y), t) ? 1 : 0; };
+      if (shut(0, -1) + shut(0, 1) > shut(-1, 0) + shut(1, 0)) { N = Sd = true; } else { E = W = true; }
+      alone = true;
+    }
     if (N) layers.push('wall-n');
     if (W) layers.push('wall-w');
     if (E) layers.push('wall-e');
     const ew = E && W && !N && !Sd, ns = N && Sd && !E && !W;
-    layers.push((ew || ns) && has && (b.x + b.y) % 2 === 1 ? (ew ? 'wall-hub-ew' : 'wall-hub-ns') : 'wall-post');
+    layers.push((ew || ns) && has && (alone || (b.x + b.y) % 2 === 1) ? (ew ? 'wall-hub-ew' : 'wall-hub-ns') : 'wall-post');
     if (Sd) layers.push('wall-s');
   }
   // Sparks: a 0.4 s burst every 3 to 7 seconds, each tile on its own beat.
@@ -2805,6 +2812,11 @@ function drawBarrierArt(ctx, type, cx, cy, s, owner, b) {
     const period = 3 + 4 * hash2(b.x, b.y, 91), ph = (R.time + period * hash2(b.y, b.x, 37)) % period;
     if (ph < 0.4) spark = Math.floor(ph / 0.4 * 6);
   }
+  // A lone Wall: its section gets a pillar at each end (the far one drawn first, the near one last).
+  const ends = type !== 'gate' && has && layers.includes('wall-hub-ew') && !barrierAt(b.x - 1, b.y, owner) && !barrierAt(b.x + 1, b.y, owner) && !barrierAt(b.x, b.y - 1, owner) && !barrierAt(b.x, b.y + 1, owner) ? [[-0.38, 0], [0.38, 0]]
+    : type !== 'gate' && has && layers.includes('wall-hub-ns') && !barrierAt(b.x - 1, b.y, owner) && !barrierAt(b.x + 1, b.y, owner) && !barrierAt(b.x, b.y - 1, owner) && !barrierAt(b.x, b.y + 1, owner) ? [[0, -0.38], [0, 0.38]] : null;
+  const post = ends && piece('wall-post');
+  if (post) { const [dx, dy] = ends[0]; drawArt(ctx, post, cx + dx * s, cy + dy * s, s); }
   for (const k of layers) {
     const art = piece(k);
     if (!art) continue;
@@ -2812,6 +2824,7 @@ function drawBarrierArt(ctx, type, cx, cy, s, owner, b) {
     const sp = spark >= 0 && ART[`${k}@${owner}-spark-f${spark}`];
     if (sp) drawArt(ctx, sp, cx, cy, s);
   }
+  if (post) { const [dx, dy] = ends[1]; drawArt(ctx, post, cx + dx * s, cy + dy * s, s); }
 }
 
 /**

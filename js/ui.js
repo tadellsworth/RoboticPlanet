@@ -2100,7 +2100,7 @@ function openBuildingSheet(b) {
         (def.bunker ? '' : `<div class="section-label">Keep here</div>
         <div class="seg" id="sh-keepw"><button data-v="auto">Auto (${b.type === 'lander' ? 1 : S.players[0].keepW ?? 0})</button><button data-v="0">0</button><button data-v="1">1</button><button data-v="2">2</button><button data-v="5">5</button><button data-v="${def.garrison}">${def.garrison}</button></div>
         <p class="hint">${b.type === 'lander' ? 'Warbots the Command Base always keeps at home: attacks, rallies and stationing never take the last of them.'
-          : 'Warbots stationed here: your Command Base sends them, and replaces any that are lost. Attacks and rally flags never take warbots stationed at an Outpost (select them to send them anywhere), and after a fight they come back here. <i>Auto</i> follows the setting for every Outpost in Army.'}</p>`);
+          : 'Warbots stationed here: your Command Base sends them, and replaces any that are lost. Attacks and rally flags use them once the Command Base has none to spare, and they come back here when you call them back (or after defending it). <i>Auto</i> follows the setting for every Outpost in Army.'}</p>`);
     }
     if (def.lab && b.built) html += '<div class="section-label">Research</div><div id="sh-research"></div>';
     if (b.type === 'foundry' && b.built) {

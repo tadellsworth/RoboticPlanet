@@ -499,7 +499,7 @@ function routeOpts(u) {
  * an enemy Wall it means to break through)? The route's last tile, where it is going, never is.
  */
 function blockedStep(u, t) {
-  return S.bAt[t] > 0 && t !== u.path[u.path.length - 1] && !passTile(t, u.owner);
+  return S.bAt[t] > 0 && t !== u.path[u.path.length - 1] && !passTile(t, u.owner) && !(ferryLink(t) >= 0 && getE(S.bAt[t]).owner === u.owner);
 }
 
 /**
@@ -793,6 +793,12 @@ function moveAlong(u, dt) {
   // A Freight Train: down the track at its own speed, braking for curves and the end of its trip; it
   // never waits for road traffic (road traffic waits for it at level crossings). A ship sails the same way.
   if (bt.rail || bt.sea) {
+    // Waypoints it is already standing on (a ship put out right at its dock) count as reached.
+    while (u.pi < u.path.length) {
+      const t = u.path[u.pi];
+      if (Math.abs((t % S.W) + 0.5 - u.x) < 1e-3 && Math.abs(((t / S.W) | 0) + 0.5 - u.y) < 1e-3) u.pi++; else break;
+    }
+    if (u.pi >= u.path.length) { u.path = null; u.vel = 0; u.drive = 0; return true; }
     let step = driveSpeed(u, bt, bt.speed * (bt.sea ? evSpeed() : speedMul(u)) * (bt.rail && S.ramp[here] ? RAIL_GRADE : 1), Infinity, dt) * dt;
     u.odo = ((u.odo || 0) + step) % 1000;
     u.moved = step > 0 ? 1 : 0;
@@ -2775,7 +2781,7 @@ function garrisonDefense(b, dt) {
   // about to fall (under SORTIE_ARMOR of its armor), every armed warbot inside goes out.
   let want = !threats ? 0 : b.armor < BDEFS[b.type].armor * SORTIE_ARMOR ? armedIn(b) : Math.min(armedIn(b), threats + 1 - out);
   while (want-- > 0) {
-    const u = takeArmed(b); // only warbots with Ammo go out to fight
+    const u = takeArmed(b, true); // only warbots with Ammo go out to fight (those stationed here too: it's their post)
     if (!u) break;
     u.inside = 0;
     u.task = { type: 'defend', home: b.id };
@@ -3598,8 +3604,9 @@ function keepAt(b) {
  * Posts (your warbots; the AI spreads its own to the front instead). Every warbot belongs somewhere:
  * u.post is the garrison it was stationed at (Station here, or an Outpost's Keep), and with none it
  * belongs at the Command Base. Wherever it goes (a fight, a rally flag, an attack, repairs), it comes
- * back to its post. Attacks and rallies draw on the Command Base (and anyone in a garrison that isn't
- * posted there), never on warbots stationed at an Outpost; select those to send them anywhere.
+ * back to its post. Attacks and rallies draw first on the Command Base (and anyone in a garrison that
+ * isn't posted there), then on warbots stationed at Outposts, nearest first: they go, and come back to
+ * their post when the order is done. Only stocking another garrison (Station here, Keep) leaves them be.
  */
 function usesPosts(owner) { const P = S.players[owner]; return !!P && !P.ai; }
 
@@ -3646,12 +3653,15 @@ function stockPost(b, dt) {
   }
 }
 
-/** How many armed warbots garrison b can send out (all but its Keep; of yours, only those not posted there). */
-function spareArmed(b) {
+/**
+ * How many armed warbots garrison b can send out: all but its Keep; of yours, those not posted there
+ * (with `posted`, for an attack or a rally of yours, the ones stationed there too).
+ */
+function spareArmed(b, posted) {
   if (BDEFS[b.type].bunker) return 0;
   if (usesPosts(b.owner) && b.type !== 'lander') {
     let n = 0;
-    for (const id of b.garrison) { const u = getE(id); if (u && (u.ammo ?? WARBOT_AMMO) > 0 && u.post !== b.id) n++; }
+    for (const id of b.garrison) { const u = getE(id); if (u && (u.ammo ?? WARBOT_AMMO) > 0 && (posted || u.post !== b.id)) n++; }
     return n;
   }
   return Math.max(0, Math.min(armedIn(b), b.garrison.length - keepAt(b)));
@@ -3663,13 +3673,15 @@ function rearGarrison(b) {
   return true;
 }
 /** Warbots garrison b can send out: every armed one from the rear (with `rear`), else all but one. */
-function spareFrom(b, rear) { return BDEFS[b.type].bunker ? 0 : rear && !usesPosts(b.owner) && rearGarrison(b) ? armedIn(b) : spareArmed(b); }
+function spareFrom(b, rear, posted) { return BDEFS[b.type].bunker ? 0 : rear && !usesPosts(b.owner) && rearGarrison(b) ? armedIn(b) : spareArmed(b, posted); }
 
-/** Take one armed warbot out of garrison b (or null). */
-function takeArmed(b) {
-  for (let k = b.garrison.length - 1; k >= 0; k--) {
-    const u = getE(b.garrison[k]);
-    if (u && (u.ammo ?? WARBOT_AMMO) > 0 && freeToGo(u, b)) { b.garrison.splice(k, 1); return u; }
+/** Take one armed warbot out of garrison b (or null): not one stationed there, unless `posted` (it comes back after). */
+function takeArmed(b, posted) {
+  for (const pass of posted ? [false, true] : [false]) {
+    for (let k = b.garrison.length - 1; k >= 0; k--) {
+      const u = getE(b.garrison[k]);
+      if (u && (u.ammo ?? WARBOT_AMMO) > 0 && (freeToGo(u, b) || pass)) { b.garrison.splice(k, 1); return u; }
+    }
   }
   return null;
 }
@@ -3867,11 +3879,11 @@ function wreckRoad(t, victim, why) {
 }
 
 /** Garrisons that can send warbots to tile (i, j): same walkable area, each keeps one at home. */
-function rallySources(owner, i, j, rear) {
+function rallySources(owner, i, j, rear, posted) {
   const zone = S.zone[tIdx(i, j)];
   const out = [];
   for (const b of S.buildings) {
-    if (b.dead || b.owner !== owner || !b.built || !BDEFS[b.type].mil || spareFrom(b, rear) < 1) continue;
+    if (b.dead || b.owner !== owner || !b.built || !BDEFS[b.type].mil || spareFrom(b, rear, posted) < 1) continue;
     if (S.zone[tIdx(b.x, b.y)] !== zone) continue;
     out.push({ b, d: dist(b.x, b.y, i, j) });
   }
@@ -3879,9 +3891,11 @@ function rallySources(owner, i, j, rear) {
   return out.map((o) => o.b);
 }
 
+/** Armed warbots that could go to a rally flag at (i, j) (yours: stationed ones too, see the posts note). */
 function rallyAvailable(owner, i, j, rear) {
+  const posted = usesPosts(owner);
   let n = 0;
-  for (const b of rallySources(owner, i, j, rear)) n += spareFrom(b, rear);
+  for (const b of rallySources(owner, i, j, rear, posted)) n += spareFrom(b, rear, posted);
   return n;
 }
 
@@ -3893,14 +3907,17 @@ function sendToRally(owner, i, j, count, rear) {
   let r = S.rallies.find((q) => q.owner === owner && Math.abs(q.x - (i + 0.5)) < 1.5 && Math.abs(q.y - (j + 0.5)) < 1.5);
   if (!r) { r = { id: S.nextId++, owner, x: i + 0.5, y: j + 0.5 }; S.rallies.push(r); }
   let slot = rallyMembers(r.id).length, sent = 0;
-  for (const b of rallySources(owner, i, j, rear)) {
-    while (spareFrom(b, rear) > 0 && sent < count) {
-      const u = takeArmed(b);
-      if (!u) break;
-      u.inside = 0;
-      u.task = { type: 'hold', rally: r.id, slot: slot++ };
-      u.path = null;
-      sent++;
+  // Free warbots first (the Command Base's), then (yours) those stationed at Outposts, nearest first.
+  for (const posted of usesPosts(owner) ? [false, true] : [false]) {
+    for (const b of rallySources(owner, i, j, rear, posted)) {
+      while (spareFrom(b, rear, posted) > 0 && sent < count) {
+        const u = takeArmed(b, posted);
+        if (!u) break;
+        u.inside = 0;
+        u.task = { type: 'hold', rally: r.id, slot: slot++ };
+        u.path = null;
+        sent++;
+      }
     }
   }
   if (!sent) cleanRallies();
@@ -4446,14 +4463,14 @@ function nukeImpact(m) {
 
 /* ------------------------------------------------------------------ player commands */
 
-function attackSources(owner, target) {
+function attackSources(owner, target, posted) {
   const out = [];
   const zone = S.zone[tIdx(target.x, target.y)];
   for (const b of S.buildings) {
     if (b.dead || b.owner !== owner || !b.built || !BDEFS[b.type].mil) continue;
     if (S.zone[tIdx(b.x, b.y)] !== zone) continue; // warbots there can't walk to the target
     const d = dist(b.x, b.y, target.x, target.y);
-    if (d <= ATTACK_RANGE && spareArmed(b) > 0) out.push({ b, d });
+    if (d <= ATTACK_RANGE && spareArmed(b, posted) > 0) out.push({ b, d });
   }
   out.sort((a, c) => a.d - c.d);
   return out.map((o) => o.b);
@@ -4461,21 +4478,25 @@ function attackSources(owner, target) {
 
 /** Armed warbots that could join an attack on `target` (each garrison keeps one at home). */
 function attackAvailable(owner, target) {
+  const posted = usesPosts(owner);
   let n = 0;
-  for (const b of attackSources(owner, target)) n += spareArmed(b);
+  for (const b of attackSources(owner, target, posted)) n += spareArmed(b, posted);
   return n;
 }
 
+/** Send up to `count` armed warbots to attack `target`: free ones first, then (yours) those stationed at Outposts, nearest first. */
 function sendAttack(owner, target, count) {
   let sent = 0;
-  for (const b of attackSources(owner, target)) {
-    while (spareArmed(b) > 0 && sent < count) {
-      const u = takeArmed(b);
-      if (!u) break;
-      u.inside = 0;
-      u.task = { type: 'attack', target: target.id };
-      u.path = null;
-      sent++;
+  for (const posted of usesPosts(owner) ? [false, true] : [false]) {
+    for (const b of attackSources(owner, target, posted)) {
+      while (spareArmed(b, posted) > 0 && sent < count) {
+        const u = takeArmed(b, posted);
+        if (!u) break;
+        u.inside = 0;
+        u.task = { type: 'attack', target: target.id };
+        u.path = null;
+        sent++;
+      }
     }
   }
   return sent;
@@ -5150,7 +5171,7 @@ function speedMul(u) { return evSpeed() * (tech(u.owner, 'motors') ? 1.15 : 1); 
 function drainMul(u) { return evDrain() * (tech(u.owner, 'cells') ? 0.7 : 1); }
 function botCarry(u) { const bt = BOTS[u.type], c = bt.carry || 1; return tech(u.owner, 'cargo') && bt.haul ? c + (bt.rail ? 8 : bt.train ? 6 : bt.truck ? 2 : 1) : c; }
 /** How many of good g bot u can carry at once: anything but a Tanker carries Crude and Fuel one at a time. */
-function carryOf(u, g) { return isLiquid(g) && !BOTS[u.type].tanker ? 1 : botCarry(u); }
+function carryOf(u, g) { return isLiquid(g) && !BOTS[u.type].tanker && !BOTS[u.type].tankShip ? 1 : botCarry(u); }
 /** A Pulse Turret's reach and shots per Crystal. */
 function turretRange(b) { return BDEFS[b.type].range + (b.type === 'turret' && tech(b.owner, 'sentry') ? 1.5 : 0); }
 function shotsPer(b) { return tech(b.owner, 'sentry') ? 6 : SHOTS_PER_AMMO; }
@@ -6103,13 +6124,15 @@ function orderLanding(owner, f, i, j, count) {
   if (!docks.some((d) => comps.includes(comp[d]))) return 'The Ferry can\'t sail there from this Port.';
   count = Math.min(count || FERRY_SEATS, FERRY_SEATS);
   let sent = 0;
-  for (const b of rallySources(owner, port.x, port.y, false)) {
-    while (spareFrom(b, false) > 0 && sent < count) {
-      const u = takeArmed(b);
-      if (!u) break;
-      u.inside = 0; u.path = null;
-      u.task = { type: 'board', port: port.id, ferry: f.id };
-      sent++;
+  for (const posted of usesPosts(owner) ? [false, true] : [false]) {
+    for (const b of rallySources(owner, port.x, port.y, false, posted)) {
+      while (spareFrom(b, false, posted) > 0 && sent < count) {
+        const u = takeArmed(b, posted);
+        if (!u) break;
+        u.inside = 0; u.path = null;
+        u.task = { type: 'board', port: port.id, ferry: f.id };
+        sent++;
+      }
     }
   }
   if (!sent) return 'No armed warbots to spare that can get to this Port.';

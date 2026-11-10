@@ -429,8 +429,12 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
   **Keep** (`keepAt`; 0 unless set, per garrison `b.keepW` Auto/0/1/2/4 or for every Outpost in the Army banner
   `P.keepW`): `stockPost` keeps that many posted there, sent from the Command Base and replaced when lost. Wherever a
   warbot goes (a sortie, a rally flag, an attack, repairs, a loot run), it comes back to its post (`goGarrison`).
-  Attacks and rally flags draw on the Command Base (which keeps its own Keep, 1), never on warbots stationed at an
-  Outpost (`spareArmed`, `takeArmed`, `freeToGo`); **Send them back to the Command Base** (`unstation`) releases an
+  Attacks, rally flags and beach landings draw first on the Command Base (which keeps its own Keep, 1), then on warbots
+  stationed at Outposts, nearest first (`spareArmed`/`takeArmed` with `posted`): they go, and come back to their post
+  when recalled; their Outpost isn't restocked while they're out (`postedAt` counts them). They sortie to defend their
+  own Outpost too. Only stocking another garrison (Station here, Keep) leaves stationed warbots where they are
+  (`freeToGo`). A Wall standing alone is drawn as a full section with a pillar at each end, across whatever it plugs
+  (`drawBarrierArt`). **Send them back to the Command Base** (`unstation`) releases an
   Outpost's warbots and sets its Keep to 0. A Bunker always keeps its two (stocked the same way). **Your robots** (the
   population chip) lists where your warbots are (`warbotGroups`: at the Command Base, in Outposts, heading home,
   attacking, on a rally flag, guarding, being repaired, carrying loot, or standing with nowhere to go), and **Show**
