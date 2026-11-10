@@ -26,7 +26,7 @@ function tileCost(t, dx, dy, offMul) {
     if (r >= 2 && dx * ROAD_DIRS[r][0] + dy * ROAD_DIRS[r][1] < 0) return 1 / ONEWAY_WRONG + 2;
     return ROAD_PREFERENCE / PAVE[S.pave[t] || 1].speed;
   }
-  if (S.bAt[t]) return passTile(t) ? ROAD_PREFERENCE / PAVE[1].speed : 1; // an Outpost a road runs through, or the building a trip starts or ends at
+  if (S.bAt[t]) return passTile(t) ? ROAD_PREFERENCE / PAVE[throughPave(t)].speed : 1; // an Outpost a road runs through (as fast as the road into it), or the building a trip starts or ends at
   if (S.ramp[t]) return offMul / SLOPE_SPEED;
   return (S.res[t] ? 1.5 : 1) * offMul;
 }

@@ -303,6 +303,9 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
 - **Army orders:** tap **Army**, then a rival building to attack it with warbots or a missile, or open
   ground to send warbots there to hold the area under a rally flag. Tap the flag to call them back, or press
   **Recall all** in the Army banner (**C** on a computer) to end every attack and rally flag at once.
+- **Through traffic:** an Outpost or Gate a road runs through counts as the best road leading into it, never worn
+  (`throughPave`), for speed and route planning, so it never slows the traffic going through: asphalt on either side
+  makes it asphalt (Freight Trucks and Road Trains keep their speed).
 - **Crates and loot:** goods inside any building that's wrecked, blown up, lost or demolished spill out as a crate
   pile on its tile (`dropLoot`, called by `destroyBuilding`; up to `LOOT_MAX`), and a robot destroyed with a load
   drops it (`dropCarried`). On a player's own land its Haulers (a Freight Truck for a big pile; workers with no

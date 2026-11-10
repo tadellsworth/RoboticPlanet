@@ -719,8 +719,9 @@ function moveAlong(u, dt) {
     const dx = (next % S.W) + 0.5 - u.x, dy = ((next / S.W) | 0) + 0.5 - u.y;
     const wrong = r >= 2 && dx * ROAD_DIRS[r][0] + dy * ROAD_DIRS[r][1] < -0.1;
     const deck = !S.road[here] && viaLink(here) >= 0; // a Viaduct's deck is smooth concrete: as good as fresh asphalt
-    const pv = deck ? 2 : S.pave[here];
-    speed *= wrong ? ONEWAY_WRONG : (pv === 2 ? asphaltSpeed(deck ? 0 : S.wear[here]) : PAVE[pv || 1].speed) / (1 + trafficJam(u, here, next));
+    const through = !deck && !S.road[here]; // an Outpost or Gate: as good as the best road into it (throughPave)
+    const pv = deck ? 2 : through ? throughPave(here) : S.pave[here];
+    speed *= wrong ? ONEWAY_WRONG : (pv === 2 ? asphaltSpeed(deck || through ? 0 : S.wear[here]) : PAVE[pv || 1].speed) / (1 + trafficJam(u, here, next));
     if (bt.truck && pv !== 2) speed *= bt.train ? TRAIN_ROAD : TRUCK_ROAD; // heavy: only asphalt lets it run flat out
     if (isJunction(here) && !S.lights[here] && !S.over[here]) speed *= JUNCTION_SLOW; // crossing carefully
   } else {

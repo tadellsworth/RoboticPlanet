@@ -1078,6 +1078,22 @@ function outpostRoads(x, y) {
 /** A road tile, or an Outpost the road runs through. */
 function roadLike(t) { return S.road[t] > 0 || (S.bAt[t] > 0 && passTile(t)); }
 
+/**
+ * The surface of a building tile a road runs through (an Outpost or a Gate): as good as the best road
+ * leading into it, and never worn, so it never slows the traffic going through. Asphalt on either
+ * side makes it asphalt (Freight Trucks and Road Trains keep their speed).
+ */
+function throughPave(t) {
+  const i = t % S.W, j = (t / S.W) | 0;
+  let best = 1;
+  for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+    if (!inMap(i + di, j + dj)) continue;
+    const u = tIdx(i + di, j + dj);
+    if (S.road[u] && S.pave[u] > best) best = S.pave[u];
+  }
+  return best;
+}
+
 /** Can bots walk on tile t? Open ground, or a bridge or tunnel. */
 function walkable(t) { return S.terrain[t] === T_GROUND || S.road[t] > 0; }
 
