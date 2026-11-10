@@ -32,7 +32,8 @@ and biomes started here and are now in the game.)
     turrets can sink them, and whether a tanker ship explodes like a Tanker; what each ship and the Port cost; how
     the AI plans ports and shipping; and how ferries pick who boards.
 - **Air (after ships).** An **Airfield**, a **strike bomber** for precision strikes (a smaller, faster, cheaper hit
-  than a Missile, on a building you pick), and an **anti-aircraft gun** to shoot it down. To think through: what
+  than a Missile, on a building you pick, or on a moving target such as a Tanker on the road, which then explodes),
+  and an **anti-aircraft gun** to shoot it down. To think through: what
   the bomber costs and carries, how far it flies and how long it takes to rearm, how the AA gun trades with turrets
   and walls, and how the AI uses both.
 - **Graphics polish (after air).** Go over every building, robot, terrain tile, effect and icon against the design

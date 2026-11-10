@@ -127,6 +127,13 @@ const BOTS = {
     desc: 'A truck pulling two trailers: 30 goods at once, for bulk runs between your Command Base and far Depots (filling supply orders, and bringing a far Depot\'s spare goods home). It only pays off on asphalt: on plain road it crawls. Slow to start and stop, it wears roads hard and holds up the traffic behind it.' },
   freight: { name: 'Freight Train', plural: 'Freight Trains', speed: WORKER_SPEED * 3.4, hp: 30, haul: true, rail: true, carry: 56, parts: 5, accel: 0.85, brake: 1.6,
     desc: 'A locomotive and four wagons: 56 goods at once between Rail Stations on the same track, fast and with no traffic to wait for. It never needs charging. It rolls out at the nearest Rail Station when the Foundry finishes it.' },
+  // Ships (naval maps only): they sail open water between Ports (passing under bridges) and never need charging.
+  cargoship: { name: 'Container Ship', plural: 'Container Ships', speed: WORKER_SPEED * 2.4, hp: 30, haul: true, sea: true, carry: 40, parts: 5, accel: 0.5, brake: 1.0, naval: true,
+    desc: 'Carries 40 goods at once between your Ports on the same water: supply orders at a Port are filled from the other Ports, and a far Port sends its spare goods home to the Port nearest your Command Base. It never needs charging. It puts to sea at the nearest Port when the Foundry finishes it.' },
+  tankship: { name: 'Tanker Ship', plural: 'Tanker Ships', speed: WORKER_SPEED * 2.4, hp: 26, haul: true, sea: true, tankShip: true, carry: 40, parts: 5, accel: 0.5, brake: 1.0, naval: true,
+    desc: 'Carries 40 Crude or Fuel at once between your Ports on the same water (and nothing else). Sunk with a load on board, it explodes, hurting everything round it.' },
+  ferry: { name: 'Ferry', plural: 'Ferries', speed: WORKER_SPEED * 2.8, hp: 26, sea: true, ferry: true, seats: 6, parts: 4, accel: 0.7, brake: 1.4, naval: true,
+    desc: 'Carries robots and trucks across the water. Give a Port a ferry line to another Port and your bots take the ferry whenever it is the shorter way (six seats: a truck takes two, a Road Train three). From a Port it can also land up to six warbots on any shore, enemy shores too: a beach landing.' },
   crawler: { name: 'Crawler', plural: 'Crawlers', speed: WORKER_SPEED * 0.45, hp: 80, crawler: true, parts: 6,
     desc: 'A colossal tracked base on the move. Drive it anywhere it can roll (no road needed) and it deploys where it stops: a Depot, a Fuel Station and an Outpost in one, claiming the land around it. Pack it up to move on: it takes everything stored in it along.' },
   truck:   { name: 'Freight Truck', plural: 'Freight Trucks', speed: WORKER_SPEED * 1.35, hp: 8, haul: true, truck: true, carry: 8, roadOnly: true, parts: 2, accel: 1.5, brake: 3.5,
@@ -141,7 +148,7 @@ const BOTS = {
   brute:    { name: 'Brute', plural: 'Brutes', speed: WORKER_SPEED * 0.8, hp: 24, wild: true, bite: 3, smash: true,
     desc: 'A big, slow, armoured creature. Brutes tear up roads and batter buildings, and bite hard.' },
 };
-const BOT_ORDER = ['worker', 'hauler', 'truck', 'tanker', 'roadtrain', 'freight', 'crawler', 'agribot', 'paver', 'warbot'];
+const BOT_ORDER = ['worker', 'hauler', 'truck', 'tanker', 'roadtrain', 'freight', 'cargoship', 'tankship', 'ferry', 'crawler', 'agribot', 'paver', 'warbot'];
 /*
  * Who carries what (see dispatch):
  * - Haulers (2 goods) do the short runs: between buildings less than TRUCK_MIN_DIST tiles apart.
@@ -320,6 +327,20 @@ const CROSS = {
 function bridgeable(t) { return S.terrain[t] === T_WATER || S.terrain[t] === T_CHASM; }
 /** Track over water or a chasm is a rail bridge, dearer than track on the ground. */
 const RAIL_BRIDGE_COST = { cement: 3, alloy: 0.5 }; // the same as a Viaduct's span
+// Naval maps (Islands, Lakes): a bridge or rail-bridge tile over water costs more the further it is from
+// the nearest shore: the usual price up to BRIDGE_NEAR tiles out, then BRIDGE_STEP times more for each tile
+// further. Short hops stay cheap; a long crossing costs several times as much, so ships are worth having.
+const BRIDGE_NEAR = 2, BRIDGE_STEP = 1.5;
+const LAKES_WET = 0.37;
+// Ships: a Port's dock must open onto at least SEA_MIN tiles of water. A Ferry's six seats (FERRY_SEATS: a
+// truck takes 2, a Road Train 3); once someone is aboard it waits FERRY_WAIT s for more before it sails;
+// a bot waiting at a Port gives up after FERRY_GIVEUP s. In routes a ferry crossing costs FERRY_COST times
+// the straight distance, plus FERRY_BOARD tiles' worth for the wait.
+const NAVAL_ON = false; // ships and Ports (still being built: off until they're ready)
+const SEA_MIN = 20, FERRY_SEATS = 6, FERRY_WAIT = 5, FERRY_GIVEUP = 90, FERRY_COST = 1.4, FERRY_BOARD = 8;
+const LANDING_GATHER = 40; // a Ferry on a beach landing sails this long after the order even if some warbots haven't come aboard
+const SHIP_MEND = 0.5; // hit points a second a ship tied up in Port gets back
+const SHIP_MIN_LOAD = 8; // a far Port sends spare goods home by ship in loads of at least this many // Lakes maps: how much of the land outside the middle lake is lakes (a noise threshold)
 /** Track through rocky crags is a rail tunnel, bored like a road tunnel and costing the same. */
 const RAIL_TUNNEL_COST = { cement: 3, alloy: 1 };
 
@@ -650,6 +671,10 @@ const BDEFS = {
     name: 'Research Lab', desc: 'Researches upgrades for your whole colony, one at a time: pick one in its panel. The Chips, Crystal and Alloy are paid from storage when you start, and a worker inside does the research. Two Labs research twice as fast. Colony only.',
     cost: { cement: 6, alloy: 4, chip: 2 }, staff: true, lab: true, colony: true, armor: 10, buildTime: 14,
   },
+  port: {
+    name: 'Port', desc: 'Storage on the shore, where ships tie up (naval maps: Islands and Lakes). Container Ships and Tanker Ships carry goods between your Ports on the same water: give a far Port supply orders and ships keep it stocked, and it sends its spare goods home by ship. Give a Port a ferry line to another Port and a Ferry carries your robots and trucks across; a Ferry can also land warbots on any shore. Haulers serve it like a Depot.',
+    cost: { cement: 8, alloy: 3 }, store: true, port: true, naval: true, armor: 14, buildTime: 14,
+  },
   station: {
     name: 'Rail Station', desc: 'Storage beside the railway: Freight Trains load and unload here. Build one at each end of a line (beside the track), give the far one supply orders, and trains keep it stocked from the stations on the same track; a far station also sends its spare goods home by train. Haulers serve it like a Depot.',
     cost: { cement: 6, alloy: 2 }, store: true, station: true, armor: 12, buildTime: 12,
@@ -671,12 +696,12 @@ const BDEFS = {
 
 /** Order of the build menu. */
 const BUILD_MENU = ['harvester', 'quarry', 'mine', 'tap', 'smelter', 'fab', 'foundry', 'charger', 'farm', 'pump', 'refinery', 'generator',
-  'kiln', 'tarworks', 'roadworks', 'ropeway', 'viaduct', 'station', 'outpost', 'turret', 'bunker', 'disruptor', 'mortar', 'repair', 'armory', 'munitions', 'silo', 'reactor', 'nukesilo', 'depot', 'grower', 'lab'];
+  'kiln', 'tarworks', 'roadworks', 'ropeway', 'viaduct', 'station', 'port', 'outpost', 'turret', 'bunker', 'disruptor', 'mortar', 'repair', 'armory', 'munitions', 'silo', 'reactor', 'nukesilo', 'depot', 'grower', 'lab'];
 /** Build-menu tabs: what each building is for. */
 const BUILD_GROUPS = [
   { key: 'gather', name: 'Gather', types: ['harvester', 'quarry', 'mine', 'tap', 'grower', 'farm', 'pump'] },
   { key: 'make', name: 'Make', types: ['kiln', 'smelter', 'fab', 'refinery', 'tarworks', 'foundry', 'armory', 'munitions', 'reactor', 'lab', 'generator'] },
-  { key: 'move', name: 'Move', types: ['charger', 'depot', 'roadworks', 'ropeway', 'viaduct', 'station'], roads: true },
+  { key: 'move', name: 'Move', types: ['charger', 'depot', 'roadworks', 'ropeway', 'viaduct', 'station', 'port'], roads: true },
   { key: 'defend', name: 'Defend', types: ['outpost', 'turret', 'bunker', 'disruptor', 'mortar', 'repair', 'silo', 'nukesilo'], walls: true },
 ];
 const BUNKER_FIRE = 0.9; // seconds between shots for each warbot in a Bunker

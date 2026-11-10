@@ -27,6 +27,7 @@ function simStep(dt) {
   for (let k = 0; k < S.bots.length; k++) {
     const u = S.bots[k];
     if (u.dead) continue;
+    if (u.ferryWait) { ferryPassenger(u); continue; }
     if (u.type === 'warbot') updateWarbot(u, dt); else if (BOTS[u.type].wild) updateCritter(u, dt); else if (BOTS[u.type].crawler) updateCrawler(u, dt); else updateWorker(u, dt);
   }
   if (S.missiles.length) updateMissiles(dt);
@@ -246,7 +247,7 @@ function backhaul(u, R) {
  * to the Command Base uses, a load at a time: TRAIN_MIN_LOAD or more by Road Train, otherwise
  * TRUCK_MIN_LOAD or more by Freight Truck.
  */
-function trunkRuns(p, blds, take, canCarry, vans, trains) {
+function trunkRuns(p, blds, take, canCarry, vans, trains, ships) {
   const hub = getE(S.players[p].lander);
   if (!hub || hub.dead || hub.owner !== p) return;
   const far2 = TRUCK_MIN_DIST * TRUCK_MIN_DIST;
@@ -258,13 +259,23 @@ function trunkRuns(p, blds, take, canCarry, vans, trains) {
       let hd = dist2(R.x, R.y, hub.x, hub.y) - far2;
       for (const s of blds) if (s !== R && BDEFS[s.type].station && s.built && railLinked(R, s)) { const d = dist2(s.x, s.y, hub.x, hub.y); if (d < hd) { hd = d; home = s; } }
     }
+    // A Port sends home by ship (Crude and Fuel too, by Tanker Ship), to the Port on its water nearest the Command Base.
+    let port = null;
+    if (ships && BDEFS[R.type].port) {
+      let pd = dist2(R.x, R.y, hub.x, hub.y) - far2;
+      for (const s of blds) if (s !== R && BDEFS[s.type].port && s.built && seaLinked(R, s)) { const d = dist2(s.x, s.y, hub.x, hub.y); if (d < pd) { pd = d; port = s; } }
+    }
     const byRoad = truckLinked(R, hub);
-    if (!home && !byRoad) continue;
+    if (!home && !port && !byRoad) continue;
     for (const g of GOODS) {
       const spare = keepSupply(R, g) - EXPORT_RESERVE;
       if (spare < TRUCK_MIN_LOAD || !storeTakes(hub, g)) continue;
       if (blds.some((c) => c !== R && !BDEFS[c.type].store && usesGood(c, g) && dist2(c.x, c.y, R.x, R.y) < dist2(c.x, c.y, hub.x, hub.y))) continue;
-      const liq = isLiquid(g); // Crude and Fuel go home by Tanker only
+      const liq = isLiquid(g); // Crude and Fuel go home by Tanker (or Tanker Ship) only
+      if (port && spare >= SHIP_MIN_LOAD && storeTakes(port, g)) {
+        const su = take(R.x, R.y, 'sea', R, g);
+        if (su) { assignHaul(su, R, port, g, canCarry(su, spare, g)); continue; }
+      }
       if (home && !liq && spare >= RAIL_MIN_LOAD && storeTakes(home, g)) {
         const tu = take(R.x, R.y, 'rail', R);
         if (tu) { assignHaul(tu, R, home, g, canCarry(tu, spare)); continue; }
@@ -290,7 +301,7 @@ function botCount(owner) {
 
 /** A civilian bot (any type but warbot) with nothing to do and enough charge for a job. */
 function isIdleWorker(u) {
-  if (u.type === 'warbot' || u.dead || u.carry || (u.task && u.task.type !== 'home')) return false;
+  if (u.type === 'warbot' || u.dead || u.carry || u.ferryWait || (u.task && u.task.type !== 'home')) return false;
   // A worker that is charging finishes first; one that is running low goes to charge before new jobs,
   // unless there's nowhere to charge: then it keeps working (slowly), or no one would bring the Fuel.
   return (u.bat ?? 100) >= (insideCharger(u) ? 90 : BATTERY.low) || !canTopUp(u);
@@ -402,7 +413,11 @@ function goCharge(u) {
 }
 
 function workerBattery(u, dt) {
-  if (BOTS[u.type].rail) { u.bat = 100; return; } // trains run off the track's power
+  if (BOTS[u.type].rail || BOTS[u.type].sea) { // trains run off the track's power; ships don't need charging
+    u.bat = 100;
+    if (BOTS[u.type].sea && u.inside && u.hp < u.maxHp) u.hp = Math.min(u.maxHp, u.hp + SHIP_MEND * dt); // a ship tied up in Port is mended
+    return;
+  }
   if (u.bat === undefined) u.bat = 100;
   // Trucks burn Fuel as they drive (see TRUCK_BURN); they fill up rather than charge.
   if (BOTS[u.type].truck) { if (u.moved && !u.inside) u.bat = Math.max(0, u.bat - (BOTS[u.type].train ? TRAIN_BURN : TRUCK_BURN) * dt * drainMul(u)); return; }
@@ -473,7 +488,7 @@ function haulerStranded(u) {
  */
 function routeOpts(u) {
   const bt = BOTS[u.type];
-  const o = { who: u.owner, breach: u.type === 'warbot' && (u.ammo ?? WARBOT_AMMO) > 0, noRope: !!(bt.truck || bt.wild || bt.crawler) };
+  const o = { who: u.owner, breach: u.type === 'warbot' && (u.ammo ?? WARBOT_AMMO) > 0, noRope: !!(bt.truck || bt.wild || bt.crawler), noFerry: !!(bt.wild || bt.crawler || bt.rail || bt.sea) };
   if (bt.roadOnly && !haulerStranded(u)) o.roadOnly = true;
   else if ((bt.offroad || bt.roadOnly) && !harvestTrip(u)) o.offMul = 1 / OFFROAD_SLOW;
   return o;
@@ -505,8 +520,18 @@ function breachHit(u, b) {
 
 function goTo(u, x, y) {
   const goal = y * S.W + x;
+  // Sent somewhere new while waiting for a ferry: it stops waiting (but can't get off one under way).
+  if (u.ferryWait) { if (u.ferryWait.ferry) return false; u.ferryWait = null; u.inside = 0; }
   // Don't hammer the pathfinder with a route that just failed.
   if (u.failGoal === goal && S.time < u.failUntil) return false;
+  // Ships keep to open water: tied up at a Port, one puts out from its dock.
+  if (BOTS[u.type].sea) {
+    const p = seaRoute(u, x, y);
+    if (!p) { u.failGoal = goal; u.failUntil = S.time + 2; return false; }
+    if (u.inside) { exitBuilding(u); if (p.length) { u.x = (p[0] % S.W) + 0.5; u.y = ((p[0] / S.W) | 0) + 0.5; } }
+    u.path = p; u.pi = 0; u.idleT = 0; u.goal = goal;
+    return true;
+  }
   // Freight Trains keep to the track.
   if (BOTS[u.type].rail) {
     const p = railRoute(u, x, y);
@@ -752,7 +777,7 @@ function moveAlong(u, dt) {
   {
     const nx = u.path[u.pi], pv = u.path[u.pi - 1], W = S.W;
     if (u.pi > 0 && nx !== undefined && Math.max(Math.abs((nx % W) - (pv % W)), Math.abs(((nx / W) | 0) - ((pv / W) | 0))) > 1 &&
-      viaLink(pv) !== nx && ropeLink(pv) !== nx && !(u.ride >= 0)) {
+      viaLink(pv) !== nx && ropeLink(pv) !== nx && ferryLink(pv) !== nx && !(u.ride >= 0)) {
       u.x = (pv % W) + 0.5; u.y = ((pv / W) | 0) + 0.5;
       u.path = null; u.deck = null; u.vel = 0;
       cancelTask(u); u.task = null;
@@ -766,9 +791,9 @@ function moveAlong(u, dt) {
   else deckEnds(u);
   const bt = BOTS[u.type];
   // A Freight Train: down the track at its own speed, braking for curves and the end of its trip; it
-  // never waits for road traffic (road traffic waits for it at level crossings).
-  if (bt.rail) {
-    let step = driveSpeed(u, bt, bt.speed * speedMul(u) * (S.ramp[here] ? RAIL_GRADE : 1), Infinity, dt) * dt;
+  // never waits for road traffic (road traffic waits for it at level crossings). A ship sails the same way.
+  if (bt.rail || bt.sea) {
+    let step = driveSpeed(u, bt, bt.speed * (bt.sea ? evSpeed() : speedMul(u)) * (bt.rail && S.ramp[here] ? RAIL_GRADE : 1), Infinity, dt) * dt;
     u.odo = ((u.odo || 0) + step) % 1000;
     u.moved = step > 0 ? 1 : 0;
     while (step > 0 && u.pi < u.path.length) {
@@ -779,8 +804,17 @@ function moveAlong(u, dt) {
     if (u.pi >= u.path.length) { u.path = null; u.vel = 0; u.drive = 0; return true; }
     return false;
   }
-  // Riding a Ropeway: from one station straight to the other at ROPE_SPEED, whatever lies below.
+  // At a Port whose ferry line is the next leg: wait there for the Ferry (see ferryPassenger).
   const nxt = u.path[u.pi];
+  if (nxt !== undefined && nxt !== here && S.bAt[here] && ferryLink(here) === nxt) {
+    const at = getE(S.bAt[here]), to = getE(S.bAt[nxt]);
+    if (at && to && at.owner === u.owner) {
+      u.ferryWait = { at: at.id, to: to.id, since: S.time, ferry: 0 };
+      u.inside = at.id; u.x = at.x + 0.5; u.y = at.y + 0.5; u.vel = 0; u.drive = 0;
+      return false;
+    }
+  }
+  // Riding a Ropeway: from one station straight to the other at ROPE_SPEED, whatever lies below.
   if (!(u.ride >= 0) && nxt !== undefined && nxt !== here && (ropeLink(here) === nxt || (u.pi > 0 && ropeLink(u.path[u.pi - 1]) === nxt))) u.ride = nxt;
   if (u.ride >= 0) {
     if (nxt !== u.ride) u.ride = -1;
@@ -904,7 +938,7 @@ function driveSpeed(u, bt, vmax, lim, dt) {
   if (t1 !== undefined && d0 > 1e-3) {
     const bx = (t1 % S.W) - (t0 % S.W), by = ((t1 / S.W) | 0) - ((t0 / S.W) | 0);
     if ((dx0 * bx + dy0 * by) / (d0 * Math.sqrt(bx * bx + by * by)) < 0.7) {
-      const vc = vmax * (bt.rail ? 0.55 : bt.train ? TRAIN_CORNER : bt.truck ? TRUCK_CORNER : BOT_CORNER);
+      const vc = vmax * (bt.rail || bt.sea ? 0.55 : bt.train ? TRAIN_CORNER : bt.truck ? TRUCK_CORNER : BOT_CORNER);
       cap = Math.min(cap, Math.sqrt(vc * vc + 2 * brk * d0));
     }
   }
@@ -979,13 +1013,14 @@ function dispatch(p) {
 
   // Keep a worker or two free to build. If raids or new buildings took them all, pull one off the
   // least useful job — this must run even when nobody is idle.
-  let free = 0, workers = 0, haulers = 0, trucks = 0, vans = 0, trains = 0, tankers = 0;
+  let free = 0, workers = 0, haulers = 0, trucks = 0, vans = 0, trains = 0, tankers = 0, ships = 0;
   // The road networks (truck networks: no Ropeways) a Tanker of ours is on: liquids there wait for a Tanker.
   const tankNets = new Set();
   for (const u of S.bots) {
     if (u.dead || u.owner !== p) continue;
     if (u.type === 'hauler') haulers++;
     if (BOTS[u.type].rail) trains++;
+    if (BOTS[u.type].sea && BOTS[u.type].haul) ships++;
     if (BOTS[u.type].tanker) { tankers++; for (const n of botNets(u)) tankNets.add(n); }
     else if (BOTS[u.type].truck) { trucks++; if (!BOTS[u.type].train) vans++; }
     if (u.type !== 'worker') continue;
@@ -1033,8 +1068,11 @@ function dispatch(p) {
     const liq = isLiquid(g), tank = liq && src && tankerReach(src);
     for (let k = 0; k < idle.length; k++) {
       const u = idle[k], bt = BOTS[u.type];
-      if (role === 'haul' || role === 'truck' || role === 'train' || role === 'rail') {
-        if (bt.tanker) { if (!tank || role === 'rail') continue; }
+      if (role === 'haul' || role === 'truck' || role === 'train' || role === 'rail' || role === 'sea') {
+        // Ships take only sea runs between Ports on their water: a Tanker Ship the liquids, a Container Ship the rest.
+        if (bt.sea) { if (role !== 'sea' || !!bt.tankShip !== liq || (src && !shipAt(u, src))) continue; }
+        else if (role === 'sea') continue;
+        else if (bt.tanker) { if (!tank || role === 'rail') continue; }
         else if (liq && (tank || role !== 'haul')) continue;
         else if (!(bt.haul || (P.noHaulers && bt.build)) || (bt.rail ? 'rail' : bt.train ? 'train' : bt.truck ? 'truck' : 'haul') !== role) continue;
         if (bt.rail && src && !trainAt(u, src)) continue;
@@ -1140,6 +1178,20 @@ function dispatch(p) {
         const tu = rs && take(rs.x, rs.y, 'rail', rs);
         if (tu) { const n = canCarry(tu, Math.min(r.n, railHas(rs))); assignHaul(tu, rs, r.b, r.g, n); r.n -= n; any = true; continue; }
       }
+      // A Port's supply orders come by ship from another Port on the same water the same way (Crude and
+      // Fuel by Tanker Ship), SHIP_MIN_LOAD or more at a time.
+      if (ships && BDEFS[r.b.type].port && r.n >= SHIP_MIN_LOAD) {
+        const L = getE(P.lander), dh = (s) => (L ? dist2(s.x, s.y, L.x, L.y) : 0);
+        const portHas = (s) => (dh(s) < dh(r.b) ? supplyOf(s, r.g) : keepSupply(s, r.g));
+        let ps = null, pd = Infinity;
+        for (const s of blds) {
+          if (s === r.b || !BDEFS[s.type].port || !s.built || portHas(s) < SHIP_MIN_LOAD || !seaLinked(s, r.b)) continue;
+          const d = dist2(s.x, s.y, r.b.x, r.b.y);
+          if (d < pd) { pd = d; ps = s; }
+        }
+        const su = ps && take(ps.x, ps.y, 'sea', ps, r.g);
+        if (su) { const n = canCarry(su, Math.min(r.n, portHas(ps)), r.g); assignHaul(su, ps, r.b, r.g, n); r.n -= n; any = true; continue; }
+      }
       for (const s of blds) {
         if (s === r.b || sup(s, r.g) <= 0 || !reachable(s) || !linked(s, r.b)) continue;
         const d = dist2(s.x, s.y, r.b.x, r.b.y);
@@ -1244,7 +1296,7 @@ function dispatch(p) {
         for (const want of wants) {
           for (let k = 0; k < idle.length; k++) {
             const u = idle[k], bt = BOTS[u.type];
-            if (bt.rail || bt.train || !(bt.haul || (P.noHaulers && bt.build))) continue;
+            if (bt.rail || bt.sea || bt.train || !(bt.haul || (P.noHaulers && bt.build))) continue;
             if (want === 'tanker' ? !bt.tanker : bt.tanker || (want === 'truck') !== !!bt.truck) continue;
             if (bt.roadOnly && !botNets(u).some((n) => (bt.truck ? netsT : nets).indexOf(n) >= 0)) continue;
             const d = dist2(u.x, u.y, l.x + 0.5, l.y + 0.5);
@@ -1260,7 +1312,7 @@ function dispatch(p) {
     }
   }
   // 4c) Trunk runs: a store far from the Command Base sends home, in bulk, what nothing near it uses.
-  if ((trucks || trains || tankers) && idle.some((u) => BOTS[u.type].truck || BOTS[u.type].rail)) trunkRuns(p, blds, take, canCarry, vans, trains);
+  if ((trucks || trains || tankers || ships) && idle.some((u) => BOTS[u.type].truck || BOTS[u.type].rail || BOTS[u.type].sea)) trunkRuns(p, blds, take, canCarry, vans, trains, ships);
   // 5) Empty out storage that no longer takes a good (set to "empty out" or the good switched off).
   for (const b of blds) {
     if (!storeAccepts(b) || (b.smode !== 'empty' && !b.reject)) continue;
@@ -1289,7 +1341,7 @@ function dispatch(p) {
 
 /** Is robot u hurt enough to go for repairs (and is there anywhere to go)? */
 function wantsRepair(u) {
-  if (u.dead || !warOn() || !u.maxHp) return false; // Colony free play has Repair Stations too (wildlife bites)
+  if (u.dead || !warOn() || !u.maxHp || BOTS[u.type].sea) return false; // Colony free play has Repair Stations too (wildlife bites); ships mend in Port
   return u.hp < u.maxHp * (u.type === 'warbot' ? REPAIR_BELOW.warbot : REPAIR_BELOW.other);
 }
 
@@ -1628,6 +1680,9 @@ function updateWorker(u, dt) {
   if (u.task && u.task.type === 'flee') { doFlee(u, dt); return; }
   // A new Freight Train rolls out at the nearest Rail Station (and waits at the Foundry until there is one).
   if (BOTS[u.type].rail && !u.task && !onTrack(u) && S.tick % 30 === u.id % 30) { deliverTrain(u); return; }
+  // A new ship puts to sea at the nearest Port (and waits at the Foundry until there is one).
+  if (BOTS[u.type].sea && !afloat(u)) { if (S.tick % 30 === u.id % 30) deliverShip(u); return; }
+  if (BOTS[u.type].ferry) { updateFerry(u, dt); return; }
   const t = u.task;
   if (!t) {
     if (u.carry) stashCarry(u);
@@ -1717,6 +1772,7 @@ function goHome(u) {
  */
 function parkingFor(u) {
   if (BOTS[u.type].rail) return nearestStation(u);
+  if (BOTS[u.type].sea) return nearestPort(u);
   if (!BOTS[u.type].truck) return nearestReachableStore(u);
   const parked = trucksParked(u.owner, u.id, !!BOTS[u.type].tanker);
   let near = null, nd = Infinity, empty = null, ed = Infinity;
@@ -1751,7 +1807,7 @@ function spreadTrucks(u) {
 }
 
 function stashCarry(u) {
-  let store = BOTS[u.type].rail ? nearestStation(u) : storeFor(u.owner, u.carry, u.x, u.y) || nearestStoreTo(u.owner, u.x, u.y);
+  let store = BOTS[u.type].rail ? nearestStation(u) : BOTS[u.type].sea ? nearestPort(u) : storeFor(u.owner, u.carry, u.x, u.y) || nearestStoreTo(u.owner, u.x, u.y);
   if (store && roadBound(u) && !botLinked(u, store)) store = nearestReachableStore(u);
   if (!store) return; // hold on to it until a road leads somewhere
   const n = u.carryN || 1;
@@ -2585,7 +2641,7 @@ function updateTurret(b, def, dt) {
   addFx('pulsebeam', m.x, m.y, { x2: target.x, y2: target.y, color, life: 0.4, seed: S.tick + b.id });
   addFx('pulsehit', target.x, target.y, { color, life: 0.4, seed: S.tick + b.id * 3 });
   shotFx(m.x - Math.cos(b.aim) * 0.32, m.y - Math.sin(b.aim) * 0.32, target.x, target.y, { color, pulse: true });
-  sfx('laser');
+  sfx('pulse');
   damageBot(target, 4);
   b.cd = 1.1;
   b.chg = 0;
@@ -2940,6 +2996,7 @@ function dropLoot(b) {
 
 /** A robot's load (a hauler's or truck's goods) put down in crates where it stands. */
 function dropCarried(u) {
+  if (BOTS[u.type] && BOTS[u.type].sea && !u.dead) return; // a ship keeps its load until it's unloaded at a Port (or sinks with it)
   if (u.carry && u.carryN > 0 && GOOD[u.carry] && inMap(Math.floor(u.x), Math.floor(u.y))) addLoot(Math.floor(u.x), Math.floor(u.y), { [u.carry]: Math.floor(u.carryN) });
   u.carry = null;
   u.carryN = 0;
@@ -3398,6 +3455,13 @@ function warbotAct(u, dt) {
     if (strikeBuilding(u, b, dt, power) === null) u.task = null;
   } else if (t.type === 'hold') {
     holdRally(u, t, rally, dt, power);
+  } else if (t.type === 'board') {
+    // Off to a Port to board a Ferry for a beach landing: it waits there to be taken aboard.
+    const port = getE(t.port), f = getE(t.ferry);
+    if (!port || port.dead || port.owner !== u.owner || !f || f.dead || !f.landing || f.landing.phase !== 'gather') { u.task = null; return; }
+    const r = travel(u, port.x, port.y, dt);
+    if (r) { u.task = null; u.ferryWait = { at: port.id, to: 0, landing: f.id, since: S.time, ferry: 0 }; u.inside = port.id; u.x = port.x + 0.5; u.y = port.y + 0.5; u.path = null; }
+    else if (r === null) u.task = null;
   } else if (t.type === 'defend') {
     const h = getE(t.home);
     if (!h || h.owner !== u.owner) { u.task = null; return; }
@@ -4274,7 +4338,7 @@ function evacSweep(p) {
   if (!evacZones(p)) return 0;
   let n = 0;
   for (const u of S.bots) {
-    if (u.dead || u.owner !== p || BOTS[u.type].rail || BOTS[u.type].crawler || (u.task && u.task.type === 'flee')) continue;
+    if (u.dead || u.owner !== p || BOTS[u.type].rail || BOTS[u.type].sea || BOTS[u.type].crawler || (u.task && u.task.type === 'flee')) continue;
     const home = u.inside ? getE(u.inside) : null;
     const x = home ? home.x + 0.5 : u.x, y = home ? home.y + 0.5 : u.y;
     if (inEvac(p, x, y)) { fleeFrom(u); n++; continue; }
@@ -4581,6 +4645,36 @@ function plansWaiting(owner) {
   return out;
 }
 
+/** What turning a Wall into a Gate costs: the difference between them (1 Cement and 2 Alloy). */
+function gateUpgradeCost() {
+  const out = {};
+  for (const g in BDEFS.gate.cost) { const d = BDEFS.gate.cost[g] - (BDEFS.wall.cost[g] || 0); if (d > 0) out[g] = d; }
+  return out;
+}
+
+/**
+ * Turn owner's built Wall b into a Gate where it stands, paying the difference from storage: their bots
+ * can pass through it from then on, enemies still have to break it down. It keeps its share of armor.
+ * Returns '' or why not.
+ */
+function wallToGate(owner, b) {
+  if (!b || b.dead || b.owner !== owner || b.type !== 'wall') return 'Only one of your Walls can become a Gate.';
+  if (!b.built) return 'Wait until the Wall is finished.';
+  const cost = gateUpgradeCost();
+  if (!canAffordRoad(owner, cost)) return `A Gate costs ${costText(cost)} more than a Wall: not enough ${missingGoods(owner, cost)} in storage.`;
+  payRoad(owner, cost);
+  const frac = clamp(b.armor / BDEFS.wall.armor, 0, 1);
+  b.type = 'gate';
+  b.armor = Math.max(1, Math.round(BDEFS.gate.armor * frac * 10) / 10);
+  delete b.cost;
+  outpostRoads(b.x, b.y); // roads either side now run through it
+  for (const [di, dj] of [[0, 0], [1, 0], [-1, 0], [0, 1], [0, -1]]) if (inMap(b.x + di, b.y + dj)) markDirty(b.x + di, b.y + dj);
+  S.roadVer = (S.roadVer || 0) + 1;
+  computeZones();
+  addFx('ring', b.x + 0.5, b.y + 0.5, { color: PLAYER_COLORS[owner] });
+  return '';
+}
+
 function payRoad(owner, cost, mul) {
   const P = S.players[owner];
   for (const g in cost) {
@@ -4633,7 +4727,7 @@ function removeRoad(owner, i, j) {
   setRoad(i, j, false);
   if (S.terrain[t] === T_WATER || S.terrain[t] === T_CHASM) computeTerritory();
   if (S.over && S.over[t]) removeOverpass(t);
-  refundRoad(owner, cross ? CROSS[S.terrain[t]].cost : roadCost(), i, j);
+  refundRoad(owner, cross ? crossCost(t) : roadCost(), i, j);
   if (cross) computeZones();
 }
 
@@ -5816,6 +5910,260 @@ function deliverTrain(u) {
   postMsg(u.owner, 'A Freight Train is ready at a Rail Station.', st.x, st.y, 'good');
 }
 
+/* ------------------------------------------------------------------ ships and Ports (naval maps) */
+
+/** Is ship u afloat: on open water, or tied up at a Port? (A new one waits at the Foundry until it's delivered.) */
+function afloat(u) {
+  if (u.inside) { const b = getE(u.inside); return !!(b && BDEFS[b.type].port); }
+  return S.terrain[tIdx(Math.floor(u.x), Math.floor(u.y))] === T_WATER;
+}
+
+/** The bodies of water ship u is on (tied up at a Port: every one its docks open onto). */
+function shipComps(u) {
+  if (u.inside) { const b = getE(u.inside); return b && BDEFS[b.type].port ? portComps(b) : []; }
+  const c = seaNet().comp[tIdx(Math.floor(u.x), Math.floor(u.y))];
+  return c >= 0 ? [c] : [];
+}
+
+/** Can ship u sail to Port b? */
+function shipAt(u, b) {
+  if (!BDEFS[b.type].port) return false;
+  const mine = shipComps(u), theirs = portComps(b);
+  return mine.some((c) => theirs.includes(c));
+}
+
+/** The nearest built Port of ship u's owner that it can sail to. */
+function nearestPort(u) {
+  let best = null, bd = Infinity;
+  for (const b of S.buildings) {
+    if (b.dead || b.owner !== u.owner || !b.built || !BDEFS[b.type].port || !shipAt(u, b)) continue;
+    const d = dist2(b.x + 0.5, b.y + 0.5, u.x, u.y);
+    if (d < bd) { bd = d; best = b; }
+  }
+  return best;
+}
+
+/** Put a new ship (still at the Foundry) into its owner's nearest Port. */
+function deliverShip(u) {
+  let st = null, bd = Infinity;
+  for (const b of S.buildings) {
+    if (b.dead || b.owner !== u.owner || !b.built || !BDEFS[b.type].port || !portDocks(b.x, b.y).length) continue;
+    const d = dist2(b.x + 0.5, b.y + 0.5, u.x, u.y);
+    if (d < bd) { bd = d; st = b; }
+  }
+  const name = BOTS[u.type].name;
+  if (!st) {
+    const P = S.players[u.owner];
+    if (S.time - (P.shipMsg || -999) > 90) { P.shipMsg = S.time; postMsg(u.owner, `A ${name} is waiting at the Foundry: build a Port on the shore and it puts to sea there.`, Math.floor(u.x), Math.floor(u.y), 'warn'); }
+    return;
+  }
+  exitBuilding(u);
+  enterBuilding(u, st);
+  if (BOTS[u.type].ferry) { u.home = st.id; computeZones(); }
+  addFx('ring', st.x + 0.5, st.y + 0.5, { color: PLAYER_COLORS[u.owner] });
+  postMsg(u.owner, `A ${name} is ready at a Port.`, st.x, st.y, 'good');
+}
+
+/** How many of a Ferry's seats bot v takes: a truck 2, a Road Train 3, anything else 1. */
+function seatsFor(v) { const bt = BOTS[v.type]; return bt.train ? 3 : bt.truck ? 2 : 1; }
+
+/** A Ferry's passengers (still alive). */
+function ferryAboard(u) {
+  if (!u.aboard) return [];
+  u.aboard = u.aboard.filter((id) => { const v = getE(id); return v && !v.dead; });
+  return u.aboard.map(getE);
+}
+
+/** Bot u stops waiting for a ferry (the line or its Port went, or it waited too long) and plans its way again. */
+function leaveFerryQueue(u) {
+  const w = u.ferryWait;
+  if (!w) return;
+  u.ferryWait = null;
+  u.inside = 0;
+  u.path = null;
+  if (w.since !== undefined) { u.failGoal = -1; cancelTask(u); u.task = null; }
+}
+
+/** A bot waiting at a Port for a ferry, or aboard one (it does nothing else meanwhile). */
+function ferryPassenger(u) {
+  const w = u.ferryWait;
+  if (w.ferry) {
+    const f = getE(w.ferry);
+    if (!f || f.dead) { killBot(u); return; } // went down with the ferry
+    u.x = f.x; u.y = f.y;
+    return;
+  }
+  const at = getE(w.at);
+  if (w.landing) { const f = getE(w.landing); if (!at || at.dead || !f || f.dead || !f.landing) leaveFerryQueue(u); return; }
+  if (!at || at.dead || S.time - w.since > FERRY_GIVEUP || ferryLines().get(w.at) === undefined) leaveFerryQueue(u);
+}
+
+/** Set ship u sailing to Port (or shore tile) dest. */
+function sailTo(u, dest) {
+  if (!goTo(u, dest.x, dest.y)) return false;
+  u.sailTo = dest.id || 0;
+  return true;
+}
+
+/**
+ * A Ferry runs its home Port's ferry line: tied up at one end, it takes on the bots waiting there for the
+ * other end (once someone is aboard it waits FERRY_WAIT s for more, or sails when full), and sails across
+ * empty when bots are waiting at the other end. With no line it stays tied up. (Beach landings: see doLanding.)
+ */
+function updateFerry(u, dt) {
+  if (u.landing) { doLanding(u, dt); return; }
+  const home = getE(u.home);
+  const far = home && !home.dead && home.ferryTo ? getE(home.ferryTo) : null;
+  const line = !!(home && far && !far.dead && far.built && home.built && far.ferryTo === home.id && far.owner === u.owner);
+  if (u.path) {
+    if (!moveAlong(u, dt)) return;
+    const to = getE(u.sailTo);
+    u.path = null; u.sailTo = 0; u.boardT = 0;
+    if (to && !to.dead && to.owner === u.owner && BDEFS[to.type].port) { enterBuilding(u, to); unloadFerry(u, to); }
+    return;
+  }
+  if (!u.inside) { const dest = line ? home : nearestPort(u); if (dest && S.tick % 15 === u.id % 15) sailTo(u, dest); return; }
+  if (!line || S.tick % 6 !== u.id % 6) return;
+  const here = getE(u.inside);
+  const other = here === home ? far : here === far ? home : null;
+  if (!other) { sailTo(u, home); return; }
+  let seats = FERRY_SEATS;
+  for (const v of ferryAboard(u)) seats -= seatsFor(v);
+  for (const v of S.bots) {
+    if (seats <= 0) break;
+    const w = v.ferryWait;
+    if (v.dead || !w || w.ferry || w.at !== here.id || w.to !== other.id || seatsFor(v) > seats) continue;
+    w.ferry = u.id;
+    (u.aboard = u.aboard || []).push(v.id);
+    seats -= seatsFor(v);
+    if (!u.boardT) u.boardT = S.time;
+  }
+  const n = ferryAboard(u).length;
+  const waitingThere = S.bots.some((v) => !v.dead && v.ferryWait && !v.ferryWait.ferry && v.ferryWait.at === other.id);
+  if ((n && (seats <= 0 || S.time - u.boardT >= FERRY_WAIT)) || (!n && waitingThere)) sailTo(u, other);
+}
+
+/** A Ferry tied up at Port `to` lets its passengers off: each carries on along its route from there. */
+function unloadFerry(u, to) {
+  const t = to.y * S.W + to.x;
+  for (const v of ferryAboard(u)) {
+    v.ferryWait = null;
+    v.inside = 0;
+    v.x = to.x + 0.5; v.y = to.y + 0.5; v.vel = 0;
+    if (v.path && v.path[v.pi] === t) v.pi++; else v.path = null;
+  }
+  u.aboard = [];
+}
+
+/** A ferry line or a Ferry came or went: routes and reachable areas change. */
+function ferryChanged() { _ferryTick = -1; computeZones(); }
+
+/**
+ * Set (to = another Port of the same owner on the same water) or clear (to = null) Port b's ferry line.
+ * A line needs a Ferry: one tied up at either end serves it, or a spare one (no line of its own) on the
+ * same water moves its home there. Returns '' or why not.
+ */
+function setFerryLine(b, to) {
+  if (!b || b.dead || !BDEFS[b.type].port) return 'Not a Port.';
+  const old = b.ferryTo ? getE(b.ferryTo) : null;
+  if (old && old.ferryTo === b.id) old.ferryTo = 0;
+  b.ferryTo = 0;
+  if (to) {
+    if (to === b || to.dead || to.owner !== b.owner || !BDEFS[to.type].port) { ferryChanged(); return 'Pick another of your Ports.'; }
+    if (!seaLinked(b, to)) { ferryChanged(); return 'Ships can\'t sail between those two Ports.'; }
+    const prev = to.ferryTo ? getE(to.ferryTo) : null;
+    if (prev && prev.ferryTo === to.id) prev.ferryTo = 0;
+    b.ferryTo = to.id; to.ferryTo = b.id;
+    const ferries = S.bots.filter((u) => !u.dead && u.owner === b.owner && BOTS[u.type].ferry && afloat(u));
+    if (!ferries.some((u) => u.home === b.id || u.home === to.id)) {
+      const spare = ferries.filter((u) => { const h = getE(u.home); return (!h || h.dead || !h.ferryTo) && shipComps(u).some((c) => portComps(b).includes(c)); });
+      spare.sort((p, q) => dist2(p.x, p.y, b.x, b.y) - dist2(q.x, q.y, b.x, b.y));
+      if (spare.length) spare[0].home = b.id;
+    }
+  }
+  ferryChanged();
+  return '';
+}
+
+/**
+ * A beach landing: Ferry f, tied up at a Port, takes up to `count` (at most FERRY_SEATS) armed warbots
+ * that can get to that Port and lands them on shore tile (i, j), anyone's shore: they hold the ground
+ * there under a rally flag, and the Ferry goes back to its line. Returns '' or why not.
+ */
+function orderLanding(owner, f, i, j, count) {
+  if (!f || f.dead || f.owner !== owner || !BOTS[f.type].ferry) return 'Pick one of your Ferries.';
+  if (f.landing) return 'That Ferry is already on a landing.';
+  const port = f.inside ? getE(f.inside) : null;
+  if (!port || !BDEFS[port.type].port || f.path) return 'The Ferry must be tied up at a Port.';
+  if (!inMap(i, j)) return 'Outside the map.';
+  const t = tIdx(i, j);
+  if (S.terrain[t] !== T_GROUND || S.bAt[t] || !walkable(t)) return 'Land them on open ground on the shore.';
+  const docks = portDocks(i, j), comps = shipComps(f), comp = seaNet().comp;
+  if (!docks.length) return 'Pick a spot right at the water\'s edge.';
+  if (!docks.some((d) => comps.includes(comp[d]))) return 'The Ferry can\'t sail there from this Port.';
+  count = Math.min(count || FERRY_SEATS, FERRY_SEATS);
+  let sent = 0;
+  for (const b of rallySources(owner, port.x, port.y, false)) {
+    while (spareFrom(b, false) > 0 && sent < count) {
+      const u = takeArmed(b);
+      if (!u) break;
+      u.inside = 0; u.path = null;
+      u.task = { type: 'board', port: port.id, ferry: f.id };
+      sent++;
+    }
+  }
+  if (!sent) return 'No armed warbots to spare that can get to this Port.';
+  // Line passengers already aboard get off again and wait for the next sailing.
+  for (const v of ferryAboard(f)) v.ferryWait.ferry = 0;
+  f.aboard = [];
+  f.landing = { x: i, y: j, phase: 'gather', since: S.time, n: sent };
+  ferryChanged();
+  return '';
+}
+
+/** A Ferry on a beach landing: wait at its Port for the warbots to come aboard, sail to the shore, put them ashore, go home. */
+function doLanding(u, dt) {
+  const L = u.landing;
+  if (L.phase === 'gather') {
+    const port = u.inside ? getE(u.inside) : null;
+    if (!port || port.dead) { u.landing = null; ferryChanged(); return; }
+    for (const v of S.bots) {
+      const w = v.ferryWait;
+      if (!v.dead && w && w.landing === u.id && !w.ferry && w.at === port.id) { w.ferry = u.id; (u.aboard = u.aboard || []).push(v.id); }
+    }
+    const aboard = ferryAboard(u).length;
+    const coming = S.bots.some((v) => !v.dead && v.task && v.task.type === 'board' && v.task.ferry === u.id);
+    if (aboard && (!coming || S.time - L.since > LANDING_GATHER)) {
+      if (!goTo(u, L.x, L.y)) {
+        for (const v of ferryAboard(u)) { v.ferryWait = null; v.inside = 0; v.task = null; }
+        u.aboard = []; u.landing = null; ferryChanged();
+        postMsg(u.owner, 'The Ferry can\'t find a way by water to that shore.', L.x, L.y, 'warn');
+        return;
+      }
+      L.phase = 'sail';
+    } else if (!aboard && !coming && S.time - L.since > 3) { u.landing = null; ferryChanged(); }
+    return;
+  }
+  if (!moveAlong(u, dt)) return;
+  // Ashore: the warbots hold the beach under a rally flag.
+  const ox = L.x + 0.5, oy = L.y + 0.5;
+  let r = S.rallies.find((q) => q.owner === u.owner && Math.abs(q.x - ox) < 1.5 && Math.abs(q.y - oy) < 1.5);
+  if (!r) { r = { id: S.nextId++, owner: u.owner, x: ox, y: oy }; S.rallies.push(r); }
+  let slot = rallyMembers(r.id).length, n = 0;
+  for (const v of ferryAboard(u)) {
+    v.ferryWait = null; v.inside = 0; v.x = ox; v.y = oy; v.path = null; v.vel = 0;
+    v.task = { type: 'hold', rally: r.id, slot: slot++ };
+    n++;
+  }
+  u.aboard = []; u.landing = null; u.path = null;
+  if (n) postMsg(u.owner, `A Ferry landed ${n} warbot${n === 1 ? '' : 's'} on the shore.`, L.x, L.y, 'good');
+  const foe = S.owner[tIdx(L.x, L.y)];
+  if (n && foe >= 0 && foe !== u.owner) { postMsg(foe, 'Enemy warbots have landed on your shore!', L.x, L.y, 'bad'); if (foe === 0) sfx('alert'); }
+  const home = getE(u.home);
+  if (!(home && !home.dead && home.owner === u.owner && sailTo(u, home))) { const p2 = nearestPort(u); if (p2) sailTo(u, p2); }
+  ferryChanged();
+}
+
 /** Is a train on or coming up to track tile t (a level crossing)? */
 function trainNear(t) {
   const x = (t % S.W) + 0.5, y = ((t / S.W) | 0) + 0.5, r2 = RAIL_CROSS_HOLD * RAIL_CROSS_HOLD;
@@ -5825,7 +6173,15 @@ function trainNear(t) {
 
 /** Lay track on tile t, paying RAIL_COST from storage: '' if done, otherwise why not. */
 /** What a tile of track costs: a rail bridge over water or a chasm costs more. */
-function railCost(t) { return S.terrain[t] === T_GROUND ? RAIL_COST : S.terrain[t] === T_ROCK ? RAIL_TUNNEL_COST : RAIL_BRIDGE_COST; }
+function railCost(t) {
+  if (S.terrain[t] === T_GROUND) return RAIL_COST;
+  if (S.terrain[t] === T_ROCK) return RAIL_TUNNEL_COST;
+  const m = bridgeMul(t);
+  if (m === 1) return RAIL_BRIDGE_COST;
+  const out = {};
+  for (const g in RAIL_BRIDGE_COST) out[g] = Math.round(RAIL_BRIDGE_COST[g] * m * 100) / 100;
+  return out;
+}
 
 function layRail(owner, t) {
   if (S.rail[t]) return '';

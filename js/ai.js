@@ -483,7 +483,7 @@ function aiBridge(p, maxSites) {
     for (let t = best; t >= 0; t = from[t]) tiles.push(t);
     tiles.reverse(); // from the shore out
     const cost = {};
-    for (const t of tiles) for (const g in CROSS[S.terrain[t]].cost) cost[g] = (cost[g] || 0) + CROSS[S.terrain[t]].cost[g];
+    for (const t of tiles) { const c = crossCost(t); for (const g in c) cost[g] = (cost[g] || 0) + c[g]; }
     // Short of Cement or Alloy: the Foundry rests until the bridge is paid for (see aiThink).
     if (!canAffordRoad(p, cost)) { P.bridgeWant = S.time; return; }
     P.bridgeWant = 0;

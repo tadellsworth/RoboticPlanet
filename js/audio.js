@@ -133,6 +133,7 @@ function _tone(freq, dur, type, vol, slideTo, delay, dest) {
   const o = ac.createOscillator(), g = ac.createGain();
   o.type = type || 'sine';
   o.frequency.setValueAtTime(freq, t0);
+  g.gain.value = 0.0001; // silent until its envelope starts (a gain starts at 1, which clicked)
   if (slideTo) o.frequency.exponentialRampToValueAtTime(slideTo, t0 + dur);
   g.gain.setValueAtTime(0.0001, t0);
   g.gain.exponentialRampToValueAtTime(vol || 0.1, t0 + 0.01);
@@ -158,6 +159,7 @@ function _noise(dur, vol, o) {
   if (o.to) f.frequency.exponentialRampToValueAtTime(o.to, t0 + dur);
   if (o.q) f.Q.value = o.q;
   const g = ac.createGain(), a = o.attack || 0.005;
+  g.gain.value = 0.0001; // silent until its envelope starts (a gain starts at 1, which clicked)
   g.gain.setValueAtTime(0.0001, t0);
   g.gain.exponentialRampToValueAtTime(vol, t0 + a);
   g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
@@ -167,7 +169,7 @@ function _noise(dur, vol, o) {
 }
 
 const SFX_GAP = {
-  launch: 0.3, boom: 0.12, shellhit: 0.09, missilehit: 0.2, laser: 0.08, hit: 0.07, produce: 0.25, alert: 1.5, complete: 0.3, order: 0.15,
+  launch: 0.3, boom: 0.12, shellhit: 0.09, missilehit: 0.2, laser: 0.08, pulse: 0.14, hit: 0.07, produce: 0.25, alert: 1.5, complete: 0.3, order: 0.15,
   weld: 0.25, scrape: 0.3, hiss: 0.6, airbrake: 1.2, honk: 2.5, nuke: 2, siren: 4,
 };
 
@@ -186,6 +188,36 @@ function sfx(name, dest) {
     case 'complete': _tone(523, 0.1, 'sine', 0.08, null, 0, D); _tone(659, 0.1, 'sine', 0.08, null, 0.08, D); _tone(784, 0.16, 'sine', 0.08, null, 0.16, D); break;
     case 'produce': _tone(980, 0.05, 'sine', 0.035, null, 0, D); break;
     case 'laser': _tone(1400, 0.14, 'sawtooth', 0.035, 300, 0, D); break;
+    // A Pulse Turret firing, like a tesla coil: the last of its charge whining up, then the discharge, a
+    // buzzing arc (a low sawtooth chopped on and off) crackling with sparks, a snapping zap sweeping down
+    // and a thump where it strikes.
+    case 'pulse': {
+      const ac = AUDIO.ctx, t0 = ac.currentTime + 0.07;
+      _tone(520, 0.08, 'sine', 0.035, 2600, 0, D);
+      _noise(0.03, 0.07, { type: 'highpass', freq: 3200, attack: 0.001, delay: 0.07, dest: D });
+      const o = ac.createOscillator(), bp = ac.createBiquadFilter(), am = ac.createGain(), env = ac.createGain();
+      const lfo = ac.createOscillator(), lg = ac.createGain();
+      o.type = 'sawtooth';
+      o.frequency.setValueAtTime(110, t0); o.frequency.exponentialRampToValueAtTime(58, t0 + 0.42);
+      bp.type = 'bandpass'; bp.frequency.setValueAtTime(1300, t0); bp.frequency.exponentialRampToValueAtTime(500, t0 + 0.42); bp.Q.value = 0.9;
+      am.gain.value = 0;
+      env.gain.value = 0.0001;
+      lfo.type = 'square'; lfo.frequency.setValueAtTime(38, t0); lfo.frequency.linearRampToValueAtTime(22, t0 + 0.42);
+      lg.gain.value = 1;
+      lfo.connect(lg).connect(am.gain);
+      env.gain.setValueAtTime(0.0001, t0);
+      env.gain.exponentialRampToValueAtTime(0.09, t0 + 0.012);
+      env.gain.exponentialRampToValueAtTime(0.04, t0 + 0.2);
+      env.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.45);
+      o.connect(bp).connect(am).connect(env).connect(D);
+      o.start(t0); lfo.start(t0); o.stop(t0 + 0.48); lfo.stop(t0 + 0.48);
+      _tone(3400, 0.22, 'sawtooth', 0.028, 240, 0.07, D);
+      _tone(150, 0.2, 'sine', 0.09, 55, 0.07, D);
+      for (let k = 0; k < 14; k++) {
+        _noise(0.006 + Math.random() * 0.022, 0.02 + Math.random() * 0.035, { type: 'bandpass', freq: 2200 + Math.random() * 5500, q: 1.6, attack: 0.001, delay: 0.07 + Math.random() * 0.36, dest: D });
+      }
+      break;
+    }
     case 'hit': _tone(220, 0.05, 'square', 0.03, 120, 0, D); break;
     // A Disruptor Tower's pulse: an electric crackle sweeping down.
     case 'zap': _tone(2400, 0.22, 'sawtooth', 0.025, 180, 0, D); _noise(0.18, 0.03, { type: 'highpass', freq: 4000, to: 1500, dest: D }); break;

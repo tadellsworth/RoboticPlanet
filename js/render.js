@@ -4099,6 +4099,8 @@ function render(dtReal) {
     ctx.lineWidth = 2.5;
     ctx.strokeRect(ox + R.ghost.x * z + 1, oy + R.ghost.y * z + 1, z - 2, z - 2);
   }
+  if (sel && BDEFS[sel.type] && BDEFS[sel.type].burner) drawBoosted(ctx, sel.type, sel.x, sel.y, sel.owner, ox, oy, z);
+  if (R.ghost && BDEFS[R.ghost.type] && BDEFS[R.ghost.type].burner) drawBoosted(ctx, R.ghost.type, R.ghost.x, R.ghost.y, 0, ox, oy, z);
   if (sel) {
     ctx.strokeStyle = '#ffffff';
     ctx.lineWidth = 2;
@@ -4628,7 +4630,7 @@ function drawBadge(ctx, b, x, y, z) {
 
 function drawRanges(ctx, type, x, y, ox, oy, z, owner) {
   const def = BDEFS[type];
-  const r = def.gather || def.plant ? def.radius + 0.5 : def.range ? turretRange({ type, owner: owner || 0 }) : def.missile ? def.missile.range : def.mil ? def.terr : 0;
+  const r = def.gather || def.plant ? def.radius + 0.5 : def.burner ? def.burner.radius + 0.5 : def.range ? turretRange({ type, owner: owner || 0 }) : def.missile ? def.missile.range : def.mil ? def.terr : 0;
   if (def.minRange) { // a Mortar Pit's blind zone
     ctx.strokeStyle = 'rgba(255,140,140,0.5)'; ctx.setLineDash([4, 4]); ctx.lineWidth = 1.5;
     ctx.beginPath(); ctx.arc(ox + (x + 0.5) * z, oy + (y + 0.5) * z, def.minRange * z, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]);
@@ -4636,10 +4638,11 @@ function drawRanges(ctx, type, x, y, ox, oy, z, owner) {
   if (!r) return;
   const cx = ox + (x + 0.5) * z, cy = oy + (y + 0.5) * z;
   const hostile = def.range || def.missile;
-  ctx.fillStyle = hostile ? 'rgba(255,90,90,0.08)' : 'rgba(255,255,255,0.09)';
-  ctx.strokeStyle = hostile ? 'rgba(255,140,140,0.7)' : 'rgba(255,255,255,0.65)';
+  ctx.fillStyle = hostile ? 'rgba(255,90,90,0.08)' : def.burner ? 'rgba(255,196,80,0.1)' : 'rgba(255,255,255,0.09)';
+  ctx.strokeStyle = hostile ? 'rgba(255,140,140,0.7)' : def.burner ? 'rgba(255,205,110,0.85)' : 'rgba(255,255,255,0.65)';
   ctx.lineWidth = 2;
   ctx.beginPath(); ctx.arc(cx, cy, r * z, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+
   if (def.gather) {
     // Highlight the nodes this building can reach.
     ctx.strokeStyle = 'rgba(255,255,255,0.75)';
@@ -4653,6 +4656,44 @@ function drawRanges(ctx, type, x, y, ox, oy, z, owner) {
       }
     }
   }
+}
+
+/**
+ * A Generator selected (or being placed): amber corner brackets and a spark on every building it powers
+ * (its owner's factories, Refineries, Oil Pumps and Bot Foundries within reach), drawn over the buildings.
+ */
+function drawBoosted(ctx, type, x, y, owner, ox, oy, z) {
+  const def = BDEFS[type];
+  if (!def || !def.burner) return;
+  const r2 = def.burner.radius * def.burner.radius, k = z * 0.26, pulse = 0.8 + 0.2 * Math.sin((R.time || 0) * 4);
+  ctx.save();
+  ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  for (const c of S.buildings) {
+    if (c.dead || c.owner !== (owner || 0) || !BDEFS[c.type].work || dist2(c.x, c.y, x, y) > r2 || (c.x === x && c.y === y)) continue;
+    const x0 = ox + c.x * z - z * 0.06, y0 = oy + c.y * z - z * 0.06, x1 = x0 + z * 1.12, y1 = y0 + z * 1.12;
+    const corners = () => {
+      ctx.beginPath();
+      ctx.moveTo(x0, y0 + k); ctx.lineTo(x0, y0); ctx.lineTo(x0 + k, y0);
+      ctx.moveTo(x1 - k, y0); ctx.lineTo(x1, y0); ctx.lineTo(x1, y0 + k);
+      ctx.moveTo(x1, y1 - k); ctx.lineTo(x1, y1); ctx.lineTo(x1 - k, y1);
+      ctx.moveTo(x0 + k, y1); ctx.lineTo(x0, y1); ctx.lineTo(x0, y1 - k);
+      ctx.stroke();
+    };
+    ctx.strokeStyle = 'rgba(20,14,4,0.55)'; ctx.lineWidth = Math.max(4, z * 0.12); corners();
+    ctx.strokeStyle = `rgba(255,205,110,${pulse})`; ctx.lineWidth = Math.max(2, z * 0.065); corners();
+    // A lightning-bolt badge on the top-left corner: this one is powered.
+    const bx = x0 + z * 0.02, by = y0 + z * 0.02, br = Math.max(6, z * 0.15);
+    ctx.fillStyle = 'rgba(28,20,6,0.85)';
+    ctx.beginPath(); ctx.arc(bx, by, br, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = `rgba(255,205,110,${pulse})`; ctx.lineWidth = Math.max(1, z * 0.025); ctx.stroke();
+    const u = br * 0.75;
+    ctx.fillStyle = '#ffd36e';
+    ctx.beginPath();
+    ctx.moveTo(bx + u * 0.25, by - u); ctx.lineTo(bx - u * 0.55, by + u * 0.15); ctx.lineTo(bx - u * 0.02, by + u * 0.15);
+    ctx.lineTo(bx - u * 0.3, by + u); ctx.lineTo(bx + u * 0.55, by - u * 0.2); ctx.lineTo(bx + u * 0.05, by - u * 0.2); ctx.closePath();
+    ctx.fill();
+  }
+  ctx.restore();
 }
 
 /**

@@ -46,6 +46,7 @@ const _DIRS = [[1, 0, 1], [-1, 0, 1], [0, 1, 1], [0, -1, 1], [1, 1, 1.4142], [1,
 function findPath(sx, sy, gx, gy, avoidFor, opts) {
   const roadOnly = !!(opts && opts.roadOnly), offMul = (opts && opts.offMul) || 1;
   const who = opts ? opts.who : undefined, breach = !!(opts && opts.breach);
+  const ferryOk = who !== undefined && !(opts && opts.noFerry) && navalMap();
   const W = S.W, H = S.H, N = W * H;
   if (!inMap(gx, gy)) return null;
   const start = sy * W + sx, goal = gy * W + gx;
@@ -78,11 +79,11 @@ function findPath(sx, sy, gx, gy, avoidFor, opts) {
       if (closed[nt] === gen) continue;
       if (!walkable(nt)) continue; // open ground, bridges and tunnels
       let wall = 0;
-      if (S.bAt[nt] && nt !== goal && !passTile(nt, who)) {
+      if (S.bAt[nt] && nt !== goal && !passTile(nt, who) && !(ferryOk && ferryLink(nt) >= 0 && getE(S.bAt[nt]).owner === who)) {
         if (!breach || dir[2] > 1 || !breachable(nt, who)) continue;
         wall = BREACH_COST + Math.max(0, getE(S.bAt[nt]).armor) * BREACH_PER_ARMOR;
       }
-      if (roadOnly && (dir[2] > 1 || (!roadLike(nt) && nt !== goal))) continue;
+      if (roadOnly && (dir[2] > 1 || (!roadLike(nt) && nt !== goal && !(ferryOk && ferryLink(nt) >= 0)))) continue;
       if (dir[2] > 1) {
         // Bots follow roads round their corners: no cutting diagonally on or off a road.
         if (S.road[cur] || S.road[nt]) continue;
@@ -107,6 +108,18 @@ function findPath(sx, sy, gx, gy, avoidFor, opts) {
       if (nt >= 0 && closed[nt] !== gen) {
         const ni = nt % W, nj = (nt / W) | 0;
         const ng = g[cur] + (Math.abs(ni - ci) + Math.abs(nj - cj)) * ROAD_PREFERENCE / PAVE[1].speed;
+        if (stamp[nt] !== gen || ng < g[nt]) {
+          stamp[nt] = gen; g[nt] = ng; from[nt] = cur;
+          heap.push(nt, ng + h(ni, nj));
+        }
+      }
+    }
+    // A Port with a ferry line: take the ferry to the far Port (its owner's bots, Crawlers and creatures excepted).
+    if (S.bAt[cur] && ferryOk) {
+      const nt = ferryLink(cur);
+      if (nt >= 0 && closed[nt] !== gen && getE(S.bAt[cur]).owner === who) {
+        const ni = nt % W, nj = (nt / W) | 0;
+        const ng = g[cur] + (Math.sqrt((ni - ci) * (ni - ci) + (nj - cj) * (nj - cj)) * FERRY_COST + FERRY_BOARD) * minStep;
         if (stamp[nt] !== gen || ng < g[nt]) {
           stamp[nt] = gen; g[nt] = ng; from[nt] = cur;
           heap.push(nt, ng + h(ni, nj));

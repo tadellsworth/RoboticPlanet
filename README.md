@@ -381,7 +381,9 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
   draining as they drive (a full tank lasts about 4 minutes of driving, a Road Train's under 3); low, they fill up at the
   nearest storage or Fuel Station holding Fuel (one Fuel fills the tank). With no Fuel anywhere they crawl at half
   speed. A **Generator** (Build → Make) burns a Fuel every 40 s while anything in its reach is working, and makes every
-  factory, Refinery, Oil Pump and Foundry within 4 tiles work a third faster.
+  factory, Refinery, Oil Pump and Foundry within 4 tiles work a third faster. Selected (or while you place one) it
+  shows its reach as an amber ring, with corner brackets and a lightning badge on every building it powers
+  (`drawRanges`, `drawBoosted`).
   **Smoke:** trucks puff diesel exhaust from their stacks (light while idling or cruising, thick black smoke pulling
   away), and working buildings smoke and steam from their chimneys (`vehicleSmoke`, `buildingSmoke` in
   `js/render.js`; the points are in `art/emitters.js`). The Generator plays its working loop (`generator-work-0…7`).
@@ -400,6 +402,8 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
 - **Gates on track:** a Gate can stand across railway track (`canPlace`; a wall line crossing track puts one there,
   `wallKind`), and track can be laid through your own Gate (`railBlocked`). Your trains run straight through it (rail
   routes ignore it; it's `passTile` for its owner); enemy robots can't walk through.
+- **Wall to Gate:** a built Wall's panel has **Make it a Gate** (`wallToGate`): it becomes a Gate where it stands, for
+  the difference in cost (1 Cement and 2 Alloy, `gateUpgradeCost`, paid from storage), keeping its share of armor.
 - **Through traffic:** an Outpost or Gate a road runs through counts as the best road leading into it, never worn
   (`throughPave`), for speed and route planning, so it never slows the traffic going through: asphalt on either side
   makes it asphalt (Freight Trucks and Road Trains keep their speed).
@@ -497,6 +501,7 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
 - **Sound** (`js/audio.js`, all Web Audio, no audio files): a generative synthwave score that follows the game (menu,
   building, war when you're attacked or fighting, and an alarm while a nuke flies), written a bar at a time from chord
   progressions, arpeggios, bass, drums and short melodies in 8-bar sections. Effects include radio blips for orders, a
+  Pulse Turret's tesla-coil discharge (a short charge whine, then a buzzing arc crackling with sparks: `pulse`), a
   nuke siren and blast, and sounds from the map when on screen (traffic hum, welding, concrete, asphalt, truck air
   brakes and horns, biome wind, jungle birds and insects). Music and Effects volumes are in the pause menu.
 - **Desktop (RTS controls):** on a wide screen the top bar is one row, the tools sit in a small dock and panels open

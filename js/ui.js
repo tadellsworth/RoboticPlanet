@@ -1471,7 +1471,7 @@ function onMapTap(i, j, wx, wy) {
     else if (S.road[t] || S.plan[t] === 1) { draftOp(stroke, t, 'del'); note = S.plan[t] ? 'Planned tile marked to call off.' : 'Road marked to take up: its Cement comes back when you tap Build.'; }
     else if (canRoad(0, i, j) || draftBridge(t)) {
       draftOp(stroke, t, 'add');
-      if (crossTile(t)) note = `${CROSS[S.terrain[t]].name} tile: ${costText(CROSS[S.terrain[t]].cost)}.`;
+      if (crossTile(t)) note = `${CROSS[S.terrain[t]].name} tile: ${costText(crossCost(t))}${bridgeMul(t) > 1 ? ' (far from shore: bridges cost more out here)' : ''}.`;
       else if (S.res[t]) note = `Workers will clear the ${RES[S.res[t]].name.toLowerCase()} (${ROAD_CLEAR}× Cement).`;
     } else { sfx('error'); showRoadBanner('You can only build roads inside your border. A bridge can reach out over the water beyond it, from your shore or the end of a bridge.'); return; }
     if (stroke.length) d.strokes.push(stroke);
@@ -1596,7 +1596,7 @@ function draftSummary() {
   for (const t of d.del) {
     if (!S.road[t] && !S.plan[t]) continue;
     // Taking up a road returns its Cement (a bridge or tunnel, its Cement and Alloy); calling off a planned tile refunds what it cost.
-    const c = S.plan[t] ? (S.owe[t] ? {} : roadTileCost(t)) : crossTile(t) ? CROSS[S.terrain[t]].cost : roadCost(); // a tile still waiting for its goods gives nothing back
+    const c = S.plan[t] ? (S.owe[t] ? {} : roadTileCost(t)) : crossTile(t) ? crossCost(t) : roadCost(); // a tile still waiting for its goods gives nothing back
     for (const g in c) back[g] = (back[g] || 0) + c[g];
   }
   // Ramps are paid for from storage as the goods come in, like the rest of the plan.
@@ -1783,7 +1783,7 @@ function onRoadPaint(i, j, first) {
   }
   if (!arrows) {
     showRoadBanner(cliffNote || (UI.paintRamp ? 'A <b>Ramp</b> is planned where the road climbs the cliff: workers cut it, paid from storage, and it carries the road up when it\'s done.'
-      : UI.paintBridge || UI.paintTunnel ? [UI.paintBridge ? `The road crosses the water as a <b>bridge</b>: ${costText(CROSS[T_WATER].cost)} a tile, built out from the shore.` : '',
+      : UI.paintBridge || UI.paintTunnel ? [UI.paintBridge ? `The road crosses the water as a <b>bridge</b>: ${costText(CROSS[T_WATER].cost)} a tile, built out from the shore${navalMap() ? ' (more a tile out past ' + BRIDGE_NEAR + ' tiles from shore: a Port and ships are the way across wide water)' : ''}.` : '',
         UI.paintTunnel ? `The road goes through the rock as a <b>tunnel</b>: ${costText(CROSS[T_ROCK].cost)} a tile, dug in from the rock face.` : ''].filter(Boolean).join(' ')
       : UI.paintCross ? 'A road stops at your border: only a bridge can reach out past it, over water.'
         : UI.paintSkipped ? 'Dragging goes round resources: tap a boulder, grove, ore or crystal tile to clear it for a road.' : ''), true);
@@ -1889,7 +1889,7 @@ function showRoadBanner(problem, info) {
     const sm = draftSummary();
     if (draftEmpty()) {
       line = mode === 'bridge'
-        ? `<b>Sketch</b> a road across water (bridge, ${costText(CROSS[T_WATER].cost)} a tile) or through rock (tunnel, ${costText(CROSS[T_ROCK].cost)}). Nothing is spent until you tap <b>Build</b>.`
+        ? `<b>Sketch</b> a road across water (bridge, ${costText(CROSS[T_WATER].cost)} a tile${navalMap() ? ' near the shore, more further out' : ''}) or through rock (tunnel, ${costText(CROSS[T_ROCK].cost)}). Nothing is spent until you tap <b>Build</b>.`
         : '<b>Sketch</b> roads by dragging; tap a tile to add or drop it, or tap a road to take it up. Nothing is spent until you tap <b>Build</b>.';
     } else {
       const parts = [];
@@ -1996,7 +1996,7 @@ function costHTML(cost, have) {
 function openBuildMenu() {
   const have = playerGoods(0);
   const sites = siteCount(0);
-  const list = BUILD_MENU.filter((t) => !(BDEFS[t].war && !warOn()) && !(BDEFS[t].nuke && !nukeOn()) && !(BDEFS[t].colony && (S.mode !== 'colony' || S.mission)));
+  const list = BUILD_MENU.filter((t) => !(BDEFS[t].war && !warOn()) && !(BDEFS[t].nuke && !nukeOn()) && !(BDEFS[t].colony && (S.mode !== 'colony' || S.mission)) && !(BDEFS[t].naval && !navalMap()));
   const groupOf = (t) => (BUILD_GROUPS.find((g) => g.types.includes(t)) || BUILD_GROUPS[0]).key;
   const ordered = BUILD_GROUPS.flatMap((g) => g.types).filter((t) => list.includes(t));
   if (!UI.buildTab) { try { UI.buildTab = localStorage.getItem('botfall.buildTab') || 'all'; } catch (e) { UI.buildTab = 'all'; } }
@@ -2141,6 +2141,7 @@ function openBuildingSheet(b) {
     html += '<div class="actions">';
     if (pausable(b) && b.built) html += `<button class="btn" id="sh-pause"></button>`;
     if (b.owner === 0 && (movable(b) || b.moving)) html += `<button class="btn" id="sh-move">${b.moving ? 'Call off the move' : 'Move'}</button><p class="hint" id="sh-move-hint">${b.moving ? 'Its new site is going up: when it\'s finished, everything here moves over and this one comes down.' : 'Put it somewhere else: no goods needed, just its build time. It keeps working until the new one is ready.'}</p>`;
+    if (b.owner === 0 && b.type === 'wall' && b.built) html += `<button class="btn" id="sh-gate">Make it a Gate</button><p class="hint">Your bots and trucks can pass through a Gate; enemies still have to break it down. It costs ${costText(gateUpgradeCost())} more, paid from storage.</p>`;
     if (BDEFS[b.type].mobile) html += '<button class="btn primary" id="sh-pack">Pack up to move</button>';
     else if (b.type !== 'lander') html += `<button class="btn danger" id="sh-demolish">${b.built ? 'Demolish' : 'Cancel site'}</button>`;
     html += '</div>';
@@ -2192,6 +2193,11 @@ function openBuildingSheet(b) {
       const u = packCrawler(b);
       sfx('order');
       if (u) openBotSheet(u); else closeSheet();
+    };
+    if ($('sh-gate')) $('sh-gate').onclick = () => {
+      const why = wallToGate(0, b);
+      if (why) { sfx('error'); toast(why, 'warn'); return; }
+      sfx('place'); toast('The Wall is now a Gate: your bots can pass through it.', 'good'); openBuildingSheet(b);
     };
     if ($('sh-aim')) $('sh-aim').onclick = () => { sfx('click'); startAim(b); };
     if ($('sh-pipe')) $('sh-pipe').onclick = () => {
@@ -2609,7 +2615,7 @@ function refreshResearch() {
 function renderFoundryOrders(b) {
   const el = $('sh-orders');
   if (!el) return;
-  const versus = warOn(), kinds = foundryList(b).filter((k) => versus || !BOTS[k].war);
+  const versus = warOn(), naval = navalMap(), shows = (k) => (versus || !BOTS[k].war) && (naval || !BOTS[k].naval), kinds = foundryList(b).filter(shows);
   el.innerHTML = kinds.map((k, i) => `<div class="order-row" data-k="${k}">
     <span class="order-move"><button class="btn ghost" data-k="${k}" data-m="-1" aria-label="Move ${BOTS[k].plural} up" ${i ? '' : 'disabled'}>▲</button><button class="btn ghost" data-k="${k}" data-m="1" aria-label="Move ${BOTS[k].plural} down" ${i < kinds.length - 1 ? '' : 'disabled'}>▼</button></span>
     <span>${BOTS[k].plural}<small id="sh-o-${k}">none queued</small></span>
@@ -2618,7 +2624,7 @@ function renderFoundryOrders(b) {
   for (const btn of el.querySelectorAll('button')) btn.onclick = () => {
     const k = btn.dataset.k;
     if (btn.dataset.m) {
-      moveFoundryOrder(b, k, +btn.dataset.m, (x) => versus || !BOTS[x].war);
+      moveFoundryOrder(b, k, +btn.dataset.m, shows);
       sfx('click');
       renderFoundryOrders(b);
       refreshSheet();
@@ -2926,7 +2932,7 @@ function refreshPopSheet() {
     else add(u.type, 'free');
   }
   const part = (o, k, label) => (o[k] ? `${o[k]} ${label}` : '');
-  const rows = BOT_ORDER.filter((k) => n[k] || warOn() || !BOTS[k].war).map((k) => {
+  const rows = BOT_ORDER.filter((k) => n[k] || ((warOn() || !BOTS[k].war) && (navalMap() || !BOTS[k].naval))).map((k) => {
     const o = n[k] || { total: 0 };
     const bits = k === 'warbot'
       ? [part(o, 'garrison', 'in garrisons'), part(o, 'field', 'in the field'), part(o, 'noAmmo', 'out of Ammo')]

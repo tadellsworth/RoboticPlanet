@@ -545,13 +545,26 @@ function generateMap(seed, W, H, cfg) {
     links = [[ca, half], [3, half], [W - 4, half]]; // the plaza, and both flank gaps (the far one through the free quarter)
   };
   // Lakes: a land of many small lakes, roads weaving between them.
+  // Lakes: a big lake in the middle and a scatter of smaller ones, wide enough for ships (it's a naval map);
+  // the way by land runs round either side of the middle lake.
   const lakesShape = () => {
-    const sL = seed * 43 + 19;
+    const sL = seed * 43 + 19, cr = makeRng(seed ^ 0x6a7b45);
+    const rx = W * (0.2 + cr() * 0.06), ry = Math.max(4, half * (0.24 + cr() * 0.08)), p = cr() * 6.28;
     for (let j = half; j < H; j++) for (let i = 0; i < W; i++) {
       if (nearBase(i, j, 9)) continue;
-      if (fbm(i / 3.6, j / 3.6, sL, 3) < 0.4) put(id(i, j), T_WATER);
+      const a = Math.atan2(j - ccy, i - ccx), w = 1 + 0.14 * Math.cos(2 * a + p) + 0.3 * (fbm(i / 3, j / 3, sL + 5, 2) - 0.5);
+      if (((i - ccx) / rx) ** 2 + ((j - ccy) / ry) ** 2 <= w * w || fbm(i / 6, j / 6, sL, 3) < LAKES_WET) put(id(i, j), T_WATER);
     }
-    links = [[ca, half]];
+    // Ponds too small for a ship go back to land.
+    const lab = new Int32Array(N).fill(-1);
+    for (let t = 0; t < N; t++) {
+      if (terrain[t] !== T_WATER || lab[t] >= 0) continue;
+      const q = [t];
+      lab[t] = t;
+      for (let h = 0; h < q.length; h++) orth(q[h], (u) => { if (lab[u] < 0 && terrain[u] === T_WATER) { lab[u] = t; q.push(u); } });
+      if (q.length < 14) for (const u of q) { terrain[u] = T_GROUND; res[u] = R_NONE; fert[u] = 0; }
+    }
+    links = [[3, half], [W - 4, half]];
   };
   // The cheapest way by land from the base to (tx, ty) on the bottom half, round the shape's barrier,
   // opened up two tiles wide where it isn't ground (a ford, a cut through crags); a long way round on
@@ -1381,8 +1394,8 @@ function computeZones() {
         z[b] = next;
         q.push(b);
       }
-      // A Ropeway or a Viaduct joins the areas at its two ends, whatever lies between.
-      if (S.bAt[a]) for (const r of [ropeLink(a), viaLink(a)]) if (r >= 0 && z[r] < 0) { z[r] = next; q.push(r); }
+      // A Ropeway, a Viaduct or a ferry line joins the areas at its two ends, whatever lies between.
+      if (S.bAt[a]) for (const r of [ropeLink(a), viaLink(a), ferryLink(a)]) if (r >= 0 && z[r] < 0) { z[r] = next; q.push(r); }
     }
     next++;
   }
@@ -1670,6 +1683,8 @@ function canPlace(owner, type, i, j, skipBlockCheck) {
   // A Ramp can go under track (to carry it up a level), and a Gate across it (your trains run through, as on a road).
   if (S.rail && (S.rail[t] || (S.railPlan && S.railPlan[t])) && !def.ramp && !def.gate) return { ok: false, reason: S.rail[t] ? 'There is railway track here.' : 'Track is planned here.' };
   if (def.station && !railPlatforms(i, j).length) return { ok: false, reason: 'A Rail Station goes right beside the track: lay rail first (Paths, Rail).' };
+  if (def.port && !navalMap()) return { ok: false, reason: 'Ports are for naval maps (Islands and Lakes).' };
+  if (def.port && !portDocks(i, j).length) return { ok: false, reason: 'A Port goes on the shore, right beside open water wide enough for ships.' };
   if (S.wildlife) for (const e of S.buildings) {
     if (!e.dead && BDEFS[e.type].wild && Math.max(Math.abs(e.x - i), Math.abs(e.y - j)) <= WILD.clear) return { ok: false, reason: 'Too close to a creature nest: clear it with warbots first.' };
   }
@@ -1849,14 +1864,127 @@ function bridgeHead(owner, i, j, extra) {
 function roadTileMul(t) {
   if (S.road[t] || S.plan[t]) return 0;
   const c = CROSS[S.terrain[t]];
-  if (c) return c.cost.cement / PAVE[1].cost.cement;
+  if (c) return (c.cost.cement * bridgeMul(t)) / PAVE[1].cost.cement;
   return S.res[t] ? ROAD_CLEAR : 1;
+}
+
+/** Is this a naval map (Islands, Lakes): Ports and ships, and long bridges cost more? */
+function navalMap() {
+  if (!NAVAL_ON) return false;
+  const sh = S && S.settings && SHAPE_PRESETS[S.settings.shape || 0];
+  return !!(sh && sh.naval);
+}
+
+/** For each tile, how many tiles it is from dry land (0 on land; 8-way steps over water). Kept per game. */
+let _shoreFor = null, _shoreArr = null;
+function shoreDist() {
+  if (_shoreFor === S && _shoreArr && _shoreArr.length === S.W * S.H) return _shoreArr;
+  const W = S.W, H = S.H, N = W * H, d = new Uint8Array(N).fill(255), q = [];
+  for (let t = 0; t < N; t++) if (S.terrain[t] !== T_WATER) { d[t] = 0; q.push(t); }
+  for (let h = 0; h < q.length; h++) {
+    const t = q[h], i = t % W, j = (t / W) | 0;
+    for (let dj = -1; dj <= 1; dj++) for (let di = -1; di <= 1; di++) {
+      const x = i + di, y = j + dj;
+      if (x < 0 || y < 0 || x >= W || y >= H) continue;
+      const u = y * W + x;
+      if (d[u] > d[t] + 1) { d[u] = d[t] + 1; q.push(u); }
+    }
+  }
+  _shoreFor = S; _shoreArr = d;
+  return d;
+}
+
+/** How many times the usual price a bridge over tile t costs (see BRIDGE_NEAR): 1 except far out on a naval map. */
+function bridgeMul(t) {
+  if (S.terrain[t] !== T_WATER || !navalMap()) return 1;
+  const d = shoreDist()[t];
+  return d <= BRIDGE_NEAR ? 1 : 1 + BRIDGE_STEP * (d - BRIDGE_NEAR);
+}
+
+/* ------------------------------------------------------------------ the sea (naval maps) */
+
+/** Bodies of open water: comp[t] (-1 off the water) and each one's size in tiles. Water never changes, so kept per game. */
+let _seaFor = null, _sea = null;
+function seaNet() {
+  if (_seaFor === S && _sea && _sea.comp.length === S.W * S.H) return _sea;
+  const W = S.W, N = W * S.H, comp = new Int32Array(N).fill(-1), size = [];
+  for (let t = 0; t < N; t++) {
+    if (S.terrain[t] !== T_WATER || comp[t] >= 0) continue;
+    const c = size.length, q = [t];
+    comp[t] = c;
+    for (let h = 0; h < q.length; h++) {
+      const a = q[h], i = a % W;
+      for (const v of [i > 0 ? a - 1 : -1, i < W - 1 ? a + 1 : -1, a - W, a + W]) {
+        if (v >= 0 && v < N && comp[v] < 0 && S.terrain[v] === T_WATER) { comp[v] = c; q.push(v); }
+      }
+    }
+    size.push(q.length);
+  }
+  _seaFor = S; _sea = { comp, size };
+  return _sea;
+}
+
+/** The open-water tiles right beside land tile (i, j) where a ship can tie up (water big enough to sail: SEA_MIN tiles). */
+function portDocks(i, j) {
+  const out = [], net = seaNet();
+  for (const [di, dj] of [[0, 1], [1, 0], [0, -1], [-1, 0]]) {
+    if (!inMap(i + di, j + dj)) continue;
+    const t = tIdx(i + di, j + dj), c = net.comp[t];
+    if (c >= 0 && net.size[c] >= SEA_MIN) out.push(t);
+  }
+  return out;
+}
+
+/** The bodies of water a Port's ships can sail on. */
+function portComps(b) { const c = seaNet().comp; return [...new Set(portDocks(b.x, b.y).map((t) => c[t]))]; }
+
+/** Can ships sail between Ports a and b (on the same water)? */
+function seaLinked(a, b) { const cb = portComps(b); return portComps(a).some((c) => cb.includes(c)); }
+
+/**
+ * Ferry lines: a Port with a ferry line (b.ferryTo, set on both ends) and a Ferry of its owner serving
+ * it carries its owner's bots across to the other end, as a link in their routes (like a Ropeway).
+ * Map of port id -> the far port's tile, worked out once a tick.
+ */
+let _ferryTick = -1, _ferryFor = null, _ferryMap = null;
+function ferryLines() {
+  if (_ferryFor === S && _ferryTick === S.tick && _ferryMap) return _ferryMap;
+  const m = new Map(), served = new Set();
+  for (const u of S.bots) if (!u.dead && BOTS[u.type].ferry && !u.landing) served.add(u.home);
+  for (const b of S.buildings) {
+    if (b.dead || !b.built || !b.ferryTo || !BDEFS[b.type].port) continue;
+    const o = getE(b.ferryTo);
+    if (!o || o.dead || !o.built || o.owner !== b.owner || o.ferryTo !== b.id) continue;
+    if (!served.has(b.id) && !served.has(o.id)) continue;
+    m.set(b.id, o.y * S.W + o.x);
+  }
+  _ferryFor = S; _ferryTick = S.tick; _ferryMap = m;
+  return m;
+}
+
+/** The tile of the far Port of the ferry line from the Port on tile t, or -1. */
+function ferryLink(t) {
+  const id = S.bAt[t];
+  if (!id) return -1;
+  const v = ferryLines().get(id);
+  return v === undefined ? -1 : v;
+}
+
+/** What a bridge, tunnel or sky-bridge tile on t costs (null if t is open ground). */
+function crossCost(t) {
+  const c = CROSS[S.terrain[t]];
+  if (!c) return null;
+  const m = bridgeMul(t);
+  if (m === 1) return c.cost;
+  const out = {};
+  for (const g in c.cost) out[g] = Math.round(c.cost[g] * m * 100) / 100;
+  return out;
 }
 
 /** Everything a new road tile on t costs: road Cement, or a bridge's or tunnel's Cement and Alloy. */
 function roadTileCost(t) {
   const c = CROSS[S.terrain[t]];
-  if (c) return c.cost;
+  if (c) return crossCost(t);
   const mul = S.res[t] ? ROAD_CLEAR : 1, out = {};
   for (const g in PAVE[1].cost) out[g] = PAVE[1].cost[g] * mul;
   return out;
@@ -2146,7 +2274,7 @@ const ROAD_AVOID = 10;
 function roadWeight(t) {
   if (S.road[t] || S.plan[t] || (S.bAt[t] && passTile(t))) return 0;
   const c = CROSS[S.terrain[t]];
-  return c ? c.weight : S.res[t] ? ROAD_AVOID : 1;
+  return c ? c.weight * bridgeMul(t) : S.res[t] ? ROAD_AVOID : 1;
 }
 
 function roadSearch(owner, seeds, done) {
@@ -2293,9 +2421,13 @@ function killBot(bot, quiet) {
   if (bot.cargo && typeof addLoot === 'function' && inMap(Math.floor(bot.x), Math.floor(bot.y))) { addLoot(Math.floor(bot.x), Math.floor(bot.y), bot.cargo); bot.cargo = null; }
   // A Tanker with a load on board explodes (see fuelBlast), and its load burns. Any other hauler, truck
   // or train with goods on board drops them.
-  const boom = !quiet && BOTS[bot.type].tanker && bot.carry && bot.carryN > 0 && typeof fuelBlast === 'function' ? Math.min(1, bot.carryN / BOTS[bot.type].carry) : -1;
+  const boom = !quiet && (BOTS[bot.type].tanker || BOTS[bot.type].tankShip) && bot.carry && bot.carryN > 0 && typeof fuelBlast === 'function' ? Math.min(1, bot.carryN / BOTS[bot.type].carry) : -1;
   const load = boom >= 0 ? GOOD[bot.carry].name : '';
-  if (boom >= 0) { bot.carry = null; bot.carryN = 0; }
+  if (boom >= 0 || BOTS[bot.type].sea) { bot.carry = null; bot.carryN = 0; } // a ship's load goes down with it
+  // A Ferry sunk with bots aboard takes them down with it; anyone waiting for a ferry stops.
+  if (bot.aboard) for (const id of bot.aboard) { const v = getE(id); if (v && !v.dead) { v.ferryWait = null; killBot(v, true); } }
+  if (bot.ferryWait) bot.ferryWait = null;
+  const wasFerry = BOTS[bot.type].ferry;
   if (bot.carry && typeof dropCarried === 'function') dropCarried(bot);
   cancelTask(bot);
   exitBuilding(bot);
@@ -2307,8 +2439,9 @@ function killBot(bot, quiet) {
   bot.dead = true;
   S.byId.delete(bot.id);
   S.players[bot.owner].stats.lost++;
+  if (wasFerry && typeof ferryChanged === 'function') ferryChanged(); // its line stops
   if (boom >= 0) {
-    postMsg(bot.owner, `A Tanker carrying ${load} exploded!`, Math.floor(bot.x), Math.floor(bot.y), 'bad');
+    postMsg(bot.owner, `A ${BOTS[bot.type].name} carrying ${load} exploded!`, Math.floor(bot.x), Math.floor(bot.y), 'bad');
     fuelBlast(bot.x, bot.y, 'tanker', boom, bot.owner);
     return;
   }
@@ -2669,6 +2802,51 @@ function setRail(t, on) {
   markDirty(i, j);
   for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) if (inMap(i + di, j + dj)) markDirty(i + di, j + dj);
   dirtySpan(t);
+}
+
+/**
+ * A ship's route over open water (8-way, never cutting a corner of land; bridges pass overhead) from where
+ * it is (afloat, or tied up at a Port: from its docks) to a dock of the building at (x, y), the water beside
+ * shore tile (x, y), or water tile (x, y). Null if there is none. A ship tied up starts out at its dock.
+ */
+function seaRoute(u, x, y) {
+  const W = S.W, H = S.H, N = W * H, comp = seaNet().comp;
+  let starts = [];
+  if (u.inside) { const b = getE(u.inside); if (b) starts = portDocks(b.x, b.y); }
+  else { const t = tIdx(Math.floor(u.x), Math.floor(u.y)); if (S.terrain[t] === T_WATER) starts = [t]; }
+  if (!starts.length || !inMap(x, y)) return null;
+  const g = tIdx(x, y);
+  let goals;
+  if (S.bAt[g]) goals = portDocks(x, y);
+  else if (S.terrain[g] === T_WATER) goals = [g];
+  else goals = portDocks(x, y);
+  goals = goals.filter((t) => starts.some((s) => comp[s] === comp[t]));
+  if (!goals.length) return null;
+  const isGoal = new Set(goals), gx = x, gy = y;
+  const cost = new Float32Array(N).fill(Infinity), from = new Int32Array(N).fill(-2), heap = new MinHeap();
+  for (const s0 of starts) { cost[s0] = 0; from[s0] = -1; heap.push(s0, Math.hypot((s0 % W) - gx, ((s0 / W) | 0) - gy)); }
+  let hit = -1;
+  while (heap.size) {
+    const a = heap.pop();
+    if (isGoal.has(a)) { hit = a; break; }
+    const ai = a % W, aj = (a / W) | 0;
+    for (let dj = -1; dj <= 1; dj++) for (let di = -1; di <= 1; di++) {
+      if (!di && !dj) continue;
+      const i = ai + di, j = aj + dj;
+      if (i < 0 || j < 0 || i >= W || j >= H) continue;
+      const b = j * W + i;
+      if (S.terrain[b] !== T_WATER) continue;
+      if (di && dj && (S.terrain[aj * W + i] !== T_WATER || S.terrain[j * W + ai] !== T_WATER)) continue;
+      const c = cost[a] + (di && dj ? 1.414 : 1);
+      if (c < cost[b]) { cost[b] = c; from[b] = a; heap.push(b, c + Math.hypot(i - gx, j - gy) * 0.9); }
+    }
+  }
+  if (hit < 0) return null;
+  const path = [];
+  for (let t = hit; t >= 0; t = from[t]) path.push(t);
+  path.reverse();
+  if (!u.inside && path[0] === tIdx(Math.floor(u.x), Math.floor(u.y))) path.shift();
+  return path;
 }
 
 /**
