@@ -6,12 +6,9 @@ and biomes started here and are now in the game.)
 ## Held for later
 
 - Multiplayer, and exporting/importing saves between devices.
-- **Fuel that's worth fighting for (next up, after the current tasks).** Make Fuel more useful and harder to get:
-  it moves only by a special **tanker truck**, which explodes and damages everything around it when it's shot
-  and destroyed. That opens the way to **pipelines**: oil always comes in clusters, so a pipeline could carry
-  Crude quickly from a cluster of Oil Pumps to a Refinery, and the **Refinery explodes** and does damage if it's
-  destroyed. To think through: what new uses make Fuel valuable, how pipelines are laid (like roads or rail?), what
-  they cost, whether they can be cut by raiders, and how the AI handles tankers and pipelines.
+- **Fuel, after the Tanker update.** Built: Tankers, explosions with chain reactions, Crude pipelines, the Generator
+  and trucks burning Fuel (see the README). Still open: Fuel pipelines (only Crude flows today), a Generator that
+  explodes too, and the AI using oil more (it mostly lives on Bio Farms: about one colony in four builds a Refinery).
 
 ## AI stalemates (seen while checking Road Trains, November)
 
@@ -24,9 +21,10 @@ look: why Ore in storage doesn't reach the Smelters (distance, haulers, trucks, 
 
 Measured, but left for a decision rather than changed:
 
-- **Fuel is plentiful.** One Fuel charges 2½ batteries (`FUEL_ENERGY` 250), so colonies make about half again
-  the Fuel they burn and a Refinery is rarely needed for Fuel (its Crude still makes Asphalt). At 150, AI colonies
-  burned about what they made (42 made, 43 used by minute 15) with no more flat batteries.
+- **Fuel is still plentiful.** One Fuel charges 2½ batteries (`FUEL_ENERGY` 250). With trucks burning Fuel and
+  Generators, AI colonies use a bit over half what they make (58% across 25 colonies, against 59% before, when Fuel
+  had fewer uses: Bio Farms now get their Agribot first, so more is made). If Fuel should be scarcer, the levers are
+  `FUEL_ENERGY`, `TRUCK_BURN` and the Generator's `perFuel`.
 - **Viaduct bridgeheads can't be shut.** Anyone can cross a Viaduct, so a bridgehead is also the rival's way in.
   Option: abutments act like Gates.
 - **A nuke still leaves the Command Base at 1 armor.** Robots can now evacuate the blast ring (and the AI does), so

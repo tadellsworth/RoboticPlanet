@@ -2542,9 +2542,9 @@ function updateDisruptor(b, def, dt) {
   if (b.cd > 0) return;
   const cx = b.x + 0.5, cy = b.y + 0.5, r2 = def.range * def.range;
   const hit = S.bots.filter((u) => !u.dead && !u.inside && u.owner !== b.owner && !BOTS[u.type].wild && !BOTS[u.type].rail && dist2(u.x, u.y, cx, cy) <= r2);
-  if (!hit.length) { b.status = (b.pulses || 0) + (b.stock.fuel || 0) > 0 ? 'Watching for enemy robots' : 'No Fuel: haulers bring it from storage'; b.cd = 0.5; return; }
+  if (!hit.length) { b.status = (b.pulses || 0) + (b.stock.fuel || 0) > 0 ? 'Watching for enemy robots' : 'No Fuel: a Tanker brings it from storage'; b.cd = 0.5; return; }
   if (!(b.pulses > 0)) {
-    if (!((b.stock.fuel || 0) > 0)) { b.status = 'No Fuel to pulse with: haulers bring it from storage'; b.cd = 1; return; }
+    if (!((b.stock.fuel || 0) > 0)) { b.status = 'No Fuel to pulse with: a Tanker brings it from storage'; b.cd = 1; return; }
     bump(b.stock, 'fuel', -1);
     usedGood(b.owner, 'fuel', 1);
     b.pulses = d.perFuel;

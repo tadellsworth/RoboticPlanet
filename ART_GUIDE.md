@@ -1439,6 +1439,10 @@ slow, tell Claude Code: each effect's length is one number in the code.
   Turret's `fx-pulse-laser` and `fx-pulse-hit`. The Pulse Turret's charge-up sheets (`turret-charge-0…15`) wait for
   a **3D turret by day** (`turret@0/@1` base and `turret-head-0…15@0/@1`, anchor [0.5, 0.615], scale 1.4): the
   morning, evening and night sets exist, but the day art is still the flat top-down turret.
+  The Fuel update's art is drawn in code for now: the **Tanker** (`tanker@0/@1-f0…f3`, `-brake`, `-boost`, 384×384,
+  like the truck), the **Generator** (`generator@0/@1` plus time-of-day sets and `generator-work-0…7`), the
+  **pipe pieces** and the **fuel blast** sheet (`fx-fuel-blast`, `oil-scorch`). The prompts are in
+  `design/claude-design-fuel.md`.
   Still missing: a 3D turret by day, resources `crop` and `oil`, ground
   `fertile`, `slope` and `cliff`, markers `missile`, `rally` and `oneway`, and the 12 goods icons
 

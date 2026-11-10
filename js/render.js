@@ -1586,7 +1586,10 @@ function drawPipes(ctx, ox, oy, z, inView) {
     }
     ctx.restore();
   }
-  // In Paths (Pipes): which Oil Pumps reach a Refinery by pipe, and the Refineries.
+}
+
+/** In Paths (Pipes): which Oil Pumps reach a Refinery by pipe (green) or don't yet (orange), and the Refineries (blue). */
+function drawPipeRings(ctx, ox, oy, z, inView) {
   if (R.mode === 'road' && typeof UI !== 'undefined' && UI.roadMode === 'pipe') {
     const joined = refineryPipes(0);
     ctx.lineWidth = Math.max(2, z * 0.07);
@@ -3590,6 +3593,7 @@ function render(dtReal) {
   drawOffMap(ctx, ox, oy, z);
   drawMapLayer(ctx, ox, oy, z);
   ctx.drawImage(R.terr, ox, oy, S.W * z, S.H * z);
+  drawPipes(ctx, ox, oy, z, inView); // (graded with the ground at dusk and night)
   todGradeGround(ctx); // morning, evening and night light on the ground and its territory tint (buildings and bots have their own re-lit art)
   drawStreetLights(ctx, ox, oy, z, v0, v1);
 
@@ -3612,7 +3616,7 @@ function render(dtReal) {
   drawBridgeRigging(ctx, ox, oy, z, inView);
   drawViaducts(ctx, ox, oy, z);
   drawCrossingGates(ctx, ox, oy, z, inView);
-  drawPipes(ctx, ox, oy, z, inView);
+  drawPipeRings(ctx, ox, oy, z, inView);
 
   // Placement overlay
   if (R.mode === 'place' && R.overlay) {

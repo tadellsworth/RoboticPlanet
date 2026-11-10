@@ -162,7 +162,7 @@ const BOT_ORDER = ['worker', 'hauler', 'truck', 'tanker', 'roadtrain', 'freight'
  * KEEP_MAX of each.
  */
 /*
- * Liquids: Crude and Fuel only travel by Tanker (and Crude by pipeline, see PIPE). Haulers, Freight
+ * Liquids: Crude and Fuel only travel by Tanker (and Crude by pipeline, see PIPE_COST). Haulers, Freight
  * Trucks, Road Trains and Freight Trains can't carry them. When no Tanker can get to the goods (none
  * left, or none on that road network), Haulers carry them one at a time, so nothing ever locks up.
  * Tankers do every liquid run, near or far; a production building's Crude or Fuel waits for a load of

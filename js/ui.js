@@ -1259,6 +1259,11 @@ function onMapTap(i, j, wx, wy) {
       }
       if (def.farm) extra = ` <span class="ok">${fertileIn(i, j, def.radius)} fertile tiles in reach.</span>`;
       if (def.pump) extra = ` <span class="ok">${oilAround(i, j)} Crude in this seep.</span>`;
+      if (def.burner) {
+        let n = 0;
+        for (const c of S.buildings) if (!c.dead && c.owner === 0 && BDEFS[c.type].work && dist2(c.x, c.y, i, j) <= def.burner.radius * def.burner.radius) n++;
+        extra = n ? ` <span class="ok">It would power ${n} building${n === 1 ? '' : 's'} in reach.</span>` : ' <span class="err">Nothing in reach to power: put it among your factories.</span>';
+      }
       showBanner(`Place the <b>${def.name}</b> here?${extra}`, 'Build here', 'Cancel');
     } else {
       sfx('error');

@@ -73,7 +73,8 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
 | Charging Station | Recharges bots' batteries, four at a time; burns **Fuel** |
 | Bio Farm | A worker plants energy crops on fertile soil and harvests them into **Fuel** |
 | Oil Pump | Built on an oil seep; a worker pumps **Crude** until it runs dry (stops at 30 Crude by default) |
-| Refinery | Crude → **Fuel**, one for one (stops at 30 unless you change its stock limit) |
+| Refinery | Crude → **Fuel**, one for one (stops at 30 unless you change its stock limit); explodes when destroyed |
+| Generator | Burns a Fuel every 40 s to make factories, Refineries, Oil Pumps and the Foundry within 4 tiles work a third faster |
 | Cement Works | 1 Stone → 2 **Cement**, the main building material (stops at 40 unless you change its stock limit) |
 | Asphalt Plant | Crude + Cement → 2 **Asphalt** |
 | Roadworks | Its Paver paves and maintains the roads you mark for asphalt (or every joined road), nearest first (1 Asphalt covers 4 tiles) |
@@ -97,10 +98,10 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
 
 - **Workers and Haulers:** Workers run buildings (one inside each production building), go out to cut, dig and mine,
   and build construction sites. They can go anywhere, but off the road they move at 40% speed, except while out
-  gathering for their building. **Haulers** move every good between buildings, two at a time, and **only drive on
-  roads**. If every Hauler is lost, workers carry goods slowly until the Foundry makes more. **Agribots** run Bio Farms
-  and Grove Planters, **Pavers** run the Roadworks and **Warbots** fight. You start with 10 Workers, 5 Haulers and an
-  Agribot (plus 4 Warbots in Versus).
+  gathering for their building. **Haulers** move every good between buildings (except Crude and Fuel: see Tankers),
+  two at a time, and **only drive on roads**. If every Hauler is lost, workers carry goods slowly until the Foundry
+  makes more. **Agribots** run Bio Farms and Grove Planters, **Pavers** run the Roadworks and **Warbots** fight. You
+  start with 10 Workers, 5 Haulers, a Tanker and an Agribot (plus 4 Warbots in Versus).
 - **Every building needs a road to storage.** Your Command Base starts with a ring of road around it; join each building and construction
   site to that network (or to a Depot on it), or Haulers can't bring it materials or collect its goods. A red road badge
   marks buildings with no road: tap one and press **Lay road** to plan the shortest route (shown dashed), or plan your
@@ -298,7 +299,7 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
 - **Batteries:** bots drain their battery walking, working and fighting, and recharge only at a Charging Station (or,
   for warbots, inside an Outpost). The Command Base doesn't charge anyone and you land without a Charging Station, so
   build the first one straight away (it runs on the 10 Fuel you land with). A flat battery means half speed and half power. Charging Stations burn Fuel (one Fuel is about
-  three quarters of a full charge). A Bio Farm makes about
+  two and a half full charges, `FUEL_ENERGY`). A Bio Farm makes about
   2–3 Fuel a minute; an Oil Pump and Refinery up to 10 a minute until the seep runs dry (both stop at 30 by default).
   A dry Oil Pump shows a crossed-out oil drop over it, frees its worker and says so once: demolish it (any Crude
   still in a demolished building goes to storage). Harvesters, Ore Mines, Crystal Taps and Bio Farms do the
@@ -307,6 +308,32 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
   rock face in reach (`rockFace`: ground against a crag or a cliff; 8 s a Stone, about 4 a minute) or, with none,
   digs it at the Quarry (20 s, about 2½ a minute), against about 8 a minute from boulders. It rests while the colony
   has `bedrock.rest` (40) Stone or more, so renewable Stone only flows when it's needed.
+- **Fuel, Tankers and pipelines:** Crude and Fuel are liquids (`LIQUID` in `js/defs.js`): only **Tankers** carry them
+  (10 at a time, near or far; `take(…, g)` in `dispatch` hands every liquid job to a Tanker that can reach it). Haulers
+  carry a liquid only when no Tanker can get there (none left, or none on that road network), one at a time, so nothing
+  locks up. Every colony lands with a Tanker; order more at the Bot Foundry (2 rounds of parts, like a Freight Truck).
+  A Tanker on a factory run brings it a full buffer (`LONG_BUFFER`), so a Refinery isn't kept waiting.
+  **Fuel is dangerous** (`BLAST`, `fuelBlast` in `js/sim.js`): a Tanker destroyed with a load explodes (0.7 tiles
+  across, up to 1.3 when full: 4½ damage to robots, 3 to buildings, half at the edge, anyone's), and so does a
+  Refinery wrecked by warbots, a missile or a nuke (1.5 to 2.4 tiles: 6 and 5); its Crude and Fuel burn instead of
+  spilling as crates. Loaded Tankers and Refineries caught in a blast go up a moment later (a chain reaction). Forts
+  never fall to a blast (they keep 1 armor). Demolishing a Refinery is safe.
+  **Pipelines** (Paths → **Pipes**, K) carry Crude only. Drag from an Oil Pump to a Refinery and the pipe routes itself
+  (`pipeRoute`: inside your border, over roads and track, under buildings if it must, up cliffs, with few bends); tap a
+  pump to pipe it to the nearest Refinery, or **Pipe every Oil Pump** in the banner; an Oil Pump's panel has a one-tap
+  **Pipe it to the Refinery** too. Pipe costs 0.3 Cement a tile (`PIPE_COST`), laid at once when you tap Build (or as
+  the Cement comes in). A pipe joins every building it runs under or beside; each second each line moves up to 4 Crude
+  (`updatePipes`) from its pumps to its Refineries (which keep up to 6) and Asphalt Plants, then into storage on it, and
+  from storage on it to its Refineries. A piped pump never waits for a Tanker. Raiders cut pipe (it counts like a road
+  for them), missiles and fuel blasts break it; broken pipe is planned again at once and relaid when it's paid for.
+  **Trucks burn Fuel** (`TRUCK_BURN`): Freight Trucks, Road Trains and Tankers have a fuel tank instead of a battery,
+  draining as they drive (a full tank lasts about 4 minutes of driving, a Road Train's under 3); low, they fill up at the
+  nearest storage or Charging Station holding Fuel (one Fuel fills the tank). With no Fuel anywhere they crawl at half
+  speed. A **Generator** (Build → Make) burns a Fuel every 40 s while anything in its reach is working, and makes every
+  factory, Refinery, Oil Pump and Foundry within 4 tiles work a third faster.
+  Balance (`fuelprobe.js` AI games over every map shape, 45 minutes): colonies use a bit over half the Fuel they make,
+  Charging Stations stand dry about 2% of the time and trucks run empty almost never; trucks take about a tenth of the
+  Fuel, a Generator a fifth where there is one.
 - **Army orders:** tap **Army**, then a rival building to attack it with warbots or a missile, or open
   ground to send warbots there to hold the area under a rally flag. Tap the flag to call them back, or press
   **Recall all** in the Army banner (**C** on a computer) to end every attack and rally flag at once.
