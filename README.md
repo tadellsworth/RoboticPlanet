@@ -225,11 +225,20 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
   over the spot, flies a circuit round to line up with the runway (`headHome`), comes down on final, touches down at the
   far end and brakes (`ROLL_BRAKE`) back to the head. It burns `PLANE_BURN` of its tank a second (one Fuel at the
   Airfield puts back `PLANE_FILL`; `sortieFuel`, `planeReach`); with no Airfield left it comes down in the field and
-  flies to the next one built. Nothing shoots aircraft yet. Off the road network, within `FOOT_CARRY` (12) tiles,
+  flies to the next one built. Only Flak Guns hurt aircraft in the air (`damageBot` passes them by). Off the road network, within `FOOT_CARRY` (12) tiles,
   Workers carry goods by hand between buildings no Hauler reaches (a Drop Outpost's goods to a site beside it).
   Warbots posted to a cut-off post (`secluded`: supplied by air, or where they can't walk to the Command Base) stay with
   it: they recharge and reload there, go for repairs, rally flags and attacks only within `SECLUDED_REACH` (16) of it,
   and dropped beside a garrison of yours they're posted to it.
+- **Flak Guns** (4 Cement, 3 Alloy; Build → Defend; Versus): a twin anti-aircraft gun (`def.flak`, `updateFlak`). It
+  tracks the nearest enemy aircraft in the air within 7 tiles (`aircraftNear`; never one on the ground, never a robot)
+  and every `reload` s fires a salvo of `salvo` shells, each led to where the plane will be when it gets there (shell
+  `speed`) give or take `scatter` tiles (`S.flak`, `updateFlakShells`); a burst hurts every enemy aircraft within
+  `splash` (`hitAircraft`, `damage` at the middle). One Ammo is `shells` (8) shells. A Cargo Plane gets through one
+  quick pass over a gun hurt and is mended at its Airfield; a few guns bring it down: the wreck falls burning
+  (`S.drops` kind `wreck`) and crashes, and what it carried is lost. Bursts are drawn in the air layer
+  (`drawFlakBurst`: a flash and fragments, then a ragged black puff that drifts and fades). The AI puts up two Flak
+  Guns by its Command Base once a rival has aircraft.
 - **Ships and Ports** (naval maps only: Islands and Lakes, `naval` in `SHAPE_PRESETS`, `navalMap`; `NAVAL_ON` switches them
   off everywhere): a **Port** (8 Cement, 3 Alloy; Build → Move) is storage on land beside water at least `SEA_MIN` (20)
   tiles big (`portDocks`; `seaNet` labels the bodies of water). Ships come from the Bot Foundry and put to sea at the

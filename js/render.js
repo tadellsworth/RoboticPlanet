@@ -2152,6 +2152,11 @@ function drawBuilding(ctx, type, cx, cy, s, owner, b) {
       const head = turretHead(owner, b && b.aim !== undefined ? b.aim : -Math.PI / 4, 'mortar');
       if (head) drawArt(ctx, head, cx, cy, s);
     }
+    // A Flak Gun's twin barrels turn to follow the plane it's shooting at (flak-head-0…15).
+    if (type === 'flak') {
+      const head = turretHead(owner, b && b.aim !== undefined ? b.aim : -Math.PI / 4, 'flak');
+      if (head) drawArt(ctx, head, cx, cy, s);
+    }
     const fx = type === 'bunker' ? ['bunker-fire', 0.1] : type === 'disruptor' ? ['disruptor-pulse', 0.4] : type === 'mortar' ? ['mortar-flash', 0.15] : null;
     if (fx && b && b.flash && S.time - b.flash < fx[1]) {
       const over = artFor(fx[0], owner), t = S.time - b.flash;
@@ -5158,6 +5163,7 @@ function drawPulseCharges(ctx, ox, oy, z, inView) {
 function drawEffects(ctx, ox, oy, z) {
   for (const f of S.fx) {
     if (f.t < 0) continue; // a delayed effect (a building's second blast) not started yet
+    if (f.type === 'flak') continue; // up in the air: see drawAirLayer
     const k = f.t / f.life;
     const x = ox + f.x * z, y = oy + f.y * z;
     // A fuel blast (renderer/fx/fuelblast.py): ground zero is 2/3 down its frame; the fireball spans about
@@ -5640,9 +5646,90 @@ function drawCanopy(ctx, x, y, s, ly, color) {
   ctx.beginPath(); for (const k of [-0.5, 0, 0.5]) { ctx.moveTo(x + k * s * 0.9, y); ctx.lineTo(x + k * s * 0.45, y - s * 0.6); } ctx.stroke();
 }
 
-/** Cargo Planes in the air, and parachutes coming down: drawn over everything on the ground. */
+/**
+ * A flak burst up in the sky: a white-hot flash with fragments flying out, then a ragged puff of black smoke
+ * that swells, drifts a little downwind and fades (f.seed shapes it).
+ */
+function drawFlakBurst(ctx, f, x, y, z) {
+  const t = f.t, k = t / f.life, sd = Math.floor((f.seed || 0) * 997);
+  const drift = t * 0.12 * z;
+  // the smoke: dark lobes round a centre, swelling fast then slowly
+  const grow = 1 - Math.pow(1 - Math.min(1, t / 0.5), 3);
+  const r0 = z * (0.13 + 0.27 * grow + 0.1 * k);
+  const a = Math.max(0, (1 - k) * (k < 0.06 ? k / 0.06 : 1));
+  for (let n = 0; n < 6; n++) {
+    const ang = hash2(sd, n, 1) * Math.PI * 2, off = n ? z * (0.08 + 0.1 * hash2(sd, n, 2)) * (0.6 + grow) : 0, rr = r0 * (n ? 0.55 + 0.35 * hash2(sd, n, 3) : 0.85);
+    const bx = x + Math.cos(ang) * off + drift, by = y + Math.sin(ang) * off - t * 0.04 * z;
+    const g = ctx.createRadialGradient(bx - rr * 0.25, by - rr * 0.3, rr * 0.1, bx, by, rr);
+    g.addColorStop(0, `rgba(70,66,62,${0.9 * a})`); g.addColorStop(0.6, `rgba(28,26,25,${0.85 * a})`); g.addColorStop(1, 'rgba(20,18,18,0)');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(bx, by, rr, 0, Math.PI * 2); ctx.fill();
+  }
+  // for the first half-second the cloud glows orange from inside, and embers fall out of it
+  if (t < 0.6) {
+    const q = t / 0.6;
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    const g = ctx.createRadialGradient(x, y, 0, x, y, r0 * 1.1);
+    g.addColorStop(0, `rgba(255,150,50,${0.55 * (1 - q)})`); g.addColorStop(1, 'rgba(255,90,20,0)');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, r0 * 1.1, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = `rgba(255,200,110,${0.9 * (1 - q)})`;
+    for (let n = 0; n < 7; n++) {
+      const ang = hash2(sd, n, 8) * Math.PI * 2, rr = z * (0.12 + 0.5 * q) * (0.5 + 0.5 * hash2(sd, n, 9));
+      const ex = x + Math.cos(ang) * rr, ey = y + Math.sin(ang) * rr + q * q * z * 0.25;
+      ctx.fillRect(ex - 1, ey - 1, Math.max(1.5, z * 0.035), Math.max(1.5, z * 0.035));
+    }
+    ctx.restore();
+  }
+  if (t < 0.32) {
+    // the burst: fire in the heart of the cloud, a flash, and fragments streaking out
+    const q = t / 0.32;
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    const fr = z * (0.12 + 0.3 * Math.sqrt(q));
+    const g = ctx.createRadialGradient(x, y, 0, x, y, fr * 1.6);
+    g.addColorStop(0, `rgba(255,250,230,${1 - q})`); g.addColorStop(0.35, `rgba(255,170,60,${0.9 * (1 - q)})`); g.addColorStop(1, 'rgba(255,90,20,0)');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, fr * 1.6, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = `rgba(255,210,140,${0.9 * (1 - q)})`; ctx.lineWidth = Math.max(1, z * 0.025);
+    ctx.beginPath();
+    for (let n = 0; n < 9; n++) {
+      const ang = hash2(sd, n, 5) * Math.PI * 2, r1 = z * (0.15 + 0.55 * q) * (0.6 + 0.5 * hash2(sd, n, 6));
+      ctx.moveTo(x + Math.cos(ang) * r1 * 0.6, y + Math.sin(ang) * r1 * 0.6); ctx.lineTo(x + Math.cos(ang) * r1, y + Math.sin(ang) * r1);
+    }
+    ctx.stroke();
+    ctx.restore();
+    if (TOD.active && TOD.state.pools > 0.05 && typeof drawLightPool === 'function') { ctx.globalAlpha = (1 - q) * 0.8; drawLightPool(ctx, x, y, z * 1.6, '#ffb060'); ctx.globalAlpha = 1; }
+  }
+}
+
+/** A plane shot down: the wreck tumbling down on fire, trailing black smoke, from where it was hit to where it crashes. */
+function drawWreck(ctx, d, ox, oy, z) {
+  const p = clamp((S.time - d.t0) / AIR_DROP_FALL, 0, 1), tx = d.i + 0.5, ty = d.j + 0.5;
+  const x = d.x + (tx - d.x) * p, y = d.y + (ty - d.y) * p, alt = (d.alt || 1) * (1 - p * p);
+  // the smoke trail behind it
+  for (let n = 6; n >= 1; n--) {
+    const q = Math.max(0, p - n * 0.06), px = d.x + (tx - d.x) * q, py = d.y + (ty - d.y) * q;
+    ctx.fillStyle = `rgba(22,20,20,${0.14 + 0.05 * (6 - n)})`;
+    ctx.beginPath(); ctx.arc(ox + px * z, oy + py * z, z * (0.12 + n * 0.05), 0, Math.PI * 2); ctx.fill();
+  }
+  const f = d.face + p * 2.2 * (d.id % 2 ? 1 : -1);
+  ctx.save();
+  ctx.globalAlpha = 0.92;
+  drawPlane(ctx, { type: d.type, owner: d.owner, face: f, rface: f, hp: 1, maxHp: 1, parked: true }, ox + x * z, oy + y * z, z, alt);
+  ctx.restore();
+  // on fire
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  const fl = 0.8 + 0.2 * Math.sin(R.time * 40 + d.id), r = z * 0.38 * fl;
+  const g = ctx.createRadialGradient(ox + x * z, oy + y * z, 0, ox + x * z, oy + y * z, r);
+  g.addColorStop(0, 'rgba(255,240,200,0.9)'); g.addColorStop(0.4, 'rgba(255,140,40,0.7)'); g.addColorStop(1, 'rgba(255,60,10,0)');
+  ctx.fillStyle = g; ctx.beginPath(); ctx.arc(ox + x * z, oy + y * z, r, 0, Math.PI * 2); ctx.fill();
+  ctx.restore();
+}
+
+/** Cargo Planes in the air, parachutes and wrecks coming down, flak bursting: drawn over everything on the ground. */
 function drawAirLayer(ctx, ox, oy, z, inView) {
   for (const d of S.drops || []) {
+    if (d.kind === 'wreck') { if (inView(d.x, d.y, 4)) drawWreck(ctx, d, ox, oy, z); continue; }
     const p = clamp((S.time - d.t0) / AIR_DROP_FALL, 0, 1), tx = d.i + 0.5, ty = d.j + 0.5;
     const x = d.x + (tx - d.x) * p, y = d.y + (ty - d.y) * p, h = (1 - p) * (1 - p * 0.3) * 1.5;
     if (!inView(x, y, 3)) continue;
@@ -5675,6 +5762,7 @@ function drawAirLayer(ctx, ox, oy, z, inView) {
     u.rface = u.rface === undefined ? want : u.rface + clamp(wrapAngle(want - u.rface), -turn, turn);
     drawPlane(ctx, u, ox + u.x * z, oy + u.y * z, z, planeAlt(u));
   }
+  for (const f of S.fx) if (f.type === 'flak' && f.t >= 0 && inView(f.x, f.y, 2)) drawFlakBurst(ctx, f, ox + f.x * z, oy + f.y * z, z);
 }
 
 /** Air drop: the plane's reach round its Airfield, and the spot under the pointer or picked. */

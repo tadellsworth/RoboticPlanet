@@ -156,8 +156,11 @@ function aiThink(p) {
   const turretsWanted = st.turrets ? Math.min(6, 1 + Math.floor(Math.max(0, S.time - AI_DEFENCE_AT * 0.5) / 240)) : 1;
   const defence = (type) => S.mode !== 'colony' && (type === 'turret' ? (counts.turret || 0) < turretsWanted : !counts[type]) &&
     ((type === 'turret' && S.time > AI_DEFENCE_AT * (st.turrets ? 0.5 : 1)) || (type === 'repair' && counts.turret && S.time > AI_DEFENCE_AT + 120) ||
-     (nukeOn() && (type === 'reactor' || type === 'nukesilo')));
+     (nukeOn() && (type === 'reactor' || type === 'nukesilo')) || (type === 'flak' && enemyAir && (counts.flak || 0) < 2));
   // Only Fuel Stations charge robots: the first one comes before anything else.
+  // Flak once a rival has aircraft: two Flak Guns by the Command Base (and Ammo to feed them).
+  const enemyAir = S.bots.some((u) => !u.dead && u.owner !== p && BOTS[u.type].air);
+  if (enemyAir && S.mode !== 'colony' && (counts.flak || 0) < 2 && !plan.some(([t]) => t === 'flak')) plan = [['flak', 2]].concat(plan); // (a copy: AI_PLAN is shared)
   const key = (type) => (type === 'charger' && !counts.charger) || type === 'foundry' || type === 'harvester' || type === 'quarry' || (type === 'kiln' && (playerGoods(p).cement || 0) < 3) || defence(type) ||
     (type === 'outpost' && P.short.length > 0);
   if (sites < siteCap) {

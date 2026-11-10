@@ -178,6 +178,8 @@ const ART_MANIFEST = {
   'airfield@1': B3D('buildings/airfield@1.webp', 1.6),
   'dropost@0': B3D('buildings/dropost@0.webp', 2.3),
   'dropost@1': B3D('buildings/dropost@1.webp', 2.3),
+  'flak@0': B3D('buildings/flak@0.webp', 1.3), 'flak@1': B3D('buildings/flak@1.webp', 1.3),
+  ...(() => { const o = {}; for (let k = 0; k < 16; k++) o[`flak-head-${k}`] = B3D(`buildings/flak-head-${k}.webp`, 1.3); return o; })(),
   'cargoplane@0': 'bots/cargoplane@0.webp',
   'cargoplane@1': 'bots/cargoplane@1.webp',
   // Generator (one version for both teams, like the factories), and its working loop: fans and power bus.

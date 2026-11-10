@@ -169,7 +169,7 @@ function _noise(dur, vol, o) {
 }
 
 const SFX_GAP = {
-  launch: 0.3, takeoff: 1.5, chute: 0.4, boom: 0.12, shellhit: 0.09, missilehit: 0.2, laser: 0.08, pulse: 0.14, hit: 0.07, produce: 0.25, alert: 1.5, complete: 0.3, order: 0.15,
+  launch: 0.3, takeoff: 1.5, chute: 0.4, flakfire: 0.25, flak: 0.12, boom: 0.12, shellhit: 0.09, missilehit: 0.2, laser: 0.08, pulse: 0.14, hit: 0.07, produce: 0.25, alert: 1.5, complete: 0.3, order: 0.15,
   weld: 0.25, scrape: 0.3, hiss: 0.6, airbrake: 1.2, honk: 2.5, nuke: 2, siren: 4,
 };
 
@@ -263,6 +263,16 @@ function sfx(name, dest) {
       _noise(2.2, 0.06, { type: 'highpass', freq: 1800, to: 3200, attack: 0.9, delay: 0.3, dest: D });
       _tone(58, 2.4, 'sawtooth', 0.03, 92, 0, D);
       _tone(87, 2.2, 'triangle', 0.025, 140, 0.15, D);
+      break;
+    // A Flak Gun firing: a heavy double pom-pom, the twin barrels a beat apart.
+    case 'flakfire':
+      for (const dl of [0, 0.11]) { _tone(95, 0.16, 'sine', 0.12, 50, dl, D); _noise(0.09, 0.12, { type: 'bandpass', freq: 700, q: 0.8, attack: 0.002, delay: dl, dest: D }); }
+      break;
+    // A flak shell bursting up in the sky: a sharp crack and a dull, rolling boom.
+    case 'flak':
+      _noise(0.05, 0.14, { type: 'highpass', freq: 2200, attack: 0.001, dest: D });
+      _noise(0.6, 0.09, { freq: 600, to: 140, attack: 0.01, delay: 0.02, dest: D });
+      _tone(62, 0.4, 'sine', 0.07, 38, 0.02, D);
       break;
     // Parachutes opening: a cloth crack and the rush of air.
     case 'chute':

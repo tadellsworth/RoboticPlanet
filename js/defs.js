@@ -596,6 +596,11 @@ const BDEFS = {
     cost: { cement: 5, alloy: 3 }, ammo: 'ammo', ammoCap: 4, range: 10, minRange: 3, armor: 14, buildTime: 12, war: true,
     mortar: { reload: 5, shells: 3, damage: 6, splash: 1.5, splashDamage: 3, flight: 1.6 },
   },
+  flak: {
+    name: 'Flak Gun', desc: 'A twin anti-aircraft gun. It fills the sky round enemy aircraft out to 7 tiles with bursting shells, leading them as they fly: each burst hurts any aircraft within about a tile of it. A plane can get through one quick pass, but not circling over a few of these. It can\'t hit anything on the ground. Fires Ammo (8 shells each).',
+    cost: { cement: 4, alloy: 3 }, ammo: 'ammo', ammoCap: 4, range: 7, armor: 14, buildTime: 10, war: true,
+    flak: { reload: 1.0, shells: 8, salvo: 2, damage: 4, splash: 1.0, speed: 14, scatter: 0.7 },
+  },
   kiln: {
     name: 'Cement Works', desc: 'Bakes Stone into Cement, the material nearly every building and road is made of: 2 Cement from each Stone. Costs raw Stone itself, so you can always build one.',
     cost: { stone: 4, fiber: 2 }, staff: true, inp: { stone: 1 }, make: { cement: 2 }, out: { cement: 6 },
@@ -722,13 +727,13 @@ const BDEFS = {
 
 /** Order of the build menu. */
 const BUILD_MENU = ['harvester', 'quarry', 'mine', 'tap', 'smelter', 'fab', 'foundry', 'charger', 'farm', 'pump', 'refinery', 'generator',
-  'kiln', 'tarworks', 'roadworks', 'ropeway', 'viaduct', 'station', 'port', 'airfield', 'outpost', 'turret', 'bunker', 'disruptor', 'mortar', 'repair', 'armory', 'munitions', 'silo', 'reactor', 'nukesilo', 'depot', 'grower', 'lab'];
+  'kiln', 'tarworks', 'roadworks', 'ropeway', 'viaduct', 'station', 'port', 'airfield', 'outpost', 'turret', 'bunker', 'disruptor', 'mortar', 'flak', 'repair', 'armory', 'munitions', 'silo', 'reactor', 'nukesilo', 'depot', 'grower', 'lab'];
 /** Build-menu tabs: what each building is for. */
 const BUILD_GROUPS = [
   { key: 'gather', name: 'Gather', types: ['harvester', 'quarry', 'mine', 'tap', 'grower', 'farm', 'pump'] },
   { key: 'make', name: 'Make', types: ['kiln', 'smelter', 'fab', 'refinery', 'tarworks', 'foundry', 'armory', 'munitions', 'reactor', 'lab', 'generator'] },
   { key: 'move', name: 'Move', types: ['charger', 'depot', 'roadworks', 'ropeway', 'viaduct', 'station', 'port', 'airfield'], roads: true },
-  { key: 'defend', name: 'Defend', types: ['outpost', 'turret', 'bunker', 'disruptor', 'mortar', 'repair', 'silo', 'nukesilo'], walls: true },
+  { key: 'defend', name: 'Defend', types: ['outpost', 'turret', 'bunker', 'disruptor', 'mortar', 'flak', 'repair', 'silo', 'nukesilo'], walls: true },
 ];
 const BUNKER_FIRE = 0.9; // seconds between shots for each warbot in a Bunker
 /** Ramps are planned in Paths (with roads), not from the build menu. */

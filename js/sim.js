@@ -32,6 +32,7 @@ function simStep(dt) {
     if (u.type === 'warbot') updateWarbot(u, dt); else if (BOTS[u.type].wild) updateCritter(u, dt); else if (BOTS[u.type].crawler) updateCrawler(u, dt); else updateWorker(u, dt);
   }
   if (S.drops && S.drops.length) updateDrops();
+  if (S.flak && S.flak.length) updateFlakShells();
   if (S.missiles.length) updateMissiles(dt);
   if (S.blowing > 0) updateBlasts();
   if (S.tick % 30 === 15) cleanRallies();
@@ -2359,6 +2360,7 @@ function updateBuilding(b, dt) {
   else if (def.nukeSilo) updateNukeSilo(b, dt * S.players[b.owner].mult);
   else if (def.disrupt) updateDisruptor(b, def, dt);
   else if (def.mortar) updateMortar(b, def, dt);
+  else if (def.flak) updateFlak(b, def, dt);
   else if (def.ammo) updateTurret(b, def, dt);
   if (def.missile && b.reload > 0) b.reload = Math.max(0, b.reload - dt);
   if (def.charger && !def.store) {
@@ -4816,7 +4818,7 @@ function setKeep(b, g, n) {
 }
 
 /** Can building b be paused (or, for a Generator or a gun, turned off)? */
-function pausable(b) { const def = BDEFS[b.type]; return !!(def.staff || def.burner || def.mortar || b.type === 'turret'); }
+function pausable(b) { const def = BDEFS[b.type]; return !!(def.staff || def.burner || def.mortar || def.flak || b.type === 'turret'); }
 
 /**
  * Pausing a building sends its worker off to do other jobs until it is resumed. A Generator turned off
@@ -6715,7 +6717,7 @@ function planeLost(u, keep) {
   const M = u.mission;
   if (M) {
     if (M.kind === 'supply' && u.cargo) { const c = getE(M.to); if (c) for (const g in u.cargo) bump(c.inc, g, -u.cargo[g]); }
-    if (M.kind === 'outpost' && M.phase !== 'done') refundRoad(u.owner, BDEFS.dropost.cost, Math.floor(u.x), Math.floor(u.y));
+    if (M.kind === 'outpost' && M.phase === 'load') refundRoad(u.owner, BDEFS.dropost.cost, Math.floor(u.x), Math.floor(u.y)); // shot down with it aboard, it's lost
   }
   if (keep) {
     for (const v of ferryAboard(u)) { v.ferryWait = null; v.inside = 0; v.task = null; v.x = u.x; v.y = u.y; }
@@ -6741,6 +6743,13 @@ function updateDrops() {
 
 function landDrop(d) {
   const t = tIdx(d.i, d.j);
+  if (d.kind === 'wreck') {
+    // The crash: a fireball, and a burn on the ground.
+    blastFx(d.i + 0.5, d.j + 0.5, 0.9);
+    addDecal('scorch', d.i + 0.5, d.j + 0.5, 0.9, 90);
+    if (d.owner === 0 || S.owner[t] === 0) sfx('boom');
+    return;
+  }
   if (d.kind === 'supply') {
     const c = getE(d.to);
     let n = 0;
@@ -6797,4 +6806,91 @@ function landDrop(d) {
     if (foe >= 0 && foe !== d.owner && bots.some((v) => v.type === 'warbot')) { postMsg(foe, 'Enemy warbots parachuted into your land!', d.i, d.j, 'bad'); if (foe === 0) sfx('alert'); }
     computeZones();
   }
+}
+
+
+/* ------------------------------------------------------------------ flak */
+
+/** Enemy aircraft up in the air within `range` of (x, y), nearest first. */
+function aircraftNear(owner, x, y, range) {
+  const out = [];
+  for (const u of S.bots) {
+    if (u.dead || u.owner === owner || !BOTS[u.type].air || !u.flight || planeAlt(u) < 0.15) continue;
+    const d = dist2(u.x, u.y, x, y);
+    if (d <= range * range) out.push([d, u]);
+  }
+  out.sort((a, c) => a[0] - c[0]);
+  return out.map((o) => o[1]);
+}
+
+/**
+ * A Flak Gun: it tracks the nearest enemy aircraft in range and every `reload` seconds fires a salvo, leading
+ * it: each shell is timed to burst where the plane will be when it gets there, give or take `scatter` tiles
+ * (S.flak, see updateFlakShells). One Ammo is `shells` shells.
+ */
+function updateFlak(b, def, dt) {
+  const f = def.flak, cx = b.x + 0.5, cy = b.y + 0.5;
+  b.cd = (b.cd || 0) - dt;
+  const tgt = aircraftNear(b.owner, cx, cy, def.range)[0];
+  if (!tgt) { b.status = (b.shells || 0) + (b.stock.ammo || 0) > 0 ? 'Watching the sky (7 tiles out)' : 'No Ammo: haulers bring it from storage'; return; }
+  // The barrels follow it round.
+  const want = Math.atan2(tgt.y - cy, tgt.x - cx);
+  b.aim = b.aim === undefined ? want : wrapAngle(b.aim + clamp(wrapAngle(want - b.aim), -4 * dt, 4 * dt));
+  if (b.cd > 0) return;
+  for (let k = 0; k < f.salvo; k++) {
+    if (!(b.shells > 0)) {
+      if (!((b.stock.ammo || 0) > 0)) { b.status = 'No Ammo for shells: haulers bring it from storage'; b.cd = 1; return; }
+      bump(b.stock, 'ammo', -1);
+      usedGood(b.owner, 'ammo', 1);
+      b.shells = f.shells;
+    }
+    b.shells--;
+    // Lead it: where it will be when a shell gets there (the flight time grows with the distance).
+    const vx = Math.cos(tgt.face || 0) * (tgt.vel || 0), vy = Math.sin(tgt.face || 0) * (tgt.vel || 0);
+    let tx = tgt.x, ty = tgt.y, tt = 0;
+    for (let i = 0; i < 3; i++) { tt = 0.12 + dist(cx, cy, tx, ty) / f.speed; tx = tgt.x + vx * tt; ty = tgt.y + vy * tt; }
+    const a = hash2(b.id, S.tick, 11 + k) * Math.PI * 2, r = f.scatter * Math.sqrt(hash2(b.id, S.tick, 17 + k));
+    S.flak = S.flak || [];
+    S.flak.push({ owner: b.owner, x0: cx, y0: cy, x: tx + Math.cos(a) * r, y: ty + Math.sin(a) * r, at: S.time + tt + k * 0.12, t0: S.time + k * 0.12 });
+  }
+  b.cd = f.reload;
+  b.flash = S.time;
+  b.working = true;
+  b.status = 'Firing at an enemy plane';
+  addFx('muzzle', cx + Math.cos(b.aim) * 0.25, cy + Math.sin(b.aim) * 0.25 - 0.45, { a: b.aim, color: '#ffd9a0', life: 0.1 });
+  addFx('smoke', cx + Math.cos(b.aim) * 0.3, cy + Math.sin(b.aim) * 0.3 - 0.3, { r: 0.3, life: 0.7 });
+  if (b.owner === 0 || tgt.owner === 0) sfx('flakfire');
+}
+
+/** Flak shells in flight: each bursts at its time, hurting every enemy aircraft within the splash (most at the middle). */
+function updateFlakShells() {
+  const f = BDEFS.flak.flak;
+  S.flak = S.flak.filter((sh) => {
+    if (S.time < sh.at) return true;
+    addFx('flak', sh.x, sh.y, { life: 2.2, seed: (sh.x * 7.3 + sh.y * 3.1) % 1 });
+    if (S.time - (S.lastFlakSfx || -9) > 0.15) { S.lastFlakSfx = S.time; sfx('flak'); }
+    for (const u of S.bots) {
+      if (u.dead || u.owner === sh.owner || !BOTS[u.type].air || !u.flight || planeAlt(u) < 0.15) continue;
+      const d = dist(u.x, u.y, sh.x, sh.y);
+      if (d <= f.splash) hitAircraft(u, f.damage * (1 - 0.6 * (d / f.splash)), sh.owner);
+    }
+    return false;
+  });
+}
+
+/** Aircraft u is hit (by flak): torn up, and shot down when it has no hit points left. */
+function hitAircraft(u, dmg, by) {
+  u.hp -= dmg;
+  u.hurtT = S.time;
+  if (u.hp > 0) return;
+  // Shot down: it breaks up and falls, burning, and the wreck crashes where it comes down.
+  S.drops = S.drops || [];
+  const fwd = Math.min(2.5, (u.vel || 0) * 0.7);
+  S.drops.push({ id: S.nextId++, owner: u.owner, kind: 'wreck', type: u.type, face: u.face || 0, alt: planeAlt(u), x: u.x, y: u.y,
+    i: clamp(Math.floor(u.x + Math.cos(u.face || 0) * fwd), 0, S.W - 1), j: clamp(Math.floor(u.y + Math.sin(u.face || 0) * fwd), 0, S.H - 1), t0: S.time });
+  blastFx(u.x, u.y, 0.6, { small: true });
+  postMsg(u.owner, `Your ${BOTS[u.type].name} was shot down!`, Math.floor(u.x), Math.floor(u.y), 'bad');
+  if (by >= 0 && by !== u.owner) postMsg(by, `Your flak shot down an enemy ${BOTS[u.type].name}.`, Math.floor(u.x), Math.floor(u.y), 'good');
+  if (u.owner === 0) sfx('alert');
+  killBot(u, true);
 }
