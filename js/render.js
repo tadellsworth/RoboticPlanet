@@ -2028,6 +2028,8 @@ function drawBuilding(ctx, type, cx, cy, s, owner, b) {
     // Flat (top-down) turret art is drawn barrel-right and rotated to aim. 3/4-view turret art
     // (anchored at the bottom) is a fixed base plus a head image for each direction (see turretHead).
     drawArt(ctx, art, cx, cy, s * (type === 'lander' && !art.scale ? 1.6 : 1), type === 'turret' && b && art.anchor !== 'bottom' ? b.aim : 0);
+    // A working loop (<type>-work-0…7, only the parts that move), played at 8 frames a second while it works.
+    if (b && b.built && working && ART[type + '-work-0']) drawArt(ctx, ART[`${type}-work-${Math.floor(t * 8) % 8}`] || ART[type + '-work-0'], cx, cy, s);
     if (full) { ctx.globalAlpha = fade; drawArt(ctx, full, cx, cy, s); ctx.globalAlpha = 1; }
     if (type === 'turret' && art.anchor === 'bottom') {
       const head = turretHead(owner, b ? b.aim : Math.PI / 4);
@@ -3340,8 +3342,8 @@ function drawTruck(ctx, u, sx, sy, s, color, art) {
     if (art.shadow) drawBotShadow(ctx, u, sx, sy, size * 0.44, size * 0.17);
     drawArt(ctx, art, sx, sy, size, u.face);
     drawDriveOverlays(ctx, u, sx, sy, size);
-    drawTruckCargo(ctx, u, sx, sy, -size * 0.392, size * 0.54, size * 0.24, s);
-    drawHeadlights(ctx, 'truck', sx, sy, size * (art.scale || 1), u.face);
+    if (u.type !== 'tanker') drawTruckCargo(ctx, u, sx, sy, -size * 0.392, size * 0.54, size * 0.24, s); // (a Tanker's load is in its tank)
+    drawHeadlights(ctx, u.type === 'tanker' ? 'tanker' : 'truck', sx, sy, size * (art.scale || 1), u.face);
     return;
   }
   ctx.save();
@@ -3372,6 +3374,77 @@ function drawTruck(ctx, u, sx, sy, s, color, art) {
   }
   ctx.restore();
   drawTruckCargo(ctx, u, sx, sy, -L / 2 + s * 0.025, L * 0.62, Wd - s * 0.06, s);
+}
+
+/*
+ * Smoke (cosmetic, kept in world tiles and game time, so it freezes while paused). Trucks, Tankers and
+ * Road Trains puff diesel exhaust from their stacks (EXHAUST_POINTS): a light puff every 0.4 s idling and
+ * 0.25 s cruising, thick black smoke every 0.08 s pulling away. Working buildings smoke and steam from
+ * their chimneys and vents (BUILDING_EMITTERS), a puff every 0.4 s. A puff stays where it was let out (a
+ * moving truck leaves a trail), drifting a little downwind; chimney smoke rises. Flame, sparks and dust
+ * points wait for their own effect sheets.
+ */
+const SMOKE = { puffs: [], next: new Map(), of: null };
+const SMOKE_MAX = 700, SMOKE_WIND = [0.1, -0.03];
+const SMOKE_SHEET = { smoke: 'smoke-exhaust', black: 'smoke-exhaust-heavy', steam: 'smoke-exhaust' };
+
+function smokeReady(key, every) {
+  if (SMOKE.of !== S) { SMOKE.of = S; SMOKE.puffs = []; SMOKE.next.clear(); }
+  const now = S.time, n = SMOKE.next.get(key);
+  if (n !== undefined && now < n && n - now <= every * 2) return false;
+  SMOKE.next.set(key, now + every * (0.85 + Math.random() * 0.3));
+  return true;
+}
+
+function addPuff(x, y, sheet, size, life, rise, steam) {
+  if (!ART[sheet]) return;
+  SMOKE.puffs.push({ x, y, t0: S.time, sheet, sz: size * (0.85 + Math.random() * 0.3), life, rise, steam });
+  if (SMOKE.puffs.length > SMOKE_MAX) SMOKE.puffs.splice(0, SMOKE.puffs.length - SMOKE_MAX);
+}
+
+/** Exhaust from a truck drawn at (x, y) tiles facing `face`. */
+function vehicleSmoke(u, x, y, face) {
+  const P = typeof EXHAUST_POINTS !== 'undefined' && EXHAUST_POINTS[BOTS[u.type].train ? 'roadtrain' : u.type];
+  if (!P || u.inside || !driveFrame(u)) return;
+  const v = u.vel || 0, heavy = !!u.path && u.drive > 0 && v < (u.vtop || 1) * 0.8;
+  if (!smokeReady(u.id, heavy ? 0.08 : v > 0.05 ? 0.25 : 0.4)) return;
+  const k = 0.9 / P.canvas, c = Math.cos(face), s = Math.sin(face);
+  for (const [px, py] of P.tips) {
+    const ax = (px - P.canvas / 2) * k, ay = (py - P.canvas / 2) * k;
+    addPuff(x + c * ax - s * ay, y + s * ax + c * ay, heavy ? 'smoke-exhaust-heavy' : 'smoke-exhaust', 0.9 * 0.36, 1, 0, false); // (sized to match the preview: the puff fills ~40% of its frame)
+  }
+}
+
+/** Smoke and steam from a working building's chimneys and vents (its art's pixels, through its anchor and scale). */
+function buildingSmoke(b) {
+  if (!b.built || !b.working || typeof BUILDING_EMITTERS === 'undefined') return;
+  const E = BUILDING_EMITTERS[b.type === 'lander' ? 'lander@' + Math.min(1, b.owner) : b.type], art = E && artFor(b.type, b.owner);
+  if (!art || !Array.isArray(art.anchor)) return;
+  const sc = art.scale || 1;
+  for (let k = 0; k < E.length; k++) {
+    const e = E[k], sheet = SMOKE_SHEET[e.kind];
+    if (!sheet || !smokeReady('b' + b.id + '.' + k, 0.4)) continue;
+    const size = 0.4 * sc * e.size;
+    addPuff(b.x + 0.5 + (e.px[0] / 512 - art.anchor[0]) * sc, b.y + 0.5 + (e.px[1] / 512 - art.anchor[1]) * sc, sheet, size, e.kind === 'steam' ? 1.1 : 1.5, e.kind === 'steam' ? 0.3 : 0.28, e.kind === 'steam');
+  }
+}
+
+function drawSmoke(ctx, ox, oy, z, inView) {
+  if (!SMOKE.puffs.length || SMOKE.of !== S) return;
+  const now = S.time, tod = TOD.active ? TOD.state.a : 'day';
+  let keep = 0;
+  for (const p of SMOKE.puffs) {
+    const age = now - p.t0;
+    if (age >= p.life || age < 0) continue;
+    SMOKE.puffs[keep++] = p;
+    const x = p.x + SMOKE_WIND[0] * age, y = p.y + SMOKE_WIND[1] * age - p.rise * age;
+    if (!inView(Math.floor(x), Math.floor(y), 1)) continue;
+    const art = ART[p.sheet], A = tod === 'day' || p.steam ? art : todVariant(art, tod);
+    if (p.steam) { ctx.globalCompositeOperation = 'screen'; ctx.globalAlpha = 0.85; }
+    drawSheetFrame(ctx, { img: A.img, frames: art.frames, cols: art.cols }, Math.floor((age / p.life) * art.frames), ox + x * z, oy + y * z, p.sz * z);
+    if (p.steam) { ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1; }
+  }
+  SMOKE.puffs.length = keep;
 }
 
 /**
@@ -3721,6 +3794,7 @@ function render(dtReal) {
     if (e.ent === 'b') {
       const cx = ox + (e.x + 0.5) * z, cy = oy + (e.y + 0.5) * z;
       drawBuilding(ctx, e.type, cx, cy, z, e.owner, e);
+      buildingSmoke(e);
       const def = BDEFS[e.type];
       if (e.built && e.armor < def.armor - 0.05) {
         const w = z * 0.8;
@@ -3763,11 +3837,14 @@ function render(dtReal) {
       const face = e.face;
       e.face = pose && pose.face !== undefined ? pose.face : e.rface; // draw with the smoothed heading
       drawBot(ctx, e, ox + (e.x + jx) * z, oy + (e.y + jy) * z, z);
+      if (BOTS[e.type].truck) vehicleSmoke(e, e.x + jx, e.y + jy, e.face || 0);
       if (e.loot) drawCrate(ctx, ox + (e.x + jx) * z, oy + (e.y + jy) * z - z * 0.22, z * 0.2, e.loot);
       e.face = face;
       if (pose) drawWorkOver(ctx, e, pose, ox + (e.x + jx) * z, oy + (e.y + jy) * z, z);
     }
   }
+
+  drawSmoke(ctx, ox, oy, z, inView);
 
   // Placing a Viaduct: the deck from the near end to the far end picked so far.
   if (typeof UI !== 'undefined' && UI.ropeA && R.ropeEnd && UI.placeType === 'viaduct') {

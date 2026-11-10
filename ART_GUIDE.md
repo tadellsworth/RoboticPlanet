@@ -1439,10 +1439,17 @@ slow, tell Claude Code: each effect's length is one number in the code.
   Turret's `fx-pulse-laser` and `fx-pulse-hit`. The Pulse Turret's charge-up sheets (`turret-charge-0…15`) wait for
   a **3D turret by day** (`turret@0/@1` base and `turret-head-0…15@0/@1`, anchor [0.5, 0.615], scale 1.4): the
   morning, evening and night sets exist, but the day art is still the flat top-down turret.
-  The Fuel update's art is drawn in code for now: the **Tanker** (`tanker@0/@1-f0…f3`, `-brake`, `-boost`, 384×384,
-  like the truck), the **Generator** (`generator@0/@1` plus time-of-day sets and `generator-work-0…7`), the
-  **pipe pieces** and the **fuel blast** sheet (`fx-fuel-blast`, `oil-scorch`). The prompts are in
+  Installed from the Fuel update: the **Tanker** (`tanker@0/@1-f0…f3`, `-brake`, `-boost`, time-of-day frames and
+  `tanker-headlights`), the **Generator** (`generator`, time-of-day versions and the working loop `generator-work-0…7`,
+  played at 8 fps while it runs; any building with `<type>-work-0…7` art gets the same), new **Freight Truck** frames
+  with exhaust stacks, and the diesel smoke sheets (`fx-exhaust`, `fx-exhaust-heavy`, listed as `smoke-exhaust` and
+  `smoke-exhaust-heavy`). Smoke points live in `art/emitters.js`: `EXHAUST_POINTS` (truck, tanker, Road Train stack
+  tips) and `BUILDING_EMITTERS` (chimneys and vents, from the animation brief's `building-emitters.json`). Smoke and
+  black smoke and steam use the exhaust sheets for now; flame, sparks and dust points wait for their own sheets.
+  Still to make: the **pipe pieces** and the **fuel blast** (`fx-fuel-blast`, `oil-scorch`): prompts in
   `design/claude-design-fuel.md`.
+  **Design system:** the Terrafall design system for making new art lives at
+  https://claude.ai/artifact/GAdLBz6kefeJeTRz57TTV7 (it can be added to the Claude Code chat so art is designed there).
   Still missing: a 3D turret by day, resources `crop` and `oil`, ground
   `fertile`, `slope` and `cliff`, markers `missile`, `rally` and `oneway`, and the 12 goods icons
 

@@ -331,6 +331,9 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
   nearest storage or Charging Station holding Fuel (one Fuel fills the tank). With no Fuel anywhere they crawl at half
   speed. A **Generator** (Build → Make) burns a Fuel every 40 s while anything in its reach is working, and makes every
   factory, Refinery, Oil Pump and Foundry within 4 tiles work a third faster.
+  **Smoke:** trucks puff diesel exhaust from their stacks (light while idling or cruising, thick black smoke pulling
+  away), and working buildings smoke and steam from their chimneys (`vehicleSmoke`, `buildingSmoke` in
+  `js/render.js`; the points are in `art/emitters.js`). The Generator plays its working loop (`generator-work-0…7`).
   Balance (`fuelprobe.js` AI games over every map shape, 45 minutes): colonies use a bit over half the Fuel they make,
   Charging Stations stand dry about 2% of the time and trucks run empty almost never; trucks take about a tenth of the
   Fuel, a Generator a fifth where there is one.

@@ -152,8 +152,16 @@ const ART_MANIFEST = {
   'nuke-blast': 'effects/nuke-blast-sheet.webp',
   'nuke-scorch': 'effects/nuke-scorch.webp',
 
-  // Freight Truck: the same pattern, drawn bigger.
+  // Freight Truck: the same pattern, drawn bigger. The Tanker is its twin with a fuel tank on the chassis.
   ...driveSet('truck'),
+  ...driveSet('tanker'),
+  // Generator (one version for both teams, like the factories), and its working loop: fans and power bus.
+  generator: B3D('buildings/generator.webp'),
+  ...Object.fromEntries([0, 1, 2, 3, 4, 5, 6, 7].map((k) => [`generator-work-${k}`, B3D(`buildings/generator-work-${k}.webp`)])),
+  // Diesel smoke: 12 frames of 64 x 64 (4 x 3), one puff each, seen from above. Not fx- names: they're
+  // graded with the light at dusk and night like other smoke.
+  'smoke-exhaust': { src: 'effects/fx-exhaust.webp', frames: 12, cols: 4 },
+  'smoke-exhaust-heavy': { src: 'effects/fx-exhaust-heavy.webp', frames: 12, cols: 4 },
 
   // Military buildings (Versus), with team versions: @0 yours (cyan lights), @1 the rival's (red).
   'armory@0': B3D('buildings/armory@0.webp'),

@@ -27,7 +27,7 @@ const TOD_CYCLE = [['morning', 1.5], ['morning', 'day', 0.5], ['day', 4], ['day'
 const TOD_NAMES = { morning: 'Morning', day: 'Day', evening: 'Evening', night: 'Night' };
 /** Sprites that are light (or UI) and are never re-lit or graded. */
 const TOD_NEVER = /(-brake|-boost|-lights|-headlights|-spark|-lamp|^rail-lights-on|^light-pool|^icon-|^nuke-blast|^rally|^oneway|^bunker-fire|^disruptor-pulse|^mortar-flash|^streetlamp-.*-(lit|pool)|^fx-)/;
-const TOD_VEHICLES = ['truck', 'roadtrain', 'freight-loco', 'crawler', 'worker', 'hauler', 'agribot', 'paver', 'warbot'];
+const TOD_VEHICLES = ['truck', 'tanker', 'roadtrain', 'freight-loco', 'crawler', 'worker', 'hauler', 'agribot', 'paver', 'warbot'];
 
 const TOD = { on: true, state: null, active: false, sets: {}, shared: {}, keys: null, poolTint: {} };
 
