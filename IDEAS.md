@@ -24,3 +24,8 @@ Measured, but left for a decision rather than changed:
 - **Smelter recipe.** Tried 2 Ore + 1 Fiber → 2 Alloy to ease Fiber; on Standard maps Ore then ran short
   (Smelters waited for Ore 56–88% of the time) and games stalled, so the 1 + 1 recipe stays.
 - **Road Train wear.** Per good moved it wears roads the least (`WEAR_TRAIN` 8 for 30 goods).
+- **Sky islands AI-vs-AI can stall.** With forts harder to crack (missile floor, sorties, captured garrisons that
+  survive), wars between two AIs last longer. On Sky islands, about 3 seeds in 8 then ran past 50 minutes: the
+  Viaducts joining the two sides get shot down, both sides run short of Cement (Stone runs out on the mesas),
+  and every new crossing is destroyed as soon as it's up. (The old rules ended those wars first, at 23–49 min.)
+  It doesn't affect a game against you, but the AI could be smarter about guarding or replacing its crossings.

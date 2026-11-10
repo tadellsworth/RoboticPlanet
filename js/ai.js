@@ -207,10 +207,14 @@ function aiThink(p) {
 
   // 1a) Repairs: damaged buildings get fixed once the fighting there stops (military ones first,
   //     the rest only with Cement to spare).
+  //     While it saves for a crossing (a Viaduct to the enemy), repairs never dip into that Cement, or
+  //     a long war of patching forts keeps it from ever reaching the enemy again.
   if (S.mode !== 'colony') {
+    const keep = P.bridgeNeed && S.time - (P.bridgeWant || -999) < 30 ? (P.bridgeNeed.cement || 0) : 0;
     for (const b of me) {
       if (!b.built || b.fixLeft > 0 || S.time - (b.lastHit || -99) < 6 || b.armor >= BDEFS[b.type].armor * 0.75) continue;
-      if (BDEFS[b.type].mil || playerGoods(p).cement >= repairCost(b) + 6) requestRepair(p, b);
+      const left = playerGoods(p).cement - repairCost(b);
+      if ((BDEFS[b.type].mil && left >= keep) || left >= 6 + keep) requestRepair(p, b);
     }
   }
 
