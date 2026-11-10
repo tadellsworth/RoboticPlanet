@@ -664,13 +664,25 @@ function generateMap(seed, W, H, cfg) {
       }
       for (const a of q) elev[a] = Math.min(elev[a] + lift, 6);
     }
-    const sd = (seed ^ 0x5c1) >>> 0;
+    const sd = (seed ^ 0x5c1) >>> 0, isFloor = new Uint8Array(N);
     for (let t = 0; t < N; t++) {
       if (terrain[t] !== T_WATER) continue;
-      terrain[t] = T_GROUND; elev[t] = 0; ramp[t] = 0; res[t] = R_NONE; fert[t] = 0;
-      // A scatter of boulders and ore down on the floor (the same for both sides of the map).
-      const m = Math.min(t, N - 1 - t), h = hash2(m % W, (m / W) | 0, sd);
-      if (h < 0.014) { res[t] = h < 0.005 ? R_ORE : R_BOULDER; amt[t] = clamp(Math.round(RES[res[t]].amount * RPR.amount), 1, 255); }
+      terrain[t] = T_GROUND; elev[t] = 0; ramp[t] = 0; res[t] = R_NONE; fert[t] = 0; isFloor[t] = 1;
+    }
+    // The canyon floor isn't a flat plain: low rises a level up and rock formations, both kept clear
+    // of the walls (so every drop stays sheer), plants (see makeDecor) and, very rarely, a boulder or
+    // some ore (the same for both sides of the map).
+    const fd = new Int16Array(N).fill(-1), fq = [];
+    for (let t = 0; t < N; t++) if (!isFloor[t] && terrain[t] === T_GROUND) { fd[t] = 0; fq.push(t); }
+    for (let h = 0; h < fq.length; h++) { const a = fq[h]; orth(a, (u) => { if (fd[u] < 0 && isFloor[u]) { fd[u] = fd[a] + 1; fq.push(u); } }); }
+    for (let t = 0; t < N; t++) {
+      if (!isFloor[t]) continue;
+      const i = t % W, j = (t / W) | 0, m = Math.min(t, N - 1 - t), mi = m % W, mj = (m / W) | 0;
+      const away = fd[t] < 0 ? 99 : fd[t];
+      if (away >= 2 && fbm(mi / 2.6, mj / 2.6, sd + 11, 2) > 0.72) { terrain[t] = T_ROCK; continue; }
+      if (away >= 3 && fbm(mi / 6, mj / 6, sd + 23, 2) > 0.58) elev[t] = 1;
+      const h = hash2(mi, mj, sd);
+      if (h < 0.006) { res[t] = h < 0.002 ? R_ORE : R_BOULDER; amt[t] = clamp(Math.round(RES[res[t]].amount * RPR.amount), 1, 255); }
     }
   }
   for (let t = 0; t < N; t++) if (terrain[t] !== T_GROUND) fert[t] = 0;
@@ -819,12 +831,14 @@ function biome() { return (S && S.settings && S.settings.biome) || 'desert'; }
  * loose patches. Made from the seed with a hash, so the map itself is the same in every biome.
  */
 function makeDecor() {
-  const W = S.W, H = S.H, d = new Uint8Array(W * H), dens = BIOMES[biome()].plants, sd = S.seed % 100000;
+  const W = S.W, H = S.H, d = new Uint8Array(W * H), dens0 = BIOMES[biome()].plants, sd = S.seed % 100000;
+  // Sky islands: the canyon floor, sheltered down there, is greener than the mesas.
+  const sky = !!(S.settings && SHAPE_PRESETS[S.settings.shape || 0] && SHAPE_PRESETS[S.settings.shape || 0].sky);
   for (let j = 0; j < H; j++) for (let i = 0; i < W; i++) {
     const t = j * W + i;
     if (S.terrain[t] !== T_GROUND || S.res[t] || S.fert[t] || S.ramp[t] || S.road[t] || S.plan[t] || S.bAt[t]) continue;
     if (j > 0 && S.terrain[t - W] === T_GROUND && S.elev[t - W] > S.elev[t]) continue; // the foot of a cliff
-    const patch = fbm(i / 5, j / 5, sd + 77, 2);
+    const patch = fbm(i / 5, j / 5, sd + 77, 2), dens = sky && S.elev[t] <= 1 ? Math.max(0.16, dens0 * 2.5) : dens0;
     if (hash2(i, j, sd + 501) > dens * (0.25 + 1.5 * patch)) continue;
     d[t] = 1 + Math.floor(hash2(i * 3 + 1, j * 5 + 2, sd + 733) * PLANT_KINDS);
   }

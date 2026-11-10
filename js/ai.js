@@ -433,8 +433,8 @@ function aiBridge(p, maxSites) {
   const via = aiViaductSpot(p, home, E);
   if (via) {
     const cost = viaductCost(via.a % W, (via.a / W) | 0, via.b % W, (via.b / W) | 0);
-    if (!canPay(p, cost)) { P.bridgeWant = S.time; return; }
-    P.bridgeWant = 0;
+    if (!canPay(p, cost)) { P.bridgeWant = S.time; P.bridgeNeed = cost; return; }
+    P.bridgeWant = 0; P.bridgeNeed = null;
     placeViaduct(p, via.a % W, (via.a / W) | 0, via.b % W, (via.b / W) | 0);
     return;
   }
@@ -718,7 +718,10 @@ function aiFreeCement(p, me) {
 /** Only start a building when the needed materials exist somewhere (stops the AI hoarding sites). */
 /** Can player p pay for a `type` site now (ignoring the goods in `except`)? */
 function aiAffordable(p, type, except) {
-  const have = playerGoods(p);
+  const have = { ...playerGoods(p) };
+  // Saving up for a crossing (a Viaduct it can't pay for yet): that much is spoken for.
+  const P = S.players[p];
+  if (P.bridgeNeed && S.time - (P.bridgeWant || -999) < 30) for (const g in P.bridgeNeed) have[g] = (have[g] || 0) - P.bridgeNeed[g];
   const cost = BDEFS[type].cost;
   for (const g in cost) if (have[g] < cost[g] && !(except && except.includes(g))) return false;
   return true;

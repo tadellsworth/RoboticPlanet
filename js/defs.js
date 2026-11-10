@@ -172,7 +172,7 @@ const ROPE_MIN = 3, ROPE_MAX = 14, ROPE_SPEED = 1.8, ROPE_COST = 1.3;
  * spans, paid up front, and a worker at the near end puts it up in VIA_TIME seconds a tile. Every
  * bot can cross it, trucks and Road Trains included, and trains when track runs onto both ends.
  */
-const VIA_MIN = 2, VIA_MAX = 12, VIA_RISE = 2, VIA_COST = { cement: 3, alloy: 1 }, VIA_TIME = 5;
+const VIA_MIN = 2, VIA_MAX = 12, VIA_RISE = 2, VIA_COST = { cement: 3, alloy: 0.5 }, VIA_TIME = 5; // cost a tile spanned (Alloy rounded up)
 const VIA_CLAIM = 3; // a Viaduct's far end claims the no-one's ground this far round it
 /*
  * Freight rail: track (S.rail) is laid in Paths (Rail), RAIL_COST a tile, paid when you build it and
@@ -537,8 +537,8 @@ const BDEFS = {
     cost: { cement: 8, alloy: 6 }, ropeway: true, armor: 10, buildTime: 14,
   },
   viaduct: {
-    name: 'Viaduct', desc: 'A level bridge straight across a valley or canyon, from one clifftop to another up to 12 tiles away, over ground lower than both ends: traffic down below carries on underneath. Tap one end, then the far end. It costs 3 Cement and 1 Alloy for every tile it spans, paid up front, and a worker builds it out from the near end. Every bot can cross, trucks and Road Trains included; lay track onto both ends and trains cross too.',
-    cost: { cement: 3, alloy: 1 }, viaduct: true, prepaid: true, armor: 24, buildTime: 10,
+    name: 'Viaduct', desc: 'A level bridge straight across a valley or canyon, from one clifftop to another up to 12 tiles away, over ground lower than both ends: traffic down below carries on underneath. Tap one end, then the far end. It costs 3 Cement for every tile it spans and 1 Alloy for every two, paid up front, and a worker builds it out from the near end. Every bot can cross, trucks and Road Trains included; lay track onto both ends and trains cross too.',
+    cost: { cement: 3, alloy: 0.5 }, viaduct: true, prepaid: true, armor: 24, buildTime: 10,
   },
   lab: {
     name: 'Research Lab', desc: 'Researches upgrades for your whole colony, one at a time: pick one in its panel. The Chips, Crystal and Alloy are paid from storage when you start, and a worker inside does the research. Two Labs research twice as fast. Colony only.',

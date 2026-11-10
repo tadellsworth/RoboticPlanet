@@ -4101,7 +4101,7 @@ function viaductBlocked(owner, ai, aj, bi, bj) {
 /** What a Viaduct from (ai, aj) to (bi, bj) costs: VIA_COST for every tile it spans. */
 function viaductCost(ai, aj, bi, bj) {
   const n = Math.abs(bi - ai) + Math.abs(bj - aj) - 1, out = {};
-  for (const g in VIA_COST) out[g] = VIA_COST[g] * n;
+  for (const g in VIA_COST) out[g] = Math.ceil(VIA_COST[g] * n);
   return out;
 }
 

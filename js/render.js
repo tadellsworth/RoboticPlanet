@@ -632,7 +632,7 @@ function paintTile(ctx, i, j) {
   // Fine grain stands in for detail the ground texture lacks (none needed with 512 px art).
   if (terr === T_GROUND && !S.road[t] && !(tex.ground && tex.ground.img.width >= 256)) drawGrain(ctx, i, j, x, y);
   // Sky islands: the canyon floor lies far below the mesas, in their shade.
-  if (terr === T_GROUND && S.elev[t] === 0 && R.skyFloor) { ctx.fillStyle = 'rgba(20,10,6,0.32)'; ctx.fillRect(x, y, TP, TP); }
+  if (terr !== T_WATER && S.elev[t] <= 1 && R.skyFloor) { ctx.fillStyle = S.elev[t] ? 'rgba(20,10,6,0.2)' : 'rgba(20,10,6,0.32)'; ctx.fillRect(x, y, TP, TP); }
   if (terr === T_GROUND) drawElevation(ctx, i, j, x, y, t, n);
   else if (terr === T_WATER) drawCliffFace(ctx, i, j, x, y, t, true);
   if (terr === T_GROUND && S.fert && S.fert[t] && !S.ramp[t]) drawFertile(ctx, i, j, x, y);
