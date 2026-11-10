@@ -290,8 +290,9 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
   still in a demolished building goes to storage). Harvesters, Ore Mines, Crystal Taps and Bio Farms do the
   same with their own resource crossed out when nothing is left in reach (and go back to work if groves regrow).
   A Quarry never runs dry (`bedrock` in its definition): out of boulders, its worker cuts Stone from the nearest
-  rock face in reach (`rockFace`: ground against a crag or a cliff; 6 s a Stone, about 5 a minute) or, with none,
-  digs it at the Quarry (15 s, about 3½ a minute), against about 8 a minute from boulders.
+  rock face in reach (`rockFace`: ground against a crag or a cliff; 8 s a Stone, about 4 a minute) or, with none,
+  digs it at the Quarry (20 s, about 2½ a minute), against about 8 a minute from boulders. It rests while the colony
+  has `bedrock.rest` (40) Stone or more, so renewable Stone only flows when it's needed.
 - **Army orders:** tap **Army**, then a rival building to attack it with warbots or a missile, or open
   ground to send warbots there to hold the area under a rally flag. Tap the flag to call them back, or press
   **Recall all** in the Army banner (**C** on a computer) to end every attack and rally flag at once.

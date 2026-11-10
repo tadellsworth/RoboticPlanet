@@ -433,7 +433,9 @@ const BDEFS = {
   quarry: {
     name: 'Quarry', desc: 'A worker breaks nearby boulders into Stone. With none left in reach it keeps going: it cuts Stone from a cliff or crag in reach, or failing that digs it out of the ground, more slowly. That never runs out.',
     cost: { fiber: 2 }, staff: true, gather: R_BOULDER, radius: 5, out: { stone: 6 }, armor: 8, buildTime: 8,
-    bedrock: { face: 6, dig: 15 }, // seconds of work for a Stone cut from a rock face in reach, or dug at the Quarry
+    // Out of boulders: seconds of work for a Stone cut from a rock face in reach, or dug at the Quarry, and
+    // the Stone in storage at which it rests (it never runs out, so it only cuts or digs when Stone is needed).
+    bedrock: { face: 8, dig: 20, rest: 40 },
   },
   mine: {
     name: 'Ore Mine', desc: 'A worker digs Ore from nearby veins.',

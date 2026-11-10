@@ -1870,7 +1870,10 @@ function doStaff(u, t, dt) {
         if (node < 0 && full) { b.status = 'Storage full, waiting for pickup'; t.wait = 1; return; }
         t.face = false;
         if (node < 0 && def.bedrock) {
-          // A Quarry out of boulders keeps going: Stone cut from a rock face in reach, or dug out of the ground.
+          // A Quarry out of boulders keeps going: Stone cut from a rock face in reach, or dug out of the ground,
+          // while the colony is short of it (it rests once there's plenty in storage).
+          const have = goodTotal(b.owner, 'stone');
+          if (have >= def.bedrock.rest) { b.status = `Resting: you have ${have} Stone (it cuts more below ${def.bedrock.rest})`; t.wait = 3; return; }
           node = findFace(b, def.radius);
           t.gtype = def.gather;
           if (node < 0) { b.status = 'Digging Stone out of the ground (slow; it never runs out)'; t.phase = 'dig'; t.timer = def.bedrock.dig; return; }
