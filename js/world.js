@@ -168,7 +168,7 @@ function generateMap(seed, W, H, cfg) {
   // 2) Resources come in separate fields (clusters) with open ground between them, so holding
   //    the land around a field matters. Fields are laid out on the bottom half, then mirrored.
   const rng = makeRng(seed ^ 0x5bd1e995);
-  const bx = Math.floor(W / 2), by = H - 7;
+  const bx = SH.cross ? Math.max(8, Math.round(W * 0.25)) : Math.floor(W / 2), by = H - 7; // Crossroads: in a corner quarter
   const bases = [{ x: bx, y: by }];
   if (np === 2) bases.push({ x: W - 1 - bx, y: H - 1 - by });
   else for (let k = 1; k < 3; k++) { const [x, y] = rot(bx, by, k); bases.push({ x: Math.round(x), y: Math.round(y) }); }
@@ -403,6 +403,194 @@ function generateMap(seed, W, H, cfg) {
   };
   if (choke) chokeBand();
 
+  // Rift, Ring valley, Oases, Crossroads and Lakes (two players): laid over the whole map, each tile with
+  // its twin turned half round, and laid again after a corridor is cut (so it can't cut through them).
+  // Each uses its own random numbers from the seed, so laying it again gives the same map. `links` are
+  // the places (on the bottom half) the base must reach by land: every way across (each arch, valley or
+  // gap), so that its twin reaches the other base too. `wall` marks the shape's own barrier (a chasm, the
+  // massif, a ridge), which a link never cuts through.
+  let links = [];
+  const wall = new Uint8Array(N);
+  const nearBase = (i, j, r) => bases.some((b) => dist2(i, j, b.x, b.y) <= r * r);
+  const put = (t, kind, lv, fixed) => {
+    for (const u of np === 2 ? [t, mir(t)] : [t]) {
+      terrain[u] = kind; res[u] = R_NONE; fert[u] = 0; wall[u] = fixed ? 1 : 0;
+      if (kind === T_GROUND && lv !== undefined) elev[u] = lv;
+    }
+  };
+  const putRes = (t, type) => {
+    for (const u of np === 2 ? [t, mir(t)] : [t]) {
+      if (terrain[u] !== T_GROUND) continue;
+      if (type === F_FERTILE) { fert[u] = 1; res[u] = R_NONE; } else { res[u] = type; fert[u] = 0; }
+    }
+  };
+  const stampRes = (cr, x, y, rad, type, fill) => {
+    for (let j = Math.floor(y - rad); j <= Math.ceil(y + rad); j++) for (let i = Math.floor(x - rad); i <= Math.ceil(x + rad); i++) {
+      if (i < 1 || j < 1 || i >= W - 1 || j >= H - 1 || dist2(i, j, x, y) > rad * rad) continue;
+      if (cr() < fill) putRes(id(i, j), type);
+    }
+  };
+  const ca = Math.floor((W - 1) / 2), cb = Math.ceil((W - 1) / 2);
+  // Rift: a chasm right across the middle, two to four tiles deep each side of the line, crossed only by
+  // natural rock arches: a pair (each with its twin), and sometimes one down the middle.
+  const riftShape = () => {
+    const cr = makeRng(seed ^ 0x2a1f77), p1 = cr() * 6.28, f1 = 0.2 + cr() * 0.15;
+    const depth = (i) => clamp(Math.round(2.7 + 1.1 * Math.sin(i * f1 + p1)), 2, 4);
+    for (let i = 0; i < W; i++) for (let j = half; j < half + depth(i); j++) put(id(i, j), T_CHASM, undefined, true);
+    const c = 3 + Math.floor(cr() * Math.max(1, ca - 7));
+    const cols = [c, c + 1, W - 2 - c, W - 1 - c];
+    if (cr() < 0.45) cols.push(ca, cb);
+    for (const i of cols) for (let j = half; j < half + 4; j++) if (terrain[id(i, j)] === T_CHASM) put(id(i, j), T_GROUND, baseLevel);
+    links = [[c, half], [W - 1 - c, half]];
+    if (cols.length > 4) links.push([ca, half]);
+  };
+  // Ring valley: a massif no one can cross fills the middle; a valley runs round it on each side, the
+  // bases at either end, with a field or two along the way.
+  const ringShape = () => {
+    const cr = makeRng(seed ^ 0x3b2e11), p = cr() * 6.28;
+    const rx = Math.max(5, W / 2 - 7), ry = Math.max(5, half - 15);
+    const inside = (i, j) => {
+      const a = Math.atan2(j - ccy, i - ccx), w = 1 + 0.08 * Math.cos(2 * a + p) + 0.05 * Math.cos(4 * a + p * 1.7);
+      return ((i - ccx) / rx) ** 2 + ((j - ccy) / ry) ** 2 <= w * w;
+    };
+    for (let j = half; j < H; j++) for (let i = 0; i < W; i++) {
+      const t = id(i, j);
+      if (inside(i, j)) put(t, T_ROCK, undefined, true);
+      else if ((i <= 5 || i >= W - 6) && terrain[t] !== T_GROUND && !nearBase(i, j, 3)) put(t, T_GROUND, baseLevel); // the valleys stay open
+    }
+    stampRes(cr, 3.2, ccy + ry * 0.45, 1.5, R_ORE, 0.8);
+    stampRes(cr, W - 4.2, ccy + ry * 0.2, 1.4, R_CRYSTAL, 0.8);
+    links = [[2, half], [W - 3, half]];
+  };
+  // Oases: a barren waste strewn with crags, where only round your base and in a few rich oases (three
+  // on each side, one in the middle) is anything worth having; narrow passes wind between them.
+  const oasesShape = () => {
+    const cr = makeRng(seed ^ 0x4c5d23), sO2 = seed * 37 + 7, home = clamp(Math.round(W * 0.3), 9, 13); // less round the base on a small map
+    const pts = [];
+    for (let tries = 0; pts.length < 3 && tries < 600; tries++) {
+      const x = 4 + cr() * (W - 8), y = half + 4 + cr() * Math.max(1, H - half - 9);
+      if (nearBase(x, y, home + 2) || dist2(x, y, ccx, ccy) < 100 || pts.some((q) => dist2(x, y, q.x, q.y) < 90)) continue;
+      pts.push({ x, y });
+    }
+    const centre = { x: ccx, y: ccy };
+    const inOasis = (i, j) => pts.some((q) => dist2(i, j, q.x, q.y) <= 13) || dist2(i, j, centre.x, centre.y) <= 17;
+    for (let j = half; j < H; j++) for (let i = 0; i < W; i++) {
+      if (nearBase(i, j, home) || inOasis(i, j)) continue;
+      const t = id(i, j);
+      if (fbm(i / 3.2, j / 3.2, sO2, 2) > 0.52) put(t, T_ROCK);
+      else if (terrain[t] === T_GROUND) for (const u of [t, mir(t)]) { res[u] = R_NONE; fert[u] = 0; } // barren
+    }
+    const kinds = [[R_ORE, R_CRYSTAL], [R_CRYSTAL, R_OIL], [R_ORE, R_BOULDER]];
+    pts.forEach((q, k) => {
+      for (let j = Math.floor(q.y - 4); j <= Math.ceil(q.y + 4); j++) for (let i = Math.floor(q.x - 4); i <= Math.ceil(q.x + 4); i++) {
+        if (i >= 1 && j >= half && i < W - 1 && j < H - 1 && dist2(i, j, q.x, q.y) <= 13) put(id(i, j), T_GROUND);
+      }
+      stampRes(cr, q.x, q.y, 3.4, F_FERTILE, 0.35);
+      stampRes(cr, q.x - 1.2, q.y - 0.8, 1.5, kinds[k % 3][0], 0.85);
+      stampRes(cr, q.x + 1.4, q.y + 0.9, 1.3, kinds[k % 3][1], 0.85);
+    });
+    for (let j = half; j < H; j++) for (let i = 0; i < W; i++) if (dist2(i, j, centre.x, centre.y) <= 17) put(id(i, j), T_GROUND);
+    stampRes(cr, centre.x + 0.5, centre.y + 0.5, 1.1, R_OIL, 0.9);
+    stampRes(cr, centre.x - 2, centre.y + 2, 1.4, R_ORE, 0.85);
+    stampRes(cr, centre.x + 2.2, centre.y + 1.6, 1.3, R_CRYSTAL, 0.85);
+    // Narrow passes, winding: home to the nearest oasis, oasis to oasis, and on to the middle.
+    const carve = (a, b) => {
+      let x = a.x, y = a.y;
+      for (let k = 0; k < 300 && dist2(x, y, b.x, b.y) > 1; k++) {
+        const d = Math.sqrt(dist2(x, y, b.x, b.y));
+        x += (b.x - x) / d + (cr() - 0.5) * 0.9; y += (b.y - y) / d + (cr() - 0.5) * 0.9;
+        for (const [di, dj] of [[0, 0], [1, 0]]) {
+          const i = Math.round(x) + di, j = Math.round(y) + dj;
+          if (i >= 1 && j >= 1 && i < W - 1 && j < H - 1 && terrain[id(i, j)] !== T_GROUND) put(id(i, j), T_GROUND);
+        }
+      }
+    };
+    const order = pts.slice().sort((a, b) => dist2(a.x, a.y, bx, by) - dist2(b.x, b.y, bx, by));
+    let prev = { x: bx, y: by };
+    for (const q of order) { carve(prev, q); prev = q; }
+    carve(prev, centre);
+    if (order.length) carve(order[0], centre);
+    links = [[ca, half]];
+  };
+  // Crossroads: ridges along both middle lines split the planet into four quarters, meeting at an open
+  // plaza in the middle with the richest fields; the bases hold two opposite quarters and the other two
+  // are rich and unclaimed. Gaps near the edges let a quarter reach its neighbours round the flanks.
+  // (Built to grow into four players, one in each quarter.)
+  const crossShape = () => {
+    const cr = makeRng(seed ^ 0x5e6f31), sC = seed * 41 + 3;
+    const wob = (i, j) => (fbm(i / 3, j / 3, sC, 2) > 0.56 ? 1 : 0);
+    for (let j = half; j < H; j++) for (let i = 0; i < W; i++) {
+      if (nearBase(i, j, 8.5)) continue;
+      if ((i >= ca - 1 - wob(i, j) && i <= cb + 1) || j <= half + 1 + wob(i, j)) put(id(i, j), T_ROCK, undefined, true);
+    }
+    // The flank gaps (each with its twin).
+    for (let j = H - 10; j <= H - 8; j++) for (let i = ca - 3; i <= cb + 3; i++) put(id(i, j), T_GROUND);
+    for (let j = half; j <= half + 2; j++) for (const i of [2, 3, 4, W - 5, W - 4, W - 3]) put(id(i, j), T_GROUND);
+    // The plaza.
+    for (let j = half; j < H; j++) for (let i = 0; i < W; i++) if (dist2(i, j, ccx, ccy) <= 21) put(id(i, j), T_GROUND, baseLevel);
+    stampRes(cr, ccx + 0.5, ccy + 0.5, 1.1, R_OIL, 0.9);
+    stampRes(cr, ccx - 2.6, ccy + 2.2, 1.3, R_ORE, 0.85);
+    stampRes(cr, ccx + 2.6, ccy + 2.0, 1.3, R_CRYSTAL, 0.85);
+    // The unclaimed quarter (bottom right; its twin, top left): rich.
+    const q0 = { x0: cb + 4, x1: W - 3, y0: half + 4, y1: H - 3 };
+    const rich = [[R_ORE, 1.8], [R_CRYSTAL, 1.6], [R_OIL, 1.1], [F_FERTILE, 2.2], [R_BOULDER, 1.6], [R_ORE, 1.5]];
+    for (const [type, rad] of rich) {
+      for (let tries = 0; tries < 60; tries++) {
+        const x = q0.x0 + cr() * (q0.x1 - q0.x0), y = q0.y0 + cr() * (q0.y1 - q0.y0);
+        if (terrain[id(Math.floor(x), Math.floor(y))] !== T_GROUND || nearBase(x, y, 9)) continue;
+        stampRes(cr, x, y, rad, type, type === F_FERTILE ? 0.8 : 0.85);
+        break;
+      }
+    }
+    links = [[ca, half], [3, half], [W - 4, half]]; // the plaza, and both flank gaps (the far one through the free quarter)
+  };
+  // Lakes: a land of many small lakes, roads weaving between them.
+  const lakesShape = () => {
+    const sL = seed * 43 + 19;
+    for (let j = half; j < H; j++) for (let i = 0; i < W; i++) {
+      if (nearBase(i, j, 9)) continue;
+      if (fbm(i / 3.6, j / 3.6, sL, 3) < 0.4) put(id(i, j), T_WATER);
+    }
+    links = [[ca, half]];
+  };
+  // The cheapest way by land from the base to (tx, ty) on the bottom half, round the shape's barrier,
+  // opened up two tiles wide where it isn't ground (a ford, a cut through crags); a long way round on
+  // open ground is preferred to cutting more than a tile or two.
+  const linkBase = (tx, ty) => {
+    const goal = id(Math.round(tx), Math.round(ty)), start = id(bx, by);
+    const cost = new Float64Array(N).fill(Infinity), from = new Int32Array(N).fill(-1), heap = new MinHeap();
+    cost[start] = 0; heap.push(start, 0);
+    while (heap.size) {
+      const t = heap.pop();
+      if (t === goal) break;
+      orth(t, (u) => {
+        if (u < half * W || wall[u]) return;
+        const c = cost[t] + (terrain[u] === T_GROUND ? 1 : 25);
+        if (c < cost[u]) { cost[u] = c; from[u] = t; heap.push(u, c); }
+      });
+    }
+    if (from[goal] < 0) return;
+    for (let t = goal; t !== start && t >= 0; t = from[t]) {
+      const side = Math.abs(from[t] - t) === 1 ? W : 1;
+      for (const u of [t, t + side]) {
+        if (u < half * W || u >= N || wall[u] || terrain[u] === T_GROUND || (side === 1 && (u % W) === 0)) continue;
+        terrain[u] = T_GROUND; res[u] = R_NONE; fert[u] = 0;
+      }
+    }
+  };
+  const shapeExtras = () => {
+    if (np !== 2) return;
+    if (SH.rift) riftShape();
+    else if (SH.ring) ringShape();
+    else if (SH.oases) oasesShape();
+    else if (SH.cross) crossShape();
+    else if (SH.lakes) lakesShape();
+    else return;
+    for (const [x, y] of links) linkBase(x, y);
+    mirror();
+  };
+  shapeExtras();
+
   const ground = (t) => terrain[t] === T_GROUND;
   const reachable = (useElev) => {
     const seen = new Uint8Array(N), q = [id(bx, by)];
@@ -452,6 +640,7 @@ function generateMap(seed, W, H, cfg) {
     }
     mirror();
     if (choke) chokeBand(); // the corridor never cuts a second way through the crags
+    shapeExtras(); // ...nor through a rift, a massif or a ridge (which are then linked up again)
   }
 
   // Crater maps: a sunken crater in the middle of the map, one level below a ring of rim, with the

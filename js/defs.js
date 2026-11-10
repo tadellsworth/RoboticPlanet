@@ -353,10 +353,15 @@ const SHAPE_PRESETS = [
   { name: 'Standard', w: 1, h: 1, ffa: true },
   { name: 'Long haul', w: 0.75, h: 1.7 },
   { name: 'Chokepoint', w: 1, h: 1, choke: true, tip: 'Chokepoint: a belt of crags splits the planet, with one to three narrow channels winding through it (different every game). Find where yours come out, and hold them: an Outpost nearby, then walls and turrets (Paths, Walls).' },
-  { name: 'Islands', w: 1.15, h: 1.45, islands: true, ffa: true, tip: 'Islands: the only way across is bridges. Push an Outpost out to your shore, then build a bridge in Paths (Bridges): it can reach out past your border.' },
+  { name: 'Islands', w: 1.15, h: 1.45, islands: true, naval: true, ffa: true, tip: 'Islands: the only way across is bridges. Push an Outpost out to your shore, then build a bridge in Paths (Bridges): it can reach out past your border.' },
   { name: 'Crater', w: 1, h: 1, crater: true, minLevels: 3, ffa: true, tip: 'Crater: the richest fields lie on the crater floor in the middle. One ramp leads down on your side; cut more in Paths (Ramps).' },
   { name: 'Plateaus', w: 1, h: 1, plateau: true, minLevels: 3, ffa: true, tip: 'Plateaus: your base stands on high ground with only two slopes down. Easy to hold: wall the slopes and push out.' },
   { name: 'Sky islands', w: 1.15, h: 1.45, islands: true, sky: true, ffa: true, tip: 'Sky islands: a home mesa each and around a dozen smaller mesas between, a chain of them always linking the sides, over a canyon floor far below, with sheer drops and no slopes down; deposits on the mesas hold more. Cross between clifftops with Viaducts (Build menu); a Ropeway can reach the floor, but there is little down there.' },
+  { name: 'Rift', w: 1, h: 1, rift: true, tip: 'Rift: a chasm splits the planet, crossed only by a few natural rock arches. Hold your arches with turrets and Mortar Pits; a bridge over the chasm is the slow way to open another crossing.' },
+  { name: 'Ring valley', w: 1, h: 1.1, ring: true, tip: 'Ring valley: a massif too steep to climb fills the middle, and a valley runs round it on each side. Two long ways round: fortify one, raid along the other. (A long tunnel through the massif is the only shortcut.)' },
+  { name: 'Oases', w: 1.05, h: 1.05, oases: true, tip: 'Oases: a barren, crag-strewn waste. Everything worth having is round your base and in a few rich oases joined by narrow passes: grab them first, and guard the long supply lines.' },
+  { name: 'Crossroads', w: 1.2, h: 1, cross: true, tip: 'Crossroads: ridges split the planet into four quarters, meeting at a rich plaza in the middle. Your base is in one corner; the two quarters no one holds are rich, and gaps near the edges lead round the flanks.' },
+  { name: 'Lakes', w: 1.1, h: 1.1, lakes: true, naval: true, tip: 'Lakes: a land of many small lakes, roads weaving between them. Bridges save long detours.' },
 ];
 const CHOKE_BAND = 3;   // Chokepoint maps: rows of crags each side of the middle line
 const CHOKE_APPROACH = 3; // ...and rows of open ground kept clear each side of the pass

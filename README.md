@@ -20,7 +20,8 @@ how goods move.
   levels. All of them are open from the start; finishing one ticks it off at that difficulty.
 
 Before each game, the new-game screen picks the mode, players and rival, the **map shape** (Standard, Long haul,
-Chokepoint, Islands, Crater, Plateaus or Sky islands, as buttons with a line on each) and the **map size** (Small to
+Chokepoint, Islands, Crater, Plateaus, Sky islands, Rift, Ring valley, Oases, Crossroads or Lakes, as buttons with a line
+on each) and the **map size** (Small to
 Huge). **More settings** (a collapsible section, its summary listing whatever isn't the default) holds the planet
 number, the **biome** (Red desert, Jungle or Polar: scenery only, with plants that roads and buildings clear), the
 **terrain** (Flat, Gentle, Rolling, Rugged, Mountainous), the **resources** (Scarce to Abundant), the **rival style**,
@@ -248,6 +249,20 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
   **Crater** sinks a crater one cliff below a rim in the middle, its floor holding rich fields (and Uranium in a
   Nuclear race), with one natural ramp in from each side. **Plateaus** stands each base on the top level, with a
   terrace one level down all round and only two natural slopes off it. Both force at least three levels.
+  Five more shapes are for two players (laid over the finished terrain by `shapeExtras`, each tile with its twin, from
+  the shape's own random numbers so laying one again gives the same map): **Rift** cuts a chasm (`T_CHASM`, 4–8 tiles
+  across) along the middle line, crossed only by natural rock arches, a pair with their twins and sometimes one down the
+  middle (a Sky bridge is the slow way to open another); **Ring valley** fills the middle with a massif too steep to
+  climb, a valley running round it on each side (a long tunnel is the only shortcut); **Oases** is a barren,
+  crag-strewn waste with nothing worth having outside the home ground and a few rich oases (three a side and one in the
+  middle, fertile with two fields each) joined by narrow, winding passes; **Crossroads** (a wider map) splits the
+  planet into four quarters with ridges along both middle lines, meeting at an open plaza with the richest fields, the
+  bases in two opposite corners and the other two quarters rich and unclaimed, with gaps near the edges for flanking
+  (built so it can grow into four players, one a quarter); **Lakes** scatters many small lakes between the bases (the
+  `naval` flag marks it, with Islands, for the ships to come). Each shape lists `links`, the places its base must reach
+  by land (each arch, both valleys, the plaza and both flank gaps), and `linkBase` opens the cheapest way to each one
+  round the shape's own barrier (`wall`: a ford or a cut through crags, two tiles wide, only where there's no way
+  round), so the twin of every link reaches the other base and no river or crag can cut a way across off.
   **Sky islands** (`sky: true`) lays out a home island per side, a small middle one, a chain of stepping-stone
   mesas from each home island to the middle (so the sides can always meet) and a jittered grid of islands between
   (14-tile cells in 2-player, 12 in 3-player; about 11 mesas, or 13–16 with three sides; the same for every side; canyons
@@ -260,7 +275,7 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
   match). The floor gets low rises, rock formations, plants and a thin scatter of boulders and ore. Viaducts
   cross between the clifftops; the AI finds one with `aiViaductSpot` (only spans that bring it closer to its rival),
   puts an Outpost on each mesa it lands on, and rests its Ammo Plant and Chip Fab (and, with a fair army, its Foundry)
-  while it saves the Alloy for the next span. (`T_CHASM`, the old bottomless canyon, is kept for old saves.)
+  while it saves the Alloy for the next span. (`T_CHASM`, the old bottomless canyon, is kept for old saves and is the Rift's chasm.)
 - **Shooting across a canyon:** a warbot that can't close in shoots from up to `WARBOT_RANGE_BLOCKED` (2.2) across
   a building or cliff, and up to `WARBOT_RANGE_GAP` (3.6) from a clifftop across lower ground (`overGap`: a narrow
   canyon with no rock, water or building in the line), so garrisons facing each other across a Sky islands canyon
@@ -287,6 +302,8 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
   top of the panel.
 - **Ammo:** warbots carry 10 shots (each Ammo reloads 5) and reload in your Command Base and Outposts, which haulers stock from an Ammo Plant. Out of
   ammo, a warbot can't fight at all: it heads back to a garrison to reload, and only armed warbots answer orders.
+  A rival's empty warbot sitting in a garrison with no Ammo and none on the way (an Outpost no road reaches yet)
+  goes to reload where there is some and keeps away from that one for 90 s; yours stay where you posted them.
 - **Rival boost (hidden):** tap the clock three times quickly, or press **`**, to give a rival a supply drop, 4 armed
   Warbots or 3 Workers at its Command Base (`BOOST` in `js/defs.js`, `boostRival` in `js/sim.js`), for a game you're
   winning too easily. The game pauses while it's open.

@@ -5,29 +5,22 @@ and biomes started here and are now in the game.)
 
 ## Held for later
 
-- **New map shapes** (suggested alongside the Chokepoint rework; each would be a `SHAPE_PRESETS` entry with its own
-  generator step, mirrored for fairness like the others):
-  - **Rift:** a sheer chasm splits the planet (the Sky islands canyon floor, far below), crossed only by two or three
-    natural rock arches at random spots. Arches can't be walled off without leaving a gap, so they're held with
-    turrets and Mortar Pits; Viaducts are the slow way to open a new crossing.
-  - **Ring valley:** an impassable massif fills the middle and a valley rings round it, the bases on opposite sides.
-    Two long ways round, so the question is which one to fortify and which to raid along.
+- **More map shapes** (Rift, Ring valley, Oases, Crossroads and Lakes are now in the game; each would be a
+  `SHAPE_PRESETS` entry with its own step in `shapeExtras`, mirrored for fairness like the others):
   - **Terraces:** the land climbs in steps toward a summit in the middle, a ramp or two per step, the richest fields
     (and a Nuclear race's Uranium) on top. Whoever holds the high ground sees and shoots down onto the rest.
-  - **Oases:** mostly barren, crag-strewn waste with a scatter of rich fertile pockets joined by narrow passes. An
-    expansion race: grab and link the oases before the rival does, with long supply lines to guard.
   - **Twin rivers:** two rivers run the length of the map, splitting it into three lanes joined by shallow fords
     that bots wade slowly (and that a Planet event can flood). Bridges are worth their price here.
-  - **Crossroads:** four quarters walled apart by ridges, meeting at an open plaza in the middle; the bases hold two
-    opposite quarters and the other two are rich and unclaimed. Fights over the plaza, flanks through the empty ones.
-  - **Lakes:** a land of many small lakes, roads weaving between them, a natural home for the ferries and tanker
-    ships below.
+- **You against up to three rivals, on Crossroads.** Crossroads was built for it: four quarters, one base in each,
+  meeting at the plaza. Needs a four-way symmetric layout (the map turned a quarter round instead of a half), a
+  fourth team colour, and the AI picking among three rivals (it already does among two in a free-for-all). The same
+  layout would suit multiplayer later.
 - Multiplayer, and exporting/importing saves between devices.
 - **Fuel, after the Tanker update.** Built: Tankers, explosions with chain reactions, Crude pipelines, the Generator
   and trucks burning Fuel (see the README). Still open: Fuel pipelines (only Crude flows today), a Generator that
   explodes too, and the AI using oil more (it mostly lives on Bio Farms: about one colony in four builds a Refinery).
-- **Ships and ports (for a new water-heavy map).** A map shape that is mostly sea, where shipping is the way to
-  move things between islands:
+- **Ships and ports (next).** Only on maps marked `naval` (Islands and Lakes), where shipping is the way to move
+  things between islands and round the lakes:
   - **Port:** a new building on the shore, where ships load and unload. It works as storage, like a Rail Station,
     so goods come and go by road.
   - **Container ships:** bulk goods between ports, like Freight Trains at sea.
@@ -38,6 +31,12 @@ and biomes started here and are now in the game.)
   - **To think through:** how ships move (open water only, their own routes, docking time); whether raiders or
     turrets can sink them, and whether a tanker ship explodes like a Tanker; what each ship and the Port cost; how
     the AI plans ports and shipping; and how ferries pick who boards.
+- **Air (after ships).** An **Airfield**, a **strike bomber** for precision strikes (a smaller, faster, cheaper hit
+  than a Missile, on a building you pick), and an **anti-aircraft gun** to shoot it down. To think through: what
+  the bomber costs and carries, how far it flies and how long it takes to rearm, how the AA gun trades with turrets
+  and walls, and how the AI uses both.
+- **Graphics polish (after air).** Go over every building, robot, terrain tile, effect and icon against the design
+  system and bring anything rough or out of style up to the same finish.
 
 ## AI stalemates (seen while checking Road Trains, November)
 

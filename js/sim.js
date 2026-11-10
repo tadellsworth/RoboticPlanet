@@ -3217,6 +3217,17 @@ function updateWarbot(u, dt) {
       if (c) { exitBuilding(u); u.task = { type: 'topup', bld: c.id }; u.path = null; return; }
     }
     if ((u.ammo ?? WARBOT_AMMO) <= WARBOT_AMMO - AMMO_SHOTS) reloadAmmo(u, home);
+    // A rival's warbot out of Ammo in a garrison with none, and none on the way (an Outpost no road
+    // reaches yet): it goes to reload where there is some, and stays away from here for a while.
+    if (home && (u.ammo ?? WARBOT_AMMO) <= 0 && !usesPosts(u.owner) && !(home.stock.ammo > 0) && !(home.inc.ammo > 0) &&
+      S.tick % 45 === u.id % 45 && S.time - (home.lastHit || -99) > 8) {
+      const c = rechargePoint(u, true);
+      if (c && c !== home) {
+        exitBuilding(u); u.avoidB = home.id; u.avoidUntil = S.time + 90;
+        if (c.garrison.length + c.garInc < BDEFS[c.type].garrison) { u.task = { type: 'garrison', bld: c.id }; c.garInc++; } else { u.task = null; goGarrison(u); }
+        return;
+      }
+    }
     // Damaged and the garrison is quiet: go and get fixed.
     if (home && wantsRepair(u) && S.tick % 45 === u.id % 45 && S.time - (home.lastHit || -99) > 8 && home.garrison.length > 1) goRepair(u);
     return;

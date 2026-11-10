@@ -191,6 +191,11 @@ const SHAPE_BLURB = [
   'The richest fields lie in a sunken crater in the middle, with one ramp down on each side.',
   'Each base on a high plateau ringed by cliffs, with only two slopes down: easy to hold, slow to break out of.',
   'Mesas standing over a canyon floor far below: cross between the clifftops on Viaducts.',
+  'A chasm splits the planet, crossed only by a few natural rock arches: hold yours.',
+  'A massif too steep to climb fills the middle, with a valley round it on each side: two long ways round.',
+  'A barren, crag-strewn waste with a few rich oases joined by narrow passes: an expansion race.',
+  'Four quarters split by ridges, meeting at a rich plaza; the two quarters no one holds are rich.',
+  'Many small lakes, with roads weaving between them: bridges save long detours.',
 ];
 
 function syncMenu() {
