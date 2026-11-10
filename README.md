@@ -124,6 +124,10 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
   (`deckLevel` in `js/render.js`), ramping down at a lower end; its piers, end towers and suspension cables reach past
   the tile, so `drawBridgeRigging` draws them each frame over the map. Lay road routes use them only when going round is much longer.
   A bridge can be pushed out over water past your border, a tile at a time from your land or a bridge (`bridgeHead`).
+  Like a Viaduct's far end, where a bridge comes ashore on no-one's land the ground within `VIA_CLAIM` (3) tiles of the
+  landing is claimed for whoever's land the bridge runs out from (`computeTerritory` traces each bridge from its owner's
+  border or shore; land only, never water or anyone's land), so an Outpost can go on the new island, even right at the
+  end of the bridge. Territory is recomputed whenever a bridge tile is built or removed.
 - **Junctions, traffic lights and overpasses:** where three or four roads meet, bots slow down and give way to traffic
   already crossing. Switch the Paths banner to **Junctions** and tap a junction to put up a traffic light (1 Alloy): it
   lets one direction through at a time, switching when traffic waits the other way. On a busy crossing a light moves

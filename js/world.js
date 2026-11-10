@@ -1149,6 +1149,35 @@ function computeTerritory() {
     if (who < 0) S.owner[t] = -1;
     else if (!tie) S.owner[t] = who;
   }
+  // Where one of our bridges comes ashore on no-one's land, the ground within VIA_CLAIM of the landing
+  // is ours too (land only, never anyone's), so an Outpost can go well onto the new island.
+  // (A bridge pushed out past the border belongs to whoever's land or bridge it runs out from.)
+  const span = (t) => S.road[t] && (S.terrain[t] === T_WATER || S.terrain[t] === T_CHASM);
+  const nb4 = (t) => { const ti = t % W; return [ti > 0 ? t - 1 : -1, ti < W - 1 ? t + 1 : -1, t - W, t + W].filter((u) => u >= 0 && u < N); };
+  const bOwner = new Int8Array(N).fill(-1), bq = [];
+  const grow = (from) => { for (let h = from; h < bq.length; h++) for (const u of nb4(bq[h])) if (span(u) && bOwner[u] < 0) { bOwner[u] = bOwner[bq[h]]; bq.push(u); } };
+  // Bridge tiles inside someone's border first, then any still unclaimed that start from someone's shore.
+  for (let t = 0; t < N; t++) if (span(t) && S.owner[t] >= 0) { bOwner[t] = S.owner[t]; bq.push(t); }
+  grow(0);
+  const mark = bq.length;
+  for (let t = 0; t < N; t++) {
+    if (!span(t) || bOwner[t] >= 0) continue;
+    for (const u of nb4(t)) if (S.terrain[u] === T_GROUND && S.owner[u] >= 0) { bOwner[t] = S.owner[u]; bq.push(t); break; }
+  }
+  grow(mark);
+  for (const t of bq) {
+    const p = bOwner[t];
+    for (const u of nb4(t)) {
+      if (S.terrain[u] !== T_GROUND || S.owner[u] >= 0) continue;
+      const ui = u % W, uj = (u / W) | 0, r = VIA_CLAIM, r2 = r * r + 0.3;
+      for (let j = Math.max(0, uj - r); j <= Math.min(H - 1, uj + r); j++) {
+        for (let i = Math.max(0, ui - r); i <= Math.min(W - 1, ui + r); i++) {
+          const v = j * W + i;
+          if (S.owner[v] < 0 && S.terrain[v] === T_GROUND && dist2(i, j, ui, uj) <= r2) S.owner[v] = p;
+        }
+      }
+    }
+  }
   // A Viaduct's far end claims the no-one's ground within VIA_CLAIM of it (never anyone's land), so
   // a new mesa can be built on: an Outpost there claims the rest.
   for (const b of S.buildings) {

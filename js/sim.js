@@ -1317,6 +1317,7 @@ function layRoad(t) {
   if (S.paveRes) delete S.paveRes[t];
   setRoad(t % S.W, (t / S.W) | 0, true);
   if (crossTile(t)) computeZones(); // a bridge or tunnel joins new land
+  if (S.terrain[t] === T_WATER || S.terrain[t] === T_CHASM) computeTerritory(); // a bridge's landing claims a little ground
 }
 
 /** Call off a planned road tile and refund its Cement. */
@@ -2821,6 +2822,7 @@ function sabotageRoads(u, r, dt) {
 function wreckRoad(t, victim, why) {
   const i = t % S.W, j = (t / S.W) | 0, cross = crossTile(t);
   setRoad(i, j, false);
+  if (S.terrain[t] === T_WATER || S.terrain[t] === T_CHASM) computeTerritory();
   delete S.lights[t];
   delete S.over[t];
   if (cross) computeZones();
@@ -3377,6 +3379,7 @@ function removeRoad(owner, i, j) {
   if (!S.road[t]) return;
   const cross = crossTile(t);
   setRoad(i, j, false);
+  if (S.terrain[t] === T_WATER || S.terrain[t] === T_CHASM) computeTerritory();
   if (S.over && S.over[t]) removeOverpass(t);
   refundRoad(owner, cross ? CROSS[S.terrain[t]].cost : roadCost(), i, j);
   if (cross) computeZones();
