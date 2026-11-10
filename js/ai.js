@@ -251,6 +251,8 @@ function aiThink(p) {
   const army = kinds.warbot || 0;
   const wantArmy = S.mode === 'colony' ? 0 : aiWantArmy(lvl, p);
   const armyBehind = army < wantArmy - 2;
+  let unarmed = 0;
+  for (const u of S.bots) if (!u.dead && u.owner === p && u.type === 'warbot' && (u.ammo ?? WARBOT_AMMO) <= 0) unarmed++;
 
   const crewNeed = {};
   for (const b of me) {
@@ -263,6 +265,8 @@ function aiThink(p) {
     b.mode = S.mode === 'colony' ? 'worker' : workers < staffed + MIN_FREE_WORKERS ? 'worker'
       : army < wantArmy ? (workers < wantWorkers ? 'alt' : 'warbot')
         : workers < wantWorkers ? 'worker' : workers > wantWorkers + 4 ? 'warbot' : 'alt';
+    // A third of the army with no Ammo: no more warbots until it's armed (the Alloy goes to Ammo).
+    if (unarmed >= Math.max(4, army / 3) && (b.mode === 'warbot' || b.mode === 'alt')) b.mode = workers < wantWorkers ? 'worker' : 'off';
     b.orders = b.orders || {};
     for (const crew in crewNeed) if ((kinds[crew] || 0) < crewNeed[crew] && !(b.orders[crew] > 0)) b.orders[crew] = 1;
     // Saving up for missiles (or feeding the Missile Factory): the Foundry rests so Alloy and Chips

@@ -204,17 +204,17 @@ function usesGood(b, g) {
 }
 
 /**
- * Trunk runs (see TRUCK_MIN_DIST): every store at least TRUCK_MIN_DIST from the Command Base sends home
- * its spare goods (beyond its own supply orders and EXPORT_RESERVE) that no building nearer to it than
- * to the Command Base uses, a load at a time: TRAIN_MIN_LOAD or more by Road Train, otherwise
- * TRUCK_MIN_LOAD or more by Freight Truck.
- */
-/**
  * Are two buildings a long run apart (TRUCK_MIN_DIST or more)? Measured across plus down, as roads
  * follow the grid: a road between them is never shorter than that.
  */
 function farApart(a, b) { return Math.abs(a.x - b.x) + Math.abs(a.y - b.y) >= TRUCK_MIN_DIST; }
 
+/**
+ * Trunk runs (see TRUCK_MIN_DIST): every store at least TRUCK_MIN_DIST from the Command Base sends home
+ * its spare goods (beyond its own supply orders and EXPORT_RESERVE) that no building nearer to it than
+ * to the Command Base uses, a load at a time: TRAIN_MIN_LOAD or more by Road Train, otherwise
+ * TRUCK_MIN_LOAD or more by Freight Truck.
+ */
 function trunkRuns(p, blds, take, canCarry, vans, trains) {
   const hub = getE(S.players[p].lander);
   if (!hub || hub.dead || hub.owner !== p) return;

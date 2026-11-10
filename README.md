@@ -160,7 +160,8 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
   Trucks** (8; 2 Alloy and 2 Chips at the Foundry) do the long runs from any building, with a full load (a far
   factory gets up to `LONG_BUFFER` of each input), and storage to storage. With trucks around, Haulers take a long run
   only when the far building is about to run dry, and a far producer waits for a truck until its output is nearly
-  full. **Trunk runs** (`trunkRuns`): a store 12+ tiles from the Command Base sends home, in bulk, the goods nothing
+  full. A truck takes a supply order only for `TRUCK_KEEP_LOAD` (4) goods or more (or half the order, if smaller),
+  unless the store has run dry. "Long" means 12+ tiles across plus down (`farApart`), as roads follow the grid. **Trunk runs** (`trunkRuns`): a store 12+ tiles from the Command Base sends home, in bulk, the goods nothing
   nearer to it uses (beyond its supply orders and `EXPORT_RESERVE`), by truck or Road Train only. **Road Trains**
   (30; 4 Alloy and 4 Chips) only do storage-to-storage runs 12+ tiles long, with `TRAIN_MIN_LOAD` (18) or more (any load
   without trucks); `TRAIN_ROAD` (35%) on plain road, slow corners, `TRAIN_LEN` of queue behind them, `WEAR_TRAIN` wear.
@@ -355,7 +356,7 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
 - You can only build inside your border. Outposts push it out (7 tiles around them).
 - **Salvage:** a colony out of Stone or Fiber with no Quarry or Harvester that can still work salvages 1 every 20 s from
   its Command Base (up to 6), so it can always rebuild. Capturing an enemy Outpost takes its land,
-  and enemy buildings left outside their border are lost.
+  and enemy buildings left outside their border are lost (their goods spill as loot, `dropLoot`; their crew walks out).
 - **Controls:** drag to pan, pinch or scroll to zoom, tap anything to inspect it. Wheel deltas are normalised and capped
   per event (smooth on a Magic Mouse or trackpad); a Ctrl + wheel pinch zooms faster, a sideways swipe or Shift + wheel
   pans, and Safari's trackpad pinch (`gesture*` events) zooms the map instead of the page. Drawing resolution is capped
