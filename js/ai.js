@@ -220,9 +220,13 @@ function aiThink(p) {
   // Producers rest once there's plenty of what they make, so they don't eat inputs other
   // buildings need (Chips and Ammo would otherwise swallow all the Alloy the Foundry needs).
   const stockNow = playerGoods(p), missiles = !!(saving || P.feedMissiles);
+  // Saving Alloy for a Viaduct (the only way to reach the enemy): Ammo and Chips stop until it's
+  // paid for, or they'd eat every bit of Alloy the Smelter makes (Outposts keep asking for Ammo).
+  const forBridge = !!(P.bridgeNeed && P.bridgeNeed.alloy && S.time - (P.bridgeWant || -999) < 30);
   for (const b of me) {
     const cap = AI_CAPS[b.type];
     if (!cap || !b.built) continue;
+    if (forBridge && (b.type === 'armory' || b.type === 'fab')) { if (!b.paused) setPaused(b, true); continue; }
     const hi = cap[1] * (missiles && b.type === 'fab' ? 2 : 1), lo = cap[2];
     const have = stockNow[cap[0]] || 0;
     if (!b.paused && have >= hi) setPaused(b, true);
@@ -428,6 +432,20 @@ function aiBridge(p, maxSites) {
     for (const t of tiles) { if (buildRoad(p, t % W, (t / W) | 0)) break; P.bridgeSince[t] = S.time; }
     return;
   }
+  // A Viaduct of ours landed on a mesa with no Outpost yet: claim that mesa first, with an Outpost
+  // on the ground the Viaduct's end claimed, on the side toward the enemy.
+  const landed = S.buildings.find((v) => !v.dead && v.owner === p && v.type === 'viaduct' && v.far && v.built &&
+    !S.buildings.some((o) => !o.dead && o.owner === p && BDEFS[o.type].mil && dist2(o.x, o.y, v.x, v.y) <= 49));
+  if (landed && siteCount(p) < maxSites) {
+    if (!aiAffordable(p, 'outpost') || S.buildings.some((b) => !b.dead && b.owner === p && b.type === 'outpost' && !b.built)) return;
+    let best = null, bs = Infinity;
+    for (let j = landed.y - VIA_CLAIM; j <= landed.y + VIA_CLAIM; j++) for (let i = landed.x - VIA_CLAIM; i <= landed.x + VIA_CLAIM; i++) {
+      if (!inMap(i, j) || S.owner[tIdx(i, j)] !== p || S.zone[tIdx(i, j)] !== home) continue;
+      const sc = dist(i, j, E.x, E.y);
+      if (sc < bs && canPlace(p, 'outpost', i, j, true).ok && !wouldBlock(tIdx(i, j))) { bs = sc; best = [i, j]; }
+    }
+    if (best) { placeSite(p, 'outpost', best[0], best[1]); return; }
+  }
   // No water to bridge (Sky islands): a Viaduct from our clifftop across the canyon, onto a clifftop
   // our border already reaches if there is one (so we can build there), else onto no-one's land.
   const via = aiViaductSpot(p, home, E);
@@ -480,6 +498,7 @@ function aiViaductSpot(p, home, E) {
         const b = tIdx(bi, bj);
         if (S.terrain[b] !== T_GROUND || S.zone[b] === home || S.zone[b] < 0 || Math.abs(S.elev[b] - S.elev[a]) > VIA_RISE) continue;
         if (viaductBlocked(p, ai, aj, bi, bj)) continue;
+        if (dist(bi, bj, E.x, E.y) > dist(ai, aj, E.x, E.y) - 2) break; // only spans that bring us closer
         const owned = S.owner[b] === p;
         const sc = dist(bi, bj, E.x, E.y) + k * 0.8 - (owned ? 20 : 0);
         if (sc < bs && canPlace(p, 'viaduct', ai, aj, true).ok) { bs = sc; best = { a, b, owned }; }

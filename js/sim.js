@@ -625,6 +625,18 @@ function queueRoom(u) {
 function moveAlong(u, dt) {
   if (!u.path) return true;
   let here = Math.floor(u.y) * S.W + Math.floor(u.x);
+  // The next step jumps a gap (a Viaduct or Ropeway) that has come down since the route was
+  // planned: back to the end it set out from, and the order is dropped so it plans again.
+  {
+    const nx = u.path[u.pi], pv = u.path[u.pi - 1], W = S.W;
+    if (u.pi > 0 && nx !== undefined && Math.max(Math.abs((nx % W) - (pv % W)), Math.abs(((nx / W) | 0) - ((pv / W) | 0))) > 1 &&
+      viaLink(pv) !== nx && ropeLink(pv) !== nx && !(u.ride >= 0)) {
+      u.x = (pv % W) + 0.5; u.y = ((pv / W) | 0) + 0.5;
+      u.path = null; u.deck = null; u.vel = 0;
+      cancelTask(u); u.task = null;
+      return false;
+    }
+  }
   // Out on a Viaduct (between its abutments) a bot drives as if still on the abutment it left: on
   // road, whatever lies down below. It remembers the two ends (u.deck) until it reaches one, so
   // whatever else it's told to do meanwhile starts from the deck, not the ground below.
@@ -2496,7 +2508,7 @@ function warbotAct(u, dt) {
     const d = dist(u.x, u.y, foe.x, foe.y);
     let inReach = d <= WARBOT_RANGE, pathing = false;
     if (!inReach && !moveDirect(u, foe.x, foe.y, dt)) {
-      if (d <= WARBOT_RANGE_BLOCKED) inReach = true;
+      if (d <= WARBOT_RANGE_BLOCKED || (d <= WARBOT_RANGE_GAP && overGap(u, foe))) inReach = true;
       else {
         pathing = true;
         if (travel(u, Math.floor(foe.x), Math.floor(foe.y), dt) === null) { u.fight = 0; u.ignoreFoe = foe.id; u.ignoreUntil = S.time + 5; }
@@ -2570,6 +2582,24 @@ function warbotAct(u, dt) {
       if (h.garrison.length < BDEFS[h.type].garrison) enterBuilding(u, h);
     } else if (r === null) u.task = null;
   }
+}
+
+/**
+ * Do bots a and b face each other across a drop (a canyon or valley lower than both of them), with
+ * no rock, water or building in the way? Warbots shoot across one from the edge.
+ */
+function overGap(a, b) {
+  const ta = tIdx(Math.floor(a.x), Math.floor(a.y)), tb = tIdx(Math.floor(b.x), Math.floor(b.y));
+  const lo = Math.min(S.elev[ta], S.elev[tb]), n = Math.ceil(dist(a.x, a.y, b.x, b.y) / 0.25);
+  let gap = false;
+  for (let k = 1; k < n; k++) {
+    const t = tIdx(Math.floor(a.x + ((b.x - a.x) * k) / n), Math.floor(a.y + ((b.y - a.y) * k) / n));
+    if (t === ta || t === tb) continue;
+    if (S.terrain[t] === T_WATER || (S.bAt[t] && !passTile(t))) return false;
+    if (S.elev[t] >= lo) { if (S.terrain[t] === T_ROCK) return false; continue; }
+    gap = true;
+  }
+  return gap;
 }
 
 /** Walk up to an enemy building and hit it. Returns null if it can't be reached. */
@@ -4085,7 +4115,6 @@ function viaductBlocked(owner, ai, aj, bi, bj) {
   const a = tIdx(ai, aj), t = tIdx(bi, bj);
   if (S.terrain[t] !== T_GROUND || S.res[t] || S.ramp[t]) return 'The far end needs clear, open ground on a clifftop.';
   if (S.bAt[t]) return 'There is a building at the far end.';
-  if (S.owner[t] >= 0 && S.owner[t] !== owner) return 'The far end is in another colony\'s land.';
   if (Math.abs(S.elev[t] - S.elev[a]) > VIA_RISE) return `The two ends are more than ${VIA_RISE} levels apart.`;
   const low = Math.min(S.elev[a], S.elev[t]), di = Math.sign(bi - ai), dj = Math.sign(bj - aj);
   let dip = false;

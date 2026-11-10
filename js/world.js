@@ -108,7 +108,7 @@ function generateMap(seed, W, H, cfg) {
       isles = [{ x: ccx, y: ccy, rx: cr, ry: cr }];
       for (const o of base) for (let k = 0; k < 3; k++) { const [x, y] = rot(o.x, o.y, k); isles.push({ x, y, rx: o.rx, ry: o.ry }); }
     }
-    // Sky islands: a smaller home island, a small mesa in the middle and a scatter of small mesas
+    // Sky islands: a home island, a small mesa in the middle and a dozen or so smaller mesas
     // between (laid out the same for every side), so there's a lot to bridge.
     if (SH.sky) {
       const srng = makeRng((seed ^ 0x51c7) >>> 0);
@@ -116,15 +116,28 @@ function generateMap(seed, W, H, cfg) {
         : [0, 1, 2].map((k) => { const [x, y] = rot(o.x, o.y, k); return { x, y, rx: o.rx, ry: o.ry }; });
       const home = np === 2 ? { x: bx0, y: by0 - 3, rx: Math.min(W * 0.27, 11), ry: 8 } : { x: bx0, y: by0 - 4, rx: 8.5, ry: 8.5 };
       isles = [...sym(home), { x: ccx, y: ccy, rx: 4, ry: 4 }];
-      const cell = 9;
+      // A chain of stepping-stone mesas from the home island to the middle one, at most a few
+      // tiles of canyon apart (and roughly in line, so straight Viaducts can span each gap): the
+      // sides can always reach each other.
+      {
+        const fx = home.x, fy = home.y - home.ry * 0.9, tx = ccx, ty = ccy + 4;
+        const d = dist(fx, fy, tx, ty), n = Math.max(0, Math.ceil(d / 7.5) - 1);
+        for (let k = 1; k <= n; k++) {
+          const f = k / (n + 1), r = 3 + srng() * 0.8;
+          isles.push(...sym({ x: fx + (tx - fx) * f + (srng() - 0.5) * 1.5, y: fy + (ty - fy) * f, rx: r + 0.6, ry: r }));
+        }
+      }
+      const cell = np === 2 ? 14 : 12;
       for (let gy = cell / 2; gy < H; gy += cell) for (let gx = cell / 2; gx < W; gx += cell) {
-        const x = gx + (srng() - 0.5) * 4, y = gy + (srng() - 0.5) * 4, r = 2.6 + srng() * 1.8, sq = 0.8 + srng() * 0.4;
+        const x = gx + (srng() - 0.5) * 5, y = gy + (srng() - 0.5) * 5, r = 4.2 + srng() * 2, sq = 0.8 + srng() * 0.4;
         const ci = Math.round(x), cj = Math.round(y);
         if (ci < 2 || cj < 2 || ci > W - 3 || cj > H - 3 || !canon(ci, cj)) continue;
-        if (isles.some((o) => dist(x, y, o.x, o.y) < Math.max(o.rx, o.ry) + r + 2.5)) continue;
+        if (isles.some((o) => dist(x, y, o.x, o.y) < Math.max(o.rx, o.ry) + r + 1.5)) continue;
         isles.push(...sym({ x, y, rx: r, ry: r * sq }));
       }
     }
+    // Sky islands keep their canyons narrow (short Viaducts); Islands keep a wider sea.
+    const gapMin = (SH.sky ? SKY_GAP : ISLE_GAP) + 1.5;
     const out = (o, i, j) => (Math.sqrt(((i - o.x) / o.rx) ** 2 + ((j - o.y) / o.ry) ** 2) - 1) * Math.min(o.rx, o.ry);
     isleCut = () => {
       for (let j = half; j < H; j++) for (let i = 0; i < W; i++) {
@@ -132,7 +145,7 @@ function generateMap(seed, W, H, cfg) {
         const t = id(i, j), wob = (fbm(i / 4, j / 4, sO, 2) - 0.5) * 3;
         let k = -1, best = Infinity;
         isles.forEach((o, n) => { const d = out(o, i, j) - wob; if (d < best) { best = d; k = n; } });
-        const land = best <= 0 && isles.every((o, n) => n === k || out(o, i, j) >= ISLE_GAP + 1.5); // + the most a shore wobbles out
+        const land = best <= 0 && isles.every((o, n) => n === k || out(o, i, j) >= gapMin); // + the most a shore wobbles out
         if (!land) { terrain[t] = T_WATER; res[t] = R_NONE; fert[t] = 0; }
         else if (terrain[t] === T_WATER) terrain[t] = T_GROUND;
       }
@@ -669,6 +682,30 @@ function generateMap(seed, W, H, cfg) {
       if (terrain[t] !== T_WATER) continue;
       terrain[t] = T_GROUND; elev[t] = 0; ramp[t] = 0; res[t] = R_NONE; fert[t] = 0; isFloor[t] = 1;
     }
+    // Every clifftop's edge stays clear of resources and crags, so a Viaduct can start from (or
+    // land on) any rim: a crag on the edge becomes ground at the level of the mesa beside it, and a
+    // resource moves a tile inland (or goes, if there's no room).
+    const rim = new Uint8Array(N);
+    for (let t = 0; t < N; t++) if (isFloor[t]) orth(t, (u) => { if (!isFloor[u]) rim[u] = 1; });
+    for (let u = 0; u < N; u++) {
+      if (!rim[u]) continue;
+      if (terrain[u] === T_ROCK) {
+        let lv = 99;
+        orth(u, (v) => { if (!isFloor[v] && terrain[v] === T_GROUND && elev[v] >= 3) lv = Math.min(lv, elev[v]); });
+        if (lv === 99) continue;
+        terrain[u] = T_GROUND; elev[u] = lv; ramp[u] = 0;
+      }
+      if (terrain[u] !== T_GROUND || !res[u]) continue;
+      const ui = u % W, uj = (u / W) | 0;
+      let to = -1, td = 99;
+      for (let j = uj - 3; j <= uj + 3; j++) for (let i = ui - 3; i <= ui + 3; i++) {
+        if (i < 1 || j < 1 || i >= W - 1 || j >= H - 1) continue;
+        const v = j * W + i, d = dist2(i, j, ui, uj);
+        if (d < td && !isFloor[v] && !rim[v] && terrain[v] === T_GROUND && !res[v] && !ramp[v] && elev[v] === elev[u]) { td = d; to = v; }
+      }
+      if (to >= 0) { res[to] = res[u]; amt[to] = amt[u]; }
+      res[u] = R_NONE;
+    }
     // The canyon floor isn't a flat plain: low rises a level up and rock formations, both kept clear
     // of the walls (so every drop stays sheer), plants (see makeDecor) and, very rarely, a boulder or
     // some ore (the same for both sides of the map).
@@ -1103,9 +1140,12 @@ function computeTerritory() {
   S.territoryVer++;
   for (const b of S.buildings.slice()) {
     if (b.dead || BDEFS[b.type].mil || BDEFS[b.type].wild) continue;
-    // A Viaduct can land on no-one's ground (that's how you reach a new clifftop): it's only lost to
-    // another colony's land.
-    if (b.type === 'viaduct' && S.owner[tIdx(b.x, b.y)] < 0) continue;
+    // A Viaduct can land on no-one's ground (that's how you reach a new clifftop) or in a rival's
+    // land (a bridgehead for an attack): it's only lost once neither end stands in its owner's land.
+    if (b.type === 'viaduct') {
+      const o = b.link && getE(b.link), own = (e) => e && !e.dead && S.owner[tIdx(e.x, e.y)] === b.owner;
+      if (S.owner[tIdx(b.x, b.y)] < 0 || own(b) || own(o)) continue;
+    }
     if (S.owner[tIdx(b.x, b.y)] !== b.owner) {
       postMsg(b.owner, `${BDEFS[b.type].name} was lost — it is no longer inside your territory.`, b.x, b.y, 'bad');
       destroyBuilding(b, true);
@@ -1173,7 +1213,7 @@ function wouldBlock(t) {
   const ends = [];
   for (let k = 0; k < 4; k++) {
     const u = nb(t, k);
-    if (u >= 0 && u < N && !S.bAt[u] && canStep(t, u)) ends.push(u);
+    if (u >= 0 && u < N && (!S.bAt[u] || passTile(u)) && canStep(t, u)) ends.push(u);
   }
   if (ends.length <= 1) return false;
   if (!_wb.seen || _wb.seen.length !== N) { _wb.seen = new Uint32Array(N); _wb.q = new Int32Array(N); _wb.gen = 0; }
@@ -1186,7 +1226,7 @@ function wouldBlock(t) {
       const a = q[head++];
       for (let k = 0; k < 4; k++) {
         const b = nb(a, k);
-        if (b < 0 || b >= N || b === t || seen[b] === gen || S.bAt[b] || !canStep(a, b)) continue;
+        if (b < 0 || b >= N || b === t || seen[b] === gen || (S.bAt[b] && !passTile(b)) || !canStep(a, b)) continue;
         if (limit && (Math.abs((b % W) - ti) > limit || Math.abs(((b / W) | 0) - tj) > limit)) continue;
         seen[b] = gen;
         if (ends.indexOf(b) >= 0 && --left === 0) return true;
@@ -1273,8 +1313,8 @@ function canPlace(owner, type, i, j, skipBlockCheck) {
     return { ok: false, reason: `No ${RES[def.gather].name.toLowerCase()}s within reach.` };
   }
   if (def.farm && fertileIn(i, j, def.radius) === 0) return { ok: false, reason: 'No fertile soil within reach.' };
-  // The most expensive check goes last.
-  if (!skipBlockCheck && wouldBlock(t)) return { ok: false, reason: 'That would block the only way through here.' };
+  // The most expensive check goes last. (Bots walk through Outposts and Viaducts' ends, so those never block.)
+  if (!skipBlockCheck && type !== 'outpost' && type !== 'viaduct' && wouldBlock(t)) return { ok: false, reason: 'That would block the only way through here.' };
   return { ok: true, reason: '' };
 }
 
@@ -1666,6 +1706,9 @@ function roadSearch(owner, seeds, done) {
       const nc = c + roadWeight(u);
       if (nc < cost[u]) { cost[u] = nc; prev[u] = t; heap.push(u, nc); }
     }
+    // Across a Viaduct: its deck carries the road from one end to the other.
+    const v = viaLink(t);
+    if (v >= 0) { const nc = c + roadWeight(v); if (nc < cost[v]) { cost[v] = nc; prev[v] = t; heap.push(v, nc); } }
   }
   return { cost, prev, end: -1 };
 }
@@ -1809,6 +1852,25 @@ function releaseBotsFrom(b, killInside) {
   b.inc = {}; b.res = {};
 }
 
+/**
+ * A Viaduct between abutments a and c is coming down: every bot out on its deck scrambles back to
+ * the nearer end (never left standing in mid-air, or dropped on the canyon floor).
+ */
+function offDeck(a, c) {
+  const ax = a.x + 0.5, ay = a.y + 0.5, cx = c.x + 0.5, cy = c.y + 0.5, ta = tIdx(a.x, a.y), tc = tIdx(c.x, c.y);
+  for (const u of S.bots) {
+    if (u.dead || u.inside) continue;
+    const on = u.deck ? u.deck.includes(ta) || u.deck.includes(tc)
+      : a.x === c.x ? Math.abs(u.x - ax) < 0.7 && u.y > Math.min(ay, cy) + 0.5 && u.y < Math.max(ay, cy) - 0.5
+        : Math.abs(u.y - ay) < 0.7 && u.x > Math.min(ax, cx) + 0.5 && u.x < Math.max(ax, cx) - 0.5;
+    if (!on) continue;
+    const near = dist2(u.x, u.y, ax, ay) <= dist2(u.x, u.y, cx, cy) ? a : c;
+    u.x = near.x + 0.5; u.y = near.y + 0.5; u.deck = null;
+    if (u.path) { u.path = null; u.pi = 0; }
+    u.vel = 0;
+  }
+}
+
 /** Remove a building. `burn` = destroyed by force (bots inside die); otherwise bots walk out. */
 function destroyBuilding(b, burn) {
   if (b.dead) return;
@@ -1820,6 +1882,7 @@ function destroyBuilding(b, burn) {
   // A Ropeway is two stations, a Viaduct two abutments: one going takes the other with it.
   if ((b.type === 'ropeway' || b.type === 'viaduct') && b.link) {
     const o = getE(b.link); b.link = 0;
+    if (b.type === 'viaduct' && o) offDeck(b, o);
     if (o && !o.dead) { o.link = 0; destroyBuilding(o, burn); }
     S.roadVer = (S.roadVer || 0) + 1; S.railVer = (S.railVer || 0) + 1;
     computeZones();

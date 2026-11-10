@@ -244,6 +244,7 @@ const SABOTAGE_WORK = 12;
 const MISSILE_ROAD = 1.5;
 const WARBOT_RANGE = 1.2;         // tiles: how far a warbot shoots
 const WARBOT_RANGE_BLOCKED = 2.2; // ...and across a building or cliff that stops it closing in
+const WARBOT_RANGE_GAP = 3.6;     // ...and from a clifftop across a narrow canyon (Sky islands)
 
 // Terrain
 const T_GROUND = 0, T_WATER = 1, T_ROCK = 2, T_CHASM = 3; // a chasm: a deep, sheer canyon between islands (Sky islands)
@@ -296,11 +297,12 @@ const SHAPE_PRESETS = [
   { name: 'Islands', w: 1.15, h: 1.45, islands: true, ffa: true, tip: 'Islands: the only way across is bridges. Push an Outpost out to your shore, then build a bridge in Paths (Bridges): it can reach out past your border.' },
   { name: 'Crater', w: 1, h: 1, crater: true, minLevels: 3, ffa: true, tip: 'Crater: the richest fields lie on the crater floor in the middle. One ramp leads down on your side; cut more in Paths (Ramps).' },
   { name: 'Plateaus', w: 1, h: 1, plateau: true, minLevels: 3, ffa: true, tip: 'Plateaus: your base stands on high ground with only two slopes down. Easy to hold: wall the slopes and push out.' },
-  { name: 'Sky islands', w: 1.15, h: 1.45, islands: true, sky: true, ffa: true, tip: 'Sky islands: a home mesa each and dozens of small mesas scattered between, over a canyon floor far below, with sheer drops and no slopes down. Cross between clifftops with Viaducts (Build menu); a Ropeway can reach the floor, but there is little down there.' },
+  { name: 'Sky islands', w: 1.15, h: 1.45, islands: true, sky: true, ffa: true, tip: 'Sky islands: a home mesa each and around a dozen smaller mesas between, a chain of them always linking the sides, over a canyon floor far below, with sheer drops and no slopes down. Cross between clifftops with Viaducts (Build menu); a Ropeway can reach the floor, but there is little down there.' },
 ];
 const CHOKE_BAND = 3;   // Chokepoint maps: rows of crags each side of the middle line
 const CHOKE_APPROACH = 3; // ...and rows of open ground kept clear each side of the pass
 const ISLE_GAP = 2.5;     // Islands maps: at least this much sea between islands
+const SKY_GAP = 1;        // Sky islands: canyons between mesas are narrower (short Viaducts)
 const LOOT_MAX = 60;      // most crates a wrecked building spills
 const LOOT_TIME = 300;    // seconds a loot pile lies before it rots away
 // Walls and Gates: an enemy warbot plans a route through one as if it were this many extra tiles

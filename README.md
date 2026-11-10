@@ -157,8 +157,12 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
   `VIA_TIME` seconds a tile spanned (`b.buildTime`). To the pathfinder it's an edge between the abutment tiles at
   plain-road cost; zones, both road networks (`comp` and `compT`) and the railway (`railNbrs`) join across it. A bot
   out on the deck drives as if on the abutment it left (`moveAlong`), so the ground below is untouched and its traffic
-  passes underneath. The deck, piers and girders are drawn each frame (`drawViaductDeck`). An abutment on no-one's
-  land survives `computeTerritory`; one inside another colony's land is lost. A far end claims the no-one's ground
+  passes underneath. The deck, piers and girders are drawn each frame (`drawViaductDeck`). A far end may land on
+  no-one's land or in a rival's (a bridgehead); `computeTerritory` keeps a Viaduct while either end stands in its
+  owner's land (or the abutment is on no-one's), and takes it down once neither does. When one comes down, `offDeck`
+  moves any bot on its deck to the nearer end, and a bot whose route jumps a Viaduct or Ropeway that's gone drops the
+  route and its order (`moveAlong`). `roadSearch` crosses Viaducts, so roads (and the AI's) reach sites on far mesas,
+  and `wouldBlock` / `canPlace` treat Outposts and Viaduct ends as walkable. A far end claims the no-one's ground
   within `VIA_CLAIM` (3) tiles, never anyone's land, so a new mesa can take an Outpost. A bot out on a deck keeps
   `u.deck` (the two ends) until it reaches one, so a new order or a chase starts from the deck, not the ground below.
 - **Freight rail** (`RAIL_*` in `js/defs.js`; the rail section of `js/world.js`; `layRail`, `deliverTrain` in
@@ -194,11 +198,20 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
   **Crater** sinks a crater one cliff below a rim in the middle, its floor holding rich fields (and Uranium in a
   Nuclear race), with one natural ramp in from each side. **Plateaus** stands each base on the top level, with a
   terrace one level down all round and only two natural slopes off it. Both force at least three levels.
-  **Sky islands** (`sky: true`) lays out a smaller home island per side, a small middle one and a jittered grid of
-  small islands between (the same for every side), then turns the sea into a canyon floor at level 0 and lifts every
+  **Sky islands** (`sky: true`) lays out a home island per side, a small middle one, a chain of stepping-stone
+  mesas from each home island to the middle (so the sides can always meet) and a jittered grid of islands between
+  (14-tile cells in 2-player, 12 in 3-player; about 11 mesas, or 13–16 with three sides; the same for every side; canyons
+  kept narrow by `SKY_GAP`, so the typical Viaduct spans 4 tiles and the route between bases never needs one over 6), then turns the sea into a canyon floor at level 0 and lifts every
   island into a mesa (home islands +3 levels, the rest +4; small ones flattened to one level), so every drop is 3+ levels: no Ramp can
-  reach the floor, only a Ropeway. A thin scatter of boulders and ore lies down there. Viaducts cross between the
-  clifftops; the AI finds one with `aiViaductSpot`. (`T_CHASM`, the old bottomless canyon, is kept for old saves.)
+  reach the floor, only a Ropeway. The outermost rim of every mesa is kept clear of resources (moved up to 3 tiles inland)
+  and crags so a Viaduct can start or land anywhere on it. The floor gets low rises, rock formations, plants and a thin scatter of boulders and ore. Viaducts
+  cross between the clifftops; the AI finds one with `aiViaductSpot` (only spans that bring it closer to its rival),
+  puts an Outpost on each mesa it lands on, and rests its Ammo Plant and Chip Fab while it saves the Alloy for the
+  next span. (`T_CHASM`, the old bottomless canyon, is kept for old saves.)
+- **Shooting across a canyon:** a warbot that can't close in shoots from up to `WARBOT_RANGE_BLOCKED` (2.2) across
+  a building or cliff, and up to `WARBOT_RANGE_GAP` (3.6) from a clifftop across lower ground (`overGap`: a narrow
+  canyon with no rock, water or building in the line), so garrisons facing each other across a Sky islands canyon
+  fight instead of standing off.
 - **Loitering:** a warbot standing still in another player's territory for more than `BATTERY.waitGrace` (15 s) drains
   `BATTERY.warbotWait` a second; once flat it gives up its attack, or leaves its rally flag, to recharge at home.
 - **Raids:** armed warbots holding a rally flag in enemy land with nothing to fight tear up enemy roads (not bridges or
