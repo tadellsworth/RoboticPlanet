@@ -407,6 +407,12 @@ are 512×512 (one image per 4×4 tiles, sharp on the zoomed-in map); all WebP to
 added one piece at a time. See **[ART_GUIDE.md](ART_GUIDE.md)** for specs, the style brief and prompts,
 including the remaining pieces (Ramp, slope and cliff textures, goods icons).
 
+Weapon effects are drawn in code: muzzle flashes, tracers, gun smoke, dust kicks and bullet pockmarks round each
+target (sparks on buildings), the Disruptor's arcs, and blasts with a fireball, flying debris, smoke and a scorch mark.
+A destroyed building shakes, leans and sinks into the ground in a dust cloud, with secondary blasts, and leaves rubble.
+Ground marks fade over a minute or so (at most 350 at once). Each effect can be swapped for a sprite sheet
+(`frames` and `cols` in the manifest; `FX_ART` and `DECAL_ART` in `js/render.js`): see ART_GUIDE Batch 15.
+
 ## Enabling GitHub Pages
 
 1. In the repository: **Settings → Pages → Build and deployment → Source: GitHub Actions**.
@@ -495,4 +501,4 @@ each minute. The smoke test needs Playwright and a running local server.
 See [IDEAS.md](IDEAS.md) for ideas waiting their turn.
 
 - Multiplayer and save export/import
-- Custom art for goods icons, menus and effects
+- Custom art for goods icons, menus and effect sprite sheets (ART_GUIDE Batch 15)

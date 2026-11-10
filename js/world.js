@@ -903,7 +903,7 @@ function newGame(opts) {
       made: {}, madeBots: {},
       aiT: 0, nextAttack: 0,
     })),
-    buildings: [], bots: [], fx: [], msgs: [], rallies: [], missiles: [], loot: [],
+    buildings: [], bots: [], fx: [], decals: [], msgs: [], rallies: [], missiles: [], loot: [],
     dirtyTiles: [], territoryVer: 0, tick: 0, hist: newHistory(settings.players),
   };
   if (opts.autoplay) S.players[0].mult = DIFFICULTY[diff].mult;
@@ -1989,7 +1989,7 @@ function killBot(bot, quiet) {
   bot.dead = true;
   S.byId.delete(bot.id);
   S.players[bot.owner].stats.lost++;
-  addFx('boom', bot.x, bot.y, { r: bot.type === 'warbot' ? 0.7 : 0.45 });
+  blastFx(bot.x, bot.y, bot.type === 'warbot' ? 0.6 : 0.4, { small: true });
   if (!quiet) sfx('boom');
 }
 
@@ -2047,8 +2047,7 @@ function destroyBuilding(b, burn) {
   // A Gate that stood on a road leaves the road behind when it goes.
   if (b.type === 'gate' && b.road) setRoad(b.x, b.y, true);
   markDirty(b.x, b.y);
-  addFx('boom', b.x + 0.5, b.y + 0.5, { r: 1.3 });
-  if (burn) addFx('smoke', b.x + 0.5, b.y + 0.5, { r: 1 });
+  collapseFx(b, burn);
   sfx('boom');
   if (BDEFS[b.type].mil && b.built) computeTerritory();
 }
@@ -2066,6 +2065,82 @@ function addFx(type, x, y, data) {
   S.fx.push(f);
 }
 
+/*
+ * Weapon effects (all cosmetic; see drawEffects and drawDecals, and FX_ART for the art that can
+ * replace each one). The pseudo-random spread comes from hash2, so it doesn't touch the game's RNG.
+ */
+const FX_MAX = 700;    // past this many live effects, the small ones (dust, wisps) are skipped
+const DECAL_MAX = 350; // ground marks kept at once (the oldest go first)
+
+/** A mark left on the ground: 'pock' (bullet holes) or 'scorch' (a burn), fading out over `life` seconds. */
+function addDecal(kind, x, y, r, life) {
+  S.decals = S.decals || [];
+  S.decals.push({ kind, x, y, r, t0: S.time, life, s: Math.floor(hash2(Math.floor(x * 7), Math.floor(y * 7), S.tick) * 997) });
+  if (S.decals.length > DECAL_MAX) S.decals.splice(0, S.decals.length - DECAL_MAX);
+}
+
+/**
+ * A shot from (x, y) at (tx, ty): a muzzle flash and a wisp of gun smoke at the barrel, a tracer, and
+ * where it lands a few rounds peppering the ground round the target (dust kicked up, pockmarks left).
+ * opts.color: the shooter's team; opts.pulse: an energy weapon (a glow, no smoke or tracer; scorch
+ * pocks); opts.structure: hitting a building (sparks off its plating, no marks on the ground).
+ */
+function shotFx(x, y, tx, ty, opts) {
+  const o = opts || {}, a = Math.atan2(ty - y, tx - x), mx = x + Math.cos(a) * 0.32, my = y + Math.sin(a) * 0.32;
+  const busy = S.fx.length > FX_MAX;
+  addFx('muzzle', mx, my, { a, color: o.pulse ? o.color : '#fff1b8', life: 0.1, pulse: !!o.pulse });
+  if (!o.pulse) {
+    if (!busy) addFx('puff', mx, my - 0.05, { r: 0.16, life: 0.9 });
+    addFx('tracer', mx, my, { x2: tx, y2: ty, life: 0.12, color: o.color || '#ffe08a' });
+  }
+  const n = o.pulse ? 1 : 3;
+  for (let k = 0; k < n; k++) {
+    const h1 = hash2(Math.floor(tx * 13) + k, Math.floor(ty * 13), S.tick), h2 = hash2(Math.floor(ty * 11), Math.floor(tx * 17) + k, S.tick + 3);
+    const spread = k === 0 ? 0.12 : 0.45, px = tx + (h1 - 0.5) * 2 * spread, py = ty + (h2 - 0.5) * 2 * spread;
+    if (o.structure) addFx('spark', px, py, { color: '#ffd27a', life: 0.35, hit: true });
+    else {
+      if (!busy) addFx('dust', px, py, { life: 0.55, seed: k + S.tick });
+      if (k > 0 || o.pulse) addDecal(o.pulse ? 'burn' : 'pock', px, py, o.pulse ? 0.14 : 0.1, o.pulse ? 30 : 25);
+    }
+  }
+}
+
+/**
+ * An explosion of radius r at (x, y): a white flash, the fireball, chunks of debris thrown out, a
+ * column of smoke and a scorch mark left on the ground. opts.small: a robot or a mortar shell.
+ */
+function blastFx(x, y, r, opts) {
+  const o = opts || {}, t = -(o.delay || 0); // a delayed blast waits (t < 0) before it shows
+  addFx('flash', x, y, { r: r * 1.3, life: 0.15, t });
+  addFx('boom', x, y, { r, t });
+  addFx('debris', x, y, { r: Math.max(0.6, r), life: 0.9, n: o.small ? 5 : 9, seed: S.tick + Math.floor(x * 31 + y * 17), t });
+  addFx('smoke', x, y, { r: Math.max(0.4, r * 0.6), life: o.small ? 1.6 : 3, t });
+  addDecal('scorch', x, y, Math.max(0.35, r * 0.7), o.small ? 35 : 70);
+}
+
+/**
+ * A building coming down. Destroyed (burn): a fireball and two more blasts as it goes, then it sinks
+ * and crumbles into a cloud of dust. Demolished or lost: the same collapse and dust, without the fire.
+ * Either way it leaves rubble on the ground for a while (and a scorch mark if it burned).
+ */
+function collapseFx(b, burn) {
+  const big = b.type === 'lander' ? 1.6 : 1, x = b.x + 0.5, y = b.y + 0.5;
+  const h = (k) => hash2(b.x * 7 + k, b.y * 13, b.id);
+  if (b.built && !BDEFS[b.type].viaduct && b.type !== 'ropeway') {
+    addFx('collapse', x, y, { btype: b.type, owner: b.owner, life: 1.5, aim: b.aim, s: big, lean: h(1) < 0.5 ? -1 : 1, t: burn ? -0.15 : 0 });
+  }
+  addFx('dustcloud', x, y + 0.25 * big, { r: 0.9 * big, life: 2.2, t: burn ? -0.3 : 0, seed: b.id });
+  if (burn) {
+    blastFx(x, y, 1.1 * big);
+    blastFx(x + (h(2) - 0.5) * 0.8 * big, y + (h(3) - 0.6) * 0.6 * big, 0.6 * big, { small: true, delay: 0.35 });
+    blastFx(x + (h(4) - 0.5) * 0.8 * big, y + (h(5) - 0.4) * 0.6 * big, 0.5 * big, { small: true, delay: 0.7 });
+  }
+  addDecal('rubble', x, y + 0.08, 0.55 * big, 90);
+}
+
+/** An electric arc from (x, y) to (x2, y2), crackling for a moment. */
+function arcFx(x, y, x2, y2, color) { addFx('arc', x, y, { x2, y2, color: color || '#8fd8ff', life: 0.3, seed: S.tick }); }
+
 /* ------------------------------------------------------------------ save / load */
 
 const SAVE_KEY = 'botfall.save.v1'; // the game's first name: kept so saves carry over
@@ -2078,7 +2153,7 @@ const TYPED_FIELDS = {
 function serializeGame() {
   const o = {};
   for (const k in S) {
-    if (k === 'byId' || k === 'fx' || k === 'msgs' || k === 'dirtyTiles' || k === 'bAt' || k === 'zone') continue;
+    if (k === 'byId' || k === 'fx' || k === 'decals' || k === 'msgs' || k === 'dirtyTiles' || k === 'bAt' || k === 'zone') continue;
     o[k] = TYPED_FIELDS[k] ? Array.from(S[k], (v) => (k === 'grow' ? Math.round(v * 100) / 100 : v)) : S[k];
   }
   o.buildings = S.buildings.filter((b) => !b.dead);
@@ -2132,7 +2207,7 @@ function deserializeGame(json) {
   for (const k in TYPED_FIELDS) o[k] = TYPED_FIELDS[k].from(o[k]);
   o.hist = o.hist || newHistory();
   for (const P of o.players) { P.made = P.made || {}; P.madeBots = P.madeBots || {}; P.stats.outposts = P.stats.outposts || 0; P.stats.startBots = P.stats.startBots ?? 18; }
-  o.fx = []; o.msgs = []; o.dirtyTiles = [];
+  o.fx = []; o.decals = []; o.msgs = []; o.dirtyTiles = [];
   o.rallies = o.rallies || [];
   o.loot = o.loot || [];
   o.missiles = o.missiles || [];

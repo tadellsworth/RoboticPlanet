@@ -6,7 +6,9 @@ remaining pieces are listed under [Batch 2](#batch-2-terrain-levels-and-goods-ic
 [Batch 4](#batch-4-fuel-farms-and-oil) and [Batch 5](#batch-5-robot-types-roads-and-ammo). To give every building a realistic 3D
 industrial look, see [Batch 6](#batch-6-realistic-3d-industrial-buildings-a-full-restyle). For Colony wildlife, the Research Lab
 and empty Silos, see [Batch 11](#batch-11-colony-wildlife-the-research-lab-and-empty-silos); for the Ropeway and Road Train,
-[Batch 12](#batch-12-ropeway-and-road-train).
+[Batch 12](#batch-12-ropeway-and-road-train). The new defences are in [Batch 14](#batch-14-bunker-disruptor-tower-and-mortar-pit), and
+weapon effects, explosions and building collapses (muzzle flashes, tracers, smoke, bullet pockmarks, rubble) in
+[Batch 15](#batch-15-weapon-effects-explosions-and-building-collapses).
 
 This guide has three parts:
 
@@ -1213,10 +1215,211 @@ stay in exactly the same spot in all eight, or the tube will wobble as it turns.
 do them for `bunker`, `disruptor` and `mortar` (both teams) and the mortar heads; the overlays glow on their own and
 don't need them.
 
+### Batch 15: Weapon effects, explosions and building collapses
+
+Every weapon now has effects, all drawn in code until art arrives. **The game already looks right without this
+batch**; these sheets replace the code drawings with richer animation. Do them in any order; each one is used as
+soon as it's in the manifest.
+
+**What plays when**
+
+| Event | What you see |
+|---|---|
+| A Warbot, or a Warbot in a Bunker, fires | a muzzle flash at the barrel, a tracer streak to the target, a puff of gun smoke drifting up. Three rounds land: dust kicks up and **bullet pockmarks** pepper the ground round the target (on a building, sparks fly instead) |
+| A Pulse Turret fires | its laser beam, a glow at the barrel in team colour, a puff of dust and a small **burn mark** where it hits (the beam and glow are drawn in code, in the beam's colour) |
+| A Mortar Pit fires | a big muzzle flash straight up and a cloud of smoke; the shell arcs over trailing smoke; where it lands: a white flash, a fireball, chunks of debris thrown out, a smoke column and a **scorch mark** |
+| A Disruptor Tower pulses | an electric **arc** jumps from its orb to every enemy robot it drains |
+| A missile lands | a big blast (flash, fireball, debris, smoke, scorch) |
+| A robot is destroyed | a small blast and a scorch mark |
+| A building is destroyed | it shakes, leans and **sinks into the ground**; a main blast, then two smaller blasts 0.35 s and 0.7 s later; a **dust cloud** billows out from its base; it leaves **rubble** and a scorch mark that fade over about a minute and a half |
+
+The collapse uses each building's own art (sunk, tilted and clipped at ground level), so no "ruined" version of any
+building is needed. The white flash, laser beams and the Pulse Turret's glow stay drawn in code.
+
+**Sprite sheets.** An animated effect is one image holding all its frames in a grid, the same size each, read
+left to right, then row by row. The game plays the frames once over the effect's life (it stretches or squeezes the
+timing to fit), so the **last frame should have faded to almost nothing**. Register it with its frame count and
+columns:
+
+```js
+'fx-explosion': { src: 'effects/fx-explosion.webp', frames: 16, cols: 4 },   // 16 frames, 4 across, 4 down
+'fx-tracer':    { src: 'effects/fx-tracer.png',     frames: 3,  cols: 1 },   // 3 frames stacked
+```
+
+Ground marks (`decal-…`) use the same layout, but each frame is a **variant**: the game picks one at random for each
+mark, so four variants stop the pockmarks from looking stamped. If it's easier to make separate frames
+(`fx-explosion-00.png` … `-15.png`), send those: Claude Code will pack them into a sheet.
+
+**Transparent, not black.** Effects packs are often made on a black background for "additive" glow. These must be on
+a **transparent** background with soft, feathered alpha edges: fire and sparks in bright opaque colours, smoke and
+dust semi-transparent. A black background will show as black boxes in the game.
+
+| Key | What | Frame size | Frames (grid) | Plays over | How it's placed | On screen |
+|---|---|---|---|---|---|---|
+| `fx-muzzle` | Gun muzzle flash (Warbots, Bunker, and pointing up for the Mortar) | 256×128 | 4 (4×1) | 0.1 s | **points right**; the barrel's end is the middle of the left edge; turned to face each shot | 0.55 tiles long (Mortar 0.9) |
+| `fx-tracer` | Bullet streak from the gun to the target | 512×64 | 3 (1×3) | 0.12 s | **points right**: gun at the left edge, target at the right; **stretched** to the shot's length | as long as the shot, ½ tile thick |
+| `fx-impact` | Dust kicked up where a round hits the ground | 128×128 | 8 (4×2) | 0.55 s | the hit point is the centre | ⅔ tile |
+| `fx-spark` | Sparks where a round hits a building | 128×128 | 6 (6×1) | 0.35 s | the hit point is the centre | 1 tile |
+| `fx-smoke` | Smoke: gun smoke, blast smoke columns, missile and shell trails, burning | 256×256 | 16 (4×4) | 0.9 – 3 s | the source sits **⅔ of the way down**, centred; the smoke rises and spreads within the frame | 0.4 – 3 tiles |
+| `fx-explosion` | The fireball of every blast | 256×256 (or 512×512) | 16 (4×4) | 0.6 s | ground zero sits **⅔ of the way down**, centred | 1.2 tiles (a robot), 2.3 (a mortar shell), 3.3 (a building), 6.6 (a missile) |
+| `fx-debris` | Chunks of metal and concrete thrown out by a blast | 256×256 | 12 (4×3) | 0.9 s | the blast point is the centre; chunks fly up and out and fall back round it | 1.4 – 3 tiles |
+| `fx-arc` | The Disruptor's electric arc | 512×128 | 6 (1×6) | 0.3 s | **points right**: the bolt must touch the middle of the left edge (the orb) and of the right edge (the robot); **stretched** to the distance | as long as the arc, ½ tile thick |
+| `fx-dustcloud` | Dust billowing out as a building collapses | 256×256 (or 512×512) | 16 (4×4) | 2.2 s | the building's foot sits **⅔ of the way down**, centred | 2.2 tiles (the Command Base 3.5) |
+| `decal-pock` | Bullet pockmarks in the ground | 64×64 | 4 variants (4×1) | fades over 25 s | centred on the hit | ¼ tile |
+| `decal-burn` | Laser burn on the ground (Pulse Turret) | 64×64 | 4 variants (4×1) | fades over 30 s | centred | ⅓ tile |
+| `decal-scorch` | Blast scorch mark | 256×256 | 4 variants (4×1) | fades over 35 – 70 s | centred | 0.8 – 3.4 tiles |
+| `decal-rubble` | The ruins left where a building stood | 256×256 | 4 variants (2×2) | fades over 90 s | centred on the building's pad | 1.2 tiles (the Command Base 1.9) |
+
+Notes on the table:
+
+- **Directional effects** (`fx-muzzle`, `fx-tracer`, `fx-arc`) are drawn pointing right and the game turns them.
+  Draw them flat-on, as if seen from above, with no shadow.
+- **Stretched effects** (`fx-tracer`, `fx-arc`) are stretched to whatever length the shot is, from 1 to 10 tiles, so
+  keep detail spread evenly along their length (no big blob in the middle) and keep the streak in the middle third of
+  the frame's height.
+- **Ground marks** are painted flat on the ground under everything, seen at the game's 70° camera, so a round crater
+  is a slightly squashed oval (about ¾ as tall as it is wide). The game fades them out itself; draw them at full
+  strength.
+- **Sizes**: the game scales each effect to the size of the blast, so one explosion sheet does a robot and a
+  Command Base. Use 512×512 frames for `fx-explosion` and `fx-dustcloud` if they look soft on big blasts.
+- Export the big sheets as **WebP** to keep the download small (a 4×4 sheet of 256 px frames is 1024×1024).
+
+**Effects brief (paste this first, in a new Claude Design chat)**
+
+```
+I'm making animated visual-effects sprite sheets for Terrafall, a mobile strategy game on a dusty orange-brown
+alien planet, run by robots. The game is seen from a high three-quarter overhead camera, like a detailed
+miniature: realistic, gritty industrial sci-fi, not cartoony. The effects should match: like real film VFX
+(gunfire, dust, fire, black smoke, sparks), simplified into bold, readable shapes because each one is only a few
+dozen pixels wide on a phone.
+
+Every sheet is a grid of equal frames read left to right, then top to bottom, on a TRANSPARENT background (not
+black): fire and sparks in bright, opaque colours, smoke and dust semi-transparent with soft, feathered edges.
+Light comes from the top-left. The animation plays once and its last frame has faded to almost nothing. No text,
+no frame borders, no numbers, no ground or background.
+
+Palette: the fire is white-hot yellow at the core, orange, then deep red at the edges; smoke is dark charcoal
+grey to brown-grey; dust is the colour of the planet's rust-ochre sand (#b8743f to #d9a066); metal debris is
+gunmetal grey with a few hot orange edges.
+```
+
+Then ask for each one:
+
+**`fx-explosion`**
+```
+An explosion sprite sheet: 16 frames of 256x256 in a 4x4 grid (1024x1024 overall). Ground zero is centred
+horizontally, two thirds of the way down each frame. Frame 1: a small white-hot flash. Frames 2-5: a fireball
+bursts up and out, yellow-white core, orange and red edges, flecks of burning debris. Frames 6-10: the fire rolls
+upward into a mushrooming ball, darkening at the edges into thick black smoke. Frames 11-16: the fire dies, leaving
+a rising, thinning cloud of dark smoke that fades to nothing. Fill most of the frame at its biggest, without
+touching the edges.
+```
+
+**`fx-muzzle`**
+```
+A gun muzzle-flash sprite sheet: 4 frames of 256x128 in one row (1024x128). The gun barrel's end is at the middle
+of each frame's left edge and the flash fires to the right, seen from above. Frame 1: a sharp, bright white-yellow
+star-shaped burst with a cone of flame reaching two thirds of the frame. Frame 2: slightly bigger, orange at the
+tips, with two small side flares. Frame 3: breaking up into orange tongues and a puff of grey smoke. Frame 4: a
+faint wisp of smoke, nearly gone.
+```
+
+**`fx-tracer`**
+```
+A bullet-tracer sprite sheet: 3 frames of 512x64 stacked in one column (512x192). Each frame is a thin glowing
+streak running the full width of the frame, through the vertical middle, about 6 pixels thick: hot yellow-white at
+the right end (the bullet's head), fading through orange to transparent at the left. Frame 1: the full streak.
+Frame 2: the tail half gone, the head still bright. Frame 3: only a faint short glint at the right end.
+```
+
+**`fx-impact`**
+```
+A bullet-impact sprite sheet: 8 frames of 128x128 in a 4x2 grid (512x256). A round hitting sandy ground, seen from
+above at a steep angle, centred: a small sharp spray of sand and grit thrown up and outward, a few pebbles flying,
+then a little cloud of rust-ochre dust that spreads, settles and fades. Frame 1 is a bright little puff; the last
+frame is nearly transparent.
+```
+
+**`fx-spark`**
+```
+A sparks sprite sheet: 6 frames of 128x128 in one row (768x128). A bullet striking armoured steel, centred: a
+shower of bright yellow-white sparks bursting outward in thin streaks, with a small white flash at the centre in
+the first frame. The sparks fly further and fall slightly with each frame, turn orange, then go out.
+```
+
+**`fx-smoke`**
+```
+A smoke sprite sheet: 16 frames of 256x256 in a 4x4 grid (1024x1024). The smoke comes from a point centred
+horizontally, two thirds of the way down each frame. Frame 1: a small, dense grey puff. It billows, grows and rises
+toward the top of the frame, drifting a little to the right, turning from dark charcoal to lighter brown-grey and
+more transparent, and breaks up into wisps that are gone by frame 16. Soft and volumetric, lit from the top-left.
+```
+
+**`fx-debris`**
+```
+A debris sprite sheet: 12 frames of 256x256 in a 4x3 grid (1024x768). From the centre of the frame, 8 to 10 jagged
+chunks of broken concrete, twisted gunmetal plate and a few glowing hot fragments are thrown up and out in all
+directions, tumbling, then fall back down and land in a rough ring round the centre, the hot ones cooling from
+orange to grey. Each chunk casts a tiny soft shadow. Nothing leaves the frame. Fade them out over the last 3 frames.
+```
+
+**`fx-arc`**
+```
+An electric-arc sprite sheet: 6 frames of 512x128 stacked in one column (512x768). Each frame is a jagged,
+branching lightning bolt running the full width, from the middle of the left edge to the middle of the right edge,
+ice blue (#8fd8ff) with a white-hot core and a soft blue glow round it, with a few small side forks. Each frame is a
+different random bolt shape (it flickers). Frames 5 and 6 get thinner and dimmer.
+```
+
+**`fx-dustcloud`**
+```
+A building-collapse dust-cloud sprite sheet: 16 frames of 256x256 in a 4x4 grid (1024x1024). The base of a
+collapsing building is centred horizontally, two thirds of the way down. Thick billowing clouds of rust-ochre dust
+and grey concrete powder roll outward along the ground in both directions and churn upward, with a few chunks of
+rubble tumbling in it; at its biggest it fills most of the frame. Then it slowly thins, settles and fades,
+transparent by frame 16.
+```
+
+**`decal-pock`**
+```
+Four small ground-mark variants in one row, each 64x64 (256x64 overall): bullet pockmarks in sandy ground, seen
+from above at a steep three-quarter angle. Each variant is a cluster of 2 to 4 small dark craters with a lighter
+rim of thrown-up sand, in a different arrangement each time. Transparent background, soft edges.
+```
+
+**`decal-burn`**
+```
+Four small ground-mark variants in one row, each 64x64 (256x64 overall): laser burns on sandy ground, seen from
+above at a steep three-quarter angle: a glassy, blackened oval with a faint dark-brown scorched halo and a thin wisp
+of a fading orange edge. Each variant a little different in shape. Transparent background, soft edges.
+```
+
+**`decal-scorch`**
+```
+Four ground-mark variants in one row, each 256x256 (1024x256 overall): a blast scorch mark on sandy ground, seen
+from above at a steep three-quarter angle, so it's an oval about three quarters as tall as wide: a shallow dark
+crater in the middle, charred black ground, radiating streaks of soot and blown sand, fading softly to transparent
+at the edges. Each variant a different irregular shape.
+```
+
+**`decal-rubble`**
+```
+Four ground-mark variants in a 2x2 grid, each 256x256 (512x512 overall): the flattened ruins of a destroyed
+industrial building, seen from the same high three-quarter camera as the buildings: a low heap of broken concrete
+slabs, twisted rebar and steel beams, crushed pipes and a few scorched gunmetal panels with faded hazard stripes,
+grey dust over everything, lit from the top-left. Low, almost flat: no wall stands higher than a robot. Neutral
+colours, no team colour, no glow. Transparent background, the heap filling about 85% of the frame.
+```
+
+**Checking it in the game.** Put the files in `art/effects/`, add the lines to the manifest (with `frames` and
+`cols`), or just send them to Claude Code to wire in. Then start a Versus game and send a few armed Warbots at a
+rival building: you'll see the gunfire, and the blast and collapse when it falls. If an effect plays too fast or too
+slow, tell Claude Code: each effect's length is one number in the code.
+
 ### Not swappable yet (ask Claude Code if you want these)
 
 - Menu background and logo
-- Effects (laser beams, explosions, smoke)
+- Laser beams, the white blast flash and the Pulse Turret's glow (the other effects are in Batch 15)
 - App icon: to change it, replace the PNGs in `icons/` (`icon-192.png`, `icon-512.png`, `icon-1024.png`,
   `apple-touch-icon.png` at 180×180 and `favicon-32.png`), all square and opaque
 - 3D buildings: the set from Claude Design is installed (harvester, quarry, mine, tap, smelter, fab, foundry, depot,

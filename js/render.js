@@ -171,7 +171,7 @@ function loadArt(onChange) {
     const entry = typeof ART_MANIFEST[key] === 'string' ? { src: ART_MANIFEST[key] } : ART_MANIFEST[key];
     const img = new Image();
     img.onload = () => {
-      ART[key] = { img, scale: entry.scale || 0, anchor: entry.anchor || '', shadow: !!entry.shadow, key };
+      ART[key] = { img, scale: entry.scale || 0, anchor: entry.anchor || '', shadow: !!entry.shadow, key, frames: entry.frames || 0, cols: entry.cols || 0 };
       artLoaded++;
       // The third team (green) gets the rival's red art recoloured, made the first time it's asked for.
       if (key.includes('@1')) {
@@ -3489,6 +3489,7 @@ function render(dtReal) {
     }
   }
   drawScorch(ctx, ox, oy, z);
+  drawDecals(ctx, ox, oy, z, inView);
   drawPlans(ctx, ox, oy, z, inView);
   if (typeof UI !== 'undefined') {
     const selB = getE(R.selected);
@@ -4344,11 +4345,192 @@ function drawScorch(ctx, ox, oy, z) {
   }
 }
 
+/*
+ * Effect art (ART_GUIDE Batch 15). Each effect can be drawn from a sprite sheet: an image of `frames`
+ * equal frames in `cols` columns (one row if `cols` is left out), played once over the effect's life.
+ * Directional ones (muzzle flash, tracer, arc) are drawn pointing right and turned to face their way.
+ * Until a sheet is installed the effect is drawn in code below. Ground marks (decals) use a sheet's
+ * frames as variants, one picked per mark.
+ */
+const FX_ART = {
+  muzzle: 'fx-muzzle', tracer: 'fx-tracer', dust: 'fx-impact', spark: 'fx-spark', puff: 'fx-smoke', smoke: 'fx-smoke',
+  boom: 'fx-explosion', debris: 'fx-debris', arc: 'fx-arc', dustcloud: 'fx-dustcloud',
+};
+const DECAL_ART = { pock: 'decal-pock', burn: 'decal-burn', scorch: 'decal-scorch', rubble: 'decal-rubble' };
+
+/** Draw frame `fr` of sprite sheet `art` centred on (x, y), `w` px wide (and `h` tall, else square), turned by `a`. */
+function drawSheetFrame(ctx, art, fr, x, y, w, h, a) {
+  const n = Math.max(1, art.frames || 1), cols = art.cols || n, rows = Math.ceil(n / cols);
+  const fw = art.img.width / cols, fh = art.img.height / rows, i = Math.min(n - 1, Math.max(0, fr));
+  h = h || w * (fh / fw);
+  if (a) { ctx.save(); ctx.translate(x, y); ctx.rotate(a); ctx.drawImage(art.img, (i % cols) * fw, Math.floor(i / cols) * fh, fw, fh, -w / 2, -h / 2, w, h); ctx.restore(); }
+  else ctx.drawImage(art.img, (i % cols) * fw, Math.floor(i / cols) * fh, fw, fh, x - w / 2, y - h / 2, w, h);
+}
+
+/** Bullet pockmarks, burns, scorch marks and rubble on the ground, fading out at the end of their life. */
+function drawDecals(ctx, ox, oy, z, inView) {
+  if (!S.decals || !S.decals.length) return;
+  for (const d of S.decals) {
+    const age = S.time - d.t0;
+    if (age >= d.life || !inView(Math.floor(d.x), Math.floor(d.y), 1)) continue;
+    const x = ox + d.x * z, y = oy + d.y * z, r = d.r * z;
+    ctx.globalAlpha = Math.min(1, (d.life - age) / Math.min(10, d.life * 0.4));
+    const art = ART[DECAL_ART[d.kind]];
+    if (art) { drawSheetFrame(ctx, art, d.s % Math.max(1, art.frames || 1), x, y, r * 2.2, 0, 0); ctx.globalAlpha = 1; continue; }
+    if (d.kind === 'pock' || d.kind === 'burn') {
+      ctx.fillStyle = d.kind === 'burn' ? 'rgba(25,18,14,0.55)' : 'rgba(30,22,16,0.7)';
+      for (let n = 0; n < 4; n++) {
+        const a = (d.s + n * 97) * 0.37, rr = r * (0.2 + ((d.s >> n) % 5) * 0.15);
+        ctx.beginPath(); ctx.arc(x + Math.cos(a) * rr, y + Math.sin(a) * rr * 0.7, Math.max(1, r * (d.kind === 'burn' ? 0.45 : 0.22)), 0, Math.PI * 2); ctx.fill();
+      }
+    } else if (d.kind === 'scorch') {
+      const g = ctx.createRadialGradient(x, y, 0, x, y, r);
+      g.addColorStop(0, 'rgba(14,9,6,0.75)'); g.addColorStop(0.65, 'rgba(30,20,12,0.45)'); g.addColorStop(1, 'rgba(30,20,12,0)');
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      for (let n = 0; n <= 10; n++) { const a = (n / 10) * Math.PI * 2, w = 0.75 + ((d.s * (n + 3)) % 7) / 20; ctx.lineTo(x + Math.cos(a) * r * w, y + Math.sin(a) * r * w * 0.75); }
+      ctx.fill();
+    } else if (d.kind === 'rubble') {
+      // A low heap of broken concrete and twisted steel.
+      ctx.fillStyle = 'rgba(40,32,26,0.45)';
+      ctx.beginPath(); ctx.ellipse(x, y, r * 1.05, r * 0.6, 0, 0, Math.PI * 2); ctx.fill();
+      for (let n = 0; n < 9; n++) {
+        const a = (d.s + n * 61) * 0.71, rr = r * (0.15 + ((d.s + n * 13) % 9) / 11), cs = r * (0.16 + ((d.s + n) % 4) * 0.05);
+        const px = x + Math.cos(a) * rr, py = y + Math.sin(a) * rr * 0.55;
+        ctx.fillStyle = n % 3 === 0 ? '#5d5e60' : n % 3 === 1 ? '#8a847a' : '#6b5646';
+        ctx.save(); ctx.translate(px, py); ctx.rotate(a);
+        ctx.beginPath(); ctx.moveTo(-cs, -cs * 0.4); ctx.lineTo(cs * 0.6, -cs * 0.7); ctx.lineTo(cs, cs * 0.3); ctx.lineTo(-cs * 0.4, cs * 0.6); ctx.closePath(); ctx.fill();
+        ctx.restore();
+      }
+      ctx.strokeStyle = 'rgba(40,40,44,0.8)'; ctx.lineWidth = Math.max(1, z * 0.025);
+      for (let n = 0; n < 3; n++) { const a = (d.s + n * 41) * 0.9; ctx.beginPath(); ctx.moveTo(x + Math.cos(a) * r * 0.2, y - r * 0.1); ctx.lineTo(x + Math.cos(a) * r * 0.7, y - r * (0.25 + n * 0.08)); ctx.stroke(); }
+    }
+    ctx.globalAlpha = 1;
+  }
+}
+
 function drawEffects(ctx, ox, oy, z) {
   for (const f of S.fx) {
+    if (f.t < 0) continue; // a delayed effect (a building's second blast) not started yet
     const k = f.t / f.life;
     const x = ox + f.x * z, y = oy + f.y * z;
+    // Effect art, if a sprite sheet for this effect is installed.
+    const sheet = FX_ART[f.type] && ART[FX_ART[f.type]];
+    // Pulse-laser glows and coloured sparks (scuffles, creatures) stay drawn in code, in their own colour.
+    if (sheet && sheet.frames && !f.pulse && (f.type !== 'spark' || f.hit)) {
+      const fr = Math.floor(k * sheet.frames);
+      ctx.globalAlpha = 1;
+      if (f.type === 'tracer' || f.type === 'arc') {
+        const x2 = ox + f.x2 * z, y2 = oy + f.y2 * z, len = Math.hypot(x2 - x, y2 - y), a = Math.atan2(y2 - y, x2 - x);
+        drawSheetFrame(ctx, sheet, fr, (x + x2) / 2, (y + y2) / 2, len, z * 0.5, a);
+      } else if (f.type === 'muzzle') {
+        // The flash's base (the barrel's end) is the left edge of the frame, so it bursts out forward.
+        const w = z * (f.big ? 0.9 : 0.55), a = f.a || 0;
+        drawSheetFrame(ctx, sheet, fr, x + Math.cos(a) * w * 0.5, y + Math.sin(a) * w * 0.5, w, 0, a);
+      }
+      else drawSheetFrame(ctx, sheet, fr, x, y - (f.type === 'boom' || f.type === 'smoke' || f.type === 'dustcloud' ? (f.r || 0.6) * z * 0.4 : 0), z * (f.r || 0.4) * (f.type === 'boom' ? 3 : f.type === 'dust' ? 1.6 : 2.4), 0, 0);
+      continue;
+    }
     switch (f.type) {
+      case 'flash': {
+        const g = ctx.createRadialGradient(x, y, 0, x, y, (f.r || 1) * z);
+        g.addColorStop(0, 'rgba(255,255,240,0.95)'); g.addColorStop(0.4, 'rgba(255,220,150,0.5)'); g.addColorStop(1, 'rgba(255,200,120,0)');
+        ctx.globalAlpha = 1 - k; ctx.fillStyle = g;
+        ctx.beginPath(); ctx.arc(x, y, (f.r || 1) * z, 0, Math.PI * 2); ctx.fill();
+        break;
+      }
+      case 'muzzle': {
+        // A flash at the barrel: a bright cone along the shot with a white-hot core (an energy weapon glows instead).
+        ctx.globalAlpha = 1 - k;
+        const L = z * (f.big ? 0.5 : 0.28), W = L * 0.45;
+        ctx.save(); ctx.translate(x, y); ctx.rotate(f.a || 0);
+        ctx.fillStyle = f.pulse ? f.color : '#ffcf6b';
+        ctx.beginPath(); ctx.moveTo(-L * 0.15, 0); ctx.lineTo(L * 0.3, -W); ctx.lineTo(L, 0); ctx.lineTo(L * 0.3, W); ctx.closePath(); ctx.fill();
+        ctx.fillStyle = '#ffffff';
+        ctx.beginPath(); ctx.arc(L * 0.15, 0, W * 0.45, 0, Math.PI * 2); ctx.fill();
+        ctx.restore();
+        break;
+      }
+      case 'tracer': {
+        // A streak flying from the barrel to where the round lands.
+        const x2 = ox + f.x2 * z, y2 = oy + f.y2 * z, d = Math.hypot(x2 - x, y2 - y) || 1, tail = Math.min(1, (z * 0.5) / d);
+        const h1 = Math.min(1, k * 1.15), h0 = Math.max(0, h1 - tail);
+        ctx.globalAlpha = 0.95;
+        ctx.strokeStyle = f.color || '#ffe08a'; ctx.lineWidth = Math.max(1.5, z * 0.05); ctx.lineCap = 'round';
+        ctx.beginPath(); ctx.moveTo(x + (x2 - x) * h0, y + (y2 - y) * h0); ctx.lineTo(x + (x2 - x) * h1, y + (y2 - y) * h1); ctx.stroke();
+        ctx.strokeStyle = '#fffbe8'; ctx.lineWidth = Math.max(1, z * 0.02); ctx.stroke();
+        break;
+      }
+      case 'dust': {
+        // Rounds peppering the ground: a little kick of dirt and grit.
+        ctx.fillStyle = '#b8936a';
+        for (let n = 0; n < 4; n++) {
+          const a = -Math.PI / 2 + (n - 1.5) * 0.55 + ((f.seed || 0) % 3) * 0.1, d = k * z * (0.18 + n * 0.04);
+          ctx.globalAlpha = 0.75 * (1 - k);
+          ctx.beginPath(); ctx.arc(x + Math.cos(a) * d, y + Math.sin(a) * d * 1.3 + k * k * z * 0.12, Math.max(1, z * (0.035 + n * 0.008) * (1 - k * 0.5)), 0, Math.PI * 2); ctx.fill();
+        }
+        ctx.globalAlpha = 0.35 * (1 - k); ctx.fillStyle = '#c9a77d';
+        ctx.beginPath(); ctx.arc(x, y - k * z * 0.1, z * (0.06 + k * 0.12), 0, Math.PI * 2); ctx.fill();
+        break;
+      }
+      case 'puff': {
+        // A wisp of gun smoke drifting up and spreading.
+        ctx.globalAlpha = 0.45 * (1 - k); ctx.fillStyle = '#8c8680';
+        ctx.beginPath(); ctx.arc(x + k * z * 0.08, y - k * z * 0.35, z * (f.r || 0.15) * (1 + k * 1.5), 0, Math.PI * 2); ctx.fill();
+        break;
+      }
+      case 'debris': {
+        // Chunks thrown out in arcs, tumbling, falling back to the ground.
+        const n = f.n || 6, rr = (f.r || 0.8) * z;
+        ctx.globalAlpha = k > 0.8 ? (1 - k) / 0.2 : 1;
+        for (let i = 0; i < n; i++) {
+          const a = ((f.seed || 0) * 0.13 + i * (Math.PI * 2 / n) + (i % 2) * 0.3), sp = 0.6 + ((i * 7 + (f.seed || 0)) % 5) / 8;
+          const px = x + Math.cos(a) * rr * sp * k, py = y + Math.sin(a) * rr * sp * k * 0.6 - Math.sin(k * Math.PI) * rr * 0.7 * sp;
+          const cs = Math.max(1.5, z * (0.05 + (i % 3) * 0.02));
+          ctx.fillStyle = i % 3 === 0 ? '#3b3d42' : i % 3 === 1 ? '#7a6d5e' : '#a8562e';
+          ctx.save(); ctx.translate(px, py); ctx.rotate(k * 9 + i);
+          ctx.fillRect(-cs / 2, -cs / 2, cs, cs * 0.7);
+          ctx.restore();
+        }
+        break;
+      }
+      case 'arc': {
+        // An electric arc: a jagged bolt that re-forms every few frames.
+        const x2 = ox + f.x2 * z, y2 = oy + f.y2 * z, segs = 7, jag = z * 0.18, sd = (f.seed || 0) + Math.floor(f.t * 30);
+        const pts = [];
+        for (let i = 0; i <= segs; i++) {
+          const t = i / segs, off = i === 0 || i === segs ? 0 : (hash2(sd, i, 5) - 0.5) * 2 * jag;
+          const nx = -(y2 - y), ny = x2 - x, nl = Math.hypot(nx, ny) || 1;
+          pts.push([x + (x2 - x) * t + (nx / nl) * off, y + (y2 - y) * t + (ny / nl) * off]);
+        }
+        ctx.globalAlpha = 0.5 * (1 - k); ctx.strokeStyle = f.color || '#8fd8ff'; ctx.lineWidth = Math.max(3, z * 0.12); ctx.lineJoin = 'round';
+        ctx.beginPath(); pts.forEach(([px, py], i) => (i ? ctx.lineTo(px, py) : ctx.moveTo(px, py))); ctx.stroke();
+        ctx.globalAlpha = 1 - k; ctx.strokeStyle = '#f2fbff'; ctx.lineWidth = Math.max(1, z * 0.035); ctx.stroke();
+        break;
+      }
+      case 'dustcloud': {
+        // Dust billowing out from a building coming down.
+        const rr = (f.r || 1) * z;
+        for (let n = 0; n < 7; n++) {
+          const a = n * 0.9 + (f.seed || 0) * 0.17, d = rr * (0.35 + 0.65 * Math.min(1, k * 1.6)) * (0.6 + (n % 3) * 0.2);
+          ctx.globalAlpha = 0.5 * (1 - k) * (n % 2 ? 0.8 : 1);
+          ctx.fillStyle = n % 2 ? '#a48a6c' : '#8f7a62';
+          ctx.beginPath(); ctx.arc(x + Math.cos(a) * d, y + Math.sin(a) * d * 0.45 - k * rr * 0.25, rr * (0.28 + k * 0.35), 0, Math.PI * 2); ctx.fill();
+        }
+        break;
+      }
+      case 'collapse': {
+        // The building sinking into the ground as it breaks up: shaking, leaning over, then gone.
+        const s = f.s || 1, ground = y + z * 0.5 * s, ease = k * k, lean = (f.lean || 1) * 0.16 * ease;
+        const shake = Math.sin(f.t * 55) * z * 0.035 * (1 - k);
+        ctx.save();
+        ctx.beginPath(); ctx.rect(x - z * 3, y - z * 4, z * 6, ground - (y - z * 4)); ctx.clip();
+        ctx.globalAlpha = k > 0.75 ? Math.max(0, (1 - k) / 0.25) : 1;
+        ctx.translate(x + shake, ground); ctx.rotate(lean); ctx.translate(-x, -ground + ease * z * 1.1 * s);
+        drawBuilding(ctx, f.btype, x, y, z, f.owner, { built: true, garrison: [], aim: f.aim !== undefined ? f.aim : -Math.PI / 4 });
+        ctx.restore();
+        break;
+      }
       case 'nuke': {
         // The detonation: 24 frames from a 6×4 sheet at 12 fps, ground zero at [0.5, 0.7] of each
         // frame, drawn so the shockwave (0.31 of the frame) reaches the blast radius.

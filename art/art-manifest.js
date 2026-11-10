@@ -48,6 +48,10 @@
  *   Markers:   missile (in flight, facing right; 128x128)  nuclear-missile  rally (your rally flag; 128x128)
  *              oneway (arrow painted on a one-way path, pointing right; 64x64)
  *   Effects:   nuke-blast (a 6×4 sprite sheet, 24 frames)  nuke-scorch (the scorched crater)
+ *              Weapon effects (ART_GUIDE Batch 15), sprite sheets given with frames and cols, e.g.
+ *              'fx-explosion': { src: 'effects/fx-explosion.webp', frames: 16, cols: 4 }:
+ *              fx-muzzle fx-tracer fx-impact fx-spark fx-smoke fx-explosion fx-debris fx-arc fx-dustcloud,
+ *              and ground marks (each frame a variant) decal-pock decal-burn decal-scorch decal-rubble
  *
  * Images should be square PNGs with transparent backgrounds, viewed from above.
  * 256x256 is plenty.

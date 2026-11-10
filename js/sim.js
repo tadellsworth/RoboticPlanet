@@ -13,6 +13,7 @@ function simStep(dt) {
   if (S.tick % 30 === 7) settlePlans();
   if (S.tick % 30 === 15) for (let p = 0; p < S.players.length; p++) landerSalvage(p, 30 * dt);
   if (S.tick % 30 === 22) updateEvac();
+  if (S.tick % 60 === 33 && S.decals && S.decals.length) S.decals = S.decals.filter((d) => S.time - d.t0 < d.life); // old ground marks fade away
   // Each player's bots are given work every 8 ticks, the players spread over those ticks.
   for (let p = 0, n = S.players.length; p < n; p++) if (S.tick % 8 === Math.floor((p * 8) / n) && !S.players[p].out && !(S.wildlife && p === WILD_OWNER)) dispatch(p);
   for (let k = 0; k < S.buildings.length; k++) {
@@ -415,7 +416,7 @@ function breachHit(u, b) {
   if (u.cd > 0 || !useAmmo(u)) return;
   u.cd = 1.0;
   u.fought = 1;
-  addFx('spark', b.x + 0.5 + (hash2(u.id, S.tick, 3) - 0.5) * 0.6, b.y + 0.5 + (hash2(u.id, S.tick, 5) - 0.5) * 0.6, { color: PLAYER_COLORS[u.owner] });
+  shotFx(u.x, u.y, b.x + 0.5 + (hash2(u.id, S.tick, 3) - 0.5) * 0.6, b.y + 0.5 + (hash2(u.id, S.tick, 5) - 0.5) * 0.6, { color: PLAYER_COLORS[u.owner], structure: true });
   if (u.owner === 0 || b.owner === 0) sfx('hit');
   hitBuilding(b, (u.bat ?? 100) < BATTERY.critical ? 0.5 : 1, u.owner);
 }
@@ -2267,6 +2268,7 @@ function updateTurret(b, def, dt) {
   b.shots--;
   b.status = 'Firing';
   addFx('laser', cx, cy, { x2: target.x, y2: target.y, color: PLAYER_COLORS[b.owner] });
+  shotFx(cx, cy - 0.2, target.x, target.y, { color: PLAYER_COLORS[b.owner], pulse: true });
   sfx('laser');
   damageBot(target, 4);
   b.cd = 1.1;
@@ -2290,6 +2292,7 @@ function bunkerFire(b, def, dt) {
     if (!u || u.dead || target.dead || !useAmmo(u)) continue;
     const power = (u.bat ?? 100) < BATTERY.critical ? 0.5 : 1;
     damageBot(target, Math.max(1, Math.round((2 + (hash2(u.id, S.tick, 7) < 0.5 ? 1 : 0)) * power)));
+    shotFx(cx + (fired ? 0.18 : -0.18), cy + 0.1, target.x, target.y, { color: PLAYER_COLORS[b.owner] }); // one gun each side of the slit
     fired++;
   }
   if (!fired) { b.status = 'Out of Ammo: haulers bring it from storage'; return; }
@@ -2297,7 +2300,6 @@ function bunkerFire(b, def, dt) {
   b.flash = S.time;
   b.working = true;
   b.status = `Firing (${fired} warbot${fired > 1 ? 's' : ''})`;
-  addFx('laser', cx, cy, { x2: target.x, y2: target.y, color: PLAYER_COLORS[b.owner] });
   if (b.owner === 0 || target.owner === 0) sfx('hit');
 }
 
@@ -2322,6 +2324,7 @@ function updateDisruptor(b, def, dt) {
   b.status = `Draining ${hit.length} enemy robot${hit.length > 1 ? 's' : ''}`;
   for (const u of hit) {
     u.bat = Math.max(0, (u.bat ?? 100) - d.drain);
+    arcFx(cx, cy - 0.45, u.x, u.y);
     addFx('spark', u.x, u.y, { color: '#8fd8ff' });
   }
   addFx('ring', cx, cy, { color: '#8fd8ff', r: def.range / 1.3, life: 0.6 }); // grows out to its range
@@ -2361,14 +2364,15 @@ function updateMortar(b, def, dt) {
   b.working = true;
   b.status = 'Firing';
   S.missiles.push({ owner: b.owner, from: b.id, shell: true, t: 0, dur: m.flight, x0: cx, y0: cy, x1: best.x, y1: best.y });
-  addFx('smoke', cx + Math.cos(b.aim) * 0.3, cy + Math.sin(b.aim) * 0.3 - 0.2, { r: 0.4, life: 0.7 });
+  addFx('muzzle', cx + Math.cos(b.aim) * 0.2, cy + Math.sin(b.aim) * 0.2 - 0.35, { a: -Math.PI / 2, color: '#ffd27a', life: 0.12, big: true });
+  addFx('smoke', cx + Math.cos(b.aim) * 0.3, cy + Math.sin(b.aim) * 0.3 - 0.2, { r: 0.4, life: 0.9 });
   sfx('thump');
 }
 
 /** A mortar shell lands: it hurts every rival robot in the open within the splash, most at the middle. */
 function shellImpact(m) {
   const md = BDEFS.mortar.mortar;
-  addFx('boom', m.x1, m.y1, { r: md.splash * 0.45 });
+  blastFx(m.x1, m.y1, md.splash * 0.5, { small: true });
   sfx('boom');
   for (const u of S.bots) {
     if (u.dead || u.inside || u.owner === m.owner) continue;
@@ -2760,9 +2764,11 @@ function warbotAct(u, dt) {
     if (inReach && u.cd <= 0) {
       u.cd = 0.9;
       u.face = Math.atan2(foe.y - u.y, foe.x - u.x);
-      addFx('spark', (u.x + foe.x) / 2, (u.y + foe.y) / 2, { color: PLAYER_COLORS[u.owner] });
       if (u.owner === 0 || foe.owner === 0) sfx('hit');
-      if (useAmmo(u)) damageBot(foe, Math.max(1, Math.round((2 + (hash2(u.id, S.tick, 7) < 0.5 ? 1 : 0)) * power)));
+      if (useAmmo(u)) {
+        damageBot(foe, Math.max(1, Math.round((2 + (hash2(u.id, S.tick, 7) < 0.5 ? 1 : 0)) * power)));
+        shotFx(u.x, u.y, foe.x, foe.y, { color: PLAYER_COLORS[u.owner] });
+      } else addFx('spark', (u.x + foe.x) / 2, (u.y + foe.y) / 2, { color: PLAYER_COLORS[u.owner] }); // a scuffle, no rounds
       u.fought = 1;
     }
     if (!pathing) u.path = null;
@@ -2864,7 +2870,7 @@ function strikeBuilding(u, b, dt, power) {
     if (u.cd <= 0 && useAmmo(u)) {
       u.cd = 1.0;
       u.fought = 1;
-      addFx('spark', b.x + 0.5 + (hash2(u.id, S.tick, 3) - 0.5) * 0.6, b.y + 0.5 + (hash2(u.id, S.tick, 5) - 0.5) * 0.6, { color: PLAYER_COLORS[u.owner] });
+      shotFx(u.x, u.y, b.x + 0.5 + (hash2(u.id, S.tick, 3) - 0.5) * 0.6, b.y + 0.5 + (hash2(u.id, S.tick, 5) - 0.5) * 0.6, { color: PLAYER_COLORS[u.owner], structure: true });
       hitBuilding(b, power, u.owner);
     }
     return true;
@@ -3337,7 +3343,11 @@ function fireMissileAt(silo, i, j) {
 function updateMissiles(dt) {
   for (const m of S.missiles) {
     m.t += dt;
-    if (m.shell) { if (m.t >= m.dur) shellImpact(m); continue; }
+    if (m.shell) {
+      if (S.tick % 4 === 0 && m.t < m.dur) { const k = m.t / m.dur; addFx('puff', lerp(m.x0, m.x1, k), lerp(m.y0, m.y1, k) - Math.sin(k * Math.PI) * 2.2, { r: 0.1, life: 0.6 }); }
+      if (m.t >= m.dur) shellImpact(m);
+      continue;
+    }
     if (m.nuke) {
       if (S.tick % 3 === 0) {
         const k = Math.min(1, m.t / m.dur);
@@ -3368,8 +3378,7 @@ function missileFloor(b) { return Math.max(1, Math.round(BDEFS[b.type].armor * M
 
 function missileImpact(m) {
   const md = BDEFS.silo.missile;
-  addFx('boom', m.x1, m.y1, { r: 2.2 });
-  addFx('smoke', m.x1, m.y1, { r: 1.2 });
+  blastFx(m.x1, m.y1, 2.2);
   sfx('boom');
   const b = getE(m.target);
   if (b && !b.dead && b.owner !== m.owner) {
