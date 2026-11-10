@@ -75,81 +75,128 @@ function driveSet(type) {
   return out;
 }
 
+/** Team frames '<type>@<team>-f0' … for an animated vehicle (WebP, in bots/). */
+function frames(type, n) {
+  const out = {};
+  for (const team of [0, 1]) for (let f = 0; f < n; f++) out[`${type}@${team}-f${f}`] = `bots/${type}@${team}-f${f}.webp`;
+  return out;
+}
+
+/** Several images in one folder, keyed by their names. */
+function files(dir, keys) {
+  const out = {};
+  for (const k of keys) out[k] = `${dir}/${k}.webp`;
+  return out;
+}
+
 const ART_MANIFEST = {
   // Priority 1: what you see constantly
   // The Command Base (internal key "lander"): a 3D fortified base on the shared pad, drawn bigger than the rest.
-  'lander@0': { src: 'buildings/lander@0.png', scale: 2.4, anchor: [0.5, 0.615] },
-  'lander@1': { src: 'buildings/lander@1.png', scale: 2.4, anchor: [0.5, 0.615] },
+  'lander@0': { src: 'buildings/lander@0.webp', scale: 2.4, anchor: [0.5, 0.615] },
+  'lander@1': { src: 'buildings/lander@1.webp', scale: 2.4, anchor: [0.5, 0.615] },
   // Robots: four driving frames per team (bots/<robot>@<team>-f0 … f3, played by distance driven)
   // and brake / boost overlays; no shadow in the images, so `shadow` has the game draw it.
   // (The older single images, bots/<robot>@<team>.png, are no longer used.)
   ...driveSet('worker'), ...driveSet('warbot'), ...driveSet('hauler'), ...driveSet('agribot'), ...driveSet('paver'),
   ground: 'tiles/ground.webp',
-  stalk: 'resources/stalk.png',
-  boulder: 'resources/boulder.png',
-  ore: 'resources/ore.png',
-  crystal: 'resources/crystal.png',
+  stalk: 'resources/stalk.webp',
+  boulder: 'resources/boulder.webp',
+  ore: 'resources/ore.webp',
+  crystal: 'resources/crystal.webp',
 
   // Priority 2: production buildings
-  harvester: B3D('buildings/harvester.png'),
-  quarry: B3D('buildings/quarry.png'),
-  mine: B3D('buildings/mine.png'),
-  tap: B3D('buildings/tap.png'),
-  smelter: B3D('buildings/smelter.png'),
-  fab: B3D('buildings/fab.png'),
-  foundry: B3D('buildings/foundry.png'),
+  harvester: B3D('buildings/harvester.webp'),
+  quarry: B3D('buildings/quarry.webp'),
+  mine: B3D('buildings/mine.webp'),
+  tap: B3D('buildings/tap.webp'),
+  smelter: B3D('buildings/smelter.webp'),
+  fab: B3D('buildings/fab.webp'),
+  foundry: B3D('buildings/foundry.webp'),
 
   // Priority 3: the rest
-  'outpost@0': B3D('buildings/outpost@0.png'),
-  'outpost@1': B3D('buildings/outpost@1.png'),
-  'turret@0': 'buildings/turret@0.png',
-  'turret@1': 'buildings/turret@1.png',
-  depot: B3D('buildings/depot.png'),
-  grower: B3D('buildings/grower.png'),
-  site: B3D('buildings/site.png'),
+  'outpost@0': B3D('buildings/outpost@0.webp'),
+  'outpost@1': B3D('buildings/outpost@1.webp'),
+  'turret@0': 'buildings/turret@0.webp',
+  'turret@1': 'buildings/turret@1.webp',
+  depot: B3D('buildings/depot.webp'),
+  grower: B3D('buildings/grower.webp'),
+  site: B3D('buildings/site.webp'),
   water: 'tiles/water.webp',
   rock: 'tiles/rock.webp',
 
   // The second 3D set: the rest of the economy buildings, plus the Ramp (build menu and preview).
-  charger: B3D('buildings/charger.png'),
-  farm: B3D('buildings/farm.png'),
-  pump: B3D('buildings/pump.png'),
-  refinery: B3D('buildings/refinery.png'),
-  kiln: B3D('buildings/kiln.png'),
-  tarworks: B3D('buildings/tarworks.png'),
-  roadworks: B3D('buildings/roadworks.png'),
-  ramp: B3D('buildings/ramp.png'),
-  repair: B3D('buildings/repair-bay.png'),
+  charger: B3D('buildings/charger.webp'),
+  farm: B3D('buildings/farm.webp'),
+  pump: B3D('buildings/pump.webp'),
+  refinery: B3D('buildings/refinery.webp'),
+  kiln: B3D('buildings/kiln.webp'),
+  tarworks: B3D('buildings/tarworks.webp'),
+  roadworks: B3D('buildings/roadworks.webp'),
+  ramp: B3D('buildings/ramp.webp'),
+  repair: B3D('buildings/repair-bay.webp'),
 
   // Nuclear race: the Reactor and Nuclear Silo (team versions), the nuclear missile in flight (nose
   // right), the detonation (a 6×4 sheet of 24 frames, played once at 12 fps, ground zero at [0.5, 0.7])
   // and the scorched crater it leaves.
-  reactor: B3D('buildings/nuclear-reactor.png'),
-  'nukesilo@0': B3D('buildings/nuclear-silo@0.png'),
-  'nukesilo@1': B3D('buildings/nuclear-silo@1.png'),
+  reactor: B3D('buildings/nuclear-reactor.webp'),
+  'nukesilo@0': B3D('buildings/nuclear-silo@0.webp'),
+  'nukesilo@1': B3D('buildings/nuclear-silo@1.webp'),
   // The same Silos with no missile in them: drawn until one is armed and ready to fire.
   'nukesilo-empty@0': B3D('buildings/nuclear-silo-empty@0.webp'),
   'nukesilo-empty@1': B3D('buildings/nuclear-silo-empty@1.webp'),
-  'nuclear-missile': 'markers/nuclear-missile.png',
+  'nuclear-missile': 'markers/nuclear-missile.webp',
   'nuke-blast': 'effects/nuke-blast-sheet.webp',
-  'nuke-scorch': 'effects/nuke-scorch.png',
+  'nuke-scorch': 'effects/nuke-scorch.webp',
 
   // Freight Truck: the same pattern, drawn bigger.
   ...driveSet('truck'),
 
   // Military buildings (Versus), with team versions: @0 yours (cyan lights), @1 the rival's (red).
-  'armory@0': B3D('buildings/armory@0.png'),
-  'armory@1': B3D('buildings/armory@1.png'),
-  'munitions@0': B3D('buildings/munitions@0.png'),
-  'munitions@1': B3D('buildings/munitions@1.png'),
-  'silo@0': B3D('buildings/silo@0.png'),
-  'silo@1': B3D('buildings/silo@1.png'),
+  'armory@0': B3D('buildings/armory@0.webp'),
+  'armory@1': B3D('buildings/armory@1.webp'),
+  'munitions@0': B3D('buildings/munitions@0.webp'),
+  'munitions@1': B3D('buildings/munitions@1.webp'),
+  'silo@0': B3D('buildings/silo@0.webp'),
+  'silo@1': B3D('buildings/silo@1.webp'),
   'silo-empty@0': B3D('buildings/silo-empty@0.webp'),
   'silo-empty@1': B3D('buildings/silo-empty@1.webp'),
 
   // Biomes: plants for the Red desert, Jungle and Polar worlds, and the Jungle and Polar terrain
   // (512x512 seamless textures, one image per 4x4 tiles; cliffs 128x48). The desert tiles above are 512 too.
   ...biomeSet('desert'), ...biomeSet('jungle'), ...biomeSet('polar'),
+
+  // Batches 11–13 (Claude Design): the Lab, creature nests, Ropeway and Rail Station, on the shared pad.
+  lab: B3D('buildings/lab.webp'),
+  'nest-1': B3D('buildings/nest-1.webp'), 'nest-2': B3D('buildings/nest-2.webp'), 'nest-3': B3D('buildings/nest-3.webp'),
+  // The Ropeway's pad is ~1.1 tiles (scale 1.47); its bull wheel, where the cable leaves, is at (0.5, 0.10).
+  'ropeway@0': { src: 'buildings/ropeway@0.webp', scale: 1.47, anchor: [0.5, 0.615] },
+  'ropeway@1': { src: 'buildings/ropeway@1.webp', scale: 1.47, anchor: [0.5, 0.615] },
+  // The Rail Station's pad is ~1.2 tiles (scale 1.6).
+  'station@0': { src: 'buildings/station@0.webp', scale: 1.6, anchor: [0.5, 0.615] },
+  'station@1': { src: 'buildings/station@1.webp', scale: 1.6, anchor: [0.5, 0.615] },
+  // A gondola hangs from the cable by its grip at (0.5, 0.08); the trader ship hovers (the game draws its shadow).
+  'gondola@0': 'bots/gondola@0.webp', 'gondola@1': 'bots/gondola@1.webp',
+  'trader-ship': 'bots/trader-ship.webp',
+  // Vehicles, straight down and facing right (no shadows in the art): see the draw* functions for how
+  // each is put together. Road Train: tractor frames + trailers (kingpin hitching, bed x 53–184, y 92–164).
+  ...frames('roadtrain', 4), 'roadtrain-brake': 'bots/roadtrain-brake.webp',
+  'roadtrain-trailer@0': 'bots/roadtrain-trailer@0.webp', 'roadtrain-trailer@1': 'bots/roadtrain-trailer@1.webp',
+  // Freight Train: locomotive frames and overlays, flat cars and hoppers (couplers at x 26 and 230 of 256).
+  ...frames('freight-loco', 4),
+  'freight-loco-lights': 'bots/freight-loco-lights.webp', 'freight-loco-brake': 'bots/freight-loco-brake.webp', 'freight-loco-exhaust': 'bots/freight-loco-exhaust.webp',
+  'freight-wagon-flat@0': 'bots/freight-wagon-flat@0.webp', 'freight-wagon-flat@1': 'bots/freight-wagon-flat@1.webp',
+  'freight-wagon-hopper@0': 'bots/freight-wagon-hopper@0.webp', 'freight-wagon-hopper@1': 'bots/freight-wagon-hopper@1.webp',
+  // Crawler: 8 tread frames, the 10-frame deploy sequence, the deployed base, and its overlays (dish pivot (180, 256) of 512).
+  ...frames('crawler', 8),
+  ...(() => { const o = {}; for (const t of [0, 1]) { for (let d = 0; d < 10; d++) o[`crawler-deploy@${t}-d${d}`] = `bots/crawler-deploy@${t}-d${d}.webp`; o[`crawlerbase@${t}`] = `bots/crawlerbase@${t}.webp`; } return o; })(),
+  'crawler-dish': 'bots/crawler-dish.webp', 'crawler-lights': 'bots/crawler-lights.webp', 'crawler-dust': 'bots/crawler-dust.webp',
+  // Creatures: four walking frames each (one version: wildlife has no team).
+  ...(() => { const o = {}; for (const c of ['scuttler', 'brute']) for (let f = 0; f < 4; f++) o[`${c}-f${f}`] = `bots/${c}-f${f}.webp`; return o; })(),
+  // Tiles (128x128, straight down): railway track pieces, the bridge kit (water, sky, rail; piers and
+  // towers 128x256, the suspension cable 512x128) and the Sky islands canyon set.
+  ...files('rail', ['rail-straight', 'rail-curve', 'rail-tee', 'rail-cross', 'rail-end', 'rail-level-crossing', 'rail-barrier-up', 'rail-barrier-down', 'rail-lights-on']),
+  ...files('bridges', ['bridge', 'skybridge', 'railbridge'].flatMap((k) => ['ew', 'ns', 'end-w', 'end-e', 'end-n', 'end-s', 'ramp-w', 'ramp-e', 'ramp-n', 'ramp-s', 'pier'].map((p) => `${k}-${p}`)).concat(['skybridge-tower', 'skybridge-tower-lamp', 'skybridge-cable'])),
+  ...files('canyon', ['', '-jungle', '-polar'].flatMap((b) => ['chasm', 'chasm-wall', 'chasm-wall-2', 'chasm-lip-n', 'chasm-lip-w', 'chasm-lip-e'].map((k) => k + b))),
 
   // Still to make (placeholders are drawn until these exist):
   //   buildings: a 3D turret (base + head frames)
