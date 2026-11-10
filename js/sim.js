@@ -10,6 +10,7 @@ function simStep(dt) {
   S.time += dt;
   S.tick++;
   if (S.tick % 30 === 0) growStalks(30 * dt);
+  if (S.tick % 30 === 7) settlePlans();
   if (S.tick % 30 === 15) for (let p = 0; p < S.players.length; p++) landerSalvage(p, 30 * dt);
   // Each player's bots are given work every 8 ticks, the players spread over those ticks.
   for (let p = 0, n = S.players.length; p < n; p++) if (S.tick % 8 === Math.floor((p * 8) / n) && !S.players[p].out && !(S.wildlife && p === WILD_OWNER)) dispatch(p);
@@ -147,6 +148,7 @@ function atLimit(b) {
 function needsOf(b) {
   const def = BDEFS[b.type], out = [];
   if (!b.built) {
+    if (storeFunded(b)) return out; // paid straight from storage (settlePlans), never hauled
     const cost = siteCost(b);
     for (const g in cost) out.push([g, cost[g] - (b.stock[g] || 0) - (b.inc[g] || 0)]);
   } else if (b.paused) {
@@ -866,7 +868,7 @@ function dispatch(p) {
   P.noHaulers = haulers === 0;
   // Planned roads the border no longer covers are called off (and refunded), except a bridge
   // still reaching out over the water from our side.
-  for (const t of planList(p).slice()) {
+  for (const t of planAll(p).slice()) {
     if (S.bAt[t] || (S.owner[t] !== p && !(bridgeable(t) && bridgeHead(p, t % S.W, (t / S.W) | 0)))) cancelPlan(t);
   }
   const linked = (a, b) => P.noHaulers || roadLinked(a, b);
@@ -1329,9 +1331,9 @@ function layRoad(t) {
 function cancelPlan(t) {
   const owner = S.plan[t] - 1;
   if (owner < 0) return;
-  const cost = roadTileCost(t);
+  const cost = roadTileCost(t), owed = S.owe && S.owe[t];
   setPlan(t, -1);
-  refundRoad(owner, cost, t % S.W, (t / S.W) | 0);
+  if (!owed) refundRoad(owner, cost, t % S.W, (t / S.W) | 0); // a tile still waiting for its goods cost nothing yet
 }
 
 function aOrAn(word) { return (/^[AEIOU]/i.test(word) ? 'an ' : 'a ') + word; }
@@ -1439,7 +1441,7 @@ function updateWorker(u, dt) {
  */
 function needsRoad(b) {
   const def = BDEFS[b.type];
-  if (b.type === 'lander' || def.prepaid) return false; // Walls and Gates are paid for up front: no Hauler needed
+  if (b.type === 'lander' || storeFunded(b)) return false; // Walls, Gates and Viaducts are paid from storage: no Hauler needed
   if (def.store) return true; // a Depot only helps if haulers can reach it from the Command Base
   if (!b.built) return true;
   if (def.mil) return warOn(); // Ammo for the garrison
@@ -1586,7 +1588,7 @@ function doBuild(u, t, dt) {
 
 function completeBuilding(b) {
   const def = BDEFS[b.type];
-  if (!def.prepaid) { const c = siteCost(b); for (const g in c) usedGood(b.owner, g, c[g]); } // its materials are built in (a Wall's were counted when it was paid for)
+  if (!storeFunded(b)) { const c = siteCost(b); for (const g in c) usedGood(b.owner, g, c[g]); } // its materials are built in (a Wall's were counted when it was paid for)
   if (def.ramp) { completeRamp(b); return; }
   b.built = true;
   if (def.ropeway && !b.link) ropewayAcross(b);
@@ -1939,7 +1941,9 @@ function updateBuilding(b, dt) {
   b.working = false;
   if (def.wild) { updateNest(b); return; }
   if (!b.built) {
-    if (b.unlinked && sumValues(b.stock) < sumValues(siteCost(b))) b.status = 'No road to storage yet';
+    const owed = storeFunded(b) ? stillOwed(b) : null;
+    if (owed && Object.keys(owed).length && !(b.builder && deliveredCount(b) / sumValues(siteCost(b)) > b.progress + 0.01)) b.status = `Waiting for ${costText(owed)} from storage`;
+    else if (b.unlinked && sumValues(b.stock) < sumValues(siteCost(b))) b.status = 'No road to storage yet';
     else if (sumValues(b.stock) + sumValues(b.inc) === 0) b.status = 'Waiting for materials';
     else if (!b.builder) b.status = 'Waiting for a builder';
     else b.status = 'Under construction';
@@ -2400,7 +2404,8 @@ function eliminate(old, by) {
     e.mode = S.players[by].ai ? 'alt' : 'off';
     markDirty(e.x, e.y);
   }
-  for (const t of planList(old).slice()) setPlan(t, -1);
+  for (const t of planAll(old).slice()) setPlan(t, -1);
+  for (let t = 0; t < S.W * S.H; t++) if (S.railPlan[t] === old + 1) setRailPlan(t, 0);
   computeTerritory();
   const L = getE(P.lander);
   const x = L ? L.x : 0, y = L ? L.y : 0;
@@ -3336,6 +3341,95 @@ function takeGood(owner, g, n) {
   return true;
 }
 
+/* ------------------------------------------------------------------ plans paid as goods come in */
+
+/*
+ * Things planned before the goods are there: road, bridge and tunnel tiles and track planned in
+ * Paths, and Walls, Gates, Viaducts (and Ramps a rail line needs) paid straight from storage. They
+ * queue in S.planQ, oldest first; settlePlans() pays for them as goods come into storage, and
+ * workers only build what's paid for (a site builds as far as its goods go). A good an older plan
+ * is still waiting for isn't spent on a newer one.
+ */
+function queuePlan(kind, ref, owner) { (S.planQ || (S.planQ = [])).push([kind, ref, owner]); }
+
+/** Is site b paid for straight from storage (no Hauler, no road), a unit at a time? */
+function storeFunded(b) { return !!(BDEFS[b.type].prepaid || b.fromStore); }
+
+/** What site b still needs from storage, e.g. { alloy: 2 } ({} once it's paid for). */
+function stillOwed(b) {
+  const c = siteCost(b), out = {};
+  for (const g in c) { const n = Math.ceil(c[g] - (b.stock[g] || 0) - 1e-9); if (n > 0) out[g] = n; }
+  return out;
+}
+
+/** Pay site b what storage can give, a unit at a time, skipping goods in `short` (and adding the ones that run out). True once it's paid for. */
+function payInto(b, short) {
+  const owed = stillOwed(b);
+  let done = true;
+  for (const g in owed) {
+    let n = owed[g];
+    if (short && short.has(g)) { done = false; continue; }
+    while (n > 0 && takeGood(b.owner, g, 1)) { bump(b.stock, g, 1); n--; }
+    if (n > 0) { done = false; if (short) short.add(g); }
+  }
+  return done;
+}
+
+/** Pay for queued plans, oldest first, from what's in storage now. */
+function settlePlans() {
+  const Q = S.planQ;
+  if (!Q || !Q.length) return;
+  const short = S.players.map(() => new Set()), keep = [];
+  for (const it of Q) {
+    const [kind, ref, o] = it, sh = short[o];
+    if (kind === 'b') {
+      const b = getE(ref);
+      if (b && !b.dead && !b.built && !payInto(b, sh)) keep.push(it);
+      continue;
+    }
+    const t = ref;
+    let cost;
+    if (kind === 'r') {
+      if (S.plan[t] !== o + 1 || !S.owe[t]) continue;
+      cost = roadTileCost(t);
+    } else {
+      if (S.railPlan[t] !== o + 1) continue;
+      if (S.rail[t]) { setRailPlan(t, 0); continue; }
+      const s = S.bAt[t] && getE(S.bAt[t]);
+      if (railBlocked(o, t)) {
+        if (s && s.type === 'ramp' && !s.built && s.owner === o) keep.push(it); // waits for its Ramp
+        else setRailPlan(t, 0); // can't go here any more (outside the border, say): dropped, nothing was paid
+        continue;
+      }
+      cost = railCost(t);
+    }
+    if (Object.keys(cost).some((g) => sh.has(g))) { keep.push(it); continue; }
+    if (!canAffordRoad(o, cost)) {
+      for (const g in cost) if (!canAffordRoad(o, { [g]: cost[g] })) sh.add(g);
+      keep.push(it);
+      continue;
+    }
+    payRoad(o, cost);
+    if (kind === 'r') setOwe(t, 0);
+    else { setRailPlan(t, 0); setRail(t, true); }
+  }
+  S.planQ = keep;
+}
+
+/** How many of `owner`'s plans are waiting for goods: { tiles, track, sites, owed: {good: n} }. */
+function plansWaiting(owner) {
+  const out = { tiles: 0, track: 0, sites: 0, owed: {} };
+  for (const [kind, ref, o] of S.planQ || []) {
+    if (o !== owner) continue;
+    let c = null;
+    if (kind === 'r' && S.plan[ref] === o + 1 && S.owe[ref]) { out.tiles++; c = roadTileCost(ref); }
+    else if (kind === 't' && S.railPlan[ref] === o + 1) { out.track++; c = railCost(ref); }
+    else if (kind === 'b') { const b = getE(ref); if (b && !b.dead && !b.built && Object.keys(stillOwed(b)).length) { out.sites++; c = stillOwed(b); } }
+    if (c) for (const g in c) out.owed[g] = (out.owed[g] || 0) + c[g];
+  }
+  return out;
+}
+
 function payRoad(owner, cost, mul) {
   const P = S.players[owner];
   for (const g in cost) {
@@ -3359,10 +3453,12 @@ function refundRoad(owner, cost, i, j, mul) {
  * Plan a road tile, paying its Cement (ROAD_CLEAR times as much through resources, which paving
  * clears). Free workers then pave it. Returns '' on success or a reason it couldn't be done.
  */
-function buildRoad(owner, i, j) {
+function buildRoad(owner, i, j, queue) {
   const t = tIdx(i, j);
   if (S.road[t] || S.plan[t]) return '';
   if (!canRoad(owner, i, j)) return 'You can only lay roads inside your border.';
+  // Planned from Paths: it joins the queue and is paid for as the goods come in (settlePlans).
+  if (queue) { setPlan(t, owner); setOwe(t, 1); queuePlan('r', t, owner); return ''; }
   const cost = roadTileCost(t), c = CROSS[S.terrain[t]];
   if (!canAffordRoad(owner, cost)) {
     return c ? `A ${c.name.toLowerCase()} tile costs ${costText(cost)}.` : `Out of ${Object.keys(roadCost()).map((g) => GOOD[g].name).join(' and ')} for roads. Make more at a Cement Works.`;
@@ -4154,7 +4250,8 @@ function placeViaduct(owner, ai, aj, bi, bj) {
   const why = viaductBlocked(owner, ai, aj, bi, bj);
   if (why) return { ok: false, reason: why };
   const cost = viaductCost(ai, aj, bi, bj);
-  if (!canPay(owner, cost)) return { ok: false, reason: `Not enough ${missingGoods(owner, cost)}: this Viaduct costs ${costText(cost)}.` };
+  // (The computer pays up front; yours waits for the goods and is paid for as they come in.)
+  if (S.players[owner].ai && !canPay(owner, cost)) return { ok: false, reason: `Not enough ${missingGoods(owner, cost)}: this Viaduct costs ${costText(cost)}.` };
   const r = placeSite(owner, 'viaduct', ai, aj, cost);
   if (r.ok) { r.building.viaTo = tIdx(bi, bj); r.building.buildTime = VIA_TIME * (Math.abs(bi - ai) + Math.abs(bj - aj) - 1); }
   return r;
@@ -4330,8 +4427,22 @@ function layRail(owner, t) {
   return '';
 }
 
-/** Take up the track on tile t: its Cement and Alloy go back to storage. */
+/**
+ * Plan track on tile t from Paths: it joins the queue and goes down as soon as it's paid for (and,
+ * on a Ramp still being built, once the Ramp is done). '' if planned, otherwise why not.
+ */
+function queueRail(owner, t) {
+  if (S.rail[t] || S.railPlan[t] === owner + 1) return '';
+  const why = railBlocked(owner, t), s = S.bAt[t] && getE(S.bAt[t]);
+  if (why && !(s && s.type === 'ramp' && !s.built && s.owner === owner)) return why;
+  setRailPlan(t, owner + 1);
+  queuePlan('t', t, owner);
+  return '';
+}
+
+/** Take up the track on tile t: its Cement and Alloy go back to storage (planned track not yet down is just dropped). */
 function takeUpRail(owner, t) {
+  if (!S.rail[t] && S.railPlan[t] === owner + 1) { setRailPlan(t, 0); return; }
   if (!S.rail[t]) return;
   setRail(t, false);
   refundRoad(owner, railCost(t), t % S.W, (t / S.W) | 0);

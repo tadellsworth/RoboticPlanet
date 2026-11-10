@@ -128,6 +128,16 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
   landing is claimed for whoever's land the bridge runs out from (`computeTerritory` traces each bridge from its owner's
   border or shore; land only, never water or anyone's land), so an Outpost can go on the new island, even right at the
   end of the bridge. Territory is recomputed whenever a bridge tile is built or removed.
+- **Plans that wait for goods** (`settlePlans`, `S.planQ` in `js/sim.js`): anything you plan in Paths (road, bridge and
+  tunnel tiles, track, Walls, Gates, Ramps) and Viaducts can be planned without the goods. Each joins a queue, oldest
+  first, and `settlePlans` (once a second, and right after you plan) pays for what it can from storage; a good an
+  older plan is still waiting for isn't spent on a newer one. Road tiles waiting for their goods are flagged in
+  `S.owe` (workers pave only paid tiles: `planList` vs `planAll`), track waiting to go down in `S.railPlan`, and
+  store-paid sites (`prepaid` Walls, Gates and Viaducts, and Ramps a rail drag plans, `b.fromStore`) take their goods a
+  unit at a time (`payInto`) and are built as far as their goods go. Calling off an unpaid tile gives nothing back; a
+  half-paid site gives back what it holds. The computer still pays up front (`canPlace` keeps its check for AI players).
+  Dragging track across a one-level cliff plans a Ramp there (`UI.draft.railRamps`), and the track over it waits in the
+  queue until the Ramp is finished.
 - **Junctions, traffic lights and overpasses:** where three or four roads meet, bots slow down and give way to traffic
   already crossing. Switch the Paths banner to **Junctions** and tap a junction to put up a traffic light (1 Alloy): it
   lets one direction through at a time, switching when traffic waits the other way. On a busy crossing a light moves

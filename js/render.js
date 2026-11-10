@@ -3642,21 +3642,22 @@ function drawEvent(ctx, ox, oy, z) {
 
 /**
  * Planned roads waiting for workers: a faint road with a dashed outline (amber for yours), and a
- * bar filling up while a worker paves it.
+ * bar filling up while a worker paves it. Tiles still waiting for their goods have a sparser
+ * orange outline; planned track waiting to go down, pale sleepers with a dashed outline.
  */
 function drawPlans(ctx, ox, oy, z, inView) {
   for (let p = 0; p < S.players.length; p++) {
-    const list = planList(p);
+    const list = planAll(p);
     if (!list.length) continue;
     ctx.lineWidth = Math.max(1, z * 0.04);
-    ctx.setLineDash([z * 0.12, z * 0.09]);
     for (const t of list) {
       const i = t % S.W, j = (t / S.W) | 0;
       if (!inView(i, j, 1)) continue;
-      const x = ox + i * z, y = oy + j * z, m = z * 0.16;
-      ctx.fillStyle = p === 0 ? 'rgba(200,206,214,0.32)' : 'rgba(200,206,214,0.16)';
+      const x = ox + i * z, y = oy + j * z, m = z * 0.16, owed = S.owe && S.owe[t];
+      ctx.setLineDash(owed ? [z * 0.06, z * 0.12] : [z * 0.12, z * 0.09]);
+      ctx.fillStyle = p === 0 ? (owed ? 'rgba(255,170,90,0.16)' : 'rgba(200,206,214,0.32)') : 'rgba(200,206,214,0.16)';
       ctx.fillRect(x + m, y + m, z - 2 * m, z - 2 * m);
-      ctx.strokeStyle = p === 0 ? 'rgba(255,209,102,0.9)' : 'rgba(255,120,120,0.5)';
+      ctx.strokeStyle = p === 0 ? (owed ? 'rgba(255,140,60,0.95)' : 'rgba(255,209,102,0.9)') : 'rgba(255,120,120,0.5)';
       ctx.strokeRect(x + m, y + m, z - 2 * m, z - 2 * m);
       const by = getE(S.paveRes[t]);
       if (by && by.task && by.task.type === 'pave' && by.task.tile === t && by.task.phase === 'work') {
@@ -3664,6 +3665,35 @@ function drawPlans(ctx, ox, oy, z, inView) {
         ctx.fillStyle = 'rgba(169,180,194,0.9)';
         ctx.fillRect(x + m, y + z - m - z * 0.12, (z - 2 * m) * f, z * 0.12);
       }
+    }
+    ctx.setLineDash([]);
+  }
+  // Planned track waiting to go down (for its goods, or for a Ramp to be finished under it).
+  if (S.planQ && S.planQ.length) {
+    ctx.lineWidth = Math.max(1, z * 0.04);
+    ctx.setLineDash([z * 0.1, z * 0.08]);
+    for (const [kind, t, o] of S.planQ) {
+      if (kind !== 't' || S.railPlan[t] !== o + 1 || S.rail[t]) continue;
+      const i = t % S.W, j = (t / S.W) | 0;
+      if (!inView(i, j, 1)) continue;
+      const x = ox + i * z, y = oy + j * z;
+      ctx.fillStyle = o === 0 ? 'rgba(255,214,140,0.22)' : 'rgba(255,214,140,0.1)';
+      ctx.fillRect(x + z * 0.12, y + z * 0.12, z * 0.76, z * 0.76);
+      ctx.strokeStyle = o === 0 ? 'rgba(255,170,90,0.95)' : 'rgba(255,120,120,0.5)';
+      ctx.strokeRect(x + z * 0.12, y + z * 0.12, z * 0.76, z * 0.76);
+      // Ghost track along the way the line runs: two rails over three sleepers.
+      const rl = (u) => u >= 0 && u < S.W * S.H && (S.rail[u] || S.railPlan[u]);
+      const horiz = rl(t - 1) || rl(t + 1) || !(rl(t - S.W) || rl(t + S.W));
+      ctx.save(); ctx.setLineDash([]); ctx.strokeStyle = o === 0 ? 'rgba(255,214,140,0.85)' : 'rgba(255,214,140,0.4)';
+      ctx.lineWidth = Math.max(1, z * 0.05);
+      ctx.beginPath();
+      for (const k of [0.3, 0.5, 0.7]) { if (horiz) { ctx.moveTo(x + z * k, y + z * 0.26); ctx.lineTo(x + z * k, y + z * 0.74); } else { ctx.moveTo(x + z * 0.26, y + z * k); ctx.lineTo(x + z * 0.74, y + z * k); } }
+      ctx.stroke();
+      ctx.lineWidth = Math.max(1, z * 0.035);
+      ctx.beginPath();
+      for (const k of [0.38, 0.62]) { if (horiz) { ctx.moveTo(x + z * 0.16, y + z * k); ctx.lineTo(x + z * 0.84, y + z * k); } else { ctx.moveTo(x + z * k, y + z * 0.16); ctx.lineTo(x + z * k, y + z * 0.84); } }
+      ctx.stroke();
+      ctx.restore();
     }
     ctx.setLineDash([]);
   }

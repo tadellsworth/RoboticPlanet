@@ -819,7 +819,7 @@ function newGame(opts) {
     v: 1, mode, seed, W, H, settings, difficulty: diff, time: 0, nextId: 1, winner: -1, milestone: 0,
     terrain: m.terrain, res: m.res, amt: m.amt, grow: m.grow, elev: m.elev, ramp: m.ramp, fert: m.fert,
     road: new Uint8Array(W * H), rail: new Uint8Array(W * H), pave: new Uint8Array(W * H), wear: new Uint16Array(W * H), paveMark: new Uint8Array(W * H), oneRoad: true, roadVer: 0, lights: {}, over: {}, scorch: {},
-    plan: new Uint8Array(W * H), planVer: 0, paveRes: {},
+    plan: new Uint8Array(W * H), planVer: 0, paveRes: {}, owe: new Uint8Array(W * H), railPlan: new Uint8Array(W * H), planQ: [],
     owner: new Int8Array(W * H).fill(-1),
     resRes: new Uint8Array(W * H),
     bAt: new Int32Array(W * H),
@@ -1306,7 +1306,7 @@ function canPlace(owner, type, i, j, skipBlockCheck) {
   } else if (S.res[t]) return { ok: false, reason: 'Clear the resources here first.' };
   if (S.bAt[t]) return { ok: false, reason: 'There is already a building here.' };
   if (def.colony && (S.mode !== 'colony' || S.mission)) return { ok: false, reason: 'Only in Colony free play.' };
-  if (S.rail && S.rail[t]) return { ok: false, reason: 'There is railway track here.' };
+  if (S.rail && S.rail[t] && !def.ramp) return { ok: false, reason: 'There is railway track here.' }; // (a Ramp can go under track, to carry it up a level)
   if (def.station && !railPlatforms(i, j).length) return { ok: false, reason: 'A Rail Station goes right beside the track: lay rail first (Paths, Rail).' };
   if (S.wildlife) for (const e of S.buildings) {
     if (!e.dead && BDEFS[e.type].wild && Math.max(Math.abs(e.x - i), Math.abs(e.y - j)) <= WILD.clear) return { ok: false, reason: 'Too close to a creature nest: clear it with warbots first.' };
@@ -1351,7 +1351,8 @@ function canPlace(owner, type, i, j, skipBlockCheck) {
   // Walls and Gates are meant to close a way through, and they need no road: workers build them
   // with Cement paid up front.
   if (def.barrier) {
-    if (def.prepaid && !skipBlockCheck && !canPay(owner, def.cost)) return { ok: false, reason: `Not enough ${missingGoods(owner, def.cost)}.` };
+    // (The computer pays up front; your plans wait for the goods: see settlePlans.)
+    if (def.prepaid && !skipBlockCheck && S.players[owner].ai && !canPay(owner, def.cost)) return { ok: false, reason: `Not enough ${missingGoods(owner, def.cost)}.` };
     return { ok: true, reason: '' };
   }
   if (!roadSide) return { ok: false, reason: 'Haulers need a road to every building: leave a side open where a road can go (open ground inside your border).' };
@@ -1429,7 +1430,7 @@ function missingGoods(owner, cost) {
   return Object.keys(cost).filter((g) => (have[g] || 0) < cost[g]).map((g) => GOOD[g].name).join(' or ') || 'materials';
 }
 
-function placeSite(owner, type, i, j, cost) {
+function placeSite(owner, type, i, j, cost, fromStore) {
   const chk = canPlace(owner, type, i, j);
   if (!chk.ok) return chk;
   const def = BDEFS[type];
@@ -1441,9 +1442,14 @@ function placeSite(owner, type, i, j, cost) {
   if (S.road[t]) removeRoad(owner, i, j);
   const b = addBuilding(owner, type, i, j, false);
   if (type === 'gate' && onRoad) b.road = true;
-  // Walls and Gates are paid for now, straight from storage: the site starts with its materials in.
+  // Walls, Gates, Viaducts (and Ramps a rail line needs) are paid straight from storage: the
+  // computer pays now; your plans queue and are paid for as the goods come in (settlePlans).
   if (cost) b.cost = cost;
-  if (def.prepaid) { const c = siteCost(b); for (const g in c) { takeGood(owner, g, c[g]); b.stock[g] = c[g]; } }
+  if (fromStore) b.fromStore = true;
+  if (storeFunded(b)) {
+    if (S.players[owner].ai) { if (!payInto(b)) queuePlan('b', b.id, owner); }
+    else { queuePlan('b', b.id, owner); settlePlans(); } // what storage has goes in now (after older plans)
+  }
   markDirty(i, j);
   return { ok: true, building: b };
 }
@@ -1499,20 +1505,33 @@ function setPlan(t, owner) {
   const v = owner < 0 ? 0 : owner + 1;
   if (S.plan[t] === v) return;
   S.plan[t] = v;
+  if (!v && S.owe) S.owe[t] = 0;
   if (v) clearDecor(t);
   S.planVer = (S.planVer || 0) + 1;
 }
 
-const _plans = { ver: -1, of: null, lists: [[], []] };
-/** The tiles `owner` has planned roads on (cached until a plan changes). */
-function planList(owner) {
+const _plans = { ver: -1, of: null, lists: [[], []], all: [[], []] };
+function _planLists() {
   if (_plans.of !== S || _plans.ver !== S.planVer) {
-    _plans.lists = S.players.map(() => []);
-    for (let t = 0; t < S.W * S.H; t++) if (S.plan[t]) _plans.lists[S.plan[t] - 1].push(t);
+    _plans.lists = S.players.map(() => []); _plans.all = S.players.map(() => []);
+    for (let t = 0; t < S.W * S.H; t++) if (S.plan[t]) { _plans.all[S.plan[t] - 1].push(t); if (!(S.owe && S.owe[t])) _plans.lists[S.plan[t] - 1].push(t); }
     _plans.of = S; _plans.ver = S.planVer;
   }
-  return _plans.lists[owner];
 }
+/** The road tiles `owner` has planned and paid for, ready for workers to pave (cached until a plan changes). */
+function planList(owner) { _planLists(); return _plans.lists[owner]; }
+/** Every road tile `owner` has planned, paid for or still waiting for its goods. */
+function planAll(owner) { _planLists(); return _plans.all[owner]; }
+
+/** Mark planned road tile t as waiting for its goods (1) or paid for (0). */
+function setOwe(t, v) {
+  if ((S.owe[t] || 0) === v) return;
+  S.owe[t] = v;
+  S.planVer = (S.planVer || 0) + 1;
+}
+
+/** Planned track waiting to go down on tile t: its owner + 1, or 0. */
+function setRailPlan(t, v) { S.railPlan[t] = v; }
 
 function setRoad(i, j, on) {
   const t = tIdx(i, j);
@@ -1968,7 +1987,7 @@ const SAVE_KEY = 'botfall.save.v1'; // the game's first name: kept so saves carr
 const TYPED_FIELDS = {
   terrain: Uint8Array, res: Uint8Array, amt: Uint8Array, grow: Float32Array, road: Uint8Array, owner: Int8Array,
   resRes: Uint8Array, elev: Uint8Array, ramp: Uint8Array, fert: Uint8Array, pave: Uint8Array, plan: Uint8Array,
-  wear: Uint16Array, paveMark: Uint8Array, decor: Uint8Array, rail: Uint8Array,
+  wear: Uint16Array, paveMark: Uint8Array, decor: Uint8Array, rail: Uint8Array, owe: Uint8Array, railPlan: Uint8Array,
 };
 
 function serializeGame() {
@@ -2011,6 +2030,10 @@ function deserializeGame(json) {
   if (!o.wear) o.wear = new Array(o.W * o.H).fill(0);
   if (!o.decor) o.decor = new Array(o.W * o.H).fill(0); // saves from before biomes: no plants
   if (!o.rail) o.rail = new Array(o.W * o.H).fill(0); // saves from before railways
+  // Saves from before plans could wait for goods: everything planned was paid for.
+  if (!o.owe) o.owe = new Array(o.W * o.H).fill(0);
+  if (!o.railPlan) o.railPlan = new Array(o.W * o.H).fill(0);
+  o.planQ = o.planQ || [];
   if (!o.paveMark) { o.paveMark = new Array(o.W * o.H).fill(0); for (const b of o.buildings) if (b.type === 'roadworks' && !b.pmode) b.pmode = 'all'; }
   o.lights = o.lights || {};
   o.over = o.over || {};

@@ -170,7 +170,7 @@ const ROPE_MIN = 3, ROPE_MAX = 14, ROPE_SPEED = 1.8, ROPE_COST = 1.3;
  * to VIA_MAX tiles apart (no more than VIA_RISE levels apart: the deck runs at the higher one and
  * ramps down at the other), over ground lower than both ends. The ground below stays as it is:
  * bots, roads and buildings down there carry on underneath. It costs VIA_COST for every tile it
- * spans, paid up front, and a worker at the near end puts it up in VIA_TIME seconds a tile. Every
+ * spans, paid from storage (as it comes in), and a worker at the near end puts it up in VIA_TIME seconds a tile. Every
  * bot can cross it, trucks and Road Trains included, and trains when track runs onto both ends.
  */
 const VIA_MIN = 2, VIA_MAX = 12, VIA_RISE = 2, VIA_COST = { cement: 3, alloy: 0.5 }, VIA_TIME = 5; // cost a tile spanned (Alloy rounded up)
@@ -407,8 +407,8 @@ function playerName(p, the) {
  *   war       only offered in Versus mode
  *   barrier   a Wall or Gate: blocks enemy bots, which break through it (see BREACH_COST); `gate`
  *             lets its owner's bots through and carries a road
- *   prepaid   its materials are taken from storage when it is planned (no Hauler needed) and it
- *             doesn't count toward MAX_SITES
+ *   prepaid   paid straight from storage (no Hauler or road needed): what's there goes in when it's
+ *             planned, the rest as it comes in (settlePlans); it doesn't count toward MAX_SITES
  *   limit     default stock limit: it stops making its product once you have this many (players
  *             can change it per building)
  */
@@ -542,7 +542,7 @@ const BDEFS = {
     cost: { cement: 8, alloy: 6 }, ropeway: true, armor: 10, buildTime: 14,
   },
   viaduct: {
-    name: 'Viaduct', desc: 'A level bridge straight across a valley or canyon, from one clifftop to another up to 12 tiles away, over ground lower than both ends: traffic down below carries on underneath. Tap one end, then the far end. It costs 3 Cement for every tile it spans and 1 Alloy for every two, paid up front, and a worker builds it out from the near end. Every bot can cross, trucks and Road Trains included; lay track onto both ends and trains cross too.',
+    name: 'Viaduct', desc: 'A level bridge straight across a valley or canyon, from one clifftop to another up to 12 tiles away, over ground lower than both ends: traffic down below carries on underneath. Tap one end, then the far end. It costs 3 Cement for every tile it spans and 1 Alloy for every two, paid from storage as the goods come in, and a worker builds it out from the near end. Every bot can cross, trucks and Road Trains included; lay track onto both ends and trains cross too.',
     cost: { cement: 3, alloy: 0.5 }, viaduct: true, prepaid: true, armor: 24, buildTime: 10,
   },
   lab: {

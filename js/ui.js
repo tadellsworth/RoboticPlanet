@@ -965,6 +965,7 @@ function confirmBanner() {
     if (!A || !E || !E.ok) return;
     const res = UI.placeType === 'viaduct' ? placeViaduct(0, A.i, A.j, E.i, E.j) : placeRopeway(0, A.i, A.j, E.i, E.j);
     if (!res.ok) { sfx('error'); showBanner(`<span class="err">${res.reason}</span>`, null, 'Cancel'); return; }
+    settlePlans(); // a Viaduct is paid from storage: what's there now goes in at once
     sfx('place');
     addFx('ring', A.i + 0.5, A.j + 0.5, { color: PLAYER_COLORS[0] });
     setMode('normal');
@@ -1024,7 +1025,7 @@ function viaductTap(i, j) {
   if (why) { sfx('error'); showBanner(`<span class="err">${why}</span> Tap another far end.`, null, 'Cancel'); return; }
   const n = Math.abs(i - A.i) + Math.abs(j - A.j) - 1, cost = viaductCost(A.i, A.j, i, j);
   const rise = S.elev[tIdx(i, j)] - S.elev[tIdx(A.i, A.j)];
-  showBanner(`A <b>Viaduct</b> spanning ${n} tile${n > 1 ? 's' : ''}${rise ? `, ${Math.abs(rise)} level${Math.abs(rise) > 1 ? 's' : ''} ${rise > 0 ? 'up' : 'down'} at the far end` : ''}? ${costHTML(cost, playerGoods(0))} (paid now)`, 'Build', 'Cancel');
+  showBanner(`A <b>Viaduct</b> spanning ${n} tile${n > 1 ? 's' : ''}${rise ? `, ${Math.abs(rise)} level${Math.abs(rise) > 1 ? 's' : ''} ${rise > 0 ? 'up' : 'down'} at the far end` : ''}? ${costHTML(cost, playerGoods(0))} (${canPay(0, cost) ? 'paid now' : 'paid from storage as the goods come in'})`, 'Build', 'Cancel');
 }
 
 function buildingAtTap(i, j, wx, wy) {
@@ -1134,7 +1135,7 @@ function onMapTap(i, j, wx, wy) {
       const stroke = [];
       if (UI.draft.rail.has(t)) draftOp(stroke, t, 'unrail');
       else if (UI.draft.railDel.has(t)) draftOp(stroke, t, 'unraildel');
-      else if (S.rail[t]) draftOp(stroke, t, 'raildel');
+      else if (S.rail[t] || S.railPlan[t] === 1) draftOp(stroke, t, 'raildel');
       else { const why = railBlocked(0, t); if (why) { sfx('error'); showRoadBanner(why); return; } draftOp(stroke, t, 'rail'); }
       UI.draft.strokes.push(stroke);
       sfx('click');
@@ -1225,7 +1226,7 @@ function rallyAtTap(wx, wy) {
  * tiles to lay, and existing or planned tiles to take up. Nothing is paid and no bot moves until
  * Build is tapped, so a stray swipe costs nothing (Undo or Clear takes it back).
  */
-function draftReset() { UI.draft = { add: [], addSet: new Set(), del: new Set(), ramps: new Set(), walls: new Map(), rail: new Set(), railDel: new Set(), strokes: [] }; }
+function draftReset() { UI.draft = { add: [], addSet: new Set(), del: new Set(), ramps: new Set(), railRamps: new Set(), walls: new Map(), rail: new Set(), railDel: new Set(), strokes: [] }; }
 function draftEmpty() { return !UI.draft || (!UI.draft.add.length && !UI.draft.del.size && !UI.draft.ramps.size && !UI.draft.walls.size && !UI.draft.rail.size && !UI.draft.railDel.size); }
 
 /** A bridge sketched out past the border: water touching a tile already in the sketch. */
@@ -1291,7 +1292,7 @@ function draftSummary() {
   for (const t of d.del) {
     if (!S.road[t] && !S.plan[t]) continue;
     // Taking up a road returns its Cement (a bridge or tunnel, its Cement and Alloy); calling off a planned tile refunds what it cost.
-    const c = S.plan[t] ? roadTileCost(t) : crossTile(t) ? CROSS[S.terrain[t]].cost : roadCost();
+    const c = S.plan[t] ? (S.owe[t] ? {} : roadTileCost(t)) : crossTile(t) ? CROSS[S.terrain[t]].cost : roadCost(); // a tile still waiting for its goods gives nothing back
     for (const g in c) back[g] = (back[g] || 0) + c[g];
   }
   // Ramps are construction sites: their materials are delivered, but you need them in stock.
@@ -1308,7 +1309,9 @@ function draftSummary() {
   for (const t of d.railDel) if (S.rail[t]) { const rc = railCost(t); for (const g in rc) back[g] = (back[g] || 0) + rc[g]; }
   const net = {};
   for (const g in cost) net[g] = Math.max(0, cost[g] - (back[g] || 0));
-  return { add, cross, clear, del: d.del.size, ramps: d.ramps.size, walls, gates, rail: d.rail.size, railDel: d.railDel.size, cost, back, net, can: canAffordRoad(0, net) && canPay(0, wcost) };
+  // Anything you can't pay for yet waits for the goods (settlePlans): the plan can always be built.
+  return { add, cross, clear, del: d.del.size, ramps: d.ramps.size, walls, gates, rail: d.rail.size, railDel: d.railDel.size, cost, back, net, can: true,
+    short: Object.keys(net).filter((g) => net[g] > 0 && !canAffordRoad(0, { [g]: net[g] })) };
 }
 
 /** Build the plan: take up the marked roads (their goods come back first), then plan the new tiles for workers to pave. */
@@ -1318,30 +1321,36 @@ function commitDraft() {
   let removed = 0, laid = 0, ramps = 0, walls = 0, gates = 0, why = '', wallWhy = '';
   for (const t of d.del) if (S.road[t] || S.plan[t] === 1) { removeRoad(0, t % S.W, (t / S.W) | 0); removed++; }
   let rails = 0, railsUp = 0, railWhy = '';
-  for (const t of d.railDel) if (S.rail[t]) { takeUpRail(0, t); railsUp++; }
-  for (const t of d.rail) { const w = layRail(0, t); if (w) { railWhy = railWhy || w; } else rails++; }
+  for (const t of d.railDel) if (S.rail[t] || S.railPlan[t] === 1) { takeUpRail(0, t); railsUp++; }
+  // Ramps first, so track planned over one waits for it. A Ramp a rail line needs is paid straight
+  // from storage (it rarely has a road for haulers).
+  for (const t of d.ramps) {
+    const r = placeSite(0, 'ramp', t % S.W, (t / S.W) | 0, null, d.railRamps.has(t) || d.rail.has(t));
+    if (r.ok) ramps++; else { why = r.reason; break; }
+  }
   for (const [t, kind] of d.walls) {
     const r = placeSite(0, kind, t % S.W, (t / S.W) | 0);
     if (r.ok) { if (kind === 'gate') gates++; else walls++; } else if (!wallWhy) wallWhy = r.reason;
   }
-  for (const t of d.ramps) {
-    const r = placeSite(0, 'ramp', t % S.W, (t / S.W) | 0);
-    if (r.ok) ramps++; else { why = r.reason; break; }
-  }
   for (const t of d.add) {
     if (S.road[t] || S.plan[t]) continue;
-    why = buildRoad(0, t % S.W, (t / S.W) | 0);
+    why = buildRoad(0, t % S.W, (t / S.W) | 0, true);
     if (why) break;
     laid++;
   }
+  for (const t of d.rail) { const w = queueRail(0, t); if (w) { railWhy = railWhy || w; } else rails++; }
+  // Pay for what we can now, oldest plans first; the rest waits for the goods.
+  settlePlans();
+  const wp = plansWaiting(0), owedN = wp.tiles + wp.track + wp.sites;
   draftReset();
   // Built: Paths closes, straight back to the map (unless something went wrong, to fix it).
   if (!why) setMode('normal');
-  const wallText = walls || gates ? ` ${[walls ? `${walls} Wall${walls === 1 ? '' : 's'}` : '', gates ? `${gates} Gate${gates === 1 ? '' : 's'}` : ''].filter(Boolean).join(' and ')} paid for: free workers will build ${walls + gates === 1 ? 'it' : 'them'}.` : '';
+  const wallText = walls || gates ? ` ${[walls ? `${walls} Wall${walls === 1 ? '' : 's'}` : '', gates ? `${gates} Gate${gates === 1 ? '' : 's'}` : ''].filter(Boolean).join(' and ')} planned: free workers will build ${walls + gates === 1 ? 'it' : 'them'}.` : '';
   if (why) { sfx('error'); toast(`Planned ${laid} tile${laid === 1 ? '' : 's'} before running short: ${why}`, 'warn'); }
   else { sfx('place'); toast((laid ? `Planned ${laid} road tile${laid === 1 ? '' : 's'}: free workers will pave them.` : '') + (ramps ? ` ${ramps} Ramp site${ramps === 1 ? '' : 's'} started.` : '') + wallText + (removed ? ` Took up ${removed} tile${removed === 1 ? '' : 's'}.` : ''), 'info'); }
   if (wallWhy) toast(`Some of the wall couldn't go up: ${wallWhy}`, 'warn');
-  if (rails || railsUp) toast(`${rails ? `Laid ${rails} tile${rails === 1 ? '' : 's'} of track.` : ''}${railsUp ? ` Took up ${railsUp} tile${railsUp === 1 ? '' : 's'} of track.` : ''}`, 'info');
+  if (rails || railsUp) toast(`${rails ? `Planned ${rails} tile${rails === 1 ? '' : 's'} of track.` : ''}${railsUp ? ` Took up ${railsUp} tile${railsUp === 1 ? '' : 's'} of track.` : ''}`, 'info');
+  if (owedN) toast(`Waiting for goods: ${costText(wp.owed)} more. It's paid from storage as the goods come in, oldest plans first, and built as it's paid for.`, 'info');
   if (railWhy) toast(`Some track couldn't go down: ${railWhy}`, 'warn');
   if (why) showRoadBanner();
 }
@@ -1360,7 +1369,7 @@ function dropDraft() {
 function onRoadPaint(i, j, first) {
   if (R.mode !== 'road' || UI.roadMode === 'lights' || UI.roadMode === 'ramp') return;
   if (!UI.draft) draftReset();
-  if (first) { UI.paintSkipped = false; UI.paintCross = false; UI.paintCliff = false; UI.stroke = []; UI.draft.strokes.push(UI.stroke); }
+  if (first) { UI.paintSkipped = false; UI.paintCross = false; UI.paintCliff = false; UI.paintRamp = false; UI.stroke = []; UI.draft.strokes.push(UI.stroke); }
   const from = first || !UI.lastPaint ? { i, j } : UI.lastPaint;
   const line = tileLine(from.i, from.j, i, j);
   let prev = null;
@@ -1372,8 +1381,15 @@ function onRoadPaint(i, j, first) {
     const t = tIdx(x, y);
     if (pave) { if (paveMarkable(t)) setPaveMark(0, x, y, UI.paveOn); continue; }
     if (rail) {
-      // Across a one-level cliff with no Ramp: the track can't join there (say so in the banner).
-      if (prev) { const p = tIdx(prev[0], prev[1]); if (S.terrain[t] === T_GROUND && S.terrain[p] === T_GROUND && S.elev[t] !== S.elev[p] && !canStep(p, t)) UI.paintCliff = true; }
+      // Climbing a one-level cliff with no Ramp: plan one for the track, on whichever side of the
+      // cliff can take it (your bots can reach it). If neither can, say so in the banner.
+      if (prev) {
+        const p = tIdx(prev[0], prev[1]);
+        if (S.terrain[t] === T_GROUND && S.terrain[p] === T_GROUND && Math.abs(S.elev[t] - S.elev[p]) === 1 && !canStep(p, t) && !UI.draft.ramps.has(t) && !UI.draft.ramps.has(p)) {
+          const at = [t, p].find((u) => canPlace(0, 'ramp', u % S.W, (u / S.W) | 0).ok);
+          if (at !== undefined) { draftOp(UI.stroke, at, 'ramp'); UI.draft.railRamps.add(at); UI.paintRamp = true; } else UI.paintCliff = true;
+        }
+      }
       prev = [x, y];
       if (S.rail[t] || UI.draft.rail.has(t)) continue;
       if (!railBlocked(0, t)) draftOp(UI.stroke, t, 'rail'); else UI.paintSkipped = true;
@@ -1403,7 +1419,7 @@ function onRoadPaint(i, j, first) {
   UI.lastPaint = { i, j };
   if (pave) { showRoadBanner(); return; }
   if (wall) { showRoadBanner(UI.paintSkipped ? 'The wall skips tiles it can\'t go on (outside your border, resources, cliffs, or right beside your Command Base).' : '', true); return; }
-  if (rail) { showRoadBanner(UI.paintCliff ? 'Track climbs a level only over a <b>Ramp</b>: build one at this cliff (Paths, Ramps), then lay the track over it.' : UI.paintSkipped ? 'Track skips tiles it can\'t go on: outside your border, resources, water and rock.' : '', true); return; }
+  if (rail) { showRoadBanner(UI.paintCliff ? 'Track climbs a level only over a <b>Ramp</b>, and there\'s no room for one where you crossed this cliff: try a tile or two along it.' : UI.paintRamp ? 'A <b>Ramp</b> is planned where the track climbs the cliff: workers build it, and the track on it goes down when it\'s done.' : UI.paintSkipped ? 'Track skips tiles it can\'t go on: outside your border, resources, water and rock.' : '', true); return; }
   if (!arrows) {
     showRoadBanner(UI.paintCross ? 'Roads stop at water and rock: pick <b>Bridges</b> to cross.'
       : UI.paintSkipped ? 'Dragging goes round resources: tap a boulder, grove, ore or crystal tile to clear it for a road.' : '', true);
@@ -1467,14 +1483,15 @@ function showRoadBanner(problem, info) {
       if (sm.rail) parts.push(`<b>${sm.rail}</b> tile${sm.rail === 1 ? '' : 's'} of track`);
       if (sm.railDel) parts.push(`<b>${sm.railDel}</b> of track to take up`);
       const cost = Object.keys(sm.net).length && Object.values(sm.net).some((v) => v > 0) ? `costs <b>${costText(sm.net)}</b>` : 'costs nothing';
-      line = `Plan: ${parts.join(', ')}; ${cost}` + (sm.can ? '.' : ` <span class="err">— not enough ${Object.keys(sm.net).filter((g) => !canAffordRoad(0, { [g]: sm.net[g] })).map((g) => GOOD[g].name).join(' or ')}.</span>`);
+      line = `Plan: ${parts.join(', ')}; ${cost}` + (!sm.short.length ? '.' : `. <span class="ok">Short of ${sm.short.map((g) => GOOD[g].name).join(' and ')} for now: what you can't pay for waits and is paid from storage as the goods come in, oldest plans first.</span>`);
     }
-    const waiting = planList(0).length;
-    if (mode === 'wall') how = 'Walls and Gates are paid for when you tap Build and free workers put them up. Enemy warbots have to go round or shoot through; your bots pass your Gates.';
-    else if (mode === 'rail') how = 'Track is paid for when you tap Build and goes down at once. Rail Stations stand beside it; Freight Trains run between stations on the same stretch of track.';
+    const waiting = planList(0).length, wp = plansWaiting(0), owedN = wp.tiles + wp.track + wp.sites;
+    const owedText = owedN ? ` <b>Waiting for goods now:</b> ${[wp.tiles ? `${wp.tiles} road tile${wp.tiles === 1 ? '' : 's'}` : '', wp.track ? `${wp.track} of track` : '', wp.sites ? `${wp.sites} site${wp.sites === 1 ? '' : 's'}` : ''].filter(Boolean).join(', ')} (${costText(wp.owed)} to go).` : '';
+    if (mode === 'wall') how = 'Walls and Gates are paid straight from storage, no Hauler needed: what you have now goes in when you tap Build, the rest as the goods come in (oldest plans first), and free workers put each piece up as far as its goods go. Enemy warbots have to go round or shoot through; your bots pass your Gates.' + owedText;
+    else if (mode === 'rail') how = 'Track you can pay for goes down when you tap Build; the rest goes down as the goods come in (oldest plans first). Where the track climbs a one-level cliff, a Ramp is planned for it (paid from storage, no road needed) and the track on it goes down once workers finish the Ramp. Rail Stations stand beside the track; Freight Trains run between stations on the same stretch of track.' + owedText;
     else how = `<b>Haulers only drive on roads</b>, so every building needs a road to storage. 1 Cement paves ${Math.round(1 / roadCost().cement)} tiles (${ROAD_CLEAR}× through resources); you have ${have.cement || 0} Cement` +
       (mode === 'bridge' ? ` and ${have.alloy || 0} Alloy. Workers build bridges and tunnels out from the shore or rock face, and they join land on any level.` : '.') +
-      ` After you tap Build, free workers pave the road a tile at a time${waiting ? ` (<b>${waiting}</b> tile${waiting === 1 ? '' : 's'} waiting now)` : ''}.`;
+      ` After you tap Build, free workers pave the road a tile at a time${waiting ? ` (<b>${waiting}</b> tile${waiting === 1 ? '' : 's'} waiting now)` : ''}. Short of Cement or Alloy? Plan it anyway: tiles you can't pay for yet wait (an orange outline) and are paid from storage as the goods come in, oldest plans first.` + owedText;
   }
   const text = (problem ? `<span class="${info ? 'ok' : 'err'}">${problem}</span> ` : '') + line +
     `<details class="how"><summary>How it works</summary>${how}</details>`;
@@ -1496,7 +1513,7 @@ function showRoadBanner(problem, info) {
     $('banner-ok').textContent = sm.add ? `Build ${sm.add} tile${sm.add === 1 ? '' : 's'}` + (sm.ramps ? ` + ${sm.ramps} Ramp${sm.ramps === 1 ? '' : 's'}` : '') + (wl ? ` + ${wl} wall` : '')
       : sm.ramps ? `Build ${sm.ramps} Ramp${sm.ramps === 1 ? '' : 's'}` + (wl ? ` + ${wl} wall` : '')
       : wl ? `Build ${sm.walls ? `${sm.walls} Wall${sm.walls === 1 ? '' : 's'}` : ''}${sm.walls && sm.gates ? ' + ' : ''}${sm.gates ? `${sm.gates} Gate${sm.gates === 1 ? '' : 's'}` : ''}`
-      : sm.rail ? `Lay ${sm.rail} track tile${sm.rail === 1 ? '' : 's'}` : 'Take up';
+      : sm.rail ? `Build ${sm.rail} track tile${sm.rail === 1 ? '' : 's'}` : 'Take up';
     $('banner-ok').disabled = !sm.can;
     $('banner-undo').onclick = () => { draftUndo(); sfx('click'); showRoadBanner(); };
     $('banner-clear').onclick = () => { draftReset(); sfx('click'); showRoadBanner(); };
