@@ -7,7 +7,7 @@ how goods move.
 
 - **Versus:** race a rival AI colony across the planet. Capture its Command Base to win (about 20–40 minutes).
   The rival is **Easy**, **Medium** (between Easy and Normal), **Normal** or **Hard**, and has a **personality**
-  (Rival style: Random, Balanced, Turtle, Raider, Rusher or Tycoon; see below).
+  (Rival style: Balanced by default, or Random, Turtle, Raider, Rusher or Tycoon; see below).
   **Players: Free-for-all · 3** adds a second rival (red and green): a round planet with the three starts 120° apart
   (player 0's third is generated and turned round onto the others, resources placed tile for tile so each third
   has as many). Capturing a Command Base hands over everything its owner built (`eliminate`); the last colony
@@ -24,7 +24,7 @@ Chokepoint, Islands, Crater, Plateaus or Sky islands, as buttons with a line on 
 Huge). **More settings** (a collapsible section, its summary listing whatever isn't the default) holds the planet
 number, the **biome** (Red desert, Jungle or Polar: scenery only, with plants that roads and buildings clear), the
 **terrain** (Flat, Gentle, Rolling, Rugged, Mountainous), the **resources** (Scarce to Abundant), the **rival style**,
-and switches for an optional **Nuclear race**, **Planet events** (on by default), **Wildlife** (Colony; on by default),
+and switches for the **Nuclear race** (on by default), **Planet events** (off by default), **Wildlife** (Colony; on by default),
 **Day and night** and **Unlimited resources** (a testing switch: `unlimitedTopUp` keeps your Command Base at
 `UNLIMITED_STOCK` of every good and fills whatever your buildings are waiting for, once a second). Resources come in separate
 fields: your landing zone has a little of everything, and the rich fields beyond it are worth fighting for.
@@ -388,7 +388,11 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
   Station and Research Lab, so WASD keeps panning; or **B R** to start laying roads), **R** (or **P**) opens and closes Paths
   and inside it picks a tool (**R** roads, **G** bridges
   and tunnels, **V** ramps, **E** pave, **O** one-way arrows, **L** junctions, **X** walls, **T** traffic map), **Q** army, **C** recall all warbots, **F** select all warbots, **J** latest alert,
-  **H** base, **[ ]** speed, **+/−** zoom, **M** minimap, **Space** pause, **Esc** back / clear selection.
+  **H** base, **[ ]** speed, **+/−** zoom, **M** minimap, **Space** pause, **Esc** back / clear selection, **Alt+Enter**
+  full screen (also a top-bar button and a pause-menu item). Chrome opens the installed app in a plain window on a
+  computer (it ignores the manifest's `fullscreen`), so the app goes full screen itself on the first click unless you
+  left full screen last time; Esc stays the game's key (`navigator.keyboard.lock`; hold it to leave). On a screen wider
+  or taller than the map the planet's ground carries on, darkened, past the map's edges (`drawOffMap`).
   Phones and tablets keep the touch controls.
 
 ## Custom art

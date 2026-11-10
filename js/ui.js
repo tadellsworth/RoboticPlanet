@@ -3,9 +3,12 @@
  * Terrafall — HTML interface: menus, HUD, build menu, info sheets, objectives, messages.
  */
 
+/** Version of the remembered new-game settings: 2 brought new defaults for rival style, Nuclear race and Planet events. */
+const SETTINGS_V = 2;
+
 const UI = {
   inGame: false, paused: false, speed: 1, overShown: false,
-  menu: { mode: 'versus', diff: 'normal', seed: randomSeed(), size: { ...DEFAULT_SIZE }, rough: DEFAULT_ROUGH, rich: DEFAULT_RICH, shape: 0, style: 0, events: 1, wild: 1, unlimited: 0 },
+  menu: { mode: 'versus', diff: 'normal', seed: randomSeed(), size: { ...DEFAULT_SIZE }, rough: DEFAULT_ROUGH, rich: DEFAULT_RICH, shape: 0, style: 1, nuke: 1, events: 0, wild: 1, unlimited: 0 },
   sheetKind: null, sheetFor: 0, sheetT: 0, hudT: 0,
   icons: {}, attackN: 0, demolishArm: 0, lastPaint: null, placeType: null,
   goodEls: {}, lastGoods: {}, objCollapsed: false, selBot: 0,
@@ -53,9 +56,15 @@ function initUI() {
   for (const btn of $('m-players').children) btn.onclick = () => { UI.menu.players = +btn.dataset.v; syncMenu(); saveSettings(); sfx('click'); };
   $('m-reroll').onclick = () => { UI.menu.seed = randomSeed(); syncMenu(); sfx('click'); };
   // Map settings sliders (remembered on this device; map size is remembered per mode).
-  try { Object.assign(UI.menu, JSON.parse(localStorage.getItem('botfall.settings') || '{}')); } catch (e) { /* defaults */ }
+  // Settings from before v2 drop their rival style, Nuclear race and Planet events, so the new defaults
+  // (a Balanced rival, Nuclear race on, Planet events off) reach every device once.
+  try {
+    const saved = JSON.parse(localStorage.getItem('botfall.settings') || '{}');
+    if ((saved.v || 0) < SETTINGS_V) { delete saved.style; delete saved.nuke; delete saved.events; }
+    Object.assign(UI.menu, saved);
+  } catch (e) { /* defaults */ }
   const saveSettings = () => {
-    try { localStorage.setItem('botfall.settings', JSON.stringify({ size: UI.menu.size, rough: UI.menu.rough, rich: UI.menu.rich, shape: UI.menu.shape, nuke: UI.menu.nuke, biome: UI.menu.biome, players: UI.menu.players, diff: UI.menu.diff, style: UI.menu.style, events: UI.menu.events, wild: UI.menu.wild, unlimited: UI.menu.unlimited })); } catch (e) { /* storage unavailable */ }
+    try { localStorage.setItem('botfall.settings', JSON.stringify({ v: SETTINGS_V, size: UI.menu.size, rough: UI.menu.rough, rich: UI.menu.rich, shape: UI.menu.shape, nuke: UI.menu.nuke, biome: UI.menu.biome, players: UI.menu.players, diff: UI.menu.diff, style: UI.menu.style, events: UI.menu.events, wild: UI.menu.wild, unlimited: UI.menu.unlimited })); } catch (e) { /* storage unavailable */ }
   };
   // Choices are buttons (all the options in view, easy to tap), and On/Off settings are switches.
   const choice = (id, labels, get, set) => {
@@ -103,6 +112,7 @@ function initUI() {
   const syncTod = () => { $('p-daynight').textContent = `Day and night: ${todEnabled() ? 'On' : 'Off'}`; };
   syncTod();
   $('p-daynight').onclick = () => { setTodEnabled(!todEnabled()); syncTod(); sfx('click'); };
+  initFullscreen();
   syncVol();
   $('p-help').onclick = () => showHelp();
   $('p-quit').onclick = () => { saveGame(); $('screen-pause').hidden = true; toMenu(); };
@@ -212,14 +222,76 @@ function syncMenu() {
   if (UI.menu.biome) sum.push(BIOMES[BIOME_ORDER[UI.menu.biome]].name);
   if (UI.menu.rough !== DEFAULT_ROUGH) sum.push(TERRAIN_PRESETS[UI.menu.rough].name + ' terrain');
   if (UI.menu.rich !== DEFAULT_RICH) sum.push(RESOURCE_PRESETS[UI.menu.rich].name + ' resources');
-  if (P && UI.menu.mode !== 'colony') sum.push(P.name + ' rival');
-  if (UI.menu.nuke) sum.push('Nuclear race');
+  if (style !== 1 && UI.menu.mode !== 'colony') sum.push(P ? P.name + ' rival' : 'Random rivals');
+  if (!UI.menu.nuke) sum.push('no Nuclear race');
   if (UI.menu.mode === 'colony' && !UI.menu.wild) sum.push('no wildlife');
-  if (!UI.menu.events) sum.push('no planet events');
+  if (UI.menu.events) sum.push('Planet events');
   if (!todEnabled()) sum.push('always day');
   if (UI.menu.unlimited) sum.push('Unlimited resources');
   $('m-more-sum').textContent = sum.length ? sum.join(' · ') : 'Planet, biome, terrain, resources, rival style, options';
   $('m-continue').hidden = !hasSave();
+}
+
+/* ------------------------------------------------------------------ full screen */
+
+/*
+ * Chrome on a computer opens the installed app in an ordinary window: it ignores the manifest's
+ * "fullscreen". So the game offers full screen itself: a button in the top bar (on a computer), one
+ * in the pause menu, and Alt+Enter. The installed app on a computer goes full screen on your first
+ * click, and remembers if you leave it. While full screen, Esc stays the game's key (hold it to leave).
+ */
+const FS_KEY = 'terrafall.fullscreen';
+const FS_ICON = {
+  on: '<svg viewBox="0 0 24 24" width="16" height="16"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" stroke="currentColor" stroke-width="2.4" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  off: '<svg viewBox="0 0 24 24" width="16" height="16"><path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5" stroke="currentColor" stroke-width="2.4" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+};
+function fsSupported() { return !!(document.fullscreenEnabled && document.documentElement.requestFullscreen); }
+function isFullscreen() { return !!document.fullscreenElement; }
+function fsPref() { try { return localStorage.getItem(FS_KEY); } catch (e) { return null; } }
+function setFsPref(on) { try { localStorage.setItem(FS_KEY, on ? '1' : '0'); } catch (e) { /* storage unavailable */ } }
+
+function setFullscreen(on) {
+  if (!fsSupported()) return;
+  setFsPref(on);
+  if (on && !isFullscreen()) {
+    document.documentElement.requestFullscreen({ navigationUI: 'hide' }).then(() => {
+      // Keep Esc for the game (close a panel, leave a mode): Chrome then asks you to hold Esc to leave.
+      if (navigator.keyboard && navigator.keyboard.lock) navigator.keyboard.lock(['Escape']).catch(() => {});
+    }).catch(() => {});
+  } else if (!on && isFullscreen()) document.exitFullscreen().catch(() => {});
+}
+function toggleFullscreen() { setFullscreen(!isFullscreen()); }
+
+function initFullscreen() {
+  const ok = fsSupported(), computer = matchMedia('(hover: hover) and (pointer: fine)').matches;
+  $('btn-full').hidden = !(ok && computer);
+  $('p-full').hidden = !ok;
+  if (!ok) return;
+  const sync = () => {
+    const on = isFullscreen();
+    $('btn-full').innerHTML = on ? FS_ICON.off : FS_ICON.on;
+    $('btn-full').setAttribute('aria-label', on ? 'Leave full screen' : 'Full screen');
+    $('btn-full').title = (on ? 'Leave full screen' : 'Full screen') + ' (Alt+Enter)';
+    $('p-full').textContent = `Full screen: ${on ? 'On' : 'Off'}`;
+  };
+  sync();
+  $('btn-full').onclick = () => { toggleFullscreen(); sfx('click'); };
+  $('p-full').onclick = () => { toggleFullscreen(); sfx('click'); };
+  let go = null;
+  document.addEventListener('fullscreenchange', () => {
+    setFsPref(isFullscreen()); // held Esc (or the browser's own control) to leave: remember that
+    if (go && isFullscreen()) { window.removeEventListener('click', go); window.removeEventListener('keyup', go); go = null; }
+    if (!isFullscreen() && navigator.keyboard && navigator.keyboard.unlock) navigator.keyboard.unlock();
+    sync();
+  });
+  // The installed app on a computer: full screen from the first click (after it has done its job, so
+  // the click isn't lost while the window grows), unless you left full screen last time.
+  const app = matchMedia('(display-mode: standalone), (display-mode: fullscreen), (display-mode: minimal-ui)').matches;
+  if (app && computer && fsPref() !== '0') {
+    go = () => { if (!isFullscreen()) setFullscreen(true); };
+    window.addEventListener('click', go);
+    window.addEventListener('keyup', go);
+  }
 }
 
 /* ------------------------------------------------------------------ goods tooltip */
@@ -310,6 +382,7 @@ function initKeyboard() {
       if (e.ctrlKey || e.metaKey || e.shiftKey) saveGroup(+digit[1]); else recallGroup(+digit[1]);
       return;
     }
+    if (e.altKey && e.key === 'Enter' && fsSupported()) { e.preventDefault(); toggleFullscreen(); return; }
     if (e.ctrlKey || e.metaKey || e.altKey) return;
     const k = e.key.toLowerCase();
     if (k === 'escape') { e.preventDefault(); escapeKey(); return; }

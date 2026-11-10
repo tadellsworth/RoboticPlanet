@@ -485,6 +485,34 @@ function hdBake(level, cx, cy) {
 }
 
 /** Draw the baked ground: the whole-map bake, with sharp chunks over it when zoomed in. */
+/**
+ * Beyond the map's edges: the planet's ground carries on, darkened, so a screen wider (or taller) than
+ * the map is filled to its edges, an ultrawide monitor included. Nothing out there can be reached.
+ */
+function drawOffMap(ctx, ox, oy, z) {
+  const mw = S.W * z, mh = S.H * z;
+  if (ox <= 0 && oy <= 0 && ox + mw >= R.w && oy + mh >= R.h) return; // the map covers the screen
+  const tex = R.tex && R.tex.ground;
+  if (tex && tex.img && tex.img.width) {
+    if (!R.offPat || R.offPat.img !== tex.img) R.offPat = { img: tex.img, pat: ctx.createPattern(tex.img, 'repeat') };
+    const pat = R.offPat.pat, s = (4 * z) / tex.img.width; // one texture covers 4×4 tiles, as on the map
+    if (pat && pat.setTransform) pat.setTransform(new DOMMatrix([s, 0, 0, s, ox, oy]));
+    ctx.fillStyle = pat || '#3a2a20';
+  } else ctx.fillStyle = (R.look && R.look.ground) || '#5a3b28';
+  const L = Math.max(0, ox), T = Math.max(0, oy), Rr = Math.min(R.w, ox + mw), B = Math.min(R.h, oy + mh);
+  const outside = new Path2D();
+  outside.rect(0, 0, R.w, R.h);
+  outside.rect(L, B, Rr - L, T - B); // the map's own rectangle, wound the other way: left as a hole
+  ctx.fill(outside, 'nonzero');
+  ctx.fillStyle = 'rgba(14,10,14,0.62)';
+  ctx.fill(outside, 'nonzero');
+  // A soft shadow along the map's edge marks where the planet you can use ends.
+  ctx.save();
+  ctx.strokeStyle = 'rgba(0,0,0,0.45)'; ctx.lineWidth = Math.max(2, z * 0.12);
+  ctx.strokeRect(ox - ctx.lineWidth / 2, oy - ctx.lineWidth / 2, mw + ctx.lineWidth, mh + ctx.lineWidth);
+  ctx.restore();
+}
+
 function drawMapLayer(ctx, ox, oy, z) {
   ctx.imageSmoothingEnabled = true;
   ctx.drawImage(R.map, ox, oy, S.W * z, S.H * z);
@@ -3412,6 +3440,7 @@ function render(dtReal) {
   const v0 = screenToWorld(0, 0), v1 = screenToWorld(R.w, R.h);
   const inView = (x, y, m) => x > v0.x - m && x < v1.x + m && y > v0.y - m && y < v1.y + m;
 
+  drawOffMap(ctx, ox, oy, z);
   drawMapLayer(ctx, ox, oy, z);
   ctx.drawImage(R.terr, ox, oy, S.W * z, S.H * z);
   todGradeGround(ctx); // morning, evening and night light on the ground and its territory tint (buildings and bots have their own re-lit art)
