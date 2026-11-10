@@ -160,6 +160,7 @@
       <label class="slider-row" for="p-fx"><span>Effects</span><output id="p-fx-v"></output>
         <input type="range" id="p-fx" min="0" max="100" step="5"></label>
     </div>
+    <button id="p-daynight" class="btn big" title="Morning, day, evening and night, 12 minutes round (a display setting)">Day and night: On</button>
     <button id="p-stats" class="btn big">Statistics</button>
     <button id="p-help" class="btn big">How to play</button>
     <button id="p-quit" class="btn big ghost">Save &amp; quit to menu</button>
@@ -269,6 +270,7 @@
       <p>Drag to move the map and pinch (or scroll) to zoom; on a Mac a trackpad pinch zooms the map, and swiping sideways (or Shift + scroll) pans. On a big screen, Cmd + and Cmd − (Ctrl on Windows) resize the buttons and text. Tap or drag on the minimap to jump around. Tap anything to see what it is doing. Tap a good's counter in the top bar to open <b>Goods</b>: how much of each good you have, how fast it's made and used per minute, which buildings make and use it, and any shortfall (buildings waiting on it with none in stock). Switch between goods at the top of the panel.</p>
       <p>The game runs at a steady, unhurried pace. Tap the <b>1×</b> button in the top bar to pick a speed: <b>0.75×</b> or <b>0.875×</b> for a calmer game, or 2× and 3× when you're waiting on something.</p>
       <p><b>Sound:</b> the music is a synthwave score made live as you play, and it follows the game: a calm groove while you build, a driving track when you're under attack or at war, and an alarm while a nuclear missile is in the air. Zoomed in, you hear what's on screen: traffic, welding, fresh concrete, hot asphalt, truck air brakes and horns in jams, and the wind of each biome. Set the <b>Music</b> and <b>Effects</b> volume in the pause menu.</p>
+      <p><b>Day and night:</b> the planet turns, 12 minutes of game time round: a golden morning, day, an orange evening as the lights come on, and night, when buildings glow, their lights spill onto the ground and vehicles drive with headlights. It's only for looks (nothing works differently at night). The clock shows a sun or a moon; turn the cycle off in the pause menu.</p>
       <p><b>On a computer</b> it plays like a classic RTS. Scroll to zoom; pan with <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> or the arrow keys, by resting the mouse at the edge of the window, or by right- or middle-dragging. Click to select; rest the mouse on anything to see what it is. <b>Drag a box</b> round your warbots to select them (a box round a garrison takes its spare warbots too; Shift adds to the selection), then <b>right-click</b>: open ground to hold it, a rival building to attack it, or your Outpost or Command Base to station them there. <kbd>Ctrl</kbd> (or <kbd>Shift</kbd>) + <kbd>1</kbd>–<kbd>9</kbd> saves the selection as a group; <kbd>1</kbd>–<kbd>9</kbd> selects it again, twice to jump to it.</p>
       <p>Keys: <kbd>B</kbd> build, then a building's key (shown on its card: a letter, or a number for Smelter 1, Bio Farm 2, Roadworks 3, Depot 4, Ropeway 5, Rail Station 6, Research Lab 7 and Viaduct 8; WASD still pans) to place it, or <kbd>B</kbd> <kbd>R</kbd> to start laying roads; <kbd>R</kbd> (or <kbd>P</kbd>) opens and closes Paths, and inside it picks a tool (<kbd>R</kbd> roads, <kbd>G</kbd> bridges and tunnels, <kbd>N</kbd> rail, <kbd>V</kbd> ramps, <kbd>E</kbd> pave, <kbd>O</kbd> one-way arrows, <kbd>L</kbd> junctions, <kbd>X</kbd> walls, <kbd>T</kbd> traffic map); <kbd>Q</kbd> army; <kbd>C</kbd> recall all warbots; <kbd>F</kbd> select every warbot; <kbd>J</kbd> jump to the latest alert; <kbd>H</kbd> base; <kbd>[</kbd> <kbd>]</kbd> game speed; <kbd>+</kbd>/<kbd>−</kbd> zoom; <kbd>M</kbd> minimap; <kbd>Space</kbd> pause; <kbd>Esc</kbd> back or clear the selection.</p>
     </div>
@@ -289,6 +291,7 @@
 </div>
 
 <script src="art/art-manifest.js"></script>
+<script src="art/tod/tod-keys.js"></script>
 <script src="js/util.js"></script>
 <script src="js/defs.js"></script>
 <script src="js/world.js"></script>
@@ -299,6 +302,7 @@
 <script src="js/charts.js"></script>
 <script src="js/audio.js"></script>
 <script src="js/render.js"></script>
+<script src="js/daynight.js"></script>
 <script src="js/input.js"></script>
 <script src="js/ui.js"></script>
 <script src="js/main.js"></script>

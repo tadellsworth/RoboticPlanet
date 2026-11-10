@@ -85,6 +85,9 @@ function initUI() {
   $('p-music').oninput = () => { setVolume('music', $('p-music').value / 100); syncVol(); };
   $('p-fx').oninput = () => { setVolume('fx', $('p-fx').value / 100); syncVol(); };
   $('p-fx').onchange = () => sfx('place');
+  const syncTod = () => { $('p-daynight').textContent = `Day and night: ${todEnabled() ? 'On' : 'Off'}`; };
+  syncTod();
+  $('p-daynight').onclick = () => { setTodEnabled(!todEnabled()); syncTod(); sfx('click'); };
   syncVol();
   $('p-help').onclick = () => showHelp();
   $('p-quit').onclick = () => { saveGame(); $('screen-pause').hidden = true; toMenu(); };
@@ -2532,7 +2535,11 @@ function updateHUD() {
   $('pop').innerHTML = `<span class="dot" style="background:#ece6da;box-shadow:inset 0 0 0 2px ${PLAYER_COLORS[0]}"></span>${workers}<span class="wide"> workers</span> <span style="color:var(--muted)">(${idle} free)</span>` +
     ` <span class="dot" style="background:#ffb547;box-shadow:inset 0 0 0 2px ${PLAYER_COLORS[0]}"></span>${haulers}<span class="wide"> haulers</span>` +
     (warOn() ? ` <span class="dot" style="background:${PLAYER_COLORS[0]};border-radius:2px;transform:rotate(45deg)"></span>${war}` : '');
-  $('clock').textContent = S.mode === 'colony' ? `${Math.round(landShare(0) * 100)}% land` : fmtTime(S.time);
+  // With day and night on, the time of day leads (a sun, a half-lit disc at dawn and dusk, a moon).
+  const tn = todAt(S.time).name, tod = todEnabled() ? `<span class="tod-mark" style="color:${{ morning: '#ffb38a', day: '#ffd166', evening: '#ff8a4a', night: '#b8c8ff' }[tn]}">${tn === 'night' ? '☾' : '☀'}</span> ` : '';
+  const ct = tod + (S.mode === 'colony' ? `${Math.round(landShare(0) * 100)}% land` : fmtTime(S.time));
+  if ($('clock').innerHTML !== ct) $('clock').innerHTML = ct;
+  $('clock').title = todEnabled() ? TOD_NAMES[todAt(S.time).name] : '';
   const obj = $('objective');
   obj.innerHTML = UI.objCollapsed && !S.mission ? 'Goal ▸' : objectiveText();
   obj.classList.toggle('small', UI.objCollapsed);

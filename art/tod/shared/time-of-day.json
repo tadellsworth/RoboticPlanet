@@ -1,0 +1,112 @@
+{
+ "note": "Terrafall time-of-day settings. Sprites: load art/tod/<tod>/<same path and name as the day file>. Everything listed under grade is NOT re-rendered: tint it in code.",
+ "times": {
+  "morning": {
+   "grade_multiply": [
+    1.0,
+    0.85,
+    0.79
+   ],
+   "grade_add": [
+    0.06,
+    0.05,
+    0.09
+   ],
+   "unit_shadow": {
+    "dx_tiles": -0.16,
+    "dy_tiles": 0.06,
+    "alpha": 0.4,
+    "blur_scale": 1.0
+   },
+   "lights": 0.0,
+   "headlights": 0.0,
+   "light_pools": 0.0
+  },
+  "day": {
+   "grade_multiply": [
+    1,
+    1,
+    1
+   ],
+   "grade_add": [
+    0,
+    0,
+    0
+   ],
+   "unit_shadow": {
+    "dx_tiles": 0.05,
+    "dy_tiles": 0.07,
+    "alpha": 0.42,
+    "blur_scale": 1.0
+   },
+   "lights": 0.0,
+   "headlights": 0.0,
+   "light_pools": 0.0
+  },
+  "evening": {
+   "grade_multiply": [
+    0.92,
+    0.64,
+    0.5
+   ],
+   "grade_add": [
+    0.01,
+    0.0,
+    0.02
+   ],
+   "unit_shadow": {
+    "dx_tiles": 0.2,
+    "dy_tiles": 0.07,
+    "alpha": 0.4,
+    "blur_scale": 1.0
+   },
+   "lights": 0.55,
+   "headlights": 0.55,
+   "light_pools": 0.3
+  },
+  "night": {
+   "grade_multiply": [
+    0.19,
+    0.23,
+    0.37
+   ],
+   "grade_add": [
+    0.008,
+    0.01,
+    0.025
+   ],
+   "unit_shadow": {
+    "dx_tiles": 0.03,
+    "dy_tiles": 0.05,
+    "alpha": 0.25,
+    "blur_scale": 1.6
+   },
+   "lights": 1.0,
+   "headlights": 1.0,
+   "light_pools": 0.55
+  }
+ },
+ "grade_these": [
+  "art/tiles/* (ground, water, rock, fertile, slope, cliff)",
+  "art/biomes/** (terrain, cliffs, plants)",
+  "art/canyon/*",
+  "art/resources/*",
+  "art/markers/missile, nuclear-missile (optional)",
+  "dust and smoke overlays: crawler-dust, truck-boost dust, freight-loco-exhaust"
+ ],
+ "never_grade": [
+  "UI and goods icons",
+  "nuke blast frames",
+  "light overlays: *-brake, *-boost glow, *-lights, *-headlights, *-spark-f*, rail-lights-on, skybridge-tower-lamp, crawler-lights, freight-loco-lights, light-pool"
+ ],
+ "suggested_cycle_minutes": {
+  "night_to_morning": 0.5,
+  "morning": 1.5,
+  "morning_to_day": 0.5,
+  "day": 4,
+  "day_to_evening": 0.5,
+  "evening": 1.5,
+  "evening_to_night": 0.5,
+  "night": 3
+ }
+}

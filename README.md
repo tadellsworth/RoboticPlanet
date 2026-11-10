@@ -401,6 +401,29 @@ including the remaining pieces (Ramp, slope and cliff textures, goods icons).
 
 (GitHub Pages on a private repository needs a paid GitHub plan; on a public repository it is free.)
 
+### Day and night
+
+The planet turns: morning, day, evening and night, 12 minutes of game time round (`TOD_CYCLE` in `js/daynight.js`),
+starting at dawn, with half-minute crossfades. It runs on game time, so it pauses with the game and is saved with it;
+the clock in the top bar shows a sun (coloured for dawn, day and dusk) or a moon. Turn it off in the pause menu (Day and
+night; a display setting kept on the device).
+
+- **Re-lit art.** Every 3D sprite (buildings, robots and vehicles, track and bridge pieces: the 207 keys in
+  `art/tod/tod-keys.js`) has a morning, evening and night version from the Claude Design day/night kit, at
+  `art/tod/<time>/<same path as the day art>` (WebP, the day file's size; the kit's design names, such as cement-works
+  for the Cement Works, are installed under the game's). `drawArt` draws the current time's version and fades in the
+  next one over a transition (`todVariant`); only the sets in use now and next are loaded (`todFrame`). The single-file
+  build puts each set in a bundle beside the page (`dist/tod-<time>.js`, loaded when needed).
+- **Graded in code** (`out = in × multiply + add`, values from the kit's `art/tod/shared/time-of-day.json`): the baked
+  ground, roads, plants, resources and territory tint (`todGradeGround`), Walls and Gates (`todColor`), and any sprite
+  without a re-lit version or whose set hasn't loaded yet (`todGraded`). Light overlays (brake lights, boost glow,
+  lamps), the UI and nuke blasts are never graded.
+- **Evening and night:** vehicles' headlights (`drawHeadlights`, the kit's overlays at 3× the sprite), a glow in team
+  colour under every finished building (`drawLightPool`), and bots' drop shadows lean left at dawn, right at dusk and
+  fade at night (`todShadow`).
+- The kit's 3D turret (base and rotating heads) and wall pieces aren't used: the game's day art has the flat turret and
+  draws Walls in code, so they're graded instead.
+
 ## Project layout
 
 ```
@@ -414,6 +437,7 @@ js/ai.js                  rival AI
 js/missions.js            mission campaign: goals, hand-placed map features, progress
 js/charts.js              line and bar charts for the statistics screen
 js/render.js              canvas renderer and placeholder art
+js/daynight.js            day and night: the clock, re-lit art sets, grading, headlights, light pools
 js/input.js               touch and mouse controls
 js/ui.js                  HUD, build menu, info panels, objectives
 js/audio.js               synthesized sound effects
@@ -421,7 +445,7 @@ js/main.js                boot and main loop
 art/art-manifest.js       register custom art here
 tools/headless-sim.js     AI-vs-AI balance test without a browser
 tools/smoke-test.js       browser test on a phone-sized screen (Playwright)
-tools/build-single.js     bundles everything into dist/terrafall.html
+tools/build-single.js     bundles everything into dist/terrafall.html (and dist/tod-<time>.js)
 ```
 
 Plain JavaScript, no build step and no dependencies. Balance tweaks mostly live in `js/defs.js`.

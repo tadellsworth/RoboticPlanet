@@ -61,6 +61,13 @@ If it's easier, just send the finished files to Claude Code and ask it to wire t
 
 ---
 
+### Day and night art
+
+`art/tod/<morning|evening|night>/` mirrors the day art for every 3D sprite (same file names, canvases and anchors, only
+re-lit), and `art/tod/shared/` holds the headlight overlays, the light pool and the kit's `time-of-day.json`. To re-lit a
+new sprite: render its three versions, save them as WebP at the day file's size under the same path, and add its key to
+`art/tod/tod-keys.js`. Sprites without them are colour-graded in code, which works but has no lights.
+
 ## 2. Style direction
 
 **Cyberpunk industrial realism.** A frontier mining colony on a dusty alien world, run entirely by

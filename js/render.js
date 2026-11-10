@@ -171,7 +171,7 @@ function loadArt(onChange) {
     const entry = typeof ART_MANIFEST[key] === 'string' ? { src: ART_MANIFEST[key] } : ART_MANIFEST[key];
     const img = new Image();
     img.onload = () => {
-      ART[key] = { img, scale: entry.scale || 0, anchor: entry.anchor || '', shadow: !!entry.shadow };
+      ART[key] = { img, scale: entry.scale || 0, anchor: entry.anchor || '', shadow: !!entry.shadow, key };
       artLoaded++;
       // The third team (green) gets the rival's red art recoloured, made the first time it's asked for.
       if (key.includes('@1')) {
@@ -179,7 +179,7 @@ function loadArt(onChange) {
         if (!Object.prototype.hasOwnProperty.call(ART, k2)) {
           Object.defineProperty(ART, k2, {
             configurable: true, enumerable: false,
-            get() { const v = recolorArt(ART[key], ART[key.replace('@1', '@0')]); Object.defineProperty(ART, k2, { value: v, writable: true, configurable: true, enumerable: false }); return v; },
+            get() { const v = recolorArt(ART[key], ART[key.replace('@1', '@0')]); if (v && v !== ART[key]) v.key = k2; Object.defineProperty(ART, k2, { value: v, writable: true, configurable: true, enumerable: false }); return v; },
           });
         }
       }
@@ -282,6 +282,20 @@ function turretHead(owner, aim) {
  * its size) on (cx, cy).
  */
 function drawArt(ctx, art, cx, cy, sizePx, angle) {
+  // Morning, evening or night: the re-lit version of the art, fading into the next time's.
+  if (TOD.active && !R.inMap && art) {
+    const st = TOD.state, A = todVariant(art, st.a);
+    drawArtRaw(ctx, A, cx, cy, sizePx, angle);
+    if (st.f > 0.002 && st.b !== st.a) {
+      const B = todVariant(art, st.b), ga = ctx.globalAlpha;
+      if (B !== A) { ctx.globalAlpha = ga * st.f; drawArtRaw(ctx, B, cx, cy, sizePx, angle); ctx.globalAlpha = ga; }
+    }
+    return;
+  }
+  drawArtRaw(ctx, art, cx, cy, sizePx, angle);
+}
+
+function drawArtRaw(ctx, art, cx, cy, sizePx, angle) {
   const s = sizePx * (art.scale || 1);
   const img = artMip(art, s * (R.drawScale || 1));
   if (Array.isArray(art.anchor) && !angle) {
@@ -547,7 +561,8 @@ function levelColor(e, n) {
 function drawTile(i, j, ctx = R.mapCtx) {
   const prev = R.drawScale;
   R.drawScale = ctx.hdScale || 1;
-  paintTile(ctx, i, j);
+  R.inMap = true; // the baked map is day art: it's graded as a whole when drawn (see todGradeGround)
+  try { paintTile(ctx, i, j); } finally { R.inMap = false; }
   R.drawScale = prev;
 }
 
@@ -2380,9 +2395,9 @@ function drawBarrier(ctx, type, cx, cy, s, owner, b) {
     lane = rv > rh ? 'v' : rh > rv ? 'h' : (c[1] || c[3]) ? 'v' : (c[0] || c[2]) ? 'h' : 'v';
     // Road surface through the gap.
     const rw = s * 0.44;
-    ctx.fillStyle = '#5d636b';
+    ctx.fillStyle = todColor('#5d636b');
     if (lane === 'v') ctx.fillRect(cx - rw / 2 - 2, y0, rw + 4, s); else ctx.fillRect(x0, cy - rw / 2 - 2, s, rw + 4);
-    ctx.fillStyle = '#b9bec5';
+    ctx.fillStyle = todColor('#b9bec5');
     if (lane === 'v') ctx.fillRect(cx - rw / 2, y0, rw, s); else ctx.fillRect(x0, cy - rw / 2, s, rw);
     // Two pillars either side of the road, reaching out to the wall on each side.
     const p = s * 0.24;
@@ -2398,11 +2413,11 @@ function drawBarrier(ctx, type, cx, cy, s, owner, b) {
   // Shadow, the front face (the block's base, seen below the raised top) and the top.
   ctx.fillStyle = 'rgba(10,8,6,0.3)';
   for (const r of rects) ctx.fillRect(r[0] + s * 0.06, r[1] + s * 0.05, r[2], r[3]);
-  ctx.fillStyle = '#6e7177';
+  ctx.fillStyle = todColor('#6e7177');
   for (const r of rects) ctx.fillRect(r[0], r[1], r[2], r[3]);
-  ctx.fillStyle = '#4f5257';
+  ctx.fillStyle = todColor('#4f5257');
   for (const r of rects) ctx.fillRect(r[0], r[1] + r[3] - Math.min(h * 0.45, r[3] * 0.4), r[2], Math.min(h * 0.45, r[3] * 0.4));
-  ctx.fillStyle = '#c3c6cb';
+  ctx.fillStyle = todColor('#c3c6cb');
   for (const r of rects) ctx.fillRect(r[0], r[1] - h, r[2], r[3]);
   // Block joints and a light top edge.
   ctx.strokeStyle = 'rgba(80,84,92,0.55)';
@@ -2428,9 +2443,9 @@ function drawBarrier(ctx, type, cx, cy, s, owner, b) {
       ? [[x0, cy - a * 1.05, pw, a * 2.1], [x0 + s - pw, cy - a * 1.05, pw, a * 2.1]]
       : [[cx - a * 1.05, y0, a * 2.1, pw], [cx - a * 1.05, y0 + s - pw, a * 2.1, pw]];
     for (const r of posts) {
-      ctx.fillStyle = '#3d4045';
+      ctx.fillStyle = todColor('#3d4045');
       ctx.fillRect(r[0], r[1] - h, r[2], r[3] + h);
-      ctx.fillStyle = '#8e939b';
+      ctx.fillStyle = todColor('#8e939b');
       ctx.fillRect(r[0], r[1] - h - ph, r[2], r[3]);
       ctx.fillStyle = 'rgba(255,255,255,0.4)';
       ctx.fillRect(r[0], r[1] - h - ph, r[2], Math.max(1, s * 0.03));
@@ -2444,7 +2459,7 @@ function drawBarrier(ctx, type, cx, cy, s, owner, b) {
     ctx.save();
     if (lane === 'v') { ctx.translate(x0 + pw, cy - h * 1.2); if (open) ctx.rotate(-1.2); }
     else { ctx.translate(cx, y0 + pw - h * 1.2); ctx.rotate(Math.PI / 2); if (open) ctx.rotate(-1.2); }
-    ctx.fillStyle = '#f2f2f2';
+    ctx.fillStyle = todColor('#f2f2f2');
     ctx.fillRect(0, -bh / 2, len, bh);
     ctx.fillStyle = color;
     for (let k = 0; k < 4; k++) if (k % 2 === 0) ctx.fillRect((len * k) / 4, -bh / 2, len / 4, bh);
@@ -2621,6 +2636,7 @@ function drawFreightTrain(ctx, u, sx, sy, s) {
     const fr = ART['freight-loco@' + u.owner + '-f' + (Math.floor((u.odo || 0) / FRAME_STEP) % 4)] || loco;
     drawArt(ctx, fr, sx, sy, size, u.face || 0);
     if (ART['freight-loco-lights']) drawArt(ctx, ART['freight-loco-lights'], sx, sy, size, u.face || 0);
+    drawHeadlights(ctx, 'freight-loco', sx, sy, size * (fr.scale || 1), u.face || 0);
     if (u.drive < 0 && ART['freight-loco-brake']) drawArt(ctx, ART['freight-loco-brake'], sx, sy, size, u.face || 0);
     if (u.drive > 0 && ART['freight-loco-exhaust']) { ctx.globalAlpha = clamp(1 - (u.vel || 0) / (u.vtop || 1), 0.3, 1); drawArt(ctx, ART['freight-loco-exhaust'], sx, sy, size, u.face || 0); ctx.globalAlpha = 1; }
     return;
@@ -2678,6 +2694,7 @@ function drawCrawlerArt(ctx, face, x, y, s, owner, deployed, odo, e) {
     : d >= 0 ? ART['crawler-deploy@' + owner + '-d' + d]
     : ART['crawler@' + owner + '-f' + (Math.floor((odo || 0) / (FRAME_STEP * 0.5)) % 8)];
   if (art) drawArt(ctx, art, x, y, size, face);
+  if (art && !deployed) drawHeadlights(ctx, 'crawler', x, y, size * (art.scale || 1), face);
   if (d < 8 && ART['crawler-dish']) {
     const spin = d >= 0 ? 0 : R.time * 0.9;
     const img = artMip(ART['crawler-dish'], size * (R.drawScale || 1));
@@ -2906,6 +2923,7 @@ function drawBot(ctx, u, sx, sy, s) {
     if (art.shadow) drawBotShadow(ctx, u, sx, sy, size * 0.42, size * 0.3);
     drawArt(ctx, art, sx, sy + bob, size, u.face);
     if (art === own) drawDriveOverlays(ctx, u, sx, sy + bob, size);
+    drawHeadlights(ctx, art === own && TOD_VEHICLES.includes(u.type) ? u.type : 'worker', sx, sy + bob, size * (art.scale || 1), u.face);
   } else if (u.type !== 'warbot') {
     const r = s * 0.16;
     ctx.fillStyle = 'rgba(20,10,5,0.3)';
@@ -2995,9 +3013,11 @@ function drawDriveOverlays(ctx, u, x, y, size) {
 
 /** A soft shadow under a bot, cast down-right whichever way the bot faces (for art without one). */
 function drawBotShadow(ctx, u, x, y, along, across) {
-  ctx.fillStyle = 'rgba(20,10,5,0.32)';
+  // It leans and softens with the light (see todShadow): left in the morning, right in the evening, faint at night.
+  const sh = todShadow();
+  ctx.fillStyle = `rgba(20,10,5,${(sh.alpha / sh.grow).toFixed(3)})`;
   ctx.beginPath();
-  ctx.ellipse(x + along * 0.12, y + along * 0.16, along, across, u.face, 0, Math.PI * 2);
+  ctx.ellipse(x + along * sh.kx, y + along * sh.ky, along * sh.grow, across * sh.grow, u.face, 0, Math.PI * 2);
   ctx.fill();
 }
 
@@ -3099,6 +3119,7 @@ function drawTruck(ctx, u, sx, sy, s, color, art) {
     drawArt(ctx, art, sx, sy, size, u.face);
     drawDriveOverlays(ctx, u, sx, sy, size);
     drawTruckCargo(ctx, u, sx, sy, -size * 0.392, size * 0.54, size * 0.24, s);
+    drawHeadlights(ctx, 'truck', sx, sy, size * (art.scale || 1), u.face);
     return;
   }
   ctx.save();
@@ -3170,6 +3191,7 @@ function drawRoadTrain(ctx, u, sx, sy, s) {
     }
     for (const c of cars) drawBotShadow(ctx, { face: c.ang }, c.x, c.y, size * 0.4, size * 0.16);
     drawArt(ctx, tractor, sx, sy, size, u.face);
+    drawHeadlights(ctx, 'roadtrain', sx, sy, size * (tractor.scale || 1), u.face);
     [l1, l2].forEach((load, k) => {
       const c = cars[k + 1];
       drawArt(ctx, trailerArt, c.x, c.y, size, c.ang);
@@ -3308,6 +3330,7 @@ function render(dtReal) {
   if (!S || !R.map) return;
   flushDirtyTiles();
   updateTerritoryLayer();
+  todFrame();
 
   let ox = R.w / 2 - R.cam.x * z, oy = R.h / 2 - R.cam.y * z;
   // A nuclear blast shakes the screen for its first half second.
@@ -3317,6 +3340,7 @@ function render(dtReal) {
 
   drawMapLayer(ctx, ox, oy, z);
   ctx.drawImage(R.terr, ox, oy, S.W * z, S.H * z);
+  todGradeGround(ctx); // morning, evening and night light on the ground and its territory tint (buildings and bots have their own re-lit art)
 
   // Territory borders
   ctx.lineWidth = Math.max(1.5, z * 0.07);
@@ -3427,6 +3451,13 @@ function render(dtReal) {
   for (const b of S.buildings) if (!b.dead && inView(b.x, b.y, 2)) items.push(b);
   for (const u of S.bots) if (!u.dead && !u.inside && !(u.ride >= 0) && inView(u.x, u.y, 1)) items.push(u);
   items.sort((a, b) => (a.ent === 'b' ? a.y + 0.5 : a.y) - (b.ent === 'b' ? b.y + 0.5 : b.y));
+  // At dusk and night, every finished building's lights spill onto the ground round its pad.
+  if (TOD.active && TOD.state.pools > 0.01) {
+    for (const e of items) {
+      if (e.ent !== 'b' || !e.built || BDEFS[e.type].barrier || BDEFS[e.type].viaduct) continue;
+      drawLightPool(ctx, ox + (e.x + 0.5) * z, oy + (e.y + 0.5) * z, z * (e.type === 'lander' ? 1.5 : 1), BDEFS[e.type].wild ? '#9dff6a' : PLAYER_COLORS[e.owner] || '#ffd9a0');
+    }
+  }
   for (const e of items) {
     if (e.ent === 'b') {
       const cx = ox + (e.x + 0.5) * z, cy = oy + (e.y + 0.5) * z;
