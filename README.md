@@ -265,6 +265,9 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
   top of the panel.
 - **Ammo:** warbots carry 10 shots (each Ammo reloads 5) and reload in your Command Base and Outposts, which haulers stock from an Ammo Plant. Out of
   ammo, a warbot can't fight at all: it heads back to a garrison to reload, and only armed warbots answer orders.
+- **Rival boost (hidden):** tap the clock three times quickly, or press **`**, to give a rival a supply drop, 4 armed
+  Warbots or 3 Workers at its Command Base (`BOOST` in `js/defs.js`, `boostRival` in `js/sim.js`), for a game you're
+  winning too easily. The game pauses while it's open.
 - **Repairs:** nothing heals by itself. Damaged bots go to a Repair Station (workers below 60% health, warbots below
   70% once their garrison is quiet; Colony free play too), which uses 1 Alloy per 12 health. Haulers keep up to 3 Alloy
   in it, and an empty one gets the first Alloy that reaches storage (like an empty Charging Station's Fuel). To fix a building, tap it and press **Repair**:

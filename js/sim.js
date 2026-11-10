@@ -2237,6 +2237,34 @@ function spawnFromFoundry(b) {
   if (kind === 'warbot') goGarrison(u);
 }
 
+/** The rivals still in the game (a Versus game's AI colonies), for the hidden boost menu. */
+function boostableRivals() {
+  if (!S || S.mode === 'colony') return [];
+  return S.players.filter((P) => P.id !== 0 && !P.out && !P.absent && getE(P.lander) && !getE(P.lander).dead);
+}
+
+/**
+ * The hidden rival boost: give rival p a supply drop ('goods'), armed warbots or workers at its
+ * Command Base (BOOST). Returns how many goods or robots it got (robots stop at the bot limit).
+ */
+function boostRival(p, kind) {
+  const P = S.players[p], L = P && getE(P.lander);
+  if (!L || L.dead || P.out) return 0;
+  let n = 0;
+  if (kind === 'goods') {
+    for (const g in BOOST.goods) { bump(L.stock, g, BOOST.goods[g]); n += BOOST.goods[g]; }
+  } else if (kind === 'warbots' || kind === 'workers') {
+    const type = kind === 'warbots' ? 'warbot' : 'worker', cap = S.mode === 'colony' ? MAX_BOTS_COLONY : MAX_BOTS;
+    for (let k = 0; k < BOOST[kind] && botCount(p) < cap; k++) {
+      const u = addBot(p, type, L.x, L.y);
+      if (type === 'warbot') { u.ammo = WARBOT_AMMO; goGarrison(u); }
+      n++;
+    }
+  }
+  if (n) { P.boosts = (P.boosts || 0) + 1; addFx('ring', L.x + 0.5, L.y + 0.5, { color: PLAYER_COLORS[p] }); }
+  return n;
+}
+
 /**
  * A Pulse Turret keeps tracking its target, turns its head toward it at TURRET_TURN radians per
  * second and fires only once it is lined up. With nothing in range it sweeps slowly back and forth.

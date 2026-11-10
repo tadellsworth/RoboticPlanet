@@ -381,6 +381,15 @@ const EVAC_MARGIN = 1.5; // an evacuation clears this much beyond the blast radi
 
 const PLAYER_COLORS = ['#38d4ff', '#ff5a6e', '#5be06c'];
 /**
+ * The hidden rival boost (tap the clock three times, or press ` on a keyboard): for a game you're
+ * winning too easily. Each button gives one rival this much, at its Command Base.
+ */
+const BOOST = {
+  goods: { cement: 40, stone: 20, fiber: 30, ore: 20, crystal: 15, alloy: 15, chip: 6, fuel: 20, ammo: 15 },
+  warbots: 4, workers: 3,
+};
+
+/**
  * What to call player p. Label: 'You', 'Rival' (two players), 'Red rival' or 'Green rival' (three).
  * In a sentence (the = true): 'you', 'the rival', 'the Red rival', 'the Green rival'.
  */

@@ -99,6 +99,14 @@ function initUI() {
   // Pause menu
   $('btn-pause').onclick = () => { UI.paused = true; $('screen-pause').hidden = false; sfx('click'); };
   $('p-resume').onclick = () => { UI.paused = false; $('screen-pause').hidden = true; };
+  // The hidden rival boost: tap the clock three times quickly (or press ` on a keyboard).
+  $('clock').addEventListener('click', () => {
+    const now = performance.now();
+    UI.clockTaps = (UI.clockTaps || []).filter((t) => now - t < 1200);
+    UI.clockTaps.push(now);
+    if (UI.clockTaps.length >= 3) { UI.clockTaps = []; openBoost(); }
+  });
+  $('bo-close').onclick = () => closeBoost();
   // Music and Effects volume (remembered on this device).
   const syncVol = () => {
     for (const [id, k] of [['p-music', 'music'], ['p-fx', 'fx']]) {
@@ -230,6 +238,45 @@ function syncMenu() {
   if (UI.menu.unlimited) sum.push('Unlimited resources');
   $('m-more-sum').textContent = sum.length ? sum.join(' · ') : 'Planet, biome, terrain, resources, rival style, options';
   $('m-continue').hidden = !hasSave();
+}
+
+/* ------------------------------------------------------------------ rival boost (hidden) */
+
+function openBoost() {
+  if (!UI.inGame || !S) return;
+  if ($('screen-boost').hidden) UI.boostWasPaused = UI.paused;
+  UI.paused = true;
+  $('screen-boost').hidden = false;
+  $('bo-msg').textContent = '';
+  renderBoost();
+  sfx('click');
+}
+
+function closeBoost() {
+  $('screen-boost').hidden = true;
+  UI.paused = !!UI.boostWasPaused || !$('screen-pause').hidden;
+}
+
+function renderBoost() {
+  const rivals = boostableRivals(), body = $('bo-body');
+  if (!rivals.length) { body.innerHTML = '<p class="mode-desc">There\'s no rival colony in this game to help.</p>'; return; }
+  body.innerHTML = rivals.map((P) => {
+    const st = PERSONALITIES[P.style];
+    return `<div class="boost-row" data-p="${P.id}"><div class="boost-head"><i class="dot" style="background:${PLAYER_COLORS[P.id]}"></i>` +
+      `<b>${playerName(P.id)}</b>${st ? ' · ' + st.name : ''}<small>${P.boosts ? `boosted ${P.boosts}×` : ''}</small></div>` +
+      `<div class="boost-btns"><button class="btn small" data-k="goods" title="${Object.entries(BOOST.goods).map(([g, n]) => n + ' ' + GOOD[g].name).join(', ')}">Supply drop</button>` +
+      `<button class="btn small" data-k="warbots">+${BOOST.warbots} Warbots</button><button class="btn small" data-k="workers">+${BOOST.workers} Workers</button></div></div>`;
+  }).join('');
+  for (const btn of body.querySelectorAll('button')) {
+    btn.onclick = () => {
+      const p = +btn.closest('.boost-row').dataset.p, k = btn.dataset.k, n = boostRival(p, k);
+      const what = k === 'goods' ? 'a supply drop' : `${n} ${k === 'warbots' ? 'armed Warbot' : 'Worker'}${n === 1 ? '' : 's'}`;
+      const msg = n ? `You gave ${playerName(p, true)} ${what}.` : `${playerName(p)} is at its robot limit.`;
+      $('bo-msg').textContent = msg;
+      sfx(n ? 'place' : 'click');
+      renderBoost();
+    };
+  }
 }
 
 /* ------------------------------------------------------------------ full screen */
@@ -386,7 +433,8 @@ function initKeyboard() {
     if (e.ctrlKey || e.metaKey || e.altKey) return;
     const k = e.key.toLowerCase();
     if (k === 'escape') { e.preventDefault(); escapeKey(); return; }
-    const overlay = !$('screen-pause').hidden || !$('screen-help').hidden || !$('screen-stats').hidden || !$('screen-over').hidden;
+    if (k === '`' && $('screen-over').hidden) { e.preventDefault(); if ($('screen-boost').hidden) openBoost(); else closeBoost(); return; }
+    const overlay = !$('screen-pause').hidden || !$('screen-help').hidden || !$('screen-stats').hidden || !$('screen-over').hidden || !$('screen-boost').hidden;
     if (k === ' ' || k === 'spacebar') {
       e.preventDefault();
       if (!$('screen-pause').hidden) $('p-resume').click(); else if (!overlay) $('btn-pause').click();
@@ -602,6 +650,7 @@ function escapeKey() {
   if (!$('speed-menu').hidden) { $('speed-menu').hidden = true; return; }
   if (!$('screen-help').hidden) { $('h-close').click(); return; }
   if (!$('screen-stats').hidden) { $('st-close').click(); return; }
+  if (!$('screen-boost').hidden) { closeBoost(); return; }
   if (!$('screen-pause').hidden) { $('p-resume').click(); return; }
   if (!$('screen-over').hidden) return;
   if (UI.sheetKind) { closeSheet(); return; }
