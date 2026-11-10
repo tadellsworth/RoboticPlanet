@@ -3738,7 +3738,7 @@ function render(dtReal) {
       }
       if (paveMode || S.road[t] || !canRoad(0, i, j)) continue;
       const cross = crossTile(t);
-      if (cross && !bridgeMode) continue;
+      if (cross && !bridgeMode && !bridgeable(t)) continue; // (a road dragged over water becomes a bridge; rock needs Bridges)
       ctx.strokeStyle = cross ? 'rgba(140,215,255,0.5)' : S.res[t] ? 'rgba(255,170,90,0.28)' : 'rgba(255,240,200,0.18)';
       ctx.strokeRect(ox + i * z + 1.5, oy + j * z + 1.5, z - 3, z - 3);
     }
