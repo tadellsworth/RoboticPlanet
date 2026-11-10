@@ -161,9 +161,19 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
   `js/sim.js`): track is a tile layer (`S.rail`), laid instantly from the Paths **Rail** tool (`RAIL_COST` a tile,
   `RAIL_BRIDGE_COST` over water or canyon), level except on bridges (`railStep`). Rail Stations stand beside the track;
   their platforms are the track tiles next to them (`railPlatforms`), and `railNet` groups stations by line. Freight
-  Trains (48 goods) take the dispatch role `'rail'`: trunk runs from a far station to the home station and supply orders
+  Trains (56 goods) take the dispatch role `'rail'`: trunk runs from a far station to the home station and supply orders
   between stations on one line, `RAIL_MIN_LOAD` (10) or more; `railRoute` plans along the track. Road bots wait at a
   level crossing while a train is near (`trainNear`, `RAIL_CROSS_HOLD`). Trains never need charging.
+- **Which carrier** (`fleet-bench`: a far store full of Stone, 12 rounds of parts of each fleet, goods home in 8 min):
+
+  | Distance | Trucks ×6, road | Road Trains ×3, road | Trucks ×6, asphalt | Road Trains ×3, asphalt | Freight Trains ×2, rail |
+  |---|---|---|---|---|---|
+  | 16 | 1200 | 1170 | 1512 | 2250 | 2996 |
+  | 28 | 776 | 720 | 1128 | 1860 | 2016 |
+  | 40 | 576 | 540 | 888 | 1560 | 1680 |
+
+  Four trucks and a Road Train on plain road do worst of all (the Road Train holds up the trucks). The rail line ran
+  15% longer than the road in these tests (it went round obstacles), and costs `RAIL_COST` a tile plus two stations.
 - **Crawlers** (`updateCrawler`, `deployCrawler`, `packCrawler`): a slow tracked bot that drives off-road and deploys
   into the `crawlerbase` building (store, 4-slot charger burning its Fuel, Outpost territory, garrison 4). Packing up
   turns it back into a bot carrying the store's goods (`u.cargo`); if it's destroyed on the move they spill as loot.

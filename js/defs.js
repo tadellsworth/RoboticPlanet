@@ -116,8 +116,8 @@ const BOTS = {
     desc: 'A road crew bot. A Roadworks needs one to lay asphalt on your roads.' },
   roadtrain: { name: 'Road Train', plural: 'Road Trains', speed: WORKER_SPEED * 1.35, hp: 14, haul: true, truck: true, train: true, carry: 30, roadOnly: true, parts: 4, accel: 1.0, brake: 2.5,
     desc: 'A truck pulling two trailers: 30 goods at once, for bulk runs between your Command Base and far Depots (filling supply orders, and bringing a far Depot\'s spare goods home). It only pays off on asphalt: on plain road it crawls. Slow to start and stop, it wears roads hard and holds up the traffic behind it.' },
-  freight: { name: 'Freight Train', plural: 'Freight Trains', speed: WORKER_SPEED * 2.4, hp: 30, haul: true, rail: true, carry: 48, parts: 6, accel: 0.6, brake: 1.5,
-    desc: 'A locomotive and four wagons: 48 goods at once between Rail Stations on the same track, fast and with no traffic to wait for. It never needs charging. It rolls out at the nearest Rail Station when the Foundry finishes it.' },
+  freight: { name: 'Freight Train', plural: 'Freight Trains', speed: WORKER_SPEED * 3.4, hp: 30, haul: true, rail: true, carry: 56, parts: 6, accel: 0.85, brake: 1.6,
+    desc: 'A locomotive and four wagons: 56 goods at once between Rail Stations on the same track, fast and with no traffic to wait for. It never needs charging. It rolls out at the nearest Rail Station when the Foundry finishes it.' },
   crawler: { name: 'Crawler', plural: 'Crawlers', speed: WORKER_SPEED * 0.45, hp: 80, crawler: true, parts: 8,
     desc: 'A colossal tracked base on the move. Drive it anywhere it can roll (no road needed) and it deploys where it stops: a Depot, a Charging Station and an Outpost in one, claiming the land around it. Pack it up to move on: it takes everything stored in it along.' },
   truck:   { name: 'Freight Truck', plural: 'Freight Trucks', speed: WORKER_SPEED * 1.35, hp: 8, haul: true, truck: true, carry: 8, roadOnly: true, parts: 2, accel: 1.5, brake: 3.5,
@@ -177,7 +177,7 @@ const VIA_MIN = 2, VIA_MAX = 12, VIA_RISE = 2, VIA_COST = { cement: 3, alloy: 1 
  * Freight rail: track (S.rail) is laid in Paths (Rail), RAIL_COST a tile, paid when you build it and
  * laid at once, on open ground in your territory and on one level (trains can't climb). It can cross a
  * road: a level crossing, where road traffic waits while a train is within RAIL_CROSS_HOLD tiles.
- * Rail Stations stand beside the track; Freight Trains (48 goods) run between stations on the same
+ * Rail Stations stand beside the track; Freight Trains (56 goods) run between stations on the same
  * track: supply orders at a station (from another station first) and a far station's trunk runs to
  * the station nearest the Command Base, with loads of RAIL_MIN_LOAD or more.
  */
