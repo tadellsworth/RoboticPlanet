@@ -2512,8 +2512,8 @@ function updateBuilding(b, dt) {
   if (def.burner) updateGenerator(b, def);
   if (def.bunker) bunkerFire(b, def, dt);
   else if (def.keep) updateKeep(b, def, dt);
-  if (def.terminal) updateTerminal(b, def, dt);
   else if (def.mil) garrisonDefense(b, dt);
+  if (def.terminal) updateTerminal(b, def, dt);
   if (def.mil && b.type !== 'lander' && usesPosts(b.owner)) stockPost(b, dt);
   if (def.repair) updateRepairStation(b, def, dt);
   if (def.lab) updateLab(b, dt);
