@@ -19,8 +19,9 @@
 const AUDIO = { ctx: null, on: true, last: {}, music: 0.55, fx: 0.8, suppress: false };
 try {
   const saved = JSON.parse(localStorage.getItem('botfall.audio') || '{}');
-  if (typeof saved.music === 'number') AUDIO.music = saved.music;
-  if (typeof saved.fx === 'number') AUDIO.fx = saved.fx;
+  // (held to 0..1: a value from storage is used as a gain, and a large one would be deafening)
+  if (typeof saved.music === 'number' && saved.music >= 0) AUDIO.music = Math.min(1, saved.music);
+  if (typeof saved.fx === 'number' && saved.fx >= 0) AUDIO.fx = Math.min(1, saved.fx);
 } catch (e) { /* defaults */ }
 
 function saveAudio() {

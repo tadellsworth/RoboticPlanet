@@ -2886,8 +2886,8 @@ function killBot(bot, quiet) {
   if (bot.dead) return;
   // A warbot carrying loot drops its crate where it falls (anyone's warbots can pick it up).
   if (bot.loot && typeof addLoot === 'function' && inMap(Math.floor(bot.x), Math.floor(bot.y))) { addLoot(Math.floor(bot.x), Math.floor(bot.y), { [bot.loot]: 1 }); bot.loot = null; }
-  // A Crawler wrecked on the move spills the goods it was carrying.
-  if (bot.cargo && typeof addLoot === 'function' && inMap(Math.floor(bot.x), Math.floor(bot.y))) { addLoot(Math.floor(bot.x), Math.floor(bot.y), bot.cargo); bot.cargo = null; }
+  // A Crawler wrecked on the move spills the goods it was carrying. (A plane's load is lost with it.)
+  if (bot.cargo && !BOTS[bot.type].air && typeof addLoot === 'function' && inMap(Math.floor(bot.x), Math.floor(bot.y))) { addLoot(Math.floor(bot.x), Math.floor(bot.y), bot.cargo); bot.cargo = null; }
   // A Tanker with a load on board explodes (see fuelBlast), and its load burns. Any other hauler, truck
   // or train with goods on board drops them.
   const boom = !quiet && (BOTS[bot.type].tanker || BOTS[bot.type].tankShip) && bot.carry && bot.carryN > 0 && typeof fuelBlast === 'function' ? Math.min(1, bot.carryN / BOTS[bot.type].carry) : -1;

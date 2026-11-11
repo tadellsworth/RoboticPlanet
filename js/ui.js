@@ -1403,8 +1403,9 @@ function portSection(b) {
   const ferries = S.bots.filter((u) => !u.dead && u.owner === b.owner && BOTS[u.type].ferry);
   html += '<div class="section-label">Ferry line</div><div id="sh-ferry">';
   if (other && !other.dead) {
-    const served = ferries.some((u) => u.home === b.id || u.home === other.id);
-    html += `<p class="hint">A ferry line runs to the Port ${dirText(b, other)}: your robots and trucks take the ferry whenever it's the shorter way.${served ? '' : ' <b>No Ferry serves it yet</b>: order one at a shipyard (a Port panel).'}</p><button class="btn" data-to="0">Stop the ferry line</button>`;
+    const mine = ferries.filter((u) => u.home === b.id || u.home === other.id);
+    const served = mine.some((u) => !u.manual && !u.landing), away = !served && mine.length > 0; // (as ferryLines counts them)
+    html += `<p class="hint">A ferry line runs to the Port ${dirText(b, other)}: your robots and trucks take the ferry whenever it's the shorter way.${served ? '' : away ? ' <b>Its Ferry is away under your orders</b>: nothing crosses until it is sent back to its line.' : ' <b>No Ferry serves it yet</b>: order one at a shipyard (a Port panel).'}</p><button class="btn" data-to="0">Stop the ferry line</button>`;
   } else {
     const ports = S.buildings.filter((o) => o !== b && !o.dead && o.built && o.owner === b.owner && BDEFS[o.type].port && seaLinked(b, o));
     html += ports.length ? `<p class="hint">Run a ferry between this Port and another: your robots and trucks take it whenever it's the shorter way (a Ferry from a Port's shipyard serves it).</p>${ports.map((o) => `<button class="btn" data-to="${esc(o.id)}">Ferry to the Port ${dirText(b, o)}</button>`).join('')}`

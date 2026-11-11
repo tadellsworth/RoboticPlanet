@@ -2194,6 +2194,7 @@ function completeBuilding(b) {
   if (!storeFunded(b)) { const c = siteCost(b); for (const g in c) usedGood(b.owner, g, c[g]); } // its materials are built in (a Wall's were counted when it was paid for)
   if (def.ramp) { completeRamp(b); return; }
   b.built = true;
+  delete b.paidFrom; // (only a site called off gives its goods back: see demolish)
   if (def.ropeway && !b.link) ropewayAcross(b);
   if (def.viaduct && !b.link) viaductAcross(b);
   b.progress = 1;
@@ -8022,8 +8023,8 @@ function bombHit(b, dmg, by) {
 function planeLost(u, keep) {
   const M = u.mission;
   if (M) {
-    // What it was bringing is no longer on its way. (A plane wrecked with goods aboard has spilt them by now, see
-    // killBot: the flight's own note of its load says what was promised. Flights from older saves have only u.cargo.)
+    // What it was bringing is no longer on its way (and is lost with the plane: killBot spills only a Crawler's
+    // load). The flight's own note of its load says what was promised; flights from older saves have only u.cargo.
     if (M.kind === 'supply') { const c = getE(M.to), load = u.cargo || M.load; if (c && load) for (const g in load) bump(c.inc, g, -load[g]); }
     if (M.kind === 'outpost' && M.phase === 'load') refundRoad(u.owner, BDEFS.dropost.cost, Math.floor(u.x), Math.floor(u.y)); // shot down with it aboard, it's lost
   }
