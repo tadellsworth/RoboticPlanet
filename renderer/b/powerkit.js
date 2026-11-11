@@ -83,7 +83,7 @@ export function power(L, opts = {}) {
 
   function flood(x, z, h = 2.2, ry = 0) {
     cyl(0.05, h, P.steelD, x, 0, z, { seg: 10, dirt: 0.3 });
-    const c = Math.cos(ry), s = -Math.sin(ry);
+    const c = Math.cos(ry), s = Math.sin(ry); // a box turned by ry faces (sin ry, cos ry)
     box(0.34, 0.2, 0.16, P.steel, x + s * 0.05, h, z + c * 0.05, { ry, dirt: 0 });
     box(0.28, 0.14, 0.03, P.white, x + s * 0.14, h + 0.03, z + c * 0.14, { ...nc, ry });
     L.pointLight('#fff1d6', 3, x + s * 0.8, h - 0.4, z + c * 0.8, 4.5);

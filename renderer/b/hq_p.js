@@ -5,8 +5,9 @@
 // band of team-coloured windows and a tall comms mast with radar dish and beacon. Courtyard: three charging
 // docks, stacked supply crates, fuel drums. Team-coloured lights along the top of the wall.
 // POWERED proposal (hq_p): the same realistic base with a lights-and-electricity layer from b/powerkit.js:
-// warm lit windows on the command block, lit firing slits, floodlights on the bastions and gate, a transformer
-// yard with arcing insulators, conduits with glowing collars into junction boxes, cables to the mast, beacons.
+// warm lit windows on the command block and gate towers, lit firing slits, perimeter lamps on the walls, floodlights
+// on the back bastions, a searchlight on the cupola, courtyard lamp posts, a transformer yard with arcing insulators,
+// conduits with glowing collars into junction boxes, powered charging docks (one arcing), cables to the mast, beacons.
 import { power } from './powerkit.js';
 export default function (L) {
   const { box, cyl, hcyl, beam, pipe, hoop, lamp, pointLight, ao, mesh, sphere, group, M, THREE, TEAM } = L;
@@ -48,7 +49,7 @@ export default function (L) {
     cyl(1.04, 0.32, plate, bx, 1.6, bz, { seg: 24, dirt: 0 });
     hoop(1.05, 0.03, dim, bx, 1.92, bz, { cast: false });
     for (let k = 0; k < 3; k++) { const a = out + (k - 1) * 0.6; box(0.34, 0.12, 0.1, M.dark, bx + Math.cos(a) * 1.07, 1.1, bz - Math.sin(a) * 1.07, { ry: a + Math.PI / 2, dirt: 0 });
-      box(0.26, 0.05, 0.1, PK.warm, bx + Math.cos(a) * 1.08, 1.135, bz - Math.sin(a) * 1.08, { ry: a + Math.PI / 2, ...nc }); }   // lit slit
+      box(0.28, 0.075, 0.1, PK.warm, bx + Math.cos(a) * 1.08, 1.122, bz - Math.sin(a) * 1.08, { ry: a + Math.PI / 2, ...nc }); }   // lit slit
     cyl(0.5, 0.18, gun, bx, 1.92, bz, { dirt: 0 });
     const t = group(bx, 2.1, bz, out);
     box(0.85, 0.42, 0.7, armor, -0.05, 0, 0, { parent: t, dirt: 0 });
@@ -149,6 +150,9 @@ export default function (L) {
     box(0.32, 0.95, 0.5, armor, x - 0.3, 0, dz); box(0.36, 0.08, 0.54, M.hazard, x - 0.3, 0.95, dz, { dirt: 0 });
     box(0.06, 0.55, 0.3, glow, x - 0.12, 0.25, dz, { cast: false });
     box(0.08, 0.05, 0.08, PK.green, x - 0.3, 1.03, dz + 0.15, nc);                                     // ready light
+    box(0.5, 0.07, 0.1, PK.steelD, x - 0.05, 0.84, dz, { dirt: 0 });                                    // charging arm over the pad
+    cyl(0.06, 0.1, PK.steel, x + 0.2, 0.76, dz, { seg: 10, dirt: 0 }); box(0.07, 0.04, 0.07, PK.glowHi, x + 0.2, 0.72, dz, nc);
+    if (dz === -0.9) PK.arc([x + 0.2, 0.72, dz], [x + 0.2, 0.08, dz], 5, 3);                            // the middle dock is charging
   }
   pointLight(TEAM, 3, -2.6, 0.8, -0.9, 3);
   // stacked supply crates (front right) and fuel drums
