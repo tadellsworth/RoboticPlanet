@@ -2,6 +2,11 @@
 // cable, a small machine house with the drive motor and the team status light at its foot, and a short loading platform
 // with railings and hazard stripes. The bull wheel's centre is placed so it projects onto the image's vertical centre
 // line, 10 % from the top edge (solved against the shared building camera).
+// POWERED (powered realism): a lights-and-electricity layer from b/powerkit.js: team light strips round the headframe
+// platform, up the front pylon legs, round the bull wheel's spokes and along the machine house roof and the loading
+// platform edge, the cable tray up the pylon as a conduit with glowing collars, lit windows and a door lamp on the
+// machine house, a transformer yard with arcing insulators and a junction box in front of it, floodlights, beacons.
+import { power } from './powerkit.js';
 export default function (L) {
   const { box, cyl, hcyl, mesh, beam, sphere, lamp, ao, group, ladder, railing, pipe, hoop, M, THREE, TEAM } = L;
   L.seed(1207);
@@ -117,4 +122,59 @@ export default function (L) {
   box(0.6, 0.45, 0.55, M.wood, PX + 0.4, PH, PZ - 0.1, { dirt: 0.3 });
   for (const x of [PX - 0.6]) for (const y of [PH + 0.2, PH + 0.42]) box(0.82, 0.04, 0.72, gunD, x, y, PZ + 0.1, { dirt: 0 });
   ao(0, ZT, 3.4, 3.4, 0.35); ao(MX, MZ, MW, MD, 0.4); ao(PX, PZ, PW, PD, 0.35);
+
+  // ================================================================ power layer (lights and electricity)
+  // (made after everything else, so the original parts keep their random texture offsets)
+  const P = power(L), nc = { dirt: 0, cast: false };
+  const NB = L.TOD === 'night' ? 2.2 : L.TOD === 'evening' ? 1.6 : 1;      // real lamps carry further after dark
+  // floodlight: pole from (x, y, z), lamp head aimed along ry and tipped down, warm-white light where it points
+  function flood(x, y, z, h, ry, reach = 1.3) {
+    cyl(0.045, h, P.steelD, x, y, z, { seg: 10, dirt: 0.2 });
+    const g = group(x, y + h, z, ry), t = new THREE.Group(); t.rotation.x = 0.25; g.add(t);
+    box(0.4, 0.25, 0.18, P.steel, 0, -0.125, 0.03, { parent: t, dirt: 0 });
+    box(0.34, 0.19, 0.03, P.white, 0, -0.095, 0.13, { parent: t, ...nc });
+    L.pointLight('#fff1d6', 3.5 * NB, x + Math.sin(ry) * reach, y + h - 0.9, z + Math.cos(ry) * reach, 5);
+  }
+
+  // headframe: team strips round the platform's edge, a glowing ring on the bull wheel's spokes, amber beacon
+  P.strip(2.42, 0, HP - 0.16, ZT + 1.21, 0, 0.06);
+  for (const s of [-1, 1]) P.strip(2.42, s * 1.21, HP - 0.16, ZT, Math.PI / 2, 0.06);
+  hoop(RW - 0.3, 0.03, P.glow, 0, HW + 0.03, ZT, { cast: false });
+  hoop(0.3, 0.025, P.glowHi, 0, HW + 0.2, ZT, { cast: false });
+  P.beacon(1.12, HP + 0.85, ZT + 1.12, '#ffb347');
+  // team strips up the two front legs of the pylon
+  for (const sx of [-1, 1]) {
+    const a = leg(sx, 1, Y0 + 0.3), b = leg(sx, 1, Y1 - 0.3);
+    beam([a[0] + sx * 0.02, a[1], a[2] + 0.1], [b[0] + sx * 0.02, b[1], b[2] + 0.1], 0.045, 0.045, P.glow, nc);
+  }
+  // the cable tray up the pylon becomes a powered conduit with glowing collars
+  P.conduit([[1.6, 0.25, 0.9], [1.6, 0.25, ZT + 1.25], [0.62, 1.2, ZT + 1.25], [B1 + 0.1, Y1 - 0.2, ZT + B1 + 0.1]], 0.066);
+
+  // machine house: lit window band, a lamp over the door, team strips along the roof edge
+  P.windows(1.0, 0.26, MX + 0.55, 1.18, MZ + MD / 2 + 0.05, 0, 3);
+  box(0.24, 0.1, 0.14, P.steelD, MX - 0.6, 1.66, MZ + MD / 2 + 0.07, { dirt: 0 }); box(0.18, 0.04, 0.1, P.white, MX - 0.6, 1.64, MZ + MD / 2 + 0.1, nc);
+  L.pointLight('#fff1d6', 2.2 * NB, MX - 0.6, 1.3, MZ + MD / 2 + 0.7, 2.6);
+  P.strip(MW + 0.27, MX, 0.24 + MH, MZ + MD / 2 + 0.14, 0, 0.06);
+  P.strip(MD + 0.27, MX - MW / 2 - 0.14, 0.24 + MH, MZ, Math.PI / 2, 0.06);
+  flood(MX + 0.95, 0.34 + MH, MZ + MD / 2 - 0.15, 0.45, 0.25, 1.6);                         // roof floodlight over the yard
+
+  // transformer yard at the front right: hazard-framed plate, transformer with arcing insulators, a junction box
+  // under the window feeding the house, a high-voltage cable up to the roof
+  const tx = 3.25, tz = 3.05;
+  box(1.35, 0.03, 1.1, P.dark, tx, 0, tz, { dirt: 0, cast: false });
+  for (const [w, d, x, z] of [[1.35, 0.08, tx, tz - 0.55], [1.35, 0.08, tx, tz + 0.55], [0.08, 1.1, tx - 0.67, tz], [0.08, 1.1, tx + 0.67, tz]]) box(w, 0.04, d, M.hazard, x, 0, z, { dirt: 0, cast: false });
+  P.transformer(tx, tz, 0);
+  ao(tx, tz, 1.0, 0.8, 0.4);
+  P.junction(MX + 1.0, MZ + MD / 2 + 0.45, 0);
+  P.conduit([[tx + 0.1, 0.3, tz - 0.4], [tx + 0.1, 0.3, MZ + MD / 2 + 0.95], [MX + 1.0, 0.3, MZ + MD / 2 + 0.95], [MX + 1.0, 0.3, MZ + MD / 2 + 0.68]], 0.05);
+  P.conduit([[MX + 1.0, 0.76, MZ + MD / 2 + 0.32], [MX + 1.0, 0.95, MZ + MD / 2 + 0.07], [MX + 1.0, 0.95, MZ + MD / 2]], 0.05);
+  box(0.12, 0.2, 0.12, P.steelD, MX + MW / 2 - 0.3, 0.2 + MH - 0.05, MZ + MD / 2 + 0.06, { dirt: 0 });   // wall bushing
+  P.cable([tx + 0.28, 1.17, tz], [MX + MW / 2 - 0.3, 0.2 + MH, MZ + MD / 2 + 0.12], 0.15);
+
+  // loading platform: team strip along the deck's front edge, a floodlight over the deck, a warm lamp by the steps
+  P.strip(PW, PX, PH - 0.13, PZ + PD / 2 + 0.02, 0, 0.06);
+  flood(PX - PW / 2 + 0.2, PH, PZ - PD / 2 + 0.2, 1.75, 0.6, 1.5);
+  cyl(0.035, 1.3, P.steelD, PX + PW / 2 + 0.95, 0, PZ + 0.1, { seg: 8, dirt: 0.3 });
+  box(0.26, 0.07, 0.14, P.steelD, PX + PW / 2 + 0.95, 1.3, PZ + 0.1, { dirt: 0 }); box(0.2, 0.025, 0.1, P.warm, PX + PW / 2 + 0.95, 1.28, PZ + 0.1, nc);
+  L.pointLight('#ffd49a', 2.5 * NB, PX + PW / 2 + 0.95, 1.0, PZ + 0.3, 2.8);
 }

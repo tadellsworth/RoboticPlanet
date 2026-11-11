@@ -1,9 +1,14 @@
 // Charging station: solar canopy over three charging bays with glowing dock pads and charge posts,
 // battery cabinets with charge bars, transformer, and an insulated power mast with a glowing top.
+// Powered realism (b/powerkit.js): team light strips outline the canopy and run up its front posts, the transformer's
+// insulators arc, conduits with glowing collars feed a junction box, floodlights flank the bays, cables run from the
+// transformer and the mast to the canopy, beacons on the canopy corners. Team-coloured: render one image per team.
+import { power } from './powerkit.js';
 export default function (L) {
   const { box, cyl, hcyl, beam, pipe, hoop, lamp, pointLight, ao, mesh, sphere, group, canvasTex, M, THREE, ACCENT } = L;
   const gun = M.paint('#50565c'), warm = M.paint('#8c8579'), off = M.paint('#c9c5ba'), alu = M.paint('#a9aeb2', { rivets: false });
   const glow = M.emit(ACCENT, 2.4), dim = M.emit(ACCENT, 1.2);
+  const P = power(L), nc = { dirt: 0, cast: false };
   L.seed(111);
 
   // photovoltaic cell texture (tileable): dark blue cells, silver busbars
@@ -71,8 +76,8 @@ export default function (L) {
   for (let i = 0; i < 7; i++) box(0.06, 0.95, 0.25, M.steel, tx - 0.72 + i * 0.24, 0.12, tz + 0.65, { dirt: 0 });
   for (const dx of [-0.45, 0, 0.45]) { cyl(0.08, 0.5, M.plain('#e4e0d6', 0.3), tx + dx, 1.25, tz, { seg: 12, dirt: 0 }); for (const y of [1.35, 1.5, 1.65]) cyl(0.16, 0.04, M.plain('#e4e0d6', 0.3), tx + dx, y, tz, { seg: 16, dirt: 0 }); }
   box(0.9, 0.5, 0.05, M.paint('#d8b52a', { rivets: false }), tx, 0.45, tz + 0.56, { dirt: 0 });
-  pipe([[tx - 0.8, 0.3, tz - 0.3], [1.0, 0.3, tz - 0.3], [1.0, 0.3, 1.8]], 0.07, M.dark);
-  pipe([[fx + 1.75, 0.3, fz - 0.3], [fx + 2.1, 0.3, fz - 0.3], [fx + 2.1, 0.3, 1.8]], 0.07, M.dark);
+  P.conduit([[tx - 0.8, 0.3, tz - 0.3], [1.0, 0.3, tz - 0.3], [1.0, 0.3, 1.8]], 0.07);
+  P.conduit([[fx + 1.75, 0.3, fz - 0.3], [fx + 2.1, 0.3, fz - 0.3], [fx + 2.1, 0.3, 1.8]], 0.07);
 
   // ---- power mast with insulator stack and a glowing collector ring (back right corner)
   const px = 4.15, pz = -4.0;
@@ -83,4 +88,30 @@ export default function (L) {
   sphere(0.22, M.emit(ACCENT, 3), px, 5.35, pz, { cast: false });
   pointLight(ACCENT, 4, px, 5.2, pz + 0.6, 3);
   pipe([[px, 1.2, pz], [px - 0.7, 1.2, pz], [px - 0.7, 1.2, zB + 0.45], [cx + CW / 2 - 0.5, 1.2, zB + 0.45]], 0.06, M.dark);
+
+  // ================================================================ power layer (lights and electricity)
+  // team light strips outlining the canopy (front, back and both sides) and up the front faces of its front posts
+  box(CW + 0.12, 0.06, 0.06, P.glow, 0, 0.11, CD / 2 + 0.1, { parent: can, ...nc });
+  box(CW + 0.12, 0.06, 0.06, P.glow, 0, 0.11, -CD / 2 - 0.04, { parent: can, ...nc });
+  for (const s of [-1, 1]) box(0.06, 0.06, CD + 0.1, P.glow, s * (CW / 2 + 0.04), 0.11, 0.03, { parent: can, ...nc });
+  for (const x of [cx - CW / 2 + 0.5, cx + CW / 2 - 0.5]) box(0.06, yF - 0.75, 0.06, P.glow, x, 0.3, zF - 0.45 + 0.18, nc);
+  // the transformer's insulators carry glowing caps with a crackle of arc between them; a lit status panel
+  const tops = [-0.45, 0, 0.45].map(dx => [tx + dx, 1.82, tz]);
+  for (const t of tops) sphere(0.07, P.white, ...t, { cast: false });
+  P.arc(tops[0], tops[1], 4, 3); P.arc(tops[1], tops[2], 4, 7);
+  pointLight('#bfe8ff', 1.5, tx, 2.0, tz + 0.3, 2.2);
+  box(1.62, 0.06, 0.06, P.glow, tx, 1.22, tz + 0.56, nc);
+  for (const [k, mat] of [[-0.2, P.green], [0, P.amber], [0.2, P.glow]]) box(0.07, 0.07, 0.03, mat, tx + k, 0.82, tz + 0.57, nc);
+  // cables from the insulators up to the canopy's front beam
+  for (const [i, t] of tops.entries()) P.cable(t, [2.55 + i * 0.35, yF - 0.08, zF - 0.45], 0.18, 6);
+  // junction box on the front apron between the cabinets and the transformer, conduits into both
+  P.junction(0.35, 3.72, 0);
+  P.conduit([[0.64, 0.35, 3.62], [tx - 0.8, 0.35, 3.62]], 0.055);
+  P.conduit([[0.06, 0.35, 3.62], [fx + 1.75, 0.35, 3.62]], 0.055);
+  // floodlights flanking the bays, aimed in over the apron
+  P.flood(-4.4, 2.25, 2.3, 0.55); P.flood(4.3, 2.0, 2.3, -0.55);
+  // a cable from the mast's insulator stack to the canopy's back beam; beacons on the canopy corners and the mast
+  P.cable([px - 0.3, 4.25, pz], [cx + CW / 2 - 0.35, yB - 0.1, zB + 0.45], 0.25);
+  for (const x of [cx - CW / 2 + 0.05, cx + CW / 2 - 0.05]) P.beacon(x, 3.3, zF - 0.03);
+  P.beacon(cx - CW / 2 + 0.05, yB + 0.12, zB + 0.05, '#ffb347');
 }

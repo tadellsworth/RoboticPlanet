@@ -1,7 +1,14 @@
 // Oil Pump: classic pumpjack (walking beam, horse head, samson post, crank and counterweights), wellhead, storage tank.
 // ?part=base      the pumpjack without its moving parts (walking beam, horse head, bridle, cranks, pitman arms)
 // ?part=work&f=k  only the moving parts, frame k of 8 through one stroke, with their shadows on the building
+// Powered realism (b/powerkit.js), in the full render and part=base only (never in the work frames, which stay
+// shared): a team strip along the skid and a team ring round the tank roof, a floodlight on the tank, a pump house
+// with lit windows at the back, a transformer with arcing insulators, a junction box and conduits with glowing
+// collars to the motor and the pump house, a cable, beacons. Kept clear of the moving parts, their sweep and the
+// strip their shadows fall on (in front of the skid), so the work overlays still line up with the base.
+// Team-coloured: render one image per team.
 import { workLayer, hideParts } from './worklib.js';
+import { power } from './powerkit.js';
 export default function (L) {
   const { box, cyl, hcyl, beam, pipe, hoop, lamp, pointLight, ao, mesh, sphere, ladder, group, M, THREE, ACCENT } = L;
   const q = new URLSearchParams(location.search), part = q.get('part') || 'full', F = +(q.get('f') || 0);
@@ -82,6 +89,47 @@ export default function (L) {
   lamp(tx, 2.55, tz, ACCENT, { shape: 'sphere', size: 0.14, intensity: 3, dist: 3, k: 2.6 });
   lamp(cx, bh + 1.45, z0 + 0.45, ACCENT, { size: 0.12, intensity: 2, dist: 2, k: 2.6 });
   box(1.4, 0.1, 0.06, M.hazard, -0.2, bh - 0.12, z0 + 0.91, { dirt: 0 });
+
+  if (part !== 'work') powerLayer();
+
+  // ================================================================ power layer (lights and electricity)
+  function powerLayer() {
+    const P = power(L), nc = { dirt: 0, cast: false };
+    // team strip along the front top edge of the skid; a team ring round the tank roof
+    P.strip(6.9, -0.2, bh - 0.04, z0 + 0.93, 0, 0.06);
+    hoop(1.1, 0.035, P.glow, tx, 2.36, tz, { cast: false });
+    // floodlight on the tank rim, aimed over the front of the pad
+    { const g = group(tx - 0.62, 2.42, tz + 0.72, -0.7); box(0.1, 0.22, 0.1, P.steelD, 0, 0, 0, { parent: g, dirt: 0 });
+      const h = new THREE.Group(); h.position.set(0, 0.28, 0.06); h.rotation.x = 0.35; g.add(h);
+      box(0.36, 0.22, 0.18, P.steel, 0, -0.11, 0, { parent: h, dirt: 0 }); box(0.3, 0.16, 0.03, P.white, 0, -0.08, 0.1, { parent: h, ...nc });
+      pointLight('#fff1d6', 3, tx - 1.3, 1.4, tz + 1.5, 4); }
+    // a floodlight pole at the front left, fed by a short conduit from a ground box, lighting the front of the pad
+    P.flood(-3.35, 3.85, 2.1, 0.55);
+    box(0.36, 0.4, 0.3, P.steel, -2.75, 0, 3.95, { dirt: 0.4 }); box(0.06, 0.06, 0.03, P.green, -2.82, 0.3, 4.11, nc); box(0.06, 0.06, 0.03, P.glow, -2.68, 0.3, 4.11, nc);
+    P.conduit([[-2.93, 0.15, 3.95], [-3.35, 0.15, 3.95], [-3.35, 0.15, 3.86]], 0.04);
+    // pump house at the back left: lit window band, team strip on the fascia, door lamp, roof unit and a beacon
+    const hx = -2.0, hz = -3.55, HW = 2.4, HD = 1.4, HH = 1.5, hf = hz + HD / 2;
+    box(HW + 0.3, 0.12, HD + 0.3, P.conc, hx, 0, hz, { dirt: 0.4 }); ao(hx, hz, HW, HD, 0.5);
+    box(HW, HH, HD, off, hx, 0.12, hz, { dirtH: 0.8 });
+    box(HW + 0.12, 0.12, HD + 0.12, gun, hx, 0.12 + HH, hz, { dirt: 0 });
+    P.strip(HW + 0.1, hx, 0.12 + HH + 0.03, hf + 0.08, 0, 0.06);
+    P.windows(1.3, 0.34, hx - 0.38, 0.95, hf + 0.02, 0, 3);
+    box(0.45, 0.95, 0.04, P.steelD, hx + 0.8, 0.12, hf + 0.02, { dirt: 0.3 }); box(0.2, 0.06, 0.05, P.white, hx + 0.8, 1.18, hf + 0.05, nc);
+    pointLight('#ffd9a0', 1.6, hx + 0.6, 0.9, hf + 0.7, 2.2);
+    box(0.6, 0.32, 0.5, P.steel, hx - 0.6, 0.24 + HH, hz - 0.15, { dirt: 0.3 }); cyl(0.17, 0.03, M.dark, hx - 0.6, 0.56 + HH, hz - 0.15, { seg: 16, dirt: 0 });
+    P.beacon(hx + 0.95, 0.38 + HH, hz - 0.4);
+    // transformer on a plinth at the back right, its junction box beside it, conduits to the motor and the pump house
+    const qx = 3.65, qz = -3.55;
+    box(1.5, 0.08, 1.15, P.conc, qx, 0, qz, { dirt: 0.4, cast: false }); ao(qx, qz, 1.5, 1.15, 0.4);
+    box(1.5, 0.1, 0.05, M.hazard, qx, 0, qz + 0.58, { dirt: 0, cast: false });
+    P.transformer(qx, qz, 0);
+    P.junction(2.3, -2.75, 0);
+    P.conduit([[qx - 0.45, 0.3, qz], [2.3, 0.3, qz], [2.3, 0.3, -2.95]], 0.05);
+    P.conduit([[2.58, 0.25, -2.6], [3.75, 0.25, -2.6], [3.75, 0.25, z0 - 0.93], [3.75, 0.62, z0 - 0.93], [3.75, 0.62, z0 - 0.06]], 0.05);
+    P.conduit([[2.02, 0.25, -2.6], [hx + HW / 2 + 0.25, 0.25, -2.6], [hx + HW / 2 + 0.25, 0.25, hz], [hx + HW / 2, 0.25, hz]], 0.05);
+    P.cable([qx + 0.28, 1.17, qz], [hx + HW / 2 - 0.1, 0.12 + HH, hz - 0.5], 0.35);
+    P.beacon(qx + 0.55, 0.95, qz + 0.3, '#ffb347');
+  }
 
   if (part === 'base') hideParts(moving);
   if (part === 'work') workLayer(L, moving, { shadows: true });

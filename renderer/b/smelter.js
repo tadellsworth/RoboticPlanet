@@ -1,10 +1,15 @@
 // Smelter: blast furnace with a glowing mouth and molten runner, tall soot-stained stack, ingot casting bed.
 // ?part=work&f=k: only the furnace mouth, the molten runner, the glowing ingots and the furnace-lit window, at frame k of
 // an 8-frame flicker (embers are drawn on top afterwards from the 'mouth' mark).
+// Powered realism: a lights-and-electricity layer from b/powerkit.js (team-colour strips round the furnace crown, the
+// catwalk edge, the plinth and the eaves, warm lit windows, a transformer yard with arcing insulators feeding a
+// conduit into the furnace, a floodlight pole, cables and beacons). Its lights are team-coloured: render one image per
+// team. The layer is added to the base render only, never to part= renders, so the work loops still line up.
 import { workLayer, litMat } from './worklib.js';
+import { power } from './powerkit.js';
 const FLICK = { mouth: [1.0, 1.3, 0.8, 1.15, 0.72, 1.35, 0.9, 1.12], runner: [1.0, 1.1, 0.95, 1.05, 0.88, 1.12, 0.97, 1.04], window: [1.0, 1.15, 0.9, 1.07, 0.85, 1.18, 0.95, 1.06] };
 export default function (L) {
-  const q = new URLSearchParams(location.search), WORK = q.get('part') === 'work', F = +(q.get('f') || 0);
+  const q = new URLSearchParams(location.search), PART = q.get('part'), WORK = PART === 'work', F = +(q.get('f') || 0);
   const parts = { mouth: [], runner: [], window: [] }, P = (k, m, hex, i) => (parts[k].push([m, hex, i]), m);
   const { box, cyl, hoop, pipe, ringWalk, ladder, lamp, pointLight, ao, catwalk, M, ACCENT } = L;
   const gun = M.paint('#50565c'), warm = M.paint('#8c8579'), off = M.paint('#c8c2b5'), rib = M.ribbed('#b9b3a6');
@@ -73,6 +78,46 @@ export default function (L) {
   P('window', box(1.2, 0.45, 0.05, M.emit('#ffc27a', 1.4), cx, 0.75, cz + 0.81, { cast: false }), '#ffc27a', 1.4);
   box(0.5, 0.35, 0.5, M.grille(), cx - 0.4, 1.64, cz);
   lamp(fx - 1.55, 2.0, fz + 1.4, ACCENT, { size: 0.16, intensity: 3, dist: 3 });
+
+  // ================================================================ power layer (lights and electricity), base render only
+  if (!PART || PART === 'base') {
+    const K = power(L), nc = { dirt: 0, cast: false };
+    // team light strips: round the furnace crown, along the catwalk's outer edge, the plinth's front edge and the eaves
+    hoop(1.23, 0.035, K.glow, fx, 4.83, fz, { cast: false });
+    hoop(2.57, 0.026, K.glow, fx, 2.56, fz, { cast: false });
+    K.strip(4.5, fx, 0.45, fz + 2.32);
+    K.strip(2.6, hx, 2.07, hz + 1.27);
+    K.strip(2.0, cx, 1.47, cz + 0.89);
+    // chimney: a team band near the top and amber obstruction beacons on the cap
+    hoop(0.71, 0.035, K.glow, sx, 6.72, sz, { cast: false });
+    for (const s of [-1, 1]) K.beacon(sx + s * 0.6, 7.32, sz + 0.25, '#ffb347');
+    // warm lit windows on the blower house; a lamp over the cabin door side
+    K.windows(0.85, 0.32, hx - 0.72, 1.25, hz + 1.17, 0, 2);
+    box(0.16, 0.1, 0.1, K.steelD, cx + 0.75, 1.28, cz + 0.84, { dirt: 0 }); box(0.12, 0.05, 0.03, K.warm, cx + 0.75, 1.3, cz + 0.89, nc);
+    // transformer yard at the front left: hazard-framed plate, a transformer with arcing insulators, a conduit to a
+    // junction box and on up the plinth into a control box on the furnace
+    const tx = -3.35, tz = 3.4;
+    box(1.25, 0.03, 1.05, K.dark, tx, 0, tz, { dirt: 0, cast: false });
+    for (const [w, d, x, z] of [[1.25, 0.08, tx, tz - 0.52], [1.25, 0.08, tx, tz + 0.52], [0.08, 1.05, tx - 0.62, tz], [0.08, 1.05, tx + 0.62, tz]]) box(w, 0.04, d, M.hazard, x, 0, z, { dirt: 0, cast: false });
+    K.transformer(tx, tz, 0);
+    K.junction(-2.15, 2.3, 0);
+    K.conduit([[tx + 0.45, 0.14, tz], [-2.15, 0.14, tz], [-2.15, 0.14, 2.52]], 0.05);
+    K.conduit([[-2.15, 0.56, 2.1], [-2.15, 0.56, 1.12], [-2.15, 1.15, 1.12]], 0.055);
+    box(0.34, 0.4, 0.16, K.steel, -2.15, 1.12, 1.1, { dirt: 0.3 }); box(0.06, 0.06, 0.03, K.green, -2.22, 1.4, 1.19, nc); box(0.06, 0.06, 0.03, K.glow, -2.08, 1.4, 1.19, nc);
+    // floodlight pole with a crossarm at the plinth's front-left corner: fed from the transformer, and on to the blower house
+    const px = -4.35, pz = 1.55;
+    K.flood(px, pz, 2.75, 0.55);
+    box(0.7, 0.06, 0.08, K.steelD, px, 2.35, pz, { dirt: 0 });
+    for (const s of [-1, 1]) cyl(0.03, 0.12, M.plain('#c9c2b0', 0.4, 0.1), px + s * 0.3, 2.41, pz, { seg: 8, dirt: 0 });
+    K.cable([tx - 0.28, 1.17, tz], [px - 0.3, 2.53, pz], 0.25);
+    K.cable([tx + 0.28, 1.17, tz], [px + 0.3, 2.53, pz], 0.3);
+    K.cable([px + 0.3, 2.53, pz], [hx - 1.15, 2.2, hz + 1.2], 0.3);
+    // a floodlight by the cabin lighting the casting bed; team beacons on the furnace crown, the blower house and the cabin
+    K.flood(4.45, 1.05, 2.3, -0.6);
+    K.beacon(fx - 0.85, 5.33, fz + 0.75);
+    K.beacon(hx + 0.5, 2.86, hz - 0.3);
+    K.beacon(cx + 0.7, 1.72, cz - 0.5);
+  }
 
   if (WORK) {
     const keep = new Set();

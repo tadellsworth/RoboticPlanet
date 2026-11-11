@@ -1,8 +1,14 @@
 // Freight Rail Station: a long barrel-roofed goods shed, a gantry crane over the loading strip along the south edge
 // with a container hanging from it, stacked containers and pallets, loading ramps at both ends and a signal mast
 // with the team light. No rails: the game draws the railway beside it.
+// POWERED (powered realism): a lights-and-electricity layer from b/powerkit.js: warm lit skylights and windows,
+// team light strips over the roof ribs, along the eave, the platform edge and the gantry girders and legs, a lit
+// crane cab with a festoon cable, floodlights on the platform, a junction box feeding the shed and the crane by
+// conduit, a transformer with arcing insulators in the back corner cabled to the shed and the signal mast, beacons.
+import { power } from './powerkit.js';
 export default function (L) {
   const { box, cyl, hcyl, mesh, beam, sphere, lamp, pointLight, ao, group, ladder, railing, M, THREE, TEAM, R } = L;
+  const warm = M.emit('#ffd9a0', 1.3), nc = { dirt: 0, cast: false };
   L.seed(911);
   const wall = M.ribbed('#a39c90'), roof = M.ribbed('#7a8086', { period: 20 }), off = M.paint('#c9c5ba', { rivets: false });
   const steel = M.paint('#5a6066', { panelW: 128 }), conc = M.rough('#8f887c'), yellow = M.paint('#c9a22a', { rivets: false });
@@ -26,7 +32,7 @@ export default function (L) {
     const pts = []; for (let i = 0; i <= 16; i++) { const t = Math.PI - (i / 16) * Math.PI; pts.push([x, 0.3 + WH + Math.sin(t) * (VH + 0.05), cz - Math.cos(t) * (rr + 0.05)]); }
     for (let i = 0; i < pts.length - 1; i++) beam(pts[i], pts[i + 1], 0.12, 0.1, steel);
   }
-  box(len - 0.6, 0.1, 0.42, M.glass('#40525e', 0.95), cx, 0.3 + WH + VH - 0.03, cz, { dirt: 0 });
+  box(len - 0.6, 0.1, 0.42, M.plain('#2b3238', 0.3, 0.6), cx, 0.3 + WH + VH - 0.03, cz, { dirt: 0 });
   // gable ends: big roller doors and a team-glow band
   for (const s of [-1, 1]) {
     const ex = s < 0 ? X0 - 0.02 : X1 + 0.02;
@@ -68,7 +74,7 @@ export default function (L) {
   const tx = 1.0, tz = (gz0 + gz1) / 2;
   box(0.8, 0.3, gz1 - gz0 - 0.7, steel, tx, GY + 0.12, tz, { dirt: 0.3 });
   box(0.55, 0.45, 0.5, off, tx - 0.75, GY - 0.35, gz1 - 0.5, { dirt: 0.3 });
-  box(0.4, 0.2, 0.05, M.glass('#2a3a44', 0.9), tx - 0.75, GY - 0.2, gz1 - 0.24, { dirt: 0 });
+  box(0.4, 0.2, 0.05, warm, tx - 0.75, GY - 0.2, gz1 - 0.24, nc);                          // lit cab window
   lamp(tx - 0.75, GY + 0.1, gz1 - 0.5, TEAM, { size: 0.13, k: 4, intensity: 2.5, dist: 2.5 });
   const cy = 1.25;
   for (const dx of [-0.4, 0.4]) for (const dz of [-0.25, 0.25]) beam([tx + dx, GY + 0.05, tz + dz], [tx + dx * 1.2, cy + 1.05, tz + dz * 1.4], 0.03, 0.03, M.dark);
@@ -93,4 +99,56 @@ export default function (L) {
   sphere(0.13, M.emit('#ff3a22', 1.4), mx, 4.25, mz + 0.24, { cast: false });
   ladder(mx - 0.15, 0.2, 3.9, mz + 0.12, { ry: Math.PI / 2 });
   pointLight(TEAM, 3, cx, 2.0, Z1 + 1.0, 4.5);
+
+  // ================================================================ power layer (lights and electricity)
+  // Made after everything else: every new part draws on the scene's random sequence, so adding them earlier would
+  // reshuffle the container colours.
+  const P = power(L);
+  const NB = L.TOD === 'night' ? 2.2 : L.TOD === 'evening' ? 1.6 : 1;      // real lamps carry further after dark
+  // warm lit skylight panes between the roof ribs, and lit panes in the south window band
+  for (let k = 0; k < 6; k++) {
+    const a = Math.max(X0 - 0.2 + k * (len + 0.4) / 6 + 0.17, cx - 3.2), b = Math.min(X0 - 0.2 + (k + 1) * (len + 0.4) / 6 - 0.17, cx + 3.2);
+    box(b - a, 0.03, 0.32, warm, (a + b) / 2, 0.3 + WH + VH + 0.05, cz, nc);
+  }
+  for (let k = 0; k < 6; k++) box(0.65, 0.23, 0.02, warm, X0 + 0.7 + k * 1.15, 1.295, Z1 + 0.055, nc);
+  // team light strips over the end and middle roof ribs, and along the south eave
+  const ribGlow = (x) => {
+    const pts = []; for (let i = 0; i <= 16; i++) { const t = Math.PI - (i / 16) * Math.PI; pts.push([x, 0.3 + WH + Math.sin(t) * (VH + 0.12), cz - Math.cos(t) * (rr + 0.12)]); }
+    for (let i = 0; i < pts.length - 1; i++) beam(pts[i], pts[i + 1], 0.045, 0.045, P.glow, nc);
+  };
+  for (const k of [0, 3, 6]) ribGlow(X0 - 0.2 + k * (len + 0.4) / 6);
+  box(len + 0.5, 0.1, 0.12, steel, cx, 1.92, Z1 + 0.2, { dirt: 0 });                         // eave gutter
+  P.strip(len + 0.4, cx, 1.9, Z1 + 0.28, 0, 0.06);
+  // a junction box between the windows, its conduit up the wall and along the ground to the crane's back leg
+  P.junction(1.67, -0.2, 0);
+  P.conduit([[1.67, 0.76, -0.33], [1.67, 0.9, -0.53], [1.67, 1.62, -0.53], [1.67, 1.62, -0.6]], 0.05);
+  P.conduit([[1.96, 0.3, -0.2], [3.85, 0.3, -0.2], [3.85, 0.3, 0.88]], 0.05);
+  box(0.26, 0.4, 0.14, P.steel, 3.85, 0.75, 1.0, { dirt: 0.3 }); box(0.1, 0.06, 0.03, P.green, 3.85, 1.02, 1.08, nc);
+  // transformer in the back-right corner on a hazard-edged plinth, cabled to the shed gable and the signal mast
+  const trx = 3.95, trz = -4.25;
+  box(1.3, 0.08, 1.0, P.conc, trx, 0, trz, { dirt: 0.4, cast: false }); ao(trx, trz, 1.3, 1.0, 0.4);
+  box(1.3, 0.1, 0.05, M.hazard, trx, 0, trz + 0.5, { dirt: 0, cast: false });
+  P.transformer(trx, trz, 0);
+  box(0.16, 0.24, 0.16, P.steelD, X1 + 0.08, 1.75, -3.5, { dirt: 0 });                        // gable bushing
+  P.cable([trx - 0.28, 1.17, trz], [X1 + 0.12, 1.95, -3.5], 0.15, 6);
+  P.cable([trx + 0.28, 1.17, trz], [mx, 3.7, mz - 0.1], 0.35, 10);
+  box(0.18, 0.14, 0.18, P.steelD, mx, 3.62, mz - 0.1, { dirt: 0 });
+  // platform edge: a team strip on the face of the loading strip, white lamps set in the safety line
+  P.strip(9.2, 0, 0.07, 3.93, 0, 0.06);
+  for (let k = 0; k < 8; k++) box(0.12, 0.02, 0.07, P.white, -4.0 + k * 1.15, 0.2, 3.75, nc);
+  // gantry crane: team strips under both girders and up the front legs, amber beacons on the girder ends
+  for (const z of [gz0 + 0.5, gz1 - 0.5]) P.strip(8.2, -0.2, GY - 0.12, z + 0.13, 0, 0.055);
+  for (const x of [-4.25, 3.85]) {
+    box(0.05, 2.6, 0.05, P.glow, x - Math.sign(x) * 0.09, 0.5, gz1 + 0.12, nc);
+    P.beacon(x + (x < 0 ? -0.05 : 0.05), GY + 0.3, gz1 - 0.5, '#ffb347');
+  }
+  // festoon power cable to the trolley in loops under the front girder; work light under the trolley
+  for (let k = 0; k < 4; k++) {
+    const x0 = -4.0 + k * 1.05, x1 = x0 + 1.05;
+    P.cable([x0, GY - 0.12, gz1 - 0.62], [x1, GY - 0.12, gz1 - 0.62], 0.28, 6); box(0.06, 0.08, 0.1, P.steelD, x1, GY - 0.18, gz1 - 0.62, nc);
+  }
+  pointLight('#fff1d6', 2.5 * NB, tx, 2.4, tz + 0.9, 3.5);
+  // floodlights on poles at the platform edge, aimed out over the track side
+  for (const x of [-1.65, 1.75]) P.flood(x, 3.5, 2.25, 0);
+  P.beacon(mx, 5.12, mz + 0.05, '#ffb347');
 }

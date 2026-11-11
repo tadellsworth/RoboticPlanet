@@ -1,4 +1,9 @@
 // Quarry: heavy jaw crusher with a hydraulic hammer on a gantry, conveyor to a gravel pile, pallets of cut stone.
+// Powered realism: a lights-and-electricity layer from b/powerkit.js (team-colour strips along the gantry girder and
+// legs and round the funnel rim, a lit operator window, floodlights under the girder, a transformer yard feeding the
+// crusher by conduit and the gantry by cable, beacons). Its lights are team-coloured: render one image per team. Base
+// render only.
+import { power } from './powerkit.js';
 export default function (L) {
   const { box, cyl, beam, pipe, lamp, pointLight, ao, mesh, sphere, rnd, M, THREE, ACCENT, ladder } = L;
   const gun = M.paint('#50565c'), warm = M.paint('#8c8579'), yel = M.paint('#b8952e'), stone = M.rough('#c9bca3'), rock = M.rough('#8f8a82');
@@ -51,4 +56,44 @@ export default function (L) {
   box(1.4, 1.5, 1.3, warm, 0.3, 0, -3.4); box(1.5, 0.12, 1.4, gun, 0.3, 1.5, -3.4, { dirt: 0 });
   box(0.9, 0.4, 0.05, M.emit('#ffd28a', 1.2), 0.3, 0.8, -2.73, { cast: false });
   pointLight(ACCENT, 6, cx, 2.0, cz + 2.2, 4);
+  // ================================================================ power layer (lights and electricity), base render only
+  const PART = new URLSearchParams(location.search).get('part');
+  if (!PART || PART === 'base') {
+    const K = power(L), nc = { dirt: 0, cast: false };
+    // team light strips: the gantry girder's top and bottom front edges, up the legs' inner front edges, round the
+    // crusher funnel's rim, under its front edge, and the cab's eave
+    K.strip(5.4, cx, GH + 0.67, cz + 0.42, 0, 0.07); K.strip(5.4, cx, GH + 0.03, cz + 0.42, 0, 0.07);
+    for (const s of [-1, 1]) box(0.06, GH - 1.1, 0.06, K.glow, cx + s * (2.35 - 0.3), 0.55, cz + 0.26, nc);
+    K.strip(4.24, cx, 4.08, cz + 2.11); for (const s of [-1, 1]) K.strip(4.24, cx + s * 2.11, 4.08, cz, Math.PI / 2);
+    K.strip(3.2, cx, 2.95, cz + 1.53);
+    K.strip(1.5, 0.3, 1.58, -2.68);
+    // a lit operator window on the crusher's front, above the grille
+    K.windows(1.4, 0.24, cx, 2.35, cz + 1.53, 0, 4);
+    // floodlights under the girder ends, tilted down over the crusher mouth and the stone yard
+    for (const s of [-1, 1]) {
+      const x = cx + s * 1.75, g = new THREE.Group(); g.position.set(x, GH, cz + 0.42); g.rotation.x = 0.55; L.getRoot().add(g);
+      box(0.42, 0.24, 0.18, K.steel, 0, -0.26, 0.05, { dirt: 0, parent: g }); box(0.34, 0.16, 0.03, K.white, 0, -0.22, 0.15, { ...nc, parent: g });
+      pointLight('#fff1d6', 4, x, 3.2, cz + 2.8, 6);
+    }
+    // transformer yard in the back-right corner: a junction box by the cab, a conduit to the crusher, and the
+    // high-voltage feed up to a bushing on the gantry's right leg
+    const qx = 3.45, qz = -3.35;
+    box(1.25, 0.03, 1.05, K.dark, qx, 0, qz, { dirt: 0, cast: false });
+    for (const [w, d, x, z] of [[1.25, 0.08, qx, qz - 0.52], [1.25, 0.08, qx, qz + 0.52], [0.08, 1.05, qx - 0.62, qz], [0.08, 1.05, qx + 0.62, qz]]) box(w, 0.04, d, M.hazard, x, 0, z, { dirt: 0, cast: false });
+    K.transformer(qx, qz, 0);
+    K.junction(1.6, -3.3, 0);
+    K.conduit([[qx - 0.45, 0.14, qz], [1.88, 0.14, qz]], 0.05);
+    K.conduit([[1.6, 0.14, -3.08], [1.6, 0.14, -2.45], [-0.3, 0.14, -2.45]], 0.055);
+    box(0.16, 0.26, 0.5, K.steelD, cx + 2.67, 4.7, cz, { dirt: 0 });
+    for (const dz of [-0.16, 0.16]) cyl(0.035, 0.18, M.plain('#c9c2b0', 0.4, 0.1), cx + 2.79, 4.96, cz + dz, { seg: 8, dirt: 0 });
+    K.cable([qx - 0.28, 1.17, qz], [cx + 2.79, 5.12, cz - 0.16], 0.35);
+    K.cable([qx, 1.17, qz], [cx + 2.79, 5.12, cz + 0.16], 0.4);
+    // ground floodlight over the stone pallets
+    K.flood(4.35, 1.45, 2.4, -0.75);
+    // beacons: amber on the girder, team on the hammer housing and the cab roof
+    K.beacon(cx, GH + 0.78, cz, '#ffb347');
+    K.beacon(cx + 0.45, GH - 0.38, cz + 0.45);
+    K.beacon(0.85, 1.72, -3.85);
+  }
+  // ---------------------------------------------------------------- end of power layer
 }

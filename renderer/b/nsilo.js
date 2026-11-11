@@ -1,7 +1,12 @@
 // Nuclear Silo: a hardened octagonal silo block with its giant blast lid hinged up behind the shaft, the dark
 // nuclear missile rising out of it, a big radiation trefoil painted on the apron, twin exhaust stacks, a bermed
 // launch-control bunker and warning beacons. Team-colour rim lights.
+// Powered realism (b/powerkit.js): a team strip round the block's top edge, white lamps on the guard blocks, amber
+// warning lamps on the raised lid, a transformer yard at the right conduited through a junction box into the block
+// and cabled to the bunker mast, a lit bunker with a team strip on its roof and a bulkhead lamp, floodlights on poles
+// at the back and left, beacons. Static, so identical with ?empty=1.
 import { trefoil, nukeMissile } from './nuke.js';
+import { power } from './powerkit.js';
 export default function (L) {
   const { box, cyl, hcyl, beam, pipe, hoop, lamp, pointLight, ao, mesh, sphere, group, canvasTex, M, THREE, TEAM } = L;
   const gun = M.paint('#4b5157'), armor = M.paint('#454a50'), olive = M.paint('#5d6247'), conc = M.rough('#8f887c'), concD = M.rough('#7a7468');
@@ -87,4 +92,40 @@ export default function (L) {
     pointLight(TEAM, 3, x, h + 0.6, z + 0.5, 3);
   }
   for (const z of [3.3, 3.85]) box(1.9, 0.02, 0.28, M.hazard, -1.6, 0, z, { dirt: 0, cast: false });
+
+  // ================================================================ power layer (lights and electricity)
+  const P = power(L), nc = { dirt: 0, cast: false };
+  const NB = L.TOD === 'night' ? 2.2 : L.TOD === 'evening' ? 1.6 : 1;      // real lamps carry further after dark
+  function flood(x, y, z, h, ry, tilt = 0.12, reach = 1.4) {
+    if (h > 0) cyl(0.04, h, P.steelD, x, y, z, { seg: 10, dirt: 0.2 });
+    const g = group(x, y + h, z, ry), t = new THREE.Group(); t.rotation.x = tilt; g.add(t);
+    box(0.4, 0.25, 0.18, P.steel, 0, -0.125, 0.03, { parent: t, dirt: 0 });
+    box(0.34, 0.19, 0.03, P.white, 0, -0.095, 0.13, { parent: t, ...nc });
+    pointLight('#fff1d6', 4 * NB, x + Math.sin(ry) * reach, y + h - 1.2, z + Math.cos(ry) * reach, 5.5);
+  }
+  // team strip round the block's top edge, white lamps on alternate guard blocks
+  cyl(2.475, 0.06, P.glow, cx, top - 0.08, cz, { rTop: 2.46, seg: 8, ry: Math.PI / 8, open: true, ...nc });
+  for (let k = 0; k < 8; k += 2) { const a = (k + 0.5) * Math.PI / 4; box(0.14, 0.06, 0.14, P.white, cx + Math.cos(a) * (SR + 0.95), top + 0.22, cz + Math.sin(a) * (SR + 0.95), { ry: -a, ...nc }); }
+  // amber warning lamps on the inside face of the raised lid
+  lid.updateMatrixWorld(true);
+  for (const s of [-1, 1]) { const v = lid.localToWorld(new THREE.Vector3(s * 0.95, -0.56, 2.55)); P.beacon(v.x, v.y, v.z, '#ffb347'); }
+  // transformer yard at the right, conduit through a junction box into the block, cable to the bunker mast
+  const ux = 3.6, uz = 0.25;
+  box(1.2, 0.03, 1.0, P.dark, ux, 0, uz, nc);
+  for (const [w, d, x, z] of [[1.2, 0.08, ux, uz - 0.5], [1.2, 0.08, ux, uz + 0.5], [0.08, 1.0, ux - 0.6, uz], [0.08, 1.0, ux + 0.6, uz]]) box(w, 0.04, d, M.hazard, x, 0, z, nc);
+  P.transformer(ux, uz, 0); ao(ux, uz, 1.0, 0.8, 0.35);
+  P.junction(2.95, 1.55, 0);
+  P.conduit([[ux, 0.35, uz + 0.37], [ux, 0.35, 1.55], [3.23, 0.35, 1.55]], 0.05);
+  P.conduit([[2.67, 0.45, 1.55], [2.1, 0.45, 1.55], [1.5, 0.45, 1.15]], 0.055);
+  P.cable([ux + 0.28, 1.2, uz], [bx + 0.7, 2.55, bz - 0.4], 0.35);
+  // launch-control bunker: team strip on the roof edge, bulkhead lamp over the door, status lights
+  P.strip(2.1, bx, 1.31, bz + 0.89, 0, 0.05);
+  box(0.2, 0.1, 0.1, P.steelD, bx - 0.25, 0.86, bz + 1.13, { dirt: 0 }); box(0.15, 0.05, 0.03, P.warm, bx - 0.25, 0.87, bz + 1.19, nc);
+  pointLight('#ffd9a0', 2 * NB, bx - 0.25, 0.7, bz + 1.6, 2.4);
+  for (const [k, mat] of [[0, P.green], [0.12, P.amber]]) box(0.07, 0.06, 0.03, mat, bx + 0.32 + k, 0.4, bz + 1.13, nc);
+  // stacks: amber beacons on the rims
+  for (const z of [-3.35, -1.85]) P.beacon(3.25 + 0.36, 2.88, z + 0.2, '#ffb347');
+  // floodlights on poles: back (behind the lid, lighting the missile) and left (lighting the block)
+  flood(1.75, 0, -3.95, 2.6, -0.45); ao(1.75, -3.95, 0.4, 0.4, 0.3);
+  flood(-4.05, 0, -0.9, 2.1, 1.0); ao(-4.05, -0.9, 0.4, 0.4, 0.3);
 }
