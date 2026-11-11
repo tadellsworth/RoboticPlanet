@@ -120,7 +120,7 @@ function aiThink(p) {
   // minutes, the rest from 20), with a Road Train to serve it (see the Foundry, and aiTrade).
   const tradeAt = st.missiles ? 840 : 1200;
   if (S.mode !== 'colony' && S.time >= tradeAt && !counts.terminal && counts.foundry && S.time - (P.termFail ?? -999) > 240) {
-    const sh = tradeShortest(p), g = sh[0];
+    const sh = tradeShortest(p), g = sh.find((x) => x !== 'alloy'); // short of something in the ground
     if (sh.left[g] < (TRADE_LEFT[g] || 60) * 1.5 || st.missiles) plan = [['terminal', 1]].concat(plan); // only when short: it goes first
   }
   if (st.missiles) { const k = plan.findIndex(([t]) => t === 'armory') + 1; plan = plan.slice(0, k).concat([['smelter', 2], ['fab', 2], ['munitions', 1], ['silo', 2]], plan.slice(k)); }

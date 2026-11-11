@@ -6145,7 +6145,8 @@ function tradeShortest(p) {
     if (S.owner[t] !== p || !S.res[t]) continue;
     for (const g of TERMINAL_GET) if (S.res[t] === RES[g]) left[g] += S.amt[t];
   }
-  // (Fiber grows back, at Groves and Bio Farms too: it only counts as short when there's little standing.)
+  // (Fiber grows back, at Groves and Bio Farms too: it only counts as short when there's little standing.
+  // Alloy is never in the ground: it's short when there's little in stock.)
   const need = (g) => left[g] / (TRADE_LEFT[g] || 60) + (g === 'fiber' && S.buildings.some((b) => !b.dead && b.owner === p && (b.type === 'farm' || b.type === 'grower') && b.built) ? 1 : 0);
   const out = TERMINAL_GET.slice().sort((a, b) => need(a) - need(b));
   out.left = left; // what's left of each, for the AI
@@ -6166,7 +6167,7 @@ function newTradeOffers(p) {
     const get = k < 2 ? short[k] : short[Math.floor(r1 * short.length)];
     const pool = spare.filter((g) => g !== get);
     const give = k < 2 ? pool[k] : pool[Math.floor(r2 * Math.min(4, pool.length))];
-    if (!give || !get || seen.has(give + '>' + get)) continue;
+    if (!give || !get || seen.has(give + '>' + get) || !tradePairOk(give, get)) continue;
     seen.add(give + '>' + get);
     out.push({ give, get, lot: TERMINAL.lot, left: TERMINAL.lots });
   }
@@ -6181,6 +6182,11 @@ function terminalBonus(b) {
   const L = getE(S.players[b.owner].lander);
   const d = L && !L.dead ? dist(L.x, L.y, b.x, b.y) : TERMINAL.minDist;
   return 1 + clamp((d - TERMINAL.minDist) * TERMINAL.perTile, 0, TERMINAL.maxBonus);
+}
+
+/** Is giving `give` for `get` a fair contract: not a good traded down for a much cheaper one, and paying back enough to matter? */
+function tradePairOk(give, get) {
+  return TRADE_VALUE[give] <= TRADE_VALUE[get] * TERMINAL.downMax && (TERMINAL.lot * TRADE_VALUE[give] * TERMINAL.rate) / TRADE_VALUE[get] >= TERMINAL.minPay;
 }
 
 /** What contract o pays player p for a lot at Terminal b (or its first Terminal), at today's rate. */

@@ -871,10 +871,13 @@ const TRADE_BONUS = 1.3;
  * Command Base pays `perTile` more for every tile further, up to `maxBonus`. Every lot sold of a good knocks
  * `sat` off what that good fetches, down to `satMin`; it recovers `recover` a minute. Only Road Trains and
  * Freight Trains serve a Terminal (and only in loads of `minLoad` or more, or what's left of the lot).
+ * Alloy is only ever bought, never given. A contract never trades a good down for a much cheaper one (what
+ * you give worth over `downMax` times what you get: no Crystal for Stone), nor pays back under `minPay` (no
+ * Cement for Alloy). 30 Stone buys about 9 Alloy (11 at a Terminal far out).
  */
-const TERMINAL = { minDist: 16, lot: 30, rate: 0.65, perTile: 0.015, maxBonus: 0.25, offers: 3, every: 300, lots: 3, sat: 0.12, satMin: 0.5, recover: 0.05, minLoad: 10 };
-const TERMINAL_GIVE = ['fiber', 'cement', 'alloy', 'stone', 'ore', 'crystal'];
-const TERMINAL_GET = ['ore', 'crystal', 'stone', 'fiber'];
+const TERMINAL = { minDist: 16, lot: 30, rate: 0.65, perTile: 0.015, maxBonus: 0.25, offers: 3, every: 300, lots: 3, sat: 0.12, satMin: 0.5, recover: 0.05, minLoad: 10, downMax: 1.3, minPay: 6 };
+const TERMINAL_GIVE = ['fiber', 'cement', 'stone', 'ore', 'crystal'];
+const TERMINAL_GET = ['ore', 'crystal', 'stone', 'fiber', 'alloy'];
 
 /*
  * Wildlife (a Colony option, on by default; never in missions). Creature nests sit out in the wilds,
