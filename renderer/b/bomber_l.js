@@ -103,7 +103,7 @@ export default function (L) {
   const spineW = (x) => { for (let i = 0; i < F0.length - 1; i++) { const [xa, wa] = F0[i], [xb, wb] = F0[i + 1]; if (x <= xa && x >= xb) return (wa + (wb - wa) * (xa - x) / (xa - xb)) * 0.5; } return 0.1; };
   for (const x of [5.3, -1.0, -3.6, -6.2]) strip(x, -spineW(x), x, spineW(x), 0.04, spineY(x) - 0.004, 0.012, seam);
   // the canopy: an armoured faceted hood, almost black, with the glowing sensor slit down its middle
-  facet([[4.85, 0.03, 0.02], [4.45, 0.3, 0.2], [3.9, 0.42, 0.33], [3.2, 0.42, 0.36], [2.45, 0.34, 0.3], [1.85, 0.16, 0.18]].map(([x, w, h]) => ({ x, w, h, b: 0.05, t: w * 0.45, m: 0.5, y: Y0 + 0.47 })), [hood, hood, dark]);
+  facet([[4.85, 0.03, 0.02], [4.45, 0.3, 0.2], [3.9, 0.42, 0.33], [3.2, 0.42, 0.36], [2.45, 0.34, 0.3], [1.85, 0.16, 0.18]].map(([x, w, h]) => ({ x, w, h, b: 0.05, t: w * 0.45, m: 0.5, y: Y0 + 0.47 })), [hood, M.plain('#2b3136', 0.35, 0.6), dark]);
   { const sh = new THREE.Shape(); [[4.55, 0], [4.25, 0.06], [2.55, 0.05], [2.35, 0], [2.55, -0.05], [4.25, -0.06]].forEach(([x, z], i) => (i ? sh.lineTo(x, z) : sh.moveTo(x, z)));
     const g = new THREE.ExtrudeGeometry(sh, { depth: 0.05, bevelEnabled: false }); g.rotateX(Math.PI / 2); mesh(g, lens, 0, Y0 + 0.86, 0, { dirt: 0, cast: false }); }
   for (const s of [-1, 1]) strip(4.15, s * 0.33, 3.0, s * 0.37, 0.04, Y0 + 0.75, 0.04, M.plain('#2b3035', 0.5, 0.5)); // hood frame rails
@@ -167,7 +167,8 @@ export default function (L) {
       const uv = g.attributes.uv; for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) * UV, uv.getY(i) * UV);
       mesh(g, roof, 0, 0, 0, { dirt: 0, parent: fin }); }
     box(0.7, 0.07, 0.15, glow, -8.52, 2.36, 0, { dirt: 0, parent: fin, cast: false });
-    box(0.05, 2.0, 0.13, seam, -7.2, 0.05, 0, { dirt: 0, parent: fin, cast: false, ry: 0 }).rotation.z = 0.55;
+    { const a = [-5.0 - 3.2 * 0.4, 0.42 + 1.98 * 0.4], b = [-8.2, 2.4], g = new THREE.BoxGeometry(Math.hypot(b[0] - a[0], b[1] - a[1]), 0.07, 0.14); // the leading edge glows on its upper part
+      const m = mesh(g, glow, (a[0] + b[0]) / 2 + 0.02, (a[1] + b[1]) / 2 - 0.03, 0, { dirt: 0, parent: fin, cast: false }); m.rotation.z = Math.atan2(b[1] - a[1], b[0] - a[0]); }
   }
 
   // ---- grime over the body and the wings
