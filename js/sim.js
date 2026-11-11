@@ -147,13 +147,16 @@ function goodTotals(p) {
 function goodTotal(p, g) { return goodTotals(p)[g] || 0; }
 
 /*
- * goodTotal as of this tick, counted once for each player: every building stopped at its stock limit asks
- * every tick, and each count walks all the buildings and bots. (A good made earlier in the same tick
- * isn't counted until the next one.)
+ * goodTotal as of a moment ago, counted once for each player every TOTAL_EVERY ticks (a third of a second):
+ * every building stopped at its stock limit asks every tick, and each count walks all the buildings and
+ * bots. (A good made since the last count isn't counted until the next one: a stock limit can be passed
+ * by a batch, as it always could when two factories finished together.)
  */
-const _totals = { of: null, tick: -1, by: [] };
+const TOTAL_EVERY = 10;
+const _totals = { of: null, at: -1, by: [] };
 function tickTotal(p, g) {
-  if (_totals.of !== S || _totals.tick !== S.tick) { _totals.of = S; _totals.tick = S.tick; _totals.by = []; }
+  const at = Math.floor(S.tick / TOTAL_EVERY);
+  if (_totals.of !== S || _totals.at !== at) { _totals.of = S; _totals.at = at; _totals.by = []; }
   return (_totals.by[p] || (_totals.by[p] = goodTotals(p)))[g] || 0;
 }
 
