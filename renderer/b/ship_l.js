@@ -52,11 +52,15 @@ export default function (L) {
   {
     const s = hullShape(0); s.holes.push(new THREE.Path(hullShape(0.12).getPoints(24)));
     ext(s, BH, hullM, HH, { dirt: 0 });
-    const pts = hullShape(0.06).getSpacedPoints(160);
-    for (let i = 0; i < pts.length - 1; i++) {
-      const a = pts[i], b = pts[i + 1];
-      if (Math.hypot(b.x - a.x, b.y - a.y) < 1e-4) continue;
-      beam([a.x, HH + BH + 0.012, -a.y], [b.x, HH + BH + 0.012, -b.y], 0.07, 0.025, glow, nc);
+    // the strip in eight lengths (so at night it throws a little light along the edges instead of flooding the deck)
+    const pts = hullShape(0.06).getSpacedPoints(160), N = 8, per = Math.ceil((pts.length - 1) / N);
+    for (let c = 0; c < N; c++) {
+      const run = pts.slice(c * per, Math.min(pts.length, (c + 1) * per + 1)), l = [], r = [];
+      run.forEach((q, i) => {
+        const a = run[Math.max(0, i - 1)], b = run[Math.min(run.length - 1, i + 1)], dx = b.x - a.x, dy = b.y - a.y, d = Math.hypot(dx, dy) || 1;
+        l.push(new THREE.Vector2(q.x - dy / d * 0.035, q.y + dx / d * 0.035)); r.push(new THREE.Vector2(q.x + dy / d * 0.035, q.y - dx / d * 0.035));
+      });
+      ext(new THREE.Shape([...l, ...r.reverse()]), 0.025, glow, HH + BH + 0.005, nc);
     }
   }
   // fittings round the deck edge: bollards fore and aft, the stern light
