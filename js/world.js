@@ -2047,13 +2047,15 @@ function placeSite(owner, type, i, j, cost, fromStore) {
   if (!chk.ok) return chk;
   const def = BDEFS[type];
   if (!def.prepaid && !def.ramp && siteCount(owner) >= MAX_SITES) return { ok: false, reason: `Maximum of ${MAX_SITES} construction sites reached.` };
-  // An Outpost or Gate on a road takes the road's place (its Cement comes back); the road runs through it.
+  // An Outpost on a road takes the road's place (its Cement comes back); the road runs through it. A Gate
+  // holds the road it stands on (b.road): the road is laid again when the Gate goes (destroyBuilding), so its
+  // Cement stays in it. A road only planned there is called off: there was no road, so none comes back.
   const t = tIdx(i, j);
-  const onRoad = !!(S.road[t] || S.plan[t]);
+  const held = type === 'gate' && S.road[t] > 0 && roadOwnedBy(owner, t);
   if (S.plan[t]) cancelPlan(t);
-  if (S.road[t]) removeRoad(owner, i, j);
+  if (S.road[t]) removeRoad(owner, i, j, held);
   const b = addBuilding(owner, type, i, j, false);
-  if (type === 'gate' && onRoad) b.road = true;
+  if (held) b.road = true;
   if (chk.rwy) b.rwy = chk.rwy; // an Airfield's runway is kept clear from now on
   // Walls, Gates, Viaducts (and Ramps a rail line needs) are paid straight from storage: the
   // computer pays now; your plans queue and are paid for as the goods come in (settlePlans).
@@ -2767,7 +2769,7 @@ function destroyBuilding(b, burn, quiet) {
   if (b.type === 'gate' && b.road) setRoad(b.x, b.y, true, b.owner);
   markDirty(b.x, b.y);
   if (!quiet) { collapseFx(b, burn); sfx('boom'); } // (taken down on purpose, as when a building moves: no wreck)
-  if ((BDEFS[b.type].mil || civClaims(b)) && b.built) computeTerritory();
+  if ((BDEFS[b.type].mil || civClaims(b)) && b.built && !(typeof LAND_HOLD !== 'undefined' && LAND_HOLD)) computeTerritory(); // (a nuclear blast works the land out once, when it's done: nukeImpact)
   if (boom >= 0) fuelBlast(b.x + 0.5, b.y + 0.5, b.type, boom, b.owner);
 }
 

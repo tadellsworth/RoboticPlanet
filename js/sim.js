@@ -2847,7 +2847,8 @@ function updateTurret(b, def, dt) {
   b.scanT = (b.scanT || 0) - dt;
   const cx = b.x + 0.5, cy = b.y + 0.5, range = turretRange(b), r2 = range * range;
   let target = b.tgt ? getE(b.tgt) : null;
-  if (target && (target.dead || target.inside || dist2(target.x, target.y, cx, cy) > r2)) target = null;
+  // (A Keep taken, or a turret handed over with its colony, drops the target it was tracking: it's on its side now.)
+  if (target && (target.dead || target.inside || target.owner === b.owner || dist2(target.x, target.y, cx, cy) > r2)) target = null;
   if (!target && b.scanT <= 0) { b.scanT = 0.3; target = nearestEnemyBot(b.owner, cx, cy, range, true); }
   b.tgt = target ? target.id : 0;
   const ammo = b.shots + (b.stock.crystal || 0) * shotsPer(b);
@@ -2924,7 +2925,7 @@ function updateDisruptor(b, def, dt) {
   b.cd = (b.cd || 0) - dt;
   if (b.cd > 0) return;
   const cx = b.x + 0.5, cy = b.y + 0.5, rr = def.range + auraRange(b), r2 = rr * rr;
-  const hit = S.bots.filter((u) => !u.dead && !u.inside && u.owner !== b.owner && !BOTS[u.type].wild && !BOTS[u.type].rail && dist2(u.x, u.y, cx, cy) <= r2);
+  const hit = S.bots.filter((u) => !u.dead && !u.inside && !u.dropping && u.owner !== b.owner && !BOTS[u.type].wild && !BOTS[u.type].rail && !BOTS[u.type].air && dist2(u.x, u.y, cx, cy) <= r2); // (aircraft are out of its reach, like a turret's: see nearestEnemyBot)
   if (!hit.length) { b.status = (b.pulses || 0) + (b.stock.fuel || 0) > 0 ? 'Watching for enemy robots' : 'No Fuel: a Tanker brings it from storage'; b.cd = 0.5; return; }
   if (!(b.pulses > 0)) {
     if (!((b.stock.fuel || 0) > 0)) { b.status = 'No Fuel to pulse with: a Tanker brings it from storage'; b.cd = 1; return; }
@@ -2957,7 +2958,7 @@ function updateMortar(b, def, dt) {
   b.cd = (b.cd || 0) - dt;
   if (b.cd > 0) return;
   const cx = b.x + 0.5, cy = b.y + 0.5, rr = def.range + auraRange(b), r2 = rr * rr, min2 = def.minRange * def.minRange, s2 = m.splash * m.splash;
-  const foes = S.bots.filter((u) => !u.dead && !u.inside && u.owner !== b.owner && !BOTS[u.type].rail);
+  const foes = S.bots.filter((u) => !u.dead && !u.inside && !u.dropping && u.owner !== b.owner && !BOTS[u.type].rail && !BOTS[u.type].air); // (no shells for aircraft: they'd never land on one)
   let best = null, bs = 0;
   for (const u of foes) {
     const d = dist2(u.x, u.y, cx, cy);
@@ -3005,9 +3006,10 @@ function shellImpact(m) {
 
 /** Military buildings send warbots out when enemy warbots come close. */
 function garrisonDefense(b, dt) {
-  b.cd -= dt;
-  if (b.cd > 0) return;
-  b.cd = 0.5;
+  const k = BDEFS[b.type].keep ? 'scd' : 'cd'; // (its own timer on a Keep: the roof cannon uses b.cd, see updateTurret)
+  b[k] = (b[k] || 0) - dt;
+  if (b[k] > 0) return;
+  b[k] = 0.5;
   if (!b.garrison.length) return;
   const cx = b.x + 0.5, cy = b.y + 0.5;
   let threats = 0, out = 0;
@@ -3112,7 +3114,7 @@ function captureBuilding(b, by) {
   }
   const name = def.name;
   if (!b.built) {
-    (S.players[old].avoid = S.players[old].avoid || []).push({ x: b.x, y: b.y, until: S.time + 150 });
+    (S.players[old].avoid = (S.players[old].avoid || []).filter((a) => a.until > S.time)).push({ x: b.x, y: b.y, until: S.time + 150 }); // (old ones dropped here: only an AI's own list is pruned elsewhere)
     postMsg(by, `Your warbots wrecked an enemy construction site.`, b.x, b.y, 'good');
     postMsg(old, `Enemy warbots wrecked your ${name} construction site.`, b.x, b.y, 'bad');
     destroyBuilding(b, true);
@@ -3121,7 +3123,9 @@ function captureBuilding(b, by) {
   releaseBotsFrom(b, false); // whoever was inside (out of Ammo, or the crew) flees: they aren't killed
   delete b.prio; delete b.smode; delete b.reject; b.paused = false;
   b.fixLeft = 0; b.fixer = 0;
-  b.owner = by;
+  // Only a fort changes hands. Anything else is wrecked (below) as its old owner's: the attackers keep
+  // their orders (releaseBotsFrom calls off only the owner's), and a Gate's road stays the defender's.
+  if (def.mil) { b.owner = by; b.tgt = 0; } // (a Keep's cannon was tracking its new owner's warbots)
   b.armor = Math.max(4, def.armor * 0.4);
   b.lastHit = S.time;
   b.timer = 0;
@@ -3208,22 +3212,26 @@ function burnLiquids(b) {
 
 /** Chain reactions: Tankers and Refineries caught in a blast go up when their moment comes. */
 function updateBlasts() {
-  let left = 0;
   for (const u of S.bots) {
     if (!(u.blowAt > 0)) continue;
     if (u.dead) { u.blowAt = 0; continue; }
-    if (S.time < u.blowAt) { left++; continue; }
+    if (S.time < u.blowAt) continue;
     u.blowAt = 0;
     if (u.carry && u.carryN > 0) killBot(u);
   }
   for (const b of S.buildings) {
     if (!(b.blowAt > 0)) continue;
     if (b.dead) { b.blowAt = 0; continue; }
-    if (S.time < b.blowAt) { left++; continue; }
+    if (S.time < b.blowAt) continue;
     b.blowAt = 0;
     postMsg(b.owner, `Your ${BDEFS[b.type].name} caught fire in the blast and exploded!`, b.x, b.y, 'bad');
     destroyBuilding(b, true);
   }
+  // Who is still waiting is counted only now: a blast set off above can catch Tankers and Refineries
+  // these loops had already passed, and they must still get their turn.
+  let left = 0;
+  for (const u of S.bots) if (u.blowAt > 0 && !u.dead) left++;
+  for (const b of S.buildings) if (b.blowAt > 0 && !b.dead) left++;
   S.blowing = left;
 }
 
@@ -3439,12 +3447,15 @@ function doLoot(u, t, dt) {
   // More crates still lying there: back for another (a warbot only carries one at a time).
   const more = (u.ammo ?? WARBOT_AMMO) > 0 && !wantsRepair(u) && lootNear(u, 50);
   if (more) { goLoot(u, more); return; }
-  if (home.garrison.length + home.garInc < BDEFS[home.type].garrison && !wantsRepair(u)) enterBuilding(u, home);
+  // Yours stay here only if it's where they belong (their post, or with none the Command Base); otherwise
+  // they walk back there (goGarrison), not into whichever garrison was nearest the pile.
+  const belongs = !usesPosts(u.owner) || (postOf(u) ? u.post === home.id : home.id === S.players[u.owner].lander);
+  if (belongs && home.garrison.length + home.garInc < BDEFS[home.type].garrison && !wantsRepair(u)) enterBuilding(u, home);
 }
 
 /**
  * Player `old` has lost its Command Base to `by`: every building it had passes to `by` (empty,
- * lightly armored), its robots shut down for good, and its rally flags come down. The last player
+ * lightly armored) with its roads, track and pipes, its robots shut down for good, and its rally flags come down. The last player
  * left standing wins; if that's not you, losing your own Command Base ends your game.
  */
 function eliminate(old, by) {
@@ -3459,13 +3470,24 @@ function eliminate(old, by) {
     releaseBotsFrom(e, true);
     delete e.prio; delete e.smode; delete e.reject; e.paused = false;
     e.fixLeft = 0; e.fixer = 0; e.timer = 0; e.garrison = []; e.garInc = 0;
-    e.owner = by;
+    e.owner = by; e.tgt = 0;
     e.armor = Math.max(4, Math.min(e.armor, BDEFS[e.type].armor * 0.4));
     e.mode = S.players[by].ai ? 'alt' : 'off';
     markDirty(e.x, e.y);
   }
   for (const t of planAll(old).slice()) setPlan(t, -1);
-  for (let t = 0; t < S.W * S.H; t++) if (S.railPlan[t] === old + 1) setRailPlan(t, 0);
+  // Its roads, track and pipes are `by`'s too, with the lights and overpasses on them (so `by` can change
+  // them, and its own raids and Missiles leave them be); what it had only planned is dropped.
+  for (let t = 0; t < S.W * S.H; t++) {
+    if (S.railPlan[t] === old + 1) setRailPlan(t, 0);
+    if (S.pipePlan[t] === old + 1) S.pipePlan[t] = 0;
+    if (S.wown[t] === old) S.wown[t] = by;
+    if (S.pipe[t] === old + 1) setPipe(t, by + 1);
+  }
+  for (const k in S.lights) if (S.lights[k].owner === old) S.lights[k].owner = by;
+  for (const k in S.over) if (S.over[k].owner === old) S.over[k].owner = by;
+  for (const k in S.junPlan || {}) if (S.junPlan[k].owner === old) delete S.junPlan[k];
+  S.roadVer = (S.roadVer || 0) + 1; S.railVer = (S.railVer || 0) + 1;
   computeTerritory();
   const L = getE(P.lander);
   const x = L ? L.x : 0, y = L ? L.y : 0;
@@ -4102,8 +4124,9 @@ function rocketHit(b, dmg, by) {
   b.armor -= keepShield(b, dmg);
   b.lastHit = S.time;
   if (by >= 0) (S.players[b.owner].hitBy = S.players[b.owner].hitBy || {})[by] = S.time;
-  if (b.built && def.mil) { const f = missileFloor(b); if (b.armor < f) b.armor = Math.min(f, b.armor + dmg); return; }
-  if (b.armor <= 0) {
+  const fort = b.built && def.mil; // it stops at its floor, and is never wrecked (but its owner is told all the same)
+  if (fort) { const f = missileFloor(b); if (b.armor < f) b.armor = Math.min(f, b.armor + dmg); }
+  if (!fort && b.armor <= 0) {
     postMsg(by, `Your rockets wrecked the enemy ${def.name}.`, b.x, b.y, 'good');
     postMsg(b.owner, `Enemy rockets wrecked your ${def.name}!`, b.x, b.y, 'bad');
     destroyBuilding(b, true);
@@ -4283,10 +4306,12 @@ function sabotageRoads(u, r, dt) {
 function wreckRoad(t, victim, why) {
   const i = t % S.W, j = (t / S.W) | 0, cross = crossTile(t);
   setRoad(i, j, false);
-  if (S.terrain[t] === T_WATER || S.terrain[t] === T_CHASM) computeTerritory();
+  // (In a nuclear blast the land and the zones are worked out once, when it's done: LAND_HOLD, see nukeImpact.)
+  if (LAND_HOLD) { if (cross) LAND_HOLD = 2; }
+  else if (S.terrain[t] === T_WATER || S.terrain[t] === T_CHASM) computeTerritory();
   delete S.lights[t];
   delete S.over[t];
-  if (cross) computeZones();
+  if (cross && !LAND_HOLD) computeZones();
   addFx('smoke', i + 0.5, j + 0.5, { r: 0.6 });
   if (victim >= 0 && why) {
     const P = S.players[victim];
@@ -4492,7 +4517,7 @@ function unstation(owner, b) {
       b.garrison = b.garrison.filter((id) => id !== u.id);
       u.inside = 0;
       u.task = { type: 'garrison', bld: L.id }; u.path = null; L.garInc = (L.garInc || 0) + 1;
-    }
+    } else if (u.task && u.task.type === 'garrison' && u.task.bld === b.id) cancelTask(u); // still on its way in: it turns back (goGarrison)
   }
   return n;
 }
@@ -4644,6 +4669,9 @@ function updateMissiles(dt) {
  */
 function missileFloor(b) { return Math.max(1, Math.round(BDEFS[b.type].armor * MISSILE_FLOOR)); }
 
+/** Player p was hit by a Missile of `by`'s just now (a nuclear one too): remembered like a warbot's or a rocket's hit (see rivalOf). */
+function hitByNow(p, by) { if (by >= 0 && by !== p && S.players[p]) (S.players[p].hitBy = S.players[p].hitBy || {})[by] = S.time; }
+
 function missileImpact(m) {
   const md = BDEFS.silo.missile;
   blastFx(m.x1, m.y1, 2.2);
@@ -4653,14 +4681,16 @@ function missileImpact(m) {
     const name = BDEFS[b.type].name;
     b.armor -= keepShield(b, md.damage);
     b.lastHit = S.time;
+    hitByNow(b.owner, m.owner);
     if (b.armor <= 0 && (!b.built || !BDEFS[b.type].mil)) {
       postMsg(m.owner, `Your missile wrecked the enemy ${name}.`, b.x, b.y, 'good');
       postMsg(b.owner, `A missile wrecked your ${name}!`, b.x, b.y, 'bad');
       destroyBuilding(b, true);
     } else {
-      const floor = missileFloor(b);
-      if (b.armor <= floor) b.armor = Math.min(floor, b.armor + md.damage);
-      postMsg(m.owner, `Missile hit the enemy ${name}${b.armor <= floor ? ': its armor is down, send warbots to capture it!' : '.'}`, b.x, b.y, 'good');
+      // (Only a fort stops at its floor; a Wall or Gate left standing has taken the whole hit.)
+      const floor = missileFloor(b), fort = b.built && BDEFS[b.type].mil;
+      if (fort && b.armor <= floor) b.armor = Math.min(floor, b.armor + md.damage);
+      postMsg(m.owner, `Missile hit the enemy ${name}${fort && b.armor <= floor ? ': its armor is down, send warbots to capture it!' : '.'}`, b.x, b.y, 'good');
       postMsg(b.owner, `A missile hit your ${name}!`, b.x, b.y, 'bad');
     }
   }
@@ -4668,6 +4698,7 @@ function missileImpact(m) {
     if (e === b || e.dead || e.owner === m.owner || dist2(e.x + 0.5, e.y + 0.5, m.x1, m.y1) > md.splash * md.splash) continue;
     e.armor -= keepShield(e, md.splashDamage);
     e.lastHit = S.time;
+    hitByNow(e.owner, m.owner);
     if (e.armor <= 0 && (!e.built || !BDEFS[e.type].mil)) {
       postMsg(e.owner, `The blast wrecked your ${BDEFS[e.type].name}!`, e.x, e.y, 'bad');
       destroyBuilding(e, true);
@@ -4861,35 +4892,50 @@ function updateEvac() {
   for (const p in S.evac) if (evacZones(+p)) evacSweep(+p);
 }
 
+/**
+ * Set while a nuclear blast takes down everything in its reach (nukeImpact): the land isn't worked out again
+ * for every building and bridge that goes (destroyBuilding, wreckRoad) but once, when the blast is done.
+ * 2: a bridge or tunnel went too, so the zones are due as well.
+ */
+let LAND_HOLD = 0;
+
 function nukeImpact(m) {
   const cx = m.x1, cy = m.y1, R2 = NUKE.radius * NUKE.radius;
   addFx('nuke', cx, cy, { life: 2, r: NUKE.radius });
   sfx('nuke');
   const lost = S.players.map(() => 0);
-  for (const b of S.buildings.slice()) {
-    if (b.dead || dist2(b.x + 0.5, b.y + 0.5, cx, cy) > R2) continue;
-    if (b.type === 'lander') {
-      for (const id of b.garrison.slice()) { const u = getE(id); if (u) killBot(u); }
-      b.garrison.length = 0;
-      for (const u of S.bots) if (!u.dead && u.inside === b.id) killBot(u);
-      b.armor = 1;
-      b.lastHit = S.time;
-    } else {
-      lost[b.owner]++;
-      destroyBuilding(b, true);
-    }
-  }
-  for (const u of S.bots) if (!u.dead && !u.inside && dist2(u.x, u.y, cx, cy) <= R2) killBot(u);
   const ci = Math.floor(cx), cj = Math.floor(cy), R0 = NUKE.radius;
-  for (let dj = -R0; dj <= R0; dj++) for (let di = -R0; di <= R0; di++) {
-    const i = ci + di, j = cj + dj;
-    if (!inMap(i, j) || di * di + dj * dj > R2) continue;
-    const t = tIdx(i, j);
-    if (S.plan[t]) cancelPlan(t);
-    if (S.road[t]) wreckRoad(t, -1, '');
-    if (S.pipe[t] || S.pipePlan[t]) { setPipe(t, 0); S.pipePlan[t] = 0; } // gone for good: the ground is scorched
-    if (S.res[t] === R_STALK || S.res[t] === R_CROP) { S.res[t] = R_NONE; S.amt[t] = 0; markDirty(i, j); }
-    S.scorch[t] = S.time + NUKE.scorch;
+  LAND_HOLD = 1;
+  try {
+    for (const b of S.buildings.slice()) {
+      if (b.dead || dist2(b.x + 0.5, b.y + 0.5, cx, cy) > R2) continue;
+      hitByNow(b.owner, m.owner);
+      if (b.type === 'lander') {
+        for (const id of b.garrison.slice()) { const u = getE(id); if (u) killBot(u); }
+        b.garrison.length = 0;
+        for (const u of S.bots) if (!u.dead && u.inside === b.id) killBot(u);
+        b.armor = 1;
+        b.lastHit = S.time;
+      } else {
+        lost[b.owner]++;
+        destroyBuilding(b, true);
+      }
+    }
+    for (const u of S.bots) if (!u.dead && !u.inside && dist2(u.x, u.y, cx, cy) <= R2) killBot(u);
+    for (let dj = -R0; dj <= R0; dj++) for (let di = -R0; di <= R0; di++) {
+      const i = ci + di, j = cj + dj;
+      if (!inMap(i, j) || di * di + dj * dj > R2) continue;
+      const t = tIdx(i, j);
+      if (S.plan[t]) cancelPlan(t);
+      if (S.road[t]) wreckRoad(t, -1, '');
+      if (S.pipe[t] || S.pipePlan[t]) { setPipe(t, 0); S.pipePlan[t] = 0; } // gone for good: the ground is scorched
+      if (S.res[t] === R_STALK || S.res[t] === R_CROP) { S.res[t] = R_NONE; S.amt[t] = 0; markDirty(i, j); }
+      S.scorch[t] = S.time + NUKE.scorch;
+    }
+  } finally {
+    const zones = LAND_HOLD === 2;
+    LAND_HOLD = 0;
+    if (zones) computeZones();
   }
   S.blasts = (S.blasts || []).filter((b) => b.until > S.time).concat([{ x: cx, y: cy, until: S.time + NUKE.scorch }]);
   computeTerritory();
@@ -4962,23 +5008,30 @@ function roadCredit(owner, g) {
 /** What laying one road tile costs. */
 function roadCost() { return PAVE[1].cost; }
 
-/** Can `owner` afford road costs `cost` (one tile's, or a whole route's), counting the credit left from earlier tiles? */
+/**
+ * Can `owner` afford road costs `cost` (one tile's, or a whole route's), counting the credit left from earlier tiles?
+ * (Only what takeGood can take counts: not goods promised to a hauler, nor a Trade Terminal's lot, so payRoad never comes up short.)
+ */
 function canAffordRoad(owner, cost) {
-  const have = playerGoods(owner);
+  const have = spendable(owner);
   for (const g in cost) if (roadCredit(owner, g) + (have[g] || 0) < cost[g] - 1e-9) return false;
   return true;
 }
 
 /** How many more road tiles the player could lay right now. */
 function roadTilesAffordable(owner) {
-  const have = playerGoods(owner), cost = roadCost();
+  const have = spendable(owner), cost = roadCost();
   let n = Infinity;
-  for (const g in cost) n = Math.min(n, Math.floor((roadCredit(owner, g) + have[g]) / cost[g] + 1e-9));
+  for (const g in cost) n = Math.min(n, Math.floor((roadCredit(owner, g) + (have[g] || 0)) / cost[g] + 1e-9));
   return n;
 }
 
-/** Take a good from wherever the player has spare of it (storage or finished goods in buildings). */
+/**
+ * Take a good from wherever the player has spare of it (storage or finished goods in buildings).
+ * Returns the building the last one came from (true if none was asked for), or false if it ran out.
+ */
 function takeGood(owner, g, n) {
+  let from = true;
   while (n > 0) {
     let best = null, most = 0;
     for (const b of S.buildings) {
@@ -4989,9 +5042,10 @@ function takeGood(owner, g, n) {
     if (!best) return false;
     bump(best.stock, g, -1);
     usedGood(owner, g, 1);
+    from = best;
     n--;
   }
-  return true;
+  return from;
 }
 
 /* ------------------------------------------------------------------ plans paid as goods come in */
@@ -5019,14 +5073,21 @@ function stillOwed(b) {
   return out;
 }
 
-/** Pay site b what storage can give, a unit at a time, skipping goods in `short` (and adding the ones that run out). True once it's paid for. */
+/**
+ * Pay site b what storage can give, a unit at a time, skipping goods in `short` (and adding the ones that run out). True once it's paid for.
+ * Where each good came from is kept on the site (b.paidFrom: { building id: { good: n } }): called off, they go back there (see demolish).
+ */
 function payInto(b, short) {
   const owed = stillOwed(b);
   let done = true;
   for (const g in owed) {
     let n = owed[g];
     if (short && short.has(g)) { done = false; continue; }
-    while (n > 0 && takeGood(b.owner, g, 1)) { bump(b.stock, g, 1); n--; }
+    for (let s; n > 0 && (s = takeGood(b.owner, g, 1)); n--) {
+      bump(b.stock, g, 1);
+      const from = b.paidFrom || (b.paidFrom = {});
+      bump(from[s.id] || (from[s.id] = {}), g, 1);
+    }
     if (n > 0) { done = false; if (short) short.add(g); }
   }
   return done;
@@ -5139,6 +5200,7 @@ function wallToGate(owner, b) {
   return '';
 }
 
+/** Pay road costs `cost`, from the credit first and then whole goods from storage (ask canAffordRoad first: short of goods, the rest would be left owing on the credit). */
 function payRoad(owner, cost, mul) {
   const P = S.players[owner];
   for (const g in cost) {
@@ -5182,8 +5244,11 @@ function costText(cost) {
   return Object.keys(cost).map((g) => `${Math.round(cost[g] * 100) / 100} ${GOOD[g].name}`).join(', ');
 }
 
-/** Remove a road tile, or call off a planned one, and refund its Cement (Asphalt on top isn't returned). */
-function removeRoad(owner, i, j) {
+/**
+ * Remove a road tile, or call off a planned one, and refund its Cement (Asphalt on top isn't returned).
+ * With `held` nothing is refunded: a Gate is taking the road's place, and lays it again when it goes (placeSite).
+ */
+function removeRoad(owner, i, j, held) {
   const t = tIdx(i, j);
   if (S.plan[t] === owner + 1) { cancelPlan(t); return; }
   if (!S.road[t] || !roadOwnedBy(owner, t)) return; // only your own roads (a rival's are wrecked by raids or Missiles)
@@ -5191,7 +5256,7 @@ function removeRoad(owner, i, j) {
   setRoad(i, j, false);
   if (S.terrain[t] === T_WATER || S.terrain[t] === T_CHASM) computeTerritory();
   if (S.over && S.over[t]) removeOverpass(t);
-  refundRoad(owner, cross ? crossCost(t) : roadCost(), i, j);
+  if (!held) refundRoad(owner, cross ? crossCost(t) : roadCost(), i, j);
   if (cross) computeZones();
 }
 
@@ -5255,7 +5320,8 @@ function releaseScore(b) {
 
 /**
  * Take building b down. Half its materials go straight to your nearest other storage (a cancelled
- * site's delivered materials all go back). Everything inside a finished building (a Silo's
+ * site's delivered materials all go back: what was paid straight from storage, to the buildings it
+ * was taken from, see payInto). Everything inside a finished building (a Silo's
  * Missiles, a pump's last Crude, a Depot's whole stock, a Nuclear Silo's missile as its parts)
  * spills out in crates on its tile, and your haulers carry them to storage.
  * Returns { goods: what went to storage, to: that storage's id (0 if you have none), crates }.
@@ -5276,18 +5342,32 @@ function demolish(b) {
     for (const g in cost) give(g, Math.floor(cost[g] / 2));
     if (def.nukeSilo && b.armed) { for (const g in NUKE.parts) bump(b.stock, g, NUKE.parts[g]); b.armed = 0; }
     out.crates = dropLoot(b);
-  } else if (store) {
-    for (const g in b.stock) give(g, Math.min(b.stock[g], cost[g] || 0));
-    b.stock = {};
-  } else out.crates = dropLoot(b);
+  } else {
+    // What a site took straight from storage goes back where it came from (b.paidFrom), not to whichever
+    // storage is nearest the site; the nearest takes only what's left (its source is gone, or haulers brought it).
+    for (const id in b.paidFrom || {}) {
+      const s = getE(+id);
+      if (!s || s.dead || !s.built || s.owner !== b.owner) continue;
+      for (const g in b.paidFrom[id]) {
+        const n = Math.min(b.paidFrom[id][g], b.stock[g] || 0);
+        if (n > 0) { bump(s.stock, g, n); bump(b.stock, g, -n); bump(out.goods, g, n); }
+      }
+    }
+    if (store) { for (const g in b.stock) give(g, Math.min(b.stock[g], cost[g] || 0)); b.stock = {}; }
+    else out.crates = dropLoot(b);
+  }
   destroyBuilding(b, false);
   return out;
 }
 
 /* ------------------------------------------------------------------ moving buildings */
 
-/** Settings a building keeps when it moves. */
-const MOVE_KEEPS = ['prio', 'limit', 'paused', 'keep', 'smode', 'reject', 'order', 'orders', 'omode', 'mode', 'gprio', 'keepW', 'pmode', 'airSupply'];
+/**
+ * What a building keeps when it moves: its settings, and the work it has in hand (a Foundry's or a yard's
+ * orders and the parts built into them, a Silo's reload, a Nuclear Silo's finished missile).
+ */
+const MOVE_KEEPS = ['prio', 'limit', 'paused', 'keep', 'smode', 'reject', 'order', 'orders', 'omode', 'mode', 'gprio', 'keepW', 'pmode', 'airSupply',
+  'partsBy', 'yard', 'yardParts', 'yardT', 'reload', 'armed'];
 
 /**
  * Can building b be moved? Any finished one of yours, except the Command Base and Outposts (they hold
@@ -5327,12 +5407,22 @@ function finishMove(nb) {
   nb.moveFrom = 0;
   if (!old || old.dead || old.owner !== nb.owner) return;
   old.moving = 0;
+  delete nb.cost; // (the site cost nothing; the building is worth what any of its kind is: see demolish)
+  nb.armor = clamp(old.armor, 1, nb.armor); // as it stood: a move is no repair
   for (const k of MOVE_KEEPS) if (old[k] !== undefined) nb[k] = old[k] && typeof old[k] === 'object' ? JSON.parse(JSON.stringify(old[k])) : old[k];
   for (const g in old.stock) if (old.stock[g] > 0) bump(nb.stock, g, old.stock[g]);
   old.stock = {}; old.res = {}; old.loot = undefined;
   for (const u of S.bots) if (!u.dead && u.owner === nb.owner && (u.post === old.id || (u.inside === old.id && u.type === 'warbot'))) u.post = nb.id;
   // An Airfield's planes move with it (one parked there taxis over).
   for (const u of S.bots) if (!u.dead && u.owner === nb.owner && BOTS[u.type].air && u.home === old.id) { u.home = nb.id; if (u.inside === old.id) { exitBuilding(u); enterBuilding(u, nb); } if (u.flight) u.flight.base = nb.id; }
+  // A Port's Ferry and ferry line move with it, as long as ships can still sail there from the old docks
+  // (and on to the far Port: setFerryLine checks); otherwise the line is dropped and the Ferry finds a Port.
+  if (BDEFS[nb.type].port) {
+    const far = getE(old.ferryTo);
+    if (seaLinked(old, nb)) for (const u of S.bots) if (!u.dead && u.owner === nb.owner && BOTS[u.type].ferry && u.home === old.id) u.home = nb.id;
+    if (far && !far.dead && far.ferryTo === old.id && setFerryLine(nb, far)) far.ferryTo = 0;
+    old.ferryTo = 0;
+  }
   destroyBuilding(old, false, true);
   addFx('smoke', old.x + 0.5, old.y + 0.5, { r: 0.7 });
   postMsg(nb.owner, `The ${BDEFS[nb.type].name} has moved here.`, nb.x, nb.y, 'good');

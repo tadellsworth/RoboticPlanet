@@ -431,8 +431,9 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
 - **Moving buildings:** tap Move on one of your finished buildings (`movable`: not the Command Base or Outposts, which
   hold your land, nor Walls, Gates, Ramps, Viaducts, Ropeways or a deployed Crawler), then the new spot. `startMove`
   puts a site of the same kind there that costs nothing (`siteFrac` treats it as fully supplied); workers put it
-  together in its build time while the old one keeps working, and `finishMove` hands over its goods, settings
-  (`MOVE_KEEPS`) and stationed warbots, then takes the old one down quietly. Calling the move off, demolishing either
+  together in its build time while the old one keeps working, and `finishMove` hands over its goods, settings and
+  work in hand (`MOVE_KEEPS`: orders and parts, a Silo's reload, a finished nuclear missile), its armor as it stood, a
+  Port's ferry line and stationed warbots, then takes the old one down quietly. Calling the move off, demolishing either
   end or losing the old one takes the site down (`cancelMove`), so no building comes free.
 - **Saved planets:** **Save** beside the planet number (More settings), or **Save this planet** in the pause menu, keeps
   the seed and the settings that shape the map (shape, size, terrain, resources, biome, players) on this device
