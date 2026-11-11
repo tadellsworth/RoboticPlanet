@@ -15,7 +15,7 @@ export default function (L) {
   const armor = M.paint('#3a4046'), top = M.paint('#4f565e'), roof = M.paint('#5e666f', { rivets: false });
   const dark = M.plain('#1a1c1f', 0.7, 0.3), black = M.plain('#08090a', 0.8), glow = M.emit(TEAM, 1.1);
   const steel = M.plain('#626970', 0.3, 0.85), seam = M.plain('#101214', 0.8), team = M.emit(TEAM, 0.75), paintT = M.paint(TEAM, { rivets: false });
-  const lamp = M.emit('#fff1d0', 2.2), amber = M.emit('#ffb347', 1.4), nose = M.plain('#c9cdd2', 0.4, 0.5);
+  const lamp = M.emit('#fff1d0', 2.2), amber = M.emit('#ff9a2a', 1.3), nose = M.plain('#c9cdd2', 0.4, 0.5);
 
   // ---- running gear: three axles a side (one under the cab, a close pair under the bed), outer half showing
   for (const x of [60, -26, -60]) for (const s of [-1, 1]) tyre(x, s * 36, 14, 16, { blocks: 14 });
@@ -51,9 +51,13 @@ export default function (L) {
   for (const [a, b, c, d] of [[94, 0, 72, 0], [72, -25, 72, 25]]) strip(a, b, c, d, 2, 1.85, 0.01, seam);
   grime(38, -30, 62, 60, 1.85, 0.7, 17);
   ext(poly([[86, -16], [92, -6], [92, 6], [86, 16], [82, 14], [87, 4], [87, -4], [82, -14]]), 1.84, 0.1, eye(TEAM, 1.3, 0.32), { bevel: 0.01, cast: false });
-  for (const s of [-1, 1]) strip(98, s * 6, 93, s * 18, 3, 1.3, 0.14, lamp, { cast: false }); // headlight bars on the nose chamfers
-  rect(48, 6, 12, 10, 1.9, 0.05, dark, { dirt: 0 });                                    // roof hatch
-  disc(46, -14, 2.6, 1.9, 0.14, amber, { cast: false });                                 // the beacon
+  for (const s of [-1, 1]) strip(97.5, s * 5, 92.5, s * 17, 4, 1.3, 0.16, lamp, { cast: false }); // headlight bars on the nose chamfers
+  disc(61, 8, 6.5, 1.9, 0.05, M.plain('#2d3236', 0.55, 0.5)); L.hoop(6.5 * k, 0.02, steel, 61 * k, 1.95, 8 * k, R.O()); // roof hatch
+  disc(46, 12, 2.6, 1.9, 0.14, amber, { cast: false });                                  // the beacon
+  // a small sensor mast, as on the warbot's turret
+  L.cyl(1.4 * k, 0.3, M.plain('#15171a', 0.6, 0.5), 52 * k, 1.9, -12 * k, R.O({ dirt: 0 }));
+  ext(rr(44, -15, 16, 6, 3), 2.2, 0.05, M.plain('#c9cdd1', 0.4, 0.3), { bevel: 0.01 });
+  disc(52, -12, 2.2, 2.25, 0.04, eye(TEAM, 1, 0.3), { cast: false });
 
   // ---- the launcher: an armoured box pivoting at its rear foot, lying flat or raised steeply toward the front
   const PX = -70, PY = 1.5, LEN = 102, H = 1.15, th = up ? 0.9 : 0;
@@ -65,7 +69,7 @@ export default function (L) {
   // the lid: two raised armour plates over the two columns of tubes, wedge-cut at the front, team chevrons across them
   for (const s of [-1, 1]) {
     ext(poly([[6, s * 3], [LEN - 14, s * 3], [LEN - 3, s * 10], [LEN - 3, s * 20], [14, s * 20], [6, s * 13]]), H, 0.12, roof, P({ bevel: 0.04 }));
-    for (const x of [LEN - 30, LEN - 40]) strip(x, s * 4, x - 7, s * 19, 3, H + 0.13, 0.02, paintT, P());
+    for (const x of [LEN - 30, LEN - 40]) strip(x, s * 4, x - 8, s * 19, 4.5, H + 0.13, 0.02, paintT, P());
     strip(26, s * 4, 26, s * 19, 1.5, H + 0.13, 0.01, seam, P());
   }
   strip(4, 0, LEN, 0, 3, H + 0.01, 0.02, black, P());                                       // the valley between the plates
