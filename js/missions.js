@@ -158,11 +158,11 @@ function goalState(g, diff) {
       text = `Have ${need} ${BOTS[g.type].plural}`;
       break;
     case 'paths':
-      for (let t = 0; t < S.W * S.H; t++) if (S.road[t] && S.owner[t] === 0 && (S.pave[t] || 1) >= g.tier) have++;
+      for (let t = 0; t < S.W * S.H; t++) if (S.road[t] && wayOwner(t) === 0 && (S.pave[t] || 1) >= g.tier) have++;
       text = `${['', 'Lay', 'Surface'][g.tier]} ${need} ${['', 'road', 'asphalt road'][g.tier]} tiles`;
       break;
     case 'oneway':
-      for (let t = 0; t < S.W * S.H; t++) if (S.road[t] >= 2 && S.owner[t] === 0) have++;
+      for (let t = 0; t < S.W * S.H; t++) if (S.road[t] >= 2 && wayOwner(t) === 0) have++;
       text = `Make ${need} road tiles one-way`;
       break;
     case 'lights':

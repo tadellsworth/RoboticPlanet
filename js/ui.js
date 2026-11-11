@@ -1749,7 +1749,7 @@ function onMapTap(i, j, wx, wy) {
       // Each tap steps a junction along: traffic light, then overpass, then plain junction again.
       // Ones you can't pay for yet are planned and go up once they're paid for (oldest plans first).
       const P = junPlanAt(t);
-      if ((S.over[t] && S.over[t].owner !== 0) || (S.lights[t] && S.lights[t].owner !== 0) || (!S.over[t] && !S.lights[t] && S.road[t] && S.owner[t] !== 0)) { sfx('error'); showRoadBanner('That junction isn\'t yours: you can only change junctions in your own land.'); return; }
+      if ((S.over[t] && S.over[t].owner !== 0) || (S.lights[t] && S.lights[t].owner !== 0) || (!S.over[t] && !S.lights[t] && S.road[t] && wayOwner(t) !== 0)) { sfx('error'); showRoadBanner('That junction isn\'t yours: you can only change junctions in your own land.'); return; }
       if (S.over[t]) { removeOverpass(t); markDirty(i, j); sfx('click'); showRoadBanner('Overpass taken down: its Cement and Alloy are back.', true); return; }
       if (P && P.kind === 'over') {
         cancelJunPlan(t);
@@ -1920,7 +1920,7 @@ function onMapTap(i, j, wx, wy) {
   if (INPUT.mouse && UI.sel.length && !INPUT.shift) selectBots([], false);
   if (inMap(i, j) && S.res[tIdx(i, j)]) { sfx('click'); openResourceSheet(tIdx(i, j)); return; }
   if (inMap(i, j) && S.fert[tIdx(i, j)] && S.terrain[tIdx(i, j)] === T_GROUND) { sfx('click'); openSoilSheet(tIdx(i, j)); return; }
-  if (inMap(i, j) && S.road[tIdx(i, j)] && S.owner[tIdx(i, j)] === 0) { sfx('click'); openRoadSheet(tIdx(i, j)); return; }
+  if (inMap(i, j) && S.road[tIdx(i, j)] && wayOwner(tIdx(i, j)) === 0) { sfx('click'); openRoadSheet(tIdx(i, j)); return; }
   closeSheet();
 }
 
@@ -2316,7 +2316,7 @@ function showRoadBanner(problem, info) {
     for (const k in S.lights) if (S.lights[k].owner === 0) lights++;
     for (const k in S.over) if (S.over[k].owner === 0) overs++;
     const net = roadNet();
-    for (let t = 0; t < S.W * S.H; t++) if (net.junc[t] && S.owner[t] === 0) junctions++;
+    for (let t = 0; t < S.W * S.H; t++) if (net.junc[t] && wayOwner(t) === 0) junctions++;
     line = `Tap a <b>junction</b> for a traffic light (${costText(LIGHT_COST)}), tap the light for an <b>overpass</b> (${costText(OVERPASS_COST)}), tap again to clear it.`;
     const jp = plansWaiting(0).junctions;
     how = `A light lets one direction through at a time: it pays where two busy roads cross (50 to 85% more goods through), and costs a little on a quiet crossing. On an overpass nobody stops: best everywhere, and more than twice as much on a jammed crossing. Short of Alloy? Tap anyway: the light or overpass is planned (a dashed orange marker) and goes up once it's paid for from storage, oldest plans first${jp ? ` (<b>${jp}</b> waiting now)` : ''}. You have ${lights} light${lights === 1 ? '' : 's'}, ${overs} overpass${overs === 1 ? '' : 'es'} and ${junctions} junction${junctions === 1 ? '' : 's'}.`;
@@ -2391,7 +2391,7 @@ function trafficSummary() {
     if (u.task && u.task.type === 'haul') n[u.type][1]++;
   }
   let jams = 0;
-  if (HEAT.jam) for (let t = 0; t < S.W * S.H; t++) if (HEAT.jam[t] > TRAFFIC_JAM && S.owner[t] === 0) jams++;
+  if (HEAT.jam) for (let t = 0; t < S.W * S.H; t++) if (HEAT.jam[t] > TRAFFIC_JAM && wayOwner(t) === 0) jams++;
   return `<b>Traffic map:</b> <i class="tk q"></i>quiet <i class="tk b"></i>busy <i class="tk p"></i>packed; pulsing rings mark jams (${jams} now). `
     + `Haulers ${n.hauler[1]} of ${n.hauler[0]} busy` + (n.truck[0] ? `, Freight Trucks ${n.truck[1]} of ${n.truck[0]}` : '') + (n.tanker[0] ? `, Tankers ${n.tanker[1]} of ${n.tanker[0]}` : '') + '.';
 }
@@ -2898,7 +2898,7 @@ function refreshBuildingSheet(b) {
       let fresh = 0, worn = 0, todo = 0;
       const nets = buildingNets(b), net = roadNet(), all = paveMode(b) === 'all';
       for (let t = 0; t < S.W * S.H; t++) {
-        if (!S.road[t] || S.owner[t] !== b.owner || !(all || S.paveMark[t]) || nets.indexOf(net.comp[t]) < 0) continue;
+        if (!S.road[t] || wayOwner(t) !== b.owner || !(all || S.paveMark[t]) || nets.indexOf(net.comp[t]) < 0) continue;
         if (S.pave[t] !== 2) todo++; else if (S.wear[t] >= REPAVE_AT) worn++; else fresh++;
       }
       parts.push(`<div class="kv"><span>${all ? 'Joined roads' : 'Marked roads joined to it'}</span><span>${fresh + worn + todo} tiles</span></div>
@@ -3363,14 +3363,14 @@ function openResourceSheet(t) {
 
 /** Can the player mark this tile for asphalt? Their own roads, and roads they've planned. */
 function paveMarkable(t) {
-  return S.owner[t] === 0 && (S.road[t] || S.plan[t] === 1);
+  return S.road[t] ? wayOwner(t) === 0 : S.plan[t] === 1;
 }
 
 /** The player's roads marked for asphalt: how many, and how many are fresh, worn or still to pave. */
 function paveCounts(owner) {
   const c = { marked: 0, fresh: 0, worn: 0, todo: 0 };
   for (let t = 0; t < S.W * S.H; t++) {
-    if (!S.paveMark[t] || S.owner[t] !== owner || !(S.road[t] || S.plan[t] === owner + 1)) continue;
+    if (!S.paveMark[t] || !(S.road[t] ? wayOwner(t) === owner : S.plan[t] === owner + 1)) continue;
     c.marked++;
     if (S.pave[t] !== 2) c.todo++;
     else if (S.wear[t] >= REPAVE_AT) c.worn++;
@@ -3657,7 +3657,7 @@ const OBJECTIVES = [
 
 function ownJunction() {
   const net = roadNet();
-  for (let t = 0; t < S.W * S.H; t++) if (net.junc[t] && S.owner[t] === 0) return true;
+  for (let t = 0; t < S.W * S.H; t++) if (net.junc[t] && wayOwner(t) === 0) return true;
   return false;
 }
 

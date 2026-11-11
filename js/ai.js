@@ -832,7 +832,7 @@ function aiRaid(p, lvl) {
     .map((b) => ({ x: b.x, y: b.y, r2: b.type === 'turret' ? 36 : 56 })); // turret range, and beyond where a garrison sorties
   let best = -1, bs = 0;
   for (let t = 0; t < S.W * S.H; t++) {
-    if (!S.road[t] || S.owner[t] !== enemy || HEAT.flow[t] < 1) continue;
+    if (!S.road[t] || wayOwner(t) !== enemy || HEAT.flow[t] < 1) continue;
     const i = t % S.W, j = (t / S.W) | 0;
     if (guards.some((g) => dist2(g.x, g.y, i, j) < g.r2)) continue;
     const s = HEAT.flow[t] - dist(i, j, S.W / 2, S.H / 2) * 0.05;

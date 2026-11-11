@@ -1184,7 +1184,7 @@ function newGame(opts) {
     road: new Uint8Array(W * H), rail: new Uint8Array(W * H), pave: new Uint8Array(W * H), wear: new Uint16Array(W * H), paveMark: new Uint8Array(W * H), oneRoad: true, roadVer: 0, lights: {}, over: {}, scorch: {},
     plan: new Uint8Array(W * H), planVer: 0, paveRes: {}, owe: new Uint8Array(W * H), railPlan: new Uint8Array(W * H), planQ: [], junPlan: {},
     pipe: new Uint8Array(W * H), pipePlan: new Uint8Array(W * H), pipeVer: 0,
-    owner: new Int8Array(W * H).fill(-1),
+    owner: new Int8Array(W * H).fill(-1), wown: new Int8Array(W * H).fill(-1),
     resRes: new Uint8Array(W * H),
     bAt: new Int32Array(W * H),
     players: Array.from({ length: settings.players }, (_, p) => ({
@@ -1282,7 +1282,7 @@ function starterRoads(L) {
     if ((!di && !dj) || !inMap(L.x + di, L.y + dj)) continue;
     const t = tIdx(L.x + di, L.y + dj);
     if (S.terrain[t] !== T_GROUND || S.elev[t] !== S.elev[lt] || S.res[t] || S.bAt[t]) continue;
-    S.road[t] = 1; S.pave[t] = 1;
+    S.road[t] = 1; S.pave[t] = 1; S.wown[t] = L.owner;
   }
   S.roadVer = (S.roadVer || 0) + 1;
 }
@@ -2129,6 +2129,7 @@ function planAll(owner) { _planLists(); return _plans.all[owner]; }
  * out past the border (unclaimed water joined to its land or bridges)? A rival's roads aren't.
  */
 function roadOwnedBy(owner, t) {
+  if (S.road[t] || S.rail[t]) return wayOwner(t) === owner;
   return S.owner[t] === owner || (S.owner[t] < 0 && crossTile(t) && bridgeHead(owner, t % S.W, (t / S.W) | 0));
 }
 
@@ -2158,10 +2159,23 @@ function pipeBlocked(owner, t) {
   return '';
 }
 
-function setRoad(i, j, on) {
+/**
+ * Who owns the road or track on tile t (S.wown: roads and track have an owner of their own, so they can run
+ * out past a border), -1 for none.
+ */
+function wayOwner(t) {
+  if (!(S.road[t] || (S.rail && S.rail[t]))) return -1;
+  const o = S.wown ? S.wown[t] : -1;
+  return o >= 0 ? o : S.owner[t]; // (one with no owner recorded is whoever's land it's on)
+}
+
+/** Lay (on) or take up the road on tile (i, j); a new road is `owner`'s (by default whoever holds the tile). */
+function setRoad(i, j, on, owner) {
   const t = tIdx(i, j);
   if (!!S.road[t] === !!on) return;
   S.road[t] = on ? 1 : 0;
+  if (on) S.wown[t] = owner ?? (S.wown[t] >= 0 && S.rail[t] ? S.wown[t] : S.owner[t]);
+  else if (!S.rail[t]) S.wown[t] = -1;
   S.pave[t] = on ? 1 : 0;
   if (S.wear) S.wear[t] = 0;
   if (on) clearDecor(t);
@@ -2230,8 +2244,8 @@ function wearRoad(t, u) {
   const i = t % S.W, j = (t / S.W) | 0;
   if (w >= WEAR_MAX) {
     setPave(i, j, 1);
-    const P = S.players[S.owner[t]];
-    if (P && !P.ai && S.owner[t] === 0 && !S.paveMark[t] && S.time - (P.wornMsgAt || -1e9) > 240) {
+    const P = S.players[wayOwner(t)];
+    if (P && !P.ai && wayOwner(t) === 0 && !S.paveMark[t] && S.time - (P.wornMsgAt || -1e9) > 240) {
       P.wornMsgAt = S.time;
       postMsg(0, 'Busy asphalt has worn back to plain road. Mark roads in Paths (Pave) and a Roadworks will keep them surfaced.', i, j, 'warn');
     }
@@ -2241,14 +2255,14 @@ function wearRoad(t, u) {
 /** How many of this player's road tiles are marked for asphalt. */
 function roadsMarked(owner) {
   let n = 0;
-  for (let t = 0; t < S.W * S.H; t++) if (S.paveMark[t] && S.road[t] && S.owner[t] === owner) n++;
+  for (let t = 0; t < S.W * S.H; t++) if (S.paveMark[t] && S.road[t] && wayOwner(t) === owner) n++;
   return n;
 }
 
 /** Mark (or unmark) a road for asphalt: a Roadworks paves and maintains marked roads. */
 function setPaveMark(owner, i, j, on) {
   const t = tIdx(i, j);
-  if (!S.road[t] || S.owner[t] !== owner || !!S.paveMark[t] === !!on) return false;
+  if (!S.road[t] || wayOwner(t) !== owner || !!S.paveMark[t] === !!on) return false;
   S.paveMark[t] = on ? 1 : 0;
   markDirty(i, j);
   return true;
@@ -2619,7 +2633,7 @@ function destroyBuilding(b, burn, quiet) {
     computeZones();
   }
   // A Gate that stood on a road leaves the road behind when it goes.
-  if (b.type === 'gate' && b.road) setRoad(b.x, b.y, true);
+  if (b.type === 'gate' && b.road) setRoad(b.x, b.y, true, b.owner);
   markDirty(b.x, b.y);
   if (!quiet) { collapseFx(b, burn); sfx('boom'); } // (taken down on purpose, as when a building moves: no wreck)
   if (BDEFS[b.type].mil && b.built) computeTerritory();
@@ -2722,7 +2736,7 @@ const TYPED_FIELDS = {
   terrain: Uint8Array, res: Uint8Array, amt: Uint8Array, grow: Float32Array, road: Uint8Array, owner: Int8Array,
   resRes: Uint8Array, elev: Uint8Array, ramp: Uint8Array, fert: Uint8Array, pave: Uint8Array, plan: Uint8Array,
   wear: Uint16Array, paveMark: Uint8Array, decor: Uint8Array, rail: Uint8Array, owe: Uint8Array, railPlan: Uint8Array,
-  pipe: Uint8Array, pipePlan: Uint8Array,
+  pipe: Uint8Array, pipePlan: Uint8Array, wown: Int8Array,
 };
 
 function serializeGame() {
@@ -2770,6 +2784,8 @@ function deserializeGame(json) {
   if (!o.railPlan) o.railPlan = new Array(o.W * o.H).fill(0);
   if (!o.pipe) o.pipe = new Array(o.W * o.H).fill(0); // saves from before pipelines
   if (!o.pipePlan) o.pipePlan = new Array(o.W * o.H).fill(0);
+  const oldWays = !o.wown; // saves from before roads had an owner of their own: see wayOwnersFromLand
+  if (oldWays) o.wown = new Array(o.W * o.H).fill(-1);
   o.pipeVer = (o.pipeVer || 0) + 1;
   o.planQ = o.planQ || [];
   o.junPlan = o.junPlan || {};
@@ -2803,7 +2819,21 @@ function deserializeGame(json) {
     u.carryN = u.carry ? u.carryN || 1 : 0;
   }
   computeZones();
+  if (oldWays) wayOwnersFromLand();
   return S;
+}
+
+/** An older save's roads and track: each is owned by whoever holds its land, a bridge out past the border by the land it runs from. */
+function wayOwnersFromLand() {
+  const N = S.W * S.H, q = [];
+  for (let t = 0; t < N; t++) if ((S.road[t] || S.rail[t]) && S.owner[t] >= 0) { S.wown[t] = S.owner[t]; q.push(t); }
+  for (let h = 0; h < q.length; h++) {
+    const t = q[h], i = t % S.W;
+    for (const u of [i > 0 ? t - 1 : -1, i < S.W - 1 ? t + 1 : -1, t - S.W, t + S.W]) {
+      if (u < 0 || u >= N || S.wown[u] >= 0 || !(S.road[u] || S.rail[u])) continue;
+      S.wown[u] = S.wown[t]; q.push(u);
+    }
+  }
 }
 
 function saveGame() {
@@ -2905,9 +2935,11 @@ function railBlocked(owner, t) {
 }
 
 /** Lay (on) or take up (off) the track on tile t. */
-function setRail(t, on) {
+function setRail(t, on, owner) {
   if (!!S.rail[t] === !!on) return;
   S.rail[t] = on ? 1 : 0;
+  if (on) S.wown[t] = owner ?? (S.wown[t] >= 0 && S.road[t] ? S.wown[t] : S.owner[t]);
+  else if (!S.road[t]) S.wown[t] = -1;
   if (on) clearDecor(t);
   S.railVer = (S.railVer || 0) + 1;
   const i = t % S.W, j = (t / S.W) | 0;

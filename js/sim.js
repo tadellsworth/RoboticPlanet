@@ -1768,9 +1768,10 @@ function doPave(u, t, dt) {
 /** Finish a road tile: clear any resource on it and make it road (its Cement was paid when planned). */
 function layRoad(t) {
   if (S.res[t]) { S.res[t] = 0; S.amt[t] = 0; if (S.grow) S.grow[t] = 1; }
+  const o = S.plan[t] - 1; // whose plan it was: the road is theirs
   setPlan(t, -1);
   if (S.paveRes) delete S.paveRes[t];
-  setRoad(t % S.W, (t / S.W) | 0, true);
+  setRoad(t % S.W, (t / S.W) | 0, true, o >= 0 ? o : undefined);
   if (crossTile(t)) computeZones(); // a bridge or tunnel joins new land
   if (S.terrain[t] === T_WATER || S.terrain[t] === T_CHASM) computeTerritory(); // a bridge's landing claims a little ground
 }
@@ -2109,6 +2110,7 @@ function completeRamp(b) {
   // A finished Ramp is a road tile too: haulers drive straight up it.
   S.road[tIdx(b.x, b.y)] = 1;
   S.pave[tIdx(b.x, b.y)] = 1;
+  S.wown[tIdx(b.x, b.y)] = b.owner;
   S.roadVer = (S.roadVer || 0) + 1;
   markDirty(b.x, b.y);
   for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) if (inMap(b.x + di, b.y + dj)) markDirty(b.x + di, b.y + dj);
@@ -2213,7 +2215,7 @@ function findPaveSpot(b, x, y) {
   if (!tail) for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) if (inMap(b.x + di, b.y + dj)) push(tIdx(b.x + di, b.y + dj));
   while (head < tail) {
     const t = q[head++];
-    if (needsPaving(t) && (all || S.paveMark[t]) && !S.resRes[t] && S.owner[t] === b.owner) return t;
+    if (needsPaving(t) && (all || S.paveMark[t]) && !S.resRes[t] && wayOwner(t) === b.owner) return t;
     const i = t % W;
     for (const u of [i > 0 ? t - 1 : -1, i < W - 1 ? t + 1 : -1, t - W, t + W]) if (u >= 0 && u < N && canStep(t, u)) push(u);
   }
@@ -4228,35 +4230,35 @@ function raidRoadsLeft(r, owner) {
     const i = ri + di, j = rj + dj;
     if (!inMap(i, j) || di * di + dj * dj > SABOTAGE_RANGE * SABOTAGE_RANGE + 0.01) continue;
     const t = tIdx(i, j);
-    if (S.road[t] && !crossTile(t) && S.owner[t] >= 0 && S.owner[t] !== owner) { r.roadsLeft = true; break; }
+    if (S.road[t] && !crossTile(t) && wayOwner(t) >= 0 && wayOwner(t) !== owner) { r.roadsLeft = true; break; }
     if (S.pipe[t] && S.pipe[t] !== owner + 1) { r.roadsLeft = true; break; }
   }
   return r.roadsLeft;
 }
 
-/** A raiding warbot at its post in enemy land tears up the enemy road tile nearest the flag. */
+/** A raiding warbot at its post tears up the enemy road (or pipe) tile nearest the flag: roads have owners of their own, on any land. */
 function sabotageRoads(u, r, dt) {
   const ri = Math.floor(r.x), rj = Math.floor(r.y);
   if (!inMap(ri, rj)) return;
-  const victim = S.owner[tIdx(ri, rj)];
-  if (victim < 0 || victim === u.owner) return;
   r.sab = (r.sab || 0) + dt;
   if (r.sab < SABOTAGE_WORK) return;
+  const foe = (o) => o >= 0 && o !== u.owner;
   let best = -1, bd = SABOTAGE_RANGE * SABOTAGE_RANGE + 0.01;
   const R0 = Math.ceil(SABOTAGE_RANGE);
   for (let dj = -R0; dj <= R0; dj++) for (let di = -R0; di <= R0; di++) {
     const i = ri + di, j = rj + dj;
     if (!inMap(i, j)) continue;
     const t = tIdx(i, j);
-    const pipe = S.pipe[t] === victim + 1; // a pipeline is worth cutting too
-    if (!pipe && (!S.road[t] || S.owner[t] !== victim || crossTile(t))) continue; // bridges and tunnels are too solid to tear up (a Missile can crater them)
+    const pipe = S.pipe[t] && foe(S.pipe[t] - 1); // a pipeline is worth cutting too
+    if (!pipe && (!S.road[t] || !foe(wayOwner(t)) || crossTile(t))) continue; // bridges and tunnels are too solid to tear up (a Missile can crater them)
     const d = di * di + dj * dj - (pipe ? 1 : S.road[t] && isJunction(t) ? 1.5 : 0); // junctions first: they cut the most routes
     if (d < bd) { bd = d; best = t; }
   }
   if (best < 0) { r.sab = SABOTAGE_WORK; return; } // nothing left here to wreck
   r.sab = 0;
   u.face = Math.atan2(((best / S.W) | 0) + 0.5 - u.y, (best % S.W) + 0.5 - u.x);
-  if (S.pipe[best] === victim + 1) {
+  const pipeHit = S.pipe[best] && foe(S.pipe[best] - 1), victim = pipeHit ? S.pipe[best] - 1 : wayOwner(best);
+  if (pipeHit) {
     breakPipe(best);
     const P = S.players[victim];
     if (S.time - (P.lastPipeMsg || -99) > 25) {
@@ -4673,7 +4675,7 @@ function missileImpact(m) {
     if (!inMap(i, j) || di * di + dj * dj > MISSILE_ROAD * MISSILE_ROAD) continue;
     const t = tIdx(i, j);
     if (S.plan[t]) cancelPlan(t);
-    if (S.road[t] && S.owner[t] !== m.owner) wreckRoad(t, S.owner[t], '');
+    if (S.road[t] && wayOwner(t) !== m.owner) wreckRoad(t, wayOwner(t), '');
     if (S.pipe[t] && S.pipe[t] !== m.owner + 1) breakPipe(t);
   }
 }
@@ -5039,7 +5041,7 @@ function settlePlans() {
       // A planned light or overpass: paid all at once, then it goes up. Dropped if the junction is gone.
       const P = junPlanAt(t);
       if (!P || P.owner !== o) continue;
-      if (!S.road[t] || !isJunction(t) || S.owner[t] !== o || S.over[t] || (P.kind === 'light' && S.lights[t]) || (P.kind === 'over' && crossTile(t))) { cancelJunPlan(t); continue; }
+      if (!S.road[t] || !isJunction(t) || wayOwner(t) !== o || S.over[t] || (P.kind === 'light' && S.lights[t]) || (P.kind === 'over' && crossTile(t))) { cancelJunPlan(t); continue; }
       const cost = junPlanCost(t, P), have = spendable(o);
       if (Object.keys(cost).some((g) => sh.has(g))) { keep.push(it); continue; }
       const lack = Object.keys(cost).filter((g) => (have[g] || 0) < cost[g]);
@@ -5078,7 +5080,7 @@ function settlePlans() {
     payRoad(o, cost);
     if (kind === 'p') { S.pipePlan[t] = 0; setPipe(t, o + 1); }
     else if (kind === 'r') setOwe(t, 0);
-    else { setRailPlan(t, 0); setRail(t, true); }
+    else { setRailPlan(t, 0); setRail(t, true, o); }
   }
   S.planQ = keep;
 }
@@ -5736,7 +5738,7 @@ function wildTarget(b) {
   for (let j = Math.max(0, b.y - R0); j <= Math.min(S.H - 1, b.y + R0); j++) {
     for (let i = Math.max(0, b.x - R0); i <= Math.min(S.W - 1, b.x + R0); i++) {
       const t = j * S.W + i;
-      if (!S.road[t] || S.owner[t] < 0 || S.owner[t] === WILD_OWNER || crossTile(t)) continue;
+      if (!S.road[t] || wayOwner(t) < 0 || wayOwner(t) === WILD_OWNER || crossTile(t)) continue;
       const d = dist2(i, j, b.x, b.y);
       if (d < bd) { bd = d; best = { x: i, y: j }; }
     }
@@ -5820,7 +5822,7 @@ function bruteTarget(u, r) {
   for (let j = cj - R0; j <= cj + R0; j++) for (let i = ci - R0; i <= ci + R0; i++) {
     if (!inMap(i, j)) continue;
     const t = tIdx(i, j);
-    if (!S.road[t] || S.bAt[t] || crossTile(t) || S.owner[t] < 0 || S.owner[t] === WILD_OWNER) continue;
+    if (!S.road[t] || S.bAt[t] || crossTile(t) || wayOwner(t) < 0 || wayOwner(t) === WILD_OWNER) continue;
     const d = dist2(i + 0.5, j + 0.5, u.x, u.y);
     if (d < bd) { bd = d; best = { road: t, x: i, y: j }; }
   }
@@ -5882,7 +5884,7 @@ function updateCritter(u, dt) {
       u.face = Math.atan2(gy - u.y, gx - u.x);
       if (g.bld) { if (u.cd <= 0) critterBite(u, g.bld); return; }
       t.work += dt; u.fought = 1;
-      if (t.work >= WILD.roadEvery) { wreckRoad(g.road, S.owner[g.road], 'Creatures are tearing up your roads'); t.smash = null; }
+      if (t.work >= WILD.roadEvery) { wreckRoad(g.road, wayOwner(g.road), 'Creatures are tearing up your roads'); t.smash = null; }
       return;
     }
     // A Scuttler: hunt for bots further out, or move on to the colony's next spot.
@@ -7122,7 +7124,7 @@ function layRail(owner, t) {
   const cost = railCost(t);
   if (!canAffordRoad(owner, cost)) return `Out of ${missingGoods(owner, cost)}: track costs ${costText(cost)} a tile here.`;
   payRoad(owner, cost); // fractions of a good are kept as credit, like a road's Cement
-  setRail(t, true);
+  setRail(t, true, owner);
   return '';
 }
 

@@ -1099,7 +1099,7 @@ function drawPaveMarks(ctx, ox, oy, z, inView) {
   const pulse = 0.75 + 0.25 * Math.sin(R.time * 3);
   ctx.lineWidth = Math.max(1.5, z * 0.05);
   for (let t = 0; t < S.W * S.H; t++) {
-    if (S.owner[t] !== 0 || !(S.road[t] || S.plan[t] === 1)) continue;
+    if (!(S.road[t] ? wayOwner(t) === 0 : S.plan[t] === 1)) continue;
     const worn = S.road[t] && S.pave[t] === 2 && S.wear[t] >= REPAVE_AT;
     if (!S.paveMark[t] && !worn) continue;
     const i = t % S.W, j = (t / S.W) | 0;
@@ -4045,7 +4045,7 @@ function render(dtReal) {
       if (!inView(i, j, 1)) continue;
       if (lightsMode) {
         // Junctions that can take a light.
-        if (!net.junc[t] || S.owner[t] !== 0 || S.lights[t]) continue;
+        if (!net.junc[t] || wayOwner(t) !== 0 || S.lights[t]) continue;
         ctx.strokeStyle = 'rgba(125,255,160,0.9)';
         ctx.lineWidth = 2;
         ctx.setLineDash([z * 0.12, z * 0.08]);
