@@ -4706,6 +4706,17 @@ function drawCutOff(ctx, cx, cy, z) {
  */
 function drawTradePost(ctx, cx, cy, z, post) {
   const r = z * 0.66, t = R.time;
+  // The 3D Trade Post (an octagonal deck with the traders' gold-ringed spire), on a soft shadow; the drawn pad
+  // below is the fallback without art.
+  if (ART.tradepost) {
+    ctx.save();
+    ctx.fillStyle = 'rgba(0,0,0,0.22)';
+    ctx.beginPath(); ctx.ellipse(cx + z * 0.06, cy + z * 0.14, z * 0.74, z * 0.6, 0, 0, Math.PI * 2); ctx.fill();
+    drawArt(ctx, ART.tradepost, cx, cy, z);
+    tradePostLabel(ctx, cx, cy, z, z * 0.82);
+    ctx.restore();
+    return;
+  }
   ctx.save();
   // shadow, then the octagonal pad
   ctx.fillStyle = 'rgba(0,0,0,0.28)';
@@ -4736,13 +4747,17 @@ function drawTradePost(ctx, cx, cy, z, post) {
     if (on) { ctx.fillStyle = 'rgba(255,190,80,0.35)'; ctx.beginPath(); ctx.arc(bx, by, z * 0.12, 0, Math.PI * 2); ctx.fill(); }
     ctx.fillStyle = on ? '#ffd27a' : '#8a6a30'; ctx.beginPath(); ctx.arc(bx, by, Math.max(1.5, z * 0.045), 0, Math.PI * 2); ctx.fill();
   }
-  if (z >= 30) {
-    ctx.font = `600 ${Math.round(Math.max(9, z * 0.16))}px system-ui, sans-serif`;
-    ctx.textAlign = 'center'; ctx.textBaseline = 'top';
-    ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(0,0,0,0.7)'; ctx.strokeText('TRADE POST', cx, cy + r + z * 0.04);
-    ctx.fillStyle = '#ffe2a0'; ctx.fillText('TRADE POST', cx, cy + r + z * 0.04);
-  }
+  tradePostLabel(ctx, cx, cy, z, r);
   ctx.restore();
+}
+
+/** "TRADE POST" under a Trade Post, when zoomed in far enough to read it. */
+function tradePostLabel(ctx, cx, cy, z, r) {
+  if (z < 30) return;
+  ctx.font = `600 ${Math.round(Math.max(9, z * 0.16))}px system-ui, sans-serif`;
+  ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+  ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(0,0,0,0.7)'; ctx.strokeText('TRADE POST', cx, cy + r + z * 0.04);
+  ctx.fillStyle = '#ffe2a0'; ctx.fillText('TRADE POST', cx, cy + r + z * 0.04);
 }
 
 function drawDryOil(ctx, x, y, z, b) {

@@ -1901,3 +1901,7 @@ art/buildings/terminal@0.png	main	terminal::#38d4ff:terminal@0
 art/buildings/terminal@1.png	main	terminal::#ff5a6e:terminal@1
 art/tod/night/buildings/terminal@0.png	main	terminal::#38d4ff:terminal@0:tod=night
 art/tod/night/buildings/terminal@1.png	main	terminal::#ff5a6e:terminal@1:tod=night
+art/buildings/tradepost.png	main	tradepost:#ffc860::tradepost	compose.py
+art/tod/morning/buildings/tradepost.png	main	tradepost:#ffc860::tradepost:tod=morning	compose.py
+art/tod/evening/buildings/tradepost.png	main	tradepost:#ffc860::tradepost:tod=evening	compose.py
+art/tod/night/buildings/tradepost.png	main	tradepost:#ffc860::tradepost:tod=night	compose.py
