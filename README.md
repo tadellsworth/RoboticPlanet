@@ -415,7 +415,8 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
   demolishing it). You can also switch individual goods off for that building.
 - **Minimap:** tap or drag it to jump around; red pulses mark buildings under attack. The × hides it.
 - **Sharp map:** the map is baked once at 32 px a tile for zoomed-out views; zoomed in, the part on screen is baked
-  again in 8×8-tile chunks at 64 or 128 px a tile (a few per frame, least recently seen dropped), and big art images
+  again in 8×8-tile chunks at 64 or 128 px a tile (a few per frame, least recently seen dropped: off-screen ones give way
+  to keep the lot under `HD_TOTAL` pixels), and big art images
   keep half-size copies so they shrink cleanly (`drawMapLayer`, `artMip` in `js/render.js`).
 - **Batteries:** bots drain their battery walking, working and fighting, and recharge only at a Fuel Station (or,
   for warbots, inside an Outpost). The Command Base doesn't charge anyone and you land without a Fuel Station, so
@@ -617,7 +618,8 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
   per event (smooth on a Magic Mouse or trackpad); a Ctrl + wheel pinch zooms faster, a sideways swipe or Shift + wheel
   pans, and Safari's trackpad pinch (`gesture*` events) zooms the map instead of the page. Drawing resolution is capped
   at `RENDER_BUDGET` pixels (about 4K; a 5K iMac at 2× would be four times the work) and `watchFrameRate` lowers it,
-  down to 1×, if frames run below ~45 a second.
+  down to 1×, if frames run below ~45 a second and drawing is what's slow (not when the screen or a power-saving mode
+  holds a steady beat, such as 30 a second, nor when the simulation is the slow part), and raises it again when there's room.
 - **Game speed:** the speed chip in the top bar opens 0.75×, 0.875×, 1×, 2× and 3×.
 - **Sound** (`js/audio.js`, all Web Audio, no audio files): a generative synthwave score that follows the game (menu,
   building, war when you're attacked or fighting, and an alarm while a nuke flies), written a bar at a time from chord
@@ -702,7 +704,9 @@ night; a display setting kept on the device).
   `art/tod/tod-keys.js`) has a morning, evening and night version from the Claude Design day/night kit, at
   `art/tod/<time>/<same path as the day art>` (WebP, the day file's size; the kit's design names, such as cement-works
   for the Cement Works, are installed under the game's). `drawArt` draws the current time's version and fades in the
-  next one over a transition (`todVariant`); only the sets in use now and next are loaded (`todFrame`). The single-file
+  next one over a transition (`todVariant`); only the sets in use now and next are loaded (`todFrame`), a
+  set's copies of each sprite are let go with it (`todDropSet`), and the sprites on screen get the coming set's versions
+  ready a couple a frame ahead of the change (`todWarm`). The single-file
   build puts each set in a bundle beside the page (`dist/tod-<time>.js`, loaded when needed).
 - **Graded in code** (`out = in × multiply + add`, values from the kit's `art/tod/shared/time-of-day.json`): the baked
   ground, roads, track, pipes, plants, resources and territory tint (`todGradeGround`), and any sprite without a
@@ -710,7 +714,7 @@ night; a display setting kept on the device).
   towers and cables, Viaduct decks, level-crossing barriers) goes through `withTod`, like `drawArt`. Light overlays (brake lights, boost glow,
   lamps), the UI and nuke blasts are never graded.
 - **Evening and night:** vehicles' headlights (`drawHeadlights`, the kit's overlays at 3× the sprite), a glow in team
-  colour under every finished building (`drawLightPool`; small ones along Walls, bigger at Gates), a searchlight
+  colour under every finished building (`lightPool`; small ones along Walls, bigger at Gates), a searchlight
   sweeping ahead of every Pulse Turret's gun as it turns (`drawSearchlight`), and bots' drop shadows lean left at dawn, right at dusk and
   fade at night (`todShadow`).
 - Every building and robot has a re-lit set (lit windows, beacons and team-colour glows; headlights on everything that

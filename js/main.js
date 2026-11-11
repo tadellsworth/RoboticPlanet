@@ -68,11 +68,18 @@ function boot() {
   initInput(canvas, { onTap: onMapTap, onPaint: onRoadPaint, onPaintEnd: () => { UI.lastPaint = null; UI.roadWarned = false; }, onHover: onMapHover,
     onBox: onSelectBox, onCommand: onMapCommand });
   initUI();
-  // Custom art loads in the background; redraw once after a burst of images arrives.
-  let rebake = 0;
-  loadArt(() => {
+  // Custom art loads in the background; redraw once after a burst of images arrives. The map is baked again only
+  // when art it's drawn from has come (bakedArt), and while more is still on its way at most every two seconds.
+  let rebake = 0, mapArt = false, baked = 0;
+  loadArt((key) => {
+    if (bakedArt(key)) mapArt = true;
     clearTimeout(rebake);
-    rebake = setTimeout(() => { UI.icons = {}; if (S && R.map) bakeMap(); }, 120);
+    rebake = setTimeout(() => {
+      UI.icons = {};
+      if (!mapArt || !S || !R.map) return;
+      mapArt = false; baked = performance.now();
+      bakeMap();
+    }, mapArt && artPending() ? Math.max(120, baked + 2000 - performance.now()) : 120);
   });
   startDemo();
   requestAnimationFrame(frame);

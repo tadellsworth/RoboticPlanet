@@ -29,7 +29,7 @@ const TOD_NAMES = { morning: 'Morning', day: 'Day', evening: 'Evening', night: '
 const TOD_NEVER = /(-brake|-boost|-lights|-headlights|-spark|-lamp|^rail-lights-on|^light-pool|^icon-|^nuke-blast|^rally|^oneway|^bunker-fire|^disruptor-pulse|^mortar-flash|^streetlamp-.*-(lit|pool)|^fx-|^(smelter|refinery)-work-|^turret-charge-)/;
 const TOD_VEHICLES = ['truck', 'tanker', 'roadtrain', 'freight-loco', 'crawler', 'worker', 'hauler', 'agribot', 'paver', 'warbot'];
 
-const TOD = { on: true, state: null, active: false, sets: {}, shared: {}, keys: null, poolTint: {} };
+const TOD = { on: true, state: null, active: false, sets: {}, shared: {}, lit: {}, keys: null, poolTint: {} };
 
 /** Is the day/night cycle on (a display setting kept on this device)? */
 function todEnabled() { return TOD.on; }
@@ -74,13 +74,14 @@ function todFrame() {
   const st = todNow();
   TOD.state = st;
   TOD.active = st.a !== 'day' || st.b !== 'day';
-  if (!TOD.on || !S) return;
+  if (!TOD.on || !S) { for (const name in TOD.sets) todDropSet(name); return; } // (switched off: nothing is kept)
   // The sets in use now and the next one coming (looked up a little ahead), and no others.
   const want = new Set([st.a, st.b, todAt(S.time + 45).a, todAt(S.time + 45).b]);
   want.delete('day');
   for (const name of want) todLoadSet(name);
   for (const name in TOD.sets) if (!want.has(name)) todDropSet(name);
   todLoadShared();
+  todWarm();
 }
 
 /** Where a sprite's time-of-day version is: art/tod/<time>/<the day file's path, as .webp>. */
@@ -102,11 +103,13 @@ function todKeySet() {
 function todLoadSet(name) {
   if (TOD.sets[name]) return;
   const set = TOD.sets[name] = { imgs: {}, n: 0 };
-  const add = (key, src) => {
-    const img = new Image();
-    img.onload = () => { if (TOD.sets[name] === set) { set.imgs[key] = img; set.n++; } };
-    img.src = src;
-  };
+  const add = (key, src) => loadImg(src, (img) => {
+    if (TOD.sets[name] !== set) return;
+    set.imgs[key] = img; set.n++;
+    // (the graded copy that stood in for it while it loaded has done its job)
+    const a = ART[key];
+    if (a && a.graded && a.graded[name]) { todFree(a.graded[name]); delete a.graded[name]; }
+  });
   if (typeof window !== 'undefined' && window.TOD_BUNDLE) {
     const go = () => { const d = window.TOD_DATA && window.TOD_DATA[name]; if (d) for (const key in d) add(key, d[key]); };
     if (window.TOD_DATA && window.TOD_DATA[name]) { go(); return; }
@@ -120,11 +123,65 @@ function todLoadSet(name) {
   for (const key of todKeySet()) { const src = todSrc(name, key); if (src) add(key, src); }
 }
 
-/** Let a set go once it's no longer in use (its re-lit copies are dropped too). */
+/**
+ * Let a set go once it's no longer in use: every sprite's re-lit and graded copies for that time go with it,
+ * the green team's too (its art isn't enumerable, and one not asked for yet is still a getter: see loadArt).
+ */
 function todDropSet(name) {
   delete TOD.sets[name];
   if (typeof window !== 'undefined' && window.TOD_DATA) delete window.TOD_DATA[name];
-  for (const k in ART) { const a = ART[k]; if (a && a.todv && a.todv[name]) delete a.todv[name]; }
+  for (const k of Object.getOwnPropertyNames(ART)) {
+    const a = Object.getOwnPropertyDescriptor(ART, k).value;
+    if (!a) continue;
+    if (a.todv && a.todv[name]) { todFree(a.todv[name]); delete a.todv[name]; }
+    if (a.graded && a.graded[name]) { todFree(a.graded[name]); delete a.graded[name]; }
+  }
+}
+
+/**
+ * Let go of a re-lit or graded copy of a sprite. Its canvases (the small copies artMip made, and the copy itself
+ * when it was graded or recoloured here) are emptied at once rather than left for the browser to collect: a
+ * phone has only so much canvas memory.
+ */
+function todFree(v) {
+  if (v.mips) for (const m of v.mips) m.width = m.height = 0;
+  v.mips = null;
+  if (v.img && v.img.getContext) v.img.width = v.img.height = 0;
+}
+
+/**
+ * Getting the coming light's art ready ahead of the change. A sprite's first draw from a new set has to unpack
+ * its image and make its small copies (and the green team's is recoloured from the other two): everything on
+ * screen doing that in the one frame the light began to change stalled the game for a moment. So the sprites
+ * drawn in the last half minute (R.artSeen, see drawArt) get theirs made a couple a frame, as each set arrives.
+ */
+function todWarm() {
+  const list = R.artSeen;
+  let any = false;
+  for (const name in TOD.sets) { any = true; break; }
+  if (!any || !list || !list.length) return;
+  const keys = todKeySet(), t0 = performance.now();
+  let made = 0;
+  for (let n = Math.min(list.length, 60); n > 0 && made < 2; n--) {
+    const art = list[(TOD.warmAt = ((TOD.warmAt || 0) + 1) % list.length)], key = art.key || '';
+    if (R.time - art.seen > 30 || TOD_NEVER.test(key)) continue;
+    for (const name in TOD.sets) {
+      const set = TOD.sets[name], has = (k) => keys.has(k) && !!set.imgs[k];
+      let v = art.todv && art.todv[name];
+      if (!v) {
+        const green = key.includes('@2'), red = key.replace('@2', '@1'), cyan = key.replace('@2', '@0');
+        if (keys.has(green ? red : key)) { // one with a re-lit version: once its image is in (and both teams', for the green one)
+          if (!(green ? has(red) && (!ART[cyan] || has(cyan)) : has(key))) continue;
+          v = todVariant(art, name); made++;
+        } else if (!(v = art.graded && art.graded[name])) { // one that's only ever graded
+          if (!set.n) continue;
+          v = todGraded(art, name); made++;
+        }
+      }
+      if (v !== art && !v.mips && v.img.width >= 64) { artMip(v, 1); made++; }
+      if (made >= 2 || performance.now() - t0 > 3) return;
+    }
+  }
 }
 
 /** Headlights and the light pool (small; loaded once the light first fades). */
@@ -133,10 +190,33 @@ function todLoadShared() {
   TOD.sharedLoading = true;
   const inline = typeof window !== 'undefined' && window.TOD_SHARED;
   for (const k of [...TOD_VEHICLES.map((v) => v + '-headlights'), 'light-pool']) {
-    const img = new Image();
-    img.onload = () => { TOD.shared[k] = img; };
-    img.src = inline && inline[k] ? inline[k] : `art/tod/shared/${k}.webp`;
+    loadImg(inline && inline[k] ? inline[k] : `art/tod/shared/${k}.webp`, (img) => { TOD.lit[k] = litBox(img); TOD.shared[k] = img; });
   }
+}
+
+/**
+ * The part of a light image that has any light in it, [x, y, w, h] in its pixels (with a few pixels to spare,
+ * so its soft edge is all there): a headlights image is mostly empty, and drawing only this part adds the same
+ * light for a fifth of the pixels. The whole image if it can't be read.
+ */
+function litBox(img) {
+  const w = img.width, h = img.height;
+  try {
+    const c = document.createElement('canvas');
+    c.width = w; c.height = h;
+    const x = c.getContext('2d', { willReadFrequently: true });
+    x.drawImage(img, 0, 0);
+    const d = x.getImageData(0, 0, w, h).data;
+    c.width = c.height = 0;
+    let x0 = w, y0 = h, x1 = -1, y1 = -1;
+    for (let j = 0, k = 3; j < h; j++) for (let i = 0; i < w; i++, k += 4) if (d[k]) { if (i < x0) x0 = i; if (i > x1) x1 = i; if (j < y0) y0 = j; if (j > y1) y1 = j; }
+    if (x1 < 0) return [0, 0, w, h];
+    // (out to whole 16s of pixels: the browser shrinks an image from its halved copies, and a part cut on their
+    // grid shrinks to exactly what the whole image would have)
+    x0 = Math.max(0, Math.floor((x0 - 2) / 16) * 16); y0 = Math.max(0, Math.floor((y0 - 2) / 16) * 16);
+    x1 = Math.min(w, Math.ceil((x1 + 3) / 16) * 16); y1 = Math.min(h, Math.ceil((y1 + 3) / 16) * 16);
+    return [x0, y0, x1 - x0, y1 - y0];
+  } catch (e) { return [0, 0, w, h]; }
 }
 
 /**
@@ -150,18 +230,22 @@ function todVariant(art, name) {
   const cache = art.todv || (art.todv = {});
   if (cache[name]) return cache[name];
   const keys = todKeySet(), set = TOD.sets[name];
+  let v = null;
   if (set && key.includes('@2')) {
     // The green team: the re-lit red version recoloured, like the day art.
     const r = ART[key.replace('@2', '@1')], c = ART[key.replace('@2', '@0')];
     const rv = r && todVariant(r, name), cv = c && todVariant(c, name);
     if (rv && rv.relit && (!cv || cv.relit)) {
-      const v = recolorArt(rv, cv && cv.relit ? cv : null);
-      if (v && v !== rv) return (cache[name] = Object.assign(v, { relit: true, key }));
+      const g = recolorArt(rv, cv && cv.relit ? cv : null);
+      if (g && g !== rv) v = Object.assign(g, { relit: true, key });
     }
   } else if (set && keys.has(key) && set.imgs[key]) {
-    return (cache[name] = { img: set.imgs[key], scale: art.scale, anchor: art.anchor, shadow: art.shadow, key, relit: true });
+    v = { img: set.imgs[key], scale: art.scale, anchor: art.anchor, shadow: art.shadow, key, relit: true };
   }
-  return todGraded(art, name);
+  if (!v) return todGraded(art, name);
+  // (the graded copy that stood in while the set loaded isn't needed any more)
+  if (art.graded && art.graded[name]) { todFree(art.graded[name]); delete art.graded[name]; }
+  return (cache[name] = v);
 }
 
 /** A copy of the art graded for time `name` (out = in × multiply + add), kept with the art. */
@@ -213,13 +297,13 @@ function drawHeadlights(ctx, kind, x, y, spritePx, angle) {
   if (!TOD.active || !(TOD.state.headlights > 0.01)) return;
   const img = TOD.shared[kind + '-headlights'];
   if (!img) return;
-  const s = spritePx * 3;
+  const s = spritePx * 3, [bx, by, bw, bh] = TOD.lit[kind + '-headlights'], kx = s / img.width, ky = s / img.height;
   ctx.save();
   ctx.globalCompositeOperation = 'lighter';
   ctx.globalAlpha *= TOD.state.headlights;
   ctx.translate(x, y);
   if (angle) ctx.rotate(angle);
-  ctx.drawImage(img, -s / 2, -s / 2, s, s);
+  ctx.drawImage(img, bx, by, bw, bh, -s / 2 + bx * kx, -s / 2 + by * ky, bw * kx, bh * ky); // (the lit part only: see litBox)
   ctx.restore();
 }
 
@@ -279,12 +363,12 @@ function drawStreetLamp(ctx, e, ox, oy, z) {
   if (on > 0.01 && lit) { const ga = ctx.globalAlpha; ctx.globalAlpha = ga * on; drawArtRaw(ctx, lit, x, y, z); ctx.globalAlpha = ga; }
 }
 
-function drawStreetLights(ctx, ox, oy, z, v0, v1) {
+function drawStreetLights(ctx, ox, oy, z, lamps) {
   if (!TOD.active || !(TOD.state.lights > 0.01) || !S.road) return;
   const on = TOD.state.lights, head = Math.max(1.2, z * 0.05);
   ctx.save();
   ctx.globalCompositeOperation = 'lighter';
-  for (const e of streetLamps(v0, v1)) {
+  for (const e of lamps) {
     const L = STREETLIGHT[e.kind], w = z * L.r * 2, pool = ART['streetlamp-' + e.kind + '-pool'];
     const x = ox + (e.i + 0.5) * z, y = oy + (e.j + 0.5) * z;
     ctx.globalAlpha = on * L.a;
@@ -298,11 +382,10 @@ function drawStreetLights(ctx, ox, oy, z, v0, v1) {
   ctx.restore();
 }
 
-/** At dusk and night, a glow in the building's team colour on the ground round its pad. */
-function drawLightPool(ctx, x, y, z, color) {
-  if (!TOD.active || !(TOD.state.pools > 0.01)) return;
+/** The light-pool image tinted `color` (made once per colour); null until the image has loaded. */
+function lightPool(color) {
   const pool = TOD.shared['light-pool'];
-  if (!pool) return;
+  if (!pool) return null;
   let tinted = TOD.poolTint[color];
   if (!tinted) {
     tinted = document.createElement('canvas');
@@ -314,6 +397,17 @@ function drawLightPool(ctx, x, y, z, color) {
     c.fillRect(0, 0, pool.width, pool.height);
     TOD.poolTint[color] = tinted;
   }
+  return tinted;
+}
+
+/**
+ * At dusk and night, a glow in `color` on the ground (round a blast, a muzzle, a flak burst). The glows round
+ * buildings' pads are the same image, drawn all together in render.
+ */
+function drawLightPool(ctx, x, y, z, color) {
+  if (!TOD.active || !(TOD.state.pools > 0.01)) return;
+  const tinted = lightPool(color);
+  if (!tinted) return;
   const s = z * 2.2;
   ctx.save();
   ctx.globalCompositeOperation = 'lighter';
