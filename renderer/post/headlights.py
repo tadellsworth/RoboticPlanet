@@ -24,6 +24,8 @@ for r in ('worker', 'hauler', 'agribot', 'paver', 'warbot'):
     p = f'{U}/{r}@0-f0.png'
     fx, h = front_from_alpha(p)
     V[r] = (256, fx - 0.015, min(0.13, h * 0.32), 0.62, 0.34)
+# the Lancer warbot's railgun sticks out far past its nose, so its lamps sit at the ends of the nose sensor strip instead
+V['warbot'] = (256, (128 + 92 - 16) / 256, 12 / 256, 0.62, 0.34)
 
 for name, (S, fx, lz, L, half) in V.items():
     N = 3 * S
