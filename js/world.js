@@ -1320,7 +1320,7 @@ function passTile(t, who) {
   const b = getE(id);
   if (!b) return false;
   if (b.type === 'viaduct') return true;
-  return (b.type === 'outpost' || b.type === 'gate' || b.type === 'ropeway') && (who === undefined || who === b.owner);
+  return (b.type === 'outpost' || b.type === 'keep' || b.type === 'gate' || b.type === 'ropeway') && (who === undefined || who === b.owner);
 }
 
 /** The tile at the far end of the Viaduct whose abutment stands on tile t (both built), or -1. */
@@ -1368,7 +1368,7 @@ function chokePass() {
  */
 function breachable(t, who) {
   const b = S.bAt[t] ? getE(S.bAt[t]) : null;
-  return !!b && b.owner !== who && (!!BDEFS[b.type].barrier || (b.type === 'outpost' && b.built));
+  return !!b && b.owner !== who && (!!BDEFS[b.type].barrier || ((b.type === 'outpost' || b.type === 'keep') && b.built));
 }
 
 /** An Outpost went up or came down: the road network changes, and the roads beside it redraw. */
@@ -1493,7 +1493,7 @@ function addBuilding(owner, type, x, y, built) {
   S.byId.set(b.id, b);
   S.bAt[tIdx(x, y)] = b.id;
   clearDecor(tIdx(x, y));
-  if (type === 'outpost' || type === 'gate' || type === 'ropeway' || type === 'viaduct') outpostRoads(x, y); // roads run through it
+  if (type === 'outpost' || type === 'keep' || type === 'gate' || type === 'ropeway' || type === 'viaduct') outpostRoads(x, y); // roads run through it
   return b;
 }
 
@@ -1800,7 +1800,7 @@ function canPlace(owner, type, i, j, skipBlockCheck) {
     return { ok: true, reason: '' };
   }
   // An Outpost or a Gate can stand on a road: the road runs through it.
-  if ((S.road[t] || S.plan[t]) && type !== 'outpost' && type !== 'gate' && type !== 'ropeway' && type !== 'viaduct') {
+  if ((S.road[t] || S.plan[t]) && type !== 'outpost' && type !== 'keep' && type !== 'gate' && type !== 'ropeway' && type !== 'viaduct') {
     return { ok: false, reason: def.barrier ? 'There is a road here: a wall line across a road gets a Gate there.' : S.road[t] ? 'There is a road here.' : 'A road is planned here.' };
   }
   if (def.barrier && (S.road[t] || S.plan[t]) && crossTile(t)) return { ok: false, reason: 'Not on a bridge or tunnel.' };
@@ -1853,7 +1853,7 @@ function canPlace(owner, type, i, j, skipBlockCheck) {
   }
   if (def.farm && fertileIn(i, j, def.radius) === 0) return { ok: false, reason: 'No fertile soil within reach.' };
   // The most expensive check goes last. (Bots walk through Outposts and Viaducts' ends, so those never block.)
-  if (!skipBlockCheck && type !== 'outpost' && type !== 'viaduct' && wouldBlock(t)) return { ok: false, reason: 'That would block the only way through here.' };
+  if (!skipBlockCheck && type !== 'outpost' && type !== 'keep' && type !== 'viaduct' && wouldBlock(t)) return { ok: false, reason: 'That would block the only way through here.' };
   return { ok: true, reason: '' };
 }
 
@@ -2609,7 +2609,7 @@ function destroyBuilding(b, burn, quiet) {
   b.dead = true;
   S.byId.delete(b.id);
   S.bAt[tIdx(b.x, b.y)] = 0;
-  if (b.type === 'outpost' || b.type === 'gate' || b.type === 'ropeway' || b.type === 'viaduct') outpostRoads(b.x, b.y);
+  if (b.type === 'outpost' || b.type === 'keep' || b.type === 'gate' || b.type === 'ropeway' || b.type === 'viaduct') outpostRoads(b.x, b.y);
   // A Ropeway is two stations, a Viaduct two abutments: one going takes the other with it.
   if ((b.type === 'ropeway' || b.type === 'viaduct') && b.link) {
     const o = getE(b.link); b.link = 0;

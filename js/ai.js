@@ -193,6 +193,7 @@ function aiThink(p) {
   const enemyAir = S.bots.some((u) => !u.dead && u.owner !== p && BOTS[u.type].air) ||
     S.buildings.some((b) => !b.dead && b.built && b.owner >= 0 && b.owner !== p && BDEFS[b.type].airfield);
   if (enemyAir && S.mode !== 'colony' && (counts.flak || 0) < 2 && !plan.some(([t]) => t === 'flak')) plan = [['flak', 2]].concat(plan); // (a copy: AI_PLAN is shared)
+  if (enemyAir && S.mode !== 'colony' && !counts.flak) siteCap = Math.max(siteCap, maxSites + 1); // the first Flak Gun doesn't wait for a free site
   const key = (type) => (type === 'charger' && !counts.charger) || type === 'foundry' || type === 'harvester' || type === 'quarry' || (type === 'kiln' && (playerGoods(p).cement || 0) < 3) || defence(type) ||
     (P.defWant && P.defWant.type === type && S.time < P.defWant.until) ||
     (type === 'outpost' && P.short.length > 0);

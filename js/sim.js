@@ -2743,7 +2743,8 @@ function spawnFromFoundry(b) {
   addFx('ring', b.x + 0.5, b.y + 0.5, { color: PLAYER_COLORS[b.owner] });
   if (kind === 'warbot') goGarrison(u);
   // A Rocket Truck rolls off onto open ground beside the Foundry and waits there for orders (its post).
-  if (BOTS[kind].siege) { const t = crawlerPark(u); if (t >= 0) { u.post = { i: t % S.W, j: (t / S.W) | 0 }; u.task = { type: 'park', i: u.post.i, j: u.post.j, home: true }; } }
+  // (Yours only: the computer moves its own trucks about, see aiSiege.)
+  if (BOTS[kind].siege && !S.players[b.owner].ai) { const t = crawlerPark(u); if (t >= 0) { u.post = { i: t % S.W, j: (t / S.W) | 0 }; u.task = { type: 'park', i: u.post.i, j: u.post.j, home: true }; } }
 }
 
 /** The rivals still in the game (a Versus game's AI colonies), for the hidden boost menu. */
@@ -6263,7 +6264,7 @@ function deploySpot(owner, i, j) {
   return best;
 }
 
-/** A free tile within 3 of Crawler u to wait on, off buildings and (if it can) off roads, in its zone. -1 if none. */
+/** A free tile within 3 of vehicle u (a Crawler, a Rocket Truck) to wait on, off buildings and roads (it would hold up the traffic), in its zone. -1 if none. */
 function crawlerPark(u) {
   const i0 = Math.floor(u.x), j0 = Math.floor(u.y), z = S.zone[tIdx(i0, j0)];
   let best = -1, bd = Infinity;
@@ -6271,8 +6272,8 @@ function crawlerPark(u) {
     const x = i0 + di, y = j0 + dj;
     if (!inMap(x, y)) continue;
     const t = tIdx(x, y);
-    if (S.terrain[t] !== T_GROUND || S.bAt[t] || S.zone[t] !== z || runwayAt(t)) continue;
-    const d = di * di + dj * dj + (S.road[t] || S.plan[t] ? 6 : 0) + (S.res[t] ? 2 : 0);
+    if (S.terrain[t] !== T_GROUND || S.bAt[t] || S.road[t] || S.plan[t] || (S.rail && S.rail[t]) || S.zone[t] !== z || runwayAt(t)) continue;
+    const d = di * di + dj * dj + (S.res[t] ? 2 : 0);
     if (d < bd) { bd = d; best = t; }
   }
   return best;
@@ -7275,7 +7276,7 @@ function headHome(u) {
  * be reached by turning: it flies on straight until it can (so it never circles a spot forever).
  */
 function steerPlane(u, tx, ty, dt, k) {
-  const f = u.face || 0, err = wrapAngle(Math.atan2(ty - u.y, tx - u.x) - f), w = PLANE_TURN * (k || 1);
+  const f = u.face || 0, err = wrapAngle(Math.atan2(ty - u.y, tx - u.x) - f), w = PLANE_TURN * (BOTS[u.type].turn || 1) * (k || 1);
   const r = Math.max(0.3, (u.vel || 0) / w), side = err >= 0 ? 1 : -1;
   const cx = u.x - Math.sin(f) * r * side, cy = u.y + Math.cos(f) * r * side; // the centre of its turn toward the spot
   if (Math.abs(err) > 0.2 && Math.hypot(tx - cx, ty - cy) < r * 0.98) return; // too tight: straight on for now
@@ -7306,7 +7307,7 @@ function flyStep(u, dt) {
     u.alt = Math.min(1, (u.alt || 0) + dt / PLANE_CLIMB);
     // A spot close by and not ahead (a drop right beside the Airfield): circling for it never lines up, so the
     // plane flies straight out to a few turns' width, then comes round and in.
-    const r = vmax / PLANE_TURN, d0 = Math.hypot(F.tx - u.x, F.ty - u.y), off = Math.abs(wrapAngle(Math.atan2(F.ty - u.y, F.tx - u.x) - u.face));
+    const r = vmax / (PLANE_TURN * (bt.turn || 1)), d0 = Math.hypot(F.tx - u.x, F.ty - u.y), off = Math.abs(wrapAngle(Math.atan2(F.ty - u.y, F.tx - u.x) - u.face));
     if (F.extend) { if (d0 > 2.6 * r) F.extend = false; } else if (d0 < 2 * r && off > 0.6) F.extend = true;
     if (!F.extend) steerPlane(u, F.tx, F.ty, dt);
     movePlane(u, dt);
