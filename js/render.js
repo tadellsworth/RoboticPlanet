@@ -5982,12 +5982,14 @@ function drawAirLayer(ctx, ox, oy, z, inView) {
       });
     }
   }
+  drawFlakSearchlights(ctx, ox, oy, z, inView, 'beams'); // at night: the flak guns' searchlights sweeping the sky
   for (const u of S.bots) {
     if (u.dead || !BOTS[u.type].air || !u.flight || !inView(u.x, u.y, 4)) continue;
     const want = u.face || 0, turn = 3 * Math.min(0.1, R.dt || 0) * ((typeof UI !== 'undefined' && UI.speed) || 1);
     u.rface = u.rface === undefined ? want : u.rface + clamp(wrapAngle(want - u.rface), -turn, turn);
     drawPlane(ctx, u, ox + u.x * z, oy + u.y * z, z, planeAlt(u));
   }
+  drawFlakSearchlights(ctx, ox, oy, z, inView, 'lit');
   drawFlakTracers(ctx, ox, oy, z, inView);
   for (const f of S.fx) if (f.type === 'flak' && f.t >= 0 && inView(f.x, f.y, 2)) { drawFlakBurst(ctx, f, ox + f.x * z, oy + f.y * z, z); if (f.t < 0.4) fxGround(ctx, ox + f.x * z, oy + f.y * z + z, z * 1.6, '#ff9a3c', 0.6 * (1 - f.t / 0.4)); }
 }

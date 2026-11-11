@@ -411,3 +411,62 @@ function drawPulseHalo(ctx, x, y, x2, y2, z, w, col) {
   ctx.restore();
   fxGround(ctx, x2, y2, z * 1.6, col, 0.9 * w);
 }
+
+/* ------------------------------------------------------------------ flak searchlights */
+
+/**
+ * At dusk and night every Flak Gun has two searchlights sweeping the sky in slow crossing arcs, like an air-raid
+ * battery. When the gun has an enemy aircraft in range (b.skyTgt) both beams swing onto it and hold it lit while
+ * the gun fires. pass 'beams' draws the beams (under the aircraft); pass 'lit' the glare on a caught aircraft.
+ */
+function drawFlakSearchlights(ctx, ox, oy, z, inView, pass) {
+  const k = typeof TOD !== 'undefined' && TOD.active ? TOD.state.lights : 0;
+  if (!(k > 0.01)) return;
+  R.sky = R.sky || new Map();
+  const dt = Math.min(0.1, R.dt || 0.016), now = S.time;
+  for (const b of S.buildings) {
+    if (b.type !== 'flak' || b.dead || !b.built || b.paused || !inView(b.x, b.y, 10)) continue;
+    const cx = ox + (b.x + 0.5) * z, cy = oy + (b.y + 0.5 - 0.42) * z;
+    const tg = b.skyTgt ? getE(b.skyTgt) : null, live = tg && !tg.dead && tg.flight;
+    let st = R.sky.get(b.id);
+    if (!st) { st = [{ a: -0.4, l: z * 7 }, { a: 0.4, l: z * 7 }]; R.sky.set(b.id, st); }
+    if (pass === 'beams') {
+      const ph = (b.id % 17) * 0.61;
+      st.forEach((bm, n) => {
+        let wa, wl;
+        if (live) {
+          // onto the aircraft, the two beams a hair apart so they cross on it
+          const dx = ox + tg.x * z - cx, dy = oy + tg.y * z - cy;
+          wa = Math.atan2(dx, -dy) + (n ? 0.03 : -0.03); wl = Math.hypot(dx, dy);
+        } else {
+          wa = (n ? 0.38 : -0.38) + 0.8 * Math.sin(now * (n ? 0.37 : 0.29) + ph + n * 2.1);
+          wl = z * (6.2 + 1.8 * Math.sin(now * 0.23 + ph * 1.7 + n));
+        }
+        const ease = 1 - Math.exp(-dt * (live ? 4 : 1.2));
+        bm.a += wrapAngle(wa - bm.a) * ease; bm.l += (wl - bm.l) * ease;
+        // the beam: a long, slowly widening shaft of cold white light, fading with height
+        ctx.save();
+        ctx.translate(cx, cy); ctx.rotate(bm.a);
+        ctx.globalCompositeOperation = 'lighter';
+        ctx.globalAlpha = k * (live ? 1 : 0.8);
+        const L = bm.l, w0 = z * 0.1, w1 = z * (0.55 + L / z * 0.06);
+        const g = ctx.createLinearGradient(0, 0, 0, -L);
+        g.addColorStop(0, 'rgba(225,238,255,0.42)'); g.addColorStop(0.6, `rgba(215,232,255,${live ? 0.22 : 0.14})`); g.addColorStop(1, `rgba(205,225,255,${live ? 0.12 : 0})`);
+        ctx.fillStyle = g;
+        ctx.beginPath(); ctx.moveTo(-w0 / 2, 0); ctx.lineTo(-w1 / 2, -L); ctx.lineTo(w1 / 2, -L); ctx.lineTo(w0 / 2, 0); ctx.closePath(); ctx.fill();
+        // a brighter core down the middle
+        const c = ctx.createLinearGradient(0, 0, 0, -L);
+        c.addColorStop(0, 'rgba(245,250,255,0.5)'); c.addColorStop(1, 'rgba(240,248,255,0)');
+        ctx.fillStyle = c;
+        ctx.beginPath(); ctx.moveTo(-w0 / 4, 0); ctx.lineTo(-w1 / 6, -L); ctx.lineTo(w1 / 6, -L); ctx.lineTo(w0 / 4, 0); ctx.closePath(); ctx.fill();
+        ctx.restore();
+      });
+      // the lamps on the gun
+      fxGlow(ctx, cx, cy, z * 0.3, '#dfeeff', 0.9 * k);
+    } else if (live) {
+      // the aircraft caught in the beams: a hard white glare on it
+      const tx = ox + tg.x * z, ty = oy + tg.y * z;
+      fxGlow(ctx, tx, ty, z * 0.75, '#eef6ff', 0.65 * k);
+    }
+  }
+}

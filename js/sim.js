@@ -8071,6 +8071,7 @@ function updateFlak(b, def, dt) {
   const f = def.flak, cx = b.x + 0.5, cy = b.y + 0.5;
   b.cd = (b.cd || 0) - dt;
   const tgt = aircraftNear(b.owner, cx, cy, def.range + auraRange(b))[0];
+  b.skyTgt = tgt ? tgt.id : 0; // (its searchlights swing onto it at night: see drawFlakSearchlights)
   if (!tgt) { b.status = (b.shells || 0) + (b.stock.ammo || 0) > 0 ? 'Watching the sky (7 tiles out)' : 'No Ammo: haulers bring it from storage'; return; }
   // The barrels follow it round.
   const want = Math.atan2(tgt.y - cy, tgt.x - cx);
