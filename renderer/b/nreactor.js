@@ -1,11 +1,18 @@
 // Nuclear Reactor: hyperboloid cooling tower with a steam plume, domed containment building with a glowing
 // ring of ports and a radiation trefoil, turbine hall, coolant tanks with glowing sight glasses, big coolant pipes,
 // and a small switchyard. Accent: radioactive green.
+// Powered realism (b/powerkit.js): team light rings round the containment's plinth and the cooling tower's lip, team
+// strips on the turbine hall's roof edge, warm lit windows on the hall, amber obstruction lights round the tower rim,
+// a transformer bank with arcing insulators between the tower and the coolant tanks, arcs across the switchyard's
+// insulators and the transformer, a junction box and conduits with glowing collars to the hall, floodlights on the
+// hall roof, cables, beacons. Team-coloured: render one image per team.
 import { trefoil } from './nuke.js';
+import { power } from './powerkit.js';
 export default function (L) {
   const { box, cyl, hcyl, beam, pipe, hoop, lamp, pointLight, ao, mesh, sphere, group, M, THREE, ACCENT } = L;
   const gun = M.paint('#50565c'), off = M.paint('#c9c5ba'), cream = M.rough('#b9b2a4'), conc = M.rough('#9a9285');
   const glow = M.emit(ACCENT, 2.4), dim = M.emit(ACCENT, 1.2);
+  const P = power(L), nc = { dirt: 0, cast: false };
   L.seed(401);
 
   // ---- cooling tower (back left): hyperboloid concrete shell, ring of support legs, dark throat, steam
@@ -83,4 +90,46 @@ export default function (L) {
   box(1.0, 0.8, 0.7, gun, -1.95, 0, 4.0); for (let i = 0; i < 5; i++) box(0.05, 0.6, 0.18, M.steel, -2.35 + i * 0.2, 0.1, 4.4, { dirt: 0 });
   box(2.6, 0.02, 0.22, M.hazard, 0.2, 0, 4.3, { dirt: 0, cast: false });
   lamp(cx + R * 0.7, 0.3 + CH + 0.3, cz - R * 0.7, ACCENT, { size: 0.14, light: false, k: 3 });
+
+  // ================================================================ power layer (lights and electricity)
+  // team light rings round the containment's plinth and the cooling tower's lower lip; a team beacon on the hatch
+  hoop(R + 0.21, 0.03, P.glow, cx, 0.31, cz, { cast: false });
+  hoop(rBot + 0.02, 0.035, P.glow, tx, 0.62, tz, { cast: false });
+  P.beacon(cx, 0.3 + CH + R + 0.2, cz);
+  // amber obstruction lights round the cooling tower's rim
+  for (let k = 0; k < 4; k++) { const t = (k + 0.5) * Math.PI / 2; P.beacon(tx + Math.cos(t) * (rTop + 0.05), H + 0.1, tz + Math.sin(t) * (rTop + 0.05), '#ffb347'); }
+  // turbine hall: team strips along the roof's front and side edges, warm lit windows below the green ones,
+  // floodlights on the roof's front corners, a lamp over the door
+  P.strip(4.12, hx, 1.8, hz + 1.17, 0, 0.07);
+  for (const s of [-1, 1]) P.strip(2.3, hx + s * 2.07, 1.8, hz, Math.PI / 2, 0.06);
+  P.windows(2.3, 0.26, hx - 0.65, 0.55, hz + 1.12, 0, 4);
+  box(0.24, 0.06, 0.06, P.white, hx + 1.3, 1.27, hz + 1.15, nc); pointLight('#ffd9a0', 1.6, hx + 1.3, 1.0, hz + 1.7, 2.2);
+  for (const s of [-1, 1]) {
+    const x = hx + s * 1.85, g = L.group(x, 1.93, hz + 0.95, s * 0.35);
+    box(0.08, 0.45, 0.08, P.steelD, 0, 0, 0, { parent: g, dirt: 0 });
+    const h = new THREE.Group(); h.position.set(0, 0.5, 0.06); h.rotation.x = 0.4; g.add(h);
+    box(0.36, 0.22, 0.18, P.steel, 0, -0.11, 0, { parent: h, dirt: 0 }); box(0.3, 0.16, 0.03, P.white, 0, -0.08, 0.1, { parent: h, ...nc });
+    pointLight('#fff1d6', 3, x + s * 0.3, 1.6, hz + 2.0, 4.5);
+  }
+  for (const s of [-1, 1]) P.beacon(hx + s * 1.95, 2.0, hz - 1.0);
+  // transformer bank between the cooling tower and the coolant tanks, on a hazard-framed plate, cabled together
+  const bx = -3.15, bz = 0.95;
+  box(2.3, 0.06, 1.1, P.dark, bx, 0, bz, { dirt: 0, cast: false });
+  for (const [w, d, x, z] of [[2.3, 0.07, bx, bz - 0.55], [2.3, 0.07, bx, bz + 0.55], [0.07, 1.1, bx - 1.15, bz], [0.07, 1.1, bx + 1.15, bz]]) box(w, 0.07, d, M.hazard, x, 0, z, { dirt: 0, cast: false });
+  for (const x of [bx - 0.52, bx + 0.52]) P.transformer(x, bz, 0);
+  P.cable([bx - 0.24, 1.17, bz], [bx + 0.24, 1.17, bz], 0.12, 6);
+  // a junction box between the bank and the hall's pipes; conduits from it to the bank and into the hall
+  P.junction(-1.85, 1.2, 0);
+  P.conduit([[bx + 0.97, 0.3, bz], [-2.12, 0.3, bz]], 0.05);
+  P.conduit([[-1.58, 0.25, 1.2], [-0.75, 0.25, 1.2], [-0.75, 0.25, 1.75], [hx - 2.0, 0.25, 1.75]], 0.05);
+  // switchyard: the insulator posts carry glowing caps with an arc between them, cables to the transformer, which gets
+  // its own insulators and arcs; a conduit from it into the hall
+  const sw = [-3.9, -3.1].map(x => [x, 1.42, 4.05]);
+  for (const t of sw) sphere(0.07, P.white, ...t, { cast: false });
+  P.arc(sw[0], sw[1], 6, 4); pointLight('#bfe8ff', 1.5, -3.5, 1.6, 4.3, 2.2);
+  const ins = [-0.3, 0, 0.3].map(dx => [-1.95 + dx, 1.12, 4.0]);
+  for (const t of ins) { cyl(0.04, 0.26, M.plain('#c9c2b0', 0.4, 0.1), t[0], 0.8, t[2], { seg: 10, dirt: 0 }); for (const y of [0.87, 0.95]) cyl(0.07, 0.02, M.plain('#d8d2c2', 0.4, 0.1), t[0], y, t[2], { seg: 12, dirt: 0 }); sphere(0.05, P.white, ...t, { cast: false }); }
+  P.arc(ins[0], ins[1], 4, 9); P.arc(ins[1], ins[2], 4, 11);
+  for (const [i, t] of sw.entries()) P.cable(t, ins[i * 2], 0.15, 6);
+  P.conduit([[-1.45, 0.3, 3.85], [hx - 2.0 + 0.25, 0.3, 3.85], [hx - 2.0 + 0.25, 0.3, hz + 1.1]], 0.05);
 }

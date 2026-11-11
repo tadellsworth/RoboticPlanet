@@ -276,7 +276,7 @@ function streetLamps(v0, v1) {
       const t = tIdx(i, j);
       if (!S.road[t] || S.terrain[t] !== T_GROUND || S.bAt[t]) continue;
       const ew = (road(i - 1, j) || road(i + 1, j)) && !road(i, j - 1) && !road(i, j + 1);
-      out.push({ ent: 'lamp', i, j, kind: S.pave[t] === 2 ? 'asphalt' : 'road', x: ew ? i + 0.5 : i + 0.125, y: ew ? j + 0.875 : j + 0.5 });
+      out.push({ ent: 'lamp', i, j, kind: S.pave[t] === 2 ? 'asphalt' : 'road', owner: Math.max(0, wayOwner(t)), x: ew ? i + 0.5 : i + 0.125, y: ew ? j + 0.875 : j + 0.5 });
     }
   }
   return out;
@@ -284,11 +284,12 @@ function streetLamps(v0, v1) {
 
 /** A streetlamp's post (graded for the time of day like any sprite) and, at dusk and night, its lit head. */
 function drawStreetLamp(ctx, e, ox, oy, z) {
-  const post = ART['streetlamp-' + e.kind];
+  // (each colony's lamps carry its colour: a light strip up the post and a ring under the head)
+  const post = artFor('streetlamp-' + e.kind, e.owner);
   if (!post) return;
   const x = ox + e.x * z, y = oy + e.y * z;
   drawArt(ctx, post, x, y, z);
-  const on = TOD.active ? TOD.state.lights : 0, lit = ART['streetlamp-' + e.kind + '-lit'];
+  const on = TOD.active ? TOD.state.lights : 0, lit = artFor('streetlamp-' + e.kind + '-lit', e.owner);
   if (on > 0.01 && lit) { const ga = ctx.globalAlpha; ctx.globalAlpha = ga * on; drawArtRaw(ctx, lit, x, y, z); ctx.globalAlpha = ga; }
 }
 
@@ -303,7 +304,7 @@ function drawStreetLights(ctx, ox, oy, z, v0, v1) {
     ctx.globalAlpha = on * L.a;
     if (pool) ctx.drawImage(pool.img, x - w / 2, y - w * 0.4, w, w * 0.8);
     else ctx.drawImage(streetGlow(e.kind), x - w / 2, y - w * 0.4, w, w * 0.8); // seen at an angle: a little squashed
-    if (ART['streetlamp-' + e.kind]) continue; // the post's own lit head shows the lamp
+    if (artFor('streetlamp-' + e.kind, e.owner)) continue; // the post's own lit head shows the lamp
     ctx.globalAlpha = on;
     ctx.fillStyle = L.head;
     ctx.beginPath(); ctx.arc(x, y, head, 0, Math.PI * 2); ctx.fill();

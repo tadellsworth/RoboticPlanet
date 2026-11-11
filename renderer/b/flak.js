@@ -5,7 +5,12 @@
 //   ?part=head&rot=k&n=N  the gun alone: a twin-barrelled anti-aircraft mount, its long barrels raised steeply,
 //                         turned to direction k of N (0 = right, then clockwise seen from above). No team colour on
 //                         the head. Camera and light never move; the turntable centre never moves.
+// Powered realism (b/powerkit.js), kept light and on the base layer only (built last, so the head frames are
+// untouched): a team strip round the top of the pit wall, a lit window on the fire-control post, a transformer at
+// the back left cabled to the post's mast and conduited under the parapet, a junction box at the front right, a pole
+// floodlight at the back right, beacons.
 import { bagArc } from './milkit.js';
+import { power } from './powerkit.js';
 
 export default function (L) {
   const { box, cyl, hcyl, beam, hoop, pointLight, ao, mesh, sphere, group, mark, M, THREE, TEAM } = L;
@@ -82,5 +87,36 @@ export default function (L) {
 
   if (part === 'base') { head.visible = false; pointLight(TEAM, 3, 0, 1.0, cz + 2.4, 3); pointLight('#ffb347', 2.5, fx, FLOOR + 2.0, fz + 0.6, 2.5); }
   else { base.visible = false; L.hidePad(); L.getRoot().traverse(o => { if (o.userData.decal) o.visible = false; }); }
+  // ================================================================ power layer (base only; lights and electricity)
+  if (part === 'base') {
+    const P = power(L), nc = { dirt: 0, cast: false };
+    const NB = L.TOD === 'night' ? 2.2 : L.TOD === 'evening' ? 1.6 : 1;
+    // team strip along the top of the pit wall, one piece per side of the octagon
+    for (let k = 0; k < 8; k++) {
+      const a0 = Math.PI / 8 + k * Math.PI / 4, a1 = a0 + Math.PI / 4, r = 2.74;
+      const ax = Math.cos(a0) * r, az = Math.sin(a0) * r, bx = Math.cos(a1) * r, bz = Math.sin(a1) * r;
+      box(Math.hypot(bx - ax, bz - az), 0.04, 0.05, P.glow, (ax + bx) / 2, FLOOR + 0.71, cz + (az + bz) / 2, { ry: Math.atan2(-(bz - az), bx - ax), ...nc });
+    }
+    // fire-control post: a lit window and status lights
+    P.windows(0.62, 0.16, fx, FLOOR + 0.55, fz + 0.41, 0, 2);
+    box(0.07, 0.06, 0.03, P.green, fx - 0.2, FLOOR + 0.3, fz + 0.41, nc); box(0.07, 0.06, 0.03, P.amber, fx - 0.08, FLOOR + 0.3, fz + 0.41, nc);
+    // transformer at the back left: a cable up to the post's mast, a conduit diving under the parapet
+    const ux = -3.65, uz = -3.7;
+    box(1.2, 0.03, 1.0, P.dark, ux, 0, uz, nc);
+    for (const [w, d, x, z] of [[1.2, 0.08, ux, uz - 0.5], [1.2, 0.08, ux, uz + 0.5], [0.08, 1.0, ux - 0.6, uz], [0.08, 1.0, ux + 0.6, uz]]) box(w, 0.04, d, M.hazard, x, 0, z, nc);
+    P.transformer(ux, uz, 0); ao(ux, uz, 1.0, 0.8, 0.35);
+    box(0.14, 0.1, 0.14, P.steelD, fx, FLOOR + 1.45, fz - 0.02, { dirt: 0 });
+    P.cable([ux + 0.28, 1.2, uz], [fx, FLOOR + 1.5, fz - 0.02], 0.12);
+    P.conduit([[ux + 0.45, 0.3, uz + 0.15], [-2.7, 0.3, uz + 0.15], [-2.45, 0.3, -3.3], [-2.4, 0.06, -3.15]], 0.05);
+    // junction box at the front right, its conduit diving under the parapet; amber beacon on top
+    P.junction(3.55, 3.55, 0); P.beacon(3.55, 0.82, 3.55, '#ffb347');
+    P.conduit([[3.55, 0.4, 3.33], [3.55, 0.3, 3.1], [2.75, 0.3, 2.5], [2.6, 0.06, 2.35]], 0.05);
+    // pole floodlight at the back right, lighting the gun pit
+    { const x = 3.8, z = -3.8, h = 2.3, ry = -0.75;
+      cyl(0.04, h, P.steelD, x, 0, z, { seg: 10, dirt: 0.2 }); ao(x, z, 0.4, 0.4, 0.3);
+      const g = group(x, h, z, ry), t = new THREE.Group(); t.rotation.x = 0.2; g.add(t);
+      box(0.4, 0.25, 0.18, P.steel, 0, -0.125, 0.03, { parent: t, dirt: 0 }); box(0.34, 0.19, 0.03, P.white, 0, -0.095, 0.13, { parent: t, ...nc });
+      pointLight('#fff1d6', 4 * NB, x + Math.sin(ry) * 1.6, h - 0.8, z + Math.cos(ry) * 1.6, 5); }
+  }
   void hoop; void beam;
 }

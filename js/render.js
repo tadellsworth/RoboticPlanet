@@ -4129,7 +4129,7 @@ function render(dtReal) {
     const dx = (dock % S.W) - b.x, dy = ((dock / S.W) | 0) - b.y;
     { const face = Math.atan2(dx, -dy); items.push({ ...sh, ent: 'u', docked: true, x: b.x + 0.5 + dx * 1.05, y: b.y + 0.5 + dy * 1.05, face, rface: face, path: null, vel: 0 }); }
   }
-  if (ART['streetlamp-road']) for (const l of streetLamps(v0, v1)) items.push(l); // posts stand among buildings and bots
+  if (artFor('streetlamp-road', 0)) for (const l of streetLamps(v0, v1)) items.push(l); // posts stand among buildings and bots
   if (S.posts) for (const p of S.posts) if (inView(p.x, p.y, 2)) items.push({ ent: 'post', x: p.x, y: p.y + 0.5, post: p });
   items.sort((a, b) => (a.ent === 'b' ? a.y + 0.5 : a.y) - (b.ent === 'b' ? b.y + 0.5 : b.y));
   // At dusk and night, every finished building's lights spill onto the ground round its pad.
