@@ -34,6 +34,24 @@ function tileCost(t, dx, dy, offMul) {
 const _DIRS = [[1, 0, 1], [-1, 0, 1], [0, 1, 1], [0, -1, 1], [1, 1, 1.4142], [1, -1, 1.4142], [-1, 1, 1.4142], [-1, -1, 1.4142]];
 
 /**
+ * Are tiles a and b in different areas (S.zone, see computeZones: all the ground a bot could walk between,
+ * with Ropeways, Viaducts and ferry lines joining theirs)? Then there is no route, whoever asks, and no
+ * need to search the whole area to learn it. A ferry line can start up without the areas being worked out
+ * again (a Ferry launched for it, a Port finished): if a line now joins two areas, they are, first.
+ */
+function zonesApart(a, b) {
+  const z = S.zone;
+  if (!z || !(z[a] >= 0 && z[b] >= 0) || z[a] === z[b]) return false;
+  if (navalMap()) {
+    for (const [id, far] of ferryLines()) {
+      const p = getE(id);
+      if (p && S.zone[p.y * S.W + p.x] !== S.zone[far]) { computeZones(); break; }
+    }
+  }
+  return S.zone[a] >= 0 && S.zone[b] >= 0 && S.zone[a] !== S.zone[b];
+}
+
+/**
  * Returns an array of tile indices from the tile after (sx, sy) up to and including (gx, gy),
  * an empty array if already there, or null if the goal cannot be reached. With `avoidFor` set to
  * a player id, tiles in that player's enemies' territory cost much more.
@@ -52,6 +70,7 @@ function findPath(sx, sy, gx, gy, avoidFor, opts) {
   const start = sy * W + sx, goal = gy * W + gx;
   if (start === goal) return [];
   if (!walkable(goal)) return null;
+  if (zonesApart(start, goal)) return null; // on different ground: no way, and no flooding the map to find that out
   _pfEnsure(N);
   const gen = ++_pf.gen;
   const g = _pf.g, from = _pf.from, stamp = _pf.stamp, closed = _pf.closed, heap = _pf.heap;

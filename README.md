@@ -206,7 +206,8 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
   mesa tops (level 3+), so a Viaduct never reaches the floor or its low rises. A far end may land on
   no-one's land or in a rival's (a bridgehead); `computeTerritory` keeps a Viaduct while either end stands in its
   owner's land (or the abutment is on no-one's), and takes it down once neither does. When one comes down, `offDeck`
-  moves any bot on its deck to the nearer end, and a bot whose route jumps a Viaduct or Ropeway that's gone drops the
+  moves any bot on its deck to the nearer end (a civilian bot drops its order there, its load put down in crates; a
+  warbot plans its way again), and a bot whose route jumps a Viaduct or Ropeway that's gone drops the
   route and its order (`moveAlong`). `roadSearch` crosses Viaducts, so roads (and the AI's) reach sites on far mesas,
   and `wouldBlock` / `canPlace` treat Outposts and Viaduct ends as walkable. A far end claims the no-one's ground
   within `VIA_CLAIM` (3) tiles, never anyone's land, so a new mesa can take an Outpost. A bot out on a deck keeps

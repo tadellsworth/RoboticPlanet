@@ -2493,11 +2493,24 @@ function isJunction(t) { return !!roadNet().junc[t]; }
  */
 function homeNets(owner) {
   const nets = [];
-  for (const L of S.buildings) {
-    if (L.dead || L.owner !== owner || L.type !== 'lander') continue;
+  for (const L of landers()) {
+    if (L.dead || L.owner !== owner) continue;
     for (const c of buildingNets(L)) if (nets.indexOf(c) < 0) nets.push(c);
   }
   return nets;
+}
+
+/**
+ * Every Command Base on the map, anyone's, dead or alive (a short list, made again whenever buildings come
+ * or go): onHomeNet is asked for every building and every idle worker, and used to walk all the buildings.
+ */
+const _landers = { of: null, arr: null, n: -1, list: [] };
+function landers() {
+  if (_landers.of !== S || _landers.arr !== S.buildings || _landers.n !== S.buildings.length) {
+    _landers.list = S.buildings.filter((b) => b.type === 'lander');
+    _landers.of = S; _landers.arr = S.buildings; _landers.n = S.buildings.length;
+  }
+  return _landers.list;
 }
 
 /** Is building b joined by road to its owner's Command Base network? */
@@ -2536,7 +2549,7 @@ function roadWeight(t) {
 
 function roadSearch(owner, seeds, done) {
   const W = S.W, N = S.W * S.H;
-  const cost = new Float32Array(N).fill(Infinity), prev = new Int32Array(N).fill(-2);
+  const cost = new Float64Array(N).fill(Infinity), prev = new Int32Array(N).fill(-2); // (doubles, like the heap's keys: see the stale test below)
   const heap = new MinHeap();
   for (const t of seeds) { cost[t] = roadWeight(t); prev[t] = -1; heap.push(t, cost[t]); }
   const open = (t) => S.road[t] || canRoad(owner, t % W, (t / W) | 0) || (S.bAt[t] > 0 && passTile(t));
@@ -2737,7 +2750,13 @@ function offDeck(a, c) {
     if (!on) continue;
     const near = dist2(u.x, u.y, ax, ay) <= dist2(u.x, u.y, cx, cy) ? a : c;
     u.x = near.x + 0.5; u.y = near.y + 0.5; u.deck = null;
-    if (u.path) { u.path = null; u.pi = 0; }
+    if (u.path) {
+      u.path = null; u.pi = 0;
+      // A civilian bot drops its order with the route (its load is put down in crates), like one whose next
+      // step jumps a gap that's gone (see moveAlong): left with the order and no route, it counted as arrived,
+      // and delivered across the canyon. Warbots, Rocket Trucks and Crawlers plan their way again (travel).
+      if (u.task && u.type !== 'warbot' && !BOTS[u.type].siege && !BOTS[u.type].wild && !BOTS[u.type].crawler) cancelTask(u);
+    }
     u.vel = 0;
   }
 }
@@ -3108,11 +3127,15 @@ function seaRoute(u, x, y) {
   goals = goals.filter((t) => starts.some((s) => comp[s] === comp[t]));
   if (!goals.length) return null;
   const isGoal = new Set(goals), gx = x, gy = y;
-  const cost = new Float32Array(N).fill(Infinity), from = new Int32Array(N).fill(-2), heap = new MinHeap();
-  for (const s0 of starts) { cost[s0] = 0; from[s0] = -1; heap.push(s0, Math.hypot((s0 % W) - gx, ((s0 / W) | 0) - gy)); }
+  // (Costs in doubles: kept as floats, a cost that rounded up looked "beaten" by itself again and again,
+  // and a long voyage's search never ended. A tile is settled the first time it comes off the heap.)
+  const cost = new Float64Array(N).fill(Infinity), from = new Int32Array(N).fill(-2), settled = new Uint8Array(N), heap = new MinHeap();
+  for (const s0 of starts) { cost[s0] = 0; from[s0] = -1; heap.push(s0, Math.hypot((s0 % W) - gx, ((s0 / W) | 0) - gy) * 0.9); }
   let hit = -1;
   while (heap.size) {
     const a = heap.pop();
+    if (settled[a]) continue; // a stale entry: this tile was reached more cheaply since
+    settled[a] = 1;
     if (isGoal.has(a)) { hit = a; break; }
     const ai = a % W, aj = (a / W) | 0;
     for (let dj = -1; dj <= 1; dj++) for (let di = -1; di <= 1; di++) {
@@ -3120,7 +3143,7 @@ function seaRoute(u, x, y) {
       const i = ai + di, j = aj + dj;
       if (i < 0 || j < 0 || i >= W || j >= H) continue;
       const b = j * W + i;
-      if (S.terrain[b] !== T_WATER) continue;
+      if (S.terrain[b] !== T_WATER || settled[b]) continue;
       if (di && dj && (S.terrain[aj * W + i] !== T_WATER || S.terrain[j * W + ai] !== T_WATER)) continue;
       const c = cost[a] + (di && dj ? 1.414 : 1);
       if (c < cost[b]) { cost[b] = c; from[b] = a; heap.push(b, c + Math.hypot(i - gx, j - gy) * 0.9); }
