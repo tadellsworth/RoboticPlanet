@@ -752,7 +752,7 @@ const BDEFS = {
     cost: { cement: 6, alloy: 2 }, store: true, station: true, armor: 12, buildTime: 12, yard: ['freight'],
   },
   terminal: {
-    name: 'Trade Terminal', desc: 'An off-world freight exchange: it trades a full lot of one good for another, at rates below what making them yourself is worth, so a big surplus can buy what your land is running out of (the Ore, Crystal or Stone of a late game). Pick one of its contracts; Road Trains (or Freight Trains, with track beside it) bring the lot, and take the goods it pays home. Nothing smaller serves it. It has to stand well out from your Command Base, and the further out, the better it pays. One per colony.',
+    name: 'Trade Terminal', desc: 'An off-world freight exchange: it trades a full lot of one good for another, at rates below what making them yourself is worth, so a big surplus can buy what your land is running out of (the Ore, Crystal or Stone of a late game). Pick one of its contracts; Road Trains (or Freight Trains, with track beside it) bring the lot, and take the goods it pays home. Nothing smaller serves it. It docks at a neutral Trade Post (gold on the minimap), within 2 tiles of the pad, one per post: lay a road out to it. The further the post from your Command Base, the better it pays.',
     cost: { cement: 12, alloy: 5 }, store: true, station: true, terminal: true, armor: 16, buildTime: 20,
   },
   crawlerbase: {
@@ -886,6 +886,15 @@ const TRADE_BONUS = 1.3;
  * Cement for Alloy). 30 Stone buys about 9 Alloy (11 at a Terminal far out).
  */
 const TERMINAL = { minDist: 16, lot: 30, rate: 0.65, perTile: 0.015, maxBonus: 0.25, offers: 3, every: 300, lots: 3, sat: 0.12, satMin: 0.5, recover: 0.05, minLoad: 10, downMax: 1.3, minPay: 6 };
+/*
+ * Neutral Trade Posts (S.posts): off-world exchanges standing on no-one's ground from the start, placed
+ * fairly between the colonies (one more than there are colonies; `colony` of them in Colony mode, about
+ * `colonyDist` tiles out), at least `minFromBase` tiles from every Command Base and `apart` from each other,
+ * and never more than `fair` tiles nearer one colony than another (the nearest two, after the first).
+ * A colony trades by docking its Trade Terminal within `dock` tiles of one (one Terminal per post): no
+ * Terminal anywhere else, never on a rival's ground, and a rival's land round a post keeps you out.
+ */
+const TRADE_POST = { colony: 2, colonyDist: 24, minFromBase: 16, apart: 12, dock: 2, fair: 3 };
 const TERMINAL_GIVE = ['fiber', 'cement', 'stone', 'ore', 'crystal'];
 const TERMINAL_GET = ['ore', 'crystal', 'stone', 'fiber', 'alloy'];
 

@@ -4123,6 +4123,7 @@ function render(dtReal) {
     { const face = Math.atan2(dx, -dy); items.push({ ...sh, ent: 'u', docked: true, x: b.x + 0.5 + dx * 1.05, y: b.y + 0.5 + dy * 1.05, face, rface: face, path: null, vel: 0 }); }
   }
   if (ART['streetlamp-road']) for (const l of streetLamps(v0, v1)) items.push(l); // posts stand among buildings and bots
+  if (S.posts) for (const p of S.posts) if (inView(p.x, p.y, 2)) items.push({ ent: 'post', x: p.x, y: p.y + 0.5, post: p });
   items.sort((a, b) => (a.ent === 'b' ? a.y + 0.5 : a.y) - (b.ent === 'b' ? b.y + 0.5 : b.y));
   // At dusk and night, every finished building's lights spill onto the ground round its pad.
   // Walls glow a little along their live rail, Gates more; Pulse Turrets sweep searchlights.
@@ -4133,9 +4134,11 @@ function render(dtReal) {
       drawLightPool(ctx, ox + (e.x + 0.5) * z, oy + (e.y + 0.5) * z, z * size, BDEFS[e.type].wild ? '#9dff6a' : PLAYER_COLORS[e.owner] || '#ffd9a0');
     }
     for (const e of items) if (e.ent === 'b' && e.type === 'turret' && e.built && !e.paused) drawSearchlight(ctx, e, ox, oy, z);
+    for (const e of items) if (e.ent === 'post') drawLightPool(ctx, ox + (e.post.x + 0.5) * z, oy + (e.post.y + 0.5) * z, z * 1.4, '#ffd27a');
   }
   for (const e of items) {
     if (e.ent === 'lamp') { drawStreetLamp(ctx, e, ox, oy, z); continue; }
+    if (e.ent === 'post') { drawTradePost(ctx, ox + (e.post.x + 0.5) * z, oy + (e.post.y + 0.5) * z, z, e.post); continue; }
     if (e.ent === 'b') {
       const cx = ox + (e.x + 0.5) * z, cy = oy + (e.y + 0.5) * z;
       drawBuilding(ctx, e.type, cx, cy, z, e.owner, e);
@@ -4695,6 +4698,51 @@ function drawCutOff(ctx, cx, cy, z) {
   ctx.lineWidth = Math.max(1.4, r * 0.16);
   ctx.beginPath(); ctx.ellipse(x - r * 0.35, y + r * 0.12, r * 0.32, r * 0.2, -0.6, 0, Math.PI * 2); ctx.stroke();
   ctx.beginPath(); ctx.ellipse(x + r * 0.35, y - r * 0.12, r * 0.32, r * 0.2, -0.6, 0, Math.PI * 2); ctx.stroke();
+}
+
+/**
+ * A neutral Trade Post (S.posts): a landing pad a little bigger than its tile, concrete with a hazard ring,
+ * a gold exchange emblem in the middle, four amber beacons blinking in turn, and its name when zoomed in.
+ */
+function drawTradePost(ctx, cx, cy, z, post) {
+  const r = z * 0.66, t = R.time;
+  ctx.save();
+  // shadow, then the octagonal pad
+  ctx.fillStyle = 'rgba(0,0,0,0.28)';
+  ctx.beginPath(); ctx.ellipse(cx + z * 0.06, cy + z * 0.1, r * 1.02, r * 0.96, 0, 0, Math.PI * 2); ctx.fill();
+  const oct = (rad) => { ctx.beginPath(); for (let k = 0; k < 8; k++) { const a = Math.PI / 8 + (k * Math.PI) / 4; ctx[k ? 'lineTo' : 'moveTo'](cx + Math.cos(a) * rad, cy + Math.sin(a) * rad); } ctx.closePath(); };
+  oct(r); ctx.fillStyle = '#5d6166'; ctx.fill();
+  oct(r * 0.9); ctx.fillStyle = '#8d9196'; ctx.fill();
+  // hazard ring
+  ctx.lineWidth = Math.max(1.5, z * 0.07);
+  ctx.setLineDash([z * 0.11, z * 0.09]);
+  ctx.strokeStyle = '#e8b93a'; ctx.beginPath(); ctx.arc(cx, cy, r * 0.72, 0, Math.PI * 2); ctx.stroke();
+  ctx.lineDashOffset = z * 0.11; ctx.strokeStyle = '#2a2a2a'; ctx.beginPath(); ctx.arc(cx, cy, r * 0.72, 0, Math.PI * 2); ctx.stroke();
+  ctx.setLineDash([]); ctx.lineDashOffset = 0;
+  // the gold exchange emblem: a disc with two arrows chasing round it
+  ctx.fillStyle = '#d9a73a'; ctx.beginPath(); ctx.arc(cx, cy, r * 0.42, 0, Math.PI * 2); ctx.fill();
+  ctx.strokeStyle = '#fff2c8'; ctx.lineWidth = Math.max(1, z * 0.03); ctx.stroke();
+  ctx.strokeStyle = '#3a2a10'; ctx.fillStyle = '#3a2a10'; ctx.lineWidth = Math.max(1.4, z * 0.05);
+  for (const s of [0, Math.PI]) {
+    const a0 = s + 0.35, a1 = s + Math.PI - 0.35, rr = r * 0.26;
+    ctx.beginPath(); ctx.arc(cx, cy, rr, a0, a1); ctx.stroke();
+    const hx = cx + Math.cos(a1) * rr, hy = cy + Math.sin(a1) * rr, tx = -Math.sin(a1), ty = Math.cos(a1), hs = z * 0.08;
+    ctx.beginPath(); ctx.moveTo(hx + tx * hs, hy + ty * hs); ctx.lineTo(hx - ty * hs * 0.8, hy + tx * hs * 0.8); ctx.lineTo(hx + ty * hs * 0.8, hy - tx * hs * 0.8); ctx.closePath(); ctx.fill();
+  }
+  // four beacons blinking in turn
+  for (let k = 0; k < 4; k++) {
+    const a = Math.PI / 4 + (k * Math.PI) / 2, on = Math.floor(t * 2) % 4 === k;
+    const bx = cx + Math.cos(a) * r * 0.86, by = cy + Math.sin(a) * r * 0.86;
+    if (on) { ctx.fillStyle = 'rgba(255,190,80,0.35)'; ctx.beginPath(); ctx.arc(bx, by, z * 0.12, 0, Math.PI * 2); ctx.fill(); }
+    ctx.fillStyle = on ? '#ffd27a' : '#8a6a30'; ctx.beginPath(); ctx.arc(bx, by, Math.max(1.5, z * 0.045), 0, Math.PI * 2); ctx.fill();
+  }
+  if (z >= 30) {
+    ctx.font = `600 ${Math.round(Math.max(9, z * 0.16))}px system-ui, sans-serif`;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+    ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(0,0,0,0.7)'; ctx.strokeText('TRADE POST', cx, cy + r + z * 0.04);
+    ctx.fillStyle = '#ffe2a0'; ctx.fillText('TRADE POST', cx, cy + r + z * 0.04);
+  }
+  ctx.restore();
 }
 
 function drawDryOil(ctx, x, y, z, b) {
@@ -5636,6 +5684,12 @@ function renderMinimap() {
     ctx.fillStyle = b.built ? PLAYER_COLORS[b.owner] : 'rgba(255,255,255,0.7)';
     ctx.fillRect(x, y, w, h);
     if (b.type === 'lander') { ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 1; ctx.strokeRect(x - 0.5, y - 0.5, w + 1, h + 1); }
+  }
+  // Trade Posts: gold diamonds.
+  if (S.posts) for (const p of S.posts) {
+    const x = (p.x + 0.5) * sx, y = (p.y + 0.5) * sy, r = Math.max(3, sx * 1.4);
+    ctx.fillStyle = '#ffcf4a'; ctx.strokeStyle = '#3a2a10'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(x, y - r); ctx.lineTo(x + r, y); ctx.lineTo(x, y + r); ctx.lineTo(x - r, y); ctx.closePath(); ctx.fill(); ctx.stroke();
   }
   for (const u of S.bots) {
     if (u.dead || u.inside || u.type !== 'warbot') continue;

@@ -908,6 +908,11 @@ function startNewGame() {
     const near = L && nests.length ? nests.reduce((a, b) => (dist2(b.x, b.y, L.x, L.y) < dist2(a.x, a.y, L.x, L.y) ? b : a)) : null;
     postMsg(0, `${nests.length} creature nests sit out in the wilds (red on the minimap; the nearest is ${near ? dirText(L, near) : 'out there'}${near ? ': press J or tap here to look' : ''}). From about 7 minutes in they raid whatever you build near their nests. Pulse Turrets (with Crystal) and warbots keep them off; clear a nest with warbots to win the goods it hoards.`, near ? near.x : 0, near ? near.y : 0, 'warn');
   }
+  if (S.posts && S.posts.length) {
+    // Pointed at the post nearest home (J or a tap jumps there); the rest are gold on the minimap.
+    const L = getE(S.players[0].lander), near = L ? S.posts.reduce((a, p) => (dist2(p.x, p.y, L.x, L.y) < dist2(a.x, a.y, L.x, L.y) ? p : a)) : null;
+    postMsg(0, `${S.posts.length} neutral Trade Posts (gold on the minimap${near ? ', nearest ' + dirText(L, near) : ''}): lay a road out and dock a Trade Terminal to trade.` + (S.mode !== 'colony' ? ' Hold the land round one to shut your rival out.' : ''), near ? near.x : 0, near ? near.y : 0, 'info');
+  }
   if (nukeOn()) postMsg(0, `Nuclear race: a few uranium deposits glow green across the planet. Dig them with Ore Mines, enrich them at a Nuclear Reactor and build the bomb${S.mode === 'colony' ? ' (no rival here, so it is yours to try out)' : ` before ${S.players.length > 2 ? 'the rivals do' : 'the rival does'}`}.`, 0, 0, 'warn');
 }
 
@@ -1919,6 +1924,7 @@ function onMapTap(i, j, wx, wy) {
   }
   UI.lastTap = null;
   if (INPUT.mouse && UI.sel.length && !INPUT.shift) selectBots([], false);
+  if (inMap(i, j) && postAt(tIdx(i, j))) { sfx('click'); openPostSheet(postAt(tIdx(i, j))); return; }
   if (inMap(i, j) && S.res[tIdx(i, j)]) { sfx('click'); openResourceSheet(tIdx(i, j)); return; }
   if (inMap(i, j) && S.fert[tIdx(i, j)] && S.terrain[tIdx(i, j)] === T_GROUND) { sfx('click'); openSoilSheet(tIdx(i, j)); return; }
   if (inMap(i, j) && S.road[tIdx(i, j)] && wayOwner(tIdx(i, j)) === 0) { sfx('click'); openRoadSheet(tIdx(i, j)); return; }
@@ -3406,6 +3412,19 @@ function refreshRoadSheet(t) {
   $('rd-mark').textContent = S.paveMark[t] ? 'Clear the asphalt mark' : 'Mark for asphalt';
 }
 
+/** A neutral Trade Post: what it is, who has docked there, and how to start trading. */
+function openPostSheet(post) {
+  const t = tIdx(post.x, post.y);
+  R.selected = 0; R.selTile = t; UI.selBot = 0;
+  const html = `<div class="sheet-title"><div><h3>Trade Post</h3><div class="sub">Neutral: nobody owns it</div></div></div>
+    <p class="desc">An off-world exchange. Any colony can trade here: dock a <b>Trade Terminal</b> beside it (Build, Move, within ${TRADE_POST.dock} tiles of the pad) and lay a road or track out to the Terminal. Only Road Trains and Freight Trains serve it. A rival's land round the post keeps you out (no Terminal and no road on their ground), so an Outpost of yours beside it keeps them out. Further from your Command Base pays more.</p>
+    <div id="sh-dyn"></div>
+    <div class="btn-row"><button class="btn primary" id="sh-dock">Dock a Trade Terminal here</button></div>`;
+  openSheet('post', t, html);
+  $('sh-dock').onclick = () => { sfx('click'); enterPlaceMode('terminal'); };
+  refreshSheet();
+}
+
 function openSoilSheet(t) {
   R.selected = 0; R.selTile = t; UI.selBot = 0;
   const html = `<div class="sheet-title"><div><h3>Fertile soil</h3></div></div>
@@ -3627,6 +3646,17 @@ function refreshSheet() {
     $('rl-info').innerHTML = `<div class="kv"><span>Warbots holding</span><span>${members.length}</span></div>` +
       (low ? `<div class="kv"><span>Low battery</span><span>${low}</span></div>` : '');
     refreshMoveStepper(Math.floor(r.x), Math.floor(r.y));
+  } else if (UI.sheetKind === 'post') {
+    const post = postAt(UI.sheetFor);
+    if (!post) { closeSheet(); return; }
+    const docks = S.buildings.filter((b) => !b.dead && BDEFS[b.type].terminal && nearPost(b.x, b.y) === post);
+    const who = docks.map((b) => (b.owner === 0 ? 'You' : playerName(b.owner)) + (b.built ? '' : ' (building)')).join(', ') || 'Nobody yet';
+    const L = getE(S.players[0].lander), holder = S.owner[UI.sheetFor];
+    $('sh-dyn').innerHTML = `<div class="kv"><span>Docked here</span><span>${who}</span></div>` +
+      (L ? `<div class="kv"><span>From your Command Base</span><span>${dirText(L, post)}</span></div>` : '') +
+      (holder >= 0 ? `<div class="kv"><span>Land round it</span><span>${holder === 0 ? 'Yours' : playerName(holder) + '\'s'}</span></div>` : '');
+    const mine = docks.some((b) => b.owner === 0);
+    $('sh-dock').hidden = mine;
   } else if (UI.sheetKind === 'res') {
     const t = UI.sheetFor;
     if (!S.res[t]) { closeSheet(); return; }

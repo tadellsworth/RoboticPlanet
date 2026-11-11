@@ -5720,6 +5720,58 @@ function placeNests(seed) {
   }
 }
 
+/**
+ * The neutral Trade Posts (TRADE_POST), placed fairly: the first as near the middle of the colonies as it
+ * can be (as far from each Command Base), each of the rest fair between the two nearest colonies and spread
+ * out from the others; in Colony mode, about colonyDist tiles out. On open, level ground with room round it
+ * to dock, the colonies' own land (reachable on foot) first.
+ */
+function placePosts(seed) {
+  S.posts = [];
+  const Ls = S.players.filter((P) => !P.absent && !(S.wildlife && P.id === WILD_OWNER)).map((P) => getE(P.lander)).filter((L) => L && !L.dead);
+  if (!Ls.length) return;
+  const want = Ls.length === 1 ? TRADE_POST.colony : Ls.length + 1;
+  const homes = new Set(Ls.map((L) => S.zone[tIdx(L.x, L.y)]));
+  const wild = S.buildings.filter((b) => !b.dead && BDEFS[b.type].wild);
+  const free = (u) => S.terrain[u] === T_GROUND && !S.res[u] && !S.bAt[u] && !S.road[u] && !S.ramp[u] && !(S.rail && S.rail[u]);
+  const cands = [];
+  for (let j = 2; j < S.H - 2; j++) for (let i = 2; i < S.W - 2; i++) {
+    const t = tIdx(i, j);
+    if (!free(t) || S.fert[t] || S.owner[t] >= 0) continue;
+    let room = 0;
+    for (let dj = -2; dj <= 2; dj++) for (let di = -2; di <= 2; di++) { const u = tIdx(i + di, j + dj); if (free(u) && S.elev[u] === S.elev[t]) room++; }
+    if (room < 14 || wild.some((n) => dist2(n.x, n.y, i, j) < 49)) continue;
+    const d = Ls.map((L) => dist(i, j, L.x, L.y)).sort((a, b) => a - b);
+    if (d[0] < TRADE_POST.minFromBase) continue;
+    cands.push({ i, j, d, home: homes.has(S.zone[t]) ? 1 : 0, h: hash2(i, j, (seed ^ 0x7a3d) >>> 0) });
+  }
+  // As fair as the map allows: within TRADE_POST.fair tiles if it can be, a little less fair if that's the
+  // only way to have two posts at all.
+  for (let k = 0, lim = TRADE_POST.fair; k < want; k++) {
+    let best = null, bs = -Infinity;
+    for (const c of cands) {
+      let near = Infinity;
+      for (const p of S.posts) near = Math.min(near, dist(p.x, p.y, c.i, c.j));
+      if (near < TRADE_POST.apart) continue;
+      let s;
+      if (Ls.length === 1) s = -Math.abs(c.d[0] - TRADE_POST.colonyDist) * 0.6;
+      else {
+        const unfair = k === 0 ? c.d[c.d.length - 1] - c.d[0] : c.d[1] - c.d[0];
+        if (unfair > lim) continue; // (no post nearer one colony than another by more than that)
+        s = -unfair * 2 - c.d[0] * 0.15; // fair, and not too far out
+      }
+      if (S.posts.length) s += Math.min(near, 40) * 0.25;
+      s += c.home * 6 + c.h * 0.5;
+      if (s > bs) { bs = s; best = c; }
+    }
+    if (!best) {
+      if (S.posts.length >= 2 || lim >= TRADE_POST.fair * 4 || Ls.length === 1) break;
+      lim += TRADE_POST.fair; k--; continue; // try again, a little less strict
+    }
+    S.posts.push({ id: S.posts.length + 1, x: best.i, y: best.j });
+  }
+}
+
 /** A new creature beside nest b. */
 function spawnCritter(b, type, task) {
   let x = b.x, y = b.y;

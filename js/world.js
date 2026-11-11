@@ -1240,8 +1240,10 @@ function newGame(opts) {
   computeTerritory();
   for (const P of S.players) { const L = getE(P.lander); if (L) starterRoads(L); }
   if (S.wildlife) placeNests(seed);
+  placePosts(seed);
   if (opts.setup) opts.setup(S);
   S.decor = makeDecor();
+  for (const p of S.posts) S.decor[tIdx(p.x, p.y)] = 0; // (no plants on a landing pad)
   // A word on how this kind of planet plays.
   const L0 = getE(S.players[0].lander), tip = !S.mission && mode === 'versus' && SHAPE_PRESETS[settings.shape].tip;
   if (tip && L0) postMsg(0, tip, L0.x, L0.y, 'info');
@@ -1469,6 +1471,20 @@ function buildZones(p) {
   return set;
 }
 
+/** The neutral Trade Post on tile t, or null. */
+function postAt(t) {
+  if (!S.posts) return null;
+  for (const p of S.posts) if (p.y * S.W + p.x === t) return p;
+  return null;
+}
+
+/** The Trade Post a Terminal at (i, j) would dock at: one within TRADE_POST.dock tiles, or null. */
+function nearPost(i, j) {
+  if (!S.posts) return null;
+  for (const p of S.posts) if (Math.max(Math.abs(p.x - i), Math.abs(p.y - j)) <= TRADE_POST.dock && (p.x !== i || p.y !== j)) return p;
+  return null;
+}
+
 /** Can `owner`'s bots get to tile t over land (its home island, or one joined by a bridge, or held by a Port, Airfield or Outpost of theirs)? */
 function reachZone(owner, t) { return buildZones(owner).has(S.zone[t]); }
 
@@ -1522,6 +1538,7 @@ function landRule(owner, type, t) {
   if (h === owner) return '';
   if (h >= 0) return 'A rival holds this ground: build on your own land or no-one\'s.';
   if (DEFENCE_TYPES.has(type)) return 'Defences only go inside your own border: an Outpost or Keep extends it.';
+  if (type === 'terminal' && nearPost(t % S.W, (t / S.W) | 0)) return ''; // docking at a Trade Post: out wherever it stands (a road still has to reach it)
   if (!inReach(owner, t)) return `Too far out: build within ${BUILD_REACH} tiles of your buildings, roads or track.`;
   return '';
 }
@@ -1871,6 +1888,7 @@ function canPlace(owner, type, i, j, skipBlockCheck) {
   if (!def || !def.cost) return { ok: false, reason: 'Cannot build that.' };
   if (!inMap(i, j)) return { ok: false, reason: 'Outside the map.' };
   const t = tIdx(i, j);
+  if (postAt(t)) return { ok: false, reason: 'A neutral Trade Post stands here: dock a Trade Terminal beside it.' };
   const land = landRule(owner, type, t);
   if (land) return { ok: false, reason: land };
   if (S.terrain[t] !== T_GROUND) return { ok: false, reason: 'The ground here is not buildable.' };
@@ -1943,9 +1961,9 @@ function canPlace(owner, type, i, j, skipBlockCheck) {
     return { ok: true, reason: '', rwy };
   }
   if (def.terminal) {
-    if (S.buildings.some((b) => !b.dead && b.owner === owner && BDEFS[b.type].terminal)) return { ok: false, reason: 'You have a Trade Terminal already: one per colony.' };
-    const L = getE(S.players[owner].lander);
-    if (L && !L.dead && dist(L.x, L.y, i, j) < TERMINAL.minDist) return { ok: false, reason: `A Trade Terminal has to stand at least ${TERMINAL.minDist} tiles from your Command Base (this spot is ${Math.floor(dist(L.x, L.y, i, j))}).` };
+    const post = nearPost(i, j);
+    if (!post) return { ok: false, reason: `A Trade Terminal docks at a neutral Trade Post (gold on the minimap): within ${TRADE_POST.dock} tiles of one. Lay a road out to it.` };
+    if (S.buildings.some((b) => !b.dead && b.owner === owner && BDEFS[b.type].terminal && nearPost(b.x, b.y) === post)) return { ok: false, reason: 'You have a Trade Terminal at this Trade Post already: one per post.' };
   }
   if (def.mil && def.terr > 0 && ringOverRival(owner, i, j, def.terr)) return { ok: false, reason: `Too close to a rival's buildings: its ring (${def.terr} tiles) would cut them off. Capture or wreck the fort that holds them first.` };
   if (def.keep && S.buildings.some((b) => !b.dead && b.owner === owner && BDEFS[b.type].keep && dist2(b.x, b.y, i, j) < KEEP.spacing * KEEP.spacing)) {
@@ -2062,7 +2080,7 @@ function placeSite(owner, type, i, j, cost, fromStore) {
 function canRoad(owner, i, j) {
   if (!inMap(i, j)) return false;
   const t = tIdx(i, j);
-  if (S.bAt[t] || S.resRes[t] || scorched(t) || runwayAt(t)) return false;
+  if (S.bAt[t] || S.resRes[t] || scorched(t) || runwayAt(t) || postAt(t)) return false;
   if (S.owner[t] === owner) return true;
   // No-one's ground your bots can reach: roads can run anywhere out there (a rival's ground is theirs).
   if (S.owner[t] < 0 && !crossTile(t) && reachZone(owner, t)) return true;
@@ -2268,6 +2286,7 @@ function pipeBlocked(owner, t) {
   if (S.owner[t] >= 0 && S.owner[t] !== owner) return 'A rival holds that ground: pipe only runs on yours or no-one\'s.';
   if (S.owner[t] < 0 && (crossTile(t) || !reachZone(owner, t))) return crossTile(t) ? 'Pipe can\'t cross open water or a chasm outside your border.' : 'Your bots can\'t reach there yet.';
   if (scorched(t)) return 'The ground there is still scorched.';
+  if (postAt(t)) return 'A Trade Post stands here.';
   if (S.pipe[t] && S.pipe[t] !== owner + 1) return 'Someone else\'s pipe runs here.';
   return '';
 }
@@ -2933,6 +2952,7 @@ function deserializeGame(json) {
   }
   computeZones();
   if (oldWays) wayOwnersFromLand();
+  if (!S.posts) { placePosts(S.seed); for (const p of S.posts) if (S.decor) S.decor[tIdx(p.x, p.y)] = 0; } // saves from before Trade Posts
   computeTerritory(); // land as it's worked out now (every building holds a little round it)
   return S;
 }
@@ -3050,6 +3070,7 @@ function railBlocked(owner, t) {
   if (S.res[t]) return 'Clear the resources here first.';
   if (scorched(t)) return 'This ground is still scorched.';
   if (runwayAt(t)) return 'That\'s an Airfield\'s runway.';
+  if (postAt(t)) return 'A Trade Post stands here.';
   return '';
 }
 

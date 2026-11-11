@@ -1136,8 +1136,9 @@ function aiSearchSpot(p, type, lander) {
       // could cut it off), an Outpost a little less so.
       let out = false;
       if (S.owner[j * S.W + i] !== p) {
-        if (!pass || defence || S.owner[j * S.W + i] >= 0 || !inReach(p, j * S.W + i)) continue;
-        if (rivalLandNear(p, i, j, type === 'outpost' ? 3 : AI_CLEAR_OF_RIVAL)) continue;
+        const dock = type === 'terminal'; // a Terminal docks at a Trade Post, wherever it stands (a road follows)
+        if (!pass || defence || S.owner[j * S.W + i] >= 0 || !(dock || inReach(p, j * S.W + i))) continue;
+        if (rivalLandNear(p, i, j, type === 'outpost' || dock ? 3 : AI_CLEAR_OF_RIVAL)) continue;
         out = true;
       }
       if (S.fert[j * S.W + i] && type !== 'farm') continue; // keep fertile soil for farming
