@@ -131,9 +131,9 @@ export default function (L) {
     for (let k = 0; k < np; k++) {
       const xc = -len / 2 + (k + 0.5) * pw;
       if (k > 0) box(0.05, 0.68, 0.03, T.seam, xc - pw / 2, 0, 0, { parent: gp, dirt: 0 });
-      box(pw * 0.5, 0.07, 0.03, T.glow, xc, 0.36, 0.004, { parent: gp, ...nc });             // dashed inlays
+      box(pw * 0.56, 0.12, 0.03, T.glowSoft, xc, 0.34, 0.004, { parent: gp, ...nc });        // team-tinted panel inlays
       box(pw * 0.62, 0.05, 0.03, T.seam, xc, 0.2, 0, { parent: gp, dirt: 0 });
-      box(pw * 0.5, 0.07, 0.03, T.glowSoft, xc, 0.6, -0.455, { parent: g, ...nc });            // inner face
+      box(pw * 0.56, 0.12, 0.03, T.glowSoft, xc, 0.58, -0.455, { parent: g, ...nc });           // inner face
       if (k > 0) box(0.05, 0.68, 0.03, T.seam, xc - pw / 2, 0.25, -0.45, { parent: g, dirt: 0 });
     }
   }
