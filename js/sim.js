@@ -626,6 +626,7 @@ function routeOpts(u) {
   const o = { who: u.owner, breach: u.type === 'warbot' && (u.ammo ?? WARBOT_AMMO) > 0, noRope: !!(bt.truck || bt.wild || bt.crawler), noFerry: !!(bt.wild || bt.crawler || bt.rail || bt.sea) };
   if (bt.roadOnly && !haulerStranded(u)) o.roadOnly = true;
   else if ((bt.offroad || bt.roadOnly) && !harvestTrip(u)) o.offMul = 1 / OFFROAD_SLOW;
+  else if (u.type === 'warbot' && !u.fight) o.offMul = WARBOT_OFFROAD; // on the march: keep to the roads
   return o;
 }
 
@@ -873,7 +874,7 @@ function trafficJam(u, here, next) {
  * Infinity when the road ahead is clear.
  */
 function queueRoom(u) {
-  const head = TRAFFIC.head;
+  const head = TRAFFIC.head, soldier = u.type === 'warbot';
   if (!head || head.length !== S.W * S.H || u.squeezeUntil > S.time) return Infinity;
   let t0 = u.path[u.pi];
   let dx = (t0 % S.W) + 0.5 - u.x, dy = ((t0 / S.W) | 0) + 0.5 - u.y, d = Math.sqrt(dx * dx + dy * dy);
@@ -889,7 +890,10 @@ function queueRoom(u) {
     if (t === undefined || !S.road[t]) continue;
     for (let k = head[t]; k >= 0; k = TRAFFIC.next[k]) {
       const v = TRAFFIC.bots[k];
-      if (v === u || v.dead || v.inside || !v.path || v.type === 'warbot') continue; // soldiers step aside: nobody queues behind one
+      if (v === u || v.dead || v.inside || !v.path) continue;
+      // Soldiers step aside: nobody queues behind one, but a warbot on the march falls in behind the next
+      // warbot of its side (single file), never behind one that's fighting or breaking down a Gate.
+      if (soldier ? v.type !== 'warbot' || v.owner !== u.owner || v.fight || v.breach : v.type === 'warbot') continue;
       const rx = v.x - u.x, ry = v.y - u.y;
       let along = rx * dx + ry * dy;
       if (along < -0.05 || along > 1.4) continue;                        // behind us, or far ahead
@@ -897,7 +901,7 @@ function queueRoom(u) {
       if (Math.cos(v.face) * dx + Math.sin(v.face) * dy < 0.3) continue; // oncoming or crossing: other lane
       // Two bots on the same spot (say, both just out of the Command Base): the older one goes first.
       if (along <= 0.05) { if (v.id > u.id) continue; along = 0; }
-      room = Math.min(room, along - QUEUE_GAP - (BOTS[v.type].train ? TRAIN_LEN : BOTS[v.type].truck ? 0.25 : 0));
+      room = Math.min(room, along - (soldier ? WARBOT_GAP : QUEUE_GAP) - (BOTS[v.type].train ? TRAIN_LEN : BOTS[v.type].truck ? 0.25 : 0));
     }
   }
   return Math.max(0, room);
@@ -1017,10 +1021,12 @@ function moveAlong(u, dt) {
     const cdx = (nx % S.W) + 0.5 - u.x, cdy = ((nx / S.W) | 0) + 0.5 - u.y;
     lim = Math.min(lim, Math.max(0, Math.sqrt(cdx * cdx + cdy * cdy) - 0.6));
   }
-  // On roads, wait behind the bot ahead instead of driving through it (warbots don't queue: a squad
-  // marching along a road, or massing at a Gate it means to break down, would stand in a line with
-  // only the front one doing anything).
-  if (!soldier && (r || S.road[u.path[u.pi]])) {
+  // On roads, wait behind the bot ahead instead of driving through it. Warbots on the march fall in
+  // single file behind their own side's warbots (see queueRoom); for their last few tiles, in a fight
+  // or breaking down a Gate they don't queue, so a squad spreads out where it's going instead of
+  // standing in a line with only the front one doing anything.
+  const marching = soldier && !u.fight && !u.breach && u.path.length - u.pi > WARBOT_SPREAD;
+  if ((!soldier || marching) && (r || S.road[u.path[u.pi]])) {
     const room = queueRoom(u);
     if (room < want) {
       if (room < want * 0.25) {
@@ -2497,7 +2503,7 @@ function updateBuilding(b, dt) {
   }
   if (def.out && !def.store) feedStep(b, dt * S.players[b.owner].mult);
   if (def.mil) b.status = `Garrison: ${b.garrison.length} of ${def.garrison} warbots`;
-  else if (def.store) b.status = 'Storing goods';
+  else if (def.store) b.status = def.station && !def.terminal && !railPlatforms(b.x, b.y).length ? 'No track beside it yet: drag rail out to it in Paths (Rail), to another station' : 'Storing goods';
   else if (def.gate) b.status = 'Open to your bots; enemies have to break it down';
   else if (def.barrier) b.status = 'Holding the line: enemies have to go round or break through';
   else if (def.ropeway) b.status = b.link ? 'Carrying bots across' : 'Waiting for its far station';

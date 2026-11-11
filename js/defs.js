@@ -62,6 +62,13 @@ const ONEWAY_WRONG = 0.5;
 const TRAFFIC_ONCOMING = 0.8;
 const QUEUE_GAP = 0.6;
 const QUEUE_PATIENCE = 6;
+/*
+ * Warbots on the march keep to the roads in single file: each walks WARBOT_GAP behind the warbot of its own
+ * side ahead of it in its lane (not behind trucks, nor one that's fighting or breaking down a Gate), and
+ * spreads out again for its last WARBOT_SPREAD tiles. Off the road they pay WARBOT_OFFROAD times as much
+ * for a tile when planning a route, so a squad keeps to the roads a little longer.
+ */
+const WARBOT_GAP = 0.45, WARBOT_SPREAD = 3, WARBOT_OFFROAD = 1.3;
 /** Traffic map: bot-seconds a minute on a road tile that show as packed (red), and seconds a minute of standing still that mark a jam. */
 const TRAFFIC_BUSY = 25;
 const TRAFFIC_JAM = 6;
@@ -748,7 +755,7 @@ const BDEFS = {
     cost: { cement: 6, alloy: 3 }, store: true, mil: true, terr: 4, garrison: 2, ammoStock: 4, charger: { slots: 2, rate: 25, fuel: true }, armor: 14, airdrop: true,
   },
   station: {
-    name: 'Rail Station', desc: 'Storage beside the railway: Freight Trains load and unload here. Build one at each end of a line (beside the track), give the far one supply orders, and trains keep it stocked from the stations on the same track; a far station also sends its spare goods home by train. Its rail yard builds Freight Trains: order them on its panel, and haulers bring it the Alloy and Chips. Haulers serve it like a Depot.',
+    name: 'Rail Station', desc: 'Storage beside the railway: Freight Trains load and unload here. Build one at each end of a line (before the track if you like: drag rail from one station to the other and it ends beside each), give the far one supply orders, and trains keep it stocked from the stations on the same track; a far station also sends its spare goods home by train. Its rail yard builds Freight Trains: order them on its panel, and haulers bring it the Alloy and Chips. Haulers serve it like a Depot.',
     cost: { cement: 6, alloy: 2 }, store: true, station: true, armor: 12, buildTime: 12, yard: ['freight'],
   },
   terminal: {

@@ -597,6 +597,12 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
   only on your own land. Roads, track and pipes run on any ground no rival holds that your bots can reach
   (`reachZone`); roads and track have their own owner (`S.wown`, read through `wayOwner`), so raids, missiles,
   creatures, paving and junctions go by who laid them, not whose land they're on.
+- **Warbots march in single file** on roads (`queueRoom`, `WARBOT_GAP`): a warbot on the march falls in behind the next
+  warbot of its side in its lane (never behind a truck, nor one that's fighting or breaking down a Gate) and spreads out
+  for its last `WARBOT_SPREAD` tiles; off-road tiles cost `WARBOT_OFFROAD` times more when it plans a route, so squads
+  keep to the roads. Other traffic still never queues behind a warbot.
+- **Rail Stations** can go up before any track: a rail drag over your own station skips its tile, so dragging from one
+  station to another lays track that ends beside each.
 - **Cut off** (`cutOff`, `crumble`): a finished building whose ground a rival's ring takes stops working (nothing is
   hauled to it, its worker leaves) and loses `armor / CUT_CRUMBLE` (90 s) a second until it's lost (`dropLoot`); it
   recovers if its owner takes the land back. A construction site on a rival's ground is lost at once. A land-claiming
