@@ -1,4 +1,8 @@
 // Grower: geodesic glass dome over rows of glowing seedlings, misting nozzles, water tank, airlock.
+// Powered realism: a lights-and-electricity layer from b/powerkit.js (team-colour rings round the base and the crown,
+// team lamps on the misting posts, lit airlock windows, a transformer yard with a junction box and a cable to the posts,
+// floodlights, beacons). Its lights are team-coloured: render one image per team. Base render only.
+import { power } from './powerkit.js';
 export default function (L) {
   const { box, cyl, hcyl, beam, pipe, hoop, lamp, pointLight, ao, mesh, sphere, M, THREE, ACCENT } = L;
   const gun = M.paint('#50565c'), off = M.paint('#c7c2b6'), soil = M.plain('#3b2b1d', 0.95);
@@ -50,4 +54,36 @@ export default function (L) {
   box(0.8, 1.2, 0.06, M.dark, cx, 0, cz + 4.61, { dirt: 0.4 });
   box(0.9, 0.08, 0.06, M.emit(ACCENT, 2.6), cx, 1.3, cz + 4.63, { cast: false });
   box(1.5, 0.08, 0.4, M.hazard, cx, 0, cz + 4.85, { dirt: 0 });
+  // ================================================================ power layer (lights and electricity), base render only
+  const PART = new URLSearchParams(location.search).get('part');
+  if (!PART || PART === 'base') {
+    const K = power(L), nc = { dirt: 0, cast: false };
+    // team light strips: round the base ring's top edge and the dome's crown, team lamps on the misting posts, the
+    // airlock eave and the water tank's rim
+    L.hoop(3.66, 0.03, K.glow, cx, BY - 0.03, cz, { cast: false });
+    L.hoop(0.37, 0.03, K.glow, cx, BY + RD + 0.23, cz, { cast: false });
+    for (let k = 0; k < 6; k++) { const a = (k / 6) * Math.PI * 2 + Math.PI / 6; box(0.18, 0.08, 0.18, K.glow, cx + Math.cos(a) * 3.95, 2.1, cz + Math.sin(a) * 3.95, nc); }
+    K.strip(1.65, cx, 1.62, cz + 4.68);
+    L.hoop(0.89, 0.03, K.glow, 3.65, 2.8, -3.65, { cast: false });
+    // the airlock: warm windows either side of the door; status lights on the pump skid
+    for (const s of [-1, 1]) K.windows(0.3, 0.4, cx + s * 0.58, 0.75, cz + 4.62, 0, 1);
+    for (const [k, m] of [[-0.25, K.green], [0, K.amber], [0.25, K.glow]]) box(0.07, 0.07, 0.03, m, -3.9 + k, 0.7, 2.81, nc);
+    // transformer yard at the front right: a junction box at the base ring, a cable up to the nearest misting post
+    const qx = 3.3, qz = 3.45;
+    box(1.25, 0.03, 1.05, K.dark, qx, 0, qz, { dirt: 0, cast: false });
+    for (const [w, d, x, z] of [[1.25, 0.08, qx, qz - 0.52], [1.25, 0.08, qx, qz + 0.52], [0.08, 1.05, qx - 0.62, qz], [0.08, 1.05, qx + 0.62, qz]]) box(w, 0.04, d, M.hazard, x, 0, z, { dirt: 0, cast: false });
+    K.transformer(qx, qz, 0);
+    K.junction(2.05, 2.75, 0);
+    K.conduit([[qx - 0.45, 0.14, qz], [2.05, 0.14, qz], [2.05, 0.14, 2.97]], 0.05);
+    K.conduit([[2.05, 0.4, 2.56], [2.05, 0.4, 2.2]], 0.05);
+    { const a = Math.PI / 6; K.cable([qx + 0.28, 1.17, qz], [cx + Math.cos(a) * 3.95, 2.0, cz + Math.sin(a) * 3.95], 0.25); }
+    // floodlights at the front left and on the right
+    K.flood(-3.0, 3.7, 2.4, 0.5);
+    K.flood(4.4, 1.45, 2.5, -0.6);
+    // beacons: amber on the dome's crown, team on the tank and the airlock roof
+    cyl(0.025, 0.5, K.steelD, cx, BY + RD + 0.25, cz, { seg: 8, dirt: 0 }); K.beacon(cx, BY + RD + 0.8, cz, '#ffb347');
+    K.beacon(3.65, 2.92, -3.65);
+    K.beacon(cx + 0.6, 1.72, cz + 3.5);
+  }
+  // ---------------------------------------------------------------- end of power layer
 }

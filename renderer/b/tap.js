@@ -1,4 +1,9 @@
 // Crystal tap: violet crystal cluster gripped by a clamp pylon, energy conduits to a storage tank and capacitor bank.
+// Powered realism: a lights-and-electricity layer from b/powerkit.js (team-colour strips round the clamp frame, up the
+// front columns and on the tank, bank and kiosk, a transformer yard with a junction box and a high-voltage line up to
+// the frame, floodlights, status lights, amber obstruction beacons). Its lights are team-coloured: render one image per
+// team. Base render only.
+import { power } from './powerkit.js';
 export default function (L) {
   const { box, cyl, hcyl, beam, pipe, hoop, lamp, pointLight, ao, mesh, crystal, rnd, M, THREE, ACCENT, ladder } = L;
   const gun = M.paint('#50565c'), warm = M.paint('#8c8579'), off = M.paint('#c2bcaf');
@@ -49,4 +54,41 @@ export default function (L) {
   // control kiosk (back right)
   box(1.3, 1.6, 1.1, off, 2.9, 0, -3.1); box(1.4, 0.12, 1.2, gun, 2.9, 1.6, -3.1, { dirt: 0 }); ao(2.9, -3.1, 1.3, 1.1, 0.5);
   box(0.7, 0.35, 0.05, M.emit(ACCENT, 1.2), 2.9, 0.95, -2.53, { cast: false });
+  // ================================================================ power layer (lights and electricity), base render only
+  const PART = new URLSearchParams(location.search).get('part');
+  if (!PART || PART === 'base') {
+    const K = power(L), nc = { dirt: 0, cast: false };
+    // team light strips: round the top of the clamp frame, up the front columns' outer edges, the tank's end rims,
+    // the capacitor bank's eaves and the kiosk's eave
+    K.strip(2 * P + 0.4, cx, H + 0.8, cz + P + 0.19); K.strip(2 * P + 0.4, cx, H + 0.8, cz - P - 0.19);
+    for (const s of [-1, 1]) K.strip(2 * P + 0.4, cx + s * (P + 0.19), H + 0.8, cz, Math.PI / 2);
+    for (const s of [-1, 1]) box(0.05, H - 0.9, 0.05, K.glow, cx + s * (P + 0.16), 0.75, cz + P + 0.19, nc);
+    for (const s of [-1, 1]) L.hoop(0.87, 0.03, K.glow, tx + s * 1.28, 1.25, tz, { cast: false }).rotation.set(0, 0, Math.PI / 2);
+    K.strip(1.8, bx, 1.6, bz + 1.32); K.strip(2.6, bx + 0.92, 1.6, bz, Math.PI / 2);
+    K.strip(1.4, 2.9, 1.69, -2.48);
+    // the kiosk: a lit door with a lamp over it
+    box(0.36, 0.86, 0.04, K.steelD, 2.35, 0, -2.53, { dirt: 0.3 }); box(0.28, 0.4, 0.03, K.warm, 2.35, 0.4, -2.51, nc);
+    box(0.14, 0.05, 0.05, K.white, 2.35, 1.0, -2.51, nc);
+    // transformer yard on the right between the kiosk and the tank: junction box, conduit to the pylon's foot, and
+    // a high-voltage line from the transformer up to a bushing on the clamp frame
+    const qx = 3.45, qz = -0.95;
+    box(1.25, 0.03, 1.05, K.dark, qx, 0, qz, { dirt: 0, cast: false });
+    for (const [w, d, x, z] of [[1.25, 0.08, qx, qz - 0.52], [1.25, 0.08, qx, qz + 0.52], [0.08, 1.05, qx - 0.62, qz], [0.08, 1.05, qx + 0.62, qz]]) box(w, 0.04, d, M.hazard, x, 0, z, { dirt: 0, cast: false });
+    K.transformer(qx, qz, 0);
+    K.junction(2.45, -1.95, 0);
+    K.conduit([[qx - 0.45, 0.14, qz - 0.2], [2.45, 0.14, qz - 0.2], [2.45, 0.14, -1.73]], 0.05);
+    K.conduit([[2.17, 0.14, -1.95], [cx + P + 0.2, 0.14, -1.95], [cx + P + 0.2, 0.14, cz - P + 0.2]], 0.05);
+    box(0.14, 0.26, 0.5, K.steelD, cx + P + 0.25, H + 0.2, cz, { dirt: 0 });
+    for (const dz of [-0.16, 0.16]) cyl(0.035, 0.18, M.plain('#c9c2b0', 0.4, 0.1), cx + P + 0.36, H + 0.46, cz + dz, { seg: 8, dirt: 0 });
+    K.cable([qx - 0.28, 1.17, qz], [cx + P + 0.36, H + 0.62, cz - 0.16], 0.4);
+    K.cable([qx, 1.17, qz], [cx + P + 0.36, H + 0.62, cz + 0.16], 0.45);
+    // floodlights at the front left and back left, lit status panel on the capacitor bank
+    K.flood(-1.95, 3.75, 2.4, 0.45);
+    K.flood(-4.35, -1.4, 2.6, 0.5);
+    for (const dz of [-0.7, 0.7]) for (const [k, m] of [[-0.3, K.green], [0, K.amber], [0.3, K.glow]]) box(0.07, 0.07, 0.03, m, bx + k, 1.3, bz + dz + 0.52, nc);
+    // amber obstruction beacons on the frame's corners, team beacons on the kiosk and the capacitor bank
+    for (const [sx, sz] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) K.beacon(cx + sx * P, H + 0.9, cz + sz * P, '#ffb347');
+    K.beacon(3.3, 1.8, -3.4); K.beacon(bx - 0.6, 1.72, bz - 1.0);
+  }
+  // ---------------------------------------------------------------- end of power layer
 }

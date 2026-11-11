@@ -1,4 +1,9 @@
 // Chip fab: sealed clean-room block, glowing lime circuit pattern on the roof, roof fans, cooling-fin bank, airlock.
+// Powered realism: a lights-and-electricity layer from b/powerkit.js (team-colour strips round the parapet, airlock and
+// cooling bank, warm lit window bands, a transformer yard with arcing insulators, a junction box and conduit into the
+// wall, cables to the cooling bank, floodlights, beacons). Its lights are team-coloured: render one image per team. Base
+// render only.
+import { power } from './powerkit.js';
 export default function (L) {
   const { box, cyl, hcyl, beam, pipe, lamp, pointLight, ao, mesh, canvasTex, group, sphere, M, THREE, ACCENT, ladder } = L;
   const gun = M.paint('#50565c'), warm = M.paint('#8c8579'), off = M.paint('#c9c5ba', { panelW: 128, panelH: 256 });
@@ -63,4 +68,37 @@ export default function (L) {
   // utility skid on the left with pipes into the wall
   box(1.4, 1.1, 1.6, gun, -4.35, 0, 1.9); hcyl(0.42, 1.4, M.paint('#9fa4a6'), -4.35, 1.5, 1.9, { axis: 'z' });
   pipe([[-4.35, 0.8, 1.1], [-4.35, 0.8, 0.4], [bx - W / 2, 0.8, 0.4]], 0.12, M.steel);
+  // ================================================================ power layer (lights and electricity), base render only
+  const PART = new URLSearchParams(location.search).get('part');
+  if (!PART || PART === 'base') {
+    const K = power(L), nc = { dirt: 0, cast: false };
+    // team light strips: round the parapet's top edge, the airlock's eave and the cooling bank's top edges
+    for (const s of [-1, 1]) { K.strip(W + 0.4, bx, H + 0.37, bz + s * (D / 2 + 0.12)); K.strip(D + 0.2, bx + s * (W / 2 + 0.12), H + 0.37, bz, Math.PI / 2); }
+    K.strip(2.1, ax, 2.47, az + 0.72);
+    K.strip(1.2, kx, 2.55, bz + 2.42); K.strip(4.8, kx + 0.62, 2.55, bz, Math.PI / 2);
+    // warm lit window bands on the clean-room wall either side of the airlock
+    K.windows(2.6, 0.36, bx + 1.85, 1.45, bz + D / 2 + 0.03, 0, 5);
+    K.windows(1.45, 0.36, bx - 2.5, 1.45, bz + D / 2 + 0.03, 0, 2);
+    // transformer yard at the front right, a junction box by the airlock, cables up to bushings on the cooling bank
+    const qx = 2.95, qz = 3.45;
+    box(1.25, 0.03, 1.05, K.dark, qx, 0, qz, { dirt: 0, cast: false });
+    for (const [w, d, x, z] of [[1.25, 0.08, qx, qz - 0.52], [1.25, 0.08, qx, qz + 0.52], [0.08, 1.05, qx - 0.62, qz], [0.08, 1.05, qx + 0.62, qz]]) box(w, 0.04, d, M.hazard, x, 0, z, { dirt: 0, cast: false });
+    K.transformer(qx, qz, 0);
+    K.junction(0.4, 2.25, 0);
+    K.conduit([[qx - 0.45, 0.14, qz], [0.4, 0.14, qz], [0.4, 0.14, 2.47]], 0.05);
+    K.conduit([[0.4, 0.55, 2.05], [0.4, 0.55, 1.87], [0.4, 1.25, 1.87]], 0.05);
+    box(1.0, 0.08, 0.16, K.steelD, kx, 2.62, bz + 2.25, { dirt: 0 });
+    for (const [k, t] of [[-0.3, -0.28], [0.3, 0.28]]) {
+      cyl(0.035, 0.16, M.plain('#c9c2b0', 0.4, 0.1), kx + k, 2.7, bz + 2.25, { seg: 8, dirt: 0 });
+      K.cable([qx + t, 1.17, qz], [kx + k, 2.86, bz + 2.25], 0.2);
+    }
+    // floodlights at the front corners
+    K.flood(4.4, 2.35, 2.5, -0.6);
+    K.flood(-4.4, 3.65, 2.4, 0.55);
+    // beacons: amber on the gas tanks, team on the roof fans' hubs and the duct unit
+    for (const tz of [-3.3, -2.0]) K.beacon(-4.35, 4.48, tz, '#ffb347');
+    for (const fx of [bx - 2.3, bx + 2.1]) K.beacon(fx, H + 0.75, bz - 2.0);
+    K.beacon(bx + 2.95, H + 0.8, bz + 1.95);
+  }
+  // ---------------------------------------------------------------- end of power layer
 }

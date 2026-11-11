@@ -2,8 +2,13 @@
 // directions). An arched hangar with its big doors part open on a lit bay, a slim control tower with a glazed
 // cab and the team beacon, a fuel bowser tank with its hose reel, a windsock, and a yellow taxi line across the
 // apron. Floodlights and the cab glow at night.
+// POWERED (powered realism): a lights-and-electricity layer from b/powerkit.js: team light strips over the hangar ribs
+// and round the door opening, warm lit skylights, a glowing threshold, floodlights on the hangar's front corners,
+// lit tower cab windows with a team strip round the roof, team edge lights round the apron and green centre lights
+// on the taxi line, a transformer and junction box powering the hangar and cabled to the tower, amber beacons.
+import { power } from './powerkit.js';
 export default function (L) {
-  const { box, cyl, hcyl, mesh, sphere, lamp, pointLight, ao, ladder, M, THREE, TEAM } = L;
+  const { box, cyl, hcyl, mesh, sphere, lamp, pointLight, ao, ladder, group, M, THREE, TEAM } = L;
   L.seed(1201);
   const wall = M.ribbed('#9fa39d', { period: 10 }), roofM = M.ribbed('#7a8086', { period: 14 }), steel = M.paint('#5a6066', { panelW: 128 });
   const off = M.paint('#cfccc2', { rivets: false }), conc = M.rough('#8f887c'), apron = M.rough('#7c776e');
@@ -25,7 +30,7 @@ export default function (L) {
   arch(HR, HL, Math.PI / 2, Math.PI, roofM, HZ, { dirt: 0.25, dirtH: 2.5 });
   for (let k = 0; k <= 6; k++) { const r = new THREE.TorusGeometry(HR + 0.03, 0.05, 6, 40, Math.PI); mesh(r, steel, HX, 0.18, HZ - HL / 2 + (k * HL) / 6, { dirt: 0 }); }
   arch(HR + 0.02, 0.6, Math.PI - 0.17, 0.34, team, HZ - 1.2, { dirt: 0 });                                       // team band over the ridge
-  for (const z of [HZ - 0.2, HZ + 1.1]) arch(HR + 0.03, 0.7, Math.PI - 0.12, 0.24, M.plain('#2f3d47', 0.15, 0.3), z, { dirt: 0 }); // skylights
+  for (const z of [HZ - 0.2, HZ + 1.1]) arch(HR + 0.03, 0.7, Math.PI - 0.12, 0.24, M.emit('#ffd9a0', 1.3), z, { dirt: 0, cast: false }); // lit skylights
   { const sh = new THREE.Shape(); sh.absarc(0, 0, HR, 0, Math.PI, false); sh.closePath();
     mesh(new THREE.ShapeGeometry(sh, 32), wall, HX, 0.18, HZ - HL / 2, { dirt: 0.3 }).material.side = THREE.DoubleSide; }
   { const sh = new THREE.Shape(); sh.absarc(0, 0, HR, 0, Math.PI, false); sh.closePath();
@@ -76,4 +81,50 @@ export default function (L) {
   for (const dx of [-0.2, 0.2]) lamp(-3.9 + dx, 3.7, -3.48, '#fff1c8', { size: 0.14, k: 2.2, intensity: 2.2, dist: 4 });
   pointLight(TEAM, 2.2, HX, 1.2, HF + 0.8, 3.5);
   void sphere;
+
+  // ================================================================ power layer (lights and electricity)
+  // (made after everything else, so the original parts keep their random texture offsets)
+  const P = power(L), nc = { dirt: 0, cast: false }, AY = 0.18;                  // AY: the apron's top
+  const NB = L.TOD === 'night' ? 2.2 : L.TOD === 'evening' ? 1.6 : 1;      // real lamps carry further after dark
+  const lift = (fn) => { const r = L.getRoot(), n = r.children.length; fn(); for (let i = n; i < r.children.length; i++) r.children[i].position.y += AY; };
+  // team light strips over two hangar ribs and round the front arch; jambs and a threshold at the door opening
+  const glowArch = (r, tube, z) => { const g = new THREE.TorusGeometry(r, tube, 6, 48, Math.PI); mesh(g, P.glow, HX, AY, z, nc); };
+  for (const k of [2, 4]) glowArch(HR + 0.09, 0.035, HZ - HL / 2 + (k * HL) / 6);
+  glowArch(HR + 0.06, 0.04, HF + 0.04);
+  for (const s of [-1, 1]) box(0.06, 1.85, 0.06, P.glow, HX + s * 1.5, AY, HF + 0.05, nc);
+  box(3.0, 0.012, 0.08, P.glow, HX, AY, HF + 0.25, nc);
+  pointLight('#ffe2b0', 3 * NB, HX, 1.0, HF - 0.3, 3.5);                                         // the bay lit inside
+  // floodlights on brackets high on the gable either side of the doors, aimed out over the apron
+  for (const s of [-1, 1]) {
+    const x = HX + s * 1.62, y = AY + 1.72, g = group(x, y, HF + 0.12, -s * 0.3), t = new THREE.Group(); t.rotation.x = 0.35; g.add(t);
+    box(0.08, 0.08, 0.22, P.steelD, x, y - 0.04, HF + 0.08, { dirt: 0 });
+    box(0.36, 0.22, 0.16, P.steel, 0, -0.11, 0.12, { parent: t, dirt: 0 });
+    box(0.3, 0.16, 0.03, P.white, 0, -0.08, 0.21, { parent: t, ...nc });
+    pointLight('#fff1d6', 3.5 * NB, x - s * 0.5, 0.9, HF + 1.6, 5);
+  }
+  // control tower: lit cab windows on the two faces we see, a team strip round the cab roof
+  P.windows(1.25, 0.36, tx, 3.8, tz + 0.71, 0, 4);
+  P.windows(1.25, 0.36, tx - 0.71, 3.8, tz, -Math.PI / 2, 4);
+  P.strip(1.6, tx, 4.34, tz + 0.79, 0, 0.055); P.strip(1.6, tx - 0.79, 4.34, tz, Math.PI / 2, 0.055);
+  // apron: team edge lights round the rim, green centre lights along the taxi line
+  for (let k = 0; k <= 8; k++) { const x = -4.0 + k; box(0.1, 0.03, 0.1, P.glow, x, AY, 4.18, nc); box(0.1, 0.03, 0.1, P.glow, x, AY, -3.78, nc); }
+  for (let k = 0; k <= 7; k++) { const z = -3.3 + k * 1.05; for (const x of [-4.18, 4.18]) box(0.1, 0.03, 0.1, P.glow, x, AY, z, nc); }
+  for (let k = 0; k < 4; k++) box(0.07, 0.025, 0.12, P.green, -0.9, AY, 1.95 + k * 0.6, nc);
+  for (let k = 0; k < 6; k++) box(0.12, 0.025, 0.07, P.green, -0.45 + k * 0.7, AY, 4.15, nc);
+  // power: a transformer and a junction box on the apron beside the hangar, a conduit into its side, a cable
+  // up to the tower
+  const yx = 3.25, yz = -0.8;
+  lift(() => {
+    box(1.3, 0.03, 1.05, P.dark, yx, 0, yz, { dirt: 0, cast: false });
+    for (const [w, d, x, z] of [[1.3, 0.08, yx, yz - 0.52], [1.3, 0.08, yx, yz + 0.52], [0.08, 1.05, yx - 0.65, yz], [0.08, 1.05, yx + 0.65, yz]]) box(w, 0.04, d, M.hazard, x, 0, z, { dirt: 0, cast: false });
+    P.transformer(yx, yz, 0);
+    P.junction(2.2, -0.15, 0);
+    P.conduit([[yx - 0.45, 0.32, yz], [2.2, 0.32, yz], [2.2, 0.32, -0.37]], 0.05);
+    P.conduit([[1.93, 0.4, -0.15], [1.45, 0.4, -0.15]], 0.05);
+  });
+  ao(yx, yz, 1.0, 0.8, 0.4);
+  box(0.14, 0.18, 0.12, P.steelD, tx - 0.25, 2.7, tz + 0.48, { dirt: 0 });                        // tower bushing
+  P.cable([yx + 0.28, AY + 1.17, yz], [tx - 0.25, 2.8, tz + 0.52], 0.25);
+  // amber beacons: the floodlight mast, the windsock pole, the fuel bowser
+  P.beacon(-3.9, 3.98, -3.6, '#ffb347'); P.beacon(-3.4, 2.66, 2.9, '#ffb347'); P.beacon(fx + 1.1, 1.78, fz, '#ffb347');
 }

@@ -79,7 +79,7 @@ export default function (L) {
   pointLight('#fff1d6', 6, lx + 0.6, 2.4, lz + 2.0, 6);
   P.beacon(lx - 0.2, 4.18, lz);
   // team road studs along both edge lines of the fresh road
-  for (let x = -2.1; x < 4.1; x += 0.75) for (const z of [0.95, 3.65]) box(0.1, 0.03, 0.06, P.glowHi, x, 0.1, z, nc);
+  for (let x = -2.1; x < 4.1; x += 0.75) for (const z of [0.95, 3.65]) box(0.1, 0.03, 0.06, P.glow, x, 0.1, z, nc);
   // transformer and junction box between the shed and the gravel; conduits to the shed and across the yard to the
   // light tower, a cable from the transformer to the shed's roof
   const qx = 1.72, qz = -2.75;

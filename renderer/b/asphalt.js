@@ -1,5 +1,10 @@
 // Asphalt Plant: cold-feed bins of aggregate, inclined conveyor, burner drum mixer, drag-slat conveyor to a tall
 // hot-mix silo on legs, baghouse with exhaust stack.
+// Powered realism: a lights-and-electricity layer from b/powerkit.js (team-colour strips on the baghouse, the hot-mix
+// silo, the slat conveyor and the feed bins, lit baghouse windows, a transformer yard with a junction box and conduit to
+// the drum, a floodlight pole fed by cable, status lights, beacons). Its lights are team-coloured: render one image per
+// team. Base render only.
+import { power } from './powerkit.js';
 export default function (L) {
   const { box, cyl, hcyl, beam, pipe, hoop, lamp, pointLight, ao, mesh, sphere, ladder, rnd, M, THREE, ACCENT } = L;
   const gun = M.paint('#454b51'), yel = M.paint('#c49a26'), dark = M.paint('#2d3136'), rib = M.ribbed('#7f8378');
@@ -53,4 +58,42 @@ export default function (L) {
   for (const x of [1.9, 3.3]) box(0.2, 0.5, 0.9, M.steel, x, 0, 2.6);
   hcyl(0.55, 2.0, M.paint('#cfcbc0'), 2.6, 1.0, 2.6, { axis: 'x' }); ao(2.6, 2.6, 2.0, 1.1, 0.45);
   pipe([[2.6, 1.5, 2.6], [2.6, 1.9, 2.6], [2.6, 1.9, dz + 0.9]], 0.07, M.steel);
+  // ================================================================ power layer (lights and electricity), base render only
+  const PART = new URLSearchParams(location.search).get('part');
+  if (!PART || PART === 'base') {
+    const K = power(L), nc = { dirt: 0, cast: false };
+    // team light strips: the baghouse eave, a ring under the silo's cap and up its front legs, along the slat
+    // conveyor's front top edge, and along the front of the cold-feed bins
+    K.strip(2.7, bx, 2.63, bz + 0.97);
+    L.hoop(1.03, 0.03, K.glow, sx, 5.62, sz, { cast: false });
+    for (const s of [-1, 1]) box(0.05, 2.0, 0.05, K.glow, sx + s * 0.75, 0.2, sz + 0.84, nc);
+    { const A = [-1.9, 1.3, dz], B = [sx - 0.3, 5.6, sz], h = [B[0] - A[0], B[2] - A[2]], n = Math.hypot(h[0], h[1]), px = -h[1] / n * 0.32, pz = h[0] / n * 0.32;
+      const t0 = 0.08, t1 = 0.95, P0 = A.map((v, i) => v + (B[i] - v) * t0), P1 = A.map((v, i) => v + (B[i] - v) * t1);
+      beam([P0[0] + px, P0[1] + 0.27, P0[2] + pz], [P1[0] + px, P1[1] + 0.27, P1[2] + pz], 0.05, 0.05, K.glow, nc); }
+    K.strip(4.4, -2.15, 1.84, 3.45);
+    // warm lit windows on the baghouse front, above the hoppers
+    K.windows(1.7, 0.34, bx - 0.35, 1.5, bz + 0.92, 0, 3);
+    // transformer yard at the front, a junction box and a conduit to the drum frame, a cable to the floodlight pole
+    const qx = 0.75, qz = 3.7;
+    box(1.25, 0.03, 1.05, K.dark, qx, 0, qz, { dirt: 0, cast: false });
+    for (const [w, d, x, z] of [[1.25, 0.08, qx, qz - 0.52], [1.25, 0.08, qx, qz + 0.52], [0.08, 1.05, qx - 0.62, qz], [0.08, 1.05, qx + 0.62, qz]]) box(w, 0.04, d, M.hazard, x, 0, z, { dirt: 0, cast: false });
+    K.transformer(qx, qz, 0);
+    K.junction(1.2, 1.35, 0);
+    K.conduit([[qx, 0.14, qz - 0.35], [qx, 0.14, 1.35], [0.92, 0.14, 1.35]], 0.05);
+    K.conduit([[1.2, 0.5, 1.15], [1.2, 0.5, 0.32], [1.5, 0.5, 0.32]], 0.05);
+    const px = 4.4, pz = 1.25;
+    K.flood(px, pz, 2.6, -0.7);
+    box(0.7, 0.06, 0.08, K.steelD, px, 2.2, pz, { dirt: 0 });
+    for (const s of [-1, 1]) cyl(0.03, 0.12, M.plain('#c9c2b0', 0.4, 0.1), px + s * 0.3, 2.26, pz, { seg: 8, dirt: 0 });
+    K.cable([qx + 0.28, 1.17, qz], [px - 0.3, 2.38, pz], 0.12);
+    K.flood(-4.5, 0.6, 2.5, 0.6);
+    // status lights on the burner housing and the hot-oil heater
+    for (const [k, m] of [[-0.18, K.green], [0, K.amber], [0.18, K.glow]]) box(0.07, 0.07, 0.03, m, 2.75 + k, 1.95, dz + 0.61, nc);
+    box(0.3, 0.2, 0.03, K.glowSoft, 2.6, 0.55, 3.16, nc);
+    // beacons: amber on the exhaust stack, team on the baghouse roof and the burner housing
+    K.beacon(bx + 1.6, 4.68, bz - 0.2, '#ffb347');
+    K.beacon(bx - 1.0, 2.86, bz - 0.5);
+    K.beacon(2.95, 2.4, dz - 0.3);
+  }
+  // ---------------------------------------------------------------- end of power layer
 }

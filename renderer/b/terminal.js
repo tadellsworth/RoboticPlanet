@@ -1,8 +1,14 @@
 // Trade Terminal: an off-world freight exchange. A landing pad with a stubby cargo lifter parked on it (engine
 // pods, cockpit glow), a loading bay under a twin-beam gantry where the Road Trains pull in, a stack of
 // containers waiting to go up, a control tower with the team's band and a beacon, and an uplink dish.
+// POWERED (powered realism): a lights-and-electricity layer from b/powerkit.js: team light strips along the gantry
+// beams, legs and spreader, work lights under the gantry over the lane, team studs along the lane's edge lines (the
+// lane itself stays clear), a team ring round the landing pad, lit cabin windows and nav lights on the lifter, a team
+// strip under the tower band, and on the front apron a transformer with arcing insulators and a junction box feeding
+// the gantry by a conduit up its leg; beacons.
+import { power } from './powerkit.js';
 export default function (L) {
-  const { box, cyl, hcyl, sphere, lamp, ao, M, TEAM, ACCENT, THREE, mesh } = L;
+  const { box, cyl, hcyl, sphere, lamp, ao, hoop, pointLight, M, TEAM, ACCENT, THREE, mesh } = L;
   L.seed(733);
   const conc = M.paint('#6a6d70', { rivets: false, panelW: 256, panelH: 256, rough: 0.92, metal: 0.03 });
   const steel = M.paint('#4c535a'), yel = M.paint('#b8952e'), hull = M.paint('#c9ccd0', { panelW: 128, panelH: 96 });
@@ -78,4 +84,36 @@ export default function (L) {
   cyl(0.12, 1.3, steel, DX, 0, DZ, { seg: 10, dirt: 0 });
   { const g = new THREE.SphereGeometry(0.85, 24, 10, 0, Math.PI * 2, 0, 1.0); const m = mesh(g, M.plain('#dfe2e4', 0.45, 0.2), DX, 1.75, DZ, { dirt: 0 }); m.rotation.z = 2.5; m.rotation.y = -0.6; }
   sphere(0.08, cyan, DX + 0.3, 1.95, DZ + 0.2, { cast: false });
+
+  // ================================================================ power layer (lights and electricity)
+  // (made after everything else, so the original parts keep their random texture offsets)
+  const P = power(L), nc = { dirt: 0, cast: false };
+  const NB = L.TOD === 'night' ? 2.2 : L.TOD === 'evening' ? 1.6 : 1;      // real lamps carry further after dark
+  // gantry: team strips along the cross beams, up the front legs and along the spreader; work lights over the lane
+  P.strip(7.5, 0, 3.98, BZ + 0.55, 0, 0.06); P.strip(7.5, 0, 3.58, BZ + 0.55, 0, 0.06); P.strip(7.5, 0, 3.98, BZ - 0.25, 0, 0.06);
+  for (const x of [-3.6, 3.6]) box(0.05, 2.8, 0.05, P.glow, x + Math.sign(x) * 0.12, 0.45, BZ + 1.42, nc);
+  P.strip(2.5, -1.0, 1.97, BZ + 0.49, 0, 0.05);
+  for (const x of [-2.6, 1.4]) {
+    box(0.5, 0.08, 0.26, P.steel, x, 3.52, BZ + 0.4, { dirt: 0 }); box(0.42, 0.03, 0.2, P.white, x, 3.5, BZ + 0.4, nc);
+    pointLight('#fff1d6', 3 * NB, x, 1.4, BZ + 0.2, 4);
+  }
+  P.beacon(-1.0, 4.55, BZ, TEAM);
+  // the lane: team studs along both edge lines (set in the ground; the lane stays clear)
+  for (let k = 0; k < 10; k++) for (const dz of [-0.95, 0.95]) box(0.12, 0.02, 0.08, P.glow, -4.05 + k * 0.9, 0.014, BZ + dz, nc);
+  // the landing pad: a team ring round the rim
+  hoop(3.0, 0.03, P.glow, PX, 0.27, PZ, { cast: false });
+  // the lifter: lit cabin windows behind the cockpit, nav lights, a team strip along the hull's top edge
+  P.windows(1.0, 0.16, LX + 0.55, LY + 0.92, LZ + 0.885, 0, 4);
+  P.strip(3.2, LX - 0.15, LY + 1.2, LZ + 0.9, 0, 0.05);
+  box(0.08, 0.08, 0.08, P.green, LX + 1.35, LY + 1.1, LZ + 0.92, nc); box(0.08, 0.08, 0.08, M.emit('#ff3a22', 2.4), LX + 1.35, LY + 1.1, LZ - 0.92, nc);
+  // the tower: a team strip under the band on the two faces we see
+  P.strip(1.64, TX, 4.29, TZ + 0.82, 0, 0.05); P.strip(1.64, TX + 0.82, 4.29, TZ, Math.PI / 2, 0.05);
+  // front apron: transformer on a hazard-framed plate and a junction box, a conduit up the right front leg
+  const yx = 1.6, yz = 4.05;
+  box(1.3, 0.03, 1.0, P.dark, yx, 0, yz, { dirt: 0, cast: false });
+  for (const [w, d, x, z] of [[1.3, 0.08, yx, yz - 0.5], [1.3, 0.08, yx, yz + 0.5], [0.08, 1.0, yx - 0.65, yz], [0.08, 1.0, yx + 0.65, yz]]) box(w, 0.04, d, M.hazard, x, 0, z, { dirt: 0, cast: false });
+  P.transformer(yx, yz, 0); ao(yx, yz, 1.0, 0.8, 0.4);
+  P.junction(2.85, 4.15, 0);
+  P.conduit([[yx + 0.45, 0.3, yz], [2.58, 0.3, yz]], 0.05);
+  P.conduit([[3.12, 0.35, 4.15], [3.44, 0.35, 4.15], [3.44, 0.35, BZ + 1.43], [3.44, 3.3, BZ + 1.43]], 0.05);
 }

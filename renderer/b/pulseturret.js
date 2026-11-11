@@ -2,6 +2,11 @@
 //   ?part=base            plinth + empty turret ring on the pad (never moves)
 //   ?part=head&rot=k&n=N  the gun head alone, turned to direction k of N (0 = east, then clockwise seen from above:
 //                         1/8 turn = down-right toward the viewer). Camera and light never move.
+// Powered realism (b/powerkit.js), on the base layer only (built last, so the head, charge and muzzle frames are
+// untouched): a team strip round the plinth, a lit window band on the front face, the left feed pipe as a conduit
+// with glowing collars into a junction box, a transformer at the back left conduited into the plinth, a pole
+// floodlight at the back right, beacons.
+import { power } from './powerkit.js';
 export default function (L) {
   const { box, cyl, hcyl, beam, pipe, hoop, lamp, pointLight, ao, mesh, sphere, group, mark, M, THREE, TEAM } = L;
   const chargeSet = new Set();
@@ -25,7 +30,6 @@ export default function (L) {
   cyl(1.3, 0.02, M.dark, 0, RING_Y, 0, { seg: 40, dirt: 0, cast: false, parent: base });
   hoop(1.58, 0.06, glow, 0, RING_Y, 0, { cast: false, parent: base });
   for (const [x, z] of [[-3.0, 2.6], [3.1, 2.6]]) { box(1.0, 0.7, 0.7, olive, x, 0, z, { parent: base }); box(1.02, 0.1, 0.72, M.hazard, x, 0.4, z, { parent: base, dirt: 0 }); }
-  pipe([[-2.2, 0.25, 0.9], [-3.4, 0.25, 0.9], [-3.4, 0.25, 4.0]], 0.1, M.dark, { parent: base });
   pipe([[2.2, 0.25, -0.9], [3.6, 0.25, -0.9], [3.6, 0.25, -4.0]], 0.1, M.dark, { parent: base });
   box(0.12, 0.012, 3.6, M.hazard, -2.9, 0, -2.4, { parent: base, dirt: 0, cast: false });
 
@@ -58,5 +62,34 @@ export default function (L) {
     const depthOnly = new THREE.MeshBasicMaterial({ colorWrite: false });
     L.getRoot().traverse(o => { if (!o.isMesh) return; if (o.userData.decal) { o.visible = false; return; }
       if (chargeSet.has(o)) o.material = lit; else { o.material = depthOnly; o.castShadow = false; o.renderOrder = -10; } });
+  }
+
+  // ================================================================ power layer (base only; lights and electricity)
+  if (part === 'base') {
+    const P = power(L), nc = { dirt: 0, cast: false };
+    const NB = L.TOD === 'night' ? 2.2 : L.TOD === 'evening' ? 1.6 : 1;
+    // team strip round the plinth's top edge
+    { const g = new THREE.TorusGeometry(2.6, 0.035, 6, 8); g.rotateX(Math.PI / 2); mesh(g, P.glow, 0, 0.36, 0, { ry: Math.PI / 8, ...nc }); }
+    // lit window band on the front face (tilted with the sloped armour), under the hazard bar
+    { const g = group(0, 0.62, 2.12, 0), t = new THREE.Group(); t.rotation.x = -0.3; g.add(t);
+      box(0.95, 0.2, 0.04, P.dark, 0, 0, 0, { parent: t, ...nc });
+      for (const x of [-0.24, 0.24]) box(0.4, 0.13, 0.05, P.warm, x, 0.035, 0.01, { parent: t, ...nc }); }
+    // the left feed pipe as a conduit with glowing collars, ending in a junction box with an amber beacon
+    P.conduit([[-2.2, 0.25, 0.9], [-3.6, 0.25, 0.9], [-3.6, 0.25, 3.65]], 0.08);
+    P.junction(-3.6, 3.86, 0); P.beacon(-3.6, 0.82, 3.86, '#ffb347');
+    // transformer on a hazard-framed plate at the back left, conduited into the plinth
+    const ux = -3.7, uz = -2.75;
+    box(1.2, 0.03, 1.0, P.dark, ux, 0, uz, nc);
+    for (const [w, d, x, z] of [[1.2, 0.08, ux, uz - 0.5], [1.2, 0.08, ux, uz + 0.5], [0.08, 1.0, ux - 0.6, uz], [0.08, 1.0, ux + 0.6, uz]]) box(w, 0.04, d, M.hazard, x, 0, z, nc);
+    P.transformer(ux, uz, 0); ao(ux, uz, 1.0, 0.8, 0.35);
+    P.conduit([[ux + 0.45, 0.3, uz + 0.15], [-2.75, 0.3, uz + 0.15], [-2.05, 0.3, -1.9]], 0.05);
+    // pole floodlight at the back right, out of the barrels' sweep
+    { const x = 4.15, z = -3.65, h = 2.1, ry = -0.85;
+      cyl(0.04, h, P.steelD, x, 0, z, { seg: 10, dirt: 0.2 }); ao(x, z, 0.4, 0.4, 0.3);
+      const g = group(x, h, z, ry), t = new THREE.Group(); t.rotation.x = 0.15; g.add(t);
+      box(0.4, 0.25, 0.18, P.steel, 0, -0.125, 0.03, { parent: t, dirt: 0 }); box(0.34, 0.19, 0.03, P.white, 0, -0.095, 0.13, { parent: t, ...nc });
+      pointLight('#fff1d6', 4 * NB, x + Math.sin(ry) * 1.4, h - 1.0, z + Math.cos(ry) * 1.4, 5); }
+    // status lights on the two ammo lockers
+    for (const [x, z] of [[-3.0, 2.6], [3.1, 2.6]]) { box(0.07, 0.06, 0.03, P.green, x - 0.12, 0.58, z + 0.36, nc); box(0.07, 0.06, 0.03, P.glow, x + 0.02, 0.58, z + 0.36, nc); }
   }
 }

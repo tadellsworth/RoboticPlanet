@@ -2,7 +2,13 @@
 // a fuel day tank with a tanker fill point, a transformer with switchgear, glowing power bus and a line pole.
 //   ?part=work&f=k   only the radiator fan blades (turning) and the power-bus lights (pulsing), frame k of 8
 // Marks: ex0, ex1 (exhaust stack tips), fill (tanker fill point).
+// Powered realism (b/powerkit.js), not in the work frames (they stay shared): team strips along the genset skids and
+// the transformer yard's fence, arcing bushings, a second transformer and a junction box on the front apron with
+// conduits with glowing collars to the kiosk, the yard and the line pole, a lit control kiosk, floodlights over the
+// apron, amber obstruction lights on the stacks, beacons. Its own lights are kept well away from the fans and nothing
+// stands in front of the power bus, so the work overlays still match. Team-coloured: render one image per team.
 import { workLayer, litMat } from './worklib.js';
+import { power } from './powerkit.js';
 export default function (L) {
   const { box, cyl, hcyl, beam, pipe, hoop, lamp, pointLight, ao, mesh, sphere, group, mark, canvasTex, M, THREE, ACCENT } = L;
   const q = new URLSearchParams(location.search), WORK = q.get('part') === 'work', F = +(q.get('f') || 0);
@@ -126,6 +132,52 @@ export default function (L) {
   for (let i = 0; i < 5; i++) box(0.1, 0.06 + i * 0.05, 0.03, i < 4 ? glow : M.dark, kx - 0.55 + i * 0.13, 1.47, kz + 0.45, { cast: false, dirt: 0 });
   cyl(0.03, 0.9, M.steel, kx + 0.6, 1.47, kz - 0.35, { seg: 8, dirt: 0 });
   pointLight(ACCENT, 5, 0.3, 1.0, 0.6, 4);
+
+  if (!WORK) powerLayer();
+
+  // ================================================================ power layer (lights and electricity)
+  function powerLayer() {
+    const P = power(L), nc = { dirt: 0, cast: false };
+    const bead = (x, y, z, hex) => lamp(x, y, z, hex, { shape: 'sphere', size: 0.07, light: false, k: 3.5 });   // a lamp that throws no light (near the fans)
+    function flood(x, z, h, ry, lx, lz) {                                                                 // a floodlight whose light lands at (lx, lz)
+      cyl(0.05, h, P.steelD, x, 0, z, { seg: 10, dirt: 0.3 });
+      const g = group(x, h, z, ry), t = new THREE.Group(); t.rotation.x = 0.3; g.add(t);
+      box(0.36, 0.22, 0.18, P.steel, 0, -0.11, 0.04, { parent: t, dirt: 0 }); box(0.3, 0.16, 0.03, P.white, 0, -0.08, 0.14, { parent: t, ...nc });
+      pointLight('#fff1d6', 3, lx, h - 0.6, lz, 4.5);
+    }
+    // team strips along the genset skids' front edges (behind the bus where it passes) and up the service doors
+    for (const gx of [-2.15, 2.05]) { P.strip(GW + 0.3, gx, 0.27, gz + GD / 2 + 0.17, 0, 0.06); box(0.05, 1.5, 0.05, P.glow, gx + 1.63, 0.35, gz + GD / 2 + 0.06, nc); }
+    // amber obstruction lights on the stacks (no light of their own: the fans are close)
+    for (const gx of [-2.15, 2.05]) { const sx = gx + 1.05 + 0.85, mz = gz - 0.55; for (const y of [4.2, 5.7]) bead(sx, y, mz + 0.27, '#ffb347'); }
+    // the transformer's bushings carry glowing caps with arcs between them
+    const tops = [0, 1, 2].map(i => [tx - 0.65 + i * 0.4, 2.17, tz - 0.15]);
+    for (const t of tops) sphere(0.06, P.white, ...t, { cast: false });
+    P.arc(tops[0], tops[1], 4, 2); P.arc(tops[1], tops[2], 4, 5);
+    pointLight('#bfe8ff', 1.5, tx - 0.25, 2.4, tz + 0.2, 2.2);
+    // team strip along the yard fence's top rail (front and right)
+    P.strip(2.5, tx, 0.98, tz + 1.05, 0, 0.05); P.strip(2.1, tx + 1.25, 0.98, tz, Math.PI / 2, 0.05);
+    for (const [k, mat] of [[0, P.glow], [1, P.amber]]) box(0.12, 0.06, 0.03, mat, tx + 0.55 + k * 0.2, 1.45, tz + 0.06, nc);
+    // the control kiosk: lit window band, team strip on the fascia, door lamp
+    P.windows(0.95, 0.34, kx - 0.2, 0.74, kz + 0.63, 0, 3);
+    P.strip(1.7, kx, 1.38, kz + 0.68, 0, 0.06);
+    box(0.18, 0.05, 0.05, P.white, kx + 0.55, 0.85, kz + 0.64, nc); pointLight('#ffd9a0', 1.5, kx + 0.55, 0.7, kz + 1.2, 2.2);
+    // front apron: junction box in front of the kiosk, a second transformer on a hazard-framed plinth, conduits from
+    // the junction box to the kiosk and the transformer, and from the yard's switchgear up to the line pole
+    P.junction(kx - 0.35, 3.85, 0);
+    P.conduit([[kx - 0.35, 0.3, 3.63], [kx - 0.35, 0.3, kz + 0.6]], 0.05);
+    const qx = 3.1, qz = 3.95;
+    box(1.5, 0.06, 0.95, P.dark, qx, 0, qz, { dirt: 0, cast: false });
+    for (const [w, d, x, z] of [[1.5, 0.07, qx, qz - 0.47], [1.5, 0.07, qx, qz + 0.47], [0.07, 0.95, qx - 0.75, qz], [0.07, 0.95, qx + 0.75, qz]]) box(w, 0.07, d, M.hazard, x, 0, z, { dirt: 0, cast: false });
+    P.transformer(qx, qz, 0);
+    P.conduit([[kx - 0.07, 0.25, 3.85], [qx - 0.45, 0.25, 3.85]], 0.05);
+    P.conduit([[tx + 1.1, 0.35, tz - 0.25], [tx + 1.45, 0.35, tz - 0.25], [tx + 1.45, 0.35, pz + 0.25], [px, 0.35, pz + 0.25], [px, 0.9, pz + 0.17]], 0.05);
+    box(0.26, 0.38, 0.16, P.steel, px, 0.8, pz + 0.18, { dirt: 0.3 }); box(0.07, 0.07, 0.03, P.green, px, 1.05, pz + 0.27, nc);
+    P.cable([qx + 0.28, 1.17, qz], [tx + 1.25, 1.0, tz + 1.05], 0.2, 6);
+    // floodlights over the apron: one by the tanker bay, one at the front right
+    flood(-1.55, 3.95, 2.1, -0.45, -2.0, 4.6); flood(4.3, 3.35, 2.1, -0.5, 3.9, 4.2);
+    P.beacon(kx + 0.55, 1.6, kz - 0.4, '#ffb347');
+    P.beacon(fx - 0.3, 2.12, fz);
+  }
 
   if (WORK) {
     const PULSE = [1.0, 1.25, 1.5, 1.25, 1.0, 0.8, 0.65, 0.8];

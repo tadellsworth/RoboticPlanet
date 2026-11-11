@@ -2,6 +2,10 @@
 // hazard-striped edge, sensor dome and periscope, one long firing slit on the front face with two gun barrels.
 // Team colour: two roof status lights and a thin strip above the slit.
 // Marks gun0/gun1 (barrel tips) and gun0f/gun1f (one unit further out) for the muzzle-flash overlay.
+// Powered realism (b/powerkit.js), kept light: a team strip round the footing, warm vision slits on the front
+// chamfers, floodlights on the roof aimed over the guns, a beacon on the antenna, a transformer at the front left
+// conduited into the footing and a junction box at the front right; the gun marks are unchanged.
+import { power } from './powerkit.js';
 import { chamferRect, offsetPoly, frustum, band, faceFrame, sandbag, bagArc, bagLine } from './milkit.js';
 
 export default function (L) {
@@ -95,4 +99,33 @@ export default function (L) {
   bagLine(L, -1.6, cz + 3.25, -0.4, cz + 3.25, 1, { mat: bag });
   // ammunition crate by the rear corner
   box(0.8, 0.45, 0.55, olive, -2.4, 0, cz - 2.85, { ry: 0.1 }); box(0.82, 0.06, 0.57, M.hazard, -2.4, 0.3, cz - 2.85, { ry: 0.1, dirt: 0 });
+
+  // ================================================================ power layer (lights and electricity)
+  const P = power(L), nc = { dirt: 0, cast: false };
+  const NB = L.TOD === 'night' ? 2.2 : L.TOD === 'evening' ? 1.6 : 1;
+  // team strip round the top of the footing
+  { const S = offsetPoly(F1, 0.09);
+    for (let i = 0; i < S.length; i++) { const a = S[i], b = S[(i + 1) % S.length], dx = b[0] - a[0], dz = b[1] - a[1];
+      box(Math.hypot(dx, dz) - 0.05, 0.03, 0.05, P.glow, (a[0] + b[0]) / 2, 0.235, cz + (a[1] + b[1]) / 2, { ry: Math.atan2(-dz, dx), ...nc }); } }
+  // warm vision slits high on the two front chamfers
+  for (const i of [1, 7]) { const f = faceFrame(L, B0, B1, Y0, Y1, i, { z: cz });
+    box(0.78, 0.16, 0.05, P.dark, 0, f.slant * 0.8, 0.03, { parent: f.g, ...nc }); box(0.66, 0.08, 0.04, P.warm, 0, f.slant * 0.8 + 0.04, 0.05, { parent: f.g, ...nc }); }
+  // floodlights on the roof's back corners, aimed forward over the guns
+  for (const s of [-1, 1]) {
+    const x = s * 2.2, z = cz - 1.35, h = 0.4, ry = -s * 0.3;
+    cyl(0.04, h, P.steelD, x, RY, z, { seg: 10, dirt: 0 });
+    const g = group(x, RY + h, z, ry), t = new THREE.Group(); t.rotation.x = 0.45; g.add(t);
+    box(0.4, 0.25, 0.18, P.steel, 0, -0.125, 0.03, { parent: t, dirt: 0 }); box(0.34, 0.19, 0.03, P.white, 0, -0.095, 0.13, { parent: t, ...nc });
+    pointLight('#fff1d6', 3 * NB, x + Math.sin(ry) * 2.2, 1.2, z + Math.cos(ry) * 4.2, 4.5);
+  }
+  P.beacon(1.55, CY + 1.52, rz - 0.95);
+  // transformer on a hazard-framed plate at the front left, conduited into the footing
+  const ux = -3.2, uz = 3.62;
+  box(1.2, 0.03, 1.0, P.dark, ux, 0, uz, nc);
+  for (const [w, d, x, z] of [[1.2, 0.08, ux, uz - 0.5], [1.2, 0.08, ux, uz + 0.5], [0.08, 1.0, ux - 0.6, uz], [0.08, 1.0, ux + 0.6, uz]]) box(w, 0.04, d, M.hazard, x, 0, z, nc);
+  P.transformer(ux, uz, 0); ao(ux, uz, 1.0, 0.8, 0.35);
+  P.conduit([[ux + 0.45, 0.3, uz + 0.1], [-2.05, 0.3, uz + 0.1], [-2.05, 0.3, cz + 3.02]], 0.05);
+  // junction box at the front right, its conduit into the footing
+  P.junction(1.75, 3.75, 0);
+  P.conduit([[1.75, 0.4, 3.53], [1.75, 0.3, 3.3], [1.75, 0.3, cz + 3.02]], 0.05);
 }

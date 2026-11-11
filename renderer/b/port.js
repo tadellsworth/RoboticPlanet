@@ -1,6 +1,11 @@
 // Port: a container quay. A harbour office with a control tower at the back, a concrete apron with stacked
 // containers, and a ship-to-shore crane whose boom reaches out over the quay edge (black rubber fenders,
 // bollards) at the front, where ships tie up. Floodlight masts and the team beacon light it at night.
+// POWERED (powered realism): a lights-and-electricity layer from b/powerkit.js: warm lit office windows and tower
+// cab, team light strips along the office eave, the cab roof, the boom girders and the crane legs, a lit crane cab
+// and machinery house, work lights under the boom, lamps along the quay cope, a transformer yard in the back corner
+// cabled to the office, a junction box feeding the crane by a ground conduit, amber beacons.
+import { power } from './powerkit.js';
 export default function (L) {
   const { box, cyl, hcyl, mesh, beam, sphere, lamp, pointLight, ao, ladder, railing, M, THREE, TEAM, R } = L;
   L.seed(733);
@@ -73,7 +78,7 @@ export default function (L) {
   const trz = 3.9;
   box(1.0, 0.28, 0.75, steel, CX, BY - 0.2, trz, { dirt: 0.3 });
   box(0.55, 0.5, 0.55, off, CX - 0.2, BY - 0.72, trz + 0.1, { dirt: 0.2 });
-  box(0.45, 0.22, 0.05, M.glass('#2a3a44', 0.9), CX - 0.2, BY - 0.6, trz + 0.39, { dirt: 0 });
+  box(0.45, 0.22, 0.05, M.emit('#ffd9a0', 1.3), CX - 0.2, BY - 0.6, trz + 0.39, { dirt: 0, cast: false });   // lit cab window
   for (const dx of [-0.3, 0.3]) beam([CX + dx, BY - 0.2, trz], [CX + dx, 1.95, trz], 0.03, 0.03, M.dark);
   box(2.2, 0.1, 0.95, craneM, CX, 1.85, trz, { dirt: 0 });
   box(2.1, 0.88, 0.9, M.ribbed('#a24a32', { period: 12 }), CX, 0.97, trz, { dirtH: 0.5 });
@@ -87,4 +92,43 @@ export default function (L) {
   }
   box(8.8, 0.05, 0.05, glow, 0, 0.31, 4.12, { cast: false });
   pointLight(TEAM, 2.5, -1.5, 1.6, Z1 + 1.0, 4);
+
+  // ================================================================ power layer (lights and electricity)
+  // (made after everything else: every new part draws on the scene's random sequence, which picks the container colours)
+  const P = power(L), nc = { dirt: 0, cast: false };
+  const NB = L.TOD === 'night' ? 2.2 : L.TOD === 'evening' ? 1.6 : 1;      // real lamps carry further after dark
+  // harbour office: warm lit windows (those clear of the roller door), a team strip along the roof eave
+  for (let k = 0; k < 4; k++) { const x = X0 + 0.7 + k * 1.1, w = k === 3 ? 0.5 : 0.65; box(w, 0.3, 0.02, P.warm, x - (k === 3 ? 0.1 : 0), 0.99, Z1 + 0.06, nc); }
+  P.strip(X1 - X0 + 0.16, cx, 1.86, Z1 + 0.09, 0, 0.055);
+  P.beacon(-0.3, 2.42, cz - 0.3, '#ffb347');
+  // control tower: lit cab windows, team strips round the cab roof
+  P.windows(1.3, 0.38, tx, 4.08, tz + 0.74, 0, 4);
+  P.windows(1.3, 0.38, tx + 0.74, 4.08, tz, Math.PI / 2, 4);
+  P.strip(1.64, tx, 4.62, tz + 0.82, 0, 0.055); P.strip(1.64, tx + 0.82, 4.62, tz, Math.PI / 2, 0.055);
+  // quay: white lamps on the cope between the bollards
+  for (const x of [-4.0, -2.0, 0.6, 3.0]) box(0.14, 0.04, 0.1, P.white, x, 0.3, 3.92, nc);
+  pointLight('#fff1d6', 2 * NB, -1.0, 0.9, 4.3, 3.5);
+  // ship-to-shore crane: team strips under the boom girders and up the front legs, a lit machinery house,
+  // work lights under the boom over the quay edge, an amber beacon on the boom tip
+  for (const dx of [-0.42, 0.42]) beam([CX + dx * 1.2, BY + 0.17, bz0 + 0.1], [CX + dx * 1.2, BY + 0.17, bz1 - 0.1], 0.045, 0.045, P.glow, nc);
+  for (const x of legX) beam([x, PY + 0.15, legZ[0] - 0.1], [x, PY + 0.15, legZ[1] + 0.1], 0.05, 0.05, P.glow, nc);
+  for (const x of legX) box(0.05, 2.5, 0.05, P.glow, x - Math.sign(x - CX) * 0.08, 0.6, legZ[1] + 0.13, nc);
+  P.windows(0.9, 0.22, CX, BY + 0.42, 1.06, 0, 3);
+  P.strip(1.42, CX, BY + 0.88, 1.11, 0, 0.05);
+  for (const z of [4.6, 2.2]) { box(0.5, 0.06, 0.24, P.steel, CX, BY - 0.24, z, { dirt: 0 }); box(0.4, 0.03, 0.18, P.white, CX, BY - 0.27, z, nc); pointLight('#fff1d6', 3 * NB, CX, 1.6, z, 4); }
+  P.beacon(CX, BY + 0.24, bz1 - 0.12, '#ffb347');
+  // amber beacons on the floodlight masts
+  for (const x of [-4.35, 0.75]) P.beacon(x, 3.62, 3.55, '#ffb347');
+  // transformer yard in the back-right corner, cabled to the office roof; a junction box feeding the crane
+  // through a conduit along the apron to a cable pit at the rail
+  const yx = 3.9, yz = -3.55;
+  box(1.35, 0.03, 1.1, P.dark, yx, 0, yz, { dirt: 0, cast: false });
+  for (const [w, d, x, z] of [[1.35, 0.08, yx, yz - 0.55], [1.35, 0.08, yx, yz + 0.55], [0.08, 1.1, yx - 0.67, yz], [0.08, 1.1, yx + 0.67, yz]]) box(w, 0.04, d, M.hazard, x, 0, z, { dirt: 0, cast: false });
+  P.transformer(yx, yz, 0); ao(yx, yz, 1.0, 0.8, 0.4);
+  box(0.16, 0.2, 0.16, P.steelD, X1 + 0.02, 1.94, -3.2, { dirt: 0 });                          // roof bushing
+  P.cable([yx - 0.28, 1.17, yz], [X1 + 0.02, 2.12, -3.2], 0.18);
+  P.junction(4.1, -2.0, 0);
+  P.conduit([[yx + 0.1, 0.35, yz + 0.4], [yx + 0.1, 0.35, -2.75], [4.1, 0.35, -2.75], [4.1, 0.35, -2.22]], 0.05);
+  P.conduit([[4.1, 0.3, -1.78], [4.1, 0.3, 0.55]], 0.055);
+  box(0.4, 0.3, 0.3, P.steel, 4.1, 0.2, 0.65, { dirt: 0.3 }); box(0.1, 0.06, 0.03, P.green, 4.0, 0.4, 0.81, nc); box(0.1, 0.06, 0.03, P.glow, 4.2, 0.4, 0.81, nc);
 }

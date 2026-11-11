@@ -104,7 +104,7 @@ export default function (L) {
     pointLight('#fff1d6', 4 * NB, x + Math.sin(ry) * reach, y + h - 1.2, z + Math.cos(ry) * reach, 5.5);
   }
   // team strip round the block's top edge, white lamps on alternate guard blocks
-  cyl(2.475, 0.06, P.glow, cx, top - 0.08, cz, { rTop: 2.46, seg: 8, ry: Math.PI / 8, open: true, ...nc });
+  { const g = new THREE.TorusGeometry(2.415, 0.035, 6, 8); g.rotateX(Math.PI / 2); mesh(g, P.glow, cx, top + 0.01, cz, { ry: Math.PI / 8, ...nc }); }
   for (let k = 0; k < 8; k += 2) { const a = (k + 0.5) * Math.PI / 4; box(0.14, 0.06, 0.14, P.white, cx + Math.cos(a) * (SR + 0.95), top + 0.22, cz + Math.sin(a) * (SR + 0.95), { ry: -a, ...nc }); }
   // amber warning lamps on the inside face of the raised lid
   lid.updateMatrixWorld(true);
@@ -121,7 +121,7 @@ export default function (L) {
   // launch-control bunker: team strip on the roof edge, bulkhead lamp over the door, status lights
   P.strip(2.1, bx, 1.31, bz + 0.89, 0, 0.05);
   box(0.2, 0.1, 0.1, P.steelD, bx - 0.25, 0.86, bz + 1.13, { dirt: 0 }); box(0.15, 0.05, 0.03, P.warm, bx - 0.25, 0.87, bz + 1.19, nc);
-  pointLight('#ffd9a0', 2 * NB, bx - 0.25, 0.7, bz + 1.6, 2.4);
+  pointLight('#ffd9a0', 1.5, bx - 0.25, 0.7, bz + 1.6, 2.2);
   for (const [k, mat] of [[0, P.green], [0.12, P.amber]]) box(0.07, 0.06, 0.03, mat, bx + 0.32 + k, 0.4, bz + 1.13, nc);
   // stacks: amber beacons on the rims
   for (const z of [-3.35, -1.85]) P.beacon(3.25 + 0.36, 2.88, z + 0.2, '#ffb347');

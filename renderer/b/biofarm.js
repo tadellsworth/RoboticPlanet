@@ -1,4 +1,8 @@
 // Bio Farm: glass polytunnel with racks of plants under pink grow lights, glowing pink bioreactor columns, nutrient tanks.
+// Powered realism: a lights-and-electricity layer from b/powerkit.js (team-colour strips along the polytunnel's ridge,
+// base and end arches, on the bioreactor plinth and column caps, yard lamp posts, a transformer yard with a junction box
+// feeding the tunnel, status lights, beacons). Its lights are team-coloured: render one image per team. Base render only.
+import { power } from './powerkit.js';
 export default function (L) {
   const { box, cyl, hcyl, beam, pipe, hoop, lamp, pointLight, ao, mesh, sphere, rnd, M, THREE, ACCENT } = L;
   const gun = M.paint('#50565c'), off = M.paint('#c9c5ba'), warm = M.paint('#8c8579');
@@ -43,4 +47,36 @@ export default function (L) {
   box(1.2, 1.5, 1.0, off, -0.6, 0, 3.2); box(1.3, 0.12, 1.1, gun, -0.6, 1.5, 3.2, { dirt: 0 }); ao(-0.6, 3.2, 1.2, 1.0, 0.45);
   box(0.7, 0.35, 0.05, M.emit(ACCENT, 1.4), -0.6, 0.85, 3.71, { cast: false });
   lamp(gx + GL / 2 + 0.15, 1.2, gz + GR, ACCENT, { size: 0.14, intensity: 2, dist: 2, k: 2.4 });
+  // ================================================================ power layer (lights and electricity), base render only
+  const PART = new URLSearchParams(location.search).get('part');
+  if (!PART || PART === 'base') {
+    const K = power(L), nc = { dirt: 0, cast: false };
+    // team light strips: along the polytunnel's ridge and base, its two end arches, the bioreactor plinth, a ring on
+    // each column cap, and the kiosk's eave
+    K.strip(GL, gx, 0.35 + GR + 0.06, gz, 0, 0.05);
+    K.strip(GL + 0.3, gx, 0.33, gz + GR + 0.17);
+    for (const s of [-1, 1]) { const r = new THREE.TorusGeometry(GR + 0.05, 0.028, 6, 40, Math.PI); mesh(r, K.glow, gx + s * GL / 2, 0.35, gz, { ry: Math.PI / 2, dirt: 0, cast: false }); }
+    K.strip(3.4, bx + 0.6, 0.28, bz + 0.77);
+    for (let i = 0; i < 4; i++) L.hoop(0.43, 0.03, K.glow, bx - 0.45 + i * 0.85, 4.23, bz, { cast: false });
+    K.strip(1.3, -0.6, 1.6, 3.77);
+    // status lights on the nutrient tanks' saddles, a lit door on the kiosk's side
+    for (const z of [1.7, 3.0]) for (const [k, m] of [[-0.12, K.green], [0.12, K.amber]]) box(0.06, 0.06, 0.03, m, -2.3 + k, 0.38, z + 0.46, nc);
+    // lamp posts in the yard between the tunnel and the kiosk
+    K.flood(-2.1, 0.75, 2.3, 0.35);
+    K.flood(0.35, 0.95, 2.3, -0.35);
+    // transformer yard in the back-right corner, a junction box and a conduit into the tunnel's base, a cable up to
+    // the end arch
+    const qx = 3.8, qz = -3.0;
+    box(1.25, 0.03, 1.05, K.dark, qx, 0, qz, { dirt: 0, cast: false });
+    for (const [w, d, x, z] of [[1.25, 0.08, qx, qz - 0.52], [1.25, 0.08, qx, qz + 0.52], [0.08, 1.05, qx - 0.62, qz], [0.08, 1.05, qx + 0.62, qz]]) box(w, 0.04, d, M.hazard, x, 0, z, { dirt: 0, cast: false });
+    K.transformer(qx, qz, 0);
+    K.junction(3.8, -1.55, 0);
+    K.conduit([[qx, 0.14, qz + 0.35], [qx, 0.14, -1.77]], 0.05);
+    K.conduit([[3.52, 0.3, -1.55], [gx + GL / 2 + 0.15, 0.3, -1.55]], 0.05);
+    K.cable([qx - 0.28, 1.17, qz], [gx + GL / 2 + 0.05, 0.35 + GR - 0.1, gz - 0.5], 0.25);
+    // beacons: team on the bioreactor's top manifold ends, amber on the kiosk
+    for (const x of [bx - 0.45, bx + 2.1]) K.beacon(x, 4.78, bz);
+    K.beacon(-0.25, 1.72, 2.95, '#ffb347');
+  }
+  // ---------------------------------------------------------------- end of power layer
 }
