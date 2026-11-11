@@ -151,14 +151,14 @@ export default function (L) {
   // the lower hull: a long armoured deck, chamfered at the tail and cut to a wedge at the nose
   const DY = 1.3, HY = 2.9;
   slab(mir([[-3.6, -1.45], [-3.32, -1.78], [2.8, -1.78], [3.5, -1.1], [3.64, -0.55]]), 0.95, DY - 0.95, armor, { bevel: 0.06 });
-  slab(mir([[-3.5, -1.4], [-3.27, -1.68], [2.74, -1.68], [3.4, -1.05], [3.52, -0.55]]), DY, 0.06, top, { bevel: 0.02 });
+  slab(mir([[-3.5, -1.4], [-3.27, -1.68], [2.74, -1.68], [3.4, -1.05], [3.52, -0.55]]), DY, 0.06, armor, { bevel: 0.02 });
   grime(-3.6 * PX, -1.78 * PX, 7.2 * PX, 3.56 * PX, DY + 0.065, 0.8, 23);
   // the long hood: armoured sides, a lighter top plate with seams, chamfered at the rear
   const HX0 = -3.3, HX1 = 2.1;
   slab(mir([[HX0, -1.05], [HX0 + 0.28, -1.36], [HX1, -1.36]]), DY + 0.06, HY - DY - 0.06, armor, { bevel: 0.08 });
-  slab(mir([[HX0 + 0.12, -0.95], [HX0 + 0.36, -1.22], [HX1 - 0.05, -1.22]]), HY, 0.06, top, { bevel: 0.02 });
+  slab(mir([[HX0 + 0.12, -0.95], [HX0 + 0.36, -1.22], [HX1 - 0.05, -1.22]]), HY, 0.06, roof, { bevel: 0.02 });
   for (const x of [-1.9, -0.6, 0.6]) line(x, -1.22, x, 1.22, 0.04, HY + 0.06, 0.01, seam);
-  slab([[-0.5, -1.0], [2.0, -1.0], [2.0, 1.0], [-0.5, 1.0]], HY + 0.06, 0.04, roof, { bevel: 0.015 });   // raised roof plate over the pantograph
+  slab([[-0.5, -1.0], [2.0, -1.0], [2.0, 1.0], [-0.5, 1.0]], HY + 0.06, 0.04, top, { bevel: 0.015 });    // a darker plate under the pantograph
   grime(HX0 * PX, -1.3 * PX, (HX1 - HX0) * PX, 2.6 * PX, HY + 0.065, 0.7, 31);
   // rear deck vents and the tail: team-colour tail lights, the brake lenses (x -3.72, z +-1.3) on the rear headstock
   for (const s of [-1, 1]) {
@@ -166,6 +166,8 @@ export default function (L) {
     brakeLens.push(box(0.16, 0.04, 0.26, M.plain('#5a1414', 0.35), -3.72, 1.34, s * 1.3, { dirt: 0, cast: false }));
     box(0.12, 0.08, 0.28, glow, -3.62, DY - 0.02, s * 1.6, { dirt: 0, cast: false });
   }
+  slab(mir([[-3.12, -0.62], [-2.98, -0.62]]), HY + 0.06, 0.03, dark, { bevel: 0.01 });                            // tail vents
+  for (const z of [-0.45, -0.22, 0, 0.22, 0.45]) line(-3.1, z, -3.0, z, 0.1, HY + 0.09, 0.01, black);
   // two radiator fans in dark wells at the rear of the hood (they turn with f)
   const NB = 7;
   for (const fx of [-2.4, -1.25]) {
