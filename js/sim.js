@@ -2894,7 +2894,7 @@ function updateTurret(b, def, dt) {
   addFx('pulsehit', target.x, target.y, { color, life: 0.4, seed: S.tick + b.id * 3 });
   shotFx(m.x - Math.cos(b.aim) * 0.32, m.y - Math.sin(b.aim) * 0.32, target.x, target.y, { color, pulse: true });
   sfx('pulse');
-  const gun = def.gun || { damage: 4, reload: 1.1 };
+  const gun = def.gun || BDEFS.turret.gun;
   damageBot(target, gun.damage);
   b.cd = gun.reload * auraRate(b);
   b.chg = 0;

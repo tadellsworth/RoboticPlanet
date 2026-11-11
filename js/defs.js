@@ -622,6 +622,7 @@ const BDEFS = {
   turret: {
     name: 'Pulse Turret', desc: 'Shoots enemy bots in range. Uses Crystal as ammo (4 shots each).',
     cost: { cement: 3, alloy: 3 }, ammo: 'crystal', range: 5, armor: 12, buildTime: 10, war: true,
+    gun: { damage: 4, reload: 1.3 }, // (was 1.1 s: toned down a touch)
   },
   // Defences that work alongside the Pulse Turret (see BUNKER, and `disrupt` and `mortar` below).
   bunker: {
@@ -648,7 +649,7 @@ const BDEFS = {
   keep: {
     name: 'Keep', desc: 'A massive fortified concrete base with a heavy twin pulse cannon on its roof. Up to 6 warbots fire from its gun slots at enemy robots within 4 tiles, with their own Ammo, and recharge inside; nothing can hit them until it falls, and it has to be captured, not knocked down. Its cannon fires Crystal out to 6 tiles. Within 7 tiles your Walls and Gates take a third less damage and slowly mend themselves, and your Pulse Turrets, Bunkers, Mortar Pits, Flak Guns and Disruptor Towers reach a tile further and fire a fifth faster. Keeps stand at least 16 tiles apart. It claims land like an Outpost, and like an Outpost your roads run straight through it (enemies have to break it to get past).',
     cost: { cement: 14, alloy: 6, chip: 2 }, mil: true, keep: true, terr: 6, garrison: 6, ammoStock: 6, armor: 60, buildTime: 24, war: true,
-    ammo: 'crystal', ammoCap: 3, range: 6, gun: { damage: 5, reload: 1.3 },
+    ammo: 'crystal', ammoCap: 3, range: 6, gun: { damage: 5, reload: 1.55 }, // (was 1.3 s: toned down a touch)
   },
   kiln: {
     name: 'Cement Works', desc: 'Bakes Stone into Cement, the material nearly every building and road is made of: 2 Cement from each Stone. Costs raw Stone itself, so you can always build one.',
