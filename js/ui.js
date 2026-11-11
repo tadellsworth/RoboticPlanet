@@ -902,8 +902,13 @@ function startNewGame() {
     const st = P.id !== 0 && P.ai && !P.absent && PERSONALITIES[P.style];
     if (st) postMsg(0, `${S.players.length > 2 ? 'The ' + playerName(P.id) : 'Your rival'} is ${st.noun}: it ${st.desc}.`, 0, 0, 'info');
   }
-  if (S.wildlife) postMsg(0, 'Creatures nest out in the wilds (red on the minimap). From about 7 minutes in they raid whatever you build near their nests. Pulse Turrets (with Crystal) and warbots keep them off; clear a nest with warbots to win the goods it hoards.', 0, 0, 'warn');
-  if (nukeOn()) postMsg(0, `Nuclear race: a few uranium deposits glow green across the planet. Dig them with Ore Mines, enrich them at a Nuclear Reactor and build the bomb before ${S.players.length > 2 ? 'the rivals do' : 'the rival does'}.`, 0, 0, 'warn');
+  if (S.wildlife) {
+    // Pointed at the nest nearest home (J jumps there), the rest are red on the minimap.
+    const L = getE(S.players[0].lander), nests = S.buildings.filter((b) => !b.dead && BDEFS[b.type].wild);
+    const near = L && nests.length ? nests.reduce((a, b) => (dist2(b.x, b.y, L.x, L.y) < dist2(a.x, a.y, L.x, L.y) ? b : a)) : null;
+    postMsg(0, `${nests.length} creature nests sit out in the wilds (red on the minimap; the nearest is ${near ? dirText(L, near) : 'out there'}${near ? ': press J or tap here to look' : ''}). From about 7 minutes in they raid whatever you build near their nests. Pulse Turrets (with Crystal) and warbots keep them off; clear a nest with warbots to win the goods it hoards.`, near ? near.x : 0, near ? near.y : 0, 'warn');
+  }
+  if (nukeOn()) postMsg(0, `Nuclear race: a few uranium deposits glow green across the planet. Dig them with Ore Mines, enrich them at a Nuclear Reactor and build the bomb${S.mode === 'colony' ? ' (no rival here, so it is yours to try out)' : ` before ${S.players.length > 2 ? 'the rivals do' : 'the rival does'}`}.`, 0, 0, 'warn');
 }
 
 /* ------------------------------------------------------------------ save files: carry a game between devices */
@@ -2481,15 +2486,16 @@ function renderTrade(b) {
   const bonus = Math.round((terminalBonus(b) - 1) * 100);
   $('sh-trade-hint').innerHTML = (!trainNear && !railNear ? '<span class="err">No Road Train can reach it, and no Freight Train runs to it: order a Road Train at the Bot Foundry and lay a road here (or lay track beside it from a Rail Station).</span> ' : '') +
     `Only Road Trains and Freight Trains serve a Terminal: they bring a contract's lot (${TERMINAL.lot}) and take what it pays home. Rates are ${Math.round(TERMINAL.rate * 100)}% of what the goods are worth` +
-    (bonus ? `, +${bonus}% for standing this far out` : `; one further than ${TERMINAL.minDist} tiles from your Command Base pays more`) + '. Each lot of a good sold fetches a little less for a while.';
+    (bonus ? `, +${bonus}% for standing this far out` : `; one further than ${TERMINAL.minDist} tiles from your Command Base pays more`) + '. Each contract runs up to ' + TERMINAL.lots + ' times, and each lot of a good you sell pays a little less for a while.';
   if (el.dataset.sig === sig) return;
   el.dataset.sig = sig;
   if (!T.offers.length) { el.innerHTML = '<p class="hint">Contracts arrive in a moment.</p>'; return; }
   el.innerHTML = T.offers.map((o, k) => {
     const on = T.pick === k, pay = tradePay(0, o, b), sat = T.sat[o.give] ?? 1;
-    return `<div class="kv trade-row${on ? ' on' : ''}"><span><b>${o.lot}</b> <i class="gi ${o.give}"></i>${GOOD[o.give].name} → <b>${pay}</b> <i class="gi ${o.get}"></i>${GOOD[o.get].name}` +
-      `<small> ${o.left} lot${o.left === 1 ? '' : 's'} left${sat < 0.99 ? ` · ${GOOD[o.give].name} fetching ${Math.round(sat * 100)}%` : ''} · you have ${Math.floor(have[o.give] || 0)}</small></span>` +
-      `<button class="btn small${on ? '' : ' primary'}" data-k="${k}" ${o.left > 0 ? '' : 'disabled'}>${on ? 'Stop' : 'Take'}</button></div>`;
+    // Spelled out which way it goes: you send `lot` of one good and get `pay` of the other back.
+    return `<div class="kv trade-row${on ? ' on' : ''}"><span>You give <b>${o.lot}</b> <i class="gi ${o.give}"></i>${GOOD[o.give].name} → you get <b>${pay}</b> <i class="gi ${o.get}"></i>${GOOD[o.get].name}` +
+      `<small> ${o.left > 0 ? `${o.left} more time${o.left === 1 ? '' : 's'}` : 'filled'}${sat < 0.99 ? ` · ${GOOD[o.give].name} pays ${Math.round(sat * 100)}% for now (you sold a lot lately)` : ''} · you have ${Math.floor(have[o.give] || 0)} ${GOOD[o.give].name}</small></span>` +
+      `<button class="btn small${on ? '' : ' primary'}" data-k="${k}" ${o.left > 0 ? '' : 'disabled'}>${o.left > 0 ? (on ? 'Stop' : 'Take') : 'Filled'}</button></div>`;
   }).join('');
   for (const btn of el.querySelectorAll('button[data-k]')) btn.onclick = () => {
     const k = +btn.dataset.k;

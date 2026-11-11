@@ -7265,8 +7265,11 @@ function headHome(u) {
   // Already out past the far end: straight onto the final approach. Otherwise round the pattern: out abeam
   // the far end on its side, then in onto the extended centre line, turning in toward the runway.
   const along = (u.x - R.x1) * R.dx + (u.y - R.y1) * R.dy, side = (u.x - R.x1) * px + (u.y - R.y1) * py >= 0 ? 1 : -1;
-  const fixes = along > 4 ? [[R.x1 + R.dx * 6, R.y1 + R.dy * 6]]
-    : [[R.x1 + R.dx * 5 + px * side * 5, R.y1 + R.dy * 5 + py * side * 5], [R.x1 + R.dx * 8, R.y1 + R.dy * 8]];
+  // A runway whose far end looks out at the map's edge gets a tighter pattern, inside the map.
+  const room = (R.dx > 0 ? S.W - R.x1 : R.dx < 0 ? R.x1 : R.dy > 0 ? S.H - R.y1 : R.y1) - AIR_EDGE, k = clamp(room / 8, 0.35, 1);
+  const fixes = (along > 4 ? [[R.x1 + R.dx * 6 * k, R.y1 + R.dy * 6 * k]]
+    : [[R.x1 + R.dx * 5 * k + px * side * 5, R.y1 + R.dy * 5 * k + py * side * 5], [R.x1 + R.dx * 8 * k, R.y1 + R.dy * 8 * k]])
+    .map(([x, y]) => [clamp(x, AIR_EDGE, S.W - AIR_EDGE), clamp(y, AIR_EDGE, S.H - AIR_EDGE)]);
   u.flight = { ph: 'air', home: true, base: base.id, fixes };
   [u.flight.tx, u.flight.ty] = u.flight.fixes.shift();
 }
@@ -7279,14 +7282,16 @@ function steerPlane(u, tx, ty, dt, k) {
   const f = u.face || 0, err = wrapAngle(Math.atan2(ty - u.y, tx - u.x) - f), w = PLANE_TURN * (BOTS[u.type].turn || 1) * (k || 1);
   const r = Math.max(0.3, (u.vel || 0) / w), side = err >= 0 ? 1 : -1;
   const cx = u.x - Math.sin(f) * r * side, cy = u.y + Math.cos(f) * r * side; // the centre of its turn toward the spot
-  if (Math.abs(err) > 0.2 && Math.hypot(tx - cx, ty - cy) < r * 0.98) return; // too tight: straight on for now
+  // Too tight: straight on for now (but up against the map's edge it comes round, sliding along the edge).
+  if (!u.pinned && Math.abs(err) > 0.2 && Math.hypot(tx - cx, ty - cy) < r * 0.98) return;
   u.face = wrapAngle(f + clamp(err, -w * dt, w * dt));
 }
 
 function movePlane(u, dt) {
   const step = (u.vel || 0) * dt;
-  u.x += Math.cos(u.face) * step; u.y += Math.sin(u.face) * step;
-  u.x = clamp(u.x, 0.2, S.W - 0.2); u.y = clamp(u.y, 0.2, S.H - 0.2);
+  const nx = u.x + Math.cos(u.face) * step, ny = u.y + Math.sin(u.face) * step;
+  u.x = clamp(nx, 0.2, S.W - 0.2); u.y = clamp(ny, 0.2, S.H - 0.2);
+  u.pinned = u.x !== nx || u.y !== ny ? 1 : 0; // flying into the map's edge
   u.moved = step > 0 ? 1 : 0;
   u.odo = ((u.odo || 0) + step) % 1000;
 }
@@ -7307,11 +7312,13 @@ function flyStep(u, dt) {
     u.alt = Math.min(1, (u.alt || 0) + dt / PLANE_CLIMB);
     // A spot close by and not ahead (a drop right beside the Airfield): circling for it never lines up, so the
     // plane flies straight out to a few turns' width, then comes round and in.
-    const r = vmax / (PLANE_TURN * (bt.turn || 1)), d0 = Math.hypot(F.tx - u.x, F.ty - u.y), off = Math.abs(wrapAngle(Math.atan2(F.ty - u.y, F.tx - u.x) - u.face));
-    if (F.extend) { if (d0 > 2.6 * r) F.extend = false; } else if (d0 < 2 * r && off > 0.6) F.extend = true;
-    if (!F.extend) steerPlane(u, F.tx, F.ty, dt);
+    // Its spot is kept inside the map: one past the edge could never be reached.
+    const tx = clamp(F.tx, AIR_EDGE, S.W - AIR_EDGE), ty = clamp(F.ty, AIR_EDGE, S.H - AIR_EDGE);
+    const r = vmax / (PLANE_TURN * (bt.turn || 1)), d0 = Math.hypot(tx - u.x, ty - u.y), off = Math.abs(wrapAngle(Math.atan2(ty - u.y, tx - u.x) - u.face));
+    if (F.extend) { if (d0 > 2.6 * r || u.pinned) F.extend = false; } else if (d0 < 2 * r && off > 0.6 && !u.pinned) F.extend = true;
+    if (!F.extend) steerPlane(u, tx, ty, dt);
     movePlane(u, dt);
-    const dx = F.tx - u.x, dy = F.ty - u.y, d = Math.hypot(dx, dy);
+    const dx = tx - u.x, dy = ty - u.y, d = Math.hypot(dx, dy);
     if (d < 0.6 || (d < 1.5 && dx * Math.cos(u.face) + dy * Math.sin(u.face) < 0)) return 'over';
     return null;
   }

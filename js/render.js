@@ -3304,7 +3304,20 @@ function drawRopeways(ctx, ox, oy, z) {
 function drawNest(ctx, cx, cy, s, b) {
   const lv = (b && b.level) || 1, t = R.time;
   const art = ART['nest-' + Math.min(3, lv)];
-  if (art) { drawArt(ctx, art, cx, cy, s); return; }
+  if (art) {
+    // Infested ground round it, and a slow red danger ring, so a nest stands out from the rocks at a glance.
+    const r = s * (1.25 + 0.15 * lv), pulse = 0.5 + 0.5 * Math.sin(t * 2.2 + (b ? b.id : 0));
+    const g = ctx.createRadialGradient(cx, cy + s * 0.08, s * 0.2, cx, cy + s * 0.08, r);
+    g.addColorStop(0, 'rgba(120,20,40,0.42)'); g.addColorStop(0.7, 'rgba(90,18,60,0.2)'); g.addColorStop(1, 'rgba(90,18,60,0)');
+    ctx.fillStyle = g;
+    ctx.beginPath(); ctx.ellipse(cx, cy + s * 0.08, r, r * 0.78, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = `rgba(255,70,90,${0.25 + 0.35 * pulse})`; ctx.lineWidth = Math.max(1.5, s * 0.045);
+    ctx.setLineDash([s * 0.18, s * 0.12]);
+    ctx.beginPath(); ctx.ellipse(cx, cy + s * 0.08, r * (0.92 + 0.05 * pulse), r * 0.72 * (0.92 + 0.05 * pulse), 0, 0, Math.PI * 2); ctx.stroke();
+    ctx.setLineDash([]);
+    drawArt(ctx, art, cx, cy, s * (1.2 + 0.1 * lv));
+    return;
+  }
   const cg = ctx.createRadialGradient(cx, cy + s * 0.1, s * 0.1, cx, cy + s * 0.1, s * 1.05);
   cg.addColorStop(0, 'rgba(92,40,110,0.55)'); cg.addColorStop(1, 'rgba(92,40,110,0)');
   ctx.fillStyle = cg;
