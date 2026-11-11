@@ -234,6 +234,11 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
   Warbots posted to a cut-off post (`secluded`: supplied by air, or where they can't walk to the Command Base) stay with
   it: they recharge and reload there, go for repairs, rally flags and attacks only within `SECLUDED_REACH` (16) of it,
   and dropped beside a garrison of yours they're posted to it.
+  The AI flies too (`aiAir`): once its war economy is up (two Smelters, a few minutes into the war; straight away on a
+  naval map or for a Raider) it builds an Airfield and orders a Cargo Plane. The plane reinforces a cut-off fort of its
+  own with two warbots, and every few minutes (`AIR_RAID_GAP`, more often for a Raider) drops two warbots beside the
+  rival's least-guarded industry, clear of its Flak (`AIR_TARGETS`), to wreck what they can; after `AIR_RAID_TIME` they
+  head home, or across the water go after the nearest enemy building.
 - **Flak Guns** (4 Cement, 3 Alloy; Build → Defend; Versus): a twin anti-aircraft gun (`def.flak`, `updateFlak`). It
   tracks the nearest enemy aircraft in the air within 7 tiles (`aircraftNear`; never one on the ground, never a robot)
   and every `reload` s fires a salvo of `salvo` shells, each led to where the plane will be when it gets there (shell
@@ -242,7 +247,7 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
   quick pass over a gun hurt and is mended at its Airfield; a few guns bring it down: the wreck falls burning
   (`S.drops` kind `wreck`) and crashes, and what it carried is lost. Bursts are drawn in the air layer
   (`drawFlakBurst`: a flash and fragments, then a ragged black puff that drifts and fades). The AI puts up two Flak
-  Guns by its Command Base once a rival has aircraft.
+  Guns by its Command Base once a rival has an Airfield or aircraft.
 - **Ships and Ports** (naval maps only: Islands and Lakes, `naval` in `SHAPE_PRESETS`, `navalMap`; `NAVAL_ON` switches them
   off everywhere): a **Port** (8 Cement, 3 Alloy; Build → Move) is storage on land beside water at least `SEA_MIN` (20)
   tiles big (`portDocks`; `seaNet` labels the bodies of water). Ships come from the Bot Foundry and put to sea at the
@@ -263,7 +268,8 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
   flag; `LANDING_GATHER` s after the order it sails with whoever is aboard. A Ferry sunk with bots aboard takes them
   down. Turrets, Bunkers, Mortar Pits and Missiles hit ships; warbots don't chase them (`nearestEnemyBot` with `land`).
   The rival builds a Port once its Foundry runs, a Ferry with a fair army, and every few minutes lands six warbots
-  beside whichever enemy building it can reach that's least guarded (`aiNaval`). The art is top-down like the trucks
+  beside whichever enemy building it can reach that's least guarded (`aiNaval`). Later (after 15 minutes) it builds a
+  second Port out toward the enemy, gives it supply orders (Cement and Ammo) and orders a Container Ship to keep it stocked. The art is top-down like the trucks
   (`renderer/b/ship.js`, `renderer/b/port.js`), drawn two tiles wide with a wake under way (`drawShip`); a ship tied
   up is drawn at its Port's dock. On naval maps a bridge tile costs more the further it is from shore (`bridgeMul`:
   `BRIDGE_NEAR` 2 tiles at the usual price, then `BRIDGE_STEP` 1.5 times more for each tile further).

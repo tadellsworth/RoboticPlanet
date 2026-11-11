@@ -3,6 +3,19 @@
 Notes on features we've talked about but not built yet. (The nuclear race, desktop RTS controls, road maintenance
 and biomes started here and are now in the game.)
 
+## Picked next (November): city layout and a siege gun
+
+Designs proposed, waiting for a go-ahead:
+
+- **Feed links** (supply chains): a factory touching the building that makes its input is fed straight across by a
+  short conveyor or pipe, no Hauler (Oil Pump or Refinery → Asphalt Plant ← Cement Works, Asphalt Plant → Roadworks;
+  Ore Mine → Smelter → Chip Fab; Smelter + Cement Works → Ammo Plant; Missile Factory → Silo). Moves goods, makes none.
+- **The Keep**: a big bastion with a turret on its roof and warbots firing from inside; Walls, Gates and defences
+  within its radius are tougher and fire better.
+- **Bulk trade**: neutral trading terminals at the map edge that only Road Trains and Freight Trains serve, full lots
+  only, at rates below making the goods yourself, so trade turns surplus into what's short without replacing industry.
+- **A siege gun between the Mortar and the Missile Silo**: an Artillery Battery (a building) or a mobile Rocket Truck.
+
 ## Held for later
 
 - **More map shapes** (Rift, Ring valley, Oases, Crossroads and Lakes are now in the game; each would be a
