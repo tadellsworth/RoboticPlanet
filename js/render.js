@@ -3955,7 +3955,8 @@ function refreshOverlay(type) {
     return;
   }
   for (let j = 0; j < S.H; j++) for (let i = 0; i < S.W; i++) {
-    if (S.owner[j * S.W + i] === 0 && canPlace(0, type, i, j).ok) valid[j * S.W + i] = 1;
+    const t = j * S.W + i;
+    if ((S.owner[t] === 0 || (S.owner[t] < 0 && inReach(0, t))) && canPlace(0, type, i, j).ok) valid[t] = 1; // (cheap test first: most of the map is out of reach)
   }
   R.overlay = { type, valid, at: R.time };
 }
@@ -4150,6 +4151,7 @@ function render(dtReal) {
       if (e.owner === 0) drawBadge(ctx, e, cx - z * 0.32, cy - z * 0.32, z);
       if (e.owner === 0 && e.unlinked) drawNoRoad(ctx, cx + z * 0.32, cy + z * 0.3, z);
       if (e.owner === 0 && (e.depleted || (e.type === 'pump' && pumpDry(e)))) drawDryOil(ctx, cx, cy - z * 0.55, z, e);
+      if (e.cut) drawCutOff(ctx, cx, cy, z);
       if (e.paused) {
         ctx.fillStyle = 'rgba(0,0,0,0.65)';
         ctx.beginPath(); ctx.arc(cx + z * 0.3, cy - z * 0.3, z * 0.16, 0, Math.PI * 2); ctx.fill();
@@ -4679,6 +4681,22 @@ function drawNoRoad(ctx, x, y, z) {
  * (demolish me). An Oil Pump shows an empty oil drop; a gatherer its boulder, ore, crystal or
  * grove; a Bio Farm a crop.
  */
+/** A building cut off on a rival's ground (see cutOff): a pulsing red wash and a broken-link badge. */
+function drawCutOff(ctx, cx, cy, z) {
+  const p = 0.5 + 0.5 * Math.sin(R.time * 4);
+  ctx.fillStyle = `rgba(255,50,60,${0.1 + 0.12 * p})`;
+  ctx.fillRect(cx - z * 0.48, cy - z * 0.48, z * 0.96, z * 0.96);
+  const x = cx - z * 0.3, y = cy + z * 0.28, r = Math.max(7, z * 0.17);
+  ctx.fillStyle = 'rgba(20,10,12,0.85)';
+  ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
+  ctx.strokeStyle = '#ff5a5a'; ctx.lineWidth = Math.max(1.5, r * 0.18);
+  ctx.stroke();
+  // two link halves pulled apart
+  ctx.lineWidth = Math.max(1.4, r * 0.16);
+  ctx.beginPath(); ctx.ellipse(x - r * 0.35, y + r * 0.12, r * 0.32, r * 0.2, -0.6, 0, Math.PI * 2); ctx.stroke();
+  ctx.beginPath(); ctx.ellipse(x + r * 0.35, y - r * 0.12, r * 0.32, r * 0.2, -0.6, 0, Math.PI * 2); ctx.stroke();
+}
+
 function drawDryOil(ctx, x, y, z, b) {
   const def = b ? BDEFS[b.type] : null;
   const res = def && (def.gather || (def.farm ? R_CROP : 0));

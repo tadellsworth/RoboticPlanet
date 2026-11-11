@@ -159,8 +159,8 @@ function needsOf(b) {
     if (storeFunded(b)) return out; // paid straight from storage (settlePlans), never hauled
     const cost = siteCost(b);
     for (const g in cost) out.push([g, cost[g] - (b.stock[g] || 0) - (b.inc[g] || 0)]);
-  } else if (b.paused) {
-    return out;
+  } else if (b.paused || b.cut) {
+    return out; // (cut off: nothing is hauled to it)
   } else if (def.bots && b.mode === 'off' && !hasOrders(b)) {
     return out; // a stopped Foundry doesn't stockpile parts
   } else if (def.inp) {
@@ -781,7 +781,7 @@ function placeLight(owner, i, j) {
   const t = tIdx(i, j);
   if (S.lights[t] || S.over[t] || junPlanAt(t)) return '';
   if (!S.road[t] || !isJunction(t)) return 'Traffic lights go on road junctions: a road tile with roads on three or four sides.';
-  if (S.owner[t] !== owner) return 'You can only put traffic lights inside your border.';
+  if (wayOwner(t) !== owner) return 'That road isn\'t yours: traffic lights go on your own roads.';
   // Yours is planned and goes up once it's paid for (settlePlans); the computer pays up front.
   if (!S.players[owner].ai) { planJunction(owner, t, 'light'); return ''; }
   const have = playerGoods(owner);
@@ -796,7 +796,7 @@ function placeOverpass(owner, i, j) {
   const t = tIdx(i, j);
   if (S.over[t]) return '';
   if (!S.road[t] || !isJunction(t) || crossTile(t)) return 'Overpasses go on road junctions on open ground: a road tile with roads on three or four sides.';
-  if (S.owner[t] !== owner) return 'You can only build overpasses inside your border.';
+  if (wayOwner(t) !== owner) return 'That road isn\'t yours: overpasses go on your own roads.';
   // Yours is planned (a planned light becomes a planned overpass) and goes up once it's paid for; a
   // light already standing keeps working meanwhile, and its Alloy counts toward the overpass.
   if (!S.players[owner].ai) { const P = junPlanAt(t); if (P) P.kind = 'over'; else planJunction(owner, t, 'over'); settlePlans(); return ''; }
@@ -1183,7 +1183,7 @@ function dispatch(p) {
   // Planned roads the border no longer covers are called off (and refunded), except a bridge
   // still reaching out over the water from our side.
   for (const t of planAll(p).slice()) {
-    if (S.bAt[t] || (S.owner[t] !== p && !(bridgeable(t) && bridgeHead(p, t % S.W, (t / S.W) | 0)))) cancelPlan(t);
+    if (S.bAt[t] || (S.owner[t] >= 0 && S.owner[t] !== p && !(bridgeable(t) && bridgeHead(p, t % S.W, (t / S.W) | 0)))) cancelPlan(t);
   }
   // Out past the roads (a foothold dropped by air), Workers carry goods by hand between buildings no
   // Hauler's road reaches, over ground they can walk: a Drop Outpost's goods to a site beside it.
@@ -1249,7 +1249,7 @@ function dispatch(p) {
   // 0) Specialist buildings get a bot of their crew.
   for (const b of blds) {
     const crew = BDEFS[b.type].crew;
-    if (!crew || !b.built || b.paused || b.staff || b.staffInc || b.depleted) continue;
+    if (!crew || !b.built || b.paused || b.cut || b.staff || b.staffInc || b.depleted) continue;
     const u = take(b.x, b.y, crew);
     if (u) assignStaff(u, b);
     else if (!S.bots.some((v) => !v.dead && v.owner === p && v.type === crew)) {
@@ -1279,7 +1279,7 @@ function dispatch(p) {
     }
   }
   // 2) An operator for every finished building that needs one, while keeping minFree workers free.
-  const staffQueue = blds.filter((b) => b.built && !b.paused && BDEFS[b.type].staff && !BDEFS[b.type].crew && !b.staff && !b.staffInc && !atLimit(b) && !pumpDry(b) && !b.depleted && !(BDEFS[b.type].lab && !P.research))
+  const staffQueue = blds.filter((b) => b.built && !b.paused && !b.cut && BDEFS[b.type].staff && !BDEFS[b.type].crew && !b.staff && !b.staffInc && !atLimit(b) && !pumpDry(b) && !b.depleted && !(BDEFS[b.type].lab && !P.research))
     .sort((a, c) => prioRank(a) - prioRank(c) || staffPriority(a) - staffPriority(c) || a.born - c.born);
   for (const b of staffQueue) {
     if (!idle.length) return;
@@ -1445,7 +1445,8 @@ function dispatch(p) {
   if (S.loot && S.loot.length) {
     for (const l of S.loot) {
       if (!idle.length) return;
-      if (S.owner[tIdx(l.x, l.y)] !== p || (l.noReach && l.noReach[p] > S.time)) continue;
+      const lo = S.owner[tIdx(l.x, l.y)];
+      if ((lo >= 0 && lo !== p) || (l.noReach && l.noReach[p] > S.time)) continue; // (not on a rival's ground)
       if (lootLeft(l) - (l.claimed || 0) <= 0 || foesNear(p, l.x + 0.5, l.y + 0.5, CRATE_SAFE)) continue;
       const nets = pileNets(l, false), netsT = pileNets(l, true);
       for (let guard = 0; guard < 12 && idle.length; guard++) {
@@ -2097,7 +2098,7 @@ function completeBuilding(b) {
   if (b.owner === 0) sfx('complete');
   addFx('ring', b.x + 0.5, b.y + 0.5, { color: PLAYER_COLORS[b.owner] });
   if (b.moveFrom) finishMove(b);
-  if (def.mil) computeTerritory();
+  if (def.mil || civClaims(b)) computeTerritory(); // its land: a wide ring, or a little round it
 }
 
 /** A finished Ramp turns its tile into a slope and the construction site disappears. */
@@ -2162,7 +2163,7 @@ function findPlantSpot(b, radius) {
       const d = dist2(i, j, b.x, b.y);
       if (d > r2 || d < 2.5) continue;
       if (S.terrain[t] !== T_GROUND || S.res[t] || S.bAt[t] || S.road[t] || S.plan[t] || S.resRes[t] || S.ramp[t] || S.fert[t] || S.zone[t] !== zone) continue;
-      if (S.owner[t] !== b.owner) continue;
+      if (S.owner[t] >= 0 && S.owner[t] !== b.owner) continue; // (not on a rival's ground)
       let near = 0, blocked = false;
       for (let dj = -1; dj <= 1; dj++) for (let di = -1; di <= 1; di++) {
         if (!inMap(i + di, j + dj)) continue;
@@ -2187,7 +2188,7 @@ function findCropSpot(b, radius) {
     for (let i = Math.max(0, b.x - radius); i <= Math.min(S.W - 1, b.x + radius); i++) {
       const t = j * S.W + i;
       if (!S.fert[t] || S.res[t] || S.bAt[t] || S.road[t] || S.plan[t] || S.resRes[t] || S.ramp[t] || S.zone[t] !== zone) continue;
-      if (S.owner[t] !== b.owner) continue;
+      if (S.owner[t] >= 0 && S.owner[t] !== b.owner) continue; // (not on a rival's ground)
       const d = dist2(i, j, b.x, b.y);
       if (d <= r2 && d < bd) { bd = d; best = t; }
     }
@@ -2488,6 +2489,7 @@ function updateBuilding(b, dt) {
     return;
   }
   repairHint(b);
+  if (b.cut) { crumble(b, dt); return; }
   if (b.paused) {
     b.status = def.burner ? 'Off: burning no Fuel (nothing round it is boosted)' : def.mortar ? 'Off: not firing, and saving its Ammo'
       : b.type === 'turret' ? 'Off: not firing, and saving its Crystal' : 'Paused — its worker is free for other jobs';
@@ -5157,7 +5159,7 @@ function refundRoad(owner, cost, i, j, mul) {
 function buildRoad(owner, i, j, queue) {
   const t = tIdx(i, j);
   if (S.road[t] || S.plan[t]) return '';
-  if (!canRoad(owner, i, j)) return 'You can only lay roads inside your border.';
+  if (!canRoad(owner, i, j)) return S.owner[t] >= 0 && S.owner[t] !== owner ? 'A rival holds that ground: roads only run on yours or no-one\'s.' : 'Your bots can\'t reach there to lay a road.';
   // Planned from Paths: it joins the queue and is paid for as the goods come in (settlePlans).
   if (queue) { setPlan(t, owner); setOwe(t, 1); queuePlan('r', t, owner); return ''; }
   const cost = roadTileCost(t), c = CROSS[S.terrain[t]];
@@ -5209,6 +5211,18 @@ function setPaused(b, paused) {
   b.paused = !!paused;
   if (b.paused && BDEFS[b.type].staff) unstaff(b);
   if (b.paused) { b.working = false; b.chg = 0; }
+}
+
+/** A cut-off building (see cutOff) crumbles: its armor wears away over CUT_CRUMBLE s, then it's lost and what's inside spills out. */
+function crumble(b, dt) {
+  const def = BDEFS[b.type];
+  b.working = false;
+  b.armor -= (def.armor / CUT_CRUMBLE) * dt;
+  b.status = 'Cut off: a rival holds this ground. It has stopped working and is crumbling: take the land back (an Outpost or Keep nearer than theirs) to save it.';
+  if (b.armor > 0) return;
+  const n = dropLoot(b);
+  postMsg(b.owner, `${def.name} crumbled away, cut off on a rival's ground.` + (n ? ' What was inside spilled out.' : ''), b.x, b.y, 'bad');
+  destroyBuilding(b, false);
 }
 
 /** Send a building's operator off to other work. */
@@ -5668,7 +5682,7 @@ function naniteRepair() {
     if (!P.tech || !P.tech.nanites) continue;
     for (const u of S.bots) if (!u.dead && u.owner === P.id && u.hp < u.maxHp && S.time - (u.hurtT ?? -99) > 12) u.hp = Math.min(u.maxHp, u.hp + 0.3);
     for (const b of S.buildings) {
-      if (b.dead || b.owner !== P.id || !b.built || b.fixLeft > 0) continue;
+      if (b.dead || b.owner !== P.id || !b.built || b.fixLeft > 0 || b.cut) continue;
       const max = BDEFS[b.type].armor;
       if (b.armor < max && S.time - (b.lastHit ?? -99) > 15) b.armor = Math.min(max, b.armor + 0.25);
     }
@@ -5928,7 +5942,7 @@ function ropeEndBlocked(owner, ai, aj, i, j) {
   const t = tIdx(i, j), d = dist(ai, aj, i, j);
   if (d < ROPE_MIN) return `Too close: the far end has to be at least ${ROPE_MIN} tiles away.`;
   if (d > ROPE_MAX) return `Too far: a Ropeway reaches ${ROPE_MAX} tiles.`;
-  if (S.owner[t] !== owner) return 'The far end has to be inside your territory.';
+  if (S.owner[t] >= 0 && S.owner[t] !== owner) return 'A rival holds the ground at the far end.';
   if (S.terrain[t] !== T_GROUND || S.res[t] || S.ramp[t]) return 'The far end needs clear, open ground.';
   if (S.bAt[t]) return 'There is a building at the far end.';
   return '';
@@ -6533,7 +6547,7 @@ function pipeToRefinery(owner, b) {
   for (const r of refs) for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1], [0, 0]]) if (inMap(r.x + di, r.y + dj)) beside.add(tIdx(r.x + di, r.y + dj));
   const start = tIdx(b.x, b.y);
   const route = pipeRoute(owner, start, (t) => beside.has(t) || (S.pipe[t] === owner + 1 && joined.has(net.comp[t])), 80);
-  if (!route) return { why: 'No way to run pipe from here to a Refinery inside your border (water or rock in the way?).' };
+  if (!route) return { why: 'No way to run pipe from here to a Refinery (water, rock or a rival\'s land in the way?).' };
   // No pipe under the pump itself unless it stands right beside the line's end.
   const tiles = route.filter((t, k) => !S.pipe[t] && !(k === 0 && route.length > 1) && !(S.bAt[t] && k === route.length - 1 && route.length > 1 && BDEFS[getE(S.bAt[t]).type].explodes));
   // A pump right beside its Refinery: one tile of pipe under the pump joins them.

@@ -235,7 +235,7 @@ const VIA_MIN = 2, VIA_MAX = 12, VIA_RISE = 2, VIA_COST = { cement: 3, alloy: 0.
 const VIA_CLAIM = 3; // a Viaduct's far end claims the no-one's ground this far round it
 /*
  * Freight rail: track (S.rail) is laid in Paths (Rail), RAIL_COST a tile, paid when you build it and
- * laid at once, on open ground in your territory; it climbs a level at a time over a Ramp (RAIL_GRADE
+ * laid at once, on open ground you hold or no-one does; it climbs a level at a time over a Ramp (RAIL_GRADE
  * speed there), like a road. It can cross a
  * road: a level crossing, where road traffic waits while a train is within RAIL_CROSS_HOLD tiles.
  * Rail Stations stand beside the track; Freight Trains (56 goods) run between stations on the same
@@ -247,7 +247,7 @@ const RAIL_MIN_LOAD = 10;
 /*
  * Pipelines carry Crude (nothing else). Pipe is laid in Paths (Pipes): drag from one building to
  * another and it finds its own way there. PIPE_COST a tile, paid from storage and laid at once (or as
- * the goods come in), on any ground in your territory: over roads and track, under buildings, up and
+ * the goods come in), on any ground you hold or no-one does: over roads and track, under buildings, up and
  * down cliffs. A pipe joins every building it runs under or beside. Every second each pipeline moves
  * up to PIPE_RATE Crude: from Oil Pumps to the Refineries and Asphalt Plants on it (a Refinery keeps
  * up to PIPE_FILL), then to storage on it; and from storage on it to its Refineries. A piped pump's
@@ -375,6 +375,16 @@ const AIRFIELD_HOLDS = { cargoplane: 1, bomber: 2 }; // planes of each type an A
  * `rearm` s before the next sortie. Flak Guns shoot it down.
  */
 const BOMBER = { ammo: 6, damage: 14, splash: 1.3, splashBld: 4, botDamage: 8, fall: 0.8, rearm: 25 };
+/*
+ * Influence. Every finished building but the military ones holds CIV_CLAIM tiles round itself (the military
+ * ones claim their wider ring, BDEFS terr), so a colony's land grows as it builds. You can build on any
+ * ground no rival holds, within BUILD_REACH tiles of something of yours (a building, road or track) that
+ * your bots can reach; defences (DEFENCE_TYPES) only inside your own land. A finished building whose ground
+ * a rival's military ring takes is cut off: it stops working and crumbles away over CUT_CRUMBLE seconds
+ * unless you take the land back.
+ */
+const CIV_CLAIM = 2, BUILD_REACH = 10, CUT_CRUMBLE = 90;
+const DEFENCE_TYPES = new Set(['turret', 'bunker', 'disruptor', 'mortar', 'flak', 'keep', 'wall', 'gate', 'silo', 'nukesilo']);
 const RUNWAY_LEN = 5, ROLL_ACCEL = 0.42, ROLL_BRAKE = 0.75, PLANE_TURN = 1.1, PLANE_CLIMB = 3;
 const AIR_EDGE = 1.5; // planes keep their turning spots this far inside the map's edge
 const SECLUDED_REACH = 16; // warbots at a cut-off post (a Drop Outpost) only go this far from it: for repairs, rally flags and attacks
@@ -598,7 +608,7 @@ const BDEFS = {
     work: 8, armor: 10, buildTime: 14,
   },
   outpost: {
-    name: 'Outpost', desc: 'Expands your territory and garrisons warbots for attack and defence. A road can run through it, for your own bots only: enemies have to break in.',
+    name: 'Outpost', desc: 'Holds a wide ring of land: your buildings inside it can\'t be cut off by a rival while it stands, and it\'s where you can put defences out in the open. Garrisons warbots for attack and defence. A road can run through it, for your own bots only: enemies have to break in.',
     cost: { cement: 4, fiber: 2 }, mil: true, terr: 7, garrison: 10, armor: 16, buildTime: 12, ammoStock: 6,
   },
   turret: {

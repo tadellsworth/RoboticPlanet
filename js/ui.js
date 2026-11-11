@@ -1548,7 +1548,8 @@ function enterPlaceMode(type, moveFrom) {
     : `Tap a highlighted spot to place a <b>${BDEFS[type].name}</b>.`, null, 'Cancel');
   if (!R.overlay.valid.some((v) => v)) {
     const near = BDEFS[type].gather ? ' near the right resource' : BDEFS[type].farm ? ' near fertile soil' : BDEFS[type].pump ? ' on an oil seep' : '';
-    showBanner(`<span class="err">There is no valid spot for a ${BDEFS[type].name} in your territory${near}. Expand with an Outpost.</span>`, null, 'Close');
+    const how = DEFENCE_TYPES.has(type) ? `inside your border${near}. Defences only go on your own land: an Outpost or Keep extends it.` : `within ${BUILD_REACH} tiles of your buildings, roads or track${near}. Lay a road out toward where you want it.`;
+    showBanner(`<span class="err">There is no valid spot for a ${BDEFS[type].name} ${how}</span>`, null, 'Close');
   }
 }
 
@@ -1618,7 +1619,7 @@ function ropewayTap(i, j) {
     if (!chk.ok) { sfx('error'); showBanner(`<span class="err">${chk.reason}</span>`, null, 'Cancel'); return; }
     UI.ropeA = { i, j };
     sfx('click');
-    showBanner(`Now tap the <b>far end</b>: ${ROPE_MIN} to ${ROPE_MAX} tiles away, in your territory, across anything (cliffs, water, rock).`, null, 'Cancel');
+    showBanner(`Now tap the <b>far end</b>: ${ROPE_MIN} to ${ROPE_MAX} tiles away, on ground no rival holds, across anything (cliffs, water, rock).`, null, 'Cancel');
     return;
   }
   const A = UI.ropeA;
@@ -1781,7 +1782,7 @@ function onMapTap(i, j, wx, wy) {
     }
     if (UI.roadMode === 'arrows') {
       // Turn the arrow: east, south, west, north, then back to two-way.
-      if (S.road[t] && !roadOwnedBy(0, t)) { sfx('error'); showRoadBanner('That road isn\'t yours: you can only change roads in your own land.'); return; }
+      if (S.road[t] && !roadOwnedBy(0, t)) { sfx('error'); showRoadBanner('That road isn\'t yours: you can only change your own roads.'); return; }
       if (S.road[t]) { setRoadDir(i, j, S.road[t] >= 5 ? 1 : S.road[t] + 1); sfx('click'); showRoadBanner(); }
       return;
     }
@@ -1840,7 +1841,7 @@ function onMapTap(i, j, wx, wy) {
       const stroke = [];
       if (UI.draft.rail.has(t)) draftOp(stroke, t, 'unrail');
       else if (UI.draft.railDel.has(t)) draftOp(stroke, t, 'unraildel');
-      else if (S.rail[t] && !roadOwnedBy(0, t)) { sfx('error'); showRoadBanner('That track isn\'t yours: you can only take up track in your own land.'); return; }
+      else if (S.rail[t] && !roadOwnedBy(0, t)) { sfx('error'); showRoadBanner('That track isn\'t yours: you can only take up your own track.'); return; }
       else if (S.rail[t] || S.railPlan[t] === 1) draftOp(stroke, t, 'raildel');
       else { const why = railBlocked(0, t); if (why) { sfx('error'); showRoadBanner(why); return; } draftOp(stroke, t, 'rail'); }
       UI.draft.strokes.push(stroke);
@@ -1870,13 +1871,13 @@ function onMapTap(i, j, wx, wy) {
     let note = '';
     if (d.addSet.has(t)) draftOp(stroke, t, 'unadd');
     else if (d.del.has(t)) draftOp(stroke, t, 'undel');
-    else if (S.road[t] && !roadOwnedBy(0, t) && S.plan[t] !== 1) { sfx('error'); showRoadBanner('That road isn\'t yours: you can only take up roads in your own land.'); return; }
+    else if (S.road[t] && !roadOwnedBy(0, t) && S.plan[t] !== 1) { sfx('error'); showRoadBanner('That road isn\'t yours: you can only take up your own roads.'); return; }
     else if (S.road[t] || S.plan[t] === 1) { draftOp(stroke, t, 'del'); note = S.plan[t] ? 'Planned tile marked to call off.' : 'Road marked to take up: its Cement comes back when you tap Build.'; }
     else if (canRoad(0, i, j) || draftBridge(t)) {
       draftOp(stroke, t, 'add');
       if (crossTile(t)) note = `${CROSS[S.terrain[t]].name} tile: ${costText(crossCost(t))}${bridgeMul(t) > 1 ? ' (far from shore: bridges cost more out here)' : ''}.`;
       else if (S.res[t]) note = `Workers will clear the ${RES[S.res[t]].name.toLowerCase()} (${ROAD_CLEAR}× Cement).`;
-    } else { sfx('error'); showRoadBanner('You can only build roads inside your border. A bridge can reach out over the water beyond it, from your shore or the end of a bridge.'); return; }
+    } else { sfx('error'); showRoadBanner(S.owner[t] >= 0 && S.owner[t] !== 0 ? 'A rival holds that ground: roads only run on yours or no-one\'s.' : crossTile(t) ? 'A bridge has to start from your shore, your road or the end of a bridge.' : 'Your bots can\'t reach there yet: it\'s across water or a cliff from your land.'); return; }
     if (stroke.length) d.strokes.push(stroke);
     sfx('click');
     showRoadBanner(note, true);
@@ -2239,7 +2240,7 @@ function pipeDrag(i, j, first) {
   UI.stroke.length = 0;
   const a = UI.pipeFrom, b = tIdx(i, j);
   let route = a === b ? (pipeBlocked(0, a) ? null : [a]) : pipeRoute(0, a, (t) => t === b, 400);
-  UI.pipeWhy = route ? '' : pipeBlocked(0, b) || pipeBlocked(0, a) || 'No way to run pipe there inside your border.';
+  UI.pipeWhy = route ? '' : pipeBlocked(0, b) || pipeBlocked(0, a) || 'No way to run pipe there: round buildings and water, on your own land or no-one\'s.';
   if (route && route.length > 1) {
     // Up to the buildings at either end, not under them.
     if (S.bAt[route[0]]) route = route.slice(1);
@@ -2848,7 +2849,7 @@ function refreshRoadLink(b) {
     return;
   }
   if (!route) {
-    el.innerHTML = `<div class="road-warn"><b>No road to storage.</b> ${what}, and no road can reach it through your land. Expand your border or build a Ramp.</div>`;
+    el.innerHTML = `<div class="road-warn"><b>No road to storage.</b> ${what}, and no road can reach it. Lay a road to it (round cliffs, or with a Ramp).</div>`;
     return;
   }
   R.routePreview = route;

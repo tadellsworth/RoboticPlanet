@@ -1469,6 +1469,53 @@ function buildZones(p) {
   return set;
 }
 
+/** Can `owner`'s bots get to tile t over land (its home island, or one joined by a bridge, or held by a Port, Airfield or Outpost of theirs)? */
+function reachZone(owner, t) { return buildZones(owner).has(S.zone[t]); }
+
+/**
+ * How far (in 8-way steps) each tile is from something of `owner`'s that reaches out: a finished building
+ * that holds land, or road or track of theirs. Kept until land, roads or track change.
+ */
+let _reach = { S: null, key: '', maps: [] };
+function reachMap(owner) {
+  const key = S.territoryVer + ':' + (S.roadVer || 0) + ':' + (S.railVer || 0);
+  if (_reach.S !== S || _reach.key !== key) _reach = { S, key, maps: [] };
+  if (_reach.maps[owner]) return _reach.maps[owner];
+  const W = S.W, H = S.H, N = W * H, dist = new Uint8Array(N).fill(255), q = [];
+  const seed = (t) => { if (dist[t]) { dist[t] = 0; q.push(t); } };
+  for (const b of S.buildings) if (!b.dead && b.owner === owner && b.built && (BDEFS[b.type].mil || civClaims(b))) seed(tIdx(b.x, b.y));
+  for (let t = 0; t < N; t++) if ((S.road[t] || (S.rail && S.rail[t])) && wayOwner(t) === owner) seed(t);
+  for (let h = 0; h < q.length; h++) {
+    const t = q[h], d = dist[t];
+    if (d >= BUILD_REACH) continue;
+    const i = t % W, j = (t / W) | 0;
+    for (let dj = -1; dj <= 1; dj++) for (let di = -1; di <= 1; di++) {
+      const x = i + di, y = j + dj;
+      if ((!di && !dj) || x < 0 || y < 0 || x >= W || y >= H) continue;
+      const u = y * W + x;
+      if (dist[u] > d + 1) { dist[u] = d + 1; q.push(u); }
+    }
+  }
+  return (_reach.maps[owner] = dist);
+}
+
+/** Is tile t within BUILD_REACH of something of `owner`'s (see reachMap)? */
+function inReach(owner, t) { return reachMap(owner)[t] <= BUILD_REACH; }
+
+/**
+ * Where `owner` may put a building of `type` on tile t, as far as the land goes: anywhere they hold, or on
+ * no-one's ground within BUILD_REACH of their buildings, roads or track; never on a rival's. Defences
+ * (DEFENCE_TYPES) only on their own land. '' if fine, or why not.
+ */
+function landRule(owner, type, t) {
+  const h = S.owner[t];
+  if (h === owner) return '';
+  if (h >= 0) return 'A rival holds this ground: build on your own land or no-one\'s.';
+  if (DEFENCE_TYPES.has(type)) return 'Defences only go inside your own border: an Outpost or Keep extends it.';
+  if (!inReach(owner, t)) return `Too far out: build within ${BUILD_REACH} tiles of your buildings, roads or track.`;
+  return '';
+}
+
 /** Count resource nodes in reach of (cx, cy) that bots there can actually walk to. */
 function reachableRes(cx, cy, radius, type) {
   return countResIn(cx, cy, radius, type, false, S.zone[tIdx(cx, cy)]);
@@ -1537,39 +1584,65 @@ function playerBots(p) { return S.bots.filter((u) => u.owner === p && !u.dead); 
 /**
  * Each tile belongs to the nearest military building (Command Base/Outpost) whose radius covers it.
  * A tile holding a player's building stays theirs as long as one of their military buildings
- * still covers it — so buildings are only lost when the military building protecting them falls.
- * Non-military buildings left outside their owner's territory are destroyed.
+ * still covers it. (Older notes: see computeTerritory for the rules now.)
+ */
+/**
+ * Does finished building b hold a little ground round itself (CIV_CLAIM)? Every building does but the
+ * military ones (they claim a wider ring, BDEFS terr), Walls and Gates, Ramps and creature nests.
+ */
+function civClaims(b) {
+  const def = BDEFS[b.type];
+  return b.built && !def.mil && !def.wild && !def.barrier && !def.gate && !def.ramp && b.type !== 'wall';
+}
+
+/**
+ * Who holds each tile (S.owner): a colony's influence, drawn on the ground. Military buildings (the Command
+ * Base, Outposts, Keeps...) claim a wide ring (BDEFS terr, or b.claim for a Port founded from a Ferry);
+ * every other finished building claims CIV_CLAIM tiles round itself, so a colony's land grows as it builds.
+ * A military claim outranks the small ones: where a rival's military ring covers ground only your
+ * buildings' small rings hold, the rival holds it (and those buildings are cut off: see below). Nearest
+ * claim wins within each kind; on an exact tie whoever held the tile keeps it.
  */
 function computeTerritory() {
   const { W, H } = S;
   const N = W * H;
-  const d = S.players.map(() => new Float32Array(N).fill(Infinity));
-  for (const b of S.buildings) {
-    // A Bunker claims no land; a Port founded from a Ferry (b.claim) claims a little round it.
-    if (b.dead || !b.built || ((!BDEFS[b.type].mil || BDEFS[b.type].bunker) && !(b.claim > 0))) continue;
-    const r = b.claim || BDEFS[b.type].terr, r2 = r * r + 0.3;
+  const d = S.players.map(() => new Float32Array(N).fill(Infinity)); // military claims
+  const c = S.players.map(() => new Float32Array(N).fill(Infinity)); // the small claims of everything else
+  const stamp = (arr, b, r) => {
+    const r2 = r * r + 0.3;
     for (let j = Math.max(0, b.y - r); j <= Math.min(H - 1, b.y + r); j++) {
       for (let i = Math.max(0, b.x - r); i <= Math.min(W - 1, b.x + r); i++) {
         const dd = dist2(i, j, b.x, b.y);
         const t = j * W + i;
-        if (dd <= r2 && dd < d[b.owner][t]) d[b.owner][t] = dd;
+        if (dd <= r2 && dd < arr[b.owner][t]) arr[b.owner][t] = dd;
       }
     }
+  };
+  for (const b of S.buildings) {
+    if (b.dead || !b.built) continue;
+    // A Bunker claims no wide ring; a Port founded from a Ferry (b.claim) claims a little round it.
+    if ((BDEFS[b.type].mil && !BDEFS[b.type].bunker) || b.claim > 0) stamp(d, b, b.claim || BDEFS[b.type].terr);
+    else if (civClaims(b)) stamp(c, b, CIV_CLAIM);
   }
+  const nearest = (arr, t) => {
+    let best = Infinity, who = -1, tie = false;
+    for (let p = 0; p < arr.length; p++) {
+      const v = arr[p][t];
+      if (v < best) { best = v; who = p; tie = false; } else if (v === best && v < Infinity) tie = true;
+    }
+    return tie ? -2 : who;
+  };
   for (let t = 0; t < N; t++) {
     const bid = S.bAt[t];
     if (bid) {
       const b = getE(bid);
       if (b && d[b.owner][t] < Infinity) { S.owner[t] = b.owner; continue; }
     }
-    // The nearest garrison's owner holds the tile (on an exact tie, whoever held it keeps it).
-    let best = Infinity, who = -1, tie = false;
-    for (let p = 0; p < d.length; p++) {
-      const c = d[p][t];
-      if (c < best) { best = c; who = p; tie = false; } else if (c === best && c < Infinity) tie = true;
-    }
-    if (who < 0) S.owner[t] = -1;
-    else if (!tie) S.owner[t] = who;
+    // The nearest military claim; where there's none, the nearest small one.
+    let who = nearest(d, t);
+    if (who === -1) who = nearest(c, t);
+    if (who === -1) S.owner[t] = -1;
+    else if (who >= 0) S.owner[t] = who;
   }
   // Where one of our bridges comes ashore on no-one's land, the ground within VIA_CLAIM of the landing
   // is ours too (land only, never anyone's), so an Outpost can go well onto the new island.
@@ -1613,21 +1686,46 @@ function computeTerritory() {
     }
   }
   S.territoryVer++;
+  // Buildings on a rival's ground: a construction site there is lost; a finished building is cut off
+  // (it stops working and crumbles, see cutOff) until its owner takes the land back. On no-one's ground,
+  // or its owner's, it's fine.
   for (const b of S.buildings.slice()) {
     if (b.dead || (BDEFS[b.type].mil && !BDEFS[b.type].bunker) || BDEFS[b.type].wild) continue;
-    // A Viaduct can land on no-one's ground (that's how you reach a new clifftop) or in a rival's
-    // land (a bridgehead for an attack): it's only lost once neither end stands in its owner's land.
-    if (b.type === 'viaduct') {
-      const o = b.link && getE(b.link), own = (e) => e && !e.dead && S.owner[tIdx(e.x, e.y)] === b.owner;
-      if (S.owner[tIdx(b.x, b.y)] < 0 || own(b) || own(o)) continue;
+    const o = S.owner[tIdx(b.x, b.y)];
+    let rival = o >= 0 && o !== b.owner;
+    // A Viaduct can land in a rival's land (a bridgehead for an attack): it's only cut off once neither
+    // end stands in its owner's land.
+    if (rival && b.type === 'viaduct') {
+      const e = b.link && getE(b.link);
+      if ((e && !e.dead && S.owner[tIdx(e.x, e.y)] === b.owner) || S.owner[tIdx(b.x, b.y)] === b.owner) rival = false;
     }
-    if (S.owner[tIdx(b.x, b.y)] !== b.owner) {
-      // Lost like a wrecked building: what was inside spills out as loot, and its crew walks away.
+    if (!rival) {
+      if (b.cut) { b.cut = 0; markDirty(b.x, b.y); postMsg(b.owner, `${BDEFS[b.type].name} is back in your hands and working again.`, b.x, b.y, 'good'); }
+      continue;
+    }
+    if (!b.built) {
+      // A site on a rival's land: lost, and what was brought for it spills out.
       const n = dropLoot(b);
-      postMsg(b.owner, `${BDEFS[b.type].name} was lost — it is no longer inside your territory.` + (n ? ' What was inside spilled out.' : ''), b.x, b.y, 'bad');
+      postMsg(b.owner, `A ${BDEFS[b.type].name} site was lost: the ground is the rival's now.` + (n ? ' What was brought for it spilled out.' : ''), b.x, b.y, 'bad');
       destroyBuilding(b, false);
+      continue;
     }
+    if (!b.cut) cutOff(b);
   }
+}
+
+/**
+ * Finished building b now stands on a rival's ground: cut off. It stops working (its worker walks away,
+ * nothing is hauled to it) and crumbles over CUT_CRUMBLE seconds unless its owner takes the land back
+ * (an Outpost or Keep of theirs nearer than the rival's).
+ */
+function cutOff(b) {
+  b.cut = S.time || 0.001;
+  b.working = false;
+  if (BDEFS[b.type].staff && typeof unstaff === 'function') unstaff(b);
+  markDirty(b.x, b.y);
+  postMsg(b.owner, `${BDEFS[b.type].name} is cut off: a rival's border has taken its ground. It has stopped working and will crumble unless you take the land back (an Outpost or Keep nearer than theirs).`, b.x, b.y, 'bad');
+  if (b.owner === 0 && typeof sfx === 'function') sfx('alert');
 }
 
 /** Share of the walkable land (ground tiles) a player has claimed, 0..1. */
@@ -1738,7 +1836,7 @@ function runwayFits(owner, i, j, dx, dy, self) {
     const x = i + dx * k, y = j + dy * k;
     if (!inMap(x, y)) return false;
     const t = tIdx(x, y);
-    if (S.terrain[t] !== T_GROUND || S.elev[t] !== lv || S.bAt[t] || S.road[t] || S.plan[t] || S.res[t] || S.ramp[t] || scorched(t) || S.owner[t] !== owner) return false;
+    if (S.terrain[t] !== T_GROUND || S.elev[t] !== lv || S.bAt[t] || S.road[t] || S.plan[t] || S.res[t] || S.ramp[t] || scorched(t) || (S.owner[t] >= 0 && S.owner[t] !== owner)) return false;
     if (S.rail && (S.rail[t] || (S.railPlan && S.railPlan[t]))) return false;
     const o = runwayAt(t);
     if (o && o !== self) return false;
@@ -1763,7 +1861,8 @@ function canPlace(owner, type, i, j, skipBlockCheck) {
   if (!def || !def.cost) return { ok: false, reason: 'Cannot build that.' };
   if (!inMap(i, j)) return { ok: false, reason: 'Outside the map.' };
   const t = tIdx(i, j);
-  if (S.owner[t] !== owner) return { ok: false, reason: 'You can only build inside your territory.' };
+  const land = landRule(owner, type, t);
+  if (land) return { ok: false, reason: land };
   if (S.terrain[t] !== T_GROUND) return { ok: false, reason: 'The ground here is not buildable.' };
   if (scorched(t)) return { ok: false, reason: 'This ground is still scorched from a nuclear blast.' };
   if (def.nuke && !nukeOn()) return { ok: false, reason: 'Only in a Nuclear race.' };
@@ -1827,7 +1926,7 @@ function canPlace(owner, type, i, j, skipBlockCheck) {
     if (def.prepaid && !skipBlockCheck && S.players[owner].ai && !canPay(owner, def.cost)) return { ok: false, reason: `Not enough ${missingGoods(owner, def.cost)}.` };
     return { ok: true, reason: '' };
   }
-  if (!roadSide) return { ok: false, reason: 'Haulers need a road to every building: leave a side open where a road can go (open ground inside your border).' };
+  if (!roadSide) return { ok: false, reason: 'Haulers need a road to every building: leave a side open where a road can go (open ground no rival holds).' };
   if (def.airfield) {
     const rwy = runwayDir(owner, i, j);
     if (!rwy) return { ok: false, reason: `An Airfield needs room for its runway: ${RUNWAY_LEN} tiles of open, level ground of yours in a straight line from it (east, west, north or south), with no road, deposit or building.` };
@@ -1943,7 +2042,7 @@ function placeSite(owner, type, i, j, cost, fromStore) {
 }
 
 /**
- * Roads can go on open ground inside your territory, and through resources (clearing them, at
+ * Roads can go on open ground you hold or no-one does (where your bots can reach), and through resources (clearing them, at
  * ROAD_CLEAR times the cost), oil seeps included so a pump is never walled in; not through a node
  * a bot is working. Over water or rock a road is a bridge or tunnel; a bridge can also be pushed
  * out over the water beyond your border, a tile at a time from your land or the end of a bridge
@@ -1954,6 +2053,8 @@ function canRoad(owner, i, j) {
   const t = tIdx(i, j);
   if (S.bAt[t] || S.resRes[t] || scorched(t) || runwayAt(t)) return false;
   if (S.owner[t] === owner) return true;
+  // No-one's ground your bots can reach: roads can run anywhere out there (a rival's ground is theirs).
+  if (S.owner[t] < 0 && !crossTile(t) && reachZone(owner, t)) return true;
   return bridgeable(t) && bridgeHead(owner, i, j);
 }
 
@@ -1962,7 +2063,7 @@ function bridgeHead(owner, i, j, extra) {
   for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
     if (!inMap(i + di, j + dj)) continue;
     const u = tIdx(i + di, j + dj);
-    if (S.owner[u] === owner || (bridgeable(u) && (S.road[u] || S.plan[u] === owner + 1)) || (extra && extra(u))) return true;
+    if (S.owner[u] === owner || S.plan[u] === owner + 1 || (S.road[u] && (bridgeable(u) || wayOwner(u) === owner)) || (extra && extra(u))) return true;
   }
   return false;
 }
@@ -2153,7 +2254,8 @@ function setPipe(t, v) {
 /** Why `owner` can't run pipe over tile t ('' if it can): its own ground, open or carrying a road or track. */
 function pipeBlocked(owner, t) {
   if (t < 0 || t >= S.W * S.H) return 'That\'s off the map.';
-  if (S.owner[t] !== owner) return 'Pipe only goes inside your border.';
+  if (S.owner[t] >= 0 && S.owner[t] !== owner) return 'A rival holds that ground: pipe only runs on yours or no-one\'s.';
+  if (S.owner[t] < 0 && (crossTile(t) || !reachZone(owner, t))) return crossTile(t) ? 'Pipe can\'t cross open water or a chasm outside your border.' : 'Your bots can\'t reach there yet.';
   if (scorched(t)) return 'The ground there is still scorched.';
   if (S.pipe[t] && S.pipe[t] !== owner + 1) return 'Someone else\'s pipe runs here.';
   return '';
@@ -2636,7 +2738,7 @@ function destroyBuilding(b, burn, quiet) {
   if (b.type === 'gate' && b.road) setRoad(b.x, b.y, true, b.owner);
   markDirty(b.x, b.y);
   if (!quiet) { collapseFx(b, burn); sfx('boom'); } // (taken down on purpose, as when a building moves: no wreck)
-  if (BDEFS[b.type].mil && b.built) computeTerritory();
+  if ((BDEFS[b.type].mil || civClaims(b)) && b.built) computeTerritory();
   if (boom >= 0) fuelBlast(b.x + 0.5, b.y + 0.5, b.type, boom, b.owner);
 }
 
@@ -2820,6 +2922,7 @@ function deserializeGame(json) {
   }
   computeZones();
   if (oldWays) wayOwnersFromLand();
+  computeTerritory(); // land as it's worked out now (every building holds a little round it)
   return S;
 }
 
@@ -2926,7 +3029,12 @@ function railBlocked(owner, t) {
   const i = t % S.W, j = (t / S.W) | 0;
   if (!inMap(i, j)) return 'Outside the map.';
   const via = S.bAt[t] ? getE(S.bAt[t]) : null;
-  if (S.owner[t] !== owner && !(via && via.type === 'viaduct' && via.owner === owner)) return 'Track only goes inside your border.';
+  const viaOk = via && via.type === 'viaduct' && via.owner === owner;
+  if (S.owner[t] >= 0 && S.owner[t] !== owner && !viaOk) return 'A rival holds that ground: track only runs on yours or no-one\'s.';
+  if (S.owner[t] < 0 && !viaOk) {
+    if (crossTile(t)) { if (!bridgeable(t) || !bridgeHead(owner, i, j, (u) => (S.rail[u] && wayOwner(u) === owner) || S.railPlan[u] === owner + 1)) return 'Track can only bridge out from your land or your own track.'; }
+    else if (!reachZone(owner, t)) return 'Your bots can\'t reach there yet.';
+  }
   if (S.bAt[t] && !(via && via.type === 'viaduct') && !(via && via.type === 'gate' && via.owner === owner)) return 'There is a building here.'; // track runs through your own Gates
   if (S.res[t]) return 'Clear the resources here first.';
   if (scorched(t)) return 'This ground is still scorched.';
