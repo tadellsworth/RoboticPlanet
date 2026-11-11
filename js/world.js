@@ -2188,10 +2188,13 @@ function seaLinked(a, b) { const cb = portComps(b); return portComps(a).some((c)
  * Map of port id -> the far port's tile, worked out once a tick.
  */
 let _ferryTick = -1, _ferryFor = null, _ferryMap = null;
+const _noFerries = new Map(); // (a planet with no sea has no Ports and no ferry lines: nothing to work out)
 function ferryLines() {
+  if (!navalMap()) return _noFerries;
   if (_ferryFor === S && _ferryTick === S.tick && _ferryMap) return _ferryMap;
   const m = new Map(), served = new Set();
-  for (const u of S.bots) if (!u.dead && BOTS[u.type].ferry && !u.landing) served.add(u.home);
+  // (A Ferry out on a landing, or sailing under your orders, isn't running its line meanwhile.)
+  for (const u of S.bots) if (!u.dead && BOTS[u.type].ferry && !u.landing && !u.manual) served.add(u.home);
   for (const b of S.buildings) {
     if (b.dead || !b.built || !b.ferryTo || !BDEFS[b.type].port) continue;
     const o = getE(b.ferryTo);
@@ -2720,13 +2723,31 @@ function killBot(bot, quiet) {
   if (!quiet) sfx('boom');
 }
 
+/**
+ * Another finished building of b's owner for the bots aboard a Ferry or a plane to count as inside once b
+ * is gone (see releaseBotsFrom): a Port or Airfield first, a garrison only if there's nothing else. Null if none.
+ */
+function aboardHold(b) {
+  let best = null, bs = 0;
+  for (const o of S.buildings) {
+    if (o === b || o.dead || !o.built || o.owner !== b.owner) continue;
+    const d = BDEFS[o.type], s = d.port || d.airfield ? 3 : d.mil ? 1 : 2;
+    if (s > bs) { bs = s; best = o; }
+  }
+  return best;
+}
+
 /** Detach every bot that depends on building b (tasks, staff, garrison, idle inside). */
 function releaseBotsFrom(b, killInside) {
+  let hold;
   for (const u of S.bots) {
     if (u.dead) continue;
     // Its owner's bots drop jobs there; attackers keep their orders (an attack moves on, a march goes on).
     if (u.owner === b.owner && taskRefs(u.task, b.id)) cancelTask(u);
     if (u.inside === b.id) {
+      // Aboard a Ferry or a plane that took it on here ("inside" only keeps it out of sight and out of reach):
+      // it isn't in the building, wherever its ride is by now. It stays aboard, and stays hidden.
+      if (u.ferryWait && u.ferryWait.ferry) { if (hold === undefined) hold = aboardHold(b); u.inside = hold ? hold.id : 0; continue; }
       if (killInside && (u.type === 'warbot' || b.staff === u.id || BOTS[u.type].air)) { killBot(u); continue; } // a plane parked in a hangar goes with it
       exitBuilding(u);
     }
@@ -2787,6 +2808,12 @@ function destroyBuilding(b, burn, quiet) {
   // A Gate that stood on a road leaves the road behind when it goes.
   if (b.type === 'gate' && b.road) setRoad(b.x, b.y, true, b.owner);
   markDirty(b.x, b.y);
+  // A Port at one end of a ferry line: the line goes with it, and the areas it joined are apart again.
+  if (BDEFS[b.type].port && b.ferryTo) {
+    const o = getE(b.ferryTo);
+    if (o && o.ferryTo === b.id) o.ferryTo = 0;
+    if (typeof ferryChanged === 'function') ferryChanged();
+  }
   if (!quiet) { collapseFx(b, burn); sfx('boom'); } // (taken down on purpose, as when a building moves: no wreck)
   if ((BDEFS[b.type].mil || civClaims(b)) && b.built && !(typeof LAND_HOLD !== 'undefined' && LAND_HOLD)) computeTerritory(); // (a nuclear blast works the land out once, when it's done: nukeImpact)
   if (boom >= 0) fuelBlast(b.x + 0.5, b.y + 0.5, b.type, boom, b.owner);

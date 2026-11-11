@@ -919,6 +919,7 @@ const WILD_OWNER = 1;
 const WILD = {
   first: 420, gap: [260, 400], reach: 24, raidTime: 70, grow: 600, guards: 2, guardEvery: 45, perTiles: 800,
   perBuildings: 14, maxPack: 9, bite: 1.1, roadEvery: 4, clear: 2, loot: { crystal: 8, ore: 8, alloy: 4 },
+  hunt: 6, // tiles an arrived Scuttler will walk to reach a bot (12 makes raids far deadlier: an AI colony was wiped out by minute 15)
 };
 
 /*

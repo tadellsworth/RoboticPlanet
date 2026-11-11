@@ -256,19 +256,20 @@ function ammoHeld(b, g) {
 /** What b can spare of g for another storing garrison's own Ammo: all but its own. */
 function ammoSpare(b, g) { return supplyOf(b, g) - ammoHeld(b, g); }
 
-/** What Airfield b holds on to: Fuel for its planes, and what the places it supplies by air are short of. */
-const _airKeep = { of: null, tick: -1, m: new Map() };
+/**
+ * What Airfield b holds on to: Fuel for its planes, and what the places it supplies by air are short of.
+ * Worked out once a tick for each Airfield (dispatch asks for every good): read it, don't change it.
+ */
 function airKeep(b) {
-  // (Worked out once a tick for each Airfield, like airWant: the dispatcher asks for every good of every order.)
-  if (_airKeep.of !== S || _airKeep.tick !== S.tick) { _airKeep.of = S; _airKeep.tick = S.tick; _airKeep.m = new Map(); }
-  let w = _airKeep.m.get(b.id);
-  if (w) return w;
-  w = Object.assign({}, airWant(b) || {});
-  let planes = 0, bombers = 0;
-  for (const u of S.bots) if (!u.dead && u.home === b.id && BOTS[u.type].air) { planes++; if (BOTS[u.type].bomber) bombers++; }
-  if (planes) w.fuel = (w.fuel || 0) + AIRFIELD_FUEL;
-  if (bombers) w.ammo = (w.ammo || 0) + BOMBER.ammo * bombers; // a sortie's worth for each of its bombers
-  _airKeep.m.set(b.id, w);
+  const C = airTally();
+  let w = C.keep.get(b.id);
+  if (!w) {
+    w = Object.assign({}, airWant(b) || {});
+    if (C.planes.get(b.id)) w.fuel = (w.fuel || 0) + AIRFIELD_FUEL;
+    const bombers = C.bombers.get(b.id) || 0;
+    if (bombers) w.ammo = (w.ammo || 0) + BOMBER.ammo * bombers; // a sortie's worth for each of its bombers
+    C.keep.set(b.id, w);
+  }
   return w;
 }
 
@@ -5726,7 +5727,7 @@ function meteorImpact(E, h) {
     if (Math.abs(di) + Math.abs(dj) > 1 || !inMap(i, j)) continue;
     const t = tIdx(i, j);
     if (!S.road[t] || S.bAt[t] || crossTile(t)) continue;
-    const o = S.owner[t];
+    const o = wayOwner(t); // whose road it is (one out past its owner's border is still theirs)
     wreckRoad(t, o, '');
     if (o >= 0) { wrecked.push([o, i, j]); E.cratered[o] = (E.cratered[o] || 0) + 1; }
   }
@@ -6039,13 +6040,14 @@ function updateNest(b) {
   if (!S.wildWarned) { S.wildWarned = true; sfx('alert'); }
 }
 
-/** The nearest colony bot out in the open within r tiles of (x, y). */
-function wildPrey(x, y, r) {
+/** The nearest colony bot out in the open within r tiles of (x, y) (with `zone`: only one standing in that walkable area). */
+function wildPrey(x, y, r, zone) {
   let best = null, bd = r * r;
   for (const v of S.bots) {
     if (v.dead || v.inside || v.owner === WILD_OWNER) continue;
     const d = dist2(v.x, v.y, x, y);
-    if (d < bd) { bd = d; best = v; }
+    if (d >= bd || (zone !== undefined && S.zone[tIdx(Math.floor(v.x), Math.floor(v.y))] !== zone)) continue;
+    bd = d; best = v;
   }
   return best;
 }
@@ -6092,7 +6094,7 @@ function bruteTarget(u, r) {
   for (const e of S.buildings) {
     if (e.dead || e.owner === WILD_OWNER || BDEFS[e.type].barrier) continue;
     const d = dist2(e.x + 0.5, e.y + 0.5, u.x, u.y);
-    if (d < bd * 0.6) { bd = d / 0.6; best = { bld: e, x: e.x, y: e.y }; }
+    if (d < bd * 0.6) { bd = d / 0.6; best = { bld: e.id, x: e.x, y: e.y }; }
   }
   return best;
 }
@@ -6134,9 +6136,11 @@ function updateCritter(u, dt) {
       return;
     }
     if (bt.smash) {
-      // A Brute: tear up the nearest road, or batter the nearest building.
-      let g = t.smash ? (t.smash.bld ? (t.smash.bld.dead ? null : t.smash) : (S.road[t.smash.road] ? t.smash : null)) : null;
-      if (!g) { g = bruteTarget(u, 6); t.smash = g; t.work = 0; }
+      // A Brute: tear up the nearest road, or batter the nearest building (kept by its id: an older save
+      // kept the building itself, which no save keeps whole, so that one counts as gone).
+      let g = t.smash, gb = g && g.bld ? getE(g.bld) : null;
+      if (g && (g.bld ? !gb || gb.dead : !S.road[g.road])) g = null;
+      if (!g) { g = bruteTarget(u, 6); t.smash = g; t.work = 0; gb = g && g.bld ? getE(g.bld) : null; }
       if (!g) { t.until = Math.min(t.until, S.time + 8); return; }
       const gx = g.x + 0.5, gy = g.y + 0.5;
       if (dist2(u.x, u.y, gx, gy) > (g.bld ? 1.7 : 1.1)) {
@@ -6145,14 +6149,16 @@ function updateCritter(u, dt) {
       }
       u.path = null;
       u.face = Math.atan2(gy - u.y, gx - u.x);
-      if (g.bld) { if (u.cd <= 0) critterBite(u, g.bld); return; }
+      if (g.bld) { if (u.cd <= 0) critterBite(u, gb); return; }
       t.work += dt; u.fought = 1;
       if (t.work >= WILD.roadEvery) { wreckRoad(g.road, wayOwner(g.road), 'Creatures are tearing up your roads'); t.smash = null; }
       return;
     }
-    // A Scuttler: hunt for bots further out, or move on to the colony's next spot.
-    const prey = wildPrey(u.x, u.y, 12);
-    if (prey) { u.fight = prey.id; return; }
+    // A Scuttler: hunt for bots a little further out (WILD.hunt: it makes for the nearest it can walk to, and
+    // goes for it once it's close: see above), or move on to the colony's next spot. (It used to pick prey up
+    // to 12 tiles off and then drop it at once for being over 6 away, so it stood still for the whole raid.)
+    const prey = wildPrey(u.x, u.y, WILD.hunt, S.zone[tIdx(Math.floor(u.x), Math.floor(u.y))]);
+    if (prey && travel(u, Math.floor(prey.x), Math.floor(prey.y), dt) !== null) return;
     t.until = Math.min(t.until, S.time + 10);
     return;
   }
@@ -6222,6 +6228,7 @@ function ropewayAcross(b) {
   const f = addBuilding(b.owner, 'ropeway', i, j, true);
   f.link = b.id; b.link = f.id; f.far = true;
   computeZones();
+  computeTerritory(); // the far station holds a little ground round it (it may go up long after the near one)
   postMsg(b.owner, 'The Ropeway is running: Haulers and Workers ride it across.', b.x, b.y, 'good');
 }
 
@@ -6386,7 +6393,7 @@ function launchFromYard(b, kind) {
   P.madeBots[kind] = (P.madeBots[kind] || 0) + 1;
   const u = addBot(b.owner, kind, b.x + 0.5, b.y + 0.5);
   enterBuilding(u, b);
-  if (BOTS[kind].ferry) { u.home = b.id; computeZones(); }
+  if (BOTS[kind].ferry) { u.home = b.id; ferryChanged(); } // (it may be the Ferry a line here was waiting for)
   if (BOTS[kind].air) { u.home = b.id; u.bat = 100; }
   addFx('ring', b.x + 0.5, b.y + 0.5, { color: PLAYER_COLORS[b.owner], r: 1.8 });
   postMsg(b.owner, BOTS[kind].sea ? `A ${BOTS[kind].name} was launched at the Port.` : BOTS[kind].air ? `A ${BOTS[kind].name} rolled out of the hangar.` : `A ${BOTS[kind].name} rolled out of the rail yard.`, b.x, b.y, 'good');
@@ -6490,7 +6497,8 @@ function updateTerminal(b, def, dt) {
   if (!b.built) return;
   const p = b.owner, T = tradeState(p);
   if (S.tick % 30 === b.id % 30) {
-    for (const g in T.sat) T.sat[g] = Math.min(1, T.sat[g] + TERMINAL.recover / 60); // once a second: `recover` a minute
+    // Once a second for the colony, however many Terminals it has: `recover` a minute.
+    if (S.tick - (T.satTick ?? -30) >= 30) { T.satTick = S.tick; for (const g in T.sat) T.sat[g] = Math.min(1, T.sat[g] + TERMINAL.recover / 60); }
     if (S.time >= T.next || !T.offers.length) newTradeOffers(p);
     if (!b.keep) syncTerminalOrders(p);
   }
@@ -6519,8 +6527,12 @@ function updateTerminal(b, def, dt) {
 
 /* ------------------------------------------------------------------ crawlers */
 
-/** Where a Crawler at (i, j) can deploy: the nearest clear, open tile within 2, not in another player's land. -1 if none. */
-function deploySpot(owner, i, j) {
+/**
+ * Where a Crawler at (i, j) can deploy (or a Drop Outpost come down): the nearest clear, open tile within 2, not in
+ * another player's land. With `zone`, only ground in that walkable area (a Crawler never unfolds across a cliff or a
+ * strait it couldn't cross); `terr` is the ring the building will hold (a Drop Outpost's, unless given). -1 if none.
+ */
+function deploySpot(owner, i, j, zone, terr) {
   let best = -1, bd = Infinity;
   for (let dj = -2; dj <= 2; dj++) for (let di = -2; di <= 2; di++) {
     const x = i + di, y = j + dj;
@@ -6528,8 +6540,9 @@ function deploySpot(owner, i, j) {
     const t = tIdx(x, y);
     if (S.terrain[t] !== T_GROUND || S.bAt[t] || S.road[t] || S.plan[t] || S.res[t] || S.ramp[t] || scorched(t) || runwayAt(t)) continue;
     if (S.owner[t] >= 0 && S.owner[t] !== owner) continue;
+    if (zone !== undefined && S.zone[t] !== zone) continue;
     if (S.wildlife && S.buildings.some((e) => !e.dead && BDEFS[e.type].wild && Math.max(Math.abs(e.x - x), Math.abs(e.y - y)) <= WILD.clear)) continue;
-    if (ringOverRival(owner, x, y, BDEFS.dropost.terr)) continue; // (its ring mustn't cut a rival's buildings off)
+    if (ringOverRival(owner, x, y, terr || BDEFS.dropost.terr)) continue; // (its ring mustn't cut a rival's buildings off)
     const d = di * di + dj * dj;
     if (d < bd) { bd = d; best = t; }
   }
@@ -6562,8 +6575,9 @@ function removeBot(u) {
 /** Drive Crawler u to (i, j); it deploys when it gets there. '' if under way, otherwise why not. */
 function driveCrawler(u, i, j) {
   if (!inMap(i, j)) return 'Outside the map.';
-  if (S.zone[tIdx(i, j)] !== S.zone[tIdx(Math.floor(u.x), Math.floor(u.y))]) return 'The Crawler can\'t roll there: it can\'t climb cliffs or cross water (it needs a slope, a Ramp or a bridge).';
-  if (deploySpot(u.owner, i, j) < 0) return 'No clear, open ground to deploy on there.';
+  const zone = S.zone[tIdx(Math.floor(u.x), Math.floor(u.y))];
+  if (S.zone[tIdx(i, j)] !== zone) return 'The Crawler can\'t roll there: it can\'t climb cliffs or cross water (it needs a slope, a Ramp or a bridge).';
+  if (deploySpot(u.owner, i, j, zone, BDEFS.crawlerbase.terr) < 0) return 'No clear, open ground to deploy on there.';
   u.task = { type: 'drive', x: i, y: j };
   u.path = null;
   return '';
@@ -6596,7 +6610,9 @@ function updateCrawler(u, dt) {
 
 /** The Crawler unfolds into its base where it stands (or on the nearest clear tile). '' if done. */
 function deployCrawler(u) {
-  const t = deploySpot(u.owner, Math.floor(u.x), Math.floor(u.y));
+  if (u.dead) return 'That Crawler is gone.';
+  const zone = S.zone[tIdx(Math.floor(u.x), Math.floor(u.y))]; // (only ground it could drive to: never across a cliff or a strait)
+  const t = deploySpot(u.owner, Math.floor(u.x), Math.floor(u.y), zone >= 0 ? zone : undefined, BDEFS.crawlerbase.terr);
   if (t < 0) return 'The Crawler needs clear, open ground to deploy: drive it somewhere level and empty.';
   const b = addBuilding(u.owner, 'crawlerbase', t % S.W, (t / S.W) | 0, true);
   b.face = u.face || 0; b.deployedAt = S.time; // for the drawing: which way it's parked, and the unfolding
@@ -6909,7 +6925,7 @@ function deliverShip(u) {
   }
   exitBuilding(u);
   enterBuilding(u, st);
-  if (BOTS[u.type].ferry) { u.home = st.id; computeZones(); }
+  if (BOTS[u.type].ferry) { u.home = st.id; ferryChanged(); }
   addFx('ring', st.x + 0.5, st.y + 0.5, { color: PLAYER_COLORS[u.owner] });
   postMsg(u.owner, `A ${name} is ready at a Port.`, st.x, st.y, 'good');
 }
@@ -6983,8 +6999,12 @@ function updateFerry(u, dt) {
     return;
   }
   if (!u.inside) { const dest = line ? home : nearestPort(u); if (dest && S.tick % 15 === u.id % 15) sailTo(u, dest); return; }
-  if (!line || S.tick % 6 !== u.id % 6) return;
+  if (S.tick % 6 !== u.id % 6) return;
   const here = getE(u.inside);
+  if (!here) return;
+  // No line (it was stopped, or its other Port is gone): whoever came aboard for the crossing gets off again
+  // and plans its way anew. (Warbots you put aboard stay: they sail when you say.)
+  if (!line) { if (u.aboard && u.aboard.length) unloadFerry(u, here, true); return; }
   const other = here === home ? far : here === far ? home : null;
   if (!other) { sailTo(u, home); return; }
   let seats = FERRY_SEATS;
@@ -7003,18 +7023,24 @@ function updateFerry(u, dt) {
   if ((n && (seats <= 0 || S.time - u.boardT >= FERRY_WAIT)) || (!n && waitingThere)) sailTo(u, other);
 }
 
-/** A Ferry tied up at Port `to` lets its passengers off: each carries on along its route from there (warbots you put aboard go back to a garrison). */
-function unloadFerry(u, to) {
-  const t = to.y * S.W + to.x;
+/**
+ * A Ferry tied up at Port `to` lets its passengers off: each carries on along its route from there; one put
+ * off where its route doesn't lead on from drops its errand and plans again (warbots you put aboard go back
+ * to a garrison, or with `keepManual` stay aboard).
+ */
+function unloadFerry(u, to, keepManual) {
+  const t = to.y * S.W + to.x, stay = [];
   for (const v of ferryAboard(u)) {
     const manual = v.ferryWait && v.ferryWait.manual;
+    if (manual && keepManual) { stay.push(v.id); continue; }
     v.ferryWait = null;
     v.inside = 0;
     v.x = to.x + 0.5; v.y = to.y + 0.5; v.vel = 0;
-    if (v.path && v.path[v.pi] === t) v.pi++; else v.path = null;
+    // (Never left with an errand and no route to it: a bot with no route counts as having arrived.)
+    if (v.path && v.path[v.pi] === t) v.pi++; else { v.path = null; if (!manual) cancelTask(v); }
     if (manual) { v.task = null; if (v.type === 'warbot') goGarrison(v); }
   }
-  u.aboard = [];
+  u.aboard = stay;
 }
 
 /* Ferries under your orders: sail anywhere, take warbots aboard off a beach, put them ashore, back to the line. */
@@ -7033,7 +7059,7 @@ function orderSail(owner, f, i, j) {
   const port = S.bAt[t] ? getE(S.bAt[t]) : null;
   if (port && port.owner === owner && BDEFS[port.type].port && port.built) {
     if (!portComps(port).some((c) => comps.includes(c))) return 'The Ferry can\'t sail to that Port.';
-    f.manual = null;
+    if (f.manual) { f.manual = null; ferryChanged(); } // (its line runs again)
     if (f.inside === port.id) return '';
     return sailTo(f, port) ? '' : 'The Ferry can\'t find a way there by water.';
   }
@@ -7129,7 +7155,7 @@ function orderBoardFerry(owner, ids, f) {
   const n = orderMove(owner, ids.filter((id) => { const v = getE(id); return v && v.type === 'warbot'; }), bi, bj);
   if (!n) return 'None of them can walk there.';
   for (const id of ids) { const v = getE(id); if (v && v.type === 'warbot' && v.task) v.embarkOn = f.id; }
-  if (!f.manual) f.manual = { i: Math.floor(f.x), j: Math.floor(f.y) }; // it waits there for them
+  if (!f.manual) { f.manual = { i: Math.floor(f.x), j: Math.floor(f.y) }; ferryChanged(); } // it waits there for them (its line waits)
   return n;
 }
 
@@ -7203,6 +7229,7 @@ function foundPortBlocked(owner, f, i, j) {
   const t = tIdx(i, j);
   if (S.terrain[t] !== T_GROUND || S.bAt[t] || S.res[t] || S.road[t] || S.plan[t] || S.ramp[t] || (S.rail && S.rail[t]) || scorched(t) || runwayAt(t)) return 'Pick open, empty ground on the shore (no road, deposit or building).';
   if (S.owner[t] >= 0 && S.owner[t] !== owner) return 'Not on land someone else holds.';
+  if (ringOverRival(owner, i, j, PORT_FOUND.claim)) return `Too close to a rival's buildings: the Port's land (${PORT_FOUND.claim} tiles round it) would cut them off.`;
   if (S.wildlife && S.buildings.some((e) => !e.dead && BDEFS[e.type].wild && Math.max(Math.abs(e.x - i), Math.abs(e.y - j)) <= WILD.clear)) return 'Too close to a creature nest.';
   const docks = portDocks(i, j), comps = shipComps(f), comp = seaNet().comp;
   if (!docks.length) return 'A Port goes right at the water\'s edge, beside open water wide enough for ships.';
@@ -7240,6 +7267,7 @@ function foundKitWant(b) {
 function foundPortAt(u, L) {
   const t = tIdx(L.x, L.y);
   if (S.terrain[t] !== T_GROUND || S.bAt[t] || S.res[t] || S.road[t] || S.ramp[t] || (S.owner[t] >= 0 && S.owner[t] !== u.owner) || !portDocks(L.x, L.y).length) return null;
+  if (ringOverRival(u.owner, L.x, L.y, PORT_FOUND.claim)) return null; // (a rival built close by while it sailed: its land mustn't cut them off)
   const b = addBuilding(u.owner, 'port', L.x, L.y, true);
   b.claim = PORT_FOUND.claim;
   computeTerritory();
@@ -7424,13 +7452,34 @@ function takeUpRail(owner, t) {
  */
 
 let AIRW = null; // per tick: what each Airfield should keep for the places it supplies by air
+let AIRC = null; // per tick: the aircraft based at each Airfield, and those up in the air (see airTally)
 
-/** Owner's built Airfield nearest (x, y) with a Cargo Plane based there, or null. */
+/**
+ * This tick's tally of the aircraft, worked out once however often it's asked for (dispatch asks for every
+ * good at every Airfield, every Flak Gun every tick): `planes` and `bombers` (Maps of Airfield id -> how many
+ * are based there), `bases` (the built Airfields with a plane, in S.buildings' order), `up` (every aircraft
+ * in the air, in S.bots' order) and `keep` (what each Airfield holds on to, filled in by airKeep).
+ */
+function airTally() {
+  if (!AIRC || AIRC.S !== S || AIRC.tick !== S.tick) {
+    const planes = new Map(), bombers = new Map(), bases = [], up = [];
+    for (const u of S.bots) {
+      if (u.dead || !BOTS[u.type].air) continue;
+      planes.set(u.home, (planes.get(u.home) || 0) + 1);
+      if (BOTS[u.type].bomber) bombers.set(u.home, (bombers.get(u.home) || 0) + 1);
+      if (u.flight && planeAlt(u) >= 0.15) up.push(u);
+    }
+    for (const b of S.buildings) if (!b.dead && b.built && BDEFS[b.type].airfield && planes.get(b.id)) bases.push(b);
+    AIRC = { S, tick: S.tick, planes, bombers, bases, up, keep: new Map() };
+  }
+  return AIRC;
+}
+
+/** Owner's built Airfield nearest (x, y) with a plane based there, or null. */
 function airBaseNear(owner, x, y) {
   let best = null, bd = Infinity;
-  for (const b of S.buildings) {
-    if (b.dead || !b.built || b.owner !== owner || !BDEFS[b.type].airfield) continue;
-    if (!S.bots.some((u) => !u.dead && u.home === b.id && BOTS[u.type].air)) continue;
+  for (const b of airTally().bases) {
+    if (b.dead || b.owner !== owner) continue; // (the tally is this tick's: one may have gone since)
     const d = dist2(b.x, b.y, x, y);
     if (d < bd) { bd = d; best = b; }
   }
@@ -7576,7 +7625,8 @@ function flyStep(u, dt) {
     u.vel = Math.min(vmax, (u.vel || 0) + ROLL_ACCEL * dt);
     u.alt = 0;
     movePlane(u, dt);
-    if (!R || (u.x - R.x0) * R.dx + (u.y - R.y0) * R.dy >= RUNWAY_LEN - 1) F.ph = 'air'; // off the far end
+    // Off the far end (or up against the map's edge: a runway that runs right out to it ends a little short).
+    if (!R || u.pinned || (u.x - R.x0) * R.dx + (u.y - R.y0) * R.dy >= RUNWAY_LEN - 1) F.ph = 'air';
     return null;
   }
   if (F.ph === 'air') {
@@ -7651,6 +7701,7 @@ function airdropBlocked(owner, u, kind, i, j) {
   if (kind === 'outpost') {
     if (S.terrain[t] !== T_GROUND || S.bAt[t] || S.road[t] || S.plan[t] || S.res[t] || S.ramp[t] || (S.rail && S.rail[t]) || scorched(t) || runwayAt(t)) return 'Drop it on open, empty ground (no road, track, runway or deposit).';
     if (S.owner[t] >= 0 && S.owner[t] !== owner) return 'Not on land someone else holds.';
+    if (ringOverRival(owner, i, j, BDEFS.dropost.terr)) return `Too close to a rival's buildings: its ring (${BDEFS.dropost.terr} tiles) would cut them off.`;
     if (S.wildlife && S.buildings.some((e) => !e.dead && BDEFS[e.type].wild && Math.max(Math.abs(e.x - i), Math.abs(e.y - j)) <= WILD.clear)) return 'Too close to a creature nest.';
     if (!canAffordRoad(owner, BDEFS.dropost.cost)) return `A Drop Outpost costs ${costText(BDEFS.dropost.cost)}: not enough ${missingGoods(owner, BDEFS.dropost.cost)} in storage.`;
   } else {
@@ -7745,15 +7796,15 @@ function airSupplyRun(u, b) {
 
 function updatePlane(u, dt) {
   if (u.bat === undefined) u.bat = 100;
-  const M = u.mission;
+  let M = u.mission;
   // In the air: burn Fuel, fly on.
   if (u.flight) {
     u.bat = Math.max(0, u.bat - PLANE_BURN * dt * drainMul(u));
-    const F = u.flight;
+    let F = u.flight;
     // On a strike: it follows a moving target, and turns for home if the target's gone.
     if (M && M.kind === 'strike' && M.phase === 'out' && !F.home) {
       const tg = getE(M.target);
-      if (!strikeTarget(u, tg)) { u.mission = null; headHome(u); }
+      if (!strikeTarget(u, tg)) { u.mission = M = null; headHome(u); F = u.flight; } // (the way home is a new flight: the sortie is over)
       else if (!BDEFS[tg.type]) { F.tx = tg.x; F.ty = tg.y; }
     }
     const ev = flyStep(u, dt);
@@ -7790,7 +7841,7 @@ function updatePlane(u, dt) {
     for (const g in run.load) { bump(base.stock, g, -run.load[g]); bump(run.c.inc, g, run.load[g]); }
     run.c.airAt = S.time;
     u.cargo = run.load;
-    u.mission = { kind: 'supply', to: run.c.id, x: run.c.x, y: run.c.y, phase: 'load', since: S.time };
+    u.mission = { kind: 'supply', to: run.c.id, x: run.c.x, y: run.c.y, phase: 'load', since: S.time, load: run.load }; // (`load`: what the place has been promised, see planeLost)
     return;
   }
   if (M.phase !== 'load') return;
@@ -7947,12 +7998,14 @@ function bombHit(b, dmg, by) {
   b.armor -= keepShield(b, dmg);
   b.lastHit = S.time;
   if (by >= 0) (S.players[b.owner].hitBy = S.players[b.owner].hitBy || {})[by] = S.time;
-  if (b.built && def.mil) { const f = missileFloor(b); if (b.armor < f) b.armor = Math.min(f, b.armor + dmg); return; }
-  if (b.armor <= 0) {
+  if (b.built && def.mil) { const f = missileFloor(b); if (b.armor < f) b.armor = Math.min(f, b.armor + dmg); } // (a fort is held at its floor; its owner still hears of the hit)
+  else if (b.armor <= 0) {
     postMsg(by, `Your bomber destroyed the enemy ${def.name}.`, b.x, b.y, 'good');
     postMsg(b.owner, `An enemy bomber destroyed your ${def.name}!`, b.x, b.y, 'bad');
     destroyBuilding(b, true);
-  } else if (S.time - (b.lastAlert || -99) > 12) {
+    return;
+  }
+  if (S.time - (b.lastAlert || -99) > 12) {
     b.lastAlert = S.time;
     postMsg(b.owner, `An enemy bomber hit your ${def.name}!`, b.x, b.y, 'bad');
   }
@@ -7962,7 +8015,9 @@ function bombHit(b, dmg, by) {
 function planeLost(u, keep) {
   const M = u.mission;
   if (M) {
-    if (M.kind === 'supply' && u.cargo) { const c = getE(M.to); if (c) for (const g in u.cargo) bump(c.inc, g, -u.cargo[g]); }
+    // What it was bringing is no longer on its way. (A plane wrecked with goods aboard has spilt them by now, see
+    // killBot: the flight's own note of its load says what was promised. Flights from older saves have only u.cargo.)
+    if (M.kind === 'supply') { const c = getE(M.to), load = u.cargo || M.load; if (c && load) for (const g in load) bump(c.inc, g, -load[g]); }
     if (M.kind === 'outpost' && M.phase === 'load') refundRoad(u.owner, BDEFS.dropost.cost, Math.floor(u.x), Math.floor(u.y)); // shot down with it aboard, it's lost
   }
   if (keep) {
@@ -8008,7 +8063,8 @@ function landDrop(d) {
   }
   if (d.kind === 'outpost') {
     let at = t;
-    if (S.bAt[at] || S.terrain[at] !== T_GROUND || (S.owner[at] >= 0 && S.owner[at] !== d.owner)) at = deploySpot(d.owner, d.i, d.j);
+    // (Somewhere beside it if the spot was taken while it fell, or a rival built close enough to be cut off by its ring.)
+    if (S.bAt[at] || S.terrain[at] !== T_GROUND || (S.owner[at] >= 0 && S.owner[at] !== d.owner) || ringOverRival(d.owner, d.i, d.j, BDEFS.dropost.terr)) at = deploySpot(d.owner, d.i, d.j);
     if (at < 0) { refundRoad(d.owner, BDEFS.dropost.cost, d.i, d.j); postMsg(d.owner, 'The Drop Outpost came down where it couldn\'t stand: its goods went back into storage.', d.i, d.j, 'warn'); return; }
     if (S.plan[at]) cancelPlan(at);
     const b = addBuilding(d.owner, 'dropost', at % S.W, (at / S.W) | 0, true);
@@ -8060,11 +8116,11 @@ function landDrop(d) {
 
 /* ------------------------------------------------------------------ flak */
 
-/** Enemy aircraft up in the air within `range` of (x, y), nearest first. */
+/** Enemy aircraft up in the air within `range` of (x, y), nearest first (from this tick's list of what's flying: airTally). */
 function aircraftNear(owner, x, y, range) {
   const out = [];
-  for (const u of S.bots) {
-    if (u.dead || u.owner === owner || !BOTS[u.type].air || !u.flight || planeAlt(u) < 0.15) continue;
+  for (const u of airTally().up) {
+    if (u.dead || u.owner === owner || !u.flight || planeAlt(u) < 0.15) continue; // (one may have come down since the list was made)
     const d = dist2(u.x, u.y, x, y);
     if (d <= range * range) out.push([d, u]);
   }
@@ -8080,7 +8136,8 @@ function aircraftNear(owner, x, y, range) {
 function updateFlak(b, def, dt) {
   const f = def.flak, cx = b.x + 0.5, cy = b.y + 0.5;
   b.cd = (b.cd || 0) - dt;
-  const tgt = aircraftNear(b.owner, cx, cy, def.range + auraRange(b))[0];
+  // (Most of the time nothing is flying at all: then there's nothing to look for, nor its reach to work out.)
+  const tgt = airTally().up.length ? aircraftNear(b.owner, cx, cy, def.range + auraRange(b))[0] : null;
   if (!tgt) { b.status = (b.shells || 0) + (b.stock.ammo || 0) > 0 ? 'Watching the sky (7 tiles out)' : 'No Ammo: haulers bring it from storage'; return; }
   // The barrels follow it round.
   const want = Math.atan2(tgt.y - cy, tgt.x - cx);
