@@ -38,7 +38,7 @@ Designs proposed, waiting for a go-ahead:
 - **Air (after ships).** An **Airfield** (done, with the Cargo Plane and air drops), a **strike bomber** (its look follows
   a Foxbat three-view, mocked up in renderer/b/bomber.js: a long black radome, big box intakes, a broad flat body, a
   43-degree wing with tip pods, swept stabilators, twin canted fins, two big nozzles, bombs under the wings; up to
-  two per Airfield beside its one Cargo Plane; each hits one target a sortie, then needs a while on the ground to rearm
+  two per Airfield beside its one Cargo Plane; the AI never uses the Cargo Plane and should fly bombers only seldom; each hits one target a sortie, then needs a while on the ground to rearm
   and refuel; its bomb is loaded from Ammo at the Airfield, several Ammo a sortie (about 6) for the bigger hit; Flak Guns,
   which shoot regular Ammo, are the counter) for precision strikes (a smaller, faster, cheaper hit
   than a Missile, on a building you pick, or on a moving target such as a Tanker on the road, which then explodes),

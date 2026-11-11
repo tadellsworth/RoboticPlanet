@@ -234,11 +234,7 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
   Warbots posted to a cut-off post (`secluded`: supplied by air, or where they can't walk to the Command Base) stay with
   it: they recharge and reload there, go for repairs, rally flags and attacks only within `SECLUDED_REACH` (16) of it,
   and dropped beside a garrison of yours they're posted to it.
-  The AI flies too (`aiAir`): once its war economy is up (two Smelters, a few minutes into the war; straight away on a
-  naval map or for a Raider) it builds an Airfield and orders a Cargo Plane. The plane reinforces a cut-off fort of its
-  own with two warbots, and every few minutes (`AIR_RAID_GAP`, more often for a Raider) drops two warbots beside the
-  rival's least-guarded industry, clear of its Flak (`AIR_TARGETS`), to wreck what they can; after `AIR_RAID_TIME` they
-  head home, or across the water go after the nearest enemy building.
+  The AI never flies Cargo Planes (it may get bombers, used seldom, when they come).
 - **Flak Guns** (4 Cement, 3 Alloy; Build → Defend; Versus): a twin anti-aircraft gun (`def.flak`, `updateFlak`). It
   tracks the nearest enemy aircraft in the air within 7 tiles (`aircraftNear`; never one on the ground, never a robot)
   and every `reload` s fires a salvo of `salvo` shells, each led to where the plane will be when it gets there (shell

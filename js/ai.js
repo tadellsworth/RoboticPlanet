@@ -115,13 +115,6 @@ function aiThink(p) {
     if (counts.reactor && goodTotal(p, 'fissile') + goodTotal(p, 'uranium') / 2 >= 2) nuke.push(['nukesilo', 1]);
     plan = plan.slice(0, k).concat(nuke, plan.slice(k));
   }
-  // Air: an Airfield (and a Cargo Plane, see the Foundry below) once the war economy is up (two Smelters,
-  // three minutes into the war; straight away on a naval map or for a Raider). Its plane flies air raids and reinforces cut-off forts
-  // (see aiAir).
-  // (Not while the army is small, and not again for five minutes after losing one.)
-  if (counts.airfield) P.airfieldSeen = S.time;
-  if (S.mode !== 'colony' && !counts.airfield && counts.foundry && (counts.smelter || 0) >= 2 && (kinds.warbot || 0) >= lvl.threshold &&
-      S.time - (P.airfieldSeen || -999) > 300 && S.time > lvl.grace + (navalMap() || st.raids >= 2 ? 0 : 180)) plan = [['airfield', 1]].concat(plan);
   // Under attack at the front: a Bunker, a Mortar Pit or a Disruptor Tower beside the fort that is being hit
   // (whichever we have fewest of), one every two minutes or so, up to one more every eight minutes of play.
   const hitFort = me.filter((b) => b.built && BDEFS[b.type].mil && !BDEFS[b.type].bunker && S.time - (b.lastHit || -99) < 45)
@@ -349,8 +342,6 @@ function aiThink(p) {
     else if ((kinds.tanker || 0) < wantTankers && !(b.orders.tanker > 0)) b.orders.tanker = 1;
     // A forward Depot with supply orders gets a Freight Truck to keep it stocked.
     else if (me.some((d) => d.keep && d.built) && (kinds.truck || 0) < 1 + Math.floor(me.length / 35) && !(b.orders.truck > 0)) b.orders.truck = 1;
-    // An Airfield with no plane: a Cargo Plane (once there's an army big enough to attack with).
-    if (S.mode !== 'colony' && army >= lvl.threshold && !(kinds.cargoplane > 0) && !(b.orders.cargoplane > 0) && me.some((a) => a.type === 'airfield' && a.built)) b.orders.cargoplane = 1;
     break;
   }
   // Depots out towards the front keep Cement for building there.
@@ -393,8 +384,6 @@ function aiThink(p) {
 
   // 4c) Naval maps: a Port, a Ferry, and beach landings on the enemy's shore.
   if (S.mode !== 'colony' && navalMap()) aiNaval(p, me, kinds, lvl, lander, sites < maxSites);
-  // 4d) Air: raids and reinforcements by Cargo Plane.
-  if (S.mode !== 'colony') aiAir(p, me, kinds, lvl);
 
   // 4b) Raids on the enemy's supply lines, and answering the enemy's raids on ours.
   if (S.mode !== 'colony') aiCounterRaid(p);
@@ -560,72 +549,6 @@ function aiNaval(p, me, kinds, lvl, lander, canBuild) {
   if (!best) { P.lastLanding = S.time - 100; return; }
   if (!orderLanding(p, ferry, best.i, best.j, Math.min(FERRY_SEATS, avail))) P.lastLanding = S.time;
   else P.lastLanding = S.time - 100;
-}
-
-/**
- * Air (Versus): a Cargo Plane parked at its Airfield flies two kinds of sortie. A cut-off fort of ours (a
- * Drop Outpost, or a fort across the water) with fewer than two warbots gets two more from home. And every
- * few minutes (more often for a Raider) two warbots parachute in beside the enemy's least-guarded industry,
- * out of reach of its Flak, to wreck what they can; raiders on our own landmass head home after a while.
- */
-const AIR_RAID_GAP = 210, AIR_RAID_TIME = 90;
-const AIR_TARGETS = { munitions: 6, reactor: 6, fab: 5, foundry: 5, smelter: 4, refinery: 4, armory: 4, generator: 3, kiln: 3, airfield: 3, mine: 2, tap: 2, pump: 2, charger: 2, depot: 2 };
-function aiAir(p, me, kinds, lvl) {
-  const P = S.players[p];
-  if (P.airRaid && S.time - P.airRaid.at > AIR_RAID_TIME) {
-    const r = S.rallies.find((q) => q.owner === p && dist2(q.x, q.y, P.airRaid.i + 0.5, P.airRaid.j + 0.5) < 4);
-    const z = r ? S.zone[tIdx(Math.floor(r.x), Math.floor(r.y))] : -1;
-    if (r && z === homeZone(p)) recallRally(r.id);
-    else if (r) {
-      // Across the water (or a canyon) they can't walk home: on to the nearest enemy building they can reach.
-      let tgt = null, bd = Infinity;
-      for (const b of S.buildings) {
-        if (b.dead || b.owner === p || b.owner < 0 || BDEFS[b.type].wild || S.zone[tIdx(b.x, b.y)] !== z) continue;
-        const d = dist(b.x, b.y, r.x, r.y);
-        if (d < bd) { bd = d; tgt = b; }
-      }
-      if (tgt) for (const u of rallyMembers(r.id)) { u.task = { type: 'attack', target: tgt.id }; u.path = null; }
-    }
-    P.airRaid = null;
-  }
-  if (S.time < lvl.grace || S.time < (P.nextAir || 0)) return;
-  const plane = S.bots.find((u) => !u.dead && u.owner === p && BOTS[u.type].air && !u.mission && planeBase(u) && u.inside === u.home);
-  if (!plane) return;
-  P.nextAir = S.time + 15;
-  const base = planeBase(plane), spare = rallyAvailable(p, base.x, base.y, true);
-  // 1) Reinforce a cut-off fort.
-  for (const b of me) {
-    if (!b.built || b.type === 'lander' || !BDEFS[b.type].garrison || !secluded(b) || b.garrison.length >= 2) continue;
-    if (spare < 3 || airdropBlocked(p, plane, 'warbot', b.x, b.y)) continue;
-    if (!orderAirdrop(p, plane, 'warbot', b.x, b.y, 2)) { P.nextAir = S.time + 60; return; }
-  }
-  // 2) An air raid.
-  if (S.time < (P.nextAirRaid || lvl.grace + 60) || (kinds.warbot || 0) < lvl.threshold + 2 || spare < 4) return;
-  const foe = (o) => o >= 0 && o !== p && S.players[o] && !S.players[o].out && !S.players[o].absent;
-  const flak = S.buildings.filter((b) => !b.dead && b.built && b.type === 'flak' && foe(b.owner));
-  let best = null, bs = -Infinity;
-  for (const b of S.buildings) {
-    const v = AIR_TARGETS[b.type];
-    if (!v || b.dead || !b.built || !foe(b.owner)) continue;
-    if (flak.some((f) => dist2(f.x, f.y, b.x, b.y) <= (BDEFS.flak.range + 1.5) ** 2)) continue;
-    const g = guardsNear(b) + b.garrison.length;
-    if (g > 2) continue;
-    const s = v * 2 - g * 3 - dist(b.x, b.y, base.x, base.y) * 0.05 + hash2(b.id, p, 11);
-    if (s <= bs) continue;
-    let spot = null;
-    for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [-1, 1], [1, -1], [-1, -1], [2, 0], [-2, 0], [0, 2], [0, -2]]) {
-      const i = b.x + di, j = b.y + dj;
-      if (inMap(i, j) && !airdropBlocked(p, plane, 'warbot', i, j)) { spot = { i, j }; break; }
-    }
-    if (spot) { bs = s; best = spot; }
-  }
-  P.nextAirRaid = S.time + 30; // nothing in reach: look again soon
-  if (!best) return;
-  if (!orderAirdrop(p, plane, 'warbot', best.i, best.j, 2)) {
-    P.airRaid = { i: best.i, j: best.j, at: S.time + PLANE_GATHER };
-    P.nextAirRaid = S.time + AIR_RAID_GAP / Math.max(0.5, aiStyle(p).raids || 1);
-    P.nextAir = S.time + 60;
-  }
 }
 
 /**
