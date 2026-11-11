@@ -94,6 +94,9 @@
     <h1 class="logo">TERRAFALL</h1>
     <p class="tagline">Claim. Seize. Annihilate.</p>
     <button id="m-continue" class="btn primary big" hidden>Continue</button>
+    <button id="m-import" class="btn big ghost" title="Load a game saved to a file with Download save file (from the pause menu), on this device or another">Load a save file</button>
+    <input type="file" id="m-import-file" accept=".json,application/json" hidden>
+    <p class="hint" id="m-import-msg" hidden></p>
     <button id="m-missions" class="btn big">Missions</button>
     <div class="label free-play">Free play</div>
     <div class="field">
@@ -181,6 +184,7 @@
     <button id="p-daynight" class="btn big" title="Morning, day, evening and night, 12 minutes round (a display setting)">Day and night: On</button>
     <button id="p-stats" class="btn big">Statistics</button>
     <button id="p-saveplanet" class="btn big" title="Keep this planet (its seed and map settings) to play again from the new-game menu">Save this planet</button>
+    <button id="p-export" class="btn big" title="Save this game to a file you can load on any device (main menu, Load a save file)">Download save file</button>
     <button id="p-help" class="btn big">How to play</button>
     <button id="p-quit" class="btn big ghost">Save &amp; quit to menu</button>
     <p class="hint" id="p-saved"></p>
@@ -293,6 +297,7 @@
       <p>A <b>Research Lab</b> (6 Cement, 4 Alloy, 2 Chips; Colony free play) researches upgrades for your whole colony, one at a time. Tap it and pick one: the cost (Chips, Crystal and sometimes Alloy) comes out of storage straight away, and a worker in the Lab does the research. A second Lab makes it twice as fast; Cancel gives the cost back. The upgrades: <b>Cargo Racks</b> (Haulers carry 3, Freight Trucks 10), <b>Long-life Cells</b> (batteries drain 30% slower and Fuel Stations charge 50% faster), <b>Rapid Paving</b> (roads, bridges and tunnels take 40% less time), <b>Sentry Optics</b> (turrets reach 1.5 tiles further, 6 shots per Crystal), <b>Turbo Motors</b> (every bot 15% faster), <b>Power Tools</b> (all work 15% faster) and <b>Nanite Repair</b> (bots and buildings slowly mend themselves).</p>
       <h3>Rivals</h3>
       <p>Pick how strong the rival is on the new-game screen: <b>Easy</b>, <b>Medium</b> (between Easy and Normal: it attacks later, with smaller armies, and raids less), <b>Normal</b> or <b>Hard</b>. <b>Rival style</b> picks its personality: <b>Balanced</b> unless you choose another, or <b>Random</b> (with two rivals, each gets a different one). You're told which one you're facing when you land, and its Command Base's panel says too.</p>
+      <p><b>Saves</b> stay on the device you play on. To carry a game to another device, tap <b>Download save file</b> in the pause menu, then <b>Load a save file</b> on the other device's main menu.</p>
       <p><b>Winning too easily?</b> Tap the clock three times quickly (or press <kbd>`</kbd>) for a hidden menu that gives a rival a hand: a supply drop of goods, 4 armed Warbots or 3 Workers, at its Command Base.</p>
       <p><b>Balanced</b> builds up, defends and attacks in good measure. A <b>Turtle</b> walls its Command Base in, keeps adding turrets (up to six) and comes late with a big army. A <b>Raider</b> keeps sending small bands of warbots to tear up your supply roads, from early on. A <b>Rusher</b> comes for you early with warbots, before its economy is big: get turrets and garrisons up fast. A <b>Tycoon</b> builds a big, fast economy first, then rains Missiles on you (and races for the bomb in a Nuclear race).</p>
       <h3>Planet events</h3>

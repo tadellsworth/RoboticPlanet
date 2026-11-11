@@ -490,7 +490,10 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
   **Recall all** in the Army banner (**C** on a computer) to end every attack and rally flag at once.
 - **Saving:** the game saves itself every `AUTOSAVE_EVERY` (20) seconds while you play, and when you switch away or
   close it (`autoSave`); Continue on the main menu picks it up. The pause menu says when it last saved, and a failed
-  save (storage full or blocked) is reported once. A long game's save is about 250–300 KB.
+  save (storage full or blocked) is reported once. A long game's save is about 250–300 KB. Saves live in that browser
+  only: **Download save file** (pause menu, `downloadSave`: through the artifact `downloads` capability in claude.ai,
+  an ordinary download elsewhere) writes `terrafall-<mode>-<date>-<time>.json` (`saveFileText`: the save with when and
+  what), and **Load a save file** (main menu, `importSaveFile`) loads one, a bare save too, and keeps it as this device's save.
 - **A failed frame never stops the game:** `frame` books the next frame before running this one and catches its errors
   (reported once each to the console). A Missile Silo's placement preview used to throw (`siloReady` on a stand-in
   with no stock), which stopped the drawing loop: the game froze when you went to place one.

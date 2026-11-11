@@ -95,6 +95,9 @@ function initUI() {
   $('m-more').ontoggle = () => { try { localStorage.setItem('botfall.moreOpen', $('m-more').open ? '1' : '0'); } catch (e) { /* storage unavailable */ } };
   $('m-new').onclick = () => { audioUnlock(); startNewGame(); };
   $('m-continue').onclick = () => { audioUnlock(); continueGame(); };
+  $('m-import').onclick = () => { audioUnlock(); $('m-import-msg').hidden = true; $('m-import-file').value = ''; $('m-import-file').click(); };
+  $('m-import-file').onchange = () => { const f = $('m-import-file').files && $('m-import-file').files[0]; if (f) importSaveFile(f); };
+  $('p-export').onclick = () => { sfx('click'); downloadSave(); };
   $('m-help').onclick = () => showHelp();
   $('h-close').onclick = () => { $('screen-help').hidden = true; UI.paused = !$('screen-pause').hidden; };
 
@@ -901,6 +904,71 @@ function startNewGame() {
   }
   if (S.wildlife) postMsg(0, 'Creatures nest out in the wilds (red on the minimap). From about 7 minutes in they raid whatever you build near their nests. Pulse Turrets (with Crystal) and warbots keep them off; clear a nest with warbots to win the goods it hoards.', 0, 0, 'warn');
   if (nukeOn()) postMsg(0, `Nuclear race: a few uranium deposits glow green across the planet. Dig them with Ore Mines, enrich them at a Nuclear Reactor and build the bomb before ${S.players.length > 2 ? 'the rivals do' : 'the rival does'}.`, 0, 0, 'warn');
+}
+
+/* ------------------------------------------------------------------ save files: carry a game between devices */
+
+/** This game as a save file's text: the save itself, with when it was made and what it is. */
+function saveFileText() {
+  return JSON.stringify({ terrafall: 1, savedAt: new Date().toISOString(), mode: S.mission ? 'mission' : S.mode, minutes: Math.floor(S.time / 60), game: serializeGame() });
+}
+
+/**
+ * Offer this game as a file (terrafall-<mode>-<date>-<time>.json). In claude.ai the page asks the viewer to
+ * confirm the download (the `downloads` capability); elsewhere it's an ordinary download.
+ */
+async function downloadSave() {
+  if (!S) return;
+  const d = new Date(), pad = (n) => String(n).padStart(2, '0');
+  const name = `terrafall-${S.mission ? 'mission' : S.mode}-${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}.json`;
+  const text = saveFileText();
+  saveGame(); // the save on this device is up to date too
+  const say = (m) => { $('p-saved').textContent = m; };
+  let dl = null;
+  try { if (window.claude && typeof window.claude.use === 'function') dl = await window.claude.use('downloads'); } catch (e) { dl = null; }
+  if (dl) {
+    try { await dl.save({ filename: name, data: text }); say(`Save file ${name} downloaded: load it from the main menu (Load a save file) on any device.`); }
+    catch (e) {
+      const c = e && e.code;
+      if (c === 'declined') say('Download cancelled.');
+      else if (c === 'rate_limited') say('A download is already waiting for your OK.');
+      else if (!plainDownload(name, text)) say('Downloads aren\'t possible here.');
+    }
+    return;
+  }
+  say(plainDownload(name, text) ? `Save file ${name} downloaded: load it from the main menu (Load a save file) on any device.` : 'Downloads aren\'t possible here.');
+}
+
+/** An ordinary browser download of `text` as `name`; false if this page can't. */
+function plainDownload(name, text) {
+  try {
+    const url = URL.createObjectURL(new Blob([text], { type: 'application/json' }));
+    const a = document.createElement('a');
+    a.href = url; a.download = name; a.style.display = 'none';
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 5000);
+    return true;
+  } catch (e) { return false; }
+}
+
+/** Load a save file picked on the main menu: it becomes this device's save too, and the game starts. */
+function importSaveFile(file) {
+  const msg = (m) => { $('m-import-msg').textContent = m; $('m-import-msg').hidden = false; };
+  const r = new FileReader();
+  r.onerror = () => msg('That file couldn\'t be read.');
+  r.onload = () => {
+    let json = String(r.result || '');
+    const prev = S;
+    try {
+      const o = JSON.parse(json);
+      if (o && o.terrafall && typeof o.game === 'string') json = o.game; // a save file; a bare save works too
+      deserializeGame(json);
+    } catch (e) { S = prev; msg('That isn\'t a Terrafall save file (or it\'s from a version this one can\'t read).'); return; }
+    try { localStorage.setItem(SAVE_KEY, json); } catch (e) { /* storage unavailable: it still plays */ }
+    enterGame();
+    postMsg(0, 'Save file loaded. Welcome back.', 0, 0, 'info');
+  };
+  r.readAsText(file);
 }
 
 function continueGame() {
