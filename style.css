@@ -162,6 +162,9 @@ body.mm-off .objective { margin-right: 54px; }
 .toast.bad { border-left-color: var(--danger); }
 .toast.good { border-left-color: var(--good); }
 .toast.warn { border-left-color: var(--warn); }
+/* A building of yours destroyed: red, bold, and it stays a while (tap it to look). */
+.toast.lost { border-left-color: var(--danger); background: #3a2026; border-color: rgba(255, 90, 110, 0.45); font-weight: 700; }
+.toast.lost::before { content: '\26A0\FE0E  '; color: var(--danger); }
 .toast.out { opacity: 0; transition: opacity 0.4s; }
 @keyframes toastIn { from { transform: translateY(-8px); opacity: 0; } }
 
@@ -583,3 +586,10 @@ canvas.chart.small { height: 110px; }
 .boost-btns { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
 .boost-btns .btn { padding-left: 4px; padding-right: 4px; }
 .sound-sliders { display: grid; gap: 6px; margin-top: 8px; padding: 8px 12px; border: 1px solid var(--line); border-radius: 12px; background: rgba(255,255,255,0.03); text-align: left; }
+/* The Army panel (Q): order buttons in a grid, and list rows with their buttons on the right. */
+.army-cmds { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin: 8px 0 4px; }
+.army-cmds .btn { padding: 10px 6px; }
+.army-row { align-items: center; gap: 6px 8px; flex-wrap: wrap; }
+.army-row > span:last-child { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 4px; flex: 0 1 auto; margin-left: auto; }
+.army-row > span:first-child { flex: 1 1 160px; min-width: 0; }
+#ar-tabs { margin-bottom: 8px; }

@@ -875,10 +875,10 @@ const METEOR_HITS = 6, METEOR_DAMAGE = 4, METEOR_BOT_DAMAGE = 1.5, METEOR_RICH =
  * the worth (TRADE_VALUE) of what it takes.
  */
 const TRADE_GET = { ore: R_ORE, crystal: R_CRYSTAL, stone: R_BOULDER, crude: R_OIL };
-const TRADE_LEFT = { ore: 80, crystal: 50, stone: 80, crude: 60 };
+const TRADE_LEFT = { ore: 80, crystal: 50, stone: 80, crude: 60, alloy: 40, ammo: 30, chip: 12 };
 const TRADE_GIVE = ['fiber', 'fuel', 'cement', 'alloy', 'stone', 'ore', 'crystal', 'crude'];
-const TRADE_VALUE = { fiber: 1, stone: 1, ore: 1.2, crystal: 1.5, crude: 1.2, cement: 0.5, fuel: 1.5, alloy: 2.2 }; // Alloy = an Ore and a Fiber, Cement = half a Stone
-const TRADE_KEEP = { fiber: 12, stone: 12, ore: 12, crystal: 10, crude: 10, cement: 20, fuel: 12, alloy: 10 };
+const TRADE_VALUE = { fiber: 1, stone: 1, ore: 1.2, crystal: 1.5, crude: 1.2, cement: 0.5, fuel: 1.5, alloy: 2.2, ammo: 1.2, chip: 4 }; // Alloy = an Ore and a Fiber, Cement = half a Stone, Ammo = a third of an Alloy and a Cement and the work, a Chip = a Crystal and an Alloy
+const TRADE_KEEP = { fiber: 12, stone: 12, ore: 12, crystal: 10, crude: 10, cement: 20, fuel: 12, alloy: 10, ammo: 10, chip: 4 };
 const TRADE_BONUS = 1.3;
 /**
  * The Trade Terminal (BDEFS.terminal). Each colony gets `offers` contracts at a time, new ones every `every`
@@ -888,11 +888,18 @@ const TRADE_BONUS = 1.3;
  * Command Base pays `perTile` more for every tile further, up to `maxBonus`. Every lot sold of a good knocks
  * `sat` off what that good fetches, down to `satMin`; it recovers `recover` a minute. Only Road Trains and
  * Freight Trains serve a Terminal (and only in loads of `minLoad` or more, or what's left of the lot).
- * Alloy is only ever bought, never given. A contract never trades a good down for a much cheaper one (what
- * you give worth over `downMax` times what you get: no Crystal for Stone), nor pays back under `minPay` (no
- * Cement for Alloy). 30 Stone buys about 9 Alloy (11 at a Terminal far out).
+ * A lot is `lotWorth` worth of the good given (60 Cement, 30 Stone or Fiber, 25 Ore, 20 Crystal: see tradeLot).
+ * Alloy, Chips and Ammo are only ever bought, never given (Ammo only when war is on). A contract never trades a
+ * good down for a much cheaper one (what you give worth over `downMax` times what you get: no Crystal for
+ * Stone), never a made good for one it's made from (TRADE_MADE_FROM: no Cement for Stone), Cement only for
+ * made goods (Alloy, Chips, Ammo), and never pays back under `minPay`. 30 Stone buys about 9 Alloy (11 at a
+ * Terminal far out); 60 Cement about 16 Ammo (20).
  */
-const TERMINAL = { minDist: 16, lot: 30, rate: 0.65, perTile: 0.015, maxBonus: 0.25, offers: 3, every: 300, lots: 3, sat: 0.12, satMin: 0.5, recover: 0.05, minLoad: 10, downMax: 1.3, minPay: 6 };
+const TERMINAL = { minDist: 16, lot: 30, lotWorth: 30, rate: 0.65, perTile: 0.015, maxBonus: 0.25, offers: 3, every: 300, lots: 3, sat: 0.12, satMin: 0.5, recover: 0.05, minLoad: 10, downMax: 1.3, minPay: 4 };
+/** What each made good is made from: a contract never sells one for its own ingredients. */
+const TRADE_MADE_FROM = { cement: ['stone'], alloy: ['ore', 'fiber'], chip: ['crystal', 'alloy'], ammo: ['alloy', 'cement'], fuel: ['crude'] };
+/** Goods only bought, made in factories: what Cement can buy. */
+const TRADE_MADE = ['alloy', 'chip', 'ammo'];
 /*
  * Neutral Trade Posts (S.posts): off-world exchanges standing on no-one's ground from the start, placed
  * fairly between the colonies (one more than there are colonies; `colony` of them in Colony mode, about
@@ -903,7 +910,7 @@ const TERMINAL = { minDist: 16, lot: 30, rate: 0.65, perTile: 0.015, maxBonus: 0
  */
 const TRADE_POST = { colony: 2, colonyDist: 24, minFromBase: 16, apart: 12, dock: 2, fair: 3 };
 const TERMINAL_GIVE = ['fiber', 'cement', 'stone', 'ore', 'crystal'];
-const TERMINAL_GET = ['ore', 'crystal', 'stone', 'fiber', 'alloy'];
+const TERMINAL_GET = ['ore', 'crystal', 'stone', 'fiber', 'alloy', 'chip', 'ammo'];
 
 /*
  * Wildlife (a Colony option, on by default; never in missions). Creature nests sit out in the wilds,

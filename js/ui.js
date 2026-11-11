@@ -142,7 +142,7 @@ function initUI() {
   // HUD tools
   $('btn-build').onclick = () => { sfx('click'); if (UI.sheetKind === 'build') closeSheet(); else { setMode('normal'); openBuildMenu(); } };
   $('btn-road').onclick = () => { sfx('click'); setMode(R.mode === 'road' ? 'normal' : 'road'); };
-  $('btn-attack').onclick = () => { sfx('click'); setMode(R.mode === 'attack' ? 'normal' : 'attack'); };
+  $('btn-attack').onclick = () => { sfx('click'); if (UI.sheetKind === 'army' || R.mode === 'attack') { setMode('normal'); closeSheet(); } else { setMode('normal'); openArmySheet(); } };
   $('btn-home').onclick = () => {
     const L = getE(S.players[0].lander);
     if (L) { centerOn(L.x + 0.5, L.y + 0.5); openBuildingSheet(L); }
@@ -432,6 +432,9 @@ const SHEET_KEYS = {
   'sh-gate': 'g', 'sh-move': 'm', 'sh-pack': 'm', 'sh-pause': 'p', 'sh-fixbtn': 'e', 'sh-layroad': 'r', 'sh-pipe': 'k',
   'sh-recall': 'c', 'sh-unpost': 'c', 'rl-recall': 'c', 'sh-land': 'l', 'sh-st-send': 'v', 'nk-evac': 'v',
   'sh-bomb': 'z', 'sh-strike': 'q', 'sh-fsail': 'g', 'sh-fembark': 'e', 'sh-fland': 'l', 'sh-fhome': 'h', 'sh-found': 'p',
+  // The Army panel (Q): its orders, the group size, and its Air tab.
+  'ar-attack': 'q', 'ar-hold': 'g', 'ar-station': 'v', 'ar-recall': 'c', 'ar-select': 'f', 'ar-n2': '1', 'ar-n4': '2', 'ar-n8': '3', 'ar-nall': '4',
+  'ar-tab-army': 'z', 'ar-tab-air': 'x', 'ar-strike': 'e',
 };
 /** Mark the open panel's buttons with their keys (SHEET_KEYS), for the hints shown on a computer. */
 function markSheetKeys() {
@@ -496,6 +499,13 @@ function initKeyboard() {
       const tab = g && $('build-tabs') && $('build-tabs').querySelector(`[data-g="${g}"]`);
       e.preventDefault();
       if (tab) tab.click();
+      return;
+    }
+    // In the Army panel a plain 1-4 picks the group size (2, 4, 8, All).
+    if (digit && UI.sheetKind === 'army' && !e.ctrlKey && !e.metaKey && !e.shiftKey && !e.altKey && +digit[1] <= 4) {
+      const btn = $(['ar-n2', 'ar-n4', 'ar-n8', 'ar-nall'][+digit[1] - 1]);
+      e.preventDefault();
+      if (btn && btn.offsetParent) btn.click();
       return;
     }
     // Tab (Shift+Tab back) steps through the build menu's tabs.
@@ -1238,6 +1248,7 @@ function setMode(mode) {
   if (mode !== 'aim' && mode !== 'land' && mode !== 'airdrop') R.aimHover = null;
   if (mode !== 'land') { R.landAt = null; UI.landFerry = 0; }
   if (mode !== 'airdrop') { R.dropAt = null; UI.dropPlane = 0; }
+  if (mode !== 'attack') UI.armyCmd = null;
   R.ghost = null;
   R.overlay = null;
   R.ropeEnd = null;
@@ -1559,7 +1570,8 @@ function enterPlaceMode(type, moveFrom) {
 }
 
 /** The Army banner: what to tap, and Recall all when warbots are out in the field. */
-function showArmyBanner() {
+function showArmyBanner(note) {
+  if (UI.armyCmd) { showArmyCmdBanner(note); return; }
   const out = warbotsOut(0), k = S.players[0].keepW ?? 0;
   showBanner('Tap a <b>rival building</b> to attack it with warbots or missiles, or tap open ground to send warbots there to <b>hold the area</b>.' +
     (out ? ` ${out} warbot${out > 1 ? 's are' : ' is'} out in the field: <b>Recall all</b> brings them home.` : '') +
@@ -1589,7 +1601,7 @@ function confirmBanner() {
   if (R.mode === 'aim') { fireAimed(); return; }
   if (R.mode === 'land') { confirmLanding(); return; }
   if (R.mode === 'airdrop') { confirmAirdrop(); return; }
-  if (R.mode === 'attack') { recallAllWarbots(); return; }
+  if (R.mode === 'attack') { if (UI.armyCmd) { setMode('normal'); openArmySheet(); } else recallAllWarbots(); return; }
   if (R.mode === 'road') { commitDraft(); return; }
   if (R.mode === 'place' && (UI.placeType === 'ropeway' || UI.placeType === 'viaduct')) {
     const A = UI.ropeA, E = R.ropeEnd;
@@ -1894,6 +1906,7 @@ function onMapTap(i, j, wx, wy) {
   if (R.mode === 'airdrop') { airdropTap(i, j); return; }
   const rally = rallyAtTap(wx, wy);
   const b = buildingAtTap(i, j, wx, wy);
+  if (R.mode === 'attack' && UI.armyCmd) { armyTap(UI.armyCmd, i, j, b); return; }
   if (R.mode === 'attack' && !rally) {
     if (b && b.owner !== 0) { setMode('normal'); openBuildingSheet(b); }
     else if (!b && inMap(i, j) && S.terrain[tIdx(i, j)] === T_GROUND) { setMode('normal'); openMoveSheet(i, j); }
@@ -2495,7 +2508,7 @@ function renderTrade(b) {
   const railNear = S.bots.some((u) => !u.dead && u.owner === 0 && BOTS[u.type].rail) && S.buildings.some((s) => !s.dead && s.owner === 0 && s.built && BDEFS[s.type].station && !BDEFS[s.type].terminal && railLinked(s, b));
   const bonus = Math.round((terminalBonus(b) - 1) * 100);
   $('sh-trade-hint').innerHTML = (!trainNear && !railNear ? '<span class="err">No Road Train can reach it, and no Freight Train runs to it: order a Road Train at the Bot Foundry and lay a road here (or lay track beside it from a Rail Station).</span> ' : '') +
-    `Only Road Trains and Freight Trains serve a Terminal: they bring a contract's lot (${TERMINAL.lot}) and take what it pays home. Rates are ${Math.round(TERMINAL.rate * 100)}% of what the goods are worth` +
+    `Only Road Trains and Freight Trains serve a Terminal: they bring a contract's lot and take what it pays home. Rates are ${Math.round(TERMINAL.rate * 100)}% of what the goods are worth` +
     (bonus ? `, +${bonus}% for standing this far out` : `; one further than ${TERMINAL.minDist} tiles from your Command Base pays more`) + '. Each contract runs up to ' + TERMINAL.lots + ' times, and each lot of a good you sell pays a little less for a while.';
   if (el.dataset.sig === sig) return;
   el.dataset.sig = sig;
@@ -2598,7 +2611,10 @@ function openBuildingSheet(b) {
           <p class="hint" id="sh-keep-hint"></p>`;
       }
       if (BDEFS[b.type].port && b.built && b.owner === 0) html += portSection(b);
-    } else if (b.type !== 'lander' && !(b.built && BDEFS[b.type].barrier)) {
+    }
+    // Priority for everything but the Command Base and finished Walls/Gates (storage too: an Airfield's or a
+    // Depot's deliveries come first or last by it).
+    if (b.type !== 'lander' && !(b.built && BDEFS[b.type].barrier)) {
       html += `<div class="section-label">Priority</div><div class="seg" id="sh-prio">
         <button data-v="low">Low</button><button data-v="normal">Normal</button><button data-v="high">High</button></div>
         <p class="hint">${b.built ? 'High-priority buildings get workers and goods first; low ones last, and lose their worker first when workers run short.' : 'High-priority sites get their materials and a builder first. Once built, it goes back to Normal.'}</p>`;
@@ -3542,6 +3558,184 @@ function refreshGoodsSheet(full) {
 }
 
 /** Your robots by type: how many, and what they're doing. Opened from the population chip. */
+/* ------------------------------------------------------------------ the Army panel (Q) and its Air tab */
+
+/**
+ * The Army panel: your warbots and Rocket Trucks at a glance and orders for them. Pick a group size, then an
+ * order (Attack a rival building, Hold ground, Station at a garrison of yours) and tap the map: each tap sends
+ * another group, until Done. Groups out in the field and every Rocket Truck are listed with their own orders.
+ * The Air tab (with an Airfield): each Airfield's hangar, every Strike Bomber (Strike) and Cargo Plane (air drops).
+ */
+function openArmySheet(tab) {
+  if (tab) UI.armyTab = tab;
+  if (UI.armyTab === 'air' && !myAirfields().length) UI.armyTab = 'army';
+  UI.armyTab = UI.armyTab || 'army';
+  UI.armyN = UI.armyN || 4;
+  openSheet('army', 0, `<div class="sheet-title"><div><h3>${UI.armyTab === 'air' ? 'Air' : 'Army'}</h3></div></div>
+    <div class="seg" id="ar-tabs"><button id="ar-tab-army" data-t="army">Army</button><button id="ar-tab-air" data-t="air">Air</button></div>
+    <div id="ar-body"></div>`);
+  for (const btn of $('ar-tabs').children) btn.onclick = () => { sfx('click'); openArmySheet(btn.dataset.t); };
+  $('ar-body').onclick = (e) => { const btn = e.target.closest('button'); if (btn && !btn.disabled) armyButton(btn); };
+  UI.armySig = '';
+  refreshArmySheet();
+}
+
+function myAirfields() { return S.buildings.filter((b) => !b.dead && b.owner === 0 && b.built && BDEFS[b.type].airfield); }
+
+/** How many of `avail` warbots a group of the chosen size takes. */
+function armyCount(avail) { return UI.armyN === 'all' ? avail : Math.min(avail, UI.armyN || 4); }
+function armyNText() { return UI.armyN === 'all' ? 'every spare warbot' : `${UI.armyN} warbots`; }
+
+function refreshArmySheet() {
+  const air = myAirfields().length > 0;
+  $('ar-tab-air').hidden = !air;
+  $('ar-tabs').hidden = !air; // (just the Army until there's an Airfield)
+  for (const btn of $('ar-tabs').children) btn.classList.toggle('on', btn.dataset.t === UI.armyTab);
+  if (UI.armyTab === 'air' && air) refreshAirTab(); else refreshArmyTab();
+  markSheetKeys();
+}
+
+function refreshArmyTab() {
+  const g = warbotGroups(), mine = S.bots.filter((u) => !u.dead && u.owner === 0);
+  const wb = mine.filter((u) => u.type === 'warbot'), noAmmo = wb.filter((u) => (u.ammo ?? WARBOT_AMMO) <= 0).length;
+  const field = g.attack.length + g.hold.length + g.defend.length + g.idle.length + g.loot.length;
+  const rockets = mine.filter((u) => BOTS[u.type].siege);
+  // The groups out in the field: each rally flag, and each building under attack.
+  const flags = S.rallies.filter((r) => r.owner === 0).map((r) => ({ r, n: rallyMembers(r.id).length })).filter((f) => f.n > 0);
+  const atk = new Map();
+  for (const u of g.attack) { const t = getE(u.task.target); if (t && !t.dead) atk.set(t.id, (atk.get(t.id) || 0) + 1); }
+  const sig = JSON.stringify([UI.armyN, wb.length, g.base.length, g.posted.length, field, noAmmo, flags.map((f) => [f.r.id, f.n]), [...atk], rockets.map((u) => [u.id, botActivity(u)]), S.players[0].keepW ?? 0, !!INPUT.mouse]);
+  if (sig === UI.armySig) return;
+  UI.armySig = sig;
+  const L = getE(S.players[0].lander), where = (x, y) => (L ? dirText(L, { x: Math.floor(x), y: Math.floor(y) }) : '');
+  const k = S.players[0].keepW ?? 0;
+  let h = `<div class="kv"><span>Warbots</span><span><b>${wb.length}</b>: ${g.base.length} at the Command Base, ${g.posted.length} in garrisons, ${field} in the field${noAmmo ? `, <span class="err">${noAmmo} out of Ammo</span>` : ''}</span></div>`;
+  if (rockets.length) h += `<div class="kv"><span>Rocket Trucks</span><span><b>${rockets.length}</b></span></div>`;
+  h += `<div class="section-label">Orders <span class="label-note">group size</span></div>
+    <div class="seg" id="ar-size">${[2, 4, 8, 'all'].map((n) => `<button id="ar-n${n}" data-act="size" data-n="${n}" class="${UI.armyN === n ? 'on' : ''}">${n === 'all' ? 'All' : n}</button>`).join('')}</div>
+    <div class="army-cmds">
+      <button class="btn primary" id="ar-attack" data-act="cmd" data-c="attack">Attack</button>
+      <button class="btn" id="ar-hold" data-act="cmd" data-c="hold">Hold ground</button>
+      <button class="btn" id="ar-station" data-act="cmd" data-c="station">Station</button>
+      <button class="btn" id="ar-recall" data-act="recall"${field ? '' : ' disabled'}>Recall all</button>
+      ${INPUT.mouse ? '<button class="btn ghost" id="ar-select" data-act="select">Select all warbots</button>' : ''}
+    </div>
+    <p class="hint"><b>Attack</b>: tap a rival building and a group of ${armyNText()} goes for it. <b>Hold ground</b>: tap open ground and they plant a rally flag and hold it. <b>Station</b>: tap an Outpost, Keep or Bunker of yours and they move in for good. Each tap sends another group, until you tap Done. Warbots come from your garrisons in reach (each keeps its own).</p>`;
+  if (flags.length || atk.size) {
+    h += '<div class="section-label">In the field</div>';
+    for (const f of flags) h += `<div class="kv army-row"><span><b>${f.n}</b> holding a flag ${where(f.r.x, f.r.y)}</span><span><button class="btn small ghost" data-act="showflag" data-id="${f.r.id}">Show</button><button class="btn small" data-act="more" data-id="${f.r.id}">+${UI.armyN === 'all' ? 'All' : UI.armyN}</button><button class="btn small ghost" data-act="recallflag" data-id="${f.r.id}">Recall</button></span></div>`;
+    for (const [id, n] of atk) { const t = getE(id); h += `<div class="kv army-row"><span><b>${n}</b> attacking the ${BDEFS[t.type].name} ${where(t.x, t.y)}</span><span><button class="btn small ghost" data-act="showbld" data-id="${id}">Show</button><button class="btn small ghost" data-act="callback" data-id="${id}">Call back</button></span></div>`; }
+  }
+  if (rockets.length) {
+    h += '<div class="section-label">Rocket Trucks</div>';
+    for (const u of rockets) h += `<div class="kv army-row"><span>${botActivity(u)}</span><span><button class="btn small" data-act="bombard" data-id="${u.id}">Bombard</button><button class="btn small ghost" data-act="rgo" data-id="${u.id}">Drive</button><button class="btn small ghost" data-act="showbot" data-id="${u.id}">Show</button></span></div>`;
+  }
+  h += `<div class="section-label">Every Outpost keeps</div><div class="seg" id="ar-keep">${[0, 1, 2, 5].map((v) => `<button data-act="keep" data-k="${v}" class="${v === k ? 'on' : ''}">${v}</button>`).join('')}</div>
+    <p class="hint">Warbots each Outpost keeps at home, sent from your Command Base (and replaced if lost). Set one Outpost on its own in its panel.</p>`;
+  $('ar-body').innerHTML = h;
+}
+
+function refreshAirTab() {
+  const fields = myAirfields(), planes = S.bots.filter((u) => !u.dead && u.owner === 0 && BOTS[u.type].air);
+  const bombers = planes.filter((u) => BOTS[u.type].bomber), cargo = planes.filter((u) => !BOTS[u.type].bomber);
+  const kinds = BDEFS.airfield.yard.filter((kk) => warOn() || !BOTS[kk].war);
+  const sig = JSON.stringify([fields.map((b) => [b.id, b.yard]), planes.map((u) => [u.id, planeStatus(u), !!(u.inside && !u.mission && !u.flight)]), !!readyBomber()]);
+  if (sig === UI.armySig) return;
+  UI.armySig = sig;
+  const L = getE(S.players[0].lander);
+  let h = '';
+  if (warOn() && bombers.length) h += `<button class="btn primary big" id="ar-strike" data-act="strikeany"${readyBomber() ? '' : ' disabled'}>Strike: tap a target</button>`;
+  h += '<div class="section-label">Airfields</div>';
+  for (const b of fields) {
+    const n = basePlanes(b).length, ord = kinds.filter((kk) => b.yard && b.yard[kk] > 0).map((kk) => `${b.yard[kk]} ${b.yard[kk] === 1 ? BOTS[kk].name : BOTS[kk].plural}`);
+    h += `<div class="kv army-row"><span>${L ? `${dirText(L, b)} from the Command Base` : 'Airfield'}: ${n} plane${n === 1 ? '' : 's'}${ord.length ? `; ordered ${ord.join(', ')}` : ''}</span><span>${kinds.map((kk) => `<button class="btn small" data-act="yard" data-id="${b.id}" data-k="${kk}">+ ${BOTS[kk].name}</button>`).join('')}<button class="btn small ghost" data-act="showbld" data-id="${b.id}">Open</button></span></div>`;
+  }
+  if (warOn()) {
+    h += '<div class="section-label">Strike Bombers</div>';
+    h += bombers.length ? bombers.map((u) => `<div class="kv army-row"><span>${planeStatus(u)}</span><span><button class="btn small" data-act="strike" data-id="${u.id}"${!u.mission && !u.flight && planeBase(u) && u.inside === planeBase(u).id ? '' : ' disabled'}>Strike</button><button class="btn small ghost" data-act="showbot" data-id="${u.id}">Show</button></span></div>`).join('')
+      : '<p class="hint">None yet: order one in an Airfield\'s hangar (+ Strike Bomber above). It bombs any enemy building but a Keep or Command Base, or a vehicle or robot out in the open.</p>';
+  }
+  h += '<div class="section-label">Cargo Planes <span class="label-note">air drops by parachute</span></div>';
+  h += cargo.length ? cargo.map((u) => {
+    const free = u.inside && !u.mission && !u.flight && planeBase(u) && u.inside === planeBase(u).id;
+    return `<div class="kv army-row"><span>${planeStatus(u)}</span><span>${free ? `<button class="btn small" data-act="drop" data-id="${u.id}" data-k="outpost">Drop Outpost</button>${warOn() ? `<button class="btn small" data-act="drop" data-id="${u.id}" data-k="warbot">2 Warbots</button>` : ''}<button class="btn small" data-act="drop" data-id="${u.id}" data-k="worker">2 Workers</button>` : ''}<button class="btn small ghost" data-act="showbot" data-id="${u.id}">Show</button></span></div>`;
+  }).join('') : '<p class="hint">None yet: order one in an Airfield\'s hangar (+ Cargo Plane above). It flies goods to places you switch to Supply by air, and drops an Outpost, Warbots or Workers anywhere it can reach.</p>';
+  $('ar-body').innerHTML = h;
+}
+
+/** A button on the Army panel. */
+function armyButton(btn) {
+  const act = btn.dataset.act, id = +btn.dataset.id, e = id ? getE(id) : null;
+  sfx('click');
+  switch (act) {
+    case 'size': UI.armyN = btn.dataset.n === 'all' ? 'all' : +btn.dataset.n; UI.armySig = ''; refreshArmySheet(); return;
+    case 'cmd': armyCmd(btn.dataset.c); return;
+    case 'recall': recallAllWarbots(); UI.armySig = ''; refreshArmySheet(); return;
+    case 'select': selectBots(armyIds(0), false); closeSheet(); if (UI.sel.length) toast(`${UI.sel.length} warbots selected: right-click to give orders.`, 'info'); return;
+    case 'keep': setKeepAll(+btn.dataset.k); UI.armySig = ''; refreshArmySheet(); return;
+    case 'showflag': if (e) { centerOn(e.x, e.y); openRallySheet(e); } return;
+    case 'showbld': if (e) { centerOn(e.x + 0.5, e.y + 0.5); openBuildingSheet(e); } return;
+    case 'showbot': if (e) { const inB = e.inside ? getE(e.inside) : null; centerOn(inB ? inB.x + 0.5 : e.x, inB ? inB.y + 0.5 : e.y); openBotSheet(e); } return;
+    case 'more': if (e) { const i = Math.floor(e.x), j = Math.floor(e.y), res = sendToRally(0, i, j, armyCount(rallyAvailable(0, i, j))); if (res.sent) { sfx('order'); toast(`${res.sent} more warbot${res.sent > 1 ? 's are' : ' is'} on the way to the flag.`, 'info'); } else { sfx('error'); toast('No spare warbots in reach of that flag.', 'warn'); } UI.armySig = ''; } return;
+    case 'recallflag': if (e) { const n = recallRally(id); toast(`${n} warbot${n !== 1 ? 's' : ''} called back.`, 'info'); UI.armySig = ''; } return;
+    case 'callback': { let n = 0; for (const u of S.bots) if (!u.dead && u.owner === 0 && u.type === 'warbot' && u.task && u.task.type === 'attack' && u.task.target === id) { u.task = null; u.path = null; n++; } toast(`${n} warbot${n !== 1 ? 's' : ''} called back to their garrisons.`, 'info'); UI.armySig = ''; return; }
+    case 'bombard': if (e) { closeSheet(); setMode('bombard'); UI.rocket = id; showBanner(`Tap an enemy building: the <b>Rocket Truck</b> drives to within ${ROCKET.range} tiles of it, parks and fires its ${ROCKET.salvo} rockets, then reloads and comes back for more.`, null, 'Cancel'); } return;
+    case 'rgo': if (e) { closeSheet(); setMode('rgo'); UI.rocket = id; showBanner('Tap where the <b>Rocket Truck</b> should wait: it stays there, and (unless it holds fire) shells any enemy building in reach of it.', null, 'Cancel'); } return;
+    case 'strikeany': { const u = readyBomber(); if (u) startStrike(u); else { sfx('error'); toast('No Strike Bomber is ready on the ground.', 'warn'); } return; }
+    case 'strike': if (e) startStrike(e); return;
+    case 'drop': if (e) { closeSheet(); startAirdrop(e, btn.dataset.k); } return;
+    case 'yard': if (e) { orderAtYard(e, btn.dataset.k, 1); toast(`${BOTS[btn.dataset.k].name} ordered: the Airfield's hangar builds it from Alloy and Chips.`, 'info'); UI.armySig = ''; refreshArmySheet(); } return;
+  }
+}
+
+/** Start an Army order: the next taps on the map pick its targets. */
+function armyCmd(cmd) {
+  closeSheet();
+  setMode('attack');
+  UI.armyCmd = cmd;
+  showArmyCmdBanner();
+}
+
+function showArmyCmdBanner(note) {
+  const what = { attack: 'Tap a <b>rival building</b> to attack it', hold: 'Tap <b>open ground</b> to hold it', station: 'Tap an <b>Outpost, Keep or Bunker</b> of yours to station them there' }[UI.armyCmd];
+  showBanner((note ? note + ' ' : '') + `${what} with ${armyNText()}. Tap again to send another group.`, 'Army', 'Done');
+}
+
+/** A tap on the map while an Army order is picking its target. */
+function armyTap(cmd, i, j, b) {
+  const fail = (why) => { sfx('error'); showArmyCmdBanner(`<span class="err">${why}</span>`); };
+  if (cmd === 'attack') {
+    if (!b || b.owner === 0 || b.owner < 0 || b.dead) return fail(`Tap a rival building (${S.players.length > 2 ? 'red or green' : 'red'}).`);
+    let n = armyCount(attackAvailable(0, b)), sent = n > 0 ? sendAttack(0, b, n) : 0;
+    // No garrison near enough to attack from: a rally flag beside it (they attack what stands there).
+    if (!sent) {
+      for (const [di, dj] of [[1, 1], [-1, 1], [1, -1], [-1, -1], [2, 0], [-2, 0], [0, 2], [0, -2]]) {
+        const ii = b.x + di, jj = b.y + dj;
+        if (!inMap(ii, jj) || !walkable(tIdx(ii, jj)) || S.bAt[tIdx(ii, jj)]) continue;
+        n = armyCount(rallyAvailable(0, ii, jj));
+        if (n > 0) sent = sendToRally(0, ii, jj, n).sent;
+        break;
+      }
+    }
+    if (!sent) return fail('No armed warbots can get there: they need Ammo, and a way to walk there.');
+    sfx('order'); showArmyCmdBanner(`${sent} warbot${sent > 1 ? 's are' : ' is'} going for the ${BDEFS[b.type].name}.`);
+    return;
+  }
+  if (cmd === 'hold') {
+    if (b || !inMap(i, j) || !walkable(tIdx(i, j))) return fail('Tap open ground your warbots can walk to.');
+    const res = sendToRally(0, i, j, armyCount(rallyAvailable(0, i, j)));
+    if (!res.sent) return fail('No spare armed warbots can get there.');
+    sfx('order'); showArmyCmdBanner(`${res.sent} warbot${res.sent > 1 ? 's are' : ' is'} on the way to hold it.`);
+    return;
+  }
+  if (cmd === 'station') {
+    if (!b || b.owner !== 0 || !b.built || !BDEFS[b.type].mil || b.type === 'lander') return fail('Tap one of your finished Outposts, Keeps or Bunkers.');
+    const n = stationWarbots(0, b, armyCount(stationAvailable(0, b)));
+    if (!n) return fail(garrisonRoom(b) ? 'No spare warbots to send there.' : `The ${BDEFS[b.type].name} is full.`);
+    sfx('order'); showArmyCmdBanner(`${n} warbot${n > 1 ? 's are' : ' is'} moving into the ${BDEFS[b.type].name}.`);
+  }
+}
+
 function openPopSheet() {
   openSheet('pop', 0, `<div class="sheet-title"><div><h3>Your robots</h3></div></div>
     <p class="desc">Every robot you have, by type, and what they're doing right now. Order more at the Bot Foundry.</p>
@@ -3631,6 +3825,7 @@ function refreshSheet() {
   if (!UI.sheetKind || UI.sheetKind === 'build') return;
   markSheetKeys();
   if (UI.sheetKind === 'pop') { refreshPopSheet(); return; }
+  if (UI.sheetKind === 'army') { refreshArmySheet(); return; }
   if (UI.sheetKind === 'goods') { refreshGoodsSheet(false); return; }
   if (UI.sheetKind === 'road') { refreshRoadSheet(UI.sheetFor); return; }
   if (UI.sheetKind === 'bld') {
@@ -3867,8 +4062,14 @@ function toast(text, kind, x, y) {
   }
   el.dataset.text = text;
   box.appendChild(el);
-  while (box.children.length > 2) box.removeChild(box.firstChild);
-  setTimeout(() => { el.classList.add('out'); setTimeout(() => el.remove(), 450); }, 3800);
+  // At most 2 at once (3 with a building lost): the oldest go first, but a "lost" toast (a building of
+  // yours destroyed) outlasts the others and isn't pushed out by them.
+  const lost = kind === 'lost';
+  while (box.children.length > (box.querySelector('.toast.lost') ? 3 : 2)) {
+    const old = [...box.children].find((c) => !c.classList.contains('lost') && c !== el) || box.firstChild;
+    box.removeChild(old);
+  }
+  setTimeout(() => { el.classList.add('out'); setTimeout(() => el.remove(), 450); }, lost ? 8000 : 3800);
 }
 
 function uiTick(dt) {
@@ -3877,7 +4078,8 @@ function uiTick(dt) {
   while (S.msgs.length) {
     const m = S.msgs.shift();
     toast(m.text, m.kind, m.x, m.y);
-    if ((m.kind === 'bad' || m.kind === 'warn') && (m.x || m.y)) UI.lastAlert = { x: m.x, y: m.y };
+    if ((m.kind === 'bad' || m.kind === 'warn' || m.kind === 'lost') && (m.x || m.y)) UI.lastAlert = { x: m.x, y: m.y };
+    if (m.kind === 'lost') sfx('alert');
   }
   updateMapTip();
   UI.hudT -= dt;

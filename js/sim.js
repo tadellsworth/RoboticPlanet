@@ -3108,7 +3108,7 @@ function captureBuilding(b, by) {
     // There's no land to take: a fallen Bunker is wrecked, and the warbots inside walk out.
     dropLoot(b);
     postMsg(by, 'Your warbots wrecked an enemy Bunker.', b.x, b.y, 'good');
-    postMsg(old, 'Enemy warbots wrecked your Bunker!', b.x, b.y, 'bad');
+    postMsg(old, 'Enemy warbots wrecked your Bunker!', b.x, b.y, 'lost');
     destroyBuilding(b, false);
     return;
   }
@@ -3116,7 +3116,7 @@ function captureBuilding(b, by) {
   if (!b.built) {
     (S.players[old].avoid = S.players[old].avoid || []).push({ x: b.x, y: b.y, until: S.time + 150 });
     postMsg(by, `Your warbots wrecked an enemy construction site.`, b.x, b.y, 'good');
-    postMsg(old, `Enemy warbots wrecked your ${name} construction site.`, b.x, b.y, 'bad');
+    postMsg(old, `Enemy warbots wrecked your ${name} construction site.`, b.x, b.y, 'lost');
     destroyBuilding(b, true);
     return;
   }
@@ -3139,13 +3139,13 @@ function captureBuilding(b, by) {
   if (def.mil) {
     S.players[by].stats.outposts = (S.players[by].stats.outposts || 0) + 1;
     postMsg(by, `Your warbots captured the enemy ${name}!`, b.x, b.y, 'good');
-    postMsg(old, `The enemy captured your ${name}!`, b.x, b.y, 'bad');
+    postMsg(old, `The enemy captured your ${name}!`, b.x, b.y, 'lost');
     computeTerritory();
   } else {
     if (def.explodes) burnLiquids(b); // a Refinery's Crude and Fuel go up with it
     const n = dropLoot(b);
     postMsg(by, `Your warbots wrecked the enemy ${name}.` + (n ? ` ${n} good${n === 1 ? '' : 's'} spilled out in crates: your warbots carry them home, one each.` : ''), b.x, b.y, 'good');
-    postMsg(old, `Enemy warbots wrecked your ${name}!` + (n ? ' What was inside spilled out in crates: your haulers collect them once the enemy has gone, unless the raiders carry them off first.' : ''), b.x, b.y, 'bad');
+    postMsg(old, `Enemy warbots wrecked your ${name}!` + (n ? ' What was inside spilled out in crates: your haulers collect them once the enemy has gone, unless the raiders carry them off first.' : ''), b.x, b.y, 'lost');
     destroyBuilding(b, true);
   }
 }
@@ -3187,7 +3187,7 @@ function fuelBlast(x, y, kind, full, owner) {
     b.lastHit = S.time;
     if (b.armor > 0) continue;
     if (b.built && BDEFS[b.type].mil) { b.armor = 1; continue; }
-    postMsg(b.owner, `An explosion wrecked your ${BDEFS[b.type].name}!`, b.x, b.y, 'bad');
+    postMsg(b.owner, `An explosion wrecked your ${BDEFS[b.type].name}!`, b.x, b.y, 'lost');
     destroyBuilding(b, true);
   }
   if (typeof blastPipes === 'function') blastPipes(x, y, r);
@@ -3223,7 +3223,7 @@ function updateBlasts() {
     if (b.dead) { b.blowAt = 0; continue; }
     if (S.time < b.blowAt) { left++; continue; }
     b.blowAt = 0;
-    postMsg(b.owner, `Your ${BDEFS[b.type].name} caught fire in the blast and exploded!`, b.x, b.y, 'bad');
+    postMsg(b.owner, `Your ${BDEFS[b.type].name} caught fire in the blast and exploded!`, b.x, b.y, 'lost');
     destroyBuilding(b, true);
   }
   S.blowing = left;
@@ -3571,7 +3571,7 @@ function eliminate(old, by) {
   const L = getE(P.lander);
   const x = L ? L.x : 0, y = L ? L.y : 0;
   postMsg(by, S.players.length > 2 ? `Your warbots captured ${playerName(old, true)}'s Command Base! Everything ${playerName(old, true)} built is yours.` : 'Your warbots captured the enemy Command Base!', x, y, 'good');
-  if (old === 0) postMsg(0, 'The enemy captured your Command Base!', x, y, 'bad');
+  if (old === 0) postMsg(0, 'The enemy captured your Command Base!', x, y, 'lost');
   else if (by !== 0) postMsg(0, `The ${playerName(by)} captured ${playerName(old, true)}'s Command Base and took over everything it had.`, x, y, 'warn');
   const left = S.players.filter((Q) => !Q.absent && !Q.out);
   if (left.length === 1) S.winner = left[0].id;
@@ -4231,7 +4231,7 @@ function rocketHit(b, dmg, by) {
   if (captureOnly(b)) { const f = missileFloor(b); if (b.armor < f) b.armor = Math.min(f, b.armor + dmg); return; }
   if (b.armor <= 0) {
     postMsg(by, `Your rockets wrecked the enemy ${def.name}.`, b.x, b.y, 'good');
-    postMsg(b.owner, `Enemy rockets wrecked your ${def.name}!`, b.x, b.y, 'bad');
+    postMsg(b.owner, `Enemy rockets wrecked your ${def.name}!`, b.x, b.y, 'lost');
     destroyBuilding(b, true);
   } else if (S.time - (b.lastAlert || -99) > 12) {
     b.lastAlert = S.time;
@@ -4788,7 +4788,7 @@ function missileImpact(m) {
     b.lastHit = S.time;
     if (b.armor <= 0 && !captureOnly(b)) {
       postMsg(m.owner, `Your missile wrecked the enemy ${name}.`, b.x, b.y, 'good');
-      postMsg(b.owner, `A missile wrecked your ${name}!`, b.x, b.y, 'bad');
+      postMsg(b.owner, `A missile wrecked your ${name}!`, b.x, b.y, 'lost');
       destroyBuilding(b, true);
     } else {
       const floor = captureOnly(b) ? missileFloor(b) : 0;
@@ -4802,7 +4802,7 @@ function missileImpact(m) {
     e.armor -= keepShield(e, md.splashDamage);
     e.lastHit = S.time;
     if (e.armor <= 0 && !captureOnly(e)) {
-      postMsg(e.owner, `The blast wrecked your ${BDEFS[e.type].name}!`, e.x, e.y, 'bad');
+      postMsg(e.owner, `The blast wrecked your ${BDEFS[e.type].name}!`, e.x, e.y, 'lost');
       destroyBuilding(e, true);
     } else if (captureOnly(e) && e.armor < missileFloor(e)) e.armor = Math.min(missileFloor(e), e.armor + md.splashDamage);
   }
@@ -5032,7 +5032,7 @@ function nukeImpact(m) {
     if (P.absent || P.out) continue;
     const mine = p === m.owner;
     postMsg(p, mine ? `Nuclear strike! ${theirs} rival building${theirs === 1 ? '' : 's'} destroyed.` + (lost[p] ? ` You lost ${lost[p]} of your own.` : '')
-      : `A nuclear strike destroyed ${lost[p]} of your buildings!`, ci, cj, mine ? 'good' : 'bad');
+      : `A nuclear strike destroyed ${lost[p]} of your buildings!`, ci, cj, mine ? 'good' : 'lost');
   }
 }
 
@@ -5360,7 +5360,7 @@ function crumble(b, dt) {
   b.status = 'Cut off: a rival holds this ground. It has stopped working and is crumbling: take the land back (an Outpost or Keep nearer than theirs) to save it.';
   if (b.armor > 0) return;
   const n = dropLoot(b);
-  postMsg(b.owner, `${def.name} crumbled away, cut off on a rival's ground.` + (n ? ' What was inside spilled out.' : ''), b.x, b.y, 'bad');
+  postMsg(b.owner, `${def.name} crumbled away, cut off on a rival's ground.` + (n ? ' What was inside spilled out.' : ''), b.x, b.y, 'lost');
   destroyBuilding(b, false);
 }
 
@@ -5738,7 +5738,7 @@ function traderOffer(p) {
   // What it asks for: the good furthest over what the colony likes to keep (at least half again).
   let give = null, gv = 1.5;
   for (const g of TRADE_GIVE) {
-    if (g === get) continue;
+    if (g === get || (TRADE_MADE_FROM[g] || []).includes(get)) continue; // (never a made good for its own ingredients: no Cement for Stone)
     const v = (have[g] || 0) / TRADE_KEEP[g];
     if ((have[g] || 0) >= 8 && v > gv) { gv = v; give = g; }
   }
@@ -6014,7 +6014,7 @@ function critterBite(u, foe) {
     foe.lastHit = S.time;
     if (!foe.built) {
       foe.armor -= bt.bite;
-      if (foe.armor <= 0) { postMsg(foe.owner, `Creatures wrecked your ${BDEFS[foe.type].name} construction site!`, foe.x, foe.y, 'bad'); destroyBuilding(foe, true); }
+      if (foe.armor <= 0) { postMsg(foe.owner, `Creatures wrecked your ${BDEFS[foe.type].name} construction site!`, foe.x, foe.y, 'lost'); destroyBuilding(foe, true); }
     } else foe.armor = Math.max(1, foe.armor - bt.bite);
     if (S.time - foe.lastAlert > 12) {
       foe.lastAlert = S.time;
@@ -6358,15 +6358,15 @@ function tradeState(p) {
 /** The raw goods player p is closest to running out of, most urgent first (in stock and in the ground on its land, against TRADE_LEFT). */
 function tradeShortest(p) {
   const have = spendable(p), left = {}, RES = Object.assign({ fiber: R_STALK }, TRADE_GET);
-  for (const g of TERMINAL_GET) left[g] = have[g] || 0;
+  for (const g of tradeGets()) left[g] = have[g] || 0;
   for (let t = 0; t < S.W * S.H; t++) {
     if (S.owner[t] !== p || !S.res[t]) continue;
-    for (const g of TERMINAL_GET) if (S.res[t] === RES[g]) left[g] += S.amt[t];
+    for (const g in RES) if (left[g] !== undefined && S.res[t] === RES[g]) left[g] += S.amt[t];
   }
   // (Fiber grows back, at Groves and Bio Farms too: it only counts as short when there's little standing.
   // Alloy is never in the ground: it's short when there's little in stock.)
   const need = (g) => left[g] / (TRADE_LEFT[g] || 60) + (g === 'fiber' && S.buildings.some((b) => !b.dead && b.owner === p && (b.type === 'farm' || b.type === 'grower') && b.built) ? 1 : 0);
-  const out = TERMINAL_GET.slice().sort((a, b) => need(a) - need(b));
+  const out = tradeGets().sort((a, b) => need(a) - need(b));
   out.left = left; // what's left of each, for the AI
   return out;
 }
@@ -6387,7 +6387,7 @@ function newTradeOffers(p) {
     const give = k < 2 ? pool[k] : pool[Math.floor(r2 * Math.min(4, pool.length))];
     if (!give || !get || seen.has(give + '>' + get) || !tradePairOk(give, get)) continue;
     seen.add(give + '>' + get);
-    out.push({ give, get, lot: TERMINAL.lot, left: TERMINAL.lots });
+    out.push({ give, get, lot: tradeLot(give), left: TERMINAL.lots });
   }
   T.pick = keep ? 0 : -1;
   T.offers = out;
@@ -6402,9 +6402,21 @@ function terminalBonus(b) {
   return 1 + clamp((d - TERMINAL.minDist) * TERMINAL.perTile, 0, TERMINAL.maxBonus);
 }
 
-/** Is giving `give` for `get` a fair contract: not a good traded down for a much cheaper one, and paying back enough to matter? */
+/** The goods a Terminal can pay in (Ammo only when war is on). */
+function tradeGets() { return TERMINAL_GET.filter((g) => g !== 'ammo' || warOn()); }
+
+/** A contract's lot of `give`: TERMINAL.lotWorth worth of it, in fives (60 Cement, 30 Stone, 25 Ore, 20 Crystal). */
+function tradeLot(give) { return clamp(Math.round(TERMINAL.lotWorth / TRADE_VALUE[give] / 5) * 5, 20, 60); }
+
+/**
+ * Is giving `give` for `get` a sensible contract: not a good traded down for a much cheaper one, nor a made
+ * good for one of its own ingredients (no Cement for Stone), Cement only for made goods, and paying back
+ * enough to matter?
+ */
 function tradePairOk(give, get) {
-  return TRADE_VALUE[give] <= TRADE_VALUE[get] * TERMINAL.downMax && (TERMINAL.lot * TRADE_VALUE[give] * TERMINAL.rate) / TRADE_VALUE[get] >= TERMINAL.minPay;
+  if ((TRADE_MADE_FROM[give] || []).includes(get)) return false;
+  if (give === 'cement' && !TRADE_MADE.includes(get)) return false;
+  return TRADE_VALUE[give] <= TRADE_VALUE[get] * TERMINAL.downMax && (tradeLot(give) * TRADE_VALUE[give] * TERMINAL.rate) / TRADE_VALUE[get] >= TERMINAL.minPay;
 }
 
 /** What contract o pays player p for a lot at Terminal b (or its first Terminal), at today's rate. */
@@ -7912,7 +7924,7 @@ function bombHit(b, dmg, by) {
   if (captureOnly(b)) { const f = missileFloor(b); if (b.armor < f) b.armor = Math.min(f, b.armor + dmg); return; }
   if (b.armor <= 0) {
     postMsg(by, `Your bomber destroyed the enemy ${def.name}.`, b.x, b.y, 'good');
-    postMsg(b.owner, `An enemy bomber destroyed your ${def.name}!`, b.x, b.y, 'bad');
+    postMsg(b.owner, `An enemy bomber destroyed your ${def.name}!`, b.x, b.y, 'lost');
     destroyBuilding(b, true);
   } else if (S.time - (b.lastAlert || -99) > 12) {
     b.lastAlert = S.time;
