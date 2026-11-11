@@ -1,135 +1,192 @@
-// Strike Bomber: a big, flat twin-engine high-speed bomber in the manner of a Foxbat, top-down, facing +x,
-// orthographic camera straight down, no ground (the game draws its shadow). 20 world units across the frame; it is
-// 18.6 long (19.3 with the nose probe) with an 11.5 span. Its planform follows a three-view: a long black radome on
-// a slim nose, a light-blue tandem canopy, big box intakes either side running back into a broad, flat body with a
-// spine down the middle, a thin wing swept about 43 degrees with a straight trailing edge and anti-flutter pods on
-// the tips, swept stabilators reaching past the tail, twin fins canted out, and two big nozzles side by side.
-// Light grey with darker engine bays. Team colour: stars on the wings, the fin caps and the bands on the bombs
-// hung under the wings (their noses show ahead of the leading edge). At night: navigation lights and the engines.
+// Strike Bomber, Lancer style: the Foxbat planform of bomber_old.js re-skinned in the Lancer robot-tank's
+// language. Top-down, facing +x, orthographic camera straight down, no ground; 20 world units across the frame, the
+// same planform, size and placement as bomber.js so it drops in. Dark gunmetal armour built up from faceted,
+// bevelled plates with thin dark seams: a long slab-sided body with a raised spine, huge angular box intakes,
+// shoulder wings swept 43 degrees, twin canted fins and twin big nozzles. The canopy is an armoured hood with a
+// glowing sensor slit. Team colour glows: strips along the wing leading edges and down the spine, the fin caps, the
+// rings round each nozzle and the bands on the bombs. Navigation lights on the tip pods and the tail.
+import { kit } from './robkit.js';
 export const config = { pad: false, size: 1024 };
 export default function (L) {
-  const { box, hcyl, mesh, sphere, M, THREE, TEAM } = L;
+  const { box, mesh, sphere, M, THREE, TEAM } = L;
   L.seed(3131);
+  const R = kit(L, 0, 0);   // the Lancer's lighting (a toned-down overhead sun) and its sensor-lens material
   const W = 20, cam = new THREE.OrthographicCamera(-W / 2, W / 2, W / 2, -W / 2, 0.1, 100);
   cam.position.set(0, 40, 0); cam.up.set(0, 0, -1); cam.lookAt(0, 0, 0); cam.updateMatrixWorld(); cam.updateProjectionMatrix();
   L.useCamera(cam);
 
-  // ---- materials: a clean aircraft skin (white texture with panel lines, tinted per part)
-  const skinTex = L.canvasTex(512, (g, n) => {
-    g.fillStyle = '#ffffff'; g.fillRect(0, 0, n, n);
-    L.blotches(g, n, 50, 30, 110, 0.035); L.blotches(g, n, 30, 20, 80, 0.05, '255,255,255');
-    g.strokeStyle = 'rgba(28,32,36,0.42)'; g.lineWidth = 1.6;
-    const ln = (a, b, c, d) => { g.beginPath(); g.moveTo(a, b); g.lineTo(c, d); g.stroke(); };
-    for (let x = 0; x <= n; x += 128) ln(x, 0, x, n);                        // frames across the body
-    for (let y = 0; y <= n; y += 128) for (let x = 0; x < n; x += 128) ln(x, y + ((x / 128) % 2) * 40, x + 128, y + ((x / 128) % 2) * 40);
-    g.strokeStyle = 'rgba(28,32,36,0.28)'; g.lineWidth = 1.2;
-    for (let i = 0; i < 9; i++) { const x = Math.floor(L.R(0, 4)) * 128 + 20, y = L.R(10, n - 60), w = L.R(30, 70), h = L.R(20, 45); g.strokeRect(x, y, w, h); }
-    for (let i = 0; i < 60; i++) { g.fillStyle = 'rgba(30,30,30,0.35)'; g.fillRect(L.R(0, n), L.R(0, n), 1.6, 1.6); } // fasteners
-    L.speckle(g, n, 1500, 0.05);
-  });
-  skinTex.repeat.set(0.25, 0.25); // UVs are in world units: one texture every 4 units, a panel every 1
-  const skinMat = (hex, rough = 0.55) => { const m = new THREE.MeshStandardMaterial({ color: hex, map: skinTex, roughness: rough, metalness: 0.25, vertexColors: true }); m.envMapIntensity = 0.55; return m; };
-  const skin = skinMat('#969da1'), skinD = skinMat('#80878b'), bay = skinMat('#6a7074', 0.6);
-  const radome = M.plain('#26292c', 0.45, 0.15), dark = M.plain('#16181a', 0.6, 0.3);
-  const metal = M.plain('#55585a', 0.38, 0.85), metalD = M.plain('#3a3c3e', 0.45, 0.8);
-  const glass = M.plain('#7fc2da', 0.1, 0.15), frame = M.plain('#8b9195', 0.5, 0.3);
-  const teamHex = '#' + new THREE.Color(TEAM).multiplyScalar(0.9).getHexString();
-  const team = M.plain(teamHex, 0.55, 0.1), white = M.plain('#e4e6e2', 0.6, 0);
-  const Y0 = 1.0;
+  // ---- materials: the Lancer's gunmetal shades, seams, steel and team glow
+  const armor = M.paint('#3a4046'), top = M.paint('#4f565e'), roof = M.paint('#5e666f', { rivets: false }), under = M.paint('#262a2e');
+  const dark = M.plain('#1a1c1f', 0.7, 0.3), black = M.plain('#08090a', 0.8), seam = M.plain('#101214', 0.8);
+  const steel = M.plain('#626970', 0.3, 0.85), rail = M.plain('#23272b', 0.4, 0.7), hood = M.plain('#121518', 0.3, 0.6);
+  const glow = M.emit(TEAM, 1.1), lens = R.eye(TEAM, 1.3, 0.32);
+  const Y0 = 1.0, UV = 0.5; // one paint panel per world unit
 
-  // a lofted body: superellipse rings (half-width w, half-height h, centre y/z, roundness n) from the front back
-  function loft(st, o = {}) {
-    const seg = o.seg ?? 40, ring = seg + 1, pos = [], uv = [], idx = [];
-    for (const s of st) {
-      const e = 2 / (s.n ?? 2), per = Math.PI * (s.w + s.h);
-      for (let j = 0; j <= seg; j++) {
-        const t = -Math.PI / 2 + (j / seg) * Math.PI * 2, c = Math.cos(t), sn = Math.sin(t);
-        pos.push(s.x, (s.y ?? Y0) + s.h * Math.sign(sn) * Math.abs(sn) ** e, (s.z ?? 0) + s.w * Math.sign(c) * Math.abs(c) ** e);
-        uv.push(s.x, (j / seg) * per);
-      }
+  // ---- helpers
+  // a faceted body lofted through octagonal sections, flat-shaded. A section: x, w (half-width), h (top above y),
+  // b (bottom below y), t (half-width of the top facet), m (where the upper chamfer meets the side, fraction of h),
+  // y, z. The top facet takes mats[0], the upper chamfers mats[1], the rest mats[2].
+  function facet(st, mats, o = {}) {
+    const ring = (s) => { const y = s.y ?? Y0, z = s.z ?? 0, w = s.w, h = s.h, b = s.b ?? h, t = s.t ?? w * 0.55, m = (s.m ?? 0.35) * h, bt = s.bt ?? w * 0.6, mb = -0.3 * b;
+      return [[z + bt, y - b], [z + w, y + mb], [z + w, y + m], [z + t, y + h], [z - t, y + h], [z - w, y + m], [z - w, y + mb], [z - bt, y - b]]; };
+    const mat = (e) => (e === 3 ? 0 : e === 2 || e === 4 ? 1 : 2);
+    const P = [[], [], []], U = [[], [], []];
+    const rings = st.map(ring);
+    const per = rings.map((r) => { const a = [0]; for (let j = 0; j < 8; j++) { const p = r[j], q = r[(j + 1) % 8]; a.push(a[j] + Math.hypot(q[0] - p[0], q[1] - p[1])); } return a; });
+    const V = (i, j) => [st[i].x, rings[i][j % 8][1], rings[i][j % 8][0]];
+    for (let i = 0; i < st.length - 1; i++) for (let j = 0; j < 8; j++) {
+      const g = mat(j), a = V(i, j), a1 = V(i, j + 1), b = V(i + 1, j), b1 = V(i + 1, j + 1);
+      const ua = [st[i].x * UV, per[i][j] * UV], ua1 = [st[i].x * UV, per[i][j + 1] * UV], ub = [st[i + 1].x * UV, per[i + 1][j] * UV], ub1 = [st[i + 1].x * UV, per[i + 1][j + 1] * UV];
+      P[g].push(...a, ...a1, ...b, ...a1, ...b1, ...b); U[g].push(...ua, ...ua1, ...ub, ...ua1, ...ub1, ...ub);
     }
-    for (let i = 0; i < st.length - 1; i++) for (let j = 0; j < seg; j++) { const a = i * ring + j, b = a + ring; idx.push(a, a + 1, b, a + 1, b + 1, b); }
-    const cap = (i, back) => { const s = st[i], c = pos.length / 3, base = i * ring; pos.push(s.x, s.y ?? Y0, s.z ?? 0); uv.push(s.x, 0);
-      for (let j = 0; j < seg; j++) back ? idx.push(c, base + j, base + j + 1) : idx.push(c, base + j + 1, base + j); };
-    if (o.capFront) cap(0, false);
+    const cap = (i, back) => { const s = st[i], c = [s.x, s.y ?? Y0, s.z ?? 0];
+      for (let j = 0; j < 8; j++) { const p = V(i, j), q = V(i, j + 1); if (back) P[2].push(...c, ...p, ...q); else P[2].push(...c, ...q, ...p);
+        for (const v of back ? [c, p, q] : [c, q, p]) U[2].push(v[2] * UV, v[1] * UV); } };
+    if (o.capFront !== false) cap(0, false);
     if (o.capBack !== false) cap(st.length - 1, true);
-    const g = new THREE.BufferGeometry();
+    const g = new THREE.BufferGeometry(), pos = [], uv = [];
+    let start = 0;
+    for (let k = 0; k < 3; k++) { pos.push(...P[k]); uv.push(...U[k]); const n = P[k].length / 3; if (n) g.addGroup(start, n, k); start += n; }
     g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
-    g.setIndex(idx); g.computeVertexNormals(); return g;
+    g.computeVertexNormals();
+    return mesh(g, [mats[0], mats[1] ?? mats[0], mats[2] ?? mats[1] ?? mats[0]], 0, 0, 0, { dirt: 0, ...o });
   }
-  // a flat plan shape [x, z] points, extruded down from its top at height y
-  function slab(pts, thick, mat, y, bevel = 0.04) {
-    const sh = new THREE.Shape(); pts.forEach(([x, z], i) => (i ? sh.lineTo(x, z) : sh.moveTo(x, z))); sh.closePath();
-    const g = new THREE.ExtrudeGeometry(sh, { depth: thick, bevelEnabled: bevel > 0, bevelThickness: bevel, bevelSize: bevel, bevelSegments: 1 });
-    g.rotateX(Math.PI / 2); // shape y -> world z, the extrude goes down
-    return mesh(g, mat, 0, y - bevel, 0, { dirt: 0 });
+  // a flat plate from a plan outline [x, z], its top at y, bevelled
+  function plate(pts, y, thick, mat, o = {}) {
+    const bev = Math.min(o.bevel ?? 0.03, thick / 3), sh = new THREE.Shape();
+    pts.forEach(([x, z], i) => (i ? sh.lineTo(x, z) : sh.moveTo(x, z))); sh.closePath();
+    const g = new THREE.ExtrudeGeometry(sh, { depth: Math.max(0.002, thick - 2 * bev), bevelEnabled: bev > 0, bevelThickness: bev, bevelSize: bev, bevelOffset: -bev, bevelSegments: 1 });
+    g.rotateX(Math.PI / 2); g.translate(0, -bev, 0);
+    const uv = g.attributes.uv; for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) * UV, uv.getY(i) * UV);
+    return mesh(g, mat, 0, y, 0, { dirt: 0, ...o });
   }
-  function star(r, mat, x, y, z) {
-    const sh = new THREE.Shape();
-    for (let k = 0; k < 10; k++) { const a = (k * Math.PI) / 5, rr = k % 2 ? r * 0.4 : r; k ? sh.lineTo(Math.cos(a) * rr, Math.sin(a) * rr) : sh.moveTo(rr, 0); }
-    const g = new THREE.ExtrudeGeometry(sh, { depth: 0.015, bevelEnabled: false }); g.rotateX(Math.PI / 2);
-    return mesh(g, mat, x, y, z, { dirt: 0, cast: false });
+  // a convex outline moved inward by d (one distance, or one per edge)
+  function inset(pts, d) {
+    const n = pts.length, ar = pts.reduce((a, p, i) => { const q = pts[(i + 1) % n]; return a + p[0] * q[1] - q[0] * p[1]; }, 0), sg = Math.sign(ar);
+    const lines = pts.map((p, i) => { const q = pts[(i + 1) % n], dx = q[0] - p[0], dz = q[1] - p[1], l = Math.hypot(dx, dz), nx = -dz / l * sg, nz = dx / l * sg, dd = Array.isArray(d) ? d[i] : d;
+      return [p[0] + nx * dd, p[1] + nz * dd, dx, dz]; });
+    return lines.map((A, i) => { const B = lines[(i + n - 1) % n], den = A[2] * B[3] - A[3] * B[2], t = ((B[0] - A[0]) * B[3] - (B[1] - A[1]) * B[2]) / den; return [A[0] + A[2] * t, A[1] + A[3] * t]; });
+  }
+  // a thin strip on top of a surface, from (x1, z1) to (x2, z2)
+  const strip = (x1, z1, x2, z2, w, y, h, mat, o = {}) => { const dx = x2 - x1, dz = z2 - z1;
+    return box(Math.hypot(dx, dz), h, w, mat, (x1 + x2) / 2, y, (z1 + z2) / 2, { ry: -Math.atan2(dz, dx), dirt: 0, cast: false, ...o }); };
+  // a band round a horizontal (x-axis) octagonal body: a short octagonal section, slightly proud
+  const band = (x, len, r, y, z, mat) => facet([{ x: x + len / 2, w: r, h: r, t: r * 0.41, m: 0.41, bt: r * 0.41, y, z }, { x: x - len / 2, w: r, h: r, t: r * 0.41, m: 0.41, bt: r * 0.41, y, z }], [mat, mat, mat], { cast: false });
+  const oct = (r) => ({ w: r, h: r, t: r * 0.41, m: 0.41, bt: r * 0.41 }); // a regular octagon section
+  // grime: rust-brown blotches and specks on a transparent decal cut to a plan outline, laid just over a surface
+  function grime(pts, y, amt = 1, seed = 1) {
+    const t = L.canvasTex(256, (g, n) => {
+      let sd = seed * 9301 + 49297; const r = () => (sd = (sd * 9301 + 49297) % 233280) / 233280;
+      for (let i = 0; i < 26 * amt; i++) { const cx = r() * n, cy = r() * n, rr = 8 + r() * 30;
+        const gr = g.createRadialGradient(cx, cy, 0, cx, cy, rr); const c = r() < 0.5 ? '122,84,50' : '70,52,36';
+        gr.addColorStop(0, `rgba(${c},${0.12 + r() * 0.18})`); gr.addColorStop(1, `rgba(${c},0)`); g.fillStyle = gr; g.fillRect(cx - rr, cy - rr, rr * 2, rr * 2); }
+      for (let i = 0; i < 900 * amt; i++) { g.fillStyle = `rgba(${r() < 0.5 ? '20,18,16' : '150,120,90'},${r() * 0.35})`; g.fillRect(r() * n, r() * n, 1 + r() * 2, 1 + r() * 2); }
+    });
+    const sh = new THREE.Shape(); pts.forEach(([x, z], i) => (i ? sh.lineTo(x, -z) : sh.moveTo(x, -z))); sh.closePath();
+    const geo = new THREE.ShapeGeometry(sh); geo.rotateX(-Math.PI / 2);
+    const uv = geo.attributes.uv; for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) / 5, uv.getY(i) / 5);
+    const m = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ map: t, transparent: true, roughness: 0.9, depthWrite: false }));
+    m.position.y = y; m.userData.decal = true; m.receiveShadow = true; L.getRoot().add(m); return m;
   }
 
-  // ---- the nose: the long black radome and the slim forward fuselage, which runs on back as the spine
+  // ---- the nose: a long, dark faceted radome on a slim forward body that runs back as the raised spine
   const R0 = [[8.96, 0.02], [8.75, 0.12], [8.35, 0.23], [7.75, 0.33], [7.0, 0.41], [6.16, 0.47]];
-  mesh(loft(R0.map(([x, w]) => ({ x, w, h: w, y: Y0 + 0.02 })), { capBack: false }), radome, 0, 0, 0, { dirt: 0 });
+  facet(R0.map(([x, w]) => ({ x, ...oct(w), y: Y0 + 0.02 })), [rail, dark, dark], { capBack: false });
+  band(6.13, 0.06, 0.48, Y0 + 0.02, 0, seam);
+  L.hcyl(0.03, 0.75, steel, 9.3, Y0 + 0.02, 0, { seg: 8, dirt: 0, cast: false }); // the nose probe
   const F0 = [[6.16, 0.47, 0.47, 0.02], [5.4, 0.53, 0.53, 0.03], [4.4, 0.56, 0.56, 0.04], [3.4, 0.55, 0.6, 0.04], [2.6, 0.48, 0.68, 0.02],
     [1.6, 0.4, 0.72, 0], [0.6, 0.36, 0.71, 0], [-1.5, 0.34, 0.7, 0], [-4.5, 0.32, 0.68, 0], [-6.5, 0.3, 0.6, 0], [-8.2, 0.24, 0.42, 0], [-8.7, 0.16, 0.26, 0]];
-  mesh(loft(F0.map(([x, w, h, dy]) => ({ x, w, h, y: Y0 + dy, n: 2.3 }))), skin, 0, 0, 0, { dirt: 0 });
-  hcyl(0.03, 0.75, metal, 9.3, Y0 + 0.02, 0, { seg: 8, dirt: 0, cast: false }); // the nose probe
-  // the canopy: windscreen and the long glazed hood, framed, faired into the spine behind
-  { const g = new THREE.SphereGeometry(1, 40, 20, 0, Math.PI * 2, 0, Math.PI / 2); g.scale(1.0, 0.36, 0.42); mesh(g, glass, 3.74, Y0 + 0.47, 0, { dirt: 0 }); }
-  for (const [x, w] of [[4.3, 0.62], [3.75, 0.8], [3.15, 0.66]]) box(0.06, 0.05, w, frame, x, Y0 + 0.8 - Math.abs(x - 3.74) * 0.3, 0, { dirt: 0, cast: false });
-  box(1.9, 0.04, 0.05, frame, 3.74, Y0 + 0.82, 0, { dirt: 0, cast: false });
+  facet(F0.map(([x, w, h, dy]) => ({ x, w, h, b: h, t: w * 0.5, m: 0.45, y: Y0 + dy })), [roof, top, armor]);
+  // the spine's top along its length, for the seams and the glow strip laid on it
+  const spineY = (x) => { for (let i = 0; i < F0.length - 1; i++) { const [xa, , ha, da] = F0[i], [xb, , hb, db] = F0[i + 1];
+    if (x <= xa && x >= xb) { const t = (xa - x) / (xa - xb); return Y0 + da + ha + t * (db + hb - da - ha); } } return Y0 + 0.5; };
+  const spineW = (x) => { for (let i = 0; i < F0.length - 1; i++) { const [xa, wa] = F0[i], [xb, wb] = F0[i + 1]; if (x <= xa && x >= xb) return (wa + (wb - wa) * (xa - x) / (xa - xb)) * 0.5; } return 0.1; };
+  for (const x of [5.3, -1.0, -3.6, -6.2]) strip(x, -spineW(x), x, spineW(x), 0.04, spineY(x) - 0.004, 0.012, seam);
+  // the canopy: an armoured faceted hood, almost black, with the glowing sensor slit down its middle
+  facet([[4.85, 0.03, 0.02], [4.45, 0.3, 0.2], [3.9, 0.42, 0.33], [3.2, 0.42, 0.36], [2.45, 0.34, 0.3], [1.85, 0.16, 0.18]].map(([x, w, h]) => ({ x, w, h, b: 0.05, t: w * 0.45, m: 0.5, y: Y0 + 0.47 })), [hood, M.plain('#2b3136', 0.35, 0.6), dark]);
+  { const sh = new THREE.Shape(); [[4.55, 0], [4.25, 0.06], [2.55, 0.05], [2.35, 0], [2.55, -0.05], [4.25, -0.06]].forEach(([x, z], i) => (i ? sh.lineTo(x, z) : sh.moveTo(x, z)));
+    const g = new THREE.ExtrudeGeometry(sh, { depth: 0.05, bevelEnabled: false }); g.rotateX(Math.PI / 2); mesh(g, lens, 0, Y0 + 0.86, 0, { dirt: 0, cast: false }); }
+  for (const s of [-1, 1]) strip(4.15, s * 0.33, 3.0, s * 0.37, 0.04, Y0 + 0.75, 0.04, M.plain('#2b3035', 0.5, 0.5)); // hood frame rails
 
-  // ---- the intakes: big rounded boxes either side of the nose, opening into the broad body behind
+  // ---- the intakes: huge angular boxes either side of the nose, raked lips, opening into the broad body behind
   for (const s of [-1, 1]) {
-    const st = [[3.41, 0.5, 0.56], [3.36, 0.555, 0.62], [1.2, 0.555, 0.62]].map(([x, w, h]) => ({ x, w, h, z: s * 0.76, y: Y0 - 0.05, n: 4 }));
-    mesh(loft(st, { capFront: true }), skin, 0, 0, 0, { dirt: 0 });
-    box(0.07, 0.03, 1.08, metal, 3.39, Y0 + 0.55, s * 0.76, { dirt: 0, cast: false }); // the lip
-    box(0.6, 0.02, 0.9, skinD, 2.9, Y0 + 0.565, s * 0.78, { dirt: 0, cast: false });   // the ramp panel behind it
+    facet([{ x: 3.41, w: 0.5, h: 0.5, t: 0.38, m: 0.6, y: Y0 - 0.05, z: s * 0.76 }, { x: 3.36, w: 0.555, h: 0.6, t: 0.43, m: 0.6, y: Y0 - 0.05, z: s * 0.76 },
+      { x: 1.2, w: 0.555, h: 0.6, t: 0.43, m: 0.6, y: Y0 - 0.05, z: s * 0.76 }], [top, armor, armor]);
+    strip(3.39, s * 0.36, 3.39, s * 1.16, 0.08, Y0 + 0.55, 0.035, steel);                                    // the lip
+    plate([[3.3, s * 0.36], [3.3, s * 1.17], [2.55, s * 1.17], [2.4, s * 0.36]], Y0 + 0.585, 0.03, roof);      // the ramp panel behind it
+    strip(2.3, s * 0.36, 2.3, s * 1.17, 0.035, Y0 + 0.552, 0.01, seam);
+    for (const x of [2.0, 1.75, 1.5]) strip(x, s * 0.5, x, s * 0.95, 0.07, Y0 + 0.552, 0.012, black);         // the bleed vents
   }
-  // ---- the broad, flat body over the engines, to the engine bays
-  mesh(loft([[1.42, 1.3, 0.62], [1.2, 1.44, 0.66], [-5.5, 1.44, 0.66], [-5.85, 1.3, 0.62], [-6.6, 1.22, 0.6]].map(([x, w, h]) => ({ x, w, h, y: Y0 - 0.1, n: 4.5 })), { capFront: true }), skin, 0, 0, 0, { dirt: 0 });
-  // the engine bays and the two big nozzles behind, a tail boom between them
+  // ---- the broad body over the engines: a wide faceted slab with raised deck plates either side of the spine
+  facet([[1.42, 1.3, 0.62], [1.2, 1.44, 0.66], [-5.5, 1.44, 0.66], [-5.85, 1.3, 0.62], [-6.6, 1.22, 0.6]].map(([x, w, h]) => ({ x, w, h, t: w - 0.34, m: 0.55, y: Y0 - 0.1 })), [armor, armor, armor]);
   for (const s of [-1, 1]) {
-    hcyl(0.62, 2.75, bay, -7.15, Y0 - 0.12, s * 0.62, { seg: 32, dirt: 0 });
-    hcyl(0.64, 0.42, metal, -8.3, Y0 - 0.12, s * 0.62, { seg: 32, dirt: 0 });
-    hcyl(0.5, 0.04, dark, -8.52, Y0 - 0.12, s * 0.62, { seg: 28, dirt: 0 });
-    hcyl(0.36, 0.03, M.emit('#ff8a3a', 1.2), -8.55, Y0 - 0.12, s * 0.62, { seg: 24, dirt: 0, cast: false });
-    for (let k = 0; k < 4; k++) box(0.03, 0.02, 0.5, metalD, -6.2 - k * 0.55, Y0 + 0.5, s * 0.62, { dirt: 0, cast: false }); // bay panel joints
+    plate([[0.95, s * 0.42], [0.95, s * 0.98], [-1.9, s * 1.02], [-1.9, s * 0.42]], Y0 + 0.595, 0.04, roof);
+    plate([[-2.1, s * 0.42], [-2.1, s * 1.02], [-5.2, s * 1.02], [-5.45, s * 0.8], [-5.45, s * 0.42]], Y0 + 0.595, 0.04, roof);
+    for (let k = 0; k < 4; k++) strip(-2.6 - k * 0.42, s * 0.55, -2.6 - k * 0.42, s * 0.88, 0.06, Y0 + 0.596, 0.01, black); // cooling louvres
+    strip(1.2, s * 1.12, -5.5, s * 1.12, 0.035, Y0 + 0.557, 0.01, seam);
+  }
+  // the engine bays: faceted nacelles, the two big nozzles behind with their glowing rings, a tail boom between them
+  for (const s of [-1, 1]) {
+    const z = s * 0.62, y = Y0 - 0.12;
+    facet([{ x: -5.78, ...oct(0.62), y, z }, { x: -8.1, ...oct(0.62), y, z }], [top, armor, armor]);
+    for (const x of [-6.35, -6.95, -7.55]) band(x, 0.04, 0.63, y, z, seam);
+    facet([{ x: -8.08, ...oct(0.6), y, z }, { x: -8.56, ...oct(0.5), y, z }], [rail, rail, rail], { capBack: false });
+    band(-8.24, 0.07, 0.585, y, z, glow); band(-8.42, 0.06, 0.55, y, z, glow);
+    facet([{ x: -8.55, ...oct(0.42), y, z }, { x: -8.6, ...oct(0.42), y, z }], [lens, lens, lens], { cast: false });  // the hot core
   }
 
   // ---- the wing: thin, swept 43 degrees at the leading edge, a straight trailing edge, pods on the tips
   const RZ = 1.3, TZ = 5.68, LE = (z) => -0.48 - (Math.abs(z) - RZ) * (3.92 / 4.38), TE = (z) => -6.16 - (Math.abs(z) - RZ) * (0.08 / 4.38);
+  const WY = Y0 + 0.34;
   for (const s of [-1, 1]) {
-    slab([[LE(RZ), s * RZ], [LE(TZ), s * TZ], [TE(TZ), s * TZ], [TE(RZ), s * RZ]], 0.12, skin, Y0 + 0.34);
-    // flaps and ailerons along the trailing edge, two pylon lines, the tip pod
-    const fl = (z0, z1) => { const zc = (z0 + z1) / 2; box(0.03, 0.02, z1 - z0, skinD, TE(zc) + 0.75, Y0 + 0.35, s * zc, { dirt: 0, cast: false }); };
-    fl(1.5, 3.3); fl(3.4, 5.4);
-    for (const z of [2.8, 4.2]) box(Math.abs(LE(z) - TE(z)) - 0.5, 0.02, 0.025, skinD, (LE(z) + TE(z)) / 2, Y0 + 0.35, s * z, { dirt: 0, cast: false });
-    hcyl(0.12, 3.5, skin, -4.8, Y0 + 0.28, s * (TZ + 0.06), { seg: 14, dirt: 0 });
-    { const g = new THREE.ConeGeometry(0.12, 0.5, 14); g.rotateZ(-Math.PI / 2); mesh(g, skinD, -2.8, Y0 + 0.28, s * (TZ + 0.06), { dirt: 0 }); }
-    // the star, in team colour on a white star
-    star(0.66, white, -4.35, Y0 + 0.355, s * 4.45); star(0.52, team, -4.35, Y0 + 0.37, s * 4.45);
-    // a bomb under the wing, its nose ahead of the leading edge; a team band behind the fuze
-    const bz = s * 2.85, bx = -1.75;
-    hcyl(0.21, 2.3, M.plain('#4f5741', 0.7, 0.1), bx, Y0 + 0.02, bz, { seg: 16, dirt: 0 });
-    { const g = new THREE.ConeGeometry(0.21, 0.55, 16); g.rotateZ(-Math.PI / 2); mesh(g, M.plain('#4f5741', 0.7, 0.1), bx + 1.42, Y0 + 0.02, bz, { dirt: 0 }); }
-    hcyl(0.215, 0.14, team, bx + 0.85, Y0 + 0.02, bz, { seg: 16, dirt: 0 });
-    // the stabilator: swept, reaching back past the nozzles
-    slab([[-6.32, s * 1.25], [-9.12, s * 3.79], [-9.62, s * 3.4], [-8.48, s * 1.25]], 0.1, skin, Y0 + 0.08);
-    // the fin: tall and swept, canted out, its cap in team colour
+    plate([[LE(RZ), s * RZ], [LE(TZ), s * TZ], [TE(TZ), s * TZ], [TE(RZ), s * RZ]], WY, 0.12, under, { bevel: 0.04 });
+    // the plating: three panels between the leading-edge band and the flaps, the flaps and the aileron behind
+    const zs = [RZ, 2.8, 4.25, TZ - 0.12], fx = (z) => TE(z) + 0.78;
+    for (let k = 0; k < 3; k++) {
+      const z0 = zs[k] + (k ? 0.04 : 0.02), z1 = zs[k + 1] - 0.04;
+      plate([[LE(z0) - 0.3, s * z0], [LE(z1) - 0.3, s * z1], [fx(z1) + 0.05, s * z1], [fx(z0) + 0.05, s * z0]], WY + 0.035, 0.035, k === 0 ? top : armor, { bevel: 0.012 });
+    }
+    for (const [z0, z1] of [[RZ + 0.04, 3.3], [3.38, 5.5]]) plate([[fx(z0) - 0.04, s * z0], [fx(z1) - 0.04, s * z1], [TE(z1) + 0.04, s * z1], [TE(z0) + 0.04, s * z0]], WY + 0.03, 0.03, armor, { bevel: 0.01 });
+    // the leading-edge glow strip, in the dark band ahead of the plating
+    strip(LE(RZ + 0.05) - 0.15, s * (RZ + 0.05), LE(TZ - 0.2) - 0.15, s * (TZ - 0.2), 0.085, WY + 0.002, 0.02, glow);
+    // the tip pod: a faceted hexagonal pod, its nose a pointed cone
+    facet([{ x: -2.5, ...oct(0.02), y: WY - 0.06, z: s * (TZ + 0.06) }, { x: -3.05, ...oct(0.12), y: WY - 0.06, z: s * (TZ + 0.06) },
+      { x: -6.4, ...oct(0.12), y: WY - 0.06, z: s * (TZ + 0.06) }, { x: -6.6, ...oct(0.07), y: WY - 0.06, z: s * (TZ + 0.06) }], [top, armor, armor]);
+    // a bomb under the wing, its nose ahead of the leading edge, a glowing band behind the fuze
+    const bz = s * 2.85, bx = -1.75, by = Y0 + 0.02;
+    facet([{ x: bx + 1.7, ...oct(0.02), y: by, z: bz }, { x: bx + 1.15, ...oct(0.21), y: by, z: bz }, { x: bx - 1.15, ...oct(0.21), y: by, z: bz }, { x: bx - 1.3, ...oct(0.14), y: by, z: bz }], [M.plain('#4a5056', 0.6, 0.4), M.plain('#30353a', 0.6, 0.4), dark]);
+    band(bx + 0.85, 0.1, 0.22, by, bz, glow);
+    // the stabilator: swept, reaching back past the nozzles, a raised panel on it
+    const stab = [[-6.32, s * 1.25], [-9.12, s * 3.79], [-9.62, s * 3.4], [-8.48, s * 1.25]];
+    plate(stab, Y0 + 0.08, 0.1, under, { bevel: 0.03 });
+    plate(inset(stab, [0.12, 0.1, 0.25, 0.1]), Y0 + 0.105, 0.03, armor, { bevel: 0.01 });
+    // the fin: tall and swept, canted out, a seam down it and its cap glowing
     const fin = new THREE.Group(); fin.position.set(0, Y0 + 0.52, s * 1.12); fin.rotation.x = s * 0.14; L.getRoot().add(fin);
     { const sh = new THREE.Shape(); sh.moveTo(-3.7, 0); sh.lineTo(-5.0, 0.42); sh.lineTo(-8.2, 2.4); sh.lineTo(-8.85, 2.4); sh.lineTo(-8.6, 0); sh.closePath();
-      const g = new THREE.ExtrudeGeometry(sh, { depth: 0.1, bevelEnabled: false }); g.translate(0, 0, -0.05); mesh(g, skin, 0, 0, 0, { dirt: 0, parent: fin }); }
-    box(0.75, 0.16, 0.13, team, -8.5, 2.28, 0, { dirt: 0, parent: fin });
+      const g = new THREE.ExtrudeGeometry(sh, { depth: 0.1, bevelEnabled: true, bevelThickness: 0.02, bevelSize: 0.02, bevelOffset: -0.02, bevelSegments: 1 }); g.translate(0, 0, -0.05);
+      const uv = g.attributes.uv; for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) * UV, uv.getY(i) * UV);
+      mesh(g, roof, 0, 0, 0, { dirt: 0, parent: fin }); }
+    box(0.7, 0.07, 0.15, glow, -8.52, 2.36, 0, { dirt: 0, parent: fin, cast: false });
+    { const a = [-5.0 - 3.2 * 0.4, 0.42 + 1.98 * 0.4], b = [-8.2, 2.4], g = new THREE.BoxGeometry(Math.hypot(b[0] - a[0], b[1] - a[1]), 0.07, 0.14); // the leading edge glows on its upper part
+      const m = mesh(g, glow, (a[0] + b[0]) / 2 + 0.02, (a[1] + b[1]) / 2 - 0.03, 0, { dirt: 0, parent: fin, cast: false }); m.rotation.z = Math.atan2(b[1] - a[1], b[0] - a[0]); }
   }
 
+  // ---- grime over the body and the wings
+  grime([[1.3, -1.4], [1.3, 1.4], [-5.5, 1.4], [-5.5, -1.4]], Y0 + 0.64, 0.7, 11);
+  for (const s of [-1, 1]) grime([[LE(RZ), s * RZ], [LE(TZ), s * TZ], [TE(TZ), s * TZ], [TE(RZ), s * RZ]], WY + 0.075, 0.4, 5 + s);
+
   // ---- lights: navigation (red left, green right) on the tip pods, white on the tail boom, the beacon on the spine
-  sphere(0.12, M.emit('#ff3a2a', 3.4), -3.2, Y0 + 0.32, -TZ - 0.12, { cast: false });
-  sphere(0.12, M.emit('#3aff6a', 3.4), -3.2, Y0 + 0.32, TZ + 0.12, { cast: false });
-  sphere(0.11, M.emit('#ffffff', 3.0), -8.75, Y0 + 0.05, 0, { cast: false });
-  sphere(0.08, M.emit('#ff3a2a', 3.0), -2.2, Y0 + 0.72, 0, { cast: false });
+  sphere(0.11, M.emit('#ff3a2a', 3.4), -2.85, WY - 0.02, -TZ - 0.06, { cast: false });
+  sphere(0.11, M.emit('#3aff6a', 3.4), -2.85, WY - 0.02, TZ + 0.06, { cast: false });
+  sphere(0.1, M.emit('#ffffff', 3.0), -8.78, Y0 + 0.05, 0, { cast: false });
+  sphere(0.07, M.emit('#ff3a2a', 3.0), -2.3, Y0 + 0.72, 0, { cast: false });
+  // the spine's glow strip, broken at the beacon
+  for (const [a, b] of [[1.25, -1.9], [-2.7, -6.1]]) {
+    const xs = [a, ...F0.map((r) => r[0]).filter((x) => x < a && x > b), b];
+    for (let i = 0; i < xs.length - 1; i++) L.beam([xs[i], spineY(xs[i]) + 0.005, 0], [xs[i + 1], spineY(xs[i + 1]) + 0.005, 0], 0.075, 0.02, glow, { cast: false });
+  }
+
+  // looking straight down, the studio environment reflects off every flat top: keep reflections low (as the robots do)
+  const seen = new Set();
+  L.getRoot().traverse((o) => { if (!o.isMesh) return; for (const m of [].concat(o.material)) if (!seen.has(m) && m.envMapIntensity !== undefined) { seen.add(m); m.envMapIntensity *= m.emissiveIntensity > 0 ? 1 : 0.35; } });
 }

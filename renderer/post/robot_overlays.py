@@ -5,8 +5,8 @@ src, out = sys.argv[1], sys.argv[2]
 N = 256
 yy, xx = np.mgrid[0:N, 0:N].astype(np.float32)
 CFG = {  # brake lens centres and dust sources (rear end of each track / rear wheel) in frame pixels
-  'worker':  {'brake': [(39.5, 80.5), (39.5, 175.5)], 'dust': [(31, 62), (31, 194)]},
-  'hauler':  {'brake': [(18, 91.5), (18, 164.5)],     'dust': [(27, 69), (27, 187)]},
+  'worker':  {'brake': [(32, 81.5), (32, 174.5)],     'dust': [(33, 62), (33, 194)]},
+  'hauler':  {'brake': [(17, 92), (17, 164)],         'dust': [(27, 69), (27, 187)]},
   'agribot': {'brake': [(41, 98), (41, 158)],         'dust': [(39, 54), (39, 202)]},
   'paver':   {'brake': [(23.5, 83), (23.5, 173)],     'dust': [(44, 67), (44, 189)]},
   'warbot':  {'brake': [(12.5, 101.5), (12.5, 154.5)], 'dust': [(28, 68), (28, 188)]},

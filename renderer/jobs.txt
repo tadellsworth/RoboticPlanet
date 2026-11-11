@@ -1905,3 +1905,15 @@ art/buildings/tradepost.png	main	tradepost:#ffc860::tradepost	compose.py
 art/tod/morning/buildings/tradepost.png	main	tradepost:#ffc860::tradepost:tod=morning	compose.py
 art/tod/evening/buildings/tradepost.png	main	tradepost:#ffc860::tradepost:tod=evening	compose.py
 art/tod/night/buildings/tradepost.png	main	tradepost:#ffc860::tradepost:tod=night	compose.py
+art/bots/rocket@0-f0.png	main	rockettruck::#38d4ff:rocket@0-f0:part=drive	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/bots/rocket-up@0.png	main	rockettruck::#38d4ff:rocket-up@0:part=up	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/bots/rocket@1-f0.png	main	rockettruck::#ff5a6e:rocket@1-f0:part=drive	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/bots/rocket-up@1.png	main	rockettruck::#ff5a6e:rocket-up@1:part=up	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/bots/bomber@0.png	main	bomber::#38d4ff:bomber@0	compose_any.py --b1 5 --b2 15
+art/bots/bomber@1.png	main	bomber::#ff5a6e:bomber@1	compose_any.py --b1 5 --b2 15
+art/tod/morning/bots/bomber@0.png	main	bomber::#38d4ff:bomber@0:tod=morning	compose_any.py --b1 5 --b2 15
+art/tod/morning/bots/bomber@1.png	main	bomber::#ff5a6e:bomber@1:tod=morning	compose_any.py --b1 5 --b2 15
+art/tod/evening/bots/bomber@0.png	main	bomber::#38d4ff:bomber@0:tod=evening	compose_any.py --b1 5 --b2 15
+art/tod/evening/bots/bomber@1.png	main	bomber::#ff5a6e:bomber@1:tod=evening	compose_any.py --b1 5 --b2 15
+art/tod/night/bots/bomber@0.png	main	bomber::#38d4ff:bomber@0:tod=night	compose_any.py --b1 5 --b2 15
+art/tod/night/bots/bomber@1.png	main	bomber::#ff5a6e:bomber@1:tod=night	compose_any.py --b1 5 --b2 15
