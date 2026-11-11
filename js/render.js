@@ -5381,21 +5381,22 @@ function drawEffects(ctx, ox, oy, z) {
       case 'heat': drawHeatFx(ctx, f, x, y, z, k); break;
       case 'nukeglow': drawNukeGlowFx(ctx, f, x, y, z, k); break;
       case 'dust': {
-        // Rounds peppering the ground: a little kick of dirt and grit.
-        ctx.fillStyle = '#b8936a';
+        // Rounds peppering the ground: a little kick of dirt and grit (shaded at night: it doesn't glow).
+        ctx.fillStyle = fxDim('#b8936a');
         for (let n = 0; n < 4; n++) {
           const a = -Math.PI / 2 + (n - 1.5) * 0.55 + ((f.seed || 0) % 3) * 0.1, d = k * z * (0.18 + n * 0.04);
           ctx.globalAlpha = 0.75 * (1 - k);
           ctx.beginPath(); ctx.arc(x + Math.cos(a) * d, y + Math.sin(a) * d * 1.3 + k * k * z * 0.12, Math.max(1, z * (0.035 + n * 0.008) * (1 - k * 0.5)), 0, Math.PI * 2); ctx.fill();
         }
-        ctx.globalAlpha = 0.35 * (1 - k); ctx.fillStyle = '#c9a77d';
+        ctx.globalAlpha = 0.35 * (1 - k); ctx.fillStyle = fxDim('#c9a77d');
         ctx.beginPath(); ctx.arc(x, y - k * z * 0.1, z * (0.06 + k * 0.12), 0, Math.PI * 2); ctx.fill();
         break;
       }
       case 'puff': {
-        // A wisp of gun smoke drifting up and spreading.
-        ctx.globalAlpha = 0.45 * (1 - k); ctx.fillStyle = '#8c8680';
-        ctx.beginPath(); ctx.arc(x + k * z * 0.08, y - k * z * 0.35, z * (f.r || 0.15) * (1 + k * 1.5), 0, Math.PI * 2); ctx.fill();
+        // A wisp of gun smoke drifting up and spreading (soft, and dimmer in the dark).
+        const s = z * (f.r || 0.15) * (1 + k * 1.5) * 2.2;
+        ctx.globalAlpha = 0.5 * (1 - k) * (1 - 0.55 * fxNight());
+        ctx.drawImage(fxPuff(false), x + k * z * 0.08 - s / 2, y - k * z * 0.35 - s / 2, s, s);
         break;
       }
       case 'debris': {
@@ -5406,7 +5407,7 @@ function drawEffects(ctx, ox, oy, z) {
           const a = ((f.seed || 0) * 0.13 + i * (Math.PI * 2 / n) + (i % 2) * 0.3), sp = 0.6 + ((i * 7 + (f.seed || 0)) % 5) / 8;
           const px = x + Math.cos(a) * rr * sp * k, py = y + Math.sin(a) * rr * sp * k * 0.6 - Math.sin(k * Math.PI) * rr * 0.7 * sp;
           const cs = Math.max(1.5, z * (0.05 + (i % 3) * 0.02));
-          ctx.fillStyle = i % 3 === 0 ? '#3b3d42' : i % 3 === 1 ? '#7a6d5e' : '#a8562e';
+          ctx.fillStyle = fxDim(i % 3 === 0 ? '#3b3d42' : i % 3 === 1 ? '#7a6d5e' : '#a8562e');
           ctx.save(); ctx.translate(px, py); ctx.rotate(k * 9 + i);
           ctx.fillRect(-cs / 2, -cs / 2, cs, cs * 0.7);
           ctx.restore();
@@ -5433,7 +5434,7 @@ function drawEffects(ctx, ox, oy, z) {
         for (let n = 0; n < 7; n++) {
           const a = n * 0.9 + (f.seed || 0) * 0.17, d = rr * (0.35 + 0.65 * Math.min(1, k * 1.6)) * (0.6 + (n % 3) * 0.2);
           ctx.globalAlpha = 0.5 * (1 - k) * (n % 2 ? 0.8 : 1);
-          ctx.fillStyle = n % 2 ? '#a48a6c' : '#8f7a62';
+          ctx.fillStyle = fxDim(n % 2 ? '#a48a6c' : '#8f7a62');
           ctx.beginPath(); ctx.arc(x + Math.cos(a) * d, y + Math.sin(a) * d * 0.45 - k * rr * 0.25, rr * (0.28 + k * 0.35), 0, Math.PI * 2); ctx.fill();
         }
         break;
@@ -5467,11 +5468,11 @@ function drawEffects(ctx, ox, oy, z) {
       }
       case 'boom': drawBoomFx(ctx, f, x, y, z, k); break;
       case 'smoke': {
-        ctx.fillStyle = f.dark ? '#2e2925' : '#5a524c'; // a fuel fire's smoke is black
+        const puff = fxPuff(true); // soft dark smoke (a fuel fire's blacker still)
         for (let n = 0; n < 3; n++) {
-          const kk = (k + n * 0.3) % 1;
-          ctx.globalAlpha = 0.5 * (1 - kk);
-          ctx.beginPath(); ctx.arc(x + (n - 1) * z * 0.15, y - kk * z * 0.9, z * (0.15 + kk * 0.3), 0, Math.PI * 2); ctx.fill();
+          const kk = (k + n * 0.3) % 1, s = z * (0.15 + kk * 0.3) * 2.4;
+          ctx.globalAlpha = (f.dark ? 0.85 : 0.6) * (1 - kk) * (1 - 0.3 * fxNight());
+          ctx.drawImage(puff, x + (n - 1) * z * 0.15 - s / 2, y - kk * z * 0.9 - s / 2, s, s);
         }
         break;
       }

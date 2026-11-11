@@ -2832,9 +2832,9 @@ function shotFx(x, y, tx, ty, opts) {
   addFx('muzzle', mx, my, { a, color: o.pulse ? o.color : '#fff1b8', life: 0.1, pulse: !!o.pulse });
   if (!o.pulse) {
     if (!busy) addFx('puff', mx, my - 0.05, { r: 0.16, life: 0.9 });
-    // A short burst of tracer rounds, glowing in the shooter's colour, each flying out to the target (about 26
+    // A short burst of tracer rounds, glowing in the shooter's colour, each flying out to the target (about 17
     // tiles a second); hitting armour, now and then one glances off and skips away.
-    const fly = Math.max(0.06, dist(mx, my, tx, ty) / 26), n = busy ? 1 : 2;
+    const fly = Math.max(0.1, dist(mx, my, tx, ty) / 17), n = busy ? 1 : 2;
     for (let k = 0; k < n; k++) {
       const h = hash2(Math.floor(tx * 17) + k, Math.floor(ty * 13), S.tick + 11);
       addFx('tracer', mx, my, { x2: tx + (h - 0.5) * 0.25, y2: ty + (hash2(k, S.tick, 3) - 0.5) * 0.25, life: fly, t: -k * 0.07, color: o.color || '#ffe08a' });

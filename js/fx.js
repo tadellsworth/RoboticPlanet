@@ -43,6 +43,15 @@ function fxPool(color) {
   return (R.fxPools[color] = c);
 }
 
+/** A colour shaded for the dark (things that don't glow: dust, smoke, debris), cached per colour and darkness step. */
+function fxDim(hex) {
+  const n = Math.round(fxNight() * 8);
+  if (!n) return hex;
+  R.fxDims = R.fxDims || {};
+  const key = hex + n;
+  return R.fxDims[key] || (R.fxDims[key] = fxMix(hex, '#0d1018', n / 8 * 0.72, 1));
+}
+
 /** '#rrggbb' -> 'r,g,b' */
 function fxRGB(hex) {
   const h = hex.replace('#', ''), v = parseInt(h.length === 3 ? h.split('').map((c) => c + c).join('') : h, 16);
@@ -343,7 +352,7 @@ function drawTrail(ctx, m, k, late, ox, oy, z) {
     const age = (k - q) * m.dur + late;
     if (age > T.life) break;
     const a = age / T.life, p = fxFlight(m, q), s = z * (T.r0 + (T.r1 - T.r0) * Math.sqrt(a)) * 2;
-    ctx.globalAlpha = 0.32 * (1 - a) * Math.min(1, age * 8 + 0.3);
+    ctx.globalAlpha = 0.32 * (1 - a) * Math.min(1, age * 8 + 0.3) * (1 - 0.5 * fxNight());
     ctx.drawImage(puff, ox + p.x * z - s / 2 + a * z * 0.25, oy + p.y * z - s / 2 - a * z * 0.15, s, s);
   }
   ctx.globalAlpha = 1;
