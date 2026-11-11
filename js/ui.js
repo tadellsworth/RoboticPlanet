@@ -90,6 +90,7 @@ function initUI() {
     $(id).onchange = () => { UI.menu[k] = $(id).checked ? 1 : 0; syncMenu(); saveSettings(); sfx('click'); };
   }
   for (const btn of $('m-daynight').children) btn.onclick = () => { setTodMode(btn.dataset.v); syncMenu(); sfx('click'); };
+  $('m-weather').onchange = () => { setWeatherOn($('m-weather').checked); syncMenu(); sfx('click'); };
   // More settings opens and closes; it's remembered on this device.
   try { $('m-more').open = localStorage.getItem('botfall.moreOpen') === '1'; } catch (e) { /* storage unavailable */ }
   $('m-more').ontoggle = () => { try { localStorage.setItem('botfall.moreOpen', $('m-more').open ? '1' : '0'); } catch (e) { /* storage unavailable */ } };
@@ -126,6 +127,9 @@ function initUI() {
   syncTod();
   // Cycle → Always day → Always night → Cycle.
   $('p-daynight').onclick = () => { setTodMode(TOD_MODES[(TOD_MODES.indexOf(todMode()) + 1) % TOD_MODES.length]); syncTod(); sfx('click'); };
+  const syncWx = () => { $('p-weather').textContent = `Weather: ${weatherOn() ? 'On' : 'Off'}`; };
+  syncWx();
+  $('p-weather').onclick = () => { setWeatherOn(!weatherOn()); syncWx(); sfx('click'); };
   initFullscreen();
   syncVol();
   $('p-help').onclick = () => showHelp();
@@ -237,6 +241,7 @@ function syncMenu() {
   $('m-events').checked = !!UI.menu.events;
   $('m-unlimited').checked = !!UI.menu.unlimited;
   for (const btn of $('m-daynight').children) btn.classList.toggle('on', btn.dataset.v === todMode());
+  $('m-weather').checked = weatherOn();
   $('m-daynight-v').textContent = { cycle: 'Morning to night, 12 minutes round (looks only)', day: 'Always day (looks only)', night: 'Always night: every city lit up (looks only)' }[todMode()];
   // What More settings holds that isn't the default, so it's clear at a glance with it closed.
   const sum = [];

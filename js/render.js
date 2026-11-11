@@ -4278,6 +4278,7 @@ function render(dtReal) {
   drawPulseCharges(ctx, ox, oy, z, inView);
   drawEffects(ctx, ox, oy, z);
   if (S.event) drawEvent(ctx, ox, oy, z);
+  drawWeather(ctx, ox, oy, z); // sandstorms, rain, snow (looks only; js/weather.js)
   if (R.box) {
     // The selection box being dragged (desktop).
     const b = R.box, x = Math.min(b.x0, b.x1), y = Math.min(b.y0, b.y1), w = Math.abs(b.x1 - b.x0), h = Math.abs(b.y1 - b.y0);
