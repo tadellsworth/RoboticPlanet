@@ -1535,6 +1535,18 @@ function wantsRepair(u) {
   return u.hp < u.maxHp * (u.type === 'warbot' ? REPAIR_BELOW.warbot : REPAIR_BELOW.other);
 }
 
+/**
+ * An idle warbot (in a garrison, or standing about) with any damage at all goes to be fixed when it's safe:
+ * no enemy robot or gun within REPAIR_IDLE.foes tiles, and a Repair Station with Alloy within REPAIR_IDLE.reach.
+ */
+function idleRepair(u) {
+  if (u.dead || !warOn() || !u.maxHp || u.hp >= u.maxHp - 0.01) return false;
+  const home = u.inside ? getE(u.inside) : null, x = home ? home.x + 0.5 : u.x, y = home ? home.y + 0.5 : u.y;
+  if (foesNear(u.owner, x, y, REPAIR_IDLE.foes)) return false;
+  const c = findRepair(u);
+  return !!c && dist2(c.x + 0.5, c.y + 0.5, x, y) <= REPAIR_IDLE.reach * REPAIR_IDLE.reach;
+}
+
 /** A Repair Station with no Alloy left (and none in its hopper) can't fix anyone. */
 function repairDry(b) { return (b.repairPts || 0) < 0.5 && !(b.stock.alloy > 0); }
 
@@ -3641,7 +3653,9 @@ function updateWarbot(u, dt) {
       }
     }
     // Damaged and the garrison is quiet: go and get fixed.
-    if (home && wantsRepair(u) && S.tick % 45 === u.id % 45 && S.time - (home.lastHit || -99) > 8 && home.garrison.length > 1) goRepair(u);
+    // Damaged and the garrison is quiet: go and get fixed. (Any damage at all, with no enemy about and a
+    // Repair Station near: see idleRepair.)
+    if (home && S.tick % 45 === u.id % 45 && S.time - (home.lastHit || -99) > 8 && ((wantsRepair(u) && home.garrison.length > 1) || idleRepair(u))) goRepair(u);
     return;
   }
   u.moved = 0;
@@ -3754,7 +3768,7 @@ function warbotAct(u, dt) {
   if (!t) {
     const l = lootNear(u, 6);
     if (l) { goLoot(u, l); return; }
-    if (!(wantsRepair(u) && goRepair(u))) goGarrison(u);
+    if (!((wantsRepair(u) || (S.tick % 30 === u.id % 30 && idleRepair(u))) && goRepair(u))) goGarrison(u);
     return;
   }
   if (t.type === 'loot') { doLoot(u, t, dt); return; }
