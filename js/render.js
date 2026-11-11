@@ -2781,8 +2781,8 @@ function drawSearchlight(ctx, b, ox, oy, z) {
  * Walls and Gates from the 3D set (renderer/walls; keys in WALL_PIECES). A Wall tile is layered on one
  * canvas: an arm toward each joined neighbour (north, west, east), then a post, or on every other tile of a
  * straight run a hub, then the south arm. A Wall joins a Gate only along the Gate's own wall line. A Gate
- * is one image across its wall, its barrier raised while one of its owner's bots goes through. Every now
- * and then sparks crackle along the live rail (six frames of light, the same by day and night).
+ * is one image across its wall, its steel blast door slid open while one of its owner's bots goes through. Every
+ * now and then arcs crackle along the razor wire on top (six frames of light, the same by day and night).
  */
 function drawBarrierArt(ctx, type, cx, cy, s, owner, b) {
   const has = b && b.x !== undefined, piece = (k) => artFor(k, owner);

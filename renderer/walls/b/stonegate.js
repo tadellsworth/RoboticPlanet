@@ -53,7 +53,22 @@ export default function (lib) {
   if (S === 'e') { // a coil of wire along the lintel, live
     K.coil(g, m, -PX + 1.2, PX - 1.2, ly + 1.3, 0, 0.3);
   }
-  if (S === 'a' || S === 'd' || S === 'e') {
+  if (S === 'e') {
+    // a steel blast door: two thick gunmetal leaves, riveted plate with raised ribs and stiffeners, a hazard band at
+    // the foot and the team light-line down the seam; open, they slide apart into the towers
+    const steelP = L.M.paint('#3c4146', { panelW: 128, panelH: 170 }), rib = L.M.paint('#2c3034', { rivets: false });
+    for (const s of [-1, 1]) {
+      const slide = OPEN ? s * (GW - 0.1) : 0;
+      const leaf = group(slide + s * GW / 2, 0.12, 0, 0, g);
+      box(GW - 0.04, DH - 0.15, 0.7, steelP, 0, 0, 0, { parent: leaf, dirtH: 1.3 });
+      for (const z of [-0.37, 0.37]) {
+        for (const y of [0.55, 1.45, 2.35]) box(GW - 0.25, 0.22, 0.08, rib, 0, y, z, { parent: leaf, dirt: 0.2 });
+        for (const u of [-GW / 2 + 0.3, 0, GW / 2 - 0.3]) box(0.16, DH - 0.5, 0.06, rib, u, 0.2, z, { parent: leaf, dirt: 0.2 });
+        box(GW - 0.1, 0.3, 0.05, m.haz || L.M.hazard, 0, 0.05, z * 1.04, { parent: leaf, dirt: 0 });
+        box(0.06, DH - 0.7, 0.04, m.glow, -s * (GW / 2 - 0.06), 0.35, z * 1.06, { parent: leaf, dirt: 0, cast: false });
+      }
+    }
+  } else if (S === 'a' || S === 'd') {
     // two door leaves of iron-banded timber; open, they swing back flat against the towers' faces
     for (const s of [-1, 1]) {
       const leaf = group(s * GW, 0.12, 0.35, OPEN ? -s * Math.PI / 2 * 0.92 : 0, g);

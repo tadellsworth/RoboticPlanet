@@ -606,8 +606,10 @@ Disruptor Tower and Mortar Pit (with their firing overlays, the Mortar's tube in
 and night sets), the streetlamps along roads (`streetLamps`: posts sorted with buildings and bots, lit heads and
 light pools at dusk and night) and the Pulse Turret's twin violet laser and hit burst (`fx-pulse-laser`,
 `fx-pulse-hit`), the 3D Pulse Turret (a base and its gun head in 16 directions, with its violet charge-up,
-`turret-charge-0…15`, and the beam leaving the barrel tips in `PULSE_MUZZLES`), the electrified Walls and Gates
-(`drawBarrierArt`: posts, arms, hubs and gates layered per tile, sparks crackling along them now and then), the
+`turret-charge-0…15`, and the beam leaving the barrel tips in `PULSE_MUZZLES`), the Walls and Gates
+(`drawBarrierArt`: the dark Citadel, smooth charcoal stone with bastion towers at the posts, razor wire on insulator
+posts along the top with live arcs crackling over it now and then, and steel blast-door Gates that slide open into
+the towers, layered per tile), the
 Viaduct's abutment tiles (`viaduct-abut-*`) and the working loops of the Oil Pump (its beam nodding over `pump-base`),
 Refinery and Smelter. Still to make: goods icons and a few terrain pieces. The biome art is in `art/biomes/` (six plants per biome with their
 shadows baked in, and the Jungle and Polar ground, water, rock and cliff), and the Red desert ground, water and rock

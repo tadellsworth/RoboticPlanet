@@ -1316,232 +1316,232 @@ art/tod/shared/warbot-headlights.png	-	-	post/headlights.py {art}/units {fin}
 art/tod/shared/tanker-headlights.png	-	-	post/headlights.py {art}/units {fin} | cp {fin}/truck-headlights.png {fin}/tanker-headlights.png
 
 ## Walls and gates (day): walls renderer, orthographic, no pad
-art/buildings/walls/wall-post@0.png	walls	wall:wall-post@0:piece=post&team=%2338d4ff&frames=6&tod=day	walls/compose_walls.py --post wall-post@0 --frames 6 --team #38d4ff
-art/buildings/walls/wall-post@0-spark-f0.png	walls	wall:wall-post@0:piece=post&team=%2338d4ff&frames=6&tod=day	walls/compose_walls.py --post wall-post@0 --frames 6 --team #38d4ff
-art/buildings/walls/wall-post@0-spark-f1.png	walls	wall:wall-post@0:piece=post&team=%2338d4ff&frames=6&tod=day	walls/compose_walls.py --post wall-post@0 --frames 6 --team #38d4ff
-art/buildings/walls/wall-post@0-spark-f2.png	walls	wall:wall-post@0:piece=post&team=%2338d4ff&frames=6&tod=day	walls/compose_walls.py --post wall-post@0 --frames 6 --team #38d4ff
-art/buildings/walls/wall-post@0-spark-f3.png	walls	wall:wall-post@0:piece=post&team=%2338d4ff&frames=6&tod=day	walls/compose_walls.py --post wall-post@0 --frames 6 --team #38d4ff
-art/buildings/walls/wall-post@0-spark-f4.png	walls	wall:wall-post@0:piece=post&team=%2338d4ff&frames=6&tod=day	walls/compose_walls.py --post wall-post@0 --frames 6 --team #38d4ff
-art/buildings/walls/wall-post@0-spark-f5.png	walls	wall:wall-post@0:piece=post&team=%2338d4ff&frames=6&tod=day	walls/compose_walls.py --post wall-post@0 --frames 6 --team #38d4ff
-art/buildings/walls/wall-n@0.png	walls	wall:wall-n@0:piece=n&team=%2338d4ff&frames=6&tod=day	walls/compose_walls.py --post wall-post@0 --frames 6 --team #38d4ff
-art/buildings/walls/wall-n@0-spark-f0.png	walls	wall:wall-n@0:piece=n&team=%2338d4ff&frames=6&tod=day	walls/compose_walls.py --post wall-post@0 --frames 6 --team #38d4ff
-art/buildings/walls/wall-n@0-spark-f1.png	walls	wall:wall-n@0:piece=n&team=%2338d4ff&frames=6&tod=day	walls/compose_walls.py --post wall-post@0 --frames 6 --team #38d4ff
-art/buildings/walls/wall-n@0-spark-f2.png	walls	wall:wall-n@0:piece=n&team=%2338d4ff&frames=6&tod=day	walls/compose_walls.py --post wall-post@0 --frames 6 --team #38d4ff
-art/buildings/walls/wall-n@0-spark-f3.png	walls	wall:wall-n@0:piece=n&team=%2338d4ff&frames=6&tod=day	walls/compose_walls.py --post wall-post@0 --frames 6 --team #38d4ff
-art/buildings/walls/wall-n@0-spark-f4.png	walls	wall:wall-n@0:piece=n&team=%2338d4ff&frames=6&tod=day	walls/compose_walls.py --post wall-post@0 --frames 6 --team #38d4ff
-art/buildings/walls/wall-n@0-spark-f5.png	walls	wall:wall-n@0:piece=n&team=%2338d4ff&frames=6&tod=day	walls/compose_walls.py --post wall-post@0 --frames 6 --team #38d4ff
-art/buildings/walls/wall-e@0.png	walls	wall:wall-e@0:piece=e&team=%2338d4ff&frames=6&tod=day	walls/compose_walls.py --post wall-post@0 --frames 6 --team #38d4ff
-art/buildings/walls/wall-e@0-spark-f0.png	walls	wall:wall-e@0:piece=e&team=%2338d4ff&frames=6&tod=day	walls/compose_walls.py --post wall-post@0 --frames 6 --team #38d4ff
-art/buildings/walls/wall-e@0-spark-f1.png	walls	wall:wall-e@0:piece=e&team=%2338d4ff&frames=6&tod=day	walls/compose_walls.py --post wall-post@0 --frames 6 --team #38d4ff
-art/buildings/walls/wall-e@0-spark-f2.png	walls	wall:wall-e@0:piece=e&team=%2338d4ff&frames=6&tod=day	walls/compose_walls.py --post wall-post@0 --frames 6 --team #38d4ff
-art/buildings/walls/wall-e@0-spark-f3.png	walls	wall:wall-e@0:piece=e&team=%2338d4ff&frames=6&tod=day	walls/compose_walls.py --post wall-post@0 --frames 6 --team #38d4ff
-art/buildings/walls/wall-e@0-spark-f4.png	walls	wall:wall-e@0:piece=e&team=%2338d4ff&frames=6&tod=day	walls/compose_walls.py --post wall-post@0 --frames 6 --team #38d4ff
-art/buildings/walls/wall-e@0-spark-f5.png	walls	wall:wall-e@0:piece=e&team=%2338d4ff&frames=6&tod=day	walls/compose_walls.py --post wall-post@0 --frames 6 --team #38d4ff
-art/buildings/walls/wall-s@0.png	walls	wall:wall-s@0:piece=s&team=%2338d4ff&frames=6&tod=day	walls/compose_walls.py --post wall-post@0 --frames 6 --team #38d4ff
-art/buildings/walls/wall-s@0-spark-f0.png	walls	wall:wall-s@0:piece=s&team=%2338d4ff&frames=6&tod=day	walls/compose_walls.py --post wall-post@0 --frames 6 --team #38d4ff
-art/buildings/walls/wall-s@0-spark-f1.png	walls	wall:wall-s@0:piece=s&team=%2338d4ff&frames=6&tod=day	walls/compose_walls.py --post wall-post@0 --frames 6 --team #38d4ff
-art/buildings/walls/wall-s@0-spark-f2.png	walls	wall:wall-s@0:piece=s&team=%2338d4ff&frames=6&tod=day	walls/compose_walls.py --post wall-post@0 --frames 6 --team #38d4ff
-art/buildings/walls/wall-s@0-spark-f3.png	walls	wall:wall-s@0:piece=s&team=%2338d4ff&frames=6&tod=day	walls/compose_walls.py --post wall-post@0 --frames 6 --team #38d4ff
-art/buildings/walls/wall-s@0-spark-f4.png	walls	wall:wall-s@0:piece=s&team=%2338d4ff&frames=6&tod=day	walls/compose_walls.py --post wall-post@0 --frames 6 --team #38d4ff
-art/buildings/walls/wall-s@0-spark-f5.png	walls	wall:wall-s@0:piece=s&team=%2338d4ff&frames=6&tod=day	walls/compose_walls.py --post wall-post@0 --frames 6 --team #38d4ff
-art/buildings/walls/wall-w@0.png	walls	wall:wall-w@0:piece=w&team=%2338d4ff&frames=6&tod=day	walls/compose_walls.py --post wall-post@0 --frames 6 --team #38d4ff
-art/buildings/walls/wall-w@0-spark-f0.png	walls	wall:wall-w@0:piece=w&team=%2338d4ff&frames=6&tod=day	walls/compose_walls.py --post wall-post@0 --frames 6 --team #38d4ff
-art/buildings/walls/wall-w@0-spark-f1.png	walls	wall:wall-w@0:piece=w&team=%2338d4ff&frames=6&tod=day	walls/compose_walls.py --post wall-post@0 --frames 6 --team #38d4ff
-art/buildings/walls/wall-w@0-spark-f2.png	walls	wall:wall-w@0:piece=w&team=%2338d4ff&frames=6&tod=day	walls/compose_walls.py --post wall-post@0 --frames 6 --team #38d4ff
-art/buildings/walls/wall-w@0-spark-f3.png	walls	wall:wall-w@0:piece=w&team=%2338d4ff&frames=6&tod=day	walls/compose_walls.py --post wall-post@0 --frames 6 --team #38d4ff
-art/buildings/walls/wall-w@0-spark-f4.png	walls	wall:wall-w@0:piece=w&team=%2338d4ff&frames=6&tod=day	walls/compose_walls.py --post wall-post@0 --frames 6 --team #38d4ff
-art/buildings/walls/wall-w@0-spark-f5.png	walls	wall:wall-w@0:piece=w&team=%2338d4ff&frames=6&tod=day	walls/compose_walls.py --post wall-post@0 --frames 6 --team #38d4ff
-art/buildings/walls/wall-hub-ew@0.png	walls	wall:wall-hub-ew@0:piece=hub-ew&team=%2338d4ff&frames=6&tod=day	walls/compose_walls.py --post wall-post@0 --frames 6 --team #38d4ff
-art/buildings/walls/wall-hub-ew@0-spark-f0.png	walls	wall:wall-hub-ew@0:piece=hub-ew&team=%2338d4ff&frames=6&tod=day	walls/compose_walls.py --post wall-post@0 --frames 6 --team #38d4ff
-art/buildings/walls/wall-hub-ew@0-spark-f1.png	walls	wall:wall-hub-ew@0:piece=hub-ew&team=%2338d4ff&frames=6&tod=day	walls/compose_walls.py --post wall-post@0 --frames 6 --team #38d4ff
-art/buildings/walls/wall-hub-ew@0-spark-f2.png	walls	wall:wall-hub-ew@0:piece=hub-ew&team=%2338d4ff&frames=6&tod=day	walls/compose_walls.py --post wall-post@0 --frames 6 --team #38d4ff
-art/buildings/walls/wall-hub-ew@0-spark-f3.png	walls	wall:wall-hub-ew@0:piece=hub-ew&team=%2338d4ff&frames=6&tod=day	walls/compose_walls.py --post wall-post@0 --frames 6 --team #38d4ff
-art/buildings/walls/wall-hub-ew@0-spark-f4.png	walls	wall:wall-hub-ew@0:piece=hub-ew&team=%2338d4ff&frames=6&tod=day	walls/compose_walls.py --post wall-post@0 --frames 6 --team #38d4ff
-art/buildings/walls/wall-hub-ew@0-spark-f5.png	walls	wall:wall-hub-ew@0:piece=hub-ew&team=%2338d4ff&frames=6&tod=day	walls/compose_walls.py --post wall-post@0 --frames 6 --team #38d4ff
-art/buildings/walls/wall-hub-ns@0.png	walls	wall:wall-hub-ns@0:piece=hub-ns&team=%2338d4ff&frames=6&tod=day	walls/compose_walls.py --post wall-post@0 --frames 6 --team #38d4ff
-art/buildings/walls/wall-hub-ns@0-spark-f0.png	walls	wall:wall-hub-ns@0:piece=hub-ns&team=%2338d4ff&frames=6&tod=day	walls/compose_walls.py --post wall-post@0 --frames 6 --team #38d4ff
-art/buildings/walls/wall-hub-ns@0-spark-f1.png	walls	wall:wall-hub-ns@0:piece=hub-ns&team=%2338d4ff&frames=6&tod=day	walls/compose_walls.py --post wall-post@0 --frames 6 --team #38d4ff
-art/buildings/walls/wall-hub-ns@0-spark-f2.png	walls	wall:wall-hub-ns@0:piece=hub-ns&team=%2338d4ff&frames=6&tod=day	walls/compose_walls.py --post wall-post@0 --frames 6 --team #38d4ff
-art/buildings/walls/wall-hub-ns@0-spark-f3.png	walls	wall:wall-hub-ns@0:piece=hub-ns&team=%2338d4ff&frames=6&tod=day	walls/compose_walls.py --post wall-post@0 --frames 6 --team #38d4ff
-art/buildings/walls/wall-hub-ns@0-spark-f4.png	walls	wall:wall-hub-ns@0:piece=hub-ns&team=%2338d4ff&frames=6&tod=day	walls/compose_walls.py --post wall-post@0 --frames 6 --team #38d4ff
-art/buildings/walls/wall-hub-ns@0-spark-f5.png	walls	wall:wall-hub-ns@0:piece=hub-ns&team=%2338d4ff&frames=6&tod=day	walls/compose_walls.py --post wall-post@0 --frames 6 --team #38d4ff
-art/buildings/walls/gate-ew-closed@0.png	walls	gate:gate-ew-closed@0:piece=ew-closed&team=%2338d4ff&frames=6&tod=day	walls/compose_walls.py --frames 6 --team #38d4ff
-art/buildings/walls/gate-ew-closed@0-spark-f0.png	walls	gate:gate-ew-closed@0:piece=ew-closed&team=%2338d4ff&frames=6&tod=day	walls/compose_walls.py --frames 6 --team #38d4ff
-art/buildings/walls/gate-ew-closed@0-spark-f1.png	walls	gate:gate-ew-closed@0:piece=ew-closed&team=%2338d4ff&frames=6&tod=day	walls/compose_walls.py --frames 6 --team #38d4ff
-art/buildings/walls/gate-ew-closed@0-spark-f2.png	walls	gate:gate-ew-closed@0:piece=ew-closed&team=%2338d4ff&frames=6&tod=day	walls/compose_walls.py --frames 6 --team #38d4ff
-art/buildings/walls/gate-ew-closed@0-spark-f3.png	walls	gate:gate-ew-closed@0:piece=ew-closed&team=%2338d4ff&frames=6&tod=day	walls/compose_walls.py --frames 6 --team #38d4ff
-art/buildings/walls/gate-ew-closed@0-spark-f4.png	walls	gate:gate-ew-closed@0:piece=ew-closed&team=%2338d4ff&frames=6&tod=day	walls/compose_walls.py --frames 6 --team #38d4ff
-art/buildings/walls/gate-ew-closed@0-spark-f5.png	walls	gate:gate-ew-closed@0:piece=ew-closed&team=%2338d4ff&frames=6&tod=day	walls/compose_walls.py --frames 6 --team #38d4ff
-art/buildings/walls/gate-ew-open@0.png	walls	gate:gate-ew-open@0:piece=ew-open&team=%2338d4ff&frames=6&tod=day	walls/compose_walls.py --frames 6 --team #38d4ff
-art/buildings/walls/gate-ew-open@0-spark-f0.png	walls	gate:gate-ew-open@0:piece=ew-open&team=%2338d4ff&frames=6&tod=day	walls/compose_walls.py --frames 6 --team #38d4ff
-art/buildings/walls/gate-ew-open@0-spark-f1.png	walls	gate:gate-ew-open@0:piece=ew-open&team=%2338d4ff&frames=6&tod=day	walls/compose_walls.py --frames 6 --team #38d4ff
-art/buildings/walls/gate-ew-open@0-spark-f2.png	walls	gate:gate-ew-open@0:piece=ew-open&team=%2338d4ff&frames=6&tod=day	walls/compose_walls.py --frames 6 --team #38d4ff
-art/buildings/walls/gate-ew-open@0-spark-f3.png	walls	gate:gate-ew-open@0:piece=ew-open&team=%2338d4ff&frames=6&tod=day	walls/compose_walls.py --frames 6 --team #38d4ff
-art/buildings/walls/gate-ew-open@0-spark-f4.png	walls	gate:gate-ew-open@0:piece=ew-open&team=%2338d4ff&frames=6&tod=day	walls/compose_walls.py --frames 6 --team #38d4ff
-art/buildings/walls/gate-ew-open@0-spark-f5.png	walls	gate:gate-ew-open@0:piece=ew-open&team=%2338d4ff&frames=6&tod=day	walls/compose_walls.py --frames 6 --team #38d4ff
-art/buildings/walls/gate-ns-closed@0.png	walls	gate:gate-ns-closed@0:piece=ns-closed&team=%2338d4ff&frames=6&tod=day	walls/compose_walls.py --frames 6 --team #38d4ff
-art/buildings/walls/gate-ns-closed@0-spark-f0.png	walls	gate:gate-ns-closed@0:piece=ns-closed&team=%2338d4ff&frames=6&tod=day	walls/compose_walls.py --frames 6 --team #38d4ff
-art/buildings/walls/gate-ns-closed@0-spark-f1.png	walls	gate:gate-ns-closed@0:piece=ns-closed&team=%2338d4ff&frames=6&tod=day	walls/compose_walls.py --frames 6 --team #38d4ff
-art/buildings/walls/gate-ns-closed@0-spark-f2.png	walls	gate:gate-ns-closed@0:piece=ns-closed&team=%2338d4ff&frames=6&tod=day	walls/compose_walls.py --frames 6 --team #38d4ff
-art/buildings/walls/gate-ns-closed@0-spark-f3.png	walls	gate:gate-ns-closed@0:piece=ns-closed&team=%2338d4ff&frames=6&tod=day	walls/compose_walls.py --frames 6 --team #38d4ff
-art/buildings/walls/gate-ns-closed@0-spark-f4.png	walls	gate:gate-ns-closed@0:piece=ns-closed&team=%2338d4ff&frames=6&tod=day	walls/compose_walls.py --frames 6 --team #38d4ff
-art/buildings/walls/gate-ns-closed@0-spark-f5.png	walls	gate:gate-ns-closed@0:piece=ns-closed&team=%2338d4ff&frames=6&tod=day	walls/compose_walls.py --frames 6 --team #38d4ff
-art/buildings/walls/gate-ns-open@0.png	walls	gate:gate-ns-open@0:piece=ns-open&team=%2338d4ff&frames=6&tod=day	walls/compose_walls.py --frames 6 --team #38d4ff
-art/buildings/walls/gate-ns-open@0-spark-f0.png	walls	gate:gate-ns-open@0:piece=ns-open&team=%2338d4ff&frames=6&tod=day	walls/compose_walls.py --frames 6 --team #38d4ff
-art/buildings/walls/gate-ns-open@0-spark-f1.png	walls	gate:gate-ns-open@0:piece=ns-open&team=%2338d4ff&frames=6&tod=day	walls/compose_walls.py --frames 6 --team #38d4ff
-art/buildings/walls/gate-ns-open@0-spark-f2.png	walls	gate:gate-ns-open@0:piece=ns-open&team=%2338d4ff&frames=6&tod=day	walls/compose_walls.py --frames 6 --team #38d4ff
-art/buildings/walls/gate-ns-open@0-spark-f3.png	walls	gate:gate-ns-open@0:piece=ns-open&team=%2338d4ff&frames=6&tod=day	walls/compose_walls.py --frames 6 --team #38d4ff
-art/buildings/walls/gate-ns-open@0-spark-f4.png	walls	gate:gate-ns-open@0:piece=ns-open&team=%2338d4ff&frames=6&tod=day	walls/compose_walls.py --frames 6 --team #38d4ff
-art/buildings/walls/gate-ns-open@0-spark-f5.png	walls	gate:gate-ns-open@0:piece=ns-open&team=%2338d4ff&frames=6&tod=day	walls/compose_walls.py --frames 6 --team #38d4ff
-art/buildings/walls/wall-post@1.png	walls	wall:wall-post@1:piece=post&team=%23ff5a6e&frames=6&tod=day	walls/compose_walls.py --post wall-post@1 --frames 6 --team #ff5a6e
-art/buildings/walls/wall-post@1-spark-f0.png	walls	wall:wall-post@1:piece=post&team=%23ff5a6e&frames=6&tod=day	walls/compose_walls.py --post wall-post@1 --frames 6 --team #ff5a6e
-art/buildings/walls/wall-post@1-spark-f1.png	walls	wall:wall-post@1:piece=post&team=%23ff5a6e&frames=6&tod=day	walls/compose_walls.py --post wall-post@1 --frames 6 --team #ff5a6e
-art/buildings/walls/wall-post@1-spark-f2.png	walls	wall:wall-post@1:piece=post&team=%23ff5a6e&frames=6&tod=day	walls/compose_walls.py --post wall-post@1 --frames 6 --team #ff5a6e
-art/buildings/walls/wall-post@1-spark-f3.png	walls	wall:wall-post@1:piece=post&team=%23ff5a6e&frames=6&tod=day	walls/compose_walls.py --post wall-post@1 --frames 6 --team #ff5a6e
-art/buildings/walls/wall-post@1-spark-f4.png	walls	wall:wall-post@1:piece=post&team=%23ff5a6e&frames=6&tod=day	walls/compose_walls.py --post wall-post@1 --frames 6 --team #ff5a6e
-art/buildings/walls/wall-post@1-spark-f5.png	walls	wall:wall-post@1:piece=post&team=%23ff5a6e&frames=6&tod=day	walls/compose_walls.py --post wall-post@1 --frames 6 --team #ff5a6e
-art/buildings/walls/wall-n@1.png	walls	wall:wall-n@1:piece=n&team=%23ff5a6e&frames=6&tod=day	walls/compose_walls.py --post wall-post@1 --frames 6 --team #ff5a6e
-art/buildings/walls/wall-n@1-spark-f0.png	walls	wall:wall-n@1:piece=n&team=%23ff5a6e&frames=6&tod=day	walls/compose_walls.py --post wall-post@1 --frames 6 --team #ff5a6e
-art/buildings/walls/wall-n@1-spark-f1.png	walls	wall:wall-n@1:piece=n&team=%23ff5a6e&frames=6&tod=day	walls/compose_walls.py --post wall-post@1 --frames 6 --team #ff5a6e
-art/buildings/walls/wall-n@1-spark-f2.png	walls	wall:wall-n@1:piece=n&team=%23ff5a6e&frames=6&tod=day	walls/compose_walls.py --post wall-post@1 --frames 6 --team #ff5a6e
-art/buildings/walls/wall-n@1-spark-f3.png	walls	wall:wall-n@1:piece=n&team=%23ff5a6e&frames=6&tod=day	walls/compose_walls.py --post wall-post@1 --frames 6 --team #ff5a6e
-art/buildings/walls/wall-n@1-spark-f4.png	walls	wall:wall-n@1:piece=n&team=%23ff5a6e&frames=6&tod=day	walls/compose_walls.py --post wall-post@1 --frames 6 --team #ff5a6e
-art/buildings/walls/wall-n@1-spark-f5.png	walls	wall:wall-n@1:piece=n&team=%23ff5a6e&frames=6&tod=day	walls/compose_walls.py --post wall-post@1 --frames 6 --team #ff5a6e
-art/buildings/walls/wall-e@1.png	walls	wall:wall-e@1:piece=e&team=%23ff5a6e&frames=6&tod=day	walls/compose_walls.py --post wall-post@1 --frames 6 --team #ff5a6e
-art/buildings/walls/wall-e@1-spark-f0.png	walls	wall:wall-e@1:piece=e&team=%23ff5a6e&frames=6&tod=day	walls/compose_walls.py --post wall-post@1 --frames 6 --team #ff5a6e
-art/buildings/walls/wall-e@1-spark-f1.png	walls	wall:wall-e@1:piece=e&team=%23ff5a6e&frames=6&tod=day	walls/compose_walls.py --post wall-post@1 --frames 6 --team #ff5a6e
-art/buildings/walls/wall-e@1-spark-f2.png	walls	wall:wall-e@1:piece=e&team=%23ff5a6e&frames=6&tod=day	walls/compose_walls.py --post wall-post@1 --frames 6 --team #ff5a6e
-art/buildings/walls/wall-e@1-spark-f3.png	walls	wall:wall-e@1:piece=e&team=%23ff5a6e&frames=6&tod=day	walls/compose_walls.py --post wall-post@1 --frames 6 --team #ff5a6e
-art/buildings/walls/wall-e@1-spark-f4.png	walls	wall:wall-e@1:piece=e&team=%23ff5a6e&frames=6&tod=day	walls/compose_walls.py --post wall-post@1 --frames 6 --team #ff5a6e
-art/buildings/walls/wall-e@1-spark-f5.png	walls	wall:wall-e@1:piece=e&team=%23ff5a6e&frames=6&tod=day	walls/compose_walls.py --post wall-post@1 --frames 6 --team #ff5a6e
-art/buildings/walls/wall-s@1.png	walls	wall:wall-s@1:piece=s&team=%23ff5a6e&frames=6&tod=day	walls/compose_walls.py --post wall-post@1 --frames 6 --team #ff5a6e
-art/buildings/walls/wall-s@1-spark-f0.png	walls	wall:wall-s@1:piece=s&team=%23ff5a6e&frames=6&tod=day	walls/compose_walls.py --post wall-post@1 --frames 6 --team #ff5a6e
-art/buildings/walls/wall-s@1-spark-f1.png	walls	wall:wall-s@1:piece=s&team=%23ff5a6e&frames=6&tod=day	walls/compose_walls.py --post wall-post@1 --frames 6 --team #ff5a6e
-art/buildings/walls/wall-s@1-spark-f2.png	walls	wall:wall-s@1:piece=s&team=%23ff5a6e&frames=6&tod=day	walls/compose_walls.py --post wall-post@1 --frames 6 --team #ff5a6e
-art/buildings/walls/wall-s@1-spark-f3.png	walls	wall:wall-s@1:piece=s&team=%23ff5a6e&frames=6&tod=day	walls/compose_walls.py --post wall-post@1 --frames 6 --team #ff5a6e
-art/buildings/walls/wall-s@1-spark-f4.png	walls	wall:wall-s@1:piece=s&team=%23ff5a6e&frames=6&tod=day	walls/compose_walls.py --post wall-post@1 --frames 6 --team #ff5a6e
-art/buildings/walls/wall-s@1-spark-f5.png	walls	wall:wall-s@1:piece=s&team=%23ff5a6e&frames=6&tod=day	walls/compose_walls.py --post wall-post@1 --frames 6 --team #ff5a6e
-art/buildings/walls/wall-w@1.png	walls	wall:wall-w@1:piece=w&team=%23ff5a6e&frames=6&tod=day	walls/compose_walls.py --post wall-post@1 --frames 6 --team #ff5a6e
-art/buildings/walls/wall-w@1-spark-f0.png	walls	wall:wall-w@1:piece=w&team=%23ff5a6e&frames=6&tod=day	walls/compose_walls.py --post wall-post@1 --frames 6 --team #ff5a6e
-art/buildings/walls/wall-w@1-spark-f1.png	walls	wall:wall-w@1:piece=w&team=%23ff5a6e&frames=6&tod=day	walls/compose_walls.py --post wall-post@1 --frames 6 --team #ff5a6e
-art/buildings/walls/wall-w@1-spark-f2.png	walls	wall:wall-w@1:piece=w&team=%23ff5a6e&frames=6&tod=day	walls/compose_walls.py --post wall-post@1 --frames 6 --team #ff5a6e
-art/buildings/walls/wall-w@1-spark-f3.png	walls	wall:wall-w@1:piece=w&team=%23ff5a6e&frames=6&tod=day	walls/compose_walls.py --post wall-post@1 --frames 6 --team #ff5a6e
-art/buildings/walls/wall-w@1-spark-f4.png	walls	wall:wall-w@1:piece=w&team=%23ff5a6e&frames=6&tod=day	walls/compose_walls.py --post wall-post@1 --frames 6 --team #ff5a6e
-art/buildings/walls/wall-w@1-spark-f5.png	walls	wall:wall-w@1:piece=w&team=%23ff5a6e&frames=6&tod=day	walls/compose_walls.py --post wall-post@1 --frames 6 --team #ff5a6e
-art/buildings/walls/wall-hub-ew@1.png	walls	wall:wall-hub-ew@1:piece=hub-ew&team=%23ff5a6e&frames=6&tod=day	walls/compose_walls.py --post wall-post@1 --frames 6 --team #ff5a6e
-art/buildings/walls/wall-hub-ew@1-spark-f0.png	walls	wall:wall-hub-ew@1:piece=hub-ew&team=%23ff5a6e&frames=6&tod=day	walls/compose_walls.py --post wall-post@1 --frames 6 --team #ff5a6e
-art/buildings/walls/wall-hub-ew@1-spark-f1.png	walls	wall:wall-hub-ew@1:piece=hub-ew&team=%23ff5a6e&frames=6&tod=day	walls/compose_walls.py --post wall-post@1 --frames 6 --team #ff5a6e
-art/buildings/walls/wall-hub-ew@1-spark-f2.png	walls	wall:wall-hub-ew@1:piece=hub-ew&team=%23ff5a6e&frames=6&tod=day	walls/compose_walls.py --post wall-post@1 --frames 6 --team #ff5a6e
-art/buildings/walls/wall-hub-ew@1-spark-f3.png	walls	wall:wall-hub-ew@1:piece=hub-ew&team=%23ff5a6e&frames=6&tod=day	walls/compose_walls.py --post wall-post@1 --frames 6 --team #ff5a6e
-art/buildings/walls/wall-hub-ew@1-spark-f4.png	walls	wall:wall-hub-ew@1:piece=hub-ew&team=%23ff5a6e&frames=6&tod=day	walls/compose_walls.py --post wall-post@1 --frames 6 --team #ff5a6e
-art/buildings/walls/wall-hub-ew@1-spark-f5.png	walls	wall:wall-hub-ew@1:piece=hub-ew&team=%23ff5a6e&frames=6&tod=day	walls/compose_walls.py --post wall-post@1 --frames 6 --team #ff5a6e
-art/buildings/walls/wall-hub-ns@1.png	walls	wall:wall-hub-ns@1:piece=hub-ns&team=%23ff5a6e&frames=6&tod=day	walls/compose_walls.py --post wall-post@1 --frames 6 --team #ff5a6e
-art/buildings/walls/wall-hub-ns@1-spark-f0.png	walls	wall:wall-hub-ns@1:piece=hub-ns&team=%23ff5a6e&frames=6&tod=day	walls/compose_walls.py --post wall-post@1 --frames 6 --team #ff5a6e
-art/buildings/walls/wall-hub-ns@1-spark-f1.png	walls	wall:wall-hub-ns@1:piece=hub-ns&team=%23ff5a6e&frames=6&tod=day	walls/compose_walls.py --post wall-post@1 --frames 6 --team #ff5a6e
-art/buildings/walls/wall-hub-ns@1-spark-f2.png	walls	wall:wall-hub-ns@1:piece=hub-ns&team=%23ff5a6e&frames=6&tod=day	walls/compose_walls.py --post wall-post@1 --frames 6 --team #ff5a6e
-art/buildings/walls/wall-hub-ns@1-spark-f3.png	walls	wall:wall-hub-ns@1:piece=hub-ns&team=%23ff5a6e&frames=6&tod=day	walls/compose_walls.py --post wall-post@1 --frames 6 --team #ff5a6e
-art/buildings/walls/wall-hub-ns@1-spark-f4.png	walls	wall:wall-hub-ns@1:piece=hub-ns&team=%23ff5a6e&frames=6&tod=day	walls/compose_walls.py --post wall-post@1 --frames 6 --team #ff5a6e
-art/buildings/walls/wall-hub-ns@1-spark-f5.png	walls	wall:wall-hub-ns@1:piece=hub-ns&team=%23ff5a6e&frames=6&tod=day	walls/compose_walls.py --post wall-post@1 --frames 6 --team #ff5a6e
-art/buildings/walls/gate-ew-closed@1.png	walls	gate:gate-ew-closed@1:piece=ew-closed&team=%23ff5a6e&frames=6&tod=day	walls/compose_walls.py --frames 6 --team #ff5a6e
-art/buildings/walls/gate-ew-closed@1-spark-f0.png	walls	gate:gate-ew-closed@1:piece=ew-closed&team=%23ff5a6e&frames=6&tod=day	walls/compose_walls.py --frames 6 --team #ff5a6e
-art/buildings/walls/gate-ew-closed@1-spark-f1.png	walls	gate:gate-ew-closed@1:piece=ew-closed&team=%23ff5a6e&frames=6&tod=day	walls/compose_walls.py --frames 6 --team #ff5a6e
-art/buildings/walls/gate-ew-closed@1-spark-f2.png	walls	gate:gate-ew-closed@1:piece=ew-closed&team=%23ff5a6e&frames=6&tod=day	walls/compose_walls.py --frames 6 --team #ff5a6e
-art/buildings/walls/gate-ew-closed@1-spark-f3.png	walls	gate:gate-ew-closed@1:piece=ew-closed&team=%23ff5a6e&frames=6&tod=day	walls/compose_walls.py --frames 6 --team #ff5a6e
-art/buildings/walls/gate-ew-closed@1-spark-f4.png	walls	gate:gate-ew-closed@1:piece=ew-closed&team=%23ff5a6e&frames=6&tod=day	walls/compose_walls.py --frames 6 --team #ff5a6e
-art/buildings/walls/gate-ew-closed@1-spark-f5.png	walls	gate:gate-ew-closed@1:piece=ew-closed&team=%23ff5a6e&frames=6&tod=day	walls/compose_walls.py --frames 6 --team #ff5a6e
-art/buildings/walls/gate-ew-open@1.png	walls	gate:gate-ew-open@1:piece=ew-open&team=%23ff5a6e&frames=6&tod=day	walls/compose_walls.py --frames 6 --team #ff5a6e
-art/buildings/walls/gate-ew-open@1-spark-f0.png	walls	gate:gate-ew-open@1:piece=ew-open&team=%23ff5a6e&frames=6&tod=day	walls/compose_walls.py --frames 6 --team #ff5a6e
-art/buildings/walls/gate-ew-open@1-spark-f1.png	walls	gate:gate-ew-open@1:piece=ew-open&team=%23ff5a6e&frames=6&tod=day	walls/compose_walls.py --frames 6 --team #ff5a6e
-art/buildings/walls/gate-ew-open@1-spark-f2.png	walls	gate:gate-ew-open@1:piece=ew-open&team=%23ff5a6e&frames=6&tod=day	walls/compose_walls.py --frames 6 --team #ff5a6e
-art/buildings/walls/gate-ew-open@1-spark-f3.png	walls	gate:gate-ew-open@1:piece=ew-open&team=%23ff5a6e&frames=6&tod=day	walls/compose_walls.py --frames 6 --team #ff5a6e
-art/buildings/walls/gate-ew-open@1-spark-f4.png	walls	gate:gate-ew-open@1:piece=ew-open&team=%23ff5a6e&frames=6&tod=day	walls/compose_walls.py --frames 6 --team #ff5a6e
-art/buildings/walls/gate-ew-open@1-spark-f5.png	walls	gate:gate-ew-open@1:piece=ew-open&team=%23ff5a6e&frames=6&tod=day	walls/compose_walls.py --frames 6 --team #ff5a6e
-art/buildings/walls/gate-ns-closed@1.png	walls	gate:gate-ns-closed@1:piece=ns-closed&team=%23ff5a6e&frames=6&tod=day	walls/compose_walls.py --frames 6 --team #ff5a6e
-art/buildings/walls/gate-ns-closed@1-spark-f0.png	walls	gate:gate-ns-closed@1:piece=ns-closed&team=%23ff5a6e&frames=6&tod=day	walls/compose_walls.py --frames 6 --team #ff5a6e
-art/buildings/walls/gate-ns-closed@1-spark-f1.png	walls	gate:gate-ns-closed@1:piece=ns-closed&team=%23ff5a6e&frames=6&tod=day	walls/compose_walls.py --frames 6 --team #ff5a6e
-art/buildings/walls/gate-ns-closed@1-spark-f2.png	walls	gate:gate-ns-closed@1:piece=ns-closed&team=%23ff5a6e&frames=6&tod=day	walls/compose_walls.py --frames 6 --team #ff5a6e
-art/buildings/walls/gate-ns-closed@1-spark-f3.png	walls	gate:gate-ns-closed@1:piece=ns-closed&team=%23ff5a6e&frames=6&tod=day	walls/compose_walls.py --frames 6 --team #ff5a6e
-art/buildings/walls/gate-ns-closed@1-spark-f4.png	walls	gate:gate-ns-closed@1:piece=ns-closed&team=%23ff5a6e&frames=6&tod=day	walls/compose_walls.py --frames 6 --team #ff5a6e
-art/buildings/walls/gate-ns-closed@1-spark-f5.png	walls	gate:gate-ns-closed@1:piece=ns-closed&team=%23ff5a6e&frames=6&tod=day	walls/compose_walls.py --frames 6 --team #ff5a6e
-art/buildings/walls/gate-ns-open@1.png	walls	gate:gate-ns-open@1:piece=ns-open&team=%23ff5a6e&frames=6&tod=day	walls/compose_walls.py --frames 6 --team #ff5a6e
-art/buildings/walls/gate-ns-open@1-spark-f0.png	walls	gate:gate-ns-open@1:piece=ns-open&team=%23ff5a6e&frames=6&tod=day	walls/compose_walls.py --frames 6 --team #ff5a6e
-art/buildings/walls/gate-ns-open@1-spark-f1.png	walls	gate:gate-ns-open@1:piece=ns-open&team=%23ff5a6e&frames=6&tod=day	walls/compose_walls.py --frames 6 --team #ff5a6e
-art/buildings/walls/gate-ns-open@1-spark-f2.png	walls	gate:gate-ns-open@1:piece=ns-open&team=%23ff5a6e&frames=6&tod=day	walls/compose_walls.py --frames 6 --team #ff5a6e
-art/buildings/walls/gate-ns-open@1-spark-f3.png	walls	gate:gate-ns-open@1:piece=ns-open&team=%23ff5a6e&frames=6&tod=day	walls/compose_walls.py --frames 6 --team #ff5a6e
-art/buildings/walls/gate-ns-open@1-spark-f4.png	walls	gate:gate-ns-open@1:piece=ns-open&team=%23ff5a6e&frames=6&tod=day	walls/compose_walls.py --frames 6 --team #ff5a6e
-art/buildings/walls/gate-ns-open@1-spark-f5.png	walls	gate:gate-ns-open@1:piece=ns-open&team=%23ff5a6e&frames=6&tod=day	walls/compose_walls.py --frames 6 --team #ff5a6e
+art/buildings/walls/wall-post@0.png	walls	stone:wall-post@0:piece=post&team=%2338d4ff&frames=6&tod=day&style=e	walls/compose_walls.py --post wall-post@0 --frames 6 --team #38d4ff
+art/buildings/walls/wall-post@0-spark-f0.png	walls	stone:wall-post@0:piece=post&team=%2338d4ff&frames=6&tod=day&style=e	walls/compose_walls.py --post wall-post@0 --frames 6 --team #38d4ff
+art/buildings/walls/wall-post@0-spark-f1.png	walls	stone:wall-post@0:piece=post&team=%2338d4ff&frames=6&tod=day&style=e	walls/compose_walls.py --post wall-post@0 --frames 6 --team #38d4ff
+art/buildings/walls/wall-post@0-spark-f2.png	walls	stone:wall-post@0:piece=post&team=%2338d4ff&frames=6&tod=day&style=e	walls/compose_walls.py --post wall-post@0 --frames 6 --team #38d4ff
+art/buildings/walls/wall-post@0-spark-f3.png	walls	stone:wall-post@0:piece=post&team=%2338d4ff&frames=6&tod=day&style=e	walls/compose_walls.py --post wall-post@0 --frames 6 --team #38d4ff
+art/buildings/walls/wall-post@0-spark-f4.png	walls	stone:wall-post@0:piece=post&team=%2338d4ff&frames=6&tod=day&style=e	walls/compose_walls.py --post wall-post@0 --frames 6 --team #38d4ff
+art/buildings/walls/wall-post@0-spark-f5.png	walls	stone:wall-post@0:piece=post&team=%2338d4ff&frames=6&tod=day&style=e	walls/compose_walls.py --post wall-post@0 --frames 6 --team #38d4ff
+art/buildings/walls/wall-n@0.png	walls	stone:wall-n@0:piece=n&team=%2338d4ff&frames=6&tod=day&style=e	walls/compose_walls.py --post wall-post@0 --frames 6 --team #38d4ff
+art/buildings/walls/wall-n@0-spark-f0.png	walls	stone:wall-n@0:piece=n&team=%2338d4ff&frames=6&tod=day&style=e	walls/compose_walls.py --post wall-post@0 --frames 6 --team #38d4ff
+art/buildings/walls/wall-n@0-spark-f1.png	walls	stone:wall-n@0:piece=n&team=%2338d4ff&frames=6&tod=day&style=e	walls/compose_walls.py --post wall-post@0 --frames 6 --team #38d4ff
+art/buildings/walls/wall-n@0-spark-f2.png	walls	stone:wall-n@0:piece=n&team=%2338d4ff&frames=6&tod=day&style=e	walls/compose_walls.py --post wall-post@0 --frames 6 --team #38d4ff
+art/buildings/walls/wall-n@0-spark-f3.png	walls	stone:wall-n@0:piece=n&team=%2338d4ff&frames=6&tod=day&style=e	walls/compose_walls.py --post wall-post@0 --frames 6 --team #38d4ff
+art/buildings/walls/wall-n@0-spark-f4.png	walls	stone:wall-n@0:piece=n&team=%2338d4ff&frames=6&tod=day&style=e	walls/compose_walls.py --post wall-post@0 --frames 6 --team #38d4ff
+art/buildings/walls/wall-n@0-spark-f5.png	walls	stone:wall-n@0:piece=n&team=%2338d4ff&frames=6&tod=day&style=e	walls/compose_walls.py --post wall-post@0 --frames 6 --team #38d4ff
+art/buildings/walls/wall-e@0.png	walls	stone:wall-e@0:piece=e&team=%2338d4ff&frames=6&tod=day&style=e	walls/compose_walls.py --post wall-post@0 --frames 6 --team #38d4ff
+art/buildings/walls/wall-e@0-spark-f0.png	walls	stone:wall-e@0:piece=e&team=%2338d4ff&frames=6&tod=day&style=e	walls/compose_walls.py --post wall-post@0 --frames 6 --team #38d4ff
+art/buildings/walls/wall-e@0-spark-f1.png	walls	stone:wall-e@0:piece=e&team=%2338d4ff&frames=6&tod=day&style=e	walls/compose_walls.py --post wall-post@0 --frames 6 --team #38d4ff
+art/buildings/walls/wall-e@0-spark-f2.png	walls	stone:wall-e@0:piece=e&team=%2338d4ff&frames=6&tod=day&style=e	walls/compose_walls.py --post wall-post@0 --frames 6 --team #38d4ff
+art/buildings/walls/wall-e@0-spark-f3.png	walls	stone:wall-e@0:piece=e&team=%2338d4ff&frames=6&tod=day&style=e	walls/compose_walls.py --post wall-post@0 --frames 6 --team #38d4ff
+art/buildings/walls/wall-e@0-spark-f4.png	walls	stone:wall-e@0:piece=e&team=%2338d4ff&frames=6&tod=day&style=e	walls/compose_walls.py --post wall-post@0 --frames 6 --team #38d4ff
+art/buildings/walls/wall-e@0-spark-f5.png	walls	stone:wall-e@0:piece=e&team=%2338d4ff&frames=6&tod=day&style=e	walls/compose_walls.py --post wall-post@0 --frames 6 --team #38d4ff
+art/buildings/walls/wall-s@0.png	walls	stone:wall-s@0:piece=s&team=%2338d4ff&frames=6&tod=day&style=e	walls/compose_walls.py --post wall-post@0 --frames 6 --team #38d4ff
+art/buildings/walls/wall-s@0-spark-f0.png	walls	stone:wall-s@0:piece=s&team=%2338d4ff&frames=6&tod=day&style=e	walls/compose_walls.py --post wall-post@0 --frames 6 --team #38d4ff
+art/buildings/walls/wall-s@0-spark-f1.png	walls	stone:wall-s@0:piece=s&team=%2338d4ff&frames=6&tod=day&style=e	walls/compose_walls.py --post wall-post@0 --frames 6 --team #38d4ff
+art/buildings/walls/wall-s@0-spark-f2.png	walls	stone:wall-s@0:piece=s&team=%2338d4ff&frames=6&tod=day&style=e	walls/compose_walls.py --post wall-post@0 --frames 6 --team #38d4ff
+art/buildings/walls/wall-s@0-spark-f3.png	walls	stone:wall-s@0:piece=s&team=%2338d4ff&frames=6&tod=day&style=e	walls/compose_walls.py --post wall-post@0 --frames 6 --team #38d4ff
+art/buildings/walls/wall-s@0-spark-f4.png	walls	stone:wall-s@0:piece=s&team=%2338d4ff&frames=6&tod=day&style=e	walls/compose_walls.py --post wall-post@0 --frames 6 --team #38d4ff
+art/buildings/walls/wall-s@0-spark-f5.png	walls	stone:wall-s@0:piece=s&team=%2338d4ff&frames=6&tod=day&style=e	walls/compose_walls.py --post wall-post@0 --frames 6 --team #38d4ff
+art/buildings/walls/wall-w@0.png	walls	stone:wall-w@0:piece=w&team=%2338d4ff&frames=6&tod=day&style=e	walls/compose_walls.py --post wall-post@0 --frames 6 --team #38d4ff
+art/buildings/walls/wall-w@0-spark-f0.png	walls	stone:wall-w@0:piece=w&team=%2338d4ff&frames=6&tod=day&style=e	walls/compose_walls.py --post wall-post@0 --frames 6 --team #38d4ff
+art/buildings/walls/wall-w@0-spark-f1.png	walls	stone:wall-w@0:piece=w&team=%2338d4ff&frames=6&tod=day&style=e	walls/compose_walls.py --post wall-post@0 --frames 6 --team #38d4ff
+art/buildings/walls/wall-w@0-spark-f2.png	walls	stone:wall-w@0:piece=w&team=%2338d4ff&frames=6&tod=day&style=e	walls/compose_walls.py --post wall-post@0 --frames 6 --team #38d4ff
+art/buildings/walls/wall-w@0-spark-f3.png	walls	stone:wall-w@0:piece=w&team=%2338d4ff&frames=6&tod=day&style=e	walls/compose_walls.py --post wall-post@0 --frames 6 --team #38d4ff
+art/buildings/walls/wall-w@0-spark-f4.png	walls	stone:wall-w@0:piece=w&team=%2338d4ff&frames=6&tod=day&style=e	walls/compose_walls.py --post wall-post@0 --frames 6 --team #38d4ff
+art/buildings/walls/wall-w@0-spark-f5.png	walls	stone:wall-w@0:piece=w&team=%2338d4ff&frames=6&tod=day&style=e	walls/compose_walls.py --post wall-post@0 --frames 6 --team #38d4ff
+art/buildings/walls/wall-hub-ew@0.png	walls	stone:wall-hub-ew@0:piece=hub-ew&team=%2338d4ff&frames=6&tod=day&style=e	walls/compose_walls.py --post wall-post@0 --frames 6 --team #38d4ff
+art/buildings/walls/wall-hub-ew@0-spark-f0.png	walls	stone:wall-hub-ew@0:piece=hub-ew&team=%2338d4ff&frames=6&tod=day&style=e	walls/compose_walls.py --post wall-post@0 --frames 6 --team #38d4ff
+art/buildings/walls/wall-hub-ew@0-spark-f1.png	walls	stone:wall-hub-ew@0:piece=hub-ew&team=%2338d4ff&frames=6&tod=day&style=e	walls/compose_walls.py --post wall-post@0 --frames 6 --team #38d4ff
+art/buildings/walls/wall-hub-ew@0-spark-f2.png	walls	stone:wall-hub-ew@0:piece=hub-ew&team=%2338d4ff&frames=6&tod=day&style=e	walls/compose_walls.py --post wall-post@0 --frames 6 --team #38d4ff
+art/buildings/walls/wall-hub-ew@0-spark-f3.png	walls	stone:wall-hub-ew@0:piece=hub-ew&team=%2338d4ff&frames=6&tod=day&style=e	walls/compose_walls.py --post wall-post@0 --frames 6 --team #38d4ff
+art/buildings/walls/wall-hub-ew@0-spark-f4.png	walls	stone:wall-hub-ew@0:piece=hub-ew&team=%2338d4ff&frames=6&tod=day&style=e	walls/compose_walls.py --post wall-post@0 --frames 6 --team #38d4ff
+art/buildings/walls/wall-hub-ew@0-spark-f5.png	walls	stone:wall-hub-ew@0:piece=hub-ew&team=%2338d4ff&frames=6&tod=day&style=e	walls/compose_walls.py --post wall-post@0 --frames 6 --team #38d4ff
+art/buildings/walls/wall-hub-ns@0.png	walls	stone:wall-hub-ns@0:piece=hub-ns&team=%2338d4ff&frames=6&tod=day&style=e	walls/compose_walls.py --post wall-post@0 --frames 6 --team #38d4ff
+art/buildings/walls/wall-hub-ns@0-spark-f0.png	walls	stone:wall-hub-ns@0:piece=hub-ns&team=%2338d4ff&frames=6&tod=day&style=e	walls/compose_walls.py --post wall-post@0 --frames 6 --team #38d4ff
+art/buildings/walls/wall-hub-ns@0-spark-f1.png	walls	stone:wall-hub-ns@0:piece=hub-ns&team=%2338d4ff&frames=6&tod=day&style=e	walls/compose_walls.py --post wall-post@0 --frames 6 --team #38d4ff
+art/buildings/walls/wall-hub-ns@0-spark-f2.png	walls	stone:wall-hub-ns@0:piece=hub-ns&team=%2338d4ff&frames=6&tod=day&style=e	walls/compose_walls.py --post wall-post@0 --frames 6 --team #38d4ff
+art/buildings/walls/wall-hub-ns@0-spark-f3.png	walls	stone:wall-hub-ns@0:piece=hub-ns&team=%2338d4ff&frames=6&tod=day&style=e	walls/compose_walls.py --post wall-post@0 --frames 6 --team #38d4ff
+art/buildings/walls/wall-hub-ns@0-spark-f4.png	walls	stone:wall-hub-ns@0:piece=hub-ns&team=%2338d4ff&frames=6&tod=day&style=e	walls/compose_walls.py --post wall-post@0 --frames 6 --team #38d4ff
+art/buildings/walls/wall-hub-ns@0-spark-f5.png	walls	stone:wall-hub-ns@0:piece=hub-ns&team=%2338d4ff&frames=6&tod=day&style=e	walls/compose_walls.py --post wall-post@0 --frames 6 --team #38d4ff
+art/buildings/walls/gate-ew-closed@0.png	walls	stonegate:gate-ew-closed@0:piece=ew-closed&team=%2338d4ff&frames=6&tod=day&style=e	walls/compose_walls.py --frames 6 --team #38d4ff
+art/buildings/walls/gate-ew-closed@0-spark-f0.png	walls	stonegate:gate-ew-closed@0:piece=ew-closed&team=%2338d4ff&frames=6&tod=day&style=e	walls/compose_walls.py --frames 6 --team #38d4ff
+art/buildings/walls/gate-ew-closed@0-spark-f1.png	walls	stonegate:gate-ew-closed@0:piece=ew-closed&team=%2338d4ff&frames=6&tod=day&style=e	walls/compose_walls.py --frames 6 --team #38d4ff
+art/buildings/walls/gate-ew-closed@0-spark-f2.png	walls	stonegate:gate-ew-closed@0:piece=ew-closed&team=%2338d4ff&frames=6&tod=day&style=e	walls/compose_walls.py --frames 6 --team #38d4ff
+art/buildings/walls/gate-ew-closed@0-spark-f3.png	walls	stonegate:gate-ew-closed@0:piece=ew-closed&team=%2338d4ff&frames=6&tod=day&style=e	walls/compose_walls.py --frames 6 --team #38d4ff
+art/buildings/walls/gate-ew-closed@0-spark-f4.png	walls	stonegate:gate-ew-closed@0:piece=ew-closed&team=%2338d4ff&frames=6&tod=day&style=e	walls/compose_walls.py --frames 6 --team #38d4ff
+art/buildings/walls/gate-ew-closed@0-spark-f5.png	walls	stonegate:gate-ew-closed@0:piece=ew-closed&team=%2338d4ff&frames=6&tod=day&style=e	walls/compose_walls.py --frames 6 --team #38d4ff
+art/buildings/walls/gate-ew-open@0.png	walls	stonegate:gate-ew-open@0:piece=ew-open&team=%2338d4ff&frames=6&tod=day&style=e	walls/compose_walls.py --frames 6 --team #38d4ff
+art/buildings/walls/gate-ew-open@0-spark-f0.png	walls	stonegate:gate-ew-open@0:piece=ew-open&team=%2338d4ff&frames=6&tod=day&style=e	walls/compose_walls.py --frames 6 --team #38d4ff
+art/buildings/walls/gate-ew-open@0-spark-f1.png	walls	stonegate:gate-ew-open@0:piece=ew-open&team=%2338d4ff&frames=6&tod=day&style=e	walls/compose_walls.py --frames 6 --team #38d4ff
+art/buildings/walls/gate-ew-open@0-spark-f2.png	walls	stonegate:gate-ew-open@0:piece=ew-open&team=%2338d4ff&frames=6&tod=day&style=e	walls/compose_walls.py --frames 6 --team #38d4ff
+art/buildings/walls/gate-ew-open@0-spark-f3.png	walls	stonegate:gate-ew-open@0:piece=ew-open&team=%2338d4ff&frames=6&tod=day&style=e	walls/compose_walls.py --frames 6 --team #38d4ff
+art/buildings/walls/gate-ew-open@0-spark-f4.png	walls	stonegate:gate-ew-open@0:piece=ew-open&team=%2338d4ff&frames=6&tod=day&style=e	walls/compose_walls.py --frames 6 --team #38d4ff
+art/buildings/walls/gate-ew-open@0-spark-f5.png	walls	stonegate:gate-ew-open@0:piece=ew-open&team=%2338d4ff&frames=6&tod=day&style=e	walls/compose_walls.py --frames 6 --team #38d4ff
+art/buildings/walls/gate-ns-closed@0.png	walls	stonegate:gate-ns-closed@0:piece=ns-closed&team=%2338d4ff&frames=6&tod=day&style=e	walls/compose_walls.py --frames 6 --team #38d4ff
+art/buildings/walls/gate-ns-closed@0-spark-f0.png	walls	stonegate:gate-ns-closed@0:piece=ns-closed&team=%2338d4ff&frames=6&tod=day&style=e	walls/compose_walls.py --frames 6 --team #38d4ff
+art/buildings/walls/gate-ns-closed@0-spark-f1.png	walls	stonegate:gate-ns-closed@0:piece=ns-closed&team=%2338d4ff&frames=6&tod=day&style=e	walls/compose_walls.py --frames 6 --team #38d4ff
+art/buildings/walls/gate-ns-closed@0-spark-f2.png	walls	stonegate:gate-ns-closed@0:piece=ns-closed&team=%2338d4ff&frames=6&tod=day&style=e	walls/compose_walls.py --frames 6 --team #38d4ff
+art/buildings/walls/gate-ns-closed@0-spark-f3.png	walls	stonegate:gate-ns-closed@0:piece=ns-closed&team=%2338d4ff&frames=6&tod=day&style=e	walls/compose_walls.py --frames 6 --team #38d4ff
+art/buildings/walls/gate-ns-closed@0-spark-f4.png	walls	stonegate:gate-ns-closed@0:piece=ns-closed&team=%2338d4ff&frames=6&tod=day&style=e	walls/compose_walls.py --frames 6 --team #38d4ff
+art/buildings/walls/gate-ns-closed@0-spark-f5.png	walls	stonegate:gate-ns-closed@0:piece=ns-closed&team=%2338d4ff&frames=6&tod=day&style=e	walls/compose_walls.py --frames 6 --team #38d4ff
+art/buildings/walls/gate-ns-open@0.png	walls	stonegate:gate-ns-open@0:piece=ns-open&team=%2338d4ff&frames=6&tod=day&style=e	walls/compose_walls.py --frames 6 --team #38d4ff
+art/buildings/walls/gate-ns-open@0-spark-f0.png	walls	stonegate:gate-ns-open@0:piece=ns-open&team=%2338d4ff&frames=6&tod=day&style=e	walls/compose_walls.py --frames 6 --team #38d4ff
+art/buildings/walls/gate-ns-open@0-spark-f1.png	walls	stonegate:gate-ns-open@0:piece=ns-open&team=%2338d4ff&frames=6&tod=day&style=e	walls/compose_walls.py --frames 6 --team #38d4ff
+art/buildings/walls/gate-ns-open@0-spark-f2.png	walls	stonegate:gate-ns-open@0:piece=ns-open&team=%2338d4ff&frames=6&tod=day&style=e	walls/compose_walls.py --frames 6 --team #38d4ff
+art/buildings/walls/gate-ns-open@0-spark-f3.png	walls	stonegate:gate-ns-open@0:piece=ns-open&team=%2338d4ff&frames=6&tod=day&style=e	walls/compose_walls.py --frames 6 --team #38d4ff
+art/buildings/walls/gate-ns-open@0-spark-f4.png	walls	stonegate:gate-ns-open@0:piece=ns-open&team=%2338d4ff&frames=6&tod=day&style=e	walls/compose_walls.py --frames 6 --team #38d4ff
+art/buildings/walls/gate-ns-open@0-spark-f5.png	walls	stonegate:gate-ns-open@0:piece=ns-open&team=%2338d4ff&frames=6&tod=day&style=e	walls/compose_walls.py --frames 6 --team #38d4ff
+art/buildings/walls/wall-post@1.png	walls	stone:wall-post@1:piece=post&team=%23ff5a6e&frames=6&tod=day&style=e	walls/compose_walls.py --post wall-post@1 --frames 6 --team #ff5a6e
+art/buildings/walls/wall-post@1-spark-f0.png	walls	stone:wall-post@1:piece=post&team=%23ff5a6e&frames=6&tod=day&style=e	walls/compose_walls.py --post wall-post@1 --frames 6 --team #ff5a6e
+art/buildings/walls/wall-post@1-spark-f1.png	walls	stone:wall-post@1:piece=post&team=%23ff5a6e&frames=6&tod=day&style=e	walls/compose_walls.py --post wall-post@1 --frames 6 --team #ff5a6e
+art/buildings/walls/wall-post@1-spark-f2.png	walls	stone:wall-post@1:piece=post&team=%23ff5a6e&frames=6&tod=day&style=e	walls/compose_walls.py --post wall-post@1 --frames 6 --team #ff5a6e
+art/buildings/walls/wall-post@1-spark-f3.png	walls	stone:wall-post@1:piece=post&team=%23ff5a6e&frames=6&tod=day&style=e	walls/compose_walls.py --post wall-post@1 --frames 6 --team #ff5a6e
+art/buildings/walls/wall-post@1-spark-f4.png	walls	stone:wall-post@1:piece=post&team=%23ff5a6e&frames=6&tod=day&style=e	walls/compose_walls.py --post wall-post@1 --frames 6 --team #ff5a6e
+art/buildings/walls/wall-post@1-spark-f5.png	walls	stone:wall-post@1:piece=post&team=%23ff5a6e&frames=6&tod=day&style=e	walls/compose_walls.py --post wall-post@1 --frames 6 --team #ff5a6e
+art/buildings/walls/wall-n@1.png	walls	stone:wall-n@1:piece=n&team=%23ff5a6e&frames=6&tod=day&style=e	walls/compose_walls.py --post wall-post@1 --frames 6 --team #ff5a6e
+art/buildings/walls/wall-n@1-spark-f0.png	walls	stone:wall-n@1:piece=n&team=%23ff5a6e&frames=6&tod=day&style=e	walls/compose_walls.py --post wall-post@1 --frames 6 --team #ff5a6e
+art/buildings/walls/wall-n@1-spark-f1.png	walls	stone:wall-n@1:piece=n&team=%23ff5a6e&frames=6&tod=day&style=e	walls/compose_walls.py --post wall-post@1 --frames 6 --team #ff5a6e
+art/buildings/walls/wall-n@1-spark-f2.png	walls	stone:wall-n@1:piece=n&team=%23ff5a6e&frames=6&tod=day&style=e	walls/compose_walls.py --post wall-post@1 --frames 6 --team #ff5a6e
+art/buildings/walls/wall-n@1-spark-f3.png	walls	stone:wall-n@1:piece=n&team=%23ff5a6e&frames=6&tod=day&style=e	walls/compose_walls.py --post wall-post@1 --frames 6 --team #ff5a6e
+art/buildings/walls/wall-n@1-spark-f4.png	walls	stone:wall-n@1:piece=n&team=%23ff5a6e&frames=6&tod=day&style=e	walls/compose_walls.py --post wall-post@1 --frames 6 --team #ff5a6e
+art/buildings/walls/wall-n@1-spark-f5.png	walls	stone:wall-n@1:piece=n&team=%23ff5a6e&frames=6&tod=day&style=e	walls/compose_walls.py --post wall-post@1 --frames 6 --team #ff5a6e
+art/buildings/walls/wall-e@1.png	walls	stone:wall-e@1:piece=e&team=%23ff5a6e&frames=6&tod=day&style=e	walls/compose_walls.py --post wall-post@1 --frames 6 --team #ff5a6e
+art/buildings/walls/wall-e@1-spark-f0.png	walls	stone:wall-e@1:piece=e&team=%23ff5a6e&frames=6&tod=day&style=e	walls/compose_walls.py --post wall-post@1 --frames 6 --team #ff5a6e
+art/buildings/walls/wall-e@1-spark-f1.png	walls	stone:wall-e@1:piece=e&team=%23ff5a6e&frames=6&tod=day&style=e	walls/compose_walls.py --post wall-post@1 --frames 6 --team #ff5a6e
+art/buildings/walls/wall-e@1-spark-f2.png	walls	stone:wall-e@1:piece=e&team=%23ff5a6e&frames=6&tod=day&style=e	walls/compose_walls.py --post wall-post@1 --frames 6 --team #ff5a6e
+art/buildings/walls/wall-e@1-spark-f3.png	walls	stone:wall-e@1:piece=e&team=%23ff5a6e&frames=6&tod=day&style=e	walls/compose_walls.py --post wall-post@1 --frames 6 --team #ff5a6e
+art/buildings/walls/wall-e@1-spark-f4.png	walls	stone:wall-e@1:piece=e&team=%23ff5a6e&frames=6&tod=day&style=e	walls/compose_walls.py --post wall-post@1 --frames 6 --team #ff5a6e
+art/buildings/walls/wall-e@1-spark-f5.png	walls	stone:wall-e@1:piece=e&team=%23ff5a6e&frames=6&tod=day&style=e	walls/compose_walls.py --post wall-post@1 --frames 6 --team #ff5a6e
+art/buildings/walls/wall-s@1.png	walls	stone:wall-s@1:piece=s&team=%23ff5a6e&frames=6&tod=day&style=e	walls/compose_walls.py --post wall-post@1 --frames 6 --team #ff5a6e
+art/buildings/walls/wall-s@1-spark-f0.png	walls	stone:wall-s@1:piece=s&team=%23ff5a6e&frames=6&tod=day&style=e	walls/compose_walls.py --post wall-post@1 --frames 6 --team #ff5a6e
+art/buildings/walls/wall-s@1-spark-f1.png	walls	stone:wall-s@1:piece=s&team=%23ff5a6e&frames=6&tod=day&style=e	walls/compose_walls.py --post wall-post@1 --frames 6 --team #ff5a6e
+art/buildings/walls/wall-s@1-spark-f2.png	walls	stone:wall-s@1:piece=s&team=%23ff5a6e&frames=6&tod=day&style=e	walls/compose_walls.py --post wall-post@1 --frames 6 --team #ff5a6e
+art/buildings/walls/wall-s@1-spark-f3.png	walls	stone:wall-s@1:piece=s&team=%23ff5a6e&frames=6&tod=day&style=e	walls/compose_walls.py --post wall-post@1 --frames 6 --team #ff5a6e
+art/buildings/walls/wall-s@1-spark-f4.png	walls	stone:wall-s@1:piece=s&team=%23ff5a6e&frames=6&tod=day&style=e	walls/compose_walls.py --post wall-post@1 --frames 6 --team #ff5a6e
+art/buildings/walls/wall-s@1-spark-f5.png	walls	stone:wall-s@1:piece=s&team=%23ff5a6e&frames=6&tod=day&style=e	walls/compose_walls.py --post wall-post@1 --frames 6 --team #ff5a6e
+art/buildings/walls/wall-w@1.png	walls	stone:wall-w@1:piece=w&team=%23ff5a6e&frames=6&tod=day&style=e	walls/compose_walls.py --post wall-post@1 --frames 6 --team #ff5a6e
+art/buildings/walls/wall-w@1-spark-f0.png	walls	stone:wall-w@1:piece=w&team=%23ff5a6e&frames=6&tod=day&style=e	walls/compose_walls.py --post wall-post@1 --frames 6 --team #ff5a6e
+art/buildings/walls/wall-w@1-spark-f1.png	walls	stone:wall-w@1:piece=w&team=%23ff5a6e&frames=6&tod=day&style=e	walls/compose_walls.py --post wall-post@1 --frames 6 --team #ff5a6e
+art/buildings/walls/wall-w@1-spark-f2.png	walls	stone:wall-w@1:piece=w&team=%23ff5a6e&frames=6&tod=day&style=e	walls/compose_walls.py --post wall-post@1 --frames 6 --team #ff5a6e
+art/buildings/walls/wall-w@1-spark-f3.png	walls	stone:wall-w@1:piece=w&team=%23ff5a6e&frames=6&tod=day&style=e	walls/compose_walls.py --post wall-post@1 --frames 6 --team #ff5a6e
+art/buildings/walls/wall-w@1-spark-f4.png	walls	stone:wall-w@1:piece=w&team=%23ff5a6e&frames=6&tod=day&style=e	walls/compose_walls.py --post wall-post@1 --frames 6 --team #ff5a6e
+art/buildings/walls/wall-w@1-spark-f5.png	walls	stone:wall-w@1:piece=w&team=%23ff5a6e&frames=6&tod=day&style=e	walls/compose_walls.py --post wall-post@1 --frames 6 --team #ff5a6e
+art/buildings/walls/wall-hub-ew@1.png	walls	stone:wall-hub-ew@1:piece=hub-ew&team=%23ff5a6e&frames=6&tod=day&style=e	walls/compose_walls.py --post wall-post@1 --frames 6 --team #ff5a6e
+art/buildings/walls/wall-hub-ew@1-spark-f0.png	walls	stone:wall-hub-ew@1:piece=hub-ew&team=%23ff5a6e&frames=6&tod=day&style=e	walls/compose_walls.py --post wall-post@1 --frames 6 --team #ff5a6e
+art/buildings/walls/wall-hub-ew@1-spark-f1.png	walls	stone:wall-hub-ew@1:piece=hub-ew&team=%23ff5a6e&frames=6&tod=day&style=e	walls/compose_walls.py --post wall-post@1 --frames 6 --team #ff5a6e
+art/buildings/walls/wall-hub-ew@1-spark-f2.png	walls	stone:wall-hub-ew@1:piece=hub-ew&team=%23ff5a6e&frames=6&tod=day&style=e	walls/compose_walls.py --post wall-post@1 --frames 6 --team #ff5a6e
+art/buildings/walls/wall-hub-ew@1-spark-f3.png	walls	stone:wall-hub-ew@1:piece=hub-ew&team=%23ff5a6e&frames=6&tod=day&style=e	walls/compose_walls.py --post wall-post@1 --frames 6 --team #ff5a6e
+art/buildings/walls/wall-hub-ew@1-spark-f4.png	walls	stone:wall-hub-ew@1:piece=hub-ew&team=%23ff5a6e&frames=6&tod=day&style=e	walls/compose_walls.py --post wall-post@1 --frames 6 --team #ff5a6e
+art/buildings/walls/wall-hub-ew@1-spark-f5.png	walls	stone:wall-hub-ew@1:piece=hub-ew&team=%23ff5a6e&frames=6&tod=day&style=e	walls/compose_walls.py --post wall-post@1 --frames 6 --team #ff5a6e
+art/buildings/walls/wall-hub-ns@1.png	walls	stone:wall-hub-ns@1:piece=hub-ns&team=%23ff5a6e&frames=6&tod=day&style=e	walls/compose_walls.py --post wall-post@1 --frames 6 --team #ff5a6e
+art/buildings/walls/wall-hub-ns@1-spark-f0.png	walls	stone:wall-hub-ns@1:piece=hub-ns&team=%23ff5a6e&frames=6&tod=day&style=e	walls/compose_walls.py --post wall-post@1 --frames 6 --team #ff5a6e
+art/buildings/walls/wall-hub-ns@1-spark-f1.png	walls	stone:wall-hub-ns@1:piece=hub-ns&team=%23ff5a6e&frames=6&tod=day&style=e	walls/compose_walls.py --post wall-post@1 --frames 6 --team #ff5a6e
+art/buildings/walls/wall-hub-ns@1-spark-f2.png	walls	stone:wall-hub-ns@1:piece=hub-ns&team=%23ff5a6e&frames=6&tod=day&style=e	walls/compose_walls.py --post wall-post@1 --frames 6 --team #ff5a6e
+art/buildings/walls/wall-hub-ns@1-spark-f3.png	walls	stone:wall-hub-ns@1:piece=hub-ns&team=%23ff5a6e&frames=6&tod=day&style=e	walls/compose_walls.py --post wall-post@1 --frames 6 --team #ff5a6e
+art/buildings/walls/wall-hub-ns@1-spark-f4.png	walls	stone:wall-hub-ns@1:piece=hub-ns&team=%23ff5a6e&frames=6&tod=day&style=e	walls/compose_walls.py --post wall-post@1 --frames 6 --team #ff5a6e
+art/buildings/walls/wall-hub-ns@1-spark-f5.png	walls	stone:wall-hub-ns@1:piece=hub-ns&team=%23ff5a6e&frames=6&tod=day&style=e	walls/compose_walls.py --post wall-post@1 --frames 6 --team #ff5a6e
+art/buildings/walls/gate-ew-closed@1.png	walls	stonegate:gate-ew-closed@1:piece=ew-closed&team=%23ff5a6e&frames=6&tod=day&style=e	walls/compose_walls.py --frames 6 --team #ff5a6e
+art/buildings/walls/gate-ew-closed@1-spark-f0.png	walls	stonegate:gate-ew-closed@1:piece=ew-closed&team=%23ff5a6e&frames=6&tod=day&style=e	walls/compose_walls.py --frames 6 --team #ff5a6e
+art/buildings/walls/gate-ew-closed@1-spark-f1.png	walls	stonegate:gate-ew-closed@1:piece=ew-closed&team=%23ff5a6e&frames=6&tod=day&style=e	walls/compose_walls.py --frames 6 --team #ff5a6e
+art/buildings/walls/gate-ew-closed@1-spark-f2.png	walls	stonegate:gate-ew-closed@1:piece=ew-closed&team=%23ff5a6e&frames=6&tod=day&style=e	walls/compose_walls.py --frames 6 --team #ff5a6e
+art/buildings/walls/gate-ew-closed@1-spark-f3.png	walls	stonegate:gate-ew-closed@1:piece=ew-closed&team=%23ff5a6e&frames=6&tod=day&style=e	walls/compose_walls.py --frames 6 --team #ff5a6e
+art/buildings/walls/gate-ew-closed@1-spark-f4.png	walls	stonegate:gate-ew-closed@1:piece=ew-closed&team=%23ff5a6e&frames=6&tod=day&style=e	walls/compose_walls.py --frames 6 --team #ff5a6e
+art/buildings/walls/gate-ew-closed@1-spark-f5.png	walls	stonegate:gate-ew-closed@1:piece=ew-closed&team=%23ff5a6e&frames=6&tod=day&style=e	walls/compose_walls.py --frames 6 --team #ff5a6e
+art/buildings/walls/gate-ew-open@1.png	walls	stonegate:gate-ew-open@1:piece=ew-open&team=%23ff5a6e&frames=6&tod=day&style=e	walls/compose_walls.py --frames 6 --team #ff5a6e
+art/buildings/walls/gate-ew-open@1-spark-f0.png	walls	stonegate:gate-ew-open@1:piece=ew-open&team=%23ff5a6e&frames=6&tod=day&style=e	walls/compose_walls.py --frames 6 --team #ff5a6e
+art/buildings/walls/gate-ew-open@1-spark-f1.png	walls	stonegate:gate-ew-open@1:piece=ew-open&team=%23ff5a6e&frames=6&tod=day&style=e	walls/compose_walls.py --frames 6 --team #ff5a6e
+art/buildings/walls/gate-ew-open@1-spark-f2.png	walls	stonegate:gate-ew-open@1:piece=ew-open&team=%23ff5a6e&frames=6&tod=day&style=e	walls/compose_walls.py --frames 6 --team #ff5a6e
+art/buildings/walls/gate-ew-open@1-spark-f3.png	walls	stonegate:gate-ew-open@1:piece=ew-open&team=%23ff5a6e&frames=6&tod=day&style=e	walls/compose_walls.py --frames 6 --team #ff5a6e
+art/buildings/walls/gate-ew-open@1-spark-f4.png	walls	stonegate:gate-ew-open@1:piece=ew-open&team=%23ff5a6e&frames=6&tod=day&style=e	walls/compose_walls.py --frames 6 --team #ff5a6e
+art/buildings/walls/gate-ew-open@1-spark-f5.png	walls	stonegate:gate-ew-open@1:piece=ew-open&team=%23ff5a6e&frames=6&tod=day&style=e	walls/compose_walls.py --frames 6 --team #ff5a6e
+art/buildings/walls/gate-ns-closed@1.png	walls	stonegate:gate-ns-closed@1:piece=ns-closed&team=%23ff5a6e&frames=6&tod=day&style=e	walls/compose_walls.py --frames 6 --team #ff5a6e
+art/buildings/walls/gate-ns-closed@1-spark-f0.png	walls	stonegate:gate-ns-closed@1:piece=ns-closed&team=%23ff5a6e&frames=6&tod=day&style=e	walls/compose_walls.py --frames 6 --team #ff5a6e
+art/buildings/walls/gate-ns-closed@1-spark-f1.png	walls	stonegate:gate-ns-closed@1:piece=ns-closed&team=%23ff5a6e&frames=6&tod=day&style=e	walls/compose_walls.py --frames 6 --team #ff5a6e
+art/buildings/walls/gate-ns-closed@1-spark-f2.png	walls	stonegate:gate-ns-closed@1:piece=ns-closed&team=%23ff5a6e&frames=6&tod=day&style=e	walls/compose_walls.py --frames 6 --team #ff5a6e
+art/buildings/walls/gate-ns-closed@1-spark-f3.png	walls	stonegate:gate-ns-closed@1:piece=ns-closed&team=%23ff5a6e&frames=6&tod=day&style=e	walls/compose_walls.py --frames 6 --team #ff5a6e
+art/buildings/walls/gate-ns-closed@1-spark-f4.png	walls	stonegate:gate-ns-closed@1:piece=ns-closed&team=%23ff5a6e&frames=6&tod=day&style=e	walls/compose_walls.py --frames 6 --team #ff5a6e
+art/buildings/walls/gate-ns-closed@1-spark-f5.png	walls	stonegate:gate-ns-closed@1:piece=ns-closed&team=%23ff5a6e&frames=6&tod=day&style=e	walls/compose_walls.py --frames 6 --team #ff5a6e
+art/buildings/walls/gate-ns-open@1.png	walls	stonegate:gate-ns-open@1:piece=ns-open&team=%23ff5a6e&frames=6&tod=day&style=e	walls/compose_walls.py --frames 6 --team #ff5a6e
+art/buildings/walls/gate-ns-open@1-spark-f0.png	walls	stonegate:gate-ns-open@1:piece=ns-open&team=%23ff5a6e&frames=6&tod=day&style=e	walls/compose_walls.py --frames 6 --team #ff5a6e
+art/buildings/walls/gate-ns-open@1-spark-f1.png	walls	stonegate:gate-ns-open@1:piece=ns-open&team=%23ff5a6e&frames=6&tod=day&style=e	walls/compose_walls.py --frames 6 --team #ff5a6e
+art/buildings/walls/gate-ns-open@1-spark-f2.png	walls	stonegate:gate-ns-open@1:piece=ns-open&team=%23ff5a6e&frames=6&tod=day&style=e	walls/compose_walls.py --frames 6 --team #ff5a6e
+art/buildings/walls/gate-ns-open@1-spark-f3.png	walls	stonegate:gate-ns-open@1:piece=ns-open&team=%23ff5a6e&frames=6&tod=day&style=e	walls/compose_walls.py --frames 6 --team #ff5a6e
+art/buildings/walls/gate-ns-open@1-spark-f4.png	walls	stonegate:gate-ns-open@1:piece=ns-open&team=%23ff5a6e&frames=6&tod=day&style=e	walls/compose_walls.py --frames 6 --team #ff5a6e
+art/buildings/walls/gate-ns-open@1-spark-f5.png	walls	stonegate:gate-ns-open@1:piece=ns-open&team=%23ff5a6e&frames=6&tod=day&style=e	walls/compose_walls.py --frames 6 --team #ff5a6e
 
 ## Walls and gates (morning): walls renderer, orthographic, no pad
-art/tod/morning/buildings/walls/wall-post@0.png	walls	wall:wall-post@0:piece=post&team=%2338d4ff&frames=6&tod=morning	walls/compose_walls.py --post wall-post@0 --frames 6 --team #38d4ff
-art/tod/morning/buildings/walls/wall-n@0.png	walls	wall:wall-n@0:piece=n&team=%2338d4ff&frames=6&tod=morning	walls/compose_walls.py --post wall-post@0 --frames 6 --team #38d4ff
-art/tod/morning/buildings/walls/wall-e@0.png	walls	wall:wall-e@0:piece=e&team=%2338d4ff&frames=6&tod=morning	walls/compose_walls.py --post wall-post@0 --frames 6 --team #38d4ff
-art/tod/morning/buildings/walls/wall-s@0.png	walls	wall:wall-s@0:piece=s&team=%2338d4ff&frames=6&tod=morning	walls/compose_walls.py --post wall-post@0 --frames 6 --team #38d4ff
-art/tod/morning/buildings/walls/wall-w@0.png	walls	wall:wall-w@0:piece=w&team=%2338d4ff&frames=6&tod=morning	walls/compose_walls.py --post wall-post@0 --frames 6 --team #38d4ff
-art/tod/morning/buildings/walls/wall-hub-ew@0.png	walls	wall:wall-hub-ew@0:piece=hub-ew&team=%2338d4ff&frames=6&tod=morning	walls/compose_walls.py --post wall-post@0 --frames 6 --team #38d4ff
-art/tod/morning/buildings/walls/wall-hub-ns@0.png	walls	wall:wall-hub-ns@0:piece=hub-ns&team=%2338d4ff&frames=6&tod=morning	walls/compose_walls.py --post wall-post@0 --frames 6 --team #38d4ff
-art/tod/morning/buildings/walls/gate-ew-closed@0.png	walls	gate:gate-ew-closed@0:piece=ew-closed&team=%2338d4ff&frames=6&tod=morning	walls/compose_walls.py --frames 6 --team #38d4ff
-art/tod/morning/buildings/walls/gate-ew-open@0.png	walls	gate:gate-ew-open@0:piece=ew-open&team=%2338d4ff&frames=6&tod=morning	walls/compose_walls.py --frames 6 --team #38d4ff
-art/tod/morning/buildings/walls/gate-ns-closed@0.png	walls	gate:gate-ns-closed@0:piece=ns-closed&team=%2338d4ff&frames=6&tod=morning	walls/compose_walls.py --frames 6 --team #38d4ff
-art/tod/morning/buildings/walls/gate-ns-open@0.png	walls	gate:gate-ns-open@0:piece=ns-open&team=%2338d4ff&frames=6&tod=morning	walls/compose_walls.py --frames 6 --team #38d4ff
-art/tod/morning/buildings/walls/wall-post@1.png	walls	wall:wall-post@1:piece=post&team=%23ff5a6e&frames=6&tod=morning	walls/compose_walls.py --post wall-post@1 --frames 6 --team #ff5a6e
-art/tod/morning/buildings/walls/wall-n@1.png	walls	wall:wall-n@1:piece=n&team=%23ff5a6e&frames=6&tod=morning	walls/compose_walls.py --post wall-post@1 --frames 6 --team #ff5a6e
-art/tod/morning/buildings/walls/wall-e@1.png	walls	wall:wall-e@1:piece=e&team=%23ff5a6e&frames=6&tod=morning	walls/compose_walls.py --post wall-post@1 --frames 6 --team #ff5a6e
-art/tod/morning/buildings/walls/wall-s@1.png	walls	wall:wall-s@1:piece=s&team=%23ff5a6e&frames=6&tod=morning	walls/compose_walls.py --post wall-post@1 --frames 6 --team #ff5a6e
-art/tod/morning/buildings/walls/wall-w@1.png	walls	wall:wall-w@1:piece=w&team=%23ff5a6e&frames=6&tod=morning	walls/compose_walls.py --post wall-post@1 --frames 6 --team #ff5a6e
-art/tod/morning/buildings/walls/wall-hub-ew@1.png	walls	wall:wall-hub-ew@1:piece=hub-ew&team=%23ff5a6e&frames=6&tod=morning	walls/compose_walls.py --post wall-post@1 --frames 6 --team #ff5a6e
-art/tod/morning/buildings/walls/wall-hub-ns@1.png	walls	wall:wall-hub-ns@1:piece=hub-ns&team=%23ff5a6e&frames=6&tod=morning	walls/compose_walls.py --post wall-post@1 --frames 6 --team #ff5a6e
-art/tod/morning/buildings/walls/gate-ew-closed@1.png	walls	gate:gate-ew-closed@1:piece=ew-closed&team=%23ff5a6e&frames=6&tod=morning	walls/compose_walls.py --frames 6 --team #ff5a6e
-art/tod/morning/buildings/walls/gate-ew-open@1.png	walls	gate:gate-ew-open@1:piece=ew-open&team=%23ff5a6e&frames=6&tod=morning	walls/compose_walls.py --frames 6 --team #ff5a6e
-art/tod/morning/buildings/walls/gate-ns-closed@1.png	walls	gate:gate-ns-closed@1:piece=ns-closed&team=%23ff5a6e&frames=6&tod=morning	walls/compose_walls.py --frames 6 --team #ff5a6e
-art/tod/morning/buildings/walls/gate-ns-open@1.png	walls	gate:gate-ns-open@1:piece=ns-open&team=%23ff5a6e&frames=6&tod=morning	walls/compose_walls.py --frames 6 --team #ff5a6e
+art/tod/morning/buildings/walls/wall-post@0.png	walls	stone:wall-post@0:piece=post&team=%2338d4ff&frames=6&tod=morning&style=e	walls/compose_walls.py --post wall-post@0 --frames 6 --team #38d4ff
+art/tod/morning/buildings/walls/wall-n@0.png	walls	stone:wall-n@0:piece=n&team=%2338d4ff&frames=6&tod=morning&style=e	walls/compose_walls.py --post wall-post@0 --frames 6 --team #38d4ff
+art/tod/morning/buildings/walls/wall-e@0.png	walls	stone:wall-e@0:piece=e&team=%2338d4ff&frames=6&tod=morning&style=e	walls/compose_walls.py --post wall-post@0 --frames 6 --team #38d4ff
+art/tod/morning/buildings/walls/wall-s@0.png	walls	stone:wall-s@0:piece=s&team=%2338d4ff&frames=6&tod=morning&style=e	walls/compose_walls.py --post wall-post@0 --frames 6 --team #38d4ff
+art/tod/morning/buildings/walls/wall-w@0.png	walls	stone:wall-w@0:piece=w&team=%2338d4ff&frames=6&tod=morning&style=e	walls/compose_walls.py --post wall-post@0 --frames 6 --team #38d4ff
+art/tod/morning/buildings/walls/wall-hub-ew@0.png	walls	stone:wall-hub-ew@0:piece=hub-ew&team=%2338d4ff&frames=6&tod=morning&style=e	walls/compose_walls.py --post wall-post@0 --frames 6 --team #38d4ff
+art/tod/morning/buildings/walls/wall-hub-ns@0.png	walls	stone:wall-hub-ns@0:piece=hub-ns&team=%2338d4ff&frames=6&tod=morning&style=e	walls/compose_walls.py --post wall-post@0 --frames 6 --team #38d4ff
+art/tod/morning/buildings/walls/gate-ew-closed@0.png	walls	stonegate:gate-ew-closed@0:piece=ew-closed&team=%2338d4ff&frames=6&tod=morning&style=e	walls/compose_walls.py --frames 6 --team #38d4ff
+art/tod/morning/buildings/walls/gate-ew-open@0.png	walls	stonegate:gate-ew-open@0:piece=ew-open&team=%2338d4ff&frames=6&tod=morning&style=e	walls/compose_walls.py --frames 6 --team #38d4ff
+art/tod/morning/buildings/walls/gate-ns-closed@0.png	walls	stonegate:gate-ns-closed@0:piece=ns-closed&team=%2338d4ff&frames=6&tod=morning&style=e	walls/compose_walls.py --frames 6 --team #38d4ff
+art/tod/morning/buildings/walls/gate-ns-open@0.png	walls	stonegate:gate-ns-open@0:piece=ns-open&team=%2338d4ff&frames=6&tod=morning&style=e	walls/compose_walls.py --frames 6 --team #38d4ff
+art/tod/morning/buildings/walls/wall-post@1.png	walls	stone:wall-post@1:piece=post&team=%23ff5a6e&frames=6&tod=morning&style=e	walls/compose_walls.py --post wall-post@1 --frames 6 --team #ff5a6e
+art/tod/morning/buildings/walls/wall-n@1.png	walls	stone:wall-n@1:piece=n&team=%23ff5a6e&frames=6&tod=morning&style=e	walls/compose_walls.py --post wall-post@1 --frames 6 --team #ff5a6e
+art/tod/morning/buildings/walls/wall-e@1.png	walls	stone:wall-e@1:piece=e&team=%23ff5a6e&frames=6&tod=morning&style=e	walls/compose_walls.py --post wall-post@1 --frames 6 --team #ff5a6e
+art/tod/morning/buildings/walls/wall-s@1.png	walls	stone:wall-s@1:piece=s&team=%23ff5a6e&frames=6&tod=morning&style=e	walls/compose_walls.py --post wall-post@1 --frames 6 --team #ff5a6e
+art/tod/morning/buildings/walls/wall-w@1.png	walls	stone:wall-w@1:piece=w&team=%23ff5a6e&frames=6&tod=morning&style=e	walls/compose_walls.py --post wall-post@1 --frames 6 --team #ff5a6e
+art/tod/morning/buildings/walls/wall-hub-ew@1.png	walls	stone:wall-hub-ew@1:piece=hub-ew&team=%23ff5a6e&frames=6&tod=morning&style=e	walls/compose_walls.py --post wall-post@1 --frames 6 --team #ff5a6e
+art/tod/morning/buildings/walls/wall-hub-ns@1.png	walls	stone:wall-hub-ns@1:piece=hub-ns&team=%23ff5a6e&frames=6&tod=morning&style=e	walls/compose_walls.py --post wall-post@1 --frames 6 --team #ff5a6e
+art/tod/morning/buildings/walls/gate-ew-closed@1.png	walls	stonegate:gate-ew-closed@1:piece=ew-closed&team=%23ff5a6e&frames=6&tod=morning&style=e	walls/compose_walls.py --frames 6 --team #ff5a6e
+art/tod/morning/buildings/walls/gate-ew-open@1.png	walls	stonegate:gate-ew-open@1:piece=ew-open&team=%23ff5a6e&frames=6&tod=morning&style=e	walls/compose_walls.py --frames 6 --team #ff5a6e
+art/tod/morning/buildings/walls/gate-ns-closed@1.png	walls	stonegate:gate-ns-closed@1:piece=ns-closed&team=%23ff5a6e&frames=6&tod=morning&style=e	walls/compose_walls.py --frames 6 --team #ff5a6e
+art/tod/morning/buildings/walls/gate-ns-open@1.png	walls	stonegate:gate-ns-open@1:piece=ns-open&team=%23ff5a6e&frames=6&tod=morning&style=e	walls/compose_walls.py --frames 6 --team #ff5a6e
 
 ## Walls and gates (evening): walls renderer, orthographic, no pad
-art/tod/evening/buildings/walls/wall-post@0.png	walls	wall:wall-post@0:piece=post&team=%2338d4ff&frames=6&tod=evening	walls/compose_walls.py --post wall-post@0 --frames 6 --team #38d4ff
-art/tod/evening/buildings/walls/wall-n@0.png	walls	wall:wall-n@0:piece=n&team=%2338d4ff&frames=6&tod=evening	walls/compose_walls.py --post wall-post@0 --frames 6 --team #38d4ff
-art/tod/evening/buildings/walls/wall-e@0.png	walls	wall:wall-e@0:piece=e&team=%2338d4ff&frames=6&tod=evening	walls/compose_walls.py --post wall-post@0 --frames 6 --team #38d4ff
-art/tod/evening/buildings/walls/wall-s@0.png	walls	wall:wall-s@0:piece=s&team=%2338d4ff&frames=6&tod=evening	walls/compose_walls.py --post wall-post@0 --frames 6 --team #38d4ff
-art/tod/evening/buildings/walls/wall-w@0.png	walls	wall:wall-w@0:piece=w&team=%2338d4ff&frames=6&tod=evening	walls/compose_walls.py --post wall-post@0 --frames 6 --team #38d4ff
-art/tod/evening/buildings/walls/wall-hub-ew@0.png	walls	wall:wall-hub-ew@0:piece=hub-ew&team=%2338d4ff&frames=6&tod=evening	walls/compose_walls.py --post wall-post@0 --frames 6 --team #38d4ff
-art/tod/evening/buildings/walls/wall-hub-ns@0.png	walls	wall:wall-hub-ns@0:piece=hub-ns&team=%2338d4ff&frames=6&tod=evening	walls/compose_walls.py --post wall-post@0 --frames 6 --team #38d4ff
-art/tod/evening/buildings/walls/gate-ew-closed@0.png	walls	gate:gate-ew-closed@0:piece=ew-closed&team=%2338d4ff&frames=6&tod=evening	walls/compose_walls.py --frames 6 --team #38d4ff
-art/tod/evening/buildings/walls/gate-ew-open@0.png	walls	gate:gate-ew-open@0:piece=ew-open&team=%2338d4ff&frames=6&tod=evening	walls/compose_walls.py --frames 6 --team #38d4ff
-art/tod/evening/buildings/walls/gate-ns-closed@0.png	walls	gate:gate-ns-closed@0:piece=ns-closed&team=%2338d4ff&frames=6&tod=evening	walls/compose_walls.py --frames 6 --team #38d4ff
-art/tod/evening/buildings/walls/gate-ns-open@0.png	walls	gate:gate-ns-open@0:piece=ns-open&team=%2338d4ff&frames=6&tod=evening	walls/compose_walls.py --frames 6 --team #38d4ff
-art/tod/evening/buildings/walls/wall-post@1.png	walls	wall:wall-post@1:piece=post&team=%23ff5a6e&frames=6&tod=evening	walls/compose_walls.py --post wall-post@1 --frames 6 --team #ff5a6e
-art/tod/evening/buildings/walls/wall-n@1.png	walls	wall:wall-n@1:piece=n&team=%23ff5a6e&frames=6&tod=evening	walls/compose_walls.py --post wall-post@1 --frames 6 --team #ff5a6e
-art/tod/evening/buildings/walls/wall-e@1.png	walls	wall:wall-e@1:piece=e&team=%23ff5a6e&frames=6&tod=evening	walls/compose_walls.py --post wall-post@1 --frames 6 --team #ff5a6e
-art/tod/evening/buildings/walls/wall-s@1.png	walls	wall:wall-s@1:piece=s&team=%23ff5a6e&frames=6&tod=evening	walls/compose_walls.py --post wall-post@1 --frames 6 --team #ff5a6e
-art/tod/evening/buildings/walls/wall-w@1.png	walls	wall:wall-w@1:piece=w&team=%23ff5a6e&frames=6&tod=evening	walls/compose_walls.py --post wall-post@1 --frames 6 --team #ff5a6e
-art/tod/evening/buildings/walls/wall-hub-ew@1.png	walls	wall:wall-hub-ew@1:piece=hub-ew&team=%23ff5a6e&frames=6&tod=evening	walls/compose_walls.py --post wall-post@1 --frames 6 --team #ff5a6e
-art/tod/evening/buildings/walls/wall-hub-ns@1.png	walls	wall:wall-hub-ns@1:piece=hub-ns&team=%23ff5a6e&frames=6&tod=evening	walls/compose_walls.py --post wall-post@1 --frames 6 --team #ff5a6e
-art/tod/evening/buildings/walls/gate-ew-closed@1.png	walls	gate:gate-ew-closed@1:piece=ew-closed&team=%23ff5a6e&frames=6&tod=evening	walls/compose_walls.py --frames 6 --team #ff5a6e
-art/tod/evening/buildings/walls/gate-ew-open@1.png	walls	gate:gate-ew-open@1:piece=ew-open&team=%23ff5a6e&frames=6&tod=evening	walls/compose_walls.py --frames 6 --team #ff5a6e
-art/tod/evening/buildings/walls/gate-ns-closed@1.png	walls	gate:gate-ns-closed@1:piece=ns-closed&team=%23ff5a6e&frames=6&tod=evening	walls/compose_walls.py --frames 6 --team #ff5a6e
-art/tod/evening/buildings/walls/gate-ns-open@1.png	walls	gate:gate-ns-open@1:piece=ns-open&team=%23ff5a6e&frames=6&tod=evening	walls/compose_walls.py --frames 6 --team #ff5a6e
+art/tod/evening/buildings/walls/wall-post@0.png	walls	stone:wall-post@0:piece=post&team=%2338d4ff&frames=6&tod=evening&style=e	walls/compose_walls.py --post wall-post@0 --frames 6 --team #38d4ff
+art/tod/evening/buildings/walls/wall-n@0.png	walls	stone:wall-n@0:piece=n&team=%2338d4ff&frames=6&tod=evening&style=e	walls/compose_walls.py --post wall-post@0 --frames 6 --team #38d4ff
+art/tod/evening/buildings/walls/wall-e@0.png	walls	stone:wall-e@0:piece=e&team=%2338d4ff&frames=6&tod=evening&style=e	walls/compose_walls.py --post wall-post@0 --frames 6 --team #38d4ff
+art/tod/evening/buildings/walls/wall-s@0.png	walls	stone:wall-s@0:piece=s&team=%2338d4ff&frames=6&tod=evening&style=e	walls/compose_walls.py --post wall-post@0 --frames 6 --team #38d4ff
+art/tod/evening/buildings/walls/wall-w@0.png	walls	stone:wall-w@0:piece=w&team=%2338d4ff&frames=6&tod=evening&style=e	walls/compose_walls.py --post wall-post@0 --frames 6 --team #38d4ff
+art/tod/evening/buildings/walls/wall-hub-ew@0.png	walls	stone:wall-hub-ew@0:piece=hub-ew&team=%2338d4ff&frames=6&tod=evening&style=e	walls/compose_walls.py --post wall-post@0 --frames 6 --team #38d4ff
+art/tod/evening/buildings/walls/wall-hub-ns@0.png	walls	stone:wall-hub-ns@0:piece=hub-ns&team=%2338d4ff&frames=6&tod=evening&style=e	walls/compose_walls.py --post wall-post@0 --frames 6 --team #38d4ff
+art/tod/evening/buildings/walls/gate-ew-closed@0.png	walls	stonegate:gate-ew-closed@0:piece=ew-closed&team=%2338d4ff&frames=6&tod=evening&style=e	walls/compose_walls.py --frames 6 --team #38d4ff
+art/tod/evening/buildings/walls/gate-ew-open@0.png	walls	stonegate:gate-ew-open@0:piece=ew-open&team=%2338d4ff&frames=6&tod=evening&style=e	walls/compose_walls.py --frames 6 --team #38d4ff
+art/tod/evening/buildings/walls/gate-ns-closed@0.png	walls	stonegate:gate-ns-closed@0:piece=ns-closed&team=%2338d4ff&frames=6&tod=evening&style=e	walls/compose_walls.py --frames 6 --team #38d4ff
+art/tod/evening/buildings/walls/gate-ns-open@0.png	walls	stonegate:gate-ns-open@0:piece=ns-open&team=%2338d4ff&frames=6&tod=evening&style=e	walls/compose_walls.py --frames 6 --team #38d4ff
+art/tod/evening/buildings/walls/wall-post@1.png	walls	stone:wall-post@1:piece=post&team=%23ff5a6e&frames=6&tod=evening&style=e	walls/compose_walls.py --post wall-post@1 --frames 6 --team #ff5a6e
+art/tod/evening/buildings/walls/wall-n@1.png	walls	stone:wall-n@1:piece=n&team=%23ff5a6e&frames=6&tod=evening&style=e	walls/compose_walls.py --post wall-post@1 --frames 6 --team #ff5a6e
+art/tod/evening/buildings/walls/wall-e@1.png	walls	stone:wall-e@1:piece=e&team=%23ff5a6e&frames=6&tod=evening&style=e	walls/compose_walls.py --post wall-post@1 --frames 6 --team #ff5a6e
+art/tod/evening/buildings/walls/wall-s@1.png	walls	stone:wall-s@1:piece=s&team=%23ff5a6e&frames=6&tod=evening&style=e	walls/compose_walls.py --post wall-post@1 --frames 6 --team #ff5a6e
+art/tod/evening/buildings/walls/wall-w@1.png	walls	stone:wall-w@1:piece=w&team=%23ff5a6e&frames=6&tod=evening&style=e	walls/compose_walls.py --post wall-post@1 --frames 6 --team #ff5a6e
+art/tod/evening/buildings/walls/wall-hub-ew@1.png	walls	stone:wall-hub-ew@1:piece=hub-ew&team=%23ff5a6e&frames=6&tod=evening&style=e	walls/compose_walls.py --post wall-post@1 --frames 6 --team #ff5a6e
+art/tod/evening/buildings/walls/wall-hub-ns@1.png	walls	stone:wall-hub-ns@1:piece=hub-ns&team=%23ff5a6e&frames=6&tod=evening&style=e	walls/compose_walls.py --post wall-post@1 --frames 6 --team #ff5a6e
+art/tod/evening/buildings/walls/gate-ew-closed@1.png	walls	stonegate:gate-ew-closed@1:piece=ew-closed&team=%23ff5a6e&frames=6&tod=evening&style=e	walls/compose_walls.py --frames 6 --team #ff5a6e
+art/tod/evening/buildings/walls/gate-ew-open@1.png	walls	stonegate:gate-ew-open@1:piece=ew-open&team=%23ff5a6e&frames=6&tod=evening&style=e	walls/compose_walls.py --frames 6 --team #ff5a6e
+art/tod/evening/buildings/walls/gate-ns-closed@1.png	walls	stonegate:gate-ns-closed@1:piece=ns-closed&team=%23ff5a6e&frames=6&tod=evening&style=e	walls/compose_walls.py --frames 6 --team #ff5a6e
+art/tod/evening/buildings/walls/gate-ns-open@1.png	walls	stonegate:gate-ns-open@1:piece=ns-open&team=%23ff5a6e&frames=6&tod=evening&style=e	walls/compose_walls.py --frames 6 --team #ff5a6e
 
 ## Walls and gates (night): walls renderer, orthographic, no pad
-art/tod/night/buildings/walls/wall-post@0.png	walls	wall:wall-post@0:piece=post&team=%2338d4ff&frames=6&tod=night	walls/compose_walls.py --post wall-post@0 --frames 6 --team #38d4ff
-art/tod/night/buildings/walls/wall-n@0.png	walls	wall:wall-n@0:piece=n&team=%2338d4ff&frames=6&tod=night	walls/compose_walls.py --post wall-post@0 --frames 6 --team #38d4ff
-art/tod/night/buildings/walls/wall-e@0.png	walls	wall:wall-e@0:piece=e&team=%2338d4ff&frames=6&tod=night	walls/compose_walls.py --post wall-post@0 --frames 6 --team #38d4ff
-art/tod/night/buildings/walls/wall-s@0.png	walls	wall:wall-s@0:piece=s&team=%2338d4ff&frames=6&tod=night	walls/compose_walls.py --post wall-post@0 --frames 6 --team #38d4ff
-art/tod/night/buildings/walls/wall-w@0.png	walls	wall:wall-w@0:piece=w&team=%2338d4ff&frames=6&tod=night	walls/compose_walls.py --post wall-post@0 --frames 6 --team #38d4ff
-art/tod/night/buildings/walls/wall-hub-ew@0.png	walls	wall:wall-hub-ew@0:piece=hub-ew&team=%2338d4ff&frames=6&tod=night	walls/compose_walls.py --post wall-post@0 --frames 6 --team #38d4ff
-art/tod/night/buildings/walls/wall-hub-ns@0.png	walls	wall:wall-hub-ns@0:piece=hub-ns&team=%2338d4ff&frames=6&tod=night	walls/compose_walls.py --post wall-post@0 --frames 6 --team #38d4ff
-art/tod/night/buildings/walls/gate-ew-closed@0.png	walls	gate:gate-ew-closed@0:piece=ew-closed&team=%2338d4ff&frames=6&tod=night	walls/compose_walls.py --frames 6 --team #38d4ff
-art/tod/night/buildings/walls/gate-ew-open@0.png	walls	gate:gate-ew-open@0:piece=ew-open&team=%2338d4ff&frames=6&tod=night	walls/compose_walls.py --frames 6 --team #38d4ff
-art/tod/night/buildings/walls/gate-ns-closed@0.png	walls	gate:gate-ns-closed@0:piece=ns-closed&team=%2338d4ff&frames=6&tod=night	walls/compose_walls.py --frames 6 --team #38d4ff
-art/tod/night/buildings/walls/gate-ns-open@0.png	walls	gate:gate-ns-open@0:piece=ns-open&team=%2338d4ff&frames=6&tod=night	walls/compose_walls.py --frames 6 --team #38d4ff
-art/tod/night/buildings/walls/wall-post@1.png	walls	wall:wall-post@1:piece=post&team=%23ff5a6e&frames=6&tod=night	walls/compose_walls.py --post wall-post@1 --frames 6 --team #ff5a6e
-art/tod/night/buildings/walls/wall-n@1.png	walls	wall:wall-n@1:piece=n&team=%23ff5a6e&frames=6&tod=night	walls/compose_walls.py --post wall-post@1 --frames 6 --team #ff5a6e
-art/tod/night/buildings/walls/wall-e@1.png	walls	wall:wall-e@1:piece=e&team=%23ff5a6e&frames=6&tod=night	walls/compose_walls.py --post wall-post@1 --frames 6 --team #ff5a6e
-art/tod/night/buildings/walls/wall-s@1.png	walls	wall:wall-s@1:piece=s&team=%23ff5a6e&frames=6&tod=night	walls/compose_walls.py --post wall-post@1 --frames 6 --team #ff5a6e
-art/tod/night/buildings/walls/wall-w@1.png	walls	wall:wall-w@1:piece=w&team=%23ff5a6e&frames=6&tod=night	walls/compose_walls.py --post wall-post@1 --frames 6 --team #ff5a6e
-art/tod/night/buildings/walls/wall-hub-ew@1.png	walls	wall:wall-hub-ew@1:piece=hub-ew&team=%23ff5a6e&frames=6&tod=night	walls/compose_walls.py --post wall-post@1 --frames 6 --team #ff5a6e
-art/tod/night/buildings/walls/wall-hub-ns@1.png	walls	wall:wall-hub-ns@1:piece=hub-ns&team=%23ff5a6e&frames=6&tod=night	walls/compose_walls.py --post wall-post@1 --frames 6 --team #ff5a6e
-art/tod/night/buildings/walls/gate-ew-closed@1.png	walls	gate:gate-ew-closed@1:piece=ew-closed&team=%23ff5a6e&frames=6&tod=night	walls/compose_walls.py --frames 6 --team #ff5a6e
-art/tod/night/buildings/walls/gate-ew-open@1.png	walls	gate:gate-ew-open@1:piece=ew-open&team=%23ff5a6e&frames=6&tod=night	walls/compose_walls.py --frames 6 --team #ff5a6e
-art/tod/night/buildings/walls/gate-ns-closed@1.png	walls	gate:gate-ns-closed@1:piece=ns-closed&team=%23ff5a6e&frames=6&tod=night	walls/compose_walls.py --frames 6 --team #ff5a6e
-art/tod/night/buildings/walls/gate-ns-open@1.png	walls	gate:gate-ns-open@1:piece=ns-open&team=%23ff5a6e&frames=6&tod=night	walls/compose_walls.py --frames 6 --team #ff5a6e
+art/tod/night/buildings/walls/wall-post@0.png	walls	stone:wall-post@0:piece=post&team=%2338d4ff&frames=6&tod=night&style=e	walls/compose_walls.py --post wall-post@0 --frames 6 --team #38d4ff
+art/tod/night/buildings/walls/wall-n@0.png	walls	stone:wall-n@0:piece=n&team=%2338d4ff&frames=6&tod=night&style=e	walls/compose_walls.py --post wall-post@0 --frames 6 --team #38d4ff
+art/tod/night/buildings/walls/wall-e@0.png	walls	stone:wall-e@0:piece=e&team=%2338d4ff&frames=6&tod=night&style=e	walls/compose_walls.py --post wall-post@0 --frames 6 --team #38d4ff
+art/tod/night/buildings/walls/wall-s@0.png	walls	stone:wall-s@0:piece=s&team=%2338d4ff&frames=6&tod=night&style=e	walls/compose_walls.py --post wall-post@0 --frames 6 --team #38d4ff
+art/tod/night/buildings/walls/wall-w@0.png	walls	stone:wall-w@0:piece=w&team=%2338d4ff&frames=6&tod=night&style=e	walls/compose_walls.py --post wall-post@0 --frames 6 --team #38d4ff
+art/tod/night/buildings/walls/wall-hub-ew@0.png	walls	stone:wall-hub-ew@0:piece=hub-ew&team=%2338d4ff&frames=6&tod=night&style=e	walls/compose_walls.py --post wall-post@0 --frames 6 --team #38d4ff
+art/tod/night/buildings/walls/wall-hub-ns@0.png	walls	stone:wall-hub-ns@0:piece=hub-ns&team=%2338d4ff&frames=6&tod=night&style=e	walls/compose_walls.py --post wall-post@0 --frames 6 --team #38d4ff
+art/tod/night/buildings/walls/gate-ew-closed@0.png	walls	stonegate:gate-ew-closed@0:piece=ew-closed&team=%2338d4ff&frames=6&tod=night&style=e	walls/compose_walls.py --frames 6 --team #38d4ff
+art/tod/night/buildings/walls/gate-ew-open@0.png	walls	stonegate:gate-ew-open@0:piece=ew-open&team=%2338d4ff&frames=6&tod=night&style=e	walls/compose_walls.py --frames 6 --team #38d4ff
+art/tod/night/buildings/walls/gate-ns-closed@0.png	walls	stonegate:gate-ns-closed@0:piece=ns-closed&team=%2338d4ff&frames=6&tod=night&style=e	walls/compose_walls.py --frames 6 --team #38d4ff
+art/tod/night/buildings/walls/gate-ns-open@0.png	walls	stonegate:gate-ns-open@0:piece=ns-open&team=%2338d4ff&frames=6&tod=night&style=e	walls/compose_walls.py --frames 6 --team #38d4ff
+art/tod/night/buildings/walls/wall-post@1.png	walls	stone:wall-post@1:piece=post&team=%23ff5a6e&frames=6&tod=night&style=e	walls/compose_walls.py --post wall-post@1 --frames 6 --team #ff5a6e
+art/tod/night/buildings/walls/wall-n@1.png	walls	stone:wall-n@1:piece=n&team=%23ff5a6e&frames=6&tod=night&style=e	walls/compose_walls.py --post wall-post@1 --frames 6 --team #ff5a6e
+art/tod/night/buildings/walls/wall-e@1.png	walls	stone:wall-e@1:piece=e&team=%23ff5a6e&frames=6&tod=night&style=e	walls/compose_walls.py --post wall-post@1 --frames 6 --team #ff5a6e
+art/tod/night/buildings/walls/wall-s@1.png	walls	stone:wall-s@1:piece=s&team=%23ff5a6e&frames=6&tod=night&style=e	walls/compose_walls.py --post wall-post@1 --frames 6 --team #ff5a6e
+art/tod/night/buildings/walls/wall-w@1.png	walls	stone:wall-w@1:piece=w&team=%23ff5a6e&frames=6&tod=night&style=e	walls/compose_walls.py --post wall-post@1 --frames 6 --team #ff5a6e
+art/tod/night/buildings/walls/wall-hub-ew@1.png	walls	stone:wall-hub-ew@1:piece=hub-ew&team=%23ff5a6e&frames=6&tod=night&style=e	walls/compose_walls.py --post wall-post@1 --frames 6 --team #ff5a6e
+art/tod/night/buildings/walls/wall-hub-ns@1.png	walls	stone:wall-hub-ns@1:piece=hub-ns&team=%23ff5a6e&frames=6&tod=night&style=e	walls/compose_walls.py --post wall-post@1 --frames 6 --team #ff5a6e
+art/tod/night/buildings/walls/gate-ew-closed@1.png	walls	stonegate:gate-ew-closed@1:piece=ew-closed&team=%23ff5a6e&frames=6&tod=night&style=e	walls/compose_walls.py --frames 6 --team #ff5a6e
+art/tod/night/buildings/walls/gate-ew-open@1.png	walls	stonegate:gate-ew-open@1:piece=ew-open&team=%23ff5a6e&frames=6&tod=night&style=e	walls/compose_walls.py --frames 6 --team #ff5a6e
+art/tod/night/buildings/walls/gate-ns-closed@1.png	walls	stonegate:gate-ns-closed@1:piece=ns-closed&team=%23ff5a6e&frames=6&tod=night&style=e	walls/compose_walls.py --frames 6 --team #ff5a6e
+art/tod/night/buildings/walls/gate-ns-open@1.png	walls	stonegate:gate-ns-open@1:piece=ns-open&team=%23ff5a6e&frames=6&tod=night&style=e	walls/compose_walls.py --frames 6 --team #ff5a6e
 
 ## Streetlamps (day; the lit heads and pools are light and serve every time of day)
 art/roads/streetlamp-road.png	main	streetlamp:::streetlamp-road:kind=road	compose_any.py --b1 4 --b2 10 --glow 1.3
