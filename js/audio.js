@@ -169,7 +169,7 @@ function _noise(dur, vol, o) {
 }
 
 const SFX_GAP = {
-  launch: 0.3, takeoff: 1.5, chute: 0.4, flakfire: 0.25, flak: 0.12, boom: 0.12, shellhit: 0.09, missilehit: 0.2, laser: 0.08, pulse: 0.14, hit: 0.07, produce: 0.25, alert: 1.5, complete: 0.3, order: 0.15,
+  launch: 0.3, rocket: 0.12, takeoff: 1.5, chute: 0.4, flakfire: 0.25, flak: 0.12, boom: 0.12, shellhit: 0.09, missilehit: 0.2, laser: 0.08, pulse: 0.14, hit: 0.07, produce: 0.25, alert: 1.5, complete: 0.3, order: 0.15,
   weld: 0.25, scrape: 0.3, hiss: 0.6, airbrake: 1.2, honk: 2.5, nuke: 2, siren: 4,
 };
 
@@ -250,6 +250,10 @@ function sfx(name, dest) {
       break;
     case 'alert': _tone(880, 0.12, 'square', 0.05, null, 0, D); _tone(660, 0.12, 'square', 0.05, null, 0.15, D); break;
     // A missile leaving its Silo: the ignition pop, then the motor's roar climbing as it rises away.
+    case 'rocket': // a short rocket whoosh off a launcher rack
+      _noise(0.04, 0.12, { type: 'highpass', freq: 1800, attack: 0.002, dest: D });
+      _noise(0.6, 0.12, { type: 'bandpass', freq: 600, to: 2600, q: 1.1, attack: 0.04, dest: D });
+      break;
     case 'launch':
       _noise(0.07, 0.18, { type: 'highpass', freq: 1500, attack: 0.002, dest: D });
       _tone(70, 0.3, 'sine', 0.16, 40, 0, D);

@@ -2152,6 +2152,17 @@ function drawBuilding(ctx, type, cx, cy, s, owner, b) {
       const head = turretHead(owner, b && b.aim !== undefined ? b.aim : -Math.PI / 4, 'mortar');
       if (head) drawArt(ctx, head, cx, cy, s);
     }
+    // The Keep: its roof cannon turns like a turret head (keep-head-0…15), and now and then an arc crackles
+    // along the razor wire round its walls (keep-spark-0…5: a 0.4 s burst every 2 to 5 seconds).
+    if (type === 'keep') {
+      const head = turretHead(owner, b && b.aim !== undefined ? b.aim : -Math.PI / 4, 'keep');
+      if (head) drawArt(ctx, head, cx, cy, s);
+      if (b && b.built) {
+        const period = 2 + 3 * hash2(b.x, b.y, 91), ph = (R.time + period * hash2(b.y, b.x, 37)) % period;
+        const sp = ph < 0.4 && ART['keep-spark-' + Math.floor(ph / 0.4 * 6)];
+        if (sp) drawArt(ctx, sp, cx, cy, s);
+      }
+    }
     // A Flak Gun's twin barrels turn to follow the plane it's shooting at (flak-head-0…15).
     if (type === 'flak') {
       const head = turretHead(owner, b && b.aim !== undefined ? b.aim : -Math.PI / 4, 'flak');
@@ -3426,7 +3437,8 @@ function drawBot(ctx, u, sx, sy, s) {
   if (BOTS[u.type].train) { drawRoadTrain(ctx, u, sx, sy, s); return; }
   if (BOTS[u.type].crawler) { drawCrawler(ctx, u.face || 0, sx, sy, s, u.owner, false, u.odo || 0, false, u); return; }
   const color = PLAYER_COLORS[u.owner];
-  const own = driveFrame(u) || artFor(u.type, u.owner);
+  // A Rocket Truck with its rack raised (deploying or firing) shows its launcher up and legs out.
+  const own = (BOTS[u.type].siege && (u.deployT > 0 || u.salvo) && artFor('rocket-up', u.owner)) || driveFrame(u) || artFor(u.type, u.owner);
   // Specialists use their own art when it exists, otherwise the worker's with a badge.
   const tanker = u.type === 'tanker', truck = u.type === 'truck' || tanker;
   const art = own || (u.type !== 'warbot' && !truck ? artFor('worker', u.owner) : null);
@@ -3436,7 +3448,7 @@ function drawBot(ctx, u, sx, sy, s) {
     if (tanker && !own) drawTanker(ctx, u, sx, sy, s, color);
     else drawTruck(ctx, u, sx, sy, s, color, own);
   } else if (art) {
-    const size = s * (u.type === 'warbot' ? 0.6 : 0.5);
+    const size = s * (u.type === 'warbot' ? 0.6 : BOTS[u.type].siege ? 0.72 : 0.5);
     if (art.shadow) drawBotShadow(ctx, u, sx, sy, size * 0.42, size * 0.3);
     drawArt(ctx, art, sx, sy + bob, size, u.face);
     if (art === own) drawDriveOverlays(ctx, u, sx, sy + bob, size);
@@ -4196,6 +4208,8 @@ function render(dtReal) {
     ctx.strokeRect(ox + R.ghost.x * z + 1, oy + R.ghost.y * z + 1, z - 2, z - 2);
   }
   if (sel && BDEFS[sel.type] && BDEFS[sel.type].burner) drawBoosted(ctx, sel.type, sel.x, sel.y, sel.owner, ox, oy, z);
+  if (sel && BDEFS[sel.type] && BDEFS[sel.type].keep) drawKeepAura(ctx, sel.x, sel.y, sel.owner, ox, oy, z);
+  if (R.ghost && BDEFS[R.ghost.type] && BDEFS[R.ghost.type].keep && inMap(R.ghost.x, R.ghost.y)) drawKeepAura(ctx, R.ghost.x, R.ghost.y, 0, ox, oy, z);
   if (R.ghost && BDEFS[R.ghost.type] && BDEFS[R.ghost.type].burner) drawBoosted(ctx, R.ghost.type, R.ghost.x, R.ghost.y, 0, ox, oy, z);
   if (R.ghost && inMap(R.ghost.x, R.ghost.y)) for (const l of feedPreview(0, R.ghost.type, R.ghost.x, R.ghost.y)) drawFeedLink(ctx, ox, oy, z, l.a[0], l.a[1], l.b[0], l.b[1], l.goods, null, true);
   if (sel) {
@@ -4759,6 +4773,28 @@ function drawRanges(ctx, type, x, y, ox, oy, z, owner) {
  * A Generator selected (or being placed): amber corner brackets and a spark on every building it powers
  * (its owner's factories, Refineries, Oil Pumps and Bot Foundries within reach), drawn over the buildings.
  */
+/**
+ * A Keep's aura (KEEP.aura tiles round tile (x, y)): a dashed team-coloured ring, and a small shield badge on each
+ * Wall, Gate and defence of its owner's it covers.
+ */
+function drawKeepAura(ctx, x, y, owner, ox, oy, z) {
+  const col = PLAYER_COLORS[owner || 0], r2 = KEEP.aura * KEEP.aura;
+  ctx.save();
+  ctx.strokeStyle = col; ctx.globalAlpha = 0.8; ctx.lineWidth = Math.max(2, z * 0.05); ctx.setLineDash([z * 0.3, z * 0.18]);
+  ctx.beginPath(); ctx.arc(ox + (x + 0.5) * z, oy + (y + 0.5) * z, KEEP.aura * z, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]);
+  ctx.globalAlpha = 1;
+  for (const c of S.buildings) {
+    if (c.dead || c.owner !== (owner || 0) || (c.x === x && c.y === y) || dist2(c.x, c.y, x, y) > r2) continue;
+    const d = BDEFS[c.type];
+    if (!d.barrier && !['turret', 'bunker', 'mortar', 'flak', 'disruptor'].includes(c.type)) continue;
+    const bx = ox + (c.x + 0.78) * z, by = oy + (c.y + 0.2) * z, r = Math.max(5, z * 0.14);
+    ctx.fillStyle = 'rgba(10,12,16,0.75)'; ctx.beginPath(); ctx.arc(bx, by, r * 1.25, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = col; ctx.beginPath(); // a shield
+    ctx.moveTo(bx, by - r); ctx.lineTo(bx + r * 0.8, by - r * 0.6); ctx.lineTo(bx + r * 0.65, by + r * 0.35); ctx.lineTo(bx, by + r); ctx.lineTo(bx - r * 0.65, by + r * 0.35); ctx.lineTo(bx - r * 0.8, by - r * 0.6); ctx.closePath(); ctx.fill();
+  }
+  ctx.restore();
+}
+
 function drawBoosted(ctx, type, x, y, owner, ox, oy, z) {
   const def = BDEFS[type];
   if (!def || !def.burner) return;
@@ -4929,6 +4965,19 @@ function drawRallies(ctx, ox, oy, z) {
 function drawMissiles(ctx, ox, oy, z) {
   for (const m of S.missiles) {
     if (m.nuke) { drawNukeFlight(ctx, m, ox, oy, z); continue; }
+    if (m.rocket) {
+      // A rocket: a short low arc, a slim body with a flame behind it, and its shadow.
+      const k = Math.min(1, m.t / m.dur), k2 = Math.min(1, (m.t + 0.04) / m.dur), hk = (q) => Math.sin(q * Math.PI) * 1.2;
+      const gx = ox + lerp(m.x0, m.x1, k) * z, gy = oy + lerp(m.y0, m.y1, k) * z;
+      const ang = Math.atan2((lerp(m.y0, m.y1, k2) - hk(k2)) - (lerp(m.y0, m.y1, k) - hk(k)), lerp(m.x0, m.x1, k2) - lerp(m.x0, m.x1, k));
+      ctx.fillStyle = 'rgba(0,0,0,0.25)'; ctx.beginPath(); ctx.ellipse(gx, gy, z * 0.1, z * 0.04, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.save(); ctx.translate(gx, gy - hk(k) * z); ctx.rotate(ang);
+      ctx.fillStyle = '#ffb347'; ctx.beginPath(); ctx.ellipse(-z * 0.2, 0, z * 0.1 + Math.random() * z * 0.04, z * 0.04, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#c9cdd2'; ctx.fillRect(-z * 0.12, -z * 0.035, z * 0.24, z * 0.07);
+      ctx.fillStyle = PLAYER_COLORS[m.owner]; ctx.fillRect(z * 0.08, -z * 0.035, z * 0.05, z * 0.07);
+      ctx.restore();
+      continue;
+    }
     if (m.shell) {
       // A mortar shell: a dark ball high on its arc, and its shadow on the ground.
       const k = Math.min(1, m.t / m.dur), gx = ox + lerp(m.x0, m.x1, k) * z, gy = oy + lerp(m.y0, m.y1, k) * z;

@@ -143,6 +143,8 @@ const BOTS = {
     desc: 'A heavy road truck that carries eight goods at once on the long runs: between your Command Base and Depots, and to anything far away. Slower than a Hauler on concrete, fastest of all on asphalt.' },
   tanker:  { name: 'Tanker', plural: 'Tankers', speed: WORKER_SPEED * 1.35, hp: 8, haul: true, truck: true, tanker: true, carry: 10, roadOnly: true, parts: 2, accel: 1.4, brake: 3.2,
     desc: 'A tank truck, the only vehicle that carries Crude and Fuel: ten at a time, wherever they need to go (Haulers carry them only when no Tanker can get there, one at a time). Fastest on asphalt. Destroyed with a load on board, it explodes, hurting everything round it, and can set off other Tankers nearby.' },
+  rocket:  { name: 'Rocket Truck', plural: 'Rocket Trucks', speed: WARBOT_SPEED * 1.05, hp: 14, war: true, siege: true, parts: 3, accel: 1.1, brake: 2.4,
+    desc: 'The army\'s siege gun: a truck with a rack of four rockets. Send it at an enemy building (or let it pick one in reach while it waits): it drives to within 11 tiles, parks, raises its rack and fires all four rockets, each knocking 5 off the target and hurting buildings and robots round it. Then it drives back to reload 4 Ammo at your nearest garrison or storage. It can\'t hit anything closer than 4 tiles, can\'t take a fort below a third of its armor (warbots still have to capture it) and is fragile: keep warbots out in front of it.' },
   warbot:  { name: 'Warbot', plural: 'Warbots', speed: WARBOT_SPEED, hp: 12, war: true,
     desc: 'Fights enemy bots and captures enemy buildings. Shoots Ammo; with none it can only scuffle.' },
   // Wildlife (Colony, see WILD): creatures from nests. Not built, never ordered.
@@ -151,7 +153,7 @@ const BOTS = {
   brute:    { name: 'Brute', plural: 'Brutes', speed: WORKER_SPEED * 0.8, hp: 24, wild: true, bite: 3, smash: true,
     desc: 'A big, slow, armoured creature. Brutes tear up roads and batter buildings, and bite hard.' },
 };
-const BOT_ORDER = ['worker', 'hauler', 'truck', 'tanker', 'roadtrain', 'freight', 'cargoship', 'tankship', 'ferry', 'cargoplane', 'crawler', 'agribot', 'paver', 'warbot'];
+const BOT_ORDER = ['worker', 'hauler', 'truck', 'tanker', 'roadtrain', 'freight', 'cargoship', 'tankship', 'ferry', 'cargoplane', 'crawler', 'agribot', 'paver', 'warbot', 'rocket'];
 /*
  * Who carries what (see dispatch):
  * - Haulers (2 goods) do the short runs: between buildings less than TRUCK_MIN_DIST tiles apart.
@@ -610,6 +612,13 @@ const BDEFS = {
     cost: { cement: 4, alloy: 3 }, ammo: 'ammo', ammoCap: 4, range: 7, armor: 14, buildTime: 10, war: true,
     flak: { reload: 1.0, shells: 8, salvo: 2, damage: 4, splash: 1.0, speed: 14, scatter: 0.7 },
   },
+  // The Keep: a big fort (see KEEP): its warbots fire from cover like a Bunker's, its roof cannon fires Crystal,
+  // and its aura toughens Walls and Gates and sharpens the defences round it.
+  keep: {
+    name: 'Keep', desc: 'A massive fortified concrete base with a heavy twin pulse cannon on its roof. Up to 6 warbots fire from its gun slots at enemy robots within 4 tiles, with their own Ammo, and recharge inside; nothing can hit them until it falls, and it has to be captured, not knocked down. Its cannon fires Crystal out to 6 tiles. Within 7 tiles your Walls and Gates take a third less damage and slowly mend themselves, and your Pulse Turrets, Bunkers, Mortar Pits, Flak Guns and Disruptor Towers reach a tile further and fire a fifth faster. Keeps stand at least 16 tiles apart. It claims land like an Outpost.',
+    cost: { cement: 14, alloy: 6, chip: 2 }, mil: true, keep: true, terr: 6, garrison: 6, ammoStock: 6, armor: 60, buildTime: 24, war: true,
+    ammo: 'crystal', ammoCap: 3, range: 6, gun: { damage: 5, reload: 1.3 },
+  },
   kiln: {
     name: 'Cement Works', desc: 'Bakes Stone into Cement, the material nearly every building and road is made of: 2 Cement from each Stone. Costs raw Stone itself, so you can always build one.',
     cost: { stone: 4, fiber: 2 }, staff: true, inp: { stone: 1 }, make: { cement: 2 }, out: { cement: 6 },
@@ -719,6 +728,10 @@ const BDEFS = {
     name: 'Rail Station', desc: 'Storage beside the railway: Freight Trains load and unload here. Build one at each end of a line (beside the track), give the far one supply orders, and trains keep it stocked from the stations on the same track; a far station also sends its spare goods home by train. Haulers serve it like a Depot.',
     cost: { cement: 6, alloy: 2 }, store: true, station: true, armor: 12, buildTime: 12,
   },
+  terminal: {
+    name: 'Trade Terminal', desc: 'An off-world freight exchange: it trades a full lot of one good for another, at rates below what making them yourself is worth, so a big surplus can buy what your land is running out of (the Ore, Crystal or Stone of a late game). Pick one of its contracts; Road Trains (or Freight Trains, with track beside it) bring the lot, and take the goods it pays home. Nothing smaller serves it. It has to stand well out from your Command Base, and the further out, the better it pays. One per colony.',
+    cost: { cement: 12, alloy: 5 }, store: true, station: true, terminal: true, armor: 16, buildTime: 20,
+  },
   crawlerbase: {
     name: 'Crawler', short: 'Crawler',
     desc: 'A deployed Crawler: storage, a Fuel Station for four bots (burning the Fuel stored in it) and an Outpost claiming the land around it, all in one. Give it supply orders like a Depot (Fuel keeps its chargers going). Pack it up to drive it somewhere else: it takes its goods along, and gives up its land.',
@@ -736,15 +749,30 @@ const BDEFS = {
 
 /** Order of the build menu. */
 const BUILD_MENU = ['harvester', 'quarry', 'mine', 'tap', 'smelter', 'fab', 'foundry', 'charger', 'farm', 'pump', 'refinery', 'generator',
-  'kiln', 'tarworks', 'roadworks', 'ropeway', 'viaduct', 'station', 'port', 'airfield', 'outpost', 'turret', 'bunker', 'disruptor', 'mortar', 'flak', 'repair', 'armory', 'munitions', 'silo', 'reactor', 'nukesilo', 'depot', 'grower', 'lab'];
+  'kiln', 'tarworks', 'roadworks', 'ropeway', 'viaduct', 'station', 'port', 'airfield', 'outpost', 'turret', 'bunker', 'keep', 'disruptor', 'mortar', 'flak', 'repair', 'armory', 'munitions', 'silo', 'reactor', 'nukesilo', 'depot', 'grower', 'lab', 'terminal'];
 /** Build-menu tabs: what each building is for. */
 const BUILD_GROUPS = [
   { key: 'gather', name: 'Gather', types: ['harvester', 'quarry', 'mine', 'tap', 'grower', 'farm', 'pump'] },
   { key: 'make', name: 'Make', types: ['kiln', 'smelter', 'fab', 'refinery', 'tarworks', 'foundry', 'armory', 'munitions', 'reactor', 'lab', 'generator'] },
-  { key: 'move', name: 'Move', types: ['charger', 'depot', 'roadworks', 'ropeway', 'viaduct', 'station', 'port', 'airfield'], roads: true },
-  { key: 'defend', name: 'Defend', types: ['outpost', 'turret', 'bunker', 'disruptor', 'mortar', 'flak', 'repair', 'silo', 'nukesilo'], walls: true },
+  { key: 'move', name: 'Move', types: ['charger', 'depot', 'roadworks', 'ropeway', 'viaduct', 'station', 'port', 'airfield', 'terminal'], roads: true },
+  { key: 'defend', name: 'Defend', types: ['outpost', 'turret', 'bunker', 'keep', 'disruptor', 'mortar', 'flak', 'repair', 'silo', 'nukesilo'], walls: true },
 ];
-const BUNKER_FIRE = 0.9; // seconds between shots for each warbot in a Bunker
+const BUNKER_FIRE = 0.9; // seconds between shots for each warbot in a Bunker (or a Keep)
+/**
+ * The Keep (BDEFS.keep): its warbots fire from cover out to `fire` tiles. Within `aura` tiles of a built Keep, its
+ * owner's Walls and Gates take damage ÷ `wallMul` and, left alone for `quiet` s, mend `mend` armor a second; its
+ * Pulse Turrets, Bunkers, Mortar Pits, Flak Guns and Disruptor Towers reach `range` tiles further and reload in
+ * `rate` of the time. Keeps stand `spacing` tiles apart.
+ */
+/**
+ * The Rocket Truck (BOTS.rocket): it fires a salvo of `salvo` rockets at a building `min` to `range` tiles away,
+ * `gap` s apart, after `deploy` s raising its rack; each lands within `scatter` of the middle of the target's tile,
+ * knocking `damage` off it (forts no lower than MISSILE_FLOOR), `splashBld` off other buildings and `botDamage` off
+ * robots within `splash`. Rockets fly at `speed` tiles a second. It reloads `ammo` Ammo in `reload` s at a garrison
+ * or storage of its owner's.
+ */
+const ROCKET = { range: 11, min: 4, salvo: 4, gap: 0.35, deploy: 2.5, damage: 5, splash: 1.2, splashBld: 2, botDamage: 4, scatter: 0.4, speed: 9, ammo: 4, reload: 6 };
+const KEEP = { fire: 4, aura: 7, wallMul: 1.5, mend: 0.33, quiet: 8, range: 1, rate: 0.8, spacing: 16 };
 /** Ramps are planned in Paths (with roads), not from the build menu. */
 
 const INPUT_CAP = 3;   // how many of each input a production building stockpiles (its def.hopper instead, if it has one)
@@ -816,6 +844,18 @@ const TRADE_GIVE = ['fiber', 'fuel', 'cement', 'alloy', 'stone', 'ore', 'crystal
 const TRADE_VALUE = { fiber: 1, stone: 1, ore: 1.2, crystal: 1.5, crude: 1.2, cement: 0.5, fuel: 1.5, alloy: 2.2 }; // Alloy = an Ore and a Fiber, Cement = half a Stone
 const TRADE_KEEP = { fiber: 12, stone: 12, ore: 12, crystal: 10, crude: 10, cement: 20, fuel: 12, alloy: 10 };
 const TRADE_BONUS = 1.3;
+/**
+ * The Trade Terminal (BDEFS.terminal). Each colony gets `offers` contracts at a time, new ones every `every`
+ * seconds (one you've picked stays while it has lots left). A contract swaps a lot of `lot` of one good
+ * (TERMINAL_GIVE) for another (TERMINAL_GET), each `lots` times at most, at `rate` of the goods' worth
+ * (TRADE_VALUE): below what making them yourself is worth. A Terminal more than `minDist` tiles from the
+ * Command Base pays `perTile` more for every tile further, up to `maxBonus`. Every lot sold of a good knocks
+ * `sat` off what that good fetches, down to `satMin`; it recovers `recover` a minute. Only Road Trains and
+ * Freight Trains serve a Terminal (and only in loads of `minLoad` or more, or what's left of the lot).
+ */
+const TERMINAL = { minDist: 16, lot: 30, rate: 0.65, perTile: 0.015, maxBonus: 0.25, offers: 3, every: 300, lots: 3, sat: 0.12, satMin: 0.5, recover: 0.05, minLoad: 10 };
+const TERMINAL_GIVE = ['fiber', 'cement', 'alloy', 'stone', 'ore', 'crystal'];
+const TERMINAL_GET = ['ore', 'crystal', 'stone', 'fiber'];
 
 /*
  * Wildlife (a Colony option, on by default; never in missions). Creature nests sit out in the wilds,

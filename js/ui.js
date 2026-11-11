@@ -405,15 +405,51 @@ function hideGoodTip() {
  */
 const PAN_KEYS = { arrowleft: [-1, 0], arrowright: [1, 0], arrowup: [0, -1], arrowdown: [0, 1], a: [-1, 0], d: [1, 0], w: [0, -1], s: [0, 1] };
 
-/** Build-menu hotkeys: with the build menu open, a building's letter starts placing it (and R lays roads). */
-// W, A, S and D always pan the map, even with the build menu open, so the buildings that would want
-// those letters (and the ones added after the letters ran out) use number keys.
+/**
+ * Build-menu hotkeys. In the build menu a number picks a tab (BUILD_TAB_KEYS: 1 Gather, 2 Make, 3 Move,
+ * 4 Defend, 5 All; Tab steps through them), then a building's letter on that tab starts placing it. Letters
+ * are per tab, so there's room for every building without number or Fn keys. W, A, S and D always pan the
+ * map, B closes the menu and R lays roads (the Move tab's Roads card), so no building uses those; the
+ * Defend tab's Walls card is X, as in Paths. On the All tab each card shows its tab's number and letter.
+ */
 const BUILD_KEYS = {
-  harvester: 'h', quarry: 'q', mine: 'm', tap: 'c', smelter: '1', fab: 'f', foundry: 'u', charger: 'e', farm: '2',
-  pump: 'p', refinery: 'v', kiln: 'k', tarworks: 't', roadworks: '3', outpost: 'o', turret: 'g', repair: 'x',
-  armory: 'i', munitions: 'n', silo: 'z', depot: '4', grower: 'l', reactor: 'y', nukesilo: 'j',
-  ropeway: '5', station: '6', lab: '7', viaduct: '8', bunker: '9', disruptor: '0', mortar: '.', generator: ',',
+  gather: { harvester: 'h', quarry: 'q', mine: 'm', tap: 'c', grower: 'g', farm: 'f', pump: 'p' },
+  make: { kiln: 'k', smelter: 'm', fab: 'f', refinery: 'v', tarworks: 't', foundry: 'u', armory: 'i', munitions: 'n', reactor: 'y', lab: 'l', generator: 'g' },
+  move: { charger: 'f', depot: 'e', roadworks: 'o', ropeway: 'y', viaduct: 'v', station: 'n', port: 'p', airfield: 'i', terminal: 'm' },
+  defend: { outpost: 'o', turret: 't', bunker: 'u', keep: 'k', disruptor: 'z', mortar: 'm', flak: 'f', repair: 'e', silo: 'i', nukesilo: 'n' },
 };
+const BUILD_TAB_KEYS = { gather: '1', make: '2', move: '3', defend: '4', all: '5' };
+/**
+ * Keys for the buttons on a building's or robot's panel, by button id. While that panel is open they win over
+ * the same letter's usual job (the key is shown on the button on a computer). Delete or Backspace demolishes,
+ * pressed twice like the button.
+ */
+const SHEET_KEYS = {
+  'sh-send': 'q', 'sh-bombard': 'q', 'sh-fire': 'f', 'sh-aim': 'f', 'sh-rgo': 'g', 'sh-crawl': 'g', 'sh-deploy': 'e',
+  'sh-gate': 'g', 'sh-move': 'm', 'sh-pack': 'm', 'sh-pause': 'p', 'sh-fixbtn': 'e', 'sh-layroad': 'r', 'sh-pipe': 'k',
+  'sh-recall': 'c', 'sh-unpost': 'c', 'rl-recall': 'c', 'sh-land': 'l', 'sh-st-send': 'v', 'nk-evac': 'v',
+};
+/** Mark the open panel's buttons with their keys (SHEET_KEYS), for the hints shown on a computer. */
+function markSheetKeys() {
+  for (const id in SHEET_KEYS) { const el = $(id); if (el && !el.dataset.key) el.dataset.key = SHEET_KEYS[id].toUpperCase(); }
+  const d = $('sh-demolish'); if (d && !d.dataset.key) d.dataset.key = 'Del';
+}
+/** The open panel's button for key k, if it's showing and can be pressed. */
+function sheetKeyButton(k) {
+  if (!UI.sheetKind || UI.sheetKind === 'build') return null;
+  if (k === 'delete' || k === 'backspace') { const d = $('sh-demolish'); return d && !d.disabled && d.offsetParent ? d : null; }
+  for (const id in SHEET_KEYS) {
+    if (SHEET_KEYS[id] !== k) continue;
+    const el = $(id);
+    if (el && !el.disabled && !el.hidden && el.offsetParent) return el;
+  }
+  return null;
+}
+/** A building's key and the build-menu tab it's on ({ tab, key }), or null. */
+function buildKeyOf(t) {
+  for (const g in BUILD_KEYS) if (BUILD_KEYS[g][t]) return { tab: g, key: BUILD_KEYS[g][t] };
+  return null;
+}
 
 /**
  * Tapped a spot where a Ramp can't go: if it's beside a one-level cliff and the tile on the other
@@ -450,11 +486,19 @@ function initKeyboard() {
     // Control groups: Ctrl (or Shift) + 1–9 saves the selected warbots, 1–9 selects them again
     // (press twice to jump to them).
     const digit = /^Digit([1-9])$/.exec(e.code || '');
-    // In the build menu a plain number picks the building on that key instead.
+    // In the build menu a plain number picks a tab instead (1 Gather, 2 Make, 3 Move, 4 Defend, 5 All).
     if (digit && UI.sheetKind === 'build' && !e.ctrlKey && !e.metaKey && !e.shiftKey && !e.altKey) {
-      const type = Object.keys(BUILD_KEYS).find((t) => BUILD_KEYS[t] === digit[1]);
-      const card = type && $('sheet-body').querySelector(`.bcard[data-t="${type}"]`);
-      if (card && !card.disabled) { e.preventDefault(); card.click(); }
+      const g = Object.keys(BUILD_TAB_KEYS).find((t) => BUILD_TAB_KEYS[t] === digit[1]);
+      const tab = g && $('build-tabs') && $('build-tabs').querySelector(`[data-g="${g}"]`);
+      e.preventDefault();
+      if (tab) tab.click();
+      return;
+    }
+    // Tab (Shift+Tab back) steps through the build menu's tabs.
+    if (e.key === 'Tab' && UI.sheetKind === 'build' && $('build-tabs') && !e.ctrlKey && !e.metaKey && !e.altKey) {
+      e.preventDefault();
+      const tabs = [...$('build-tabs').children], i = tabs.findIndex((b) => b.classList.contains('on'));
+      tabs[(i + (e.shiftKey ? tabs.length - 1 : 1)) % tabs.length].click();
       return;
     }
     if (digit && !e.altKey && $('screen-pause').hidden) {
@@ -474,13 +518,26 @@ function initKeyboard() {
       return;
     }
     if (overlay) return;
-    // In the build menu, a building's letter picks it, and R goes straight to laying roads. W, A, S
-    // and D still pan the map (no building uses them).
+    // Enter confirms the banner's main button (Build here, Fire, Lay roads...).
+    if (k === 'enter' && !$('banner').hidden && !$('banner-ok').hidden && !$('banner-ok').disabled) { e.preventDefault(); $('banner-ok').click(); return; }
+    // A key on the open panel's buttons (SHEET_KEYS) presses that button.
+    const sk = sheetKeyButton(k);
+    if (sk) { e.preventDefault(); sk.click(); return; }
+    // In the build menu, a building's letter on the tab that's showing picks it, R goes straight to
+    // laying roads and X to Walls. W, A, S and D still pan the map (no building uses them).
     if (UI.sheetKind === 'build' && k === 'r') { e.preventDefault(); openPaths('road'); return; }
-    if (UI.sheetKind === 'build') {
-      const type = Object.keys(BUILD_KEYS).find((t) => BUILD_KEYS[t] === k);
+    if (UI.sheetKind === 'build' && k === 'x' && $('build-walls')) { e.preventDefault(); $('build-walls').click(); return; }
+    // A letter that's no building's on this tab does what it does elsewhere (Q army, H base, M minimap...).
+    if (UI.sheetKind === 'build' && /^[a-z]$/.test(k) && !PAN_KEYS[k] && k !== 'b') {
+      const keys = BUILD_KEYS[UI.buildTab];
+      const type = keys && Object.keys(keys).find((t) => keys[t] === k);
       const card = type && $('sheet-body').querySelector(`.bcard[data-t="${type}"]`);
-      if (card && !card.disabled) { e.preventDefault(); card.click(); return; }
+      if (card && !card.hidden) { e.preventDefault(); if (card.disabled) sfx('error'); else card.click(); return; }
+      if (!keys && Object.values(BUILD_KEYS).some((m) => Object.values(m).includes(k))) {
+        e.preventDefault();
+        toast(`On All, press the card's number first (its tab), then ${k.toUpperCase()}: 1 Gather, 2 Make, 3 Move, 4 Defend.`, 'info');
+        return;
+      }
     }
     // WASD and the arrow keys pan the map while held.
     if (PAN_KEYS[k]) { e.preventDefault(); R.keys.add(k); return; }
@@ -503,6 +560,9 @@ function initKeyboard() {
       case 'm': setMinimap(!MM.on); break;
       case 'c': if (warOn()) recallAllWarbots(); break;
       case 'f': selectBots(armyIds(0), false); if (UI.sel.length) toast(`${UI.sel.length} warbots selected: right-click to give orders.`, 'info'); break;
+      case 'i': if ($('screen-stats').hidden) openStats(); break;
+      case 'u': $('pop').click(); break;
+      case 'y': if (UI.sheetKind === 'goods') closeSheet(); else { setMode('normal'); openGoodsSheet(UI.goodSel || 'cement'); } break;
       case 'j': if (UI.lastAlert) { centerOn(UI.lastAlert.x + 0.5, UI.lastAlert.y + 0.5); sfx('click'); } break;
       case '[': stepSpeed(-1); break;
       case ']': stepSpeed(1); break;
@@ -523,20 +583,21 @@ const EDGE_SCROLL = 6; // pixels from the window edge where the map scrolls
 
 /** Select these warbots (or add them to the selection). */
 function selectBots(ids, add) {
-  const mine = orderable(0, ids).map((u) => u.id);
+  const mine = selectable(0, ids).map((u) => u.id);
   UI.sel = add ? [...new Set(UI.sel.concat(mine))] : mine;
   refreshSelection();
 }
 
 /** Drop dead or captured warbots from the selection and update the selection bar. */
 function refreshSelection() {
-  if (UI.sel.length) UI.sel = orderable(0, UI.sel).map((u) => u.id);
+  if (UI.sel.length) UI.sel = selectable(0, UI.sel).map((u) => u.id);
   UI.selSet = new Set(UI.sel);
   const bar = $('selbar');
   if (!UI.sel.length || !UI.inGame) { bar.hidden = true; return; }
   let inside = 0, empty = 0;
   for (const u of orderable(0, UI.sel)) { if (u.inside) inside++; if ((u.ammo ?? WARBOT_AMMO) <= 0) empty++; }
-  const html = `<b>${UI.sel.length} warbot${UI.sel.length > 1 ? 's' : ''} selected</b>` +
+  const nw = orderable(0, UI.sel).length, nr = UI.sel.length - nw;
+  const html = `<b>${[nw ? `${nw} warbot${nw > 1 ? 's' : ''}` : '', nr ? `${nr} Rocket Truck${nr > 1 ? 's' : ''}` : ''].filter(Boolean).join(' and ')} selected</b>` +
     (inside ? ` <span class="muted">(${inside} in garrisons)</span>` : '') + (empty ? ` <span class="err">${empty} out of Ammo</span>` : '') +
     `<span class="hint">Right-click open ground to hold it, a rival building to attack, or your Outpost to station them. Esc clears.</span>
     <button class="btn small ghost" id="selbar-clear" aria-label="Clear selection">✕</button>`;
@@ -553,7 +614,7 @@ function onSelectBox(box, add) {
   const x0 = Math.min(box.x0, box.x1), x1 = Math.max(box.x0, box.x1), y0 = Math.min(box.y0, box.y1), y1 = Math.max(box.y0, box.y1);
   const ids = [];
   for (const u of S.bots) {
-    if (u.dead || u.owner !== 0 || u.type !== 'warbot' || u.inside) continue;
+    if (u.dead || u.owner !== 0 || (u.type !== 'warbot' && !BOTS[u.type].siege) || u.inside) continue;
     const p = worldToScreen(u.x, u.y);
     if (p.x >= x0 && p.x <= x1 && p.y >= y0 && p.y <= y1) ids.push(u.id);
   }
@@ -572,10 +633,22 @@ function onMapCommand(i, j, wx, wy) {
   if (!UI.inGame || UI.paused || !UI.sel.length || R.mode !== 'normal') return;
   const b = buildingAtTap(i, j, wx, wy);
   let n = 0, what = '';
+  // Rocket Trucks in the selection: they bombard an enemy building, or drive to open ground (or beside a garrison) and wait there.
+  let nr = 0;
+  if (b && b.owner !== 0) nr = orderBombard(0, UI.sel, b);
+  else if (b && BDEFS[b.type].mil && b.built) { const s = deploySpot(0, b.x, b.y); if (s >= 0) nr = orderPark(0, UI.sel, s % S.W, (s / S.W) | 0); }
+  else if (inMap(i, j) && walkable(tIdx(i, j)) && !b) nr = orderPark(0, UI.sel, i, j);
   if (b && b.owner !== 0) { n = orderAttack(0, UI.sel, b); what = `attacking the ${BDEFS[b.type].name}`; }
   else if (b && BDEFS[b.type].mil && b.built) { n = orderStation(0, UI.sel, b); what = `heading to the ${BDEFS[b.type].name}`; }
   else if (inMap(i, j) && walkable(tIdx(i, j)) && !b) { n = orderMove(0, UI.sel, i, j); what = 'moving to hold that ground'; }
   else { sfx('error'); toast('Right-click open ground, a rival building or one of your garrisons.', 'warn'); return; }
+  if (nr && !n) {
+    sfx('order');
+    addFx('ring', (b ? b.x : i) + 0.5, (b ? b.y : j) + 0.5, { color: b && b.owner !== 0 ? '#ff5a6e' : '#7dffa0' });
+    toast(`${nr} Rocket Truck${nr > 1 ? 's' : ''} ${b && b.owner !== 0 ? `bombarding the ${BDEFS[b.type].name}` : 'on the move'}.`, 'info');
+    refreshSelection();
+    return;
+  }
   if (!n) {
     sfx('error');
     toast(b && b.owner === 0 ? 'That garrison is full.' : 'None of the selected warbots have Ammo: they reload in a garrison first.', 'warn');
@@ -596,7 +669,7 @@ function saveGroup(k) {
 }
 
 function recallGroup(k) {
-  const ids = orderable(0, UI.groups[k] || []).map((u) => u.id);
+  const ids = selectable(0, UI.groups[k] || []).map((u) => u.id);
   if (!ids.length) return;
   const twice = UI.lastGroup.k === k && performance.now() - UI.lastGroup.at < 450;
   UI.lastGroup = { k, at: performance.now() };
@@ -1484,6 +1557,21 @@ function buildingAtTap(i, j, wx, wy) {
 
 function onMapTap(i, j, wx, wy) {
   if (!UI.inGame || UI.paused) return;
+  // A Rocket Truck's orders from its panel: bombard the enemy building tapped, or drive to the spot tapped.
+  if (R.mode === 'bombard' || R.mode === 'rgo') {
+    const u = getE(UI.rocket);
+    if (!u || u.dead) { setMode('normal'); return; }
+    if (R.mode === 'bombard') {
+      const b = buildingAtTap(i, j, wx, wy);
+      if (!b || !rocketTarget(u, b)) { sfx('error'); showBanner('<span class="err">Tap an enemy building.</span> The truck drives to within ' + ROCKET.range + ' tiles of it and fires.', null, 'Cancel'); return; }
+      orderBombard(0, [u.id], b);
+      toast(`The Rocket Truck is off to bombard the ${BDEFS[b.type].name}.`, 'info');
+    } else if (!orderPark(0, [u.id], i, j)) { sfx('error'); showBanner('<span class="err">It can\'t drive there.</span> Tap open ground.', null, 'Cancel'); return; }
+    sfx('order');
+    addFx('ring', i + 0.5, j + 0.5, { color: R.mode === 'bombard' ? '#ff5a6e' : '#7dffa0' });
+    setMode('normal');
+    return;
+  }
   if (R.mode === 'crawl') {
     const u = getE(UI.crawler);
     if (!u || u.dead) { setMode('normal'); return; }
@@ -1669,27 +1757,37 @@ function onMapTap(i, j, wx, wy) {
   if (R.mode === 'land') { landTap(i, j); return; }
   if (R.mode === 'airdrop') { airdropTap(i, j); return; }
   const rally = rallyAtTap(wx, wy);
-  if (rally) { sfx('click'); setMode('normal'); openRallySheet(rally); return; }
   const b = buildingAtTap(i, j, wx, wy);
-  if (R.mode === 'attack') {
+  if (R.mode === 'attack' && !rally) {
     if (b && b.owner !== 0) { setMode('normal'); openBuildingSheet(b); }
     else if (!b && inMap(i, j) && S.terrain[tIdx(i, j)] === T_GROUND) { setMode('normal'); openMoveSheet(i, j); }
     else { sfx('error'); showBanner(`<span class="err">Tap a rival building (${S.players.length > 2 ? 'red or green' : 'red'}) or open ground.</span>`, null, 'Cancel'); }
     return;
   }
-  if (b) { sfx('click'); openBuildingSheet(b); return; }
-  let bot = null, bd = 0.3;
-  for (const u of S.bots) {
-    if (u.dead || u.inside) continue;
-    const d = dist2(u.x, u.y, wx, wy);
-    if (d < bd) { bd = d; bot = u; }
-  }
-  if (bot) {
+  // Everything under the tap: a rally flag, a building, then robots, nearest first. Tapping the same spot
+  // again steps on to the next (a Crawler parked on a Foundry, a worker at a site, two warbots together).
+  const stack = tapStack(rally, b, wx, wy);
+  if (stack.length) {
+    const L = UI.lastTap;
+    let k = 0;
+    if (L && Math.hypot(L.wx - wx, L.wy - wy) < 0.7) {
+      const cur = stack.findIndex((s) => UI.sheetKind === s.kind && UI.sheetFor === s.e.id);
+      if (cur >= 0) k = (cur + 1) % stack.length;
+    }
+    UI.lastTap = { wx, wy };
+    const s = stack[k];
     sfx('click');
-    if (INPUT.mouse && bot.owner === 0 && bot.type === 'warbot') selectBots([bot.id], INPUT.shift);
-    openBotSheet(bot);
+    if (s.kind === 'rally') { setMode('normal'); openRallySheet(s.e); }
+    else if (s.kind === 'bld') openBuildingSheet(s.e);
+    else {
+      const bot = s.e;
+      if (INPUT.mouse && bot.owner === 0 && (bot.type === 'warbot' || BOTS[bot.type].siege)) selectBots([bot.id], INPUT.shift);
+      openBotSheet(bot);
+    }
+    if (stack.length > 1 && !UI.stackHint) { UI.stackHint = true; toast(`${stack.length} things are here: tap the same spot again for the next one.`, 'info'); }
     return;
   }
+  UI.lastTap = null;
   if (INPUT.mouse && UI.sel.length && !INPUT.shift) selectBots([], false);
   if (inMap(i, j) && S.res[tIdx(i, j)]) { sfx('click'); openResourceSheet(tIdx(i, j)); return; }
   if (inMap(i, j) && S.fert[tIdx(i, j)] && S.terrain[tIdx(i, j)] === T_GROUND) { sfx('click'); openSoilSheet(tIdx(i, j)); return; }
@@ -1702,6 +1800,26 @@ function onMapHover(i, j) {
   if (R.mode === 'aim' || R.mode === 'land' || R.mode === 'airdrop') { R.aimHover = inMap(i, j) ? { i, j } : null; return; }
   if (R.mode !== 'place' || !R.overlay || !UI.placeType || !inMap(i, j)) return;
   R.ghost = { type: UI.placeType, x: i, y: j, ok: !!R.overlay.valid[tIdx(i, j)], hover: true };
+}
+
+/**
+ * What a tap at (wx, wy) could open, top of the pile first: the rally flag there, the building, then robots
+ * out in the open within reach (bigger ones from further), nearest first. Each is { kind: sheet kind, e }.
+ */
+function tapStack(rally, b, wx, wy) {
+  const out = [];
+  if (rally) out.push({ kind: 'rally', e: rally });
+  if (b) out.push({ kind: 'bld', e: b });
+  const bots = [];
+  for (const u of S.bots) {
+    if (u.dead || u.inside) continue;
+    const bt = BOTS[u.type], r2 = bt.crawler || bt.siege || bt.truck || bt.rail ? 0.6 : 0.3;
+    const d = dist2(u.x, u.y, wx, wy);
+    if (d < r2) bots.push([d, u]);
+  }
+  bots.sort((p, q) => p[0] - q[0]);
+  for (const [, u] of bots) out.push({ kind: 'bot', e: u });
+  return out;
 }
 
 function rallyAtTap(wx, wy) {
@@ -2159,6 +2277,7 @@ function openSheet(kind, id, html) {
   $('sheet').hidden = false;
   document.body.classList.add('sheet-open');
   $('banner').hidden = true;
+  markSheetKeys();
 }
 
 function closeSheet() {
@@ -2182,9 +2301,9 @@ function costInline(cost, have) {
 }
 
 /**
- * The build menu: tabs across the top (All, and the BUILD_GROUPS: Gather, Make, Move, Defend), the
- * last one used remembered. Every card is in the page whichever tab is showing (the others are just
- * hidden), so a building's hotkey works from any tab.
+ * The build menu: tabs across the top (the BUILD_GROUPS: Gather, Make, Move, Defend, then All), the
+ * last one used remembered, each with its number key. Every card is in the page whichever tab is showing
+ * (the others are just hidden); a letter picks a building on the tab that's showing (BUILD_KEYS).
  */
 function openBuildMenu() {
   const have = playerGoods(0);
@@ -2195,14 +2314,15 @@ function openBuildMenu() {
   if (!UI.buildTab) { try { UI.buildTab = localStorage.getItem('botfall.buildTab') || 'all'; } catch (e) { UI.buildTab = 'all'; } }
   const groups = BUILD_GROUPS.filter((g) => ordered.some((t) => groupOf(t) === g.key));
   if (UI.buildTab !== 'all' && !groups.some((g) => g.key === UI.buildTab)) UI.buildTab = 'all';
-  const tabs = `<div class="seg build-tabs" id="build-tabs"><button data-g="all">All</button>${groups.map((g) => `<button data-g="${g.key}">${g.name}<span class="n">${ordered.filter((t) => groupOf(t) === g.key).length}</span></button>`).join('')}</div>`;
+  const tabs = `<div class="seg build-tabs" id="build-tabs">${groups.map((g) => `<button data-g="${g.key}"><kbd>${BUILD_TAB_KEYS[g.key]}</kbd>${g.name}<span class="n">${ordered.filter((t) => groupOf(t) === g.key).length}</span></button>`).join('')}<button data-g="all"><kbd>${BUILD_TAB_KEYS.all}</kbd>All</button></div>`;
+  const kbd = (t) => { const k = buildKeyOf(t); return k ? `<kbd data-tab="${BUILD_TAB_KEYS[k.tab]}" data-key="${k.key.toUpperCase()}">${k.key.toUpperCase()}</kbd>` : ''; };
   const html = `<div class="sheet-title"><h3>Build</h3></div>
     <p class="desc">Placing a site is free; haulers bring the materials by road, so lay a road to it. ${sites}/${MAX_SITES} sites in progress.</p>
     ${tabs}
-    <div class="build-grid"><button class="bcard roads" id="build-roads" data-g="move"><kbd>R</kbd><svg viewBox="0 0 24 24"><path d="M8 3L5 21M16 3l3 18M12 4v3M12 10.5v3M12 17v3" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
-      <div class="bname">Roads</div><div class="bhave">Plan roads, bridges and ramps</div></button>${warOn() ? `<button class="bcard walls" id="build-walls" data-g="defend"><img src="${iconFor('wall')}" alt=""><div class="bname">Walls</div><div class="bcost">${costHTML(BDEFS.wall.cost, have)}</div>
+    <div class="build-grid"><button class="bcard roads" id="build-roads" data-g="move"><kbd data-key="R">R</kbd><svg viewBox="0 0 24 24"><path d="M8 3L5 21M16 3l3 18M12 4v3M12 10.5v3M12 17v3" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+      <div class="bname">Roads</div><div class="bhave">Plan roads, bridges and ramps</div></button>${warOn() ? `<button class="bcard walls" id="build-walls" data-g="defend"><kbd data-tab="${BUILD_TAB_KEYS.defend}" data-key="X">X</kbd><img src="${iconFor('wall')}" alt=""><div class="bname">Walls</div><div class="bcost">${costHTML(BDEFS.wall.cost, have)}</div>
       <div class="bhave">${wallCountText()}</div></button>` : ''}${ordered.map((t) => `<button class="bcard" data-t="${t}" data-g="${groupOf(t)}" ${sites >= MAX_SITES ? 'disabled' : ''}>
-      ${BUILD_KEYS[t] ? `<kbd>${BUILD_KEYS[t].toUpperCase()}</kbd>` : ''}<img src="${iconFor(t)}" alt=""><div class="bname">${BDEFS[t].name}</div><div class="bcost">${costHTML(BDEFS[t].cost, have)}${t === 'viaduct' ? ' a tile' : ''}</div>
+      ${kbd(t)}<img src="${iconFor(t)}" alt=""><div class="bname">${BDEFS[t].name}</div><div class="bcost">${costHTML(BDEFS[t].cost, have)}${t === 'viaduct' ? ' a tile' : ''}</div>
       <div class="bhave">${ownedText(t)}</div></button>`).join('')}</div>`;
   openSheet('build', 0, html);
   for (const el of $('sheet-body').querySelectorAll('.bcard[data-t]')) {
@@ -2215,9 +2335,45 @@ function openBuildMenu() {
     try { localStorage.setItem('botfall.buildTab', g); } catch (e) { /* private mode: not remembered */ }
     for (const btn of $('build-tabs').children) btn.classList.toggle('on', btn.dataset.g === g);
     for (const el of $('sheet-body').querySelectorAll('.build-grid .bcard')) el.hidden = g !== 'all' && el.dataset.g !== g;
+    // On All, a card's key reads "2 K": its tab's number, then its letter.
+    for (const el of $('sheet-body').querySelectorAll('.build-grid kbd[data-tab]')) el.textContent = g === 'all' ? `${el.dataset.tab} ${el.dataset.key}` : el.dataset.key;
   };
   for (const btn of $('build-tabs').children) btn.onclick = () => { sfx('click'); show(btn.dataset.g); };
   show(UI.buildTab);
+}
+
+/**
+ * The Trade Terminal's contracts: each one's lot and what it pays today, with Take (or Stop) on it, and the
+ * lot's progress. Rebuilt only when something shown changes, so its buttons stay pressable.
+ */
+function renderTrade(b) {
+  const el = $('sh-trade');
+  if (!el) return;
+  const T = tradeState(0), have = spendable(0);
+  const sig = JSON.stringify([T.round, T.pick, T.offers.map((o) => [o.left, tradePay(0, o, b)]), Object.keys(T.sat).map((g) => Math.round(T.sat[g] * 20))]);
+  $('sh-trade-next').textContent = T.next > S.time ? `new ones in ${fmtTime(T.next - S.time)}` : '';
+  const trainNear = S.bots.some((u) => !u.dead && u.owner === 0 && BOTS[u.type].train && botLinked(u, b));
+  const railNear = S.bots.some((u) => !u.dead && u.owner === 0 && BOTS[u.type].rail) && S.buildings.some((s) => !s.dead && s.owner === 0 && s.built && BDEFS[s.type].station && !BDEFS[s.type].terminal && railLinked(s, b));
+  const bonus = Math.round((terminalBonus(b) - 1) * 100);
+  $('sh-trade-hint').innerHTML = (!trainNear && !railNear ? '<span class="err">No Road Train can reach it, and no Freight Train runs to it: order a Road Train at the Bot Foundry and lay a road here (or lay track beside it from a Rail Station).</span> ' : '') +
+    `Only Road Trains and Freight Trains serve a Terminal: they bring a contract's lot (${TERMINAL.lot}) and take what it pays home. Rates are ${Math.round(TERMINAL.rate * 100)}% of what the goods are worth` +
+    (bonus ? `, +${bonus}% for standing this far out` : `; one further than ${TERMINAL.minDist} tiles from your Command Base pays more`) + '. Each lot of a good sold fetches a little less for a while.';
+  if (el.dataset.sig === sig) return;
+  el.dataset.sig = sig;
+  if (!T.offers.length) { el.innerHTML = '<p class="hint">Contracts arrive in a moment.</p>'; return; }
+  el.innerHTML = T.offers.map((o, k) => {
+    const on = T.pick === k, pay = tradePay(0, o, b), sat = T.sat[o.give] ?? 1;
+    return `<div class="kv trade-row${on ? ' on' : ''}"><span><b>${o.lot}</b> <i class="gi ${o.give}"></i>${GOOD[o.give].name} → <b>${pay}</b> <i class="gi ${o.get}"></i>${GOOD[o.get].name}` +
+      `<small> ${o.left} lot${o.left === 1 ? '' : 's'} left${sat < 0.99 ? ` · ${GOOD[o.give].name} fetching ${Math.round(sat * 100)}%` : ''} · you have ${Math.floor(have[o.give] || 0)}</small></span>` +
+      `<button class="btn small${on ? '' : ' primary'}" data-k="${k}" ${o.left > 0 ? '' : 'disabled'}>${on ? 'Stop' : 'Take'}</button></div>`;
+  }).join('');
+  for (const btn of el.querySelectorAll('button[data-k]')) btn.onclick = () => {
+    const k = +btn.dataset.k;
+    pickContract(0, T.pick === k ? -1 : k);
+    sfx('click');
+    renderTrade(b);
+    refreshSheet();
+  };
 }
 
 /** "4 Walls, 1 Gate" for the build menu's Walls card. */
@@ -2261,7 +2417,8 @@ function openBuildingSheet(b) {
     <p class="desc">${desc}</p><div class="status" id="sh-status"></div><div id="sh-dyn"></div>${mine ? '<div id="sh-fix"></div>' : ''}`;
   if (mine) {
     if (def.airfield && b.built && b.owner === 0) html += airfieldSection(b); // its planes and air drops first
-    if (def.store && b.built) {
+    if (def.terminal && b.built) html += '<div class="section-label">Contracts <span class="label-note" id="sh-trade-next"></span></div><div id="sh-trade"></div><p class="hint" id="sh-trade-hint"></p>';
+    if (def.store && b.built && !def.terminal) {
       html += `<div class="section-label">Storage</div><div class="seg" id="sh-smode">
         <button data-v="normal">Normal</button><button data-v="fill">Fill first</button><button data-v="empty">Empty out</button></div>
         <p class="hint" id="sh-smode-hint"></p>
@@ -2560,6 +2717,7 @@ function refreshRoadLink(b) {
 function refreshBuildingSheet(b) {
   const def = BDEFS[b.type];
   const mine = b.owner === 0;
+  if (mine && def.terminal && b.built) renderTrade(b);
   const parts = [];
   if (mine && def.lab && $('sh-research')) refreshResearch();
   $('sh-status').textContent = mine ? b.status || '' : (b.built ? '' : 'Construction site');
@@ -2642,7 +2800,7 @@ function refreshBuildingSheet(b) {
       if (feeds.length) parts.push(`<div class="kv"><span>Feeds by conveyor</span><span>${feeds.map((l) => linkText(l, l.c)).join('; ')}</span></div>`);
       if (by.length) parts.push(`<div class="kv"><span>Fed by conveyor</span><span>${by.map(({ from, link }) => linkText(link, from)).join('; ')}${beingFed(b) ? ', working a tenth faster' : ''}</span></div>`);
     }
-    if (def.store && mine) {
+    if (def.store && mine && !def.terminal) {
       let idle = 0;
       for (const u of S.bots) if (!u.dead && u.inside === b.id && u.type === 'worker') idle++;
       parts.push(`<div class="kv"><span>Workers resting here</span><span>${idle}</span></div>`);
@@ -2650,6 +2808,13 @@ function refreshBuildingSheet(b) {
     if (def.mil) parts.push(`<div class="kv"><span>${mine ? 'Warbots inside' : 'Defenders inside'}</span><span>${b.garrison.length} / ${def.garrison}</span></div>`);
     if (def.mil && mine && !def.bunker) parts.push(`<div class="kv"><span>Territory radius</span><span>${def.terr} tiles</span></div>`);
     if (def.bunker) parts.push(`<div class="kv"><span>Fires at</span><span>enemy robots within ${def.range} tiles</span></div>`);
+    if (def.keep) {
+      const r2 = KEEP.aura * KEEP.aura, near = S.buildings.filter((c) => !c.dead && c.built && c.owner === b.owner && c !== b && dist2(c.x, c.y, b.x, b.y) <= r2);
+      const walls = near.filter((c) => BDEFS[c.type].barrier && keepOver(c) === b).length, guns = near.filter((c) => ['turret', 'bunker', 'mortar', 'flak', 'disruptor'].includes(c.type)).length;
+      parts.push(`<div class="kv"><span>Warbots fire at</span><span>enemy robots within ${KEEP.fire} tiles</span></div>`);
+      parts.push(`<div class="kv"><span>Roof cannon</span><span>${def.range} tiles, ${goodTag('crystal', `${b.shots + (b.stock.crystal || 0) * shotsPer(b)} shots`, !(b.shots > 0 || b.stock.crystal > 0))}</span></div>`);
+      parts.push(`<div class="kv"><span>Aura (${KEEP.aura} tiles)</span><span>${walls} Wall${walls === 1 ? '' : 's'} and Gate${walls === 1 ? '' : 's'} toughened, ${guns} defence${guns === 1 ? '' : 's'} sharpened</span></div>`);
+    }
     if (def.disrupt && mine) {
       parts.push(`<div class="kv"><span>Fuel</span><span>${goodTag('fuel', `${b.stock.fuel || 0}/${def.ammoCap}`, !(b.stock.fuel > 0))} + ${b.pulses || 0} pulse${b.pulses === 1 ? '' : 's'} charged</span></div>`);
       parts.push(`<div class="kv"><span>Each pulse</span><span>drains ${def.disrupt.drain} battery from enemy robots within ${def.range} tiles, every ${def.disrupt.every}s</span></div>`);
@@ -2866,6 +3031,13 @@ function botActivity(u) {
   const t = u.task;
   if (BOTS[u.type].air) { const b = getE(u.home); return `${planeStatus(u)[0].toUpperCase()}${planeStatus(u).slice(1)}` + (b && !b.dead ? ` (based at the Airfield ${dirText(getE(S.players[u.owner].lander) || b, b)} from the Command Base)` : ' (no Airfield yet)'); }
   const nm = (id) => { const b = getE(id); return b ? BDEFS[b.type].name : 'a building'; };
+  if (BOTS[u.type].siege) {
+    if (u.salvo) return `Firing at the ${nm(u.salvo.target)}!`;
+    if (t && t.type === 'bombard') return u.deployT > 0 ? `Raising its rack to fire at the ${nm(t.target)}` : `Driving into reach of the ${nm(t.target)}`;
+    if (t && t.type === 'rearm') return `Reloading ${ROCKET.ammo} Ammo at the ${nm(t.bld)}`;
+    if (t && t.type === 'park') return 'Driving to its spot';
+    return (u.rockets ?? ROCKET.salvo) ? `Loaded: waiting, and firing at any enemy building within ${ROCKET.range} tiles` : 'Out of rockets: no Ammo in reach to reload';
+  }
   if (u.type === 'warbot') {
     const p = u.owner === 0 && usesPosts(0) ? postOf(u) : null;
     const where = u.owner !== 0 ? '' : p ? ` (stationed at the ${BDEFS[p.type].name})` : ' (belongs to the Command Base)';
@@ -2912,10 +3084,13 @@ function openBotSheet(u) {
     <p class="desc">${BOTS[u.type].desc}</p>
     <div class="status" id="sh-status"></div><div id="sh-dyn"></div>
     ${u.owner === 0 && u.type === 'warbot' ? '<button class="btn big" id="sh-recall" hidden>Call back this squad</button>' : ''}
-    ${u.owner === 0 && BOTS[u.type].crawler ? '<div class="actions"><button class="btn primary" id="sh-crawl">Drive somewhere</button><button class="btn" id="sh-deploy">Deploy here</button></div>' : ''}`;
+    ${u.owner === 0 && BOTS[u.type].crawler ? '<div class="actions"><button class="btn primary" id="sh-crawl">Drive somewhere</button><button class="btn" id="sh-deploy">Deploy here</button></div>' : ''}
+    ${u.owner === 0 && BOTS[u.type].siege ? '<div class="actions"><button class="btn primary" id="sh-bombard">Bombard a building</button><button class="btn" id="sh-rgo">Drive somewhere</button></div>' : ''}`;
   openSheet('bot', u.id, html);
   if ($('sh-crawl')) $('sh-crawl').onclick = () => { sfx('click'); UI.crawler = u.id; setMode('crawl'); UI.crawler = u.id; showBanner('Tap where the <b>Crawler</b> should go: it rolls there (no road needed, but it can\'t climb cliffs or cross water) and deploys when it arrives.', null, 'Cancel'); };
   if ($('sh-deploy')) $('sh-deploy').onclick = () => { const why = deployCrawler(u); if (why) { sfx('error'); toast(why, 'warn'); } else closeSheet(); };
+  if ($('sh-bombard')) $('sh-bombard').onclick = () => { sfx('click'); closeSheet(); setMode('bombard'); UI.rocket = u.id; showBanner(`Tap an enemy building: the <b>Rocket Truck</b> drives to within ${ROCKET.range} tiles of it, parks and fires its ${ROCKET.salvo} rockets, then reloads and comes back for more.`, null, 'Cancel'); };
+  if ($('sh-rgo')) $('sh-rgo').onclick = () => { sfx('click'); closeSheet(); setMode('rgo'); UI.rocket = u.id; showBanner('Tap where the <b>Rocket Truck</b> should wait: it fires at any enemy building that comes in reach.', null, 'Cancel'); };
   if ($('sh-recall')) $('sh-recall').onclick = () => {
     if (u.task && u.task.type === 'hold') { const n = recallRally(u.task.rally); toast(`${n} warbot${n > 1 ? 's' : ''} called back.`, 'info'); }
     closeSheet();
@@ -3217,6 +3392,7 @@ function showWarbots(k) {
 
 function refreshSheet() {
   if (!UI.sheetKind || UI.sheetKind === 'build') return;
+  markSheetKeys();
   if (UI.sheetKind === 'pop') { refreshPopSheet(); return; }
   if (UI.sheetKind === 'goods') { refreshGoodsSheet(false); return; }
   if (UI.sheetKind === 'road') { refreshRoadSheet(UI.sheetFor); return; }
@@ -3233,6 +3409,7 @@ function refreshSheet() {
       `<div class="kv"><span>${BOTS[u.type].truck ? 'Fuel tank' : 'Battery'}</span><span>${bat}%${bat < BATTERY.critical ? (BOTS[u.type].truck ? ' (empty: crawling)' : ' (flat: slow and weak)') : bat < BATTERY.low ? ' (low)' : ''}</span></div>` +
       `<div class="bar battery"><div style="width:${bat}%;background:${bat < BATTERY.critical ? '#ff4d4d' : bat < BATTERY.low ? '#ffb347' : '#7ee08a'}"></div></div>` +
       (u.type === 'warbot' ? `<div class="kv"><span>Ammo</span><span>${u.ammo ?? WARBOT_AMMO} / ${WARBOT_AMMO} shots${!u.ammo ? ' (out: can\'t fight until it reloads)' : ''}</span></div>` : '') +
+      (BOTS[u.type].siege ? `<div class="kv"><span>Rockets</span><span>${u.rockets ?? ROCKET.salvo} / ${ROCKET.salvo}${!(u.rockets ?? ROCKET.salvo) ? ` (reloads ${ROCKET.ammo} Ammo at a garrison or storage)` : ''}</span></div><div class="kv"><span>Reach</span><span>${ROCKET.min} to ${ROCKET.range} tiles</span></div>` : '') +
       (u.carry ? `<div class="kv"><span>Carrying</span><span>${goodTag(u.carry, (u.carryN > 1 ? u.carryN + ' × ' : '') + GOOD[u.carry].name)}</span></div>` : '') +
       (u.cargo && Object.keys(u.cargo).length ? `<div class="section-label">On board</div><div class="goodlist">${Object.keys(u.cargo).map((g) => goodTag(g, `${u.cargo[g]} ${GOOD[g].name}`)).join('')}</div>` : '');
     if ($('sh-recall')) $('sh-recall').hidden = !(u.task && u.task.type === 'hold');

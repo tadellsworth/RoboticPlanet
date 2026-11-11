@@ -226,6 +226,9 @@ kbd {
 .desc { color: var(--muted); margin: 0 0 10px; font-size: 14px; }
 .status { font-weight: 600; margin: 6px 0 10px; }
 .kv { display: flex; justify-content: space-between; gap: 10px; padding: 6px 0; border-top: 1px solid var(--line); font-size: 14px; }
+.trade-row { align-items: center; }
+.trade-row small { display: block; color: var(--muted); font-size: 12px; margin-top: 2px; }
+.trade-row.on > span { color: var(--accent); }
 .kv span:last-child { font-weight: 600; text-align: right; }
 .bar { height: 8px; border-radius: 4px; background: rgba(255,255,255,0.08); overflow: hidden; margin: 4px 0 10px; }
 .bar > div { height: 100%; background: var(--accent); }
@@ -462,6 +465,12 @@ i.g.uranium { background: var(--g-uranium); } i.g.fissile { background: var(--g-
   .tool kbd { display: inline-block; margin-left: 2px; opacity: 0.7; }
   .tool.on kbd { border-color: rgba(6, 35, 48, 0.4); color: var(--accent-ink); }
   .seg kbd { display: inline-block; margin-left: 6px; opacity: 0.6; font-size: 11px; }
+  .build-tabs kbd { margin-left: 0; }
+  .build-tabs .n { display: none; } /* room for the tab keys: all five tabs fit */
+  .build-tabs button { padding: 8px 3px; gap: 4px; font-size: 13.5px; flex: 1 1 auto; min-width: 0; }
+  .build-tabs kbd { font-size: 10px; padding: 0 4px; }
+  #sheet button[data-key]::after { content: attr(data-key); display: inline-block; margin-left: 8px; padding: 0 5px; font: 600 11px/16px ui-monospace, monospace;
+    border: 1px solid rgba(255, 255, 255, 0.25); border-radius: 4px; opacity: 0.65; vertical-align: 1px; }
   .bcard { position: relative; }
   .bcard kbd { display: inline-block; position: absolute; top: 6px; left: 6px; opacity: 0.75; font-size: 11px; }
   #banner-traffic kbd { display: inline-block; margin-left: 6px; opacity: 0.6; font-size: 11px; }

@@ -95,7 +95,7 @@ function aiThink(p) {
     const have = playerGoods(p);
     for (const b of me) {
       if (b.built || b.dead || S.time - b.born < 120 || (needArmory && b.type === 'armory')) continue;
-      if ((b.type === 'silo' || b.type === 'munitions') && S.time - b.born < 420) continue; // saved up for: give it time
+      if ((b.type === 'silo' || b.type === 'munitions' || b.type === 'keep' || b.type === 'terminal') && S.time - b.born < 420) continue; // saved up for: give it time
       const cost = siteCost(b);
       let stuck = false;
       for (const g in cost) if ((b.stock[g] || 0) + (b.inc[g] || 0) < cost[g] && have[g] <= 0) stuck = true;
@@ -106,6 +106,20 @@ function aiThink(p) {
   // A Turtle wants twice the turrets (and its first one early); a Tycoon a bigger industry and a
   // second Silo straight after the first Ammo Plant.
   if (st.turrets) plan = plan.map(([t, n]) => (t === 'turret' ? [t, n * 2] : [t, n]));
+  // Keeps: one for every rival, about ten minutes into the war; a Turtle builds its first early and adds one
+  // every eight minutes after, up to three. When one is due it goes first and holds its goods (see defence).
+  const keepAt = AI_DEFENCE_AT + (st.walls ? 120 : 600);
+  let wantKeeps = S.mode === 'colony' || S.time < keepAt ? 0 : st.walls ? Math.min(3, 1 + Math.floor((S.time - keepAt) / 480)) : 1;
+  // A Keep site given up (it waited too long for goods, or for a road) isn't tried again for five minutes.
+  if (S.time - (S.players[p].keepFail ?? -999) < 300) wantKeeps = Math.min(wantKeeps, counts.keep || 0);
+  if ((counts.keep || 0) < wantKeeps) plan = [['keep', wantKeeps]].concat(plan);
+  // Bulk trade: a Trade Terminal once the colony is running short of Ore, Crystal or Stone (a Tycoon from 14
+  // minutes, the rest from 20), with a Road Train to serve it (see the Foundry, and aiTrade).
+  const tradeAt = st.missiles ? 840 : 1200;
+  if (S.mode !== 'colony' && S.time >= tradeAt && !counts.terminal && counts.foundry && S.time - (P.termFail ?? -999) > 240) {
+    const sh = tradeShortest(p), g = sh[0];
+    if (sh.left[g] < (TRADE_LEFT[g] || 60) * 1.5 || st.missiles) plan = [['terminal', 1]].concat(plan); // only when short: it goes first
+  }
   if (st.missiles) { const k = plan.findIndex(([t]) => t === 'armory') + 1; plan = plan.slice(0, k).concat([['smelter', 2], ['fab', 2], ['munitions', 1], ['silo', 2]], plan.slice(k)); }
   // Nuclear race: a Reactor once there's Uranium to enrich (or a mine on a deposit), then a Nuclear Silo.
   if (nukeOn()) {
@@ -167,9 +181,10 @@ function aiThink(p) {
   // In a Nuclear race the Reactor and Nuclear Silo get the same treatment: the race is the point.
   // A Turtle keeps adding turrets: one more every four minutes, up to six.
   const turretsWanted = st.turrets ? Math.min(6, 1 + Math.floor(Math.max(0, S.time - AI_DEFENCE_AT * 0.5) / 240)) : 1;
-  const defence = (type) => S.mode !== 'colony' && (type === 'turret' ? (counts.turret || 0) < turretsWanted : !counts[type]) &&
+  const defence = (type) => S.mode !== 'colony' && (type === 'turret' ? (counts.turret || 0) < turretsWanted : type === 'keep' ? (counts.keep || 0) < wantKeeps : !counts[type]) &&
     ((type === 'turret' && S.time > AI_DEFENCE_AT * (st.turrets ? 0.5 : 1)) || (type === 'repair' && counts.turret && S.time > AI_DEFENCE_AT + 120) ||
-     (nukeOn() && (type === 'reactor' || type === 'nukesilo')) || (type === 'flak' && enemyAir && (counts.flak || 0) < 2));
+     (nukeOn() && (type === 'reactor' || type === 'nukesilo')) || (type === 'flak' && enemyAir && (counts.flak || 0) < 2) ||
+     (type === 'keep' && wantKeeps > 0));
   // Only Fuel Stations charge robots: the first one comes before anything else.
   // Flak once a rival has aircraft: two Flak Guns by the Command Base (and Ammo to feed them).
   const enemyAir = S.bots.some((u) => !u.dead && u.owner !== p && BOTS[u.type].air) ||
@@ -194,7 +209,7 @@ function aiThink(p) {
       // Plenty of Fuel in stock: no need for more farms or oil yet.
       if ((type === 'farm' || type === 'pump' || type === 'refinery') && (counts[type] || 0) >= 1 && playerGoods(p).fuel > 10) continue;
       if ((counts[type] || 0) >= want) continue;
-      if (saving && type !== saving && !BDEFS[type].nuke && (BDEFS[type].cost.alloy || BDEFS[type].cost.chip)) continue;
+      if (saving && type !== saving && type !== 'keep' && type !== 'terminal' && !BDEFS[type].nuke && (BDEFS[type].cost.alloy || BDEFS[type].cost.chip)) continue;
       // Keep enough Fiber for a Harvester while none is cutting: without Fiber there's no way back.
       if (type !== 'harvester' && fiberLow && (BDEFS[type].cost.fiber || 0) > 0 && playerGoods(p).fiber - BDEFS[type].cost.fiber < BDEFS.harvester.cost.fiber) continue;
       // The first of each staffed building is always allowed, so the production chain is complete.
@@ -204,7 +219,7 @@ function aiThink(p) {
       if (type === 'kiln' && stoneLow && counts.kiln) continue;
       // A turret or Repair Station is started as soon as the Cement is there: new Alloy goes straight
       // into factories, so it never piles up in storage; the high-priority site gets it delivered.
-      const defenceNow = defence(type) && counts.smelter && aiAffordable(p, type, ['alloy', 'chip']);
+      const defenceNow = (defence(type) && counts.smelter && aiAffordable(p, type, ['alloy', 'chip'])) || (type === 'terminal' && aiAffordable(p, type, ['alloy']));
       if (!aiAffordable(p, type) && !defenceNow) {
         if (key(type) && (!counts[type] || type === 'outpost')) {
           const have = playerGoods(p), cost = BDEFS[type].cost;
@@ -341,7 +356,12 @@ function aiThink(p) {
     else if ((kinds.hauler || 0) < (armyBehind ? Math.min(wantHaulers, 6) : wantHaulers) && !(b.orders.hauler > 0)) b.orders.hauler = 1;
     else if ((kinds.tanker || 0) < wantTankers && !(b.orders.tanker > 0)) b.orders.tanker = 1;
     // A forward Depot with supply orders gets a Freight Truck to keep it stocked.
-    else if (me.some((d) => d.keep && d.built) && (kinds.truck || 0) < 1 + Math.floor(me.length / 35) && !(b.orders.truck > 0)) b.orders.truck = 1;
+    else if (me.some((d) => d.keep && d.built && !BDEFS[d.type].terminal) && (kinds.truck || 0) < 1 + Math.floor(me.length / 35) && !(b.orders.truck > 0)) b.orders.truck = 1;
+    // Rocket Trucks for siege once the army is up: one, and one more for every ten warbots (at most three).
+    const wantRockets = S.mode === 'colony' || S.time < lvl.grace ? 0 : Math.min(3, Math.floor(army / 10) + (army >= lvl.threshold ? 1 : 0));
+    if ((kinds.rocket || 0) < wantRockets && !(b.orders.rocket > 0) && !armyBehind && me.some((a) => a.type === 'armory' && a.built)) b.orders.rocket = 1;
+    // A Trade Terminal is served only by Road Trains: one for it.
+    if (me.some((t) => BDEFS[t.type].terminal) && !(kinds.roadtrain > 0) && !(b.orders.roadtrain > 0)) b.orders.roadtrain = 1;
     break;
   }
   // Depots out towards the front keep Cement for building there.
@@ -370,7 +390,7 @@ function aiThink(p) {
         const left = e.armor - (coming.get(e.id) || 0);
         if (BDEFS[e.type].mil ? left <= missileFloor(e) + 2 : left <= 0) continue;
         const s = (e.type === 'turret' ? 10 : e.type === 'nukesilo' ? 12 : e.type === 'silo' || e.type === 'reactor' ? 9 : e.type === 'outpost' ? 8 :
-          e.type === 'mortar' || e.type === 'disruptor' || e.type === 'bunker' ? 7 : e.type === 'lander' ? 5 : 3) - d * 0.1;
+          e.type === 'mortar' || e.type === 'disruptor' || e.type === 'bunker' || e.type === 'keep' ? 7 : e.type === 'lander' ? 5 : 3) - d * 0.1;
         if (s > bs) { bs = s; best = e; }
       }
       if (best && fireMissile(p, best)) coming.set(best.id, (coming.get(best.id) || 0) + dmg);
@@ -384,6 +404,11 @@ function aiThink(p) {
 
   // 4c) Naval maps: a Port, a Ferry, and beach landings on the enemy's shore.
   if (S.mode !== 'colony' && navalMap()) aiNaval(p, me, kinds, lvl, lander, sites < maxSites);
+
+  // 4e) Rocket Trucks: shell the defences round what we're attacking, and hunt down the enemy's.
+  if (S.mode !== 'colony') aiSiege(p);
+  // 4f) Bulk trade: pick a contract at the Trade Terminal.
+  aiTrade(p, me);
 
   // 4b) Raids on the enemy's supply lines, and answering the enemy's raids on ours.
   if (S.mode !== 'colony') aiCounterRaid(p);
@@ -408,6 +433,7 @@ function aiThink(p) {
   }
   if (best) {
     sendAttack(p, best, bestAvail);
+    P.siegeAt = { x: best.x, y: best.y, until: S.time + 120 };
     P.nextAttack = S.time + 25;
     P.lastAttack = S.time;
     return;
@@ -766,6 +792,7 @@ function guardsNear(b) {
     else if (e.type === 'bunker' && d2 <= 25) n += e.garrison.length * 2;
     else if (e.type === 'disruptor' && d2 <= 25) n += 2;
     else if (e.type === 'mortar' && d2 <= 100) n += 2;
+    else if (e.type === 'keep' && d2 <= 36) n += 3 + e.garrison.length;
   }
   for (const u of S.bots) if (!u.dead && !u.inside && u.owner === b.owner && u.type === 'warbot' && dist2(u.x, u.y, b.x + 0.5, b.y + 0.5) <= 49) n++;
   return n;
@@ -811,6 +838,63 @@ function aiRaid(p, lvl) {
   if (rallyAvailable(p, i, j) < size + (st.raidKeep ?? 2)) return; // keep enough warbots at home (a Raider sends all it can spare)
   const { sent, rally } = sendToRally(p, i, j, size);
   if (sent) { rally.raid = true; P.raid = { id: rally.id, until: S.time + RAID_TIME }; }
+}
+
+/**
+ * Rocket Trucks (Versus). Loaded ones not already busy go after the enemy defences round the building we last
+ * attacked (or, with no attack on, the nearest enemy defence or fort within 24 tiles): turrets, Bunkers, the
+ * Keep, Mortars and Disruptors first. And an enemy Rocket Truck shelling our buildings gets warbots sent after
+ * it (they fight whatever is at the flag; a truck can't fight back).
+ */
+/**
+ * The Trade Terminal's contract: the one that brings what we're shortest of, paid with a good we have a lot
+ * to spare of (a lot and TRADE_KEEP besides). None if nothing's worth it.
+ */
+function aiTrade(p, me) {
+  if (!me.some((b) => BDEFS[b.type].terminal && b.built)) return;
+  const T = tradeState(p);
+  if (!T.offers.length || (T.pick >= 0 && T.offers[T.pick] && T.offers[T.pick].left > 0)) return;
+  const have = spendable(p), short = tradeShortest(p);
+  let best = -1, bs = -Infinity;
+  T.offers.forEach((o, k) => {
+    const spare = (have[o.give] || 0) - TRADE_KEEP[o.give] - o.lot;
+    if (o.left <= 0 || spare < 0) return;
+    const sc = (short.length - short.indexOf(o.get)) * 10 + Math.min(spare, 60) * 0.1;
+    if (sc > bs) { bs = sc; best = k; }
+  });
+  if (best >= 0) pickContract(p, best);
+}
+
+function aiSiege(p) {
+  const P = S.players[p];
+  if (S.tick % 30 !== (p * 7) % 30) return;
+  const trucks = S.bots.filter((u) => !u.dead && u.owner === p && BOTS[u.type].siege);
+  const at = P.siegeAt && S.time < P.siegeAt.until ? P.siegeAt : null;
+  for (const u of trucks) {
+    if (u.salvo || (u.task && !u.task.auto) || !(u.rockets ?? ROCKET.salvo)) continue;
+    const z = S.zone[tIdx(Math.floor(u.x), Math.floor(u.y))];
+    let best = null, bs = -Infinity;
+    for (const b of S.buildings) {
+      if (!rocketTarget(u, b) || !b.built || S.zone[tIdx(b.x, b.y)] !== z) continue;
+      const def = BDEFS[b.type], d = dist(u.x, u.y, b.x, b.y);
+      if (d > 24) continue;
+      let sc = (def.war && !def.barrier ? 8 : 0) + (def.mil ? 4 : 0) - d * 0.2;
+      if (at) sc += dist(b.x, b.y, at.x, at.y) <= 8 ? 10 : -6;
+      if (sc > bs) { bs = sc; best = b; }
+    }
+    if (best) orderBombard(p, [u.id], best);
+  }
+  // Enemy rocket trucks shelling us: hunt them down.
+  P.truckHunt = (P.truckHunt || []).filter((h) => { const r = rallyById(h.rally), e = getE(h.truck); if (r && (S.time >= h.until || !e || e.dead)) recallRally(h.rally); return r && S.time < h.until && e && !e.dead; });
+  for (const e of S.bots) {
+    if (e.dead || e.owner === p || e.owner < 0 || !BOTS[e.type].siege || !(e.salvo || (e.task && e.task.type === 'bombard'))) continue;
+    const tgt = getE(e.salvo ? e.salvo.target : e.task.target);
+    if (!tgt || tgt.owner !== p || P.truckHunt.some((h) => h.truck === e.id)) continue;
+    const i = Math.floor(e.x), j = Math.floor(e.y);
+    if (!inMap(i, j) || !walkable(tIdx(i, j))) continue;
+    const { sent, rally } = sendToRally(p, i, j, 4, true);
+    if (sent) P.truckHunt.push({ truck: e.id, rally: rally.id, until: S.time + 90 });
+  }
 }
 
 /**
@@ -1065,6 +1149,18 @@ function aiSearchSpot(p, type, lander) {
         let dp = 99;
         for (const b of S.buildings) if (!b.dead && b.owner === p && BDEFS[b.type].port) dp = Math.min(dp, dist(i, j, b.x, b.y));
         s = dp < 99 ? Math.min(dp, 30) - dist(i, j, ex, ey) * 0.3 : -dHome; // a second Port: away from the first, toward the enemy
+      } else if (type === 'keep') {
+        // Toward the front but not out on a limb, covering as many of our Walls, Gates and defences as it can.
+        let cover = 0;
+        for (const b of S.buildings) {
+          if (b.dead || b.owner !== p || dist2(b.x, b.y, i, j) > KEEP.aura * KEEP.aura) continue;
+          if (BDEFS[b.type].barrier || ['turret', 'bunker', 'mortar', 'flak', 'disruptor'].includes(b.type)) cover++;
+          else if (BDEFS[b.type].mil) cover += 0.5;
+        }
+        s = -Math.abs(dHome - 8) * 0.8 - dist(i, j, ex, ey) * 0.15 + Math.min(cover, 12) * 0.7;
+      } else if (type === 'terminal') {
+        // Out far enough to pay well (but not past the bonus), away from the enemy, close to our roads.
+        s = Math.min(dHome, TERMINAL.minDist + TERMINAL.maxBonus / TERMINAL.perTile) * 0.5 + dist(i, j, ex, ey) * 0.3 - rc * 0.4;
       } else if (type === 'silo') {
         s = -dist(i, j, ex, ey); // as close to the enemy as our land allows
       } else if (type === 'depot') {

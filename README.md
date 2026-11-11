@@ -69,7 +69,10 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
 | Bunker | A pillbox for 2 warbots who fire out (3½ tiles) with their own Ammo; claims no land; wrecked, not captured |
 | Disruptor Tower | A pulse every 2½ s jams enemy robots' guns within 4½ tiles for 2 s (`jam`) and drains 10 battery; kills nothing itself; 1 Fuel per 4 pulses |
 | Mortar Pit | Shells where enemies bunch up, 3–10 tiles out: 6 damage, 3 within 1½ tiles, up to 6 robots a shell (`most`); 3 shells per Ammo |
+| Keep | 14 Cement, 6 Alloy, 2 Chips: a fortified base with a roof cannon (Crystal, 6 tiles) and 6 warbots firing from cover (4 tiles); claims land; captured, not wrecked. Within 7 tiles (`KEEP.aura`) Walls/Gates take damage ÷1.5 and mend after 8 s quiet, and defences get +1 range and ×0.8 reload (`auraRange`, `auraRate`); 16 tiles apart. AI: one (a Turtle up to three) |
+| Rocket Truck (Foundry) | Mobile siege launcher (`ROCKET`): parks 4–11 tiles from a building and fires 4 rockets (5 each, splash 2 to buildings, 4 to robots), reloads 4 Ammo at a garrison or storage; forts stop at `MISSILE_FLOOR`; 14 hp. AI builds 1–3 and hunts the enemy's |
 | Depot | Extra storage, shortens hauling trips; give it supply orders to stock it as a forward base |
+| Trade Terminal | Bulk trade, one per colony, 16+ tiles from the Command Base (`TERMINAL`): 3 contracts at a time (new every 5 min), a lot of 30 of one good for Ore, Crystal, Stone or Fiber at 65% of worth (`TRADE_VALUE`), +1.5%/tile beyond 16 (max +25%), each lot sold fetching 12% less for a while; served only by Road Trains and Freight Trains (`terminalSpare`, `updateTerminal`); its goods can't be spent until a train takes them home |
 | Ramp | Planned in Paths: cuts a slope into a one-level cliff so bots can climb it; counts as road |
 | Fuel Station | Recharges bots' batteries, four at a time; burns **Fuel** |
 | Bio Farm | A worker plants energy crops on fertile soil and harvests them into **Fuel** |
@@ -589,11 +592,14 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
   on the right. Drag a box to select warbots (Shift adds; a box round a garrison takes its spare warbots), right-click
   ground to hold it, a rival building to attack, or your garrison to station them. Ctrl/Shift+1–9 saves a control
   group, 1–9 recalls it (twice jumps to it). Pan with **WASD** or the arrow keys, the window edge, or right/middle drag; hover for
-  tooltips. Keys: **B** build then a building's key (a letter, or 1–7 for Smelter, Bio Farm, Roadworks, Depot, Ropeway, Rail
-  Station and Research Lab, so WASD keeps panning; or **B R** to start laying roads), **R** (or **P**) opens and closes Paths
+  tooltips. Clicking the same spot again steps through what's piled there (a Crawler on a Foundry, workers at a site). Keys:
+  **B** build, then **1–5** a tab (Gather, Make, Move, Defend, All; **Tab** steps; it opens on the last one used) and the
+  letter on a card (`BUILD_KEYS` in js/ui.js: letters are per tab, so every building has one and none needs W, A, S, D, B
+  or R; on All a card shows "2 K"; **B R** lays roads, **B X** walls), **R** (or **P**) opens and closes Paths
   and inside it picks a tool (**R** roads, **G** bridges
   and tunnels, **V** ramps, **E** pave, **O** one-way arrows, **L** junctions, **X** walls, **T** traffic map), **Q** army, **C** recall all warbots, **F** select all warbots, **J** latest alert,
-  **H** base, **[ ]** speed, **+/−** zoom, **M** minimap, **Space** pause, **Esc** back / clear selection, **Alt+Enter**
+  **H** base, **I** statistics, **U** robots, **Y** goods, **[ ]** speed, **+/−** zoom, **M** minimap, **Enter** the banner's main
+  button, panel buttons by the key shown on them (`SHEET_KEYS`; **Delete** twice demolishes), **Space** pause, **Esc** back / clear selection, **Alt+Enter**
   full screen (also a top-bar button and a pause-menu item). Chrome opens the installed app in a plain window on a
   computer (it ignores the manifest's `fullscreen`), so the app goes full screen itself on the first click unless you
   left full screen last time; Esc stays the game's key (`navigator.keyboard.lock`; hold it to leave). On a screen wider

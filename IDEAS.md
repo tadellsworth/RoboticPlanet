@@ -3,18 +3,14 @@
 Notes on features we've talked about but not built yet. (The nuclear race, desktop RTS controls, road maintenance
 and biomes started here and are now in the game.)
 
-## Picked next (November): city layout and a siege gun
+## Built in November: city layout and a siege gun
 
-Designs proposed, waiting for a go-ahead:
-
-- **Feed links** (supply chains): a factory touching the building that makes its input is fed straight across by a
-  short conveyor or pipe, no Hauler (Oil Pump or Refinery → Asphalt Plant ← Cement Works, Asphalt Plant → Roadworks;
-  Ore Mine → Smelter → Chip Fab; Smelter + Cement Works → Ammo Plant; Missile Factory → Silo). Moves goods, makes none.
-- **The Keep**: a big bastion with a turret on its roof and warbots firing from inside; Walls, Gates and defences
-  within its radius are tougher and fire better.
-- **Bulk trade**: neutral trading terminals at the map edge that only Road Trains and Freight Trains serve, full lots
-  only, at rates below making the goods yourself, so trade turns surplus into what's short without replacing industry.
-- **A siege gun between the Mortar and the Missile Silo**: an Artillery Battery (a building) or a mobile Rocket Truck.
+Feed links (a factory beside its supplier is fed straight across), the Keep (a fortified base whose aura
+toughens Walls and defences), the Rocket Truck (a mobile siege launcher between the Mortar and the Silo) and bulk
+trade (the Trade Terminal: full lots by Road Train or Freight Train at below-cost rates) are in the game; see the
+README. The Terminal ended up a building each colony puts up itself, 16+ tiles out, rather than a neutral one on
+the map edge: roads and track can't run outside your border, and this way it's fair on every map shape.
+Still open: a neutral, shared exchange the rivals compete over; contracts for Chips or Ammo.
 
 ## Held for later
 

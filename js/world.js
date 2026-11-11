@@ -1757,7 +1757,7 @@ function canPlace(owner, type, i, j, skipBlockCheck) {
   if (def.colony && (S.mode !== 'colony' || S.mission)) return { ok: false, reason: 'Only in Colony free play.' };
   // A Ramp can go under track (to carry it up a level), and a Gate across it (your trains run through, as on a road).
   if (S.rail && (S.rail[t] || (S.railPlan && S.railPlan[t])) && !def.ramp && !def.gate) return { ok: false, reason: S.rail[t] ? 'There is railway track here.' : 'Track is planned here.' };
-  if (def.station && !railPlatforms(i, j).length) return { ok: false, reason: 'A Rail Station goes right beside the track: lay rail first (Paths, Rail).' };
+  if (def.station && !def.terminal && !railPlatforms(i, j).length) return { ok: false, reason: 'A Rail Station goes right beside the track: lay rail first (Paths, Rail).' };
   if (def.port && !navalMap()) return { ok: false, reason: 'Ports are for naval maps (Islands and Lakes).' };
   if (def.port && !portDocks(i, j).length) return { ok: false, reason: 'A Port goes on the shore, right beside open water wide enough for ships.' };
   if (S.wildlife) for (const e of S.buildings) {
@@ -1813,6 +1813,14 @@ function canPlace(owner, type, i, j, skipBlockCheck) {
     const rwy = runwayDir(owner, i, j);
     if (!rwy) return { ok: false, reason: `An Airfield needs room for its runway: ${RUNWAY_LEN} tiles of open, level ground of yours in a straight line from it (east, west, north or south), with no road, deposit or building.` };
     return { ok: true, reason: '', rwy };
+  }
+  if (def.terminal) {
+    if (S.buildings.some((b) => !b.dead && b.owner === owner && BDEFS[b.type].terminal)) return { ok: false, reason: 'You have a Trade Terminal already: one per colony.' };
+    const L = getE(S.players[owner].lander);
+    if (L && !L.dead && dist(L.x, L.y, i, j) < TERMINAL.minDist) return { ok: false, reason: `A Trade Terminal has to stand at least ${TERMINAL.minDist} tiles from your Command Base (this spot is ${Math.floor(dist(L.x, L.y, i, j))}).` };
+  }
+  if (def.keep && S.buildings.some((b) => !b.dead && b.owner === owner && BDEFS[b.type].keep && dist2(b.x, b.y, i, j) < KEEP.spacing * KEEP.spacing)) {
+    return { ok: false, reason: `Keeps stand at least ${KEEP.spacing} tiles apart: one of yours is too close.` };
   }
   if (def.mil && !def.bunker) { // Bunkers can go right beside Outposts (and each other)
     for (const b of S.buildings) {
