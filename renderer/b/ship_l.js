@@ -31,7 +31,7 @@ export default function (L) {
   // the team light (as the powered buildings': the red team's runs deeper so it doesn't wash out to pink)
   const red = /^#ff5a6e$/i.test(TEAM), glow = M.emit(red ? '#ff2a40' : TEAM, red ? 1.4 : 1.1);
   const warm = M.emit('#ffc27a', 0.85), mull = M.plain('#1c2024', 0.6, 0.3), steel = M.plain('#6a7178', 0.35, 0.8);
-  const lit = { day: 0.35, morning: 0.55, evening: 1, night: 1 }[L.TOD] ?? 0.35;
+  const lit = { day: 0.35, morning: 0.55, evening: 1.2, night: 1.6 }[L.TOD] ?? 0.35;
   const len = kind === 'ferry' ? 12.4 : 17.2, half = kind === 'ferry' ? 2.35 : 1.95, bow = kind === 'ferry' ? 1.8 : 3.4;
   const XS = -len / 2, XB = len / 2, HH = 1.1, BH = kind === 'ferry' ? 0.45 : 0.2;
 
@@ -52,8 +52,8 @@ export default function (L) {
   {
     const s = hullShape(0); s.holes.push(new THREE.Path(hullShape(0.12).getPoints(24)));
     ext(s, BH, hullM, HH, { dirt: 0 });
-    // the strip in eight lengths (so at night it throws a little light along the edges instead of flooding the deck)
-    const pts = hullShape(0.06).getSpacedPoints(160), N = 8, per = Math.ceil((pts.length - 1) / N);
+    // the strip in sixteen lengths (so at night it throws a little light along the edges instead of flooding the deck)
+    const pts = hullShape(0.06).getSpacedPoints(192), N = 16, per = Math.ceil((pts.length - 1) / N);
     for (let c = 0; c < N; c++) {
       const run = pts.slice(c * per, Math.min(pts.length, (c + 1) * per + 1)), l = [], r = [];
       run.forEach((q, i) => {
@@ -73,16 +73,16 @@ export default function (L) {
     box(0.12, 0.03, 0.12, P.white, x, y + 0.08, z, nc);
     L.pointLight('#fff1d6', k * lit, x + (ax - x) * 0.45, y + 0.5, z + (az - z) * 0.45, d);
   }
-  // a band of lit window panes on a wall facing +-z (sz) or +x (sx), just proud of the wall so its top edge shows
+  // a band of lit window panes on a wall facing +-z (sz) or +x, set proud of the wall (a sill) so the lit line shows from above
   function winZ(x0, x1, y, z, sz, n) {
     const w = (x1 - x0) / n;
-    box(x1 - x0, 0.2, 0.05, mull, (x0 + x1) / 2, y - 0.02, z + sz * 0.02, nc);
-    for (let k = 0; k < n; k++) box(w * 0.78, 0.16, 0.06, warm, x0 + w * (k + 0.5), y, z + sz * 0.025, nc);
+    box(x1 - x0, 0.14, 0.1, mull, (x0 + x1) / 2, y - 0.02, z + sz * 0.04, nc);
+    for (let k = 0; k < n; k++) box(w * 0.78, 0.16, 0.12, warm, x0 + w * (k + 0.5), y, z + sz * 0.05, nc);
   }
   function winX(z0, z1, y, x, n) {
     const w = (z1 - z0) / n;
-    box(0.05, 0.2, z1 - z0, mull, x + 0.02, y - 0.02, (z0 + z1) / 2, nc);
-    for (let k = 0; k < n; k++) box(0.06, 0.16, w * 0.78, warm, x + 0.025, y, z0 + w * (k + 0.5), nc);
+    box(0.1, 0.14, z1 - z0, mull, x + 0.04, y - 0.02, (z0 + z1) / 2, nc);
+    for (let k = 0; k < n; k++) box(0.12, 0.16, w * 0.78, warm, x + 0.05, y, z0 + w * (k + 0.5), nc);
   }
   // the bridge's forward windows: a band of lit panes slanting out at the top, so it shows from above
   function bridgeGlass(x, y0, y1, zh, n) {
@@ -109,7 +109,7 @@ export default function (L) {
     box(0.7, 0.55, half * 2 + 0.5, off, brx, HH + 2.2, 0, { dirt: 0.1 });
     bridgeGlass(bx1 - 0.12, HH + 2.28, HH + 2.68, half + 0.2, 12);
     box(0.72, 0.06, half * 2 + 0.6, dark, brx - 0.06, HH + 2.75, 0, { dirt: 0 });
-    for (const s of [-1, 1]) winZ(brx - 0.3, brx + 0.25, HH + 2.42, s * (half + 0.25), s, 2);
+    for (const s of [-1, 1]) winZ(brx - 0.3, brx + 0.25, HH + 2.42, s * (half + 0.15), s, 2);
     // the funnel with the team band, a glowing ring at the band's top edge, sooted top
     cyl(0.42, 1.2, off, bx0 + 0.55, HH + 2.2, 0, { seg: 28, dirt: 0.2, soot: 0.8 });
     cyl(0.43, 0.25, team, bx0 + 0.55, HH + 2.95, 0, { seg: 28, dirt: 0 });
@@ -146,7 +146,7 @@ export default function (L) {
     box(1.2, 0.5, half * 2 + 0.3, off, cx1 - 0.85, HH + 1.9, 0, { dirt: 0.1 });
     bridgeGlass(cx1 - 0.27, HH + 1.96, HH + 2.36, half + 0.1, 14);
     box(1.15, 0.06, half * 2 + 0.5, dark, cx1 - 0.9, HH + 2.4, 0, { dirt: 0 });
-    for (const s of [-1, 1]) winZ(cx1 - 1.35, cx1 - 0.4, HH + 2.1, s * (half + 0.15), s, 3);
+    for (const s of [-1, 1]) winZ(cx1 - 1.35, cx1 - 0.4, HH + 2.1, s * (half + 0.05), s, 3);
     // the sun deck on the cabin roof: a team light strip down the middle, benches, a skylight
     box(cx1 - cx0 - 1.6, 0.04, 0.32, team, (cx0 + cx1) / 2 - 0.9, HH + 1.9, 0, { dirt: 0 });
     box(cx1 - cx0 - 1.8, 0.02, 0.07, glow, (cx0 + cx1) / 2 - 0.9, HH + 1.94, 0, nc);

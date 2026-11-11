@@ -26,7 +26,7 @@ export default function (L) {
     ext(rr(x + 1.5, -24, 4.5, 48, 1), 1.22, 0.04, haz, { bevel: 0.01 });
     for (const s of [-1, 1]) {
       V.brake((xr + 0.05) / k, s * 32.8 - 3.07, 5.1, 6.14, 1.24);
-      rect(x - 1.2, s * 41.5 - 3, 3.5, 6, 0.8, 0.42, m.glow, { dirt: 0, cast: false });
+      rect(x, s * 41.5 - 3, 3, 6, 0.8, 0.42, m.glow, { dirt: 0, cast: false });
     }
   }
 
@@ -131,6 +131,9 @@ export default function (L) {
   V.beacon(57, -18, yr);
   V.mast(76, -15, yr);
   for (const s of [-1, 1]) L.hcyl(0.06, 0.6, m.steel, 1.95, yr + 0.08, s * 0.62, O({ axis: 'x' }));     // air horns
+  // a low armoured front bumper under the prow (to the old bumper line, world 4.4) with a hazard band
+  ext(poly([[112.6, -30], [110.5, -40], [104, -42], [104, 42], [110.5, 40], [112.6, 30]]), 0.55, 0.5, m.armor, { bevel: 0.04 });
+  ext(poly([[112.2, -26], [112.2, 26], [109, 26], [109, -26]]), 1.05, 0.03, haz, { bevel: 0.005 });
   // mirrors on short arms at the cab's front corners
   for (const s of [-1, 1]) {
     L.beam([3.7, 2.0, s * 1.4], [3.85, 2.05, s * 1.9], 0.05, 0.05, m.dark, O());

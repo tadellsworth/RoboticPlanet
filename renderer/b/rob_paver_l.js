@@ -33,7 +33,7 @@ export default function (L) {
   rect(-105, -46, 8, 92, 0.5, 0.4, M.plain('#22262a', 0.6, 0.4), { dirt: 0 });
   for (const y of [-34, -17, 0, 17, 34]) { disc(-103, y, 2.6, 0.9, 0.03, black); disc(-106.5, y, 2.6, 0.6, 0.25, M.emit('#ff7a1a', 0.9), { cast: false }); }
   ext(rr(-110, -50, 6, 100, 2), 0.5, 0.5, haz, { bevel: 0.03 });
-  for (const y of [-50, 42]) rect(-111, y, 3, 8, 0.6, 0.36, glow, { dirt: 0, cast: false });
+  for (const y of [-50, 42]) rect(-110, y, 2.5, 8, 0.6, 0.36, glow, { dirt: 0, cast: false });
   brake(-109, -49, 5, 8, 1.0); brake(-109, 41, 5, 8, 1.0);
   // the cab: a wedge with a paver-yellow roof, a darker brow and the sensor slit
   ext(poly([[48, -18], [40, -42], [-8, -44], [-14, -38], [-14, 38], [-8, 44], [40, 42], [48, 18]]), 1.0, 0.85, armor, { bevel: 0.08 });

@@ -2,7 +2,7 @@
 // orthographic camera straight down, no ground and no shadow; 10 world units across the 384-px frame, the truck 8.5 x 3.86.
 // Gunmetal armour, the three axles half under armoured side skirts carrying team-colour light strips, a long open
 // flatbed (kept clear: the game draws the cargo crates on it, world x -3.92..1.48, z -1.2..1.2) behind a slatted
-// headboard, a wedge cab with the glowing sensor-slit eye, LED headlight bars, an amber beacon and the two motor vents,
+// headboard with a team-painted cap, a wedge cab with the glowing sensor-slit eye, LED headlight bars, an amber beacon and the two motor vents,
 // twin gunmetal exhaust stacks behind the cab, team rear lights. Coordinates in robkit px (1 px = 1/25.6 unit).
 //   ?f=k     driving frame k (0..3): every tyre rolled forward by k/4 of one tread-block pitch
 //   ?part=   truck (default) | brake (only the two rear brake lenses, lit) | boost (only the cab's motor vents, glowing)
@@ -43,7 +43,8 @@ export default function (L) {
   }
   // slatted headboard guarding the cab
   ext(rr(34.5, -36, 5, 72, 1.5), 1.16, 0.9, m.top, { bevel: 0.03 });
-  for (let y = -28; y <= 28; y += 8) strip(35, y, 39, y, 2, 2.07, 0.01, m.black);
+  ext(rr(35, -34.5, 4, 69, 1), 2.05, 0.02, M.paint(TEAM, { rivets: false }), { bevel: 0.005 });            // team-painted cap
+  for (let y = -28; y <= 28; y += 8) strip(35, y, 39, y, 2, 2.075, 0.01, m.black);
   rect(39.5, -34, 2, 68, 0.9, 0.5, m.seam, { dirt: 0 });                                   // the joint behind the cab
 
   // ---- the tail: an armoured bumper with a hazard band, the brake lenses, team-colour corner lights
@@ -51,7 +52,7 @@ export default function (L) {
   ext(rr(-107.5, -24, 4.5, 48, 1), 1.22, 0.04, haz, { bevel: 0.01 });
   for (const s of [-1, 1]) {
     V.brake(-107.6, s * 32.8 - 3.07, 5.1, 6.14, 1.24);
-    rect(-110, s * 41.5 - 3, 3.5, 6, 0.8, 0.42, m.glow, { dirt: 0, cast: false });
+    rect(-109, s * 41.5 - 3, 3.2, 6, 0.8, 0.42, m.glow, { dirt: 0, cast: false });
   }
 
   // ---- the cab

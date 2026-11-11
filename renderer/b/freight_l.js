@@ -126,6 +126,8 @@ export default function (L) {
       for (const z of [-1.2, 1.2]) beam([s * 3.62, 1.2, z], [s * (X1 - 0.05), H1 - 0.1, z], 0.1, 0.1, top);   // end platform braces
       line(s * (X1 - 0.02), -1.5, s * (X1 - 0.02), 1.5, 0.06, H1 + 0.065, 0.01, haz);                         // hazard on the end chords
     }
+    // angular corner gussets on the top chord (the Lancer wedge language)
+    for (const sx of [-1, 1]) for (const sz of [-1, 1]) slab([[sx * (X1 + 0.06), sz * (Z - 0.5)], [sx * (X1 + 0.06), sz * (Z + 0.06)], [sx * (X1 - 0.5), sz * (Z + 0.06)]], H1 + 0.04, 0.05, armor, { bevel: 0.015 });
     const dk = M.plain('#141210', 0.95), inner = M.plain('#1e1c1a', 0.9);
     // sloped floors: two hopper bays meeting at a ridge in the middle, chutes at the bottom
     const IX0 = X0 + t, IX1 = X1 - t, IZ = Z - t;

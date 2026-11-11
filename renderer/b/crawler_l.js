@@ -15,13 +15,12 @@ export default function (L) {
   const { box, cyl, hcyl, mesh, beam, sphere, group, gear, ao, M, THREE, TEAM } = L;
   const p = new URLSearchParams(location.search);
   const f = +(p.get('f') || 0), d = p.has('d') ? +p.get('d') : -1, part = p.get('part') || 'crawler';
-  const gun = M.paint('#4f565e'), gunD = M.paint('#3a4046'), off = M.paint('#454c53'), roofM = M.paint('#5e666f', { rivets: false });
+  const gun = M.paint('#4f565e'), gunD = M.paint('#3a4046'), off = M.paint('#4c535a'), roofM = M.paint('#5e666f', { rivets: false });
   const deckP = M.paint('#5a6066', { panelW: 128, panelH: 512 }), grille = M.grille('#3d4247');
-  const team = M.paint('#' + new THREE.Color(TEAM).multiplyScalar(0.55).getHexString(), { rivets: false });
   const runL = M.emit(TEAM, 1.1), padGlow = M.emit(TEAM, 2.2), glassD = M.plain('#0e1114', 0.15, 0.6);
   const seam = M.plain('#101214', 0.8), lamp = M.emit('#fff1d0', 2.2), dark = M.plain('#1a1c1f', 0.7, 0.3);
   const eyeM = (() => { const m = M.emit(TEAM, 1.3).clone(); m.color = new THREE.Color(TEAM).multiplyScalar(0.12); m.roughness = 0.7; m.envMapIntensity = 0.1; m.userData.glow = '#' + new THREE.Color(TEAM).multiplyScalar(0.32).getHexString(); return m; })();
-  const plateM = M.plain('#3b3d40', 0.75, 0.45), grouserM = M.steel;
+  const plateM = M.plain('#2c2e31', 0.75, 0.45), grouserM = M.steel;
   L.seed(2203);
 
   const W = 20, cam = new THREE.OrthographicCamera(-W / 2, W / 2, W / 2, -W / 2, 0.1, 100);
@@ -133,8 +132,9 @@ export default function (L) {
     for (const rx of [-3.75, -2.0, -0.3, 1.4, 3.1, 4.15]) for (const rz of [0.95, 2.08, 3.2]) box(0.1, 0.85, 0.1, gunD, rx, 2.5, s * rz, o({ dirt: 0 }));
     for (const rz of [0.95, 2.08, 3.2]) box(MX1 - MX0 - 0.2, 0.06, 0.07, gun, (MX0 + MX1) / 2, 3.3, s * rz, o({ dirt: 0 }));
     // running lights along the hull edges (rear and front sections)
-    box(3.7, 0.03, 0.12, runL, -6.0, 4.11, s * (HZ - 0.22), o({ dirt: 0, cast: false }));
+    box(3.7, 0.03, 0.12, runL, -6.0, 4.11, s * (HZ - 0.2), o({ dirt: 0, cast: false }));
     box(3.9, 0.03, 0.12, runL, 6.35, 3.61, s * (HZ - 0.16), o({ dirt: 0, cast: false }));
+    box(MX1 - MX0 - 0.3, 0.03, 0.1, runL, (MX0 + MX1) / 2, 3.68, s * (HZ - 0.08), o({ dirt: 0, cast: false }));   // along the wing hinge line
   }
   // containers stacked on the spine, cargo hatch
   const ccols = [['#8a4a2c', -1.0, 3.45, 0], ['#5f7a7c', 1.25, 3.45, 0], ['#c9c5ba', 0.1, 4.6, 0]];
@@ -186,6 +186,13 @@ export default function (L) {
     for (const x of [-L2 / 2 + 0.35, L2 / 2 - 0.35]) box(0.6, 0.03, 0.6, M.hazard, x, -0.06, s * (WW - 0.35), { parent: wg, dirt: 0 });
     for (let x = -L2 / 2 + 1.0; x < L2 / 2; x += 1.6) box(0.05, 0.03, WW - 0.2, gunD, x, -0.06, s * WW / 2, { parent: wg, dirt: 0 });
     box(L2 - 0.4, 0.02, 0.1, runL, 0, -0.065, s * (WW - 0.14), { parent: wg, dirt: 0, cast: false });
+    // team chevrons on the outer armour (face up while stowed), pointing forward, as on the rocket truck's lid
+    const paintT = M.paint(TEAM, { rivets: false });
+    for (const cx of [2.35, 3.05]) for (const e of [-1, 1]) {
+      const za = s * (1.21 + e * 0.62), zb = s * 1.21, xa = cx - 0.42, xb = cx, len = Math.hypot(xb - xa, zb - za);
+      const c = box(len, 0.02, 0.2, paintT, (xa + xb) / 2, -0.085, (za + zb) / 2, { parent: wg, dirt: 0, cast: false });
+      c.rotation.y = -Math.atan2(zb - za, xb - xa);
+    }
     // inner face (up when deployed): charging bays
     for (const bx of [-2.0, 2.0]) {
       box(2.3, 0.04, 1.9, M.plain('#26292c', 0.85), bx, WT, s * 1.25, { parent: wg, dirt: 0 });

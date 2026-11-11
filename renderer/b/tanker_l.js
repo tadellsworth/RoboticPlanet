@@ -78,7 +78,7 @@ export default function (L) {
   ext(rr(-107.5, -24, 4.5, 48, 1), 1.22, 0.04, haz, { bevel: 0.01 });
   for (const s of [-1, 1]) {
     V.brake(-107.6, s * 32.8 - 3.07, 5.1, 6.14, 1.24);
-    rect(-110, s * 41.5 - 3, 3.5, 6, 0.8, 0.42, m.glow, { dirt: 0, cast: false });
+    rect(-109, s * 41.5 - 3, 3.2, 6, 0.8, 0.42, m.glow, { dirt: 0, cast: false });
   }
   const C = V.cab({ x0: 41, xf: 108.5, xc: 101, hw: 35, nf: 20, y0: 0.45, yt: 1.72, roof: [60, -23, 29, 46] });
   V.hatch(75, 9, 6.5, C.yu + 0.07);

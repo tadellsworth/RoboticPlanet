@@ -19,16 +19,16 @@ export default function (L) {
   // two narrow rubber tracks, the inner part under armoured skirts with team running lights
   for (const y of [-74, 74]) track(-84, 84, y, 18, 0.32, { pitch: 0.26 });
   for (const s of [-1, 1]) {
-    ext(poly(mir([[82, 58], [74, 72], [-78, 72], [-88, 66], [-88, 58]], s)), 0.42, 0.5, armor, { bevel: 0.05 });
+    ext(poly(mir([[82, 58], [74, 72], [-78, 72], [-87, 66], [-87, 58]], s)), 0.42, 0.5, armor, { bevel: 0.05 });
     strip(-74, s * 68.5, 68, s * 68.5, 3, 0.93, 0.02, glow);
     for (const x of [-30, 22]) strip(x, s * 70, x, s * 72, 1.5, 0.92, 0.01, seam);
   }
   // hull: low and chamfered
-  ext(poly([[84, -30], [76, -60], [-80, -62], [-92, -50], [-92, 50], [-80, 62], [76, 60], [84, 30]]), 0.35, 0.78, armor, { bevel: 0.08 });
-  grime(-92, -62, 176, 124, 1.14, 0.8, 13);
+  ext(poly([[84, -30], [76, -60], [-78, -62], [-88, -52], [-88, 52], [-78, 62], [76, 60], [84, 30]]), 0.35, 0.78, armor, { bevel: 0.08 });
+  grime(-88, -62, 172, 124, 1.14, 0.8, 13);
   // seed hitch and spreader chute at the tail
-  rect(-96, -10, 9, 20, 0.6, 0.62, dark, { dirt: 0 });
-  for (const y of [-6, 0, 6]) rect(-95, y - 1, 7, 2, 1.22, 0.01, black, { dirt: 0, cast: false });
+  rect(-88, -10, 9, 20, 0.6, 0.62, dark, { dirt: 0 });
+  for (const y of [-6, 0, 6]) rect(-87, y - 1, 7, 2, 1.22, 0.01, black, { dirt: 0, cast: false });
   // the domed seed hopper: sage shell, dark ribs, a rim, a window onto the seed
   const DR = 48 * k, DH = 0.46, dcx = -34, y0d = 1.13, dome = (x, y) => { const r = Math.hypot(x - dcx, y) * k; return y0d + DH * Math.sqrt(Math.max(0, 1 - (r / DR) ** 2)); };
   const dg = new THREE.SphereGeometry(DR, 48, 20, 0, Math.PI * 2, 0, Math.PI / 2); dg.scale(1, DH / DR, 1);
@@ -64,8 +64,8 @@ export default function (L) {
   ext(R.poly([[89, 25.5], [97, 30], [89, 34.5]]), 1.76, 0.12, M.plain('#a8b0b5', 0.3, 0.8), { bevel: 0.02 });
   for (const s of [-1, 1]) { strip(85, 30 + s * 8, 90, 30 + s * 12, 2.6, 1.84, 0.05, M.plain('#8d959b', 0.4, 0.7)); strip(90, 30 + s * 12, 96, 30 + s * 10, 2.6, 1.84, 0.05, M.plain('#8d959b', 0.4, 0.7)); }
   // the green farm lights at the hull's corners, team lights and brake lenses at the tail
-  for (const [x, y] of [[-82, -52], [-82, 52], [70, -53], [70, 53]]) { disc(x, y, 4.6, 1.1, 0.04, dark); disc(x, y, 3.4, 1.12, 0.05, green, { cast: false }); }
-  for (const y of [-48, 40]) rect(-95, y, 4, 8, 0.5, 0.36, glow, { dirt: 0, cast: false });
+  for (const [x, y] of [[-78, -51], [-78, 51], [70, -53], [70, 53]]) { disc(x, y, 4.6, 1.1, 0.04, dark); disc(x, y, 3.4, 1.12, 0.05, green, { cast: false }); }
+  for (const y of [-48, 40]) rect(-88, y, 2.5, 8, 0.5, 0.36, glow, { dirt: 0, cast: false });
   brake(-85, -34, 6, 8, 1.13); brake(-85, 26, 6, 8, 1.13);
   R.finish();
 }
