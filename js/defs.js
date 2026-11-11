@@ -193,6 +193,15 @@ const BLAST = {
   refinery: { r0: 1.5, r1: 0.9, bot: 6, bld: 5 },
   chain: [0.25, 0.7],
 };
+/*
+ * Feed links: a production building feeds a neighbour (any of the 8 tiles round it) that uses what it makes
+ * straight across, by a short conveyor (a pipe for Crude and Fuel), with no Hauler: one good every FEED_TIME
+ * seconds a link. A building being fed works FEED_BOOST faster. Each producer feeds at most FEED_MAX
+ * neighbours (side by side before corners). A Refinery also passes Crude on from its intake (to an Asphalt
+ * Plant beside it, say). Storage never takes part: a link moves goods between factories, it makes none.
+ */
+const FEED_TIME = 2, FEED_BOOST = 0.1, FEED_MAX = 2;
+const FEED_NB = [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [-1, 1], [1, -1], [-1, -1]];
 const TRUCK_MIN_DIST = 12;
 const TRUCK_MIN_LOAD = 3;
 const TRUCK_KEEP_LOAD = 4;     // a truck fills a supply order with at least this many (half a load; or half the order), unless the store has run dry

@@ -962,6 +962,9 @@ function resourceSums(type) {
   };
 }
 
+/** Buildings the AI likes to put beside their suppliers or customers, for feed links. */
+const AI_FEED = new Set(['smelter', 'fab', 'foundry', 'armory', 'munitions', 'tarworks', 'roadworks', 'refinery', 'kiln', 'charger', 'generator', 'repair']);
+
 function aiFindSpot(p, type, lander) {
   // A search that found nothing isn't repeated until the territory changes or 20 s pass.
   const P = S.players[p];
@@ -1080,6 +1083,8 @@ function aiSearchSpot(p, type, lander) {
         s = -dHome;
       }
       s -= Math.min(rc, 30) * (far ? 0.05 : 0.35);
+      // Feed links: a factory beside the building that makes its input (or uses its output) is worth a few tiles.
+      if (AI_FEED.has(type)) s += Math.min(2, feedPreview(p, type, i, j).length) * 3;
       s += jitter;
       cands.push({ x: i, y: j, s });
     }

@@ -452,6 +452,15 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
   factory, Refinery, Oil Pump and Foundry within 4 tiles work a third faster. Selected (or while you place one) it
   shows its reach as an amber ring, with corner brackets and a lightning badge on every building it powers
   (`drawRanges`, `drawBoosted`).
+- **Feed links** (`FEED_TIME`, `FEED_MAX`, `FEED_BOOST`; `feedTargets`, `feedStep`): a production building passes
+  what it makes straight to a neighbour (any of the 8 tiles round it) that uses it, one good every 2 s a link, by a
+  short raised conveyor (a pipe for Crude and Fuel), with no Hauler, and a building being fed works a tenth faster.
+  Each producer feeds at most two neighbours (side by side before corners); storage and walls never take part, and a
+  Refinery also passes Crude on from its intake. So Mine → Smelter → Chip Fab → Foundry, Quarry → Cement Works,
+  Smelter + Cement Works → Ammo Plant, Refinery → Asphalt Plant → Roadworks, Missile Factory → Silo work as blocks.
+  Placing a building shows the links it would make as green arrows (`feedPreview`); a building's panel lists what it
+  feeds and what feeds it; the belts are drawn over the gap between buildings, a crate riding across with each good
+  (`drawFeeds`, `drawFeedLink`). The AI puts its factories beside their suppliers (`AI_FEED` in `aiSearchSpot`).
   **Smoke:** trucks puff diesel exhaust from their stacks (light while idling or cruising, thick black smoke pulling
   away), and working buildings smoke and steam from their chimneys (`vehicleSmoke`, `buildingSmoke` in
   `js/render.js`; the points are in `art/emitters.js`). The Generator plays its working loop (`generator-work-0…7`).

@@ -4157,6 +4157,7 @@ function render(dtReal) {
     }
   }
 
+  drawFeeds(ctx, ox, oy, z, inView);
   drawSmoke(ctx, ox, oy, z, inView);
   drawAirLayer(ctx, ox, oy, z, inView);
 
@@ -4196,6 +4197,7 @@ function render(dtReal) {
   }
   if (sel && BDEFS[sel.type] && BDEFS[sel.type].burner) drawBoosted(ctx, sel.type, sel.x, sel.y, sel.owner, ox, oy, z);
   if (R.ghost && BDEFS[R.ghost.type] && BDEFS[R.ghost.type].burner) drawBoosted(ctx, R.ghost.type, R.ghost.x, R.ghost.y, 0, ox, oy, z);
+  if (R.ghost && inMap(R.ghost.x, R.ghost.y)) for (const l of feedPreview(0, R.ghost.type, R.ghost.x, R.ghost.y)) drawFeedLink(ctx, ox, oy, z, l.a[0], l.a[1], l.b[0], l.b[1], l.goods, null, true);
   if (sel) {
     ctx.strokeStyle = '#ffffff';
     ctx.lineWidth = 2;
@@ -5858,6 +5860,72 @@ function drawAirdropPick(ctx, ox, oy, z) {
 
 
 /** Every Airfield's runway, on the ground under buildings and bots. */
+/** Feed links: a short conveyor (a pipe for Crude and Fuel) between each producer and the neighbours it feeds. */
+function drawFeeds(ctx, ox, oy, z, inView) {
+  for (const b of S.buildings) {
+    if (b.dead || !b.built || !BDEFS[b.type].out || BDEFS[b.type].store || !inView(b.x + 0.5, b.y + 0.5, 2)) continue;
+    const links = feedTargets(b);
+    for (const l of links) {
+      const f = b.fed && b.fed[l.c.id];
+      drawFeedLink(ctx, ox, oy, z, b.x, b.y, l.c.x, l.c.y, l.goods, f && S.time - f.t < FEED_TIME ? f : null, false);
+    }
+  }
+}
+
+/**
+ * One feed link from tile (ai, aj) to (bi, bj): a raised conveyor belt across the gap between the two buildings,
+ * its chevrons running toward the building fed, or a pipe with flanges for Crude and Fuel. `moving` ({t, g}) is
+ * a good on its way across (a crate, or a pulse along the pipe); `preview` draws a dashed link while placing.
+ */
+function drawFeedLink(ctx, ox, oy, z, ai, aj, bi, bj, goods, moving, preview) {
+  const ax = ox + (ai + 0.5) * z, ay = oy + (aj + 0.5) * z - z * 0.12, bx = ox + (bi + 0.5) * z, by = oy + (bj + 0.5) * z - z * 0.12;
+  const ang = Math.atan2(by - ay, bx - ax), len = Math.hypot(bx - ax, by - ay);
+  const s0 = len * 0.3, s1 = len * 0.7; // the stretch across the gap between the two buildings
+  const liquid = goods.every((g) => isLiquid(g)), w = z * (liquid ? 0.13 : 0.2);
+  ctx.save();
+  ctx.translate(ax, ay); ctx.rotate(ang);
+  if (preview) {
+    ctx.strokeStyle = '#9dffb8'; ctx.lineWidth = Math.max(2, z * 0.06); ctx.setLineDash([z * 0.12, z * 0.08]);
+    ctx.beginPath(); ctx.moveTo(len * 0.18, 0); ctx.lineTo(len * 0.82, 0); ctx.stroke(); ctx.setLineDash([]);
+    ctx.fillStyle = '#9dffb8'; ctx.beginPath(); ctx.moveTo(len * 0.82, 0); ctx.lineTo(len * 0.72, -z * 0.09); ctx.lineTo(len * 0.72, z * 0.09); ctx.closePath(); ctx.fill();
+    goods.forEach((g, k) => { ctx.fillStyle = GOOD[g].color; ctx.beginPath(); ctx.arc(len * 0.5, (k - (goods.length - 1) / 2) * z * 0.16 - z * 0.16, Math.max(3, z * 0.065), 0, Math.PI * 2); ctx.fill(); ctx.strokeStyle = 'rgba(0,0,0,0.6)'; ctx.lineWidth = 1; ctx.stroke(); });
+    ctx.restore();
+    return;
+  }
+  // its shadow on the ground
+  ctx.fillStyle = 'rgba(0,0,0,0.28)';
+  ctx.fillRect(s0, -w / 2 + z * 0.12, s1 - s0, w);
+  if (liquid) {
+    const grd = ctx.createLinearGradient(0, -w / 2, 0, w / 2);
+    grd.addColorStop(0, '#9a7a5e'); grd.addColorStop(0.45, '#6e5440'); grd.addColorStop(1, '#3d2e22');
+    ctx.fillStyle = grd; ctx.fillRect(s0, -w / 2, s1 - s0, w);
+    ctx.fillStyle = '#4b3a2c';
+    for (const x of [s0, s1 - z * 0.05]) ctx.fillRect(x, -w * 0.7, z * 0.05, w * 1.4); // flanges
+    if (moving) {
+      const k = (S.time - moving.t) / FEED_TIME, x = s0 + (s1 - s0) * k;
+      ctx.fillStyle = GOOD[moving.g].color; ctx.globalAlpha = 0.85;
+      ctx.beginPath(); ctx.ellipse(x, 0, z * 0.07, w * 0.32, 0, 0, Math.PI * 2); ctx.fill(); ctx.globalAlpha = 1;
+    }
+  } else {
+    ctx.fillStyle = '#23272b'; ctx.fillRect(s0, -w / 2, s1 - s0, w); // the belt
+    ctx.fillStyle = '#8b939a'; ctx.fillRect(s0, -w / 2 - z * 0.025, s1 - s0, z * 0.035); ctx.fillRect(s0, w / 2 - z * 0.01, s1 - s0, z * 0.035); // side rails
+    ctx.fillStyle = '#5c646b'; for (const x of [s0, s1 - z * 0.04]) ctx.fillRect(x, -w / 2 - z * 0.04, z * 0.04, w + z * 0.08); // end rollers
+    // chevrons running toward the building fed (moving only while goods flow)
+    const run = moving ? (S.time * 0.9) % 1 : 0, step = z * 0.14;
+    ctx.strokeStyle = 'rgba(200,210,220,0.55)'; ctx.lineWidth = Math.max(1, z * 0.025);
+    ctx.save(); ctx.beginPath(); ctx.rect(s0, -w / 2, s1 - s0, w); ctx.clip();
+    ctx.beginPath();
+    for (let x = s0 - step + run * step; x < s1; x += step) { ctx.moveTo(x, -w * 0.32); ctx.lineTo(x + w * 0.3, 0); ctx.lineTo(x, w * 0.32); }
+    ctx.stroke(); ctx.restore();
+    if (moving) {
+      const k = (S.time - moving.t) / FEED_TIME, x = s0 + (s1 - s0) * Math.min(1, k), c = z * 0.13;
+      ctx.fillStyle = GOOD[moving.g].color; ctx.fillRect(x - c / 2, -c / 2 - z * 0.02, c, c);
+      ctx.strokeStyle = 'rgba(0,0,0,0.65)'; ctx.lineWidth = Math.max(1, z * 0.02); ctx.strokeRect(x - c / 2, -c / 2 - z * 0.02, c, c);
+    }
+  }
+  ctx.restore();
+}
+
 function drawRunways(ctx, ox, oy, z, inView) {
   for (const b of S.buildings) {
     if (b.dead || !BDEFS[b.type].airfield || !b.rwy) continue;

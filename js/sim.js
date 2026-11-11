@@ -223,9 +223,101 @@ function airKeep(b) {
 function usesGood(b, g) {
   const def = BDEFS[b.type];
   if (!b.built) return (siteCost(b)[g] || 0) > (b.stock[g] || 0);
+  return typeUses(def, g);
+}
+
+/* ------------------------------------------------------------------ feed links */
+
+/** What building b can pass to a neighbour by feed link: what it makes (and a Refinery's Crude). */
+function feedGoods(b) {
+  const def = BDEFS[b.type];
+  if (!b || b.dead || !b.built || def.store || !def.out) return [];
+  const gs = Object.keys(def.out).filter((g) => !NUKE_GOODS.includes(g) || nukeOn());
+  if (def.explodes && def.inp && def.inp.crude) gs.push('crude'); // a Refinery passes Crude on from its intake
+  return gs;
+}
+/** How much of g building b can feed on right now (a Refinery keeps one Crude for itself). */
+function feedSupply(b, g) { return BDEFS[b.type].out[g] ? supplyOf(b, g) : Math.max(0, (b.stock[g] || 0) - 1); }
+
+/** The neighbours building b feeds (at most FEED_MAX, sides before corners): [{c, goods}]. */
+function feedTargets(b) {
+  const gs = feedGoods(b);
+  if (!gs.length) return [];
+  const out = [];
+  for (const [di, dj] of FEED_NB) {
+    const i = b.x + di, j = b.y + dj;
+    if (!inMap(i, j) || !S.bAt[tIdx(i, j)]) continue;
+    const c = getE(S.bAt[tIdx(i, j)]);
+    if (!c || c === b || c.dead || !c.built || c.owner !== b.owner || BDEFS[c.type].store || BDEFS[c.type].barrier) continue;
+    const goods = gs.filter((g) => usesGood(c, g));
+    if (!goods.length) continue;
+    out.push({ c, goods });
+    if (out.length >= FEED_MAX) break;
+  }
+  return out;
+}
+
+/** Building b's feed links at work: one good every FEED_TIME a link, to a neighbour that wants it. */
+function feedStep(b, dt) {
+  b.feedT = (b.feedT || 0) - dt;
+  if (b.feedT > 0) return;
+  b.feedT = FEED_TIME;
+  for (const { c, goods } of feedTargets(b)) {
+    const need = needsOf(c);
+    for (const g of goods) {
+      const n = need.find((x) => x[0] === g);
+      if (!n || n[1] < 1 || feedSupply(b, g) < 1) continue;
+      bump(b.stock, g, -1);
+      bump(c.stock, g, 1);
+      c.fedT = S.time;
+      (b.fed = b.fed || {})[c.id] = { t: S.time, g };
+      break;
+    }
+  }
+}
+
+/** The neighbours feeding building b: [{from, link}]. */
+function feedersOf(b) {
+  const out = [];
+  for (const [di, dj] of FEED_NB) {
+    const i = b.x + di, j = b.y + dj;
+    if (!inMap(i, j) || !S.bAt[tIdx(i, j)]) continue;
+    const from = getE(S.bAt[tIdx(i, j)]);
+    const link = from && from !== b && from.owner === b.owner ? feedTargets(from).find((l) => l.c === b) : null;
+    if (link) out.push({ from, link });
+  }
+  return out;
+}
+
+/**
+ * The feed links a building of `type` placed at (x, y) by `owner` would make with its neighbours, for the
+ * placement preview: [{a, b, goods}] from producer tile a to user tile b (ignoring FEED_MAX).
+ */
+function feedPreview(owner, type, x, y) {
+  const def = BDEFS[type], out = [];
+  if (!def || def.store || def.barrier) return out;
+  const makes = def.out ? Object.keys(def.out).concat(def.explodes && def.inp && def.inp.crude ? ['crude'] : []) : [];
+  for (const [di, dj] of FEED_NB) {
+    const i = x + di, j = y + dj;
+    if (!inMap(i, j) || !S.bAt[tIdx(i, j)]) continue;
+    const c = getE(S.bAt[tIdx(i, j)]);
+    if (!c || c.dead || c.owner !== owner || BDEFS[c.type].store || BDEFS[c.type].barrier) continue;
+    const toC = makes.filter((g) => typeUses(BDEFS[c.type], g));
+    if (toC.length) out.push({ a: [x, y], b: [i, j], goods: toC });
+    const fromC = feedGoods(c).filter((g) => typeUses(def, g));
+    if (fromC.length) out.push({ a: [i, j], b: [x, y], goods: fromC });
+  }
+  return out;
+}
+
+/** Does a building of this kind use good g (as an input, ammo, fuel or repairs)? */
+function typeUses(def, g) {
   return !!((def.inp && def.inp[g]) || def.ammo === g || (def.fuelCap && g === 'fuel') || (def.repair && g === 'alloy') ||
     (def.roadworks && g === 'asphalt') || (def.ammoStock && g === 'ammo') || (def.nukeSilo && NUKE.parts[g]) || (def.bots && (g === 'alloy' || g === 'chip')));
 }
+
+/** Is building b being fed by a neighbour (so it works FEED_BOOST faster)? */
+function beingFed(b) { return S.time - (b.fedT ?? -99) < FEED_TIME * 2.5; }
 
 /**
  * Are two buildings a long run apart (TRUCK_MIN_DIST or more)? Measured across plus down, as roads
@@ -925,6 +1017,14 @@ function moveAlong(u, dt) {
     } else u.queueT = 0;
     lim = Math.min(lim, room);
   }
+  // Already standing right on the next waypoint (braked to a stop exactly on it, or put there): it's
+  // reached. Otherwise, at the end of a trip, braking to a stop "at" it leaves no speed to get there,
+  // and the bot would stand on its goal for ever without arriving.
+  while (u.pi < u.path.length) {
+    const t = u.path[u.pi];
+    if (Math.abs((t % S.W) + 0.5 - u.x) < 1e-3 && Math.abs(((t / S.W) | 0) + 0.5 - u.y) < 1e-3) u.pi++; else break;
+  }
+  if (u.pi >= u.path.length) { u.path = null; u.vel = 0; u.drive = 0; return true; }
   let step = driveSpeed(u, bt, vmax, lim, dt) * dt;
   if (step > lim) step = lim;
   u.odo = ((u.odo || 0) + step) % 1000; // distance driven: turns the wheels in drive animations
@@ -2349,6 +2449,7 @@ function updateBuilding(b, dt) {
       : b.type === 'turret' ? 'Off: not firing, and saving its Crystal' : 'Paused — its worker is free for other jobs';
     return;
   }
+  if (def.out && !def.store) feedStep(b, dt * S.players[b.owner].mult);
   if (def.mil) b.status = `Garrison: ${b.garrison.length} of ${def.garrison} warbots`;
   else if (def.store) b.status = 'Storing goods';
   else if (def.gate) b.status = 'Open to your bots; enemies have to break it down';
@@ -2498,9 +2599,9 @@ function produce(b, def, dt) {
     }
   }
   if (def.bots && botCount(b.owner) >= (S.mode === 'colony' ? MAX_BOTS_COLONY : MAX_BOTS)) { b.status = 'Bot limit reached'; return; }
-  b.status = b.boostUntil > S.time ? 'Working (powered by a Generator)' : 'Working';
+  b.status = (b.boostUntil > S.time ? 'Working (powered by a Generator)' : 'Working') + (beingFed(b) ? ', fed by conveyor' : '');
   b.working = true;
-  b.timer += dt * (b.boostUntil > S.time ? 1 + BDEFS.generator.burner.boost : 1);
+  b.timer += dt * (b.boostUntil > S.time ? 1 + BDEFS.generator.burner.boost : 1) * (beingFed(b) ? 1 + FEED_BOOST : 1);
   if (b.timer < def.work) return;
   b.timer = 0;
   for (const g in def.inp) { bump(b.stock, g, -def.inp[g]); usedGood(b.owner, g, def.inp[g]); }
