@@ -3986,6 +3986,7 @@ function toast(text, kind, x, y) {
   el.className = 'toast ' + (kind || 'info');
   el.textContent = text;
   if (x !== undefined && (x || y)) el.onclick = () => centerOn(x + 0.5, y + 0.5);
+  else el.style.pointerEvents = 'none'; // nowhere to jump to: a tap goes through to the map under it
   // Repeat messages (e.g. several buildings finishing at once) collapse into one line.
   const prev = box.lastElementChild;
   if (prev && prev.dataset.text === text) {

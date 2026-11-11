@@ -27,6 +27,7 @@ const out = process.argv[3] || '.';
   // Point at the best valid tile (found in page): with a mouse the building follows the pointer and
   // a click places it. (On touch screens a first tap previews and a second confirms.)
   const spot = await page.evaluate(() => {
+    document.getElementById('toasts').textContent = ''; // (a message with a place to jump to is tappable, and would take the click)
     let best = null, bs = -1;
     for (let t = 0; t < S.W * S.H; t++) if (R.overlay.valid[t]) {
       const i = t % S.W, j = (t / S.W) | 0, n = countResIn(i, j, 5, R_STALK);
