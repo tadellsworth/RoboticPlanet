@@ -156,7 +156,7 @@ export default function (L) {
   L.pointLight('#fff1d6', 2.2 * NB, MX - 0.6, 1.3, MZ + MD / 2 + 0.7, 2.6);
   P.strip(MW + 0.27, MX, 0.24 + MH, MZ + MD / 2 + 0.14, 0, 0.06);
   P.strip(MD + 0.27, MX - MW / 2 - 0.14, 0.24 + MH, MZ, Math.PI / 2, 0.06);
-  flood(MX + 0.95, 0.34 + MH, MZ + MD / 2 - 0.15, 0.45, 0.25, 1.6);                         // roof floodlight over the yard
+  flood(MX + 0.2, 0.34 + MH, MZ + MD / 2 - 0.15, 0.45, 0.35, 1.6);                         // roof floodlight over the yard
 
   // transformer yard at the front right: hazard-framed plate, transformer with arcing insulators, a junction box
   // under the window feeding the house, a high-voltage cable up to the roof
