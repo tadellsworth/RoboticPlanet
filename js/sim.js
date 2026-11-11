@@ -4005,6 +4005,16 @@ function updateRocket(u, dt) {
     if (!u.rockets) { u.salvo = null; u.deployT = 0; }
     return;
   }
+  // Hurt (below REPAIR_BELOW.other): off to a Repair Station within ROCKET.repairReach tiles, then back to the
+  // building it was bombarding on your orders (or to its post).
+  if (!(u.task && u.task.type === 'repair') && S.tick % 30 === u.id % 30 && wantsRepair(u)) {
+    const c = findRepair(u);
+    if (c && dist(u.x, u.y, c.x + 0.5, c.y + 0.5) <= ROCKET.repairReach) {
+      const back = u.task && u.task.type === 'bombard' && !u.task.auto ? u.task.target : 0;
+      u.task = { type: 'repair', bld: c.id, back };
+      u.path = null; u.deployT = 0;
+    }
+  }
   const t = u.task;
   if (!t) {
     u.deployT = 0;
@@ -4069,6 +4079,21 @@ function updateRocket(u, dt) {
     if (r || r === null) u.task = null;
     return;
   }
+  if (t.type === 'repair') {
+    const c = getE(t.bld);
+    if (!c || c.dead || c.owner !== u.owner || !c.built) { if (u.inside) exitBuilding(u); u.task = null; u.path = null; return; }
+    if (u.inside === c.id) {
+      u.vel = 0;
+      if (u.hp >= u.maxHp || repairDry(c)) { // mended (or the Station ran out of Alloy): back to work
+        exitBuilding(u);
+        u.task = t.back && rocketTarget(u, getE(t.back)) ? { type: 'bombard', target: t.back } : null;
+      }
+      return;
+    }
+    const r = travel(u, c.x, c.y, dt);
+    if (r) enterBuilding(u, c); else if (r === null) u.task = null;
+    return;
+  }
   u.task = null;
 }
 
@@ -4102,7 +4127,7 @@ function rocketHit(b, dmg, by) {
   b.armor -= keepShield(b, dmg);
   b.lastHit = S.time;
   if (by >= 0) (S.players[b.owner].hitBy = S.players[b.owner].hitBy || {})[by] = S.time;
-  if (b.built && def.mil) { const f = missileFloor(b); if (b.armor < f) b.armor = Math.min(f, b.armor + dmg); return; }
+  if (captureOnly(b)) { const f = missileFloor(b); if (b.armor < f) b.armor = Math.min(f, b.armor + dmg); return; }
   if (b.armor <= 0) {
     postMsg(by, `Your rockets wrecked the enemy ${def.name}.`, b.x, b.y, 'good');
     postMsg(b.owner, `Enemy rockets wrecked your ${def.name}!`, b.x, b.y, 'bad');
@@ -4644,6 +4669,13 @@ function updateMissiles(dt) {
  */
 function missileFloor(b) { return Math.max(1, Math.round(BDEFS[b.type].armor * MISSILE_FLOOR)); }
 
+/**
+ * A building weapons can only knock down to its missileFloor, never destroy: a Command Base or a Keep (they
+ * have to be captured by warbots on the ground). Every other building, Outposts and Bunkers included, a
+ * Missile, a bomb or a Rocket Truck's rockets can knock out.
+ */
+function captureOnly(b) { return !!(b.built && (b.type === 'lander' || BDEFS[b.type].keep)); }
+
 function missileImpact(m) {
   const md = BDEFS.silo.missile;
   blastFx(m.x1, m.y1, 2.2);
@@ -4653,14 +4685,14 @@ function missileImpact(m) {
     const name = BDEFS[b.type].name;
     b.armor -= keepShield(b, md.damage);
     b.lastHit = S.time;
-    if (b.armor <= 0 && (!b.built || !BDEFS[b.type].mil)) {
+    if (b.armor <= 0 && !captureOnly(b)) {
       postMsg(m.owner, `Your missile wrecked the enemy ${name}.`, b.x, b.y, 'good');
       postMsg(b.owner, `A missile wrecked your ${name}!`, b.x, b.y, 'bad');
       destroyBuilding(b, true);
     } else {
-      const floor = missileFloor(b);
-      if (b.armor <= floor) b.armor = Math.min(floor, b.armor + md.damage);
-      postMsg(m.owner, `Missile hit the enemy ${name}${b.armor <= floor ? ': its armor is down, send warbots to capture it!' : '.'}`, b.x, b.y, 'good');
+      const floor = captureOnly(b) ? missileFloor(b) : 0;
+      if (floor && b.armor <= floor) b.armor = Math.min(floor, b.armor + md.damage);
+      postMsg(m.owner, `Missile hit the enemy ${name}${floor && b.armor <= floor ? ': its armor is down, send warbots to capture it!' : '.'}`, b.x, b.y, 'good');
       postMsg(b.owner, `A missile hit your ${name}!`, b.x, b.y, 'bad');
     }
   }
@@ -4668,10 +4700,10 @@ function missileImpact(m) {
     if (e === b || e.dead || e.owner === m.owner || dist2(e.x + 0.5, e.y + 0.5, m.x1, m.y1) > md.splash * md.splash) continue;
     e.armor -= keepShield(e, md.splashDamage);
     e.lastHit = S.time;
-    if (e.armor <= 0 && (!e.built || !BDEFS[e.type].mil)) {
+    if (e.armor <= 0 && !captureOnly(e)) {
       postMsg(e.owner, `The blast wrecked your ${BDEFS[e.type].name}!`, e.x, e.y, 'bad');
       destroyBuilding(e, true);
-    } else if (e.built && BDEFS[e.type].mil && e.armor < missileFloor(e)) e.armor = Math.min(missileFloor(e), e.armor + md.splashDamage);
+    } else if (captureOnly(e) && e.armor < missileFloor(e)) e.armor = Math.min(missileFloor(e), e.armor + md.splashDamage);
   }
   for (const u of S.bots) {
     if (!u.dead && !u.inside && u.owner !== m.owner && dist2(u.x, u.y, m.x1, m.y1) <= md.splash * md.splash) damageBot(u, md.botDamage);
@@ -5287,7 +5319,7 @@ function demolish(b) {
 /* ------------------------------------------------------------------ moving buildings */
 
 /** Settings a building keeps when it moves. */
-const MOVE_KEEPS = ['prio', 'limit', 'paused', 'keep', 'smode', 'reject', 'order', 'orders', 'omode', 'mode', 'gprio', 'keepW', 'pmode', 'airSupply'];
+const MOVE_KEEPS = ['prio', 'limit', 'paused', 'keep', 'smode', 'reject', 'order', 'orders', 'omode', 'mode', 'gprio', 'keepW', 'pmode', 'airSupply', 'yard', 'yardParts'];
 
 /**
  * Can building b be moved? Any finished one of yours, except the Command Base and Outposts (they hold
@@ -5331,8 +5363,19 @@ function finishMove(nb) {
   for (const g in old.stock) if (old.stock[g] > 0) bump(nb.stock, g, old.stock[g]);
   old.stock = {}; old.res = {}; old.loot = undefined;
   for (const u of S.bots) if (!u.dead && u.owner === nb.owner && (u.post === old.id || (u.inside === old.id && u.type === 'warbot'))) u.post = nb.id;
-  // An Airfield's planes move with it (one parked there taxis over).
-  for (const u of S.bots) if (!u.dead && u.owner === nb.owner && BOTS[u.type].air && u.home === old.id) { u.home = nb.id; if (u.inside === old.id) { exitBuilding(u); enterBuilding(u, nb); } if (u.flight) u.flight.base = nb.id; }
+  // An Airfield's planes move with it: one parked there taxis over, one rolling out on the old runway
+  // finishes its landing at the new one, and one coming in to land lines up on the new runway instead.
+  for (const u of S.bots) {
+    if (u.dead || u.owner !== nb.owner || !BOTS[u.type].air || u.home !== old.id) continue;
+    u.home = nb.id;
+    if (u.inside === old.id) { exitBuilding(u); enterBuilding(u, nb); }
+    const F = u.flight;
+    if (!F) continue;
+    F.base = nb.id;
+    if (F.ph === 'rollout' || (F.ph === 'roll' && !u.mission)) { u.flight = null; u.vel = 0; u.alt = 0; enterBuilding(u, nb); landed(u, nb); }
+    else if (F.ph === 'roll') F.ph = 'air'; // taking off from the old runway on a mission: it lifts off now
+    else if (F.home && (F.ph === 'air' || F.ph === 'final')) headHome(u);
+  }
   destroyBuilding(old, false, true);
   addFx('smoke', old.x + 0.5, old.y + 0.5, { r: 0.7 });
   postMsg(nb.owner, `The ${BDEFS[nb.type].name} has moved here.`, nb.x, nb.y, 'good');
@@ -7657,8 +7700,10 @@ function airDrop(u) {
 function landed(u, b) {
   if (u.cargo) { for (const g in u.cargo) bump(b.stock, g, u.cargo[g]); u.cargo = null; }
   if (BOTS[u.type].bomber) {
+    // Back with its bomb (the target was gone, or another bomber's finished it): the Ammo goes back into the
+    // Airfield and there's nothing to rearm. Otherwise it rearms before its next sortie.
     if (u.bombLoad) { bump(b.stock, 'ammo', u.bombLoad); u.bombLoad = 0; }
-    u.rearmUntil = S.time + BOMBER.rearm;
+    else u.rearmUntil = S.time + BOMBER.rearm;
   }
 }
 
@@ -7724,6 +7769,13 @@ function bomberOnGround(u, base, dt) {
 function bombDrop(u) {
   const M = u.mission, tg = getE(M.target);
   const bld = tg && BDEFS[tg.type];
+  // Bombs already falling on it (another bomber's) will finish it: this one holds its bomb and flies home with
+  // it, so its Ammo goes back into the Airfield (only the Fuel for the trip is spent).
+  if (tg && !tg.dead && !(bld && captureOnly(tg))) { // (bombs only knock a Command Base or Keep down: every bomb counts there)
+    let due = 0;
+    for (const m of S.missiles) if (m.bomb && m.target === M.target) due += bld ? BOMBER.damage : BOMBER.botDamage * 2;
+    if (due > 0 && due >= (bld ? tg.armor : tg.hp)) { u.mission = null; headHome(u); return; }
+  }
   // A vehicle on the move is led: the bomb's aimed where it will be when it lands.
   const lead = !bld && tg && (tg.vel || 0) > 0.05 ? (tg.vel || 0) * BOMBER.fall : 0, fa = tg ? tg.face || 0 : 0;
   const x1 = bld ? tg.x + 0.5 : tg ? tg.x + Math.cos(fa) * lead : u.x, y1 = bld ? tg.y + 0.5 : tg ? tg.y + Math.sin(fa) * lead : u.y;
@@ -7756,7 +7808,7 @@ function bombHit(b, dmg, by) {
   b.armor -= keepShield(b, dmg);
   b.lastHit = S.time;
   if (by >= 0) (S.players[b.owner].hitBy = S.players[b.owner].hitBy || {})[by] = S.time;
-  if (b.built && def.mil) { const f = missileFloor(b); if (b.armor < f) b.armor = Math.min(f, b.armor + dmg); return; }
+  if (captureOnly(b)) { const f = missileFloor(b); if (b.armor < f) b.armor = Math.min(f, b.armor + dmg); return; }
   if (b.armor <= 0) {
     postMsg(by, `Your bomber destroyed the enemy ${def.name}.`, b.x, b.y, 'good');
     postMsg(b.owner, `An enemy bomber destroyed your ${def.name}!`, b.x, b.y, 'bad');

@@ -3127,12 +3127,7 @@ function refreshBuildingSheet(b) {
     const n = (b.orders && b.orders[k]) || 0;
     $('sh-o-' + k).textContent = n ? `${n} queued` : 'none queued';
   }
-  if ($('sh-bomb')) {
-    const u = readyBomber(b), any = myBombers();
-    $('sh-bomb').disabled = !u;
-    $('sh-bomb-hint').textContent = u ? `A Strike Bomber is ready: it drops one bomb (${BOMBER.damage} off the target, ${BOMBER.ammo} Ammo a sortie). Flak Guns can shoot it down.`
-      : any.some((v) => v.mission || v.flight) ? 'Your bombers are out on sorties.' : any.some((v) => v.rearmUntil > S.time) ? 'Your bombers are rearming.' : 'Out of your bombers\' reach.';
-  }
+  refreshBombButton(b);
   if ($('sh-fire')) {
     const silos = silosInRange(0, b), ready = silos.filter(siloReady);
     const minReload = silos.reduce((m, q) => (q.reload > 0 && q.stock.warhead > 0 ? Math.min(m, q.reload) : m), Infinity);
@@ -3265,6 +3260,17 @@ function botActivity(u) {
   return 'Busy';
 }
 
+/** The Bomb it button on an enemy building's or unit's panel: enabled when a Strike Bomber is ready that can reach t. */
+function refreshBombButton(t) {
+  if (!$('sh-bomb')) return;
+  const u = readyBomber(t), any = myBombers(), bot = !BDEFS[t.type];
+  $('sh-bomb').disabled = !u;
+  $('sh-bomb-hint').textContent = u ? (bot ? `A Strike Bomber is ready: it flies out, leads it if it's moving and drops one bomb (a direct hit does ${BOMBER.botDamage * 2}, ${BOMBER.ammo} Ammo a sortie). Flak Guns can shoot it down.`
+      : `A Strike Bomber is ready: it drops one bomb (${BOMBER.damage} off the target, ${BOMBER.ammo} Ammo a sortie). Flak Guns can shoot it down.`)
+    : bot && (t.inside || t.dropping) ? 'It\'s under cover: bombers only hit vehicles and robots out in the open.'
+      : any.some((v) => v.mission || v.flight) ? 'Your bombers are out on sorties.' : any.some((v) => v.rearmUntil > S.time) ? 'Your bombers are rearming.' : 'Out of your bombers\' reach.';
+}
+
 function openBotSheet(u) {
   R.selected = 0; R.selTile = -1; UI.selBot = u.id;
   const html = `<div class="sheet-title"><div><h3>${BOTS[u.type].name}</h3>
@@ -3273,6 +3279,7 @@ function openBotSheet(u) {
     <div class="status" id="sh-status"></div><div id="sh-dyn"></div>
     ${u.owner === 0 && u.type === 'warbot' ? '<button class="btn big" id="sh-recall" hidden>Call back this squad</button>' : ''}
     ${u.owner === 0 && BOTS[u.type].bomber ? '<button class="btn primary big" id="sh-strike">Pick a target</button>' : ''}
+    ${u.owner !== 0 && u.owner >= 0 && !BOTS[u.type].wild && !BOTS[u.type].air && myBombers().length ? '<div class="section-label">Air strike</div><p class="hint" id="sh-bomb-hint"></p><button class="btn big" id="sh-bomb">Bomb it</button>' : ''}
     ${u.owner === 0 && BOTS[u.type].ferry ? `<div class="actions"><button class="btn primary" id="sh-fsail">Sail somewhere</button><button class="btn" id="sh-fhome">Back to its line</button></div>
       <div class="actions"><button class="btn" id="sh-fembark">Take warbots aboard</button><button class="btn" id="sh-fland">Put them ashore</button></div>
       <button class="btn" id="sh-found">Found a Port on another shore</button>
@@ -3282,6 +3289,12 @@ function openBotSheet(u) {
       <div class="section-label">While it waits</div><div class="seg" id="sh-stance"><button data-v="fire">Fire at will</button><button data-v="hold">Hold fire</button></div>
       <p class="hint">It stays where you put it (beside the Foundry when it's new). <b>Fire at will</b>: it shells any enemy building that comes in reach of that spot, without moving. <b>Hold fire</b>: it fires only when you tell it to. After reloading it goes back to its target, or to its spot. With a mouse, select it and right-click a rival building to bombard it, or open ground to move it there.</p>` : ''}`;
   openSheet('bot', u.id, html);
+  if ($('sh-bomb')) $('sh-bomb').onclick = () => {
+    const v = readyBomber(u);
+    const why = v ? orderStrike(0, v, u) : 'No Strike Bomber is ready that can reach it.';
+    if (why) { sfx('error'); toast(why, 'warn'); return; }
+    sfx('order'); toast(`Strike ordered on the ${BOTS[u.type].name}: a bomber loads up, takes off and hunts it down.`, 'good'); refreshSheet();
+  };
   if ($('sh-strike')) $('sh-strike').onclick = () => { const why = u.mission || u.flight ? 'It\'s already out on a sortie.' : ''; if (why) { sfx('error'); toast(why, 'warn'); return; } sfx('click'); startStrike(u); };
   if ($('sh-fsail')) {
     const done = (r, ok) => { if (typeof r === 'string' && r) { sfx('error'); toast(r, 'warn'); } else { sfx('order'); if (ok) toast(ok, 'info'); } refreshSheet(); };
@@ -3626,6 +3639,7 @@ function refreshSheet() {
     const u = getE(UI.sheetFor);
     if (!u || u.inside) { closeSheet(); return; }
     $('sh-status').textContent = botActivity(u);
+    refreshBombButton(u);
     const bat = Math.round(u.bat ?? 100);
     $('sh-dyn').innerHTML = `<div class="kv"><span>Health</span><span>${Math.ceil(u.hp)} / ${u.maxHp}</span></div>` +
       `<div class="kv"><span>${BOTS[u.type].truck ? 'Fuel tank' : 'Battery'}</span><span>${bat}%${bat < BATTERY.critical ? (BOTS[u.type].truck ? ' (empty: crawling)' : ' (flat: slow and weak)') : bat < BATTERY.low ? ' (low)' : ''}</span></div>` +

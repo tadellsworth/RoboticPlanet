@@ -2712,7 +2712,9 @@ function releaseBotsFrom(b, killInside) {
     // Its owner's bots drop jobs there; attackers keep their orders (an attack moves on, a march goes on).
     if (u.owner === b.owner && taskRefs(u.task, b.id)) cancelTask(u);
     if (u.inside === b.id) {
-      if (killInside && (u.type === 'warbot' || b.staff === u.id || BOTS[u.type].air)) { killBot(u); continue; } // a plane parked in a hangar goes with it
+      // A plane parked in a hangar goes with it; so do warbots in an ordinary building, but a fort's garrison
+      // (an Outpost or Bunker a Missile or bomb knocks out) scrambles out alive. (A nuke kills them first.)
+      if (killInside && ((u.type === 'warbot' && !BDEFS[b.type].mil) || b.staff === u.id || BOTS[u.type].air)) { killBot(u); continue; }
       exitBuilding(u);
     }
   }

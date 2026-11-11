@@ -380,8 +380,8 @@ function aiThink(p) {
   const enemy = rivalOf(p);
   const rival = (o) => o >= 0 && o !== p && !S.players[o].out && !S.players[o].absent;
   if (S.mode !== 'colony' && S.time >= lvl.grace) {
-    // Damage already on its way: never two missiles for a target one wrecks, nor a fort a missile can
-    // knock no lower (see missileFloor).
+    // Damage already on its way: never two missiles for a target one wrecks, nor a Command Base or Keep a
+    // missile can knock no lower (see captureOnly).
     const dmg = BDEFS.silo.missile.damage, coming = new Map();
     for (const m of S.missiles) if (m.owner === p && m.target && !m.nuke) coming.set(m.target, (coming.get(m.target) || 0) + dmg);
     for (const silo of me) {
@@ -392,7 +392,7 @@ function aiThink(p) {
         const d = dist(silo.x, silo.y, e.x, e.y);
         if (d > BDEFS.silo.missile.range) continue;
         const left = e.armor - (coming.get(e.id) || 0);
-        if (BDEFS[e.type].mil ? left <= missileFloor(e) + 2 : left <= 0) continue;
+        if (captureOnly(e) ? left <= missileFloor(e) + 2 : left <= 0) continue;
         const s = (e.type === 'turret' ? 10 : e.type === 'nukesilo' ? 12 : e.type === 'silo' || e.type === 'reactor' ? 9 : e.type === 'outpost' ? 8 :
           e.type === 'mortar' || e.type === 'disruptor' || e.type === 'bunker' || e.type === 'keep' ? 7 : e.type === 'lander' ? 5 : 3) - d * 0.1;
         if (s > bs) { bs = s; best = e; }

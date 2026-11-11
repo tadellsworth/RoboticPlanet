@@ -675,7 +675,7 @@ const BDEFS = {
   },
   silo: {
     name: 'Missile Silo',
-    desc: 'Fires Missiles from a Missile Factory at rival buildings far away. A hit wrecks most buildings outright, damages the buildings and bots around it, and knocks Outposts and Command Bases down so warbots can capture them. Holds two Missiles.',
+    desc: 'Fires Missiles from a Missile Factory at rival buildings far away. A hit wrecks most buildings outright, Outposts and Bunkers included, and damages the buildings and bots around it; a Command Base or Keep it only knocks down, so warbots can capture it. Holds two Missiles.',
     cost: { cement: 5, alloy: 4, chip: 2 }, ammo: 'warhead', ammoCap: 2,
     missile: { range: 18, reload: 25, damage: 24, splash: 2.2, splashDamage: 5, botDamage: 9 }, armor: 14, buildTime: 16, war: true,
   },
@@ -801,7 +801,7 @@ const BUNKER_FIRE = 0.9; // seconds between shots for each warbot in a Bunker (o
  * robots within `splash`. Rockets fly at `speed` tiles a second. It reloads `ammo` Ammo in `reload` s at a garrison
  * or storage of its owner's.
  */
-const ROCKET = { range: 11, min: 4, salvo: 4, gap: 0.35, deploy: 2.5, damage: 5, splash: 1.2, splashBld: 2, botDamage: 4, scatter: 0.4, speed: 9, ammo: 4, reload: 6 };
+const ROCKET = { range: 11, min: 4, salvo: 4, gap: 0.35, deploy: 2.5, damage: 5, splash: 1.2, splashBld: 2, botDamage: 4, scatter: 0.4, speed: 9, ammo: 4, reload: 6, repairReach: 30 };
 /**
  * Yards: a Port's shipyard builds ships, a Rail Station's rail yard Freight Trains (BDEFS[type].yard lists
  * what each makes), a round of parts (1 Alloy, 1 Chip) every `work` s, BOTS[kind].parts rounds a vessel; it
