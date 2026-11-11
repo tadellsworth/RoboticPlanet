@@ -2511,7 +2511,7 @@ function updateBuilding(b, dt) {
   repairHint(b);
   if (b.cut) { crumble(b, dt); return; }
   if (b.paused) {
-    b.status = def.burner ? 'Off: burning no Fuel (nothing round it is boosted)' : def.mortar ? 'Off: not firing, and saving its Ammo'
+    b.status = def.burner ? 'Off: burning no Fuel (nothing round it is boosted)' : def.mortar || def.minigun ? 'Off: not firing, and saving its Ammo'
       : b.type === 'turret' ? 'Off: not firing, and saving its Crystal' : 'Paused — its worker is free for other jobs';
     return;
   }
@@ -2528,6 +2528,7 @@ function updateBuilding(b, dt) {
   else if (def.disrupt) updateDisruptor(b, def, dt);
   else if (def.mortar) updateMortar(b, def, dt);
   else if (def.flak) updateFlak(b, def, dt);
+  else if (def.minigun) updateMinigun(b, def, dt);
   else if (def.ammo) updateTurret(b, def, dt);
   if (def.missile && b.reload > 0) b.reload = Math.max(0, b.reload - dt);
   if (def.charger && !def.store) {
@@ -3307,6 +3308,7 @@ function gunReach(b) {
   const def = BDEFS[b.type];
   let r = 0;
   if (def.mortar) { if ((b.shells || 0) + (b.stock.ammo || 0) > 0) r = def.range + auraRange(b); }
+  else if (def.minigun) { if ((b.rounds || 0) + (b.stock.ammo || 0) > 0) r = def.range + auraRange(b); }
   else if ((b.type === 'turret' || def.keep) && (b.shots > 0 || (b.stock.crystal || 0) > 0)) r = turretRange(b);
   if ((def.bunker || def.keep) && b.garrison && b.garrison.length && armedIn(b) > 0) r = Math.max(r, def.keep ? KEEP.fire : def.range + auraRange(b));
   return r;
@@ -3753,7 +3755,7 @@ function warbotAct(u, dt) {
     }
     if (inReach) spreadOut(u, dt);
     if (inReach && u.cd <= 0) {
-      u.cd = 0.9;
+      u.cd = 0.9 * (u.pinT > S.time ? MINIGUN_PIN.reload : 1); // (pinned by a minigun: slower to fire back)
       u.face = Math.atan2(foe.y - u.y, foe.x - u.x);
       if (u.owner === 0 || foe.owner === 0) sfx('hit');
       if (useAmmo(u)) {
@@ -5353,7 +5355,7 @@ function setKeep(b, g, n) {
 }
 
 /** Can building b be paused (or, for a Generator or a gun, turned off)? */
-function pausable(b) { const def = BDEFS[b.type]; return !!(def.staff || def.burner || def.mortar || def.flak || b.type === 'turret'); }
+function pausable(b) { const def = BDEFS[b.type]; return !!(def.staff || def.burner || def.mortar || def.flak || def.minigun || b.type === 'turret'); }
 
 /**
  * Pausing a building sends its worker off to do other jobs until it is resumed. A Generator turned off
@@ -5784,7 +5786,7 @@ function acceptTrade(p) {
 /** Has player p researched upgrade k (see TECHS)? */
 function tech(p, k) { const P = S.players[p]; return !!(P && P.tech && P.tech[k]); }
 /** Speed, battery drain and carrying for bot u, with planet events and research applied. */
-function speedMul(u) { return evSpeed() * (tech(u.owner, 'motors') ? 1.15 : 1); }
+function speedMul(u) { return evSpeed() * (tech(u.owner, 'motors') ? 1.15 : 1) * (u.pinT > S.time ? MINIGUN_PIN.speed : 1); }
 function drainMul(u) { return evDrain() * (tech(u.owner, 'cells') ? 0.7 : 1); }
 function botCarry(u) { const bt = BOTS[u.type], c = bt.carry || 1; return tech(u.owner, 'cargo') && bt.haul ? c + (bt.rail ? 8 : bt.train ? 6 : bt.truck ? 2 : 1) : c; }
 /** How many of good g bot u can carry at once: anything but a Tanker carries Crude and Fuel one at a time. */
@@ -8060,6 +8062,72 @@ function aircraftNear(owner, x, y, range) {
   }
   out.sort((a, c) => a[0] - c[0]);
   return out.map((o) => o[1]);
+}
+
+/**
+ * A Minigun Nest: it tracks the nearest enemy robot in the open within range, turns to it, spins its barrels up
+ * (`spin` s, and they spin down again when it has nothing to shoot), then fires `rate` rounds a second, each
+ * knocking `damage` off and pinning the robot (MINIGUN_PIN). Rounds come `rounds` to an Ammo. Every round is a
+ * tracer (shotFx's look, in a stream); a Keep's aura makes it fire faster.
+ */
+function updateMinigun(b, def, dt) {
+  const g = def.minigun, cx = b.x + 0.5, cy = b.y + 0.5, range = def.range + auraRange(b), r2 = range * range;
+  b.scanT = (b.scanT || 0) - dt;
+  let target = b.tgt ? getE(b.tgt) : null;
+  if (target && (target.dead || target.inside || dist2(target.x, target.y, cx, cy) > r2)) target = null;
+  if (!target && b.scanT <= 0) { b.scanT = 0.25; target = nearestEnemyBot(b.owner, cx, cy, range, true); }
+  b.tgt = target ? target.id : 0;
+  const ammo = (b.rounds || 0) + (b.stock.ammo || 0) * g.rounds;
+  b.spin = clamp((b.spin || 0) + ((target && ammo > 0 ? 1 : -1) * dt) / g.spin, 0, 1);
+  if (!target) {
+    b.fireAcc = 0;
+    b.sweepT = (b.sweepT || 0) + dt;
+    if (b.sweepT > 5) { b.sweepT = 0; b.sweep = -(b.sweep || 1); }
+    b.aim = wrapAngle((b.aim ?? -Math.PI / 4) + (b.sweep || 1) * TURRET_SWEEP * dt);
+    b.status = ammo > 0 ? `Watching (${ammo} rounds)` : 'Needs Ammo: haulers bring it from storage';
+    return;
+  }
+  const want = Math.atan2(target.y - cy, target.x - cx), diff = wrapAngle(want - (b.aim ?? want));
+  b.aim = wrapAngle((b.aim ?? want) + clamp(diff, -g.turn * dt, g.turn * dt));
+  b.working = true;
+  if (ammo <= 0) { b.status = 'Out of Ammo!'; return; }
+  if (Math.abs(diff) > 0.3) { b.status = 'Turning to aim'; return; }
+  if (b.spin < 1) { b.status = 'Spinning up'; return; }
+  b.status = `Firing (${ammo} rounds)`;
+  b.fireAcc = (b.fireAcc || 0) + (dt * g.rate) / auraRate(b);
+  let fired = 0;
+  while (b.fireAcc >= 1 && !target.dead) {
+    b.fireAcc -= 1;
+    if (!(b.rounds > 0)) {
+      if (!((b.stock.ammo || 0) > 0)) break;
+      bump(b.stock, 'ammo', -1); usedGood(b.owner, 'ammo', 1); b.rounds = g.rounds;
+    }
+    b.rounds--;
+    damageBot(target, g.damage);
+    target.pinT = S.time + MINIGUN_PIN.time;
+    fired++;
+  }
+  if (!fired) return;
+  b.flash = S.time;
+  // the stream: a tracer for every round (a little spread), the barrels' flash, dirt kicked up round the target
+  const m = minigunMuzzle(b, b.aim), busy = S.fx.length > FX_MAX;
+  for (let k = 0; k < fired; k++) {
+    const h1 = hash2(b.id, S.tick, 41 + k), h2 = hash2(S.tick, b.id, 43 + k), tx = target.x + (h1 - 0.5) * 0.35, ty = target.y + (h2 - 0.5) * 0.3;
+    addFx('tracer', m.x, m.y, { x2: tx, y2: ty, life: Math.max(0.07, dist(m.x, m.y, tx, ty) / 26), t: -k / g.rate, color: PLAYER_COLORS[b.owner] });
+    if (!busy && h1 < 0.35) addFx('dust', tx, ty, { life: 0.45, seed: S.tick + k });
+  }
+  if (S.time - (b.mzT || -9) > 0.07) { b.mzT = S.time; addFx('muzzle', m.x, m.y, { a: b.aim, color: '#fff1b8', life: 0.07 }); }
+  if (!busy && hash2(b.id, S.tick, 47) < 0.25) addDecal('pock', target.x + (hash2(S.tick, 3, b.id) - 0.5) * 0.5, target.y + (hash2(5, S.tick, b.id) - 0.5) * 0.4, 0.08, 20);
+  if ((b.owner === 0 || target.owner === 0) && S.time - (b.sfxT || -9) > 0.32) { b.sfxT = S.time; sfx('minigun'); }
+}
+
+/** Where a Minigun Nest's rounds leave its barrels, turned to `aim`: from the art's muzzle marks when they're installed. */
+function minigunMuzzle(b, aim) {
+  if (typeof MINIGUN_MUZZLES !== 'undefined' && typeof ART !== 'undefined' && ART['minigun-head-0']) {
+    const k = ((Math.round(aim / (Math.PI / 8)) % 16) + 16) % 16, m = MINIGUN_MUZZLES[k], sc = MINIGUN_MUZZLES.scale || 1.3;
+    return { x: b.x + 0.5 + (m[0] / 512 - 0.5) * sc, y: b.y + 0.5 + (m[1] / 512 - 0.615) * sc };
+  }
+  return { x: b.x + 0.5 + Math.cos(aim) * 0.42, y: b.y + 0.5 + Math.sin(aim) * 0.3 - 0.32 };
 }
 
 /**

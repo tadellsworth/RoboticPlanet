@@ -137,9 +137,9 @@ function aiThink(p) {
   const hitFort = me.filter((b) => b.built && BDEFS[b.type].mil && !BDEFS[b.type].bunker && S.time - (b.lastHit || -99) < 45)
     .sort((a, c) => (c.lastHit || 0) - (a.lastHit || 0))[0];
   if (hitFort && S.mode !== 'colony' && S.time > AI_DEFENCE_AT && !(P.defWant && S.time < P.defWant.until)) {
-    const nDef = (counts.bunker || 0) + (counts.mortar || 0) + (counts.disruptor || 0);
+    const nDef = (counts.bunker || 0) + (counts.mortar || 0) + (counts.disruptor || 0) + (counts.minigun || 0);
     if (nDef < 1 + Math.floor(S.time / 480) && S.time - (P.defAt || -999) > 120) {
-      const type = ['bunker', 'mortar', 'disruptor'].sort((a, c) => (counts[a] || 0) - (counts[c] || 0))[0];
+      const type = ['minigun', 'bunker', 'mortar', 'disruptor'].sort((a, c) => (counts[a] || 0) - (counts[c] || 0))[0];
       P.defWant = { type, n: (counts[type] || 0) + 1, until: S.time + 120, x: hitFort.x, y: hitFort.y };
       P.defAt = S.time;
     }
@@ -1311,7 +1311,7 @@ function aiSearchSpot(p, type, lander) {
         let cover = 0;
         for (const b of S.buildings) {
           if (b.dead || b.owner !== p || dist2(b.x, b.y, i, j) > KEEP.aura * KEEP.aura) continue;
-          if (BDEFS[b.type].barrier || ['turret', 'bunker', 'mortar', 'flak', 'disruptor'].includes(b.type)) cover++;
+          if (BDEFS[b.type].barrier || ['turret', 'minigun', 'bunker', 'mortar', 'flak', 'disruptor'].includes(b.type)) cover++;
           else if (BDEFS[b.type].mil) cover += 0.5;
         }
         s = -Math.abs(dHome - 8) * 0.8 - dist(i, j, ex, ey) * 0.15 + Math.min(cover, 12) * 0.7;

@@ -392,7 +392,7 @@ const BOMBER = { ammo: 6, damage: 14, splash: 1.3, splashBld: 4, botDamage: 8, f
  * unless you take the land back.
  */
 const CIV_CLAIM = 2, BUILD_REACH = 10, CUT_CRUMBLE = 90;
-const DEFENCE_TYPES = new Set(['turret', 'bunker', 'disruptor', 'mortar', 'flak', 'keep', 'wall', 'gate', 'silo', 'nukesilo']);
+const DEFENCE_TYPES = new Set(['turret', 'minigun', 'bunker', 'disruptor', 'mortar', 'flak', 'keep', 'wall', 'gate', 'silo', 'nukesilo']);
 const RUNWAY_LEN = 5, ROLL_ACCEL = 0.42, ROLL_BRAKE = 0.75, PLANE_TURN = 1.1, PLANE_CLIMB = 3;
 const AIR_EDGE = 1.5; // planes keep their turning spots this far inside the map's edge
 const SECLUDED_REACH = 16; // warbots at a cut-off post (a Drop Outpost) only go this far from it: for repairs, rally flags and attacks
@@ -644,6 +644,12 @@ const BDEFS = {
     cost: { cement: 4, alloy: 3 }, ammo: 'ammo', ammoCap: 4, range: 7, armor: 14, buildTime: 10, war: true,
     flak: { reload: 1.0, shells: 8, salvo: 2, damage: 4, splash: 1.0, speed: 14, scatter: 0.7 },
   },
+  // The Minigun Nest (see MINIGUN): a cheap rotary gun that spins up and hoses enemy robots with tracer rounds.
+  minigun: {
+    name: 'Minigun Nest', desc: 'A cheap six-barrel rotary gun on an armoured mount. It spins up, then hoses the nearest enemy robot in the open within 4½ tiles with a stream of tracer rounds: each does little, but it fires twelve a second, and every robot it hits is pinned down (it moves at half speed and shoots slower for a moment). Great against swarms of workers, haulers and creatures; slower to bring down a warbot than a Pulse Turret. Fires Ammo (60 rounds each).',
+    cost: { cement: 3, alloy: 2 }, ammo: 'ammo', ammoCap: 4, range: 4.5, armor: 12, buildTime: 8, war: true,
+    minigun: { rate: 12, damage: 0.18, rounds: 60, spin: 0.7, turn: 4.5 },
+  },
   // The Keep: a big fort (see KEEP): its warbots fire from cover like a Bunker's, its roof cannon fires Crystal,
   // and its aura toughens Walls and Gates and sharpens the defences round it.
   keep: {
@@ -781,15 +787,17 @@ const BDEFS = {
 
 /** Order of the build menu. */
 const BUILD_MENU = ['harvester', 'quarry', 'mine', 'tap', 'smelter', 'fab', 'foundry', 'charger', 'farm', 'pump', 'refinery', 'generator',
-  'kiln', 'tarworks', 'roadworks', 'ropeway', 'viaduct', 'station', 'port', 'airfield', 'outpost', 'turret', 'bunker', 'keep', 'disruptor', 'mortar', 'flak', 'repair', 'armory', 'munitions', 'silo', 'reactor', 'nukesilo', 'depot', 'grower', 'lab', 'terminal'];
+  'kiln', 'tarworks', 'roadworks', 'ropeway', 'viaduct', 'station', 'port', 'airfield', 'outpost', 'turret', 'minigun', 'bunker', 'keep', 'disruptor', 'mortar', 'flak', 'repair', 'armory', 'munitions', 'silo', 'reactor', 'nukesilo', 'depot', 'grower', 'lab', 'terminal'];
 /** Build-menu tabs: what each building is for. */
 const BUILD_GROUPS = [
   { key: 'gather', name: 'Gather', types: ['harvester', 'quarry', 'mine', 'tap', 'grower', 'farm', 'pump'] },
   { key: 'make', name: 'Make', types: ['kiln', 'smelter', 'fab', 'refinery', 'tarworks', 'foundry', 'armory', 'munitions', 'reactor', 'lab', 'generator'] },
   { key: 'move', name: 'Move', types: ['charger', 'depot', 'roadworks', 'ropeway', 'viaduct', 'station', 'port', 'airfield', 'terminal'], roads: true },
-  { key: 'defend', name: 'Defend', types: ['outpost', 'turret', 'bunker', 'keep', 'disruptor', 'mortar', 'flak', 'repair', 'silo', 'nukesilo'], walls: true },
+  { key: 'defend', name: 'Defend', types: ['outpost', 'turret', 'minigun', 'bunker', 'keep', 'disruptor', 'mortar', 'flak', 'repair', 'silo', 'nukesilo'], walls: true },
 ];
 const BUNKER_FIRE = 0.9; // seconds between shots for each warbot in a Bunker (or a Keep)
+/** A robot hit by a Minigun Nest is pinned for `time` s: it moves at `speed` and its guns reload `reload` times slower. */
+const MINIGUN_PIN = { time: 1.2, speed: 0.5, reload: 1.35 };
 /**
  * The Keep (BDEFS.keep): its warbots fire from cover out to `fire` tiles. Within `aura` tiles of a built Keep, its
  * owner's Walls and Gates take damage ÷ `wallMul` and, left alone for `quiet` s, mend `mend` armor a second; its

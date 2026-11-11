@@ -2163,9 +2163,10 @@ function drawBuilding(ctx, type, cx, cy, s, owner, b) {
         if (sp) drawArt(ctx, sp, cx, cy, s);
       }
     }
-    // A Flak Gun's twin barrels turn to follow the plane it's shooting at (flak-head-0…15).
-    if (type === 'flak') {
-      const head = turretHead(owner, b && b.aim !== undefined ? b.aim : -Math.PI / 4, 'flak');
+    // A Flak Gun's twin barrels turn to follow the plane it's shooting at (flak-head-0…15); a Minigun Nest's
+    // rotary gun follows what it's hosing (minigun-head-0…15).
+    if (type === 'flak' || type === 'minigun') {
+      const head = turretHead(owner, b && b.aim !== undefined ? b.aim : -Math.PI / 4, type);
       if (head) drawArt(ctx, head, cx, cy, s);
     }
     const fx = type === 'bunker' ? ['bunker-fire', 0.1] : type === 'disruptor' ? ['disruptor-pulse', 0.4] : type === 'mortar' ? ['mortar-flash', 0.15] : null;
@@ -2713,6 +2714,20 @@ function drawBuilding(ctx, type, cx, cy, s, owner, b) {
       ctx.beginPath(); ctx.arc(cx, cy, 2.5 * u, 0, Math.PI * 2); ctx.fill();
       break;
     }
+    case 'minigun': {
+      // (until its 3D art loads) a square nest with a cluster of six short barrels on a turning mount
+      hullBase(ctx, cx, cy, s, color, 'square');
+      const a = b && b.aim !== undefined ? b.aim : -Math.PI / 4;
+      ctx.save(); ctx.translate(cx, cy); ctx.rotate(a);
+      ctx.fillStyle = '#2b2f33';
+      ctx.fillRect(-4 * u, -4.5 * u, 9 * u, 9 * u);
+      ctx.fillStyle = '#9aa1a8';
+      for (const dy of [-2.6, -0.9, 0.9, 2.6]) ctx.fillRect(4 * u, (dy - 0.6) * u, 9 * u, 1.2 * u);
+      ctx.fillStyle = color;
+      ctx.fillRect(-4 * u, -4.5 * u, 2 * u, 9 * u);
+      ctx.restore();
+      break;
+    }
   }
 }
 
@@ -2759,7 +2774,7 @@ function viaductDir(b) {
 function drawSearchlight(ctx, b, ox, oy, z) {
   const k = TOD.state.lights;
   if (!(k > 0.01)) return;
-  const a = b.aim ?? Math.PI / 4, art = artFor('turret', b.owner);
+  const a = b.aim ?? Math.PI / 4, art = artFor(b.type, b.owner);
   const lift = art && art.anchor ? 0.18 : 0; // the head stands a little above the pad on the 3D art
   const cx = ox + (b.x + 0.5) * z, cy = oy + (b.y + 0.5 - lift) * z, len = z * 4.4, half = 0.3;
   ctx.save();
@@ -4141,7 +4156,7 @@ function render(dtReal) {
       const size = e.type === 'lander' ? 1.7 : e.type === 'wall' ? 0.45 : e.type === 'gate' ? 0.8 : 1.2;
       drawLightPool(ctx, ox + (e.x + 0.5) * z, oy + (e.y + 0.5) * z, z * size, BDEFS[e.type].wild ? '#9dff6a' : PLAYER_COLORS[e.owner] || '#ffd9a0');
     }
-    for (const e of items) if (e.ent === 'b' && e.type === 'turret' && e.built && !e.paused) drawSearchlight(ctx, e, ox, oy, z);
+    for (const e of items) if (e.ent === 'b' && (e.type === 'turret' || e.type === 'minigun') && e.built && !e.paused) drawSearchlight(ctx, e, ox, oy, z);
     for (const e of items) if (e.ent === 'post') drawLightPool(ctx, ox + (e.post.x + 0.5) * z, oy + (e.post.y + 0.5) * z, z * 1.4, '#ffd27a');
   }
   for (const e of items) {
@@ -4895,7 +4910,7 @@ function drawKeepAura(ctx, x, y, owner, ox, oy, z) {
   for (const c of S.buildings) {
     if (c.dead || c.owner !== (owner || 0) || (c.x === x && c.y === y) || dist2(c.x, c.y, x, y) > r2) continue;
     const d = BDEFS[c.type];
-    if (!d.barrier && !['turret', 'bunker', 'mortar', 'flak', 'disruptor'].includes(c.type)) continue;
+    if (!d.barrier && !['turret', 'minigun', 'bunker', 'mortar', 'flak', 'disruptor'].includes(c.type)) continue;
     const bx = ox + (c.x + 0.78) * z, by = oy + (c.y + 0.2) * z, r = Math.max(5, z * 0.14);
     ctx.fillStyle = 'rgba(10,12,16,0.75)'; ctx.beginPath(); ctx.arc(bx, by, r * 1.25, 0, Math.PI * 2); ctx.fill();
     ctx.fillStyle = col; ctx.beginPath(); // a shield

@@ -273,6 +273,11 @@ function sfx(name, dest) {
       for (const dl of [0, 0.11]) { _tone(95, 0.16, 'sine', 0.12, 50, dl, D); _noise(0.09, 0.12, { type: 'bandpass', freq: 700, q: 0.8, attack: 0.002, delay: dl, dest: D }); }
       break;
     // A flak shell bursting up in the sky: a sharp crack and a dull, rolling boom.
+    // A minigun's burst: a fast rattle of sharp cracks over a motor whine.
+    case 'minigun':
+      for (let k = 0; k < 8; k++) _noise(0.025, 0.07, { type: 'highpass', freq: 1800, attack: 0.001, delay: k * 0.04, dest: D });
+      _tone(880, 0.34, 'sawtooth', 0.012, 660, 0.0, D);
+      break;
     case 'flak':
       _noise(0.05, 0.14, { type: 'highpass', freq: 2200, attack: 0.001, dest: D });
       _noise(0.6, 0.09, { freq: 600, to: 140, attack: 0.01, delay: 0.02, dest: D });
