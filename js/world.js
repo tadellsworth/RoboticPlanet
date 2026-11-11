@@ -1499,6 +1499,16 @@ function reachMap(owner) {
   return (_reach.maps[owner] = dist);
 }
 
+/**
+ * Would a new land-claiming building of `owner`'s at (i, j), with a ring of r tiles, take the ground under a
+ * rival's ordinary building (cutting it off)? Not allowed: buildings are cut off when the fort that holds
+ * them falls or is captured, not by planting a fort beside them.
+ */
+function ringOverRival(owner, i, j, r) {
+  const r2 = r * r + 0.3;
+  return S.buildings.some((b) => !b.dead && b.owner !== owner && b.owner >= 0 && !BDEFS[b.type].wild && !(BDEFS[b.type].mil && !BDEFS[b.type].bunker) && dist2(b.x, b.y, i, j) <= r2);
+}
+
 /** Is tile t within BUILD_REACH of something of `owner`'s (see reachMap)? */
 function inReach(owner, t) { return reachMap(owner)[t] <= BUILD_REACH; }
 
@@ -1937,6 +1947,7 @@ function canPlace(owner, type, i, j, skipBlockCheck) {
     const L = getE(S.players[owner].lander);
     if (L && !L.dead && dist(L.x, L.y, i, j) < TERMINAL.minDist) return { ok: false, reason: `A Trade Terminal has to stand at least ${TERMINAL.minDist} tiles from your Command Base (this spot is ${Math.floor(dist(L.x, L.y, i, j))}).` };
   }
+  if (def.mil && def.terr > 0 && ringOverRival(owner, i, j, def.terr)) return { ok: false, reason: `Too close to a rival's buildings: its ring (${def.terr} tiles) would cut them off. Capture or wreck the fort that holds them first.` };
   if (def.keep && S.buildings.some((b) => !b.dead && b.owner === owner && BDEFS[b.type].keep && dist2(b.x, b.y, i, j) < KEEP.spacing * KEEP.spacing)) {
     return { ok: false, reason: `Keeps stand at least ${KEEP.spacing} tiles apart: one of yours is too close.` };
   }

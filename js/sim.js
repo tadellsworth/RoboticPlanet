@@ -6280,6 +6280,7 @@ function deploySpot(owner, i, j) {
     if (S.terrain[t] !== T_GROUND || S.bAt[t] || S.road[t] || S.plan[t] || S.res[t] || S.ramp[t] || scorched(t) || runwayAt(t)) continue;
     if (S.owner[t] >= 0 && S.owner[t] !== owner) continue;
     if (S.wildlife && S.buildings.some((e) => !e.dead && BDEFS[e.type].wild && Math.max(Math.abs(e.x - x), Math.abs(e.y - y)) <= WILD.clear)) continue;
+    if (ringOverRival(owner, x, y, BDEFS.dropost.terr)) continue; // (its ring mustn't cut a rival's buildings off)
     const d = di * di + dj * dj;
     if (d < bd) { bd = d; best = t; }
   }

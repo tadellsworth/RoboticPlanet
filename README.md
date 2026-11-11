@@ -64,7 +64,7 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
 | Smelter | 2 Ore + 2 Fiber → 3 **Alloy** (15 s; it keeps 6 of each on hand, `hopper`) |
 | Chip Fab | Crystal + Alloy → **Chip** |
 | Bot Foundry | Alloy + Chip → a new **Worker** or **Warbot** |
-| Outpost | Expands your territory and garrisons Warbots |
+| Outpost | Holds a wide ring of land (buildings inside it can't be cut off; defences can go there) and garrisons Warbots |
 | Pulse Turret | Turns to aim and shoots enemy bots, 5 tiles out; uses Crystal as ammo (3 Cement, 3 Alloy) |
 | Bunker | A pillbox for 2 warbots who fire out (3½ tiles) with their own Ammo; claims no land; wrecked, not captured |
 | Disruptor Tower | A pulse every 2½ s jams enemy robots' guns within 4½ tiles for 2 s (`jam`) and drains 10 battery; kills nothing itself; 1 Fuel per 4 pulses |
@@ -590,10 +590,21 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
 - **Demolishing** returns half a building's materials straight to the nearest other storage; anything inside it (a
   Silo's Missiles, a Nuclear Silo's finished missile as its parts, a Depot's whole stock) spills out in crates for the
   Haulers to collect.
-- You can only build inside your border. Outposts push it out (7 tiles around them).
+- **Land is influence** (`computeTerritory`): military buildings claim their ring (BDEFS `terr`: Command Base 8,
+  Outpost 7, Keep 6), every other finished building `CIV_CLAIM` (2) tiles round itself (`civClaims`), and a military
+  claim outranks the small ones. You build on your own land or on no-one's within `BUILD_REACH` (10) 8-way steps of
+  your buildings, roads or track (`reachMap`, `inReach`, `landRule`), never on a rival's; defences (`DEFENCE_TYPES`)
+  only on your own land. Roads, track and pipes run on any ground no rival holds that your bots can reach
+  (`reachZone`); roads and track have their own owner (`S.wown`, read through `wayOwner`), so raids, missiles,
+  creatures, paving and junctions go by who laid them, not whose land they're on.
+- **Cut off** (`cutOff`, `crumble`): a finished building whose ground a rival's ring takes stops working (nothing is
+  hauled to it, its worker leaves) and loses `armor / CUT_CRUMBLE` (90 s) a second until it's lost (`dropLoot`); it
+  recovers if its owner takes the land back. A construction site on a rival's ground is lost at once. A land-claiming
+  building can't go where its ring would cover a rival's ordinary building (`ringOverRival`): cut-offs come from capture
+  or a fort falling. The AI builds on its own land first and on open ground only when it has no spot at home.
 - **Salvage:** a colony out of Stone or Fiber with no Quarry or Harvester that can still work salvages 1 every 20 s from
   its Command Base (up to 6), so it can always rebuild. Capturing an enemy Outpost takes its land,
-  and enemy buildings left outside their border are lost (their goods spill as loot, `dropLoot`; their crew walks out).
+  and enemy buildings its ring now covers are cut off (see above).
 - **Controls:** drag to pan, pinch or scroll to zoom, tap anything to inspect it. Wheel deltas are normalised and capped
   per event (smooth on a Magic Mouse or trackpad); a Ctrl + wheel pinch zooms faster, a sideways swipe or Shift + wheel
   pans, and Safari's trackpad pinch (`gesture*` events) zooms the map instead of the page. Drawing resolution is capped

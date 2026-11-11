@@ -481,7 +481,8 @@ function aiThink(p) {
   if (enemyL && army >= lvl.threshold * 2 && S.time - (P.lastAttack || 0) > 60 && siteCount(p) < maxSites && aiAffordable(p, 'outpost')) {
     let spot = null, bd = Infinity;
     for (let j = 0; j < S.H; j++) for (let i = 0; i < S.W; i++) {
-      if (S.owner[j * S.W + i] !== p) continue;
+      const o = S.owner[j * S.W + i];
+      if (o !== p && !(o < 0 && inReach(p, j * S.W + i))) continue; // our land, or no-one's within reach
       const d = dist(i, j, enemyL.x, enemyL.y);
       if (d < bd && canPlace(p, 'outpost', i, j, true).ok && !wouldBlock(j * S.W + i)) { bd = d; spot = { x: i, y: j }; }
     }
@@ -1100,6 +1101,19 @@ function aiFindSpot(p, type, lander) {
   return spot;
 }
 
+/** Out on no-one's ground the AI builds at least this far from a rival's land, and pays this much score for leaving its own. */
+const AI_CLEAR_OF_RIVAL = 7, AI_OUT_COST = 2;
+
+/** Does any tile within r of (i, j) belong to a rival of p's (not creatures)? */
+function rivalLandNear(p, i, j, r) {
+  for (let dj = -r; dj <= r; dj++) for (let di = -r; di <= r; di++) {
+    if (!inMap(i + di, j + dj) || di * di + dj * dj > r * r) continue;
+    const o = S.owner[tIdx(i + di, j + dj)];
+    if (o >= 0 && o !== p && !(S.wildlife && o === WILD_OWNER)) return true;
+  }
+  return false;
+}
+
 function aiSearchSpot(p, type, lander) {
   const def = BDEFS[type], P = S.players[p];
   const sums = type === 'outpost' ? [R_ORE, R_CRYSTAL, R_STALK, R_BOULDER, R_OIL, R_URANIUM].map(resourceSums) : null;
@@ -1112,9 +1126,20 @@ function aiSearchSpot(p, type, lander) {
   const far = type === 'outpost' || type === 'silo';
   const avoid = (S.players[p].avoid || []).filter((a) => a.until > S.time);
   S.players[p].avoid = avoid;
+  const defence = DEFENCE_TYPES.has(type);
+  // Our own land first; only when there's no spot there, no-one's ground within reach (in AI-vs-AI games,
+  // building out on open ground from the start left the economy short of Fiber and Alloy).
+  for (let pass = 0; pass < 2 && !cands.length; pass++)
   for (let j = 0; j < S.H; j++) {
     for (let i = 0; i < S.W; i++) {
-      if (S.owner[j * S.W + i] !== p) continue;
+      // Out on no-one's ground (never for defences), a building keeps clear of a rival's land (their ring
+      // could cut it off), an Outpost a little less so.
+      let out = false;
+      if (S.owner[j * S.W + i] !== p) {
+        if (!pass || defence || S.owner[j * S.W + i] >= 0 || !inReach(p, j * S.W + i)) continue;
+        if (rivalLandNear(p, i, j, type === 'outpost' ? 3 : AI_CLEAR_OF_RIVAL)) continue;
+        out = true;
+      }
       if (S.fert[j * S.W + i] && type !== 'farm') continue; // keep fertile soil for farming
       if (avoid.some((a) => dist2(a.x, a.y, i, j) < 12)) continue;
       if (!canPlace(p, type, i, j, true).ok) continue;
@@ -1222,6 +1247,7 @@ function aiSearchSpot(p, type, lander) {
       // Feed links: a factory beside the building that makes its input (or uses its output) is worth a few tiles.
       if (AI_FEED.has(type)) s += Math.min(2, feedPreview(p, type, i, j).length) * 3;
       s += jitter;
+      if (out && type !== 'outpost') s -= AI_OUT_COST; // (our own land first)
       cands.push({ x: i, y: j, s });
     }
   }
