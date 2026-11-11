@@ -1,11 +1,16 @@
 // Repair bay: an open-sided service shed (roofed at the back, open rafters at the front) over three repair
 // cradles; a robotic welding arm throwing a bright spark onto a hull on the middle cradle; a monorail crane
 // hoist lowering a spare plate onto the left cradle; a rack of spare plating, gas bottles and a parts cart.
+// Powered realism (b/powerkit.js): team light strips along the roof ridges and up the front posts, floodlights on the
+// front posts, a transformer with arcing insulators on the front apron cabled up to the eave, a junction box and
+// conduits with glowing collars to the welding console and the robot, beacons. Team-coloured: one image per team.
+import { power } from './powerkit.js';
 export default function (L) {
   const { box, cyl, hcyl, beam, pipe, hoop, lamp, pointLight, ao, mesh, sphere, group, M, THREE, ACCENT } = L;
   const gun = M.paint('#50565c'), off = M.paint('#c9c5ba'), olive = M.paint('#5d6247');
   const yel = M.paint('#d0a536', { rivets: false }), arm = M.paint('#d8a032', { rivets: false, panelW: 512, panelH: 512 });
   const glow = M.emit(ACCENT, 2.4), dim = M.emit(ACCENT, 1.2);
+  const P = power(L), nc = { dirt: 0, cast: false };
   L.seed(141);
 
   // ---- shed: posts and a sawtooth workshop roof over the back of the cradles; open on all sides.
@@ -156,4 +161,31 @@ export default function (L) {
   ao(3.6, 3.4, 1.6, 1.6, 0.45);
   // floor bay markings in front of each cradle
   
+
+  // ================================================================ power layer (lights and electricity)
+  // team light strips along the top of each glazed roof face, and up the front faces of the front posts
+  for (let k = 0; k < teeth; k++) box(X1 - X0 + 0.3, 0.06, 0.06, P.glow, 0, Y0 + RISE + 0.03, z0 + (k + 1) * td + 0.08, nc);
+  for (const x of [X0 + 0.2, X1 - 0.2]) box(0.06, Y0 - 0.55, 0.06, P.glow, x, 0.2, ZF - 0.2 + 0.17, nc);
+  // floodlights on the outer faces of the front posts, aimed out over the apron
+  for (const s of [-1, 1]) {
+    const x = s * (X1 - 0.2 + 0.2), g = group(x, 2.75, ZF - 0.05, s * 0.5);
+    box(0.12, 0.12, 0.22, P.steelD, 0, -0.06, -0.06, { parent: g, dirt: 0 });
+    const h = new THREE.Group(); h.position.set(0, 0, 0.1); h.rotation.x = 0.45; g.add(h);
+    box(0.36, 0.22, 0.18, P.steel, 0, -0.11, 0, { parent: h, dirt: 0 }); box(0.3, 0.16, 0.03, P.white, 0, -0.08, 0.1, { parent: h, ...nc });
+    pointLight('#fff1d6', 3, s * 3.7, 1.4, 2.2, 4.5);
+  }
+  // transformer on a hazard-framed plate on the front apron, cabled to its junction box; conduits to the welding
+  // console and the robot's base
+  const qx = -0.8, qz = 3.8;
+  box(1.35, 0.06, 1.0, P.dark, qx, 0, qz, { dirt: 0, cast: false });
+  for (const [w, d, x, z] of [[1.35, 0.07, qx, qz - 0.5], [1.35, 0.07, qx, qz + 0.5], [0.07, 1.0, qx - 0.67, qz], [0.07, 1.0, qx + 0.67, qz]]) box(w, 0.07, d, M.hazard, x, 0, z, { dirt: 0, cast: false });
+  P.transformer(qx, qz, 0);
+  P.junction(0.5, 3.95, 0);
+  cyl(0.035, 0.16, M.plain('#c9c2b0', 0.4, 0.1), 0.62, 0.76, 3.9, { seg: 8, dirt: 0 });
+  P.cable([qx + 0.28, 1.17, qz], [0.62, 0.92, 3.9], 0.3, 8);
+  P.conduit([[0.6, 0.3, 3.73], [0.6, 0.3, 2.8]], 0.05);
+  P.conduit([[0.77, 0.25, 3.9], [1.42, 0.25, 3.9], [1.42, 0.25, 2.42]], 0.05);
+  // beacons: team on the front-left roof corner (the accent one is on the right), amber on the roof fan
+  P.beacon(X0 + 0.1, Y0 + RISE + 0.12, z1 - 0.1);
+  P.beacon(2.6 + 0.35, Y0 + 0.66, z0 + 0.6, '#ffb347');
 }

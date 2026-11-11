@@ -3,6 +3,11 @@
 // and a glass-and-steel orb on top. Coils and orb glow ice blue #8fd8ff for every team.
 //   ?part=pulse   only the coils and orb, blindingly bright (body kept as depth so hidden parts stay hidden)
 // Marks c<k>L / c<k>R (coil rims), c<k>F, orb, orbL, orbR for the arcs drawn on the pulse overlay.
+// Powered realism (b/powerkit.js), kept light and on the tower render only (?part=pulse is untouched): a team strip
+// round the concrete footing, a transformer at the back left conduited into the capacitor bank and cabled to the
+// deck, a junction box at the front right feeding the other bank, status lights by the fan, a pole floodlight at
+// the back right and an amber aviation beacon on the lightning rod.
+import { power } from './powerkit.js';
 export default function (L) {
   const { box, cyl, hcyl, beam, pipe, hoop, lamp, pointLight, ao, mesh, sphere, group, mark, M, THREE, TEAM } = L;
   const part = new URLSearchParams(location.search).get('part') || 'tower';
@@ -96,6 +101,32 @@ export default function (L) {
   sphere(0.06, M.chrome, 0, OY + 1.56, cz, {});
   mark('orb', 0, OY, cz); mark('orbL', -0.66, OY, cz); mark('orbR', 0.66, OY, cz); mark('orbB', 0, OY - 0.66, cz);
   if (!PULSE) pointLight(ICE, 7, 0, OY, cz + 1.2, 4);
+
+  // ================================================================ power layer (tower render only)
+  if (!PULSE) {
+    const PK = power(L), nc = { dirt: 0, cast: false };
+    const NB = L.TOD === 'night' ? 2.2 : L.TOD === 'evening' ? 1.6 : 1;
+    { const g = new THREE.TorusGeometry(2.98, 0.035, 6, 8); g.rotateX(Math.PI / 2); mesh(g, PK.glow, 0, 0.27, cz, { ry: Math.PI / 8, ...nc }); }
+    // transformer at the back left, conduited into the back-left capacitor bank and cabled up to the deck
+    const ux = -3.55, uz = -3.3;
+    box(1.2, 0.03, 1.0, PK.dark, ux, 0, uz, nc);
+    for (const [w, d, x, z] of [[1.2, 0.08, ux, uz - 0.5], [1.2, 0.08, ux, uz + 0.5], [0.08, 1.0, ux - 0.6, uz], [0.08, 1.0, ux + 0.6, uz]]) box(w, 0.04, d, M.hazard, x, 0, z, nc);
+    PK.transformer(ux, uz, 0); ao(ux, uz, 1.0, 0.8, 0.35);
+    PK.conduit([[ux + 0.45, 0.3, uz + 0.2], [-2.7, 0.3, uz + 0.2], [-2.15, 0.3, -2.55]], 0.05);
+    PK.cable([ux + 0.28, 1.2, uz], [-1.35, 1.66, cz - 1.25], 0.2);
+    // junction box at the front right feeding the front-right capacitor bank
+    PK.junction(3.3, 2.95, -0.4);
+    PK.conduit([[3.2, 0.4, 2.75], [2.95, 0.3, 2.5], [2.3, 0.3, 1.85]], 0.05);
+    // status lights on the fan housing
+    for (const [k, mat] of [[-0.3, PK.green], [-0.16, PK.amber], [0.16, PK.glow], [0.3, PK.glow]]) box(0.07, 0.06, 0.03, mat, k, 1.18, cz + 2.54, nc);
+    // pole floodlight at the back right, lighting the tower; aviation beacon on the lightning rod
+    { const x = 3.95, z = -3.7, h = 2.3, ry = -0.75;
+      cyl(0.04, h, PK.steelD, x, 0, z, { seg: 10, dirt: 0.2 }); ao(x, z, 0.4, 0.4, 0.3);
+      const g = group(x, h, z, ry), t = new THREE.Group(); t.rotation.x = 0.1; g.add(t);
+      box(0.4, 0.25, 0.18, PK.steel, 0, -0.125, 0.03, { parent: t, dirt: 0 }); box(0.34, 0.19, 0.03, PK.white, 0, -0.095, 0.13, { parent: t, ...nc });
+      pointLight('#fff1d6', 4 * NB, x + Math.sin(ry) * 1.6, h - 0.6, z + Math.cos(ry) * 1.6, 5); }
+    PK.beacon(0, OY + 1.66, cz, '#ffb347');
+  }
 
   if (PULSE) {
     const depthOnly = new THREE.MeshBasicMaterial({ colorWrite: false });

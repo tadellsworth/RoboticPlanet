@@ -3,7 +3,11 @@
 //   ?part=head&rot=k&n=N  the mortar alone (tube, bipod, round base plate), turned to direction k of N
 //                         (0 = right, then clockwise seen from above: 1/8 turn = down-right toward the viewer).
 //                         No team colour on the head. Camera and light never move; the base plate centre never moves.
+// Powered realism (b/powerkit.js), kept light and on the base layer only (built last, so the head frames are
+// untouched): team strips and warm lamps on the outer faces of the concrete blocks, a transformer at the back right
+// and a junction box at the front right conduited into the blocks, a pole floodlight at the back left, beacons.
 import { sandbag, bagArc } from './milkit.js';
+import { power } from './powerkit.js';
 
 export default function (L) {
   const { box, cyl, hcyl, beam, pipe, hoop, lamp, pointLight, ao, mesh, sphere, group, mark, M, THREE, TEAM } = L;
@@ -118,4 +122,33 @@ export default function (L) {
 
   if (part === 'base') { head.visible = false; pointLight(TEAM, 3, 0, 1.0, cz + 2.4, 3); pointLight(AMBER, 3, -1.57, FLOOR + 2.0, cz - 1.55, 2.5); }
   else { base.visible = false; L.hidePad(); L.getRoot().traverse(o => { if (o.userData.decal) o.visible = false; }); }
+
+  // ================================================================ power layer (base only; lights and electricity)
+  if (part === 'base') {
+    const P = power(L), nc = { dirt: 0, cast: false };
+    const NB = L.TOD === 'night' ? 2.2 : L.TOD === 'evening' ? 1.6 : 1;
+    const pol = (a, r) => [Math.cos(a) * r, cz + Math.sin(a) * r];
+    // the concrete blocks set in the bag ring: a team strip under the hazard top and a warm lamp on each outer face
+    for (const b of BLOCKS) {
+      const [x, z] = pol(b, 3.15), g = group(x, 0, z, -b + Math.PI / 2);
+      box(1.05, 0.05, 0.04, P.glow, 0, 0.9, 0.545, { parent: g, ...nc });
+      box(0.2, 0.12, 0.08, P.steelD, 0, 0.6, 0.56, { parent: g, dirt: 0 }); box(0.14, 0.06, 0.03, P.warm, 0, 0.62, 0.61, { parent: g, ...nc });
+    }
+    P.beacon(...(([x, z]) => [x, 1.33, z])(pol(BLOCKS[0], 3.15)), '#ffb347');
+    // transformer at the back right, conduited into the back-right block
+    const ux = 3.6, uz = -3.7;
+    box(1.2, 0.03, 1.0, P.dark, ux, 0, uz, nc);
+    for (const [w, d, x, z] of [[1.2, 0.08, ux, uz - 0.5], [1.2, 0.08, ux, uz + 0.5], [0.08, 1.0, ux - 0.6, uz], [0.08, 1.0, ux + 0.6, uz]]) box(w, 0.04, d, M.hazard, x, 0, z, nc);
+    P.transformer(ux, uz, 0); ao(ux, uz, 1.0, 0.8, 0.35);
+    { const [x, z] = pol(BLOCKS[2], 3.72); P.conduit([[ux - 0.45, 0.3, uz + 0.1], [x + 0.3, 0.3, uz + 0.1], [x, 0.3, z]], 0.05); }
+    // junction box at the front right, conduited into the front-right block
+    P.junction(3.6, 3.6, 0);
+    { const [x, z] = pol(BLOCKS[0], 3.72); P.conduit([[3.6, 0.4, 3.38], [3.6, 0.3, 3.15], [3.6, 0.3, 1.8], [x, 0.3, z]], 0.05); }
+    // pole floodlight at the back left, lighting the pit
+    { const x = -3.75, z = -3.75, h = 2.2, ry = 0.75;
+      cyl(0.04, h, P.steelD, x, 0, z, { seg: 10, dirt: 0.2 }); ao(x, z, 0.4, 0.4, 0.3);
+      const g = group(x, h, z, ry), t = new THREE.Group(); t.rotation.x = 0.2; g.add(t);
+      box(0.4, 0.25, 0.18, P.steel, 0, -0.125, 0.03, { parent: t, dirt: 0 }); box(0.34, 0.19, 0.03, P.white, 0, -0.095, 0.13, { parent: t, ...nc });
+      pointLight('#fff1d6', 4 * NB, x + Math.sin(ry) * 1.6, h - 0.8, z + Math.cos(ry) * 1.6, 5); }
+  }
 }

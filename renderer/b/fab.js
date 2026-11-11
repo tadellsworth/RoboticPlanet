@@ -96,7 +96,7 @@ export default function (L) {
     K.flood(4.4, 2.35, 2.5, -0.6);
     K.flood(-4.4, 3.65, 2.4, 0.55);
     // beacons: amber on the gas tanks, team on the roof fans' hubs and the duct unit
-    for (const tz of [-3.3, -2.0]) K.beacon(-4.35, 4.48, tz, '#ffb347');
+    for (const tz of [-3.3, -2.0]) { cyl(0.025, 0.32, K.steelD, -4.35, 4.38, tz, { seg: 8, dirt: 0 }); K.beacon(-4.35, 4.74, tz, '#ffb347'); }
     for (const fx of [bx - 2.3, bx + 2.1]) K.beacon(fx, H + 0.75, bz - 2.0);
     K.beacon(bx + 2.95, H + 0.8, bz + 1.95);
   }

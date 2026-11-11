@@ -1,9 +1,15 @@
 // Research Lab: a compact white-and-graphite science station. Observatory dome on a drum with a glowing violet window
 // band and a shutter slit; an entrance airlock; a flat-roofed instrument annex carrying a small satellite dish and an
 // antenna mast; a bank of server racks with blinking lights on the east side; a sample bay with glowing glass canisters
-// on the west side. Accent (violet #b98cff) in the window band and canisters. One version (the game adds the team bar).
+// on the west side. Accent (violet #b98cff) in the window band and canisters.
+// Powered realism (b/powerkit.js): team light rings round the dome's cornice and crown, team strips on the airlock,
+// annex and server canopy, warm lit windows on the annex, lamp posts at the airlock, a transformer with arcing
+// insulators and a junction box at the front right with conduits with glowing collars to the server racks, a cable,
+// beacons. Team-coloured: render one image per team.
+import { power } from './powerkit.js';
 export default function (L) {
   const { box, cyl, hcyl, sphere, hoop, mesh, beam, pipe, lamp, pointLight, ao, railing, group, M, THREE, ACCENT } = L;
+  const P = power(L), nc = { dirt: 0, cast: false };
   L.seed(1777);
   const white = M.paint('#e2e0da', { rivets: false }), whiteR = M.paint('#d8d6cf'), graph = M.paint('#3a3d42'), graphD = M.paint('#2c2f33', { rivets: false });
   const conc = M.rough('#8f887c'), glow = M.emit(ACCENT, 2.6), glowS = M.emit(ACCENT, 1.4);
@@ -109,4 +115,31 @@ export default function (L) {
   pointLight(ACCENT, 8, BX, 1.2, BZ + 0.3, 3);
   box(0.7, 0.9, 0.5, white, BX + 1.55, 0.3, BZ - 0.45, { dirt: 0.2 });                                  // sample fridge
   box(0.5, 0.05, 0.03, glowS, BX + 1.55, 1.0, BZ - 0.19, { dirt: 0, cast: false });
+
+  // ================================================================ power layer (lights and electricity)
+  // team rings round the dome's cornice and its crown puck; a team beacon on the crown
+  hoop(DR + 0.1, 0.035, P.glow, DX, 2.2, DZ, { cast: false });
+  hoop(0.4, 0.03, P.glow, DX, 2.24 + DR + 0.02, DZ, { cast: false });
+  P.beacon(DX + 0.12, 2.24 + DR + 0.18, DZ + 0.1);
+  // airlock: team strip along the roof's front edge, warm bulkhead lamps either side of the door
+  P.strip(1.72, AX, 1.96, AZ + 0.73, 0, 0.06);
+  for (const s of [-1, 1]) { box(0.14, 0.12, 0.08, P.steelD, AX + s * 0.58, 1.25, AZ + 0.68, { dirt: 0 }); box(0.1, 0.07, 0.03, P.warm, AX + s * 0.58, 1.27, AZ + 0.72, nc); }
+  pointLight('#ffd9a0', 2, AX, 1.0, AZ + 1.3, 2.4);
+  // annex: warm lit windows over the glass band, a team strip along the roof's front edge, amber beacon on the roof unit
+  P.windows(NW - 0.5, 0.28, NX, 1.15, NZ + ND / 2 + 0.03, 0, 5);
+  P.strip(NW + 0.1, NX, 0.3 + NH + 0.04, NZ + ND / 2 + 0.08, 0, 0.06);
+  P.beacon(NX + 0.85, RY + 0.42, NZ + 0.75, '#ffb347');
+  // server canopy: a team strip along its front edge
+  P.strip(3.0, SX, 2.22, SZ + 0.72, 0, 0.06);
+  // lamp posts flanking the airlock's step
+  P.flood(AX - 1.15, AZ + 1.25, 1.55, -0.35); P.flood(AX + 1.15, AZ + 1.25, 1.55, 0.35);
+  // transformer and junction box at the front right; conduits into the server racks' plinth, a cable to the canopy
+  const qx = 3.45, qz = 3.55;
+  box(1.35, 0.08, 1.05, P.conc, qx, 0, qz, { dirt: 0.4, cast: false }); ao(qx, qz, 1.35, 1.05, 0.4);
+  box(1.35, 0.1, 0.05, M.hazard, qx, 0, qz + 0.53, { dirt: 0, cast: false });
+  P.transformer(qx, qz, 0);
+  P.junction(2.05, 3.65, 0);
+  P.conduit([[qx - 0.45, 0.3, qz], [2.32, 0.3, qz]], 0.05);
+  P.conduit([[2.05, 0.3, 3.44], [2.05, 0.3, SZ + 0.85], [2.05, 0.12, SZ + 0.72]], 0.05);
+  P.cable([qx + 0.28, 1.17, qz], [SX + 1.42, 2.1, SZ + 0.62], 0.2, 6);
 }
