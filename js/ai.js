@@ -323,7 +323,8 @@ function aiThink(p) {
     ['refinery', 'farm', 'munitions', 'tarworks', 'disruptor'].includes(b.type))).length;
   const wantTankers = Math.min(4, 1 + Math.floor(liquidBlds / 5));
   const army = kinds.warbot || 0;
-  const wantArmy = S.mode === 'colony' ? 0 : aiWantArmy(lvl, p);
+  // (An enemy gun covering our buildings: at least enough warbots to knock it out, see aiClearGuns.)
+  const wantArmy = S.mode === 'colony' ? 0 : Math.max(aiWantArmy(lvl, p), P.gunWant || 0);
   const armyBehind = army < wantArmy - 2;
   let unarmed = 0;
   // (Warbots stranded across the water, say landed on an enemy shore, can't get home to rearm: they don't count.)
@@ -362,7 +363,7 @@ function aiThink(p) {
     // A forward Depot with supply orders gets a Freight Truck to keep it stocked.
     else if (me.some((d) => d.keep && d.built && !BDEFS[d.type].terminal) && (kinds.truck || 0) < 1 + Math.floor(me.length / 35) && !(b.orders.truck > 0)) b.orders.truck = 1;
     // Rocket Trucks for siege once the army is up: one, and one more for every ten warbots (at most three).
-    const wantRockets = S.mode === 'colony' || S.time < lvl.grace ? 0 : Math.min(3, Math.floor(army / 10) + (army >= lvl.threshold ? 1 : 0));
+    const wantRockets = S.mode === 'colony' ? 0 : Math.max(P.gunTarget ? 1 : 0, S.time < lvl.grace ? 0 : Math.min(3, Math.floor(army / 10) + (army >= lvl.threshold ? 1 : 0)));
     if ((kinds.rocket || 0) < wantRockets && !(b.orders.rocket > 0) && !armyBehind && me.some((a) => a.type === 'armory' && a.built)) b.orders.rocket = 1;
     // A Trade Terminal is served only by Road Trains: one for it.
     if (me.some((t) => BDEFS[t.type].terminal) && !(kinds.roadtrain > 0) && !(b.orders.roadtrain > 0)) b.orders.roadtrain = 1;
@@ -374,6 +375,10 @@ function aiThink(p) {
     setKeep(d, 'cement', 12);
     if (S.mode !== 'colony') setKeep(d, 'ammo', 4);
   }
+
+  // 3b) An enemy gun covering our buildings: our robots keep clear of them, so the work there has stopped.
+  //     Knock it out (missile, Rocket Truck, bomber, warbots) so they can get back to work.
+  if (S.mode !== 'colony') aiClearGuns(p, lvl);
 
   // 4) Missiles: soften turrets and Outposts first, the Command Base once the army is big. (With
   //    two rivals, the one it's up against is the nearest still in the game.)
@@ -886,11 +891,14 @@ function aiBomber(p, me) {
   if (!field) return;
   const bombers = S.bots.filter((u) => !u.dead && u.owner === p && BOTS[u.type].bomber);
   if (!bombers.length && !(field.yard && field.yard.bomber > 0)) orderAtYard(field, 'bomber', 1);
-  if (S.time - (P.lastStrike || -999) < AI_BOMB_GAP) return;
+  const gun = P.gunTarget ? getE(P.gunTarget) : null;
+  if (S.time - (P.lastStrike || -999) < (gun && !gun.dead ? AI_BOMB_GAP / 4 : AI_BOMB_GAP)) return;
   const u = bombers.find((v) => !v.mission && !v.flight && !(v.rearmUntil > S.time) && planeBase(v) && v.inside === planeBase(v).id);
   if (!u) return;
   const flak = S.buildings.filter((b) => !b.dead && b.built && b.owner !== p && BDEFS[b.type].flak);
   const covered = (x, y) => flak.some((f) => dist2(f.x + 0.5, f.y + 0.5, x, y) <= 49);
+  // An enemy gun keeping our robots off our own buildings: bomb it first.
+  if (gun && !gun.dead && gun.owner !== p && !covered(gun.x + 0.5, gun.y + 0.5) && !strikeBlocked(p, u, gun) && !orderStrike(p, u, gun)) { P.lastStrike = S.time; return; }
   let best = null, bs = 0;
   for (const b of S.buildings) {
     const v = AI_BOMB_VALUE[b.type];
@@ -904,6 +912,87 @@ function aiBomber(p, me) {
     if (sc > bs) { bs = sc; best = v; }
   }
   if (best && !orderStrike(p, u, best)) P.lastStrike = S.time;
+}
+
+/**
+ * Enemy guns hurting the economy: a rival's Pulse Turret, Mortar Pit, manned Bunker or Keep whose reach covers
+ * buildings of ours (our robots keep clear of them, so the work there stops: see dangerSweep). Each:
+ * { b: the gun, score, n: how many of our buildings it covers }, worst first.
+ */
+function aiGunThreats(p) {
+  dangerMap(p);
+  const out = [];
+  for (const g of DANGER.guns[p] || []) {
+    const b = g.b;
+    if (b.dead || b.owner < 0 || (S.wildlife && b.owner === WILD_OWNER)) continue;
+    const r2 = g.r * g.r;
+    let score = 0, n = 0;
+    for (const e of S.buildings) {
+      if (e.dead || e.owner !== p || dist2(e.x + 0.5, e.y + 0.5, b.x + 0.5, b.y + 0.5) > r2) continue;
+      const def = BDEFS[e.type];
+      n++;
+      score += e.type === 'lander' ? 8 : def.store || def.staff || def.out || def.charger ? 3 : def.war ? 1 : 2;
+    }
+    if (n) out.push({ b, score, n });
+  }
+  out.sort((a, c) => c.score - a.score);
+  return out;
+}
+
+/** Warbots it takes to knock out gun b: its guards, its garrison, and a margin. */
+function aiGunNeed(b) {
+  return Math.ceil((b.garrison ? b.garrison.length : 0) * 1.3) + guardsNear(b) + (b.type === 'turret' || BDEFS[b.type].keep ? 3 : 2) + 1;
+}
+
+/**
+ * Clear the worst enemy gun covering our buildings: a missile if a Silo can reach it, Rocket Trucks (they
+ * outrange a Pulse Turret), a Strike Bomber, and a band of warbots big enough to win. Until the army can
+ * win, the Foundry makes warbots (P.gunNeed). P.gunTarget names the gun for aiSiege and aiBomber.
+ */
+function aiClearGuns(p, lvl) {
+  const P = S.players[p];
+  // A construction site an enemy gun covers would never be built (no robot goes there) and holds up the
+  // rest: call it off (its materials go back), and build somewhere else.
+  for (const b of S.buildings) if (!b.dead && b.owner === p && !b.built && b.underFire && S.time - b.underFire > 10) demolish(b);
+  const threats = aiGunThreats(p);
+  // The gun a rally flag was sent against is gone: call the warbots home.
+  if (P.gunRally && (!threats.length || threats[0].b.id !== P.gunTarget)) { if (rallyById(P.gunRally)) recallRally(P.gunRally); P.gunRally = 0; }
+  if (!threats.length) { P.gunTarget = 0; P.gunNeed = 0; P.gunWant = 0; return; }
+  const t = threats[0].b;
+  if (P.gunTarget !== t.id) { P.gunTarget = t.id; P.gunSince = S.time; }
+  // A missile, if a Silo is in range and none is on its way already.
+  if (!S.missiles.some((m) => m.owner === p && m.target === t.id) && silosInRange(p, t).some(siloReady)) fireMissile(p, t);
+  // Rocket Trucks free to shell it (aiSiege also puts it first).
+  const z = S.zone[tIdx(t.x, t.y)];
+  for (const u of S.bots) {
+    if (u.dead || u.owner !== p || !BOTS[u.type].siege || u.salvo || (u.task && !u.task.auto) || !(u.rockets ?? ROCKET.salvo)) continue;
+    if (S.zone[tIdx(Math.floor(u.x), Math.floor(u.y))] !== z || !rocketTarget(u, t)) continue;
+    orderBombard(p, [u.id], t);
+  }
+  // Warbots: enough to win, from the garrisons in reach. Already on their way: wait for them.
+  const need = aiGunNeed(t);
+  P.gunWant = need + 2; // (each garrison keeps one at home)
+  const going = S.bots.filter((u) => !u.dead && u.owner === p && u.type === 'warbot' && u.task && u.task.type === 'attack' && u.task.target === t.id).length;
+  P.gunNeed = Math.max(0, need - going);
+  if (going >= need || S.time < (P.gunAttackAt || 0)) return;
+  const avail = attackAvailable(p, t);
+  if (avail + going >= need) {
+    const sent = sendAttack(p, t, Math.min(avail, need - going + 2));
+    if (sent) { P.gunAttackAt = S.time + 20; P.lastAttack = S.time; P.siegeAt = { x: t.x, y: t.y, until: S.time + 90 }; }
+    return;
+  }
+  // No garrison near enough to attack from: a rally flag beside the gun (they fight what they meet there
+  // and attack what stands there), called home once the gun is gone.
+  if (P.gunRally && rallyById(P.gunRally)) return;
+  let spot = null;
+  for (const [di, dj] of [[1, 1], [-1, 1], [1, -1], [-1, -1], [2, 0], [-2, 0], [0, 2], [0, -2], [2, 2], [-2, -2]]) {
+    const i = t.x + di, j = t.y + dj;
+    if (inMap(i, j) && walkable(tIdx(i, j)) && !S.bAt[tIdx(i, j)] && S.zone[tIdx(i, j)] === homeZone(p)) { spot = { i, j }; break; }
+  }
+  if (spot && rallyAvailable(p, spot.i, spot.j, true) + going >= need) {
+    const { sent, rally } = sendToRally(p, spot.i, spot.j, need - going + 2, true);
+    if (sent) { P.gunRally = rally.id; P.gunAttackAt = S.time + 20; P.lastAttack = S.time; }
+  }
 }
 
 function aiSiege(p) {
@@ -921,6 +1010,7 @@ function aiSiege(p) {
       if (d > 24) continue;
       let sc = (def.war && !def.barrier ? 8 : 0) + (def.mil ? 4 : 0) - d * 0.2;
       if (at) sc += dist(b.x, b.y, at.x, at.y) <= 8 ? 10 : -6;
+      if (b.id === P.gunTarget) sc += 40; // a gun keeping our robots off our own buildings comes first
       if (sc > bs) { bs = sc; best = b; }
     }
     if (best) orderBombard(p, [u.id], best);
@@ -1142,6 +1232,7 @@ function aiSearchSpot(p, type, lander) {
         out = true;
       }
       if (S.fert[j * S.W + i] && type !== 'farm') continue; // keep fertile soil for farming
+      if (gunCovers(p, j * S.W + i)) continue; // not where an enemy gun reaches: nobody could build it
       if (avoid.some((a) => dist2(a.x, a.y, i, j) < 12)) continue;
       if (!canPlace(p, type, i, j, true).ok) continue;
       let rc = Infinity;

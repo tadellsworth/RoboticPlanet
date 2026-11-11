@@ -1787,7 +1787,7 @@ function onMapTap(i, j, wx, wy) {
     }
     if (UI.roadMode === 'arrows') {
       // Turn the arrow: east, south, west, north, then back to two-way.
-      if (S.road[t] && !roadOwnedBy(0, t)) { sfx('error'); showRoadBanner('That road isn\'t yours: you can only change your own roads.'); return; }
+      if (S.road[t] && !roadOwnedBy(0, t)) { sfx('error'); showRoadBanner('That road isn\'t yours: you can only change your own roads, or ones on land you hold.'); return; }
       if (S.road[t]) { setRoadDir(i, j, S.road[t] >= 5 ? 1 : S.road[t] + 1); sfx('click'); showRoadBanner(); }
       return;
     }
@@ -1846,7 +1846,7 @@ function onMapTap(i, j, wx, wy) {
       const stroke = [];
       if (UI.draft.rail.has(t)) draftOp(stroke, t, 'unrail');
       else if (UI.draft.railDel.has(t)) draftOp(stroke, t, 'unraildel');
-      else if (S.rail[t] && !roadOwnedBy(0, t)) { sfx('error'); showRoadBanner('That track isn\'t yours: you can only take up your own track.'); return; }
+      else if (S.rail[t] && !roadOwnedBy(0, t)) { sfx('error'); showRoadBanner('That track isn\'t yours: you can only take up your own track, or track on land you hold.'); return; }
       else if (S.rail[t] || S.railPlan[t] === 1) draftOp(stroke, t, 'raildel');
       else if (S.bAt[t] && getE(S.bAt[t]).owner === 0 && BDEFS[getE(S.bAt[t]).type].station) { showRoadBanner('Drag from this station to another: the track is laid beside each of them, and trains run between them.'); return; }
       else { const why = railBlocked(0, t); if (why) { sfx('error'); showRoadBanner(why); return; } draftOp(stroke, t, 'rail'); }
@@ -1877,7 +1877,7 @@ function onMapTap(i, j, wx, wy) {
     let note = '';
     if (d.addSet.has(t)) draftOp(stroke, t, 'unadd');
     else if (d.del.has(t)) draftOp(stroke, t, 'undel');
-    else if (S.road[t] && !roadOwnedBy(0, t) && S.plan[t] !== 1) { sfx('error'); showRoadBanner('That road isn\'t yours: you can only take up your own roads.'); return; }
+    else if (S.road[t] && !roadOwnedBy(0, t) && S.plan[t] !== 1) { sfx('error'); showRoadBanner('That road isn\'t yours: you can only take up your own roads, or ones on land you hold.'); return; }
     else if (S.road[t] || S.plan[t] === 1) { draftOp(stroke, t, 'del'); note = S.plan[t] ? 'Planned tile marked to call off.' : 'Road marked to take up: its Cement comes back when you tap Build.'; }
     else if (canRoad(0, i, j) || draftBridge(t)) {
       draftOp(stroke, t, 'add');
@@ -2891,7 +2891,9 @@ function refreshBuildingSheet(b) {
   if (mine && def.yard && b.built) renderYard(b);
   const parts = [];
   if (mine && def.lab && $('sh-research')) refreshResearch();
-  $('sh-status').textContent = mine ? b.status || '' : (b.built ? '' : 'Construction site');
+  const gun = mine && b.underFire && !BDEFS[b.type].war ? gunOver(0, b.x, b.y) : null;
+  $('sh-status').textContent = gun ? `Under enemy fire: an enemy ${BDEFS[gun.type].name} covers it, so your robots keep clear until the gun is destroyed or runs dry.`
+    : mine ? b.status || '' : (b.built ? '' : 'Construction site');
   if (!b.built) {
     parts.push(`<div class="bar"><div style="width:${Math.round(b.progress * 100)}%"></div></div>`);
     parts.push('<div class="section-label">Materials delivered</div><div class="goodlist">' +

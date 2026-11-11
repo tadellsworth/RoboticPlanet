@@ -1713,6 +1713,23 @@ function computeTerritory() {
     }
   }
   S.territoryVer++;
+  // Roads, track and pipe a rival left inside our military ring (an Outpost, Keep or the Command Base
+  // took the ground) are ours now: we can use them, change them or rip them up, and the rival can't.
+  // (The small rings round other buildings don't take a rival's ways: they're only ours to tear up.)
+  let took = false;
+  for (let t = 0; t < N; t++) {
+    const o = S.owner[t];
+    if (o < 0 || (S.wildlife && o === WILD_OWNER) || d[o][t] === Infinity) continue;
+    if ((S.road[t] || S.rail[t]) && S.wown[t] >= 0 && S.wown[t] !== o) {
+      S.wown[t] = o;
+      if (S.paveMark) S.paveMark[t] = 0;
+      if (S.lights && S.lights[t]) S.lights[t].owner = o;
+      if (S.over && S.over[t]) S.over[t].owner = o;
+      took = true;
+    }
+    if (S.pipe && S.pipe[t] && S.pipe[t] !== o + 1) { setPipe(t, o + 1); took = true; }
+  }
+  if (took) { S.roadVer = (S.roadVer || 0) + 1; S.railVer = (S.railVer || 0) + 1; }
   // Buildings on a rival's ground: a construction site there is lost; a finished building is cut off
   // (it stops working and crumbles, see cutOff) until its owner takes the land back. On no-one's ground,
   // or its owner's, it's fine.
@@ -2254,11 +2271,12 @@ function planList(owner) { _planLists(); return _plans.lists[owner]; }
 function planAll(owner) { _planLists(); return _plans.all[owner]; }
 
 /**
- * Is the road (or track) on tile t `owner`'s to change: inside its border, or a bridge it has pushed
- * out past the border (unclaimed water joined to its land or bridges)? A rival's roads aren't.
+ * Is the road (or track) on tile t `owner`'s to change: its own, anything on land it holds (a rival's
+ * road left behind there is de facto ours), or a bridge it has pushed out past the border (unclaimed
+ * water joined to its land or bridges)? A rival's roads on anyone else's ground aren't.
  */
 function roadOwnedBy(owner, t) {
-  if (S.road[t] || S.rail[t]) return wayOwner(t) === owner;
+  if (S.road[t] || S.rail[t]) return wayOwner(t) === owner || S.owner[t] === owner;
   return S.owner[t] === owner || (S.owner[t] < 0 && crossTile(t) && bridgeHead(owner, t % S.W, (t / S.W) | 0));
 }
 

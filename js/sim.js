@@ -14,6 +14,7 @@ function simStep(dt) {
   if (S.tick % 30 === 11) updatePipes();
   if (S.tick % 30 === 15) for (let p = 0; p < S.players.length; p++) landerSalvage(p, 30 * dt);
   if (S.tick % 30 === 22) updateEvac();
+  if (S.tick % 30 === 26) dangerSweep();
   if (S.tick % 60 === 33 && S.decals && S.decals.length) S.decals = S.decals.filter((d) => S.time - d.t0 < d.life); // old ground marks fade away
   // Each player's bots are given work every 8 ticks, the players spread over those ticks.
   for (let p = 0, n = S.players.length; p < n; p++) if (S.tick % 8 === Math.floor((p * 8) / n) && !S.players[p].out && !(S.wildlife && p === WILD_OWNER)) dispatch(p);
@@ -86,7 +87,7 @@ function storeAccepts(b) { return b.built && !b.dead && BDEFS[b.type].store && !
 function nearestStoreTo(owner, x, y, except) {
   let best = null, bd = Infinity;
   for (const b of S.buildings) {
-    if (b === except || b.dead || b.owner !== owner || !storeAccepts(b) || evacuated(b)) continue;
+    if (b === except || b.dead || b.owner !== owner || !storeAccepts(b) || evacuated(b) || underGuns(b)) continue;
     const d = dist2(b.x + 0.5, b.y + 0.5, x, y);
     if (d < bd) { bd = d; best = b; }
   }
@@ -473,7 +474,7 @@ function findCharger(u) {
     const ch = BDEFS[b.type].charger;
     if (!ch || S.zone[tIdx(b.x, b.y)] !== zone || chargerDry(b) || evacuated(b)) continue;
     if (roadBound(u) && !botLinked(u, b)) continue;
-    const s = dist(b.x + 0.5, b.y + 0.5, u.x, u.y) + Math.max(0, (b.charging || 0) - ch.slots) * 4;
+    const s = dist(b.x + 0.5, b.y + 0.5, u.x, u.y) + Math.max(0, (b.charging || 0) - ch.slots) * 4 + (gunShy(u) && underGuns(b) ? 500 : 0); // one an enemy gun covers only as a last resort
     if (s < bs) { bs = s; best = b; }
   }
   return best;
@@ -491,7 +492,7 @@ function findFuel(u) {
     const def = BDEFS[b.type];
     if (!(def.store || def.charger) || ((b.stock.fuel || 0) - (b.res.fuel || 0)) < 1) continue;
     if (ship ? !shipAt(u, b) : !botLinked(u, b)) continue; // a ship fills up at a Port on its water
-    const d = dist2(b.x + 0.5, b.y + 0.5, u.x, u.y);
+    const d = dist2(b.x + 0.5, b.y + 0.5, u.x, u.y) + (gunShy(u) && underGuns(b) ? 1e6 : 0); // (under an enemy gun: a last resort)
     if (d < bd) { bd = d; best = b; }
   }
   return best;
@@ -1163,7 +1164,7 @@ function moveDirect(u, x, y, dt) {
 
 function dispatch(p) {
   const blds = [];
-  for (const b of S.buildings) if (b.owner === p && !b.dead && !evacuated(b)) blds.push(b); // nothing inside a blast ring being evacuated
+  for (const b of S.buildings) if (b.owner === p && !b.dead && !evacuated(b) && !underGuns(b)) blds.push(b); // nothing inside a blast ring being evacuated, or in an enemy gun's reach
   blds.sort((a, c) => prioRank(a) - prioRank(c) || a.born - c.born);
 
   // Keep a worker or two free to build. If raids or new buildings took them all, pull one off the
@@ -1709,7 +1710,7 @@ function nextPaveTile(u, p, maxD) {
   for (const t of planList(p)) {
     const by = S.paveRes[t];
     if (by && getE(by) && !getE(by).dead) continue;
-    if (skip[t] > S.time) continue;
+    if (skip[t] > S.time || gunCovers(p, t)) continue; // (not where an enemy gun reaches)
     const cross = crossTile(t);
     // A bridge or tunnel is built from the tile next to it: the shore, the rock face, or the deck so far.
     if (cross ? paveStand(t, zone) < 0 : S.zone[t] !== zone) continue;
@@ -1943,7 +1944,7 @@ function roadBound(u) { return BOTS[u.type].roadOnly && !haulerStranded(u); }
 function nearestReachableStore(u) {
   let best = null, bd = Infinity;
   for (const b of S.buildings) {
-    if (b.dead || b.owner !== u.owner || !storeAccepts(b) || evacuated(b)) continue;
+    if (b.dead || b.owner !== u.owner || !storeAccepts(b) || evacuated(b) || (gunShy(u) && underGuns(b))) continue;
     if (roadBound(u) && !botLinked(u, b)) continue;
     const d = dist2(b.x + 0.5, b.y + 0.5, u.x, u.y);
     if (d < bd) { bd = d; best = b; }
@@ -1970,7 +1971,7 @@ function parkingFor(u) {
   const parked = trucksParked(u.owner, u.id, !!BOTS[u.type].tanker);
   let near = null, nd = Infinity, empty = null, ed = Infinity;
   for (const b of S.buildings) {
-    if (b.dead || b.owner !== u.owner || !storeAccepts(b) || !botLinked(u, b) || evacuated(b)) continue;
+    if (b.dead || b.owner !== u.owner || !storeAccepts(b) || !botLinked(u, b) || evacuated(b) || (gunShy(u) && underGuns(b))) continue;
     const d = dist2(b.x + 0.5, b.y + 0.5, u.x, u.y);
     if (d < nd) { nd = d; near = b; }
     if (!parked.get(b.id) && d < ed) { ed = d; empty = b; }
@@ -2135,7 +2136,7 @@ function findFace(b, radius) {
   for (let j = Math.max(0, b.y - radius); j <= Math.min(S.H - 1, b.y + radius); j++) {
     for (let i = Math.max(0, b.x - radius); i <= Math.min(S.W - 1, b.x + radius); i++) {
       const t = j * S.W + i, d = dist2(i, j, b.x, b.y);
-      if (d > r2 || d >= bd || S.zone[t] !== zone || S.resRes[t] || (S.owner[t] >= 0 && S.owner[t] !== b.owner) || !rockFace(t)) continue;
+      if (d > r2 || d >= bd || S.zone[t] !== zone || S.resRes[t] || (S.owner[t] >= 0 && S.owner[t] !== b.owner) || !rockFace(t) || gunCovers(b.owner, t)) continue;
       bd = d; best = t;
     }
   }
@@ -2151,6 +2152,7 @@ function findNode(b, type, radius) {
       const t = j * S.W + i;
       if (S.res[t] !== type || !S.amt[t] || S.resRes[t] || S.zone[t] !== zone) continue;
       if (S.owner[t] >= 0 && S.owner[t] !== b.owner) continue; // don't harvest on enemy land
+      if (gunCovers(b.owner, t)) continue; // nor where an enemy gun reaches
       if ((type === R_STALK || type === R_CROP) && S.grow[t] < 1) continue;
       const d = dist2(i, j, b.x, b.y);
       if (d <= r2 && d < bd) { bd = d; best = t; }
@@ -2169,7 +2171,7 @@ function findPlantSpot(b, radius) {
       const d = dist2(i, j, b.x, b.y);
       if (d > r2 || d < 2.5) continue;
       if (S.terrain[t] !== T_GROUND || S.res[t] || S.bAt[t] || S.road[t] || S.plan[t] || S.resRes[t] || S.ramp[t] || S.fert[t] || S.zone[t] !== zone) continue;
-      if (S.owner[t] >= 0 && S.owner[t] !== b.owner) continue; // (not on a rival's ground)
+      if ((S.owner[t] >= 0 && S.owner[t] !== b.owner) || gunCovers(b.owner, t)) continue; // (not on a rival's ground, nor where an enemy gun reaches)
       let near = 0, blocked = false;
       for (let dj = -1; dj <= 1; dj++) for (let di = -1; di <= 1; di++) {
         if (!inMap(i + di, j + dj)) continue;
@@ -2194,7 +2196,7 @@ function findCropSpot(b, radius) {
     for (let i = Math.max(0, b.x - radius); i <= Math.min(S.W - 1, b.x + radius); i++) {
       const t = j * S.W + i;
       if (!S.fert[t] || S.res[t] || S.bAt[t] || S.road[t] || S.plan[t] || S.resRes[t] || S.ramp[t] || S.zone[t] !== zone) continue;
-      if (S.owner[t] >= 0 && S.owner[t] !== b.owner) continue; // (not on a rival's ground)
+      if ((S.owner[t] >= 0 && S.owner[t] !== b.owner) || gunCovers(b.owner, t)) continue; // (not on a rival's ground, nor where an enemy gun reaches)
       const d = dist2(i, j, b.x, b.y);
       if (d <= r2 && d < bd) { bd = d; best = t; }
     }
@@ -2222,7 +2224,7 @@ function findPaveSpot(b, x, y) {
   if (!tail) for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) if (inMap(b.x + di, b.y + dj)) push(tIdx(b.x + di, b.y + dj));
   while (head < tail) {
     const t = q[head++];
-    if (needsPaving(t) && (all || S.paveMark[t]) && !S.resRes[t] && wayOwner(t) === b.owner) return t;
+    if (needsPaving(t) && (all || S.paveMark[t]) && !S.resRes[t] && wayOwner(t) === b.owner && !gunCovers(b.owner, t)) return t;
     const i = t % W;
     for (const u of [i > 0 ? t - 1 : -1, i < W - 1 ? t + 1 : -1, t - W, t + W]) if (u >= 0 && u < N && canStep(t, u)) push(u);
   }
@@ -3272,6 +3274,105 @@ function foesNear(p, x, y, r) {
   return false;
 }
 
+/* ------------------------------------------------------------------ keeping clear of enemy guns */
+
+/**
+ * Robots that don't fight (workers, haulers, trucks...) keep out of reach of the enemy guns that would
+ * shoot them: nothing is sent to work at, build, fetch from or deliver to a building one covers (see
+ * dispatch), gatherers pick spots out of reach, routes go round where they can (findPath), and robots
+ * already working there pull out (dangerSweep). The jobs pick up again once the gun is gone or empty.
+ * The guns: a loaded Pulse Turret or Keep cannon, a Mortar Pit with shells, a Bunker or Keep with armed
+ * warbots inside. DANGER.maps[p][t] is 1 where a gun of one of p's rivals reaches (plus DANGER_PAD);
+ * DANGER.guns[p] lists those guns. Refreshed every second.
+ */
+const DANGER = { s: null, t: -1, maps: [], guns: [] };
+const DANGER_PAD = 1;    // robots keep this many tiles further off than a gun can shoot
+const DANGER_COST = 24;  // what crossing a tile in a gun's reach adds to a route (they go round if they can)
+
+/** How far building b can shoot enemy robots right now (tiles), or 0. */
+function gunReach(b) {
+  if (b.dead || !b.built || b.cut || b.paused || b.owner < 0) return 0;
+  const def = BDEFS[b.type];
+  let r = 0;
+  if (def.mortar) { if ((b.shells || 0) + (b.stock.ammo || 0) > 0) r = def.range + auraRange(b); }
+  else if ((b.type === 'turret' || def.keep) && (b.shots > 0 || (b.stock.crystal || 0) > 0)) r = turretRange(b);
+  if ((def.bunker || def.keep) && b.garrison && b.garrison.length && armedIn(b) > 0) r = Math.max(r, def.keep ? KEEP.fire : def.range + auraRange(b));
+  return r;
+}
+
+/** Work out, for every player, the ground its rivals' guns cover. */
+function updateDanger() {
+  const W = S.W, H = S.H, N = W * H, n = S.players.length;
+  if (DANGER.s !== S || DANGER.maps.length !== n || !DANGER.maps[0] || DANGER.maps[0].length !== N) DANGER.maps = S.players.map(() => new Uint8Array(N));
+  DANGER.s = S; DANGER.t = S.time;
+  for (const m of DANGER.maps) m.fill(0);
+  DANGER.guns = S.players.map(() => []);
+  for (const b of S.buildings) {
+    const r = gunReach(b);
+    if (!r) continue;
+    const R = r + DANGER_PAD, R2 = R * R, cx = b.x + 0.5, cy = b.y + 0.5;
+    for (let p = 0; p < n; p++) {
+      if (p === b.owner || (S.wildlife && p === WILD_OWNER)) continue;
+      DANGER.guns[p].push({ b, r: R });
+      const m = DANGER.maps[p];
+      for (let j = Math.max(0, Math.floor(cy - R)); j <= Math.min(H - 1, Math.floor(cy + R)); j++)
+        for (let i = Math.max(0, Math.floor(cx - R)); i <= Math.min(W - 1, Math.floor(cx + R)); i++)
+          if (dist2(i + 0.5, j + 0.5, cx, cy) <= R2) m[j * W + i] = 1;
+    }
+  }
+}
+
+/** The ground player p's robots should keep off (1 = an enemy gun reaches it). */
+function dangerMap(p) {
+  if (DANGER.s !== S || DANGER.t > S.time || S.time - DANGER.t >= 1 || !DANGER.maps[p]) updateDanger();
+  return DANGER.maps[p] || DANGER.maps[0];
+}
+/** Does an enemy gun reach tile t, for player p's robots? */
+function gunCovers(p, t) { return p >= 0 && p < S.players.length && dangerMap(p)[t] === 1; }
+/** Is building b in reach of an enemy gun (so its owner's robots keep away from it)? */
+function underGuns(b) { return gunCovers(b.owner, tIdx(b.x, b.y)); }
+/** The enemy gun covering building b (or tile x, y) for its owner, the nearest one, or null. */
+function gunOver(p, x, y) {
+  dangerMap(p);
+  let best = null, bd = Infinity;
+  for (const g of DANGER.guns[p] || []) { const d = dist2(g.b.x + 0.5, g.b.y + 0.5, x + 0.5, y + 0.5); if (d <= g.r * g.r && d < bd) { bd = d; best = g.b; } }
+  return best;
+}
+
+/** Does robot u stay clear of enemy guns (anything but a fighter: warbots, Rocket Trucks and aircraft go in)? */
+function gunShy(u) { const bt = BOTS[u.type]; return u.type !== 'warbot' && !bt.siege && !bt.air && !bt.wild && !bt.sea && !bt.rail; }
+
+/**
+ * Once a second: every player's robots pull out of jobs at buildings an enemy gun now covers (a worker
+ * running one walks away, a hauler drops the run) and buildings newly under fire tell their owner.
+ */
+function dangerSweep() {
+  updateDanger();
+  for (const b of S.buildings) {
+    if (b.dead || b.owner < 0 || (S.wildlife && b.owner === WILD_OWNER)) continue;
+    const hot = underGuns(b);
+    if (hot && !b.underFire) {
+      b.underFire = S.time;
+      if (b.staff || b.staffInc) unstaff(b);
+      const gun = gunOver(b.owner, b.x, b.y), P = S.players[b.owner];
+      if (b.owner === 0 && gun && !BDEFS[b.type].war && S.time - (P.gunMsgAt || -999) > 45) {
+        P.gunMsgAt = S.time;
+        postMsg(0, `An enemy ${BDEFS[gun.type].name} covers your ${BDEFS[b.type].name}: your robots keep clear of it until the gun is destroyed or runs dry.`, b.x, b.y, 'warn');
+        sfx('alert');
+      }
+    } else if (!hot && b.underFire) b.underFire = 0;
+  }
+  for (const u of S.bots) {
+    if (u.dead || !u.task || !gunShy(u)) continue;
+    // Where it's heading next: a run's pick-up, then its drop-off; a site, a building it runs or mends.
+    const t = u.task, id = t.type === 'haul' ? (t.phase === 'toSrc' ? t.src : t.dst) : t.type === 'crate' ? (t.phase === 'toDst' ? t.dst : 0) : t.type === 'build' ? t.site : t.type === 'staff' || t.type === 'fix' ? t.bld : 0;
+    const b = id ? getE(id) : null;
+    if (!b || b.owner !== u.owner || !b.underFire) continue;
+    if (u.inside === b.id) exitBuilding(u);
+    cancelTask(u); u.task = null; u.path = null;
+  }
+}
+
 /** The road networks a pile of crates can be reached from (its own tile, or a road beside it). */
 function pileNets(l, trucks) {
   const net = roadNet(), comp = trucks ? net.compT : net.comp, t = tIdx(l.x, l.y), nets = [];
@@ -3299,7 +3400,7 @@ function crateStore(u, g, l) {
   const bt = BOTS[u.type], nets = bt.roadOnly ? pileNets(l, !!bt.truck) : null;
   let best = null, bd = Infinity;
   for (const b of S.buildings) {
-    if (b.dead || b.owner !== u.owner || !storeTakes(b, g) || evacuated(b)) continue;
+    if (b.dead || b.owner !== u.owner || !storeTakes(b, g) || evacuated(b) || underGuns(b)) continue;
     if (nets && !buildingNets(b, !!bt.truck).some((k) => nets.indexOf(k) >= 0)) continue;
     const d = dist2(b.x + 0.5, b.y + 0.5, l.x + 0.5, l.y + 0.5);
     if (d < bd) { bd = d; best = b; }
