@@ -22,8 +22,9 @@ and biomes started here and are now in the game.)
 - **Ships, after the first version** (Ports, Container Ships, Tanker Ships, Ferries and beach landings are in the game):
   a gunboat or patrol boat to escort ships and shell the shore; the rival using Container Ships and ferry lines
   (today it only builds a Port and makes beach landings).
-- **Air (after ships).** An **Airfield** (done, with the Cargo Plane and air drops), a **strike bomber** (styled after a
-  MiG-31: a long, slab-sided twin-engine interceptor with big rectangular intakes, a thin swept wing, twin fins; up to
+- **Air (after ships).** An **Airfield** (done, with the Cargo Plane and air drops), a **strike bomber** (its look follows
+  a Foxbat three-view, mocked up in renderer/b/bomber.js: a long black radome, big box intakes, a broad flat body, a
+  43-degree wing with tip pods, swept stabilators, twin canted fins, two big nozzles, bombs under the wings; up to
   two per Airfield beside its one Cargo Plane; each hits one target a sortie, then needs a while on the ground to rearm
   and refuel; its bomb is loaded from Ammo at the Airfield, several Ammo a sortie (about 6) for the bigger hit; Flak Guns,
   which shoot regular Ammo, are the counter) for precision strikes (a smaller, faster, cheaper hit
