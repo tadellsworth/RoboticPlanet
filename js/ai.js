@@ -7,16 +7,26 @@
 
 /** [good, pause at, resume below]: producers the AI rests when it has plenty. */
 const AI_CAPS = { fab: ['chip', 8, 3], armory: ['ammo', 18, 6], refinery: ['fuel', 30, 10] };
-/** [building type, how many the AI wants]. Entries are tried in order. */
+/**
+ * [building type, how many the AI wants]. Entries are tried in order. (No Missile Factory or Silo here: those
+ * come only through aiMissilePlan, which waits for an economy and an army and saves up for them. As ordinary
+ * entries they went up as soon as the goods happened to be there, a Hard rival's four minutes in.)
+ */
 const AI_PLAN = [
   ['charger', 1], ['harvester', 1], ['quarry', 1], ['kiln', 1], ['harvester', 2], ['mine', 1], ['tap', 1], ['smelter', 1],
   ['fab', 1], ['foundry', 1], ['outpost', 1], ['armory', 1], ['farm', 1], ['quarry', 2], ['grower', 1], ['mine', 2],
   ['smelter', 2], ['kiln', 2],
   ['turret', 1], ['repair', 1], ['outpost', 2], ['tap', 2], ['pump', 1], ['refinery', 1], ['harvester', 3], ['outpost', 3], ['generator', 1],
-  ['munitions', 1], ['silo', 1], ['depot', 1], ['charger', 2], ['farm', 2], ['mine', 3], ['outpost', 4], ['turret', 2], ['bunker', 1],
-  ['grower', 2], ['fab', 2], ['outpost', 5], ['mortar', 1], ['disruptor', 1], ['armory', 2], ['quarry', 3], ['silo', 2], ['outpost', 6], ['bunker', 2], ['charger', 3], ['pump', 2],
+  ['depot', 1], ['charger', 2], ['farm', 2], ['mine', 3], ['outpost', 4], ['turret', 2], ['bunker', 1],
+  ['grower', 2], ['fab', 2], ['outpost', 5], ['mortar', 1], ['disruptor', 1], ['armory', 2], ['quarry', 3], ['outpost', 6], ['bunker', 2], ['charger', 3], ['pump', 2],
   ['tap', 3], ['farm', 3], ['generator', 2], ['outpost', 8], ['turret', 3], ['mortar', 2], ['bunker', 3],
 ];
+/** The buildings that make new bots between them (and what they run on): the first of each is always worth a worker. */
+const AI_CHAIN = ['harvester', 'quarry', 'kiln', 'mine', 'tap', 'smelter', 'fab', 'foundry'];
+/** ...and the ones a colony down to a handful of workers keeps running, come what may (see the triage in aiThink). */
+const AI_CORE = ['mine', 'smelter', 'fab', 'foundry'];
+/** Fewer workers than this is an emergency (triage); it's over once there are AI_ENOUGH again. */
+const AI_FEW = 6, AI_ENOUGH = 8;
 
 /** Rival p's personality (see PERSONALITIES). */
 function aiStyle(p) { return PERSONALITIES[S.players[p].style] || PERSONALITIES.balanced; }
@@ -54,7 +64,7 @@ function aiTurtleWalls(p) {
 function aiThink(p) {
   const P = S.players[p];
   const lvl = aiLevel(p), st = aiStyle(p);
-  const me = playerBuildings(p);
+  let me = playerBuildings(p);
   const lander = getE(P.lander);
   if (!lander || lander.owner !== p) return;
 
@@ -66,19 +76,42 @@ function aiThink(p) {
     if (!b.built && !BDEFS[b.type].prepaid) sites++;
   }
   const maxSites = p === 0 && P.ai ? 2 : lvl.maxSites;
-  aiWalls(p);
-  aiTurtleWalls(p);
-  aiBridge(p, maxSites);
-  // Warbots can't fight without Ammo: in a war, once the opening is done, an Ammo Plant comes
-  // first, its site is never given up, and the Foundry rests so the Alloy reaches it.
-  const needArmory = warOn() && S.time > 150 && !me.some((b) => b.type === 'armory' && b.built);
-  let workers = 0, staffed = 0;
+  let workers = 0, staffed = 0, freeWorkers = 0;
   const kinds = {};
-  for (const u of S.bots) if (!u.dead && u.owner === p) kinds[u.type] = (kinds[u.type] || 0) + 1;
+  for (const u of S.bots) {
+    if (u.dead || u.owner !== p) continue;
+    kinds[u.type] = (kinds[u.type] || 0) + 1;
+    if (u.type === 'worker' && !(u.task && u.task.type === 'staff')) freeWorkers++;
+  }
   workers = kinds.worker || 0;
+  // Triage: down to a handful of workers (a raid got the rest), the colony does one thing only, make more. Nothing
+  // new is started and open sites are called off (dispatch keeps two workers free for building while any site
+  // stands, which left no one to run the Foundry), every building rests but the ones that make bots, and the
+  // Foundry builds workers alone (see below), until there are enough again.
+  const few = S.time > 60 && workers < (P.triage ? AI_ENOUGH : AI_FEW);
+  if (few && me.some((b) => !b.built && !BDEFS[b.type].prepaid && !AI_CHAIN.includes(b.type))) {
+    for (const b of me) if (!b.built && !BDEFS[b.type].prepaid && !AI_CHAIN.includes(b.type)) { demolish(b); sites--; counts[b.type]--; }
+    me = me.filter((b) => !b.dead);
+  }
   for (const b of me) if (BDEFS[b.type].staff && !BDEFS[b.type].crew) staffed++;
+  if (!few) {
+    aiWalls(p);
+    aiTurtleWalls(p);
+    aiBridge(p, maxSites, kinds.warbot || 0);
+  }
+  // Warbots can't fight without Ammo: in a war, once the opening is done and the Bot Foundry stands, an Ammo
+  // Plant comes first, its site is never given up, and the Foundry rests so the Alloy reaches it. (Not before the
+  // Foundry: an Ammo Plant with nothing else to feed turned the Alloy we landed with into Ammo, and the Foundry
+  // came five minutes late.)
+  const needArmory = warOn() && S.time > 150 && !me.some((b) => b.type === 'armory' && b.built) && me.some((b) => b.type === 'foundry' && b.built);
+  const armoryDue = needArmory && S.mode !== 'colony'; // (a Colony builds none, so nothing waits for one there)
   // Keep a few workers free to build: a colony with every worker staffed stalls.
   const canStaffMore = staffed + Math.max(3, Math.round(workers * 0.2)) <= workers;
+  // The chain that makes bots (see AI_CHAIN): until it's complete the only second building of a kind is a
+  // Harvester, and anything else that needs a worker waits until there's one to spare beyond the two dispatch
+  // keeps free for building. With ten workers the chain alone takes eight.
+  const chainDone = AI_CHAIN.every((t) => counts[t]);
+  const spareWorker = workers - staffed > MIN_FREE_WORKERS;
   // Resources are in separate fields: when one kind runs short inside our land, expanding toward
   // more of it comes before anything else.
   const inLand = {};
@@ -103,10 +136,10 @@ function aiThink(p) {
     }
   }
   let plan = S.mode === 'colony' ? AI_PLAN.concat([['outpost', 40]]) : AI_PLAN;
-  // A Turtle wants twice the turrets (and its first one early); a Tycoon a bigger industry and a
-  // second Silo straight after the first Ammo Plant.
+  // A Turtle wants twice the turrets (and its first one early); a Tycoon a bigger industry straight
+  // after the first Ammo Plant (its Missile Factory and Silos come through aiMissilePlan, like everyone's).
   if (st.turrets) plan = plan.map(([t, n]) => (t === 'turret' ? [t, n * 2] : [t, n]));
-  // Keeps: one for every rival, about ten minutes into the war; a Turtle builds its first early and adds one
+  // Keeps: one for every rival, a quarter of an hour in; a Turtle builds its first early and adds one
   // every eight minutes after, up to three. When one is due it goes first and holds its goods (see defence).
   const keepAt = AI_DEFENCE_AT + (st.walls ? 120 : 600);
   let wantKeeps = S.mode === 'colony' || S.time < keepAt ? 0 : st.walls ? Math.min(3, 1 + Math.floor((S.time - keepAt) / 480)) : 1;
@@ -123,10 +156,10 @@ function aiThink(p) {
     const sh = tradeShortest(p), g = sh.find((x) => x !== 'alloy'); // short of something in the ground
     if (sh.left[g] < (TRADE_LEFT[g] || 60) * 1.5 || st.missiles) plan = [['terminal', 1]].concat(plan); // only when short: it goes first
   }
-  if (st.missiles) { const k = plan.findIndex(([t]) => t === 'armory') + 1; plan = plan.slice(0, k).concat([['smelter', 2], ['fab', 2], ['munitions', 1], ['silo', 2]], plan.slice(k)); }
+  if (st.missiles) { const k = plan.findIndex(([t]) => t === 'armory') + 1; plan = plan.slice(0, k).concat([['smelter', 2], ['fab', 2]], plan.slice(k)); }
   // Nuclear race: a Reactor once there's Uranium to enrich (or a mine on a deposit), then a Nuclear Silo.
   if (nukeOn()) {
-    const k = plan.findIndex(([t]) => t === 'munitions');
+    const k = plan.findIndex(([t]) => t === 'depot'); // (after the first Generator, where the Missile Factory used to stand in the plan)
     const nuke = [];
     if (goodTotal(p, 'uranium') > 0 || me.some((b) => b.type === 'mine' && reachableRes(b.x, b.y, BDEFS.mine.radius, R_URANIUM) > 0)) nuke.push(['reactor', 1]);
     if (counts.reactor && goodTotal(p, 'fissile') + goodTotal(p, 'uranium') / 2 >= 2) nuke.push(['nukesilo', 1]);
@@ -154,9 +187,12 @@ function aiThink(p) {
   if (P.short.length && !outSite && S.time - (P.lastExpand || -99) > 40) plan = [['outpost', (counts.outpost || 0) + 1]].concat(plan);
   // Missiles are expensive, so the AI saves up for them (see aiMissilePlan): while it is saving,
   // the building it saves for goes first and nothing else that costs Alloy or Chips is started.
-  const saving = aiMissilePlan(p, me, counts, kinds, workers, staffed);
-  if (saving) plan = [[saving, (counts[saving] || 0) + 1]].concat(plan);
-  if (needArmory) plan = [['armory', 1]].concat(plan);
+  // (A site of that kind already going up is the one being saved for, not a reason for one more: asking for
+  // "one more" every time left some rivals with four Missile Factories, or sixteen Silos.)
+  const saving = few ? null : aiMissilePlan(p, me, counts, kinds, workers, staffed);
+  if (saving) plan = [[saving, (counts[saving] || 0) + (me.some((b) => b.type === saving && !b.built) ? 0 : 1)]].concat(plan);
+  // (Like the first Cement Works, the first Ammo Plant doesn't wait for a free site, and its Alloy is held for it.)
+  if (needArmory) { plan = [['armory', 1]].concat(plan); if (armoryDue && !counts.armory) siteCap = Math.max(siteCap, maxSites + 1); }
   // Workers no longer haul, so spare ones go to work: another gatherer for the scarcest raw good.
   if (S.time > 150 && workers - staffed >= 4 && canStaffMore) {
     const have = playerGoods(p);
@@ -164,6 +200,12 @@ function aiThink(p) {
       .sort((a, c) => (have[RES[BDEFS[a].gather].good] || 0) - (have[RES[BDEFS[c].gather].good] || 0));
     if (g.length) plan = [[g[0], (counts[g[0]] || 0) + 1]].concat(plan);
   }
+  // No Fuel left and nothing that makes any (only Fuel Stations charge robots, and every truck burns it): a Bio
+  // Farm comes before everything but Fiber, past the usual limit on sites and the Fiber kept back for a Harvester;
+  // with no fertile soil to build one by, an Oil Pump and a Refinery. (As an ordinary entry the farm could wait a
+  // whole game behind Outposts and gatherers taking every free site.)
+  const noFuel = (playerGoods(p).fuel || 0) < 4 && !me.some((b) => (b.type === 'farm' && !b.depleted) || (b.type === 'refinery' && counts.pump));
+  if (noFuel) { plan = [['farm', 1], ['pump', 1], ['refinery', 1]].concat(plan); siteCap = Math.max(siteCap, maxSites + 1); }
   // A Harvester site only counts once its materials are in: one waiting for Fiber never gets any.
   const cutting = me.some((b) => b.type === 'harvester' &&
     (b.built ? reachableRes(b.x, b.y, BDEFS.harvester.radius, R_STALK) > 0 : sumValues(b.stock) >= sumValues(BDEFS.harvester.cost)));
@@ -194,12 +236,13 @@ function aiThink(p) {
     S.buildings.some((b) => !b.dead && b.built && b.owner >= 0 && b.owner !== p && BDEFS[b.type].airfield);
   if (enemyAir && S.mode !== 'colony' && (counts.flak || 0) < 2 && !plan.some(([t]) => t === 'flak')) plan = [['flak', 2]].concat(plan); // (a copy: AI_PLAN is shared)
   if (enemyAir && S.mode !== 'colony' && !counts.flak) siteCap = Math.max(siteCap, maxSites + 1); // the first Flak Gun doesn't wait for a free site
-  const key = (type) => (type === 'charger' && !counts.charger) || type === 'foundry' || type === 'harvester' || type === 'quarry' || (type === 'kiln' && (playerGoods(p).cement || 0) < 3) || defence(type) ||
+  const key = (type) => (type === 'charger' && !counts.charger) || type === 'foundry' || type === 'harvester' || type === 'quarry' || (type === 'kiln' && (playerGoods(p).cement || 0) < 3) || defence(type) || (type === 'armory' && needArmory) ||
     (P.defWant && P.defWant.type === type && S.time < P.defWant.until) ||
     (type === 'outpost' && P.short.length > 0);
   if (sites < siteCap) {
     for (const [type, want0] of plan) {
-      if (cementStarved && sites >= maxSites && type !== 'kiln') continue;
+      if (few && (!AI_CHAIN.includes(type) || (counts[type] && !(type === 'harvester' && !cutting)))) continue; // triage: only a missing link of the chain
+      if (cementStarved && sites >= maxSites && type !== 'kiln' && !(noFuel && type === 'farm')) continue;
       if (S.mode === 'colony' && BDEFS[type].war) continue;
       // One more Fuel Station for every four Outposts as the colony spreads out, and a Bio
       // Farm for every two stations to keep them in Fuel.
@@ -215,9 +258,15 @@ function aiThink(p) {
       if ((counts[type] || 0) >= want) continue;
       if (saving && type !== saving && type !== 'keep' && type !== 'terminal' && type !== 'airfield' && !BDEFS[type].nuke && (BDEFS[type].cost.alloy || BDEFS[type].cost.chip)) continue;
       // Keep enough Fiber for a Harvester while none is cutting: without Fiber there's no way back.
-      if (type !== 'harvester' && fiberLow && (BDEFS[type].cost.fiber || 0) > 0 && playerGoods(p).fiber - BDEFS[type].cost.fiber < BDEFS.harvester.cost.fiber) continue;
-      // The first of each staffed building is always allowed, so the production chain is complete.
-      if (BDEFS[type].staff && !BDEFS[type].crew && !canStaffMore && counts[type]) continue;
+      if (type !== 'harvester' && !(noFuel && type === 'farm') && fiberLow && (BDEFS[type].cost.fiber || 0) > 0 && playerGoods(p).fiber - BDEFS[type].cost.fiber < BDEFS.harvester.cost.fiber) continue;
+      // The first of each building in the chain that makes bots is always allowed, so the chain is complete, and
+      // so is the Ammo Plant once it's due (it lends its worker to the chain when it must: see below). Until the
+      // chain is complete the only second building of a kind is a Harvester, and the first of anything else that
+      // takes a worker waits for one to spare; none of them while the Ammo Plant is still to come.
+      if (BDEFS[type].staff && !BDEFS[type].crew && !(type === 'armory' && needArmory)) {
+        if (counts[type] ? !canStaffMore || (type !== 'harvester' && (!chainDone || (armoryDue && !counts.armory)))
+          : !AI_CHAIN.includes(type) && (!spareWorker || (armoryDue && !counts.armory)) && !(noFuel && (type === 'pump' || type === 'refinery'))) continue;
+      }
       if (Object.keys(BDEFS[type].cost).some((g) => held.has(g))) continue;
       if (reserveCement && type !== 'outpost' && type !== 'quarry' && type !== 'kiln' && BDEFS[type].cost.cement) continue;
       if (type === 'kiln' && stoneLow && counts.kiln) continue;
@@ -237,7 +286,7 @@ function aiThink(p) {
         if (type === 'outpost') P.lastExpand = S.time;
         // The chain that makes new bots gets workers first; the Ammo Plant gives its worker up first.
         if (['mine', 'smelter', 'fab', 'foundry'].includes(type) && !counts[type]) placed.building.prio = 'high';
-        if (type === 'armory') placed.building.prio = 'low';
+        if (type === 'armory' && !needArmory) placed.building.prio = 'low'; // (the first one's site isn't served last; it's set low once it stands)
         if (defenceNow || defence(type)) placed.building.prio = 'high';
         break;
       }
@@ -266,14 +315,32 @@ function aiThink(p) {
   // Saving Alloy for a Viaduct (the only way to reach the enemy): Ammo and Chips stop until it's
   // paid for, or they'd eat every bit of Alloy the Smelter makes (Outposts keep asking for Ammo).
   const forBridge = !!(P.bridgeNeed && P.bridgeNeed.alloy && S.time - (P.bridgeWant || -999) < 30);
+  // The chain that makes bots comes first for workers. Dispatch never moves one from a building to another by
+  // itself, so a Smelter finished last could stand empty beside a manned Ammo Plant waiting for its Alloy: while a
+  // link of it (see AI_CHAIN: every Smelter, say, or the only Crystal Tap) wants a worker, has none and none is free
+  // to send, the Ammo Plant rests, and failing that the newest second gatherer of a kind lends its worker.
+  const unmanned = (type) => me.some((b) => b.type === type && b.built && !b.paused && !b.cut && !b.depleted && !b.staff && !b.staffInc && !atLimit(b)) &&
+    !me.some((b) => b.type === type && b.built && (b.staff || b.staffInc));
+  const chainWaits = !few && freeWorkers <= MIN_FREE_WORKERS && AI_CHAIN.some(unmanned);
+  let freed = false;
   for (const b of me) {
     const cap = AI_CAPS[b.type];
     if (!cap || !b.built) continue;
     if (forBridge && (b.type === 'armory' || b.type === 'fab')) { if (!b.paused) setPaused(b, true); continue; }
+    if (b.type === 'armory' && !b.prio) b.prio = 'low';
+    if (chainWaits && b.type === 'armory') { if (!b.paused) { freed = freed || !!(b.staff || b.staffInc); setPaused(b, true); } continue; }
     const hi = cap[1] * (missiles && b.type === 'fab' ? 2 : 1), lo = cap[2];
     const have = stockNow[cap[0]] || 0;
     if (!b.paused && have >= hi) setPaused(b, true);
     else if (b.paused && have < lo) setPaused(b, false);
+  }
+  if (!chainWaits && P.lent) {
+    for (const id of P.lent) { const b = getE(id); if (b && !b.dead && b.owner === p && b.paused) setPaused(b, false); }
+    delete P.lent;
+  } else if (chainWaits && !freed) {
+    const spare = me.filter((b) => b.built && !b.paused && BDEFS[b.type].gather && (b.staff || b.staffInc) && me.some((x) => x !== b && x.type === b.type && x.built && !x.paused))
+      .sort((a, c) => c.born - a.born)[0];
+    if (spare) { setPaused(spare, true); (P.lent = P.lent || []).push(spare.id); }
   }
 
   // Fuel first: a Grove Planter gives up its Agribot while a Bio Farm has none (and takes one back
@@ -284,6 +351,24 @@ function aiThink(p) {
     if (b.type !== 'grower' || !b.built) continue;
     if (farmWaits && !b.paused && (b.staff || b.staffInc)) setPaused(b, true);
     else if (b.paused && !farmWaits && (kinds.agribot || 0) > farms) setPaused(b, false);
+  }
+
+  // Triage (see above): every building that takes a worker rests but the Mine, Smelter, Chip Fab and Foundry (and
+  // a gatherer, or the Quarry and Cement Works, while there's next to none of what they're for); the ones rested
+  // here are switched back on when it's over.
+  if (few) {
+    P.triage = P.triage || [];
+    const have = playerGoods(p);
+    for (const b of me) {
+      const def = BDEFS[b.type];
+      if (!b.built || !def.staff || def.crew) continue;
+      const need = AI_CORE.includes(b.type) || (b.type === 'quarry' || b.type === 'kiln' ? (have.cement || 0) < 4 : !!def.gather && (have[RES[def.gather].good] || 0) < 4);
+      if (need) { if (b.paused && P.triage.includes(b.id)) setPaused(b, false); }
+      else if (!b.paused) { setPaused(b, true); if (!P.triage.includes(b.id)) P.triage.push(b.id); }
+    }
+  } else if (P.triage) {
+    for (const id of P.triage) { const b = getE(id); if (b && !b.dead && b.owner === p && b.paused) setPaused(b, false); }
+    delete P.triage;
   }
 
   // 2) Retire gatherers and pumps that have run dry so their worker can be reused.
@@ -337,6 +422,7 @@ function aiThink(p) {
   }
   for (const b of me) {
     if (b.type !== 'foundry' || !b.built) continue;
+    if (few) { b.mode = 'worker'; delete b.orders; break; } // triage: workers, and nothing else, until there are enough
     // Workers first while buildings stand empty; then the army gets its share as the game goes on.
     b.mode = S.mode === 'colony' ? 'worker' : workers < staffed + MIN_FREE_WORKERS ? 'worker'
       : army < wantArmy ? (workers < wantWorkers ? 'alt' : 'warbot')
@@ -407,7 +493,7 @@ function aiThink(p) {
   if (S.missiles.some((m) => m.nuke) && nukesThreatening(p).some((m) => !evacuating(p, m))) startEvac(p);
 
   // 4c) Naval maps: a Port, a Ferry, and beach landings on the enemy's shore.
-  if (S.mode !== 'colony' && navalMap()) aiNaval(p, me, kinds, lvl, lander, sites < maxSites);
+  if (S.mode !== 'colony' && navalMap()) aiNaval(p, me, kinds, lvl, lander, !few && sites < maxSites);
 
   // 4e) Rocket Trucks: shell the defences round what we're attacking, and hunt down the enemy's.
   if (S.mode !== 'colony') aiSiege(p);
@@ -478,7 +564,7 @@ function aiThink(p) {
   if (P.march && rallyById(P.march) && S.time - (P.lastMarch || 0) > 150) { recallRally(P.march); P.march = 0; }
   // A big army with nothing in reach: push a forward Outpost toward the enemy Command Base.
   const enemyL = getE(S.players[enemy].lander);
-  if (enemyL && army >= lvl.threshold * 2 && S.time - (P.lastAttack || 0) > 60 && siteCount(p) < maxSites && aiAffordable(p, 'outpost')) {
+  if (enemyL && !few && army >= lvl.threshold * 2 && S.time - (P.lastAttack || 0) > 60 && siteCount(p) < maxSites && aiAffordable(p, 'outpost')) {
     let spot = null, bd = Infinity;
     for (let j = 0; j < S.H; j++) for (let i = 0; i < S.W; i++) {
       const o = S.owner[j * S.W + i];
@@ -590,7 +676,7 @@ function aiNaval(p, me, kinds, lvl, lander, canBuild) {
  * Command Base; if our border doesn't reach a shore facing it yet, put an Outpost there first.
  * One bridge at a time.
  */
-function aiBridge(p, maxSites) {
+function aiBridge(p, maxSites, army) {
   if (!warOn()) return;
   const P = S.players[p], L = getE(P.lander), E = getE(S.players[rivalOf(p)].lander);
   if (!L || !E || L.owner !== p) return;
@@ -656,12 +742,15 @@ function aiBridge(p, maxSites) {
   }
   // No water to bridge (Sky islands): a Viaduct from our clifftop across the canyon, onto a clifftop
   // our border already reaches if there is one (so we can build there), else onto no-one's land.
-  const via = aiViaductSpot(p, home, E);
+  // (With an army waiting to cross and no span that brings it closer for four minutes, it takes one that runs
+  // sideways to another mesa: a way round. Without that a rival whose only free rim faced the wrong way sat on
+  // its mesa for the whole game.)
+  const via = aiViaductSpot(p, home, E, !navalMap() && S.time - (P.viaAt || 0) > 240 && army >= aiLevel(p).threshold * 2);
   if (via) {
     const cost = viaductCost(via.a % W, (via.a / W) | 0, via.b % W, (via.b / W) | 0);
     if (!canPay(p, cost)) { P.bridgeWant = S.time; P.bridgeNeed = cost; return; }
     P.bridgeWant = 0; P.bridgeNeed = null;
-    placeViaduct(p, via.a % W, (via.a / W) | 0, via.b % W, (via.b / W) | 0);
+    if (placeViaduct(p, via.a % W, (via.a / W) | 0, via.b % W, (via.b / W) | 0).ok) P.viaAt = S.time;
     return;
   }
   // No crossing from inside our border yet: an Outpost on the shore facing the nearest land toward the enemy.
@@ -687,9 +776,11 @@ function aiBridge(p, maxSites) {
 /**
  * The best Viaduct for player p to put up toward enemy base E: from a clifftop tile of ours (in
  * our border, where our bots go) straight across lower ground to a clifftop in another area, as
- * close to the enemy as possible, and short. Far ends inside our border come first. {a, b, owned} or null.
+ * close to the enemy as possible, and short. Far ends inside our border come first. Only spans that
+ * bring it closer; with `sideways`, failing those, one whose far end is no more than two tiles further
+ * from the enemy than its near end (the way round by another mesa). {a, b, owned} or null.
  */
-function aiViaductSpot(p, home, E) {
+function aiViaductSpot(p, home, E, sideways) {
   const W = S.W, N = W * S.H;
   let best = null, bs = Infinity;
   for (let a = 0; a < N; a++) {
@@ -706,9 +797,10 @@ function aiViaductSpot(p, home, E) {
         const b = tIdx(bi, bj);
         if (S.terrain[b] !== T_GROUND || S.zone[b] === home || S.zone[b] < 0 || Math.abs(S.elev[b] - S.elev[a]) > VIA_RISE) continue;
         if (viaductBlocked(p, ai, aj, bi, bj)) continue;
-        if (dist(bi, bj, E.x, E.y) > dist(ai, aj, E.x, E.y) - 2) break; // only spans that bring us closer
+        const gain = dist(ai, aj, E.x, E.y) - dist(bi, bj, E.x, E.y); // how much nearer the enemy the far end is
+        if (gain < (sideways ? -2 : 2)) break; // only spans that bring us closer (or, sideways, don't lead away)
         const owned = S.owner[b] === p;
-        const sc = dist(bi, bj, E.x, E.y) + k * 0.8 - (owned ? 20 : 0);
+        const sc = dist(bi, bj, E.x, E.y) + k * 0.8 - (owned ? 20 : 0) + (gain < 2 ? 1000 : 0); // (a sideways one only when nothing brings us closer)
         if (sc < bs && canPlace(p, 'viaduct', ai, aj, true).ok) { bs = sc; best = { a, b, owned }; }
         break; // the first clifftop across is the one
       }
@@ -718,7 +810,7 @@ function aiViaductSpot(p, home, E) {
 }
 
 /**
- * Chokepoint maps (Normal and Hard): once the mouth of a channel through the crags on our side is
+ * Chokepoint maps (not on Easy, unless it's a Turtle): once the mouth of a channel through the crags on our side is
  * inside our border, wall it off, with a Gate on our road through it (or in the middle), and put back
  * any piece the enemy breaks.
  * Cement for the colony comes first.
@@ -842,7 +934,7 @@ function aiRaid(p, lvl) {
   if (best < 0) return;
   const i = best % S.W, j = (best / S.W) | 0;
   const size = st.raidSize || 3;
-  if (rallyAvailable(p, i, j) < size + (st.raidKeep ?? 2)) return; // keep enough warbots at home (a Raider sends all it can spare)
+  if (rallyAvailable(p, i, j) < size + (st.raidKeep ?? 2)) return; // keep enough warbots at home (a Raider keeps none back: its band of three goes as soon as it has three)
   const { sent, rally } = sendToRally(p, i, j, size);
   if (sent) { rally.raid = true; P.raid = { id: rally.id, until: S.time + RAID_TIME }; }
 }
@@ -973,8 +1065,12 @@ function aiMissilePlan(p, me, counts, kinds, workers, staffed) {
   P.feedMissiles = false;
   if (S.mode === 'colony') return null;
   const site = me.find((b) => !b.built && (b.type === 'munitions' || b.type === 'silo'));
-  // A Silo site waiting for Alloy: the Missile Factory stops eating it until the Silo stands.
-  for (const b of me) if (b.type === 'munitions' && b.built && !!b.paused !== (site && site.type === 'silo')) setPaused(b, !!(site && site.type === 'silo'));
+  // A Silo site waiting for Alloy: the Missile Factory stops eating it until the Silo stands. It rests too while
+  // no Silo that's built has room for another Missile: with nowhere to load them it only turned Alloy, Chips
+  // and Fuel into Missiles lying in storage (more than half the rivals that built one never got a Silo up).
+  const room = me.some((b) => b.type === 'silo' && b.built && (b.stock.warhead || 0) + (b.inc.warhead || 0) < BDEFS.silo.ammoCap);
+  const rest = !!(site && site.type === 'silo') || !room;
+  for (const b of me) if (b.type === 'munitions' && b.built && !!b.paused !== rest) setPaused(b, rest);
   if (site) { site.prio = 'high'; return site.type; } // keep the Foundry resting (and goods coming here first) until the site has its materials
   // A Tycoon goes for missiles sooner, with fewer warbots at home, once its Bot Foundry runs. The
   // others start no sooner than a Balanced rival would (a Rusher spends on warbots instead).
@@ -1127,6 +1223,20 @@ function aiSearchSpot(p, type, lander) {
   const avoid = (S.players[p].avoid || []).filter((a) => a.until > S.time);
   S.players[p].avoid = avoid;
   const defence = DEFENCE_TYPES.has(type);
+  // What a gatherer at (i, j) is worth: the nodes in reach (a mine on uranium beats any ore field); with none
+  // left anywhere near, a Quarry by a cliff or crag cuts Stone from it instead. null: no use there.
+  const gatherWorth = (i, j, dHome) => {
+    const n = reachableRes(i, j, def.radius, def.gather);
+    const u = type === 'mine' && nukeOn() ? reachableRes(i, j, def.radius, R_URANIUM) : 0;
+    if (n >= 2 || u) return Math.min(n, 10) * 2 - dHome * 0.35 + u * 12;
+    if (!n || !def.bedrock) return null; // (canPlace wants at least one node in reach)
+    const f = rockFacesIn(i, j, def.radius);
+    return f < 3 ? null : Math.min(f, 10) * 0.6 - dHome * 0.35 - 8;
+  };
+  // (While every tile is scanned, nodes in reach are counted as the crow flies: see reachableRes. The best spots
+  // for a gatherer are checked on foot afterwards.)
+  _walk.quick = true;
+  try {
   // Our own land first; only when there's no spot there, no-one's ground within reach (in AI-vs-AI games,
   // building out on open ground from the start left the economy short of Fiber and Alloy).
   for (let pass = 0; pass < 2 && !cands.length; pass++)
@@ -1149,17 +1259,10 @@ function aiSearchSpot(p, type, lander) {
       if (rc > budget) continue;
       const dHome = dist(i, j, lander.x, lander.y);
       const jitter = hash2(i, j, S.seed + p) * 0.8;
-      let s;
+      let s, gw = 0;
       if (def.gather) {
-        const n = reachableRes(i, j, def.radius, def.gather);
-        const u = type === 'mine' && nukeOn() ? reachableRes(i, j, def.radius, R_URANIUM) : 0;
-        if (n < 2 && !u) {
-          // No boulders left anywhere near: a Quarry by a cliff or crag cuts Stone from it instead.
-          if (!def.bedrock) continue;
-          const f = rockFacesIn(i, j, def.radius);
-          if (f < 3) continue;
-          s = Math.min(f, 10) * 0.6 - dHome * 0.35 - 8;
-        } else s = Math.min(n, 10) * 2 - dHome * 0.35 + u * 12; // a mine on uranium beats any ore field
+        s = gw = gatherWorth(i, j, dHome);
+        if (s === null) continue;
       } else if (def.plant) {
         let dh = 99;
         for (const b of S.buildings) if (!b.dead && b.owner === p && b.type === 'harvester') dh = Math.min(dh, dist(i, j, b.x, b.y));
@@ -1249,12 +1352,25 @@ function aiSearchSpot(p, type, lander) {
       if (AI_FEED.has(type)) s += Math.min(2, feedPreview(p, type, i, j).length) * 3;
       s += jitter;
       if (out && type !== 'outpost') s -= AI_OUT_COST; // (our own land first)
-      cands.push({ x: i, y: j, s });
+      cands.push({ x: i, y: j, s, gw, dHome });
     }
   }
+  } finally { _walk.quick = false; }
   // Only the best few spots get the (costly) checks that a building won't block a pass and that
   // a road can reach it.
   cands.sort((a, b) => b.s - a.s);
+  if (def.gather) {
+    // A gatherer's best spots are walked: groves on a clifftop two tiles off can be fifty tiles away on foot, and
+    // a Harvester below them cut one Fiber every other minute. Best first, each scored again with what it can
+    // really reach, until no spot left could beat the best found (a walked score is never higher).
+    let best = null;
+    for (let k = 0; k < Math.min(cands.length, 120) && !(best && cands[k].s <= best.s); k++) {
+      const c = cands[k], w = gatherWorth(c.x, c.y, c.dHome);
+      if (w === null || (best && c.s - c.gw + w <= best.s) || wouldBlock(tIdx(c.x, c.y))) continue;
+      best = { x: c.x, y: c.y, s: c.s - c.gw + w };
+    }
+    return best;
+  }
   for (let k = 0; k < Math.min(cands.length, 12); k++) {
     if (!wouldBlock(tIdx(cands[k].x, cands[k].y))) return cands[k];
   }

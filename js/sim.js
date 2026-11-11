@@ -39,10 +39,17 @@ function simStep(dt) {
   if (S.tick % 30 === 20) updateLoot();
   if (S.events) updateEvents();
   if (S.tick % 30 === 25) naniteRepair();
+  // Only one AI thinks in a step (its search for building spots is the dearest thing in one): another that's due
+  // the same step waits a few steps, which also pulls apart timers that an older save has in step.
+  let thought = false;
   for (const P of S.players) {
     if (!P.ai || P.out) continue;
     P.aiT -= dt;
-    if (P.aiT <= 0) { P.aiT = DIFFICULTY[S.difficulty].think; aiThink(P.id); }
+    if (P.aiT > 0) continue;
+    if (thought) { P.aiT = 5 * dt; continue; }
+    thought = true;
+    P.aiT = DIFFICULTY[S.difficulty].think;
+    aiThink(P.id);
   }
   if (S.tick % 15 === 0) {
     S.buildings = S.buildings.filter((b) => !b.dead);

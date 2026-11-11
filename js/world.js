@@ -1675,9 +1675,40 @@ function landRule(owner, type, t) {
   return '';
 }
 
-/** Count resource nodes in reach of (cx, cy) that bots there can actually walk to. */
+/**
+ * A node only counts as in reach when the walk to it is no more than REACH_WALK times the reach: groves on a
+ * clifftop two tiles away are no use when the only way up is fifty tiles round.
+ */
+const REACH_WALK = 3;
+const _walk = { n: 0, seen: null, q: null, gen: 0, quick: false };
+
+/**
+ * Count resource nodes in reach of (cx, cy) that bots there can actually walk to: in the same area and no more
+ * than REACH_WALK × radius steps away on foot, round cliffs and buildings. (While `_walk.quick` is set, the AI
+ * scanning the whole map for a spot, the walk isn't measured: it checks its best few spots by foot afterwards.)
+ */
 function reachableRes(cx, cy, radius, type) {
-  return countResIn(cx, cy, radius, type, false, S.zone[tIdx(cx, cy)]);
+  const start = tIdx(cx, cy), n = countResIn(cx, cy, radius, type, false, S.zone[start]);
+  if (!n || _walk.quick) return n;
+  const W = S.W, N = W * S.H, r2 = radius * radius + 0.3;
+  if (_walk.n !== N) { _walk.n = N; _walk.seen = new Uint32Array(N); _walk.q = new Int32Array(N); _walk.gen = 0; }
+  const seen = _walk.seen, q = _walk.q, gen = ++_walk.gen;
+  // Breadth first from the building's tile, a ring of steps at a time (straight steps: cliffs block, Ramps join levels).
+  let head = 0, tail = 1, found = 0;
+  seen[start] = gen; q[0] = start;
+  for (let steps = radius * REACH_WALK; steps >= 0 && head < tail && found < n; steps--) {
+    for (const end = tail; head < end; head++) {
+      const t = q[head], i = t % W;
+      if (S.res[t] === type && dist2(i, (t / W) | 0, cx, cy) <= r2) found++;
+      if (!steps) continue;
+      for (let d = 0; d < 4; d++) {
+        const u = d === 0 ? (i + 1 < W ? t + 1 : -1) : d === 1 ? (i > 0 ? t - 1 : -1) : d === 2 ? (t + W < N ? t + W : -1) : t - W;
+        if (u < 0 || seen[u] === gen || !walkable(u) || !canStep(t, u) || (S.bAt[u] && !passTile(u))) continue;
+        seen[u] = gen; q[tail++] = u;
+      }
+    }
+  }
+  return found;
 }
 
 /* ------------------------------------------------------------------ entities */

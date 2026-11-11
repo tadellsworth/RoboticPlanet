@@ -129,8 +129,8 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
   plans roads round resources; tap a boulder, grove, ore or crystal tile to clear it for a road at 3× the Cement. A Roadworks' Paver
   upgrades roads to asphalt (2.75×) with Asphalt, driving out along the roads joined to its Roadworks, however far.
 - **Paving and road wear:** Paths → **Pave** (E): drag along roads to mark them for asphalt (drag over marked road to
-  clear it). Roadworks pave the marked roads joined to them (or, set to *Every joined road*, everything; the AI uses
-  that). Every bot driving onto asphalt wears it (`WEAR_BOT`, Freight Trucks `WEAR_TRUCK`, three times as much): past
+  clear it). Roadworks pave the marked roads joined to them (or, set to *Every joined road*, everything; a
+  Roadworks the AI comes to own works that way, but it never builds one, so its own roads stay plain). Every bot driving onto asphalt wears it (`WEAR_BOT`, Freight Trucks `WEAR_TRUCK`, three times as much): past
   half worn it slows bots (to 2.3× when nearly through), at `REPAVE_AT` the Paver resurfaces marked road, and worn
   through it drops back to plain road. On a busy trunk road that's every 8–10 minutes. Tap any of your roads to see its
   wear and mark it. Removing a road refunds its Cement.
@@ -360,7 +360,7 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
   compact field 5–7 tiles out, placed the same for every side), and Ore, Crystal and Stalk on the mesas hold
   `SKY_RES_MUL` (1.8) times the usual amount, since half the fields fall into the canyons (`richRes` scales its mark to
   match). The floor gets low rises, rock formations, plants and a thin scatter of boulders and ore. Viaducts
-  cross between the clifftops; the AI finds one with `aiViaductSpot` (only spans that bring it closer to its rival),
+  cross between the clifftops; the AI finds one with `aiViaductSpot` (spans that bring it closer to its rival; with an army waiting and none for four minutes, one sideways to another mesa),
   puts an Outpost on each mesa it lands on, and rests its Ammo Plant and Chip Fab (and, with a fair army, its Foundry)
   while it saves the Alloy for the next span. (`T_CHASM`, the old bottomless canyon, is kept for old saves and is the Rift's chasm.)
 - **Shooting across a canyon:** a warbot that can't close in shoots from up to `WARBOT_RANGE_BLOCKED` (2.2) across
@@ -426,6 +426,9 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
   A dry Oil Pump shows a crossed-out oil drop over it, frees its worker and says so once: demolish it (any Crude
   still in a demolished building goes to storage). Harvesters, Ore Mines, Crystal Taps and Bio Farms do the
   same with their own resource crossed out when nothing is left in reach (and go back to work if groves regrow).
+  "In reach" (`reachableRes`) means inside the building's radius and no more than `REACH_WALK` (3) times that
+  far on foot: groves on a clifftop two tiles away, with the only way up fifty tiles round, don't count, in the
+  placement preview, for the building, or for the AI choosing a spot (`aiSearchSpot` walks its best candidates).
   A Quarry never runs dry (`bedrock` in its definition): out of boulders, its worker cuts Stone from the nearest
   rock face in reach (`rockFace`: ground against a crag or a cliff; 8 s a Stone, about 4 a minute) or, with none,
   digs it at the Quarry (20 s, about 2½ a minute), against about 8 a minute from boulders. It rests while the colony
@@ -527,7 +530,7 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
   Gates let their owner's bots and road through (`passTile(t, who)`). Armed enemy warbots plan through a Wall or
   Gate as if it were `BREACH_COST + armor` tiles long, so they go round a short way or stop and shoot through
   (`breachHit`); a bot whose route gets walled off re-plans (`blockedStep`). On Chokepoint maps the AI walls the mouth
-  of each channel on its side on Normal and Hard (`aiWalls`).
+  of each channel on its side on Medium, Normal and Hard (`aiWalls`; on Easy only a Turtle does).
 - **Garrisons and posts** (yours, `usesPosts`; the AI spreads its own to the front as before): every warbot belongs
   somewhere. `u.post` is the Outpost or Bunker it was stationed at; with none it belongs to the Command Base. All your
   warbots stay at the Command Base until you station some: tap an Outpost and **Station here** (how many; from the
@@ -549,7 +552,7 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
   the difficulty's grace period, attack threshold, army growth and raid rate. **Balanced** is the plain AI. **Turtle**:
   later and bigger attacks, rare raids, a square ring of Walls and Gates six tiles round its Command Base
   (`aiTurtleWalls`) and a turret more every four minutes (up to six). **Raider**: raids three times as often from early on,
-  sending every warbot it can spare. **Rusher**: attacks early with a fast-growing army. **Tycoon**: its bots work 15%
+  in the same bands of three but keeping no warbots back at home for it. **Rusher**: attacks early with a fast-growing army. **Tycoon**: its bots work 15%
   faster (`econ`), it builds extra Smelters and Chip Fabs and goes for Missile Silos (up to three) once its Bot Foundry
   runs. With Random each rival gets a different one, picked from the seed; missions use Balanced. The landing messages
   and the rival Command Base's panel name it.
@@ -583,7 +586,7 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
   armed), then the missile fades in (`siloRise`; art `silo-empty`, `nukesilo-empty`).
   To fire, tap a Silo and press **Aim missile**: its 18-tile range shows as a red ring; tap any spot inside it (a
   building or open ground) to see the blast radius, then **Fire**. (Army → rival building → Fire missile also works.)
-- **Nuclear race** (new-game option): six small Uranium deposits glow green across the map. An Ore Mine within 4 tiles
+- **Nuclear race** (new-game option): six small Uranium deposits a side glow green across the map. An Ore Mine within 4 tiles
   digs Uranium before ore; a Nuclear Reactor enriches it (2 → 1) and a Nuclear Silo assembles a missile from 6 Enriched
   Uranium, 4 Alloy and 2 Chips (60 s), so 12 Uranium a bomb. It flies 30 s (the target is warned and sees the blast
   ring; the **Evacuate** button on the incoming-nuke card, or the AI by itself, sends every robot in the ring plus

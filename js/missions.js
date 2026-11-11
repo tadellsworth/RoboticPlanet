@@ -12,9 +12,11 @@
  *   own       have `n` bots of `type` at once
  *   paths     have `n` road tiles of surface `tier` or better (1 road, 2 asphalt)
  *   oneway    have `n` one-way road tiles
+ *   lights    have `n` traffic lights
  *   land      claim `n` percent of the land
  *   outposts  capture `n` rival Outposts
  *   capture   capture the rival Command Base
+ * Capturing the rival Command Base wins a mission outright, whatever else was still open (see goalState).
  */
 
 const CAMPAIGN_KEY = 'botfall.campaign';
@@ -182,7 +184,11 @@ function goalState(g, diff) {
       text = 'Capture the rival Command Base';
       break;
   }
-  return { have: Math.min(have, need), need, done: have >= need, text };
+  // Capturing the rival Command Base wins the war, and the mission with it: whatever was still open counts as met
+  // (its Outposts are all yours now), so beating the rival early is never "the game ended before every goal was met".
+  const beaten = S.winner === 0 && S.players.length > 1 && !!S.players[1].out;
+  if (beaten && g.kind === 'outposts') have = Math.max(have, need);
+  return { have: Math.min(have, need), need, done: have >= need || beaten, text };
 }
 
 /** Runs once a second while a mission is in play: success, or failure when the clock runs out. */
