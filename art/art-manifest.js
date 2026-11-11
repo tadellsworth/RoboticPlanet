@@ -273,7 +273,7 @@ const ART_MANIFEST = {
   // Streetlamps (256x256, foot at [0.5, 0.914], drawn 1 tile across; arm to the right): a sodium lamp
   // on concrete roads, a white highway lamp on asphalt; '-lit' is the glowing head alone, and '-pool'
   // the light it throws on the road.
-  ...(() => { const o = {}; for (const k of ['streetlamp-road', 'streetlamp-road-lit', 'streetlamp-asphalt', 'streetlamp-asphalt-lit']) o[k] = { src: `roads/${k}.webp`, scale: 1, anchor: [0.5, 0.914] }; return o; })(),
+  ...(() => { const o = {}; for (const k of ['streetlamp-road', 'streetlamp-road-lit', 'streetlamp-asphalt', 'streetlamp-asphalt-lit']) for (const t of [0, 1]) o[`${k}@${t}`] = { src: `roads/${k}@${t}.webp`, scale: 1, anchor: [0.5, 0.914] }; return o; })(), // each colony's lamps in its colour (green's made from red's)
   ...files('roads', ['streetlamp-road-pool', 'streetlamp-asphalt-pool']),
   // The Pulse Turret's twin violet laser (6 frames of 512x64, stacked; points right, stretched to the
   // target) and the burst where it hits (6 frames of 128x128 in a row).
