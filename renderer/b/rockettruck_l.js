@@ -60,7 +60,7 @@ export default function (L) {
   disc(52, -12, 2.2, 2.25, 0.04, eye(TEAM, 1, 0.3), { cast: false });
 
   // ---- the launcher: an armoured box pivoting at its rear foot, lying flat or raised steeply toward the front
-  const PX = -70, PY = 1.5, LEN = 102, H = 1.15, th = up ? 0.9 : 0;
+  const PX = -70, PY = 1.5, LEN = 102, H = 1.15, th = up ? 0.95 : 0;
   for (const s of [-1, 1]) rect(-72, s * 17 - 3, 104, 6, 1.35, 0.15, dark, { dirt: 0 });  // the cradle rails
   const rack = L.group(PX * k, PY, 0, 0, G); rack.rotation.z = th;
   const P = (o = {}) => Object.assign({ parent: rack }, o);
