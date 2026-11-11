@@ -147,7 +147,7 @@ function roundRectPath(ctx, x, y, w, h, r) {
 /** Legend for two or more series (identity never rests on colour alone). */
 function chartLegend(series) {
   if (series.length < 2) return '';
-  return `<div class="chart-legend">${series.map((s) => `<span><i style="background:${s.color}"></i>${s.name}</span>`).join('')}</div>`;
+  return `<div class="chart-legend">${series.map((s) => `<span><i style="background:${esc(s.color)}"></i>${esc(s.name)}</span>`).join('')}</div>`;
 }
 
 /**
@@ -156,9 +156,9 @@ function chartLegend(series) {
  */
 function barChartHTML(rows, selected) {
   if (!rows.length) return '<p class="desc">Nothing to show yet.</p>';
-  return `<div class="hbars">${rows.map((r) => `<button class="hbar${r.key === selected ? ' on' : ''}" data-k="${r.key}">
-    <span class="hb-label">${r.label}${r.note ? ` <small>${r.note}</small>` : ''}</span>
-    <span class="hb-track"><i style="width:${Math.max(1, r.value)}%;background:${CHART.series[0]}"></i><b style="left:${Math.min(r.value, 82)}%">${r.value}%</b></span>
+  return `<div class="hbars">${rows.map((r) => `<button class="hbar${r.key === selected ? ' on' : ''}" data-k="${esc(r.key)}">
+    <span class="hb-label">${esc(r.label)}${r.note ? ` <small>${esc(r.note)}</small>` : ''}</span>
+    <span class="hb-track"><i style="width:${Math.max(1, r.value)}%;background:${CHART.series[0]}"></i><b style="left:${Math.min(r.value, 82)}%">${esc(r.value)}%</b></span>
   </button>`).join('')}</div>`;
 }
 

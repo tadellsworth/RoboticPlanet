@@ -496,9 +496,14 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
   save (storage full or blocked) is reported once. A long game's save is about 250–300 KB. Saves live in that browser
   only: **Download save file** (pause menu, `downloadSave`: through the artifact `downloads` capability in claude.ai,
   an ordinary download elsewhere) writes `terrafall-<mode>-<date>-<time>.json` (`saveFileText`: the save with when and
-  what), and **Load a save file** (main menu, `importSaveFile`) loads one, a bare save too, and keeps it as this device's save.
+  what), and **Load a save file** (main menu, `importSaveFile`) loads one, a bare save too. A save is checked before it is used
+  (`checkSave`: a damaged, hand-edited or newer-version one is refused and changes nothing; if Continue can't load this
+  device's save the menu says so), and a loaded file becomes this device's save only once its game is running, with the
+  save it replaced kept as a backup (`SAVE_BACKUP_KEY`).
 - **A failed frame never stops the game:** `frame` books the next frame before running this one and catches its errors
-  (reported once each to the console). A Missile Silo's placement preview used to throw (`siloReady` on a stand-in
+  (reported once each to the console), and each stage of a frame (simulation, camera, drawing, interface, sound) runs
+  on its own (`stage` in `js/main.js`): one that keeps failing during a game says so once and pauses saving, so the
+  last good save is still there to reload. A Missile Silo's placement preview used to throw (`siloReady` on a stand-in
   with no stock), which stopped the drawing loop: the game froze when you went to place one.
 - **Gates on track:** a Gate can stand across railway track (`canPlace`; a wall line crossing track puts one there,
   `wallKind`), and track can be laid through your own Gate (`railBlocked`). Your trains run straight through it (rail

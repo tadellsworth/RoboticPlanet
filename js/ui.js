@@ -17,7 +17,31 @@ const UI = {
 
 const $ = (id) => document.getElementById(id);
 
+/**
+ * Text made safe to write into a panel's HTML (or an attribute). Everything that comes out of the game
+ * state or this device's storage goes through it: a save file is somebody else's text until proven otherwise.
+ */
+function esc(v) { return String(v).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', '\'': '&#39;' }[c])); }
+
 function randomSeed() { return 1 + Math.floor(Math.random() * 999998); }
+
+/** v if it's an index into a table of presets, else def (a setting kept by another version, or damaged). */
+function presetIndex(v, list, def) { return Number.isInteger(v) && v >= 0 && v < list.length ? v : def; }
+
+/** Keep the new-game settings to what the menu offers, whatever this device had remembered. */
+function cleanMenu() {
+  const m = UI.menu, size = m.size && typeof m.size === 'object' ? m.size : {};
+  m.mode = m.mode === 'colony' ? 'colony' : 'versus';
+  m.diff = ownKey(DIFFICULTY, m.diff) ? m.diff : 'normal';
+  m.size = { versus: presetIndex(size.versus, SIZE_PRESETS, DEFAULT_SIZE.versus), colony: presetIndex(size.colony, SIZE_PRESETS, DEFAULT_SIZE.colony) };
+  m.rough = presetIndex(m.rough, TERRAIN_PRESETS, DEFAULT_ROUGH);
+  m.rich = presetIndex(m.rich, RESOURCE_PRESETS, DEFAULT_RICH);
+  m.shape = presetIndex(m.shape, SHAPE_PRESETS, 0);
+  m.biome = presetIndex(m.biome, BIOME_ORDER, 0);
+  m.style = presetIndex(m.style, [0].concat(PERSONALITY_ORDER), 1);
+  m.players = m.players === 3 ? 3 : 2;
+  for (const k of ['nuke', 'events', 'wild', 'unlimited']) m[k] = m[k] ? 1 : 0;
+}
 
 function iconFor(type, owner) {
   const key = type + '@' + (owner || 0);
@@ -26,7 +50,7 @@ function iconFor(type, owner) {
 }
 
 function goodTag(g, text, short) {
-  return `<span class="gtag${short ? ' short' : ''}"><i class="gi ${g}"></i>${text}</span>`;
+  return `<span class="gtag${short ? ' short' : ''}"><i class="gi ${esc(g)}"></i>${esc(text)}</span>`;
 }
 
 /* ------------------------------------------------------------------ setup */
@@ -61,10 +85,11 @@ function initUI() {
   // Settings from before v2 drop their rival style, Nuclear race and Planet events, so the new defaults
   // (a Balanced rival, Nuclear race on, Planet events off) reach every device once.
   try {
-    const saved = JSON.parse(localStorage.getItem('botfall.settings') || '{}');
+    const saved = JSON.parse(localStorage.getItem('botfall.settings') || '{}') || {};
     if ((saved.v || 0) < SETTINGS_V) { delete saved.style; delete saved.nuke; delete saved.events; }
-    Object.assign(UI.menu, saved);
+    for (const k of ['size', 'rough', 'rich', 'shape', 'nuke', 'biome', 'players', 'diff', 'style', 'events', 'wild', 'unlimited']) if (saved[k] !== undefined) UI.menu[k] = saved[k];
   } catch (e) { /* defaults */ }
+  cleanMenu(); // (a remembered value this version doesn't offer falls back to the default)
   const saveSettings = () => {
     try { localStorage.setItem('botfall.settings', JSON.stringify({ v: SETTINGS_V, size: UI.menu.size, rough: UI.menu.rough, rich: UI.menu.rich, shape: UI.menu.shape, nuke: UI.menu.nuke, biome: UI.menu.biome, players: UI.menu.players, diff: UI.menu.diff, style: UI.menu.style, events: UI.menu.events, wild: UI.menu.wild, unlimited: UI.menu.unlimited })); } catch (e) { /* storage unavailable */ }
   };
@@ -128,7 +153,7 @@ function initUI() {
   initFullscreen();
   syncVol();
   $('p-help').onclick = () => showHelp();
-  $('p-quit').onclick = () => { saveGame(); $('screen-pause').hidden = true; toMenu(); };
+  $('p-quit').onclick = () => { if (!UI.saveHold) saveGame(); $('screen-pause').hidden = true; toMenu(); };
 
   // Game over (missions swap in their own actions)
   $('o-new').onclick = () => { $('screen-over').hidden = true; if (UI.overNew) UI.overNew(); else { UI.menu.seed = randomSeed(); startNewGame(); } };
@@ -154,6 +179,8 @@ function initUI() {
   });
   $('objective').onclick = () => { UI.objCollapsed = !UI.objCollapsed; UI.hudT = 0; };
   $('sheet-close').onclick = () => closeSheet();
+  // A building panel's buttons do nothing once the building has changed hands under it: the panel is built again instead.
+  $('sheet-body').addEventListener('click', (e) => { if (sheetStale()) { e.stopPropagation(); e.preventDefault(); refreshSheet(); } }, true);
   $('banner-cancel').onclick = () => setMode('normal');
   $('banner-ok').onclick = () => confirmBanner();
 
@@ -179,6 +206,9 @@ function initUI() {
   window.addEventListener('resize', () => { if (UI.inGame) { layoutMinimap(); placeMinimap(); } });
 
   initKeyboard();
+  initDialogs();
+  // The illustrated manual is a page beside this one: the single-file build has none, so there the link is left out.
+  if ($('h-manual')) $('h-manual').hidden = !!window.TOD_BUNDLE;
   document.addEventListener('visibilitychange', () => { if (document.hidden && UI.inGame) autoSave(); });
   window.addEventListener('pagehide', () => { if (UI.inGame) autoSave(); });
   setInterval(() => { if (UI.inGame && !UI.paused) autoSave(); }, AUTOSAVE_EVERY * 1000);
@@ -260,7 +290,8 @@ function syncMenu() {
  */
 const AUTOSAVE_EVERY = 20;
 function autoSave() {
-  if (!S || S.winner >= 0 || S.players[0].ai) return;
+  // (UI.saveHold: the game keeps failing, see `stage` in main.js. The last good save is left alone.)
+  if (!S || UI.saveHold || S.winner >= 0 || S.players[0].ai) return;
   if (saveGame()) { UI.savedAt = Date.now(); UI.saveFailed = false; }
   else if (!UI.saveFailed) {
     UI.saveFailed = true;
@@ -272,8 +303,54 @@ function syncSaved() {
   const el = $('p-saved');
   if (!el) return;
   const s = UI.savedAt ? Math.round((Date.now() - UI.savedAt) / 1000) : -1;
-  el.textContent = UI.saveFailed ? 'Saving isn\'t working in this browser right now: keep this tab open.'
+  el.textContent = UI.saveHold ? 'Saving is paused: something in the game keeps going wrong. Reload the page to carry on from your last save.'
+    : UI.saveFailed ? 'Saving isn\'t working in this browser right now: keep this tab open.'
     : `Your game saves itself every ${AUTOSAVE_EVERY} seconds` + (s >= 0 ? ` (last saved ${s < 5 ? 'just now' : s < 60 ? s + ' s ago' : Math.round(s / 60) + ' min ago'})` : '') + '. If it closes, tap Continue on the main menu.';
+}
+
+/* ------------------------------------------------------------------ overlays as dialogs */
+
+/** The overlay on top (Help over the pause menu, say), or null when none is showing. */
+function topScreen() {
+  let top = null, tz = -1;
+  for (const el of document.querySelectorAll('.screen')) {
+    if (el.hidden) continue;
+    const z = +getComputedStyle(el).zIndex || 0;
+    if (z >= tz) { top = el; tz = z; }
+  }
+  return top;
+}
+
+/**
+ * The overlays (menu, pause, help, statistics, game over...) work as dialogs for the keyboard and for
+ * screen readers: opening one moves the focus into it, Tab stays inside the one on top, and closing
+ * it puts the focus back where it was.
+ */
+function initDialogs() {
+  const stops = (scr) => [...scr.querySelectorAll('button, a[href], input, select, summary')].filter((el) => !el.disabled && el.tabIndex >= 0 && el.offsetParent);
+  const watch = new MutationObserver((list) => {
+    for (const m of list) {
+      const scr = m.target, open = !scr.hidden, a = document.activeElement;
+      if (open === !!scr._open) continue;
+      scr._open = open;
+      if (open) {
+        scr._back = a && a !== document.body && !scr.contains(a) ? a : null;
+        scr.focus({ preventScroll: true });
+      } else if (!a || a === document.body || scr.contains(a)) {
+        const b = scr._back;
+        if (b && b.isConnected && b.offsetParent) b.focus({ preventScroll: true }); else if (a && a !== document.body) a.blur();
+      }
+    }
+  });
+  for (const scr of document.querySelectorAll('.screen')) { scr._open = !scr.hidden; watch.observe(scr, { attributes: true, attributeFilter: ['hidden'] }); }
+  document.addEventListener('keydown', (e) => {
+    const scr = e.key === 'Tab' && !e.ctrlKey && !e.metaKey && !e.altKey ? topScreen() : null;
+    if (!scr) return;
+    const f = stops(scr), a = document.activeElement, first = f[0], last = f[f.length - 1];
+    if (!f.length) { e.preventDefault(); return; }
+    if (!scr.contains(a)) { e.preventDefault(); (e.shiftKey ? last : first).focus(); }
+    else if (e.shiftKey ? a === first || !f.includes(a) : a === last) { e.preventDefault(); (e.shiftKey ? last : first).focus(); }
+  }, true);
 }
 
 /* ------------------------------------------------------------------ rival boost (hidden) */
@@ -298,8 +375,8 @@ function renderBoost() {
   if (!rivals.length) { body.innerHTML = '<p class="mode-desc">There\'s no rival colony in this game to help.</p>'; return; }
   body.innerHTML = rivals.map((P) => {
     const st = PERSONALITIES[P.style];
-    return `<div class="boost-row" data-p="${P.id}"><div class="boost-head"><i class="dot" style="background:${PLAYER_COLORS[P.id]}"></i>` +
-      `<b>${playerName(P.id)}</b>${st ? ' · ' + st.name : ''}<small>${P.boosts ? `boosted ${P.boosts}×` : ''}</small></div>` +
+    return `<div class="boost-row" data-p="${esc(P.id)}"><div class="boost-head"><i class="dot" style="background:${PLAYER_COLORS[P.id]}"></i>` +
+      `<b>${playerName(P.id)}</b>${st ? ' · ' + st.name : ''}<small>${P.boosts ? `boosted ${esc(P.boosts)}×` : ''}</small></div>` +
       `<div class="boost-btns"><button class="btn small" data-k="goods" title="${Object.entries(BOOST.goods).map(([g, n]) => n + ' ' + GOOD[g].name).join(', ')}">Supply drop</button>` +
       `<button class="btn small" data-k="warbots">+${BOOST.warbots} Warbots</button><button class="btn small" data-k="workers">+${BOOST.workers} Workers</button></div></div>`;
   }).join('');
@@ -384,7 +461,7 @@ function showGoodTip(g, el, ms) {
   let tip = $('good-tip');
   if (!tip) { tip = document.createElement('div'); tip.id = 'good-tip'; tip.setAttribute('role', 'tooltip'); document.body.appendChild(tip); }
   clearTimeout(UI.tipTimer);
-  tip.innerHTML = `<b>${GOOD[g].name}</b> <em>${el.lastChild.textContent}</em><span>${GOOD[g].desc}</span>`;
+  tip.innerHTML = `<b>${GOOD[g].name}</b> <em>${esc(el.lastChild.textContent)}</em><span>${GOOD[g].desc}</span>`;
   tip.hidden = false;
   tip.dataset.g = g;
   const r = el.getBoundingClientRect(), w = tip.offsetWidth;
@@ -485,7 +562,9 @@ function openPaths(v) {
 function initKeyboard() {
   window.addEventListener('keydown', (e) => {
     const tag = (e.target && e.target.tagName) || '';
-    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+    if (tag === 'TEXTAREA' || tag === 'SELECT') return;
+    // A slider or switch keeps its own keys (arrows, Home, End); Esc and Space still reach the game from one.
+    if (tag === 'INPUT' && !(/^(range|checkbox)$/.test(e.target.type) && (e.key === 'Escape' || e.key === ' '))) return;
     if (!UI.inGame) return;
     // Control groups: Ctrl (or Shift) + 1–9 saves the selected warbots, 1–9 selects them again
     // (press twice to jump to them).
@@ -499,7 +578,7 @@ function initKeyboard() {
       return;
     }
     // Tab (Shift+Tab back) steps through the build menu's tabs.
-    if (e.key === 'Tab' && UI.sheetKind === 'build' && $('build-tabs') && !e.ctrlKey && !e.metaKey && !e.altKey) {
+    if (e.key === 'Tab' && UI.sheetKind === 'build' && $('build-tabs') && !topScreen() && !e.ctrlKey && !e.metaKey && !e.altKey) {
       e.preventDefault();
       const tabs = [...$('build-tabs').children], i = tabs.findIndex((b) => b.classList.contains('on'));
       tabs[(i + (e.shiftKey ? tabs.length - 1 : 1)) % tabs.length].click();
@@ -690,7 +769,7 @@ function recallGroup(k) {
   sfx('click');
   if (twice) {
     let x = 0, y = 0;
-    for (const u of orderable(0, ids)) { x += u.x; y += u.y; }
+    for (const u of selectable(0, ids)) { x += u.x; y += u.y; } // (Rocket Trucks too: they're in the group)
     centerOn(x / ids.length, y / ids.length);
   }
 }
@@ -705,7 +784,7 @@ function updateMapTip() {
   if (b) {
     const def = BDEFS[b.type];
     key = 'b' + b.id;
-    html = `<b>${b.owner === 0 ? '' : playerName(b.owner) + ' '}${def.name}</b>` + (b.owner === 0 && b.status ? `<em>${b.status}</em>` : '') +
+    html = `<b>${b.owner === 0 ? '' : playerName(b.owner) + ' '}${def.name}</b>` + (b.owner === 0 && b.status ? `<em>${esc(b.status)}</em>` : '') +
       (def.mil && !(b.owner === 0 && b.status) ? `<em>${b.garrison.length} warbot${b.garrison.length === 1 ? '' : 's'} inside</em>` : '') +
       (b.armor < def.armor ? `<em>Armor ${Math.ceil(b.armor)}/${def.armor}</em>` : '');
   } else {
@@ -717,8 +796,8 @@ function updateMapTip() {
     }
     if (bot) {
       key = 'u' + bot.id;
-      html = `<b>${bot.owner === 0 ? '' : playerName(bot.owner) + ' '}${BOTS[bot.type].name}</b>` + (bot.owner === 0 ? `<em>${botActivity(bot)}</em>` : '') +
-        `<em>Health ${Math.ceil(bot.hp)}/${bot.maxHp}${bot.owner === 0 ? ` · battery ${Math.round(bot.bat ?? 100)}%` : ''}</em>`;
+      html = `<b>${bot.owner === 0 ? '' : playerName(bot.owner) + ' '}${BOTS[bot.type].name}</b>` + (bot.owner === 0 ? `<em>${esc(botActivity(bot))}</em>` : '') +
+        `<em>Health ${Math.ceil(bot.hp)}/${esc(bot.maxHp)}${bot.owner === 0 ? ` · battery ${Math.round(bot.bat ?? 100)}%` : ''}</em>`;
     } else if (inMap(i, j) && S.res[tIdx(i, j)]) {
       const t = tIdx(i, j);
       key = 'r' + t;
@@ -834,12 +913,17 @@ function placeMinimap() {
  * More settings to set the menu to it; × forgets it.
  */
 const PLANETS_KEY = 'terrafall.planets', PLANETS_MAX = 40;
+/** A saved planet this version can show and start: a number for a seed, and no setting the menu doesn't offer. */
+function planetOk(p) {
+  return !!p && typeof p === 'object' && Number.isFinite(p.seed) && (p.players == null || p.players === 2 || p.players === 3) &&
+    [[p.shape, SHAPE_PRESETS], [p.size, SIZE_PRESETS], [p.rough, TERRAIN_PRESETS], [p.rich, RESOURCE_PRESETS], [p.biome, BIOME_ORDER]].every(([v, list]) => v == null || presetIndex(v, list, -1) >= 0);
+}
 function savedPlanets() {
-  try { const l = JSON.parse(localStorage.getItem(PLANETS_KEY) || '[]'); return Array.isArray(l) ? l : []; } catch (e) { return []; }
+  try { const l = JSON.parse(localStorage.getItem(PLANETS_KEY) || '[]'); return Array.isArray(l) ? l.filter(planetOk) : []; } catch (e) { return []; }
 }
 function writePlanets(list) { try { localStorage.setItem(PLANETS_KEY, JSON.stringify(list.slice(0, PLANETS_MAX))); } catch (e) { /* storage unavailable */ } }
 const planetKey = (p) => [p.seed, p.shape, p.size, p.rough, p.rich, p.biome, p.players].join(':');
-function savePlanet(p) { writePlanets([{ ...p, at: Date.now() }].concat(savedPlanets().filter((q) => planetKey(q) !== planetKey(p)))); }
+function savePlanet(p) { if (planetOk(p)) writePlanets([{ ...p, at: Date.now() }].concat(savedPlanets().filter((q) => planetKey(q) !== planetKey(p)))); }
 /** The planet the new-game menu is set to. */
 function menuPlanet() {
   return { seed: UI.menu.seed, shape: UI.menu.shape || 0, size: UI.menu.size[UI.menu.mode] ?? DEFAULT_SIZE[UI.menu.mode], rough: UI.menu.rough, rich: UI.menu.rich,
@@ -847,15 +931,17 @@ function menuPlanet() {
 }
 /** The planet being played. */
 function gamePlanet() {
-  const st = S.settings;
-  return { seed: S.seed, shape: st.shape || 0, size: st.size, rough: st.rough, rich: st.rich, biome: Math.max(0, BIOME_ORDER.indexOf(st.biome)), players: st.players || 2 };
+  const st = S.settings || {}; // (a very old save has none: the defaults stand in)
+  return { seed: S.seed, shape: st.shape || 0, size: presetIndex(st.size, SIZE_PRESETS, DEFAULT_SIZE[S.mode === 'colony' ? 'colony' : 'versus']),
+    rough: presetIndex(st.rough, TERRAIN_PRESETS, DEFAULT_ROUGH), rich: presetIndex(st.rich, RESOURCE_PRESETS, DEFAULT_RICH),
+    biome: Math.max(0, BIOME_ORDER.indexOf(st.biome)), players: st.players === 3 ? 3 : 2 };
 }
 function planetLabel(p) {
   const bits = [SHAPE_PRESETS[p.shape] ? SHAPE_PRESETS[p.shape].name : 'Standard', SIZE_PRESETS[p.size] ? SIZE_PRESETS[p.size].name : '', BIOMES[BIOME_ORDER[p.biome || 0]].name];
   if (p.rough !== DEFAULT_ROUGH && TERRAIN_PRESETS[p.rough]) bits.push(TERRAIN_PRESETS[p.rough].name + ' terrain');
   if (p.rich !== DEFAULT_RICH && RESOURCE_PRESETS[p.rich]) bits.push(RESOURCE_PRESETS[p.rich].name + ' resources');
   if (p.players === 3) bits.push('3 players');
-  return `<b>Planet #${p.seed}</b> · ${bits.filter(Boolean).join(' · ')}`;
+  return `<b>Planet #${esc(p.seed)}</b> · ${bits.filter(Boolean).join(' · ')}`;
 }
 function renderPlanets() {
   const el = $('m-planets');
@@ -863,12 +949,13 @@ function renderPlanets() {
   const list = savedPlanets(), cur = planetKey(menuPlanet());
   el.hidden = !list.length;
   el.innerHTML = list.length ? '<span class="planets-title">Saved planets</span>' + list.map((p, k) =>
-    `<div class="planet-row"><button class="btn small ghost use${planetKey(p) === cur ? ' on' : ''}" data-use="${k}">${planetLabel(p)}</button><button class="btn small ghost del" data-del="${k}" aria-label="Forget Planet #${p.seed}" title="Forget this planet">×</button></div>`).join('') : '';
+    `<div class="planet-row"><button class="btn small ghost use${planetKey(p) === cur ? ' on' : ''}" data-use="${k}">${planetLabel(p)}</button><button class="btn small ghost del" data-del="${k}" aria-label="Forget Planet #${esc(p.seed)}" title="Forget this planet">×</button></div>`).join('') : '';
   for (const b of el.querySelectorAll('[data-use]')) b.onclick = () => {
     const p = savedPlanets()[+b.dataset.use];
     if (!p) return;
     Object.assign(UI.menu, { seed: p.seed, shape: p.shape, rough: p.rough, rich: p.rich, biome: p.biome, players: p.players || 2 });
     UI.menu.size[UI.menu.mode] = p.size;
+    cleanMenu(); // (a setting the planet was saved without takes its default)
     sfx('click'); syncMenu();
     toast(`Set to Planet #${p.seed}. Tap Start to play it.`, 'info');
   };
@@ -932,7 +1019,7 @@ async function downloadSave() {
   const d = new Date(), pad = (n) => String(n).padStart(2, '0');
   const name = `terrafall-${S.mission ? 'mission' : S.mode}-${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}.json`;
   const text = saveFileText();
-  saveGame(); // the save on this device is up to date too
+  if (!UI.saveHold) saveGame(); // the save on this device is up to date too
   const say = (m) => { $('p-saved').textContent = m; };
   let dl = null;
   try { if (window.claude && typeof window.claude.use === 'function') dl = await window.claude.use('downloads'); } catch (e) { dl = null; }
@@ -961,38 +1048,69 @@ function plainDownload(name, text) {
   } catch (e) { return false; }
 }
 
-/** Load a save file picked on the main menu: it becomes this device's save too, and the game starts. */
+/** The save a loaded file replaced on this device: kept (the latest one only) in case the file was the wrong one. */
+const SAVE_BACKUP_KEY = 'botfall.save.bak';
+
+/** A line under the menu's Continue and Load buttons: why a save didn't load. */
+function menuMsg(m) { $('m-import-msg').textContent = m; $('m-import-msg').hidden = false; }
+
+/**
+ * Start playing the game just loaded into S (a save file, or this device's save), without saving it yet.
+ * If it can't be started, the menu comes back (`prev`, the demo that was running, until a new one is up) and it's false.
+ */
+function enterLoaded(prev) {
+  try { enterGame(true); updateHUD(); return true; } catch (e) {
+    console.error('Terrafall: a save loaded but could not be started.', e);
+    S = prev;
+    toMenu();
+    return false;
+  }
+}
+
+/**
+ * Load a save file picked on the main menu: the game starts, and once it is running it becomes this
+ * device's save too (the save it replaces is kept as a backup). A file that can't be read or started
+ * changes nothing.
+ */
 function importSaveFile(file) {
-  const msg = (m) => { $('m-import-msg').textContent = m; $('m-import-msg').hidden = false; };
   const r = new FileReader();
-  r.onerror = () => msg('That file couldn\'t be read.');
+  r.onerror = () => menuMsg('That file couldn\'t be read.');
   r.onload = () => {
     let json = String(r.result || '');
-    const prev = S;
+    const prev = S, no = () => menuMsg('That isn\'t a Terrafall save file (or it\'s from a version this one can\'t read).');
     try {
       const o = JSON.parse(json);
       if (o && o.terrafall && typeof o.game === 'string') json = o.game; // a save file; a bare save works too
       deserializeGame(json);
-    } catch (e) { S = prev; msg('That isn\'t a Terrafall save file (or it\'s from a version this one can\'t read).'); return; }
-    try { localStorage.setItem(SAVE_KEY, json); } catch (e) { /* storage unavailable: it still plays */ }
-    enterGame();
+    } catch (e) { S = prev; no(); return; }
+    if (!enterLoaded(prev)) { no(); return; }
+    try { const old = localStorage.getItem(SAVE_KEY); if (old) localStorage.setItem(SAVE_BACKUP_KEY, old); } catch (e) { /* storage unavailable or full: it still plays */ }
+    saveGame();
     postMsg(0, 'Save file loaded. Welcome back.', 0, 0, 'info');
   };
   r.readAsText(file);
 }
 
 function continueGame() {
-  if (!loadGame()) { syncMenu(); return; }
-  enterGame();
+  const prev = S;
+  if (!loadGame() || !enterLoaded(prev)) {
+    syncMenu();
+    menuMsg('Your saved game couldn\'t be loaded: it may be damaged, or from a newer version of the game. It stays on this device until you start a new game.');
+    return;
+  }
+  saveGame();
   postMsg(0, 'Welcome back.', 0, 0, 'info');
 }
 
-function enterGame() {
+/** Into the game in S: the HUD comes up and (unless `unsaved`: a save still being tried out) it's saved. */
+function enterGame(unsaved) {
   bakeMap();
   UI.inGame = true; UI.paused = false; UI.overShown = false;
   UI.sel = []; UI.groups = {}; UI.lastAlert = null;
+  UI.saveHold = false;
   setSpeed(1, true);
   $('screen-menu').hidden = true;
+  $('m-import-msg').hidden = true;
   $('hud').hidden = false;
   $('toasts').innerHTML = '';
   const colony = S.mode === 'colony';
@@ -1011,7 +1129,7 @@ function enterGame() {
   if (L) centerOn(L.x + 0.5, L.y - 1);
   layoutMinimap();
   placeMinimap();
-  saveGame();
+  if (!unsaved) saveGame();
 }
 
 function toMenu() {
@@ -1049,7 +1167,7 @@ function showGameOver() {
   $('o-stats').innerHTML = [
     ['Time', fmtTime(S.time)], ['Buildings completed', st.built], ['Bots built', st.bots - (st.startBots || 0)],
     ['Enemy buildings captured', st.captured], ['Bots lost', st.lost],
-  ].map(([k, v]) => `<span>${k}</span><span>${v}</span>`).join('');
+  ].map(([k, v]) => `<span>${k}</span><span>${esc(v)}</span>`).join('');
   $('screen-over').hidden = false;
 }
 
@@ -1106,6 +1224,7 @@ function goalText(g, diff) {
     case 'own': return `Have ${n} ${BOTS[g.type].plural}`;
     case 'paths': return `${['', 'Lay', 'Surface'][g.tier]} ${n} ${['', 'road', 'asphalt road'][g.tier]} tiles`;
     case 'oneway': return `Make ${n} road tiles one-way`;
+    case 'lights': return n > 1 ? `Put up ${n} traffic lights` : 'Put up a traffic light';
     case 'land': return `Claim ${n}% of the land`;
     case 'outposts': return n > 1 ? `Capture ${n} rival Outposts` : 'Capture a rival Outpost';
     case 'capture': return 'Capture the rival Command Base';
@@ -1131,7 +1250,7 @@ function missionObjectiveHTML() {
   if (UI.objCollapsed) return `Mission ▸ ${states.filter((s) => s.done).length}/${states.length}`;
   const left = M.limit ? Math.max(0, M.limit - S.time) : 0;
   return `<b>${def.name}</b>${M.limit ? ` · ${fmtTime(left)} left` : ''}<ul class="obj-goals">${states.map((s) =>
-    `<li class="${s.done ? 'done' : ''}">${s.done ? '✓' : '○'} ${s.text}${s.need > 1 && !s.done ? ` (${s.have}/${s.need})` : ''}</li>`).join('')}</ul>`;
+    `<li class="${s.done ? 'done' : ''}">${s.done ? '✓' : '○'} ${s.text}${s.need > 1 && !s.done ? ` (${esc(s.have)}/${s.need})` : ''}</li>`).join('')}</ul>`;
 }
 
 function showMissionOver() {
@@ -1144,7 +1263,7 @@ function showMissionOver() {
     ? `${def.name} (${MISSION_DIFF_NAMES[M.diff]}) done in ${fmtTime(S.time)}.`
     : M.why === 'time' ? `${def.name}: time ran out before every goal was met.`
       : M.why === 'lander' ? `${def.name}: the rival captured your Command Base.` : `${def.name}: the game ended before every goal was met.`;
-  $('o-stats').innerHTML = def.goals.map((g) => { const s = goalState(g, M.diff); return `<span>${s.done ? '✓' : '✗'} ${s.text}</span><span>${s.need > 1 ? `${s.have}/${s.need}` : s.done ? 'Done' : '–'}</span>`; }).join('');
+  $('o-stats').innerHTML = def.goals.map((g) => { const s = goalState(g, M.diff); return `<span>${s.done ? '✓' : '✗'} ${s.text}</span><span>${s.need > 1 ? `${esc(s.have)}/${s.need}` : s.done ? 'Done' : '–'}</span>`; }).join('');
   if (won) {
     completeMission(M.k, M.diff);
     if (M.k + 1 < MISSIONS.length) {
@@ -1195,7 +1314,7 @@ function renderStats() {
   const landSer = ser((h) => h.land || []);
   const goodSer = ser((h) => (h.goods && h.goods[UI.stats.good]) || []);
   $('st-body').innerHTML = `
-    <div class="stat-tiles">${tiles.map(([k, v]) => `<div class="stat-tile"><span>${k}</span><b>${v}</b></div>`).join('')}</div>
+    <div class="stat-tiles">${tiles.map(([k, v]) => `<div class="stat-tile"><span>${k}</span><b>${esc(v)}</b></div>`).join('')}</div>
     <div class="chart-block"><h3>Bots</h3><p class="sub">Every bot you own, workers and warbots together. Drag across a chart to read it.</p>${chartLegend(botsSer)}<canvas class="chart" id="ch-bots"></canvas></div>
     <div class="chart-block"><h3>Land claimed</h3><p class="sub">Share of the land bots can reach.</p>${chartLegend(landSer)}<canvas class="chart" id="ch-land"></canvas></div>
     <div class="chart-block"><h3>Goods on hand</h3><p class="sub">In storage plus finished goods waiting in buildings.</p>
@@ -1288,7 +1407,7 @@ function portSection(b) {
     html += `<p class="hint">A ferry line runs to the Port ${dirText(b, other)}: your robots and trucks take the ferry whenever it's the shorter way.${served ? '' : ' <b>No Ferry serves it yet</b>: order one at a shipyard (a Port panel).'}</p><button class="btn" data-to="0">Stop the ferry line</button>`;
   } else {
     const ports = S.buildings.filter((o) => o !== b && !o.dead && o.built && o.owner === b.owner && BDEFS[o.type].port && seaLinked(b, o));
-    html += ports.length ? `<p class="hint">Run a ferry between this Port and another: your robots and trucks take it whenever it's the shorter way (a Ferry from a Port's shipyard serves it).</p>${ports.map((o) => `<button class="btn" data-to="${o.id}">Ferry to the Port ${dirText(b, o)}</button>`).join('')}`
+    html += ports.length ? `<p class="hint">Run a ferry between this Port and another: your robots and trucks take it whenever it's the shorter way (a Ferry from a Port's shipyard serves it).</p>${ports.map((o) => `<button class="btn" data-to="${esc(o.id)}">Ferry to the Port ${dirText(b, o)}</button>`).join('')}`
       : '<p class="hint">Build another Port on the same water to run a ferry line between them.</p>';
   }
   html += '</div>';
@@ -1495,7 +1614,7 @@ function showAimBanner(problem) {
     ok = 'Fire';
   } else {
     const w = silo.stock.warhead || 0;
-    html += `Tap where to fire, inside the red ring (${md.range} tiles). A hit wrecks most buildings; the blast hurts everything rival within ${md.splash} tiles. <b>${w}</b> Missile${w === 1 ? '' : 's'} loaded.`;
+    html += `Tap where to fire, inside the red ring (${md.range} tiles). A hit wrecks most buildings; the blast hurts everything rival within ${md.splash} tiles. <b>${esc(w)}</b> Missile${w === 1 ? '' : 's'} loaded.`;
   }
   showBanner(html, ok, 'Cancel');
 }
@@ -2355,8 +2474,8 @@ function showRoadBanner(problem, info) {
     if (mode === 'pipe') how = pipeHow + owedText;
     else if (mode === 'wall') how = 'Walls and Gates are paid straight from storage, no Hauler needed: what you have now goes in when you tap Build, the rest as the goods come in (oldest plans first), and free workers put each piece up as far as its goods go. Enemy warbots have to go round or shoot through; your bots pass your Gates.' + owedText;
     else if (mode === 'rail') how = 'Track you can pay for goes down when you tap Build; the rest goes down as the goods come in (oldest plans first). Where the track climbs a one-level cliff, a Ramp is planned for it (paid from storage, no road needed) and the track on it goes down once workers finish the Ramp. Rail Stations stand beside the track (build them first if you like, and drag from one to the other); Freight Trains run between stations on the same stretch of track.' + owedText;
-    else how = `<b>Haulers only drive on roads</b>, so every building needs a road to storage. 1 Cement paves ${Math.round(1 / roadCost().cement)} tiles (${ROAD_CLEAR}× through resources); you have ${have.cement || 0} Cement` +
-      (mode === 'bridge' ? ` and ${have.alloy || 0} Alloy. Workers build bridges and tunnels out from the shore or rock face, and they join land on any level.` : `. Drag a road out over water and it carries on as a bridge (${costText(CROSS[T_WATER].cost)} a tile), and through rock as a tunnel (${costText(CROSS[T_ROCK].cost)}).`) +
+    else how = `<b>Haulers only drive on roads</b>, so every building needs a road to storage. 1 Cement paves ${Math.round(1 / roadCost().cement)} tiles (${ROAD_CLEAR}× through resources); you have ${esc(have.cement || 0)} Cement` +
+      (mode === 'bridge' ? ` and ${esc(have.alloy || 0)} Alloy. Workers build bridges and tunnels out from the shore or rock face, and they join land on any level.` : `. Drag a road out over water and it carries on as a bridge (${costText(CROSS[T_WATER].cost)} a tile), and through rock as a tunnel (${costText(CROSS[T_ROCK].cost)}).`) +
       ` After you tap Build, free workers pave the road a tile at a time${waiting ? ` (<b>${waiting}</b> tile${waiting === 1 ? '' : 's'} waiting now)` : ''}. Short of Cement or Alloy? Plan it anyway: tiles you can't pay for yet wait (an orange outline) and are paid from storage as the goods come in, oldest plans first.` + owedText;
   }
   const text = (problem ? `<span class="${info ? 'ok' : 'err'}">${problem}</span> ` : '') + line +
@@ -2419,6 +2538,13 @@ function openSheet(kind, id, html) {
   markSheetKeys();
 }
 
+/** Is the open building panel out of date: the building gone, or in other hands than when the panel was built? */
+function sheetStale() {
+  if (UI.sheetKind !== 'bld') return false;
+  const b = getE(UI.sheetFor);
+  return !b || b.dead || (b.owner === 0) !== UI.sheetMine;
+}
+
 function closeSheet() {
   R.routePreview = null;
   $('sheet').hidden = true;
@@ -2456,7 +2582,7 @@ function openBuildMenu() {
   const tabs = `<div class="seg build-tabs" id="build-tabs">${groups.map((g) => `<button data-g="${g.key}"><kbd>${BUILD_TAB_KEYS[g.key]}</kbd>${g.name}<span class="n">${ordered.filter((t) => groupOf(t) === g.key).length}</span></button>`).join('')}<button data-g="all"><kbd>${BUILD_TAB_KEYS.all}</kbd>All</button></div>`;
   const kbd = (t) => { const k = buildKeyOf(t); return k ? `<kbd data-tab="${BUILD_TAB_KEYS[k.tab]}" data-key="${k.key.toUpperCase()}">${k.key.toUpperCase()}</kbd>` : ''; };
   const html = `<div class="sheet-title"><h3>Build</h3></div>
-    <p class="desc">Placing a site is free; haulers bring the materials by road, so lay a road to it. ${sites}/${MAX_SITES} sites in progress.</p>
+    <p class="desc">Placing a site is free; haulers bring the materials by road, so lay a road to it. <span id="build-sites">${sites}</span>/${MAX_SITES} sites in progress.</p>
     ${tabs}
     <div class="build-grid"><button class="bcard roads" id="build-roads" data-g="move"><kbd data-key="R">R</kbd><svg viewBox="0 0 24 24"><path d="M8 3L5 21M16 3l3 18M12 4v3M12 10.5v3M12 17v3" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
       <div class="bname">Roads</div><div class="bhave">Plan roads, bridges and ramps</div></button>${warOn() ? `<button class="bcard walls" id="build-walls" data-g="defend"><kbd data-tab="${BUILD_TAB_KEYS.defend}" data-key="X">X</kbd><img src="${iconFor('wall')}" alt=""><div class="bname">Walls</div><div class="bcost">${costHTML(BDEFS.wall.cost, have)}</div>
@@ -2503,8 +2629,8 @@ function renderTrade(b) {
   el.innerHTML = T.offers.map((o, k) => {
     const on = T.pick === k, pay = tradePay(0, o, b), sat = T.sat[o.give] ?? 1;
     // Spelled out which way it goes: you send `lot` of one good and get `pay` of the other back.
-    return `<div class="kv trade-row${on ? ' on' : ''}"><span>You give <b>${o.lot}</b> <i class="gi ${o.give}"></i>${GOOD[o.give].name} → you get <b>${pay}</b> <i class="gi ${o.get}"></i>${GOOD[o.get].name}` +
-      `<small> ${o.left > 0 ? `${o.left} more time${o.left === 1 ? '' : 's'}` : 'filled'}${sat < 0.99 ? ` · ${GOOD[o.give].name} pays ${Math.round(sat * 100)}% for now (you sold a lot lately)` : ''} · you have ${Math.floor(have[o.give] || 0)} ${GOOD[o.give].name}</small></span>` +
+    return `<div class="kv trade-row${on ? ' on' : ''}"><span>You give <b>${esc(o.lot)}</b> <i class="gi ${esc(o.give)}"></i>${GOOD[o.give].name} → you get <b>${esc(pay)}</b> <i class="gi ${esc(o.get)}"></i>${GOOD[o.get].name}` +
+      `<small> ${o.left > 0 ? `${esc(o.left)} more time${o.left === 1 ? '' : 's'}` : 'filled'}${sat < 0.99 ? ` · ${GOOD[o.give].name} pays ${Math.round(sat * 100)}% for now (you sold a lot lately)` : ''} · you have ${Math.floor(have[o.give] || 0)} ${GOOD[o.give].name}</small></span>` +
       `<button class="btn small${on ? '' : ' primary'}" data-k="${k}" ${o.left > 0 ? '' : 'disabled'}>${o.left > 0 ? (on ? 'Stop' : 'Take') : 'Filled'}</button></div>`;
   }).join('');
   for (const btn of el.querySelectorAll('button[data-k]')) btn.onclick = () => {
@@ -2571,7 +2697,7 @@ function openBuildingSheet(b) {
   if (style && S.mode !== 'colony' && !S.mission) desc += ` <b>${style.name}:</b> it ${style.desc}.`;
   if (def.wild) {
     const n = S.bots.filter((u) => !u.dead && u.nest === b.id).length;
-    desc += ` <b>Level ${b.level || 1} of 3</b>, ${n} creature${n === 1 ? '' : 's'} out and about. Hoarded: ${Object.keys(b.stock).filter((g) => b.stock[g] > 0).map((g) => `${b.stock[g]} ${GOOD[g].name}`).join(', ') || 'nothing'}.`;
+    desc += ` <b>Level ${esc(b.level || 1)} of 3</b>, ${n} creature${n === 1 ? '' : 's'} out and about. Hoarded: ${Object.keys(b.stock).filter((g) => b.stock[g] > 0).map((g) => `${esc(b.stock[g])} ${GOOD[g].name}`).join(', ') || 'nothing'}.`;
   }
   let html = `<div class="sheet-title"><img src="${iconFor(b.type, b.owner)}" alt=""><div><h3>${def.name}</h3>
     <div class="owner"><span class="dot" style="background:${PLAYER_COLORS[b.owner]}"></span> ${mine ? 'Yours' : playerName(b.owner)}</div></div></div>
@@ -2614,7 +2740,7 @@ function openBuildingSheet(b) {
         (b.type === 'lander' ? '<p class="hint" id="sh-posted"></p>' : `<div class="kv"><span>Stationed here</span><span id="sh-posted"></span></div>
         <button class="btn small ghost" id="sh-unpost">Send them back to the Command Base</button>`) +
         (def.bunker ? '' : `<div class="section-label">Keep here</div>
-        <div class="seg" id="sh-keepw"><button data-v="auto">Auto (${b.type === 'lander' ? 1 : S.players[0].keepW ?? 0})</button><button data-v="0">0</button><button data-v="1">1</button><button data-v="2">2</button><button data-v="5">5</button><button data-v="${def.garrison}">${def.garrison}</button></div>
+        <div class="seg" id="sh-keepw"><button data-v="auto">Auto (${b.type === 'lander' ? 1 : esc(S.players[0].keepW ?? 0)})</button><button data-v="0">0</button><button data-v="1">1</button><button data-v="2">2</button><button data-v="5">5</button><button data-v="${def.garrison}">${def.garrison}</button></div>
         <p class="hint">${b.type === 'lander' ? 'Warbots the Command Base always keeps at home: attacks, rallies and stationing never take the last of them.'
           : 'Warbots stationed here: your Command Base sends them, and replaces any that are lost. Attacks and rally flags use them once the Command Base has none to spare, and they come back here when you call them back (or after defending it). <i>Auto</i> follows the setting for every Outpost in Army.'}</p>`);
     }
@@ -2663,12 +2789,13 @@ function openBuildingSheet(b) {
     html += '</div>';
   } else if (S.mode !== 'colony' || def.wild) {
     html += `<div class="section-label">Attack with warbots</div><div id="sh-attack"></div>
-      <div class="stepper" id="sh-stepper"><button class="btn" id="sh-minus">−</button><span class="n" id="sh-n">0</span>
-      <button class="btn" id="sh-plus">+</button><button class="btn primary" id="sh-send" style="flex:1">Send warbots</button></div>
+      <div class="stepper" id="sh-stepper"><button class="btn" id="sh-minus" aria-label="Fewer warbots">−</button><span class="n" id="sh-n">0</span>
+      <button class="btn" id="sh-plus" aria-label="More warbots">+</button><button class="btn primary" id="sh-send" style="flex:1">Send warbots</button></div>
       <div class="section-label">Missile strike</div><div id="sh-missile"></div>
       <button class="btn primary big" id="sh-fire">Fire missile</button>${myBombers().length ? '<div class="section-label">Air strike</div><p class="hint" id="sh-bomb-hint"></p><button class="btn big" id="sh-bomb">Bomb it</button>' : ''}`;
   }
   openSheet('bld', b.id, html);
+  UI.sheetMine = mine;
   if (mine) {
     if ($('sh-prio')) for (const btn of $('sh-prio').children) btn.onclick = () => {
       b.prio = btn.dataset.v === 'normal' ? undefined : btn.dataset.v;
@@ -2773,6 +2900,7 @@ function openBuildingSheet(b) {
       };
     }
     if ($('sh-demolish')) $('sh-demolish').onclick = () => {
+      if (b.owner !== 0) return; // (captured while its panel was open: no longer yours to take down)
       if (!UI.demolishArm) {
         UI.demolishArm = 1;
         $('sh-demolish').textContent = BDEFS[b.type].mil && b.built ? 'Tap again: buildings outside your border will be lost' : 'Tap again to confirm';
@@ -2914,7 +3042,7 @@ function refreshBuildingSheet(b) {
       parts.push(`<div class="kv"><span>${all ? 'Joined roads' : 'Marked roads joined to it'}</span><span>${fresh + worn + todo} tiles</span></div>
         <div class="kv"><span>Asphalt in good repair</span><span>${fresh}</span></div>
         <div class="kv"><span>To pave · worn, to resurface</span><span>${todo} · ${worn}</span></div>`);
-      if (mine) parts.push(`<div class="kv"><span>Asphalt</span><span>${goodTag('asphalt', `${b.stock.asphalt || 0}/3`, !(b.stock.asphalt > 0) && !(b.charges > 0))} + ${b.charges || 0} tiles in the hopper</span></div>`);
+      if (mine) parts.push(`<div class="kv"><span>Asphalt</span><span>${goodTag('asphalt', `${b.stock.asphalt || 0}/3`, !(b.stock.asphalt > 0) && !(b.charges > 0))} + ${esc(b.charges || 0)} tiles in the hopper</span></div>`);
     }
     if (def.ammoStock && mine && warOn()) {
       parts.push(`<div class="kv"><span>Ammo for warbots</span><span>${goodTag('ammo', `${b.stock.ammo || 0}/${def.ammoStock}`, !(b.stock.ammo > 0))}</span></div>`);
@@ -2987,14 +3115,14 @@ function refreshBuildingSheet(b) {
       parts.push(`<div class="kv"><span>Aura (${KEEP.aura} tiles)</span><span>${walls} Wall${walls === 1 ? '' : 's'} and Gate${walls === 1 ? '' : 's'} toughened, ${guns} defence${guns === 1 ? '' : 's'} sharpened</span></div>`);
     }
     if (def.disrupt && mine) {
-      parts.push(`<div class="kv"><span>Fuel</span><span>${goodTag('fuel', `${b.stock.fuel || 0}/${def.ammoCap}`, !(b.stock.fuel > 0))} + ${b.pulses || 0} pulse${b.pulses === 1 ? '' : 's'} charged</span></div>`);
+      parts.push(`<div class="kv"><span>Fuel</span><span>${goodTag('fuel', `${b.stock.fuel || 0}/${def.ammoCap}`, !(b.stock.fuel > 0))} + ${esc(b.pulses || 0)} pulse${b.pulses === 1 ? '' : 's'} charged</span></div>`);
       parts.push(`<div class="kv"><span>Each pulse</span><span>drains ${def.disrupt.drain} battery from enemy robots within ${def.range} tiles, every ${def.disrupt.every}s</span></div>`);
     }
     if (def.mortar && mine) {
-      parts.push(`<div class="kv"><span>Shells</span><span>${(b.shells || 0) + (b.stock.ammo || 0) * def.mortar.shells} (${goodTag('ammo', `${b.stock.ammo || 0}/${def.ammoCap}`, !(b.stock.ammo > 0))})</span></div>`);
+      parts.push(`<div class="kv"><span>Shells</span><span>${esc((b.shells || 0) + (b.stock.ammo || 0) * def.mortar.shells)} (${goodTag('ammo', `${b.stock.ammo || 0}/${def.ammoCap}`, !(b.stock.ammo > 0))})</span></div>`);
       parts.push(`<div class="kv"><span>Each shell</span><span>${def.mortar.damage} damage, ${def.mortar.splashDamage} within ${def.mortar.splash} tiles; ${def.minRange} to ${def.range} tiles out</span></div>`);
     }
-    if (def.ammo && mine && !def.missile && !def.disrupt && !def.mortar) parts.push(`<div class="kv"><span>Ammo</span><span>${b.shots + (b.stock.crystal || 0) * shotsPer(b)} shots</span></div>`);
+    if (def.ammo && mine && !def.missile && !def.disrupt && !def.mortar) parts.push(`<div class="kv"><span>Ammo</span><span>${esc(b.shots + (b.stock.crystal || 0) * shotsPer(b))} shots</span></div>`);
     if (def.missile && mine) {
       parts.push(`<div class="kv"><span>Missiles loaded</span><span>${goodTag('warhead', `${b.stock.warhead || 0}/${def.ammoCap}`)}</span></div>`);
       parts.push(`<div class="kv"><span>Each hit</span><span>${def.missile.damage} damage, ${def.missile.splashDamage} to buildings within ${def.missile.splash} tiles</span></div>`);
@@ -3016,7 +3144,7 @@ function refreshBuildingSheet(b) {
       parts.push(`<div class="kv"><span>Repair left in the hopper</span><span>${Math.floor(b.repairPts || 0)} health</span></div>`);
     }
     if (def.charger && mine) {
-      parts.push(`<div class="kv"><span>Charging now</span><span>${b.charging || 0} (${def.charger.slots} at full speed)</span></div>`);
+      parts.push(`<div class="kv"><span>Charging now</span><span>${esc(b.charging || 0)} (${def.charger.slots} at full speed)</span></div>`);
       if (def.charger.fuel) {
         const pct = Math.round(Math.min(100, ((b.energy || 0) / FUEL_ENERGY) * 100));
         parts.push(`<div class="kv"><span>Fuel stocked</span><span>${goodTag('fuel', `${b.stock.fuel || 0}/${def.fuelCap}`, !(b.stock.fuel > 0))}</span></div>`);
@@ -3091,7 +3219,7 @@ function refreshBuildingSheet(b) {
     const sig = bs.map((u) => u.id + ':' + planeStatus(u)).join('|');
     if (el.dataset.sig !== sig) {
       el.dataset.sig = sig;
-      el.innerHTML = bs.length ? bs.map((u, k) => `<div class="kv trade-row"><span>Bomber ${k + 1}<small>${planeStatus(u)}</small></span><button class="btn small primary" data-b="${u.id}" ${u.mission || u.flight ? 'disabled' : ''}>Strike</button></div>`).join('') +
+      el.innerHTML = bs.length ? bs.map((u, k) => `<div class="kv trade-row"><span>Bomber ${k + 1}<small>${esc(planeStatus(u))}</small></span><button class="btn small primary" data-b="${esc(u.id)}" ${u.mission || u.flight ? 'disabled' : ''}>Strike</button></div>`).join('') +
         `<p class="hint">A sortie takes ${BOMBER.ammo} Ammo (this Airfield keeps some for them; haulers bring it) and Fuel; back on the ground a bomber needs ${BOMBER.rearm} s to rearm. Or open a rival building and tap <b>Bomb it</b>.</p>`
         : '<p class="hint">None based here: order Strike Bombers in the hangar below (two fit).</p>';
       for (const btn of el.querySelectorAll('button[data-b]')) btn.onclick = () => { const u = getE(+btn.dataset.b); if (u) { sfx('click'); startStrike(u); } };
@@ -3313,8 +3441,8 @@ function openMoveSheet(i, j) {
   const html = `<div class="sheet-title"><div><h3>Send warbots here</h3></div></div>
     <p class="desc">They plant a rally flag and hold the area: they fight enemy bots that come close and attack enemy buildings within 3 tiles, until you tap the flag and call them back.</p>
     <div id="mv-info"></div>
-    <div class="stepper"><button class="btn" id="mv-minus">−</button><span class="n" id="mv-n">0</span>
-      <button class="btn" id="mv-plus">+</button><button class="btn primary" id="mv-send" style="flex:1">Send warbots</button></div>`;
+    <div class="stepper"><button class="btn" id="mv-minus" aria-label="Fewer warbots">−</button><span class="n" id="mv-n">0</span>
+      <button class="btn" id="mv-plus" aria-label="More warbots">+</button><button class="btn primary" id="mv-send" style="flex:1">Send warbots</button></div>`;
   openSheet('move', tIdx(i, j), html);
   UI.moveN = Math.min(5, rallyAvailable(0, i, j));
   $('mv-minus').onclick = () => { UI.moveN = Math.max(1, UI.moveN - 1); refreshSheet(); };
@@ -3334,8 +3462,8 @@ function openRallySheet(r) {
     <div id="rl-info"></div>
     <button class="btn big" id="rl-recall">Call them back</button>
     <div class="section-label">Send more</div>
-    <div class="stepper"><button class="btn" id="mv-minus">−</button><span class="n" id="mv-n">0</span>
-      <button class="btn" id="mv-plus">+</button><button class="btn primary" id="mv-send" style="flex:1">Send warbots</button></div>`;
+    <div class="stepper"><button class="btn" id="mv-minus" aria-label="Fewer warbots">−</button><span class="n" id="mv-n">0</span>
+      <button class="btn" id="mv-plus" aria-label="More warbots">+</button><button class="btn primary" id="mv-send" style="flex:1">Send warbots</button></div>`;
   openSheet('rally', r.id, html);
   const i = Math.floor(r.x), j = Math.floor(r.y);
   UI.moveN = Math.min(3, rallyAvailable(0, i, j));
@@ -3508,22 +3636,28 @@ function refreshGoodsSheet(full) {
     ? Object.keys(o).map((t) => `<span class="gtag">${o[t].n} ${o[t].n === 1 ? BDEFS[t].name : BDEFS[t].name + (BDEFS[t].name.endsWith('s') ? '' : 's')}${o[t].working !== undefined ? ` <small>${o[t].working} working${o[t].stopped ? `, ${o[t].stopped} at limit` : ''}</small>` : ''}</span>`).join('')
     : `<span class="hint">${label}</span>`;
   const extraUse = g === 'cement' ? ' Also construction and roads.' : (BDEFS.depot.cost[g] || ['fiber', 'alloy', 'chip', 'stone'].includes(g)) ? ' Also construction.' : '';
-  $('gs-body').innerHTML = `<p class="desc">${GOOD[g].desc}</p>${status}
+  // The figures are rewritten when they change; the chart's canvas stays put (a drag across it reads it)
+  // and is redrawn only for another good or a new sample.
+  if (full) $('gs-body').innerHTML = `<div id="gs-info"></div><div class="section-label">On hand over time</div><canvas class="chart small" id="gs-chart"></canvas>
+    <p class="hint">Rates are over the last two minutes. The Statistics screen in the pause menu shows the whole game.</p>`;
+  const info = `<p class="desc">${GOOD[g].desc}</p>${status}
     <div class="gs-stats">
       <div><b>${fmt(total)}</b><span>on hand</span></div>
       <div><b class="up">+${fmt(rate.made)}</b><span>made / min</span></div>
       <div><b class="down">−${fmt(rate.used)}</b><span>used / min</span></div>
       <div><b class="${net > 0.05 ? 'up' : net < -0.05 ? 'down' : ''}">${net >= 0 ? '+' : '−'}${fmt(Math.abs(net))}</b><span>net / min</span></div>
     </div>
-    <div class="kv"><span>In storage</span><span>${stored}</span></div>
-    <div class="kv"><span>Waiting for pickup at buildings</span><span>${waiting}</span></div>
+    <div class="kv"><span>In storage</span><span>${esc(stored)}</span></div>
+    <div class="kv"><span>Waiting for pickup at buildings</span><span>${esc(waiting)}</span></div>
     <div class="kv"><span>Wanted right now</span><span>${wantN ? `${wantN} by ${wantB} building${wantB === 1 ? '' : 's'}` : 'Nothing waiting'}</span></div>
     <div class="section-label">Made by</div><div class="goodlist">${list(makers, g === 'cement' || g === 'alloy' ? 'Nothing yet.' : 'Nothing makes it yet.')}</div>
-    <div class="section-label">Used by</div><div class="goodlist">${list(users, 'No buildings use it.')}</div>${extraUse ? `<p class="hint">${extraUse.trim()}</p>` : ''}
-    <div class="section-label">On hand over time</div><canvas class="chart small" id="gs-chart"></canvas>
-    <p class="hint">Rates are over the last two minutes. The Statistics screen in the pause menu shows the whole game.</p>`;
-  const H = S.hist;
-  if (H && H.t.length > 1 && H.p[0].goods && H.p[0].goods[g]) lineChart($('gs-chart'), { xs: H.t, series: [{ name: GOOD[g].name, color: GOOD[g].color, values: H.p[0].goods[g] }] });
+    <div class="section-label">Used by</div><div class="goodlist">${list(users, 'No buildings use it.')}</div>${extraUse ? `<p class="hint">${extraUse.trim()}</p>` : ''}`;
+  const box = $('gs-info'), cv = $('gs-chart');
+  if (box.dataset.html !== info) { box.dataset.html = info; box.innerHTML = info; }
+  const H = S.hist, key = g + ':' + (H ? H.t.length + ':' + (H.t[H.t.length - 1] || 0) : '');
+  if (cv.dataset.key === key) return;
+  cv.dataset.key = key;
+  if (H && H.t.length > 1 && H.p[0].goods && H.p[0].goods[g]) lineChart(cv, { xs: H.t, series: [{ name: GOOD[g].name, color: GOOD[g].color, values: H.p[0].goods[g] }] });
 }
 
 /** Your robots by type: how many, and what they're doing. Opened from the population chip. */
@@ -3569,8 +3703,12 @@ function refreshPopSheet() {
       `<div class="kv pop-row"><span>${label}</span><span><b>${g[k].length}</b> <button class="btn small ghost" data-wb="${k}">Show</button></span></div>`).join('') +
       '<p class="hint">Show takes you to each in turn. Warbots stationed at an Outpost come back to it after a fight; every other one belongs to the Command Base.</p>';
   }
-  $('sh-pop').innerHTML = rows.join('') + `<div class="kv"><span>All robots</span><span><b>${total}</b> of ${cap} (the limit)</span></div>` + wb;
-  for (const btn of $('sh-pop').querySelectorAll('[data-wb]')) btn.onclick = () => showWarbots(btn.dataset.wb);
+  // Rebuilt only when something shown changes, so a click on Show isn't lost between press and release.
+  const el = $('sh-pop'), html = rows.join('') + `<div class="kv"><span>All robots</span><span><b>${total}</b> of ${cap} (the limit)</span></div>` + wb;
+  if (el.dataset.html === html) return;
+  el.dataset.html = html;
+  el.innerHTML = html;
+  for (const btn of el.querySelectorAll('[data-wb]')) btn.onclick = () => showWarbots(btn.dataset.wb);
 }
 
 const WARBOT_PLACES = [['base', 'At the Command Base'], ['posted', 'In Outposts and Bunkers'], ['home', 'Heading back to a garrison'], ['attack', 'Attacking'],
@@ -3620,18 +3758,20 @@ function refreshSheet() {
   if (UI.sheetKind === 'road') { refreshRoadSheet(UI.sheetFor); return; }
   if (UI.sheetKind === 'bld') {
     const b = getE(UI.sheetFor);
-    if (!b) { closeSheet(); return; }
+    if (!b || b.dead) { closeSheet(); return; }
+    // Captured (or won) while its panel was open: the panel is built again for its new owner.
+    if (sheetStale()) { openBuildingSheet(b); return; }
     refreshBuildingSheet(b);
   } else if (UI.sheetKind === 'bot') {
     const u = getE(UI.sheetFor);
     if (!u || u.inside) { closeSheet(); return; }
     $('sh-status').textContent = botActivity(u);
     const bat = Math.round(u.bat ?? 100);
-    $('sh-dyn').innerHTML = `<div class="kv"><span>Health</span><span>${Math.ceil(u.hp)} / ${u.maxHp}</span></div>` +
+    $('sh-dyn').innerHTML = `<div class="kv"><span>Health</span><span>${Math.ceil(u.hp)} / ${esc(u.maxHp)}</span></div>` +
       `<div class="kv"><span>${BOTS[u.type].truck ? 'Fuel tank' : 'Battery'}</span><span>${bat}%${bat < BATTERY.critical ? (BOTS[u.type].truck ? ' (empty: crawling)' : ' (flat: slow and weak)') : bat < BATTERY.low ? ' (low)' : ''}</span></div>` +
       `<div class="bar battery"><div style="width:${bat}%;background:${bat < BATTERY.critical ? '#ff4d4d' : bat < BATTERY.low ? '#ffb347' : '#7ee08a'}"></div></div>` +
-      (u.type === 'warbot' ? `<div class="kv"><span>Ammo</span><span>${u.ammo ?? WARBOT_AMMO} / ${WARBOT_AMMO} shots${!u.ammo ? ' (out: can\'t fight until it reloads)' : ''}</span></div>` : '') +
-      (BOTS[u.type].siege ? `<div class="kv"><span>Rockets</span><span>${u.rockets ?? ROCKET.salvo} / ${ROCKET.salvo}${!(u.rockets ?? ROCKET.salvo) ? ` (reloads ${ROCKET.ammo} Ammo at a garrison or storage)` : ''}</span></div><div class="kv"><span>Reach</span><span>${ROCKET.min} to ${ROCKET.range} tiles</span></div>` : '') +
+      (u.type === 'warbot' ? `<div class="kv"><span>Ammo</span><span>${esc(u.ammo ?? WARBOT_AMMO)} / ${WARBOT_AMMO} shots${!u.ammo ? ' (out: can\'t fight until it reloads)' : ''}</span></div>` : '') +
+      (BOTS[u.type].siege ? `<div class="kv"><span>Rockets</span><span>${esc(u.rockets ?? ROCKET.salvo)} / ${ROCKET.salvo}${!(u.rockets ?? ROCKET.salvo) ? ` (reloads ${ROCKET.ammo} Ammo at a garrison or storage)` : ''}</span></div><div class="kv"><span>Reach</span><span>${ROCKET.min} to ${ROCKET.range} tiles</span></div>` : '') +
       (u.carry ? `<div class="kv"><span>Carrying</span><span>${goodTag(u.carry, (u.carryN > 1 ? u.carryN + ' × ' : '') + GOOD[u.carry].name)}</span></div>` : '') +
       (u.cargo && Object.keys(u.cargo).length ? `<div class="section-label">On board</div><div class="goodlist">${Object.keys(u.cargo).map((g) => goodTag(g, `${u.cargo[g]} ${GOOD[g].name}`)).join('')}</div>` : '');
     if ($('sh-recall')) $('sh-recall').hidden = !(u.task && u.task.type === 'hold');
@@ -3754,9 +3894,12 @@ function updateHUD() {
   updateEventCard();
   updateNukeCard();
   if (UI.sheetKind === 'build') {
-    // keep build-menu affordability current without rebuilding the buttons
+    // keep build-menu affordability (and the site count: at the limit no card can be picked) current without rebuilding the buttons
+    const sites = siteCount(0);
+    if ($('build-sites')) $('build-sites').textContent = sites;
     for (const el of $('sheet-body').querySelectorAll('.bcard[data-t]')) {
       const cost = BDEFS[el.dataset.t].cost;
+      el.disabled = sites >= MAX_SITES;
       el.querySelector('.bcost').innerHTML = costHTML(cost, goods) + (el.dataset.t === 'viaduct' ? ' a tile' : '');
       const have = el.querySelector('.bhave');
       const txt = ownedText(el.dataset.t);
@@ -3783,9 +3926,9 @@ function updateEventCard() {
     if (E.type !== 'trader') html += `<div class="ev-desc">${def.desc}</div>`;
     else if (!E.started) html += '';
     else if (!o) html += '<div class="ev-desc">It wants nothing you have spare.</div>';
-    else if (o.done) html += `<div class="ev-desc">Deal done: ${o.m} ${GOOD[o.get].name} delivered to your Command Base.</div>`;
+    else if (o.done) html += `<div class="ev-desc">Deal done: ${esc(o.m)} ${GOOD[o.get].name} delivered to your Command Base.</div>`;
     else {
-      html += `<div class="ev-deal"><span>Give <b>${o.n}</b> <i class="gi ${o.give}"></i> ${GOOD[o.give].name}, get <b>${o.m}</b> <i class="gi ${o.get}"></i> ${GOOD[o.get].name}</span>` +
+      html += `<div class="ev-deal"><span>Give <b>${esc(o.n)}</b> <i class="gi ${esc(o.give)}"></i> ${GOOD[o.give].name}, get <b>${esc(o.m)}</b> <i class="gi ${esc(o.get)}"></i> ${GOOD[o.get].name}</span>` +
         '<button class="btn small primary" id="ev-trade">Trade</button></div>';
     }
     el.innerHTML = html;

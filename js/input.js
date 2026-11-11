@@ -42,16 +42,25 @@ function onPointerDown(e) {
     // With a mouse, a left drag on the map in the normal view draws a selection box, RTS-style.
     const box = e.pointerType === 'mouse' && e.button === 0 && R.mode === 'normal' && !!INPUT.onBox;
     INPUT.gesture = { type: 'single', sx: e.clientX, sy: e.clientY, lx: e.clientX, ly: e.clientY, moved: false, painting: false, panOnly, box, button: e.button };
-  } else if (INPUT.pointers.size === 2) {
-    const [a, b] = [...INPUT.pointers.values()];
-    INPUT.gesture = {
-      type: 'pinch',
-      d0: Math.hypot(a.x - b.x, a.y - b.y) || 1,
-      z0: R.cam.z,
-      mid: screenToWorld((a.x + b.x) / 2, (a.y + b.y) / 2),
-    };
-    if (INPUT.onPaintEnd) INPUT.onPaintEnd();
+  } else {
+    // Two fingers pinch. A third (a palm, a thumb) starts the pinch afresh from where the fingers are now.
+    startPinch();
+    if (INPUT.pointers.size === 2 && INPUT.onPaintEnd) INPUT.onPaintEnd();
   }
+}
+
+/**
+ * A pinch measured from the first two pointers down, as they are now. Started again whenever a finger
+ * lands or lifts with two or more still down, so the zoom never jumps to fit a different pair.
+ */
+function startPinch() {
+  const [a, b] = [...INPUT.pointers.values()];
+  INPUT.gesture = {
+    type: 'pinch',
+    d0: Math.hypot(a.x - b.x, a.y - b.y) || 1,
+    z0: R.cam.z,
+    mid: screenToWorld((a.x + b.x) / 2, (a.y + b.y) / 2),
+  };
 }
 
 function onPointerMove(e) {
@@ -105,21 +114,25 @@ function onPointerUp(e) {
   const g = INPUT.gesture;
   const wasSingle = g && g.type === 'single' && INPUT.pointers.size === 1;
   INPUT.pointers.delete(e.pointerId);
-  if (wasSingle && e.type === 'pointerup') {
-    INPUT.shift = e.shiftKey;
-    if (g.box && g.moved && R.box) {
-      if (INPUT.onBox) INPUT.onBox(R.box, e.shiftKey);
-    } else if (!g.moved && g.panOnly && g.button === 2) {
-      const t = _tileAt(e.clientX, e.clientY);
-      if (INPUT.onCommand) INPUT.onCommand(t.i, t.j, t.wx, t.wy);
-    } else if (!g.moved && !g.panOnly) {
-      const t = _tileAt(e.clientX, e.clientY);
-      if (INPUT.onTap) INPUT.onTap(t.i, t.j, t.wx, t.wy);
+  if (wasSingle) {
+    // (A cancelled gesture selects, orders and taps nothing, but still ends: no box left on the screen.)
+    if (e.type === 'pointerup') {
+      INPUT.shift = e.shiftKey;
+      if (g.box && g.moved && R.box) {
+        if (INPUT.onBox) INPUT.onBox(R.box, e.shiftKey);
+      } else if (!g.moved && g.panOnly && g.button === 2) {
+        const t = _tileAt(e.clientX, e.clientY);
+        if (INPUT.onCommand) INPUT.onCommand(t.i, t.j, t.wx, t.wy);
+      } else if (!g.moved && !g.panOnly) {
+        const t = _tileAt(e.clientX, e.clientY);
+        if (INPUT.onTap) INPUT.onTap(t.i, t.j, t.wx, t.wy);
+      }
     }
     R.box = null;
     if (g.painting && INPUT.onPaintEnd) INPUT.onPaintEnd();
   }
-  if (INPUT.pointers.size === 1) {
+  if (INPUT.pointers.size >= 2) startPinch(); // a finger lifted with two still down: carry on from here
+  else if (INPUT.pointers.size === 1) {
     // Finishing a pinch with one finger still down continues as a pan (never a tap).
     const p = [...INPUT.pointers.values()][0];
     INPUT.gesture = { type: 'single', sx: p.x, sy: p.y, lx: p.x, ly: p.y, moved: true, painting: false };

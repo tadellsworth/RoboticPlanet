@@ -583,3 +583,39 @@ canvas.chart.small { height: 110px; }
 .boost-btns { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
 .boost-btns .btn { padding-left: 4px; padding-right: 4px; }
 .sound-sliders { display: grid; gap: 6px; margin-top: 8px; padding: 8px 12px; border: 1px solid var(--line); border-radius: 12px; background: rgba(255,255,255,0.03); text-align: left; }
+
+/* The overlays are dialogs: opening one puts the keyboard focus on it (Tab then walks its buttons), with no ring round the whole screen. */
+.screen:focus { outline: none; }
+/* A link dressed as a button (the manual, on the How to play screen). */
+a.btn { display: block; text-align: center; text-decoration: none; color: inherit; }
+
+/* ---------- touch: controls sized for a finger (44px), where a mouse gets the compact ones ---------- */
+@media (pointer: coarse) {
+  /* The minimap's close button keeps its size; its corner of the minimap answers for it. */
+  .mm-hide::after { content: ''; position: absolute; top: -3px; right: -3px; width: 44px; height: 44px; }
+  .sheet-close { width: 44px; height: 44px; margin: -4px -4px 0 0; }
+  .sheet-title { margin-right: 46px; }
+  /* A Foundry's order list: the two arrows side by side, each a full target. */
+  .order-row { grid-template-columns: 92px 1fr 48px 48px 58px; gap: 6px; font-size: 15px; }
+  .order-move { flex-direction: row; gap: 4px; }
+  .order-row .order-move .btn { width: 44px; min-height: 44px; padding: 0; font-size: 14px; }
+  .speed-menu button, .pick-row button, .hbar, .stats-head .btn { min-height: 44px; }
+  .pick-row button { padding: 5px 14px; }
+}
+/* The top bar and the Paths tools grow only where there's height for it (not on a phone held sideways). */
+@media (pointer: coarse) and (min-height: 520px) {
+  .toprow .chip { min-height: 44px; }
+  .res-chip, .goods.two-rows .res-chip { min-height: 32px; }
+  .banner-actions .road-seg button { min-height: 44px; }
+}
+/* Paths on a phone: five tools to a row (two rows of full-height buttons, where three short rows were). */
+@media (pointer: coarse) and (max-width: 699px) and (min-height: 520px) {
+  body.mode-road .banner-actions .road-seg button { flex-basis: calc(20% - 3px); }
+}
+
+/* ---------- reduced motion (a system setting): panels, messages and counters appear without sliding, fading or flashing ---------- */
+@media (prefers-reduced-motion: reduce) {
+  #sheet, .toast, .res-chip.flash { animation: none; }
+  .toast.out, .more-title::before, .toggle-row input, .toggle-row input::after { transition: none; }
+  .chip-btn:active, .btn:active, .tool:active { transform: none; }
+}

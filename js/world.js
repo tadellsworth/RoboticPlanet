@@ -2929,9 +2929,84 @@ function serializeGame() {
   return JSON.stringify(o);
 }
 
+/** Is k one of table's own entries? (A save's type "constructor" is not a building.) */
+function ownKey(table, k) { return typeof k === 'string' && Object.prototype.hasOwnProperty.call(table, k); }
+
+/*
+ * A save is untrusted: people share save files, and one may be damaged, hand-edited or from a newer
+ * version. checkSave throws on a save this version can't run (nothing is loaded, and the menu says
+ * so), and makes every count and measure a number: text there would reach the panels as HTML.
+ * Fields an older save doesn't have are left alone (deserializeGame fills them in).
+ */
+const SAVE_NUMS = ['id', 'x', 'y', 'owner', 'armor', 'progress', 'timer', 'level', 'shots', 'shells', 'charges', 'pulses', 'charging', 'reload',
+  'energy', 'repairPts', 'limit', 'keepW', 'upT', 'useT', 'fixLeft', 'garInc', 'yardFrac', 'hp', 'maxHp', 'bat', 'ammo', 'rockets', 'carryN', 'inside',
+  'home', 'staff', 'mult', 'lander', 'boosts'];
+const SAVE_COUNTS = ['stock', 'keep', 'cargo', 'orders', 'yard', 'yardParts', 'stats', 'made', 'madeBots'];
+function checkSave(o) {
+  const bad = () => { throw new Error('Unsupported save'); };
+  const obj = (v) => !!v && typeof v === 'object' && !Array.isArray(v);
+  const num = (h, k) => {
+    const v = h[k];
+    if (v == null || typeof v === 'number' || typeof v === 'boolean') return;
+    const n = typeof v === 'string' && v.trim() ? Number(v) : NaN;
+    if (!Number.isFinite(n)) bad();
+    h[k] = n;
+  };
+  const nums = (h) => {
+    for (const k of SAVE_NUMS) num(h, k);
+    for (const c of SAVE_COUNTS) if (h[c] != null) { if (!obj(h[c])) bad(); for (const k in h[c]) num(h[c], k); }
+  };
+  const deal = (f) => { if (!obj(f) || !ownKey(GOOD, f.give) || !ownKey(GOOD, f.get)) bad(); for (const k of ['n', 'm', 'lot', 'left']) num(f, k); };
+  if (!obj(o) || o.v !== 1) bad();
+  for (const k of ['W', 'H', 'seed', 'time', 'nextId', 'winner', 'milestone', 'tick', 'nextEvent']) num(o, k);
+  // (A finished game is never saved, so a save that has a winner isn't one of ours.)
+  if (!Number.isInteger(o.W) || !Number.isInteger(o.H) || o.W < 1 || o.H < 1 || o.W * o.H > 1e6 || !(o.time >= 0) || o.winner >= 0) bad();
+  if (o.mode != null && o.mode !== 'versus' && o.mode !== 'colony') bad();
+  for (const k in TYPED_FIELDS) if (o[k] != null && (!Array.isArray(o[k]) || o[k].length !== o.W * o.H)) bad();
+  for (const k of ['rallies', 'loot', 'missiles', 'posts']) if (o[k] != null && !Array.isArray(o[k])) bad();
+  if (o.hist != null && !(obj(o.hist) && Array.isArray(o.hist.t) && Array.isArray(o.hist.p))) bad();
+  if (o.settings != null) {
+    const st = o.settings;
+    if (!obj(st) || (st.biome != null && !ownKey(BIOMES, st.biome))) bad();
+    if (st.shape != null && !(Number.isInteger(st.shape) && st.shape >= 0 && st.shape < SHAPE_PRESETS.length)) bad();
+  }
+  if (!Array.isArray(o.players) || !o.players.length || o.players.length > PLAYER_COLORS.length || !Array.isArray(o.buildings) || !Array.isArray(o.bots)) bad();
+  for (const P of o.players) {
+    if (!obj(P) || !obj(P.stats)) bad();
+    nums(P);
+    if (P.research && !(obj(P.research) && ownKey(TECHS, P.research.key))) bad();
+    if (P.trade != null) {
+      if (!obj(P.trade) || !Array.isArray(P.trade.offers)) bad();
+      P.trade.offers.forEach(deal);
+      for (const k of ['next', 'pick', 'round', 'sold']) num(P.trade, k);
+    }
+  }
+  for (const b of o.buildings) {
+    if (!obj(b) || !ownKey(BDEFS, b.type) || (b.garrison != null && !Array.isArray(b.garrison))) bad();
+    nums(b);
+    if (!o.players[b.owner] || !Number.isInteger(b.x) || !Number.isInteger(b.y) || b.x < 0 || b.y < 0 || b.x >= o.W || b.y >= o.H) bad();
+  }
+  for (const u of o.bots) {
+    if (!obj(u) || !ownKey(BOTS, u.type) || (u.carry != null && !ownKey(GOOD, u.carry))) bad();
+    nums(u);
+    if (!o.players[u.owner]) bad();
+  }
+  if (o.mission) {
+    const M = o.mission;
+    if (!obj(M) || typeof MISSIONS === 'undefined' || !Number.isInteger(M.k) || !MISSIONS[M.k] || ![0, 1, 2].includes(M.diff)) bad();
+    num(M, 'limit');
+  }
+  if (o.event) {
+    const E = o.event;
+    if (!obj(E) || !ownKey(EVENTS, E.type) || (E.offers != null && !obj(E.offers))) bad();
+    for (const k of ['t0', 't1', 'n']) num(E, k);
+    for (const p in E.offers || {}) deal(E.offers[p]);
+  }
+}
+
 function deserializeGame(json) {
   const o = JSON.parse(json);
-  if (!o || o.v !== 1) throw new Error('Unsupported save');
+  checkSave(o);
   // Saves from before elevation existed load as flat maps.
   if (!o.elev) { o.elev = new Array(o.W * o.H).fill(0); o.ramp = new Array(o.W * o.H).fill(0); }
   // Saves from before fertile soil and oil existed get them from the map's generator, on tiles
@@ -2986,21 +3061,25 @@ function deserializeGame(json) {
   o.missiles = o.missiles || [];
   o.bAt = new Int32Array(o.W * o.H);
   o.byId = new Map();
+  // The rest works on S. A save that fails part-way leaves the game that was running as it was.
+  const prev = S;
   S = o;
-  for (const b of S.buildings) {
-    S.byId.set(b.id, b);
-    S.bAt[tIdx(b.x, b.y)] = b.id;
-    if (b.type === 'foundry' && !S.players[b.owner].ai) b.mode = 'off'; // older saves: build on order only
-  }
-  for (const u of S.bots) {
-    S.byId.set(u.id, u);
-    if (u.type === 'warbot') u.ammo = u.ammo === undefined ? WARBOT_AMMO : Math.min(u.ammo, WARBOT_AMMO); // older saves carried more
-    u.carryN = u.carry ? u.carryN || 1 : 0;
-  }
-  computeZones();
-  if (oldWays) wayOwnersFromLand();
-  if (!S.posts) { placePosts(S.seed); for (const p of S.posts) if (S.decor) S.decor[tIdx(p.x, p.y)] = 0; } // saves from before Trade Posts
-  computeTerritory(); // land as it's worked out now (every building holds a little round it)
+  try {
+    for (const b of S.buildings) {
+      S.byId.set(b.id, b);
+      S.bAt[tIdx(b.x, b.y)] = b.id;
+      if (b.type === 'foundry' && !S.players[b.owner].ai) b.mode = 'off'; // older saves: build on order only
+    }
+    for (const u of S.bots) {
+      S.byId.set(u.id, u);
+      if (u.type === 'warbot') u.ammo = u.ammo === undefined ? WARBOT_AMMO : Math.min(u.ammo, WARBOT_AMMO); // older saves carried more
+      u.carryN = u.carry ? u.carryN || 1 : 0;
+    }
+    computeZones();
+    if (oldWays) wayOwnersFromLand();
+    if (!S.posts) { placePosts(S.seed); for (const p of S.posts) if (S.decor) S.decor[tIdx(p.x, p.y)] = 0; } // saves from before Trade Posts
+    computeTerritory(); // land as it's worked out now (every building holds a little round it)
+  } catch (e) { S = prev; throw e; }
   return S;
 }
 

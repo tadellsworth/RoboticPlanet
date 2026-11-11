@@ -89,7 +89,7 @@
   </nav>
 </div>
 
-<div id="screen-menu" class="screen">
+<div id="screen-menu" class="screen" role="dialog" aria-modal="true" aria-label="Terrafall: main menu" tabindex="-1">
   <div class="card menu-card">
     <h1 class="logo">TERRAFALL</h1>
     <p class="tagline">Claim. Seize. Annihilate.</p>
@@ -170,7 +170,7 @@
   </div>
 </div>
 
-<div id="screen-pause" class="screen" hidden>
+<div id="screen-pause" class="screen" role="dialog" aria-modal="true" aria-label="Paused" tabindex="-1" hidden>
   <div class="card">
     <h2>Paused</h2>
     <button id="p-resume" class="btn primary big">Resume</button>
@@ -191,7 +191,7 @@
   </div>
 </div>
 
-<div id="screen-boost" class="screen" hidden>
+<div id="screen-boost" class="screen" role="dialog" aria-modal="true" aria-label="Boost a rival" tabindex="-1" hidden>
   <div class="card">
     <h2>Boost a rival</h2>
     <p class="mode-desc">Winning too easily? Give a rival a hand. Everything lands at its Command Base.</p>
@@ -201,21 +201,21 @@
   </div>
 </div>
 
-<div id="screen-missions" class="screen" hidden>
+<div id="screen-missions" class="screen" role="dialog" aria-modal="true" aria-label="Missions" tabindex="-1" hidden>
   <div class="card help-card missions-card">
     <div class="stats-head"><h2>Missions</h2><button id="ms-close" class="btn small">Back</button></div>
     <div class="help-body" id="ms-body"></div>
   </div>
 </div>
 
-<div id="screen-stats" class="screen" hidden>
+<div id="screen-stats" class="screen" role="dialog" aria-modal="true" aria-label="Statistics" tabindex="-1" hidden>
   <div class="card help-card stats-card">
     <div class="stats-head"><h2>Statistics</h2><button id="st-close" class="btn small">Close</button></div>
     <div class="help-body" id="st-body"></div>
   </div>
 </div>
 
-<div id="screen-help" class="screen" hidden>
+<div id="screen-help" class="screen" role="dialog" aria-modal="true" aria-label="How to play" tabindex="-1" hidden>
   <div class="card help-card">
     <h2>How to play</h2>
     <div class="help-body">
@@ -322,11 +322,12 @@
       <p><b>On a computer</b> it plays like a classic RTS. Scroll to zoom; pan with <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> or the arrow keys, by resting the mouse at the edge of the window, or by right- or middle-dragging. Click to select; rest the mouse on anything to see what it is. <b>Drag a box</b> round your warbots to select them (a box round a garrison takes its spare warbots too; Shift adds to the selection), then <b>right-click</b>: open ground to hold it, a rival building to attack it, or your Outpost or Command Base to station them there. <kbd>Ctrl</kbd> (or <kbd>Shift</kbd>) + <kbd>1</kbd>–<kbd>9</kbd> saves the selection as a group; <kbd>1</kbd>–<kbd>9</kbd> selects it again, twice to jump to it.</p>
       <p>Keys: <kbd>B</kbd> build, then a tab's number (<kbd>1</kbd> Gather, <kbd>2</kbd> Make, <kbd>3</kbd> Move, <kbd>4</kbd> Defend, <kbd>5</kbd> All; <kbd>Tab</kbd> steps through them; it opens on the last one you used) and the letter on a building's card (letters belong to their tab, so every building has one, and WASD still pans; on All a card shows both, like 2 K), or <kbd>B</kbd> <kbd>R</kbd> to start laying roads and <kbd>B</kbd> <kbd>X</kbd> for walls; <kbd>R</kbd> (or <kbd>P</kbd>) opens and closes Paths, and inside it picks a tool (<kbd>R</kbd> roads, <kbd>G</kbd> bridges and tunnels, <kbd>N</kbd> rail, <kbd>K</kbd> pipes, <kbd>V</kbd> ramps, <kbd>E</kbd> pave, <kbd>O</kbd> one-way arrows, <kbd>L</kbd> junctions, <kbd>X</kbd> walls, <kbd>T</kbd> traffic map); <kbd>Q</kbd> army; <kbd>C</kbd> recall all warbots; <kbd>F</kbd> select every warbot; <kbd>J</kbd> jump to the latest alert; <kbd>H</kbd> base; <kbd>I</kbd> statistics; <kbd>U</kbd> your robots; <kbd>Y</kbd> goods; <kbd>[</kbd> <kbd>]</kbd> game speed; <kbd>+</kbd>/<kbd>−</kbd> zoom; <kbd>M</kbd> minimap; <kbd>Space</kbd> pause; <kbd>Enter</kbd> the banner's main button (Build here, Fire, Recall all); <kbd>Esc</kbd> back or clear the selection; <kbd>Alt</kbd>+<kbd>Enter</kbd> full screen (or the button beside pause). A building's or robot's panel shows keys on its main buttons (<kbd>Delete</kbd> twice demolishes, <kbd>G</kbd> makes a Wall a Gate, <kbd>M</kbd> moves it...). Click the same spot again to step to the next thing piled there (a Crawler parked on a Foundry, say). The installed app on a computer goes full screen when you first click; hold <kbd>Esc</kbd> to leave, and it remembers.</p>
     </div>
+    <a id="h-manual" class="btn big ghost" href="how-to-play.html" target="_blank" rel="noopener">Open the illustrated manual</a>
     <button id="h-close" class="btn primary big">Got it</button>
   </div>
 </div>
 
-<div id="screen-over" class="screen" hidden>
+<div id="screen-over" class="screen" role="dialog" aria-modal="true" aria-labelledby="o-title" tabindex="-1" hidden>
   <div class="card">
     <h2 id="o-title">Victory</h2>
     <p id="o-text"></p>
