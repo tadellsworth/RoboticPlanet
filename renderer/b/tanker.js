@@ -1,142 +1,101 @@
-// Fuel Tanker: the Freight Truck's chassis and armoured cab with a fuel tank in place of the flatbed. Top-down, facing +x,
-// orthographic camera straight down, no ground and no shadow. Same framing as the Freight Truck.
+// Fuel Tanker, "Lancer" restyle: the Lancer Freight Truck's chassis, skirts and cab (b/truck.js) with a fuel tank in
+// place of the flatbed. Top-down, facing +x, orthographic camera straight down, no ground and no shadow; same framing as
+// the Freight Truck. The tank stays bright brushed steel (it is the vehicle's job, and reads as a tank at game size),
+// wrapped in gunmetal armour bands, with team-colour light lines along its upper flanks, a dark catwalk spine with three
+// hatches, and the flammable placards. Coordinates in robkit px (1 px = 1/25.6 unit) or world units where noted.
 //   ?f=k     driving frame k (0..3): every tyre rolled forward by k/4 of one tread-block pitch
 //   ?part=   truck (default) | brake (only the two rear brake lenses, lit) | boost (only the cab's motor vents, glowing)
+// Kept from b/tanker.js: tyres, tank span and section, brake lenses, motor-vent slots, exhaust marks ex0 / ex1, headlamps.
+import { lancer } from './lancertruck.js';
 export const config = { pad: false, size: 768 };
 export default function (L) {
-  const { box, cyl, hcyl, beam, pipe, hoop, mesh, group, M, THREE, TEAM } = L;
-  const p = new URLSearchParams(location.search), f = +(p.get('f') || 0), part = p.get('part') || 'truck';
-  const gun = M.paint('#50565c'), gunD = M.paint('#3f4449'), off = M.paint('#c9c5ba'), deck = M.paint('#5a6066', { panelW: 128, panelH: 512 });
-  const team = M.paint('#' + new THREE.Color(TEAM).multiplyScalar(0.55).getHexString(), { rivets: false }), rubber = M.plain('#141516', 0.95), lug = M.plain('#4a4c50', 0.8);
+  const { M, TEAM, THREE } = L;
+  const part = new URLSearchParams(location.search).get('part') || 'truck';
   L.seed(611);
+  const V = lancer(L), { R, k, m, mir } = V, { rect, rr, poly, ext, disc, strip, tyre, grime, hazard } = R;
+  const haz = hazard('#f0a030'), O = R.O;
 
-  // camera: straight down, image top = -z, 10 world units across the 384-px frame (truck = 8.5 = 85 %)
-  const W = 10, cam = new THREE.OrthographicCamera(-W / 2, W / 2, W / 2, -W / 2, 0.1, 100);
-  cam.position.set(0, 40, 0); cam.up.set(0, 0, -1); cam.lookAt(0, 0, 0); cam.updateMatrixWorld(); cam.updateProjectionMatrix();
-  L.useCamera(cam);
-
-  const XF = 4.25, XR = -4.25, HW = 1.93;                       // overall footprint: 8.5 x 3.86 (2.2 : 1)
-  const keep = [];                                                // meshes kept visible in the overlay passes
-
-  // ---- tyres: three axles, deep staggered block treads; rolled per frame
-  const TR = 0.62, TW = 0.62, NL = 18, pitch = Math.PI * 2 / NL;
-  for (const ax of [2.95, -1.55, -3.05]) for (const s of [-1, 1]) {
-    const w = group(ax, TR, s * (HW - TW / 2)); w.rotation.z = -f * pitch / 4;     // negative: the top of the tyre moves forward
-    const tg = new THREE.CylinderGeometry(TR - 0.07, TR - 0.07, TW, 36, 1); tg.rotateX(Math.PI / 2);
-    mesh(tg, rubber, 0, 0, 0, { parent: w, dirt: 0 });
-    for (let k = 0; k < NL; k++) for (const half of [-1, 1]) {
-      const a = k * pitch + (half > 0 ? pitch / 2 : 0);
-      const b = new THREE.BoxGeometry(0.17, 0.11, TW * 0.46); b.translate(0, TR - 0.06, half * TW * 0.26);
-      const m = mesh(b, lug, 0, 0, 0, { parent: w, dirt: 0 }); m.rotation.z = a;
-    }
-    const sw = new THREE.CylinderGeometry(TR - 0.02, TR - 0.02, 0.06, 36, 1); sw.rotateX(Math.PI / 2);    // shoulder ribs on the sidewalls
-    for (const e of [-1, 1]) mesh(sw, rubber, 0, 0, e * (TW / 2 - 0.03), { parent: w, dirt: 0 });
+  // ---- running gear and skirts, as the Freight Truck
+  for (const x of [2.95, -1.55, -3.05]) for (const s of [-1, 1]) tyre(x / k, s * 41.5, 15.9, 15.9, { blocks: 18 });
+  rect(-104, -24, 204, 48, 0.3, 0.5, m.dark, { dirt: 0 });
+  for (const s of [-1, 1]) {
+    ext(poly(mir([[106, 26], [101, 42], [-100, 42], [-107, 37], [-107, 26]], s)), 0.62, 0.6, m.armor, { bevel: 0.06 });
+    strip(-99, s * 38.5, 97, s * 38.5, 3, 1.23, 0.02, m.glow);
+    for (const x of [53, -12, -59]) strip(x, s * 40.5, x, s * 42, 1.5, 1.22, 0.01, m.seam);
   }
+  ext(poly([[40, -30], [-101, -30], [-108.5, -24], [-108.5, 24], [-101, 30], [40, 30]]), 0.4, 0.7, m.armor, { bevel: 0.06 });   // bed hull
 
-  // ---- chassis and fuel tank: an oval-section tank on saddles, top catwalk, hatches, vapour line, team stripes
-  box(7.6, 0.35, 2.2, gunD, -0.3, 0.55, 0, { dirt: 0 });                              // frame rails (mostly hidden)
-  const TX0 = -3.95, TX1 = 1.42, TYc = 1.62, TRz = 1.3, TRy = 0.82;                  // tank: x span, centre height, half-width, half-height
-  const tankM = M.paint('#c3c6c8', { rivets: false, metal: 0.55, rough: 0.35, panelW: 4096, panelH: 4096 });
-  const tlen = TX1 - TX0, tmid = (TX0 + TX1) / 2;
+  // ---- the tank (world units): an oval-section shell on armoured saddles
+  const TX0 = -3.95, TX1 = 1.42, TYc = 1.62, TRz = 1.3, TRy = 0.82, tlen = TX1 - TX0, tmid = (TX0 + TX1) / 2;
+  const tankM = M.paint('#b3b8bc', { rivets: false, metal: 0.6, rough: 0.33, panelW: 4096, panelH: 4096 });
   const body = new THREE.CylinderGeometry(1, 1, tlen - 0.5, 48, 1, true); body.rotateZ(Math.PI / 2); body.scale(1, TRy, TRz);
-  mesh(body, tankM, tmid, TYc, 0, { dirt: 0.25, dirtH: 0.6 });
-  for (const e of [-1, 1]) {                                                            // dished ends
+  L.mesh(body, tankM, tmid, TYc, 0, O({ dirt: 0.25, dirtH: 0.6 }));
+  for (const e of [-1, 1]) {
     const cap = new THREE.SphereGeometry(1, 40, 16, 0, Math.PI * 2, 0, Math.PI / 2); cap.rotateZ(-e * Math.PI / 2); cap.scale(0.25, TRy, TRz);
-    mesh(cap, tankM, tmid + e * (tlen - 0.5) / 2, TYc, 0, { dirt: 0.2 });
+    L.mesh(cap, tankM, tmid + e * (tlen - 0.5) / 2, TYc, 0, O({ dirt: 0.2 }));
   }
-  for (const x of [TX0 + 0.55, tmid - 0.9, tmid + 0.9, TX1 - 0.55]) {                // reinforcing rings
-    const r = new THREE.TorusGeometry(1, 0.045, 8, 48); r.rotateY(Math.PI / 2); r.scale(1, TRy + 0.01, TRz + 0.01);
-    mesh(r, gun, x, TYc, 0, { dirt: 0 });
-  }
-  for (const x of [TX0 + 0.7, TX1 - 0.7]) box(0.5, 0.75, 2.3, gunD, x, 0.6, 0, { dirt: 0 });   // saddles
-  // team-colour stripes down both upper flanks, with thin running lights
+  for (const x of [TX0 + 0.7, TX1 - 0.7]) L.box(0.5, 0.75, 2.3, m.armor, x, 0.6, 0, O({ dirt: 0 }));      // saddles
+  // team-colour light lines along both upper flanks (the armour bands below cut them into segments)
   for (const s of [-1, 1]) {
-    const st = new THREE.CylinderGeometry(1, 1, tlen - 0.9, 48, 1, true, s > 0 ? Math.PI * 0.215 : Math.PI * 0.735, Math.PI * 0.05); st.rotateZ(Math.PI / 2); st.scale(1, TRy + 0.012, TRz + 0.012);
-    mesh(st, team, tmid, TYc, 0, { dirt: 0, cast: false });
+    const st = new THREE.CylinderGeometry(1, 1, tlen - 0.9, 48, 1, true, s > 0 ? Math.PI * 0.225 : Math.PI * 0.75, Math.PI * 0.025);
+    st.rotateZ(Math.PI / 2); st.scale(1, TRy + 0.012, TRz + 0.012);
+    L.mesh(st, M.emit(TEAM, 0.7), tmid, TYc, 0, O({ dirt: 0, cast: false }));          // dimmer, so the night lights don't flood the steel
   }
-  // top catwalk with grating, handrails, three domed manhole hatches and a vapour-recovery line
+  // gunmetal armour bands round the shell
+  for (const x of [TX0 + 0.55, tmid - 0.9, tmid + 0.9, TX1 - 0.55]) {
+    const b = new THREE.CylinderGeometry(1, 1, 0.2, 48, 1, true); b.rotateZ(Math.PI / 2); b.scale(1, TRy + 0.03, TRz + 0.03);
+    L.mesh(b, m.armor, x, TYc, 0, O({ dirt: 0 }));
+    for (const e of [-1, 1]) { const r = new THREE.TorusGeometry(1, 0.018, 6, 48); r.rotateY(Math.PI / 2); r.scale(1, TRy + 0.035, TRz + 0.035); L.mesh(r, m.seam, x + e * 0.1, TYc, 0, O({ dirt: 0 })); }
+  }
+  // the catwalk spine: dark grating, low rails, three hatches, the vapour line
   const top = TYc + TRy;
-  box(tlen - 0.9, 0.06, 0.62, M.grating, tmid, top - 0.02, 0, { dirt: 0 });
+  L.box(tlen - 0.9, 0.06, 0.62, M.grating, tmid, top - 0.02, 0, O({ dirt: 0 }));
   for (const s of [-1, 1]) {
-    for (let x = TX0 + 0.6; x <= TX1 - 0.5; x += 0.95) box(0.04, 0.32, 0.04, M.steel, x, top, s * 0.36, { dirt: 0 });
-    box(tlen - 1.0, 0.04, 0.04, M.paint('#d0a536', { rivets: false }), tmid, top + 0.32, s * 0.36, { dirt: 0 });
+    for (let x = TX0 + 0.6; x <= TX1 - 0.5; x += 0.95) L.box(0.04, 0.3, 0.04, m.steel, x, top, s * 0.36, O({ dirt: 0 }));
+    L.box(tlen - 1.0, 0.04, 0.05, m.top, tmid, top + 0.3, s * 0.36, O({ dirt: 0 }));
   }
   for (const x of [TX0 + 1.15, tmid, TX1 - 1.15]) {
-    cyl(0.3, 0.1, gun, x, top + 0.02, 0, { seg: 24, dirt: 0 });
-    const d = new THREE.SphereGeometry(0.27, 24, 10, 0, Math.PI * 2, 0, Math.PI / 2); d.scale(1, 0.45, 1); mesh(d, M.steel, x, top + 0.12, 0, { dirt: 0 });
-    box(0.32, 0.04, 0.06, gunD, x, top + 0.2, 0.18, { dirt: 0 });
+    L.cyl(0.3, 0.1, m.armor, x, top + 0.02, 0, O({ seg: 24, dirt: 0 }));
+    const d = new THREE.SphereGeometry(0.25, 24, 10, 0, Math.PI * 2, 0, Math.PI / 2); d.scale(1, 0.45, 1); L.mesh(d, m.steel, x, top + 0.12, 0, O({ dirt: 0 }));
+    L.box(0.3, 0.04, 0.06, m.dark, x, top + 0.2, 0.17, O({ dirt: 0 }));
   }
-  pipe([[TX0 + 0.5, top + 0.08, -0.48], [TX1 - 0.4, top + 0.08, -0.48]], 0.05, gunD);
-  // hazard placards (flammable diamond) on the tank's rear end and on both sides of the top
+  L.pipe([[TX0 + 0.5, top + 0.08, -0.48], [TX1 - 0.4, top + 0.08, -0.48]], 0.05, m.pipe);
+  // flammable placards on the upper flanks
   const plac = L.canvasTex(128, (g, n) => { g.fillStyle = '#e8541c'; g.fillRect(0, 0, n, n); g.strokeStyle = '#1b1b1b'; g.lineWidth = 6; g.strokeRect(10, 10, n - 20, n - 20);
     g.fillStyle = '#1b1b1b'; g.beginPath(); g.moveTo(n / 2, 26); g.bezierCurveTo(n * 0.78, n * 0.45, n * 0.7, n * 0.66, n / 2, n * 0.7); g.bezierCurveTo(n * 0.3, n * 0.66, n * 0.24, n * 0.48, n * 0.4, n * 0.36);
     g.bezierCurveTo(n * 0.42, n * 0.48, n * 0.5, n * 0.5, n / 2, 26); g.fill(); g.fillRect(n * 0.3, n * 0.78, n * 0.4, 6); });
   const placM = new THREE.MeshStandardMaterial({ map: plac, roughness: 0.6, vertexColors: true });
-  for (const s of [-1, 1]) { const g = group(tmid + 1.55, TYc + TRy * Math.sqrt(1 - (0.86 / TRz) ** 2) + 0.02, s * 0.86, 0); g.rotation.x = s * 0.51; const pl = box(0.4, 0.02, 0.4, placM, 0, 0, 0, { parent: g, dirt: 0, cast: false }); pl.rotation.y = Math.PI / 4; }
-  // rear: valve manifold, hose reel, ladder up to the catwalk
-  for (const s of [-1, 1]) { cyl(0.12, 0.42, M.steel, TX0 - 0.05, 0.6, s * 0.55, { seg: 16 }); hcyl(0.1, 0.3, M.paint('#c43b2a', { rivets: false }), TX0 - 0.05, 0.95, s * 0.55, { axis: 'z' }); }
-  hcyl(0.07, 1.6, gunD, TX0 - 0.05, 0.62, 0, { axis: 'z' });
-  hcyl(0.28, 0.5, M.plain('#141516', 0.9), TX0 + 0.25, 0.75, -1.15, { axis: 'z', seg: 24 });
-  for (let k = 0; k < 6; k++) box(0.05, 0.03, 0.42, M.steel, TX0 - 0.15, 0.85 + k * 0.17, 0.8, { dirt: 0 });
-  // fuel-amber edge markers along the frame
-  for (const s of [-1, 1]) for (const x of [-2.6, -0.6]) box(0.14, 0.05, 0.08, M.emit('#ffa632', 1.0), x, 0.74, s * 1.42, { dirt: 0, cast: false });
-  // rear bumper with hazard stripes, rear corner lights
-  box(0.28, 0.4, 3.3, gunD, XR + 0.14, 0.75, 0, { dirt: 0 });
-  box(0.26, 0.02, 2.2, M.hazard, XR + 0.15, 1.15, 0, { dirt: 0 });
-  const brakeLens = [];
-  for (const s of [-1, 1]) {
-    box(0.26, 0.12, 0.32, gunD, XR + 0.15, 1.15, s * 1.28, { dirt: 0 });
-    brakeLens.push(box(0.2, 0.04, 0.24, M.plain('#5a1414', 0.35), XR + 0.15, 1.27, s * 1.28, { dirt: 0, cast: false }));
-    box(0.26, 0.12, 0.18, gunD, XR + 0.15, 1.15, s * 1.62, { dirt: 0 });
-    box(0.18, 0.04, 0.12, M.emit('#ffa632', 1.2), XR + 0.15, 1.27, s * 1.62, { dirt: 0, cast: false });
-  }
+  for (const s of [-1, 1]) { const g = L.group(tmid + 1.55, TYc + TRy * Math.sqrt(1 - (0.86 / TRz) ** 2) + 0.02, s * 0.86, 0, R.G); g.rotation.x = s * 0.51; const pl = L.box(0.38, 0.02, 0.38, placM, 0, 0, 0, { parent: g, dirt: 0, cast: false }); pl.rotation.y = Math.PI / 4; }
+  // rear of the tank: valve manifold, hose reel, ladder
+  for (const s of [-1, 1]) { L.cyl(0.12, 0.42, m.steel, TX0 - 0.05, 0.6, s * 0.55, O({ seg: 16 })); L.hcyl(0.1, 0.3, M.paint('#c43b2a', { rivets: false }), TX0 - 0.05, 0.95, s * 0.55, O({ axis: 'z' })); }
+  L.hcyl(0.07, 1.6, m.pipe, TX0 - 0.05, 0.62, 0, O({ axis: 'z' }));
+  L.hcyl(0.28, 0.5, M.plain('#141516', 0.9), TX0 + 0.25, 0.75, -1.15, O({ axis: 'z', seg: 24 }));
+  for (let i = 0; i < 6; i++) L.box(0.05, 0.03, 0.42, m.steel, TX0 - 0.15, 0.85 + i * 0.17, 0.8, O({ dirt: 0 }));
+  rect(37, -30, 4, 60, 0.9, 0.5, m.seam, { dirt: 0 });                                     // the joint behind the cab
 
-  // ---- armoured cab: side profile extruded across the truck; sloped nose with a dark sensor strip
-  const CX0 = 1.6, CY = 2.05, CW = 1.45;
-  const prof = new THREE.Shape(); prof.moveTo(CX0, 0.55); prof.lineTo(CX0, CY - 0.12); prof.lineTo(CX0 + 0.12, CY); prof.lineTo(3.7, CY); prof.lineTo(4.12, 1.48); prof.lineTo(4.12, 0.55); prof.closePath();
-  const cg = new THREE.ExtrudeGeometry(prof, { depth: CW * 2 - 0.16, bevelEnabled: true, bevelThickness: 0.08, bevelSize: 0.08, bevelSegments: 2 });
-  cg.translate(0, 0, -(CW * 2 - 0.16) / 2);
-  mesh(cg, off, 0, 0, 0, { dirt: 0.4, dirtH: 1.2 });
-  beam([3.74, CY + 0.005, 0], [4.15, 1.5, 0], CW * 2 - 0.3, 0.05, M.plain('#0e1114', 0.15, 0.6));       // sensor windscreen strip
-  beam([3.76, CY + 0.03, 0], [4.13, 1.56, 0], CW * 2 - 0.5, 0.012, M.emit(TEAM, 0.5), { cast: false });
-  // gunmetal armour skirts along the cab sides and a front bumper with headlights and amber markers
-  for (const s of [-1, 1]) box(2.3, 0.75, 0.1, gun, 2.85, 0.7, s * (CW + 0.06), { dirt: 0 });
-  box(0.3, 0.45, 3.3, gunD, XF - 0.15, 0.6, 0, { dirt: 0 });
+  // ---- the tail, the cab, the vents and the stacks, as the Freight Truck
+  ext(poly([[-102, -46], [-106, -46], [-109, -42], [-109, 42], [-106, 46], [-102, 46]]), 0.5, 0.74, m.armor, { bevel: 0.05 });
+  ext(rr(-107.5, -24, 4.5, 48, 1), 1.22, 0.04, haz, { bevel: 0.01 });
   for (const s of [-1, 1]) {
-    box(0.22, 0.06, 0.3, M.emit('#fff1c8', 0.7), XF - 0.13, 1.05, s * 1.18, { dirt: 0, cast: false });
-    box(0.2, 0.06, 0.16, M.emit('#ffa632', 1.2), XF - 0.13, 1.05, s * 1.6, { dirt: 0, cast: false });
+    V.brake(-107.6, s * 32.8 - 3.07, 5.1, 6.14, 1.24);
+    rect(-109, s * 41.5 - 3, 3.2, 6, 0.8, 0.42, m.glow, { dirt: 0, cast: false });
   }
-  // roof: team-coloured panel, armour trim, sensor puck, motor vents at the back of the cab
-  box(1.55, 0.04, CW * 2 - 0.75, team, 2.75, CY + 0.08, 0, { dirt: 0 });
-  box(1.65, 0.03, CW * 2 - 0.62, gunD, 2.75, CY + 0.06, 0, { dirt: 0 });
-  for (const s of [-1, 1]) box(1.55, 0.03, 0.04, M.emit(TEAM, 0.7), 2.75, CY + 0.12, s * (CW - 0.4), { dirt: 0, cast: false });
-  cyl(0.16, 0.1, gunD, 3.55, CY + 0.08, 0, { seg: 20, dirt: 0 }); cyl(0.1, 0.05, M.plain('#0e1114', 0.15, 0.6), 3.55, CY + 0.18, 0, { seg: 20, dirt: 0 });
+  const C = V.cab({ x0: 41, xf: 108.5, xc: 101, hw: 35, nf: 20, y0: 0.45, yt: 1.72, roof: [60, -23, 29, 46] });
+  V.hatch(75, 9, 6.5, C.yu + 0.07);
+  V.beacon(65, 17, C.yu + 0.07);
+  V.mast(83, -13, C.yu + 0.07);
   const ventGlow = [];
   for (const s of [-1, 1]) {
-    box(0.42, 0.08, 0.95, gunD, 1.92, CY + 0.06, s * 0.72, { dirt: 0 });
-    box(0.34, 0.03, 0.85, M.grille('#3d4247'), 1.92, CY + 0.14, s * 0.72, { dirt: 0 });
-    for (let k = 0; k < 4; k++) ventGlow.push(box(0.28, 0.02, 0.1, M.dark, 1.92, CY + 0.15, s * 0.72 - 0.3 + k * 0.2, { dirt: 0, cast: false }));
+    L.box(0.42, 0.08, 0.95, m.dark, 1.92, C.yu, s * 0.72, O({ dirt: 0 }));
+    L.box(0.34, 0.03, 0.85, M.grille('#3d4247'), 1.92, C.yu + 0.08, s * 0.72, O({ dirt: 0 }));
+    for (let i = 0; i < 4; i++) ventGlow.push(L.box(0.28, 0.02, 0.1, M.dark, 1.92, C.yu + 0.09, s * 0.72 - 0.3 + i * 0.2, O({ dirt: 0, cast: false })));
+  }
+  for (const [i, s] of [[0, -1], [1, 1]]) {
+    const x = 1.62, z = s * 1.72, top2 = 3.05;
+    V.stack(x, z, top2);
+    L.box(0.3, 0.1, 0.24, m.armor, x + 0.1, 1.0, z - s * 0.13, O({ dirt: 0 }));
+    L.mark('ex' + i, x, top2 + 0.05, z);
   }
 
-
-  // ---- twin exhaust stacks beside the back of the cab (chrome, perforated heat shields, rain caps); marks at the tips
-  for (const [k, s] of [[0, -1], [1, 1]]) {
-    const x = 1.62, z = s * 1.72, top = 3.05;
-    cyl(0.15, top - 0.55, M.steel, x, 0.55, z, { seg: 24, dirt: 0, soot: 0.8 });
-    cyl(0.19, 1.1, M.grille('#8a9197'), x, 1.25, z, { seg: 24, dirt: 0 });
-    cyl(0.165, 0.22, M.plain('#24211e', 0.8), x, top - 0.22, z, { seg: 24, dirt: 0 });           // soot-black tip
-    cyl(0.12, 0.02, M.plain('#080808', 0.9), x, top, z, { seg: 20, dirt: 0 });                  // open pipe
-    const cap = new THREE.CylinderGeometry(0.15, 0.15, 0.025, 20); cap.translate(0.15, 0.012, 0);
-    const cm = mesh(cap, gunD, x - 0.15, top + 0.01, z, { dirt: 0 }); cm.rotation.z = 1.15;   // rain flap swung open, toward the back
-    for (const y of [0.9, 2.5]) hoop(0.14, 0.03, gunD, x, y, z);
-    box(0.3, 0.1, 0.22, gunD, x + 0.1, 1.0, z - s * 0.12, { dirt: 0 });              // bracket to the cab
-    L.mark('ex' + k, x, top + 0.05, z);
-  }
-
-  // ---- overlay passes: hide the truck, keep only the lit parts, at exactly the same framing
-  if (part !== 'truck') {
-    L.getRoot().traverse(o => { if (o.isMesh) o.visible = false; });
-    if (part === 'brake') for (const m of brakeLens) { m.visible = true; m.material = M.emit('#ff2a1e', 4); }
-    if (part === 'boost') for (const m of ventGlow) { m.visible = true; m.material = M.emit('#bfe4ff', 2.6); }
-  }
+  V.finish(part, { boost: ventGlow.map(b => [b, M.emit('#bfe4ff', 2.6)]) });
 }

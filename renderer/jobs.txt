@@ -884,12 +884,12 @@ art/units/roadtrain@0-f1.png	main	roadtrain::#38d4ff:roadtrain@0-f1:f=1	compose_
 art/units/roadtrain@0-f2.png	main	roadtrain::#38d4ff:roadtrain@0-f2:f=2	compose_any.py --b1 3.5 --b2 10
 art/units/roadtrain@0-f3.png	main	roadtrain::#38d4ff:roadtrain@0-f3:f=3	compose_any.py --b1 3.5 --b2 10
 art/units/roadtrain-trailer@0.png	main	roadtrain::#38d4ff:roadtrain-trailer@0:part=trailer	compose_any.py --b1 3.5 --b2 10
-art/units/freight-loco@0-f0.png	main	freight::#38d4ff:freight-loco@0-f0:f=0	compose_any.py --b1 3.5 --b2 10
-art/units/freight-loco@0-f1.png	main	freight::#38d4ff:freight-loco@0-f1:f=1	compose_any.py --b1 3.5 --b2 10
-art/units/freight-loco@0-f2.png	main	freight::#38d4ff:freight-loco@0-f2:f=2	compose_any.py --b1 3.5 --b2 10
-art/units/freight-loco@0-f3.png	main	freight::#38d4ff:freight-loco@0-f3:f=3	compose_any.py --b1 3.5 --b2 10
-art/units/freight-wagon-flat@0.png	main	freight::#38d4ff:freight-wagon-flat@0:part=flat	compose_any.py --b1 3.5 --b2 10
-art/units/freight-wagon-hopper@0.png	main	freight::#38d4ff:freight-wagon-hopper@0:part=hopper	compose_any.py --b1 3.5 --b2 10
+art/units/freight-loco@0-f0.png	main	freight::#38d4ff:freight-loco@0-f0:f=0	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/units/freight-loco@0-f1.png	main	freight::#38d4ff:freight-loco@0-f1:f=1	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/units/freight-loco@0-f2.png	main	freight::#38d4ff:freight-loco@0-f2:f=2	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/units/freight-loco@0-f3.png	main	freight::#38d4ff:freight-loco@0-f3:f=3	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/units/freight-wagon-flat@0.png	main	freight::#38d4ff:freight-wagon-flat@0:part=flat	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/units/freight-wagon-hopper@0.png	main	freight::#38d4ff:freight-wagon-hopper@0:part=hopper	compose_any.py --b1 3.5 --b2 10 --glow 1.4
 art/units/crawler@0-f0.png	main	crawler::#38d4ff:crawler@0-f0:f=0	compose_any.py --b1 6 --b2 16
 art/units/crawler@0-f1.png	main	crawler::#38d4ff:crawler@0-f1:f=1	compose_any.py --b1 6 --b2 16
 art/units/crawler@0-f2.png	main	crawler::#38d4ff:crawler@0-f2:f=2	compose_any.py --b1 6 --b2 16
@@ -943,12 +943,12 @@ art/units/roadtrain@1-f1.png	main	roadtrain::#ff5a6e:roadtrain@1-f1:f=1	compose_
 art/units/roadtrain@1-f2.png	main	roadtrain::#ff5a6e:roadtrain@1-f2:f=2	compose_any.py --b1 3.5 --b2 10
 art/units/roadtrain@1-f3.png	main	roadtrain::#ff5a6e:roadtrain@1-f3:f=3	compose_any.py --b1 3.5 --b2 10
 art/units/roadtrain-trailer@1.png	main	roadtrain::#ff5a6e:roadtrain-trailer@1:part=trailer	compose_any.py --b1 3.5 --b2 10
-art/units/freight-loco@1-f0.png	main	freight::#ff5a6e:freight-loco@1-f0:f=0	compose_any.py --b1 3.5 --b2 10
-art/units/freight-loco@1-f1.png	main	freight::#ff5a6e:freight-loco@1-f1:f=1	compose_any.py --b1 3.5 --b2 10
-art/units/freight-loco@1-f2.png	main	freight::#ff5a6e:freight-loco@1-f2:f=2	compose_any.py --b1 3.5 --b2 10
-art/units/freight-loco@1-f3.png	main	freight::#ff5a6e:freight-loco@1-f3:f=3	compose_any.py --b1 3.5 --b2 10
-art/units/freight-wagon-flat@1.png	main	freight::#ff5a6e:freight-wagon-flat@1:part=flat	compose_any.py --b1 3.5 --b2 10
-art/units/freight-wagon-hopper@1.png	main	freight::#ff5a6e:freight-wagon-hopper@1:part=hopper	compose_any.py --b1 3.5 --b2 10
+art/units/freight-loco@1-f0.png	main	freight::#ff5a6e:freight-loco@1-f0:f=0	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/units/freight-loco@1-f1.png	main	freight::#ff5a6e:freight-loco@1-f1:f=1	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/units/freight-loco@1-f2.png	main	freight::#ff5a6e:freight-loco@1-f2:f=2	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/units/freight-loco@1-f3.png	main	freight::#ff5a6e:freight-loco@1-f3:f=3	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/units/freight-wagon-flat@1.png	main	freight::#ff5a6e:freight-wagon-flat@1:part=flat	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/units/freight-wagon-hopper@1.png	main	freight::#ff5a6e:freight-wagon-hopper@1:part=hopper	compose_any.py --b1 3.5 --b2 10 --glow 1.4
 art/units/crawler@1-f0.png	main	crawler::#ff5a6e:crawler@1-f0:f=0	compose_any.py --b1 6 --b2 16
 art/units/crawler@1-f1.png	main	crawler::#ff5a6e:crawler@1-f1:f=1	compose_any.py --b1 6 --b2 16
 art/units/crawler@1-f2.png	main	crawler::#ff5a6e:crawler@1-f2:f=2	compose_any.py --b1 6 --b2 16
@@ -1014,12 +1014,12 @@ art/tod/morning/units/roadtrain@0-f1.png	main	roadtrain::#38d4ff:roadtrain@0-f1:
 art/tod/morning/units/roadtrain@0-f2.png	main	roadtrain::#38d4ff:roadtrain@0-f2:f=2&tod=morning	compose_any.py --b1 3.5 --b2 10
 art/tod/morning/units/roadtrain@0-f3.png	main	roadtrain::#38d4ff:roadtrain@0-f3:f=3&tod=morning	compose_any.py --b1 3.5 --b2 10
 art/tod/morning/units/roadtrain-trailer@0.png	main	roadtrain::#38d4ff:roadtrain-trailer@0:part=trailer&tod=morning	compose_any.py --b1 3.5 --b2 10
-art/tod/morning/units/freight-loco@0-f0.png	main	freight::#38d4ff:freight-loco@0-f0:f=0&tod=morning	compose_any.py --b1 3.5 --b2 10
-art/tod/morning/units/freight-loco@0-f1.png	main	freight::#38d4ff:freight-loco@0-f1:f=1&tod=morning	compose_any.py --b1 3.5 --b2 10
-art/tod/morning/units/freight-loco@0-f2.png	main	freight::#38d4ff:freight-loco@0-f2:f=2&tod=morning	compose_any.py --b1 3.5 --b2 10
-art/tod/morning/units/freight-loco@0-f3.png	main	freight::#38d4ff:freight-loco@0-f3:f=3&tod=morning	compose_any.py --b1 3.5 --b2 10
-art/tod/morning/units/freight-wagon-flat@0.png	main	freight::#38d4ff:freight-wagon-flat@0:part=flat&tod=morning	compose_any.py --b1 3.5 --b2 10
-art/tod/morning/units/freight-wagon-hopper@0.png	main	freight::#38d4ff:freight-wagon-hopper@0:part=hopper&tod=morning	compose_any.py --b1 3.5 --b2 10
+art/tod/morning/units/freight-loco@0-f0.png	main	freight::#38d4ff:freight-loco@0-f0:f=0&tod=morning	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/tod/morning/units/freight-loco@0-f1.png	main	freight::#38d4ff:freight-loco@0-f1:f=1&tod=morning	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/tod/morning/units/freight-loco@0-f2.png	main	freight::#38d4ff:freight-loco@0-f2:f=2&tod=morning	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/tod/morning/units/freight-loco@0-f3.png	main	freight::#38d4ff:freight-loco@0-f3:f=3&tod=morning	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/tod/morning/units/freight-wagon-flat@0.png	main	freight::#38d4ff:freight-wagon-flat@0:part=flat&tod=morning	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/tod/morning/units/freight-wagon-hopper@0.png	main	freight::#38d4ff:freight-wagon-hopper@0:part=hopper&tod=morning	compose_any.py --b1 3.5 --b2 10 --glow 1.4
 art/tod/morning/units/crawler@0-f0.png	main	crawler::#38d4ff:crawler@0-f0:f=0&tod=morning	compose_any.py --b1 6 --b2 16
 art/tod/morning/units/crawler@0-f1.png	main	crawler::#38d4ff:crawler@0-f1:f=1&tod=morning	compose_any.py --b1 6 --b2 16
 art/tod/morning/units/crawler@0-f2.png	main	crawler::#38d4ff:crawler@0-f2:f=2&tod=morning	compose_any.py --b1 6 --b2 16
@@ -1073,12 +1073,12 @@ art/tod/morning/units/roadtrain@1-f1.png	main	roadtrain::#ff5a6e:roadtrain@1-f1:
 art/tod/morning/units/roadtrain@1-f2.png	main	roadtrain::#ff5a6e:roadtrain@1-f2:f=2&tod=morning	compose_any.py --b1 3.5 --b2 10
 art/tod/morning/units/roadtrain@1-f3.png	main	roadtrain::#ff5a6e:roadtrain@1-f3:f=3&tod=morning	compose_any.py --b1 3.5 --b2 10
 art/tod/morning/units/roadtrain-trailer@1.png	main	roadtrain::#ff5a6e:roadtrain-trailer@1:part=trailer&tod=morning	compose_any.py --b1 3.5 --b2 10
-art/tod/morning/units/freight-loco@1-f0.png	main	freight::#ff5a6e:freight-loco@1-f0:f=0&tod=morning	compose_any.py --b1 3.5 --b2 10
-art/tod/morning/units/freight-loco@1-f1.png	main	freight::#ff5a6e:freight-loco@1-f1:f=1&tod=morning	compose_any.py --b1 3.5 --b2 10
-art/tod/morning/units/freight-loco@1-f2.png	main	freight::#ff5a6e:freight-loco@1-f2:f=2&tod=morning	compose_any.py --b1 3.5 --b2 10
-art/tod/morning/units/freight-loco@1-f3.png	main	freight::#ff5a6e:freight-loco@1-f3:f=3&tod=morning	compose_any.py --b1 3.5 --b2 10
-art/tod/morning/units/freight-wagon-flat@1.png	main	freight::#ff5a6e:freight-wagon-flat@1:part=flat&tod=morning	compose_any.py --b1 3.5 --b2 10
-art/tod/morning/units/freight-wagon-hopper@1.png	main	freight::#ff5a6e:freight-wagon-hopper@1:part=hopper&tod=morning	compose_any.py --b1 3.5 --b2 10
+art/tod/morning/units/freight-loco@1-f0.png	main	freight::#ff5a6e:freight-loco@1-f0:f=0&tod=morning	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/tod/morning/units/freight-loco@1-f1.png	main	freight::#ff5a6e:freight-loco@1-f1:f=1&tod=morning	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/tod/morning/units/freight-loco@1-f2.png	main	freight::#ff5a6e:freight-loco@1-f2:f=2&tod=morning	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/tod/morning/units/freight-loco@1-f3.png	main	freight::#ff5a6e:freight-loco@1-f3:f=3&tod=morning	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/tod/morning/units/freight-wagon-flat@1.png	main	freight::#ff5a6e:freight-wagon-flat@1:part=flat&tod=morning	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/tod/morning/units/freight-wagon-hopper@1.png	main	freight::#ff5a6e:freight-wagon-hopper@1:part=hopper&tod=morning	compose_any.py --b1 3.5 --b2 10 --glow 1.4
 art/tod/morning/units/crawler@1-f0.png	main	crawler::#ff5a6e:crawler@1-f0:f=0&tod=morning	compose_any.py --b1 6 --b2 16
 art/tod/morning/units/crawler@1-f1.png	main	crawler::#ff5a6e:crawler@1-f1:f=1&tod=morning	compose_any.py --b1 6 --b2 16
 art/tod/morning/units/crawler@1-f2.png	main	crawler::#ff5a6e:crawler@1-f2:f=2&tod=morning	compose_any.py --b1 6 --b2 16
@@ -1144,12 +1144,12 @@ art/tod/evening/units/roadtrain@0-f1.png	main	roadtrain::#38d4ff:roadtrain@0-f1:
 art/tod/evening/units/roadtrain@0-f2.png	main	roadtrain::#38d4ff:roadtrain@0-f2:f=2&tod=evening	compose_any.py --b1 3.5 --b2 10
 art/tod/evening/units/roadtrain@0-f3.png	main	roadtrain::#38d4ff:roadtrain@0-f3:f=3&tod=evening	compose_any.py --b1 3.5 --b2 10
 art/tod/evening/units/roadtrain-trailer@0.png	main	roadtrain::#38d4ff:roadtrain-trailer@0:part=trailer&tod=evening	compose_any.py --b1 3.5 --b2 10
-art/tod/evening/units/freight-loco@0-f0.png	main	freight::#38d4ff:freight-loco@0-f0:f=0&tod=evening	compose_any.py --b1 3.5 --b2 10
-art/tod/evening/units/freight-loco@0-f1.png	main	freight::#38d4ff:freight-loco@0-f1:f=1&tod=evening	compose_any.py --b1 3.5 --b2 10
-art/tod/evening/units/freight-loco@0-f2.png	main	freight::#38d4ff:freight-loco@0-f2:f=2&tod=evening	compose_any.py --b1 3.5 --b2 10
-art/tod/evening/units/freight-loco@0-f3.png	main	freight::#38d4ff:freight-loco@0-f3:f=3&tod=evening	compose_any.py --b1 3.5 --b2 10
-art/tod/evening/units/freight-wagon-flat@0.png	main	freight::#38d4ff:freight-wagon-flat@0:part=flat&tod=evening	compose_any.py --b1 3.5 --b2 10
-art/tod/evening/units/freight-wagon-hopper@0.png	main	freight::#38d4ff:freight-wagon-hopper@0:part=hopper&tod=evening	compose_any.py --b1 3.5 --b2 10
+art/tod/evening/units/freight-loco@0-f0.png	main	freight::#38d4ff:freight-loco@0-f0:f=0&tod=evening	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/tod/evening/units/freight-loco@0-f1.png	main	freight::#38d4ff:freight-loco@0-f1:f=1&tod=evening	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/tod/evening/units/freight-loco@0-f2.png	main	freight::#38d4ff:freight-loco@0-f2:f=2&tod=evening	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/tod/evening/units/freight-loco@0-f3.png	main	freight::#38d4ff:freight-loco@0-f3:f=3&tod=evening	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/tod/evening/units/freight-wagon-flat@0.png	main	freight::#38d4ff:freight-wagon-flat@0:part=flat&tod=evening	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/tod/evening/units/freight-wagon-hopper@0.png	main	freight::#38d4ff:freight-wagon-hopper@0:part=hopper&tod=evening	compose_any.py --b1 3.5 --b2 10 --glow 1.4
 art/tod/evening/units/crawler@0-f0.png	main	crawler::#38d4ff:crawler@0-f0:f=0&tod=evening	compose_any.py --b1 6 --b2 16
 art/tod/evening/units/crawler@0-f1.png	main	crawler::#38d4ff:crawler@0-f1:f=1&tod=evening	compose_any.py --b1 6 --b2 16
 art/tod/evening/units/crawler@0-f2.png	main	crawler::#38d4ff:crawler@0-f2:f=2&tod=evening	compose_any.py --b1 6 --b2 16
@@ -1203,12 +1203,12 @@ art/tod/evening/units/roadtrain@1-f1.png	main	roadtrain::#ff5a6e:roadtrain@1-f1:
 art/tod/evening/units/roadtrain@1-f2.png	main	roadtrain::#ff5a6e:roadtrain@1-f2:f=2&tod=evening	compose_any.py --b1 3.5 --b2 10
 art/tod/evening/units/roadtrain@1-f3.png	main	roadtrain::#ff5a6e:roadtrain@1-f3:f=3&tod=evening	compose_any.py --b1 3.5 --b2 10
 art/tod/evening/units/roadtrain-trailer@1.png	main	roadtrain::#ff5a6e:roadtrain-trailer@1:part=trailer&tod=evening	compose_any.py --b1 3.5 --b2 10
-art/tod/evening/units/freight-loco@1-f0.png	main	freight::#ff5a6e:freight-loco@1-f0:f=0&tod=evening	compose_any.py --b1 3.5 --b2 10
-art/tod/evening/units/freight-loco@1-f1.png	main	freight::#ff5a6e:freight-loco@1-f1:f=1&tod=evening	compose_any.py --b1 3.5 --b2 10
-art/tod/evening/units/freight-loco@1-f2.png	main	freight::#ff5a6e:freight-loco@1-f2:f=2&tod=evening	compose_any.py --b1 3.5 --b2 10
-art/tod/evening/units/freight-loco@1-f3.png	main	freight::#ff5a6e:freight-loco@1-f3:f=3&tod=evening	compose_any.py --b1 3.5 --b2 10
-art/tod/evening/units/freight-wagon-flat@1.png	main	freight::#ff5a6e:freight-wagon-flat@1:part=flat&tod=evening	compose_any.py --b1 3.5 --b2 10
-art/tod/evening/units/freight-wagon-hopper@1.png	main	freight::#ff5a6e:freight-wagon-hopper@1:part=hopper&tod=evening	compose_any.py --b1 3.5 --b2 10
+art/tod/evening/units/freight-loco@1-f0.png	main	freight::#ff5a6e:freight-loco@1-f0:f=0&tod=evening	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/tod/evening/units/freight-loco@1-f1.png	main	freight::#ff5a6e:freight-loco@1-f1:f=1&tod=evening	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/tod/evening/units/freight-loco@1-f2.png	main	freight::#ff5a6e:freight-loco@1-f2:f=2&tod=evening	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/tod/evening/units/freight-loco@1-f3.png	main	freight::#ff5a6e:freight-loco@1-f3:f=3&tod=evening	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/tod/evening/units/freight-wagon-flat@1.png	main	freight::#ff5a6e:freight-wagon-flat@1:part=flat&tod=evening	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/tod/evening/units/freight-wagon-hopper@1.png	main	freight::#ff5a6e:freight-wagon-hopper@1:part=hopper&tod=evening	compose_any.py --b1 3.5 --b2 10 --glow 1.4
 art/tod/evening/units/crawler@1-f0.png	main	crawler::#ff5a6e:crawler@1-f0:f=0&tod=evening	compose_any.py --b1 6 --b2 16
 art/tod/evening/units/crawler@1-f1.png	main	crawler::#ff5a6e:crawler@1-f1:f=1&tod=evening	compose_any.py --b1 6 --b2 16
 art/tod/evening/units/crawler@1-f2.png	main	crawler::#ff5a6e:crawler@1-f2:f=2&tod=evening	compose_any.py --b1 6 --b2 16
@@ -1274,12 +1274,12 @@ art/tod/night/units/roadtrain@0-f1.png	main	roadtrain::#38d4ff:roadtrain@0-f1:f=
 art/tod/night/units/roadtrain@0-f2.png	main	roadtrain::#38d4ff:roadtrain@0-f2:f=2&tod=night	compose_any.py --b1 3.5 --b2 10
 art/tod/night/units/roadtrain@0-f3.png	main	roadtrain::#38d4ff:roadtrain@0-f3:f=3&tod=night	compose_any.py --b1 3.5 --b2 10
 art/tod/night/units/roadtrain-trailer@0.png	main	roadtrain::#38d4ff:roadtrain-trailer@0:part=trailer&tod=night	compose_any.py --b1 3.5 --b2 10
-art/tod/night/units/freight-loco@0-f0.png	main	freight::#38d4ff:freight-loco@0-f0:f=0&tod=night	compose_any.py --b1 3.5 --b2 10
-art/tod/night/units/freight-loco@0-f1.png	main	freight::#38d4ff:freight-loco@0-f1:f=1&tod=night	compose_any.py --b1 3.5 --b2 10
-art/tod/night/units/freight-loco@0-f2.png	main	freight::#38d4ff:freight-loco@0-f2:f=2&tod=night	compose_any.py --b1 3.5 --b2 10
-art/tod/night/units/freight-loco@0-f3.png	main	freight::#38d4ff:freight-loco@0-f3:f=3&tod=night	compose_any.py --b1 3.5 --b2 10
-art/tod/night/units/freight-wagon-flat@0.png	main	freight::#38d4ff:freight-wagon-flat@0:part=flat&tod=night	compose_any.py --b1 3.5 --b2 10
-art/tod/night/units/freight-wagon-hopper@0.png	main	freight::#38d4ff:freight-wagon-hopper@0:part=hopper&tod=night	compose_any.py --b1 3.5 --b2 10
+art/tod/night/units/freight-loco@0-f0.png	main	freight::#38d4ff:freight-loco@0-f0:f=0&tod=night	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/tod/night/units/freight-loco@0-f1.png	main	freight::#38d4ff:freight-loco@0-f1:f=1&tod=night	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/tod/night/units/freight-loco@0-f2.png	main	freight::#38d4ff:freight-loco@0-f2:f=2&tod=night	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/tod/night/units/freight-loco@0-f3.png	main	freight::#38d4ff:freight-loco@0-f3:f=3&tod=night	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/tod/night/units/freight-wagon-flat@0.png	main	freight::#38d4ff:freight-wagon-flat@0:part=flat&tod=night	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/tod/night/units/freight-wagon-hopper@0.png	main	freight::#38d4ff:freight-wagon-hopper@0:part=hopper&tod=night	compose_any.py --b1 3.5 --b2 10 --glow 1.4
 art/tod/night/units/crawler@0-f0.png	main	crawler::#38d4ff:crawler@0-f0:f=0&tod=night	compose_any.py --b1 6 --b2 16
 art/tod/night/units/crawler@0-f1.png	main	crawler::#38d4ff:crawler@0-f1:f=1&tod=night	compose_any.py --b1 6 --b2 16
 art/tod/night/units/crawler@0-f2.png	main	crawler::#38d4ff:crawler@0-f2:f=2&tod=night	compose_any.py --b1 6 --b2 16
@@ -1333,12 +1333,12 @@ art/tod/night/units/roadtrain@1-f1.png	main	roadtrain::#ff5a6e:roadtrain@1-f1:f=
 art/tod/night/units/roadtrain@1-f2.png	main	roadtrain::#ff5a6e:roadtrain@1-f2:f=2&tod=night	compose_any.py --b1 3.5 --b2 10
 art/tod/night/units/roadtrain@1-f3.png	main	roadtrain::#ff5a6e:roadtrain@1-f3:f=3&tod=night	compose_any.py --b1 3.5 --b2 10
 art/tod/night/units/roadtrain-trailer@1.png	main	roadtrain::#ff5a6e:roadtrain-trailer@1:part=trailer&tod=night	compose_any.py --b1 3.5 --b2 10
-art/tod/night/units/freight-loco@1-f0.png	main	freight::#ff5a6e:freight-loco@1-f0:f=0&tod=night	compose_any.py --b1 3.5 --b2 10
-art/tod/night/units/freight-loco@1-f1.png	main	freight::#ff5a6e:freight-loco@1-f1:f=1&tod=night	compose_any.py --b1 3.5 --b2 10
-art/tod/night/units/freight-loco@1-f2.png	main	freight::#ff5a6e:freight-loco@1-f2:f=2&tod=night	compose_any.py --b1 3.5 --b2 10
-art/tod/night/units/freight-loco@1-f3.png	main	freight::#ff5a6e:freight-loco@1-f3:f=3&tod=night	compose_any.py --b1 3.5 --b2 10
-art/tod/night/units/freight-wagon-flat@1.png	main	freight::#ff5a6e:freight-wagon-flat@1:part=flat&tod=night	compose_any.py --b1 3.5 --b2 10
-art/tod/night/units/freight-wagon-hopper@1.png	main	freight::#ff5a6e:freight-wagon-hopper@1:part=hopper&tod=night	compose_any.py --b1 3.5 --b2 10
+art/tod/night/units/freight-loco@1-f0.png	main	freight::#ff5a6e:freight-loco@1-f0:f=0&tod=night	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/tod/night/units/freight-loco@1-f1.png	main	freight::#ff5a6e:freight-loco@1-f1:f=1&tod=night	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/tod/night/units/freight-loco@1-f2.png	main	freight::#ff5a6e:freight-loco@1-f2:f=2&tod=night	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/tod/night/units/freight-loco@1-f3.png	main	freight::#ff5a6e:freight-loco@1-f3:f=3&tod=night	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/tod/night/units/freight-wagon-flat@1.png	main	freight::#ff5a6e:freight-wagon-flat@1:part=flat&tod=night	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/tod/night/units/freight-wagon-hopper@1.png	main	freight::#ff5a6e:freight-wagon-hopper@1:part=hopper&tod=night	compose_any.py --b1 3.5 --b2 10 --glow 1.4
 art/tod/night/units/crawler@1-f0.png	main	crawler::#ff5a6e:crawler@1-f0:f=0&tod=night	compose_any.py --b1 6 --b2 16
 art/tod/night/units/crawler@1-f1.png	main	crawler::#ff5a6e:crawler@1-f1:f=1&tod=night	compose_any.py --b1 6 --b2 16
 art/tod/night/units/crawler@1-f2.png	main	crawler::#ff5a6e:crawler@1-f2:f=2&tod=night	compose_any.py --b1 6 --b2 16
@@ -1386,9 +1386,9 @@ art/units/paver-boost.png	main	rob_worker::#38d4ff:worker-brake:part=brake rob_h
 art/units/warbot-brake.png	main	rob_worker::#38d4ff:worker-brake:part=brake rob_hauler::#38d4ff:hauler-brake:part=brake rob_agribot::#38d4ff:agribot-brake:part=brake rob_paver::#38d4ff:paver-brake:part=brake rob_warbot::#38d4ff:warbot-brake:part=brake	compose_any.py --b1 3.5 --b2 10 --glow 1.4 | post/robot_overlays.py {raw} {fin}
 art/units/warbot-boost.png	main	rob_worker::#38d4ff:worker-brake:part=brake rob_hauler::#38d4ff:hauler-brake:part=brake rob_agribot::#38d4ff:agribot-brake:part=brake rob_paver::#38d4ff:paver-brake:part=brake rob_warbot::#38d4ff:warbot-brake:part=brake	compose_any.py --b1 3.5 --b2 10 --glow 1.4 | post/robot_overlays.py {raw} {fin}
 art/units/roadtrain-brake.png	main	roadtrain:::roadtrain-brake:part=brake	compose_any.py --b1 3.5 --b2 10 | post/roadtrain_overlays.py {raw} {fin}
-art/units/freight-loco-lights.png	main	freight::#38d4ff:freight-loco-heads:part=heads freight::#38d4ff:freight-loco-brake:part=brake	compose_any.py --b1 3.5 --b2 10 | post/freight_overlays.py {raw} {fin}
-art/units/freight-loco-brake.png	main	freight::#38d4ff:freight-loco-heads:part=heads freight::#38d4ff:freight-loco-brake:part=brake	compose_any.py --b1 3.5 --b2 10 | post/freight_overlays.py {raw} {fin}
-art/units/freight-loco-exhaust.png	main	freight::#38d4ff:freight-loco-heads:part=heads freight::#38d4ff:freight-loco-brake:part=brake	compose_any.py --b1 3.5 --b2 10 | post/freight_overlays.py {raw} {fin}
+art/units/freight-loco-lights.png	main	freight::#38d4ff:freight-loco-heads:part=heads freight::#38d4ff:freight-loco-brake:part=brake	compose_any.py --b1 3.5 --b2 10 --glow 1.4 | post/freight_overlays.py {raw} {fin}
+art/units/freight-loco-brake.png	main	freight::#38d4ff:freight-loco-heads:part=heads freight::#38d4ff:freight-loco-brake:part=brake	compose_any.py --b1 3.5 --b2 10 --glow 1.4 | post/freight_overlays.py {raw} {fin}
+art/units/freight-loco-exhaust.png	main	freight::#38d4ff:freight-loco-heads:part=heads freight::#38d4ff:freight-loco-brake:part=brake	compose_any.py --b1 3.5 --b2 10 --glow 1.4 | post/freight_overlays.py {raw} {fin}
 art/units/crawler-lights.png	main	crawler::#38d4ff:crawler-deploy@0-d3:d=3 crawler::#ff5a6e:crawler-deploy@1-d3:d=3	compose_any.py --b1 6 --b2 16 | post/crawler_overlays.py {raw} {fin}
 art/units/crawler-dust.png	main	crawler::#38d4ff:crawler-deploy@0-d3:d=3 crawler::#ff5a6e:crawler-deploy@1-d3:d=3	compose_any.py --b1 6 --b2 16 | post/crawler_overlays.py {raw} {fin}
 

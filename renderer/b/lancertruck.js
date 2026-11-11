@@ -1,4 +1,4 @@
-// Shared parts for the "Lancer" road vehicles (truck_l, tanker_l, roadtrain_l): the rocket truck's language on the
+// Shared parts for the "Lancer" road vehicles (truck, tanker, roadtrain): the rocket truck's language on the
 // civilian haulers. Dark gunmetal armour, a wedge-nosed cab with a glowing sensor-slit eye across the prow, white LED
 // headlight bars on the nose chamfers, an amber beacon, team-colour light strips along the armoured skirts.
 // Coordinates are robkit px (1 px = 1/25.6 world unit), x forward, y across (= world z); 10 world units across the frame.

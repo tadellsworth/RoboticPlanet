@@ -1,10 +1,5 @@
-// THE CRAWLER, "Lancer" restyle: the colossal tracked mobile depot in the rocket truck's family. Top-down, facing +x
-// (right), orthographic camera straight down, framed 20 world units across the 512 frame (render 1024). Crawler: 18 x 12.
-// The off-white hull becomes gunmetal armour with thin dark seams and the robkit lighting; team-colour light strips run
-// along every hull edge and the wing panels; the cab is an armoured bridge with a glowing sensor-slit eye across its
-// front slope, LED headlight bars on the glacis and the amber beacon on its roof; the massive treads, the container deck,
-// the charging bays, legs, arms and mast keep their geometry. Kept from b/crawler.js: every position the overlays and the
-// game use (treads, headlamps at x 8.9 z +-2.1, beacon at 6.9, mast pivot at canvas px 180, leg feet, dish layer).
+// THE CRAWLER: colossal tracked mobile base, top-down, facing +x (right). Same orthographic straight-down camera, sun
+// and materials as b/truck.js, framed 20 world units across the 512 frame (render 1024). Crawler: 18 x 12 units.
 //   ?f=k     driving frame k (0..7): track plates advance k/8 of a plate pitch, sprocket/idler turn to match;
 //            f2 and f6 settle the hull one pixel back and lower.
 //   ?d=k     deploy frame k (0..9) (d0 = f0, d9 = crawlerbase)
@@ -15,19 +10,16 @@ export default function (L) {
   const { box, cyl, hcyl, mesh, beam, sphere, group, gear, ao, M, THREE, TEAM } = L;
   const p = new URLSearchParams(location.search);
   const f = +(p.get('f') || 0), d = p.has('d') ? +p.get('d') : -1, part = p.get('part') || 'crawler';
-  const gun = M.paint('#4f565e'), gunD = M.paint('#3a4046'), off = M.paint('#4c535a'), roofM = M.paint('#5e666f', { rivets: false });
+  const gun = M.paint('#50565c'), gunD = M.paint('#3f4449'), off = M.paint('#c9c5ba');
   const deckP = M.paint('#5a6066', { panelW: 128, panelH: 512 }), grille = M.grille('#3d4247');
-  const runL = M.emit(TEAM, 1.1), padGlow = M.emit(TEAM, 2.2), glassD = M.plain('#0e1114', 0.15, 0.6);
-  const seam = M.plain('#101214', 0.8), lamp = M.emit('#fff1d0', 2.2), dark = M.plain('#1a1c1f', 0.7, 0.3);
-  const eyeM = (() => { const m = M.emit(TEAM, 1.3).clone(); m.color = new THREE.Color(TEAM).multiplyScalar(0.12); m.roughness = 0.7; m.envMapIntensity = 0.1; m.userData.glow = '#' + new THREE.Color(TEAM).multiplyScalar(0.32).getHexString(); return m; })();
-  const plateM = M.plain('#2c2e31', 0.75, 0.45), grouserM = M.steel;
+  const team = M.paint('#' + new THREE.Color(TEAM).multiplyScalar(0.55).getHexString(), { rivets: false });
+  const runL = M.emit(TEAM, 0.8), padGlow = M.emit(TEAM, 2.2), glassD = M.plain('#0e1114', 0.15, 0.6);
+  const plateM = M.plain('#3b3d40', 0.75, 0.45), grouserM = M.steel;
   L.seed(2203);
 
   const W = 20, cam = new THREE.OrthographicCamera(-W / 2, W / 2, W / 2, -W / 2, 0.1, 100);
   cam.position.set(0, 40, 0); cam.up.set(0, 0, -1); cam.lookAt(0, 0, 0); cam.updateMatrixWorld(); cam.updateProjectionMatrix();
   L.useCamera(cam);
-  // straight-down sun lights every top face fully: tone it down as robkit does for the Lancer line
-  L.getScene().traverse(o => { if (o.isDirectionalLight) o.intensity *= o.castShadow ? 0.58 : 0.6; if (o.isHemisphereLight) o.intensity *= 0.7; });
 
   // deploy state
   const D = d < 0 ? 0 : d;
@@ -99,10 +91,8 @@ export default function (L) {
   box(0.3, 0.6, 5.6, gunD, HX0 + 0.1, 2.4, 0, o({ dirt: 0 }));
   for (const s of [-1, 1]) {
     box(0.9, 0.05, 0.9, M.hazard, HX0 + 0.5, 4.11, s * (HZ - 0.5), o({ dirt: 0 }));
-    box(0.14, 0.1, 0.5, M.emit(TEAM, 1.2), HX0 - 0.02, 3.6, s * 2.6, o({ dirt: 0, cast: false }));    // team rear lights
-    box(0.12, 0.08, 0.3, M.emit('#ff2a1e', 1.2), HX0 + 0.02, 3.6, s * 1.9, o({ dirt: 0, cast: false }));
+    box(0.12, 0.08, 0.3, M.emit('#ff2a1e', 1.2), HX0 + 0.02, 3.6, s * 2.4, o({ dirt: 0, cast: false }));
   }
-  for (const x of [-6.15, -4.4]) box(0.05, 0.012, HZ * 2 - 1.1, seam, x, 4.1, 0, o({ dirt: 0, cast: false }));
   // front block under the cab, with a sloped glacis, headlights and hazard corners
   chamferBlock(4.3, HX1, 2.4, 3.6, HZ, 0.35, off);
   {
@@ -111,8 +101,8 @@ export default function (L) {
     g.setAttribute('position', new THREE.Float32BufferAttribute(v, 3)); g.setIndex([0, 2, 1, 0, 3, 2]); g.computeVertexNormals();
     mesh(g, gun, 0, 0, 0, o({ dirt: 0 }));
     for (const s of [-1, 1]) {
-      box(0.3, 0.2, 1.1, gunD, HX1 + 0.25, 2.55, s * 2.1, o({ dirt: 0 }));
-      box(0.12, 0.12, 0.95, lamp, HX1 + 0.42, 2.6, s * 2.1, o({ dirt: 0, cast: false }));                // LED headlight bars
+      box(0.3, 0.2, 0.7, gunD, HX1 + 0.25, 2.55, s * 2.1, o({ dirt: 0 }));
+      box(0.12, 0.14, 0.55, M.emit('#fff1c8', 0.8), HX1 + 0.42, 2.58, s * 2.1, o({ dirt: 0, cast: false }));
       box(0.6, 0.05, 0.6, M.hazard, HX1 - 0.4, 3.61, s * (HZ - 0.45), o({ dirt: 0 }));
     }
   }
@@ -132,9 +122,8 @@ export default function (L) {
     for (const rx of [-3.75, -2.0, -0.3, 1.4, 3.1, 4.15]) for (const rz of [0.95, 2.08, 3.2]) box(0.1, 0.85, 0.1, gunD, rx, 2.5, s * rz, o({ dirt: 0 }));
     for (const rz of [0.95, 2.08, 3.2]) box(MX1 - MX0 - 0.2, 0.06, 0.07, gun, (MX0 + MX1) / 2, 3.3, s * rz, o({ dirt: 0 }));
     // running lights along the hull edges (rear and front sections)
-    box(3.7, 0.03, 0.12, runL, -6.0, 4.11, s * (HZ - 0.2), o({ dirt: 0, cast: false }));
-    box(3.9, 0.03, 0.12, runL, 6.35, 3.61, s * (HZ - 0.16), o({ dirt: 0, cast: false }));
-    box(MX1 - MX0 - 0.3, 0.03, 0.1, runL, (MX0 + MX1) / 2, 3.68, s * (HZ - 0.08), o({ dirt: 0, cast: false }));   // along the wing hinge line
+    box(3.5, 0.03, 0.06, runL, -6.0, 4.11, s * (HZ - 0.3), o({ dirt: 0, cast: false }));
+    box(3.7, 0.03, 0.06, runL, 6.3, 3.61, s * (HZ - 0.2), o({ dirt: 0, cast: false }));
   }
   // containers stacked on the spine, cargo hatch
   const ccols = [['#8a4a2c', -1.0, 3.45, 0], ['#5f7a7c', 1.25, 3.45, 0], ['#c9c5ba', 0.1, 4.6, 0]];
@@ -158,17 +147,14 @@ export default function (L) {
     const m = mesh(g, glassD, 0, 0, 0, o({ dirt: 0 })); m.material.side = THREE.DoubleSide;
     // window mullions on the slopes
     for (const x of [5.4, 6.4, 7.4]) for (const s of [-1, 1]) beam([x, y0, s * z1], [x, y1, s * (z1 - a)], 0.08, 0.05, gun, o());
-    for (const zz of [-2.35, 2.35]) beam([x1, y0, zz], [x1 - a, y1, zz * (z1 - a) / z1], 0.08, 0.05, gun, o());
-    // the sensor-slit eye: a glowing visor across the front slope, its ends turned back like the Lancer bracket
-    beam([x1 + 0.01, y0 + 0.12, 0], [x1 - a + 0.05, y1 - 0.1, 0], 3.6, 0.03, eyeM, o({ cast: false }));
-    for (const s of [-1, 1]) beam([x1 - 0.02, y0 + 0.12, s * 1.8], [x1 - a + 0.06, y1 - 0.1, s * 1.62], 0.5, 0.03, eyeM, o({ cast: false, ry: 0 }));
+    for (const zz of [-1.6, 0, 1.6]) beam([x1, y0, zz], [x1 - a, y1, zz * (z1 - a) / z1], 0.08, 0.05, gun, o());
   }
   box(CX1 - CX0 - IN * 2, 0.25, CZ * 2 - IN * 2, off, (CX0 + CX1) / 2, CYT, 0, o({ dirt: 0 }));
-  // cab roof: a lighter armour plate with seams, running lights round the edge, amber beacon, antenna, AC unit
+  // cab roof: team panel, running lights round the edge, amber beacon, antenna, AC unit
   const RX = (CX0 + CX1) / 2, RY = CYT + 0.25;
-  box(2.4, 0.03, 3.6, roofM, RX - 0.1, RY, 0, o({ dirt: 0 }));
-  for (const x of [5.6, 7.75]) box(0.05, 0.012, CZ * 2 - IN * 2 - 0.3, seam, x, RY + 0.03, 0, o({ dirt: 0, cast: false }));
-  for (const s of [-1, 1]) box(CX1 - CX0 - 1.0, 0.03, 0.1, runL, RX, RY + 0.02, s * (CZ - IN - 0.16), o({ dirt: 0, cast: false }));
+  box(2.0, 0.03, 2.7, team, RX - 0.1, RY, 0, o({ dirt: 0 }));
+  for (const s of [-1, 1]) box(CX1 - CX0 - 1.0, 0.03, 0.06, runL, RX, RY + 0.02, s * (CZ - IN - 0.18), o({ dirt: 0, cast: false }));
+  box(0.06, 0.03, CZ * 2 - IN * 2 - 0.6, runL, CX1 - IN - 0.18, RY + 0.02, 0, o({ dirt: 0, cast: false }));
   cyl(0.28, 0.12, gunD, 6.9, RY, 0, o({ seg: 24, dirt: 0 }));
   sphere(0.24, M.emit('#ffa632', 1.0), 6.9, RY + 0.12, 0, o({ dirt: 0, dome: true }));
   box(0.9, 0.3, 0.8, gun, 5.35, RY, -1.2, o({ dirt: 0 })); box(0.8, 0.04, 0.7, grille, 5.35, RY + 0.3, -1.2, o({ dirt: 0 }));
@@ -185,14 +171,7 @@ export default function (L) {
     box(L2, 0.04, WW, off, 0, -0.04, s * WW / 2, { parent: wg, dirt: 0.4 });                          // outer armour (up when stowed)
     for (const x of [-L2 / 2 + 0.35, L2 / 2 - 0.35]) box(0.6, 0.03, 0.6, M.hazard, x, -0.06, s * (WW - 0.35), { parent: wg, dirt: 0 });
     for (let x = -L2 / 2 + 1.0; x < L2 / 2; x += 1.6) box(0.05, 0.03, WW - 0.2, gunD, x, -0.06, s * WW / 2, { parent: wg, dirt: 0 });
-    box(L2 - 0.4, 0.02, 0.1, runL, 0, -0.065, s * (WW - 0.14), { parent: wg, dirt: 0, cast: false });
-    // team chevrons on the outer armour (face up while stowed), pointing forward, as on the rocket truck's lid
-    const paintT = M.paint(TEAM, { rivets: false });
-    for (const cx of [2.35, 3.05]) for (const e of [-1, 1]) {
-      const za = s * (1.21 + e * 0.62), zb = s * 1.21, xa = cx - 0.42, xb = cx, len = Math.hypot(xb - xa, zb - za);
-      const c = box(len, 0.02, 0.2, paintT, (xa + xb) / 2, -0.085, (za + zb) / 2, { parent: wg, dirt: 0, cast: false });
-      c.rotation.y = -Math.atan2(zb - za, xb - xa);
-    }
+    box(L2 - 0.4, 0.02, 0.05, runL, 0, -0.065, s * (WW - 0.12), { parent: wg, dirt: 0, cast: false });
     // inner face (up when deployed): charging bays
     for (const bx of [-2.0, 2.0]) {
       box(2.3, 0.04, 1.9, M.plain('#26292c', 0.85), bx, WT, s * 1.25, { parent: wg, dirt: 0 });

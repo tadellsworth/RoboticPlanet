@@ -1,17 +1,12 @@
-// Ropeway cargo gondola, "powered realism" restyle (design study for b/gondola.js). The same grip clamp with carrier
-// wheels at the top centre (where the cable passes, 8 % from the top edge), bent steel hanger arm and yoke, and
-// open-topped steel cargo cabin with its crate rack (the game draws the load at the cabin's top). Weathered plated
-// steel, with lights and power added: a band of lit windows round the upper cabin walls, a team-colour light strip
-// round the cabin's waist, team lights on the yoke ends, an amber beacon on the grip and a white work light under it.
+// Ropeway cargo gondola: grip clamp with carrier wheels at the top centre (where the cable passes, 8 % from the top
+// edge), a bent steel hanger arm and yoke, and an open-topped steel cargo cabin with a team stripe and a crate rack.
 // Building camera angle (57 degrees, FOV 20) and sun; no pad, no ground. Cabin = 45 % of the image width.
-import { power } from './powerkit.js';
 export const config = { pad: false, size: 512 };
 export default function (L) {
   const { box, cyl, hcyl, mesh, beam, sphere, group, M, THREE, TEAM } = L;
   L.seed(1313);
   const gun = M.paint('#50565c'), gunD = M.paint('#3f4449'), off = M.paint('#c9c5ba'), steelP = M.paint('#5a6066', { panelW: 128 });
-  const team = M.paint('#' + new THREE.Color(TEAM).multiplyScalar(0.55).getHexString(), { rivets: false });
-  const PK = power(L), glow = PK.glow, warm = M.emit('#ffc27a', 0.95), mull = M.plain('#1b1d20', 0.6, 0.3);
+  const team = M.paint('#' + new THREE.Color(TEAM).multiplyScalar(0.55).getHexString(), { rivets: false }), glow = M.emit(TEAM, 1.8);
 
   // ---- grip clamp (cable runs along x through y = 0)
   const GY = 0;
@@ -24,7 +19,6 @@ export default function (L) {
   for (const s of [-1, 1]) box(0.5, 0.2, 0.06, gun, 0, GY - 0.2, s * 0.13, { dirt: 0 });   // jaws
   box(0.22, 0.04, 0.44, M.hazard, 0, GY - 0.12, 0, { dirt: 0 });
   box(0.16, 0.12, 0.3, M.paint('#d0a536', { rivets: false }), 0.38, GY - 0.48, 0, { dirt: 0 });   // release lever
-  box(0.12, 0.1, 0.12, gunD, -0.5, GY - 0.36, 0.12, { dirt: 0 }); PK.beacon(-0.5, GY - 0.2, 0.12, '#ffb347');   // amber beacon on the grip
 
   // ---- hanger arm: a C-shaped steel arm stepping out and back down, then a yoke over the cabin
   const HY0 = GY - 0.36, KX = 0.42, YK = -3.9;
@@ -35,7 +29,7 @@ export default function (L) {
   const CW = 1.15, CD = 0.78, CH = 1.1, CT = YK - 0.45;                                   // cabin half sizes, rim height
   beam([-CW + 0.05, CT, 0], [CW - 0.05, CT, 0], 0.14, 0.14, gun);                         // yoke bar
   beam([-0.6, CT + 0.05, 0], [0, YK - 0.15, 0], 0.1, 0.1, gun); beam([0.6, CT + 0.05, 0], [0, YK - 0.15, 0], 0.1, 0.1, gun);
-  for (const s of [-1, 1]) { box(0.14, 0.4, 0.3, gunD, s * (CW - 0.05), CT - 0.3, 0, { dirt: 0 }); box(0.06, 0.06, 0.2, PK.glowHi, s * (CW + 0.03), CT + 0.0, 0, { dirt: 0, cast: false }); }
+  for (const s of [-1, 1]) box(0.14, 0.4, 0.3, gunD, s * (CW - 0.05), CT - 0.3, 0, { dirt: 0 });
 
   // ---- open-topped cabin
   const Y0 = CT - CH, t = 0.07;
@@ -47,24 +41,14 @@ export default function (L) {
   // top rim, corner posts, ribs
   for (const s of [-1, 1]) { box(CW * 2 + 0.06, 0.07, 0.1, gun, 0, CT - 0.04, s * (CD - 0.02), { dirt: 0 }); box(0.1, 0.07, CD * 2 + 0.06, gun, s * (CW - 0.02), CT - 0.04, 0, { dirt: 0 }); }
   for (const sx of [-1, 1]) for (const sz of [-1, 1]) box(0.12, CH + 0.02, 0.12, gunD, sx * (CW - 0.03), Y0, sz * (CD - 0.03), { dirt: 0 });
-  // a band of lit windows round the upper walls (four panes a side between the ribs, two at each end)
-  const WY = CT - 0.42, WH = 0.26;
+  for (const x of [-0.55, 0, 0.55]) for (const s of [-1, 1]) box(0.06, CH - 0.1, 0.05, gun, x, Y0 + 0.05, s * (CD + 0.01), { dirt: 0 });
+  // team stripe round the cabin
   for (const s of [-1, 1]) {
-    box(CW * 2 - 0.12, WH + 0.06, 0.02, mull, 0, WY - 0.03, s * (CD + 0.01), { dirt: 0, cast: false });
-    for (const x of [-0.82, -0.28, 0.28, 0.82]) box(0.4, WH, 0.025, warm, x, WY, s * (CD + 0.02), { dirt: 0, cast: false });
-    box(0.02, WH + 0.06, CD * 2 - 0.12, mull, s * (CW + 0.01), WY - 0.03, 0, { dirt: 0, cast: false });
-    for (const z of [-0.33, 0.33]) box(0.025, WH, 0.5, warm, s * (CW + 0.02), WY, z, { dirt: 0, cast: false });
-  }
-  for (const x of [-0.55, 0, 0.55]) for (const s of [-1, 1]) box(0.06, CH - 0.1, 0.05, gun, x, Y0 + 0.05, s * (CD + 0.03), { dirt: 0 });
-  // the team light strip round the waist, on a painted band
-  for (const s of [-1, 1]) {
-    box(CW * 2 + 0.02, 0.14, 0.02, team, 0, Y0 + 0.3, s * (CD + 0.04), { dirt: 0 });
-    box(CW * 2 - 0.06, 0.045, 0.02, glow, 0, Y0 + 0.345, s * (CD + 0.055), { dirt: 0, cast: false });
-    box(0.02, 0.14, CD * 2 + 0.02, team, s * (CW + 0.04), Y0 + 0.3, 0, { dirt: 0 });
-    box(0.02, 0.045, CD * 2 - 0.06, glow, s * (CW + 0.055), Y0 + 0.345, 0, { dirt: 0, cast: false });
+    box(CW * 2 + 0.02, 0.16, 0.02, team, 0, CT - 0.42, s * (CD + 0.02), { dirt: 0 });
+    box(CW * 2 - 0.1, 0.035, 0.02, glow, 0, CT - 0.36, s * (CD + 0.035), { dirt: 0, cast: false });
+    box(0.02, 0.16, CD * 2 + 0.02, team, s * (CW + 0.02), CT - 0.42, 0, { dirt: 0 });
   }
   box(CW * 2 + 0.1, 0.05, 0.14, M.hazard, 0, Y0 - 0.02, CD - 0.05, { dirt: 0 });
-  box(0.3, 0.08, 0.2, gunD, 0, Y0 - 0.1, 0, { dirt: 0 }); box(0.22, 0.02, 0.14, PK.white, 0, Y0 - 0.12, 0, { dirt: 0, cast: false });   // work light under the floor
   // crate rack inside: a low steel frame with two crates
   for (const x of [-0.7, 0.05, 0.75]) box(0.06, 0.45, CD * 2 - 0.25, gunD, x, Y0 + 0.08, 0, { dirt: 0 });
   box(1.6, 0.05, CD * 2 - 0.25, gun, 0.02, Y0 + 0.5, 0, { dirt: 0 });
