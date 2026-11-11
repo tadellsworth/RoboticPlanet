@@ -1186,7 +1186,7 @@ function portShipsText(b) {
   for (const u of S.bots) if (!u.dead && u.owner === b.owner && BOTS[u.type].sea && u.inside === b.id) here[u.type] = (here[u.type] || 0) + 1;
   const list = Object.keys(here).map((k) => `${here[k]} ${here[k] === 1 ? BOTS[k].name : BOTS[k].plural}`);
   return (list.length ? `Tied up here: ${list.join(', ')}.` : 'No ships tied up here.') +
-    ' Container Ships and Tanker Ships fill this Port\'s supply orders from your other Ports on the same water, and a far Port sends its spare goods home by ship. Order ships at the Bot Foundry.';
+    ' Container Ships and Tanker Ships fill this Port\'s supply orders from your other Ports on the same water, and a far Port sends its spare goods home by ship. Order ships at its shipyard (below).';
 }
 
 /** The Port panel's ship sections: ships here, its ferry line, and a beach landing. */
@@ -1197,10 +1197,10 @@ function portSection(b) {
   html += '<div class="section-label">Ferry line</div><div id="sh-ferry">';
   if (other && !other.dead) {
     const served = ferries.some((u) => u.home === b.id || u.home === other.id);
-    html += `<p class="hint">A ferry line runs to the Port ${dirText(b, other)}: your robots and trucks take the ferry whenever it's the shorter way.${served ? '' : ' <b>No Ferry serves it yet</b>: order one at the Bot Foundry.'}</p><button class="btn" data-to="0">Stop the ferry line</button>`;
+    html += `<p class="hint">A ferry line runs to the Port ${dirText(b, other)}: your robots and trucks take the ferry whenever it's the shorter way.${served ? '' : ' <b>No Ferry serves it yet</b>: order one at a shipyard (a Port panel).'}</p><button class="btn" data-to="0">Stop the ferry line</button>`;
   } else {
     const ports = S.buildings.filter((o) => o !== b && !o.dead && o.built && o.owner === b.owner && BDEFS[o.type].port && seaLinked(b, o));
-    html += ports.length ? `<p class="hint">Run a ferry between this Port and another: your robots and trucks take it whenever it's the shorter way (a Ferry from the Bot Foundry serves it).</p>${ports.map((o) => `<button class="btn" data-to="${o.id}">Ferry to the Port ${dirText(b, o)}</button>`).join('')}`
+    html += ports.length ? `<p class="hint">Run a ferry between this Port and another: your robots and trucks take it whenever it's the shorter way (a Ferry from a Port's shipyard serves it).</p>${ports.map((o) => `<button class="btn" data-to="${o.id}">Ferry to the Port ${dirText(b, o)}</button>`).join('')}`
       : '<p class="hint">Build another Port on the same water to run a ferry line between them.</p>';
   }
   html += '</div>';
@@ -2159,7 +2159,7 @@ function showRoadBanner(problem, info) {
       (unpiped ? ` <button class="btn" id="pipe-all">Pipe every Oil Pump (${unpiped})</button>` : '');
     how = pipeHow;
   } else if (mode === 'rail' && !UI.draft.rail.size && !UI.draft.railDel.size) {
-    line = `<b>Lay railway track</b> by dragging (${costText(RAIL_COST)} a tile, laid when you tap Build if you have the goods, otherwise as they come in). Tap a tile to add or drop it, or tap track to take it up. Then put a <b>Rail Station</b> (Build menu) beside each end, and order a <b>Freight Train</b> at the Bot Foundry.`;
+    line = `<b>Lay railway track</b> by dragging (${costText(RAIL_COST)} a tile, laid when you tap Build if you have the goods, otherwise as they come in). Tap a tile to add or drop it, or tap track to take it up. Then put a <b>Rail Station</b> (Build menu) beside each end, and order a <b>Freight Train</b> at a station's rail yard (tap the station).`;
     how = 'Freight Trains carry 56 goods between Rail Stations on the same track, fast and with no traffic to wait for, and never need charging. They keep a station\'s supply orders filled from the other stations on the line, and a far station sends its spare goods home to the station nearest your Command Base. Track goes on open ground in your territory. It climbs a level at a time over a Ramp (a natural slope, or one you build in Paths), like a road, with trains slowing on the grade; over water it\'s a rail bridge, through rock a rail tunnel (a drag carries straight on into both), and across a valley it runs over a Viaduct. It can cross a road: road traffic waits at the crossing while a train goes by.';
   } else if (mode === 'wall' && !UI.draft.walls.size) {
     line = `<b>Sketch a wall</b> by dragging (${costText(BDEFS.wall.cost)} a tile); where it crosses a road or track a <b>Gate</b> goes (${costText(BDEFS.gate.cost)}). Tap a planned Wall to make it a Gate, again to drop it. Nothing is spent until you tap <b>Build</b>.`;
@@ -2376,6 +2376,27 @@ function renderTrade(b) {
   };
 }
 
+/** A Port's shipyard or a Rail Station's rail yard: each kind it builds, how many are ordered, +1, +5 and Clear. */
+function renderYard(b) {
+  const el = $('sh-yard');
+  if (!el) return;
+  const kinds = BDEFS[b.type].yard, now = nextYardKind(b);
+  if (el.dataset.k !== kinds.join()) {
+    el.dataset.k = kinds.join();
+    el.innerHTML = kinds.map((k) => `<div class="order-row yard-row" data-k="${k}"><span>${BOTS[k].plural}<small id="sh-y-${k}"></small></span>
+      <button class="btn" data-k="${k}" data-d="1">+1</button><button class="btn" data-k="${k}" data-d="5">+5</button><button class="btn ghost" data-k="${k}" data-d="0">Clear</button></div>`).join('');
+    for (const btn of el.querySelectorAll('button')) btn.onclick = () => { orderAtYard(b, btn.dataset.k, +btn.dataset.d); sfx('click'); renderYard(b); };
+  }
+  for (const k of kinds) {
+    const n = (b.yard && b.yard[k]) || 0, parts = (b.yardParts && b.yardParts[k]) || 0;
+    $('sh-y-' + k).textContent = n ? `${n} ordered` + (parts ? ` · ${parts} of ${BOTS[k].parts} parts in` : '') : 'none ordered';
+    el.querySelector(`.order-row[data-k="${k}"]`).classList.toggle('next', k === now);
+  }
+  $('sh-yard-status').textContent = b.yardStatus || (now ? '' : 'Nothing ordered');
+  $('sh-yard-bar').hidden = !now;
+  $('sh-yard-bar').firstElementChild.style.width = `${Math.round((b.yardFrac || 0) * 100)}%`;
+}
+
 /** "4 Walls, 1 Gate" for the build menu's Walls card. */
 function wallCountText() {
   const w = ownedCount('wall'), g = ownedCount('gate');
@@ -2417,6 +2438,8 @@ function openBuildingSheet(b) {
     <p class="desc">${desc}</p><div class="status" id="sh-status"></div><div id="sh-dyn"></div>${mine ? '<div id="sh-fix"></div>' : ''}`;
   if (mine) {
     if (def.airfield && b.built && b.owner === 0) html += airfieldSection(b); // its planes and air drops first
+    if (def.yard && b.built) html += `<div class="section-label">${def.port ? 'Shipyard' : 'Rail yard'}</div><div class="status" id="sh-yard-status"></div><div class="bar" id="sh-yard-bar"><div></div></div><div id="sh-yard"></div>
+      <p class="hint">${def.port ? 'Ships are built here' : 'Freight Trains are built here'}, a round of parts (1 Alloy, 1 Chip) every ${YARD.work} s: ${def.yard.map((k) => `${BOTS[k].plural.toLowerCase().replace(/^./, (c) => c.toUpperCase())} ${BOTS[k].parts}`).join(', ')} rounds. Haulers bring the parts. ${def.port ? 'Each one puts to sea from this Port.' : 'Each one rolls out onto this station\'s track, so the Bot Foundry never needs a railway.'}</p>`;
     if (def.terminal && b.built) html += '<div class="section-label">Contracts <span class="label-note" id="sh-trade-next"></span></div><div id="sh-trade"></div><p class="hint" id="sh-trade-hint"></p>';
     if (def.store && b.built && !def.terminal) {
       html += `<div class="section-label">Storage</div><div class="seg" id="sh-smode">
@@ -2460,7 +2483,7 @@ function openBuildingSheet(b) {
       html += `<div class="section-label">Order bots</div>
         <div class="seg" id="sh-omode"><button data-v="turns">Take turns</button><button data-v="first">Top of the list first</button></div>
         <div id="sh-orders"></div>
-        <p class="hint">The Foundry only builds the bots you order, from the top of this list down. <b>Take turns</b>: one of each type you've ordered in turn. <b>Top of the list first</b>: every bot of the top type you've ordered, then the next. Move a type up or down with the arrows. Each bot uses 1 Alloy and 1 Chip a round, ${def.work} s each (a Freight Truck or Tanker takes ${BOTS.truck.parts} rounds, a Road Train ${BOTS.roadtrain.parts}, a Freight Train ${BOTS.freight.parts}, a Crawler ${BOTS.crawler.parts}, a Cargo Plane ${BOTS.cargoplane.parts}).
+        <p class="hint">The Foundry only builds the bots you order, from the top of this list down. <b>Take turns</b>: one of each type you've ordered in turn. <b>Top of the list first</b>: every bot of the top type you've ordered, then the next. Move a type up or down with the arrows. Each bot uses 1 Alloy and 1 Chip a round, ${def.work} s each (a Freight Truck or Tanker takes ${BOTS.truck.parts} rounds, a Road Train ${BOTS.roadtrain.parts}, a Crawler ${BOTS.crawler.parts}, a Cargo Plane ${BOTS.cargoplane.parts}). Freight Trains are built at a Rail Station's rail yard${navalMap() ? ', ships at a Port\'s shipyard' : ''}.
         <b>Haulers</b> carry two goods on the short runs. <b>Freight Trucks</b> carry eight on the long runs (12 tiles or more), from far mines and factories as well as storage. <b>Tankers</b> are the only vehicles that carry Crude and Fuel, ten at a time (they explode if they're destroyed full). <b>Road Trains</b> carry thirty between your Command Base and far Depots, best on asphalt. <b>Agribots</b> run Bio Farms and Grove Planters, and <b>Pavers</b> run the Roadworks.</p>`;
     }
     if (def.roadworks && b.built) {
@@ -2718,6 +2741,7 @@ function refreshBuildingSheet(b) {
   const def = BDEFS[b.type];
   const mine = b.owner === 0;
   if (mine && def.terminal && b.built) renderTrade(b);
+  if (mine && def.yard && b.built) renderYard(b);
   const parts = [];
   if (mine && def.lab && $('sh-research')) refreshResearch();
   $('sh-status').textContent = mine ? b.status || '' : (b.built ? '' : 'Construction site');
@@ -3003,7 +3027,7 @@ function refreshResearch() {
 function renderFoundryOrders(b) {
   const el = $('sh-orders');
   if (!el) return;
-  const versus = warOn(), naval = navalMap(), shows = (k) => (versus || !BOTS[k].war) && (naval || !BOTS[k].naval), kinds = foundryList(b).filter(shows);
+  const versus = warOn(), shows = (k) => (versus || !BOTS[k].war) && !BOTS[k].sea && !BOTS[k].rail, kinds = foundryList(b).filter(shows); // ships and trains come from yards
   el.innerHTML = kinds.map((k, i) => `<div class="order-row" data-k="${k}">
     <span class="order-move"><button class="btn ghost" data-k="${k}" data-m="-1" aria-label="Move ${BOTS[k].plural} up" ${i ? '' : 'disabled'}>▲</button><button class="btn ghost" data-k="${k}" data-m="1" aria-label="Move ${BOTS[k].plural} down" ${i < kinds.length - 1 ? '' : 'disabled'}>▼</button></span>
     <span>${BOTS[k].plural}<small id="sh-o-${k}">none queued</small></span>

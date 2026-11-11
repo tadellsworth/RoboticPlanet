@@ -249,8 +249,8 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
   Guns by its Command Base once a rival has an Airfield or aircraft.
 - **Ships and Ports** (naval maps only: Islands and Lakes, `naval` in `SHAPE_PRESETS`, `navalMap`; `NAVAL_ON` switches them
   off everywhere): a **Port** (8 Cement, 3 Alloy; Build → Move) is storage on land beside water at least `SEA_MIN` (20)
-  tiles big (`portDocks`; `seaNet` labels the bodies of water). Ships come from the Bot Foundry and put to sea at the
-  nearest Port (`deliverShip`); they sail open water by `seaRoute` (8-way A*, never cutting a corner of land, under
+  tiles big (`portDocks`; `seaNet` labels the bodies of water). Ships are built at a Port's shipyard (`BDEFS.port.yard`, `updateYard`,
+  `YARD`: a round of 1 Alloy + 1 Chip every 8 s, haulers bring `YARD.hopper` of each) and put to sea there (`launchFromYard`); they sail open water by `seaRoute` (8-way A*, never cutting a corner of land, under
   bridges) and move like trains. They burn Fuel under way (`SHIP_BURN`, a tank of 100 like a truck's) and fill up from a
   Port's Fuel when they tie up below `SHIP_REFUEL` (each Port with ships keeps `PORT_FUEL`, 4, which haulers bring;
   running low, an idle ship sails to a Port with Fuel, `findFuel`; empty, it crawls at half speed); they're mended
@@ -279,7 +279,8 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
   joins where a road would (`railStep` uses `canStep`): on one level, or a level up or down over a Ramp (natural or
   built in Paths), where trains drop to `RAIL_GRADE` (0.55) of their speed and brake for it in advance (`driveSpeed`);
   rail bridges join any level, and a Viaduct with track on both abutments joins its ends (`railNbrs`). Dragging track
-  across a one-level cliff with no Ramp says to build one there. Rail Stations stand beside the track;
+  across a one-level cliff with no Ramp says to build one there. Rail Stations stand beside the track and build Freight Trains in their rail yard (the same `updateYard`; the Foundry
+  builds neither ships nor trains, and orders for them in an older save move to a yard);
   their platforms are the track tiles next to them (`railPlatforms`), and `railNet` groups stations by line. Freight
   Trains (56 goods) take the dispatch role `'rail'`: trunk runs from a far station to the home station and supply orders
   between stations on one line, `RAIL_MIN_LOAD` (10) or more; `railRoute` plans along the track. Road bots wait at a

@@ -181,6 +181,11 @@ function needsOf(b) {
     // A Depot's supply orders: keep this much of each good here (goods already promised to someone don't count).
     for (const g in b.keep) out.push([g, b.keep[g] - ((b.stock[g] || 0) - (b.res[g] || 0)) - (b.inc[g] || 0), true]);
   }
+  // A shipyard or rail yard with orders keeps a round or two of parts (YARD.hopper Alloy and Chips).
+  if (def.yard && b.built && hasYardOrders(b)) for (const g of ['alloy', 'chip']) {
+    const n = YARD.hopper - ((b.stock[g] || 0) - (b.res[g] || 0)) - (b.inc[g] || 0), e = out.find((o) => o[0] === g);
+    if (e) e[1] = Math.max(e[1], n); else out.push([g, n, true]);
+  }
   // A Port keeps a little Fuel for its owner's ships to fill up from (once there are ships).
   if (def.port && b.built && S.bots.some((u) => !u.dead && u.owner === b.owner && BOTS[u.type].sea)) out.push(['fuel', PORT_FUEL - (b.stock.fuel || 0) - (b.inc.fuel || 0), true]);
   // An Airfield keeps Fuel for its planes, and what the places it supplies by air are short of.
@@ -210,7 +215,8 @@ function supplyOf(b, g) {
 
 /** What b can spare of g to fill another Depot's supply order: never dipping into its own order. */
 function keepSupply(b, g) {
-  return Math.max(0, supplyOf(b, g) - Math.max((b.keep && b.keep[g]) || 0, BDEFS[b.type].airfield ? airKeep(b)[g] || 0 : 0));
+  const yard = BDEFS[b.type].yard && (g === 'alloy' || g === 'chip') && hasYardOrders(b) ? YARD.hopper : 0;
+  return Math.max(0, supplyOf(b, g) - Math.max((b.keep && b.keep[g]) || 0, BDEFS[b.type].airfield ? airKeep(b)[g] || 0 : 0, yard));
 }
 
 /** What Airfield b holds on to: Fuel for its planes, and what the places it supplies by air are short of. */
@@ -1852,9 +1858,9 @@ function updateWorker(u, dt) {
   u.moved = 0;
   if (BOTS[u.type].air) { updatePlane(u, dt); return; }
   if (u.task && u.task.type === 'flee') { doFlee(u, dt); return; }
-  // A new Freight Train rolls out at the nearest Rail Station (and waits at the Foundry until there is one).
+  // A Freight Train left at a Foundry by an older save rolls out at the nearest Rail Station (new ones come from rail yards).
   if (BOTS[u.type].rail && !u.task && !onTrack(u) && S.tick % 30 === u.id % 30) { deliverTrain(u); return; }
-  // A new ship puts to sea at the nearest Port (and waits at the Foundry until there is one).
+  // So does a ship left at a Foundry, at the nearest Port (new ones are launched from shipyards).
   if (BOTS[u.type].sea && !afloat(u)) { if (S.tick % 30 === u.id % 30) deliverShip(u); return; }
   if (BOTS[u.type].ferry) { updateFerry(u, dt); workerBattery(u, dt); return; }
   const t = u.task;
@@ -2514,6 +2520,7 @@ function updateBuilding(b, dt) {
   else if (def.keep) updateKeep(b, def, dt);
   else if (def.mil) garrisonDefense(b, dt);
   if (def.terminal) updateTerminal(b, def, dt);
+  if (def.yard && b.built) updateYard(b, def, dt);
   if (def.mil && b.type !== 'lander' && usesPosts(b.owner)) stockPost(b, dt);
   if (def.repair) updateRepairStation(b, def, dt);
   if (def.lab) updateLab(b, dt);
@@ -6028,6 +6035,78 @@ function viaductAcross(b) {
   computeZones();
   computeTerritory(); // the far end claims a little no-one's ground round it
   postMsg(b.owner, 'The Viaduct is open: anything can drive across.', b.x, b.y, 'good');
+}
+
+/* ------------------------------------------------------------------ yards: Ports build ships, Rail Stations trains */
+
+function hasYardOrders(b) {
+  if (!b.yard) return false;
+  for (const k in b.yard) if (b.yard[k] > 0) return true;
+  return false;
+}
+
+/** What yard b builds next: the first kind on its list with an order (YARD; BDEFS[type].yard). */
+function nextYardKind(b) {
+  for (const k of BDEFS[b.type].yard) if (b.yard && b.yard[k] > 0) return k;
+  return null;
+}
+
+/** Order n more (n = 0: none) of `kind` at yard b. */
+function orderAtYard(b, kind, n) {
+  b.yard = b.yard || {};
+  b.yard[kind] = n === 0 ? 0 : clamp((b.yard[kind] || 0) + n, 0, 99);
+  if (!hasYardOrders(b)) delete b.yard;
+}
+
+/** Can yard b launch what it builds: a Port needs open water at its docks, a Rail Station track beside it. */
+function yardOpen(b) { return BDEFS[b.type].port ? portDocks(b.x, b.y).length > 0 : railPlatforms(b.x, b.y).length > 0; }
+
+/**
+ * A yard at work: a round of parts (1 Alloy, 1 Chip from its own stock) every YARD.work s into the vessel it's
+ * building; with BOTS[kind].parts rounds in, it's launched there. (Ship and train orders left at a Bot Foundry
+ * from an older save move to the owner's yard that builds them.)
+ */
+function updateYard(b, def, dt) {
+  if (S.tick % 30 === b.id % 30) {
+    for (const f of S.buildings) {
+      if (f.dead || f.owner !== b.owner || f.type !== 'foundry' || !f.orders) continue;
+      for (const k of def.yard) if (f.orders[k] > 0) { orderAtYard(b, k, f.orders[k]); delete f.orders[k]; }
+      if (!hasOrders(f)) delete f.orders;
+    }
+  }
+  const kind = nextYardKind(b);
+  if (!kind) { b.yardStatus = ''; return; }
+  const name = BOTS[kind].name, need = BOTS[kind].parts || 1, have = (b.yardParts && b.yardParts[kind]) || 0;
+  if (!yardOpen(b)) { b.yardStatus = def.port ? `Can't launch a ${name}: no open water at its docks` : `Can't build a ${name}: lay track beside the station`; return; }
+  if (botCount(b.owner) >= (S.mode === 'colony' ? MAX_BOTS_COLONY : MAX_BOTS)) { b.yardStatus = 'Bot limit reached'; return; }
+  const free = (g) => (b.stock[g] || 0) - (b.res[g] || 0);
+  if (free('alloy') < 1 || free('chip') < 1) { b.yardStatus = `Building a ${name} (part ${have + 1} of ${need}): waiting for ${free('alloy') < 1 ? (free('chip') < 1 ? 'Alloy and Chips' : 'Alloy') : 'Chips'}`; b.yardT = 0; return; }
+  b.yardT = (b.yardT || 0) + dt;
+  b.yardStatus = `Building a ${name}: part ${have + 1} of ${need}`;
+  b.yardFrac = (have + Math.min(1, b.yardT / YARD.work)) / need;
+  if (b.yardT < YARD.work) return;
+  b.yardT = 0;
+  for (const g of ['alloy', 'chip']) { bump(b.stock, g, -1); usedGood(b.owner, g, 1); }
+  b.yardParts = b.yardParts || {};
+  if (have + 1 < need) { b.yardParts[kind] = have + 1; return; }
+  delete b.yardParts[kind];
+  b.yard[kind]--;
+  if (!hasYardOrders(b)) delete b.yard;
+  b.yardFrac = 0;
+  launchFromYard(b, kind);
+}
+
+/** A finished ship puts to sea from Port b (tied up there), a finished train rolls out at Rail Station b. */
+function launchFromYard(b, kind) {
+  const P = S.players[b.owner];
+  P.madeBots = P.madeBots || {};
+  P.madeBots[kind] = (P.madeBots[kind] || 0) + 1;
+  const u = addBot(b.owner, kind, b.x + 0.5, b.y + 0.5);
+  enterBuilding(u, b);
+  if (BOTS[kind].ferry) { u.home = b.id; computeZones(); }
+  addFx('ring', b.x + 0.5, b.y + 0.5, { color: PLAYER_COLORS[b.owner], r: 1.8 });
+  postMsg(b.owner, BOTS[kind].sea ? `A ${BOTS[kind].name} was launched at the Port.` : `A ${BOTS[kind].name} rolled out of the rail yard.`, b.x, b.y, 'good');
+  if (b.owner === 0) sfx('complete');
 }
 
 /* ------------------------------------------------------------------ bulk trade (the Trade Terminal) */

@@ -527,9 +527,10 @@ function aiNaval(p, me, kinds, lvl, lander, canBuild) {
     return;
   }
   const army = kinds.warbot || 0;
-  const foundry = me.find((b) => b.type === 'foundry' && b.built);
+  // Ships are built at the Port nearest home (its shipyard).
+  const yard = ports.filter((b) => b.built).sort((a, b) => dist2(a.x, a.y, lander.x, lander.y) - dist2(b.x, b.y, lander.x, lander.y))[0];
   const ferry = S.bots.find((u) => !u.dead && u.owner === p && BOTS[u.type].ferry);
-  if (!ferry && foundry && army >= lvl.threshold && ports.some((b) => b.built)) { foundry.orders = foundry.orders || {}; if (!(foundry.orders.ferry > 0)) foundry.orders.ferry = 1; }
+  if (!ferry && yard && army >= lvl.threshold && !(yard.yard && yard.yard.ferry > 0)) orderAtYard(yard, 'ferry', 1);
   // Later on, a second Port out toward the enemy, kept stocked from home by a Container Ship (Cement for
   // building at the front, Ammo for the warbots there).
   if (ports.length === 1 && ports[0].built && S.time > 900 && canBuild && aiAffordable(p, 'port')) {
@@ -537,11 +538,10 @@ function aiNaval(p, me, kinds, lvl, lander, canBuild) {
     if (spot && dist(spot.x, spot.y, ports[0].x, ports[0].y) >= 15) placeSite(p, 'port', spot.x, spot.y);
   }
   const built = ports.filter((b) => b.built);
-  if (built.length >= 2 && foundry) {
+  if (built.length >= 2 && yard) {
     const far = built.reduce((a, b) => (dist2(b.x, b.y, lander.x, lander.y) > dist2(a.x, a.y, lander.x, lander.y) ? b : a));
     if (!far.keep) { setKeep(far, 'cement', 12); setKeep(far, 'ammo', 6); }
-    foundry.orders = foundry.orders || {};
-    if (!S.bots.some((u) => !u.dead && u.owner === p && u.type === 'cargoship') && !(foundry.orders.cargoship > 0)) foundry.orders.cargoship = 1;
+    if (!S.bots.some((u) => !u.dead && u.owner === p && u.type === 'cargoship') && !(yard.yard && yard.yard.cargoship > 0)) orderAtYard(yard, 'cargoship', 1);
   }
   if (!ferry || ferry.landing || !ferry.inside || S.time < lvl.grace || S.time - (P.lastLanding || -999) < 150) return;
   const port = getE(ferry.inside);
