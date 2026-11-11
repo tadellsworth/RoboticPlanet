@@ -108,13 +108,13 @@ export default function (L) {
     box(0.36, 0.4, 0.3, P.steel, -2.75, 0, 3.95, { dirt: 0.4 }); box(0.06, 0.06, 0.03, P.green, -2.82, 0.3, 4.11, nc); box(0.06, 0.06, 0.03, P.glow, -2.68, 0.3, 4.11, nc);
     P.conduit([[-2.93, 0.15, 3.95], [-3.35, 0.15, 3.95], [-3.35, 0.15, 3.86]], 0.04);
     // pump house at the back left: lit window band, team strip on the fascia, door lamp, roof unit and a beacon
-    const hx = -2.0, hz = -3.55, HW = 2.4, HD = 1.4, HH = 1.5, hf = hz + HD / 2;
+    const hx = -2.0, hz = -3.2, HW = 2.4, HD = 1.3, HH = 1.4, hf = hz + HD / 2;      // low enough to stay inside the pad's outline
     box(HW + 0.3, 0.12, HD + 0.3, P.conc, hx, 0, hz, { dirt: 0.4 }); ao(hx, hz, HW, HD, 0.5);
     box(HW, HH, HD, off, hx, 0.12, hz, { dirtH: 0.8 });
     box(HW + 0.12, 0.12, HD + 0.12, gun, hx, 0.12 + HH, hz, { dirt: 0 });
     P.strip(HW + 0.1, hx, 0.12 + HH + 0.03, hf + 0.08, 0, 0.06);
-    P.windows(1.3, 0.34, hx - 0.38, 0.95, hf + 0.02, 0, 3);
-    box(0.45, 0.95, 0.04, P.steelD, hx + 0.8, 0.12, hf + 0.02, { dirt: 0.3 }); box(0.2, 0.06, 0.05, P.white, hx + 0.8, 1.18, hf + 0.05, nc);
+    P.windows(1.3, 0.32, hx - 0.38, 0.9, hf + 0.02, 0, 3);
+    box(0.45, 0.9, 0.04, P.steelD, hx + 0.8, 0.12, hf + 0.02, { dirt: 0.3 }); box(0.2, 0.06, 0.05, P.white, hx + 0.8, 1.12, hf + 0.05, nc);
     pointLight('#ffd9a0', 1.6, hx + 0.6, 0.9, hf + 0.7, 2.2);
     box(0.6, 0.32, 0.5, P.steel, hx - 0.6, 0.24 + HH, hz - 0.15, { dirt: 0.3 }); cyl(0.17, 0.03, M.dark, hx - 0.6, 0.56 + HH, hz - 0.15, { seg: 16, dirt: 0 });
     P.beacon(hx + 0.95, 0.38 + HH, hz - 0.4);
