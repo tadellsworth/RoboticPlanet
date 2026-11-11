@@ -135,6 +135,8 @@ const BOTS = {
   ferry: { name: 'Ferry', plural: 'Ferries', speed: WORKER_SPEED * 2.8, hp: 26, sea: true, ferry: true, seats: 6, parts: 4, accel: 0.7, brake: 1.4, naval: true,
     desc: 'Carries robots and trucks across the water. Give a Port a ferry line to another Port and your bots take the ferry whenever it is the shorter way (six seats: a truck takes two, a Road Train three). From a Port it can also land up to six warbots on any shore, enemy shores too: a beach landing.' },
   // Aircraft: they fly straight over anything (water, cliffs, rock, the enemy), burning Fuel (PLANE_BURN), from an Airfield.
+  bomber: { name: 'Strike Bomber', plural: 'Strike Bombers', speed: WORKER_SPEED * 5.2, hp: 16, air: true, war: true, bomber: true, parts: 5, accel: 1.3, brake: 1.6,
+    desc: 'A fast twin-engined strike jet, based at an Airfield (two to a hangar; built there). Pick a target, an enemy building, or a truck, Tanker, ship or robot out in the open, and it flies out, drops one heavy bomb and flies home: it knocks 14 off a building (forts no lower than a third of their armor) and hurts what\'s round it, and a Tanker it hits explodes. Each sortie takes 6 Ammo and Fuel from its Airfield, and it needs a while on the ground to rearm. Flak Guns are the answer to it.' },
   cargoplane: { name: 'Cargo Plane', plural: 'Cargo Planes', speed: WORKER_SPEED * 3.75, hp: 24, air: true, carry: 8, seats: 2, parts: 6, accel: 0.9, brake: 1.3,
     desc: 'A big four-engined transport, based at an Airfield. It flies straight over anything and drops what it carries by parachute, one load a flight: a Drop Outpost anywhere on open ground nobody else holds, two robots (Warbots or Workers) wherever you like, the enemy\'s land too, or up to 8 goods for a place you supply by air. It burns Fuel in the air and fills up at its Airfield. It flies to the nearest Airfield when the Foundry finishes it.' },
   crawler: { name: 'Crawler', plural: 'Crawlers', speed: WORKER_SPEED * 0.45, hp: 80, crawler: true, parts: 6,
@@ -153,7 +155,7 @@ const BOTS = {
   brute:    { name: 'Brute', plural: 'Brutes', speed: WORKER_SPEED * 0.8, hp: 24, wild: true, bite: 3, smash: true,
     desc: 'A big, slow, armoured creature. Brutes tear up roads and batter buildings, and bite hard.' },
 };
-const BOT_ORDER = ['worker', 'hauler', 'truck', 'tanker', 'roadtrain', 'freight', 'cargoship', 'tankship', 'ferry', 'cargoplane', 'crawler', 'agribot', 'paver', 'warbot', 'rocket'];
+const BOT_ORDER = ['worker', 'hauler', 'truck', 'tanker', 'roadtrain', 'freight', 'cargoship', 'tankship', 'ferry', 'cargoplane', 'bomber', 'crawler', 'agribot', 'paver', 'warbot', 'rocket'];
 /*
  * Who carries what (see dispatch):
  * - Haulers (2 goods) do the short runs: between buildings less than TRUCK_MIN_DIST tiles apart.
@@ -352,6 +354,8 @@ const LAKES_WET = 0.37;
 // the straight distance, plus FERRY_BOARD tiles' worth for the wait.
 const NAVAL_ON = true; // ships and Ports on naval maps (false switches them off everywhere)
 const SEA_MIN = 20, FERRY_SEATS = 6, FERRY_WAIT = 5, FERRY_GIVEUP = 90, FERRY_COST = 1.4, FERRY_BOARD = 8;
+/** A Ferry founding a Port on another shore (orderFoundPort): the kit it loads at its Port, the land the new Port claims, the Workers it takes. */
+const PORT_FOUND = { cost: { cement: 12, alloy: 4 }, claim: 4, workers: 4 };
 const LANDING_GATHER = 40; // a Ferry on a beach landing sails this long after the order even if some warbots haven't come aboard
 const SHIP_BURN = 0.3, SHIP_REFUEL = 70, PORT_FUEL = 4; // a ship's tank (0–100) drains this a second under way; it fills up (one Fuel) when tied up below SHIP_REFUEL; a Port keeps PORT_FUEL for them
 // Cargo Planes: a tank (0–100) drains PLANE_BURN a second in the air; one Fuel at the Airfield puts back PLANE_FILL of it
@@ -362,7 +366,15 @@ const PLANE_MEND = 0.6;    // hit points a second a plane parked at its Airfield
 // Airfields: a runway RUNWAY_LEN tiles long runs straight out from the hangar. A plane rolls down it from the
 // head, gathering speed (ROLL_ACCEL tiles/s²), and lifts off at the far end; in the air it turns at up to
 // PLANE_TURN radians a second; it lands at the far end and brakes (ROLL_BRAKE) back to the head.
-const AIRFIELD_HOLDS = { cargoplane: 1 }; // planes of each type an Airfield has room for (bombers will be 2)
+const AIRFIELD_HOLDS = { cargoplane: 1, bomber: 2 }; // planes of each type an Airfield has room for
+/**
+ * The Strike Bomber (BOTS.bomber): a sortie loads `ammo` Ammo at its Airfield (and Fuel for the trip), flies to
+ * one target (an enemy building, or a vehicle or robot out in the open, which it chases), drops its bomb (`fall`
+ * s to the ground) and flies home: `damage` to the building it's aimed at (forts no lower than MISSILE_FLOOR),
+ * `splashBld` to other buildings and `botDamage` to robots within `splash` tiles. Back on the ground it needs
+ * `rearm` s before the next sortie. Flak Guns shoot it down.
+ */
+const BOMBER = { ammo: 6, damage: 14, splash: 1.3, splashBld: 4, botDamage: 8, fall: 0.8, rearm: 25 };
 const RUNWAY_LEN = 5, ROLL_ACCEL = 0.42, ROLL_BRAKE = 0.75, PLANE_TURN = 1.1, PLANE_CLIMB = 3;
 const SECLUDED_REACH = 16; // warbots at a cut-off post (a Drop Outpost) only go this far from it: for repairs, rally flags and attacks
 const FOOT_CARRY = 12;     // off the road network (a foothold dropped by air), Workers carry goods by hand between buildings this close
@@ -716,8 +728,8 @@ const BDEFS = {
     cost: { cement: 8, alloy: 3 }, store: true, port: true, naval: true, armor: 14, buildTime: 14, yard: ['cargoship', 'tankship', 'ferry'],
   },
   airfield: {
-    name: 'Airfield', desc: 'A runway and hangar for Cargo Planes (order them at the Bot Foundry). A plane drops a Drop Outpost anywhere on open ground nobody else holds, two Warbots or Workers wherever you like, or keeps a place you supply by air stocked, 8 goods a flight. Haulers bring the Airfield what those places are short of, and Fuel for the planes. It is storage too, like a Depot.',
-    cost: { cement: 10, alloy: 4 }, store: true, airfield: true, armor: 16, buildTime: 16,
+    name: 'Airfield', desc: 'A runway and hangar for a Cargo Plane and two Strike Bombers (order them on its panel: the hangar builds them from Alloy and Chips). A plane drops a Drop Outpost anywhere on open ground nobody else holds, two Warbots or Workers wherever you like, or keeps a place you supply by air stocked, 8 goods a flight. Haulers bring the Airfield what those places are short of, and Fuel for the planes. It is storage too, like a Depot.',
+    cost: { cement: 10, alloy: 4 }, store: true, airfield: true, armor: 16, buildTime: 16, yard: ['cargoplane', 'bomber'],
   },
   dropost: {
     name: 'Drop Outpost', short: 'Drop Outpost',

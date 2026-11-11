@@ -4090,8 +4090,14 @@ function render(dtReal) {
   // A Cargo Plane parked at its Airfield stands on the apron (one an Airfield).
   for (const b of S.buildings) {
     if (b.dead || !BDEFS[b.type].airfield || !b.built || !inView(b.x, b.y, 3)) continue;
-    const pl = S.bots.find((u) => !u.dead && u.inside === b.id && BOTS[u.type].air);
-    if (pl) { const E = runwayEnds(b), f = Math.atan2(E.dy, E.dx); items.push({ ...pl, ent: 'u', parked: true, x: E.x0, y: E.y0, face: f, rface: f, path: null, vel: 0 }); }
+    // (and Strike Bombers on the apron either side of the runway's head)
+    const E = runwayEnds(b), f = Math.atan2(E.dy, E.dx), px = -E.dy, py = E.dx;
+    let side = 0;
+    for (const pl of S.bots) {
+      if (pl.dead || pl.inside !== b.id || !BOTS[pl.type].air) continue;
+      const k = BOTS[pl.type].bomber ? (++side % 2 ? 1 : -1) * 1.15 : 0;
+      items.push({ ...pl, ent: 'u', parked: true, x: E.x0 + px * k + E.dx * (k ? 0.6 : 0), y: E.y0 + py * k + E.dy * (k ? 0.6 : 0), face: f, rface: f, path: null, vel: 0 });
+    }
   }
   // A ship tied up at a Port is drawn at its dock, along the shore (one a Port).
   for (const b of S.buildings) {
@@ -4965,6 +4971,17 @@ function drawRallies(ctx, ox, oy, z) {
 function drawMissiles(ctx, ox, oy, z) {
   for (const m of S.missiles) {
     if (m.nuke) { drawNukeFlight(ctx, m, ox, oy, z); continue; }
+    if (m.bomb) {
+      // A bomb: dropped from the bomber's height, falling onto its target, its shadow growing under it.
+      const k = Math.min(1, m.t / m.dur), gx = ox + lerp(m.x0, m.x1, k) * z, gy = oy + lerp(m.y0, m.y1, k) * z, h = (1 - k * k) * 1.25 * z;
+      ctx.fillStyle = `rgba(0,0,0,${0.15 + 0.25 * k})`; ctx.beginPath(); ctx.ellipse(gx, gy, z * (0.06 + 0.06 * k), z * (0.03 + 0.03 * k), 0, 0, Math.PI * 2); ctx.fill();
+      ctx.save(); ctx.translate(gx + h * 0.7, gy - h); ctx.rotate(Math.atan2(m.y1 - m.y0, m.x1 - m.x0));
+      ctx.fillStyle = '#2b2f33'; ctx.beginPath(); ctx.ellipse(0, 0, z * 0.16, z * 0.055, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = PLAYER_COLORS[m.owner]; ctx.fillRect(-z * 0.03, -z * 0.055, z * 0.04, z * 0.11);
+      ctx.fillStyle = '#4a5056'; ctx.fillRect(-z * 0.2, -z * 0.07, z * 0.05, z * 0.14);
+      ctx.restore();
+      continue;
+    }
     if (m.rocket) {
       // A rocket: a short low arc, a slim body with a flame behind it, and its shadow.
       const k = Math.min(1, m.t / m.dur), k2 = Math.min(1, (m.t + 0.04) / m.dur), hk = (q) => Math.sin(q * Math.PI) * 1.2;
@@ -5645,7 +5662,8 @@ function planeOutline(ctx, L) {
  * bigger and its shadow falls further off down the sun. Engine trails stream behind it in the air.
  */
 function drawPlane(ctx, u, sx, sy, s, alt) {
-  const f = u.rface ?? u.face ?? 0, L = s * (1.6 + 0.85 * alt), off = s * (0.07 + 1.1 * alt);
+  const bomber = !!BOTS[u.type].bomber;
+  const f = u.rface ?? u.face ?? 0, L = s * (1.6 + 0.85 * alt) * (bomber ? 0.72 : 1), off = s * (0.07 + 1.1 * alt);
   ctx.save();
   ctx.translate(sx + off * 0.7, sy + off);
   ctx.rotate(f);
@@ -5657,11 +5675,12 @@ function drawPlane(ctx, u, sx, sy, s, alt) {
     // Engine trails: four faint streaks from the engines under the wing.
     ctx.save(); ctx.translate(sx, sy); ctx.rotate(f);
     const run = L * (0.5 + 0.6 * alt);
-    for (const k of [-0.3, -0.17, 0.17, 0.3]) {
+    for (const k of bomber ? [-0.045, 0.045] : [-0.3, -0.17, 0.17, 0.3]) {
       const g = ctx.createLinearGradient(-L * 0.05, 0, -L * 0.05 - run, 0);
       g.addColorStop(0, `rgba(240,246,255,${0.32 * alt})`); g.addColorStop(1, 'rgba(240,246,255,0)');
       ctx.strokeStyle = g; ctx.lineWidth = Math.max(1, s * 0.05);
-      ctx.beginPath(); ctx.moveTo(-L * 0.05 + Math.abs(k) * L * 0.18, k * L); ctx.lineTo(-L * 0.05 - run, k * L * 1.02); ctx.stroke();
+      const x0 = bomber ? -L * 0.47 : -L * 0.05 + Math.abs(k) * L * 0.18;
+      ctx.beginPath(); ctx.moveTo(x0, k * L); ctx.lineTo(x0 - run, k * L * 1.02); ctx.stroke();
     }
     ctx.restore();
   }

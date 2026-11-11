@@ -1452,6 +1452,23 @@ function homeZone(p) {
   return L && L.owner === p ? S.zone[tIdx(L.x, L.y)] : -2;
 }
 
+/**
+ * The bodies of land player p can build on: its Command Base's, and every one where it holds a built store or
+ * garrison (a Drop Outpost dropped on another island, a Port founded by sea, an Outpost taken in a landing...).
+ * Cached for the tick.
+ */
+let _buildZones = { S: null, key: '', sets: [] };
+function buildZones(p) {
+  const key = S.tick + ':' + S.buildings.length;
+  if (_buildZones.S !== S || _buildZones.key !== key) _buildZones = { S, key, sets: [] };
+  let set = _buildZones.sets[p];
+  if (set) return set;
+  set = new Set([homeZone(p)]);
+  for (const b of S.buildings) if (!b.dead && b.owner === p && b.built && (BDEFS[b.type].store || BDEFS[b.type].mil)) set.add(S.zone[tIdx(b.x, b.y)]);
+  _buildZones.sets[p] = set;
+  return set;
+}
+
 /** Count resource nodes in reach of (cx, cy) that bots there can actually walk to. */
 function reachableRes(cx, cy, radius, type) {
   return countResIn(cx, cy, radius, type, false, S.zone[tIdx(cx, cy)]);
@@ -1528,8 +1545,9 @@ function computeTerritory() {
   const N = W * H;
   const d = S.players.map(() => new Float32Array(N).fill(Infinity));
   for (const b of S.buildings) {
-    if (b.dead || !b.built || !BDEFS[b.type].mil || BDEFS[b.type].bunker) continue; // a Bunker claims no land
-    const r = BDEFS[b.type].terr, r2 = r * r + 0.3;
+    // A Bunker claims no land; a Port founded from a Ferry (b.claim) claims a little round it.
+    if (b.dead || !b.built || ((!BDEFS[b.type].mil || BDEFS[b.type].bunker) && !(b.claim > 0))) continue;
+    const r = b.claim || BDEFS[b.type].terr, r2 = r * r + 0.3;
     for (let j = Math.max(0, b.y - r); j <= Math.min(H - 1, b.y + r); j++) {
       for (let i = Math.max(0, b.x - r); i <= Math.min(W - 1, b.x + r); i++) {
         const dd = dist2(i, j, b.x, b.y);
@@ -1765,9 +1783,10 @@ function canPlace(owner, type, i, j, skipBlockCheck) {
   }
   if (S.ramp[t]) return { ok: false, reason: 'Too steep: this is a slope.' };
   // A Ramp is built from either side of its cliff (see rampStands), so it only needs one side your bots can reach.
-  if (S.zone[t] !== homeZone(owner) && !(def.ramp && rampSides(t).some((u) => S.zone[u] === homeZone(owner) && !S.bAt[u]))) {
+  const zones = buildZones(owner);
+  if (!zones.has(S.zone[t]) && !(def.ramp && rampSides(t).some((u) => zones.has(S.zone[u]) && !S.bAt[u]))) {
     return { ok: false, reason: def.ramp ? 'Your bots can\'t reach either side of this cliff yet.'
-      : 'Your bots cannot reach this spot. Find a slope, or build a Ramp from the side they can reach.' };
+      : 'Your bots cannot reach this spot. Find a slope, or build a Ramp from the side they can reach (on another island, hold an Outpost, Drop Outpost or Port there first).' };
   }
   if (def.ramp) {
     let cliff = false;

@@ -181,6 +181,8 @@ function needsOf(b) {
     // A Depot's supply orders: keep this much of each good here (goods already promised to someone don't count).
     for (const g in b.keep) out.push([g, b.keep[g] - ((b.stock[g] || 0) - (b.res[g] || 0)) - (b.inc[g] || 0), true]);
   }
+  // A Port where a Ferry is loading a kit to found a Port asks for it.
+  if (def.port && b.built) { const kit = foundKitWant(b); if (kit) for (const g in kit) { const n = kit[g] - ((b.stock[g] || 0) - (b.res[g] || 0)) - (b.inc[g] || 0), e = out.find((o) => o[0] === g); if (e) e[1] = Math.max(e[1], n); else out.push([g, n, true]); } }
   // A shipyard or rail yard with orders keeps a round or two of parts (YARD.hopper Alloy and Chips).
   if (def.yard && b.built && hasYardOrders(b)) for (const g of ['alloy', 'chip']) {
     const n = YARD.hopper - ((b.stock[g] || 0) - (b.res[g] || 0)) - (b.inc[g] || 0), e = out.find((o) => o[0] === g);
@@ -223,6 +225,8 @@ function keepSupply(b, g) {
 function airKeep(b) {
   const w = Object.assign({}, airWant(b) || {});
   if (S.bots.some((u) => !u.dead && u.home === b.id && BOTS[u.type].air)) w.fuel = (w.fuel || 0) + AIRFIELD_FUEL;
+  const bombers = S.bots.filter((u) => !u.dead && u.home === b.id && BOTS[u.type].bomber).length;
+  if (bombers) w.ammo = (w.ammo || 0) + BOMBER.ammo * bombers; // a sortie's worth for each of its bombers
   return w;
 }
 
@@ -2738,6 +2742,8 @@ function spawnFromFoundry(b) {
   const u = addBot(b.owner, kind, b.x, b.y);
   addFx('ring', b.x + 0.5, b.y + 0.5, { color: PLAYER_COLORS[b.owner] });
   if (kind === 'warbot') goGarrison(u);
+  // A Rocket Truck rolls off onto open ground beside the Foundry and waits there for orders (its post).
+  if (BOTS[kind].siege) { const t = crawlerPark(u); if (t >= 0) { u.post = { i: t % S.W, j: (t / S.W) | 0 }; u.task = { type: 'park', i: u.post.i, j: u.post.j, home: true }; } }
 }
 
 /** The rivals still in the game (a Versus game's AI colonies), for the hidden boost menu. */
@@ -3952,7 +3958,7 @@ function rocketTargetNear(u) {
   for (const b of S.buildings) {
     if (!rocketTarget(u, b) || !b.built) continue;
     const d = dist(u.x, u.y, b.x + 0.5, b.y + 0.5);
-    if (d > ROCKET.range || d < ROCKET.min) continue;
+    if (d > ROCKET.range - 0.25 || d < ROCKET.min) continue;
     const def = BDEFS[b.type], s = (def.war ? 6 : 0) + (def.mil ? 3 : 0) + (def.barrier ? -4 : 0) - d * 0.2;
     if (s > bs) { bs = s; best = b; }
   }
@@ -3992,8 +3998,10 @@ function updateRocket(u, dt) {
   if (!t) {
     u.deployT = 0;
     if (u.rockets < ROCKET.salvo) { const d = rocketDepot(u); if (d) u.task = { type: 'rearm', bld: d.id }; return; }
-    // Loaded and waiting: an enemy building in reach is fair game.
-    if (S.tick % 30 === u.id % 30) { const b = rocketTargetNear(u); if (b) u.task = { type: 'bombard', target: b.id, auto: true }; }
+    // Back to the spot it was told to hold (u.post), if it's been away (reloading, or after a bombardment).
+    if (u.post && dist2(u.x, u.y, u.post.i + 0.5, u.post.j + 0.5) > 2.5 && S.tick % 30 === u.id % 30) { u.task = { type: 'park', i: u.post.i, j: u.post.j, home: true }; return; }
+    // Loaded and waiting: an enemy building in reach of where it stands is fair game, unless told to hold fire.
+    if (u.stance !== 'hold' && S.tick % 30 === u.id % 30) { const b = rocketTargetNear(u); if (b) u.task = { type: 'bombard', target: b.id, auto: true }; }
     return;
   }
   if (t.type === 'bombard') {
@@ -4016,7 +4024,7 @@ function updateRocket(u, dt) {
       return;
     }
     u.deployT = 0;
-    if (t.auto && d > ROCKET.range + 1) { u.task = null; return; } // it only fires at what comes in reach by itself
+    if (t.auto) { u.task = null; return; } // firing at will, it never leaves its spot: only what's in reach from there
     let r;
     if (d < ROCKET.min) {
       // Too close: back off, straight away from it.
@@ -4039,7 +4047,7 @@ function updateRocket(u, dt) {
       usedGood(u.owner, 'ammo', n);
       u.rockets = Math.min(ROCKET.salvo, u.rockets + Math.round(n * ROCKET.salvo / ROCKET.ammo));
       const back = t.back;
-      u.task = back && getE(back) ? { type: 'bombard', target: back } : null;
+      u.task = back && rocketTarget(u, getE(back)) ? { type: 'bombard', target: back } : null; // (then back to its post: see above)
       return;
     }
     if (travel(u, b.x, b.y, dt) === null) u.task = null;
@@ -4340,7 +4348,7 @@ function selectable(owner, ids) {
 function orderPark(owner, ids, i, j) {
   if (!inMap(i, j) || !walkable(tIdx(i, j))) return 0;
   const trucks = ids.map(getE).filter((u) => u && !u.dead && u.owner === owner && BOTS[u.type].siege);
-  for (const u of trucks) { u.salvo = null; u.deployT = 0; u.path = null; u.task = { type: 'park', i, j }; }
+  for (const u of trucks) { u.salvo = null; u.deployT = 0; u.path = null; u.task = { type: 'park', i, j }; u.post = { i, j }; }
   return trucks.length;
 }
 
@@ -4349,6 +4357,7 @@ function readyForOrder(u) {
   exitBuilding(u);
   cancelTask(u);
   u.fight = 0;
+  u.embarkOn = 0; // a new order: no longer heading to board a Ferry
   u.path = null;
 }
 
@@ -4585,6 +4594,10 @@ function updateMissiles(dt) {
     if (m.shell) {
       if (S.tick % 4 === 0 && m.t < m.dur) { const k = m.t / m.dur; addFx('puff', lerp(m.x0, m.x1, k), lerp(m.y0, m.y1, k) - Math.sin(k * Math.PI) * 2.2, { r: 0.1, life: 0.6 }); }
       if (m.t >= m.dur) shellImpact(m);
+      continue;
+    }
+    if (m.bomb) {
+      if (m.t >= m.dur) bombImpact(m);
       continue;
     }
     if (m.rocket) {
@@ -6059,7 +6072,10 @@ function orderAtYard(b, kind, n) {
 }
 
 /** Can yard b launch what it builds: a Port needs open water at its docks, a Rail Station track beside it. */
-function yardOpen(b) { return BDEFS[b.type].port ? portDocks(b.x, b.y).length > 0 : railPlatforms(b.x, b.y).length > 0; }
+function yardOpen(b, kind) {
+  if (BDEFS[b.type].airfield) return airfieldRoom(b, { type: kind, owner: b.owner });
+  return BDEFS[b.type].port ? portDocks(b.x, b.y).length > 0 : railPlatforms(b.x, b.y).length > 0;
+}
 
 /**
  * A yard at work: a round of parts (1 Alloy, 1 Chip from its own stock) every YARD.work s into the vessel it's
@@ -6077,7 +6093,8 @@ function updateYard(b, def, dt) {
   const kind = nextYardKind(b);
   if (!kind) { b.yardStatus = ''; return; }
   const name = BOTS[kind].name, need = BOTS[kind].parts || 1, have = (b.yardParts && b.yardParts[kind]) || 0;
-  if (!yardOpen(b)) { b.yardStatus = def.port ? `Can't launch a ${name}: no open water at its docks` : `Can't build a ${name}: lay track beside the station`; return; }
+  if (BOTS[kind].war && !warOn()) { b.yardStatus = ''; return; }
+  if (!yardOpen(b, kind)) { b.yardStatus = def.airfield ? `The hangar is full: room for ${AIRFIELD_HOLDS[kind] || 1} ${(AIRFIELD_HOLDS[kind] || 1) === 1 ? name : BOTS[kind].plural}` : def.port ? `Can't launch a ${name}: no open water at its docks` : `Can't build a ${name}: lay track beside the station`; return; }
   if (botCount(b.owner) >= (S.mode === 'colony' ? MAX_BOTS_COLONY : MAX_BOTS)) { b.yardStatus = 'Bot limit reached'; return; }
   const free = (g) => (b.stock[g] || 0) - (b.res[g] || 0);
   if (free('alloy') < 1 || free('chip') < 1) { b.yardStatus = `Building a ${name} (part ${have + 1} of ${need}): waiting for ${free('alloy') < 1 ? (free('chip') < 1 ? 'Alloy and Chips' : 'Alloy') : 'Chips'}`; b.yardT = 0; return; }
@@ -6104,8 +6121,9 @@ function launchFromYard(b, kind) {
   const u = addBot(b.owner, kind, b.x + 0.5, b.y + 0.5);
   enterBuilding(u, b);
   if (BOTS[kind].ferry) { u.home = b.id; computeZones(); }
+  if (BOTS[kind].air) { u.home = b.id; u.bat = 100; }
   addFx('ring', b.x + 0.5, b.y + 0.5, { color: PLAYER_COLORS[b.owner], r: 1.8 });
-  postMsg(b.owner, BOTS[kind].sea ? `A ${BOTS[kind].name} was launched at the Port.` : `A ${BOTS[kind].name} rolled out of the rail yard.`, b.x, b.y, 'good');
+  postMsg(b.owner, BOTS[kind].sea ? `A ${BOTS[kind].name} was launched at the Port.` : BOTS[kind].air ? `A ${BOTS[kind].name} rolled out of the hangar.` : `A ${BOTS[kind].name} rolled out of the rail yard.`, b.x, b.y, 'good');
   if (b.owner === 0) sfx('complete');
 }
 
@@ -6671,6 +6689,16 @@ function sailTo(u, dest) {
  */
 function updateFerry(u, dt) {
   if (u.landing) { doLanding(u, dt); return; }
+  // Under your orders: it sails where it was told and waits there (see orderSail).
+  if (u.manual) {
+    if (u.path) { if (moveAlong(u, dt)) u.path = null; return; }
+    // Warbots sent to board it (right-click the Ferry) come aboard once they're beside it.
+    if (S.tick % 15 === u.id % 15) {
+      const ids = S.bots.filter((v) => !v.dead && v.embarkOn === u.id && !v.inside && dist2(v.x, v.y, u.x, u.y) <= FERRY_REACH * FERRY_REACH).map((v) => v.id);
+      if (ids.length && typeof embarkWarbots(u.owner, u, ids) === 'number') for (const id of ids) { const v = getE(id); if (v) v.embarkOn = 0; }
+    }
+    return;
+  }
   const home = getE(u.home);
   const far = home && !home.dead && home.ferryTo ? getE(home.ferryTo) : null;
   const line = !!(home && far && !far.dead && far.built && home.built && far.ferryTo === home.id && far.owner === u.owner);
@@ -6702,16 +6730,144 @@ function updateFerry(u, dt) {
   if ((n && (seats <= 0 || S.time - u.boardT >= FERRY_WAIT)) || (!n && waitingThere)) sailTo(u, other);
 }
 
-/** A Ferry tied up at Port `to` lets its passengers off: each carries on along its route from there. */
+/** A Ferry tied up at Port `to` lets its passengers off: each carries on along its route from there (warbots you put aboard go back to a garrison). */
 function unloadFerry(u, to) {
   const t = to.y * S.W + to.x;
   for (const v of ferryAboard(u)) {
+    const manual = v.ferryWait && v.ferryWait.manual;
     v.ferryWait = null;
     v.inside = 0;
     v.x = to.x + 0.5; v.y = to.y + 0.5; v.vel = 0;
     if (v.path && v.path[v.pi] === t) v.pi++; else v.path = null;
+    if (manual) { v.task = null; if (v.type === 'warbot') goGarrison(v); }
   }
   u.aboard = [];
+}
+
+/* Ferries under your orders: sail anywhere, take warbots aboard off a beach, put them ashore, back to the line. */
+
+const FERRY_REACH = 2.6; // how near the Ferry robots must be to come aboard, and land must be to put them ashore
+
+/**
+ * Ferry f sails to tile (i, j) (open water, or the water off a shore tile; one of your Ports: it ties up there
+ * and goes back to its line) and waits there under your orders (f.manual). '' or why not.
+ */
+function orderSail(owner, f, i, j) {
+  if (!f || f.dead || f.owner !== owner || !BOTS[f.type].ferry) return 'Pick one of your Ferries.';
+  if (f.landing) return 'That Ferry is out on a voyage: wait for it to finish.';
+  if (!inMap(i, j)) return 'Outside the map.';
+  const t = tIdx(i, j), comp = seaNet().comp, comps = shipComps(f);
+  const port = S.bAt[t] ? getE(S.bAt[t]) : null;
+  if (port && port.owner === owner && BDEFS[port.type].port && port.built) {
+    if (!portComps(port).some((c) => comps.includes(c))) return 'The Ferry can\'t sail to that Port.';
+    f.manual = null;
+    if (f.inside === port.id) return '';
+    return sailTo(f, port) ? '' : 'The Ferry can\'t find a way there by water.';
+  }
+  const ok = (S.terrain[t] === T_WATER && comps.includes(comp[t])) || portDocks(i, j).some((d) => comps.includes(comp[d]));
+  if (!ok) return 'Pick open water the Ferry can sail to, or a spot on the shore.';
+  // Passengers waiting at a Port for a crossing get off; warbots you put aboard stay.
+  if (f.inside) for (const v of ferryAboard(f)) if (!v.ferryWait.manual) { v.ferryWait.ferry = 0; f.aboard = f.aboard.filter((id) => id !== v.id); }
+  if (!goTo(f, i, j)) return 'The Ferry can\'t find a way there by water.';
+  f.manual = { i, j }; f.sailTo = 0;
+  ferryChanged();
+  return '';
+}
+
+/** Free seats on Ferry f. */
+function ferrySeats(f) { let n = FERRY_SEATS; for (const v of ferryAboard(f)) n -= seatsFor(v); return n; }
+
+/**
+ * Warbots of yours standing within FERRY_REACH of Ferry f (only those in `ids`, if given) come aboard, as many as
+ * there are seats. The Ferry has to be afloat at the shore (or at a Port). Returns how many, or why not.
+ */
+function embarkWarbots(owner, f, ids) {
+  if (!f || f.dead || f.owner !== owner || !BOTS[f.type].ferry) return 'Pick one of your Ferries.';
+  if (f.landing || f.path) return 'Wait for the Ferry to stop.';
+  const hold = getE(f.home) && !getE(f.home).dead ? getE(f.home) : nearestPort(f);
+  if (!hold) return 'The Ferry needs a Port of yours.';
+  const at = f.inside ? getE(f.inside) : null, fx = at ? at.x + 0.5 : f.x, fy = at ? at.y + 0.5 : f.y;
+  let seats = ferrySeats(f), n = 0;
+  const cands = S.bots.filter((v) => !v.dead && v.owner === owner && v.type === 'warbot' && !v.inside && !v.ferryWait && !v.dropping && (!ids || ids.includes(v.id)) && dist2(v.x, v.y, fx, fy) <= FERRY_REACH * FERRY_REACH);
+  cands.sort((a, b) => dist2(a.x, a.y, fx, fy) - dist2(b.x, b.y, fx, fy));
+  for (const v of cands) {
+    if (seats < 1) break;
+    cancelTask(v); v.path = null; v.task = null; v.fight = 0;
+    v.ferryWait = { at: 0, to: 0, landing: 0, ferry: f.id, since: S.time, manual: 1 };
+    v.inside = hold.id; // aboard (kept out of sight, like a beach landing's passengers)
+    (f.aboard = f.aboard || []).push(v.id);
+    seats--; n++;
+  }
+  if (!n) return cands.length ? 'The Ferry is full.' : `No warbots of yours within ${Math.round(FERRY_REACH)} tiles of the Ferry: bring them right up to it.`;
+  ferryChanged();
+  return n;
+}
+
+/** Ferry f puts the warbots aboard ashore on the land beside it, holding the beach under a rally flag. '' or why not. */
+function disembark(owner, f) {
+  if (!f || f.dead || f.owner !== owner || !BOTS[f.type].ferry) return 'Pick one of your Ferries.';
+  if (f.landing || f.path) return 'Wait for the Ferry to stop.';
+  const pass = ferryAboard(f);
+  if (!pass.length) return 'Nobody is aboard.';
+  if (f.inside) { unloadFerry(f, getE(f.inside)); return ''; }
+  let best = -1, bd = Infinity;
+  const r = Math.ceil(FERRY_REACH);
+  for (let dj = -r; dj <= r; dj++) for (let di = -r; di <= r; di++) {
+    const i = Math.floor(f.x) + di, j = Math.floor(f.y) + dj;
+    if (!inMap(i, j)) continue;
+    const t = tIdx(i, j), d = dist2(i + 0.5, j + 0.5, f.x, f.y);
+    if (S.terrain[t] !== T_GROUND || S.bAt[t] || !walkable(t) || d > FERRY_REACH * FERRY_REACH || d >= bd) continue;
+    bd = d; best = t;
+  }
+  if (best < 0) return 'Sail the Ferry right up to the shore first.';
+  const ox = (best % S.W) + 0.5, oy = ((best / S.W) | 0) + 0.5;
+  let rl = S.rallies.find((q) => q.owner === owner && Math.abs(q.x - ox) < 1.5 && Math.abs(q.y - oy) < 1.5);
+  if (!rl) { rl = { id: S.nextId++, owner, x: ox, y: oy }; S.rallies.push(rl); }
+  let slot = rallyMembers(rl.id).length;
+  for (const v of pass) {
+    v.ferryWait = null; v.inside = 0; v.x = ox; v.y = oy; v.path = null; v.vel = 0;
+    v.task = v.type === 'warbot' ? { type: 'hold', rally: rl.id, slot: slot++ } : null;
+  }
+  f.aboard = [];
+  const foe = S.owner[best];
+  if (foe >= 0 && foe !== owner) { postMsg(foe, 'Enemy warbots have landed on your shore!', ox, oy, 'bad'); if (foe === 0) sfx('alert'); }
+  ferryBack(f); // then home to its Port and its line
+  return '';
+}
+
+/**
+ * Send warbots `ids` to board Ferry f: they walk to the shore beside it and come aboard there (it has to be
+ * waiting off a shore under your orders). Returns how many were sent, or why not.
+ */
+function orderBoardFerry(owner, ids, f) {
+  if (!f || f.dead || f.owner !== owner || !BOTS[f.type].ferry) return 'Pick one of your Ferries.';
+  if (f.inside) return 'At a Port, robots board the Ferry by its ferry line.';
+  let best = -1, bd = Infinity;
+  const r = Math.ceil(FERRY_REACH);
+  for (let dj = -r; dj <= r; dj++) for (let di = -r; di <= r; di++) {
+    const i = Math.floor(f.x) + di, j = Math.floor(f.y) + dj;
+    if (!inMap(i, j)) continue;
+    const t = tIdx(i, j), d = dist2(i + 0.5, j + 0.5, f.x, f.y);
+    if (S.terrain[t] !== T_GROUND || S.bAt[t] || !walkable(t) || d > (FERRY_REACH - 0.3) ** 2 || d >= bd) continue;
+    bd = d; best = t;
+  }
+  if (best < 0) return 'The Ferry isn\'t at a shore: sail it right up to the land first.';
+  const bi = best % S.W, bj = (best / S.W) | 0;
+  const n = orderMove(owner, ids.filter((id) => { const v = getE(id); return v && v.type === 'warbot'; }), bi, bj);
+  if (!n) return 'None of them can walk there.';
+  for (const id of ids) { const v = getE(id); if (v && v.type === 'warbot' && v.task) v.embarkOn = f.id; }
+  if (!f.manual) f.manual = { i: Math.floor(f.x), j: Math.floor(f.y) }; // it waits there for them
+  return n;
+}
+
+/** Ferry f goes back to its Port and its line (warbots you put aboard get off there and head for a garrison). */
+function ferryBack(f) {
+  if (!f || f.dead || !BOTS[f.type].ferry) return;
+  f.manual = null;
+  const home = getE(f.home), dest = home && !home.dead && home.owner === f.owner ? home : nearestPort(f);
+  if (f.inside) unloadFerry(f, getE(f.inside));
+  else if (dest) sailTo(f, dest);
+  ferryChanged();
 }
 
 /** A ferry line or a Ferry came or went: routes and reachable areas change. */
@@ -6764,6 +6920,60 @@ function landingBlocked(owner, f, i, j) {
   return '';
 }
 
+/** Why Ferry f can't found a Port on shore tile (i, j), or '' if it can (see PORT_FOUND). */
+function foundPortBlocked(owner, f, i, j) {
+  if (!f || f.dead || f.owner !== owner || !BOTS[f.type].ferry) return 'Pick one of your Ferries.';
+  if (f.landing) return 'That Ferry is already out on a voyage.';
+  const port = f.inside ? getE(f.inside) : null;
+  if (!port || !BDEFS[port.type].port || f.path) return 'The Ferry must be tied up at a Port.';
+  if (!inMap(i, j)) return 'Outside the map.';
+  const t = tIdx(i, j);
+  if (S.terrain[t] !== T_GROUND || S.bAt[t] || S.res[t] || S.road[t] || S.plan[t] || S.ramp[t] || (S.rail && S.rail[t]) || scorched(t) || runwayAt(t)) return 'Pick open, empty ground on the shore (no road, deposit or building).';
+  if (S.owner[t] >= 0 && S.owner[t] !== owner) return 'Not on land someone else holds.';
+  if (S.wildlife && S.buildings.some((e) => !e.dead && BDEFS[e.type].wild && Math.max(Math.abs(e.x - i), Math.abs(e.y - j)) <= WILD.clear)) return 'Too close to a creature nest.';
+  const docks = portDocks(i, j), comps = shipComps(f), comp = seaNet().comp;
+  if (!docks.length) return 'A Port goes right at the water\'s edge, beside open water wide enough for ships.';
+  if (!docks.some((d) => comps.includes(comp[d]))) return 'The Ferry can\'t sail there from this Port.';
+  return '';
+}
+
+/**
+ * Ferry f, tied up at a Port, founds a Port on shore tile (i, j): it loads PORT_FOUND.cost at its Port (waiting
+ * for haulers to bring it there) and up to PORT_FOUND.workers idle Workers who can get to that Port, sails, and
+ * puts the Port up on arrival, claiming PORT_FOUND.claim tiles of land round it. Returns '' or why not.
+ */
+function orderFoundPort(owner, f, i, j) {
+  const why = foundPortBlocked(owner, f, i, j);
+  if (why) return why;
+  const port = getE(f.inside), zone = S.zone[tIdx(port.x, port.y)];
+  const cands = S.bots.filter((v) => !v.dead && v.owner === owner && v.type === 'worker' && !v.carry && !v.ferryWait && (!v.task || v.task.type === 'home') && S.zone[tIdx(Math.floor(v.x), Math.floor(v.y))] === zone);
+  cands.sort((a, c) => dist2(a.x, a.y, port.x, port.y) - dist2(c.x, c.y, port.x, port.y));
+  let sent = 0;
+  for (const v of cands.slice(0, PORT_FOUND.workers)) { cancelTask(v); exitBuilding(v); v.path = null; v.task = { type: 'board', port: port.id, ferry: f.id }; sent++; }
+  for (const v of ferryAboard(f)) v.ferryWait.ferry = 0; // line passengers get off and wait for the next sailing
+  f.aboard = [];
+  f.landing = { x: i, y: j, phase: 'gather', since: S.time, n: sent, found: true, loaded: false };
+  ferryChanged();
+  return '';
+}
+
+/** The kit Ferries tied up at Port b are waiting to load there for founding a Port (for its supply requests). */
+function foundKitWant(b) {
+  for (const u of S.bots) if (!u.dead && u.owner === b.owner && u.inside === b.id && u.landing && u.landing.found && !u.landing.loaded) return PORT_FOUND.cost;
+  return null;
+}
+
+/** A Ferry founding a Port has reached the shore: up goes the Port (if the spot's still free), the Workers go ashore. */
+function foundPortAt(u, L) {
+  const t = tIdx(L.x, L.y);
+  if (S.terrain[t] !== T_GROUND || S.bAt[t] || S.res[t] || S.road[t] || S.ramp[t] || (S.owner[t] >= 0 && S.owner[t] !== u.owner) || !portDocks(L.x, L.y).length) return null;
+  const b = addBuilding(u.owner, 'port', L.x, L.y, true);
+  b.claim = PORT_FOUND.claim;
+  computeTerritory();
+  addFx('ring', L.x + 0.5, L.y + 0.5, { color: PLAYER_COLORS[u.owner], r: PORT_FOUND.claim });
+  return b;
+}
+
 function orderLanding(owner, f, i, j, count) {
   const why = landingBlocked(owner, f, i, j);
   if (why) return why;
@@ -6803,6 +7013,27 @@ function doLanding(u, dt) {
     }
     const aboard = ferryAboard(u).length;
     const coming = S.bots.some((v) => !v.dead && v.task && v.task.type === 'board' && v.task.ferry === u.id);
+    if (L.found) {
+      // Founding a Port: load the kit from this Port's stock (haulers bring it), then sail with whoever's aboard.
+      if (!L.loaded) {
+        const kit = PORT_FOUND.cost;
+        if (Object.keys(kit).every((g) => (port.stock[g] || 0) - (port.res[g] || 0) >= kit[g])) {
+          for (const g in kit) { bump(port.stock, g, -kit[g]); usedGood(u.owner, g, kit[g]); }
+          L.loaded = true; L.from = port.id;
+        } else return;
+      }
+      if (coming && S.time - L.since < LANDING_GATHER) return;
+      for (const v of S.bots) if (!v.dead && v.task && v.task.type === 'board' && v.task.ferry === u.id) v.task = null; // too late: they stay behind
+      if (!goTo(u, L.x, L.y)) {
+        for (const g in PORT_FOUND.cost) bump(port.stock, g, PORT_FOUND.cost[g]);
+        for (const v of ferryAboard(u)) { v.ferryWait = null; v.inside = 0; v.task = null; }
+        u.aboard = []; u.landing = null; ferryChanged();
+        postMsg(u.owner, 'The Ferry can\'t find a way by water to that shore: the Port kit is unloaded again.', L.x, L.y, 'warn');
+        return;
+      }
+      L.phase = 'sail';
+      return;
+    }
     if (aboard && (!coming || S.time - L.since > LANDING_GATHER)) {
       if (!goTo(u, L.x, L.y)) {
         for (const v of ferryAboard(u)) { v.ferryWait = null; v.inside = 0; v.task = null; }
@@ -6815,6 +7046,29 @@ function doLanding(u, dt) {
     return;
   }
   if (!moveAlong(u, dt)) return;
+  if (L.found) {
+    const b = foundPortAt(u, L), ox = L.x + 0.5, oy = L.y + 0.5;
+    let n = 0;
+    for (const v of ferryAboard(u)) { v.ferryWait = null; v.inside = 0; v.x = ox; v.y = oy; v.path = null; v.vel = 0; v.task = null; n++; }
+    u.aboard = []; u.landing = null; u.path = null;
+    if (b) {
+      postMsg(u.owner, `The Ferry founded a Port on the shore${n ? ` and landed ${n} Worker${n === 1 ? '' : 's'}` : ''}: you can build on the land round it.`, L.x, L.y, 'good');
+      if (u.owner === 0) sfx('complete');
+      // Home again, running a ferry line to the new Port if its own Port has none.
+      const home = getE(L.from) || getE(u.home);
+      if (home && !home.dead && home.owner === u.owner && !home.ferryTo && seaLinked(home, b)) setFerryLine(home, b);
+      if (home && !home.dead && home.owner === u.owner && sailTo(u, home)) u.home = home.id; else enterBuilding(u, b);
+    } else {
+      // The spot was taken while it sailed: the kit goes back to its Port.
+      const home = getE(L.from);
+      if (home && !home.dead) for (const g in PORT_FOUND.cost) bump(home.stock, g, PORT_FOUND.cost[g]);
+      postMsg(u.owner, 'The shore was taken before the Ferry got there: no Port, and the kit goes back.', L.x, L.y, 'warn');
+      const h = getE(u.home);
+      if (!(h && !h.dead && h.owner === u.owner && sailTo(u, h))) { const p2 = nearestPort(u); if (p2) sailTo(u, p2); }
+    }
+    ferryChanged();
+    return;
+  }
   // Ashore: the warbots hold the beach under a rally flag.
   const ox = L.x + 0.5, oy = L.y + 0.5;
   let r = S.rallies.find((q) => q.owner === u.owner && Math.abs(q.x - ox) < 1.5 && Math.abs(q.y - oy) < 1.5);
@@ -7108,7 +7362,7 @@ function sortieFuel(u, b, x, y) { return Math.min(100, flightFuel(u, 2 * dist(b.
 
 /** Why owner's plane u can't drop `kind` ('outpost', 'warbot' or 'worker') at tile (i, j); '' if it can. */
 function airdropBlocked(owner, u, kind, i, j) {
-  if (!u || u.dead || u.owner !== owner || !BOTS[u.type].air) return 'Pick one of your Cargo Planes.';
+  if (!u || u.dead || u.owner !== owner || !BOTS[u.type].air || BOTS[u.type].bomber) return 'Pick one of your Cargo Planes.';
   const base = planeBase(u);
   if (!base || u.inside !== base.id) return 'The plane must be parked at its Airfield.';
   if (u.mission) return 'That plane is already on a flight.';
@@ -7215,9 +7469,17 @@ function updatePlane(u, dt) {
   // In the air: burn Fuel, fly on.
   if (u.flight) {
     u.bat = Math.max(0, u.bat - PLANE_BURN * dt * drainMul(u));
-    const F = u.flight, ev = flyStep(u, dt);
+    const F = u.flight;
+    // On a strike: it follows a moving target, and turns for home if the target's gone.
+    if (M && M.kind === 'strike' && M.phase === 'out' && !F.home) {
+      const tg = getE(M.target);
+      if (!strikeTarget(u, tg)) { u.mission = null; headHome(u); }
+      else if (!BDEFS[tg.type]) { F.tx = tg.x; F.ty = tg.y; }
+    }
+    const ev = flyStep(u, dt);
     if (ev === 'over') {
-      if (M && M.phase === 'out' && !F.home) airDrop(u);
+      if (M && M.phase === 'out' && !F.home && M.kind === 'strike') bombDrop(u);
+      else if (M && M.phase === 'out' && !F.home) airDrop(u);
       else if (F.fixes && F.fixes.length) [F.tx, F.ty] = F.fixes.shift();
       else if (F.home) F.ph = 'final';
     } else if (ev === 'parked') {
@@ -7239,6 +7501,7 @@ function updatePlane(u, dt) {
   }
   // Parked: mended, and Fuel topped up when it's low.
   if (u.hp < u.maxHp) u.hp = Math.min(u.maxHp, u.hp + PLANE_MEND * dt);
+  if (BOTS[u.type].bomber) { bomberOnGround(u, base, dt); return; }
   if (!M) {
     if (u.bat < 100 - PLANE_FILL + 1 && S.tick % 15 === u.id % 15) fuelPlane(u, base, 100 - PLANE_FILL + 1);
     if (S.tick % 30 !== u.id % 30) return;
@@ -7301,9 +7564,118 @@ function airDrop(u) {
   headHome(u);
 }
 
-/** A plane parked at Airfield b after a flight: anything it still carries is unloaded there. */
+/** A plane parked at Airfield b after a flight: anything it still carries is unloaded there (a bomb it didn't drop goes back into Ammo). */
 function landed(u, b) {
   if (u.cargo) { for (const g in u.cargo) bump(b.stock, g, u.cargo[g]); u.cargo = null; }
+  if (BOTS[u.type].bomber) {
+    if (u.bombLoad) { bump(b.stock, 'ammo', u.bombLoad); u.bombLoad = 0; }
+    u.rearmUntil = S.time + BOMBER.rearm;
+  }
+}
+
+/* ------------------------------------------------------------------ Strike Bombers */
+
+/** Can bomber u strike `t`: an enemy building, or an enemy vehicle, ship or robot out in the open (not in the air)? */
+function strikeTarget(u, t) {
+  if (!t || t.dead || t.owner === u.owner || t.owner < 0) return false;
+  if (BDEFS[t.type]) return !BDEFS[t.type].wild && t.type !== 'nest';
+  const bt = BOTS[t.type];
+  return !!bt && !bt.air && !bt.wild && !t.inside && !t.dropping;
+}
+
+/** Why owner's bomber u can't strike `t` (a building or a bot), or '' if it can. */
+function strikeBlocked(owner, u, t) {
+  if (!u || u.dead || u.owner !== owner || !BOTS[u.type].bomber) return 'Pick one of your Strike Bombers.';
+  const base = planeBase(u);
+  if (!base || u.inside !== base.id) return 'The bomber must be parked at its Airfield.';
+  if (u.mission) return 'That bomber already has a target.';
+  if (!strikeTarget(u, t)) return 'Pick an enemy building, or an enemy vehicle or robot out in the open.';
+  const tx = BDEFS[t.type] ? t.x + 0.5 : t.x, ty = BDEFS[t.type] ? t.y + 0.5 : t.y;
+  if (sortieFuel(u, base, tx, ty) > 99.5) return `Too far: a full tank takes the bomber ${planeReach(u)} tiles out and back.`;
+  return '';
+}
+
+/** Send bomber u at `t`: it loads its bomb and Fuel at its Airfield, then takes off. '' or why not. */
+function orderStrike(owner, u, t) {
+  const why = strikeBlocked(owner, u, t);
+  if (why) return why;
+  u.mission = { kind: 'strike', target: t.id, phase: 'load', since: S.time };
+  return '';
+}
+
+/** A bomber on the ground: rearming after a sortie, then loading its bomb and Fuel for the next one and taking off. */
+function bomberOnGround(u, base, dt) {
+  const M = u.mission;
+  if (u.bat < 100 - PLANE_FILL + 1 && S.tick % 15 === u.id % 15) fuelPlane(u, base, 100 - PLANE_FILL + 1);
+  if (!M || M.kind !== 'strike' || M.phase !== 'load') return;
+  const tg = getE(M.target);
+  if (!strikeTarget(u, tg)) { u.mission = null; return; }
+  if (u.rearmUntil > S.time) return;
+  if (!u.bombLoad) {
+    if ((base.stock.ammo || 0) - (base.res.ammo || 0) < BOMBER.ammo) {
+      M.noAmmo = 1;
+      const P = S.players[u.owner];
+      if (u.owner === 0 && S.time - (P.bombAmmoMsg || -999) > 90) { P.bombAmmoMsg = S.time; postMsg(u.owner, `A Strike Bomber is waiting for Ammo: it needs ${BOMBER.ammo} at its Airfield (haulers bring it).`, base.x, base.y, 'warn'); }
+      return;
+    }
+    M.noAmmo = 0;
+    bump(base.stock, 'ammo', -BOMBER.ammo);
+    usedGood(u.owner, 'ammo', BOMBER.ammo);
+    u.bombLoad = BOMBER.ammo;
+  }
+  const tx = BDEFS[tg.type] ? tg.x + 0.5 : tg.x, ty = BDEFS[tg.type] ? tg.y + 0.5 : tg.y;
+  if (!fuelPlane(u, base, sortieFuel(u, base, tx, ty))) { M.noFuel = 1; return; }
+  M.noFuel = 0;
+  M.phase = 'out';
+  startTakeoff(u, base, tx, ty);
+  if (u.owner === 0) sfx('takeoff');
+}
+
+/** Bomber u is over its target: the bomb falls (BOMBER.fall s), and it turns for home. */
+function bombDrop(u) {
+  const M = u.mission, tg = getE(M.target);
+  const bld = tg && BDEFS[tg.type];
+  // A vehicle on the move is led: the bomb's aimed where it will be when it lands.
+  const lead = !bld && tg && (tg.vel || 0) > 0.05 ? (tg.vel || 0) * BOMBER.fall : 0, fa = tg ? tg.face || 0 : 0;
+  const x1 = bld ? tg.x + 0.5 : tg ? tg.x + Math.cos(fa) * lead : u.x, y1 = bld ? tg.y + 0.5 : tg ? tg.y + Math.sin(fa) * lead : u.y;
+  S.missiles.push({ bomb: true, owner: u.owner, from: u.id, target: M.target, t: 0, dur: BOMBER.fall, x0: u.x, y0: u.y, x1, y1 });
+  u.bombLoad = 0;
+  u.mission = null;
+  headHome(u);
+  if (u.owner === 0 || (tg && tg.owner === 0)) sfx('chute');
+}
+
+/** A bomb lands: BOMBER.damage off the building it was aimed at, and harm to what's round it. */
+function bombImpact(m) {
+  blastFx(m.x1, m.y1, 1.0);
+  sfx('boom');
+  const tg = getE(m.target);
+  const s2 = BOMBER.splash * BOMBER.splash;
+  if (tg && BDEFS[tg.type] && !tg.dead && tg.owner !== m.owner && Math.floor(m.x1) === tg.x && Math.floor(m.y1) === tg.y) bombHit(tg, BOMBER.damage, m.owner);
+  for (const e of S.buildings.slice()) {
+    if (e === tg || e.dead || e.owner === m.owner || e.owner < 0 || BDEFS[e.type].wild || dist2(e.x + 0.5, e.y + 0.5, m.x1, m.y1) > s2) continue;
+    bombHit(e, BOMBER.splashBld, m.owner);
+  }
+  for (const u of S.bots) {
+    if (u.dead || u.inside || u.owner === m.owner || BOTS[u.type].wild || BOTS[u.type].air || dist2(u.x, u.y, m.x1, m.y1) > s2) continue;
+    damageBot(u, u === tg ? BOMBER.botDamage * 2 : BOMBER.botDamage); // a direct hit on a vehicle does double
+  }
+}
+
+function bombHit(b, dmg, by) {
+  const def = BDEFS[b.type];
+  b.armor -= keepShield(b, dmg);
+  b.lastHit = S.time;
+  if (by >= 0) (S.players[b.owner].hitBy = S.players[b.owner].hitBy || {})[by] = S.time;
+  if (b.built && def.mil) { const f = missileFloor(b); if (b.armor < f) b.armor = Math.min(f, b.armor + dmg); return; }
+  if (b.armor <= 0) {
+    postMsg(by, `Your bomber destroyed the enemy ${def.name}.`, b.x, b.y, 'good');
+    postMsg(b.owner, `An enemy bomber destroyed your ${def.name}!`, b.x, b.y, 'bad');
+    destroyBuilding(b, true);
+  } else if (S.time - (b.lastAlert || -99) > 12) {
+    b.lastAlert = S.time;
+    postMsg(b.owner, `An enemy bomber hit your ${def.name}!`, b.x, b.y, 'bad');
+  }
 }
 
 /** Plane u lost its flight (shot down, or its base went): reserved goods are let go, a kit is refunded, passengers get off. */

@@ -70,7 +70,7 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
 | Disruptor Tower | A pulse every 2½ s jams enemy robots' guns within 4½ tiles for 2 s (`jam`) and drains 10 battery; kills nothing itself; 1 Fuel per 4 pulses |
 | Mortar Pit | Shells where enemies bunch up, 3–10 tiles out: 6 damage, 3 within 1½ tiles, up to 6 robots a shell (`most`); 3 shells per Ammo |
 | Keep | 14 Cement, 6 Alloy, 2 Chips: a fortified base with a roof cannon (Crystal, 6 tiles) and 6 warbots firing from cover (4 tiles); claims land; captured, not wrecked. Within 7 tiles (`KEEP.aura`) Walls/Gates take damage ÷1.5 and mend after 8 s quiet, and defences get +1 range and ×0.8 reload (`auraRange`, `auraRate`); 16 tiles apart. AI: one (a Turtle up to three) |
-| Rocket Truck (Foundry) | Mobile siege launcher (`ROCKET`): parks 4–11 tiles from a building and fires 4 rockets (5 each, splash 2 to buildings, 4 to robots), reloads 4 Ammo at a garrison or storage; forts stop at `MISSILE_FLOOR`; 14 hp. AI builds 1–3 and hunts the enemy's |
+| Rocket Truck (Foundry) | Mobile siege launcher (`ROCKET`): parks 4–11 tiles from a building and fires 4 rockets (5 each, splash 2 to buildings, 4 to robots), reloads 4 Ammo at a garrison or storage; forts stop at `MISSILE_FLOOR`; 14 hp. AI builds 1–3 and hunts the enemy's  A new one rolls off the Foundry to a post (`u.post`) it returns to after reloading; `u.stance` `hold` fires only on orders, otherwise it shells what comes in reach of its post without moving |
 | Depot | Extra storage, shortens hauling trips; give it supply orders to stock it as a forward base |
 | Trade Terminal | Bulk trade, one per colony, 16+ tiles from the Command Base (`TERMINAL`): 3 contracts at a time (new every 5 min), a lot of 30 of one good for Ore, Crystal, Stone or Fiber at 65% of worth (`TRADE_VALUE`), +1.5%/tile beyond 16 (max +25%), each lot sold fetching 12% less for a while; served only by Road Trains and Freight Trains (`terminalSpare`, `updateTerminal`); its goods can't be spent until a train takes them home |
 | Ramp | Planned in Paths: cuts a slope into a one-level cliff so bots can climb it; counts as road |
@@ -214,8 +214,7 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
 - **Air: Airfields, the Cargo Plane and air drops** (every map). An **Airfield** (10 Cement, 4 Alloy; Build → Move) is
   a hangar with a runway `RUNWAY_LEN` (5) tiles long running straight out from it (`runwayDir`: the first of east, west,
   south, north with open, level ground of yours; kept in `b.rwy`, and nothing else goes on it: `runwayAt`). It is storage
-  like a Depot. A **Cargo Plane** (6 rounds at the Bot Foundry; `AIRFIELD_HOLDS`: one per Airfield, a spare waits at the
-  Foundry) is based there (`u.home`, parked at the runway head). One load a flight (`u.mission`), dropped by parachute
+  like a Depot. A **Cargo Plane** (6 rounds, built in the Airfield's hangar: `BDEFS.airfield.yard`, `updateYard`; `AIRFIELD_HOLDS`: one per Airfield) is based there (`u.home`, parked at the runway head). One load a flight (`u.mission`), dropped by parachute
   (`S.drops`, `AIR_DROP_FALL` s to come down): a **Drop Outpost** kit (6 Cement, 3 Alloy, paid from storage: a small
   outpost on any open ground nobody else holds; `terr` 4, garrison 2, `ammoStock` 4, storage, a 2-slot Fuel charger),
   two robots (Warbots from garrisons as for a march, or idle Workers, who board at the Airfield: the `board` task and
@@ -237,7 +236,16 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
   Warbots posted to a cut-off post (`secluded`: supplied by air, or where they can't walk to the Command Base) stay with
   it: they recharge and reload there, go for repairs, rally flags and attacks only within `SECLUDED_REACH` (16) of it,
   and dropped beside a garrison of yours they're posted to it.
-  The AI never flies Cargo Planes (it may get bombers, used seldom, when they come).
+  The AI never flies Cargo Planes.
+- **Strike Bombers** (Versus; `BOTS.bomber`, `BOMBER`): built in an Airfield's hangar, two to a hangar. A sortie
+  (`orderStrike`, `strikeBlocked`: parked, in reach of a full tank) loads `BOMBER.ammo` (6) Ammo at its Airfield (which
+  keeps that much a bomber, `airKeep`) and Fuel, flies out like a Cargo Plane and over the target drops one bomb
+  (`bombDrop`; a vehicle on the move is led, and a target that's gone sends it home): `damage` 14 to the building aimed at
+  (forts held at `missileFloor`), `splashBld` 4 to others and `botDamage` 8 to robots within `splash` 1.3, double on a
+  vehicle hit squarely (a Tanker explodes). Home again it rearms for `rearm` 25 s (`bomberOnGround`); a bomb it didn't
+  drop goes back into Ammo. Flak Guns shoot it down. The AI (not a Turtle) builds an Airfield from 22 minutes with its Ammo
+  Plant running, one bomber, and a sortie at most every `AI_BOMB_GAP` (240) s at the most valuable building or loaded
+  Tanker no Flak covers (`aiBomber`, `AI_BOMB_VALUE`).
 - **Flak Guns** (4 Cement, 3 Alloy; Build → Defend; Versus): a twin anti-aircraft gun (`def.flak`, `updateFlak`). It
   tracks the nearest enemy aircraft in the air within 7 tiles (`aircraftNear`; never one on the ground, never a robot)
   and every `reload` s fires a salvo of `salvo` shells, each led to where the plane will be when it gets there (shell
@@ -249,7 +257,13 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
   Guns by its Command Base once a rival has an Airfield or aircraft.
 - **Ships and Ports** (naval maps only: Islands and Lakes, `naval` in `SHAPE_PRESETS`, `navalMap`; `NAVAL_ON` switches them
   off everywhere): a **Port** (8 Cement, 3 Alloy; Build → Move) is storage on land beside water at least `SEA_MIN` (20)
-  tiles big (`portDocks`; `seaNet` labels the bodies of water). Ships are built at a Port's shipyard (`BDEFS.port.yard`, `updateYard`,
+  tiles big (`portDocks`; `seaNet` labels the bodies of water). Building on other islands: `buildZones` lets you build in the Command Base's zone and any where you hold a built store
+  or garrison (a Drop Outpost, an Outpost, a Port). A Ferry founds a Port (`orderFoundPort`, `PORT_FOUND`: 12 Cement, 4 Alloy
+  loaded at its Port, up to 4 Workers) on an empty shore nobody holds; it claims `claim` 4 tiles (`b.claim`, read by
+  `computeTerritory`), and the Ferry heads home running a ferry line to it. A Ferry under your orders (`f.manual`:
+  `orderSail`, `embarkWarbots`, `orderBoardFerry` with `v.embarkOn`, `disembark`, then `ferryBack`) sails anywhere, takes
+  warbots aboard off a beach within `FERRY_REACH` and puts them ashore beside it.
+  Ships are built at a Port's shipyard (`BDEFS.port.yard`, `updateYard`,
   `YARD`: a round of 1 Alloy + 1 Chip every 8 s, haulers bring `YARD.hopper` of each) and put to sea there (`launchFromYard`); they sail open water by `seaRoute` (8-way A*, never cutting a corner of land, under
   bridges) and move like trains. They burn Fuel under way (`SHIP_BURN`, a tank of 100 like a truck's) and fill up from a
   Port's Fuel when they tie up below `SHIP_REFUEL` (each Port with ships keeps `PORT_FUEL`, 4, which haulers bring;

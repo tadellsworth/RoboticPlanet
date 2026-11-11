@@ -95,7 +95,7 @@ function aiThink(p) {
     const have = playerGoods(p);
     for (const b of me) {
       if (b.built || b.dead || S.time - b.born < 120 || (needArmory && b.type === 'armory')) continue;
-      if ((b.type === 'silo' || b.type === 'munitions' || b.type === 'keep' || b.type === 'terminal') && S.time - b.born < 420) continue; // saved up for: give it time
+      if ((b.type === 'silo' || b.type === 'munitions' || b.type === 'keep' || b.type === 'terminal' || b.type === 'airfield') && S.time - b.born < 420) continue; // saved up for: give it time
       const cost = siteCost(b);
       let stuck = false;
       for (const g in cost) if ((b.stock[g] || 0) + (b.inc[g] || 0) < cost[g] && have[g] <= 0) stuck = true;
@@ -113,6 +113,9 @@ function aiThink(p) {
   // A Keep site given up (it waited too long for goods, or for a road) isn't tried again for five minutes.
   if (S.time - (S.players[p].keepFail ?? -999) < 300) wantKeeps = Math.min(wantKeeps, counts.keep || 0);
   if ((counts.keep || 0) < wantKeeps) plan = [['keep', wantKeeps]].concat(plan);
+  // Bombers, now and then: every rival but a Turtle puts up an Airfield late in a war (from 22 minutes, with its
+  // Ammo Plant running) for a single Strike Bomber (see aiBomber).
+  if (S.mode !== 'colony' && !st.walls && S.time >= 1320 && !counts.airfield && me.some((b) => b.type === 'armory' && b.built)) plan = [['airfield', 1]].concat(plan);
   // Bulk trade: a Trade Terminal once the colony is running short of Ore, Crystal or Stone (a Tycoon from 14
   // minutes, the rest from 20), with a Road Train to serve it (see the Foundry, and aiTrade).
   const tradeAt = st.missiles ? 840 : 1200;
@@ -209,7 +212,7 @@ function aiThink(p) {
       // Plenty of Fuel in stock: no need for more farms or oil yet.
       if ((type === 'farm' || type === 'pump' || type === 'refinery') && (counts[type] || 0) >= 1 && playerGoods(p).fuel > 10) continue;
       if ((counts[type] || 0) >= want) continue;
-      if (saving && type !== saving && type !== 'keep' && type !== 'terminal' && !BDEFS[type].nuke && (BDEFS[type].cost.alloy || BDEFS[type].cost.chip)) continue;
+      if (saving && type !== saving && type !== 'keep' && type !== 'terminal' && type !== 'airfield' && !BDEFS[type].nuke && (BDEFS[type].cost.alloy || BDEFS[type].cost.chip)) continue;
       // Keep enough Fiber for a Harvester while none is cutting: without Fiber there's no way back.
       if (type !== 'harvester' && fiberLow && (BDEFS[type].cost.fiber || 0) > 0 && playerGoods(p).fiber - BDEFS[type].cost.fiber < BDEFS.harvester.cost.fiber) continue;
       // The first of each staffed building is always allowed, so the production chain is complete.
@@ -219,7 +222,7 @@ function aiThink(p) {
       if (type === 'kiln' && stoneLow && counts.kiln) continue;
       // A turret or Repair Station is started as soon as the Cement is there: new Alloy goes straight
       // into factories, so it never piles up in storage; the high-priority site gets it delivered.
-      const defenceNow = (defence(type) && counts.smelter && aiAffordable(p, type, ['alloy', 'chip'])) || (type === 'terminal' && aiAffordable(p, type, ['alloy']));
+      const defenceNow = (defence(type) && counts.smelter && aiAffordable(p, type, ['alloy', 'chip'])) || ((type === 'terminal' || type === 'airfield') && aiAffordable(p, type, ['alloy']));
       if (!aiAffordable(p, type) && !defenceNow) {
         if (key(type) && (!counts[type] || type === 'outpost')) {
           const have = playerGoods(p), cost = BDEFS[type].cost;
@@ -409,6 +412,8 @@ function aiThink(p) {
   if (S.mode !== 'colony') aiSiege(p);
   // 4f) Bulk trade: pick a contract at the Trade Terminal.
   aiTrade(p, me);
+  // 4g) A Strike Bomber now and then.
+  if (S.mode !== 'colony') aiBomber(p, me);
 
   // 4b) Raids on the enemy's supply lines, and answering the enemy's raids on ours.
   if (S.mode !== 'colony') aiCounterRaid(p);
@@ -863,6 +868,40 @@ function aiTrade(p, me) {
     if (sc > bs) { bs = sc; best = k; }
   });
   if (best >= 0) pickContract(p, best);
+}
+
+/** What a bomb is worth dropping on, for the AI: its most valuable buildings, and a loaded Tanker. */
+const AI_BOMB_VALUE = { nukesilo: 14, silo: 12, munitions: 10, reactor: 9, keep: 7, refinery: 7, foundry: 6, armory: 6, airfield: 6, fab: 5, generator: 4, smelter: 4, terminal: 4 };
+
+/**
+ * The AI's Strike Bomber: one, built at its Airfield's hangar, and a sortie at most every AI_BOMB_GAP s, at the
+ * enemy building (or loaded Tanker) worth most that no Flak Gun covers.
+ */
+const AI_BOMB_GAP = 240;
+function aiBomber(p, me) {
+  const P = S.players[p];
+  const field = me.find((b) => b.type === 'airfield' && b.built);
+  if (!field) return;
+  const bombers = S.bots.filter((u) => !u.dead && u.owner === p && BOTS[u.type].bomber);
+  if (!bombers.length && !(field.yard && field.yard.bomber > 0)) orderAtYard(field, 'bomber', 1);
+  if (S.time - (P.lastStrike || -999) < AI_BOMB_GAP) return;
+  const u = bombers.find((v) => !v.mission && !v.flight && !(v.rearmUntil > S.time) && planeBase(v) && v.inside === planeBase(v).id);
+  if (!u) return;
+  const flak = S.buildings.filter((b) => !b.dead && b.built && b.owner !== p && BDEFS[b.type].flak);
+  const covered = (x, y) => flak.some((f) => dist2(f.x + 0.5, f.y + 0.5, x, y) <= 49);
+  let best = null, bs = 0;
+  for (const b of S.buildings) {
+    const v = AI_BOMB_VALUE[b.type];
+    if (!v || b.dead || !b.built || b.owner === p || b.owner < 0 || covered(b.x + 0.5, b.y + 0.5) || strikeBlocked(p, u, b)) continue;
+    const sc = v - dist(b.x, b.y, field.x, field.y) * 0.05;
+    if (sc > bs) { bs = sc; best = b; }
+  }
+  for (const v of S.bots) {
+    if (v.dead || v.owner === p || v.type !== 'tanker' || !v.carry || v.inside || covered(v.x, v.y) || strikeBlocked(p, u, v)) continue;
+    const sc = 8 - dist(v.x, v.y, field.x, field.y) * 0.05;
+    if (sc > bs) { bs = sc; best = v; }
+  }
+  if (best && !orderStrike(p, u, best)) P.lastStrike = S.time;
 }
 
 function aiSiege(p) {

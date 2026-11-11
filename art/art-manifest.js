@@ -191,6 +191,8 @@ const ART_MANIFEST = {
   ...Object.fromEntries(['chute-fall', 'chute', 'crate-drop', 'chute-flat'].flatMap((k) => [0, 1].map((t) => [`${k}@${t}`, `bots/${k}@${t}.webp`]))),
   'cargoplane@0': 'bots/cargoplane@0.webp',
   'cargoplane@1': 'bots/cargoplane@1.webp',
+  'bomber@0': 'bots/bomber@0.webp',
+  'bomber@1': 'bots/bomber@1.webp',
   // Generator (one version for both teams, like the factories), and its working loop: fans and power bus.
   generator: B3D('buildings/generator.webp'),
   ...Object.fromEntries([0, 1, 2, 3, 4, 5, 6, 7].map((k) => [`generator-work-${k}`, B3D(`buildings/generator-work-${k}.webp`)])),
