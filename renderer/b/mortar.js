@@ -4,7 +4,7 @@
 //                         (0 = right, then clockwise seen from above: 1/8 turn = down-right toward the viewer).
 //                         No team colour on the head. Camera and light never move; the base plate centre never moves.
 // Powered realism (b/powerkit.js), kept light and on the base layer only (built last, so the head frames are
-// untouched): team strips and warm lamps on the outer faces of the concrete blocks, a transformer at the back right
+// untouched): a team strip round the apron, team strips and warm lamps on the outer faces of the concrete blocks, a transformer at the back right
 // and a junction box at the front right conduited into the blocks, a pole floodlight at the back left, beacons.
 import { sandbag, bagArc } from './milkit.js';
 import { power } from './powerkit.js';
@@ -134,7 +134,11 @@ export default function (L) {
       box(1.05, 0.05, 0.04, P.glow, 0, 0.9, 0.545, { parent: g, ...nc });
       box(0.2, 0.12, 0.08, P.steelD, 0, 0.6, 0.56, { parent: g, dirt: 0 }); box(0.14, 0.06, 0.03, P.warm, 0, 0.62, 0.61, { parent: g, ...nc });
     }
-    P.beacon(...(([x, z]) => [x, 1.33, z])(pol(BLOCKS[0], 3.15)), '#ffb347');
+    for (let k = 0; k < 8; k++) {                                                   // team strip round the concrete apron, in eight
+      const g = new THREE.TorusGeometry(3.77, 0.035, 6, 12, Math.PI / 4 + 0.002); g.rotateX(Math.PI / 2);   // arcs so night light follows the ring
+      mesh(g, P.glow, 0, 0.06, cz, { ry: k * Math.PI / 4, ...nc });
+    }
+    P.beacon(3.6, 0.82, 3.6, '#ffb347');                                            // on the junction box
     // transformer at the back right, conduited into the back-right block
     const ux = 3.6, uz = -3.7;
     box(1.2, 0.03, 1.0, P.dark, ux, 0, uz, nc);

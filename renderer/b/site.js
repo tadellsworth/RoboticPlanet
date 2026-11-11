@@ -1,6 +1,10 @@
 // Construction site: fresh slab with rebar, part-built steel frame, scaffolding, small tower crane, materials, hazard tape.
+// Powered realism, a light touch (b/powerkit.js): work lamps clamped to the scaffold, a site power box with a cable
+// to the scaffold, team blinkers on the tape posts, beacons on the crane. Team-coloured: render one image per team.
+import { power } from './powerkit.js';
 export default function (L) {
-  const { box, cyl, hcyl, beam, pipe, lamp, ao, mesh, M, THREE, ACCENT } = L;
+  const { box, cyl, hcyl, beam, pipe, lamp, pointLight, ao, mesh, group, M, THREE, ACCENT } = L;
+  const P = power(L), nc = { dirt: 0, cast: false };
   const yel = M.paint('#b8952e'), primer = M.paint('#8a4a32'), rust = M.plain('#7a4426', 0.8, 0.4), tube = M.plain('#9aa2a8', 0.4, 0.8);
   L.seed(101);
 
@@ -50,4 +54,20 @@ export default function (L) {
   for (const [x, z] of posts) cyl(0.07, 0.95, post, x, 0, z, { seg: 10, dirt: 0.5 });
   for (let i = 0; i < 3; i++) box(3.0, 0.12, 0.025, M.hazard, -3.0 + i * 3.0, 0.75, 4.4, { dirt: 0 });
   for (const [z0, z1] of [[4.4, 1.4], [1.4, -1.6], [-1.6, -4.4]]) box(0.025, 0.12, Math.abs(z0 - z1), M.hazard, -4.5, 0.75, (z0 + z1) / 2, { dirt: 0 });
+
+  // ================================================================ power layer (a light touch)
+  // work lamps clamped to the scaffold's top rail, aimed down over the slab
+  for (const x of [0.5, 2.5]) {
+    const g = group(x, 3.15, 0.12, 0); g.rotation.x = 0.7;
+    box(0.34, 0.22, 0.14, P.steel, 0, 0, 0, { parent: g, dirt: 0 }); box(0.28, 0.16, 0.03, P.white, 0, 0.03, 0.08, { parent: g, ...nc });
+    pointLight('#fff1d6', 3, x, 1.6, 1.0, 4);
+  }
+  // site power box on the apron, with a cable looping up to the scaffold
+  box(0.6, 0.65, 0.42, M.paint('#c9a028'), 0.15, 0, 3.2, { dirt: 0.5 }); box(0.64, 0.06, 0.46, P.steelD, 0.15, 0.65, 3.2, { dirt: 0 });
+  box(0.06, 0.06, 0.03, P.green, 0.03, 0.48, 3.42, nc); box(0.06, 0.06, 0.03, P.glow, 0.15, 0.48, 3.42, nc); box(0.06, 0.06, 0.03, P.amber, 0.27, 0.48, 3.42, nc);
+  P.cable([0.15, 0.55, 2.98], [0.3, 1.6, 0.08], 0.5, 10);
+  // team blinkers on the tape posts; beacons on the crane: team on the jib tip, amber on the counter-jib
+  for (const [x, z] of [[-4.5, 4.4], [-1.5, 4.4], [1.5, 4.4], [4.5, 4.4], [-4.5, -1.6]]) lamp(x, 0.95, z, L.TEAM === '#ff5a6e' ? '#ff2a40' : L.TEAM, { shape: 'sphere', size: 0.07, light: false, k: 3.2 });
+  P.beacon(-1.95, MH + 0.9, mz);
+  P.beacon(4.85, MH + 0.75, mz, '#ffb347');
 }

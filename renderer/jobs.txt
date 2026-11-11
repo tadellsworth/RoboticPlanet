@@ -1989,10 +1989,10 @@ art/tod/night/bots/chute-fall@1.png	main	airdrop::#ff5a6e:chute-fall@1:part=fall
 art/tod/night/bots/chute@1.png	main	airdrop::#ff5a6e:chute@1:part=canopy&tod=night	compose_any.py --b1 4 --b2 10
 art/tod/night/bots/crate-drop@1.png	main	airdrop::#ff5a6e:crate-drop@1:part=crate&tod=night	compose_any.py --b1 4 --b2 10
 art/tod/night/bots/chute-flat@1.png	main	airdrop::#ff5a6e:chute-flat@1:part=flat&tod=night	compose_any.py --b1 4 --b2 10
-art/buildings/terminal@0.png	main	terminal::#38d4ff:terminal@0
-art/buildings/terminal@1.png	main	terminal::#ff5a6e:terminal@1
-art/tod/night/buildings/terminal@0.png	main	terminal::#38d4ff:terminal@0:tod=night
-art/tod/night/buildings/terminal@1.png	main	terminal::#ff5a6e:terminal@1:tod=night
+art/buildings/terminal@0.png	main	terminal::#38d4ff:terminal@0	compose.py
+art/buildings/terminal@1.png	main	terminal::#ff5a6e:terminal@1	compose.py
+art/tod/night/buildings/terminal@0.png	main	terminal::#38d4ff:terminal@0:tod=night	compose.py
+art/tod/night/buildings/terminal@1.png	main	terminal::#ff5a6e:terminal@1:tod=night	compose.py
 art/buildings/tradepost.png	main	tradepost:#ffc860::tradepost	compose.py
 art/tod/morning/buildings/tradepost.png	main	tradepost:#ffc860::tradepost:tod=morning	compose.py
 art/tod/evening/buildings/tradepost.png	main	tradepost:#ffc860::tradepost:tod=evening	compose.py

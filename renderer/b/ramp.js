@@ -1,7 +1,12 @@
 // Ramp: steel-plated ramp rising from the front of the pad to an upper concrete landing at the back,
 // with hazard-striped edges, guard rails, painted chevrons and amber guide lights.
+// Powered realism, a light touch (b/powerkit.js): team beacons on the bollards, floodlights on the landing's corners,
+// a junction box at the foot with a conduit with glowing collars up the side wall, team strips on the landing's
+// exposed front edges. Team-coloured: render one image per team.
+import { power } from './powerkit.js';
 export default function (L) {
   const { box, cyl, beam, pipe, lamp, ao, mesh, M, THREE, ACCENT } = L;
+  const P = power(L), nc = { dirt: 0, cast: false };
   const plate = M.paint('#7d848a', { rivets: false, panelW: 128, panelH: 128 }), gun = M.paint('#50565c'), yel = M.paint('#c49a2c', { rivets: false });
   L.seed(181);
   const W = 5.6, z0 = 4.3, z1 = -2.4, H = 2.6, len = Math.hypot(z0 - z1, H), ang = Math.atan2(H, z0 - z1);
@@ -40,4 +45,15 @@ export default function (L) {
   for (const s of [-1, 1]) lamp(s * (W / 2 + 0.3), H + 0.1, -3.6, ACCENT, { size: 0.14, intensity: 2, dist: 2, k: 2.6 });
   // bollards at the foot of the ramp
   for (const x of [-W / 2 - 0.6, W / 2 + 0.6]) { cyl(0.16, 0.7, yel, x, 0, z0 - 0.2, { seg: 16 }); cyl(0.17, 0.12, M.dark, x, 0.45, z0 - 0.2, { seg: 16, dirt: 0 }); }
+
+  // ================================================================ power layer (a light touch)
+  // team beacons on the bollards
+  for (const x of [-W / 2 - 0.6, W / 2 + 0.6]) P.beacon(x, 0.76, z0 - 0.2);
+  // team strips along the landing's front edge either side of the ramp
+  for (const s of [-1, 1]) P.strip(0.62, s * (W / 2 + 0.29), H + 0.04, -2.33, 0, 0.06);
+  // floodlights on the landing's back corners, aimed down the ramp
+  for (const s of [-1, 1]) P.flood(s * (W / 2 + 0.3), -4.55, H + 1.3, -s * 0.35);
+  // junction box at the foot of the right side wall, a conduit up the wall to the landing
+  P.junction(W / 2 + 0.45, 2.6, -Math.PI / 2);
+  P.conduit([[W / 2 + 0.25, 0.55, 2.6], [W / 2 + 0.05, 0.55, 2.6], [W / 2 + 0.05, yAt(-1.2) - 0.25, -1.2], [W / 2 + 0.05, H - 0.25, -2.6]], 0.05);
 }
