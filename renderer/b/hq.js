@@ -4,8 +4,14 @@
 // stepped armoured command block (the old landing craft, legs sunk into concrete and plated over) with a slanted
 // band of team-coloured windows and a tall comms mast with radar dish and beacon. Courtyard: three charging
 // docks, stacked supply crates, fuel drums. Team-coloured lights along the top of the wall.
+// POWERED proposal (hq_p): the same realistic base with a lights-and-electricity layer from b/powerkit.js:
+// warm lit windows on the command block and gate towers, lit firing slits, perimeter lamps on the walls, floodlights
+// on the back bastions, a searchlight on the cupola, courtyard lamp posts, a transformer yard with arcing insulators,
+// conduits with glowing collars into junction boxes, powered charging docks (one arcing), cables to the mast, beacons.
+import { power } from './powerkit.js';
 export default function (L) {
   const { box, cyl, hcyl, beam, pipe, hoop, lamp, pointLight, ao, mesh, sphere, group, M, THREE, TEAM } = L;
+  const PK = power(L), nc = { dirt: 0, cast: false };
   const conc = M.rough('#8f887c'), concD = M.rough('#7a7468'), plate = M.paint('#5a6066', { panelW: 128, panelH: 256 });
   const armor = M.paint('#4c5258'), gun = M.paint('#3f4449'), off = M.paint('#c9c5ba'), olive = M.paint('#5d6247');
   const glow = M.emit(TEAM, 2.4), dim = M.emit(TEAM, 1.1);
@@ -42,7 +48,8 @@ export default function (L) {
     cyl(1.12, 1.6, conc, bx, 0, bz, { rTop: 1.0, seg: 24 });
     cyl(1.04, 0.32, plate, bx, 1.6, bz, { seg: 24, dirt: 0 });
     hoop(1.05, 0.03, dim, bx, 1.92, bz, { cast: false });
-    for (let k = 0; k < 3; k++) { const a = out + (k - 1) * 0.6; box(0.34, 0.12, 0.1, M.dark, bx + Math.cos(a) * 1.07, 1.1, bz - Math.sin(a) * 1.07, { ry: a + Math.PI / 2, dirt: 0 }); }
+    for (let k = 0; k < 3; k++) { const a = out + (k - 1) * 0.6; box(0.34, 0.12, 0.1, M.dark, bx + Math.cos(a) * 1.07, 1.1, bz - Math.sin(a) * 1.07, { ry: a + Math.PI / 2, dirt: 0 });
+      box(0.28, 0.075, 0.1, PK.warm, bx + Math.cos(a) * 1.08, 1.122, bz - Math.sin(a) * 1.08, { ry: a + Math.PI / 2, ...nc }); }   // lit slit
     cyl(0.5, 0.18, gun, bx, 1.92, bz, { dirt: 0 });
     const t = group(bx, 2.1, bz, out);
     box(0.85, 0.42, 0.7, armor, -0.05, 0, 0, { parent: t, dirt: 0 });
@@ -142,6 +149,10 @@ export default function (L) {
     hoop(0.32, 0.04, glow, x + 0.2, 0.06, dz, { cast: false });
     box(0.32, 0.95, 0.5, armor, x - 0.3, 0, dz); box(0.36, 0.08, 0.54, M.hazard, x - 0.3, 0.95, dz, { dirt: 0 });
     box(0.06, 0.55, 0.3, glow, x - 0.12, 0.25, dz, { cast: false });
+    box(0.08, 0.05, 0.08, PK.green, x - 0.3, 1.03, dz + 0.15, nc);                                     // ready light
+    box(0.5, 0.07, 0.1, PK.steelD, x - 0.05, 0.84, dz, { dirt: 0 });                                    // charging arm over the pad
+    cyl(0.06, 0.1, PK.steel, x + 0.2, 0.76, dz, { seg: 10, dirt: 0 }); box(0.07, 0.04, 0.07, PK.glowHi, x + 0.2, 0.72, dz, nc);
+    if (dz === -0.9) PK.arc([x + 0.2, 0.72, dz], [x + 0.2, 0.08, dz], 5, 3);                            // the middle dock is charging
   }
   pointLight(TEAM, 3, -2.6, 0.8, -0.9, 3);
   // stacked supply crates (front right) and fuel drums
@@ -150,7 +161,7 @@ export default function (L) {
     box(0.66, 0.6, 0.6, m, x, y, z); box(0.68, 0.06, 0.62, M.dark, x, y + 0.27, z, { dirt: 0 });
   }
   ao(2.1, 2.65, 1.5, 1.3, 0.5);
-  for (const [x, z] of [[-1.85, 2.3], [-2.35, 2.55], [-1.9, 2.85], [3.05, -0.6], [3.05, -1.15]]) {
+  for (const [x, z] of [[-1.85, 2.3], [-2.35, 2.55], [-1.9, 2.85], [2.1, -0.3]]) {
     cyl(0.25, 0.72, M.paint('#8a5a2e', { rivets: false }), x, 0, z, { seg: 18 }); hoop(0.26, 0.025, gun, x, 0.25, z); hoop(0.26, 0.025, gun, x, 0.5, z);
     cyl(0.08, 0.03, M.dark, x + 0.1, 0.72, z, { seg: 10, dirt: 0 });
   }
@@ -158,4 +169,85 @@ export default function (L) {
   // small generator on the right
   box(0.8, 0.75, 1.3, olive, 3.0, 0, 1.0); box(0.6, 0.06, 0.9, M.grille('#3d4247'), 3.0, 0.76, 1.0, { dirt: 0 });
   pipe([[3.0, 0.4, 0.35], [3.0, 0.3, -0.1], [1.9, 0.3, -0.1]], 0.06, M.dark);
+
+  // ================================================================ power layer (lights and electricity)
+  const at = (dx, dz) => Math.atan2(dx, dz);                               // ry that aims local +z along (dx, dz)
+  const NB = L.TOD === 'night' ? 2.2 : L.TOD === 'evening' ? 1.6 : 1;      // real lamps carry further after dark
+  // floodlight: pole from (x, y, z), lamp head aimed along ry and tipped down, warm-white light where it points
+  function flood(x, y, z, h, ry, reach = 1.3) {
+    cyl(0.045, h, PK.steelD, x, y, z, { seg: 10, dirt: 0.2 });
+    const g = group(x, y + h, z, ry), t = new THREE.Group(); t.rotation.x = 0.12; g.add(t);
+    box(0.42, 0.26, 0.18, PK.steel, 0, -0.13, 0.03, { parent: t, dirt: 0 });
+    box(0.36, 0.2, 0.03, PK.white, 0, -0.1, 0.13, { parent: t, ...nc });
+    pointLight('#fff1d6', 4 * NB, x + Math.sin(ry) * reach, y + h - 0.6, z + Math.cos(ry) * reach, 5);
+  }
+  // a band of n lit windows on a sloping facet: outward normal at angle ang (from +z toward +x), leaning back by tilt
+  function facetWin(x, y, z, ang, tilt, w, h, n, mat = PK.warm) {
+    const g = group(x, y, z, ang), t = new THREE.Group(); t.rotation.x = -tilt; g.add(t);
+    const gap = 0.07, ww = (w - gap * (n + 1)) / n;
+    box(w, h + 0.08, 0.04, PK.dark, 0, -h / 2 - 0.04, 0, { parent: t, ...nc });
+    for (let k = 0; k < n; k++) box(ww, h, 0.05, mat, -w / 2 + gap + ww / 2 + k * (ww + gap), -h / 2, 0.01, { parent: t, ...nc });
+  }
+
+  // warm lit windows on the command block hull, under the team window band
+  const hullApo = (y) => (1.98 - 0.43 * (y - 1.89) / 2.2) * Math.cos(Math.PI / 8) + 0.02, hullTilt = Math.atan(0.43 * Math.cos(Math.PI / 8) / 2.2);
+  const wy = 2.28, wa = hullApo(wy);
+  facetWin(0, wy, cz + wa, 0, hullTilt, 1.2, 0.26, 4);
+  for (const s of [-1, 1]) {                                               // front diagonals: a pane each side of the leg
+    const a = s * Math.PI / 4, ox = Math.sin(a) * wa, oz = Math.cos(a) * wa, tx = Math.cos(a), tz = -Math.sin(a);
+    for (const k of [-0.48, 0.48]) facetWin(ox + tx * k, wy, cz + oz + tz * k, a, hullTilt, 0.3, 0.26, 1);
+  }
+  // warm bulkhead lamps either side of the block entrance
+  for (const s of [-1, 1]) { box(0.16, 0.12, 0.1, PK.steelD, s * 0.5, 1.28, cz + 2.75, { dirt: 0 }); box(0.12, 0.07, 0.03, PK.warm, s * 0.5, 1.3, cz + 2.8, nc); }
+  pointLight('#ffd9a0', 2.5, 0, 0.9, cz + 3.2, 2.6);
+
+  // floodlights on the back bastions, beside the guns, lighting the courtyard
+  const flTop = [];
+  for (const sx of [-1, 1]) {
+    const bx = sx * (A - C / 2 + 0.15), bz = -(A - C / 2 + 0.15), px = bx - sx * 0.74, pz = bz + 0.1;
+    flood(px, 1.92, pz, 1.15, at(-px * 0.5, 1.0 - pz), 1.8); flTop.push([px, 3.0, pz]);
+  }
+  // searchlight on the cupola roof, trained on the gate
+  { const sx0 = 0.6, sz0 = cz + 0.5, sy = 5.35;
+    cyl(0.13, 0.1, PK.steelD, sx0, sy, sz0, { seg: 12, dirt: 0 });
+    for (const s of [-1, 1]) box(0.04, 0.3, 0.06, PK.steelD, sx0 + s * 0.2, sy + 0.1, sz0, { dirt: 0 });
+    hcyl(0.16, 0.34, PK.steel, sx0, sy + 0.34, sz0, { axis: 'z', seg: 20 });
+    hcyl(0.13, 0.03, PK.white, sx0, sy + 0.34, sz0 + 0.17, { axis: 'z', seg: 20, cast: false });
+    pointLight('#f2f8ff', 3 * NB, 0.3, 1.0, 2.6, 4.5); }
+  // warm lamp posts in the front courtyard
+  for (const [x, z] of [[-1.3, 3.05], [1.2, 2.55]]) {
+    cyl(0.035, 1.25, PK.steelD, x, 0, z, { seg: 8, dirt: 0.3 });
+    box(0.26, 0.07, 0.14, PK.steelD, x, 1.25, z, { dirt: 0 }); box(0.2, 0.025, 0.1, PK.warm, x, 1.23, z, nc);
+    pointLight('#ffd49a', 2.5 * NB, x, 1.0, z, 2.8);
+  }
+  // lit guard-post windows on the gate towers
+  for (const s of [-1, 1]) PK.windows(0.62, 0.16, s * (GATE + 0.3), 1.27, A + 0.66, 0, 2);
+  // perimeter lamps along the wall tops, between the team strips
+  const bollard = (x, z) => { box(0.05, 0.16, 0.05, PK.steelD, x, 1.32, z, { dirt: 0 }); box(0.09, 0.07, 0.09, PK.white, x, 1.48, z, nc); };
+  for (const z of [-1.55, -0.5, 0.55, 1.6]) for (const sx of [-1, 1]) bollard(sx * A, z);
+  for (const x of [-1.3, 0, 1.3]) bollard(x, -A);
+  pointLight('#ffe2b8', 3, 0, 0.6, A + 1.0, 3.2);
+
+  // transformer yard in the right courtyard: hazard-framed plate, transformer with arcing insulators,
+  // a junction box, conduit into the block and a high-voltage feed to the hull
+  const tx = 3.0, tz = -1.4;
+  box(1.2, 0.03, 1.0, PK.dark, tx, 0, tz, { dirt: 0, cast: false });
+  for (const [w, d, x, z] of [[1.2, 0.08, tx, tz - 0.5], [1.2, 0.08, tx, tz + 0.5], [0.08, 1.0, tx - 0.6, tz], [0.08, 1.0, tx + 0.6, tz]]) box(w, 0.04, d, M.hazard, x, 0, z, { dirt: 0, cast: false });
+  PK.transformer(tx, tz, 0);
+  PK.junction(3.05, -0.55, 0);
+  PK.conduit([[3.05, 0.55, -0.75], [3.05, 0.55, -1.0]], 0.05);
+  PK.conduit([[2.77, 0.4, -0.55], [2.4, 0.4, -0.55], [2.17, 1.62, -0.55], [2.17, 1.95, -0.55], [1.86, 2.35, -0.55]], 0.055);
+  box(0.1, 0.18, 0.18, PK.steelD, hullApo(2.55) + 0.02, 2.46, tz, { dirt: 0 });                    // hull bushing
+  PK.cable([tx - 0.28, 1.2, tz], [hullApo(2.55) + 0.06, 2.55, tz], 0.12);
+  PK.cable([tx + 0.28, 1.2, tz], [3.66, 1.25, tz - 0.2], 0.08);
+
+  // conduit along the left wall feeding the charging docks, from a junction box by the front-left bastion
+  const wx = -3.63, wyc = 1.12;
+  PK.junction(-3.12, 1.32, 0);
+  PK.conduit([[-3.4, 0.45, 1.32], [wx, 0.45, 1.32], [wx, wyc, 1.32], [wx, wyc, -2.55]], 0.05);
+  for (const dz of [-2.15, -0.9, 0.35]) PK.conduit([[wx, wyc, dz], [-3.36, wyc, dz], [-3.36, 1.03, dz]], 0.035);
+
+  // comms mast: amber obstruction beacons on the cross-arm, feed cables down to the back floodlights
+  for (const s of [-1, 1]) PK.beacon(mx + s * 0.45, 8.78, mz, '#ffb347');
+  for (let i = 0; i < 2; i++) PK.cable([mx + (i ? 0.12 : -0.12), 7.4, mz], flTop[i], 0.35);
 }

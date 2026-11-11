@@ -2125,7 +2125,7 @@ function drawBuilding(ctx, type, cx, cy, s, owner, b) {
   }
   // A building whose loop moves a part away from where its image shows it (the Oil Pump's beam) is drawn
   // without that part ('<type>-base') while the loop plays.
-  if (art && b && b.built && working && ART[type + '-base'] && ART[type + '-work-0']) art = ART[type + '-base'];
+  if (art && b && b.built && working && artFor(type + '-base', owner) && ART[type + '-work-0']) art = artFor(type + '-base', owner);
   if (art) {
     if (!ART[type + '@' + owner] && type !== 'ramp') {
       // Shared art: a thin team-coloured bar along the front edge shows whose building it is.
@@ -2958,7 +2958,7 @@ function drawBarrier(ctx, type, cx, cy, s, owner, b) {
 
 function drawSite(ctx, type, cx, cy, s, owner, b) {
   const color = PLAYER_COLORS[owner];
-  const art = ART.site;
+  const art = artFor('site', owner);
   if (art) drawArt(ctx, art, cx, cy, s);
   else {
     const w = s * 0.8;

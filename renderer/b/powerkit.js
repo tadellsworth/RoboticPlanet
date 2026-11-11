@@ -17,11 +17,13 @@
 // Materials: P.steel, P.steelD, P.conc, P.glow (team), P.glowSoft, P.warm (window light), P.white, P.amber, P.green.
 export function power(L, opts = {}) {
   const { box, cyl, beam, sphere, lamp, M, THREE } = L;
-  const C = opts.color || L.TEAM;
+  // The red team's light runs deeper and a little stronger: its pinkish #ff5a6e washes out to pale pink in daylight
+  // on bright concrete and yellow steel.
+  const C0 = opts.color || L.TEAM, red = /^#ff5a6e$/i.test(C0), C = red ? '#ff2a40' : C0, kk = red ? 1.25 : 1;
   const P = {
     steel: M.paint('#5a6066'), steelD: M.paint('#3f4449', { rivets: false }), conc: M.rough('#8f887c'),
     dark: M.plain('#1b1d20', 0.6, 0.3),
-    glow: M.emit(C, 2.4), glowHi: M.emit(C, 3.4), glowSoft: M.emit(C, 1.0),
+    glow: M.emit(C, 2.4 * kk), glowHi: M.emit(C, 3.4 * kk), glowSoft: M.emit(C, 1.0 * kk),
     warm: M.emit('#ffd9a0', 1.3), white: M.emit('#e8fbff', 2.2), amber: M.emit('#ffb347', 2.6), green: M.emit('#7dff9a', 2.2), arcM: M.emit('#cfefff', 4),
   };
   const nc = { dirt: 0, cast: false };
