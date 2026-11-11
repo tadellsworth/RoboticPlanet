@@ -2720,6 +2720,8 @@ function killBot(bot, quiet) {
     return;
   }
   blastFx(bot.x, bot.y, bot.type === 'warbot' ? 0.6 : 0.4, { small: true });
+  // what's left of it burns for a few seconds (a big vehicle longer)
+  if (!quiet) addFx('fire', bot.x, bot.y, { r: BOTS[bot.type].truck || BOTS[bot.type].rail || BOTS[bot.type].crawler ? 0.3 : 0.18, life: BOTS[bot.type].truck || BOTS[bot.type].crawler ? 9 : 5, t: -0.3, seed: bot.id % 97 });
   if (!quiet) sfx('boom');
 }
 
@@ -2830,12 +2832,23 @@ function shotFx(x, y, tx, ty, opts) {
   addFx('muzzle', mx, my, { a, color: o.pulse ? o.color : '#fff1b8', life: 0.1, pulse: !!o.pulse });
   if (!o.pulse) {
     if (!busy) addFx('puff', mx, my - 0.05, { r: 0.16, life: 0.9 });
-    addFx('tracer', mx, my, { x2: tx, y2: ty, life: 0.12, color: o.color || '#ffe08a' });
+    // A short burst of tracer rounds, glowing in the shooter's colour, each flying out to the target (about 26
+    // tiles a second); hitting armour, now and then one glances off and skips away.
+    const fly = Math.max(0.06, dist(mx, my, tx, ty) / 26), n = busy ? 1 : 2;
+    for (let k = 0; k < n; k++) {
+      const h = hash2(Math.floor(tx * 17) + k, Math.floor(ty * 13), S.tick + 11);
+      addFx('tracer', mx, my, { x2: tx + (h - 0.5) * 0.25, y2: ty + (hash2(k, S.tick, 3) - 0.5) * 0.25, life: fly, t: -k * 0.07, color: o.color || '#ffe08a' });
+    }
+    if (o.structure && !busy && hash2(Math.floor(tx * 7), S.tick, 19) < 0.4) {
+      const ra = hash2(S.tick, Math.floor(ty * 9), 23) * Math.PI * 2, rl = 0.6 + 0.6 * hash2(S.tick, 5, 29);
+      addFx('tracer', tx, ty, { x2: tx + Math.cos(ra) * rl, y2: ty + Math.sin(ra) * rl * 0.7, life: 0.14, t: -fly, rico: true, color: '#ffd27a' });
+    }
   }
   const n = o.pulse ? 1 : 3;
   for (let k = 0; k < n; k++) {
     const h1 = hash2(Math.floor(tx * 13) + k, Math.floor(ty * 13), S.tick), h2 = hash2(Math.floor(ty * 11), Math.floor(tx * 17) + k, S.tick + 3);
     const spread = k === 0 ? 0.12 : 0.45, px = tx + (h1 - 0.5) * 2 * spread, py = ty + (h2 - 0.5) * 2 * spread;
+    if (o.pulse && k === 0) addFx('heat', px, py, { color: '#aa5cff', life: 1.4 }); // the spot it struck glows, cooling (the beam's violet)
     if (o.structure) addFx('spark', px, py, { color: '#ffd27a', life: 0.35, hit: true });
     else {
       if (!busy) addFx('dust', px, py, { life: 0.55, seed: k + S.tick });
@@ -2851,7 +2864,7 @@ function shotFx(x, y, tx, ty, opts) {
 function blastFx(x, y, r, opts) {
   const o = opts || {}, t = -(o.delay || 0); // a delayed blast waits (t < 0) before it shows
   addFx('flash', x, y, { r: r * 1.3, life: 0.15, t });
-  addFx('boom', x, y, { r, t });
+  addFx('boom', x, y, { r, t, life: o.small ? 0.75 : 1.0, small: !!o.small, seed: (x * 3.7 + y * 1.3) % 1 });
   addFx('debris', x, y, { r: Math.max(0.6, r), life: 0.9, n: o.small ? 5 : 9, seed: S.tick + Math.floor(x * 31 + y * 17), t });
   addFx('smoke', x, y, { r: Math.max(0.4, r * 0.6), life: o.small ? 1.6 : 3, t });
   addDecal('scorch', x, y, Math.max(0.35, r * 0.7), o.small ? 35 : 70);
@@ -2870,6 +2883,7 @@ function collapseFx(b, burn) {
   }
   addFx('dustcloud', x, y + 0.25 * big, { r: 0.9 * big, life: 2.2, t: burn ? -0.3 : 0, seed: b.id });
   if (burn) {
+    addFx('fire', x, y + 0.1, { r: 0.42 * big, life: 16, t: -0.4, seed: b.id % 97 }); // the wreck burns for a while
     blastFx(x, y, 1.1 * big);
     blastFx(x + (h(2) - 0.5) * 0.8 * big, y + (h(3) - 0.6) * 0.6 * big, 0.6 * big, { small: true, delay: 0.35 });
     blastFx(x + (h(4) - 0.5) * 0.8 * big, y + (h(5) - 0.4) * 0.6 * big, 0.5 * big, { small: true, delay: 0.7 });

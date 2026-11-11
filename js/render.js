@@ -3977,8 +3977,8 @@ function render(dtReal) {
   todFrame();
 
   let ox = R.w / 2 - R.cam.x * z, oy = R.h / 2 - R.cam.y * z;
-  // A nuclear blast shakes the screen for its first half second.
-  for (const f of S.fx) if (f.type === 'nuke' && f.t < 0.6) { const a = 9 * (1 - f.t / 0.6); ox += (Math.random() - 0.5) * a; oy += (Math.random() - 0.5) * a; }
+  // Big blasts near the middle of the screen shake it for a moment (a nuclear blast hardest; see fxShake).
+  { const a = fxShake(ox, oy, z); if (a > 0.2) { ox += (Math.random() - 0.5) * a; oy += (Math.random() - 0.5) * a; } }
   const v0 = screenToWorld(0, 0), v1 = screenToWorld(R.w, R.h);
   const inView = (x, y, m) => x > v0.x - m && x < v1.x + m && y > v0.y - m && y < v1.y + m;
 
@@ -5071,6 +5071,7 @@ function drawRallies(ctx, ox, oy, z) {
 
 /** Missiles fly in an arc: a shadow on the ground and the missile above it. */
 function drawMissiles(ctx, ox, oy, z) {
+  drawTrails(ctx, ox, oy, z); // smoke trails and exhaust (js/fx.js)
   for (const m of S.missiles) {
     if (m.nuke) { drawNukeFlight(ctx, m, ox, oy, z); continue; }
     if (m.bomb) {
@@ -5193,8 +5194,9 @@ function drawScorch(ctx, ox, oy, z) {
  * frames as variants, one picked per mark.
  */
 const FX_ART = {
-  muzzle: 'fx-muzzle', tracer: 'fx-tracer', dust: 'fx-impact', spark: 'fx-spark', puff: 'fx-smoke', smoke: 'fx-smoke',
-  boom: 'fx-explosion', debris: 'fx-debris', arc: 'fx-arc', dustcloud: 'fx-dustcloud',
+  // (muzzle flashes, tracers and fireballs are drawn in code, in js/fx.js: lit, and lighting the ground at night)
+  dust: 'fx-impact', spark: 'fx-spark', puff: 'fx-smoke', smoke: 'fx-smoke',
+  debris: 'fx-debris', arc: 'fx-arc', dustcloud: 'fx-dustcloud',
 };
 const DECAL_ART = { pock: 'decal-pock', burn: 'decal-burn', scorch: 'decal-scorch', rubble: 'decal-rubble' };
 
@@ -5288,8 +5290,8 @@ function drawPulseCharges(ctx, ox, oy, z, inView) {
   ctx.globalCompositeOperation = 'lighter';
   for (const b of S.buildings) {
     if (b.type !== 'turret' || b.dead || !b.built || !inView(b.x, b.y, 2)) continue;
-    const fired = S.time - (b.shotAt ?? -9) < 0.12;
-    if (!(b.chg > 0.01) && !fired) continue;
+    const fired = S.time - (b.shotAt ?? -9) < 0.12, pre = b.tgt && (b.cd || 0) < 1.0;
+    if (!(b.chg > 0.01) && !fired && !pre) continue;
     const lv = Math.min(1, (b.chg || 0) / PULSE_CHARGE), m = pulseMuzzle(b, b.aim), x = ox + m.x * z, y = oy + m.y * z;
     // The 3D turret's own charge-up (turret-charge-K, on its head's canvas): the coils and barrel tips
     // lighting violet as the shot builds (frames 0-6), then the discharge flash (frame 7).
@@ -5297,9 +5299,11 @@ function drawPulseCharges(ctx, ox, oy, z, inView) {
     if (sheet && base && base.anchor && ART['turret-head-0@0']) {
       const w = z * 1.4;
       ctx.globalAlpha = 1;
-      drawSheetFrame(ctx, sheet, fired ? 7 : Math.min(6, Math.floor(lv * 7)), ox + (b.x + 0.5) * z, oy + (b.y + 0.5) * z + (0.5 - 0.615) * w, w, w, 0);
+      if (b.chg > 0.01 || fired) drawSheetFrame(ctx, sheet, fired ? 7 : Math.min(6, Math.floor(lv * 7)), ox + (b.x + 0.5) * z, oy + (b.y + 0.5) * z + (0.5 - 0.615) * w, w, w, 0);
+      drawPulseChargeGlow(ctx, b, x, y, z, lv, fired);
       continue;
     }
+    drawPulseChargeGlow(ctx, b, x, y, z, lv, fired);
     if (!(b.chg > 0.01)) continue;
     // Violet, like the laser art, when it's installed; otherwise the team colour.
     const color = ART['fx-pulse-laser'] ? '#aa5cff' : PLAYER_COLORS[b.owner], flick = 0.85 + 0.15 * Math.sin(R.time * 60 + b.id);
@@ -5366,34 +5370,16 @@ function drawEffects(ctx, ox, oy, z) {
     }
     switch (f.type) {
       case 'flash': {
-        const g = ctx.createRadialGradient(x, y, 0, x, y, (f.r || 1) * z);
-        g.addColorStop(0, 'rgba(255,255,240,0.95)'); g.addColorStop(0.4, 'rgba(255,220,150,0.5)'); g.addColorStop(1, 'rgba(255,200,120,0)');
-        ctx.globalAlpha = 1 - k; ctx.fillStyle = g;
-        ctx.beginPath(); ctx.arc(x, y, (f.r || 1) * z, 0, Math.PI * 2); ctx.fill();
+        // the white flash of a blast, and the light it throws for a moment
+        fxGlow(ctx, x, y, (f.r || 1) * z * 1.3, '#ffe6b0', 1 - k);
+        fxGround(ctx, x, y, (f.r || 1) * z * 3.5, '#ffd9a0', 1.2 * (1 - k));
         break;
       }
-      case 'muzzle': {
-        // A flash at the barrel: a bright cone along the shot with a white-hot core (an energy weapon glows instead).
-        ctx.globalAlpha = 1 - k;
-        const L = z * (f.big ? 0.5 : 0.28), W = L * 0.45;
-        ctx.save(); ctx.translate(x, y); ctx.rotate(f.a || 0);
-        ctx.fillStyle = f.pulse ? f.color : '#ffcf6b';
-        ctx.beginPath(); ctx.moveTo(-L * 0.15, 0); ctx.lineTo(L * 0.3, -W); ctx.lineTo(L, 0); ctx.lineTo(L * 0.3, W); ctx.closePath(); ctx.fill();
-        ctx.fillStyle = '#ffffff';
-        ctx.beginPath(); ctx.arc(L * 0.15, 0, W * 0.45, 0, Math.PI * 2); ctx.fill();
-        ctx.restore();
-        break;
-      }
-      case 'tracer': {
-        // A streak flying from the barrel to where the round lands.
-        const x2 = ox + f.x2 * z, y2 = oy + f.y2 * z, d = Math.hypot(x2 - x, y2 - y) || 1, tail = Math.min(1, (z * 0.5) / d);
-        const h1 = Math.min(1, k * 1.15), h0 = Math.max(0, h1 - tail);
-        ctx.globalAlpha = 0.95;
-        ctx.strokeStyle = f.color || '#ffe08a'; ctx.lineWidth = Math.max(1.5, z * 0.05); ctx.lineCap = 'round';
-        ctx.beginPath(); ctx.moveTo(x + (x2 - x) * h0, y + (y2 - y) * h0); ctx.lineTo(x + (x2 - x) * h1, y + (y2 - y) * h1); ctx.stroke();
-        ctx.strokeStyle = '#fffbe8'; ctx.lineWidth = Math.max(1, z * 0.02); ctx.stroke();
-        break;
-      }
+      case 'muzzle': drawMuzzleFx(ctx, f, x, y, z, k); break;
+      case 'tracer': drawTracerFx(ctx, f, x, y, ox + f.x2 * z, oy + f.y2 * z, z, k); break;
+      case 'fire': drawFireFx(ctx, f, x, y, z, k); break;
+      case 'heat': drawHeatFx(ctx, f, x, y, z, k); break;
+      case 'nukeglow': drawNukeGlowFx(ctx, f, x, y, z, k); break;
       case 'dust': {
         // Rounds peppering the ground: a little kick of dirt and grit.
         ctx.fillStyle = '#b8936a';
@@ -5479,15 +5465,7 @@ function drawEffects(ctx, ox, oy, z) {
         }
         break;
       }
-      case 'boom': {
-        const r = (f.r || 0.6) * z * (0.3 + k);
-        ctx.globalAlpha = 1 - k;
-        ctx.fillStyle = '#ffcf6b';
-        ctx.beginPath(); ctx.arc(x, y, r * 0.6, 0, Math.PI * 2); ctx.fill();
-        ctx.strokeStyle = '#ff7a3d'; ctx.lineWidth = 3;
-        ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.stroke();
-        break;
-      }
+      case 'boom': drawBoomFx(ctx, f, x, y, z, k); break;
       case 'smoke': {
         ctx.fillStyle = f.dark ? '#2e2925' : '#5a524c'; // a fuel fire's smoke is black
         for (let n = 0; n < 3; n++) {
@@ -5505,6 +5483,7 @@ function drawEffects(ctx, ox, oy, z) {
           // stretched to the target; frames held 0.05, 0.1, 0.1, 0.05, 0.05 and 0.05 of its 0.4 s.
           const at = (k * 0.4), ends = [0.05, 0.15, 0.25, 0.3, 0.35, 0.4], fr = Math.max(0, ends.findIndex((e) => at < e));
           const dx = x2 - x, dy = y2 - y, len = Math.hypot(dx, dy) || 1, a = Math.atan2(dy, dx), px = (-dy / len) * z * 0.045, py = (dx / len) * z * 0.045;
+          drawPulseHalo(ctx, x, y, x2, y2, z, w, '#aa5cff');
           ctx.globalAlpha = 1;
           for (const s of [-1, 1]) drawSheetFrame(ctx, laser, fr < 0 ? 5 : fr, (x + x2) / 2 + px * s, (y + y2) / 2 + py * s, len, z * 0.13, a);
           // At night the blast lights up the ground at the muzzle.
@@ -6008,7 +5987,8 @@ function drawAirLayer(ctx, ox, oy, z, inView) {
     u.rface = u.rface === undefined ? want : u.rface + clamp(wrapAngle(want - u.rface), -turn, turn);
     drawPlane(ctx, u, ox + u.x * z, oy + u.y * z, z, planeAlt(u));
   }
-  for (const f of S.fx) if (f.type === 'flak' && f.t >= 0 && inView(f.x, f.y, 2)) drawFlakBurst(ctx, f, ox + f.x * z, oy + f.y * z, z);
+  drawFlakTracers(ctx, ox, oy, z, inView);
+  for (const f of S.fx) if (f.type === 'flak' && f.t >= 0 && inView(f.x, f.y, 2)) { drawFlakBurst(ctx, f, ox + f.x * z, oy + f.y * z, z); if (f.t < 0.4) fxGround(ctx, ox + f.x * z, oy + f.y * z + z, z * 1.6, '#ff9a3c', 0.6 * (1 - f.t / 0.4)); }
 }
 
 /** Air drop: the plane's reach round its Airfield, and the spot under the pointer or picked. */

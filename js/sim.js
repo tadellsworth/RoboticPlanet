@@ -5011,6 +5011,7 @@ function updateEvac() {
 function nukeImpact(m) {
   const cx = m.x1, cy = m.y1, R2 = NUKE.radius * NUKE.radius;
   addFx('nuke', cx, cy, { life: 2, r: NUKE.radius });
+  addFx('nukeglow', cx, cy, { life: 55, r: NUKE.radius }); // the eerie green afterglow and haze (js/fx.js)
   sfx('nuke');
   const lost = S.players.map(() => 0);
   for (const b of S.buildings.slice()) {
@@ -7980,6 +7981,7 @@ function landDrop(d) {
   if (d.kind === 'wreck') {
     // The crash: a fireball, and a burn on the ground.
     blastFx(d.i + 0.5, d.j + 0.5, 0.9);
+    addFx('fire', d.i + 0.5, d.j + 0.5, { r: 0.4, life: 14, t: -0.3, seed: d.id % 97 }); // the wreck burns
     addDecal('scorch', d.i + 0.5, d.j + 0.5, 0.9, 90);
     if (d.owner === 0 || S.owner[t] === 0) sfx('boom');
     return;
