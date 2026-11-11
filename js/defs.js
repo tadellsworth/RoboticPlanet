@@ -579,7 +579,7 @@ const BDEFS = {
   },
   turret: {
     name: 'Pulse Turret', desc: 'Shoots enemy bots in range. Uses Crystal as ammo (4 shots each).',
-    cost: { cement: 2, alloy: 2 }, ammo: 'crystal', range: 5, armor: 12, buildTime: 10, war: true,
+    cost: { cement: 3, alloy: 3 }, ammo: 'crystal', range: 5, armor: 12, buildTime: 10, war: true,
   },
   // Defences that work alongside the Pulse Turret (see BUNKER, and `disrupt` and `mortar` below).
   bunker: {
@@ -587,14 +587,14 @@ const BDEFS = {
     cost: { cement: 6, alloy: 2 }, mil: true, bunker: true, terr: 0, garrison: 2, armor: 32, buildTime: 14, ammoStock: 4, range: 3.5, war: true,
   },
   disruptor: {
-    name: 'Disruptor Tower', desc: 'Every few seconds it sends out a pulse that drains the batteries of enemy robots within 4½ tiles: drained warbots slow down, hit at half power and have to go home to recharge. It burns Fuel (one for every 4 pulses), only while enemies are in range.',
+    name: 'Disruptor Tower', desc: 'Every few seconds it sends out a pulse that jams the guns of enemy robots within 4½ tiles for 2 seconds and drains their batteries: drained warbots slow down, hit at half power and have to go home to recharge. It kills nothing itself, so pair it with a turret or a Bunker. It burns Fuel (one for every 4 pulses), only while enemies are in range.',
     cost: { cement: 4, alloy: 3, crystal: 3 }, ammo: 'fuel', ammoCap: 4, range: 4.5, armor: 12, buildTime: 12, war: true,
-    disrupt: { every: 2.5, drain: 10, perFuel: 4 },
+    disrupt: { every: 2.5, drain: 10, perFuel: 4, jam: 2 },
   },
   mortar: {
-    name: 'Mortar Pit', desc: 'Lobs shells at enemy robots 3 to 10 tiles away, aiming where they bunch up: each shell hurts every robot within a tile and a half of where it lands. Slow to reload, and it can\'t hit anything closer than 3 tiles. Fires Ammo (3 shells each).',
+    name: 'Mortar Pit', desc: 'Lobs shells at enemy robots 3 to 10 tiles away, aiming where they bunch up: each shell hurts the robots within a tile and a half of where it lands (up to 6 of them). Slow to reload, and it can\'t hit anything closer than 3 tiles. Fires Ammo (3 shells each).',
     cost: { cement: 5, alloy: 3 }, ammo: 'ammo', ammoCap: 4, range: 10, minRange: 3, armor: 14, buildTime: 12, war: true,
-    mortar: { reload: 5, shells: 3, damage: 6, splash: 1.5, splashDamage: 3, flight: 1.6 },
+    mortar: { reload: 5, shells: 3, damage: 6, splash: 1.5, splashDamage: 3, most: 6, flight: 1.6 },
   },
   flak: {
     name: 'Flak Gun', desc: 'A twin anti-aircraft gun. It fills the sky round enemy aircraft out to 7 tiles with bursting shells, leading them as they fly: each burst hurts any aircraft within about a tile of it. A plane can get through one quick pass, but not circling over a few of these. It can\'t hit anything on the ground. Fires Ammo (8 shells each).',

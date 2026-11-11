@@ -2743,6 +2743,7 @@ function updateDisruptor(b, def, dt) {
   b.status = `Draining ${hit.length} enemy robot${hit.length > 1 ? 's' : ''}`;
   for (const u of hit) {
     u.bat = Math.max(0, (u.bat ?? 100) - d.drain);
+    if (BOTS[u.type].war && d.jam) u.cd = Math.max(u.cd || 0, d.jam); // jammed: its guns are dead for a moment
     arcFx(cx, cy - 0.62, u.x, u.y); // from the orb (71 px down its 512 canvas, at scale 1.3)
     addFx('spark', u.x, u.y, { color: '#8fd8ff' });
   }
@@ -2788,17 +2789,22 @@ function updateMortar(b, def, dt) {
   sfx('thump');
 }
 
-/** A mortar shell lands: it hurts every rival robot in the open within the splash, most at the middle. */
+/**
+ * A mortar shell lands: it hurts the rival robots in the open within the splash, most at the middle,
+ * up to `most` of them (the nearest), so a crowd at a breach is hurt badly but not wiped out by a few shells.
+ */
 function shellImpact(m) {
   const md = BDEFS.mortar.mortar;
   blastFx(m.x1, m.y1, md.splash * 0.5, { small: true });
   sfx('shellhit');
+  const hit = [];
   for (const u of S.bots) {
     if (u.dead || u.inside || u.owner === m.owner) continue;
     const d2 = dist2(u.x, u.y, m.x1, m.y1);
-    if (d2 > md.splash * md.splash) continue;
-    damageBot(u, d2 <= 0.36 ? md.damage : md.splashDamage);
+    if (d2 <= md.splash * md.splash) hit.push([d2, u]);
   }
+  hit.sort((a, b) => a[0] - b[0]);
+  for (const [d2, u] of hit.slice(0, md.most || hit.length)) damageBot(u, d2 <= 0.36 ? md.damage : md.splashDamage);
 }
 
 /** Military buildings send warbots out when enemy warbots come close. */
