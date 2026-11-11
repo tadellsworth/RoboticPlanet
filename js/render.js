@@ -3987,6 +3987,7 @@ function render(dtReal) {
   ctx.drawImage(R.terr, ox, oy, S.W * z, S.H * z);
   drawPipes(ctx, ox, oy, z, inView); // (graded with the ground at dusk and night)
   todGradeGround(ctx); // morning, evening and night light on the ground and its territory tint (buildings and bots have their own re-lit art)
+  drawRoadGlow(ctx, ox, oy, z, v0, v1);
   drawStreetLights(ctx, ox, oy, z, v0, v1);
 
   // Territory borders
@@ -4002,6 +4003,12 @@ function render(dtReal) {
       ctx.lineTo(ox + sg[3] * z, oy + sg[4] * z);
     }
     ctx.stroke();
+    // At dusk and night the border glows: a soft, wider line of light under the dashes.
+    if (TOD.active && TOD.state.lights > 0.01) {
+      ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.setLineDash([]);
+      ctx.globalAlpha = 0.22 * TOD.state.lights; ctx.lineWidth = Math.max(3, z * 0.22); ctx.stroke();
+      ctx.restore();
+    }
   }
   ctx.setLineDash([]);
   ctx.globalAlpha = 1;
@@ -4128,9 +4135,10 @@ function render(dtReal) {
   // At dusk and night, every finished building's lights spill onto the ground round its pad.
   // Walls glow a little along their live rail, Gates more; Pulse Turrets sweep searchlights.
   if (TOD.active && TOD.state.pools > 0.01) {
+    drawCityGlow(ctx, ox, oy, z, items);
     for (const e of items) {
       if (e.ent !== 'b' || !e.built || BDEFS[e.type].viaduct) continue;
-      const size = e.type === 'lander' ? 1.5 : e.type === 'wall' ? 0.45 : e.type === 'gate' ? 0.8 : 1;
+      const size = e.type === 'lander' ? 1.7 : e.type === 'wall' ? 0.45 : e.type === 'gate' ? 0.8 : 1.2;
       drawLightPool(ctx, ox + (e.x + 0.5) * z, oy + (e.y + 0.5) * z, z * size, BDEFS[e.type].wild ? '#9dff6a' : PLAYER_COLORS[e.owner] || '#ffd9a0');
     }
     for (const e of items) if (e.ent === 'b' && e.type === 'turret' && e.built && !e.paused) drawSearchlight(ctx, e, ox, oy, z);

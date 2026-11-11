@@ -593,3 +593,5 @@ canvas.chart.small { height: 110px; }
 .army-row > span:last-child { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 4px; flex: 0 1 auto; margin-left: auto; }
 .army-row > span:first-child { flex: 1 1 160px; min-width: 0; }
 #ar-tabs { margin-bottom: 8px; }
+.toggle-row .tod-seg { flex: 0 0 auto; }
+.toggle-row .tod-seg button { padding: 6px 10px; font-size: 13px; }

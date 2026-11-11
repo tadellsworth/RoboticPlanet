@@ -19,8 +19,9 @@
 const TOD_TIMES = {
   morning: { mul: [1.0, 0.85, 0.79], add: [0.06, 0.05, 0.09], shadow: { dx: -0.16, dy: 0.06, alpha: 0.4, blur: 1.0 }, lights: 0, headlights: 0, pools: 0 },
   day: { mul: [1, 1, 1], add: [0, 0, 0], shadow: { dx: 0.05, dy: 0.07, alpha: 0.42, blur: 1.0 }, lights: 0, headlights: 0, pools: 0 },
-  evening: { mul: [0.92, 0.64, 0.5], add: [0.01, 0, 0.02], shadow: { dx: 0.2, dy: 0.07, alpha: 0.4, blur: 1.0 }, lights: 0.55, headlights: 0.55, pools: 0.3 },
-  night: { mul: [0.19, 0.23, 0.37], add: [0.008, 0.01, 0.025], shadow: { dx: 0.03, dy: 0.05, alpha: 0.25, blur: 1.6 }, lights: 1, headlights: 1, pools: 0.55 },
+  evening: { mul: [0.92, 0.64, 0.5], add: [0.01, 0, 0.02], shadow: { dx: 0.2, dy: 0.07, alpha: 0.4, blur: 1.0 }, lights: 0.55, headlights: 0.55, pools: 0.45 },
+  // (night is a little deeper than it was, so the cities' lights stand out: see drawCityGlow and drawRoadGlow)
+  night: { mul: [0.16, 0.2, 0.33], add: [0.006, 0.008, 0.022], shadow: { dx: 0.03, dy: 0.05, alpha: 0.25, blur: 1.6 }, lights: 1, headlights: 1, pools: 0.8 },
 };
 /** The cycle, in minutes of game time: [time] holds it, [from, to] crossfades. It starts at dawn. */
 const TOD_CYCLE = [['morning', 1.5], ['morning', 'day', 0.5], ['day', 4], ['day', 'evening', 0.5], ['evening', 1.5], ['evening', 'night', 0.5], ['night', 3], ['night', 'morning', 0.5]];
@@ -31,13 +32,23 @@ const TOD_VEHICLES = ['truck', 'tanker', 'roadtrain', 'freight-loco', 'crawler',
 
 const TOD = { on: true, state: null, active: false, sets: {}, shared: {}, keys: null, poolTint: {} };
 
-/** Is the day/night cycle on (a display setting kept on this device)? */
-function todEnabled() { return TOD.on; }
-function setTodEnabled(on) {
-  TOD.on = !!on;
-  try { localStorage.setItem('botfall.daynight', on ? '1' : '0'); } catch (e) { /* storage unavailable */ }
+/**
+ * The time of day setting (a display setting kept on this device): 'cycle' (morning to night, 12 minutes
+ * round), 'day' (always day, the cycle off) or 'night' (always night: the cities' lights all game).
+ */
+const TOD_MODES = ['cycle', 'day', 'night'];
+const TOD_MODE_NAMES = { cycle: 'Cycle', day: 'Always day', night: 'Always night' };
+function todMode() { return TOD.mode; }
+function setTodMode(m) {
+  TOD.mode = TOD_MODES.includes(m) ? m : 'cycle';
+  TOD.on = TOD.mode !== 'day';
+  try { localStorage.setItem('botfall.daynight', TOD.mode === 'day' ? '0' : TOD.mode === 'night' ? 'night' : '1'); } catch (e) { /* storage unavailable */ }
 }
-try { if (localStorage.getItem('botfall.daynight') === '0') TOD.on = false; } catch (e) { /* storage unavailable */ }
+/** Is the light changing at all (the cycle, or always night)? */
+function todEnabled() { return TOD.on; }
+function setTodEnabled(on) { setTodMode(on ? 'cycle' : 'day'); }
+TOD.mode = 'cycle';
+try { const v = localStorage.getItem('botfall.daynight'); if (v === '0') { TOD.mode = 'day'; TOD.on = false; } else if (v === 'night') TOD.mode = 'night'; } catch (e) { /* storage unavailable */ }
 
 const todLerp = (a, b, f) => a + (b - a) * f;
 
@@ -66,8 +77,10 @@ function todMix(a, b, f) {
   };
 }
 
-/** The time of day now (the game's clock, or always day with the cycle off). */
-function todNow() { return TOD.on && S ? todAt(S.time) : todMix('day', 'day', 0); }
+/** The time of day now (the game's clock; always day with the cycle off, always night set to night). */
+function todNow() { return TOD.mode === 'night' ? todMix('night', 'night', 0) : TOD.on && S ? todAt(S.time) : todMix('day', 'day', 0); }
+/** The name of the time of day now ('morning', 'day', 'evening' or 'night'). */
+function todName() { return todNow().name; }
 
 /** Once a frame, before drawing: work out the light and make sure the sets in use are loading. */
 function todFrame() {
@@ -76,7 +89,7 @@ function todFrame() {
   TOD.active = st.a !== 'day' || st.b !== 'day';
   if (!TOD.on || !S) return;
   // The sets in use now and the next one coming (looked up a little ahead), and no others.
-  const want = new Set([st.a, st.b, todAt(S.time + 45).a, todAt(S.time + 45).b]);
+  const want = TOD.mode === 'night' ? new Set(['night']) : new Set([st.a, st.b, todAt(S.time + 45).a, todAt(S.time + 45).b]);
   want.delete('day');
   for (const name of want) todLoadSet(name);
   for (const name in TOD.sets) if (!want.has(name)) todDropSet(name);
@@ -319,6 +332,85 @@ function drawLightPool(ctx, x, y, z, color) {
   ctx.globalCompositeOperation = 'lighter';
   ctx.globalAlpha *= TOD.state.pools;
   ctx.drawImage(tinted, x - s / 2, y - s / 2, s, s);
+  ctx.restore();
+}
+
+/** A soft round glow in colour `color` (cached per colour), for the city haze. */
+function glowDisc(color) {
+  TOD.glowDisc = TOD.glowDisc || {};
+  if (TOD.glowDisc[color]) return TOD.glowDisc[color];
+  const n = 128, c = document.createElement('canvas');
+  c.width = c.height = n;
+  const x = c.getContext('2d'), gr = x.createRadialGradient(n / 2, n / 2, 0, n / 2, n / 2, n / 2);
+  gr.addColorStop(0, color); gr.addColorStop(0.35, color + 'aa'); gr.addColorStop(0.7, color + '33'); gr.addColorStop(1, color + '00');
+  x.fillStyle = gr; x.fillRect(0, 0, n, n);
+  return (TOD.glowDisc[color] = c);
+}
+
+/**
+ * At dusk and night, a city glows: a wide, faint haze in its owner's colour round every finished building,
+ * so where buildings crowd together the haze builds up into a glow over the whole town.
+ */
+function drawCityGlow(ctx, ox, oy, z, items) {
+  if (!TOD.active || !(TOD.state.pools > 0.01)) return;
+  // The haze is soft, so it's built at an eighth of the screen's size and laid over it in one draw (cheap).
+  const k = 1 / 8, w = Math.max(1, Math.ceil(R.w * k)), h = Math.max(1, Math.ceil(R.h * k));
+  let buf = TOD.cityBuf;
+  if (!buf) buf = TOD.cityBuf = document.createElement('canvas');
+  if (buf.width !== w || buf.height !== h) { buf.width = w; buf.height = h; }
+  const c = buf.getContext('2d');
+  c.clearRect(0, 0, w, h);
+  c.globalCompositeOperation = 'lighter';
+  c.globalAlpha = 0.085 * TOD.state.pools;
+  let any = false;
+  for (const e of items) {
+    if (e.ent !== 'b' || !e.built || BDEFS[e.type].wild || BDEFS[e.type].barrier || BDEFS[e.type].viaduct) continue;
+    const col = PLAYER_COLORS[e.owner];
+    if (!col) continue;
+    const r = z * (e.type === 'lander' ? 4.2 : 3.0) * k;
+    c.drawImage(glowDisc(col), (ox + (e.x + 0.5) * z) * k - r, (oy + (e.y + 0.5) * z) * k - r, r * 2, r * 2);
+    any = true;
+  }
+  if (!any) return;
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  ctx.imageSmoothingEnabled = true;
+  ctx.drawImage(buf, 0, 0, w / k, h / k);
+  ctx.restore();
+}
+
+/**
+ * At dusk and night, roads light up: a thin glowing line in the owner's colour along each road's edges
+ * (brighter on asphalt), so a colony's road network shows as lit lines across the dark.
+ */
+function drawRoadGlow(ctx, ox, oy, z, v0, v1) {
+  if (!TOD.active || !(TOD.state.lights > 0.01) || !S.road) return;
+  const W = S.W, H = S.H, on = TOD.state.lights, inset = 0.09;
+  const i0 = Math.max(0, Math.floor(v0.x) - 1), i1 = Math.min(W - 1, Math.ceil(v1.x) + 1);
+  const j0 = Math.max(0, Math.floor(v0.y) - 1), j1 = Math.min(H - 1, Math.ceil(v1.y) + 1);
+  const road = (i, j) => i >= 0 && j >= 0 && i < W && j < H && S.road[j * W + i];
+  const paths = {};
+  for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) {
+    const t = j * W + i;
+    if (!S.road[t] || S.bAt[t]) continue;
+    const o = wayOwner(t), key = (o >= 0 ? o : 'n') + (S.pave[t] === 2 ? 'a' : 'r');
+    const P = paths[key] || (paths[key] = new Path2D());
+    const x0 = ox + (i + inset) * z, x1 = ox + (i + 1 - inset) * z, y0 = oy + (j + inset) * z, y1 = oy + (j + 1 - inset) * z;
+    // Along each side with no road beside it; joined straight on through to the next road tile.
+    if (!road(i, j - 1)) { P.moveTo(road(i - 1, j) ? ox + i * z : x0, y0); P.lineTo(road(i + 1, j) ? ox + (i + 1) * z : x1, y0); }
+    if (!road(i, j + 1)) { P.moveTo(road(i - 1, j) ? ox + i * z : x0, y1); P.lineTo(road(i + 1, j) ? ox + (i + 1) * z : x1, y1); }
+    if (!road(i - 1, j)) { P.moveTo(x0, road(i, j - 1) ? oy + j * z : y0); P.lineTo(x0, road(i, j + 1) ? oy + (j + 1) * z : y1); }
+    if (!road(i + 1, j)) { P.moveTo(x1, road(i, j - 1) ? oy + j * z : y0); P.lineTo(x1, road(i, j + 1) ? oy + (j + 1) * z : y1); }
+  }
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  ctx.lineCap = 'round';
+  for (const key in paths) {
+    const o = key.slice(0, -1), col = o === 'n' ? '#ffd9a0' : PLAYER_COLORS[+o] || '#ffd9a0', asph = key.endsWith('a');
+    ctx.strokeStyle = col;
+    ctx.globalAlpha = on * (asph ? 0.2 : 0.13); ctx.lineWidth = Math.max(2, z * 0.11); ctx.stroke(paths[key]); // the glow
+    ctx.globalAlpha = on * (asph ? 0.85 : 0.6); ctx.lineWidth = Math.max(1, z * 0.028); ctx.stroke(paths[key]); // the strip
+  }
   ctx.restore();
 }
 

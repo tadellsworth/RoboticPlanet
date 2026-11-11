@@ -89,7 +89,7 @@ function initUI() {
   for (const [id, k] of [['m-nuke', 'nuke'], ['m-wild', 'wild'], ['m-events', 'events'], ['m-unlimited', 'unlimited']]) {
     $(id).onchange = () => { UI.menu[k] = $(id).checked ? 1 : 0; syncMenu(); saveSettings(); sfx('click'); };
   }
-  $('m-daynight').onchange = () => { setTodEnabled($('m-daynight').checked); syncMenu(); sfx('click'); };
+  for (const btn of $('m-daynight').children) btn.onclick = () => { setTodMode(btn.dataset.v); syncMenu(); sfx('click'); };
   // More settings opens and closes; it's remembered on this device.
   try { $('m-more').open = localStorage.getItem('botfall.moreOpen') === '1'; } catch (e) { /* storage unavailable */ }
   $('m-more').ontoggle = () => { try { localStorage.setItem('botfall.moreOpen', $('m-more').open ? '1' : '0'); } catch (e) { /* storage unavailable */ } };
@@ -122,9 +122,10 @@ function initUI() {
   $('p-music').oninput = () => { setVolume('music', $('p-music').value / 100); syncVol(); };
   $('p-fx').oninput = () => { setVolume('fx', $('p-fx').value / 100); syncVol(); };
   $('p-fx').onchange = () => sfx('place');
-  const syncTod = () => { $('p-daynight').textContent = `Day and night: ${todEnabled() ? 'On' : 'Off'}`; };
+  const syncTod = () => { $('p-daynight').textContent = `Time of day: ${TOD_MODE_NAMES[todMode()]}`; };
   syncTod();
-  $('p-daynight').onclick = () => { setTodEnabled(!todEnabled()); syncTod(); sfx('click'); };
+  // Cycle → Always day → Always night → Cycle.
+  $('p-daynight').onclick = () => { setTodMode(TOD_MODES[(TOD_MODES.indexOf(todMode()) + 1) % TOD_MODES.length]); syncTod(); sfx('click'); };
   initFullscreen();
   syncVol();
   $('p-help').onclick = () => showHelp();
@@ -235,7 +236,8 @@ function syncMenu() {
   $('m-wild').checked = !!UI.menu.wild;
   $('m-events').checked = !!UI.menu.events;
   $('m-unlimited').checked = !!UI.menu.unlimited;
-  $('m-daynight').checked = todEnabled();
+  for (const btn of $('m-daynight').children) btn.classList.toggle('on', btn.dataset.v === todMode());
+  $('m-daynight-v').textContent = { cycle: 'Morning to night, 12 minutes round (looks only)', day: 'Always day (looks only)', night: 'Always night: every city lit up (looks only)' }[todMode()];
   // What More settings holds that isn't the default, so it's clear at a glance with it closed.
   const sum = [];
   if (UI.menu.biome) sum.push(BIOMES[BIOME_ORDER[UI.menu.biome]].name);
@@ -245,7 +247,7 @@ function syncMenu() {
   if (!UI.menu.nuke) sum.push('no Nuclear race');
   if (UI.menu.mode === 'colony' && !UI.menu.wild) sum.push('no wildlife');
   if (UI.menu.events) sum.push('Planet events');
-  if (!todEnabled()) sum.push('always day');
+  if (todMode() !== 'cycle') sum.push(todMode() === 'day' ? 'always day' : 'always night');
   if (UI.menu.unlimited) sum.push('Unlimited resources');
   $('m-more-sum').textContent = sum.length ? sum.join(' · ') : 'Planet, biome, terrain, resources, rival style, options';
   $('m-continue').hidden = !hasSave();
@@ -3955,10 +3957,10 @@ function updateHUD() {
     ` <span class="dot" style="background:#ffb547;box-shadow:inset 0 0 0 2px ${PLAYER_COLORS[0]}"></span>${haulers}<span class="wide"> haulers</span>` +
     (warOn() ? ` <span class="dot" style="background:${PLAYER_COLORS[0]};border-radius:2px;transform:rotate(45deg)"></span>${war}` : '');
   // With day and night on, the time of day leads (a sun, a half-lit disc at dawn and dusk, a moon).
-  const tn = todAt(S.time).name, tod = todEnabled() ? `<span class="tod-mark" style="color:${{ morning: '#ffb38a', day: '#ffd166', evening: '#ff8a4a', night: '#b8c8ff' }[tn]}">${tn === 'night' ? '☾' : '☀'}</span> ` : '';
+  const tn = todName(), tod = todEnabled() ? `<span class="tod-mark" style="color:${{ morning: '#ffb38a', day: '#ffd166', evening: '#ff8a4a', night: '#b8c8ff' }[tn]}">${tn === 'night' ? '☾' : '☀'}</span> ` : '';
   const ct = tod + (S.mode === 'colony' ? `${Math.round(landShare(0) * 100)}% land` : fmtTime(S.time));
   if ($('clock').innerHTML !== ct) $('clock').innerHTML = ct;
-  $('clock').title = todEnabled() ? TOD_NAMES[todAt(S.time).name] : '';
+  $('clock').title = todEnabled() ? TOD_NAMES[todName()] + (todMode() === 'night' ? ' (always)' : '') : '';
   const obj = $('objective');
   obj.innerHTML = UI.objCollapsed && !S.mission ? 'Goal ▸' : objectiveText();
   obj.classList.toggle('small', UI.objCollapsed);

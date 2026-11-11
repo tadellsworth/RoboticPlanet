@@ -161,7 +161,7 @@
         <label class="toggle-row" id="m-nuke-row"><span>Nuclear race<small id="m-nuke-v">Race for uranium and nuclear missiles</small></span><input type="checkbox" id="m-nuke" role="switch"></label>
         <label class="toggle-row" id="m-wild-row"><span>Wildlife<small id="m-wild-v">Creature nests raid what you build near them</small></span><input type="checkbox" id="m-wild" role="switch"></label>
         <label class="toggle-row" id="m-events-row"><span>Planet events<small id="m-events-v">Dust storms, meteor showers, solar flares and a trader ship, every few minutes</small></span><input type="checkbox" id="m-events" role="switch"></label>
-        <label class="toggle-row" id="m-daynight-row"><span>Day and night<small>Morning to night, 12 minutes round (looks only)</small></span><input type="checkbox" id="m-daynight" role="switch"></label>
+        <div class="toggle-row" id="m-daynight-row"><span>Time of day<small id="m-daynight-v">Morning to night, 12 minutes round (looks only)</small></span><div class="seg tod-seg" id="m-daynight"><button type="button" data-v="cycle">Cycle</button><button type="button" data-v="day">Day</button><button type="button" data-v="night">Night</button></div></div>
         <label class="toggle-row" id="m-unlimited-row"><span>Unlimited resources<small id="m-unlimited-v">For trying things out: 500 of everything</small></span><input type="checkbox" id="m-unlimited" role="switch"></label>
       </div>
     </details>
@@ -181,7 +181,7 @@
         <input type="range" id="p-fx" min="0" max="100" step="5"></label>
     </div>
     <button id="p-full" class="btn big" hidden>Full screen: Off</button>
-    <button id="p-daynight" class="btn big" title="Morning, day, evening and night, 12 minutes round (a display setting)">Day and night: On</button>
+    <button id="p-daynight" class="btn big" title="Cycle (morning to night, 12 minutes round), always day or always night (a display setting)">Time of day: Cycle</button>
     <button id="p-stats" class="btn big">Statistics</button>
     <button id="p-saveplanet" class="btn big" title="Keep this planet (its seed and map settings) to play again from the new-game menu">Save this planet</button>
     <button id="p-export" class="btn big" title="Save this game to a file you can load on any device (main menu, Load a save file)">Download save file</button>
