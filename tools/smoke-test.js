@@ -50,7 +50,8 @@ const out = process.argv[3] || '.';
   await page.evaluate(() => { S.players[0].ai = true; for (let k = 0; k < 30 * 240; k++) simStep(SIM_STEP); S.players[0].ai = false; });
   await page.waitForTimeout(500);
   await page.screenshot({ path: `${out}/05-four-minutes.png` });
-  const L = await page.evaluate(() => { const L = getE(S.players[0].lander); centerOn(L.x + 0.5, L.y + 0.5); const p = worldToScreen(L.x + 0.5, L.y + 0.5); return { x: p.x, y: p.y }; });
+  // (Messages are cleared first: a toast is tappable, and one lying over the middle of the screen would take the tap meant for the Command Base.)
+  const L = await page.evaluate(() => { document.getElementById('toasts').textContent = ''; const L = getE(S.players[0].lander); centerOn(L.x + 0.5, L.y + 0.5); const p = worldToScreen(L.x + 0.5, L.y + 0.5); return { x: p.x, y: p.y }; });
   await page.mouse.click(L.x, L.y);
   await page.waitForTimeout(400);
   await page.screenshot({ path: `${out}/06-lander-sheet.png` });
