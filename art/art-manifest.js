@@ -120,13 +120,13 @@ const ART_MANIFEST = {
   crystal: 'resources/crystal.webp',
 
   // Priority 2: production buildings
-  harvester: B3D('buildings/harvester.webp'),
-  quarry: B3D('buildings/quarry.webp'),
-  mine: B3D('buildings/mine.webp'),
-  tap: B3D('buildings/tap.webp'),
-  smelter: B3D('buildings/smelter.webp'),
-  fab: B3D('buildings/fab.webp'),
-  foundry: B3D('buildings/foundry.webp'),
+  'harvester@0': B3D('buildings/harvester@0.webp'), 'harvester@1': B3D('buildings/harvester@1.webp'),
+  'quarry@0': B3D('buildings/quarry@0.webp'), 'quarry@1': B3D('buildings/quarry@1.webp'),
+  'mine@0': B3D('buildings/mine@0.webp'), 'mine@1': B3D('buildings/mine@1.webp'),
+  'tap@0': B3D('buildings/tap@0.webp'), 'tap@1': B3D('buildings/tap@1.webp'),
+  'smelter@0': B3D('buildings/smelter@0.webp'), 'smelter@1': B3D('buildings/smelter@1.webp'),
+  'fab@0': B3D('buildings/fab@0.webp'), 'fab@1': B3D('buildings/fab@1.webp'),
+  'foundry@0': B3D('buildings/foundry@0.webp'), 'foundry@1': B3D('buildings/foundry@1.webp'),
 
   // Priority 3: the rest
   'outpost@0': B3D('buildings/outpost@0.webp'),
@@ -135,27 +135,27 @@ const ART_MANIFEST = {
   // screen), each team's own, on the base's canvas.
   'turret@0': B3D('buildings/turret@0.webp'), 'turret@1': B3D('buildings/turret@1.webp'),
   ...(() => { const o = {}; for (const t of [0, 1]) for (let k = 0; k < 16; k++) o[`turret-head-${k}@${t}`] = B3D(`buildings/turret-head-${k}@${t}.webp`); return o; })(),
-  depot: B3D('buildings/depot.webp'),
-  grower: B3D('buildings/grower.webp'),
-  site: B3D('buildings/site.webp'),
+  'depot@0': B3D('buildings/depot@0.webp'), 'depot@1': B3D('buildings/depot@1.webp'),
+  'grower@0': B3D('buildings/grower@0.webp'), 'grower@1': B3D('buildings/grower@1.webp'),
+  'site@0': B3D('buildings/site@0.webp'), 'site@1': B3D('buildings/site@1.webp'),
   water: 'tiles/water.webp',
   rock: 'tiles/rock.webp',
 
   // The second 3D set: the rest of the economy buildings, plus the Ramp (build menu and preview).
-  charger: B3D('buildings/charger.webp'),
-  farm: B3D('buildings/farm.webp'),
-  pump: B3D('buildings/pump.webp'),
-  refinery: B3D('buildings/refinery.webp'),
-  kiln: B3D('buildings/kiln.webp'),
-  tarworks: B3D('buildings/tarworks.webp'),
-  roadworks: B3D('buildings/roadworks.webp'),
-  ramp: B3D('buildings/ramp.webp'),
-  repair: B3D('buildings/repair-bay.webp'),
+  'charger@0': B3D('buildings/charger@0.webp'), 'charger@1': B3D('buildings/charger@1.webp'),
+  'farm@0': B3D('buildings/farm@0.webp'), 'farm@1': B3D('buildings/farm@1.webp'),
+  'pump@0': B3D('buildings/pump@0.webp'), 'pump@1': B3D('buildings/pump@1.webp'),
+  'refinery@0': B3D('buildings/refinery@0.webp'), 'refinery@1': B3D('buildings/refinery@1.webp'),
+  'kiln@0': B3D('buildings/kiln@0.webp'), 'kiln@1': B3D('buildings/kiln@1.webp'),
+  'tarworks@0': B3D('buildings/tarworks@0.webp'), 'tarworks@1': B3D('buildings/tarworks@1.webp'),
+  'roadworks@0': B3D('buildings/roadworks@0.webp'), 'roadworks@1': B3D('buildings/roadworks@1.webp'),
+  'ramp@0': B3D('buildings/ramp@0.webp'), 'ramp@1': B3D('buildings/ramp@1.webp'),
+  'repair@0': B3D('buildings/repair-bay@0.webp'), 'repair@1': B3D('buildings/repair-bay@1.webp'),
 
   // Nuclear race: the Reactor and Nuclear Silo (team versions), the nuclear missile in flight (nose
   // right), the detonation (a 6×4 sheet of 24 frames, played once at 12 fps, ground zero at [0.5, 0.7])
   // and the scorched crater it leaves.
-  reactor: B3D('buildings/nuclear-reactor.webp'),
+  'reactor@0': B3D('buildings/nuclear-reactor@0.webp'), 'reactor@1': B3D('buildings/nuclear-reactor@1.webp'),
   'nukesilo@0': B3D('buildings/nuclear-silo@0.webp'),
   'nukesilo@1': B3D('buildings/nuclear-silo@1.webp'),
   // The same Silos with no missile in them: drawn until one is armed and ready to fire.
@@ -195,13 +195,13 @@ const ART_MANIFEST = {
   'bomber@0': 'bots/bomber@0.webp',
   'bomber@1': 'bots/bomber@1.webp',
   // Generator (one version for both teams, like the factories), and its working loop: fans and power bus.
-  generator: B3D('buildings/generator.webp'),
+  'generator@0': B3D('buildings/generator@0.webp'), 'generator@1': B3D('buildings/generator@1.webp'),
   ...Object.fromEntries([0, 1, 2, 3, 4, 5, 6, 7].map((k) => [`generator-work-${k}`, B3D(`buildings/generator-work-${k}.webp`)])),
   // Working loops (8 frames, played while the building works): the Smelter's furnace glow and embers and
   // the Refinery's blinking column lights (both light), and the Oil Pump's walking beam nodding through
   // a stroke, drawn over the pump without its beam ('pump-base') while it pumps.
   ...Object.fromEntries(['smelter', 'refinery', 'pump'].flatMap((b) => [0, 1, 2, 3, 4, 5, 6, 7].map((k) => [`${b}-work-${k}`, B3D(`buildings/${b}-work-${k}.webp`)]))),
-  'pump-base': B3D('buildings/pump-base.webp'),
+  'pump-base@0': B3D('buildings/pump-base@0.webp'), 'pump-base@1': B3D('buildings/pump-base@1.webp'),
   // Diesel smoke: 12 frames of 64 x 64 (4 x 3), one puff each, seen from above. Not fx- names: they're
   // graded with the light at dusk and night like other smoke.
   'smoke-exhaust': { src: 'effects/fx-exhaust.webp', frames: 12, cols: 4 },
@@ -227,7 +227,7 @@ const ART_MANIFEST = {
   ...biomeSet('desert'), ...biomeSet('jungle'), ...biomeSet('polar'),
 
   // Batches 11–13 (Claude Design): the Lab, creature nests, Ropeway and Rail Station, on the shared pad.
-  lab: B3D('buildings/lab.webp'),
+  'lab@0': B3D('buildings/lab@0.webp'), 'lab@1': B3D('buildings/lab@1.webp'),
   'nest-1': B3D('buildings/nest-1.webp'), 'nest-2': B3D('buildings/nest-2.webp'), 'nest-3': B3D('buildings/nest-3.webp'),
   // The Ropeway's pad is ~1.1 tiles (scale 1.47); its bull wheel, where the cable leaves, is at (0.5, 0.10).
   'ropeway@0': { src: 'buildings/ropeway@0.webp', scale: 1.47, anchor: [0.5, 0.615] },
