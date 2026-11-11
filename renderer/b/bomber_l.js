@@ -16,7 +16,7 @@ export default function (L) {
   L.useCamera(cam);
 
   // ---- materials: the Lancer's gunmetal shades, seams, steel and team glow
-  const armor = M.paint('#3a4046'), top = M.paint('#4f565e'), roof = M.paint('#5e666f', { rivets: false });
+  const armor = M.paint('#3a4046'), top = M.paint('#4f565e'), roof = M.paint('#5e666f', { rivets: false }), under = M.paint('#262a2e');
   const dark = M.plain('#1a1c1f', 0.7, 0.3), black = M.plain('#08090a', 0.8), seam = M.plain('#101214', 0.8);
   const steel = M.plain('#626970', 0.3, 0.85), rail = M.plain('#23272b', 0.4, 0.7), hood = M.plain('#121518', 0.3, 0.6);
   const glow = M.emit(TEAM, 1.1), lens = R.eye(TEAM, 1.3, 0.32);
@@ -79,7 +79,7 @@ export default function (L) {
       let sd = seed * 9301 + 49297; const r = () => (sd = (sd * 9301 + 49297) % 233280) / 233280;
       for (let i = 0; i < 26 * amt; i++) { const cx = r() * n, cy = r() * n, rr = 8 + r() * 30;
         const gr = g.createRadialGradient(cx, cy, 0, cx, cy, rr); const c = r() < 0.5 ? '122,84,50' : '70,52,36';
-        gr.addColorStop(0, `rgba(${c},${0.2 + r() * 0.25})`); gr.addColorStop(1, `rgba(${c},0)`); g.fillStyle = gr; g.fillRect(cx - rr, cy - rr, rr * 2, rr * 2); }
+        gr.addColorStop(0, `rgba(${c},${0.12 + r() * 0.18})`); gr.addColorStop(1, `rgba(${c},0)`); g.fillStyle = gr; g.fillRect(cx - rr, cy - rr, rr * 2, rr * 2); }
       for (let i = 0; i < 900 * amt; i++) { g.fillStyle = `rgba(${r() < 0.5 ? '20,18,16' : '150,120,90'},${r() * 0.35})`; g.fillRect(r() * n, r() * n, 1 + r() * 2, 1 + r() * 2); }
     });
     const sh = new THREE.Shape(); pts.forEach(([x, z], i) => (i ? sh.lineTo(x, -z) : sh.moveTo(x, -z))); sh.closePath();
@@ -118,10 +118,10 @@ export default function (L) {
     for (const x of [2.0, 1.75, 1.5]) strip(x, s * 0.5, x, s * 0.95, 0.07, Y0 + 0.552, 0.012, black);         // the bleed vents
   }
   // ---- the broad body over the engines: a wide faceted slab with raised deck plates either side of the spine
-  facet([[1.42, 1.3, 0.62], [1.2, 1.44, 0.66], [-5.5, 1.44, 0.66], [-5.85, 1.3, 0.62], [-6.6, 1.22, 0.6]].map(([x, w, h]) => ({ x, w, h, t: w - 0.34, m: 0.55, y: Y0 - 0.1 })), [top, armor, armor]);
+  facet([[1.42, 1.3, 0.62], [1.2, 1.44, 0.66], [-5.5, 1.44, 0.66], [-5.85, 1.3, 0.62], [-6.6, 1.22, 0.6]].map(([x, w, h]) => ({ x, w, h, t: w - 0.34, m: 0.55, y: Y0 - 0.1 })), [armor, armor, armor]);
   for (const s of [-1, 1]) {
     plate([[0.95, s * 0.42], [0.95, s * 0.98], [-1.9, s * 1.02], [-1.9, s * 0.42]], Y0 + 0.595, 0.04, roof);
-    plate([[-2.1, s * 0.42], [-2.1, s * 1.02], [-5.2, s * 1.02], [-5.45, s * 0.8], [-5.45, s * 0.42]], Y0 + 0.595, 0.04, top);
+    plate([[-2.1, s * 0.42], [-2.1, s * 1.02], [-5.2, s * 1.02], [-5.45, s * 0.8], [-5.45, s * 0.42]], Y0 + 0.595, 0.04, roof);
     for (let k = 0; k < 4; k++) strip(-2.6 - k * 0.42, s * 0.55, -2.6 - k * 0.42, s * 0.88, 0.06, Y0 + 0.596, 0.01, black); // cooling louvres
     strip(1.2, s * 1.12, -5.5, s * 1.12, 0.035, Y0 + 0.557, 0.01, seam);
   }
@@ -139,14 +139,14 @@ export default function (L) {
   const RZ = 1.3, TZ = 5.68, LE = (z) => -0.48 - (Math.abs(z) - RZ) * (3.92 / 4.38), TE = (z) => -6.16 - (Math.abs(z) - RZ) * (0.08 / 4.38);
   const WY = Y0 + 0.34;
   for (const s of [-1, 1]) {
-    plate([[LE(RZ), s * RZ], [LE(TZ), s * TZ], [TE(TZ), s * TZ], [TE(RZ), s * RZ]], WY, 0.12, armor, { bevel: 0.04 });
+    plate([[LE(RZ), s * RZ], [LE(TZ), s * TZ], [TE(TZ), s * TZ], [TE(RZ), s * RZ]], WY, 0.12, under, { bevel: 0.04 });
     // the plating: three panels between the leading-edge band and the flaps, the flaps and the aileron behind
     const zs = [RZ, 2.8, 4.25, TZ - 0.12], fx = (z) => TE(z) + 0.78;
     for (let k = 0; k < 3; k++) {
       const z0 = zs[k] + (k ? 0.04 : 0.02), z1 = zs[k + 1] - 0.04;
-      plate([[LE(z0) - 0.3, s * z0], [LE(z1) - 0.3, s * z1], [fx(z1) + 0.05, s * z1], [fx(z0) + 0.05, s * z0]], WY + 0.035, 0.035, k === 1 ? roof : top, { bevel: 0.012 });
+      plate([[LE(z0) - 0.3, s * z0], [LE(z1) - 0.3, s * z1], [fx(z1) + 0.05, s * z1], [fx(z0) + 0.05, s * z0]], WY + 0.035, 0.035, k === 0 ? top : armor, { bevel: 0.012 });
     }
-    for (const [z0, z1] of [[RZ + 0.04, 3.3], [3.38, 5.5]]) plate([[fx(z0) - 0.04, s * z0], [fx(z1) - 0.04, s * z1], [TE(z1) + 0.04, s * z1], [TE(z0) + 0.04, s * z0]], WY + 0.03, 0.03, top, { bevel: 0.01 });
+    for (const [z0, z1] of [[RZ + 0.04, 3.3], [3.38, 5.5]]) plate([[fx(z0) - 0.04, s * z0], [fx(z1) - 0.04, s * z1], [TE(z1) + 0.04, s * z1], [TE(z0) + 0.04, s * z0]], WY + 0.03, 0.03, armor, { bevel: 0.01 });
     // the leading-edge glow strip, in the dark band ahead of the plating
     strip(LE(RZ + 0.05) - 0.15, s * (RZ + 0.05), LE(TZ - 0.2) - 0.15, s * (TZ - 0.2), 0.085, WY + 0.002, 0.02, glow);
     // the tip pod: a faceted hexagonal pod, its nose a pointed cone
@@ -158,21 +158,21 @@ export default function (L) {
     band(bx + 0.85, 0.1, 0.22, by, bz, glow);
     // the stabilator: swept, reaching back past the nozzles, a raised panel on it
     const stab = [[-6.32, s * 1.25], [-9.12, s * 3.79], [-9.62, s * 3.4], [-8.48, s * 1.25]];
-    plate(stab, Y0 + 0.08, 0.1, armor, { bevel: 0.03 });
-    plate(inset(stab, [0.12, 0.1, 0.25, 0.1]), Y0 + 0.105, 0.03, top, { bevel: 0.01 });
+    plate(stab, Y0 + 0.08, 0.1, under, { bevel: 0.03 });
+    plate(inset(stab, [0.12, 0.1, 0.25, 0.1]), Y0 + 0.105, 0.03, armor, { bevel: 0.01 });
     // the fin: tall and swept, canted out, a seam down it and its cap glowing
     const fin = new THREE.Group(); fin.position.set(0, Y0 + 0.52, s * 1.12); fin.rotation.x = s * 0.14; L.getRoot().add(fin);
     { const sh = new THREE.Shape(); sh.moveTo(-3.7, 0); sh.lineTo(-5.0, 0.42); sh.lineTo(-8.2, 2.4); sh.lineTo(-8.85, 2.4); sh.lineTo(-8.6, 0); sh.closePath();
       const g = new THREE.ExtrudeGeometry(sh, { depth: 0.1, bevelEnabled: true, bevelThickness: 0.02, bevelSize: 0.02, bevelOffset: -0.02, bevelSegments: 1 }); g.translate(0, 0, -0.05);
       const uv = g.attributes.uv; for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) * UV, uv.getY(i) * UV);
-      mesh(g, armor, 0, 0, 0, { dirt: 0, parent: fin }); }
+      mesh(g, roof, 0, 0, 0, { dirt: 0, parent: fin }); }
     box(0.7, 0.07, 0.15, glow, -8.52, 2.36, 0, { dirt: 0, parent: fin, cast: false });
     box(0.05, 2.0, 0.13, seam, -7.2, 0.05, 0, { dirt: 0, parent: fin, cast: false, ry: 0 }).rotation.z = 0.55;
   }
 
   // ---- grime over the body and the wings
   grime([[1.3, -1.4], [1.3, 1.4], [-5.5, 1.4], [-5.5, -1.4]], Y0 + 0.64, 0.7, 11);
-  for (const s of [-1, 1]) grime([[LE(RZ), s * RZ], [LE(TZ), s * TZ], [TE(TZ), s * TZ], [TE(RZ), s * RZ]], WY + 0.075, 0.6, 5 + s);
+  for (const s of [-1, 1]) grime([[LE(RZ), s * RZ], [LE(TZ), s * TZ], [TE(TZ), s * TZ], [TE(RZ), s * RZ]], WY + 0.075, 0.4, 5 + s);
 
   // ---- lights: navigation (red left, green right) on the tip pods, white on the tail boom, the beacon on the spine
   sphere(0.11, M.emit('#ff3a2a', 3.4), -2.85, WY - 0.02, -TZ - 0.06, { cast: false });
