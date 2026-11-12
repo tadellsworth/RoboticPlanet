@@ -13,7 +13,7 @@ import os
 import sys
 import numpy as np
 from tex import *
-from terrain_biomes import N, over, leaf_patch, crag_height, cast_shadow
+from terrain_biomes import N, over, leaf_patch, cast_shadow
 
 OUT = 'out/art/biomes/lunar'
 

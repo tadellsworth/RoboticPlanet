@@ -160,7 +160,7 @@ def s2_baobab(seed=32):
         nl = rng.integers(5, 8)
         y0 = rng.uniform(0, 2 * np.pi)
         for j in range(nl):
-            add_leaf(S, p, y0 + 2 * np.pi * j / nl + rng.uniform(-0.2, 0.2), rng.uniform(4.5, 6.0), 2.0,
+            add_leaf(S, p, y0 + 2 * np.pi * j / nl + rng.uniform(-0.2, 0.2), rng.uniform(5.5, 7.5), 2.5,
                      np.radians(rng.uniform(10, 30)), np.radians(rng.uniform(-15, 5)), shape='ovate', n=5, ncross=3,
                      fold=0.25, col=leaf_cols[rng.integers(len(leaf_cols))], col2='#3a5a1c', mat=1, spec=0.14, trans=0.3)
 
@@ -172,8 +172,10 @@ def s2_baobab(seed=32):
                 d2 = nrm(nrm(sp[-1] - sp[-3]) + rng.normal(size=3) * 0.55 + np.array([0, 0, 0.15]))
                 limb(sp[-1], d2, L * rng.uniform(0.5, 0.68), r0 * 0.58, depth + 1)
         else:
-            if rng.uniform() < 0.55:
+            if rng.uniform() < 0.9:
                 rosette(sp[-1] + np.array([0, 0, 0.5]))
+                if rng.uniform() < 0.5:
+                    rosette(sp[-3] + np.array([0, 0, 0.5]))
     nb = 8
     off = rng.uniform(0, 2 * np.pi)
     for k in range(nb):
@@ -181,7 +183,7 @@ def s2_baobab(seed=32):
         p0 = np.array([np.cos(yaw) * rt * 0.55, np.sin(yaw) * rt * 0.55, H + 2])
         pitch = np.radians(rng.uniform(10, 28))
         d = np.array([np.cos(pitch) * np.cos(yaw), np.cos(pitch) * np.sin(yaw), np.sin(pitch)])
-        limb(p0, d, rng.uniform(28, 36), 5.4, 0)
+        limb(p0, d, rng.uniform(32, 40), 5.4, 0)
     for k in range(2):
         yaw = rng.uniform(0, 2 * np.pi)
         p0 = np.array([np.cos(yaw) * 4, np.sin(yaw) * 4, H + 3])
@@ -334,9 +336,9 @@ def s6_sapling(seed=36):
     return S
 
 
-SCALE = [1.03, 1.25, 1.36, 1.72, 1.6, 1.62]
+SCALE = [1.03, 1.17, 1.36, 1.72, 1.6, 1.62]
 # tall plants cast long shadows to the lower right: shift them up-left so the shadow fits
-OFFSET = [(16, 20), (16, 26), (30, 36), (14, 18), (4, 4), (12, 16)]
+OFFSET = [(16, 20), (24, 34), (30, 36), (14, 18), (4, 4), (12, 16)]
 # per-plant render settings: the mound's tall spires would otherwise be darkened by the height-based occlusion
 RKW = [{}, {}, dict(ao_low=0.15), {}, {}, {}]
 ENV = ['savanna', 'savanna', 'savanna-mound', 'savanna', 'savanna', 'savanna']

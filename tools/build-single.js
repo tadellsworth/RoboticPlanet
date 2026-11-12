@@ -15,13 +15,26 @@ const sandbox = {};
 vm.runInNewContext(manifestSrc.replace('const ART_MANIFEST', 'this.ART_MANIFEST'), sandbox);
 const manifest = sandbox.ART_MANIFEST || {};
 const mime = { '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp', '.svg': 'image/svg+xml' };
-const inlined = {};
+// The newer biomes' art goes in a bundle of its own beside the page (dist/biome-<b>.js, loaded when that
+// biome is wanted: see ensureBiomeArt), so the page stays small; its manifest entries stay, without the data.
+const LAZY_BIOMES = ['autumn', 'savanna', 'swamp', 'volcanic', 'lunar', 'alien'];
+const lazyBiomeOf = (key) => LAZY_BIOMES.find((b) => key.endsWith('-' + b) || key.startsWith('plant-' + b + '-')) || null;
+const inlined = {}, biomeData = {};
 for (const key of Object.keys(manifest)) {
   const entry = typeof manifest[key] === 'string' ? { src: manifest[key] } : { ...manifest[key] };
   const file = path.join(root, 'art', entry.src);
   if (!fs.existsSync(file)) { console.warn('missing art file, skipped:', entry.src); continue; }
-  entry.src = `data:${mime[path.extname(file).toLowerCase()] || 'image/png'};base64,${fs.readFileSync(file).toString('base64')}`;
+  const data = `data:${mime[path.extname(file).toLowerCase()] || 'image/png'};base64,${fs.readFileSync(file).toString('base64')}`;
+  const lb = lazyBiomeOf(key);
+  if (lb) { (biomeData[lb] = biomeData[lb] || {})[key] = data; entry.src = ''; } else entry.src = data;
   inlined[key] = entry;
+}
+let biomeBytes = 0;
+for (const b of LAZY_BIOMES) {
+  const js = `window.BIOME_DATA = window.BIOME_DATA || {};\nwindow.BIOME_DATA[${JSON.stringify(b)}] = ${JSON.stringify(biomeData[b] || {})};\n`;
+  fs.mkdirSync(path.join(root, 'dist'), { recursive: true });
+  fs.writeFileSync(path.join(root, 'dist', `biome-${b}.js`), js);
+  biomeBytes += js.length;
 }
 
 const scripts = [...html.matchAll(/<script src="([^"]+)"><\/script>/g)].map((m) => m[1]);
@@ -56,9 +69,9 @@ html = html
   .replace(/<link rel="apple-touch-icon"[^>]*>\n/, '')
   .replace(/<link rel="icon"[^>]*>/, `<link rel="icon" href="${icon}" type="image/png">`)
   .replace('<link rel="stylesheet" href="style.css">', () => `<style>\n${read('style.css')}</style>`)
-  .replace(/(<script src="[^"]+"><\/script>\n?)+/, () => `<script>\nwindow.BOTFALL_NO_SW = true;\nwindow.TOD_BUNDLE = true;\nwindow.TOD_SHARED = ${JSON.stringify(todShared)};\n${code.replace(/<\/script/g, '<\\/script')}\n</script>\n`);
+  .replace(/(<script src="[^"]+"><\/script>\n?)+/, () => `<script>\nwindow.BOTFALL_NO_SW = true;\nwindow.TOD_BUNDLE = true;\nwindow.BIOME_BUNDLE = true;\nwindow.TOD_SHARED = ${JSON.stringify(todShared)};\n${code.replace(/<\/script/g, '<\\/script')}\n</script>\n`);
 
 fs.mkdirSync(path.join(root, 'dist'), { recursive: true });
 const out = path.join(root, 'dist', 'terrafall.html');
 fs.writeFileSync(out, html);
-console.log(`wrote ${path.relative(root, out)} (${Math.round(html.length / 1024)} KB, ${Object.keys(inlined).length} custom art files) and dist/tod-{morning,evening,night}.js (${Math.round(todBytes / 1024)} KB)`);
+console.log(`wrote ${path.relative(root, out)} (${Math.round(html.length / 1024)} KB, ${Object.keys(inlined).length} custom art files) and dist/tod-{morning,evening,night}.js (${Math.round(todBytes / 1024)} KB) and dist/biome-*.js (${Math.round(biomeBytes / 1024)} KB)`);

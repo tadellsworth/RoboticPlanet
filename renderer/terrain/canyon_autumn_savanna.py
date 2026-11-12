@@ -23,7 +23,7 @@ PAL = {
         void='#070605', haze='#1e1912', mote='#f2c070',
         rim='#64645e', rimhi='#8a8a80', crack='#121212', dust='#8a6a3c',
         bands=['#5e6064', '#74767a', '#4c4e52', '#808286', '#585a5e', '#6a6c70', '#505256', '#7a7c80'],
-        face=0.80, moss='#6a6a2c', moss2='#b8682a', vine='#5a2a1a', leaf='#c0381e'),
+        face=0.80, moss='#6a6a2c', moss2='#b8682a', vine='#3a2a1e', leaf='#a8481e'),
     'savanna': dict(
         void='#0b0705', haze='#2a1a10', mote='#f4cc8c',
         rim='#9a6a4a', rimhi='#c09468', crack='#1e100a', dust='#c8a464',

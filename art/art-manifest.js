@@ -62,11 +62,19 @@
  */
 function B3D(src, scale) { return { src, scale: scale || 1.4, anchor: [0.5, 0.615] }; }
 
-/** A biome's six decorative plants (shadows baked in, centred) and, except the desert, its ground, water, rock and cliff. */
+// Biomes whose ground, water or plants glow at night: which pieces have glow art (see bakeGlow).
+const BIOME_GLOWS = { volcanic: { plants: [1, 2, 3], ground: true, water: true }, alien: { plants: [1, 2, 3, 4, 5, 6], ground: true, water: true } };
+
+/** A biome's six decorative plants (shadows baked in, centred) and, except the desert, its ground, water, rock and cliff, plus any glow art. */
 function biomeSet(b) {
-  const out = {};
+  const out = {}, g = BIOME_GLOWS[b];
   for (let k = 1; k <= 6; k++) out[`plant-${b}-${k}`] = `biomes/${b}/plant-${k}.webp`;
   if (b !== 'desert') for (const kind of ['ground', 'water', 'rock', 'cliff']) out[`${kind}-${b}`] = `biomes/${b}/${kind}.webp`;
+  if (g) {
+    for (const k of g.plants) out[`plant-${b}-${k}-glow`] = `biomes/${b}/plant-${k}-glow.webp`;
+    if (g.ground) out[`ground-glow-${b}`] = `biomes/${b}/ground-glow.webp`;
+    if (g.water) out[`water-glow-${b}`] = `biomes/${b}/water-glow.webp`;
+  }
   return out;
 }
 
@@ -227,6 +235,8 @@ const ART_MANIFEST = {
   // Biomes: plants for the Red desert, Jungle and Polar worlds, and the Jungle and Polar terrain
   // (512x512 seamless textures, one image per 4x4 tiles; cliffs 128x48). The desert tiles above are 512 too.
   ...biomeSet('desert'), ...biomeSet('jungle'), ...biomeSet('polar'),
+  ...biomeSet('autumn'), ...biomeSet('savanna'), ...biomeSet('swamp'), ...biomeSet('volcanic'), ...biomeSet('lunar'), ...biomeSet('alien'),
+  lava: 'biomes/volcanic/water.webp', // lava (Volcano maps, whatever the biome)
 
   // Batches 11–13 (Claude Design): the Lab, creature nests, Ropeway and Rail Station, on the shared pad.
   'lab@0': B3D('buildings/lab@0.webp'), 'lab@1': B3D('buildings/lab@1.webp'),
@@ -261,7 +271,7 @@ const ART_MANIFEST = {
   ...files('bridges', ['bridge', 'skybridge', 'railbridge'].flatMap((k) => ['ew', 'ns', 'end-w', 'end-e', 'end-n', 'end-s', 'ramp-w', 'ramp-e', 'ramp-n', 'ramp-s', 'pier'].map((p) => `${k}-${p}`)).concat(['skybridge-tower', 'skybridge-tower-lamp', 'skybridge-cable'])),
   // A Viaduct's abutment tile (renderer/b/bridge.js piece abut-*): viaduct-abut-e when its span leaves eastward.
   ...files('bridges', ['viaduct-abut-w', 'viaduct-abut-e', 'viaduct-abut-n', 'viaduct-abut-s']),
-  ...files('canyon', ['', '-jungle', '-polar'].flatMap((b) => ['chasm', 'chasm-wall', 'chasm-wall-2', 'chasm-lip-n', 'chasm-lip-w', 'chasm-lip-e'].map((k) => k + b))),
+  ...files('canyon', ['', '-jungle', '-polar', '-autumn', '-savanna', '-swamp', '-volcanic', '-lunar', '-alien'].flatMap((b) => ['chasm', 'chasm-wall', 'chasm-wall-2', 'chasm-lip-n', 'chasm-lip-w', 'chasm-lip-e'].map((k) => k + b))),
 
   // Bunker, Disruptor Tower and Mortar Pit (ART_GUIDE Batch 14), drawn at their size classes (1.2,
   // 1.3 and 1.3 tiles). The overlays (flashed as they fire) and the Mortar's tube in 16 directions

@@ -3,7 +3,8 @@
 Ground: charcoal basalt plates under drifts of pale grey ash, cinder grit, hairline cracks (a few
 with a faint dull-red glow), small sulphur crusts and the odd obsidian glint. Mid-dark grey, warm.
 Water: molten lava, bright orange-yellow channels flowing between darker cooling crust plates;
-water-glow.png is its night glow mask (bright where hottest).
+water-glow.png is its night glow (coloured, bright where hottest), ground-glow.png the faint glow of
+the ground's red cracks; both seamless, black elsewhere, for the game to add on at night.
 Rock: black basalt and obsidian crags with glassy highlights and columnar jointing on the tops.
 Cliff: dark basalt columns under an ash cap, a faint warm glow at the foot.
 
@@ -17,6 +18,7 @@ from tex import *
 from terrain_biomes import N, over, leaf_patch, crag_height, cast_shadow, jitter_points, _paste
 
 OUT = 'out/art/biomes/volcanic'
+_GLOW = {}
 WIND = np.radians(-24)   # ash drifts lie along the prevailing wind
 FLOW = np.radians(28)    # lava flows down-right
 
@@ -79,6 +81,7 @@ def volcanic_ground():
     halo = blur_wrap(gl, 2.5) * 2.0
     col = over(col, hexrgb('#55302a'), np.clip(halo, 0, 1) * 0.3)
     col = over(col, hexrgb('#a2381a'), gl * 0.6)
+    _GLOW['ground'] = (gl, halo)
     # sulphur crusts: small yellow patches, mostly beside cracks, a few white salts
     sn = fbm(N, 3016, 8, 64, beta=1.6) + 0.5 * fbm(N, 3017, 40, 160, beta=0.8)
     near = blur_wrap(crack, 4.0)
@@ -192,10 +195,22 @@ def volcanic_lava():
 
 
 def volcanic_lava_glow():
+    """Night glow for the lava, coloured (the game adds it with 'lighter'): red-orange where the lava
+    is warm, yellow-orange where it's hottest, black on the cooled crust."""
     T, H, crust = lava_fields()
     g = smoothstep(0.28, 0.95, T) ** 1.2
-    g = 0.7 * g + 0.3 * np.clip(blur_wrap(g, 5.0) * 1.3, 0, 1)
-    return np.repeat(np.clip(g, 0, 1)[..., None], 3, -1)
+    g = np.clip(0.7 * g + 0.3 * np.clip(blur_wrap(g, 5.0) * 1.3, 0, 1), 0, 1)
+    hot = smoothstep(0.6, 1.0, g)[..., None]
+    col = hexrgb('#ff5a14') * (1 - hot) + hexrgb('#ffb048') * hot
+    return col * g[..., None]
+
+
+def volcanic_ground_glow():
+    """Night glow for the ground: just the few dull-red cracks, faint (added on with 'lighter')."""
+    volcanic_ground()
+    gl, halo = _GLOW['ground']
+    g = np.clip(gl * 0.75 + np.clip(halo, 0, 1) * 0.3, 0, 1)
+    return hexrgb('#d8401a') * g[..., None]
 
 
 # ============================================================================ ROCK
@@ -290,7 +305,7 @@ def volcanic_cliff():
     return downsample(col, ss)
 
 
-JOBS = {'ground': volcanic_ground, 'water': volcanic_lava, 'water-glow': volcanic_lava_glow,
+JOBS = {'ground': volcanic_ground, 'ground-glow': volcanic_ground_glow, 'water': volcanic_lava, 'water-glow': volcanic_lava_glow,
         'rock': volcanic_rock, 'cliff': volcanic_cliff}
 
 if __name__ == '__main__':

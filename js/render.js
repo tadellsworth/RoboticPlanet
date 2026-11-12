@@ -71,6 +71,60 @@ const BIOME_LOOK = {
     // into canopy; the log and the ferns stay inside theirs.
     plantScale: [1.36, 1.36, 1.36, 1.36, 1.12, 1.12],
   },
+  // The six newer biomes (their art is already the right colour: nothing is adjusted).
+  autumn: {
+    level: [['#4c3c1e', '#584522'], ['#5f4b25', '#6a5429'], ['#6e572b', '#79602f'], ['#7b6130', '#856a33'], ['#886c36', '#94763b']],
+    theme: { cliffTop: '#55504d', cliffBottom: '#2a2a2c', slope: '#8d6f37', water: '#1c3f4c', waterEdge: '#3a6670',
+      rock: '#4f5149', rockTop: '#62655c', rockHi: '#868a7c', rockShadow: '#272825' },
+    hi: '255,226,170', lo: 'rgba(32,16,4,0.2)',
+    grain: ['rgba(48,24,8,0.24)', 'rgba(255,205,130,0.16)', 'rgba(150,100,50,0.5)', 'rgba(28,14,4,0.3)'],
+    mm: { ground: [116, 91, 45], water: [38, 71, 83], rock: [79, 81, 73], ramp: [141, 111, 55] },
+    plantScale: [1.36, 1.36, 1.36, 1.36, 1.12, 1.12],
+  },
+  savanna: {
+    level: [['#715d3a', '#826b42'], ['#8c7448', '#9d8250'], ['#a28653', '#b3945c'], ['#b5965d', '#c5a365'], ['#c8a668', '#d8b470']],
+    theme: { cliffTop: '#734e38', cliffBottom: '#3b271d', slope: '#d0ac6b', water: '#4a4c2e', waterEdge: '#7a7050',
+      rock: '#80573f', rockTop: '#a06d4f', rockHi: '#c8906a', rockShadow: '#402b20' },
+    hi: '255,242,205', lo: 'rgba(70,36,12,0.18)',
+    grain: ['rgba(96,64,28,0.2)', 'rgba(255,244,210,0.2)', 'rgba(168,112,80,0.55)', 'rgba(60,34,16,0.3)'],
+    mm: { ground: [171, 141, 88], water: [81, 82, 55], rock: [128, 87, 63], ramp: [208, 172, 107] },
+    plantScale: [1.36, 1.24, 1.12, 1.0, 1.0, 1.12],
+  },
+  swamp: {
+    level: [['#373e24', '#40492a'], ['#434c2c', '#4c5632'], ['#4c5632', '#556038'], ['#535f37', '#5d693d'], ['#5b673c', '#647242']],
+    theme: { cliffTop: '#4a5228', cliffBottom: '#1f1b11', slope: '#6e7a48', water: '#333c2a', waterEdge: '#4e5a3a',
+      rock: '#272d1f', rockTop: '#353d29', rockHi: '#545a42', rockShadow: '#121510' },
+    hi: '225,240,190', lo: 'rgba(14,18,6,0.22)',
+    grain: ['rgba(30,34,16,0.26)', 'rgba(200,220,150,0.12)', 'rgba(110,96,64,0.5)', 'rgba(14,16,8,0.32)'],
+    mm: { ground: [76, 86, 50], water: [51, 60, 42], rock: [39, 45, 31], ramp: [110, 122, 72] },
+    plantScale: [1.4, 1.12, 1.15, 1.3, 1.05, 1.1],
+  },
+  volcanic: {
+    level: [['#363230', '#423d3a'], ['#423d3a', '#4f4945'], ['#4c4642', '#5a534e'], ['#57504b', '#665f59'], ['#625b55', '#736b64']],
+    theme: { cliffTop: '#5c5652', cliffBottom: '#221a18', slope: '#7c766f', water: '#8a3a14', waterEdge: '#2a1a14',
+      rock: '#2c2929', rockTop: '#3c3838', rockHi: '#6c6868', rockShadow: '#0e0c0c' },
+    hi: '235,226,216', lo: 'rgba(22,10,8,0.24)',
+    grain: ['rgba(22,18,16,0.3)', 'rgba(176,170,162,0.2)', 'rgba(118,110,102,0.6)', 'rgba(10,8,7,0.35)'],
+    mm: { ground: [83, 77, 73], water: [137, 68, 28], rock: [46, 43, 43], ramp: [124, 118, 111] },
+    plantScale: [1.24, 1.1, 1.1, 1, 1.04, 1.04],
+  },
+  lunar: {
+    level: [['#606166', '#6b6d72'], ['#6b6d72', '#77797e'], ['#75777c', '#818388'], ['#7f8186', '#8c8e93'], ['#898b90', '#97999e']],
+    theme: { cliffTop: '#76787d', cliffBottom: '#25262a', slope: '#9c9ea3', water: '#566675', waterEdge: '#a2b4c4',
+      rock: '#3e4045', rockTop: '#56585d', rockHi: '#8c8e93', rockShadow: '#121316' },
+    hi: '244,247,255', lo: 'rgba(8,10,16,0.24)',
+    grain: ['rgba(40,42,48,0.22)', 'rgba(222,226,234,0.2)', 'rgba(150,152,158,0.6)', 'rgba(8,9,12,0.42)'],
+    mm: { ground: [120, 122, 127], water: [88, 104, 119], rock: [64, 66, 70], ramp: [156, 158, 163] },
+  },
+  alien: {
+    level: [['#46355e', '#523e6f'], ['#554073', '#614982'], ['#614982', '#6c5292'], ['#6a518f', '#76599f'], ['#74589c', '#8061ac']],
+    theme: { cliffTop: '#4e4462', cliffBottom: '#211c2c', slope: '#8a72b0', water: '#852f70', waterEdge: '#a8468a',
+      rock: '#26253a', rockTop: '#34334e', rockHi: '#5a5680', rockShadow: '#121220' },
+    hi: '235,215,255', lo: 'rgba(20,10,40,0.22)',
+    grain: ['rgba(30,20,55,0.24)', 'rgba(235,200,255,0.14)', 'rgba(196,140,210,0.5)', 'rgba(20,12,36,0.3)'],
+    mm: { ground: [97, 73, 130], water: [133, 47, 112], rock: [38, 37, 58], ramp: [138, 114, 176] },
+    plantScale: [1.32, 1.12, 1.12, 1.15, 1.1, 1.1],
+  },
   polar: {
     level: [['#9fb0c2', '#aebfd0'], ['#c3d0dd', '#d3dee9'], ['#d6e0ea', '#e4ecf3'], ['#e2eaf2', '#eef3f8'], ['#ecf2f7', '#f8fbfd']],
     theme: { cliffTop: '#7d8b99', cliffBottom: '#4c5866', slope: '#e3eaf1', water: '#132a3f', waterEdge: '#2c5878',
@@ -87,6 +141,7 @@ const MM_DESERT = {};
 /** Switch the palette, textures and minimap colours to the current game's biome (at every bake). */
 function applyBiome() {
   const b = typeof biome === 'function' && S ? biome() : 'desert';
+  ensureBiomeArt(b); // (the map is baked again as it arrives)
   const look = BIOME_LOOK[b] || BIOME_LOOK.desert;
   if (!THEME_DESERT.cliffTop) { Object.assign(THEME_DESERT, THEME); Object.assign(MM_DESERT, { ground: MM_COLORS.ground, water: MM_COLORS.water, rock: MM_COLORS.rock, ramp: MM_COLORS.ramp }); }
   Object.assign(THEME, THEME_DESERT, look.theme);
@@ -169,10 +224,47 @@ function adjustArt(art, adj) {
 const ART = {};
 let artLoaded = 0;
 
+/*
+ * The newer biomes' art (ground, water, rock, cliff, plants, glow and canyon art) loads only when it's
+ * wanted: that biome is being played, or shown on the new-game screen (ensureBiomeArt). In a single-file
+ * copy of the game each of these biomes' art is a bundle beside the page (biome-<b>.js).
+ */
+const LAZY_BIOMES = ['autumn', 'savanna', 'swamp', 'volcanic', 'lunar', 'alien'];
+function lazyBiomeOf(key) {
+  for (const b of LAZY_BIOMES) if (key.endsWith('-' + b) || key.startsWith('plant-' + b + '-')) return b;
+  return null;
+}
+const _biomeArt = {};
+function ensureBiomeArt(b) {
+  if (!LAZY_BIOMES.includes(b) || _biomeArt[b] || typeof ART_MANIFEST !== 'object') return;
+  _biomeArt[b] = 'loading';
+  const keys = Object.keys(ART_MANIFEST).filter((k) => lazyBiomeOf(k) === b);
+  const entryOf = (k) => (typeof ART_MANIFEST[k] === 'string' ? { src: ART_MANIFEST[k] } : ART_MANIFEST[k]);
+  if (typeof window !== 'undefined' && window.BIOME_BUNDLE) {
+    const go = () => { const d = window.BIOME_DATA && window.BIOME_DATA[b]; if (d) for (const k of keys) if (d[k]) loadArtKey(k, { ...entryOf(k), src: d[k] }); };
+    if (window.BIOME_DATA && window.BIOME_DATA[b]) { go(); return; }
+    const s = document.createElement('script');
+    s.src = `biome-${b}.js`;
+    s.onload = go;
+    s.onerror = () => { _biomeArt[b] = 'failed'; }; // no bundle: the biome's palette stands in
+    document.head.appendChild(s);
+    return;
+  }
+  for (const k of keys) loadArtKey(k, entryOf(k));
+}
+
 function loadArt(onChange) {
   if (typeof ART_MANIFEST !== 'object') return;
+  R.artChange = onChange;
   for (const key in ART_MANIFEST) {
-    const entry = typeof ART_MANIFEST[key] === 'string' ? { src: ART_MANIFEST[key] } : ART_MANIFEST[key];
+    if (lazyBiomeOf(key)) continue; // (see ensureBiomeArt)
+    loadArtKey(key, typeof ART_MANIFEST[key] === 'string' ? { src: ART_MANIFEST[key] } : ART_MANIFEST[key]);
+  }
+}
+
+function loadArtKey(key, entry) {
+  const onChange = R.artChange;
+  {
     const img = new Image();
     img.onload = () => {
       ART[key] = { img, scale: entry.scale || 0, anchor: entry.anchor || '', shadow: !!entry.shadow, key, frames: entry.frames || 0, cols: entry.cols || 0 };

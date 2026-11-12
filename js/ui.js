@@ -212,9 +212,9 @@ function menuThree() {
 }
 function modeInfo(mode, three) {
   return mode === 'colony'
-    ? (UI.menu.wild ? 'Colony: no rival, but creatures nest in the wilds and raid what you build near them. Build supply chains, research upgrades and spread across the planet.'
-      : 'Colony: no rival. Settle the planet at your own pace: build supply chains, research upgrades and spread across the planet.')
-    : three ? 'Free-for-all: you and two rival colonies on a round planet. Capture a rival\'s Command Base and everything it built is yours. Last colony standing wins.'
+    ? (UI.menu.wild ? 'Colony: no rival, but creatures nest in the wilds and raid what you build near them. Build, research and spread across the planet.'
+      : 'Colony: no rival. Settle the planet at your own pace: build, research and spread across the planet.')
+    : three ? 'Free-for-all: you and two rival colonies on a round planet. Take a rival\'s Command Base and all it built is yours; the last colony standing wins.'
       : 'Versus: race a rival colony across the planet. Build up, then capture its Command Base to win.';
 }
 function styleInfo(v) {
@@ -314,7 +314,8 @@ function initMenu() {
   $('m-shape').onclick = () => { sfx('click'); openPicker('shape'); };
   $('m-biome').onclick = () => { sfx('click'); openPicker('biome'); };
   $('m-picker-close').onclick = () => closePicker();
-  $('m-picker').addEventListener('pointerdown', (e) => { if (e.target === $('m-picker')) { e.preventDefault(); closePicker(); } });
+  // Tapping outside the sheet closes it (on click, so the tap can't land on the menu underneath).
+  $('m-picker').addEventListener('click', (e) => { if (e.target === $('m-picker')) closePicker(); });
   $('m-picker').addEventListener('keydown', pickerKey);
   // Esc: close the picker, then go back from Customise to Home.
   window.addEventListener('keydown', (e) => {
@@ -348,6 +349,7 @@ function syncInfo() {
 
 /** Bring every control in the menu up to date with UI.menu (and the device's time of day and weather). */
 function syncMenu() {
+  if (typeof ensureBiomeArt === 'function') ensureBiomeArt(BIOME_ORDER[UI.menu.biome || 0]); // the chosen biome's swatch
   const m = UI.menu, colony = m.mode === 'colony', three = menuThree();
   const mark = (b, on) => { b.classList.toggle('on', on); if (b.getAttribute('role') === 'radio') b.setAttribute('aria-checked', on ? 'true' : 'false'); };
   for (const btn of $('m-mode').children) { mark(btn, btn.dataset.v === m.mode); btn.dataset.info = modeInfo(btn.dataset.v, false); }
@@ -369,10 +371,10 @@ function syncMenu() {
     const el = $(id), v = el._get();
     for (const b of el.children) { mark(b, +b.dataset.v === v); b.classList.toggle('lit', +b.dataset.v <= v); }
   }
-  const dims = mapDims({ size: menuSize(), shape, players: three ? 3 : 2 });
-  const players = three ? 3 : 2;
-  for (const b of $('m-size').children) { const d = mapDims({ size: +b.dataset.v, shape, players }); b.dataset.info = `${SIZE_PRESETS[+b.dataset.v].name}: ${d.W}×${d.H} tiles${m.shapeRnd ? ' on a Standard map (other map types differ)' : ''}.`; }
-  $('m-size-v').textContent = `${dims.W}×${dims.H}`;
+  // (Random map type: sizes as on a Standard map; the others differ a little.)
+  const players = three ? 3 : 2, dShape = m.shapeRnd ? 0 : shape, dims = mapDims({ size: menuSize(), shape: dShape, players });
+  for (const b of $('m-size').children) { const d = mapDims({ size: +b.dataset.v, shape: dShape, players }); b.dataset.info = `${SIZE_PRESETS[+b.dataset.v].name}: ${m.shapeRnd ? 'about ' : ''}${d.W}×${d.H} tiles${m.shapeRnd ? ' (map types differ a little)' : ''}.`; }
+  $('m-size-v').textContent = `${m.shapeRnd ? '~' : ''}${dims.W}×${dims.H}`;
   $('m-pv-dims').textContent = m.shapeRnd ? 'Random map type' : `${dims.W}×${dims.H} tiles`;
   $('m-rough-v').textContent = TERRAIN_PRESETS[m.rough].name;
   $('m-rich-v').textContent = RESOURCE_PRESETS[m.rich].name;
@@ -414,11 +416,12 @@ function syncPickRows() {
 /* ------------------------------------------------------------------ map type and biome pickers */
 
 function openPicker(kind) {
+  if (kind === 'biome' && typeof ensureBiomeArt === 'function') for (const b of BIOME_ORDER) ensureBiomeArt(b); // their swatches fill in as it arrives
   const m = UI.menu, body = $('m-picker-body'), three = m.mode === 'versus' && m.players === 3;
   UI.picker = { kind, opener: document.activeElement };
   $('m-picker-title').textContent = kind === 'shape' ? 'Map type' : 'Biome';
   $('m-picker').classList.toggle('bio', kind === 'biome');
-  const card = (v, on, inner, cls) => `<button type="button" class="pcard${cls ? ' ' + cls : ''}" data-v="${v}"${on ? ' aria-current="true"' : ''}>${inner}</button>`;
+  const card = (v, on, inner, cls, tip) => `<button type="button" class="pcard${cls ? ' ' + cls : ''}" data-v="${v}"${on ? ' aria-current="true"' : ''}${tip ? ` title="${tip.replace(/"/g, '&quot;')}"` : ''}>${inner}</button>`;
   let h = '';
   if (kind === 'shape') {
     const text = (name, badges, blurb) => `<canvas class="pc-thumb" aria-hidden="true"></canvas><span class="pc-text"><span class="pc-name">${name}</span>${badges ? `<span class="pc-badges">${badges}</span>` : ''}<span class="pc-blurb">${blurb}</span></span>`;
@@ -429,13 +432,13 @@ function openPicker(kind) {
       if (!g.list.length) continue;
       h += `<section class="pgroup" aria-label="${g.name}"><h3>${g.name}</h3><div class="pgrid">` + g.list.map((i) => {
         const P = SHAPE_PRESETS[i], badges = (P.ffa ? '<span class="badge ffa">3 players</span>' : '') + (P.naval ? '<span class="badge naval">Naval</span>' : '');
-        return card(i, !m.shapeRnd && i === (m.shape || 0), text(P.name, badges, P.blurb || ''));
+        return card(i, !m.shapeRnd && i === (m.shape || 0), text(P.name, badges, P.blurb || ''), '', P.blurb);
       }).join('') + '</div></section>';
     }
   } else {
     const inner = (name, desc) => `<canvas class="pc-swatch" aria-hidden="true"></canvas><span class="pc-name">${name}</span><span class="pc-blurb">${desc}</span>`;
     h += '<div class="pgrid">' + card('rnd', m.biomeRnd, inner('Random', 'Any biome, picked when you land.'), 'rnd')
-      + BIOME_ORDER.map((k, i) => card(i, !m.biomeRnd && i === (m.biome || 0), inner(BIOMES[k].name, BIOMES[k].desc || ''))).join('') + '</div>';
+      + BIOME_ORDER.map((k, i) => card(i, !m.biomeRnd && i === (m.biome || 0), inner(BIOMES[k].name, BIOMES[k].desc || ''), '', BIOMES[k].desc)).join('') + '</div>';
   }
   body.innerHTML = h;
   for (const b of body.querySelectorAll('.pcard')) {
@@ -725,8 +728,12 @@ function roundRect(ctx, x, y, w, h, r) {
   ctx.closePath();
 }
 
-/** The biome's ground: its texture if there is one, else its palette, else a neutral grey. */
-function biomeGround(b) { return b === 'desert' ? ART.ground : ART['ground-' + b]; }
+/** The biome's ground texture: its own art, or the desert's recoloured to its palette (render.js), or null. */
+function biomeGround(b) {
+  const own = b === 'desert' ? ART.ground : ART['ground-' + b];
+  if (own || !biomeLook(b) || typeof biomeTexture !== 'function') return own || null;
+  try { return biomeTexture(b, 'ground'); } catch (e) { return null; }
+}
 function biomeLook(b) { return typeof BIOME_LOOK === 'object' && BIOME_LOOK[b] ? BIOME_LOOK[b] : null; }
 
 /**

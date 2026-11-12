@@ -264,13 +264,13 @@ def b5_stump(seed=5):
         oriented_blob(S, (np.cos(a) * Rt * 0.7, np.sin(a) * Rt * 0.7, H + 0.8), (rng.uniform(5, 8), rng.uniform(3.5, 5), 2.2),
                       yaw=a + np.pi / 2, col='#4e6e28', mat=4, col2='#6c8a34', spec=0.03, zmin=None, nu=8, nv=12)
     # shelf fungi: half-discs in tiers on the sides, orange with cream rims and bands
-    for (a, zz, r) in [(-1.9, 10, 8.5), (-0.95, 21, 7.0), (-2.75, 25, 6.0), (-0.1, 8, 6.5), (-1.45, 31, 5.0)]:
+    for (a, zz, r) in [(-1.9, 10, 7.5), (-0.95, 21, 6.5), (-2.75, 25, 5.5), (-0.1, 8, 6.0)]:
         rr = np.interp(zz, z, rad)
         cx, cy = np.cos(a) * (rr - 0.5), np.sin(a) * (rr - 0.5)
 
         def fc(u, v, V, cx=cx, cy=cy, r=r):
             d = np.hypot(V[:, 0] - cx, V[:, 1] - cy) / r
-            c = lerpc('#b85a1c', '#f09a34', smoothstep(0.1, 0.8, d))
+            c = lerpc('#c0701e', '#f2b444', smoothstep(0.1, 0.8, d))
             c = c * (0.9 + 0.1 * np.sin(d * 22))[:, None]
             return lerpc(c, '#f4d090', smoothstep(0.88, 0.98, d))
         oriented_blob(S, (cx, cy, zz), (r * 0.9, r * 1.5, 2.2), yaw=a, col=fc, mat=0, spec=0.2, gloss=24, zmin=None, nu=8, nv=18)

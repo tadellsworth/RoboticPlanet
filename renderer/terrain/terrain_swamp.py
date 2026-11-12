@@ -135,20 +135,20 @@ def swamp_ground():
 def swamp_water():
     z1 = fbm(N, 4121, 4, 64, beta=2.0)
     z2 = fbm(N, 4122, 4, 64, beta=2.0)
-    col = np.ones((N, N, 3)) * hexrgb('#313722')
-    col = over(col, hexrgb('#22281a'), 0.1 + 0.18 * z1)
-    col = over(col, hexrgb('#46462a'), -0.1 - 0.18 * z2)
-    col = over(col, hexrgb('#4a3e26'), smoothstep(0.4, 1.6, fbm(N, 4128, 3, 20, beta=2.2)) * 0.3)
+    col = np.ones((N, N, 3)) * hexrgb('#242c20')
+    col = over(col, hexrgb('#182018'), 0.1 + 0.18 * z1)
+    col = over(col, hexrgb('#363a26'), -0.1 - 0.18 * z2)
+    col = over(col, hexrgb('#3a3222'), smoothstep(0.4, 1.6, fbm(N, 4128, 3, 20, beta=2.2)) * 0.25)
     h = fbm(N, 4123, 3, 48, beta=2.0, aniso=(1.0, 3.0), angle=0.1) + 0.035 * fbm(N, 4124, 30, 160, beta=1.5, aniso=(1.0, 3.0))
     H = 0.5 + 0.12 * zscore(h)
     col = col * (0.68 + 0.34 * 1.2 * lambert(normals_from_height(H * 13.0), 225, 55))[..., None]
     sheen_a = blur_wrap(np.clip((fbm(N, 4126, 5, 40, beta=2.2, aniso=(1.0, 2.2), angle=0.1) - 0.5) * 0.7, 0, 1), 2.0) * 0.35
     sheen_a *= np.clip(0.55 + 0.35 * zscore(H), 0, 1.2)
-    col = over(col, hexrgb('#7a8466'), sheen_a)
-    col = over(col, hexrgb('#dfe2c8'), 0.9 * spec(normals_from_height(H * 10.4), 26, 225, 38) * 0.4)
+    col = over(col, hexrgb('#7e8e7c'), sheen_a * 1.3)
+    col = over(col, hexrgb('#e2e8d8'), 0.9 * spec(normals_from_height(H * 10.4), 26, 225, 38) * 0.5)
     # floating duckweed: drifting patches, densest in their middles, with stragglers around
     dm = fbm(N, 4106, 2, 14, beta=2.0) + 0.3 * fbm(N, 4107, 10, 60, beta=1.5)
-    cover = smoothstep(0.55, 1.25, dm) * 0.95 + smoothstep(0.1, 0.6, dm) * 0.12
+    cover = smoothstep(0.75, 1.4, dm) * 0.92 + smoothstep(0.3, 0.8, dm) * 0.08
     dc, da, dsh = duckweed(N, 200, 4108, cover, ('#62822a', '#8aa63a'), size=0.33)
     col = over(col, hexrgb('#121608'), dsh * 0.5)
     col = over(col, dc, da)

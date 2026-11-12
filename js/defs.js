@@ -27,15 +27,23 @@ const PAVE = [null,
  * rock and decorative plants (`plants` is the share of open tiles with one). Plants never block
  * anything; a road, planned road or building clears the plants on its tile. `groves`: the plants
  * grow in stands of one kind (the Forest's spruces and firs here, leafy trees there, with logs and
- * ferns between) instead of a random mix. `desc`: the line shown on the new-game screen. (The Forest
+ * ferns between) instead of a random mix. `weights`: how common each variety is (the Moon's probe wrecks are
+ * rare). `desc`: the line shown on the new-game screen. (The Forest
  * keeps the key 'jungle', which saves and missions use.)
  */
 const BIOMES = {
   desert: { name: 'Red desert', plants: 0.07, desc: 'Rust-red sand and dust under a hard sun; now and then a sandstorm.' },
   jungle: { name: 'Forest', plants: 0.44, groves: true, desc: 'Stands of spruce and leafy trees, ferns and clear lakes; now and then a rainstorm with fog.' },
   polar: { name: 'Polar', plants: 0.1, desc: 'Snow, ice and frosted shrubs; now and then a blizzard.' },
+  autumn: { name: 'Autumn forest', plants: 0.44, groves: true, desc: 'The forest in its fall colours: maples, birches and oaks in red and gold over a carpet of leaves; now and then a gale.' },
+  savanna: { name: 'Savanna', plants: 0.12, desc: 'Golden grassland with umbrella acacias, baobabs and termite mounds; now and then dust devils.' },
+  swamp: { name: 'Swamp', plants: 0.38, groves: true, desc: 'Dark mud, stands of cypress and mangrove, reeds and duckweed; now and then a thick fog, with fireflies at night.' },
+  volcanic: { name: 'Volcanic ashlands', plants: 0.1, desc: 'Black basalt and ash, charred trees and fumaroles, lakes of lava that glow at night; now and then ash and embers fall.' },
+  lunar: { name: 'Lunar', plants: 0.12, weights: [1, 1, 1, 1, 1, 0.12], desc: 'Grey regolith pocked with craters, frozen cryo-ice pools and the odd wreck of an old probe; now and then a meteor shower.' },
+  alien: { name: 'Alien bloom', plants: 0.3, desc: 'Violet moss and strange growths that glow after dark, beside pink lakes; now and then an aurora.' },
 };
-const BIOME_ORDER = ['desert', 'jungle', 'polar'];
+// (New biomes go on the end: the new-game screen saves the choice as its place in this list.)
+const BIOME_ORDER = ['desert', 'jungle', 'polar', 'autumn', 'savanna', 'swamp', 'volcanic', 'lunar', 'alien'];
 const PLANT_KINDS = 6; // decorative plant varieties per biome
 
 const ASPHALT_TILES = 4;          // road tiles one Asphalt covers

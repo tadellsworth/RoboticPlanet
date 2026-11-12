@@ -50,9 +50,9 @@ def savanna_ground():
     col = col * (0.84 + 0.18 * relief(normals_from_height(hs * 5), 225, 50))[..., None]
     # bare red earth: patches where the grass is grazed down or trampled
     be = fbm(N, 3707, 3, 24, beta=2.0) + 0.3 * fbm(N, 3708, 12, 60, beta=1.4)
-    B = smoothstep(0.8, 1.6, be)
+    B = smoothstep(0.9, 1.7, be)
     eh = fbm(N, 3709, 20, 200, beta=1.0)
-    ecol = mix(hexrgb('#9a5c38'), hexrgb('#b47648'), smoothstep(-1.2, 1.2, fbm(N, 3710, 6, 60, beta=1.5)))
+    ecol = mix(hexrgb('#a06a48'), hexrgb('#b8845a'), smoothstep(-1.2, 1.2, fbm(N, 3710, 6, 60, beta=1.5)))
     ecol = ecol * (0.86 + 0.16 * relief(normals_from_height(eh * 2.5), 225, 50))[..., None]
     # sun-baked cracks in the earth
     F1, F2, _ = worley(N, rng.uniform(0, 1, (90, 2)))
@@ -109,7 +109,9 @@ def savanna_water():
     sheen_n = fbm(N, 3726, 5, 40, beta=2.2, aniso=(1.0, 2.2), angle=0.1)
     sheen_a = blur_wrap(np.clip((sheen_n - 0.5) * 0.7, 0, 1), 2.0) * 0.35
     sheen_a *= np.clip(0.55 + 0.35 * zscore(H), 0, 1.2)
-    col = over(col, hexrgb('#9a9a70'), sheen_a)
+    col = over(col, hexrgb('#94a096'), sheen_a)
+    # the pale sky mirrored in the calmer stretches
+    col = over(col, hexrgb('#8a9c9c'), smoothstep(0.6, 1.8, fbm(N, 3731, 2, 16, beta=2.2)) * 0.18)
     col = over(col, hexrgb('#eeead0'), 0.9 * spec(normals_from_height(H * 10.4), 26, 225, 38) * 0.45)
     img = np.concatenate([col, np.ones((N, N, 1))], -1)
     # a little floating scum and drifting grass stems

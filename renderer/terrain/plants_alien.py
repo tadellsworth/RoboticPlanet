@@ -54,8 +54,10 @@ class GScene(Scene):
             self.cur = prev
 
 
-def render_glow(S, size=256, ss=3, scale=1.0, offset=(0.0, 0.0), halo=((2.2, 0.7), (6.0, 0.35))):
-    """Emission-only pass with exactly render()'s framing. Returns (core rgb, glow rgba float)."""
+def render_glow(S, size=256, ss=3, scale=1.0, offset=(0.0, 0.0), halo=((2.2, 0.7), (6.0, 0.4), (12.0, 0.3))):
+    """Emission-only pass with exactly render()'s framing. Returns (core rgb, glow rgba float).
+    The plant's own silhouette is kept as opaque black under the glow, so when the game bakes the
+    glow art over the ground's glow, the plant hides the glowing veins beneath it (black adds no light)."""
     V, F, Nv, A = S.arrays()
     E = np.concatenate(S.E)
     V = V * scale
@@ -88,12 +90,17 @@ def render_glow(S, size=256, ss=3, scale=1.0, offset=(0.0, 0.0), halo=((2.2, 0.7
     img = np.zeros((W * W, 3))
     img[m] = g
     core = img.reshape(size, ss, size, ss, 3).mean((1, 3))
+    cov = m.reshape(size, ss, size, ss).mean((1, 3))
     out = core.copy()
     for (s, k) in halo:
         out += k * np.stack([ndimage.gaussian_filter(core[..., c], s) for c in range(3)], -1)
-    a = np.clip(out.max(-1), 0, 1)
-    rgb = np.clip(out / np.maximum(a, 1e-4)[..., None], 0, 1)
-    return core, np.concatenate([rgb, a[..., None]], -1)
+    e = np.minimum(np.arange(size), np.arange(size)[::-1]).astype(float)
+    out *= (smoothstep(1.0, 10.0, e)[:, None] * smoothstep(1.0, 10.0, e)[None, :])[..., None]  # halo never reaches the edge
+    ga = np.clip(out.max(-1), 0, 1)
+    glow_rgb = np.clip(out / np.maximum(ga, 1e-4)[..., None], 0, 1)
+    A = ga + cov * (1 - ga)
+    rgb = np.clip(glow_rgb * (ga / np.maximum(A, 1e-4))[..., None], 0, 1)
+    return core, np.concatenate([rgb, A[..., None]], -1)
 
 
 def render_plant(S, i, scale, offset=(0.0, 0.0), day_glow=0.3):
@@ -129,15 +136,17 @@ def m1_mushroom(seed=1):
     # gills: a thin ribbed disc just under the cap, a little wider than it, glowing gold and pink
     ribs = lambda u, v, V: lerpc('#8a4a7a', '#a0507e', smoothstep(0.3, 1.0, u)) * (0.75 + 0.25 * np.cos(v * 2 * np.pi * 60))[:, None]
     with S.glowing(lambda u, v, V: lerpc(GOLD, PINK, smoothstep(0.55, 0.95, np.hypot(V[:, 0] - 3, V[:, 1] - 2) / R))
-                   * (0.55 + 0.45 * np.cos(v * 2 * np.pi * 60))[:, None], k=1.0):
+                   * (0.55 + 0.45 * np.cos(v * 2 * np.pi * 60))[:, None], k=1.7):
         oriented_blob(S, (3, 2, cz - 3.0), (R * 1.035, R * 1.035, 2.4), col=ribs, mat=0, spec=0.1, zmin=None, nu=10, nv=240)
     # cap: a low dome, darker in the middle, lighter magenta toward the rim
     capc = lambda u, v, V: lerpc('#7a2468', '#c04c92', smoothstep(0.05, 0.98, np.hypot(V[:, 0] - 3, V[:, 1] - 2) / R)) * \
         (1 + 0.06 * np.sin(np.arctan2(V[:, 1] - 2, V[:, 0] - 3) * 23))[:, None]
     disp = lambda d: 0.012 * np.sin(d[:, 0] * 9 + d[:, 1] * 7) + 0.012 * np.sin(np.arctan2(d[:, 1], d[:, 0]) * 11)
     CH = 27.0
-    oriented_blob(S, (3, 2, cz), (R, R * 0.97, CH), col=capc, mat=0, spec=0.3, gloss=30, disp=disp,
-                  zmin=cz - 1.5, nu=26, nv=56)
+    with S.glowing(lambda u, v, V: lerpc('#c050d0', PINK, smoothstep(0.3, 1.0, np.hypot(V[:, 0] - 3, V[:, 1] - 2) / R)),
+                   mode=2, k=0.22):
+        oriented_blob(S, (3, 2, cz), (R, R * 0.97, CH), col=capc, mat=0, spec=0.3, gloss=30, disp=disp,
+                      zmin=cz - 1.5, nu=26, nv=56)
     # pale warts / spots, some of them glowing faintly
     for q in range(18):
         while True:
@@ -147,8 +156,8 @@ def m1_mushroom(seed=1):
         rr = np.hypot(x, y) / R
         z = cz + CH * np.sqrt(max(0, 1 - rr ** 2)) * (1 - 0.012) - 0.2
         r = rng.uniform(4.0, 8.5) * (1 - 0.35 * rr)
-        gl = rng.uniform() < 0.5
-        with S.glowing(rng.choice([VIOLET, PINK]), k=0.55 if gl else 0.0):
+        gl = rng.uniform() < 0.75
+        with S.glowing(rng.choice([VIOLET, PINK]), k=1.4 if gl else 0.0):
             nz = np.array([x / R ** 2, y / R ** 2, np.sqrt(max(0, 1 - rr ** 2)) / CH])
             tilt = np.arccos(np.clip(nrm(nz)[2], -1, 1))
             oriented_blob(S, (x + 3, y + 2, z), (r * 0.22, r * rng.uniform(0.75, 1.0), r), yaw=np.arctan2(y, x), pitch=np.pi / 2 - tilt,
@@ -189,7 +198,7 @@ def coral_tube(S, rng, base, h, r, lean, cols):
     Vm, Fm, um, vm = blob((0, 0, 0), (rad[-1] * 0.95, rad[-1] * 0.95, 0.6), 8, 16)
     Rm = np.stack([e1, e2, T], 1)
     Vm = Vm @ Rm.T + sp[-1] - T * 2.5
-    with S.glowing(VIOLET, mode=2, k=0.8):
+    with S.glowing(VIOLET, mode=2, k=0.4):
         S.add(Vm, Fm, attrs(len(Vm), '#3a0e3e', mat=0, spec=0.0))
 
 
@@ -250,9 +259,9 @@ def spiral_tendril(S, rng, yaw, r0, z0, coil, turns, thick, cols, bulb):
     V, F, u, v = tube(spine, radius, 9)
     c = lerpc(cols[0], cols[1], smoothstep(0.35, 1.0, u))
     c = c * (1 - 0.15 * (np.cos(u * m * 1.3) > 0.6))[:, None]
-    with S.glowing(lambda u, v, V: lerpc('#000000', PINK, smoothstep(0.75, 1.0, u)), k=0.5):
+    with S.glowing(lambda u, v, V: lerpc('#000000', PINK, smoothstep(0.7, 1.0, u)), k=0.8):
         S.add(V, F, attrs(len(V), c, u=u, v=v, mat=0, spec=0.3, gloss=28))
-    with S.glowing(bulb[1], mode=2, k=1.2):
+    with S.glowing(bulb[1], mode=2, k=2.2):
         oriented_blob(S, spine[-1] + np.array([0, 0, 1.5]), (bulb[2], bulb[2], bulb[2] * 1.05), col=bulb[0], mat=0, spec=0.5,
                       gloss=40, trans=0.5, zmin=None, nu=10, nv=14)
 
@@ -267,8 +276,8 @@ def m3_spirals(seed=3):
                  n=12, ncross=7, fold=0.25, col='#5a2e6e', col_tip='#7a3e86', col2='#b064b0', mat=1, spec=0.2, trans=0.2,
                  gloss=26, yaw1=yaw + rng.uniform(-0.25, 0.25))
     cols = ('#7a3c9e', '#e08ac8')
-    bulbs = [('#ffe6a8', GOLD, 5.6), ('#ffe0a0', GOLD, 5.0), ('#ffd8f0', PINK, 4.8), ('#d8fbff', AQUA, 3.8),
-             ('#ffe6a8', GOLD, 5.2), ('#ffd8f0', PINK, 4.6), ('#ffe0a0', GOLD, 4.4)]
+    bulbs = [('#ffe6a8', GOLD, 6.6), ('#ffe0a0', GOLD, 6.0), ('#ffd8f0', PINK, 5.8), ('#d8fbff', AQUA, 4.4),
+             ('#ffe6a8', GOLD, 6.2), ('#ffd8f0', PINK, 5.6), ('#ffe0a0', GOLD, 5.4)]
     nt = 7
     for k in range(nt):
         yaw = 2 * np.pi * k / nt + rng.uniform(-0.2, 0.2) + 0.3
@@ -288,26 +297,32 @@ def m4_lanterns(seed=4):
         add_leaf(S, (0, 0, 2), yaw, rng.uniform(36, 46), rng.uniform(9, 12), np.radians(20), np.radians(-16), shape='lance',
                  n=12, ncross=7, fold=0.3, col='#2e1c4c', col_tip='#4a2c6e', col2='#6a3a8a', mat=1, spec=0.2, trans=0.2,
                  gloss=24, yaw1=yaw + rng.uniform(-0.3, 0.3))
-    pods = [(0, 2, 40, 13, 0.0), (-26, 10, 30, 11, 0.4), (24, 14, 28, 11, 0.4), (-12, -24, 26, 10.5, 0.45),
-            (20, -20, 22, 9.5, 0.5), (-34, -14, 16, 8, 0.55), (36, -6, 14, 7.5, 0.55), (4, 30, 20, 9, 0.45)]
-    pal = [('#f8b8d0', '#d064a8'), ('#f6c4b4', '#d8709e'), ('#f0b0dc', '#c058a8')]
+    # a central stalk; arching stems carry the pods, which hang ribbed and translucent like paper lanterns
+    Hc = 64.0
+    add_tube(S, np.array([[0, 0, 0], [0.5, 0.3, Hc * 0.5], [1, 0.6, Hc]], float), 2.6, 1.6, nseg=7, col='#4a2c66', mat=3)
+    pods = [(-30, 8, 30, 11.5, 0.22), (26, 16, 34, 11, 0.2), (-14, -26, 26, 11, 0.25), (22, -22, 24, 10.5, 0.25),
+            (-38, -18, 18, 8.5, 0.3), (40, -4, 20, 8.5, 0.3), (2, 32, 36, 10, 0.18), (2, 2, 44, 12.5, 0.05)]
+    pal = [('#f8bcd4', '#e070a8'), ('#f8c8b8', '#e47c9c'), ('#f2b4e0', '#cc62ae')]
     for k, (x, y, h, r, tilt) in enumerate(pods):
-        yaw = np.arctan2(y, x) if np.hypot(x, y) > 1 else -1.2
+        yaw = np.arctan2(y, x) if np.hypot(x, y) > 3 else -1.2
         c0, c1 = pal[k % 3]
         ax = np.array([np.cos(yaw) * np.sin(tilt), np.sin(yaw) * np.sin(tilt), np.cos(tilt)])
-        top = np.array([x, y, h]) + ax * r * 1.3
-        # stem from the centre up to the pod's top, arching over
-        st = np.stack([np.array([0, 0, 3.0]) * (1 - q) ** 2 + 2 * (1 - q) * q * np.array([x * 0.5, y * 0.5, h + r * 2.2])
-                       + q ** 2 * top for q in np.linspace(0, 1, 12)])
-        add_tube(S, st, 1.2, 0.9, nseg=6, col='#5a3474', col_tip='#8a5aa4', mat=3)
-        ribs = lambda u, v, V, c0=c0, c1=c1: lerpc(c0, c1, smoothstep(0.1, 0.9, u)) * (0.68 + 0.32 * np.abs(np.cos(v * np.pi * 8)) ** 0.6)[:, None]
-        glowc = lambda u, v, V: lerpc(GOLD, ORANGE, 0.35) * (0.6 + 0.4 * np.abs(np.cos(v * np.pi * 8)) ** 0.5)[:, None] * np.sin(np.pi * np.clip(u, 0.05, 0.95))[:, None] ** 0.5
+        top = np.array([x, y, h]) + ax * r * 1.22
+        q = np.linspace(0, 1, 14)[:, None]
+        p0, p2 = np.array([1, 0.6, Hc - 3]), top + np.array([0, 0, 0.8])
+        p1 = np.array([p2[0] * 0.65, p2[1] * 0.65, Hc + 8 + 0.15 * np.hypot(x, y)])
+        st = (1 - q) ** 2 * p0 + 2 * (1 - q) * q * p1 + q ** 2 * p2
+        add_tube(S, st, 1.4, 0.9, nseg=6, col='#5a3474', col_tip='#8a5aa4', mat=3)
+        ribs = lambda u, v, V, c0=c0, c1=c1: lerpc(c0, c1, smoothstep(0.0, 1.0, u)) * \
+            (0.7 + 0.3 * np.abs(np.cos(v * np.pi * 8)) ** 0.6)[:, None]
+        glowc = lambda u, v, V: lerpc(GOLD, ORANGE, 0.3) * (0.65 + 0.35 * np.abs(np.cos(v * np.pi * 8)) ** 0.5)[:, None] * \
+            np.sin(np.pi * np.clip(u, 0.05, 0.95))[:, None] ** 0.6
         with S.glowing(glowc, mode=2, k=1.1):
-            oriented_blob(S, (x, y, h), (r, r, r * 1.25), pitch=np.pi / 2 - tilt, yaw=yaw, col=ribs, mat=0, spec=0.45,
-                          gloss=34, trans=0.7, zmin=None, nu=16, nv=32)
-        # the calyx cap on top and a small tassel below
-        oriented_blob(S, top - ax * 1.0, (r * 0.32, r * 0.32, 2.0), pitch=np.pi / 2 - tilt, yaw=yaw, col='#8a4a9a', mat=0,
-                      spec=0.2, zmin=None, nu=8, nv=12)
+            oriented_blob(S, (x, y, h), (r, r, r * 1.22), pitch=-tilt, yaw=yaw, col=ribs, mat=0, spec=0.45, gloss=34,
+                          trans=0.7, zmin=None, nu=16, nv=32)
+        # the calyx cap on top
+        oriented_blob(S, top - ax * 0.6, (r * 0.36, r * 0.36, 1.8), pitch=-tilt, yaw=yaw, col='#7a3e92', mat=0, spec=0.2,
+                      zmin=None, nu=8, nv=12)
     return S
 
 
@@ -328,7 +343,7 @@ def curl_frond(S, rng, origin, yaw, L, W, pitch0, pitch1, curl, cols, n=26):
     with S.glowing(lambda u, v, V: lerpc('#000000', ORANGE, smoothstep(0.8, 1.0, u)), k=0.45):
         S.add(V, F, attrs(len(V), c, col2=cols[1], u=u, v=v, mat=0, spec=0.3, gloss=28, trans=0.3))
     # suckers along the top
-    with S.glowing(PINK, k=0.8):
+    with S.glowing(PINK, k=1.1):
         for i in range(3, n - 3, 2):
             p = pts[i] + np.array([0, 0, 1.0 + 0.4 * w[i] * 0.35])
             r = 0.9 + 0.9 * (1 - s[i])
@@ -377,14 +392,14 @@ def m6_fans(seed=6):
             f = k / (nl - 1) - 0.5
             yaw = dirn + f * spread + rng.uniform(-0.05, 0.05)
             Lk = L * (1 - 0.2 * abs(f) * 2) * rng.uniform(0.94, 1.04)
-            with S.glowing(lerpc(GOLD, PINK, 0.3), mode=1, k=0.95):
+            with S.glowing(lerpc(GOLD, PINK, 0.3), mode=1, k=1.5):
                 petal(S, (ox, oy, 6), yaw, Lk, Wd * rng.uniform(0.9, 1.05), np.radians(rng.uniform(40, 52)),
                       np.radians(rng.uniform(-24, -10)), bodies[k % 4], '#e8b040', '#f0c860',
                       yaw1=yaw + rng.uniform(-0.15, 0.15), roll=rng.uniform(-0.12, 0.12))
     # inner, younger petals standing more upright
     for k in range(5):
         yaw = 2 * np.pi * k / 5 + 0.3
-        with S.glowing(lerpc(GOLD, PINK, 0.3), mode=1, k=0.95):
+        with S.glowing(lerpc(GOLD, PINK, 0.3), mode=1, k=1.5):
             petal(S, (0, 2, 7), yaw, 28, 11, np.radians(70), np.radians(30), '#c8408a', '#f0b84a', '#f6cc5c', n=10, ncross=11)
     # the curled gold bud in the middle
     sp, _ = arc_spine((0, 2, 8), 0.8, 18, np.radians(85), np.radians(-140), 14)
@@ -393,8 +408,9 @@ def m6_fans(seed=6):
     return S
 
 
-SCALE = [1.42, 2.1, 1.6, 2.1, 1.95, 1.8]
+SCALE = [1.42, 2.1, 1.6, 1.95, 1.95, 1.8]
 OFFSET = [(10, 12), (4, 6), (6, 20), (4, 6), (2, 4), (2, 8)]
+DAYGLOW = [0.18, 0.3, 0.21, 0.42, 0.22, 0.16]
 PLANTS = [m1_mushroom, m2_corals, m3_spirals, m4_lanterns, m5_tentacles, m6_fans]
 
 if __name__ == '__main__':
@@ -411,4 +427,4 @@ if __name__ == '__main__':
             which.append(int(a))
     for i in (which or range(1, 7)):
         S = PLANTS[i - 1]()
-        render_plant(S, i, scales.get(i, SCALE[i - 1]), OFFSET[i - 1])
+        render_plant(S, i, scales.get(i, SCALE[i - 1]), OFFSET[i - 1], DAYGLOW[i - 1])

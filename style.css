@@ -639,7 +639,7 @@ canvas.chart.small { height: 110px; }
 .m-chips { gap: 4px; }
 .m-chips button { padding: 5px 10px; font-size: 13px; }
 .m-info { margin: 2px 2px 0; min-height: 2.8em; font-size: 12.5px; line-height: 1.4; color: var(--muted);
-  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
 .m-note { margin: 0 2px; font-size: 12.5px; line-height: 1.35; color: var(--warn); }
 /* Terrain and Resources: a level meter, one bar per step. */
 .seg.lv button { display: flex; align-items: flex-end; justify-content: center; height: 34px; padding: 6px 0 7px; }
@@ -710,6 +710,13 @@ canvas.chart.small { height: 110px; }
   .menu-card .tagline { margin-bottom: 10px; }
   .m-cust { margin-top: 10px; }
   .m-links { margin-top: 6px; }
+}
+@media (max-height: 500px) and (min-width: 700px) {
+  .menu-card.is-setup { width: min(100%, 1000px); }
+  .m-body { grid-template-columns: 200px minmax(0, 1fr); gap: 12px; }
+  .m-planet { grid-template-columns: 1fr; gap: 8px; position: sticky; top: 0; align-self: start; }
+  .pv { height: 112px; }
+  .planets { max-height: 64px; }
 }
 @media (max-width: 420px) {
   .m-row { grid-template-columns: 78px minmax(0, 1fr); gap: 8px; }

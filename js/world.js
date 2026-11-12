@@ -1559,6 +1559,13 @@ function makeDecor() {
       d[t] = u < 0.07 ? 5 : u < 0.17 ? 6 : g > 0.53 ? (r < 0.62 ? 1 : 2) : g < 0.47 ? (r < 0.6 ? 3 : 4) : 1 + Math.floor(r * 4);
       continue;
     }
+    const wts = BIOMES[biome()].weights;
+    if (wts) { // some varieties rarer than others
+      let x = r * wts.reduce((a, w) => a + w, 0), k = 0;
+      while (k < wts.length - 1 && x >= wts[k]) x -= wts[k++];
+      d[t] = k + 1;
+      continue;
+    }
     d[t] = 1 + Math.floor(r * PLANT_KINDS);
   }
   return d;

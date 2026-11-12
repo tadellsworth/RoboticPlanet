@@ -146,18 +146,44 @@ def l4_frostslab(seed=34, scale=1.0, shift=(0, 0)):
     S = GScene()
     # ice first: a glassy sheet on the ground down-right of the slab (in its shadow)
     rf = lobed(24, rng, k=5, amp=(0.1, 0.25))
-    V, F, u, v = patch((24, -24), rf, lambda x, y: 0.9 + 0.0 * x, step=1.2, edge=3)
-    S.add(V, F, attrs(len(V), '#93a8b8', col2='#cfdde8', u=u, v=v, mat=5, spec=0.8, gloss=50), fade=np.clip(u, 1e-3, 1) ** 3)
-    # the slab: wide and thin, its far (down-right) edge lifted so it leans back from the sun
-    P = facet_rock(S, (-6, 6, 10), (48, 32, 8), rng, npts=24, yaw=np.radians(-38), pitch=np.radians(-24),
-                   col='#505257', col2='#6e7075', snow=0.5, zmin=0.0, jitter=0.32, tone=0.14)
+    V, F, u, v = patch((30, -28), rf, lambda x, y: 0.9 + 0.0 * x, step=1.2, edge=3)
+    S.add(V, F, attrs(len(V), '#8ea0ae', col2='#c4d4e0', u=u, v=v, mat=5, spec=0.8, gloss=50), fade=np.clip(u, 1e-3, 1) ** 3)
+    # the slab: an angular, broken plate of rock, its far (down-right) edge lifted so it leans back
+    k = 9
+    ang = np.sort(rng.uniform(0, 2 * np.pi, k))
+    rad = rng.uniform(0.78, 1.0, k)
+    ring = np.stack([44 * rad * np.cos(ang), 34 * rad * np.sin(ang)], -1)
+    pts = []
+    for (x, y) in ring:
+        pts.append((x, y, 4.0 + rng.uniform(-0.8, 0.8)))
+        pts.append((x * 0.97, y * 0.97, -4.0))
+    pts += [(rng.uniform(-12, 12), rng.uniform(-8, 8), 5.2) for _ in range(4)]
+    from scipy.spatial import ConvexHull
+    P = np.array(pts, float)
+    hull = ConvexHull(P)
+    tri = hull.simplices.copy()
+    c = P.mean(0)
+    for q, (a, b, e) in enumerate(tri):
+        if np.dot(np.cross(P[b] - P[a], P[e] - P[a]), P[a] - c) < 0:
+            tri[q] = (a, e, b)
+    P = rot_y(P, np.radians(-22))
+    P = rot_z(P, np.radians(-38))
+    P = P + np.array([-8.0, 8.0, 11.0])
+    P[:, 2] = np.maximum(P[:, 2], 0.0)
+    V = P[tri].reshape(-1, 3)
+    F = np.arange(len(V)).reshape(-1, 3)
+    ft = np.repeat(1 + 0.08 * rng.uniform(-1, 1, len(tri)), 3)[:, None]
+    S.add(V, F, attrs(len(V), C('#6a6c72') * ft, col2=C('#7c7e84') * ft, mat=3, spec=0.15, gloss=18, snow=0.38))
     # a frost rime along its upper edges: small ice crystals
-    top = P[P[:, 2] > np.percentile(P[:, 2], 55)]
-    for k in range(26):
-        p = top[rng.integers(len(top))] + rng.normal(size=3) * np.array([1.5, 1.5, 0.3])
-        s = rng.uniform(1.0, 2.0)
-        oriented_blob(S, p, (s * 1.3, s, s * 0.8), yaw=rng.uniform(0, 3), col='#dce8f2', col2='#ffffff', mat=5, spec=0.7,
-                      gloss=40, zmin=None, nu=5, nv=7)
+    top = P[0:2 * k:2]
+    cen = P[0:2 * k:2].mean(0)
+    for q in range(110):
+        i = rng.integers(k)
+        p = top[i] + (top[(i + 1) % k] - top[i]) * rng.uniform(0, 1)
+        p = p + (cen - p) * rng.uniform(0.0, 0.16) + rng.normal(size=3) * np.array([0.5, 0.5, 0.1])
+        sz = rng.uniform(0.6, 1.3)
+        oriented_blob(S, p + np.array([0, 0, 0.4]), (sz * 1.6, sz, sz * 0.5), yaw=rng.uniform(0, 3), col='#d4e2ee',
+                      col2='#ffffff', mat=5, spec=0.6, gloss=40, zmin=None, nu=4, nv=6)
     # a couple of smaller broken pieces
     facet_rock(S, (36, 18, 3), (9, 7, 5), rng, npts=10, yaw=0.6, col='#505257', col2='#6c6e73', snow=0.5)
     facet_rock(S, (-44, -16, 2), (7, 5, 4), rng, npts=9, yaw=1.6, col='#505257', col2='#6c6e73', snow=0.5)
@@ -218,7 +244,7 @@ def l6_probe(seed=36, scale=1.0, shift=(0, 0)):
         sp = np.stack([p0, (p0 + mid) / 2, mid, (mid + p1) / 2, p1])
         add_tube(S, sp, 1.3, 1.0, nseg=6, col='#cfcfca', mat=0, spec=0.35, gloss=30, snow=0.2)
         if foot:
-            oriented_blob(S, p1, (4.2, 4.2, 1.2), roll=rng.uniform(0.5, 1.2), col='#d4d4ce', mat=0, spec=0.3, zmin=0.0,
+            oriented_blob(S, p1, (3.2, 3.2, 0.8), roll=rng.uniform(0.9, 1.3), col='#c4c4be', mat=0, spec=0.3, zmin=0.0,
                           nu=8, nv=12)
     # antenna dish on a short mast
     add_tube(S, np.array([[2, 0, 16], [8, 2, 22], [12, 3, 25]], float), 0.9, 0.7, nseg=5, col='#bdbdb8', mat=0)
@@ -251,7 +277,7 @@ def l6_probe(seed=36, scale=1.0, shift=(0, 0)):
 
 
 SCALE = [1.32, 1.42, 1.72, 1.62, 1.6, 1.7]
-OFFSET = [(0, 0), (0, 0), (14, 12), (12, 10), (10, 10), (10, 6)]
+OFFSET = [(0, 0), (0, 0), (-16, -12), (-12, -10), (-10, -10), (-10, -6)]  # world origin at canvas centre + this
 PLANTS = [l1_crater, l2_craters, l3_outcrop, l4_frostslab, l5_scatter, l6_probe]
 ENV = ['lunar_dust', 'lunar_dust', 'lunar_dust', 'lunar', 'lunar_dust', 'lunar_dust']
 
