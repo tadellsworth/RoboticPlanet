@@ -5,8 +5,9 @@
 // muzzle brake. Top-down, orthographic, facing +x, no ground (the game draws its shadow); 10 world units across the
 // frame, the hull about 7.7 long and 3.2 wide (kit px: 1 px = 1/25.6 unit), the barrel overhanging the nose in travel.
 //   ?part=drive  travelling: the barrel lowered and laid forward over the cab in its travel lock, legs stowed, spade up
-//   ?part=up     dug in: the barrel raised steeply, the travel lock folded flat, four stabiliser legs out at the
-//                corners onto foot pads, the recoil spade down behind the hull
+//   ?part=up     dug in: the barrel raised steeply (about 41 degrees, the muzzle brake over the cab's prow), the
+//                travel lock's clamp open and empty, four stabiliser legs out at the corners onto hazard-striped foot
+//                pads, the toothed recoil spade down behind the hull
 // Mark: muzzle (the centre of the barrel's mouth, in both poses).
 import { lancer } from './lancertruck.js';
 export const config = { pad: false, size: 512 };
@@ -14,10 +15,10 @@ export default function (L) {
   const { M, TEAM, THREE } = L;
   const part = new URLSearchParams(location.search).get('part') || 'drive', up = part === 'up';
   L.seed(613);
-  const V = lancer(L), { R, k, m, mir } = V, { rect, rr, poly, ext, disc, strip, tyre, grime, eye, beamL, hazard, G } = R;
+  const V = lancer(L), { R, k, m, mir } = V, { rect, rr, poly, ext, disc, strip, tyre, grime, beamL, hazard, G } = R;
   const { armor, top, roof, dark, black, glow, steel, seam } = m;
   const team = M.emit(TEAM, 0.9), paintT = M.paint(TEAM, { rivets: false }), haz = hazard('#f0a030');
-  const gun = M.plain('#3e454c', 0.42, 0.7), gunD = M.plain('#25292d', 0.5, 0.6), pad = M.plain('#24272b', 0.7, 0.4);
+  const gun = M.plain('#757d85', 0.48, 0.4), gunD = M.plain('#25292d', 0.5, 0.6), brakeM = M.plain('#4a5158', 0.45, 0.6), pad = M.plain('#24272b', 0.7, 0.4);
 
   // ---- running gear: three axles a side (one under the cab, a close pair under the gun), outer half showing
   for (const x of [60, -26, -60]) for (const s of [-1, 1]) tyre(x, s * 36, 14, 16, { blocks: 14 });
@@ -31,7 +32,7 @@ export default function (L) {
 
   // ---- the hull: armoured bed under the gun house, a deck plate, an ammunition hatch between gun house and cab
   ext(poly([[36, -28], [-88, -28], [-97, -20], [-97, 20], [-88, 28], [36, 28]]), 0.4, 0.95, armor, { bevel: 0.08 });
-  ext(rr(-92, -24, 126, 48, 4), 1.35, 0.06, top, { bevel: 0.02 });
+  ext(rr(-92, -24, 126, 48, 4), 1.35, 0.06, M.paint('#41474e'), { bevel: 0.02 });
   for (const x of [-30, 8]) strip(x, -24, x, 24, 1.5, 1.42, 0.01, seam);
   grime(-94, -28, 130, 56, 1.42, 0.8, 41);
   rect(10, -20, 20, 10, 1.41, 0.05, dark, { dirt: 0 });                                   // ammunition hatch (left of the barrel)
@@ -59,6 +60,7 @@ export default function (L) {
 
   // ---- the gun house: a big angular armoured box on the rear deck, wedge-faced toward the front
   const T0 = 1.3, TH = 1.0, TT = T0 + TH + 0.12;                                             // TT: top of the roof plate
+  ext(poly([[-3, -13], [-14, -30], [-81, -30], [-93, -21], [-93, 21], [-81, 30], [-14, 30], [-3, 13]]), 1.38, 0.06, black, { bevel: 0.01, dirt: 0, cast: false }); // dark ring gap round its foot
   ext(poly([[-6, -12], [-16, -27], [-80, -27], [-90, -20], [-90, 20], [-80, 27], [-16, 27], [-6, 12]]), T0, TH, armor, { bevel: 0.08 });
   ext(poly([[-12, -10], [-20, -22], [-77, -22], [-84, -16], [-84, 16], [-77, 22], [-20, 22], [-12, 10]]), T0 + TH - 0.02, 0.14, roof, { bevel: 0.04 });
   for (const [a, b, c, d] of [[-50, -22, -50, 22], [-77, 0, -58, 0]]) strip(a, b, c, d, 1.6, TT + 0.005, 0.01, seam);
@@ -85,34 +87,36 @@ export default function (L) {
   L.hcyl(3.2 * k, 38 * k, steel, TX * k, HT, 0, R.O({ axis: 'z', seg: 16, dirt: 0 }));
 
   // ---- the gun: everything below rotates about the trunnion; local x along the barrel, local y up
-  const th = up ? +(new URLSearchParams(location.search).get('el') || 0.8) : 0;
+  const th = up ? 0.72 : 0;                                                                // dug in: about 41 degrees
   const gg = L.group(TX * k, HT, 0, 0, G); gg.rotation.z = th;
   const P = (o = {}) => Object.assign({ parent: gg, dirt: 0 }, o);
   // mantlet: a chamfered armour block round the barrel's root
   ext(poly([[-10, -13], [6, -13], [13, -8], [13, 8], [6, 13], [-10, 13]]), -0.3, 0.6, armor, { parent: gg, bevel: 0.06, dirt: 0.2 });
   // cradle sleeve with two recoil cylinders along its top
-  L.hcyl(8 * k, 30 * k, gunD, 26 * k, 0, 0, P({ seg: 28 }));
-  for (const s of [-1, 1]) L.hcyl(2.4 * k, 34 * k, steel, 28 * k, 0.3, s * 4.5 * k, P({ seg: 14 }));
+  L.hcyl(9 * k, 30 * k, gunD, 26 * k, 0, 0, P({ seg: 28 }));
+  for (const s of [-1, 1]) L.hcyl(2.6 * k, 34 * k, steel, 28 * k, 0.33, s * 5 * k, P({ seg: 14 }));
   // the tube, tapering slightly toward the muzzle
   const B0 = 40, B1 = 124;
-  const tube = new THREE.CylinderGeometry(5.0 * k, 6.2 * k, (B1 - B0) * k, 32, 1); tube.rotateZ(-Math.PI / 2);
+  const tube = new THREE.CylinderGeometry(5.8 * k, 7.0 * k, (B1 - B0) * k, 32, 1); tube.rotateZ(-Math.PI / 2);
   L.mesh(tube, gun, (B0 + B1) / 2 * k, 0, 0, P());
   // fume extractor: a swelling a third of the way along
   const FE0 = 50, FE1 = 68;
-  const fe = new THREE.CylinderGeometry(7.4 * k, 7.4 * k, (FE1 - FE0) * k, 32, 1); fe.rotateZ(-Math.PI / 2);
+  const fe = new THREE.CylinderGeometry(8.6 * k, 8.6 * k, (FE1 - FE0) * k, 32, 1); fe.rotateZ(-Math.PI / 2);
   L.mesh(fe, gun, (FE0 + FE1) / 2 * k, 0, 0, P());
-  for (const [x, rT, rB] of [[FE0 - 1.25, 7.4, 6.0], [FE1 + 1.25, 5.8, 7.4]]) {
+  for (const [x, rT, rB] of [[FE0 - 1.25, 8.6, 6.8], [FE1 + 1.25, 6.6, 8.6]]) {
     const g = new THREE.CylinderGeometry(rT * k, rB * k, 2.5 * k, 32, 1); g.rotateZ(-Math.PI / 2); L.mesh(g, gun, x * k, 0, 0, P());
   }
   // team-lit band behind the muzzle brake
-  L.hcyl(5.6 * k, 4 * k, team, 114 * k, 0, 0, P({ seg: 28, cast: false }));
+  L.hcyl(6.6 * k, 4 * k, team, 114 * k, 0, 0, P({ seg: 28, cast: false }));
+  for (const x of [44, 96]) L.hcyl(7.2 * k, 2.5 * k, gunD, x * k, 0, 0, P({ seg: 28 }));     // clamp rings
   // double-baffle muzzle brake: two broad blocks with the bore showing between them, a dark mouth at the front
-  for (const [x0, x1] of [[123, 130], [132, 139]]) {
-    L.box((x1 - x0) * k, 0.44, 22 * k, gunD, (x0 + x1) / 2 * k, -0.22, 0, P());
-    L.box((x1 - x0 - 2) * k, 0.02, 20 * k, gun, (x0 + x1) / 2 * k, 0.22, 0, P({ cast: false }));
+  const BW = 28;
+  for (const [x0, x1] of [[120, 128.5], [131, 139]]) {
+    L.box((x1 - x0) * k, 0.5, BW * k, brakeM, (x0 + x1) / 2 * k, -0.25, 0, P());
+    for (const s of [-1, 1]) L.box((x1 - x0 + 0.4) * k, 0.3, 3 * k, black, (x0 + x1) / 2 * k, -0.15, s * (BW / 2 - 1.3) * k, P({ cast: false })); // side ports
   }
-  L.hcyl(4.8 * k, 3 * k, gun, 131 * k, 0, 0, P({ seg: 24 }));
-  L.hcyl(3.4 * k, 0.6 * k, black, 139.2 * k, 0, 0, P({ seg: 24 }));
+  L.hcyl(5.2 * k, 3 * k, gunD, 131 * k, 0, 0, P({ seg: 24 }));
+  L.hcyl(4.2 * k, 0.6 * k, black, 139.2 * k, 0, 0, P({ seg: 24 }));
   L.mark('muzzle', 139.5 * k, 0, 0, gg);
 
   // elevating rams from the front of the gun house up to the cradle's belly
@@ -124,22 +128,15 @@ export default function (L) {
     beamL(A, M2, 0.17, 0.17, gunD, { dirt: 0 }); beamL(M2, B, 0.1, 0.1, steel, { dirt: 0 });
   }
 
-  // ---- the travel lock on the back of the cab roof: a crutch that holds the barrel in travel, folded flat when dug in
-  const xl = 56, yb = C.yu + 0.07;
-  if (!up) {
-    const yt = HT - 6.1 * k;                                                                // the barrel's underside over the lock
-    for (const s of [-1, 1]) beamL([xl * k, yb, s * 13 * k], [xl * k, yt - 0.05, s * 5 * k], 0.12, 0.12, steel, { dirt: 0 });
-    rect(xl - 3, -9, 6, 18, yt - 0.08, 0.08, dark, { dirt: 0 });                              // the saddle
-    for (const s of [-1, 1]) rect(xl - 2.5, s * 8.5 - 1.5, 5, 3, yt - 0.08, 0.34, dark, { dirt: 0 }); // clamp jaws either side of the tube
-  } else {
-    for (const s of [-1, 1]) strip(xl + 1, s * 13, xl - 11, s * 5, 3.5, yb, 0.08, steel, { cast: true });
-    rect(xl - 15, -7, 5, 14, yb, 0.1, dark, { dirt: 0 });
-    for (const s of [-1, 1]) rect(xl - 14.5, s * 6.5 - 1.5, 4, 3, yb, 0.22, dark, { dirt: 0 });
-  }
+  // ---- the travel lock on the back of the cab roof: a crutch whose clamp holds the barrel in travel (left open, empty, when dug in)
+  const xl = 56, yb = C.yu + 0.07, yt = HT - 7.1 * k;                                       // yt: the barrel's underside over the lock
+  for (const s of [-1, 1]) beamL([xl * k, yb, s * 14 * k], [xl * k, yt - 0.05, s * 6 * k], 0.12, 0.12, steel, { dirt: 0 });
+  rect(xl - 3, -10, 6, 20, yt - 0.08, 0.08, dark, { dirt: 0 });                              // the saddle
+  for (const s of [-1, 1]) rect(xl - 2.5, s * (up ? 11 : 9.5) - 1.5, 5, 3, yt - 0.08, 0.36, dark, { dirt: 0 }); // clamp jaws (swung open when dug in)
 
   // ---- the recoil spade: a toothed blade hinged under the tail, folded up in travel, dug into the ground behind
   const SPX = -95, SPH = 0.82, SL = 30;
-  const sp = L.group(SPX * k, SPH, 0, 0, G); sp.rotation.z = up ? 0.64 : -1.32;
+  const sp = L.group(SPX * k, SPH, 0, 0, G); sp.rotation.z = up ? 0.64 : -1.45;
   const S = (o = {}) => Object.assign({ parent: sp, dirt: 0 }, o);
   L.hcyl(0.07, 48 * k, steel, 0, 0, 0, S({ axis: 'z', seg: 12 }));
   L.box(SL * k, 0.1, 50 * k, armor, -SL / 2 * k, -0.05, 0, S({ dirt: 0.3 }));

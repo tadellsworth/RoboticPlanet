@@ -179,6 +179,7 @@ const ART_MANIFEST = {
   'dropost@0': B3D('buildings/dropost@0.webp', 2.3),
   'dropost@1': B3D('buildings/dropost@1.webp', 2.3),
   'flak@0': B3D('buildings/flak@0.webp', 1.3), 'flak@1': B3D('buildings/flak@1.webp', 1.3),
+  'minigun@0': B3D('buildings/minigun@0.webp', 1.3), 'minigun@1': B3D('buildings/minigun@1.webp', 1.3),
   // The Rocket Truck (renderer/b/rockettruck.js): top-down, driving, and with its rack raised to fire.
   'rocket@0-f0': { src: 'bots/rocket@0-f0.webp', shadow: true }, 'rocket@1-f0': { src: 'bots/rocket@1-f0.webp', shadow: true },
   'rocket-up@0': { src: 'bots/rocket-up@0.webp', shadow: true }, 'rocket-up@1': { src: 'bots/rocket-up@1.webp', shadow: true },
@@ -188,6 +189,7 @@ const ART_MANIFEST = {
   'terminal@0': B3D('buildings/terminal@0.webp', 1.6), 'terminal@1': B3D('buildings/terminal@1.webp', 1.6),
   ...(() => { const o = {}; for (let k = 0; k < 16; k++) o[`keep-head-${k}`] = B3D(`buildings/keep-head-${k}.webp`, 1.65); for (let f = 0; f < 6; f++) o[`keep-spark-${f}`] = B3D(`buildings/keep-spark-${f}.webp`, 1.65); return o; })(),
   ...(() => { const o = {}; for (let k = 0; k < 16; k++) o[`flak-head-${k}`] = B3D(`buildings/flak-head-${k}.webp`, 1.3); return o; })(),
+  ...(() => { const o = {}; for (let k = 0; k < 16; k++) o[`minigun-head-${k}`] = B3D(`buildings/minigun-head-${k}.webp`, 1.3); return o; })(),
   // Air drops (renderer/b/airdrop.js): a crate under its parachute, a canopy, a landed crate, a spent parachute.
   ...Object.fromEntries(['chute-fall', 'chute', 'crate-drop', 'chute-flat'].flatMap((k) => [0, 1].map((t) => [`${k}@${t}`, `bots/${k}@${t}.webp`]))),
   'cargoplane@0': 'bots/cargoplane@0.webp',

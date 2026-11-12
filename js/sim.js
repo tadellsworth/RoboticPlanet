@@ -4363,8 +4363,8 @@ function launchRocket(u, b) {
   const k = S.tick + u.id * 7 + u.rockets;
   const x1 = b.x + 0.5 + (hash2(k, u.id, 3) - 0.5) * 2 * ROCKET.scatter, y1 = b.y + 0.5 + (hash2(u.id, k, 5) - 0.5) * 2 * ROCKET.scatter;
   const d = dist(u.x, u.y, x1, y1);
-  const mx = u.x + Math.cos(u.face) * 0.62, my = u.y + Math.sin(u.face) * 0.62 - 0.25; // the barrel's end, raised
-  S.missiles.push({ rocket: true, owner: u.owner, from: u.id, target: b.id, t: 0, dur: Math.max(1.2, d / ROCKET.speed), x0: mx, y0: my + 0.25, x1, y1 });
+  const mx = u.x + Math.cos(u.face) * 0.26, my = u.y + Math.sin(u.face) * 0.26; // the raised barrel's end (its muzzle mark, dug in: 0.34 of the sprite ahead)
+  S.missiles.push({ rocket: true, owner: u.owner, from: u.id, target: b.id, t: 0, dur: Math.max(1.2, d / ROCKET.speed), x0: mx, y0: my, x1, y1 });
   addFx('muzzle', mx, my, { a: u.face, color: '#ffd27a', life: 0.16, big: true });
   addFx('flash', mx, my, { r: 0.6, life: 0.12 });
   addFx('smoke', mx, my, { r: 0.55, life: 1.6 });

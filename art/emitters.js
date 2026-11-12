@@ -11,3 +11,4 @@ const GENERATOR_FILL = [123.5, 432.4];
 // The Pulse Turret's beam start for each of its 16 head directions: between the two barrel tips, in pixels
 // of the head's 512 canvas (renderer/post/pulsefx.py, pulse-muzzles.json).
 const PULSE_MUZZLES = [[412.8,266.4],[404.2,318.2],[371.7,363.9],[319.4,395.5],[256.0,406.8],[192.6,395.5],[140.3,363.9],[107.8,318.2],[99.2,266.4],[114.3,217.0],[149.5,176.7],[199.0,150.6],[256.0,141.6],[313.0,150.6],[362.5,176.7],[397.7,217.0]];
+const MINIGUN_MUZZLES = Object.assign([[365.0,277.2],[358.3,313.1],[335.4,344.5],[299.4,365.9],[256.0,373.5],[212.6,365.9],[176.6,344.5],[153.7,313.1],[147.0,277.2],[156.8,242.5],[181.1,213.9],[215.8,195.1],[256.0,188.6],[296.2,195.1],[330.9,213.9],[355.2,242.5]], { scale: 1.3 }); // the Minigun Nest's barrel tips (renderer/out/minigun/muzzles.json): pixels in the head's 512 canvas, drawn 1.3 tiles across
