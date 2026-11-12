@@ -1180,6 +1180,12 @@ function toggleRoute() {
   showRoadBanner();
 }
 
+/** Paths on the Roads tool, ready to drag roads (Route to off), whatever tool was used last. */
+function openRoadDraw() {
+  UI.route = false; UI.routeGhost = null; UI.routePrev = null;
+  openPaths('road');
+}
+
 /** Open Paths on one of its tools (roads, bridges, ramps, arrows, junctions). */
 function openPaths(v) {
   if (R.mode !== 'road') setMode('road');
@@ -1243,7 +1249,7 @@ function initKeyboard() {
     if (sk) { e.preventDefault(); sk.click(); return; }
     // In the build menu, a building's letter on the tab that's showing picks it, R goes straight to
     // laying roads and X to Walls. W, A, S and D still pan the map (no building uses them).
-    if (UI.sheetKind === 'build' && k === 'r') { e.preventDefault(); openPaths('road'); return; }
+    if (UI.sheetKind === 'build' && k === 'r') { e.preventDefault(); openRoadDraw(); return; }
     if (UI.sheetKind === 'build' && k === 'x' && $('build-walls')) { e.preventDefault(); $('build-walls').click(); return; }
     // A letter that's no building's on this tab does what it does elsewhere (Q army, H base, M minimap...).
     if (UI.sheetKind === 'build' && /^[a-z]$/.test(k) && !PAN_KEYS[k] && k !== 'b') {
@@ -1263,7 +1269,9 @@ function initKeyboard() {
       case 'b': $('btn-build').click(); break;
       case 'p': $('btn-road').click(); break;
       // R opens and closes the Paths menu (like P); inside Paths it picks the Roads tool first.
-      case 'r': if (R.mode === 'road' && UI.roadMode !== 'road') openPaths('road'); else $('btn-road').click(); break;
+      // R always means the road drag tool: from anywhere it opens Paths on Roads (drawing, not Route to,
+      // whatever tool was used last); on that tool already, it closes Paths. (P opens the last tool used.)
+      case 'r': if (R.mode === 'road' && UI.roadMode === 'road' && !UI.route) $('btn-road').click(); else openRoadDraw(); break;
       case 'o': openPaths('arrows'); break;
       case 'g': openPaths('bridge'); break;
       case 'v': openPaths('ramp'); break;
@@ -3427,7 +3435,7 @@ function openBuildMenu() {
   for (const el of $('sheet-body').querySelectorAll('.bcard[data-t]')) {
     el.onclick = () => { sfx('click'); enterPlaceMode(el.dataset.t); };
   }
-  $('build-roads').onclick = () => openPaths('road');
+  $('build-roads').onclick = () => openRoadDraw();
   if ($('build-walls')) $('build-walls').onclick = () => openPaths('wall');
   const show = (g) => {
     UI.buildTab = g;
