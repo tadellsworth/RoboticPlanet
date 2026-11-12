@@ -591,8 +591,6 @@ a.btn { display: block; text-align: center; text-decoration: none; color: inheri
 
 /* ---------- touch: controls sized for a finger (44px), where a mouse gets the compact ones ---------- */
 @media (pointer: coarse) {
-  /* The minimap's close button keeps its size; its corner of the minimap answers for it. */
-  .mm-hide::after { content: ''; position: absolute; top: -3px; right: -3px; width: 44px; height: 44px; }
   .sheet-close { width: 44px; height: 44px; margin: -4px -4px 0 0; }
   .sheet-title { margin-right: 46px; }
   /* A Foundry's order list: the two arrows side by side, each a full target. */
