@@ -1287,7 +1287,7 @@ function refreshSelection() {
   const nw = orderable(0, UI.sel).length, nr = UI.sel.length - nw;
   const html = `<b>${[nw ? `${nw} warbot${nw > 1 ? 's' : ''}` : '', nr ? `${nr} Howitzer${nr > 1 ? 's' : ''}` : ''].filter(Boolean).join(' and ')} selected</b>` +
     (inside ? ` <span class="muted">(${inside} in garrisons)</span>` : '') + (empty ? ` <span class="err">${empty} out of Ammo</span>` : '') +
-    `<span class="hint">Right-click open ground to hold it, a rival building or robot to attack, or your Outpost to station them. Esc clears.</span>
+    `<span class="hint">Right-click open ground to hold it, a rival building or robot to attack, your Outpost to station them, or a Repair Station to get them fixed. Esc clears.</span>
     <button class="btn small ghost" id="selbar-clear" aria-label="Clear selection">✕</button>`;
   if (bar.dataset.html !== html) {
     bar.dataset.html = html;
@@ -1335,6 +1335,15 @@ function onMapCommand(i, j, wx, wy) {
   if (b && b.owner !== 0) nr = orderBombard(0, UI.sel, b);
   else if (b && BDEFS[b.type].mil && b.built) { const s = deploySpot(0, b.x, b.y); if (s >= 0) nr = orderPark(0, UI.sel, s % S.W, (s / S.W) | 0); }
   else if (inMap(i, j) && walkable(tIdx(i, j)) && !b) nr = orderPark(0, UI.sel, i, j);
+  // Your Repair Station: the damaged ones go there to be fixed.
+  if (b && b.owner === 0 && BDEFS[b.type].repair) {
+    const r = orderRepair(0, UI.sel, b);
+    if (typeof r === 'string') { sfx('error'); toast(r, 'warn'); return; }
+    sfx('order'); addFx('ring', b.x + 0.5, b.y + 0.5, { color: '#7dffa0' });
+    toast(`${r} robot${r === 1 ? '' : 's'} heading to the Repair Station.`, 'info');
+    refreshSelection();
+    return;
+  }
   const foe = !b ? enemyBotAtTap(i, j) : null;
   if (foe) { n = orderHunt(0, UI.sel, foe); what = `going after the rival's ${BOTS[foe.type].name}`; }
   else if (b && b.owner !== 0) { n = orderAttack(0, UI.sel, b); what = `attacking the ${BDEFS[b.type].name}`; }
@@ -3294,6 +3303,10 @@ function openBuildingSheet(b) {
       }
       if (BDEFS[b.type].port && b.built && b.owner === 0) html += portSection(b);
     }
+    // Call a worker: one of yours with a building that needs a worker and has none (a mine no one comes to).
+    if (b.owner === 0 && b.built && BDEFS[b.type].staff && !BDEFS[b.type].crew && !b.staff) {
+      html += `<button class="btn" id="sh-callw">Call a worker</button><p class="hint" id="sh-callw-hint">Send the nearest worker here now, even one busy elsewhere, so this keeps working.</p>`;
+    }
     // Priority for everything but the Command Base and finished Walls/Gates (storage too: an Airfield's or a
     // Depot's deliveries come first or last by it).
     if (b.type !== 'lander' && !(b.built && BDEFS[b.type].barrier)) {
@@ -3442,6 +3455,12 @@ function openBuildingSheet(b) {
     };
     if ($('sh-gprio')) for (const btn of $('sh-gprio').children) btn.onclick = () => { b.gprio = btn.dataset.v === 'normal' ? undefined : btn.dataset.v; sfx('click'); refreshSheet(); };
     if ($('sh-keepw')) for (const btn of $('sh-keepw').children) btn.onclick = () => { b.keepW = btn.dataset.v === 'auto' ? undefined : +btn.dataset.v; b.stockT = 0; sfx('click'); refreshSheet(); };
+    if ($('sh-callw')) $('sh-callw').onclick = () => {
+      const r = callWorker(0, b);
+      if (r.u) { sfx('order'); toast(r.already ? 'A worker is already on the way.' : 'A worker is on the way.', 'info'); addFx('ring', r.u.x, r.u.y, { color: '#ffe45a' }); }
+      else { sfx('error'); toast(r.why, 'warn'); }
+      refreshSheet();
+    };
     if ($('sh-rallypost')) $('sh-rallypost').onclick = () => {
       const P = S.players[0], on = P.rallyPost === b.id;
       P.rallyPost = on ? 0 : b.id;
@@ -4460,6 +4479,19 @@ function openPopSheet() {
   refreshPopSheet();
 }
 
+/** What worker (or other civilian bot) u is doing, as a key: running, carrying, building, charging, repairing or free. */
+function botActivity(u) {
+  const t = u.task, tt = t && t.type;
+  if (tt === 'charge' || tt === 'refuel' || (u.inside && insideCharger(u) && !tt && (u.bat ?? 100) < 99)) return 'charging';
+  if (tt === 'haul') return 'carrying';
+  if (tt === 'staff') return 'running';
+  if (tt === 'build' || tt === 'pave' || tt === 'fix') return 'building';
+  if (tt === 'repair') return 'repairing';
+  return 'free';
+}
+const WORKER_VIEW = { running: ['#5dd88a', 'running buildings'], building: ['#ffb24a', 'building or paving'], carrying: ['#6ec8ff', 'carrying goods'],
+  charging: ['#c79bff', 'recharging'], repairing: ['#ff7a8a', 'being repaired'], free: ['#ffe45a', 'free'] };
+
 function refreshPopSheet() {
   const n = {};
   const add = (type, key) => { n[type] = n[type] || { total: 0 }; n[type].total++; if (key) n[type][key] = (n[type][key] || 0) + 1; };
@@ -4495,7 +4527,11 @@ function refreshPopSheet() {
       `<div class="kv pop-row"><span>${label}</span><span><b>${g[k].length}</b> <button class="btn small ghost" data-wb="${k}">Show</button></span></div>`).join('') +
       '<p class="hint">Show takes you to each in turn. Warbots stationed at an Outpost come back to it after a fight; every other one belongs to the Command Base.</p>';
   }
-  $('sh-pop').innerHTML = rows.join('') + `<div class="kv"><span>All robots</span><span><b>${total}</b> of ${cap} (the limit)</span></div>` + wb;
+  const wv = `<div class="section-label">Where your workers are</div>
+    <button class="btn${R.workerView ? ' primary' : ''}" id="sh-wview">${R.workerView ? 'Hide workers on the map' : 'Show workers on the map'}</button>
+    <p class="hint">Rings every Worker on the map (and dots it on the minimap) in the colour of what it's doing, with a line to where it's going: ${Object.values(WORKER_VIEW).map(([c, l]) => `<span style="color:${c}">●</span> ${l}`).join(', ')}. Workers inside a building show as a count on it.</p>`;
+  $('sh-pop').innerHTML = rows.join('') + `<div class="kv"><span>All robots</span><span><b>${total}</b> of ${cap} (the limit)</span></div>` + wv + wb;
+  $('sh-wview').onclick = () => { R.workerView = !R.workerView; sfx('click'); refreshPopSheet(); };
   for (const btn of $('sh-pop').querySelectorAll('[data-wb]')) btn.onclick = () => showWarbots(btn.dataset.wb);
 }
 

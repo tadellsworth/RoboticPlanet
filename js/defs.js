@@ -479,6 +479,8 @@ const ERUPTION = { first: 420, gap: [300, 420], warn: 20, dur: 14, bombs: 34, da
 const QUAKE = { at: 900, jitter: 90, warn: [120, 30] };
 // River delta: fords are slow to wade (speed ×) and dearer to plan a route through (cost ×).
 const FORD_SLOW = 0.45, FORD_COST = 2.5;
+// Warbots you order somewhere (move, station, call back) march there without stopping to fight, for at most this long (s).
+const MARCH_MAX = 90;
 const CHOKE_BAND = 3;   // Chokepoint maps: rows of crags each side of the middle line
 const CHOKE_APPROACH = 3; // ...and rows of open ground kept clear each side of the pass
 const ISLE_GAP = 4;       // Islands maps: at least this much sea between islands (a wide sea: ships, or long, dear bridges)

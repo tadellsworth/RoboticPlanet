@@ -1892,6 +1892,7 @@ function addBot(owner, type, x, y) {
 }
 
 function enterBuilding(bot, b) {
+  bot.march = 0;
   bot.inside = b.id;
   bot.x = b.x + 0.5; bot.y = b.y + 0.5;
   bot.path = null;

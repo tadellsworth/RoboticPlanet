@@ -4561,6 +4561,7 @@ function render(dtReal) {
   drawRallies(ctx, ox, oy, z);
   drawMissiles(ctx, ox, oy, z);
   drawLavaBombs(ctx, ox, oy, z);
+  if (R.workerView) drawWorkerView(ctx, ox, oy, z);
   drawPulseCharges(ctx, ox, oy, z, inView);
   drawEffects(ctx, ox, oy, z);
   if (S.event) drawEvent(ctx, ox, oy, z);
@@ -5108,6 +5109,44 @@ function drawDepletedRes(ctx, x, y, z, res) {
 }
 
 /** Small corner badge showing a player-set priority or storage mode. */
+/**
+ * The workers view (Your robots → Show workers on the map): every Worker of yours ringed in the colour of
+ * what it's doing (WORKER_VIEW), with a faint line to where it's going; those inside buildings are counted
+ * on the building.
+ */
+function drawWorkerView(ctx, ox, oy, z) {
+  const inside = new Map(), pulse = 0.5 + 0.5 * Math.sin(R.time * 4);
+  ctx.save();
+  ctx.lineCap = 'round';
+  for (const u of S.bots) {
+    if (u.dead || u.owner !== 0 || u.type !== 'worker') continue;
+    if (u.inside) { inside.set(u.inside, (inside.get(u.inside) || 0) + 1); continue; }
+    const act = botActivity(u), col = WORKER_VIEW[act][0], x = ox + u.x * z, y = oy + u.y * z;
+    const t = u.task, goal = t && (getE(t.bld) || getE(t.site) || null);
+    if (goal && !goal.dead) {
+      ctx.strokeStyle = col; ctx.globalAlpha = 0.45; ctx.lineWidth = Math.max(1, z * 0.04); ctx.setLineDash([z * 0.15, z * 0.12]);
+      ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(ox + (goal.x + 0.5) * z, oy + (goal.y + 0.5) * z); ctx.stroke();
+      ctx.setLineDash([]);
+    }
+    const r = z * (act === 'free' ? 0.42 + 0.08 * pulse : 0.36);
+    ctx.globalAlpha = 0.95; ctx.strokeStyle = 'rgba(0,0,0,0.6)'; ctx.lineWidth = Math.max(3, z * 0.1);
+    ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.stroke();
+    ctx.strokeStyle = col; ctx.lineWidth = Math.max(2, z * 0.06);
+    ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.stroke();
+  }
+  ctx.font = `700 ${Math.max(10, z * 0.3)}px Inter, system-ui, sans-serif`;
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  for (const [id, n] of inside) {
+    const b = getE(id);
+    if (!b || b.dead) continue;
+    const x = ox + (b.x + 0.85) * z, y = oy + (b.y + 0.1) * z, r = Math.max(8, z * 0.22);
+    ctx.globalAlpha = 0.95; ctx.fillStyle = 'rgba(14,15,20,0.88)'; ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = '#5dd88a'; ctx.lineWidth = 1.5; ctx.stroke();
+    ctx.fillStyle = '#e8eef6'; ctx.fillText(String(n), x, y + 0.5);
+  }
+  ctx.restore();
+}
+
 /** The rally point for new warbots: a little flag in your colour flying over the Outpost or Keep. */
 function drawRallyMark(ctx, x, y, z) {
   const h = Math.max(12, z * 0.5), w = h * 0.55, wave = Math.sin(R.time * 4) * h * 0.04;
@@ -6004,6 +6043,11 @@ function renderMinimap() {
     if (u.dead || u.inside || u.type !== 'warbot') continue;
     ctx.fillStyle = u.owner === 0 ? '#bff2ff' : '#ffc2ca';
     ctx.fillRect(u.x * sx - 1, u.y * sy - 1, 2, 2);
+  }
+  if (R.workerView) for (const u of S.bots) { // the workers view: your Workers, in the colour of what they're doing
+    if (u.dead || u.inside || u.owner !== 0 || u.type !== 'worker') continue;
+    ctx.fillStyle = WORKER_VIEW[botActivity(u)][0];
+    ctx.fillRect(u.x * sx - 1.5, u.y * sy - 1.5, 3, 3);
   }
   for (const b of S.buildings) {
     if (b.dead || S.time - b.lastHit > 2) continue;

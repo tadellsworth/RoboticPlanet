@@ -1879,6 +1879,44 @@ function assignStaff(u, b) {
   if (!goTo(u, b.x, b.y)) cancelTask(u);
 }
 
+/**
+ * Call a worker to run building b now (its panel's Call a worker): the nearest Worker that can get there, a
+ * free one first, else one off building, paving or carrying (or, if none, one running something else),
+ * even past the few the colony keeps free. Returns { u } (the worker), or { why } it can't.
+ */
+function callWorker(owner, b) {
+  const def = BDEFS[b.type];
+  if (!b.built || !def.staff || def.crew) return { why: 'This building doesn\'t take a worker.' };
+  const cur = b.staff ? getE(b.staff) : null;
+  if (cur && !cur.dead) return { why: 'It already has its worker.' };
+  if (b.depleted) return { why: 'There\'s nothing left in its reach to gather: build one beside a fresh field.' };
+  if (b.paused) return { why: 'It\'s paused: unpause it first.' };
+  if (b.cut) return { why: 'It\'s cut off by a rival\'s border: take the land back first.' };
+  if (atLimit(b)) return { why: 'Its store is full: haulers need a road to it, to take its goods to storage.' };
+  if (b.staffInc) {
+    const v = getE(b.staffInc);
+    if (v && !v.dead && v.task && v.task.type === 'staff' && v.task.bld === b.id) return { u: v, already: true };
+    b.staffInc = 0;
+  }
+  const zone = S.zone[tIdx(b.x, b.y)];
+  let best = null, bs = Infinity;
+  for (const u of S.bots) {
+    if (u.dead || u.owner !== owner || u.type !== 'worker' || u.dropping) continue;
+    const here = u.inside ? getE(u.inside) : null, ux = here ? here.x : Math.floor(u.x), uy = here ? here.y : Math.floor(u.y);
+    if (!inMap(ux, uy) || S.zone[tIdx(ux, uy)] !== zone) continue;
+    const t = u.task, tt = t && t.type;
+    if (tt === 'staff' && t.bld === b.id) return { u, already: true };
+    const cost = !tt ? 0 : tt === 'staff' ? 40 + prioRank(getE(t.bld) || b) * -10 : tt === 'charge' || tt === 'refuel' || tt === 'repair' ? 60 : 8;
+    const s = dist(ux, uy, b.x, b.y) + cost;
+    if (s < bs) { bs = s; best = u; }
+  }
+  if (!best) return { why: 'None of your workers can walk there: it needs a way in from the rest of your colony (a road, a ramp or a bridge).' };
+  if (best.inside) exitBuilding(best);
+  assignStaff(best, b);
+  if (!best.task) return { why: 'The nearest worker couldn\'t find a way there.' };
+  return { u: best };
+}
+
 /* ------------------------------------------------------------------ workers */
 
 function updateWorker(u, dt) {
@@ -3687,6 +3725,10 @@ function warbotAct(u, dt) {
   const t = u.task;
   const defending = t && t.type === 'defend';
   const rally = t && t.type === 'hold' ? rallyById(t.rally) : null;
+  // Ordered somewhere (move, station, call back): it marches there without stopping to fight, until it
+  // arrives (or MARCH_MAX runs out).
+  if (u.march && (!t || S.time > u.march || (rally && dist2(u.x, u.y, rally.x, rally.y) <= 6.25) || t.type === 'attack')) u.march = 0;
+  const calm = !!u.retreat || u.march > S.time;
   const power = (u.bat ?? 100) < BATTERY.critical ? 0.5 : 1; // emergency mode hits half as hard
   // Out of Ammo: it can't fight at all. It drops any fight and an attack or sortie, and goes back
   // to a garrison to reload (one holding a rally flag reloads and comes back, see holdRally).
@@ -3715,9 +3757,9 @@ function warbotAct(u, dt) {
     }
     if (back) u.task = back; // couldn't set off after all: carry on
   }
-  let foe = armed && u.fight && !u.retreat ? getE(u.fight) : null;
+  let foe = armed && u.fight && !calm ? getE(u.fight) : null;
   // Hunting a robot (a flag that follows it): that's the one to shoot, once it's close enough.
-  if (armed && !u.retreat && rally && rally.follow) {
+  if (armed && !calm && rally && rally.follow) {
     const tg = getE(rally.follow);
     if (tg && !tg.dead && !tg.inside && dist2(tg.x, tg.y, u.x, u.y) <= 30) { foe = tg; u.fight = tg.id; }
   }
@@ -3727,7 +3769,7 @@ function warbotAct(u, dt) {
   if (!foe) {
     u.fight = 0;
     u.scanT -= dt;
-    if (armed && u.scanT <= 0 && !u.retreat) {
+    if (armed && u.scanT <= 0 && !calm) {
       u.scanT = 0.3;
       // Guards (defending their garrison) only chase civilians inside their own land.
       foe = nearestEnemyBot(u.owner, u.x, u.y, rally ? 3.5 : 2.8, true, defending, true);
@@ -4672,7 +4714,7 @@ function sendHunt(owner, e, count) {
   const i = Math.floor(e.x), j = Math.floor(e.y);
   if (!inMap(i, j) || !walkable(tIdx(i, j))) return { sent: 0 };
   const res = sendToRally(owner, i, j, count);
-  if (res.sent) res.rally.follow = e.id;
+  if (res.sent) { res.rally.follow = e.id; for (const u of rallyMembers(res.rally.id)) u.march = 0; }
   return res;
 }
 
@@ -4715,6 +4757,7 @@ function readyForOrder(u) {
   exitBuilding(u);
   cancelTask(u);
   u.fight = 0;
+  u.march = 0;
   u.embarkOn = 0; // a new order: no longer heading to board a Ferry
   u.path = null;
 }
@@ -4727,7 +4770,7 @@ function orderMove(owner, ids, i, j) {
   let r = S.rallies.find((q) => q.owner === owner && Math.abs(q.x - (i + 0.5)) < 1.5 && Math.abs(q.y - (j + 0.5)) < 1.5);
   if (!r) { r = { id: S.nextId++, owner, x: i + 0.5, y: j + 0.5 }; S.rallies.push(r); }
   let slot = rallyMembers(r.id).length;
-  for (const u of bots) { readyForOrder(u); u.task = { type: 'hold', rally: r.id, slot: slot++ }; }
+  for (const u of bots) { readyForOrder(u); u.task = { type: 'hold', rally: r.id, slot: slot++ }; if (usesPosts(owner)) u.march = S.time + MARCH_MAX; }
   return bots.length;
 }
 
@@ -4738,7 +4781,31 @@ function orderHunt(owner, ids, e) {
   const n = orderMove(owner, ids, i, j);
   if (!n) return 0;
   const r = S.rallies.find((q) => q.owner === owner && Math.abs(q.x - (i + 0.5)) < 1.5 && Math.abs(q.y - (j + 0.5)) < 1.5);
-  if (r && (S.rallies.length > r0 || !r.follow)) { r.x = i + 0.5; r.y = j + 0.5; r.follow = e.id; }
+  if (r && (S.rallies.length > r0 || !r.follow)) { r.x = i + 0.5; r.y = j + 0.5; r.follow = e.id; for (const u of rallyMembers(r.id)) u.march = 0; }
+  return n;
+}
+
+/**
+ * Send selected robots to Repair Station b to be fixed (they march there: no stopping to fight). Only the
+ * damaged ones go; returns how many, or a reason none can.
+ */
+function orderRepair(owner, ids, b) {
+  if (!b || b.dead || b.owner !== owner || !b.built || !BDEFS[b.type].repair) return 'That isn\'t one of your finished Repair Stations.';
+  if (repairDry(b)) return 'That Repair Station is out of Alloy.';
+  const zone = S.zone[tIdx(b.x, b.y)];
+  let n = 0, whole = 0;
+  for (const u of orderable(owner, ids)) {
+    if (u.hp >= u.maxHp) { whole++; continue; }
+    const here = u.inside ? getE(u.inside) : null, ux = here ? here.x : Math.floor(u.x), uy = here ? here.y : Math.floor(u.y);
+    if (S.zone[tIdx(ux, uy)] !== zone) continue;
+    readyForOrder(u);
+    if (u.type === 'warbot') u.task = { type: 'repair', bld: b.id };
+    else if (goTo(u, b.x, b.y)) u.task = { type: 'repair', bld: b.id };
+    else continue;
+    if (usesPosts(owner)) u.march = S.time + MARCH_MAX;
+    n++;
+  }
+  if (!n) return whole ? 'They aren\'t damaged: nothing to repair.' : 'None of them can get there.';
   return n;
 }
 
@@ -4759,7 +4826,7 @@ function orderStation(owner, ids, to) {
     if (u.inside === to.id || (u.task && u.task.type === 'garrison' && u.task.bld === to.id)) continue;
     readyForOrder(u);
     u.task = { type: 'garrison', bld: to.id };
-    if (usesPosts(owner)) u.post = to.type === 'lander' ? 0 : to.id; // stationed there from now on
+    if (usesPosts(owner)) { u.post = to.type === 'lander' ? 0 : to.id; u.march = S.time + MARCH_MAX; } // stationed there from now on (marching there)
     to.garInc = (to.garInc || 0) + 1;
     room--; sent++;
   }
@@ -4873,13 +4940,14 @@ function recallAll(owner) {
     if (u.inside || !u.task) continue;
     if (!['attack', 'defend', 'hold'].includes(u.task.type)) continue;
     cancelTask(u); u.task = null; u.path = null; u.fight = 0; n++;
+    if (usesPosts(owner)) u.march = S.time + MARCH_MAX; // called back: home without stopping to fight
   }
   return n;
 }
 
 function recallRally(id) {
   let n = 0;
-  for (const u of rallyMembers(id)) { u.task = null; u.path = null; u.fight = 0; n++; }
+  for (const u of rallyMembers(id)) { u.task = null; u.path = null; u.fight = 0; n++; if (usesPosts(u.owner)) u.march = S.time + MARCH_MAX; } // called back: home without stopping to fight
   for (const u of S.bots) if (u.resume && u.resume.type === 'hold' && u.resume.rally === id) u.resume = null; // away for repairs: not going back
   S.rallies = S.rallies.filter((r) => r.id !== id);
   return n;
