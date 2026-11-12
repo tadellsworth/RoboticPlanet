@@ -652,7 +652,7 @@ function breachHit(u, b) {
   u.fought = 1;
   shotFx(u.x, u.y, b.x + 0.5 + (hash2(u.id, S.tick, 3) - 0.5) * 0.6, b.y + 0.5 + (hash2(u.id, S.tick, 5) - 0.5) * 0.6, { color: PLAYER_COLORS[u.owner], structure: true });
   if (u.owner === 0 || b.owner === 0) sfx('hit');
-  hitBuilding(b, (u.bat ?? 100) < BATTERY.critical ? 0.5 : 1, u.owner);
+  hitBuilding(b, ((u.bat ?? 100) < BATTERY.critical ? 0.5 : 1) * (BDEFS[b.type].barrier ? WARBOT_HIT.wall : WARBOT_HIT.building), u.owner);
 }
 
 function goTo(u, x, y) {
@@ -3908,7 +3908,7 @@ function overGap(a, b) {
 
 /** Walk up to an enemy building and hit it. Returns null if it can't be reached. */
 function strikeBuilding(u, b, dt, power) {
-  if (dist2(u.x, u.y, b.x + 0.5, b.y + 0.5) <= 1.7) {
+  if (dist2(u.x, u.y, b.x + 0.5, b.y + 0.5) <= WARBOT_HIT.reach * WARBOT_HIT.reach) {
     u.path = null;
     spreadOut(u, dt);
     u.face = Math.atan2(b.y + 0.5 - u.y, b.x + 0.5 - u.x);
@@ -3916,7 +3916,7 @@ function strikeBuilding(u, b, dt, power) {
       u.cd = 1.0;
       u.fought = 1;
       shotFx(u.x, u.y, b.x + 0.5 + (hash2(u.id, S.tick, 3) - 0.5) * 0.6, b.y + 0.5 + (hash2(u.id, S.tick, 5) - 0.5) * 0.6, { color: PLAYER_COLORS[u.owner], structure: true });
-      hitBuilding(b, power, u.owner);
+      hitBuilding(b, power * (BDEFS[b.type].barrier ? WARBOT_HIT.wall : WARBOT_HIT.building), u.owner);
     }
     return true;
   }

@@ -154,7 +154,7 @@ const BOTS = {
   tanker:  { name: 'Tanker', plural: 'Tankers', speed: WORKER_SPEED * 1.35, hp: 8, haul: true, truck: true, tanker: true, carry: 10, roadOnly: true, parts: 2, accel: 1.4, brake: 3.2,
     desc: 'A tank truck, the only vehicle that carries Crude and Fuel: ten at a time, wherever they need to go (Haulers carry them only when no Tanker can get there, one at a time). Fastest on asphalt. Destroyed with a load on board, it explodes, hurting everything round it, and can set off other Tankers nearby.' },
   rocket:  { name: 'Howitzer', plural: 'Howitzers', speed: WARBOT_SPEED * 0.9, hp: 16, war: true, siege: true, parts: 3, accel: 0.9, brake: 2.2,
-    desc: 'Mobile artillery for breaking defences. Send it at an enemy building (or let it pick one in reach while it waits): it drives to within 13 tiles, digs in (about 7 seconds), then fires one heavy shell every 5 seconds, over and over until the target is rubble or its 12 shells are spent. Each shell does double damage to defences (turrets, bunkers, mortars, flak, Minigun Nests, walls, gates, outposts) but little to robots. Dug in it can\'t move: it takes 4 seconds to pack up. On your own ground near a road, haulers bring it Ammo where it stands; otherwise it packs up, reloads 3 Ammo at a garrison or storage and comes back. Nothing closer than 4 tiles.' },
+    desc: 'Mobile artillery for breaking defences. Send it at an enemy building (or let it pick one in reach while it waits): it drives to within 13 tiles, digs in (about 7 seconds), then fires one heavy shell every 5 seconds, over and over until the target is rubble or its 12 shells are spent. Each shell does 4 damage, double (8) to defences (turrets, bunkers, mortars, flak, Minigun Nests, walls, gates, outposts) but little to robots. Dug in it can\'t move: it takes 4 seconds to pack up. On your own ground near a road, haulers bring it Ammo where it stands; otherwise it packs up, reloads 3 Ammo at a garrison or storage and comes back. Nothing closer than 4 tiles.' },
   warbot:  { name: 'Warbot', plural: 'Warbots', speed: WARBOT_SPEED, hp: 12, war: true,
     desc: 'Fights enemy bots and captures enemy buildings. Shoots Ammo; with none it can only scuffle.' },
   // Wildlife (Colony, see WILD): creatures from nests. Not built, never ordered.
@@ -647,8 +647,8 @@ const BDEFS = {
   // The Minigun Nest (see MINIGUN): a cheap rotary gun that spins up and hoses enemy robots with tracer rounds.
   minigun: {
     name: 'Minigun Nest', desc: 'A cheap, short-range deterrent: a six-barrel rotary gun on an armoured mount. It spins up, then hoses the nearest enemy robot in the open within 3½ tiles with a stream of tracer rounds: each does little, but it fires twelve a second, and every robot it hits is pinned down (it moves at half speed and shoots slower for a moment). Great against swarms of workers, haulers and creatures; slower to bring down a warbot than a Pulse Turret. Fires Ammo (60 rounds each).',
-    cost: { cement: 2, alloy: 1 }, ammo: 'ammo', ammoCap: 4, range: 3.5, armor: 10, buildTime: 6, war: true,
-    minigun: { rate: 12, damage: 0.18, rounds: 60, spin: 0.7, turn: 4.5 },
+    cost: { cement: 2, alloy: 1 }, ammo: 'ammo', ammoCap: 4, range: 3.5, armor: 12, buildTime: 6, war: true,
+    minigun: { rate: 12, damage: 0.2, rounds: 60, spin: 0.5, turn: 4.5 },
   },
   // The Keep: a big fort (see KEEP): its warbots fire from cover like a Bunker's, its roof cannon fires Crystal,
   // and its aura toughens Walls and Gates and sharpens the defences round it.
@@ -796,6 +796,12 @@ const BUILD_GROUPS = [
   { key: 'defend', name: 'Defend', types: ['outpost', 'turret', 'minigun', 'bunker', 'keep', 'disruptor', 'mortar', 'flak', 'repair', 'silo', 'nukesilo'], walls: true },
 ];
 const BUNKER_FIRE = 0.9; // seconds between shots for each warbot in a Bunker (or a Keep)
+/**
+ * A warbot against a building: what a shot knocks off it (`wall` off a Wall or Gate: they're built to hold; half on a
+ * critical battery), from up to `reach` tiles away (a building is a big target: it needn't come right up to it, so a
+ * group can all fire at once instead of crowding round it under the guns).
+ */
+const WARBOT_HIT = { building: 2, wall: 1, reach: 2.4 };
 /** A robot hit by a Minigun Nest is pinned for `time` s: it moves at `speed` and its guns reload `reload` times slower. */
 const MINIGUN_PIN = { time: 1.2, speed: 0.5, reload: 1.35 };
 /**
@@ -815,7 +821,7 @@ const MINIGUN_PIN = { time: 1.2, speed: 0.5, reload: 1.35 };
  * magazine is `ammo` Ammo (`perAmmo` shells each), loaded in `reload` s at a garrison or storage; or, dug in on its
  * own ground with a road within `supplyReach` tiles, a hauler brings it Ammo (see rocketCallSupply).
  */
-const ROCKET = { range: 13, min: 4, deploy: 7, pack: 4, salvo: 1, gap: 0.9, cycle: 5, mag: 12, turn: 0.7, damage: 6, fortMul: 2,
+const ROCKET = { range: 13, min: 4, deploy: 7, pack: 4, salvo: 1, gap: 0.9, cycle: 5, mag: 12, turn: 0.7, damage: 4, fortMul: 2,
   splash: 0.9, splashBld: 2, botDamage: 2, scatter: 0.55, speed: 6, arc: 3.2, ammo: 3, perAmmo: 4, reload: 10, supplyReach: 2.5, repairReach: 30 };
 /**
  * Yards: a Port's shipyard builds ships, a Rail Station's rail yard Freight Trains (BDEFS[type].yard lists
