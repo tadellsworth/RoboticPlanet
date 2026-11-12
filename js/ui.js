@@ -1164,8 +1164,9 @@ function initKeyboard() {
     const tag = (e.target && e.target.tagName) || '';
     if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
     if (!UI.inGame) return;
-    // Control groups: Ctrl (or Shift) + 1–9 saves the selected warbots, 1–9 selects them again
-    // (press twice to jump to them).
+    // Control groups: Cmd/Ctrl (or Shift, or Option/Alt) + 1–9 saves the selected warbots and Howitzers as
+    // a group, 1–9 selects it again (press twice to jump to it). Option/Alt and Shift always reach the game;
+    // a browser tab on a Mac may keep Cmd+1–9 for itself (it switches tabs).
     const digit = /^Digit([1-9])$/.exec(e.code || '');
     // In the build menu a plain number picks a tab instead (1 Gather, 2 Make, 3 Move, 4 Defend, 5 All).
     if (digit && UI.sheetKind === 'build' && !e.ctrlKey && !e.metaKey && !e.shiftKey && !e.altKey) {
@@ -1189,9 +1190,9 @@ function initKeyboard() {
       tabs[(i + (e.shiftKey ? tabs.length - 1 : 1)) % tabs.length].click();
       return;
     }
-    if (digit && !e.altKey && $('screen-pause').hidden) {
+    if (digit && $('screen-pause').hidden) {
       e.preventDefault();
-      if (e.ctrlKey || e.metaKey || e.shiftKey) saveGroup(+digit[1]); else recallGroup(+digit[1]);
+      if (e.ctrlKey || e.metaKey || e.shiftKey || e.altKey) saveGroup(+digit[1]); else recallGroup(+digit[1]);
       return;
     }
     if (e.altKey && e.key === 'Enter' && fsSupported()) { e.preventDefault(); toggleFullscreen(); return; }
@@ -1276,25 +1277,36 @@ function selectBots(ids, add) {
   refreshSelection();
 }
 
+/** The group number a Save as group button would use: the selection's own group if it's one already, else the first free one. */
+function nextGroupNo() {
+  const G = S && S.groups ? S.groups : {};
+  for (let k = 1; k <= 9; k++) if (G[k] && G[k].length && G[k].length === UI.sel.length && UI.sel.every((id) => G[k].includes(id))) return k;
+  for (let k = 1; k <= 9; k++) if (!G[k] || !selectable(0, G[k]).length) return k;
+  return 9;
+}
+
 /** Drop dead or captured warbots from the selection and update the selection bar. */
 function refreshSelection() {
   if (UI.sel.length) UI.sel = selectable(0, UI.sel).map((u) => u.id);
   UI.selSet = new Set(UI.sel);
   const bar = $('selbar');
-  if (!UI.sel.length || !UI.inGame) { bar.hidden = true; return; }
+  if (!UI.sel.length || !UI.inGame) { bar.hidden = true; refreshGroupBar(); return; }
   let inside = 0, empty = 0;
   for (const u of orderable(0, UI.sel)) { if (u.inside) inside++; if ((u.ammo ?? WARBOT_AMMO) <= 0) empty++; }
   const nw = orderable(0, UI.sel).length, nr = UI.sel.length - nw;
   const html = `<b>${[nw ? `${nw} warbot${nw > 1 ? 's' : ''}` : '', nr ? `${nr} Howitzer${nr > 1 ? 's' : ''}` : ''].filter(Boolean).join(' and ')} selected</b>` +
     (inside ? ` <span class="muted">(${inside} in garrisons)</span>` : '') + (empty ? ` <span class="err">${empty} out of Ammo</span>` : '') +
     `<span class="hint">Right-click open ground to hold it, a rival building or robot to attack, your Outpost to station them, or a Repair Station to get them fixed. Esc clears.</span>
+    <button class="btn small ghost" id="selbar-group" title="Save them as a control group (or ⌘/Ctrl/⌥ + 1–9)">Save as group ${nextGroupNo()}</button>
     <button class="btn small ghost" id="selbar-clear" aria-label="Clear selection">✕</button>`;
   if (bar.dataset.html !== html) {
     bar.dataset.html = html;
     bar.innerHTML = html;
     $('selbar-clear').onclick = () => { sfx('click'); selectBots([], false); };
+    $('selbar-group').onclick = () => saveGroup(nextGroupNo());
   }
   bar.hidden = false;
+  refreshGroupBar();
 }
 
 /** A drag box (screen pixels) selects your warbots inside it; with Shift it adds to the selection. */
@@ -1369,25 +1381,76 @@ function onMapCommand(i, j, wx, wy) {
 }
 
 /** Control groups: Ctrl/Shift + digit saves the selection; the digit selects it again, twice to jump there. */
+/** Control groups (kept with the game, so they're there after Continue): group number → robot ids. */
+function ctrlGroups() { if (!S.groups) S.groups = {}; return S.groups; }
+
+/** What a list of selected robots is, in words ("2 Howitzers", "5 warbots and 1 Howitzer"). */
+function groupWords(ids) {
+  const us = selectable(0, ids), nw = us.filter((u) => u.type === 'warbot').length, nr = us.length - nw;
+  return [nw ? `${nw} warbot${nw > 1 ? 's' : ''}` : '', nr ? `${nr} Howitzer${nr > 1 ? 's' : ''}` : ''].filter(Boolean).join(' and ');
+}
+
 function saveGroup(k) {
-  if (!UI.sel.length) { toast(`Select warbots first (drag a box round them), then Ctrl+${k} saves them as group ${k}.`, 'info'); return; }
-  UI.groups[k] = UI.sel.slice();
+  const mac = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent || '');
+  if (!UI.sel.length) { toast(`Select warbots or Howitzers first (drag a box round them), then ${mac ? '⌘ or ⌥' : 'Ctrl'}+${k} saves them as group ${k}.`, 'info'); return; }
+  const G = ctrlGroups();
+  // A robot is in one group at a time: putting it in this one takes it out of any other.
+  for (const g in G) G[g] = G[g].filter((id) => !UI.sel.includes(id));
+  G[k] = UI.sel.slice();
   sfx('click');
-  toast(`Group ${k}: ${UI.sel.length} warbot${UI.sel.length > 1 ? 's' : ''}. Press ${k} to select them again.`, 'info');
+  toast(`Group ${k}: ${groupWords(G[k])}. Press ${k} to select them again (twice to go to them).`, 'info');
+  refreshGroupBar();
 }
 
 function recallGroup(k) {
-  const ids = selectable(0, UI.groups[k] || []).map((u) => u.id);
+  const ids = selectable(0, ctrlGroups()[k] || []).map((u) => u.id);
   if (!ids.length) return;
   const twice = UI.lastGroup.k === k && performance.now() - UI.lastGroup.at < 450;
   UI.lastGroup = { k, at: performance.now() };
   selectBots(ids, false);
   sfx('click');
   if (twice) {
+    const us = selectable(0, ids);
     let x = 0, y = 0;
-    for (const u of orderable(0, ids)) { x += u.x; y += u.y; }
-    centerOn(x / ids.length, y / ids.length);
+    for (const u of us) { const h = u.inside ? getE(u.inside) : null; x += h ? h.x + 0.5 : u.x; y += h ? h.y + 0.5 : u.y; }
+    centerOn(x / us.length, y / us.length);
   }
+}
+
+/** The group of each robot in a control group (for the number shown by it on the map). */
+function groupOf(id) {
+  const G = S && S.groups;
+  if (!G) return 0;
+  for (const g in G) if (G[g].includes(id)) return +g;
+  return 0;
+}
+
+/**
+ * The control-group bar (computers and touch alike): a chip for each group that has anyone left in it;
+ * tap to select it, tap again to go to it.
+ */
+function refreshGroupBar() {
+  let bar = $('groupbar');
+  if (!bar) { bar = document.createElement('div'); bar.id = 'groupbar'; bar.className = 'groupbar'; document.body.appendChild(bar); }
+  const G = UI.inGame && S ? ctrlGroups() : {};
+  const chips = [];
+  for (let k = 1; k <= 9; k++) {
+    const ids = G[k] ? selectable(0, G[k]).map((u) => u.id) : [];
+    if (G[k] && ids.length !== G[k].length) G[k] = ids; // the lost are dropped
+    if (!ids.length) continue;
+    const on = UI.sel.length && ids.every((id) => UI.selSet && UI.selSet.has(id));
+    chips.push(`<button class="gchip${on ? ' on' : ''}" data-g="${k}" title="Group ${k}: ${groupWords(ids)} (press ${k}; twice to go to them)"><kbd>${k}</kbd>${groupWords(ids).replace(' and ', ' + ')}</button>`);
+  }
+  const html = chips.join('');
+  if (bar.dataset.html !== html) {
+    bar.dataset.html = html;
+    bar.innerHTML = html;
+    for (const b of bar.querySelectorAll('[data-g]')) b.onclick = () => recallGroup(+b.dataset.g);
+  }
+  bar.hidden = !chips.length || !UI.inGame;
+  // Above the selection bar when that's showing.
+  const sb = $('selbar');
+  bar.style.bottom = sb && !sb.hidden ? `calc(var(--safe-b) + ${84 + sb.offsetHeight + 8}px)` : '';
 }
 
 /** On a computer, resting the mouse on a building or bot shows what it is and what it's doing. */

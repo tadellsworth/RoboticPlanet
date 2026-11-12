@@ -500,6 +500,16 @@ body.mode-aim .objective, body.mode-land .objective, body.mode-airdrop .objectiv
 .selbar .hint { display: block; color: var(--muted); margin-top: 3px; }
 .selbar .err { color: var(--danger); }
 .selbar .muted { color: var(--muted); }
+.selbar #selbar-group { margin-top: 6px; }
+/* Control groups: a chip for each, above the selection bar */
+.groupbar { position: fixed; z-index: 16; left: 16px; bottom: calc(var(--safe-b) + 84px); display: flex; flex-wrap: wrap; gap: 6px; max-width: min(560px, calc(100vw - 32px)); pointer-events: none; }
+.groupbar[hidden] { display: none; }
+.gchip { pointer-events: auto; display: inline-flex; align-items: center; gap: 6px; padding: 4px 9px 4px 4px; border-radius: 9px; font: 600 12px/1.2 inherit;
+  color: #e8eef6; background: var(--panel); border: 1px solid rgba(255, 255, 255, 0.14); box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4); cursor: pointer; }
+.gchip kbd { display: inline-grid; place-items: center; min-width: 18px; height: 18px; border-radius: 5px; background: rgba(255, 255, 255, 0.12); font: 700 11px/1 inherit; }
+.gchip.on { border-color: rgba(125, 255, 160, 0.7); color: #7dffa0; }
+.gchip.on kbd { background: rgba(125, 255, 160, 0.25); }
+.gchip:hover { border-color: rgba(255, 255, 255, 0.3); }
 .selbar #selbar-clear { position: absolute; top: 6px; right: 6px; padding: 4px 8px; min-height: 0; }
 .map-tip { position: fixed; z-index: 18; pointer-events: none; max-width: 260px;
   background: #0d0f15; border: 1px solid rgba(255, 255, 255, 0.16); border-radius: 10px; padding: 7px 10px;

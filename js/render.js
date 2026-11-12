@@ -4467,6 +4467,7 @@ function render(dtReal) {
         const lane = rt === 1 ? LANE_OFFSET : 0;
         jx = -Math.sin(e.rface) * lane; jy = Math.cos(e.rface) * lane;
       }
+      if (e.owner === 0 && S.groups && z >= 18) { const g = groupOf(e.id); if (g) drawGroupTag(ctx, ox + (e.x + jx) * z + z * 0.28, oy + (e.y + jy) * z - z * 0.34, z, g); }
       if (typeof UI !== 'undefined' && UI.selSet && UI.selSet.has(e.id)) {
         // Selected (desktop): a green ring on the ground under it.
         ctx.strokeStyle = 'rgba(125,255,160,0.95)';
@@ -5144,6 +5145,17 @@ function drawWorkerView(ctx, ox, oy, z) {
     ctx.strokeStyle = '#5dd88a'; ctx.lineWidth = 1.5; ctx.stroke();
     ctx.fillStyle = '#e8eef6'; ctx.fillText(String(n), x, y + 0.5);
   }
+  ctx.restore();
+}
+
+/** A control group's number, by each robot in it. */
+function drawGroupTag(ctx, x, y, z, g) {
+  const r = Math.max(6, z * 0.13);
+  ctx.save();
+  ctx.fillStyle = 'rgba(14,15,20,0.85)'; ctx.strokeStyle = 'rgba(125,255,160,0.8)'; ctx.lineWidth = 1.2;
+  ctx.beginPath(); ctx.roundRect ? ctx.roundRect(x - r, y - r, r * 2, r * 2, r * 0.4) : ctx.rect(x - r, y - r, r * 2, r * 2); ctx.fill(); ctx.stroke();
+  ctx.fillStyle = '#e8eef6'; ctx.font = `700 ${Math.round(r * 1.4)}px Inter, system-ui, sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText(String(g), x, y + 0.5);
   ctx.restore();
 }
 
