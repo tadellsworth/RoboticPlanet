@@ -1,6 +1,6 @@
 /*
  * Weather, for looks only (it changes nothing in the game): now and then a sandstorm blows in across the red
- * desert, a rainstorm with fog and lightning sweeps the jungle, or a blizzard whites out the poles. The weather
+ * desert, a rainstorm with fog and lightning sweeps the forest, or a blizzard whites out the poles. The weather
  * comes from the planet's seed and the game clock alone (weatherAt), so it needs no saved state and plays the
  * same on every device. The front blows in from upwind, the storm holds a minute or two, then clears.
  * A display setting, on by default (weatherOn / setWeatherOn; the Pause menu and the new-game menu).

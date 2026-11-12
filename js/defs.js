@@ -25,11 +25,14 @@ const PAVE = [null,
 /**
  * Biomes: the look of the planet, chosen on the new-game screen. Purely cosmetic: ground, water,
  * rock and decorative plants (`plants` is the share of open tiles with one). Plants never block
- * anything; a road, planned road or building clears the plants on its tile.
+ * anything; a road, planned road or building clears the plants on its tile. `groves`: the plants
+ * grow in stands of one kind (the Forest's spruces and firs here, leafy trees there, with logs and
+ * ferns between) instead of a random mix. (The Forest keeps the key 'jungle', which saves and
+ * missions use.)
  */
 const BIOMES = {
   desert: { name: 'Red desert', plants: 0.07 },
-  jungle: { name: 'Jungle', plants: 0.34 },
+  jungle: { name: 'Forest', plants: 0.44, groves: true },
   polar: { name: 'Polar', plants: 0.1 },
 };
 const BIOME_ORDER = ['desert', 'jungle', 'polar'];

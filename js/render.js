@@ -57,17 +57,19 @@ const BIOME_LOOK = {
     grain: ['rgba(62,32,14,0.2)', 'rgba(255,238,212,0.18)', 'rgba(238,214,180,0.55)', 'rgba(40,20,8,0.3)'],
     mm: { ground: [169, 113, 74], water: [28, 75, 93], rock: [74, 51, 41], ramp: [235, 205, 150] },
   },
+  // The Forest (key 'jungle'): a medium forest-green floor of grass, moss and needle litter, clear
+  // blue-green lakes, mossy grey stone. Its art is already the right colour, so nothing is adjusted.
   jungle: {
-    level: [['#22301a', '#2c3d20'], ['#33492a', '#425d31'], ['#40592f', '#516f3a'], ['#4d6a36', '#5f8043'], ['#5b7a40', '#6f914e']],
-    theme: { cliffTop: '#33402a', cliffBottom: '#1b2215', slope: '#7b8a52', water: '#22402f', waterEdge: '#3d6a4a',
-      rock: '#2b3329', rockTop: '#3a4636', rockHi: '#55664c', rockShadow: '#161c15' },
-    tex: { ground: ['#1f2a14', '#3f5726', '#7f9a4c'], water: ['#16281d', '#2f5240', '#6f9478'], rock: ['#15190f', '#33402c', '#6b7d5d'] },
-    // The jungle art is very dark: lift the ground to a lighter moss green (and the water to a clear
-    // teal) so roads, plants, resources and bots stand out. Rock and cliffs stay dark for contrast.
-    adjust: { ground: { mul: [1.25, 1.5, 1.2], add: [44, 56, 38] }, water: { mul: [0.7, 1.1, 1.45], add: [10, 22, 32] } },
-    hi: '220,255,190', lo: 'rgba(8,22,6,0.2)',
-    grain: ['rgba(20,32,10,0.28)', 'rgba(200,230,150,0.14)', 'rgba(120,90,50,0.55)', 'rgba(10,18,6,0.35)'],
-    mm: { ground: [66, 96, 46], water: [34, 64, 47], rock: [43, 51, 41], ramp: [123, 138, 82] },
+    level: [['#3a5426', '#46632c'], ['#4a6a2e', '#587a36'], ['#557832', '#64883c'], ['#5f833a', '#6f9444'], ['#6a8e42', '#7a9e4c']],
+    theme: { cliffTop: '#3e4a36', cliffBottom: '#1f261b', slope: '#7f9a52', water: '#1f4650', waterEdge: '#3d6e6a',
+      rock: '#2f3630', rockTop: '#3f4840', rockHi: '#5c6a58', rockShadow: '#181d18' },
+    tex: { ground: ['#2f4a20', '#557a32', '#8eae52'], water: ['#163640', '#2c5e64', '#6a9ea4'], rock: ['#15190f', '#33402c', '#6b7d5d'] },
+    hi: '230,255,200', lo: 'rgba(10,26,8,0.18)',
+    grain: ['rgba(24,40,12,0.24)', 'rgba(210,240,160,0.14)', 'rgba(120,90,50,0.5)', 'rgba(12,22,8,0.3)'],
+    mm: { ground: [83, 110, 48], water: [40, 78, 87], rock: [47, 54, 48], ramp: [127, 154, 82] },
+    // Spruce, firs, leafy tree and birches spread a little past their tile, so stands of them close
+    // into canopy; the log and the ferns stay inside theirs.
+    plantScale: [1.36, 1.36, 1.36, 1.36, 1.12, 1.12],
   },
   polar: {
     level: [['#9fb0c2', '#aebfd0'], ['#c3d0dd', '#d3dee9'], ['#d6e0ea', '#e4ecf3'], ['#e2eaf2', '#eef3f8'], ['#ecf2f7', '#f8fbfd']],
@@ -442,6 +444,7 @@ function bakeMap() {
   R.mapCtx.hdScale = 1;
   hdReset();
   for (let j = 0; j < S.H; j++) for (let i = 0; i < S.W; i++) drawTile(i, j);
+  drawPlants(R.mapCtx, 0, 0, S.W - 1, S.H - 1);
   R.terr = document.createElement('canvas');
   R.terr.width = S.W; R.terr.height = S.H;
   R.terrCtx = R.terr.getContext('2d');
@@ -459,10 +462,40 @@ function flushDirtyTiles() {
     if (seen.has(t)) continue;
     seen.add(t);
     const i = t % S.W, j = (t / S.W) | 0;
-    drawTile(i, j);
-    for (const ch of chunks) if (i >= ch.i0 && i < ch.i0 + HD_CHUNK && j >= ch.j0 && j < ch.j0 + HD_CHUNK) drawTile(i, j, ch.ctx);
+    redrawAround(R.mapCtx, i, j);
+    for (const ch of chunks) if (i >= ch.i0 - 1 && i <= ch.i0 + HD_CHUNK && j >= ch.j0 - 1 && j <= ch.j0 + HD_CHUNK) redrawAround(ch.ctx, i, j);
   }
   S.dirtyTiles.length = 0;
+}
+
+/**
+ * Repaint a changed tile. Plants are drawn after all the ground (a tree's crown may lean over its
+ * neighbours), so the tile and the 8 round it are repainted, then every plant that can reach them is
+ * drawn again, clipped to those 9 tiles: no crown is cut off, and a cleared plant leaves nothing behind.
+ */
+function redrawAround(ctx, i, j) {
+  if (!(R.look && R.look.plantScale)) { drawTile(i, j, ctx); drawPlants(ctx, i, j, i, j); return; } // plants keep to their tile
+  for (let b = j - 1; b <= j + 1; b++) for (let a = i - 1; a <= i + 1; a++) if (inMap(a, b)) drawTile(a, b, ctx);
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect((i - 1) * TP, (j - 1) * TP, 3 * TP, 3 * TP);
+  ctx.clip();
+  drawPlants(ctx, i - 2, j - 2, i + 2, j + 2);
+  ctx.restore();
+}
+
+/** The decorative plants of tiles i0..i1 × j0..j1, drawn over the ground already baked there. */
+function drawPlants(ctx, i0, j0, i1, j1) {
+  if (!S.decor) return;
+  const prev = R.drawScale;
+  R.drawScale = ctx.hdScale || 1;
+  R.inMap = true;
+  try {
+    for (let j = Math.max(0, j0); j <= Math.min(S.H - 1, j1); j++) for (let i = Math.max(0, i0); i <= Math.min(S.W - 1, i1); i++) {
+      const t = tIdx(i, j);
+      if (S.decor[t] && S.terrain[t] === T_GROUND && !S.road[t] && !S.res[t] && !S.plan[t] && !S.bAt[t]) drawPlant(ctx, S.decor[t], i, j, i * TP, j * TP);
+    }
+  } finally { R.inMap = false; R.drawScale = prev; }
 }
 
 /* ------------------------------------------------------------------ sharp map (HD chunks) */
@@ -496,6 +529,7 @@ function hdBake(level, cx, cy) {
   const i0 = cx * HD_CHUNK, j0 = cy * HD_CHUNK;
   // One tile of margin, so plants and resources leaning over the chunk's edge aren't cut off.
   for (let j = j0 - 1; j <= j0 + HD_CHUNK; j++) for (let i = i0 - 1; i <= i0 + HD_CHUNK; i++) if (inMap(i, j)) drawTile(i, j, ctx);
+  drawPlants(ctx, i0 - 1, j0 - 1, i0 + HD_CHUNK, j0 + HD_CHUNK);
   return { c, ctx, level, i0, j0, used: 0 };
 }
 
@@ -695,7 +729,6 @@ function paintTile(ctx, i, j) {
   if (terr === T_GROUND) drawElevation(ctx, i, j, x, y, t, n);
   else if (terr === T_WATER) drawCliffFace(ctx, i, j, x, y, t, true);
   if (terr === T_GROUND && S.fert && S.fert[t] && !S.ramp[t]) drawFertile(ctx, i, j, x, y);
-  if (S.decor && S.decor[t] && !S.road[t] && !S.res[t] && !S.plan[t] && !S.bAt[t]) drawPlant(ctx, S.decor[t], i, j, x, y);
   if (S.road[t]) { if (terr === T_GROUND) drawRoad(ctx, i, j, x, y); else drawCrossing(ctx, i, j, x, y, t); }
   if (S.rail && S.rail[t]) {
     if (!S.road[t] && bridgeable(t)) drawBridge(ctx, i, j, x, y, t, true);
@@ -711,17 +744,19 @@ function paintTile(ctx, i, j) {
 
 /**
  * A decorative plant on open ground: the biome's art (plant-<biome>-1 …) if there is any, otherwise
- * a simple drawn stand-in. Each tile's plant sits a little off-centre at its own size.
+ * a simple drawn stand-in. Each tile's plant sits a little off-centre at its own size. The biome's
+ * `plantScale` (one per variety) lets big plants, the Forest's trees, spread a little past their tile.
  */
 function drawPlant(ctx, v, i, j, x, y) {
   const b = R.biome || 'desert', sd = 911;
   let n = 0;
   while (ART[`plant-${b}-${n + 1}`]) n++;
   if (n) {
-    // The art is centred with its shadow baked in: a small nudge and size change per tile, kept
-    // inside the tile so neighbouring tiles never cut it off.
+    // The art is centred with its shadow baked in: a small nudge and size change per tile (plants
+    // are drawn after all the ground, so one that leans over a neighbour isn't cut off).
+    const k = ((v - 1) % n) + 1, ps = (R.look && R.look.plantScale && R.look.plantScale[k - 1]) || 1;
     const ax = x + TP / 2 + (hash2(i, j, sd) - 0.5) * TP * 0.1, ay = y + TP / 2 + (hash2(j, i, sd + 1) - 0.5) * TP * 0.1;
-    drawArt(ctx, ART[`plant-${b}-${((v - 1) % n) + 1}`], ax, ay, TP * (0.84 + hash2(i, j, sd + 2) * 0.14));
+    drawArt(ctx, ART[`plant-${b}-${k}`], ax, ay, TP * ps * (0.84 + hash2(i, j, sd + 2) * 0.14));
     return;
   }
   const cx = x + TP / 2 + (hash2(i, j, sd) - 0.5) * TP * 0.22, cy = y + TP / 2 + (hash2(j, i, sd + 1) - 0.5) * TP * 0.22;

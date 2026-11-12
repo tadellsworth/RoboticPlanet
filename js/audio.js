@@ -5,7 +5,7 @@
  * Effects: short synthesized sounds for the interface and the battle, plus sounds from the map
  * that play when they're on screen (louder zoomed in, panned left or right): the hum of traffic,
  * builders welding, workers spreading concrete, Pavers laying hot asphalt, Freight Truck air brakes
- * and horns in jams, and the wind of each biome (with birds and insects in the jungle).
+ * and horns in jams, and the wind of each biome (with birds and insects in the forest).
  *
  * Music: a generative synthwave score that follows the game. A slow theme on the menu, a calm
  * groove while you build, a driving track when you're under attack or at war, and an alarm while a
@@ -429,7 +429,7 @@ function at(u, name, vol) {
 
 /*
  * Two steady beds under everything: the hum of the traffic on screen (deeper with trucks), and the
- * wind of the biome, gusting. In the jungle, birds and insects call now and then.
+ * wind of the biome, gusting. In the forest, birds and insects call now and then.
  */
 function updateBeds(live, dt) {
   const ac = AUDIO.ctx, A = AUDIO, t = ac.currentTime;
@@ -471,7 +471,7 @@ function updateBeds(live, dt) {
   }
 }
 
-/** A bird or an insect somewhere in the jungle. */
+/** A bird or an insect somewhere in the forest. */
 function jungleCall() {
   if (!sfxReady()) return;
   const ac = AUDIO.ctx, pan = ac.createStereoPanner ? ac.createStereoPanner() : null, g = ac.createGain();

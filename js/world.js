@@ -1267,7 +1267,15 @@ function makeDecor() {
     if (j > 0 && S.terrain[t - W] === T_GROUND && S.elev[t - W] > S.elev[t]) continue; // the foot of a cliff
     const patch = fbm(i / 5, j / 5, sd + 77, 2), dens = sky && S.elev[t] <= 1 ? Math.max(0.16, dens0 * 2.5) : dens0;
     if (hash2(i, j, sd + 501) > dens * (0.25 + 1.5 * patch)) continue;
-    d[t] = 1 + Math.floor(hash2(i * 3 + 1, j * 5 + 2, sd + 733) * PLANT_KINDS);
+    const r = hash2(i * 3 + 1, j * 5 + 2, sd + 733);
+    if (BIOMES[biome()].groves) {
+      // Stands of conifers (1, 2) and of leafy trees (3, 4), mixed where they meet, with fallen
+      // logs (5) and ferns (6) in the undergrowth.
+      const g = fbm(i / 7, j / 7, sd + 91, 2), u = hash2(i * 5 + 3, j * 7 + 1, sd + 919);
+      d[t] = u < 0.07 ? 5 : u < 0.17 ? 6 : g > 0.53 ? (r < 0.62 ? 1 : 2) : g < 0.47 ? (r < 0.6 ? 3 : 4) : 1 + Math.floor(r * 4);
+      continue;
+    }
+    d[t] = 1 + Math.floor(r * PLANT_KINDS);
   }
   return d;
 }
