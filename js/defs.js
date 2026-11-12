@@ -27,13 +27,13 @@ const PAVE = [null,
  * rock and decorative plants (`plants` is the share of open tiles with one). Plants never block
  * anything; a road, planned road or building clears the plants on its tile. `groves`: the plants
  * grow in stands of one kind (the Forest's spruces and firs here, leafy trees there, with logs and
- * ferns between) instead of a random mix. (The Forest keeps the key 'jungle', which saves and
- * missions use.)
+ * ferns between) instead of a random mix. `desc`: the line shown on the new-game screen. (The Forest
+ * keeps the key 'jungle', which saves and missions use.)
  */
 const BIOMES = {
-  desert: { name: 'Red desert', plants: 0.07 },
-  jungle: { name: 'Forest', plants: 0.44, groves: true },
-  polar: { name: 'Polar', plants: 0.1 },
+  desert: { name: 'Red desert', plants: 0.07, desc: 'Rust-red sand and dust under a hard sun; now and then a sandstorm.' },
+  jungle: { name: 'Forest', plants: 0.44, groves: true, desc: 'Stands of spruce and leafy trees, ferns and clear lakes; now and then a rainstorm with fog.' },
+  polar: { name: 'Polar', plants: 0.1, desc: 'Snow, ice and frosted shrubs; now and then a blizzard.' },
 };
 const BIOME_ORDER = ['desert', 'jungle', 'polar'];
 const PLANT_KINDS = 6; // decorative plant varieties per biome
@@ -432,19 +432,27 @@ const RESOURCE_PRESETS = [
   { name: 'Abundant', density: 1.65, amount: 1.7 },
 ];
 /* Map shape: a Long haul map is narrower and much longer, with the bases far apart. */
+// Map types. `group` sorts them on the new-game screen (MAP_GROUPS); `blurb` is the line shown under
+// the choice; `tip` the longer note shown when a game starts.
+const MAP_GROUPS = [
+  { key: 'open', name: 'Open ground' },
+  { key: 'divided', name: 'Divided' },
+  { key: 'water', name: 'Water' },
+  { key: 'heights', name: 'Heights and depths' },
+];
 const SHAPE_PRESETS = [
-  { name: 'Standard', w: 1, h: 1, ffa: true },
-  { name: 'Long haul', w: 0.75, h: 1.7 },
-  { name: 'Chokepoint', w: 1, h: 1, choke: true, tip: 'Chokepoint: a belt of crags splits the planet, with one to three narrow channels winding through it (different every game). Find where yours come out, and hold them: an Outpost nearby, then walls and turrets (Paths, Walls).' },
-  { name: 'Islands', w: 1.15, h: 1.45, islands: true, naval: true, ffa: true, tip: 'Islands: a wide sea between the islands. Build a Port on your shore and order ships and a Ferry at its shipyard (a Ferry can land warbots on any shore), or push an Outpost out to your shore and build a bridge in Paths (Bridges): long ones cost a lot.' },
-  { name: 'Crater', w: 1, h: 1, crater: true, minLevels: 3, ffa: true, tip: 'Crater: the richest fields lie on the crater floor in the middle. One ramp leads down on your side; cut more in Paths (Ramps).' },
-  { name: 'Plateaus', w: 1, h: 1, plateau: true, minLevels: 3, ffa: true, tip: 'Plateaus: your base stands on high ground with only two slopes down. Easy to hold: wall the slopes and push out.' },
-  { name: 'Sky islands', w: 1.15, h: 1.45, islands: true, sky: true, ffa: true, tip: 'Sky islands: a home mesa each and around a dozen smaller mesas between, a chain of them always linking the sides, over a canyon floor far below, with sheer drops and no slopes down; deposits on the mesas hold more. Cross between clifftops with Viaducts (Build menu); a Ropeway can reach the floor, but there is little down there.' },
-  { name: 'Rift', w: 1, h: 1, rift: true, tip: 'Rift: a chasm splits the planet, crossed only by a few natural rock arches. Hold your arches with turrets and Mortar Pits; a bridge over the chasm is the slow way to open another crossing.' },
-  { name: 'Ring valley', w: 1, h: 1.1, ring: true, tip: 'Ring valley: a massif too steep to climb fills the middle, and a valley runs round it on each side. Two long ways round: fortify one, raid along the other. (A long tunnel through the massif is the only shortcut.)' },
-  { name: 'Oases', w: 1.05, h: 1.05, oases: true, tip: 'Oases: a barren, crag-strewn waste. Everything worth having is round your base and in a few rich oases joined by narrow passes: grab them first, and guard the long supply lines.' },
-  { name: 'Crossroads', w: 1.2, h: 1, cross: true, tip: 'Crossroads: ridges split the planet into four quarters, meeting at a rich plaza in the middle. Your base is in one corner; the two quarters no one holds are rich, and gaps near the edges lead round the flanks.' },
-  { name: 'Lakes', w: 1.1, h: 1.1, lakes: true, naval: true, tip: 'Lakes: a land of many small lakes, roads weaving between them. Bridges save long detours.' },
+  { name: 'Standard', group: 'open', blurb: 'Open ground with hills, cliffs and resource fields between the bases.', w: 1, h: 1, ffa: true },
+  { name: 'Long haul', group: 'open', blurb: 'A narrow planet with the bases far apart: built for long supply lines (trucks, Road Trains and rail).', w: 0.75, h: 1.7 },
+  { name: 'Chokepoint', group: 'divided', blurb: 'A belt of crags across the middle with one to three narrow channels winding through it, different every game: whoever holds them holds the map.', w: 1, h: 1, choke: true, tip: 'Chokepoint: a belt of crags splits the planet, with one to three narrow channels winding through it (different every game). Find where yours come out, and hold them: an Outpost nearby, then walls and turrets (Paths, Walls).' },
+  { name: 'Islands', group: 'water', blurb: 'Each base on its own island, with two or three medium islands between, a wide sea apart: cross by ship, or by long, dear bridges.', w: 1.15, h: 1.45, islands: true, naval: true, ffa: true, tip: 'Islands: a wide sea between the islands. Build a Port on your shore and order ships and a Ferry at its shipyard (a Ferry can land warbots on any shore), or push an Outpost out to your shore and build a bridge in Paths (Bridges): long ones cost a lot.' },
+  { name: 'Crater', group: 'heights', blurb: 'The richest fields lie in a sunken crater in the middle, with one ramp down on each side.', w: 1, h: 1, crater: true, minLevels: 3, ffa: true, tip: 'Crater: the richest fields lie on the crater floor in the middle. One ramp leads down on your side; cut more in Paths (Ramps).' },
+  { name: 'Plateaus', group: 'heights', blurb: 'Each base on a high plateau ringed by cliffs, with only two slopes down: easy to hold, slow to break out of.', w: 1, h: 1, plateau: true, minLevels: 3, ffa: true, tip: 'Plateaus: your base stands on high ground with only two slopes down. Easy to hold: wall the slopes and push out.' },
+  { name: 'Sky islands', group: 'heights', blurb: 'Mesas standing over a canyon floor far below: cross between the clifftops on Viaducts.', w: 1.15, h: 1.45, islands: true, sky: true, ffa: true, tip: 'Sky islands: a home mesa each and around a dozen smaller mesas between, a chain of them always linking the sides, over a canyon floor far below, with sheer drops and no slopes down; deposits on the mesas hold more. Cross between clifftops with Viaducts (Build menu); a Ropeway can reach the floor, but there is little down there.' },
+  { name: 'Rift', group: 'divided', blurb: 'A chasm splits the planet, crossed only by a few natural rock arches: hold yours.', w: 1, h: 1, rift: true, tip: 'Rift: a chasm splits the planet, crossed only by a few natural rock arches. Hold your arches with turrets and Mortar Pits; a bridge over the chasm is the slow way to open another crossing.' },
+  { name: 'Ring valley', group: 'divided', blurb: 'A massif too steep to climb fills the middle, with a valley round it on each side: two long ways round.', w: 1, h: 1.1, ring: true, tip: 'Ring valley: a massif too steep to climb fills the middle, and a valley runs round it on each side. Two long ways round: fortify one, raid along the other. (A long tunnel through the massif is the only shortcut.)' },
+  { name: 'Oases', group: 'open', blurb: 'A barren, crag-strewn waste with a few rich oases joined by narrow passes: an expansion race.', w: 1.05, h: 1.05, oases: true, tip: 'Oases: a barren, crag-strewn waste. Everything worth having is round your base and in a few rich oases joined by narrow passes: grab them first, and guard the long supply lines.' },
+  { name: 'Crossroads', group: 'divided', blurb: 'Four quarters split by ridges, meeting at a rich plaza; the two quarters no one holds are rich.', w: 1.2, h: 1, cross: true, tip: 'Crossroads: ridges split the planet into four quarters, meeting at a rich plaza in the middle. Your base is in one corner; the two quarters no one holds are rich, and gaps near the edges lead round the flanks.' },
+  { name: 'Lakes', group: 'water', blurb: 'Many small lakes, with roads weaving between them: bridges save long detours.', w: 1.1, h: 1.1, lakes: true, naval: true, tip: 'Lakes: a land of many small lakes, roads weaving between them. Bridges save long detours.' },
 ];
 const CHOKE_BAND = 3;   // Chokepoint maps: rows of crags each side of the middle line
 const CHOKE_APPROACH = 3; // ...and rows of open ground kept clear each side of the pass

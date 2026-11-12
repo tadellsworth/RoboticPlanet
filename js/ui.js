@@ -191,21 +191,6 @@ function initUI() {
 }
 
 /** A line under the map shape choice: what each shape plays like. */
-const SHAPE_BLURB = [
-  'Open ground with hills, cliffs and resource fields between the bases.',
-  'A narrow planet with the bases far apart: built for long supply lines (trucks, Road Trains and rail).',
-  'A belt of crags across the middle with one to three narrow channels winding through it, different every game: whoever holds them holds the map.',
-  'Each base on its own island, with two or three medium islands between, a wide sea apart: cross by ship, or by long, dear bridges.',
-  'The richest fields lie in a sunken crater in the middle, with one ramp down on each side.',
-  'Each base on a high plateau ringed by cliffs, with only two slopes down: easy to hold, slow to break out of.',
-  'Mesas standing over a canyon floor far below: cross between the clifftops on Viaducts.',
-  'A chasm splits the planet, crossed only by a few natural rock arches: hold yours.',
-  'A massif too steep to climb fills the middle, with a valley round it on each side: two long ways round.',
-  'A barren, crag-strewn waste with a few rich oases joined by narrow passes: an expansion race.',
-  'Four quarters split by ridges, meeting at a rich plaza; the two quarters no one holds are rich.',
-  'Many small lakes, with roads weaving between them: bridges save long detours.',
-];
-
 function syncMenu() {
   for (const btn of $('m-mode').children) btn.classList.toggle('on', btn.dataset.v === UI.menu.mode);
   for (const btn of $('m-diff').children) btn.classList.toggle('on', btn.dataset.v === UI.menu.diff);
@@ -228,7 +213,7 @@ function syncMenu() {
     const el = $(id), v = el._get();
     for (const b of el.children) { const on = +b.dataset.v === v; b.classList.toggle('on', on); b.setAttribute('aria-checked', on ? 'true' : 'false'); }
   }
-  $('m-shape-desc').textContent = SHAPE_BLURB[shape] || '';
+  $('m-shape-desc').textContent = SHAPE_PRESETS[shape].blurb || '';
   const dims = mapDims({ size, shape, players: three ? 3 : 2 });
   $('m-size-v').textContent = `${dims.W}×${dims.H} tiles`;
   // Rival style: 0 is a random personality for each rival, then each one in PERSONALITY_ORDER.
