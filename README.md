@@ -556,7 +556,10 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
   (`squadBreach`, `breachCheck`): when it can't shoot its way through the player is warned (`sendToRally` also
   returns it as `breach: { need, shots }`), and the rival AI can ask before it orders an attack (`attackBreach`).
   On Chokepoint maps the AI walls the mouth
-  of each channel on its side on Medium, Normal and Hard (`aiWalls`; on Easy only a Turtle does).
+  of each channel on its side on Medium, Normal and Hard (`aiWalls`; on Easy only a Turtle does). Its Gate goes on a
+  mouth tile its own bots can reach from the Command Base and get on through to the middle of the map from
+  (`aiWallGate`, flooding with `aiFlood`), the Walls on the rest; a mouth with no such tile is left open, and a Wall
+  of its own found standing on that tile (an older save) is taken down for a Gate.
 - **Garrisons and posts** (yours, `usesPosts`; the AI spreads its own to the front as before): every warbot belongs
   somewhere. `u.post` is the Outpost or Bunker it was stationed at; with none it belongs to the Command Base. All your
   warbots stay at the Command Base until you station some: tap an Outpost and **Station here** (how many; from the
@@ -582,6 +585,23 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
   faster (`econ`), it builds extra Smelters and Chip Fabs and goes for Missile Silos (up to three) once its Bot Foundry
   runs. With Random each rival gets a different one, picked from the seed; missions use Balanced. The landing messages
   and the rival Command Base's panel name it.
+- **The rival's economy** (`aiThink` in `js/ai.js`): it builds from a plan (`AI_PLAN`), as many sites at a time as
+  its difficulty allows (`DIFFICULTY.maxSites`: one on Easy, two on Medium and Normal, three on Hard). On every
+  difficulty its Smelters rest while Fiber is nearly gone and a site is short of it, or while a building it wants
+  can't be started for lack of it (`P.fiberWait`): a busy Smelter used to burn every Fiber the Harvesters cut, and
+  nothing that costs Fiber could go up. On Medium, Normal and Hard (`smart`):
+  its Depots out toward the front (12 tiles or more from the Command Base) keep Cement and Ammo and take in no Ore,
+  Crystal, Stone or Fiber (`reject`), where a Depot among the far Mines used to collect their whole output, a long run
+  from the Smelters waiting for it; it orders a Freight Truck for every two producers a long run (`TRUCK_MIN_DIST`)
+  from the Command Base, up to four (`wantTrucks`), and Haulers by the count of its buildings and by need: one more,
+  up to 24, whenever none has stood idle for 20 s while a building's output was full or a factory was short of an
+  input that lay in storage (`P.haulShort`); with fewer than half the Haulers it wants, the Foundry doesn't rest and
+  builds a Hauler next, whatever else is on order. Its Bot Foundry rests to save for a Missile Factory or Silo only
+  while the army isn't well behind and the colony has the workers and the Haulers its buildings call for (a Tycoon
+  rests it sooner, as before); saving holds other Alloy-costing builds back only while the Foundry rests for it, and
+  the first turret and the Repair Station go to the head of the queue once they are due. An Easy rival keeps the old
+  habits in all of that: one truck for a Depot, a Depot that takes everything, a Foundry that rests whenever its army
+  isn't well behind, and no more than six Haulers while it is.
 - **Wildlife** (Colony; `WILD` in `js/defs.js`, `updateNest`/`updateCritter` in `js/sim.js`; new-game option, on by
   default, never in missions): one creature nest per `WILD.perTiles` tiles (3–8), owned by `WILD_OWNER` (the empty
   second player slot of a Colony game), at least 16 tiles from the landing site and reachable on foot. Each keeps

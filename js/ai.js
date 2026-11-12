@@ -64,6 +64,8 @@ function aiTurtleWalls(p) {
 function aiThink(p) {
   const P = S.players[p];
   const lvl = aiLevel(p), st = aiStyle(p);
+  // An Easy rival keeps to the plain rules: the ones marked `smart` below are for Medium, Normal and Hard.
+  const smart = S.difficulty !== 'easy';
   let me = playerBuildings(p);
   const lander = getE(P.lander);
   if (!lander || lander.owner !== p) return;
@@ -212,9 +214,12 @@ function aiThink(p) {
   const fiberLow = !cutting || playerGoods(p).fiber < 4;
   if (!cutting) plan = [['harvester', (counts.harvester || 0) + 1]].concat(plan);
   // With Fiber nearly gone (no Harvester at work, or construction waiting for it), the Smelters
-  // stop burning it until there's some to spare.
+  // stop burning it until there's some to spare. Construction waits for it at a site that is short of it, and
+  // before there is a site at all: none is started without the Fiber in storage (P.fiberWait, set below), and a
+  // busy Smelter burned every Fiber two Harvesters cut, so a colony could go a quarter of an hour unable to
+  // start a third Harvester, a Mine or an Outpost.
   const fiberNow = playerGoods(p).fiber;
-  const sitesWantFiber = me.some((b) => !b.built && (siteCost(b).fiber || 0) > (b.stock.fiber || 0) + (b.inc.fiber || 0));
+  const sitesWantFiber = S.time - (P.fiberWait ?? -99) < 8 || me.some((b) => !b.built && (siteCost(b).fiber || 0) > (b.stock.fiber || 0) + (b.inc.fiber || 0));
   for (const b of me) {
     if (b.type !== 'smelter' || !b.built) continue;
     if (!b.paused && fiberNow < 3 && (!cutting || sitesWantFiber)) setPaused(b, true);
@@ -239,6 +244,10 @@ function aiThink(p) {
   const key = (type) => (type === 'charger' && !counts.charger) || type === 'foundry' || type === 'harvester' || type === 'quarry' || (type === 'kiln' && (playerGoods(p).cement || 0) < 3) || defence(type) || (type === 'armory' && needArmory) ||
     (P.defWant && P.defWant.type === type && S.time < P.defWant.until) ||
     (type === 'outpost' && P.short.length > 0);
+  // The first turret and the Repair Station go to the head of the queue once they are due. (They have their place
+  // in the plan behind the second Smelter; with the Foundry no longer resting, more was wanted ahead of them, and
+  // they went up one and five minutes later than they used to.)
+  if (smart) for (const d of ['repair', 'turret']) if (!counts[d] && defence(d)) plan = [[d, 1]].concat(plan);
   if (sites < siteCap) {
     for (const [type, want0] of plan) {
       if (few && (!AI_CHAIN.includes(type) || (counts[type] && !(type === 'harvester' && !cutting)))) continue; // triage: only a missing link of the chain
@@ -256,7 +265,9 @@ function aiThink(p) {
       // Plenty of Fuel in stock: no need for more farms or oil yet.
       if ((type === 'farm' || type === 'pump' || type === 'refinery') && (counts[type] || 0) >= 1 && playerGoods(p).fuel > 10) continue;
       if ((counts[type] || 0) >= want) continue;
-      if (saving && type !== saving && type !== 'keep' && type !== 'terminal' && type !== 'airfield' && !BDEFS[type].nuke && (BDEFS[type].cost.alloy || BDEFS[type].cost.chip)) continue;
+      // (Only while the Foundry rests for the missiles too: when it doesn't, see forMissiles below, they wait for
+      // Alloy to spare and hold nothing else up, or a long wait kept the Repair Station and Fuel Stations back.)
+      if (saving && (!smart || st.missiles || P.missileRest) && type !== saving && type !== 'keep' && type !== 'terminal' && type !== 'airfield' && !BDEFS[type].nuke && (BDEFS[type].cost.alloy || BDEFS[type].cost.chip)) continue;
       // Keep enough Fiber for a Harvester while none is cutting: without Fiber there's no way back.
       if (type !== 'harvester' && !(noFuel && type === 'farm') && fiberLow && (BDEFS[type].cost.fiber || 0) > 0 && playerGoods(p).fiber - BDEFS[type].cost.fiber < BDEFS.harvester.cost.fiber) continue;
       // The first of each building in the chain that makes bots is always allowed, so the chain is complete, and
@@ -274,6 +285,7 @@ function aiThink(p) {
       // into factories, so it never piles up in storage; the high-priority site gets it delivered.
       const defenceNow = (defence(type) && counts.smelter && aiAffordable(p, type, ['alloy', 'chip'])) || ((type === 'terminal' || type === 'airfield') && aiAffordable(p, type, ['alloy']));
       if (!aiAffordable(p, type) && !defenceNow) {
+        if ((BDEFS[type].cost.fiber || 0) > playerGoods(p).fiber) P.fiberWait = S.time; // (the Smelters rest for it: see above)
         if (key(type) && (!counts[type] || type === 'outpost')) {
           const have = playerGoods(p), cost = BDEFS[type].cost;
           for (const g in cost) if (have[g] < cost[g]) held.add(g);
@@ -402,7 +414,33 @@ function aiThink(p) {
   //    one, and enough Haulers (a Freight Truck counts as one and a half) to carry every good in the colony.
   const wantWorkers = staffed + 3 + Math.min(3, sites);
   // A Freight Truck takes the long runs off the Haulers, but sits idle much of the time: it counts as one and a half.
-  const wantHaulers = clamp(Math.ceil(me.length * 0.35), 4, 16) - Math.floor(1.5 * (kinds.truck || 0));
+  let wantHaulers = clamp(Math.ceil(me.length * 0.35), 4, 16) - Math.floor(1.5 * (kinds.truck || 0));
+  const baseHaulers = wantHaulers;
+  // ...and one more (up to 24) whenever no Hauler has stood idle for 20 s while goods waited to be moved: a building
+  // with its output full, or a factory short of an input that is in storage. (By the count of buildings alone the
+  // Haulers were busy 98% of the time from minute 10, the Mines stood full and the Smelters empty.)
+  if (smart) {
+    const have = playerGoods(p);
+    const waits = (b) => {
+      const def = BDEFS[b.type];
+      if (!b.built || b.paused || b.cut || def.store) return false;
+      for (const g in def.out || {}) if ((b.stock[g] || 0) >= def.out[g]) return true;
+      if (b.staff) for (const g in def.inp || {}) if ((b.stock[g] || 0) + (b.inc[g] || 0) < def.inp[g] && (have[g] || 0) >= 2) return true;
+      return false;
+    };
+    const idle = S.bots.some((u) => !u.dead && u.owner === p && u.type === 'hauler' && isIdleWorker(u));
+    if (idle || !me.some(waits)) P.haulShort = 0;
+    else if (!P.haulShort) P.haulShort = S.time;
+    else if (S.time - P.haulShort >= 20) { P.haulShort = S.time; P.haulMore = Math.min(24, (kinds.hauler || 0) + 1); }
+    if ((P.haulMore || 0) > (kinds.hauler || 0)) wantHaulers = Math.max(wantHaulers, P.haulMore); else P.haulMore = 0;
+  }
+  // Freight Trucks: one for every two buildings that make goods a long run (TRUCK_MIN_DIST) from the Command Base, up
+  // to four. With any truck about, a long run waits for one unless the factory at its end is empty (see dispatch), so
+  // a single truck for a forward Depot held up every far Mine and Tap. (Easy keeps that: one for a Depot with supply
+  // orders, another for every 35 buildings.)
+  const farRuns = me.reduce((n, x) => n + (x.built && BDEFS[x.type].out && !BDEFS[x.type].store && farApart(x, lander) ? 1 : 0), 0);
+  const wantTrucks = smart ? Math.min(4, Math.floor((farRuns + 1) / 2))
+    : me.some((d) => d.keep && d.built && !BDEFS[d.type].terminal) ? 1 + Math.floor(me.length / 35) : 0;
   // Tankers carry every drop of Crude and Fuel: one, and another for every five buildings that make or burn them.
   const liquidBlds = me.filter((b) => b.built && (BDEFS[b.type].charger || BDEFS[b.type].pump || BDEFS[b.type].burner ||
     ['refinery', 'farm', 'munitions', 'tarworks', 'disruptor'].includes(b.type))).length;
@@ -438,27 +476,40 @@ function aiThink(p) {
     // (Not while the army is well behind: warbots come first.)
     // Saving for a bridge to the enemy's island too: until it's built the army can't reach anyone.
     const bridging = P.bridgeWant > 0 && S.time - P.bridgeWant < 30;
-    // A Tycoon rests it for missiles even with a small army (as long as a few warbots stand guard).
-    const forMissiles = (saving || P.feedMissiles) && (!armyBehind || (st.missiles && army >= wantArmy * 0.7));
+    // A Tycoon rests it for missiles even with a small army (as long as a few warbots stand guard). The others
+    // only while the army isn't well behind and the colony has the workers and the Haulers its buildings call for.
+    // (With the army alone to go by it was off a third of minutes 3 to 15, while buildings stood empty and goods
+    // waited. Asking for the army at full strength too left it never resting once a war was on: hardly a Missile
+    // Factory or Silo went up, and more games ran past forty minutes undecided. An Easy rival keeps the old rule.)
+    const forMissiles = (saving || P.feedMissiles) && (st.missiles ? !armyBehind || army >= wantArmy * 0.7
+      : !armyBehind && (!smart || (workers >= wantWorkers && (kinds.hauler || 0) >= baseHaulers)));
+    P.missileRest = forMissiles ? 1 : 0;
     // (Saving for a crossing with a fair army already: the Foundry rests even if workers are short.)
-    if (((forMissiles || needArmory || bridging) && workers >= staffed + 3) || (bridging && P.bridgeNeed && army >= Math.min(wantArmy, 8))) { b.mode = 'off'; delete b.orders.hauler; delete b.orders.truck; }
-    // Haulers when short; while the army is well behind, only when badly short.
-    else if ((kinds.hauler || 0) < (armyBehind ? Math.min(wantHaulers, 6) : wantHaulers) && !(b.orders.hauler > 0)) b.orders.hauler = 1;
+    // Fewer than half the Haulers it wants (a raid got them, say): nothing reaches the factories without them, so
+    // the Foundry doesn't rest and the next robot it builds is a Hauler, whatever else is on order.
+    const fewHaulers = smart && (kinds.hauler || 0) < wantHaulers / 2;
+    if (!fewHaulers && (((forMissiles || needArmory || bridging) && workers >= staffed + 3) || (bridging && P.bridgeNeed && army >= Math.min(wantArmy, 8)))) { b.mode = 'off'; delete b.orders.hauler; delete b.orders.truck; }
+    // Haulers when short. (An Easy rival, while its army is well behind, only when badly short: it stopped at six
+    // for most of a war, with thirty or forty buildings to serve.)
+    else if ((kinds.hauler || 0) < (armyBehind && !smart ? Math.min(wantHaulers, 6) : wantHaulers) && !(b.orders.hauler > 0)) b.orders.hauler = 1;
     else if ((kinds.tanker || 0) < wantTankers && !(b.orders.tanker > 0)) b.orders.tanker = 1;
-    // A forward Depot with supply orders gets a Freight Truck to keep it stocked.
-    else if (me.some((d) => d.keep && d.built && !BDEFS[d.type].terminal) && (kinds.truck || 0) < 1 + Math.floor(me.length / 35) && !(b.orders.truck > 0)) b.orders.truck = 1;
+    // Freight Trucks for the long runs (see wantTrucks).
+    else if ((kinds.truck || 0) < wantTrucks && !(b.orders.truck > 0)) b.orders.truck = 1;
     // Rocket Trucks for siege once the army is up: one, and one more for every ten warbots (at most three).
     const wantRockets = S.mode === 'colony' || S.time < lvl.grace ? 0 : Math.min(3, Math.floor(army / 10) + (army >= lvl.threshold ? 1 : 0));
     if ((kinds.rocket || 0) < wantRockets && !(b.orders.rocket > 0) && !armyBehind && me.some((a) => a.type === 'armory' && a.built)) b.orders.rocket = 1;
+    if (fewHaulers && b.orders.hauler > 0) b.rr = foundryList(b).indexOf('hauler'); // (orders take turns from b.rr: see nextBotKind)
     // A Trade Terminal is served only by Road Trains: one for it.
     if (me.some((t) => BDEFS[t.type].terminal) && !(kinds.roadtrain > 0) && !(b.orders.roadtrain > 0)) b.orders.roadtrain = 1;
     break;
   }
-  // Depots out towards the front keep Cement for building there.
+  // Depots out towards the front keep Cement for building there (and Ammo), and take in nothing that is dug or cut:
+  // a Depot among the far Mines was the nearest storage for their Ore, which then lay there, a long run from the
+  // Smelters that stood waiting for it (every stored Ore in the Depot, none at the Command Base).
   for (const d of me) {
-    if (d.type !== 'depot' || !d.built || d.keep || dist(d.x, d.y, lander.x, lander.y) < 12) continue;
-    setKeep(d, 'cement', 12);
-    if (S.mode !== 'colony') setKeep(d, 'ammo', 4);
+    if (d.type !== 'depot' || !d.built || dist(d.x, d.y, lander.x, lander.y) < 12) continue;
+    if (!d.keep) { setKeep(d, 'cement', 12); if (S.mode !== 'colony') setKeep(d, 'ammo', 4); }
+    if (smart && !d.reject) d.reject = { ore: true, crystal: true, stone: true, fiber: true };
   }
 
   // 4) Missiles: soften turrets and Outposts first, the Command Base once the army is big. (With
@@ -811,24 +862,34 @@ function aiViaductSpot(p, home, E, sideways) {
 
 /**
  * Chokepoint maps (not on Easy, unless it's a Turtle): once the mouth of a channel through the crags on our side is
- * inside our border, wall it off, with a Gate on our road through it (or in the middle), and put back
- * any piece the enemy breaks.
+ * inside our border, wall it off, with a Gate where our own bots still get through it to the middle of the map (see
+ * aiWallGate: an existing Gate, our road through it, or the middle tile), and put back any piece the enemy breaks.
+ * A mouth no Gate would keep open is left alone: a Wall on the one tile that leads on, and the Gate on a spur beside
+ * it, shut the colony's own warbots in.
  * Cement for the colony comes first.
  */
 function aiWalls(p) {
   const cp = chokePass();
   if (!cp || !warOn() || (S.difficulty === 'easy' && !aiStyle(p).walls) || S.time < 240) return;
-  const L = getE(S.players[p].lander);
+  const P = S.players[p], L = getE(P.lander);
   if (!L) return;
   const bottom = L.y > S.H / 2;
   // Each channel's mouth on our side of the crags, once it's inside our border.
-  for (const mouth of cp.mouths) {
-    const tiles = mouth.filter((t) => (((t / S.W) | 0) > S.H / 2) === bottom && S.terrain[t] === T_GROUND);
-    if (!tiles.length || tiles.some((t) => S.owner[t] !== p)) continue;
-    const at = (t) => getE(S.bAt[t]);
-    let gate = tiles.find((t) => at(t) && at(t).type === 'gate');
-    if (gate === undefined) gate = tiles.find((t) => S.road[t] || S.plan[t]);
-    if (gate === undefined) gate = tiles[Math.floor(tiles.length / 2)];
+  const mouths = cp.mouths.map((m) => m.filter((t) => (((t / S.W) | 0) > S.H / 2) === bottom && S.terrain[t] === T_GROUND)).filter((m) => m.length);
+  // (A mouth with every piece in place is looked at again twice a minute, in case it's one that was walled shut.)
+  const recheck = S.time - (P.gateChk || -99) > 30;
+  if (recheck) P.gateChk = S.time;
+  for (const tiles of mouths) {
+    if (tiles.some((t) => S.owner[t] !== p) || (!recheck && tiles.every((t) => S.bAt[t]))) continue;
+    const others = mouths.filter((m) => m !== tiles).flat();
+    const gate = aiWallGate(p, L, tiles, others, bottom, false);
+    if (gate < 0) {
+      // Shut by a Wall of our own (a save from before the Gate was checked): the piece that stands in the way comes
+      // down, and a Gate goes there next time.
+      const w = aiWallGate(p, L, tiles, others, bottom, true);
+      if (w >= 0) demolish(getE(S.bAt[w]));
+      continue;
+    }
     for (const t of tiles) {
       if (S.bAt[t]) continue;
       const kind = t === gate || S.road[t] || S.plan[t] ? 'gate' : 'wall';
@@ -837,6 +898,56 @@ function aiWalls(p) {
       if (canPlace(p, kind, i, j).ok) placeSite(p, kind, i, j);
     }
   }
+}
+
+/**
+ * The tile of a channel mouth (`tiles`) for player p's Gate: one its bots can walk to from the Command Base (L)
+ * without going through any mouth (`others`: the other mouths on its side), and from which, with a Wall on every
+ * other free tile of this mouth (road tiles get Gates), they get on across the middle line of the map. A Gate already
+ * standing comes first, then our road through the mouth, then the middle tile and outwards. -1 if there is none:
+ * then the mouth isn't walled. With `walls`, the Wall of ours that stands on such a tile instead (or -1).
+ */
+function aiWallGate(p, L, tiles, others, bottom, walls) {
+  const W = S.W, at = (t) => getE(S.bAt[t]);
+  const isGate = (t) => !!at(t) && at(t).type === 'gate';
+  // The ground our bots reach without going through a mouth.
+  const home = new Uint8Array(W * S.H);
+  for (const t of others) home[t] = 1;
+  for (const t of tiles) home[t] = 1;
+  aiFlood(p, L.y * W + L.x, home, bottom);
+  const mid = (tiles.length - 1) / 2;
+  const order = tiles.map((t, k) => ({ t, s: isGate(t) ? -2 : S.road[t] || S.plan[t] ? -1 : Math.abs(k - mid) })).sort((a, b) => a.s - b.s || a.t - b.t);
+  for (const { t } of order) {
+    if (walls ? !(at(t) && at(t).owner === p && at(t).type === 'wall') : S.bAt[t] && !isGate(t)) continue;
+    const i = t % W;
+    if (![i > 0 ? t - 1 : -1, i < W - 1 ? t + 1 : -1, t - W, t + W].some((u) => u >= 0 && home[u] === 2 && canStep(u, t))) continue;
+    // On from there: not back over the home ground, nor through the tiles that get Walls.
+    const seen = home.slice();
+    for (const u of tiles) seen[u] = u !== t && !S.bAt[u] && !S.road[u] && !S.plan[u] ? 1 : 0;
+    if (aiFlood(p, t, seen, bottom)) return t;
+  }
+  return -1;
+}
+
+/**
+ * Flood out from tile `from` over the ground player p's bots can walk (stepping as they do, and through the
+ * buildings that let them pass: their own Gates and Outposts), marking it 2 in `seen`; tiles already set there are
+ * closed. True if the flood gets across the middle line of the map (to the far half from a base in the `bottom` half).
+ */
+function aiFlood(p, from, seen, bottom) {
+  const W = S.W, N = W * S.H, half = Math.floor(S.H / 2), q = [from];
+  let across = false;
+  seen[from] = 2;
+  for (let h = 0; h < q.length; h++) {
+    const a = q[h], i = a % W, j = (a / W) | 0;
+    if (bottom ? j < half : j >= half) across = true;
+    for (const b of [i > 0 ? a - 1 : -1, i < W - 1 ? a + 1 : -1, a - W, a + W]) {
+      if (b < 0 || b >= N || seen[b] || !walkable(b) || !canStep(a, b) || (S.bAt[b] && !passTile(b, p))) continue;
+      seen[b] = 2;
+      q.push(b);
+    }
+  }
+  return across;
 }
 
 /**
