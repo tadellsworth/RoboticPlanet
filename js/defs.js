@@ -453,7 +453,24 @@ const SHAPE_PRESETS = [
   { name: 'Oases', group: 'open', blurb: 'A barren, crag-strewn waste with a few rich oases joined by narrow passes: an expansion race.', w: 1.05, h: 1.05, oases: true, tip: 'Oases: a barren, crag-strewn waste. Everything worth having is round your base and in a few rich oases joined by narrow passes: grab them first, and guard the long supply lines.' },
   { name: 'Crossroads', group: 'divided', blurb: 'Four quarters split by ridges, meeting at a rich plaza; the two quarters no one holds are rich.', w: 1.2, h: 1, cross: true, tip: 'Crossroads: ridges split the planet into four quarters, meeting at a rich plaza in the middle. Your base is in one corner; the two quarters no one holds are rich, and gaps near the edges lead round the flanks.' },
   { name: 'Lakes', group: 'water', blurb: 'Many small lakes, with roads weaving between them: bridges save long detours.', w: 1.1, h: 1.1, lakes: true, naval: true, tip: 'Lakes: a land of many small lakes, roads weaving between them. Bridges save long detours.' },
+  { name: 'Tidal flats', group: 'water', blurb: 'Low islands joined by sandbars: at low tide armies walk across, at high tide the sea covers the flats and anything caught out there is washed ashore.', w: 1.15, h: 1.45, islands: true, naval: true, tidal: true, flat: true, tip: 'Tidal flats: the islands are joined by sandbars, dry at low tide and under the sea at high tide (a warning comes first). Bots walk across at low tide; nothing can be built on the flats, so trucks still need bridges or ships.' },
+  { name: 'River delta', group: 'water', blurb: 'A wide braided river splits the planet: bots wade the shallow fords, trucks need bridges. Rich islets midstream, fertile banks.', w: 1.1, h: 1.1, delta: true, naval: true, flat: true, tip: 'River delta: a braided river runs across the planet. Bots can wade the shallow fords (slowly); haulers and trucks need a bridge. The islet midstream is rich, and the banks are fertile for Bio Farms.' },
+  { name: 'Volcano', group: 'heights', blurb: 'A volcano in the middle with lava rivers down its flanks and the richest deposits on its slopes, until it erupts.', w: 1.1, h: 1.1, volcano: true, minLevels: 4, tip: 'Volcano: the richest deposits lie on its slopes, but every few minutes it erupts and rains lava bombs on them (it rumbles first). Bridge the lava rivers, or go round where they end.' },
+  { name: 'Fault line', group: 'divided', blurb: 'A crack runs across the planet. About 15 minutes in an earthquake splits it open into a chasm, leaving only a couple of rock arches to cross.', w: 1, h: 1, fault: true, tip: 'Fault line: the scar across the middle opens into a chasm about 15 minutes in, swallowing whatever stands on it, with tremors first. Only two rock arches stay standing (a Sky bridge opens another way across).' },
+  { name: 'Canyon maze', group: 'divided', blurb: 'A labyrinth of narrow canyons, its dead ends full of riches: ambushes everywhere, and Howitzers shoot over the walls.', w: 1, h: 1, maze: true, tip: 'Canyon maze: narrow canyons wind between the bases, with riches in the dead ends. A tunnel can cut through a wall, at a price.' },
 ];
+// Map events: what happens on the map types that change as you play (seconds unless noted).
+// Tidal flats: the first low tide lasts `firstLow`, then high and low take turns, with a warning first;
+// `closing`: bots keep off the flats this long before they flood.
+const TIDE = { firstLow: 300, low: 210, high: 140, warn: 30, closing: 20 };
+// Volcano: the first eruption and the gap between them, the warning, how long it lasts, how many lava
+// bombs it throws, the damage each does (armor to buildings, never below 1; hit points to bots), how far
+// out they land (× the cone's radius) and how long they fly.
+const ERUPTION = { first: 420, gap: [300, 420], warn: 20, dur: 14, bombs: 34, damage: 3, botDamage: 3, reach: 1.15, flight: [1.4, 2.4] };
+// Fault line: when the earthquake comes (give or take `jitter`), and the warnings before it.
+const QUAKE = { at: 900, jitter: 90, warn: [120, 30] };
+// River delta: fords are slow to wade (speed ×) and dearer to plan a route through (cost ×).
+const FORD_SLOW = 0.45, FORD_COST = 2.5;
 const CHOKE_BAND = 3;   // Chokepoint maps: rows of crags each side of the middle line
 const CHOKE_APPROACH = 3; // ...and rows of open ground kept clear each side of the pass
 const ISLE_GAP = 4;       // Islands maps: at least this much sea between islands (a wide sea: ships, or long, dear bridges)

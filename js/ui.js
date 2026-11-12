@@ -50,14 +50,9 @@ function initUI() {
   // Rally / move / missile panels share the stepper markup below.
   UI.moveN = 0;
 
-  // Menu
-  for (const btn of $('m-mode').children) btn.onclick = () => { UI.menu.mode = btn.dataset.v; syncMenu(); sfx('click'); };
-  for (const btn of $('m-diff').children) btn.onclick = () => { UI.menu.diff = btn.dataset.v; syncMenu(); saveSettings(); sfx('click'); };
-  for (const btn of $('m-players').children) btn.onclick = () => { UI.menu.players = +btn.dataset.v; syncMenu(); saveSettings(); sfx('click'); };
-  $('m-reroll').onclick = () => { UI.menu.seed = randomSeed(); syncMenu(); sfx('click'); };
-  $('m-saveplanet').onclick = () => { savePlanet(menuPlanet()); sfx('place'); toast(`Saved Planet #${UI.menu.seed}: pick it from Saved planets any time.`, 'good'); syncMenu(); };
+  // The new-game menu (Home and Customise, the map type and biome pickers, the planet preview): initMenu.
   $('p-saveplanet').onclick = () => { if (!S) return; savePlanet(gamePlanet()); sfx('place'); toast(`Saved Planet #${S.seed}: start it again from Saved planets in the new-game menu.`, 'good'); };
-  // Map settings sliders (remembered on this device; map size is remembered per mode).
+  // Map settings (remembered on this device; map size is remembered per mode).
   // Settings from before v2 drop their rival style, Nuclear race and Planet events, so the new defaults
   // (a Balanced rival, Nuclear race on, Planet events off) reach every device once.
   try {
@@ -65,36 +60,8 @@ function initUI() {
     if ((saved.v || 0) < SETTINGS_V) { delete saved.style; delete saved.nuke; delete saved.events; }
     Object.assign(UI.menu, saved);
   } catch (e) { /* defaults */ }
-  const saveSettings = () => {
-    try { localStorage.setItem('botfall.settings', JSON.stringify({ v: SETTINGS_V, size: UI.menu.size, rough: UI.menu.rough, rich: UI.menu.rich, shape: UI.menu.shape, nuke: UI.menu.nuke, biome: UI.menu.biome, players: UI.menu.players, diff: UI.menu.diff, style: UI.menu.style, events: UI.menu.events, wild: UI.menu.wild, unlimited: UI.menu.unlimited })); } catch (e) { /* storage unavailable */ }
-  };
-  // Choices are buttons (all the options in view, easy to tap), and On/Off settings are switches.
-  const choice = (id, labels, get, set) => {
-    const el = $(id);
-    el.innerHTML = '';
-    labels.forEach((lab, v) => {
-      const b = document.createElement('button');
-      b.type = 'button'; b.dataset.v = v; b.textContent = lab; b.setAttribute('role', 'radio');
-      b.onclick = () => { set(v); syncMenu(); saveSettings(); sfx('click'); };
-      el.appendChild(b);
-    });
-    el._get = get;
-  };
-  choice('m-shape', SHAPE_PRESETS.map((p) => p.name), () => UI.menu.shape || 0, (v) => { UI.menu.shape = v; });
-  choice('m-size', SIZE_PRESETS.map((p) => p.name), () => UI.menu.size[UI.menu.mode] ?? DEFAULT_SIZE[UI.menu.mode], (v) => { UI.menu.size[UI.menu.mode] = v; });
-  choice('m-biome', BIOME_ORDER.map((k) => BIOMES[k].name), () => UI.menu.biome || 0, (v) => { UI.menu.biome = v; });
-  choice('m-rough', TERRAIN_PRESETS.map((p) => p.name), () => UI.menu.rough, (v) => { UI.menu.rough = v; });
-  choice('m-rich', RESOURCE_PRESETS.map((p) => p.name), () => UI.menu.rich, (v) => { UI.menu.rich = v; });
-  choice('m-style', ['Random', ...PERSONALITY_ORDER.map((k) => PERSONALITIES[k].name)], () => Math.min(PERSONALITY_ORDER.length, UI.menu.style || 0), (v) => { UI.menu.style = v; });
-  for (const [id, k] of [['m-nuke', 'nuke'], ['m-wild', 'wild'], ['m-events', 'events'], ['m-unlimited', 'unlimited']]) {
-    $(id).onchange = () => { UI.menu[k] = $(id).checked ? 1 : 0; syncMenu(); saveSettings(); sfx('click'); };
-  }
-  for (const btn of $('m-daynight').children) btn.onclick = () => { setTodMode(btn.dataset.v); syncMenu(); sfx('click'); };
-  $('m-weather').onchange = () => { setWeatherOn($('m-weather').checked); syncMenu(); sfx('click'); };
-  // More settings opens and closes; it's remembered on this device.
-  try { $('m-more').open = localStorage.getItem('botfall.moreOpen') === '1'; } catch (e) { /* storage unavailable */ }
-  $('m-more').ontoggle = () => { try { localStorage.setItem('botfall.moreOpen', $('m-more').open ? '1' : '0'); } catch (e) { /* storage unavailable */ } };
-  $('m-new').onclick = () => { audioUnlock(); startNewGame(); };
+  checkMenuSettings();
+  initMenu();
   $('m-continue').onclick = () => { audioUnlock(); continueGame(); };
   $('m-import').onclick = () => { audioUnlock(); $('m-import-msg').hidden = true; $('m-import-file').value = ''; $('m-import-file').click(); };
   $('m-import-file').onchange = () => { const f = $('m-import-file').files && $('m-import-file').files[0]; if (f) importSaveFile(f); };
@@ -190,57 +157,760 @@ function initUI() {
   syncMenu();
 }
 
-/** A line under the map shape choice: what each shape plays like. */
-function syncMenu() {
-  for (const btn of $('m-mode').children) btn.classList.toggle('on', btn.dataset.v === UI.menu.mode);
-  for (const btn of $('m-diff').children) btn.classList.toggle('on', btn.dataset.v === UI.menu.diff);
-  $('m-diff-field').hidden = UI.menu.mode === 'colony';
-  // Free-for-all (you and two rivals) on the map shapes with room for three.
-  const ffaOk = !!SHAPE_PRESETS[UI.menu.shape || 0].ffa, three = UI.menu.mode === 'versus' && UI.menu.players === 3 && ffaOk;
-  $('m-players-field').hidden = UI.menu.mode === 'colony';
-  for (const btn of $('m-players').children) { btn.classList.toggle('on', +btn.dataset.v === (three ? 3 : 2)); btn.disabled = btn.dataset.v === '3' && !ffaOk; }
-  $('m-players-note').hidden = ffaOk || UI.menu.players !== 3;
-  $('m-players-note').textContent = `${SHAPE_PRESETS[UI.menu.shape || 0].name} maps are for two players only: pick Standard, Islands, Crater, Plateaus or Sky islands for a free-for-all.`;
-  $('m-mode-desc').textContent = UI.menu.mode === 'colony'
-    ? (UI.menu.wild ? 'No rival, but creatures nest in the wilds and raid what you build near them. Build supply chains, research upgrades and spread across the whole map.'
-      : 'No rival. Settle the planet at your own pace: build supply chains, research upgrades and spread across the whole map.')
+/* ------------------------------------------------------------------ new-game menu */
+
+/*
+ * The main menu has two views. Home (on load): Continue, Play (#m-new: a game with the settings
+ * summed up under it), Customise game, and Missions, Load a save file and How to play. Customise
+ * (#m-more; `$('m-more').open = true` opens it too): a preview of the very planet the settings make,
+ * with its seed and saved planets, and the settings in three sections, Match, Planet and Rules, each
+ * with one line describing the option under the mouse (or focused, or chosen). Play is the same
+ * button there, as Start in a bar that stays in view. Map type and Biome open a picker of cards.
+ * Everything is built from the data (SHAPE_PRESETS, MAP_GROUPS, BIOMES, BIOME_ORDER, the presets),
+ * so new map types and biomes show up by themselves. Settings are remembered on this device
+ * (botfall.settings: map type and biome as indices, shapeRnd / biomeRnd for Random).
+ */
+
+/** What each rival difficulty plays like (the Match section's line). */
+const DIFF_INFO = {
+  easy: 'Easy: a slow, forgiving rival that builds up and attacks late.',
+  medium: 'Medium: between Easy and Normal. It attacks later, with smaller armies, and raids less.',
+  normal: 'Normal: a fair fight. The rival expands, raids your roads and attacks in force.',
+  hard: 'Hard: a fast rival that lands with extra goods and attacks early and often.',
+};
+const TOD_INFO = { cycle: 'Time of day: morning to night, 12 minutes round (looks only; kept on this device).', day: 'Time of day: always day (looks only; kept on this device).', night: 'Time of day: always night, every colony lit up (looks only; kept on this device).' };
+
+/** Keep remembered settings inside what the data offers now (a map type or biome may have gone). */
+function checkMenuSettings() {
+  const m = UI.menu, ok = (v, n) => Number.isInteger(v) && v >= 0 && v < n;
+  if (!ok(m.shape, SHAPE_PRESETS.length)) m.shape = 0;
+  if (!ok(m.biome || 0, BIOME_ORDER.length)) m.biome = 0;
+  if (!ok(m.rough, TERRAIN_PRESETS.length)) m.rough = DEFAULT_ROUGH;
+  if (!ok(m.rich, RESOURCE_PRESETS.length)) m.rich = DEFAULT_RICH;
+  if (!m.size || typeof m.size !== 'object') m.size = { ...DEFAULT_SIZE };
+  for (const k in DEFAULT_SIZE) if (!ok(m.size[k], SIZE_PRESETS.length)) m.size[k] = DEFAULT_SIZE[k];
+  if (!DIFFICULTY[m.diff]) m.diff = 'normal';
+}
+
+/** Remember the new-game settings on this device. */
+function saveSettings() {
+  const m = UI.menu;
+  try {
+    localStorage.setItem('botfall.settings', JSON.stringify({ v: SETTINGS_V, size: m.size, rough: m.rough, rich: m.rich, shape: m.shape, nuke: m.nuke, biome: m.biome, players: m.players,
+      diff: m.diff, style: m.style, events: m.events, wild: m.wild, unlimited: m.unlimited, shapeRnd: m.shapeRnd ? 1 : 0, biomeRnd: m.biomeRnd ? 1 : 0 }));
+  } catch (e) { /* storage unavailable */ }
+}
+
+const menuSize = () => UI.menu.size[UI.menu.mode] ?? DEFAULT_SIZE[UI.menu.mode];
+const menuStyle = () => Math.min(PERSONALITY_ORDER.length, UI.menu.style || 0);
+const biomeName = (k) => (BIOMES[BIOME_ORDER[k]] || BIOMES[BIOME_ORDER[0]]).name;
+const mapGroupName = (g) => { const G = MAP_GROUPS.find((x) => x.key === g); return G ? G.name : ''; };
+/** Is this a free-for-all (Versus, 3 players, on a map type with room for three, or Random)? */
+function menuThree() {
+  const m = UI.menu;
+  return m.mode === 'versus' && m.players === 3 && (!!m.shapeRnd || !!SHAPE_PRESETS[m.shape || 0].ffa);
+}
+function modeInfo(mode, three) {
+  return mode === 'colony'
+    ? (UI.menu.wild ? 'Colony: no rival, but creatures nest in the wilds and raid what you build near them. Build supply chains, research upgrades and spread across the planet.'
+      : 'Colony: no rival. Settle the planet at your own pace: build supply chains, research upgrades and spread across the planet.')
     : three ? 'Free-for-all: you and two rival colonies on a round planet. Capture a rival\'s Command Base and everything it built is yours. Last colony standing wins.'
-      : 'Race a rival colony across the planet. Build up, then capture its Command Base to win.';
-  $('m-seed').textContent = 'Planet #' + UI.menu.seed;
-  renderPlanets();
-  const size = UI.menu.size[UI.menu.mode] ?? DEFAULT_SIZE[UI.menu.mode], shape = UI.menu.shape || 0;
-  for (const id of ['m-shape', 'm-size', 'm-biome', 'm-rough', 'm-rich', 'm-style']) {
-    const el = $(id), v = el._get();
-    for (const b of el.children) { const on = +b.dataset.v === v; b.classList.toggle('on', on); b.setAttribute('aria-checked', on ? 'true' : 'false'); }
-  }
-  $('m-shape-desc').textContent = SHAPE_PRESETS[shape].blurb || '';
-  const dims = mapDims({ size, shape, players: three ? 3 : 2 });
-  $('m-size-v').textContent = `${dims.W}×${dims.H} tiles`;
+      : 'Versus: race a rival colony across the planet. Build up, then capture its Command Base to win.';
+}
+function styleInfo(v) {
+  const P = v && PERSONALITIES[PERSONALITY_ORDER[v - 1]];
+  if (P) return `${P.name}: it ${P.desc}.`;
+  const names = PERSONALITY_ORDER.map((k) => PERSONALITIES[k].name);
+  return `Random: each rival gets a personality at random (${names.slice(0, -1).join(', ')} or ${names[names.length - 1]}).`;
+}
+function terrainInfo(v) {
+  const T = TERRAIN_PRESETS[v];
+  return `${T.name} terrain: ${T.levels === 1 ? 'one level, no cliffs to get round' : `${T.levels} levels of ground, with cliffs between and slopes up them`}.`;
+}
+function resourceInfo(v) {
+  const P = RESOURCE_PRESETS[v], pct = (x) => Math.round(x * 100) + '%';
+  return v === DEFAULT_RICH ? `${P.name} resources: the usual fields of stone, ore, crystal and stalks.` : `${P.name} resources: ${pct(P.density)} as many fields, each holding ${pct(P.amount)} as much.`;
+}
+
+/** The setup in a line (and what isn't the default in a second one), under Play and in Start's bar. */
+function menuSummary() {
+  const m = UI.menu, colony = m.mode === 'colony', three = menuThree(), style = menuStyle();
+  const main = [colony ? 'Colony' : three ? 'Free-for-all' : 'Versus'];
+  if (!colony) main.push(`${DIFFICULTY[m.diff].label} rival${three ? 's' : ''}`);
+  main.push(m.shapeRnd ? 'Random map' : SHAPE_PRESETS[m.shape || 0].name, m.biomeRnd ? 'Random biome' : biomeName(m.biome || 0), SIZE_PRESETS[menuSize()].name);
+  const extra = [];
+  if (!colony && style !== 1) extra.push(style ? PERSONALITIES[PERSONALITY_ORDER[style - 1]].name + ' style' : 'random rival styles');
+  if (m.rough !== DEFAULT_ROUGH) extra.push(TERRAIN_PRESETS[m.rough].name + ' terrain');
+  if (m.rich !== DEFAULT_RICH) extra.push(RESOURCE_PRESETS[m.rich].name + ' resources');
+  if (!m.nuke) extra.push('no Nuclear race');
+  if (colony && !m.wild) extra.push('no wildlife');
+  if (m.events) extra.push('Planet events');
+  if (todMode() !== 'cycle') extra.push(todMode() === 'day' ? 'always day' : 'always night');
+  if (!weatherOn()) extra.push('no weather');
+  if (m.unlimited) extra.push('Unlimited resources');
+  return { main: main.join(' · '), extra: extra.join(' · ') };
+}
+
+/** Home or Customise. */
+function showMenuView(v, focus) {
+  const setup = v === 'setup';
+  if ((UI.menuView === 'setup') === setup && UI.menuView) return;
+  UI.menuView = setup ? 'setup' : 'home';
+  $('m-more').hidden = !setup;
+  $('m-home').hidden = setup;
+  $('m-home-foot').hidden = setup;
+  $('menu-card').classList.toggle('is-setup', setup);
+  $('screen-menu').classList.toggle('is-setup', setup);
+  $('m-new-label').textContent = setup ? 'Start' : 'Play';
+  if (!setup) closePicker(false);
+  else { $('m-body').scrollTop = 0; $('screen-menu').scrollTop = 0; }
+  syncMenu();
+  if (focus) (setup ? $('m-back') : $('m-customise')).focus();
+}
+
+function initMenu() {
+  UI.menuHover = {};
+  const pick = (fn) => () => { fn(); syncMenu(); saveSettings(); sfx('click'); };
+  for (const btn of $('m-mode').children) btn.onclick = () => { UI.menu.mode = btn.dataset.v; syncMenu(); sfx('click'); };
+  for (const btn of $('m-diff').children) { btn.dataset.info = DIFF_INFO[btn.dataset.v] || ''; btn.onclick = pick(() => { UI.menu.diff = btn.dataset.v; }); }
+  for (const btn of $('m-players').children) btn.onclick = pick(() => { UI.menu.players = +btn.dataset.v; });
+  // Choices are buttons (all the options in view). Terrain and Resources are level meters, a bar per step.
+  const choice = (id, labels, get, set, info, meter) => {
+    const el = $(id);
+    el.innerHTML = '';
+    labels.forEach((lab, v) => {
+      const b = document.createElement('button');
+      b.type = 'button'; b.dataset.v = v; b.setAttribute('role', 'radio');
+      if (meter) { b.innerHTML = `<i style="height:${Math.round(28 + (72 * v) / Math.max(1, labels.length - 1))}%"></i>`; b.setAttribute('aria-label', lab); b.title = lab; }
+      else b.textContent = lab;
+      if (info) b.dataset.info = info(v);
+      b.onclick = pick(() => set(v));
+      el.appendChild(b);
+    });
+    el._get = get;
+  };
+  choice('m-size', SIZE_PRESETS.map((p) => p.name), menuSize, (v) => { UI.menu.size[UI.menu.mode] = v; });
+  choice('m-rough', TERRAIN_PRESETS.map((p) => p.name), () => UI.menu.rough, (v) => { UI.menu.rough = v; }, terrainInfo, true);
+  choice('m-rich', RESOURCE_PRESETS.map((p) => p.name), () => UI.menu.rich, (v) => { UI.menu.rich = v; }, resourceInfo, true);
   // Rival style: 0 is a random personality for each rival, then each one in PERSONALITY_ORDER.
-  const style = Math.min(PERSONALITY_ORDER.length, UI.menu.style || 0), P = style && PERSONALITIES[PERSONALITY_ORDER[style - 1]];
-  $('m-style-desc').textContent = P ? `${P.name}: ${P.desc}.` : 'Each rival gets a personality at random: Balanced, Turtle, Raider, Rusher or Tycoon.';
-  $('m-style-row').hidden = UI.menu.mode === 'colony';
-  $('m-wild-row').hidden = UI.menu.mode !== 'colony';
-  $('m-nuke').checked = !!UI.menu.nuke;
-  $('m-wild').checked = !!UI.menu.wild;
-  $('m-events').checked = !!UI.menu.events;
-  $('m-unlimited').checked = !!UI.menu.unlimited;
-  for (const btn of $('m-daynight').children) btn.classList.toggle('on', btn.dataset.v === todMode());
-  $('m-weather').checked = weatherOn();
-  $('m-daynight-v').textContent = { cycle: 'Morning to night, 12 minutes round (looks only)', day: 'Always day (looks only)', night: 'Always night: every city lit up (looks only)' }[todMode()];
-  // What More settings holds that isn't the default, so it's clear at a glance with it closed.
-  const sum = [];
-  if (UI.menu.biome) sum.push(BIOMES[BIOME_ORDER[UI.menu.biome]].name);
-  if (UI.menu.rough !== DEFAULT_ROUGH) sum.push(TERRAIN_PRESETS[UI.menu.rough].name + ' terrain');
-  if (UI.menu.rich !== DEFAULT_RICH) sum.push(RESOURCE_PRESETS[UI.menu.rich].name + ' resources');
-  if (style !== 1 && UI.menu.mode !== 'colony') sum.push(P ? P.name + ' rival' : 'Random rivals');
-  if (!UI.menu.nuke) sum.push('no Nuclear race');
-  if (UI.menu.mode === 'colony' && !UI.menu.wild) sum.push('no wildlife');
-  if (UI.menu.events) sum.push('Planet events');
-  if (todMode() !== 'cycle') sum.push(todMode() === 'day' ? 'always day' : 'always night');
-  if (UI.menu.unlimited) sum.push('Unlimited resources');
-  $('m-more-sum').textContent = sum.length ? sum.join(' · ') : 'Planet, biome, terrain, resources, rival style, options';
+  choice('m-style', ['Random', ...PERSONALITY_ORDER.map((k) => PERSONALITIES[k].name)], menuStyle, (v) => { UI.menu.style = v; }, styleInfo);
+  for (const [id, k] of [['m-nuke', 'nuke'], ['m-wild', 'wild'], ['m-events', 'events'], ['m-unlimited', 'unlimited']]) {
+    $(id).onchange = () => { UI.menu[k] = $(id).checked ? 1 : 0; syncMenu(); saveSettings(); sfx('click'); };
+  }
+  for (const btn of $('m-daynight').children) { btn.dataset.info = TOD_INFO[btn.dataset.v]; btn.onclick = () => { setTodMode(btn.dataset.v); syncMenu(); sfx('click'); }; }
+  $('m-weather').onchange = () => { setWeatherOn($('m-weather').checked); syncMenu(); sfx('click'); };
+  $('m-reroll').onclick = () => { UI.menu.seed = randomSeed(); syncMenu(); sfx('click'); };
+  $('m-saveplanet').onclick = () => {
+    savePlanet(menuPlanet()); sfx('place'); toast(`Saved Planet #${UI.menu.seed}: pick it from Saved planets any time.`, 'good'); syncMenu();
+    // (Toasts belong to the game screen: say it on the button too.)
+    const b = $('m-saveplanet'); b.textContent = 'Saved ✓'; clearTimeout(UI.savedFlash); UI.savedFlash = setTimeout(() => { b.textContent = 'Save'; }, 1600);
+  };
+  // The two views. Tests and older code open Customise with $('m-more').open = true (it was a <details>).
+  $('m-customise').onclick = () => { sfx('click'); showMenuView('setup', true); };
+  $('m-back').onclick = () => { sfx('click'); showMenuView('home', true); };
+  Object.defineProperty($('m-more'), 'open', { configurable: true, get: () => UI.menuView === 'setup', set: (v) => showMenuView(v ? 'setup' : 'home') });
+  $('m-new').onclick = () => { audioUnlock(); startNewGame(); };
+  // Map type and Biome open their pickers.
+  $('m-shape').onclick = () => { sfx('click'); openPicker('shape'); };
+  $('m-biome').onclick = () => { sfx('click'); openPicker('biome'); };
+  $('m-picker-close').onclick = () => closePicker();
+  $('m-picker').addEventListener('pointerdown', (e) => { if (e.target === $('m-picker')) { e.preventDefault(); closePicker(); } });
+  $('m-picker').addEventListener('keydown', pickerKey);
+  // Esc: close the picker, then go back from Customise to Home.
+  window.addEventListener('keydown', (e) => {
+    if (UI.inGame || e.key !== 'Escape' || $('screen-menu').hidden) return;
+    if (UI.picker) { e.preventDefault(); closePicker(); return; }
+    const over = !$('screen-help').hidden || !$('screen-missions').hidden || !$('screen-stats').hidden;
+    if (!over && UI.menuView === 'setup') { e.preventDefault(); showMenuView('home', true); }
+  });
+  // One line per section about the option under the mouse, or focused, or else what's chosen.
+  for (const sec of ['m-sec-match', 'm-sec-planet', 'm-sec-rules']) {
+    const el = $(sec), show = (t) => { const k = t && t.closest && t.closest('[data-info]'); UI.menuHover[sec] = k && el.contains(k) ? k : null; syncInfo(); };
+    el.addEventListener('pointerover', (e) => { if (e.pointerType === 'mouse') show(e.target); });
+    el.addEventListener('pointerleave', (e) => { if (e.pointerType === 'mouse') show(el.contains(document.activeElement) && document.activeElement.matches(':focus-visible') ? document.activeElement : null); });
+    el.addEventListener('focusin', (e) => show(e.target));
+    el.addEventListener('focusout', (e) => { if (!el.contains(e.relatedTarget)) show(null); });
+  }
+  // The preview follows the size of its box.
+  if (window.ResizeObserver) new ResizeObserver(() => { PV.drawn = ''; schedulePreview(true); }).observe($('m-pv'));
+  showMenuView('home');
+}
+
+/** Each section's line: the hovered or focused option's, or else the choice's. */
+function syncInfo() {
+  const m = UI.menu, H = UI.menuHover || {}, three = menuThree();
+  const line = (sec, def) => (H[sec] && H[sec].isConnected && !H[sec].closest('[hidden]') ? H[sec].dataset.info : def) || def;
+  const P = SHAPE_PRESETS[m.shape || 0];
+  $('m-mode-desc').textContent = line('m-sec-match', modeInfo(m.mode, three));
+  $('m-planet-info').textContent = line('m-sec-planet', m.shapeRnd ? $('m-shape').dataset.info : `${P.name}: ${P.blurb || ''}`);
+  $('m-rules-info').textContent = line('m-sec-rules', TOD_INFO[todMode()]);
+}
+
+/** Bring every control in the menu up to date with UI.menu (and the device's time of day and weather). */
+function syncMenu() {
+  const m = UI.menu, colony = m.mode === 'colony', three = menuThree();
+  const mark = (b, on) => { b.classList.toggle('on', on); if (b.getAttribute('role') === 'radio') b.setAttribute('aria-checked', on ? 'true' : 'false'); };
+  for (const btn of $('m-mode').children) { mark(btn, btn.dataset.v === m.mode); btn.dataset.info = modeInfo(btn.dataset.v, false); }
+  for (const btn of $('m-diff').children) mark(btn, btn.dataset.v === m.diff);
+  $('m-diff-field').hidden = colony;
+  // Free-for-all (you and two rivals) on the map types with room for three (Random picks one of those).
+  const shape = m.shape || 0, SH = SHAPE_PRESETS[shape], ffaOk = !!m.shapeRnd || !!SH.ffa;
+  $('m-players-field').hidden = colony;
+  for (const btn of $('m-players').children) {
+    mark(btn, +btn.dataset.v === (three ? 3 : 2));
+    btn.disabled = btn.dataset.v === '3' && !ffaOk;
+    btn.dataset.info = btn.dataset.v === '3' ? modeInfo('versus', true) + (ffaOk ? '' : ` (Not on ${SH.name}: pick a map type marked 3 players.)`) : 'You vs 1: you and one rival colony, landing at the far end of the planet.';
+  }
+  $('m-players-note').hidden = colony || ffaOk || m.players !== 3;
+  $('m-players-note').textContent = `${SH.name} is for two players only: pick a map type marked “3 players” for a free-for-all.`;
+  $('m-seed').textContent = 'Planet #' + m.seed;
+  renderPlanets();
+  for (const id of ['m-size', 'm-rough', 'm-rich', 'm-style']) {
+    const el = $(id), v = el._get();
+    for (const b of el.children) { mark(b, +b.dataset.v === v); b.classList.toggle('lit', +b.dataset.v <= v); }
+  }
+  const dims = mapDims({ size: menuSize(), shape, players: three ? 3 : 2 });
+  const players = three ? 3 : 2;
+  for (const b of $('m-size').children) { const d = mapDims({ size: +b.dataset.v, shape, players }); b.dataset.info = `${SIZE_PRESETS[+b.dataset.v].name}: ${d.W}×${d.H} tiles${m.shapeRnd ? ' on a Standard map (other map types differ)' : ''}.`; }
+  $('m-size-v').textContent = `${dims.W}×${dims.H}`;
+  $('m-pv-dims').textContent = m.shapeRnd ? 'Random map type' : `${dims.W}×${dims.H} tiles`;
+  $('m-rough-v').textContent = TERRAIN_PRESETS[m.rough].name;
+  $('m-rich-v').textContent = RESOURCE_PRESETS[m.rich].name;
+  $('m-style-row').hidden = colony;
+  $('m-wild-row').hidden = !colony;
+  for (const [id, on] of [['m-nuke', m.nuke], ['m-wild', m.wild], ['m-events', m.events], ['m-unlimited', m.unlimited], ['m-weather', weatherOn()]]) {
+    $(id).checked = !!on;
+    $(id + '-row').classList.toggle('on', !!on);
+  }
+  for (const btn of $('m-daynight').children) mark(btn, btn.dataset.v === todMode());
+  // Map type and Biome rows: the choice, with a thumbnail.
+  const sRow = $('m-shape'), bRow = $('m-biome'), bk = BIOME_ORDER[m.biome || 0];
+  sRow.querySelector('.m-pick-name').textContent = m.shapeRnd ? 'Random' : SH.name;
+  sRow.querySelector('.m-pick-meta').textContent = m.shapeRnd ? (three ? 'any for 3 players' : 'any map type') : mapGroupName(SH.group);
+  sRow.dataset.info = m.shapeRnd ? `Random map type: ${three ? 'one with room for three players' : 'any of them'}, picked when you land.` : `${SH.name}: ${SH.blurb || ''}`;
+  sRow.setAttribute('aria-label', `Map type: ${m.shapeRnd ? 'Random' : SH.name}. Change`);
+  drawThumbOnce(sRow.querySelector('canvas'), 'shape:' + (m.shapeRnd ? 'rnd' : shape), (cv) => drawShapeThumb(cv, m.shapeRnd ? null : SH));
+  bRow.querySelector('.m-pick-name').textContent = m.biomeRnd ? 'Random' : biomeName(m.biome || 0);
+  bRow.querySelector('.m-pick-meta').textContent = m.biomeRnd ? 'any biome' : '';
+  bRow.dataset.info = m.biomeRnd ? 'Random biome: any of them, picked when you land.' : `${biomeName(m.biome || 0)}: ${(BIOMES[bk] && BIOMES[bk].desc) || ''}`;
+  bRow.setAttribute('aria-label', `Biome: ${m.biomeRnd ? 'Random' : biomeName(m.biome || 0)}. Change`);
+  drawThumbOnce(bRow.querySelector('canvas'), 'biome:' + (m.biomeRnd ? 'rnd' : bk) + ':' + artCount(), (cv) => drawBiomeSwatch(cv, m.biomeRnd ? null : bk));
+  // Random can't be saved as a planet: pick a map type and biome first.
+  const rnd = !!(m.shapeRnd || m.biomeRnd);
+  $('m-saveplanet').disabled = rnd;
+  $('m-saveplanet').title = rnd ? 'Pick a map type and biome (not Random) to save this planet' : 'Keep this planet (with its map settings) to play again';
+  const sum = menuSummary();
+  $('m-more-sum').innerHTML = `<span class="sum-main">${sum.main}</span>` + (sum.extra ? `<span class="sum-extra">${sum.extra}</span>` : '');
   $('m-continue').hidden = !hasSave();
+  syncInfo();
+  schedulePreview();
+}
+
+/* ------------------------------------------------------------------ map type and biome pickers */
+
+function openPicker(kind) {
+  const m = UI.menu, body = $('m-picker-body'), three = m.mode === 'versus' && m.players === 3;
+  UI.picker = { kind, opener: document.activeElement };
+  $('m-picker-title').textContent = kind === 'shape' ? 'Map type' : 'Biome';
+  $('m-picker').classList.toggle('bio', kind === 'biome');
+  const card = (v, on, inner, cls) => `<button type="button" class="pcard${cls ? ' ' + cls : ''}" data-v="${v}"${on ? ' aria-current="true"' : ''}>${inner}</button>`;
+  let h = '';
+  if (kind === 'shape') {
+    const text = (name, badges, blurb) => `<canvas class="pc-thumb" aria-hidden="true"></canvas><span class="pc-text"><span class="pc-name">${name}</span>${badges ? `<span class="pc-badges">${badges}</span>` : ''}<span class="pc-blurb">${blurb}</span></span>`;
+    h += `<div class="pgrid">${card('rnd', m.shapeRnd, text('Random', '<span class="badge">surprise</span>', three ? 'One of the map types with room for three, picked when you land.' : 'Any map type, picked when you land.'), 'rnd')}</div>`;
+    const groups = MAP_GROUPS.map((g) => ({ ...g, list: [] })), other = { key: '', name: 'More', list: [] };
+    SHAPE_PRESETS.forEach((P, i) => (groups.find((g) => g.key === P.group) || other).list.push(i));
+    for (const g of groups.concat(other)) {
+      if (!g.list.length) continue;
+      h += `<section class="pgroup" aria-label="${g.name}"><h3>${g.name}</h3><div class="pgrid">` + g.list.map((i) => {
+        const P = SHAPE_PRESETS[i], badges = (P.ffa ? '<span class="badge ffa">3 players</span>' : '') + (P.naval ? '<span class="badge naval">Naval</span>' : '');
+        return card(i, !m.shapeRnd && i === (m.shape || 0), text(P.name, badges, P.blurb || ''));
+      }).join('') + '</div></section>';
+    }
+  } else {
+    const inner = (name, desc) => `<canvas class="pc-swatch" aria-hidden="true"></canvas><span class="pc-name">${name}</span><span class="pc-blurb">${desc}</span>`;
+    h += '<div class="pgrid">' + card('rnd', m.biomeRnd, inner('Random', 'Any biome, picked when you land.'), 'rnd')
+      + BIOME_ORDER.map((k, i) => card(i, !m.biomeRnd && i === (m.biome || 0), inner(BIOMES[k].name, BIOMES[k].desc || ''))).join('') + '</div>';
+  }
+  body.innerHTML = h;
+  for (const b of body.querySelectorAll('.pcard')) {
+    b.setAttribute('aria-pressed', b.hasAttribute('aria-current') ? 'true' : 'false');
+    b.onclick = () => choosePicked(kind, b.dataset.v);
+  }
+  $('m-picker').hidden = false;
+  body.scrollTop = 0;
+  drawPickerArt();
+  const cur = body.querySelector('[aria-current]') || body.querySelector('.pcard');
+  cur.focus({ preventScroll: true });
+  cur.scrollIntoView({ block: 'nearest' });
+}
+
+/** Thumbnails and swatches for the open picker (again when art arrives). */
+function drawPickerArt() {
+  if (!UI.picker) return;
+  for (const b of $('m-picker-body').querySelectorAll('.pcard')) {
+    const cv = b.querySelector('canvas'), v = b.dataset.v;
+    if (UI.picker.kind === 'shape') drawShapeThumb(cv, v === 'rnd' ? null : SHAPE_PRESETS[+v]);
+    else drawBiomeSwatch(cv, v === 'rnd' ? null : BIOME_ORDER[+v]);
+  }
+}
+
+function choosePicked(kind, v) {
+  const m = UI.menu, rnd = v === 'rnd';
+  if (kind === 'shape') { m.shapeRnd = rnd ? 1 : 0; if (!rnd) m.shape = +v; } else { m.biomeRnd = rnd ? 1 : 0; if (!rnd) m.biome = +v; }
+  sfx('click');
+  closePicker();
+  syncMenu();
+  saveSettings();
+}
+
+function closePicker(restore = true) {
+  if (!UI.picker) { $('m-picker').hidden = true; return; }
+  const opener = UI.picker.opener;
+  UI.picker = null;
+  $('m-picker').hidden = true;
+  $('m-picker-body').innerHTML = '';
+  if (restore && opener && opener.isConnected && opener.focus) opener.focus();
+}
+
+/** Keys in a picker: arrows move between cards (up and down by rows), Home / End, Tab stays inside. */
+function pickerKey(e) {
+  if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); closePicker(); return; }
+  const cards = [...$('m-picker-body').querySelectorAll('.pcard')];
+  if (e.key === 'Tab') {
+    const all = [$('m-picker-close'), ...cards], i = all.indexOf(document.activeElement);
+    if (e.shiftKey ? i <= 0 : i === all.length - 1) { e.preventDefault(); all[e.shiftKey ? all.length - 1 : 0].focus(); }
+    return;
+  }
+  const i = cards.indexOf(document.activeElement);
+  if (i < 0) return;
+  let j = -1;
+  if (e.key === 'ArrowRight') j = Math.min(cards.length - 1, i + 1);
+  else if (e.key === 'ArrowLeft') j = Math.max(0, i - 1);
+  else if (e.key === 'Home') j = 0;
+  else if (e.key === 'End') j = cards.length - 1;
+  else if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+    // The nearest card in the next row up or down, closest across.
+    const r = cards[i].getBoundingClientRect(), cx = r.left + r.width / 2, down = e.key === 'ArrowDown';
+    let best = -1, bestRow = Infinity, bestDx = Infinity;
+    cards.forEach((c, k) => {
+      const q = c.getBoundingClientRect(), dy = down ? q.top - r.top : r.top - q.top;
+      if (dy < 4) return;
+      const dx = Math.abs(q.left + q.width / 2 - cx);
+      if (dy < bestRow - 4 || (Math.abs(dy - bestRow) <= 4 && dx < bestDx)) { best = k; bestRow = dy; bestDx = dx; }
+    });
+    j = best;
+  }
+  if (j >= 0) { e.preventDefault(); cards[j].focus({ preventScroll: true }); cards[j].scrollIntoView({ block: 'nearest' }); }
+}
+
+/** Random map type and biome: a concrete pick for the game about to start (3 players: map types with room for three). */
+function resolveRandom() {
+  const m = UI.menu, out = { shape: m.shape || 0, biome: m.biome || 0 };
+  if (m.shapeRnd) {
+    const pool = SHAPE_PRESETS.map((_, i) => i).filter((i) => !(m.mode === 'versus' && m.players === 3) || SHAPE_PRESETS[i].ffa);
+    out.shape = pool.length ? pool[Math.floor(Math.random() * pool.length)] : 0;
+  }
+  if (m.biomeRnd) out.biome = Math.floor(Math.random() * BIOME_ORDER.length);
+  return out;
+}
+
+/* ------------------------------------------------------------------ menu thumbnails */
+
+/** Size a canvas to its box at the screen's pixel density; returns its context (in CSS pixels) and size. */
+function fitCanvas(cv) {
+  const w = Math.max(1, cv.clientWidth), h = Math.max(1, cv.clientHeight), dpr = Math.min(3, window.devicePixelRatio || 1);
+  if (cv.width !== Math.round(w * dpr) || cv.height !== Math.round(h * dpr)) { cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr); }
+  const ctx = cv.getContext('2d');
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, w, h);
+  return { ctx, w, h, dpr };
+}
+const artCount = () => (typeof artLoaded === 'number' ? artLoaded : 0);
+/** Draw a menu thumbnail only when what it shows (or its size) changed. */
+function drawThumbOnce(cv, key, draw) {
+  if (!cv.clientWidth) return;
+  const k = key + '@' + cv.clientWidth + 'x' + cv.clientHeight;
+  if (cv._k === k) return;
+  cv._k = k;
+  draw(cv);
+}
+function strHash(s) { let h = 2166136261; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return h >>> 0; }
+
+const THUMB = {
+  space: '#0d0f15', ground: '#b07650', hi: '#cd9563', lo: '#8a5636', water: '#1f566b', waterHi: '#3b8799', rock: '#4b3329', rockHi: '#6c4a3a',
+  floor: '#1c1411', ramp: '#e6cc96', sand: '#ecd29a', green: '#5bd27d', lava: '#ff7a2e', lavaHi: '#ffd166',
+  res: ['#3fd8a6', '#ff8a3d', '#b98cff', '#c9c1b4'],
+};
+
+/**
+ * A map type drawn as a little schematic from its flags (islands, rift, crater...), with the two bases
+ * (yours cyan at the bottom, the rival's red at the top). Unknown flags get plain open ground; null is Random.
+ */
+function drawShapeThumb(cv, P) {
+  const { ctx, w, h } = fitCanvas(cv);
+  const r0 = Math.min(6, w * 0.08);
+  if (!P) {
+    // Random: stacked map cards with a question mark.
+    ctx.fillStyle = THUMB.space; roundRect(ctx, 0, 0, w, h, r0); ctx.fill();
+    const s = Math.min(w, h);
+    for (const [dx, dy, a, c] of [[-0.16, 0.06, -0.22, THUMB.water], [0.16, 0.04, 0.2, THUMB.lo], [0, 0, 0, THUMB.ground]]) {
+      ctx.save(); ctx.translate(w / 2 + dx * s, h / 2 + dy * s); ctx.rotate(a);
+      ctx.fillStyle = c; roundRect(ctx, -s * 0.24, -s * 0.32, s * 0.48, s * 0.64, s * 0.06); ctx.fill();
+      ctx.strokeStyle = 'rgba(255,255,255,0.25)'; ctx.lineWidth = 1; ctx.stroke(); ctx.restore();
+    }
+    ctx.fillStyle = '#fff'; ctx.font = `800 ${Math.round(s * 0.38)}px system-ui, sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.shadowColor = 'rgba(0,0,0,0.6)'; ctx.shadowBlur = 4; ctx.fillText('?', w / 2, h / 2 + s * 0.02); ctx.shadowBlur = 0;
+    return;
+  }
+  const i = SHAPE_PRESETS.indexOf(P), d = mapDims({ size: 1, shape: Math.max(0, i), players: 2 });
+  let s = strHash(P.name);
+  const rnd = () => ((s = (Math.imul(s, 1664525) + 1013904223) >>> 0) / 4294967296);
+  // The map's own proportions (Long haul is tall and narrow), inside the thumbnail.
+  const pad = Math.max(2, Math.min(w, h) * 0.05), a = d.W / d.H;
+  let mh = h - pad * 2, mw = mh * a;
+  if (mw > w - pad * 2) { mw = w - pad * 2; mh = mw / a; }
+  const x0 = (w - mw) / 2, y0 = (h - mh) / 2, X = (u) => x0 + u * mw, Y = (v) => y0 + v * mh, U = Math.min(mw, mh);
+  ctx.fillStyle = THUMB.space; roundRect(ctx, 0, 0, w, h, r0); ctx.fill();
+  ctx.save();
+  roundRect(ctx, x0, y0, mw, mh, Math.min(4, U * 0.06)); ctx.clip();
+  // A wobbly blob, mirrored through the centre when `sym` (the map is point-symmetric).
+  const blob = (u, v, rx, ry, fill, stroke, sym) => {
+    for (const [uu, vv] of sym ? [[u, v], [1 - u, 1 - v]] : [[u, v]]) {
+      ctx.beginPath();
+      const n = 14, ph = rnd() * 6;
+      for (let k = 0; k <= n; k++) {
+        const t = (k / n) * Math.PI * 2, f = 1 + 0.14 * Math.sin(t * 3 + ph) + 0.08 * Math.sin(t * 5 + ph * 2);
+        const px = X(uu) + Math.cos(t) * rx * mw * f, py = Y(vv) + Math.sin(t) * ry * mh * f;
+        if (k) ctx.lineTo(px, py); else ctx.moveTo(px, py);
+      }
+      ctx.closePath();
+      if (fill) { ctx.fillStyle = fill; ctx.fill(); }
+      if (stroke) { ctx.strokeStyle = stroke; ctx.lineWidth = Math.max(1, U * 0.025); ctx.stroke(); }
+    }
+  };
+  const line = (pts, col, lw, dash) => {
+    ctx.beginPath(); pts.forEach(([u, v], k) => (k ? ctx.lineTo(X(u), Y(v)) : ctx.moveTo(X(u), Y(v))));
+    ctx.strokeStyle = col; ctx.lineWidth = lw; ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.setLineDash(dash || []); ctx.stroke(); ctx.setLineDash([]);
+  };
+  const jag = (v0, v1, n, amp) => Array.from({ length: n + 1 }, (_, k) => [k / n, v0 + (v1 - v0) * (k / n) + (k % 2 ? amp : -amp) * (0.5 + rnd() * 0.5)]);
+  // Ground with a few rises and hollows.
+  ctx.fillStyle = THUMB.ground; ctx.fillRect(x0, y0, mw, mh);
+  ctx.globalAlpha = 0.5;
+  for (let k = 0; k < 4; k++) blob(0.15 + rnd() * 0.7, 0.55 + rnd() * 0.35, 0.12 + rnd() * 0.12, 0.06 + rnd() * 0.06, k % 2 ? THUMB.hi : THUMB.lo, null, true);
+  ctx.globalAlpha = 1;
+  let crags = 2;
+  if (P.sky) {
+    ctx.fillStyle = THUMB.floor; ctx.fillRect(x0, y0, mw, mh);
+    const mesa = (u, v, rx, ry) => { for (const [uu, vv] of [[u, v], [1 - u, 1 - v]]) { ctx.save(); ctx.translate(U * 0.025, U * 0.04); blob(uu, vv, rx, ry, 'rgba(0,0,0,0.55)'); ctx.restore(); blob(uu, vv, rx, ry, THUMB.hi, THUMB.rockHi); } };
+    mesa(0.5, 0.86, 0.3, 0.1);
+    for (let k = 0; k < 4; k++) mesa(0.15 + rnd() * 0.7, 0.52 + k * 0.08, 0.07 + rnd() * 0.05, 0.04 + rnd() * 0.02);
+    crags = 0;
+  } else if (P.islands || P.tidal) {
+    ctx.fillStyle = THUMB.water; ctx.fillRect(x0, y0, mw, mh);
+    const isle = (u, v, rx, ry) => { blob(u, v, rx * 1.12, ry * 1.18, THUMB.waterHi, null, true); s -= 2; blob(u, v, rx, ry, THUMB.ground, null, true); };
+    const home = P.tidal ? [0.5, 0.84, 0.34, 0.13] : [0.5, 0.87, 0.36, 0.1];
+    const mids = P.tidal ? [[0.3, 0.6, 0.13, 0.07], [0.72, 0.62, 0.11, 0.06]] : [[0.28, 0.6, 0.14, 0.06], [0.74, 0.62, 0.1, 0.05]];
+    if (P.tidal) for (const [u, v] of mids) { line([[0.5, home[1] - home[3]], [u, v]], THUMB.sand, Math.max(1.2, U * 0.04), [U * 0.06, U * 0.05]); line([[0.5, 1 - home[1] + home[3]], [1 - u, 1 - v]], THUMB.sand, Math.max(1.2, U * 0.04), [U * 0.06, U * 0.05]); }
+    isle(...home);
+    for (const q of mids) isle(...q);
+    if (!P.tidal) isle(0.12 + rnd() * 0.1, 0.72, 0.035, 0.022);
+    crags = 0;
+  }
+  if (P.lakes) for (let k = 0; k < 4; k++) { const u = 0.12 + rnd() * 0.76, v = 0.52 + rnd() * 0.3; blob(u, v, 0.07 + rnd() * 0.05, 0.035 + rnd() * 0.025, THUMB.water, THUMB.waterHi, true); }
+  if (P.oases) {
+    ctx.fillStyle = 'rgba(70,38,22,0.45)'; ctx.fillRect(x0, y0, mw, mh);
+    for (let k = 0; k < 5; k++) blob(0.1 + rnd() * 0.8, 0.5 + rnd() * 0.45, 0.05, 0.03, THUMB.rock, null, true);
+    for (const [u, v] of [[0.25, 0.62], [0.7, 0.58], [0.5, 0.5]]) { blob(u, v, 0.09, 0.05, 'rgba(91,210,125,0.35)', null, true); blob(u, v, 0.045, 0.025, THUMB.green, null, true); }
+    crags = 0;
+  }
+  if (P.choke) {
+    const band = [...jag(0.43, 0.43, 8, 0.02), ...jag(0.57, 0.57, 8, 0.02).reverse()];
+    ctx.beginPath(); band.forEach(([u, v], k) => (k ? ctx.lineTo(X(u), Y(v)) : ctx.moveTo(X(u), Y(v)))); ctx.closePath(); ctx.fillStyle = THUMB.rock; ctx.fill();
+    for (const u of [0.3, 0.68]) line([[u, 0.41], [u + 0.04, 0.47], [u - 0.03, 0.53], [u + 0.01, 0.59]], THUMB.ground, Math.max(2, U * 0.07));
+    crags = 0;
+  }
+  if (P.rift) {
+    const top = jag(0.45, 0.47, 9, 0.025), bot = jag(0.55, 0.53, 9, 0.025);
+    ctx.beginPath(); [...top, ...bot.reverse()].forEach(([u, v], k) => (k ? ctx.lineTo(X(u), Y(v)) : ctx.moveTo(X(u), Y(v)))); ctx.closePath();
+    ctx.fillStyle = THUMB.floor; ctx.fill(); ctx.strokeStyle = THUMB.rockHi; ctx.lineWidth = Math.max(1, U * 0.02); ctx.stroke();
+    for (const u of [0.22, 0.78]) line([[u, 0.42], [u, 0.58]], THUMB.hi, Math.max(2, U * 0.06));
+    crags = 0;
+  }
+  if (P.fault) {
+    const pts = jag(0.4, 0.6, 10, 0.035);
+    ctx.beginPath(); ctx.moveTo(X(0), Y(0)); pts.forEach(([u, v]) => ctx.lineTo(X(u), Y(v))); ctx.lineTo(X(1), Y(0)); ctx.closePath(); ctx.fillStyle = 'rgba(60,30,18,0.3)'; ctx.fill();
+    line(pts, '#2a1a14', Math.max(1.5, U * 0.04)); line(pts.map(([u, v]) => [u, v + 0.012]), THUMB.hi, Math.max(0.8, U * 0.015));
+  }
+  if (P.delta) {
+    const lw = Math.max(1.5, U * 0.06);
+    line([[0, 0.48], [0.18, 0.5], [0.36, 0.47], [0.5, 0.5]], THUMB.water, lw * 1.4);
+    for (const [v1, v2] of [[0.36, 0.3], [0.46, 0.44], [0.56, 0.6], [0.66, 0.72]]) line([[0.5, 0.5], [0.7, (0.5 + v1) / 2 + 0.02], [0.86, v1], [1, v2]], THUMB.water, lw * 0.8);
+    blob(0.85, 0.5, 0.08, 0.12, 'rgba(91,210,125,0.25)');
+    crags = 1;
+  }
+  if (P.crater) {
+    ctx.beginPath(); ctx.ellipse(X(0.5), Y(0.5), U * 0.36, U * 0.36 * 0.92, 0, 0, Math.PI * 2); ctx.fillStyle = THUMB.hi; ctx.fill();
+    ctx.beginPath(); ctx.ellipse(X(0.5), Y(0.5), U * 0.28, U * 0.28 * 0.92, 0, 0, Math.PI * 2); ctx.fillStyle = THUMB.lo; ctx.fill();
+    ctx.strokeStyle = 'rgba(40,20,10,0.55)'; ctx.lineWidth = Math.max(1, U * 0.025); ctx.stroke();
+    for (const v of [-1, 1]) { ctx.fillStyle = THUMB.ramp; ctx.fillRect(X(0.5) - U * 0.04, Y(0.5) + v * U * 0.3 - U * 0.04, U * 0.08, U * 0.08); }
+    for (let k = 0; k < 5; k++) { ctx.fillStyle = THUMB.res[k % 3 + 1]; ctx.beginPath(); ctx.arc(X(0.5) + (rnd() - 0.5) * U * 0.3, Y(0.5) + (rnd() - 0.5) * U * 0.3, Math.max(1, U * 0.035), 0, 7); ctx.fill(); }
+    crags = 0;
+  }
+  if (P.plateau) {
+    for (const v of [0.84, 0.16]) {
+      const bx = X(0.5) - mw * 0.3, by = Y(v) - mh * 0.12, bw = mw * 0.6, bh = mh * 0.24;
+      ctx.fillStyle = 'rgba(40,20,10,0.6)'; roundRect(ctx, bx + U * 0.03, by + U * 0.05, bw, bh, U * 0.05); ctx.fill();
+      ctx.fillStyle = THUMB.hi; roundRect(ctx, bx, by, bw, bh, U * 0.05); ctx.fill();
+      ctx.fillStyle = THUMB.ramp; ctx.fillRect(bx - U * 0.03, by + bh * 0.4, U * 0.06, bh * 0.2); ctx.fillRect(bx + bw - U * 0.03, by + bh * 0.4, U * 0.06, bh * 0.2);
+    }
+  }
+  if (P.ring) { blob(0.5, 0.5, 0.3, 0.2, THUMB.rock, THUMB.rockHi); blob(0.47, 0.47, 0.14, 0.08, THUMB.rockHi); crags = 0; }
+  if (P.cross) {
+    const lw = Math.max(2, U * 0.08);
+    line([[0.1, 0.5], [0.9, 0.5]], THUMB.rock, lw); line([[0.5, 0.1], [0.5, 0.9]], THUMB.rock, lw);
+    ctx.beginPath(); ctx.arc(X(0.5), Y(0.5), U * 0.13, 0, 7); ctx.fillStyle = THUMB.hi; ctx.fill();
+    for (let k = 0; k < 4; k++) { ctx.fillStyle = THUMB.res[k % 3 + 1]; ctx.beginPath(); ctx.arc(X(0.5) + Math.cos(k * 1.6) * U * 0.06, Y(0.5) + Math.sin(k * 1.6) * U * 0.06, Math.max(1, U * 0.03), 0, 7); ctx.fill(); }
+    crags = 0;
+  }
+  if (P.volcano) {
+    for (const [r, c] of [[0.3, '#3a2620'], [0.22, '#5a3a2c'], [0.13, '#7a4a34']]) { ctx.beginPath(); ctx.arc(X(0.5), Y(0.5), U * r, 0, 7); ctx.fillStyle = c; ctx.fill(); }
+    ctx.shadowColor = THUMB.lava; ctx.shadowBlur = U * 0.12;
+    for (let k = 0; k < 6; k++) { const t = (k / 6) * Math.PI * 2 + rnd() * 0.4, r1 = 0.07, r2 = 0.24 + rnd() * 0.12; line([[0.5 + (Math.cos(t) * r1 * U) / mw, 0.5 + (Math.sin(t) * r1 * U) / mh], [0.5 + (Math.cos(t + 0.15) * (r1 + r2) * 0.5 * U) / mw, 0.5 + (Math.sin(t + 0.15) * (r1 + r2) * 0.5 * U) / mh], [0.5 + (Math.cos(t) * r2 * U) / mw, 0.5 + (Math.sin(t) * r2 * U) / mh]], THUMB.lava, Math.max(1, U * 0.03)); }
+    ctx.beginPath(); ctx.arc(X(0.5), Y(0.5), U * 0.06, 0, 7); ctx.fillStyle = THUMB.lavaHi; ctx.fill();
+    ctx.shadowBlur = 0;
+    crags = 0;
+  }
+  if (P.maze) {
+    // A labyrinth carved from a grid (the same every time for this map type).
+    const cw = 5, ch = Math.max(5, Math.round(cw / a)), seen = new Uint8Array(cw * ch), walls = [];
+    const open = new Set(), stack = [Math.floor(cw / 2) + (ch - 1) * cw];
+    seen[stack[0]] = 1;
+    while (stack.length) {
+      const c = stack[stack.length - 1], cx = c % cw, cy = (c / cw) | 0;
+      const nb = [[1, 0], [-1, 0], [0, 1], [0, -1]].map(([dx, dy]) => [cx + dx, cy + dy]).filter(([x, y]) => x >= 0 && y >= 0 && x < cw && y < ch && !seen[y * cw + x]);
+      if (!nb.length) { stack.pop(); continue; }
+      const [nx, ny] = nb[Math.floor(rnd() * nb.length)], n = ny * cw + nx;
+      seen[n] = 1; open.add(Math.min(c, n) + ':' + Math.max(c, n)); stack.push(n);
+    }
+    for (let y = 0; y < ch; y++) for (let x = 0; x < cw; x++) {
+      const c = y * cw + x;
+      if (x < cw - 1 && !open.has(c + ':' + (c + 1))) walls.push([[(x + 1) / cw, y / ch], [(x + 1) / cw, (y + 1) / ch]]);
+      if (y < ch - 1 && !open.has(c + ':' + (c + cw))) walls.push([[x / cw, (y + 1) / ch], [(x + 1) / cw, (y + 1) / ch]]);
+    }
+    for (const wl of walls) line(wl, THUMB.rock, Math.max(1.5, (U / cw) * 0.35));
+    crags = 0;
+  }
+  for (let k = 0; k < crags; k++) blob(0.15 + rnd() * 0.7, 0.55 + rnd() * 0.2, 0.06, 0.035, THUMB.rock, THUMB.rockHi, true);
+  // A few resource fields, and the bases.
+  if (!P.maze && !P.sky) for (let k = 0; k < 3; k++) { const u = 0.15 + rnd() * 0.7, v = 0.6 + rnd() * 0.12; ctx.fillStyle = THUMB.res[k % 4]; for (const [uu, vv] of [[u, v], [1 - u, 1 - v]]) { ctx.beginPath(); ctx.arc(X(uu), Y(vv), Math.max(1, U * 0.03), 0, 7); ctx.fill(); } }
+  const bs = Math.max(3, U * 0.1);
+  for (const [v, c] of [[0.88, PLAYER_COLORS[0]], [0.12, PLAYER_COLORS[1]]]) {
+    ctx.fillStyle = c; ctx.strokeStyle = '#fff'; ctx.lineWidth = Math.max(1, bs * 0.18);
+    roundRect(ctx, X(0.5) - bs / 2, Y(v) - bs / 2, bs, bs, bs * 0.25); ctx.fill(); ctx.stroke();
+  }
+  ctx.restore();
+  ctx.strokeStyle = 'rgba(255,255,255,0.14)'; ctx.lineWidth = 1; roundRect(ctx, x0 + 0.5, y0 + 0.5, mw - 1, mh - 1, Math.min(4, U * 0.06)); ctx.stroke();
+}
+
+function roundRect(ctx, x, y, w, h, r) {
+  r = Math.max(0, Math.min(r, w / 2, h / 2));
+  ctx.beginPath();
+  ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r); ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r);
+  ctx.closePath();
+}
+
+/** The biome's ground: its texture if there is one, else its palette, else a neutral grey. */
+function biomeGround(b) { return b === 'desert' ? ART.ground : ART['ground-' + b]; }
+function biomeLook(b) { return typeof BIOME_LOOK === 'object' && BIOME_LOOK[b] ? BIOME_LOOK[b] : null; }
+
+/**
+ * A swatch of a biome: its ground texture with a few of its plants standing on it. Biomes whose art
+ * isn't in yet fall back to their palette (or a neutral one). null is Random: slices of every biome.
+ */
+function drawBiomeSwatch(cv, b) {
+  const { ctx, w, h } = fitCanvas(cv);
+  if (!b) {
+    const n = BIOME_ORDER.length;
+    BIOME_ORDER.forEach((k, i) => {
+      ctx.save(); ctx.beginPath();
+      const x0 = (i / n) * (w + h * 0.5) - h * 0.25, x1 = ((i + 1) / n) * (w + h * 0.5) - h * 0.25;
+      ctx.moveTo(x0 + h * 0.25, 0); ctx.lineTo(x1 + h * 0.25 + 0.6, 0); ctx.lineTo(x1 - h * 0.25 + 0.6, h); ctx.lineTo(x0 - h * 0.25, h); ctx.closePath(); ctx.clip();
+      swatchGround(ctx, w, h, k);
+      ctx.restore();
+    });
+    ctx.fillStyle = 'rgba(8,10,14,0.45)'; ctx.fillRect(0, 0, w, h);
+    const s = Math.min(w, h);
+    ctx.fillStyle = '#fff'; ctx.font = `800 ${Math.round(s * 0.5)}px system-ui, sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.shadowColor = 'rgba(0,0,0,0.7)'; ctx.shadowBlur = 5; ctx.fillText('?', w / 2, h / 2 + s * 0.03); ctx.shadowBlur = 0;
+    return;
+  }
+  swatchGround(ctx, w, h, b);
+  // Plants: a big one, a middling one and a small one, the way they'd stand on the ground.
+  const s = Math.min(w * 0.62, h);
+  const spots = w / h > 1.4 ? [[0.22, 0.6, 0.95, 1], [0.58, 0.42, 0.8, 3], [0.84, 0.72, 0.6, 6]] : [[0.32, 0.4, 0.95, 1], [0.72, 0.68, 0.7, 3]];
+  for (const [u, v, f, n] of spots) {
+    const A = ART[`plant-${b}-${n}`] || ART[`plant-${b}-1`];
+    if (!A || !A.img) continue;
+    const z = s * f * 1.15;
+    ctx.drawImage(A.img, u * w - z / 2, v * h - z / 2, z, z);
+  }
+  const g = ctx.createRadialGradient(w / 2, h / 2, Math.min(w, h) * 0.3, w / 2, h / 2, Math.max(w, h) * 0.75);
+  g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(1, 'rgba(0,0,0,0.35)');
+  ctx.fillStyle = g; ctx.fillRect(0, 0, w, h);
+}
+function swatchGround(ctx, w, h, b) {
+  const G = biomeGround(b), look = biomeLook(b);
+  if (G && G.img && G.img.width) {
+    const pat = ctx.createPattern(G.img, 'repeat'), k = Math.max(0.18, Math.min(0.5, (h * 1.6) / G.img.width));
+    if (pat && pat.setTransform && window.DOMMatrix) pat.setTransform(new DOMMatrix().scale(k));
+    ctx.fillStyle = pat || '#777'; ctx.fillRect(0, 0, w, h);
+    return;
+  }
+  const lv = look && look.level, g = ctx.createLinearGradient(0, 0, w, h);
+  if (lv && lv.length) { g.addColorStop(0, lv[Math.min(1, lv.length - 1)][0]); g.addColorStop(1, lv[Math.min(3, lv.length - 1)][1]); }
+  else if (look && look.mm && look.mm.ground) { const [r, gg, bb] = look.mm.ground; g.addColorStop(0, `rgb(${r * 0.8},${gg * 0.8},${bb * 0.8})`); g.addColorStop(1, `rgb(${r},${gg},${bb})`); }
+  else { g.addColorStop(0, '#5a606c'); g.addColorStop(1, '#7c8390'); }
+  ctx.fillStyle = g; ctx.fillRect(0, 0, w, h);
+}
+
+/** Art arrives over the first seconds: redraw the menu's biome swatches as it does. */
+function menuArtTick() {
+  const n = artCount(), now = performance.now();
+  if (n === UI.menuArtN || now - (UI.menuArtT || 0) < 300) return;
+  UI.menuArtN = n; UI.menuArtT = now;
+  if ($('screen-menu').hidden) return;
+  if (UI.menuView === 'setup') syncMenu();
+  if (UI.picker && UI.picker.kind === 'biome') drawPickerArt();
+}
+
+/* ------------------------------------------------------------------ planet preview */
+
+/*
+ * Customise shows the very planet the settings make: generateMap (world.js) is a pure function of
+ * the seed and map settings, so it's run here on its own, away from S (the live game behind the
+ * menu, and the render state, are never touched). It runs ~250 ms after the last change, maps are
+ * kept per settings, and if it ever fails the map type's schematic thumbnail stands in.
+ */
+const PV = { timer: 0, maps: new Map(), drawn: '', failed: false };
+
+/** The settings newGame would make of the menu (Random biome: drawn as the Red desert). */
+function previewSettings() {
+  const m = UI.menu, mode = m.mode === 'colony' ? 'colony' : 'versus';
+  const st = { size: clamp(menuSize(), 0, SIZE_PRESETS.length - 1), rough: clamp(m.rough ?? DEFAULT_ROUGH, 0, TERRAIN_PRESETS.length - 1), rich: clamp(m.rich ?? DEFAULT_RICH, 0, RESOURCE_PRESETS.length - 1) };
+  st.shape = clamp(m.shape || 0, 0, SHAPE_PRESETS.length - 1);
+  st.players = mode === 'versus' && m.players === 3 && SHAPE_PRESETS[st.shape].ffa ? 3 : 2;
+  st.nuke = !!m.nuke;
+  st.biome = m.biomeRnd ? 'desert' : BIOME_ORDER[m.biome || 0] || 'desert';
+  return { seed: m.seed >>> 0, mode, st };
+}
+function previewKey() {
+  const p = previewSettings(), s = p.st;
+  return UI.menu.shapeRnd ? 'rnd' : [p.seed, p.mode, s.shape, s.size, s.rough, s.rich, s.players, s.nuke ? 1 : 0, s.biome].join(':');
+}
+
+function schedulePreview(now) {
+  if (UI.menuView !== 'setup' || $('screen-menu').hidden) return;
+  const key = previewKey();
+  if (key === PV.drawn) return;
+  clearTimeout(PV.timer);
+  $('m-pv').classList.add('busy');
+  PV.timer = setTimeout(drawPreview, now || !PV.drawn ? 0 : 250);
+}
+
+function drawPreview() {
+  const cv = $('m-preview');
+  if (!cv.clientWidth || UI.menuView !== 'setup') return;
+  const key = previewKey(), p = previewSettings();
+  PV.drawn = key;
+  $('m-pv').classList.remove('busy');
+  $('m-pv-random').hidden = !UI.menu.shapeRnd;
+  if (UI.menu.shapeRnd) { const { ctx, w, h } = fitCanvas(cv); ctx.fillStyle = THUMB.space; ctx.fillRect(0, 0, w, h); return; }
+  let m = PV.maps.get(key);
+  if (!m && !PV.failed) {
+    try {
+      const { W, H } = mapDims(p.st);
+      m = generateMap(p.seed, W, H, { ...p.st });
+      m.W = W; m.H = H;
+      PV.maps.set(key, m);
+      if (PV.maps.size > 24) PV.maps.delete(PV.maps.keys().next().value);
+    } catch (e) { PV.failed = true; m = null; console.warn('Terrafall: the planet preview fell back to a sketch.', e); }
+  }
+  if (!m) { drawShapeThumb(cv, SHAPE_PRESETS[p.st.shape]); return; }
+  renderPreview(cv, m, p);
+}
+
+/** A minimap-style picture of a generated map: levels, cliffs, water, rock, resources and the bases. */
+function renderPreview(cv, m, p) {
+  const { ctx, w, h, dpr } = fitCanvas(cv);
+  const W = m.W, H = m.H, pad = 8, k = Math.min((w - pad * 2) / W, (h - pad * 2) / H);
+  const mw = W * k, mh = H * k, x0 = Math.round((w - mw) / 2), y0 = Math.round((h - mh) / 2);
+  // Colours: the biome's minimap palette (render.js), the resources' as on the minimap.
+  const look = biomeLook(p.st.biome) || biomeLook('desert'), mm = (look && look.mm) || {};
+  const C = { ground: mm.ground || [169, 113, 74], water: mm.water || [28, 75, 93], rock: mm.rock || [74, 51, 41], ramp: mm.ramp || [235, 205, 150],
+    chasm: [18, 12, 10], fertile: [92, 98, 40] };
+  if (!look || !look.mm) { const G = biomeGround(p.st.biome); const c = G && typeof avgColor === 'function' ? avgColor(G) : null; if (c) C.ground = c; }
+  const resCol = (r) => (typeof MM_COLORS === 'object' && MM_COLORS[r]) || [220, 220, 220];
+  // Paint the tiles at about one image pixel per screen pixel, s by s each.
+  const s = clamp(Math.round(k * dpr), 2, 8), IW = W * s, IH = H * s;
+  const off = document.createElement('canvas'); off.width = IW; off.height = IH;
+  const oc = off.getContext('2d'), img = oc.createImageData(IW, IH), px = img.data;
+  const T = m.terrain, E = m.elev, Rs = m.res, Rp = m.ramp, F = m.fert;
+  const isG = (t) => T[t] === T_GROUND;
+  const put = (x, y, c, f) => { const o = (y * IW + x) * 4; px[o] = Math.min(255, c[0] * f); px[o + 1] = Math.min(255, c[1] * f); px[o + 2] = Math.min(255, c[2] * f); px[o + 3] = 255; };
+  const edge = Math.max(1, Math.round(s / 4)), rr = (s * 0.42) ** 2;
+  for (let j = 0; j < H; j++) for (let i = 0; i < W; i++) {
+    const t = j * W + i, terr = T[t], n = 0.96 + 0.08 * hash2(i, j, 91);
+    let c, f = n;
+    if (terr === T_WATER) c = C.water;
+    else if (typeof T_CHASM !== 'undefined' && terr === T_CHASM) c = C.chasm;
+    else if (terr === T_ROCK) c = C.rock;
+    else if (Rp[t]) c = C.ramp;
+    else { c = F && F[t] ? C.fertile : C.ground; f = n * (0.8 + 0.09 * E[t]); }
+    const r = terr === T_GROUND && Rs[t] ? resCol(Rs[t]) : null;
+    // Cliff edges: a dark lip where the ground drops to the tile below or beside, a light one where it rises.
+    const below = j < H - 1 ? t + W : -1, right = i < W - 1 ? t + 1 : -1, above = j > 0 ? t - W : -1;
+    const dropB = terr === T_GROUND && below >= 0 && isG(below) && E[below] < E[t] && !Rp[t] && !Rp[below];
+    const dropR = terr === T_GROUND && right >= 0 && isG(right) && E[right] < E[t] && !Rp[t] && !Rp[right];
+    const riseA = terr === T_GROUND && above >= 0 && isG(above) && E[above] < E[t];
+    const shore = terr === T_WATER && ((below >= 0 && T[below] !== T_WATER) || (above >= 0 && T[above] !== T_WATER) || (right >= 0 && T[right] !== T_WATER) || (i > 0 && T[t - 1] !== T_WATER));
+    const rockTop = terr === T_ROCK && above >= 0 && T[above] !== T_ROCK;
+    for (let y = 0; y < s; y++) for (let x = 0; x < s; x++) {
+      let ff = f;
+      if (dropB && y >= s - edge) ff *= 0.55;
+      else if (dropR && x >= s - edge) ff *= 0.7;
+      else if (riseA && y < edge) ff *= 1.12;
+      if (shore) ff *= 1.18;
+      if (rockTop && y < edge) ff *= 1.3;
+      if (r && (x + 0.5 - s / 2) ** 2 + (y + 0.5 - s / 2) ** 2 <= rr) put(i * s + x, j * s + y, r, 1);
+      else put(i * s + x, j * s + y, c, ff);
+    }
+  }
+  oc.putImageData(img, 0, 0);
+  // The planet on its dark panel, with a soft shadow.
+  ctx.save();
+  ctx.shadowColor = 'rgba(0,0,0,0.6)'; ctx.shadowBlur = 14; ctx.shadowOffsetY = 4;
+  ctx.fillStyle = '#000'; roundRect(ctx, x0, y0, mw, mh, 6); ctx.fill();
+  ctx.restore();
+  ctx.save();
+  roundRect(ctx, x0, y0, mw, mh, 6); ctx.clip();
+  ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high';
+  ctx.drawImage(off, x0, y0, mw, mh);
+  // The bases: each colony's Command Base with the ring of land it holds.
+  const n = p.mode === 'colony' ? 1 : p.st.players;
+  for (let q = n - 1; q >= 0; q--) {
+    const b = m.bases[q];
+    if (!b) continue;
+    const cx = x0 + (b.x + 0.5) * k, cy = y0 + (b.y + 0.5) * k, col = PLAYER_COLORS[q] || '#fff', bs = Math.max(7, k * 2.2);
+    ctx.beginPath(); ctx.arc(cx, cy, k * 8, 0, Math.PI * 2);
+    ctx.fillStyle = col + '24'; ctx.fill();
+    ctx.setLineDash([4, 3]); ctx.strokeStyle = col + 'cc'; ctx.lineWidth = 1.2; ctx.stroke(); ctx.setLineDash([]);
+    ctx.shadowColor = col; ctx.shadowBlur = 8;
+    ctx.fillStyle = col; roundRect(ctx, cx - bs / 2, cy - bs / 2, bs, bs, bs * 0.25); ctx.fill();
+    ctx.shadowBlur = 0; ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.5; ctx.stroke();
+  }
+  ctx.restore();
+  ctx.strokeStyle = 'rgba(255,255,255,0.16)'; ctx.lineWidth = 1; roundRect(ctx, x0 + 0.5, y0 + 0.5, mw - 1, mh - 1, 6); ctx.stroke();
 }
 
 /* ------------------------------------------------------------------ autosave */
@@ -853,24 +1523,25 @@ function gamePlanet() {
   return { seed: S.seed, shape: st.shape || 0, size: st.size, rough: st.rough, rich: st.rich, biome: Math.max(0, BIOME_ORDER.indexOf(st.biome)), players: st.players || 2 };
 }
 function planetLabel(p) {
-  const bits = [SHAPE_PRESETS[p.shape] ? SHAPE_PRESETS[p.shape].name : 'Standard', SIZE_PRESETS[p.size] ? SIZE_PRESETS[p.size].name : '', BIOMES[BIOME_ORDER[p.biome || 0]].name];
+  const bits = [SHAPE_PRESETS[p.shape] ? SHAPE_PRESETS[p.shape].name : 'Standard', SIZE_PRESETS[p.size] ? SIZE_PRESETS[p.size].name : '', biomeName(p.biome || 0)];
   if (p.rough !== DEFAULT_ROUGH && TERRAIN_PRESETS[p.rough]) bits.push(TERRAIN_PRESETS[p.rough].name + ' terrain');
   if (p.rich !== DEFAULT_RICH && RESOURCE_PRESETS[p.rich]) bits.push(RESOURCE_PRESETS[p.rich].name + ' resources');
   if (p.players === 3) bits.push('3 players');
-  return `<b>Planet #${p.seed}</b> · ${bits.filter(Boolean).join(' · ')}`;
+  return `<b>Planet #${p.seed}</b><span> · ${bits.filter(Boolean).join(' · ')}</span>`;
 }
 function renderPlanets() {
   const el = $('m-planets');
   if (!el) return;
-  const list = savedPlanets(), cur = planetKey(menuPlanet());
+  const list = savedPlanets(), cur = UI.menu.shapeRnd || UI.menu.biomeRnd ? '' : planetKey(menuPlanet());
   el.hidden = !list.length;
-  el.innerHTML = list.length ? '<span class="planets-title">Saved planets</span>' + list.map((p, k) =>
+  el.innerHTML = list.length ? `<span class="planets-title">Saved planets <small>${list.length}</small></span>` + list.map((p, k) =>
     `<div class="planet-row"><button class="btn small ghost use${planetKey(p) === cur ? ' on' : ''}" data-use="${k}">${planetLabel(p)}</button><button class="btn small ghost del" data-del="${k}" aria-label="Forget Planet #${p.seed}" title="Forget this planet">×</button></div>`).join('') : '';
   for (const b of el.querySelectorAll('[data-use]')) b.onclick = () => {
     const p = savedPlanets()[+b.dataset.use];
     if (!p) return;
-    Object.assign(UI.menu, { seed: p.seed, shape: p.shape, rough: p.rough, rich: p.rich, biome: p.biome, players: p.players || 2 });
+    Object.assign(UI.menu, { seed: p.seed, shape: p.shape, rough: p.rough, rich: p.rich, biome: p.biome, players: p.players || 2, shapeRnd: 0, biomeRnd: 0 });
     UI.menu.size[UI.menu.mode] = p.size;
+    checkMenuSettings();
     sfx('click'); syncMenu();
     toast(`Set to Planet #${p.seed}. Tap Start to play it.`, 'info');
   };
@@ -886,10 +1557,13 @@ function renderPlanets() {
 
 function startNewGame() {
   clearSave();
+  closePicker(false);
+  // Random map type or biome: picked now (see resolveRandom); the menu keeps Random for next time.
+  const pick = resolveRandom();
   newGame({
     seed: UI.menu.seed, difficulty: UI.menu.diff, mode: UI.menu.mode,
-    size: UI.menu.size[UI.menu.mode] ?? DEFAULT_SIZE[UI.menu.mode], rough: UI.menu.rough, rich: UI.menu.rich, shape: UI.menu.shape || 0,
-    nuke: !!UI.menu.nuke, biome: BIOME_ORDER[UI.menu.biome || 0], players: UI.menu.players === 3 ? 3 : 2,
+    size: UI.menu.size[UI.menu.mode] ?? DEFAULT_SIZE[UI.menu.mode], rough: UI.menu.rough, rich: UI.menu.rich, shape: pick.shape,
+    nuke: !!UI.menu.nuke, biome: BIOME_ORDER[pick.biome], players: UI.menu.players === 3 ? 3 : 2,
     style: UI.menu.style ? PERSONALITY_ORDER[UI.menu.style - 1] : 'random', events: !!UI.menu.events, wildlife: !!UI.menu.wild, unlimited: !!UI.menu.unlimited,
   });
   enterGame();
@@ -899,6 +1573,7 @@ function startNewGame() {
     ? 'Your bots have landed. Build, expand and make this planet home.'
     : S.players.length > 2 ? 'Your bots have landed. Two rival colonies landed too, one to the north-west (red) and one to the north-east (green). Build up fast!'
       : 'Your bots have landed. A rival colony landed to the north. Build up fast!', 0, 0, 'info');
+  if (UI.menu.shapeRnd || UI.menu.biomeRnd) postMsg(0, `Random pick: ${[UI.menu.shapeRnd ? SHAPE_PRESETS[pick.shape].name : '', UI.menu.biomeRnd ? biomeName(pick.biome) : ''].filter(Boolean).join(', ')}.`, 0, 0, 'info');
   // Name each rival's personality, so you know what's coming.
   if (S.mode !== 'colony') for (const P of S.players) {
     const st = P.id !== 0 && P.ai && !P.absent && PERSONALITIES[P.style];
@@ -1025,6 +1700,7 @@ function toMenu() {
   $('hud').hidden = true;
   placeMinimap();
   $('screen-menu').hidden = false;
+  showMenuView('home');
   syncMenu();
   startDemo();
 }
@@ -4072,6 +4748,7 @@ function toast(text, kind, x, y) {
 
 function uiTick(dt) {
   AUDIO.suppress = !UI.inGame;
+  if (!UI.inGame) menuArtTick();
   if (!UI.inGame || !S) return;
   while (S.msgs.length) {
     const m = S.msgs.shift();

@@ -39,6 +39,7 @@ function simStep(dt) {
   if (S.tick % 30 === 15) cleanRallies();
   if (S.tick % 30 === 20) updateLoot();
   if (S.events) updateEvents();
+  if (S.tide || S.volcano || (S.quake && !S.quake.done)) updateMapEvents(dt);
   if (S.tick % 30 === 25) naniteRepair();
   for (const P of S.players) {
     if (!P.ai || P.out) continue;
@@ -988,6 +989,7 @@ function moveAlong(u, dt) {
     if (isJunction(here) && !S.lights[here] && !S.over[here]) speed *= JUNCTION_SLOW; // crossing carefully
   } else {
     if (S.ramp[here]) speed *= SLOPE_SPEED; else if (S.res[here]) speed *= 0.75;
+    if (S.ford && S.ford[here] && S.terrain[here] === T_WATER) speed *= FORD_SLOW; // wading a ford
     if (!S.bAt[here]) {
       const fleeing = u.task && u.task.type === 'flee'; // running from a nuclear blast: no time to keep to the roads
       if (bt.roadOnly) speed *= fleeing ? OFFROAD_SLOW : HAULER_STRANDED; // a hauler caught off the road crawls back to it
@@ -5725,6 +5727,226 @@ function usageByType(p) {
     o.up += b.upT; o.use += b.useT || 0; o.n++;
   }
   return out;
+}
+
+/* ------------------------------------------------------------------ map events */
+
+/** A new game's map events: the tide (Tidal flats), the volcano (Volcano), the fault (Fault line). */
+function mapEventsStart(m) {
+  if (S.tidal) { S.tide = { high: false, next: TIDE.firstLow, warned: false }; setTide(false, true); }
+  if (m.volcano) S.volcano = { ...m.volcano, next: ERUPTION.first, n: 0, warned: false, erupting: false, bombs: [] };
+  if (S.fault) {
+    const rng = makeRng((S.seed ^ 0x9a17) >>> 0);
+    S.quake = { at: QUAKE.at + Math.round((rng() * 2 - 1) * QUAKE.jitter), warned: 0, done: false };
+  }
+}
+
+function updateMapEvents(dt) {
+  if (S.tide) updateTide();
+  if (S.volcano) updateVolcano(dt);
+  if (S.quake && !S.quake.done) updateQuake();
+}
+
+/** Tidal flats about to flood: routes keep off them (see tileCost). */
+function flatsClosing() { return !!S.tide && !S.tide.high && S.tide.next - S.time < TIDE.closing; }
+
+function updateTide() {
+  const T = S.tide;
+  if (!T.warned && S.time >= T.next - TIDE.warn) {
+    T.warned = true;
+    if (T.high) postMsg(0, `The tide is going out: the sandbars will be dry in ${TIDE.warn}s.`, undefined, undefined, 'info');
+    else { postMsg(0, `The tide is coming in! The sandbars flood in ${TIDE.warn}s: get your bots off them.`, undefined, undefined, 'warn'); sfx('alert'); }
+  }
+  if (S.time < T.next) return;
+  T.high = !T.high;
+  T.warned = false;
+  T.next = S.time + (T.high ? TIDE.high : TIDE.low);
+  setTide(T.high);
+  postMsg(0, T.high ? 'High tide: the sandbars are under the sea.' : 'Low tide: the sandbars are dry. Bots can walk across.', undefined, undefined, 'info');
+}
+
+/**
+ * Flood the tidal flats (high) or let them dry (low). A bot caught out on the flats by the sea is
+ * washed ashore (a little the worse for it); a ship left on them as they dry is pushed off to deep water.
+ * `quiet`: setting up a new game (nothing to move or redraw yet).
+ */
+function setTide(high, quiet) {
+  const N = S.W * S.H;
+  for (let t = 0; t < N; t++) if (S.tidal[t]) { S.terrain[t] = high ? T_WATER : T_GROUND; if (!quiet) S.dirtyTiles.push(t); }
+  if (quiet) return;
+  terrainChanged();
+  for (const u of S.bots) {
+    if (u.dead || u.inside || u.dropping || BOTS[u.type].air) continue;
+    const t = tIdx(Math.floor(u.x), Math.floor(u.y)), sea = !!BOTS[u.type].sea;
+    if (S.tidal[t] && high !== sea) {
+      const to = nearestTile(t, sea ? (v) => S.terrain[v] === T_WATER && !S.tidal[v] : (v) => walkable(v) && !S.tidal[v] && !S.bAt[v]);
+      if (to >= 0) moveOff(u, to, sea ? 0 : 1);
+    } else if (u.path && u.path.slice(u.pi).some((v) => S.tidal[v])) dropPath(u);
+  }
+}
+
+/** The nearest tile to t (by steps over the map) that `ok` accepts, or -1. */
+function nearestTile(t, ok) {
+  const N = S.W * S.H, W = S.W, seen = new Uint8Array(N), q = [t];
+  seen[t] = 1;
+  for (let h = 0; h < q.length && h < 4000; h++) {
+    const a = q[h];
+    if (ok(a)) return a;
+    const i = a % W;
+    for (const b of [i > 0 ? a - 1 : -1, i < W - 1 ? a + 1 : -1, a - W, a + W]) if (b >= 0 && b < N && !seen[b]) { seen[b] = 1; q.push(b); }
+  }
+  return -1;
+}
+
+/** Put bot u on tile `to` (the ground gave way, or the sea came in), hurt by `dmg`, and let it plan again. */
+function moveOff(u, to, dmg) {
+  addFx('smoke', u.x, u.y, { r: 0.5 });
+  u.x = (to % S.W) + 0.5; u.y = ((to / S.W) | 0) + 0.5;
+  dropPath(u);
+  if (dmg) damageBot(u, dmg);
+}
+
+/** Drop bot u's route (it crosses ground that has changed): a soldier keeps its orders and finds a new way; anyone else is given new work. */
+function dropPath(u) {
+  u.path = null; u.vel = 0; u.deck = null;
+  if (u.type === 'warbot' || BOTS[u.type].siege) return;
+  cancelTask(u); u.task = null;
+}
+
+/** Land and water have changed somewhere: the areas bots can reach, the sea lanes and the routes planned over them. */
+function terrainChanged() {
+  computeZones();
+  computeTerritory();
+  _seaFor = null; _shoreFor = null;
+  S.roadVer = (S.roadVer || 0) + 1;
+  S.planVer = (S.planVer || 0) + 1;
+  if (typeof MM !== 'undefined') MM.dirty = true;
+}
+
+/* Volcano: it rumbles, then for a while throws lava bombs over its slopes (see ERUPTION). */
+function updateVolcano(dt) {
+  const V = S.volcano;
+  if (!V.erupting) {
+    if (!V.warned && S.time >= V.next - ERUPTION.warn) {
+      V.warned = true;
+      postMsg(0, `The volcano is rumbling: it erupts in ${ERUPTION.warn}s. Get clear of its slopes!`, Math.floor(V.x), Math.floor(V.y), 'warn');
+      sfx('rumble');
+      addFx('quake', V.x, V.y, { life: ERUPTION.warn, amp: 1.2 });
+    }
+    if (S.time >= V.next) startEruption(V);
+  } else {
+    while (V.shot < V.plan.length && S.time >= V.plan[V.shot].at) {
+      const p = V.plan[V.shot++];
+      V.bombs.push({ x0: V.x + (p.ox || 0), y0: V.y - 0.4, x1: p.x, y1: p.y, t0: S.time, dur: p.dur, done: false });
+    }
+    if (S.tick % 9 === 0) addFx('smoke', V.x + (hash2(S.tick, 3, 7) - 0.5), V.y - 0.6, { r: 1.6 + hash2(S.tick, 5, 9) });
+    if (S.time >= V.until) {
+      V.erupting = false;
+      const rng = makeRng(((S.seed ^ 0x7e2) + V.n * 7919) >>> 0);
+      V.next = S.time + ERUPTION.gap[0] + rng() * (ERUPTION.gap[1] - ERUPTION.gap[0]);
+      V.warned = false;
+      postMsg(0, 'The eruption is over.', undefined, undefined, 'info');
+    }
+  }
+  if (V.bombs.length) {
+    for (const b of V.bombs) if (!b.done && S.time >= b.t0 + b.dur) { b.done = true; lavaImpact(V, b); }
+    V.bombs = V.bombs.filter((b) => !b.done);
+  }
+}
+
+function startEruption(V) {
+  V.erupting = true;
+  V.n++;
+  V.until = S.time + ERUPTION.dur;
+  V.shot = 0;
+  V.hitMsg = false;
+  const rng = makeRng(((S.seed ^ 0x6f3b) + V.n * 104729) >>> 0);
+  V.plan = [];
+  for (let k = 0; k < ERUPTION.bombs; k++) {
+    const a = rng() * Math.PI * 2, r = V.crater + 1 + Math.sqrt(rng()) * (V.r * ERUPTION.reach - V.crater - 1);
+    V.plan.push({
+      at: S.time + (k + rng()) * (ERUPTION.dur / ERUPTION.bombs), ox: (rng() - 0.5) * V.crater,
+      x: clamp(V.x + Math.cos(a) * r, 0.5, S.W - 0.5), y: clamp(V.y + Math.sin(a) * r, 0.5, S.H - 0.5),
+      dur: ERUPTION.flight[0] + rng() * (ERUPTION.flight[1] - ERUPTION.flight[0]),
+    });
+  }
+  addFx('boom', V.x, V.y - 0.3, { r: 2.4 });
+  addFx('quake', V.x, V.y, { life: ERUPTION.dur, amp: 2.2 });
+  sfx('eruption');
+  postMsg(0, 'The volcano is erupting! Lava bombs are raining on its slopes.', Math.floor(V.x), Math.floor(V.y), 'bad');
+}
+
+/** A lava bomb lands: a burst of fire, a scorch mark, buildings dented (never wrecked) and bots hurt. */
+function lavaImpact(V, b) {
+  const t = tIdx(clamp(Math.floor(b.x1), 0, S.W - 1), clamp(Math.floor(b.y1), 0, S.H - 1));
+  if (S.terrain[t] === T_WATER) { addFx('smoke', b.x1, b.y1, { r: 0.7 }); return; }
+  addFx('boom', b.x1, b.y1, { r: 0.9 });
+  addFx('fire', b.x1, b.y1, { life: 7, r: 0.5 });
+  addDecal('scorch', b.x1, b.y1, 0.7, 60);
+  for (const e of S.buildings) {
+    if (e.dead || dist2(e.x + 0.5, e.y + 0.5, b.x1, b.y1) > 1.7) continue;
+    e.armor = Math.max(1, e.armor - ERUPTION.damage);
+    if (e.owner === 0 && !V.hitMsg) { V.hitMsg = true; postMsg(0, 'Lava bombs are hitting your buildings on the slopes!', e.x, e.y, 'bad'); }
+  }
+  for (const u of S.bots) if (!u.dead && !u.inside && dist2(u.x, u.y, b.x1, b.y1) <= 1.4) damageBot(u, ERUPTION.botDamage);
+  if (S.owner[t] === 0) sfx('boom');
+}
+
+/* Fault line: warnings, tremors, then the earthquake opens the fault (see QUAKE). */
+function updateQuake() {
+  const Q = S.quake;
+  if (Q.warned < 1 && S.time >= Q.at - QUAKE.warn[0]) {
+    Q.warned = 1;
+    postMsg(0, 'Seismic readings are rising along the fault line: it could open within two minutes. Anything on the scar will fall in.', undefined, undefined, 'warn');
+    sfx('alert');
+  }
+  if (Q.warned < 2 && S.time >= Q.at - QUAKE.warn[1]) {
+    Q.warned = 2;
+    postMsg(0, `Tremors! The fault opens in ${QUAKE.warn[1]}s.`, undefined, undefined, 'warn');
+    addFx('quake', S.W / 2, S.H / 2, { life: QUAKE.warn[1], amp: 1.5 });
+    sfx('rumble');
+  }
+  if (S.time >= Q.at) openFault();
+}
+
+/** The earthquake: the fault opens into a chasm. Whatever stood on it falls in; bots on it scramble clear. */
+function openFault() {
+  S.quake.done = true;
+  const N = S.W * S.H, lost = new Map(), fall = new Set();
+  for (let t = 0; t < N; t++) if (S.fault[t] && S.bAt[t]) fall.add(S.bAt[t]);
+  for (const id of fall) {
+    const b = getE(id);
+    if (!b || b.dead) continue;
+    lost.set(b.owner, (lost.get(b.owner) || 0) + 1);
+    destroyBuilding(b, true, true);
+  }
+  for (let t = 0; t < N; t++) {
+    if (!S.fault[t]) continue;
+    const i = t % S.W, j = (t / S.W) | 0;
+    if (S.road[t]) setRoad(i, j, false);
+    if (S.rail && S.rail[t]) { S.rail[t] = 0; S.railVer = (S.railVer || 0) + 1; }
+    if (S.pipe[t]) setPipe(t, 0);
+    S.plan[t] = 0; S.owe[t] = 0; if (S.railPlan) S.railPlan[t] = 0; if (S.pipePlan) S.pipePlan[t] = 0;
+    delete S.lights[t]; delete S.over[t];
+    S.res[t] = R_NONE; S.amt[t] = 0; S.fert[t] = 0; S.ramp[t] = 0;
+    if (S.decor) S.decor[t] = 0;
+    S.terrain[t] = T_CHASM;
+    S.dirtyTiles.push(t);
+    if ((i + j) % 3 === 0) addFx('dustcloud', i + 0.5, j + 0.5, { r: 1.4 });
+  }
+  terrainChanged();
+  S.railVer = (S.railVer || 0) + 1;
+  for (const u of S.bots) {
+    if (u.dead || u.inside || u.dropping || BOTS[u.type].air || BOTS[u.type].sea) continue;
+    const t = tIdx(Math.floor(u.x), Math.floor(u.y));
+    if (S.fault[t]) { const to = nearestTile(t, (v) => walkable(v) && !S.fault[v] && !S.bAt[v]); if (to >= 0) moveOff(u, to, 2); }
+    else if (u.path && u.path.slice(u.pi).some((v) => S.fault[v])) dropPath(u);
+  }
+  addFx('quake', S.W / 2, S.H / 2, { life: 5, amp: 9 });
+  sfx('rumble'); sfx('boom');
+  const n = lost.get(0) || 0;
+  postMsg(0, 'Earthquake! The fault has opened into a chasm' + (n ? `, and ${n} of your buildings fell in` : '') +
+    '. Cross at the rock arches, or open a new way with a Sky bridge (Paths).', undefined, undefined, 'bad');
 }
 
 /* ------------------------------------------------------------------ planet events */

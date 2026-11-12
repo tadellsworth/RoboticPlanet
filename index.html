@@ -90,84 +90,127 @@
 </div>
 
 <div id="screen-menu" class="screen">
-  <div class="card menu-card">
-    <h1 class="logo">TERRAFALL</h1>
-    <p class="tagline">Claim. Seize. Annihilate.</p>
-    <button id="m-continue" class="btn primary big" hidden>Continue</button>
-    <button id="m-import" class="btn big ghost" title="Load a game saved to a file with Download save file (from the pause menu), on this device or another">Load a save file</button>
-    <input type="file" id="m-import-file" accept=".json,application/json" hidden>
-    <p class="hint" id="m-import-msg" hidden></p>
-    <button id="m-missions" class="btn big">Missions</button>
-    <div class="label free-play">Free play</div>
-    <div class="field">
-      <span class="label">Mode</span>
-      <div class="seg" id="m-mode">
-        <button data-v="versus" class="on">Versus</button>
-        <button data-v="colony">Colony</button>
+  <div class="card menu-card" id="menu-card">
+    <!-- Home: what shows on load. -->
+    <div class="m-home" id="m-home">
+      <h1 class="logo">TERRAFALL</h1>
+      <p class="tagline">Claim. Seize. Annihilate.</p>
+      <button id="m-continue" class="btn big m-cont" hidden>Continue</button>
+    </div>
+    <!-- Customise: the whole new-game setup (opened by Customise game; $('m-more').open = true works too). -->
+    <div class="m-setup" id="m-more" role="region" aria-labelledby="m-setup-title" hidden>
+      <header class="m-head">
+        <button type="button" id="m-back" class="btn small ghost m-back" aria-label="Back to the main menu">
+          <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M15 5l-7 7 7 7" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg><span>Back</span>
+        </button>
+        <h2 id="m-setup-title">New game</h2>
+        <span class="m-head-logo" aria-hidden="true">TERRAFALL</span>
+      </header>
+      <div class="m-body" id="m-body">
+        <section class="m-planet" aria-label="Planet preview">
+          <div class="pv" id="m-pv">
+            <canvas id="m-preview" role="img" aria-label="Preview of the planet these settings make"></canvas>
+            <div class="pv-random" id="m-pv-random" hidden><b>?</b><span>A random map type, picked when you land</span></div>
+          </div>
+          <div class="pv-side">
+            <div class="seed-row">
+              <span class="seed-txt"><span id="m-seed" class="seed"></span><small id="m-pv-dims"></small></span>
+              <span class="seed-btns"><button type="button" id="m-saveplanet" class="btn small ghost" title="Keep this planet (with its map settings) to play again">Save</button><button type="button" id="m-reroll" class="btn small" title="Roll a new planet with these settings">New planet</button></span>
+            </div>
+            <div id="m-planets" class="planets" hidden></div>
+          </div>
+        </section>
+        <div class="m-sets">
+          <section class="m-sec" id="m-sec-match" aria-labelledby="m-h-match">
+            <h3 id="m-h-match">Match</h3>
+            <div class="m-row"><span class="m-rl" id="m-l-mode">Mode</span>
+              <div class="seg" id="m-mode" role="radiogroup" aria-labelledby="m-l-mode">
+                <button type="button" role="radio" data-v="versus" class="on">Versus</button>
+                <button type="button" role="radio" data-v="colony">Colony</button>
+              </div>
+            </div>
+            <div class="m-row" id="m-players-field"><span class="m-rl" id="m-l-players">Players</span>
+              <div class="seg" id="m-players" role="radiogroup" aria-labelledby="m-l-players">
+                <button type="button" role="radio" data-v="2" class="on">You vs 1</button>
+                <button type="button" role="radio" data-v="3">Free-for-all · 3</button>
+              </div>
+            </div>
+            <div class="m-row" id="m-diff-field"><span class="m-rl" id="m-l-diff">Rival</span>
+              <div class="seg" id="m-diff" role="radiogroup" aria-labelledby="m-l-diff">
+                <button type="button" role="radio" data-v="easy">Easy</button>
+                <button type="button" role="radio" data-v="medium">Medium</button>
+                <button type="button" role="radio" data-v="normal" class="on">Normal</button>
+                <button type="button" role="radio" data-v="hard">Hard</button>
+              </div>
+            </div>
+            <div class="m-row" id="m-style-row"><span class="m-rl" id="m-l-style">Rival style</span>
+              <div class="chips m-chips" id="m-style" role="radiogroup" aria-labelledby="m-l-style"></div>
+            </div>
+            <p class="m-info" id="m-mode-desc" aria-live="polite"></p>
+            <p class="m-note" id="m-players-note" hidden></p>
+          </section>
+          <section class="m-sec" id="m-sec-planet" aria-labelledby="m-h-planet">
+            <h3 id="m-h-planet">Planet</h3>
+            <div class="m-row"><span class="m-rl">Map type</span>
+              <button type="button" class="m-pick" id="m-shape" aria-haspopup="dialog"><canvas class="m-pick-thumb" aria-hidden="true"></canvas><span class="m-pick-name"></span><span class="m-pick-meta"></span><svg class="m-pick-chev" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M9 5l7 7-7 7" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+            </div>
+            <div class="m-row"><span class="m-rl">Biome</span>
+              <button type="button" class="m-pick" id="m-biome" aria-haspopup="dialog"><canvas class="m-pick-thumb" aria-hidden="true"></canvas><span class="m-pick-name"></span><span class="m-pick-meta"></span><svg class="m-pick-chev" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M9 5l7 7-7 7" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+            </div>
+            <div class="m-row"><span class="m-rl" id="m-l-size">Size <output id="m-size-v" class="m-val"></output></span>
+              <div class="seg" id="m-size" role="radiogroup" aria-labelledby="m-l-size"></div>
+            </div>
+            <div class="m-row"><span class="m-rl" id="m-l-rough">Terrain <output id="m-rough-v" class="m-val"></output></span>
+              <div class="seg lv" id="m-rough" role="radiogroup" aria-labelledby="m-l-rough"></div>
+            </div>
+            <div class="m-row"><span class="m-rl" id="m-l-rich">Resources <output id="m-rich-v" class="m-val"></output></span>
+              <div class="seg lv" id="m-rich" role="radiogroup" aria-labelledby="m-l-rich"></div>
+            </div>
+            <p class="m-info" id="m-planet-info" aria-live="polite"></p>
+          </section>
+          <section class="m-sec m-rules" id="m-sec-rules" aria-labelledby="m-h-rules">
+            <h3 id="m-h-rules">Rules</h3>
+            <div class="tchips" role="group" aria-labelledby="m-h-rules">
+              <label class="tchip" id="m-nuke-row" data-info="Nuclear race: a few uranium deposits glow on the planet. Race for them and build the bomb."><input type="checkbox" id="m-nuke" role="switch"><span>Nuclear race</span></label>
+              <label class="tchip" id="m-wild-row" data-info="Wildlife (Colony): creature nests in the wilds raid what you build near them."><input type="checkbox" id="m-wild" role="switch"><span>Wildlife</span></label>
+              <label class="tchip" id="m-events-row" data-info="Planet events: dust storms, meteor showers, solar flares and a trader ship, every few minutes."><input type="checkbox" id="m-events" role="switch"><span>Planet events</span></label>
+              <label class="tchip" id="m-weather-row" data-info="Weather: now and then a storm to suit the biome (looks only; kept on this device)."><input type="checkbox" id="m-weather" role="switch"><span>Weather</span></label>
+              <label class="tchip" id="m-unlimited-row" data-info="Unlimited resources: for trying things out, 500 of everything and nothing waits on hauling. Rivals play as usual."><input type="checkbox" id="m-unlimited" role="switch"><span>Unlimited resources</span></label>
+            </div>
+            <div class="m-row" id="m-daynight-row"><span class="m-rl" id="m-l-tod">Time of day</span>
+              <div class="seg tod-seg" id="m-daynight" role="radiogroup" aria-labelledby="m-l-tod"><button type="button" role="radio" data-v="cycle">Cycle</button><button type="button" role="radio" data-v="day">Day</button><button type="button" role="radio" data-v="night">Night</button></div>
+            </div>
+            <p class="m-info" id="m-rules-info" aria-live="polite"></p>
+          </section>
+        </div>
       </div>
     </div>
-    <p class="mode-desc" id="m-mode-desc"></p>
-    <div class="field" id="m-players-field">
-      <span class="label">Players</span>
-      <div class="seg" id="m-players">
-        <button data-v="2" class="on">You vs 1</button>
-        <button data-v="3">Free-for-all · 3</button>
-      </div>
-      <p class="mode-desc" id="m-players-note" hidden></p>
+    <!-- Play / Start: one button for both views (big under the logo; the sticky bar of the setup). -->
+    <div class="m-go" id="m-go">
+      <button id="m-new" class="btn primary big"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M8 5.5v13l11-6.5z" fill="currentColor"/></svg><span id="m-new-label">Play</span></button>
+      <p class="m-sum" id="m-more-sum"></p>
     </div>
-    <div class="field" id="m-diff-field">
-      <span class="label">Rival</span>
-      <div class="seg" id="m-diff">
-        <button data-v="easy">Easy</button>
-        <button data-v="medium">Medium</button>
-        <button data-v="normal" class="on">Normal</button>
-        <button data-v="hard">Hard</button>
-      </div>
+    <div class="m-home-foot" id="m-home-foot">
+      <button type="button" id="m-customise" class="btn big m-cust"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h4M12 17h8" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/><circle cx="16" cy="7" r="2.4" fill="none" stroke="currentColor" stroke-width="2.2"/><circle cx="10" cy="17" r="2.4" fill="none" stroke="currentColor" stroke-width="2.2"/></svg>Customise game</button>
+      <nav class="m-links" aria-label="More">
+        <button type="button" id="m-missions">Missions</button>
+        <button type="button" id="m-import" title="Load a game saved to a file with Download save file (from the pause menu), on this device or another">Load a save file</button>
+        <button type="button" id="m-help">How to play</button>
+      </nav>
+      <input type="file" id="m-import-file" accept=".json,application/json" hidden>
+      <p class="hint" id="m-import-msg" hidden></p>
     </div>
-    <div class="field">
-      <span class="label">Map</span>
-      <div class="chips" id="m-shape" role="radiogroup" aria-label="Map shape"></div>
-      <p class="mode-desc" id="m-shape-desc"></p>
-    </div>
-    <div class="field">
-      <span class="label">Map size <output id="m-size-v" class="label-v"></output></span>
-      <div class="seg" id="m-size" role="radiogroup" aria-label="Map size"></div>
-    </div>
-    <details class="more" id="m-more">
-      <summary><span class="more-title">More settings</span><span class="more-sum" id="m-more-sum"></span></summary>
-      <div class="field">
-        <span class="label">Planet</span>
-        <div class="seed-row"><span id="m-seed" class="seed"></span><span class="seed-btns"><button id="m-saveplanet" class="btn small ghost" title="Keep this planet (with its map settings) to play again">Save</button><button id="m-reroll" class="btn small">New planet</button></span></div>
-        <div id="m-planets" class="planets" hidden></div>
-      </div>
-      <div class="field">
-        <span class="label">Biome</span>
-        <div class="seg" id="m-biome" role="radiogroup" aria-label="Biome"></div>
-      </div>
-      <div class="field">
-        <span class="label">Terrain</span>
-        <div class="chips" id="m-rough" role="radiogroup" aria-label="Terrain"></div>
-      </div>
-      <div class="field">
-        <span class="label">Resources</span>
-        <div class="chips" id="m-rich" role="radiogroup" aria-label="Resources"></div>
-      </div>
-      <div class="field" id="m-style-row">
-        <span class="label">Rival style</span>
-        <div class="chips" id="m-style" role="radiogroup" aria-label="Rival style"></div>
-        <p class="mode-desc" id="m-style-desc"></p>
-      </div>
-      <div class="toggles">
-        <label class="toggle-row" id="m-nuke-row"><span>Nuclear race<small id="m-nuke-v">Race for uranium and nuclear missiles</small></span><input type="checkbox" id="m-nuke" role="switch"></label>
-        <label class="toggle-row" id="m-wild-row"><span>Wildlife<small id="m-wild-v">Creature nests raid what you build near them</small></span><input type="checkbox" id="m-wild" role="switch"></label>
-        <label class="toggle-row" id="m-events-row"><span>Planet events<small id="m-events-v">Dust storms, meteor showers, solar flares and a trader ship, every few minutes</small></span><input type="checkbox" id="m-events" role="switch"></label>
-        <div class="toggle-row" id="m-daynight-row"><span>Time of day<small id="m-daynight-v">Morning to night, 12 minutes round (looks only)</small></span><div class="seg tod-seg" id="m-daynight"><button type="button" data-v="cycle">Cycle</button><button type="button" data-v="day">Day</button><button type="button" data-v="night">Night</button></div></div>
-        <label class="toggle-row" id="m-weather-row"><span>Weather<small id="m-weather-v">Now and then a sandstorm on the red desert, a rainstorm with fog in the forest, a blizzard on the poles (looks only)</small></span><input type="checkbox" id="m-weather" role="switch"></label>
-        <label class="toggle-row" id="m-unlimited-row"><span>Unlimited resources<small id="m-unlimited-v">For trying things out: 500 of everything</small></span><input type="checkbox" id="m-unlimited" role="switch"></label>
-      </div>
-    </details>
-    <button id="m-new" class="btn primary big">Start</button>
-    <button id="m-help" class="btn big ghost">How to play</button>
+  </div>
+</div>
+
+<!-- The map type and biome pickers: a centred overlay on a big screen, a bottom sheet on a phone. -->
+<div id="m-picker" class="m-picker" role="dialog" aria-modal="true" aria-labelledby="m-picker-title" hidden>
+  <div class="m-picker-sheet" id="m-picker-sheet">
+    <header class="m-picker-head">
+      <h2 id="m-picker-title"></h2>
+      <button type="button" class="sheet-close" id="m-picker-close" aria-label="Close"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/></svg></button>
+    </header>
+    <div class="m-picker-body" id="m-picker-body"></div>
   </div>
 </div>
 

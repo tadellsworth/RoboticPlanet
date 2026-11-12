@@ -20,6 +20,7 @@ function _pfEnsure(N) {
 
 /** Cost of crossing tile t while moving in direction (dx, dy); off-road tiles cost `offMul` times more. */
 function tileCost(t, dx, dy, offMul) {
+  if (S.tidal && S.tidal[t] && flatsClosing()) return 40; // the tide is about to cover the flats: keep off them
   const r = S.road[t];
   if (r) {
     // The wrong way up a one-way road: slow, plus a penalty so bots only do it when there's no other way.
@@ -28,6 +29,7 @@ function tileCost(t, dx, dy, offMul) {
   }
   if (S.bAt[t]) return passTile(t) ? ROAD_PREFERENCE / PAVE[throughPave(t)].speed : 1; // an Outpost a road runs through (as fast as the road into it), or the building a trip starts or ends at
   if (S.ramp[t]) return offMul / SLOPE_SPEED;
+  if (S.ford && S.ford[t] && S.terrain[t] === T_WATER) return FORD_COST * offMul; // wading a ford: slow
   return (S.res[t] ? 1.5 : 1) * offMul;
 }
 

@@ -278,6 +278,7 @@ function fxShake(ox, oy, z) {
     let s = 0;
     if (f.type === 'nuke' && f.t < 0.9) s = 11 * (1 - f.t / 0.9);
     else if (f.type === 'boom' && (f.r || 0) >= 0.9 && f.t < 0.35) s = Math.min(6, (f.r || 1) * 2.4) * (1 - f.t / 0.35);
+    else if (f.type === 'quake') { a = Math.max(a, (f.amp || 2) * Math.min(1, f.t * 2, (f.life - f.t) / 1.5) * (0.7 + 0.3 * Math.sin(S.time * 23))); continue; } // the ground itself shaking: everywhere on screen
     if (!s) continue;
     const sx = ox + f.x * z, sy = oy + f.y * z, d = Math.hypot(sx - R.w / 2, sy - R.h / 2) / Math.max(R.w, R.h);
     a = Math.max(a, s * clamp(1.2 - d * 1.6, 0, 1));
@@ -469,4 +470,77 @@ function drawFlakSearchlights(ctx, ox, oy, z, inView, pass) {
       fxGlow(ctx, tx, ty, z * 0.75, '#eef6ff', 0.65 * k);
     }
   }
+}
+
+/* ------------------------------------------------------------------ lava */
+
+/**
+ * Lava gives off its own light: a warm glow over every lava tile (and a halo round it), faint by day and
+ * strong at night, flickering slowly; stronger round the crater while the volcano erupts. The glow map is
+ * one pixel a tile, drawn scaled up so it's soft (rebuilt when land and water change).
+ */
+function drawLavaGlow(ctx, ox, oy, z) {
+  if (!S.lava && R.biome !== 'volcanic') return;
+  const key = (S.roadVer || 0) + ':' + S.W;
+  if (!R.lavaGlow || R.lavaGlow.S !== S || R.lavaGlow.key !== key) {
+    const c = document.createElement('canvas');
+    c.width = S.W; c.height = S.H;
+    const g = c.getContext('2d'), img = g.createImageData(S.W, S.H);
+    let any = false;
+    for (let t = 0; t < S.W * S.H; t++) {
+      if (S.terrain[t] !== T_WATER || !((S.lava && S.lava[t]) || R.biome === 'volcanic')) continue;
+      img.data[t * 4] = 255; img.data[t * 4 + 1] = 120; img.data[t * 4 + 2] = 30; img.data[t * 4 + 3] = 255; any = true;
+    }
+    g.putImageData(img, 0, 0);
+    R.lavaGlow = { S, key, c: any ? c : null };
+  }
+  if (!R.lavaGlow.c) return;
+  const night = fxNight(), V = S.volcano, erupt = V && V.erupting ? 1 : 0;
+  const flick = 0.85 + 0.1 * Math.sin(S.time * 1.7) + 0.05 * Math.sin(S.time * 5.3);
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  ctx.imageSmoothingEnabled = true;
+  ctx.globalAlpha = (0.1 + 0.55 * night) * flick;
+  ctx.drawImage(R.lavaGlow.c, ox, oy, S.W * z, S.H * z);
+  // The halo: the same map drawn bigger and fainter, spilling light onto the banks.
+  ctx.globalAlpha = (0.05 + 0.3 * night) * flick;
+  const pad = z * 0.9;
+  ctx.drawImage(R.lavaGlow.c, ox - pad, oy - pad, S.W * z + pad * 2, S.H * z + pad * 2);
+  if (V) {
+    const x = ox + V.x * z, y = oy + V.y * z, r = z * (V.crater + 1.5 + erupt * 2.5);
+    const gr = ctx.createRadialGradient(x, y, 0, x, y, r);
+    gr.addColorStop(0, `rgba(255,170,60,${(0.25 + 0.35 * night + 0.35 * erupt) * flick})`);
+    gr.addColorStop(1, 'rgba(255,80,20,0)');
+    ctx.globalAlpha = 1; ctx.fillStyle = gr;
+    ctx.fillRect(x - r, y - r, r * 2, r * 2);
+  }
+  ctx.restore();
+}
+
+/** Lava bombs in flight from an erupting volcano: glowing blobs on high arcs, trailing sparks and smoke, a shadow below. */
+function drawLavaBombs(ctx, ox, oy, z) {
+  const V = S.volcano;
+  if (!V || !V.bombs || !V.bombs.length) return;
+  ctx.save();
+  for (const b of V.bombs) {
+    const q = clamp((S.time - b.t0) / b.dur, 0, 1), H = 3.5 + b.dur;
+    const at = (k) => { const gx = lerp(b.x0, b.x1, k), gy = lerp(b.y0, b.y1, k); return [ox + gx * z, oy + (gy - Math.sin(k * Math.PI) * H) * z, ox + gx * z, oy + gy * z]; };
+    const [x, y, sx, sy] = at(q);
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.fillStyle = `rgba(0,0,0,${0.12 + 0.2 * q})`;
+    ctx.beginPath(); ctx.ellipse(sx, sy, z * 0.22, z * 0.11, 0, 0, Math.PI * 2); ctx.fill();
+    for (let k = 1; k <= 6; k++) {
+      const qq = q - k * 0.035;
+      if (qq <= 0) break;
+      const [tx, ty] = at(qq);
+      ctx.fillStyle = `rgba(70,60,56,${0.22 * (1 - k / 7)})`;
+      ctx.beginPath(); ctx.arc(tx, ty, z * (0.1 + k * 0.03), 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.globalCompositeOperation = 'lighter';
+    const g = ctx.createRadialGradient(x, y, 0, x, y, z * 0.6);
+    g.addColorStop(0, 'rgba(255,240,180,0.95)'); g.addColorStop(0.25, 'rgba(255,150,40,0.8)'); g.addColorStop(1, 'rgba(255,60,10,0)');
+    ctx.fillStyle = g;
+    ctx.fillRect(x - z * 0.6, y - z * 0.6, z * 1.2, z * 1.2);
+  }
+  ctx.restore();
 }

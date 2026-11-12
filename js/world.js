@@ -62,7 +62,8 @@ function generateMap(seed, W, H, cfg) {
     }
   };
   // Crater and Plateau maps need cliffs: at least three levels, the rest kept flat on Flat terrain.
-  const L = Math.max(TPR.levels, SH.minLevels || 1), flatRest = TPR.levels === 1 && L > 1;
+  // Tidal flats and River delta are flat (low islands and a delta plain), whatever the Terrain setting.
+  const L = SH.flat ? 1 : Math.max(TPR.levels, SH.minLevels || 1), flatRest = TPR.levels === 1 && L > 1;
   const thresholds = [];
   const step = L >= 5 ? 0.07 : L >= 4 ? 0.085 : 0.1;
   for (let k = 0; k < L - 1; k++) thresholds.push(0.5 + (k - (L - 2) / 2) * step);
@@ -432,6 +433,12 @@ function generateMap(seed, W, H, cfg) {
   // massif, a ridge), which a link never cuts through.
   let links = [];
   const wall = new Uint8Array(N);
+  // Tiles with something special about them (returned with the map): lava (water you can't sail),
+  // fords (shallow water bots can wade), tidal flats (sea at high tide, sand at low tide) and the
+  // fault (ground until the earthquake opens it). Each is set with its twin.
+  const lavaA = new Uint8Array(N), fordA = new Uint8Array(N), tidalA = new Uint8Array(N), faultA = new Uint8Array(N);
+  const flag = (arr, t, v = 1) => { arr[t] = v; if (np === 2) arr[mir(t)] = v; };
+  let volcanoAt = null, faultInfo = null;
   const nearBase = (i, j, r) => bases.some((b) => dist2(i, j, b.x, b.y) <= r * r);
   const put = (t, kind, lv, fixed) => {
     for (const u of np === 2 ? [t, mir(t)] : [t]) {
@@ -587,6 +594,169 @@ function generateMap(seed, W, H, cfg) {
     }
     links = [[3, half], [W - 4, half]];
   };
+
+  // River delta: a wide braided river along the middle of the planet, with sandbar islets in it (the
+  // middle one rich), shallow fords bots can wade across (trucks need a bridge), fertile banks, and a
+  // side channel branching off toward each flank. Flat ground (see SH.flat).
+  const deltaShape = () => {
+    const cr = makeRng(seed ^ 0x8d9e67), p1 = cr() * 6.28, p2 = cr() * 6.28;
+    // How far the river reaches into the bottom half at column i (its top half is the twin of column W-1-i's).
+    const hw = (i) => clamp(Math.round(3.2 + 1.1 * Math.sin(i * 0.23 + p1) + 0.7 * Math.sin(i * 0.61 + p2)), 2, 5);
+    for (let i = 0; i < W; i++) for (let j = half; j < half + hw(i); j++) put(id(i, j), T_WATER, undefined, true);
+    // A side channel off each flank: from the river out toward the bottom-left edge (its twin, top right).
+    const sx0 = Math.round(W * 0.34), sy0 = half + hw(Math.round(W * 0.34)) - 1, ex = 0, ey = Math.round(half + (H - half) * 0.62);
+    let x = sx0, y = sy0, a = Math.atan2(ey - sy0, ex - sx0);
+    const side = [];
+    for (let k = 0; k < 400 && x > 0.5 && y < H - 3; k++) {
+      a += (cr() - 0.5) * 0.35 + 0.15 * (Math.atan2(ey - y, ex - x) - a);
+      x += Math.cos(a) * 0.5; y += Math.sin(a) * 0.5;
+      const i = Math.round(x), j = Math.round(y);
+      if (i < 0 || j < half || j >= H || nearBase(i, j, 9)) continue;
+      for (const [di, dj] of [[0, 0], [0, 1], [1, 0]]) {
+        const u = i + di, v = j + dj;
+        if (u >= 0 && u < W && v >= half && v < H && !nearBase(u, v, 8.5)) { put(id(u, v), T_WATER, undefined, true); side.push(id(u, v)); }
+      }
+    }
+    // Islets midstream: one in the middle with oil and crystal, and a couple more off to the sides.
+    const islet = (x0, x1, j0, j1) => { for (let j = j0; j <= j1; j++) for (let i = x0; i <= x1; i++) if (j >= half) put(id(i, j), T_GROUND, baseLevel, true); };
+    islet(ca - 2, cb + 2, half, half);
+    stampRes(cr, ccx + 0.5, half, 1.2, R_OIL, 0.9);
+    stampRes(cr, ccx - 1.5, half, 0.8, R_CRYSTAL, 0.95);
+    const ix = Math.round(W * (0.16 + cr() * 0.08));
+    if (hw(ix) >= 4 && hw(ix + 3) >= 4) { islet(ix, ix + 3, half + 1, half + 1); stampRes(cr, ix + 1.5, half + 1, 1.2, R_ORE, 0.85); }
+    // Fords: a pair of shallow crossings right across the river (each column with its twin), and one
+    // across each side channel.
+    const fc = Math.round(W * (0.42 + cr() * 0.03));
+    for (const c of [fc, fc + 1, W - 2 - fc, W - 1 - fc]) for (let j = half; j < half + hw(c); j++) if (terrain[id(c, j)] === T_WATER) flag(fordA, id(c, j));
+    if (side.length > 12) {
+      const k0 = Math.floor(side.length * 0.55), c0 = side[k0], ci = c0 % W, cj = (c0 / W) | 0;
+      for (const t of side) { const i = t % W, j = (t / W) | 0; if (Math.abs(i - ci) <= 1 && Math.abs(j - cj) <= 1) flag(fordA, t); }
+    }
+    // Fertile banks.
+    for (let i = 0; i < W; i++) { const j = half + hw(i); if (j < H && terrain[id(i, j)] === T_GROUND && cr() < 0.55) putRes(id(i, j), F_FERTILE); }
+    links = [[fc, half + hw(fc)], [W - 1 - fc, half + hw(W - 1 - fc)]];
+  };
+  // Volcano: a cone in the middle of the planet, rising level by level to a crater of lava, with lava
+  // rivers running down its flanks (bridge them, or go round where they end) and the richest deposits
+  // on its slopes. It erupts every few minutes (see updateVolcano).
+  const volcanoShape = () => {
+    const cr = makeRng(seed ^ 0x9eaf13), sV = seed * 53 + 29;
+    const rS = Math.min(W, H) * 0.3, rC = Math.max(2.2, rS * 0.17), top = L - 1, rings = Math.max(1, top - baseLevel);
+    for (let j = half; j < H; j++) for (let i = 0; i < W; i++) {
+      const t = id(i, j), d = dist(i, j, ccx, ccy) * (1 + 0.12 * (fbm(i / 4, j / 4, sV, 2) - 0.5));
+      if (d <= rC) { put(t, T_WATER, undefined, true); flag(lavaA, t); continue; }
+      if (d > rS) continue;
+      const lv = baseLevel + clamp(Math.ceil(rings * (1 - (d - rC) / (rS - rC)) + 0.001), 0, rings);
+      if (terrain[t] === T_ROCK && d > rS * 0.55 && fbm(i / 3, j / 3, sV + 3, 2) > 0.55) continue; // a few crags on the lower slopes
+      put(t, T_GROUND, lv);
+    }
+    // Lava rivers: two down the bottom flanks (their twins down the top ones), each ending in a pool.
+    for (const a0 of [Math.PI / 2 + 0.75 + cr() * 0.35, Math.PI / 2 - 0.75 - cr() * 0.35]) {
+      let a = a0, r = rC - 0.5, x = ccx + Math.cos(a) * r, y = ccy + Math.sin(a) * r;
+      const rEnd = rS * (1.45 + cr() * 0.25);
+      for (let k = 0; k < 300 && r < rEnd; k++) {
+        a += (cr() - 0.5) * 0.3 + 0.2 * (a0 - a);
+        x += Math.cos(a) * 0.5; y += Math.sin(a) * 0.5; r = dist(x, y, ccx, ccy);
+        const i = Math.round(x), j = Math.round(y);
+        if (i < 4 || i > W - 5 || j > H - 6 || nearBase(i, j, 10)) break;
+        for (const [di, dj] of [[0, 0], [1, 0]]) { const u = id(i + di, j + dj); put(u, T_WATER, undefined, true); flag(lavaA, u); }
+      }
+      for (let j = Math.round(y) - 2; j <= Math.round(y) + 2; j++) for (let i = Math.round(x) - 2; i <= Math.round(x) + 2; i++) {
+        if (i >= 4 && i <= W - 5 && j >= half && j <= H - 6 && dist2(i, j, x, y) <= 2.6 && !nearBase(i, j, 10)) { put(id(i, j), T_WATER, undefined, true); flag(lavaA, id(i, j)); }
+      }
+    }
+    // Rich fields on the slopes, between the rivers.
+    const slope = [[R_ORE, 1.7], [R_CRYSTAL, 1.4], [R_ORE, 1.3], [R_BOULDER, 1.4]];
+    if (cfg.nuke) slope.push([R_URANIUM, 0.6]);
+    slope.forEach(([type, rad], k) => {
+      for (let tries = 0; tries < 80; tries++) {
+        const a = Math.PI * (0.08 + cr() * 0.84), r = rS * (0.45 + cr() * 0.4), x = ccx + Math.cos(a) * r, y = ccy + Math.sin(a) * r;
+        const t = id(Math.round(x), Math.round(y));
+        if (y < half || terrain[t] !== T_GROUND || lavaA[t] || res[t]) continue;
+        stampRes(cr, x, y, rad, type, type === R_URANIUM ? 1 : 0.85);
+        break;
+      }
+    });
+    volcanoAt = { x: ccx + 0.5, y: ccy + 0.5, r: rS, crater: rC };
+    links = [[2, half], [W - 3, half]];
+  };
+  // Fault line: a jagged crack across the middle of the planet. It's plain ground at first (a faint scar
+  // marks it); an earthquake later opens it into a chasm (see updateQuake), all but a couple of rock
+  // arches. The band along it is kept level so both sides stay joined to their arches afterwards.
+  const faultShape = () => {
+    const cr = makeRng(seed ^ 0xa1b2c3), c = (W - 1) / 2, P = W * (0.85 + cr() * 0.3), ph = cr() < 0.5 ? 1 : -1;
+    const f = (i) => ph * (3.2 * Math.sin((2 * Math.PI * (i - c)) / P) + 0.9 * Math.sin((2 * Math.PI * (i - c)) / 5.3));
+    const hw = (i) => 1.15 + 0.45 * Math.abs(Math.sin((i - c) * 0.37));
+    const ax = Math.round(W * (0.2 + cr() * 0.08));
+    const arch = (i) => i === ax || i === ax + 1 || i === W - 1 - ax || i === W - 2 - ax;
+    for (let j = half; j < H; j++) for (let i = 0; i < W; i++) {
+      const d = Math.abs(j + 0.5 - half - f(i)), t = id(i, j);
+      if (d <= hw(i)) { put(t, T_GROUND, baseLevel, !arch(i)); if (!arch(i)) flag(faultA, t); }
+      else if (d <= hw(i) + 3 && terrain[t] === T_GROUND) for (const u of [t, mir(t)]) elev[u] = baseLevel;
+    }
+    // ...and the same for the rows above the middle (the twin of each is set as it goes).
+    for (let j = 0; j < half; j++) for (let i = 0; i < W; i++) {
+      const d = Math.abs(j + 0.5 - half - f(i)), t = id(i, j);
+      if (d <= hw(i)) { put(t, T_GROUND, baseLevel, !arch(i)); if (!arch(i)) flag(faultA, t); }
+      else if (d <= hw(i) + 3 && terrain[t] === T_GROUND) for (const u of [t, mir(t)]) elev[u] = baseLevel;
+    }
+    const below = (i) => Math.min(H - 2, Math.round(half + f(i) + hw(i) + 1.5));
+    links = [[ax, below(ax)], [W - 1 - ax, below(W - 1 - ax)]];
+    faultInfo = { f, hw, arches: [ax, W - 2 - ax] };
+  };
+  // Canyon maze: the land between the bases is a labyrinth of narrow canyons cut through rock, with a
+  // few loops and plenty of dead ends, each holding something worth the trip. Two ways (and their
+  // twins) lead through the middle. Tunnels can cut through a wall, at a price.
+  const mazeShape = () => {
+    const cr = makeRng(seed ^ 0x7c8d55), cw = W >= 44 ? 3 : 2, cell = cw + 1;
+    const cols = Math.floor((W - 1) / cell), x0 = Math.floor((W - (cols * cell - 1)) / 2);
+    const rows = Math.floor((H - 1 - (half + 1)) / cell);
+    const cx = (c) => x0 + c * cell, cy = (r) => half + 1 + r * cell, home = 8.5;
+    for (let j = half; j < H; j++) for (let i = 0; i < W; i++) if (!nearBase(i, j, home)) put(id(i, j), T_ROCK, undefined, true);
+    const open = (i, j) => { if (i >= 0 && j >= half && i < W && j < H) put(id(i, j), T_GROUND, baseLevel); };
+    const room = (c, r) => { for (let j = 0; j < cw; j++) for (let i = 0; i < cw; i++) open(cx(c) + i, cy(r) + j); };
+    const doors = new Uint8Array(cols * rows); // bit 1: east, 2: south (the wall between it and that neighbour is open)
+    const seen = new Uint8Array(cols * rows), stack = [];
+    const startC = clamp(Math.floor((bx - x0) / cell), 0, cols - 1), startR = rows - 1;
+    stack.push(startR * cols + startC); seen[startR * cols + startC] = 1;
+    while (stack.length) {
+      const k = stack[stack.length - 1], c = k % cols, r = (k / cols) | 0;
+      const nb = [[c + 1, r], [c - 1, r], [c, r + 1], [c, r - 1]].filter(([a, b]) => a >= 0 && b >= 0 && a < cols && b < rows && !seen[b * cols + a]);
+      if (!nb.length) { stack.pop(); continue; }
+      const [a, b] = nb[Math.floor(cr() * nb.length)], n = b * cols + a;
+      if (a > c) doors[k] |= 1; else if (a < c) doors[n] |= 1; else if (b > r) doors[k] |= 2; else doors[n] |= 2;
+      seen[n] = 1; stack.push(n);
+    }
+    // A few extra openings so there's more than one way round.
+    for (let k = 0; k < cols * rows; k++) { if (cr() < 0.1 && k % cols < cols - 1) doors[k] |= 1; if (cr() < 0.08 && ((k / cols) | 0) < rows - 1) doors[k] |= 2; }
+    for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) {
+      room(c, r);
+      const k = r * cols + c;
+      if (doors[k] & 1) for (let j = 0; j < cw; j++) open(cx(c) + cw, cy(r) + j);
+      if (doors[k] & 2) for (let i = 0; i < cw; i++) open(cx(c) + i, cy(r) + cw);
+    }
+    // The ways through the middle: two cells' columns (each with its twin) open across the middle line.
+    const cA = clamp(Math.round(cols * (0.18 + cr() * 0.1)), 0, cols - 1);
+    for (const c of [cA, cols - 1 - cA]) for (let i = 0; i < cw; i++) open(cx(c) + i, half);
+    // Dead ends (one way in), away from the base, hold the riches.
+    const kinds = [R_ORE, R_CRYSTAL, R_BOULDER, R_OIL, R_ORE, F_FERTILE, R_CRYSTAL, R_STALK];
+    let n = 0;
+    for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) {
+      const k = r * cols + c;
+      let ways = 0;
+      if (doors[k] & 1) ways++;
+      if (doors[k] & 2) ways++;
+      if (c > 0 && doors[k - 1] & 1) ways++;
+      if (r > 0 && doors[k - cols] & 2) ways++;
+      if (r === 0 && (c === cA || c === cols - 1 - cA)) ways++;
+      const mx = cx(c) + (cw - 1) / 2, my = cy(r) + (cw - 1) / 2;
+      if (ways !== 1 || nearBase(mx, my, home + 3)) continue;
+      const type = cfg.nuke && n % 7 === 6 ? R_URANIUM : kinds[n % kinds.length];
+      stampRes(cr, mx, my, type === R_URANIUM ? 0.5 : cw * 0.55, type, 0.9);
+      n++;
+    }
+    links = [[cx(cA), half], [cx(cols - 1 - cA), half]];
+  };
   // The cheapest way by land from the base to (tx, ty) on the bottom half, round the shape's barrier,
   // opened up two tiles wide where it isn't ground (a ford, a cut through crags); a long way round on
   // open ground is preferred to cutting more than a tile or two.
@@ -619,6 +789,10 @@ function generateMap(seed, W, H, cfg) {
     else if (SH.oases) oasesShape();
     else if (SH.cross) crossShape();
     else if (SH.lakes) lakesShape();
+    else if (SH.delta) deltaShape();
+    else if (SH.volcano) volcanoShape();
+    else if (SH.fault) faultShape();
+    else if (SH.maze) mazeShape();
     else return;
     for (const [x, y] of links) linkBase(x, y);
     mirror();
@@ -632,7 +806,7 @@ function generateMap(seed, W, H, cfg) {
     while (q.length) {
       const t = q.pop();
       orth(t, (u) => {
-        if (seen[u] || !ground(u)) return;
+        if (seen[u] || !(ground(u) || fordA[u])) return;
         if (useElev && elev[u] !== elev[t] && !(Math.abs(elev[u] - elev[t]) === 1 && (ramp[u] || ramp[t]))) return;
         seen[u] = 1; q.push(u);
       });
@@ -1079,8 +1253,116 @@ function generateMap(seed, W, H, cfg) {
       for (let k = 0; k < spots.length && have < target; k++) { res[spots[k]] = R_BOULDER; amt[spots[k]] = per; have += per; }
     }
   }
-  for (let t = 0; t < N; t++) if (terrain[t] !== T_GROUND) fert[t] = 0;
-  return { terrain, res, amt, grow, elev, ramp, fert, bases, choke: choke ? chokeInfo.map((ts) => ts.slice()) : null };
+  // Fault line: once the fault opens, each base must still reach both arches. A level way is laid from
+  // the base to each arch's near end (round the fault, never over it), cutting through crags and cliffs
+  // if it has to, with its twin from the other base to the arches' far ends.
+  if (faultInfo && np === 2) {
+    const ends = [];
+    for (const c of faultInfo.arches) {
+      let lo = -1, hi = H;
+      for (let j = 0; j < H; j++) if (Math.abs(j + 0.5 - half - faultInfo.f(c)) <= faultInfo.hw(c)) { lo = Math.max(lo, j); hi = Math.min(hi, j); }
+      if (lo >= 0) ends.push(id(c, Math.min(H - 1, lo + 1)));
+    }
+    for (const goal of ends) {
+      const start = id(bx, by), cost = new Float64Array(N).fill(Infinity), from = new Int32Array(N).fill(-1), heap = new MinHeap();
+      cost[start] = 0; heap.push(start, 0);
+      while (heap.size) {
+        const t = heap.pop();
+        if (t === goal) break;
+        orth(t, (u) => {
+          if (faultA[u]) return;
+          const c = cost[t] + (terrain[u] === T_GROUND ? (elev[u] === baseLevel ? 1 : 4) : terrain[u] === T_ROCK ? 9 : 12);
+          if (c < cost[u]) { cost[u] = c; from[u] = t; heap.push(u, c); }
+        });
+      }
+      if (from[goal] < 0) continue;
+      for (let t = goal; t >= 0; t = from[t]) {
+        for (const u of [t, mir(t)]) { terrain[u] = T_GROUND; elev[u] = baseLevel; ramp[u] = 0; res[u] = R_NONE; amt[u] = 0; fert[u] = 0; }
+        if (t === start) break;
+      }
+    }
+    // The arches themselves: level ground.
+    for (const c of faultInfo.arches) for (const i of [c, c + 1]) for (let j = 0; j < H; j++) {
+      if (Math.abs(j + 0.5 - half - faultInfo.f(i)) > faultInfo.hw(i) + 1) continue;
+      const t = id(i, j);
+      if (!faultA[t]) for (const u of [t, mir(t)]) { terrain[u] = T_GROUND; elev[u] = baseLevel; ramp[u] = 0; res[u] = R_NONE; }
+    }
+  }
+  // Tidal flats: sandbars join the islands, laid like the cheapest set of links that joins them all
+  // (shortest first), each 2 tiles wide and laid with its twin. They're sea at high tide and sand at low
+  // tide (see updateTide); nothing can be built on them.
+  if (SH.tidal) {
+    const comp = new Int32Array(N).fill(-1), coasts = [];
+    // (Open ground only: a sandbar never runs ashore onto crags.)
+    for (let t = 0; t < N; t++) {
+      if (terrain[t] !== T_GROUND || comp[t] >= 0) continue;
+      const c = coasts.length, q = [t], coast = [];
+      comp[t] = c;
+      for (let h = 0; h < q.length; h++) {
+        let shore = false;
+        orth(q[h], (u) => { if (terrain[u] === T_WATER) shore = true; else if (terrain[u] === T_GROUND && comp[u] < 0) { comp[u] = c; q.push(u); } });
+        if (shore) coast.push(q[h]);
+      }
+      coasts.push(q.length >= 6 ? coast : []);
+    }
+    const edges = [];
+    for (let a1 = 0; a1 < coasts.length; a1++) for (let b1 = a1 + 1; b1 < coasts.length; b1++) {
+      let best = Infinity, ta = -1, tb = -1;
+      for (const u of coasts[a1]) for (const v of coasts[b1]) {
+        const d = dist2(u % W, (u / W) | 0, v % W, (v / W) | 0);
+        if (d < best || (d === best && u + v < ta + tb)) { best = d; ta = u; tb = v; }
+      }
+      if (ta >= 0) edges.push({ a: a1, b: b1, d: best, ta, tb });
+    }
+    edges.sort((e1, e2) => e1.d - e2.d || e1.ta - e2.ta);
+    const parent = coasts.map((_, k) => k), find = (k) => { while (parent[k] !== k) k = parent[k] = parent[parent[k]]; return k; };
+    const trng = makeRng(seed ^ 0x7d1de);
+    const bar = (ta, tb) => {
+      let x = ta % W, y = (ta / W) | 0;
+      const ex = tb % W, ey = (tb / W) | 0;
+      for (let k = 0; k < 200 && (Math.round(x) !== ex || Math.round(y) !== ey); k++) {
+        const d = dist(x, y, ex, ey);
+        x += (ex - x) / d * 0.6 + (trng() - 0.5) * 0.35; y += (ey - y) / d * 0.6 + (trng() - 0.5) * 0.35;
+        const i = Math.round(x), j = Math.round(y);
+        for (const [di, dj] of [[0, 0], [1, 0], [0, 1]]) {
+          const u = i + di, v = j + dj;
+          if (u >= 0 && v >= 0 && u < W && v < H && terrain[id(u, v)] === T_WATER) flag(tidalA, id(u, v));
+        }
+      }
+    };
+    for (const e of edges) {
+      const ra = find(e.a), rb = find(e.b);
+      if (ra === rb) continue;
+      parent[ra] = rb;
+      bar(e.ta, e.tb);
+      // Its twin joins the twin islands, so join those in the union too.
+      const ma = comp[mir(e.ta)], mb = comp[mir(e.tb)];
+      if (ma >= 0 && mb >= 0) { const r1 = find(ma), r2 = find(mb); if (r1 !== r2) parent[r1] = r2; }
+    }
+    for (let t = 0; t < N; t++) if (tidalA[t]) { res[t] = R_NONE; amt[t] = 0; elev[t] = 0; }
+  }
+  for (let t = 0; t < N; t++) {
+    if (terrain[t] !== T_GROUND) fert[t] = 0;
+    if (terrain[t] !== T_WATER) { lavaA[t] = 0; fordA[t] = 0; tidalA[t] = 0; }
+    if (faultA[t] && terrain[t] === T_GROUND) { res[t] = R_NONE; amt[t] = 0; fert[t] = 0; }
+  }
+  // Lava rivers and fords sit level with their banks.
+  for (let t = 0; t < N; t++) {
+    if (!fordA[t]) continue;
+    let lv = -1;
+    orth(t, (u) => { if (terrain[u] === T_GROUND && (lv < 0 || elev[u] < lv)) lv = elev[u]; });
+    if (lv >= 0) elev[t] = lv;
+  }
+  // The volcano's slopes hold the planet's richest deposits.
+  if (volcanoAt) for (let t = 0; t < N; t++) {
+    if (!res[t] || dist(t % W, (t / W) | 0, ccx, ccy) > volcanoAt.r) continue;
+    if (RICH_TYPES.includes(res[t])) amt[t] = clamp(Math.round(amt[t] * 1.6), 1, 255);
+  }
+  const any = (arr) => { for (let t = 0; t < N; t++) if (arr[t]) return arr; return null; };
+  return {
+    terrain, res, amt, grow, elev, ramp, fert, bases, choke: choke ? chokeInfo.map((ts) => ts.slice()) : null,
+    lava: any(lavaA), ford: any(fordA), tidal: any(tidalA), fault: any(faultA), volcano: volcanoAt,
+  };
 }
 
 /* ------------------------------------------------------------------ new game */
@@ -1181,6 +1463,7 @@ function newGame(opts) {
   S = {
     v: 1, mode, seed, W, H, settings, difficulty: diff, time: 0, nextId: 1, winner: -1, milestone: 0,
     terrain: m.terrain, res: m.res, amt: m.amt, grow: m.grow, elev: m.elev, ramp: m.ramp, fert: m.fert, choke: m.choke,
+    lava: m.lava || null, ford: m.ford || null, tidal: m.tidal || null, fault: m.fault || null,
     road: new Uint8Array(W * H), rail: new Uint8Array(W * H), pave: new Uint8Array(W * H), wear: new Uint16Array(W * H), paveMark: new Uint8Array(W * H), oneRoad: true, roadVer: 0, lights: {}, over: {}, scorch: {},
     plan: new Uint8Array(W * H), planVer: 0, paveRes: {}, owe: new Uint8Array(W * H), railPlan: new Uint8Array(W * H), planQ: [], junPlan: {},
     pipe: new Uint8Array(W * H), pipePlan: new Uint8Array(W * H), pipeVer: 0,
@@ -1201,6 +1484,7 @@ function newGame(opts) {
     dirtyTiles: [], territoryVer: 0, tick: 0, hist: newHistory(settings.players),
   };
   if (opts.autoplay) S.players[0].mult = DIFFICULTY[diff].mult;
+  mapEventsStart(m);
   // Planet events (see EVENTS): the first one comes after EVENT_FIRST seconds.
   if (opts.events) { S.events = true; S.event = null; S.nextEvent = EVENT_FIRST; }
   // Unlimited resources (a testing option on the new-game screen): see unlimitedTopUp.
@@ -1263,7 +1547,7 @@ function makeDecor() {
   const sky = !!(S.settings && SHAPE_PRESETS[S.settings.shape || 0] && SHAPE_PRESETS[S.settings.shape || 0].sky);
   for (let j = 0; j < H; j++) for (let i = 0; i < W; i++) {
     const t = j * W + i;
-    if (S.terrain[t] !== T_GROUND || S.res[t] || S.fert[t] || S.ramp[t] || S.road[t] || S.plan[t] || S.bAt[t]) continue;
+    if (S.terrain[t] !== T_GROUND || S.res[t] || S.fert[t] || S.ramp[t] || S.road[t] || S.plan[t] || S.bAt[t] || (S.tidal && S.tidal[t])) continue;
     if (j > 0 && S.terrain[t - W] === T_GROUND && S.elev[t - W] > S.elev[t]) continue; // the foot of a cliff
     const patch = fbm(i / 5, j / 5, sd + 77, 2), dens = sky && S.elev[t] <= 1 ? Math.max(0.16, dens0 * 2.5) : dens0;
     if (hash2(i, j, sd + 501) > dens * (0.25 + 1.5 * patch)) continue;
@@ -1304,11 +1588,12 @@ function starterRoads(L) {
  * only if either tile is a ramp. Cliffs of more than one level are never climbable.
  */
 function canStep(a, b) {
-  if (S.terrain[a] !== T_GROUND || S.terrain[b] !== T_GROUND) {
+  const ga = groundLike(a), gb = groundLike(b);
+  if (!ga || !gb) {
     // Bridges and tunnels (road over water or through rock) join any neighbour, whatever its level,
     // except that a tunnel can't come out on ground more than two levels from the crag it runs
     // through: no digging down a sheer cliff (Sky islands' canyon walls).
-    if (!((S.terrain[a] === T_GROUND || S.road[a] > 0) && (S.terrain[b] === T_GROUND || S.road[b] > 0))) return false;
+    if (!((ga || S.road[a] > 0) && (gb || S.road[b] > 0))) return false;
     if (S.terrain[a] === T_ROCK && S.terrain[b] === T_GROUND && Math.abs(S.elev[b] - S.elev[a]) > 2) return false;
     if (S.terrain[b] === T_ROCK && S.terrain[a] === T_GROUND && Math.abs(S.elev[a] - S.elev[b]) > 2) return false;
     return true;
@@ -1407,7 +1692,10 @@ function throughPave(t) {
 }
 
 /** Can bots walk on tile t? Open ground, or a bridge or tunnel. */
-function walkable(t) { return S.terrain[t] === T_GROUND || S.road[t] > 0; }
+function walkable(t) { return S.terrain[t] === T_GROUND || S.road[t] > 0 || (S.ford !== null && S.ford !== undefined && S.ford[t] === 1); }
+
+/** Open ground, or a ford (shallow water bots can wade across: River delta). */
+function groundLike(t) { return S.terrain[t] === T_GROUND || (S.ford !== null && S.ford !== undefined && S.ford[t] === 1); }
 
 /** Is tile t water or rock, where a road would be a bridge or tunnel? */
 function crossTile(t) { return S.terrain[t] !== T_GROUND; }
@@ -1917,6 +2205,7 @@ function canPlace(owner, type, i, j, skipBlockCheck) {
   const land = landRule(owner, type, t);
   if (land) return { ok: false, reason: land };
   if (S.terrain[t] !== T_GROUND) return { ok: false, reason: 'The ground here is not buildable.' };
+  if (S.tidal && S.tidal[t]) return { ok: false, reason: 'Tidal flats: the sea covers this at high tide.' };
   if (scorched(t)) return { ok: false, reason: 'This ground is still scorched from a nuclear blast.' };
   if (def.nuke && !nukeOn()) return { ok: false, reason: 'Only in a Nuclear race.' };
   if (def.pump) {
@@ -2104,7 +2393,7 @@ function placeSite(owner, type, i, j, cost, fromStore) {
 function canRoad(owner, i, j) {
   if (!inMap(i, j)) return false;
   const t = tIdx(i, j);
-  if (S.bAt[t] || S.resRes[t] || scorched(t) || runwayAt(t) || postAt(t)) return false;
+  if (S.bAt[t] || S.resRes[t] || scorched(t) || runwayAt(t) || postAt(t) || (S.tidal && S.tidal[t])) return false;
   if (S.owner[t] === owner) return true;
   // No-one's ground your bots can reach: roads can run anywhere out there (a rival's ground is theirs).
   if (S.owner[t] < 0 && !crossTile(t) && reachZone(owner, t)) return true;
@@ -2311,6 +2600,7 @@ function pipeBlocked(owner, t) {
   if (S.owner[t] >= 0 && S.owner[t] !== owner) return 'A rival holds that ground: pipe only runs on yours or no-one\'s.';
   if (S.owner[t] < 0 && (crossTile(t) || !reachZone(owner, t))) return crossTile(t) ? 'Pipe can\'t cross open water or a chasm outside your border.' : 'Your bots can\'t reach there yet.';
   if (scorched(t)) return 'The ground there is still scorched.';
+  if (S.tidal && S.tidal[t]) return 'Tidal flats: the sea covers this at high tide.';
   if (postAt(t)) return 'A Trade Post stands here.';
   if (S.pipe[t] && S.pipe[t] !== owner + 1) return 'Someone else\'s pipe runs here.';
   return '';
@@ -2911,18 +3201,19 @@ function arcFx(x, y, x2, y2, color) { addFx('arc', x, y, { x2, y2, color: color 
 /* ------------------------------------------------------------------ save / load */
 
 const SAVE_KEY = 'botfall.save.v1'; // the game's first name: kept so saves carry over
+const MAP_LAYERS = ['lava', 'ford', 'tidal', 'fault']; // optional per-tile layers some map types have (null otherwise)
 const TYPED_FIELDS = {
   terrain: Uint8Array, res: Uint8Array, amt: Uint8Array, grow: Float32Array, road: Uint8Array, owner: Int8Array,
   resRes: Uint8Array, elev: Uint8Array, ramp: Uint8Array, fert: Uint8Array, pave: Uint8Array, plan: Uint8Array,
   wear: Uint16Array, paveMark: Uint8Array, decor: Uint8Array, rail: Uint8Array, owe: Uint8Array, railPlan: Uint8Array,
-  pipe: Uint8Array, pipePlan: Uint8Array, wown: Int8Array,
+  pipe: Uint8Array, pipePlan: Uint8Array, wown: Int8Array, lava: Uint8Array, ford: Uint8Array, tidal: Uint8Array, fault: Uint8Array,
 };
 
 function serializeGame() {
   const o = {};
   for (const k in S) {
     if (k === 'byId' || k === 'fx' || k === 'decals' || k === 'msgs' || k === 'dirtyTiles' || k === 'bAt' || k === 'zone') continue;
-    o[k] = TYPED_FIELDS[k] ? Array.from(S[k], (v) => (k === 'grow' ? Math.round(v * 100) / 100 : v)) : S[k];
+    o[k] = TYPED_FIELDS[k] && S[k] ? Array.from(S[k], (v) => (k === 'grow' ? Math.round(v * 100) / 100 : v)) : S[k];
   }
   o.buildings = S.buildings.filter((b) => !b.dead);
   o.bots = S.bots.filter((u) => !u.dead);
@@ -2977,7 +3268,7 @@ function deserializeGame(json) {
   if (!o.plan) o.plan = new Array(o.W * o.H).fill(0);
   o.planVer = (o.planVer || 0) + 1;
   o.paveRes = {};
-  for (const k in TYPED_FIELDS) o[k] = TYPED_FIELDS[k].from(o[k]);
+  for (const k in TYPED_FIELDS) o[k] = MAP_LAYERS.includes(k) && !o[k] ? null : TYPED_FIELDS[k].from(o[k]); // (a map's optional layers are null when it has none)
   o.hist = o.hist || newHistory();
   for (const P of o.players) { P.made = P.made || {}; P.madeBots = P.madeBots || {}; P.stats.outposts = P.stats.outposts || 0; P.stats.startBots = P.stats.startBots ?? 18; }
   o.fx = []; o.decals = []; o.msgs = []; o.dirtyTiles = [];
@@ -3115,6 +3406,7 @@ function railBlocked(owner, t) {
   }
   if (S.bAt[t] && !(via && via.type === 'viaduct') && !(via && via.type === 'gate' && via.owner === owner)) return 'There is a building here.'; // track runs through your own Gates
   if (S.res[t]) return 'Clear the resources here first.';
+  if (S.tidal && S.tidal[t]) return 'Tidal flats: the sea covers this at high tide.';
   if (scorched(t)) return 'This ground is still scorched.';
   if (runwayAt(t)) return 'That\'s an Airfield\'s runway.';
   if (postAt(t)) return 'A Trade Post stands here.';

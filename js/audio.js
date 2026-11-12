@@ -168,7 +168,7 @@ function _noise(dur, vol, o) {
   src.stop(t0 + dur + 0.05);
 }
 
-const SFX_GAP = {
+const SFX_GAP = { rumble: 2.5, eruption: 3,
   launch: 0.3, rocket: 0.12, takeoff: 1.5, chute: 0.4, flakfire: 0.25, flak: 0.12, boom: 0.12, shellhit: 0.09, missilehit: 0.2, laser: 0.08, pulse: 0.14, hit: 0.07, produce: 0.25, alert: 1.5, complete: 0.3, order: 0.15,
   weld: 0.25, scrape: 0.3, hiss: 0.6, airbrake: 1.2, honk: 2.5, nuke: 2, siren: 4,
 };
@@ -223,6 +223,21 @@ function sfx(name, dest) {
     case 'zap': _tone(2400, 0.22, 'sawtooth', 0.025, 180, 0, D); _noise(0.18, 0.03, { type: 'highpass', freq: 4000, to: 1500, dest: D }); break;
     // A Mortar Pit firing: a deep hollow thump.
     case 'thump': _tone(90, 0.22, 'sine', 0.14, 45, 0, D); _noise(0.12, 0.05, { freq: 500, to: 120, dest: D }); break;
+    // The ground shaking (a volcano rumbling, an earthquake): a long, deep, swelling rumble with a sub under it.
+    case 'rumble':
+      _noise(3.2, 0.26, { freq: 160, to: 60, attack: 0.9, dest: D });
+      _noise(2.4, 0.12, { type: 'bandpass', freq: 320, to: 120, q: 0.8, attack: 0.6, delay: 0.3, dest: D });
+      _tone(42, 2.8, 'sine', 0.18, 30, 0.2, D);
+      duckMusic(0.55, 2.5);
+      break;
+    // A volcano erupting: a huge blast, a roar that rolls on, and the hiss of ash and stones thrown up.
+    case 'eruption':
+      _noise(0.12, 0.32, { type: 'highpass', freq: 1800, attack: 0.002, dest: D });
+      _noise(2.6, 0.3, { freq: 1200, to: 70, attack: 0.01, dest: D });
+      _noise(3.5, 0.08, { type: 'highpass', freq: 3000, attack: 0.5, delay: 0.4, dest: D });
+      _tone(55, 1.6, 'sine', 0.22, 26, 0, D);
+      duckMusic(0.5, 2.5);
+      break;
     case 'boom':
       _noise(0.45, 0.2, { freq: 900, to: 120, dest: D });
       _tone(110, 0.35, 'sine', 0.16, 38, 0, D);

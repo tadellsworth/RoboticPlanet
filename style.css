@@ -313,8 +313,6 @@ kbd {
 }
 #screen-pause, #screen-help, #screen-over { z-index: 30; background: rgba(10, 11, 15, 0.78); }
 #screen-stats { z-index: 40; background: rgba(10, 11, 15, 0.86); }
-.free-play { margin: 16px 0 0; text-align: center; }
-#m-missions { margin-top: 8px; }
 .card.missions-card { width: min(100%, 560px); background: #161820; }
 #screen-missions { z-index: 25; background: rgba(10, 11, 15, 0.9); }
 .ms-list { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
@@ -371,40 +369,7 @@ canvas.chart { display: block; width: 100%; height: 170px; touch-action: pan-y; 
   background: linear-gradient(180deg, #ffffff, var(--accent)); -webkit-background-clip: text; background-clip: text; color: transparent;
 }
 .tagline { text-align: center; color: var(--muted); margin: 4px 0 14px; }
-.field { margin-top: 12px; }
-.label { display: block; font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); font-weight: 700; margin-bottom: 6px; }
 .mode-desc { color: var(--muted); font-size: 13px; margin: 8px 2px 0; min-height: 36px; }
-.seed-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
-.seed-btns { display: flex; gap: 6px; }
-.planets { display: flex; flex-direction: column; gap: 4px; margin-top: 8px; }
-.planets .planets-title { font-size: 12px; color: var(--muted); font-weight: 700; }
-.planet-row { display: flex; align-items: stretch; gap: 4px; }
-.planet-row .use { flex: 1; text-align: left; white-space: normal; line-height: 1.3; }
-.planet-row .use.on { outline: 2px solid var(--accent, #3ff0d0); outline-offset: -2px; }
-.planet-row .del { flex: none; width: 34px; padding: 0; font-size: 18px; }
-/* New-game menu: choice chips (all options in view), switches, and the More settings section. */
-.chips { display: flex; flex-wrap: wrap; gap: 6px; }
-.chips button { border: 1px solid rgba(255,255,255,0.1); background: rgba(255,255,255,0.05); color: var(--muted); padding: 8px 12px; border-radius: 999px; font-weight: 700; font-size: 14px; }
-.chips button.on { background: var(--panel-2); color: var(--text); border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent) inset; }
-.label-v { float: right; font-weight: 700; color: var(--accent); text-transform: none; letter-spacing: 0; font-variant-numeric: tabular-nums; }
-#m-shape-desc, #m-style-desc { min-height: 0; }
-details.more { margin: 14px 0 4px; border: 1px solid rgba(255,255,255,0.09); border-radius: 14px; background: rgba(255,255,255,0.03); }
-details.more > summary { list-style: none; cursor: pointer; padding: 12px 14px; display: flex; flex-direction: column; gap: 3px; }
-details.more > summary::-webkit-details-marker { display: none; }
-.more-title { font-weight: 800; display: flex; align-items: center; gap: 8px; }
-.more-title::before { content: ''; width: 7px; height: 7px; border-right: 2px solid var(--muted); border-bottom: 2px solid var(--muted); transform: rotate(-45deg); transition: transform 0.15s; flex: none; }
-details.more[open] .more-title::before { transform: rotate(45deg); }
-.more-sum { font-size: 12.5px; color: var(--muted); padding-left: 15px; }
-details.more > .field, details.more > .toggles { margin-left: 14px; margin-right: 14px; }
-details.more > .field:first-of-type { margin-top: 2px; }
-.toggles { display: flex; flex-direction: column; margin-top: 12px; margin-bottom: 8px; }
-.toggle-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 9px 0; border-top: 1px solid rgba(255,255,255,0.06); font-weight: 700; font-size: 14px; cursor: pointer; }
-.toggle-row small { display: block; font-weight: 400; color: var(--muted); font-size: 12.5px; margin-top: 1px; }
-.toggle-row input { appearance: none; -webkit-appearance: none; margin: 0; width: 44px; height: 26px; border-radius: 13px; background: rgba(255,255,255,0.16); position: relative; flex: none; cursor: pointer; transition: background 0.15s; }
-.toggle-row input::after { content: ''; position: absolute; top: 3px; left: 3px; width: 20px; height: 20px; border-radius: 50%; background: #fff; transition: transform 0.15s; }
-.toggle-row input:checked { background: var(--accent); }
-.toggle-row input:checked::after { transform: translateX(18px); }
-.toggle-row input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .seed { font-variant-numeric: tabular-nums; font-weight: 700; }
 .sliders { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; }
 .slider-row { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 2px 10px; font-size: 14px; }
@@ -593,5 +558,195 @@ canvas.chart.small { height: 110px; }
 .army-row > span:last-child { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 4px; flex: 0 1 auto; margin-left: auto; }
 .army-row > span:first-child { flex: 1 1 160px; min-width: 0; }
 #ar-tabs { margin-bottom: 8px; }
-.toggle-row .tod-seg { flex: 0 0 auto; }
-.toggle-row .tod-seg button { padding: 6px 10px; font-size: 13px; }
+
+/* ---------- main menu: Home, Customise (the new-game setup) and the map type / biome pickers ---------- */
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chips button { border: 1px solid rgba(255,255,255,0.1); background: rgba(255,255,255,0.05); color: var(--muted); padding: 8px 12px; border-radius: 999px; font-weight: 700; font-size: 14px; }
+.chips button.on { background: var(--panel-2); color: var(--text); border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent) inset; }
+#screen-menu button:focus-visible, .m-picker button:focus-visible, .m-pick:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+#screen-menu .seg button:focus-visible { outline-offset: -2px; }
+.menu-card { width: min(100%, 392px); padding: 26px 22px 18px; display: flex; flex-direction: column; }
+.m-home { display: flex; flex-direction: column; }
+.menu-card .tagline { margin: 2px 0 20px; }
+.m-cont { margin: 0 0 10px; background: rgba(56, 212, 255, 0.09); border-color: rgba(56, 212, 255, 0.45); color: #c4f1ff; }
+.m-go { display: flex; flex-direction: column; }
+#m-new { display: flex; align-items: center; justify-content: center; gap: 8px; margin: 0; font-size: 17px; letter-spacing: 0.02em;
+  box-shadow: 0 8px 26px rgba(56, 212, 255, 0.22); }
+.m-sum { margin: 9px 4px 0; text-align: center; font-size: 13px; line-height: 1.35; color: var(--muted); }
+.m-sum .sum-main { display: block; color: #c3cad6; font-weight: 600; }
+.m-sum .sum-extra { display: block; font-size: 12px; margin-top: 1px; }
+.m-home-foot { display: flex; flex-direction: column; }
+.m-cust { display: flex; align-items: center; justify-content: center; gap: 9px; margin-top: 14px; }
+.m-links { display: flex; flex-wrap: wrap; justify-content: center; gap: 2px 10px; margin-top: 12px; }
+.m-links button { position: relative; border: 0; background: none; color: var(--muted); font-weight: 650; font-size: 13.5px; padding: 6px 6px; border-radius: 8px; }
+.m-links button + button::before { content: ''; position: absolute; left: -7px; top: 50%; width: 3px; height: 3px; margin-top: -1.5px; border-radius: 50%; background: rgba(255, 255, 255, 0.22); }
+.m-links button:hover { color: var(--text); }
+#m-import-msg { text-align: center; }
+
+/* Customise: a header, the scrolling settings, and Start in a bar that stays in view. */
+#screen-menu.is-setup { padding: calc(var(--safe-t) + 8px) calc(var(--safe-r) + 8px) calc(var(--safe-b) + 8px) calc(var(--safe-l) + 8px); }
+.menu-card.is-setup { width: min(100%, 620px); padding: 0; overflow: hidden;
+  height: calc(100vh - 16px - var(--safe-t) - var(--safe-b)); height: calc(100dvh - 16px - var(--safe-t) - var(--safe-b)); }
+.m-setup { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; }
+.m-head { display: flex; align-items: center; gap: 8px; padding: 10px 14px 9px 10px; border-bottom: 1px solid var(--line); flex: none; }
+.menu-card .m-head h2 { margin: 0; font-size: 17px; }
+.m-back { display: inline-flex; align-items: center; gap: 3px; padding: 6px 10px 6px 6px; border-color: transparent; }
+.m-back:hover { background: rgba(255, 255, 255, 0.06); }
+.m-head-logo { margin-left: auto; font-weight: 900; letter-spacing: 0.16em; font-size: 12px; color: transparent; opacity: 0.85;
+  background: linear-gradient(180deg, #ffffff, var(--accent)); -webkit-background-clip: text; background-clip: text; }
+.m-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; touch-action: pan-y; display: grid; gap: 12px; padding: 12px; align-content: start; }
+.menu-card.is-setup .m-go { flex: none; flex-direction: row; align-items: center; gap: 12px; padding: 10px 12px; border-top: 1px solid var(--line); background: rgba(12, 13, 18, 0.55); }
+.menu-card.is-setup .m-sum { order: -1; flex: 1; min-width: 0; margin: 0; text-align: left; font-size: 12.5px; }
+.menu-card.is-setup .m-sum .sum-main, .menu-card.is-setup .m-sum .sum-extra { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.menu-card.is-setup #m-new { width: auto; flex: none; min-width: 132px; padding: 12px 20px; font-size: 16px; }
+
+/* The planet: its preview, seed and saved planets (a strip on top on a phone, a column on a big screen). */
+.m-planet { display: grid; grid-template-columns: 118px minmax(0, 1fr); gap: 12px; align-items: start; }
+.pv { position: relative; height: 148px; border-radius: 12px; overflow: hidden; border: 1px solid rgba(255, 255, 255, 0.07);
+  background: radial-gradient(ellipse at 50% 35%, #1b2030, #0b0c11 78%); }
+.pv canvas { display: block; width: 100%; height: 100%; transition: opacity 0.18s; }
+.pv.busy canvas { opacity: 0.55; }
+.pv-random { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; padding: 10px; text-align: center; color: var(--muted); font-size: 12px; line-height: 1.3; }
+.pv-random b { font-size: 40px; line-height: 1; color: var(--text); font-weight: 900; text-shadow: 0 0 18px rgba(56, 212, 255, 0.5); }
+.pv-side { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.seed-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.seed-txt { display: flex; flex-direction: column; min-width: 0; }
+.seed-txt .seed { font-size: 15px; }
+.seed-txt small { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+.seed-btns { display: flex; gap: 6px; }
+.seed-btns .btn { padding: 6px 11px; }
+.planets { display: flex; flex-direction: column; gap: 3px; max-height: 118px; overflow-y: auto; touch-action: pan-y; overscroll-behavior: contain; }
+.planets .planets-title { font-size: 11.5px; color: var(--muted); font-weight: 800; text-transform: uppercase; letter-spacing: 0.08em; margin: 2px 0 2px; }
+.planets .planets-title small { font-weight: 700; opacity: 0.7; margin-left: 3px; }
+.planet-row { display: flex; align-items: stretch; gap: 3px; }
+.planet-row .use { flex: 1; min-width: 0; text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1.3; font-size: 12.5px; font-weight: 600; padding: 5px 8px; border-color: rgba(255, 255, 255, 0.07); }
+.planet-row .use span { color: var(--muted); font-weight: 500; }
+.planet-row .use.on { outline: 2px solid var(--accent); outline-offset: -2px; }
+.planet-row .del { flex: none; width: 30px; padding: 0; font-size: 17px; border-color: transparent; color: var(--muted); }
+
+/* Settings: Match, Planet, Rules. A row is a label and its control; the line under them describes. */
+.m-sets { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.m-sec { display: flex; flex-direction: column; gap: 5px; padding: 10px 12px 8px; border-radius: 14px; background: rgba(255, 255, 255, 0.025); border: 1px solid rgba(255, 255, 255, 0.06); min-width: 0; }
+.menu-card .m-sec h3 { margin: 0 0 2px; font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--muted); font-weight: 800; }
+.m-row { display: grid; grid-template-columns: 86px minmax(0, 1fr); align-items: center; gap: 10px; min-height: 38px; }
+.m-row[hidden] { display: none; }
+.m-rl { font-size: 13.5px; font-weight: 700; color: #d4dae4; line-height: 1.15; }
+.m-val { display: block; margin-top: 2px; font-size: 11.5px; font-weight: 700; color: var(--accent); font-variant-numeric: tabular-nums; }
+.m-row .seg { padding: 2px; gap: 2px; border-radius: 10px; min-width: 0; }
+.m-row .seg button { min-width: 0; padding: 7px 4px; border-radius: 8px; font-size: 13.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.m-chips { gap: 4px; }
+.m-chips button { padding: 5px 10px; font-size: 13px; }
+.m-info { margin: 2px 2px 0; min-height: 2.8em; font-size: 12.5px; line-height: 1.4; color: var(--muted);
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.m-note { margin: 0 2px; font-size: 12.5px; line-height: 1.35; color: var(--warn); }
+/* Terrain and Resources: a level meter, one bar per step. */
+.seg.lv button { display: flex; align-items: flex-end; justify-content: center; height: 34px; padding: 6px 0 7px; }
+.seg.lv button i { display: block; width: 9px; border-radius: 2px; background: rgba(255, 255, 255, 0.16); transition: background 0.12s; }
+.seg.lv button.lit i { background: rgba(56, 212, 255, 0.5); }
+.seg.lv button.on i { background: var(--accent); box-shadow: 0 0 8px rgba(56, 212, 255, 0.45); }
+.seg.lv button:hover:not(.on) i { background: rgba(255, 255, 255, 0.35); }
+/* Map type and Biome: the choice, with a thumbnail; it opens the picker. */
+.m-pick { display: flex; align-items: center; gap: 10px; width: 100%; min-width: 0; min-height: 44px; padding: 4px 10px 4px 4px; text-align: left;
+  border-radius: 10px; border: 1px solid rgba(255, 255, 255, 0.1); background: rgba(255, 255, 255, 0.05); color: var(--text); }
+.m-pick:hover { border-color: rgba(255, 255, 255, 0.24); background: rgba(255, 255, 255, 0.08); }
+.m-pick-thumb { width: 36px; height: 36px; flex: none; border-radius: 7px; display: block; }
+.m-pick-name { font-weight: 800; font-size: 14.5px; white-space: nowrap; }
+.m-pick-meta { min-width: 0; font-size: 12.5px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.m-pick-chev { margin-left: auto; flex: none; color: var(--muted); }
+/* Rules: switches as chips, and the time of day. */
+.tchips { display: flex; flex-wrap: wrap; gap: 6px; padding: 2px 0 4px; }
+.tchip { display: inline-flex; align-items: center; gap: 7px; padding: 7px 12px 7px 9px; border-radius: 999px; cursor: pointer;
+  border: 1px solid rgba(255, 255, 255, 0.1); background: rgba(255, 255, 255, 0.04); color: var(--muted); font-weight: 700; font-size: 13.5px; transition: background 0.12s, border-color 0.12s, color 0.12s; }
+.tchip[hidden] { display: none; }
+.tchip:hover { border-color: rgba(255, 255, 255, 0.25); }
+.tchip.on { color: var(--text); border-color: rgba(56, 212, 255, 0.55); background: rgba(56, 212, 255, 0.1); }
+.tchip input { appearance: none; -webkit-appearance: none; margin: 0; width: 16px; height: 16px; flex: none; border-radius: 50%; cursor: pointer;
+  border: 2px solid rgba(255, 255, 255, 0.3); display: grid; place-items: center; }
+.tchip input:checked { background: var(--accent); border-color: var(--accent); }
+.tchip input:checked::after { content: ''; width: 6px; height: 3px; margin-top: -2px; border-left: 2px solid var(--accent-ink); border-bottom: 2px solid var(--accent-ink); transform: rotate(-45deg); }
+.tchip:has(input:focus-visible) { outline: 2px solid var(--accent); outline-offset: 2px; }
+.tchip input:focus { outline: none; }
+.m-rules .m-row { grid-template-columns: 86px auto; justify-content: start; }
+.tod-seg button { padding: 6px 14px; }
+
+/* A big screen: the planet on the left, settings on the right; wider still, Match beside Planet. */
+@media (min-width: 900px) and (min-height: 600px) {
+  .menu-card.is-setup { width: min(100%, 1120px); height: auto; max-height: calc(100vh - 32px); max-height: calc(100dvh - 32px - var(--safe-t) - var(--safe-b)); }
+  #screen-menu.is-setup { padding: calc(var(--safe-t) + 16px) 16px calc(var(--safe-b) + 16px); }
+  .m-head { padding: 12px 18px 11px 12px; }
+  .menu-card .m-head h2 { font-size: 18px; }
+  .m-body { grid-template-columns: minmax(250px, 31%) minmax(0, 1fr); gap: 18px; padding: 16px 18px; }
+  .m-planet { grid-template-columns: 1fr; position: sticky; top: 0; align-self: start; gap: 10px; }
+  .pv { height: clamp(260px, 42vh, 380px); }
+  .planets { max-height: 200px; }
+  .menu-card.is-setup .m-go { padding: 12px 18px; }
+  .menu-card.is-setup .m-sum { font-size: 13px; }
+  .menu-card.is-setup #m-new { min-width: 180px; }
+}
+@media (min-width: 1180px) and (min-height: 600px) {
+  .m-sets { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; align-items: start; }
+  .m-rules { grid-column: 1 / -1; }
+  .m-rules { display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 16px; }
+  .m-rules h3, .m-rules .m-info { grid-column: 1 / -1; }
+  .m-rules .tchips { align-self: center; }
+}
+/* A phone on its side: a slimmer header and planet strip. */
+@media (max-height: 500px) {
+  .m-head { padding: 6px 12px 5px 8px; }
+  .m-body { padding: 10px 12px; }
+  .pv { height: 112px; }
+  .m-planet { grid-template-columns: 96px minmax(0, 1fr); }
+  .menu-card.is-setup .m-go { padding: 8px 12px; }
+  .menu-card.is-setup #m-new { padding: 10px 18px; }
+  .menu-card:not(.is-setup) { padding: 14px 20px 12px; }
+  .menu-card .tagline { margin-bottom: 10px; }
+  .m-cust { margin-top: 10px; }
+  .m-links { margin-top: 6px; }
+}
+@media (max-width: 420px) {
+  .m-row { grid-template-columns: 78px minmax(0, 1fr); gap: 8px; }
+  .m-row .seg button { font-size: 13px; padding: 7px 2px; }
+  .m-rules .m-row { grid-template-columns: 78px auto; }
+}
+
+/* The pickers: a centred panel of cards; on a phone, a sheet from the bottom. */
+.m-picker { position: fixed; inset: 0; z-index: 26; display: grid; place-items: center; padding: 24px; background: rgba(6, 7, 10, 0.62); animation: pickFade 0.15s ease-out; }
+@keyframes pickFade { from { opacity: 0; } }
+.m-picker-sheet { width: min(100%, 920px); max-height: min(86vh, 900px); display: flex; flex-direction: column; overflow: hidden;
+  background: #161820; border: 1px solid var(--line); border-radius: 18px; box-shadow: 0 30px 80px rgba(0, 0, 0, 0.6); animation: pickIn 0.18s ease-out; }
+@keyframes pickIn { from { transform: translateY(10px) scale(0.985); opacity: 0.5; } }
+.m-picker.bio .m-picker-sheet { width: min(100%, 860px); }
+.m-picker-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 12px 14px 10px 20px; border-bottom: 1px solid var(--line); flex: none; }
+.m-picker-head h2 { margin: 0; font-size: 18px; }
+.m-picker-head .sheet-close { position: static; flex: none; }
+.m-picker-body { overflow-y: auto; overscroll-behavior: contain; touch-action: pan-y; padding: 14px 16px 18px; }
+.pgroup h3 { margin: 16px 2px 8px; font-size: 11.5px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); font-weight: 800; }
+.pgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 8px; }
+.pcard { display: grid; grid-template-columns: 58px minmax(0, 1fr); gap: 11px; align-items: start; padding: 8px; text-align: left; color: var(--text);
+  border-radius: 12px; border: 1px solid rgba(255, 255, 255, 0.08); background: rgba(255, 255, 255, 0.035); transition: background 0.12s, border-color 0.12s; }
+.pcard:hover { border-color: rgba(255, 255, 255, 0.24); background: rgba(255, 255, 255, 0.065); }
+.pcard[aria-current] { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent) inset; background: rgba(56, 212, 255, 0.08); }
+.pc-thumb { width: 58px; height: 74px; display: block; border-radius: 8px; }
+.pc-text { display: flex; flex-direction: column; gap: 3px; min-width: 0; padding-top: 1px; }
+.pc-name { font-weight: 800; font-size: 14.5px; line-height: 1.2; }
+.pc-badges { display: flex; flex-wrap: wrap; gap: 4px; }
+.badge { font-size: 10.5px; font-weight: 800; letter-spacing: 0.02em; padding: 1px 6px; border-radius: 6px; background: rgba(255, 255, 255, 0.08); color: #c9d0db; }
+.badge.ffa { background: rgba(126, 224, 138, 0.14); color: #a9ecb2; }
+.badge.naval { background: rgba(56, 212, 255, 0.14); color: #a3e7ff; }
+.pc-blurb { font-size: 12.5px; line-height: 1.35; color: var(--muted); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.m-picker.bio .pgrid { grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 10px; }
+.m-picker.bio .pcard { grid-template-columns: minmax(0, 1fr); gap: 4px; padding: 6px 6px 9px; }
+.m-picker.bio .pc-name, .m-picker.bio .pc-blurb { padding: 0 4px; }
+.m-picker.bio .pc-name { margin-top: 4px; }
+.pc-swatch { width: 100%; height: 96px; display: block; border-radius: 8px; }
+@media (max-width: 699px), (max-height: 500px) {
+  .m-picker { place-items: end stretch; padding: calc(var(--safe-t) + 20px) 0 0; }
+  .m-picker-sheet, .m-picker.bio .m-picker-sheet { width: 100%; max-height: 100%; border-radius: 18px 18px 0 0; border-bottom: 0; padding-bottom: var(--safe-b); animation: sheetIn 0.22s ease-out; }
+  .m-picker-sheet::before { content: ''; flex: none; width: 38px; height: 4px; border-radius: 2px; margin: 7px auto -3px; background: rgba(255, 255, 255, 0.2); }
+  .m-picker-head { padding: 6px 10px 8px 16px; }
+  .m-picker-body { padding: 10px 12px 16px; }
+  .pgrid { grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); }
+  .m-picker.bio .pgrid { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
+  .pc-swatch { height: 84px; }
+}
+@media (prefers-reduced-motion: reduce) { .m-picker, .m-picker-sheet { animation: none; } }

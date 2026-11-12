@@ -96,6 +96,8 @@ function applyBiome() {
   R.tex = {};
   for (const k of ['ground', 'water', 'rock']) R.tex[k] = biomeTexture(b, k);
   R.tex.cliff = b === 'desert' ? ART.cliff || null : ART['cliff-' + b] || null;
+  R.tex.lava = ART.lava || null; // lava (Volcano maps; the volcanic biome's lakes): the volcanic biome's molten water
+  R.lavaGlow = null;
   // The minimap takes its ground, water and rock colours from the textures themselves.
   for (const k of ['ground', 'water', 'rock']) { const c = R.tex[k] && avgColor(R.tex[k]); if (c) MM_COLORS[k] = c; }
 }
@@ -666,7 +668,9 @@ function paintTile(ctx, i, j) {
     }
   }
 
-  if (terr === T_WATER) {
+  if (terr === T_WATER && ((S.lava && S.lava[t]) || R.biome === 'volcanic')) {
+    drawLava(ctx, i, j, x, y);
+  } else if (terr === T_WATER) {
     if (tex.water) {
       drawTexture(ctx, tex.water, i, j, x, y);
       ctx.fillStyle = 'rgba(159,217,208,0.5)';
@@ -728,6 +732,9 @@ function paintTile(ctx, i, j) {
   if (terr !== T_WATER && S.elev[t] <= 1 && R.skyFloor) { ctx.fillStyle = S.elev[t] ? 'rgba(20,10,6,0.2)' : 'rgba(20,10,6,0.32)'; ctx.fillRect(x, y, TP, TP); }
   if (terr === T_GROUND) drawElevation(ctx, i, j, x, y, t, n);
   else if (terr === T_WATER) drawCliffFace(ctx, i, j, x, y, t, true);
+  if (S.ford && S.ford[t] && terr === T_WATER) drawFord(ctx, i, j, x, y);
+  if (S.tidal && S.tidal[t]) drawFlat(ctx, i, j, x, y, terr === T_WATER);
+  if (S.fault && S.fault[t] && terr !== T_CHASM) drawFaultScar(ctx, i, j, x, y);
   if (terr === T_GROUND && S.fert && S.fert[t] && !S.ramp[t]) drawFertile(ctx, i, j, x, y);
   if (S.road[t]) { if (terr === T_GROUND) drawRoad(ctx, i, j, x, y); else drawCrossing(ctx, i, j, x, y, t); }
   if (S.rail && S.rail[t]) {
@@ -844,6 +851,81 @@ function drawPlant(ctx, v, i, j, x, y) {
         for (let k = 0; k < 6; k++) line('#c9a86a', 0.6, [gx, gy, gx + (k - 2.5) * 1.1, gy - 4 - h(k + g * 6) * 3]);
       }
     }
+  }
+}
+
+/* ------------------------------------------------------------------ special terrain (map types) */
+
+/** Lava (Volcano maps, and every lake on the volcanic biome): the lava art, with a dark crust where it meets land. */
+function drawLava(ctx, i, j, x, y) {
+  const tex = R.tex && R.tex.lava;
+  if (tex) drawTexture(ctx, tex, i, j, x, y);
+  else {
+    ctx.fillStyle = '#5a1606'; ctx.fillRect(x, y, TP, TP);
+    for (let k = 0; k < 4; k++) {
+      const cx = x + hash2(i * 5 + k, j, 61) * TP, cy = y + hash2(i, j * 5 + k, 62) * TP, r = TP * (0.18 + hash2(i + k, j - k, 63) * 0.22);
+      const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, r);
+      g.addColorStop(0, 'rgba(255,214,90,0.95)'); g.addColorStop(0.5, 'rgba(255,110,24,0.7)'); g.addColorStop(1, 'rgba(255,60,10,0)');
+      ctx.fillStyle = g; ctx.fillRect(x, y, TP, TP);
+    }
+  }
+  const lava = (a, b) => S.lava && inMap(a, b) && S.lava[tIdx(a, b)] && S.terrain[tIdx(a, b)] === T_WATER;
+  ctx.fillStyle = 'rgba(28,12,8,0.75)';
+  if (!lava(i, j - 1)) ctx.fillRect(x, y, TP, 3);
+  if (!lava(i - 1, j)) ctx.fillRect(x, y, 3, TP);
+  if (!lava(i, j + 1)) ctx.fillRect(x, y + TP - 3, TP, 3);
+  if (!lava(i + 1, j)) ctx.fillRect(x + TP - 3, y, 3, TP);
+}
+
+/** A ford: shallow water over a gravel bar, with stepping stones (bots wade it; trucks need a bridge). */
+function drawFord(ctx, i, j, x, y) {
+  ctx.fillStyle = 'rgba(196,186,150,0.42)';
+  ctx.fillRect(x, y, TP, TP);
+  for (let k = 0; k < 5; k++) {
+    const px = x + (0.15 + hash2(i * 3 + k, j, 71) * 0.7) * TP, py = y + (0.15 + hash2(i, j * 3 + k, 72) * 0.7) * TP, r = TP * (0.05 + hash2(i + k, j, 73) * 0.05);
+    ctx.fillStyle = 'rgba(40,36,30,0.35)';
+    ctx.beginPath(); ctx.ellipse(px + 1, py + 1.5, r, r * 0.7, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = 'rgba(176,170,152,0.95)';
+    ctx.beginPath(); ctx.ellipse(px, py, r, r * 0.7, 0, 0, Math.PI * 2); ctx.fill();
+  }
+  ctx.strokeStyle = 'rgba(235,245,240,0.35)';
+  ctx.lineWidth = 1.2;
+  for (let k = 0; k < 2; k++) {
+    const ry = y + (0.3 + k * 0.4) * TP, rx = x + hash2(i, j + k, 74) * TP * 0.4;
+    ctx.beginPath(); ctx.moveTo(rx, ry); ctx.quadraticCurveTo(rx + TP * 0.15, ry - 3, rx + TP * 0.3, ry); ctx.stroke();
+  }
+}
+
+/** A tidal flat: wet, rippled sand at low tide; pale shallows at high tide. */
+function drawFlat(ctx, i, j, x, y, flooded) {
+  if (flooded) { ctx.fillStyle = 'rgba(190,232,222,0.2)'; ctx.fillRect(x, y, TP, TP); return; }
+  ctx.fillStyle = 'rgba(170,150,108,0.82)';
+  ctx.fillRect(x, y, TP, TP);
+  ctx.strokeStyle = 'rgba(110,92,62,0.45)';
+  ctx.lineWidth = 1.3;
+  for (let k = 0; k < 4; k++) {
+    const ry = y + (k + 0.5 + (hash2(i, j + k, 81) - 0.5) * 0.4) * (TP / 4);
+    ctx.beginPath(); ctx.moveTo(x, ry);
+    for (let s = 1; s <= 4; s++) ctx.quadraticCurveTo(x + (s - 0.5) * TP / 4, ry + (s % 2 ? -2 : 2), x + s * TP / 4, ry);
+    ctx.stroke();
+  }
+  if (hash2(i, j, 82) < 0.35) {
+    ctx.fillStyle = 'rgba(150,200,205,0.45)';
+    ctx.beginPath(); ctx.ellipse(x + TP * (0.3 + hash2(i, j, 83) * 0.4), y + TP * (0.3 + hash2(j, i, 84) * 0.4), TP * 0.16, TP * 0.09, 0.3, 0, Math.PI * 2); ctx.fill();
+  }
+}
+
+/** The fault before it opens: a faint, jagged scar of hairline cracks. */
+function drawFaultScar(ctx, i, j, x, y) {
+  ctx.fillStyle = 'rgba(30,20,14,0.14)';
+  ctx.fillRect(x, y, TP, TP);
+  ctx.strokeStyle = 'rgba(22,14,10,0.6)';
+  ctx.lineWidth = 1.4;
+  for (let k = 0; k < 2; k++) {
+    let px = x, py = y + (0.25 + hash2(i, j * 2 + k, 91) * 0.5) * TP;
+    ctx.beginPath(); ctx.moveTo(px, py);
+    for (let s = 1; s <= 4; s++) { px = x + s * TP / 4; py = clamp(py + (hash2(i * 4 + s, j + k, 92) - 0.5) * TP * 0.4, y + 2, y + TP - 2); ctx.lineTo(px, py); }
+    ctx.stroke();
   }
 }
 
@@ -4037,6 +4119,7 @@ function render(dtReal) {
   ctx.drawImage(R.terr, ox, oy, S.W * z, S.H * z);
   drawPipes(ctx, ox, oy, z, inView); // (graded with the ground at dusk and night)
   todGradeGround(ctx); // morning, evening and night light on the ground and its territory tint (buildings and bots have their own re-lit art)
+  drawLavaGlow(ctx, ox, oy, z);
   drawRoadGlow(ctx, ox, oy, z, v0, v1);
   drawStreetLights(ctx, ox, oy, z, v0, v1);
 
@@ -4325,6 +4408,7 @@ function render(dtReal) {
   drawLoot(ctx, ox, oy, z, inView);
   drawRallies(ctx, ox, oy, z);
   drawMissiles(ctx, ox, oy, z);
+  drawLavaBombs(ctx, ox, oy, z);
   drawPulseCharges(ctx, ox, oy, z, inView);
   drawEffects(ctx, ox, oy, z);
   if (S.event) drawEvent(ctx, ox, oy, z);
@@ -5387,7 +5471,7 @@ function drawPulseCharges(ctx, ox, oy, z, inView) {
 function drawEffects(ctx, ox, oy, z) {
   for (const f of S.fx) {
     if (f.t < 0) continue; // a delayed effect (a building's second blast) not started yet
-    if (f.type === 'flak' || f.type === 'crateland') continue; // see drawAirLayer
+    if (f.type === 'flak' || f.type === 'crateland' || f.type === 'quake') continue; // see drawAirLayer (a quake only shakes the screen: see fxShake)
     const k = f.t / f.life;
     const x = ox + f.x * z, y = oy + f.y * z;
     // A fuel blast (renderer/fx/fuelblast.py): ground zero is 2/3 down its frame; the fireball spans about
@@ -5702,7 +5786,12 @@ function rebuildMinimapBase() {
     const terr = S.terrain[t];
     let c = terr === T_WATER ? MM_COLORS.water : terr === T_CHASM ? MM_COLORS.chasm : terr === T_ROCK ? MM_COLORS.rock : S.res[t] ? MM_COLORS[S.res[t]] : S.ramp[t] ? MM_COLORS.ramp
       : S.fert && S.fert[t] ? MM_COLORS.fertile : MM_COLORS.ground;
-    if (terr === T_GROUND && !S.res[t] && !S.ramp[t]) {
+    // Lava glows orange, fords show as gravel shallows, tidal flats as sand (or shallows), the fault as a dark scar.
+    if (terr === T_WATER && ((S.lava && S.lava[t]) || R.biome === 'volcanic')) c = [236, 104, 34];
+    else if (terr === T_WATER && S.ford && S.ford[t]) c = [150, 160, 140];
+    else if (S.tidal && S.tidal[t]) c = terr === T_WATER ? [Math.min(255, c[0] + 40), Math.min(255, c[1] + 50), Math.min(255, c[2] + 45)] : [184, 164, 120];
+    else if (S.fault && S.fault[t] && terr === T_GROUND && !S.res[t]) c = [c[0] * 0.62, c[1] * 0.6, c[2] * 0.58];
+    if (terr === T_GROUND && !S.res[t] && !S.ramp[t] && !(S.tidal && S.tidal[t])) {
       // Higher ground is lighter.
       const f = 0.8 + 0.09 * (S.elev[t] + (R.levelOffset || 0));
       c = [Math.min(255, c[0] * f), Math.min(255, c[1] * f), Math.min(255, c[2] * f)];
