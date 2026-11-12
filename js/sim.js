@@ -182,9 +182,10 @@ function needsOf(b) {
     out.push(['asphalt', 3 - (b.stock.asphalt || 0) - (b.inc.asphalt || 0)]);
   } else if (def.store && keepOf(b) && b.smode !== 'empty') {
     // A Depot's supply orders (a Rail Station's own stock too): keep this much of each good here (goods
-    // already promised to someone don't count). What a far station stocks automatically comes by train only.
-    const k = keepOf(b), far = def.station && farStation(b);
-    for (const g in k) out.push([g, k[g] - ((b.stock[g] || 0) - (b.res[g] || 0)) - (b.inc[g] || 0), true, far && ((b.auto && b.auto[g]) || 0) > ((b.keep && b.keep[g]) || 0)]);
+    // already promised to someone don't count). What a far station stocks automatically comes by train
+    // only, and what a far Depot does by Road Train only (the bulk carrier it's planned for, see railPlan).
+    const k = keepOf(b), bulk = (def.station && farStation(b)) || b.type === 'depot';
+    for (const g in k) out.push([g, k[g] - ((b.stock[g] || 0) - (b.res[g] || 0)) - (b.inc[g] || 0), true, bulk && ((b.auto && b.auto[g]) || 0) > ((b.keep && b.keep[g]) || 0)]);
   }
   // A Port where a Ferry is loading a kit to found a Port asks for it.
   if (def.port && b.built) { const kit = foundKitWant(b); if (kit) for (const g in kit) { const n = kit[g] - ((b.stock[g] || 0) - (b.res[g] || 0)) - (b.inc[g] || 0), e = out.find((o) => o[0] === g); if (e) e[1] = Math.max(e[1], n); else out.push([g, n, true]); } }
@@ -504,22 +505,25 @@ function stationBeside(c) {
 }
 
 /**
- * Plan player p's railway (every 2 s): each Rail Station's home (the station on its track nearest the
- * Command Base), what each stocks automatically (b.auto, see RAIL_AUTO_MAX), and the buildings each far
- * station serves (c.railBy). Lines with no Freight Train on them stock nothing automatically.
+ * Plan player p's bulk supply (every 2 s): each Rail Station's home (the station on its track nearest the
+ * Command Base), what each far station or far Depot stocks automatically (b.auto, see RAIL_AUTO_MAX), and the
+ * buildings each serves (c.railBy: each goes to the nearest one that can serve it). A far station stocks
+ * itself while a Freight Train runs its line; a far Depot (TRUCK_MIN_DIST or more from the Command Base)
+ * while a Road Train can drive to it and the buildings round it need a Road Train load (TRAIN_MIN_LOAD).
  */
 function railPlan(p) {
   const P = S.players[p];
   if (P.railT !== undefined && S.time - P.railT < 2 && S.time >= P.railT) return;
   P.railT = S.time;
   const hub = getE(P.lander);
-  const sts = [];
+  const sts = [], deps = [];
   for (const b of S.buildings) {
     if (b.dead || b.owner !== p) continue;
     if (b.railBy) b.railBy = 0;
     if (BDEFS[b.type].station && !BDEFS[b.type].terminal) { b.auto = null; b.home = 0; if (b.built) sts.push(b); }
+    else if (b.type === 'depot') { b.auto = null; if (b.built) deps.push(b); }
   }
-  if (!hub || hub.dead || hub.owner !== p || !sts.length) return;
+  if (!hub || hub.dead || hub.owner !== p || (!sts.length && !deps.length)) return;
   const dh = (b) => dist2(b.x, b.y, hub.x, hub.y);
   for (const s of sts) {
     let h = s;
@@ -529,37 +533,53 @@ function railPlan(p) {
   // Lines with a train on them (inside a station, on the track, or on a run between stations), remembered
   // for half a minute so a train pulling out or in doesn't switch its line's automatic stock off and on.
   P.railSeen = P.railSeen || {};
-  for (const u of S.bots) {
+  if (sts.length) for (const u of S.bots) {
     if (u.dead || u.owner !== p || !BOTS[u.type].rail) continue;
     const ends = u.task ? [getE(u.task.src), getE(u.task.dst)].filter((b) => b && !b.dead && BDEFS[b.type].station) : [];
     for (const s of sts) if (trainAt(u, s) || ends.some((e) => e === s || railLinked(e, s))) P.railSeen[s.home] = S.time;
   }
   const served = new Set();
   for (const s of sts) if (S.time - (P.railSeen[s.home] ?? -999) < 30) served.add(s.home);
-  const blds = S.buildings.filter((c) => !c.dead && c.owner === p && !BDEFS[c.type].store && !BDEFS[c.type].barrier && !storeFunded(c));
-  // Far stations: what the buildings round them need.
-  for (const s of sts) {
-    if (!served.has(s.home) || s.autoOff || (s.home === s.id && !farApart(s, hub))) continue;
-    const want = {}, made = new Set(), mine = [];
+  // The far stores that stock themselves.
+  const fars = sts.filter((s) => served.has(s.home) && !s.autoOff && !(s.home === s.id && !farApart(s, hub)));
+  for (const d of deps) if (!d.autoOff && d.smode !== 'empty' && farApart(d, hub) && reachable(d) && truckLinked(d, hub) && roadTrainFor(p, d)) fars.push(d);
+  if (fars.length) {
+    const blds = S.buildings.filter((c) => !c.dead && c.owner === p && !BDEFS[c.type].store && !BDEFS[c.type].barrier && !storeFunded(c));
+    // Each building goes to the nearest far store that can serve it: within STATION_REACH, nearer to it than
+    // to the Command Base by STATION_NEARER, and touching it or joined to it by road.
     for (const c of blds) {
-      const d = dist(c.x, c.y, s.x, s.y);
-      if (d > STATION_REACH || d > dist(c.x, c.y, hub.x, hub.y) - STATION_NEARER) continue;
-      if (c.railBy && c.railBy !== s.id) { const o = getE(c.railBy); if (o && dist2(o.x, o.y, c.x, c.y) <= d * d) continue; }
-      if (!touching(c).includes(s) && !roadLinked(c, s)) continue;
-      mine.push(c);
-      if (c.built && BDEFS[c.type].out) for (const g in BDEFS[c.type].out) made.add(g);
-    }
-    for (const c of mine) {
-      c.railBy = s.id;
-      for (const [g, n] of needsOf(c)) {
-        if (isLiquid(g) || made.has(g)) continue;
-        // A working building: twice what it holds when full. A site: what it still lacks.
-        const full = Math.max(0, n) + (c.built ? (c.stock[g] || 0) + (c.inc[g] || 0) : 0);
-        want[g] = (want[g] || 0) + (c.built ? 2 * full : Math.max(0, siteCost(c)[g] - (c.stock[g] || 0)));
+      let best = null, bd = Infinity;
+      const toHub = dist(c.x, c.y, hub.x, hub.y);
+      for (const s of fars) {
+        const d = dist(c.x, c.y, s.x, s.y);
+        if (d > STATION_REACH || d > toHub - STATION_NEARER || d >= bd) continue;
+        if (!touching(c).includes(s) && !roadLinked(c, s)) continue;
+        best = s; bd = d;
       }
+      if (best) c.railBy = best.id;
     }
-    for (const g in want) { want[g] = Math.min(RAIL_AUTO_MAX, Math.ceil(want[g])); if (want[g] < 1) delete want[g]; }
-    if (Object.keys(want).length) s.auto = want;
+    // What each keeps: what the buildings it serves need, never what they make themselves.
+    for (const s of fars) {
+      const mine = blds.filter((c) => c.railBy === s.id), want = {}, made = new Set();
+      for (const c of mine) if (c.built && BDEFS[c.type].out) for (const g in BDEFS[c.type].out) made.add(g);
+      for (const c of mine) {
+        for (const [g, n] of needsOf(c)) {
+          if (isLiquid(g) || made.has(g)) continue;
+          // A working building: twice what it holds when full. A site: what it still lacks.
+          const full = Math.max(0, n) + (c.built ? (c.stock[g] || 0) + (c.inc[g] || 0) : 0);
+          want[g] = (want[g] || 0) + (c.built ? 2 * full : Math.max(0, siteCost(c)[g] - (c.stock[g] || 0)));
+        }
+      }
+      for (const g in want) { want[g] = Math.min(RAIL_AUTO_MAX, Math.ceil(want[g])); if (want[g] < 1 || !storeTakes(s, g)) delete want[g]; }
+      // It serves the buildings that use what it keeps, or make goods to send home (not, say, a Fuel Station).
+      for (const c of mine) {
+        const uses = needsOf(c).some(([g]) => want[g]), makes = c.built && BDEFS[c.type].out && Object.keys(BDEFS[c.type].out).some((g) => !isLiquid(g));
+        if (!uses && !makes) c.railBy = 0;
+      }
+      // A Depot only once that's a Road Train load: less, and trucks and Haulers serve the buildings as before.
+      if (s.type === 'depot' && sumValues(want) < TRAIN_MIN_LOAD) { for (const c of mine) c.railBy = 0; continue; }
+      if (Object.keys(want).length) s.auto = want;
+    }
   }
   // Home stations: what their far stations keep (automatically or by supply orders), so a train loads at once.
   for (const s of sts) {
@@ -1590,7 +1610,7 @@ function dispatch(p) {
     // So does one Alloy for an empty Repair Station, so it always has some on hand for the next robot.
     const dry = (BDEFS[b.type].charger && b.built && chargerDry(b)) ||
       (BDEFS[b.type].repair && b.built && !(b.stock.alloy > 0) && !(b.inc.alloy > 0) && (b.repairPts || 0) < REPAIR_HP_PER_ALLOY / 2);
-    for (const [g, n, keep, railOnly] of needsOf(b)) if (n > 0) reqs.push({ b, g, n, pri: dry ? -1 : keep ? prioRank(b) * 3 + 2 : pri, inc: sumValues(b.inc), keep, railOnly });
+    for (const [g, n, keep, autoOnly] of needsOf(b)) if (n > 0) reqs.push({ b, g, n, pri: dry ? -1 : keep ? prioRank(b) * 3 + 2 : pri, inc: sumValues(b.inc), keep, autoOnly });
   }
   reqs.sort((a, c) => a.pri - c.pri || a.inc - c.inc || a.b.born - c.b.born);
   for (let pass = 0; pass < 4 && idle.length; pass++) {
@@ -1627,7 +1647,7 @@ function dispatch(p) {
             if (!term && supplyOf(r.b, r2.g) + (r.b.inc[r2.g] || 0) < (k[r2.g] || 0) / 3) low = true;
           }
           // (A Terminal's lot: a worthwhile load, or what's left of the lot.)
-          const go = !!load[r.g] && (total >= cap * RAIL_FILL || (low && total >= 4) || (!r.railOnly && total >= (term ? Math.min(RAIL_MIN_LOAD, r.n) : RAIL_MIN_LOAD)));
+          const go = !!load[r.g] && (total >= cap * RAIL_FILL || (low && total >= 4) || (!r.autoOnly && total >= (term ? Math.min(RAIL_MIN_LOAD, r.n) : RAIL_MIN_LOAD)));
           return go ? load : null;
         };
         // The nearest station on its track with a load worth the trip (a nearer one with only a few goods doesn't hold it up).
@@ -1649,15 +1669,17 @@ function dispatch(p) {
           any = true;
           continue;
         }
-        if (r.railOnly) { r.n = 0; continue; }
+        if (r.autoOnly) { r.n = 0; continue; }
       }
       // A building a far Rail Station serves: the train brings its goods, so trucks leave it alone while the
       // station is out of something that's on its way (or waiting at the home station), unless the
-      // building has run dry with nothing coming.
+      // building has run dry with nothing coming. One a far Depot serves waits the same way for the Road
+      // Train (from the Command Base) when you have no Freight Trucks, so Haulers don't take the long run;
+      // with trucks, a truck fills in while the Depot is out (a Road Train on plain road is slow).
       if (r.b.railBy && !r.keep && !isLiquid(r.g)) {
-        const st = getE(r.b.railBy);
-        if (st && !st.dead && st.auto && st.auto[r.g] && supplyOf(st, r.g) < 1) {
-          const held = (r.b.built ? (r.b.stock[r.g] || 0) : 0) + (r.b.inc[r.g] || 0), home = getE(st.home);
+        const st = getE(r.b.railBy), dep = st && st.type === 'depot';
+        if (st && !st.dead && st.auto && st.auto[r.g] && supplyOf(st, r.g) < 1 && !(dep && vans)) {
+          const held = (r.b.built ? (r.b.stock[r.g] || 0) : 0) + (r.b.inc[r.g] || 0), home = getE(dep ? P.lander : st.home);
           if ((st.inc[r.g] || 0) > 0 || (home && supplyOf(home, r.g) >= 1 && held > 0)) { r.n = 0; continue; }
         }
       }
@@ -1704,6 +1726,32 @@ function dispatch(p) {
         const n = canCarry(u, bulk, r.g);
         assignHaul(u, src, r.b, r.g, n);
         r.n -= n;
+        any = true;
+        continue;
+      }
+      // What a far Depot stocks automatically comes by Road Train only (see railPlan): one trip takes
+      // everything the Depot is short of that the source can spare (a mixed load), once that's a Road Train
+      // load (TRAIN_MIN_LOAD), or a truckload when the Depot is running low on something. Meanwhile the
+      // buildings round it are served as before.
+      if (r.autoOnly) {
+        const k = keepOf(r.b) || {}, load = {};
+        let total = 0, low = false;
+        if (byRoad && s2s && long && !isLiquid(r.g)) {
+          for (const r2 of reqs) {
+            if (r2.b !== r.b || r2.n < 1 || isLiquid(r2.g) || load[r2.g]) continue;
+            const m = Math.min(r2.n, Math.floor(sup(src, r2.g)));
+            if (m < 1) continue;
+            load[r2.g] = m; total += m;
+            if (supplyOf(r.b, r2.g) + (r.b.inc[r2.g] || 0) < (k[r2.g] || 0) / 3) low = true;
+          }
+        }
+        const tu = load[r.g] && (total >= TRAIN_MIN_LOAD || (low && total >= TRUCK_MIN_LOAD)) ? take(src.x, src.y, 'train', src, r.g) : null;
+        if (!tu) { r.n = 0; continue; }
+        const n = Math.min(load[r.g], botCarry(tu)), extra = Object.assign({}, load);
+        delete extra[r.g];
+        assignHaul(tu, src, r.b, r.g, n, extra);
+        const mix = (tu.task && tu.task.mix) || {};
+        for (const r2 of reqs) if (r2.b === r.b) { if (r2.g === r.g) r2.n -= n; else if (mix[r2.g]) r2.n -= mix[r2.g]; }
         any = true;
         continue;
       }

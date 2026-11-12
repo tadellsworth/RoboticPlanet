@@ -3376,6 +3376,18 @@ function railStatusText(b) {
     (conv.length ? `<div class="kv"><span>Conveyors</span><span>${conv.map((l) => BDEFS[l.c.type].name).join(', ')}</span></div>` : '');
 }
 
+/** A Depot's automatic stock (see railPlan): whether it stocks itself, and what it keeps for the buildings round it. */
+function depotAutoText(b) {
+  const P = S.players[b.owner], hub = getE(P.lander);
+  if (!hub || hub.dead || !farApart(b, hub)) return `Near your Command Base: it stocks nothing by itself (a Depot ${TRUCK_MIN_DIST} or more tiles out does).`;
+  if (b.autoOff) return 'Auto supply is off: only the supply orders below stock it.';
+  if (!roadTrainFor(b.owner, b) || !truckLinked(b, hub)) return 'Once a Road Train can drive here from your Command Base (order one at the Bot Foundry), this Depot keeps what the buildings round it need, and the Road Train brings it.';
+  if (!b.auto) return `Nothing round it needs a Road Train load yet (${TRAIN_MIN_LOAD} goods or more): Freight Trucks and Haulers serve the buildings here as usual.`;
+  const served = S.buildings.filter((c) => !c.dead && c.railBy === b.id && needsOf(c).some(([g]) => b.auto[g])).length;
+  const list = Object.entries(b.auto).map(([g, n]) => goodTag(g, `${Math.min(b.stock[g] || 0, n)}/${n} ${GOOD[g].name}`, (b.stock[g] || 0) < n / 3)).join(' ');
+  return `It keeps what the ${served} building${served === 1 ? '' : 's'} round it need${served === 1 ? 's' : ''}, brought by Road Train, several goods a trip:<div class="goodlist">${list}</div>`;
+}
+
 /** Traffic map legend plus how busy the haulers and trucks are. */
 function trafficSummary() {
   const n = { hauler: [0, 0], truck: [0, 0], tanker: [0, 0] };
@@ -3570,6 +3582,12 @@ function openBuildingSheet(b) {
       html += `<div class="section-label">Railway</div><div class="status" id="sh-rail-status"></div>
         <div class="seg" id="sh-auto"><button data-v="1">Auto supply</button><button data-v="0">Off</button></div>
         <p class="hint" id="sh-rail-hint"></p>`;
+    }
+    // A Depot: what it stocks automatically for a Road Train to bring.
+    if (b.type === 'depot' && b.built && mine) {
+      html += `<div class="section-label">Road Train supply</div><div class="status" id="sh-dauto-status"></div>
+        <div class="seg" id="sh-auto"><button data-v="1">Auto supply</button><button data-v="0">Off</button></div>
+        <p class="hint" id="sh-dauto-hint"></p>`;
     }
     if (def.store && b.built && !def.terminal) {
       html += `<div class="section-label">Storage</div><div class="seg" id="sh-smode">
@@ -3994,7 +4012,11 @@ function refreshBuildingSheet(b) {
       if (by.length) parts.push(`<div class="kv"><span>Fed by conveyor</span><span>${by.map(({ from, link }) => linkText(link, from)).join('; ')}${beingFed(b) ? ', working a tenth faster' : ''}</span></div>`);
       const sb = !def.store && stationBeside(b);
       if (sb && stationLinks(sb).some((l) => l.c === b)) parts.push(`<div class="kv"><span>Rail Station</span><span>joined by conveyor: it hands this its goods${def.out ? ' and takes its output' : ''}</span></div>`);
-      else if (b.railBy) parts.push(`<div class="kv"><span>Supplied by rail</span><span>from the Rail Station ${dirText(b, getE(b.railBy) || b)}</span></div>`);
+      else if (b.railBy) {
+        const sv = getE(b.railBy);
+        if (sv && sv.type === 'depot') parts.push(`<div class="kv"><span>Supplied by Road Train</span><span>through the Depot ${dirText(b, sv)}</span></div>`);
+        else parts.push(`<div class="kv"><span>Supplied by rail</span><span>from the Rail Station ${dirText(b, sv || b)}</span></div>`);
+      }
     }
     if (def.store && mine && !def.terminal) {
       let idle = 0;
@@ -4129,6 +4151,11 @@ function refreshBuildingSheet(b) {
   }
   if ($('sh-air-places')) $('sh-air-places').textContent = airPlacesText(b);
   if ($('sh-airsup')) { for (const btn of $('sh-airsup').children) btn.classList.toggle('on', (btn.dataset.v === '1') === !!b.airSupply); $('sh-airsup-hint').textContent = airSupplyHint(b); }
+  if ($('sh-dauto-status')) {
+    for (const btn of $('sh-auto').children) btn.classList.toggle('on', (btn.dataset.v === '1') === !b.autoOff);
+    $('sh-dauto-status').innerHTML = depotAutoText(b);
+    $('sh-dauto-hint').textContent = `Auto supply: a Depot ${TRUCK_MIN_DIST} or more tiles from your Command Base keeps what the factories, garrisons and building sites round it need (twice what a factory holds, what a site still lacks, never what they make), and a Road Train brings it from home once that makes a load (${TRAIN_MIN_LOAD} or more), several goods a trip, taking the Depot's spare goods home. Haulers do the short hop to each building. Supply orders you set below come on top.`;
+  }
   if ($('sh-rail-status')) {
     for (const btn of $('sh-auto').children) btn.classList.toggle('on', (btn.dataset.v === '1') === !b.autoOff);
     $('sh-rail-status').innerHTML = railStatusText(b);

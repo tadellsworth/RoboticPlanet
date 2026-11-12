@@ -143,7 +143,7 @@ const BOTS = {
   paver:   { name: 'Paver', plural: 'Pavers', speed: WORKER_SPEED, hp: 6, crew: 'paver', offroad: true,
     desc: 'A road crew bot. A Roadworks needs one to lay asphalt on your roads.' },
   roadtrain: { name: 'Road Train', plural: 'Road Trains', speed: WORKER_SPEED * 1.35, hp: 14, haul: true, truck: true, train: true, mixed: true, carry: 30, roadOnly: true, parts: 4, accel: 1.0, brake: 2.5,
-    desc: 'A truck pulling two trailers: 30 goods at once, several kinds in one trip, for bulk runs between your Command Base and far Depots (filling their supply orders, and bringing a far Depot\'s spare goods home). One does the work of about three Freight Trucks on a long asphalt run, on less Fuel. It only pays off on asphalt: on plain road it crawls. Slow to start and stop, it wears roads hard and holds up the traffic behind it.' },
+    desc: 'A truck pulling two trailers: 30 goods at once, several kinds in one trip, for bulk runs between your Command Base and far Depots (keeping a far Depot stocked with what the buildings round it need, filling supply orders, and bringing a far Depot\'s spare goods home). One does the work of about three Freight Trucks on a long asphalt run, on less Fuel. It only pays off on asphalt: on plain road it crawls. Slow to start and stop, it wears roads hard and holds up the traffic behind it.' },
   freight: { name: 'Freight Train', plural: 'Freight Trains', speed: WORKER_SPEED * 3.4, hp: 30, haul: true, rail: true, mixed: true, carry: 56, parts: 5, accel: 0.85, brake: 1.6,
     desc: 'A locomotive and four wagons: 56 goods at once, several kinds in one trip, between Rail Stations on the same track, fast and with no traffic to wait for. It runs the line on its own: out with what the far station needs once that fills a good share of its wagons (sooner if the station runs low), home with the far station\'s spare goods. It never needs charging or Fuel. Order it at a Rail Station: its rail yard builds it from Alloy and Chips and it rolls out onto that station\'s track.' },
   // Ships (naval maps only): they sail open water between Ports (passing under bridges), burning Fuel (SHIP_BURN).
@@ -842,7 +842,7 @@ const BDEFS = {
     cost: {}, wild: true, armor: 45, buildTime: 1,
   },
   depot: {
-    name: 'Depot', desc: 'Extra storage. Haulers drop goods at the nearest storage they can reach by road, so depots along your highways shorten trips. Give it supply orders to stock it from home: a forward base for building at the front.',
+    name: 'Depot', desc: 'Extra storage. Haulers drop goods at the nearest storage they can reach by road, so depots along your highways shorten trips. Give it supply orders to stock it from home: a forward base for building at the front. Far from your Command Base, with a Road Train that can drive to it, it stocks itself with what the buildings round it need, and the Road Train keeps it supplied.',
     cost: { fiber: 3, cement: 2 }, store: true, armor: 10, buildTime: 8,
   },
 };
