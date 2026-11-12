@@ -388,7 +388,9 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
   which buildings make and use it, and any shortfall (buildings waiting on it with none in stock). Switch goods at the
   top of the panel.
 - **Ammo:** warbots carry 10 shots (each Ammo reloads 5) and reload in your Command Base and Outposts, which haulers stock from an Ammo Plant. Out of
-  ammo, a warbot can't fight at all: it heads back to a garrison to reload, and only armed warbots answer orders.
+  ammo, a warbot can't fight at all: it heads back to a garrison to reload, and only armed warbots answer orders. On an
+  attack it goes to reload and comes back to it, once (`startReload`, `task.reload`), when the target still stands, a
+  squad-mate with Ammo is still on it and a garrison with Ammo is within `RELOAD_REACH` (16) tiles.
   A rival's empty warbot sitting in a garrison with no Ammo and none on the way (an Outpost no road reaches yet)
   goes to reload where there is some and keeps away from that one for 90 s; yours stay where you posted them.
 - **Rival boost (hidden):** tap the clock three times quickly, or press **`**, to give a rival a supply drop, 4 armed
@@ -397,7 +399,7 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
 - **Repairs:** nothing heals by itself. Damaged bots go to a Repair Station (workers below 60% health, warbots below
   70% once their garrison is quiet; Colony free play too), which uses 1 Alloy per 12 health. A warbot below 35%
   (`REPAIR_RETREAT`) on an attack, a rally flag or a sortie pulls out of the fight for repairs when a Repair Station can
-  fix it (otherwise it fights on), takes no new fights on the way (`u.retreat`), and goes back to its attack or flag
+  fix it (otherwise it fights on; and not while it stands under enemy guns, `underGuns`, where walking away mostly killed it), takes no new fights on the way (`u.retreat`), and goes back to its attack or flag
   once mended (`u.resume`, `resumeAfterRepair`; the flag stays up meanwhile, and Recall cancels the return). Haulers keep up to 3 Alloy
   in it, and an empty one gets the first Alloy that reaches storage (like an empty Fuel Station's Fuel). To fix a building, tap it and press **Repair**:
   you pay 1 Cement for every 6 missing armor and a free worker restores it.
@@ -494,6 +496,10 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
 - **Army orders:** tap **Army**, then a rival building to attack it with warbots or a missile, or open
   ground to send warbots there to hold the area under a rally flag. Tap the flag to call them back, or press
   **Recall all** in the Army banner (**C** on a computer) to end every attack and rally flag at once.
+  A squad drawn from several garrisons sets off so as to arrive together (`paceSquad`, called by `sendAttack` and
+  `sendToRally`; not the rival's raids): each warbot's walk is timed along its route (`walkTime`) and those nearer
+  wait at home for the difference (`task.wait`, at most `PACE_MAX` 45 s; one that's shot at goes at once), and the
+  player is told. Warbots selected and ordered directly (`orderMove`, `orderAttack`) never wait.
 - **Saving:** the game saves itself every `AUTOSAVE_EVERY` (20) seconds while you play, and when you switch away or
   close it (`autoSave`); Continue on the main menu picks it up. The pause menu says when it last saved, and a failed
   save (storage full or blocked) is reported once. A long game's save is about 250–300 KB. Saves live in that browser
@@ -529,7 +535,11 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
   They're `prepaid` (paid from storage on Build, no Hauler or road, outside the site limit). Walls block every bot;
   Gates let their owner's bots and road through (`passTile(t, who)`). Armed enemy warbots plan through a Wall or
   Gate as if it were `BREACH_COST + armor` tiles long, so they go round a short way or stop and shoot through
-  (`breachHit`); a bot whose route gets walled off re-plans (`blockedStep`). On Chokepoint maps the AI walls the mouth
+  (`breachHit`); a bot whose route gets walled off re-plans (`blockedStep`). Every army order adds up the armor of
+  the rival Walls, Gates and road-blocking Outposts on the squad's routes against the shots it carries
+  (`squadBreach`, `breachCheck`): when it can't shoot its way through the player is warned (`sendToRally` also
+  returns it as `breach: { need, shots }`), and the rival AI can ask before it orders an attack (`attackBreach`).
+  On Chokepoint maps the AI walls the mouth
   of each channel on its side on Medium, Normal and Hard (`aiWalls`; on Easy only a Turtle does).
 - **Garrisons and posts** (yours, `usesPosts`; the AI spreads its own to the front as before): every warbot belongs
   somewhere. `u.post` is the Outpost or Bunker it was stationed at; with none it belongs to the Command Base. All your
@@ -581,7 +591,7 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
   An event card under the top bar shows it with a countdown and the Trade button.
 - **Missiles** are built at a Missile Factory (2 Alloy, 1 Chip and 1 Fuel each, 20 seconds) and carried to Missile Silos
   by haulers. A hit does 24 damage, which wrecks most buildings outright, plus 5 to other rival buildings and 9 to bots
-  within 2.2 tiles. Outposts and Command Bases drop no lower than `MISSILE_FLOOR` (35%) of their armor; warbots still have to shoot their way in. A fort under `SORTIE_ARMOR` (25%) sends every armed warbot inside out to fight, and capturing one ejects whoever is left inside instead of killing them.
+  within 2.2 tiles. Outposts and Command Bases drop no lower than `MISSILE_FLOOR` (35%) of their armor; warbots still have to shoot their way in. A Rocket Truck doesn't fire at a fort already down at that floor (`atFloor`, `rocketTarget`): an order to shell one ends, or is refused, with a message saying why, and trucks firing at will (and the rival's) pick something else. A truck sent at a building fires from the tile in rocket reach of it that the fewest enemy guns cover, the nearest of those (`rocketSpot`, looked for again every two seconds on the way), and a fort sends two guards after a truck that is shelling its owner's buildings from within `TRUCK_ALARM` (12) tiles (`garrisonDefense`; guards go after a Rocket Truck outside their own land too). A fort under `SORTIE_ARMOR` (25%) sends every armed warbot inside out to fight, and capturing one ejects whoever is left inside instead of killing them. Guards out on a sortie (`garrisonDefense`) give up a foe once it is `SORTIE_LEASH` (9) tiles from their fort and out of their reach, and leave it alone for 12 s, so they can't be led away. A fort with nobody at its own walls also answers for its owner's buildings within `AREA_DEFENCE` (14) tiles: where enemy warbots are shooting at one (`P.raided`, set by `hitBuilding`), it sends one more guard than there are raiders, less those already on their way, keeping its last armed warbot (`task.ax`, `task.ay`); they follow the raid from building to building while it stays within reach of the fort, with their leash measured from that spot, and go home after `AREA_QUIET` (6) quiet seconds. A squad on a rally flag that isn't in a rival's land likewise takes on enemy robots within 6.5 tiles of the flag.
   A Silo is drawn with its launch pit empty until it's ready to fire (loaded and not reloading; a Nuclear Silo once
   armed), then the missile fades in (`siloRise`; art `silo-empty`, `nukesilo-empty`).
   To fire, tap a Silo and press **Aim missile**: its 18-tile range shows as a red ring; tap any spot inside it (a
@@ -611,7 +621,16 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
 - **Warbots march in single file** on roads (`queueRoom`, `WARBOT_GAP`): a warbot on the march falls in behind the next
   warbot of its side in its lane (never behind a truck, nor one that's fighting or breaking down a Gate) and spreads out
   for its last `WARBOT_SPREAD` tiles; off-road tiles cost `WARBOT_OFFROAD` times more when it plans a route, so squads
-  keep to the roads. Other traffic still never queues behind a warbot.
+  keep to the roads. Other traffic still never queues behind a warbot. Warbots given the same order from one place
+  share one route search (`squadRoute`, routes kept for the tick they're planned in and the next; `goTo`), and a
+  warbot marching to a rally flag makes for the flag itself until it is within 4 tiles, then for its own spot
+  (`holdRally`), so a squad of 20 costs one cross-map search, not 20.
+- **Gun cover** (`gunCover`, `underGuns`, `gunReach`): for each player, how many of its rivals' guns (Pulse Turrets, Keep
+  cannons and manned Keep slits, manned Bunkers, Mortar Pit rings; every rival in a three-player game) can hit a robot on
+  each tile. Never saved; looked over once a tick when asked and refilled only when the guns change. A warbot not in a
+  fight, a Rocket Truck and a Crawler plan routes that pay `COVER_COST` more a tile for each gun covering it
+  (`routeOpts`, `findPath` `opts.cover`): they go round a gun when the way round is short and come at a covered place
+  from its least covered side, breaches included. A cost, not a ban.
 - **Rail Stations** can go up before any track: a rail drag over your own station skips its tile, so dragging from one
   station to another lays track that ends beside each.
 - **Cut off** (`cutOff`, `crumble`): a finished building whose ground a rival's ring takes stops working (nothing is
