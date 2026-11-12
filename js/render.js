@@ -3466,7 +3466,7 @@ function drawBot(ctx, u, sx, sy, s) {
   if (BOTS[u.type].crawler) { drawCrawler(ctx, u.face || 0, sx, sy, s, u.owner, false, u.odo || 0, false, u); return; }
   const color = PLAYER_COLORS[u.owner];
   // A Rocket Truck with its rack raised (deploying or firing) shows its launcher up and legs out.
-  const own = (BOTS[u.type].siege && (u.deployT > 0 || u.salvo) && artFor('rocket-up', u.owner)) || driveFrame(u) || artFor(u.type, u.owner);
+  const own = (BOTS[u.type].siege && (u.deployT > ROCKET.deploy * 0.4 || u.salvo) && artFor('rocket-up', u.owner)) || driveFrame(u) || artFor(u.type, u.owner); // (dug in: spades down, barrel up)
   // Specialists use their own art when it exists, otherwise the worker's with a badge.
   const tanker = u.type === 'tanker', truck = u.type === 'truck' || tanker;
   const art = own || (u.type !== 'warbot' && !truck ? artFor('worker', u.owner) : null);
@@ -5102,15 +5102,14 @@ function drawMissiles(ctx, ox, oy, z) {
       continue;
     }
     if (m.rocket) {
-      // A rocket: a short low arc, a slim body with a flame behind it, and its shadow.
-      const k = Math.min(1, m.t / m.dur), k2 = Math.min(1, (m.t + 0.04) / m.dur), hk = (q) => Math.sin(q * Math.PI) * 1.2;
+      // A Howitzer's shell: a high arc, a dark shell with a glowing base (its tracer), and its shadow on the ground.
+      const k = Math.min(1, m.t / m.dur), k2 = Math.min(1, (m.t + 0.04) / m.dur), hk = (q) => Math.sin(q * Math.PI) * ROCKET.arc;
       const gx = ox + lerp(m.x0, m.x1, k) * z, gy = oy + lerp(m.y0, m.y1, k) * z;
       const ang = Math.atan2((lerp(m.y0, m.y1, k2) - hk(k2)) - (lerp(m.y0, m.y1, k) - hk(k)), lerp(m.x0, m.x1, k2) - lerp(m.x0, m.x1, k));
       ctx.fillStyle = 'rgba(0,0,0,0.25)'; ctx.beginPath(); ctx.ellipse(gx, gy, z * 0.1, z * 0.04, 0, 0, Math.PI * 2); ctx.fill();
       ctx.save(); ctx.translate(gx, gy - hk(k) * z); ctx.rotate(ang);
-      ctx.fillStyle = '#ffb347'; ctx.beginPath(); ctx.ellipse(-z * 0.2, 0, z * 0.1 + Math.random() * z * 0.04, z * 0.04, 0, 0, Math.PI * 2); ctx.fill();
-      ctx.fillStyle = '#c9cdd2'; ctx.fillRect(-z * 0.12, -z * 0.035, z * 0.24, z * 0.07);
-      ctx.fillStyle = PLAYER_COLORS[m.owner]; ctx.fillRect(z * 0.08, -z * 0.035, z * 0.05, z * 0.07);
+      ctx.fillStyle = '#2a2d31'; ctx.beginPath(); ctx.ellipse(0, 0, z * 0.13, z * 0.055, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#b08a4a'; ctx.fillRect(-z * 0.02, -z * 0.055, z * 0.035, z * 0.11);
       ctx.restore();
       continue;
     }

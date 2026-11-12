@@ -289,7 +289,7 @@ function fxShake(ox, oy, z) {
 
 /** Where missile m is at fraction q of its flight (world tiles; y raised by its height), and its ground point. */
 function fxFlight(m, q) {
-  const H = m.nuke ? 7 : m.rocket ? 1.2 : m.shell ? 2.2 : 2.5;
+  const H = m.nuke ? 7 : m.rocket ? ROCKET.arc : m.shell ? 2.2 : 2.5;
   const gx = lerp(m.x0, m.x1, q), gy = lerp(m.y0, m.y1, q);
   return { x: gx, y: gy - Math.sin(q * Math.PI) * H, gx, gy };
 }
@@ -297,7 +297,7 @@ function fxFlight(m, q) {
 const FX_TRAIL = { // smoke left behind: how long a puff lasts (s), how big it gets (tiles), how dense
   missile: { life: 2.6, r0: 0.16, r1: 0.55, step: 0.09, glow: '#ffb347', flame: 0.42 },
   nuke: { life: 4, r0: 0.26, r1: 0.95, step: 0.14, glow: '#ffd27a', flame: 0.8 },
-  rocket: { life: 1.3, r0: 0.11, r1: 0.32, step: 0.08, glow: '#ffb347', flame: 0.24 },
+  rocket: { life: 1.8, r0: 0.07, r1: 0.26, step: 0.08, glow: '#ffcf8a', flame: 0.15 }, // a Howitzer's shell: its tracer and a thin smoke trail
   shell: { life: 0, glow: '#ffcf8a', flame: 0 },
 };
 function fxKind(m) { return m.nuke ? 'nuke' : m.rocket ? 'rocket' : m.shell ? 'shell' : m.bomb ? null : 'missile'; }

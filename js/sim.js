@@ -1922,6 +1922,7 @@ function updateWorker(u, dt) {
       if (u.bat >= 99.5 || chargerDry(c)) { u.task = null; if (!BDEFS[c.type].store) exitBuilding(u); }
     } else if (moveAlong(u, dt)) enterBuilding(u, c);
   } else if (t.type === 'haul') doHaul(u, t, dt);
+  else if (t.type === 'arty') doArtySupply(u, t, dt);
   else if (t.type === 'board') doBoard(u, t, dt);
   else if (t.type === 'crate') doCrate(u, t, dt);
   else if (t.type === 'build') doBuild(u, t, dt);
@@ -2767,7 +2768,7 @@ function spawnFromFoundry(b) {
   const u = addBot(b.owner, kind, b.x, b.y);
   addFx('ring', b.x + 0.5, b.y + 0.5, { color: PLAYER_COLORS[b.owner] });
   if (kind === 'warbot') goGarrison(u);
-  // A Rocket Truck rolls off onto open ground beside the Foundry and waits there for orders (its post).
+  // A Howitzer rolls off onto open ground beside the Foundry and waits there for orders (its post).
   // (Yours only: the computer moves its own trucks about, see aiSiege.)
   if (BOTS[kind].siege && !S.players[b.owner].ai) { const t = crawlerPark(u); if (t >= 0) { u.post = { i: t % S.W, j: (t / S.W) | 0 }; u.task = { type: 'park', i: u.post.i, j: u.post.j, home: true }; } }
 }
@@ -3353,7 +3354,7 @@ function gunOver(p, x, y) {
   return best;
 }
 
-/** Does robot u stay clear of enemy guns (anything but a fighter: warbots, Rocket Trucks and aircraft go in)? */
+/** Does robot u stay clear of enemy guns (anything but a fighter: warbots, Howitzers and aircraft go in)? */
 function gunShy(u) { const bt = BOTS[u.type]; return u.type !== 'warbot' && !bt.siege && !bt.air && !bt.wild && !bt.sea && !bt.rail; }
 
 /**
@@ -4075,25 +4076,25 @@ function ammoNear(u) {
   return S.buildings.some((b) => !b.dead && b.built && b.owner === u.owner && BDEFS[b.type].mil && (b.stock.ammo || 0) > 0 && S.zone[tIdx(b.x, b.y)] === zone);
 }
 
-/* ------------------------------------------------------------------ the Rocket Truck */
+/* ------------------------------------------------------------------ the Howitzer */
 
-/** Can rocket truck u fire at building b (a rival's, standing)? */
+/** Can Howitzer u fire at building b (a rival's, standing)? */
 function rocketTarget(u, b) { return b && !b.dead && b.owner >= 0 && b.owner !== u.owner && !BDEFS[b.type].wild && S.players[b.owner] && !S.players[b.owner].out; }
 
-/** An enemy building in reach of a parked, loaded rocket truck: forts and guns first, then the nearest. */
+/** An enemy building in reach of a parked, loaded Howitzer: forts and guns first, then the nearest. */
 function rocketTargetNear(u) {
   let best = null, bs = -Infinity;
   for (const b of S.buildings) {
     if (!rocketTarget(u, b) || !b.built) continue;
     const d = dist(u.x, u.y, b.x + 0.5, b.y + 0.5);
     if (d > ROCKET.range - 0.25 || d < ROCKET.min) continue;
-    const def = BDEFS[b.type], s = (def.war ? 6 : 0) + (def.mil ? 3 : 0) + (def.barrier ? -4 : 0) - d * 0.2;
+    const def = BDEFS[b.type], s = (def.war ? 8 : 0) + (def.mil ? 4 : 0) + (def.barrier ? -3 : 0) - d * 0.2; // defences first
     if (s > bs) { bs = s; best = b; }
   }
   return best;
 }
 
-/** Where rocket truck u can take on Ammo: the nearest garrison or storage of its owner's holding enough, on its side of the water. */
+/** Where Howitzer u can take on Ammo: the nearest garrison or storage of its owner's holding enough, on its side of the water. */
 function rocketDepot(u) {
   const zone = S.zone[tIdx(Math.floor(u.x), Math.floor(u.y))];
   let best = null, bd = Infinity;
@@ -4106,22 +4107,143 @@ function rocketDepot(u) {
   return best;
 }
 
+/** Is Howitzer u dug in (spades down, barrel up), ready to fire? */
+function rocketDug(u) { return (u.deployT || 0) >= ROCKET.deploy; }
+
+/** Howitzer u packing up before it drives anywhere (ROCKET.pack s from dug in; faster when it has to flee). True once it can move. */
+function rocketPacked(u, dt, hurry) {
+  if (!(u.deployT > 0)) { u.deployT = 0; u.packing = false; return true; }
+  u.vel = 0; u.path = null; u.salvo = null; u.packing = true;
+  u.deployT = Math.max(0, u.deployT - (dt * ROCKET.deploy * (hurry ? 2 : 1)) / ROCKET.pack);
+  if (u.deployT <= 0) { u.packing = false; return true; }
+  return false;
+}
+
+/**
+ * Where Howitzer u can fire on building b from: a free tile of open ground in its zone, about ROCKET.range - 2 tiles
+ * from b toward u (nearer if u is already closer), the nearest such to that point. -1 if none.
+ */
+function rocketSpot(u, b) {
+  const cx = b.x + 0.5, cy = b.y + 0.5, d = dist(u.x, u.y, cx, cy) || 1, want = clamp(d, ROCKET.min + 1, ROCKET.range - 2);
+  const px = cx + ((u.x - cx) / d) * want, py = cy + ((u.y - cy) / d) * want, zone = S.zone[tIdx(Math.floor(u.x), Math.floor(u.y))];
+  let best = -1, bd = Infinity;
+  for (let dj = -3; dj <= 3; dj++) for (let di = -3; di <= 3; di++) {
+    const i = Math.floor(px) + di, j = Math.floor(py) + dj;
+    if (!inMap(i, j)) continue;
+    const t = tIdx(i, j), e = dist(i + 0.5, j + 0.5, cx, cy);
+    if (S.bAt[t] || !walkable(t) || S.zone[t] !== zone || e > ROCKET.range - 0.5 || e < ROCKET.min + 0.5) continue;
+    const dd = dist2(i + 0.5, j + 0.5, px, py);
+    if (dd < bd) { bd = dd; best = t; }
+  }
+  return best;
+}
+
+/** Is a hauler on its way with Ammo for Howitzer u? */
+function rocketSupplyComing(u) {
+  const h = u.supplyBy ? getE(u.supplyBy) : null;
+  return !!(h && !h.dead && h.task && h.task.type === 'arty' && h.task.gun === u.id);
+}
+
+/**
+ * Howitzer u, dug in on its owner's ground and a full Ammo or more short of shells, calls up a hauler: a free one takes
+ * Ammo from the nearest garrison or storage holding some and drives it to the road beside the gun (within
+ * ROCKET.supplyReach tiles), one run at a time. Off its own ground, or with no road beside it, it fetches its own.
+ */
+function rocketCallSupply(u) {
+  if (u.rockets > ROCKET.mag - ROCKET.perAmmo || rocketSupplyComing(u)) return;
+  const road = rocketSupplyRoad(u);
+  if (road < 0) return;
+  const src = rocketDepot(u);
+  if (!src) return;
+  let h = null, hd = Infinity;
+  for (const v of S.bots) {
+    if (v.dead || v.owner !== u.owner || v.type !== 'hauler' || v.task || v.carry) continue;
+    const d = dist2(v.x, v.y, src.x, src.y);
+    if (d < hd) { hd = d; h = v; }
+  }
+  if (!h) return;
+  const n = Math.min(carryOf(h, 'ammo'), Math.ceil((ROCKET.mag - u.rockets) / ROCKET.perAmmo), Math.floor((src.stock.ammo || 0) - (src.res.ammo || 0)));
+  if (n < 1) return;
+  h.task = { type: 'arty', src: src.id, gun: u.id, good: 'ammo', phase: 'toSrc', n, road };
+  bump(src.res, 'ammo', n);
+  if (!goTo(h, src.x, src.y)) { bump(src.res, 'ammo', -n); h.task = null; return; }
+  u.supplyBy = h.id;
+}
+
+/** The road tile a hauler would bring Howitzer u its Ammo to: on its owner's ground within ROCKET.supplyReach tiles (and the gun's own tile its owner's too). -1 if none. */
+function rocketSupplyRoad(u) {
+  const ui = Math.floor(u.x), uj = Math.floor(u.y);
+  if (!inMap(ui, uj) || S.owner[tIdx(ui, uj)] !== u.owner) return -1;
+  let road = -1, bd = Infinity;
+  const R2 = ROCKET.supplyReach * ROCKET.supplyReach;
+  for (let dj = -3; dj <= 3; dj++) for (let di = -3; di <= 3; di++) {
+    const i = ui + di, j = uj + dj;
+    if (!inMap(i, j)) continue;
+    const t = tIdx(i, j), d = dist2(i + 0.5, j + 0.5, u.x, u.y);
+    if (!S.road[t] || d > R2 || d >= bd || S.owner[t] !== u.owner) continue;
+    road = t; bd = d;
+  }
+  return road;
+}
+
+/**
+ * Howitzer u is out of shells (or short of them) where it's dug in: should it stay put for a hauler? Yes while one is
+ * on its way; and where one could come (its own ground, a road beside it, Ammo in storage), for up to 12 s while it
+ * calls one up (every second, until a hauler is free). Otherwise it packs up and fetches its own.
+ */
+function rocketAwaitSupply(u) {
+  if (!rocketDug(u)) return false;
+  if (rocketSupplyComing(u)) { u.dryAt = 0; return true; }
+  if (rocketSupplyRoad(u) < 0 || !rocketDepot(u)) return false;
+  if (!u.dryAt) u.dryAt = S.time;
+  if (S.time - u.dryAt > 12) return false;
+  if (S.time - (u.supTry || -9) >= 1) { u.supTry = S.time; rocketCallSupply(u); }
+  return true;
+}
+
+/** A hauler's run with Ammo for a dug-in Howitzer (task 'arty'): to the storage, then to the road beside the gun. */
+function doArtySupply(u, t, dt) {
+  const src = getE(t.src);
+  if (t.phase === 'toSrc') {
+    if (!src || src.dead || src.owner !== u.owner) { if (src) bump(src.res, 'ammo', -t.n); u.task = null; return; }
+    if (!moveAlong(u, dt)) return;
+    bump(src.res, 'ammo', -t.n);
+    const got = Math.min(t.n, Math.floor(src.stock.ammo || 0));
+    if (got <= 0) { u.task = null; return; }
+    bump(src.stock, 'ammo', -got);
+    u.carry = 'ammo'; u.carryN = got; t.n = got; t.phase = 'toGun';
+    if (!goTo(u, t.road % S.W, (t.road / S.W) | 0)) { bump(src.stock, 'ammo', got); u.carry = null; u.carryN = 0; u.task = null; }
+    return;
+  }
+  if (!moveAlong(u, dt)) return;
+  const g = getE(t.gun);
+  if (g && !g.dead && dist2(g.x, g.y, u.x, u.y) <= 12) {
+    g.rockets = Math.min(ROCKET.mag, (g.rockets || 0) + t.n * ROCKET.perAmmo);
+    usedGood(u.owner, 'ammo', t.n);
+    if (g.owner === 0) addFx('ring', g.x, g.y, { color: PLAYER_COLORS[g.owner], r: 0.8 });
+  } else if (src && !src.dead && src.owner === u.owner) bump(src.stock, 'ammo', t.n); // the gun's gone: it goes back into storage
+  u.carry = null; u.carryN = 0; u.task = null; u.idleT = 0;
+}
+
 function updateRocket(u, dt) {
-  if (u.rockets === undefined) u.rockets = ROCKET.salvo;
-  if (u.task && u.task.type === 'flee') { u.salvo = null; u.deployT = 0; doFlee(u, dt); return; }
+  if (u.rockets === undefined || u.rockets > ROCKET.mag) u.rockets = Math.min(ROCKET.mag, u.rockets ?? ROCKET.mag);
+  if (u.task && u.task.type === 'flee') { u.salvo = null; if (rocketPacked(u, dt, true)) doFlee(u, dt); return; }
   u.cd = (u.cd || 0) - dt;
-  // Firing a salvo: one rocket every `gap` seconds until the rack is empty (jammed by a Disruptor, it waits).
+  // A salvo under way: `salvo` shells `gap` s apart, then the crew reloads (`cycle` s) for the next one.
   if (u.salvo) {
     u.vel = 0;
     const b = getE(u.salvo.target);
-    if (!rocketTarget(u, b) || !u.rockets) { u.salvo = null; u.deployT = 0; return; }
+    if (!rocketTarget(u, b) || !u.rockets) { u.salvo = null; return; }
     if (u.cd > 0) return;
     launchRocket(u, b);
     u.rockets--;
+    u.salvo.n = (u.salvo.n || 0) + 1;
     u.cd = ROCKET.gap;
-    if (!u.rockets) { u.salvo = null; u.deployT = 0; }
+    if (u.salvo.n >= ROCKET.salvo || !u.rockets) { u.salvo = null; u.cd = ROCKET.cycle; }
     return;
   }
+  // Dug in on its own ground near a road: it calls up a hauler with Ammo.
+  if (rocketDug(u) && S.tick % 60 === u.id % 60) rocketCallSupply(u);
   // Hurt (below REPAIR_BELOW.other): off to a Repair Station within ROCKET.repairReach tiles, then back to the
   // building it was bombarding on your orders (or to its post).
   if (!(u.task && u.task.type === 'repair') && S.tick % 30 === u.id % 30 && wantsRepair(u)) {
@@ -4129,13 +4251,18 @@ function updateRocket(u, dt) {
     if (c && dist(u.x, u.y, c.x + 0.5, c.y + 0.5) <= ROCKET.repairReach) {
       const back = u.task && u.task.type === 'bombard' && !u.task.auto ? u.task.target : 0;
       u.task = { type: 'repair', bld: c.id, back };
-      u.path = null; u.deployT = 0;
+      u.path = null;
     }
   }
   const t = u.task;
   if (!t) {
-    u.deployT = 0;
-    if (u.rockets < ROCKET.salvo) { const d = rocketDepot(u); if (d) u.task = { type: 'rearm', bld: d.id }; return; }
+    if (!u.rockets || (u.rockets < ROCKET.mag && !rocketDug(u))) {
+      if (rocketAwaitSupply(u)) return; // dug in, waiting for a hauler
+      u.dryAt = 0;
+      const d = rocketDepot(u);
+      if (d) u.task = { type: 'rearm', bld: d.id };
+      return;
+    }
     // Back to the spot it was told to hold (u.post), if it's been away (reloading, or after a bombardment).
     if (u.post && dist2(u.x, u.y, u.post.i + 0.5, u.post.j + 0.5) > 2.5 && S.tick % 30 === u.id % 30) { u.task = { type: 'park', i: u.post.i, j: u.post.j, home: true }; return; }
     // Loaded and waiting: an enemy building in reach of where it stands is fair game, unless told to hold fire.
@@ -4144,46 +4271,61 @@ function updateRocket(u, dt) {
   }
   if (t.type === 'bombard') {
     const b = getE(t.target);
-    if (!rocketTarget(u, b)) { u.task = null; u.deployT = 0; u.path = null; return; }
+    if (!rocketTarget(u, b)) { u.task = null; u.path = null; return; } // (stays dug in: the next target in reach may come)
     if (!u.rockets) {
+      if (rocketAwaitSupply(u)) return; // dug in, waiting for a hauler
+      u.dryAt = 0;
       const d = rocketDepot(u);
       if (!d) { u.task = null; return; }
       u.task = { type: 'rearm', bld: d.id, back: t.auto ? 0 : b.id };
-      u.deployT = 0;
       return;
     }
     const cx = b.x + 0.5, cy = b.y + 0.5, d = dist(u.x, u.y, cx, cy);
     if (d <= ROCKET.range - 0.25 && d >= ROCKET.min) {
-      // In reach: stop, raise the rack, fire.
+      // In reach: stop, dig in, then bring the gun to bear and fire salvo after salvo.
       u.path = null; u.vel = 0; u.drive = 0;
-      u.face = Math.atan2(cy - u.y, cx - u.x);
-      u.deployT = (u.deployT || 0) + dt;
-      if (u.deployT >= ROCKET.deploy) { u.salvo = { target: b.id }; u.cd = Math.max(u.cd, 0); }
+      const want = Math.atan2(cy - u.y, cx - u.x);
+      if (!rocketDug(u)) {
+        if (!(u.deployT > 0)) u.face = want; // (it lines up before the spades go down)
+        u.deployT = (u.deployT || 0) + dt;
+        return;
+      }
+      const diff = wrapAngle(want - (u.face || 0));
+      u.face = wrapAngle((u.face || 0) + clamp(diff, -ROCKET.turn * dt, ROCKET.turn * dt));
+      if (Math.abs(diff) > 0.12) return;
+      if (u.cd <= 0) u.salvo = { target: b.id, n: 0 };
       return;
     }
-    u.deployT = 0;
     if (t.auto) { u.task = null; return; } // firing at will, it never leaves its spot: only what's in reach from there
+    if (!rocketPacked(u, dt)) return;
     let r;
     if (d < ROCKET.min) {
       // Too close: back off, straight away from it.
       const L = d || 1, i = clamp(Math.round(u.x + ((u.x - cx) / L) * 4), 0, S.W - 1), j = clamp(Math.round(u.y + ((u.y - cy) / L) * 4), 0, S.H - 1);
       r = travel(u, i, j, dt);
-    } else r = travel(u, b.x, b.y, dt);
+    } else {
+      // Toward a firing spot: open ground on the line to it, a little inside its reach (the target's own tile can't
+      // be driven onto when it's a fort), picked once and again only if the way there fails.
+      if (!t.spot || S.bAt[t.spot] || !walkable(t.spot)) t.spot = rocketSpot(u, b);
+      r = t.spot >= 0 ? travel(u, t.spot % S.W, (t.spot / S.W) | 0, dt) : travel(u, b.x, b.y, dt);
+      if (r === null && t.spot >= 0) { t.tried = (t.tried || 0) + 1; t.spot = 0; if (t.tried < 4) r = false; }
+    }
     if (r === null) { u.task = null; u.path = null; }
     return;
   }
   if (t.type === 'rearm') {
     const b = getE(t.bld);
     if (!b || b.dead || b.owner !== u.owner || (b.stock.ammo || 0) < 1) { const d = rocketDepot(u); if (d && d !== b) t.bld = d.id; else { u.task = null; return; } return; }
+    if (!rocketPacked(u, dt)) return;
     if (dist2(u.x, u.y, b.x + 0.5, b.y + 0.5) <= 2.2) {
       u.path = null; u.vel = 0;
       t.time = (t.time || 0) + dt;
       if (t.time < ROCKET.reload) return;
-      const n = Math.min(ROCKET.ammo, Math.floor((b.stock.ammo || 0) - (b.res.ammo || 0)));
+      const want = Math.ceil((ROCKET.mag - u.rockets) / ROCKET.perAmmo), n = Math.min(want, Math.floor((b.stock.ammo || 0) - (b.res.ammo || 0)));
       if (n <= 0) { u.task = null; return; }
       bump(b.stock, 'ammo', -n);
       usedGood(u.owner, 'ammo', n);
-      u.rockets = Math.min(ROCKET.salvo, u.rockets + Math.round(n * ROCKET.salvo / ROCKET.ammo));
+      u.rockets = Math.min(ROCKET.mag, u.rockets + n * ROCKET.perAmmo);
       const back = t.back;
       u.task = back && rocketTarget(u, getE(back)) ? { type: 'bombard', target: back } : null; // (then back to its post: see above)
       return;
@@ -4192,6 +4334,7 @@ function updateRocket(u, dt) {
     return;
   }
   if (t.type === 'park') {
+    if (!rocketPacked(u, dt)) return;
     const r = travel(u, t.i, t.j, dt);
     if (r || r === null) u.task = null;
     return;
@@ -4207,6 +4350,7 @@ function updateRocket(u, dt) {
       }
       return;
     }
+    if (!rocketPacked(u, dt)) return;
     const r = travel(u, c.x, c.y, dt);
     if (r) enterBuilding(u, c); else if (r === null) u.task = null;
     return;
@@ -4219,22 +4363,31 @@ function launchRocket(u, b) {
   const k = S.tick + u.id * 7 + u.rockets;
   const x1 = b.x + 0.5 + (hash2(k, u.id, 3) - 0.5) * 2 * ROCKET.scatter, y1 = b.y + 0.5 + (hash2(u.id, k, 5) - 0.5) * 2 * ROCKET.scatter;
   const d = dist(u.x, u.y, x1, y1);
-  S.missiles.push({ rocket: true, owner: u.owner, from: u.id, target: b.id, t: 0, dur: Math.max(0.5, d / ROCKET.speed), x0: u.x, y0: u.y, x1, y1 });
-  addFx('muzzle', u.x + Math.cos(u.face) * 0.2, u.y + Math.sin(u.face) * 0.2 - 0.15, { a: u.face, color: '#ffd27a', life: 0.1 });
-  addFx('smoke', u.x - Math.cos(u.face) * 0.3, u.y - Math.sin(u.face) * 0.3, { r: 0.35, life: 0.8 });
-  if (u.owner === 0 || b.owner === 0) sfx('rocket');
+  const mx = u.x + Math.cos(u.face) * 0.62, my = u.y + Math.sin(u.face) * 0.62 - 0.25; // the barrel's end, raised
+  S.missiles.push({ rocket: true, owner: u.owner, from: u.id, target: b.id, t: 0, dur: Math.max(1.2, d / ROCKET.speed), x0: mx, y0: my + 0.25, x1, y1 });
+  addFx('muzzle', mx, my, { a: u.face, color: '#ffd27a', life: 0.16, big: true });
+  addFx('flash', mx, my, { r: 0.6, life: 0.12 });
+  addFx('smoke', mx, my, { r: 0.55, life: 1.6 });
+  addFx('smoke', u.x - Math.cos(u.face) * 0.3, u.y - Math.sin(u.face) * 0.3, { r: 0.4, life: 1.1 }); // dust kicked up by the recoil
+  if (u.owner === 0 || b.owner === 0) sfx('howitzer');
 }
 
-/** A rocket lands: it knocks ROCKET.damage off its target (forts no lower than MISSILE_FLOOR), and hurts what's round it. */
+/** Does a Howitzer's shell do ROCKET.fortMul damage to building b (a defence or an Outpost)? */
+function rocketFort(b) { return DEFENCE_TYPES.has(b.type) || BDEFS[b.type].mil; }
+
+/** A Howitzer's shell lands: it knocks ROCKET.damage off its target (×fortMul off a defence; forts no lower than MISSILE_FLOOR), and hurts what's round it. */
 function rocketImpact(m) {
-  blastFx(m.x1, m.y1, 0.6, { small: true });
+  blastFx(m.x1, m.y1, 0.85);
   sfx('shellhit');
   const b = getE(m.target);
-  if (b && !b.dead && b.owner !== m.owner && Math.floor(m.x1) === b.x && Math.floor(m.y1) === b.y) rocketHit(b, ROCKET.damage, m.owner);
+  if (b && !b.dead && b.owner >= 0 && b.owner !== m.owner) (S.players[b.owner].shelledBy = S.players[b.owner].shelledBy || {})[m.from] = S.time; // (the AI hunts it down: aiSiege)
+  const direct = !!(b && !b.dead && b.owner !== m.owner && Math.floor(m.x1) === b.x && Math.floor(m.y1) === b.y);
+  if (direct) rocketHit(b, ROCKET.damage * (rocketFort(b) ? ROCKET.fortMul : 1), m.owner);
+  // Splash on what's round it (the target too, on a near miss: a defence takes fortMul of it there as well).
   const s2 = ROCKET.splash * ROCKET.splash;
   for (const e of S.buildings.slice()) {
-    if (e === b || e.dead || e.owner === m.owner || e.owner < 0 || BDEFS[e.type].wild || dist2(e.x + 0.5, e.y + 0.5, m.x1, m.y1) > s2) continue;
-    rocketHit(e, ROCKET.splashBld, m.owner);
+    if ((e === b && direct) || e.dead || e.owner === m.owner || e.owner < 0 || BDEFS[e.type].wild || dist2(e.x + 0.5, e.y + 0.5, m.x1, m.y1) > s2) continue;
+    rocketHit(e, ROCKET.splashBld * (e === b && rocketFort(e) ? ROCKET.fortMul : 1), m.owner);
   }
   for (const u of S.bots) if (!u.dead && !u.inside && u.owner !== m.owner && !BOTS[u.type].wild && dist2(u.x, u.y, m.x1, m.y1) <= s2) damageBot(u, ROCKET.botDamage);
 }
@@ -4246,20 +4399,20 @@ function rocketHit(b, dmg, by) {
   if (by >= 0) (S.players[b.owner].hitBy = S.players[b.owner].hitBy || {})[by] = S.time;
   if (captureOnly(b)) { const f = missileFloor(b); if (b.armor < f) b.armor = Math.min(f, b.armor + dmg); return; }
   if (b.armor <= 0) {
-    postMsg(by, `Your rockets wrecked the enemy ${def.name}.`, b.x, b.y, 'good');
-    postMsg(b.owner, `Enemy rockets wrecked your ${def.name}!`, b.x, b.y, 'lost');
+    postMsg(by, `Your artillery wrecked the enemy ${def.name}.`, b.x, b.y, 'good');
+    postMsg(b.owner, `Enemy artillery wrecked your ${def.name}!`, b.x, b.y, 'lost');
     destroyBuilding(b, true);
   } else if (S.time - (b.lastAlert || -99) > 12) {
     b.lastAlert = S.time;
-    postMsg(b.owner, `Enemy rockets are hitting your ${def.name}!`, b.x, b.y, 'bad');
+    postMsg(b.owner, `Enemy artillery is shelling your ${def.name}!`, b.x, b.y, 'bad');
   }
 }
 
-/** Send selected rocket trucks to bombard enemy building `target` (they drive into reach and reload as needed). */
+/** Send selected Howitzers to bombard enemy building `target` (they drive into reach and reload as needed). */
 function orderBombard(owner, ids, target) {
   const trucks = ids.map(getE).filter((u) => u && !u.dead && u.owner === owner && BOTS[u.type].siege);
   if (!rocketTarget(trucks[0] || { owner }, target)) return 0;
-  for (const u of trucks) { u.salvo = null; u.deployT = 0; u.path = null; u.task = { type: 'bombard', target: target.id }; }
+  for (const u of trucks) { u.salvo = null; u.path = null; u.task = { type: 'bombard', target: target.id }; } // (dug in, it stays dug in if the new target is in reach)
   return trucks.length;
 }
 
@@ -4493,15 +4646,15 @@ function sendToRally(owner, i, j, count, rear) {
 function orderable(owner, ids) {
   return ids.map(getE).filter((u) => u && !u.dead && u.owner === owner && u.type === 'warbot');
 }
-/** Selected units: warbots and Rocket Trucks. */
+/** Selected units: warbots and Howitzers. */
 function selectable(owner, ids) {
   return ids.map(getE).filter((u) => u && !u.dead && u.owner === owner && (u.type === 'warbot' || BOTS[u.type].siege));
 }
-/** Selected rocket trucks sent to (i, j): they drive there and wait (firing at anything that comes in reach). */
+/** Selected Howitzers sent to (i, j): they drive there and wait (firing at anything that comes in reach). */
 function orderPark(owner, ids, i, j) {
   if (!inMap(i, j) || !walkable(tIdx(i, j))) return 0;
   const trucks = ids.map(getE).filter((u) => u && !u.dead && u.owner === owner && BOTS[u.type].siege);
-  for (const u of trucks) { u.salvo = null; u.deployT = 0; u.path = null; u.task = { type: 'park', i, j }; u.post = { i, j }; }
+  for (const u of trucks) { u.salvo = null; u.path = null; u.task = { type: 'park', i, j }; u.post = { i, j }; } // (dug in, it packs up first)
   return trucks.length;
 }
 
@@ -4789,7 +4942,7 @@ function missileFloor(b) { return Math.max(1, Math.round(BDEFS[b.type].armor * M
 /**
  * A building weapons can only knock down to its missileFloor, never destroy: a Command Base or a Keep (they
  * have to be captured by warbots on the ground). Every other building, Outposts and Bunkers included, a
- * Missile, a bomb or a Rocket Truck's rockets can knock out.
+ * Missile, a bomb or a Howitzer's rockets can knock out.
  */
 function captureOnly(b) { return !!(b.built && (b.type === 'lander' || BDEFS[b.type].keep)); }
 
@@ -6518,7 +6671,7 @@ function deploySpot(owner, i, j) {
   return best;
 }
 
-/** A free tile within 3 of vehicle u (a Crawler, a Rocket Truck) to wait on, off buildings and roads (it would hold up the traffic), in its zone. -1 if none. */
+/** A free tile within 3 of vehicle u (a Crawler, a Howitzer) to wait on, off buildings and roads (it would hold up the traffic), in its zone. -1 if none. */
 function crawlerPark(u) {
   const i0 = Math.floor(u.x), j0 = Math.floor(u.y), z = S.zone[tIdx(i0, j0)];
   let best = -1, bd = Infinity;

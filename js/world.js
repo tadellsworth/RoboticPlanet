@@ -2634,6 +2634,12 @@ function cancelTask(bot) {
       dropCarried(bot); // called off with a load on board: it's put down in crates, not lost
       break;
     }
+    case 'arty': { // a supply run for a Howitzer: release the Ammo it reserved, put down what it carries
+      const src = getE(t.src);
+      if (t.phase === 'toSrc' && src) bump(src.res, 'ammo', -(t.n || 1));
+      dropCarried(bot);
+      break;
+    }
     case 'crate': {
       const l = t.phase === 'toPile' && S.loot && S.loot.find((x) => x.id === t.pile);
       if (l) unclaimCrate(l, t.good, t.n);

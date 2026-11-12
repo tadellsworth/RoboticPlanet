@@ -618,7 +618,7 @@ function refreshSelection() {
   let inside = 0, empty = 0;
   for (const u of orderable(0, UI.sel)) { if (u.inside) inside++; if ((u.ammo ?? WARBOT_AMMO) <= 0) empty++; }
   const nw = orderable(0, UI.sel).length, nr = UI.sel.length - nw;
-  const html = `<b>${[nw ? `${nw} warbot${nw > 1 ? 's' : ''}` : '', nr ? `${nr} Rocket Truck${nr > 1 ? 's' : ''}` : ''].filter(Boolean).join(' and ')} selected</b>` +
+  const html = `<b>${[nw ? `${nw} warbot${nw > 1 ? 's' : ''}` : '', nr ? `${nr} Howitzer${nr > 1 ? 's' : ''}` : ''].filter(Boolean).join(' and ')} selected</b>` +
     (inside ? ` <span class="muted">(${inside} in garrisons)</span>` : '') + (empty ? ` <span class="err">${empty} out of Ammo</span>` : '') +
     `<span class="hint">Right-click open ground to hold it, a rival building to attack, or your Outpost to station them. Esc clears.</span>
     <button class="btn small ghost" id="selbar-clear" aria-label="Clear selection">✕</button>`;
@@ -663,7 +663,7 @@ function onMapCommand(i, j, wx, wy) {
     toast(`${r} warbot${r === 1 ? '' : 's'} heading for the Ferry: they board once they're beside it.`, 'info');
     return;
   }
-  // Rocket Trucks in the selection: they bombard an enemy building, or drive to open ground (or beside a garrison) and wait there.
+  // Howitzers in the selection: they shell an enemy building, or drive to open ground (or beside a garrison) and wait there.
   let nr = 0;
   if (b && b.owner !== 0) nr = orderBombard(0, UI.sel, b);
   else if (b && BDEFS[b.type].mil && b.built) { const s = deploySpot(0, b.x, b.y); if (s >= 0) nr = orderPark(0, UI.sel, s % S.W, (s / S.W) | 0); }
@@ -675,7 +675,7 @@ function onMapCommand(i, j, wx, wy) {
   if (nr && !n) {
     sfx('order');
     addFx('ring', (b ? b.x : i) + 0.5, (b ? b.y : j) + 0.5, { color: b && b.owner !== 0 ? '#ff5a6e' : '#7dffa0' });
-    toast(`${nr} Rocket Truck${nr > 1 ? 's' : ''} ${b && b.owner !== 0 ? `bombarding the ${BDEFS[b.type].name}` : 'on the move'}.`, 'info');
+    toast(`${nr} Howitzer${nr > 1 ? 's' : ''} ${b && b.owner !== 0 ? `shelling the ${BDEFS[b.type].name}` : 'on the move'}.`, 'info');
     refreshSelection();
     return;
   }
@@ -1711,15 +1711,15 @@ function onMapTap(i, j, wx, wy) {
     sfx('order'); setMode('normal'); openBotSheet(f);
     return;
   }
-  // A Rocket Truck's orders from its panel: bombard the enemy building tapped, or drive to the spot tapped.
+  // A Howitzer's orders from its panel: shell the enemy building tapped, or drive to the spot tapped.
   if (R.mode === 'bombard' || R.mode === 'rgo') {
     const u = getE(UI.rocket);
     if (!u || u.dead) { setMode('normal'); return; }
     if (R.mode === 'bombard') {
       const b = buildingAtTap(i, j, wx, wy);
-      if (!b || !rocketTarget(u, b)) { sfx('error'); showBanner('<span class="err">Tap an enemy building.</span> The truck drives to within ' + ROCKET.range + ' tiles of it and fires.', null, 'Cancel'); return; }
+      if (!b || !rocketTarget(u, b)) { sfx('error'); showBanner('<span class="err">Tap an enemy building.</span> The Howitzer drives to within ' + ROCKET.range + ' tiles of it, digs in and shells it.', null, 'Cancel'); return; }
       orderBombard(0, [u.id], b);
-      toast(`The Rocket Truck is off to bombard the ${BDEFS[b.type].name}.`, 'info');
+      toast(`The Howitzer is off to shell the ${BDEFS[b.type].name}.`, 'info');
     } else if (!orderPark(0, [u.id], i, j)) { sfx('error'); showBanner('<span class="err">It can\'t drive there.</span> Tap open ground.', null, 'Cancel'); return; }
     sfx('order');
     addFx('ring', i + 0.5, j + 0.5, { color: R.mode === 'bombard' ? '#ff5a6e' : '#7dffa0' });
@@ -3245,10 +3245,12 @@ function botActivity(u) {
   const nm = (id) => { const b = getE(id); return b ? BDEFS[b.type].name : 'a building'; };
   if (BOTS[u.type].siege) {
     if (u.salvo) return `Firing at the ${nm(u.salvo.target)}!`;
-    if (t && t.type === 'bombard') return u.deployT > 0 ? `Raising its rack to fire at the ${nm(t.target)}` : `Driving into reach of the ${nm(t.target)}`;
-    if (t && t.type === 'rearm') return `Reloading ${ROCKET.ammo} Ammo at the ${nm(t.bld)}`;
+    if (u.packing) return 'Packing up to move';
+    if (rocketSupplyComing(u)) return u.rockets ? `Shelling, a hauler on its way with Ammo (${u.rockets} shells left)` : 'Out of shells: a hauler is on its way with Ammo';
+    if (t && t.type === 'bombard') return rocketDug(u) ? `Dug in, shelling the ${nm(t.target)} (reloading between shots)` : u.deployT > 0 ? `Digging in to shell the ${nm(t.target)} (${Math.ceil(ROCKET.deploy - u.deployT)}s)` : `Driving into reach of the ${nm(t.target)}`;
+    if (t && t.type === 'rearm') return `Reloading Ammo at the ${nm(t.bld)}`;
     if (t && t.type === 'park') return 'Driving to its spot';
-    return (u.rockets ?? ROCKET.salvo) ? `Loaded: waiting, and firing at any enemy building within ${ROCKET.range} tiles` : 'Out of rockets: no Ammo in reach to reload';
+    return (u.rockets ?? ROCKET.mag) ? `${rocketDug(u) ? 'Dug in' : 'Loaded'}: waiting, and shelling any enemy building within ${ROCKET.range} tiles` : 'Out of shells: no Ammo in reach to reload';
   }
   if (u.type === 'warbot') {
     const p = u.owner === 0 && usesPosts(0) ? postOf(u) : null;
@@ -3335,13 +3337,13 @@ function openBotSheet(u) {
   }
   if ($('sh-crawl')) $('sh-crawl').onclick = () => { sfx('click'); UI.crawler = u.id; setMode('crawl'); UI.crawler = u.id; showBanner('Tap where the <b>Crawler</b> should go: it rolls there (no road needed, but it can\'t climb cliffs or cross water) and deploys when it arrives.', null, 'Cancel'); };
   if ($('sh-deploy')) $('sh-deploy').onclick = () => { const why = deployCrawler(u); if (why) { sfx('error'); toast(why, 'warn'); } else closeSheet(); };
-  if ($('sh-bombard')) $('sh-bombard').onclick = () => { sfx('click'); closeSheet(); setMode('bombard'); UI.rocket = u.id; showBanner(`Tap an enemy building: the <b>Rocket Truck</b> drives to within ${ROCKET.range} tiles of it, parks and fires its ${ROCKET.salvo} rockets, then reloads and comes back for more.`, null, 'Cancel'); };
+  if ($('sh-bombard')) $('sh-bombard').onclick = () => { sfx('click'); closeSheet(); setMode('bombard'); UI.rocket = u.id; showBanner(`Tap an enemy building: the <b>Howitzer</b> drives to within ${ROCKET.range} tiles of it, digs in and shells it, one heavy shell after another, until it's rubble.`, null, 'Cancel'); };
   if ($('sh-stance')) {
     const sync = () => { for (const btn of $('sh-stance').children) btn.classList.toggle('on', btn.dataset.v === (u.stance === 'hold' ? 'hold' : 'fire')); };
-    for (const btn of $('sh-stance').children) btn.onclick = () => { u.stance = btn.dataset.v === 'hold' ? 'hold' : undefined; if (u.stance === 'hold' && u.task && u.task.auto) { u.task = null; u.salvo = null; u.deployT = 0; } sfx('click'); sync(); };
+    for (const btn of $('sh-stance').children) btn.onclick = () => { u.stance = btn.dataset.v === 'hold' ? 'hold' : undefined; if (u.stance === 'hold' && u.task && u.task.auto) { u.task = null; u.salvo = null; } sfx('click'); sync(); };
     sync();
   }
-  if ($('sh-rgo')) $('sh-rgo').onclick = () => { sfx('click'); closeSheet(); setMode('rgo'); UI.rocket = u.id; showBanner('Tap where the <b>Rocket Truck</b> should wait: it stays there, and (unless it holds fire) shells any enemy building in reach of it.', null, 'Cancel'); };
+  if ($('sh-rgo')) $('sh-rgo').onclick = () => { sfx('click'); closeSheet(); setMode('rgo'); UI.rocket = u.id; showBanner('Tap where the <b>Howitzer</b> should wait: it stays there, and (unless it holds fire) shells any enemy building in reach of it.', null, 'Cancel'); };
   if ($('sh-recall')) $('sh-recall').onclick = () => {
     if (u.task && u.task.type === 'hold') { const n = recallRally(u.task.rally); toast(`${n} warbot${n > 1 ? 's' : ''} called back.`, 'info'); }
     closeSheet();
@@ -3572,9 +3574,9 @@ function refreshGoodsSheet(full) {
 /* ------------------------------------------------------------------ the Army panel (Q) and its Air tab */
 
 /**
- * The Army panel: your warbots and Rocket Trucks at a glance and orders for them. Pick a group size, then an
+ * The Army panel: your warbots and Howitzers at a glance and orders for them. Pick a group size, then an
  * order (Attack a rival building, Hold ground, Station at a garrison of yours) and tap the map: each tap sends
- * another group, until Done. Groups out in the field and every Rocket Truck are listed with their own orders.
+ * another group, until Done. Groups out in the field and every Howitzer are listed with their own orders.
  * The Air tab (with an Airfield): each Airfield's hangar, every Strike Bomber (Strike) and Cargo Plane (air drops).
  */
 function openArmySheet(tab) {
@@ -3621,7 +3623,7 @@ function refreshArmyTab() {
   const L = getE(S.players[0].lander), where = (x, y) => (L ? dirText(L, { x: Math.floor(x), y: Math.floor(y) }) : '');
   const k = S.players[0].keepW ?? 0;
   let h = `<div class="kv"><span>Warbots</span><span><b>${wb.length}</b>: ${g.base.length} at the Command Base, ${g.posted.length} in garrisons, ${field} in the field${noAmmo ? `, <span class="err">${noAmmo} out of Ammo</span>` : ''}</span></div>`;
-  if (rockets.length) h += `<div class="kv"><span>Rocket Trucks</span><span><b>${rockets.length}</b></span></div>`;
+  if (rockets.length) h += `<div class="kv"><span>Howitzers</span><span><b>${rockets.length}</b></span></div>`;
   h += `<div class="section-label">Orders <span class="label-note">group size</span></div>
     <div class="seg" id="ar-size">${[2, 4, 8, 'all'].map((n) => `<button id="ar-n${n}" data-act="size" data-n="${n}" class="${UI.armyN === n ? 'on' : ''}">${n === 'all' ? 'All' : n}</button>`).join('')}</div>
     <div class="army-cmds">
@@ -3638,7 +3640,7 @@ function refreshArmyTab() {
     for (const [id, n] of atk) { const t = getE(id); h += `<div class="kv army-row"><span><b>${n}</b> attacking the ${BDEFS[t.type].name} ${where(t.x, t.y)}</span><span><button class="btn small ghost" data-act="showbld" data-id="${id}">Show</button><button class="btn small ghost" data-act="callback" data-id="${id}">Call back</button></span></div>`; }
   }
   if (rockets.length) {
-    h += '<div class="section-label">Rocket Trucks</div>';
+    h += '<div class="section-label">Howitzers</div>';
     for (const u of rockets) h += `<div class="kv army-row"><span>${botActivity(u)}</span><span><button class="btn small" data-act="bombard" data-id="${u.id}">Bombard</button><button class="btn small ghost" data-act="rgo" data-id="${u.id}">Drive</button><button class="btn small ghost" data-act="showbot" data-id="${u.id}">Show</button></span></div>`;
   }
   h += `<div class="section-label">Every Outpost keeps</div><div class="seg" id="ar-keep">${[0, 1, 2, 5].map((v) => `<button data-act="keep" data-k="${v}" class="${v === k ? 'on' : ''}">${v}</button>`).join('')}</div>
@@ -3690,8 +3692,8 @@ function armyButton(btn) {
     case 'more': if (e) { const i = Math.floor(e.x), j = Math.floor(e.y), res = sendToRally(0, i, j, armyCount(rallyAvailable(0, i, j))); if (res.sent) { sfx('order'); toast(`${res.sent} more warbot${res.sent > 1 ? 's are' : ' is'} on the way to the flag.`, 'info'); } else { sfx('error'); toast('No spare warbots in reach of that flag.', 'warn'); } UI.armySig = ''; } return;
     case 'recallflag': if (e) { const n = recallRally(id); toast(`${n} warbot${n !== 1 ? 's' : ''} called back.`, 'info'); UI.armySig = ''; } return;
     case 'callback': { let n = 0; for (const u of S.bots) if (!u.dead && u.owner === 0 && u.type === 'warbot' && u.task && u.task.type === 'attack' && u.task.target === id) { u.task = null; u.path = null; n++; } toast(`${n} warbot${n !== 1 ? 's' : ''} called back to their garrisons.`, 'info'); UI.armySig = ''; return; }
-    case 'bombard': if (e) { closeSheet(); setMode('bombard'); UI.rocket = id; showBanner(`Tap an enemy building: the <b>Rocket Truck</b> drives to within ${ROCKET.range} tiles of it, parks and fires its ${ROCKET.salvo} rockets, then reloads and comes back for more.`, null, 'Cancel'); } return;
-    case 'rgo': if (e) { closeSheet(); setMode('rgo'); UI.rocket = id; showBanner('Tap where the <b>Rocket Truck</b> should wait: it stays there, and (unless it holds fire) shells any enemy building in reach of it.', null, 'Cancel'); } return;
+    case 'bombard': if (e) { closeSheet(); setMode('bombard'); UI.rocket = id; showBanner(`Tap an enemy building: the <b>Howitzer</b> drives to within ${ROCKET.range} tiles of it, digs in and shells it, one heavy shell after another, until it's rubble.`, null, 'Cancel'); } return;
+    case 'rgo': if (e) { closeSheet(); setMode('rgo'); UI.rocket = id; showBanner('Tap where the <b>Howitzer</b> should wait: it stays there, and (unless it holds fire) shells any enemy building in reach of it.', null, 'Cancel'); } return;
     case 'strikeany': { const u = readyBomber(); if (u) startStrike(u); else { sfx('error'); toast('No Strike Bomber is ready on the ground.', 'warn'); } return; }
     case 'strike': if (e) startStrike(e); return;
     case 'drop': if (e) { closeSheet(); startAirdrop(e, btn.dataset.k); } return;
@@ -3853,7 +3855,7 @@ function refreshSheet() {
       `<div class="kv"><span>${BOTS[u.type].truck ? 'Fuel tank' : 'Battery'}</span><span>${bat}%${bat < BATTERY.critical ? (BOTS[u.type].truck ? ' (empty: crawling)' : ' (flat: slow and weak)') : bat < BATTERY.low ? ' (low)' : ''}</span></div>` +
       `<div class="bar battery"><div style="width:${bat}%;background:${bat < BATTERY.critical ? '#ff4d4d' : bat < BATTERY.low ? '#ffb347' : '#7ee08a'}"></div></div>` +
       (u.type === 'warbot' ? `<div class="kv"><span>Ammo</span><span>${u.ammo ?? WARBOT_AMMO} / ${WARBOT_AMMO} shots${!u.ammo ? ' (out: can\'t fight until it reloads)' : ''}</span></div>` : '') +
-      (BOTS[u.type].siege ? `<div class="kv"><span>Rockets</span><span>${u.rockets ?? ROCKET.salvo} / ${ROCKET.salvo}${!(u.rockets ?? ROCKET.salvo) ? ` (reloads ${ROCKET.ammo} Ammo at a garrison or storage)` : ''}</span></div><div class="kv"><span>Reach</span><span>${ROCKET.min} to ${ROCKET.range} tiles</span></div>` : '') +
+      (BOTS[u.type].siege ? `<div class="kv"><span>Shells</span><span>${u.rockets ?? ROCKET.mag} / ${ROCKET.mag}${!(u.rockets ?? ROCKET.mag) ? ` (haulers bring Ammo while it's dug in on your ground near a road; or it reloads ${ROCKET.ammo} Ammo at a garrison or storage)` : ''}</span></div><div class="kv"><span>Each shell</span><span>${ROCKET.damage} damage, ${ROCKET.damage * ROCKET.fortMul} to defences; one every ${ROCKET.cycle}s</span></div><div class="kv"><span>Reach</span><span>${ROCKET.min} to ${ROCKET.range} tiles</span></div>` : '') +
       (u.carry ? `<div class="kv"><span>Carrying</span><span>${goodTag(u.carry, (u.carryN > 1 ? u.carryN + ' × ' : '') + GOOD[u.carry].name)}</span></div>` : '') +
       (u.cargo && Object.keys(u.cargo).length ? `<div class="section-label">On board</div><div class="goodlist">${Object.keys(u.cargo).map((g) => goodTag(g, `${u.cargo[g]} ${GOOD[g].name}`)).join('')}</div>` : '');
     if ($('sh-recall')) $('sh-recall').hidden = !(u.task && u.task.type === 'hold');

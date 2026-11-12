@@ -250,6 +250,12 @@ function sfx(name, dest) {
       break;
     case 'alert': _tone(880, 0.12, 'square', 0.05, null, 0, D); _tone(660, 0.12, 'square', 0.05, null, 0.15, D); break;
     // A missile leaving its Silo: the ignition pop, then the motor's roar climbing as it rises away.
+    // A Howitzer firing: a deep, heavy cannon boom rolling away.
+    case 'howitzer':
+      _noise(0.08, 0.2, { type: 'lowpass', freq: 1400, attack: 0.001, dest: D });
+      _noise(1.1, 0.12, { type: 'lowpass', freq: 380, to: 90, attack: 0.01, delay: 0.02, dest: D });
+      _tone(46, 0.7, 'sine', 0.16, 28, 0.0, D);
+      break;
     case 'rocket': // a short rocket whoosh off a launcher rack
       _noise(0.04, 0.12, { type: 'highpass', freq: 1800, attack: 0.002, dest: D });
       _noise(0.6, 0.12, { type: 'bandpass', freq: 600, to: 2600, q: 1.1, attack: 0.04, dest: D });

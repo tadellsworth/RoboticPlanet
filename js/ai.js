@@ -362,7 +362,7 @@ function aiThink(p) {
     else if ((kinds.tanker || 0) < wantTankers && !(b.orders.tanker > 0)) b.orders.tanker = 1;
     // A forward Depot with supply orders gets a Freight Truck to keep it stocked.
     else if (me.some((d) => d.keep && d.built && !BDEFS[d.type].terminal) && (kinds.truck || 0) < 1 + Math.floor(me.length / 35) && !(b.orders.truck > 0)) b.orders.truck = 1;
-    // Rocket Trucks for siege once the army is up: one, and one more for every ten warbots (at most three).
+    // Howitzers for siege once the army is up: one, and one more for every ten warbots (at most three).
     const wantRockets = S.mode === 'colony' ? 0 : Math.max(P.gunTarget ? 1 : 0, S.time < lvl.grace ? 0 : Math.min(3, Math.floor(army / 10) + (army >= lvl.threshold ? 1 : 0)));
     if ((kinds.rocket || 0) < wantRockets && !(b.orders.rocket > 0) && !armyBehind && me.some((a) => a.type === 'armory' && a.built)) b.orders.rocket = 1;
     // A Trade Terminal is served only by Road Trains: one for it.
@@ -377,7 +377,7 @@ function aiThink(p) {
   }
 
   // 3b) An enemy gun covering our buildings: our robots keep clear of them, so the work there has stopped.
-  //     Knock it out (missile, Rocket Truck, bomber, warbots) so they can get back to work.
+  //     Knock it out (missile, Howitzer, bomber, warbots) so they can get back to work.
   if (S.mode !== 'colony') aiClearGuns(p, lvl);
 
   // 4) Missiles: soften turrets and Outposts first, the Command Base once the army is big. (With
@@ -414,7 +414,7 @@ function aiThink(p) {
   // 4c) Naval maps: a Port, a Ferry, and beach landings on the enemy's shore.
   if (S.mode !== 'colony' && navalMap()) aiNaval(p, me, kinds, lvl, lander, sites < maxSites);
 
-  // 4e) Rocket Trucks: shell the defences round what we're attacking, and hunt down the enemy's.
+  // 4e) Howitzers: shell the defences round what we're attacking, and hunt down the enemy's.
   if (S.mode !== 'colony') aiSiege(p);
   // 4f) Bulk trade: pick a contract at the Trade Terminal.
   aiTrade(p, me);
@@ -853,9 +853,9 @@ function aiRaid(p, lvl) {
 }
 
 /**
- * Rocket Trucks (Versus). Loaded ones not already busy go after the enemy defences round the building we last
+ * Howitzers (Versus). Loaded ones not already busy go after the enemy defences round the building we last
  * attacked (or, with no attack on, the nearest enemy defence or fort within 24 tiles): turrets, Bunkers, the
- * Keep, Mortars and Disruptors first. And an enemy Rocket Truck shelling our buildings gets warbots sent after
+ * Keep, Mortars and Disruptors first. And an enemy Howitzer shelling our buildings gets warbots sent after
  * it (they fight whatever is at the flag; a truck can't fight back).
  */
 /**
@@ -945,7 +945,7 @@ function aiGunNeed(b) {
 }
 
 /**
- * Clear the worst enemy gun covering our buildings: a missile if a Silo can reach it, Rocket Trucks (they
+ * Clear the worst enemy gun covering our buildings: a missile if a Silo can reach it, Howitzers (they
  * outrange a Pulse Turret), a Strike Bomber, and a band of warbots big enough to win. Until the army can
  * win, the Foundry makes warbots (P.gunNeed). P.gunTarget names the gun for aiSiege and aiBomber.
  */
@@ -962,10 +962,10 @@ function aiClearGuns(p, lvl) {
   if (P.gunTarget !== t.id) { P.gunTarget = t.id; P.gunSince = S.time; }
   // A missile, if a Silo is in range and none is on its way already.
   if (!S.missiles.some((m) => m.owner === p && m.target === t.id) && silosInRange(p, t).some(siloReady)) fireMissile(p, t);
-  // Rocket Trucks free to shell it (aiSiege also puts it first).
+  // Howitzers free to shell it (aiSiege also puts it first).
   const z = S.zone[tIdx(t.x, t.y)];
   for (const u of S.bots) {
-    if (u.dead || u.owner !== p || !BOTS[u.type].siege || u.salvo || (u.task && !u.task.auto) || !(u.rockets ?? ROCKET.salvo)) continue;
+    if (u.dead || u.owner !== p || !BOTS[u.type].siege || u.salvo || (u.task && !u.task.auto) || !(u.rockets ?? ROCKET.mag)) continue;
     if (S.zone[tIdx(Math.floor(u.x), Math.floor(u.y))] !== z || !rocketTarget(u, t)) continue;
     orderBombard(p, [u.id], t);
   }
@@ -996,12 +996,12 @@ function aiClearGuns(p, lvl) {
 }
 
 function aiSiege(p) {
-  const P = S.players[p];
-  if (S.tick % 30 !== (p * 7) % 30) return;
+  const P = S.players[p]; // (called from aiThink, every couple of seconds: it used to wait for one tick in 30 as well,
+  // which the think cycle seldom landed on, so the AI hardly ever sent its Howitzers or hunted the enemy's)
   const trucks = S.bots.filter((u) => !u.dead && u.owner === p && BOTS[u.type].siege);
   const at = P.siegeAt && S.time < P.siegeAt.until ? P.siegeAt : null;
   for (const u of trucks) {
-    if (u.salvo || (u.task && !u.task.auto) || !(u.rockets ?? ROCKET.salvo)) continue;
+    if (u.salvo || (u.task && !u.task.auto) || !(u.rockets ?? ROCKET.mag)) continue;
     const z = S.zone[tIdx(Math.floor(u.x), Math.floor(u.y))];
     let best = null, bs = -Infinity;
     for (const b of S.buildings) {
@@ -1015,16 +1015,30 @@ function aiSiege(p) {
     }
     if (best) orderBombard(p, [u.id], best);
   }
-  // Enemy rocket trucks shelling us: hunt them down.
+  // Enemy Howitzers shelling us (or digging in to): they wreck defences from out of their reach, so each one is
+  // hunted down with enough warbots to beat the escort round it, topped up if the hunters are thinned out, the flag
+  // moved with it if it packs up and drives off, until it's dead (or two and a half minutes have passed).
   P.truckHunt = (P.truckHunt || []).filter((h) => { const r = rallyById(h.rally), e = getE(h.truck); if (r && (S.time >= h.until || !e || e.dead)) recallRally(h.rally); return r && S.time < h.until && e && !e.dead; });
   for (const e of S.bots) {
-    if (e.dead || e.owner === p || e.owner < 0 || !BOTS[e.type].siege || !(e.salvo || (e.task && e.task.type === 'bombard'))) continue;
-    const tgt = getE(e.salvo ? e.salvo.target : e.task.target);
-    if (!tgt || tgt.owner !== p || P.truckHunt.some((h) => h.truck === e.id)) continue;
+    if (e.dead || e.owner === p || e.owner < 0 || !BOTS[e.type].siege || e.inside) continue;
+    const tid = e.salvo ? e.salvo.target : e.task && e.task.type === 'bombard' ? e.task.target : 0, tgt = tid ? getE(tid) : null;
+    const shelling = P.shelledBy && S.time - (P.shelledBy[e.id] || -999) < 40;
+    if (!shelling && !(tgt && tgt.owner === p && (e.deployT > 0 || dist(e.x, e.y, tgt.x, tgt.y) < ROCKET.range + 4))) continue;
     const i = Math.floor(e.x), j = Math.floor(e.y);
     if (!inMap(i, j) || !walkable(tIdx(i, j))) continue;
-    const { sent, rally } = sendToRally(p, i, j, 4, true);
-    if (sent) P.truckHunt.push({ truck: e.id, rally: rally.id, until: S.time + 90 });
+    const escort = S.bots.filter((v) => !v.dead && !v.inside && v.owner === e.owner && v.type === 'warbot' && dist2(v.x, v.y, e.x, e.y) <= 20).length;
+    const want = Math.min(14, 4 + Math.ceil(escort * 1.5));
+    const h = P.truckHunt.find((x) => x.truck === e.id);
+    if (!h) {
+      const { sent, rally } = sendToRally(p, i, j, want, true);
+      if (sent) P.truckHunt.push({ truck: e.id, rally: rally.id, until: S.time + 150, at: S.time });
+      continue;
+    }
+    const r = rallyById(h.rally);
+    if (!r) continue;
+    if (dist2(r.x, r.y, e.x, e.y) > 4) { r.x = i + 0.5; r.y = j + 0.5; } // it moved: so does the flag
+    const have = rallyMembers(h.rally).length;
+    if (have < want && S.time - (h.at || 0) > 15) { h.at = S.time; sendToRally(p, Math.floor(r.x), Math.floor(r.y), want - have, true); }
   }
 }
 

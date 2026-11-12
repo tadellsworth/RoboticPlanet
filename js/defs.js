@@ -153,8 +153,8 @@ const BOTS = {
     desc: 'A heavy road truck that carries eight goods at once on the long runs: between your Command Base and Depots, and to anything far away. Slower than a Hauler on concrete, fastest of all on asphalt.' },
   tanker:  { name: 'Tanker', plural: 'Tankers', speed: WORKER_SPEED * 1.35, hp: 8, haul: true, truck: true, tanker: true, carry: 10, roadOnly: true, parts: 2, accel: 1.4, brake: 3.2,
     desc: 'A tank truck, the only vehicle that carries Crude and Fuel: ten at a time, wherever they need to go (Haulers carry them only when no Tanker can get there, one at a time). Fastest on asphalt. Destroyed with a load on board, it explodes, hurting everything round it, and can set off other Tankers nearby.' },
-  rocket:  { name: 'Rocket Truck', plural: 'Rocket Trucks', speed: WARBOT_SPEED * 1.05, hp: 14, war: true, siege: true, parts: 3, accel: 1.1, brake: 2.4,
-    desc: 'The army\'s siege gun: a truck with a rack of four rockets. Send it at an enemy building (or let it pick one in reach while it waits): it drives to within 11 tiles, parks, raises its rack and fires all four rockets, each knocking 5 off the target and hurting buildings and robots round it. Then it drives back to reload 4 Ammo at your nearest garrison or storage. It can\'t hit anything closer than 4 tiles, can\'t take a fort below a third of its armor (warbots still have to capture it) and is fragile: keep warbots out in front of it.' },
+  rocket:  { name: 'Howitzer', plural: 'Howitzers', speed: WARBOT_SPEED * 0.9, hp: 16, war: true, siege: true, parts: 3, accel: 0.9, brake: 2.2,
+    desc: 'Mobile artillery for breaking defences. Send it at an enemy building (or let it pick one in reach while it waits): it drives to within 13 tiles, digs in (about 7 seconds), then fires one heavy shell every 5 seconds, over and over until the target is rubble or its 12 shells are spent. Each shell does double damage to defences (turrets, bunkers, mortars, flak, Minigun Nests, walls, gates, outposts) but little to robots. Dug in it can\'t move: it takes 4 seconds to pack up. On your own ground near a road, haulers bring it Ammo where it stands; otherwise it packs up, reloads 3 Ammo at a garrison or storage and comes back. Nothing closer than 4 tiles.' },
   warbot:  { name: 'Warbot', plural: 'Warbots', speed: WARBOT_SPEED, hp: 12, war: true,
     desc: 'Fights enemy bots and captures enemy buildings. Shoots Ammo; with none it can only scuffle.' },
   // Wildlife (Colony, see WILD): creatures from nests. Not built, never ordered.
@@ -646,8 +646,8 @@ const BDEFS = {
   },
   // The Minigun Nest (see MINIGUN): a cheap rotary gun that spins up and hoses enemy robots with tracer rounds.
   minigun: {
-    name: 'Minigun Nest', desc: 'A cheap six-barrel rotary gun on an armoured mount. It spins up, then hoses the nearest enemy robot in the open within 4½ tiles with a stream of tracer rounds: each does little, but it fires twelve a second, and every robot it hits is pinned down (it moves at half speed and shoots slower for a moment). Great against swarms of workers, haulers and creatures; slower to bring down a warbot than a Pulse Turret. Fires Ammo (60 rounds each).',
-    cost: { cement: 3, alloy: 2 }, ammo: 'ammo', ammoCap: 4, range: 4.5, armor: 12, buildTime: 8, war: true,
+    name: 'Minigun Nest', desc: 'A cheap, short-range deterrent: a six-barrel rotary gun on an armoured mount. It spins up, then hoses the nearest enemy robot in the open within 3½ tiles with a stream of tracer rounds: each does little, but it fires twelve a second, and every robot it hits is pinned down (it moves at half speed and shoots slower for a moment). Great against swarms of workers, haulers and creatures; slower to bring down a warbot than a Pulse Turret. Fires Ammo (60 rounds each).',
+    cost: { cement: 2, alloy: 1 }, ammo: 'ammo', ammoCap: 4, range: 3.5, armor: 10, buildTime: 6, war: true,
     minigun: { rate: 12, damage: 0.18, rounds: 60, spin: 0.7, turn: 4.5 },
   },
   // The Keep: a big fort (see KEEP): its warbots fire from cover like a Bunker's, its roof cannon fires Crystal,
@@ -805,13 +805,18 @@ const MINIGUN_PIN = { time: 1.2, speed: 0.5, reload: 1.35 };
  * `rate` of the time. Keeps stand `spacing` tiles apart.
  */
 /**
- * The Rocket Truck (BOTS.rocket): it fires a salvo of `salvo` rockets at a building `min` to `range` tiles away,
- * `gap` s apart, after `deploy` s raising its rack; each lands within `scatter` of the middle of the target's tile,
- * knocking `damage` off it (forts no lower than MISSILE_FLOOR), `splashBld` off other buildings and `botDamage` off
- * robots within `splash`. Rockets fly at `speed` tiles a second. It reloads `ammo` Ammo in `reload` s at a garrison
- * or storage of its owner's.
+ * The Howitzer (BOTS.rocket: mobile artillery; the key is the old Rocket Truck's). In reach of a building (`min` to
+ * `range` tiles) it digs in (`deploy` s: spades down, barrel up) and then fires one heavy shell at a time (`salvo`),
+ * the crew reloading `cycle` s between shots, over and over until the target is down or the magazine (`mag`
+ * shells) is empty; dug in, its gun traverses `turn` rad/s. Before it can drive anywhere it packs up (`pack` s).
+ * Each shell lands within `scatter` of the middle of the target's tile, knocking `damage` off it (`fortMul` times as
+ * much off a defence: DEFENCE_TYPES, Outposts; forts no lower than MISSILE_FLOOR), `splashBld` off other buildings and
+ * `botDamage` off robots within `splash`. Shells fly at `speed` tiles a second on an arc `arc` tiles high. A full
+ * magazine is `ammo` Ammo (`perAmmo` shells each), loaded in `reload` s at a garrison or storage; or, dug in on its
+ * own ground with a road within `supplyReach` tiles, a hauler brings it Ammo (see rocketCallSupply).
  */
-const ROCKET = { range: 11, min: 4, salvo: 4, gap: 0.35, deploy: 2.5, damage: 5, splash: 1.2, splashBld: 2, botDamage: 4, scatter: 0.4, speed: 9, ammo: 4, reload: 6, repairReach: 30 };
+const ROCKET = { range: 13, min: 4, deploy: 7, pack: 4, salvo: 1, gap: 0.9, cycle: 5, mag: 12, turn: 0.7, damage: 6, fortMul: 2,
+  splash: 0.9, splashBld: 2, botDamage: 2, scatter: 0.55, speed: 6, arc: 3.2, ammo: 3, perAmmo: 4, reload: 10, supplyReach: 2.5, repairReach: 30 };
 /**
  * Yards: a Port's shipyard builds ships, a Rail Station's rail yard Freight Trains (BDEFS[type].yard lists
  * what each makes), a round of parts (1 Alloy, 1 Chip) every `work` s, BOTS[kind].parts rounds a vessel; it
