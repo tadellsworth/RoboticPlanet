@@ -3173,6 +3173,7 @@ function cancelTask(bot) {
       const src = getE(t.src), dst = getE(t.dst);
       if (t.phase === 'toSrc' && src) bump(src.res, t.good, -(t.n || 1));
       if (dst) bump(dst.inc, t.good, -(t.n || 1));
+      if (t.mix) for (const k in t.mix) { if (t.phase === 'toSrc' && src) bump(src.res, k, -t.mix[k]); if (dst) bump(dst.inc, k, -t.mix[k]); }
       dropCarried(bot); // called off with a load on board: it's put down in crates, not lost
       break;
     }

@@ -3379,7 +3379,7 @@ function drawFreightTrain(ctx, u, sx, sy, s) {
   // tiles apart along the track, each turned to its own bit of the curve. Flat cars and hoppers alternate.
   const loco = ART['freight-loco@' + u.owner + '-f0'];
   if (loco) {
-    const size = s * 0.775, n = u.carry ? u.carryN || 1 : 0;
+    const size = s * 0.775, n = cargoCount(u);
     const cars = [];
     for (let k = 0; k <= 4; k++) {
       const d = k * 0.62, p = at(d), f = at(Math.max(0, d - 0.25)), b = at(d + 0.25);
@@ -3391,7 +3391,7 @@ function drawFreightTrain(ctx, u, sx, sy, s) {
       drawArt(ctx, art, c.x, c.y, size, c.ang);
       const load = Math.max(0, Math.min(14, n - (k - 1) * 14));
       // Load: the flat car's deck (x 40–216, y 81–175) or the hopper's opening (x 45–211, y 82–174).
-      if (load > 0) drawTruckCargo(ctx, { carry: u.carry, carryN: Math.ceil((load / 14) * 8), face: c.ang }, c.x, c.y, ((hopper ? 45 : 40) - 128) / 256 * size, (hopper ? 166 : 176) / 256 * size, (hopper ? 92 : 94) / 256 * size, s);
+      if (load > 0) drawTruckCargo(ctx, { carry: cargoAt(u, (k - 1) * 14, 14) || u.carry, carryN: Math.ceil((load / 14) * 8), face: c.ang }, c.x, c.y, ((hopper ? 45 : 40) - 128) / 256 * size, (hopper ? 166 : 176) / 256 * size, (hopper ? 92 : 94) / 256 * size, s);
     }
     const fr = ART['freight-loco@' + u.owner + '-f' + (Math.floor((u.odo || 0) / FRAME_STEP) % 4)] || loco;
     drawArt(ctx, fr, sx, sy, size, u.face || 0);
@@ -4107,7 +4107,7 @@ function drawRoadTrain(ctx, u, sx, sy, s) {
     const e = tr[tr.length - 1];
     return { x: e.x, y: e.y };
   };
-  const n = u.carry ? u.carryN || 1 : 0, cab = Math.min(8, n), rest = n - cab, t1 = Math.min(11, rest), t2 = rest - t1;
+  const n = cargoCount(u), cab = Math.min(8, n), rest = n - cab, t1 = Math.min(11, rest), t2 = rest - t1;
   // The art: the tractor, then two flatbeds, each trailer's kingpin on the fifth wheel of the one in
   // front (5.3 of the frame's 10 units apart: 0.477 tiles at the Freight Truck's size), drawn in that
   // order so each trailer's nose rides over the coupling. All the load is on the trailers.
@@ -4126,7 +4126,7 @@ function drawRoadTrain(ctx, u, sx, sy, s) {
       const c = cars[k + 1];
       drawArt(ctx, trailerArt, c.x, c.y, size, c.ang);
       // The bed inside the rails: x 53–184, y 92–164 of the 256 frame.
-      if (load > 0) drawTruckCargo(ctx, { carry: u.carry, carryN: Math.ceil((load / 15) * 8), face: c.ang }, c.x, c.y, (-75 / 256) * size, (131 / 256) * size, (72 / 256) * size, s);
+      if (load > 0) drawTruckCargo(ctx, { carry: cargoAt(u, k * 15, 15) || u.carry, carryN: Math.ceil((load / 15) * 8), face: c.ang }, c.x, c.y, (-75 / 256) * size, (131 / 256) * size, (72 / 256) * size, s);
     });
     // Brake lights on the last trailer (the tractor's own are hidden under the first).
     const last = cars[2];
@@ -6420,10 +6420,38 @@ function drawAirdropPick(ctx, ox, oy, z) {
 
 
 /** Every Airfield's runway, on the ground under buildings and bots. */
+/**
+ * A mixed load laid out along a train or Road Train, front to back: the good that fills most of slots
+ * [a, a + len), or null if they're empty.
+ */
+function cargoAt(u, a, len) {
+  const list = cargoList(u), n = {};
+  let k = 0;
+  for (const [g, m] of list) {
+    const lo = Math.max(a, k), hi = Math.min(a + len, k + m);
+    if (hi > lo) n[g] = (n[g] || 0) + hi - lo;
+    k += m;
+  }
+  let best = null, bn = 0;
+  for (const g in n) if (n[g] > bn) { bn = n[g]; best = g; }
+  return best;
+}
+
 /** Feed links: a short conveyor (a pipe for Crude and Fuel) between each producer and the neighbours it feeds. */
 function drawFeeds(ctx, ox, oy, z, inView) {
   for (const b of S.buildings) {
-    if (b.dead || !b.built || !BDEFS[b.type].out || BDEFS[b.type].store || !inView(b.x + 0.5, b.y + 0.5, 2)) continue;
+    if (b.dead || !b.built || !inView(b.x + 0.5, b.y + 0.5, 2)) continue;
+    const def = BDEFS[b.type];
+    // A Rail Station's conveyors: to the factories round it (and their output back), and to a Command Base or Depot.
+    if (def.station && !def.terminal) {
+      for (const { c } of stationLinks(b)) {
+        const f = b.sfed && b.sfed[c.id], mv = f && S.time - f.t < STATION_FEED ? f : null;
+        if (mv && mv.out) drawFeedLink(ctx, ox, oy, z, c.x, c.y, b.x, b.y, [mv.g], mv, false, STATION_FEED);
+        else drawFeedLink(ctx, ox, oy, z, b.x, b.y, c.x, c.y, mv ? [mv.g] : [], mv, false, STATION_FEED);
+      }
+      continue;
+    }
+    if (!def.out || def.store) continue;
     const links = feedTargets(b);
     for (const l of links) {
       const f = b.fed && b.fed[l.c.id];
@@ -6437,11 +6465,11 @@ function drawFeeds(ctx, ox, oy, z, inView) {
  * its chevrons running toward the building fed, or a pipe with flanges for Crude and Fuel. `moving` ({t, g}) is
  * a good on its way across (a crate, or a pulse along the pipe); `preview` draws a dashed link while placing.
  */
-function drawFeedLink(ctx, ox, oy, z, ai, aj, bi, bj, goods, moving, preview) {
+function drawFeedLink(ctx, ox, oy, z, ai, aj, bi, bj, goods, moving, preview, dur) {
   const ax = ox + (ai + 0.5) * z, ay = oy + (aj + 0.5) * z - z * 0.12, bx = ox + (bi + 0.5) * z, by = oy + (bj + 0.5) * z - z * 0.12;
   const ang = Math.atan2(by - ay, bx - ax), len = Math.hypot(bx - ax, by - ay);
   const s0 = len * 0.3, s1 = len * 0.7; // the stretch across the gap between the two buildings
-  const liquid = goods.every((g) => isLiquid(g)), w = z * (liquid ? 0.13 : 0.2);
+  const liquid = goods.length > 0 && goods.every((g) => isLiquid(g)), w = z * (liquid ? 0.13 : 0.2);
   ctx.save();
   ctx.translate(ax, ay); ctx.rotate(ang);
   if (preview) {
@@ -6478,7 +6506,7 @@ function drawFeedLink(ctx, ox, oy, z, ai, aj, bi, bj, goods, moving, preview) {
     for (let x = s0 - step + run * step; x < s1; x += step) { ctx.moveTo(x, -w * 0.32); ctx.lineTo(x + w * 0.3, 0); ctx.lineTo(x, w * 0.32); }
     ctx.stroke(); ctx.restore();
     if (moving) {
-      const k = (S.time - moving.t) / FEED_TIME, x = s0 + (s1 - s0) * Math.min(1, k), c = z * 0.13;
+      const k = (S.time - moving.t) / (dur || FEED_TIME), x = s0 + (s1 - s0) * Math.min(1, k), c = z * 0.13;
       ctx.fillStyle = GOOD[moving.g].color; ctx.fillRect(x - c / 2, -c / 2 - z * 0.02, c, c);
       ctx.strokeStyle = 'rgba(0,0,0,0.65)'; ctx.lineWidth = Math.max(1, z * 0.02); ctx.strokeRect(x - c / 2, -c / 2 - z * 0.02, c, c);
     }

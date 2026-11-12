@@ -3360,6 +3360,22 @@ function showRoadBanner(problem, info) {
   if (R.traffic) $('banner-text').innerHTML += ` <span class="traffic-key">${trafficSummary()}</span>`;
 }
 
+/** A Rail Station's place on its line, what it stocks automatically, and its conveyors (panel text). */
+function railStatusText(b) {
+  const linked = S.buildings.filter((s) => s !== b && !s.dead && s.owner === b.owner && s.built && BDEFS[s.type].station && !BDEFS[s.type].terminal && railLinked(s, b));
+  const trains = S.bots.filter((u) => !u.dead && u.owner === b.owner && BOTS[u.type].rail && trainAt(u, b)).length;
+  const auto = b.auto ? Object.entries(b.auto).map(([g, n]) => goodTag(g, `${Math.min(b.stock[g] || 0, n)}/${n} ${GOOD[g].name}`, (b.stock[g] || 0) < n / 3)).join(' ') : '';
+  const conv = stationLinks(b);
+  const role = !linked.length ? 'No other station on its track yet.'
+    : !trains ? `On a line with ${linked.length} other station${linked.length > 1 ? 's' : ''}, but no Freight Train runs on it: order one at a rail yard.`
+      : farStation(b) ? `A far station: ${trains} train${trains > 1 ? 's' : ''} on its line bring${trains > 1 ? '' : 's'} what it stocks, and take${trains > 1 ? '' : 's'} its spare goods home.`
+        : 'The home station of its line (nearest your Command Base): it keeps what the far stations want, ready to load.';
+  const served = S.buildings.filter((c) => !c.dead && c.railBy === b.id).length;
+  return role + (served ? ` It serves ${served} building${served > 1 ? 's' : ''} round it.` : '') +
+    (b.autoOff ? ' Auto supply is off.' : auto ? `<div class="goodlist">${auto}</div>` : '') +
+    (conv.length ? `<div class="kv"><span>Conveyors</span><span>${conv.map((l) => BDEFS[l.c.type].name).join(', ')}</span></div>` : '');
+}
+
 /** Traffic map legend plus how busy the haulers and trucks are. */
 function trafficSummary() {
   const n = { hauler: [0, 0], truck: [0, 0], tanker: [0, 0] };
@@ -3549,6 +3565,12 @@ function openBuildingSheet(b) {
     if (def.yard && b.built && mine) html += `<div class="section-label">${def.port ? 'Shipyard' : def.airfield ? 'Hangar' : 'Rail yard'}</div><div class="status" id="sh-yard-status"></div><div class="bar" id="sh-yard-bar"><div></div></div><div id="sh-yard"></div>
       <p class="hint">${def.port ? 'Ships are built here' : def.airfield ? 'Planes are built here' : 'Freight Trains are built here'}, a round of parts (1 Alloy, 1 Chip) every ${YARD.work} s: ${def.yard.map((k) => `${BOTS[k].plural.toLowerCase().replace(/^./, (c) => c.toUpperCase())} ${BOTS[k].parts}`).join(', ')} rounds. Haulers bring the parts. ${def.port ? 'Each one puts to sea from this Port.' : def.airfield ? `The hangar holds ${Object.entries(AIRFIELD_HOLDS).map(([k, n]) => `${n} ${n === 1 ? BOTS[k].name : BOTS[k].plural}`).join(' and ')}.` : 'Each one rolls out onto this station\'s track, so the Bot Foundry never needs a railway.'}</p>`;
     if (def.terminal && b.built) html += '<div class="section-label">Contracts <span class="label-note" id="sh-trade-next"></span></div><div id="sh-trade"></div><p class="hint" id="sh-trade-hint"></p>';
+    // A Rail Station: its line, what it stocks automatically, and its conveyors.
+    if (def.station && !def.terminal && b.built && mine) {
+      html += `<div class="section-label">Railway</div><div class="status" id="sh-rail-status"></div>
+        <div class="seg" id="sh-auto"><button data-v="1">Auto supply</button><button data-v="0">Off</button></div>
+        <p class="hint" id="sh-rail-hint"></p>`;
+    }
     if (def.store && b.built && !def.terminal) {
       html += `<div class="section-label">Storage</div><div class="seg" id="sh-smode">
         <button data-v="normal">Normal</button><button data-v="fill">Fill first</button><button data-v="empty">Empty out</button></div>
@@ -3666,6 +3688,14 @@ function openBuildingSheet(b) {
     if ($('sh-pmode')) for (const btn of $('sh-pmode').children) btn.onclick = () => { b.pmode = btn.dataset.v; sfx('click'); refreshSheet(); };
     if ($('sh-pmark')) $('sh-pmark').onclick = () => openPaths('pave');
     if ($('sh-keep-all')) $('sh-keep-all').onclick = () => { UI.keepAll = !UI.keepAll; sfx('click'); openBuildingSheet(b); };
+    if ($('sh-auto')) for (const btn of $('sh-auto').children) btn.onclick = () => {
+      b.autoOff = btn.dataset.v !== '1';
+      if (b.autoOff) b.auto = null;
+      S.players[b.owner].railT = undefined; // plan the line again now
+      railPlan(b.owner);
+      sfx('click');
+      refreshSheet();
+    };
     if ($('sh-keep')) for (const btn of $('sh-keep').querySelectorAll('button')) btn.onclick = () => {
       const g = btn.parentElement.dataset.g;
       setKeep(b, g, ((b.keep && b.keep[g]) || 0) + +btn.dataset.d);
@@ -3962,6 +3992,9 @@ function refreshBuildingSheet(b) {
       const feeds = feedTargets(b), by = feedersOf(b);
       if (feeds.length) parts.push(`<div class="kv"><span>Feeds by conveyor</span><span>${feeds.map((l) => linkText(l, l.c)).join('; ')}</span></div>`);
       if (by.length) parts.push(`<div class="kv"><span>Fed by conveyor</span><span>${by.map(({ from, link }) => linkText(link, from)).join('; ')}${beingFed(b) ? ', working a tenth faster' : ''}</span></div>`);
+      const sb = !def.store && stationBeside(b);
+      if (sb && stationLinks(sb).some((l) => l.c === b)) parts.push(`<div class="kv"><span>Rail Station</span><span>joined by conveyor: it hands this its goods${def.out ? ' and takes its output' : ''}</span></div>`);
+      else if (b.railBy) parts.push(`<div class="kv"><span>Supplied by rail</span><span>from the Rail Station ${dirText(b, getE(b.railBy) || b)}</span></div>`);
     }
     if (def.store && mine && !def.terminal) {
       let idle = 0;
@@ -4096,6 +4129,11 @@ function refreshBuildingSheet(b) {
   }
   if ($('sh-air-places')) $('sh-air-places').textContent = airPlacesText(b);
   if ($('sh-airsup')) { for (const btn of $('sh-airsup').children) btn.classList.toggle('on', (btn.dataset.v === '1') === !!b.airSupply); $('sh-airsup-hint').textContent = airSupplyHint(b); }
+  if ($('sh-rail-status')) {
+    for (const btn of $('sh-auto').children) btn.classList.toggle('on', (btn.dataset.v === '1') === !b.autoOff);
+    $('sh-rail-status').innerHTML = railStatusText(b);
+    $('sh-rail-hint').textContent = 'Auto supply: a far station stocks what the buildings round it need, and the station nearest your Command Base keeps what the far stations want, so Freight Trains run the line on their own, several goods a trip. Buildings, a Command Base or a Depot touching a station are joined to it by conveyor: no Hauler needed. Supply orders you set below come on top.';
+  }
   if ($('sh-keep')) {
     let want = 0, short = 0;
     for (const cell of $('sh-keep').children) {
@@ -4860,7 +4898,7 @@ function refreshSheet() {
       `<div class="bar battery"><div style="width:${bat}%;background:${bat < BATTERY.critical ? '#ff4d4d' : bat < BATTERY.low ? '#ffb347' : '#7ee08a'}"></div></div>` +
       (u.type === 'warbot' ? `<div class="kv"><span>Ammo</span><span>${u.ammo ?? WARBOT_AMMO} / ${WARBOT_AMMO} shots${!u.ammo ? ' (out: can\'t fight until it reloads)' : ''}</span></div>` : '') +
       (BOTS[u.type].siege ? `<div class="kv"><span>Shells</span><span>${u.rockets ?? ROCKET.mag} / ${ROCKET.mag}${!(u.rockets ?? ROCKET.mag) ? ` (haulers bring Ammo while it's dug in on your ground near a road; or it reloads ${ROCKET.ammo} Ammo at a garrison or storage)` : ''}</span></div><div class="kv"><span>Each shell</span><span>${ROCKET.damage} damage, ${ROCKET.damage * ROCKET.fortMul} to defences; one every ${ROCKET.cycle}s</span></div><div class="kv"><span>Reach</span><span>${ROCKET.min} to ${ROCKET.range} tiles</span></div>` : '') +
-      (u.carry ? `<div class="kv"><span>Carrying</span><span>${goodTag(u.carry, (u.carryN > 1 ? u.carryN + ' × ' : '') + GOOD[u.carry].name)}</span></div>` : '') +
+      (u.carry ? `<div class="kv"><span>Carrying</span><span>${cargoList(u).map(([g, n]) => goodTag(g, (n > 1 ? n + ' × ' : '') + GOOD[g].name)).join(' ')}</span></div>` : '') +
       (u.cargo && Object.keys(u.cargo).length ? `<div class="section-label">On board</div><div class="goodlist">${Object.keys(u.cargo).map((g) => goodTag(g, `${u.cargo[g]} ${GOOD[g].name}`)).join('')}</div>` : '');
     if ($('sh-recall')) $('sh-recall').hidden = !(u.task && u.task.type === 'hold');
   } else if (UI.sheetKind === 'move') {

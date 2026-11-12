@@ -193,13 +193,16 @@ function aiThink(p) {
   const enemyAir = S.bots.some((u) => !u.dead && u.owner !== p && BOTS[u.type].air) ||
     S.buildings.some((b) => !b.dead && b.built && b.owner >= 0 && b.owner !== p && BDEFS[b.type].airfield);
   if (enemyAir && S.mode !== 'colony' && (counts.flak || 0) < 2 && !plan.some(([t]) => t === 'flak')) plan = [['flak', 2]].concat(plan); // (a copy: AI_PLAN is shared)
-  if (enemyAir && S.mode !== 'colony' && !counts.flak) siteCap = Math.max(siteCap, maxSites + 1); // the first Flak Gun doesn't wait for a free site
+  // The first Flak Gun doesn't wait for a free site (nothing else goes past the usual limit for it).
+  const flakFirst = enemyAir && S.mode !== 'colony' && !counts.flak, capBefore = Math.max(siteCap, maxSites + 1);
+  if (flakFirst) siteCap = Math.max(capBefore, sites + 1);
   const key = (type) => (type === 'charger' && !counts.charger) || type === 'foundry' || type === 'harvester' || type === 'quarry' || (type === 'kiln' && (playerGoods(p).cement || 0) < 3) || defence(type) ||
     (P.defWant && P.defWant.type === type && S.time < P.defWant.until) ||
     (type === 'outpost' && P.short.length > 0);
   if (sites < siteCap) {
     for (const [type, want0] of plan) {
       if (cementStarved && sites >= maxSites && type !== 'kiln') continue;
+      if (flakFirst && sites >= capBefore && type !== 'flak') continue;
       if (S.mode === 'colony' && BDEFS[type].war) continue;
       // One more Fuel Station for every four Outposts as the colony spreads out, and a Bio
       // Farm for every two stations to keep them in Fuel.
@@ -213,7 +216,7 @@ function aiThink(p) {
       // Plenty of Fuel in stock: no need for more farms or oil yet.
       if ((type === 'farm' || type === 'pump' || type === 'refinery') && (counts[type] || 0) >= 1 && playerGoods(p).fuel > 10) continue;
       if ((counts[type] || 0) >= want) continue;
-      if (saving && type !== saving && type !== 'keep' && type !== 'terminal' && type !== 'airfield' && !BDEFS[type].nuke && (BDEFS[type].cost.alloy || BDEFS[type].cost.chip)) continue;
+      if (saving && type !== saving && type !== 'keep' && type !== 'terminal' && type !== 'airfield' && !(type === 'flak' && flakFirst) && !BDEFS[type].nuke && (BDEFS[type].cost.alloy || BDEFS[type].cost.chip)) continue;
       // Keep enough Fiber for a Harvester while none is cutting: without Fiber there's no way back.
       if (type !== 'harvester' && fiberLow && (BDEFS[type].cost.fiber || 0) > 0 && playerGoods(p).fiber - BDEFS[type].cost.fiber < BDEFS.harvester.cost.fiber) continue;
       // The first of each staffed building is always allowed, so the production chain is complete.

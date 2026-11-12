@@ -142,10 +142,10 @@ const BOTS = {
     desc: 'A farm robot. Bio Farms and Grove Planters need one to run. Slow off roads, except while farming.' },
   paver:   { name: 'Paver', plural: 'Pavers', speed: WORKER_SPEED, hp: 6, crew: 'paver', offroad: true,
     desc: 'A road crew bot. A Roadworks needs one to lay asphalt on your roads.' },
-  roadtrain: { name: 'Road Train', plural: 'Road Trains', speed: WORKER_SPEED * 1.35, hp: 14, haul: true, truck: true, train: true, carry: 30, roadOnly: true, parts: 4, accel: 1.0, brake: 2.5,
-    desc: 'A truck pulling two trailers: 30 goods at once, for bulk runs between your Command Base and far Depots (filling supply orders, and bringing a far Depot\'s spare goods home). It only pays off on asphalt: on plain road it crawls. Slow to start and stop, it wears roads hard and holds up the traffic behind it.' },
-  freight: { name: 'Freight Train', plural: 'Freight Trains', speed: WORKER_SPEED * 3.4, hp: 30, haul: true, rail: true, carry: 56, parts: 5, accel: 0.85, brake: 1.6,
-    desc: 'A locomotive and four wagons: 56 goods at once between Rail Stations on the same track, fast and with no traffic to wait for. It never needs charging. Order it at a Rail Station: its rail yard builds it from Alloy and Chips and it rolls out onto that station\'s track.' },
+  roadtrain: { name: 'Road Train', plural: 'Road Trains', speed: WORKER_SPEED * 1.35, hp: 14, haul: true, truck: true, train: true, mixed: true, carry: 30, roadOnly: true, parts: 4, accel: 1.0, brake: 2.5,
+    desc: 'A truck pulling two trailers: 30 goods at once, several kinds in one trip, for bulk runs between your Command Base and far Depots (filling their supply orders, and bringing a far Depot\'s spare goods home). One does the work of about three Freight Trucks on a long asphalt run, on less Fuel. It only pays off on asphalt: on plain road it crawls. Slow to start and stop, it wears roads hard and holds up the traffic behind it.' },
+  freight: { name: 'Freight Train', plural: 'Freight Trains', speed: WORKER_SPEED * 3.4, hp: 30, haul: true, rail: true, mixed: true, carry: 56, parts: 5, accel: 0.85, brake: 1.6,
+    desc: 'A locomotive and four wagons: 56 goods at once, several kinds in one trip, between Rail Stations on the same track, fast and with no traffic to wait for. It runs the line on its own: out with what the far station needs once that fills a good share of its wagons (sooner if the station runs low), home with the far station\'s spare goods. It never needs charging or Fuel. Order it at a Rail Station: its rail yard builds it from Alloy and Chips and it rolls out onto that station\'s track.' },
   // Ships (naval maps only): they sail open water between Ports (passing under bridges), burning Fuel (SHIP_BURN).
   cargoship: { name: 'Container Ship', plural: 'Container Ships', speed: WORKER_SPEED * 2.4, hp: 30, haul: true, sea: true, carry: 40, parts: 5, accel: 0.5, brake: 1.0, naval: true,
     desc: 'Carries 40 goods at once between your Ports on the same water: supply orders at a Port are filled from the other Ports, and a far Port sends its spare goods home to the Port nearest your Command Base. It burns Fuel under way and fills up at a Port (each Port keeps a little Fuel for its ships). It puts to sea at the nearest Port when the Foundry finishes it.' },
@@ -226,6 +226,7 @@ const BLAST = {
 const FEED_TIME = 2, FEED_BOOST = 0.1, FEED_MAX = 2;
 const FEED_NB = [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [-1, 1], [1, -1], [-1, -1]];
 const TRUCK_MIN_DIST = 12;
+const HAUL_FAR = 12, HAUL_NEAR = 6; // a short Hauler run waits for a Hauler finishing within HAUL_NEAR of the pickup rather than send one from over HAUL_FAR away
 const TRUCK_MIN_LOAD = 3;
 const TRUCK_KEEP_LOAD = 4;     // a truck fills a supply order with at least this many (half a load; or half the order), unless the store has run dry
 const TRUCK_ROAD = 0.8;
@@ -263,6 +264,24 @@ const VIA_CLAIM = 3; // a Viaduct's far end claims the no-one's ground this far 
  */
 const RAIL_COST = { cement: 1.5, alloy: 0.25 }; // mostly Cement (sleepers and ballast): Alloy is too scarce for a long line to cost a bar a tile
 const RAIL_MIN_LOAD = 10;
+/*
+ * Rail logistics. A Rail Station stocks itself (its Auto supply, on unless it's switched off on its panel),
+ * once a Freight Train runs on its track. A far station (one further from the Command Base than another
+ * station on its track) keeps what the buildings round it need: those within STATION_REACH tiles of it,
+ * and nearer to it than to the Command Base by STATION_NEARER: twice what each holds of its inputs and
+ * Ammo, and what a construction site still lacks (none of what the buildings round it make themselves).
+ * The station on the line nearest the Command Base, its home station, keeps what the far stations keep,
+ * so a train can load at once. Each good is kept up to RAIL_AUTO_MAX. A train sets out when it can fill
+ * RAIL_FILL of its wagons, or sooner when a far station is running low (a third of what it keeps) or out
+ * of something, taking every good the far station is short of in one trip. Trucks leave the buildings a
+ * far station serves to the train, unless one has run dry with nothing coming.
+ * Station conveyors: a Rail Station hands goods to the factories touching it (any of the 8 tiles round it)
+ * and takes their output, a good a link every STATION_FEED seconds, and swaps stock with a Command Base or
+ * Depot touching it, STATION_SWAP goods at a time: what it keeps comes from the store, and (at the home
+ * station) what trains bring in beyond that goes into the store.
+ */
+const STATION_REACH = 9, STATION_NEARER = 4, RAIL_AUTO_MAX = 60, RAIL_FILL = 0.45, STATION_FEED = 1, STATION_SWAP = 6;
+const STORE_BESIDE = 4; // a truck that delivered to a building takes home what waits in storage this close to it
 /*
  * Pipelines carry Crude (nothing else). Pipe is laid in Paths (Pipes): drag from one building to
  * another and it finds its own way there. PIPE_COST a tile, paid from storage and laid at once (or as
@@ -806,7 +825,7 @@ const BDEFS = {
     cost: { cement: 6, alloy: 3 }, store: true, mil: true, terr: 4, garrison: 2, ammoStock: 4, charger: { slots: 2, rate: 25, fuel: true }, armor: 14, airdrop: true,
   },
   station: {
-    name: 'Rail Station', desc: 'Storage beside the railway: Freight Trains load and unload here. Build one at each end of a line (before the track if you like: drag rail from one station to the other and it ends beside each), give the far one supply orders, and trains keep it stocked from the stations on the same track; a far station also sends its spare goods home by train. Its rail yard builds Freight Trains: order them on its panel, and haulers bring it the Alloy and Chips. Haulers serve it like a Depot.',
+    name: 'Rail Station', desc: 'Storage beside the railway: Freight Trains load and unload here. Build one at each end of a line (before the track if you like: drag rail from one station to the other and it ends beside each). Once a train runs on it, the far station stocks itself with what the buildings round it need and sends their output home, the station nearest your Command Base keeps the line fed, and trains carry several goods a trip. Buildings, a Command Base or a Depot touching a station are joined to it by conveyor, no Hauler needed: put your far factories round it. Supply orders you set come on top. Its rail yard builds Freight Trains: order them on its panel.',
     cost: { cement: 6, alloy: 2 }, store: true, station: true, armor: 12, buildTime: 12, yard: ['freight'],
   },
   terminal: {
