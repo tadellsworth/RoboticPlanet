@@ -163,12 +163,13 @@ function todVariant(art, name) {
   const cache = art.todv || (art.todv = {});
   if (cache[name]) return cache[name];
   const keys = todKeySet(), set = TOD.sets[name];
-  if (set && key.includes('@2')) {
-    // The green team: the re-lit red version recoloured, like the day art.
-    const r = ART[key.replace('@2', '@1')], c = ART[key.replace('@2', '@0')];
+  const tm = set && /@[23](?![0-9])/.exec(key);
+  if (tm) {
+    // The green and purple teams: the re-lit red version recoloured, like the day art.
+    const r = ART[key.replace(tm[0], '@1')], c = ART[key.replace(tm[0], '@0')];
     const rv = r && todVariant(r, name), cv = c && todVariant(c, name);
     if (rv && rv.relit && (!cv || cv.relit)) {
-      const v = recolorArt(rv, cv && cv.relit ? cv : null);
+      const v = recolorArt(rv, cv && cv.relit ? cv : null, +tm[0][1]);
       if (v && v !== rv) return (cache[name] = Object.assign(v, { relit: true, key }));
     }
   } else if (set && keys.has(key) && set.imgs[key]) {

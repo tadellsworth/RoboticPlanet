@@ -269,13 +269,15 @@ function loadArtKey(key, entry) {
     img.onload = () => {
       ART[key] = { img, scale: entry.scale || 0, anchor: entry.anchor || '', shadow: !!entry.shadow, key, frames: entry.frames || 0, cols: entry.cols || 0 };
       artLoaded++;
-      // The third team (green) gets the rival's red art recoloured, made the first time it's asked for.
+      // The third and fourth teams (green, purple) get the rival's red art recoloured, made the first
+      // time it's asked for.
       if (key.includes('@1')) {
-        const k2 = key.replace('@1', '@2');
-        if (!Object.prototype.hasOwnProperty.call(ART, k2)) {
+        for (const team of [2, 3]) {
+          const k2 = key.replace('@1', '@' + team);
+          if (Object.prototype.hasOwnProperty.call(ART, k2)) continue;
           Object.defineProperty(ART, k2, {
             configurable: true, enumerable: false,
-            get() { const v = recolorArt(ART[key], ART[key.replace('@1', '@0')]); if (v && v !== ART[key]) v.key = k2; Object.defineProperty(ART, k2, { value: v, writable: true, configurable: true, enumerable: false }); return v; },
+            get() { const v = recolorArt(ART[key], ART[key.replace('@1', '@0')], team); if (v && v !== ART[key]) v.key = k2; Object.defineProperty(ART, k2, { value: v, writable: true, configurable: true, enumerable: false }); return v; },
           });
         }
       }
@@ -300,11 +302,13 @@ function applyGoodIcons() {
 }
 
 /**
- * The green team's art, made from the other two teams' versions: wherever the red (@1) and cyan
- * (@0) versions differ (the team lights, stripes and glow), the cyan pixel is turned green;
- * everything else is left as it is. Without a cyan version, strongly red pixels are turned green.
+ * The green (team 2) or purple (team 3) team's art, made from the first two teams' versions: wherever
+ * the red (@1) and cyan (@0) versions differ (the team lights, stripes and glow), the cyan pixel is
+ * turned green or purple; everything else is left as it is. Without a cyan version, strongly red
+ * pixels are turned green or purple.
  */
-function recolorArt(red, cyan) {
+function recolorArt(red, cyan, team = 2) {
+  const purple = team === 3;
   if (!red) return null;
   const img = red.img, w = img.width, h = img.height;
   const c = document.createElement('canvas');
@@ -331,7 +335,8 @@ function recolorArt(red, cyan) {
         r = cy[k]; g = cy[k + 1]; b = cy[k + 2];
         f = Math.min(1, (diff - 40) / 80);
         const v = Math.max(r, g, b), lo = Math.min(r, g, b);
-        const ng = v, nr = lo + (v - lo) * 0.38, nb = lo + (v - lo) * 0.3;
+        // (Green: full green, a little red and blue. Purple: full blue, more red than green.)
+        const ng = purple ? lo + (v - lo) * 0.26 : v, nr = lo + (v - lo) * (purple ? 0.62 : 0.38), nb = purple ? v : lo + (v - lo) * 0.3;
         px[k] = px[k] + (nr - px[k]) * f; px[k + 1] = px[k + 1] + (ng - px[k + 1]) * f; px[k + 2] = px[k + 2] + (nb - px[k + 2]) * f;
         px[k + 3] = px[k + 3] + (cy[k + 3] - px[k + 3]) * f;
       } else {
@@ -339,7 +344,7 @@ function recolorArt(red, cyan) {
         const mn = Math.min(g, b), sat = (r - mn) / r;
         if (sat < 0.35) continue;
         f = Math.min(1, (sat - 0.35) / 0.25);
-        const ng = r * 0.92, nr = mn + (r - mn) * 0.32, nb = mn + (r - mn) * 0.38;
+        const ng = purple ? mn + (r - mn) * 0.22 : r * 0.92, nr = mn + (r - mn) * (purple ? 0.62 : 0.32), nb = purple ? r * 0.97 : mn + (r - mn) * 0.38;
         px[k] = r + (nr - r) * f; px[k + 1] = g + (ng - g) * f; px[k + 2] = b + (nb - b) * f;
       }
     }
@@ -4359,7 +4364,7 @@ function render(dtReal) {
     const selB = getE(R.selected);
     if ((R.mode === 'road' && UI.roadMode === 'pave') || (selB && selB.type === 'roadworks' && selB.owner === 0) || UI.sheetKind === 'road') drawPaveMarks(ctx, ox, oy, z, inView);
   }
-  if (R.mode === 'road') drawDraft(ctx, ox, oy, z, inView);
+  if (R.mode === 'road') { drawDraft(ctx, ox, oy, z, inView); drawRouteGhost(ctx, ox, oy, z); }
   drawLights(ctx, ox, oy, z, inView);
   drawOverpasses(ctx, ox, oy, z, inView);
   if (R.traffic && R.mode === 'road') drawTraffic(ctx, ox, oy, z, inView);
@@ -4785,6 +4790,40 @@ function drawLights(ctx, ox, oy, z, inView) {
       ctx.beginPath(); ctx.arc(px, py + dy * r, r * 0.8, 0, Math.PI * 2); ctx.fill();
     }
   }
+}
+
+/**
+ * Route to, with a mouse: the way a route would take to the pointer, as a dashed line through the
+ * tiles (cyan for road, amber for track) ending in a ring; a red cross where there's no way.
+ */
+function drawRouteGhost(ctx, ox, oy, z) {
+  const g = typeof UI !== 'undefined' && UI.routeGhost;
+  if (!g) return;
+  const W = S.W, cx = (t) => ox + ((t % W) + 0.5) * z, cy = (t) => oy + (((t / W) | 0) + 0.5) * z;
+  ctx.save();
+  if (!g.tiles) {
+    const x = cx(g.to), y = cy(g.to), r = z * 0.28;
+    ctx.strokeStyle = '#ff5a6e'; ctx.lineWidth = Math.max(2, z * 0.08);
+    ctx.beginPath(); ctx.moveTo(x - r, y - r); ctx.lineTo(x + r, y + r); ctx.moveTo(x + r, y - r); ctx.lineTo(x - r, y + r); ctx.stroke();
+    ctx.restore();
+    return;
+  }
+  const col = g.rail ? '#ffd68c' : '#7ae8ff';
+  ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  const path = () => {
+    ctx.beginPath();
+    g.tiles.forEach((t, k) => {
+      const prev = k ? g.tiles[k - 1] : -1, jump = prev >= 0 && Math.abs((prev % W) - (t % W)) + Math.abs(((prev / W) | 0) - ((t / W) | 0)) !== 1;
+      if (!k || jump) ctx.moveTo(cx(t), cy(t)); else ctx.lineTo(cx(t), cy(t));
+    });
+  };
+  ctx.setLineDash([z * 0.28, z * 0.2]); ctx.lineDashOffset = -R.time * z * 0.8;
+  ctx.strokeStyle = 'rgba(10,14,20,0.55)'; ctx.lineWidth = Math.max(3, z * 0.16); path(); ctx.stroke();
+  ctx.strokeStyle = col; ctx.lineWidth = Math.max(1.5, z * 0.09); path(); ctx.stroke();
+  ctx.setLineDash([]);
+  const e = g.tiles[g.tiles.length - 1];
+  ctx.beginPath(); ctx.arc(cx(e), cy(e), z * 0.32, 0, Math.PI * 2); ctx.strokeStyle = col; ctx.lineWidth = Math.max(1.5, z * 0.07); ctx.stroke();
+  ctx.restore();
 }
 
 /**

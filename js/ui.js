@@ -205,17 +205,29 @@ const menuSize = () => UI.menu.size[UI.menu.mode] ?? DEFAULT_SIZE[UI.menu.mode];
 const menuStyle = () => Math.min(PERSONALITY_ORDER.length, UI.menu.style || 0);
 const biomeName = (k) => (BIOMES[BIOME_ORDER[k]] || BIOMES[BIOME_ORDER[0]]).name;
 const mapGroupName = (g) => { const G = MAP_GROUPS.find((x) => x.key === g); return G ? G.name : ''; };
-/** Is this a free-for-all (Versus, 3 players, on a map type with room for three, or Random)? */
-function menuThree() {
-  const m = UI.menu;
-  return m.mode === 'versus' && m.players === 3 && (!!m.shapeRnd || !!SHAPE_PRESETS[m.shape || 0].ffa);
+/**
+ * How many players the menu is set to (Versus): you and one to three rivals, as many as the map type
+ * has room for (Random picks a map type with room for them all).
+ */
+function menuPlayers() {
+  const m = UI.menu, want = clamp(Math.round(m.players) || 2, 2, 4);
+  if (m.mode !== 'versus') return 2;
+  return m.shapeRnd ? want : Math.min(want, maxPlayers(m.shape || 0));
 }
-function modeInfo(mode, three) {
+/** Is this a free-for-all (Versus, three or four players)? */
+function menuThree() { return menuPlayers() > 2; }
+/** The Crossroads map type (four quarters: three or four players get one corner quarter each). */
+const crossIdx = () => Math.max(0, SHAPE_PRESETS.findIndex((P) => P.cross));
+function modeInfo(mode, n) {
+  const m = UI.menu, onCross = n === 4 || (!m.shapeRnd && SHAPE_PRESETS[m.shape || 0].cross);
+  const win = 'Take a rival\'s Command Base and all it built is yours; the last colony standing wins.';
   return mode === 'colony'
     ? (UI.menu.wild ? 'Colony: no rival, but creatures nest in the wilds and raid what you build near them. Build, research and spread across the planet.'
       : 'Colony: no rival. Settle the planet at your own pace: build, research and spread across the planet.')
-    : three ? 'Free-for-all: you and two rival colonies on a round planet. Take a rival\'s Command Base and all it built is yours; the last colony standing wins.'
-      : 'Versus: race a rival colony across the planet. Build up, then capture its Command Base to win.';
+    : n === 4 ? `Free-for-all · 4: you and three rival colonies (red, green and purple) on Crossroads, one in each corner quarter. ${win}`
+      : n === 3 && onCross ? `Free-for-all · 3: you and two rival colonies on Crossroads, each in a corner quarter; the quarter beside you is free and rich. ${win}`
+        : n === 3 ? `Free-for-all: you and two rival colonies${m.shapeRnd ? '' : ' on a round planet'}. ${win}`
+          : 'Versus: race a rival colony across the planet. Build up, then capture its Command Base to win.';
 }
 function styleInfo(v) {
   const P = v && PERSONALITIES[PERSONALITY_ORDER[v - 1]];
@@ -235,7 +247,7 @@ function resourceInfo(v) {
 /** The setup in a line (and what isn't the default in a second one), under Play and in Start's bar. */
 function menuSummary() {
   const m = UI.menu, colony = m.mode === 'colony', three = menuThree(), style = menuStyle();
-  const main = [colony ? 'Colony' : three ? 'Free-for-all' : 'Versus'];
+  const main = [colony ? 'Colony' : three ? `Free-for-all · ${menuPlayers()}` : 'Versus'];
   if (!colony) main.push(`${DIFFICULTY[m.diff].label} rival${three ? 's' : ''}`);
   main.push(m.shapeRnd ? 'Random map' : SHAPE_PRESETS[m.shape || 0].name, m.biomeRnd ? 'Random biome' : biomeName(m.biome || 0), SIZE_PRESETS[menuSize()].name);
   const extra = [];
@@ -342,7 +354,7 @@ function syncInfo() {
   const m = UI.menu, H = UI.menuHover || {}, three = menuThree();
   const line = (sec, def) => (H[sec] && H[sec].isConnected && !H[sec].closest('[hidden]') ? H[sec].dataset.info : def) || def;
   const P = SHAPE_PRESETS[m.shape || 0];
-  $('m-mode-desc').textContent = line('m-sec-match', modeInfo(m.mode, three));
+  $('m-mode-desc').textContent = line('m-sec-match', modeInfo(m.mode, menuPlayers()));
   $('m-planet-info').textContent = line('m-sec-planet', m.shapeRnd ? $('m-shape').dataset.info : `${P.name}: ${P.blurb || ''}`);
   $('m-rules-info').textContent = line('m-sec-rules', TOD_INFO[todMode()]);
 }
@@ -355,16 +367,20 @@ function syncMenu() {
   for (const btn of $('m-mode').children) { mark(btn, btn.dataset.v === m.mode); btn.dataset.info = modeInfo(btn.dataset.v, false); }
   for (const btn of $('m-diff').children) mark(btn, btn.dataset.v === m.diff);
   $('m-diff-field').hidden = colony;
-  // Free-for-all (you and two rivals) on the map types with room for three (Random picks one of those).
-  const shape = m.shape || 0, SH = SHAPE_PRESETS[shape], ffaOk = !!m.shapeRnd || !!SH.ffa;
+  // Free-for-all: you and two rivals on the map types with room for three, or three rivals on
+  // Crossroads (Random picks a map type with room for them all).
+  const shape = m.shape || 0, SH = SHAPE_PRESETS[shape], room = m.shapeRnd ? 4 : maxPlayers(shape), want = clamp(Math.round(m.players) || 2, 2, 4);
   $('m-players-field').hidden = colony;
   for (const btn of $('m-players').children) {
-    mark(btn, +btn.dataset.v === (three ? 3 : 2));
-    btn.disabled = btn.dataset.v === '3' && !ffaOk;
-    btn.dataset.info = btn.dataset.v === '3' ? modeInfo('versus', true) + (ffaOk ? '' : ` (Not on ${SH.name}: pick a map type marked 3 players.)`) : 'You vs 1: you and one rival colony, landing at the far end of the planet.';
+    const v = +btn.dataset.v;
+    mark(btn, v === menuPlayers());
+    btn.disabled = v > room;
+    btn.dataset.info = v === 2 ? 'You vs 1: you and one rival colony, landing at the far end of the planet.'
+      : modeInfo('versus', v) + (v <= room ? '' : v === 4 ? ` (Crossroads only: ${SH.name} has room for ${room === 3 ? 'three' : 'two'}.)` : ` (Not on ${SH.name}: pick a map type marked “3 players”, or Crossroads.)`);
   }
-  $('m-players-note').hidden = colony || ffaOk || m.players !== 3;
-  $('m-players-note').textContent = `${SH.name} is for two players only: pick a map type marked “3 players” for a free-for-all.`;
+  $('m-players-note').hidden = colony || want <= room;
+  $('m-players-note').textContent = want === 4 ? `${SH.name} has room for ${room === 3 ? 'three players' : 'two players only'}: pick Crossroads for four.`
+    : `${SH.name} is for two players only: pick a map type marked “3 players” (or Crossroads) for a free-for-all.`;
   $('m-seed').textContent = 'Planet #' + m.seed;
   renderPlanets();
   for (const id of ['m-size', 'm-rough', 'm-rich', 'm-style']) {
@@ -372,7 +388,7 @@ function syncMenu() {
     for (const b of el.children) { mark(b, +b.dataset.v === v); b.classList.toggle('lit', +b.dataset.v <= v); }
   }
   // (Random map type: sizes as on a Standard map; the others differ a little.)
-  const players = three ? 3 : 2, dShape = m.shapeRnd ? 0 : shape, dims = mapDims({ size: menuSize(), shape: dShape, players });
+  const players = menuPlayers(), dShape = m.shapeRnd ? (players === 4 ? crossIdx() : 0) : shape, dims = mapDims({ size: menuSize(), shape: dShape, players });
   for (const b of $('m-size').children) { const d = mapDims({ size: +b.dataset.v, shape: dShape, players }); b.dataset.info = `${SIZE_PRESETS[+b.dataset.v].name}: ${m.shapeRnd ? 'about ' : ''}${d.W}×${d.H} tiles${m.shapeRnd ? ' (map types differ a little)' : ''}.`; }
   $('m-size-v').textContent = `${m.shapeRnd ? '~' : ''}${dims.W}×${dims.H}`;
   $('m-pv-dims').textContent = m.shapeRnd ? 'Random map type' : `${dims.W}×${dims.H} tiles`;
@@ -402,8 +418,9 @@ function syncPickRows() {
   const m = UI.menu, three = menuThree(), shape = m.shape || 0, SH = SHAPE_PRESETS[shape];
   const sRow = $('m-shape'), bRow = $('m-biome'), bk = BIOME_ORDER[m.biome || 0];
   sRow.querySelector('.m-pick-name').textContent = m.shapeRnd ? 'Random' : SH.name;
-  sRow.querySelector('.m-pick-meta').textContent = m.shapeRnd ? (three ? 'any for 3 players' : 'any map type') : mapGroupName(SH.group);
-  sRow.dataset.info = m.shapeRnd ? `Random map type: ${three ? 'one with room for three players' : 'any of them'}, picked when you land.` : `${SH.name}: ${SH.blurb || ''}`;
+  const np = menuPlayers();
+  sRow.querySelector('.m-pick-meta').textContent = m.shapeRnd ? (np === 4 ? 'Crossroads (4 players)' : three ? 'any for 3 players' : 'any map type') : mapGroupName(SH.group);
+  sRow.dataset.info = m.shapeRnd ? `Random map type: ${np === 4 ? 'Crossroads, the one with room for four players' : three ? 'one with room for three players' : 'any of them'}, picked when you land.` : `${SH.name}: ${SH.blurb || ''}`;
   sRow.setAttribute('aria-label', `Map type: ${m.shapeRnd ? 'Random' : SH.name}. Change`);
   drawThumbOnce(sRow.querySelector('canvas'), 'shape:' + (m.shapeRnd ? 'rnd' : shape), (cv) => drawShapeThumb(cv, m.shapeRnd ? null : SH));
   bRow.querySelector('.m-pick-name').textContent = m.biomeRnd ? 'Random' : biomeName(m.biome || 0);
@@ -417,7 +434,7 @@ function syncPickRows() {
 
 function openPicker(kind) {
   if (kind === 'biome' && typeof ensureBiomeArt === 'function') for (const b of BIOME_ORDER) ensureBiomeArt(b); // their swatches fill in as it arrives
-  const m = UI.menu, body = $('m-picker-body'), three = m.mode === 'versus' && m.players === 3;
+  const m = UI.menu, body = $('m-picker-body'), want = m.mode === 'versus' ? clamp(Math.round(m.players) || 2, 2, 4) : 2;
   UI.picker = { kind, opener: document.activeElement };
   $('m-picker-title').textContent = kind === 'shape' ? 'Map type' : 'Biome';
   $('m-picker').classList.toggle('bio', kind === 'biome');
@@ -425,13 +442,13 @@ function openPicker(kind) {
   let h = '';
   if (kind === 'shape') {
     const text = (name, badges, blurb) => `<canvas class="pc-thumb" aria-hidden="true"></canvas><span class="pc-text"><span class="pc-name">${name}</span>${badges ? `<span class="pc-badges">${badges}</span>` : ''}<span class="pc-blurb">${blurb}</span></span>`;
-    h += `<div class="pgrid">${card('rnd', m.shapeRnd, text('Random', '', three ? 'One of the map types with room for three, picked when you land.' : 'Any map type, picked when you land.'), 'rnd')}</div>`;
+    h += `<div class="pgrid">${card('rnd', m.shapeRnd, text('Random', '', want > 2 ? `One of the map types with room for ${want === 4 ? 'four' : 'three'}, picked when you land.` : 'Any map type, picked when you land.'), 'rnd')}</div>`;
     const groups = MAP_GROUPS.map((g) => ({ ...g, list: [] })), other = { key: '', name: 'More', list: [] };
     SHAPE_PRESETS.forEach((P, i) => (groups.find((g) => g.key === P.group) || other).list.push(i));
     for (const g of groups.concat(other)) {
       if (!g.list.length) continue;
       h += `<section class="pgroup" aria-label="${g.name}"><h3>${g.name}</h3><div class="pgrid">` + g.list.map((i) => {
-        const P = SHAPE_PRESETS[i], badges = (P.ffa ? '<span class="badge ffa">3 players</span>' : '') + (P.naval ? '<span class="badge naval">Naval</span>' : '');
+        const P = SHAPE_PRESETS[i], badges = (maxPlayers(i) > 2 ? `<span class="badge ffa">${maxPlayers(i) === 4 ? '3–4' : '3'} players</span>` : '') + (P.naval ? '<span class="badge naval">Naval</span>' : '');
         return card(i, !m.shapeRnd && i === (m.shape || 0), text(P.name, badges, P.blurb || ''), '', P.blurb);
       }).join('') + '</div></section>';
     }
@@ -516,7 +533,8 @@ function pickerKey(e) {
 function resolveRandom() {
   const m = UI.menu, out = { shape: m.shape || 0, biome: m.biome || 0 };
   if (m.shapeRnd) {
-    const pool = SHAPE_PRESETS.map((_, i) => i).filter((i) => !(m.mode === 'versus' && m.players === 3) || SHAPE_PRESETS[i].ffa);
+    const want = m.mode === 'versus' ? clamp(Math.round(m.players) || 2, 2, 4) : 2;
+    const pool = SHAPE_PRESETS.map((_, i) => i).filter((i) => maxPlayers(i) >= want);
     out.shape = pool.length ? pool[Math.floor(Math.random() * pool.length)] : 0;
   }
   if (m.biomeRnd) out.biome = Math.floor(Math.random() * BIOME_ORDER.length);
@@ -811,7 +829,7 @@ function previewSettings() {
   const m = UI.menu, mode = m.mode === 'colony' ? 'colony' : 'versus';
   const st = { size: clamp(menuSize(), 0, SIZE_PRESETS.length - 1), rough: clamp(m.rough ?? DEFAULT_ROUGH, 0, TERRAIN_PRESETS.length - 1), rich: clamp(m.rich ?? DEFAULT_RICH, 0, RESOURCE_PRESETS.length - 1) };
   st.shape = clamp(m.shape || 0, 0, SHAPE_PRESETS.length - 1);
-  st.players = mode === 'versus' && m.players === 3 && SHAPE_PRESETS[st.shape].ffa ? 3 : 2;
+  st.players = playerCount(mode, st.shape, m.players);
   st.nuke = !!m.nuke;
   st.biome = m.biomeRnd ? 'desert' : BIOME_ORDER[m.biome || 0] || 'desert';
   return { seed: m.seed >>> 0, mode, st };
@@ -1151,6 +1169,17 @@ function rampPartner(i, j) {
   return best;
 }
 
+/** Route to on or off (Roads, Bridges and Rail; from anywhere else it opens Roads with it on). */
+function toggleRoute() {
+  const was = R.mode === 'road';
+  if (!was) setMode('road');
+  if (!['road', 'bridge', 'rail'].includes(UI.roadMode)) { UI.roadMode = 'road'; UI.route = true; }
+  else UI.route = was ? !UI.route : true;
+  UI.routeGhost = null; UI.routePrev = null;
+  sfx('click');
+  showRoadBanner();
+}
+
 /** Open Paths on one of its tools (roads, bridges, ramps, arrows, junctions). */
 function openPaths(v) {
   if (R.mode !== 'road') setMode('road');
@@ -1244,6 +1273,7 @@ function initKeyboard() {
       case 'x': if (warOn()) openPaths('wall'); break;
       case 'n': openPaths('rail'); break;
       case 'k': openPaths('pipe'); break;
+      case 'z': toggleRoute(); break;
       case 'q': if (!$('btn-attack').hidden) $('btn-attack').click(); break;
       case 'h': case 'home': $('btn-home').click(); break;
       case 'm': setMinimap(!MM.on); break;
@@ -1601,7 +1631,7 @@ function savePlanet(p) { writePlanets([{ ...p, at: Date.now() }].concat(savedPla
 /** The planet the new-game menu is set to. */
 function menuPlanet() {
   return { seed: UI.menu.seed, shape: UI.menu.shape || 0, size: UI.menu.size[UI.menu.mode] ?? DEFAULT_SIZE[UI.menu.mode], rough: UI.menu.rough, rich: UI.menu.rich,
-    biome: UI.menu.biome || 0, players: UI.menu.players === 3 ? 3 : 2 };
+    biome: UI.menu.biome || 0, players: menuPlayers() };
 }
 /** The planet being played. */
 function gamePlanet() {
@@ -1612,7 +1642,7 @@ function planetLabel(p) {
   const bits = [SHAPE_PRESETS[p.shape] ? SHAPE_PRESETS[p.shape].name : 'Standard', SIZE_PRESETS[p.size] ? SIZE_PRESETS[p.size].name : '', biomeName(p.biome || 0)];
   if (p.rough !== DEFAULT_ROUGH && TERRAIN_PRESETS[p.rough]) bits.push(TERRAIN_PRESETS[p.rough].name + ' terrain');
   if (p.rich !== DEFAULT_RICH && RESOURCE_PRESETS[p.rich]) bits.push(RESOURCE_PRESETS[p.rich].name + ' resources');
-  if (p.players === 3) bits.push('3 players');
+  if (p.players > 2) bits.push(`${p.players} players`);
   return `<b>Planet #${p.seed}</b><span> · ${bits.filter(Boolean).join(' · ')}</span>`;
 }
 function renderPlanets() {
@@ -1641,6 +1671,20 @@ function renderPlanets() {
 
 /* ------------------------------------------------------------------ game flow */
 
+/** Where the rivals landed, from your Command Base: "Two rival colonies landed too: red to the north, ..." */
+function rivalsLanded() {
+  const L0 = getE(S.players[0].lander), rivals = S.players.filter((P) => P.id !== 0 && !P.absent);
+  const where = rivals.map((P) => { const L = getE(P.lander); return `${RIVAL_NAMES[P.id].toLowerCase()} ${L0 && L ? 'to the ' + dirText(L0, L).replace(/^\d+ tiles? /, '') : ''}`.trim(); });
+  const list = where.length > 1 ? where.slice(0, -1).join(', ') + ' and ' + where[where.length - 1] : where[0] || '';
+  return `${['', 'A rival colony', 'Two rival colonies', 'Three rival colonies'][rivals.length]} landed too: ${list}.`;
+}
+
+/** The rivals' colours, for a hint: 'red', 'red or green', 'red, green or purple'. */
+function rivalColours() {
+  const c = S.players.filter((P) => P.id !== 0 && !P.absent).map((P) => (RIVAL_NAMES[P.id] || 'red').toLowerCase());
+  return c.length > 1 ? c.slice(0, -1).join(', ') + ' or ' + c[c.length - 1] : c[0] || 'red';
+}
+
 function startNewGame() {
   clearSave();
   closePicker(false);
@@ -1649,7 +1693,7 @@ function startNewGame() {
   newGame({
     seed: UI.menu.seed, difficulty: UI.menu.diff, mode: UI.menu.mode,
     size: UI.menu.size[UI.menu.mode] ?? DEFAULT_SIZE[UI.menu.mode], rough: UI.menu.rough, rich: UI.menu.rich, shape: pick.shape,
-    nuke: !!UI.menu.nuke, biome: BIOME_ORDER[pick.biome], players: UI.menu.players === 3 ? 3 : 2,
+    nuke: !!UI.menu.nuke, biome: BIOME_ORDER[pick.biome], players: clamp(Math.round(UI.menu.players) || 2, 2, 4),
     style: UI.menu.style ? PERSONALITY_ORDER[UI.menu.style - 1] : 'random', events: !!UI.menu.events, wildlife: !!UI.menu.wild, unlimited: !!UI.menu.unlimited,
   });
   enterGame();
@@ -1657,7 +1701,7 @@ function startNewGame() {
   placeMinimap();
   postMsg(0, UI.menu.mode === 'colony'
     ? 'Your bots have landed. Build, expand and make this planet home.'
-    : S.players.length > 2 ? 'Your bots have landed. Two rival colonies landed too, one to the north-west (red) and one to the north-east (green). Build up fast!'
+    : S.players.length > 2 ? `Your bots have landed. ${rivalsLanded()} Build up fast!`
       : 'Your bots have landed. A rival colony landed to the north. Build up fast!', 0, 0, 'info');
   if (UI.menu.shapeRnd || UI.menu.biomeRnd) postMsg(0, `Random pick: ${[UI.menu.shapeRnd ? SHAPE_PRESETS[pick.shape].name : '', UI.menu.biomeRnd ? biomeName(pick.biome) : ''].filter(Boolean).join(', ')}.`, 0, 0, 'info');
   // Name each rival's personality, so you know what's coming.
@@ -1674,7 +1718,7 @@ function startNewGame() {
   if (S.posts && S.posts.length) {
     // Pointed at the post nearest home (J or a tap jumps there); the rest are gold on the minimap.
     const L = getE(S.players[0].lander), near = L ? S.posts.reduce((a, p) => (dist2(p.x, p.y, L.x, L.y) < dist2(a.x, a.y, L.x, L.y) ? p : a)) : null;
-    postMsg(0, `${S.posts.length} neutral Trade Posts (gold on the minimap${near ? ', nearest ' + dirText(L, near) : ''}): lay a road out and dock a Trade Terminal to trade.` + (S.mode !== 'colony' ? ' Hold the land round one to shut your rival out.' : ''), near ? near.x : 0, near ? near.y : 0, 'info');
+    postMsg(0, `${S.posts.length} neutral Trade Posts (gold on the minimap${near ? ', nearest ' + dirText(L, near) : ''}): lay a road out and dock a Trade Terminal to trade.` + (S.mode !== 'colony' ? ` Hold the land round one to shut ${S.players.length > 2 ? 'the rivals' : 'your rival'} out.` : ''), near ? near.x : 0, near ? near.y : 0, 'info');
   }
   if (nukeOn()) postMsg(0, `Nuclear race: a few uranium deposits glow green across the planet. Dig them with Ore Mines, enrich them at a Nuclear Reactor and build the bomb${S.mode === 'colony' ? ' (no rival here, so it is yours to try out)' : ` before ${S.players.length > 2 ? 'the rivals do' : 'the rival does'}`}.`, 0, 0, 'warn');
 }
@@ -1807,7 +1851,7 @@ function showGameOver() {
   sfx(won ? 'win' : 'lose');
   $('o-title').textContent = won ? 'Victory!' : 'Defeat';
   $('o-text').textContent = won
-    ? (S.players.length > 2 ? 'Both rival Command Bases are yours: the last colony standing. The planet is yours.' : 'Your warbots captured the rival Command Base. The planet is yours.')
+    ? (S.players.length > 2 ? `${S.players.length > 3 ? 'All three' : 'Both'} rival Command Bases are yours: the last colony standing. The planet is yours.` : 'Your warbots captured the rival Command Base. The planet is yours.')
     : `The ${S.players.length > 2 ? playerName(S.winner) : 'rival'} ${S.players[0].out ? 'captured your Command Base' : 'took the planet'}. Regroup and try again.`;
   const st = S.players[0].stats;
   $('o-stats').innerHTML = [
@@ -1995,7 +2039,7 @@ function renderStats() {
 /* ------------------------------------------------------------------ modes & banner */
 
 function setMode(mode) {
-  if (R.mode === 'road' && mode !== 'road') dropDraft(); // a plan that was never built costs nothing
+  if (R.mode === 'road' && mode !== 'road') { dropDraft(); UI.routeGhost = null; } // a plan that was never built costs nothing
   R.mode = mode;
   for (const m of ['road', 'place', 'attack', 'aim', 'land', 'airdrop']) document.body.classList.toggle('mode-' + m, mode === m);
   if (mode !== 'aim') { R.aim = null; UI.aimSilo = 0; }
@@ -2297,6 +2341,7 @@ function showBanner(html, okLabel, cancelLabel) {
   $('banner').hidden = false;
   $('banner-seg').hidden = true;
   $('banner-traffic').hidden = true;
+  $('banner-route').hidden = true;
   $('banner-undo').hidden = true;
   $('banner-clear').hidden = true;
   $('banner-ok').disabled = false;
@@ -2607,6 +2652,7 @@ function onMapTap(i, j, wx, wy) {
       showRoadBanner();
       return;
     }
+    if (routeOn()) { routeTap(i, j); return; }
     if (UI.roadMode === 'rail') {
       // Rail: a tap adds a tile of track or drops it; tapping laid track marks it to take up.
       const stroke = [];
@@ -2664,7 +2710,7 @@ function onMapTap(i, j, wx, wy) {
   if (R.mode === 'attack' && !rally) {
     if (b && b.owner !== 0) { setMode('normal'); openBuildingSheet(b); }
     else if (!b && inMap(i, j) && S.terrain[tIdx(i, j)] === T_GROUND) { setMode('normal'); openMoveSheet(i, j); }
-    else { sfx('error'); showBanner(`<span class="err">Tap a rival building (${S.players.length > 2 ? 'red or green' : 'red'}) or open ground.</span>`, null, 'Cancel'); }
+    else { sfx('error'); showBanner(`<span class="err">Tap a rival building (${rivalColours()}) or open ground.</span>`, null, 'Cancel'); }
     return;
   }
   // Everything under the tap: a rally flag, a building, then robots, nearest first. Tapping the same spot
@@ -2701,6 +2747,8 @@ function onMapTap(i, j, wx, wy) {
 
 /** With a mouse, placing a building previews it under the pointer; a click then places it. */
 function onMapHover(i, j) {
+  UI.hoverTile = inMap(i, j) ? tIdx(i, j) : -1;
+  if (R.mode === 'road' && routeOn()) { routeHover(i, j); return; }
   if (R.mode === 'aim' || R.mode === 'land' || R.mode === 'airdrop') { R.aimHover = inMap(i, j) ? { i, j } : null; return; }
   if (R.mode !== 'place' || !R.overlay || !UI.placeType || !inMap(i, j)) return;
   R.ghost = { type: UI.placeType, x: i, y: j, ok: !!R.overlay.valid[tIdx(i, j)], hover: true };
@@ -2915,14 +2963,27 @@ function dragCliff(stroke, p, t) {
 function onRoadPaint(i, j, first) {
   if (R.mode !== 'road' || UI.roadMode === 'lights' || UI.roadMode === 'ramp') return;
   if (!UI.draft) draftReset();
-  if (first) { UI.paintSkipped = false; UI.paintCross = false; UI.paintBridge = false; UI.paintTunnel = false; UI.paintCliff = false; UI.paintRamp = false; UI.paintSteep = false; UI.stroke = []; UI.draft.strokes.push(UI.stroke); }
+  if (first) { paintFlagsReset(); UI.stroke = []; UI.draft.strokes.push(UI.stroke); UI.routeGhost = null; }
   const from = first || !UI.lastPaint ? { i, j } : UI.lastPaint;
   const line = tileLine(from.i, from.j, i, j);
+  if (UI.roadMode === 'pipe') { pipeDrag(i, j, first); return; }
+  if (routeOn()) { routeDrag(i, j, first); return; }
+  // Pave: the first road tile of a drag decides whether it marks roads or clears their marks.
+  if (UI.roadMode === 'pave' && first) UI.paveOn = !(inMap(i, j) && S.paveMark[tIdx(i, j)]);
+  paintTiles(line);
+  UI.lastPaint = { i, j };
+  paintBanner();
+}
+
+function paintFlagsReset() { UI.paintSkipped = false; UI.paintCross = false; UI.paintBridge = false; UI.paintTunnel = false; UI.paintCliff = false; UI.paintRamp = false; UI.paintSteep = false; }
+
+/**
+ * Sketch the current tool along `line` (tiles [x, y], each next to the one before) into UI.stroke.
+ * clear: a road may go through resources (Route to), which workers clear; a drag goes round them.
+ */
+function paintTiles(line, clear) {
   let prev = null;
   const arrows = UI.roadMode === 'arrows', pave = UI.roadMode === 'pave', wall = UI.roadMode === 'wall', rail = UI.roadMode === 'rail';
-  if (UI.roadMode === 'pipe') { pipeDrag(i, j, first); return; }
-  // Pave: the first road tile of a drag decides whether it marks roads or clears their marks.
-  if (pave && first) UI.paveOn = !(inMap(i, j) && S.paveMark[tIdx(i, j)]);
   for (const [x, y] of line) {
     if (!inMap(x, y)) break;
     const t = tIdx(x, y);
@@ -2973,14 +3034,19 @@ function onRoadPaint(i, j, first) {
     }
     if (S.road[t] || S.plan[t] || roadLike(t) || UI.draft.ramps.has(t)) continue;
     // Dragging never bulldozes resources by accident: tap a resource tile to clear it for a road.
-    if (S.res[t]) { UI.paintSkipped = true; continue; }
+    if (S.res[t] && !clear) { UI.paintSkipped = true; continue; }
     // A road dragged out over water (or a canyon) carries on as a bridge, and through rock as a tunnel.
     if (canRoad(0, x, y) || draftBridge(t)) {
       draftOp(UI.stroke, t, 'add');
       if (crossTile(t) && UI.roadMode !== 'bridge') { if (bridgeable(t)) UI.paintBridge = true; else UI.paintTunnel = true; }
     } else if (crossTile(t)) UI.paintCross = true;
   }
-  UI.lastPaint = { i, j };
+}
+
+/** The banner after a drag (or a route): what was planned, and anything the sketch had to go round. */
+function paintBanner(lead) {
+  const pave = UI.roadMode === 'pave', wall = UI.roadMode === 'wall', rail = UI.roadMode === 'rail', arrows = UI.roadMode === 'arrows';
+  lead = lead ? lead + ' ' : '';
   if (pave) { showRoadBanner(); return; }
   if (wall) { showRoadBanner(UI.paintSkipped ? 'The wall skips tiles it can\'t go on (outside your border, resources, cliffs, or right beside your Command Base).' : '', true); return; }
   const what = rail ? 'Track' : 'A road';
@@ -2989,17 +3055,134 @@ function onRoadPaint(i, j, first) {
       : '';
   if (rail) {
     const crossNote = [UI.paintBridge ? `Over the water it's a <b>rail bridge</b> (${costText(RAIL_BRIDGE_COST)} a tile).` : '', UI.paintTunnel ? `Through the rock it's a <b>rail tunnel</b> (${costText(RAIL_TUNNEL_COST)} a tile).` : ''].filter(Boolean).join(' ');
-    showRoadBanner(cliffNote || [UI.paintRamp ? 'A <b>Ramp</b> is planned where the track climbs the cliff: workers build it, paid from storage, and the track on it goes down when it\'s done.' : '', crossNote,
-      UI.paintSkipped ? 'Track skips tiles it can\'t go on: outside your border, resources or buildings.' : ''].filter(Boolean).join(' '), true);
+    showRoadBanner(lead + (cliffNote || [UI.paintRamp ? 'A <b>Ramp</b> is planned where the track climbs the cliff: workers build it, paid from storage, and the track on it goes down when it\'s done.' : '', crossNote,
+      UI.paintSkipped ? 'Track skips tiles it can\'t go on: outside your border, resources or buildings.' : ''].filter(Boolean).join(' ')), true);
     return;
   }
   if (!arrows) {
-    showRoadBanner(cliffNote || (UI.paintRamp ? 'A <b>Ramp</b> is planned where the road climbs the cliff: workers cut it, paid from storage, and it carries the road up when it\'s done.'
+    showRoadBanner(lead + (cliffNote || (UI.paintRamp ? 'A <b>Ramp</b> is planned where the road climbs the cliff: workers cut it, paid from storage, and it carries the road up when it\'s done.'
       : UI.paintBridge || UI.paintTunnel ? [UI.paintBridge ? `The road crosses the water as a <b>bridge</b>: ${costText(CROSS[T_WATER].cost)} a tile, built out from the shore${navalMap() ? ' (more a tile out past ' + BRIDGE_NEAR + ' tiles from shore: a Port and ships are the way across wide water)' : ''}.` : '',
         UI.paintTunnel ? `The road goes through the rock as a <b>tunnel</b>: ${costText(CROSS[T_ROCK].cost)} a tile, dug in from the rock face.` : ''].filter(Boolean).join(' ')
       : UI.paintCross ? 'A road stops at your border: only a bridge can reach out past it, over water.'
-        : UI.paintSkipped ? 'Dragging goes round resources: tap a boulder, grove, ore or crystal tile to clear it for a road.' : ''), true);
+        : UI.paintSkipped ? 'Dragging goes round resources: tap a boulder, grove, ore or crystal tile to clear it for a road.' : '')), true);
   }
+}
+
+/* ------------------------------------------------------------------ Route to (Roads and Track) */
+
+/** Is Route to on for the current Paths tool (Roads, Bridges or Rail)? */
+function routeOn() { return !!UI.route && (UI.roadMode === 'road' || UI.roadMode === 'bridge' || UI.roadMode === 'rail'); }
+
+/** Take a stroke's ops back out of the plan (newest first) and empty it. */
+function strokeBack(stroke) {
+  const back = { add: 'unadd', unadd: 'add', del: 'undel', undel: 'del', ramp: 'unramp', unramp: 'ramp', rail: 'unrail', unrail: 'rail', raildel: 'unraildel', unraildel: 'raildel', pipe: 'unpipe', unpipe: 'pipe', pipedel: 'unpipedel', unpipedel: 'pipedel' };
+  for (let k = stroke.length - 1; k >= 0; k--) draftOp([], stroke[k].t, back[stroke[k].op]);
+  stroke.length = 0;
+}
+
+/** Tiles already in the plan that a route can run along (they count as laid). */
+function routeHave(rail) {
+  const d = UI.draft;
+  return rail ? (t) => d.rail.has(t) : (t) => d.addSet.has(t) || d.ramps.has(t);
+}
+
+/** Where a tapped route starts from: your road network (or track and Rail Stations), with what's planned. */
+function routeSeeds(rail) {
+  const d = UI.draft, out = [];
+  for (let t = 0; t < S.W * S.H; t++) {
+    if (rail ? (S.rail[t] && wayOwner(t) === 0) || S.railPlan[t] === 1 || d.rail.has(t)
+      : (S.road[t] && wayOwner(t) === 0) || S.plan[t] === 1 || d.addSet.has(t) || d.ramps.has(t)) out.push(t);
+  }
+  for (const b of S.buildings) {
+    if (b.dead || b.owner !== 0) continue;
+    if (rail ? BDEFS[b.type].station : b.type === 'lander') out.push(tIdx(b.x, b.y)); // (the route starts beside it)
+  }
+  return out;
+}
+
+/**
+ * The search from your whole network (Route to by tap or hover), kept while nothing it depends on has
+ * changed (roads, track, plans, land, buildings, this plan), so moving the pointer only reads it.
+ */
+function routeTreeNow(rail) {
+  const d = UI.draft;
+  const key = [rail ? 1 : 0, S.roadVer, S.railVer, S.planVer, S.territoryVer, S.buildings.length, d.add.length, d.ramps.size, d.rail.size, d.del.size, d.railDel.size, Math.floor(S.time / 30)].join(':');
+  if (UI.routeTreeKey === key && UI.routeTreeCache) return UI.routeTreeCache;
+  const seeds = routeSeeds(rail);
+  const T = seeds.length ? routeTree(0, rail ? 'rail' : 'road', seeds, routeHave(rail)) : { why: 'You have no track or Rail Station yet: drag from where the track should start to where it should go.' };
+  T.nSeeds = seeds.length;
+  UI.routeTreeKey = key; UI.routeTreeCache = T;
+  return T;
+}
+
+/** The route from your network to tile t (Route to by tap or hover): { tiles } or { why }. */
+function routeToTile(t, rail) {
+  const T = routeTreeNow(rail);
+  return T.why ? T : routeFromTree(T, t, T.nSeeds);
+}
+
+/** Plan a found route's tiles (a Viaduct's two ends aren't neighbours: the deck between is already there). */
+function paintRoute(tiles) {
+  let run = [];
+  for (let k = 0; k < tiles.length; k++) {
+    const t = tiles[k], x = t % S.W, y = (t / S.W) | 0;
+    if (run.length) { const [px, py] = run[run.length - 1]; if (Math.abs(px - x) + Math.abs(py - y) !== 1) { paintTiles(run, true); run = []; } }
+    run.push([x, y]);
+  }
+  if (run.length) paintTiles(run, true);
+}
+
+/** What the route came to, for the banner. */
+function routeNote(r, rail) {
+  const n = rail ? UI.stroke.filter((s) => s.op === 'rail').length : UI.stroke.filter((s) => s.op === 'add').length;
+  const ramps = UI.stroke.filter((s) => s.op === 'ramp').length;
+  const along = r.tiles.length - n - ramps;
+  if (!n && !ramps) return `<b>Route:</b> your ${rail ? 'track' : 'roads'} already ${rail ? 'run' : 'go'} there.`;
+  return `<b>Route:</b> ${n} new ${rail ? 'track' : 'road'} tile${n === 1 ? '' : 's'}${ramps ? ` and ${ramps} Ramp${ramps === 1 ? '' : 's'}` : ''}` +
+    (along > 1 ? `, joining ${along} tiles of your ${rail ? 'track' : 'roads'}` : '') + '. Tap Build to keep it, or tap somewhere else to try another spot.';
+}
+
+/** Route to, by tap: the cheapest way there from your network replaces the last route you tried. */
+function routeTap(i, j) {
+  const d = UI.draft, rail = UI.roadMode === 'rail';
+  if (UI.routePrev && d.strokes[d.strokes.length - 1] === UI.routePrev) { strokeBack(UI.routePrev); d.strokes.pop(); }
+  UI.routePrev = null;
+  UI.routeGhost = null;
+  const r = routeToTile(tIdx(i, j), rail);
+  if (!r.tiles) { sfx('error'); showRoadBanner(r.why); return; }
+  paintFlagsReset();
+  UI.stroke = []; d.strokes.push(UI.stroke);
+  paintRoute(r.tiles);
+  UI.routePrev = UI.stroke;
+  UI.routeEnd = tIdx(i, j);
+  sfx('click');
+  paintBanner(routeNote(r, rail));
+}
+
+/** Route to, by drag: from where the drag started to the finger, found again as it moves. */
+function routeDrag(i, j, first) {
+  if (first) { UI.routeFrom = inMap(i, j) ? tIdx(i, j) : -1; UI.routeTo = -1; UI.routePrev = null; }
+  if (UI.routeFrom < 0 || !inMap(i, j)) return;
+  const to = tIdx(i, j), rail = UI.roadMode === 'rail';
+  if (to === UI.routeTo) return;
+  UI.routeTo = to;
+  strokeBack(UI.stroke);
+  paintFlagsReset();
+  if (to === UI.routeFrom) { showRoadBanner('<b>Route to:</b> drag on to where it should go.', true); return; }
+  const r = pathRoute(0, rail ? 'rail' : 'road', [UI.routeFrom], to, routeHave(rail));
+  UI.routeEnd = to;
+  if (!r.tiles) { showRoadBanner(r.why); return; }
+  paintRoute(r.tiles);
+  paintBanner(routeNote(r, rail));
+}
+
+/** With a mouse, Route to previews the way to the pointer (a dashed line); a click plans it. */
+function routeHover(i, j) {
+  if (!inMap(i, j)) { UI.routeGhost = null; return; }
+  const t = tIdx(i, j), rail = UI.roadMode === 'rail';
+  if (UI.routeGhost && UI.routeGhost.to === t && UI.routeGhost.rail === rail) return;
+  const r = routeToTile(t, rail);
+  UI.routeGhost = { to: t, rail, tiles: r.tiles || null };
 }
 
 /**
@@ -3064,6 +3247,9 @@ function showRoadBanner(problem, info) {
     line = `<b>Drag from an Oil Pump to a Refinery</b> and the pipe finds its own way there, over roads and track, across water and through rock (${costText(PIPE_COST)} a tile, ${costText(PIPE_CROSS_COST)} across water or rock; laid when you tap Build). Or tap a pump to pipe it to the nearest Refinery. Tap pipe to take it up.` +
       (unpiped ? ` <button class="btn" id="pipe-all">Pipe every Oil Pump (${unpiped})</button>` : '');
     how = pipeHow;
+  } else if (mode === 'rail' && routeOn() && !UI.draft.rail.size && !UI.draft.railDel.size) {
+    line = `<b>Route to:</b> tap where the track should go and the best way there from your track (or a Rail Station) is planned: round buildings and fields, up one-level cliffs over a Ramp, with few bends.${INPUT.mouse ? ' The dashed line shows the way to the pointer.' : ''} Or drag from a start to the end. Tap another spot to try again; nothing is spent until you tap <b>Build</b>.`;
+    how = 'Route to finds the cheapest way for track on ground you hold or no-one does, using track you already have where it helps; a Ramp is planned at each one-level cliff it climbs (it costs as much as several tiles of track, so it goes round small rises). It won\'t climb a cliff two levels high: a Viaduct crosses those. Put a Rail Station at each end and order a Freight Train at its rail yard.';
   } else if (mode === 'rail' && !UI.draft.rail.size && !UI.draft.railDel.size) {
     line = `<b>Lay railway track</b> by dragging (${costText(RAIL_COST)} a tile, laid when you tap Build if you have the goods, otherwise as they come in). Tap a tile to add or drop it, or tap track to take it up. Put a <b>Rail Station</b> (Build menu) at each end, before or after (drag from one station to the other and the track ends beside each), and order a <b>Freight Train</b> at a station's rail yard (tap the station).`;
     how = 'Freight Trains carry 56 goods between Rail Stations on the same track, fast and with no traffic to wait for, and never need charging. They keep a station\'s supply orders filled from the other stations on the line, and a far station sends its spare goods home to the station nearest your Command Base. Track goes on open ground you hold or no-one does. It climbs a level at a time over a Ramp (a natural slope, or one you build in Paths), like a road, with trains slowing on the grade; over water it\'s a rail bridge, through rock a rail tunnel (a drag carries straight on into both), and across a valley it runs over a Viaduct. It can cross a road: road traffic waits at the crossing while a train goes by.';
@@ -3099,7 +3285,9 @@ function showRoadBanner(problem, info) {
     how = `A light lets one direction through at a time: it pays where two busy roads cross (50 to 85% more goods through), and costs a little on a quiet crossing. On an overpass nobody stops: best everywhere, and more than twice as much on a jammed crossing. Short of Alloy? Tap anyway: the light or overpass is planned (a dashed orange marker) and goes up once it's paid for from storage, oldest plans first${jp ? ` (<b>${jp}</b> waiting now)` : ''}. You have ${lights} light${lights === 1 ? '' : 's'}, ${overs} overpass${overs === 1 ? '' : 'es'} and ${junctions} junction${junctions === 1 ? '' : 's'}.`;
   } else {
     const sm = draftSummary();
-    if (draftEmpty()) {
+    if (draftEmpty() && routeOn()) {
+      line = `<b>Route to:</b> tap a spot and the cheapest road there from your road network is planned: round fields where it can, up one-level cliffs with a Ramp, over water as a bridge (or through rock as a tunnel) only when that saves a long way round.${INPUT.mouse ? ' The dashed line shows the way to the pointer.' : ''} Or drag from a start to the end. Tap another spot to try again; nothing is spent until you tap <b>Build</b>.`;
+    } else if (draftEmpty()) {
       line = mode === 'bridge'
         ? `<b>Sketch</b> a road across water (bridge, ${costText(CROSS[T_WATER].cost)} a tile${navalMap() ? ' near the shore, more further out' : ''}) or through rock (tunnel, ${costText(CROSS[T_ROCK].cost)}). Nothing is spent until you tap <b>Build</b>.`
         : '<b>Sketch</b> roads by dragging; tap a tile to add or drop it, or tap a road to take it up. Nothing is spent until you tap <b>Build</b>.';
@@ -3156,6 +3344,11 @@ function showRoadBanner(problem, info) {
   tb.hidden = false;
   tb.classList.toggle('on', !!R.traffic);
   tb.onclick = () => { R.traffic = !R.traffic; sfx('click'); showRoadBanner(); };
+  // Route to: on Roads, Bridges and Rail.
+  const rb = $('banner-route');
+  rb.hidden = !['road', 'bridge', 'rail'].includes(mode);
+  rb.classList.toggle('on', routeOn());
+  rb.onclick = () => { UI.route = !UI.route; UI.routeGhost = null; UI.routePrev = null; sfx('click'); showRoadBanner(); };
   if (R.traffic) $('banner-text').innerHTML += ` <span class="traffic-key">${trafficSummary()}</span>`;
 }
 
@@ -4504,7 +4697,7 @@ function armyTap(cmd, i, j, b) {
       sfx('order'); showArmyCmdBanner(`${res.sent} warbot${res.sent > 1 ? 's are' : ' is'} going after the rival's ${BOTS[foe.type].name}.`);
       return;
     }
-    if (!b || b.owner === 0 || b.owner < 0 || b.dead) return fail(`Tap a rival building or robot (${S.players.length > 2 ? 'red or green' : 'red'}).`);
+    if (!b || b.owner === 0 || b.owner < 0 || b.dead) return fail(`Tap a rival building or robot (${rivalColours()}).`);
     let n = armyCount(attackAvailable(0, b)), sent = n > 0 ? sendAttack(0, b, n) : 0;
     // No garrison near enough to attack from: a rally flag beside it (they attack what stands there).
     if (!sent) {
@@ -4746,7 +4939,7 @@ function objectiveText() {
       ? `Colonize the planet: <b>${pct}%</b> claimed. Next milestone at ${Math.round(next * 100)}%.`
       : `<b>${pct}%</b> of the planet colonized. Every milestone reached!`;
   }
-  return S.players.length > 2 ? 'Gather warbots in Outposts near a rival, then tap its <b>Command Base</b> and send them in. Take both rival Command Bases to win.'
+  return S.players.length > 2 ? 'Gather warbots in Outposts near a rival, then tap its <b>Command Base</b> and send them in. Take every rival Command Base to win.'
     : 'Gather warbots in Outposts near the rival, then tap the <b>rival Command Base</b> and send them in to capture it.';
 }
 

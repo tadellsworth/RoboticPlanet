@@ -6156,13 +6156,15 @@ function endEvent(E) {
 /**
  * Where a meteor shower's meteors fall: METEOR_HITS spots on player 0's share of the planet (half
  * of them near its landing site), each copied to the same spot on every other colony's share
- * (mirrored with two players, turned with three), so the shower is fair.
+ * (mirrored with two players, turned with three, a quarter at a time on Crossroads for three or four),
+ * so the shower is fair.
  */
 function meteorPlan(rng, t0, dur) {
   const W = S.W, H = S.H, np = S.players.length, alone = S.mode === 'colony';
   const ccx = (W - 1) / 2, ccy = (H - 1) / 2, SEC = (2 * Math.PI) / 3;
   const sector = (x, y) => { let a = Math.atan2(y - ccy, x - ccx) - Math.PI / 6; a = ((a % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI); return Math.floor(a / SEC) % 3; };
-  const mine = (i, j) => alone || (np === 2 ? j >= H / 2 : sector(i, j) === 0);
+  const quad = !alone && quadMap(S.settings); // (four quarters: each spot is turned onto the other three)
+  const mine = (i, j) => alone || (quad ? i < W / 2 && j >= H / 2 : np === 2 ? j >= H / 2 : sector(i, j) === 0);
   const L = getE(S.players[0].lander), hits = [], n = METEOR_HITS * (alone ? 2 : 1);
   for (let k = 0; k < n; k++) {
     let x = -1, y = -1;
@@ -6174,8 +6176,9 @@ function meteorPlan(rng, t0, dur) {
     if (x < 0) continue;
     const at = t0 + 1.5 + ((k + rng() * 0.8) * (dur - 4)) / n, roll = rng();
     const spots = [[x, y]];
-    if (!alone && np === 2) spots.push([W - 1 - x, H - 1 - y]);
-    if (!alone && np === 3) for (let r = 1; r < 3; r++) {
+    if (quad) for (let r = 1, a = x, b = y; r < 4; r++) { [a, b] = [W - 1 - b, a]; spots.push([a, b]); }
+    else if (!alone && np === 2) spots.push([W - 1 - x, H - 1 - y]);
+    else if (!alone && np === 3) for (let r = 1; r < 3; r++) {
       const a = r * SEC, c = Math.cos(a), s = Math.sin(a), dx = x - ccx, dy = y - ccy;
       spots.push([Math.round(ccx + dx * c - dy * s), Math.round(ccy + dx * s + dy * c)]);
     }

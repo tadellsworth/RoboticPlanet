@@ -181,7 +181,7 @@ body.mm-off .objective { margin-right: 54px; }
   background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); font-size: 12px; font-weight: 600;
 }
 .tool svg { width: 24px; height: 24px; }
-.tool kbd, .seg kbd, .bcard kbd, #banner-traffic kbd { display: none; }
+.tool kbd, .seg kbd, .bcard kbd, #banner-traffic kbd, #banner-route kbd { display: none; }
 kbd {
   display: inline-block; min-width: 1.5em; padding: 0 5px; border-radius: 5px; border: 1px solid rgba(255,255,255,0.25);
   border-bottom-width: 2px; font: 600 12px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; text-align: center; color: var(--text);
@@ -201,7 +201,7 @@ kbd {
 #banner-text .ok { color: var(--good); }
 .banner-actions { display: flex; gap: 8px; flex-wrap: wrap; }
 .banner-actions .road-seg { flex: 1 1 100%; }
-#banner-traffic.on { background: var(--accent); color: var(--accent-ink); }
+#banner-traffic.on, #banner-route.on { background: var(--accent); color: var(--accent-ink); }
 .banner-actions .road-seg button { padding: 7px 4px; }
 /* The Paths tools wrap onto a second row instead of running off the side (the page can't be swiped
    sideways: touches go to the map). */
@@ -442,7 +442,7 @@ i.g.uranium { background: var(--g-uranium); } i.g.fissile { background: var(--g-
     border: 1px solid rgba(255, 255, 255, 0.25); border-radius: 4px; opacity: 0.65; vertical-align: 1px; }
   .bcard { position: relative; }
   .bcard kbd { display: inline-block; position: absolute; top: 6px; left: 6px; opacity: 0.75; font-size: 11px; }
-  #banner-traffic kbd { display: inline-block; margin-left: 6px; opacity: 0.6; font-size: 11px; }
+  #banner-traffic kbd, #banner-route kbd { display: inline-block; margin-left: 6px; opacity: 0.6; font-size: 11px; }
   .tool:hover { border-color: rgba(255, 255, 255, 0.25); }
   /* With a panel open on the right, the dock and messages centre on the map that's left. */
   body.sheet-open #bottombar, body.sheet-open #toasts { left: calc((100% - 444px) / 2); }

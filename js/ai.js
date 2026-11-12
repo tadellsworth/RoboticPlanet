@@ -1274,6 +1274,8 @@ function aiSearchSpot(p, type, lander) {
         const rest = Math.min(sums[2](i, j, 5), 6) + Math.min(sums[3](i, j, 5), 6) + Math.min(sums[4](i, j, 5), 4) * 1.5;
         s = -dist(i, j, ex, ey) * 0.6 + dHome * 0.5 + ore * 1.6 + cry * 1.0 + rest * 0.3;
         if (nukeOn()) s += Math.min(sums[5](i, j, 6), 3) * 6; // the race for uranium
+        // Crossroads for three: the rich quarter no one landed in draws expansion too.
+        if (S.spare) s += Math.max(0, 34 - dist(i, j, S.spare.x, S.spare.y)) * 0.3;
         // Head for whatever we're running out of.
         for (const r of P.short || []) s += Math.min(sums[[R_ORE, R_CRYSTAL, R_STALK, R_BOULDER].indexOf(r)](i, j, 5), 6) * 1.5;
       } else if (def.farm) {

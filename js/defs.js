@@ -459,7 +459,9 @@ const SHAPE_PRESETS = [
   { name: 'Rift', group: 'divided', blurb: 'A chasm splits the planet, crossed only by a few natural rock arches: hold yours.', w: 1, h: 1, rift: true, tip: 'Rift: a chasm splits the planet, crossed only by a few natural rock arches. Hold your arches with turrets and Mortar Pits; a bridge over the chasm is the slow way to open another crossing.' },
   { name: 'Ring valley', group: 'divided', blurb: 'A massif too steep to climb fills the middle, with a valley round it on each side: two long ways round.', w: 1, h: 1.1, ring: true, tip: 'Ring valley: a massif too steep to climb fills the middle, and a valley runs round it on each side. Two long ways round: fortify one, raid along the other. (A long tunnel through the massif is the only shortcut.)' },
   { name: 'Oases', group: 'open', blurb: 'A barren, crag-strewn waste with a few rich oases joined by narrow passes: an expansion race.', w: 1.05, h: 1.05, oases: true, tip: 'Oases: a barren, crag-strewn waste. Everything worth having is round your base and in a few rich oases joined by narrow passes: grab them first, and guard the long supply lines.' },
-  { name: 'Crossroads', group: 'divided', blurb: 'Four quarters split by ridges, meeting at a rich plaza; the two quarters no one holds are rich.', w: 1.2, h: 1, cross: true, tip: 'Crossroads: ridges split the planet into four quarters, meeting at a rich plaza in the middle. Your base is in one corner; the two quarters no one holds are rich, and gaps near the edges lead round the flanks.' },
+  { name: 'Crossroads', group: 'divided', blurb: 'Four quarters split by ridges, meeting at a rich plaza. Two players leave two rich quarters free; up to four take a corner each.', w: 1.2, h: 1, cross: true, players: 4, tip: 'Crossroads: ridges split the planet into four quarters, meeting at a rich plaza in the middle. Your base is in one corner; the two quarters no one holds are rich, and gaps near the edges lead round the flanks.',
+    quadTip: 'Crossroads: ridges split the planet into four quarters, a colony in each corner, meeting at a rich plaza in the middle where every quarter touches. A gap through each ridge, out toward the edge, leads to your neighbours round the flanks. The colony across the plaza is the far one.',
+    spareTip: 'Crossroads: ridges split the planet into four quarters, meeting at a rich plaza in the middle. The quarter beside you to the north is free and rich; the red rival across the plaza borders it too, and the green rival is beside you to the east. A gap through each ridge, out toward the edge, leads round the flanks.' },
   { name: 'Lakes', group: 'water', blurb: 'Many small lakes, with roads weaving between them: bridges save long detours.', w: 1.1, h: 1.1, lakes: true, naval: true, tip: 'Lakes: a land of many small lakes, roads weaving between them. Bridges save long detours.' },
   { name: 'Tidal flats', group: 'water', blurb: 'Low islands joined by sandbars: at low tide armies walk across, at high tide the sea covers the flats and anything caught out there is washed ashore.', w: 1.15, h: 1.45, islands: true, naval: true, tidal: true, flat: true, tip: 'Tidal flats: the islands are joined by sandbars, dry at low tide and under the sea at high tide (a warning comes first). Bots walk across at low tide; nothing can be built on the flats, so trucks still need bridges or ships.' },
   { name: 'River delta', group: 'water', blurb: 'A wide braided river splits the planet: bots wade the shallow fords, trucks need bridges. Rich islets midstream, fertile banks.', w: 1.1, h: 1.1, delta: true, naval: true, flat: true, tip: 'River delta: a braided river runs across the planet. Bots can wade the shallow fords (slowly); haulers and trucks need a bridge. The islet midstream is rich, and the banks are fertile for Bio Farms.' },
@@ -559,7 +561,10 @@ const URANIUM_DEPOSITS = 6;
 const NUKE = { parts: { fissile: 6, alloy: 4, chip: 2 }, assemble: 60, range: 40, flight: 30, radius: 6, scorch: 240 };
 const EVAC_MARGIN = 1.5; // an evacuation clears this much beyond the blast radius
 
-const PLAYER_COLORS = ['#38d4ff', '#ff5a6e', '#5be06c'];
+// You (cyan), the rival (red), and in a free-for-all the green and purple rivals. Purple stands apart
+// from the other three and from every biome's ground (gold would vanish on desert, savanna and lava).
+const PLAYER_COLORS = ['#38d4ff', '#ff5a6e', '#5be06c', '#b36bff'];
+const RIVAL_NAMES = ['', 'Red', 'Green', 'Purple'];
 /**
  * The hidden rival boost (tap the clock three times, or press ` on a keyboard): for a game you're
  * winning too easily. Each button gives one rival this much, at its Command Base.
@@ -570,14 +575,14 @@ const BOOST = {
 };
 
 /**
- * What to call player p. Label: 'You', 'Rival' (two players), 'Red rival' or 'Green rival' (three).
- * In a sentence (the = true): 'you', 'the rival', 'the Red rival', 'the Green rival'.
+ * What to call player p. Label: 'You', 'Rival' (two players), 'Red rival', 'Green rival' or 'Purple
+ * rival' (three or four). In a sentence (the = true): 'you', 'the rival', 'the Red rival', ...
  */
 function playerName(p, the) {
   if (p === 0) return the ? 'you' : 'You';
   if (typeof S !== 'undefined' && S && S.mode === 'colony' && p === 1) return the ? 'the wildlife' : 'Wildlife';
   const three = typeof S !== 'undefined' && S && S.players && S.players.length > 2;
-  const n = three ? ['', 'Red', 'Green'][p] + ' rival' : the ? 'rival' : 'Rival';
+  const n = three ? RIVAL_NAMES[p] + ' rival' : the ? 'rival' : 'Rival';
   return the ? 'the ' + n : n;
 }
 
