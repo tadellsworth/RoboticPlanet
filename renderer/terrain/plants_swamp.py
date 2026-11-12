@@ -236,7 +236,7 @@ def b5_stump(seed=5):
     tr = np.stack([np.zeros_like(z), np.zeros_like(z), z], -1)
     rad = R * (1 + 0.35 * np.exp(-z / 4.0)) * (1 - 0.06 * z / H)
     V, F, u, v = tube(tr, rad, 28)
-    c = lerpc('#4c4234', '#5e5242', u) * (0.82 + 0.18 * np.cos(v * 2 * np.pi * 9 + u * 2))[:, None]
+    c = lerpc('#54493a', '#6e604c', u) * (0.8 + 0.2 * np.cos(v * 2 * np.pi * 9 + u * 2))[:, None]
     S.add(V, F, attrs(len(V), c, u=u, v=v, mat=3, spec=0.08))
     # roots flaring into the mud
     for k in range(7):
@@ -264,8 +264,7 @@ def b5_stump(seed=5):
         oriented_blob(S, (np.cos(a) * Rt * 0.7, np.sin(a) * Rt * 0.7, H + 0.8), (rng.uniform(5, 8), rng.uniform(3.5, 5), 2.2),
                       yaw=a + np.pi / 2, col='#4e6e28', mat=4, col2='#6c8a34', spec=0.03, zmin=None, nu=8, nv=12)
     # shelf fungi: half-discs in tiers on the sides, orange with cream rims and bands
-    for (a, zz, r) in [(-1.75, 12, 8.0), (-1.35, 22, 6.5), (-2.4, 18, 6.0), (-0.55, 9, 7.0), (0.15, 26, 5.5),
-                       (-3.0, 30, 5.0)]:
+    for (a, zz, r) in [(-1.9, 10, 8.5), (-0.95, 21, 7.0), (-2.75, 25, 6.0), (-0.1, 8, 6.5), (-1.45, 31, 5.0)]:
         rr = np.interp(zz, z, rad)
         cx, cy = np.cos(a) * (rr - 0.5), np.sin(a) * (rr - 0.5)
 
@@ -273,7 +272,7 @@ def b5_stump(seed=5):
             d = np.hypot(V[:, 0] - cx, V[:, 1] - cy) / r
             c = lerpc('#b85a1c', '#f09a34', smoothstep(0.1, 0.8, d))
             c = c * (0.9 + 0.1 * np.sin(d * 22))[:, None]
-            return lerpc(c, '#f4d090', smoothstep(0.82, 0.97, d))
+            return lerpc(c, '#f4d090', smoothstep(0.88, 0.98, d))
         oriented_blob(S, (cx, cy, zz), (r * 0.9, r * 1.5, 2.2), yaw=a, col=fc, mat=0, spec=0.2, gloss=24, zmin=None, nu=8, nv=18)
     # a fern sprig at the foot
     from plants_forest import frond
@@ -355,8 +354,8 @@ def b6_pitchers(seed=6):
     return S
 
 
-SCALE = [1.42, 1.5, 1.6, 1.5, 1.6, 1.6]
-OFFSET = [(8, 22), (0, 0), (6, 18), (4, 6), (0, 6), (2, 4)]
+SCALE = [1.34, 1.5, 1.6, 1.5, 1.6, 1.6]
+OFFSET = [(14, 22), (0, 0), (6, 18), (4, 6), (0, 6), (2, 4)]
 PLANTS = [b1_cypress, b2_knees, b3_cattails, b4_mangrove, b5_stump, b6_pitchers]
 
 if __name__ == '__main__':

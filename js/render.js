@@ -447,6 +447,7 @@ function bakeMap() {
   hdReset();
   for (let j = 0; j < S.H; j++) for (let i = 0; i < S.W; i++) drawTile(i, j);
   drawPlants(R.mapCtx, 0, 0, S.W - 1, S.H - 1);
+  bakeGlow();
   R.terr = document.createElement('canvas');
   R.terr.width = S.W; R.terr.height = S.H;
   R.terrCtx = R.terr.getContext('2d');
@@ -465,6 +466,7 @@ function flushDirtyTiles() {
     seen.add(t);
     const i = t % S.W, j = (t / S.W) | 0;
     redrawAround(R.mapCtx, i, j);
+    if (R.glowMap) glowTiles(i - 1, j - 1, i + 1, j + 1);
     for (const ch of chunks) if (i >= ch.i0 - 1 && i <= ch.i0 + HD_CHUNK && j >= ch.j0 - 1 && j <= ch.j0 + HD_CHUNK) redrawAround(ch.ctx, i, j);
   }
   S.dirtyTiles.length = 0;
@@ -486,8 +488,62 @@ function redrawAround(ctx, i, j) {
   ctx.restore();
 }
 
+/*
+ * Night glow: biomes whose ground, water or plants glow after dark (the alien bloom's veins and plants,
+ * the ashlands' embers) have glow art (ground-glow-<b>, water-glow-<b>, plant-<b>-<k>-glow) baked into a
+ * map of its own, GLOW_PX a tile, which is added on at night (drawBiomeGlow).
+ */
+const GLOW_PX = 16;
+function bakeGlow() {
+  R.glowMap = null;
+  const b = R.biome;
+  let any = !!(ART['ground-glow-' + b] || ART['water-glow-' + b]);
+  for (let k = 1; k <= PLANT_KINDS && !any; k++) if (ART[`plant-${b}-${k}-glow`]) any = true;
+  if (!any) return;
+  const c = document.createElement('canvas');
+  c.width = S.W * GLOW_PX; c.height = S.H * GLOW_PX;
+  const ctx = c.getContext('2d'), k = GLOW_PX / TP;
+  ctx.setTransform(k, 0, 0, k, 0, 0);
+  ctx.hdScale = k;
+  R.glowMap = { c, ctx };
+  glowTiles(0, 0, S.W - 1, S.H - 1);
+}
+
+/** Redraw the night glow of tiles i0..i1 × j0..j1 (ground, water, and any plant's glow reaching them). */
+function glowTiles(i0, j0, i1, j1) {
+  const G = R.glowMap;
+  if (!G) return;
+  const ctx = G.ctx, b = R.biome, gArt = ART['ground-glow-' + b], wArt = ART['water-glow-' + b];
+  i0 = Math.max(0, i0); j0 = Math.max(0, j0); i1 = Math.min(S.W - 1, i1); j1 = Math.min(S.H - 1, j1);
+  ctx.clearRect(i0 * TP, j0 * TP, (i1 - i0 + 1) * TP, (j1 - j0 + 1) * TP);
+  R.inMap = true;
+  for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) {
+    const t = tIdx(i, j);
+    if (S.terrain[t] === T_GROUND && gArt && !S.road[t] && !S.bAt[t]) drawTexture(ctx, gArt, i, j, i * TP, j * TP);
+    else if (S.terrain[t] === T_WATER && wArt && !S.road[t]) drawTexture(ctx, wArt, i, j, i * TP, j * TP);
+  }
+  R.inMap = false;
+  ctx.save();
+  ctx.beginPath(); ctx.rect(i0 * TP, j0 * TP, (i1 - i0 + 1) * TP, (j1 - j0 + 1) * TP); ctx.clip();
+  drawPlants(ctx, i0 - 1, j0 - 1, i1 + 1, j1 + 1, true);
+  ctx.restore();
+}
+
+/** Add the biome's night glow over the ground (after it's graded for the time of day), stronger the darker it is. */
+function drawBiomeGlow(ctx, ox, oy, z) {
+  if (!R.glowMap) return;
+  const n = fxNight();
+  if (n < 0.02) return;
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  ctx.globalAlpha = n * (0.8 + 0.2 * Math.sin(S.time * 0.9));
+  ctx.imageSmoothingEnabled = true;
+  ctx.drawImage(R.glowMap.c, ox, oy, S.W * z, S.H * z);
+  ctx.restore();
+}
+
 /** The decorative plants of tiles i0..i1 × j0..j1, drawn over the ground already baked there. */
-function drawPlants(ctx, i0, j0, i1, j1) {
+function drawPlants(ctx, i0, j0, i1, j1, glow) {
   if (!S.decor) return;
   const prev = R.drawScale;
   R.drawScale = ctx.hdScale || 1;
@@ -495,7 +551,7 @@ function drawPlants(ctx, i0, j0, i1, j1) {
   try {
     for (let j = Math.max(0, j0); j <= Math.min(S.H - 1, j1); j++) for (let i = Math.max(0, i0); i <= Math.min(S.W - 1, i1); i++) {
       const t = tIdx(i, j);
-      if (S.decor[t] && S.terrain[t] === T_GROUND && !S.road[t] && !S.res[t] && !S.plan[t] && !S.bAt[t]) drawPlant(ctx, S.decor[t], i, j, i * TP, j * TP);
+      if (S.decor[t] && S.terrain[t] === T_GROUND && !S.road[t] && !S.res[t] && !S.plan[t] && !S.bAt[t]) drawPlant(ctx, S.decor[t], i, j, i * TP, j * TP, glow);
     }
   } finally { R.inMap = false; R.drawScale = prev; }
 }
@@ -754,16 +810,18 @@ function paintTile(ctx, i, j) {
  * a simple drawn stand-in. Each tile's plant sits a little off-centre at its own size. The biome's
  * `plantScale` (one per variety) lets big plants, the Forest's trees, spread a little past their tile.
  */
-function drawPlant(ctx, v, i, j, x, y) {
+function drawPlant(ctx, v, i, j, x, y, glow) {
   const b = R.biome || 'desert', sd = 911;
   let n = 0;
   while (ART[`plant-${b}-${n + 1}`]) n++;
+  if (glow && !n) return;
   if (n) {
     // The art is centred with its shadow baked in: a small nudge and size change per tile (plants
     // are drawn after all the ground, so one that leans over a neighbour isn't cut off).
     const k = ((v - 1) % n) + 1, ps = (R.look && R.look.plantScale && R.look.plantScale[k - 1]) || 1;
     const ax = x + TP / 2 + (hash2(i, j, sd) - 0.5) * TP * 0.1, ay = y + TP / 2 + (hash2(j, i, sd + 1) - 0.5) * TP * 0.1;
-    drawArt(ctx, ART[`plant-${b}-${k}`], ax, ay, TP * ps * (0.84 + hash2(i, j, sd + 2) * 0.14));
+    const art = ART[`plant-${b}-${k}${glow ? '-glow' : ''}`]; // (glow: just the parts of it that glow at night, if any)
+    if (art) drawArt(ctx, art, ax, ay, TP * ps * (0.84 + hash2(i, j, sd + 2) * 0.14));
     return;
   }
   const cx = x + TP / 2 + (hash2(i, j, sd) - 0.5) * TP * 0.22, cy = y + TP / 2 + (hash2(j, i, sd + 1) - 0.5) * TP * 0.22;
@@ -4120,6 +4178,7 @@ function render(dtReal) {
   drawPipes(ctx, ox, oy, z, inView); // (graded with the ground at dusk and night)
   todGradeGround(ctx); // morning, evening and night light on the ground and its territory tint (buildings and bots have their own re-lit art)
   drawLavaGlow(ctx, ox, oy, z);
+  drawBiomeGlow(ctx, ox, oy, z);
   drawRoadGlow(ctx, ox, oy, z, v0, v1);
   drawStreetLights(ctx, ox, oy, z, v0, v1);
 

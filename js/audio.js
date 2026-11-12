@@ -470,7 +470,8 @@ function updateBeds(live, dt) {
   B.g3.gain.setTargetAtTime(Math.min(1, (WORLD.trucks || 0) * 0.5), t, 0.4);
   B.lp.frequency.setTargetAtTime(160 + Math.min(200, (WORLD.moving || 0) * 8), t, 0.5);
   const b = typeof biome === 'function' && S ? biome() : 'desert';
-  const wind = { desert: [480, 0.7, 0.03], jungle: [320, 0.6, 0.016], polar: [1100, 2.2, 0.035] }[b] || [480, 0.7, 0.03];
+  const wind = { desert: [480, 0.7, 0.03], jungle: [320, 0.6, 0.016], polar: [1100, 2.2, 0.035], volcanic: [180, 0.5, 0.03], lunar: [90, 0.4, 0.008],
+    autumn: [600, 0.8, 0.028], savanna: [700, 0.9, 0.024], alien: [260, 3, 0.014], swamp: [240, 0.5, 0.01] }[b] || [480, 0.7, 0.03];
   B.gust -= dt;
   if (B.gust <= 0) {
     // A new gust every few seconds: the wind swells, drops and changes pitch.
@@ -480,10 +481,42 @@ function updateBeds(live, dt) {
   }
   const windLevel = live ? wind[2] * (0.5 + 0.5 * Math.sin(t * 0.37) * Math.sin(t * 0.23 + 1)) + wind[2] * 0.5 : 0;
   B.wg.gain.setTargetAtTime(windLevel, t, 0.8);
-  if (live && b === 'jungle') {
+  if (live && BIOME_CALLS[b]) {
     B.chirp -= dt;
-    if (B.chirp <= 0) { B.chirp = 2 + Math.random() * 6; jungleCall(); }
+    if (B.chirp <= 0) { B.chirp = 2 + Math.random() * 6; biomeCall(b); }
   }
+}
+
+// The life (and the land) heard now and then in each biome: see biomeCall.
+const BIOME_CALLS = { jungle: 1, autumn: 1, savanna: 1, swamp: 1, alien: 1, volcanic: 1 };
+
+/** Something heard somewhere out in the biome: birds and insects, frogs in the swamp, strange calls on the alien bloom, the ground hissing and grumbling on the ashlands. */
+function biomeCall(b) {
+  if (b === 'jungle' || b === 'autumn') return jungleCall();
+  if (!sfxReady()) return;
+  const ac = AUDIO.ctx, pan = ac.createStereoPanner ? ac.createStereoPanner() : null, g = ac.createGain();
+  g.gain.value = 0.5;
+  if (pan) { pan.pan.value = Math.random() * 1.6 - 0.8; g.connect(pan).connect(AUDIO.fxBus); } else g.connect(AUDIO.fxBus);
+  const r = Math.random();
+  if (b === 'savanna') {
+    // Cicadas buzzing, or a far-off bird's two-note call.
+    if (r < 0.6) { const f = 5200 + Math.random() * 1500; for (let k = 0; k < 14; k++) _tone(f, 0.02, 'square', 0.006, f * 1.02, k * 0.03, g); }
+    else { const f = 900 + Math.random() * 300; _tone(f, 0.22, 'sine', 0.025, f * 0.92, 0, g); _tone(f * 1.25, 0.25, 'sine', 0.022, f, 0.3, g); }
+  } else if (b === 'swamp') {
+    // Frogs croaking, a chorus, or a drip.
+    if (r < 0.7) { const f = 140 + Math.random() * 120; for (let k = 0; k < 2 + Math.floor(Math.random() * 3); k++) _tone(f, 0.09, 'square', 0.02, f * 0.8, k * 0.22, g); }
+    else _tone(1800 + Math.random() * 600, 0.05, 'sine', 0.02, 900, 0, g);
+  } else if (b === 'alien') {
+    // Strange, sliding, warbling calls.
+    const f = 300 + Math.random() * 900;
+    _tone(f, 0.6, 'sine', 0.02, f * (Math.random() < 0.5 ? 2.2 : 0.45), 0, g);
+    if (r < 0.5) _tone(f * 1.5, 0.4, 'triangle', 0.012, f * 0.8, 0.35, g);
+  } else if (b === 'volcanic') {
+    // A vent hissing, or the ground grumbling.
+    if (r < 0.6) _noise(1.2, 0.03, { type: 'highpass', freq: 2500, attack: 0.2, dest: g });
+    else _noise(1.6, 0.06, { freq: 140, to: 60, attack: 0.3, dest: g });
+  }
+  setTimeout(() => { try { g.disconnect(); } catch (e) { /* gone */ } }, 3000);
 }
 
 /** A bird or an insect somewhere in the forest. */

@@ -25,7 +25,7 @@ def crater_patch(R, depth, rim, rim_w=0.22, blanket=0.35, floor=0.0):
     r = np.hypot(xs, ys) / R
     bowl = -depth * np.clip(1 - r ** 2, 0, 1) ** (1 + floor)
     rimh = rim * np.exp(-((r - 1) / rim_w) ** 2)
-    out = rim * blanket * np.exp(-np.clip(r - 1, 0, None) * 2.2) * (r > 1)
+    out = rim * blanket * np.exp(-np.clip(r - 1, 0, None) * 2.2) * smoothstep(0.85, 1.15, r)
     h = bowl + rimh + out
     h *= 1 - smoothstep(2.6, 3.15, r)
     return h[..., None]

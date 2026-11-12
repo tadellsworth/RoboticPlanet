@@ -179,7 +179,7 @@ def crater_height(X, Y, cx, cy, R, depth=0.38, rim=0.13, rim_w=0.22, blanket=0.4
     r = np.hypot(X - cx, (Y - cy) * squash) / R
     bowl = -depth * R * np.clip(1 - r ** 2, 0, 1) ** (1 + floor)
     rimh = rim * R * np.exp(-((r - 1) / rim_w) ** 2)
-    out = rim * R * blanket * np.exp(-np.clip(r - 1, 0, None) * 2.0) * (r > 1)
+    out = rim * R * blanket * np.exp(-np.clip(r - 1, 0, None) * 2.0) * smoothstep(0.85, 1.15, r)
     return bowl + rimh + out
 
 

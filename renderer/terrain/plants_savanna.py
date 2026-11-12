@@ -62,7 +62,7 @@ def pad(S, rng, c, Rp, cols, dark, density=0.55, leaf_L=5.5, leaf_W=2.3, flat=0.
 
 
 def acacia(S, rng, base, H, R, cols=ACACIA, dark='#1a200c', n_ring=9, n_limbs=4, trunk_r=3.4, density=0.55,
-           leaf_L=5.5, leaf_W=2.3, tiers=1, ell=(1.22, 0.86), lean=(4, 14)):
+           leaf_L=5.5, leaf_W=2.3, tiers=1, ell=(1.22, 0.86), lean=(4, 14), fill=1.0):
     """An umbrella thorn: a thin, leaning trunk forking into a V of limbs that spread to carry a wide,
     flat-topped, oval crown of foliage plates in layers: a high middle, a lower lobed rim, small gaps."""
     bx, by = base
@@ -90,24 +90,26 @@ def acacia(S, rng, base, H, R, cols=ACACIA, dark='#1a200c', n_ring=9, n_limbs=4,
 
     def at(r, a):
         return top[0] + r * ex * np.cos(a), top[1] + r * ey * np.sin(a)
-    # crown plates: a high middle, a middle ring, and a lower outer rim of lobes with gaps between them
+    # crown plates: a high middle, a middle ring, and a lower outer rim of lobes, with gaps between them
+    # (pad radii scaled by `fill`) so the dark limbs and the ground's shadow show through
     pads = []
     for k in range(3):
         a = off + 2 * np.pi * k / 3
-        pads.append(((*at(R * 0.14, a), H + 4 + rng.uniform(-0.5, 0.8)), R * rng.uniform(0.26, 0.3)))
+        pads.append(((*at(R * 0.15, a), H + 6 + rng.uniform(-0.5, 1.0)), R * rng.uniform(0.23, 0.27) * fill))
     for k in range(6):
         a = off + 0.4 + 2 * np.pi * k / 6 + rng.uniform(-0.2, 0.2)
-        pads.append(((*at(R * rng.uniform(0.42, 0.5), a), H + rng.uniform(0.0, 1.5)), R * rng.uniform(0.24, 0.29)))
+        pads.append(((*at(R * rng.uniform(0.44, 0.52), a), H + rng.uniform(0.0, 2.0)), R * rng.uniform(0.21, 0.26) * fill))
     for k in range(n_ring):
         a = off + 2 * np.pi * (k + 0.5) / n_ring + rng.uniform(-0.12, 0.12)
-        r = R * rng.uniform(0.7, 0.8)
-        pads.append(((*at(r, a), H - 4.5 + rng.uniform(-1.0, 1.0)), R * rng.uniform(0.19, 0.25)))
+        r = R * rng.uniform(0.72, 0.82)
+        pads.append(((*at(r, a), H - 6 + rng.uniform(-1.5, 1.5)), R * rng.uniform(0.17, 0.22) * fill))
     for t in range(1, tiers):
-        # young trees grow in layers: a smaller, separate tier above the first
+        # young trees grow in layers: a smaller, separate tier above the first on its own leader
+        lift = 14 * t
         for k in range(4):
-            a = off + 2 * np.pi * k / 4 + rng.uniform(-0.3, 0.3)
-            pads.append(((*at(R * rng.uniform(0.1, 0.3), a), H + 11 * t), R * rng.uniform(0.2, 0.26)))
-        sp = bez(np.array([fork[0], fork[1], zf]), np.array([top[0], top[1], H]), np.array([top[0], top[1], H + 11 * t - 2]), 6)
+            a = off + 0.8 + 2 * np.pi * k / 4 + rng.uniform(-0.3, 0.3)
+            pads.append(((*at(R * rng.uniform(0.12, 0.26) / t, a), H + lift), R * rng.uniform(0.2, 0.24) / t ** 0.5))
+        sp = bez(np.array([fork[0], fork[1], zf]), np.array([top[0], top[1], H]), np.array([top[0], top[1], H + lift - 2]), 6)
         add_tube(S, sp, trunk_r * 0.5, trunk_r * 0.3, nseg=6, col=ACACIA_BARK, mat=3)
     for (c, Rp) in pads:
         pad(S, rng, c, Rp, cols, dark, density=density, leaf_L=leaf_L, leaf_W=leaf_W)
@@ -117,7 +119,7 @@ def acacia(S, rng, base, H, R, cols=ACACIA, dark='#1a200c', n_ring=9, n_limbs=4,
 def s1_acacia(seed=31):
     rng = np.random.default_rng(seed)
     S = Scene()
-    acacia(S, rng, (0, 0), 66, 78, n_ring=11, n_limbs=4, lean=(10, 40), ell=(1.25, 0.74))
+    acacia(S, rng, (0, 0), 66, 80, n_ring=11, n_limbs=5, lean=(10, 40), ell=(1.25, 0.74), fill=0.9)
     return S
 
 
@@ -277,7 +279,7 @@ def s5_thornbush(seed=35):
     rng = np.random.default_rng(seed)
     S = Scene()
     R_dome, H_dome = 70, 38
-    leafc = ['#8a8858', '#9a9664', '#7a7a4c', '#a6a070', '#8c8c5a']
+    leafc = ['#9c9c70', '#acaa7e', '#8e8e64', '#b8b48a', '#a0a274']
 
     def cluster(p, k=6):
         for j in range(k):
@@ -327,12 +329,12 @@ def s6_sapling(seed=36):
     """A young acacia: a slim stem and a small crown in two flat tiers."""
     rng = np.random.default_rng(seed)
     S = Scene()
-    acacia(S, rng, (0, 0), 34, 44, n_ring=8, n_limbs=3, trunk_r=2.2, density=0.6, leaf_L=4.6, leaf_W=2.0, tiers=2,
-           lean=(4, 20), ell=(1.2, 0.8))
+    acacia(S, rng, (0, 0), 30, 46, n_ring=7, n_limbs=3, trunk_r=2.2, density=0.6, leaf_L=4.6, leaf_W=2.0, tiers=3,
+           lean=(4, 18), ell=(1.15, 0.85), fill=0.85)
     return S
 
 
-SCALE = [1.08, 1.25, 1.36, 1.72, 1.6, 1.45]
+SCALE = [1.03, 1.25, 1.36, 1.72, 1.6, 1.62]
 # tall plants cast long shadows to the lower right: shift them up-left so the shadow fits
 OFFSET = [(16, 20), (16, 26), (30, 36), (14, 18), (4, 4), (12, 16)]
 # per-plant render settings: the mound's tall spires would otherwise be darkened by the height-based occlusion

@@ -383,7 +383,21 @@ function syncMenu() {
     $(id + '-row').classList.toggle('on', !!on);
   }
   for (const btn of $('m-daynight').children) mark(btn, btn.dataset.v === todMode());
-  // Map type and Biome rows: the choice, with a thumbnail.
+  syncPickRows();
+  // Random can't be saved as a planet: pick a map type and biome first.
+  const rnd = !!(m.shapeRnd || m.biomeRnd);
+  $('m-saveplanet').disabled = rnd;
+  $('m-saveplanet').title = rnd ? 'Pick a map type and biome (not Random) to save this planet' : 'Keep this planet (with its map settings) to play again';
+  const sum = menuSummary();
+  $('m-more-sum').innerHTML = `<span class="sum-main">${sum.main}</span>` + (sum.extra ? `<span class="sum-extra"><span class="vh"> · </span>${sum.extra}</span>` : '');
+  $('m-continue').hidden = !hasSave();
+  syncInfo();
+  schedulePreview();
+}
+
+/** The Map type and Biome rows: the choice, with a thumbnail (redrawn as art arrives). */
+function syncPickRows() {
+  const m = UI.menu, three = menuThree(), shape = m.shape || 0, SH = SHAPE_PRESETS[shape];
   const sRow = $('m-shape'), bRow = $('m-biome'), bk = BIOME_ORDER[m.biome || 0];
   sRow.querySelector('.m-pick-name').textContent = m.shapeRnd ? 'Random' : SH.name;
   sRow.querySelector('.m-pick-meta').textContent = m.shapeRnd ? (three ? 'any for 3 players' : 'any map type') : mapGroupName(SH.group);
@@ -395,15 +409,6 @@ function syncMenu() {
   bRow.dataset.info = m.biomeRnd ? 'Random biome: any of them, picked when you land.' : `${biomeName(m.biome || 0)}: ${(BIOMES[bk] && BIOMES[bk].desc) || ''}`;
   bRow.setAttribute('aria-label', `Biome: ${m.biomeRnd ? 'Random' : biomeName(m.biome || 0)}. Change`);
   drawThumbOnce(bRow.querySelector('canvas'), 'biome:' + (m.biomeRnd ? 'rnd' : bk) + ':' + artCount(), (cv) => drawBiomeSwatch(cv, m.biomeRnd ? null : bk));
-  // Random can't be saved as a planet: pick a map type and biome first.
-  const rnd = !!(m.shapeRnd || m.biomeRnd);
-  $('m-saveplanet').disabled = rnd;
-  $('m-saveplanet').title = rnd ? 'Pick a map type and biome (not Random) to save this planet' : 'Keep this planet (with its map settings) to play again';
-  const sum = menuSummary();
-  $('m-more-sum').innerHTML = `<span class="sum-main">${sum.main}</span>` + (sum.extra ? `<span class="sum-extra">${sum.extra}</span>` : '');
-  $('m-continue').hidden = !hasSave();
-  syncInfo();
-  schedulePreview();
 }
 
 /* ------------------------------------------------------------------ map type and biome pickers */
@@ -417,7 +422,7 @@ function openPicker(kind) {
   let h = '';
   if (kind === 'shape') {
     const text = (name, badges, blurb) => `<canvas class="pc-thumb" aria-hidden="true"></canvas><span class="pc-text"><span class="pc-name">${name}</span>${badges ? `<span class="pc-badges">${badges}</span>` : ''}<span class="pc-blurb">${blurb}</span></span>`;
-    h += `<div class="pgrid">${card('rnd', m.shapeRnd, text('Random', '<span class="badge">surprise</span>', three ? 'One of the map types with room for three, picked when you land.' : 'Any map type, picked when you land.'), 'rnd')}</div>`;
+    h += `<div class="pgrid">${card('rnd', m.shapeRnd, text('Random', '', three ? 'One of the map types with room for three, picked when you land.' : 'Any map type, picked when you land.'), 'rnd')}</div>`;
     const groups = MAP_GROUPS.map((g) => ({ ...g, list: [] })), other = { key: '', name: 'More', list: [] };
     SHAPE_PRESETS.forEach((P, i) => (groups.find((g) => g.key === P.group) || other).list.push(i));
     for (const g of groups.concat(other)) {
@@ -780,7 +785,7 @@ function menuArtTick() {
   if (n === UI.menuArtN || now - (UI.menuArtT || 0) < 300) return;
   UI.menuArtN = n; UI.menuArtT = now;
   if ($('screen-menu').hidden) return;
-  if (UI.menuView === 'setup') syncMenu();
+  if (UI.menuView === 'setup') syncPickRows();
   if (UI.picker && UI.picker.kind === 'biome') drawPickerArt();
 }
 
@@ -1502,8 +1507,8 @@ function placeMinimap() {
 
 /*
  * Planets you liked, kept on this device (localStorage): a seed with the map settings that shape it
- * (map shape, size, terrain, resources, biome, players), newest first. Tap one in the new-game menu's
- * More settings to set the menu to it; × forgets it.
+ * (map type, size, terrain, resources, biome, players), newest first. Tap one under the planet preview
+ * in the new-game menu's Customise view to set the menu to it; × forgets it.
  */
 const PLANETS_KEY = 'terrafall.planets', PLANETS_MAX = 40;
 function savedPlanets() {
@@ -1535,7 +1540,7 @@ function renderPlanets() {
   const list = savedPlanets(), cur = UI.menu.shapeRnd || UI.menu.biomeRnd ? '' : planetKey(menuPlanet());
   el.hidden = !list.length;
   el.innerHTML = list.length ? `<span class="planets-title">Saved planets <small>${list.length}</small></span>` + list.map((p, k) =>
-    `<div class="planet-row"><button class="btn small ghost use${planetKey(p) === cur ? ' on' : ''}" data-use="${k}">${planetLabel(p)}</button><button class="btn small ghost del" data-del="${k}" aria-label="Forget Planet #${p.seed}" title="Forget this planet">×</button></div>`).join('') : '';
+    `<div class="planet-row"><button class="btn small ghost use${planetKey(p) === cur ? ' on' : ''}" data-use="${k}" title="${planetLabel(p).replace(/<[^>]+>/g, '')}">${planetLabel(p)}</button><button class="btn small ghost del" data-del="${k}" aria-label="Forget Planet #${p.seed}" title="Forget this planet">×</button></div>`).join('') : '';
   for (const b of el.querySelectorAll('[data-use]')) b.onclick = () => {
     const p = savedPlanets()[+b.dataset.use];
     if (!p) return;
