@@ -2597,27 +2597,41 @@ function setPaveMark(owner, i, j, on) {
  * carry goods between buildings that touch the same network. A junction is a road tile with
  * roads on three or four sides. Labels are rebuilt lazily whenever S.roadVer changes.
  */
-const _rn = { ver: -1, of: null, comp: null, compT: null, junc: null, bnet: new Map(), bnetT: new Map() };
+const _rn = { ver: -1, of: null, comp: null, compT: null, junc: null, own: {}, bnet: new Map(), bnetT: new Map() };
 
 function roadNet() {
   const N = S.W * S.H;
   if (_rn.of === S && _rn.ver === (S.roadVer || 0) && _rn.comp && _rn.comp.length === N) return _rn;
-  const comp = new Int32Array(N).fill(-1), junc = new Uint8Array(N);
-  const W = S.W;
+  const junc = new Uint8Array(N), all = netLabels(undefined, junc);
+  Object.assign(_rn, { of: S, ver: S.roadVer || 0, comp: all.comp, compT: all.compT, junc, own: {} });
+  _rn.bnet.clear();
+  _rn.bnetT.clear();
+  return _rn;
+}
+
+/**
+ * Number the road networks as `who`'s bots can drive them: the roads, Viaducts, and who's own Outposts, Keeps,
+ * Gates and Ropeways (everyone's with `who` undefined: then `junc` is filled in too).
+ */
+function netLabels(who, junc) {
+  const N = S.W * S.H, W = S.W, on = new Uint8Array(N), comp = new Int32Array(N).fill(-1);
+  for (let t = 0; t < N; t++) if (S.road[t] > 0 || (S.bAt[t] > 0 && passTile(t, who))) on[t] = 1;
   let next = 0;
   const q = [];
   for (let t = 0; t < N; t++) {
-    if (!roadLike(t)) continue;
-    let k = 0;
+    if (!on[t]) continue;
     const i = t % W;
-    for (const u of [i > 0 ? t - 1 : -1, i < W - 1 ? t + 1 : -1, t - W, t + W]) if (u >= 0 && u < N && roadLike(u) && canStep(t, u)) k++;
-    if (k >= 3 && S.road[t]) junc[t] = 1;
+    if (junc && S.road[t]) {
+      let k = 0;
+      for (const u of [i > 0 ? t - 1 : -1, i < W - 1 ? t + 1 : -1, t - W, t + W]) if (u >= 0 && u < N && on[u] && canStep(t, u)) k++;
+      if (k >= 3) junc[t] = 1;
+    }
     if (comp[t] >= 0) continue;
     comp[t] = next; q.length = 0; q.push(t);
     while (q.length) {
       const a = q.pop(), ai = a % W;
       for (const b of [ai > 0 ? a - 1 : -1, ai < W - 1 ? a + 1 : -1, a - W, a + W]) {
-        if (b < 0 || b >= N || comp[b] >= 0 || !roadLike(b) || !canStep(a, b)) continue;
+        if (b < 0 || b >= N || comp[b] >= 0 || !on[b] || !canStep(a, b)) continue;
         comp[b] = next; q.push(b);
       }
     }
@@ -2635,10 +2649,32 @@ function roadNet() {
     if (b.type === 'viaduct') parentT[find(parentT, compT[t])] = find(parentT, compT[o]);
   }
   for (let t = 0; t < N; t++) if (comp[t] >= 0) { comp[t] = find(parent, comp[t]); compT[t] = find(parentT, compT[t]); }
-  Object.assign(_rn, { of: S, ver: S.roadVer || 0, comp, compT, junc });
-  _rn.bnet.clear();
-  _rn.bnetT.clear();
-  return _rn;
+  return { comp, compT };
+}
+
+/**
+ * The road networks as `owner`'s bots can drive them (trucks: without Ropeways). A rival's Outposts, Keeps, Gates
+ * and Ropeways aren't part of them: a road that only joins up through one doesn't link two of the owner's
+ * buildings (roadNet's own labels said it did, and a Hauler was sent and found no way again and again). Worked
+ * out when first asked after the roads change; numbered as in roadNet wherever a network is whole for this owner.
+ */
+function ownNet(owner, trucks) {
+  const net = roadNet();
+  let o = net.own[owner];
+  if (!o) {
+    o = net.own[owner] = netLabels(owner, null);
+    for (const [mine, all] of [[o.comp, net.comp], [o.compT, net.compT]]) {
+      const id = new Map(), used = new Set();
+      let fresh = mine.length;
+      for (let t = 0; t < mine.length; t++) {
+        if (mine[t] < 0) continue;
+        let k = id.get(mine[t]);
+        if (k === undefined) { k = used.has(all[t]) ? fresh++ : all[t]; used.add(all[t]); id.set(mine[t], k); }
+        mine[t] = k;
+      }
+    }
+  }
+  return trucks ? o.compT : o.comp;
 }
 
 /** Can a Freight Truck or Road Train drive between buildings a and b (by road, not by ropeway)? */
@@ -2651,16 +2687,17 @@ function truckLinked(a, b) {
 
 /** The road networks touching building b (the road tiles right next to it). */
 function buildingNets(b, trucks) {
-  const net = roadNet(), comp = trucks ? net.compT : net.comp, cache = trucks ? net.bnetT : net.bnet;
+  const net = roadNet(), cache = trucks ? net.bnetT : net.bnet;
   let nets = cache.get(b.id);
   if (nets) return nets;
+  const comp = ownNet(b.owner, trucks);
   nets = [];
   const t = tIdx(b.x, b.y);
   if (comp[t] >= 0) nets.push(comp[t]); // an Outpost is part of the road through it
   for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
     if (!inMap(b.x + di, b.y + dj)) continue;
     const u = tIdx(b.x + di, b.y + dj);
-    if (roadLike(u) && canStep(t, u) && nets.indexOf(comp[u]) < 0) nets.push(comp[u]);
+    if (comp[u] >= 0 && canStep(t, u) && nets.indexOf(comp[u]) < 0) nets.push(comp[u]);
   }
   if (b.id) cache.set(b.id, nets);
   return nets;
@@ -2727,9 +2764,12 @@ function roadGoals(owner, except) {
  * Cheapest road through the owner's land, by Dijkstra: existing road is free, open ground costs 1
  * and resources (which a road clears) ROAD_AVOID, so routes go round fields unless the detour is
  * long. Starting from `seeds`, stopping at the first tile where done(t) holds (or exploring
- * everything if done is null). Returns { cost, prev, end }.
+ * everything if done is null). Returns { cost, prev, end }. A route to a goal also pays ROAD_TURN for
+ * every turn, so of the routes that cost the same the straightest is laid, never a longer one (twenty
+ * turns weigh one tile): bots brake for every corner, trucks most of all. The map of costs with no
+ * goal (roadReach) stays in whole road tiles.
  */
-const ROAD_AVOID = 10;
+const ROAD_AVOID = 10, ROAD_TURN = 0.05;
 function roadWeight(t) {
   if (S.road[t] || S.plan[t] || (S.bAt[t] && passTile(t))) return 0;
   const c = CROSS[S.terrain[t]];
@@ -2742,6 +2782,7 @@ function roadSearch(owner, seeds, done) {
   const heap = new MinHeap();
   for (const t of seeds) { cost[t] = roadWeight(t); prev[t] = -1; heap.push(t, cost[t]); }
   const open = (t) => S.road[t] || canRoad(owner, t % W, (t / W) | 0) || (S.bAt[t] > 0 && passTile(t));
+  const turn = done ? ROAD_TURN : 0;
   while (heap.size) {
     const c = heap.pri[0], t = heap.pop();
     if (c > cost[t]) continue;
@@ -2749,7 +2790,7 @@ function roadSearch(owner, seeds, done) {
     const i = t % W;
     for (const u of [i > 0 ? t - 1 : -1, i < W - 1 ? t + 1 : -1, t - W, t + W]) {
       if (u < 0 || u >= N || !open(u) || !(roadLike(t) && roadLike(u) ? canStep(t, u) : stepPlan(t, u))) continue;
-      const nc = c + roadWeight(u);
+      const nc = c + roadWeight(u) + (prev[t] >= 0 && u - t !== t - prev[t] ? turn : 0);
       if (nc < cost[u]) { cost[u] = nc; prev[u] = t; heap.push(u, nc); }
     }
     // Across a Viaduct: its deck carries the road from one end to the other.
@@ -2779,8 +2820,8 @@ function roadRouteTo(owner, b) {
   const g = roadGoals(owner, b);
   if (!g.stores.length) return null;
   if (onHomeNet(b)) { const r = []; r.cost = 0; r.pending = 0; return r; }
-  const net = roadNet();
-  const res = roadSearch(owner, roadSides(owner, b.x, b.y), (t) => (roadLike(t) && g.nets.has(net.comp[t])) || g.next[t]);
+  const comp = ownNet(owner);
+  const res = roadSearch(owner, roadSides(owner, b.x, b.y), (t) => g.nets.has(comp[t]) || g.next[t]);
   if (res.end < 0) return null;
   const out = [];
   out.cost = 0; out.pending = 0; out.goods = {}; out.cross = 0;
@@ -2811,8 +2852,8 @@ function roadReach(owner) {
   const c = _roadReach;
   if (c.S !== S || c.key !== key || c.zone !== S.zone || !(S.time - c.at <= 10 && S.time >= c.at)) _roadReach = { S, key, zone: S.zone, at: S.time, maps: [] };
   if (_roadReach.maps[owner]) return _roadReach.maps[owner];
-  const g = roadGoals(owner, null), net = roadNet(), seeds = [];
-  for (let t = 0; t < S.W * S.H; t++) if ((roadLike(t) && g.nets.has(net.comp[t])) || g.next[t]) seeds.push(t);
+  const g = roadGoals(owner, null), comp = ownNet(owner), seeds = [];
+  for (let t = 0; t < S.W * S.H; t++) if (g.nets.has(comp[t]) || g.next[t]) seeds.push(t);
   return (_roadReach.maps[owner] = roadSearch(owner, seeds, null).cost);
 }
 

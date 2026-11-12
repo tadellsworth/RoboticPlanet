@@ -16,7 +16,10 @@ function simStep(dt) {
   if (S.tick % 30 === 22) updateEvac();
   if (S.tick % 60 === 33 && S.decals && S.decals.length) S.decals = S.decals.filter((d) => S.time - d.t0 < d.life); // old ground marks fade away
   // Each player's bots are given work every 8 ticks, the players spread over those ticks.
+  // (TRAFFIC.aware: while the working bots are given jobs and act, the routes they plan count the traffic: see tileCost.)
+  TRAFFIC.aware = 1;
   for (let p = 0, n = S.players.length; p < n; p++) if (S.tick % 8 === Math.floor((p * 8) / n) && !S.players[p].out && !(S.wildlife && p === WILD_OWNER)) dispatch(p);
+  TRAFFIC.aware = 0;
   for (let k = 0; k < S.buildings.length; k++) {
     const b = S.buildings[k];
     if (!b.dead) updateBuilding(b, dt);
@@ -29,7 +32,7 @@ function simStep(dt) {
     if (u.dead) continue;
     if (u.ferryWait) { ferryPassenger(u); continue; }
     if (u.dropping) continue; // coming down by parachute (see updateDrops)
-    if (u.type === 'warbot') updateWarbot(u, dt); else if (BOTS[u.type].siege) updateRocket(u, dt); else if (BOTS[u.type].wild) updateCritter(u, dt); else if (BOTS[u.type].crawler) updateCrawler(u, dt); else updateWorker(u, dt);
+    if (u.type === 'warbot') updateWarbot(u, dt); else if (BOTS[u.type].siege) updateRocket(u, dt); else if (BOTS[u.type].wild) updateCritter(u, dt); else if (BOTS[u.type].crawler) updateCrawler(u, dt); else { TRAFFIC.aware = 1; updateWorker(u, dt); TRAFFIC.aware = 0; }
   }
   if (S.drops && S.drops.length) updateDrops();
   if (S.flak && S.flak.length) updateFlakShells();
@@ -532,6 +535,20 @@ function countCharging() {
   }
 }
 
+/**
+ * Has factory b nothing for its worker to do just now: short of an input with none on the way, or its output
+ * full with no carrier coming for it? Then a worker below IDLE_TOP goes to recharge now, not at BATTERY.low in
+ * the middle of a batch, when the walk would cost working time.
+ */
+const IDLE_TOP = 60;
+function standingBy(b) {
+  const def = BDEFS[b.type];
+  if (!def.inp || beingFed(b)) return false;
+  for (const g in def.inp) if ((b.stock[g] || 0) < def.inp[g] && !(b.inc[g] > 0)) return true;
+  if (def.make) for (const g in def.make) if ((b.stock[g] || 0) + def.make[g] > def.out[g] && !(b.res[g] > 0)) return true;
+  return false;
+}
+
 /** Nearest charger the bot can walk to, avoiding ones that are already crowded. */
 function findCharger(u) {
   let best = null, bs = Infinity;
@@ -818,16 +835,18 @@ function goTo(u, x, y) {
  * TRAFFIC.next) and counted per tile by heading (east, south, west, north). Only the entries
  * touched are cleared each tick, so this stays cheap on big maps.
  */
-const TRAFFIC = { occ: null, head: null, n: 0, used: [], cells: [], bots: [], next: [] };
+const TRAFFIC = { occ: null, head: null, n: 0, used: [], cells: [], bots: [], next: [], aware: 0 };
 
 function heading(face) { return ((Math.round(face / (Math.PI / 2)) % 4) + 4) % 4; }
 
 /*
  * The traffic map: for every road tile, how many bot-seconds of traffic passed over it (flow) and
  * how long bots stood still on it waiting (jam), both fading with a time constant of about a minute.
+ * `dir` is the flow again by heading (four numbers a tile: east, south, west, north), which route planning
+ * reads (tileCost): a working bot keeps off a road where the traffic comes the other way, and off busy junctions.
  * Kept outside the save; it rebuilds within a minute of loading.
  */
-const HEAT = { n: 0, of: null, flow: null, jam: null };
+const HEAT = { n: 0, of: null, flow: null, jam: null, dir: null };
 const HEAT_FADE = Math.exp(-1 / 60);
 
 function countTraffic() {
@@ -840,8 +859,12 @@ function countTraffic() {
   for (const k of TRAFFIC.used) occ[k] = 0;
   for (const t of TRAFFIC.cells) head[t] = -1;
   TRAFFIC.used.length = 0; TRAFFIC.cells.length = 0; TRAFFIC.bots.length = 0; TRAFFIC.next.length = 0;
-  if (HEAT.of !== S || HEAT.n !== N) { HEAT.flow = new Float32Array(N); HEAT.jam = new Float32Array(N); HEAT.n = N; HEAT.of = S; }
-  if (S.tick % 30 === 0) for (let t = 0; t < N; t++) if (HEAT.flow[t]) { HEAT.flow[t] *= HEAT_FADE; HEAT.jam[t] *= HEAT_FADE; if (HEAT.flow[t] < 0.01) HEAT.flow[t] = HEAT.jam[t] = 0; }
+  if (HEAT.of !== S || HEAT.n !== N) { HEAT.flow = new Float32Array(N); HEAT.jam = new Float32Array(N); HEAT.dir = new Float32Array(N * 4); HEAT.n = N; HEAT.of = S; }
+  const dir = HEAT.dir;
+  if (S.tick % 30 === 0) for (let t = 0; t < N; t++) if (HEAT.flow[t]) {
+    const k = t * 4, gone = HEAT.flow[t] * HEAT_FADE < 0.01, f = gone ? 0 : HEAT_FADE;
+    HEAT.flow[t] *= f; HEAT.jam[t] *= f; dir[k] *= f; dir[k + 1] *= f; dir[k + 2] *= f; dir[k + 3] *= f;
+  }
   for (const u of S.bots) {
     if (u.dead || u.inside || !u.path) continue;
     const t = Math.floor(u.y) * S.W + Math.floor(u.x);
@@ -850,6 +873,7 @@ function countTraffic() {
     HEAT.flow[t] += SIM_STEP;
     if (!u.moved) HEAT.jam[t] += SIM_STEP;
     const k = t * 4 + heading(u.face);
+    dir[k] += SIM_STEP;
     if (!occ[k]) TRAFFIC.used.push(k);
     if (occ[k] < 255) occ[k]++;
     if (head[t] < 0) TRAFFIC.cells.push(t);
@@ -1017,9 +1041,57 @@ function queueRoom(u) {
   return Math.max(0, room);
 }
 
+/** What a planned route depends on: the roads (and bridges) and the buildings. A bot looks its route over when this changes. */
+function routeVer() { return (S.roadVer || 0) * 4096 + S.buildings.length; }
+
+/** How many road tiles of detour one tile crawled off the road is worth to a road-bound bot (see HAULER_STRANDED). */
+const GAP_DETOUR = PAVE[1].speed / HAULER_STRANDED - 1;
+
+/**
+ * Roads or buildings have changed since bot u last looked at its route (routeVer): it looks over what is
+ * left of it. If the route now crosses water or rock (a bridge or tunnel is gone) it plans again at once; with
+ * no other way the job is dropped there, and a load is put down in crates (it used to drive on, over open
+ * water). A civilian bot plans again too when a new building stands on the route, or (road-bound) when its
+ * road was taken up and the way round is quicker than crawling across the gap. Fighting units plan their own
+ * way again (travel): their route is only cleared. False if the bot has no route left to follow this tick.
+ */
+function routeCheck(u) {
+  u.rv = routeVer();
+  const bt = BOTS[u.type], p = u.path, last = p.length - 1, W = S.W;
+  if (bt.rail || bt.sea || bt.air || u.ride >= 0 || u.deck || last < 0) return true;
+  const civ = u.type !== 'warbot' && !bt.siege && !bt.wild && !bt.crawler; // (driven by updateWorker: a job with no route counts as arrived)
+  const here = tIdx(Math.floor(u.x), Math.floor(u.y)), onRoad = civ && bt.roadOnly && !haulerStranded(u);
+  let bad = 0, gap = 0;
+  for (let k = u.pi; k <= last; k++) {
+    const t = p[k], q = k > 0 ? p[k - 1] : here;
+    if (Math.max(Math.abs((t % W) - (q % W)), Math.abs(((t / W) | 0) - ((q / W) | 0))) > 1) continue; // a Ropeway, Viaduct or ferry leg: moveAlong looks after those
+    if (!walkable(t)) { bad = 2; break; }
+    if (!civ || k === last) continue;
+    if (S.bAt[t]) { if (!passTile(t, u.owner) && !(ferryLink(t) >= 0 && getE(S.bAt[t]).owner === u.owner)) bad = 1; }
+    else if (onRoad && !S.road[t]) gap++;
+  }
+  if (!bad && !gap) return true;
+  if (bad === 2 && !walkable(here) && !S.bAt[here]) {
+    // Standing where the bridge was: back to the nearest tile of its route that still stands (as offDeck does on a Viaduct).
+    let best = -1, bd = Infinity;
+    for (const t of p) { if (!walkable(t)) continue; const d = dist2((t % W) + 0.5, ((t / W) | 0) + 0.5, u.x, u.y); if (d < bd) { bd = d; best = t; } }
+    if (best >= 0) { u.x = (best % W) + 0.5; u.y = ((best / W) | 0) + 0.5; u.vel = 0; }
+  }
+  if (!civ) { if (bad === 2) { u.path = null; u.vel = 0; return false; } return true; }
+  const pi = u.pi, g = p[last];
+  if (goTo(u, g % W, (g / W) | 0)) {
+    if (!bad && u.path.length - (last + 1 - pi) >= GAP_DETOUR * gap) { u.path = p; u.pi = pi; } // crawling across the gap is quicker
+    return true;
+  }
+  u.path = p; u.pi = pi;
+  if (bad === 2) { u.vel = 0; cancelTask(u); u.task = null; u.path = null; return false; }
+  return true;
+}
+
 /** Walk along the current path. Returns true once the destination is reached. */
 function moveAlong(u, dt) {
   if (!u.path) return true;
+  if (u.rv !== routeVer() && !routeCheck(u)) return false;
   let here = Math.floor(u.y) * S.W + Math.floor(u.x);
   // The next step jumps a gap (a Viaduct or Ropeway) that has come down since the route was
   // planned: back to the end it set out from, and the order is dropped so it plans again.
@@ -1351,6 +1423,7 @@ function dispatch(p) {
         else if (!(bt.haul || (bt.build && (P.noHaulers || (src && !onHomeNet(src) && zoneAt(u.x, u.y) === zoneAt(src.x, src.y) && dist2(u.x, u.y, src.x, src.y) <= FOOT_CARRY * FOOT_CARRY)))) || (bt.rail ? 'rail' : bt.train ? 'train' : bt.truck ? 'truck' : 'haul') !== role) continue;
         if (bt.rail && src && !trainAt(u, src)) continue;
         if (bt.roadOnly && src && !botLinked(u, src)) continue;
+        if (src && u.noGo && u.noGo[src.id] > S.time) continue; // (it found no way there a moment ago)
         if (!bt.haul && src && zoneAt(u.x, u.y) >= 0 && zoneAt(src.x, src.y) >= 0 && zoneAt(u.x, u.y) !== zoneAt(src.x, src.y)) continue; // (a worker carrying by hand: only goods it can walk to)
       } else if (role === 'build' ? !bt.build : role === 'staff' ? !bt.staff : bt.crew !== role) continue;
       else if (zs && zoneAt(u.x, u.y) >= 0 && zs.indexOf(zoneAt(u.x, u.y)) < 0) continue;
@@ -1430,14 +1503,22 @@ function dispatch(p) {
   // 3) Deliveries, one unit per request per pass. Player priority comes first; within the same
   //    priority the Foundry goes first (new workers unblock everything), then construction sites
   //    and production inputs share turns, whichever has the fewest goods on the way first.
-  const reqs = [];
+  const reqs = [], load = botCarry({ type: 'hauler', owner: p }); // (what a Hauler of ours carries: 2, or 3 with the cargo research)
   for (const b of blds) {
     const pri = prioRank(b) * 3 + (b.built && BDEFS[b.type].bots ? 0 : 1);
     // Fuel for an empty Fuel Station comes before anything else: nothing moves without charge.
     // So does one Alloy for an empty Repair Station, so it always has some on hand for the next robot.
     const dry = (BDEFS[b.type].charger && b.built && chargerDry(b)) ||
       (BDEFS[b.type].repair && b.built && !(b.stock.alloy > 0) && !(b.inc.alloy > 0) && (b.repairPts || 0) < REPAIR_HP_PER_ALLOY / 2);
-    for (const [g, n, keep] of needsOf(b)) if (n > 0) reqs.push({ b, g, n, pri: dry ? -1 : keep ? prioRank(b) * 3 + 2 : pri, inc: sumValues(b.inc), keep });
+    const inp = b.built && BDEFS[b.type].inp;
+    for (const [g, n, keep] of needsOf(b)) {
+      if (n <= 0) continue;
+      // Full loads: a factory that is less than a Hauler's load short of an input, with more than its next
+      // batch still in hand or on the way, waits to be topped up. (Asked after every batch, a third of all
+      // Hauler trips carried a single unit to a factory that wasn't short.) Liquids go by Tanker, as they come.
+      if (inp && inp[g] && !keep && n < load && !isLiquid(g) && (b.stock[g] || 0) + (b.inc[g] || 0) >= 2 * inp[g]) continue;
+      reqs.push({ b, g, n, pri: dry ? -1 : keep ? prioRank(b) * 3 + 2 : pri, inc: sumValues(b.inc), keep });
+    }
   }
   reqs.sort((a, c) => a.pri - c.pri || a.inc - c.inc || a.b.born - c.b.born);
   for (let pass = 0; pass < 4 && idle.length; pass++) {
@@ -1580,7 +1661,7 @@ function dispatch(p) {
       const lo = S.owner[tIdx(l.x, l.y)];
       if ((lo >= 0 && lo !== p) || (l.noReach && l.noReach[p] > S.time)) continue; // (not on a rival's ground)
       if (lootLeft(l) - (l.claimed || 0) <= 0 || foesNear(p, l.x + 0.5, l.y + 0.5, CRATE_SAFE)) continue;
-      const nets = pileNets(l, false), netsT = pileNets(l, true);
+      const nets = pileNets(l, false, p), netsT = pileNets(l, true, p);
       for (let guard = 0; guard < 12 && idle.length; guard++) {
         // The good there's most of, not yet promised to a hauler.
         let g = null, left = 0;
@@ -1935,7 +2016,21 @@ function assignHaul(u, src, dst, g, n) {
   u.task = { type: 'haul', src: src.id, dst: dst.id, good: g, phase: 'toSrc', n };
   bump(src.res, g, n);
   bump(dst.inc, g, n);
-  if (!goTo(u, src.x, src.y)) { cancelTask(u); src.unreachUntil = S.time + 5; }
+  if (!goTo(u, src.x, src.y)) { cancelTask(u); noGo(u, src); }
+}
+
+/** How long a carrier that found no way to a pickup isn't offered that pickup again (seconds). */
+const NO_GO = 30;
+
+/**
+ * Carrier u found no way to pickup b: it remembers it (u.noGo, see take). The pickup used to be shut to every
+ * carrier for a few seconds instead, and the same carrier was sent for it again the moment that ran out
+ * (at once, for a producer's goods or loot: twice a second).
+ */
+function noGo(u, b) {
+  const m = u.noGo || (u.noGo = {});
+  for (const k in m) if (!(m[k] > S.time)) delete m[k];
+  m[b.id] = S.time + NO_GO;
 }
 
 /** The road networks bot u is on (or in the building it is inside); none if it is off the road. */
@@ -1943,7 +2038,7 @@ function botNets(u) {
   const tr = !!BOTS[u.type].truck; // trucks can't ride a Ropeway
   if (u.inside) { const b = getE(u.inside); return b ? buildingNets(b, tr) : []; }
   const t = tIdx(Math.floor(u.x), Math.floor(u.y));
-  if (S.road[t]) return [tr ? roadNet().compT[t] : roadNet().comp[t]];
+  if (S.road[t]) return [ownNet(u.owner, tr)[t]];
   if (S.bAt[t]) { const b = getE(S.bAt[t]); return b ? buildingNets(b, tr) : []; }
   return [];
 }
@@ -2276,8 +2371,25 @@ function findFace(b, radius) {
   return best;
 }
 
+/** What walking the route `path` from tile `a` costs, as findPath counts it (tileCost). */
+function routeCost(a, path) {
+  let c = 0;
+  for (const t of path) {
+    const dx = Math.sign((t % S.W) - (a % S.W)), dy = Math.sign(((t / S.W) | 0) - ((a / S.W) | 0));
+    c += (dx && dy ? 1.4142 : 1) * (tileCost(a, dx, dy, 1) + tileCost(t, dx, dy, 1)) * 0.5;
+    a = t;
+  }
+  return c;
+}
+
+/**
+ * The node of `type` b's worker goes to next: the nearest, unless the walk to it is a long way round (a cliff,
+ * water or a building in between): then, of the four nearest, the one with the shortest walk. A walk of up to
+ * NODE_DETOUR times the straight line counts as straight (groves and corners make it that much longer).
+ */
+const NODE_DETOUR = 1.75;
 function findNode(b, type, radius) {
-  let best = -1, bd = Infinity;
+  const near = []; // [distance squared, tile] of the four nearest, nearest first
   const r2 = radius * radius + 0.3;
   const zone = S.zone[tIdx(b.x, b.y)];
   for (let j = Math.max(0, b.y - radius); j <= Math.min(S.H - 1, b.y + radius); j++) {
@@ -2287,8 +2399,20 @@ function findNode(b, type, radius) {
       if (S.owner[t] >= 0 && S.owner[t] !== b.owner) continue; // don't harvest on enemy land
       if ((type === R_STALK || type === R_CROP) && S.grow[t] < 1) continue;
       const d = dist2(i, j, b.x, b.y);
-      if (d <= r2 && d < bd) { bd = d; best = t; }
+      if (d > r2 || (near.length === 4 && d >= near[3][0])) continue;
+      let k = near.length;
+      while (k && near[k - 1][0] > d) k--;
+      near.splice(k, 0, [d, t]);
+      if (near.length > 4) near.pop();
     }
+  }
+  if (near.length < 2) return near.length ? near[0][1] : -1;
+  let best = near[0][1], bc = Infinity;
+  for (const [d, t] of near) {
+    const p = findPath(b.x, b.y, t % S.W, (t / S.W) | 0, b.owner, { who: b.owner });
+    const c = p ? routeCost(tIdx(b.x, b.y), p) : Infinity;
+    if (c < bc) { bc = c; best = t; }
+    if (bc <= NODE_DETOUR * Math.sqrt(d)) break; // (as good as straight there: the ones further off are no nearer)
   }
   return best;
 }
@@ -2345,12 +2469,12 @@ const _pave = { seen: null, gen: 0, q: null };
 function findPaveSpot(b, x, y) {
   const nets = buildingNets(b);
   if (!nets.length) return -1;
-  const net = roadNet(), W = S.W, N = W * S.H;
+  const comp = ownNet(b.owner), W = S.W, N = W * S.H;
   if (!_pave.seen || _pave.seen.length !== N) { _pave.seen = new Uint32Array(N); _pave.q = new Int32Array(N); _pave.gen = 0; }
   const seen = _pave.seen, q = _pave.q, gen = ++_pave.gen;
   let head = 0, tail = 0;
   const all = paveMode(b) === 'all';
-  const push = (t) => { if (t >= 0 && t < N && seen[t] !== gen && roadLike(t) && nets.indexOf(net.comp[t]) >= 0) { seen[t] = gen; q[tail++] = t; } };
+  const push = (t) => { if (t >= 0 && t < N && seen[t] !== gen && roadLike(t) && nets.indexOf(comp[t]) >= 0) { seen[t] = gen; q[tail++] = t; } };
   // Start where the Paver is (or at the roads beside the Roadworks).
   push(tIdx(x, y));
   if (!tail) for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) if (inMap(b.x + di, b.y + dj)) push(tIdx(b.x + di, b.y + dj));
@@ -2426,8 +2550,8 @@ function doStaff(u, t, dt) {
     case 'in': {
       t.wait -= dt;
       if (t.wait > 0) return;
-      if ((u.bat ?? 100) < BATTERY.low) {
-        // Step out to recharge, then come back to this job.
+      if ((u.bat ?? 100) < BATTERY.low || ((u.bat ?? 100) < IDLE_TOP && standingBy(b))) {
+        // Step out to recharge, then come back to this job (early, while there is nothing to do here: see standingBy).
         const c = findCharger(u);
         t.trip = false;
         if (c && goTo(u, c.x, c.y)) { t.phase = 'toCharge'; t.charger = c.id; return; }
@@ -3353,7 +3477,7 @@ function captureBuilding(b, by) {
   b.fixLeft = 0; b.fixer = 0;
   // Only a fort changes hands. Anything else is wrecked (below) as its old owner's: the attackers keep
   // their orders (releaseBotsFrom calls off only the owner's), and a Gate's road stays the defender's.
-  if (def.mil) { b.owner = by; b.tgt = 0; } // (a Keep's cannon was tracking its new owner's warbots)
+  if (def.mil) { b.owner = by; b.tgt = 0; S.roadVer = (S.roadVer || 0) + 1; } // (a Keep's cannon was tracking its new owner's warbots; roads through it are its new owner's: see ownNet)
   b.armor = Math.max(4, def.armor * 0.4);
   b.lastHit = S.time;
   b.timer = 0;
@@ -3508,9 +3632,9 @@ function foesNear(p, x, y, r) {
   return false;
 }
 
-/** The road networks a pile of crates can be reached from (its own tile, or a road beside it). */
-function pileNets(l, trucks) {
-  const net = roadNet(), comp = trucks ? net.compT : net.comp, t = tIdx(l.x, l.y), nets = [];
+/** The road networks a pile of crates can be reached from by `owner`'s bots (its own tile, or a road beside it). */
+function pileNets(l, trucks, owner) {
+  const comp = ownNet(owner, trucks), t = tIdx(l.x, l.y), nets = [];
   if (comp[t] >= 0) nets.push(comp[t]);
   for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
     if (!inMap(l.x + di, l.y + dj)) continue;
@@ -3532,7 +3656,7 @@ function assignCrate(u, l, g, n) {
 
 /** The nearest storage that takes good g and that bot u, standing at pile l, can reach. */
 function crateStore(u, g, l) {
-  const bt = BOTS[u.type], nets = bt.roadOnly ? pileNets(l, !!bt.truck) : null;
+  const bt = BOTS[u.type], nets = bt.roadOnly ? pileNets(l, !!bt.truck, u.owner) : null;
   let best = null, bd = Infinity;
   for (const b of S.buildings) {
     if (b.dead || b.owner !== u.owner || !storeTakes(b, g) || evacuated(b)) continue;

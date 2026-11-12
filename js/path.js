@@ -24,7 +24,16 @@ function tileCost(t, dx, dy, offMul) {
   if (r) {
     // The wrong way up a one-way road: slow, plus a penalty so bots only do it when there's no other way.
     if (r >= 2 && dx * ROAD_DIRS[r][0] + dy * ROAD_DIRS[r][1] < 0) return 1 / ONEWAY_WRONG + 2;
-    return ROAD_PREFERENCE / PAVE[S.pave[t] || 1].speed;
+    let c = ROAD_PREFERENCE / PAVE[S.pave[t] || 1].speed;
+    if (TRAFFIC.aware && HEAT.of === S) {
+      // A working bot's route counts the traffic too (HEAT.dir: bot-seconds a minute over the tile, by heading):
+      // every bot met head-on slows it by TRAFFIC_ONCOMING on this tile and on the next, and a junction with
+      // no light or overpass is crossed at JUNCTION_SLOW, giving way to whatever crosses it.
+      const f = HEAT.dir, k = t * 4, d = dx > 0 ? 0 : dx < 0 ? 2 : dy > 0 ? 1 : 3;
+      c *= 1 + 2 * TRAFFIC_ONCOMING * f[k + ((d + 2) & 3)] / 60;
+      if (isJunction(t) && !S.lights[t] && !S.over[t]) c = c / JUNCTION_SLOW + 0.5 * ROAD_PREFERENCE * (f[k + ((d + 1) & 3)] + f[k + ((d + 3) & 3)]) / 60;
+    }
+    return c;
   }
   if (S.bAt[t]) return passTile(t) ? ROAD_PREFERENCE / PAVE[throughPave(t)].speed : 1; // an Outpost a road runs through (as fast as the road into it), or the building a trip starts or ends at
   if (S.ramp[t]) return offMul / SLOPE_SPEED;

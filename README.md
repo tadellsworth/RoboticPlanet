@@ -102,13 +102,20 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
 
 - **Workers and Haulers:** Workers run buildings (one inside each production building), go out to cut, dig and mine,
   and build construction sites. They can go anywhere, but off the road they move at 40% speed, except while out
-  gathering for their building. **Haulers** move every good between buildings (except Crude and Fuel: see Tankers),
-  two at a time, and **only drive on roads**. If every Hauler is lost, workers carry goods slowly until the Foundry
-  makes more. **Agribots** run Bio Farms and Grove Planters, **Pavers** run the Roadworks and **Warbots** fight. You
+  gathering for their building. A gatherer goes to the nearest node, unless the walk there is a long way round (over
+  `NODE_DETOUR` times the straight line: a cliff, water or a building in between): then to the one of the four nearest
+  with the shortest walk (`findNode`). **Haulers** move every good between buildings (except Crude and Fuel: see Tankers),
+  two at a time, and **only drive on roads**. A factory keeps `INPUT_CAP` (3) of each input on hand and calls a Hauler
+  when it is a full load short or down to its last batch, not after every unit it uses (`dispatch`). If every Hauler is
+  lost, workers carry goods slowly until the Foundry makes more. **Agribots** run Bio Farms and Grove Planters, **Pavers** run the Roadworks and **Warbots** fight. You
   start with 10 Workers, 5 Haulers, a Tanker and an Agribot (plus 4 Warbots in Versus).
 - **Every building needs a road to storage.** Your Command Base starts with a ring of road around it; join each building and construction
-  site to that network (or to a Depot on it), or Haulers can't bring it materials or collect its goods. A red road badge
-  marks buildings with no road: tap one and press **Lay road** to plan the shortest route (shown dashed), or plan your
+  site to that network (or to a Depot on it), or Haulers can't bring it materials or collect its goods. Networks are
+  worked out for each colony (`ownNet`): a rival's Outpost, Keep or Gate standing on your road cuts it for you, as your
+  bots can't drive through it. A carrier that finds no way to a pickup leaves it alone for `NO_GO` (30) seconds
+  (`noGo`, `take`). A red road badge
+  marks buildings with no road: tap one and press **Lay road** to plan the shortest route (shown dashed; of equally short ones
+  the straightest, as bots brake for every corner: `ROAD_TURN` in `roadSearch`, which the AI's roads use too), or plan your
   own. Placement keeps a side of every building open for a road.
 - **Planning roads:** in Paths, dragging and tapping only sketch a road (and tapping a road marks it to take up);
   the banner, at the top of the screen, shows the cost, with **Undo**, **Clear** and **Build**. Nothing is spent until
@@ -208,7 +215,10 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
   owner's land (or the abutment is on no-one's), and takes it down once neither does. When one comes down, `offDeck`
   moves any bot on its deck to the nearer end (a civilian bot drops its order there, its load put down in crates; a
   warbot plans its way again), and a bot whose route jumps a Viaduct or Ropeway that's gone drops the
-  route and its order (`moveAlong`). `roadSearch` crosses Viaducts, so roads (and the AI's) reach sites on far mesas,
+  route and its order (`moveAlong`). Every bot looks its route over again when a road, bridge or building changes
+  (`routeCheck`): with a bridge or tunnel on it gone, or a new building in the way, it plans again at once (with no
+  way left across a missing bridge it drops the job on the bank and puts its load down); a Hauler whose road was
+  taken up goes round when that is quicker than crawling across the gap. `roadSearch` crosses Viaducts, so roads (and the AI's) reach sites on far mesas,
   and `wouldBlock` / `canPlace` treat Outposts and Viaduct ends as walkable. A far end claims the no-one's ground
   within `VIA_CLAIM` (3) tiles, never anyone's land, so a new mesa can take an Outpost. A bot out on a deck keeps
   `u.deck` (the two ends) until it reaches one, so a new order or a chase starts from the deck, not the ground below.
@@ -383,7 +393,11 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
 - **Traffic:** bots queue on roads, each waiting behind the bot ahead of it going the same way. On two-way roads each
   direction keeps to its own side, but passing oncoming traffic slows bots down. Switch the Paths banner to **Arrows** and
   drag along a road to point it the way you drag (tap a road to turn its arrow). One-way loops keep busy routes flowing;
-  going the wrong way up a one-way road is allowed but crawls.
+  going the wrong way up a one-way road is allowed but crawls. Working bots plan around the traffic (`tileCost`): the
+  traffic map also keeps the last minute's traffic by heading (`HEAT.dir`, filled in `countTraffic`, never saved), and a
+  route costs more along a road where bots have been coming the other way and across a junction with no light or
+  overpass, the busier the more. So two roads side by side sort themselves into an up road and a down road. Warbots
+  and the other fighting units plan as before (`TRAFFIC.aware` is set only around `dispatch` and `updateWorker`).
 - **Goods panel:** tap a goods counter in the top bar for that good's stock, production and use per minute, net rate,
   which buildings make and use it, and any shortfall (buildings waiting on it with none in stock). Switch goods at the
   top of the panel.
@@ -422,7 +436,9 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
   keep half-size copies so they shrink cleanly (`drawMapLayer`, `artMip` in `js/render.js`).
 - **Batteries:** bots drain their battery walking, working and fighting, and recharge only at a Fuel Station (or,
   for warbots, inside an Outpost). The Command Base doesn't charge anyone and you land without a Fuel Station, so
-  build the first one straight away (it runs on the 10 Fuel you land with). A flat battery means half speed and half power. Fuel Stations burn Fuel (one Fuel is about
+  build the first one straight away (it runs on the 10 Fuel you land with). A flat battery means half speed and half power. A factory's worker
+  goes to recharge below `BATTERY.low` (30), or already below `IDLE_TOP` (60) while its factory has nothing for it to
+  do (`standingBy`: short of an input with none on the way, or full with no pickup coming). Fuel Stations burn Fuel (one Fuel is about
   two and a half full charges, `FUEL_ENERGY`). A Bio Farm makes about
   2–3 Fuel a minute; an Oil Pump and Refinery up to 10 a minute until the seep runs dry (both stop at 30 by default).
   A dry Oil Pump shows a crossed-out oil drop over it, frees its worker and says so once: demolish it (any Crude
