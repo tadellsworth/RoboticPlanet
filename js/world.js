@@ -1840,6 +1840,8 @@ function landRule(owner, type, t) {
   const h = S.owner[t];
   if (h === owner) return '';
   if (h >= 0) return 'A rival holds this ground: build on your own land or no-one\'s.';
+  // Walls and Gates go anywhere out on no-one's land your bots can walk to (to fence off a pass, a field, a far road).
+  if (BDEFS[type] && BDEFS[type].barrier) return reachZone(owner, t) ? '' : 'Your bots can\'t walk there yet.';
   if (DEFENCE_TYPES.has(type)) return 'Defences only go inside your own border: an Outpost or Keep extends it.';
   if (type === 'terminal' && nearPost(t % S.W, (t / S.W) | 0)) return ''; // docking at a Trade Post: out wherever it stands (a road still has to reach it)
   if (!inReach(owner, t)) return `Too far out: build within ${BUILD_REACH} tiles of your buildings, roads or track.`;

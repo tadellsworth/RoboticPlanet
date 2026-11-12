@@ -37,6 +37,7 @@ function simStep(dt) {
   if (S.missiles.length) updateMissiles(dt);
   if (S.blowing > 0) updateBlasts();
   if (S.tick % 30 === 15) cleanRallies();
+  if (S.tick % 10 === 4 && S.rallies.length) followRallies();
   if (S.tick % 30 === 20) updateLoot();
   if (S.events) updateEvents();
   if (S.tide || S.volcano || (S.quake && !S.quake.done)) updateMapEvents(dt);
@@ -2769,7 +2770,12 @@ function spawnFromFoundry(b) {
   }
   const u = addBot(b.owner, kind, b.x, b.y);
   addFx('ring', b.x + 0.5, b.y + 0.5, { color: PLAYER_COLORS[b.owner] });
-  if (kind === 'warbot') goGarrison(u);
+  if (kind === 'warbot') {
+    // Your rally point (an Outpost or Keep you've picked): every new warbot is stationed there.
+    const rp = usesPosts(b.owner) && rallyPostOf(b.owner);
+    if (rp && S.zone[tIdx(rp.x, rp.y)] === S.zone[tIdx(b.x, b.y)]) u.post = rp.id;
+    goGarrison(u);
+  }
   // A Howitzer rolls off onto open ground beside the Foundry and waits there for orders (its post).
   // (Yours only: the computer moves its own trucks about, see aiSiege.)
   if (BOTS[kind].siege && !S.players[b.owner].ai) { const t = crawlerPark(u); if (t >= 0) { u.post = { i: t % S.W, j: (t / S.W) | 0 }; u.task = { type: 'park', i: u.post.i, j: u.post.j, home: true }; } }
@@ -3060,8 +3066,8 @@ function goGarrison(u) {
     const ok = (b) => b && !b.dead && b.owner === u.owner && b.built && BDEFS[b.type].mil && !evacuated(b) && S.zone[tIdx(b.x, b.y)] === zone &&
       b.garrison.length + b.garInc < BDEFS[b.type].garrison && !(u.avoidB === b.id && S.time < u.avoidUntil);
     const post = postOf(u), L = getE(S.players[u.owner].lander);
-    // Posted to a cut-off post it can walk to: back there (if it's full, it waits beside it).
-    if (post && secluded(post) && S.zone[tIdx(post.x, post.y)] === zone) {
+    // Posted to a cut-off post, or to your rally point, it can walk to: back there (if it's full, it waits beside it).
+    if (post && (secluded(post) || post.id === S.players[u.owner].rallyPost) && S.zone[tIdx(post.x, post.y)] === zone) {
       if (ok(post)) { u.task = { type: 'garrison', bld: post.id }; post.garInc++; }
       else if (dist2(u.x, u.y, post.x + 0.5, post.y + 0.5) > 9) u.task = { type: 'defend', home: post.id };
       return;
@@ -3710,6 +3716,11 @@ function warbotAct(u, dt) {
     if (back) u.task = back; // couldn't set off after all: carry on
   }
   let foe = armed && u.fight && !u.retreat ? getE(u.fight) : null;
+  // Hunting a robot (a flag that follows it): that's the one to shoot, once it's close enough.
+  if (armed && !u.retreat && rally && rally.follow) {
+    const tg = getE(rally.follow);
+    if (tg && !tg.dead && !tg.inside && dist2(tg.x, tg.y, u.x, u.y) <= 30) { foe = tg; u.fight = tg.id; }
+  }
   const leash = defending ? 9 : rally ? 6 : 4;
   if (foe && (foe.dead || foe.inside || dist2(foe.x, foe.y, u.x, u.y) > leash * leash ||
       (rally && dist2(foe.x, foe.y, rally.x, rally.y) > 49))) foe = null;
@@ -4000,6 +4011,17 @@ function postedAt(b) {
   let n = 0;
   for (const u of S.bots) if (!u.dead && u.post === b.id && u.owner === b.owner) n++;
   return n;
+}
+
+/**
+ * The rally point player p has picked for new warbots (P.rallyPost): an Outpost or Keep of theirs, finished.
+ * New warbots from the Bot Foundry are stationed there; ones that don't fit wait beside it. Null if none
+ * (or it was lost).
+ */
+function rallyPostOf(p) {
+  const P = S.players[p], b = P && P.rallyPost ? getE(P.rallyPost) : null;
+  if (!b || b.dead || b.owner !== p || !b.built || !(b.type === 'outpost' || b.type === 'keep')) return null;
+  return b;
 }
 
 /** May warbot u be sent out of garrison b (it isn't stationed there)? */
@@ -4642,6 +4664,34 @@ function sendToRally(owner, i, j, count, rear) {
   return { sent, rally: r };
 }
 
+/**
+ * Send `count` armed warbots after an enemy robot e: a rally flag that follows it (followRallies), so they
+ * chase it down and shoot it first. Once it's destroyed they come back.
+ */
+function sendHunt(owner, e, count) {
+  const i = Math.floor(e.x), j = Math.floor(e.y);
+  if (!inMap(i, j) || !walkable(tIdx(i, j))) return { sent: 0 };
+  const res = sendToRally(owner, i, j, count);
+  if (res.sent) res.rally.follow = e.id;
+  return res;
+}
+
+/** Flags that follow an enemy robot: each moves with its quarry; when it's gone, the hunters come back. */
+function followRallies() {
+  for (const r of S.rallies.slice()) {
+    if (!r.follow) continue;
+    const e = getE(r.follow);
+    if (!e || e.dead || e.owner === r.owner) {
+      const n = recallRally(r.id);
+      if (n) postMsg(r.owner, `Target destroyed: ${n} warbot${n > 1 ? 's are' : ' is'} coming back.`, Math.floor(r.x), Math.floor(r.y), 'good');
+      continue;
+    }
+    if (e.inside) continue; // gone into a building: the flag waits where it was
+    const i = Math.floor(e.x), j = Math.floor(e.y);
+    if (dist2(r.x, r.y, e.x, e.y) > 2.25 && inMap(i, j) && walkable(tIdx(i, j))) { r.x = i + 0.5; r.y = j + 0.5; }
+  }
+}
+
 /* ------------------------------------------------------------------ direct orders (desktop selection) */
 
 /** The warbots among `ids` that `owner` can give orders to. */
@@ -4679,6 +4729,17 @@ function orderMove(owner, ids, i, j) {
   let slot = rallyMembers(r.id).length;
   for (const u of bots) { readyForOrder(u); u.task = { type: 'hold', rally: r.id, slot: slot++ }; }
   return bots.length;
+}
+
+/** Send selected warbots after an enemy robot (a flag that follows it: see followRallies). Only armed ones go. */
+function orderHunt(owner, ids, e) {
+  if (!e || e.dead || e.owner === owner) return 0;
+  const i = Math.floor(e.x), j = Math.floor(e.y), r0 = S.rallies.length;
+  const n = orderMove(owner, ids, i, j);
+  if (!n) return 0;
+  const r = S.rallies.find((q) => q.owner === owner && Math.abs(q.x - (i + 0.5)) < 1.5 && Math.abs(q.y - (j + 0.5)) < 1.5);
+  if (r && (S.rallies.length > r0 || !r.follow)) { r.x = i + 0.5; r.y = j + 0.5; r.follow = e.id; }
+  return n;
 }
 
 /** Send selected warbots to attack an enemy building. Only armed ones go. */
@@ -5636,6 +5697,7 @@ function finishMove(nb) {
   for (const g in old.stock) if (old.stock[g] > 0) bump(nb.stock, g, old.stock[g]);
   old.stock = {}; old.res = {}; old.loot = undefined;
   for (const u of S.bots) if (!u.dead && u.owner === nb.owner && (u.post === old.id || (u.inside === old.id && u.type === 'warbot'))) u.post = nb.id;
+  for (const P of S.players) if (P.rallyPost === old.id) P.rallyPost = nb.id;
   // An Airfield's planes move with it: one parked there taxis over, one rolling out on the old runway
   // finishes its landing at the new one, and one coming in to land lines up on the new runway instead.
   for (const u of S.bots) {

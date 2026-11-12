@@ -4444,6 +4444,7 @@ function render(dtReal) {
         ctx.fillRect(cx - w / 2, cy - z * 0.62, (w * Math.max(0, e.armor)) / def.armor, Math.max(3, z * 0.08));
       }
       if (e.owner === 0) drawBadge(ctx, e, cx - z * 0.32, cy - z * 0.32, z);
+      if (e.owner === 0 && S.players[0].rallyPost === e.id) drawRallyMark(ctx, cx + z * 0.34, cy - z * 0.5, z);
       if (e.owner === 0 && e.unlinked) drawNoRoad(ctx, cx + z * 0.32, cy + z * 0.3, z);
       if (e.owner === 0 && (e.depleted || (e.type === 'pump' && pumpDry(e)))) drawDryOil(ctx, cx, cy - z * 0.55, z, e);
       if (e.cut) drawCutOff(ctx, cx, cy, z);
@@ -5107,6 +5108,21 @@ function drawDepletedRes(ctx, x, y, z, res) {
 }
 
 /** Small corner badge showing a player-set priority or storage mode. */
+/** The rally point for new warbots: a little flag in your colour flying over the Outpost or Keep. */
+function drawRallyMark(ctx, x, y, z) {
+  const h = Math.max(12, z * 0.5), w = h * 0.55, wave = Math.sin(R.time * 4) * h * 0.04;
+  ctx.save();
+  ctx.lineCap = 'round';
+  ctx.strokeStyle = 'rgba(10,12,16,0.85)'; ctx.lineWidth = Math.max(2.5, z * 0.07);
+  ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x, y - h); ctx.stroke();
+  ctx.strokeStyle = '#e8eef6'; ctx.lineWidth = Math.max(1.2, z * 0.035);
+  ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x, y - h); ctx.stroke();
+  ctx.fillStyle = PLAYER_COLORS[0]; ctx.strokeStyle = 'rgba(10,12,16,0.85)'; ctx.lineWidth = Math.max(1, z * 0.03);
+  ctx.beginPath(); ctx.moveTo(x, y - h); ctx.quadraticCurveTo(x + w * 0.5, y - h + wave - h * 0.05, x + w, y - h * 0.8 + wave);
+  ctx.quadraticCurveTo(x + w * 0.5, y - h * 0.62 - wave, x, y - h * 0.58); ctx.closePath(); ctx.fill(); ctx.stroke();
+  ctx.restore();
+}
+
 function drawBadge(ctx, b, x, y, z) {
   let kind = null;
   if (b.prio === 'high') kind = 'up';

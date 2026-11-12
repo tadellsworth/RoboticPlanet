@@ -1287,7 +1287,7 @@ function refreshSelection() {
   const nw = orderable(0, UI.sel).length, nr = UI.sel.length - nw;
   const html = `<b>${[nw ? `${nw} warbot${nw > 1 ? 's' : ''}` : '', nr ? `${nr} Howitzer${nr > 1 ? 's' : ''}` : ''].filter(Boolean).join(' and ')} selected</b>` +
     (inside ? ` <span class="muted">(${inside} in garrisons)</span>` : '') + (empty ? ` <span class="err">${empty} out of Ammo</span>` : '') +
-    `<span class="hint">Right-click open ground to hold it, a rival building to attack, or your Outpost to station them. Esc clears.</span>
+    `<span class="hint">Right-click open ground to hold it, a rival building or robot to attack, or your Outpost to station them. Esc clears.</span>
     <button class="btn small ghost" id="selbar-clear" aria-label="Clear selection">✕</button>`;
   if (bar.dataset.html !== html) {
     bar.dataset.html = html;
@@ -1335,7 +1335,9 @@ function onMapCommand(i, j, wx, wy) {
   if (b && b.owner !== 0) nr = orderBombard(0, UI.sel, b);
   else if (b && BDEFS[b.type].mil && b.built) { const s = deploySpot(0, b.x, b.y); if (s >= 0) nr = orderPark(0, UI.sel, s % S.W, (s / S.W) | 0); }
   else if (inMap(i, j) && walkable(tIdx(i, j)) && !b) nr = orderPark(0, UI.sel, i, j);
-  if (b && b.owner !== 0) { n = orderAttack(0, UI.sel, b); what = `attacking the ${BDEFS[b.type].name}`; }
+  const foe = !b ? enemyBotAtTap(i, j) : null;
+  if (foe) { n = orderHunt(0, UI.sel, foe); what = `going after the rival's ${BOTS[foe.type].name}`; }
+  else if (b && b.owner !== 0) { n = orderAttack(0, UI.sel, b); what = `attacking the ${BDEFS[b.type].name}`; }
   else if (b && BDEFS[b.type].mil && b.built) { n = orderStation(0, UI.sel, b); what = `heading to the ${BDEFS[b.type].name}`; }
   else if (inMap(i, j) && walkable(tIdx(i, j)) && !b) { n = orderMove(0, UI.sel, i, j); what = 'moving to hold that ground'; }
   else { sfx('error'); toast('Right-click open ground, a rival building or one of your garrisons.', 'warn'); return; }
@@ -3309,6 +3311,9 @@ function openBuildingSheet(b) {
         <p class="hint" id="sh-st-hint"></p>` +
         (b.type === 'lander' ? '<p class="hint" id="sh-posted"></p>' : `<div class="kv"><span>Stationed here</span><span id="sh-posted"></span></div>
         <button class="btn small ghost" id="sh-unpost">Send them back to the Command Base</button>`) +
+        (b.type === 'outpost' || b.type === 'keep' ? `<div class="section-label">Rally point</div>
+        <button class="btn" id="sh-rallypost"></button>
+        <p class="hint">Every new warbot from the Bot Foundry is stationed here instead of at the Command Base, and comes back here after its orders. Ones that don't fit wait beside it. One Outpost or Keep at a time.</p>` : '') +
         (def.bunker ? '' : `<div class="section-label">Keep here</div>
         <div class="seg" id="sh-keepw"><button data-v="auto">Auto (${b.type === 'lander' ? 1 : S.players[0].keepW ?? 0})</button><button data-v="0">0</button><button data-v="1">1</button><button data-v="2">2</button><button data-v="5">5</button><button data-v="${def.garrison}">${def.garrison}</button></div>
         <p class="hint">${b.type === 'lander' ? 'Warbots the Command Base always keeps at home: attacks, rallies and stationing never take the last of them.'
@@ -3437,6 +3442,12 @@ function openBuildingSheet(b) {
     };
     if ($('sh-gprio')) for (const btn of $('sh-gprio').children) btn.onclick = () => { b.gprio = btn.dataset.v === 'normal' ? undefined : btn.dataset.v; sfx('click'); refreshSheet(); };
     if ($('sh-keepw')) for (const btn of $('sh-keepw').children) btn.onclick = () => { b.keepW = btn.dataset.v === 'auto' ? undefined : +btn.dataset.v; b.stockT = 0; sfx('click'); refreshSheet(); };
+    if ($('sh-rallypost')) $('sh-rallypost').onclick = () => {
+      const P = S.players[0], on = P.rallyPost === b.id;
+      P.rallyPost = on ? 0 : b.id;
+      toast(on ? 'No rally point: new warbots go to the Command Base again.' : `New warbots will gather at this ${BDEFS[b.type].name}.`, 'info');
+      sfx('click'); refreshSheet();
+    };
     if ($('sh-unpost')) $('sh-unpost').onclick = () => {
       const n = unstation(0, b);
       if (n) { sfx('order'); toast(`${n} warbot${n > 1 ? 's' : ''} heading back to the Command Base. This ${def.name} now keeps none.`, 'info'); } else sfx('error');
@@ -3738,6 +3749,7 @@ function refreshBuildingSheet(b) {
     $('sh-aim-hint').textContent = why || `Shows the Silo's ${BDEFS.silo.missile.range}-tile range on the ground: tap any spot inside it to aim, then fire.`;
   }
   if ($('sh-gprio')) for (const btn of $('sh-gprio').children) btn.classList.toggle('on', btn.dataset.v === (b.gprio || 'normal'));
+  if ($('sh-rallypost')) { const on = S.players[0].rallyPost === b.id; $('sh-rallypost').textContent = on ? '⚑ Rally point for new warbots (tap to clear)' : 'Make this the rally point for new warbots'; $('sh-rallypost').classList.toggle('primary', on); }
   if ($('sh-keepw')) for (const btn of $('sh-keepw').children) btn.classList.toggle('on', btn.dataset.v === (b.keepW === undefined ? 'auto' : String(b.keepW)));
   if ($('sh-st-n')) {
     const avail = stationAvailable(0, b), coming = b.garInc || 0;
@@ -4383,15 +4395,34 @@ function armyCmd(cmd) {
 }
 
 function showArmyCmdBanner(note) {
-  const what = { attack: 'Tap a <b>rival building</b> to attack it', hold: 'Tap <b>open ground</b> to hold it', station: 'Tap an <b>Outpost, Keep or Bunker</b> of yours to station them there' }[UI.armyCmd];
+  const what = { attack: 'Tap a <b>rival building or robot</b> to attack it', hold: 'Tap <b>open ground</b> to hold it', station: 'Tap an <b>Outpost, Keep or Bunker</b> of yours to station them there' }[UI.armyCmd];
   showBanner((note ? note + ' ' : '') + `${what} with ${armyNText()}. Tap again to send another group.`, 'Army', 'Done');
 }
 
 /** A tap on the map while an Army order is picking its target. */
+/** The rival robot nearest the tap at tile (i, j), within a tile of it (out in the open, not in a building), or null. */
+function enemyBotAtTap(i, j) {
+  let best = null, bd = 1.3 * 1.3;
+  for (const u of S.bots) {
+    if (u.dead || u.inside || u.owner === 0 || u.owner < 0 || u.dropping || (BOTS[u.type].air && u.flight)) continue;
+    const d = dist2(u.x, u.y, i + 0.5, j + 0.5);
+    if (d < bd) { bd = d; best = u; }
+  }
+  return best;
+}
+
 function armyTap(cmd, i, j, b) {
   const fail = (why) => { sfx('error'); showArmyCmdBanner(`<span class="err">${why}</span>`); };
   if (cmd === 'attack') {
-    if (!b || b.owner === 0 || b.owner < 0 || b.dead) return fail(`Tap a rival building (${S.players.length > 2 ? 'red or green' : 'red'}).`);
+    // A rival robot (nearest the tap, if there's one there): hunt it down.
+    const foe = !b || b.owner === 0 ? enemyBotAtTap(i, j) : null;
+    if (foe) {
+      const res = sendHunt(0, foe, armyCount(rallyAvailable(0, Math.floor(foe.x), Math.floor(foe.y))));
+      if (!res.sent) return fail('No armed warbots can get there: they need Ammo, and a way to walk there.');
+      sfx('order'); showArmyCmdBanner(`${res.sent} warbot${res.sent > 1 ? 's are' : ' is'} going after the rival's ${BOTS[foe.type].name}.`);
+      return;
+    }
+    if (!b || b.owner === 0 || b.owner < 0 || b.dead) return fail(`Tap a rival building or robot (${S.players.length > 2 ? 'red or green' : 'red'}).`);
     let n = armyCount(attackAvailable(0, b)), sent = n > 0 ? sendAttack(0, b, n) : 0;
     // No garrison near enough to attack from: a rally flag beside it (they attack what stands there).
     if (!sent) {
