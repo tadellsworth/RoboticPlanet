@@ -22,14 +22,17 @@ class GScene(Scene):
 
     def __init__(self):
         super().__init__()
-        self.glow = (0.0, 0.0)
-        self.gn, self.gd, self.fv = [], [], []
+        self.glow = (0.0, 0.0, None)
+        self.gn, self.gd, self.fv, self.ec = [], [], [], []
 
     def add(self, V, F, A, normals=None, fade=None):
         super().add(V, F, A, normals)
         self.gn.append(np.full(len(F), float(self.glow[0])))
         self.gd.append(np.full(len(F), float(self.glow[1])))
         self.fv.append(np.zeros(len(V)) if fade is None else np.asarray(fade, float))
+        # emissive colour per vertex: the glowing() colour, else the part's own colour
+        self.ec.append(np.broadcast_to(C(self.glow[2]), (len(V), 3)).copy() if self.glow[2] is not None
+                       else np.asarray(A[:, 0:3], float).copy())
 
     def glow_arrays(self):
         return np.concatenate(self.gn), np.concatenate(self.gd)
@@ -37,11 +40,16 @@ class GScene(Scene):
     def fade_array(self):
         return np.concatenate(self.fv)
 
+    def emissive_array(self):
+        return np.concatenate(self.ec)
+
 
 @contextmanager
-def glowing(S, night=1.0, day=0.85):
+def glowing(S, night=1.0, day=0.85, col=None):
+    """Parts added inside glow: `night` strength in plant-N-glow.png, `day` = how much the emissive
+    colour (`col`, or the part's own colour) replaces the lit colour in the day art."""
     old = S.glow
-    S.glow = (night, day)
+    S.glow = (night, day, col)
     try:
         yield
     finally:
@@ -117,7 +125,7 @@ def aux_pass(S, scale, offset, size=256, ss=3, fade0=0.55):
     col = np.zeros((W * W, 3))
     n[m] = gn[fidx[m]]
     d[m] = gd[fidx[m]]
-    col[m] = interp(A[:, 0:3], F, fidx, b0, b1, m)
+    col[m] = interp(S.emissive_array(), F, fidx, b0, b1, m)
     fm = np.ones(W * W)
     fpx = interp(fv[:, None], F, fidx, b0, b1, m)[:, 0]
     fm[m] = 1 - smoothstep(fade0, 1.0, fpx)

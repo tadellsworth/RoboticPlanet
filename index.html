@@ -152,10 +152,10 @@
           <section class="m-sec" id="m-sec-planet" aria-labelledby="m-h-planet">
             <h3 id="m-h-planet">Planet</h3>
             <div class="m-row"><span class="m-rl">Map type</span>
-              <button type="button" class="m-pick" id="m-shape" aria-haspopup="dialog"><canvas class="m-pick-thumb" aria-hidden="true"></canvas><span class="m-pick-name"></span><span class="m-pick-meta"></span><svg class="m-pick-chev" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M9 5l7 7-7 7" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+              <button type="button" class="m-pick" id="m-shape" aria-haspopup="dialog"><canvas class="m-pick-thumb" aria-hidden="true"></canvas><span class="m-pick-text"><span class="m-pick-name"></span><span class="m-pick-meta"></span></span><svg class="m-pick-chev" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M9 5l7 7-7 7" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
             </div>
             <div class="m-row"><span class="m-rl">Biome</span>
-              <button type="button" class="m-pick" id="m-biome" aria-haspopup="dialog"><canvas class="m-pick-thumb" aria-hidden="true"></canvas><span class="m-pick-name"></span><span class="m-pick-meta"></span><svg class="m-pick-chev" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M9 5l7 7-7 7" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+              <button type="button" class="m-pick" id="m-biome" aria-haspopup="dialog"><canvas class="m-pick-thumb" aria-hidden="true"></canvas><span class="m-pick-text"><span class="m-pick-name"></span><span class="m-pick-meta"></span></span><svg class="m-pick-chev" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M9 5l7 7-7 7" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
             </div>
             <div class="m-row"><span class="m-rl" id="m-l-size">Size <output id="m-size-v" class="m-val"></output></span>
               <div class="seg" id="m-size" role="radiogroup" aria-labelledby="m-l-size"></div>
@@ -170,6 +170,7 @@
           </section>
           <section class="m-sec m-rules" id="m-sec-rules" aria-labelledby="m-h-rules">
             <h3 id="m-h-rules">Rules</h3>
+            <div class="m-rules-row">
             <div class="tchips" role="group" aria-labelledby="m-h-rules">
               <label class="tchip" id="m-nuke-row" data-info="Nuclear race: a few uranium deposits glow on the planet. Race for them and build the bomb."><input type="checkbox" id="m-nuke" role="switch"><span>Nuclear race</span></label>
               <label class="tchip" id="m-wild-row" data-info="Wildlife (Colony): creature nests in the wilds raid what you build near them."><input type="checkbox" id="m-wild" role="switch"><span>Wildlife</span></label>
@@ -177,8 +178,9 @@
               <label class="tchip" id="m-weather-row" data-info="Weather: now and then a storm to suit the biome (looks only; kept on this device)."><input type="checkbox" id="m-weather" role="switch"><span>Weather</span></label>
               <label class="tchip" id="m-unlimited-row" data-info="Unlimited resources: for trying things out, 500 of everything and nothing waits on hauling. Rivals play as usual."><input type="checkbox" id="m-unlimited" role="switch"><span>Unlimited resources</span></label>
             </div>
-            <div class="m-row" id="m-daynight-row"><span class="m-rl" id="m-l-tod">Time of day</span>
+            <div class="m-tod" id="m-daynight-row"><span class="m-rl" id="m-l-tod">Time of day</span>
               <div class="seg tod-seg" id="m-daynight" role="radiogroup" aria-labelledby="m-l-tod"><button type="button" role="radio" data-v="cycle">Cycle</button><button type="button" role="radio" data-v="day">Day</button><button type="button" role="radio" data-v="night">Night</button></div>
+            </div>
             </div>
             <p class="m-info" id="m-rules-info" aria-live="polite"></p>
           </section>

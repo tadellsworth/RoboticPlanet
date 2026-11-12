@@ -565,14 +565,14 @@ canvas.chart.small { height: 110px; }
 .chips button.on { background: var(--panel-2); color: var(--text); border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent) inset; }
 #screen-menu button:focus-visible, .m-picker button:focus-visible, .m-pick:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 #screen-menu .seg button:focus-visible { outline-offset: -2px; }
-.menu-card { width: min(100%, 392px); padding: 26px 22px 18px; display: flex; flex-direction: column; }
+.menu-card { width: min(100%, 404px); padding: 26px 22px 18px; display: flex; flex-direction: column; }
 .m-home { display: flex; flex-direction: column; }
 .menu-card .tagline { margin: 2px 0 20px; }
 .m-cont { margin: 0 0 10px; background: rgba(56, 212, 255, 0.09); border-color: rgba(56, 212, 255, 0.45); color: #c4f1ff; }
 .m-go { display: flex; flex-direction: column; }
 #m-new { display: flex; align-items: center; justify-content: center; gap: 8px; margin: 0; font-size: 17px; letter-spacing: 0.02em;
   box-shadow: 0 8px 26px rgba(56, 212, 255, 0.22); }
-.m-sum { margin: 9px 4px 0; text-align: center; font-size: 13px; line-height: 1.35; color: var(--muted); }
+.m-sum { margin: 9px 4px 0; text-align: center; font-size: 13px; line-height: 1.35; color: var(--muted); text-wrap: balance; }
 .m-sum .sum-main { display: block; color: #c3cad6; font-weight: 600; }
 .m-sum .sum-extra { display: block; font-size: 12px; margin-top: 1px; }
 .m-home-foot { display: flex; flex-direction: column; }
@@ -597,7 +597,8 @@ canvas.chart.small { height: 110px; }
 .m-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; touch-action: pan-y; display: grid; gap: 12px; padding: 12px; align-content: start; }
 .menu-card.is-setup .m-go { flex: none; flex-direction: row; align-items: center; gap: 12px; padding: 10px 12px; border-top: 1px solid var(--line); background: rgba(12, 13, 18, 0.55); }
 .menu-card.is-setup .m-sum { order: -1; flex: 1; min-width: 0; margin: 0; text-align: left; font-size: 12.5px; }
-.menu-card.is-setup .m-sum .sum-main, .menu-card.is-setup .m-sum .sum-extra { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.menu-card.is-setup .m-sum .sum-main { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; text-wrap: pretty; }
+.menu-card.is-setup .m-sum .sum-extra { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .menu-card.is-setup #m-new { width: auto; flex: none; min-width: 132px; padding: 12px 20px; font-size: 16px; }
 
 /* The planet: its preview, seed and saved planets (a strip on top on a phone, a column on a big screen). */
@@ -650,8 +651,10 @@ canvas.chart.small { height: 110px; }
   border-radius: 10px; border: 1px solid rgba(255, 255, 255, 0.1); background: rgba(255, 255, 255, 0.05); color: var(--text); }
 .m-pick:hover { border-color: rgba(255, 255, 255, 0.24); background: rgba(255, 255, 255, 0.08); }
 .m-pick-thumb { width: 36px; height: 36px; flex: none; border-radius: 7px; display: block; }
-.m-pick-name { font-weight: 800; font-size: 14.5px; white-space: nowrap; }
-.m-pick-meta { min-width: 0; font-size: 12.5px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.m-pick-text { display: flex; flex-direction: column; min-width: 0; line-height: 1.2; }
+.m-pick-name { font-weight: 800; font-size: 14.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.m-pick-meta { font-size: 11.5px; font-weight: 600; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.m-pick-meta:empty { display: none; }
 .m-pick-chev { margin-left: auto; flex: none; color: var(--muted); }
 /* Rules: switches as chips, and the time of day. */
 .tchips { display: flex; flex-wrap: wrap; gap: 6px; padding: 2px 0 4px; }
@@ -666,8 +669,12 @@ canvas.chart.small { height: 110px; }
 .tchip input:checked::after { content: ''; width: 6px; height: 3px; margin-top: -2px; border-left: 2px solid var(--accent-ink); border-bottom: 2px solid var(--accent-ink); transform: rotate(-45deg); }
 .tchip:has(input:focus-visible) { outline: 2px solid var(--accent); outline-offset: 2px; }
 .tchip input:focus { outline: none; }
-.m-rules .m-row { grid-template-columns: 86px auto; justify-content: start; }
-.tod-seg button { padding: 6px 14px; }
+.m-rules-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; }
+.m-rules-row .tchips { padding: 0; }
+.m-tod { display: flex; align-items: center; gap: 10px; min-height: 38px; }
+.m-tod .m-rl { white-space: nowrap; }
+.tod-seg { flex: none; padding: 2px; gap: 2px; border-radius: 10px; }
+.tod-seg button { padding: 6px 13px; border-radius: 8px; font-size: 13.5px; }
 
 /* A big screen: the planet on the left, settings on the right; wider still, Match beside Planet. */
 @media (min-width: 900px) and (min-height: 600px) {
@@ -684,11 +691,11 @@ canvas.chart.small { height: 110px; }
   .menu-card.is-setup #m-new { min-width: 180px; }
 }
 @media (min-width: 1180px) and (min-height: 600px) {
-  .m-sets { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; align-items: start; }
+  .m-body { grid-template-columns: minmax(240px, 26%) minmax(0, 1fr); }
+  .m-sets { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; align-items: stretch; }
   .m-rules { grid-column: 1 / -1; }
-  .m-rules { display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 16px; }
-  .m-rules h3, .m-rules .m-info { grid-column: 1 / -1; }
-  .m-rules .tchips { align-self: center; }
+  .m-row { grid-template-columns: 80px minmax(0, 1fr); gap: 8px; }
+  .m-sec .m-info { margin-top: auto; }
 }
 /* A phone on its side: a slimmer header and planet strip. */
 @media (max-height: 500px) {
@@ -706,7 +713,6 @@ canvas.chart.small { height: 110px; }
 @media (max-width: 420px) {
   .m-row { grid-template-columns: 78px minmax(0, 1fr); gap: 8px; }
   .m-row .seg button { font-size: 13px; padding: 7px 2px; }
-  .m-rules .m-row { grid-template-columns: 78px auto; }
 }
 
 /* The pickers: a centred panel of cards; on a phone, a sheet from the bottom. */

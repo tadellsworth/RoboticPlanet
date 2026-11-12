@@ -16,8 +16,13 @@ OUT = 'out/art/biomes/savanna'
 ENVS['savanna'] = dict(sun=np.array([1.0, 0.94, 0.82]) * 1.02, sky=np.array([0.40, 0.46, 0.56]) * 0.6,
                        bounce=np.array([0.56, 0.45, 0.26]) * 0.45, shadow='#2a1a08', shadow_op=0.52, snow='#ffffff')
 
+# The termite mound's tall spires show the camera their shaded side (the sun is up-screen), so it gets a
+# stronger warm fill (light bounced off the bright grass) under the same sun and shadow.
+ENVS['savanna-mound'] = dict(ENVS['savanna'], sky=np.array([0.44, 0.47, 0.54]) * 0.78,
+                             bounce=np.array([0.70, 0.54, 0.32]) * 0.62)
+
 ACACIA = ['#6e7e32', '#7a8a3a', '#63732e', '#86943f', '#727f36', '#8e9a48']
-ACACIA_BARK = '#4a3e34'
+ACACIA_BARK = '#5c4e42'
 GOLD = ['#d4b468', '#c8a658', '#dcc07a', '#bf9c50', '#e2c886', '#b89448']
 
 
@@ -137,84 +142,93 @@ def bottle_trunk(S, base, H, rfun, rng, nz=18, nseg=30, col='#8e7462', col_top='
 
 def s2_baobab(seed=32):
     """A baobab: a huge pinkish-grey bottle trunk and a sparse crown of thick, stubby, crooked branches
-    with a few small clumps of leaves at their ends."""
+    that fork into twigs carrying a few small rosettes of hand-shaped leaves."""
     rng = np.random.default_rng(seed)
     S = Scene()
-    H = 58
+    H = 60
 
     def rfun(s):
-        return 22 + 6 * np.sin(np.pi * np.clip(s, 0, 1) * 0.8) - 10 * np.clip(s - 0.55, 0, 1) ** 1.2 * 2.2
-    bottle_trunk(S, (0, 0), H, rfun, rng)
+        return 26 + 7 * np.sin(np.pi * np.clip(s, 0, 1) * 0.8) - 12 * np.clip(s - 0.55, 0, 1) ** 1.2 * 2.2
+    bottle_trunk(S, (0, 0), H, rfun, rng, col='#9a8070', col_top='#ae9482')
     rt = rfun(1.0)
-    leaf_cols = ['#5c7a2a', '#678632', '#527026', '#6e8e36']
-    nb = 8
-    off = rng.uniform(0, 2 * np.pi)
+    leaf_cols = ['#5a6e2a', '#667a30', '#526426', '#728436']
+    bark, bark_tip = '#a08676', '#ae9484'
+
+    def rosette(p):
+        nl = rng.integers(5, 8)
+        y0 = rng.uniform(0, 2 * np.pi)
+        for j in range(nl):
+            add_leaf(S, p, y0 + 2 * np.pi * j / nl + rng.uniform(-0.2, 0.2), rng.uniform(4.5, 6.0), 2.0,
+                     np.radians(rng.uniform(10, 30)), np.radians(rng.uniform(-15, 5)), shape='ovate', n=5, ncross=3,
+                     fold=0.25, col=leaf_cols[rng.integers(len(leaf_cols))], col2='#3a5a1c', mat=1, spec=0.14, trans=0.3)
 
     def limb(p0, d, L, r0, depth):
-        sp = wiggle_spine(p0, d, L, 6, rng, amp=0.22, upbias=0.05)
-        add_tube(S, sp, r0, r0 * 0.6, nseg=8, col='#8a7060', col_tip='#947a68', mat=3, spec=0.05)
-        if depth == 0:
+        sp = wiggle_spine(p0, d, L, 6, rng, amp=0.16 + 0.08 * depth, upbias=0.02)
+        add_tube(S, sp, r0, r0 * 0.62, nseg=8 if depth == 0 else 6, col=bark, col_tip=bark_tip, mat=3, spec=0.05)
+        if depth < 2:
             for j in range(rng.integers(2, 4)):
-                d2 = nrm(nrm(sp[-1] - sp[-3]) + rng.normal(size=3) * 0.6 + np.array([0, 0, 0.25]))
-                limb(sp[-1], d2, L * rng.uniform(0.45, 0.65), r0 * 0.55, 1)
+                d2 = nrm(nrm(sp[-1] - sp[-3]) + rng.normal(size=3) * 0.55 + np.array([0, 0, 0.15]))
+                limb(sp[-1], d2, L * rng.uniform(0.5, 0.68), r0 * 0.58, depth + 1)
         else:
-            # a small, sparse leaf clump at the tip
-            c = sp[-1] + np.array([0, 0, 2.5])
-            Rc = rng.uniform(5, 8)
-            oriented_blob(S, c, (Rc * 0.7, Rc * 0.7, Rc * 0.45), col='#26340f', mat=0, spec=0.02, zmin=None, nu=7, nv=10)
-            leaves_on_ellipsoid(S, rng, c, (Rc, Rc, Rc * 0.7), int(Rc * 7), 6.0, 3.2, leaf_cols, '#2a3a12',
-                                zmin_frac=-0.3, tilt=0.5, shape='ovate', trans=0.3)
+            if rng.uniform() < 0.55:
+                rosette(sp[-1] + np.array([0, 0, 0.5]))
+    nb = 8
+    off = rng.uniform(0, 2 * np.pi)
     for k in range(nb):
         yaw = off + 2 * np.pi * k / nb + rng.uniform(-0.25, 0.25)
         p0 = np.array([np.cos(yaw) * rt * 0.55, np.sin(yaw) * rt * 0.55, H + 2])
-        pitch = np.radians(rng.uniform(18, 42))
+        pitch = np.radians(rng.uniform(10, 28))
         d = np.array([np.cos(pitch) * np.cos(yaw), np.cos(pitch) * np.sin(yaw), np.sin(pitch)])
-        limb(p0, d, rng.uniform(26, 36), 4.6, 0)
-    # a couple of stubs straight up from the middle
+        limb(p0, d, rng.uniform(28, 36), 5.4, 0)
     for k in range(2):
         yaw = rng.uniform(0, 2 * np.pi)
         p0 = np.array([np.cos(yaw) * 4, np.sin(yaw) * 4, H + 3])
-        limb(p0, nrm(np.array([np.cos(yaw) * 0.4, np.sin(yaw) * 0.4, 1])), 16, 4.0, 1)
+        limb(p0, nrm(np.array([np.cos(yaw) * 0.4, np.sin(yaw) * 0.4, 1])), 14, 4.0, 1)
     return S
 
 
-def spire(S, rng, base, H, r0, lean=(0, 0), seed=0, knob=1.4):
-    """A knobbly clay spire: a tapering tube along a gently bent spine, its surface lumpy."""
+def spire(S, rng, base, H, r0, lean=(0, 0), seed=0, knob=0.6, flutes=7, rexp=0.62):
+    """A clay spire: a tapering tube along a gently bent spine, with rounded vertical flutes and a few
+    soft lumps, paler and sun-bleached toward the top."""
     bx, by = base
-    n, nseg = 16, 18
+    n, nseg = 18, 24
     s = np.linspace(0, 1, n)
     sp = np.stack([bx + lean[0] * s ** 1.5, by + lean[1] * s ** 1.5, H * s], -1)
-    rad = r0 * (1 - s) ** 0.75 + 1.6
+    rad = r0 * (1 - s) ** rexp + 1.4
     V, F, u, v = tube(sp, rad, nseg)
     Vr = V.reshape(n, nseg, 3)
     radial = Vr - sp[:, None, :]
     radial[..., 2] = 0
     radial = nrm(radial)
-    d = sinnoise(V, seed, freq=0.32, n=16).reshape(n, nseg) * knob + sinnoise(V, seed + 1, freq=0.9, n=10).reshape(n, nseg) * 0.5
-    Vr = Vr + radial * d[..., None] * (0.4 + 0.6 * (1 - s[:, None] * 0.6))[..., None]
+    th = np.linspace(0, 2 * np.pi, nseg, endpoint=False)[None, :]
+    flute = np.abs(np.sin(flutes * 0.5 * th + 0.6 * s[:, None] * 3 + seed)) * 1.4 - 0.7
+    d = sinnoise(V, seed, freq=0.25, n=14).reshape(n, nseg) * knob + flute * (0.6 + 0.8 * (1 - s[:, None]))
+    Vr = Vr + radial * d[..., None]
     V = Vr.reshape(-1, 3)
-    col = lerpc('#8a5a44', '#b48a6c', smoothstep(0.0, 1.0, u) * 0.85 + 0.15 * np.clip(d.ravel(), 0, 1))
-    S.add(V, F, attrs(len(V), col, col2='#a87a5c', u=u, v=v, mat=7, spec=0.05, gloss=10))
-    oriented_blob(S, sp[-1], (2.2, 2.2, 2.0), col='#b48a6c', mat=7, spec=0.05, zmin=None, nu=6, nv=8)
+    col = lerpc('#c08a68', '#ecd2b2', smoothstep(0.05, 1.0, u) * 0.85 + 0.1 * np.clip(d.ravel(), 0, 1))
+    S.add(V, F, attrs(len(V), col, u=u, v=v, mat=3, spec=0.05, gloss=10))
+    oriented_blob(S, sp[-1], (2.2, 2.2, 2.4), col='#fae6c8', mat=3, spec=0.05, zmin=None, nu=6, nv=8)
 
 
 def s3_termites(seed=33):
-    """A cathedral termite mound: a tall main spire with shorter ones fused to it on a broad, lumpy base,
-    a few tufts of dry grass around its foot."""
+    """A cathedral termite mound: a tall fluted main spire with shorter ones fused to it on a broad,
+    lumpy base of pale clay, dry grass growing around its foot."""
     rng = np.random.default_rng(seed)
     S = Scene()
 
     def disp(d):
         P = d * 30
         return 0.12 * sinnoise(P, 7, freq=0.18, n=12)
-    oriented_blob(S, (0, 0, 0), (36, 32, 15), disp=disp, col=lambda u, v, V: lerpc('#8a5a44', '#a07058', smoothstep(0, 14, V[:, 2])),
-                  col2='#a87a5c', mat=7, spec=0.04, zmin=0.3, nu=14, nv=28)
-    spire(S, rng, (2, 4), 72, 15, lean=(-3, 4), seed=331)
-    spire(S, rng, (-15, -4), 46, 11, lean=(-5, -1), seed=332)
-    spire(S, rng, (14, -9), 36, 10, lean=(4, -2), seed=333)
-    spire(S, rng, (-4, -16), 22, 8, lean=(0, -3), seed=334, knob=1.0)
+    oriented_blob(S, (0, 0, 0), (32, 28, 15), disp=disp, col=lambda u, v, V: lerpc('#b88462', '#d4a684', smoothstep(0, 15, V[:, 2])),
+                  mat=3, spec=0.04, zmin=0.3, nu=14, nv=28)
+    spire(S, rng, (2, 8), 150, 13, lean=(-2, 6), seed=331, rexp=0.85)
+    spire(S, rng, (-16, -2), 100, 10.5, lean=(-7, 0), seed=332, rexp=0.85)
+    spire(S, rng, (15, -6), 78, 10, lean=(6, -2), seed=333, rexp=0.85)
+    spire(S, rng, (-4, -15), 48, 8, lean=(0, -3), seed=334, knob=0.5, flutes=5, rexp=0.85)
+    spire(S, rng, (20, 14), 36, 7, lean=(3, 2), seed=335, knob=0.5, flutes=5, rexp=0.85)
     # dry grass around the foot
-    for (cx, cy, nbl) in [(-40, 14, 16), (34, 22, 14), (40, -18, 12), (-30, -26, 14), (8, -36, 10), (-6, 36, 10)]:
+    for (cx, cy, nbl) in [(-44, 16, 18), (38, 24, 16), (44, -16, 14), (-36, -26, 16), (8, -38, 12), (-6, 40, 12),
+                          (-50, -6, 10), (26, 40, 10)]:
         for i in range(nbl):
             yaw = rng.uniform(0, 2 * np.pi)
             L = rng.uniform(16, 26)
@@ -229,7 +243,7 @@ def s4_tussock(seed=34):
     """A big tussock of tall golden grass, arching out in a fountain, with reddish seed heads on thin stems."""
     rng = np.random.default_rng(seed)
     S = Scene()
-    nbl = 110
+    nbl = 150
     for i in range(nbl):
         yaw = rng.uniform(0, 2 * np.pi)
         inner = rng.uniform() < 0.3
@@ -263,12 +277,12 @@ def s5_thornbush(seed=35):
     rng = np.random.default_rng(seed)
     S = Scene()
     R_dome, H_dome = 70, 38
-    leafc = ['#7c8c68', '#8a9a76', '#6e7e5c', '#96a482', '#828e6a']
+    leafc = ['#8a8858', '#9a9664', '#7a7a4c', '#a6a070', '#8c8c5a']
 
     def cluster(p, k=6):
         for j in range(k):
             yaw = rng.uniform(0, 2 * np.pi)
-            add_leaf(S, p + rng.normal(size=3) * 1.2, yaw, rng.uniform(4.5, 6.5), rng.uniform(1.8, 2.4),
+            add_leaf(S, p + rng.normal(size=3) * 1.2, yaw, rng.uniform(4.0, 5.5), rng.uniform(1.6, 2.1),
                      np.radians(rng.uniform(5, 35)), np.radians(rng.uniform(-10, 15)), shape='ovate', n=4, ncross=3,
                      fold=0.2, col=leafc[rng.integers(len(leafc))], mat=0, spec=0.1, trans=0.2)
 
@@ -285,13 +299,13 @@ def s5_thornbush(seed=35):
         sp[:, 2] = np.maximum(sp[:, 2], 0.8)
         add_tube(S, sp, r, r * 0.6, nseg=6 if r > 1 else 4, col='#4a4038', col_tip='#5a4e44', mat=3, spec=0.06)
         for i in range(2, n):
-            if rng.uniform() < 0.5:
+            if rng.uniform() < 0.8:
                 side = nrm(np.cross(nrm(sp[i] - sp[i - 1]), [0, 0, 1]) * rng.choice([-1, 1]) + np.array([0, 0, 0.3]))
                 thorn(sp[i], side)
         if depth >= 3:
             for i in range(1, n):
-                if rng.uniform() < 0.75:
-                    cluster(sp[i], k=rng.integers(4, 8))
+                if rng.uniform() < 0.6:
+                    cluster(sp[i], k=rng.integers(3, 7))
             return
         for j in range(rng.integers(2, 4)):
             t0 = rng.uniform(0.3, 0.95)
@@ -313,13 +327,17 @@ def s6_sapling(seed=36):
     """A young acacia: a slim stem and a small crown in two flat tiers."""
     rng = np.random.default_rng(seed)
     S = Scene()
-    acacia(S, rng, (0, 0), 38, 48, n_ring=7, n_limbs=3, trunk_r=2.2, density=0.6, leaf_L=5.0, leaf_W=2.1, tiers=2)
+    acacia(S, rng, (0, 0), 34, 44, n_ring=8, n_limbs=3, trunk_r=2.2, density=0.6, leaf_L=4.6, leaf_W=2.0, tiers=2,
+           lean=(4, 20), ell=(1.2, 0.8))
     return S
 
 
-SCALE = [1.08, 1.3, 1.5, 1.35, 1.35, 1.6]
+SCALE = [1.08, 1.25, 1.36, 1.72, 1.6, 1.45]
 # tall plants cast long shadows to the lower right: shift them up-left so the shadow fits
-OFFSET = [(16, 20), (12, 16), (16, 20), (6, 8), (4, 4), (10, 12)]
+OFFSET = [(16, 20), (16, 26), (30, 36), (14, 18), (4, 4), (12, 16)]
+# per-plant render settings: the mound's tall spires would otherwise be darkened by the height-based occlusion
+RKW = [{}, {}, dict(ao_low=0.15), {}, {}, {}]
+ENV = ['savanna', 'savanna', 'savanna-mound', 'savanna', 'savanna', 'savanna']
 PLANTS = [s1_acacia, s2_baobab, s3_termites, s4_tussock, s5_thornbush, s6_sapling]
 
 if __name__ == '__main__':
@@ -337,4 +355,5 @@ if __name__ == '__main__':
             which.append(int(a))
     for i in (which or range(1, 7)):
         S = PLANTS[i - 1]()
-        render(S, 'savanna', out=f'{OUT}/plant-{i}.png', seed=i, scale=scales.get(i, SCALE[i - 1]), offset=OFFSET[i - 1])
+        render(S, ENV[i - 1], out=f'{OUT}/plant-{i}.png', seed=i, scale=scales.get(i, SCALE[i - 1]), offset=OFFSET[i - 1],
+               **RKW[i - 1])
