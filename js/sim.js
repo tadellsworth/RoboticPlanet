@@ -3931,7 +3931,9 @@ function updateDanger() {
 
 /** How far robots that don't fight keep from bot v, an enemy to them (0: it's no threat out there now). */
 function foeReach(v) {
-  if (v.dead || v.inside || v.dropping || v.owner < 0) return 0;
+  if (v.dead || v.dropping || v.owner < 0) return 0;
+  if (v.armored) return TRAIN_ARMOR.pulse.range + 1; // an armored train's pulse cannon (it fires from a station too)
+  if (v.inside) return 0;
   if (BOTS[v.type].wild) return FOE_SHY_WILD;
   return v.type === 'warbot' && (v.ammo ?? WARBOT_AMMO) > 0 ? FOE_SHY : 0;
 }
