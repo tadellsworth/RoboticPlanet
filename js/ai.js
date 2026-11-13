@@ -57,6 +57,7 @@ function aiThink(p) {
   const me = playerBuildings(p);
   const lander = getE(P.lander);
   if (!lander || lander.owner !== p) return;
+  aiArmorTrains(p);
 
   // 1) Construction
   const counts = {};
@@ -1370,4 +1371,22 @@ function aiSearchSpot(p, type, lander) {
     if (!wouldBlock(tIdx(cands[k].x, cands[k].y))) return cands[k];
   }
   return null;
+}
+
+/**
+ * In a war, the rival armors its Freight Trains (see TRAIN_ARMOR), one at a time, once it has the goods to spare
+ * (three times the cost and a margin; once its trains have been shot at, just the margin). Checked every half
+ * minute or so.
+ */
+function aiArmorTrains(p) {
+  const P = S.players[p];
+  if (!warOn() || S.time < (P.armorCheckAt || 0)) return;
+  P.armorCheckAt = S.time + 25;
+  const trains = S.bots.filter((u) => !u.dead && u.owner === p && BOTS[u.type].rail);
+  if (!trains.length || trains.some((u) => u.armorOrder)) return;
+  const t = trains.find((u) => !u.armored);
+  if (!t) return;
+  const have = playerGoods(p), spare = trains.some((u) => u.hp < u.maxHp) ? 1 : 3;
+  for (const g in TRAIN_ARMOR.cost) if ((have[g] || 0) < TRAIN_ARMOR.cost[g] * spare + (g === 'alloy' ? 10 : 4)) return;
+  orderTrainArmor(p, t);
 }

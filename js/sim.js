@@ -703,6 +703,7 @@ function botCount(owner) {
 function isIdleWorker(u) {
   if (u.type === 'warbot' || u.dead || u.carry || u.ferryWait || (u.task && u.task.type !== 'home')) return false;
   if (u.shyUntil > S.time) return false; // just gave way to enemy warbots: it waits a moment (see foeSweep)
+  if (u.armorOrder) return false; // a train with armor on order parks at a station to have it fitted (see fitTrainArmor)
   if (u.inside && gunShy(u)) { const b = getE(u.inside); if (b && b.owner === u.owner && foesAt(b)) return false; } // enemy warbots right outside: it stays in
   // A worker that is charging finishes first; one that is running low goes to charge before new jobs,
   // unless there's nowhere to charge: then it keeps working (slowly), or no one would bring the Fuel.
@@ -2369,6 +2370,7 @@ function updateWorker(u, dt) {
   u.moved = 0;
   if (BOTS[u.type].air) { updatePlane(u, dt); return; }
   if (u.task && u.task.type === 'flee') { doFlee(u, dt); return; }
+  if (BOTS[u.type].rail) { if (u.armorOrder) fitTrainArmor(u, dt); if (u.armored) trainGuns(u, dt); }
   // A Freight Train left at a Foundry by an older save rolls out at the nearest Rail Station (new ones come from rail yards).
   if (BOTS[u.type].rail && !u.task && !onTrack(u) && S.tick % 30 === u.id % 30) { deliverTrain(u); return; }
   // So does a ship left at a Foundry, at the nearest Port (new ones are launched from shipyards).
@@ -3659,6 +3661,7 @@ function wrapAngle(a) { return Math.atan2(Math.sin(a), Math.cos(a)); }
 
 function damageBot(u, dmg) {
   if (u.dropping || (BOTS[u.type].air && u.flight && planeAlt(u) > 0.3)) return; // up in the air: out of reach
+  if (u.armored) dmg *= TRAIN_ARMOR.takes; // an armored train's plating
   u.hp -= dmg;
   u.hurtT = S.time;
   if (u.hp <= 0) killBot(u);
@@ -8060,6 +8063,75 @@ function nearestStation(u) {
     if (d < bd) { bd = d; best = b; }
   }
   return best;
+}
+
+/**
+ * Armor Freight Train u (see TRAIN_ARMOR): paid for from its owner's storage now; it takes no new runs, and the
+ * next Rail Station it stops at fits the plating and guns. Returns '' or why not.
+ */
+function orderTrainArmor(owner, u) {
+  if (!u || u.dead || u.owner !== owner || !BOTS[u.type].rail) return 'Pick one of your Freight Trains.';
+  if (u.armored) return 'This train is already armored.';
+  if (u.armorOrder) return 'Its armor is already on order.';
+  const have = playerGoods(owner), short = Object.keys(TRAIN_ARMOR.cost).filter((g) => (have[g] || 0) < TRAIN_ARMOR.cost[g]);
+  if (short.length) return `Not enough in storage: it needs ${costText(TRAIN_ARMOR.cost)} (short of ${short.map((g) => GOOD[g].name).join(' and ')}).`;
+  for (const g in TRAIN_ARMOR.cost) takeGood(owner, g, TRAIN_ARMOR.cost[g]);
+  u.armorOrder = { t: 0 };
+  return '';
+}
+
+/** Train u, with armor on order: the Rail Station it's stopped in fits it (TRAIN_ARMOR.fit seconds). */
+function fitTrainArmor(u, dt) {
+  const st = u.inside ? getE(u.inside) : null;
+  if (!st || st.dead || st.owner !== u.owner || !BDEFS[st.type].station) return;
+  u.armorOrder.t = (u.armorOrder.t || 0) + dt;
+  if (u.armorOrder.t < TRAIN_ARMOR.fit) return;
+  delete u.armorOrder;
+  u.armored = 1;
+  u.maxHp += TRAIN_ARMOR.hp;
+  u.hp += TRAIN_ARMOR.hp;
+  addFx('ring', st.x + 0.5, st.y + 0.5, { color: PLAYER_COLORS[u.owner], r: 1.6 });
+  postMsg(u.owner, 'A Freight Train is armored: plating, a pulse cannon and a flak gun. It\'s back on its runs.', st.x, st.y, 'good');
+}
+
+/**
+ * An armored train's guns (TRAIN_ARMOR): the pulse cannon shoots the nearest enemy robot or vehicle on the ground in
+ * reach (warbots first), the flak gun the nearest enemy aircraft, a shell at a time, leading it (S.flak, see
+ * updateFlakShells). Moving or stopped, inside a station or out.
+ */
+function trainGuns(u, dt) {
+  const A = TRAIN_ARMOR, x = u.x, y = u.y, color = PLAYER_COLORS[u.owner];
+  u.pcd = (u.pcd || 0) - dt;
+  u.fcd = (u.fcd || 0) - dt;
+  if (u.pcd <= 0) {
+    const tg = nearestEnemyBot(u.owner, x, y, A.pulse.range, true);
+    if (tg) {
+      u.paim = Math.atan2(tg.y - y, tg.x - x);
+      u.pshot = S.time;
+      const mx = x + Math.cos(u.paim) * 0.25, my = y + Math.sin(u.paim) * 0.25 - 0.2;
+      addFx('pulsebeam', mx, my, { x2: tg.x, y2: tg.y, color, life: 0.35, seed: S.tick + u.id });
+      addFx('pulsehit', tg.x, tg.y, { color, life: 0.35, seed: S.tick + u.id * 3 });
+      if (u.owner === 0 || tg.owner === 0) sfx('pulse');
+      damageBot(tg, A.pulse.damage);
+      u.pcd = A.pulse.reload;
+    } else u.pcd = 0.3;
+  }
+  if (u.fcd <= 0) {
+    const tgt = aircraftNear(u.owner, x, y, A.flak.range)[0];
+    if (tgt) {
+      const f = BDEFS.flak.flak, vx = Math.cos(tgt.face || 0) * (tgt.vel || 0), vy = Math.sin(tgt.face || 0) * (tgt.vel || 0);
+      let tx = tgt.x, ty = tgt.y, tt = 0;
+      for (let i = 0; i < 3; i++) { tt = 0.12 + dist(x, y, tx, ty) / f.speed; tx = tgt.x + vx * tt; ty = tgt.y + vy * tt; }
+      const a = hash2(u.id, S.tick, 11) * Math.PI * 2, r = f.scatter * Math.sqrt(hash2(u.id, S.tick, 17));
+      S.flak = S.flak || [];
+      S.flak.push({ owner: u.owner, x0: x, y0: y, x: tx + Math.cos(a) * r, y: ty + Math.sin(a) * r, at: S.time + tt, t0: S.time });
+      u.faim = Math.atan2(tgt.y - y, tgt.x - x);
+      u.fshot = S.time;
+      addFx('muzzle', x + Math.cos(u.faim) * 0.2, y + Math.sin(u.faim) * 0.2 - 0.3, { a: u.faim, color: '#ffd9a0', life: 0.1 });
+      if (u.owner === 0 || tgt.owner === 0) sfx('flakfire');
+      u.fcd = A.flak.reload;
+    } else u.fcd = 0.3;
+  }
 }
 
 /** Put a train that isn't on the track (just built) into the nearest Rail Station. */

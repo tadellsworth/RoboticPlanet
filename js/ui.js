@@ -1140,7 +1140,7 @@ const SHEET_KEYS = {
   'sh-send': 'q', 'sh-bombard': 'q', 'sh-fire': 'f', 'sh-aim': 'f', 'sh-rgo': 'g', 'sh-crawl': 'g', 'sh-deploy': 'e',
   'sh-gate': 'g', 'sh-move': 'm', 'sh-pack': 'm', 'sh-pause': 'p', 'sh-fixbtn': 'e', 'sh-layroad': 'r', 'sh-pipe': 'k',
   'sh-recall': 'c', 'sh-unpost': 'c', 'rl-recall': 'c', 'sh-land': 'l', 'sh-st-send': 'v', 'nk-evac': 'v',
-  'sh-bomb': 'z', 'sh-strike': 'q', 'sh-fsail': 'g', 'sh-fembark': 'e', 'sh-fland': 'l', 'sh-fhome': 'h', 'sh-found': 'p', 'sh-fout': 'o',
+  'sh-bomb': 'z', 'sh-strike': 'q', 'sh-fsail': 'g', 'sh-fembark': 'e', 'sh-fland': 'l', 'sh-fhome': 'h', 'sh-found': 'p', 'sh-fout': 'o', 'sh-tarmor': 'r',
   // The Army panel (Q): its orders, the group size, and its Air tab.
   'ar-attack': 'q', 'ar-hold': 'g', 'ar-station': 'v', 'ar-recall': 'c', 'ar-select': 'f', 'ar-n2': '1', 'ar-n4': '2', 'ar-n8': '3', 'ar-nall': '4',
   'ar-tab-army': 'z', 'ar-tab-air': 'x', 'ar-strike': 'e',
@@ -2119,6 +2119,17 @@ function portShipsText(b) {
   const list = Object.keys(here).map((k) => `${here[k]} ${here[k] === 1 ? BOTS[k].name : BOTS[k].plural}`);
   return (list.length ? `Tied up here: ${list.join(', ')}.` : 'No ships tied up here.') +
     ' Container Ships and Tanker Ships fill this Port\'s supply orders from your other Ports on the same water, and a far Port sends its spare goods home by ship. Order ships at its shipyard (below).';
+}
+
+/** Fill el with a button for each of your vehicles inside building b that pick() takes, opening its panel. */
+function hereButtons(el, b, pick) {
+  if (!el) return;
+  const here = b.owner === 0 ? S.bots.filter((u) => !u.dead && u.owner === 0 && u.inside === b.id && pick(u)) : [];
+  const key = here.map((u) => u.id).join(',');
+  if (el.dataset.here === key) return;
+  el.dataset.here = key;
+  el.innerHTML = here.map((u) => `<button class="btn small" data-bot="${u.id}">${BOTS[u.type].name}${u.armored ? ' (armored)' : ''} ›</button>`).join('');
+  for (const btn of el.querySelectorAll('button')) btn.onclick = () => { const u = getE(+btn.dataset.bot); if (u && !u.dead) { sfx('click'); openBotSheet(u); } };
 }
 
 /** The Port panel's ship sections: ships here, its ferry line, and a beach landing. */
@@ -3602,7 +3613,7 @@ function openBuildingSheet(b) {
     <p class="desc">${desc}</p><div class="status" id="sh-status"></div><div id="sh-dyn"></div>${mine ? '<div id="sh-fix"></div>' : ''}`;
   if (mine) {
     if (def.airfield && b.built && b.owner === 0) html += airfieldSection(b); // its planes and air drops first
-    if (def.yard && b.built && mine) html += `<div class="section-label">${def.port ? 'Shipyard' : def.airfield ? 'Hangar' : 'Rail yard'}</div><div class="status" id="sh-yard-status"></div><div class="bar" id="sh-yard-bar"><div></div></div><div id="sh-yard"></div>
+    if (def.yard && b.built && mine) html += `<div class="section-label">${def.port ? 'Shipyard' : def.airfield ? 'Hangar' : 'Rail yard'}</div><div class="status" id="sh-yard-status"></div><div class="bar" id="sh-yard-bar"><div></div></div><div id="sh-yard"></div>${def.station ? '<div class="actions" id="sh-yard-here"></div>' : ''}
       <p class="hint">${def.port ? 'Ships are built here' : def.airfield ? 'Planes are built here' : 'Freight Trains are built here'}, a round of parts (1 Alloy, 1 Chip) every ${YARD.work} s: ${def.yard.map((k) => `${BOTS[k].plural.toLowerCase().replace(/^./, (c) => c.toUpperCase())} ${BOTS[k].parts}`).join(', ')} rounds. Haulers bring the parts. ${def.port ? 'Each one puts to sea from this Port.' : def.airfield ? `The hangar holds ${Object.entries(AIRFIELD_HOLDS).map(([k, n]) => `${n} ${n === 1 ? BOTS[k].name : BOTS[k].plural}`).join(' and ')}.` : 'Each one rolls out onto this station\'s track, so the Bot Foundry never needs a railway.'}</p>`;
     if (def.terminal && b.built) html += '<div class="section-label">Contracts <span class="label-note" id="sh-trade-next"></span></div><div id="sh-trade"></div><p class="hint" id="sh-trade-hint"></p>';
     // A Rail Station: its line, what it stocks automatically, and its conveyors.
@@ -4188,17 +4199,10 @@ function refreshBuildingSheet(b) {
   }
   if ($('sh-land-n')) $('sh-land-n').textContent = UI.landN || 3;
   if ($('sh-port-ships')) $('sh-port-ships').textContent = portShipsText(b);
-  // Your ships tied up here, one button each: tap to take charge of it (it can't be tapped on the map while it's inside).
-  const sbtn = $('sh-port-shipbtns');
-  if (sbtn) {
-    const here = b.owner === 0 ? S.bots.filter((u) => !u.dead && u.owner === 0 && BOTS[u.type].sea && u.inside === b.id) : [];
-    const key = here.map((u) => u.id).join(',');
-    if (sbtn.dataset.key !== key) {
-      sbtn.dataset.key = key;
-      sbtn.innerHTML = here.map((u) => `<button class="btn small" data-ship="${u.id}">${BOTS[u.type].name} ›</button>`).join('');
-      for (const btn of sbtn.querySelectorAll('button')) btn.onclick = () => { const u = getE(+btn.dataset.ship); if (u && !u.dead) { sfx('click'); openBotSheet(u); } };
-    }
-  }
+  // Your ships tied up here, and trains stopped at a Rail Station, one button each: tap to take charge of it (it
+  // can't be tapped on the map while it's inside).
+  hereButtons($('sh-port-shipbtns'), b, (u) => BOTS[u.type].sea);
+  hereButtons($('sh-yard-here'), b, (u) => BOTS[u.type].rail);
   if ($('sh-air-planes')) { const ps = basePlanes(b).filter((u) => !BOTS[u.type].bomber); $('sh-air-planes').textContent = ps.length ? ps.map((u) => `Its plane is ${planeStatus(u)}.`).join(' ') : 'None based here: order one in the hangar below.'; }
   if ($('sh-air-bombers')) {
     const bs = basePlanes(b).filter((u) => BOTS[u.type].bomber), el = $('sh-air-bombers');
@@ -4364,6 +4368,11 @@ function botActivity(u) {
     })();
     return what + where;
   }
+  if (BOTS[u.type].rail && u.armorOrder) {
+    const st = u.inside ? getE(u.inside) : null;
+    if (st && BDEFS[st.type].station) return `Having its armor fitted at the ${BDEFS[st.type].name}`;
+    if (!t) return 'Heading to a Rail Station to have its armor fitted';
+  }
   if (u.shyUntil > S.time && gunShy(u) && !(t && t.type === 'staff')) {
     const who = u.shyOf === 'wild' ? 'creatures' : 'enemy warbots';
     return t && t.type === 'home' ? `Keeping clear of ${who}: taking cover in storage` : `Keeping clear of ${who}: waiting for them to go`;
@@ -4401,6 +4410,28 @@ function refreshBombButton(t) {
       : any.some((v) => v.mission || v.flight) ? 'Your bombers are out on sorties.' : any.some((v) => v.rearmUntil > S.time) ? 'Your bombers are rearming.' : 'Out of your bombers\' reach.';
 }
 
+/** The Armor section of one of your Freight Trains' panels (see TRAIN_ARMOR). */
+function refreshTrainArmor(u) {
+  const A = TRAIN_ARMOR, btn = $('sh-tarmor'), hint = $('sh-tarmor-hint'), less = Math.round((1 - A.takes) * 100);
+  if (u.armored) {
+    btn.hidden = true;
+    hint.innerHTML = `<b>Armored.</b> Its plating gives it ${A.hp} more hit points and it takes ${less}% less damage. A pulse cannon on the locomotive shoots enemy robots and vehicles within ${A.pulse.range} tiles, and a flak gun on the last wagon enemy aircraft within ${A.flak.range}. Both run off the engine: no ammo to bring.`;
+    return;
+  }
+  if (u.armorOrder) {
+    btn.hidden = true;
+    const st = u.inside ? getE(u.inside) : null;
+    hint.textContent = st && BDEFS[st.type].station ? `Being fitted at the ${BDEFS[st.type].name}: ${Math.max(1, Math.ceil(A.fit - (u.armorOrder.t || 0)))}s to go.`
+      : 'Paid for: it finishes its run and stops at a Rail Station, where the yard fits the armor and guns.';
+    return;
+  }
+  const have = playerGoods(0), ok = Object.keys(A.cost).every((g) => (have[g] || 0) >= A.cost[g]);
+  btn.hidden = false;
+  btn.disabled = !ok;
+  btn.textContent = `Armor this train (${costText(A.cost)})`;
+  hint.textContent = `Plating and two guns, paid from storage and fitted at a Rail Station (it stops there about ${A.fit}s): ${A.hp} more hit points and ${less}% less damage, a pulse cannon for enemy robots and vehicles, and a flak gun for aircraft.` + (ok ? '' : ' Not enough in storage yet.');
+}
+
 /** Does bot u run on a fuel tank, filled with Fuel (trucks, ships and planes), rather than a battery? */
 function tankOf(u) { const bt = BOTS[u.type]; return !!(bt.truck || bt.sea || bt.air); }
 
@@ -4418,11 +4449,17 @@ function openBotSheet(u) {
       <div class="actions"><button class="btn" id="sh-fembark">Take warbots aboard</button><button class="btn" id="sh-fland">Put them ashore</button></div>
       <button class="btn" id="sh-found">Found a Port on another shore</button>
       <p class="hint"><b>Sail out of the Port</b>: tied up, it sails out to wait just off the Port, where you can tap it on the map. <b>Sail somewhere</b>: it sails to the spot you tap (open water, or right up to a shore) and waits there for your orders; with a mouse, right-click the water while its panel is open. <b>Take warbots aboard</b> loads your warbots standing within ${Math.floor(FERRY_REACH)} tiles of it (with a mouse, select warbots and right-click the Ferry: they walk to the shore beside it and board). <b>Put them ashore</b> lands them on the shore beside it, and it heads home. <b>Found a Port</b>: it loads ${costText(PORT_FOUND.cost)} at its Port and up to ${PORT_FOUND.workers} Workers, and puts up a Port on an empty shore that claims the land round it.</p>` : ''}
+    ${u.owner === 0 && BOTS[u.type].rail ? '<div class="section-label">Armor</div><p class="hint" id="sh-tarmor-hint"></p><button class="btn big" id="sh-tarmor">Armor this train</button>' : ''}
     ${u.owner === 0 && BOTS[u.type].crawler ? '<div class="actions"><button class="btn primary" id="sh-crawl">Drive somewhere</button><button class="btn" id="sh-deploy">Deploy here</button></div>' : ''}
     ${u.owner === 0 && BOTS[u.type].siege ? `<div class="actions"><button class="btn primary" id="sh-bombard">Bombard a building</button><button class="btn" id="sh-rgo">Drive somewhere</button></div>
       <div class="section-label">While it waits</div><div class="seg" id="sh-stance"><button data-v="fire">Fire at will</button><button data-v="hold">Hold fire</button></div>
       <p class="hint">It stays where you put it (beside the Foundry when it's new). <b>Fire at will</b>: it shells any enemy building that comes in reach of that spot, without moving. <b>Hold fire</b>: it fires only when you tell it to. After reloading it goes back to its target, or to its spot. With a mouse, select it and right-click a rival building to bombard it, or open ground to move it there.</p>` : ''}`;
   openSheet('bot', u.id, html);
+  if ($('sh-tarmor')) $('sh-tarmor').onclick = () => {
+    const r = orderTrainArmor(0, u);
+    if (r) { sfx('error'); toast(r, 'warn'); } else { sfx('order'); toast('Armor paid for: the train finishes its run, stops at a Rail Station and the yard fits the plating and guns.', 'info'); }
+    refreshSheet();
+  };
   if ($('sh-bomb')) $('sh-bomb').onclick = () => {
     const v = readyBomber(u);
     const why = v ? orderStrike(0, v, u) : 'No Strike Bomber is ready that can reach it.';
@@ -4988,7 +5025,7 @@ function refreshSheet() {
     refreshBuildingSheet(b);
   } else if (UI.sheetKind === 'bot') {
     const u = getE(UI.sheetFor);
-    if (!u || (u.inside && !BOTS[u.type].sea)) { closeSheet(); return; } // (a ship tied up at a Port keeps its panel)
+    if (!u || (u.inside && !BOTS[u.type].sea && !BOTS[u.type].rail)) { closeSheet(); return; } // (a ship tied up at a Port, or a train at a station, keeps its panel)
     $('sh-status').textContent = botActivity(u);
     refreshBombButton(u);
     const bat = Math.round(u.bat ?? 100);
@@ -5001,6 +5038,7 @@ function refreshSheet() {
       (u.cargo && Object.keys(u.cargo).length ? `<div class="section-label">On board</div><div class="goodlist">${Object.keys(u.cargo).map((g) => goodTag(g, `${u.cargo[g]} ${GOOD[g].name}`)).join('')}</div>` : '');
     if ($('sh-recall')) $('sh-recall').hidden = !(u.task && u.task.type === 'hold');
     if ($('sh-fout')) $('sh-fout').hidden = !u.inside || !!u.landing;
+    if ($('sh-tarmor')) refreshTrainArmor(u);
   } else if (UI.sheetKind === 'move') {
     const t = UI.sheetFor, i = t % S.W, j = (t / S.W) | 0;
     const avail = refreshMoveStepper(i, j);

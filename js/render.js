@@ -3403,6 +3403,7 @@ function drawFreightTrain(ctx, u, sx, sy, s) {
     drawHeadlights(ctx, 'freight-loco', sx, sy, size * (fr.scale || 1), u.face || 0);
     if (u.drive < 0 && ART['freight-loco-brake']) drawArt(ctx, ART['freight-loco-brake'], sx, sy, size, u.face || 0);
     if (u.drive > 0 && ART['freight-loco-exhaust']) { ctx.globalAlpha = clamp(1 - (u.vel || 0) / (u.vtop || 1), 0.3, 1); drawArt(ctx, ART['freight-loco-exhaust'], sx, sy, size, u.face || 0); ctx.globalAlpha = 1; }
+    if (u.armored) drawTrainArmor(ctx, u, cars, s);
     return;
   }
   const car = (d, loco, load) => {
@@ -3431,6 +3432,65 @@ function drawFreightTrain(ctx, u, sx, sy, s) {
   // Wagons back to front, then the locomotive on top.
   for (let k = 4; k >= 1; k--) car(k * 0.68, false, Math.max(0, Math.min(8, Math.ceil((n - (k - 1) * 10) * 0.8))));
   car(0, true, 0);
+  if (u.armored) {
+    const cs = [];
+    for (let k = 0; k <= 4; k++) { const d = k * 0.68, p = at(d), f = at(Math.max(0, d - 0.25)), b = at(d + 0.25); cs.push({ x: sx + (p.x - u.x) * s, y: sy + (p.y - u.y) * s, ang: Math.atan2(f.y - b.y, f.x - b.x) }); }
+    drawTrainArmor(ctx, u, cs, s);
+  }
+}
+
+/**
+ * An armored Freight Train (TRAIN_ARMOR) over its art: dark riveted plates along both sides of every car, a pulse
+ * cannon on the back of the locomotive and a twin flak gun on the last wagon, each turned to what it last shot at
+ * (or along the train), the cannon's emitter flaring as it fires and the flak barrels flashing.
+ */
+function drawTrainArmor(ctx, u, cars, s) {
+  const color = PLAYER_COLORS[u.owner];
+  for (const c of cars) {
+    ctx.save();
+    ctx.translate(c.x, c.y);
+    ctx.rotate(c.ang);
+    const L = s * 0.58, W = s * 0.32, th = s * 0.06;
+    for (const sg of [-1, 1]) {
+      const y0 = sg < 0 ? -W / 2 - th * 0.35 : W / 2 - th * 0.65;
+      ctx.fillStyle = 'rgba(40,46,54,0.97)'; roundRect(ctx, -L / 2, y0, L, th, th * 0.35); ctx.fill();
+      ctx.fillStyle = 'rgba(120,132,145,0.55)'; ctx.fillRect(-L / 2 + th * 0.3, sg < 0 ? y0 : y0 + th * 0.72, L - th * 0.6, th * 0.28); // (the lit edge)
+    }
+    ctx.fillStyle = 'rgba(190,200,210,0.95)';
+    for (let r = 0; r < 4; r++) for (const sg of [-1, 1]) { ctx.beginPath(); ctx.arc(-L / 2 + (L * (r + 0.5)) / 4, sg * (W / 2 - th * 0.15), Math.max(0.7, s * 0.009), 0, Math.PI * 2); ctx.fill(); }
+    ctx.restore();
+  }
+  const gun = (c, back, aim, shotAt, flak) => {
+    const x = c.x - Math.cos(c.ang) * back, y = c.y - Math.sin(c.ang) * back - s * 0.06;
+    const a = shotAt && S.time - shotAt < 2.5 ? aim : c.ang;
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.fillStyle = 'rgba(10,12,16,0.4)'; ctx.beginPath(); ctx.ellipse(s * 0.025, s * 0.07, s * 0.14, s * 0.08, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#262b32'; ctx.beginPath(); ctx.arc(0, 0, s * 0.135, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = color; ctx.lineWidth = Math.max(1.2, s * 0.028); ctx.stroke();
+    ctx.rotate(a);
+    if (flak) {
+      ctx.fillStyle = '#56606b'; roundRect(ctx, -s * 0.09, -s * 0.08, s * 0.17, s * 0.16, s * 0.03); ctx.fill();
+      ctx.fillStyle = '#15191e';
+      for (const o of [-0.042, 0.042]) roundRect(ctx, s * 0.03, s * o - s * 0.017, s * 0.23, s * 0.034, s * 0.012), ctx.fill();
+      if (shotAt && S.time - shotAt < 0.12) {
+        ctx.fillStyle = 'rgba(255,225,160,0.95)';
+        for (const o of [-0.042, 0.042]) { ctx.beginPath(); ctx.arc(s * 0.28, s * o, s * 0.05, 0, Math.PI * 2); ctx.fill(); }
+      }
+    } else {
+      ctx.fillStyle = '#56606b'; ctx.beginPath(); ctx.arc(0, 0, s * 0.085, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#15191e'; roundRect(ctx, 0, -s * 0.026, s * 0.22, s * 0.052, s * 0.015); ctx.fill();
+      const glow = shotAt ? clamp(1 - (S.time - shotAt) / 0.45, 0, 1) : 0;
+      ctx.fillStyle = color;
+      ctx.globalAlpha = 0.6 + 0.4 * glow;
+      ctx.beginPath(); ctx.arc(s * 0.22, 0, s * (0.034 + 0.04 * glow), 0, Math.PI * 2); ctx.fill();
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = 'rgba(255,255,255,0.8)'; ctx.beginPath(); ctx.arc(s * 0.22, 0, s * 0.014, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.restore();
+  };
+  gun(cars[0], s * 0.15, u.paim, u.pshot, false);
+  gun(cars[cars.length - 1], 0, u.faim, u.fshot, true);
 }
 
 /**

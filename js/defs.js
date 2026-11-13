@@ -145,7 +145,7 @@ const BOTS = {
   roadtrain: { name: 'Road Train', plural: 'Road Trains', speed: WORKER_SPEED * 1.35, hp: 14, haul: true, truck: true, train: true, mixed: true, carry: 30, roadOnly: true, parts: 4, accel: 1.0, brake: 2.5,
     desc: 'A truck pulling two trailers: 30 goods at once, several kinds in one trip, for bulk runs between your Command Base and far Depots (keeping a far Depot stocked with what the buildings round it need, filling supply orders, and bringing a far Depot\'s spare goods home). One does the work of about three Freight Trucks on a long asphalt run, on less Fuel. It only pays off on asphalt: on plain road it crawls. Slow to start and stop, it wears roads hard and holds up the traffic behind it.' },
   freight: { name: 'Freight Train', plural: 'Freight Trains', speed: WORKER_SPEED * 3.4, hp: 30, haul: true, rail: true, mixed: true, carry: 56, parts: 5, accel: 0.85, brake: 1.6,
-    desc: 'A locomotive and four wagons: 56 goods at once, several kinds in one trip, between Rail Stations on the same track, fast and with no traffic to wait for. It runs the line on its own: out with what the far station needs once that fills a good share of its wagons (sooner if the station runs low), home with the far station\'s spare goods. It never needs charging or Fuel. Order it at a Rail Station: its rail yard builds it from Alloy and Chips and it rolls out onto that station\'s track.' },
+    desc: 'A locomotive and four wagons: 56 goods at once, several kinds in one trip, between Rail Stations on the same track, fast and with no traffic to wait for. It runs the line on its own: out with what the far station needs once that fills a good share of its wagons (sooner if the station runs low), home with the far station\'s spare goods. It never needs charging or Fuel. Order it at a Rail Station: its rail yard builds it from Alloy and Chips and it rolls out onto that station\'s track. Tap a train to have it armored: plating and two guns, a pulse cannon and a flak gun.' },
   // Ships (naval maps only): they sail open water between Ports (passing under bridges), burning Fuel (SHIP_BURN).
   cargoship: { name: 'Container Ship', plural: 'Container Ships', speed: WORKER_SPEED * 2.4, hp: 30, haul: true, sea: true, carry: 40, parts: 5, accel: 0.5, brake: 1.0, naval: true,
     desc: 'Carries 40 goods at once between your Ports on the same water: supply orders at a Port are filled from the other Ports, and a far Port sends its spare goods home to the Port nearest your Command Base. It burns Fuel under way and fills up at a Port (each Port keeps a little Fuel for its ships). It puts to sea at the nearest Port when the Foundry finishes it.' },
@@ -399,6 +399,18 @@ const SHIP_BURN = 0.3, SHIP_REFUEL = 70, PORT_FUEL = 4; // a ship's tank (0–10
 // Cargo Planes: a tank (0–100) drains PLANE_BURN a second in the air; one Fuel at the Airfield puts back PLANE_FILL of it
 // (a long sortie takes two or three); an Airfield keeps AIRFIELD_FUEL for its planes. Loading takes PLANE_LOAD s; robots
 // have PLANE_GATHER s to get aboard (then it goes with whoever is); a parachute takes AIR_DROP_FALL s to come down.
+// Armored Freight Trains: an upgrade a train is given on its panel, paid for from storage there and then and fitted at the
+// next Rail Station it stops at (it waits there while the yard works). Plating (more hit points, and it takes less of any
+// damage), a pulse cannon on the locomotive for enemy robots and vehicles on the ground, and a twin flak gun on the last
+// wagon for enemy aircraft (its shells burst like a Flak Gun's). Both run off the engine: no ammo to bring.
+const TRAIN_ARMOR = {
+  cost: { alloy: 6, chip: 3, crystal: 3 },
+  fit: 12,      // seconds the station's yard takes to fit it
+  hp: 40,       // extra hit points (a Freight Train has 30)
+  takes: 0.6,   // the share of any damage it takes
+  pulse: { range: 4.5, damage: 4, reload: 1.6 }, // (a Pulse Turret: 5 tiles, 4 a shot, every 1.3 s)
+  flak: { range: 6, reload: 1.5 },               // one shell a time (a Flak Gun: 7 tiles, two every second)
+};
 const PLANE_BURN = 2.2, PLANE_FILL = 40, AIRFIELD_FUEL = 6, PLANE_LOAD = 3, PLANE_GATHER = 45, AIR_DROP_FALL = 2.2;
 const PLANE_MEND = 0.6;    // hit points a second a plane parked at its Airfield gets back
 // Airfields: a runway RUNWAY_LEN tiles long runs straight out from the hangar. A plane rolls down it from the
