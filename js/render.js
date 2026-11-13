@@ -897,8 +897,12 @@ function paintTile(ctx, i, j) {
     if (!S.road[t] && terr === T_ROCK) drawRailTunnel(ctx, i, j, x, y, t, true);
   }
   if (S.res[t]) {
+    // An oil seep under a road or track stays underground: it shows through faintly, a stain on the surface.
+    const under = S.road[t] || (S.rail && S.rail[t]);
+    if (under) { ctx.save(); ctx.globalAlpha = 0.4; }
     drawResource(ctx, S.res[t], S.amt[t], S.grow[t], x + TP / 2, y + TP / 2, TP, i, j);
-    if (richRes(t)) drawGlint(ctx, x, y, i, j);
+    if (under) ctx.restore();
+    else if (richRes(t)) drawGlint(ctx, x, y, i, j);
   }
 }
 
@@ -3863,7 +3867,7 @@ function workPose(u) {
     return { kind: 'weld', dx: Math.cos(a) * r, dy: Math.sin(a) * r * 0.8, face: a + Math.PI };
   }
   if (t.type === 'pave' && t.phase !== 'go') {
-    const c = CROSS[S.terrain[t.tile]], time = c ? c.time : S.res[t.tile] ? PAVE_CLEAR_TIME : PAVE_TIME;
+    const c = CROSS[S.terrain[t.tile]], time = c ? c.time : roadClears(t.tile) ? PAVE_CLEAR_TIME : PAVE_TIME;
     return { kind: c ? 'deck' : 'concrete', tile: t.tile, prog: clamp(t.prog / time, 0, 1), dx: 0, dy: 0 };
   }
   if (t.type === 'staff' && t.phase === 'work' && t.node >= 0 && S.road[t.node]) {
@@ -4353,7 +4357,7 @@ function render(dtReal) {
       if (paveMode || S.road[t] || !canRoad(0, i, j)) continue;
       const cross = crossTile(t);
       // (A road dragged over water becomes a bridge, and through rock a tunnel.)
-      ctx.strokeStyle = cross ? 'rgba(140,215,255,0.5)' : S.res[t] ? 'rgba(255,170,90,0.28)' : 'rgba(255,240,200,0.18)';
+      ctx.strokeStyle = cross ? 'rgba(140,215,255,0.5)' : roadClears(t) ? 'rgba(255,170,90,0.28)' : 'rgba(255,240,200,0.18)';
       ctx.strokeRect(ox + i * z + 1.5, oy + j * z + 1.5, z - 3, z - 3);
     }
   }
@@ -4376,7 +4380,7 @@ function render(dtReal) {
     ctx.lineDashOffset = -R.time * z * 0.4;
     for (const t of R.routePreview) {
       const i = t % S.W, j = (t / S.W) | 0;
-      ctx.fillStyle = S.res[t] ? 'rgba(255,140,80,0.25)' : 'rgba(255,209,102,0.18)';
+      ctx.fillStyle = roadClears(t) ? 'rgba(255,140,80,0.25)' : 'rgba(255,209,102,0.18)';
       ctx.fillRect(ox + i * z + z * 0.1, oy + j * z + z * 0.1, z * 0.8, z * 0.8);
       ctx.strokeRect(ox + i * z + z * 0.1, oy + j * z + z * 0.1, z * 0.8, z * 0.8);
     }
@@ -4691,7 +4695,7 @@ function drawPlans(ctx, ox, oy, z, inView) {
       ctx.strokeRect(x + m, y + m, z - 2 * m, z - 2 * m);
       const by = getE(S.paveRes[t]);
       if (by && by.task && by.task.type === 'pave' && by.task.tile === t && by.task.phase === 'work') {
-        const f = Math.min(1, by.task.prog / (S.res[t] ? PAVE_CLEAR_TIME : PAVE_TIME));
+        const f = Math.min(1, by.task.prog / (roadClears(t) ? PAVE_CLEAR_TIME : PAVE_TIME));
         ctx.fillStyle = 'rgba(169,180,194,0.9)';
         ctx.fillRect(x + m, y + z - m - z * 0.12, (z - 2 * m) * f, z * 0.12);
       }

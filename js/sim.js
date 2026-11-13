@@ -2167,7 +2167,7 @@ function doPave(u, t, dt) {
   u.busy = 1;
   const c = CROSS[S.terrain[tile]];
   if (c) u.face = Math.atan2(((tile / S.W) | 0) + 0.5 - u.y, (tile % S.W) + 0.5 - u.x);
-  if (t.prog < (c ? c.time : S.res[tile] ? PAVE_CLEAR_TIME : PAVE_TIME)) return;
+  if (t.prog < (c ? c.time : roadClears(tile) ? PAVE_CLEAR_TIME : PAVE_TIME)) return;
   layRoad(tile);
   cancelTask(u);
   u.idleT = 0;
@@ -2176,9 +2176,9 @@ function doPave(u, t, dt) {
   if (next >= 0) assignPave(u, next);
 }
 
-/** Finish a road tile: clear any resource on it and make it road (its Cement was paid when planned). */
+/** Finish a road tile: clear any resource on it (an oil seep stays, underground) and make it road (its Cement was paid when planned). */
 function layRoad(t) {
-  if (S.res[t]) { S.res[t] = 0; S.amt[t] = 0; if (S.grow) S.grow[t] = 1; }
+  if (roadClears(t)) { S.res[t] = 0; S.amt[t] = 0; if (S.grow) S.grow[t] = 1; }
   const o = S.plan[t] - 1; // whose plan it was: the road is theirs
   setPlan(t, -1);
   if (S.paveRes) delete S.paveRes[t];
@@ -2989,7 +2989,7 @@ function updateBuilding(b, dt) {
   }
   if (def.out && !def.store) feedStep(b, dt * S.players[b.owner].mult);
   if (def.station && !def.terminal) stationStep(b, dt * S.players[b.owner].mult);
-  if (def.mil) b.status = `Garrison: ${b.garrison.length} of ${def.garrison} warbots`;
+  if (def.mil) b.status = `Garrison: ${b.garrison.length} of ${def.garrison} warbots` + (b.hold ? ', holding inside' : '');
   else if (def.store) b.status = def.station && !def.terminal && !railPlatforms(b.x, b.y).length ? 'No track beside it yet: drag rail out to it in Paths (Rail), to another station' : 'Storing goods';
   else if (def.gate) b.status = 'Open to your bots; enemies have to break it down';
   else if (def.barrier) b.status = 'Holding the line: enemies have to go round or break through';
@@ -3496,12 +3496,16 @@ function shellImpact(m) {
   for (const [d2, u] of hit.slice(0, md.most || hit.length)) damageBot(u, d2 <= 0.36 ? md.damage : md.splashDamage);
 }
 
-/** Military buildings send warbots out when enemy warbots come close. */
+/**
+ * Military buildings send warbots out when enemy warbots come close, unless you set one to hold (b.hold,
+ * from its panel): then its warbots stay inside whatever comes near, until you send them out (sortieNow)
+ * or it falls (they scramble out alive, see releaseBotsFrom). Attack orders and rally flags can still take them.
+ */
 function garrisonDefense(b, dt) {
   b.cd -= dt;
   if (b.cd > 0) return;
   b.cd = 0.5;
-  if (!b.garrison.length) return;
+  if (!b.garrison.length || b.hold) return;
   const cx = b.x + 0.5, cy = b.y + 0.5;
   let threats = 0, out = 0;
   for (const u of S.bots) {
@@ -3519,6 +3523,30 @@ function garrisonDefense(b, dt) {
     u.inside = 0;
     u.task = { type: 'defend', home: b.id };
     u.path = null;
+  }
+}
+
+/** The nearest enemy a sortie from garrison b would go after (within SORTIE_REACH of it), or null. */
+function sortieTarget(b) { return nearestEnemyBot(b.owner, b.x + 0.5, b.y + 0.5, SORTIE_REACH, true, true, true); }
+
+/**
+ * A sortie you order: every warbot with Ammo in garrison b (those stationed there too) goes out to fight
+ * the enemies near it, and comes back in once it's clear. Returns how many went.
+ */
+function sortieNow(b) {
+  let n = 0;
+  for (let u = takeArmed(b, true); u; u = takeArmed(b, true)) { u.inside = 0; u.task = { type: 'defend', home: b.id }; u.path = null; u.march = 0; n++; }
+  return n;
+}
+
+/** Set garrison b to hold (or not). Holding, its warbots out defending it come straight back in, without stopping to fight. */
+function setHold(b, on) {
+  b.hold = on ? true : undefined;
+  if (!on) return;
+  for (const u of S.bots) {
+    if (u.dead || u.owner !== b.owner || u.type !== 'warbot' || u.inside || !u.task || u.task.type !== 'defend' || u.task.home !== b.id) continue;
+    u.task = { type: 'garrison', bld: b.id }; b.garInc = (b.garInc || 0) + 1;
+    u.fight = 0; u.path = null; u.march = S.time + MARCH_MAX;
   }
 }
 
@@ -4211,7 +4239,7 @@ function warbotAct(u, dt) {
       foe = nearestEnemyBot(u.owner, u.x, u.y, rally ? 3.5 : 2.8, true, defending, true);
       if (!foe && defending) {
         const h = getE(t.home);
-        if (h) foe = nearestEnemyBot(u.owner, h.x + 0.5, h.y + 0.5, 6.5, true, true, true);
+        if (h) foe = nearestEnemyBot(u.owner, h.x + 0.5, h.y + 0.5, SORTIE_REACH, true, true, true);
       }
       // A foe it gave up chasing is left alone, unless it comes close enough to shoot.
       if (foe && foe.id === u.ignoreFoe && S.time < u.ignoreUntil && dist2(foe.x, foe.y, u.x, u.y) > WARBOT_RANGE_BLOCKED * WARBOT_RANGE_BLOCKED) foe = null;

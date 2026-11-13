@@ -520,6 +520,7 @@ const BREACH_PER_ARMOR = 1;
 // is still inside instead of killing them.
 const MISSILE_FLOOR = 0.35;
 const SORTIE_ARMOR = 0.25;
+const SORTIE_REACH = 6.5; // guards out on a sortie fight enemies within this of their garrison
 const DEFAULT_SIZE = { versus: 1, colony: 3 };
 const DEFAULT_ROUGH = 2;
 const DEFAULT_RICH = 2;

@@ -2702,7 +2702,8 @@ function onMapTap(i, j, wx, wy) {
     else if (canRoad(0, i, j) || draftBridge(t)) {
       draftOp(stroke, t, 'add');
       if (crossTile(t)) note = `${CROSS[S.terrain[t]].name} tile: ${costText(crossCost(t))}${bridgeMul(t) > 1 ? ' (far from shore: bridges cost more out here)' : ''}.`;
-      else if (S.res[t]) note = `Workers will clear the ${RES[S.res[t]].name.toLowerCase()} (${ROAD_CLEAR}× Cement).`;
+      else if (roadClears(t)) note = `Workers will clear the ${RES[S.res[t]].name.toLowerCase()} (${ROAD_CLEAR}× Cement).`;
+      else if (S.res[t] === R_OIL) note = 'The oil seep stays underground, under the road: take the road up later and you can still pump it.';
     } else { sfx('error'); showRoadBanner(S.owner[t] >= 0 && S.owner[t] !== 0 ? 'A rival holds that ground: roads only run on yours or no-one\'s.' : crossTile(t) ? 'A bridge has to start from your shore, your road or the end of a bridge.' : 'Your bots can\'t reach there yet: it\'s across water or a cliff from your land.'); return; }
     if (stroke.length) d.strokes.push(stroke);
     sfx('click');
@@ -2855,7 +2856,7 @@ function draftSummary() {
   for (const t of d.add) {
     if (S.road[t] || S.plan[t] || d.ramps.has(t)) continue; // (a planned Ramp is the road there)
     add++;
-    if (crossTile(t)) cross++; else if (S.res[t]) clear++;
+    if (crossTile(t)) cross++; else if (roadClears(t)) clear++;
     const c = roadTileCost(t);
     for (const g in c) cost[g] = (cost[g] || 0) + c[g];
   }
@@ -3634,7 +3635,12 @@ function openBuildingSheet(b) {
         (def.bunker ? '' : `<div class="section-label">Keep here</div>
         <div class="seg" id="sh-keepw"><button data-v="auto">Auto (${b.type === 'lander' ? 1 : S.players[0].keepW ?? 0})</button><button data-v="0">0</button><button data-v="1">1</button><button data-v="2">2</button><button data-v="5">5</button><button data-v="${def.garrison}">${def.garrison}</button></div>
         <p class="hint">${b.type === 'lander' ? 'Warbots the Command Base always keeps at home: attacks, rallies and stationing never take the last of them.'
-          : 'Warbots stationed here: your Command Base sends them, and replaces any that are lost. Attacks and rally flags use them once the Command Base has none to spare, and they come back here when you call them back (or after defending it). <i>Auto</i> follows the setting for every Outpost in Army.'}</p>`);
+          : 'Warbots stationed here: your Command Base sends them, and replaces any that are lost. Attacks and rally flags use them once the Command Base has none to spare, and they come back here when you call them back (or after defending it). <i>Auto</i> follows the setting for every Outpost in Army.'}</p>`) +
+        // Whether its warbots go out by themselves against enemies close by (a Bunker's and a Keep's fire from cover instead).
+        (def.bunker || def.keep ? '' : `<div class="section-label">When enemies come near</div>
+        <div class="seg" id="sh-hold"><button data-v="0">Go out and fight</button><button data-v="1">Hold inside</button></div>
+        <p class="hint" id="sh-hold-hint"></p>
+        <button class="btn" id="sh-sortie">Send them out to fight</button>`);
     }
     if (def.lab && b.built) html += '<div class="section-label">Research</div><div id="sh-research"></div>';
     if (b.type === 'foundry' && b.built) {
@@ -3767,6 +3773,13 @@ function openBuildingSheet(b) {
     };
     if ($('sh-gprio')) for (const btn of $('sh-gprio').children) btn.onclick = () => { b.gprio = btn.dataset.v === 'normal' ? undefined : btn.dataset.v; sfx('click'); refreshSheet(); };
     if ($('sh-keepw')) for (const btn of $('sh-keepw').children) btn.onclick = () => { b.keepW = btn.dataset.v === 'auto' ? undefined : +btn.dataset.v; b.stockT = 0; sfx('click'); refreshSheet(); };
+    if ($('sh-hold')) for (const btn of $('sh-hold').children) btn.onclick = () => { setHold(b, btn.dataset.v === '1'); sfx('click'); refreshSheet(); };
+    if ($('sh-sortie')) $('sh-sortie').onclick = () => {
+      const n = sortieNow(b);
+      sfx('click');
+      toast(n ? `${n} warbot${n === 1 ? '' : 's'} going out to fight: they come back in once it's clear.` : 'No warbots with Ammo inside to send out.', n ? 'good' : 'warn');
+      refreshSheet();
+    };
     if ($('sh-callw')) $('sh-callw').onclick = () => {
       const r = callWorker(0, b);
       if (r.u) { sfx('order'); toast(r.already ? 'A worker is already on the way.' : 'A worker is on the way.', 'info'); addFx('ring', r.u.x, r.u.y, { color: '#ffe45a' }); }
@@ -4089,6 +4102,15 @@ function refreshBuildingSheet(b) {
   if ($('sh-gprio')) for (const btn of $('sh-gprio').children) btn.classList.toggle('on', btn.dataset.v === (b.gprio || 'normal'));
   if ($('sh-rallypost')) { const on = S.players[0].rallyPost === b.id; $('sh-rallypost').textContent = on ? '⚑ Rally point for new warbots (tap to clear)' : 'Make this the rally point for new warbots'; $('sh-rallypost').classList.toggle('primary', on); }
   if ($('sh-keepw')) for (const btn of $('sh-keepw').children) btn.classList.toggle('on', btn.dataset.v === (b.keepW === undefined ? 'auto' : String(b.keepW)));
+  if ($('sh-hold')) {
+    for (const btn of $('sh-hold').children) btn.classList.toggle('on', (btn.dataset.v === '1') === !!b.hold);
+    $('sh-hold-hint').textContent = b.hold
+      ? 'Holding: its warbots stay inside whatever comes near, until you send them out with the button below (if it falls, they scramble out). Attack orders and rally flags can still take them.'
+      : 'Its warbots go out by themselves to fight enemy warbots and creatures that come near, and come back in once it\'s clear (every one of them when it\'s about to fall).';
+    const armed = armedIn(b), foe = sortieTarget(b), sb = $('sh-sortie');
+    sb.disabled = !armed || !foe;
+    sb.textContent = !armed ? 'Send them out to fight (no armed warbots inside)' : !foe ? 'Send them out to fight (no enemies near it)' : `Send ${armed} out to fight`;
+  }
   if ($('sh-st-n')) {
     const avail = stationAvailable(0, b), coming = b.garInc || 0;
     UI.stationN = clamp(UI.stationN || 0, avail ? 1 : 0, avail);

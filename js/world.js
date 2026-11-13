@@ -2333,7 +2333,7 @@ function canPlace(owner, type, i, j, skipBlockCheck) {
   if (def.nuke && !nukeOn()) return { ok: false, reason: 'Only in a Nuclear race.' };
   if (def.pump) {
     if (S.res[t] !== R_OIL) return { ok: false, reason: 'Build an Oil Pump right on top of an oil seep.' };
-  } else if (S.res[t]) return { ok: false, reason: 'Clear the resources here first.' };
+  } else if (S.res[t] && !(S.res[t] === R_OIL && (S.road[t] || S.plan[t]))) return { ok: false, reason: 'Clear the resources here first.' }; // (oil under a road stays underground: the road rules below decide)
   if (S.bAt[t]) return { ok: false, reason: 'There is already a building here.' };
   if (runwayAt(t)) return { ok: false, reason: 'That\'s an Airfield\'s runway: keep it clear.' };
   if (def.colony && (S.mode !== 'colony' || S.mission)) return { ok: false, reason: 'Only in Colony free play.' };
@@ -2541,8 +2541,11 @@ function roadTileMul(t) {
   if (S.road[t] || S.plan[t]) return 0;
   const c = CROSS[S.terrain[t]];
   if (c) return (c.cost.cement * bridgeMul(t)) / PAVE[1].cost.cement;
-  return S.res[t] ? ROAD_CLEAR : 1;
+  return roadClears(t) ? ROAD_CLEAR : 1;
 }
+
+/** Does a road laid on tile t clear a resource off it? Not an oil seep: the oil is underground, and stays there under the road (or track). */
+function roadClears(t) { return !!S.res[t] && S.res[t] !== R_OIL; }
 
 /** Is this a naval map (Islands, Lakes): Ports and ships, and long bridges cost more? */
 function navalMap() {
@@ -2661,7 +2664,7 @@ function crossCost(t) {
 function roadTileCost(t) {
   const c = CROSS[S.terrain[t]];
   if (c) return crossCost(t);
-  const mul = S.res[t] ? ROAD_CLEAR : 1, out = {};
+  const mul = roadClears(t) ? ROAD_CLEAR : 1, out = {};
   for (const g in PAVE[1].cost) out[g] = PAVE[1].cost[g] * mul;
   return out;
 }
@@ -2961,7 +2964,7 @@ function roadGoals(owner, except) {
 /*
  * Cheapest road through the owner's land, by Dijkstra: existing road is free, open ground costs 1
  * and resources (which a road clears) ROAD_AVOID, so routes go round fields unless the detour is
- * long. Starting from `seeds`, stopping at the first tile where done(t) holds (or exploring
+ * long (an oil seep a road would only cover, but it couldn't be pumped till the road went). Starting from `seeds`, stopping at the first tile where done(t) holds (or exploring
  * everything if done is null). Returns { cost, prev, end }.
  */
 const ROAD_AVOID = 10;
@@ -3650,7 +3653,7 @@ function railBlocked(owner, t) {
     else if (!reachZone(owner, t)) return 'Your bots can\'t reach there yet.';
   }
   if (S.bAt[t] && !(via && via.type === 'viaduct') && !(via && via.type === 'gate' && via.owner === owner)) return 'There is a building here.'; // track runs through your own Gates
-  if (S.res[t]) return 'Clear the resources here first.';
+  if (S.res[t] && S.res[t] !== R_OIL) return 'Clear the resources here first.'; // (an oil seep stays underground, under the track)
   if (S.tidal && S.tidal[t]) return 'Tidal flats: the sea covers this at high tide.';
   if (scorched(t)) return 'This ground is still scorched.';
   if (runwayAt(t)) return 'That\'s an Airfield\'s runway.';
