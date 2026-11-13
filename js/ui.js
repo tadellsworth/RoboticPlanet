@@ -3970,7 +3970,9 @@ function refreshBuildingSheet(b) {
   const parts = [];
   if (mine && def.lab && $('sh-research')) refreshResearch();
   const gun = mine && b.underFire && !BDEFS[b.type].war ? gunOver(0, b.x, b.y) : null;
+  const foes = mine && !gun && !BDEFS[b.type].war && !(def.staff && b.staff) && foesAt(b); // (a staffed building says so itself)
   $('sh-status').textContent = gun ? `Under enemy fire: an enemy ${BDEFS[gun.type].name} covers it, so your robots keep clear until the gun is destroyed or runs dry.`
+    : foes ? `${S.wildlife ? 'Creatures' : 'Enemy warbots'} about: your workers and haulers keep clear of it until they've gone${S.wildlife ? '' : ' (send warbots to drive them off)'}.`
     : mine ? b.status || '' : (b.built ? '' : 'Construction site');
   if (!b.built) {
     parts.push(`<div class="bar"><div style="width:${Math.round(b.progress * 100)}%"></div></div>`);
@@ -4361,6 +4363,10 @@ function botActivity(u) {
       return 'On patrol';
     })();
     return what + where;
+  }
+  if (u.shyUntil > S.time && gunShy(u) && !(t && t.type === 'staff')) {
+    const who = u.shyOf === 'wild' ? 'creatures' : 'enemy warbots';
+    return t && t.type === 'home' ? `Keeping clear of ${who}: taking cover in storage` : `Keeping clear of ${who}: waiting for them to go`;
   }
   if (t && t.type === 'charge') return u.inside ? 'Recharging its battery' : 'Going to recharge its battery';
   if (t && t.type === 'refuel') return 'Going to fill up with Fuel';
@@ -4874,7 +4880,8 @@ function openPopSheet() {
 }
 
 /** What worker (or other civilian bot) u is doing, as a key: running, carrying, building, charging, repairing or free. */
-function botActivity(u) {
+/** What bot u is up to, for the Workers view's colours (a WORKER_VIEW key). */
+function workerViewKind(u) {
   const t = u.task, tt = t && t.type;
   if (tt === 'charge' || tt === 'refuel' || (u.inside && insideCharger(u) && !tt && (u.bat ?? 100) < 99)) return 'charging';
   if (tt === 'haul') return 'carrying';

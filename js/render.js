@@ -5165,7 +5165,7 @@ function drawWorkerView(ctx, ox, oy, z) {
   for (const u of S.bots) {
     if (u.dead || u.owner !== 0 || u.type !== 'worker') continue;
     if (u.inside) { inside.set(u.inside, (inside.get(u.inside) || 0) + 1); continue; }
-    const act = botActivity(u), col = WORKER_VIEW[act][0], x = ox + u.x * z, y = oy + u.y * z;
+    const act = workerViewKind(u), col = WORKER_VIEW[act][0], x = ox + u.x * z, y = oy + u.y * z;
     const t = u.task, goal = t && (getE(t.bld) || getE(t.site) || null);
     if (goal && !goal.dead) {
       ctx.strokeStyle = col; ctx.globalAlpha = 0.45; ctx.lineWidth = Math.max(1, z * 0.04); ctx.setLineDash([z * 0.15, z * 0.12]);
@@ -6101,7 +6101,7 @@ function renderMinimap() {
   }
   if (R.workerView) for (const u of S.bots) { // the workers view: your Workers, in the colour of what they're doing
     if (u.dead || u.inside || u.owner !== 0 || u.type !== 'worker') continue;
-    ctx.fillStyle = WORKER_VIEW[botActivity(u)][0];
+    ctx.fillStyle = WORKER_VIEW[workerViewKind(u)][0];
     ctx.fillRect(u.x * sx - 1.5, u.y * sy - 1.5, 3, 3);
   }
   for (const b of S.buildings) {
