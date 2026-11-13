@@ -1453,7 +1453,7 @@ function dispatch(p) {
     if (u.type === 'hauler') haulers++;
     if (BOTS[u.type].rail) trains++;
     if (BOTS[u.type].sea && BOTS[u.type].haul) ships++;
-    if (BOTS[u.type].tanker) { tankers++; for (const n of botNets(u)) tankNets.add(n); }
+    if (BOTS[u.type].tanker) { tankers++; for (const n of botGroups(u)) tankNets.add(n); } // (by road, and ferry lines: a Tanker rides the ferry)
     else if (BOTS[u.type].truck) { trucks++; if (!BOTS[u.type].train) vans++; }
     if (u.type !== 'worker') continue;
     workers++;
@@ -1473,7 +1473,25 @@ function dispatch(p) {
   const zoneAt = (x, y) => S.zone[tIdx(Math.floor(x), Math.floor(y))];
   const footLinked = (a, b) => dist2(a.x, a.y, b.x, b.y) <= FOOT_CARRY * FOOT_CARRY && !onHomeNet(a) && !onHomeNet(b) && zoneAt(a.x, a.y) === zoneAt(b.x, b.y);
   const linked = (a, b) => P.noHaulers || roadLinked(a, b) || footLinked(a, b);
-  for (const b of blds) b.unlinked = !P.noHaulers && needsRoad(b) && !onHomeNet(b) && !b.airSupply && !convLinked(b);
+  // "No road to storage": a building Haulers can't get to from home, by road or by road and a working ferry line,
+  // that isn't supplied by air or a Rail Station's conveyor, or near storage that is (off the road network Workers
+  // carry goods from it by hand, FOOT_CARRY). A Port on the same water as one joined to home is supplied by sea,
+  // once you have a Container Ship.
+  const homeG = [];
+  for (const L of S.buildings) { // (every Command Base of p's, even one in a rival gun's reach, like homeNets)
+    if (L.dead || L.owner !== p || L.type !== 'lander') continue;
+    for (const c of buildingGroups(L)) if (homeG.indexOf(c) < 0) homeG.push(c);
+  }
+  const onHomeG = (b) => buildingGroups(b).some((c) => homeG.indexOf(c) >= 0);
+  const cargoShips = S.bots.some((u) => !u.dead && u.owner === p && BOTS[u.type].sea && BOTS[u.type].haul && !BOTS[u.type].tankShip);
+  const mine = S.buildings.filter((s) => !s.dead && s.owner === p); // (those in a rival gun's reach too: no flicker)
+  const homePorts = cargoShips ? mine.filter((s) => s.built && BDEFS[s.type].port && onHomeG(s)) : [];
+  const bySea = (b) => b.built && BDEFS[b.type].port && homePorts.some((h) => h !== b && seaLinked(h, b));
+  const hubs = mine.filter((s) => s.built && storeAccepts(s) && !onHomeNet(s) && (s.airSupply || onHomeG(s) || bySea(s)));
+  for (const b of blds) {
+    b.unlinked = !P.noHaulers && needsRoad(b) && !onHomeG(b) && !b.airSupply && !convLinked(b) && !bySea(b) &&
+      !hubs.some((s) => s !== b && footLinked(s, b));
+  }
   const minFree = siteCount(p) > 0 ? MIN_FREE_WORKERS : 1;
   // Can this colony charge anywhere right now (a Fuel Station with Fuel)? Can its trucks fill up?
   P.canCharge = blds.some((b) => b.built && BDEFS[b.type].charger && !chargerDry(b));
@@ -1547,7 +1565,7 @@ function dispatch(p) {
   };
   function tankerReach(b) {
     if (!tankNets.size) return false;
-    for (const n of buildingNets(b, true)) if (tankNets.has(n)) return true;
+    for (const n of buildingGroups(b, true)) if (tankNets.has(n)) return true;
     return false;
   }
 
@@ -2250,11 +2268,21 @@ function botNets(u) {
   return [];
 }
 
-/** Can bot u reach building b along roads (and, unless it's a truck, Ropeways)? */
+/** Can bot u reach building b along roads (and, unless it's a truck, Ropeways), and working ferry lines (see netGroups)? */
 function botLinked(u, b) {
-  const a = botNets(u), n = buildingNets(b, !!BOTS[u.type].truck);
+  const a = botGroups(u), n = buildingGroups(b, !!BOTS[u.type].truck);
   for (const c of a) if (n.indexOf(c) >= 0) return true;
   return false;
+}
+
+/** The groups of road networks (joined by ferry lines, see netGroups) bot u is on, or in the building it's inside. */
+function botGroups(u) {
+  const tr = !!BOTS[u.type].truck;
+  if (u.inside) { const b = getE(u.inside); return b ? buildingGroups(b, tr) : []; }
+  const t = tIdx(Math.floor(u.x), Math.floor(u.y));
+  if (S.road[t]) return [netGroup(tr ? roadNet().compT[t] : roadNet().comp[t], tr)];
+  if (S.bAt[t]) { const b = getE(S.bAt[t]); return b ? buildingGroups(b, tr) : []; }
+  return [];
 }
 
 /** Buildings bots recently failed to reach are skipped by the dispatcher for a few seconds. */
@@ -8023,6 +8051,32 @@ function orderSail(owner, f, i, j) {
   return '';
 }
 
+/**
+ * Ferry f, tied up at a Port, sails out onto the open water just off it and waits there for your orders, where you
+ * can see it and take charge of it on the map (see orderSail). Returns '' or why not.
+ */
+function sailOut(owner, f) {
+  if (!f || f.dead || f.owner !== owner || !BOTS[f.type].ferry) return 'Pick one of your Ferries.';
+  if (f.landing) return 'That Ferry is out on a voyage: wait for it to finish.';
+  const port = f.inside ? getE(f.inside) : null;
+  if (!port) return 'It is already out on the water.';
+  // Straight out from one of the Port's docks, as far as 3 tiles where the water allows.
+  const comp = seaNet().comp, comps = shipComps(f);
+  let best = -1, far = 0;
+  for (const d of portDocks(port.x, port.y)) {
+    if (!comps.includes(comp[d])) continue;
+    const di = (d % S.W) - port.x, dj = ((d / S.W) | 0) - port.y;
+    for (let k = 3; k >= 1; k--) {
+      const i = port.x + di * k, j = port.y + dj * k;
+      if (!inMap(i, j) || S.terrain[tIdx(i, j)] !== T_WATER || comp[tIdx(i, j)] !== comp[d]) continue;
+      if (k > far) { far = k; best = tIdx(i, j); }
+      break;
+    }
+  }
+  if (best < 0) return 'There is no open water off this Port.';
+  return orderSail(owner, f, best % S.W, (best / S.W) | 0);
+}
+
 /** Free seats on Ferry f. */
 function ferrySeats(f) { let n = FERRY_SEATS; for (const v of ferryAboard(f)) n -= seatsFor(v); return n; }
 
@@ -8435,11 +8489,36 @@ function airWant(b) {
       if (!base) continue;
       let w = m.get(base.id);
       if (!w) m.set(base.id, (w = {}));
-      for (const [g, n] of needsOf(c)) if (n >= 1) w[g] = Math.min(AIR_KEEP, (w[g] || 0) + Math.ceil(n));
+      for (const [g, n] of airNeeds(c)) if (n >= 1) w[g] = Math.min(AIR_KEEP, (w[g] || 0) + Math.ceil(n));
     }
     AIRW = { S, tick: S.tick, m };
   }
   return AIRW.m.get(b.id) || null;
+}
+
+/**
+ * What place c, supplied by air, is short of: its own needs and, if it's storage off the road network (a Drop
+ * Outpost, say), those of the buildings round it that Workers serve from it by hand (FOOT_CARRY, same ground, not
+ * supplied by air themselves or reachable from home), less what it already holds beyond its own supply orders.
+ */
+function airNeeds(c) {
+  const own = needsOf(c);
+  if (!BDEFS[c.type].store || onHomeNet(c)) return own;
+  const extra = {}, zc = S.zone[tIdx(c.x, c.y)];
+  for (const d of S.buildings) {
+    if (d === c || d.dead || d.owner !== c.owner || d.airSupply || BDEFS[d.type].store || !needsRoad(d)) continue;
+    if (dist2(d.x, d.y, c.x, c.y) > FOOT_CARRY * FOOT_CARRY || S.zone[tIdx(d.x, d.y)] !== zc || onHomeGroup(d)) continue;
+    for (const [g, n] of needsOf(d)) if (n >= 1) extra[g] = (extra[g] || 0) + n;
+  }
+  const k = keepOf(c) || {}, out = own.map((o) => o.slice());
+  for (const g in extra) {
+    const spare = Math.max(0, supplyOf(c, g) + (c.inc[g] || 0) - (k[g] || 0));
+    const n = Math.ceil(extra[g] - spare);
+    if (n < 1) continue;
+    const e = out.find((o) => o[0] === g);
+    if (e) e[1] = Math.max(0, e[1]) + n; else out.push([g, n]);
+  }
+  return out;
 }
 
 /**
@@ -8700,7 +8779,7 @@ function airSupplyRun(u, b) {
     if (S.bots.some((v) => v !== u && !v.dead && v.mission && v.mission.to === c.id)) continue; // one plane at a time
     const load = {};
     let n = 0, short = 0;
-    for (const [g, k] of needsOf(c)) {
+    for (const [g, k] of airNeeds(c)) {
       const want = Math.floor(k);
       if (want < 1) continue;
       short += want;

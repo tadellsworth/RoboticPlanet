@@ -1140,7 +1140,7 @@ const SHEET_KEYS = {
   'sh-send': 'q', 'sh-bombard': 'q', 'sh-fire': 'f', 'sh-aim': 'f', 'sh-rgo': 'g', 'sh-crawl': 'g', 'sh-deploy': 'e',
   'sh-gate': 'g', 'sh-move': 'm', 'sh-pack': 'm', 'sh-pause': 'p', 'sh-fixbtn': 'e', 'sh-layroad': 'r', 'sh-pipe': 'k',
   'sh-recall': 'c', 'sh-unpost': 'c', 'rl-recall': 'c', 'sh-land': 'l', 'sh-st-send': 'v', 'nk-evac': 'v',
-  'sh-bomb': 'z', 'sh-strike': 'q', 'sh-fsail': 'g', 'sh-fembark': 'e', 'sh-fland': 'l', 'sh-fhome': 'h', 'sh-found': 'p',
+  'sh-bomb': 'z', 'sh-strike': 'q', 'sh-fsail': 'g', 'sh-fembark': 'e', 'sh-fland': 'l', 'sh-fhome': 'h', 'sh-found': 'p', 'sh-fout': 'o',
   // The Army panel (Q): its orders, the group size, and its Air tab.
   'ar-attack': 'q', 'ar-hold': 'g', 'ar-station': 'v', 'ar-recall': 'c', 'ar-select': 'f', 'ar-n2': '1', 'ar-n4': '2', 'ar-n8': '3', 'ar-nall': '4',
   'ar-tab-army': 'z', 'ar-tab-air': 'x', 'ar-strike': 'e',
@@ -1385,7 +1385,17 @@ function onSelectBox(box, add) {
 
 /** Right-click: order the selected warbots to whatever is under the pointer. */
 function onMapCommand(i, j, wx, wy) {
-  if (!UI.inGame || UI.paused || !UI.sel.length || R.mode !== 'normal') return;
+  if (!UI.inGame || UI.paused || R.mode !== 'normal') return;
+  // Your Ferry, its panel open (nothing else picked): right-click open water, a spot on the shore or one of your Ports to sail it there.
+  const fpick = !UI.sel.length && UI.sheetKind === 'bot' ? getE(UI.sheetFor) : null;
+  if (fpick && !fpick.dead && fpick.owner === 0 && BOTS[fpick.type].ferry) {
+    const why = orderSail(0, fpick, i, j);
+    if (why) { sfx('error'); toast(why, 'warn'); return; }
+    sfx('order'); addFx('ring', i + 0.5, j + 0.5, { color: '#7dffa0' });
+    refreshSheet();
+    return;
+  }
+  if (!UI.sel.length) return;
   const b = buildingAtTap(i, j, wx, wy);
   let n = 0, what = '';
   // Your Ferry, off a shore: the selected warbots walk to the shore beside it and board.
@@ -2113,7 +2123,7 @@ function portShipsText(b) {
 
 /** The Port panel's ship sections: ships here, its ferry line, and a beach landing. */
 function portSection(b) {
-  let html = '<div class="section-label">Ships</div><p class="hint" id="sh-port-ships"></p>';
+  let html = '<div class="section-label">Ships</div><div class="actions" id="sh-port-shipbtns"></div><p class="hint" id="sh-port-ships"></p>';
   const other = b.ferryTo ? getE(b.ferryTo) : null;
   const ferries = S.bots.filter((u) => !u.dead && u.owner === b.owner && BOTS[u.type].ferry);
   html += '<div class="section-label">Ferry line</div><div id="sh-ferry">';
@@ -4176,6 +4186,17 @@ function refreshBuildingSheet(b) {
   }
   if ($('sh-land-n')) $('sh-land-n').textContent = UI.landN || 3;
   if ($('sh-port-ships')) $('sh-port-ships').textContent = portShipsText(b);
+  // Your ships tied up here, one button each: tap to take charge of it (it can't be tapped on the map while it's inside).
+  const sbtn = $('sh-port-shipbtns');
+  if (sbtn) {
+    const here = b.owner === 0 ? S.bots.filter((u) => !u.dead && u.owner === 0 && BOTS[u.type].sea && u.inside === b.id) : [];
+    const key = here.map((u) => u.id).join(',');
+    if (sbtn.dataset.key !== key) {
+      sbtn.dataset.key = key;
+      sbtn.innerHTML = here.map((u) => `<button class="btn small" data-ship="${u.id}">${BOTS[u.type].name} ›</button>`).join('');
+      for (const btn of sbtn.querySelectorAll('button')) btn.onclick = () => { const u = getE(+btn.dataset.ship); if (u && !u.dead) { sfx('click'); openBotSheet(u); } };
+    }
+  }
   if ($('sh-air-planes')) { const ps = basePlanes(b).filter((u) => !BOTS[u.type].bomber); $('sh-air-planes').textContent = ps.length ? ps.map((u) => `Its plane is ${planeStatus(u)}.`).join(' ') : 'None based here: order one in the hangar below.'; }
   if ($('sh-air-bombers')) {
     const bs = basePlanes(b).filter((u) => BOTS[u.type].bomber), el = $('sh-air-bombers');
@@ -4374,6 +4395,9 @@ function refreshBombButton(t) {
       : any.some((v) => v.mission || v.flight) ? 'Your bombers are out on sorties.' : any.some((v) => v.rearmUntil > S.time) ? 'Your bombers are rearming.' : 'Out of your bombers\' reach.';
 }
 
+/** Does bot u run on a fuel tank, filled with Fuel (trucks, ships and planes), rather than a battery? */
+function tankOf(u) { const bt = BOTS[u.type]; return !!(bt.truck || bt.sea || bt.air); }
+
 function openBotSheet(u) {
   R.selected = 0; R.selTile = -1; UI.selBot = u.id;
   const html = `<div class="sheet-title"><div><h3>${BOTS[u.type].name}</h3>
@@ -4383,10 +4407,11 @@ function openBotSheet(u) {
     ${u.owner === 0 && u.type === 'warbot' ? '<button class="btn big" id="sh-recall" hidden>Call back this squad</button>' : ''}
     ${u.owner === 0 && BOTS[u.type].bomber ? '<button class="btn primary big" id="sh-strike">Pick a target</button>' : ''}
     ${u.owner !== 0 && u.owner >= 0 && !BOTS[u.type].wild && !BOTS[u.type].air && myBombers().length ? '<div class="section-label">Air strike</div><p class="hint" id="sh-bomb-hint"></p><button class="btn big" id="sh-bomb">Bomb it</button>' : ''}
-    ${u.owner === 0 && BOTS[u.type].ferry ? `<div class="actions"><button class="btn primary" id="sh-fsail">Sail somewhere</button><button class="btn" id="sh-fhome">Back to its line</button></div>
+    ${u.owner === 0 && BOTS[u.type].ferry ? `<button class="btn big" id="sh-fout"${u.inside && !u.landing ? '' : ' hidden'}>Sail out of the Port</button>
+      <div class="actions"><button class="btn primary" id="sh-fsail">Sail somewhere</button><button class="btn" id="sh-fhome">Back to its line</button></div>
       <div class="actions"><button class="btn" id="sh-fembark">Take warbots aboard</button><button class="btn" id="sh-fland">Put them ashore</button></div>
       <button class="btn" id="sh-found">Found a Port on another shore</button>
-      <p class="hint"><b>Sail somewhere</b>: it sails to the spot you tap (open water, or right up to a shore) and waits there for your orders. <b>Take warbots aboard</b> loads your warbots standing within ${Math.floor(FERRY_REACH)} tiles of it (with a mouse, select warbots and right-click the Ferry: they walk to the shore beside it and board). <b>Put them ashore</b> lands them on the shore beside it, and it heads home. <b>Found a Port</b>: it loads ${costText(PORT_FOUND.cost)} at its Port and up to ${PORT_FOUND.workers} Workers, and puts up a Port on an empty shore that claims the land round it.</p>` : ''}
+      <p class="hint"><b>Sail out of the Port</b>: tied up, it sails out to wait just off the Port, where you can tap it on the map. <b>Sail somewhere</b>: it sails to the spot you tap (open water, or right up to a shore) and waits there for your orders; with a mouse, right-click the water while its panel is open. <b>Take warbots aboard</b> loads your warbots standing within ${Math.floor(FERRY_REACH)} tiles of it (with a mouse, select warbots and right-click the Ferry: they walk to the shore beside it and board). <b>Put them ashore</b> lands them on the shore beside it, and it heads home. <b>Found a Port</b>: it loads ${costText(PORT_FOUND.cost)} at its Port and up to ${PORT_FOUND.workers} Workers, and puts up a Port on an empty shore that claims the land round it.</p>` : ''}
     ${u.owner === 0 && BOTS[u.type].crawler ? '<div class="actions"><button class="btn primary" id="sh-crawl">Drive somewhere</button><button class="btn" id="sh-deploy">Deploy here</button></div>' : ''}
     ${u.owner === 0 && BOTS[u.type].siege ? `<div class="actions"><button class="btn primary" id="sh-bombard">Bombard a building</button><button class="btn" id="sh-rgo">Drive somewhere</button></div>
       <div class="section-label">While it waits</div><div class="seg" id="sh-stance"><button data-v="fire">Fire at will</button><button data-v="hold">Hold fire</button></div>
@@ -4403,6 +4428,7 @@ function openBotSheet(u) {
     const done = (r, ok) => { if (typeof r === 'string' && r) { sfx('error'); toast(r, 'warn'); } else { sfx('order'); if (ok) toast(ok, 'info'); } refreshSheet(); };
     $('sh-fsail').onclick = () => { sfx('click'); closeSheet(); setMode('fsail'); UI.ferry = u.id; showBanner('Tap where the <b>Ferry</b> should sail: open water, a spot on the shore (it comes right up to it), or one of your Ports.', null, 'Cancel'); };
     $('sh-fhome').onclick = () => { ferryBack(u); done('', 'The Ferry is heading back to its Port and its line.'); };
+    $('sh-fout').onclick = () => { done(sailOut(0, u), 'The Ferry is sailing out to wait just off the Port: tap it on the map (or right-click the water with its panel open) to send it somewhere.'); };
     $('sh-fembark').onclick = () => { const r = embarkWarbots(0, u, null); done(r, typeof r === 'number' ? `${r} warbot${r === 1 ? '' : 's'} came aboard.` : ''); };
     $('sh-fland').onclick = () => { done(disembark(0, u), 'Put ashore: they hold the beach, and the Ferry heads home.'); };
     $('sh-found').onclick = () => { sfx('click'); startLanding(u, 0, 'port'); };
@@ -4955,18 +4981,19 @@ function refreshSheet() {
     refreshBuildingSheet(b);
   } else if (UI.sheetKind === 'bot') {
     const u = getE(UI.sheetFor);
-    if (!u || u.inside) { closeSheet(); return; }
+    if (!u || (u.inside && !BOTS[u.type].sea)) { closeSheet(); return; } // (a ship tied up at a Port keeps its panel)
     $('sh-status').textContent = botActivity(u);
     refreshBombButton(u);
     const bat = Math.round(u.bat ?? 100);
     $('sh-dyn').innerHTML = `<div class="kv"><span>Health</span><span>${Math.ceil(u.hp)} / ${u.maxHp}</span></div>` +
-      `<div class="kv"><span>${BOTS[u.type].truck ? 'Fuel tank' : 'Battery'}</span><span>${bat}%${bat < BATTERY.critical ? (BOTS[u.type].truck ? ' (empty: crawling)' : ' (flat: slow and weak)') : bat < BATTERY.low ? ' (low)' : ''}</span></div>` +
+      `<div class="kv"><span>${tankOf(u) ? 'Fuel tank' : 'Battery'}</span><span>${bat}%${bat < BATTERY.critical ? (tankOf(u) ? ' (empty: crawling)' : ' (flat: slow and weak)') : bat < BATTERY.low ? ' (low)' : ''}</span></div>` +
       `<div class="bar battery"><div style="width:${bat}%;background:${bat < BATTERY.critical ? '#ff4d4d' : bat < BATTERY.low ? '#ffb347' : '#7ee08a'}"></div></div>` +
       (u.type === 'warbot' ? `<div class="kv"><span>Ammo</span><span>${u.ammo ?? WARBOT_AMMO} / ${WARBOT_AMMO} shots${!u.ammo ? ' (out: can\'t fight until it reloads)' : ''}</span></div>` : '') +
       (BOTS[u.type].siege ? `<div class="kv"><span>Shells</span><span>${u.rockets ?? ROCKET.mag} / ${ROCKET.mag}${!(u.rockets ?? ROCKET.mag) ? ` (haulers bring Ammo while it's dug in on your ground near a road; or it reloads ${ROCKET.ammo} Ammo at a garrison or storage)` : ''}</span></div><div class="kv"><span>Each shell</span><span>${ROCKET.damage} damage, ${ROCKET.damage * ROCKET.fortMul} to defences; one every ${ROCKET.cycle}s</span></div><div class="kv"><span>Reach</span><span>${ROCKET.min} to ${ROCKET.range} tiles</span></div>` : '') +
       (u.carry ? `<div class="kv"><span>Carrying</span><span>${cargoList(u).map(([g, n]) => goodTag(g, (n > 1 ? n + ' × ' : '') + GOOD[g].name)).join(' ')}</span></div>` : '') +
       (u.cargo && Object.keys(u.cargo).length ? `<div class="section-label">On board</div><div class="goodlist">${Object.keys(u.cargo).map((g) => goodTag(g, `${u.cargo[g]} ${GOOD[g].name}`)).join('')}</div>` : '');
     if ($('sh-recall')) $('sh-recall').hidden = !(u.task && u.task.type === 'hold');
+    if ($('sh-fout')) $('sh-fout').hidden = !u.inside || !!u.landing;
   } else if (UI.sheetKind === 'move') {
     const t = UI.sheetFor, i = t % S.W, j = (t / S.W) | 0;
     const avail = refreshMoveStepper(i, j);

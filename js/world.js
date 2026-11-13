@@ -2496,8 +2496,9 @@ function placeSite(owner, type, i, j, cost, fromStore) {
   // computer pays now; your plans queue and are paid for as the goods come in (settlePlans).
   if (cost) b.cost = cost;
   if (fromStore) b.fromStore = true;
-  // A site in the land of a Drop Outpost no road reaches is supplied by air, like the outpost.
-  if (!storeFunded(b) && S.buildings.some((d) => !d.dead && d.owner === owner && d.airSupply && BDEFS[d.type].airdrop && dist2(d.x, d.y, i, j) <= (BDEFS[d.type].terr + 1) ** 2 && !onHomeNet(d))) b.airSupply = true;
+  // A site in the land of a place supplied by air (a Drop Outpost, or an Outpost you set to it) that no road or
+  // ferry line from home reaches is supplied by air too.
+  if (!storeFunded(b) && S.buildings.some((d) => !d.dead && d.owner === owner && d.airSupply && BDEFS[d.type].terr && dist2(d.x, d.y, i, j) <= (BDEFS[d.type].terr + 1) ** 2 && !onHomeGroup(d))) b.airSupply = true;
   if (storeFunded(b)) {
     if (S.players[owner].ai) { if (!payInto(b)) queuePlan('b', b.id, owner); }
     else { queuePlan('b', b.id, owner); settlePlans(); } // what storage has goes in now (after older plans)
@@ -2895,9 +2896,59 @@ function roadNet() {
 /** Can a Freight Truck or Road Train drive between buildings a and b (by road, not by ropeway)? */
 function truckLinked(a, b) {
   if (a === b) return true;
-  const na = buildingNets(a, true), nb = buildingNets(b, true);
+  const na = buildingGroups(a, true), nb = buildingGroups(b, true);
   for (const c of na) if (nb.indexOf(c) >= 0) return true;
   return false;
+}
+
+/*
+ * Road networks joined by a working ferry line (see ferryLines) count as one for getting goods about: a Ferry
+ * carries Haulers, Workers and trucks across. Each line is a node both its Ports touch (roads round them or
+ * not), joined with the road networks round both Ports; a network's group is the lowest id among those
+ * joined. Worked out once a tick, separately for trucks (their networks leave out Ropeways).
+ */
+const FERRY_NODE = 1 << 24; // above any road network's id
+let _ngTick = -1, _ngFor = null, _ngVer = -1, _ng = null;
+function netGroups() {
+  if (_ngFor === S && _ngTick === S.tick && _ngVer === (S.roadVer || 0) && _ng) return _ng; // (roads renumber when they change)
+  const out = { g: new Map(), gT: new Map(), port: new Map(), bg: new Map(), bgT: new Map(), find: null };
+  const lines = typeof ferryLines === 'function' && S.bots ? ferryLines() : null;
+  if (lines && lines.size) {
+    const find = (m, c) => { let r = c; while (m.has(r) && m.get(r) !== r) r = m.get(r); return r; };
+    const join = (m, a, b) => { const ra = find(m, a), rb = find(m, b); if (ra === rb) return; const lo = Math.min(ra, rb); m.set(Math.max(ra, rb), lo); if (!m.has(lo)) m.set(lo, lo); };
+    for (const [id, tile] of lines) {
+      const a = getE(id), b = getE(S.bAt[tile]);
+      if (!a || !b) continue;
+      const node = FERRY_NODE + Math.min(a.id, b.id);
+      out.port.set(a.id, node);
+      for (const [m, tr] of [[out.g, false], [out.gT, true]]) {
+        if (!m.has(node)) m.set(node, node);
+        for (const c of buildingNets(a, tr)) join(m, node, c);
+      }
+    }
+    out.find = find;
+  }
+  _ngFor = S; _ngTick = S.tick; _ngVer = S.roadVer || 0; _ng = out;
+  return out;
+}
+
+/** Road network c's group (networks joined by ferry lines share one, see netGroups). */
+function netGroup(c, trucks) { const G = netGroups(); return G.find ? G.find(trucks ? G.gT : G.g, c) : c; }
+
+/** The groups building b touches: its road networks' (see netGroups), and its ferry line's if it's a Port on one. */
+function buildingGroups(b, trucks) {
+  const G = netGroups();
+  if (!G.find) return buildingNets(b, trucks);
+  const cache = trucks ? G.bgT : G.bg;
+  let out = b.id ? cache.get(b.id) : null;
+  if (out) return out;
+  const m = trucks ? G.gT : G.g;
+  out = [];
+  for (const c of buildingNets(b, trucks)) { const r = G.find(m, c); if (out.indexOf(r) < 0) out.push(r); }
+  const node = G.port.get(b.id);
+  if (node !== undefined) { const r = G.find(m, node); if (out.indexOf(r) < 0) out.push(r); }
+  if (b.id) cache.set(b.id, out);
+  return out;
 }
 
 /** The road networks touching building b (the road tiles right next to it). */
@@ -2917,10 +2968,10 @@ function buildingNets(b, trucks) {
   return nets;
 }
 
-/** Do buildings a and b share a road network (can haulers carry goods between them)? */
+/** Do buildings a and b share a road network, or networks a ferry line joins (can haulers carry goods between them)? */
 function roadLinked(a, b) {
   if (a === b) return true;
-  const na = buildingNets(a), nb = buildingNets(b);
+  const na = buildingGroups(a), nb = buildingGroups(b);
   for (const c of na) if (nb.indexOf(c) >= 0) return true;
   return false;
 }
@@ -2940,10 +2991,21 @@ function homeNets(owner) {
   return nets;
 }
 
-/** Is building b joined by road to its owner's Command Base network? */
+/** Is building b joined by road to its owner's Command Base network? (Road only: see onHomeGroup for ferry lines too.) */
 function onHomeNet(b) {
   const h = homeNets(b.owner);
   for (const c of buildingNets(b)) if (h.indexOf(c) >= 0) return true;
+  return false;
+}
+
+/** Is building b joined to its owner's Command Base by road, or by road and a working ferry line (see netGroups)? */
+function onHomeGroup(b) {
+  const h = [];
+  for (const L of S.buildings) {
+    if (L.dead || L.owner !== b.owner || L.type !== 'lander') continue;
+    for (const c of buildingGroups(L)) if (h.indexOf(c) < 0) h.push(c);
+  }
+  for (const c of buildingGroups(b)) if (h.indexOf(c) >= 0) return true;
   return false;
 }
 
