@@ -968,7 +968,7 @@ function syncSaved() {
     : `Your game saves itself every ${AUTOSAVE_EVERY} seconds` + (s >= 0 ? ` (last saved ${s < 5 ? 'just now' : s < 60 ? s + ' s ago' : Math.round(s / 60) + ' min ago'})` : '') + '. If it closes, tap Continue on the main menu.';
 }
 
-/* ------------------------------------------------------------------ rival boost (hidden) */
+/* ------------------------------------------------------------------ boosts (hidden) */
 
 function openBoost() {
   if (!UI.inGame || !S) return;
@@ -986,22 +986,39 @@ function closeBoost() {
 }
 
 function renderBoost() {
-  const rivals = boostableRivals(), body = $('bo-body');
-  if (!rivals.length) { body.innerHTML = '<p class="mode-desc">There\'s no rival colony in this game to help.</p>'; return; }
-  body.innerHTML = rivals.map((P) => {
-    const st = PERSONALITIES[P.style];
-    return `<div class="boost-row" data-p="${P.id}"><div class="boost-head"><i class="dot" style="background:${PLAYER_COLORS[P.id]}"></i>` +
-      `<b>${playerName(P.id)}</b>${st ? ' · ' + st.name : ''}<small>${P.boosts ? `boosted ${P.boosts}×` : ''}</small></div>` +
-      `<div class="boost-btns"><button class="btn small" data-k="goods" title="${Object.entries(BOOST.goods).map(([g, n]) => n + ' ' + GOOD[g].name).join(', ')}">Supply drop</button>` +
-      `<button class="btn small" data-k="warbots">+${BOOST.warbots} Warbots</button><button class="btn small" data-k="workers">+${BOOST.workers} Workers</button></div></div>`;
-  }).join('');
-  for (const btn of body.querySelectorAll('button')) {
+  const rivals = boostableRivals(), body = $('bo-body'), me = S.players[0], home = getE(me.lander);
+  // A row of boosts for you or one rival: a supply drop, armed warbots, workers, haulers.
+  const row = (P, label, extra) => `<div class="boost-row${P.id === 0 ? ' boost-you' : ''}" data-p="${P.id}"><div class="boost-head"><i class="dot" style="background:${PLAYER_COLORS[P.id]}"></i>` +
+    `<b>${label}</b>${extra}<small>${P.boosts ? `boosted ${P.boosts}×` : ''}</small></div>` +
+    `<div class="boost-btns"><button class="btn small" data-k="goods" title="${Object.entries(BOOST.goods).map(([g, n]) => n + ' ' + GOOD[g].name).join(', ')}">Supply drop</button>` +
+    (warOn() ? `<button class="btn small" data-k="warbots">+${BOOST.warbots} Warbots</button>` : '') +
+    `<button class="btn small" data-k="workers">+${BOOST.workers} Workers</button><button class="btn small" data-k="haulers">+${BOOST.haulers} Haulers</button></div></div>`;
+  let html = home && !home.dead ? row(me, 'You', '') : '';
+  html += rivals.length ? rivals.map((P) => { const st = PERSONALITIES[P.style]; return row(P, playerName(P.id), st ? ' · ' + st.name : ''); }).join('')
+    : '<p class="mode-desc">There\'s no rival colony in this game.</p>';
+  // Unit types every rival can be stopped making, for the rest of this game.
+  if (rivals.length) {
+    html += `<div class="boost-row ban-row"><div class="boost-head"><b>Rivals can't build</b><small>for the rest of this game</small></div><div class="ban-chips">` +
+      BANNABLE.map((k) => { const on = !!(S.ban && S.ban[k]); return `<button class="btn small ban-chip${on ? ' on' : ''}" data-ban="${k}" aria-pressed="${on}">${on ? '⊘ ' : ''}${BOTS[k].plural}</button>`; }).join('') +
+      '</div><p class="hint">Tap one to stop every rival making it, and again to allow it. Ones they already have carry on; any they had queued are called off.</p></div>';
+  }
+  body.innerHTML = html;
+  for (const btn of body.querySelectorAll('.boost-btns button')) {
     btn.onclick = () => {
       const p = +btn.closest('.boost-row').dataset.p, k = btn.dataset.k, n = boostRival(p, k);
-      const what = k === 'goods' ? 'a supply drop' : `${n} ${k === 'warbots' ? 'armed Warbot' : 'Worker'}${n === 1 ? '' : 's'}`;
-      const msg = n ? `You gave ${playerName(p, true)} ${what}.` : `${playerName(p)} is at its robot limit.`;
+      const what = k === 'goods' ? 'a supply drop' : `${n} ${{ warbots: 'armed Warbot', workers: 'Worker', haulers: 'Hauler' }[k]}${n === 1 ? '' : 's'}`;
+      const msg = !n ? `${p === 0 ? 'You are' : playerName(p) + ' is'} at the robot limit.` : p === 0 ? `You got ${what}.` : `You gave ${playerName(p, true)} ${what}.`;
       $('bo-msg').textContent = msg;
       sfx(n ? 'place' : 'click');
+      renderBoost();
+    };
+  }
+  for (const btn of body.querySelectorAll('.ban-chip')) {
+    btn.onclick = () => {
+      const k = btn.dataset.ban, on = !(S.ban && S.ban[k]);
+      setBan(k, on);
+      $('bo-msg').textContent = on ? `The rivals can't build ${BOTS[k].plural} for the rest of this game.` : `The rivals can build ${BOTS[k].plural} again.`;
+      sfx('click');
       renderBoost();
     };
   }

@@ -3122,7 +3122,7 @@ function produce(b, def, dt) {
     b.status = charging ? 'Worker is recharging' : b.staffInc || op ? 'Worker on the way' : 'Needs a worker';
     return;
   }
-  if (def.bots && b.mode === 'off' && !hasOrders(b)) { b.status = 'Idle: tap it to order bots'; return; }
+  if (def.bots && nextBotKind(b) === 'off') { b.status = 'Idle: tap it to order bots'; return; }
   if (!b.timer && atLimit(b)) {
     const g = limitGood(b);
     b.status = `Stopped: you have ${goodTotal(b.owner, g)} ${GOOD[g].name} (limit ${stockLimit(b)})`;
@@ -3209,16 +3209,19 @@ function moveFoundryOrder(b, k, d, shown) {
  * bot of each type in its build order, or (b.omode 'first') all of the top type first, then the next.
  */
 function nextBotKind(b) {
+  const no = (k) => botBanned(b.owner, k); // (a rival barred from making it, in the hidden menu)
   if (hasOrders(b)) {
     const list = foundryList(b);
-    if (b.omode === 'first') { for (const k of list) if (b.orders[k] > 0) return k; }
+    if (b.omode === 'first') { for (const k of list) if (b.orders[k] > 0 && !no(k)) return k; }
     const start = b.rr || 0;
     for (let i = 0; i < list.length; i++) {
       const k = list[(start + i) % list.length];
-      if (b.orders[k] > 0) return k;
+      if (b.orders[k] > 0 && !no(k)) return k;
     }
   }
-  return b.mode === 'alt' ? b.altNext : b.mode;
+  const m = b.mode === 'alt' ? b.altNext : b.mode;
+  if (m && no(m)) return b.mode === 'alt' && !no('worker') ? 'worker' : 'off';
+  return m;
 }
 
 function spawnFromFoundry(b) {
@@ -3226,7 +3229,7 @@ function spawnFromFoundry(b) {
   const P = S.players[b.owner];
   P.madeBots = P.madeBots || {};
   P.madeBots[kind] = (P.madeBots[kind] || 0) + 1;
-  if (hasOrders(b)) {
+  if (hasOrders(b) && b.orders[kind] > 0) {
     b.orders[kind]--;
     const list = foundryList(b);
     b.rr = (list.indexOf(kind) + 1) % list.length;
@@ -3257,8 +3260,9 @@ function boostableRivals() {
 }
 
 /**
- * The hidden rival boost: give rival p a supply drop ('goods'), armed warbots or workers at its
- * Command Base (BOOST). Returns how many goods or robots it got (robots stop at the bot limit).
+ * The hidden boost menu: give player p (you, or a rival) a supply drop ('goods'), or armed warbots,
+ * workers or haulers at its Command Base (BOOST). Returns how many goods or robots it got (robots stop
+ * at the bot limit).
  */
 function boostRival(p, kind) {
   const P = S.players[p], L = P && getE(P.lander);
@@ -3266,8 +3270,8 @@ function boostRival(p, kind) {
   let n = 0;
   if (kind === 'goods') {
     for (const g in BOOST.goods) { bump(L.stock, g, BOOST.goods[g]); n += BOOST.goods[g]; }
-  } else if (kind === 'warbots' || kind === 'workers') {
-    const type = kind === 'warbots' ? 'warbot' : 'worker', cap = S.mode === 'colony' ? MAX_BOTS_COLONY : MAX_BOTS;
+  } else if (kind === 'warbots' || kind === 'workers' || kind === 'haulers') {
+    const type = { warbots: 'warbot', workers: 'worker', haulers: 'hauler' }[kind], cap = S.mode === 'colony' ? MAX_BOTS_COLONY : MAX_BOTS;
     for (let k = 0; k < BOOST[kind] && botCount(p) < cap; k++) {
       const u = addBot(p, type, L.x, L.y);
       if (type === 'warbot') { u.ammo = WARBOT_AMMO; goGarrison(u); }
@@ -3276,6 +3280,24 @@ function boostRival(p, kind) {
   }
   if (n) { P.boosts = (P.boosts || 0) + 1; addFx('ring', L.x + 0.5, L.y + 0.5, { color: PLAYER_COLORS[p] }); }
   return n;
+}
+
+/** Is player p barred from making bots of `kind` (a rival, with that type stopped in the hidden menu)? */
+function botBanned(p, kind) { return p !== 0 && !!(S.ban && S.ban[kind]); }
+
+/**
+ * Stop (on) or allow again every rival making bots of `kind` for the rest of this game. Stopping it calls off
+ * what they have queued of it, at a Bot Foundry or a yard (parts already put in are kept for later).
+ */
+function setBan(kind, on) {
+  S.ban = S.ban || {};
+  if (!on) { delete S.ban[kind]; return; }
+  S.ban[kind] = true;
+  for (const b of S.buildings) {
+    if (b.dead || b.owner === 0) continue;
+    if (b.orders && b.orders[kind]) { delete b.orders[kind]; if (!hasOrders(b)) delete b.orders; }
+    if (b.yard && b.yard[kind]) { delete b.yard[kind]; if (!hasYardOrders(b)) delete b.yard; }
+  }
 }
 
 /**
@@ -7268,7 +7290,7 @@ function hasYardOrders(b) {
 
 /** What yard b builds next: the first kind on its list with an order (YARD; BDEFS[type].yard). */
 function nextYardKind(b) {
-  for (const k of BDEFS[b.type].yard) if (b.yard && b.yard[k] > 0) return k;
+  for (const k of BDEFS[b.type].yard) if (b.yard && b.yard[k] > 0 && !botBanned(b.owner, k)) return k;
   return null;
 }
 

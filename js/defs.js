@@ -586,13 +586,18 @@ const EVAC_MARGIN = 1.5; // an evacuation clears this much beyond the blast radi
 const PLAYER_COLORS = ['#38d4ff', '#ff5a6e', '#5be06c', '#b36bff'];
 const RIVAL_NAMES = ['', 'Red', 'Green', 'Purple'];
 /**
- * The hidden rival boost (tap the clock three times, or press ` on a keyboard): for a game you're
- * winning too easily. Each button gives one rival this much, at its Command Base.
+ * The hidden boost menu (tap the clock three times, or press ` on a keyboard): for a game you're winning
+ * too easily, or losing. Each button gives you or one rival this much, at its Command Base.
  */
 const BOOST = {
   goods: { cement: 40, stone: 20, fiber: 30, ore: 20, crystal: 15, alloy: 15, chip: 6, fuel: 20, ammo: 15 },
-  warbots: 4, workers: 3,
+  warbots: 4, workers: 3, haulers: 3,
 };
+/**
+ * The unit types the hidden menu can stop every rival making for the rest of a game (S.ban): their Bot
+ * Foundry, shipyard and hangar skip them, and the computer stops planning round them. Ones they have carry on.
+ */
+const BANNABLE = ['warbot', 'rocket', 'bomber', 'ferry'];
 
 /**
  * What to call player p. Label: 'You', 'Rival' (two players), 'Red rival', 'Green rival' or 'Purple

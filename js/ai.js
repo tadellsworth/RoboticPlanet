@@ -115,7 +115,7 @@ function aiThink(p) {
   if ((counts.keep || 0) < wantKeeps) plan = [['keep', wantKeeps]].concat(plan);
   // Bombers, now and then: every rival but a Turtle puts up an Airfield late in a war (from 22 minutes, with its
   // Ammo Plant running) for a single Strike Bomber (see aiBomber).
-  if (S.mode !== 'colony' && !st.walls && S.time >= 1320 && !counts.airfield && me.some((b) => b.type === 'armory' && b.built)) plan = [['airfield', 1]].concat(plan);
+  if (S.mode !== 'colony' && !st.walls && S.time >= 1320 && !counts.airfield && !botBanned(p, 'bomber') && me.some((b) => b.type === 'armory' && b.built)) plan = [['airfield', 1]].concat(plan); // (only for a bomber)
   // Bulk trade: a Trade Terminal once the colony is running short of Ore, Crystal or Stone (a Tycoon from 14
   // minutes, the rest from 20), with a Road Train to serve it (see the Foundry, and aiTrade).
   const tradeAt = st.missiles ? 840 : 1200;
@@ -327,7 +327,7 @@ function aiThink(p) {
   const wantTankers = Math.min(4, 1 + Math.floor(liquidBlds / 5));
   const army = kinds.warbot || 0;
   // (An enemy gun covering our buildings: at least enough warbots to knock it out, see aiClearGuns.)
-  const wantArmy = S.mode === 'colony' ? 0 : Math.max(aiWantArmy(lvl, p), P.gunWant || 0);
+  const wantArmy = S.mode === 'colony' || botBanned(p, 'warbot') ? 0 : Math.max(aiWantArmy(lvl, p), P.gunWant || 0); // (barred from making warbots: no army to build)
   const armyBehind = army < wantArmy - 2;
   let unarmed = 0;
   // (Warbots stranded across the water, say landed on an enemy shore, can't get home to rearm: they don't count.)
@@ -347,6 +347,7 @@ function aiThink(p) {
         : workers < wantWorkers ? 'worker' : workers > wantWorkers + 4 ? 'warbot' : 'alt';
     // A third of the army with no Ammo: no more warbots until it's armed (the Alloy goes to Ammo).
     if (unarmed >= Math.max(4, army / 3) && (b.mode === 'warbot' || b.mode === 'alt')) b.mode = workers < wantWorkers ? 'worker' : 'off';
+    if (botBanned(p, 'warbot') && (b.mode === 'warbot' || b.mode === 'alt')) b.mode = workers < wantWorkers ? 'worker' : 'off';
     b.orders = b.orders || {};
     for (const crew in crewNeed) if ((kinds[crew] || 0) < crewNeed[crew] && !(b.orders[crew] > 0)) b.orders[crew] = 1;
     // No Tanker left: Fuel only trickles by Hauler, so a new one comes before anything else.
@@ -367,7 +368,7 @@ function aiThink(p) {
     else if (me.some((d) => d.keep && d.built && !BDEFS[d.type].terminal) && (kinds.truck || 0) < 1 + Math.floor(me.length / 35) && !(b.orders.truck > 0)) b.orders.truck = 1;
     // Howitzers for siege once the army is up: one, and one more for every ten warbots (at most three).
     const wantRockets = S.mode === 'colony' ? 0 : Math.max(P.gunTarget ? 1 : 0, S.time < lvl.grace ? 0 : Math.min(3, Math.floor(army / 10) + (army >= lvl.threshold ? 1 : 0)));
-    if ((kinds.rocket || 0) < wantRockets && !(b.orders.rocket > 0) && !armyBehind && me.some((a) => a.type === 'armory' && a.built)) b.orders.rocket = 1;
+    if ((kinds.rocket || 0) < wantRockets && !(b.orders.rocket > 0) && !armyBehind && !botBanned(p, 'rocket') && me.some((a) => a.type === 'armory' && a.built)) b.orders.rocket = 1;
     // A Trade Terminal is served only by Road Trains: one for it.
     if (me.some((t) => BDEFS[t.type].terminal) && !(kinds.roadtrain > 0) && !(b.orders.roadtrain > 0)) b.orders.roadtrain = 1;
     break;
@@ -545,7 +546,7 @@ function aiNaval(p, me, kinds, lvl, lander, canBuild) {
   // Ships are built at the Port nearest home (its shipyard).
   const yard = ports.filter((b) => b.built).sort((a, b) => dist2(a.x, a.y, lander.x, lander.y) - dist2(b.x, b.y, lander.x, lander.y))[0];
   const ferry = S.bots.find((u) => !u.dead && u.owner === p && BOTS[u.type].ferry);
-  if (!ferry && yard && army >= lvl.threshold && !(yard.yard && yard.yard.ferry > 0)) orderAtYard(yard, 'ferry', 1);
+  if (!ferry && yard && army >= lvl.threshold && !(yard.yard && yard.yard.ferry > 0) && !botBanned(p, 'ferry')) orderAtYard(yard, 'ferry', 1);
   // Later on, a second Port out toward the enemy, kept stocked from home by a Container Ship (Cement for
   // building at the front, Ammo for the warbots there).
   if (ports.length === 1 && ports[0].built && S.time > 900 && canBuild && aiAffordable(p, 'port')) {
@@ -893,7 +894,7 @@ function aiBomber(p, me) {
   const field = me.find((b) => b.type === 'airfield' && b.built);
   if (!field) return;
   const bombers = S.bots.filter((u) => !u.dead && u.owner === p && BOTS[u.type].bomber);
-  if (!bombers.length && !(field.yard && field.yard.bomber > 0)) orderAtYard(field, 'bomber', 1);
+  if (!bombers.length && !(field.yard && field.yard.bomber > 0) && !botBanned(p, 'bomber')) orderAtYard(field, 'bomber', 1);
   const gun = P.gunTarget ? getE(P.gunTarget) : null;
   if (S.time - (P.lastStrike || -999) < (gun && !gun.dead ? AI_BOMB_GAP / 4 : AI_BOMB_GAP)) return;
   const u = bombers.find((v) => !v.mission && !v.flight && !(v.rearmUntil > S.time) && planeBase(v) && v.inside === planeBase(v).id);
