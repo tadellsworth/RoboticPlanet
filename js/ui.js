@@ -3530,7 +3530,9 @@ function refreshBuildingSheet(b) {
   if (mine && def.yard && b.built) renderYard(b);
   const parts = [];
   if (mine && def.lab && $('sh-research')) refreshResearch();
-  $('sh-status').textContent = mine ? b.status || '' : (b.built ? '' : 'Construction site');
+  // (robots that ran in from enemy warbots: said on the building they are hiding in, see takeShelter)
+  const hiding = mine ? S.bots.reduce((n, u) => n + (!u.dead && u.inside === b.id && u.task && u.task.type === 'shelter' ? 1 : 0), 0) : 0;
+  $('sh-status').textContent = mine ? (b.status || '') + (hiding ? `${b.status ? ' · ' : ''}${hiding} robot${hiding === 1 ? '' : 's'} sheltering from enemy warbots` : '') : (b.built ? '' : 'Construction site');
   if (!b.built) {
     parts.push(`<div class="bar"><div style="width:${Math.round(b.progress * 100)}%"></div></div>`);
     parts.push('<div class="section-label">Materials delivered</div><div class="goodlist">' +
@@ -3885,6 +3887,7 @@ function botActivity(u) {
     })();
     return what + where;
   }
+  if (t && t.type === 'shelter') return u.inside ? `Sheltering in the ${nm(t.bld)} until the enemy warbots have gone` : `Enemy warbots close: running for shelter in the ${nm(t.bld)}`;
   if (t && t.type === 'charge') return u.inside ? 'Recharging its battery' : 'Going to recharge its battery';
   if (t && t.type === 'refuel') return 'Going to fill up with Fuel';
   if (t && t.type === 'staff' && (t.phase === 'toCharge' || t.phase === 'charging')) return t.phase === 'charging' ? 'Recharging its battery' : 'Going to recharge its battery';

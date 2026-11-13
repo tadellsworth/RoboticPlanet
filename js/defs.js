@@ -94,6 +94,13 @@ const ARMOR_PER_CEMENT = 6;
 const FIX_RATE = 2;
 const REPAIR_BELOW = { warbot: 0.7, other: 0.6 };
 const REPAIR_RETREAT = 0.35;      // a warbot this badly hurt pulls out of a fight for repairs (if a Repair Station can fix it)
+const REPAIR_WALK = 16;            // ...and only to a Repair Station within this many tiles
+// Shelter (takeShelter): a civilian with an enemy's armed warbot within SHELTER_NEAR tiles runs into a building of its
+// owner's within SHELTER_RUN, and comes out once none has been within SHELTER_CLEAR of it for SHELTER_STAY seconds;
+// each robot looks once every SHELTER_TICKS ticks.
+const SHELTER_NEAR = 6, SHELTER_RUN = 8, SHELTER_CLEAR = 8, SHELTER_STAY = 5, SHELTER_TICKS = 10;
+// A rival AI's danger spots (see noteDanger): how near one counts, how long the first death keeps it, and the longest it lasts.
+const DANGER_R = 4, DANGER_TIME = 180, DANGER_MAX = 900;
 const FUEL_ENERGY = 250;          // battery points one Fuel gives at a Fuel Station (2½ full charges)
 /*
  * Trucks burn Fuel. Freight Trucks, Road Trains and Tankers have a fuel tank instead of a battery

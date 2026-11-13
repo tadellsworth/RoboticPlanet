@@ -3030,6 +3030,9 @@ function destroyBuilding(b, burn, quiet) {
   // Whatever was inside spills out as crates on its tile, for haulers (or raiding warbots) to collect.
   if (typeof dropLoot === 'function') dropLoot(b);
   releaseBotsFrom(b, !!burn);
+  // A rival AI doesn't build again for five minutes within four tiles of where a building or site of its own was
+  // destroyed by force (P.avoid, see aiSearchSpot): it used to put the next one up in the same crater.
+  if (burn && b.owner >= 0 && S.players[b.owner] && S.players[b.owner].ai) (S.players[b.owner].avoid = S.players[b.owner].avoid || []).push({ x: b.x, y: b.y, until: S.time + 300, r2: 16 });
   b.dead = true;
   S.byId.delete(b.id);
   S.bAt[tIdx(b.x, b.y)] = 0;

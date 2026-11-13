@@ -417,8 +417,9 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
   winning too easily. The game pauses while it's open.
 - **Repairs:** nothing heals by itself. Damaged bots go to a Repair Station (workers below 60% health, warbots below
   70% once their garrison is quiet; Colony free play too), which uses 1 Alloy per 12 health. A warbot below 35%
-  (`REPAIR_RETREAT`) on an attack, a rally flag or a sortie pulls out of the fight for repairs when a Repair Station can
-  fix it (otherwise it fights on; and not while it stands under enemy guns, `underGuns`, where walking away mostly killed it), takes no new fights on the way (`u.retreat`), and goes back to its attack or flag
+  (`REPAIR_RETREAT`) on an attack, a rally flag or a sortie pulls out of the fight for repairs when a Repair Station within
+  `REPAIR_WALK` (16) tiles can fix it (otherwise it fights on: a hurt warbot walking the length of the map mostly died on the way; a warbot in a garrison
+  doesn't leave for repairs while enemy warbots are within 10 tiles of the fort, and a rival AI's goes only to a station within `REPAIR_WALK`; and not while it stands under enemy guns, `underGuns`, where walking away mostly killed it), takes no new fights on the way (`u.retreat`), and goes back to its attack or flag
   once mended (`u.resume`, `resumeAfterRepair`; the flag stays up meanwhile, and Recall cancels the return). Haulers keep up to 3 Alloy
   in it, and an empty one gets the first Alloy that reaches storage (like an empty Fuel Station's Fuel). To fix a building, tap it and press **Repair**:
   you pay 1 Cement for every 6 missing armor and a free worker restores it.
@@ -609,6 +610,88 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
   the first turret and the Repair Station go to the head of the queue once they are due. An Easy rival keeps the old
   habits in all of that: one truck for a Depot, a Depot that takes everything, a Foundry that rests whenever its army
   isn't well behind, and no more than six Haulers while it is.
+- **Shelter** (every player's robots; `takeShelter`, `doShelter`, `intruders`, `intruderNear` in `js/sim.js`,
+  `SHELTER_*` in `js/defs.js`): a worker, a specialist or a Hauler out in the open with an enemy's armed warbot
+  within `SHELTER_NEAR` (6) tiles drops what it is doing (a load is put down in crates) and runs, off the roads at
+  full speed, for a finished building of its owner's within `SHELTER_RUN` (8) tiles that is no nearer that warbot
+  than it is itself (the one that leaves it furthest from the warbot for the shortest run); it stays inside, where
+  nothing can shoot it (task `shelter`), until no enemy warbot has been within `SHELTER_CLEAR` (8) tiles of the
+  building for `SHELTER_STAY` (5) seconds, then goes back to work. With nowhere to run to it carries on. Only the
+  robots near an intruder stop, the rest of the colony works on, and `dispatch` sends nobody to a building, or to
+  pave a tile, that close to one. Each robot looks once every `SHELTER_TICKS` (10) ticks, against a list of enemy
+  warbots looked over as often. The first time it happens in a game the player is told (`P.shelterMsg`). Trucks,
+  Tankers and Rocket Trucks don't shelter. (A column of warbots walking through a colony used to shoot down its
+  whole workforce in two to five minutes: in four sieges the besieged rival ended with 0 to 5 workers of 21 to 28,
+  now with 19 to 27; in twelve AI-vs-AI games the two sides lost 35% fewer civilians a minute.)
+- **The rival keeps its workers out of enemy fire** (every difficulty; `unsafeAt`, `noteDanger`, `dangerAt` in
+  `js/sim.js`, used by `aiThink`, `aiSearchSpot`, `aiRoads` and `dispatch`): a tile is unsafe for a rival AI's
+  civilians when a rival's gun reaches it (`gunCover`) or it lies within `DANGER_R` (4) tiles of a danger spot, a
+  place where one of its civilians was shot down in the open (`P.danger`, optional in a save: 3 minutes for the first
+  death there, 3 more for each further one within 3 tiles, 15 at most). The AI places no site on unsafe ground or
+  where the site's road would have to cross it (`aiRoadSafe`), plans no road over it and calls off the planned
+  tiles there, asks for no repair or front-line defence there, gives up a site that has come under guns or where two
+  have died, and takes up its own road where two have died under a gun; `dispatch` hands an AI's workers no
+  building, repair or paving job there, and its workers plan their walks round gun cover like warbots do. (In a
+  static war a rival used to rebuild and repair beside one shelled Outpost without end: 78 workers lost in twenty
+  minutes on Normal, the army stuck at ten; now 3, and the army grows.) A human player's robots are not held back.
+- **The rival's home guard and its marches** (`P.homeGuard`, `P.homeCall`, `keepAt`, `goGarrison`, `guardsNear`, the
+  attack rules at the end of `aiThink`): a rival's Command Base keeps about a third of its army (2 to 8), and each of
+  its Keeps up to three, out of every attack, raid and march; while four or more enemy warbots stand within 12 tiles
+  of the base, or it is being hit, every new and idle warbot goes there. An Easy rival keeps two; so does one with
+  half as many warbots again as all its rivals and four more, and anyone from 28 minutes (`AI_ALL_IN`) whose base
+  isn't threatened; and with twice its rivals' warbots it throws everything in, its Outposts keeping none back
+  (`keepW` 0). A new or idle warbot of a rival AI's goes to a fort that stands in reach of enemy guns only when no
+  other has room (`goGarrison`). An attack or a march goes only with enough warbots to beat what guards the place
+  (`guardAt`: 1.3 for each of the garrison and 2 more, its guns, warbots in the field, every armed warbot of a fort
+  within 7 tiles and half of what forts within `AREA_DEFENCE` can spare) and never at walls the band can't shoot
+  through (`attackBreach`, `sendToRally().breach`). A march picks the enemy fort that takes the fewest (a little more
+  for every tile from home; the enemy Command Base counts as cheaper, much cheaper with twice the enemy's army), sends
+  what it takes and two more, 14 to 22 (30 when crushing); with too few it masses (`P.massFor`: the army target
+  rises to that many, the home guard and one for each fort, `aiWantArmy`) while its Rocket Trucks shell the place.
+  A band that loses more than half its warbots within three minutes is remembered (`P.fights`, `P.beaten`): nothing
+  goes within 8 tiles of that place for five minutes unless half as many again go. A rival AI's second Repair
+  Station goes up beside its fort nearest the enemy once that fort is fought over and no station is within
+  `REPAIR_WALK` of it. (Marches used to go 8 to 14 strong to stand beside the nearest fort, whatever guarded it: 60 of 86
+  marchers died; and the Command Base often held one warbot or none.) While it masses, its Outposts with no enemy
+  near keep no warbot back either. It answers an enemy flag on its land only when it can spare a third more warbots
+  than the flag has (`aiCounterRaid`; fewer stay behind their walls), and hunts a Rocket Truck that is shelling it
+  only where the truck stands off its owner's land, out of every enemy gun's reach and not beside a manned fort:
+  four warbots and two for each escort, all or none, sent at once (`aiSiege`). A raid's 60 s (`RAID_TIME`) start when
+  the first raider reaches the flag (`P.raid.at`, with a walking allowance), and the band comes home early when the
+  enemy warbots within 5 tiles outnumber it (`aiRaid`).
+- **The rival under siege** (`aiThink`, `aiSiege`, `P.defWant`, `P.shut`): four or more enemy warbots and Rocket
+  Trucks standing on a Normal or Hard rival's land (a Turtle's on any difficulty), or within 14 tiles of its Command
+  Base, with no fort being hit, call for a Mortar Pit by the fort nearest them, 7 to 10 tiles from where they stand
+  (up to three): the one gun that reaches a parked army from outside its reach. With no push of its own on, its
+  Rocket Trucks fire only from a tile within 3 of one of its forts that no enemy gun covers and no enemy warbot
+  stands within 7 of (parking there first), at the enemy building in reach worth most: a Mortar Pit or a Silo, a
+  fort pushed up against its land, guns, and whatever has enemy warbots or Rocket Trucks standing by it; during its
+  own attacks and marches they go with the push as before. A building whose workers keep being killed about it (two
+  within its working radius and two tiles) rests until the danger spot is gone. For every player, a guard badly hurt
+  on a sortie goes back inside its fort instead of walking to a Repair Station past the enemy (`warbotAct`). A rival
+  AI builds nothing for five minutes within four tiles of where a building or site of its own was destroyed by
+  force (`destroyBuilding` adds a `P.avoid` entry with `r2`): it used to put the next Foundry up in the same crater.
+  (Against the scripted besieger, flag only: its losses rose from 15 to 89 warbots on Normal; a Turtle held out the
+  whole fifteen minutes of the full siege, rockets and Missiles included, and went on building.)
+- **The rival's Missiles and targets** (Normal and Hard; `AI_HURT`, the missile and attack rules in `aiThink`): a
+  rival other than a Tycoon holds a ready Missile up to 90 s for its next push (`P.missileWait`) and fires it at the
+  defences within 8 tiles of the fort its warbots are attacking, marching on or massing against (`P.siegeAt.push`);
+  with no push by then it aims at what stalls its enemy, by `AI_HURT` (Bot Foundry, Ammo Plant, Missile Factory,
+  Silos, Fuel, Chip Fab, Smelter), then guns, then forts. Its attacks count the same values on top of the old
+  score, a Hard rival's also how far the target stands from the enemy's warbots in the field (up to 6 for 30 tiles),
+  and a raid is due the moment an attack on a fort or a march sets off. An Easy or Medium rival fires and attacks
+  as before. (In AI-vs-AI games the effect is small: what a Silo reaches is mostly Outposts and outlying gatherers.)
+- **The rival's triage** (`few` in `aiThink`, `AI_FEW`/`AI_ENOUGH`/`AI_PLENTY`; `minFree`, `hasRound` in `dispatch`):
+  with fewer than 8 workers a rival AI gives up every site but one for a link of the bot-making chain it has none of,
+  its Foundry builds workers only (one Hauler first when it has none and three workers), and each link works only
+  while what it makes is short and what it needs is there (the Smelter while Alloy is short and there's Ore, a Mine
+  while Alloy and Ore are both short, the Chip Fab while Chips are short and it has Crystal and Alloy, a Crystal Tap
+  or Harvester while there's next to none of its good); everything else rests. In triage `dispatch` holds a worker
+  back only for a site or, with no Hauler left, to carry. It ends at 10 workers, or as many as its buildings want
+  and two to spare, up to 16. For every player: with no Hauler left, a Foundry waiting for parts gives up its worker
+  to fetch them and takes even the last free worker back once it holds a round of them, so one worker alone can
+  restart a colony. (A colony cut down to a few workers used to man two Smelters and the Chip Fab with nobody at
+  the Crystal Tap, and stood still at four to eight workers for good.)
 - **Wildlife** (Colony; `WILD` in `js/defs.js`, `updateNest`/`updateCritter` in `js/sim.js`; new-game option, on by
   default, never in missions): one creature nest per `WILD.perTiles` tiles (3–8), owned by `WILD_OWNER` (the empty
   second player slot of a Colony game), at least 16 tiles from the landing site and reachable on foot. Each keeps
