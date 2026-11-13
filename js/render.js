@@ -170,6 +170,9 @@ let artLoaded = 0, artTotal = 0, artFailed = 0;
 
 /** How many art images are still on their way. */
 function artPending() { return artTotal - artLoaded - artFailed; }
+/** How much of the art the map is baked from (bakedArt) is still on its way: it's asked for first, and the map is baked when it's in. */
+let artBakedLeft = 0;
+function bakedArtPending() { return artBakedLeft; }
 
 /**
  * Art the baked map is drawn from (ground, water and rock, cliffs and canyons, plants, resources, the pieces of
@@ -193,12 +196,16 @@ function loadImg(src, ok, fail) {
 
 function loadArt(onChange) {
   if (typeof ART_MANIFEST !== 'object') return;
-  for (const key in ART_MANIFEST) {
+  // (What the map is baked from goes first, so the map can be baked once, early, while the rest is still coming.)
+  for (const key of Object.keys(ART_MANIFEST).sort((a, b) => bakedArt(b) - bakedArt(a))) {
     const entry = typeof ART_MANIFEST[key] === 'string' ? { src: ART_MANIFEST[key] } : ART_MANIFEST[key];
+    const baked = bakedArt(key);
     artTotal++;
+    if (baked) artBakedLeft++;
     loadImg(/^(data:|https?:)/.test(entry.src) ? entry.src : 'art/' + entry.src, (img) => {
       ART[key] = { img, scale: entry.scale || 0, anchor: entry.anchor || '', shadow: !!entry.shadow, key, frames: entry.frames || 0, cols: entry.cols || 0 };
       artLoaded++;
+      if (baked) artBakedLeft--;
       // The third team (green) gets the rival's red art recoloured, made the first time it's asked for.
       if (key.includes('@1')) {
         const k2 = key.replace('@1', '@2');
@@ -211,7 +218,7 @@ function loadArt(onChange) {
       }
       if (key.startsWith('icon-')) applyGoodIcons();
       if (onChange) onChange(key);
-    }, () => { artFailed++; console.warn('Terrafall: could not load art for', key, entry.src); });
+    }, () => { artFailed++; if (baked) artBakedLeft--; console.warn('Terrafall: could not load art for', key, entry.src); });
   }
 }
 
@@ -450,6 +457,7 @@ function resizeRender() {
   R.canvas.style.width = R.w + 'px';
   R.canvas.style.height = R.h + 'px';
   if (S) clampCam();
+  R.dirty = true; // (setting its size wipes the canvas: the next frame is drawn whatever main.js's drawNeeded says)
   layoutMinimap(); // (it's drawn at the same resolution: sized again whenever that changes)
 }
 
@@ -504,7 +512,8 @@ function clampCam() {
   // the top bar, the banner and the side panel.
   const wide = isWide();
   const padX = Math.max(1, Math.min(R.w * 0.3, 440) / c.z), padT = Math.max(1.5, (R.h * (wide ? 0.12 : 0.22)) / c.z);
-  const padB = Math.max(2.5, (R.h * (wide ? 0.08 : 0.4)) / c.z);
+  // (R.lift: the share of the screen a bottom panel covers, so the last rows can be brought out above it.)
+  const padB = Math.max(2.5, (R.h * (wide ? 0.08 : Math.max(0.4, (R.lift || 0) + 0.14))) / c.z);
   c.x = S.W / 2 <= hw ? S.W / 2 : clamp(c.x, hw - padX, S.W - hw + padX);
   c.y = S.H / 2 <= hh ? S.H / 2 : clamp(c.y, hh - padT, S.H - hh + padB);
 }
@@ -625,6 +634,7 @@ function drawOffMap(ctx, ox, oy, z) {
 function drawMapLayer(ctx, ox, oy, z) {
   ctx.imageSmoothingEnabled = true;
   const level = hdLevel(z);
+  R.hdMore = false; // (set below when a sharp chunk on screen is left for the next frame: keep drawing till it's done)
   if (!level) { ctx.drawImage(R.map, ox, oy, S.W * z, S.H * z); return; }
   if (!R.hd) hdReset();
   const hd = R.hd, C = HD_CHUNK, d = R.dpr;
@@ -659,6 +669,7 @@ function drawMapLayer(ctx, ox, oy, z) {
   const t0 = performance.now(), size = (C * level) ** 2;
   for (const [cx, cy, bare] of todo) {
     if (performance.now() - t0 > HD_BAKE_MS) {
+      R.hdMore = true;
       if (!bare) continue;
       const i0 = cx * C, j0 = cy * C, w = Math.min(C, S.W - i0), h = Math.min(C, S.H - j0);
       const x0 = edge(ox + i0 * z), y0 = edge(oy + j0 * z);
@@ -5821,7 +5832,7 @@ function initMinimap(canvas) {
 /** Size the minimap for the current screen and map. Returns its CSS width. */
 function layoutMinimap() {
   if (!S || !MM.canvas) return 0;
-  MM.w = R.w >= 700 ? 156 : 100;
+  MM.w = R.w > R.h && R.h < 520 ? 84 : R.w >= 700 ? 156 : 100; // (a phone on its side is short, not wide: it had the big one, two thirds of its height)
   MM.h = Math.round((MM.w * S.H) / S.W);
   MM.canvas.style.width = MM.w + 'px';
   MM.canvas.style.height = MM.h + 'px';

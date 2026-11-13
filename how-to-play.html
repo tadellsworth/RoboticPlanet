@@ -76,6 +76,8 @@ p { margin: 10px 0; max-width: 65ch; }
   padding: 9px 12px; border-radius: 999px; background: var(--panel); border: 1px solid var(--line); white-space: nowrap;
 }
 .toc a:hover { border-color: var(--accent); }
+.toc a.back { background: var(--accent); color: #062330; border-color: var(--accent); font-weight: 700; min-height: 44px; display: inline-flex; align-items: center; }
+.toc .wrap { align-items: center; }
 
 section { padding-block: 34px 8px; border-top: 1px solid var(--line); }
 section:first-of-type { border-top: 0; }
@@ -206,7 +208,7 @@ footer { padding-block: 28px 40px; color: var(--muted); font-size: 14px; border-
 
 <nav class="toc" aria-label="Chapters">
   <div class="wrap">
-    <a href="#goal">Goal</a><a href="#controls">Controls</a><a href="#opening">First 10 min</a><a href="#chain">Supply chain</a>
+    <a href="./" id="back" class="back">&larr; Back to the game</a><a href="#goal">Goal</a><a href="#controls">Controls</a><a href="#opening">First 10 min</a><a href="#chain">Supply chain</a>
     <a href="#buildings">Buildings</a><a href="#workers">Robots</a><a href="#traffic">Roads &amp; traffic</a><a href="#paving">Paving</a><a href="#longhaul">Long hauls</a><a href="#batteries">Batteries &amp; Fuel</a><a href="#terrain">Terrain</a>
     <a href="#war">War</a><a href="#rivals">Rivals</a><a href="#events">Planet events</a><a href="#colony">Wildlife &amp; research</a><a href="#nuclear">Nuclear race</a><a href="#missions">Missions</a><a href="#stats">Statistics</a><a href="#goods">Goods</a><a href="#status">Status messages</a><a href="#saving">Saving</a>
   </div>
@@ -660,6 +662,15 @@ footer { padding-block: 28px 40px; color: var(--muted); font-size: 14px; border-
 </section>
 
 </main>
+<script>
+/* Back to the game: back to the page that opened this one (the game, as it was left), or, opened in a tab of its own, that tab closes; failing both, the game opens here. */
+document.getElementById('back').addEventListener('click', function (e) {
+  e.preventDefault();
+  if (history.length > 1) { history.back(); return; }
+  window.close();
+  setTimeout(function () { location.href = './'; }, 250);
+});
+</script>
 <footer><div class="wrap">Terrafall Field Manual · covers the current build: long hauls (Freight Trucks, Depot supply orders, bridges, tunnels, overpasses, the traffic map and raids), road networks, paving and traffic lights, Workers and Haulers, desktop controls, missions, statistics, road surfaces, Ammo, Fuel, resource fields, terrain levels, missiles, army orders and batteries.</div></footer>
 </body>
 </html>
