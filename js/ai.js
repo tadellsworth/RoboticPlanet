@@ -671,6 +671,41 @@ function aiThink(p) {
   if (S.mode !== 'colony' && S.time >= lvl.grace) aiRaid(p, lvl);
 
   // 5) Attack
+  // A storm of the enemy Command Base (P.stormOn, see the marches below). The band forms up under a flag out of every
+  // enemy gun's reach (aiStage); once three in five of it stand within 5 tiles of the flag it goes in, at the guns
+  // first: every warbot at the Pulse Turret, Mortar Pit or manned Bunker within 10 tiles of the base that is nearest
+  // the band (a turret counts as three tiles nearer), then the next, and when none is left, or only Keeps, at the
+  // base itself. It is called off when fewer than two in five are left with Ammo. All the while its Rocket Trucks and
+  // Missiles go for the guns round the base (P.siegeAt, aiSiege). (Sent to stand under a flag
+  // beside the base, a band walked through the turrets without firing at them: one that kills a warbot every three
+  // seconds, three of them 18 warbots in half a minute, against a base two warbots held.)
+  if (P.stormOn) {
+    const T = P.stormOn, eb = getE(S.players[enemy].lander), r = T.ids ? null : rallyById(T.id);
+    const band = (T.ids ? T.ids.map(getE) : r ? rallyMembers(r.id) : []).filter((u) => u && !u.dead && u.owner === p && (u.ammo ?? WARBOT_AMMO) > 0);
+    if (!eb || eb.dead || eb.owner !== enemy || band.length * 5 < T.n * 2 || (!T.ids && S.time - (P.lastMarch || 0) > 300)) {
+      if (T.ids) for (const u of band) if (u.task && u.task.type === 'attack') { cancelTask(u); u.task = null; u.path = null; }
+      P.stormOn = null;
+    } else if (T.ids || band.filter((u) => dist2(u.x, u.y, r.x, r.y) <= 25).length * 5 >= band.length * 3) {
+      // (Formed up, it waits up to 45 s under its flag while its Rocket Trucks have guns left to shell there.)
+      P.siegeAt = { x: eb.x, y: eb.y, until: S.time + 30, push: 1, storm: 1 };
+      if (!T.ids && S.time - (T.readyT || (T.readyT = S.time)) < 45 && S.bots.some((u) => !u.dead && u.owner === p && BOTS[u.type].siege) &&
+          S.buildings.some((g) => !g.dead && g.owner === enemy && g.built && !BDEFS[g.type].mil && gunReach(g) && dist2(g.x, g.y, eb.x, eb.y) <= 100)) return;
+      const tg = getE(T.tgt);
+      if (!T.ids || !tg || tg.dead || tg.owner !== enemy) {
+        const cx = band.reduce((a, u) => a + u.x, 0) / band.length, cy = band.reduce((a, u) => a + u.y, 0) / band.length;
+        let next = eb, bs = Infinity;
+        for (const g of S.buildings) {
+          if (g.dead || g.owner !== enemy || BDEFS[g.type].keep || !gunReach(g) || dist2(g.x, g.y, eb.x, eb.y) > 100) continue;
+          const sc = dist(g.x, g.y, cx, cy) - (g.type === 'turret' ? 3 : 0);
+          if (sc < bs) { bs = sc; next = g; }
+        }
+        T.ids = band.map((u) => u.id); T.tgt = next.id; P.march = 0;
+      }
+      // (Every think: a warbot that wandered off after the last target fell is sent on with the rest.)
+      const idle = band.filter((u) => !(u.task && u.task.type === 'attack' && u.task.target === T.tgt));
+      if (idle.length) orderAttack(p, idle.map((u) => u.id), getE(T.tgt));
+    }
+  }
   if (S.time < lvl.grace || S.time < P.nextAttack) return;
   // What became of its attacks and marches: one that loses more than half its warbots within three minutes is
   // remembered (P.beaten) and nothing goes within 8 tiles of that place for five minutes, unless half as many
@@ -734,8 +769,11 @@ function aiThink(p) {
   // 8 to 14 it had to stand beside the nearest fort, whatever guarded it: of 86 warbots on ten marches 60 died.)
   const enemyArmy = S.bots.reduce((n, u) => n + (!u.dead && u.owner === enemy && u.type === 'warbot' ? 1 : 0), 0);
   const crushing = army >= lvl.threshold * 2 && army >= enemyArmy * 2 + 2;
+  // A decisive lead (half as many warbots again as the enemy and four more; not an Easy rival's): the war is won at
+  // the enemy Command Base, so that is where the next march goes, see below.
+  const strong = smart && army >= lvl.threshold * 2 && army >= enemyArmy * 1.5 + 4;
   if (P.massFor && S.time > P.massFor.until) P.massFor = null;
-  if (army >= lvl.threshold * 2 && S.time - (P.lastMarch || -999) > 120 && !(P.march && rallyById(P.march))) {
+  if (army >= lvl.threshold * 2 && S.time - (P.lastMarch || -999) > 120 && !(P.march && rallyById(P.march)) && !P.stormOn) {
     const spotBy = (b) => {
       for (const [di, dj] of [[1, 1], [-1, 1], [1, -1], [-1, -1], [2, 0], [-2, 0], [0, 2], [0, -2]]) {
         const i = b.x + di, j = b.y + dj;
@@ -746,7 +784,25 @@ function aiThink(p) {
     // The fort that takes the fewest to beat among those it has the warbots for (the enemy Command Base counts as a
     // little cheaper than it is, and much cheaper with twice the enemy's army); failing any, the cheapest to mass for.
     let tgt = null, spot = null, size = 0, bs = Infinity, hard = 0, hs = Infinity;
-    for (const b of S.buildings) {
+    // The storm: with a decisive lead it goes for the enemy Command Base with every warbot it can gather (up to 30),
+    // as soon as that is enough to beat what guards the base (guardAt). Until then, while the whole army would be
+    // enough, it masses for the base and marches on nothing else (P.massFor: the Outposts give up their keepers, the
+    // army target rises) while its Rocket Trucks and Missiles go for the guns round the base (P.siegeAt, aiSiege), which
+    // brings down what it takes. Four minutes of massing without getting there (P.stormT) and it takes a cheaper fort
+    // first, as below. (With the bases defended, a rival far ahead used to march on the cheapest Outpost every four
+    // minutes and never on the base: games it had won at minute 25 ran to minute 50, or past the hour.)
+    const eb = getE(S.players[enemy].lander), by = strong && !P.stormOn && eb && !eb.dead && eb.owner === enemy && !beaten(eb, 30) ? aiStage(p, eb) || spotBy(eb) : null;
+    let storm = false;
+    if (by) {
+      const g = guardAt(eb), n = Math.min(30, rallyAvailable(p, by.i, by.j, true));
+      if (n >= Math.max(4, g)) { tgt = eb; spot = by; size = n; storm = true; }
+      else if (g <= army - 2 && S.time - (P.stormT || (P.stormT = S.time)) < 240) {
+        storm = true; hard = g;
+        P.siegeAt = { x: eb.x, y: eb.y, until: S.time + 60, push: 1, storm: 1 };
+      }
+    }
+    if (!storm || tgt) P.stormT = 0;
+    if (!storm) for (const b of S.buildings) {
       if (b.dead || b.owner !== enemy || !b.built || !BDEFS[b.type].mil || BDEFS[b.type].bunker) continue;
       const g = guardAt(b), sc = g + dist(b.x, b.y, lander.x, lander.y) * 0.15 - (b.type === 'lander' ? (crushing ? 12 : 3) : 0);
       if (sc >= bs && sc >= hs) continue;
@@ -764,15 +820,16 @@ function aiThink(p) {
       if (sent && breach && breach.need > breach.shots) { recallRally(rally.id); walled(tgt); } // (walls in the way it can't shoot through)
       else if (sent) {
         P.march = rally.id; P.lastMarch = S.time; P.massFor = null;
+        if (storm) P.stormOn = { id: rally.id, n: sent, ids: null, tgt: 0 };
         if (wily && !P.raid) P.nextRaid = Math.min(P.nextRaid || Infinity, S.time); // (and a raid with it)
         P.fights.push({ x: tgt.x, y: tgt.y, n: sent, t: S.time, ids: rallyMembers(rally.id).map((u) => u.id) });
-        P.siegeAt = { x: tgt.x, y: tgt.y, until: S.time + 150, push: 1 };
+        P.siegeAt = { x: tgt.x, y: tgt.y, until: S.time + 150, push: 1, storm: storm ? 1 : 0 };
         return;
       }
     } else if (hard) P.massFor = { need: hard + 2, until: S.time + 240 };
   }
-  // Recall a march that has nothing left to fight.
-  if (P.march && rallyById(P.march) && S.time - (P.lastMarch || 0) > 150) { recallRally(P.march); P.march = 0; }
+  // Recall a march that has nothing left to fight. (Not a storm forming up: see P.stormOn above.)
+  if (P.march && rallyById(P.march) && S.time - (P.lastMarch || 0) > 150 && !(P.stormOn && P.stormOn.id === P.march)) { recallRally(P.march); P.march = 0; }
   // A big army with nothing in reach: push a forward Outpost toward the enemy Command Base.
   const enemyL = getE(S.players[enemy].lander);
   if (enemyL && !few && army >= lvl.threshold * 2 && S.time - (P.lastAttack || 0) > 60 && siteCount(p) < maxSites && aiAffordable(p, 'outpost')) {
@@ -1155,6 +1212,23 @@ function aiWantArmy(lvl, p) {
 }
 
 /**
+ * Where a storm of enemy fort b forms up: a walkable tile within 16 tiles of it, on the ground p's Command Base
+ * stands on, that as few enemy guns reach as can be (none, where there is such a tile), more than 7 tiles from its
+ * owner's forts if that can be had, and about 9 tiles out. Null if there is no tile at all.
+ */
+function aiStage(p, b) {
+  const cover = gunCover(p), z = homeZone(p), forts = S.buildings.filter((e) => !e.dead && e.built && e.owner === b.owner && BDEFS[e.type].mil);
+  let best = null, bs = Infinity;
+  for (let j = Math.max(0, b.y - 16); j <= Math.min(S.H - 1, b.y + 16); j++) for (let i = Math.max(0, b.x - 16); i <= Math.min(S.W - 1, b.x + 16); i++) {
+    const t = tIdx(i, j), d = dist(i, j, b.x, b.y);
+    if (d > 16 || d < 4 || !walkable(t) || S.bAt[t] || S.zone[t] !== z) continue;
+    const sc = cover[t] * 8 + Math.abs(d - 9) * 0.5 + (forts.some((e) => dist2(e.x, e.y, i, j) <= 49) ? 3 : 0);
+    if (sc < bs) { bs = sc; best = { i, j }; }
+  }
+  return best;
+}
+
+/**
  * What stands guard round building b besides its garrison: 3 for each of its owner's turrets within 6
  * tiles (and the like for its other guns), the garrisons of its owner's forts near enough to come to its help,
  * plus its owner's warbots out in the field within 7 (on a rally flag, say).
@@ -1342,10 +1416,13 @@ function aiSiege(p) {
     let best = null, bs = -Infinity;
     for (const b of S.buildings) {
       if (!rocketTarget(u, b) || !b.built || S.zone[tIdx(b.x, b.y)] !== z) continue;
-      const def = BDEFS[b.type], d = dist(u.x, u.y, b.x, b.y);
-      if (d > 24) continue;
-      let sc = (def.war && !def.barrier ? 8 : 0) + (def.mil ? 4 : 0) - d * 0.2;
-      sc += dist(b.x, b.y, at.x, at.y) <= 8 ? 10 : -6;
+      const def = BDEFS[b.type], d = dist(u.x, u.y, b.x, b.y), near = dist(b.x, b.y, at.x, at.y) <= 8;
+      // (Within 24 tiles; for a storm of the enemy Command Base, P.siegeAt.storm, however far for what stands round
+      // the base: the trucks go with the storm, at the guns they can wreck first, a Pulse Turret or a Mortar Pit, then
+      // Bunkers and Keeps, never a fort at its floor.)
+      if ((d > 24 && !(at.storm && near)) || (at.storm && def.mil && b.armor <= missileFloor(b) + 1)) continue;
+      let sc = (def.war && !def.barrier ? (at.storm && !def.mil ? 12 : 8) : 0) + (def.mil ? 4 : 0) - Math.min(d, 24) * 0.2;
+      sc += near ? 10 : -6;
       if (sc > bs) { bs = sc; best = b; }
     }
     if (best) orderBombard(p, [u.id], best);

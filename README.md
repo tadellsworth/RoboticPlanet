@@ -648,6 +648,20 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
   for every tile from home; the enemy Command Base counts as cheaper, much cheaper with twice the enemy's army), sends
   what it takes and two more, 14 to 22 (30 when crushing); with too few it masses (`P.massFor`: the army target
   rises to that many, the home guard and one for each fort, `aiWantArmy`) while its Rocket Trucks shell the place.
+  With a decisive lead (`strong`: half as many warbots again as the enemy and four more; not an Easy rival) the
+  next march is a storm of the enemy Command Base (`P.stormOn`): every warbot it can gather, up to 30, as soon as
+  that is enough for what guards the base; until then, while its whole army would be enough, it masses for the
+  base and marches on nothing else for up to four minutes (`P.stormT`). The band forms up under a flag about 9
+  tiles from the base that as few enemy guns reach as can be (`aiStage`), waits there up to 45 s while its Rocket
+  Trucks have guns left to shell, then goes in at the guns first: all at the Pulse Turret, Mortar Pit or manned
+  Bunker within 10 tiles of the base nearest the band (a turret counts three tiles nearer), then the next, then the
+  base itself; it is called off when fewer than two in five are left with Ammo. While it masses for the base and
+  while the storm is on (`P.siegeAt.storm`) its Rocket Trucks go for what stands within 8 tiles of the base however
+  far off it is (otherwise within 24 tiles of the truck), the guns they can wreck before Bunkers and Keeps, and
+  never a fort already at its floor (`aiSiege`).
+  (With bases defended, a rival far ahead used to march on the cheapest Outpost every four minutes and never on the
+  base, and a band sent to stand beside the base walked through its turrets without firing at them: of twelve
+  two-player games five were undecided at their caps where two had been; now three.)
   A band that loses more than half its warbots within three minutes is remembered (`P.fights`, `P.beaten`): nothing
   goes within 8 tiles of that place for five minutes unless half as many again go. A rival AI's second Repair
   Station goes up beside its fort nearest the enemy once that fort is fought over and no station is within
