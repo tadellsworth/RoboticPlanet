@@ -1429,6 +1429,8 @@ function moveDirect(u, x, y, dt) {
     if (S.bAt[t] && t !== deck[0]) return false;
   } else if (t !== c) {
     if (S.bAt[t]) return false;
+    // Nor slip past a building's corner: two Walls touching only at their corners block the way, as they do a route.
+    if (ti !== ci && tj !== cj) { const s1 = tIdx(ti, cj), s2 = tIdx(ci, tj); if ((S.bAt[s1] && !passTile(s1, u.owner)) || (S.bAt[s2] && !passTile(s2, u.owner))) return false; }
     // Chasing can't jump down or up a cliff: the step must be walkable via an orthogonal neighbour.
     const ok = ti === ci || tj === cj ? canStep(c, t)
       : (canStep(c, tIdx(ti, cj)) && canStep(tIdx(ti, cj), t)) || (canStep(c, tIdx(ci, tj)) && canStep(tIdx(ci, tj), t));
@@ -3879,6 +3881,7 @@ const FOE_SHY = 4.5;     // robots that don't fight keep this far from an armed 
 const FOE_SHY_WILD = 6;  // ...and from a creature (it hunts within 4.5)
 const SHY_LOOK = 6;      // how far ahead along its way a robot looks out for them (tiles)
 const SHY_WAIT = 5;      // seconds a robot that turned back waits before it's given work again
+const FOE_LEAD = 2;      // seconds ahead along its way that a moving one counts too
 
 /** How far building b can shoot enemy robots right now (tiles), or 0. */
 function gunReach(b) {
@@ -3913,18 +3916,26 @@ function updateDanger() {
     }
   }
   // Enemy robots out in the open that would shoot (armed warbots) or bite (creatures): bit 2.
+  // One on the move counts where it's heading too (FOE_LEAD seconds on, at the pace it's going): a warbot on a road
+  // outpaces a worker on foot, so robots have to give way before it's on them.
   DANGER.foes = 0;
   for (const v of S.bots) {
     const R = foeReach(v);
-    if (!R) continue;
+    if (!R) { v.dgT = undefined; continue; }
     DANGER.foes++;
-    const R2 = R * R, cx = v.x, cy = v.y;
+    const dtv = v.dgT === undefined ? 0 : S.time - v.dgT;
+    if (dtv >= 0.25) { v.dgVx = (v.x - v.dgX) / dtv; v.dgVy = (v.y - v.dgY) / dtv; }
+    if (dtv >= 0.25 || v.dgT === undefined) { v.dgX = v.x; v.dgY = v.y; v.dgT = S.time; }
+    const lx = v.x + (v.dgVx || 0) * FOE_LEAD, ly = v.y + (v.dgVy || 0) * FOE_LEAD;
+    const spots = dist2(lx, ly, v.x, v.y) > 0.25 ? [[v.x, v.y], [lx, ly]] : [[v.x, v.y]];
+    const R2 = R * R;
     for (let p = 0; p < n; p++) {
       if (p === v.owner || (S.wildlife && p === WILD_OWNER)) continue;
       const m = DANGER.maps[p];
-      for (let j = Math.max(0, Math.floor(cy - R)); j <= Math.min(H - 1, Math.floor(cy + R)); j++)
-        for (let i = Math.max(0, Math.floor(cx - R)); i <= Math.min(W - 1, Math.floor(cx + R)); i++)
-          if (dist2(i + 0.5, j + 0.5, cx, cy) <= R2) m[j * W + i] |= 2;
+      for (const [cx, cy] of spots)
+        for (let j = Math.max(0, Math.floor(cy - R)); j <= Math.min(H - 1, Math.floor(cy + R)); j++)
+          for (let i = Math.max(0, Math.floor(cx - R)); i <= Math.min(W - 1, Math.floor(cx + R)); i++)
+            if (dist2(i + 0.5, j + 0.5, cx, cy) <= R2) m[j * W + i] |= 2;
     }
   }
 }
@@ -4627,7 +4638,7 @@ function warbotAct(u, dt) {
 
 /**
  * Could a bot walk the straight line from (x0, y0) to (x1, y1): no building, water, cliff or chasm
- * across it (ramps and diagonal steps round no corner, as in moveDirect)?
+ * across it, and no squeezing past a building's corner (ramps and diagonal steps round no corner, as in moveDirect)?
  */
 function clearLine(x0, y0, x1, y1) {
   const n = Math.ceil(dist(x0, y0, x1, y1) / 0.25);
@@ -4638,6 +4649,7 @@ function clearLine(x0, y0, x1, y1) {
     if (!inMap(i, j)) return false;
     const c = tIdx(ci, cj), t = tIdx(i, j);
     if (S.bAt[t] && k < n) return false;
+    if (i !== ci && j !== cj && (S.bAt[tIdx(i, cj)] || S.bAt[tIdx(ci, j)])) return false; // (not past a building's corner)
     const ok = i === ci || j === cj ? canStep(c, t)
       : (canStep(c, tIdx(i, cj)) && canStep(tIdx(i, cj), t)) || (canStep(c, tIdx(ci, j)) && canStep(tIdx(ci, j), t));
     if (!ok) return false;
