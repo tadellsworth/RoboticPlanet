@@ -765,7 +765,7 @@ const BDEFS = {
     name: 'Missile Silo',
     desc: 'Fires Missiles from a Missile Factory at rival buildings far away. A hit wrecks most buildings outright, Outposts and Bunkers included, and damages the buildings and bots around it; a Command Base or Keep it only knocks down, so warbots can capture it. Holds two Missiles.',
     cost: { cement: 5, alloy: 4, chip: 2 }, ammo: 'warhead', ammoCap: 2,
-    missile: { range: 18, reload: 25, damage: 24, splash: 2.2, splashDamage: 5, botDamage: 9 }, armor: 14, buildTime: 16, war: true,
+    missile: { range: 22, reload: 25, damage: 24, splash: 2.2, splashDamage: 5, botDamage: 9 }, armor: 14, buildTime: 16, war: true,
   },
   reactor: {
     name: 'Nuclear Reactor', desc: 'Enriches Uranium: 2 Uranium make 1 Enriched Uranium. Nuclear race only.',
