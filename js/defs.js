@@ -439,6 +439,8 @@ const RUNWAY_LEN = 5, ROLL_ACCEL = 0.42, ROLL_BRAKE = 0.75, PLANE_TURN = 1.1, PL
 const AIR_EDGE = 1.5; // planes keep their turning spots this far inside the map's edge
 const SECLUDED_REACH = 16; // warbots at a cut-off post (a Drop Outpost) only go this far from it: for repairs, rally flags and attacks
 const FOOT_CARRY = 12;     // off the road network (a foothold dropped by air), Workers carry goods by hand between buildings this close
+const BUILD_FAR = 16;      // a site doesn't call a Worker from further off than this while one close by (FOOT_CARRY) will soon be free
+const TOPUP_NEAR = 10;     // seconds' walk: how far an idle Worker goes to top up its battery (a flat one goes as far as it must)
 const AIR_KEEP = 12;       // an Airfield keeps up to this many of each good the places it supplies by air are short of
 const SHIP_MEND = 0.5; // hit points a second a ship tied up in Port gets back
 const SHIP_MIN_LOAD = 8; // a far Port sends spare goods home by ship in loads of at least this many // Lakes maps: how much of the land outside the middle lake is lakes (a noise threshold)
@@ -531,6 +533,8 @@ const BREACH_PER_ARMOR = 1;
 // once it's under SORTIE_ARMOR every armed warbot inside goes out to fight. Taking one ejects whoever
 // is still inside instead of killing them.
 const MISSILE_FLOOR = 0.35;
+/** Seconds before a missile (or a nuclear one, ×1.6) lands that its roar is heard diving in (sound only). */
+const MISSILE_WARN = 1.3;
 const SORTIE_ARMOR = 0.25;
 const SORTIE_REACH = 6.5; // guards out on a sortie fight enemies within this of their garrison
 const DEFAULT_SIZE = { versus: 1, colony: 3 };

@@ -743,19 +743,57 @@ function countCharging() {
   }
 }
 
-/** Nearest charger the bot can walk to, avoiding ones that are already crowded. */
-function findCharger(u) {
-  let best = null, bs = Infinity;
+/**
+ * The charger bot u can walk to where it would be charged soonest: the walk there (a straight line, plus a
+ * quarter as paths wind), its turn (the bots inside and on their way share the slots) and, at one that has run
+ * out of Fuel with more on its way, the wait for it. So a busy Fuel Station at home beats a long walk out to an
+ * empty one (a queue there costs seconds; a walk across the map, much longer and half the charge). One an enemy
+ * gun covers (or with enemy warbots about) only as a last resort. maxWalk: seconds; none further (a top-up).
+ */
+function findCharger(u, maxWalk) {
+  let best = null, bs = Infinity, queue = null;
   const zone = S.zone[tIdx(Math.floor(u.x), Math.floor(u.y))];
+  const spd = (BOTS[u.type].speed || WORKER_SPEED) * batFactor(u), need = Math.max(10, 100 - (u.bat ?? 100));
   for (const b of S.buildings) {
     if (b.dead || b.owner !== u.owner || !b.built) continue;
     const ch = BDEFS[b.type].charger;
-    if (!ch || S.zone[tIdx(b.x, b.y)] !== zone || chargerDry(b) || evacuated(b)) continue;
+    if (!ch || S.zone[tIdx(b.x, b.y)] !== zone || evacuated(b)) continue;
     if (roadBound(u) && !botLinked(u, b)) continue;
-    const s = dist(b.x + 0.5, b.y + 0.5, u.x, u.y) + Math.max(0, (b.charging || 0) - ch.slots) * 4 + (gunShy(u) && shunned(b) ? 500 : 0); // one an enemy gun covers (or with enemy warbots about) only as a last resort
+    const walk = (1.25 * dist(b.x + 0.5, b.y + 0.5, u.x, u.y)) / spd;
+    if (walk > (maxWalk ?? Infinity)) continue;
+    const wait = chargerDry(b) ? fuelEta(b) : 0;
+    if (wait === Infinity) continue;
+    if (!queue) queue = chargeQueue(u);
+    const rate = ch.rate * (tech(b.owner, 'cells') || tech(b.owner, 'charge') ? 1.5 : 1) * Math.min(1, ch.slots / ((queue.get(b.id) || 0) + 1));
+    const s = Math.max(walk, wait) + need / rate + (gunShy(u) && shunned(b) ? 600 : 0);
     if (s < bs) { bs = s; best = b; }
   }
   return best;
+}
+
+/** How many bots are charging at each charger, or on their way to (bot u aside): building id -> n. */
+function chargeQueue(u) {
+  const q = new Map();
+  for (const v of S.bots) {
+    if (v === u || v.dead || v.owner !== u.owner || v.type === 'warbot' || BOTS[v.type].truck || BOTS[v.type].sea) continue;
+    const t = v.task;
+    const id = t && t.type === 'charge' ? t.bld : t && t.phase === 'toCharge' ? t.charger : v.inside && (v.bat ?? 100) < 100 ? v.inside : 0;
+    if (id) q.set(id, (q.get(id) || 0) + 1);
+  }
+  return q;
+}
+
+/** Seconds until Fuel reaches charger b, which has none (Infinity if none is on its way). */
+function fuelEta(b) {
+  if (!((b.inc.fuel || 0) > 0)) return Infinity;
+  let best = Infinity;
+  for (const v of S.bots) {
+    const t = v.task;
+    if (v.dead || !t || t.type !== 'haul' || t.dst !== b.id || !(t.good === 'fuel' || (t.mix && t.mix.fuel))) continue;
+    const src = getE(t.src), d = t.phase === 'toDst' || !src ? dist(v.x, v.y, b.x + 0.5, b.y + 0.5) : dist(v.x, v.y, src.x + 0.5, src.y + 0.5) + dist(src.x, src.y, b.x, b.y);
+    best = Math.min(best, (1.25 * d) / (BOTS[v.type].speed || WORKER_SPEED) + 2);
+  }
+  return best < Infinity ? best : 20;
 }
 
 /**
@@ -803,9 +841,10 @@ function goRefuel(u) {
   return true;
 }
 
-function goCharge(u) {
+function goCharge(u, maxWalk) {
   if (BOTS[u.type].truck || BOTS[u.type].sea) return goRefuel(u);
-  const c = findCharger(u);
+  const c = findCharger(u, maxWalk);
+  if (maxWalk !== undefined && !c) return false; // (a top-up: nowhere close enough, so it doesn't bother)
   if (!c || !goTo(u, c.x, c.y)) {
     const P = S.players[u.owner];
     if (S.time - (P.lastChargeMsg || -99) > 90) {
@@ -1592,11 +1631,14 @@ function dispatch(p) {
   }
   if (!idle.length) return;
 
-  // 1) A builder for every construction site that has materials waiting to be built with.
+  // 1) A builder for every construction site that has materials waiting to be built with (not from far off
+  //    while a worker close by will soon be free: see nearSoon).
   for (const b of blds) {
     if (!idle.length) return;
     if (!b.built && !b.builder && siteFrac(b) > b.progress + 0.01) {
-      assignBuild(take(b.x, b.y, 'build'), b);
+      const u = take(b.x, b.y, 'build');
+      if (u && nearSoon(u, b)) { idle.push(u); continue; }
+      assignBuild(u, b);
     }
   }
   // 1b) A worker for every building you've paid to repair.
@@ -1604,6 +1646,7 @@ function dispatch(p) {
     if (!idle.length) return;
     if (b.built && b.fixLeft > 0 && !b.fixer) {
       const u = take(b.x, b.y, 'build');
+      if (u && nearSoon(u, b)) { idle.push(u); continue; }
       if (u) assignFix(u, b);
     }
   }
@@ -1621,6 +1664,7 @@ function dispatch(p) {
     }
     const u = take(b.x, b.y, 'staff');
     if (!u) break;
+    if (nearSoon(u, b)) { idle.push(u); continue; } // (a worker close by will soon be free to run it)
     assignStaff(u, b);
     free--;
   }
@@ -2294,6 +2338,25 @@ function botGroups(u) {
 /** Buildings bots recently failed to reach are skipped by the dispatcher for a few seconds. */
 function reachable(b) { return !(b.unreachUntil > S.time); }
 
+/**
+ * Is idle worker u, picked to build, mend or run building b, far off (over BUILD_FAR tiles) while another worker close
+ * by (FOOT_CARRY, on the same ground) is busy on something short and will soon be free: building or mending,
+ * carrying goods, charging, sheltering from enemy warbots, or waiting? Then that one does it, and nobody treks
+ * across the map: as at a Drop Outpost, whose workers carry the goods to a site beside it and then build it.
+ */
+function nearSoon(u, b) {
+  const cx = b.x + 0.5, cy = b.y + 0.5;
+  if (dist2(u.x, u.y, cx, cy) <= BUILD_FAR * BUILD_FAR) return false;
+  const z = S.zone[tIdx(b.x, b.y)];
+  for (const v of S.bots) {
+    if (v === u || v.dead || v.owner !== b.owner || !BOTS[v.type].build || dist2(v.x, v.y, cx, cy) > FOOT_CARRY * FOOT_CARRY) continue;
+    if (S.zone[tIdx(Math.floor(v.x), Math.floor(v.y))] !== z) continue;
+    const t = v.task;
+    if (!t || ['build', 'fix', 'haul', 'charge', 'cover', 'home', 'crate'].indexOf(t.type) >= 0) return true;
+  }
+  return false;
+}
+
 function assignBuild(u, site) {
   if (!u) return;
   cancelTask(u);
@@ -2390,7 +2453,7 @@ function updateWorker(u, dt) {
       if (u.idleT > 1.5) {
         u.idleT = 0;
         // (A truck tops up only when it's low: a Fuel fills the tank whatever is left in it.)
-        if (!((u.bat ?? 100) < (BOTS[u.type].truck ? 45 : 70) && goCharge(u)) && !u.inside) goHome(u);
+        if (!((u.bat ?? 100) < (BOTS[u.type].truck ? 45 : 70) && goCharge(u, BOTS[u.type].truck ? undefined : TOPUP_NEAR)) && !u.inside) goHome(u);
       }
       if (u.inside && BOTS[u.type].truck && S.tick % 450 === u.id % 450) spreadTrucks(u);
     }
@@ -2412,7 +2475,8 @@ function updateWorker(u, dt) {
     const c = getE(t.bld);
     if (!c || c.owner !== u.owner) { u.task = null; u.path = null; }
     else if (u.inside === c.id) {
-      if (u.bat >= 99.5 || chargerDry(c)) { u.task = null; if (!BDEFS[c.type].store) exitBuilding(u); }
+      // (Out of Fuel: it waits for the Fuel on its way, if any is.)
+      if (u.bat >= 99.5 || (chargerDry(c) && !((c.inc.fuel || 0) > 0))) { u.task = null; if (!BDEFS[c.type].store) exitBuilding(u); }
     } else if (moveAlong(u, dt)) enterBuilding(u, c);
   } else if (t.type === 'haul') doHaul(u, t, dt);
   else if (t.type === 'arty') doArtySupply(u, t, dt);
@@ -3546,7 +3610,7 @@ function updateMortar(b, def, dt) {
 function shellImpact(m) {
   const md = BDEFS.mortar.mortar;
   blastFx(m.x1, m.y1, md.splash * 0.5, { small: true });
-  sfx('shellhit');
+  sfx('shellhit', m.x1, m.y1);
   const hit = [];
   for (const u of S.bots) {
     if (u.dead || u.inside || u.owner === m.owner) continue;
@@ -3750,7 +3814,7 @@ function fuelBlast(x, y, kind, full, owner) {
     blastFx(x + 0.2, y - 0.25, r * 0.6, { small: true, delay: 0.18 });
     addFx('smoke', x, y - 0.2, { r: r * 0.9, life: 5, dark: true });
   }
-  sfx('boom');
+  sfx('fireball', x, y);
   const later = (k) => S.time + BLAST.chain[0] + (BLAST.chain[1] - BLAST.chain[0]) * hash2(Math.floor(x * 13) + k, Math.floor(y * 7), S.tick);
   for (const u of S.bots) {
     if (u.dead || u.inside || u.blowAt > 0) continue;
@@ -5187,7 +5251,7 @@ function rocketFort(b) { return DEFENCE_TYPES.has(b.type) || BDEFS[b.type].mil; 
 /** A Howitzer's shell lands: it knocks ROCKET.damage off its target (×fortMul off a defence; forts no lower than MISSILE_FLOOR), and hurts what's round it. */
 function rocketImpact(m) {
   blastFx(m.x1, m.y1, 0.85);
-  sfx('shellhit');
+  sfx('howitzerhit', m.x1, m.y1);
   const b = getE(m.target);
   if (b && !b.dead && b.owner >= 0 && b.owner !== m.owner) (S.players[b.owner].shelledBy = S.players[b.owner].shelledBy || {})[m.from] = S.time; // (the AI hunts it down: aiSiege)
   const direct = !!(b && !b.dead && b.owner !== m.owner && Math.floor(m.x1) === b.x && Math.floor(m.y1) === b.y);
@@ -5786,6 +5850,7 @@ function updateMissiles(dt) {
       continue;
     }
     if (m.nuke) {
+      if (!m.roar && m.dur - m.t <= MISSILE_WARN * 1.6) { m.roar = true; sfx('nukefall', m.x1, m.y1); }
       if (S.tick % 3 === 0) {
         const k = Math.min(1, m.t / m.dur);
         addFx('smoke', lerp(m.x0, m.x1, k), lerp(m.y0, m.y1, k) - Math.sin(k * Math.PI) * 7 + 0.2, { r: 0.35, life: 1.4 });
@@ -5793,6 +5858,7 @@ function updateMissiles(dt) {
       if (m.t >= m.dur) nukeImpact(m);
       continue;
     }
+    if (!m.roar && m.dur - m.t <= MISSILE_WARN) { m.roar = true; sfx('incoming', m.x1, m.y1); } // (its roar as it dives in)
     if (S.tick % 3 === 0) {
       const k = Math.min(1, m.t / m.dur);
       addFx('smoke', lerp(m.x0, m.x1, k), lerp(m.y0, m.y1, k) - Math.sin(k * Math.PI) * 2.5, { r: 0.3, life: 0.9 });
@@ -5823,7 +5889,7 @@ function captureOnly(b) { return !!(b.built && (b.type === 'lander' || BDEFS[b.t
 function missileImpact(m) {
   const md = BDEFS.silo.missile;
   blastFx(m.x1, m.y1, 2.2);
-  sfx('missilehit');
+  sfx('missilehit', m.x1, m.y1);
   const b = getE(m.target);
   if (b && !b.dead && b.owner !== m.owner) {
     const name = BDEFS[b.type].name;
@@ -6041,7 +6107,7 @@ function nukeImpact(m) {
   const cx = m.x1, cy = m.y1, R2 = NUKE.radius * NUKE.radius;
   addFx('nuke', cx, cy, { life: 2, r: NUKE.radius });
   addFx('nukeglow', cx, cy, { life: 55, r: NUKE.radius }); // the eerie green afterglow and haze (js/fx.js)
-  sfx('nuke');
+  sfx('nuke', cx, cy);
   const lost = S.players.map(() => 0);
   for (const b of S.buildings.slice()) {
     if (b.dead || dist2(b.x + 0.5, b.y + 0.5, cx, cy) > R2) continue;
@@ -6767,7 +6833,7 @@ function lavaImpact(V, b) {
     if (e.owner === 0 && !V.hitMsg) { V.hitMsg = true; postMsg(0, 'Lava bombs are hitting your buildings on the slopes!', e.x, e.y, 'bad'); }
   }
   for (const u of S.bots) if (!u.dead && !u.inside && dist2(u.x, u.y, b.x1, b.y1) <= 1.4) damageBot(u, ERUPTION.botDamage);
-  if (S.owner[t] === 0) sfx('boom');
+  if (S.owner[t] === 0) sfx('boom', b.x1, b.y1);
 }
 
 /* Fault line: warnings, tremors, then the earthquake opens the fault (see QUAKE). */
@@ -6942,7 +7008,7 @@ function meteorImpact(E, h) {
   addFx('smoke', cx, cy, { r: 1 });
   addFx('crater', cx, cy, { life: 6 });
   if (owner === 0) {
-    sfx('boom');
+    sfx('boom', cx, cy);
     if (S.time - (E.msgT || -99) > 12) { E.msgT = S.time; postMsg(0, 'A meteor struck your land!', h.x, h.y, 'bad'); }
   }
   // Roads on the spot and next to it are cratered (bridges and tunnels are too solid).
@@ -9290,12 +9356,13 @@ function bombDrop(u) {
   u.mission = null;
   headHome(u);
   if (u.owner === 0 || (tg && tg.owner === 0)) sfx('chute');
+  sfx('bombfall', x1, y1); // (its whistle as it falls, heard from where it will land)
 }
 
 /** A bomb lands: BOMBER.damage off the building it was aimed at, and harm to what's round it. */
 function bombImpact(m) {
   blastFx(m.x1, m.y1, 1.0);
-  sfx('boom');
+  sfx('bombhit', m.x1, m.y1);
   const tg = getE(m.target);
   const s2 = BOMBER.splash * BOMBER.splash;
   if (tg && BDEFS[tg.type] && !tg.dead && tg.owner !== m.owner && Math.floor(m.x1) === tg.x && Math.floor(m.y1) === tg.y) bombHit(tg, BOMBER.damage, m.owner);
@@ -9361,7 +9428,7 @@ function landDrop(d) {
     blastFx(d.i + 0.5, d.j + 0.5, 0.9);
     addFx('fire', d.i + 0.5, d.j + 0.5, { r: 0.4, life: 14, t: -0.3, seed: d.id % 97 }); // the wreck burns
     addDecal('scorch', d.i + 0.5, d.j + 0.5, 0.9, 90);
-    if (d.owner === 0 || S.owner[t] === 0) sfx('boom');
+    if (d.owner === 0 || S.owner[t] === 0) sfx('fireball', d.i + 0.5, d.j + 0.5);
     return;
   }
   if (d.kind === 'supply') {
@@ -9552,7 +9619,7 @@ function updateFlakShells() {
   S.flak = S.flak.filter((sh) => {
     if (S.time < sh.at) return true;
     addFx('flak', sh.x, sh.y, { life: 2.2, seed: (sh.x * 7.3 + sh.y * 3.1) % 1 });
-    if (S.time - (S.lastFlakSfx || -9) > 0.15) { S.lastFlakSfx = S.time; sfx('flak'); }
+    if (S.time - (S.lastFlakSfx || -9) > 0.15) { S.lastFlakSfx = S.time; sfx('flak', sh.x, sh.y); }
     for (const u of S.bots) {
       if (u.dead || u.owner === sh.owner || !BOTS[u.type].air || !u.flight || planeAlt(u) < 0.15) continue;
       const d = dist(u.x, u.y, sh.x, sh.y);

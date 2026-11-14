@@ -3336,7 +3336,7 @@ function killBot(bot, quiet) {
   blastFx(bot.x, bot.y, bot.type === 'warbot' ? 0.6 : 0.4, { small: true });
   // what's left of it burns for a few seconds (a big vehicle longer)
   if (!quiet) addFx('fire', bot.x, bot.y, { r: BOTS[bot.type].truck || BOTS[bot.type].rail || BOTS[bot.type].crawler ? 0.3 : 0.18, life: BOTS[bot.type].truck || BOTS[bot.type].crawler ? 9 : 5, t: -0.3, seed: bot.id % 97 });
-  if (!quiet) sfx('boom');
+  if (!quiet) sfx('botboom', bot.x, bot.y);
 }
 
 /** Detach every bot that depends on building b (tasks, staff, garrison, idle inside). */
@@ -3403,7 +3403,8 @@ function destroyBuilding(b, burn, quiet) {
   // A Gate that stood on a road leaves the road behind when it goes.
   if (b.type === 'gate' && b.road) setRoad(b.x, b.y, true, b.owner);
   markDirty(b.x, b.y);
-  if (!quiet) { collapseFx(b, burn); sfx('boom'); } // (taken down on purpose, as when a building moves: no wreck)
+  // (blown up: an explosion; taken down on purpose, dismantled or moved: no wreck, the rubble just comes down)
+  if (!quiet) { collapseFx(b, burn); sfx(burn ? 'boom' : 'collapse', b.x + 0.5, b.y + 0.5); }
   if ((BDEFS[b.type].mil || civClaims(b)) && b.built) computeTerritory();
   if (boom >= 0) fuelBlast(b.x + 0.5, b.y + 0.5, b.type, boom, b.owner);
 }

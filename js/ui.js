@@ -3870,7 +3870,7 @@ function openBuildingSheet(b) {
       // Say what's left in crates: all its materials, and anything that was inside it.
       const def = BDEFS[b.type], built = b.built;
       const out = demolish(b);
-      sfx('boom');
+      sfx('collapse');
       closeSheet();
       if (!out) return;
       const mats = Object.keys(out.cost).length ? costText(out.cost) : '';
