@@ -2085,3 +2085,7 @@ art/tod/evening/bots/bomber@0.png	main	bomber::#38d4ff:bomber@0:tod=evening	comp
 art/tod/evening/bots/bomber@1.png	main	bomber::#ff5a6e:bomber@1:tod=evening	compose_any.py --b1 5 --b2 15
 art/tod/night/bots/bomber@0.png	main	bomber::#38d4ff:bomber@0:tod=night	compose_any.py --b1 5 --b2 15
 art/tod/night/bots/bomber@1.png	main	bomber::#ff5a6e:bomber@1:tod=night	compose_any.py --b1 5 --b2 15
+art/buildings/uplink.png	main	uplink:#eef6ff::uplink	compose.py
+art/tod/morning/buildings/uplink.png	main	uplink:#eef6ff::uplink:tod=morning	compose.py
+art/tod/evening/buildings/uplink.png	main	uplink:#eef6ff::uplink:tod=evening	compose.py
+art/tod/night/buildings/uplink.png	main	uplink:#eef6ff::uplink:tod=night	compose.py

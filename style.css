@@ -127,6 +127,12 @@ body::before {
 .win-bar i { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 4px; background: var(--c); }
 .win-bar b { position: absolute; top: -3px; bottom: -3px; width: 2px; margin-left: -1px; background: #fff; opacity: 0.8; border-radius: 1px; }
 .win-note { font-size: 11.5px; opacity: 0.75; }
+.up-dots { display: flex; gap: 6px; }
+.up-dots i { width: 14px; height: 14px; border-radius: 50%; background: var(--c); border: 2px solid rgba(255, 255, 255, 0.85); box-sizing: border-box; }
+.up-dots i.free { background: transparent; border-color: rgba(255, 255, 255, 0.5); }
+.up-dots i.jam { animation: upjam 0.5s steps(2) infinite; }
+@keyframes upjam { 50% { background: transparent; } }
+@media (prefers-reduced-motion: reduce) { .up-dots i.jam { animation: none; } }
 /* Research Lab panel */
 .research-now { margin-bottom: 8px; }
 .research-now .kv { align-items: center; }

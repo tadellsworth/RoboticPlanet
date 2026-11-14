@@ -5,7 +5,9 @@ on a dusty alien planet: gather resources, link them into supply chains with a n
 spread across the map. Roads are the heart of the game: Haulers only drive on them, so where your roads go decides
 how goods move.
 
-- **Versus:** race a rival AI colony across the planet. Capture its Command Base to win (about 20–40 minutes).
+- **Versus:** race a rival AI colony across the planet. Capture its Command Base to win (about 20–40 minutes), or pick a
+  faster **Victory** on the new-game screen: **Domination** (hold most of the land for 3 minutes) or **Uplinks** (hold
+  neutral relay towers for a total of 5 minutes). A rival that's clearly beaten surrenders.
   The rival is **Easy**, **Medium** (between Easy and Normal), **Normal** or **Hard**, and has a **personality**
   (Rival style: Balanced by default, or Random, Turtle, Raider, Rusher or Tycoon; see below).
   **Players: Free-for-all · 3** adds a second rival (red and green): a round planet with the three starts 120° apart
@@ -485,6 +487,22 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
   Balance (`fuelprobe.js` AI games over every map shape, 45 minutes): colonies use a bit over half the Fuel they make,
   Fuel Stations stand dry about 2% of the time and trucks run empty almost never; trucks take about a tenth of the
   Fuel, a Generator a fifth where there is one.
+- **Ways to win** (`VICTORY`, `S.victory`, `S.endHow`; Versus only, not missions): **Capture** is the default.
+  **Surrender** (`SURRENDER`, `checkSurrender`): in any mode, 12 minutes in, a rival down to 40% of its best (buildings,
+  warbots counting double) against a colony 4× as strong, or with nothing to rebuild with, gives up after about 40 s and
+  everything it had changes hands as if captured. **Domination** (`DOM`, `updateDomination`, `domShare`): hold 60% of the
+  land anyone holds with one rival (half with two, 45% with three) and a fifth of the planet for 3 minutes straight.
+  **Uplinks** (`UPLINK`, `placeUplinks`, `updateUplinks`): 3 to 5 neutral towers (`S.uplinks`) placed by the map's own
+  symmetry (180° for two, 120° for three, quarter turns on Crossroads), so every colony has the same, using a travel-effort
+  map (`travelCost`) to keep them fair; on Sky islands only on mesa tops. Each belongs to the colony whose land covers it,
+  and an armed enemy warbot within 2.5 tiles jams it. From `UPLINK.online` (8 min) the colony holding at least half of
+  them and more than anyone else runs its clock (`S.upClock`, kept when it stops); 5 minutes in all wins. The AI plays
+  for the Uplinks rather than the Command Base (`aiUplinks`): it pushes Outposts toward free ones (`aiUplinkGap`, a pull
+  in `aiSearchSpot`; Keeps too), bridges or viaducts across to one it can't walk to (`aiCrossTarget`), holds its own
+  (garrison priority High at the forts there, a guard flag of 2 to 4 warbots beside each from 90 s before they come
+  online, two more per jammer, and a Bunker right beside each that skips the queue), and sends attacks, marches,
+  bombers and missiles at the forts holding a rival's Uplinks (`holdsUplink`), even ahead of a crushed rival's
+  Command Base, jamming them while that rival's clock runs (`aiJamUplink`).
 - **Army orders:** tap **Army**, then a rival building to attack it with warbots or a missile, or open
   ground to send warbots there to hold the area under a rally flag. Tap the flag to call them back, or press
   **Recall all** in the Army banner (**C** on a computer) to end every attack and rally flag at once.

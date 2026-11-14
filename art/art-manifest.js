@@ -194,6 +194,7 @@ const ART_MANIFEST = {
   // The Keep: the concrete base (per team), its roof cannon in 16 directions and six frames of live wire (renderer/b/keep.js).
   'keep@0': B3D('buildings/keep@0.webp', 1.65), 'keep@1': B3D('buildings/keep@1.webp', 1.65),
   tradepost: B3D('buildings/tradepost.webp', 2.0), // the neutral Trade Post (no team)
+  uplink: B3D('buildings/uplink.webp', 1.9), // a neutral Uplink (the Uplinks victory; no team: the game lights its ring and beacon)
   'terminal@0': B3D('buildings/terminal@0.webp', 1.6), 'terminal@1': B3D('buildings/terminal@1.webp', 1.6),
   ...(() => { const o = {}; for (let k = 0; k < 16; k++) o[`keep-head-${k}`] = B3D(`buildings/keep-head-${k}.webp`, 1.65); for (let f = 0; f < 6; f++) o[`keep-spark-${f}`] = B3D(`buildings/keep-spark-${f}.webp`, 1.65); return o; })(),
   ...(() => { const o = {}; for (let k = 0; k < 16; k++) o[`flak-head-${k}`] = B3D(`buildings/flak-head-${k}.webp`, 1.3); return o; })(),

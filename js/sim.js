@@ -43,7 +43,7 @@ function simStep(dt) {
   if (S.events) updateEvents();
   if (S.tide || S.volcano || (S.quake && !S.quake.done)) updateMapEvents(dt);
   if (S.tick % 30 === 25) naniteRepair();
-  if (S.tick % 30 === 9) { checkSurrender(); if (S.victory === 'domination' && S.winner < 0) updateDomination(); }
+  if (S.tick % 30 === 9) { checkSurrender(); if (S.victory === 'domination' && S.winner < 0) updateDomination(); if (S.victory === 'uplinks' && S.winner < 0) updateUplinks(); }
   for (const P of S.players) {
     if (!P.ai || P.out) continue;
     P.aiT -= dt;
@@ -4546,8 +4546,9 @@ function updateDomination() {
  */
 function rivalOf(p) {
   if (S.players.length === 2) return 1 - p;
-  // Domination: a colony about to win on land is everyone's rival.
+  // Domination: a colony about to win on land is everyone's rival (Uplinks: one whose clock is running).
   if (S.victory === 'domination' && S.dom && S.dom.lead >= 0 && S.dom.lead !== p && !S.players[S.dom.lead].out) return S.dom.lead;
+  if (S.victory === 'uplinks' && (S.upLead ?? -1) >= 0 && S.upLead !== p && !S.players[S.upLead].out) return S.upLead;
   const P = S.players[p];
   const keep = P.rival >= 0 && S.players[P.rival] && !S.players[P.rival].out && S.time < (P.rivalUntil || 0);
   if (keep) return P.rival;
@@ -7354,6 +7355,225 @@ function placePosts(seed) {
     S.posts.push({ id: S.posts.length + 1, x: best.i, y: best.j });
   }
 }
+
+/* ------------------------------------------------------------------ Uplinks (a Victory) */
+
+/** Travel effort from tile `from` to every tile (for placing the Uplinks fairly): on foot 1 a step (4 ways), and what it takes to cross what's in
+ *  the way: a cliff (a Ramp) 6, water (a bridge or a ferry) 3, a canyon (a bridge) 5, rock (a tunnel) 7, lava 12. */
+function travelCost(from) {
+  const N = S.W * S.H, d = new Float32Array(N).fill(Infinity), W = S.W;
+  const hc = [], ht = [];
+  const push = (c, t) => { let i = hc.length; hc.push(c); ht.push(t); while (i > 0) { const p = (i - 1) >> 1; if (hc[p] <= hc[i]) break; [hc[p], hc[i]] = [hc[i], hc[p]]; [ht[p], ht[i]] = [ht[i], ht[p]]; i = p; } };
+  const pop = () => { const c = hc[0], t = ht[0], lc = hc.pop(), lt = ht.pop(); if (hc.length) { hc[0] = lc; ht[0] = lt; let i = 0; for (;;) { const l = 2 * i + 1, r = l + 1; let m = i; if (l < hc.length && hc[l] < hc[m]) m = l; if (r < hc.length && hc[r] < hc[m]) m = r; if (m === i) break; [hc[m], hc[i]] = [hc[i], hc[m]]; [ht[m], ht[i]] = [ht[i], ht[m]]; i = m; } } return [c, t]; };
+  const enter = (a, b) => {
+    const tb = S.terrain[b];
+    if (S.lava && S.lava[b]) return 12;
+    if (tb === T_WATER) return S.ford && S.ford[b] === 1 ? 1.5 : 3;
+    if (tb === T_CHASM) return 5;
+    if (tb === T_ROCK) return 7;
+    if (S.terrain[a] !== T_GROUND) return 1.5;
+    return canStep(a, b) ? 1 : 6;
+  };
+  d[from] = 0; push(0, from);
+  while (hc.length) {
+    const [c, t] = pop();
+    if (c > d[t]) continue;
+    const i = t % W;
+    for (const u of [i > 0 ? t - 1 : -1, i < W - 1 ? t + 1 : -1, t - W, t + W]) {
+      if (u < 0 || u >= N) continue;
+      const nc = c + enter(t, u);
+      if (nc < d[u]) { d[u] = nc; push(nc, u); }
+    }
+  }
+  return d;
+}
+
+/** The map's own symmetry: tile t and its twins (the same spot on every other side), or null off the map. */
+function uplinkOrbit(t) {
+  const W = S.W, H = S.H, N = W * H, np = S.players.length, SH = SHAPE_PRESETS[S.settings.shape || 0];
+  if (np === 2 && !(SH.cross && false)) return [t, N - 1 - t];
+  if (SH.cross) { const r4 = (u) => { const i = u % W, j = (u / W) | 0; return i * W + (W - 1 - j); }; return [t, r4(t), r4(r4(t)), r4(r4(r4(t)))]; }
+  const ccx = (W - 1) / 2, ccy = (H - 1) / 2, i = t % W, j = (t / W) | 0, out = [t];
+  for (let k = 1; k < 3; k++) {
+    const a = (k * 2 * Math.PI) / 3, c = Math.cos(a), s = Math.sin(a), x = Math.round(ccx + (i - ccx) * c - (j - ccy) * s), y = Math.round(ccy + (i - ccx) * s + (j - ccy) * c);
+    if (!inMap(x, y)) return null;
+    out.push(tIdx(x, y));
+  }
+  return out;
+}
+
+/**
+ * The Uplinks, placed fairly on any map by its own symmetry (each one with its twins, so every colony has the
+ * same), on open, level ground with room round it, clear of the Trade Posts, lava, the fault, the tide and the
+ * Command Bases. Two colonies: one in the middle if there's ground there, and a pair out on the flanks (two
+ * pairs if the middle is a rift or the sea); three: one between each pair of colonies; four (Crossroads): the
+ * plaza and one in each gap between neighbouring quarters.
+ */
+function placeUplinks(seed) {
+  const Ls = S.players.filter((P) => !P.absent).map((P) => getE(P.lander)).filter(Boolean), n = Ls.length;
+  const costs = Ls.map((L) => travelCost(tIdx(L.x, L.y)));
+  const W = S.W, H = S.H, SH = SHAPE_PRESETS[S.settings.shape || 0], quad = !!SH.cross && S.players.length >= 3;
+  const near = (t, r, f) => { const i = t % W, j = (t / W) | 0; for (let dj = -r; dj <= r; dj++) for (let di = -r; di <= r; di++) { const x = i + di, y = j + dj; if (inMap(x, y) && f(tIdx(x, y))) return true; } return false; };
+  const free = (u) => S.terrain[u] === T_GROUND && !S.res[u] && !S.bAt[u] && !S.road[u] && !S.ramp[u] && !(S.tidal && S.tidal[u]) && !(S.lava && S.lava[u]);
+  const span = Math.hypot(W, H), minBase = Math.max(10, span * 0.12);
+  const ok = new Uint8Array(W * H), roomAt = new Uint8Array(W * H);
+  for (let j = 3; j < H - 3; j++) for (let i = 3; i < W - 3; i++) {
+    const t = tIdx(i, j);
+    if (!free(t)) continue;
+    let room = 0;
+    for (let dj = -2; dj <= 2; dj++) for (let di = -2; di <= 2; di++) { const u = tIdx(i + di, j + dj); if (free(u) && S.elev[u] === S.elev[t]) room++; }
+    roomAt[t] = room;
+    if (room < 9) continue;
+    if (SH.sky && S.elev[t] < 3) continue; // (Sky islands: on a mesa top, which a Viaduct can reach, not the canyon floor)
+    if (S.fault && near(t, 3, (u) => S.fault[u])) continue;
+    if (S.lava && near(t, 2, (u) => S.lava[u])) continue;
+    if ((S.posts || []).some((p) => Math.abs(p.x - i) <= 2 && Math.abs(p.y - j) <= 2)) continue;
+    if (costs.some((c) => !(c[t] < Infinity))) continue;
+    const db = Math.min(...Ls.map((L) => dist(L.x, L.y, i, j)));
+    if (db < minBase) continue;
+    ok[t] = db >= Math.max(12, span * 0.16) ? 2 : 1; // (2: well out from every base; 1: closer, if need be)
+  }
+  const ups = [];
+  let apart = Math.max(9, span * 0.16);
+  const used = (t) => ups.some((u) => dist(u.x, u.y, t % W, (t / W) | 0) < apart);
+  const add = (orb) => { for (const t of orb) ups.push({ x: t % W, y: (t / W) | 0, d: costs.map((c) => Math.round(c[t])) }); };
+  const orbitOk = (t) => { const o = uplinkOrbit(t); if (!o || !o.every((u) => ok[u] >= ok[t] && roomAt[u] >= Math.min(16, roomAt[t]))) return null; const xs = o.map((u) => [u % W, (u / W) | 0]); for (let a = 0; a < xs.length; a++) for (let b = a + 1; b < xs.length; b++) if (dist(xs[a][0], xs[a][1], xs[b][0], xs[b][1]) < apart) return null; return o; };
+  const cx = (W - 1) / 2, cy = (H - 1) / 2;
+  // 1) The middle (two colonies, or Crossroads): open ground right at the centre (so it is its own twin), as near
+  //    every colony as the others. Not there (a rift, the sea): two pairs out on the flanks instead.
+  // (Here a field of stone or ore doesn't rule a spot out: the Uplink's own tile is cleared, with its twins.)
+  let mid = null;
+  if (n === 2 || quad) {
+    let bs = -Infinity;
+    for (let j = Math.floor(cy - 5); j <= Math.ceil(cy + 5); j++) for (let i = Math.floor(cx - 5); i <= Math.ceil(cx + 5); i++) {
+      if (!inMap(i, j)) continue;
+      const t = tIdx(i, j), dc = dist(i, j, cx, cy);
+      if (dc > 4.6 || S.terrain[t] !== T_GROUND || S.ramp[t] || S.road[t] || S.bAt[t] || (S.tidal && S.tidal[t]) || (S.lava && S.lava[t]) || (SH.sky && S.elev[t] < 3)) continue;
+      if (S.fault && near(t, 3, (u) => S.fault[u])) continue;
+      if (S.lava && near(t, 2, (u) => S.lava[u])) continue;
+      if ((S.posts || []).some((p) => Math.abs(p.x - i) <= 2 && Math.abs(p.y - j) <= 2)) continue;
+      let room = 0;
+      for (let dj = -2; dj <= 2; dj++) for (let di = -2; di <= 2; di++) { const u = tIdx(i + di, j + dj); if (S.terrain[u] === T_GROUND && !S.ramp[u] && S.elev[u] === S.elev[t]) room++; }
+      if (room < 10) continue;
+      const d = costs.map((c) => c[t]);
+      if (d.some((v) => !(v < Infinity))) continue;
+      const unfair = Math.max(...d) - Math.min(...d);
+      if (unfair > (quad ? 6 : 3)) continue;
+      const s = -unfair - dc * 1.5 - (S.res[t] ? 1 : 0);
+      if (s > bs) { bs = s; mid = t; }
+    }
+    if (mid !== null) add([mid]);
+  }
+  // 2) The rest, an orbit at a time: the fairest band the map has (between the two nearest colonies), and in it
+  //    as far out from the middle and each other as can be, not too far from home.
+  const want = n === 2 ? (mid !== null ? 1 : 2) : 1;
+  for (let k = 0; k < want; k++) {
+    let best = null;
+    // (Roomy spots well out from home first, 16 of the 25 tiles round it open; then a small islet's 9; then,
+    // on a crowded map of islets, closer to the others and to home.)
+    // (A pair is fair as a pair, whatever each one's lean: past 48 the lean no longer rules a spot out.)
+    for (let pass = 0; pass < 3 && !best; pass++) for (const lim of [4, 8, 12, 16, 20, 24, 32, 40, 48, Infinity]) {
+      if (best) break;
+      let bs = -Infinity;
+      if (pass === 2) apart = Math.max(7, span * 0.1);
+      for (let t = 0; t < W * H; t++) {
+        if (!ok[t] || used(t) || roomAt[t] < (pass ? 9 : 16) || (pass < 2 && ok[t] < 2)) continue;
+        const d = costs.map((c) => c[t]).slice().sort((a, b) => a - b), unfair = d[1] - d[0];
+        if (unfair > lim) continue;
+        const o = orbitOk(t);
+        if (!o || o.some((u) => used(u))) continue;
+        const sep = ups.length ? Math.min(...ups.map((u) => dist(u.x, u.y, t % W, (t / W) | 0))) : span * 0.25;
+        // (The twins land on slightly different ground where the map was turned, not mirrored: keep the
+        // whole set as near alike for every colony as it can be.)
+        const tot = costs.map((c) => o.reduce((a, u) => a + c[u], 0)), lop = Math.max(...tot) - Math.min(...tot);
+        // (Spread out, but only so far: past a quarter of the map, nearer the colonies is better, where they meet.)
+        const s = Math.min(sep, span * 0.25) * 0.6 - d[0] * 0.35 - unfair * 0.5 - lop * 1.5 + hash2(t % W, (t / W) | 0, (seed ^ 0x51ab) >>> 0) * 0.5;
+        if (s > bs) { bs = s; best = o; }
+      }
+    }
+    if (best) add(best);
+  }
+  // Each Uplink's own tile is cleared of anything growing or lying there (with its twins, so the map stays fair).
+  S.uplinks = ups.map((u, k) => ({ id: k + 1, x: u.x, y: u.y, owner: -1, jam: 0 }));
+  for (const u of S.uplinks) { const t = tIdx(u.x, u.y); S.res[t] = R_NONE; S.amt[t] = 0; S.fert[t] = 0; }
+  return S.uplinks;
+}
+
+/** The neutral Uplink on tile t, or null. */
+function uplinkAt(t) {
+  if (!S.uplinks) return null;
+  for (const u of S.uplinks) if (u.y * S.W + u.x === t) return u;
+  return null;
+}
+
+/** How many Uplinks it takes to run your clock: at least half of them (and more than anyone else: see updateUplinks). */
+function uplinksNeeded() { return Math.ceil((S.uplinks || []).length / 2); }
+
+/** The goal in words: "2 of 3", or with an even number "2 of 4, more than anyone else" (2 each is a tie). */
+function uplinkGoal() {
+  const n = (S.uplinks || []).length;
+  return `${uplinksNeeded()} of ${n}` + (n % 2 ? '' : `, more than ${S.players.length > 2 ? 'anyone else' : 'the rival'}`);
+}
+
+/**
+ * Uplinks (the Victory picked on the new-game screen), once a second: each Uplink is held by the colony whose land
+ * it stands in, unless an armed warbot of another colony stands within UPLINK.jam tiles of it (jammed: no one's).
+ * The colony holding most of them runs its clock (S.upClock); a total of UPLINK.hold seconds wins. Messages when
+ * an Uplink changes hands, when a colony takes or loses the lead, and at a minute and 20 seconds left.
+ */
+function updateUplinks() {
+  const U = S.uplinks;
+  if (!U || !U.length) return;
+  const clock = S.upClock || (S.upClock = S.players.map(() => 0)), many = S.players.length > 2;
+  const held = S.players.map(() => 0), j2 = UPLINK.jam * UPLINK.jam;
+  const who = (p) => (p === 0 ? 'You' : many ? 'The ' + playerName(p) : 'The rival');
+  for (const u of U) {
+    const o = S.owner[tIdx(u.x, u.y)], was = u.owner;
+    u.owner = o >= 0 && S.players[o] && !S.players[o].out && !S.players[o].absent ? o : -1;
+    let jam = 0;
+    if (u.owner >= 0) for (const b of S.bots) {
+      if (b.dead || b.inside || b.type !== 'warbot' || b.owner < 0 || b.owner === u.owner || (b.ammo ?? WARBOT_AMMO) <= 0) continue;
+      if (dist2(b.x, b.y, u.x + 0.5, u.y + 0.5) <= j2) { jam = b.owner + 1; break; }
+    }
+    if (jam && !u.jam && u.owner === 0) postMsg(0, `${jam - 1 > 0 ? (many ? 'The ' + playerName(jam - 1) : 'Enemy') : 'Your'} warbots are jamming your Uplink: drive them off!`, u.x, u.y, 'bad');
+    u.jam = jam;
+    if (u.owner !== was) {
+      if (u.owner === 0) postMsg(0, 'An Uplink is yours: it stands in your land.', u.x, u.y, 'good');
+      else if (was === 0) postMsg(0, `${u.owner >= 0 ? who(u.owner) + ' took' : 'You lost'} an Uplink!`, u.x, u.y, 'bad');
+    }
+    if (u.owner >= 0 && !u.jam) held[u.owner]++;
+  }
+  S.upHeld = held;
+  const need = uplinksNeeded();
+  // Before they come online they can be claimed, but no clock runs.
+  if (S.time < UPLINK.online) return;
+  if (!S.upOnline) {
+    S.upOnline = true;
+    postMsg(0, `The Uplinks are online: hold ${uplinkGoal()}, and your clock runs.`, undefined, undefined, 'info');
+  }
+  let lead = -1;
+  for (const P of S.players) if (!P.out && !P.absent && held[P.id] >= need && S.players.every((Q) => Q === P || held[Q.id] < held[P.id])) lead = P.id;
+  if (lead !== (S.upLead ?? -1)) {
+    const was = S.upLead ?? -1;
+    S.upLead = lead; S.upWarned = 999;
+    if (lead === 0) postMsg(0, `You hold ${held[0]} of the ${U.length} Uplinks: your clock is running (${fmtClock(UPLINK.hold - clock[0])} to go).`, undefined, undefined, 'good');
+    else if (lead > 0) postMsg(0, `${who(lead)} holds ${held[lead]} of the ${U.length} Uplinks: its clock is running (${fmtClock(UPLINK.hold - clock[lead])} to go). Take or jam one!`, undefined, undefined, 'bad');
+    else if (was === 0) postMsg(0, 'You no longer lead on the Uplinks: your clock has stopped.', undefined, undefined, 'warn');
+    else if (was > 0) postMsg(0, `${who(was)} no longer leads on the Uplinks: its clock has stopped.`, undefined, undefined, 'good');
+  }
+  if (lead < 0) return;
+  clock[lead] += 1;
+  const left = UPLINK.hold - clock[lead];
+  if (left <= 0) { S.winner = lead; S.endHow = 'uplinks'; return; }
+  for (const w of [60, 20]) {
+    if (left > w || (S.upWarned ?? 999) <= w) continue;
+    S.upWarned = w;
+    postMsg(0, lead === 0 ? `${w === 60 ? 'One minute' : '20 seconds'} more on the Uplinks and the planet is yours!` : `${who(lead)} wins on the Uplinks in ${w === 60 ? 'one minute' : '20 seconds'}: take or jam one!`, undefined, undefined, lead === 0 ? 'good' : 'bad');
+  }
+}
+
+/** m:ss */
+function fmtClock(s) { s = Math.max(0, Math.round(s)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; }
 
 /** A new creature beside nest b. */
 function spawnCritter(b, type, task) {

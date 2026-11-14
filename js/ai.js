@@ -145,6 +145,8 @@ function aiThink(p) {
       P.defAt = S.time;
     }
   }
+  // Uplinks: guards, first call on warbots and a Bunker for the Uplinks it holds (see aiUplinks).
+  if (S.victory === 'uplinks') aiUplinks(p, lvl, counts);
   if (P.defWant && S.time < P.defWant.until && (counts[P.defWant.type] || 0) < P.defWant.n) plan = [[P.defWant.type, P.defWant.n]].concat(plan);
   // No Cement Works: Cement builds nearly everything (and every road), so one comes first, even
   // past the usual limit on sites.
@@ -155,6 +157,15 @@ function aiThink(p) {
   if (P.short.length && !outSite && S.time - (P.lastExpand || -99) > 40) plan = [['outpost', (counts.outpost || 0) + 1]].concat(plan);
   // Domination: land wins the game, so an Outpost every so often (once the colony runs), wherever it claims most.
   else if (S.victory === 'domination' && !outSite && S.time > 240 && S.time - (P.lastExpand || -99) > 50) plan = [['outpost', (counts.outpost || 0) + 1]].concat(plan);
+  // Uplinks: an Outpost every 40 seconds or so on the way to the nearest free Uplink, while they bring it nearer
+  // (two that don't, and it waits three minutes: one across the sea or past a rival may be out of reach for now).
+  else if (S.victory === 'uplinks' && !outSite && S.time > 180 && S.time - (P.lastExpand || -99) > 40 && S.time >= (P.upWait || 0)) {
+    const gap = aiUplinkGap(p);
+    if (P.upGapT !== undefined && (P.lastExpand || -99) > P.upGapT) P.upMiss = gap < P.upGap - 1 ? 0 : (P.upMiss || 0) + 1;
+    P.upGap = gap; P.upGapT = S.time;
+    if (P.upMiss >= 2) { P.upMiss = 0; P.upWait = S.time + 180; }
+    else if (gap < Infinity) plan = [['outpost', (counts.outpost || 0) + 1]].concat(plan);
+  }
   // Missiles are expensive, so the AI saves up for them (see aiMissilePlan): while it is saving,
   // the building it saves for goes first and nothing else that costs Alloy or Chips is started.
   const saving = aiMissilePlan(p, me, counts, kinds, workers, staffed);
@@ -199,6 +210,9 @@ function aiThink(p) {
   // The first Flak Gun doesn't wait for a free site (nothing else goes past the usual limit for it).
   const flakFirst = enemyAir && S.mode !== 'colony' && !counts.flak, capBefore = Math.max(siteCap, maxSites + 1);
   if (flakFirst) siteCap = Math.max(capBefore, sites + 1);
+  // Uplinks: the Bunker for an Uplink it holds goes first, past the usual limit on sites, once they're nearly online.
+  const upFirst = !!(P.defWant && P.defWant.up && S.time < P.defWant.until && S.time >= UPLINK.online - 60 && (counts.bunker || 0) < P.defWant.n);
+  if (upFirst) { siteCap = Math.max(siteCap, capBefore, sites + 1); plan = [['bunker', P.defWant.n]].concat(plan); }
   const key = (type) => (type === 'charger' && !counts.charger) || type === 'foundry' || type === 'harvester' || type === 'quarry' || (type === 'kiln' && (playerGoods(p).cement || 0) < 3) || defence(type) ||
     (P.defWant && P.defWant.type === type && S.time < P.defWant.until) ||
     (type === 'outpost' && P.short.length > 0);
@@ -206,6 +220,7 @@ function aiThink(p) {
     for (const [type, want0] of plan) {
       if (cementStarved && sites >= maxSites && type !== 'kiln') continue;
       if (flakFirst && sites >= capBefore && type !== 'flak') continue;
+      if (upFirst && sites >= capBefore && type !== 'bunker') continue;
       if (S.mode === 'colony' && BDEFS[type].war) continue;
       // One more Fuel Station for every four Outposts as the colony spreads out, and a Bio
       // Farm for every two stations to keep them in Fuel.
@@ -406,7 +421,8 @@ function aiThink(p) {
         const left = e.armor - (coming.get(e.id) || 0);
         if (captureOnly(e) ? left <= missileFloor(e) + 2 : left <= 0) continue;
         const s = (e.type === 'turret' ? 10 : e.type === 'nukesilo' ? 12 : e.type === 'silo' || e.type === 'reactor' ? 9 : e.type === 'outpost' ? 8 :
-          e.type === 'mortar' || e.type === 'disruptor' || e.type === 'bunker' || e.type === 'keep' ? 7 : e.type === 'lander' ? 5 : 3) - d * 0.1;
+          e.type === 'mortar' || e.type === 'disruptor' || e.type === 'bunker' || e.type === 'keep' ? 7 : e.type === 'lander' ? (S.victory === 'uplinks' ? 1 : 5) : 3) - d * 0.1 +
+          (S.victory === 'uplinks' && holdsUplink(e) ? 7 : 0); // (Uplinks: knock out the forts that hold them)
         if (s > bs) { bs = s; best = e; }
       }
       if (best && fireMissile(p, best)) coming.set(best.id, (coming.get(best.id) || 0) + dmg);
@@ -433,8 +449,14 @@ function aiThink(p) {
   if (S.mode !== 'colony' && S.time >= lvl.grace) aiRaid(p, lvl);
 
   // 5) Attack. Domination: a rival about to win on land is attacked at once, at the Outposts and Keeps that hold it.
+  // Uplinks: the same for one whose clock is running, at the forts whose land holds its Uplinks (and a band of
+  // warbots goes to jam the nearest of them).
   const domFoe = S.victory === 'domination' && S.dom && S.dom.lead >= 0 && S.dom.lead !== p ? S.dom.lead : -1;
-  if (domFoe >= 0 && S.time >= lvl.grace) P.nextAttack = Math.min(P.nextAttack, S.time);
+  const upFoe = S.victory === 'uplinks' && (S.upLead ?? -1) >= 0 && S.upLead !== p ? S.upLead : -1;
+  const upWant = S.victory === 'uplinks' && S.time - (P.lastAttack || -999) > 60 && ((S.upHeld && S.upHeld[p]) || 0) < uplinksNeeded() &&
+    (S.uplinks || []).some((u) => u.owner >= 0 && u.owner !== p);
+  if ((domFoe >= 0 || upFoe >= 0 || upWant) && S.time >= lvl.grace) P.nextAttack = Math.min(P.nextAttack, S.time);
+  if (upFoe >= 0 && S.time >= lvl.grace) aiJamUplink(p, upFoe);
   if (S.time < lvl.grace || S.time < P.nextAttack) return;
   let best = null, bestScore = -Infinity, bestAvail = 0;
   for (const b of S.buildings) {
@@ -447,8 +469,9 @@ function aiThink(p) {
     const base = !b.built ? 2 : weak ? lvl.threshold : Math.max(lvl.threshold, Math.ceil(b.garrison.length * 1.3) + 2);
     if (avail < base || (b.built && !weak && avail < Math.ceil(b.garrison.length * 1.3) + 2 + guardsNear(b))) continue;
     const def = BDEFS[b.type];
-    let score = (def.mil ? 12 : 0) + (b.type === 'lander' ? 25 : 0) - dist(b.x, b.y, lander.x, lander.y) * 0.4 - b.garrison.length * 2;
+    let score = (def.mil ? 12 : 0) + (b.type === 'lander' ? (S.victory === 'uplinks' ? 5 : 25) : 0) - dist(b.x, b.y, lander.x, lander.y) * 0.4 - b.garrison.length * 2;
     if (b.owner === domFoe && b.built && def.mil && def.terr && b.type !== 'lander') score += 30;
+    if (S.victory === 'uplinks' && holdsUplink(b)) score += b.owner === upFoe ? 40 : 30;
     if (!b.built) score -= 8;
     if (score > bestScore) { bestScore = score; best = b; bestAvail = avail; }
   }
@@ -467,7 +490,14 @@ function aiThink(p) {
   if (army >= lvl.threshold * 2 && S.time - (P.lastMarch || -999) > 120 && !(P.march && rallyById(P.march))) {
     let tgt = null, bd = Infinity;
     const enemyBase = getE(S.players[enemy].lander);
-    if (crushing && enemyBase && !enemyBase.dead && enemyBase.owner === enemy) tgt = enemyBase;
+    // Uplinks: the nearest fort holding one of the enemy's Uplinks comes first, even ahead of a crushed rival's Command Base.
+    if (S.victory === 'uplinks') for (const b of S.buildings) {
+      if (b.dead || b.owner !== enemy || !holdsUplink(b)) continue;
+      const d = dist2(b.x, b.y, lander.x, lander.y);
+      if (d < bd) { bd = d; tgt = b; }
+    }
+    if (tgt) { /* (an Uplink fort) */ }
+    else if (crushing && enemyBase && !enemyBase.dead && enemyBase.owner === enemy) tgt = enemyBase;
     else for (const b of S.buildings) {
       if (b.dead || b.owner !== enemy || !b.built || !BDEFS[b.type].mil) continue;
       const d = dist2(b.x, b.y, lander.x, lander.y);
@@ -495,10 +525,12 @@ function aiThink(p) {
   const enemyL = getE(S.players[enemy].lander);
   if (enemyL && army >= lvl.threshold * 2 && S.time - (P.lastAttack || 0) > 60 && siteCount(p) < maxSites && aiAffordable(p, 'outpost')) {
     let spot = null, bd = Infinity;
+    // (Uplinks: toward the nearest one that isn't ours)
+    const goal = S.victory === 'uplinks' ? (S.uplinks || []).filter((u) => u.owner !== p).sort((a, c) => dist2(a.x, a.y, lander.x, lander.y) - dist2(c.x, c.y, lander.x, lander.y))[0] || enemyL : enemyL;
     for (let j = 0; j < S.H; j++) for (let i = 0; i < S.W; i++) {
       const o = S.owner[j * S.W + i];
       if (o !== p && !(o < 0 && inReach(p, j * S.W + i))) continue; // our land, or no-one's within reach
-      const d = dist(i, j, enemyL.x, enemyL.y);
+      const d = dist(i, j, goal.x, goal.y);
       if (d < bd && canPlace(p, 'outpost', i, j, true).ok && !wouldBlock(j * S.W + i)) { bd = d; spot = { x: i, y: j }; }
     }
     if (spot) { placeSite(p, 'outpost', spot.x, spot.y); P.lastAttack = S.time - 30; }
@@ -610,7 +642,9 @@ function aiBridge(p, maxSites) {
   const P = S.players[p], L = getE(P.lander), E = getE(S.players[rivalOf(p)].lander);
   if (!L || !E || L.owner !== p) return;
   const home = homeZone(p);
-  if (S.zone[tIdx(E.x, E.y)] === home || S.time - (P.lastBridge || -999) < 12) return;
+  // What to cross toward: a free Uplink we can't walk to (Uplinks), else the enemy Command Base.
+  const T = aiCrossTarget(p, home) || (S.zone[tIdx(E.x, E.y)] !== home ? E : null);
+  if (!T || S.time - (P.lastBridge || -999) < 12) return;
   P.lastBridge = S.time;
   // One of our bridges is going up already (one its workers can't get to for a long while is called off).
   P.bridgeSince = P.bridgeSince || {};
@@ -638,7 +672,7 @@ function aiBridge(p, maxSites) {
     const t = q[h];
     nb(t, (u) => {
       if (S.terrain[u] === T_GROUND && S.zone[u] >= 0 && S.zone[u] !== home) {
-        const s = steps[t] * 3 + dist(u % W, (u / W) | 0, E.x, E.y);
+        const s = steps[t] * 3 + dist(u % W, (u / W) | 0, T.x, T.y);
         if (s < bestS) { bestS = s; best = t; }
       } else if (steps[t] < 9 && sea(u) && steps[u] < 0) { steps[u] = steps[t] + 1; from[u] = t; q.push(u); }
     });
@@ -664,14 +698,14 @@ function aiBridge(p, maxSites) {
     let best = null, bs = Infinity;
     for (let j = landed.y - VIA_CLAIM; j <= landed.y + VIA_CLAIM; j++) for (let i = landed.x - VIA_CLAIM; i <= landed.x + VIA_CLAIM; i++) {
       if (!inMap(i, j) || S.owner[tIdx(i, j)] !== p || S.zone[tIdx(i, j)] !== home) continue;
-      const sc = dist(i, j, E.x, E.y);
+      const sc = dist(i, j, T.x, T.y);
       if (sc < bs && canPlace(p, 'outpost', i, j, true).ok && !wouldBlock(tIdx(i, j))) { bs = sc; best = [i, j]; }
     }
     if (best) { placeSite(p, 'outpost', best[0], best[1]); return; }
   }
   // No water to bridge (Sky islands): a Viaduct from our clifftop across the canyon, onto a clifftop
   // our border already reaches if there is one (so we can build there), else onto no-one's land.
-  const via = aiViaductSpot(p, home, E);
+  const via = aiViaductSpot(p, home, T);
   if (via) {
     const cost = viaductCost(via.a % W, (via.a / W) | 0, via.b % W, (via.b / W) | 0);
     if (!canPay(p, cost)) { P.bridgeWant = S.time; P.bridgeNeed = cost; return; }
@@ -686,7 +720,7 @@ function aiBridge(p, maxSites) {
   const lowest = S.elev[tIdx(L.x, L.y)] - VIA_RISE;
   for (let t = 0; t < N; t++) {
     if (S.terrain[t] !== T_GROUND || S.zone[t] < 0 || S.zone[t] === home || S.elev[t] < lowest) continue;
-    const i = t % W, j = (t / W) | 0, d = dist(i, j, L.x, L.y) + dist(i, j, E.x, E.y) * 0.6;
+    const i = t % W, j = (t / W) | 0, d = dist(i, j, L.x, L.y) + dist(i, j, T.x, T.y) * 0.6;
     if (d < td) { td = d; tx = i; ty = j; }
   }
   if (tx < 0) return;
@@ -697,6 +731,20 @@ function aiBridge(p, maxSites) {
     const t = cands[k][1], i = t % W, j = (t / W) | 0;
     if (canPlace(p, 'outpost', i, j, true).ok && !wouldBlock(t)) { placeSite(p, 'outpost', i, j); return; }
   }
+}
+
+/** Uplinks: the nearest free Uplink player p can't walk to (across water or a canyon), to cross toward; or null. */
+function aiCrossTarget(p, home) {
+  const L = getE(S.players[p].lander);
+  if (S.victory !== 'uplinks' || !S.uplinks || !L) return null;
+  let best = null, bd = Infinity;
+  for (const u of S.uplinks) {
+    const z = S.zone[tIdx(u.x, u.y)];
+    if (u.owner >= 0 || z === home || z < 0) continue;
+    const d = dist2(u.x, u.y, L.x, L.y);
+    if (d < bd) { bd = d; best = u; }
+  }
+  return best;
 }
 
 /**
@@ -911,7 +959,7 @@ function aiBomber(p, me) {
   if (gun && !gun.dead && gun.owner !== p && !covered(gun.x + 0.5, gun.y + 0.5) && !strikeBlocked(p, u, gun) && !orderStrike(p, u, gun)) { P.lastStrike = S.time; return; }
   let best = null, bs = 0;
   for (const b of S.buildings) {
-    const v = AI_BOMB_VALUE[b.type];
+    const v = S.victory === 'uplinks' && holdsUplink(b) ? Math.max(13, AI_BOMB_VALUE[b.type] || 0) : AI_BOMB_VALUE[b.type]; // (Uplinks: the forts that hold them)
     if (!v || b.dead || !b.built || b.owner === p || b.owner < 0 || covered(b.x + 0.5, b.y + 0.5) || strikeBlocked(p, u, b)) continue;
     const sc = v - dist(b.x, b.y, field.x, field.y) * 0.05;
     if (sc > bs) { bs = sc; best = b; }
@@ -1285,6 +1333,16 @@ function aiSearchSpot(p, type, lander) {
         s = -dist(i, j, ex, ey) * 0.6 + dHome * 0.5 + ore * 1.6 + cry * 1.0 + rest * 0.3;
         if (nukeOn()) s += Math.min(sums[5](i, j, 6), 3) * 6; // the race for uranium
         if (S.victory === 'domination') s += newLandAt(p, i, j, BDEFS.outpost.terr) * 0.1; // Domination: the land it claims
+        if (S.victory === 'uplinks' && S.uplinks) { // Uplinks: one its land would cover, not ours yet, and the way to the nearest free one
+          let near = Infinity;
+          for (const u of S.uplinks) {
+            if (u.owner === p) continue;
+            const du = dist(i, j, u.x, u.y);
+            if (du <= BDEFS.outpost.terr - 1) s += 40 - du * 2;
+            if (u.owner < 0) near = Math.min(near, du);
+          }
+          if (near < Infinity) s += Math.max(0, 44 - near) * 0.9; // (stronger than the pull toward the enemy base)
+        }
         // Crossroads for three: the rich quarter no one landed in draws expansion too.
         if (S.spare) s += Math.max(0, 34 - dist(i, j, S.spare.x, S.spare.y)) * 0.3;
         // Head for whatever we're running out of.
@@ -1327,7 +1385,8 @@ function aiSearchSpot(p, type, lander) {
           if (BDEFS[b.type].mil && !BDEFS[b.type].bunker && (!at || (b.x === at.x && b.y === at.y))) df = Math.min(df, d + (at ? 0 : dist(b.x, b.y, ex, ey) * 0.25));
           if (b.type === type) dk = Math.min(dk, d);
         }
-        const want = type === 'mortar' ? 4 : 2.5;
+        if (at && at.up) { df = dist(i, j, at.x, at.y); dk = 8; } // (beside an Uplink: its guns reach all round it)
+        const want = at && at.up ? 1.5 : type === 'mortar' ? 4 : 2.5;
         s = -Math.abs(df - want - 0) * 1.5 - dist(i, j, ex, ey) * 0.25 + Math.min(dk, 8) * 0.5;
       } else if (type === 'port') {
         let dp = 99;
@@ -1342,6 +1401,8 @@ function aiSearchSpot(p, type, lander) {
           else if (BDEFS[b.type].mil) cover += 0.5;
         }
         s = -Math.abs(dHome - 8) * 0.8 - dist(i, j, ex, ey) * 0.15 + Math.min(cover, 12) * 0.7;
+        // Uplinks: beside one of ours (or a free one its ring would take), to hold it.
+        if (S.victory === 'uplinks' && (S.uplinks || []).some((u) => u.owner === p || u.owner < 0 ? dist(i, j, u.x, u.y) <= BDEFS.keep.terr - 1 : false)) s += 12;
       } else if (type === 'terminal') {
         // Out far enough to pay well (but not past the bonus), away from the enemy, close to our roads.
         s = Math.min(dHome, TERMINAL.minDist + TERMINAL.maxBonus / TERMINAL.perTile) * 0.5 + dist(i, j, ex, ey) * 0.3 - rc * 0.4;
@@ -1384,6 +1445,102 @@ function aiSearchSpot(p, type, lander) {
  * (three times the cost and a margin; once its trains have been shot at, just the margin). Checked every half
  * minute or so.
  */
+/** Uplinks: whether fort b's ring takes in an Uplink its owner holds. */
+function holdsUplink(b) {
+  const r = BDEFS[b.type].terr;
+  return !!(r && b.built && !b.dead && S.uplinks && S.uplinks.some((u) => u.owner === b.owner && dist(u.x, u.y, b.x, b.y) <= r + 0.5));
+}
+
+/** A free tile right beside Uplink u (on the side toward `from`, if given) for a flag, or null. */
+function besideUplink(u, from) {
+  let best = null, bd = Infinity;
+  for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [-1, 1], [1, -1], [-1, -1]]) {
+    const i = u.x + di, j = u.y + dj;
+    if (!inMap(i, j) || !walkable(tIdx(i, j)) || S.bAt[tIdx(i, j)]) continue;
+    const d = from ? dist2(i, j, from.x, from.y) : di * di + dj * dj;
+    if (d < bd) { bd = d; best = { i, j }; }
+  }
+  return best;
+}
+
+/**
+ * Uplinks: the rival plays for the Uplinks rather than the usual siege of the Command Base. It races for the free
+ * ones (its Outposts head for them, see aiSearchSpot and the plan in aiThink; aiBridge crosses to one it can't walk
+ * to), goes for the forts holding the others (step 5 of aiThink, its missiles and bombers), and holds its own:
+ * - its forts there call on new warbots first (garrison priority High);
+ * - from a little before the Uplinks come online, a band of guards on a flag beside each one (2 to 4 by difficulty),
+ *   topped up, with two more for every enemy warbot jamming it, to drive them off;
+ * - a Bunker right beside each one (one at a time, through the defence plan).
+ */
+function aiUplinks(p, lvl, counts) {
+  const P = S.players[p];
+  if (!S.uplinks) return;
+  P.upGuards = P.upGuards || {}; P.upGuardAt = P.upGuardAt || {};
+  const soon = S.time >= UPLINK.online - 90, guards = Math.max(2, Math.min(4, 8 - lvl.threshold));
+  for (const u of S.uplinks) {
+    const r = P.upGuards[u.id] ? rallyById(P.upGuards[u.id]) : null;
+    if (u.owner !== p) { if (r) recallRally(r.id); delete P.upGuards[u.id]; continue; } // lost (or never ours): the guards come home
+    for (const b of S.buildings) {
+      if (b.dead || b.owner !== p || !b.built || !BDEFS[b.type].terr || b.gprio === 'high' || dist(b.x, b.y, u.x, u.y) > BDEFS[b.type].terr + 0.5) continue;
+      b.gprio = 'high'; b.upHold = true;
+    }
+    if (!soon) continue;
+    const jammers = u.jam ? S.bots.filter((w) => !w.dead && !w.inside && w.type === 'warbot' && w.owner >= 0 && w.owner !== p && dist2(w.x, w.y, u.x + 0.5, u.y + 0.5) <= 16).length : 0;
+    const want = guards + jammers * 2, have = r ? rallyMembers(r.id).length : 0;
+    if (have >= want || S.time - (P.upGuardAt[u.id] || -99) < (jammers ? 5 : 20)) continue;
+    P.upGuardAt[u.id] = S.time;
+    const E = getE(S.players[rivalOf(p)].lander);
+    const spot = r ? { i: Math.floor(r.x), j: Math.floor(r.y) } : besideUplink(u, E);
+    if (!spot) continue;
+    const n = Math.min(want - have, rallyAvailable(p, spot.i, spot.j) - (jammers ? 0 : 1)); // (jammed: everyone it can spare)
+    if (n <= 0) continue;
+    const res = sendToRally(p, spot.i, spot.j, n);
+    if (res.sent) P.upGuards[u.id] = res.rally.id;
+  }
+  // Forts that no longer hold one go back to the usual priority.
+  for (const b of S.buildings) if (b.upHold && b.owner === p && !holdsUplink(b)) { b.gprio = undefined; b.upHold = false; }
+  // A Bunker right beside each Uplink it holds that has no gun of ours beside it, one at a time.
+  if (S.time > AI_DEFENCE_AT && !(P.defWant && S.time < P.defWant.until) && S.time - (P.upDefAt || -999) > 90) {
+    const bare = S.uplinks.find((u) => u.owner === p && !S.buildings.some((b) => !b.dead && b.owner === p && ['bunker', 'minigun', 'turret', 'keep'].includes(b.type) && dist2(b.x, b.y, u.x, u.y) <= 16));
+    if (bare) { P.defWant = { type: 'bunker', n: (counts.bunker || 0) + 1, until: S.time + 150, x: bare.x, y: bare.y, up: true }; P.upDefAt = S.time; }
+  }
+}
+
+/**
+ * Uplinks: a rival is running its clock, so a band of warbots goes to stand beside the nearest Uplink it holds,
+ * jamming it (once a minute at most, with warbots to spare, and not while a band is already out there).
+ */
+function aiJamUplink(p, foe) {
+  const P = S.players[p], L = getE(P.lander);
+  if (!L || S.time - (P.lastJam || -999) < 60 || (P.jamRally && rallyById(P.jamRally))) return;
+  let best = null, bd = Infinity;
+  for (const u of S.uplinks || []) {
+    if (u.owner !== foe || u.jam) continue;
+    const d = dist2(u.x, u.y, L.x, L.y);
+    if (d < bd) { bd = d; best = u; }
+  }
+  if (!best) return;
+  const spot = besideUplink(best, L);
+  if (!spot) return;
+  const avail = rallyAvailable(p, spot.i, spot.j, true);
+  if (avail < 5) return;
+  const { sent, rally } = sendToRally(p, spot.i, spot.j, Math.min(8, avail - 2), true);
+  if (sent) { P.jamRally = rally.id; P.lastJam = S.time; }
+}
+
+/** Uplinks: how far the nearest free Uplink lies past the rings of our Outposts, Keeps and Command Base (sites too), or Infinity with none free. */
+function aiUplinkGap(p) {
+  let gap = Infinity;
+  for (const u of S.uplinks || []) {
+    if (u.owner >= 0) continue;
+    for (const b of S.buildings) {
+      if (b.dead || b.owner !== p || !BDEFS[b.type].terr) continue;
+      gap = Math.min(gap, Math.max(0, dist(u.x, u.y, b.x, b.y) - BDEFS[b.type].terr));
+    }
+  }
+  return gap;
+}
+
 /** Domination: about how much land an Outpost at (i, j) would add (no-one's ground in its ring, a rival's at half). */
 function newLandAt(p, i, j, r) {
   let n = 0;

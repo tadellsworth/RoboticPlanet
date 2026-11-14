@@ -1761,6 +1761,10 @@ function startNewGame() {
     const L = getE(S.players[0].lander), near = L ? S.posts.reduce((a, p) => (dist2(p.x, p.y, L.x, L.y) < dist2(a.x, a.y, L.x, L.y) ? p : a)) : null;
     postMsg(0, `${S.posts.length} neutral Trade Posts (gold on the minimap${near ? ', nearest ' + dirText(L, near) : ''}): lay a road out and dock a Trade Terminal to trade.` + (S.mode !== 'colony' ? ` Hold the land round one to shut ${S.players.length > 2 ? 'the rivals' : 'your rival'} out.` : ''), near ? near.x : 0, near ? near.y : 0, 'info');
   }
+  if (S.victory === 'uplinks' && S.uplinks) {
+    const L = getE(S.players[0].lander), near = L ? S.uplinks.reduce((a, u) => (dist2(u.x, u.y, L.x, L.y) < dist2(a.x, a.y, L.x, L.y) ? u : a)) : null;
+    postMsg(0, `Uplinks: ${S.uplinks.length} neutral Uplink towers stand across the planet (ringed dots on the minimap${near ? ', nearest ' + dirText(L, near) : ''}). One is yours while it stands in your land: build an Outpost or a Keep near it. They come online ${UPLINK.online / 60} minutes in: from then on, hold ${uplinkGoal()} and your clock runs, and a total of ${UPLINK.hold / 60} minutes wins. Enemy warbots right beside an Uplink jam it.`, near ? near.x : 0, near ? near.y : 0, 'info');
+  }
   if (S.victory === 'domination') postMsg(0, `Domination: hold ${Math.round(domShare() * 100)}% of the land anyone holds (and ${Math.round(DOM.min * 100)}% of the planet) for ${DOM.hold / 60} minutes straight to win. The card at the top shows where everyone stands. Outposts and Keeps claim the most land.`, 0, 0, 'info');
   if (nukeOn()) postMsg(0, `Nuclear race: a few uranium deposits glow green across the planet. Dig them with Ore Mines, enrich them at a Nuclear Reactor and build the bomb${S.mode === 'colony' ? ' (no rival here, so it is yours to try out)' : ` before ${S.players.length > 2 ? 'the rivals do' : 'the rival does'}`}.`, 0, 0, 'warn');
 }
@@ -1891,12 +1895,14 @@ function showGameOver() {
   if (S.mission) { showMissionOver(); return; }
   const won = S.winner === 0, how = S.endHow || 'capture', many = S.players.length > 2, them = many ? playerName(S.winner) : 'rival';
   sfx(won ? 'win' : 'lose');
-  $('o-title').textContent = won ? (how === 'domination' ? 'Domination!' : 'Victory!') : 'Defeat';
+  $('o-title').textContent = won ? (how === 'domination' ? 'Domination!' : how === 'uplinks' ? 'Uplinks held!' : 'Victory!') : 'Defeat';
   $('o-text').textContent = won
     ? (how === 'domination' ? `You held most of the planet's land for ${DOM.hold / 60} minutes. The planet is yours.`
+      : how === 'uplinks' ? `You led on the Uplinks for ${UPLINK.hold / 60} minutes. The planet is yours.`
       : how === 'surrender' ? (many ? 'The last rival surrendered: the planet is yours.' : 'Your rival surrendered. The planet is yours.')
         : many ? `${S.players.length > 3 ? 'All three' : 'Both'} rival Command Bases are yours: the last colony standing. The planet is yours.` : 'Your warbots captured the rival Command Base. The planet is yours.')
     : how === 'domination' ? `The ${them} held most of the planet's land for ${DOM.hold / 60} minutes. Regroup and try again.`
+      : how === 'uplinks' ? `The ${them} led on the Uplinks for ${UPLINK.hold / 60} minutes. Regroup and try again.`
       : `The ${them} ${S.players[0].out ? 'captured your Command Base' : 'took the planet'}. Regroup and try again.`;
   const st = S.players[0].stats;
   $('o-stats').innerHTML = [
@@ -2796,6 +2802,7 @@ function onMapTap(i, j, wx, wy) {
   UI.lastTap = null;
   if (INPUT.mouse && UI.sel.length && !INPUT.shift) selectBots([], false);
   if (inMap(i, j) && postAt(tIdx(i, j))) { sfx('click'); openPostSheet(postAt(tIdx(i, j))); return; }
+  if (inMap(i, j) && uplinkAt(tIdx(i, j))) { sfx('click'); openUplinkSheet(uplinkAt(tIdx(i, j))); return; }
   if (inMap(i, j) && S.res[tIdx(i, j)]) { sfx('click'); openResourceSheet(tIdx(i, j)); return; }
   if (inMap(i, j) && S.fert[tIdx(i, j)] && S.terrain[tIdx(i, j)] === T_GROUND) { sfx('click'); openSoilSheet(tIdx(i, j)); return; }
   if (inMap(i, j) && S.road[tIdx(i, j)] && wayOwner(tIdx(i, j)) === 0) { sfx('click'); openRoadSheet(tIdx(i, j)); return; }
@@ -4624,6 +4631,19 @@ function openPostSheet(post) {
   refreshSheet();
 }
 
+/** A neutral Uplink's panel: whose it is, whether it's jammed, and how to take it. */
+function openUplinkSheet(u) {
+  const t = tIdx(u.x, u.y);
+  R.selected = 0; R.selTile = t; UI.selBot = 0;
+  const html = `<div class="sheet-title"><div><h3>Uplink</h3><div class="sub">A neutral relay tower</div></div></div>
+    <p class="desc">It belongs to whoever's land it stands in: build an Outpost or a Keep near it (a Drop Outpost will do, or a Port across the water) and it's yours while your land covers it. Armed enemy warbots within ${UPLINK.jam} tiles of it jam it: then it counts for no one. Once they're online (${UPLINK.online / 60} minutes in), hold ${uplinkGoal()} and your clock runs; a total of ${UPLINK.hold / 60} minutes wins.</p>
+    <div id="sh-dyn"></div>
+    <div class="btn-row"><button class="btn" id="sh-up-guard">Hold it with warbots</button></div>`;
+  openSheet('uplink', t, html);
+  $('sh-up-guard').onclick = () => { sfx('click'); closeSheet(); setMode('attack'); UI.armyCmd = 'hold'; showArmyCmdBanner('Tap the ground beside the Uplink.'); };
+  refreshSheet();
+}
+
 function openSoilSheet(t) {
   R.selected = 0; R.selTile = t; UI.selBot = 0;
   const html = `<div class="sheet-title"><div><h3>Fertile soil</h3></div></div>
@@ -5084,6 +5104,14 @@ function refreshSheet() {
     $('rl-info').innerHTML = `<div class="kv"><span>Warbots holding</span><span>${members.length}</span></div>` +
       (low ? `<div class="kv"><span>Low battery</span><span>${low}</span></div>` : '');
     refreshMoveStepper(Math.floor(r.x), Math.floor(r.y));
+  } else if (UI.sheetKind === 'uplink') {
+    const u = uplinkAt(UI.sheetFor);
+    if (!u) { closeSheet(); return; }
+    const L = getE(S.players[0].lander);
+    $('sh-dyn').innerHTML = `<div class="kv"><span>Held by</span><span>${u.owner < 0 ? 'No one' : u.owner === 0 ? 'You' : playerName(u.owner)}</span></div>` +
+      (u.jam ? `<div class="kv"><span>Jammed</span><span class="err">${u.jam - 1 === 0 ? 'by your warbots' : 'by ' + playerName(u.jam - 1, true) + '\'s warbots'}</span></div>` : '') +
+      (S.time < UPLINK.online ? `<div class="kv"><span>Online in</span><span>${fmtClock(UPLINK.online - S.time)}</span></div>` : '') +
+      (L ? `<div class="kv"><span>From your Command Base</span><span>${dirText(L, u)}</span></div>` : '');
   } else if (UI.sheetKind === 'post') {
     const post = postAt(UI.sheetFor);
     if (!post) { closeSheet(); return; }
@@ -5243,6 +5271,7 @@ function updateEventCard() {
  * to look at the leader's Command Base.
  */
 function updateWinCard() {
+  if (S.victory === 'uplinks') { updateUplinkCard(); return; }
   const el = $('win-card'), D = S.victory === 'domination' ? S.dom : null;
   if (!D || !D.held || S.winner >= 0) { el.hidden = true; return; }
   const live = S.players.filter((P) => !P.absent && !P.out), pct = (p) => Math.min(1, (D.land[p] || 0) / D.held);
@@ -5264,6 +5293,34 @@ function updateWinCard() {
   el.querySelector('.ev-time').textContent = D.lead >= 0 ? clock : '';
   el.querySelector('.win-rows').innerHTML = live.map((P) => `<span class="wn">${playerName(P.id)}</span><span class="win-bar" style="--c:${PLAYER_COLORS[P.id]}"><i style="width:${(pct(P.id) * 100).toFixed(1)}%"></i><b style="left:${share * 100}%"></b></span><span class="wp">${Math.round(pct(P.id) * 100)}%</span>`).join('');
   el.querySelector('.win-note').textContent = `${Math.round((D.held / Math.max(1, D.ground)) * 100)}% of the planet is held: hold ${Math.round(share * 100)}% of that (and ${Math.round(DOM.min * 100)}% of the planet) for ${DOM.hold / 60} minutes to win.`;
+  el.hidden = false;
+}
+
+/**
+ * Uplinks: a dot for each Uplink in its holder's colour (red while jammed), and a bar per colony of the time it
+ * has held most of them (of UPLINK.hold), with whoever's clock is running. Tap it to cycle the view round them.
+ */
+function updateUplinkCard() {
+  const el = $('win-card'), U = S.uplinks;
+  if (!U || !U.length || S.winner >= 0) { el.hidden = true; return; }
+  const clock = S.upClock || S.players.map(() => 0), lead = S.upLead ?? -1, need = uplinksNeeded(), held = S.upHeld || S.players.map(() => 0);
+  const live = S.players.filter((P) => !P.absent && !P.out);
+  if (el.dataset.key !== 'up') {
+    el.dataset.key = 'up';
+    el.innerHTML = '<div class="ev-head"><span class="ev-dot"></span><b class="wc-head"></b><span class="ev-time"></span></div><div class="up-dots"></div><div class="win-rows"></div><div class="win-note"></div>';
+    el.onclick = () => { const L = S.uplinks; if (!L || !L.length) return; UI.upCycle = ((UI.upCycle ?? -1) + 1) % L.length; const u = L[UI.upCycle]; centerOn(u.x + 0.5, u.y + 0.5); };
+  }
+  const pre = S.time < UPLINK.online; // not online yet: no clock runs
+  el.classList.toggle('mine', lead === 0);
+  el.classList.toggle('theirs', lead > 0);
+  const dot = el.querySelector('.ev-dot'), col = lead >= 0 ? PLAYER_COLORS[lead] : '#dfefff';
+  dot.style.background = col; dot.style.color = col;
+  el.querySelector('.wc-head').textContent = pre ? 'Uplinks come online in' : lead < 0 ? `Uplinks: hold ${need} of ${U.length}${U.length % 2 ? '' : ' (the most)'}` : lead === 0 ? `You hold ${held[0]} of ${U.length} Uplinks` : `${S.players.length > 2 ? 'The ' + playerName(lead) : 'The rival'} holds ${held[lead]} of ${U.length}`;
+  el.querySelector('.ev-time').textContent = pre ? fmtClock(UPLINK.online - S.time) : lead >= 0 ? fmtClock(UPLINK.hold - clock[lead]) : '';
+  el.querySelector('.up-dots').innerHTML = U.map((u) => `<i title="Uplink ${u.id}" style="--c:${u.jam ? '#ff4030' : u.owner >= 0 ? PLAYER_COLORS[u.owner] : 'transparent'}" class="${u.jam ? 'jam' : u.owner < 0 ? 'free' : ''}"></i>`).join('');
+  el.querySelector('.win-rows').innerHTML = live.map((P) => `<span class="wn">${playerName(P.id)}</span><span class="win-bar" style="--c:${PLAYER_COLORS[P.id]}"><i style="width:${Math.min(100, ((clock[P.id] || 0) / UPLINK.hold) * 100).toFixed(1)}%"></i></span><span class="wp">${fmtClock(UPLINK.hold - (clock[P.id] || 0))}</span>`).join('');
+  el.querySelector('.win-note').textContent = pre ? `Claim them now: an Uplink is yours while your land covers it. Once they're online, hold ${uplinkGoal()} and your clock runs; ${UPLINK.hold / 60} minutes in all wins. Tap to look at each.`
+    : `Bars: time held so far, of ${UPLINK.hold / 60} minutes. An Uplink is yours while your land covers it; enemy warbots beside it jam it. Tap to look at each.`;
   el.hidden = false;
 }
 

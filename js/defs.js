@@ -538,12 +538,21 @@ const MISSILE_FLOOR = 0.35;
  * surrenders (see SURRENDER).
  *   capture     take every rival's Command Base: the last colony standing wins
  *   domination  hold most of the land for a while (see DOM)
+ *   uplinks     hold most of the neutral Uplink towers for a while (see UPLINK)
  */
 const VICTORY = {
   capture: { name: 'Capture', info: 'Capture: take a rival\'s Command Base and all it built is yours; the last colony standing wins.' },
   domination: { name: 'Domination', info: 'Domination: hold most of the land anyone holds (and a good part of the planet) for 3 minutes straight to win.' },
+  uplinks: { name: 'Uplinks', info: 'Uplinks: neutral relay towers stand across the planet (3 to 5, by the map). One is yours while it stands in your land. Once they come online, 8 minutes in, hold at least half of them (and more than anyone else) for a total of 5 minutes to win.' },
 };
-const VICTORY_ORDER = ['capture', 'domination'];
+const VICTORY_ORDER = ['capture', 'domination', 'uplinks'];
+/**
+ * Uplinks: neutral relay towers (see placeUplinks). Each is held by the colony whose land it stands in, and is
+ * jammed (counts for no one) while an armed warbot of another colony stands within `jam` tiles of it. The colony
+ * holding most of them runs its clock; a total of `hold` seconds wins. The clocks only run once the Uplinks come
+ * `online` (seconds in): before that they can be claimed, but every colony has time to build an army to fight for them.
+ */
+const UPLINK = { hold: 300, jam: 2.5, online: 480 };
 /**
  * A rival that has clearly lost gives up (see checkSurrender): after `after` seconds of play, once its colony is
  * down to `left` of what it was at its height and the colony beating it is `odds` times as strong (buildings,

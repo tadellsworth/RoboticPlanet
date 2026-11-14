@@ -4488,6 +4488,7 @@ function render(dtReal) {
   }
   if (artFor('streetlamp-road', 0)) for (const l of streetLamps(v0, v1)) items.push(l); // posts stand among buildings and bots
   if (S.posts) for (const p of S.posts) if (inView(p.x, p.y, 2)) items.push({ ent: 'post', x: p.x, y: p.y + 0.5, post: p });
+  if (S.uplinks) for (const u of S.uplinks) if (inView(u.x, u.y, 3)) items.push({ ent: 'uplink', x: u.x, y: u.y + 0.5, up: u });
   items.sort((a, b) => (a.ent === 'b' ? a.y + 0.5 : a.y) - (b.ent === 'b' ? b.y + 0.5 : b.y));
   // At dusk and night, every finished building's lights spill onto the ground round its pad.
   // Walls glow a little along their live rail, Gates more; Pulse Turrets sweep searchlights.
@@ -4500,10 +4501,12 @@ function render(dtReal) {
     }
     for (const e of items) if (e.ent === 'b' && (e.type === 'turret' || e.type === 'minigun') && e.built && !e.paused) drawSearchlight(ctx, e, ox, oy, z);
     for (const e of items) if (e.ent === 'post') drawLightPool(ctx, ox + (e.post.x + 0.5) * z, oy + (e.post.y + 0.5) * z, z * 1.4, '#ffd27a');
+    for (const e of items) if (e.ent === 'uplink') drawLightPool(ctx, ox + (e.up.x + 0.5) * z, oy + (e.up.y + 0.5) * z, z * 1.5, e.up.owner >= 0 ? PLAYER_COLORS[e.up.owner] : '#dfefff');
   }
   for (const e of items) {
     if (e.ent === 'lamp') { drawStreetLamp(ctx, e, ox, oy, z); continue; }
     if (e.ent === 'post') { drawTradePost(ctx, ox + (e.post.x + 0.5) * z, oy + (e.post.y + 0.5) * z, z, e.post); continue; }
+    if (e.ent === 'uplink') { drawUplink(ctx, ox + (e.up.x + 0.5) * z, oy + (e.up.y + 0.5) * z, z, e.up); continue; }
     if (e.ent === 'b') {
       const cx = ox + (e.x + 0.5) * z, cy = oy + (e.y + 0.5) * z;
       drawBuilding(ctx, e.type, cx, cy, z, e.owner, e);
@@ -5159,6 +5162,50 @@ function drawTradePost(ctx, cx, cy, z, post) {
 }
 
 /** "TRADE POST" under a Trade Post, when zoomed in far enough to read it. */
+/**
+ * A neutral Uplink (the Uplinks victory): the relay mast (renderer/b/uplink.js), its signal ring and beacon lit
+ * in the colour of whoever holds it (pale white while no one does), flickering red while enemy warbots jam it,
+ * and zoomed in, a label saying whose it is. (The marks: the ring at 0.45 of the image, 0.135 across; the beacon
+ * at 0.532, 0.226; the image is 1.9 tiles, anchored at 0.615.)
+ */
+function drawUplink(ctx, cx, cy, z, u) {
+  const t = R.time, col = u.owner >= 0 ? PLAYER_COLORS[u.owner] : '#dfefff', s = z * 1.9;
+  const jam = u.jam && Math.floor(t * 5) % 2 === 0;
+  ctx.save();
+  ctx.fillStyle = 'rgba(0,0,0,0.22)';
+  ctx.beginPath(); ctx.ellipse(cx + z * 0.06, cy + z * 0.14, z * 0.72, z * 0.58, 0, 0, Math.PI * 2); ctx.fill();
+  if (ART.uplink) drawArt(ctx, ART.uplink, cx, cy, z);
+  else {
+    // (without the art: a hexagonal pad, a mast and a ring)
+    ctx.fillStyle = '#5f6367'; ctx.beginPath();
+    for (let k = 0; k < 6; k++) { const a = Math.PI / 6 + (k * Math.PI) / 3; ctx[k ? 'lineTo' : 'moveTo'](cx + Math.cos(a) * z * 0.7, cy + Math.sin(a) * z * 0.6); }
+    ctx.closePath(); ctx.fill();
+    ctx.strokeStyle = '#c9ced4'; ctx.lineWidth = Math.max(1.5, z * 0.05);
+    ctx.beginPath(); ctx.moveTo(cx - z * 0.22, cy + z * 0.1); ctx.lineTo(cx, cy - z * 0.75); ctx.lineTo(cx + z * 0.22, cy + z * 0.1); ctx.stroke();
+  }
+  const rx = cx, ry = cy + (0.4505 - 0.615) * s, bx = cx + (0.532 - 0.5) * s, by = cy + (0.226 - 0.615) * s;
+  // (not online yet: the lights burn low and steady)
+  const glow = jam ? '#ff4030' : col, pulse = S.time < UPLINK.online ? 0.55 : 0.75 + 0.25 * Math.sin(t * 3 + u.id);
+  ctx.globalCompositeOperation = 'lighter';
+  ctx.strokeStyle = glow; ctx.globalAlpha = (u.owner >= 0 || jam ? 0.95 : 0.45) * pulse;
+  ctx.lineWidth = Math.max(2, s * 0.02);
+  ctx.shadowColor = glow; ctx.shadowBlur = Math.max(6, s * 0.05);
+  ctx.beginPath(); ctx.ellipse(rx, ry, s * 0.125, s * 0.06, 0, 0, Math.PI * 2); ctx.stroke();
+  const g = ctx.createRadialGradient(bx, by, 0, bx, by, s * 0.06);
+  g.addColorStop(0, glow); g.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.shadowBlur = 0; ctx.fillStyle = g; ctx.globalAlpha = u.owner >= 0 || jam ? pulse : 0.5;
+  ctx.beginPath(); ctx.arc(bx, by, s * 0.06, 0, Math.PI * 2); ctx.fill();
+  ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1;
+  if (z >= 30) {
+    const label = u.jam ? 'UPLINK · JAMMED' : u.owner >= 0 ? `UPLINK · ${playerName(u.owner).toUpperCase()}` : 'UPLINK';
+    ctx.font = `600 ${Math.round(Math.max(9, z * 0.16))}px system-ui, sans-serif`;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+    ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(0,0,0,0.7)'; ctx.strokeText(label, cx, cy + z * 0.82);
+    ctx.fillStyle = u.jam ? '#ffb0a8' : u.owner >= 0 ? col : '#e8f2ff'; ctx.fillText(label, cx, cy + z * 0.82);
+  }
+  ctx.restore();
+}
+
 function tradePostLabel(ctx, cx, cy, z, r) {
   if (z < 30) return;
   ctx.font = `600 ${Math.round(Math.max(9, z * 0.16))}px system-ui, sans-serif`;
@@ -6196,6 +6243,15 @@ function renderMinimap() {
     if (u.dead || u.inside || u.type !== 'warbot') continue;
     ctx.fillStyle = u.owner === 0 ? '#bff2ff' : '#ffc2ca';
     ctx.fillRect(u.x * sx - 1, u.y * sy - 1, 2, 2);
+  }
+  // Uplinks: a ringed dot each, in the holder's colour (white while no one holds it; flashing while jammed).
+  if (S.uplinks) for (const u of S.uplinks) {
+    const x = (u.x + 0.5) * sx, y = (u.y + 0.5) * sy, r = Math.max(3.5, sx * 2);
+    const c = u.jam && (R.time * 4) % 2 < 1 ? '#ff4030' : u.owner >= 0 ? PLAYER_COLORS[u.owner] : '#f2f6fa';
+    ctx.fillStyle = c; ctx.strokeStyle = '#0b1420'; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.arc(x, y, r + 2.2, 0, Math.PI * 2); ctx.stroke();
   }
   // Howitzers: a triangle each (yours in your colour), so they're easy to find.
   for (const u of S.bots) {

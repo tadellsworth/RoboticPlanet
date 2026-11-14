@@ -1639,9 +1639,11 @@ function newGame(opts) {
   for (const P of S.players) { const L = getE(P.lander); if (L) starterRoads(L); }
   if (S.wildlife) placeNests(seed);
   placePosts(seed);
+  if (S.victory === 'uplinks') placeUplinks(seed);
   if (opts.setup) opts.setup(S);
   S.decor = makeDecor();
   for (const p of S.posts) S.decor[tIdx(p.x, p.y)] = 0; // (no plants on a landing pad)
+  for (const u of S.uplinks || []) S.decor[tIdx(u.x, u.y)] = 0;
   // A word on how this kind of planet plays.
   const SH = SHAPE_PRESETS[settings.shape], quadTip = quadMap(settings) && (settings.players === 3 ? SH.spareTip : SH.quadTip);
   const L0 = getE(S.players[0].lander), tip = !S.mission && mode === 'versus' && (quadTip || SH.tip);
@@ -2327,6 +2329,7 @@ function canPlace(owner, type, i, j, skipBlockCheck) {
   if (!inMap(i, j)) return { ok: false, reason: 'Outside the map.' };
   const t = tIdx(i, j);
   if (postAt(t)) return { ok: false, reason: 'A neutral Trade Post stands here: dock a Trade Terminal beside it.' };
+  if (uplinkAt(t)) return { ok: false, reason: 'A neutral Uplink stands here: build an Outpost near it, and it\'s yours while it stands in your land.' };
   const land = landRule(owner, type, t);
   if (land) return { ok: false, reason: land };
   if (S.terrain[t] !== T_GROUND) return { ok: false, reason: 'The ground here is not buildable.' };
