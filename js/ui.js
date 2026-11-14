@@ -1133,7 +1133,7 @@ const BUILD_KEYS = {
 const BUILD_TAB_KEYS = { gather: '1', make: '2', move: '3', defend: '4', all: '5' };
 /**
  * Keys for the buttons on a building's or robot's panel, by button id. While that panel is open they win over
- * the same letter's usual job (the key is shown on the button on a computer). Delete or Backspace demolishes,
+ * the same letter's usual job (the key is shown on the button on a computer). Delete or Backspace dismantles,
  * pressed twice like the button.
  */
 const SHEET_KEYS = {
@@ -3721,7 +3721,7 @@ function openBuildingSheet(b) {
     if (b.owner === 0 && (movable(b) || b.moving)) html += `<button class="btn" id="sh-move">${b.moving ? 'Call off the move' : 'Move'}</button><p class="hint" id="sh-move-hint">${b.moving ? 'Its new site is going up: when it\'s finished, everything here moves over and this one comes down.' : 'Put it somewhere else: no goods needed, just its build time. It keeps working until the new one is ready.'}</p>`;
     if (b.owner === 0 && b.type === 'wall' && b.built) html += `<button class="btn" id="sh-gate">Make it a Gate</button><p class="hint">Your bots and trucks can pass through a Gate; enemies still have to break it down. It costs ${costText(gateUpgradeCost())} more, paid from storage.</p>`;
     if (BDEFS[b.type].mobile) html += '<button class="btn primary" id="sh-pack">Pack up to move</button>';
-    else if (b.type !== 'lander') html += `<button class="btn danger" id="sh-demolish">${b.built ? 'Demolish' : 'Cancel site'}</button>`;
+    else if (b.type !== 'lander') html += `<button class="btn danger" id="sh-demolish">${b.built ? 'Dismantle' : 'Cancel site'}</button>`;
     html += '</div>';
   } else if (S.mode !== 'colony' || def.wild) {
     html += `<div class="section-label">Attack with warbots</div><div id="sh-attack"></div>
@@ -3867,15 +3867,16 @@ function openBuildingSheet(b) {
         $('sh-demolish').textContent = BDEFS[b.type].mil && b.built ? 'Tap again: buildings outside your border will be lost' : 'Tap again to confirm';
         return;
       }
-      // Say what went back to storage: half the building, and anything that was inside it.
-      const def = BDEFS[b.type];
+      // Say what's left in crates: all its materials, and anything that was inside it.
+      const def = BDEFS[b.type], built = b.built;
       const out = demolish(b);
       sfx('boom');
       closeSheet();
-      if (!b.built || !out) return;
-      const to = out.to && getE(out.to);
-      toast(`${def.name} demolished: ` + (to ? `half its materials went to your ${BDEFS[to.type].name}` : 'with no other storage, its materials were lost') +
-        (out.crates ? `, and the ${out.crates} good${out.crates === 1 ? '' : 's'} inside spilled out in crates for your haulers to collect.` : '.'), 'info', b.x, b.y);
+      if (!out) return;
+      const mats = Object.keys(out.cost).length ? costText(out.cost) : '';
+      if (built) toast(`${def.name} dismantled: ` + (mats ? `its materials (${mats})` : 'it') + (out.inside ? ` and the ${out.inside} good${out.inside === 1 ? '' : 's'} inside` : '') +
+        ` ${mats || out.inside ? 'are left in crates for your haulers to bring back' : 'is gone'}.`, 'info', b.x, b.y);
+      else if (out.crates) toast(`${def.name} site cancelled: the ${out.crates} good${out.crates === 1 ? '' : 's'} delivered for it ${out.crates === 1 ? 'is' : 'are'} left in crates for your haulers to bring back.`, 'info', b.x, b.y);
     };
   } else if ($('sh-send')) {
     UI.attackN = attackAvailable(0, b);
@@ -4017,7 +4018,7 @@ function refreshBuildingSheet(b) {
       parts.push(`<div class="kv"><span>Busy</span><span>${pct}% of the time</span></div>${sparkline(b.useHist)}`);
     }
     if ((def.gather || def.farm) && mine && b.depleted) {
-      parts.push(`<p class="desc err"><b>Nothing left to ${def.farm ? 'farm' : 'gather'} in reach.</b> Demolish it (below) for half its materials back; anything still in it goes to storage. Then build a new ${def.name} ${def.farm ? 'beside open fertile soil' : `by a fresh field of ${RES[def.gather].name.toLowerCase()}s`}.</p>`);
+      parts.push(`<p class="desc err"><b>Nothing left to ${def.farm ? 'farm' : 'gather'} in reach.</b> Dismantle it (below): its materials and anything still in it are left in crates for your haulers to bring back. Then build a new ${def.name} ${def.farm ? 'beside open fertile soil' : `by a fresh field of ${RES[def.gather].name.toLowerCase()}s`}.</p>`);
     }
     if (def.gather) {
       const g = RES[def.gather].good;
@@ -4034,7 +4035,7 @@ function refreshBuildingSheet(b) {
       if (mine) parts.push(`<div class="kv"><span>Waiting for pickup</span><span>${goodTag('fuel', `${b.stock.fuel || 0}/${def.out.fuel}`)}</span></div>`);
     }
     if (def.pump) {
-      if (mine && pumpDry(b)) parts.push('<p class="desc err"><b>This seep has run dry.</b> Demolish the pump (below) for half its materials back; any Crude still in it goes to storage. Then build a new Oil Pump on another oil seep.</p>');
+      if (mine && pumpDry(b)) parts.push('<p class="desc err"><b>This seep has run dry.</b> Dismantle the pump (below): its materials and any Crude still in it are left in crates for your haulers to bring back. Then build a new Oil Pump on another oil seep.</p>');
       parts.push(`<div class="kv"><span>Crude left in the seep</span><span>${oilAround(b.x, b.y)}</span></div>`);
       if (mine) parts.push(`<div class="kv"><span>Waiting for pickup</span><span>${goodTag('crude', `${b.stock.crude || 0}/${def.out.crude}`)}</span></div>`);
       if (mine) {
@@ -4189,7 +4190,7 @@ function refreshBuildingSheet(b) {
     $('sh-smode-hint').textContent = {
       normal: 'Finished goods go to whichever storage is closest.',
       fill: 'Haulers bring finished goods here before any other storage, even if another is closer.',
-      empty: 'Takes nothing new and sends what it holds to your other storage. Good before demolishing it.',
+      empty: 'Takes nothing new and sends what it holds to your other storage. Good before dismantling it.',
     }[m];
   }
   if ($('sh-accept')) for (const btn of $('sh-accept').children) {

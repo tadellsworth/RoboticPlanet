@@ -1860,7 +1860,7 @@ function dispatch(p) {
       if (u) assignHaul(u, b, store, g, canCarry(u, avail, g));
     }
   }
-  // 4d) Crates lying on our land (spilled from a wrecked or demolished building, or dropped by a
+  // 4d) Crates lying on our land (spilled from a wrecked or dismantled building, or dropped by a
   //     robot) go to storage, a load at a time, unless enemy robots or guns are about.
   if (S.loot && S.loot.length) {
     for (const l of S.loot) {
@@ -3095,13 +3095,13 @@ function updateDepleted(b, def) {
     if (b.depleted && !b.dryMsg && S.time - b.born > 20) {
       b.dryMsg = 1;
       postMsg(b.owner, def.gather
-        ? `Your ${def.name} has no ${RES[def.gather].name.toLowerCase()}s left in reach. Demolish it for half its materials back, and build one by a fresh field.`
-        : 'Your Bio Farm has no fertile soil left in reach. Demolish it and build one beside open fertile soil.', b.x, b.y, 'warn');
+        ? `Your ${def.name} has no ${RES[def.gather].name.toLowerCase()}s left in reach. Dismantle it (your haulers bring back all its materials) and build one by a fresh field.`
+        : 'Your Bio Farm has no fertile soil left in reach. Dismantle it and build one beside open fertile soil.', b.x, b.y, 'warn');
     }
     if (!b.depleted) b.dryMsg = 0;
   }
   if (!b.depleted) return false;
-  b.status = def.gather ? `No ${RES[def.gather].name.toLowerCase()}s left in reach: demolish it` : 'No fertile soil left in reach: demolish it';
+  b.status = def.gather ? `No ${RES[def.gather].name.toLowerCase()}s left in reach: dismantle it` : 'No fertile soil left in reach: dismantle it';
   if (b.staff || b.staffInc) unstaff(b);
   return true;
 }
@@ -3140,11 +3140,11 @@ function updateGenerator(b, def) {
 function produce(b, def, dt) {
   if (def.pump && pumpSeep(b) < 0) {
     // Dry for good: free its worker, and tell the player once.
-    b.status = 'The oil seep has run dry: demolish this pump';
+    b.status = 'The oil seep has run dry: dismantle this pump';
     if (b.staff || b.staffInc) unstaff(b);
     if (!b.dryMsg) {
       b.dryMsg = 1;
-      postMsg(b.owner, 'An Oil Pump has run dry. Demolish it for half its materials back, and pump another seep.', b.x, b.y, 'warn');
+      postMsg(b.owner, 'An Oil Pump has run dry. Dismantle it (your haulers bring back all its materials) and pump another seep.', b.x, b.y, 'warn');
     }
     return;
   }
@@ -3809,7 +3809,7 @@ function updateBlasts() {
 }
 
 /*
- * Loot and crates. Goods inside a building that is wrecked, blown up or demolished spill out as a
+ * Loot and crates. Goods inside a building that is wrecked, blown up or dismantled spill out as a
  * pile of crates on its tile, and a robot destroyed with a load drops it the same way. On your own
  * land your haulers collect the crates and take them to storage, a load at a time, as long as no
  * enemy robot is near (see dispatch, step 4d). Any warbot near a pile with nothing better to do
@@ -6419,34 +6419,37 @@ function releaseScore(b) {
 }
 
 /**
- * Take building b down. Half its materials go straight to your nearest other storage (a cancelled
- * site's delivered materials all go back). Everything inside a finished building (a Silo's
- * Missiles, a pump's last Crude, a Depot's whole stock, a Nuclear Silo's missile as its parts)
- * spills out in crates on its tile, and your haulers carry them to storage.
- * Returns { goods: what went to storage, to: that storage's id (0 if you have none), crates }.
+ * Dismantle building b (your Dismantle button; the rival's AI takes buildings down the same way). It comes
+ * down on the spot and everything that went into it is left in crates for your haulers to bring back: all
+ * its materials (what it cost to build; for a construction site, what had been delivered) and everything
+ * inside it (a Silo's Missiles, a pump's last Crude, a Depot's stock, a Nuclear Silo's missile as its parts).
+ * Nothing goes straight to storage. A Ropeway or Viaduct comes down whole, and what it cost is left once, at
+ * its near end. (A building the enemy destroys is simply lost: only what was inside it spills out, and a
+ * site loses what had been delivered; see destroyBuilding.)
+ * Returns { cost: the materials left, crates: every crate left, inside: those that were inside it }.
  */
 function demolish(b) {
   if (b.dead || b.type === 'lander') return null;
-  // A building on the move: demolishing either end calls the move off (the old one stays as it was).
-  if (b.moveFrom && !b.built) { const o = getE(b.moveFrom); if (o) o.moving = 0; b.moveFrom = 0; destroyBuilding(b, false, true); return { goods: {}, to: 0, crates: 0 }; }
+  // A building on the move: dismantling either end calls the move off (the old one stays as it was; the new site cost nothing).
+  if (b.moveFrom && !b.built) { const o = getE(b.moveFrom); if (o) o.moving = 0; b.moveFrom = 0; destroyBuilding(b, false, true); return { cost: {}, crates: 0, inside: 0 }; }
   if (b.moving) cancelMove(b);
   const def = BDEFS[b.type];
   if ((def.keep || def.terminal) && !b.built && S.players[b.owner]) S.players[b.owner][def.keep ? 'keepFail' : 'termFail'] = S.time; // an AI waits a while before trying again
-  // Never into itself: a Depot used to be its own nearest storage, and lost everything.
-  const store = nearestStoreTo(b.owner, b.x + 0.5, b.y + 0.5, b);
-  const out = { goods: {}, to: store ? store.id : 0, crates: 0 };
-  const give = (g, n) => { if (store && n > 0 && GOOD[g]) { bump(store.stock, g, n); bump(out.goods, g, n); } };
-  const cost = siteCost(b);
+  const pair = (b.type === 'ropeway' || b.type === 'viaduct') && b.link ? getE(b.link) : null;
+  const near = b.far && pair && !pair.dead ? pair : b; // (the end by your roads)
+  const cost = {};
   if (b.built) {
-    for (const g in cost) give(g, Math.floor(cost[g] / 2));
+    const c = siteCost(near);
+    for (const g in c) if (GOOD[g] && c[g] >= 1) cost[g] = Math.floor(c[g]);
     if (def.nukeSilo && b.armed) { for (const g in NUKE.parts) bump(b.stock, g, NUKE.parts[g]); b.armed = 0; }
-    out.crates = dropLoot(b);
-  } else if (store) {
-    for (const g in b.stock) give(g, Math.min(b.stock[g], cost[g] || 0));
-    b.stock = {};
-  } else out.crates = dropLoot(b);
+  }
+  // What's inside (a site's delivered materials are its stock), then its materials, in the pile.
+  const inside = dropLoot(b);
+  let n = 0;
+  for (const g in cost) n += cost[g];
+  if (n) addLoot(near.x, near.y, cost);
   destroyBuilding(b, false);
-  return out;
+  return { cost, crates: inside + n, inside };
 }
 
 /* ------------------------------------------------------------------ moving buildings */
@@ -6456,7 +6459,7 @@ const MOVE_KEEPS = ['prio', 'limit', 'paused', 'keep', 'smode', 'reject', 'order
 
 /**
  * Can building b be moved? Any finished one of yours, except the Command Base and Outposts (they hold
- * your land: build another, then demolish the old), and things joined to the land or each other (Walls,
+ * your land: build another, then dismantle the old), and things joined to the land or each other (Walls,
  * Gates, Ramps, Viaducts, Ropeways, a deployed Crawler).
  */
 function movable(b) {
@@ -6493,6 +6496,8 @@ function finishMove(nb) {
   if (!old || old.dead || old.owner !== nb.owner) return;
   old.moving = 0;
   for (const k of MOVE_KEEPS) if (old[k] !== undefined) nb[k] = old[k] && typeof old[k] === 'object' ? JSON.parse(JSON.stringify(old[k])) : old[k];
+  // (it cost what the old one did, not the nothing the move cost: dismantling it leaves that)
+  if (old.cost) nb.cost = JSON.parse(JSON.stringify(old.cost)); else delete nb.cost;
   for (const g in old.stock) if (old.stock[g] > 0) bump(nb.stock, g, old.stock[g]);
   old.stock = {}; old.res = {}; old.loot = undefined;
   for (const u of S.bots) if (!u.dead && u.owner === nb.owner && (u.post === old.id || (u.inside === old.id && u.type === 'warbot'))) u.post = nb.id;

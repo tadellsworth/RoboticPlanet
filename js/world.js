@@ -3384,8 +3384,9 @@ function destroyBuilding(b, burn, quiet) {
   if (b.moveFrom && !b.built) { const o = getE(b.moveFrom); if (o) o.moving = 0; b.moveFrom = 0; }
   // A Refinery destroyed by force explodes: its Crude and Fuel burn in the blast (see fuelBlast).
   const boom = burn && b.built && BDEFS[b.type].explodes && typeof burnLiquids === 'function' ? burnLiquids(b) : -1;
-  // Whatever was inside spills out as crates on its tile, for haulers (or raiding warbots) to collect.
-  if (typeof dropLoot === 'function') dropLoot(b);
+  // Whatever was inside spills out as crates on its tile, for haulers (or raiding warbots) to collect. A construction
+  // site destroyed by force (wrecked, blown up) is simply lost, what had been delivered for it with it.
+  if (typeof dropLoot === 'function' && (b.built || !burn)) dropLoot(b);
   releaseBotsFrom(b, !!burn);
   b.dead = true;
   S.byId.delete(b.id);
@@ -3486,7 +3487,7 @@ function blastFx(x, y, r, opts) {
 
 /**
  * A building coming down. Destroyed (burn): a fireball and two more blasts as it goes, then it sinks
- * and crumbles into a cloud of dust. Demolished or lost: the same collapse and dust, without the fire.
+ * and crumbles into a cloud of dust. Dismantled or lost: the same collapse and dust, without the fire.
  * Either way it leaves rubble on the ground for a while (and a scorch mark if it burned).
  */
 function collapseFx(b, burn) {

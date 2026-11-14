@@ -5081,7 +5081,7 @@ function drawNoRoad(ctx, x, y, z) {
 
 /**
  * A resource building with nothing left to work: its resource, struck through, pulsing over it
- * (demolish me). An Oil Pump shows an empty oil drop; a gatherer its boulder, ore, crystal or
+ * (dismantle me). An Oil Pump shows an empty oil drop; a gatherer its boulder, ore, crystal or
  * grove; a Bio Farm a crop.
  */
 /** A building cut off on a rival's ground (see cutOff): a pulsing red wash and a broken-link badge. */

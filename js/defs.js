@@ -206,7 +206,7 @@ const LIQUID = { crude: true, fuel: true };
 function isLiquid(g) { return !!LIQUID[g]; }
 /*
  * Fuel is dangerous. A Tanker destroyed with a load on board, or a Refinery destroyed (by fire, a
- * missile or a nuke, not demolished), explodes: radius r0 + r1 × how full it was, hurting every robot
+ * missile or a nuke, not dismantled), explodes: radius r0 + r1 × how full it was, hurting every robot
  * (bot) and building (bld) in it, whoever's they are, at full strength in the middle and half at the
  * edge. Loaded Tankers and Refineries caught in a blast go up too, chain[0] to chain[1] seconds later.
  * A wrecked Refinery's Crude and Fuel burn in the blast instead of spilling.
@@ -520,7 +520,7 @@ const ISLE_GAP = 4;       // Islands maps: at least this much sea between island
 const SKY_GAP = 1;        // Sky islands: canyons between mesas are narrower (short Viaducts)
 const SKY_RES_MUL = 1.8;  // Sky islands: Ore, Crystal, Stalk and Stone hold this much more (half the fields fall in the canyons)
 const HOME_STONE = 300;   // Islands and Sky islands: Stone each home island or mesa holds at the start (topped up near the base)
-const LOOT_MAX = 500;     // most crates a wrecked or demolished building spills (everything that was inside it)
+const LOOT_MAX = 500;     // most crates a wrecked or dismantled building spills of what was inside it
 const LOOT_TIME = 300;    // seconds a pile of crates on no-one's land lies before it rots away (on claimed land it stays)
 const CRATE_SAFE = 6;     // haulers collect crates on their own land only with no enemy robot (or gun) within this many tiles
 // Walls and Gates: an enemy warbot plans a route through one as if it were this many extra tiles
