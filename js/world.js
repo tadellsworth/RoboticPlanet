@@ -1601,6 +1601,8 @@ function newGame(opts) {
   if (opts.events) { S.events = true; S.event = null; S.nextEvent = EVENT_FIRST; }
   // Unlimited resources (a testing option on the new-game screen): see unlimitedTopUp.
   if (opts.unlimited && !opts.mission) S.unlimited = true;
+  // How the game is won (Versus): see VICTORY. Capture unless another way was picked.
+  if (mode === 'versus' && !opts.mission && !opts.layout && VICTORY[opts.victory] && opts.victory !== 'capture') S.victory = opts.victory;
   // Wildlife (see WILD): Colony free play only; the nests go down once the landing site is in.
   if (mode === 'colony' && opts.wildlife && !opts.layout && !opts.setup) S.wildlife = true;
   // Each rival AI's personality: the one asked for, or (with 'random') a different one each, picked

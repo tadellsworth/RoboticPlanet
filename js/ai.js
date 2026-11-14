@@ -153,6 +153,8 @@ function aiThink(p) {
   if (cementStarved) { plan = [['kiln', 1]].concat(plan); siteCap = maxSites + 1; }
   const outSite = me.some((b) => b.type === 'outpost' && !b.built);
   if (P.short.length && !outSite && S.time - (P.lastExpand || -99) > 40) plan = [['outpost', (counts.outpost || 0) + 1]].concat(plan);
+  // Domination: land wins the game, so an Outpost every so often (once the colony runs), wherever it claims most.
+  else if (S.victory === 'domination' && !outSite && S.time > 240 && S.time - (P.lastExpand || -99) > 50) plan = [['outpost', (counts.outpost || 0) + 1]].concat(plan);
   // Missiles are expensive, so the AI saves up for them (see aiMissilePlan): while it is saving,
   // the building it saves for goes first and nothing else that costs Alloy or Chips is started.
   const saving = aiMissilePlan(p, me, counts, kinds, workers, staffed);
@@ -430,7 +432,9 @@ function aiThink(p) {
   if (S.mode !== 'colony') aiCounterRaid(p);
   if (S.mode !== 'colony' && S.time >= lvl.grace) aiRaid(p, lvl);
 
-  // 5) Attack
+  // 5) Attack. Domination: a rival about to win on land is attacked at once, at the Outposts and Keeps that hold it.
+  const domFoe = S.victory === 'domination' && S.dom && S.dom.lead >= 0 && S.dom.lead !== p ? S.dom.lead : -1;
+  if (domFoe >= 0 && S.time >= lvl.grace) P.nextAttack = Math.min(P.nextAttack, S.time);
   if (S.time < lvl.grace || S.time < P.nextAttack) return;
   let best = null, bestScore = -Infinity, bestAvail = 0;
   for (const b of S.buildings) {
@@ -444,6 +448,7 @@ function aiThink(p) {
     if (avail < base || (b.built && !weak && avail < Math.ceil(b.garrison.length * 1.3) + 2 + guardsNear(b))) continue;
     const def = BDEFS[b.type];
     let score = (def.mil ? 12 : 0) + (b.type === 'lander' ? 25 : 0) - dist(b.x, b.y, lander.x, lander.y) * 0.4 - b.garrison.length * 2;
+    if (b.owner === domFoe && b.built && def.mil && def.terr && b.type !== 'lander') score += 30;
     if (!b.built) score -= 8;
     if (score > bestScore) { bestScore = score; best = b; bestAvail = avail; }
   }
@@ -1279,6 +1284,7 @@ function aiSearchSpot(p, type, lander) {
         const rest = Math.min(sums[2](i, j, 5), 6) + Math.min(sums[3](i, j, 5), 6) + Math.min(sums[4](i, j, 5), 4) * 1.5;
         s = -dist(i, j, ex, ey) * 0.6 + dHome * 0.5 + ore * 1.6 + cry * 1.0 + rest * 0.3;
         if (nukeOn()) s += Math.min(sums[5](i, j, 6), 3) * 6; // the race for uranium
+        if (S.victory === 'domination') s += newLandAt(p, i, j, BDEFS.outpost.terr) * 0.1; // Domination: the land it claims
         // Crossroads for three: the rich quarter no one landed in draws expansion too.
         if (S.spare) s += Math.max(0, 34 - dist(i, j, S.spare.x, S.spare.y)) * 0.3;
         // Head for whatever we're running out of.
@@ -1378,6 +1384,19 @@ function aiSearchSpot(p, type, lander) {
  * (three times the cost and a margin; once its trains have been shot at, just the margin). Checked every half
  * minute or so.
  */
+/** Domination: about how much land an Outpost at (i, j) would add (no-one's ground in its ring, a rival's at half). */
+function newLandAt(p, i, j, r) {
+  let n = 0;
+  for (let dj = -r; dj <= r; dj += 2) for (let di = -r; di <= r; di += 2) {
+    const x = i + di, y = j + dj;
+    if (!inMap(x, y) || di * di + dj * dj > r * r) continue;
+    const t = tIdx(x, y);
+    if (S.terrain[t] !== T_GROUND || S.owner[t] === p) continue;
+    n += S.owner[t] < 0 ? 4 : 2; // (every other tile each way: four tiles' worth)
+  }
+  return n;
+}
+
 function aiArmorTrains(p) {
   const P = S.players[p];
   if (!warOn() || S.time < (P.armorCheckAt || 0)) return;

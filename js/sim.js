@@ -43,6 +43,7 @@ function simStep(dt) {
   if (S.events) updateEvents();
   if (S.tide || S.volcano || (S.quake && !S.quake.done)) updateMapEvents(dt);
   if (S.tick % 30 === 25) naniteRepair();
+  if (S.tick % 30 === 9) { checkSurrender(); if (S.victory === 'domination' && S.winner < 0) updateDomination(); }
   for (const P of S.players) {
     if (!P.ai || P.out) continue;
     P.aiT -= dt;
@@ -4415,7 +4416,7 @@ function doLoot(u, t, dt) {
  * lightly armored), its robots shut down for good, and its rally flags come down. The last player
  * left standing wins; if that's not you, losing your own Command Base ends your game.
  */
-function eliminate(old, by) {
+function eliminate(old, by, how) {
   const P = S.players[old];
   P.out = true;
   for (const u of S.bots) if (!u.dead && u.owner === old) killBot(u, true);
@@ -4437,12 +4438,103 @@ function eliminate(old, by) {
   computeTerritory();
   const L = getE(P.lander);
   const x = L ? L.x : 0, y = L ? L.y : 0;
-  postMsg(by, S.players.length > 2 ? `Your warbots captured ${playerName(old, true)}'s Command Base! Everything ${playerName(old, true)} built is yours.` : 'Your warbots captured the enemy Command Base!', x, y, 'good');
-  if (old === 0) postMsg(0, 'The enemy captured your Command Base!', x, y, 'lost');
-  else if (by !== 0) postMsg(0, `The ${playerName(by)} captured ${playerName(old, true)}'s Command Base and took over everything it had.`, x, y, 'warn');
+  if (how !== 'surrender') {
+    postMsg(by, S.players.length > 2 ? `Your warbots captured ${playerName(old, true)}'s Command Base! Everything ${playerName(old, true)} built is yours.` : 'Your warbots captured the enemy Command Base!', x, y, 'good');
+    if (old === 0) postMsg(0, 'The enemy captured your Command Base!', x, y, 'lost');
+    else if (by !== 0) postMsg(0, `The ${playerName(by)} captured ${playerName(old, true)}'s Command Base and took over everything it had.`, x, y, 'warn');
+  }
   const left = S.players.filter((Q) => !Q.absent && !Q.out);
-  if (left.length === 1) S.winner = left[0].id;
-  else if (old === 0) S.winner = by;
+  if (left.length === 1) { S.winner = left[0].id; S.endHow = how || 'capture'; }
+  else if (old === 0) { S.winner = by; S.endHow = how || 'capture'; }
+}
+
+/* ------------------------------------------------------------------ surrender and Domination */
+
+/**
+ * Once a second: a rival run by the computer that has clearly lost gives up, rather than make the winner dig out
+ * its last buildings one by one. Clearly lost (see SURRENDER): well into the game, its colony down to 40% of what
+ * it was at its height, against a colony four times as strong; or nothing left to rebuild with (no Bot Foundry,
+ * no Workers, next to no army). After SURRENDER.hold seconds of that (a building it finishes in the meantime only
+ * winds the count back a little) it concedes to the colony beating it, which takes everything it had, as when a
+ * Command Base is captured.
+ */
+function checkSurrender() {
+  if (S.mission || S.mode === 'colony' || S.winner >= 0) return;
+  const live = S.players.filter((P) => !P.absent && !P.out);
+  if (live.length < 2) return;
+  const n = S.players.map(() => ({ b: 0, wb: 0, wk: 0, fd: false }));
+  for (const b of S.buildings) { if (b.dead || !b.built || b.owner < 0 || !n[b.owner]) continue; n[b.owner].b++; if (BDEFS[b.type].bots) n[b.owner].fd = true; }
+  for (const u of S.bots) { if (u.dead || u.owner < 0 || !n[u.owner]) continue; if (u.type === 'warbot') n[u.owner].wb++; else if (u.type === 'worker') n[u.owner].wk++; }
+  for (const P of live) {
+    const me = n[P.id];
+    P.peakB = Math.max(P.peakB || 0, me.b);
+    if (!P.ai || S.time < SURRENDER.after) { P.giveUp = 0; continue; }
+    const by = beatenBy(P, live, n), E = n[by], power = (c) => c.b + 2 * c.wb;
+    const beaten = me.b <= SURRENDER.left * P.peakB && power(E) >= SURRENDER.odds * Math.max(1, power(me));
+    const broke = !me.fd && me.wk === 0 && me.wb <= 2;
+    P.giveUp = beaten || broke ? (P.giveUp || 0) + 1 : Math.max(0, (P.giveUp || 0) - 2);
+    if (P.giveUp >= SURRENDER.hold) { surrender(P.id, by); return; }
+  }
+}
+
+/** The share of the land anyone holds that wins Domination, by how many colonies are still in. */
+function domShare() { return DOM.share[clamp(S.players.filter((P) => !P.out && !P.absent).length, 2, 4)]; }
+
+/** Who is beating player P: the rival still in that hit it last (in the last three minutes), else the strongest. */
+function beatenBy(P, live, n) {
+  let by = -1, last = S.time - 180;
+  for (const id in P.hitBy || {}) { const Q = S.players[+id]; if (Q && Q !== P && !Q.out && !Q.absent && P.hitBy[id] > last) { last = P.hitBy[id]; by = +id; } }
+  if (by >= 0) return by;
+  let best = -1;
+  for (const Q of live) if (Q !== P && n[Q.id].b + 2 * n[Q.id].wb > best) { best = n[Q.id].b + 2 * n[Q.id].wb; by = Q.id; }
+  return by;
+}
+
+/** Player p gives up to player `by` (see checkSurrender): everything it had is theirs, as when a Command Base falls. */
+function surrender(p, by) {
+  const L = getE(S.players[p].lander), x = L ? L.x : 0, y = L ? L.y : 0, two = S.players.length === 2;
+  if (by === 0) postMsg(0, two ? 'The rival has surrendered! Everything it built is yours.' : `The ${playerName(p)} has surrendered to you! Everything it built is yours.`, x, y, 'good');
+  else if (p !== 0) postMsg(0, `The ${playerName(p)} has surrendered to ${playerName(by, true)}: everything it built is theirs.`, x, y, 'warn');
+  eliminate(p, by, 'surrender');
+}
+
+/**
+ * Domination (the Victory picked on the new-game screen), once a second: every colony's land (the ground inside
+ * its border) and all the land anyone holds. A colony holding DOM.share of that, and DOM.min of the planet's
+ * ground, for DOM.hold seconds straight wins; the count starts again whenever it slips under. S.dom keeps
+ * { land: per colony, held, ground, lead (or -1), t: seconds it has held on, warned: the last warning given }.
+ */
+function updateDomination() {
+  const D = S.dom || (S.dom = { land: [], held: 0, ground: 0, lead: -1, t: 0, warned: 999 });
+  const land = S.players.map(() => 0);
+  let ground = 0;
+  for (let t = 0, N = S.W * S.H; t < N; t++) {
+    if (S.terrain[t] !== T_GROUND) continue;
+    ground++;
+    const o = S.owner[t];
+    if (o >= 0 && o < land.length) land[o]++;
+  }
+  const held = land.reduce((a, v) => a + v, 0), share = domShare();
+  D.land = land; D.held = held; D.ground = ground;
+  let lead = -1;
+  for (const P of S.players) if (!P.out && !P.absent && held > 0 && land[P.id] >= share * held && land[P.id] >= DOM.min * ground) lead = P.id;
+  if (lead !== D.lead) {
+    const was = D.lead;
+    D.lead = lead; D.t = 0; D.warned = 999;
+    if (was >= 0) postMsg(0, was === 0 ? 'You no longer hold most of the land: your Domination count starts again.' : `${S.players.length > 2 ? 'The ' + playerName(was) : 'The rival'} no longer holds most of the land: its Domination count starts again.`, undefined, undefined, was === 0 ? 'warn' : 'good');
+    if (lead === 0) postMsg(0, `You hold ${Math.round((land[0] / held) * 100)}% of the land! Keep at least ${Math.round(share * 100)}% for ${DOM.hold / 60} minutes to win by Domination.`, undefined, undefined, 'good');
+    else if (lead > 0) { const L = getE(S.players[lead].lander); postMsg(0, `${S.players.length > 2 ? 'The ' + playerName(lead) : 'The rival'} holds most of the land: take some back within ${DOM.hold / 60} minutes, or it wins by Domination!`, L ? L.x : undefined, L ? L.y : undefined, 'bad'); }
+    return;
+  }
+  if (lead < 0) return;
+  D.t += 1;
+  const left = DOM.hold - D.t;
+  if (left <= 0) { S.winner = lead; S.endHow = 'domination'; return; }
+  for (const w of [60, 20]) {
+    if (left > w || D.warned <= w) continue;
+    D.warned = w;
+    postMsg(0, lead === 0 ? `${w === 60 ? 'One minute' : '20 seconds'} to Domination: hold on to your land!` : `${S.players.length > 2 ? 'The ' + playerName(lead) : 'The rival'} wins by Domination in ${w === 60 ? 'one minute' : '20 seconds'}: break its hold on the land!`, undefined, undefined, lead === 0 ? 'good' : 'bad');
+  }
 }
 
 /**
@@ -4454,6 +4546,8 @@ function eliminate(old, by) {
  */
 function rivalOf(p) {
   if (S.players.length === 2) return 1 - p;
+  // Domination: a colony about to win on land is everyone's rival.
+  if (S.victory === 'domination' && S.dom && S.dom.lead >= 0 && S.dom.lead !== p && !S.players[S.dom.lead].out) return S.dom.lead;
   const P = S.players[p];
   const keep = P.rival >= 0 && S.players[P.rival] && !S.players[P.rival].out && S.time < (P.rivalUntil || 0);
   if (keep) return P.rival;

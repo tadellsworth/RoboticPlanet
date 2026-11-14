@@ -533,6 +533,31 @@ const BREACH_PER_ARMOR = 1;
 // once it's under SORTIE_ARMOR every armed warbot inside goes out to fight. Taking one ejects whoever
 // is still inside instead of killing them.
 const MISSILE_FLOOR = 0.35;
+/*
+ * How a Versus game is won (the new-game screen's Victory row). However it's won, a rival that has clearly lost
+ * surrenders (see SURRENDER).
+ *   capture     take every rival's Command Base: the last colony standing wins
+ *   domination  hold most of the land for a while (see DOM)
+ */
+const VICTORY = {
+  capture: { name: 'Capture', info: 'Capture: take a rival\'s Command Base and all it built is yours; the last colony standing wins.' },
+  domination: { name: 'Domination', info: 'Domination: hold most of the land anyone holds (and a good part of the planet) for 3 minutes straight to win.' },
+};
+const VICTORY_ORDER = ['capture', 'domination'];
+/**
+ * A rival that has clearly lost gives up (see checkSurrender): after `after` seconds of play, once its colony is
+ * down to `left` of what it was at its height and the colony beating it is `odds` times as strong (buildings,
+ * and warbots counting two each), or it has nothing left to rebuild with, for `hold` seconds all told (a moment
+ * back in the fight winds the count back, twice as fast).
+ */
+const SURRENDER = { after: 720, hold: 40, left: 0.4, odds: 4 };
+/**
+ * Domination: a colony holding `share` of the land anyone holds (by how many colonies are still in: 60% with
+ * two, half with three, 45% with four), and at least `min` of the planet's land, for `hold` seconds straight
+ * wins (the count starts again whenever it slips under). Measured in AI games: each colony holds 12-25% of the
+ * planet most of the game, the one that's winning a third of it by the end.
+ */
+const DOM = { share: [0, 0, 0.6, 0.5, 0.45], min: 0.2, hold: 180 };
 /** Seconds before a missile (or a nuclear one, ×1.6) lands that its roar is heard diving in (sound only). */
 const MISSILE_WARN = 1.3;
 const SORTIE_ARMOR = 0.25;

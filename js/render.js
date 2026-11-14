@@ -4461,17 +4461,21 @@ function render(dtReal) {
   const items = [];
   for (const b of S.buildings) if (!b.dead && inView(b.x, b.y, 2)) items.push(b);
   for (const u of S.bots) if (!u.dead && !u.inside && !(u.ride >= 0) && !u.dropping && !(BOTS[u.type].air && u.flight) && inView(u.x, u.y, 1)) items.push(u);
-  // A Cargo Plane parked at its Airfield stands on the apron (one an Airfield).
+  // Planes parked at an Airfield: one waits at the head of the runway, lined up to roll; the rest are in the
+  // hangar (a tag on the Airfield says how many). Nothing parks off the runway, on ground other things use.
+  const hangarTags = [];
   for (const b of S.buildings) {
     if (b.dead || !BDEFS[b.type].airfield || !b.built || !inView(b.x, b.y, 3)) continue;
-    // (and Strike Bombers on the apron either side of the runway's head)
-    const E = runwayEnds(b), f = Math.atan2(E.dy, E.dx), px = -E.dy, py = E.dx;
-    let side = 0;
+    let lead = null, n = 0;
     for (const pl of S.bots) {
       if (pl.dead || pl.inside !== b.id || !BOTS[pl.type].air) continue;
-      const k = BOTS[pl.type].bomber ? (++side % 2 ? 1 : -1) * 1.15 : 0;
-      items.push({ ...pl, ent: 'u', parked: true, x: E.x0 + px * k + E.dx * (k ? 0.6 : 0), y: E.y0 + py * k + E.dy * (k ? 0.6 : 0), face: f, rface: f, path: null, vel: 0 });
+      n++;
+      if (!lead || pl.id < lead.id) lead = pl;
     }
+    if (!lead) continue;
+    const E = runwayEnds(b), f = Math.atan2(E.dy, E.dx);
+    items.push({ ...lead, ent: 'u', parked: true, x: E.x0, y: E.y0, face: f, rface: f, path: null, vel: 0 });
+    if (n > 1) hangarTags.push({ b, n: n - 1 });
   }
   // A ship tied up at a Port is drawn at its dock, along the shore (one a Port).
   for (const b of S.buildings) {
@@ -4537,6 +4541,8 @@ function render(dtReal) {
         jx = -Math.sin(e.rface) * lane; jy = Math.cos(e.rface) * lane;
       }
       if (e.owner === 0 && S.groups && z >= 18) { const g = groupOf(e.id); if (g) drawGroupTag(ctx, ox + (e.x + jx) * z + z * 0.28, oy + (e.y + jy) * z - z * 0.34, z, g); }
+      // Your Howitzers, zoomed out: a marker over each, so they don't get lost among the trucks.
+      if (e.owner === 0 && BOTS[e.type].siege && z < 30) drawUnitMarker(ctx, ox + (e.x + jx) * z, oy + (e.y + jy) * z - Math.max(10, z * 0.5), Math.max(5, z * 0.22), PLAYER_COLORS[0]);
       if (typeof UI !== 'undefined' && UI.selSet && UI.selSet.has(e.id)) {
         // Selected (desktop): a green ring on the ground under it.
         ctx.strokeStyle = 'rgba(125,255,160,0.95)';
@@ -4559,6 +4565,7 @@ function render(dtReal) {
   drawFeeds(ctx, ox, oy, z, inView);
   drawSmoke(ctx, ox, oy, z, inView);
   drawAirLayer(ctx, ox, oy, z, inView);
+  if (z >= 14) for (const t of hangarTags) drawHangarTag(ctx, ox + (t.b.x + 0.5) * z, oy + (t.b.y + 0.08) * z, z, t.n);
 
   // Placing a Viaduct: the deck from the near end to the far end picked so far.
   if (typeof UI !== 'undefined' && UI.ropeA && R.ropeEnd && UI.placeType === 'viaduct') {
@@ -6131,6 +6138,37 @@ function rebuildMinimapBase() {
   MM.builtAt = R.time;
 }
 
+/** The tag on an Airfield with planes in its hangar: a plane and how many (centre x, top y). */
+function drawHangarTag(ctx, x, y, z, n) {
+  const h = Math.max(13, z * 0.24), w = h * 2.1, x0 = x - w / 2, y0 = y - h * 0.6;
+  ctx.save();
+  ctx.fillStyle = 'rgba(10,18,28,0.82)'; ctx.strokeStyle = 'rgba(127,227,255,0.65)'; ctx.lineWidth = 1;
+  ctx.beginPath();
+  if (ctx.roundRect) ctx.roundRect(x0, y0, w, h, h / 2); else ctx.rect(x0, y0, w, h);
+  ctx.fill(); ctx.stroke();
+  // a little plane, nose up
+  const px = x0 + h * 0.62, py = y0 + h / 2, s = h * 0.36;
+  ctx.fillStyle = '#bff2ff';
+  ctx.beginPath();
+  ctx.moveTo(px, py - s); ctx.lineTo(px + s * 0.18, py - s * 0.35); ctx.lineTo(px + s, py + s * 0.15); ctx.lineTo(px + s * 0.18, py + s * 0.05);
+  ctx.lineTo(px + s * 0.12, py + s * 0.7); ctx.lineTo(px + s * 0.45, py + s); ctx.lineTo(px - s * 0.45, py + s); ctx.lineTo(px - s * 0.12, py + s * 0.7);
+  ctx.lineTo(px - s * 0.18, py + s * 0.05); ctx.lineTo(px - s, py + s * 0.15); ctx.lineTo(px - s * 0.18, py - s * 0.35);
+  ctx.closePath(); ctx.fill();
+  ctx.font = `700 ${Math.round(h * 0.72)}px system-ui, sans-serif`; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+  ctx.fillStyle = '#e2f6ff';
+  ctx.fillText('×' + n, x0 + h * 1.12, py + 0.5);
+  ctx.restore();
+}
+
+/** A small marker pointing down at a unit (centre x, y; size r): a coloured triangle with a dark rim. */
+function drawUnitMarker(ctx, x, y, r, color) {
+  ctx.save();
+  ctx.fillStyle = color; ctx.strokeStyle = 'rgba(8,16,26,0.9)'; ctx.lineWidth = Math.max(1.2, r * 0.22);
+  ctx.beginPath(); ctx.moveTo(x - r, y - r * 0.7); ctx.lineTo(x + r, y - r * 0.7); ctx.lineTo(x, y + r * 0.6); ctx.closePath();
+  ctx.stroke(); ctx.fill();
+  ctx.restore();
+}
+
 function renderMinimap() {
   if (!MM.on || !S || !MM.ctx || !MM.w) return;
   if ((MM.dirty || MM.ver !== S.territoryVer) && R.time - MM.builtAt > 0.4) rebuildMinimapBase();
@@ -6158,6 +6196,13 @@ function renderMinimap() {
     if (u.dead || u.inside || u.type !== 'warbot') continue;
     ctx.fillStyle = u.owner === 0 ? '#bff2ff' : '#ffc2ca';
     ctx.fillRect(u.x * sx - 1, u.y * sy - 1, 2, 2);
+  }
+  // Howitzers: a triangle each (yours in your colour), so they're easy to find.
+  for (const u of S.bots) {
+    if (u.dead || u.inside || !BOTS[u.type].siege || u.owner < 0) continue;
+    const x = u.x * sx, y = u.y * sy, r = Math.max(3, sx * 1.6);
+    ctx.fillStyle = PLAYER_COLORS[u.owner] || '#ffffff'; ctx.strokeStyle = '#0b1420'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(x, y - r); ctx.lineTo(x + r * 0.9, y + r * 0.7); ctx.lineTo(x - r * 0.9, y + r * 0.7); ctx.closePath(); ctx.fill(); ctx.stroke();
   }
   if (R.workerView) for (const u of S.bots) { // the workers view: your Workers, in the colour of what they're doing
     if (u.dead || u.inside || u.owner !== 0 || u.type !== 'worker') continue;

@@ -8,7 +8,7 @@ const SETTINGS_V = 2;
 
 const UI = {
   inGame: false, paused: false, speed: 1, overShown: false,
-  menu: { mode: 'versus', diff: 'normal', seed: randomSeed(), size: { ...DEFAULT_SIZE }, rough: DEFAULT_ROUGH, rich: DEFAULT_RICH, shape: 0, style: 1, nuke: 1, events: 0, wild: 1, unlimited: 0 },
+  menu: { mode: 'versus', diff: 'normal', seed: randomSeed(), size: { ...DEFAULT_SIZE }, rough: DEFAULT_ROUGH, rich: DEFAULT_RICH, shape: 0, style: 1, nuke: 1, events: 0, wild: 1, unlimited: 0, victory: 'capture' },
   sheetKind: null, sheetFor: 0, sheetT: 0, hudT: 0,
   icons: {}, attackN: 0, demolishArm: 0, lastPaint: null, placeType: null,
   goodEls: {}, lastGoods: {}, objCollapsed: false, selBot: 0,
@@ -190,6 +190,7 @@ function checkMenuSettings() {
   if (!m.size || typeof m.size !== 'object') m.size = { ...DEFAULT_SIZE };
   for (const k in DEFAULT_SIZE) if (!ok(m.size[k], SIZE_PRESETS.length)) m.size[k] = DEFAULT_SIZE[k];
   if (!DIFFICULTY[m.diff]) m.diff = 'normal';
+  if (!VICTORY[m.victory]) m.victory = 'capture';
 }
 
 /** Remember the new-game settings on this device. */
@@ -197,7 +198,7 @@ function saveSettings() {
   const m = UI.menu;
   try {
     localStorage.setItem('botfall.settings', JSON.stringify({ v: SETTINGS_V, size: m.size, rough: m.rough, rich: m.rich, shape: m.shape, nuke: m.nuke, biome: m.biome, players: m.players,
-      diff: m.diff, style: m.style, events: m.events, wild: m.wild, unlimited: m.unlimited, shapeRnd: m.shapeRnd ? 1 : 0, biomeRnd: m.biomeRnd ? 1 : 0 }));
+      diff: m.diff, style: m.style, events: m.events, wild: m.wild, unlimited: m.unlimited, victory: m.victory, shapeRnd: m.shapeRnd ? 1 : 0, biomeRnd: m.biomeRnd ? 1 : 0 }));
   } catch (e) { /* storage unavailable */ }
 }
 
@@ -227,7 +228,7 @@ function modeInfo(mode, n) {
     : n === 4 ? `Free-for-all · 4: you and three rival colonies (red, green and purple) on Crossroads, one in each corner quarter. ${win}`
       : n === 3 && onCross ? `Free-for-all · 3: you and two rival colonies on Crossroads, each in a corner quarter; the quarter beside you is free and rich. ${win}`
         : n === 3 ? `Free-for-all: you and two rival colonies${m.shapeRnd ? '' : ' on a round planet'}. ${win}`
-          : 'Versus: race a rival colony across the planet. Build up, then capture its Command Base to win.';
+          : 'Versus: race a rival colony across the planet. Build up, then capture its Command Base (or hold most of the land: see Victory) to win.';
 }
 function styleInfo(v) {
   const P = v && PERSONALITIES[PERSONALITY_ORDER[v - 1]];
@@ -249,6 +250,7 @@ function menuSummary() {
   const m = UI.menu, colony = m.mode === 'colony', three = menuThree(), style = menuStyle();
   const main = [colony ? 'Colony' : three ? `Free-for-all · ${menuPlayers()}` : 'Versus'];
   if (!colony) main.push(`${DIFFICULTY[m.diff].label} rival${three ? 's' : ''}`);
+  if (!colony && m.victory && m.victory !== 'capture') main.push(VICTORY[m.victory].name);
   main.push(m.shapeRnd ? 'Random map' : SHAPE_PRESETS[m.shape || 0].name, m.biomeRnd ? 'Random biome' : biomeName(m.biome || 0), SIZE_PRESETS[menuSize()].name);
   const extra = [];
   if (!colony && style !== 1) extra.push(style ? PERSONALITIES[PERSONALITY_ORDER[style - 1]].name + ' style' : 'random rival styles');
@@ -286,6 +288,7 @@ function initMenu() {
   for (const btn of $('m-mode').children) btn.onclick = () => { UI.menu.mode = btn.dataset.v; syncMenu(); sfx('click'); };
   for (const btn of $('m-diff').children) { btn.dataset.info = DIFF_INFO[btn.dataset.v] || ''; btn.onclick = pick(() => { UI.menu.diff = btn.dataset.v; }); }
   for (const btn of $('m-players').children) btn.onclick = pick(() => { UI.menu.players = +btn.dataset.v; });
+  for (const btn of $('m-victory').children) { btn.dataset.info = VICTORY[btn.dataset.v].info; btn.onclick = pick(() => { UI.menu.victory = btn.dataset.v; }); }
   // Choices are buttons (all the options in view). Terrain and Resources are level meters, a bar per step.
   const choice = (id, labels, get, set, info, meter) => {
     const el = $(id);
@@ -367,6 +370,8 @@ function syncMenu() {
   for (const btn of $('m-mode').children) { mark(btn, btn.dataset.v === m.mode); btn.dataset.info = modeInfo(btn.dataset.v, false); }
   for (const btn of $('m-diff').children) mark(btn, btn.dataset.v === m.diff);
   $('m-diff-field').hidden = colony;
+  for (const btn of $('m-victory').children) mark(btn, btn.dataset.v === (m.victory || 'capture'));
+  $('m-victory-field').hidden = colony;
   // Free-for-all: you and two rivals on the map types with room for three, or three rivals on
   // Crossroads (Random picks a map type with room for them all).
   const shape = m.shape || 0, SH = SHAPE_PRESETS[shape], room = m.shapeRnd ? 4 : maxPlayers(shape), want = clamp(Math.round(m.players) || 2, 2, 4);
@@ -1730,6 +1735,7 @@ function startNewGame() {
     size: UI.menu.size[UI.menu.mode] ?? DEFAULT_SIZE[UI.menu.mode], rough: UI.menu.rough, rich: UI.menu.rich, shape: pick.shape,
     nuke: !!UI.menu.nuke, biome: BIOME_ORDER[pick.biome], players: clamp(Math.round(UI.menu.players) || 2, 2, 4),
     style: UI.menu.style ? PERSONALITY_ORDER[UI.menu.style - 1] : 'random', events: !!UI.menu.events, wildlife: !!UI.menu.wild, unlimited: !!UI.menu.unlimited,
+    victory: UI.menu.victory,
   });
   enterGame();
   updateHUD();
@@ -1755,6 +1761,7 @@ function startNewGame() {
     const L = getE(S.players[0].lander), near = L ? S.posts.reduce((a, p) => (dist2(p.x, p.y, L.x, L.y) < dist2(a.x, a.y, L.x, L.y) ? p : a)) : null;
     postMsg(0, `${S.posts.length} neutral Trade Posts (gold on the minimap${near ? ', nearest ' + dirText(L, near) : ''}): lay a road out and dock a Trade Terminal to trade.` + (S.mode !== 'colony' ? ` Hold the land round one to shut ${S.players.length > 2 ? 'the rivals' : 'your rival'} out.` : ''), near ? near.x : 0, near ? near.y : 0, 'info');
   }
+  if (S.victory === 'domination') postMsg(0, `Domination: hold ${Math.round(domShare() * 100)}% of the land anyone holds (and ${Math.round(DOM.min * 100)}% of the planet) for ${DOM.hold / 60} minutes straight to win. The card at the top shows where everyone stands. Outposts and Keeps claim the most land.`, 0, 0, 'info');
   if (nukeOn()) postMsg(0, `Nuclear race: a few uranium deposits glow green across the planet. Dig them with Ore Mines, enrich them at a Nuclear Reactor and build the bomb${S.mode === 'colony' ? ' (no rival here, so it is yours to try out)' : ` before ${S.players.length > 2 ? 'the rivals do' : 'the rival does'}`}.`, 0, 0, 'warn');
 }
 
@@ -1882,12 +1889,15 @@ function showGameOver() {
   $('o-new').textContent = 'New game'; $('o-menu').textContent = 'Main menu';
   $('o-code').hidden = true;
   if (S.mission) { showMissionOver(); return; }
-  const won = S.winner === 0;
+  const won = S.winner === 0, how = S.endHow || 'capture', many = S.players.length > 2, them = many ? playerName(S.winner) : 'rival';
   sfx(won ? 'win' : 'lose');
-  $('o-title').textContent = won ? 'Victory!' : 'Defeat';
+  $('o-title').textContent = won ? (how === 'domination' ? 'Domination!' : 'Victory!') : 'Defeat';
   $('o-text').textContent = won
-    ? (S.players.length > 2 ? `${S.players.length > 3 ? 'All three' : 'Both'} rival Command Bases are yours: the last colony standing. The planet is yours.` : 'Your warbots captured the rival Command Base. The planet is yours.')
-    : `The ${S.players.length > 2 ? playerName(S.winner) : 'rival'} ${S.players[0].out ? 'captured your Command Base' : 'took the planet'}. Regroup and try again.`;
+    ? (how === 'domination' ? `You held most of the planet's land for ${DOM.hold / 60} minutes. The planet is yours.`
+      : how === 'surrender' ? (many ? 'The last rival surrendered: the planet is yours.' : 'Your rival surrendered. The planet is yours.')
+        : many ? `${S.players.length > 3 ? 'All three' : 'Both'} rival Command Bases are yours: the last colony standing. The planet is yours.` : 'Your warbots captured the rival Command Base. The planet is yours.')
+    : how === 'domination' ? `The ${them} held most of the planet's land for ${DOM.hold / 60} minutes. Regroup and try again.`
+      : `The ${them} ${S.players[0].out ? 'captured your Command Base' : 'took the planet'}. Regroup and try again.`;
   const st = S.players[0].stats;
   $('o-stats').innerHTML = [
     ['Time', fmtTime(S.time)], ['Buildings completed', st.built], ['Bots built', st.bots - (st.startBots || 0)],
@@ -4759,7 +4769,7 @@ function refreshArmyTab() {
   const flags = S.rallies.filter((r) => r.owner === 0).map((r) => ({ r, n: rallyMembers(r.id).length })).filter((f) => f.n > 0);
   const atk = new Map();
   for (const u of g.attack) { const t = getE(u.task.target); if (t && !t.dead) atk.set(t.id, (atk.get(t.id) || 0) + 1); }
-  const sig = JSON.stringify([UI.armyN, wb.length, g.base.length, g.posted.length, field, noAmmo, flags.map((f) => [f.r.id, f.n]), [...atk], rockets.map((u) => [u.id, botActivity(u)]), S.players[0].keepW ?? 0, !!INPUT.mouse]);
+  const sig = JSON.stringify([UI.armyN, wb.length, g.base.length, g.posted.length, field, noAmmo, flags.map((f) => [f.r.id, f.n]), [...atk], rockets.map((u) => [u.id, botActivity(u), Math.round(u.x / 3), Math.round(u.y / 3)]), S.players[0].keepW ?? 0, !!INPUT.mouse]);
   if (sig === UI.armySig) return;
   UI.armySig = sig;
   const L = getE(S.players[0].lander), where = (x, y) => (L ? dirText(L, { x: Math.floor(x), y: Math.floor(y) }) : '');
@@ -4782,8 +4792,12 @@ function refreshArmyTab() {
     for (const [id, n] of atk) { const t = getE(id); h += `<div class="kv army-row"><span><b>${n}</b> attacking the ${BDEFS[t.type].name} ${where(t.x, t.y)}</span><span><button class="btn small ghost" data-act="showbld" data-id="${id}">Show</button><button class="btn small ghost" data-act="callback" data-id="${id}">Call back</button></span></div>`; }
   }
   if (rockets.length) {
-    h += '<div class="section-label">Howitzers</div>';
-    for (const u of rockets) h += `<div class="kv army-row"><span>${botActivity(u)}</span><span><button class="btn small" data-act="bombard" data-id="${u.id}">Bombard</button><button class="btn small ghost" data-act="rgo" data-id="${u.id}">Drive</button><button class="btn small ghost" data-act="showbot" data-id="${u.id}">Show</button></span></div>`;
+    // Each one by number and where it is (they're easy to lose: Find takes you to it and picks it out).
+    h += `<div class="section-label">Howitzers <span class="label-note">Find takes you to one</span></div>`;
+    rockets.forEach((u, k) => {
+      h += `<div class="kv army-row"><span><b>Howitzer ${k + 1}</b>${L ? `, ${where(u.x, u.y)}` : ''}: ${botActivity(u)}</span><span><button class="btn small primary" data-act="findbot" data-id="${u.id}">Find</button><button class="btn small" data-act="bombard" data-id="${u.id}">Bombard</button><button class="btn small ghost" data-act="rgo" data-id="${u.id}">Drive</button></span></div>`;
+    });
+    if (INPUT.mouse) h += `<div class="army-cmds"><button class="btn ghost" id="ar-select-rockets" data-act="selectrockets">Select all Howitzers</button></div>`;
   }
   h += `<div class="section-label">Every Outpost keeps</div><div class="seg" id="ar-keep">${[0, 1, 2, 5].map((v) => `<button data-act="keep" data-k="${v}" class="${v === k ? 'on' : ''}">${v}</button>`).join('')}</div>
     <p class="hint">Warbots each Outpost keeps at home, sent from your Command Base (and replaced if lost). Set one Outpost on its own in its panel.</p>`;
@@ -4831,6 +4845,8 @@ function armyButton(btn) {
     case 'showflag': if (e) { centerOn(e.x, e.y); openRallySheet(e); } return;
     case 'showbld': if (e) { centerOn(e.x + 0.5, e.y + 0.5); openBuildingSheet(e); } return;
     case 'showbot': if (e) { const inB = e.inside ? getE(e.inside) : null; centerOn(inB ? inB.x + 0.5 : e.x, inB ? inB.y + 0.5 : e.y); openBotSheet(e); } return;
+    case 'findbot': if (e) findBot(e); return;
+    case 'selectrockets': { const ids = S.bots.filter((u) => !u.dead && u.owner === 0 && BOTS[u.type].siege).map((u) => u.id); closeSheet(); selectBots(ids, false); if (UI.sel.length) toast(`${UI.sel.length} Howitzer${UI.sel.length > 1 ? 's' : ''} selected: right-click an enemy building to shell it, or open ground to drive there.`, 'info'); return; }
     case 'more': if (e) { const i = Math.floor(e.x), j = Math.floor(e.y), res = sendToRally(0, i, j, armyCount(rallyAvailable(0, i, j))); if (res.sent) { sfx('order'); toast(`${res.sent} more warbot${res.sent > 1 ? 's are' : ' is'} on the way to the flag.`, 'info'); } else { sfx('error'); toast('No spare warbots in reach of that flag.', 'warn'); } UI.armySig = ''; } return;
     case 'recallflag': if (e) { const n = recallRally(id); toast(`${n} warbot${n !== 1 ? 's' : ''} called back.`, 'info'); UI.armySig = ''; } return;
     case 'callback': { let n = 0; for (const u of S.bots) if (!u.dead && u.owner === 0 && u.type === 'warbot' && u.task && u.task.type === 'attack' && u.task.target === id) { u.task = null; u.path = null; n++; } toast(`${n} warbot${n !== 1 ? 's' : ''} called back to their garrisons.`, 'info'); UI.armySig = ''; return; }
@@ -4841,6 +4857,20 @@ function armyButton(btn) {
     case 'drop': if (e) { closeSheet(); startAirdrop(e, btn.dataset.k); } return;
     case 'yard': if (e) { orderAtYard(e, btn.dataset.k, 1); toast(`${BOTS[btn.dataset.k].name} ordered: the Airfield's hangar builds it from Alloy and Chips.`, 'info'); UI.armySig = ''; refreshArmySheet(); } return;
   }
+}
+
+/**
+ * Take the view to one of your robots (a Howitzer, say) and pick it out: rings pulse round it, and it's selected
+ * (with a mouse: right-click to give it orders) or its panel opens.
+ */
+function findBot(u) {
+  const inB = u.inside ? getE(u.inside) : null, x = inB ? inB.x + 0.5 : u.x, y = inB ? inB.y + 0.5 : u.y;
+  closeSheet();
+  if (R.cam.z < 30) R.cam.z = 30;
+  centerOn(x, y);
+  for (const t of [0, -0.35, -0.7]) addFx('ring', x, y, { color: '#7dffa0', r: 1.4, life: 0.9, t });
+  if (INPUT.mouse) selectBots([u.id], false);
+  else openBotSheet(u);
 }
 
 /** Start an Army order: the next taps on the map pick its targets. */
@@ -5158,6 +5188,7 @@ function updateHUD() {
   obj.classList.toggle('small', UI.objCollapsed);
   updateEventCard();
   updateNukeCard();
+  updateWinCard();
   if (UI.sheetKind === 'build') {
     // keep build-menu affordability current without rebuilding the buttons
     for (const el of $('sheet-body').querySelectorAll('.bcard[data-t]')) {
@@ -5203,6 +5234,36 @@ function updateEventCard() {
   }
   const left = Math.max(0, Math.ceil((soon ? E.t0 : E.t1) - S.time));
   el.querySelector('.ev-time').textContent = soon ? `in ${left}s` : `${left}s`;
+  el.hidden = false;
+}
+
+/**
+ * How the game is won, if not by capture. Domination: a bar of the land each colony holds (its share of all the
+ * land anyone holds), a mark where Domination starts, and whoever holds that much, with the time left. Tap it
+ * to look at the leader's Command Base.
+ */
+function updateWinCard() {
+  const el = $('win-card'), D = S.victory === 'domination' ? S.dom : null;
+  if (!D || !D.held || S.winner >= 0) { el.hidden = true; return; }
+  const live = S.players.filter((P) => !P.absent && !P.out), pct = (p) => Math.min(1, (D.land[p] || 0) / D.held);
+  const left = D.lead >= 0 ? Math.max(0, DOM.hold - D.t) : 0, clock = `${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}`;
+  const share = domShare();
+  const head = D.lead < 0 ? `Domination: hold ${Math.round(share * 100)}% of the land`
+    : D.lead === 0 ? 'You hold most of the land' : `${S.players.length > 2 ? 'The ' + playerName(D.lead) : 'The rival'} holds most of the land`;
+  const key = `${D.lead}`;
+  if (el.dataset.key !== key) {
+    el.dataset.key = key;
+    el.innerHTML = '<div class="ev-head"><span class="ev-dot"></span><b class="wc-head"></b><span class="ev-time"></span></div><div class="win-rows"></div><div class="win-note"></div>';
+    el.onclick = () => { const L = getE(S.players[Math.max(0, D.lead)].lander); if (L) centerOn(L.x + 0.5, L.y + 0.5); };
+  }
+  el.classList.toggle('mine', D.lead === 0);
+  el.classList.toggle('theirs', D.lead > 0);
+  const dot = el.querySelector('.ev-dot'), col = D.lead >= 0 ? PLAYER_COLORS[D.lead] : '#7fc8ff';
+  dot.style.background = col; dot.style.color = col;
+  el.querySelector('.wc-head').textContent = head;
+  el.querySelector('.ev-time').textContent = D.lead >= 0 ? clock : '';
+  el.querySelector('.win-rows').innerHTML = live.map((P) => `<span class="wn">${playerName(P.id)}</span><span class="win-bar" style="--c:${PLAYER_COLORS[P.id]}"><i style="width:${(pct(P.id) * 100).toFixed(1)}%"></i><b style="left:${share * 100}%"></b></span><span class="wp">${Math.round(pct(P.id) * 100)}%</span>`).join('');
+  el.querySelector('.win-note').textContent = `${Math.round((D.held / Math.max(1, D.ground)) * 100)}% of the planet is held: hold ${Math.round(share * 100)}% of that (and ${Math.round(DOM.min * 100)}% of the planet) for ${DOM.hold / 60} minutes to win.`;
   el.hidden = false;
 }
 
