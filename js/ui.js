@@ -3718,7 +3718,7 @@ function openBuildingSheet(b) {
     if (needsRoad(b) || (b.unlinked !== undefined && !def.store)) html += '<div id="sh-road"></div>';
     html += '<div class="actions">';
     if (pausable(b) && b.built) html += `<button class="btn" id="sh-pause"></button>`;
-    if (b.owner === 0 && (movable(b) || b.moving)) html += `<button class="btn" id="sh-move">${b.moving ? 'Call off the move' : 'Move'}</button><p class="hint" id="sh-move-hint">${b.moving ? 'Its new site is going up: when it\'s finished, everything here moves over and this one comes down.' : 'Put it somewhere else: no goods needed, just its build time. It keeps working until the new one is ready.'}</p>`;
+    if (b.owner === 0 && (movable(b) || b.moving)) html += `<button class="btn" id="sh-move">${b.moving ? 'Cancel move' : 'Move'}</button><p class="hint" id="sh-move-hint">${b.moving ? 'Its new site is going up: when it\'s finished, everything here moves over and this one comes down.' : 'Put it somewhere else: no goods needed, just its build time. It keeps working until the new one is ready.'}</p>`;
     if (b.owner === 0 && b.type === 'wall' && b.built) html += `<button class="btn" id="sh-gate">Make it a Gate</button><p class="hint">Your bots and trucks can pass through a Gate; enemies still have to break it down. It costs ${costText(gateUpgradeCost())} more, paid from storage.</p>`;
     if (BDEFS[b.type].mobile) html += '<button class="btn primary" id="sh-pack">Pack up to move</button>';
     else if (b.type !== 'lander') html += `<button class="btn danger" id="sh-demolish">${b.built ? 'Dismantle' : 'Cancel site'}</button>`;
@@ -3770,7 +3770,7 @@ function openBuildingSheet(b) {
     if ($('sh-omode')) for (const btn of $('sh-omode').children) btn.onclick = () => { b.omode = btn.dataset.v === 'first' ? 'first' : undefined; sfx('click'); refreshSheet(); };
     if ($('sh-pause')) $('sh-pause').onclick = () => { setPaused(b, !b.paused); sfx('click'); refreshSheet(); };
     if ($('sh-move')) $('sh-move').onclick = () => {
-      if (b.moving) { cancelMove(b); sfx('click'); toast(`Move called off: the ${def.name} stays where it is.`, 'info'); openBuildingSheet(b); return; }
+      if (b.moving) { cancelMove(b); sfx('click'); toast(`Move cancelled: the ${def.name} stays where it is.`, 'info'); openBuildingSheet(b); return; }
       sfx('click'); enterPlaceMode(b.type, b.id);
     };
     if ($('sh-pack')) $('sh-pack').onclick = () => {
