@@ -1559,6 +1559,7 @@ function newGame(opts) {
     size: clamp(opts.size ?? DEFAULT_SIZE[mode], 0, SIZE_PRESETS.length - 1),
     rough: clamp(opts.rough ?? DEFAULT_ROUGH, 0, TERRAIN_PRESETS.length - 1),
     rich: clamp(opts.rich ?? DEFAULT_RICH, 0, RESOURCE_PRESETS.length - 1),
+    resV: RES_V,
   };
   settings.shape = clamp(opts.shape ?? 0, 0, SHAPE_PRESETS.length - 1);
   // Free-for-all: three players (you and two rivals) on the map shapes that have room for three, or
@@ -3591,6 +3592,8 @@ function serializeGame() {
 function deserializeGame(json) {
   const o = JSON.parse(json);
   if (!o || o.v !== 1) throw new Error('Unsupported save');
+  // Saves from before resources were lowered a notch: the setting that matches the map they were made with.
+  if (o.settings && !o.settings.resV) { o.settings.rich = resLevelUp(o.settings.rich); o.settings.resV = RES_V; }
   // Saves from before elevation existed load as flat maps.
   if (!o.elev) { o.elev = new Array(o.W * o.H).fill(0); o.ramp = new Array(o.W * o.H).fill(0); }
   // Saves from before fertile soil and oil existed get them from the map's generator, on tiles

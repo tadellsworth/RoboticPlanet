@@ -476,14 +476,20 @@ const TERRAIN_PRESETS = [
   { name: 'Rugged', levels: 4, scale: 13, extra: 0.22, gap: 10, rock: 0.67 },
   { name: 'Mountainous', levels: 5, scale: 14, extra: 0.1, gap: 13, rock: 0.65 },
 ];
-/*   density  how many resource fields   amount  how much each node holds */
+/*   density  how many resource fields   amount  how much each node holds
+ * (Lowered a notch in resources version 2: Normal is what Sparse was, Rich what Normal was, Abundant what Rich was,
+ * Sparse what Scarce was, and Scarce is new. Older saves and saved planets move up a notch to keep their maps:
+ * resLevelUp.) */
 const RESOURCE_PRESETS = [
-  { name: 'Scarce', density: 0.55, amount: 0.6 },
-  { name: 'Sparse', density: 0.78, amount: 0.8 },
-  { name: 'Normal', density: 1, amount: 1 },
-  { name: 'Rich', density: 1.3, amount: 1.3 },
-  { name: 'Abundant', density: 1.65, amount: 1.7 },
+  { name: 'Scarce', density: 0.45, amount: 0.5 },
+  { name: 'Sparse', density: 0.55, amount: 0.6 },
+  { name: 'Normal', density: 0.78, amount: 0.8 },
+  { name: 'Rich', density: 1, amount: 1 },
+  { name: 'Abundant', density: 1.3, amount: 1.3 },
 ];
+const RES_V = 2;
+/** A resource setting from before RES_V: the setting that gives the same map now (the old Abundant is gone: Abundant). */
+function resLevelUp(k) { return Math.min(RESOURCE_PRESETS.length - 1, (Number.isInteger(k) ? k : 2) + 1); }
 /* Map shape: a Long haul map is narrower and much longer, with the bases far apart. */
 // Map types. `group` sorts them on the new-game screen (MAP_GROUPS); `blurb` is the line shown under
 // the choice; `tip` the longer note shown when a game starts.

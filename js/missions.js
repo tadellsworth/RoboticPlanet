@@ -53,11 +53,12 @@ function mirrored(W, H, x, y, fn) { fn(x, y); fn(W - 1 - x, H - 1 - y); }
 
 /* --- the campaign --- */
 
+// (Every mission is on Rich resources: the amount it was made and balanced with, before resources were lowered a notch.)
 const MISSIONS = [
   {
     id: 'touchdown', name: 'Touchdown',
     brief: 'A sheltered valley with everything close at hand. Get the colony running: cut Fiber, break Stone and smelt your first Alloy. Haulers only drive on roads, so lay one to every building.',
-    mode: 'colony', seed: 1101, size: 0, rough: 1, rich: 2, limit: [0, 0, 14],
+    mode: 'colony', seed: 1101, size: 0, rough: 1, rich: 3, limit: [0, 0, 14],
     goals: [
       { kind: 'built', type: 'harvester', n: 1 }, { kind: 'built', type: 'quarry', n: 1 },
       { kind: 'built', type: 'smelter', n: 1 }, { kind: 'made', good: 'alloy', n: [8, 12, 16] },
@@ -67,13 +68,13 @@ const MISSIONS = [
   {
     id: 'assembly', name: 'Assembly Line',
     brief: 'Bots make bots. Chain Ore, Crystal and Fiber into Chips, then order new bots at the Bot Foundry.',
-    mode: 'colony', seed: 2203, size: 0, rough: 2, rich: 2, limit: [0, 0, 18],
+    mode: 'colony', seed: 2203, size: 0, rough: 2, rich: 3, limit: [0, 0, 18],
     goals: [{ kind: 'made', good: 'chip', n: [6, 10, 14] }, { kind: 'bots', n: [4, 6, 8] }],
   },
   {
     id: 'greenfuel', name: 'Green Fuel',
     brief: 'The landing burned the fuel reserve and the colony is spread thin. Grow Fuel on the fertile flats and keep two Fuel Stations running.',
-    mode: 'colony', seed: 3307, size: 1, rough: 1, rich: 2, limit: [0, 0, 25], biome: 'jungle',
+    mode: 'colony', seed: 3307, size: 1, rough: 1, rich: 3, limit: [0, 0, 25], biome: 'jungle',
     goals: [
       { kind: 'built', type: 'farm', n: 1 }, { kind: 'made', good: 'fuel', n: [15, 25, 35] },
       { kind: 'built', type: 'charger', n: 2 },
@@ -84,7 +85,7 @@ const MISSIONS = [
   {
     id: 'rushhour', name: 'Rush Hour',
     brief: 'A supply depot landed far from your Command Base and the traffic is already backing up. Order more Haulers, run a road out to the depot, add one-way lanes and put traffic lights on the busy crossings.',
-    mode: 'colony', seed: 4409, size: 1, rough: 0, rich: 2, limit: [0, 0, 20],
+    mode: 'colony', seed: 4409, size: 1, rough: 0, rich: 3, limit: [0, 0, 20],
     goals: [{ kind: 'own', type: 'hauler', n: [7, 8, 10] }, { kind: 'paths', tier: 1, n: [32, 40, 48] }, { kind: 'oneway', n: [8, 12, 16] },
       { kind: 'lights', n: [1, 2, 3] }],
     setup(S) {
@@ -100,7 +101,7 @@ const MISSIONS = [
   {
     id: 'blacktop', name: 'Blacktop',
     brief: 'The survey crews want proper roads. Bake Cement, lay roads, then mark them for asphalt in Paths (Pave) and send a Paver out with Asphalt made from the oil seep beside your base.',
-    mode: 'colony', seed: 5501, size: 1, rough: 2, rich: 2, limit: [0, 0, 25],
+    mode: 'colony', seed: 5501, size: 1, rough: 2, rich: 3, limit: [0, 0, 25],
     goals: [
       { kind: 'made', good: 'cement', n: [12, 20, 28] }, { kind: 'paths', tier: 1, n: [23, 33, 43] },
       { kind: 'paths', tier: 2, n: [8, 14, 20] },
@@ -111,7 +112,7 @@ const MISSIONS = [
   {
     id: 'border', name: 'Border Dispute',
     brief: 'A rival colony landed on the same plateau, and the richest fields lie between you. Take their Outposts and hold the land.',
-    mode: 'versus', seed: 6603, size: 0, rough: 1, rich: 2, rival: ['easy', 'normal', 'hard'], limit: [0, 0, 30],
+    mode: 'versus', seed: 6603, size: 0, rough: 1, rich: 3, rival: ['easy', 'normal', 'hard'], limit: [0, 0, 30],
     goals: [{ kind: 'outposts', n: [1, 2, 2] }, { kind: 'land', n: [30, 35, 40] }],
     layout(m, W) {
       const H = m.terrain.length / W;
@@ -122,14 +123,14 @@ const MISSIONS = [
   {
     id: 'supply', name: 'Supply Lines',
     brief: 'Warbots win nothing on empty magazines. Build an Ammo Plant, keep your garrisons stocked, and capture the rival Command Base.',
-    mode: 'versus', seed: 7707, size: 1, rough: 2, rich: 2, rival: ['easy', 'normal', 'hard'], limit: [0, 40, 35], biome: 'jungle',
+    mode: 'versus', seed: 7707, size: 1, rough: 2, rich: 3, rival: ['easy', 'normal', 'hard'], limit: [0, 40, 35], biome: 'jungle',
     goals: [{ kind: 'made', good: 'ammo', n: [15, 25, 35] }, { kind: 'capture' }],
     setup(S) { for (const u of S.bots) if (u.type === 'warbot' && u.owner === 0) u.ammo = 4; },
   },
   {
     id: 'descent', name: 'Final Descent',
     brief: 'A deep canyon world and a veteran rival. Every route is long, so plan your roads, Fuel and Ammo well. Capture the rival Command Base.',
-    mode: 'versus', seed: 8803, size: 2, rough: 3, rich: 2, rival: ['normal', 'hard', 'hard'], rivalBonus: [0, 0, 6], limit: [0, 0, 50], biome: 'polar',
+    mode: 'versus', seed: 8803, size: 2, rough: 3, rich: 3, rival: ['normal', 'hard', 'hard'], rivalBonus: [0, 0, 6], limit: [0, 0, 50], biome: 'polar',
     goals: [{ kind: 'capture' }],
   },
 ];

@@ -28,7 +28,9 @@ Chokepoint, Islands, Crater, Plateaus, Sky islands, Rift, Ring valley, Oases, Cr
 on each) and the **map size** (Small to
 Huge). **More settings** (a collapsible section, its summary listing whatever isn't the default) holds the planet
 number, the **biome** (Red desert, Jungle or Polar: scenery only, with plants that roads and buildings clear), the
-**terrain** (Flat, Gentle, Rolling, Rugged, Mountainous), the **resources** (Scarce to Abundant), the **rival style**,
+**terrain** (Flat, Gentle, Rolling, Rugged, Mountainous), the **resources** (Scarce to Abundant; Normal is
+`RESOURCE_PRESETS` density 0.78, amount 0.8, which was Sparse until everything was lowered a notch: older saves,
+saved planets and missions move up one, `resLevelUp`), the **rival style**,
 and switches for the **Nuclear race** (on by default), **Planet events** (off by default), **Wildlife** (Colony; on by default),
 **Day and night** and **Unlimited resources** (a testing switch: `unlimitedTopUp` keeps your Command Base at
 `UNLIMITED_STOCK` of every good and fills whatever your buildings are waiting for, once a second). Resources come in separate

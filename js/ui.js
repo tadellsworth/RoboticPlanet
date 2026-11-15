@@ -4,7 +4,7 @@
  */
 
 /** Version of the remembered new-game settings: 2 brought new defaults for rival style, Nuclear race and Planet events. */
-const SETTINGS_V = 2;
+const SETTINGS_V = 3;
 
 const UI = {
   inGame: false, paused: false, speed: 1, overShown: false,
@@ -66,10 +66,13 @@ function initUI() {
   $('p-saveplanet').onclick = () => { if (!S) return; savePlanet(gamePlanet()); sfx('place'); toast(`Saved Planet #${S.seed}: start it again from Saved planets in the new-game menu.`, 'good'); };
   // Map settings (remembered on this device; map size is remembered per mode).
   // Settings from before v2 drop their rival style, Nuclear race and Planet events, so the new defaults
-  // (a Balanced rival, Nuclear race on, Planet events off) reach every device once.
+  // (a Balanced rival, Nuclear race on, Planet events off) reach every device once. From before v3 (resources
+  // lowered a notch): Normal stays Normal (the new, leaner default), and the others keep what they gave
+  // (Scarce is now Sparse, Sparse Normal, Rich Abundant).
   try {
     const saved = JSON.parse(localStorage.getItem('botfall.settings') || '{}');
-    if ((saved.v || 0) < SETTINGS_V) { delete saved.style; delete saved.nuke; delete saved.events; }
+    if ((saved.v || 0) < 2) { delete saved.style; delete saved.nuke; delete saved.events; }
+    if ((saved.v || 0) < 3 && Number.isInteger(saved.rich)) saved.rich = [1, 2, 2, 4, 4][saved.rich] ?? DEFAULT_RICH;
     Object.assign(UI.menu, saved);
   } catch (e) { /* defaults */ }
   checkMenuSettings();
@@ -264,8 +267,8 @@ function terrainInfo(v) {
   return `${T.name} terrain: ${T.levels === 1 ? 'one level, no cliffs to get round' : `${T.levels} levels of ground, with cliffs between and slopes up them`}.`;
 }
 function resourceInfo(v) {
-  const P = RESOURCE_PRESETS[v], pct = (x) => Math.round(x * 100) + '%';
-  return v === DEFAULT_RICH ? `${P.name} resources: the usual fields of stone, ore, crystal and stalks.` : `${P.name} resources: ${pct(P.density)} as many fields, each holding ${pct(P.amount)} as much.`;
+  const P = RESOURCE_PRESETS[v], N = RESOURCE_PRESETS[DEFAULT_RICH], pct = (x) => Math.round(x * 100) + '%';
+  return v === DEFAULT_RICH ? `${P.name} resources: enough stone, ore, crystal and stalks near home to get going; spread out for more.` : `${P.name} resources: ${pct(P.density / N.density)} as many fields as Normal, each holding ${pct(P.amount / N.amount)} as much.`;
 }
 
 /** The setup in a line (and what isn't the default in a second one), under Play and in Start's bar. */
@@ -1704,11 +1707,16 @@ function placeMinimap() {
  */
 const PLANETS_KEY = 'terrafall.planets', PLANETS_MAX = 40;
 function savedPlanets() {
-  try { const l = JSON.parse(localStorage.getItem(PLANETS_KEY) || '[]'); return Array.isArray(l) ? l : []; } catch (e) { return []; }
+  let l;
+  try { l = JSON.parse(localStorage.getItem(PLANETS_KEY) || '[]'); } catch (e) { return []; }
+  if (!Array.isArray(l)) return [];
+  // Planets saved before resources were lowered a notch: the setting that makes the same planet now.
+  if (l.some((p) => p && !p.rv)) { for (const p of l) if (p && !p.rv) { p.rich = resLevelUp(p.rich); p.rv = RES_V; } writePlanets(l); }
+  return l;
 }
 function writePlanets(list) { try { localStorage.setItem(PLANETS_KEY, JSON.stringify(list.slice(0, PLANETS_MAX))); } catch (e) { /* storage unavailable */ } }
 const planetKey = (p) => [p.seed, p.shape, p.size, p.rough, p.rich, p.biome, p.players].join(':');
-function savePlanet(p) { writePlanets([{ ...p, at: Date.now() }].concat(savedPlanets().filter((q) => planetKey(q) !== planetKey(p)))); }
+function savePlanet(p) { writePlanets([{ ...p, rv: RES_V, at: Date.now() }].concat(savedPlanets().filter((q) => planetKey(q) !== planetKey(p)))); }
 /** The planet the new-game menu is set to. */
 function menuPlanet() {
   return { seed: UI.menu.seed, shape: UI.menu.shape || 0, size: UI.menu.size[UI.menu.mode] ?? DEFAULT_SIZE[UI.menu.mode], rough: UI.menu.rough, rich: UI.menu.rich,
