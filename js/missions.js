@@ -1,20 +1,28 @@
 'use strict';
 /*
- * Terrafall — the mission campaign. Eight missions on hand-picked planets, each with its own goals,
- * starting conditions and some hand-placed features. Every mission has three difficulty levels
- * (Easy / Normal / Hard: bigger goals, tighter clocks, tougher rivals). Every mission is open from the
- * start; finishing one ticks it off at that difficulty.
+ * Terrafall — the mission campaign, which is also the tutorial: it starts with the very basics and, chapter by
+ * chapter, teaches every part of the game. Missions are on hand-picked planets, each with its own goals, starting
+ * conditions and hand-placed features, and three difficulty levels (Easy / Normal / Hard: bigger goals, tighter
+ * clocks, tougher rivals). Every mission is open from the start; finishing one ticks it off at that difficulty.
  *
- * Goal kinds (n can be one number or [easy, normal, hard]):
+ * A mission: { id (progress is saved by it), name, chapter, brief, intro: [lines for the briefing card], mode,
+ * seed, size, rough, rich, biome, shape, players, style, rival: [easy, normal, hard], rivalBonus, limit (minutes
+ * per difficulty, 0 none), nuke/war/lab/events/wildlife (switch on what missions otherwise leave out), layout(m, W),
+ * setup(S, diff), goals }.
+ * A goal: { kind, n (one number or [easy, normal, hard]), hint (how to do it, shown while it's the next goal),
+ * ui (CSS selector of the button(s) to light up meanwhile), text (its own objective text, "{n}" for the number) }.
+ * Goal kinds:
  *   built     have `n` finished buildings of `type`
  *   made      produce `n` of `good` over the mission
- *   bots      build `n` new bots at the Foundry (any type, or `type`)
+ *   bots      build `n` new bots (any type, or `type`) at the Foundry or a yard
  *   own       have `n` bots of `type` at once
  *   paths     have `n` road tiles of surface `tier` or better (1 road, 2 asphalt)
  *   oneway    have `n` one-way road tiles
+ *   lights    have `n` traffic lights up
  *   land      claim `n` percent of the land
- *   outposts  capture `n` rival Outposts
+ *   outposts  capture `n` rival Outposts (or other garrisons)
  *   capture   capture the rival Command Base
+ *   (any)     with `count(P, S)`: whatever that returns, with the goal's own `text`
  */
 
 const CAMPAIGN_KEY = 'botfall.campaign';
@@ -137,53 +145,58 @@ const MISSIONS = [
 
 function goalNeed(g, diff) { return Array.isArray(g.n) ? g.n[diff] : g.n || 1; }
 
-/** Where a goal stands: { have, need, done, text }. */
-function goalState(g, diff) {
-  const P = S.players[0], need = goalNeed(g, diff);
-  let have = 0, text = '';
+/** A building's name for `n` of them: "a Quarry", "2 Quarries", "2 Cement Works". */
+function bldCount(type, n) {
+  const name = BDEFS[type].name;
+  if (n <= 1) return aOrAn(name);
+  return `${n} ${/s$/.test(name) ? name : /[^aeiou]y$/.test(name) ? name.slice(0, -1) + 'ies' : name + 's'}`;
+}
+
+/**
+ * A goal's objective text for `need` (shared by the mission screen and the game). A goal can give its own `text`
+ * ("{n}" stands for the number), which every custom goal (one with a `count` function) does.
+ */
+function goalLabel(g, need) {
+  if (g.text) return g.text.replace(/\{n\}/g, need);
   switch (g.kind) {
-    case 'built':
-      for (const b of S.buildings) if (!b.dead && b.owner === 0 && b.built && b.type === g.type) have++;
-      text = need > 1 ? `Build ${need} ${BDEFS[g.type].name}s` : `Build ${aOrAn(BDEFS[g.type].name)}`;
-      break;
-    case 'made':
-      have = (P.made && P.made[g.good]) || 0;
-      text = `Make ${need} ${GOOD[g.good].name}`;
-      break;
-    case 'bots':
-      for (const k in P.madeBots || {}) if (!g.type || k === g.type) have += P.madeBots[k];
-      text = `Build ${need} new ${g.type ? BOTS[g.type].plural : 'bots'} at the Foundry`;
-      break;
-    case 'own':
-      for (const u of S.bots) if (!u.dead && u.owner === 0 && u.type === g.type) have++;
-      text = `Have ${need} ${BOTS[g.type].plural}`;
-      break;
-    case 'paths':
-      for (let t = 0; t < S.W * S.H; t++) if (S.road[t] && wayOwner(t) === 0 && (S.pave[t] || 1) >= g.tier) have++;
-      text = `${['', 'Lay', 'Surface'][g.tier]} ${need} ${['', 'road', 'asphalt road'][g.tier]} tiles`;
-      break;
-    case 'oneway':
-      for (let t = 0; t < S.W * S.H; t++) if (S.road[t] >= 2 && wayOwner(t) === 0) have++;
-      text = `Make ${need} road tiles one-way`;
-      break;
-    case 'lights':
-      for (const k in S.lights) if (S.lights[k].owner === 0) have++;
-      text = need > 1 ? `Put up ${need} traffic lights` : 'Put up a traffic light';
-      break;
-    case 'land':
-      have = Math.floor(landShare(0) * 100);
-      text = `Claim ${need}% of the land`;
-      break;
-    case 'outposts':
-      have = P.stats.outposts || 0;
-      text = need > 1 ? `Capture ${need} rival Outposts` : 'Capture a rival Outpost';
-      break;
-    case 'capture':
-      have = S.winner === 0 ? 1 : 0;
-      text = 'Capture the rival Command Base';
-      break;
+    case 'built': return `Build ${bldCount(g.type, need)}`;
+    case 'made': return `Make ${need} ${GOOD[g.good].name}`;
+    case 'bots': return `Build ${need} new ${g.type ? BOTS[g.type].plural : 'bots'}`;
+    case 'own': return `Have ${need} ${BOTS[g.type].plural}`;
+    case 'paths': return `${['', 'Lay', 'Surface'][g.tier]} ${need} ${['', 'road', 'asphalt road'][g.tier]} tiles`;
+    case 'oneway': return `Make ${need} road tiles one-way`;
+    case 'lights': return need > 1 ? `Put up ${need} traffic lights` : 'Put up a traffic light';
+    case 'land': return `Claim ${need}% of the land`;
+    case 'outposts': return need > 1 ? `Capture ${need} rival Outposts` : 'Capture a rival Outpost';
+    case 'capture': return 'Capture the rival Command Base';
   }
-  return { have: Math.min(have, need), need, done: have >= need, text };
+  return '';
+}
+
+/** How far player 0 has got with goal g (see goalState); a custom goal counts with its own `count(P, S)`. */
+function goalHave(g) {
+  const P = S.players[0];
+  if (g.count) return g.count(P, S) || 0;
+  let have = 0;
+  switch (g.kind) {
+    case 'built': for (const b of S.buildings) if (!b.dead && b.owner === 0 && b.built && b.type === g.type) have++; break;
+    case 'made': have = (P.made && P.made[g.good]) || 0; break;
+    case 'bots': for (const k in P.madeBots || {}) if (!g.type || k === g.type) have += P.madeBots[k]; break;
+    case 'own': for (const u of S.bots) if (!u.dead && u.owner === 0 && u.type === g.type) have++; break;
+    case 'paths': for (let t = 0; t < S.W * S.H; t++) if (S.road[t] && wayOwner(t) === 0 && (S.pave[t] || 1) >= g.tier) have++; break;
+    case 'oneway': for (let t = 0; t < S.W * S.H; t++) if (S.road[t] >= 2 && wayOwner(t) === 0) have++; break;
+    case 'lights': for (const k in S.lights) if (S.lights[k].owner === 0) have++; break;
+    case 'land': have = Math.floor(landShare(0) * 100); break;
+    case 'outposts': have = P.stats.outposts || 0; break;
+    case 'capture': have = S.winner === 0 ? 1 : 0; break;
+  }
+  return have;
+}
+
+/** Where a goal stands: { have, need, done, text }. (Counts of what stands now, like buildings, can drop again; the made and captured counts only grow.) */
+function goalState(g, diff) {
+  const need = goalNeed(g, diff), have = goalHave(g);
+  return { have: Math.min(have, need), need, done: have >= need, text: goalLabel(g, need) };
 }
 
 /** Runs once a second while a mission is in play: success, or failure when the clock runs out. */
@@ -211,6 +224,8 @@ function missionOptions(k, diff) {
   return {
     seed: def.seed, mode: def.mode, size: def.size, rough: def.rough, rich: def.rich, biome: def.biome,
     difficulty: def.rival ? def.rival[diff] : 'normal',
+    // (A map shape, more players, the rival's personality and a Nuclear race, for the missions that teach them.)
+    shape: def.shape || 0, players: def.players, style: def.style, nuke: !!def.nuke, events: !!def.events,
     layout: def.layout,
     setup(S) {
       // Easy starts with more in the Command Base, Hard with less.
@@ -221,8 +236,10 @@ function missionOptions(k, diff) {
         const R2 = getE(S.players[1].lander);
         for (const g in R2.stock) R2.stock[g] += def.rivalBonus[diff];
       }
+      // What this mission switches on that missions otherwise leave out (see nukeOn, warOn, labOn, updateEvents).
+      S.mission = { k, id: def.id, diff, limit: (def.limit[diff] || 0) * 60, nuke: !!def.nuke, war: !!def.war, lab: !!def.lab, events: !!def.events };
+      if (def.wildlife && S.mode === 'colony') { S.wildlife = true; placeNests(S.seed); }
       if (def.setup) def.setup(S, diff);
-      S.mission = { k, id: def.id, diff, limit: (def.limit[diff] || 0) * 60 };
     },
   };
 }

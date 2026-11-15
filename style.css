@@ -421,7 +421,13 @@ canvas.chart { display: block; width: 100%; height: 170px; touch-action: pan-y; 
 .slider-row output { font-weight: 700; font-variant-numeric: tabular-nums; color: var(--accent); }
 .slider-row input { grid-column: 1 / -1; width: 100%; height: 28px; margin: 0; accent-color: var(--accent); touch-action: pan-x; }
 .help-card { width: min(100%, 560px); max-height: calc(100vh - 32px); display: flex; flex-direction: column; }
-.help-body { overflow-y: auto; touch-action: pan-y; padding-right: 4px; }
+/* (The visible height on a phone: dvh leaves out the browser's bars, and the safe areas the screen's padding keeps
+   clear are taken off too, so the button at the bottom is never under the home bar.) */
+@supports (height: 100dvh) {
+  .help-card { max-height: calc(100dvh - var(--safe-t) - var(--safe-b) - 32px); }
+}
+.help-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; touch-action: pan-y; padding-right: 4px; }
+.help-card > .btn, .help-card > .stats-head { flex-shrink: 0; }
 .help-body h3 { margin: 14px 0 4px; font-size: 16px; color: var(--accent); }
 .help-body p { margin: 4px 0; color: #d3d9e2; }
 .chain { margin: 4px 0; padding-left: 18px; color: #d3d9e2; }
@@ -877,3 +883,51 @@ canvas.chart.small { height: 110px; }
 .mp-players li.mp-team small { text-transform: none; letter-spacing: 0; font-weight: 400; }
 .mp-players li.mp-swap { cursor: pointer; }
 .mp-players li.mp-swap:hover { outline: 1px solid var(--line); }
+
+/* ---- Missions as the tutorial: chapters, the next mission, the next goal's hint and the buttons it needs ---- */
+.ms-chapter { margin: 14px 2px 0; }
+.ms-chapter:first-child { margin-top: 2px; }
+.ms-item.next { border-color: rgba(56,212,255,0.6); background: rgba(56,212,255,0.08); }
+.ms-up { color: var(--accent); }
+.obj-goals li.now { color: var(--text); font-weight: 700; }
+.obj-hint { margin-top: 4px; padding-top: 4px; border-top: 1px solid var(--line); color: #cfe9f5; font-size: 0.95em; line-height: 1.3; }
+.obj-hint kbd, .help-body kbd { display: inline-block; min-width: 1.4em; padding: 0 4px; border: 1px solid var(--line); border-bottom-width: 2px;
+  border-radius: 5px; background: rgba(255,255,255,0.06); font: 600 0.85em/1.4 ui-monospace, monospace; text-align: center; color: var(--text); }
+.tut-glow { position: relative; animation: tutglow 1.4s ease-in-out infinite; z-index: 1; }
+@keyframes tutglow {
+  0%, 100% { box-shadow: 0 0 0 2px rgba(56,212,255,0.85), 0 0 10px 2px rgba(56,212,255,0.35); }
+  50% { box-shadow: 0 0 0 3px rgba(56,212,255,1), 0 0 22px 6px rgba(56,212,255,0.55); }
+}
+
+/* ---- How to play: contents with jump links ---- */
+.help-toc { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0 6px; }
+.help-toc a { padding: 5px 10px; border: 1px solid var(--line); border-radius: 999px; background: rgba(255,255,255,0.04);
+  color: var(--text); font-size: 13px; text-decoration: none; }
+.help-toc a:hover { border-color: rgba(56,212,255,0.6); }
+.help-body section { scroll-margin-top: 6px; }
+.help-top { display: inline-block; margin: 6px 0 2px; font-size: 12px; color: var(--muted); text-decoration: none; }
+.help-top:hover { color: var(--accent); }
+
+/* ---- The menus in the app icon's colours: midnight navy, coral and cream (icons/icon.svg) ---- */
+#screen-menu, .m-picker, #screen-missions, #screen-help {
+  --accent: #ff6b4a;          /* the planet's coral */
+  --accent-ink: #14213d;      /* navy text on coral */
+  --panel: rgba(17, 27, 51, 0.95);
+  --panel-2: rgba(30, 44, 78, 0.96);
+  --line: rgba(241, 228, 211, 0.12);
+  --text: #f4ece2;            /* the ring's cream */
+  --muted: #b9ad9f;
+}
+#screen-menu { background: radial-gradient(ellipse at 50% 28%, rgba(20, 33, 61, 0.35), rgba(8, 12, 24, 0.86)); }
+.menu-card, #screen-missions .card, #screen-help .card { background: var(--panel); border-color: rgba(241, 228, 211, 0.14); }
+.m-icon { display: block; width: 84px; height: 84px; margin: -4px auto 10px; border-radius: 20px; box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(241, 228, 211, 0.12); }
+#screen-menu .logo, .menu-card .m-head-logo { background: linear-gradient(180deg, #fff6ec 10%, #ffb08f 60%, #ff6b4a); -webkit-background-clip: text; background-clip: text; color: transparent; }
+#screen-menu .tagline { color: #d9c9b6; letter-spacing: 0.04em; }
+#m-new { box-shadow: 0 8px 26px rgba(255, 107, 74, 0.28); }
+#screen-menu .btn.primary:hover { filter: brightness(1.06); }
+#screen-menu .m-cust { background: rgba(20, 33, 61, 0.72); border-color: rgba(241, 228, 211, 0.16); color: var(--text); }
+#screen-menu .m-cust:hover { border-color: rgba(255, 107, 74, 0.55); }
+#screen-menu .m-cont { background: rgba(255, 107, 74, 0.1); border-color: rgba(255, 107, 74, 0.5); color: #ffd9cc; }
+#screen-menu .m-sum .sum-main { color: #e6d9c8; }
+#screen-menu .m-links button:hover { color: #ffb08f; }
+#screen-missions .help-body h3, #screen-help .help-body h3 { color: #ff8a66; }

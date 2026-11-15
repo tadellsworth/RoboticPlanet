@@ -1772,14 +1772,17 @@ function mapDims(st) {
   return { W: Math.round(sz.w * sh.w), H: 2 * Math.round((sz.h * sh.h) / 2) };
 }
 
-/** Is this a Nuclear race (the optional Versus setting with uranium and nuclear missiles)? */
-function nukeOn() { return !!(S && S.settings && S.settings.nuke) && !S.mission; }
+/** Is this a Nuclear race (the optional Versus setting with uranium and nuclear missiles)? Not in a mission, unless it teaches it. */
+function nukeOn() { return !!(S && S.settings && S.settings.nuke) && (!S.mission || !!S.mission.nuke); }
 
 /**
  * Are military buildings, warbots and missiles available? Always in Versus; in Colony free play too
- * (a sandbox to try everything); not in Colony missions, which are about building.
+ * (a sandbox to try everything); not in Colony missions, which are about building, unless one teaches defence.
  */
-function warOn() { return !!S && (S.mode !== 'colony' || !S.mission); }
+function warOn() { return !!S && (S.mode !== 'colony' || !S.mission || !!S.mission.war); }
+
+/** Is the Research Lab available? In Colony free play, and in a Colony mission that teaches it. */
+function labOn() { return !!S && S.mode === 'colony' && (!S.mission || !!S.mission.lab); }
 
 /** The resources a building of `type` gathers: its own, plus uranium for Ore Mines in a Nuclear race (uranium first). */
 function gatherTypes(type) {
@@ -2639,7 +2642,7 @@ function canPlace(owner, type, i, j, skipBlockCheck) {
   } else if (S.res[t] && !(S.res[t] === R_OIL && (S.road[t] || S.plan[t]))) return { ok: false, reason: 'Clear the resources here first.' }; // (oil under a road stays underground: the road rules below decide)
   if (S.bAt[t]) return { ok: false, reason: 'There is already a building here.' };
   if (runwayAt(t)) return { ok: false, reason: 'That\'s an Airfield\'s runway: keep it clear.' };
-  if (def.colony && (S.mode !== 'colony' || S.mission)) return { ok: false, reason: 'Only in Colony free play.' };
+  if (def.colony && !labOn()) return { ok: false, reason: 'Only in Colony free play.' };
   // A Ramp can go under track (to carry it up a level), and a Gate across it (your trains run through, as on a road).
   if (S.rail && (S.rail[t] || (S.railPlan && S.railPlan[t])) && !def.ramp && !def.gate) return { ok: false, reason: S.rail[t] ? 'There is railway track here.' : 'Track is planned here.' };
   if (def.port && !navalMap()) return { ok: false, reason: 'Ports are for naval maps (Islands and Lakes).' };
@@ -3400,10 +3403,11 @@ function roadSides(owner, x, y) {
  * buildings by road: a list of tiles to pave (empty if it is already linked), or null if there is
  * no way through the owner's land. `.cost` is its price in road tiles (resources cost more).
  */
-function roadRouteTo(owner, b) {
+function roadRouteTo(owner, b, join) {
   const g = roadGoals(owner, b);
   if (!g.stores.length) return null;
-  if (onHomeNet(b)) { const r = []; r.cost = 0; r.pending = 0; return r; }
+  // (With join, b is a Command Base of ours on roads of its own, a captured one: the way to the others' roads.)
+  if (join ? g.stores.some((s) => roadLinked(s, b)) : onHomeNet(b)) { const r = []; r.cost = 0; r.pending = 0; return r; }
   const net = roadNet(owner);
   const res = roadSearch(owner, roadSides(owner, b.x, b.y), (t) => (net.comp[t] >= 0 && g.nets.has(net.comp[t])) || g.next[t]);
   if (res.end < 0) return null;

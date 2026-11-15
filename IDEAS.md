@@ -62,11 +62,10 @@ the Haulers disagree about is given up after four minutes); two Ore Mines went s
 gatherer now counts only the deposits none of its kind already works); and the rival spans canyons onto a rival's mesa
 or plateau with a Viaduct (see Fortresses in the README). Still worth a look: Ore near home is sparse at the Normal
 level (about a tile and a half inside the starting border, sometimes none), so the first minutes hang on how well the
-rival picks its first Ore Mine. Two signs of the same thing in the tests: a rival with one Ore Mine runs out of Alloy
-and its army stops at five warbots (gunshy-test: it never gathers the nine it wants to clear a turret), and in a 2 v 2
-on Crossroads (seed 9, no nukes) the stronger colony sits on 160+ unused Alloy with about ten warbots while two against
-one can't finish the last rival inside 40 minutes. The army a rich rival wants (`aiWantArmy`) and what stops its
-Foundry are the places to look.
+rival picks its first Ore Mine. A sign of it in the tests: a rival with one Ore Mine runs out of Alloy and its army
+stops at five warbots (gunshy-test: it never gathers the nine it wants to clear a turret). (Fixed: in a 2 v 2 a rival
+that captured a Command Base had two road networks, each counting as home, so Crystal piled on one side while the Chip
+Fabs on the other went without, and its army stopped growing; `aiJoinBases` now joins a captured base by road.)
 
 ## Balance decisions
 

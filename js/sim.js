@@ -7330,7 +7330,7 @@ function evDrain() { return S.event && S.event.type === 'flare' && S.time >= S.e
 
 /** Start, run and end planet events (see EVENTS). */
 function updateEvents() {
-  if (!S.events || S.mission) return;
+  if (!S.events || (S.mission && !S.mission.events)) return;
   const E = S.event;
   if (E) {
     if (!E.started && S.time >= E.t0) startEvent(E);

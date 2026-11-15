@@ -84,6 +84,14 @@ function initUI() {
   $('p-export').onclick = () => { sfx('click'); downloadSave(); };
   $('m-help').onclick = () => showHelp();
   $('h-close').onclick = () => { $('screen-help').hidden = true; UI.paused = !$('screen-pause').hidden; };
+  // The How to play's contents and "Back to top" links: scroll its text to the section.
+  $('screen-help').addEventListener('click', (e) => {
+    const a = e.target.closest && e.target.closest('[data-jump]');
+    if (!a) return;
+    e.preventDefault();
+    const el = document.getElementById(a.dataset.jump);
+    if (el) el.scrollIntoView({ block: 'start', behavior: 'smooth' });
+  });
 
   // Pause menu
   // (in a multiplayer game the menu doesn't stop the game: Pause for everyone does, see mpui.js)
@@ -190,7 +198,7 @@ function initUI() {
 
 /*
  * The main menu has two views. Home (on load): Continue, Play (#m-new: a game with the settings
- * summed up under it), Customise game, and Missions, Load a save file and How to play. Customise
+ * summed up under it), Custom Game, then Multiplayer, and Missions, Load a save file and How to play. Customise
  * (#m-more; `$('m-more').open = true` opens it too): a preview of the very planet the settings make,
  * with its seed and saved planets, and the settings in three sections, Match, Planet and Rules, each
  * with one line describing the option under the mouse (or focused, or chosen). Play is the same
@@ -308,7 +316,7 @@ function showMenuView(v, focus) {
   $('menu-card').classList.toggle('is-setup', setup);
   $('screen-menu').classList.toggle('is-setup', setup);
   $('m-new-label').textContent = UI.mpSetup ? 'Done' : setup ? 'Start' : 'Play';
-  $('m-setup-title').textContent = UI.mpSetup ? 'Multiplayer game' : 'New game';
+  $('m-setup-title').textContent = UI.mpSetup ? 'Multiplayer game' : 'Custom Game';
   if (!setup) closePicker(false);
   else { $('m-body').scrollTop = 0; $('screen-menu').scrollTop = 0; }
   syncMenu();
@@ -1876,6 +1884,7 @@ function startNewGame() {
   }
   if (S.victory === 'domination') postMsg(ME, `Domination: hold ${Math.round(domShare() * 100)}% of the land anyone holds (and ${Math.round(DOM.min * 100)}% of the planet) for ${DOM.hold / 60} minutes straight to win. The card at the top shows where everyone stands. Outposts and Keeps claim the most land.`, 0, 0, 'info');
   if (nukeOn()) postMsg(ME, `Nuclear race: a few uranium deposits glow green across the planet. Dig them with Ore Mines, enrich them at a Nuclear Reactor and build the bomb${S.mode === 'colony' ? ' (no rival here, so it is yours to try out)' : ` before ${S.players.length > 2 ? 'the rivals do' : 'the rival does'}`}.`, 0, 0, 'warn');
+  $('br-title').textContent = 'Before you start';
   showBriefing();
 }
 
@@ -2048,12 +2057,16 @@ function renderMissions(msg) {
   const c = loadCampaign();
   const body = $('ms-body');
   if (UI.msSel == null) {
-    body.innerHTML = `<p class="desc">Eight missions with their own goals, each with three difficulty levels. Play them in any order.</p>
+    // (The next to play: the first not yet finished at any difficulty. In order, they teach the whole game.)
+    const next = MISSIONS.findIndex((m) => !(c.done[m.id] || []).some(Boolean));
+    let chapter = '';
+    body.innerHTML = `<p class="desc">${MISSIONS.length} missions, each with its own goals and three difficulty levels. Play them in order to learn the game, or pick any.</p>
       <div class="ms-list">${MISSIONS.map((m, k) => {
         const done = c.done[m.id] || [];
         const marks = MISSION_DIFF_NAMES.map((n, d) => (done[d] ? `<span class="ms-done">${n} ✓</span>` : '')).filter(Boolean).join(' ');
-        return `<button class="ms-item" data-k="${k}"><span class="ms-num">${k + 1}</span>
-          <span class="ms-name">${m.name}</span><span class="ms-meta">${marks || (m.mode === 'colony' ? 'Colony' : 'Versus')}</span></button>`;
+        const head = m.chapter && m.chapter !== chapter ? `<div class="section-label ms-chapter">${(chapter = m.chapter)}</div>` : '';
+        return `${head}<button class="ms-item${k === next ? ' next' : ''}" data-k="${k}"><span class="ms-num">${k + 1}</span>
+          <span class="ms-name">${m.name}</span><span class="ms-meta">${marks || (k === next ? '<b class="ms-up">Next up</b> · ' : '') + (m.mode === 'colony' ? 'Colony' : 'Versus')}</span></button>`;
       }).join('')}</div>${msg ? `<p class="hint">${msg}</p>` : ''}`;
     for (const el of body.querySelectorAll('.ms-item')) el.onclick = () => { sfx('click'); UI.msSel = +el.dataset.k; UI.msDiff = UI.msDiff ?? 1; renderMissions(); };
     return;
@@ -2061,7 +2074,7 @@ function renderMissions(msg) {
   const k = UI.msSel, def = MISSIONS[k], diff = UI.msDiff ?? 1;
   const done = c.done[def.id] || [];
   body.innerHTML = `<p class="hint" style="margin-top:6px">Mission ${k + 1} of ${MISSIONS.length}</p>
-    <h3 style="margin:2px 0 6px;font-size:20px">${def.name}</h3>
+    <h3 style="margin:2px 0 6px;font-size:20px">${def.name}</h3>${def.chapter ? `<p class="hint" style="margin:0 0 4px">${def.chapter}</p>` : ''}
     <p class="desc">${def.brief}</p>
     <div class="section-label" style="margin-top:12px">Difficulty</div>
     <div class="seg" id="ms-diff">${MISSION_DIFF_NAMES.map((n, d) => `<button data-d="${d}" class="${d === diff ? 'on' : ''}">${n}${done[d] ? ' ✓' : ''}</button>`).join('')}</div>
@@ -2074,21 +2087,7 @@ function renderMissions(msg) {
 }
 
 /** A goal's description without a game running (for the mission briefing). */
-function goalText(g, diff) {
-  const n = goalNeed(g, diff);
-  switch (g.kind) {
-    case 'built': return n > 1 ? `Build ${n} ${BDEFS[g.type].name}s` : `Build ${aOrAn(BDEFS[g.type].name)}`;
-    case 'made': return `Make ${n} ${GOOD[g.good].name}`;
-    case 'bots': return `Build ${n} new ${g.type ? BOTS[g.type].plural : 'bots'} at the Foundry`;
-    case 'own': return `Have ${n} ${BOTS[g.type].plural}`;
-    case 'paths': return `${['', 'Lay', 'Surface'][g.tier]} ${n} ${['', 'road', 'asphalt road'][g.tier]} tiles`;
-    case 'oneway': return `Make ${n} road tiles one-way`;
-    case 'land': return `Claim ${n}% of the land`;
-    case 'outposts': return n > 1 ? `Capture ${n} rival Outposts` : 'Capture a rival Outpost';
-    case 'capture': return 'Capture the rival Command Base';
-  }
-  return '';
-}
+function goalText(g, diff) { return goalLabel(g, goalNeed(g, diff)); }
 
 function startMission(k, diff) {
   clearSave();
@@ -2098,7 +2097,47 @@ function startMission(k, diff) {
   updateHUD();
   placeMinimap();
   UI.objCollapsed = false;
-  postMsg(ME, `Mission ${k + 1}: ${MISSIONS[k].name}. ${MISSIONS[k].brief}`, 0, 0, 'info');
+  UI.msDone = null;
+  // The briefing card: the brief, the mission's own pointers, and how to start on the first goal.
+  const def = MISSIONS[k];
+  $('br-title').textContent = `Mission ${k + 1}: ${def.name}`;
+  S.msgs.length = 0;
+  postMsg(ME, def.brief, 0, 0, 'info');
+  for (const line of def.intro || []) postMsg(ME, line, 0, 0, 'info');
+  const g0 = def.goals[0];
+  if (g0 && g0.hint) postMsg(ME, `First: ${goalText(g0, diff)}. ${plainHint(g0.hint)}`, 0, 0, 'good');
+  showBriefing();
+}
+
+/** A hint as plain text (for messages, which show text, not markup). */
+function plainHint(h) { return String(h || '').replace(/<[^>]+>/g, ''); }
+
+/** The mission goal to do next: the first not done yet (or -1). */
+function missionGoalNow(states) { return states.findIndex((s) => !s.done); }
+
+/**
+ * Tutorial pointers while a mission runs (a few times a second, from uiTick): the buttons the next goal needs light
+ * up (its `ui` selector), and each goal met is ticked off with a message and the next one's hint.
+ */
+function missionCoach() {
+  const M = S && S.mission, def = M && MISSIONS[M.k];
+  let sel = '';
+  if (def && !M.result && S.winner < 0) {
+    const states = def.goals.map((g) => goalState(g, M.diff)), now = missionGoalNow(states);
+    if (UI.msDone && UI.msDone.length === states.length) {
+      for (let i = 0; i < states.length; i++) {
+        if (!states[i].done || UI.msDone[i]) continue;
+        sfx('complete');
+        const g = now >= 0 ? def.goals[now] : null;
+        toast(`✓ ${states[i].text}.${g && g.hint ? ' Next: ' + plainHint(g.hint) : ''}`, 'good');
+      }
+    }
+    UI.msDone = states.map((x) => x.done);
+    if (now >= 0) sel = def.goals[now].ui || '';
+  }
+  if (sel !== UI.glowSel) { for (const el of document.querySelectorAll('.tut-glow')) el.classList.remove('tut-glow'); UI.glowSel = sel; }
+  // (Panels and menus rebuild their buttons, so the light goes back on each time.)
+  if (sel) { try { for (const el of document.querySelectorAll(sel)) el.classList.add('tut-glow'); } catch (e) { UI.glowSel = ''; } }
 }
 
 /** The goal banner during a mission: each goal with progress, and the clock if there's a limit. */
@@ -2106,9 +2145,9 @@ function missionObjectiveHTML() {
   const M = S.mission, def = MISSIONS[M.k];
   const states = def.goals.map((g) => goalState(g, M.diff));
   if (UI.objCollapsed) return `Mission ▸ ${states.filter((s) => s.done).length}/${states.length}`;
-  const left = M.limit ? Math.max(0, M.limit - S.time) : 0;
-  return `<b>${def.name}</b>${M.limit ? ` · ${fmtTime(left)} left` : ''}<ul class="obj-goals">${states.map((s) =>
-    `<li class="${s.done ? 'done' : ''}">${s.done ? '✓' : '○'} ${s.text}${s.need > 1 && !s.done ? ` (${s.have}/${s.need})` : ''}</li>`).join('')}</ul>`;
+  const left = M.limit ? Math.max(0, M.limit - S.time) : 0, now = missionGoalNow(states), hint = now >= 0 && def.goals[now].hint;
+  return `<b>${def.name}</b>${M.limit ? ` · ${fmtTime(left)} left` : ''}<ul class="obj-goals">${states.map((s, i) =>
+    `<li class="${s.done ? 'done' : i === now ? 'now' : ''}">${s.done ? '✓' : i === now ? '▸' : '○'} ${s.text}${s.need > 1 && !s.done ? ` (${s.have}/${s.need})` : ''}</li>`).join('')}</ul>${hint ? `<div class="obj-hint">${hint}</div>` : ''}`;
 }
 
 function showMissionOver() {
@@ -3616,7 +3655,7 @@ function costInline(cost, have) {
 function openBuildMenu() {
   const have = playerGoods(ME);
   const sites = siteCount(ME);
-  const list = BUILD_MENU.filter((t) => !(BDEFS[t].war && !warOn()) && !(BDEFS[t].nuke && !nukeOn()) && !(BDEFS[t].colony && (S.mode !== 'colony' || S.mission)) && !(BDEFS[t].naval && !navalMap()));
+  const list = BUILD_MENU.filter((t) => !(BDEFS[t].war && !warOn()) && !(BDEFS[t].nuke && !nukeOn()) && !(BDEFS[t].colony && !labOn()) && !(BDEFS[t].naval && !navalMap()));
   const groupOf = (t) => (BUILD_GROUPS.find((g) => g.types.includes(t)) || BUILD_GROUPS[0]).key;
   const ordered = BUILD_GROUPS.flatMap((g) => g.types).filter((t) => list.includes(t));
   if (!UI.buildTab) { try { UI.buildTab = localStorage.getItem('botfall.buildTab') || 'all'; } catch (e) { UI.buildTab = 'all'; } }
@@ -5551,6 +5590,6 @@ function uiTick(dt) {
   }
   updateMapTip();
   UI.hudT -= dt;
-  if (UI.hudT <= 0) { UI.hudT = 0.25; updateHUD(); refreshSheet(); placeMinimap(); refreshSelection(); }
+  if (UI.hudT <= 0) { UI.hudT = 0.25; updateHUD(); refreshSheet(); placeMinimap(); refreshSelection(); missionCoach(); }
   if (S.winner >= 0 && !UI.overShown) showGameOver();
 }

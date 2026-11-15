@@ -1400,6 +1400,28 @@ function aiRoads(p, me) {
     budget -= route.cost;
     done++;
   }
+  if (done < 3) aiJoinBases(p);
+}
+
+/**
+ * A Command Base we captured stands on its own roads, and everything built round it counts as linked home through
+ * it: join its roads to ours, or goods never cross between the two (in a 2 v 2 the Chip Fabs on one side waited
+ * for Crystal piled up on the other, and the army stopped growing for want of Chips). Every 20 seconds, the
+ * captured base on the same land as ours, its road queued and paid for as the goods come in.
+ */
+function aiJoinBases(p) {
+  const P = S.players[p], L = getE(P.lander);
+  if (!L || L.dead || L.owner !== p || S.time - (P.joinAt || -999) < 20) return;
+  P.joinAt = S.time;
+  const z = S.zone[tIdx(L.x, L.y)];
+  for (const b of S.buildings) {
+    if (b.dead || b.owner !== p || b.type !== 'lander' || b === L || !b.built || S.zone[tIdx(b.x, b.y)] !== z || roadLinked(b, L)) continue;
+    const route = roadRouteTo(p, b, true);
+    if (!route || !route.length) continue; // (no way, or the road is planned already and being laid)
+    // (Queued, as from Paths: paid for tile by tile as the goods come in, so a long road doesn't wait for all of it.)
+    for (const t of route) buildRoad(p, t % S.W, (t / S.W) | 0, true);
+    return;
+  }
 }
 
 /**
