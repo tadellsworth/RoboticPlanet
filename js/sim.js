@@ -2711,6 +2711,7 @@ function completeBuilding(b) {
 
 /** A finished Ramp turns its tile into a slope and the construction site disappears. */
 function completeRamp(b) {
+  if (S.players[b.owner]) S.players[b.owner].stats.ramps = (S.players[b.owner].stats.ramps || 0) + 1;
   releaseBotsFrom(b, false);
   b.dead = true;
   S.byId.delete(b.id);
@@ -6376,6 +6377,7 @@ function nukeBlocked(silo, i, j) {
 function fireNukeAt(silo, i, j) {
   if (nukeBlocked(silo, i, j)) return false;
   silo.armed = 0;
+  if (S.players[silo.owner]) S.players[silo.owner].stats.nukes = (S.players[silo.owner].stats.nukes || 0) + 1;
   S.missiles.push({
     owner: silo.owner, from: silo.id, nuke: true, t: 0, dur: NUKE.flight,
     x0: silo.x + 0.5, y0: silo.y + 0.5, x1: i + 0.5, y1: j + 0.5,
@@ -6939,6 +6941,7 @@ function demolish(b) {
   const pair = (b.type === 'ropeway' || b.type === 'viaduct') && b.link ? getE(b.link) : null;
   const near = b.far && pair && !pair.dead ? pair : b; // (the end by your roads)
   const cost = {};
+  if (b.built && S.players[b.owner]) S.players[b.owner].stats.dismantled = (S.players[b.owner].stats.dismantled || 0) + 1;
   if (b.built) {
     const c = siteCost(near);
     for (const g in c) if (GOOD[g] && c[g] >= 1) cost[g] = Math.floor(c[g]);
@@ -6996,6 +6999,7 @@ function finishMove(nb) {
   nb.moveFrom = 0;
   if (!old || old.dead || old.owner !== nb.owner) return;
   old.moving = 0;
+  if (S.players[nb.owner]) S.players[nb.owner].stats.moved = (S.players[nb.owner].stats.moved || 0) + 1;
   for (const k of MOVE_KEEPS) if (old[k] !== undefined) nb[k] = old[k] && typeof old[k] === 'object' ? JSON.parse(JSON.stringify(old[k])) : old[k];
   // (it cost what the old one did, not the nothing the move cost: dismantling it leaves that)
   if (old.cost) nb.cost = JSON.parse(JSON.stringify(old.cost)); else delete nb.cost;

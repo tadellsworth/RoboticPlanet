@@ -1883,7 +1883,7 @@ function newGame(opts) {
       ai: (rival(p) && mode !== 'colony') || (p === 0 && !!opts.autoplay),
       mult: rival(p) ? DIFFICULTY[diff].mult : 1,
       lander: 0,
-      stats: { built: 0, bots: 0, captured: 0, lost: 0, outposts: 0, startBots: 0 },
+      stats: { built: 0, bots: 0, captured: 0, lost: 0, outposts: 0, startBots: 0, ramps: 0, moved: 0, dismantled: 0, nukes: 0 },
       made: {}, madeBots: {},
       aiT: 0, nextAttack: 0,
     })),

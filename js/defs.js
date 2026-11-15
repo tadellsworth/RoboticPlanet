@@ -1037,6 +1037,14 @@ const PERSONALITIES = {
   tycoon: { noun: 'a Tycoon', name: 'Tycoon', desc: 'builds a big economy first, then rains Missiles on you (or a nuke, in a Nuclear race)', grace: 1.15, army: 0.9, missiles: true, econ: 1.15 },
 };
 const PERSONALITY_ORDER = ['balanced', 'turtle', 'raider', 'rusher', 'tycoon'];
+/** The new-game menu's line under the Rival style chips: how each plays, and how to beat it. */
+const PERSONALITY_TIPS = {
+  balanced: 'A fair first opponent.',
+  turtle: 'Out-grow it while it digs in, then bring Torches to burn through its Walls and Bulwarks to shield your warbots.',
+  raider: 'Guard your roads: Outposts and turrets along them, and warbots ready to chase raiders off.',
+  rusher: 'Get a garrison and a turret up early; hold off the first waves and it runs short.',
+  tycoon: 'Hit it early, before its Missile Silos are ready (or capture them), and keep your buildings spread out so one strike can\'t take many.',
+};
 
 /*
  * Planetary events (a menu option, on by default; never in missions): every five to eight minutes the

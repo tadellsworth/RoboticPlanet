@@ -459,6 +459,9 @@ function syncMenu() {
   $('m-rough-v').textContent = TERRAIN_PRESETS[m.rough].name;
   $('m-rich-v').textContent = RESOURCE_PRESETS[m.rich].name;
   $('m-style-row').hidden = colony;
+  $('m-style-note').hidden = colony;
+  { const v = menuStyle(), k = v && PERSONALITY_ORDER[v - 1];
+    $('m-style-note').textContent = k ? `${PERSONALITIES[k].name}: it ${PERSONALITIES[k].desc}. ${PERSONALITY_TIPS[k]}` : styleInfo(0) + ' You find out which from how it plays.'; }
   $('m-wild-row').hidden = !colony;
   for (const [id, on] of [['m-nuke', m.nuke], ['m-wild', m.wild], ['m-events', m.events], ['m-unlimited', m.unlimited], ['m-weather', weatherOn()]]) {
     $(id).checked = !!on;
@@ -2122,10 +2125,10 @@ function missionGoalNow(states) { return states.findIndex((s) => !s.done); }
  * up (its `ui` selector), and each goal met is ticked off with a message and the next one's hint.
  */
 function missionCoach() {
-  const M = S && S.mission, def = M && MISSIONS[M.k];
+  const M = S && S.mission, def = M && missionDef(M);
   let sel = '';
   if (def && !M.result && S.winner < 0) {
-    const states = def.goals.map((g) => goalState(g, M.diff)), now = missionGoalNow(states);
+    const states = missionStates(M), now = missionGoalNow(states);
     if (UI.msDone && UI.msDone.length === states.length) {
       for (let i = 0; i < states.length; i++) {
         if (!states[i].done || UI.msDone[i]) continue;
@@ -2144,8 +2147,8 @@ function missionCoach() {
 
 /** The goal banner during a mission: each goal with progress, and the clock if there's a limit. */
 function missionObjectiveHTML() {
-  const M = S.mission, def = MISSIONS[M.k];
-  const states = def.goals.map((g) => goalState(g, M.diff));
+  const M = S.mission, def = missionDef(M);
+  const states = missionStates(M);
   if (UI.objCollapsed) return `Mission ▸ ${states.filter((s) => s.done).length}/${states.length}`;
   const left = M.limit ? Math.max(0, M.limit - S.time) : 0, now = missionGoalNow(states), hint = now >= 0 && def.goals[now].hint;
   return `<b>${def.name}</b>${M.limit ? ` · ${fmtTime(left)} left` : ''}<ul class="obj-goals">${states.map((s, i) =>
@@ -2154,7 +2157,7 @@ function missionObjectiveHTML() {
 
 function showMissionOver() {
   finishMission();
-  const M = S.mission, def = MISSIONS[M.k];
+  const M = S.mission, def = missionDef(M), states = missionStates(M), k = Math.max(0, MISSIONS.indexOf(def));
   const won = M.result === 'won';
   sfx(won ? 'win' : 'lose');
   $('o-title').textContent = won ? 'Mission complete' : 'Mission failed';
@@ -2162,26 +2165,26 @@ function showMissionOver() {
     ? `${def.name} (${MISSION_DIFF_NAMES[M.diff]}) done in ${fmtTime(S.time)}.`
     : M.why === 'time' ? `${def.name}: time ran out before every goal was met.`
       : M.why === 'lander' ? `${def.name}: the rival captured your Command Base.` : `${def.name}: the game ended before every goal was met.`;
-  $('o-stats').innerHTML = def.goals.map((g) => { const s = goalState(g, M.diff); return `<span>${s.done ? '✓' : '✗'} ${s.text}</span><span>${s.need > 1 ? `${s.have}/${s.need}` : s.done ? 'Done' : '–'}</span>`; }).join('');
+  $('o-stats').innerHTML = states.map((s) => { return `<span>${s.done ? '✓' : '✗'} ${s.text}</span><span>${s.need > 1 ? `${s.have}/${s.need}` : s.done ? 'Done' : '–'}</span>`; }).join('');
   if (won) {
-    completeMission(M.k, M.diff);
-    if (M.k + 1 < MISSIONS.length) {
+    completeMission(k, M.diff);
+    if (k + 1 < MISSIONS.length) {
       $('o-code').hidden = false;
-      $('o-code').innerHTML = `Next up: mission ${M.k + 2}, <b style="font-size:inherit;letter-spacing:0;color:var(--text)">${MISSIONS[M.k + 1].name}</b>.`;
+      $('o-code').innerHTML = `Next up: mission ${k + 2}, <b style="font-size:inherit;letter-spacing:0;color:var(--text)">${MISSIONS[k + 1].name}</b>.`;
       $('o-new').textContent = 'Next mission';
-      UI.overNew = () => startMission(M.k + 1, M.diff);
+      UI.overNew = () => startMission(k + 1, M.diff);
     } else {
       $('o-code').hidden = false;
       $('o-code').textContent = 'That was the last mission: the campaign is complete!';
       $('o-new').textContent = 'Play it again';
-      UI.overNew = () => startMission(M.k, M.diff);
+      UI.overNew = () => startMission(k, M.diff);
     }
   } else {
     $('o-new').textContent = 'Try again';
-    UI.overNew = () => startMission(M.k, M.diff);
+    UI.overNew = () => startMission(k, M.diff);
   }
   $('o-menu').textContent = 'Missions';
-  UI.overMenu = () => { openMissions(); UI.msSel = won && M.k + 1 < MISSIONS.length ? M.k + 1 : M.k; UI.msDiff = M.diff; renderMissions(); };
+  UI.overMenu = () => { openMissions(); UI.msSel = won && k + 1 < MISSIONS.length ? k + 1 : k; UI.msDiff = M.diff; renderMissions(); };
   $('screen-over').hidden = false;
 }
 
@@ -3572,6 +3575,12 @@ function showRoadBanner(problem, info) {
   rb.classList.toggle('on', routeOn());
   rb.onclick = () => { UI.route = !UI.route; UI.routeGhost = null; UI.routePrev = null; sfx('click'); showRoadBanner(); };
   if (R.traffic) $('banner-text').innerHTML += ` <span class="traffic-key">${trafficSummary()}</span>`;
+  // In a mission, the next goal's hint (the goal list is hidden while Paths is open).
+  const M = S && S.mission, def = M && !M.result && missionDef(M);
+  if (def) {
+    const states = missionStates(M), now = missionGoalNow(states);
+    if (now >= 0 && def.goals[now].hint) $('banner-text').innerHTML += `<div class="obj-hint ban-hint"><b>${states[now].text}:</b> ${def.goals[now].hint}</div>`;
+  }
 }
 
 /** A Rail Station's place on its line, what it stocks automatically, and its conveyors (panel text). */

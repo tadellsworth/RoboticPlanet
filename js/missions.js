@@ -56,6 +56,24 @@ function placeFertile(m, W, cx, cy, r) {
   mapTiles(m, W, cx, cy, r, (t) => { if (m.terrain[t] === T_GROUND && !m.ramp[t] && !m.res[t]) m.fert[t] = 1; });
 }
 
+/**
+ * For a mission's setup: a finished `type` for `owner` on the nearest open spot to (x, y) it may stand on (within
+ * `reach` tiles), joined to the owner's roads by finished road when `road` is set. Returns the building, or null.
+ */
+function preBuild(owner, type, x, y, opts) {
+  const o = opts || {}, reach = o.reach || 12;
+  for (let r = 0; r <= reach; r++) {
+    for (let j = y - r; j <= y + r; j++) for (let i = x - r; i <= x + r; i++) {
+      if (Math.max(Math.abs(i - x), Math.abs(j - y)) !== r || !inMap(i, j) || !canPlace(owner, type, i, j).ok) continue;
+      const b = addBuilding(owner, type, i, j, true);
+      if (o.stock) for (const g in o.stock) b.stock[g] = (b.stock[g] || 0) + o.stock[g];
+      if (o.road) { const route = roadRouteTo(owner, b) || []; for (const t of route) setRoad(t % S.W, (t / S.W) | 0, true, owner); }
+      return b;
+    }
+  }
+  return null;
+}
+
 /** The same feature at (x, y) and at its mirror image, so both sides stay fair in Versus. */
 function mirrored(W, H, x, y, fn) { fn(x, y); fn(W - 1 - x, H - 1 - y); }
 
@@ -161,7 +179,7 @@ function goalLabel(g, need) {
   switch (g.kind) {
     case 'built': return `Build ${bldCount(g.type, need)}`;
     case 'made': return `Make ${need} ${GOOD[g.good].name}`;
-    case 'bots': return `Build ${need} new ${g.type ? BOTS[g.type].plural : 'bots'}`;
+    case 'bots': return g.type && need === 1 ? `Build ${aOrAn(BOTS[g.type].name)}` : `Build ${need} new ${g.type ? BOTS[g.type].plural : 'bots'}`;
     case 'own': return `Have ${need} ${BOTS[g.type].plural}`;
     case 'paths': return `${['', 'Lay', 'Surface'][g.tier]} ${need} ${['', 'road', 'asphalt road'][g.tier]} tiles`;
     case 'oneway': return `Make ${need} road tiles one-way`;
@@ -199,12 +217,30 @@ function goalState(g, diff) {
   return { have: Math.min(have, need), need, done: have >= need, text: goalLabel(g, need) };
 }
 
+/** The mission a game is playing (by its id, so a saved game finds it even if the campaign's order changes). */
+function missionDef(M) { return (M && (MISSIONS.find((m) => m.id === M.id) || MISSIONS[M.k])) || null; }
+
+/**
+ * Every goal of the running mission, where it stands. A goal once met stays met (M.got), so one that can come
+ * undone (a flag recalled, a building lost) still counts, unless the goal says `hold` (it must hold at the end).
+ */
+function missionStates(M) {
+  const def = missionDef(M);
+  if (!def) return [];
+  M.got = M.got || [];
+  return def.goals.map((g, i) => {
+    const st = goalState(g, M.diff);
+    if (st.done && !g.hold) M.got[i] = 1;
+    else if (M.got[i] && !g.hold) { st.done = true; st.have = st.need; }
+    return st;
+  });
+}
+
 /** Runs once a second while a mission is in play: success, or failure when the clock runs out. */
 function checkMission() {
   const M = S.mission;
   if (!M || M.result) return;
-  const def = MISSIONS[M.k];
-  const states = def.goals.map((g) => goalState(g, M.diff));
+  const states = missionStates(M);
   if (states.every((s) => s.done)) { M.result = 'won'; S.winner = 0; return; }
   if (M.limit && S.time >= M.limit) { M.result = 'lost'; M.why = 'time'; S.winner = 1; }
 }
@@ -213,8 +249,7 @@ function checkMission() {
 function finishMission() {
   const M = S.mission;
   if (!M || M.result) return;
-  const def = MISSIONS[M.k];
-  if (S.winner === 0 && def.goals.every((g) => goalState(g, M.diff).done)) M.result = 'won';
+  if (S.winner === 0 && missionStates(M).every((s) => s.done)) M.result = 'won';
   else { M.result = 'lost'; M.why = S.winner === 1 ? 'lander' : 'goals'; }
 }
 
@@ -239,6 +274,8 @@ function missionOptions(k, diff) {
       // What this mission switches on that missions otherwise leave out (see nukeOn, warOn, labOn, updateEvents).
       S.mission = { k, id: def.id, diff, limit: (def.limit[diff] || 0) * 60, nuke: !!def.nuke, war: !!def.war, lab: !!def.lab, events: !!def.events };
       if (def.wildlife && S.mode === 'colony') { S.wildlife = true; placeNests(S.seed); }
+      // (A rival that never attacks, at the difficulties the mission says: passive [easy, normal, hard].)
+      if (def.passive && def.passive[diff]) for (const P of S.players) if (P.id !== 0) P.passive = true;
       if (def.setup) def.setup(S, diff);
     },
   };

@@ -531,6 +531,8 @@ function aiThink(p) {
   //     Knock it out (missile, Howitzer, bomber, warbots) so they can get back to work.
   if (S.mode !== 'colony') aiClearGuns(p, lvl);
 
+  // A passive rival (an early mission's, on Easy): it builds, grows and defends, but never strikes first.
+  if (P.passive) return;
   // 4) Missiles: soften turrets and Outposts first, the Command Base once the army is big. (With
   //    two rivals, the one it's up against is the nearest still in the game.)
   const enemy = rivalOf(p);
