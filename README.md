@@ -121,6 +121,12 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
   cliff, or just drag a road or track up it: `dragCliff`) and count as road once built.
 - **Roads through Outposts:** an Outpost can stand on a road, and its tile joins the road network. Like a Gate it only
   lets its owner's bots through (`passTile`); an armed enemy warbot breaks in (`breachable`), which captures it.
+  So connectivity is worked out per player (`roadNet(who)`, `roadLikeFor`): an Outpost, Keep, Gate or Ropeway station
+  joins roads only for its owner, and a building anyone can't pass blocks the road under it, exactly as `findPath` has
+  it; `buildingNets`, `botNets`/`botGroups`, `pileNets`, `onHomeNet`, `roadRouteTo` and `roadReach` all use the
+  owner's view, so nothing counts as linked that a hauler can't drive. Each player's networks are numbered from
+  `(who + 1) * RN_SPAN`, so ferry-line groups (`netGroups`) never mix players up; `roadNet()` (everyone's at once) is
+  for drawing roads and junctions. A capture (or a colony knocked out) bumps `S.roadVer`.
   Bots follow roads round corners (no diagonal shortcuts on or off a road).
 - **Your robots:** tap the robot counter in the top bar for every robot by type and what they're doing.
 - **Bot Foundry build order:** its panel lists every bot type with ▲ ▼ arrows to move it up or down (`b.order`,
@@ -565,6 +571,10 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
   spread apart), a Minigun Nest or Bunker by its fort nearest the rival every six minutes from about ten minutes in (up to
   `front`, through `P.defWant`), and with chance `walls` (decided once a game from the seed) an arc of Wall seven tiles
   out on the side facing the rival, two pieces every 30 s from nine minutes, up to 16 (`aiFortWalls`); Easy halves it all.
+  Opening fixes: a Harvester down to its last couple of stalks doesn't count as cutting, and with none cutting and none
+  on the way a new one goes up past the usual limit on sites (Alloy-starved sites could otherwise hold every slot while
+  the Smelters wait for Fiber); and until its first Bot Foundry has its Alloy, the Ammo Plant and (with Chips enough for
+  the Foundry) the Chip Fab rest, so they don't eat the Alloy the Foundry needs (`forFoundry`).
   Once it's ready to march it orders a Bulwark for every five warbots (two, three against a dug-in rival) and a Torch
   for every four (three, four), only with Fuel for Torches. **Raider**: raids three times as often from early on,
   sending every warbot it can spare. **Rusher**: attacks early with a fast-growing army. **Tycoon**: its bots work 15%

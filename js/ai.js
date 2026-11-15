@@ -244,11 +244,17 @@ function aiThink(p) {
       .sort((a, c) => (have[RES[BDEFS[a].gather].good] || 0) - (have[RES[BDEFS[c].gather].good] || 0));
     if (g.length) plan = [[g[0], (counts[g[0]] || 0) + 1]].concat(plan);
   }
-  // A Harvester site only counts once its materials are in: one waiting for Fiber never gets any.
+  // A Harvester site only counts once its materials are in: one waiting for Fiber never gets any. Nor does a
+  // Harvester down to its last couple of stalks (a few regrow round a cut-out grove, enough to look busy but not to
+  // keep the Smelters going).
   const cutting = me.some((b) => b.type === 'harvester' &&
-    (b.built ? reachableRes(b.x, b.y, BDEFS.harvester.radius, R_STALK) > 0 : sumValues(b.stock) >= sumValues(BDEFS.harvester.cost)));
+    (b.built ? reachableRes(b.x, b.y, BDEFS.harvester.radius, R_STALK) >= 3 : sumValues(b.stock) >= sumValues(BDEFS.harvester.cost)));
   const fiberLow = !cutting || playerGoods(p).fiber < 4;
+  // With none cutting, a new Harvester goes first; and with none on the way either, past the usual limit on sites:
+  // sites waiting for Alloy could otherwise hold every place while the Smelters wait for the Fiber to make it.
+  const fiberStarved = !cutting && !me.some((b) => b.type === 'harvester' && !b.built);
   if (!cutting) plan = [['harvester', (counts.harvester || 0) + 1]].concat(plan);
+  if (fiberStarved) siteCap = Math.max(siteCap, maxSites + 1) + (cementStarved ? 1 : 0);
   // With Fiber nearly gone (no Harvester at work, or construction waiting for it), the Smelters
   // stop burning it until there's some to spare.
   const fiberNow = playerGoods(p).fiber;
@@ -285,7 +291,8 @@ function aiThink(p) {
     (type === 'outpost' && P.short.length > 0);
   if (sites < siteCap) {
     for (const [type, want0] of plan) {
-      if (cementStarved && sites >= maxSites && type !== 'kiln') continue;
+      // (past the usual limit only for what's starving the colony: a Cement Works, a Harvester)
+      if ((cementStarved || fiberStarved) && sites >= maxSites && !(cementStarved && type === 'kiln') && !(fiberStarved && type === 'harvester')) continue;
       if (flakFirst && sites >= capBefore && type !== 'flak') continue;
       if (upFirst && sites >= capBefore && type !== 'bunker') continue;
       if (S.mode === 'colony' && BDEFS[type].war) continue;
@@ -354,10 +361,16 @@ function aiThink(p) {
   // Saving Alloy for a Viaduct (the only way to reach the enemy): Ammo and Chips stop until it's
   // paid for, or they'd eat every bit of Alloy the Smelter makes (Outposts keep asking for Ammo).
   const forBridge = !!(P.bridgeNeed && P.bridgeNeed.alloy && S.time - (P.bridgeWant || -999) < 30);
+  // No Bot Foundry yet (or a site still short of its Alloy): it comes first. The Ammo Plant, and the Chip Fab once
+  // there are Chips enough for the Foundry, rest until it has its Alloy: put up before it, they'd eat every bit the
+  // Smelter makes and the colony would never make another robot.
+  const fCost = BDEFS.foundry.cost;
+  const forFoundry = !me.some((b) => b.type === 'foundry' && (b.built || (b.stock.alloy || 0) + (b.inc.alloy || 0) >= fCost.alloy));
   for (const b of me) {
     const cap = AI_CAPS[b.type];
     if (!cap || !b.built) continue;
     if (forBridge && (b.type === 'armory' || b.type === 'fab')) { if (!b.paused) setPaused(b, true); continue; }
+    if (forFoundry && (b.type === 'armory' || (b.type === 'fab' && (stockNow.chip || 0) >= fCost.chip))) { if (!b.paused) setPaused(b, true); continue; }
     const hi = cap[1] * (missiles && b.type === 'fab' ? 2 : 1), lo = cap[2];
     const have = stockNow[cap[0]] || 0;
     if (!b.paused && have >= hi) setPaused(b, true);

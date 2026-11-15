@@ -2855,28 +2855,47 @@ function setPaveMark(owner, i, j, on) {
  * Road tiles joined along roads (respecting cliffs and ramps) form networks. Haulers can only
  * carry goods between buildings that touch the same network. A junction is a road tile with
  * roads on three or four sides. Labels are rebuilt lazily whenever S.roadVer changes.
+ *
+ * roadNet(who) is player who's own view: an Outpost, Keep, Gate or Ropeway station joins roads only
+ * for its owner (as findPath lets only its owner's bots through), so a road running through one the
+ * enemy holds is cut for us, and nothing counts as linked that a hauler couldn't drive. Each player's
+ * networks are numbered apart from the others' (from (who + 1) * RN_SPAN), so ferry lines joining
+ * them (netGroups) never mix two players' networks up. roadNet() is everyone's at once: for drawing
+ * roads and junctions.
  */
 const _rn = { ver: -1, of: null, comp: null, compT: null, junc: null, bnet: new Map(), bnetT: new Map() };
+const _rnBy = [];
+const RN_SPAN = 1 << 20;
 
-function roadNet() {
+/**
+ * Does tile t carry player who's bots along a road: a road with nothing built on it, or a building of theirs the road
+ * runs through? (As findPath has it: a building they can't pass blocks the way, whatever lies under it.)
+ */
+function roadLikeFor(t, who) { return S.bAt[t] > 0 ? passTile(t, who) : S.road[t] > 0; }
+
+function roadNet(who) {
+  const own = who !== undefined && who !== null && who >= 0;
+  let rn = _rn;
+  if (own) rn = _rnBy[who] || (_rnBy[who] = { ver: -1, of: null, comp: null, compT: null, junc: null, bnet: new Map(), bnetT: new Map() });
   const N = S.W * S.H;
-  if (_rn.of === S && _rn.ver === (S.roadVer || 0) && _rn.comp && _rn.comp.length === N) return _rn;
+  if (rn.of === S && rn.ver === (S.roadVer || 0) && rn.comp && rn.comp.length === N) return rn;
+  const rl = own ? (t) => roadLikeFor(t, who) : roadLike;
   const comp = new Int32Array(N).fill(-1), junc = new Uint8Array(N);
   const W = S.W;
   let next = 0;
   const q = [];
   for (let t = 0; t < N; t++) {
-    if (!roadLike(t)) continue;
+    if (!rl(t)) continue;
     let k = 0;
     const i = t % W;
-    for (const u of [i > 0 ? t - 1 : -1, i < W - 1 ? t + 1 : -1, t - W, t + W]) if (u >= 0 && u < N && roadLike(u) && canStep(t, u)) k++;
+    for (const u of [i > 0 ? t - 1 : -1, i < W - 1 ? t + 1 : -1, t - W, t + W]) if (u >= 0 && u < N && rl(u) && canStep(t, u)) k++;
     if (k >= 3 && S.road[t]) junc[t] = 1;
     if (comp[t] >= 0) continue;
     comp[t] = next; q.length = 0; q.push(t);
     while (q.length) {
       const a = q.pop(), ai = a % W;
       for (const b of [ai > 0 ? a - 1 : -1, ai < W - 1 ? a + 1 : -1, a - W, a + W]) {
-        if (b < 0 || b >= N || comp[b] >= 0 || !roadLike(b) || !canStep(a, b)) continue;
+        if (b < 0 || b >= N || comp[b] >= 0 || !rl(b) || !canStep(a, b)) continue;
         comp[b] = next; q.push(b);
       }
     }
@@ -2893,11 +2912,12 @@ function roadNet() {
     parent[find(parent, comp[t])] = find(parent, comp[o]);
     if (b.type === 'viaduct') parentT[find(parentT, compT[t])] = find(parentT, compT[o]);
   }
-  for (let t = 0; t < N; t++) if (comp[t] >= 0) { comp[t] = find(parent, comp[t]); compT[t] = find(parentT, compT[t]); }
-  Object.assign(_rn, { of: S, ver: S.roadVer || 0, comp, compT, junc });
-  _rn.bnet.clear();
-  _rn.bnetT.clear();
-  return _rn;
+  const base = own ? (who + 1) * RN_SPAN : 0;
+  for (let t = 0; t < N; t++) if (comp[t] >= 0) { comp[t] = find(parent, comp[t]) + base; compT[t] = find(parentT, compT[t]) + base; }
+  Object.assign(rn, { of: S, ver: S.roadVer || 0, comp, compT, junc });
+  rn.bnet.clear();
+  rn.bnetT.clear();
+  return rn;
 }
 
 /** Can a Freight Truck or Road Train drive between buildings a and b (by road, not by ropeway)? */
@@ -2958,9 +2978,9 @@ function buildingGroups(b, trucks) {
   return out;
 }
 
-/** The road networks touching building b (the road tiles right next to it). */
+/** The road networks touching building b (the road tiles right next to it), as its owner's bots can drive them (see roadNet). */
 function buildingNets(b, trucks) {
-  const net = roadNet(), comp = trucks ? net.compT : net.comp, cache = trucks ? net.bnetT : net.bnet;
+  const net = roadNet(b.owner), comp = trucks ? net.compT : net.comp, cache = trucks ? net.bnetT : net.bnet;
   let nets = cache.get(b.id);
   if (nets) return nets;
   nets = [];
@@ -2969,7 +2989,7 @@ function buildingNets(b, trucks) {
   for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
     if (!inMap(b.x + di, b.y + dj)) continue;
     const u = tIdx(b.x + di, b.y + dj);
-    if (roadLike(u) && canStep(t, u) && nets.indexOf(comp[u]) < 0) nets.push(comp[u]);
+    if (comp[u] >= 0 && canStep(t, u) && nets.indexOf(comp[u]) < 0) nets.push(comp[u]);
   }
   if (b.id) cache.set(b.id, nets);
   return nets;
@@ -3086,8 +3106,8 @@ function roadRouteTo(owner, b) {
   const g = roadGoals(owner, b);
   if (!g.stores.length) return null;
   if (onHomeNet(b)) { const r = []; r.cost = 0; r.pending = 0; return r; }
-  const net = roadNet();
-  const res = roadSearch(owner, roadSides(owner, b.x, b.y), (t) => (roadLike(t) && g.nets.has(net.comp[t])) || g.next[t]);
+  const net = roadNet(owner);
+  const res = roadSearch(owner, roadSides(owner, b.x, b.y), (t) => (net.comp[t] >= 0 && g.nets.has(net.comp[t])) || g.next[t]);
   if (res.end < 0) return null;
   const out = [];
   out.cost = 0; out.pending = 0; out.goods = {}; out.cross = 0;
@@ -3229,8 +3249,8 @@ function routeFromTree(T, goal, nSeeds) {
  * a map for choosing building spots a road can reach cheaply.
  */
 function roadReach(owner) {
-  const g = roadGoals(owner, null), net = roadNet(), seeds = [];
-  for (let t = 0; t < S.W * S.H; t++) if ((roadLike(t) && g.nets.has(net.comp[t])) || g.next[t]) seeds.push(t);
+  const g = roadGoals(owner, null), net = roadNet(owner), seeds = [];
+  for (let t = 0; t < S.W * S.H; t++) if ((net.comp[t] >= 0 && g.nets.has(net.comp[t])) || g.next[t]) seeds.push(t);
   return roadSearch(owner, seeds, null).cost;
 }
 

@@ -4018,7 +4018,7 @@ function refreshBuildingSheet(b) {
     if (def.roadworks) {
       // Everything on the road network joined to the Roadworks is in reach (or just the marked roads).
       let fresh = 0, worn = 0, todo = 0;
-      const nets = buildingNets(b), net = roadNet(), all = paveMode(b) === 'all';
+      const nets = buildingNets(b), net = roadNet(b.owner), all = paveMode(b) === 'all';
       for (let t = 0; t < S.W * S.H; t++) {
         if (!S.road[t] || wayOwner(t) !== b.owner || !(all || S.paveMark[t]) || nets.indexOf(net.comp[t]) < 0) continue;
         if (S.pave[t] !== 2) todo++; else if (S.wear[t] >= REPAVE_AT) worn++; else fresh++;

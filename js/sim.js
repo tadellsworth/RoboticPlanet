@@ -1918,7 +1918,7 @@ function dispatch(p) {
       const lo = S.owner[tIdx(l.x, l.y)];
       if ((lo >= 0 && lo !== p) || (l.noReach && l.noReach[p] > S.time)) continue; // (not on a rival's ground)
       if (lootLeft(l) - (l.claimed || 0) <= 0 || foesNear(p, l.x + 0.5, l.y + 0.5, CRATE_SAFE)) continue;
-      const nets = pileNets(l, false), netsT = pileNets(l, true);
+      const nets = pileNets(l, false, p), netsT = pileNets(l, true, p);
       for (let guard = 0; guard < 12 && idle.length; guard++) {
         // The good there's most of, not yet promised to a hauler.
         let g = null, left = 0;
@@ -2317,7 +2317,7 @@ function botNets(u) {
   const tr = !!BOTS[u.type].truck; // trucks can't ride a Ropeway
   if (u.inside) { const b = getE(u.inside); return b ? buildingNets(b, tr) : []; }
   const t = tIdx(Math.floor(u.x), Math.floor(u.y));
-  if (S.road[t]) return [tr ? roadNet().compT[t] : roadNet().comp[t]];
+  if (S.road[t]) return [tr ? roadNet(u.owner).compT[t] : roadNet(u.owner).comp[t]];
   if (S.bAt[t]) { const b = getE(S.bAt[t]); return b ? buildingNets(b, tr) : []; }
   return [];
 }
@@ -2334,7 +2334,7 @@ function botGroups(u) {
   const tr = !!BOTS[u.type].truck;
   if (u.inside) { const b = getE(u.inside); return b ? buildingGroups(b, tr) : []; }
   const t = tIdx(Math.floor(u.x), Math.floor(u.y));
-  if (S.road[t]) return [netGroup(tr ? roadNet().compT[t] : roadNet().comp[t], tr)];
+  if (S.road[t]) return [netGroup(tr ? roadNet(u.owner).compT[t] : roadNet(u.owner).comp[t], tr)];
   if (S.bAt[t]) { const b = getE(S.bAt[t]); return b ? buildingGroups(b, tr) : []; }
   return [];
 }
@@ -2812,7 +2812,7 @@ const _pave = { seen: null, gen: 0, q: null };
 function findPaveSpot(b, x, y) {
   const nets = buildingNets(b);
   if (!nets.length) return -1;
-  const net = roadNet(), W = S.W, N = W * S.H;
+  const net = roadNet(b.owner), W = S.W, N = W * S.H;
   if (!_pave.seen || _pave.seen.length !== N) { _pave.seen = new Uint32Array(N); _pave.q = new Int32Array(N); _pave.gen = 0; }
   const seen = _pave.seen, q = _pave.q, gen = ++_pave.gen;
   let head = 0, tail = 0;
@@ -3993,6 +3993,7 @@ function captureBuilding(b, by) {
   delete b.prio; delete b.smode; delete b.reject; b.paused = false;
   b.fixLeft = 0; b.fixer = 0;
   b.owner = by;
+  if (b.type === 'outpost' || b.type === 'keep' || b.type === 'gate' || b.type === 'ropeway') S.roadVer = (S.roadVer || 0) + 1; // (the road through it changes hands: see roadNet)
   b.armor = Math.max(4, def.armor * 0.4);
   b.lastHit = S.time;
   b.timer = 0;
@@ -4464,14 +4465,14 @@ function coverStore(u) {
   return false;
 }
 
-/** The road networks a pile of crates can be reached from (its own tile, or a road beside it). */
-function pileNets(l, trucks) {
-  const net = roadNet(), comp = trucks ? net.compT : net.comp, t = tIdx(l.x, l.y), nets = [];
+/** The road networks a pile of crates can be reached from (its own tile, or a road beside it) by player who's bots. */
+function pileNets(l, trucks, who) {
+  const net = roadNet(who), comp = trucks ? net.compT : net.comp, t = tIdx(l.x, l.y), nets = [];
   if (comp[t] >= 0) nets.push(comp[t]);
   for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
     if (!inMap(l.x + di, l.y + dj)) continue;
     const u = tIdx(l.x + di, l.y + dj);
-    if (roadLike(u) && comp[u] >= 0 && nets.indexOf(comp[u]) < 0) nets.push(comp[u]);
+    if (comp[u] >= 0 && nets.indexOf(comp[u]) < 0) nets.push(comp[u]);
   }
   return nets;
 }
@@ -4488,7 +4489,7 @@ function assignCrate(u, l, g, n) {
 
 /** The nearest storage that takes good g and that bot u, standing at pile l, can reach. */
 function crateStore(u, g, l) {
-  const bt = BOTS[u.type], nets = bt.roadOnly ? pileNets(l, !!bt.truck) : null;
+  const bt = BOTS[u.type], nets = bt.roadOnly ? pileNets(l, !!bt.truck, u.owner) : null;
   let best = null, bd = Infinity;
   for (const b of S.buildings) {
     if (b.dead || b.owner !== u.owner || !storeTakes(b, g) || evacuated(b) || shunned(b)) continue;
@@ -4656,6 +4657,7 @@ function eliminate(old, by, how) {
     e.mode = S.players[by].ai ? 'alt' : 'off';
     markDirty(e.x, e.y);
   }
+  S.roadVer = (S.roadVer || 0) + 1; // (its Outposts and Gates change hands: see roadNet)
   for (const t of planAll(old).slice()) setPlan(t, -1);
   for (let t = 0; t < S.W * S.H; t++) if (S.railPlan[t] === old + 1) setRailPlan(t, 0);
   computeTerritory();
