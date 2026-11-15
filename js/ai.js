@@ -771,9 +771,12 @@ function aiBridge(p, maxSites) {
   const P = S.players[p], L = getE(P.lander), E = getE(S.players[rivalOf(p)].lander);
   if (!L || !E || L.owner !== p) return;
   const home = homeZone(p);
-  // What to cross toward: a free Uplink we can't walk to (Uplinks), else the enemy Command Base.
+  // What to cross toward: a free Uplink we can't walk to (Uplinks), else the enemy Command Base. Where we can walk to
+  // it but its home ground is a fortress (a mesa or plateau with one or two ramps up, which its guns hold), a Viaduct
+  // straight onto that ground, from midgame on (see aiFortressSpan).
   const T = aiCrossTarget(p, home) || (S.zone[tIdx(E.x, E.y)] !== home ? E : null);
-  if (!T || S.time - (P.lastBridge || -999) < 12) return;
+  if (!T) { if (S.time - (P.lastBridge || -999) >= 12) { P.lastBridge = S.time; aiFortressSpan(p, home, E); } return; }
+  if (S.time - (P.lastBridge || -999) < 12) return;
   P.lastBridge = S.time;
   // One of our bridges is going up already (one its workers can't get to for a long while is called off).
   P.bridgeSince = P.bridgeSince || {};
@@ -881,11 +884,65 @@ function aiCrossTarget(p, home) {
 }
 
 /**
+ * Player q's home ground if it is a fortress (Three Mesas and Plateaus): the area on its Command Base's level round it (open ground, joined
+ * without a ramp), when no more than six ramp tiles lead off it (a mesa or plateau: one, two or three ramps two lanes
+ * wide) and it is big enough to hold a colony. A mask of its tiles, or null.
+ */
+function fortressHome(q) {
+  const L = getE(S.players[q] && S.players[q].lander), SH = SHAPE_PRESETS[(S.settings && S.settings.shape) || 0] || {};
+  if (!L || L.dead || !(SH.mesas || SH.plateau)) return null; // (the maps built round them: elsewhere a few ramps are just the lie of the land)
+  const W = S.W, N = W * S.H, t0 = tIdx(L.x, L.y), lv = S.elev[t0], mask = new Uint8Array(N), list = [t0];
+  mask[t0] = 1;
+  for (let h = 0; h < list.length; h++) {
+    const t = list[h], i = t % W;
+    for (const u of [i > 0 ? t - 1 : -1, i < W - 1 ? t + 1 : -1, t - W, t + W]) {
+      if (u < 0 || u >= N || mask[u] || S.terrain[u] !== T_GROUND || S.elev[u] !== lv) continue;
+      mask[u] = 1; list.push(u);
+    }
+    if (list.length > N / 3) return null; // (half the planet: open country, not a fortress)
+  }
+  const exits = new Set(); // (the ramp tiles that lead off it: a ramp sits on the lower tile of its step)
+  for (const t of list) {
+    const i = t % W;
+    for (const u of [i > 0 ? t - 1 : -1, i < W - 1 ? t + 1 : -1, t - W, t + W]) {
+      if (u < 0 || u >= N || mask[u] || S.terrain[u] !== T_GROUND || Math.abs(S.elev[u] - lv) !== 1) continue;
+      if (S.ramp[u] && S.elev[u] < lv) exits.add(u);
+      else if (S.ramp[t] && S.elev[u] > lv) exits.add(t);
+    }
+  }
+  return exits.size <= 6 && list.length >= 60 ? mask : null;
+}
+
+/**
+ * The enemy can be walked to, but its home ground is a fortress (fortressHome): from midgame, with the goods to
+ * spare, a Viaduct from a clifftop of ours straight onto that ground, out of its guns' reach, so an attack doesn't
+ * have to come up the one ramp they hold. One at a time, and no more than two standing onto the same fortress.
+ */
+function aiFortressSpan(p, home, E) {
+  const P = S.players[p];
+  if (S.time < AI_FORTRESS_SPAN_AT || S.buildings.some((v) => !v.dead && v.owner === p && v.type === 'viaduct' && !v.built)) return;
+  const mask = fortressHome(E.owner);
+  if (!mask) return;
+  const L = getE(P.lander);
+  if (L && mask[tIdx(L.x, L.y)]) return; // (our own Command Base on it: an ally's, or a shared plateau)
+  const onto = S.buildings.filter((v) => !v.dead && v.owner === p && v.type === 'viaduct' && v.far && mask[tIdx(v.x, v.y)]).length;
+  if (onto >= 2) return;
+  const via = aiViaductSpot(p, home, E, mask);
+  if (!via) return;
+  const cost = viaductCost(via.a % S.W, (via.a / S.W) | 0, via.b % S.W, (via.b / S.W) | 0);
+  // (Only with the goods to spare: the colony and its army come first.)
+  const have = spendable(p);
+  for (const g in cost) if ((have[g] || 0) < cost[g] * 2 + 10) return;
+  placeViaduct(p, via.a % S.W, (via.a / S.W) | 0, via.b % S.W, (via.b / S.W) | 0);
+}
+
+/**
  * The best Viaduct for player p to put up toward enemy base E: from a clifftop tile of ours (in
  * our border, where our bots go) straight across lower ground to a clifftop in another area, as
  * close to the enemy as possible, and short. Far ends inside our border come first. {a, b, owned} or null.
+ * With `onto` (a mask: a rival's fortress), to a clifftop on it instead, never into its guns' reach.
  */
-function aiViaductSpot(p, home, E) {
+function aiViaductSpot(p, home, E, onto) {
   const W = S.W, N = W * S.H, lost = S.players[p].viaLost || {};
   let best = null, bs = Infinity;
   for (let a = 0; a < N; a++) {
@@ -900,7 +957,8 @@ function aiViaductSpot(p, home, E) {
         const bi = ai + di * k, bj = aj + dj * k;
         if (!inMap(bi, bj)) break;
         const b = tIdx(bi, bj);
-        if (S.terrain[b] !== T_GROUND || S.zone[b] === home || S.zone[b] < 0 || Math.abs(S.elev[b] - S.elev[a]) > VIA_RISE) continue;
+        if (S.terrain[b] !== T_GROUND || (onto ? !onto[b] : S.zone[b] === home || S.zone[b] < 0) || Math.abs(S.elev[b] - S.elev[a]) > VIA_RISE) continue;
+        if (onto && (gunCovers(p, b) || gunCovers(p, a))) break;
         if (viaductBlocked(p, ai, aj, bi, bj)) continue;
         if (dist(bi, bj, E.x, E.y) > dist(ai, aj, E.x, E.y) - 2) break; // only spans that bring us closer
         const owned = S.owner[b] === p;
@@ -1325,6 +1383,13 @@ function aiRoads(p, me) {
       }
       continue;
     }
+    // Linked by road as far as the planner can tell, yet the Haulers still can't get there after four minutes (the
+    // two disagree, whatever the reason): give the site up rather than let it hold a place for good.
+    if (!route.length && !route.pending && !b.built && b.unlinked && S.time - b.born > 240) {
+      P.avoid = (P.avoid || []).concat([{ x: b.x, y: b.y, until: S.time + 240 }]);
+      demolish(b);
+      continue;
+    }
     if (route.cost > budget || !canAffordRoad(p, route.goods)) {
       P.roadShort = S.time;
       // A site that has waited long for a road we can't pay for is given up (its goods come back).
@@ -1429,6 +1494,28 @@ function aiSearchSpot(p, type, lander) {
   const avoid = (S.players[p].avoid || []).filter((a) => a.until > S.time);
   S.players[p].avoid = avoid;
   const defence = DEFENCE_TYPES.has(type);
+  // An Ore Mine counts only the Ore none of our Mines already works (two side by side on a small patch both ran dry
+  // inside a minute). Not the others: Stone and Fiber lie thick, and spreading Quarries out slowed whole colonies.
+  let covered = null;
+  if (type === 'mine') {
+    covered = new Uint8Array(S.W * S.H);
+    const r = def.radius, r2 = r * r + 0.3;
+    for (const b of S.buildings) {
+      if (b.dead || b.owner !== p || b.type !== type) continue;
+      for (let j = Math.max(0, b.y - r); j <= Math.min(S.H - 1, b.y + r); j++) for (let i = Math.max(0, b.x - r); i <= Math.min(S.W - 1, b.x + r); i++) {
+        if (dist2(i, j, b.x, b.y) <= r2) covered[j * S.W + i] = 1;
+      }
+    }
+  }
+  const freeRes = (cx, cy) => {
+    const r = def.radius, r2 = r * r + 0.3, zone = S.zone[tIdx(cx, cy)];
+    let n = 0;
+    for (let j = Math.max(0, cy - r); j <= Math.min(S.H - 1, cy + r); j++) for (let i = Math.max(0, cx - r); i <= Math.min(S.W - 1, cx + r); i++) {
+      const t = j * S.W + i;
+      if (S.res[t] === def.gather && !covered[t] && S.zone[t] === zone && dist2(i, j, cx, cy) <= r2) n++;
+    }
+    return n;
+  };
   // Our own land first; only when there's no spot there, no-one's ground within reach (in AI-vs-AI games,
   // building out on open ground from the start left the economy short of Fiber and Alloy).
   for (let pass = 0; pass < 2 && !cands.length; pass++)
@@ -1454,7 +1541,7 @@ function aiSearchSpot(p, type, lander) {
       const jitter = hash2(i, j, S.seed + p) * 0.8;
       let s;
       if (def.gather) {
-        const n = reachableRes(i, j, def.radius, def.gather);
+        const n = type === 'mine' ? freeRes(i, j) : reachableRes(i, j, def.radius, def.gather);
         const u = type === 'mine' && nukeOn() ? reachableRes(i, j, def.radius, R_URANIUM) : 0;
         if (n < 2 && !u) {
           // No boulders left anywhere near: a Quarry by a cliff or crag cuts Stone from it instead.
@@ -1555,14 +1642,16 @@ function aiSearchSpot(p, type, lander) {
         // A forward base: out towards the Outposts, but on the road network.
         s = Math.min(dHome, 18) * 0.6 - dist(i, j, ex, ey) * 0.1;
       } else if (type === 'charger') {
-        // Spread chargers out, near where bots work.
+        // The first Fuel Station by the Command Base (on the home roads, so the Haulers can stock it at once: out by a
+        // site no road reaches yet, the robots ran flat waiting for it). The rest spread out, near where bots work: by
+        // buildings that stand, not sites (an Outpost site far out can wait for its road for minutes).
         let dc = 99, db = 99;
         for (const b of S.buildings) {
           if (b.dead || b.owner !== p) continue;
           const d = dist(i, j, b.x, b.y);
-          if (BDEFS[b.type].charger) dc = Math.min(dc, d); else db = Math.min(db, d);
+          if (BDEFS[b.type].charger) dc = Math.min(dc, d); else if (b.built) db = Math.min(db, d);
         }
-        s = Math.min(dc, 12) - db * 0.8;
+        s = dc === 99 ? -dHome * 2 - rc * 2 : Math.min(dc, 12) - db * 0.8;
       } else {
         s = -dHome;
       }

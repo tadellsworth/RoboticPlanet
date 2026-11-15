@@ -87,6 +87,11 @@ function initUI() {
 
   // Pause menu
   // (in a multiplayer game the menu doesn't stop the game: Pause for everyone does, see mpui.js)
+  // The briefing: a tap anywhere, or any key, starts the game (capture: before the game's own keys see it).
+  // (on click: the press and the release both land on the card, so nothing behind it gets a tap)
+  $('briefing').addEventListener('pointerdown', (e) => e.stopPropagation());
+  $('briefing').addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); closeBriefing(); });
+  window.addEventListener('keydown', (e) => { if (UI.briefing && !e.repeat) { e.preventDefault(); e.stopPropagation(); closeBriefing(); } }, true);
   $('btn-pause').onclick = () => { UI.paused = !MP.on; UI.mpQuitArm = false; mpSyncPauseMenu(); $('screen-pause').hidden = false; syncSaved(); sfx('click'); };
   $('p-resume').onclick = () => { UI.paused = false; $('screen-pause').hidden = true; };
   // The hidden rival boost: tap the clock three times quickly (or press ` on a keyboard).
@@ -1871,6 +1876,7 @@ function startNewGame() {
   }
   if (S.victory === 'domination') postMsg(ME, `Domination: hold ${Math.round(domShare() * 100)}% of the land anyone holds (and ${Math.round(DOM.min * 100)}% of the planet) for ${DOM.hold / 60} minutes straight to win. The card at the top shows where everyone stands. Outposts and Keeps claim the most land.`, 0, 0, 'info');
   if (nukeOn()) postMsg(ME, `Nuclear race: a few uranium deposits glow green across the planet. Dig them with Ore Mines, enrich them at a Nuclear Reactor and build the bomb${S.mode === 'colony' ? ' (no rival here, so it is yours to try out)' : ` before ${S.players.length > 2 ? 'the rivals do' : 'the rival does'}`}.`, 0, 0, 'warn');
+  showBriefing();
 }
 
 /* ------------------------------------------------------------------ save files: carry a game between devices */
@@ -5490,7 +5496,48 @@ function toast(text, kind, x, y) {
   setTimeout(() => { el.classList.add('out'); setTimeout(() => el.remove(), 450); }, lost ? 8000 : 3800);
 }
 
+/**
+ * The start of a game: everything it has to tell you (who landed where, the rivals' styles, the map, the Uplinks, a
+ * Nuclear race...) in one card instead of a stack of pop-ups, with the game paused behind it. A tap anywhere (or a key)
+ * starts the game; otherwise the card closes by itself once there's been time to read it. (Multiplayer can't pause for
+ * one player: there it's just the card.)
+ */
+function showBriefing() {
+  // (Not under test automation, whose scripts expect the game to start at once, unless a test asks for it.)
+  if (typeof navigator !== 'undefined' && navigator.webdriver && !window.BOTFALL_BRIEF) return;
+  const items = S.msgs.splice(0);
+  if (!items.length) return;
+  // (who landed where first, then the rest as they came: the map, the rivals, the Trade Posts, the rules)
+  const first = items.findIndex((m) => / have landed/.test(m.text));
+  if (first > 0) items.unshift(items.splice(first, 1)[0]);
+  const list = $('br-list');
+  list.innerHTML = '';
+  for (const m of items) { const li = document.createElement('li'); li.className = m.kind || 'info'; li.textContent = m.text; list.appendChild(li); }
+  const chars = items.reduce((n, m) => n + m.text.length, 0);
+  UI.briefing = { t0: performance.now(), dur: clamp(4 + chars / 40, 6, 24), paused: !MP.on };
+  if (UI.briefing.paused) UI.paused = true;
+  $('br-state').textContent = MP.on ? '' : 'Paused';
+  $('br-hint').textContent = MP.on ? 'Tap to close' : 'Tap anywhere to start';
+  $('br-fill').style.width = '100%';
+  $('briefing').hidden = false;
+}
+function closeBriefing() {
+  const b = UI.briefing;
+  if (!b) return;
+  UI.briefing = null;
+  $('briefing').hidden = true;
+  if (b.paused && UI.inGame) UI.paused = false;
+}
+function briefingTick() {
+  if (!UI.briefing) return;
+  if (!UI.inGame) { closeBriefing(); return; }
+  const f = (performance.now() - UI.briefing.t0) / 1000 / UI.briefing.dur;
+  if (f >= 1) { closeBriefing(); return; }
+  $('br-fill').style.width = ((1 - f) * 100).toFixed(1) + '%';
+}
+
 function uiTick(dt) {
+  briefingTick();
   netTick();
   mpBannerTick();
   AUDIO.suppress = !UI.inGame;

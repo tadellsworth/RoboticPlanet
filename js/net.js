@@ -7,8 +7,8 @@
  * The screens (ui.js, the Multiplayer section) hang their hooks on NET.on*.
  */
 
-/** The relay's address: set when the relay is deployed (see README, Multiplayer); ?relay=<address> overrides it. */
-const RELAY_DEFAULT = '';
+/** The relay's address (deployed by .github/workflows/relay.yml; see README, Multiplayer); ?relay=<address> overrides it. */
+const RELAY_DEFAULT = 'wss://terrafall-relay.tadellsworth.workers.dev';
 
 const NET = {
   url: '', ws: null, state: 'off', // off | connecting | lobby | game

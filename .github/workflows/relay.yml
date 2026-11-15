@@ -27,8 +27,33 @@ jobs:
           else echo "::notice::The Cloudflare secrets aren't set up yet, so the relay wasn't deployed (see the top of relay.yml)."; fi
       - if: steps.check.outputs.ok == 'true'
         uses: actions/checkout@v4
+      # Cloudflare can take a moment to see a Worker it has just been sent: switching on its workers.dev address straight
+      # after the upload sometimes fails with "This Worker does not exist on your account [code: 10007]". So a failed
+      # deploy waits half a minute and tries again (twice), and only then does the run fail.
       - if: steps.check.outputs.ok == 'true'
-        id: deploy
+        id: deploy1
+        continue-on-error: true
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: relay
+          wranglerVersion: '4.40.0'
+      - if: steps.check.outputs.ok == 'true' && steps.deploy1.outcome == 'failure'
+        run: sleep 30
+      - if: steps.check.outputs.ok == 'true' && steps.deploy1.outcome == 'failure'
+        id: deploy2
+        continue-on-error: true
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: relay
+          wranglerVersion: '4.40.0'
+      - if: steps.check.outputs.ok == 'true' && steps.deploy1.outcome == 'failure' && steps.deploy2.outcome == 'failure'
+        run: sleep 60
+      - if: steps.check.outputs.ok == 'true' && steps.deploy1.outcome == 'failure' && steps.deploy2.outcome == 'failure'
+        id: deploy3
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -37,8 +62,8 @@ jobs:
           wranglerVersion: '4.40.0'
       - if: steps.check.outputs.ok == 'true'
         env:
-          OUT: ${{ steps.deploy.outputs.command-output }}
-          URL: ${{ steps.deploy.outputs.deployment-url }}
+          OUT: ${{ steps.deploy1.outputs.command-output }}${{ steps.deploy2.outputs.command-output }}${{ steps.deploy3.outputs.command-output }}
+          URL: ${{ steps.deploy1.outputs.deployment-url || steps.deploy2.outputs.deployment-url || steps.deploy3.outputs.deployment-url }}
         run: |
           U="$URL"; [ -n "$U" ] || U=$(printf '%s' "$OUT" | grep -o 'https://[a-zA-Z0-9.-]*workers\.dev' | head -1)
           echo "Relay address: $U"

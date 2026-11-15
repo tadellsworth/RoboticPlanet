@@ -1213,15 +1213,21 @@ function generateMap(seed, W, H, cfg) {
       for (let t = 0; t < N; t++) if (ground(t) && target.has(comp[t])) elev[t] = Math.max(target.get(comp[t]), minE[t]);
     }
     // Neighbouring tiles differ by at most one level, so every cliff is climbable with a ramp.
-    for (let changed = true; changed;) {
-      changed = false;
-      for (let t = 0; t < N; t++) {
-        if (!ground(t)) continue;
-        let m = elev[t];
-        orth(t, (u) => { if (ground(u) && elev[u] + 1 < m) m = elev[u] + 1; });
-        if (m < elev[t]) { elev[t] = m; changed = true; }
+    const smooth = () => {
+      for (let changed = true; changed;) {
+        changed = false;
+        for (let t = 0; t < N; t++) {
+          if (!ground(t)) continue;
+          let m = elev[t];
+          orth(t, (u) => { if (ground(u) && elev[u] + 1 < m) m = elev[u] + 1; });
+          if (m < elev[t]) { elev[t] = m; changed = true; }
+        }
       }
-    }
+    };
+    smooth();
+    // Three players: the specks and slopes above came out a little differently in each third (a patch just under the
+    // size limit in one, just over it in another), so player 0's third is turned onto the others again.
+    if (np === 3) { symmetrize(); smooth(); }
     // Ramps: first the fewest needed to connect every level-area (narrow passes), then a few
     // extras along long cliffs. Each ramp is placed together with its mirror image.
     const { comp } = levelComponents();
@@ -1372,6 +1378,56 @@ function generateMap(seed, W, H, cfg) {
         tryRamp(bx, by, -Math.PI / 2 - side * 1.25, (i, j) => plEdge(i, j) >= 0);
       }
       if (!joinedAll(true)) ramp.set(keep);
+    }
+    // Three players: the ramps the same in every third. Those in player 0's third are turned onto the other two
+    // (each onto the nearest tile at the foot of the same step) and the others dropped; then any ground that loses its
+    // way up or down gets one back, the same in every third. (Laid one by one above, each third came out with its own
+    // ramps: one colony could have half as many ways up as another.)
+    if (np === 3) {
+      const before = reachable(true), keep3 = ramp.slice();
+      const foot = (q, lv) => { let up = false; orth(q, (u) => { if (ground(u) && elev[u] === lv + 1) up = true; }); return up; };
+      const turned = (t, k) => {
+        const i = t % W, j = (t / W) | 0, [x, y] = rot(i, j, k);
+        let best = -1, bd = 7; // (within two tiles or so: the turned ground can sit a tile off)
+        for (let dj = -2; dj <= 2; dj++) for (let di = -2; di <= 2; di++) {
+          const u = Math.round(x) + di, v = Math.round(y) + dj;
+          if (u < 0 || v < 0 || u >= W || v >= H) continue;
+          const q = id(u, v), d = dist2(u, v, x, y);
+          if (ground(q) && elev[q] === elev[t] && foot(q, elev[t]) && d < bd) { bd = d; best = q; }
+        }
+        return best;
+      };
+      const in0 = (t) => sector(t % W, (t / W) | 0) === 0;
+      const place3 = (t) => { for (const q of [t, turned(t, 1), turned(t, 2)]) if (q >= 0) { ramp[q] = 1; res[q] = R_NONE; } };
+      for (let t = 0; t < N; t++) if (!in0(t)) ramp[t] = 0;
+      for (let t = 0; t < N; t++) if (keep3[t] && in0(t)) place3(t);
+      let after = reachable(true);
+      for (let pass = 0; pass < 6; pass++) {
+        let fixed = false;
+        for (let t = 0; t < N && !fixed; t++) {
+          if (!ground(t)) continue;
+          orth(t, (u) => {
+            if (fixed || !ground(u) || elev[u] !== elev[t] + 1 || after[t] === after[u] || !(before[t] && before[u])) return;
+            // (t, at the foot of the step, turned into player 0's third: a ramp there and its two twins)
+            const k = sector(t % W, (t / W) | 0), t0 = k ? turned(t, 3 - k) : t;
+            if (t0 >= 0 && !ramp[t0]) { place3(t0); fixed = true; }
+          });
+        }
+        if (!fixed) break;
+        after = reachable(true);
+      }
+      // Still cut off somewhere (the thirds' ground differs by a tile here and there): the old ramp that joins it back,
+      // one at a time; failing that, the ramps as they were.
+      for (let pass = 0; pass < 12; pass++) {
+        let fixed = false;
+        for (let t = 0; t < N && !fixed; t++) {
+          if (!keep3[t] || ramp[t]) continue;
+          orth(t, (u) => { if (!fixed && ground(u) && Math.abs(elev[u] - elev[t]) === 1 && after[t] !== after[u] && before[t] && before[u]) { ramp[t] = 1; fixed = true; } });
+        }
+        if (!fixed) break;
+        after = reachable(true);
+      }
+      for (let t = 0; t < N; t++) if (before[t] && !after[t]) { ramp.set(keep3); break; }
     }
     // Safety net: if the bases still can't reach each other, flatten the map (Islands are joined
     // by bridges, not land).
@@ -3308,14 +3364,16 @@ function roadSearch(owner, seeds, done) {
   const cost = new Float32Array(N).fill(Infinity), prev = new Int32Array(N).fill(-2);
   const heap = new MinHeap();
   for (const t of seeds) { cost[t] = roadWeight(t); prev[t] = -1; heap.push(t, cost[t]); }
-  const open = (t) => S.road[t] || canRoad(owner, t % W, (t / W) | 0) || (S.bAt[t] > 0 && passTile(t));
+  // (Through our own Outposts and Gates, never a rival's: its bots can't pass one, so a road through it links nothing.)
+  const like = (t) => roadLikeFor(t, owner);
+  const open = (t) => S.bAt[t] > 0 ? passTile(t, owner) : S.road[t] || canRoad(owner, t % W, (t / W) | 0);
   while (heap.size) {
     const c = heap.pri[0], t = heap.pop();
     if (c > cost[t]) continue;
     if (done && done(t)) return { cost, prev, end: t };
     const i = t % W;
     for (const u of [i > 0 ? t - 1 : -1, i < W - 1 ? t + 1 : -1, t - W, t + W]) {
-      if (u < 0 || u >= N || !open(u) || !(roadLike(t) && roadLike(u) ? canStep(t, u) : stepPlan(t, u))) continue;
+      if (u < 0 || u >= N || !open(u) || !(like(t) && like(u) ? canStep(t, u) : stepPlan(t, u))) continue;
       const nc = c + roadWeight(u);
       if (nc < cost[u]) { cost[u] = nc; prev[u] = t; heap.push(u, nc); }
     }

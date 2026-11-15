@@ -52,6 +52,14 @@
   <div id="selbar" class="selbar" hidden></div>
   <div id="map-tip" class="map-tip" hidden></div>
   <div id="toasts" aria-live="polite"></div>
+  <!-- The start of a game: what it has to tell you in one card, the game paused until you tap (see showBriefing). -->
+  <div id="briefing" class="briefing" role="dialog" aria-modal="true" aria-labelledby="br-title" hidden>
+    <div class="br-card">
+      <div class="br-head"><b id="br-title">Before you start</b><span id="br-state" class="br-state">Paused</span></div>
+      <ul id="br-list" class="br-list"></ul>
+      <div class="br-foot"><span id="br-hint">Tap anywhere to start</span><span class="br-bar"><i id="br-fill"></i></span></div>
+    </div>
+  </div>
 
   <div id="banner" hidden>
     <div id="banner-text"></div>
@@ -143,7 +151,7 @@
             </div>
             <div class="m-row" id="m-teams-field" hidden><span class="m-rl" id="m-l-teams">Teams</span>
               <div class="seg" id="m-teams" role="radiogroup" aria-labelledby="m-l-teams">
-                <button type="button" role="radio" data-v="0" class="on">Every colony alone</button>
+                <button type="button" role="radio" data-v="0" class="on">Free-for-all</button>
                 <button type="button" role="radio" data-v="1">2 vs 2</button>
               </div>
             </div>

@@ -398,6 +398,15 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
   each end, the ways from each base to its pass and up its valley carved open. The Trade Posts on Twin Valleys (whose
   middle is a mountain) fall back to being about as near the two nearest colonies (`placePosts`), and its Uplinks are
   two half-turn pairs.
+- **Three players, the same in every third:** the terrain is turned from player 0's third onto the others, and turned
+  again after the specks and slopes are smoothed (a patch just under the 10-tile limit in one third could be just over
+  it in another); the ramps are laid in player 0's third and turned onto the others (`turned`: the nearest tile at the
+  foot of the same step), then any ground that lost its way up or down gets a ramp back, the same in every third. Each
+  third now has about as many ramps (within a tile or two; it used to vary up to two to one).
+- **Fortresses** (`fortressHome`, Three Mesas and Plateaus): a colony's home ground counts as one while no more than six
+  ramp tiles lead off it. From 10 minutes in (`AI_FORTRESS_SPAN_AT`), with twice the goods to spare, the computer spans a
+  canyon with a Viaduct straight onto a rival's fortress, out of its guns' reach (`aiFortressSpan`; at most two onto
+  one fortress), so its attacks needn't all come up the one ramp the rival's turrets hold.
 - **Shooting across a canyon:** a warbot that can't close in shoots from up to `WARBOT_RANGE_BLOCKED` (2.2) across
   a building or cliff, and up to `WARBOT_RANGE_GAP` (3.6) from a clifftop across lower ground (`overGap`: a narrow
   canyon with no rock, water or building in the line), so garrisons facing each other across a Sky islands canyon
@@ -706,7 +715,16 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
   progressions, arpeggios, bass, drums and short melodies in 8-bar sections. Effects include radio blips for orders, a
   Pulse Turret's tesla-coil discharge (a short charge whine, then a buzzing arc crackling with sparks: `pulse`), a
   nuke siren and blast, and sounds from the map when on screen (traffic hum, welding, concrete, asphalt, truck air
-  brakes and horns, biome wind, jungle birds and insects). Music and Effects volumes are in the pause menu.
+  brakes and horns, biome wind, jungle birds and insects). Ambience that grows with the colony (`ambienceBeds`): a
+  city murmur that rises with the built-up area on screen (and a little with the colony's size; quieter at night),
+  far-off horns in a big town, an industrial hum under working factories plus their own one-shots (`WORK_SOUNDS`:
+  furnaces, clanks, drills, pump thumps, beeps), a train's diesel throb and rail clack that quickens with its speed,
+  its horn as it pulls out and brakes as it slows, aircraft engines panned to where they fly, with a rival's take-off
+  roll, the approach whine and the touchdown chirp, a ship's horn leaving port, the sea's wash, bubbling lava and
+  crickets on warm nights. Music and Effects volumes are in the pause menu.
+- **Briefing at the start:** the messages a new game opens with (where you landed, your goal, the map's notes) come
+  together on one card while the game waits paused behind it; it closes by itself after a few seconds (longer for
+  more text), or at a tap or key. In multiplayer the game doesn't pause for it.
 - **Desktop (RTS controls):** on a wide screen the top bar is one row, the tools sit in a small dock and panels open
   on the right. Drag a box to select warbots (Shift adds; a box round a garrison takes its spare warbots), right-click
   ground to hold it, a rival building to attack, or your garrison to station them. Ctrl/Shift+1–9 saves a control
@@ -749,7 +767,7 @@ the towers, layered per tile), the
 Viaduct's abutment tiles (`viaduct-abut-*`) and the working loops of the Oil Pump (its beam nodding over `pump-base`),
 Refinery and Smelter. Still to make: goods icons and a few terrain pieces. The biome art is in `art/biomes/` (six plants per biome with their
 shadows baked in, and the Jungle and Polar ground, water, rock and cliff), and the Red desert ground, water and rock
-are 512×512 (one image per 4×4 tiles, sharp on the zoomed-in map); all WebP to keep the single-file build small. The app icon is in `icons/`. Anything without an image falls back to placeholder art drawn in code, so new art can be
+are 512×512 (one image per 4×4 tiles, sharp on the zoomed-in map); all WebP to keep the single-file build small. The app icon is in `icons/` (its source: `icons/icon.svg`). Anything without an image falls back to placeholder art drawn in code, so new art can be
 added one piece at a time. See **[ART_GUIDE.md](ART_GUIDE.md)** for specs, the style brief and prompts,
 including the remaining pieces (Ramp, slope and cliff textures, goods icons).
 
@@ -859,9 +877,12 @@ and both colonies of your team win. Teams also work in a one-person game (Versus
 ally against two computer rivals). Rules: `S.teams` (`[0, 0, 1, 1]`), with `foes(p, q)`, `allies(p, q)` and
 `teamOf(p)` in `world.js`; without teams `foes` is just `p !== q`.
 
-**Setting up the relay (once).** The devices talk through a small relay server: `relay/`, a Cloudflare Worker with
-one Durable Object per game room, free on Cloudflare's free plan. It's deployed from this repository by the
-**Deploy multiplayer relay** workflow (`.github/workflows/relay.yml`):
+**The relay.** The devices talk through a small relay server: `relay/`, a Cloudflare Worker with one Durable Object per
+game room, free on Cloudflare's free plan. It's deployed from this repository by the **Deploy multiplayer relay**
+workflow (`.github/workflows/relay.yml`, again on every push that changes `relay/`), and runs at
+`https://terrafall-relay.tadellsworth.workers.dev` (`RELAY_DEFAULT` in `js/net.js`). A deploy that fails right after
+the upload (Cloudflare not yet seeing a Worker it has just been sent: "This Worker does not exist on your account
+[code: 10007]") is tried again after half a minute, and once more after a minute. Setting it up on another account:
 
 1. Make a free Cloudflare account (dash.cloudflare.com/sign-up). Open **Workers & Pages** once: it asks you to pick
    your `workers.dev` subdomain.
@@ -872,7 +893,7 @@ one Durable Object per game room, free on Cloudflare's free plan. It's deployed 
    `CLOUDFLARE_API_TOKEN` (the token) and `CLOUDFLARE_ACCOUNT_ID` (the Account ID).
 5. **Actions → Deploy multiplayer relay → Run workflow.** When it's done, its summary shows the relay's address,
    `https://terrafall-relay.<your-subdomain>.workers.dev` (opening it says *Terrafall relay: ok*).
-6. Put that address in `RELAY_DEFAULT` at the top of `js/net.js` and push: the published game then uses it. (To try
+6. Put that address in `RELAY_DEFAULT` at the top of `js/net.js` (as `wss://...`) and push: the published game then uses it. (To try
    it before that, open the game with `?relay=<address>` on the end of its web address: that device remembers it.)
 
 The relay runs locally too: `cd relay && npx wrangler dev`, then open the game with `?relay=ws://127.0.0.1:8787`.

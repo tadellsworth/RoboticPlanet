@@ -1423,7 +1423,7 @@ slow, tell Claude Code: each effect's length is one number in the code.
 
 - Menu background and logo
 - Laser beams, the white blast flash and the Pulse Turret's glow (the other effects are in Batch 15)
-- App icon: to change it, replace the PNGs in `icons/` (`icon-192.png`, `icon-512.png`, `icon-1024.png`,
+- App icon: its source is `icons/icon.svg` (the planet, ring and T in flat colours). To change it, replace the PNGs in `icons/` (`icon-192.png`, `icon-512.png`, `icon-1024.png`,
   `apple-touch-icon.png` at 180×180 and `favicon-32.png`), all square and opaque
 - 3D buildings: the set from Claude Design is installed (harvester, quarry, mine, tap, smelter, fab, foundry, depot,
   grower, site, outpost@0/@1), and so is the second set (charger, farm, pump, refinery, kiln, tarworks, roadworks,

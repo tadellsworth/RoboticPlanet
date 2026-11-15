@@ -263,6 +263,7 @@ const ROPE_MIN = 3, ROPE_MAX = 14, ROPE_SPEED = 1.8, ROPE_COST = 1.3;
  * spans, paid from storage (as it comes in), and a worker at the near end puts it up in VIA_TIME seconds a tile. Every
  * bot can cross it, trucks and Road Trains included, and trains when track runs onto both ends.
  */
+const AI_FORTRESS_SPAN_AT = 600; // the rival Viaducts onto an enemy's mesa or plateau from 10 minutes in (see aiFortressSpan)
 const VIA_MIN = 2, VIA_MAX = 12, VIA_RISE = 2, VIA_COST = { cement: 3, alloy: 0.5 }, VIA_TIME = 5; // cost a tile spanned (Alloy rounded up)
 const VIA_CLAIM = 3; // a Viaduct's far end claims the no-one's ground this far round it
 /*

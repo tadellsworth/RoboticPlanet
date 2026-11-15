@@ -55,11 +55,18 @@ Fuel Stations went dry around minute 10 and its robots crawled, which starved Fi
 Fuel first when it runs low. AI-vs-AI wars on Islands can still run past 40 minutes now and then.
 
 On the maps for three or four (The Wheel, Three Mesas, Pinwheel, Four Isles, Twin Valleys), every colony grows, gets
-off its home ground and fights in AI-vs-AI games, and colonies are captured on every one. Two things to keep an eye
-on: in one Pinwheel game (seed 1) one colony ran out of Fuel by minute 5 and never built an Ore Mine (the others did
-fine on the same ground), and one Three Mesas game (seed 2) went 50 minutes without a capture (each mesa has a single
-way down, which turrets hold well; three other seeds had captures at 16, 26 and 40 minutes). The rival doesn't yet
-span the Three Mesas canyons with Viaducts: its Viaduct search only looks for crossings to land it can't walk to.
+off its home ground and fights in AI-vs-AI games, and colonies are captured on every one. Fixed after the first runs: the
+rival's first Fuel Station went out by an unroaded Outpost site (its robots ran flat; now it goes by the Command Base); the
+road planner counted a way through a rival's Outpost, so a site behind one waited for good (and a site the planner and
+the Haulers disagree about is given up after four minutes); two Ore Mines went side by side on one small patch (a
+gatherer now counts only the deposits none of its kind already works); and the rival spans canyons onto a rival's mesa
+or plateau with a Viaduct (see Fortresses in the README). Still worth a look: Ore near home is sparse at the Normal
+level (about a tile and a half inside the starting border, sometimes none), so the first minutes hang on how well the
+rival picks its first Ore Mine. Two signs of the same thing in the tests: a rival with one Ore Mine runs out of Alloy
+and its army stops at five warbots (gunshy-test: it never gathers the nine it wants to clear a turret), and in a 2 v 2
+on Crossroads (seed 9, no nukes) the stronger colony sits on 160+ unused Alloy with about ten warbots while two against
+one can't finish the last rival inside 40 minutes. The army a rich rival wants (`aiWantArmy`) and what stops its
+Foundry are the places to look.
 
 ## Balance decisions
 

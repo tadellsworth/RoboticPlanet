@@ -189,6 +189,30 @@ body.mm-off .objective { margin-right: 54px; }
 .toast.out { opacity: 0; transition: opacity 0.4s; }
 @keyframes toastIn { from { transform: translateY(-8px); opacity: 0; } }
 
+/* ---------- the briefing at the start of a game ---------- */
+.briefing {
+  position: fixed; inset: 0; z-index: 30; display: flex; align-items: center; justify-content: center;
+  padding: calc(var(--safe-t) + 12px) calc(var(--safe-r) + 12px) calc(var(--safe-b) + 12px) calc(var(--safe-l) + 12px);
+  background: rgba(6, 9, 14, 0.55); cursor: pointer; animation: toastIn 0.25s;
+}
+.briefing[hidden] { display: none; }
+.br-card {
+  width: min(100%, 520px); max-height: 100%; display: flex; flex-direction: column; gap: 10px;
+  background: #1d2230; border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px 12px;
+  box-shadow: 0 14px 40px rgba(0, 0, 0, 0.5);
+}
+.br-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; font-size: 16px; }
+.br-state { font-size: 12px; color: var(--muted, #9aa3b5); text-transform: uppercase; letter-spacing: 0.08em; }
+.br-list { list-style: none; margin: 0; padding: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 7px; min-height: 0; }
+.br-list li { background: #252a36; border-left: 4px solid var(--accent); border-radius: 8px; padding: 7px 10px; font-size: 13.5px; line-height: 1.4; }
+.br-list li.warn { border-left-color: var(--warn); }
+.br-list li.bad { border-left-color: var(--danger); }
+.br-list li.good { border-left-color: var(--good); }
+.br-foot { display: flex; align-items: center; gap: 12px; font-size: 13px; color: var(--muted, #9aa3b5); }
+.br-foot > span:first-child { flex: none; font-weight: 600; color: var(--accent); }
+.br-bar { flex: 1; height: 4px; border-radius: 2px; background: rgba(255, 255, 255, 0.1); overflow: hidden; }
+.br-bar i { display: block; height: 100%; width: 100%; background: var(--accent); }
+
 /* ---------- bottom bar ---------- */
 #bottombar {
   position: fixed; left: 0; right: 0; bottom: 0; z-index: 5;
@@ -670,6 +694,8 @@ canvas.chart.small { height: 110px; }
 .m-rl { font-size: 13.5px; font-weight: 700; color: #d4dae4; line-height: 1.15; }
 .m-val { display: block; margin-top: 2px; font-size: 11.5px; font-weight: 700; color: var(--accent); font-variant-numeric: tabular-nums; }
 .m-row .seg { padding: 2px; gap: 2px; border-radius: 10px; min-width: 0; }
+/* (each choice as wide as its label needs, so a long one like Domination isn't cut short on a phone) */
+.m-row .seg button { flex: 1 1 auto; padding-left: 4px; padding-right: 4px; }
 .m-row .seg button { min-width: 0; padding: 7px 4px; border-radius: 8px; font-size: 13.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .m-chips { gap: 4px; }
 .m-chips button { padding: 5px 10px; font-size: 13px; }
@@ -756,6 +782,11 @@ canvas.chart.small { height: 110px; }
 @media (max-width: 420px) {
   .m-row { grid-template-columns: 78px minmax(0, 1fr); gap: 8px; }
   .m-row .seg button { font-size: 13px; padding: 7px 2px; }
+}
+/* The narrowest phones (an original iPhone SE: 320 px): each label above its choices, so they get the whole width. */
+@media (max-width: 359px) {
+  .m-row { grid-template-columns: minmax(0, 1fr); gap: 4px; }
+  .m-row .seg button { font-size: 13px; }
 }
 
 /* The pickers: a centred panel of cards; on a phone, a sheet from the bottom. */

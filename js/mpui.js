@@ -325,6 +325,7 @@ function mpOnStart(m) {
   const ai = S.players.filter((P) => P.ai && foes(P.id, me)).length;
   const ally = S.teams ? S.players.find((P) => allies(P.id, me)) : null;
   postMsg(ME, `Multiplayer: you against ${[...others, ai ? `${ai} computer rival${ai > 1 ? 's' : ''}` : ''].filter(Boolean).join(' and ')}${ally ? `, with ${ally.name || 'a computer ally'} on your side` : ''}. Your bots have landed: build up fast!`, 0, 0, 'info');
+  showBriefing();
 }
 
 /** The game was replaced (a reloaded page got it, or this device went astray and got the host's). */
