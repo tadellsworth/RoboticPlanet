@@ -668,6 +668,7 @@ const BANNABLE = ['warbot', 'bulwark', 'torch', 'rocket', 'bomber', 'ferry'];
 function playerName(p, the) {
   if (p === (typeof ME !== 'undefined' ? ME : 0)) return the ? 'you' : 'You'; // (whoever is playing on this device)
   if (typeof S !== 'undefined' && S && S.mode === 'colony' && p === 1) return the ? 'the wildlife' : 'Wildlife';
+  if (typeof S !== 'undefined' && S && S.players && S.players[p] && S.players[p].name) return S.players[p].name; // (a person, in multiplayer)
   const three = typeof S !== 'undefined' && S && S.players && S.players.length > 2;
   const n = three ? RIVAL_NAMES[p] + ' rival' : the ? 'rival' : 'Rival';
   return the ? 'the ' + n : n;

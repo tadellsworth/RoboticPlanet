@@ -50,6 +50,7 @@ function step(now) {
     const running = UI.inGame ? !UI.paused && S.winner < 0 : true;
     // A multiplayer game keeps time with the other players' devices (lockstep.js), paused or not.
     if (UI.inGame && MP.on) mpFrame(dt);
+    else if (MPJ.on) { mpFrame(dt); if (running) { _acc += dt * 1.5 * GAME_PACE; let n = 0; while (_acc >= SIM_STEP && n < 10) { simStep(SIM_STEP); _acc -= SIM_STEP; n++; } } } // (joining: asking for the game, the menu's backdrop playing on)
     else if (running) {
       _acc += dt * (UI.inGame ? UI.speed : 1.5) * GAME_PACE;
       let n = 0;

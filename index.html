@@ -19,6 +19,8 @@
 <canvas id="game"></canvas>
 
 <div id="hud" hidden>
+  <!-- Multiplayer: waiting for a player, paused by someone, or watching (see mpBanner in ui.js). -->
+  <div id="mp-banner" class="mp-banner" role="status" aria-live="polite" hidden><span id="mp-banner-text"></span><button type="button" id="mp-banner-btn" class="btn small" hidden></button></div>
   <header id="topbar">
     <div id="goods" class="goods"></div>
     <div class="toprow">
@@ -98,6 +100,7 @@
       <h1 class="logo">TERRAFALL</h1>
       <p class="tagline">Claim. Seize. Annihilate.</p>
       <button id="m-continue" class="btn big m-cont" hidden>Continue</button>
+      <button id="m-rejoin" class="btn big m-cont" hidden>Rejoin multiplayer game</button>
     </div>
     <!-- Customise: the whole new-game setup (opened by Customise game; $('m-more').open = true works too). -->
     <div class="m-setup" id="m-more" role="region" aria-labelledby="m-setup-title" hidden>
@@ -203,6 +206,7 @@
       <p class="m-sum" id="m-more-sum"></p>
     </div>
     <div class="m-home-foot" id="m-home-foot">
+      <button type="button" id="m-multi" class="btn big m-cust"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><circle cx="8" cy="8" r="3" fill="none" stroke="currentColor" stroke-width="2.2"/><circle cx="16.5" cy="9.5" r="2.5" fill="none" stroke="currentColor" stroke-width="2.2"/><path d="M2.5 19c.8-3.2 3-5 5.5-5s4.7 1.8 5.5 5M13.5 15.2c.9-.8 2-1.2 3-1.2 2.1 0 3.9 1.5 4.6 4.5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>Multiplayer</button>
       <button type="button" id="m-customise" class="btn big m-cust"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h4M12 17h8" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/><circle cx="16" cy="7" r="2.4" fill="none" stroke="currentColor" stroke-width="2.2"/><circle cx="10" cy="17" r="2.4" fill="none" stroke="currentColor" stroke-width="2.2"/></svg>Customise game</button>
       <nav class="m-links" aria-label="More">
         <button type="button" id="m-missions">Missions</button>
@@ -226,10 +230,53 @@
   </div>
 </div>
 
+<!-- Multiplayer: host or join a game by its room code, then the lobby (see the Multiplayer section of ui.js). -->
+<div id="screen-mp" class="screen" hidden>
+  <div class="card mp-card" role="dialog" aria-labelledby="mp-title">
+    <header class="mp-head">
+      <button type="button" id="mp-back" class="btn small ghost m-back" aria-label="Back to the main menu">
+        <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M15 5l-7 7 7 7" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg><span>Back</span>
+      </button>
+      <h2 id="mp-title">Multiplayer</h2>
+    </header>
+    <div id="mp-connect" class="mp-view">
+      <label class="mp-field" for="mp-name"><span>Your name</span><input id="mp-name" maxlength="16" autocomplete="nickname" placeholder="Name"></label>
+      <button type="button" id="mp-host" class="btn primary big">Host a game</button>
+      <div class="mp-or"><span>or join one</span></div>
+      <div class="mp-join">
+        <input id="mp-code" maxlength="5" placeholder="CODE" aria-label="Room code" autocapitalize="characters" autocomplete="off" spellcheck="false" inputmode="text">
+        <button type="button" id="mp-join" class="btn big">Join</button>
+      </div>
+      <p class="mp-msg" id="mp-msg" role="status" aria-live="polite"></p>
+      <p class="hint">Two to four people, on any mix of phones, tablets and computers. The host gets a room code to give the others; computer rivals can fill the empty places.</p>
+    </div>
+    <div id="mp-lobby" class="mp-view" hidden>
+      <div class="mp-codebox">
+        <span class="mp-codelbl">Room code</span>
+        <b id="mp-roomcode" class="mp-code"></b>
+        <button type="button" id="mp-share" class="btn small">Share</button>
+      </div>
+      <div class="section-label">Players</div>
+      <ul id="mp-players" class="mp-players"></ul>
+      <div class="section-label">Game</div>
+      <p class="mp-sum" id="mp-sum"></p>
+      <button type="button" id="mp-settings" class="btn">Change settings</button>
+      <p class="mp-msg" id="mp-lmsg" role="status" aria-live="polite"></p>
+      <button type="button" id="mp-start" class="btn primary big">Start game</button>
+      <button type="button" id="mp-leave" class="btn ghost">Leave</button>
+    </div>
+    <div id="mp-joining" class="mp-view" hidden>
+      <p class="mp-sum" id="mp-joinmsg">Joining the game: getting it from the other players…</p>
+      <button type="button" id="mp-joincancel" class="btn ghost">Cancel</button>
+    </div>
+  </div>
+</div>
+
 <div id="screen-pause" class="screen" hidden>
   <div class="card">
-    <h2>Paused</h2>
+    <h2 id="p-title">Paused</h2>
     <button id="p-resume" class="btn primary big">Resume</button>
+    <button id="p-mppause" class="btn big" hidden>Pause the game for everyone</button>
     <div class="sound-sliders">
       <label class="slider-row" for="p-music"><span>Music</span><output id="p-music-v"></output>
         <input type="range" id="p-music" min="0" max="100" step="5"></label>
@@ -409,6 +456,7 @@
 <script src="js/missions.js"></script>
 <script src="js/orders.js"></script>
 <script src="js/lockstep.js"></script>
+<script src="js/net.js"></script>
 <script src="js/charts.js"></script>
 <script src="js/audio.js"></script>
 <script src="js/render.js"></script>
@@ -417,6 +465,7 @@
 <script src="js/weather.js"></script>
 <script src="js/input.js"></script>
 <script src="js/ui.js"></script>
+<script src="js/mpui.js"></script>
 <script src="js/main.js"></script>
 </body>
 </html>

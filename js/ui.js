@@ -74,6 +74,7 @@ function initUI() {
   } catch (e) { /* defaults */ }
   checkMenuSettings();
   initMenu();
+  initMulti();
   $('m-continue').onclick = () => { audioUnlock(); continueGame(); };
   $('m-import').onclick = () => { audioUnlock(); $('m-import-msg').hidden = true; $('m-import-file').value = ''; $('m-import-file').click(); };
   $('m-import-file').onchange = () => { const f = $('m-import-file').files && $('m-import-file').files[0]; if (f) importSaveFile(f); };
@@ -82,7 +83,8 @@ function initUI() {
   $('h-close').onclick = () => { $('screen-help').hidden = true; UI.paused = !$('screen-pause').hidden; };
 
   // Pause menu
-  $('btn-pause').onclick = () => { UI.paused = true; $('screen-pause').hidden = false; syncSaved(); sfx('click'); };
+  // (in a multiplayer game the menu doesn't stop the game: Pause for everyone does, see mpui.js)
+  $('btn-pause').onclick = () => { UI.paused = !MP.on; UI.mpQuitArm = false; mpSyncPauseMenu(); $('screen-pause').hidden = false; syncSaved(); sfx('click'); };
   $('p-resume').onclick = () => { UI.paused = false; $('screen-pause').hidden = true; };
   // The hidden rival boost: tap the clock three times quickly (or press ` on a keyboard).
   $('clock').addEventListener('click', () => {
@@ -112,11 +114,18 @@ function initUI() {
   initFullscreen();
   syncVol();
   $('p-help').onclick = () => showHelp();
-  $('p-quit').onclick = () => { saveGame(); $('screen-pause').hidden = true; toMenu(); };
+  $('p-quit').onclick = () => {
+    if (MP.on) {
+      if (!UI.mpQuitArm) { UI.mpQuitArm = true; mpSyncPauseMenu(); return; }
+      mpQuit();
+    } else saveGame();
+    $('screen-pause').hidden = true;
+    toMenu();
+  };
 
   // Game over (missions swap in their own actions)
-  $('o-new').onclick = () => { $('screen-over').hidden = true; if (UI.overNew) UI.overNew(); else { UI.menu.seed = randomSeed(); startNewGame(); } };
-  $('o-menu').onclick = () => { $('screen-over').hidden = true; toMenu(); if (UI.overMenu) UI.overMenu(); };
+  $('o-new').onclick = () => { $('screen-over').hidden = true; if (MP.on) mpQuit(); if (UI.overNew) UI.overNew(); else { UI.menu.seed = randomSeed(); startNewGame(); } };
+  $('o-menu').onclick = () => { $('screen-over').hidden = true; if (MP.on) mpQuit(); toMenu(); if (UI.overMenu) UI.overMenu(); };
   $('m-missions').onclick = () => { sfx('click'); openMissions(); };
   $('ms-close').onclick = () => { sfx('click'); if (UI.msSel != null) { UI.msSel = null; renderMissions(); } else $('screen-missions').hidden = true; };
   $('o-statsbtn').onclick = () => { sfx('click'); openStats(); };
@@ -287,7 +296,8 @@ function showMenuView(v, focus) {
   $('m-home-foot').hidden = setup;
   $('menu-card').classList.toggle('is-setup', setup);
   $('screen-menu').classList.toggle('is-setup', setup);
-  $('m-new-label').textContent = setup ? 'Start' : 'Play';
+  $('m-new-label').textContent = UI.mpSetup ? 'Done' : setup ? 'Start' : 'Play';
+  $('m-setup-title').textContent = UI.mpSetup ? 'Multiplayer game' : 'New game';
   if (!setup) closePicker(false);
   else { $('m-body').scrollTop = 0; $('screen-menu').scrollTop = 0; }
   syncMenu();
@@ -334,9 +344,9 @@ function initMenu() {
   };
   // The two views. Tests and older code open Customise with $('m-more').open = true (it was a <details>).
   $('m-customise').onclick = () => { sfx('click'); showMenuView('setup', true); };
-  $('m-back').onclick = () => { sfx('click'); showMenuView('home', true); };
+  $('m-back').onclick = () => { sfx('click'); if (UI.mpSetup) mpSetupDone(); else showMenuView('home', true); };
   Object.defineProperty($('m-more'), 'open', { configurable: true, get: () => UI.menuView === 'setup', set: (v) => showMenuView(v ? 'setup' : 'home') });
-  $('m-new').onclick = () => { audioUnlock(); startNewGame(); };
+  $('m-new').onclick = () => { audioUnlock(); if (UI.mpSetup) mpSetupDone(); else startNewGame(); };
   // Map type and Biome open their pickers.
   $('m-shape').onclick = () => { sfx('click'); openPicker('shape'); };
   $('m-biome').onclick = () => { sfx('click'); openPicker('biome'); };
@@ -380,6 +390,11 @@ function syncMenu() {
   const m = UI.menu, colony = m.mode === 'colony', three = menuThree();
   const mark = (b, on) => { b.classList.toggle('on', on); if (b.getAttribute('role') === 'radio') b.setAttribute('aria-checked', on ? 'true' : 'false'); };
   for (const btn of $('m-mode').children) { mark(btn, btn.dataset.v === m.mode); btn.dataset.info = modeInfo(btn.dataset.v, false); }
+  // Multiplayer settings (the host, from the lobby): Versus only; Players counts everyone, people first, computer rivals after.
+  const mps = !!UI.mpSetup;
+  $('m-mode').closest('.m-row').hidden = mps;
+  $('m-unlimited-row').hidden = mps;
+  $('m-l-diff').textContent = mps ? 'Computer rivals' : 'Rival';
   for (const btn of $('m-diff').children) mark(btn, btn.dataset.v === m.diff);
   $('m-diff-field').hidden = colony;
   for (const btn of $('m-victory').children) mark(btn, btn.dataset.v === (m.victory || 'capture'));
@@ -391,9 +406,12 @@ function syncMenu() {
   for (const btn of $('m-players').children) {
     const v = +btn.dataset.v;
     mark(btn, v === menuPlayers());
+    if (!btn.dataset.lbl) btn.dataset.lbl = btn.textContent;
+    btn.textContent = mps ? `${v} in all` : btn.dataset.lbl;
     btn.disabled = v > room;
     btn.dataset.info = v === 2 ? 'You vs 1: you and one rival colony, landing at the far end of the planet.'
       : modeInfo('versus', v) + (v <= room ? '' : v === 4 ? ` (Crossroads only: ${SH.name} has room for ${room === 3 ? 'three' : 'two'}.)` : ` (Not on ${SH.name}: pick a map type marked “3 players”, or Crossroads.)`);
+    if (mps) btn.dataset.info = `${v} colonies in all: the people in the lobby take the first, computer rivals the rest (more people than this, and they all play).` + (v <= room ? '' : ` (${SH.name} has room for ${room}.)`);
   }
   $('m-players-note').hidden = colony || want <= room;
   $('m-players-note').textContent = want === 4 ? `${SH.name} has room for ${room === 3 ? 'three players' : 'two players only'}: pick Crossroads for four.`
@@ -1591,6 +1609,7 @@ function setSpeed(v, quiet) {
 
 /** Step to the next slower (-1) or faster (+1) speed. */
 function stepSpeed(d) {
+  if (MP.on) return;
   const k = SPEEDS.indexOf(UI.speed);
   setSpeed(SPEEDS[clamp((k < 0 ? 2 : k) + d, 0, SPEEDS.length - 1)]);
   toast(`Game speed ${UI.speed}×`, 'info');
@@ -1860,6 +1879,7 @@ function enterGame() {
   UI.inGame = true; UI.paused = false; UI.overShown = false;
   UI.sel = []; UI.groups = {}; UI.lastAlert = null;
   setSpeed(1, true);
+  $('btn-speed').hidden = MP.on; // (a multiplayer game runs at one speed for everyone)
   $('screen-menu').hidden = true;
   $('hud').hidden = false;
   $('toasts').innerHTML = '';
@@ -1883,6 +1903,8 @@ function enterGame() {
 }
 
 function toMenu() {
+  if (MP.on || MPJ.on) mpQuit();
+  ME = 0;
   hideGoodTip();
   UI.inGame = false;
   UI.paused = false;
@@ -1893,6 +1915,7 @@ function toMenu() {
   $('screen-menu').hidden = false;
   showMenuView('home');
   syncMenu();
+  syncRejoin();
   startDemo();
 }
 
@@ -1909,6 +1932,7 @@ function showGameOver() {
   $('o-code').hidden = true;
   if (S.mission) { showMissionOver(); return; }
   const won = S.winner === ME, how = S.endHow || 'capture', many = S.players.length > 2, them = many ? playerName(S.winner) : 'rival';
+  const W = S.players[S.winner], The = W && W.name ? W.name : `The ${them}`; // (a person, in multiplayer: by name)
   sfx(won ? 'win' : 'lose');
   $('o-title').textContent = won ? (how === 'domination' ? 'Domination!' : how === 'uplinks' ? 'Uplinks held!' : 'Victory!') : 'Defeat';
   $('o-text').textContent = won
@@ -1916,9 +1940,9 @@ function showGameOver() {
       : how === 'uplinks' ? `You led on the Uplinks for ${UPLINK.hold / 60} minutes. The planet is yours.`
       : how === 'surrender' ? (many ? 'The last rival surrendered: the planet is yours.' : 'Your rival surrendered. The planet is yours.')
         : many ? `${S.players.length > 3 ? 'All three' : 'Both'} rival Command Bases are yours: the last colony standing. The planet is yours.` : 'Your warbots captured the rival Command Base. The planet is yours.')
-    : how === 'domination' ? `The ${them} held most of the planet's land for ${DOM.hold / 60} minutes. Regroup and try again.`
-      : how === 'uplinks' ? `The ${them} led on the Uplinks for ${UPLINK.hold / 60} minutes. Regroup and try again.`
-      : `The ${them} ${S.players[ME].out ? 'captured your Command Base' : 'took the planet'}. Regroup and try again.`;
+    : how === 'domination' ? `${The} held most of the planet's land for ${DOM.hold / 60} minutes. Regroup and try again.`
+      : how === 'uplinks' ? `${The} led on the Uplinks for ${UPLINK.hold / 60} minutes. Regroup and try again.`
+      : `${The} ${S.players[ME].out ? 'captured your Command Base' : 'took the planet'}. Regroup and try again.`;
   const st = S.players[ME].stats;
   $('o-stats').innerHTML = [
     ['Time', fmtTime(S.time)], ['Buildings completed', st.built], ['Bots built', st.bots - (st.startBots || 0)],
@@ -5373,6 +5397,8 @@ function toast(text, kind, x, y) {
 }
 
 function uiTick(dt) {
+  netTick();
+  mpBannerTick();
   AUDIO.suppress = !UI.inGame;
   if (!UI.inGame) menuArtTick();
   if (!UI.inGame || !S) return;

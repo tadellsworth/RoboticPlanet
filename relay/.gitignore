@@ -1,0 +1,3 @@
+# wrangler dev's working files
+.wrangler/
+node_modules/

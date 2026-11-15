@@ -1,0 +1,45 @@
+# Deploys the multiplayer relay (relay/) to Cloudflare Workers.
+# One-time setup (repo Settings → Secrets and variables → Actions → New repository secret):
+#   CLOUDFLARE_API_TOKEN   a Cloudflare API token made from the "Edit Cloudflare Workers" template
+#   CLOUDFLARE_ACCOUNT_ID  the Account ID shown on the Cloudflare dashboard (Workers & Pages, on the right)
+# Then Actions → Deploy multiplayer relay → Run workflow. Without the secrets it does nothing (and doesn't fail).
+name: Deploy multiplayer relay
+on:
+  workflow_dispatch:
+  push:
+    branches: [claude/elegant-cori-a8yj96]
+    paths: ['relay/**', '.github/workflows/relay.yml']
+permissions:
+  contents: read
+concurrency:
+  group: relay
+  cancel-in-progress: false
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - id: check
+        env:
+          TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          ACCOUNT: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          if [ -n "$TOKEN" ] && [ -n "$ACCOUNT" ]; then echo "ok=true" >> "$GITHUB_OUTPUT"
+          else echo "::notice::The Cloudflare secrets aren't set up yet, so the relay wasn't deployed (see the top of relay.yml)."; fi
+      - if: steps.check.outputs.ok == 'true'
+        uses: actions/checkout@v4
+      - if: steps.check.outputs.ok == 'true'
+        id: deploy
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: relay
+          wranglerVersion: '4.40.0'
+      - if: steps.check.outputs.ok == 'true'
+        env:
+          OUT: ${{ steps.deploy.outputs.command-output }}
+          URL: ${{ steps.deploy.outputs.deployment-url }}
+        run: |
+          U="$URL"; [ -n "$U" ] || U=$(printf '%s' "$OUT" | grep -o 'https://[a-zA-Z0-9.-]*workers\.dev' | head -1)
+          echo "Relay address: $U"
+          { echo "### Multiplayer relay deployed"; echo; echo "Address: **$U**"; echo; echo "Check it: open $U in a browser; it should say *Terrafall relay: ok*."; } >> "$GITHUB_STEP_SUMMARY"

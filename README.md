@@ -767,6 +767,8 @@ js/ai.js                  rival AI
 js/missions.js            mission campaign: goals, hand-placed map features, progress
 js/orders.js              every player action as an order: a name and plain arguments, checked against the player
 js/lockstep.js            multiplayer: every device runs the game, only orders travel (see Multiplayer below)
+js/net.js                 multiplayer: the connection to the relay (rooms, reconnecting, catching up)
+js/mpui.js                multiplayer screens: host, join, the lobby, the in-game banner, pause and leave
 js/charts.js              line and bar charts for the statistics screen
 js/render.js              canvas renderer and placeholder art
 js/daynight.js            day and night: the clock, re-lit art sets, grading, headlights, light pools
@@ -778,13 +780,50 @@ art/art-manifest.js       register custom art here
 tools/headless-sim.js     AI-vs-AI balance test without a browser
 tools/smoke-test.js       browser test on a phone-sized screen (Playwright)
 tools/build-single.js     bundles everything into dist/terrafall.html (and dist/tod-<time>.js)
+relay/                    the multiplayer relay: a Cloudflare Worker (deployed by .github/workflows/relay.yml)
 ```
 
 Plain JavaScript, no build step and no dependencies. Balance tweaks mostly live in `js/defs.js`.
 
-### Multiplayer (in progress)
+### Multiplayer
 
-Multiplayer is lockstep: every device runs the whole game, and only the players' orders go between them.
+Two to four people play one game, each on their own phone, tablet or computer (any mix), with computer rivals
+in any places left over. Everyone sees the whole map.
+
+**Playing.** Main menu → **Multiplayer**. One person types their name and taps **Host a game**: the lobby shows a
+five-character room code, and **Share** sends it (with a link that opens the game straight to it). The others type
+their name and the code and tap **Join**. The host can **Change settings** (the usual new-game screen: map type,
+biome, size, rules, how many colonies in all and how hard the computer rivals are) and taps **Start game**. In the
+game:
+
+- The menu button (top right) opens the menu without stopping the game; **Pause the game for everyone** pauses all
+  of you (anyone can resume). The game runs at one speed for everyone.
+- If someone's connection drops, the others' games wait for it; after 12 seconds the computer runs that colony.
+  When the device comes back it catches up and the colony is handed back. A page that reloads (or a phone app that
+  was closed) offers **Rejoin multiplayer game** on the main menu, and gets the game from the others.
+- **Leave the game** hands your colony to the computer for the rest of the game. A multiplayer game isn't saved for
+  Continue.
+
+**Setting up the relay (once).** The devices talk through a small relay server: `relay/`, a Cloudflare Worker with
+one Durable Object per game room, free on Cloudflare's free plan. It's deployed from this repository by the
+**Deploy multiplayer relay** workflow (`.github/workflows/relay.yml`):
+
+1. Make a free Cloudflare account (dash.cloudflare.com/sign-up). Open **Workers & Pages** once: it asks you to pick
+   your `workers.dev` subdomain.
+2. Copy your **Account ID** (on the Workers & Pages overview, on the right).
+3. **My Profile → API Tokens → Create Token → Edit Cloudflare Workers → Use template**, pick your account, then
+   **Continue to summary → Create Token**, and copy the token (it's only shown once).
+4. In this repository: **Settings → Secrets and variables → Actions → New repository secret**: add
+   `CLOUDFLARE_API_TOKEN` (the token) and `CLOUDFLARE_ACCOUNT_ID` (the Account ID).
+5. **Actions → Deploy multiplayer relay → Run workflow.** When it's done, its summary shows the relay's address,
+   `https://terrafall-relay.<your-subdomain>.workers.dev` (opening it says *Terrafall relay: ok*).
+6. Put that address in `RELAY_DEFAULT` at the top of `js/net.js` and push: the published game then uses it. (To try
+   it before that, open the game with `?relay=<address>` on the end of its web address: that device remembers it.)
+
+The relay runs locally too: `cd relay && npx wrangler dev`, then open the game with `?relay=ws://127.0.0.1:8787`.
+
+**How it works.** Multiplayer is lockstep: every device runs the whole game, and only the players' orders go between
+them.
 
 - **Orders** (`js/orders.js`): everything a player does on the screens goes through `act(name, args, callback)` in
   `js/ui.js`, which runs one of the `ORDERS` (place a building, set a priority, send warbots, plan roads...). Each
@@ -793,15 +832,17 @@ Multiplayer is lockstep: every device runs the whole game, and only the players'
 - **Lockstep** (`js/lockstep.js`): time is cut into turns of 3 ticks (a tenth of a second). An order is sent for a
   turn a little way ahead (each device picks how far from its own round trip to the relay), and a turn starts only
   once every player's orders for it are in, so every device carries them out at the same tick. Once a second each
-  device sends a fingerprint of its game (`hashState`); if they ever differ, the host sends its game and everyone
-  carries on from it. A player who goes quiet for 12 seconds (or leaves) has their colony run by the computer, on
-  every device from the same turn.
+  device sends a fingerprint of its game (`hashState`); if they ever differ, the host sends its game to the device
+  that went astray. A player who goes quiet for 12 seconds (or leaves) has their colony run by the computer, on every
+  device from the same turn, until they're back (`rejoin`); a device with no game asks for it (`want`).
+- **The relay** (`relay/src/index.js`): seats up to four players per room, keeps the lobby, numbers every game message
+  and hands it to every device in one order (that shared order is what keeps the decisions above the same
+  everywhere), and keeps a log so a dropped connection picks up what it missed. **The connection** (`js/net.js`)
+  reconnects by itself and sends big messages (a whole game) in pieces; **the screens** are `js/mpui.js`.
 - **The same game everywhere**: no `Math.random` or clocks in the game; exact maths for angles and distances
   (`dsin`, `dcos`, `datan2`, `dhypot` in `js/util.js`, the same on every browser and phone); `ME` is the player at
   this device (messages, sounds, what the screens show), while the rules only ask whether a player is a person or
-  the computer (`human`). Saves (and the host's game) are taken at the start of a whole second.
-- Still to come: the relay (a small server that passes messages along), a lobby with a room code, and the
-  multiplayer screens (who's here, waiting for a player, pause, leave).
+  the computer (`human`). Saves (and a game sent between devices) are taken at the start of a whole second.
 
 ### Testing
 
