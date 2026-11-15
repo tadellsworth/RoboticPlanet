@@ -10,7 +10,10 @@ CFG = {  # brake lens centres and dust sources (rear end of each track / rear wh
   'agribot': {'brake': [(41, 98), (41, 158)],         'dust': [(39, 54), (39, 202)]},
   'paver':   {'brake': [(23.5, 83), (23.5, 173)],     'dust': [(44, 67), (44, 189)]},
   'warbot':  {'brake': [(12.5, 101.5), (12.5, 154.5)], 'dust': [(28, 68), (28, 188)]},
+  'bulwark': {'brake': [(23, 97), (23, 158)],         'dust': [(30, 52), (30, 204)]},
+  'torch':   {'brake': [(19, 105), (19, 150)],        'dust': [(24, 75), (24, 180)]},
 }
+if len(sys.argv) > 3: CFG = {k: v for k, v in CFG.items() if k in sys.argv[3:]}  # (only these robots)
 def noise(seed, size):
     r = np.random.default_rng(seed).standard_normal((N, N)); f = np.fft.fft2(r)
     fy = np.fft.fftfreq(N)[:, None]; fx = np.fft.fftfreq(N)[None, :]

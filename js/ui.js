@@ -1352,10 +1352,9 @@ function refreshSelection() {
   const bar = $('selbar');
   if (!UI.sel.length || !UI.inGame) { bar.hidden = true; refreshGroupBar(); return; }
   let inside = 0, empty = 0;
-  for (const u of orderable(0, UI.sel)) { if (u.inside) inside++; if ((u.ammo ?? WARBOT_AMMO) <= 0) empty++; }
-  const nw = orderable(0, UI.sel).length, nr = UI.sel.length - nw;
-  const html = `<b>${[nw ? `${nw} warbot${nw > 1 ? 's' : ''}` : '', nr ? `${nr} Howitzer${nr > 1 ? 's' : ''}` : ''].filter(Boolean).join(' and ')} selected</b>` +
-    (inside ? ` <span class="muted">(${inside} in garrisons)</span>` : '') + (empty ? ` <span class="err">${empty} out of Ammo</span>` : '') +
+  for (const u of orderable(0, UI.sel)) { if (u.inside) inside++; if (!botArmed(u)) empty++; }
+  const html = `<b>${groupWords(UI.sel)} selected</b>` +
+    (inside ? ` <span class="muted">(${inside} in garrisons)</span>` : '') + (empty ? ` <span class="err">${empty} out of Ammo or Fuel</span>` : '') +
     `<span class="hint">Right-click open ground to hold it, a rival building or robot to attack, your Outpost to station them, or a Repair Station to get them fixed. Esc clears.</span>
     <button class="btn small ghost" id="selbar-group" title="Save them as a control group (or ⌘/Ctrl/⌥ + 1–9)">Save as group ${nextGroupNo()}</button>
     <button class="btn small ghost" id="selbar-clear" aria-label="Clear selection">✕</button>`;
@@ -1374,7 +1373,7 @@ function onSelectBox(box, add) {
   const x0 = Math.min(box.x0, box.x1), x1 = Math.max(box.x0, box.x1), y0 = Math.min(box.y0, box.y1), y1 = Math.max(box.y0, box.y1);
   const ids = [];
   for (const u of S.bots) {
-    if (u.dead || u.owner !== 0 || (u.type !== 'warbot' && !BOTS[u.type].siege) || u.inside) continue;
+    if (u.dead || u.owner !== 0 || (!isArmy(u) && !BOTS[u.type].siege) || u.inside) continue;
     const p = worldToScreen(u.x, u.y);
     if (p.x >= x0 && p.x <= x1 && p.y >= y0 && p.y <= y1) ids.push(u.id);
   }
@@ -1456,8 +1455,10 @@ function ctrlGroups() { if (!S.groups) S.groups = {}; return S.groups; }
 
 /** What a list of selected robots is, in words ("2 Howitzers", "5 warbots and 1 Howitzer"). */
 function groupWords(ids) {
-  const us = selectable(0, ids), nw = us.filter((u) => u.type === 'warbot').length, nr = us.length - nw;
-  return [nw ? `${nw} warbot${nw > 1 ? 's' : ''}` : '', nr ? `${nr} Howitzer${nr > 1 ? 's' : ''}` : ''].filter(Boolean).join(' and ');
+  const us = selectable(0, ids), n = {};
+  for (const u of us) n[u.type] = (n[u.type] || 0) + 1;
+  const words = Object.keys(n).map((k) => `${n[k]} ${k === 'warbot' ? (n[k] > 1 ? 'warbots' : 'warbot') : n[k] > 1 ? BOTS[k].plural : BOTS[k].name}`);
+  return words.length > 1 ? words.slice(0, -1).join(', ') + ' and ' + words[words.length - 1] : words.join('');
 }
 
 function saveGroup(k) {
@@ -2793,7 +2794,7 @@ function onMapTap(i, j, wx, wy) {
     else if (s.kind === 'bld') openBuildingSheet(s.e);
     else {
       const bot = s.e;
-      if (INPUT.mouse && bot.owner === 0 && (bot.type === 'warbot' || BOTS[bot.type].siege)) selectBots([bot.id], INPUT.shift);
+      if (INPUT.mouse && bot.owner === 0 && (isArmy(bot) || BOTS[bot.type].siege)) selectBots([bot.id], INPUT.shift);
       openBotSheet(bot);
     }
     if (stack.length > 1 && !UI.stackHint) { UI.stackHint = true; toast(`${stack.length} things are here: tap the same spot again for the next one.`, 'info'); }
@@ -4181,7 +4182,7 @@ function refreshBuildingSheet(b) {
   if ($('sh-posted')) {
     if (b.type === 'lander') {
       let home = 0, out = 0;
-      for (const u of S.bots) if (!u.dead && u.owner === 0 && u.type === 'warbot' && !postOf(u)) { if (u.inside === b.id) home++; else out++; }
+      for (const u of S.bots) if (!u.dead && u.owner === 0 && isArmy(u) && !postOf(u)) { if (u.inside === b.id) home++; else out++; }
       $('sh-posted').textContent = `${home} warbot${home === 1 ? '' : 's'} here${out ? `, ${out} more out or on the way (they belong here)` : ''}. Warbots not stationed at an Outpost belong to the Command Base.`;
     } else {
       let inside = 0, out = 0;
@@ -4369,7 +4370,7 @@ function botActivity(u) {
     if (t && t.type === 'park') return 'Driving to its spot';
     return (u.rockets ?? ROCKET.mag) ? `${rocketDug(u) ? 'Dug in' : 'Loaded'}: waiting, and shelling any enemy building within ${ROCKET.range} tiles` : 'Out of shells: no Ammo in reach to reload';
   }
-  if (u.type === 'warbot') {
+  if (isArmy(u)) {
     const p = u.owner === 0 && usesPosts(0) ? postOf(u) : null;
     const where = u.owner !== 0 ? '' : p ? ` (stationed at the ${BDEFS[p.type].name})` : ' (belongs to the Command Base)';
     const what = (() => {
@@ -4381,6 +4382,7 @@ function botActivity(u) {
       if (t.type === 'hold') return t.phase === 'recharge' ? 'Battery flat: going to recharge' : t.target ? `Attacking the rival ${nm(t.target)}` : 'Holding the rally point';
       if (t.type === 'repair') return u.retreat ? 'Badly hurt: pulling out of the fight for repairs' + (u.resume ? ', then back to it' : '') : 'Going for repairs';
       if (t.type === 'topup') return 'Topping up its battery';
+      if (t.type === 'refill') return `Tank empty: going to refill it with Fuel at the ${nm(t.bld)}` + (u.resume ? ', then back to it' : '');
       if (t.type === 'loot') return t.phase === 'home' ? 'Carrying a crate of loot home' : 'Going to pick up loot';
       return 'On patrol';
     })();
@@ -4453,13 +4455,20 @@ function refreshTrainArmor(u) {
 /** Does bot u run on a fuel tank, filled with Fuel (trucks, ships and planes), rather than a battery? */
 function tankOf(u) { const bt = BOTS[u.type]; return !!(bt.truck || bt.sea || bt.air); }
 
+/** A Bulwark's shield in its robot panel: strength and a purple bar, or how long until it's back after failing. */
+function shieldRows(u) {
+  const sh = Math.max(0, u.sh ?? BULWARK.shield), down = u.shDown && u.shDown > S.time;
+  return `<div class="kv"><span>Shield</span><span>${down ? `down: back in ${Math.ceil(u.shDown - S.time)}s` : `${Math.round(sh)} / ${BULWARK.shield}${sh < BULWARK.shield && S.time - (u.shHit ?? -99) <= BULWARK.wait ? ' (taking fire)' : sh < BULWARK.shield ? ' (recharging)' : ''}`}</span></div>` +
+    `<div class="bar battery"><div style="width:${down ? 0 : Math.round(100 * sh / BULWARK.shield)}%;background:#b77bff"></div></div>`;
+}
+
 function openBotSheet(u) {
   R.selected = 0; R.selTile = -1; UI.selBot = u.id;
   const html = `<div class="sheet-title"><div><h3>${BOTS[u.type].name}</h3>
     <div class="owner"><span class="dot" style="background:${PLAYER_COLORS[u.owner]}"></span> ${u.owner === 0 ? 'Yours' : playerName(u.owner)}</div></div></div>
     <p class="desc">${BOTS[u.type].desc}</p>
     <div class="status" id="sh-status"></div><div id="sh-dyn"></div>
-    ${u.owner === 0 && u.type === 'warbot' ? '<button class="btn big" id="sh-recall" hidden>Call back this squad</button>' : ''}
+    ${u.owner === 0 && isArmy(u) ? '<button class="btn big" id="sh-recall" hidden>Call back this squad</button>' : ''}
     ${u.owner === 0 && BOTS[u.type].bomber ? '<button class="btn primary big" id="sh-strike">Pick a target</button>' : ''}
     ${u.owner !== 0 && u.owner >= 0 && !BOTS[u.type].wild && !BOTS[u.type].air && myBombers().length ? '<div class="section-label">Air strike</div><p class="hint" id="sh-bomb-hint"></p><button class="btn big" id="sh-bomb">Bomb it</button>' : ''}
     ${u.owner === 0 && BOTS[u.type].ferry ? `<button class="btn big" id="sh-fout"${u.inside && !u.landing ? '' : ' hidden'}>Sail out of the Port</button>
@@ -4782,7 +4791,8 @@ function refreshArmySheet() {
 
 function refreshArmyTab() {
   const g = warbotGroups(), mine = S.bots.filter((u) => !u.dead && u.owner === 0);
-  const wb = mine.filter((u) => u.type === 'warbot'), noAmmo = wb.filter((u) => (u.ammo ?? WARBOT_AMMO) <= 0).length;
+  const wb = mine.filter(isArmy), noAmmo = wb.filter((u) => !botArmed(u)).length;
+  const nB = wb.filter((u) => u.type === 'bulwark').length, nT = wb.filter((u) => u.type === 'torch').length;
   const field = g.attack.length + g.hold.length + g.defend.length + g.idle.length + g.loot.length;
   const rockets = mine.filter((u) => BOTS[u.type].siege);
   // The groups out in the field: each rally flag, and each building under attack.
@@ -4794,7 +4804,7 @@ function refreshArmyTab() {
   UI.armySig = sig;
   const L = getE(S.players[0].lander), where = (x, y) => (L ? dirText(L, { x: Math.floor(x), y: Math.floor(y) }) : '');
   const k = S.players[0].keepW ?? 0;
-  let h = `<div class="kv"><span>Warbots</span><span><b>${wb.length}</b>: ${g.base.length} at the Command Base, ${g.posted.length} in garrisons, ${field} in the field${noAmmo ? `, <span class="err">${noAmmo} out of Ammo</span>` : ''}</span></div>`;
+  let h = `<div class="kv"><span>Warbots</span><span><b>${wb.length}</b>${nB || nT ? ` (${[nB ? `${nB} ${nB > 1 ? 'Bulwarks' : 'Bulwark'}` : '', nT ? `${nT} ${nT > 1 ? 'Torches' : 'Torch'}` : ''].filter(Boolean).join(', ')})` : ''}: ${g.base.length} at the Command Base, ${g.posted.length} in garrisons, ${field} in the field${noAmmo ? `, <span class="err">${noAmmo} out of Ammo${nT ? ' or Fuel' : ''}</span>` : ''}</span></div>`;
   if (rockets.length) h += `<div class="kv"><span>Howitzers</span><span><b>${rockets.length}</b></span></div>`;
   h += `<div class="section-label">Orders <span class="label-note">group size</span></div>
     <div class="seg" id="ar-size">${[2, 4, 8, 'all'].map((n) => `<button id="ar-n${n}" data-act="size" data-n="${n}" class="${UI.armyN === n ? 'on' : ''}">${n === 'all' ? 'All' : n}</button>`).join('')}</div>
@@ -4869,7 +4879,7 @@ function armyButton(btn) {
     case 'selectrockets': { const ids = S.bots.filter((u) => !u.dead && u.owner === 0 && BOTS[u.type].siege).map((u) => u.id); closeSheet(); selectBots(ids, false); if (UI.sel.length) toast(`${UI.sel.length} Howitzer${UI.sel.length > 1 ? 's' : ''} selected: right-click an enemy building to shell it, or open ground to drive there.`, 'info'); return; }
     case 'more': if (e) { const i = Math.floor(e.x), j = Math.floor(e.y), res = sendToRally(0, i, j, armyCount(rallyAvailable(0, i, j))); if (res.sent) { sfx('order'); toast(`${res.sent} more warbot${res.sent > 1 ? 's are' : ' is'} on the way to the flag.`, 'info'); } else { sfx('error'); toast('No spare warbots in reach of that flag.', 'warn'); } UI.armySig = ''; } return;
     case 'recallflag': if (e) { const n = recallRally(id); toast(`${n} warbot${n !== 1 ? 's' : ''} called back.`, 'info'); UI.armySig = ''; } return;
-    case 'callback': { let n = 0; for (const u of S.bots) if (!u.dead && u.owner === 0 && u.type === 'warbot' && u.task && u.task.type === 'attack' && u.task.target === id) { u.task = null; u.path = null; n++; } toast(`${n} warbot${n !== 1 ? 's' : ''} called back to their garrisons.`, 'info'); UI.armySig = ''; return; }
+    case 'callback': { let n = 0; for (const u of S.bots) if (!u.dead && u.owner === 0 && isArmy(u) && u.task && u.task.type === 'attack' && u.task.target === id) { u.task = null; u.path = null; n++; } toast(`${n} warbot${n !== 1 ? 's' : ''} called back to their garrisons.`, 'info'); UI.armySig = ''; return; }
     case 'bombard': if (e) { closeSheet(); setMode('bombard'); UI.rocket = id; showBanner(`Tap an enemy building: the <b>Howitzer</b> drives to within ${ROCKET.range} tiles of it, digs in and shells it, one heavy shell after another, until it's rubble.`, null, 'Cancel'); } return;
     case 'rgo': if (e) { closeSheet(); setMode('rgo'); UI.rocket = id; showBanner('Tap where the <b>Howitzer</b> should wait: it stays there, and (unless it holds fire) shells any enemy building in reach of it.', null, 'Cancel'); } return;
     case 'strikeany': { const u = readyBomber(); if (u) startStrike(u); else { sfx('error'); toast('No Strike Bomber is ready on the ground.', 'warn'); } return; }
@@ -4989,9 +4999,9 @@ function refreshPopSheet() {
     if (u.dead || u.owner !== 0) continue;
     total++;
     const t = u.task, tt = t && t.type;
-    if (u.type === 'warbot') {
+    if (isArmy(u)) {
       add(u.type, u.inside ? 'garrison' : 'field');
-      if ((u.ammo ?? WARBOT_AMMO) <= 0) n.warbot.noAmmo = (n.warbot.noAmmo || 0) + 1;
+      if (!botArmed(u)) add(u.type, 'noAmmo'), n[u.type].total--;
     } else if (tt === 'charge' || tt === 'refuel' || (u.inside && insideCharger(u) && !tt && (u.bat ?? 100) < 99)) add(u.type, 'charging');
     else if (tt === 'haul') add(u.type, 'carrying');
     else if (tt === 'staff') add(u.type, 'running');
@@ -5002,15 +5012,15 @@ function refreshPopSheet() {
   const part = (o, k, label) => (o[k] ? `${o[k]} ${label}` : '');
   const rows = BOT_ORDER.filter((k) => n[k] || (!BOTS_OFF.has(k) && (warOn() || !BOTS[k].war) && (navalMap() || !BOTS[k].naval))).map((k) => {
     const o = n[k] || { total: 0 };
-    const bits = k === 'warbot'
-      ? [part(o, 'garrison', 'in garrisons'), part(o, 'field', 'in the field'), part(o, 'noAmmo', 'out of Ammo')]
+    const bits = BOTS[k].army
+      ? [part(o, 'garrison', 'in garrisons'), part(o, 'field', 'in the field'), part(o, 'noAmmo', BOTS[k].flame ? 'out of Fuel' : 'out of Ammo')]
       : [part(o, 'running', 'running buildings'), part(o, 'carrying', 'carrying goods'), part(o, 'building', 'building or paving'),
         part(o, 'charging', 'recharging'), part(o, 'repairing', 'being repaired'), part(o, 'free', 'free')];
     return `<div class="kv pop-row"><span><b>${o.total}</b> ${o.total === 1 ? BOTS[k].name : BOTS[k].plural}</span><span>${bits.filter(Boolean).join(' · ') || '–'}</span></div>`;
   });
   const cap = S.mode === 'colony' ? MAX_BOTS_COLONY : MAX_BOTS;
   let wb = '';
-  if (warOn() && n.warbot) {
+  if (warOn() && (n.warbot || n.bulwark || n.torch)) {
     const g = warbotGroups();
     wb = '<div class="section-label">Where your warbots are</div>' + WARBOT_PLACES.filter(([k]) => g[k].length).map(([k, label]) =>
       `<div class="kv pop-row"><span>${label}</span><span><b>${g[k].length}</b> <button class="btn small ghost" data-wb="${k}">Show</button></span></div>`).join('') +
@@ -5033,7 +5043,7 @@ function warbotGroups() {
   const g = {};
   for (const [k] of WARBOT_PLACES) g[k] = [];
   for (const u of S.bots) {
-    if (u.dead || u.owner !== 0 || u.type !== 'warbot') continue;
+    if (u.dead || u.owner !== 0 || !isArmy(u)) continue;
     const tt = u.task && u.task.type, inB = u.inside ? getE(u.inside) : null;
     if (inB && inB.type === 'lander') g.base.push(u);
     else if (inB && BDEFS[inB.type].repair) g.fix.push(u);
@@ -5083,6 +5093,9 @@ function refreshSheet() {
     $('sh-dyn').innerHTML = `<div class="kv"><span>Health</span><span>${Math.ceil(u.hp)} / ${u.maxHp}</span></div>` +
       `<div class="kv"><span>${tankOf(u) ? 'Fuel tank' : 'Battery'}</span><span>${bat}%${bat < BATTERY.critical ? (tankOf(u) ? ' (empty: crawling)' : ' (flat: slow and weak)') : bat < BATTERY.low ? ' (low)' : ''}</span></div>` +
       `<div class="bar battery"><div style="width:${bat}%;background:${bat < BATTERY.critical ? '#ff4d4d' : bat < BATTERY.low ? '#ffb347' : '#7ee08a'}"></div></div>` +
+      (BOTS[u.type].shield ? shieldRows(u) : '') +
+      (BOTS[u.type].flame ? `<div class="kv"><span>Flame tank</span><span>${Math.round(u.gel ?? TORCH.tank)} / ${TORCH.tank} seconds of fire${(u.gel ?? TORCH.tank) <= 0.05 ? ' (empty: going to refill with Fuel)' : ''}</span></div>` +
+        `<div class="bar battery"><div style="width:${Math.round(100 * (u.gel ?? TORCH.tank) / TORCH.tank)}%;background:#ff8a2a"></div></div>` : '') +
       (u.type === 'warbot' ? `<div class="kv"><span>Ammo</span><span>${u.ammo ?? WARBOT_AMMO} / ${WARBOT_AMMO} shots${!u.ammo ? ' (out: can\'t fight until it reloads)' : ''}</span></div>` : '') +
       (BOTS[u.type].siege ? `<div class="kv"><span>Shells</span><span>${u.rockets ?? ROCKET.mag} / ${ROCKET.mag}${!(u.rockets ?? ROCKET.mag) ? ` (haulers bring Ammo while it's dug in on your ground near a road; or it reloads ${ROCKET.ammo} Ammo at a garrison or storage)` : ''}</span></div><div class="kv"><span>Each shell</span><span>${ROCKET.damage} damage, ${ROCKET.damage * ROCKET.fortMul} to defences; one every ${ROCKET.cycle}s</span></div><div class="kv"><span>Reach</span><span>${ROCKET.min} to ${ROCKET.range} tiles</span></div>` : '') +
       (u.carry ? `<div class="kv"><span>Carrying</span><span>${cargoList(u).map(([g, n]) => goodTag(g, (n > 1 ? n + ' × ' : '') + GOOD[g].name)).join(' ')}</span></div>` : '') +
@@ -5198,7 +5211,7 @@ function updateHUD() {
   let workers = 0, idle = 0, war = 0, haulers = 0;
   for (const u of S.bots) {
     if (u.dead || u.owner !== 0) continue;
-    if (u.type === 'warbot') war++;
+    if (isArmy(u)) war++;
     else if (u.type === 'hauler' || u.type === 'truck' || u.type === 'tanker') haulers++;
     else if (u.type === 'worker') { workers++; if (isIdleWorker(u)) idle++; }
   }

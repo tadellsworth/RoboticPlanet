@@ -3805,19 +3805,22 @@ function drawBot(ctx, u, sx, sy, s) {
   const own = (BOTS[u.type].siege && (u.deployT > ROCKET.deploy * 0.4 || u.salvo) && artFor('rocket-up', u.owner)) || driveFrame(u) || artFor(u.type, u.owner); // (dug in: spades down, barrel up)
   // Specialists use their own art when it exists, otherwise the worker's with a badge.
   const tanker = u.type === 'tanker', truck = u.type === 'truck' || tanker;
-  const art = own || (u.type !== 'warbot' && !truck ? artFor('worker', u.owner) : null);
+  const art = own || (!isArmy(u) && !truck ? artFor('worker', u.owner) : null);
   const acting = u.task && (u.task.type === 'build' || u.task.type === 'pave' || (u.task.type === 'staff' && u.task.phase === 'work' && u.task.node >= 0 && S.road[u.task.node]));
   const bob = u.busy && !acting ? Math.sin(R.time * 18 + u.id) * s * 0.03 : 0;
   if (truck) {
     if (tanker && !own) drawTanker(ctx, u, sx, sy, s, color);
     else drawTruck(ctx, u, sx, sy, s, color, own);
   } else if (art) {
-    const size = s * (u.type === 'warbot' ? 0.6 : BOTS[u.type].siege ? 0.72 : 0.5);
+    const size = s * (u.type === 'bulwark' ? 0.68 : isArmy(u) ? 0.6 : BOTS[u.type].siege ? 0.72 : 0.5);
     if (art.shadow) drawBotShadow(ctx, u, sx, sy, size * 0.42, size * 0.3);
     drawArt(ctx, art, sx, sy + bob, size, u.face);
     if (art === own) drawDriveOverlays(ctx, u, sx, sy + bob, size);
-    drawHeadlights(ctx, art === own && TOD_VEHICLES.includes(u.type) ? u.type : 'worker', sx, sy + bob, size * (art.scale || 1), u.face);
-  } else if (u.type !== 'warbot') {
+    // (a Bulwark's shield and a Torch's pilot flame light their way at night instead of headlights)
+    if (BOTS[u.type].shield) drawShieldArc(ctx, u, sx, sy + bob, s);
+    else if (BOTS[u.type].flame) drawTorchPilot(ctx, u, sx, sy + bob, s, size);
+    else drawHeadlights(ctx, art === own && TOD_VEHICLES.includes(u.type) ? u.type : 'worker', sx, sy + bob, size * (art.scale || 1), u.face);
+  } else if (!isArmy(u)) {
     const r = s * 0.16;
     ctx.fillStyle = 'rgba(20,10,5,0.3)';
     ctx.beginPath(); ctx.ellipse(sx + r * 0.3, sy + r * 0.6, r, r * 0.6, 0, 0, Math.PI * 2); ctx.fill();
@@ -3840,7 +3843,7 @@ function drawBot(ctx, u, sx, sy, s) {
     ctx.beginPath(); ctx.arc(r * 0.3, 0, r * 0.18, 0, Math.PI * 2); ctx.fill();
     ctx.restore();
   }
-  if (!own && u.type !== 'worker' && u.type !== 'warbot' && !truck) drawBotBadge(ctx, u.type, sx + s * 0.16, sy + s * 0.14 + bob, s);
+  if (!own && u.type !== 'worker' && !isArmy(u) && !truck) drawBotBadge(ctx, u.type, sx + s * 0.16, sy + s * 0.14 + bob, s);
   // A Hauler with its own art carries its load on the flatbed (x 29–165, y 87–169 of the 256 image).
   const bed = u.type === 'hauler' && own;
   if (bed && u.carry) drawTruckCargo(ctx, u, sx, sy + bob, -0.387 * s * 0.5, 0.531 * s * 0.5, 0.32 * s * 0.5, s, 2, 1);
@@ -3853,6 +3856,14 @@ function drawBot(ctx, u, sx, sy, s) {
       ctx.fillStyle = GOOD[u.carry].color;
       ctx.fillRect(sx - c + ox, sy - s * 0.3 - c + bob + oy, c * 2, c * 2);
     }
+  }
+  if (u.owner === 0 && BOTS[u.type].flame && (u.gel ?? TORCH.tank) < TORCH.tank * 0.3) {
+    // Low on fuel: a short orange bar under the Torch.
+    const w = s * 0.26, h = Math.max(2.5, s * 0.07), x = sx - w / 2, y = sy + s * 0.26;
+    ctx.fillStyle = 'rgba(0,0,0,0.7)';
+    ctx.fillRect(x - 1, y - 1, w + 2, h + 2);
+    ctx.fillStyle = '#ff8a2a';
+    ctx.fillRect(x, y, (w * Math.max(0, u.gel ?? 0)) / TORCH.tank, h);
   }
   if (u.owner === 0 && u.type === 'warbot' && (u.ammo ?? WARBOT_AMMO) < WARBOT_AMMO * 0.3) {
     // Low on ammo: a short brass bar under the bot (empty = grey outline only).
@@ -5887,6 +5898,9 @@ function drawEffects(ctx, ox, oy, z) {
       case 'muzzle': drawMuzzleFx(ctx, f, x, y, z, k); break;
       case 'tracer': drawTracerFx(ctx, f, x, y, ox + f.x2 * z, oy + f.y2 * z, z, k); break;
       case 'fire': drawFireFx(ctx, f, x, y, z, k); break;
+      case 'flame': drawFlameFx(ctx, f, x, y, z, k); break;
+      case 'shieldhit': drawShieldHitFx(ctx, f, x, y, z, k, ox + f.cx * z, oy + f.cy * z); break;
+      case 'shieldbreak': drawShieldBreakFx(ctx, f, x, y, z, k); break;
       case 'heat': drawHeatFx(ctx, f, x, y, z, k); break;
       case 'nukeglow': drawNukeGlowFx(ctx, f, x, y, z, k); break;
       case 'dust': {
@@ -6240,7 +6254,7 @@ function renderMinimap() {
     ctx.beginPath(); ctx.moveTo(x, y - r); ctx.lineTo(x + r, y); ctx.lineTo(x, y + r); ctx.lineTo(x - r, y); ctx.closePath(); ctx.fill(); ctx.stroke();
   }
   for (const u of S.bots) {
-    if (u.dead || u.inside || u.type !== 'warbot') continue;
+    if (u.dead || u.inside || !isArmy(u)) continue;
     ctx.fillStyle = u.owner === 0 ? '#bff2ff' : '#ffc2ca';
     ctx.fillRect(u.x * sx - 1, u.y * sy - 1, 2, 2);
   }

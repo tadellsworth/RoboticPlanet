@@ -28,6 +28,57 @@ function aiLevel(p) {
 }
 
 /**
+ * How each personality fortifies (in a war): `turrets` Pulse Turrets at most, one more every `every` seconds after
+ * the first; `front` Minigun Nests and Bunkers put up at the front (by the fort nearest the rival) without waiting
+ * to be attacked there, one every six minutes from about ten minutes in; and the chance (`walls`, decided once a
+ * game) that it walls off the side of its base facing the rival (see aiFortWalls; a Turtle rings it all round,
+ * see aiTurtleWalls). An easy rival builds half as much, and walls half as often.
+ */
+const AI_FORT = {
+  balanced: { turrets: 3, every: 420, front: 2, walls: 0.5 },
+  tycoon: { turrets: 4, every: 360, front: 2, walls: 0.6 },
+  raider: { turrets: 2, every: 540, front: 1, walls: 0.2 },
+  rusher: { turrets: 2, every: 600, front: 1, walls: 0.15 },
+  turtle: { turrets: 6, every: 240, front: 3, walls: 1 },
+};
+function aiFort(p) {
+  const F = AI_FORT[S.players[p].style] || AI_FORT.balanced;
+  return S.difficulty === 'easy' ? { turrets: Math.ceil(F.turrets / 2), every: F.every * 1.5, front: Math.ceil(F.front / 2), walls: F.walls / 2 } : F;
+}
+
+/**
+ * A rival that isn't a Turtle may wall off the side of its base that faces the rival (aiFort's `walls` chance,
+ * decided once a game): from nine minutes in, an arc of Wall seven tiles out from its Command Base, about 50°
+ * either side of the way to the rival's, with a Gate where a road crosses, two pieces every half minute while
+ * Cement allows, up to 16 pieces. Its ends are open, so its own robots go round.
+ */
+function aiFortWalls(p) {
+  if (aiStyle(p).walls || !warOn() || S.mode === 'colony' || S.time < 540) return;
+  const P = S.players[p];
+  if (P.fortWalls === undefined) P.fortWalls = hash2(S.seed % 100000, p + 1, 77) < aiFort(p).walls;
+  if (!P.fortWalls || S.time - (P.fwT || 0) < 30) return;
+  P.fwT = S.time;
+  const L = getE(P.lander), R0 = S.players[rivalOf(p)], F = R0 && getE(R0.lander);
+  if (!L || L.owner !== p || !F || spendable(p).cement < 40) return;
+  let have = 0;
+  for (const b of S.buildings) if (!b.dead && b.owner === p && BDEFS[b.type].barrier) have++;
+  if (have >= 16) return;
+  const R = 7, fa = Math.atan2(F.y - L.y, F.x - L.x), ring = [];
+  for (let d = -R; d <= R; d++) ring.push([L.x + d, L.y - R], [L.x + d, L.y + R], [L.x - R, L.y + d], [L.x + R, L.y + d]);
+  const off = ([i, j]) => Math.abs(wrapAngle(Math.atan2(j - L.y, i - L.x) - fa));
+  ring.sort((a, c) => off(a) - off(c));
+  let placed = 0;
+  for (const [i, j] of ring) {
+    if (placed >= 2 || have + placed >= 16 || off([i, j]) > 0.9) break;
+    if (!inMap(i, j)) continue;
+    const t = tIdx(i, j);
+    if (S.bAt[t] || S.owner[t] !== p || S.terrain[t] !== T_GROUND || S.res[t]) continue;
+    const kind = S.road[t] || S.plan[t] ? 'gate' : 'wall';
+    if (canPlace(p, kind, i, j).ok) { placeSite(p, kind, i, j); placed++; }
+  }
+}
+
+/**
  * A Turtle walls its base in: a square ring six tiles out from its Command Base, a Wall on each
  * free tile and a Gate where a road crosses, a few pieces at a time while Cement allows.
  */
@@ -69,6 +120,7 @@ function aiThink(p) {
   const maxSites = p === 0 && P.ai ? 2 : lvl.maxSites;
   aiWalls(p);
   aiTurtleWalls(p);
+  aiFortWalls(p);
   aiBridge(p, maxSites);
   // Warbots can't fight without Ammo: in a war, once the opening is done, an Ammo Plant comes
   // first, its site is never given up, and the Foundry rests so the Alloy reaches it.
@@ -145,6 +197,20 @@ function aiThink(p) {
       P.defAt = S.time;
     }
   }
+  // Front defences without waiting to be hit there: a Minigun Nest or a Bunker (whichever it has fewer of) by its
+  // fort nearest the rival's Command Base, one every six minutes from about ten minutes in, up to aiFort's `front`.
+  const FT = aiFort(p);
+  if (S.mode !== 'colony' && warOn() && S.time > AI_DEFENCE_AT + 300 && !(P.defWant && S.time < P.defWant.until) && S.time - (P.frontAt ?? -999) > 360) {
+    const nFront = (counts.bunker || 0) + (counts.minigun || 0), R0 = S.players[rivalOf(p)], foeL = R0 && getE(R0.lander);
+    if (foeL && nFront < Math.min(FT.front, 1 + Math.floor((S.time - AI_DEFENCE_AT - 300) / 360))) {
+      const front = me.filter((b) => b.built && BDEFS[b.type].mil && !BDEFS[b.type].bunker).sort((a, c) => dist2(a.x, a.y, foeL.x, foeL.y) - dist2(c.x, c.y, foeL.x, foeL.y))[0];
+      if (front) {
+        const type = (counts.minigun || 0) <= (counts.bunker || 0) ? 'minigun' : 'bunker';
+        P.defWant = { type, n: (counts[type] || 0) + 1, until: S.time + 150, x: front.x, y: front.y };
+        P.frontAt = S.time;
+      }
+    }
+  }
   // Uplinks: guards, first call on warbots and a Bunker for the Uplinks it holds (see aiUplinks).
   if (S.victory === 'uplinks') aiUplinks(p, lvl, counts);
   if (P.defWant && S.time < P.defWant.until && (counts[P.defWant.type] || 0) < P.defWant.n) plan = [[P.defWant.type, P.defWant.n]].concat(plan);
@@ -196,8 +262,9 @@ function aiThink(p) {
   const held = new Set();
   // Defences come first once the colony is running: the first Pulse Turret, then a Repair Station.
   // In a Nuclear race the Reactor and Nuclear Silo get the same treatment: the race is the point.
-  // A Turtle keeps adding turrets: one more every four minutes, up to six.
-  const turretsWanted = st.turrets ? Math.min(6, 1 + Math.floor(Math.max(0, S.time - AI_DEFENCE_AT * 0.5) / 240)) : 1;
+  // More Pulse Turrets as the game goes on: one more every so often, up to its personality's number (aiFort; a
+  // Turtle starts early and builds most).
+  const turretsWanted = Math.min(FT.turrets, 1 + Math.floor(Math.max(0, S.time - AI_DEFENCE_AT * (st.turrets ? 0.5 : 1)) / FT.every));
   const defence = (type) => S.mode !== 'colony' && (type === 'turret' ? (counts.turret || 0) < turretsWanted : type === 'keep' ? (counts.keep || 0) < wantKeeps : !counts[type]) &&
     ((type === 'turret' && S.time > AI_DEFENCE_AT * (st.turrets ? 0.5 : 1)) || (type === 'repair' && counts.turret && S.time > AI_DEFENCE_AT + 120) ||
      (nukeOn() && (type === 'reactor' || type === 'nukesilo')) || (type === 'flak' && enemyAir && (counts.flak || 0) < 2) ||
@@ -226,7 +293,7 @@ function aiThink(p) {
       // Farm for every two stations to keep them in Fuel.
       const nCh = 1 + Math.floor((counts.outpost || 0) / 4);
       // Only Fuel Stations charge, so Fuel scales with the colony: a Bio Farm for every 18 robots.
-      const nBots = S.bots.reduce((n, u) => n + (!u.dead && u.owner === p && u.type !== 'warbot' ? 1 : 0), 0);
+      const nBots = S.bots.reduce((n, u) => n + (!u.dead && u.owner === p && !isArmy(u) ? 1 : 0), 0);
       const want = type === 'charger' ? Math.max(want0, nCh) : type === 'farm' && counts.charger ? Math.max(want0, Math.ceil((counts.charger || 0) / 2), Math.ceil(nBots / 18)) : want0;
       if (type === 'refinery' && !counts.pump) continue;
       // A Generator only once there's Fuel to spare for it (and a refinery or farm to keep it coming).
@@ -343,14 +410,14 @@ function aiThink(p) {
   const liquidBlds = me.filter((b) => b.built && (BDEFS[b.type].charger || BDEFS[b.type].pump || BDEFS[b.type].burner ||
     ['refinery', 'farm', 'munitions', 'tarworks', 'disruptor'].includes(b.type))).length;
   const wantTankers = Math.min(4, 1 + Math.floor(liquidBlds / 5));
-  const army = kinds.warbot || 0;
+  const army = (kinds.warbot || 0) + (kinds.bulwark || 0) + (kinds.torch || 0); // (the whole army, specialists too)
   // (An enemy gun covering our buildings: at least enough warbots to knock it out, see aiClearGuns.)
   const wantArmy = S.mode === 'colony' || botBanned(p, 'warbot') ? 0 : Math.max(aiWantArmy(lvl, p), P.gunWant || 0); // (barred from making warbots: no army to build)
   const armyBehind = army < wantArmy - 2;
   let unarmed = 0;
   // (Warbots stranded across the water, say landed on an enemy shore, can't get home to rearm: they don't count.)
   const hzA = homeZone(p);
-  for (const u of S.bots) if (!u.dead && u.owner === p && u.type === 'warbot' && (u.ammo ?? WARBOT_AMMO) <= 0 && (u.inside || S.zone[tIdx(Math.floor(u.x), Math.floor(u.y))] === hzA)) unarmed++;
+  for (const u of S.bots) if (!u.dead && u.owner === p && isArmy(u) && !botArmed(u) && (u.inside || S.zone[tIdx(Math.floor(u.x), Math.floor(u.y))] === hzA)) unarmed++;
 
   const crewNeed = {};
   for (const b of me) {
@@ -387,6 +454,16 @@ function aiThink(p) {
     // Howitzers for siege once the army is up: one, and one more for every ten warbots (at most three).
     const wantRockets = S.mode === 'colony' ? 0 : Math.max(P.gunTarget ? 1 : 0, S.time < lvl.grace ? 0 : Math.min(3, Math.floor(army / 10) + (army >= lvl.threshold ? 1 : 0)));
     if ((kinds.rocket || 0) < wantRockets && !(b.orders.rocket > 0) && !armyBehind && !botBanned(p, 'rocket') && me.some((a) => a.type === 'armory' && a.built)) b.orders.rocket = 1;
+    // The army's specialists, a third of it at most once it's up: a Bulwark to lead its attacks for every five
+    // warbots (two at most) and a Torch to burn down defences and Walls for every four (three at most, and only
+    // with Fuel to fill them); one more of each against a rival dug in behind guns or Walls.
+    if (S.mode !== 'colony' && S.time >= lvl.grace && army >= lvl.threshold && !armyBehind) {
+      const foe = rivalOf(p), wb = kinds.warbot || 0;
+      const dug = !!P.gunTarget || S.buildings.some((e) => !e.dead && e.built && e.owner === foe && (BDEFS[e.type].barrier || e.type === 'turret' || e.type === 'bunker' || e.type === 'minigun'));
+      const wantB = Math.min(dug ? 3 : 2, Math.floor(wb / 5)), wantT = Math.min(dug ? 4 : 3, Math.floor(wb / 4) + (dug && wb >= 3 ? 1 : 0));
+      if ((kinds.bulwark || 0) < wantB && !(b.orders.bulwark > 0) && !botBanned(p, 'bulwark')) b.orders.bulwark = 1;
+      else if ((kinds.torch || 0) < wantT && !(b.orders.torch > 0) && !botBanned(p, 'torch') && goodTotal(p, 'fuel') >= 3) b.orders.torch = 1;
+    }
     // A Trade Terminal is served only by Road Trains: one for it.
     if (me.some((t) => BDEFS[t.type].terminal) && !(kinds.roadtrain > 0) && !(b.orders.roadtrain > 0)) b.orders.roadtrain = 1;
     break;
@@ -485,7 +562,7 @@ function aiThink(p) {
   // A big army with nothing in reach marches on the nearest enemy garrison (a rally flag beside it:
   // the warbots fight what they meet and attack what stands there). With twice the enemy's army it
   // goes for the enemy Command Base itself.
-  const enemyArmy = S.bots.reduce((n, u) => n + (!u.dead && u.owner === enemy && u.type === 'warbot' ? 1 : 0), 0);
+  const enemyArmy = S.bots.reduce((n, u) => n + (!u.dead && u.owner === enemy && isArmy(u) ? 1 : 0), 0);
   const crushing = army >= lvl.threshold * 2 && army >= enemyArmy * 2 + 2;
   if (army >= lvl.threshold * 2 && S.time - (P.lastMarch || -999) > 120 && !(P.march && rallyById(P.march))) {
     let tgt = null, bd = Infinity;
@@ -562,7 +639,7 @@ function aiNaval(p, me, kinds, lvl, lander, canBuild) {
   // go after the nearest enemy building on their island.
   const hz = homeZone(p);
   for (const u of S.bots) {
-    if (u.dead || u.owner !== p || u.type !== 'warbot' || u.inside || u.ferryWait || (u.ammo ?? WARBOT_AMMO) <= 0) continue;
+    if (u.dead || u.owner !== p || !isArmy(u) || u.inside || u.ferryWait || !botArmed(u)) continue;
     if (u.task && u.task.type !== 'garrison') continue;
     const z = S.zone[tIdx(Math.floor(u.x), Math.floor(u.y))], gb = u.task && getE(u.task.bld);
     if (z === hz || (gb && S.zone[tIdx(gb.x, gb.y)] === z)) continue;
@@ -580,7 +657,7 @@ function aiNaval(p, me, kinds, lvl, lander, canBuild) {
     if (canBuild && aiAffordable(p, 'port')) { const spot = aiFindSpot(p, 'port', lander); if (spot) placeSite(p, 'port', spot.x, spot.y); }
     return;
   }
-  const army = kinds.warbot || 0;
+  const army = (kinds.warbot || 0) + (kinds.bulwark || 0) + (kinds.torch || 0); // (the whole army, specialists too)
   // Ships are built at the Port nearest home (its shipyard).
   const yard = ports.filter((b) => b.built).sort((a, b) => dist2(a.x, a.y, lander.x, lander.y) - dist2(b.x, b.y, lander.x, lander.y))[0];
   const ferry = S.bots.find((u) => !u.dead && u.owner === p && BOTS[u.type].ferry);
@@ -611,7 +688,7 @@ function aiNaval(p, me, kinds, lvl, lander, canBuild) {
   for (let o = 0; o < S.players.length; o++) {
     const eL = getE(S.players[o].lander);
     if (o === p || S.players[o].out || !eL || eL.dead || eL.owner !== o) continue;
-    const n = S.bots.reduce((k, u) => k + (!u.dead && u.owner === o && u.type === 'warbot' ? 1 : 0), 0);
+    const n = S.bots.reduce((k, u) => k + (!u.dead && u.owner === o && isArmy(u) ? 1 : 0), 0);
     if (n < wa) { wa = n; weak = o; }
   }
   if (weak >= 0) foes = [getE(S.players[weak].lander)];
@@ -844,7 +921,7 @@ function aiWantArmy(lvl, p) {
   const from = AI_ARMY_FROM * (st.armyFrom || 1), rate = lvl.mult * (st.army || 1);
   // ...and never stops short of the rival's army: it keeps up with it, and a few more.
   let rivalArmy = 0;
-  if (p !== undefined) { const e = rivalOf(p); for (const u of S.bots) if (!u.dead && u.owner === e && u.type === 'warbot') rivalArmy++; }
+  if (p !== undefined) { const e = rivalOf(p); for (const u of S.bots) if (!u.dead && u.owner === e && isArmy(u)) rivalArmy++; }
   const cap = Math.max(AI_ARMY_MAX, rivalArmy + 6) + Math.max(0, extra - 8);
   return Math.min(cap, START_WARBOTS + 1 + Math.floor((Math.max(0, S.time - from) / 60) * rate));
 }
@@ -864,7 +941,7 @@ function guardsNear(b) {
     else if (e.type === 'mortar' && d2 <= 100) n += 2;
     else if (e.type === 'keep' && d2 <= 36) n += 3 + e.garrison.length;
   }
-  for (const u of S.bots) if (!u.dead && !u.inside && u.owner === b.owner && u.type === 'warbot' && dist2(u.x, u.y, b.x + 0.5, b.y + 0.5) <= 49) n++;
+  for (const u of S.bots) if (!u.dead && !u.inside && u.owner === b.owner && isArmy(u) && dist2(u.x, u.y, b.x + 0.5, b.y + 0.5) <= 49) n++;
   return n;
 }
 
@@ -1030,9 +1107,9 @@ function aiClearGuns(p, lvl) {
   // Warbots: enough to win, from the garrisons in reach. Already on their way: wait for them. Too few to spare
   // (each garrison keeps one at home): the Foundry makes up the difference (P.gunWant sets the army it wants).
   const need = aiGunNeed(t);
-  const going = S.bots.filter((u) => !u.dead && u.owner === p && u.type === 'warbot' && u.task && u.task.type === 'attack' && u.task.target === t.id).length;
+  const going = S.bots.filter((u) => !u.dead && u.owner === p && isArmy(u) && u.task && u.task.type === 'attack' && u.task.target === t.id).length;
   let avail = attackAvailable(p, t), all = false;
-  const army = S.bots.filter((u) => !u.dead && u.owner === p && u.type === 'warbot').length;
+  const army = S.bots.filter((u) => !u.dead && u.owner === p && isArmy(u)).length;
   P.gunWant = Math.max(need + 2, army + Math.max(0, need - going - avail));
   P.gunNeed = Math.max(0, need - going);
   if (going >= need || S.time < (P.gunAttackAt || 0)) return;
@@ -1088,7 +1165,7 @@ function aiSiege(p) {
     if (!shelling && !(tgt && tgt.owner === p && (e.deployT > 0 || dist(e.x, e.y, tgt.x, tgt.y) < ROCKET.range + 4))) continue;
     const i = Math.floor(e.x), j = Math.floor(e.y);
     if (!inMap(i, j) || !walkable(tIdx(i, j))) continue;
-    const escort = S.bots.filter((v) => !v.dead && !v.inside && v.owner === e.owner && v.type === 'warbot' && dist2(v.x, v.y, e.x, e.y) <= 20).length;
+    const escort = S.bots.filter((v) => !v.dead && !v.inside && v.owner === e.owner && isArmy(v) && dist2(v.x, v.y, e.x, e.y) <= 20).length;
     const want = Math.min(14, 4 + Math.ceil(escort * 1.5));
     const h = P.truckHunt.find((x) => x.truck === e.id);
     if (!h) {
@@ -1377,8 +1454,11 @@ function aiSearchSpot(p, type, lander) {
         for (const b of S.buildings) if (!b.dead && b.owner === p && b.type === 'pump') dp = Math.min(dp, dist(i, j, b.x, b.y));
         s = -dp - dHome * 0.2;
       } else if (type === 'turret') {
-        s = -Math.abs(dHome - 3.5) * 2 - dist(i, j, ex, ey) * 0.15;
-      } else if (type === 'bunker' || type === 'disruptor' || type === 'mortar') {
+        // Round the Command Base, on the side facing the enemy, spread out from the other turrets.
+        let dt = 7;
+        for (const b of S.buildings) if (!b.dead && b.owner === p && b.type === 'turret') dt = Math.min(dt, dist(i, j, b.x, b.y));
+        s = -Math.abs(dHome - 3.5) * 2 - dist(i, j, ex, ey) * 0.15 + dt * 0.9;
+      } else if (type === 'bunker' || type === 'disruptor' || type === 'mortar' || type === 'minigun') {
         // Out at the front: beside the fort nearest the enemy (a Mortar a little behind it, to reach
         // over it), and spread out from others of its kind.
         let df = 99, dk = 99;
@@ -1489,7 +1569,7 @@ function aiUplinks(p, lvl, counts) {
       b.gprio = 'high'; b.upHold = true;
     }
     if (!soon) continue;
-    const jammers = u.jam ? S.bots.filter((w) => !w.dead && !w.inside && w.type === 'warbot' && w.owner >= 0 && w.owner !== p && dist2(w.x, w.y, u.x + 0.5, u.y + 0.5) <= 16).length : 0;
+    const jammers = u.jam ? S.bots.filter((w) => !w.dead && !w.inside && isArmy(w) && w.owner >= 0 && w.owner !== p && dist2(w.x, w.y, u.x + 0.5, u.y + 0.5) <= 16).length : 0;
     const want = guards + jammers * 2, have = r ? rallyMembers(r.id).length : 0;
     if (have >= want || S.time - (P.upGuardAt[u.id] || -99) < (jammers ? 5 : 20)) continue;
     P.upGuardAt[u.id] = S.time;

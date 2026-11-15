@@ -121,6 +121,7 @@ const ART_MANIFEST = {
   // and brake / boost overlays; no shadow in the images, so `shadow` has the game draw it.
   // (The older single images, bots/<robot>@<team>.png, are no longer used.)
   ...driveSet('worker'), ...driveSet('warbot'), ...driveSet('hauler'), ...driveSet('agribot'), ...driveSet('paver'),
+  ...driveSet('bulwark'), ...driveSet('torch'),
   ground: 'tiles/ground.webp',
   stalk: 'resources/stalk.webp',
   boulder: 'resources/boulder.webp',

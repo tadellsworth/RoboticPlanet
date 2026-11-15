@@ -214,6 +214,7 @@ const SFX_GAP = { rumble: 2.5, eruption: 3,
   launch: 0.3, rocket: 0.12, takeoff: 1.5, chute: 0.4, flakfire: 0.25, flak: 0.12, boom: 0.12, shellhit: 0.09, missilehit: 0.2, laser: 0.08, pulse: 0.14, hit: 0.07, produce: 0.25, alert: 1.5, complete: 0.3, order: 0.15,
   weld: 0.25, scrape: 0.3, hiss: 0.6, airbrake: 1.2, honk: 2.5, nuke: 2, siren: 4,
   bombhit: 0.12, howitzerhit: 0.12, fireball: 0.2, collapse: 0.15, botboom: 0.1, bombfall: 0.15, incoming: 0.3, nukefall: 3,
+  flame: 0.45, shieldhit: 0.08, shieldbreak: 0.3,
 };
 
 /* ------------------------------------------------------------------ explosions */
@@ -226,6 +227,7 @@ const SFX_GAP = { rumble: 2.5, eruption: 3,
 const BLAST_SIZE = {
   flak: 0.4, shellhit: 0.55, botboom: 0.6, collapse: 0.9, boom: 1, howitzerhit: 1.1, fireball: 1.3, bombhit: 1.35, missilehit: 1.8, nuke: 3.2,
   bombfall: 0.9, incoming: 1.2, nukefall: 3.2,
+  flame: 0.5, shieldhit: 0.45, shieldbreak: 0.6, // (heard only on screen)
 };
 
 /**
@@ -580,6 +582,25 @@ function sfx(name, dest, y) {
       _tone(880, 0.34, 'sawtooth', 0.012, 660, 0.0, D);
       break;
     case 'flak': blast(D, { size: 0.4, far: Math.max(far, 0.35), gain: 0.8, air: true }); break;
+    // A Torch's flamethrower: a roaring rush of fire with a low rumble under it and a crackle on top.
+    case 'flame':
+      _noise(0.62, 0.12, { type: 'bandpass', freq: 520, to: 950, q: 0.6, attack: 0.04, dest: D });
+      _noise(0.6, 0.09, { type: 'lowpass', freq: 320, to: 170, attack: 0.05, dest: D });
+      for (let k = 0; k < 6; k++) _noise(0.015 + Math.random() * 0.02, 0.03 + Math.random() * 0.03, { type: 'highpass', freq: 2500 + Math.random() * 3000, attack: 0.001, delay: 0.05 + Math.random() * 0.5, dest: D });
+      break;
+    // Fire striking a Bulwark's shield: a bright energy ping that drops away, a hum under it and a fizz of sparks.
+    case 'shieldhit':
+      _tone(1900, 0.13, 'sine', 0.045, 650, 0, D);
+      _tone(2650, 0.28, 'sine', 0.014, 2550, 0, D);
+      _tone(360, 0.18, 'triangle', 0.05, 220, 0, D);
+      _noise(0.09, 0.035, { type: 'highpass', freq: 5000, attack: 0.002, dest: D });
+      break;
+    // A Bulwark's shield failing: a glassy shatter and a falling power-down whine.
+    case 'shieldbreak':
+      _tone(950, 0.65, 'sawtooth', 0.03, 70, 0, D);
+      _noise(0.45, 0.08, { type: 'bandpass', freq: 3200, to: 700, q: 0.9, attack: 0.003, dest: D });
+      for (let k = 0; k < 8; k++) _tone(2400 + Math.random() * 2600, 0.06, 'sine', 0.018, null, Math.random() * 0.3, D);
+      break;
     // Parachutes opening: a cloth crack and the rush of air.
     case 'chute':
       _noise(0.09, 0.12, { type: 'bandpass', freq: 900, q: 1.2, attack: 0.003, dest: D });
@@ -916,7 +937,7 @@ function musicMood() {
   let threat = 0;
   for (const b of S.buildings) if (!b.dead && b.owner === 0 && S.time - (b.lastHit ?? -99) < 8) threat += 2;
   for (const u of S.bots) {
-    if (u.dead || u.inside || u.type !== 'warbot') continue;
+    if (u.dead || u.inside || !isArmy(u)) continue;
     if (u.owner !== 0 && S.owner[Math.floor(u.y) * S.W + Math.floor(u.x)] === 0) threat++;
     else if (u.owner === 0 && u.fight) threat++;
   }

@@ -544,3 +544,245 @@ function drawLavaBombs(ctx, ox, oy, z) {
   }
   ctx.restore();
 }
+
+/* ------------------------------------------------------------------ Torch and Bulwark */
+
+/** A soft blob of `color` fading to nothing at its edge (no white core, unlike glowSprite), cached. For fire. */
+function fxBlob(color) {
+  R.fxBlobs = R.fxBlobs || {};
+  if (R.fxBlobs[color]) return R.fxBlobs[color];
+  const n = 64, c = document.createElement('canvas');
+  c.width = c.height = n;
+  const g = c.getContext('2d'), gr = g.createRadialGradient(n / 2, n / 2, 0, n / 2, n / 2, n / 2);
+  const rgb = fxRGB(color);
+  gr.addColorStop(0, `rgba(${rgb},0.95)`); gr.addColorStop(0.4, `rgba(${rgb},0.6)`); gr.addColorStop(1, `rgba(${rgb},0)`);
+  g.fillStyle = gr; g.fillRect(0, 0, n, n);
+  return (R.fxBlobs[color] = c);
+}
+
+/**
+ * A Torch's spray of fire from its nozzle at (x, y) along f.a, f.len tiles long: a blue-white jet at the nozzle
+ * blooming into a roiling cone of yellow, orange and red, licks of flame, sparks flung past the tip and black smoke
+ * rolling off the end, all throwing a big orange light on the ground (bright at night). A Torch firing keeps one
+ * going every TORCH.tick, so they overlap into a steady roar of flame.
+ */
+function drawFlameFx(ctx, f, x, y, z, k) {
+  const a = f.a || 0, ca = Math.cos(a), sa = Math.sin(a), L = (f.len || 1.6) * z, sd = (f.seed || 0) * 7 + 3, t = S.time;
+  const p = Math.min(1, k * 3.2), fade = k > 0.55 ? (1 - k) / 0.45 : 1, cone = Math.tan(TORCH.cone) * 0.6;
+  // light on the ground: a long pool along the flame, a hot one at the nozzle
+  fxGround(ctx, x + ca * L * 0.55, y + sa * L * 0.55, L * 1.15, '#ff7a1a', 0.75 * fade);
+  fxGround(ctx, x + ca * L * 0.15, y + sa * L * 0.15, L * 0.5, '#ffc46a', 0.5 * fade);
+  // smoke rolling off the end (under the fire)
+  for (let i = 0; i < 3; i++) {
+    const d = L * (0.8 + 0.25 * i + k * 0.35) * p, s = z * (0.35 + 0.25 * i + k * 0.5);
+    const lat = (hash2(sd, i, 3) - 0.5) * d * cone;
+    ctx.globalAlpha = 0.32 * fade * (1 - i * 0.2);
+    ctx.drawImage(fxPuff(true), x + ca * d - sa * lat - s / 2, y + sa * d + ca * lat - s / 2 - k * z * 0.25, s, s);
+  }
+  ctx.globalAlpha = 1;
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  // the body: blobs from a blue-white jet out to a red, ragged tip
+  for (let i = 0; i <= 11; i++) {
+    const q = i / 11, d = q * L * p, w = d * cone + z * 0.04;
+    const lat = ((hash2(sd, i, 1) - 0.5) * 0.9 + Math.sin(t * 31 + i * 1.7 + sd) * 0.25) * w;
+    const r = z * 0.045 + w * (0.6 + 0.25 * hash2(sd, i, 2));
+    const col = q < 0.12 ? '#bfe2ff' : q < 0.35 ? '#ffd060' : q < 0.7 ? '#ff8a20' : '#e8400c';
+    ctx.globalAlpha = Math.min(1, fade * (0.6 - q * 0.28));
+    ctx.drawImage(fxBlob(col), x + ca * d - sa * lat - r, y + sa * d + ca * lat - r, r * 2, r * 2);
+  }
+  // licks of flame: tapered tongues fanned across the cone
+  for (let i = 0; i < 3; i++) {
+    const da = (hash2(sd, i, 5) - 0.5) * TORCH.cone * 1.3 + Math.sin(t * 23 + i * 2.1) * 0.06, aa = a + da;
+    const len = L * p * (0.72 + 0.28 * hash2(sd, i, 6)), w = len * cone * 0.5, c2 = Math.cos(aa), s2 = Math.sin(aa);
+    const g = ctx.createLinearGradient(x, y, x + c2 * len, y + s2 * len);
+    g.addColorStop(0, `rgba(255,250,225,${0.7 * fade})`); g.addColorStop(0.3, `rgba(255,185,60,${0.55 * fade})`); g.addColorStop(0.75, `rgba(255,80,15,${0.32 * fade})`); g.addColorStop(1, 'rgba(255,40,0,0)');
+    ctx.fillStyle = g; ctx.globalAlpha = 1;
+    const wob = Math.sin(t * 19 + i * 3 + sd) * w * 0.5;
+    ctx.beginPath();
+    ctx.moveTo(x - s2 * z * 0.03, y + c2 * z * 0.03);
+    ctx.quadraticCurveTo(x + c2 * len * 0.5 - s2 * (w + wob), y + s2 * len * 0.5 + c2 * (w + wob), x + c2 * len - s2 * wob, y + s2 * len + c2 * wob);
+    ctx.quadraticCurveTo(x + c2 * len * 0.5 + s2 * (w - wob), y + s2 * len * 0.5 - c2 * (w - wob), x + s2 * z * 0.03, y - c2 * z * 0.03);
+    ctx.closePath(); ctx.fill();
+  }
+  // sparks and burning droplets flung on past the tip
+  for (let i = 0; i < 7; i++) {
+    const q = (k * 1.4 + hash2(sd, i, 7)) % 1, d = L * (0.35 + q * 0.95), lat = (hash2(sd, i, 8) - 0.5) * d * cone * 1.3;
+    const ex = x + ca * d - sa * lat, ey = y + sa * d + ca * lat - q * q * z * 0.15, s = Math.max(1.2, z * 0.028);
+    ctx.globalAlpha = (1 - q) * fade;
+    ctx.fillStyle = i % 3 ? '#ffd27a' : '#fff4d0';
+    ctx.fillRect(ex - s / 2, ey - s / 2, s, s);
+  }
+  ctx.restore();
+  // a blinding blue-white core right at the nozzle
+  fxGlow(ctx, x, y, z * 0.2, '#9fd4ff', 0.8 * fade);
+  fxGlow(ctx, x + ca * L * 0.3, y + sa * L * 0.3, L * 0.32, '#ff8a2a', 0.22 * fade);
+}
+
+/** Half the width of the shield as drawn (radians either side of where it faces). */
+const SHIELD_DRAW_ARC = 0.95;
+
+/** The shield's curve, from angle a0 to a1, round (cx, cy) at radius r px. */
+function shieldPath(ctx, cx, cy, r, a0, a1) { ctx.beginPath(); ctx.arc(cx, cy, r, a0, a1); }
+
+/**
+ * A Bulwark's shield, standing across its front: a curtain of violet light with a white-hot edge, shimmering
+ * bands crawling across it and crackles of static, fading off at its ends. It glows faintly by day and brightly at
+ * night (lighting the ground before it), flares where it's hit, dims as it's worn down, and flickers back on after
+ * a failure. (x, y): the Bulwark on screen, z: pixels a tile.
+ */
+function drawShieldArc(ctx, u, x, y, z) {
+  const B = BULWARK, now = S.time, night = fxNight();
+  if (u.shDown && u.shDown > now) {
+    // down: the emitters spit sparks now and then
+    if (hash2(u.id, Math.floor(R.time * 9), 3) < 0.35) {
+      const aa = (u.shAim ?? u.face ?? 0) + (hash2(u.id, Math.floor(R.time * 9), 4) - 0.5) * 1.4;
+      fxGlow(ctx, x + Math.cos(aa) * z * 0.3, y + Math.sin(aa) * z * 0.3, z * 0.1, '#b77bff', 0.8);
+    }
+    return;
+  }
+  const aim = u.shAim ?? u.face ?? 0, str = clamp((u.sh ?? B.shield) / B.shield, 0, 1);
+  const hit = clamp(1 - (now - (u.shHit ?? -99)) / 0.3, 0, 1);
+  const boot = u.shDown === 0 && u.sh < B.shield * B.reboot + 2 && (R.time * 20) % 2 < 1 ? 0.4 : 1; // (just back on: a flicker)
+  const shim = 0.85 + 0.15 * Math.sin(R.time * 7 + u.id);
+  const A = Math.min(1.2, ((0.32 + 0.45 * str) * (0.6 + 0.55 * night) + 0.55 * hit) * shim * boot);
+  const r = z * BULWARK.r, a0 = aim - SHIELD_DRAW_ARC, a1 = aim + SHIELD_DRAW_ARC;
+  fxGround(ctx, x + Math.cos(aim) * r * 0.9, y + Math.sin(aim) * r * 0.9 + z * 0.08, z * 1.0, '#9b5cff', (0.55 + 0.45 * str) * (0.7 + hit) * boot);
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  ctx.lineCap = 'round';
+  // the curtain: segments that fade out toward the ends
+  const N = 9, step = (a1 - a0) / N;
+  for (let i = 0; i < N; i++) {
+    const m = Math.sqrt(Math.sin(Math.PI * (i + 0.5) / N)), s0 = a0 + i * step, s1 = s0 + step + 0.01;
+    ctx.strokeStyle = `rgba(140,80,255,${0.2 * A * m})`; ctx.lineWidth = z * 0.2;
+    shieldPath(ctx, x, y, r * 0.97, s0, s1); ctx.stroke();
+    ctx.strokeStyle = `rgba(183,123,255,${0.45 * A * m})`; ctx.lineWidth = z * 0.075;
+    shieldPath(ctx, x, y, r, s0, s1); ctx.stroke();
+    ctx.strokeStyle = `rgba(245,232,255,${0.8 * A * m})`; ctx.lineWidth = Math.max(1, z * 0.02);
+    shieldPath(ctx, x, y, r, s0, s1); ctx.stroke();
+  }
+  // shimmer: bands of light crawling across it
+  ctx.setLineDash([z * 0.05, z * 0.09]);
+  ctx.lineDashOffset = -R.time * z * 0.35;
+  ctx.strokeStyle = `rgba(210,175,255,${0.4 * A})`; ctx.lineWidth = Math.max(1, z * 0.035);
+  shieldPath(ctx, x, y, r * 0.9, a0 + 0.12, a1 - 0.12); ctx.stroke();
+  ctx.setLineDash([]);
+  // static: little jagged crackles that jump about on it
+  const tick = Math.floor(R.time * 14);
+  ctx.strokeStyle = `rgba(235,220,255,${0.75 * A})`; ctx.lineWidth = Math.max(1, z * 0.014);
+  for (let n = 0; n < 2; n++) {
+    if (hash2(u.id, tick, 20 + n) > 0.55 + 0.35 * str) continue;
+    const c0 = a0 + 0.15 + hash2(u.id, tick, 30 + n) * (a1 - a0 - 0.5);
+    ctx.beginPath();
+    for (let j = 0; j <= 4; j++) {
+      const aa = c0 + j * 0.07, rr = r * (1 + (hash2(u.id + j, tick, 40 + n) - 0.5) * 0.14);
+      const px = x + Math.cos(aa) * rr, py = y + Math.sin(aa) * rr;
+      j ? ctx.lineTo(px, py) : ctx.moveTo(px, py);
+    }
+    ctx.stroke();
+  }
+  ctx.restore();
+  // the emitters at its ends
+  for (const e of [a0 + 0.06, a1 - 0.06]) fxGlow(ctx, x + Math.cos(e) * r * 0.98, y + Math.sin(e) * r * 0.98, z * 0.09, '#b77bff', 0.55 * A);
+}
+
+/**
+ * Fire striking a Bulwark's shield where it meets it (angle f.a from the Bulwark's centre (cx, cy) on screen): a
+ * violet-white flash, the shield's cells lighting up round the spot, a ripple running away along the shield both
+ * ways, a ring spreading on its face, and sparks glancing off.
+ */
+function drawShieldHitFx(ctx, f, x, y, z, k, cx, cy) {
+  const a = f.a || 0, r = z * BULWARK.r, big = f.big ? 1.45 : 1, sd = (f.seed || 0) * 5 + 1;
+  const aim = f.aim ?? a, lim = SHIELD_DRAW_ARC;
+  const da = clamp(wrapAngle(a - aim), -lim + 0.05, lim - 0.05), ha = aim + da;
+  const px = cx + Math.cos(ha) * r, py = cy + Math.sin(ha) * r, tx = -Math.sin(ha), ty = Math.cos(ha);
+  const fade = Math.pow(1 - k, 1.4);
+  fxGround(ctx, px, py + z * 0.1, z * 1.25 * big, '#9b5cff', 0.9 * fade);
+  fxGlow(ctx, px, py, z * 0.5 * big * (1 - k * 0.4), '#a45cff', 0.85 * fade);
+  fxGlow(ctx, px, py, z * 0.2 * big, '#f4e8ff', fade);
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  ctx.lineCap = 'round';
+  // the ripple racing away along the shield, both ways
+  const sp = 0.1 + Math.pow(k, 0.6) * 1.1;
+  for (const sg of [-1, 1]) {
+    const e = clamp(da + sg * sp, -lim, lim), b0 = Math.min(da, e), b1 = Math.max(da, e);
+    if (b1 - b0 < 0.01) continue;
+    ctx.strokeStyle = `rgba(200,150,255,${0.55 * fade})`; ctx.lineWidth = z * 0.05;
+    shieldPath(ctx, cx, cy, r, aim + b0, aim + b1); ctx.stroke();
+    const fx0 = aim + e;
+    ctx.strokeStyle = `rgba(250,240,255,${0.95 * fade})`; ctx.lineWidth = Math.max(1.5, z * 0.035);
+    shieldPath(ctx, cx, cy, r, fx0 - 0.05, fx0 + 0.05); ctx.stroke();
+  }
+  // hex cells lighting up round the spot
+  const hs = z * 0.055;
+  ctx.strokeStyle = `rgba(215,185,255,${0.8 * fade})`; ctx.lineWidth = Math.max(1, z * 0.012);
+  for (const [u, v] of [[0, 0], [-1.7, 0], [1.7, 0], [-0.85, 1.5], [0.85, 1.5], [-0.85, -1.5], [0.85, -1.5]]) {
+    const hx = px + (tx * u + Math.cos(ha) * v) * hs, hy = py + (ty * u + Math.sin(ha) * v) * hs, cf = 1 - Math.hypot(u, v) / 3.2;
+    if (cf * fade < 0.05) continue;
+    ctx.globalAlpha = Math.min(1, cf * 1.3);
+    ctx.beginPath();
+    for (let j = 0; j < 6; j++) { const aa = ha + j * Math.PI / 3, qx = hx + Math.cos(aa) * hs * 0.55, qy = hy + Math.sin(aa) * hs * 0.55; j ? ctx.lineTo(qx, qy) : ctx.moveTo(qx, qy); }
+    ctx.closePath(); ctx.stroke();
+  }
+  ctx.globalAlpha = 1;
+  // a ring spreading across the shield's face
+  ctx.strokeStyle = `rgba(230,210,255,${0.7 * fade})`; ctx.lineWidth = Math.max(1, z * 0.02);
+  ctx.beginPath(); ctx.ellipse(px, py, z * (0.05 + k * 0.32) * big, z * (0.03 + k * 0.12) * big, ha + Math.PI / 2, 0, Math.PI * 2); ctx.stroke();
+  // sparks glancing off, back the way the shot came
+  const go = 1 - Math.pow(1 - k, 2.2);
+  for (let i = 0; i < 9; i++) {
+    const aa = ha + (hash2(sd, i, 1) - 0.5) * 2.4, d = z * (0.12 + 0.55 * hash2(sd, i, 2)) * big * go;
+    const ex = px + Math.cos(aa) * d, ey = py + Math.sin(aa) * d, bx = px + Math.cos(aa) * d * 0.6, by = py + Math.sin(aa) * d * 0.6;
+    ctx.strokeStyle = i % 3 ? `rgba(200,160,255,${fade})` : `rgba(255,250,255,${fade})`; ctx.lineWidth = Math.max(1, z * 0.018);
+    ctx.beginPath(); ctx.moveTo(bx, by); ctx.lineTo(ex, ey); ctx.stroke();
+  }
+  ctx.restore();
+}
+
+/** A Bulwark's shield failing: it shatters into falling shards of violet light with a burst and a crackle of static. */
+function drawShieldBreakFx(ctx, f, x, y, z, k) {
+  const aim = f.aim || 0, r = z * BULWARK.r, sd = (f.seed || 0) * 3 + 2, fade = Math.pow(1 - k, 1.2);
+  const fx0 = x + Math.cos(aim) * r * 0.8, fy0 = y + Math.sin(aim) * r * 0.8;
+  fxGround(ctx, fx0, fy0, z * 1.8, '#9b5cff', 1.1 * fade);
+  fxGlow(ctx, fx0, fy0, z * 0.9 * (0.6 + k * 0.6), '#b77bff', fade);
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  ctx.lineCap = 'round';
+  for (let i = 0; i < 11; i++) {
+    const th = aim - SHIELD_DRAW_ARC + (2 * SHIELD_DRAW_ARC * i) / 10, out = r + z * k * (0.25 + 0.6 * hash2(sd, i, 1));
+    const spin = (hash2(sd, i, 2) - 0.5) * 3 * k, len = 0.09 + 0.06 * hash2(sd, i, 3);
+    const cx = x + Math.cos(th) * out, cy = y + Math.sin(th) * out + k * k * z * 0.2;
+    ctx.strokeStyle = `rgba(225,205,255,${fade})`; ctx.lineWidth = Math.max(1.2, z * 0.03 * (1 - k * 0.5));
+    ctx.beginPath(); ctx.arc(cx - Math.cos(th) * r, cy - Math.sin(th) * r, r, th - len + spin, th + len + spin); ctx.stroke();
+  }
+  if (k < 0.5) {
+    ctx.strokeStyle = `rgba(245,235,255,${1 - k * 2})`; ctx.lineWidth = Math.max(1, z * 0.016);
+    for (let n = 0; n < 3; n++) {
+      ctx.beginPath();
+      for (let j = 0; j <= 6; j++) {
+        const th = aim - SHIELD_DRAW_ARC + (2 * SHIELD_DRAW_ARC * j) / 6, rr = r * (0.75 + 0.5 * hash2(sd + n, j, Math.floor(k * 12)));
+        const px = x + Math.cos(th) * rr, py = y + Math.sin(th) * rr;
+        j ? ctx.lineTo(px, py) : ctx.moveTo(px, py);
+      }
+      ctx.stroke();
+    }
+  }
+  ctx.restore();
+}
+
+/**
+ * A Torch's nozzle: a little blue pilot flame always burning in its mouth (it lights the ground at night), and
+ * an orange glow round it for a moment after it fires. (x, y): the Torch on screen; size: its sprite in px.
+ */
+function drawTorchPilot(ctx, u, x, y, z, size) {
+  const a = u.face || 0, nx = x + Math.cos(a) * size * 0.4, ny = y + Math.sin(a) * size * 0.4, night = fxNight();
+  const lit = (u.gel ?? TORCH.tank) > 0.05, hot = clamp(1 - (S.time - (u.flameT ?? -99)) / 0.6, 0, 1);
+  const fl = 0.8 + 0.2 * Math.sin(R.time * 23 + u.id) * Math.sin(R.time * 9 + u.id * 3);
+  if (lit) {
+    fxGlow(ctx, nx, ny, z * 0.09 * fl, '#7cc8ff', 0.6 + 0.4 * night);
+    fxGround(ctx, nx, ny + z * 0.05, z * 0.45, '#ff9a4a', (0.35 + 0.4 * hot) * fl);
+  }
+  if (hot > 0) fxGlow(ctx, nx, ny, z * 0.3, '#ff8a2a', 0.6 * hot);
+}

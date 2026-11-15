@@ -2002,6 +2002,8 @@ function addBot(owner, type, x, y) {
     inside: 0, cd: 0, fight: 0, scanT: 0, idleT: 0, face: 0, busy: 0, bat: 100,
   };
   if (type === 'warbot') bot.ammo = WARBOT_AMMO;
+  if (BOTS[type].flame) bot.gel = TORCH.tank;
+  if (BOTS[type].shield) { bot.sh = BULWARK.shield; bot.shAim = 0; }
   S.bots.push(bot);
   S.byId.set(bot.id, bot);
   S.players[owner].stats.bots++;
@@ -2013,7 +2015,7 @@ function enterBuilding(bot, b) {
   bot.inside = b.id;
   bot.x = b.x + 0.5; bot.y = b.y + 0.5;
   bot.path = null;
-  if (bot.type === 'warbot' && BDEFS[b.type].mil && !b.garrison.includes(bot.id)) b.garrison.push(bot.id);
+  if (BOTS[bot.type].army && BDEFS[b.type].mil && !b.garrison.includes(bot.id)) b.garrison.push(bot.id);
 }
 
 function exitBuilding(bot) {
@@ -3338,7 +3340,9 @@ function killBot(bot, quiet) {
     fuelBlast(bot.x, bot.y, 'tanker', boom, bot.owner);
     return;
   }
-  blastFx(bot.x, bot.y, bot.type === 'warbot' ? 0.6 : 0.4, { small: true });
+  // A Torch destroyed with fuel aboard goes up in a fireball that hurts anyone close, friend or foe.
+  if (!quiet && BOTS[bot.type].flame && (bot.gel ?? 0) > 1 && typeof fuelBlast === 'function') { fuelBlast(bot.x, bot.y, 'torch', bot.gel / TORCH.tank, bot.owner); return; }
+  blastFx(bot.x, bot.y, BOTS[bot.type].army ? 0.6 : 0.4, { small: true });
   // what's left of it burns for a few seconds (a big vehicle longer)
   if (!quiet) addFx('fire', bot.x, bot.y, { r: BOTS[bot.type].truck || BOTS[bot.type].rail || BOTS[bot.type].crawler ? 0.3 : 0.18, life: BOTS[bot.type].truck || BOTS[bot.type].crawler ? 9 : 5, t: -0.3, seed: bot.id % 97 });
   if (!quiet) sfx('botboom', bot.x, bot.y);
@@ -3353,7 +3357,7 @@ function releaseBotsFrom(b, killInside) {
     if (u.inside === b.id) {
       // A plane parked in a hangar goes with it; so do warbots in an ordinary building, but a fort's garrison
       // (an Outpost or Bunker a Missile or bomb knocks out) scrambles out alive. (A nuke kills them first.)
-      if (killInside && ((u.type === 'warbot' && !BDEFS[b.type].mil) || b.staff === u.id || BOTS[u.type].air)) { killBot(u); continue; }
+      if (killInside && ((BOTS[u.type].army && !BDEFS[b.type].mil) || b.staff === u.id || BOTS[u.type].air)) { killBot(u); continue; }
       exitBuilding(u);
     }
   }
@@ -3422,7 +3426,7 @@ function postMsg(player, text, x, y, kind) {
 }
 
 function addFx(type, x, y, data) {
-  const f = { type, x, y, t: 0, life: type === 'smoke' ? 2.5 : type === 'laser' ? 0.25 : type === 'float' ? 1.2 : 0.6 };
+  const f = { type, x, y, t: 0, life: type === 'smoke' ? 2.5 : type === 'laser' ? 0.25 : type === 'float' ? 1.2 : 0.6, tick: S.tick };
   if (data) Object.assign(f, data);
   S.fx.push(f);
 }

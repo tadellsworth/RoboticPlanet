@@ -166,15 +166,20 @@ const BOTS = {
     desc: 'A tank truck, the only vehicle that carries Crude and Fuel: ten at a time, wherever they need to go (Haulers carry them only when no Tanker can get there, one at a time). Fastest on asphalt. Destroyed with a load on board, it explodes, hurting everything round it, and can set off other Tankers nearby.' },
   rocket:  { name: 'Howitzer', plural: 'Howitzers', speed: WARBOT_SPEED * 0.9, hp: 16, war: true, siege: true, parts: 3, accel: 0.9, brake: 2.2,
     desc: 'Mobile artillery for breaking defences. Send it at an enemy building (or let it pick one in reach while it waits): it drives to within 13 tiles, digs in (about 7 seconds), then fires one heavy shell every 5 seconds, over and over until the target is rubble or its 12 shells are spent. Each shell does 4 damage, double (8) to defences (turrets, bunkers, mortars, flak, Minigun Nests, walls, gates, outposts) but little to robots. Dug in it can\'t move: it takes 4 seconds to pack up. On your own ground near a road, haulers bring it Ammo where it stands; otherwise it packs up, reloads 3 Ammo at a garrison or storage and comes back. Nothing closer than 4 tiles.' },
-  warbot:  { name: 'Warbot', plural: 'Warbots', speed: WARBOT_SPEED, hp: 12, war: true,
+  warbot:  { name: 'Warbot', plural: 'Warbots', speed: WARBOT_SPEED, hp: 12, war: true, army: true,
     desc: 'Fights enemy bots and captures enemy buildings. Shoots Ammo; with none it can only scuffle.' },
+  // The army's two specialists (see BULWARK and TORCH): they garrison, rally, attack, reload and get repaired like warbots.
+  bulwark: { name: 'Bulwark', plural: 'Bulwarks', speed: WARBOT_SPEED * 0.72, hp: 30, war: true, army: true, shield: true, parts: 3, range: 1.6,
+    desc: 'A heavy shield robot. A purple energy shield stands across its front and stops fire coming from ahead, for it and for the robots sheltering behind it, until the shield is worn down (it comes back after a rest). Shells, bombs and missiles come down over it, and fire from the side or behind gets round it. Its own twin blasters are weak: it leads warbots in, it doesn\'t fight alone.' },
+  torch:   { name: 'Torch', plural: 'Torches', speed: WARBOT_SPEED * 0.9, hp: 18, war: true, army: true, flame: true, parts: 2, range: 1.9,
+    desc: 'A flamethrower robot. A short cone of fire burns every enemy robot in it and eats through buildings, defences and Walls fastest of all. It burns Fuel: a full tank lasts about 12 seconds of fire, refilled from Fuel kept at your Command Base, a Depot or a Fuel Station. Destroyed with fuel aboard, it explodes.' },
   // Wildlife (Colony, see WILD): creatures from nests. Not built, never ordered.
   scuttler: { name: 'Scuttler', plural: 'Scuttlers', speed: WORKER_SPEED * 1.1, hp: 6, wild: true, bite: 1,
     desc: 'A quick, small creature. Scuttlers run in packs and go for any bot they catch out in the open.' },
   brute:    { name: 'Brute', plural: 'Brutes', speed: WORKER_SPEED * 0.8, hp: 24, wild: true, bite: 3, smash: true,
     desc: 'A big, slow, armoured creature. Brutes tear up roads and batter buildings, and bite hard.' },
 };
-const BOT_ORDER = ['worker', 'hauler', 'truck', 'tanker', 'roadtrain', 'freight', 'cargoship', 'tankship', 'ferry', 'cargoplane', 'bomber', 'crawler', 'agribot', 'paver', 'warbot', 'rocket'];
+const BOT_ORDER = ['worker', 'hauler', 'truck', 'tanker', 'roadtrain', 'freight', 'cargoship', 'tankship', 'ferry', 'cargoplane', 'bomber', 'crawler', 'agribot', 'paver', 'warbot', 'bulwark', 'torch', 'rocket'];
 /**
  * Unit types switched off for now, for everyone: no Bot Foundry (yours or a rival's) makes them, the menus leave them
  * out, and any in a saved game are taken out when it loads (see botBanned, dropOffBots). Take a type out of this set
@@ -219,6 +224,7 @@ function isLiquid(g) { return !!LIQUID[g]; }
  */
 const BLAST = {
   tanker: { r0: 0.7, r1: 0.6, bot: 4.5, bld: 3 },
+  torch: { r0: 0.55, r1: 0.55, bot: 4, bld: 2 }, // a Torch going up with fuel aboard
   refinery: { r0: 1.5, r1: 0.9, bot: 6, bld: 5 },
   chain: [0.25, 0.7],
 };
@@ -653,7 +659,7 @@ const BOOST = {
  * The unit types the hidden menu can stop every rival making for the rest of a game (S.ban): their Bot
  * Foundry, shipyard and hangar skip them, and the computer stops planning round them. Ones they have carry on.
  */
-const BANNABLE = ['warbot', 'rocket', 'bomber', 'ferry'];
+const BANNABLE = ['warbot', 'bulwark', 'torch', 'rocket', 'bomber', 'ferry'];
 
 /**
  * What to call player p. Label: 'You', 'Rival' (two players), 'Red rival', 'Green rival' or 'Purple
@@ -954,6 +960,23 @@ const ROCKET = { range: 13, min: 4, deploy: 7, pack: 4, salvo: 1, gap: 0.9, cycl
  */
 const YARD = { work: 8, hopper: 2 };
 const KEEP = { fire: 4, aura: 7, wallMul: 1.5, mend: 0.33, quiet: 8, range: 1, rate: 0.8, spacing: 16 };
+/**
+ * The Bulwark (BOTS.bulwark): a purple shield across its front, `r` tiles out, spanning `arc` radians either side of
+ * where it faces. A shot (or flame) from in front, at the Bulwark or at a robot of its owner's within `cover` tiles
+ * behind the shield line, hits the shield instead: it soaks up to `shield` damage, comes back `regen` a second once
+ * it's had `wait` s without a hit, and worn right down it fails for `down` s, coming back at `reboot` of full.
+ * Blasts from above (shells, bombs, missiles, fuel blasts) and fire from the side or behind get past it; a
+ * Disruptor Tower's pulse drains `drain` off it. It turns (`turn` rad/s) to face the nearest threat. Its twin
+ * blasters: `dmg` a shot every `reload` s.
+ */
+const BULWARK = { shield: 50, regen: 4, wait: 2.5, down: 6, reboot: 0.35, arc: 1.0, r: 0.5, cover: 2.1, turn: 2.6, dmg: 1, reload: 0.9, drain: 14, look: 6 };
+/**
+ * The Torch (BOTS.torch): every `tick` s while it has a target in reach (BOTS.torch.range) it sprays a cone `cone`
+ * radians either side of its aim: `bot` damage to each enemy robot in it and `bld` to the building it's burning
+ * (`fort` times that to defences and Walls/Gates). Its tank holds `tank` seconds of fire; a Fuel refills `perFuel`
+ * seconds, from its owner's Command Base, a Depot or a Fuel Station.
+ */
+const TORCH = { cone: 0.5, tick: 0.2, bot: 0.35, bld: 0.8, fort: 1.6, tank: 12, perFuel: 12 };
 /** Ramps are planned in Paths (with roads), not from the build menu. */
 
 const INPUT_CAP = 3;   // how many of each input a production building stockpiles (its def.hopper instead, if it has one)
