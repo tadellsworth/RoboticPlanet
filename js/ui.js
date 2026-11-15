@@ -2769,16 +2769,17 @@ function onMapTap(i, j, wx, wy) {
       return;
     }
     if (UI.roadMode === 'pipe') {
-      // Pipes: tap an Oil Pump to pipe it to the nearest Refinery; tap a tile to add or drop pipe there,
-      // or tap laid pipe to take it up.
+      // Pipes: tap an Oil Pump to pipe it to the nearest Refinery, or something that burns Fuel to pipe it to
+      // the nearest Fuel; tap a tile to add or drop pipe there, or tap laid pipe to take it up.
       const stroke = [], bb = S.bAt[t] && getE(S.bAt[t]);
-      if (bb && bb.owner === ME && BDEFS[bb.type].pump) {
-        const r = pipeToRefinery(ME, bb);
+      const fuelTap = bb && bb.owner === ME && bb.built && fuelUser(BDEFS[bb.type]);
+      if (bb && bb.owner === ME && (BDEFS[bb.type].pump || fuelTap)) {
+        const r = fuelTap ? pipeToFuel(ME, bb) : pipeToRefinery(ME, bb);
         if (r.why) { sfx('error'); showRoadBanner(r.why); return; }
         for (const u of r.tiles) if (!UI.draft.pipe.has(u)) draftOp(stroke, u, 'pipe');
         UI.draft.strokes.push(stroke);
         sfx('click');
-        showRoadBanner(`Pipe from the Oil Pump to the Refinery: ${r.tiles.length} tile${r.tiles.length === 1 ? '' : 's'}.`, true);
+        showRoadBanner(`Pipe ${fuelTap ? `Fuel to the ${BDEFS[bb.type].name}` : 'from the Oil Pump to the Refinery'}: ${r.tiles.length} tile${r.tiles.length === 1 ? '' : 's'}.`, true);
         return;
       }
       if (UI.draft.pipe.has(t)) draftOp(stroke, t, 'unpipe');
@@ -3360,12 +3361,12 @@ function showRoadBanner(problem, info) {
   if (!UI.draft) draftReset();
   const have = playerGoods(ME);
   let line, how;
-  const pipeHow = `Pipelines carry Crude, nothing else. Every second each line moves up to ${PIPE_RATE} Crude from its Oil Pumps to the Refineries (and Asphalt Plants) on it, then into any storage on it; storage on a line feeds its Refineries too. A pump on a pipeline never waits for a Tanker. Pipe goes anywhere inside your border: over roads and track, under buildings, up cliffs, across water on stilts and bored through rock (those tiles cost more, so a drag goes round a small pond); a pipe joins every building it runs beside or under. Raiders and missiles can break it: broken pipe is relaid as soon as it's paid for again.`;
+  const pipeHow = `Pipelines carry Crude and Fuel. Every second each line moves up to ${PIPE_RATE} Crude from its Oil Pumps to the Refineries (and Asphalt Plants) on it, then into any storage on it; storage on a line feeds its Refineries too. And up to ${PIPE_RATE} Fuel from its Refineries and Bio Farms to what burns Fuel on it (Fuel Stations, Generators, Flame Towers, the Missile Factory), then into storage; storage on a line feeds them too. A pump on a pipeline never waits for a Tanker, and nothing on a line with Fuel to give waits for one to bring it. Pipe goes anywhere inside your border: over roads and track, under buildings, up cliffs, across water on stilts and bored through rock (those tiles cost more, so a drag goes round a small pond); a pipe joins every building it runs beside or under. Raiders and missiles can break it: broken pipe is relaid as soon as it's paid for again.`;
   if (mode === 'pipe' && !UI.draft.pipe.size && !UI.draft.pipeDel.size) {
     let unpiped = 0;
     const joined = refineryPipes(ME);
     for (const b of S.buildings) if (!b.dead && b.owner === ME && BDEFS[b.type].pump && !buildingPipes(b).some((c) => joined.has(c))) unpiped++;
-    line = `<b>Drag from an Oil Pump to a Refinery</b> and the pipe finds its own way there, over roads and track, across water and through rock (${costText(PIPE_COST)} a tile, ${costText(PIPE_CROSS_COST)} across water or rock; laid when you tap Build). Or tap a pump to pipe it to the nearest Refinery. Tap pipe to take it up.` +
+    line = `<b>Drag from an Oil Pump to a Refinery</b> (or from storage or a Refinery to a Fuel Station or Generator) and the pipe finds its own way there, over roads and track, across water and through rock (${costText(PIPE_COST)} a tile, ${costText(PIPE_CROSS_COST)} across water or rock; laid when you tap Build). Or tap a pump to pipe it to the nearest Refinery, or a Fuel Station or Generator to pipe Fuel to it. Tap pipe to take it up.` +
       (unpiped ? ` <button class="btn" id="pipe-all">Pipe every Oil Pump (${unpiped})</button>` : '');
     how = pipeHow;
   } else if (mode === 'rail' && routeOn() && !UI.draft.rail.size && !UI.draft.railDel.size) {
@@ -3771,6 +3772,11 @@ function openBuildingSheet(b) {
       if (!pr.why) html += `<button class="btn" id="sh-pipe">Pipe it to the Refinery: ${pr.tiles.length} tile${pr.tiles.length === 1 ? '' : 's'}, ${costText(pr.cost)}</button>
         <p class="hint">A pipeline sends its Crude straight to the Refinery, every second, so it never waits for a Tanker. It runs over roads and track; raiders can break it.</p>`;
     }
+    if (fuelUser(def) && b.built && b.owner === ME) {
+      const pr = pipeToFuel(ME, b);
+      if (!pr.why && pr.tiles.length <= 40) html += `<button class="btn" id="sh-pipefuel">Pipe Fuel to it: ${pr.tiles.length} tile${pr.tiles.length === 1 ? '' : 's'}, ${costText(pr.cost)}</button>
+        <p class="hint">A pipeline from storage, a Refinery or a Bio Farm keeps it topped up with Fuel every second, with no Tanker trips. It runs over roads and track; raiders can break it.</p>`;
+    }
     if (def.nukeSilo && b.built) {
       html += `<button class="btn primary big danger-glow" id="sh-aim">Aim nuclear missile</button>
         <p class="hint" id="sh-aim-hint"></p>`;
@@ -3857,6 +3863,15 @@ function openBuildingSheet(b) {
         const { n, owed } = r;
         sfx('place');
         toast(`Pipe laid from the Oil Pump to the Refinery (${n} tile${n === 1 ? '' : 's'}).` + (owed ? ` ${owed} tile${owed === 1 ? '' : 's'} wait for goods, paid from storage as they come in.` : ''), 'good');
+      });
+    };
+    if ($('sh-pipefuel')) $('sh-pipefuel').onclick = () => {
+      $('sh-pipefuel').hidden = true;
+      act('pipeToFuel', [b.id], (r) => {
+        if (r.why) { sfx('error'); toast(r.why, 'warn'); refreshSheet(); return; }
+        const { n, owed } = r;
+        sfx('place');
+        toast(`Pipe laid to carry Fuel to the ${BDEFS[b.type].name} (${n} tile${n === 1 ? '' : 's'}).` + (owed ? ` ${owed} tile${owed === 1 ? '' : 's'} wait for goods, paid from storage as they come in.` : ''), 'good');
       });
     };
     if ($('sh-gprio')) for (const btn of $('sh-gprio').children) btn.onclick = () => set('gprio', btn.dataset.v);
@@ -4079,8 +4094,14 @@ function refreshBuildingSheet(b) {
       }
       if (mine && b.timer > 0 && /^Working/.test(b.status || '')) parts.push(`<div class="bar"><div style="width:${Math.round((b.timer / def.work) * 100)}%"></div></div>`);
     }
+    if (mine && b.built && fuelUser(def)) {
+      const fp = fuelPipes(ME), ns = buildingPipes(b);
+      parts.push(`<div class="kv"><span>Fuel comes</span><span>${b.fuelByPipe ? 'by pipe' : ns.some((c) => fp.has(c)) ? 'by pipe (none to give just now)' : 'by Tanker'}</span></div>`);
+    } else if (mine && b.built && fuelMaker(def) && buildingPipes(b).length) {
+      parts.push(`<div class="kv"><span>Fuel goes</span><span>${b.pipedFuel ? 'by pipe, to storage and what burns it' : 'by pipe to what burns it; a Tanker takes the rest'}</span></div>`);
+    }
     if (def.inp && mine && !def.pump) {
-      const ins = Object.keys(def.inp).map((g) => goodTag(g, `${b.stock[g] || 0}/${INPUT_CAP}`, !(b.stock[g] > 0))).join('');
+      const ins = Object.keys(def.inp).map((g) => goodTag(g, `${b.stock[g] || 0}/${def.hopper || INPUT_CAP}`, !(b.stock[g] > 0))).join(''); // (what it keeps on hand: a Smelter keeps 6)
       const outs = def.make ? Object.keys(def.make).map((g) => goodTag(g, `${b.stock[g] || 0}/${def.out[g]}`)).join('') : '';
       const recipe = Object.keys(def.inp).map((g) => GOOD[g].name).join(' + ') + ' → ' + (def.make ? Object.keys(def.make).map((g) => GOOD[g].name).join('') : 'a new bot');
       parts.push(`<div class="kv"><span>Recipe</span><span>${recipe}, ${def.work}s</span></div>`);

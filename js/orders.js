@@ -60,7 +60,14 @@ const ORDERS = {
     const r = pipeToRefinery(p, b);
     if (r.why) return { why: r.why };
     const n = pipeUp(p, r.tiles);
-    return { n, owed: r.tiles.filter((t) => S.pipePlan[t] === 1).length };
+    return { n, owed: r.tiles.filter((t) => S.pipePlan[t] === p + 1).length };
+  },
+  pipeToFuel(p, id) {
+    const b = ownB(p, id); if (!b || !fuelUser(BDEFS[b.type])) return { why: 'That building is gone.' };
+    const r = pipeToFuel(p, b);
+    if (r.why) return { why: r.why };
+    const n = pipeUp(p, r.tiles);
+    return { n, owed: r.tiles.filter((t) => S.pipePlan[t] === p + 1).length };
   },
   gprio(p, id, v) { const b = ownB(p, id); if (b) b.gprio = v === 'normal' ? undefined : v; },
   keepW(p, id, v) { const b = ownB(p, id); if (!b) return; b.keepW = v === null || v === undefined ? undefined : clamp(v | 0, 0, 99); b.stockT = 0; },

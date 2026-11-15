@@ -20,17 +20,14 @@ Still open: a neutral, shared exchange the rivals compete over; contracts for Ch
     (and a Nuclear race's Uranium) on top. Whoever holds the high ground sees and shoots down onto the rest.
   - **Twin rivers:** two rivers run the length of the map, splitting it into three lanes joined by shallow fords
     that bots wade slowly (and that a Planet event can flood). Bridges are worth their price here.
-- **You against up to three rivals, on Crossroads.** Crossroads was built for it: four quarters, one base in each,
-  meeting at the plaza. Needs a four-way symmetric layout (the map turned a quarter round instead of a half), a
-  fourth team colour, and the AI picking among three rivals (it already does among two in a free-for-all). The same
-  layout would suit multiplayer later.
-- Multiplayer, and exporting/importing saves between devices.
-- **Fuel, after the Tanker update.** Built: Tankers, explosions with chain reactions, Crude pipelines, the Generator
-  and trucks burning Fuel (see the README). Still open: Fuel pipelines (only Crude flows today), a Generator that
-  explodes too, and the AI using oil more (it mostly lives on Bio Farms: about one colony in four builds a Refinery).
-- **Ships, after the first version** (Ports, Container Ships, Tanker Ships, Ferries and beach landings are in the game):
-  a gunboat or patrol boat to escort ships and shell the shore; the rival using Container Ships and ferry lines
-  (today it only builds a Port and makes beach landings).
+- **Cloud saves.** Saves move between devices by exporting and importing a file today; a cloud save (perhaps kept by
+  the multiplayer relay on Cloudflare) would do it without the file.
+- **Fuel.** Built: Tankers, explosions with chain reactions, Crude and Fuel pipelines, the Generator and trucks burning
+  Fuel, and the rival keeping its Fuel up (Bio Farms first when it runs low, an Oil Pump and Refinery once its Foundry
+  is up). Still open: a Generator that explodes too.
+- **Ships.** Ports, Container Ships, Tanker Ships, Ferries and beach landings are in the game, and the rival keeps a
+  forward Port stocked by Container Ship. Still open: a gunboat or patrol boat to escort ships and shell the shore
+  (held back for now); the rival running ferry lines.
 - **Air (after ships).** An **Airfield** (done, with the Cargo Plane and air drops), a **strike bomber** (its look follows
   a Foxbat three-view, mocked up in renderer/b/bomber.js: a long black radome, big box intakes, a broad flat body, a
   43-degree wing with tip pods, swept stabilators, twin canted fins, two big nozzles, bombs under the wings; up to
@@ -47,15 +44,15 @@ Still open: a neutral, shared exchange the rivals compete over; contracts for Ch
   Fuel, for a cut-off island or an Outpost under siege), a **gunship / attack drone** (circles a spot and
   shoots warbots there for a while; close support rather than one strike), and a **radar station** (warns of
   incoming aircraft and lets AA guns fire further). A recon plane only matters if the map ever gets fog of war.
-- **Graphics polish (after air).** Go over every building, robot, terrain tile, effect and icon against the design
-  system and bring anything rough or out of style up to the same finish.
+- **Graphics.** A first pass is done (rounded shorelines on ponds, lakes and seas, by day and in the night glow). Worth
+  another look when new art comes in.
 
-## AI stalemates (seen while checking Road Trains, November)
+## AI stalemates
 
-About a quarter of fresh-seed AI-vs-AI games still run the full hour without a winner (6 of 8 decisive, the same before
-and after the Road Train change). In the ones looked at, late in the game both rivals' Smelters sit "Waiting for Ore"
-while 75–100 Ore lies in storage, so Alloy, then Ammo, run short and armies stall with warbots out of Ammo. Worth a
-look: why Ore in storage doesn't reach the Smelters (distance, haulers, trucks, or the AI's placement).
+The old stall (Smelters "Waiting for Ore" while Ore lay in storage) no longer shows: measured second by second, a
+Smelter now waits with Ore stored only while that Ore is already on its way. What did starve the rival was Fuel: its
+Fuel Stations went dry around minute 10 and its robots crawled, which starved Fiber, Ore and Alloy in turn. It now puts
+Fuel first when it runs low. AI-vs-AI wars on Islands can still run past 40 minutes now and then.
 
 ## Open balance questions (from the November audit)
 

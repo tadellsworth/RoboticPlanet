@@ -295,14 +295,17 @@ const RAIL_MIN_LOAD = 10;
 const STATION_REACH = 9, STATION_NEARER = 4, RAIL_AUTO_MAX = 60, RAIL_FILL = 0.45, STATION_FEED = 1, STATION_SWAP = 6;
 const STORE_BESIDE = 4; // a truck that delivered to a building takes home what waits in storage this close to it
 /*
- * Pipelines carry Crude (nothing else). Pipe is laid in Paths (Pipes): drag from one building to
+ * Pipelines carry Crude and Fuel. Pipe is laid in Paths (Pipes): drag from one building to
  * another and it finds its own way there. PIPE_COST a tile, paid from storage and laid at once (or as
  * the goods come in), on any ground you hold or no-one does: over roads and track, under buildings, up and
  * down cliffs. A pipe joins every building it runs under or beside. Every second each pipeline moves
  * up to PIPE_RATE Crude: from Oil Pumps to the Refineries and Asphalt Plants on it (a Refinery keeps
- * up to PIPE_FILL), then to storage on it; and from storage on it to its Refineries. A piped pump's
- * Crude never waits for a Tanker. Raids, missiles and fuel blasts break pipe: a broken tile is planned
- * again at once and relaid when it's paid for.
+ * up to PIPE_FILL), then to storage on it; and from storage on it to its Refineries. And up to PIPE_RATE
+ * Fuel: from Refineries and Bio Farms to what burns it (Fuel Stations, Generators, Flame Towers, the
+ * Missile Factory), then to storage on it; and from storage on it to what burns it. A piped pump's Crude
+ * never waits for a Tanker, nor does Fuel made on a line with storage, and nothing on a line that has Fuel
+ * to give waits for a Tanker to bring it. Raids, missiles and fuel blasts break pipe: a broken tile is
+ * planned again at once and relaid when it's paid for.
  */
 const PIPE_COST = { cement: 0.3 }; // cheap, and no Alloy (always the scarce one)
 // Pipe across open water or a canyon (on stilts) or through rock (bored) costs more a tile; the route
@@ -313,6 +316,7 @@ const PIPE_CROSS_WEIGHT = 4;
 /** What a tile of pipe on tile t costs. */
 function pipeCost(t) { return S.terrain[t] === T_GROUND || S.road[t] || (S.rail && S.rail[t]) ? PIPE_COST : PIPE_CROSS_COST; }
 const PIPE_RATE = 4;
+const PIPE_DRY = 20; // something on a Fuel line that has sat empty this long gets Fuel by Tanker again
 const PIPE_FILL = 6;
 const RAIL_CROSS_HOLD = 2.4;
 /**

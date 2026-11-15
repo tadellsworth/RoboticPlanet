@@ -255,6 +255,24 @@ function aiThink(p) {
   const fiberStarved = !cutting && !me.some((b) => b.type === 'harvester' && !b.built);
   if (!cutting) plan = [['harvester', (counts.harvester || 0) + 1]].concat(plan);
   if (fiberStarved) siteCap = Math.max(siteCap, maxSites + 1) + (cementStarved ? 1 : 0);
+  // Fuel first when it runs low: with the Fuel Stations dry every robot slows to a crawl, and everything else with
+  // it. A Bio Farm (or an Oil Pump where there's oil on our land), and an Oil Pump with no Refinery gets one.
+  // (Low for half a minute, not a dip; never while a Bio Farm still waits for its Agribot; at most a Bio Farm for
+  // every 15 robots and two more.)
+  const fuelNow = playerGoods(p).fuel || 0;
+  const fuelSite = me.some((b) => !b.built && (b.type === 'farm' || b.type === 'pump' || b.type === 'refinery'));
+  P.fuelLow = fuelNow < 6 ? (P.fuelLow ?? S.time) : undefined;
+  if (P.fuelLow !== undefined && S.time - P.fuelLow > 30 && !fuelSite && S.time > 60) {
+    const pumped = me.some((b) => b.built && b.type === 'pump' && !pumpDry(b));
+    const farmWaiting = me.some((b) => b.built && b.type === 'farm' && !b.paused && !b.staff);
+    const robots = S.bots.reduce((n, u) => n + (!u.dead && u.owner === p && !isArmy(u) ? 1 : 0), 0);
+    const foundry = me.some((b) => b.built && b.type === 'foundry'); // (oil costs Alloy: the Foundry's comes first)
+    const add = pumped && !counts.refinery && foundry ? [['refinery', 1]] : [];
+    if (!add.length && !farmWaiting && (counts.farm || 0) < 2 + Math.ceil(robots / 15)) add.push(['farm', (counts.farm || 0) + 1]);
+    if ((!add.length || add[0][0] === 'farm') && !counts.pump && foundry) add.push(['pump', 1]); // (one Oil Pump, where there's oil)
+    plan = add.concat(plan);
+    if (fuelNow < 3) siteCap = Math.max(siteCap, maxSites + 1);
+  }
   // With Fiber nearly gone (no Harvester at work, or construction waiting for it), the Smelters
   // stop burning it until there's some to spare.
   const fiberNow = playerGoods(p).fiber;
@@ -414,11 +432,22 @@ function aiThink(p) {
   if (S.time - (P.pipeT || -99) > 15) {
     P.pipeT = S.time;
     const have = spendable(p);
+    let laid = false;
     for (const b of me) {
       if (!b.built || !BDEFS[b.type].pump || pumpDry(b)) continue;
       const r = pipeToRefinery(p, b);
       if (r.why || r.tiles.length > 40) continue;
       if ((have.cement || 0) < 6 + (r.cost.cement || 0) || (have.alloy || 0) < (r.cost.alloy || 0)) continue;
+      pipeUp(p, r.tiles);
+      laid = true;
+      break;
+    }
+    // ...and a Fuel Station or Generator near storage or a Refinery gets Fuel by a short pipe: no more Tanker runs to it.
+    if (!laid) for (const b of me) {
+      if (!b.built || !(BDEFS[b.type].charger || BDEFS[b.type].burner) || BDEFS[b.type].store) continue;
+      const r = pipeToFuel(p, b);
+      if (r.why || r.tiles.length > 10) continue;
+      if ((have.cement || 0) < 10 + (r.cost.cement || 0)) continue;
       pipeUp(p, r.tiles);
       break;
     }
@@ -754,6 +783,10 @@ function aiBridge(p, maxSites) {
     if (S.time - P.bridgeSince[k] > 240) { cancelPlan(+k); delete P.bridgeSince[k]; } else pending = true;
   }
   if (pending) return;
+  // Viaducts of ours that have been knocked down: remember where, and try somewhere else for a while.
+  P.viaSeen = P.viaSeen || {}; P.viaLost = P.viaLost || {};
+  for (const id in P.viaSeen) { const v = getE(+id); if (!v || v.dead) { P.viaLost[P.viaSeen[id]] = S.time; delete P.viaSeen[id]; } }
+  for (const v of S.buildings) if (!v.dead && v.owner === p && v.type === 'viaduct' && !v.far) P.viaSeen[v.id] = tIdx(v.x, v.y);
   // A Viaduct of ours is still going up.
   if (S.buildings.some((v) => !v.dead && v.owner === p && v.type === 'viaduct' && !v.built)) return;
   const W = S.W, N = W * S.H;
@@ -853,7 +886,7 @@ function aiCrossTarget(p, home) {
  * close to the enemy as possible, and short. Far ends inside our border come first. {a, b, owned} or null.
  */
 function aiViaductSpot(p, home, E) {
-  const W = S.W, N = W * S.H;
+  const W = S.W, N = W * S.H, lost = S.players[p].viaLost || {};
   let best = null, bs = Infinity;
   for (let a = 0; a < N; a++) {
     if (S.owner[a] !== p || S.zone[a] !== home || S.terrain[a] !== T_GROUND || S.bAt[a] || S.res[a] || S.ramp[a]) continue;
@@ -871,7 +904,9 @@ function aiViaductSpot(p, home, E) {
         if (viaductBlocked(p, ai, aj, bi, bj)) continue;
         if (dist(bi, bj, E.x, E.y) > dist(ai, aj, E.x, E.y) - 2) break; // only spans that bring us closer
         const owned = S.owner[b] === p;
-        const sc = dist(bi, bj, E.x, E.y) + k * 0.8 - (owned ? 20 : 0);
+        // Not into the enemy's guns (they'd shoot it down as soon as it's up), nor where one was just knocked down.
+        const shot = (gunCovers(p, b) ? 18 : 0) + (gunCovers(p, a) ? 10 : 0) + (lost[a] && S.time - lost[a] < 240 ? 25 : 0);
+        const sc = dist(bi, bj, E.x, E.y) + k * 0.8 - (owned ? 20 : 0) + shot;
         if (sc < bs && canPlace(p, 'viaduct', ai, aj, true).ok) { bs = sc; best = { a, b, owned }; }
         break; // the first clifftop across is the one
       }

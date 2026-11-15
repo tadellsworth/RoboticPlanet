@@ -467,7 +467,7 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
   Refinery wrecked by warbots, a missile or a nuke (1.5 to 2.4 tiles: 6 and 5); its Crude and Fuel burn instead of
   spilling as crates. Loaded Tankers and Refineries caught in a blast go up a moment later (a chain reaction). Forts
   never fall to a blast (they keep 1 armor). Demolishing a Refinery is safe.
-  **Pipelines** (Paths → **Pipes**, K) carry Crude only. Drag from an Oil Pump to a Refinery and the pipe routes itself
+  **Pipelines** (Paths → **Pipes**, K) carry Crude and Fuel. Drag from an Oil Pump to a Refinery and the pipe routes itself
   (`pipeRoute`: inside your border, over roads and track, under buildings if it must, up cliffs, across water on stilts
   and bored through rock at `PIPE_CROSS_COST` (1.2 Cement) a tile, weighed by price so it goes round only when that's
   cheaper, with few bends); tap a
@@ -475,7 +475,15 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
   **Pipe it to the Refinery** too. Pipe costs 0.3 Cement a tile (`PIPE_COST`), laid at once when you tap Build (or as
   the Cement comes in). A pipe joins every building it runs under or beside; each second each line moves up to 4 Crude
   (`updatePipes`) from its pumps to its Refineries (which keep up to 6) and Asphalt Plants, then into storage on it, and
-  from storage on it to its Refineries. A piped pump never waits for a Tanker. Raiders cut pipe (it counts like a road
+  from storage on it to its Refineries. A piped pump never waits for a Tanker. **Fuel** moves the same way, up to 4 a
+  second: from the Refineries and Bio Farms on a line (`fuelMaker`) to what burns it there (`fuelUser`: Fuel Stations,
+  Generators, Flame Towers, the Missile Factory) up to what each asks for, then into storage; and from storage to what
+  burns it. Lines joined through something that burns Fuel count as one (its tank passes Fuel on). What's made on a line
+  with storage never waits for a Tanker (`pipedFuel`); on a line with only burners a Tanker takes just a full output's
+  surplus (`fuelLine`); and nothing on a line with somewhere Fuel is made, or storage holding some, is sent Fuel by
+  Tanker (`fuelByPipe`), unless it has sat empty for `PIPE_DRY` (20 s). Tap a Fuel Station or Generator in Pipes, or
+  **Pipe Fuel to it** on its panel, to pipe it to the nearest storage, Refinery or Bio Farm (`pipeToFuel`); the rival
+  pipes its own Fuel Stations and Generators that are within 10 tiles. Raiders cut pipe (it counts like a road
   for them), missiles and fuel blasts break it; broken pipe is planned again at once and relaid when it's paid for.
   **Trucks burn Fuel** (`TRUCK_BURN`): Freight Trucks, Road Trains and Tankers have a fuel tank instead of a battery,
   draining as they drive (a full tank lasts about 4 minutes of driving, a Road Train's under 3); low, they fill up at the
@@ -581,7 +589,13 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
   the Foundry) the Chip Fab rest, so they don't eat the Alloy the Foundry needs (`forFoundry`). With no stalks left to
   cut and Fiber under 6, groves come first (`groveFirst`): a Bio Farm gives its Agribot to a Grove Planter (placed by a
   Harvester, or else near home) until a Harvester has stalks again, since without Fiber there's no Alloy for another
-  Agribot.
+  Agribot. Fuel first too: with Fuel under 6 for half a minute (`P.fuelLow`) a Bio Farm goes first (never while one
+  waits for its Agribot; at most two plus one for every 15 robots), an Oil Pump once the Bot Foundry is up (oil costs
+  Alloy), and a Refinery for a pump that has none; without it the Fuel Stations went dry around minute 10 and the
+  workers crawled, which in turn starved the Fiber, Ore and Alloy. Its forts (`rearGarrison`): one counts as behind the
+  lines, free to send its last warbot on a march, when no rival building is within 18 tiles, or when every one that
+  near has another fort of ours, with someone in it, at least 4 tiles nearer to it. Its Viaducts (Sky islands): not
+  into the enemy's guns, nor for four minutes where one was just knocked down (`P.viaLost`).
   Once it's ready to march it orders a Bulwark for every five warbots (two, three against a dug-in rival) and a Torch
   for every four (three, four), only with Fuel for Torches. **Raider**: raids three times as often from early on,
   sending every warbot it can spare. **Rusher**: attacks early with a fast-growing army. **Tycoon**: its bots work 15%

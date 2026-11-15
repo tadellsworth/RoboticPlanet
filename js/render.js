@@ -618,6 +618,14 @@ function glowTiles(i0, j0, i1, j1) {
     const t = tIdx(i, j);
     if (S.terrain[t] === T_GROUND && gArt && !S.road[t] && !S.bAt[t]) drawTexture(ctx, gArt, i, j, i * TP, j * TP);
     else if (S.terrain[t] === T_WATER && wArt && !S.road[t]) drawTexture(ctx, wArt, i, j, i * TP, j * TP);
+    // (rounded shores: each corner glows as what it now shows)
+    for (const { fill, dx, dy } of shoreRounds(i, j)) {
+      ctx.save(); shoreCornerPath(ctx, i * TP, j * TP, dx, dy); ctx.clip();
+      ctx.clearRect(i * TP, j * TP, TP, TP);
+      const art = fill === 'land' ? gArt : wArt;
+      if (art) drawTexture(ctx, art, i, j, i * TP, j * TP);
+      ctx.restore();
+    }
   }
   R.inMap = false;
   ctx.save();
@@ -885,6 +893,7 @@ function paintTile(ctx, i, j) {
   if (terr !== T_WATER && S.elev[t] <= 1 && R.skyFloor) { ctx.fillStyle = S.elev[t] ? 'rgba(20,10,6,0.2)' : 'rgba(20,10,6,0.32)'; ctx.fillRect(x, y, TP, TP); }
   if (terr === T_GROUND) drawElevation(ctx, i, j, x, y, t, n);
   else if (terr === T_WATER) drawCliffFace(ctx, i, j, x, y, t, true);
+  shoreCorners(ctx, i, j, x, y);
   if (S.ford && S.ford[t] && terr === T_WATER) drawFord(ctx, i, j, x, y);
   if (S.tidal && S.tidal[t]) drawFlat(ctx, i, j, x, y, terr === T_WATER);
   if (S.fault && S.fault[t] && terr !== T_CHASM) drawFaultScar(ctx, i, j, x, y);
@@ -1124,6 +1133,57 @@ function groundElev(i, j) {
 }
 
 /** The rock face of a higher tile to the north, seen in front of this tile. */
+/**
+ * Rounded shores: ponds and lakes would otherwise be squares of water. A corner of a water tile with land
+ * on both sides (and beyond) is filled with that ground in a quarter circle; a corner of plain ground with
+ * water on both sides (and beyond) with water; a lit rim follows the curve. (Not lava, fords or tidal flats.)
+ */
+const SHORE_R = 0.42;
+/** The rounded corners of tile (i, j) (see shoreCorners): [{ fill: 'land' | 'water', dx, dy }]. */
+function shoreRounds(i, j) {
+  const t = tIdx(i, j), terr = S.terrain[t], out = [];
+  if ((terr !== T_WATER && terr !== T_GROUND) || !(R.tex && R.tex.water) || R.biome === 'volcanic') return out;
+  const plainWater = (a, b) => terrAt(a, b) === T_WATER && !(S.lava && S.lava[tIdx(a, b)]) && !(S.ford && S.ford[tIdx(a, b)]) && !(S.tidal && S.tidal[tIdx(a, b)]) && !S.road[tIdx(a, b)];
+  if (terr === T_WATER && !plainWater(i, j)) return out;
+  if (terr === T_GROUND && (S.road[t] || S.bAt[t] || S.res[t] || S.ramp[t] || (S.rail && S.rail[t]) || (S.fert && S.fert[t]) || (S.tidal && S.tidal[t]))) return out;
+  for (const [dx, dy] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) {
+    if (terr === T_WATER && terrAt(i + dx, j) === T_GROUND && terrAt(i, j + dy) === T_GROUND && terrAt(i + dx, j + dy) === T_GROUND) out.push({ fill: 'land', dx, dy });
+    else if (terr === T_GROUND && plainWater(i + dx, j) && plainWater(i, j + dy) && plainWater(i + dx, j + dy)) out.push({ fill: 'water', dx, dy });
+  }
+  return out;
+}
+/** The path of a rounded corner of the tile at (x, y) (its corner square outside the quarter circle), and the arc's centre and angles. */
+function shoreCornerPath(ctx, x, y, dx, dy) {
+  const rr = TP * SHORE_R, px = x + (dx < 0 ? 0 : TP), py = y + (dy < 0 ? 0 : TP), cx = x + (dx < 0 ? rr : TP - rr), cy = y + (dy < 0 ? rr : TP - rr);
+  const a1 = dy < 0 ? -Math.PI / 2 : Math.PI / 2, a2 = dx < 0 ? Math.PI : 0, ccw = dx * dy > 0;
+  ctx.beginPath(); ctx.moveTo(px, py); ctx.lineTo(cx, py); ctx.arc(cx, cy, rr, a1, a2, ccw); ctx.closePath();
+  return { cx, cy, rr, a1, a2, ccw };
+}
+function shoreCorners(ctx, i, j, x, y) {
+  const tex = R.tex || {};
+  for (const { fill, dx, dy } of shoreRounds(i, j)) {
+    ctx.save();
+    const { cx, cy, rr, a1, a2, ccw } = shoreCornerPath(ctx, x, y, dx, dy);
+    ctx.clip();
+    if (fill === 'land') groundPatch(ctx, i, j, x, y, Math.max(S.elev[tIdx(i + dx, j)], S.elev[tIdx(i, j + dy)]));
+    else drawTexture(ctx, tex.water, i, j, x, y);
+    ctx.restore();
+    ctx.beginPath(); ctx.arc(cx, cy, rr, a1, a2, ccw);
+    ctx.strokeStyle = dy < 0 ? 'rgba(159,217,208,0.5)' : 'rgba(10,30,40,0.35)'; ctx.lineWidth = 2; ctx.stroke();
+  }
+}
+/** Plain ground at elevation e over tile (i, j) (clipped by the caller): its level's colour, the texture and the level's tint. */
+function groundPatch(ctx, i, j, x, y, e) {
+  const tex = R.tex || {}, look = R.look || BIOME_LOOK.desert;
+  ctx.fillStyle = levelColor(e, fbm(i / 6, j / 6, 991, 3));
+  ctx.fillRect(x, y, TP, TP);
+  if (!tex.ground) return;
+  drawTexture(ctx, tex.ground, i, j, x, y);
+  const d = e + (R.levelOffset || 0) - 1;
+  if (d > 0) { ctx.fillStyle = `rgba(${look.hi},${Math.min(0.34, 0.1 * d)})`; ctx.fillRect(x, y, TP, TP); }
+  else if (d < 0) { ctx.fillStyle = look.lo; ctx.fillRect(x, y, TP, TP); }
+}
+
 function drawCliffFace(ctx, i, j, x, y, t, waterOnly) {
   let en = groundElev(i, j - 1);
   // A sheer drop of three levels or more (Sky islands) is too tall for one tile: its face carries on
@@ -1818,9 +1878,10 @@ function drawViaducts(ctx, ox, oy, z) {
 
 /**
  * Pipelines: a steel pipe along the tile centres, joined to the pipe and buildings beside it, raised
- * on posts where it crosses a road or track. Crude pulses along a line that moved some in the last
- * couple of seconds. In Paths (Pipes), Oil Pumps are ringed: green when piped to a Refinery, orange
- * when not. Drawn every frame over the map, under buildings and bots.
+ * on posts where it crosses a road or track. Crude (brown) and Fuel (pink) pulse along a line that moved
+ * some in the last couple of seconds. In Paths (Pipes), Oil Pumps are ringed: green when piped to a Refinery,
+ * orange when not; and what burns Fuel is ringed pink when it's piped to some. Drawn every frame over the
+ * map, under buildings and bots.
  */
 const PIPE_DIRS = [[1, 0], [0, 1], [-1, 0], [0, -1]];
 function pipeSegments(has, inView, ox, oy, z, endsToo) {
@@ -1895,15 +1956,8 @@ function drawPipes(ctx, ox, oy, z, inView) {
       ctx.drawImage(img, -z / 2, -z / 2, z, z);
       ctx.restore();
     }
-    const now = S.time, flowing = (g) => now - (net.flow[net.comp[g[4]]] ?? -99) < 2;
     const { segs } = pipeSegments(has, inView, ox, oy, z, true);
-    if (segs.some(flowing)) {
-      ctx.save(); ctx.lineCap = 'round';
-      ctx.strokeStyle = GOOD.crude.color; ctx.lineWidth = Math.max(1, z * 0.05);
-      ctx.setLineDash([z * 0.1, z * 0.3]); ctx.lineDashOffset = -R.time * z * 0.9;
-      strokeSegs(ctx, segs, flowing);
-      ctx.restore();
-    }
+    pipePulses(ctx, net, segs, z);
   } else if (net.n) {
     const { segs, posts, caps } = pipeSegments((t) => S.pipe[t], inView, ox, oy, z, true);
     ctx.save();
@@ -1919,14 +1973,8 @@ function drawPipes(ctx, ox, oy, z, inView) {
     strokeSegs(ctx, segs);
     ctx.strokeStyle = 'rgba(255,255,255,0.38)'; ctx.lineWidth = Math.max(0.8, z * 0.035);
     ctx.save(); ctx.translate(-z * 0.015, -z * 0.03); strokeSegs(ctx, segs); ctx.restore();
-    // Crude on the move.
-    const now = S.time, flowing = (g) => now - (net.flow[net.comp[g[4]]] ?? -99) < 2;
-    if (segs.some(flowing)) {
-      ctx.strokeStyle = GOOD.crude.color; ctx.lineWidth = Math.max(1, z * 0.06);
-      ctx.setLineDash([z * 0.1, z * 0.3]); ctx.lineDashOffset = -R.time * z * 0.9;
-      strokeSegs(ctx, segs, flowing);
-      ctx.setLineDash([]);
-    }
+    // Crude and Fuel on the move.
+    pipePulses(ctx, net, segs, z);
     // Flanges at joints and bends, banded in the owner's colour.
     for (const [x, y, own] of caps) {
       ctx.fillStyle = '#262a30'; ctx.fillRect(x - z * 0.11, y - z * 0.11, z * 0.22, z * 0.22);
@@ -1937,13 +1985,32 @@ function drawPipes(ctx, ox, oy, z, inView) {
 }
 
 /** In Paths (Pipes): which Oil Pumps reach a Refinery by pipe (green) or don't yet (orange), and the Refineries (blue). */
+/** Crude (and Fuel, offset half a dash so both show on a line carrying both) pulsing along lines that moved some lately. */
+function pipePulses(ctx, net, segs, z) {
+  const now = S.time;
+  for (const [flow, color, off] of [[net.flow, GOOD.crude.color, 0], [net.fflow || [], GOOD.fuel.color, z * 0.2]]) {
+    const flowing = (g) => now - (flow[net.comp[g[4]]] ?? -99) < 2;
+    if (!segs.some(flowing)) continue;
+    ctx.save(); ctx.lineCap = 'round';
+    ctx.strokeStyle = color; ctx.lineWidth = Math.max(1, z * 0.055);
+    ctx.setLineDash([z * 0.1, z * 0.3]); ctx.lineDashOffset = -R.time * z * 0.9 + off;
+    strokeSegs(ctx, segs, flowing);
+    ctx.restore();
+  }
+}
+
 function drawPipeRings(ctx, ox, oy, z, inView) {
   if (R.mode === 'road' && typeof UI !== 'undefined' && UI.roadMode === 'pipe') {
-    const joined = refineryPipes(ME);
+    const joined = refineryPipes(ME), fueled = fuelPipes(ME);
     ctx.lineWidth = Math.max(2, z * 0.07);
     for (const b of S.buildings) {
       if (b.dead || b.owner !== ME || !inView(b.x, b.y, 1)) continue;
       const def = BDEFS[b.type];
+      if (fuelUser(def) && buildingPipes(b).some((c) => fueled.has(c))) {
+        ctx.strokeStyle = GOOD.fuel.color; ctx.setLineDash([]);
+        ctx.beginPath(); ctx.arc(ox + (b.x + 0.5) * z, oy + (b.y + 0.5) * z, z * 0.62, 0, Math.PI * 2); ctx.stroke();
+        continue;
+      }
       if (!def.pump && !def.explodes) continue;
       const ok = def.explodes || buildingPipes(b).some((c) => joined.has(c));
       ctx.strokeStyle = def.explodes ? 'rgba(140,215,255,0.9)' : ok ? 'rgba(125,255,160,0.95)' : 'rgba(255,170,90,0.95)';

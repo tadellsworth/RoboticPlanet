@@ -1682,7 +1682,7 @@ function dispatch(p) {
     // So does one Alloy for an empty Repair Station, so it always has some on hand for the next robot.
     const dry = (BDEFS[b.type].charger && b.built && chargerDry(b)) ||
       (BDEFS[b.type].repair && b.built && !(b.stock.alloy > 0) && !(b.inc.alloy > 0) && (b.repairPts || 0) < REPAIR_HP_PER_ALLOY / 2);
-    for (const [g, n, keep, autoOnly] of needsOf(b)) if (n > 0) reqs.push({ b, g, n, pri: dry ? -1 : keep ? prioRank(b) * 3 + 2 : pri, inc: sumValues(b.inc), keep, autoOnly });
+    for (const [g, n, keep, autoOnly] of needsOf(b)) if (n > 0 && !(g === 'fuel' && b.fuelByPipe)) reqs.push({ b, g, n, pri: dry ? -1 : keep ? prioRank(b) * 3 + 2 : pri, inc: sumValues(b.inc), keep, autoOnly });
   }
   reqs.sort((a, c) => a.pri - c.pri || a.inc - c.inc || a.b.born - c.b.born);
   for (let pass = 0; pass < 4 && idle.length; pass++) {
@@ -1883,6 +1883,8 @@ function dispatch(p) {
         if (isLiquid(g)) {
           // Crude and Fuel: a Tanker comes for a load (or a Hauler, a can at a time, if no Tanker can get here).
           if (b.piped && g === 'crude') continue; // a pipeline takes it
+          if (b.pipedFuel && g === 'fuel') continue; // (Fuel too, to storage on its line)
+          if (b.fuelLine && g === 'fuel' && avail < def.out[g] - 1) continue; // (piped to what burns it: a Tanker takes only a full output's surplus)
           const full = avail >= def.out[g] - 1 || !b.staff;
           if (avail >= TRUCK_MIN_LOAD || full || !tankerReach(b)) u = take(b.x, b.y, 'haul', b, g);
         } else if (vans && farApart(b, store) && truckLinked(b, store)) {
@@ -5299,9 +5301,22 @@ function spareArmed(b, posted, all) {
   return Math.max(0, Math.min(armedIn(b), b.garrison.length - (all && b.type !== 'lander' ? 0 : keepAt(b))));
 }
 
-/** A garrison far behind the lines (no rival building within 18 tiles): it can send its last warbot. */
+/**
+ * A garrison behind the lines: it can send its last warbot. No rival building within 18 tiles, or (the rival AI's
+ * many forts) every rival building that near has another fort of ours at least 4 tiles nearer to it, standing
+ * between them, so this one isn't the front.
+ */
 function rearGarrison(b) {
-  for (const e of S.buildings) if (!e.dead && foes(e.owner, b.owner) && e.owner >= 0 && dist2(e.x, e.y, b.x, b.y) < 18 * 18) return false;
+  let shield = null;
+  for (const e of S.buildings) {
+    if (e.dead || !foes(e.owner, b.owner) || e.owner < 0) continue;
+    const d2 = dist2(e.x, e.y, b.x, b.y);
+    if (d2 >= 18 * 18) continue;
+    if (!S.players[b.owner] || !S.players[b.owner].ai) return false;
+    if (!shield) shield = S.buildings.filter((o) => !o.dead && o.built && o !== b && o.owner === b.owner && BDEFS[o.type].mil && o.garrison && o.garrison.length);
+    const lim = Math.sqrt(d2) - 4;
+    if (lim <= 0 || !shield.some((o) => dist2(o.x, o.y, e.x, e.y) <= lim * lim)) return false;
+  }
   return true;
 }
 /** Warbots garrison b can send out: every armed one from the rear (with `rear`), else all but one. */
@@ -8564,7 +8579,7 @@ function pipeNet() {
     }
     n++;
   }
-  PIPE_NET.ver = S.pipeVer; PIPE_NET.of = S; PIPE_NET.comp = comp; PIPE_NET.n = n; PIPE_NET.flow = [];
+  PIPE_NET.ver = S.pipeVer; PIPE_NET.of = S; PIPE_NET.comp = comp; PIPE_NET.n = n; PIPE_NET.flow = []; PIPE_NET.fflow = [];
   return PIPE_NET;
 }
 
@@ -8579,24 +8594,40 @@ function buildingPipes(b, net) {
   return out;
 }
 
-/** Can pipe carry Crude to or from b? Oil Pumps, buildings that use Crude, and storage. */
-function pipeEnd(b) { const d = BDEFS[b.type]; return !!(d.pump || (d.inp && d.inp.crude) || d.store); }
+/** Does a building of this kind make Fuel for pickup (a Refinery, a Bio Farm)? */
+function fuelMaker(def) { return !!(def.out && def.out.fuel); }
+/** Does a building of this kind burn Fuel (a Fuel Station, a Generator, a Flame Tower, the Missile Factory)? Storage doesn't count. */
+function fuelUser(def) { return !def.store && typeUses(def, 'fuel'); }
 
-/** How much more Crude pipe can bring building b (a Refinery stocks PIPE_FILL, an Asphalt Plant its usual inputs). */
-function pipeRoom(b) { return (BDEFS[b.type].explodes ? PIPE_FILL : INPUT_CAP) - (b.stock.crude || 0) - (b.inc.crude || 0); }
+/** Can pipe carry Crude or Fuel to or from b? Oil Pumps, what uses Crude, what makes or burns Fuel, and storage. */
+function pipeEnd(b) { const d = BDEFS[b.type]; return !!(d.pump || (d.inp && d.inp.crude) || d.store || fuelMaker(d) || fuelUser(d)); }
 
-/** Every second: each pipeline moves Crude from its pumps (and storage) to where it's used (see PIPE_COST). */
+/** How much more of liquid g pipe can bring building b (Crude: a Refinery stocks PIPE_FILL, an Asphalt Plant its usual inputs; Fuel: what it asks for). */
+function pipeRoom(b, g = 'crude') {
+  if (g === 'crude') return (BDEFS[b.type].explodes ? PIPE_FILL : INPUT_CAP) - (b.stock.crude || 0) - (b.inc.crude || 0);
+  const e = needsOf(b).find((x) => x[0] === g);
+  return e ? e[1] : 0;
+}
+
+/** Every second: each pipeline moves Crude from its pumps (and storage) to where it's used, and Fuel from where it's made (and storage) to where it's burnt (see PIPE_COST). */
 function updatePipes() {
   const net = pipeNet();
   const nets = new Map();
   for (const b of S.buildings) {
     if (b.piped) b.piped = false;
+    if (b.pipedFuel) b.pipedFuel = false;
+    if (b.fuelLine) b.fuelLine = false;
+    if (b.fuelByPipe) b.fuelByPipe = false;
     if (b.dead || !b.built || !net.n || !pipeEnd(b)) continue;
-    const def = BDEFS[b.type], kind = def.pump ? 'pumps' : def.store ? 'stores' : 'users';
+    const def = BDEFS[b.type];
     for (const c of buildingPipes(b, net)) {
       let N = nets.get(c);
-      if (!N) nets.set(c, (N = { pumps: [], users: [], stores: [] }));
-      if (N[kind].indexOf(b) < 0) N[kind].push(b);
+      if (!N) nets.set(c, (N = { pumps: [], users: [], stores: [], makers: [], burners: [] }));
+      if (def.store) { N.stores.push(b); continue; }
+      if (def.pump) N.pumps.push(b);
+      if (def.inp && def.inp.crude) N.users.push(b);
+      if (fuelMaker(def)) N.makers.push(b);
+      if (fuelUser(def)) N.burners.push(b);
     }
   }
   for (const [c, N] of nets) {
@@ -8610,6 +8641,45 @@ function updatePipes() {
     }
     for (const u of N.users) for (const s of N.stores) { const n = Math.min(Math.floor(supplyOf(s, 'crude')), Math.floor(pipeRoom(u)), left); if (n > 0) give(s, u, n); }
     if (moved) net.flow[c] = S.time; // (drawn: Crude pulsing along the pipe)
+  }
+  // Fuel. Lines joined through something that burns Fuel count as one (its tank passes Fuel on, so pipe dragged
+  // on from a Fuel Station to a Generator carries it too).
+  const root = new Map(), find = (c) => { let r = c; while (root.get(r) !== r) r = root.get(r); root.set(c, r); return r; };
+  for (const c of nets.keys()) root.set(c, c);
+  for (const [, N] of nets) for (const u of N.burners) {
+    const cs = buildingPipes(u, net);
+    for (let k = 1; k < cs.length; k++) { const a = find(cs[0]), b2 = find(cs[k]); if (a !== b2) root.set(b2, a); }
+  }
+  const lines = new Map();
+  for (const [c, N] of nets) {
+    const r = find(c);
+    let F = lines.get(r);
+    if (!F) lines.set(r, (F = { comps: [], makers: [], burners: [], stores: [] }));
+    F.comps.push(c);
+    for (const k of ['makers', 'burners', 'stores']) for (const b of N[k]) if (F[k].indexOf(b) < 0) F[k].push(b);
+  }
+  for (const [, N] of lines) {
+    // From where it's made to what burns it, then into storage; and from storage to what burns it.
+    if (!N.burners.length && !N.makers.length) continue;
+    let fleft = PIPE_RATE, fmoved = 0;
+    const room = new Map(N.burners.map((u) => [u, Math.floor(pipeRoom(u, 'fuel'))]));
+    const fgive = (from, to, n) => { bump(from.stock, 'fuel', -n); bump(to.stock, 'fuel', n); fleft -= n; fmoved += n; if (room.has(to)) room.set(to, room.get(to) - n); };
+    const fstores = N.stores.filter((s) => storeTakes(s, 'fuel'));
+    for (const m of N.makers) {
+      if (fstores.length) m.pipedFuel = true; // its Fuel goes by pipe: no Tanker needed
+      else if (N.burners.some((u) => u !== m)) m.fuelLine = true; // (what burns it on the line comes first: a Tanker takes only the surplus)
+      for (const u of N.burners) { if (u === m) continue; const n = Math.min(Math.floor(supplyOf(m, 'fuel')), room.get(u), fleft); if (n > 0) fgive(m, u, n); }
+      for (const s of fstores) { const n = Math.min(Math.floor(supplyOf(m, 'fuel')), fleft); if (n > 0) fgive(m, s, n); }
+    }
+    for (const u of N.burners) for (const s of N.stores) { const n = Math.min(Math.floor(supplyOf(s, 'fuel')), room.get(u), fleft); if (n > 0) fgive(s, u, n); }
+    // What burns Fuel on a line with somewhere it's made, or storage with some, gets it by pipe: no Tanker brings
+    // it. (Unless it has sat empty for PIPE_DRY s: then the line isn't keeping up, and Tankers bring it again.)
+    const onLine = N.makers.some((m) => !m.paused) || N.stores.some((s) => supplyOf(s, 'fuel') >= 1);
+    for (const u of N.burners) {
+      if ((u.stock.fuel || 0) >= 1) u.pipeDry = 0; else if (!u.pipeDry) u.pipeDry = S.time;
+      if (onLine && !(u.pipeDry && S.time - u.pipeDry > PIPE_DRY)) u.fuelByPipe = true;
+    }
+    if (fmoved) for (const c of N.comps) net.fflow[c] = S.time; // (drawn: Fuel pulsing along the pipe)
   }
 }
 
@@ -8699,22 +8769,50 @@ function refineryPipes(owner) {
 
 /**
  * Pipe for building b (an Oil Pump) to the nearest Refinery: to a tile beside one, or to pipe already
- * joined to one. Returns { tiles (the new pipe to lay), cost, to (the Refinery, if it goes straight to
- * one) } or { why } when there's no way (or no Refinery).
+ * joined to one. Returns { tiles (the new pipe to lay), cost } or { why } when there's no way (or no Refinery).
  */
 function pipeToRefinery(owner, b) {
   const refs = S.buildings.filter((r) => !r.dead && r.owner === owner && BDEFS[r.type].explodes);
   if (!refs.length) return { why: 'Build a Refinery first: the pipe runs from the pump to it.' };
-  const net = pipeNet(), joined = refineryPipes(owner), mine = buildingPipes(b, net);
-  if (mine.some((c) => joined.has(c))) return { why: 'This pump is already piped to a Refinery.' };
-  const beside = new Set();
-  for (const r of refs) for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1], [0, 0]]) if (inMap(r.x + di, r.y + dj)) beside.add(tIdx(r.x + di, r.y + dj));
+  return pipeToward(owner, b, refs, refineryPipes(owner), 'This pump is already piped to a Refinery.', 'No way to run pipe from here to a Refinery (water, rock or a rival\'s land in the way?).');
+}
+
+/** Where `owner` has Fuel to give by pipe: Refineries, Bio Farms and storage (not a Trade Terminal or a Crawler, which moves). */
+function fuelSources(owner) {
+  return S.buildings.filter((r) => { const d = BDEFS[r.type]; return !r.dead && r.owner === owner && (fuelMaker(d) || (d.store && !d.terminal && !d.mobile)); });
+}
+/** The pipe networks (of `owner`) joined to a place with Fuel to give (and on through anything that burns Fuel: it passes Fuel on). */
+function fuelPipes(owner) {
+  const net = pipeNet(), out = new Set();
+  for (const b of fuelSources(owner)) for (const c of buildingPipes(b, net)) out.add(c);
+  const relays = S.buildings.filter((b) => !b.dead && b.owner === owner && fuelUser(BDEFS[b.type])).map((b) => buildingPipes(b, net)).filter((cs) => cs.length > 1);
+  for (let grew = true; grew;) { grew = false; for (const cs of relays) if (cs.some((c) => out.has(c)) && cs.some((c) => !out.has(c))) { for (const c of cs) out.add(c); grew = true; } }
+  return out;
+}
+
+/**
+ * Pipe for building b (one that burns Fuel: a Fuel Station, a Generator, a Flame Tower, the Missile Factory) to the
+ * nearest place with Fuel: beside a Refinery, a Bio Farm or storage, or to pipe already joined to one. Returns
+ * { tiles, cost } or { why }.
+ */
+function pipeToFuel(owner, b) {
+  const srcs = fuelSources(owner).filter((r) => r !== b);
+  if (!srcs.length) return { why: 'There\'s nowhere with Fuel to pipe it from.' };
+  return pipeToward(owner, b, srcs, fuelPipes(owner), 'It\'s already piped to Fuel.', 'No way to run pipe from here to storage, a Refinery or a Bio Farm (water, rock or a rival\'s land in the way?).');
+}
+
+/** Pipe from building b to the nearest of `ends` (a tile beside one) or to pipe on one of the `joined` networks (see pipeToRefinery). */
+function pipeToward(owner, b, ends, joined, already, noWay) {
+  const net = pipeNet(), mine = buildingPipes(b, net);
+  if (mine.some((c) => joined.has(c))) return { why: already };
+  const beside = new Set(), endAt = new Set();
+  for (const r of ends) { endAt.add(tIdx(r.x, r.y)); for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1], [0, 0]]) if (inMap(r.x + di, r.y + dj)) beside.add(tIdx(r.x + di, r.y + dj)); }
   const start = tIdx(b.x, b.y);
   const route = pipeRoute(owner, start, (t) => beside.has(t) || (S.pipe[t] === owner + 1 && joined.has(net.comp[t])), 80);
-  if (!route) return { why: 'No way to run pipe from here to a Refinery (water, rock or a rival\'s land in the way?).' };
-  // No pipe under the pump itself unless it stands right beside the line's end.
-  const tiles = route.filter((t, k) => !S.pipe[t] && !(k === 0 && route.length > 1) && !(S.bAt[t] && k === route.length - 1 && route.length > 1 && BDEFS[getE(S.bAt[t]).type].explodes));
-  // A pump right beside its Refinery: one tile of pipe under the pump joins them.
+  if (!route) return { why: noWay };
+  // No pipe under b itself unless it stands right beside the line's end, nor under the building it runs to.
+  const tiles = route.filter((t, k) => !S.pipe[t] && !(k === 0 && route.length > 1) && !(k === route.length - 1 && route.length > 1 && endAt.has(t)));
+  // b right beside where it's going: one tile of pipe under it joins them.
   if (!tiles.length && !route.some((t) => S.pipe[t])) tiles.push(start);
   const cost = {};
   for (const t of tiles) { const c = pipeCost(t); for (const g in c) cost[g] = (cost[g] || 0) + c[g]; }
