@@ -5303,7 +5303,7 @@ function spareArmed(b, posted, all) {
     for (const id of b.garrison) { const u = getE(id); if (u && botArmed(u) && (posted || u.post !== b.id)) n++; }
     return n;
   }
-  return Math.max(0, Math.min(armedIn(b), b.garrison.length - (all && b.type !== 'lander' ? 0 : keepAt(b))));
+  return Math.max(0, Math.min(armedIn(b), b.garrison.length - (all === 'every' || (all && b.type !== 'lander') ? 0 : keepAt(b))));
 }
 
 /**
@@ -6587,7 +6587,7 @@ function attackSources(owner, target, posted, all) {
   return out.map((o) => o.b);
 }
 
-/** Armed warbots that could join an attack on `target` (each garrison keeps one at home; with `all`, only the Command Base does). */
+/** Armed warbots that could join an attack on `target` (each garrison keeps one at home; with `all`, only the Command Base does; with 'every', none). */
 function attackAvailable(owner, target, all) {
   const posted = usesPosts(owner);
   let n = 0;

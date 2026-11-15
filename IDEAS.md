@@ -62,8 +62,11 @@ the Haulers disagree about is given up after four minutes); two Ore Mines went s
 gatherer now counts only the deposits none of its kind already works); and the rival spans canyons onto a rival's mesa
 or plateau with a Viaduct (see Fortresses in the README). Still worth a look: Ore near home is sparse at the Normal
 level (about a tile and a half inside the starting border, sometimes none), so the first minutes hang on how well the
-rival picks its first Ore Mine. A sign of it in the tests: a rival with one Ore Mine runs out of Alloy and its army
-stops at five warbots (gunshy-test: it never gathers the nine it wants to clear a turret). (Fixed: in a 2 v 2 a rival
+rival picks its first Ore Mine. (Fixed: the gunshy-test's rival stuck at four warbots wasn't short of Ore after all: the
+test's turret covered its Chip Fab, Fuel Station, Quarries and Harvesters, so no Chips reached the Foundry and it could
+never make the one more warbot it needed to clear the gun. A factory, gatherer or Fuel Station a gun has covered for a
+minute no longer counts in its build plan (`aiShut`: another goes up out of reach), and when the gun has stood for two
+and a half minutes with no new warbot for two, every warbot goes, the Command Base's last one too.) (Fixed: in a 2 v 2 a rival
 that captured a Command Base had two road networks, each counting as home, so Crystal piled on one side while the Chip
 Fabs on the other went without, and its army stopped growing; `aiJoinBases` now joins a captured base by road.)
 

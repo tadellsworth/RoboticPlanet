@@ -29,7 +29,7 @@ check('every robot and vehicle you can make is named', !missingR.length, missing
 // Contents links and sections.
 const ids = new Set([...help.matchAll(/<section[^>]*\sid="([^"]+)"/g)].map((m) => m[1]));
 const jumps = [...help.matchAll(/data-jump="([^"]+)"/g)].map((m) => m[1]);
-const toc = (help.match(/<nav class="help-toc">([\s\S]*?)<\/nav>/) || [])[1] || '';
+const toc = (help.match(/<nav class="help-toc"[^>]*>([\s\S]*?)<\/nav>/) || [])[1] || '';
 const tocIds = [...toc.matchAll(/data-jump="([^"]+)"/g)].map((m) => m[1]);
 check('there is a contents list with links', tocIds.length >= 8, tocIds.length);
 const broken = jumps.filter((j) => j !== 'hs-top' && !ids.has(j));

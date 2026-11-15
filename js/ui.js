@@ -89,8 +89,9 @@ function initUI() {
     const a = e.target.closest && e.target.closest('[data-jump]');
     if (!a) return;
     e.preventDefault();
-    const el = document.getElementById(a.dataset.jump);
-    if (el) el.scrollIntoView({ block: 'start', behavior: 'smooth' });
+    // (straight there: a smooth scroll down a long text takes a while, and scrollIntoView can move the page too)
+    const el = document.getElementById(a.dataset.jump), body = $('screen-help').querySelector('.help-body');
+    if (el && body) body.scrollTop += el.getBoundingClientRect().top - body.getBoundingClientRect().top - 4;
   });
 
   // Pause menu

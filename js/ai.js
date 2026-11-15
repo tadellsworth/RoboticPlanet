@@ -102,6 +102,15 @@ function aiTurtleWalls(p) {
   }
 }
 
+/**
+ * A factory, gatherer or Fuel Station an enemy gun has covered for over a minute: out of action (no robot goes near
+ * it), so the build plan doesn't count it and puts up another out of the gun's reach (aiFindSpot keeps clear of guns).
+ * Without this, a turret over the only Chip Fab or Fuel Station left the colony unable to make the warbots to clear it.
+ */
+function aiShut(b) {
+  return b.built && !!b.underFire && S.time - b.underFire > 60 && !BDEFS[b.type].mil && (!!BDEFS[b.type].staff || b.type === 'charger');
+}
+
 function aiThink(p) {
   const P = S.players[p];
   const lvl = aiLevel(p), st = aiStyle(p);
@@ -114,7 +123,7 @@ function aiThink(p) {
   const counts = {};
   let sites = 0;
   for (const b of me) {
-    counts[b.type] = (counts[b.type] || 0) + 1;
+    if (!aiShut(b)) counts[b.type] = (counts[b.type] || 0) + 1;
     if (!b.built && !BDEFS[b.type].prepaid) sites++;
   }
   const maxSites = p === 0 && P.ai ? 2 : lvl.maxSites;
@@ -129,7 +138,7 @@ function aiThink(p) {
   const kinds = {};
   for (const u of S.bots) if (!u.dead && u.owner === p) kinds[u.type] = (kinds[u.type] || 0) + 1;
   workers = kinds.worker || 0;
-  for (const b of me) if (BDEFS[b.type].staff && !BDEFS[b.type].crew) staffed++;
+  for (const b of me) if (BDEFS[b.type].staff && !BDEFS[b.type].crew && !aiShut(b)) staffed++;
   // Keep a few workers free to build: a colony with every worker staffed stalls.
   const canStaffMore = staffed + Math.max(3, Math.round(workers * 0.2)) <= workers;
   // Resources are in separate fields: when one kind runs short inside our land, expanding toward
@@ -1213,7 +1222,10 @@ function aiClearGuns(p, lvl) {
   if (P.gunRally && (!threats.length || threats[0].b.id !== P.gunTarget)) { if (rallyById(P.gunRally)) recallRally(P.gunRally); P.gunRally = 0; }
   if (!threats.length) { P.gunTarget = 0; P.gunNeed = 0; P.gunWant = 0; return; }
   const t = threats[0].b;
-  if (P.gunTarget !== t.id) { P.gunTarget = t.id; P.gunSince = S.time; }
+  const army = S.bots.filter((u) => !u.dead && u.owner === p && isArmy(u)).length;
+  if (P.gunTarget !== t.id) { P.gunTarget = t.id; P.gunSince = S.time; P.gunArmyN = army; P.gunArmyT = S.time; }
+  if (army > (P.gunArmyN ?? -1)) { P.gunArmyN = army; P.gunArmyT = S.time; }
+  if (army < (P.gunArmyN ?? 0)) P.gunArmyN = army;
   // A missile, if a Silo is in range and none is on its way already.
   if (!S.missiles.some((m) => m.owner === p && m.target === t.id) && silosInRange(p, t).some(siloReady)) fireMissile(p, t);
   // Howitzers free to shell it (aiSiege also puts it first).
@@ -1228,12 +1240,15 @@ function aiClearGuns(p, lvl) {
   const need = aiGunNeed(t);
   const going = S.bots.filter((u) => !u.dead && u.owner === p && isArmy(u) && u.task && u.task.type === 'attack' && u.task.target === t.id).length;
   let avail = attackAvailable(p, t), all = false;
-  const army = S.bots.filter((u) => !u.dead && u.owner === p && isArmy(u)).length;
   P.gunWant = Math.max(need + 2, army + Math.max(0, need - going - avail));
   P.gunNeed = Math.max(0, need - going);
   if (going >= need || S.time < (P.gunAttackAt || 0)) return;
   // Just short: the forts in reach send their last warbots too (never the Command Base's), the gun is that bad.
   if (avail + going < need && attackAvailable(p, t, true) + going >= need) { avail = attackAvailable(p, t, true); all = true; }
+  // Stuck: the gun has stood for over two and a half minutes and no new warbot has come for two (the gun may be what
+  // stops the Foundry: a Chip Fab or Fuel Station under it). Then every warbot goes, the Command Base's last one too.
+  const stuck = S.time - (P.gunSince ?? S.time) > 150 && S.time - (P.gunArmyT ?? S.time) > 120;
+  if (avail + going < need && stuck && attackAvailable(p, t, 'every') + going >= need) { avail = attackAvailable(p, t, 'every'); all = 'every'; }
   if (avail + going >= need) {
     const sent = sendAttack(p, t, Math.min(avail, need - going + 2), all);
     if (sent) { P.gunAttackAt = S.time + 20; P.lastAttack = S.time; P.siegeAt = { x: t.x, y: t.y, until: S.time + 90 }; }

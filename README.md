@@ -626,7 +626,11 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
   workers crawled, which in turn starved the Fiber, Ore and Alloy. Its forts (`rearGarrison`): one counts as behind the
   lines, free to send its last warbot on a march, when no rival building is within 18 tiles, or when every one that
   near has another fort of ours, with someone in it, at least 4 tiles nearer to it. Its Viaducts (Sky islands): not
-  into the enemy's guns, nor for four minutes where one was just knocked down (`P.viaLost`).
+  into the enemy's guns, nor for four minutes where one was just knocked down (`P.viaLost`). Under an enemy gun
+  (`aiClearGuns`): a factory, gatherer or Fuel Station a gun has covered for over a minute doesn't count in its build
+  plan (`aiShut`), so another goes up out of reach; and when the gun has stood for two and a half minutes with no new
+  warbot for two (the gun may be over the Chip Fab the Foundry needs), every warbot goes, the Command Base's last one too
+  (`attackAvailable(p, t, 'every')`).
   Once it's ready to march it orders a Bulwark for every five warbots (two, three against a dug-in rival) and a Torch
   for every four (three, four), only with Fuel for Torches. **Raider**: raids three times as often from early on,
   sending every warbot it can spare. **Rusher**: attacks early with a fast-growing army. **Tycoon**: its bots work 15%
