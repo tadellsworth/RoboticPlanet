@@ -636,7 +636,9 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
   down to 1×, if frames run below ~45 a second.
 - **Game speed:** the speed chip in the top bar opens 0.75×, 0.875×, 1×, 2× and 3×.
 - **Sound** (`js/audio.js`, all Web Audio, no audio files): a generative synthwave score that follows the game (menu,
-  building, war when you're attacked or fighting, and an alarm while a nuke flies), written a bar at a time from chord
+  building, war when you're attacked or fighting, and an alarm while a nuke flies; the building music takes turns between
+  three themes, `BUILD_THEMES`, every `MUSIC_ROTATE` seconds of play: the original, Night Drive (Dorian, octave bass,
+  claps, a plucked lead) and Horizon (half-time, a chord every two bars, an arpeggio in threes)), written a bar at a time from chord
   progressions, arpeggios, bass, drums and short melodies in 8-bar sections. Effects include radio blips for orders, a
   Pulse Turret's tesla-coil discharge (a short charge whine, then a buzzing arc crackling with sparks: `pulse`), a
   nuke siren and blast, and sounds from the map when on screen (traffic hum, welding, concrete, asphalt, truck air

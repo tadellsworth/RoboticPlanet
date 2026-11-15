@@ -8,7 +8,8 @@
  * and horns in jams, and the wind of each biome (with birds and insects in the forest).
  *
  * Music: a generative synthwave score that follows the game. A slow theme on the menu, a calm
- * groove while you build, a driving track when you're under attack or at war, and an alarm while a
+ * groove while you build (three of them, taking turns every ten minutes of play: the original,
+ * Night Drive and Horizon), a driving track when you're under attack or at war, and an alarm while a
  * nuclear missile is in the air. It's written a bar at a time from chord progressions, arpeggios,
  * bass lines, drum patterns and short melodies, arranged in 8-bar sections that bring parts in and
  * out, so it never loops exactly.
@@ -34,11 +35,13 @@ function setVolume(kind, v) {
   const ac = AUDIO.ctx;
   if (!ac) return;
   if (kind === 'fx' && AUDIO.fxBus) AUDIO.fxBus.gain.setTargetAtTime(AUDIO.fx, ac.currentTime, 0.05);
-  if (kind === 'music' && AUDIO.musicBus) AUDIO.musicBus.gain.setTargetAtTime(AUDIO.music * MUSIC_LEVEL, ac.currentTime, 0.05);
+  if (kind === 'music' && AUDIO.musicBus) AUDIO.musicBus.gain.setTargetAtTime(musicLevel(), ac.currentTime, 0.05);
 }
 function clampV(v) { return Math.max(0, Math.min(1, +v || 0)); }
 
 const MUSIC_LEVEL = 0.95; // the music bus at full Music volume
+/** The music bus's level: the Music volume, and the mood's own trim (a sparser theme is brought up to match). */
+function musicLevel() { return AUDIO.music * MUSIC_LEVEL * ((typeof MUSIC !== 'undefined' && MUSIC.def && MUSIC.def.gain) || 1); }
 
 /** Browsers only start audio from a tap or key press: called on the first one (and on Start). */
 function audioUnlock() {
@@ -99,7 +102,7 @@ function buildAudioGraph(ac) {
   for (let i = 0; i < 2048; i++) { const x = (i / 2047) * 2 - 1; A.boomCurve[i] = Math.tanh(x * 2.8) / Math.tanh(2.8); }
 
   A.musicBus = ac.createGain();
-  A.musicBus.gain.value = A.music * MUSIC_LEVEL;
+  A.musicBus.gain.value = musicLevel();
   A.musicDuck = ac.createGain();
   A.musicLP = ac.createBiquadFilter();
   A.musicLP.type = 'lowpass';
@@ -918,10 +921,13 @@ function musicMood() {
     else if (u.owner === 0 && u.fight) threat++;
   }
   if (threat >= 3) MUSIC.warUntil = S.time + 40;
-  return S.time < MUSIC.warUntil ? 'war' : 'build';
+  return S.time < MUSIC.warUntil ? 'war' : BUILD_THEMES[Math.floor(S.time / MUSIC_ROTATE) % BUILD_THEMES.length];
 }
 
-const MINOR = [0, 2, 3, 5, 7, 8, 10], PHRYGIAN = [0, 1, 3, 5, 7, 8, 10];
+/** The build music's themes, taking turns every MUSIC_ROTATE seconds of play (a game starts on the first). */
+const BUILD_THEMES = ['build', 'build2', 'build3'], MUSIC_ROTATE = 600;
+
+const MINOR = [0, 2, 3, 5, 7, 8, 10], PHRYGIAN = [0, 1, 3, 5, 7, 8, 10], DORIAN = [0, 2, 3, 5, 7, 9, 10];
 const CHORD = { m: [0, 3, 7], M: [0, 4, 7], m7: [0, 3, 7, 10], M7: [0, 4, 7, 11], dim: [0, 3, 6] };
 
 /** Each mood: tempo, keys (MIDI note of the root, octave 3), scale, chord progressions, and its arrangements. */
@@ -941,6 +947,32 @@ const MOODS = {
       ['pad', 'arp', 'bass', 'kick', 'snare', 'hat', 'lead'],
       ['pad', 'lead', 'hat', 'bassW'],
       ['pad', 'bass', 'kick', 'hat', 'lead'],
+    ],
+  },
+  // Night Drive: a little quicker and brighter (Dorian), an octave-pumping bass, claps and a plucked lead.
+  build2: {
+    bpm: 102, keys: [55, 57, 53], scale: DORIAN, chordBars: 1, lead: 'pluck',
+    progs: [[[0, 'm7'], [5, 'M'], [0, 'm7'], [5, 'M']], [[0, 'm'], [10, 'M'], [5, 'M'], [0, 'm']], [[0, 'm7'], [3, 'M'], [10, 'M'], [5, 'M']], [[5, 'M'], [10, 'M'], [0, 'm'], [0, 'm7']]],
+    arrange: [
+      ['pad', 'arp'],
+      ['pad', 'arp', 'bassOct', 'hat8'],
+      ['pad', 'arp', 'bassOct', 'kick', 'clap', 'hat8'],
+      ['pad', 'arp', 'bassOct', 'kick', 'clap', 'hat8', 'lead'],
+      ['pad', 'lead', 'hat8', 'bassW', 'shimmer'],
+      ['pad', 'bassOct', 'kick', 'clap', 'hat8', 'lead'],
+    ],
+  },
+  // Horizon: slower and dreamier: half-time drums, a chord every two bars, an arpeggio rolling in threes over the beat.
+  build3: {
+    bpm: 88, keys: [52, 54, 50], scale: MINOR, chordBars: 2, gain: 1.25,
+    progs: [[[0, 'm'], [8, 'M'], [10, 'M'], [7, 'm']], [[0, 'm7'], [3, 'M7'], [8, 'M7'], [10, 'M']], [[5, 'm'], [0, 'm'], [8, 'M'], [10, 'M']]],
+    arrange: [
+      ['pad', 'arp3'],
+      ['pad', 'arp3', 'bassW', 'shimmer'],
+      ['pad', 'arp3', 'bassHalf', 'kickHalf', 'snareHalf', 'hat'],
+      ['pad', 'arp3', 'bassHalf', 'kickHalf', 'snareHalf', 'hat', 'lead'],
+      ['pad', 'shimmer', 'lead', 'bassW'],
+      ['pad', 'arp3', 'bassHalf', 'kickHalf', 'snareHalf', 'lead'],
     ],
   },
   war: {
@@ -990,6 +1022,7 @@ const rnd = (n) => Math.floor(Math.random() * n);
 function musicSetMood(m, t) {
   const d = MOODS[m];
   MUSIC.mood = m; MUSIC.def = d;
+  if (AUDIO.musicBus) AUDIO.musicBus.gain.setTargetAtTime(musicLevel(), t, 0.4); // (each theme at its own trim)
   MUSIC.stepDur = 60 / d.bpm / 4;
   MUSIC.key = d.keys[rnd(d.keys.length)];
   MUSIC.prog = d.progs[rnd(d.progs.length)];
@@ -1029,6 +1062,12 @@ function musicStep(t) {
   // Drums
   if (L.has('kick') && (s === 0 || s === 8 || (s === 10 && MUSIC.bar % 2 === 1))) mKick(t, 0.9);
   if (L.has('kick4') && s % 4 === 0) mKick(t, 1);
+  if (L.has('kickHalf') && (s === 0 || (s === 10 && MUSIC.bar % 2 === 1))) mKick(t, 0.95);
+  if (L.has('snareHalf') && s === 8) mSnare(t, 1.1);
+  if (L.has('snareHalf') && fill && s >= 12 && s % 2 === 0) mSnare(t, 0.35 + (s - 12) * 0.12);
+  if (L.has('clap') && (s === 4 || s === 12)) mClap(t, 1);
+  if (L.has('clap') && fill && s === 15) mClap(t, 0.5);
+  if (L.has('hat8') && s % 2 === 0) mHat(t, s % 4 === 2 ? 0.07 : 0.025, s % 4 === 2 ? 1 : 0.6);
   if (L.has('heart') && (s === 0 || s === 3)) mKick(t, s ? 0.5 : 0.7);
   if (L.has('snare') && (s === 4 || s === 12)) mSnare(t, 1);
   if (L.has('snare') && fill && s >= 13) mSnare(t, 0.4 + (s - 12) * 0.15);
@@ -1039,12 +1078,19 @@ function musicStep(t) {
   if (L.has('bass') && s % 2 === 0) mBass(t, root - 12 + (s % 8 === 6 ? 12 : 0), sd * 1.6);
   if (L.has('bassW') && s === 0) mBass(t, root - 12, sd * 15, true);
   if (L.has('bass16')) mBass(t, root - 12 + (s % 8 === 7 ? 12 : 0), sd * 0.8);
+  if (L.has('bassOct') && s % 2 === 0) mBass(t, root - 12 + (s % 4 === 2 ? 12 : 0), sd * 1.5); // root and octave, eighth notes
+  if (L.has('bassHalf') && (s === 0 || s === 6 || s === 10)) mBass(t, root - 12 + (s === 6 ? 7 : 0), sd * (s === 0 ? 5 : 3), true);
   // Arpeggio: chord tones across two octaves.
   if (L.has('arp') || (L.has('arp8') && s % 2 === 0)) {
     const notes = [...chord.map((n) => n + 12), ...chord.map((n) => n + 24)];
     const k = L.has('arp8') ? s / 2 : s;
     const i = MUSIC.arpMode === 0 ? k % notes.length : MUSIC.arpMode === 1 ? pingPong(k, notes.length) : (k * 5 + MUSIC.bar * 3) % notes.length;
     mArp(t, MUSIC.key + notes[i], s);
+  }
+  // In threes: six notes a bar against the four beats, carrying on from bar to bar.
+  if (L.has('arp3') && s % 3 === 0) {
+    const notes = [...chord.map((n) => n + 12), ...chord.map((n) => n + 24)], k = s / 3 + MUSIC.bar * 6;
+    mArp(t, MUSIC.key + notes[MUSIC.arpMode === 1 ? pingPong(k, notes.length) : k % notes.length], s);
   }
   if (L.has('stab') && [0, 3, 6, 10].includes(s)) mStab(t, chord);
   // Shimmer: a slow, high bell arpeggio drifting through the chord.
@@ -1053,7 +1099,7 @@ function musicStep(t) {
   // Melody
   if (L.has('lead') && MUSIC.melody) {
     const n = MUSIC.melody[s];
-    if (n) mLead(t, n[0], n[1] * sd);
+    if (n) (d.lead === 'pluck' ? mPluck : mLead)(t, n[0], n[1] * sd);
   }
 }
 
@@ -1061,7 +1107,9 @@ function pingPong(k, n) { const p = 2 * n - 2; const m = k % p; return m < n ? m
 
 /** At the top of each bar: mood changes, sections, the chord, pads and the melody for the bar. */
 function musicBar(t) {
-  if (MUSIC.want !== MUSIC.mood) musicSetMood(MUSIC.want, t);
+  // (one build theme gives way to the next only at the end of an 8-bar section)
+  const turn = BUILD_THEMES.includes(MUSIC.want) && BUILD_THEMES.includes(MUSIC.mood) && MUSIC.bar % 8 !== 7;
+  if (MUSIC.want !== MUSIC.mood && !turn) musicSetMood(MUSIC.want, t);
   else {
     MUSIC.bar++;
     if (MUSIC.bar % 8 === 0) musicSection();
@@ -1226,6 +1274,28 @@ function mLead(t, n, dur, vol) {
   o.connect(g); o2.connect(g2).connect(g); o3.connect(g3).connect(lp).connect(g);
   sends(g, 1, 0.55, 0.45);
   for (const x of [o, o2, o3]) { x.start(t); x.stop(t + ring + 0.1); }
+}
+
+/** Night Drive's lead: a plucked synth, two detuned saws through a filter that snaps shut, into the echo. */
+function mPluck(t, n, dur, vol) {
+  const ac = AUDIO.ctx, f = midiHz(n), lp = ac.createBiquadFilter(), g = ac.createGain();
+  lp.type = 'lowpass'; lp.Q.value = 3;
+  lp.frequency.setValueAtTime(4200, t); lp.frequency.exponentialRampToValueAtTime(520, t + 0.22);
+  const ring = Math.min(0.9, Math.max(0.3, dur * 1.1));
+  env(g, t, 0.003, 0.04 * (vol || 1), 0.01, ring);
+  for (const det of [-6, 6]) { const o = mOsc('sawtooth', f, t); o.detune.value = det; o.connect(lp); o.start(t); o.stop(t + ring + 0.1); }
+  lp.connect(g); sends(g, 1, 0.45, 0.55);
+}
+
+/** A hand clap: three quick bursts of band-passed noise and a short tail. */
+function mClap(t, v) {
+  const ac = AUDIO.ctx, src = ac.createBufferSource(), bp = ac.createBiquadFilter(), g = ac.createGain();
+  src.buffer = AUDIO.noise; bp.type = 'bandpass'; bp.frequency.value = 1300; bp.Q.value = 1.1;
+  g.gain.setValueAtTime(0.0001, t);
+  for (const k of [0, 0.011, 0.022]) { g.gain.setValueAtTime(0.15 * v, t + k); g.gain.exponentialRampToValueAtTime(0.02, t + k + 0.009); }
+  g.gain.setValueAtTime(0.11 * v, t + 0.033); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.21);
+  src.connect(bp).connect(g); sends(g, 1, 0.4, 0);
+  src.start(t, Math.random()); src.stop(t + 0.26);
 }
 
 function mDrone(t, n, dur, bar) {
