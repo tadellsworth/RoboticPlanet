@@ -1027,15 +1027,19 @@ function aiClearGuns(p, lvl) {
     if (S.zone[tIdx(Math.floor(u.x), Math.floor(u.y))] !== z || !rocketTarget(u, t)) continue;
     orderBombard(p, [u.id], t);
   }
-  // Warbots: enough to win, from the garrisons in reach. Already on their way: wait for them.
+  // Warbots: enough to win, from the garrisons in reach. Already on their way: wait for them. Too few to spare
+  // (each garrison keeps one at home): the Foundry makes up the difference (P.gunWant sets the army it wants).
   const need = aiGunNeed(t);
-  P.gunWant = need + 2; // (each garrison keeps one at home)
   const going = S.bots.filter((u) => !u.dead && u.owner === p && u.type === 'warbot' && u.task && u.task.type === 'attack' && u.task.target === t.id).length;
+  let avail = attackAvailable(p, t), all = false;
+  const army = S.bots.filter((u) => !u.dead && u.owner === p && u.type === 'warbot').length;
+  P.gunWant = Math.max(need + 2, army + Math.max(0, need - going - avail));
   P.gunNeed = Math.max(0, need - going);
   if (going >= need || S.time < (P.gunAttackAt || 0)) return;
-  const avail = attackAvailable(p, t);
+  // Just short: the forts in reach send their last warbots too (never the Command Base's), the gun is that bad.
+  if (avail + going < need && attackAvailable(p, t, true) + going >= need) { avail = attackAvailable(p, t, true); all = true; }
   if (avail + going >= need) {
-    const sent = sendAttack(p, t, Math.min(avail, need - going + 2));
+    const sent = sendAttack(p, t, Math.min(avail, need - going + 2), all);
     if (sent) { P.gunAttackAt = S.time + 20; P.lastAttack = S.time; P.siegeAt = { x: t.x, y: t.y, until: S.time + 90 }; }
     return;
   }

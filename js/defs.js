@@ -175,6 +175,12 @@ const BOTS = {
     desc: 'A big, slow, armoured creature. Brutes tear up roads and batter buildings, and bite hard.' },
 };
 const BOT_ORDER = ['worker', 'hauler', 'truck', 'tanker', 'roadtrain', 'freight', 'cargoship', 'tankship', 'ferry', 'cargoplane', 'bomber', 'crawler', 'agribot', 'paver', 'warbot', 'rocket'];
+/**
+ * Unit types switched off for now, for everyone: no Bot Foundry (yours or a rival's) makes them, the menus leave them
+ * out, and any in a saved game are taken out when it loads (see botBanned, dropOffBots). Take a type out of this set
+ * to bring it back: all its code is still there.
+ */
+const BOTS_OFF = new Set(['rocket']); // the Howitzer (BOTS.rocket)
 /*
  * Who carries what (see dispatch):
  * - Haulers (2 goods) do the short runs: between buildings less than TRUCK_MIN_DIST tiles apart.
@@ -500,7 +506,7 @@ const SHAPE_PRESETS = [
   { name: 'River delta', group: 'water', blurb: 'A wide braided river splits the planet: bots wade the shallow fords, trucks need bridges. Rich islets midstream, fertile banks.', w: 1.1, h: 1.1, delta: true, naval: true, flat: true, tip: 'River delta: a braided river runs across the planet. Bots can wade the shallow fords (slowly); haulers and trucks need a bridge. The islet midstream is rich, and the banks are fertile for Bio Farms.' },
   { name: 'Volcano', group: 'heights', blurb: 'A volcano in the middle with lava rivers down its flanks and the richest deposits on its slopes, until it erupts.', w: 1.1, h: 1.1, volcano: true, minLevels: 4, tip: 'Volcano: the richest deposits lie on its slopes, but every few minutes it erupts and rains lava bombs on them (it rumbles first). Bridge the lava rivers, or go round where they end.' },
   { name: 'Fault line', group: 'divided', blurb: 'A crack runs across the planet. About 15 minutes in an earthquake splits it open into a chasm, leaving only a couple of rock arches to cross.', w: 1, h: 1, fault: true, tip: 'Fault line: the scar across the middle opens into a chasm about 15 minutes in, swallowing whatever stands on it, with tremors first. Only two rock arches stay standing (a Sky bridge opens another way across).' },
-  { name: 'Canyon maze', group: 'divided', blurb: 'A labyrinth of narrow canyons, its dead ends full of riches: ambushes everywhere, and Howitzers shoot over the walls.', w: 1, h: 1, maze: true, tip: 'Canyon maze: narrow canyons wind between the bases, with riches in the dead ends. A tunnel can cut through a wall, at a price.' },
+  { name: 'Canyon maze', group: 'divided', blurb: 'A labyrinth of narrow canyons, its dead ends full of riches: ambushes everywhere, and artillery shoots over the walls.', w: 1, h: 1, maze: true, tip: 'Canyon maze: narrow canyons wind between the bases, with riches in the dead ends. A tunnel can cut through a wall, at a price.' },
 ];
 // Map events: what happens on the map types that change as you play (seconds unless noted).
 // Tidal flats: the first low tide lasts `firstLow`, then high and low take turns, with a warning first;

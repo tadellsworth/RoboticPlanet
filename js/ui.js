@@ -1004,7 +1004,7 @@ function renderBoost() {
   // Unit types every rival can be stopped making, for the rest of this game.
   if (rivals.length) {
     html += `<div class="boost-row ban-row"><div class="boost-head"><b>Rivals can't build</b><small>for the rest of this game</small></div><div class="ban-chips">` +
-      BANNABLE.map((k) => { const on = !!(S.ban && S.ban[k]); return `<button class="btn small ban-chip${on ? ' on' : ''}" data-ban="${k}" aria-pressed="${on}">${on ? '⊘ ' : ''}${BOTS[k].plural}</button>`; }).join('') +
+      BANNABLE.filter((k) => !BOTS_OFF.has(k)).map((k) => { const on = !!(S.ban && S.ban[k]); return `<button class="btn small ban-chip${on ? ' on' : ''}" data-ban="${k}" aria-pressed="${on}">${on ? '⊘ ' : ''}${BOTS[k].plural}</button>`; }).join('') +
       '</div><p class="hint">Tap one to stop every rival making it, and again to allow it. Ones they already have carry on; any they had queued are called off.</p></div>';
   }
   body.innerHTML = html;
@@ -1462,7 +1462,7 @@ function groupWords(ids) {
 
 function saveGroup(k) {
   const mac = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent || '');
-  if (!UI.sel.length) { toast(`Select warbots or Howitzers first (drag a box round them), then ${mac ? '⌘ or ⌥' : 'Ctrl'}+${k} saves them as group ${k}.`, 'info'); return; }
+  if (!UI.sel.length) { toast(`Select ${BOTS_OFF.has('rocket') ? 'warbots' : 'warbots or Howitzers'} first (drag a box round them), then ${mac ? '⌘ or ⌥' : 'Ctrl'}+${k} saves them as group ${k}.`, 'info'); return; }
   const G = ctrlGroups();
   // A robot is in one group at a time: putting it in this one takes it out of any other.
   for (const g in G) G[g] = G[g].filter((id) => !UI.sel.includes(id));
@@ -4332,7 +4332,7 @@ function refreshResearch() {
 function renderFoundryOrders(b) {
   const el = $('sh-orders');
   if (!el) return;
-  const versus = warOn(), shows = (k) => (versus || !BOTS[k].war) && !BOTS[k].sea && !BOTS[k].rail && !BOTS[k].air, kinds = foundryList(b).filter(shows); // ships, trains and planes come from yards
+  const versus = warOn(), shows = (k) => (versus || !BOTS[k].war) && !BOTS[k].sea && !BOTS[k].rail && !BOTS[k].air && !BOTS_OFF.has(k), kinds = foundryList(b).filter(shows); // ships, trains and planes come from yards (and switched-off types from nowhere)
   el.innerHTML = kinds.map((k, i) => `<div class="order-row" data-k="${k}">
     <span class="order-move"><button class="btn ghost" data-k="${k}" data-m="-1" aria-label="Move ${BOTS[k].plural} up" ${i ? '' : 'disabled'}>▲</button><button class="btn ghost" data-k="${k}" data-m="1" aria-label="Move ${BOTS[k].plural} down" ${i < kinds.length - 1 ? '' : 'disabled'}>▼</button></span>
     <span>${BOTS[k].plural}<small id="sh-o-${k}">none queued</small></span>
@@ -5000,7 +5000,7 @@ function refreshPopSheet() {
     else add(u.type, 'free');
   }
   const part = (o, k, label) => (o[k] ? `${o[k]} ${label}` : '');
-  const rows = BOT_ORDER.filter((k) => n[k] || ((warOn() || !BOTS[k].war) && (navalMap() || !BOTS[k].naval))).map((k) => {
+  const rows = BOT_ORDER.filter((k) => n[k] || (!BOTS_OFF.has(k) && (warOn() || !BOTS[k].war) && (navalMap() || !BOTS[k].naval))).map((k) => {
     const o = n[k] || { total: 0 };
     const bits = k === 'warbot'
       ? [part(o, 'garrison', 'in garrisons'), part(o, 'field', 'in the field'), part(o, 'noAmmo', 'out of Ammo')]

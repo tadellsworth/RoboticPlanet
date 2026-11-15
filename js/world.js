@@ -3609,6 +3609,9 @@ function deserializeGame(json) {
   if (oldWays) wayOwnersFromLand();
   if (!S.posts) { placePosts(S.seed); for (const p of S.posts) if (S.decor) S.decor[tIdx(p.x, p.y)] = 0; } // saves from before Trade Posts
   computeTerritory(); // land as it's worked out now (every building holds a little round it)
+  // Unit types switched off for now (BOTS_OFF) leave the game.
+  const off = dropOffBots();
+  if (off) postMsg(0, `${[...BOTS_OFF].map((k) => BOTS[k].plural).join(' and ')} are switched off for now: ${off} left this game.`, undefined, undefined, 'info');
   return S;
 }
 

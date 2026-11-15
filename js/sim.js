@@ -2445,7 +2445,7 @@ function updateWorker(u, dt) {
   const t = u.task;
   if (!t) {
     if (u.shyUntil > S.time && !u.inside && gunShy(u)) { u.idleT = 0; u.vel = 0; } // giving way to enemy warbots, with no cover to make for: it waits here (see foeSweep)
-    else if (u.carry) stashCarry(u);
+    else if (u.carry) { if (!(u.stashAt > S.time)) stashCarry(u); }
     else if (wantsRepair(u) && S.tick % 30 === u.id % 30 && goRepair(u)) { /* off to be fixed */ }
     else if ((u.bat ?? 100) < BATTERY.low && !insideCharger(u)) { if (!goCharge(u) && !u.inside) goHome(u); }
     else if (!insideCharger(u)) {
@@ -2579,7 +2579,16 @@ function stashCarry(u) {
   u.task = { type: 'haul', src: 0, dst: store.id, good: u.carry, phase: 'toDst', n };
   bump(store.inc, u.carry, n);
   if (u.mix) { u.task.mix = Object.assign({}, u.mix); for (const k in u.mix) bump(store.inc, k, u.mix[k]); }
-  if (!goTo(u, store.x, store.y)) { cancelTask(u); u.carry = null; u.carryN = 0; delete u.mix; }
+  // No way there just now (enemy warbots in the way, a road torn up): it keeps the load and tries again in a few
+  // seconds; it puts it down in a crate only after half a minute of that, with no enemy about. (Putting it down at
+  // once drew enemy looters straight to it.)
+  if (!goTo(u, store.x, store.y)) {
+    bump(store.inc, u.carry, -n);
+    if (u.task.mix) for (const k in u.task.mix) bump(store.inc, k, -u.task.mix[k]);
+    u.task = null; u.path = null;
+    u.stashTry = (u.stashTry || 0) + 1; u.stashAt = S.time + 3;
+    if (u.stashTry >= 10 && !foesNear(u.owner, u.x, u.y, 8)) { dropCarried(u); u.stashTry = 0; }
+  } else u.stashTry = 0;
 }
 
 function doHaul(u, t, dt) {
@@ -3386,8 +3395,34 @@ function boostRival(p, kind) {
   return n;
 }
 
-/** Is player p barred from making bots of `kind` (a rival, with that type stopped in the hidden menu)? */
-function botBanned(p, kind) { return p !== 0 && !!(S.ban && S.ban[kind]); }
+/** Is player p barred from making bots of `kind` (switched off for everyone, BOTS_OFF; or a rival, with that type stopped in the hidden menu)? */
+function botBanned(p, kind) { return BOTS_OFF.has(kind) || (p !== 0 && !!(S.ban && S.ban[kind])); }
+
+/**
+ * Unit types switched off for now (BOTS_OFF): any already in this game (a save from before) are taken out quietly,
+ * along with jobs that wait on them (a hauler bringing a Howitzer its Ammo puts its load down) and any queued at a
+ * Bot Foundry. Returns how many robots went.
+ */
+function dropOffBots() {
+  if (!BOTS_OFF.size || !S) return 0;
+  let n = 0;
+  for (const u of S.bots) {
+    if (u.dead || !BOTS_OFF.has(u.type)) continue;
+    for (const v of S.bots) if (!v.dead && v !== u && v.task && (taskRefs(v.task, u.id) || v.task.gun === u.id)) cancelTask(v);
+    cancelTask(u);
+    exitBuilding(u);
+    u.dead = true;
+    S.byId.delete(u.id);
+    n++;
+  }
+  if (n) S.bots = S.bots.filter((u) => !u.dead);
+  for (const b of S.buildings) {
+    if (!b.orders) continue;
+    for (const k of BOTS_OFF) delete b.orders[k];
+    if (!hasOrders(b)) delete b.orders;
+  }
+  return n;
+}
 
 /**
  * Stop (on) or allow again every rival making bots of `kind` for the rest of this game. Stopping it calls off
@@ -4998,16 +5033,17 @@ function stockPost(b, dt) {
 
 /**
  * How many armed warbots garrison b can send out: all but its Keep; of yours, those not posted there
- * (with `posted`, for an attack or a rally of yours, the ones stationed there too).
+ * (with `posted`, for an attack or a rally of yours, the ones stationed there too). With `all` (the AI against a
+ * gun shutting its colony down), every one but the Command Base's keeper.
  */
-function spareArmed(b, posted) {
+function spareArmed(b, posted, all) {
   if (BDEFS[b.type].bunker) return 0;
   if (usesPosts(b.owner) && b.type !== 'lander') {
     let n = 0;
     for (const id of b.garrison) { const u = getE(id); if (u && (u.ammo ?? WARBOT_AMMO) > 0 && (posted || u.post !== b.id)) n++; }
     return n;
   }
-  return Math.max(0, Math.min(armedIn(b), b.garrison.length - keepAt(b)));
+  return Math.max(0, Math.min(armedIn(b), b.garrison.length - (all && b.type !== 'lander' ? 0 : keepAt(b))));
 }
 
 /** A garrison far behind the lines (no rival building within 18 tiles): it can send its last warbot. */
@@ -6243,7 +6279,7 @@ function nukeImpact(m) {
 
 /* ------------------------------------------------------------------ player commands */
 
-function attackSources(owner, target, posted) {
+function attackSources(owner, target, posted, all) {
   const out = [];
   const zone = S.zone[tIdx(target.x, target.y)];
   for (const b of S.buildings) {
@@ -6251,26 +6287,26 @@ function attackSources(owner, target, posted) {
     if (S.zone[tIdx(b.x, b.y)] !== zone) continue; // warbots there can't walk to the target
     const d = dist(b.x, b.y, target.x, target.y);
     if (secluded(b) && usesPosts(owner) && d > SECLUDED_REACH) continue; // a cut-off post keeps its warbots
-    if (d <= ATTACK_RANGE && spareArmed(b, posted) > 0) out.push({ b, d });
+    if (d <= ATTACK_RANGE && spareArmed(b, posted, all) > 0) out.push({ b, d });
   }
   out.sort((a, c) => a.d - c.d);
   return out.map((o) => o.b);
 }
 
-/** Armed warbots that could join an attack on `target` (each garrison keeps one at home). */
-function attackAvailable(owner, target) {
+/** Armed warbots that could join an attack on `target` (each garrison keeps one at home; with `all`, only the Command Base does). */
+function attackAvailable(owner, target, all) {
   const posted = usesPosts(owner);
   let n = 0;
-  for (const b of attackSources(owner, target, posted)) n += spareArmed(b, posted);
+  for (const b of attackSources(owner, target, posted, all)) n += spareArmed(b, posted, all);
   return n;
 }
 
 /** Send up to `count` armed warbots to attack `target`: free ones first, then (yours) those stationed at Outposts, nearest first. */
-function sendAttack(owner, target, count) {
+function sendAttack(owner, target, count, all) {
   let sent = 0;
   for (const posted of usesPosts(owner) ? [false, true] : [false]) {
-    for (const b of attackSources(owner, target, posted)) {
-      while (spareArmed(b, posted) > 0 && sent < count) {
+    for (const b of attackSources(owner, target, posted, all)) {
+      while (spareArmed(b, posted, all) > 0 && sent < count) {
         const u = takeArmed(b, posted);
         if (!u) break;
         u.inside = 0;
