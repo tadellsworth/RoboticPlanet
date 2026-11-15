@@ -17,6 +17,18 @@ const UI = {
 
 const $ = (id) => document.getElementById(id);
 
+/**
+ * Do order `name` (orders.js) for the player at this screen, with plain arguments (ids, numbers, strings, lists of
+ * them). In a single-player game it's done at once; in multiplayer it goes to every device and is done on each at
+ * the same tick (lockstep.js). cb(what it gave back) runs once it's done here: everything the screen says about how
+ * it went goes there, worked out from things noted when the order was given (not live objects, which may be gone).
+ */
+function act(name, args, cb) {
+  if (typeof MP !== 'undefined' && MP.on) { MP.order(name, args || [], cb); return; }
+  const r = applyOrder(ME, name, args || []);
+  if (cb) cb(r);
+}
+
 function randomSeed() { return 1 + Math.floor(Math.random() * 999998); }
 
 function iconFor(type, owner) {
@@ -116,7 +128,7 @@ function initUI() {
   $('btn-road').onclick = () => { sfx('click'); setMode(R.mode === 'road' ? 'normal' : 'road'); };
   $('btn-attack').onclick = () => { sfx('click'); if (UI.sheetKind === 'army' || R.mode === 'attack') { setMode('normal'); closeSheet(); } else { setMode('normal'); openArmySheet(); } };
   $('btn-home').onclick = () => {
-    const L = getE(S.players[0].lander);
+    const L = getE(S.players[ME].lander);
     if (L) { centerOn(L.x + 0.5, L.y + 0.5); openBuildingSheet(L); }
   };
   $('btn-speed').onclick = (e) => { e.stopPropagation(); sfx('click'); toggleSpeedMenu(); };
@@ -736,7 +748,7 @@ function drawShapeThumb(cv, P) {
   // A few resource fields, and the bases.
   if (!P.maze && !P.sky) for (let k = 0; k < 3; k++) { const u = 0.15 + rnd() * 0.7, v = 0.6 + rnd() * 0.12; ctx.fillStyle = THUMB.res[k % 4]; for (const [uu, vv] of [[u, v], [1 - u, 1 - v]]) { ctx.beginPath(); ctx.arc(X(uu), Y(vv), Math.max(1, U * 0.03), 0, 7); ctx.fill(); } }
   const bs = Math.max(3, U * 0.1);
-  for (const [v, c] of [[0.88, PLAYER_COLORS[0]], [0.12, PLAYER_COLORS[1]]]) {
+  for (const [v, c] of [[0.88, PLAYER_COLORS[ME]], [0.12, PLAYER_COLORS[1]]]) {
     ctx.fillStyle = c; ctx.strokeStyle = '#fff'; ctx.lineWidth = Math.max(1, bs * 0.18);
     roundRect(ctx, X(0.5) - bs / 2, Y(v) - bs / 2, bs, bs, bs * 0.25); ctx.fill(); ctx.stroke();
   }
@@ -957,7 +969,7 @@ function renderPreview(cv, m, p) {
  */
 const AUTOSAVE_EVERY = 20;
 function autoSave() {
-  if (!S || S.winner >= 0 || S.players[0].ai) return;
+  if (!S || S.winner >= 0 || S.players[ME].ai) return;
   if (saveGame()) { UI.savedAt = Date.now(); UI.saveFailed = false; }
   else if (!UI.saveFailed) {
     UI.saveFailed = true;
@@ -976,6 +988,7 @@ function syncSaved() {
 /* ------------------------------------------------------------------ boosts (hidden) */
 
 function openBoost() {
+  if (typeof MP !== 'undefined' && MP.on) return; // (single player only: in multiplayer it would change only this device's game)
   if (!UI.inGame || !S) return;
   if ($('screen-boost').hidden) UI.boostWasPaused = UI.paused;
   UI.paused = true;
@@ -991,9 +1004,9 @@ function closeBoost() {
 }
 
 function renderBoost() {
-  const rivals = boostableRivals(), body = $('bo-body'), me = S.players[0], home = getE(me.lander);
+  const rivals = boostableRivals(), body = $('bo-body'), me = S.players[ME], home = getE(me.lander);
   // A row of boosts for you or one rival: a supply drop, armed warbots, workers, haulers.
-  const row = (P, label, extra) => `<div class="boost-row${P.id === 0 ? ' boost-you' : ''}" data-p="${P.id}"><div class="boost-head"><i class="dot" style="background:${PLAYER_COLORS[P.id]}"></i>` +
+  const row = (P, label, extra) => `<div class="boost-row${P.id === ME ? ' boost-you' : ''}" data-p="${P.id}"><div class="boost-head"><i class="dot" style="background:${PLAYER_COLORS[P.id]}"></i>` +
     `<b>${label}</b>${extra}<small>${P.boosts ? `boosted ${P.boosts}×` : ''}</small></div>` +
     `<div class="boost-btns"><button class="btn small" data-k="goods" title="${Object.entries(BOOST.goods).map(([g, n]) => n + ' ' + GOOD[g].name).join(', ')}">Supply drop</button>` +
     (warOn() ? `<button class="btn small" data-k="warbots">+${BOOST.warbots} Warbots</button>` : '') +
@@ -1012,7 +1025,7 @@ function renderBoost() {
     btn.onclick = () => {
       const p = +btn.closest('.boost-row').dataset.p, k = btn.dataset.k, n = boostRival(p, k);
       const what = k === 'goods' ? 'a supply drop' : `${n} ${{ warbots: 'armed Warbot', workers: 'Worker', haulers: 'Hauler' }[k]}${n === 1 ? '' : 's'}`;
-      const msg = !n ? `${p === 0 ? 'You are' : playerName(p) + ' is'} at the robot limit.` : p === 0 ? `You got ${what}.` : `You gave ${playerName(p, true)} ${what}.`;
+      const msg = !n ? `${p === ME ? 'You are' : playerName(p) + ' is'} at the robot limit.` : p === ME ? `You got ${what}.` : `You gave ${playerName(p, true)} ${what}.`;
       $('bo-msg').textContent = msg;
       sfx(n ? 'place' : 'click');
       renderBoost();
@@ -1185,7 +1198,7 @@ function rampPartner(i, j) {
     if (!inMap(i + di, j + dj)) continue;
     const u = tIdx(i + di, j + dj);
     if (S.terrain[u] !== T_GROUND || Math.abs(S.elev[u] - S.elev[t]) !== 1 || canStep(t, u)) continue;
-    if (!canPlace(0, 'ramp', i + di, j + dj).ok) continue;
+    if (!canPlace(ME, 'ramp', i + di, j + dj).ok) continue;
     if (best < 0 || UI.draft.ramps.has(u)) best = u;
   }
   return best;
@@ -1308,7 +1321,7 @@ function initKeyboard() {
       case 'h': case 'home': $('btn-home').click(); break;
       case 'm': setMinimap(!MM.on); break;
       case 'c': if (warOn()) recallAllWarbots(); break;
-      case 'f': selectBots(armyIds(0), false); if (UI.sel.length) toast(`${UI.sel.length} warbots selected: right-click to give orders.`, 'info'); break;
+      case 'f': selectBots(armyIds(ME), false); if (UI.sel.length) toast(`${UI.sel.length} warbots selected: right-click to give orders.`, 'info'); break;
       case 'i': if ($('screen-stats').hidden) openStats(); break;
       case 'u': $('pop').click(); break;
       case 'y': if (UI.sheetKind === 'goods') closeSheet(); else { setMode('normal'); openGoodsSheet(UI.goodSel || 'cement'); } break;
@@ -1332,7 +1345,7 @@ const EDGE_SCROLL = 6; // pixels from the window edge where the map scrolls
 
 /** Select these warbots (or add them to the selection). */
 function selectBots(ids, add) {
-  const mine = selectable(0, ids).map((u) => u.id);
+  const mine = selectable(ME, ids).map((u) => u.id);
   UI.sel = add ? [...new Set(UI.sel.concat(mine))] : mine;
   refreshSelection();
 }
@@ -1341,18 +1354,18 @@ function selectBots(ids, add) {
 function nextGroupNo() {
   const G = S && S.groups ? S.groups : {};
   for (let k = 1; k <= 9; k++) if (G[k] && G[k].length && G[k].length === UI.sel.length && UI.sel.every((id) => G[k].includes(id))) return k;
-  for (let k = 1; k <= 9; k++) if (!G[k] || !selectable(0, G[k]).length) return k;
+  for (let k = 1; k <= 9; k++) if (!G[k] || !selectable(ME, G[k]).length) return k;
   return 9;
 }
 
 /** Drop dead or captured warbots from the selection and update the selection bar. */
 function refreshSelection() {
-  if (UI.sel.length) UI.sel = selectable(0, UI.sel).map((u) => u.id);
+  if (UI.sel.length) UI.sel = selectable(ME, UI.sel).map((u) => u.id);
   UI.selSet = new Set(UI.sel);
   const bar = $('selbar');
   if (!UI.sel.length || !UI.inGame) { bar.hidden = true; refreshGroupBar(); return; }
   let inside = 0, empty = 0;
-  for (const u of orderable(0, UI.sel)) { if (u.inside) inside++; if (!botArmed(u)) empty++; }
+  for (const u of orderable(ME, UI.sel)) { if (u.inside) inside++; if (!botArmed(u)) empty++; }
   const html = `<b>${groupWords(UI.sel)} selected</b>` +
     (inside ? ` <span class="muted">(${inside} in garrisons)</span>` : '') + (empty ? ` <span class="err">${empty} out of Ammo or Fuel</span>` : '') +
     `<span class="hint">Right-click open ground to hold it, a rival building or robot to attack, your Outpost to station them, or a Repair Station to get them fixed. Esc clears.</span>
@@ -1373,13 +1386,13 @@ function onSelectBox(box, add) {
   const x0 = Math.min(box.x0, box.x1), x1 = Math.max(box.x0, box.x1), y0 = Math.min(box.y0, box.y1), y1 = Math.max(box.y0, box.y1);
   const ids = [];
   for (const u of S.bots) {
-    if (u.dead || u.owner !== 0 || (!isArmy(u) && !BOTS[u.type].siege) || u.inside) continue;
+    if (u.dead || u.owner !== ME || (!isArmy(u) && !BOTS[u.type].siege) || u.inside) continue;
     const p = worldToScreen(u.x, u.y);
     if (p.x >= x0 && p.x <= x1 && p.y >= y0 && p.y <= y1) ids.push(u.id);
   }
   // A box round your own garrisons picks up their spare warbots too (each keeps its Keep at home).
   for (const b of S.buildings) {
-    if (b.dead || b.owner !== 0 || !b.garrison || b.garrison.length < 2) continue;
+    if (b.dead || b.owner !== ME || !b.garrison || b.garrison.length < 2) continue;
     const p = worldToScreen(b.x + 0.5, b.y + 0.5);
     if (p.x >= x0 && p.x <= x1 && p.y >= y0 && p.y <= y1) ids.push(...b.garrison.slice(1));
   }
@@ -1392,61 +1405,62 @@ function onMapCommand(i, j, wx, wy) {
   if (!UI.inGame || UI.paused || R.mode !== 'normal') return;
   // Your Ferry, its panel open (nothing else picked): right-click open water, a spot on the shore or one of your Ports to sail it there.
   const fpick = !UI.sel.length && UI.sheetKind === 'bot' ? getE(UI.sheetFor) : null;
-  if (fpick && !fpick.dead && fpick.owner === 0 && BOTS[fpick.type].ferry) {
-    const why = orderSail(0, fpick, i, j);
-    if (why) { sfx('error'); toast(why, 'warn'); return; }
-    sfx('order'); addFx('ring', i + 0.5, j + 0.5, { color: '#7dffa0' });
-    refreshSheet();
+  if (fpick && !fpick.dead && fpick.owner === ME && BOTS[fpick.type].ferry) {
+    act('sail', [fpick.id, i, j], (why) => {
+      if (why) { sfx('error'); toast(why, 'warn'); return; }
+      sfx('order'); addFx('ring', i + 0.5, j + 0.5, { color: '#7dffa0' });
+      refreshSheet();
+    });
     return;
   }
   if (!UI.sel.length) return;
   const b = buildingAtTap(i, j, wx, wy);
-  let n = 0, what = '';
   // Your Ferry, off a shore: the selected warbots walk to the shore beside it and board.
-  const ferry = S.bots.find((v) => !v.dead && v.owner === 0 && BOTS[v.type].ferry && !v.inside && dist2(v.x, v.y, wx, wy) < 0.9);
+  const ferry = S.bots.find((v) => !v.dead && v.owner === ME && BOTS[v.type].ferry && !v.inside && dist2(v.x, v.y, wx, wy) < 0.9);
   if (ferry) {
-    const r = orderBoardFerry(0, UI.sel, ferry);
-    if (typeof r === 'string') { sfx('error'); toast(r, 'warn'); return; }
-    sfx('order'); addFx('ring', ferry.x, ferry.y, { color: '#7dffa0' });
-    toast(`${r} warbot${r === 1 ? '' : 's'} heading for the Ferry: they board once they're beside it.`, 'info');
+    const fx = ferry.x, fy = ferry.y;
+    act('command', [UI.sel.slice(), { ferry: ferry.id }], (r) => {
+      if (!r || r.why) { sfx('error'); toast((r && r.why) || 'That Ferry is gone.', 'warn'); return; }
+      sfx('order'); addFx('ring', fx, fy, { color: '#7dffa0' });
+      toast(`${r.n} warbot${r.n === 1 ? '' : 's'} heading for the Ferry: they board once they're beside it.`, 'info');
+    });
     return;
   }
-  // Howitzers in the selection: they shell an enemy building, or drive to open ground (or beside a garrison) and wait there.
-  let nr = 0;
-  if (b && b.owner !== 0) nr = orderBombard(0, UI.sel, b);
-  else if (b && BDEFS[b.type].mil && b.built) { const s = deploySpot(0, b.x, b.y); if (s >= 0) nr = orderPark(0, UI.sel, s % S.W, (s / S.W) | 0); }
-  else if (inMap(i, j) && walkable(tIdx(i, j)) && !b) nr = orderPark(0, UI.sel, i, j);
-  // Your Repair Station: the damaged ones go there to be fixed.
-  if (b && b.owner === 0 && BDEFS[b.type].repair) {
-    const r = orderRepair(0, UI.sel, b);
-    if (typeof r === 'string') { sfx('error'); toast(r, 'warn'); return; }
-    sfx('order'); addFx('ring', b.x + 0.5, b.y + 0.5, { color: '#7dffa0' });
-    toast(`${r} robot${r === 1 ? '' : 's'} heading to the Repair Station.`, 'info');
-    refreshSelection();
-    return;
-  }
+  // Howitzers in the selection shell an enemy building, or drive to open ground (or beside a garrison) and wait there;
+  // the damaged go to your Repair Station; warbots go after an enemy robot, attack a building, station in a garrison or
+  // hold the ground (ORDERS.command).
   const foe = !b ? enemyBotAtTap(i, j) : null;
-  if (foe) { n = orderHunt(0, UI.sel, foe); what = `going after the rival's ${BOTS[foe.type].name}`; }
-  else if (b && b.owner !== 0) { n = orderAttack(0, UI.sel, b); what = `attacking the ${BDEFS[b.type].name}`; }
-  else if (b && BDEFS[b.type].mil && b.built) { n = orderStation(0, UI.sel, b); what = `heading to the ${BDEFS[b.type].name}`; }
-  else if (inMap(i, j) && walkable(tIdx(i, j)) && !b) { n = orderMove(0, UI.sel, i, j); what = 'moving to hold that ground'; }
-  else { sfx('error'); toast('Right-click open ground, a rival building or one of your garrisons.', 'warn'); return; }
-  if (nr && !n) {
+  const spec = foe ? { foe: foe.id } : b ? { b: b.id } : { i, j };
+  const theirs = !!b && b.owner !== ME, mine = !!b && b.owner === ME, bName = b ? BDEFS[b.type].name : '', foeName = foe ? BOTS[foe.type].name : '';
+  const rx = (b ? b.x : i) + 0.5, ry = (b ? b.y : j) + 0.5;
+  act('command', [UI.sel.slice(), spec], (r) => {
+    if (!r || r.why) { sfx('error'); toast((r && r.why) || 'Right-click open ground, a rival building or one of your garrisons.', 'warn'); return; }
+    if (r.kind === 'repair') {
+      sfx('order'); addFx('ring', rx, ry, { color: '#7dffa0' });
+      toast(`${r.n} robot${r.n === 1 ? '' : 's'} heading to the Repair Station.`, 'info');
+      refreshSelection();
+      return;
+    }
+    if (r.kind === 'none') { sfx('error'); toast('Right-click open ground, a rival building or one of your garrisons.', 'warn'); return; }
+    const n = r.n, nr = r.nr;
+    const what = r.kind === 'hunt' ? `going after the rival's ${foeName}` : r.kind === 'attack' ? `attacking the ${bName}` : r.kind === 'station' ? `heading to the ${bName}` : 'moving to hold that ground';
+    if (nr && !n) {
+      sfx('order');
+      addFx('ring', rx, ry, { color: theirs ? '#ff5a6e' : '#7dffa0' });
+      toast(`${nr} Howitzer${nr > 1 ? 's' : ''} ${theirs ? `shelling the ${bName}` : 'on the move'}.`, 'info');
+      refreshSelection();
+      return;
+    }
+    if (!n) {
+      sfx('error');
+      toast(mine ? 'That garrison is full.' : 'None of the selected warbots have Ammo: they reload in a garrison first.', 'warn');
+      return;
+    }
     sfx('order');
-    addFx('ring', (b ? b.x : i) + 0.5, (b ? b.y : j) + 0.5, { color: b && b.owner !== 0 ? '#ff5a6e' : '#7dffa0' });
-    toast(`${nr} Howitzer${nr > 1 ? 's' : ''} ${b && b.owner !== 0 ? `shelling the ${BDEFS[b.type].name}` : 'on the move'}.`, 'info');
+    addFx('ring', rx, ry, { color: theirs ? '#ff5a6e' : '#7dffa0' });
+    toast(`${n} warbot${n > 1 ? 's' : ''} ${what}.`, 'info');
     refreshSelection();
-    return;
-  }
-  if (!n) {
-    sfx('error');
-    toast(b && b.owner === 0 ? 'That garrison is full.' : 'None of the selected warbots have Ammo: they reload in a garrison first.', 'warn');
-    return;
-  }
-  sfx('order');
-  addFx('ring', (b ? b.x : i) + 0.5, (b ? b.y : j) + 0.5, { color: b && b.owner !== 0 ? '#ff5a6e' : '#7dffa0' });
-  toast(`${n} warbot${n > 1 ? 's' : ''} ${what}.`, 'info');
-  refreshSelection();
+  });
 }
 
 /** Control groups: Ctrl/Shift + digit saves the selection; the digit selects it again, twice to jump there. */
@@ -1455,7 +1469,7 @@ function ctrlGroups() { if (!S.groups) S.groups = {}; return S.groups; }
 
 /** What a list of selected robots is, in words ("2 Howitzers", "5 warbots and 1 Howitzer"). */
 function groupWords(ids) {
-  const us = selectable(0, ids), n = {};
+  const us = selectable(ME, ids), n = {};
   for (const u of us) n[u.type] = (n[u.type] || 0) + 1;
   const words = Object.keys(n).map((k) => `${n[k]} ${k === 'warbot' ? (n[k] > 1 ? 'warbots' : 'warbot') : n[k] > 1 ? BOTS[k].plural : BOTS[k].name}`);
   return words.length > 1 ? words.slice(0, -1).join(', ') + ' and ' + words[words.length - 1] : words.join('');
@@ -1474,14 +1488,14 @@ function saveGroup(k) {
 }
 
 function recallGroup(k) {
-  const ids = selectable(0, ctrlGroups()[k] || []).map((u) => u.id);
+  const ids = selectable(ME, ctrlGroups()[k] || []).map((u) => u.id);
   if (!ids.length) return;
   const twice = UI.lastGroup.k === k && performance.now() - UI.lastGroup.at < 450;
   UI.lastGroup = { k, at: performance.now() };
   selectBots(ids, false);
   sfx('click');
   if (twice) {
-    const us = selectable(0, ids);
+    const us = selectable(ME, ids);
     let x = 0, y = 0;
     for (const u of us) { const h = u.inside ? getE(u.inside) : null; x += h ? h.x + 0.5 : u.x; y += h ? h.y + 0.5 : u.y; }
     centerOn(x / us.length, y / us.length);
@@ -1506,7 +1520,7 @@ function refreshGroupBar() {
   const G = UI.inGame && S ? ctrlGroups() : {};
   const chips = [];
   for (let k = 1; k <= 9; k++) {
-    const ids = G[k] ? selectable(0, G[k]).map((u) => u.id) : [];
+    const ids = G[k] ? selectable(ME, G[k]).map((u) => u.id) : [];
     if (G[k] && ids.length !== G[k].length) G[k] = ids; // the lost are dropped
     if (!ids.length) continue;
     const on = UI.sel.length && ids.every((id) => UI.selSet && UI.selSet.has(id));
@@ -1534,8 +1548,8 @@ function updateMapTip() {
   if (b) {
     const def = BDEFS[b.type];
     key = 'b' + b.id;
-    html = `<b>${b.owner === 0 ? '' : playerName(b.owner) + ' '}${def.name}</b>` + (b.owner === 0 && b.status ? `<em>${b.status}</em>` : '') +
-      (def.mil && !(b.owner === 0 && b.status) ? `<em>${b.garrison.length} warbot${b.garrison.length === 1 ? '' : 's'} inside</em>` : '') +
+    html = `<b>${b.owner === ME ? '' : playerName(b.owner) + ' '}${def.name}</b>` + (b.owner === ME && b.status ? `<em>${b.status}</em>` : '') +
+      (def.mil && !(b.owner === ME && b.status) ? `<em>${b.garrison.length} warbot${b.garrison.length === 1 ? '' : 's'} inside</em>` : '') +
       (b.armor < def.armor ? `<em>Armor ${Math.ceil(b.armor)}/${def.armor}</em>` : '');
   } else {
     let bot = null, bd = 0.3;
@@ -1546,8 +1560,8 @@ function updateMapTip() {
     }
     if (bot) {
       key = 'u' + bot.id;
-      html = `<b>${bot.owner === 0 ? '' : playerName(bot.owner) + ' '}${BOTS[bot.type].name}</b>` + (bot.owner === 0 ? `<em>${botActivity(bot)}</em>` : '') +
-        `<em>Health ${Math.ceil(bot.hp)}/${bot.maxHp}${bot.owner === 0 ? ` · battery ${Math.round(bot.bat ?? 100)}%` : ''}</em>`;
+      html = `<b>${bot.owner === ME ? '' : playerName(bot.owner) + ' '}${BOTS[bot.type].name}</b>` + (bot.owner === ME ? `<em>${botActivity(bot)}</em>` : '') +
+        `<em>Health ${Math.ceil(bot.hp)}/${bot.maxHp}${bot.owner === ME ? ` · battery ${Math.round(bot.bat ?? 100)}%` : ''}</em>`;
     } else if (inMap(i, j) && S.res[tIdx(i, j)]) {
       const t = tIdx(i, j);
       key = 'r' + t;
@@ -1714,7 +1728,7 @@ function renderPlanets() {
 
 /** Where the rivals landed, from your Command Base: "Two rival colonies landed too: red to the north, ..." */
 function rivalsLanded() {
-  const L0 = getE(S.players[0].lander), rivals = S.players.filter((P) => P.id !== 0 && !P.absent);
+  const L0 = getE(S.players[ME].lander), rivals = S.players.filter((P) => P.id !== ME && !P.absent);
   const where = rivals.map((P) => { const L = getE(P.lander); return `${RIVAL_NAMES[P.id].toLowerCase()} ${L0 && L ? 'to the ' + dirText(L0, L).replace(/^\d+ tiles? /, '') : ''}`.trim(); });
   const list = where.length > 1 ? where.slice(0, -1).join(', ') + ' and ' + where[where.length - 1] : where[0] || '';
   return `${['', 'A rival colony', 'Two rival colonies', 'Three rival colonies'][rivals.length]} landed too: ${list}.`;
@@ -1722,7 +1736,7 @@ function rivalsLanded() {
 
 /** The rivals' colours, for a hint: 'red', 'red or green', 'red, green or purple'. */
 function rivalColours() {
-  const c = S.players.filter((P) => P.id !== 0 && !P.absent).map((P) => (RIVAL_NAMES[P.id] || 'red').toLowerCase());
+  const c = S.players.filter((P) => P.id !== ME && !P.absent).map((P) => (RIVAL_NAMES[P.id] || 'red').toLowerCase());
   return c.length > 1 ? c.slice(0, -1).join(', ') + ' or ' + c[c.length - 1] : c[0] || 'red';
 }
 
@@ -1741,33 +1755,33 @@ function startNewGame() {
   enterGame();
   updateHUD();
   placeMinimap();
-  postMsg(0, UI.menu.mode === 'colony'
+  postMsg(ME, UI.menu.mode === 'colony'
     ? 'Your bots have landed. Build, expand and make this planet home.'
     : S.players.length > 2 ? `Your bots have landed. ${rivalsLanded()} Build up fast!`
       : 'Your bots have landed. A rival colony landed to the north. Build up fast!', 0, 0, 'info');
-  if (UI.menu.shapeRnd || UI.menu.biomeRnd) postMsg(0, `Random pick: ${[UI.menu.shapeRnd ? SHAPE_PRESETS[pick.shape].name : '', UI.menu.biomeRnd ? biomeName(pick.biome) : ''].filter(Boolean).join(', ')}.`, 0, 0, 'info');
+  if (UI.menu.shapeRnd || UI.menu.biomeRnd) postMsg(ME, `Random pick: ${[UI.menu.shapeRnd ? SHAPE_PRESETS[pick.shape].name : '', UI.menu.biomeRnd ? biomeName(pick.biome) : ''].filter(Boolean).join(', ')}.`, 0, 0, 'info');
   // Name each rival's personality, so you know what's coming.
   if (S.mode !== 'colony') for (const P of S.players) {
-    const st = P.id !== 0 && P.ai && !P.absent && PERSONALITIES[P.style];
-    if (st) postMsg(0, `${S.players.length > 2 ? 'The ' + playerName(P.id) : 'Your rival'} is ${st.noun}: it ${st.desc}.`, 0, 0, 'info');
+    const st = P.id !== ME && P.ai && !P.absent && PERSONALITIES[P.style];
+    if (st) postMsg(ME, `${S.players.length > 2 ? 'The ' + playerName(P.id) : 'Your rival'} is ${st.noun}: it ${st.desc}.`, 0, 0, 'info');
   }
   if (S.wildlife) {
     // Pointed at the nest nearest home (J jumps there), the rest are red on the minimap.
-    const L = getE(S.players[0].lander), nests = S.buildings.filter((b) => !b.dead && BDEFS[b.type].wild);
+    const L = getE(S.players[ME].lander), nests = S.buildings.filter((b) => !b.dead && BDEFS[b.type].wild);
     const near = L && nests.length ? nests.reduce((a, b) => (dist2(b.x, b.y, L.x, L.y) < dist2(a.x, a.y, L.x, L.y) ? b : a)) : null;
-    postMsg(0, `${nests.length} creature nests sit out in the wilds (red on the minimap; the nearest is ${near ? dirText(L, near) : 'out there'}${near ? ': press J or tap here to look' : ''}). From about 7 minutes in they raid whatever you build near their nests. Pulse Turrets (with Crystal) and warbots keep them off; clear a nest with warbots to win the goods it hoards.`, near ? near.x : 0, near ? near.y : 0, 'warn');
+    postMsg(ME, `${nests.length} creature nests sit out in the wilds (red on the minimap; the nearest is ${near ? dirText(L, near) : 'out there'}${near ? ': press J or tap here to look' : ''}). From about 7 minutes in they raid whatever you build near their nests. Pulse Turrets (with Crystal) and warbots keep them off; clear a nest with warbots to win the goods it hoards.`, near ? near.x : 0, near ? near.y : 0, 'warn');
   }
   if (S.posts && S.posts.length) {
     // Pointed at the post nearest home (J or a tap jumps there); the rest are gold on the minimap.
-    const L = getE(S.players[0].lander), near = L ? S.posts.reduce((a, p) => (dist2(p.x, p.y, L.x, L.y) < dist2(a.x, a.y, L.x, L.y) ? p : a)) : null;
-    postMsg(0, `${S.posts.length} neutral Trade Posts (gold on the minimap${near ? ', nearest ' + dirText(L, near) : ''}): lay a road out and dock a Trade Terminal to trade.` + (S.mode !== 'colony' ? ` Hold the land round one to shut ${S.players.length > 2 ? 'the rivals' : 'your rival'} out.` : ''), near ? near.x : 0, near ? near.y : 0, 'info');
+    const L = getE(S.players[ME].lander), near = L ? S.posts.reduce((a, p) => (dist2(p.x, p.y, L.x, L.y) < dist2(a.x, a.y, L.x, L.y) ? p : a)) : null;
+    postMsg(ME, `${S.posts.length} neutral Trade Posts (gold on the minimap${near ? ', nearest ' + dirText(L, near) : ''}): lay a road out and dock a Trade Terminal to trade.` + (S.mode !== 'colony' ? ` Hold the land round one to shut ${S.players.length > 2 ? 'the rivals' : 'your rival'} out.` : ''), near ? near.x : 0, near ? near.y : 0, 'info');
   }
   if (S.victory === 'uplinks' && S.uplinks) {
-    const L = getE(S.players[0].lander), near = L ? S.uplinks.reduce((a, u) => (dist2(u.x, u.y, L.x, L.y) < dist2(a.x, a.y, L.x, L.y) ? u : a)) : null;
-    postMsg(0, `Uplinks: ${S.uplinks.length} neutral Uplink towers stand across the planet (ringed dots on the minimap${near ? ', nearest ' + dirText(L, near) : ''}). One is yours while it stands in your land: build an Outpost or a Keep near it. They come online ${UPLINK.online / 60} minutes in: from then on, hold ${uplinkGoal()} and your clock runs, and a total of ${UPLINK.hold / 60} minutes wins. Enemy warbots right beside an Uplink jam it.`, near ? near.x : 0, near ? near.y : 0, 'info');
+    const L = getE(S.players[ME].lander), near = L ? S.uplinks.reduce((a, u) => (dist2(u.x, u.y, L.x, L.y) < dist2(a.x, a.y, L.x, L.y) ? u : a)) : null;
+    postMsg(ME, `Uplinks: ${S.uplinks.length} neutral Uplink towers stand across the planet (ringed dots on the minimap${near ? ', nearest ' + dirText(L, near) : ''}). One is yours while it stands in your land: build an Outpost or a Keep near it. They come online ${UPLINK.online / 60} minutes in: from then on, hold ${uplinkGoal()} and your clock runs, and a total of ${UPLINK.hold / 60} minutes wins. Enemy warbots right beside an Uplink jam it.`, near ? near.x : 0, near ? near.y : 0, 'info');
   }
-  if (S.victory === 'domination') postMsg(0, `Domination: hold ${Math.round(domShare() * 100)}% of the land anyone holds (and ${Math.round(DOM.min * 100)}% of the planet) for ${DOM.hold / 60} minutes straight to win. The card at the top shows where everyone stands. Outposts and Keeps claim the most land.`, 0, 0, 'info');
-  if (nukeOn()) postMsg(0, `Nuclear race: a few uranium deposits glow green across the planet. Dig them with Ore Mines, enrich them at a Nuclear Reactor and build the bomb${S.mode === 'colony' ? ' (no rival here, so it is yours to try out)' : ` before ${S.players.length > 2 ? 'the rivals do' : 'the rival does'}`}.`, 0, 0, 'warn');
+  if (S.victory === 'domination') postMsg(ME, `Domination: hold ${Math.round(domShare() * 100)}% of the land anyone holds (and ${Math.round(DOM.min * 100)}% of the planet) for ${DOM.hold / 60} minutes straight to win. The card at the top shows where everyone stands. Outposts and Keeps claim the most land.`, 0, 0, 'info');
+  if (nukeOn()) postMsg(ME, `Nuclear race: a few uranium deposits glow green across the planet. Dig them with Ore Mines, enrich them at a Nuclear Reactor and build the bomb${S.mode === 'colony' ? ' (no rival here, so it is yours to try out)' : ` before ${S.players.length > 2 ? 'the rivals do' : 'the rival does'}`}.`, 0, 0, 'warn');
 }
 
 /* ------------------------------------------------------------------ save files: carry a game between devices */
@@ -1830,7 +1844,7 @@ function importSaveFile(file) {
     } catch (e) { S = prev; msg('That isn\'t a Terrafall save file (or it\'s from a version this one can\'t read).'); return; }
     try { localStorage.setItem(SAVE_KEY, json); } catch (e) { /* storage unavailable: it still plays */ }
     enterGame();
-    postMsg(0, 'Save file loaded. Welcome back.', 0, 0, 'info');
+    postMsg(ME, 'Save file loaded. Welcome back.', 0, 0, 'info');
   };
   r.readAsText(file);
 }
@@ -1838,7 +1852,7 @@ function importSaveFile(file) {
 function continueGame() {
   if (!loadGame()) { syncMenu(); return; }
   enterGame();
-  postMsg(0, 'Welcome back.', 0, 0, 'info');
+  postMsg(ME, 'Welcome back.', 0, 0, 'info');
 }
 
 function enterGame() {
@@ -1860,7 +1874,7 @@ function enterGame() {
   $('bottombar').classList.toggle('three', !warOn());
   closeSheet();
   setMode('normal');
-  const L = getE(S.players[0].lander);
+  const L = getE(S.players[ME].lander);
   R.cam.z = clamp(Math.min(R.w, 520) / 11, 26, 48);
   if (L) centerOn(L.x + 0.5, L.y - 1);
   layoutMinimap();
@@ -1894,7 +1908,7 @@ function showGameOver() {
   $('o-new').textContent = 'New game'; $('o-menu').textContent = 'Main menu';
   $('o-code').hidden = true;
   if (S.mission) { showMissionOver(); return; }
-  const won = S.winner === 0, how = S.endHow || 'capture', many = S.players.length > 2, them = many ? playerName(S.winner) : 'rival';
+  const won = S.winner === ME, how = S.endHow || 'capture', many = S.players.length > 2, them = many ? playerName(S.winner) : 'rival';
   sfx(won ? 'win' : 'lose');
   $('o-title').textContent = won ? (how === 'domination' ? 'Domination!' : how === 'uplinks' ? 'Uplinks held!' : 'Victory!') : 'Defeat';
   $('o-text').textContent = won
@@ -1904,8 +1918,8 @@ function showGameOver() {
         : many ? `${S.players.length > 3 ? 'All three' : 'Both'} rival Command Bases are yours: the last colony standing. The planet is yours.` : 'Your warbots captured the rival Command Base. The planet is yours.')
     : how === 'domination' ? `The ${them} held most of the planet's land for ${DOM.hold / 60} minutes. Regroup and try again.`
       : how === 'uplinks' ? `The ${them} led on the Uplinks for ${UPLINK.hold / 60} minutes. Regroup and try again.`
-      : `The ${them} ${S.players[0].out ? 'captured your Command Base' : 'took the planet'}. Regroup and try again.`;
-  const st = S.players[0].stats;
+      : `The ${them} ${S.players[ME].out ? 'captured your Command Base' : 'took the planet'}. Regroup and try again.`;
+  const st = S.players[ME].stats;
   $('o-stats').innerHTML = [
     ['Time', fmtTime(S.time)], ['Buildings completed', st.built], ['Bots built', st.bots - (st.startBots || 0)],
     ['Enemy buildings captured', st.captured], ['Bots lost', st.lost],
@@ -1981,7 +1995,7 @@ function startMission(k, diff) {
   updateHUD();
   placeMinimap();
   UI.objCollapsed = false;
-  postMsg(0, `Mission ${k + 1}: ${MISSIONS[k].name}. ${MISSIONS[k].brief}`, 0, 0, 'info');
+  postMsg(ME, `Mission ${k + 1}: ${MISSIONS[k].name}. ${MISSIONS[k].brief}`, 0, 0, 'info');
 }
 
 /** The goal banner during a mission: each goal with progress, and the clock if there's a limit. */
@@ -2038,16 +2052,16 @@ function openStats() {
 function renderStats() {
   const H = S.hist || newHistory(S.players.length);
   const versus = S.mode !== 'colony';
-  const P = S.players[0], st = P.stats;
+  const P = S.players[ME], st = P.stats;
   const made = Object.values(P.made || {}).reduce((a, v) => a + v, 0);
   const tiles = [['Time', fmtTime(S.time)], ['Buildings built', st.built], ['Bots built', st.bots - (st.startBots || 0)],
-    ['Goods produced', made.toLocaleString()], versus ? ['Rival buildings taken', st.captured] : ['Land claimed', Math.round(landShare(0) * 100) + '%'],
+    ['Goods produced', made.toLocaleString()], versus ? ['Rival buildings taken', st.captured] : ['Land claimed', Math.round(landShare(ME) * 100) + '%'],
     ['Bots lost', st.lost]];
   const players = versus ? S.players.map((P) => P.id) : [0];
   const ser = (fn) => players.map((p) => ({ name: playerName(p), color: CHART.series[p], values: fn(H.p[p] || {}) }));
   const goodsList = GOODS.filter((g) => (warOn() || !WAR_GOODS.includes(g)) && (nukeOn() || !NUKE_GOODS.includes(g)));
   if (!goodsList.includes(UI.stats.good)) UI.stats.good = 'alloy';
-  const use = usageByType(0);
+  const use = usageByType(ME);
   const rows = Object.keys(use).map((k) => ({ key: k, label: BDEFS[k].name, note: use[k].n > 1 ? '×' + use[k].n : '', value: Math.round((use[k].use / use[k].up) * 100) }))
     .sort((a, b) => b.value - a.value);
   if (!UI.stats.type || !use[UI.stats.type]) UI.stats.type = rows.length ? rows[0].key : null;
@@ -2141,7 +2155,7 @@ function portShipsText(b) {
 /** Fill el with a button for each of your vehicles inside building b that pick() takes, opening its panel. */
 function hereButtons(el, b, pick) {
   if (!el) return;
-  const here = b.owner === 0 ? S.bots.filter((u) => !u.dead && u.owner === 0 && u.inside === b.id && pick(u)) : [];
+  const here = b.owner === ME ? S.bots.filter((u) => !u.dead && u.owner === ME && u.inside === b.id && pick(u)) : [];
   const key = here.map((u) => u.id).join(',');
   if (el.dataset.here === key) return;
   el.dataset.here = key;
@@ -2201,7 +2215,7 @@ function showLandBanner(problem) {
 function landTap(i, j) {
   const f = getE(UI.landFerry);
   if (!f) { setMode('normal'); return; }
-  const why = UI.landKind === 'port' ? foundPortBlocked(0, f, i, j) : landingBlocked(0, f, i, j);
+  const why = UI.landKind === 'port' ? foundPortBlocked(ME, f, i, j) : landingBlocked(ME, f, i, j);
   if (why) { sfx('error'); R.landAt = null; showLandBanner(why); return; }
   if (R.landAt && R.landAt.i === i && R.landAt.j === j) { confirmLanding(); return; }
   R.landAt = { i, j };
@@ -2213,11 +2227,12 @@ function confirmLanding() {
   const f = getE(UI.landFerry), at = R.landAt;
   if (!f || !at) return;
   const port = UI.landKind === 'port';
-  const why = port ? orderFoundPort(0, f, at.i, at.j) : orderLanding(0, f, at.i, at.j, UI.landN);
-  if (why) { sfx('error'); showLandBanner(why); return; }
-  sfx('order');
-  toast(port ? 'The Ferry is loading the Port kit and Workers: it sails once they\'re aboard.' : 'Beach landing ordered: the warbots head for the Ferry, and it sails once they\'re aboard.', 'good');
-  setMode('normal');
+  act(port ? 'foundPort' : 'landing', port ? [f.id, at.i, at.j] : [f.id, at.i, at.j, UI.landN], (why) => {
+    if (why) { sfx('error'); showLandBanner(why); return; }
+    sfx('order');
+    toast(port ? 'The Ferry is loading the Port kit and Workers: it sails once they\'re aboard.' : 'Beach landing ordered: the warbots head for the Ferry, and it sails once they\'re aboard.', 'good');
+    setMode('normal');
+  });
 }
 
 /* ------------------------------------------------------------------ Airfields: Cargo Planes and air drops */
@@ -2226,8 +2241,8 @@ function confirmLanding() {
 function basePlanes(b) { return S.bots.filter((u) => !u.dead && u.owner === b.owner && BOTS[u.type].air && u.home === b.id); }
 
 /** Your Strike Bombers, and the first that's parked, rearmed and free to fly a sortie (optionally: at `t`). */
-function myBombers() { return S.bots.filter((u) => !u.dead && u.owner === 0 && BOTS[u.type].bomber); }
-function readyBomber(t) { return myBombers().find((u) => !u.mission && !u.flight && !(u.rearmUntil > S.time) && planeBase(u) && u.inside === planeBase(u).id && (!t || !strikeBlocked(0, u, t))) || null; }
+function myBombers() { return S.bots.filter((u) => !u.dead && u.owner === ME && BOTS[u.type].bomber); }
+function readyBomber(t) { return myBombers().find((u) => !u.mission && !u.flight && !(u.rearmUntil > S.time) && planeBase(u) && u.inside === planeBase(u).id && (!t || !strikeBlocked(ME, u, t))) || null; }
 
 /** Pick a target for bomber u on the map. */
 function startStrike(u) {
@@ -2281,7 +2296,7 @@ function airPlacesText(b) {
 
 /** The "Supply by air" switch for one of your Depots, Outposts and the like, once you have an Airfield. */
 function airSupplySection(b) {
-  if (!airSuppliable(b) || !b.built || b.owner !== 0 || !S.buildings.some((o) => !o.dead && o.built && o.owner === 0 && BDEFS[o.type].airfield)) return '';
+  if (!airSuppliable(b) || !b.built || b.owner !== ME || !S.buildings.some((o) => !o.dead && o.built && o.owner === ME && BDEFS[o.type].airfield)) return '';
   return '<div class="section-label">Supply by air</div><div class="seg" id="sh-airsup"><button data-v="1">On</button><button data-v="0">Off</button></div><p class="hint" id="sh-airsup-hint"></p>';
 }
 
@@ -2316,7 +2331,7 @@ function showAirdropBanner(problem) {
 function airdropTap(i, j) {
   const u = getE(UI.dropPlane);
   if (!u) { setMode('normal'); return; }
-  const why = airdropBlocked(0, u, UI.dropKind, i, j);
+  const why = airdropBlocked(ME, u, UI.dropKind, i, j);
   if (why) { sfx('error'); R.dropAt = null; showAirdropBanner(why); return; }
   if (R.dropAt && R.dropAt.i === i && R.dropAt.j === j) { confirmAirdrop(); return; }
   R.dropAt = { i, j };
@@ -2327,11 +2342,13 @@ function airdropTap(i, j) {
 function confirmAirdrop() {
   const u = getE(UI.dropPlane), at = R.dropAt;
   if (!u || !at) return;
-  const why = orderAirdrop(0, u, UI.dropKind, at.i, at.j, BOTS[u.type].seats);
-  if (why) { sfx('error'); showAirdropBanner(why); return; }
-  sfx('order');
-  toast(UI.dropKind === 'outpost' ? 'Drop Outpost loading: the plane takes off in a moment.' : `The ${BOTS[UI.dropKind].plural} head for the Airfield: the plane takes off once they're aboard.`, 'good');
-  setMode('normal');
+  const kind = UI.dropKind;
+  act('airdrop', [u.id, kind, at.i, at.j], (why) => {
+    if (why) { sfx('error'); showAirdropBanner(why); return; }
+    sfx('order');
+    toast(kind === 'outpost' ? 'Drop Outpost loading: the plane takes off in a moment.' : `The ${BOTS[kind].plural} head for the Airfield: the plane takes off once they're aboard.`, 'good');
+    setMode('normal');
+  });
 }
 
 function startAim(silo) {
@@ -2361,7 +2378,7 @@ function showAimBanner(problem) {
     return;
   }
   if (R.aim) {
-    const t = missileTargetAt(0, R.aim.i, R.aim.j);
+    const t = missileTargetAt(ME, R.aim.i, R.aim.j);
     html += t ? `Fire at the ${playerName(t.owner)} <b>${BDEFS[t.type].name}</b>? ${BDEFS[t.type].mil ? 'Its armor drops to almost nothing, ready for warbots to capture.' : 'A hit wrecks it.'}`
       : 'Fire at this spot? The blast hurts rival buildings and bots within ' + md.splash + ' tiles.';
     ok = 'Fire';
@@ -2388,16 +2405,25 @@ function aimTap(i, j) {
 function fireAimed() {
   const silo = getE(UI.aimSilo);
   if (!silo || !R.aim) return;
+  const { i, j } = R.aim, sid = silo.id;
   if (BDEFS[silo.type].nukeSilo) {
-    if (fireNukeAt(silo, R.aim.i, R.aim.j)) { setMode('normal'); sfx('alert'); }
-    else { sfx('error'); showAimBanner(nukeBlocked(silo, R.aim.i, R.aim.j)); }
+    act('nukeAt', [sid, i, j], (ok) => {
+      if (ok) { setMode('normal'); sfx('alert'); return; }
+      const s = getE(sid);
+      sfx('error'); showAimBanner(s ? nukeBlocked(s, i, j) : 'That Silo is gone.');
+    });
     return;
   }
-  const t = missileTargetAt(0, R.aim.i, R.aim.j);
-  if (fireMissileAt(silo, R.aim.i, R.aim.j)) {
-    toast(t ? `Missile away: it will hit the ${BDEFS[t.type].name} in a few seconds.` : 'Missile away.', 'info');
-    setMode('normal');
-  } else { sfx('error'); showAimBanner(missileBlocked(silo, R.aim.i, R.aim.j)); }
+  const t = missileTargetAt(ME, i, j), tName = t ? BDEFS[t.type].name : '';
+  act('missileAt', [sid, i, j], (ok) => {
+    if (ok) {
+      toast(tName ? `Missile away: it will hit the ${tName} in a few seconds.` : 'Missile away.', 'info');
+      setMode('normal');
+      return;
+    }
+    const s = getE(sid);
+    sfx('error'); showAimBanner(s ? missileBlocked(s, i, j) : 'That Silo is gone.');
+  });
 }
 
 function showBanner(html, okLabel, cancelLabel) {
@@ -2434,7 +2460,7 @@ function enterPlaceMode(type, moveFrom) {
 /** The Army banner: what to tap, and Recall all when warbots are out in the field. */
 function showArmyBanner(note) {
   if (UI.armyCmd) { showArmyCmdBanner(note); return; }
-  const out = warbotsOut(0), k = S.players[0].keepW ?? 0;
+  const out = warbotsOut(ME), k = S.players[ME].keepW ?? 0;
   showBanner('Tap a <b>rival building</b> to attack it with warbots or missiles, or tap open ground to send warbots there to <b>hold the area</b>.' +
     (out ? ` ${out} warbot${out > 1 ? 's are' : ' is'} out in the field: <b>Recall all</b> brings them home.` : '') +
     `<span class="keep-all">Every Outpost keeps <span class="seg">${[0, 1, 2, 5].map((v) => `<button data-k="${v}" class="${v === k ? 'on' : ''}">${v}</button>`).join('')}</span> warbot${k === 1 ? '' : 's'}, sent from your Command Base</span>`,
@@ -2444,8 +2470,7 @@ function showArmyBanner(note) {
 
 /** Every Outpost keeps v warbots at home (each one's own setting is reset to follow this). */
 function setKeepAll(v) {
-  S.players[0].keepW = v;
-  for (const b of S.buildings) if (!b.dead && b.owner === 0 && BDEFS[b.type].mil && b.type !== 'lander') delete b.keepW;
+  act('keepWAll', [v]);
   sfx('click');
   toast(v === 0 ? 'Outposts keep no warbots now: your warbots stay at the Command Base unless you station some at an Outpost.'
     : `Every Outpost now keeps ${v} warbot${v === 1 ? '' : 's'}, sent from your Command Base (and replaced if lost).`, 'info');
@@ -2453,9 +2478,10 @@ function setKeepAll(v) {
 
 /** Bring every warbot in the field home to its garrison. */
 function recallAllWarbots() {
-  const n = recallAll(0);
-  if (n) { sfx('order'); toast(`Recalled ${n} warbot${n > 1 ? 's' : ''}: they're heading back to their garrisons.`, 'info'); }
-  else { sfx('error'); toast('No warbots are out in the field.', 'info'); }
+  act('recallAll', [], (n) => {
+    if (n) { sfx('order'); toast(`Recalled ${n} warbot${n > 1 ? 's' : ''}: they're heading back to their garrisons.`, 'info'); }
+    else { sfx('error'); toast('No warbots are out in the field.', 'info'); }
+  });
   if (R.mode === 'attack') setMode('normal');
 }
 
@@ -2468,24 +2494,25 @@ function confirmBanner() {
   if (R.mode === 'place' && (UI.placeType === 'ropeway' || UI.placeType === 'viaduct')) {
     const A = UI.ropeA, E = R.ropeEnd;
     if (!A || !E || !E.ok) return;
-    const res = UI.placeType === 'viaduct' ? placeViaduct(0, A.i, A.j, E.i, E.j) : placeRopeway(0, A.i, A.j, E.i, E.j);
-    if (!res.ok) { sfx('error'); showBanner(`<span class="err">${res.reason}</span>`, null, 'Cancel'); return; }
-    settlePlans(); // a Viaduct is paid from storage: what's there now goes in at once
-    sfx('place');
-    addFx('ring', A.i + 0.5, A.j + 0.5, { color: PLAYER_COLORS[0] });
-    setMode('normal');
+    act('link', [UI.placeType === 'viaduct' ? 'viaduct' : 'ropeway', A.i, A.j, E.i, E.j], (res) => {
+      if (!res.ok) { sfx('error'); showBanner(`<span class="err">${res.reason}</span>`, null, 'Cancel'); return; }
+      sfx('place');
+      addFx('ring', A.i + 0.5, A.j + 0.5, { color: PLAYER_COLORS[ME] });
+      setMode('normal');
+    });
     return;
   }
   if (R.mode !== 'place' || !R.ghost || !R.ghost.ok) return;
   const { type, x, y } = R.ghost;
   const from = UI.moveFrom ? getE(UI.moveFrom) : null;
-  const res = from ? startMove(0, from, x, y) : placeSite(0, type, x, y);
-  if (!res.ok) { sfx('error'); showBanner(`<span class="err">${res.reason}</span>`, null, 'Cancel'); return; }
-  if (from) toast(`Moving the ${BDEFS[type].name}: workers put it together here (no goods needed), and the old one keeps working until it's ready.`, 'good');
-  UI.moveFrom = 0;
-  sfx('place');
-  addFx('ring', x + 0.5, y + 0.5, { color: PLAYER_COLORS[0] });
-  setMode('normal');
+  act(from ? 'moveBuilding' : 'place', from ? [from.id, x, y] : [type, x, y], (res) => {
+    if (!res.ok) { sfx('error'); showBanner(`<span class="err">${res.reason}</span>`, null, 'Cancel'); return; }
+    if (from) toast(`Moving the ${BDEFS[type].name}: workers put it together here (no goods needed), and the old one keeps working until it's ready.`, 'good');
+    UI.moveFrom = 0;
+    sfx('place');
+    addFx('ring', x + 0.5, y + 0.5, { color: PLAYER_COLORS[ME] });
+    setMode('normal');
+  });
 }
 
 /* ------------------------------------------------------------------ map taps */
@@ -2493,7 +2520,7 @@ function confirmBanner() {
 /** Placing a Ropeway: the first tap picks the near station, the second the far end (tap it again to build). */
 function ropewayTap(i, j) {
   if (!UI.ropeA) {
-    const chk = canPlace(0, 'ropeway', i, j);
+    const chk = canPlace(ME, 'ropeway', i, j);
     R.ghost = { type: 'ropeway', x: i, y: j, ok: chk.ok };
     if (!chk.ok) { sfx('error'); showBanner(`<span class="err">${chk.reason}</span>`, null, 'Cancel'); return; }
     UI.ropeA = { i, j };
@@ -2503,18 +2530,18 @@ function ropewayTap(i, j) {
   }
   const A = UI.ropeA;
   if (R.ropeEnd && R.ropeEnd.i === i && R.ropeEnd.j === j && R.ropeEnd.ok) { confirmBanner(); return; }
-  const why = ropeEndBlocked(0, A.i, A.j, i, j);
+  const why = ropeEndBlocked(ME, A.i, A.j, i, j);
   R.ropeEnd = { i, j, ok: !why };
   if (why) { sfx('error'); showBanner(`<span class="err">${why}</span> Tap another far end.`, null, 'Cancel'); return; }
   const len = Math.round(dist(A.i, A.j, i, j));
   const rise = S.elev[tIdx(i, j)] - S.elev[tIdx(A.i, A.j)];
-  showBanner(`A <b>Ropeway</b> ${len} tiles long${rise ? `, ${Math.abs(rise)} level${Math.abs(rise) > 1 ? 's' : ''} ${rise > 0 ? 'up' : 'down'}` : ''}? ${costInline(BDEFS.ropeway.cost, playerGoods(0))}`, 'Build', 'Cancel');
+  showBanner(`A <b>Ropeway</b> ${len} tiles long${rise ? `, ${Math.abs(rise)} level${Math.abs(rise) > 1 ? 's' : ''} ${rise > 0 ? 'up' : 'down'}` : ''}? ${costInline(BDEFS.ropeway.cost, playerGoods(ME))}`, 'Build', 'Cancel');
 }
 
 /** Placing a Viaduct: the first tap picks the near end, the second the far end across the valley (tap it again to build). */
 function viaductTap(i, j) {
   if (!UI.ropeA) {
-    const chk = canPlace(0, 'viaduct', i, j);
+    const chk = canPlace(ME, 'viaduct', i, j);
     R.ghost = { type: 'viaduct', x: i, y: j, ok: chk.ok };
     if (!chk.ok) { sfx('error'); showBanner(`<span class="err">${chk.reason}</span>`, null, 'Cancel'); return; }
     UI.ropeA = { i, j };
@@ -2528,12 +2555,12 @@ function viaductTap(i, j) {
   }
   const A = UI.ropeA;
   if (R.ropeEnd && R.ropeEnd.i === i && R.ropeEnd.j === j && R.ropeEnd.ok) { confirmBanner(); return; }
-  const why = viaductBlocked(0, A.i, A.j, i, j);
+  const why = viaductBlocked(ME, A.i, A.j, i, j);
   R.ropeEnd = { i, j, ok: !why };
   if (why) { sfx('error'); showBanner(`<span class="err">${why}</span> Tap another far end.`, null, 'Cancel'); return; }
   const n = Math.abs(i - A.i) + Math.abs(j - A.j) - 1, cost = viaductCost(A.i, A.j, i, j);
   const rise = S.elev[tIdx(i, j)] - S.elev[tIdx(A.i, A.j)];
-  showBanner(`A <b>Viaduct</b> spanning ${n} tile${n > 1 ? 's' : ''}${rise ? `, ${Math.abs(rise)} level${Math.abs(rise) > 1 ? 's' : ''} ${rise > 0 ? 'up' : 'down'} at the far end` : ''}? ${costInline(cost, playerGoods(0))} (${canPay(0, cost) ? 'paid now' : 'paid from storage as the goods come in'})`, 'Build', 'Cancel');
+  showBanner(`A <b>Viaduct</b> spanning ${n} tile${n > 1 ? 's' : ''}${rise ? `, ${Math.abs(rise)} level${Math.abs(rise) > 1 ? 's' : ''} ${rise > 0 ? 'up' : 'down'} at the far end` : ''}? ${costInline(cost, playerGoods(ME))} (${canPay(ME, cost) ? 'paid now' : 'paid from storage as the goods come in'})`, 'Build', 'Cancel');
 }
 
 function buildingAtTap(i, j, wx, wy) {
@@ -2550,20 +2577,24 @@ function onMapTap(i, j, wx, wy) {
     const u = getE(UI.bomber);
     if (!u || u.dead) { setMode('normal'); return; }
     const b = buildingAtTap(i, j, wx, wy);
-    let t = b && b.owner !== 0 ? b : null;
-    if (!t) { let bd = 0.5; for (const v of S.bots) { if (v.dead || v.owner === 0 || v.inside || BOTS[v.type].air) continue; const d = dist2(v.x, v.y, wx, wy); if (d < bd) { bd = d; t = v; } } }
-    const why = t ? orderStrike(0, u, t) : 'Tap an enemy building, or an enemy vehicle or robot out in the open.';
-    if (why) { sfx('error'); showBanner(`<span class="err">${why}</span>`, null, 'Cancel'); return; }
-    sfx('order'); setMode('normal');
-    toast(`Strike ordered on ${BDEFS[t.type] ? `the ${BDEFS[t.type].name}` : `a ${BOTS[t.type].name}`}: the bomber loads up and takes off.`, 'good');
+    let t = b && b.owner !== ME ? b : null;
+    if (!t) { let bd = 0.5; for (const v of S.bots) { if (v.dead || v.owner === ME || v.inside || BOTS[v.type].air) continue; const d = dist2(v.x, v.y, wx, wy); if (d < bd) { bd = d; t = v; } } }
+    if (!t) { sfx('error'); showBanner('<span class="err">Tap an enemy building, or an enemy vehicle or robot out in the open.</span>', null, 'Cancel'); return; }
+    const tName = BDEFS[t.type] ? `the ${BDEFS[t.type].name}` : `a ${BOTS[t.type].name}`;
+    act('strike', [u.id, t.id], (why) => {
+      if (why) { sfx('error'); showBanner(`<span class="err">${why}</span>`, null, 'Cancel'); return; }
+      sfx('order'); setMode('normal');
+      toast(`Strike ordered on ${tName}: the bomber loads up and takes off.`, 'good');
+    });
     return;
   }
   if (R.mode === 'fsail') {
     const f = getE(UI.ferry);
     if (!f || f.dead) { setMode('normal'); return; }
-    const why = orderSail(0, f, i, j);
-    if (why) { sfx('error'); showBanner(`<span class="err">${why}</span>`, null, 'Cancel'); return; }
-    sfx('order'); setMode('normal'); openBotSheet(f);
+    act('sail', [f.id, i, j], (why) => {
+      if (why) { sfx('error'); showBanner(`<span class="err">${why}</span>`, null, 'Cancel'); return; }
+      sfx('order'); setMode('normal'); if (!f.dead) openBotSheet(f);
+    });
     return;
   }
   // A Howitzer's orders from its panel: shell the enemy building tapped, or drive to the spot tapped.
@@ -2573,23 +2604,31 @@ function onMapTap(i, j, wx, wy) {
     if (R.mode === 'bombard') {
       const b = buildingAtTap(i, j, wx, wy);
       if (!b || !rocketTarget(u, b)) { sfx('error'); showBanner('<span class="err">Tap an enemy building.</span> The Howitzer drives to within ' + ROCKET.range + ' tiles of it, digs in and shells it.', null, 'Cancel'); return; }
-      orderBombard(0, [u.id], b);
+      act('bombard', [[u.id], b.id]);
       toast(`The Howitzer is off to shell the ${BDEFS[b.type].name}.`, 'info');
-    } else if (!orderPark(0, [u.id], i, j)) { sfx('error'); showBanner('<span class="err">It can\'t drive there.</span> Tap open ground.', null, 'Cancel'); return; }
-    sfx('order');
-    addFx('ring', i + 0.5, j + 0.5, { color: R.mode === 'bombard' ? '#ff5a6e' : '#7dffa0' });
-    setMode('normal');
+      sfx('order');
+      addFx('ring', i + 0.5, j + 0.5, { color: '#ff5a6e' });
+      setMode('normal');
+      return;
+    }
+    act('park', [[u.id], i, j], (n) => {
+      if (!n) { sfx('error'); showBanner('<span class="err">It can\'t drive there.</span> Tap open ground.', null, 'Cancel'); return; }
+      sfx('order');
+      addFx('ring', i + 0.5, j + 0.5, { color: '#7dffa0' });
+      setMode('normal');
+    });
     return;
   }
   if (R.mode === 'crawl') {
     const u = getE(UI.crawler);
     if (!u || u.dead) { setMode('normal'); return; }
-    const why = driveCrawler(u, i, j);
-    if (why) { sfx('error'); showBanner(`<span class="err">${why}</span> Tap somewhere else.`, null, 'Cancel'); return; }
-    sfx('order');
-    addFx('ring', i + 0.5, j + 0.5, { color: PLAYER_COLORS[0] });
-    setMode('normal');
-    toast('The Crawler is on its way: it deploys when it gets there.', 'info');
+    act('crawl', [u.id, i, j], (why) => {
+      if (why) { sfx('error'); showBanner(`<span class="err">${why}</span> Tap somewhere else.`, null, 'Cancel'); return; }
+      sfx('order');
+      addFx('ring', i + 0.5, j + 0.5, { color: PLAYER_COLORS[ME] });
+      setMode('normal');
+      toast('The Crawler is on its way: it deploys when it gets there.', 'info');
+    });
     return;
   }
   if (R.mode === 'place') {
@@ -2598,7 +2637,7 @@ function onMapTap(i, j, wx, wy) {
     if (type === 'ropeway') { ropewayTap(i, j); return; }
     if (type === 'viaduct') { viaductTap(i, j); return; }
     if (R.ghost && R.ghost.x === i && R.ghost.y === j && R.ghost.ok) { confirmBanner(); return; }
-    const chk = canPlace(0, type, i, j);
+    const chk = canPlace(ME, type, i, j);
     R.ghost = { type, x: i, y: j, ok: chk.ok };
     if (chk.ok) {
       let extra = '';
@@ -2612,7 +2651,7 @@ function onMapTap(i, j, wx, wy) {
       if (def.pump) extra = ` <span class="ok">${oilAround(i, j)} Crude in this seep.</span>`;
       if (def.burner) {
         let n = 0;
-        for (const c of S.buildings) if (!c.dead && c.owner === 0 && BDEFS[c.type].work && dist2(c.x, c.y, i, j) <= def.burner.radius * def.burner.radius) n++;
+        for (const c of S.buildings) if (!c.dead && c.owner === ME && BDEFS[c.type].work && dist2(c.x, c.y, i, j) <= def.burner.radius * def.burner.radius) n++;
         extra = n ? ` <span class="ok">It would power ${n} building${n === 1 ? '' : 's'} in reach.</span>` : ' <span class="err">Nothing in reach to power: put it among your factories.</span>';
       }
       showBanner(`Place the <b>${def.name}</b> here?${extra}`, 'Build here', 'Cancel');
@@ -2628,41 +2667,33 @@ function onMapTap(i, j, wx, wy) {
     if (UI.roadMode === 'lights') {
       // Each tap steps a junction along: traffic light, then overpass, then plain junction again.
       // Ones you can't pay for yet are planned and go up once they're paid for (oldest plans first).
-      const P = junPlanAt(t);
-      if ((S.over[t] && S.over[t].owner !== 0) || (S.lights[t] && S.lights[t].owner !== 0) || (!S.over[t] && !S.lights[t] && S.road[t] && wayOwner(t) !== 0)) { sfx('error'); showRoadBanner('That junction isn\'t yours: you can only change junctions in your own land.'); return; }
-      if (S.over[t]) { removeOverpass(t); markDirty(i, j); sfx('click'); showRoadBanner('Overpass taken down: its Cement and Alloy are back.', true); return; }
-      if (P && P.kind === 'over') {
-        cancelJunPlan(t);
-        const lit = !!S.lights[t];
-        if (lit) removeLight(t);
-        sfx('click'); showRoadBanner(`Planned overpass called off (nothing was spent on it yet)${lit ? '; the light is taken down and its Alloy is back' : ''}.`, true);
-        return;
-      }
-      if (S.lights[t] || P) {
-        const why = placeOverpass(0, i, j);
-        if (why) { if (S.lights[t]) removeLight(t); cancelJunPlan(t); sfx('click'); showRoadBanner(`Light taken down. ${why}`, true); }
-        else if (S.over[t]) { sfx('place'); addFx('ring', i + 0.5, j + 0.5, { color: '#ffd166' }); showRoadBanner('Overpass built: traffic flows through without stopping.', true); }
-        else { sfx('place'); showRoadBanner(`Overpass planned: it goes up once its ${costText(junPlanCost(t, junPlanAt(t)))} is paid for from storage (oldest plans first)${S.lights[t] ? '; the light keeps working meanwhile' : ''}.`, true); }
-        return;
-      }
-      const why = placeLight(0, i, j);
-      if (why) { sfx('error'); showRoadBanner(why); }
-      else if (S.lights[t]) { sfx('place'); addFx('ring', i + 0.5, j + 0.5, { color: '#7dffa0' }); showRoadBanner(); }
-      else { sfx('place'); showRoadBanner(`Traffic light planned: it goes up once its ${costText(LIGHT_COST)} is paid for from storage (oldest plans first).`, true); }
+      act('junction', [i, j], (r) => {
+        switch (r.what) {
+          case 'notYours': sfx('error'); showRoadBanner('That junction isn\'t yours: you can only change junctions in your own land.'); return;
+          case 'overDown': sfx('click'); showRoadBanner('Overpass taken down: its Cement and Alloy are back.', true); return;
+          case 'overOff': sfx('click'); showRoadBanner(`Planned overpass called off (nothing was spent on it yet)${r.lit ? '; the light is taken down and its Alloy is back' : ''}.`, true); return;
+          case 'lightDown': sfx('click'); showRoadBanner(`Light taken down. ${r.why}`, true); return;
+          case 'overUp': sfx('place'); addFx('ring', i + 0.5, j + 0.5, { color: '#ffd166' }); showRoadBanner('Overpass built: traffic flows through without stopping.', true); return;
+          case 'overPlanned': { const P = junPlanAt(t); sfx('place'); showRoadBanner(`Overpass planned: it goes up once its ${P ? costText(junPlanCost(t, P)) : 'cost'} is paid for from storage (oldest plans first)${r.lit ? '; the light keeps working meanwhile' : ''}.`, true); return; }
+          case 'error': sfx('error'); showRoadBanner(r.why); return;
+          case 'lightUp': sfx('place'); addFx('ring', i + 0.5, j + 0.5, { color: '#7dffa0' }); showRoadBanner(); return;
+          case 'lightPlanned': sfx('place'); showRoadBanner(`Traffic light planned: it goes up once its ${costText(LIGHT_COST)} is paid for from storage (oldest plans first).`, true); return;
+          default: return;
+        }
+      });
       return;
     }
     if (UI.roadMode === 'pave') {
       // Mark a road for asphalt, or clear its mark.
       if (!paveMarkable(t)) { sfx('error'); showRoadBanner('Mark your own roads (or planned roads) for asphalt.'); return; }
-      setPaveMark(0, i, j, !S.paveMark[t]);
+      act('paveMark', [i, j, !S.paveMark[t]], () => showRoadBanner());
       sfx('click');
-      showRoadBanner();
       return;
     }
     if (UI.roadMode === 'arrows') {
       // Turn the arrow: east, south, west, north, then back to two-way.
-      if (S.road[t] && !roadOwnedBy(0, t)) { sfx('error'); showRoadBanner('That road isn\'t yours: you can only change your own roads, or ones on land you hold.'); return; }
-      if (S.road[t]) { setRoadDir(i, j, S.road[t] >= 5 ? 1 : S.road[t] + 1); sfx('click'); showRoadBanner(); }
+      if (S.road[t] && !roadOwnedBy(ME, t)) { sfx('error'); showRoadBanner('That road isn\'t yours: you can only change your own roads, or ones on land you hold.'); return; }
+      if (S.road[t]) { act('roadDir', [i, j, S.road[t] >= 5 ? 1 : S.road[t] + 1], () => showRoadBanner()); sfx('click'); }
       return;
     }
     if (!UI.draft) draftReset();
@@ -2673,7 +2704,7 @@ function onMapTap(i, j, wx, wy) {
       if (UI.draft.ramps.has(t)) draftOp(stroke, t, 'unramp');
       else {
         let at = t;
-        const chk = canPlace(0, 'ramp', i, j);
+        const chk = canPlace(ME, 'ramp', i, j);
         if (!chk.ok) {
           // The other side of the cliff (often ground your bots can't reach yet, below or above):
           // plan the Ramp on the side they can reach, cut toward the tile you tapped.
@@ -2697,8 +2728,8 @@ function onMapTap(i, j, wx, wy) {
       // Pipes: tap an Oil Pump to pipe it to the nearest Refinery; tap a tile to add or drop pipe there,
       // or tap laid pipe to take it up.
       const stroke = [], bb = S.bAt[t] && getE(S.bAt[t]);
-      if (bb && bb.owner === 0 && BDEFS[bb.type].pump) {
-        const r = pipeToRefinery(0, bb);
+      if (bb && bb.owner === ME && BDEFS[bb.type].pump) {
+        const r = pipeToRefinery(ME, bb);
         if (r.why) { sfx('error'); showRoadBanner(r.why); return; }
         for (const u of r.tiles) if (!UI.draft.pipe.has(u)) draftOp(stroke, u, 'pipe');
         UI.draft.strokes.push(stroke);
@@ -2709,7 +2740,7 @@ function onMapTap(i, j, wx, wy) {
       if (UI.draft.pipe.has(t)) draftOp(stroke, t, 'unpipe');
       else if (UI.draft.pipeDel.has(t)) draftOp(stroke, t, 'unpipedel');
       else if (S.pipe[t] === 1 || S.pipePlan[t] === 1) draftOp(stroke, t, 'pipedel');
-      else { const why = pipeBlocked(0, t); if (why) { sfx('error'); showRoadBanner(why); return; } draftOp(stroke, t, 'pipe'); }
+      else { const why = pipeBlocked(ME, t); if (why) { sfx('error'); showRoadBanner(why); return; } draftOp(stroke, t, 'pipe'); }
       UI.draft.strokes.push(stroke);
       sfx('click');
       showRoadBanner();
@@ -2721,10 +2752,10 @@ function onMapTap(i, j, wx, wy) {
       const stroke = [];
       if (UI.draft.rail.has(t)) draftOp(stroke, t, 'unrail');
       else if (UI.draft.railDel.has(t)) draftOp(stroke, t, 'unraildel');
-      else if (S.rail[t] && !roadOwnedBy(0, t)) { sfx('error'); showRoadBanner('That track isn\'t yours: you can only take up your own track, or track on land you hold.'); return; }
+      else if (S.rail[t] && !roadOwnedBy(ME, t)) { sfx('error'); showRoadBanner('That track isn\'t yours: you can only take up your own track, or track on land you hold.'); return; }
       else if (S.rail[t] || S.railPlan[t] === 1) draftOp(stroke, t, 'raildel');
-      else if (S.bAt[t] && getE(S.bAt[t]).owner === 0 && BDEFS[getE(S.bAt[t]).type].station) { showRoadBanner('Drag from this station to another: the track is laid beside each of them, and trains run between them.'); return; }
-      else { const why = railBlocked(0, t); if (why) { sfx('error'); showRoadBanner(why); return; } draftOp(stroke, t, 'rail'); }
+      else if (S.bAt[t] && getE(S.bAt[t]).owner === ME && BDEFS[getE(S.bAt[t]).type].station) { showRoadBanner('Drag from this station to another: the track is laid beside each of them, and trains run between them.'); return; }
+      else { const why = railBlocked(ME, t); if (why) { sfx('error'); showRoadBanner(why); return; } draftOp(stroke, t, 'rail'); }
       UI.draft.strokes.push(stroke);
       sfx('click');
       showRoadBanner();
@@ -2737,7 +2768,7 @@ function onMapTap(i, j, wx, wy) {
       const next = !had ? first : had === 'wall' ? 'gate' : null;
       if (next && !wallFits(t, next)) {
         sfx('error');
-        showRoadBanner(S.bAt[t] ? 'There is already a building here.' : canPlace(0, next, i, j, true).reason);
+        showRoadBanner(S.bAt[t] ? 'There is already a building here.' : canPlace(ME, next, i, j, true).reason);
         return;
       }
       draftWall(stroke, t, next);
@@ -2752,14 +2783,14 @@ function onMapTap(i, j, wx, wy) {
     let note = '';
     if (d.addSet.has(t)) draftOp(stroke, t, 'unadd');
     else if (d.del.has(t)) draftOp(stroke, t, 'undel');
-    else if (S.road[t] && !roadOwnedBy(0, t) && S.plan[t] !== 1) { sfx('error'); showRoadBanner('That road isn\'t yours: you can only take up your own roads, or ones on land you hold.'); return; }
+    else if (S.road[t] && !roadOwnedBy(ME, t) && S.plan[t] !== 1) { sfx('error'); showRoadBanner('That road isn\'t yours: you can only take up your own roads, or ones on land you hold.'); return; }
     else if (S.road[t] || S.plan[t] === 1) { draftOp(stroke, t, 'del'); note = S.plan[t] ? 'Planned tile marked to call off.' : 'Road marked to take up: its Cement comes back when you tap Build.'; }
-    else if (canRoad(0, i, j) || draftBridge(t)) {
+    else if (canRoad(ME, i, j) || draftBridge(t)) {
       draftOp(stroke, t, 'add');
       if (crossTile(t)) note = `${CROSS[S.terrain[t]].name} tile: ${costText(crossCost(t))}${bridgeMul(t) > 1 ? ' (far from shore: bridges cost more out here)' : ''}.`;
       else if (roadClears(t)) note = `Workers will clear the ${RES[S.res[t]].name.toLowerCase()} (${ROAD_CLEAR}× Cement).`;
       else if (S.res[t] === R_OIL) note = 'The oil seep stays underground, under the road: take the road up later and you can still pump it.';
-    } else { sfx('error'); showRoadBanner(S.owner[t] >= 0 && S.owner[t] !== 0 ? 'A rival holds that ground: roads only run on yours or no-one\'s.' : crossTile(t) ? 'A bridge has to start from your shore, your road or the end of a bridge.' : 'Your bots can\'t reach there yet: it\'s across water or a cliff from your land.'); return; }
+    } else { sfx('error'); showRoadBanner(S.owner[t] >= 0 && S.owner[t] !== ME ? 'A rival holds that ground: roads only run on yours or no-one\'s.' : crossTile(t) ? 'A bridge has to start from your shore, your road or the end of a bridge.' : 'Your bots can\'t reach there yet: it\'s across water or a cliff from your land.'); return; }
     if (stroke.length) d.strokes.push(stroke);
     sfx('click');
     showRoadBanner(note, true);
@@ -2772,7 +2803,7 @@ function onMapTap(i, j, wx, wy) {
   const b = buildingAtTap(i, j, wx, wy);
   if (R.mode === 'attack' && UI.armyCmd) { armyTap(UI.armyCmd, i, j, b); return; }
   if (R.mode === 'attack' && !rally) {
-    if (b && b.owner !== 0) { setMode('normal'); openBuildingSheet(b); }
+    if (b && b.owner !== ME) { setMode('normal'); openBuildingSheet(b); }
     else if (!b && inMap(i, j) && S.terrain[tIdx(i, j)] === T_GROUND) { setMode('normal'); openMoveSheet(i, j); }
     else { sfx('error'); showBanner(`<span class="err">Tap a rival building (${rivalColours()}) or open ground.</span>`, null, 'Cancel'); }
     return;
@@ -2794,7 +2825,7 @@ function onMapTap(i, j, wx, wy) {
     else if (s.kind === 'bld') openBuildingSheet(s.e);
     else {
       const bot = s.e;
-      if (INPUT.mouse && bot.owner === 0 && (isArmy(bot) || BOTS[bot.type].siege)) selectBots([bot.id], INPUT.shift);
+      if (INPUT.mouse && bot.owner === ME && (isArmy(bot) || BOTS[bot.type].siege)) selectBots([bot.id], INPUT.shift);
       openBotSheet(bot);
     }
     if (stack.length > 1 && !UI.stackHint) { UI.stackHint = true; toast(`${stack.length} things are here: tap the same spot again for the next one.`, 'info'); }
@@ -2840,7 +2871,7 @@ function tapStack(rally, b, wx, wy) {
 }
 
 function rallyAtTap(wx, wy) {
-  for (const r of S.rallies) if (r.owner === 0 && dist2(r.x + 0.1, r.y - 0.35, wx, wy) < 0.45) return r;
+  for (const r of S.rallies) if (r.owner === ME && dist2(r.x + 0.1, r.y - 0.35, wx, wy) < 0.45) return r;
   return null;
 }
 
@@ -2855,14 +2886,14 @@ function draftEmpty() { return !UI.draft || (!UI.draft.add.length && !UI.draft.d
 /** A bridge sketched out past the border: water touching a tile already in the sketch. */
 function draftBridge(t) {
   const d = UI.draft;
-  return bridgeable(t) && !S.bAt[t] && !scorched(t) && bridgeHead(0, t % S.W, (t / S.W) | 0, (u) => d.addSet.has(u) && bridgeable(u));
+  return bridgeable(t) && !S.bAt[t] && !scorched(t) && bridgeHead(ME, t % S.W, (t / S.W) | 0, (u) => d.addSet.has(u) && bridgeable(u));
 }
 
 /** What a wall line puts on tile t: a Gate on a road or track (or a planned one), a Wall anywhere else. */
 function wallKind(t) { return S.road[t] || S.plan[t] || S.rail[t] || (S.railPlan && S.railPlan[t]) || (UI.draft && UI.draft.rail.has(t)) ? 'gate' : 'wall'; }
 
 /** Could a Wall or Gate (`kind`) go on tile t? (What it costs is checked for the whole plan.) */
-function wallFits(t, kind) { return !S.bAt[t] && canPlace(0, kind, t % S.W, (t / S.W) | 0, true).ok; }
+function wallFits(t, kind) { return !S.bAt[t] && canPlace(ME, kind, t % S.W, (t / S.W) | 0, true).ok; }
 
 /** Plan a Wall or Gate on tile t, or drop it (kind null), remembering the change for Undo. */
 function draftWall(stroke, t, kind) {
@@ -2942,45 +2973,26 @@ function draftSummary() {
   // Anything you can't pay for yet waits for the goods (settlePlans): the plan can always be built.
   for (const g in net) net[g] = Math.round(net[g] * 100) / 100;
   return { add, cross, clear, del: d.del.size, ramps: d.ramps.size, walls, gates, rail: d.rail.size, railDel: d.railDel.size, pipe: d.pipe.size, pipeDel: d.pipeDel.size, cost, back, net, can: true,
-    short: Object.keys(net).filter((g) => net[g] > 0 && !canAffordRoad(0, { [g]: net[g] })) };
+    short: Object.keys(net).filter((g) => net[g] > 0 && !canAffordRoad(ME, { [g]: net[g] })) };
 }
 
 /** Build the plan: take up the marked roads (their goods come back first), then plan the new tiles for workers to pave. */
 function commitDraft() {
   if (draftEmpty()) return;
   const d = UI.draft;
-  let removed = 0, laid = 0, ramps = 0, walls = 0, gates = 0, why = '', wallWhy = '';
-  for (const t of d.del) if (S.road[t] || S.plan[t] === 1) { removeRoad(0, t % S.W, (t / S.W) | 0); removed++; }
-  let rails = 0, railsUp = 0, railWhy = '';
-  for (const t of d.railDel) if (S.rail[t] || S.railPlan[t] === 1) { takeUpRail(0, t); railsUp++; }
-  // Ramps first, so the road or track planned over one waits for it. Like everything else in Paths
-  // they're paid straight from storage (the cliff rarely has a road to it yet for haulers), and
-  // they don't count against the construction-site limit.
-  let rampWhy = '';
-  for (const t of d.ramps) {
-    const r = placeSite(0, 'ramp', t % S.W, (t / S.W) | 0, null, true);
-    if (r.ok) ramps++; else if (!rampWhy) rampWhy = r.reason;
-  }
-  for (const [t, kind] of d.walls) {
-    const r = placeSite(0, kind, t % S.W, (t / S.W) | 0);
-    if (r.ok) { if (kind === 'gate') gates++; else walls++; } else if (!wallWhy) wallWhy = r.reason;
-  }
-  for (const t of d.add) {
-    if (S.road[t] || S.plan[t] || d.ramps.has(t)) continue; // (a planned Ramp is the road there)
-    why = buildRoad(0, t % S.W, (t / S.W) | 0, true);
-    if (why) break;
-    laid++;
-  }
-  for (const t of d.rail) { const w = queueRail(0, t); if (w) { railWhy = railWhy || w; } else rails++; }
-  let pipes = 0, pipesUp = 0;
-  for (const t of d.pipeDel) if (S.pipe[t] === 1 || S.pipePlan[t] === 1) { takeUpPipe(0, t); pipesUp++; }
-  for (const t of d.pipe) if (!queuePipe(0, t)) pipes++;
-  // Pay for what we can now, oldest plans first; the rest waits for the goods.
-  settlePlans();
-  const wp = plansWaiting(0), owedN = wp.tiles + wp.track + wp.pipes + wp.sites;
+  // The whole plan goes as one order (ORDERS.paths): take up, then Ramps first (so the road or track planned over one
+  // waits for it), Walls and Gates, road, track and pipe; it's paid for from storage as far as it goes, oldest plans first.
+  const plan = { del: [...d.del], railDel: [...d.railDel], ramps: [...d.ramps], walls: [...d.walls], add: [...d.add], rail: [...d.rail], pipeDel: [...d.pipeDel], pipe: [...d.pipe] };
   draftReset();
+  act('paths', [plan], (r) => draftDone(r));
+}
+
+/** What the plan made in Paths came to (ORDERS.paths' counts): the messages, and back to the map if it all went down. */
+function draftDone(r) {
+  const { removed, laid, ramps, walls, gates, why, wallWhy, rampWhy, rails, railsUp, railWhy, pipes, pipesUp } = r;
+  const wp = plansWaiting(ME), owedN = wp.tiles + wp.track + wp.pipes + wp.sites;
   // Built: Paths closes, straight back to the map (unless something went wrong, to fix it).
-  if (!why) setMode('normal');
+  if (!why && R.mode === 'road') setMode('normal');
   const wallText = walls || gates ? ` ${[walls ? `${walls} Wall${walls === 1 ? '' : 's'}` : '', gates ? `${gates} Gate${gates === 1 ? '' : 's'}` : ''].filter(Boolean).join(' and ')} planned: free workers will build ${walls + gates === 1 ? 'it' : 'them'}.` : '';
   if (why) { sfx('error'); toast(`Planned ${laid} tile${laid === 1 ? '' : 's'} before running short: ${why}`, 'warn'); }
   else { sfx('place'); toast((laid ? `Planned ${laid} road tile${laid === 1 ? '' : 's'}: free workers will pave them.` : '') + (ramps ? ` ${ramps} Ramp site${ramps === 1 ? '' : 's'} started.` : '') + wallText + (removed ? ` Took up ${removed} tile${removed === 1 ? '' : 's'}.` : ''), 'info'); }
@@ -3014,7 +3026,7 @@ function dragCliff(stroke, p, t) {
   if (d > 1) return 'steep';
   if (UI.draft.ramps.has(t) || UI.draft.ramps.has(p)) return 'ramp';
   const busy = (u) => (S.road[u] || S.plan[u] || (S.rail && S.rail[u]) ? 1 : 0);
-  const ok = [t, p].filter((u) => canPlace(0, 'ramp', u % S.W, (u / S.W) | 0).ok).sort((a, b) => busy(a) - busy(b));
+  const ok = [t, p].filter((u) => canPlace(ME, 'ramp', u % S.W, (u / S.W) | 0).ok).sort((a, b) => busy(a) - busy(b));
   if (!ok.length) return 'nope';
   draftOp(stroke, ok[0], 'ramp');
   return 'ramp';
@@ -3052,7 +3064,7 @@ function paintTiles(line, clear) {
   for (const [x, y] of line) {
     if (!inMap(x, y)) break;
     const t = tIdx(x, y);
-    if (pave) { if (paveMarkable(t)) setPaveMark(0, x, y, UI.paveOn); continue; }
+    if (pave) { if (paveMarkable(t) && !!S.paveMark[t] !== !!UI.paveOn) act('paveMark', [x, y, !!UI.paveOn]); continue; }
     if (rail) {
       // Climbing a one-level cliff with no Ramp: plan one for the track (see dragCliff).
       if (prev) {
@@ -3062,8 +3074,8 @@ function paintTiles(line, clear) {
       prev = [x, y];
       if (S.rail[t] || UI.draft.rail.has(t)) continue;
       const st = S.bAt[t] && getE(S.bAt[t]);
-      if (st && st.owner === 0 && BDEFS[st.type].station) continue; // a drag from (or to) a station: the track starts (or ends) beside it
-      if (!railBlocked(0, t)) {
+      if (st && st.owner === ME && BDEFS[st.type].station) continue; // a drag from (or to) a station: the track starts (or ends) beside it
+      if (!railBlocked(ME, t)) {
         draftOp(UI.stroke, t, 'rail');
         // Over water the track is a rail bridge, through rock a rail tunnel: dearer, so the banner says so.
         if (crossTile(t)) { if (bridgeable(t)) UI.paintBridge = true; else UI.paintTunnel = true; }
@@ -3079,7 +3091,7 @@ function paintTiles(line, clear) {
     if (arrows) {
       if (S.road[t] && prev) {
         const v = 2 + [[1, 0], [0, 1], [-1, 0], [0, -1]].findIndex(([dx, dy]) => dx === x - prev[0] && dy === y - prev[1]);
-        if (v >= 2 && roadOwnedBy(0, t)) { if (S.road[tIdx(prev[0], prev[1])] && roadOwnedBy(0, tIdx(prev[0], prev[1]))) setRoadDir(prev[0], prev[1], v); setRoadDir(x, y, v); }
+        if (v >= 2 && roadOwnedBy(ME, t)) { if (S.road[tIdx(prev[0], prev[1])] && roadOwnedBy(ME, tIdx(prev[0], prev[1]))) act('roadDir', [prev[0], prev[1], v]); act('roadDir', [x, y, v]); }
       }
       prev = [x, y];
       continue;
@@ -3101,7 +3113,7 @@ function paintTiles(line, clear) {
     // Dragging never bulldozes resources by accident: tap a resource tile to clear it for a road.
     if (S.res[t] && !clear) { UI.paintSkipped = true; continue; }
     // A road dragged out over water (or a canyon) carries on as a bridge, and through rock as a tunnel.
-    if (canRoad(0, x, y) || draftBridge(t)) {
+    if (canRoad(ME, x, y) || draftBridge(t)) {
       draftOp(UI.stroke, t, 'add');
       if (crossTile(t) && UI.roadMode !== 'bridge') { if (bridgeable(t)) UI.paintBridge = true; else UI.paintTunnel = true; }
     } else if (crossTile(t)) UI.paintCross = true;
@@ -3155,11 +3167,11 @@ function routeHave(rail) {
 function routeSeeds(rail) {
   const d = UI.draft, out = [];
   for (let t = 0; t < S.W * S.H; t++) {
-    if (rail ? (S.rail[t] && wayOwner(t) === 0) || S.railPlan[t] === 1 || d.rail.has(t)
-      : (S.road[t] && wayOwner(t) === 0) || S.plan[t] === 1 || d.addSet.has(t) || d.ramps.has(t)) out.push(t);
+    if (rail ? (S.rail[t] && wayOwner(t) === ME) || S.railPlan[t] === 1 || d.rail.has(t)
+      : (S.road[t] && wayOwner(t) === ME) || S.plan[t] === 1 || d.addSet.has(t) || d.ramps.has(t)) out.push(t);
   }
   for (const b of S.buildings) {
-    if (b.dead || b.owner !== 0) continue;
+    if (b.dead || b.owner !== ME) continue;
     if (rail ? BDEFS[b.type].station : b.type === 'lander') out.push(tIdx(b.x, b.y)); // (the route starts beside it)
   }
   return out;
@@ -3174,7 +3186,7 @@ function routeTreeNow(rail) {
   const key = [rail ? 1 : 0, S.roadVer, S.railVer, S.planVer, S.territoryVer, S.buildings.length, d.add.length, d.ramps.size, d.rail.size, d.del.size, d.railDel.size, Math.floor(S.time / 30)].join(':');
   if (UI.routeTreeKey === key && UI.routeTreeCache) return UI.routeTreeCache;
   const seeds = routeSeeds(rail);
-  const T = seeds.length ? routeTree(0, rail ? 'rail' : 'road', seeds, routeHave(rail)) : { why: 'You have no track or Rail Station yet: drag from where the track should start to where it should go.' };
+  const T = seeds.length ? routeTree(ME, rail ? 'rail' : 'road', seeds, routeHave(rail)) : { why: 'You have no track or Rail Station yet: drag from where the track should start to where it should go.' };
   T.nSeeds = seeds.length;
   UI.routeTreeKey = key; UI.routeTreeCache = T;
   return T;
@@ -3234,7 +3246,7 @@ function routeDrag(i, j, first) {
   strokeBack(UI.stroke);
   paintFlagsReset();
   if (to === UI.routeFrom) { showRoadBanner('<b>Route to:</b> drag on to where it should go.', true); return; }
-  const r = pathRoute(0, rail ? 'rail' : 'road', [UI.routeFrom], to, routeHave(rail));
+  const r = pathRoute(ME, rail ? 'rail' : 'road', [UI.routeFrom], to, routeHave(rail));
   UI.routeEnd = to;
   if (!r.tiles) { showRoadBanner(r.why); return; }
   paintRoute(r.tiles);
@@ -3263,8 +3275,8 @@ function pipeDrag(i, j, first) {
   for (let k = UI.stroke.length - 1; k >= 0; k--) draftOp([], UI.stroke[k].t, 'unpipe');
   UI.stroke.length = 0;
   const a = UI.pipeFrom, b = tIdx(i, j);
-  let route = a === b ? (pipeBlocked(0, a) ? null : [a]) : pipeRoute(0, a, (t) => t === b, 400);
-  UI.pipeWhy = route ? '' : pipeBlocked(0, b) || pipeBlocked(0, a) || 'No way to run pipe there: round buildings and water, on your own land or no-one\'s.';
+  let route = a === b ? (pipeBlocked(ME, a) ? null : [a]) : pipeRoute(ME, a, (t) => t === b, 400);
+  UI.pipeWhy = route ? '' : pipeBlocked(ME, b) || pipeBlocked(ME, a) || 'No way to run pipe there: round buildings and water, on your own land or no-one\'s.';
   if (route && route.length > 1) {
     // Up to the buildings at either end, not under them.
     if (S.bAt[route[0]]) route = route.slice(1);
@@ -3284,8 +3296,8 @@ function pipeAllPumps() {
   const stroke = [];
   let n = 0, why = '';
   for (const b of S.buildings) {
-    if (b.dead || b.owner !== 0 || !BDEFS[b.type].pump) continue;
-    const r = pipeToRefinery(0, b);
+    if (b.dead || b.owner !== ME || !BDEFS[b.type].pump) continue;
+    const r = pipeToRefinery(ME, b);
     if (r.why) { if (!/already/.test(r.why)) why = r.why; continue; }
     for (const t of r.tiles) if (!UI.draft.pipe.has(t)) draftOp(stroke, t, 'pipe');
     n++;
@@ -3302,13 +3314,13 @@ function pipeAllPumps() {
 function showRoadBanner(problem, info) {
   const mode = ['arrows', 'lights', 'bridge', 'ramp', 'pave', 'wall', 'rail', 'pipe'].includes(UI.roadMode) ? UI.roadMode : 'road';
   if (!UI.draft) draftReset();
-  const have = playerGoods(0);
+  const have = playerGoods(ME);
   let line, how;
   const pipeHow = `Pipelines carry Crude, nothing else. Every second each line moves up to ${PIPE_RATE} Crude from its Oil Pumps to the Refineries (and Asphalt Plants) on it, then into any storage on it; storage on a line feeds its Refineries too. A pump on a pipeline never waits for a Tanker. Pipe goes anywhere inside your border: over roads and track, under buildings, up cliffs, across water on stilts and bored through rock (those tiles cost more, so a drag goes round a small pond); a pipe joins every building it runs beside or under. Raiders and missiles can break it: broken pipe is relaid as soon as it's paid for again.`;
   if (mode === 'pipe' && !UI.draft.pipe.size && !UI.draft.pipeDel.size) {
     let unpiped = 0;
-    const joined = refineryPipes(0);
-    for (const b of S.buildings) if (!b.dead && b.owner === 0 && BDEFS[b.type].pump && !buildingPipes(b).some((c) => joined.has(c))) unpiped++;
+    const joined = refineryPipes(ME);
+    for (const b of S.buildings) if (!b.dead && b.owner === ME && BDEFS[b.type].pump && !buildingPipes(b).some((c) => joined.has(c))) unpiped++;
     line = `<b>Drag from an Oil Pump to a Refinery</b> and the pipe finds its own way there, over roads and track, across water and through rock (${costText(PIPE_COST)} a tile, ${costText(PIPE_CROSS_COST)} across water or rock; laid when you tap Build). Or tap a pump to pipe it to the nearest Refinery. Tap pipe to take it up.` +
       (unpiped ? ` <button class="btn" id="pipe-all">Pipe every Oil Pump (${unpiped})</button>` : '');
     how = pipeHow;
@@ -3326,9 +3338,9 @@ function showRoadBanner(problem, info) {
     line = `Tap a highlighted spot at the top or foot of a one-level cliff to plan a <b>Ramp</b> (${costText(BDEFS.ramp.cost)}). To get down from high ground, plan it on the cliff top. You rarely need this tool: dragging a road or track up a cliff plans one for you. Nothing is spent until you tap <b>Build</b>.`;
     how = 'Workers cut a sloped road into the cliff; once it is done it is part of your road network, so haulers drive straight up it, and track can run over it. Ramps are paid straight from storage (as the goods come in) and don\'t count against the construction-site limit. A Ramp can\'t go on resources or a building, or where it would block the only way through a pass, and no Ramp can climb a cliff two levels high.';
   } else if (mode === 'pave') {
-    const c = paveCounts(0);
+    const c = paveCounts(ME);
     let works = 0;
-    for (const b of S.buildings) if (!b.dead && b.owner === 0 && b.type === 'roadworks') works++;
+    for (const b of S.buildings) if (!b.dead && b.owner === ME && b.type === 'roadworks') works++;
     line = `Drag along roads to mark them for <b>asphalt</b>; drag over marked road to clear it. Marked: <b>${c.marked}</b> tile${c.marked === 1 ? '' : 's'}` +
       (c.marked ? ` (${c.fresh} asphalt, ${c.worn} worn, ${c.todo} to pave)` : '') + '.' +
       (works ? '' : ' <span class="err">Build a Roadworks to pave them.</span>');
@@ -3341,12 +3353,12 @@ function showRoadBanner(problem, info) {
     how = 'One-way traffic never meets head-on, so a loop of one-way roads (one lane out, one back) keeps busy routes flowing.';
   } else if (mode === 'lights') {
     let lights = 0, junctions = 0, overs = 0;
-    for (const k in S.lights) if (S.lights[k].owner === 0) lights++;
-    for (const k in S.over) if (S.over[k].owner === 0) overs++;
+    for (const k in S.lights) if (S.lights[k].owner === ME) lights++;
+    for (const k in S.over) if (S.over[k].owner === ME) overs++;
     const net = roadNet();
-    for (let t = 0; t < S.W * S.H; t++) if (net.junc[t] && wayOwner(t) === 0) junctions++;
+    for (let t = 0; t < S.W * S.H; t++) if (net.junc[t] && wayOwner(t) === ME) junctions++;
     line = `Tap a <b>junction</b> for a traffic light (${costText(LIGHT_COST)}), tap the light for an <b>overpass</b> (${costText(OVERPASS_COST)}), tap again to clear it.`;
-    const jp = plansWaiting(0).junctions;
+    const jp = plansWaiting(ME).junctions;
     how = `A light lets one direction through at a time: it pays where two busy roads cross (50 to 85% more goods through), and costs a little on a quiet crossing. On an overpass nobody stops: best everywhere, and more than twice as much on a jammed crossing. Short of Alloy? Tap anyway: the light or overpass is planned (a dashed orange marker) and goes up once it's paid for from storage, oldest plans first${jp ? ` (<b>${jp}</b> waiting now)` : ''}. You have ${lights} light${lights === 1 ? '' : 's'}, ${overs} overpass${overs === 1 ? '' : 'es'} and ${junctions} junction${junctions === 1 ? '' : 's'}.`;
   } else {
     const sm = draftSummary();
@@ -3370,7 +3382,7 @@ function showRoadBanner(problem, info) {
       const cost = Object.keys(sm.net).length && Object.values(sm.net).some((v) => v > 0) ? `costs <b>${costText(sm.net)}</b>` : 'costs nothing';
       line = `Plan: ${parts.join(', ')}; ${cost}` + (!sm.short.length ? '.' : `. <span class="ok">Short of ${sm.short.map((g) => GOOD[g].name).join(' and ')} for now: what you can't pay for waits and is paid from storage as the goods come in, oldest plans first.</span>`);
     }
-    const waiting = planList(0).length, wp = plansWaiting(0), owedN = wp.tiles + wp.track + wp.pipes + wp.sites;
+    const waiting = planList(ME).length, wp = plansWaiting(ME), owedN = wp.tiles + wp.track + wp.pipes + wp.sites;
     const owedText = owedN ? ` <b>Waiting for goods now:</b> ${[wp.tiles ? `${wp.tiles} road tile${wp.tiles === 1 ? '' : 's'}` : '', wp.track ? `${wp.track} of track` : '', wp.pipes ? `${wp.pipes} of pipe` : '', wp.sites ? `${wp.sites} site${wp.sites === 1 ? '' : 's'}` : ''].filter(Boolean).join(', ')} (${costText(wp.owed)} to go).` : '';
     if (mode === 'pipe') how = pipeHow + owedText;
     else if (mode === 'wall') how = 'Walls and Gates are paid straight from storage, no Hauler needed: what you have now goes in when you tap Build, the rest as the goods come in (oldest plans first), and free workers put each piece up as far as its goods go. Enemy warbots have to go round or shoot through; your bots pass your Gates.' + owedText;
@@ -3449,12 +3461,12 @@ function depotAutoText(b) {
 function trafficSummary() {
   const n = { hauler: [0, 0], truck: [0, 0], tanker: [0, 0] };
   for (const u of S.bots) {
-    if (u.dead || u.owner !== 0 || !n[u.type]) continue;
+    if (u.dead || u.owner !== ME || !n[u.type]) continue;
     n[u.type][0]++;
     if (u.task && u.task.type === 'haul') n[u.type][1]++;
   }
   let jams = 0;
-  if (HEAT.jam) for (let t = 0; t < S.W * S.H; t++) if (HEAT.jam[t] > TRAFFIC_JAM && wayOwner(t) === 0) jams++;
+  if (HEAT.jam) for (let t = 0; t < S.W * S.H; t++) if (HEAT.jam[t] > TRAFFIC_JAM && wayOwner(t) === ME) jams++;
   return `<b>Traffic map:</b> <i class="tk q"></i>quiet <i class="tk b"></i>busy <i class="tk p"></i>packed; pulsing rings mark jams (${jams} now). `
     + `Haulers ${n.hauler[1]} of ${n.hauler[0]} busy` + (n.truck[0] ? `, Freight Trucks ${n.truck[1]} of ${n.truck[0]}` : '') + (n.tanker[0] ? `, Tankers ${n.tanker[1]} of ${n.tanker[0]}` : '') + '.';
 }
@@ -3498,8 +3510,8 @@ function costInline(cost, have) {
  * (the others are just hidden); a letter picks a building on the tab that's showing (BUILD_KEYS).
  */
 function openBuildMenu() {
-  const have = playerGoods(0);
-  const sites = siteCount(0);
+  const have = playerGoods(ME);
+  const sites = siteCount(ME);
   const list = BUILD_MENU.filter((t) => !(BDEFS[t].war && !warOn()) && !(BDEFS[t].nuke && !nukeOn()) && !(BDEFS[t].colony && (S.mode !== 'colony' || S.mission)) && !(BDEFS[t].naval && !navalMap()));
   const groupOf = (t) => (BUILD_GROUPS.find((g) => g.types.includes(t)) || BUILD_GROUPS[0]).key;
   const ordered = BUILD_GROUPS.flatMap((g) => g.types).filter((t) => list.includes(t));
@@ -3541,11 +3553,11 @@ function openBuildMenu() {
 function renderTrade(b) {
   const el = $('sh-trade');
   if (!el) return;
-  const T = tradeState(0), have = spendable(0);
-  const sig = JSON.stringify([T.round, T.pick, T.offers.map((o) => [o.left, tradePay(0, o, b)]), Object.keys(T.sat).map((g) => Math.round(T.sat[g] * 20))]);
+  const T = tradeState(ME), have = spendable(ME);
+  const sig = JSON.stringify([T.round, T.pick, T.offers.map((o) => [o.left, tradePay(ME, o, b)]), Object.keys(T.sat).map((g) => Math.round(T.sat[g] * 20))]);
   $('sh-trade-next').textContent = T.next > S.time ? `new ones in ${fmtTime(T.next - S.time)}` : '';
-  const trainNear = S.bots.some((u) => !u.dead && u.owner === 0 && BOTS[u.type].train && botLinked(u, b));
-  const railNear = S.bots.some((u) => !u.dead && u.owner === 0 && BOTS[u.type].rail) && S.buildings.some((s) => !s.dead && s.owner === 0 && s.built && BDEFS[s.type].station && !BDEFS[s.type].terminal && railLinked(s, b));
+  const trainNear = S.bots.some((u) => !u.dead && u.owner === ME && BOTS[u.type].train && botLinked(u, b));
+  const railNear = S.bots.some((u) => !u.dead && u.owner === ME && BOTS[u.type].rail) && S.buildings.some((s) => !s.dead && s.owner === ME && s.built && BDEFS[s.type].station && !BDEFS[s.type].terminal && railLinked(s, b));
   const bonus = Math.round((terminalBonus(b) - 1) * 100);
   $('sh-trade-hint').innerHTML = (!trainNear && !railNear ? '<span class="err">No Road Train can reach it, and no Freight Train runs to it: order a Road Train at the Bot Foundry and lay a road here (or lay track beside it from a Rail Station).</span> ' : '') +
     `Only Road Trains and Freight Trains serve a Terminal: they bring a contract's lot and take what it pays home. Rates are ${Math.round(TERMINAL.rate * 100)}% of what the goods are worth` +
@@ -3554,7 +3566,7 @@ function renderTrade(b) {
   el.dataset.sig = sig;
   if (!T.offers.length) { el.innerHTML = '<p class="hint">Contracts arrive in a moment.</p>'; return; }
   el.innerHTML = T.offers.map((o, k) => {
-    const on = T.pick === k, pay = tradePay(0, o, b), sat = T.sat[o.give] ?? 1;
+    const on = T.pick === k, pay = tradePay(ME, o, b), sat = T.sat[o.give] ?? 1;
     // Spelled out which way it goes: you send `lot` of one good and get `pay` of the other back.
     return `<div class="kv trade-row${on ? ' on' : ''}"><span>You give <b>${o.lot}</b> <i class="gi ${o.give}"></i>${GOOD[o.give].name} → you get <b>${pay}</b> <i class="gi ${o.get}"></i>${GOOD[o.get].name}` +
       `<small> ${o.left > 0 ? `${o.left} more time${o.left === 1 ? '' : 's'}` : 'filled'}${sat < 0.99 ? ` · ${GOOD[o.give].name} pays ${Math.round(sat * 100)}% for now (you sold a lot lately)` : ''} · you have ${Math.floor(have[o.give] || 0)} ${GOOD[o.give].name}</small></span>` +
@@ -3562,10 +3574,8 @@ function renderTrade(b) {
   }).join('');
   for (const btn of el.querySelectorAll('button[data-k]')) btn.onclick = () => {
     const k = +btn.dataset.k;
-    pickContract(0, T.pick === k ? -1 : k);
+    act('contract', [T.pick === k ? -1 : k], () => { renderTrade(b); refreshSheet(); });
     sfx('click');
-    renderTrade(b);
-    refreshSheet();
   };
 }
 
@@ -3578,7 +3588,7 @@ function renderYard(b) {
     el.dataset.k = kinds.join();
     el.innerHTML = kinds.map((k) => `<div class="order-row yard-row" data-k="${k}"><span>${BOTS[k].plural}<small id="sh-y-${k}"></small></span>
       <button class="btn" data-k="${k}" data-d="1">+1</button><button class="btn" data-k="${k}" data-d="5">+5</button><button class="btn ghost" data-k="${k}" data-d="0">Clear</button></div>`).join('');
-    for (const btn of el.querySelectorAll('button')) btn.onclick = () => { orderAtYard(b, btn.dataset.k, +btn.dataset.d); sfx('click'); renderYard(b); };
+    for (const btn of el.querySelectorAll('button')) btn.onclick = () => { act('yard', [b.id, btn.dataset.k, +btn.dataset.d], () => renderYard(b)); sfx('click'); };
   }
   for (const k of kinds) {
     const n = (b.yard && b.yard[k]) || 0, parts = (b.yardParts && b.yardParts[k]) || 0;
@@ -3602,7 +3612,7 @@ function wallCountText() {
 function ownedCount(type) {
   let built = 0, sites = 0;
   for (const b of S.buildings) {
-    if (b.dead || b.owner !== 0 || b.type !== type) continue;
+    if (b.dead || b.owner !== ME || b.type !== type) continue;
     if (b.built) built++; else sites++;
   }
   return { built, sites };
@@ -3617,7 +3627,7 @@ function ownedText(type) {
 
 function openBuildingSheet(b) {
   const def = BDEFS[b.type];
-  const mine = b.owner === 0;
+  const mine = b.owner === ME;
   R.selected = b.id; R.selTile = -1; UI.selBot = 0;
   let desc = !mine && b.type === 'lander' ? (S.players.length > 2 ? `The ${playerName(b.owner)}'s fortified headquarters. Capture it and everything the ${playerName(b.owner)} built is yours.` : 'The rival\'s fortified headquarters. Capture it to win.') : def.desc;
   const style = !mine && b.type === 'lander' && S.players[b.owner] && S.players[b.owner].ai && PERSONALITIES[S.players[b.owner].style];
@@ -3630,7 +3640,7 @@ function openBuildingSheet(b) {
     <div class="owner"><span class="dot" style="background:${PLAYER_COLORS[b.owner]}"></span> ${mine ? 'Yours' : playerName(b.owner)}</div></div></div>
     <p class="desc">${desc}</p><div class="status" id="sh-status"></div><div id="sh-dyn"></div>${mine ? '<div id="sh-fix"></div>' : ''}`;
   if (mine) {
-    if (def.airfield && b.built && b.owner === 0) html += airfieldSection(b); // its planes and air drops first
+    if (def.airfield && b.built && b.owner === ME) html += airfieldSection(b); // its planes and air drops first
     if (def.yard && b.built && mine) html += `<div class="section-label">${def.port ? 'Shipyard' : def.airfield ? 'Hangar' : 'Rail yard'}</div><div class="status" id="sh-yard-status"></div><div class="bar" id="sh-yard-bar"><div></div></div><div id="sh-yard"></div>${def.station ? '<div class="actions" id="sh-yard-here"></div>' : ''}
       <p class="hint">${def.port ? 'Ships are built here' : def.airfield ? 'Planes are built here' : 'Freight Trains are built here'}, a round of parts (1 Alloy, 1 Chip) every ${YARD.work} s: ${def.yard.map((k) => `${BOTS[k].plural.toLowerCase().replace(/^./, (c) => c.toUpperCase())} ${BOTS[k].parts}`).join(', ')} rounds. Haulers bring the parts. ${def.port ? 'Each one puts to sea from this Port.' : def.airfield ? `The hangar holds ${Object.entries(AIRFIELD_HOLDS).map(([k, n]) => `${n} ${n === 1 ? BOTS[k].name : BOTS[k].plural}`).join(' and ')}.` : 'Each one rolls out onto this station\'s track, so the Bot Foundry never needs a railway.'}</p>`;
     if (def.terminal && b.built) html += '<div class="section-label">Contracts <span class="label-note" id="sh-trade-next"></span></div><div id="sh-trade"></div><p class="hint" id="sh-trade-hint"></p>';
@@ -3662,10 +3672,10 @@ function openBuildingSheet(b) {
           <button class="btn small ghost" id="sh-keep-all">${UI.keepAll ? 'Fewer goods' : 'More goods'}</button>
           <p class="hint" id="sh-keep-hint"></p>`;
       }
-      if (BDEFS[b.type].port && b.built && b.owner === 0) html += portSection(b);
+      if (BDEFS[b.type].port && b.built && b.owner === ME) html += portSection(b);
     }
     // Call a worker: one of yours with a building that needs a worker and has none (a mine no one comes to).
-    if (b.owner === 0 && b.built && BDEFS[b.type].staff && !BDEFS[b.type].crew && !b.staff) {
+    if (b.owner === ME && b.built && BDEFS[b.type].staff && !BDEFS[b.type].crew && !b.staff) {
       html += `<button class="btn" id="sh-callw">Call a worker</button><p class="hint" id="sh-callw-hint">Send the nearest worker here now, even one busy elsewhere, so this keeps working.</p>`;
     }
     // Priority for everything but the Command Base and finished Walls/Gates (storage too: an Airfield's or a
@@ -3689,7 +3699,7 @@ function openBuildingSheet(b) {
         <button class="btn" id="sh-rallypost"></button>
         <p class="hint">Every new warbot from the Bot Foundry is stationed here instead of at the Command Base, and comes back here after its orders. Ones that don't fit wait beside it. One Outpost or Keep at a time.</p>` : '') +
         (def.bunker ? '' : `<div class="section-label">Keep here</div>
-        <div class="seg" id="sh-keepw"><button data-v="auto">Auto (${b.type === 'lander' ? 1 : S.players[0].keepW ?? 0})</button><button data-v="0">0</button><button data-v="1">1</button><button data-v="2">2</button><button data-v="5">5</button><button data-v="${def.garrison}">${def.garrison}</button></div>
+        <div class="seg" id="sh-keepw"><button data-v="auto">Auto (${b.type === 'lander' ? 1 : S.players[ME].keepW ?? 0})</button><button data-v="0">0</button><button data-v="1">1</button><button data-v="2">2</button><button data-v="5">5</button><button data-v="${def.garrison}">${def.garrison}</button></div>
         <p class="hint">${b.type === 'lander' ? 'Warbots the Command Base always keeps at home: attacks, rallies and stationing never take the last of them.'
           : 'Warbots stationed here: your Command Base sends them, and replaces any that are lost. Attacks and rally flags use them once the Command Base has none to spare, and they come back here when you call them back (or after defending it). <i>Auto</i> follows the setting for every Outpost in Army.'}</p>`) +
         // Whether its warbots go out by themselves against enemies close by (a Bunker's and a Keep's fire from cover instead).
@@ -3712,8 +3722,8 @@ function openBuildingSheet(b) {
         <button class="btn" id="sh-pmark">Mark roads to pave</button>
         <p class="hint">Mark roads in Paths (Pave) and the Paver keeps just those surfaced, resurfacing them as traffic wears them down: put the Roadworks near the roads that matter. <i>Every joined road</i> paves everything it can reach.</p>`;
     }
-    if (def.pump && b.built && b.owner === 0) {
-      const pr = pipeToRefinery(0, b);
+    if (def.pump && b.built && b.owner === ME) {
+      const pr = pipeToRefinery(ME, b);
       if (!pr.why) html += `<button class="btn" id="sh-pipe">Pipe it to the Refinery: ${pr.tiles.length} tile${pr.tiles.length === 1 ? '' : 's'}, ${costText(pr.cost)}</button>
         <p class="hint">A pipeline sends its Crude straight to the Refinery, every second, so it never waits for a Tanker. It runs over roads and track; raiders can break it.</p>`;
     }
@@ -3736,8 +3746,8 @@ function openBuildingSheet(b) {
     if (needsRoad(b) || (b.unlinked !== undefined && !def.store)) html += '<div id="sh-road"></div>';
     html += '<div class="actions">';
     if (pausable(b) && b.built) html += `<button class="btn" id="sh-pause"></button>`;
-    if (b.owner === 0 && (movable(b) || b.moving)) html += `<button class="btn" id="sh-move">${b.moving ? 'Cancel move' : 'Move'}</button><p class="hint" id="sh-move-hint">${b.moving ? 'Its new site is going up: when it\'s finished, everything here moves over and this one comes down.' : 'Put it somewhere else: no goods needed, just its build time. It keeps working until the new one is ready.'}</p>`;
-    if (b.owner === 0 && b.type === 'wall' && b.built) html += `<button class="btn" id="sh-gate">Make it a Gate</button><p class="hint">Your bots and trucks can pass through a Gate; enemies still have to break it down. It costs ${costText(gateUpgradeCost())} more, paid from storage.</p>`;
+    if (b.owner === ME && (movable(b) || b.moving)) html += `<button class="btn" id="sh-move">${b.moving ? 'Cancel move' : 'Move'}</button><p class="hint" id="sh-move-hint">${b.moving ? 'Its new site is going up: when it\'s finished, everything here moves over and this one comes down.' : 'Put it somewhere else: no goods needed, just its build time. It keeps working until the new one is ready.'}</p>`;
+    if (b.owner === ME && b.type === 'wall' && b.built) html += `<button class="btn" id="sh-gate">Make it a Gate</button><p class="hint">Your bots and trucks can pass through a Gate; enemies still have to break it down. It costs ${costText(gateUpgradeCost())} more, paid from storage.</p>`;
     if (BDEFS[b.type].mobile) html += '<button class="btn primary" id="sh-pack">Pack up to move</button>';
     else if (b.type !== 'lander') html += `<button class="btn danger" id="sh-demolish">${b.built ? 'Dismantle' : 'Cancel site'}</button>`;
     html += '</div>';
@@ -3750,68 +3760,45 @@ function openBuildingSheet(b) {
   }
   openSheet('bld', b.id, html);
   if (mine) {
-    if ($('sh-prio')) for (const btn of $('sh-prio').children) btn.onclick = () => {
-      b.prio = btn.dataset.v === 'normal' ? undefined : btn.dataset.v;
-      if (b.built) delete b.sitePrio; else b.sitePrio = !!b.prio; // a site's priority ends when it's built
-      sfx('click');
-      refreshSheet();
-    };
-    if ($('sh-smode')) for (const btn of $('sh-smode').children) btn.onclick = () => { b.smode = btn.dataset.v === 'normal' ? undefined : btn.dataset.v; sfx('click'); refreshSheet(); };
-    if ($('sh-accept')) for (const btn of $('sh-accept').children) btn.onclick = () => {
-      const g = btn.dataset.g;
-      b.reject = b.reject || {};
-      if (b.reject[g]) delete b.reject[g]; else b.reject[g] = true;
-      if (!Object.keys(b.reject).length) delete b.reject;
-      sfx('click');
-      refreshSheet();
-    };
-    if ($('sh-pmode')) for (const btn of $('sh-pmode').children) btn.onclick = () => { b.pmode = btn.dataset.v; sfx('click'); refreshSheet(); };
+    // (each setting is an order: refreshSheet once it's done)
+    const set = (name, ...args) => { act(name, [b.id, ...args], () => refreshSheet()); sfx('click'); };
+    if ($('sh-prio')) for (const btn of $('sh-prio').children) btn.onclick = () => set('prio', btn.dataset.v);
+    if ($('sh-smode')) for (const btn of $('sh-smode').children) btn.onclick = () => set('smode', btn.dataset.v);
+    if ($('sh-accept')) for (const btn of $('sh-accept').children) btn.onclick = () => set('accept', btn.dataset.g);
+    if ($('sh-pmode')) for (const btn of $('sh-pmode').children) btn.onclick = () => set('pmode', btn.dataset.v);
     if ($('sh-pmark')) $('sh-pmark').onclick = () => openPaths('pave');
     if ($('sh-keep-all')) $('sh-keep-all').onclick = () => { UI.keepAll = !UI.keepAll; sfx('click'); openBuildingSheet(b); };
-    if ($('sh-auto')) for (const btn of $('sh-auto').children) btn.onclick = () => {
-      b.autoOff = btn.dataset.v !== '1';
-      if (b.autoOff) b.auto = null;
-      S.players[b.owner].railT = undefined; // plan the line again now
-      railPlan(b.owner);
-      sfx('click');
-      refreshSheet();
-    };
-    if ($('sh-keep')) for (const btn of $('sh-keep').querySelectorAll('button')) btn.onclick = () => {
-      const g = btn.parentElement.dataset.g;
-      setKeep(b, g, ((b.keep && b.keep[g]) || 0) + +btn.dataset.d);
-      sfx('click');
-      refreshSheet();
-    };
+    if ($('sh-auto')) for (const btn of $('sh-auto').children) btn.onclick = () => set('autoSupply', btn.dataset.v === '1');
+    if ($('sh-keep')) for (const btn of $('sh-keep').querySelectorAll('button')) btn.onclick = () => set('keep', btn.parentElement.dataset.g, +btn.dataset.d);
     const seg = $('sh-mode');
-    if (seg) for (const btn of seg.children) btn.onclick = () => { b.mode = btn.dataset.v; sfx('click'); refreshSheet(); };
+    if (seg) for (const btn of seg.children) btn.onclick = () => set('fmode', btn.dataset.v);
     if ($('sh-orders')) renderFoundryOrders(b);
-    if ($('sh-omode')) for (const btn of $('sh-omode').children) btn.onclick = () => { b.omode = btn.dataset.v === 'first' ? 'first' : undefined; sfx('click'); refreshSheet(); };
-    if ($('sh-pause')) $('sh-pause').onclick = () => { setPaused(b, !b.paused); sfx('click'); refreshSheet(); };
+    if ($('sh-omode')) for (const btn of $('sh-omode').children) btn.onclick = () => set('omode', btn.dataset.v);
+    if ($('sh-pause')) $('sh-pause').onclick = () => set('pause', !b.paused);
     if ($('sh-move')) $('sh-move').onclick = () => {
-      if (b.moving) { cancelMove(b); sfx('click'); toast(`Move cancelled: the ${def.name} stays where it is.`, 'info'); openBuildingSheet(b); return; }
+      if (b.moving) { act('cancelMove', [b.id], () => { toast(`Move cancelled: the ${def.name} stays where it is.`, 'info'); if (!b.dead) openBuildingSheet(b); }); sfx('click'); return; }
       sfx('click'); enterPlaceMode(b.type, b.id);
     };
     if ($('sh-pack')) $('sh-pack').onclick = () => {
       const btn = $('sh-pack');
       if (!btn.dataset.armed) { btn.dataset.armed = '1'; btn.textContent = 'Tap again: its land goes, and buildings only it covers are lost'; return; }
-      const u = packCrawler(b);
       sfx('order');
-      if (u) openBotSheet(u); else closeSheet();
+      act('pack', [b.id], (uid) => { const u = uid ? getE(uid) : null; if (u) openBotSheet(u); else closeSheet(); });
     };
-    if ($('sh-gate')) $('sh-gate').onclick = () => {
-      const why = wallToGate(0, b);
+    if ($('sh-gate')) $('sh-gate').onclick = () => act('gate', [b.id], (why) => {
       if (why) { sfx('error'); toast(why, 'warn'); return; }
-      sfx('place'); toast('The Wall is now a Gate: your bots can pass through it.', 'good'); openBuildingSheet(b);
-    };
+      sfx('place'); toast('The Wall is now a Gate: your bots can pass through it.', 'good'); if (!b.dead) openBuildingSheet(b);
+    });
     if ($('sh-aim')) $('sh-aim').onclick = () => { sfx('click'); startAim(b); };
     for (const btn of document.querySelectorAll('#sh-ferry button[data-to]')) btn.onclick = () => {
-      const to = +btn.dataset.to ? getE(+btn.dataset.to) : null;
-      const why = setFerryLine(b, to);
-      if (why) { sfx('error'); toast(why, 'warn'); return; }
-      sfx('click'); toast(to ? 'Ferry line set: your bots take the ferry when it\'s the shorter way.' : 'Ferry line stopped.', 'info'); openBuildingSheet(b);
+      const to = +btn.dataset.to;
+      act('ferryLine', [b.id, to], (why) => {
+        if (why) { sfx('error'); toast(why, 'warn'); return; }
+        sfx('click'); toast(to ? 'Ferry line set: your bots take the ferry when it\'s the shorter way.' : 'Ferry line stopped.', 'info'); if (!b.dead) openBuildingSheet(b);
+      });
     };
     if ($('sh-air')) for (const btn of $('sh-air').querySelectorAll('button[data-k]')) btn.onclick = () => { const f = freePlane(b); if (!f) return; sfx('click'); startAirdrop(f, btn.dataset.k); };
-    if ($('sh-airsup')) for (const btn of $('sh-airsup').children) btn.onclick = () => { b.airSupply = btn.dataset.v === '1'; sfx('click'); refreshSheet(); };
+    if ($('sh-airsup')) for (const btn of $('sh-airsup').children) btn.onclick = () => set('airSupply', btn.dataset.v === '1');
     if ($('sh-land')) {
       UI.landN = clamp(UI.landN || 3, 1, FERRY_SEATS);
       $('sh-land-minus').onclick = () => { UI.landN = Math.max(1, UI.landN - 1); refreshSheet(); };
@@ -3820,64 +3807,55 @@ function openBuildingSheet(b) {
       if ($('sh-found')) $('sh-found').onclick = () => { const f = portFerry(b); if (!f) return; sfx('click'); startLanding(f, 0, 'port'); };
     }
     if ($('sh-pipe')) $('sh-pipe').onclick = () => {
-      const r = pipeToRefinery(0, b);
-      if (r.why) { sfx('error'); toast(r.why, 'warn'); return; }
-      const n = pipeUp(0, r.tiles), owed = r.tiles.filter((t) => S.pipePlan[t] === 1).length;
-      sfx('place');
-      toast(`Pipe laid from the Oil Pump to the Refinery (${n} tile${n === 1 ? '' : 's'}).` + (owed ? ` ${owed} tile${owed === 1 ? '' : 's'} wait for goods, paid from storage as they come in.` : ''), 'good');
       $('sh-pipe').hidden = true;
+      act('pipeToRefinery', [b.id], (r) => {
+        if (r.why) { sfx('error'); toast(r.why, 'warn'); refreshSheet(); return; }
+        const { n, owed } = r;
+        sfx('place');
+        toast(`Pipe laid from the Oil Pump to the Refinery (${n} tile${n === 1 ? '' : 's'}).` + (owed ? ` ${owed} tile${owed === 1 ? '' : 's'} wait for goods, paid from storage as they come in.` : ''), 'good');
+      });
     };
-    if ($('sh-gprio')) for (const btn of $('sh-gprio').children) btn.onclick = () => { b.gprio = btn.dataset.v === 'normal' ? undefined : btn.dataset.v; sfx('click'); refreshSheet(); };
-    if ($('sh-keepw')) for (const btn of $('sh-keepw').children) btn.onclick = () => { b.keepW = btn.dataset.v === 'auto' ? undefined : +btn.dataset.v; b.stockT = 0; sfx('click'); refreshSheet(); };
-    if ($('sh-hold')) for (const btn of $('sh-hold').children) btn.onclick = () => { setHold(b, btn.dataset.v === '1'); sfx('click'); refreshSheet(); };
+    if ($('sh-gprio')) for (const btn of $('sh-gprio').children) btn.onclick = () => set('gprio', btn.dataset.v);
+    if ($('sh-keepw')) for (const btn of $('sh-keepw').children) btn.onclick = () => set('keepW', btn.dataset.v === 'auto' ? null : +btn.dataset.v);
+    if ($('sh-hold')) for (const btn of $('sh-hold').children) btn.onclick = () => set('hold', btn.dataset.v === '1');
     if ($('sh-sortie')) $('sh-sortie').onclick = () => {
-      const n = sortieNow(b);
       sfx('click');
-      toast(n ? `${n} warbot${n === 1 ? '' : 's'} going out to fight: they come back in once it's clear.` : 'No warbots with Ammo inside to send out.', n ? 'good' : 'warn');
-      refreshSheet();
+      act('sortie', [b.id], (n) => {
+        toast(n ? `${n} warbot${n === 1 ? '' : 's'} going out to fight: they come back in once it's clear.` : 'No warbots with Ammo inside to send out.', n ? 'good' : 'warn');
+        refreshSheet();
+      });
     };
-    if ($('sh-callw')) $('sh-callw').onclick = () => {
-      const r = callWorker(0, b);
-      if (r.u) { sfx('order'); toast(r.already ? 'A worker is already on the way.' : 'A worker is on the way.', 'info'); addFx('ring', r.u.x, r.u.y, { color: '#ffe45a' }); }
+    if ($('sh-callw')) $('sh-callw').onclick = () => act('callWorker', [b.id], (r) => {
+      const u = r.uid ? getE(r.uid) : null;
+      if (u) { sfx('order'); toast(r.already ? 'A worker is already on the way.' : 'A worker is on the way.', 'info'); addFx('ring', u.x, u.y, { color: '#ffe45a' }); }
       else { sfx('error'); toast(r.why, 'warn'); }
       refreshSheet();
-    };
+    });
     if ($('sh-rallypost')) $('sh-rallypost').onclick = () => {
-      const P = S.players[0], on = P.rallyPost === b.id;
-      P.rallyPost = on ? 0 : b.id;
-      toast(on ? 'No rally point: new warbots go to the Command Base again.' : `New warbots will gather at this ${BDEFS[b.type].name}.`, 'info');
-      sfx('click'); refreshSheet();
+      const bName = BDEFS[b.type].name;
+      act('rallyPost', [b.id], (on) => {
+        toast(!on ? 'No rally point: new warbots go to the Command Base again.' : `New warbots will gather at this ${bName}.`, 'info');
+        refreshSheet();
+      });
+      sfx('click');
     };
-    if ($('sh-unpost')) $('sh-unpost').onclick = () => {
-      const n = unstation(0, b);
+    if ($('sh-unpost')) $('sh-unpost').onclick = () => act('unstation', [b.id], (n) => {
       if (n) { sfx('order'); toast(`${n} warbot${n > 1 ? 's' : ''} heading back to the Command Base. This ${def.name} now keeps none.`, 'info'); } else sfx('error');
       refreshSheet();
-    };
+    });
     if ($('sh-st-send')) {
-      UI.stationN = stationAvailable(0, b); // as many as it has room for and you can spare
+      UI.stationN = stationAvailable(ME, b); // as many as it has room for and you can spare
       $('sh-st-minus').onclick = () => { UI.stationN = Math.max(1, UI.stationN - 1); refreshSheet(); };
-      $('sh-st-plus').onclick = () => { UI.stationN = Math.min(stationAvailable(0, b), UI.stationN + 1); refreshSheet(); };
-      $('sh-st-send').onclick = () => {
-        const n = stationWarbots(0, b, UI.stationN);
+      $('sh-st-plus').onclick = () => { UI.stationN = Math.min(stationAvailable(ME, b), UI.stationN + 1); refreshSheet(); };
+      $('sh-st-send').onclick = () => act('station', [b.id, UI.stationN], (n) => {
         if (n) { sfx('order'); toast(`${n} warbot${n > 1 ? 's' : ''} on the way to the ${def.name}.`, 'info'); } else sfx('error');
         refreshSheet();
-      };
+      });
     }
     if ($('sh-lim')) {
-      const step = (d) => {
-        const cur = stockLimit(b);
-        const base = cur === Infinity ? (BDEFS[b.type].limit || 20) - d : cur;
-        b.limit = clamp(Math.round((base + d) / 5) * 5, 5, 500);
-        sfx('click');
-        refreshSheet();
-      };
-      $('sh-lim-minus').onclick = () => step(-5);
-      $('sh-lim-plus').onclick = () => step(5);
-      $('sh-lim-off').onclick = () => {
-        b.limit = stockLimit(b) === Infinity ? BDEFS[b.type].limit || 20 : -1;
-        sfx('click');
-        refreshSheet();
-      };
+      $('sh-lim-minus').onclick = () => set('limit', -5);
+      $('sh-lim-plus').onclick = () => set('limit', 5);
+      $('sh-lim-off').onclick = () => set('limit', 0);
     }
     if ($('sh-demolish')) $('sh-demolish').onclick = () => {
       if (!UI.demolishArm) {
@@ -3886,37 +3864,39 @@ function openBuildingSheet(b) {
         return;
       }
       // Say what's left in crates: all its materials, and anything that was inside it.
-      const def = BDEFS[b.type], built = b.built;
-      const out = demolish(b);
+      const def = BDEFS[b.type], built = b.built, bx = b.x, by = b.y;
       sfx('collapse');
       closeSheet();
-      if (!out) return;
-      const mats = Object.keys(out.cost).length ? costText(out.cost) : '';
-      if (built) toast(`${def.name} dismantled: ` + (mats ? `its materials (${mats})` : 'it') + (out.inside ? ` and the ${out.inside} good${out.inside === 1 ? '' : 's'} inside` : '') +
-        ` ${mats || out.inside ? 'are left in crates for your haulers to bring back' : 'is gone'}.`, 'info', b.x, b.y);
-      else if (out.crates) toast(`${def.name} site cancelled: the ${out.crates} good${out.crates === 1 ? '' : 's'} delivered for it ${out.crates === 1 ? 'is' : 'are'} left in crates for your haulers to bring back.`, 'info', b.x, b.y);
+      act('demolish', [b.id], (out) => {
+        if (!out) return;
+        const mats = Object.keys(out.cost).length ? costText(out.cost) : '';
+        if (built) toast(`${def.name} dismantled: ` + (mats ? `its materials (${mats})` : 'it') + (out.inside ? ` and the ${out.inside} good${out.inside === 1 ? '' : 's'} inside` : '') +
+          ` ${mats || out.inside ? 'are left in crates for your haulers to bring back' : 'is gone'}.`, 'info', bx, by);
+        else if (out.crates) toast(`${def.name} site cancelled: the ${out.crates} good${out.crates === 1 ? '' : 's'} delivered for it ${out.crates === 1 ? 'is' : 'are'} left in crates for your haulers to bring back.`, 'info', bx, by);
+      });
     };
   } else if ($('sh-send')) {
-    UI.attackN = attackAvailable(0, b);
+    UI.attackN = attackAvailable(ME, b);
     $('sh-minus').onclick = () => { UI.attackN = Math.max(1, UI.attackN - 1); refreshSheet(); };
-    $('sh-plus').onclick = () => { UI.attackN = Math.min(attackAvailable(0, b), UI.attackN + 1); refreshSheet(); };
-    $('sh-send').onclick = () => {
-      const n = sendAttack(0, b, UI.attackN);
+    $('sh-plus').onclick = () => { UI.attackN = Math.min(attackAvailable(ME, b), UI.attackN + 1); refreshSheet(); };
+    $('sh-send').onclick = () => act('sendAttack', [b.id, UI.attackN], (n) => {
       if (n > 0) {
         sfx('order');
         toast(`${n} warbot${n > 1 ? 's' : ''} sent to attack the ${def.name}.`, 'info');
         closeSheet();
       }
-    };
-    $('sh-fire').onclick = () => {
-      if (fireMissile(0, b)) { toast(`Missile away: it will hit the ${def.name} in a few seconds.`, 'info'); refreshSheet(); }
+    });
+    $('sh-fire').onclick = () => act('fireMissile', [b.id], (ok) => {
+      if (ok) { toast(`Missile away: it will hit the ${def.name} in a few seconds.`, 'info'); refreshSheet(); }
       else sfx('error');
-    };
+    });
     if ($('sh-bomb')) $('sh-bomb').onclick = () => {
       const u = readyBomber(b);
-      const why = u ? orderStrike(0, u, b) : 'No Strike Bomber is ready that can reach it.';
-      if (why) { sfx('error'); toast(why, 'warn'); return; }
-      sfx('order'); toast(`Strike ordered on the ${def.name}: a bomber loads up and takes off.`, 'good'); refreshSheet();
+      if (!u) { sfx('error'); toast('No Strike Bomber is ready that can reach it.', 'warn'); return; }
+      act('strike', [u.id, b.id], (why) => {
+        if (why) { sfx('error'); toast(why, 'warn'); return; }
+        sfx('order'); toast(`Strike ordered on the ${def.name}: a bomber loads up and takes off.`, 'good'); refreshSheet();
+      });
     };
   }
   refreshSheet();
@@ -3932,7 +3912,7 @@ function refreshFix(b) {
     key = 'fixing' + (w && w.task && w.task.phase === 'work' ? 'w' : 'g') + Math.ceil(b.fixLeft);
     html = `<div class="kv"><span>Repair</span><span class="ok">${w && w.task && w.task.phase === 'work' ? `Worker repairing: ${Math.ceil(b.fixLeft)} armor to go` : 'A worker is on the way'}</span></div>`;
   } else {
-    const n = repairCost(b), can = playerGoods(0).cement >= n;
+    const n = repairCost(b), can = playerGoods(ME).cement >= n;
     key = 'btn' + n + can + (S.time - (b.lastHit || -99) < 3);
     html = `<button class="btn primary big" id="sh-fixbtn" ${can ? '' : 'disabled'}>Repair: ${n} Cement</button>
       <p class="hint">${can ? 'A free worker comes and restores its armor.' : `Not enough Cement: repairing it takes ${n}.`}${S.time - (b.lastHit || -99) < 3 ? ' It is under attack right now.' : ''}</p>`;
@@ -3940,12 +3920,11 @@ function refreshFix(b) {
   if (el.dataset.key === key) return;
   el.dataset.key = key;
   el.innerHTML = html;
-  if ($('sh-fixbtn')) $('sh-fixbtn').onclick = () => {
-    const why = requestRepair(0, b);
+  if ($('sh-fixbtn')) $('sh-fixbtn').onclick = () => act('repair', [b.id], (why) => {
     if (why) { sfx('error'); toast(why, 'warn'); } else { sfx('click'); toast(`Repair ordered: a worker is coming to fix the ${def.name}.`, 'info'); }
     el.dataset.key = '';
     refreshSheet();
-  };
+  });
 }
 
 /** The building sheet's road section: linked, or what it would take to link it (with a button). */
@@ -3957,7 +3936,7 @@ function refreshRoadLink(b) {
     el.innerHTML = '<div class="kv"><span>Road</span><span class="ok">Linked to storage</span></div>';
     return;
   }
-  const route = roadRouteTo(0, b);
+  const route = roadRouteTo(ME, b);
   const what = b.built ? 'Haulers can\'t collect from it or bring it anything' : 'Haulers can\'t bring its materials';
   if (route && !route.length && route.pending) {
     R.routePreview = null;
@@ -3970,36 +3949,30 @@ function refreshRoadLink(b) {
     return;
   }
   R.routePreview = route;
-  const can = canAffordRoad(0, route.goods);
+  const can = canAffordRoad(ME, route.goods);
   const key = route.join(',');
   if (el.dataset.key === key + can) return;
   el.dataset.key = key + can;
-  const short = Object.keys(route.goods).filter((g) => !canAffordRoad(0, { [g]: route.goods[g] })).map((g) => GOOD[g].name);
+  const short = Object.keys(route.goods).filter((g) => !canAffordRoad(ME, { [g]: route.goods[g] })).map((g) => GOOD[g].name);
   const cross = route.cross ? ` It crosses water or rock: ${route.cross} tile${route.cross === 1 ? '' : 's'} of bridge or tunnel.` : '';
   el.innerHTML = `<div class="road-warn"><b>No road to storage.</b> ${what}. The dashed tiles show the shortest road${route.pending ? ` (${route.pending} more already planned)` : ''}; free workers pave it once it's planned.${cross}
     <button class="btn primary" id="sh-layroad" ${can ? '' : 'disabled'}>Lay road: ${route.length} tile${route.length === 1 ? '' : 's'}, ${costText(route.goods)}</button>
     ${can ? '' : `<span class="err">Not enough ${short.join(' or ')}${short.includes('Cement') ? ': build a Cement Works' : ''}.</span>`}</div>`;
-  $('sh-layroad').onclick = () => {
-    let laid = 0, why = '';
-    for (const t of roadRouteTo(0, b) || []) {
-      why = buildRoad(0, t % S.W, (t / S.W) | 0);
-      if (why) break;
-      laid++;
-    }
+  $('sh-layroad').onclick = () => act('layRoad', [b.id], ({ laid, why }) => {
     if (why) { sfx('error'); toast(why, 'warn'); } else { sfx('place'); toast(`Planned ${laid} road tile${laid === 1 ? '' : 's'}: free workers will pave them.`, 'info'); }
     el.dataset.key = '';
     refreshSheet();
-  };
+  });
 }
 
 function refreshBuildingSheet(b) {
   const def = BDEFS[b.type];
-  const mine = b.owner === 0;
+  const mine = b.owner === ME;
   if (mine && def.terminal && b.built) renderTrade(b);
   if (mine && def.yard && b.built) renderYard(b);
   const parts = [];
   if (mine && def.lab && $('sh-research')) refreshResearch();
-  const gun = mine && b.underFire && !BDEFS[b.type].war ? gunOver(0, b.x, b.y) : null;
+  const gun = mine && b.underFire && !BDEFS[b.type].war ? gunOver(ME, b.x, b.y) : null;
   const foes = mine && !gun && !BDEFS[b.type].war && !(def.staff && b.staff) && foesAt(b); // (a staffed building says so itself)
   $('sh-status').textContent = gun ? `Under enemy fire: an enemy ${BDEFS[gun.type].name} covers it, so your robots keep clear until the gun is destroyed or runs dry.`
     : foes ? `${S.wildlife ? 'Creatures' : 'Enemy warbots'} about: your workers and haulers keep clear of it until they've gone${S.wildlife ? '' : ' (send warbots to drive them off)'}.`
@@ -4057,7 +4030,7 @@ function refreshBuildingSheet(b) {
       parts.push(`<div class="kv"><span>Crude left in the seep</span><span>${oilAround(b.x, b.y)}</span></div>`);
       if (mine) parts.push(`<div class="kv"><span>Waiting for pickup</span><span>${goodTag('crude', `${b.stock.crude || 0}/${def.out.crude}`)}</span></div>`);
       if (mine) {
-        const joined = refineryPipes(0), ns = buildingPipes(b);
+        const joined = refineryPipes(ME), ns = buildingPipes(b);
         parts.push(`<div class="kv"><span>Pipeline</span><span>${ns.some((c) => joined.has(c)) ? 'to a Refinery' : b.piped ? 'to storage' : ns.length ? 'goes nowhere yet' : 'none: a Tanker collects'}</span></div>`);
       }
       if (mine && b.timer > 0 && /^Working/.test(b.status || '')) parts.push(`<div class="bar"><div style="width:${Math.round((b.timer / def.work) * 100)}%"></div></div>`);
@@ -4159,7 +4132,7 @@ function refreshBuildingSheet(b) {
     $('sh-aim-hint').textContent = why || `Shows the Silo's ${BDEFS.silo.missile.range}-tile range on the ground: tap any spot inside it to aim, then fire.`;
   }
   if ($('sh-gprio')) for (const btn of $('sh-gprio').children) btn.classList.toggle('on', btn.dataset.v === (b.gprio || 'normal'));
-  if ($('sh-rallypost')) { const on = S.players[0].rallyPost === b.id; $('sh-rallypost').textContent = on ? '⚑ Rally point for new warbots (tap to clear)' : 'Make this the rally point for new warbots'; $('sh-rallypost').classList.toggle('primary', on); }
+  if ($('sh-rallypost')) { const on = S.players[ME].rallyPost === b.id; $('sh-rallypost').textContent = on ? '⚑ Rally point for new warbots (tap to clear)' : 'Make this the rally point for new warbots'; $('sh-rallypost').classList.toggle('primary', on); }
   if ($('sh-keepw')) for (const btn of $('sh-keepw').children) btn.classList.toggle('on', btn.dataset.v === (b.keepW === undefined ? 'auto' : String(b.keepW)));
   if ($('sh-hold')) {
     for (const btn of $('sh-hold').children) btn.classList.toggle('on', (btn.dataset.v === '1') === !!b.hold);
@@ -4171,7 +4144,7 @@ function refreshBuildingSheet(b) {
     sb.textContent = !armed ? 'Send them out to fight (no armed warbots inside)' : !foe ? 'Send them out to fight (no enemies near it)' : `Send ${armed} out to fight`;
   }
   if ($('sh-st-n')) {
-    const avail = stationAvailable(0, b), coming = b.garInc || 0;
+    const avail = stationAvailable(ME, b), coming = b.garInc || 0;
     UI.stationN = clamp(UI.stationN || 0, avail ? 1 : 0, avail);
     $('sh-st-n').textContent = UI.stationN;
     $('sh-st-send').disabled = !avail;
@@ -4182,17 +4155,17 @@ function refreshBuildingSheet(b) {
   if ($('sh-posted')) {
     if (b.type === 'lander') {
       let home = 0, out = 0;
-      for (const u of S.bots) if (!u.dead && u.owner === 0 && isArmy(u) && !postOf(u)) { if (u.inside === b.id) home++; else out++; }
+      for (const u of S.bots) if (!u.dead && u.owner === ME && isArmy(u) && !postOf(u)) { if (u.inside === b.id) home++; else out++; }
       $('sh-posted').textContent = `${home} warbot${home === 1 ? '' : 's'} here${out ? `, ${out} more out or on the way (they belong here)` : ''}. Warbots not stationed at an Outpost belong to the Command Base.`;
     } else {
       let inside = 0, out = 0;
-      for (const u of S.bots) if (!u.dead && u.owner === 0 && u.post === b.id) { if (u.inside === b.id) inside++; else out++; }
+      for (const u of S.bots) if (!u.dead && u.owner === ME && u.post === b.id) { if (u.inside === b.id) inside++; else out++; }
       $('sh-posted').textContent = inside + out ? `${inside + out} (${inside} inside${out ? `, ${out} out or on the way` : ''})` : 'None';
       if ($('sh-unpost')) $('sh-unpost').disabled = !(inside + out);
     }
   }
   if ($('sh-lim')) {
-    const lim = stockLimit(b), g = limitGood(b), have = goodTotal(0, g);
+    const lim = stockLimit(b), g = limitGood(b), have = goodTotal(ME, g);
     $('sh-lim').textContent = lim === Infinity ? '∞' : lim;
     $('sh-lim-off').textContent = lim === Infinity ? 'Set a limit' : 'No limit';
     $('sh-lim-hint').textContent = lim === Infinity
@@ -4256,7 +4229,7 @@ function refreshBuildingSheet(b) {
       if (k) { want++; if (have < k) short++; }
     }
     let trucks = 0;
-    for (const u of S.bots) if (!u.dead && u.owner === 0 && BOTS[u.type].truck && !BOTS[u.type].train && !BOTS[u.type].tanker) trucks++; // Road Trains only run to far Depots
+    for (const u of S.bots) if (!u.dead && u.owner === ME && BOTS[u.type].truck && !BOTS[u.type].train && !BOTS[u.type].tanker) trucks++; // Road Trains only run to far Depots
     $('sh-keep-hint').textContent = !want
       ? 'Set how much of each good to keep here, and haulers and Freight Trucks bring it from your other storage. Buildings and roads near here then draw on it.'
       : `${short ? `Filling ${short} order${short > 1 ? 's' : ''}` : 'Fully stocked'}. ` + (b.airSupply && !onHomeNet(b) ? `A Cargo Plane flies them in, ${BOTS.cargoplane.carry} goods a flight (see Supply by air).`
@@ -4276,7 +4249,7 @@ function refreshBuildingSheet(b) {
   }
   refreshBombButton(b);
   if ($('sh-fire')) {
-    const silos = silosInRange(0, b), ready = silos.filter(siloReady);
+    const silos = silosInRange(ME, b), ready = silos.filter(siloReady);
     const minReload = silos.reduce((m, q) => (q.reload > 0 && q.stock.warhead > 0 ? Math.min(m, q.reload) : m), Infinity);
     $('sh-fire').disabled = !ready.length;
     $('sh-missile').innerHTML = `<p class="desc">${!silos.length
@@ -4286,7 +4259,7 @@ function refreshBuildingSheet(b) {
         : minReload < Infinity ? `Silos in range are reloading (${Math.ceil(minReload)}s).` : 'Silos in range have no Missiles. Build them at a Missile Factory (Alloy, Chips and Fuel).'}</p>`;
   }
   if ($('sh-send')) {
-    const avail = attackAvailable(0, b);
+    const avail = attackAvailable(ME, b);
     UI.attackN = clamp(UI.attackN || avail, Math.min(1, avail), avail);
     $('sh-n').textContent = UI.attackN;
     $('sh-send').disabled = avail === 0;
@@ -4302,26 +4275,28 @@ function refreshBuildingSheet(b) {
  * lost to the progress bar moving.
  */
 function refreshResearch() {
-  const el = $('sh-research'), P = S.players[0], r = P.research, have = spendable(0);
-  const key = (r ? r.key : '-') + TECH_ORDER.map((k) => (tech(0, k) ? 'd' : canPay(0, TECHS[k].cost) ? 'y' : 'n')).join('');
+  const el = $('sh-research'), P = S.players[ME], r = P.research, have = spendable(ME);
+  const key = (r ? r.key : '-') + TECH_ORDER.map((k) => (tech(ME, k) ? 'd' : canPay(ME, TECHS[k].cost) ? 'y' : 'n')).join('');
   if (el.dataset.key !== key) {
     el.dataset.key = key;
     el.innerHTML = (r
       ? `<div class="research-now"><div class="kv"><span>Researching <b>${TECHS[r.key].name}</b></span><button class="btn small ghost" id="sh-rcancel">Cancel</button></div><div class="bar"><div id="sh-rbar"></div></div></div>`
       : '<p class="hint">Pick an upgrade: its cost comes out of storage now, and a worker in the Lab researches it. Every upgrade lasts the whole game.</p>') +
       `<div class="tech-list">${TECH_ORDER.map((k) => {
-        const d = TECHS[k], done = tech(0, k), now = r && r.key === k;
+        const d = TECHS[k], done = tech(ME, k), now = r && r.key === k;
         return `<div class="tech${done ? ' done' : ''}${now ? ' now' : ''}"><div class="tech-head"><b>${d.name}</b><span>${done ? 'Done ✓' : `${d.time} s`}</span></div><p>${d.desc}</p>` +
           (done ? '' : `<div class="tech-foot"><span class="bcost">${costHTML(d.cost, have)}</span>${now ? '<span class="ok">Under way</span>'
-            : `<button class="btn small${r ? '' : ' primary'}" data-k="${k}" ${r || !canPay(0, d.cost) ? 'disabled' : ''}>Research</button>`}</div>`) + '</div>';
+            : `<button class="btn small${r ? '' : ' primary'}" data-k="${k}" ${r || !canPay(ME, d.cost) ? 'disabled' : ''}>Research</button>`}</div>`) + '</div>';
       }).join('')}</div>`;
-    for (const btn of el.querySelectorAll('button[data-k]')) btn.onclick = () => {
-      const why = startResearch(0, btn.dataset.k);
+    for (const btn of el.querySelectorAll('button[data-k]')) btn.onclick = () => act('research', [btn.dataset.k], (why) => {
       if (why) { sfx('error'); toast(why, 'warn'); } else { sfx('order'); toast(`Research started: ${TECHS[btn.dataset.k].name}.`, 'info'); }
       el.dataset.key = '';
       refreshSheet();
+    });
+    if ($('sh-rcancel')) $('sh-rcancel').onclick = () => {
+      act('cancelResearch', [], () => { el.dataset.key = ''; refreshSheet(); });
+      sfx('click'); toast('Research called off: its cost is back in your Command Base.', 'info');
     };
-    if ($('sh-rcancel')) $('sh-rcancel').onclick = () => { cancelResearch(0); sfx('click'); toast('Research called off: its cost is back in your Command Base.', 'info'); el.dataset.key = ''; refreshSheet(); };
   }
   if (r && $('sh-rbar')) $('sh-rbar').style.width = `${Math.min(100, (100 * r.t) / TECHS[r.key].time)}%`;
 }
@@ -4342,18 +4317,12 @@ function renderFoundryOrders(b) {
   for (const btn of el.querySelectorAll('button')) btn.onclick = () => {
     const k = btn.dataset.k;
     if (btn.dataset.m) {
-      moveFoundryOrder(b, k, +btn.dataset.m, shows);
+      act('foundryMove', [b.id, k, +btn.dataset.m, kinds], () => { renderFoundryOrders(b); refreshSheet(); });
       sfx('click');
-      renderFoundryOrders(b);
-      refreshSheet();
       return;
     }
-    const d = +btn.dataset.d;
-    b.orders = b.orders || {};
-    b.orders[k] = d === 0 ? 0 : clamp((b.orders[k] || 0) + d, 0, 99);
-    if (!hasOrders(b)) delete b.orders;
+    act('foundryOrder', [b.id, k, +btn.dataset.d], () => refreshSheet());
     sfx('click');
-    refreshSheet();
   };
 }
 
@@ -4371,8 +4340,8 @@ function botActivity(u) {
     return (u.rockets ?? ROCKET.mag) ? `${rocketDug(u) ? 'Dug in' : 'Loaded'}: waiting, and shelling any enemy building within ${ROCKET.range} tiles` : 'Out of shells: no Ammo in reach to reload';
   }
   if (isArmy(u)) {
-    const p = u.owner === 0 && usesPosts(0) ? postOf(u) : null;
-    const where = u.owner !== 0 ? '' : p ? ` (stationed at the ${BDEFS[p.type].name})` : ' (belongs to the Command Base)';
+    const p = u.owner === ME && usesPosts(ME) ? postOf(u) : null;
+    const where = u.owner !== ME ? '' : p ? ` (stationed at the ${BDEFS[p.type].name})` : ' (belongs to the Command Base)';
     const what = (() => {
       if (u.fight) return 'Fighting!';
       if (!t) return u.inside ? 'Standing guard inside' : 'Waiting for orders: no garrison with room';
@@ -4445,7 +4414,7 @@ function refreshTrainArmor(u) {
       : 'Paid for: it finishes its run and stops at a Rail Station, where the yard fits the armor and guns.';
     return;
   }
-  const have = playerGoods(0), ok = Object.keys(A.cost).every((g) => (have[g] || 0) >= A.cost[g]);
+  const have = playerGoods(ME), ok = Object.keys(A.cost).every((g) => (have[g] || 0) >= A.cost[g]);
   btn.hidden = false;
   btn.disabled = !ok;
   btn.textContent = `Armor this train (${costText(A.cost)})`;
@@ -4465,55 +4434,56 @@ function shieldRows(u) {
 function openBotSheet(u) {
   R.selected = 0; R.selTile = -1; UI.selBot = u.id;
   const html = `<div class="sheet-title"><div><h3>${BOTS[u.type].name}</h3>
-    <div class="owner"><span class="dot" style="background:${PLAYER_COLORS[u.owner]}"></span> ${u.owner === 0 ? 'Yours' : playerName(u.owner)}</div></div></div>
+    <div class="owner"><span class="dot" style="background:${PLAYER_COLORS[u.owner]}"></span> ${u.owner === ME ? 'Yours' : playerName(u.owner)}</div></div></div>
     <p class="desc">${BOTS[u.type].desc}</p>
     <div class="status" id="sh-status"></div><div id="sh-dyn"></div>
-    ${u.owner === 0 && isArmy(u) ? '<button class="btn big" id="sh-recall" hidden>Call back this squad</button>' : ''}
-    ${u.owner === 0 && BOTS[u.type].bomber ? '<button class="btn primary big" id="sh-strike">Pick a target</button>' : ''}
-    ${u.owner !== 0 && u.owner >= 0 && !BOTS[u.type].wild && !BOTS[u.type].air && myBombers().length ? '<div class="section-label">Air strike</div><p class="hint" id="sh-bomb-hint"></p><button class="btn big" id="sh-bomb">Bomb it</button>' : ''}
-    ${u.owner === 0 && BOTS[u.type].ferry ? `<button class="btn big" id="sh-fout"${u.inside && !u.landing ? '' : ' hidden'}>Sail out of the Port</button>
+    ${u.owner === ME && isArmy(u) ? '<button class="btn big" id="sh-recall" hidden>Call back this squad</button>' : ''}
+    ${u.owner === ME && BOTS[u.type].bomber ? '<button class="btn primary big" id="sh-strike">Pick a target</button>' : ''}
+    ${u.owner !== ME && u.owner >= 0 && !BOTS[u.type].wild && !BOTS[u.type].air && myBombers().length ? '<div class="section-label">Air strike</div><p class="hint" id="sh-bomb-hint"></p><button class="btn big" id="sh-bomb">Bomb it</button>' : ''}
+    ${u.owner === ME && BOTS[u.type].ferry ? `<button class="btn big" id="sh-fout"${u.inside && !u.landing ? '' : ' hidden'}>Sail out of the Port</button>
       <div class="actions"><button class="btn primary" id="sh-fsail">Sail somewhere</button><button class="btn" id="sh-fhome">Back to its line</button></div>
       <div class="actions"><button class="btn" id="sh-fembark">Take warbots aboard</button><button class="btn" id="sh-fland">Put them ashore</button></div>
       <button class="btn" id="sh-found">Found a Port on another shore</button>
       <p class="hint"><b>Sail out of the Port</b>: tied up, it sails out to wait just off the Port, where you can tap it on the map. <b>Sail somewhere</b>: it sails to the spot you tap (open water, or right up to a shore) and waits there for your orders; with a mouse, right-click the water while its panel is open. <b>Take warbots aboard</b> loads your warbots standing within ${Math.floor(FERRY_REACH)} tiles of it (with a mouse, select warbots and right-click the Ferry: they walk to the shore beside it and board). <b>Put them ashore</b> lands them on the shore beside it, and it heads home. <b>Found a Port</b>: it loads ${costText(PORT_FOUND.cost)} at its Port and up to ${PORT_FOUND.workers} Workers, and puts up a Port on an empty shore that claims the land round it.</p>` : ''}
-    ${u.owner === 0 && BOTS[u.type].rail ? '<div class="section-label">Armor</div><p class="hint" id="sh-tarmor-hint"></p><button class="btn big" id="sh-tarmor">Armor this train</button>' : ''}
-    ${u.owner === 0 && BOTS[u.type].crawler ? '<div class="actions"><button class="btn primary" id="sh-crawl">Drive somewhere</button><button class="btn" id="sh-deploy">Deploy here</button></div>' : ''}
-    ${u.owner === 0 && BOTS[u.type].siege ? `<div class="actions"><button class="btn primary" id="sh-bombard">Bombard a building</button><button class="btn" id="sh-rgo">Drive somewhere</button></div>
+    ${u.owner === ME && BOTS[u.type].rail ? '<div class="section-label">Armor</div><p class="hint" id="sh-tarmor-hint"></p><button class="btn big" id="sh-tarmor">Armor this train</button>' : ''}
+    ${u.owner === ME && BOTS[u.type].crawler ? '<div class="actions"><button class="btn primary" id="sh-crawl">Drive somewhere</button><button class="btn" id="sh-deploy">Deploy here</button></div>' : ''}
+    ${u.owner === ME && BOTS[u.type].siege ? `<div class="actions"><button class="btn primary" id="sh-bombard">Bombard a building</button><button class="btn" id="sh-rgo">Drive somewhere</button></div>
       <div class="section-label">While it waits</div><div class="seg" id="sh-stance"><button data-v="fire">Fire at will</button><button data-v="hold">Hold fire</button></div>
       <p class="hint">It stays where you put it (beside the Foundry when it's new). <b>Fire at will</b>: it shells any enemy building that comes in reach of that spot, without moving. <b>Hold fire</b>: it fires only when you tell it to. After reloading it goes back to its target, or to its spot. With a mouse, select it and right-click a rival building to bombard it, or open ground to move it there.</p>` : ''}`;
   openSheet('bot', u.id, html);
-  if ($('sh-tarmor')) $('sh-tarmor').onclick = () => {
-    const r = orderTrainArmor(0, u);
+  if ($('sh-tarmor')) $('sh-tarmor').onclick = () => act('trainArmor', [u.id], (r) => {
     if (r) { sfx('error'); toast(r, 'warn'); } else { sfx('order'); toast('Armor paid for: the train finishes its run, stops at a Rail Station and the yard fits the plating and guns.', 'info'); }
     refreshSheet();
-  };
+  });
   if ($('sh-bomb')) $('sh-bomb').onclick = () => {
     const v = readyBomber(u);
-    const why = v ? orderStrike(0, v, u) : 'No Strike Bomber is ready that can reach it.';
-    if (why) { sfx('error'); toast(why, 'warn'); return; }
-    sfx('order'); toast(`Strike ordered on the ${BOTS[u.type].name}: a bomber loads up, takes off and hunts it down.`, 'good'); refreshSheet();
+    if (!v) { sfx('error'); toast('No Strike Bomber is ready that can reach it.', 'warn'); return; }
+    act('strike', [v.id, u.id], (why) => {
+      if (why) { sfx('error'); toast(why, 'warn'); return; }
+      sfx('order'); toast(`Strike ordered on the ${BOTS[u.type].name}: a bomber loads up, takes off and hunts it down.`, 'good'); refreshSheet();
+    });
   };
   if ($('sh-strike')) $('sh-strike').onclick = () => { const why = u.mission || u.flight ? 'It\'s already out on a sortie.' : ''; if (why) { sfx('error'); toast(why, 'warn'); return; } sfx('click'); startStrike(u); };
   if ($('sh-fsail')) {
     const done = (r, ok) => { if (typeof r === 'string' && r) { sfx('error'); toast(r, 'warn'); } else { sfx('order'); if (ok) toast(ok, 'info'); } refreshSheet(); };
     $('sh-fsail').onclick = () => { sfx('click'); closeSheet(); setMode('fsail'); UI.ferry = u.id; showBanner('Tap where the <b>Ferry</b> should sail: open water, a spot on the shore (it comes right up to it), or one of your Ports.', null, 'Cancel'); };
-    $('sh-fhome').onclick = () => { ferryBack(u); done('', 'The Ferry is heading back to its Port and its line.'); };
-    $('sh-fout').onclick = () => { done(sailOut(0, u), 'The Ferry is sailing out to wait just off the Port: tap it on the map (or right-click the water with its panel open) to send it somewhere.'); };
-    $('sh-fembark').onclick = () => { const r = embarkWarbots(0, u, null); done(r, typeof r === 'number' ? `${r} warbot${r === 1 ? '' : 's'} came aboard.` : ''); };
-    $('sh-fland').onclick = () => { done(disembark(0, u), 'Put ashore: they hold the beach, and the Ferry heads home.'); };
+    $('sh-fhome').onclick = () => act('ferryBack', [u.id], () => done('', 'The Ferry is heading back to its Port and its line.'));
+    $('sh-fout').onclick = () => act('sailOut', [u.id], (r) => done(r, 'The Ferry is sailing out to wait just off the Port: tap it on the map (or right-click the water with its panel open) to send it somewhere.'));
+    $('sh-fembark').onclick = () => act('embark', [u.id], (r) => done(r, typeof r === 'number' ? `${r} warbot${r === 1 ? '' : 's'} came aboard.` : ''));
+    $('sh-fland').onclick = () => act('disembark', [u.id], (r) => done(r, 'Put ashore: they hold the beach, and the Ferry heads home.'));
     $('sh-found').onclick = () => { sfx('click'); startLanding(u, 0, 'port'); };
   }
   if ($('sh-crawl')) $('sh-crawl').onclick = () => { sfx('click'); UI.crawler = u.id; setMode('crawl'); UI.crawler = u.id; showBanner('Tap where the <b>Crawler</b> should go: it rolls there (no road needed, but it can\'t climb cliffs or cross water) and deploys when it arrives.', null, 'Cancel'); };
-  if ($('sh-deploy')) $('sh-deploy').onclick = () => { const why = deployCrawler(u); if (why) { sfx('error'); toast(why, 'warn'); } else closeSheet(); };
+  if ($('sh-deploy')) $('sh-deploy').onclick = () => act('deploy', [u.id], (why) => { if (why) { sfx('error'); toast(why, 'warn'); } else closeSheet(); });
   if ($('sh-bombard')) $('sh-bombard').onclick = () => { sfx('click'); closeSheet(); setMode('bombard'); UI.rocket = u.id; showBanner(`Tap an enemy building: the <b>Howitzer</b> drives to within ${ROCKET.range} tiles of it, digs in and shells it, one heavy shell after another, until it's rubble.`, null, 'Cancel'); };
   if ($('sh-stance')) {
     const sync = () => { for (const btn of $('sh-stance').children) btn.classList.toggle('on', btn.dataset.v === (u.stance === 'hold' ? 'hold' : 'fire')); };
-    for (const btn of $('sh-stance').children) btn.onclick = () => { u.stance = btn.dataset.v === 'hold' ? 'hold' : undefined; if (u.stance === 'hold' && u.task && u.task.auto) { u.task = null; u.salvo = null; } sfx('click'); sync(); };
+    for (const btn of $('sh-stance').children) btn.onclick = () => { act('stance', [u.id, btn.dataset.v === 'hold'], () => sync()); sfx('click'); };
     sync();
   }
   if ($('sh-rgo')) $('sh-rgo').onclick = () => { sfx('click'); closeSheet(); setMode('rgo'); UI.rocket = u.id; showBanner('Tap where the <b>Howitzer</b> should wait: it stays there, and (unless it holds fire) shells any enemy building in reach of it.', null, 'Cancel'); };
   if ($('sh-recall')) $('sh-recall').onclick = () => {
-    if (u.task && u.task.type === 'hold') { const n = recallRally(u.task.rally); toast(`${n} warbot${n > 1 ? 's' : ''} called back.`, 'info'); }
+    if (u.task && u.task.type === 'hold') act('recallRally', [u.task.rally], (n) => toast(`${n} warbot${n > 1 ? 's' : ''} called back.`, 'info'));
     closeSheet();
   };
   refreshSheet();
@@ -4528,14 +4498,13 @@ function openMoveSheet(i, j) {
     <div class="stepper"><button class="btn" id="mv-minus">−</button><span class="n" id="mv-n">0</span>
       <button class="btn" id="mv-plus">+</button><button class="btn primary" id="mv-send" style="flex:1">Send warbots</button></div>`;
   openSheet('move', tIdx(i, j), html);
-  UI.moveN = Math.min(5, rallyAvailable(0, i, j));
+  UI.moveN = Math.min(5, rallyAvailable(ME, i, j));
   $('mv-minus').onclick = () => { UI.moveN = Math.max(1, UI.moveN - 1); refreshSheet(); };
-  $('mv-plus').onclick = () => { UI.moveN = Math.min(rallyAvailable(0, i, j), UI.moveN + 1); refreshSheet(); };
-  $('mv-send').onclick = () => {
-    const res = sendToRally(0, i, j, UI.moveN);
+  $('mv-plus').onclick = () => { UI.moveN = Math.min(rallyAvailable(ME, i, j), UI.moveN + 1); refreshSheet(); };
+  $('mv-send').onclick = () => act('rally', [i, j, UI.moveN], (res) => {
     if (res.sent) { sfx('order'); toast(`${res.sent} warbot${res.sent > 1 ? 's are' : ' is'} on the way. Tap the flag to call them back.`, 'info'); closeSheet(); }
     else sfx('error');
-  };
+  });
   refreshSheet();
 }
 
@@ -4550,17 +4519,17 @@ function openRallySheet(r) {
       <button class="btn" id="mv-plus">+</button><button class="btn primary" id="mv-send" style="flex:1">Send warbots</button></div>`;
   openSheet('rally', r.id, html);
   const i = Math.floor(r.x), j = Math.floor(r.y);
-  UI.moveN = Math.min(3, rallyAvailable(0, i, j));
-  $('rl-recall').onclick = () => { const n = recallRally(r.id); toast(`${n} warbot${n !== 1 ? 's' : ''} called back.`, 'info'); sfx('click'); closeSheet(); };
+  UI.moveN = Math.min(3, rallyAvailable(ME, i, j));
+  $('rl-recall').onclick = () => { act('recallRally', [r.id], (n) => toast(`${n} warbot${n !== 1 ? 's' : ''} called back.`, 'info')); sfx('click'); closeSheet(); };
   $('mv-minus').onclick = () => { UI.moveN = Math.max(1, UI.moveN - 1); refreshSheet(); };
-  $('mv-plus').onclick = () => { UI.moveN = Math.min(rallyAvailable(0, i, j), UI.moveN + 1); refreshSheet(); };
-  $('mv-send').onclick = () => { const res = sendToRally(0, i, j, UI.moveN); if (res.sent) { sfx('order'); refreshSheet(); } else sfx('error'); };
+  $('mv-plus').onclick = () => { UI.moveN = Math.min(rallyAvailable(ME, i, j), UI.moveN + 1); refreshSheet(); };
+  $('mv-send').onclick = () => act('rally', [i, j, UI.moveN], (res) => { if (res.sent) { sfx('order'); refreshSheet(); } else sfx('error'); });
   refreshSheet();
 }
 
 /** Shared stepper refresh for the move and rally panels. */
 function refreshMoveStepper(i, j) {
-  const avail = rallyAvailable(0, i, j);
+  const avail = rallyAvailable(ME, i, j);
   UI.moveN = clamp(UI.moveN || avail, Math.min(1, avail), avail);
   $('mv-n').textContent = UI.moveN;
   $('mv-send').disabled = avail === 0;
@@ -4585,7 +4554,7 @@ function openResourceSheet(t) {
 
 /** Can the player mark this tile for asphalt? Their own roads, and roads they've planned. */
 function paveMarkable(t) {
-  return S.road[t] ? wayOwner(t) === 0 : S.plan[t] === 1;
+  return S.road[t] ? wayOwner(t) === ME : S.plan[t] === 1;
 }
 
 /** The player's roads marked for asphalt: how many, and how many are fresh, worn or still to pave. */
@@ -4607,7 +4576,7 @@ function openRoadSheet(t) {
   const html = `<div class="sheet-title"><div><h3 id="rd-name"></h3></div></div><div id="sh-dyn"></div>
     <div class="actions"><button class="btn" id="rd-mark"></button><button class="btn ghost" id="rd-paths">Mark more roads</button></div>`;
   openSheet('road', t, html);
-  $('rd-mark').onclick = () => { setPaveMark(0, t % S.W, (t / S.W) | 0, !S.paveMark[t]); sfx('click'); refreshSheet(); };
+  $('rd-mark').onclick = () => { act('paveMark', [t % S.W, (t / S.W) | 0, !S.paveMark[t]], () => refreshSheet()); sfx('click'); };
   $('rd-paths').onclick = () => openPaths('pave');
   refreshSheet();
 }
@@ -4774,10 +4743,12 @@ function openArmySheet(tab) {
   refreshArmySheet();
 }
 
-function myAirfields() { return S.buildings.filter((b) => !b.dead && b.owner === 0 && b.built && BDEFS[b.type].airfield); }
+function myAirfields() { return S.buildings.filter((b) => !b.dead && b.owner === ME && b.built && BDEFS[b.type].airfield); }
 
 /** How many of `avail` warbots a group of the chosen size takes. */
 function armyCount(avail) { return UI.armyN === 'all' ? avail : Math.min(avail, UI.armyN || 4); }
+/** How many warbots the Army sheet's size picks, for an order (-1: every spare one; see armyN in orders.js). */
+function armyWant() { return UI.armyN === 'all' ? -1 : UI.armyN || 4; }
 function armyNText() { return UI.armyN === 'all' ? 'every spare warbot' : `${UI.armyN} warbots`; }
 
 function refreshArmySheet() {
@@ -4790,20 +4761,20 @@ function refreshArmySheet() {
 }
 
 function refreshArmyTab() {
-  const g = warbotGroups(), mine = S.bots.filter((u) => !u.dead && u.owner === 0);
+  const g = warbotGroups(), mine = S.bots.filter((u) => !u.dead && u.owner === ME);
   const wb = mine.filter(isArmy), noAmmo = wb.filter((u) => !botArmed(u)).length;
   const nB = wb.filter((u) => u.type === 'bulwark').length, nT = wb.filter((u) => u.type === 'torch').length;
   const field = g.attack.length + g.hold.length + g.defend.length + g.idle.length + g.loot.length;
   const rockets = mine.filter((u) => BOTS[u.type].siege);
   // The groups out in the field: each rally flag, and each building under attack.
-  const flags = S.rallies.filter((r) => r.owner === 0).map((r) => ({ r, n: rallyMembers(r.id).length })).filter((f) => f.n > 0);
+  const flags = S.rallies.filter((r) => r.owner === ME).map((r) => ({ r, n: rallyMembers(r.id).length })).filter((f) => f.n > 0);
   const atk = new Map();
   for (const u of g.attack) { const t = getE(u.task.target); if (t && !t.dead) atk.set(t.id, (atk.get(t.id) || 0) + 1); }
-  const sig = JSON.stringify([UI.armyN, wb.length, g.base.length, g.posted.length, field, noAmmo, flags.map((f) => [f.r.id, f.n]), [...atk], rockets.map((u) => [u.id, botActivity(u), Math.round(u.x / 3), Math.round(u.y / 3)]), S.players[0].keepW ?? 0, !!INPUT.mouse]);
+  const sig = JSON.stringify([UI.armyN, wb.length, g.base.length, g.posted.length, field, noAmmo, flags.map((f) => [f.r.id, f.n]), [...atk], rockets.map((u) => [u.id, botActivity(u), Math.round(u.x / 3), Math.round(u.y / 3)]), S.players[ME].keepW ?? 0, !!INPUT.mouse]);
   if (sig === UI.armySig) return;
   UI.armySig = sig;
-  const L = getE(S.players[0].lander), where = (x, y) => (L ? dirText(L, { x: Math.floor(x), y: Math.floor(y) }) : '');
-  const k = S.players[0].keepW ?? 0;
+  const L = getE(S.players[ME].lander), where = (x, y) => (L ? dirText(L, { x: Math.floor(x), y: Math.floor(y) }) : '');
+  const k = S.players[ME].keepW ?? 0;
   let h = `<div class="kv"><span>Warbots</span><span><b>${wb.length}</b>${nB || nT ? ` (${[nB ? `${nB} ${nB > 1 ? 'Bulwarks' : 'Bulwark'}` : '', nT ? `${nT} ${nT > 1 ? 'Torches' : 'Torch'}` : ''].filter(Boolean).join(', ')})` : ''}: ${g.base.length} at the Command Base, ${g.posted.length} in garrisons, ${field} in the field${noAmmo ? `, <span class="err">${noAmmo} out of Ammo${nT ? ' or Fuel' : ''}</span>` : ''}</span></div>`;
   if (rockets.length) h += `<div class="kv"><span>Howitzers</span><span><b>${rockets.length}</b></span></div>`;
   h += `<div class="section-label">Orders <span class="label-note">group size</span></div>
@@ -4835,13 +4806,13 @@ function refreshArmyTab() {
 }
 
 function refreshAirTab() {
-  const fields = myAirfields(), planes = S.bots.filter((u) => !u.dead && u.owner === 0 && BOTS[u.type].air);
+  const fields = myAirfields(), planes = S.bots.filter((u) => !u.dead && u.owner === ME && BOTS[u.type].air);
   const bombers = planes.filter((u) => BOTS[u.type].bomber), cargo = planes.filter((u) => !BOTS[u.type].bomber);
   const kinds = BDEFS.airfield.yard.filter((kk) => warOn() || !BOTS[kk].war);
   const sig = JSON.stringify([fields.map((b) => [b.id, b.yard]), planes.map((u) => [u.id, planeStatus(u), !!(u.inside && !u.mission && !u.flight)]), !!readyBomber()]);
   if (sig === UI.armySig) return;
   UI.armySig = sig;
-  const L = getE(S.players[0].lander);
+  const L = getE(S.players[ME].lander);
   let h = '';
   if (warOn() && bombers.length) h += `<button class="btn primary big" id="ar-strike" data-act="strikeany"${readyBomber() ? '' : ' disabled'}>Strike: tap a target</button>`;
   h += '<div class="section-label">Airfields</div>';
@@ -4864,28 +4835,28 @@ function refreshAirTab() {
 
 /** A button on the Army panel. */
 function armyButton(btn) {
-  const act = btn.dataset.act, id = +btn.dataset.id, e = id ? getE(id) : null;
+  const what = btn.dataset.act, id = +btn.dataset.id, e = id ? getE(id) : null;
   sfx('click');
-  switch (act) {
+  switch (what) {
     case 'size': UI.armyN = btn.dataset.n === 'all' ? 'all' : +btn.dataset.n; UI.armySig = ''; refreshArmySheet(); return;
     case 'cmd': armyCmd(btn.dataset.c); return;
     case 'recall': recallAllWarbots(); UI.armySig = ''; refreshArmySheet(); return;
-    case 'select': selectBots(armyIds(0), false); closeSheet(); if (UI.sel.length) toast(`${UI.sel.length} warbots selected: right-click to give orders.`, 'info'); return;
+    case 'select': selectBots(armyIds(ME), false); closeSheet(); if (UI.sel.length) toast(`${UI.sel.length} warbots selected: right-click to give orders.`, 'info'); return;
     case 'keep': setKeepAll(+btn.dataset.k); UI.armySig = ''; refreshArmySheet(); return;
     case 'showflag': if (e) { centerOn(e.x, e.y); openRallySheet(e); } return;
     case 'showbld': if (e) { centerOn(e.x + 0.5, e.y + 0.5); openBuildingSheet(e); } return;
     case 'showbot': if (e) { const inB = e.inside ? getE(e.inside) : null; centerOn(inB ? inB.x + 0.5 : e.x, inB ? inB.y + 0.5 : e.y); openBotSheet(e); } return;
     case 'findbot': if (e) findBot(e); return;
-    case 'selectrockets': { const ids = S.bots.filter((u) => !u.dead && u.owner === 0 && BOTS[u.type].siege).map((u) => u.id); closeSheet(); selectBots(ids, false); if (UI.sel.length) toast(`${UI.sel.length} Howitzer${UI.sel.length > 1 ? 's' : ''} selected: right-click an enemy building to shell it, or open ground to drive there.`, 'info'); return; }
-    case 'more': if (e) { const i = Math.floor(e.x), j = Math.floor(e.y), res = sendToRally(0, i, j, armyCount(rallyAvailable(0, i, j))); if (res.sent) { sfx('order'); toast(`${res.sent} more warbot${res.sent > 1 ? 's are' : ' is'} on the way to the flag.`, 'info'); } else { sfx('error'); toast('No spare warbots in reach of that flag.', 'warn'); } UI.armySig = ''; } return;
-    case 'recallflag': if (e) { const n = recallRally(id); toast(`${n} warbot${n !== 1 ? 's' : ''} called back.`, 'info'); UI.armySig = ''; } return;
-    case 'callback': { let n = 0; for (const u of S.bots) if (!u.dead && u.owner === 0 && isArmy(u) && u.task && u.task.type === 'attack' && u.task.target === id) { u.task = null; u.path = null; n++; } toast(`${n} warbot${n !== 1 ? 's' : ''} called back to their garrisons.`, 'info'); UI.armySig = ''; return; }
+    case 'selectrockets': { const ids = S.bots.filter((u) => !u.dead && u.owner === ME && BOTS[u.type].siege).map((u) => u.id); closeSheet(); selectBots(ids, false); if (UI.sel.length) toast(`${UI.sel.length} Howitzer${UI.sel.length > 1 ? 's' : ''} selected: right-click an enemy building to shell it, or open ground to drive there.`, 'info'); return; }
+    case 'more': if (e) act('rally', [Math.floor(e.x), Math.floor(e.y), armyWant()], (res) => { if (res.sent) { sfx('order'); toast(`${res.sent} more warbot${res.sent > 1 ? 's are' : ' is'} on the way to the flag.`, 'info'); } else { sfx('error'); toast('No spare warbots in reach of that flag.', 'warn'); } UI.armySig = ''; }); return;
+    case 'recallflag': if (e) act('recallRally', [id], (n) => { toast(`${n} warbot${n !== 1 ? 's' : ''} called back.`, 'info'); UI.armySig = ''; }); return;
+    case 'callback': act('callBack', [id], (n) => { toast(`${n} warbot${n !== 1 ? 's' : ''} called back to their garrisons.`, 'info'); UI.armySig = ''; }); return;
     case 'bombard': if (e) { closeSheet(); setMode('bombard'); UI.rocket = id; showBanner(`Tap an enemy building: the <b>Howitzer</b> drives to within ${ROCKET.range} tiles of it, digs in and shells it, one heavy shell after another, until it's rubble.`, null, 'Cancel'); } return;
     case 'rgo': if (e) { closeSheet(); setMode('rgo'); UI.rocket = id; showBanner('Tap where the <b>Howitzer</b> should wait: it stays there, and (unless it holds fire) shells any enemy building in reach of it.', null, 'Cancel'); } return;
     case 'strikeany': { const u = readyBomber(); if (u) startStrike(u); else { sfx('error'); toast('No Strike Bomber is ready on the ground.', 'warn'); } return; }
     case 'strike': if (e) startStrike(e); return;
     case 'drop': if (e) { closeSheet(); startAirdrop(e, btn.dataset.k); } return;
-    case 'yard': if (e) { orderAtYard(e, btn.dataset.k, 1); toast(`${BOTS[btn.dataset.k].name} ordered: the Airfield's hangar builds it from Alloy and Chips.`, 'info'); UI.armySig = ''; refreshArmySheet(); } return;
+    case 'yard': if (e) { act('yard', [e.id, btn.dataset.k, 1]); toast(`${BOTS[btn.dataset.k].name} ordered: the Airfield's hangar builds it from Alloy and Chips.`, 'info'); UI.armySig = ''; refreshArmySheet(); } return;
   }
 }
 
@@ -4921,7 +4892,7 @@ function showArmyCmdBanner(note) {
 function enemyBotAtTap(i, j) {
   let best = null, bd = 1.3 * 1.3;
   for (const u of S.bots) {
-    if (u.dead || u.inside || u.owner === 0 || u.owner < 0 || u.dropping || (BOTS[u.type].air && u.flight)) continue;
+    if (u.dead || u.inside || u.owner === ME || u.owner < 0 || u.dropping || (BOTS[u.type].air && u.flight)) continue;
     const d = dist2(u.x, u.y, i + 0.5, j + 0.5);
     if (d < bd) { bd = d; best = u; }
   }
@@ -4932,41 +4903,38 @@ function armyTap(cmd, i, j, b) {
   const fail = (why) => { sfx('error'); showArmyCmdBanner(`<span class="err">${why}</span>`); };
   if (cmd === 'attack') {
     // A rival robot (nearest the tap, if there's one there): hunt it down.
-    const foe = !b || b.owner === 0 ? enemyBotAtTap(i, j) : null;
+    const foe = !b || b.owner === ME ? enemyBotAtTap(i, j) : null;
     if (foe) {
-      const res = sendHunt(0, foe, armyCount(rallyAvailable(0, Math.floor(foe.x), Math.floor(foe.y))));
-      if (!res.sent) return fail('No armed warbots can get there: they need Ammo, and a way to walk there.');
-      sfx('order'); showArmyCmdBanner(`${res.sent} warbot${res.sent > 1 ? 's are' : ' is'} going after the rival's ${BOTS[foe.type].name}.`);
+      const name = BOTS[foe.type].name;
+      act('hunt', [foe.id, armyWant()], (res) => {
+        if (!res.sent) return fail('No armed warbots can get there: they need Ammo, and a way to walk there.');
+        sfx('order'); showArmyCmdBanner(`${res.sent} warbot${res.sent > 1 ? 's are' : ' is'} going after the rival's ${name}.`);
+      });
       return;
     }
-    if (!b || b.owner === 0 || b.owner < 0 || b.dead) return fail(`Tap a rival building or robot (${rivalColours()}).`);
-    let n = armyCount(attackAvailable(0, b)), sent = n > 0 ? sendAttack(0, b, n) : 0;
-    // No garrison near enough to attack from: a rally flag beside it (they attack what stands there).
-    if (!sent) {
-      for (const [di, dj] of [[1, 1], [-1, 1], [1, -1], [-1, -1], [2, 0], [-2, 0], [0, 2], [0, -2]]) {
-        const ii = b.x + di, jj = b.y + dj;
-        if (!inMap(ii, jj) || !walkable(tIdx(ii, jj)) || S.bAt[tIdx(ii, jj)]) continue;
-        n = armyCount(rallyAvailable(0, ii, jj));
-        if (n > 0) sent = sendToRally(0, ii, jj, n).sent;
-        break;
-      }
-    }
-    if (!sent) return fail('No armed warbots can get there: they need Ammo, and a way to walk there.');
-    sfx('order'); showArmyCmdBanner(`${sent} warbot${sent > 1 ? 's are' : ' is'} going for the ${BDEFS[b.type].name}.`);
+    if (!b || b.owner === ME || b.owner < 0 || b.dead) return fail(`Tap a rival building or robot (${rivalColours()}).`);
+    const name = BDEFS[b.type].name;
+    act('assault', [b.id, armyWant()], (sent) => {
+      if (!sent) return fail('No armed warbots can get there: they need Ammo, and a way to walk there.');
+      sfx('order'); showArmyCmdBanner(`${sent} warbot${sent > 1 ? 's are' : ' is'} going for the ${name}.`);
+    });
     return;
   }
   if (cmd === 'hold') {
     if (b || !inMap(i, j) || !walkable(tIdx(i, j))) return fail('Tap open ground your warbots can walk to.');
-    const res = sendToRally(0, i, j, armyCount(rallyAvailable(0, i, j)));
-    if (!res.sent) return fail('No spare armed warbots can get there.');
-    sfx('order'); showArmyCmdBanner(`${res.sent} warbot${res.sent > 1 ? 's are' : ' is'} on the way to hold it.`);
+    act('rally', [i, j, armyWant()], (res) => {
+      if (!res.sent) return fail('No spare armed warbots can get there.');
+      sfx('order'); showArmyCmdBanner(`${res.sent} warbot${res.sent > 1 ? 's are' : ' is'} on the way to hold it.`);
+    });
     return;
   }
   if (cmd === 'station') {
-    if (!b || b.owner !== 0 || !b.built || !BDEFS[b.type].mil || b.type === 'lander') return fail('Tap one of your finished Outposts, Keeps or Bunkers.');
-    const n = stationWarbots(0, b, armyCount(stationAvailable(0, b)));
-    if (!n) return fail(garrisonRoom(b) ? 'No spare warbots to send there.' : `The ${BDEFS[b.type].name} is full.`);
-    sfx('order'); showArmyCmdBanner(`${n} warbot${n > 1 ? 's are' : ' is'} moving into the ${BDEFS[b.type].name}.`);
+    if (!b || b.owner !== ME || !b.built || !BDEFS[b.type].mil || b.type === 'lander') return fail('Tap one of your finished Outposts, Keeps or Bunkers.');
+    const name = BDEFS[b.type].name;
+    act('station', [b.id, armyWant()], (n) => {
+      if (!n) return fail(!b.dead && garrisonRoom(b) ? 'No spare warbots to send there.' : `The ${name} is full.`);
+      sfx('order'); showArmyCmdBanner(`${n} warbot${n > 1 ? 's are' : ' is'} moving into the ${name}.`);
+    });
   }
 }
 
@@ -4996,7 +4964,7 @@ function refreshPopSheet() {
   const add = (type, key) => { n[type] = n[type] || { total: 0 }; n[type].total++; if (key) n[type][key] = (n[type][key] || 0) + 1; };
   let total = 0;
   for (const u of S.bots) {
-    if (u.dead || u.owner !== 0) continue;
+    if (u.dead || u.owner !== ME) continue;
     total++;
     const t = u.task, tt = t && t.type;
     if (isArmy(u)) {
@@ -5043,7 +5011,7 @@ function warbotGroups() {
   const g = {};
   for (const [k] of WARBOT_PLACES) g[k] = [];
   for (const u of S.bots) {
-    if (u.dead || u.owner !== 0 || !isArmy(u)) continue;
+    if (u.dead || u.owner !== ME || !isArmy(u)) continue;
     const tt = u.task && u.task.type, inB = u.inside ? getE(u.inside) : null;
     if (inB && inB.type === 'lander') g.base.push(u);
     else if (inB && BDEFS[inB.type].repair) g.fix.push(u);
@@ -5108,7 +5076,7 @@ function refreshSheet() {
     const avail = refreshMoveStepper(i, j);
     $('mv-info').innerHTML = `<p class="desc">${avail
       ? `${avail} armed warbot${avail > 1 ? 's' : ''} available in your garrisons (each keeps its Keep at home).`
-      : S.zone[t] !== homeZone(0) ? 'Your warbots cannot walk there from your garrisons.' : 'No armed warbots available. Make some at the Bot Foundry, and keep your garrisons stocked with Ammo: warbots without it can\'t fight.'}</p>`;
+      : S.zone[t] !== homeZone(ME) ? 'Your warbots cannot walk there from your garrisons.' : 'No armed warbots available. Make some at the Bot Foundry, and keep your garrisons stocked with Ammo: warbots without it can\'t fight.'}</p>`;
   } else if (UI.sheetKind === 'rally') {
     const r = rallyById(UI.sheetFor);
     if (!r) { closeSheet(); return; }
@@ -5120,8 +5088,8 @@ function refreshSheet() {
   } else if (UI.sheetKind === 'uplink') {
     const u = uplinkAt(UI.sheetFor);
     if (!u) { closeSheet(); return; }
-    const L = getE(S.players[0].lander);
-    $('sh-dyn').innerHTML = `<div class="kv"><span>Held by</span><span>${u.owner < 0 ? 'No one' : u.owner === 0 ? 'You' : playerName(u.owner)}</span></div>` +
+    const L = getE(S.players[ME].lander);
+    $('sh-dyn').innerHTML = `<div class="kv"><span>Held by</span><span>${u.owner < 0 ? 'No one' : u.owner === ME ? 'You' : playerName(u.owner)}</span></div>` +
       (u.jam ? `<div class="kv"><span>Jammed</span><span class="err">${u.jam - 1 === 0 ? 'by your warbots' : 'by ' + playerName(u.jam - 1, true) + '\'s warbots'}</span></div>` : '') +
       (S.time < UPLINK.online ? `<div class="kv"><span>Online in</span><span>${fmtClock(UPLINK.online - S.time)}</span></div>` : '') +
       (L ? `<div class="kv"><span>From your Command Base</span><span>${dirText(L, u)}</span></div>` : '');
@@ -5129,12 +5097,12 @@ function refreshSheet() {
     const post = postAt(UI.sheetFor);
     if (!post) { closeSheet(); return; }
     const docks = S.buildings.filter((b) => !b.dead && BDEFS[b.type].terminal && nearPost(b.x, b.y) === post);
-    const who = docks.map((b) => (b.owner === 0 ? 'You' : playerName(b.owner)) + (b.built ? '' : ' (building)')).join(', ') || 'Nobody yet';
-    const L = getE(S.players[0].lander), holder = S.owner[UI.sheetFor];
+    const who = docks.map((b) => (b.owner === ME ? 'You' : playerName(b.owner)) + (b.built ? '' : ' (building)')).join(', ') || 'Nobody yet';
+    const L = getE(S.players[ME].lander), holder = S.owner[UI.sheetFor];
     $('sh-dyn').innerHTML = `<div class="kv"><span>Docked here</span><span>${who}</span></div>` +
       (L ? `<div class="kv"><span>From your Command Base</span><span>${dirText(L, post)}</span></div>` : '') +
       (holder >= 0 ? `<div class="kv"><span>Land round it</span><span>${holder === 0 ? 'Yours' : playerName(holder) + '\'s'}</span></div>` : '');
-    const mine = docks.some((b) => b.owner === 0);
+    const mine = docks.some((b) => b.owner === ME);
     $('sh-dock').hidden = mine;
   } else if (UI.sheetKind === 'res') {
     const t = UI.sheetFor;
@@ -5151,45 +5119,45 @@ function refreshSheet() {
 const OBJECTIVES = [
   { text: 'Robots run on batteries, and your Command Base can\'t charge them. Tap <b>Build</b> and place a <b>Fuel Station</b> beside the road ring round your base: it runs on the Fuel you landed with.', done: () => hasBuilt('charger') || hasAny('charger') },
   { text: 'Tap <b>Build</b> and place a <b>Harvester</b> beside the teal stalk groves.', done: () => hasBuilt('harvester') || hasAny('harvester') },
-  { text: '<b>Haulers only drive on roads.</b> Tap <b>Paths</b>, sketch a road from the ring round your Command Base to the Harvester site and tap <b>Build</b> (or tap the site and choose <b>Lay road</b>). Free workers pave it.', done: () => hasBuilt('harvester') || S.buildings.some((b) => !b.dead && b.owner === 0 && b.type === 'harvester' && !b.unlinked) },
+  { text: '<b>Haulers only drive on roads.</b> Tap <b>Paths</b>, sketch a road from the ring round your Command Base to the Harvester site and tap <b>Build</b> (or tap the site and choose <b>Lay road</b>). Free workers pave it.', done: () => hasBuilt('harvester') || S.buildings.some((b) => !b.dead && b.owner === ME && b.type === 'harvester' && !b.unlinked) },
   { text: 'Build a <b>Quarry</b> near the grey boulders to get Stone.', done: () => hasBuilt('quarry') },
   { text: 'Build a <b>Cement Works</b> near your Command Base: it bakes Stone into <b>Cement</b>, which nearly every building and every road is made of.', done: () => hasBuilt('kiln') },
   { text: 'Build an <b>Ore Mine</b> by the dark ore veins and a <b>Crystal Tap</b> by the violet crystals.', done: () => hasBuilt('mine') && hasBuilt('tap') },
   { text: 'Build a <b>Smelter</b>: it turns Ore and Fiber into Alloy.', done: () => hasBuilt('smelter') },
   { text: 'Build a <b>Chip Fab</b>: it turns Crystal and Alloy into Chips.', done: () => hasBuilt('fab') },
   { text: 'Build a <b>Bot Foundry</b> so you can make more workers.', done: () => hasBuilt('foundry') },
-  { text: 'Tap your <b>Bot Foundry</b> and order some <b>Workers</b>: it only builds the bots you ask for.', done: () => S.players[0].stats.bots > S.players[0].stats.startBots || S.buildings.some((b) => !b.dead && b.owner === 0 && hasOrders(b)) },
+  { text: 'Tap your <b>Bot Foundry</b> and order some <b>Workers</b>: it only builds the bots you ask for.', done: () => S.players[ME].stats.bots > S.players[ME].stats.startBots || S.buildings.some((b) => !b.dead && b.owner === ME && hasOrders(b)) },
   { text: 'Build an <b>Outpost</b> near your border to claim more land.', done: () => hasBuilt('outpost') },
-  { text: 'Fuel Stations burn <b>Fuel</b>. Build a <b>Bio Farm</b> beside the dark fertile soil to grow it (your Agribot runs it).', done: () => hasBuilt('farm') || hasBuilt('refinery') || playerGoods(0).fuel >= 20 },
-  { text: 'Busy crossings jam up. In <b>Paths</b>, choose <b>Junctions</b> and put a traffic light on a junction where three or four roads meet.', done: () => Object.keys(S.lights).some((k) => S.lights[k].owner === 0) || !ownJunction() },
+  { text: 'Fuel Stations burn <b>Fuel</b>. Build a <b>Bio Farm</b> beside the dark fertile soil to grow it (your Agribot runs it).', done: () => hasBuilt('farm') || hasBuilt('refinery') || playerGoods(ME).fuel >= 20 },
+  { text: 'Busy crossings jam up. In <b>Paths</b>, choose <b>Junctions</b> and put a traffic light on a junction where three or four roads meet.', done: () => Object.keys(S.lights).some((k) => S.lights[k].owner === ME) || !ownJunction() },
   { text: 'Warbots need <b>Ammo</b>. Build an <b>Ammo Plant</b>: haulers stock your Command Base and Outposts and warbots reload there.', done: () => S.mode === 'colony' || hasBuilt('armory') },
 ];
 
 function ownJunction() {
   const net = roadNet();
-  for (let t = 0; t < S.W * S.H; t++) if (net.junc[t] && wayOwner(t) === 0) return true;
+  for (let t = 0; t < S.W * S.H; t++) if (net.junc[t] && wayOwner(t) === ME) return true;
   return false;
 }
 
 function hasAny(type) {
-  for (const b of S.buildings) if (!b.dead && b.owner === 0 && b.type === type) return true;
+  for (const b of S.buildings) if (!b.dead && b.owner === ME && b.type === type) return true;
   return false;
 }
 
 function hasBuilt(type) {
-  for (const b of S.buildings) if (!b.dead && b.owner === 0 && b.built && b.type === type) return true;
+  for (const b of S.buildings) if (!b.dead && b.owner === ME && b.built && b.type === type) return true;
   return false;
 }
 
 function objectiveText() {
-  const cut = S.buildings.filter((b) => !b.dead && b.owner === 0 && b.unlinked);
+  const cut = S.buildings.filter((b) => !b.dead && b.owner === ME && b.unlinked);
   const warn = cut.length && !(cut.length === 1 && cut[0].type === 'harvester' && !hasBuilt('harvester'))
     ? `<span class="err">${cut.length === 1 ? `Your ${BDEFS[cut[0].type].name}${cut[0].built ? '' : ' site'} has` : `${cut.length} buildings have`} no road to storage.</span> Tap ${cut.length === 1 ? 'it' : 'one'} and choose <b>Lay road</b>.<br>` : '';
   if (S.mission) return warn + missionObjectiveHTML();
   for (const o of OBJECTIVES) if (!o.done()) return warn + o.text;
   if (warn) return warn;
   if (S.mode === 'colony') {
-    const pct = Math.round(landShare(0) * 100);
+    const pct = Math.round(landShare(ME) * 100);
     const next = COLONY_MILESTONES[S.milestone];
     return next !== undefined
       ? `Colonize the planet: <b>${pct}%</b> claimed. Next milestone at ${Math.round(next * 100)}%.`
@@ -5200,7 +5168,7 @@ function objectiveText() {
 }
 
 function updateHUD() {
-  const goods = playerGoods(0);
+  const goods = playerGoods(ME);
   for (const g of GOODS) {
     const el = UI.goodEls[g];
     const v = goods[g];
@@ -5210,18 +5178,18 @@ function updateHUD() {
   }
   let workers = 0, idle = 0, war = 0, haulers = 0;
   for (const u of S.bots) {
-    if (u.dead || u.owner !== 0) continue;
+    if (u.dead || u.owner !== ME) continue;
     if (isArmy(u)) war++;
     else if (u.type === 'hauler' || u.type === 'truck' || u.type === 'tanker') haulers++;
     else if (u.type === 'worker') { workers++; if (isIdleWorker(u)) idle++; }
   }
   $('pop').title = `${workers} workers (${idle} free), ${haulers} haulers, trucks and Tankers` + (warOn() ? `, ${war} warbots` : '') + '. Tap for every robot by type.';
-  $('pop').innerHTML = `<span class="dot" style="background:#ece6da;box-shadow:inset 0 0 0 2px ${PLAYER_COLORS[0]}"></span>${workers}<span class="wide"> workers</span> <span style="color:var(--muted)">(${idle} free)</span>` +
-    ` <span class="dot" style="background:#ffb547;box-shadow:inset 0 0 0 2px ${PLAYER_COLORS[0]}"></span>${haulers}<span class="wide"> haulers</span>` +
-    (warOn() ? ` <span class="dot" style="background:${PLAYER_COLORS[0]};border-radius:2px;transform:rotate(45deg)"></span>${war}` : '');
+  $('pop').innerHTML = `<span class="dot" style="background:#ece6da;box-shadow:inset 0 0 0 2px ${PLAYER_COLORS[ME]}"></span>${workers}<span class="wide"> workers</span> <span style="color:var(--muted)">(${idle} free)</span>` +
+    ` <span class="dot" style="background:#ffb547;box-shadow:inset 0 0 0 2px ${PLAYER_COLORS[ME]}"></span>${haulers}<span class="wide"> haulers</span>` +
+    (warOn() ? ` <span class="dot" style="background:${PLAYER_COLORS[ME]};border-radius:2px;transform:rotate(45deg)"></span>${war}` : '');
   // With day and night on, the time of day leads (a sun, a half-lit disc at dawn and dusk, a moon).
   const tn = todName(), tod = todEnabled() ? `<span class="tod-mark" style="color:${{ morning: '#ffb38a', day: '#ffd166', evening: '#ff8a4a', night: '#b8c8ff' }[tn]}">${tn === 'night' ? '☾' : '☀'}</span> ` : '';
-  const ct = tod + (S.mode === 'colony' ? `${Math.round(landShare(0) * 100)}% land` : fmtTime(S.time));
+  const ct = tod + (S.mode === 'colony' ? `${Math.round(landShare(ME) * 100)}% land` : fmtTime(S.time));
   if ($('clock').innerHTML !== ct) $('clock').innerHTML = ct;
   $('clock').title = todEnabled() ? TOD_NAMES[todName()] + (todMode() === 'night' ? ' (always)' : '') : '';
   updateWinCard(); // (first: folded under the Goal chip, it leaves a summary there)
@@ -5267,11 +5235,10 @@ function updateEventCard() {
     }
     el.innerHTML = html;
     const btn = $('ev-trade');
-    if (btn) btn.onclick = () => {
-      const why = acceptTrade(0);
+    if (btn) btn.onclick = () => act('trade', [], (why) => {
       if (why) { sfx('error'); toast(why, 'bad'); } else sfx('complete');
       updateHUD();
-    };
+    });
   }
   const left = Math.max(0, Math.ceil((soon ? E.t0 : E.t1) - S.time));
   el.querySelector('.ev-time').textContent = soon ? `in ${left}s` : `${left}s`;
@@ -5292,15 +5259,15 @@ function updateWinCard() {
   const left = D.lead >= 0 ? Math.max(0, DOM.hold - D.t) : 0, clock = `${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}`;
   const share = domShare();
   const head = D.lead < 0 ? `Domination: hold ${Math.round(share * 100)}% of the land`
-    : D.lead === 0 ? 'You hold most of the land' : `${S.players.length > 2 ? 'The ' + playerName(D.lead) : 'The rival'} holds most of the land`;
+    : D.lead === ME ? 'You hold most of the land' : `${S.players.length > 2 ? 'The ' + playerName(D.lead) : 'The rival'} holds most of the land`;
   const key = `${D.lead}`;
   if (el.dataset.key !== key) {
     el.dataset.key = key;
     el.innerHTML = '<div class="ev-head"><span class="ev-dot"></span><b class="wc-head"></b><span class="ev-time"></span></div><div class="win-rows"></div><div class="win-note"></div>';
     el.onclick = () => { const L = getE(S.players[Math.max(0, D.lead)].lander); if (L) centerOn(L.x + 0.5, L.y + 0.5); };
   }
-  el.classList.toggle('mine', D.lead === 0);
-  el.classList.toggle('theirs', D.lead > 0);
+  el.classList.toggle('mine', D.lead === ME);
+  el.classList.toggle('theirs', D.lead >= 0 && D.lead !== ME);
   const dot = el.querySelector('.ev-dot'), col = D.lead >= 0 ? PLAYER_COLORS[D.lead] : '#7fc8ff';
   dot.style.background = col; dot.style.color = col;
   el.querySelector('.wc-head').textContent = head;
@@ -5308,7 +5275,7 @@ function updateWinCard() {
   el.querySelector('.win-rows').innerHTML = live.map((P) => `<span class="wn">${playerName(P.id)}</span><span class="win-bar" style="--c:${PLAYER_COLORS[P.id]}"><i style="width:${(pct(P.id) * 100).toFixed(1)}%"></i><b style="left:${share * 100}%"></b></span><span class="wp">${Math.round(pct(P.id) * 100)}%</span>`).join('');
   el.querySelector('.win-note').textContent = `${Math.round((D.held / Math.max(1, D.ground)) * 100)}% of the planet is held: hold ${Math.round(share * 100)}% of that (and ${Math.round(DOM.min * 100)}% of the planet) for ${DOM.hold / 60} minutes to win.`;
   // Folded under the Goal chip (tap it): the card hides, and the chip shows your share (and the count, if one runs).
-  UI.winMini = ` <span class="win-mini"><i style="background:${PLAYER_COLORS[0]}"></i>${Math.round(pct(0) * 100)}%${D.lead >= 0 ? ` <i style="background:${col}"></i>${clock}` : ''}</span>`;
+  UI.winMini = ` <span class="win-mini"><i style="background:${PLAYER_COLORS[ME]}"></i>${Math.round(pct(ME) * 100)}%${D.lead >= 0 ? ` <i style="background:${col}"></i>${clock}` : ''}</span>`;
   el.hidden = !!UI.objCollapsed;
 }
 
@@ -5327,8 +5294,8 @@ function updateUplinkCard() {
     el.onclick = () => { const L = S.uplinks; if (!L || !L.length) return; UI.upCycle = ((UI.upCycle ?? -1) + 1) % L.length; const u = L[UI.upCycle]; centerOn(u.x + 0.5, u.y + 0.5); };
   }
   const pre = S.time < UPLINK.online; // not online yet: no clock runs
-  el.classList.toggle('mine', lead === 0);
-  el.classList.toggle('theirs', lead > 0);
+  el.classList.toggle('mine', lead === ME);
+  el.classList.toggle('theirs', lead >= 0 && lead !== ME);
   const dot = el.querySelector('.ev-dot'), col = lead >= 0 ? PLAYER_COLORS[lead] : '#dfefff';
   dot.style.background = col; dot.style.color = col;
   el.querySelector('.wc-head').textContent = pre ? 'Uplinks come online in' : lead < 0 ? `Uplinks: hold ${need} of ${U.length}${U.length % 2 ? '' : ' (the most)'}` : lead === 0 ? `You hold ${held[0]} of ${U.length} Uplinks` : `${S.players.length > 2 ? 'The ' + playerName(lead) : 'The rival'} holds ${held[lead]} of ${U.length}`;
@@ -5349,13 +5316,13 @@ function updateUplinkCard() {
  */
 function updateNukeCard() {
   const el = $('nuke-card');
-  const threats = S.missiles && S.missiles.some((m) => m.nuke) ? nukesThreatening(0) : [];
+  const threats = S.missiles && S.missiles.some((m) => m.nuke) ? nukesThreatening(ME) : [];
   if (!threats.length) { el.hidden = true; el.dataset.key = ''; return; }
   const m = threats.reduce((a, c) => (c.dur - c.t < a.dur - a.t ? c : a));
-  const done = threats.every((n) => evacuating(0, n)), mine = m.owner === 0;
-  const inRing = S.bots.filter((u) => !u.dead && u.owner === 0 && !BOTS[u.type].rail && !(u.task && u.task.type === 'flee') &&
+  const done = threats.every((n) => evacuating(ME, n)), mine = m.owner === ME;
+  const inRing = S.bots.filter((u) => !u.dead && u.owner === ME && !BOTS[u.type].rail && !(u.task && u.task.type === 'flee') &&
     dist2(u.inside ? getE(u.inside).x + 0.5 : u.x, u.inside ? getE(u.inside).y + 0.5 : u.y, m.x1, m.y1) <= (NUKE.radius + EVAC_MARGIN) ** 2).length;
-  const fleeing = S.bots.filter((u) => !u.dead && u.owner === 0 && u.task && u.task.type === 'flee').length;
+  const fleeing = S.bots.filter((u) => !u.dead && u.owner === ME && u.task && u.task.type === 'flee').length;
   const key = `${done}|${mine}|${threats.length}`;
   if (el.dataset.key !== key) {
     el.dataset.key = key;
@@ -5364,10 +5331,12 @@ function updateNukeCard() {
       `<div class="ev-deal"><span class="ev-desc nk-text"></span>${done ? '' : '<button class="btn small primary" id="nk-evac">Evacuate</button>'}</div>`;
     const btn = $('nk-evac');
     if (btn) btn.onclick = () => {
-      const n = startEvac(0);
-      sfx(n ? 'click' : 'error');
-      toast(n ? `Evacuating: ${n} robot${n === 1 ? '' : 's'} leaving the blast ring.` : 'The blast ring is clear: robots will keep out until it lands.', 'warn', Math.floor(m.x1), Math.floor(m.y1));
-      updateNukeCard();
+      const mx = Math.floor(m.x1), my = Math.floor(m.y1);
+      act('evac', [], (n) => {
+        sfx(n ? 'click' : 'error');
+        toast(n ? `Evacuating: ${n} robot${n === 1 ? '' : 's'} leaving the blast ring.` : 'The blast ring is clear: robots will keep out until it lands.', 'warn', mx, my);
+        updateNukeCard();
+      });
     };
     el.onclick = (e) => { if (e.target.id !== 'nk-evac') centerOn(m.x1, m.y1); };
   }

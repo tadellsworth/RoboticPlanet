@@ -63,9 +63,9 @@ function aiFortWalls(p) {
   let have = 0;
   for (const b of S.buildings) if (!b.dead && b.owner === p && BDEFS[b.type].barrier) have++;
   if (have >= 16) return;
-  const R = 7, fa = Math.atan2(F.y - L.y, F.x - L.x), ring = [];
+  const R = 7, fa = datan2(F.y - L.y, F.x - L.x), ring = [];
   for (let d = -R; d <= R; d++) ring.push([L.x + d, L.y - R], [L.x + d, L.y + R], [L.x - R, L.y + d], [L.x + R, L.y + d]);
-  const off = ([i, j]) => Math.abs(wrapAngle(Math.atan2(j - L.y, i - L.x) - fa));
+  const off = ([i, j]) => Math.abs(wrapAngle(datan2(j - L.y, i - L.x) - fa));
   ring.sort((a, c) => off(a) - off(c));
   let placed = 0;
   for (const [i, j] of ring) {

@@ -765,6 +765,8 @@ js/path.js                A* pathfinding
 js/sim.js                 simulation: logistics, workers, production, combat
 js/ai.js                  rival AI
 js/missions.js            mission campaign: goals, hand-placed map features, progress
+js/orders.js              every player action as an order: a name and plain arguments, checked against the player
+js/lockstep.js            multiplayer: every device runs the game, only orders travel (see Multiplayer below)
 js/charts.js              line and bar charts for the statistics screen
 js/render.js              canvas renderer and placeholder art
 js/daynight.js            day and night: the clock, re-lit art sets, grading, headlights, light pools
@@ -779,6 +781,27 @@ tools/build-single.js     bundles everything into dist/terrafall.html (and dist/
 ```
 
 Plain JavaScript, no build step and no dependencies. Balance tweaks mostly live in `js/defs.js`.
+
+### Multiplayer (in progress)
+
+Multiplayer is lockstep: every device runs the whole game, and only the players' orders go between them.
+
+- **Orders** (`js/orders.js`): everything a player does on the screens goes through `act(name, args, callback)` in
+  `js/ui.js`, which runs one of the `ORDERS` (place a building, set a priority, send warbots, plan roads...). Each
+  takes plain arguments (ids, numbers, tile lists), checks that what it's given belongs to the player who sent it,
+  and gives back how it went; the screens say so in the callback. In a single-player game it runs at once.
+- **Lockstep** (`js/lockstep.js`): time is cut into turns of 3 ticks (a tenth of a second). An order is sent for a
+  turn a little way ahead (each device picks how far from its own round trip to the relay), and a turn starts only
+  once every player's orders for it are in, so every device carries them out at the same tick. Once a second each
+  device sends a fingerprint of its game (`hashState`); if they ever differ, the host sends its game and everyone
+  carries on from it. A player who goes quiet for 12 seconds (or leaves) has their colony run by the computer, on
+  every device from the same turn.
+- **The same game everywhere**: no `Math.random` or clocks in the game; exact maths for angles and distances
+  (`dsin`, `dcos`, `datan2`, `dhypot` in `js/util.js`, the same on every browser and phone); `ME` is the player at
+  this device (messages, sounds, what the screens show), while the rules only ask whether a player is a person or
+  the computer (`human`). Saves (and the host's game) are taken at the start of a whole second.
+- Still to come: the relay (a small server that passes messages along), a lobby with a room code, and the
+  multiplayer screens (who's here, waiting for a player, pause, leave).
 
 ### Testing
 

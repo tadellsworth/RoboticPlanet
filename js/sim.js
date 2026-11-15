@@ -966,13 +966,13 @@ function blockedStep(u, t) {
 function breachHit(u, b) {
   u.breach = b.id;
   u.vel = 0;
-  u.face = Math.atan2(b.y + 0.5 - u.y, b.x + 0.5 - u.x);
+  u.face = datan2(b.y + 0.5 - u.y, b.x + 0.5 - u.x);
   if (BOTS[u.type].flame) { if (u.cd <= 0 && botArmed(u)) torchFire(u, b.x + 0.5, b.y + 0.5, (u.bat ?? 100) < BATTERY.critical ? 0.5 : 1, b); return; } // (a Torch burns it)
   if (u.cd > 0 || !useAmmo(u)) return;
   u.cd = 1.0;
   u.fought = 1;
   shotFx(u.x, u.y, b.x + 0.5 + (hash2(u.id, S.tick, 3) - 0.5) * 0.6, b.y + 0.5 + (hash2(u.id, S.tick, 5) - 0.5) * 0.6, { color: PLAYER_COLORS[u.owner], structure: true });
-  if (u.owner === 0 || b.owner === 0) sfx('hit');
+  if (isMe(u.owner) || isMe(b.owner)) sfx('hit');
   hitBuilding(b, ((u.bat ?? 100) < BATTERY.critical ? 0.5 : 1) * (BDEFS[b.type].barrier ? WARBOT_HIT.wall : WARBOT_HIT.building), u.owner);
 }
 
@@ -1040,7 +1040,7 @@ function heading(face) { return ((Math.round(face / (Math.PI / 2)) % 4) + 4) % 4
  * Kept outside the save; it rebuilds within a minute of loading.
  */
 const HEAT = { n: 0, of: null, flow: null, jam: null };
-const HEAT_FADE = Math.exp(-1 / 60);
+const HEAT_FADE = 0.9834714538216175; // (e^(-1/60), written out: Math.exp may differ by a bit between browsers)
 
 function countTraffic() {
   const N = S.W * S.H;
@@ -1220,7 +1220,7 @@ function queueRoom(u) {
       let along = rx * dx + ry * dy;
       if (along < -0.05 || along > 1.4) continue;                        // behind us, or far ahead
       if (Math.abs(rx * dy - ry * dx) > 0.35) continue;                  // off to the side
-      if (Math.cos(v.face) * dx + Math.sin(v.face) * dy < 0.3) continue; // oncoming or crossing: other lane
+      if (dcos(v.face) * dx + dsin(v.face) * dy < 0.3) continue; // oncoming or crossing: other lane
       // Two bots on the same spot (say, both just out of the Command Base): the older one goes first.
       if (along <= 0.05) { if (v.id > u.id) continue; along = 0; }
       room = Math.min(room, along - (soldier ? WARBOT_GAP : QUEUE_GAP) - (BOTS[v.type].train ? TRAIN_LEN : BOTS[v.type].truck ? 0.25 : 0));
@@ -1265,7 +1265,7 @@ function moveAlong(u, dt) {
     u.moved = step > 0 ? 1 : 0;
     while (step > 0 && u.pi < u.path.length) {
       const t = u.path[u.pi], tx = (t % S.W) + 0.5, ty = ((t / S.W) | 0) + 0.5, dx = tx - u.x, dy = ty - u.y, d = Math.sqrt(dx * dx + dy * dy);
-      if (d > 1e-4) u.face = Math.atan2(dy, dx);
+      if (d > 1e-4) u.face = datan2(dy, dx);
       if (d <= step) { u.x = tx; u.y = ty; step -= d; u.pi++; } else { u.x += (dx / d) * step; u.y += (dy / d) * step; step = 0; }
     }
     if (u.pi >= u.path.length) { u.path = null; u.vel = 0; u.drive = 0; return true; }
@@ -1289,7 +1289,7 @@ function moveAlong(u, dt) {
       const tx = (nxt % S.W) + 0.5, ty = ((nxt / S.W) | 0) + 0.5, dx = tx - u.x, dy = ty - u.y, d = Math.sqrt(dx * dx + dy * dy);
       const step = ROPE_SPEED * evSpeed() * dt;
       u.moved = 1; u.vel = 0; u.drive = 0;
-      if (d > 1e-4) u.face = Math.atan2(dy, dx);
+      if (d > 1e-4) u.face = datan2(dy, dx);
       if (d <= step) { u.x = tx; u.y = ty; u.pi++; u.ride = -1; } else { u.x += (dx / d) * step; u.y += (dy / d) * step; }
       if (u.pi >= u.path.length) { u.path = null; return true; }
       return false;
@@ -1389,7 +1389,7 @@ function moveAlong(u, dt) {
       return false;
     }
     const dx = tx - u.x, dy = ty - u.y, d = Math.sqrt(dx * dx + dy * dy);
-    if (d > 1e-4) u.face = Math.atan2(dy, dx);
+    if (d > 1e-4) u.face = datan2(dy, dx);
     if (d <= step) { u.x = tx; u.y = ty; step -= d; u.pi++; }
     else { u.x += (dx / d) * step; u.y += (dy / d) * step; step = 0; }
   }
@@ -1462,7 +1462,7 @@ function moveDirect(u, x, y, dt) {
   if (deck) { x = (deck[0] % S.W) + 0.5; y = ((deck[0] / S.W) | 0) + 0.5; }
   const dx = x - u.x, dy = y - u.y, d = Math.sqrt(dx * dx + dy * dy);
   if (d < 1e-4) return true;
-  u.face = Math.atan2(dy, dx);
+  u.face = datan2(dy, dx);
   const s = Math.min(WARBOT_SPEED * batFactor(u) * speedMul(u) * dt, d);
   const nx = u.x + (dx / d) * s, ny = u.y + (dy / d) * s;
   const ti = Math.floor(nx), tj = Math.floor(ny), ci = Math.floor(u.x), cj = Math.floor(u.y);
@@ -2126,19 +2126,19 @@ function doFix(u, t, dt) {
     if (b.armor >= def.armor - 0.01) b.armor = def.armor;
     cancelTask(u);
     u.idleT = 0;
-    if (b.owner === 0) addFx('ring', b.x + 0.5, b.y + 0.5, { color: '#7ee08a' });
+    if (isMe(b.owner)) addFx('ring', b.x + 0.5, b.y + 0.5, { color: '#7ee08a' });
   }
 }
 
 /** A gentle nudge when one of your buildings is left damaged after a fight. */
 function repairHint(b) {
-  if (b.owner !== 0 || S.mode === 'colony' || b.fixLeft > 0) return;
+  if (!isMe(b.owner) || S.mode === 'colony' || b.fixLeft > 0) return;
   const def = BDEFS[b.type];
   if (b.armor >= def.armor * 0.6 || S.time - (b.lastHit || -99) < 10) return;
-  const P = S.players[0];
+  const P = S.players[ME];
   if (S.time - (P.lastRepairHint || -999) < 150) return;
   P.lastRepairHint = S.time;
-  postMsg(0, `Your ${def.name} is damaged. Tap it and press Repair: a worker fixes it for a little Cement.`, b.x, b.y, 'warn');
+  postMsg(ME, `Your ${def.name} is damaged. Tap it and press Repair: a worker fixes it for a little Cement.`, b.x, b.y, 'warn');
 }
 
 /* ------------------------------------------------------------------ salvage */
@@ -2238,7 +2238,7 @@ function doPave(u, t, dt) {
   t.prog += dt * S.players[u.owner].mult * batFactor(u) * (tech(u.owner, 'paving') ? 1 / 0.6 : 1);
   u.busy = 1;
   const c = CROSS[S.terrain[tile]];
-  if (c) u.face = Math.atan2(((tile / S.W) | 0) + 0.5 - u.y, (tile % S.W) + 0.5 - u.x);
+  if (c) u.face = datan2(((tile / S.W) | 0) + 0.5 - u.y, (tile % S.W) + 0.5 - u.x);
   if (t.prog < (c ? c.time : roadClears(tile) ? PAVE_CLEAR_TIME : PAVE_TIME)) return;
   layRoad(tile);
   cancelTask(u);
@@ -2701,7 +2701,7 @@ function completeBuilding(b) {
   S.players[b.owner].stats.built++;
   markDirty(b.x, b.y);
   postMsg(b.owner, `${def.name} is complete.` + (def.roadworks && paveMode(b) === 'marked' && !roadsMarked(b.owner) ? ' Mark the roads it should pave in Paths (Pave).' : ''), b.x, b.y, 'good');
-  if (b.owner === 0) sfx('complete');
+  if (isMe(b.owner)) sfx('complete');
   addFx('ring', b.x + 0.5, b.y + 0.5, { color: PLAYER_COLORS[b.owner] });
   if (b.moveFrom) finishMove(b);
   if (def.mil || civClaims(b)) computeTerritory(); // its land: a wide ring, or a little round it
@@ -2724,7 +2724,7 @@ function completeRamp(b) {
   computeZones();
   S.players[b.owner].stats.built++;
   postMsg(b.owner, 'Ramp is complete: a road now climbs the cliff here.', b.x, b.y, 'good');
-  if (b.owner === 0) sfx('complete');
+  if (isMe(b.owner)) sfx('complete');
   addFx('ring', b.x + 0.5, b.y + 0.5, { color: PLAYER_COLORS[b.owner] });
 }
 
@@ -3280,7 +3280,7 @@ function produce(b, def, dt) {
     if (have >= ((BOTS[kind] && BOTS[kind].parts) || 1)) { delete b.partsBy[kind]; spawnFromFoundry(b); }
     else b.partsBy[kind] = have;
   }
-  if (b.owner === 0) sfx('produce');
+  if (isMe(b.owner)) sfx('produce');
 }
 
 function hasOrders(b) {
@@ -3420,7 +3420,7 @@ function dropOffBots() {
   }
   if (n) S.bots = S.bots.filter((u) => !u.dead);
   for (const b of S.buildings) {
-    if (!b.orders) continue;
+    if (!b.orders || ![...BOTS_OFF].some((k) => k in b.orders)) continue; // (left exactly as saved otherwise: a loaded game must play on the same)
     for (const k of BOTS_OFF) delete b.orders[k];
     if (!hasOrders(b)) delete b.orders;
   }
@@ -3491,12 +3491,12 @@ function updateKeep(b, def, dt) {
 }
 
 function pulseMuzzle(b, aim) {
-  if (BDEFS[b.type].keep) return { x: b.x + 0.5 + Math.cos(aim) * 0.42, y: b.y + 0.5 + Math.sin(aim) * 0.3 - 0.62 }; // up on the roof
+  if (BDEFS[b.type].keep) return { x: b.x + 0.5 + dcos(aim) * 0.42, y: b.y + 0.5 + dsin(aim) * 0.3 - 0.62 }; // up on the roof
   if (typeof PULSE_MUZZLES !== 'undefined' && typeof ART !== 'undefined' && ART['turret-head-0@0'] && ART['turret@0'] && ART['turret@0'].anchor) {
     const k = ((Math.round(aim / (Math.PI / 8)) % 16) + 16) % 16, m = PULSE_MUZZLES[k];
     return { x: b.x + 0.5 + (m[0] / 512 - 0.5) * 1.4, y: b.y + 0.5 + (m[1] / 512 - 0.615) * 1.4 };
   }
-  return { x: b.x + 0.5 + Math.cos(aim) * 0.36, y: b.y + 0.5 + Math.sin(aim) * 0.36 };
+  return { x: b.x + 0.5 + dcos(aim) * 0.36, y: b.y + 0.5 + dsin(aim) * 0.36 };
 }
 
 function updateTurret(b, def, dt) {
@@ -3516,7 +3516,7 @@ function updateTurret(b, def, dt) {
     b.status = ammo ? `Watching (${ammo} shots)` : 'Needs Crystal for ammo';
     return;
   }
-  const want = Math.atan2(target.y - cy, target.x - cx);
+  const want = datan2(target.y - cy, target.x - cx);
   const diff = wrapAngle(want - b.aim), turn = TURRET_TURN * dt;
   b.aim = wrapAngle(b.aim + Math.max(-turn, Math.min(turn, diff)));
   b.working = true;
@@ -3535,7 +3535,7 @@ function updateTurret(b, def, dt) {
   const m = pulseMuzzle(b, b.aim), color = PLAYER_COLORS[b.owner];
   addFx('pulsebeam', m.x, m.y, { x2: target.x, y2: target.y, color, life: 0.4, seed: S.tick + b.id });
   addFx('pulsehit', target.x, target.y, { color, life: 0.4, seed: S.tick + b.id * 3 });
-  shotFx(m.x - Math.cos(b.aim) * 0.32, m.y - Math.sin(b.aim) * 0.32, target.x, target.y, { color, pulse: true });
+  shotFx(m.x - dcos(b.aim) * 0.32, m.y - dsin(b.aim) * 0.32, target.x, target.y, { color, pulse: true });
   sfx('pulse');
   const gun = def.gun || BDEFS.turret.gun;
   damageBot(target, gun.damage, b.x + 0.5, b.y + 0.5);
@@ -3568,11 +3568,11 @@ function bunkerFire(b, def, dt) {
     fired++;
   }
   if (!fired) { if (!keep) b.status = 'Out of Ammo: haulers bring it from storage'; return; }
-  if (!keep) b.aim = Math.atan2(target.y - cy, target.x - cx);
+  if (!keep) b.aim = datan2(target.y - cy, target.x - cx);
   b.flash = S.time;
   b.working = true;
   if (!keep) b.status = `Firing (${fired} warbot${fired > 1 ? 's' : ''})`;
-  if (b.owner === 0 || target.owner === 0) sfx('hit');
+  if (isMe(b.owner) || isMe(target.owner)) sfx('hit');
 }
 
 /** A Disruptor Tower: a pulse that drains enemy robots' batteries in range, burning Fuel (see BDEFS.disruptor). */
@@ -3602,7 +3602,7 @@ function updateDisruptor(b, def, dt) {
     addFx('spark', u.x, u.y, { color: '#8fd8ff' });
   }
   addFx('ring', cx, cy, { color: '#8fd8ff', r: def.range / 1.3, life: 0.6 }); // grows out to its range
-  if (b.owner === 0 || hit.some((u) => u.owner === 0)) sfx('zap');
+  if (isMe(b.owner) || hit.some((u) => isMe(u.owner))) sfx('zap');
 }
 
 /**
@@ -3633,13 +3633,13 @@ function updateMortar(b, def, dt) {
   }
   b.shells--;
   b.cd = m.reload * auraRate(b);
-  b.aim = Math.atan2(best.y - cy, best.x - cx);
+  b.aim = datan2(best.y - cy, best.x - cx);
   b.flash = S.time;
   b.working = true;
   b.status = 'Firing';
   S.missiles.push({ owner: b.owner, from: b.id, shell: true, t: 0, dur: m.flight, x0: cx, y0: cy, x1: best.x, y1: best.y });
-  addFx('muzzle', cx + Math.cos(b.aim) * 0.2, cy + Math.sin(b.aim) * 0.2 - 0.35, { a: -Math.PI / 2, color: '#ffd27a', life: 0.12, big: true });
-  addFx('smoke', cx + Math.cos(b.aim) * 0.3, cy + Math.sin(b.aim) * 0.3 - 0.2, { r: 0.4, life: 0.9 });
+  addFx('muzzle', cx + dcos(b.aim) * 0.2, cy + dsin(b.aim) * 0.2 - 0.35, { a: -Math.PI / 2, color: '#ffd27a', life: 0.12, big: true });
+  addFx('smoke', cx + dcos(b.aim) * 0.3, cy + dsin(b.aim) * 0.3 - 0.2, { r: 0.4, life: 0.9 });
   sfx('thump');
 }
 
@@ -3763,7 +3763,7 @@ function goGarrison(u) {
 }
 
 /** An angle folded into -π..π. */
-function wrapAngle(a) { return Math.atan2(Math.sin(a), Math.cos(a)); }
+function wrapAngle(a) { return datan2(dsin(a), dcos(a)); }
 
 /** An army robot (a warbot, Bulwark or Torch): it garrisons, rallies, attacks, reloads and is repaired like a warbot. */
 function isArmy(u) { return !!(u && BOTS[u.type] && BOTS[u.type].army); }
@@ -3787,19 +3787,19 @@ const SHIELDS = [];
 function shieldBlock(u, sx, sy, dmg) {
   for (const w of SHIELDS) {
     if (w.owner !== u.owner || w.dead || w.inside || !(w.sh > 0)) continue;
-    const ax = sx - w.x, ay = sy - w.y, ad = Math.hypot(ax, ay);
+    const ax = sx - w.x, ay = sy - w.y, ad = dhypot(ax, ay);
     if (ad < BULWARK.r + 0.15) continue; // (fired from inside its shield line)
-    const fa = w.shAim ?? w.face ?? 0, fx = Math.cos(fa), fy = Math.sin(fa);
-    if ((ax * fx + ay * fy) / ad < Math.cos(BULWARK.arc)) continue; // from the side or behind: past the shield
+    const fa = w.shAim ?? w.face ?? 0, fx = dcos(fa), fy = dsin(fa);
+    if ((ax * fx + ay * fy) / ad < dcos(BULWARK.arc)) continue; // from the side or behind: past the shield
     if (u !== w) {
       const bx = u.x - w.x, by = u.y - w.y;
       if (bx * bx + by * by > BULWARK.cover * BULWARK.cover || bx * fx + by * fy > BULWARK.r) continue; // not behind it
-      const tx = u.x - sx, ty = u.y - sy, td = Math.hypot(tx, ty) || 1;
+      const tx = u.x - sx, ty = u.y - sy, td = dhypot(tx, ty) || 1;
       if (Math.abs((w.x - sx) * ty - (w.y - sy) * tx) / td > BULWARK.r * 2.35) continue; // the shot's line misses the shield
     }
-    const ang = Math.atan2(ay, ax), took = Math.min(w.sh, dmg);
+    const ang = datan2(ay, ax), took = Math.min(w.sh, dmg);
     w.sh -= took; w.shHit = S.time; w.shAbs = (w.shAbs || 0) + took;
-    shieldFx(w, w.x + Math.cos(ang) * BULWARK.r, w.y + Math.sin(ang) * BULWARK.r, ang, dmg, u);
+    shieldFx(w, w.x + dcos(ang) * BULWARK.r, w.y + dsin(ang) * BULWARK.r, ang, dmg, u);
     if (w.sh <= 0.01) shieldFail(w);
     return dmg - took;
   }
@@ -3816,7 +3816,7 @@ function shieldFx(w, x, y, ang, dmg, u) {
     else if ((f.type === 'pulsehit' || f.type === 'spark') && dist2(f.x, f.y, u.x, u.y) < 0.36) { f.x = x; f.y = y; }
   }
   addFx('shieldhit', x, y, { a: ang, aim: w.shAim ?? w.face ?? 0, cx: w.x, cy: w.y, life: 0.45, big: dmg >= 3, seed: S.tick + w.id });
-  if (w.owner === 0 || S.time - (w.shSnd || 0) > 0.12) { w.shSnd = S.time; sfx('shieldhit', x, y); }
+  if (isMe(w.owner) || S.time - (w.shSnd || 0) > 0.12) { w.shSnd = S.time; sfx('shieldhit', x, y); }
 }
 
 /** A Bulwark's shield worn right down: it collapses in a burst and is out for BULWARK.down seconds. */
@@ -3824,7 +3824,7 @@ function shieldFail(w) {
   w.sh = 0; w.shDown = S.time + BULWARK.down;
   addFx('shieldbreak', w.x, w.y, { aim: w.shAim ?? w.face ?? 0, life: 0.8, seed: S.tick + w.id });
   sfx('shieldbreak', w.x, w.y);
-  if (w.owner === 0) postMsg(0, 'A Bulwark\'s shield has failed: it comes back in ' + BULWARK.down + ' seconds.', Math.floor(w.x), Math.floor(w.y), 'warn');
+  if (isMe(w.owner)) postMsg(ME, 'A Bulwark\'s shield has failed: it comes back in ' + BULWARK.down + ' seconds.', Math.floor(w.x), Math.floor(w.y), 'warn');
 }
 
 /**
@@ -3858,8 +3858,8 @@ function bulwarkTick(u, dt) {
     u.shThreat = th ? { x: th.x, y: th.y } : null;
   }
   let want = u.shAim ?? u.face ?? 0;
-  if (u.shThreat) want = Math.atan2(u.shThreat.y - u.y, u.shThreat.x - u.x);
-  else if (u.px !== undefined && Math.hypot(u.x - u.px, u.y - u.py) > 0.004) want = Math.atan2(u.y - u.py, u.x - u.px);
+  if (u.shThreat) want = datan2(u.shThreat.y - u.y, u.shThreat.x - u.x);
+  else if (u.px !== undefined && dhypot(u.x - u.px, u.y - u.py) > 0.004) want = datan2(u.y - u.py, u.x - u.px);
   u.px = u.x; u.py = u.y;
   const diff = wrapAngle(want - (u.shAim ?? want)), step = B.turn * dt;
   u.shAim = wrapAngle((u.shAim ?? want) + Math.max(-step, Math.min(step, diff)));
@@ -3874,12 +3874,12 @@ function bulwarkTick(u, dt) {
 function torchFire(u, tx, ty, power, bld) {
   u.cd = TORCH.tick;
   u.gel = Math.max(0, (u.gel ?? TORCH.tank) - TORCH.tick);
-  const ang = Math.atan2(ty - u.y, tx - u.x), R = BOTS.torch.range + 0.15, c = Math.cos(TORCH.cone), ca = Math.cos(ang), sa = Math.sin(ang);
+  const ang = datan2(ty - u.y, tx - u.x), R = BOTS.torch.range + 0.15, c = dcos(TORCH.cone), ca = dcos(ang), sa = dsin(ang);
   u.face = ang; u.flameT = S.time;
   u.fought = 1;
   for (const v of S.bots) {
     if (v.dead || v.inside || v.owner === u.owner || v.dropping || (BOTS[v.type].air && v.flight)) continue;
-    const dx = v.x - u.x, dy = v.y - u.y, d = Math.hypot(dx, dy);
+    const dx = v.x - u.x, dy = v.y - u.y, d = dhypot(dx, dy);
     if (d > R || d < 0.05 || (dx * ca + dy * sa) / d < c) continue;
     damageBot(v, TORCH.bot * power, u.x, u.y);
   }
@@ -3890,9 +3890,9 @@ function torchFire(u, tx, ty, power, bld) {
   }
   addFx('flame', u.x + ca * 0.42, u.y + sa * 0.42, { a: ang, len: R - 0.3, life: 0.34, seed: S.tick + u.id * 7, owner: u.owner });
   if (S.time - (u.flSnd || 0) > 0.55) { u.flSnd = S.time; sfx('flame', u.x, u.y); }
-  if (u.gel <= 0 && u.owner === 0) {
-    const P = S.players[0];
-    if (S.time - (P.lastGelMsg || -999) > 90) { P.lastGelMsg = S.time; postMsg(0, 'A Torch has burned all its fuel: it goes back to refill (Fuel from your Command Base, a Depot or a Fuel Station).', Math.floor(u.x), Math.floor(u.y), 'warn'); }
+  if (u.gel <= 0 && isMe(u.owner)) {
+    const P = S.players[ME];
+    if (S.time - (P.lastGelMsg || -999) > 90) { P.lastGelMsg = S.time; postMsg(ME, 'A Torch has burned all its fuel: it goes back to refill (Fuel from your Command Base, a Depot or a Fuel Station).', Math.floor(u.x), Math.floor(u.y), 'warn'); }
   }
 }
 
@@ -3965,7 +3965,7 @@ function hitBuilding(b, dmg, by) {
   if (S.time - b.lastAlert > 12) {
     b.lastAlert = S.time;
     postMsg(b.owner, `Enemy warbots are attacking your ${BDEFS[b.type].name}!`, b.x, b.y, 'bad');
-    if (b.owner === 0) sfx('alert');
+    if (isMe(b.owner)) sfx('alert');
   }
   if (b.armor <= 0) captureBuilding(b, by);
 }
@@ -4163,7 +4163,7 @@ function foesNear(p, x, y, r) {
  * gun of one of p's rivals reaches (plus DANGER_PAD), bit 2 where one of their warbots is near (FOE_SHY);
  * DANGER.guns[p] lists those guns. Refreshed twice a second.
  */
-const DANGER = { s: null, t: -1, maps: [], guns: [], foes: 0 };
+const DANGER = { s: null, t: -1, epoch: -1, maps: [], guns: [], foes: 0 };
 const DANGER_PAD = 1;    // robots keep this many tiles further off than a gun can shoot
 const DANGER_COST = 24;  // what crossing a tile in a gun's reach (or near enemy warbots) adds to a route (they go round if they can)
 const FOE_SHY = 4.5;     // robots that don't fight keep this far from an armed enemy warbot (it picks targets within 2.8 tiles, 3.5 at a rally flag)
@@ -4188,7 +4188,7 @@ function gunReach(b) {
 function updateDanger() {
   const W = S.W, H = S.H, N = W * H, n = S.players.length;
   if (DANGER.s !== S || DANGER.maps.length !== n || !DANGER.maps[0] || DANGER.maps[0].length !== N) DANGER.maps = S.players.map(() => new Uint8Array(N));
-  DANGER.s = S; DANGER.t = S.time;
+  DANGER.s = S; DANGER.t = S.time; DANGER.epoch = Math.floor(S.tick / 15);
   for (const m of DANGER.maps) m.fill(0);
   DANGER.guns = S.players.map(() => []);
   for (const b of S.buildings) {
@@ -4240,7 +4240,8 @@ function foeReach(v) {
 
 /** The ground player p's robots should keep off (1 = an enemy gun reaches it). */
 function dangerMap(p) {
-  if (DANGER.s !== S || DANGER.t > S.time || S.time - DANGER.t >= 0.5 || !DANGER.maps[p]) updateDanger();
+  // (worked out afresh every 15 ticks, at the same ticks on every device and after a game is loaded: see hashState)
+  if (DANGER.s !== S || DANGER.epoch !== Math.floor(S.tick / 15) || !DANGER.maps[p]) updateDanger();
   return DANGER.maps[p] || DANGER.maps[0];
 }
 /** Does an enemy gun reach tile t, for player p's robots? */
@@ -4279,9 +4280,9 @@ function dangerSweep() {
       b.underFire = S.time;
       if (b.staff || b.staffInc) unstaff(b);
       const gun = gunOver(b.owner, b.x, b.y), P = S.players[b.owner];
-      if (b.owner === 0 && gun && !BDEFS[b.type].war && S.time - (P.gunMsgAt || -999) > 45) {
+      if (isMe(b.owner) && gun && !BDEFS[b.type].war && S.time - (P.gunMsgAt || -999) > 45) {
         P.gunMsgAt = S.time;
-        postMsg(0, `An enemy ${BDEFS[gun.type].name} covers your ${BDEFS[b.type].name}: your robots keep clear of it until the gun is destroyed or runs dry.`, b.x, b.y, 'warn');
+        postMsg(ME, `An enemy ${BDEFS[gun.type].name} covers your ${BDEFS[b.type].name}: your robots keep clear of it until the gun is destroyed or runs dry.`, b.x, b.y, 'warn');
         sfx('alert');
       }
     } else if (!hot && b.underFire) b.underFire = 0;
@@ -4319,8 +4320,9 @@ function foeSweep() {
     let ahead = false;
     if (!caught && u.path) for (let k = u.pi, e = Math.min(u.path.length, u.pi + SHY_LOOK); k < e; k++) if (m[u.path[k]] & 2) { ahead = true; break; }
     if (!caught && !ahead) continue;
-    // Already on its way to cover, planned a moment ago: let it go.
+    // Already on its way to cover, planned a moment ago, or on a way that takes it no nearer them: let it go.
     if (u.shyUntil > S.time && S.time - (u.coverT || 0) < 1) continue;
+    if (u.shyUntil > S.time && t && (t.type === 'cover' || t.type === 'home') && u.path && u.pi < u.path.length && !fleeingTowards(u)) continue;
     takeCover(u, caught);
     budget--;
   }
@@ -4335,10 +4337,10 @@ function takeCover(u, caught) {
   u.coverT = S.time;
   const foe = nearestFoe(u);
   u.shyOf = foe && BOTS[foe.type].wild ? 'wild' : 'warbots';
-  if (u.owner === 0 && P && S.time - (P.foeMsgAt || -999) > 60) {
+  if (isMe(u.owner) && P && S.time - (P.foeMsgAt || -999) > 60) {
     P.foeMsgAt = S.time;
     const fx = foe ? Math.floor(foe.x) : Math.floor(u.x), fy = foe ? Math.floor(foe.y) : Math.floor(u.y);
-    postMsg(0, u.shyOf === 'wild' ? 'Creatures about: your workers and haulers keep clear of them, and go back to work once they\'ve gone.'
+    postMsg(ME, u.shyOf === 'wild' ? 'Creatures about: your workers and haulers keep clear of them, and go back to work once they\'ve gone.'
       : 'Enemy warbots about: your workers and haulers keep clear of them, and go back to work once they\'ve gone (or your warbots drive them off).', fx, fy, 'warn');
   }
   if (t && t.type === 'staff' && t.phase !== 'go') {
@@ -4363,7 +4365,8 @@ function takeCover(u, caught) {
     const dst = getE(t.dst);
     if (dst) { bump(dst.inc, t.good, -(t.n || 1)); if (t.mix) for (const k in t.mix) bump(dst.inc, k, -t.mix[k]); }
   } else if (t && t.type !== 'home') cancelTask(u);
-  u.task = null; u.path = null; u.vel = 0;
+  u.task = null; u.path = null;
+  if (!(t && (t.type === 'cover' || t.type === 'home'))) u.vel = 0; // (one already running for cover keeps going)
   u.shyUntil = S.time + SHY_WAIT;
   // Caught near them: into storage close by if there's some that isn't towards them (warbots on a road are
   // quicker than a worker on foot, but can't shoot it indoors); if not, out of their reach the shortest way
@@ -4376,11 +4379,18 @@ function takeCover(u, caught) {
   coverStore(u);
 }
 
+/** Bot u, running for cover: do the next few tiles of its way take it nearer the enemy warbots it's running from? */
+function fleeingTowards(u) {
+  const fd = foeDistFn(u), here = fd(u.x, u.y);
+  for (let k = u.pi, e = Math.min(u.path.length, u.pi + 3); k < e; k++) { const t = u.path[k]; if (fd((t % S.W) + 0.5, ((t / S.W) | 0) + 0.5) < here - 0.5) return true; }
+  return false;
+}
+
 /** How far tile t (or point x, y) is from the nearest of the enemy warbots within 20 tiles of bot u that it keeps clear of. */
 function foeDistFn(u) {
   const foes = [];
   for (const v of S.bots) if (v.owner !== u.owner && foeReach(v) && dist2(v.x, v.y, u.x, u.y) < 400) foes.push(v);
-  return (x, y) => { let d = Infinity; for (const v of foes) d = Math.min(d, Math.hypot(v.x - x, v.y - y)); return d; };
+  return (x, y) => { let d = Infinity; for (const v of foes) d = Math.min(d, dhypot(v.x - x, v.y - y)); return d; };
 }
 
 /** Bot u, caught near enemy warbots: off into storage of its owner's close by (by a way that never goes nearer them). True if it's on its way. */
@@ -4408,16 +4418,22 @@ function hideNear(u) {
 /**
  * Where bot u, caught near enemy warbots, runs to: the nearest tile it can get to (by road, for one that keeps
  * to roads) a good way clear of them (FOE_SHY + 3 tiles) and of enemy guns, never going nearer them than it
- * started (so it doesn't run past them to get away). -1 if there's nowhere.
+ * started (so it doesn't run past them to get away); if there's nowhere that far clear, the furthest from them it
+ * can get (at least a tile further than it is). -1 if there's nowhere.
  */
 function escapeSpot(u) {
   const W = S.W, N = W * S.H, start = tIdx(Math.floor(u.x), Math.floor(u.y)), m = dangerMap(u.owner);
   const f = foeDistFn(u), fd = (t) => f((t % W) + 0.5, ((t / W) | 0) + 0.5);
   const road = roadBound(u) || !!BOTS[u.type].truck, seen = new Uint8Array(N), q = [start], d0 = fd(start) - 0.5;
+  let best = -1, bestD = d0 + 1.5; // (if nowhere is that far clear: the furthest from them it can get, if that's a good way further)
   seen[start] = 1;
   for (let h = 0; h < q.length && h < 4000; h++) {
     const t = q[h], i = t % W, j = (t / W) | 0;
-    if (t !== start && !(m[t] & 1) && !S.bAt[t] && fd(t) >= FOE_SHY + 3) return t;
+    if (t !== start && !(m[t] & 1) && !S.bAt[t]) {
+      const d = fd(t);
+      if (d >= FOE_SHY + 3) return t;
+      if (d > bestD) { bestD = d; best = t; }
+    }
     for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
       if (!inMap(i + di, j + dj)) continue;
       const v = tIdx(i + di, j + dj);
@@ -4427,7 +4443,7 @@ function escapeSpot(u) {
       q.push(v);
     }
   }
-  return -1;
+  return best;
 }
 
 /** The enemy warbot (or creature) nearest bot u that its robots keep clear of, or null. */
@@ -4665,12 +4681,14 @@ function eliminate(old, by, how) {
   const x = L ? L.x : 0, y = L ? L.y : 0;
   if (how !== 'surrender') {
     postMsg(by, S.players.length > 2 ? `Your warbots captured ${playerName(old, true)}'s Command Base! Everything ${playerName(old, true)} built is yours.` : 'Your warbots captured the enemy Command Base!', x, y, 'good');
-    if (old === 0) postMsg(0, 'The enemy captured your Command Base!', x, y, 'lost');
-    else if (by !== 0) postMsg(0, `The ${playerName(by)} captured ${playerName(old, true)}'s Command Base and took over everything it had.`, x, y, 'warn');
+    if (isMe(old)) postMsg(ME, 'The enemy captured your Command Base!', x, y, 'lost');
+    else if (!isMe(by)) postMsg(ME, `The ${playerName(by)} captured ${playerName(old, true)}'s Command Base and took over everything it had.`, x, y, 'warn');
   }
   const left = S.players.filter((Q) => !Q.absent && !Q.out);
   if (left.length === 1) { S.winner = left[0].id; S.endHow = how || 'capture'; }
-  else if (old === 0) { S.winner = by; S.endHow = how || 'capture'; }
+  // The last colony people play is gone (you, in a game against the computer): it's over. (A game with nobody's
+  // colony in it, the menu's backdrop, ends when the first colony falls.)
+  else if (S.players.some((Q) => !Q.ai) ? !left.some((Q) => !Q.ai) : old === 0) { S.winner = by; S.endHow = how || 'capture'; }
 }
 
 /* ------------------------------------------------------------------ surrender and Domination */
@@ -4718,8 +4736,8 @@ function beatenBy(P, live, n) {
 /** Player p gives up to player `by` (see checkSurrender): everything it had is theirs, as when a Command Base falls. */
 function surrender(p, by) {
   const L = getE(S.players[p].lander), x = L ? L.x : 0, y = L ? L.y : 0, two = S.players.length === 2;
-  if (by === 0) postMsg(0, two ? 'The rival has surrendered! Everything it built is yours.' : `The ${playerName(p)} has surrendered to you! Everything it built is yours.`, x, y, 'good');
-  else if (p !== 0) postMsg(0, `The ${playerName(p)} has surrendered to ${playerName(by, true)}: everything it built is theirs.`, x, y, 'warn');
+  if (isMe(by)) postMsg(ME, two ? 'The rival has surrendered! Everything it built is yours.' : `The ${playerName(p)} has surrendered to you! Everything it built is yours.`, x, y, 'good');
+  else if (!isMe(p)) postMsg(ME, `The ${playerName(p)} has surrendered to ${playerName(by, true)}: everything it built is theirs.`, x, y, 'warn');
   eliminate(p, by, 'surrender');
 }
 
@@ -4746,9 +4764,9 @@ function updateDomination() {
   if (lead !== D.lead) {
     const was = D.lead;
     D.lead = lead; D.t = 0; D.warned = 999;
-    if (was >= 0) postMsg(0, was === 0 ? 'You no longer hold most of the land: your Domination count starts again.' : `${S.players.length > 2 ? 'The ' + playerName(was) : 'The rival'} no longer holds most of the land: its Domination count starts again.`, undefined, undefined, was === 0 ? 'warn' : 'good');
-    if (lead === 0) postMsg(0, `You hold ${Math.round((land[0] / held) * 100)}% of the land! Keep at least ${Math.round(share * 100)}% for ${DOM.hold / 60} minutes to win by Domination.`, undefined, undefined, 'good');
-    else if (lead > 0) { const L = getE(S.players[lead].lander); postMsg(0, `${S.players.length > 2 ? 'The ' + playerName(lead) : 'The rival'} holds most of the land: take some back within ${DOM.hold / 60} minutes, or it wins by Domination!`, L ? L.x : undefined, L ? L.y : undefined, 'bad'); }
+    if (was >= 0) postMsg(ME, was === ME ? 'You no longer hold most of the land: your Domination count starts again.' : `${S.players.length > 2 ? 'The ' + playerName(was) : 'The rival'} no longer holds most of the land: its Domination count starts again.`, undefined, undefined, was === ME ? 'warn' : 'good');
+    if (lead === ME) postMsg(ME, `You hold ${Math.round((land[ME] / held) * 100)}% of the land! Keep at least ${Math.round(share * 100)}% for ${DOM.hold / 60} minutes to win by Domination.`, undefined, undefined, 'good');
+    else if (lead >= 0 && lead !== ME) { const L = getE(S.players[lead].lander); postMsg(ME, `${S.players.length > 2 ? 'The ' + playerName(lead) : 'The rival'} holds most of the land: take some back within ${DOM.hold / 60} minutes, or it wins by Domination!`, L ? L.x : undefined, L ? L.y : undefined, 'bad'); }
     return;
   }
   if (lead < 0) return;
@@ -4758,7 +4776,7 @@ function updateDomination() {
   for (const w of [60, 20]) {
     if (left > w || D.warned <= w) continue;
     D.warned = w;
-    postMsg(0, lead === 0 ? `${w === 60 ? 'One minute' : '20 seconds'} to Domination: hold on to your land!` : `${S.players.length > 2 ? 'The ' + playerName(lead) : 'The rival'} wins by Domination in ${w === 60 ? 'one minute' : '20 seconds'}: break its hold on the land!`, undefined, undefined, lead === 0 ? 'good' : 'bad');
+    postMsg(ME, lead === ME ? `${w === 60 ? 'One minute' : '20 seconds'} to Domination: hold on to your land!` : `${S.players.length > 2 ? 'The ' + playerName(lead) : 'The rival'} wins by Domination in ${w === 60 ? 'one minute' : '20 seconds'}: break its hold on the land!`, undefined, undefined, lead === ME ? 'good' : 'bad');
   }
 }
 
@@ -4948,14 +4966,14 @@ function warbotAct(u, dt) {
       else if (bt.shield) {
         // The Bulwark's twin blasters: weak, short shots from the turret behind its shield.
         u.cd = BULWARK.reload * pin;
-        if (u.owner === 0 || foe.owner === 0) sfx('hit');
+        if (isMe(u.owner) || isMe(foe.owner)) sfx('hit');
         damageBot(foe, BULWARK.dmg * power, u.x, u.y);
-        for (const sd of [-1, 1]) shotFx(u.x + Math.cos((u.shAim ?? 0) + sd * 1.57) * 0.08, u.y + Math.sin((u.shAim ?? 0) + sd * 1.57) * 0.08, foe.x, foe.y, { color: '#c89bff', pulse: true });
+        for (const sd of [-1, 1]) shotFx(u.x + dcos((u.shAim ?? 0) + sd * 1.57) * 0.08, u.y + dsin((u.shAim ?? 0) + sd * 1.57) * 0.08, foe.x, foe.y, { color: '#c89bff', pulse: true });
         u.fought = 1;
       } else {
         u.cd = 0.9 * pin;
-        u.face = Math.atan2(foe.y - u.y, foe.x - u.x);
-        if (u.owner === 0 || foe.owner === 0) sfx('hit');
+        u.face = datan2(foe.y - u.y, foe.x - u.x);
+        if (isMe(u.owner) || isMe(foe.owner)) sfx('hit');
         if (useAmmo(u)) {
           damageBot(foe, Math.max(1, Math.round((2 + (hash2(u.id, S.tick, 7) < 0.5 ? 1 : 0)) * power)), u.x, u.y);
           shotFx(u.x, u.y, foe.x, foe.y, { color: PLAYER_COLORS[u.owner] });
@@ -5085,7 +5103,7 @@ function spreadOut(u, dt) {
     const dx = u.x - v.x, dy = u.y - v.y, d2 = dx * dx + dy * dy;
     if (d2 >= 0.16) continue;
     const d = Math.sqrt(d2), w = 1 - d / 0.4;
-    if (d < 1e-3) { const a = (u.id * 2.39996) % (Math.PI * 2); fx += Math.cos(a); fy += Math.sin(a); } else { fx += (dx / d) * w; fy += (dy / d) * w; }
+    if (d < 1e-3) { const a = (u.id * 2.39996) % (Math.PI * 2); fx += dcos(a); fy += dsin(a); } else { fx += (dx / d) * w; fy += (dy / d) * w; }
     n++;
   }
   if (!n) return;
@@ -5125,12 +5143,12 @@ function strikeBuilding(u, b, dt, power) {
   if (dist2(u.x, u.y, b.x + 0.5, b.y + 0.5) <= reach * reach) {
     u.path = null;
     spreadOut(u, dt);
-    if (!bt.shield) u.face = Math.atan2(b.y + 0.5 - u.y, b.x + 0.5 - u.x);
+    if (!bt.shield) u.face = datan2(b.y + 0.5 - u.y, b.x + 0.5 - u.x);
     if (bt.flame) { if (u.cd <= 0 && botArmed(u)) torchFire(u, b.x + 0.5, b.y + 0.5, power, b); return true; }
     if (bt.shield) {
       if (u.cd <= 0) {
         u.cd = BULWARK.reload; u.fought = 1;
-        for (const sd of [-1, 1]) shotFx(u.x + Math.cos((u.shAim ?? 0) + sd * 1.57) * 0.08, u.y + Math.sin((u.shAim ?? 0) + sd * 1.57) * 0.08, b.x + 0.5, b.y + 0.5, { color: '#c89bff', pulse: true, structure: true });
+        for (const sd of [-1, 1]) shotFx(u.x + dcos((u.shAim ?? 0) + sd * 1.57) * 0.08, u.y + dsin((u.shAim ?? 0) + sd * 1.57) * 0.08, b.x + 0.5, b.y + 0.5, { color: '#c89bff', pulse: true, structure: true });
         hitBuilding(b, power * (BDEFS[b.type].barrier ? WARBOT_HIT.wall : WARBOT_HIT.building) * 0.5, u.owner);
       }
       return true;
@@ -5457,7 +5475,7 @@ function doArtySupply(u, t, dt) {
   if (g && !g.dead && dist2(g.x, g.y, u.x, u.y) <= 12) {
     g.rockets = Math.min(ROCKET.mag, (g.rockets || 0) + t.n * ROCKET.perAmmo);
     usedGood(u.owner, 'ammo', t.n);
-    if (g.owner === 0) addFx('ring', g.x, g.y, { color: PLAYER_COLORS[g.owner], r: 0.8 });
+    if (isMe(g.owner)) addFx('ring', g.x, g.y, { color: PLAYER_COLORS[g.owner], r: 0.8 });
   } else if (src && !src.dead && src.owner === u.owner) bump(src.stock, 'ammo', t.n); // the gun's gone: it goes back into storage
   u.carry = null; u.carryN = 0; u.task = null; u.idleT = 0;
 }
@@ -5521,7 +5539,7 @@ function updateRocket(u, dt) {
     if (d <= ROCKET.range - 0.25 && d >= ROCKET.min) {
       // In reach: stop, dig in, then bring the gun to bear and fire salvo after salvo.
       u.path = null; u.vel = 0; u.drive = 0;
-      const want = Math.atan2(cy - u.y, cx - u.x);
+      const want = datan2(cy - u.y, cx - u.x);
       if (!rocketDug(u)) {
         if (!(u.deployT > 0)) u.face = want; // (it lines up before the spades go down)
         u.deployT = (u.deployT || 0) + dt;
@@ -5600,13 +5618,13 @@ function launchRocket(u, b) {
   const k = S.tick + u.id * 7 + u.rockets;
   const x1 = b.x + 0.5 + (hash2(k, u.id, 3) - 0.5) * 2 * ROCKET.scatter, y1 = b.y + 0.5 + (hash2(u.id, k, 5) - 0.5) * 2 * ROCKET.scatter;
   const d = dist(u.x, u.y, x1, y1);
-  const mx = u.x + Math.cos(u.face) * 0.26, my = u.y + Math.sin(u.face) * 0.26; // the raised barrel's end (its muzzle mark, dug in: 0.34 of the sprite ahead)
+  const mx = u.x + dcos(u.face) * 0.26, my = u.y + dsin(u.face) * 0.26; // the raised barrel's end (its muzzle mark, dug in: 0.34 of the sprite ahead)
   S.missiles.push({ rocket: true, owner: u.owner, from: u.id, target: b.id, t: 0, dur: Math.max(1.2, d / ROCKET.speed), x0: mx, y0: my, x1, y1 });
   addFx('muzzle', mx, my, { a: u.face, color: '#ffd27a', life: 0.16, big: true });
   addFx('flash', mx, my, { r: 0.6, life: 0.12 });
   addFx('smoke', mx, my, { r: 0.55, life: 1.6 });
-  addFx('smoke', u.x - Math.cos(u.face) * 0.3, u.y - Math.sin(u.face) * 0.3, { r: 0.4, life: 1.1 }); // dust kicked up by the recoil
-  if (u.owner === 0 || b.owner === 0) sfx('howitzer');
+  addFx('smoke', u.x - dcos(u.face) * 0.3, u.y - dsin(u.face) * 0.3, { r: 0.4, life: 1.1 }); // dust kicked up by the recoil
+  if (isMe(u.owner) || isMe(b.owner)) sfx('howitzer');
 }
 
 /** Does a Howitzer's shell do ROCKET.fortMul damage to building b (a defence or an Outpost)? */
@@ -5803,7 +5821,7 @@ function sabotageRoads(u, r, dt) {
   }
   if (best < 0) { r.sab = SABOTAGE_WORK; return; } // nothing left here to wreck
   r.sab = 0;
-  u.face = Math.atan2(((best / S.W) | 0) + 0.5 - u.y, (best % S.W) + 0.5 - u.x);
+  u.face = datan2(((best / S.W) | 0) + 0.5 - u.y, (best % S.W) + 0.5 - u.x);
   const pipeHit = S.pipe[best] && foe(S.pipe[best] - 1), victim = pipeHit ? S.pipe[best] - 1 : wayOwner(best);
   if (pipeHit) {
     breakPipe(best);
@@ -5811,7 +5829,7 @@ function sabotageRoads(u, r, dt) {
     if (S.time - (P.lastPipeMsg || -99) > 25) {
       P.lastPipeMsg = S.time;
       postMsg(victim, 'Raiders are cutting your pipeline! It\'s relaid once they\'re driven off and it\'s paid for.', best % S.W, (best / S.W) | 0, 'bad');
-      if (victim === 0) sfx('alert');
+      if (isMe(victim)) sfx('alert');
     }
     return;
   }
@@ -5832,7 +5850,7 @@ function wreckRoad(t, victim, why) {
     if (S.time - (P.lastRaidMsg || -99) > 25) {
       P.lastRaidMsg = S.time;
       postMsg(victim, `${why}! Send warbots to drive them off, then re-lay the road.`, i, j, 'bad');
-      if (victim === 0) sfx('alert');
+      if (isMe(victim)) sfx('alert');
     }
   }
 }
@@ -6207,7 +6225,7 @@ function updateMissiles(dt) {
   for (const m of S.missiles) {
     m.t += dt;
     if (m.shell) {
-      if (S.tick % 4 === 0 && m.t < m.dur) { const k = m.t / m.dur; addFx('puff', lerp(m.x0, m.x1, k), lerp(m.y0, m.y1, k) - Math.sin(k * Math.PI) * 2.2, { r: 0.1, life: 0.6 }); }
+      if (S.tick % 4 === 0 && m.t < m.dur) { const k = m.t / m.dur; addFx('puff', lerp(m.x0, m.x1, k), lerp(m.y0, m.y1, k) - dsin(k * Math.PI) * 2.2, { r: 0.1, life: 0.6 }); }
       if (m.t >= m.dur) shellImpact(m);
       continue;
     }
@@ -6216,7 +6234,7 @@ function updateMissiles(dt) {
       continue;
     }
     if (m.rocket) {
-      if (S.tick % 2 === 0 && m.t < m.dur) { const k = m.t / m.dur; addFx('puff', lerp(m.x0, m.x1, k), lerp(m.y0, m.y1, k) - Math.sin(k * Math.PI) * 1.2, { r: 0.08, life: 0.5 }); }
+      if (S.tick % 2 === 0 && m.t < m.dur) { const k = m.t / m.dur; addFx('puff', lerp(m.x0, m.x1, k), lerp(m.y0, m.y1, k) - dsin(k * Math.PI) * 1.2, { r: 0.08, life: 0.5 }); }
       if (m.t >= m.dur) rocketImpact(m);
       continue;
     }
@@ -6224,7 +6242,7 @@ function updateMissiles(dt) {
       if (!m.roar && m.dur - m.t <= MISSILE_WARN * 1.6) { m.roar = true; sfx('nukefall', m.x1, m.y1); }
       if (S.tick % 3 === 0) {
         const k = Math.min(1, m.t / m.dur);
-        addFx('smoke', lerp(m.x0, m.x1, k), lerp(m.y0, m.y1, k) - Math.sin(k * Math.PI) * 7 + 0.2, { r: 0.35, life: 1.4 });
+        addFx('smoke', lerp(m.x0, m.x1, k), lerp(m.y0, m.y1, k) - dsin(k * Math.PI) * 7 + 0.2, { r: 0.35, life: 1.4 });
       }
       if (m.t >= m.dur) nukeImpact(m);
       continue;
@@ -6232,7 +6250,7 @@ function updateMissiles(dt) {
     if (!m.roar && m.dur - m.t <= MISSILE_WARN) { m.roar = true; sfx('incoming', m.x1, m.y1); } // (its roar as it dives in)
     if (S.tick % 3 === 0) {
       const k = Math.min(1, m.t / m.dur);
-      addFx('smoke', lerp(m.x0, m.x1, k), lerp(m.y0, m.y1, k) - Math.sin(k * Math.PI) * 2.5, { r: 0.3, life: 0.9 });
+      addFx('smoke', lerp(m.x0, m.x1, k), lerp(m.y0, m.y1, k) - dsin(k * Math.PI) * 2.5, { r: 0.3, life: 0.9 });
     }
     if (m.t >= m.dur) missileImpact(m);
   }
@@ -6343,12 +6361,12 @@ function fireNukeAt(silo, i, j) {
   });
   addFx('ring', silo.x + 0.5, silo.y + 0.5, { color: '#9dff3a', r: 2, life: 1.2 });
   sfx('launch');
-  if (silo.owner !== 0 && !S.players[0].absent) sfx('siren');
+  if (!isMe(silo.owner) && !S.players[ME].absent) sfx('siren');
   postMsg(silo.owner, `Nuclear missile launched: impact in ${NUKE.flight} seconds.`, i, j, 'good');
   // Every launch by a rival is detected (in a free-for-all too), wherever it's aimed.
-  if (silo.owner !== 0) {
+  if (!isMe(silo.owner)) {
     const atUs = nukesThreatening(0).includes(S.missiles[S.missiles.length - 1]);
-    postMsg(0, `NUCLEAR LAUNCH DETECTED! Impact in ${NUKE.flight} seconds` + (atUs ? ': press Evacuate to get your robots out of the red ring!' : ', aimed at a rival.'), i, j, 'bad');
+    postMsg(ME, `NUCLEAR LAUNCH DETECTED! Impact in ${NUKE.flight} seconds` + (atUs ? ': press Evacuate to get your robots out of the red ring!' : ', aimed at a rival.'), i, j, 'bad');
   }
   return true;
 }
@@ -7069,15 +7087,15 @@ function updateTide() {
   const T = S.tide;
   if (!T.warned && S.time >= T.next - TIDE.warn) {
     T.warned = true;
-    if (T.high) postMsg(0, `The tide is going out: the sandbars will be dry in ${TIDE.warn}s.`, undefined, undefined, 'info');
-    else { postMsg(0, `The tide is coming in! The sandbars flood in ${TIDE.warn}s: get your bots off them.`, undefined, undefined, 'warn'); sfx('alert'); }
+    if (T.high) postMsg(ME, `The tide is going out: the sandbars will be dry in ${TIDE.warn}s.`, undefined, undefined, 'info');
+    else { postMsg(ME, `The tide is coming in! The sandbars flood in ${TIDE.warn}s: get your bots off them.`, undefined, undefined, 'warn'); sfx('alert'); }
   }
   if (S.time < T.next) return;
   T.high = !T.high;
   T.warned = false;
   T.next = S.time + (T.high ? TIDE.high : TIDE.low);
   setTide(T.high);
-  postMsg(0, T.high ? 'High tide: the sandbars are under the sea.' : 'Low tide: the sandbars are dry. Bots can walk across.', undefined, undefined, 'info');
+  postMsg(ME, T.high ? 'High tide: the sandbars are under the sea.' : 'Low tide: the sandbars are dry. Bots can walk across.', undefined, undefined, 'info');
 }
 
 /**
@@ -7144,7 +7162,7 @@ function updateVolcano(dt) {
   if (!V.erupting) {
     if (!V.warned && S.time >= V.next - ERUPTION.warn) {
       V.warned = true;
-      postMsg(0, `The volcano is rumbling: it erupts in ${ERUPTION.warn}s. Get clear of its slopes!`, Math.floor(V.x), Math.floor(V.y), 'warn');
+      postMsg(ME, `The volcano is rumbling: it erupts in ${ERUPTION.warn}s. Get clear of its slopes!`, Math.floor(V.x), Math.floor(V.y), 'warn');
       sfx('rumble');
       addFx('quake', V.x, V.y, { life: ERUPTION.warn, amp: 1.2 });
     }
@@ -7160,7 +7178,7 @@ function updateVolcano(dt) {
       const rng = makeRng(((S.seed ^ 0x7e2) + V.n * 7919) >>> 0);
       V.next = S.time + ERUPTION.gap[0] + rng() * (ERUPTION.gap[1] - ERUPTION.gap[0]);
       V.warned = false;
-      postMsg(0, 'The eruption is over.', undefined, undefined, 'info');
+      postMsg(ME, 'The eruption is over.', undefined, undefined, 'info');
     }
   }
   if (V.bombs.length) {
@@ -7181,14 +7199,14 @@ function startEruption(V) {
     const a = rng() * Math.PI * 2, r = V.crater + 1 + Math.sqrt(rng()) * (V.r * ERUPTION.reach - V.crater - 1);
     V.plan.push({
       at: S.time + (k + rng()) * (ERUPTION.dur / ERUPTION.bombs), ox: (rng() - 0.5) * V.crater,
-      x: clamp(V.x + Math.cos(a) * r, 0.5, S.W - 0.5), y: clamp(V.y + Math.sin(a) * r, 0.5, S.H - 0.5),
+      x: clamp(V.x + dcos(a) * r, 0.5, S.W - 0.5), y: clamp(V.y + dsin(a) * r, 0.5, S.H - 0.5),
       dur: ERUPTION.flight[0] + rng() * (ERUPTION.flight[1] - ERUPTION.flight[0]),
     });
   }
   addFx('boom', V.x, V.y - 0.3, { r: 2.4 });
   addFx('quake', V.x, V.y, { life: ERUPTION.dur, amp: 2.2 });
   sfx('eruption');
-  postMsg(0, 'The volcano is erupting! Lava bombs are raining on its slopes.', Math.floor(V.x), Math.floor(V.y), 'bad');
+  postMsg(ME, 'The volcano is erupting! Lava bombs are raining on its slopes.', Math.floor(V.x), Math.floor(V.y), 'bad');
 }
 
 /** A lava bomb lands: a burst of fire, a scorch mark, buildings dented (never wrecked) and bots hurt. */
@@ -7201,10 +7219,10 @@ function lavaImpact(V, b) {
   for (const e of S.buildings) {
     if (e.dead || dist2(e.x + 0.5, e.y + 0.5, b.x1, b.y1) > 1.7) continue;
     e.armor = Math.max(1, e.armor - ERUPTION.damage);
-    if (e.owner === 0 && !V.hitMsg) { V.hitMsg = true; postMsg(0, 'Lava bombs are hitting your buildings on the slopes!', e.x, e.y, 'bad'); }
+    if (isMe(e.owner) && !V.hitMsg) { V.hitMsg = true; postMsg(ME, 'Lava bombs are hitting your buildings on the slopes!', e.x, e.y, 'bad'); }
   }
   for (const u of S.bots) if (!u.dead && !u.inside && dist2(u.x, u.y, b.x1, b.y1) <= 1.4) damageBot(u, ERUPTION.botDamage);
-  if (S.owner[t] === 0) sfx('boom', b.x1, b.y1);
+  if (isMe(S.owner[t])) sfx('boom', b.x1, b.y1);
 }
 
 /* Fault line: warnings, tremors, then the earthquake opens the fault (see QUAKE). */
@@ -7212,12 +7230,12 @@ function updateQuake() {
   const Q = S.quake;
   if (Q.warned < 1 && S.time >= Q.at - QUAKE.warn[0]) {
     Q.warned = 1;
-    postMsg(0, 'Seismic readings are rising along the fault line: it could open within two minutes. Anything on the scar will fall in.', undefined, undefined, 'warn');
+    postMsg(ME, 'Seismic readings are rising along the fault line: it could open within two minutes. Anything on the scar will fall in.', undefined, undefined, 'warn');
     sfx('alert');
   }
   if (Q.warned < 2 && S.time >= Q.at - QUAKE.warn[1]) {
     Q.warned = 2;
-    postMsg(0, `Tremors! The fault opens in ${QUAKE.warn[1]}s.`, undefined, undefined, 'warn');
+    postMsg(ME, `Tremors! The fault opens in ${QUAKE.warn[1]}s.`, undefined, undefined, 'warn');
     addFx('quake', S.W / 2, S.H / 2, { life: QUAKE.warn[1], amp: 1.5 });
     sfx('rumble');
   }
@@ -7260,7 +7278,7 @@ function openFault() {
   addFx('quake', S.W / 2, S.H / 2, { life: 5, amp: 9 });
   sfx('rumble'); sfx('boom');
   const n = lost.get(0) || 0;
-  postMsg(0, 'Earthquake! The fault has opened into a chasm' + (n ? `, and ${n} of your buildings fell in` : '') +
+  postMsg(ME, 'Earthquake! The fault has opened into a chasm' + (n ? `, and ${n} of your buildings fell in` : '') +
     '. Cross at the rock arches, or open a new way with a Sky bridge (Paths).', undefined, undefined, 'bad');
 }
 
@@ -7296,7 +7314,7 @@ function updateEvents() {
   S.event = { type, t0, t1: t0 + dur, n: S.evN };
   if (type === 'meteor') { S.event.hits = meteorPlan(rng, t0, dur); S.event.dir = rng() < 0.5 ? -1 : 1; S.event.cratered = {}; S.event.relaid = {}; }
   if (def.warn) {
-    postMsg(0, type === 'dust' ? `A dust storm is blowing in (${EVENT_WARN}s): bots will slow down and Missiles will be grounded.`
+    postMsg(ME, type === 'dust' ? `A dust storm is blowing in (${EVENT_WARN}s): bots will slow down and Missiles will be grounded.`
       : type === 'meteor' ? `Meteor shower in ${EVENT_WARN}s! Meteors will crater roads, but leave rich Ore and Crystal where they land.`
         : `Solar flare in ${EVENT_WARN}s: bot batteries will drain twice as fast. Keep your Fuel Stations fuelled.`, undefined, undefined, 'warn');
     sfx('alert');
@@ -7316,11 +7334,11 @@ function startEvent(E) {
       if (P.ai && P.id !== 0 && o.short) acceptTrade(P.id);
     }
     const o = E.offers[0];
-    postMsg(0, o ? `A trader ship is in orbit for ${Math.round(E.t1 - E.t0)}s: it offers ${o.m} ${GOOD[o.get].name} (your land is running lowest on it) for ${o.n} of your ${GOOD[o.give].name}. Tap Trade to take it.`
+    postMsg(ME, o ? `A trader ship is in orbit for ${Math.round(E.t1 - E.t0)}s: it offers ${o.m} ${GOOD[o.get].name} (your land is running lowest on it) for ${o.n} of your ${GOOD[o.give].name}. Tap Trade to take it.`
       : 'A trader ship is in orbit, but it wants nothing you have spare.', undefined, undefined, 'info');
     sfx('order');
-  } else if (E.type === 'dust') postMsg(0, 'The dust storm is here: bots crawl and Missiles are grounded until it blows over.', undefined, undefined, 'warn');
-  else if (E.type === 'flare') postMsg(0, 'Solar flare! Bot batteries are draining twice as fast.', undefined, undefined, 'warn');
+  } else if (E.type === 'dust') postMsg(ME, 'The dust storm is here: bots crawl and Missiles are grounded until it blows over.', undefined, undefined, 'warn');
+  else if (E.type === 'flare') postMsg(ME, 'Solar flare! Bot batteries are draining twice as fast.', undefined, undefined, 'warn');
 }
 
 function endEvent(E) {
@@ -7328,12 +7346,12 @@ function endEvent(E) {
   S.event = null;
   const rng = makeRng(((S.seed ^ 0x3c1f) + E.n * 104729) >>> 0);
   S.nextEvent = S.time + EVENT_GAP[0] + rng() * (EVENT_GAP[1] - EVENT_GAP[0]);
-  if (E.type === 'dust') postMsg(0, 'The dust storm has blown over.', undefined, undefined, 'info');
-  else if (E.type === 'flare') postMsg(0, 'The solar flare has passed.', undefined, undefined, 'info');
-  else if (E.type === 'trader') postMsg(0, 'The trader ship has left orbit.', undefined, undefined, 'info');
+  if (E.type === 'dust') postMsg(ME, 'The dust storm has blown over.', undefined, undefined, 'info');
+  else if (E.type === 'flare') postMsg(ME, 'The solar flare has passed.', undefined, undefined, 'info');
+  else if (E.type === 'trader') postMsg(ME, 'The trader ship has left orbit.', undefined, undefined, 'info');
   else if (E.type === 'meteor') {
     const n = E.cratered[0] || 0, k = E.relaid[0] || 0;
-    postMsg(0, 'The meteor shower is over. Rich Ore and Crystal lie where the meteors fell' +
+    postMsg(ME, 'The meteor shower is over. Rich Ore and Crystal lie where the meteors fell' +
       (n ? `; ${n} road tile${n > 1 ? 's were' : ' was'} cratered${k === n ? ' and your workers will re-lay them.' : k ? `: ${k} planned again, the rest need Cement.` : ': re-lay them when you have the Cement.'}` : '.'), undefined, undefined, 'info');
   }
 }
@@ -7347,7 +7365,7 @@ function endEvent(E) {
 function meteorPlan(rng, t0, dur) {
   const W = S.W, H = S.H, np = S.players.length, alone = S.mode === 'colony';
   const ccx = (W - 1) / 2, ccy = (H - 1) / 2, SEC = (2 * Math.PI) / 3;
-  const sector = (x, y) => { let a = Math.atan2(y - ccy, x - ccx) - Math.PI / 6; a = ((a % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI); return Math.floor(a / SEC) % 3; };
+  const sector = (x, y) => { let a = datan2(y - ccy, x - ccx) - Math.PI / 6; a = ((a % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI); return Math.floor(a / SEC) % 3; };
   const quad = !alone && quadMap(S.settings); // (four quarters: each spot is turned onto the other three)
   const mine = (i, j) => alone || (quad ? i < W / 2 && j >= H / 2 : np === 2 ? j >= H / 2 : sector(i, j) === 0);
   const L = getE(S.players[0].lander), hits = [], n = METEOR_HITS * (alone ? 2 : 1);
@@ -7355,7 +7373,7 @@ function meteorPlan(rng, t0, dur) {
     let x = -1, y = -1;
     for (let tries = 0; tries < 40 && x < 0; tries++) {
       let i, j;
-      if (L && k % 2 === 0) { const a = rng() * Math.PI * 2, r = 4 + rng() * 14; i = Math.round(L.x + Math.cos(a) * r); j = Math.round(L.y + Math.sin(a) * r); } else { i = Math.floor(rng() * W); j = Math.floor(rng() * H); }
+      if (L && k % 2 === 0) { const a = rng() * Math.PI * 2, r = 4 + rng() * 14; i = Math.round(L.x + dcos(a) * r); j = Math.round(L.y + dsin(a) * r); } else { i = Math.floor(rng() * W); j = Math.floor(rng() * H); }
       if (inMap(i, j) && mine(i, j) && S.terrain[tIdx(i, j)] === T_GROUND) { x = i; y = j; }
     }
     if (x < 0) continue;
@@ -7364,7 +7382,7 @@ function meteorPlan(rng, t0, dur) {
     if (quad) for (let r = 1, a = x, b = y; r < 4; r++) { [a, b] = [W - 1 - b, a]; spots.push([a, b]); }
     else if (!alone && np === 2) spots.push([W - 1 - x, H - 1 - y]);
     else if (!alone && np === 3) for (let r = 1; r < 3; r++) {
-      const a = r * SEC, c = Math.cos(a), s = Math.sin(a), dx = x - ccx, dy = y - ccy;
+      const a = r * SEC, c = dcos(a), s = dsin(a), dx = x - ccx, dy = y - ccy;
       spots.push([Math.round(ccx + dx * c - dy * s), Math.round(ccy + dx * s + dy * c)]);
     }
     for (const [i, j] of spots) if (inMap(i, j)) hits.push({ x: i, y: j, at, roll, done: 0 });
@@ -7378,9 +7396,9 @@ function meteorImpact(E, h) {
   addFx('boom', cx, cy, { r: 1.7 });
   addFx('smoke', cx, cy, { r: 1 });
   addFx('crater', cx, cy, { life: 6 });
-  if (owner === 0) {
+  if (isMe(owner)) {
     sfx('boom', cx, cy);
-    if (S.time - (E.msgT || -99) > 12) { E.msgT = S.time; postMsg(0, 'A meteor struck your land!', h.x, h.y, 'bad'); }
+    if (S.time - (E.msgT || -99) > 12) { E.msgT = S.time; postMsg(ME, 'A meteor struck your land!', h.x, h.y, 'bad'); }
   }
   // Roads on the spot and next to it are cratered (bridges and tunnels are too solid).
   const wrecked = [];
@@ -7470,7 +7488,7 @@ function acceptTrade(p) {
   bump(store.stock, o.get, o.m);
   madeGood(p, o.get, o.m);
   o.done = true;
-  if (p === 0) postMsg(0, `Deal done: ${o.m} ${GOOD[o.get].name} are in your Command Base.`, store.x, store.y, 'good');
+  if (isMe(p)) postMsg(ME, `Deal done: ${o.m} ${GOOD[o.get].name} are in your Command Base.`, store.x, store.y, 'good');
   return '';
 }
 
@@ -7516,7 +7534,7 @@ function finishResearch(p, lab) {
   P.research = null;
   if (k === 'tools') P.mult *= 1.15;
   postMsg(p, `Research complete: ${def.name}. ${def.desc}`, lab.x, lab.y, 'good');
-  if (p === 0) sfx('complete');
+  if (isMe(p)) sfx('complete');
 }
 
 /** A Research Lab: a worker inside works on the colony's research. */
@@ -7671,7 +7689,7 @@ function uplinkOrbit(t) {
   if (SH.cross) { const r4 = (u) => { const i = u % W, j = (u / W) | 0; return i * W + (W - 1 - j); }; return [t, r4(t), r4(r4(t)), r4(r4(r4(t)))]; }
   const ccx = (W - 1) / 2, ccy = (H - 1) / 2, i = t % W, j = (t / W) | 0, out = [t];
   for (let k = 1; k < 3; k++) {
-    const a = (k * 2 * Math.PI) / 3, c = Math.cos(a), s = Math.sin(a), x = Math.round(ccx + (i - ccx) * c - (j - ccy) * s), y = Math.round(ccy + (i - ccx) * s + (j - ccy) * c);
+    const a = (k * 2 * Math.PI) / 3, c = dcos(a), s = dsin(a), x = Math.round(ccx + (i - ccx) * c - (j - ccy) * s), y = Math.round(ccy + (i - ccx) * s + (j - ccy) * c);
     if (!inMap(x, y)) return null;
     out.push(tIdx(x, y));
   }
@@ -7691,7 +7709,7 @@ function placeUplinks(seed) {
   const W = S.W, H = S.H, SH = SHAPE_PRESETS[S.settings.shape || 0], quad = !!SH.cross && S.players.length >= 3;
   const near = (t, r, f) => { const i = t % W, j = (t / W) | 0; for (let dj = -r; dj <= r; dj++) for (let di = -r; di <= r; di++) { const x = i + di, y = j + dj; if (inMap(x, y) && f(tIdx(x, y))) return true; } return false; };
   const free = (u) => S.terrain[u] === T_GROUND && !S.res[u] && !S.bAt[u] && !S.road[u] && !S.ramp[u] && !(S.tidal && S.tidal[u]) && !(S.lava && S.lava[u]);
-  const span = Math.hypot(W, H), minBase = Math.max(10, span * 0.12);
+  const span = dhypot(W, H), minBase = Math.max(10, span * 0.12);
   const ok = new Uint8Array(W * H), roomAt = new Uint8Array(W * H);
   for (let j = 3; j < H - 3; j++) for (let i = 3; i < W - 3; i++) {
     const t = tIdx(i, j);
@@ -7802,7 +7820,7 @@ function updateUplinks() {
   if (!U || !U.length) return;
   const clock = S.upClock || (S.upClock = S.players.map(() => 0)), many = S.players.length > 2;
   const held = S.players.map(() => 0), j2 = UPLINK.jam * UPLINK.jam;
-  const who = (p) => (p === 0 ? 'You' : many ? 'The ' + playerName(p) : 'The rival');
+  const who = (p) => (isMe(p) ? 'You' : many ? 'The ' + playerName(p) : 'The rival');
   for (const u of U) {
     const o = S.owner[tIdx(u.x, u.y)], was = u.owner;
     u.owner = o >= 0 && S.players[o] && !S.players[o].out && !S.players[o].absent ? o : -1;
@@ -7811,11 +7829,11 @@ function updateUplinks() {
       if (b.dead || b.inside || !isArmy(b) || b.owner < 0 || b.owner === u.owner || !botArmed(b)) continue;
       if (dist2(b.x, b.y, u.x + 0.5, u.y + 0.5) <= j2) { jam = b.owner + 1; break; }
     }
-    if (jam && !u.jam && u.owner === 0) postMsg(0, `${jam - 1 > 0 ? (many ? 'The ' + playerName(jam - 1) : 'Enemy') : 'Your'} warbots are jamming your Uplink: drive them off!`, u.x, u.y, 'bad');
+    if (jam && !u.jam && isMe(u.owner)) postMsg(ME, `${jam - 1 > 0 ? (many ? 'The ' + playerName(jam - 1) : 'Enemy') : 'Your'} warbots are jamming your Uplink: drive them off!`, u.x, u.y, 'bad');
     u.jam = jam;
     if (u.owner !== was) {
-      if (u.owner === 0) postMsg(0, 'An Uplink is yours: it stands in your land.', u.x, u.y, 'good');
-      else if (was === 0) postMsg(0, `${u.owner >= 0 ? who(u.owner) + ' took' : 'You lost'} an Uplink!`, u.x, u.y, 'bad');
+      if (isMe(u.owner)) postMsg(ME, 'An Uplink is yours: it stands in your land.', u.x, u.y, 'good');
+      else if (was === ME) postMsg(ME, `${u.owner >= 0 ? who(u.owner) + ' took' : 'You lost'} an Uplink!`, u.x, u.y, 'bad');
     }
     if (u.owner >= 0 && !u.jam) held[u.owner]++;
   }
@@ -7825,17 +7843,17 @@ function updateUplinks() {
   if (S.time < UPLINK.online) return;
   if (!S.upOnline) {
     S.upOnline = true;
-    postMsg(0, `The Uplinks are online: hold ${uplinkGoal()}, and your clock runs.`, undefined, undefined, 'info');
+    postMsg(ME, `The Uplinks are online: hold ${uplinkGoal()}, and your clock runs.`, undefined, undefined, 'info');
   }
   let lead = -1;
   for (const P of S.players) if (!P.out && !P.absent && held[P.id] >= need && S.players.every((Q) => Q === P || held[Q.id] < held[P.id])) lead = P.id;
   if (lead !== (S.upLead ?? -1)) {
     const was = S.upLead ?? -1;
     S.upLead = lead; S.upWarned = 999;
-    if (lead === 0) postMsg(0, `You hold ${held[0]} of the ${U.length} Uplinks: your clock is running (${fmtClock(UPLINK.hold - clock[0])} to go).`, undefined, undefined, 'good');
-    else if (lead > 0) postMsg(0, `${who(lead)} holds ${held[lead]} of the ${U.length} Uplinks: its clock is running (${fmtClock(UPLINK.hold - clock[lead])} to go). Take or jam one!`, undefined, undefined, 'bad');
-    else if (was === 0) postMsg(0, 'You no longer lead on the Uplinks: your clock has stopped.', undefined, undefined, 'warn');
-    else if (was > 0) postMsg(0, `${who(was)} no longer leads on the Uplinks: its clock has stopped.`, undefined, undefined, 'good');
+    if (lead === ME) postMsg(ME, `You hold ${held[ME]} of the ${U.length} Uplinks: your clock is running (${fmtClock(UPLINK.hold - clock[ME])} to go).`, undefined, undefined, 'good');
+    else if (lead >= 0 && lead !== ME) postMsg(ME, `${who(lead)} holds ${held[lead]} of the ${U.length} Uplinks: its clock is running (${fmtClock(UPLINK.hold - clock[lead])} to go). Take or jam one!`, undefined, undefined, 'bad');
+    else if (was === ME) postMsg(ME, 'You no longer lead on the Uplinks: your clock has stopped.', undefined, undefined, 'warn');
+    else if (was >= 0 && was !== ME) postMsg(ME, `${who(was)} no longer leads on the Uplinks: its clock has stopped.`, undefined, undefined, 'good');
   }
   if (lead < 0) return;
   clock[lead] += 1;
@@ -7844,7 +7862,7 @@ function updateUplinks() {
   for (const w of [60, 20]) {
     if (left > w || (S.upWarned ?? 999) <= w) continue;
     S.upWarned = w;
-    postMsg(0, lead === 0 ? `${w === 60 ? 'One minute' : '20 seconds'} more on the Uplinks and the planet is yours!` : `${who(lead)} wins on the Uplinks in ${w === 60 ? 'one minute' : '20 seconds'}: take or jam one!`, undefined, undefined, lead === 0 ? 'good' : 'bad');
+    postMsg(ME, lead === ME ? `${w === 60 ? 'One minute' : '20 seconds'} more on the Uplinks and the planet is yours!` : `${who(lead)} wins on the Uplinks in ${w === 60 ? 'one minute' : '20 seconds'}: take or jam one!`, undefined, undefined, lead === ME ? 'good' : 'bad');
   }
 }
 
@@ -7917,7 +7935,7 @@ function updateNest(b) {
   for (let k = 0; k < size; k++) spawnCritter(b, k < brutes ? 'brute' : 'scuttler', { type: 'raid', x: tgt.x, y: tgt.y, until });
   const gap = WILD.gap[0] + hash2(b.id, Math.floor(S.time), 41) * (WILD.gap[1] - WILD.gap[0]);
   b.raidAt = S.time + gap;
-  postMsg(0, `A pack of ${size} creature${size === 1 ? '' : 's'}${brutes ? ` (${brutes} Brute${brutes === 1 ? '' : 's'})` : ''} is coming out of a nest!`, b.x, b.y, 'warn');
+  postMsg(ME, `A pack of ${size} creature${size === 1 ? '' : 's'}${brutes ? ` (${brutes} Brute${brutes === 1 ? '' : 's'})` : ''} is coming out of a nest!`, b.x, b.y, 'warn');
   if (!S.wildWarned) { S.wildWarned = true; sfx('alert'); }
 }
 
@@ -7936,7 +7954,7 @@ function wildPrey(x, y, r) {
 function critterBite(u, foe) {
   const bt = BOTS[u.type];
   u.cd = WILD.bite;
-  u.face = Math.atan2(foe.y + (foe.ent === 'b' ? 0.5 : 0) - u.y, foe.x + (foe.ent === 'b' ? 0.5 : 0) - u.x);
+  u.face = datan2(foe.y + (foe.ent === 'b' ? 0.5 : 0) - u.y, foe.x + (foe.ent === 'b' ? 0.5 : 0) - u.x);
   u.fought = 1;
   addFx('spark', (u.x + foe.x + (foe.ent === 'b' ? 0.5 : 0)) / 2, (u.y + foe.y + (foe.ent === 'b' ? 0.5 : 0)) / 2, { color: '#c77dff' });
   if (foe.ent === 'b') {
@@ -7948,14 +7966,14 @@ function critterBite(u, foe) {
     if (S.time - foe.lastAlert > 12) {
       foe.lastAlert = S.time;
       postMsg(foe.owner, `Creatures are attacking your ${BDEFS[foe.type].name}!`, foe.x, foe.y, 'bad');
-      if (foe.owner === 0) sfx('alert');
+      if (isMe(foe.owner)) sfx('alert');
     }
     return;
   }
-  if (foe.owner === 0) {
+  if (isMe(foe.owner)) {
     sfx('hit');
-    const P = S.players[0];
-    if (S.time - (P.lastWildMsg || -99) > 20) { P.lastWildMsg = S.time; postMsg(0, 'Creatures are attacking your bots!', Math.floor(foe.x), Math.floor(foe.y), 'bad'); }
+    const P = S.players[ME];
+    if (S.time - (P.lastWildMsg || -99) > 20) { P.lastWildMsg = S.time; postMsg(ME, 'Creatures are attacking your bots!', Math.floor(foe.x), Math.floor(foe.y), 'bad'); }
   }
   damageBot(foe, bt.bite);
 }
@@ -8026,7 +8044,7 @@ function updateCritter(u, dt) {
         return;
       }
       u.path = null;
-      u.face = Math.atan2(gy - u.y, gx - u.x);
+      u.face = datan2(gy - u.y, gx - u.x);
       if (g.bld) { if (u.cd <= 0) critterBite(u, g.bld); return; }
       t.work += dt; u.fought = 1;
       if (t.work >= WILD.roadEvery) { wreckRoad(g.road, wayOwner(g.road), 'Creatures are tearing up your roads'); t.smash = null; }
@@ -8060,7 +8078,7 @@ function clearNest(b, by) {
   const n = dropLoot(b);
   postMsg(by, `Nest cleared!${n ? ` ${n} goods spilled out: your warbots carry them home, one each.` : ''} The land around it is free to build on.`, b.x, b.y, 'good');
   addFx('ring', b.x + 0.5, b.y + 0.5, { color: '#c77dff', r: 2.4 });
-  if (by === 0) sfx('capture');
+  if (isMe(by)) sfx('capture');
   S.players[by].stats.captured++;
   destroyBuilding(b, true);
 }
@@ -8272,7 +8290,7 @@ function launchFromYard(b, kind) {
   if (BOTS[kind].air) { u.home = b.id; u.bat = 100; }
   addFx('ring', b.x + 0.5, b.y + 0.5, { color: PLAYER_COLORS[b.owner], r: 1.8 });
   postMsg(b.owner, BOTS[kind].sea ? `A ${BOTS[kind].name} was launched at the Port.` : BOTS[kind].air ? `A ${BOTS[kind].name} rolled out of the hangar.` : `A ${BOTS[kind].name} rolled out of the rail yard.`, b.x, b.y, 'good');
-  if (b.owner === 0) sfx('complete');
+  if (isMe(b.owner)) sfx('complete');
 }
 
 /* ------------------------------------------------------------------ bulk trade (the Trade Terminal) */
@@ -8403,7 +8421,7 @@ function updateTerminal(b, def, dt) {
     b.working = true;
     addFx('ring', b.x + 0.5, b.y + 0.5, { color: '#7fe3ff', r: 1.6 });
     postMsg(p, `Trade done: ${o.lot} ${GOOD[o.give].name} for ${pay} ${GOOD[o.get].name}, waiting at the Trade Terminal to go home by train.` + (o.left ? ` ${o.left} more lot${o.left > 1 ? 's' : ''} on this contract.` : ' That contract is filled.'), b.x, b.y, 'good');
-    if (p === 0) sfx('complete');
+    if (isMe(p)) sfx('complete');
     if (!o.left) { T.pick = -1; syncTerminalOrders(p); }
     return;
   }
@@ -8501,7 +8519,7 @@ function deployCrawler(u) {
   computeTerritory();
   addFx('ring', b.x + 0.5, b.y + 0.5, { color: PLAYER_COLORS[b.owner], r: 2.5 });
   postMsg(b.owner, 'The Crawler is deployed: storage, charging and an Outpost\'s land, right here.', b.x, b.y, 'good');
-  if (b.owner === 0) sfx('complete');
+  if (isMe(b.owner)) sfx('complete');
   return '';
 }
 
@@ -8781,12 +8799,12 @@ function trainGuns(u, dt) {
   if (u.pcd <= 0) {
     const tg = nearestEnemyBot(u.owner, x, y, A.pulse.range, true);
     if (tg) {
-      u.paim = Math.atan2(tg.y - y, tg.x - x);
+      u.paim = datan2(tg.y - y, tg.x - x);
       u.pshot = S.time;
-      const mx = x + Math.cos(u.paim) * 0.25, my = y + Math.sin(u.paim) * 0.25 - 0.2;
+      const mx = x + dcos(u.paim) * 0.25, my = y + dsin(u.paim) * 0.25 - 0.2;
       addFx('pulsebeam', mx, my, { x2: tg.x, y2: tg.y, color, life: 0.35, seed: S.tick + u.id });
       addFx('pulsehit', tg.x, tg.y, { color, life: 0.35, seed: S.tick + u.id * 3 });
-      if (u.owner === 0 || tg.owner === 0) sfx('pulse');
+      if (isMe(u.owner) || isMe(tg.owner)) sfx('pulse');
       damageBot(tg, A.pulse.damage, x, y);
       u.pcd = A.pulse.reload;
     } else u.pcd = 0.3;
@@ -8794,16 +8812,16 @@ function trainGuns(u, dt) {
   if (u.fcd <= 0) {
     const tgt = aircraftNear(u.owner, x, y, A.flak.range)[0];
     if (tgt) {
-      const f = BDEFS.flak.flak, vx = Math.cos(tgt.face || 0) * (tgt.vel || 0), vy = Math.sin(tgt.face || 0) * (tgt.vel || 0);
+      const f = BDEFS.flak.flak, vx = dcos(tgt.face || 0) * (tgt.vel || 0), vy = dsin(tgt.face || 0) * (tgt.vel || 0);
       let tx = tgt.x, ty = tgt.y, tt = 0;
       for (let i = 0; i < 3; i++) { tt = 0.12 + dist(x, y, tx, ty) / f.speed; tx = tgt.x + vx * tt; ty = tgt.y + vy * tt; }
       const a = hash2(u.id, S.tick, 11) * Math.PI * 2, r = f.scatter * Math.sqrt(hash2(u.id, S.tick, 17));
       S.flak = S.flak || [];
-      S.flak.push({ owner: u.owner, x0: x, y0: y, x: tx + Math.cos(a) * r, y: ty + Math.sin(a) * r, at: S.time + tt, t0: S.time });
-      u.faim = Math.atan2(tgt.y - y, tgt.x - x);
+      S.flak.push({ owner: u.owner, x0: x, y0: y, x: tx + dcos(a) * r, y: ty + dsin(a) * r, at: S.time + tt, t0: S.time });
+      u.faim = datan2(tgt.y - y, tgt.x - x);
       u.fshot = S.time;
-      addFx('muzzle', x + Math.cos(u.faim) * 0.2, y + Math.sin(u.faim) * 0.2 - 0.3, { a: u.faim, color: '#ffd9a0', life: 0.1 });
-      if (u.owner === 0 || tgt.owner === 0) sfx('flakfire');
+      addFx('muzzle', x + dcos(u.faim) * 0.2, y + dsin(u.faim) * 0.2 - 0.3, { a: u.faim, color: '#ffd9a0', life: 0.1 });
+      if (isMe(u.owner) || isMe(tgt.owner)) sfx('flakfire');
       u.fcd = A.flak.reload;
     } else u.fcd = 0.3;
   }
@@ -9110,7 +9128,7 @@ function orderBoardFerry(owner, ids, f) {
     const i = Math.floor(f.x) + di, j = Math.floor(f.y) + dj;
     if (!inMap(i, j)) continue;
     const t = tIdx(i, j), d = dist2(i + 0.5, j + 0.5, f.x, f.y);
-    if (S.terrain[t] !== T_GROUND || S.bAt[t] || !walkable(t) || d > (FERRY_REACH - 0.3) ** 2 || d >= bd) continue;
+    if (S.terrain[t] !== T_GROUND || S.bAt[t] || !walkable(t) || d > sq(FERRY_REACH - 0.3) || d >= bd) continue;
     bd = d; best = t;
   }
   if (best < 0) return 'The Ferry isn\'t at a shore: sail it right up to the land first.';
@@ -9315,7 +9333,7 @@ function doLanding(u, dt) {
     u.aboard = []; u.landing = null; u.path = null;
     if (b) {
       postMsg(u.owner, `The Ferry founded a Port on the shore${n ? ` and landed ${n} Worker${n === 1 ? '' : 's'}` : ''}: you can build on the land round it.`, L.x, L.y, 'good');
-      if (u.owner === 0) sfx('complete');
+      if (isMe(u.owner)) sfx('complete');
       // Home again, running a ferry line to the new Port if its own Port has none.
       const home = getE(L.from) || getE(u.home);
       if (home && !home.dead && home.owner === u.owner && !home.ferryTo && seaLinked(home, b)) setFerryLine(home, b);
@@ -9537,7 +9555,7 @@ function deliverPlane(u) {
 function startTakeoff(u, base, tx, ty) {
   const R = runwayEnds(base);
   exitBuilding(u);
-  u.x = R.x0; u.y = R.y0; u.face = Math.atan2(R.dy, R.dx); u.vel = 0; u.alt = 0; u.path = null;
+  u.x = R.x0; u.y = R.y0; u.face = datan2(R.dy, R.dx); u.vel = 0; u.alt = 0; u.path = null;
   u.flight = { ph: 'roll', tx, ty, base: base.id };
   u.flown = 1;
 }
@@ -9565,17 +9583,17 @@ function headHome(u) {
  * be reached by turning: it flies on straight until it can (so it never circles a spot forever).
  */
 function steerPlane(u, tx, ty, dt, k) {
-  const f = u.face || 0, err = wrapAngle(Math.atan2(ty - u.y, tx - u.x) - f), w = PLANE_TURN * (BOTS[u.type].turn || 1) * (k || 1);
+  const f = u.face || 0, err = wrapAngle(datan2(ty - u.y, tx - u.x) - f), w = PLANE_TURN * (BOTS[u.type].turn || 1) * (k || 1);
   const r = Math.max(0.3, (u.vel || 0) / w), side = err >= 0 ? 1 : -1;
-  const cx = u.x - Math.sin(f) * r * side, cy = u.y + Math.cos(f) * r * side; // the centre of its turn toward the spot
+  const cx = u.x - dsin(f) * r * side, cy = u.y + dcos(f) * r * side; // the centre of its turn toward the spot
   // Too tight: straight on for now (but up against the map's edge it comes round, sliding along the edge).
-  if (!u.pinned && Math.abs(err) > 0.2 && Math.hypot(tx - cx, ty - cy) < r * 0.98) return;
+  if (!u.pinned && Math.abs(err) > 0.2 && dhypot(tx - cx, ty - cy) < r * 0.98) return;
   u.face = wrapAngle(f + clamp(err, -w * dt, w * dt));
 }
 
 function movePlane(u, dt) {
   const step = (u.vel || 0) * dt;
-  const nx = u.x + Math.cos(u.face) * step, ny = u.y + Math.sin(u.face) * step;
+  const nx = u.x + dcos(u.face) * step, ny = u.y + dsin(u.face) * step;
   u.x = clamp(nx, 0.2, S.W - 0.2); u.y = clamp(ny, 0.2, S.H - 0.2);
   u.pinned = u.x !== nx || u.y !== ny ? 1 : 0; // flying into the map's edge
   u.moved = step > 0 ? 1 : 0;
@@ -9600,23 +9618,23 @@ function flyStep(u, dt) {
     // plane flies straight out to a few turns' width, then comes round and in.
     // Its spot is kept inside the map: one past the edge could never be reached.
     const tx = clamp(F.tx, AIR_EDGE, S.W - AIR_EDGE), ty = clamp(F.ty, AIR_EDGE, S.H - AIR_EDGE);
-    const r = vmax / (PLANE_TURN * (bt.turn || 1)), d0 = Math.hypot(tx - u.x, ty - u.y), off = Math.abs(wrapAngle(Math.atan2(ty - u.y, tx - u.x) - u.face));
+    const r = vmax / (PLANE_TURN * (bt.turn || 1)), d0 = dhypot(tx - u.x, ty - u.y), off = Math.abs(wrapAngle(datan2(ty - u.y, tx - u.x) - u.face));
     if (F.extend) { if (d0 > 2.6 * r || u.pinned) F.extend = false; } else if (d0 < 2 * r && off > 0.6 && !u.pinned) F.extend = true;
     if (!F.extend) steerPlane(u, tx, ty, dt);
     movePlane(u, dt);
-    const dx = tx - u.x, dy = ty - u.y, d = Math.hypot(dx, dy);
-    if (d < 0.6 || (d < 1.5 && dx * Math.cos(u.face) + dy * Math.sin(u.face) < 0)) return 'over';
+    const dx = tx - u.x, dy = ty - u.y, d = dhypot(dx, dy);
+    if (d < 0.6 || (d < 1.5 && dx * dcos(u.face) + dy * dsin(u.face) < 0)) return 'over';
     return null;
   }
   if (F.ph === 'final') {
     if (!R) { headHome(u); return null; }
-    const d = Math.hypot(R.x1 - u.x, R.y1 - u.y);
+    const d = dhypot(R.x1 - u.x, R.y1 - u.y);
     steerPlane(u, R.x1, R.y1, dt, 1.8);
     u.vel = Math.max(Math.min(vmax, 2.4), u.vel - bt.brake * dt);
     u.alt = Math.min(u.alt || 0, clamp(d / 3, 0, 1));
     movePlane(u, dt);
-    if (d < 0.35 || (d < 1.5 && (R.x1 - u.x) * Math.cos(u.face) + (R.y1 - u.y) * Math.sin(u.face) < 0)) {
-      F.ph = 'rollout'; u.alt = 0; u.x = R.x1; u.y = R.y1; u.face = Math.atan2(-R.dy, -R.dx);
+    if (d < 0.35 || (d < 1.5 && (R.x1 - u.x) * dcos(u.face) + (R.y1 - u.y) * dsin(u.face) < 0)) {
+      F.ph = 'rollout'; u.alt = 0; u.x = R.x1; u.y = R.y1; u.face = datan2(-R.dy, -R.dx);
     }
     return null;
   }
@@ -9627,7 +9645,7 @@ function flyStep(u, dt) {
     u.vel = Math.max(0, u.vel - ROLL_BRAKE * dt * 0.5);
     u.alt = 0;
     movePlane(u, dt);
-    if (left <= 0.08 || u.vel < 0.05) { u.x = R.x0; u.y = R.y0; u.vel = 0; u.face = Math.atan2(R.dy, R.dx); return 'parked'; }
+    if (left <= 0.08 || u.vel < 0.05) { u.x = R.x0; u.y = R.y0; u.vel = 0; u.face = datan2(R.dy, R.dx); return 'parked'; }
     return null;
   }
   // Ditching: down where it is, to wait for an Airfield.
@@ -9831,7 +9849,7 @@ function updatePlane(u, dt) {
   M.noFuel = 0;
   M.phase = 'out';
   startTakeoff(u, base, tx, ty);
-  if (u.owner === 0) sfx('takeoff');
+  if (isMe(u.owner)) sfx('takeoff');
 }
 
 /** Plane u is over its drop point: the load goes out on parachutes, and it turns for home. */
@@ -9853,7 +9871,7 @@ function airDrop(u) {
     u.aboard = [];
   }
   S.drops.push(d);
-  if (u.owner === 0) sfx('chute');
+  if (isMe(u.owner)) sfx('chute');
   u.mission = null;
   headHome(u);
 }
@@ -9911,7 +9929,7 @@ function bomberOnGround(u, base, dt) {
     if ((base.stock.ammo || 0) - (base.res.ammo || 0) < BOMBER.ammo) {
       M.noAmmo = 1;
       const P = S.players[u.owner];
-      if (u.owner === 0 && S.time - (P.bombAmmoMsg || -999) > 90) { P.bombAmmoMsg = S.time; postMsg(u.owner, `A Strike Bomber is waiting for Ammo: it needs ${BOMBER.ammo} at its Airfield (haulers bring it).`, base.x, base.y, 'warn'); }
+      if (isMe(u.owner) && S.time - (P.bombAmmoMsg || -999) > 90) { P.bombAmmoMsg = S.time; postMsg(u.owner, `A Strike Bomber is waiting for Ammo: it needs ${BOMBER.ammo} at its Airfield (haulers bring it).`, base.x, base.y, 'warn'); }
       return;
     }
     M.noAmmo = 0;
@@ -9924,7 +9942,7 @@ function bomberOnGround(u, base, dt) {
   M.noFuel = 0;
   M.phase = 'out';
   startTakeoff(u, base, tx, ty);
-  if (u.owner === 0) sfx('takeoff');
+  if (isMe(u.owner)) sfx('takeoff');
 }
 
 /** Bomber u is over its target: the bomb falls (BOMBER.fall s), and it turns for home. */
@@ -9940,12 +9958,12 @@ function bombDrop(u) {
   }
   // A vehicle on the move is led: the bomb's aimed where it will be when it lands.
   const lead = !bld && tg && (tg.vel || 0) > 0.05 ? (tg.vel || 0) * BOMBER.fall : 0, fa = tg ? tg.face || 0 : 0;
-  const x1 = bld ? tg.x + 0.5 : tg ? tg.x + Math.cos(fa) * lead : u.x, y1 = bld ? tg.y + 0.5 : tg ? tg.y + Math.sin(fa) * lead : u.y;
+  const x1 = bld ? tg.x + 0.5 : tg ? tg.x + dcos(fa) * lead : u.x, y1 = bld ? tg.y + 0.5 : tg ? tg.y + dsin(fa) * lead : u.y;
   S.missiles.push({ bomb: true, owner: u.owner, from: u.id, target: M.target, t: 0, dur: BOMBER.fall, x0: u.x, y0: u.y, x1, y1 });
   u.bombLoad = 0;
   u.mission = null;
   headHome(u);
-  if (u.owner === 0 || (tg && tg.owner === 0)) sfx('chute');
+  if (isMe(u.owner) || (tg && isMe(tg.owner))) sfx('chute');
   sfx('bombfall', x1, y1); // (its whistle as it falls, heard from where it will land)
 }
 
@@ -10018,7 +10036,7 @@ function landDrop(d) {
     blastFx(d.i + 0.5, d.j + 0.5, 0.9);
     addFx('fire', d.i + 0.5, d.j + 0.5, { r: 0.4, life: 14, t: -0.3, seed: d.id % 97 }); // the wreck burns
     addDecal('scorch', d.i + 0.5, d.j + 0.5, 0.9, 90);
-    if (d.owner === 0 || S.owner[t] === 0) sfx('fireball', d.i + 0.5, d.j + 0.5);
+    if (isMe(d.owner) || isMe(S.owner[t])) sfx('fireball', d.i + 0.5, d.j + 0.5);
     return;
   }
   if (d.kind === 'supply') {
@@ -10027,7 +10045,7 @@ function landDrop(d) {
     for (const g in d.goods) { n += d.goods[g]; if (c && !c.dead && c.owner === d.owner) { bump(c.inc, g, -d.goods[g]); bump(c.stock, g, d.goods[g]); } }
     // The crates sit a moment where they came down, their parachutes collapsing beside them, then they're taken in.
     addFx('crateland', d.i + 0.5, d.j + 0.5, { life: 2.8, owner: d.owner, crates: d.crates || [{ dx: 0, dy: 0.62, lag: 0 }], seed: d.id % 97 });
-    if (d.owner === 0) sfx('thump');
+    if (isMe(d.owner)) sfx('thump');
     void n;
     return;
   }
@@ -10044,7 +10062,7 @@ function landDrop(d) {
     computeZones();
     addFx('ring', b.x + 0.5, b.y + 0.5, { color: PLAYER_COLORS[b.owner], r: 2 });
     postMsg(b.owner, 'A Drop Outpost is down: it claims the land around it and is supplied by air from your Airfield.', b.x, b.y, 'good');
-    if (b.owner === 0) sfx('complete');
+    if (isMe(b.owner)) sfx('complete');
     const foe = S.owner[at];
     if (foe >= 0 && foe !== b.owner) postMsg(foe, 'The enemy dropped an outpost nearby!', b.x, b.y, 'bad');
     return;
@@ -10120,7 +10138,7 @@ function updateMinigun(b, def, dt) {
     b.status = ammo > 0 ? `Watching (${ammo} rounds)` : 'Needs Ammo: haulers bring it from storage';
     return;
   }
-  const want = Math.atan2(target.y - cy, target.x - cx), diff = wrapAngle(want - (b.aim ?? want));
+  const want = datan2(target.y - cy, target.x - cx), diff = wrapAngle(want - (b.aim ?? want));
   b.aim = wrapAngle((b.aim ?? want) + clamp(diff, -g.turn * dt, g.turn * dt));
   b.working = true;
   if (ammo <= 0) { b.status = 'Out of Ammo!'; return; }
@@ -10151,7 +10169,7 @@ function updateMinigun(b, def, dt) {
   }
   if (S.time - (b.mzT || -9) > 0.07) { b.mzT = S.time; addFx('muzzle', m.x, m.y, { a: b.aim, color: '#fff1b8', life: 0.07 }); }
   if (!busy && hash2(b.id, S.tick, 47) < 0.25) addDecal('pock', target.x + (hash2(S.tick, 3, b.id) - 0.5) * 0.5, target.y + (hash2(5, S.tick, b.id) - 0.5) * 0.4, 0.08, 20);
-  if ((b.owner === 0 || target.owner === 0) && S.time - (b.sfxT || -9) > 0.32) { b.sfxT = S.time; sfx('minigun'); }
+  if ((isMe(b.owner) || isMe(target.owner)) && S.time - (b.sfxT || -9) > 0.32) { b.sfxT = S.time; sfx('minigun'); }
 }
 
 /** Where a Minigun Nest's rounds leave its barrels, turned to `aim`: from the art's muzzle marks when they're installed. */
@@ -10160,7 +10178,7 @@ function minigunMuzzle(b, aim) {
     const k = ((Math.round(aim / (Math.PI / 8)) % 16) + 16) % 16, m = MINIGUN_MUZZLES[k], sc = MINIGUN_MUZZLES.scale || 1.3;
     return { x: b.x + 0.5 + (m[0] / 512 - 0.5) * sc, y: b.y + 0.5 + (m[1] / 512 - 0.615) * sc };
   }
-  return { x: b.x + 0.5 + Math.cos(aim) * 0.42, y: b.y + 0.5 + Math.sin(aim) * 0.3 - 0.32 };
+  return { x: b.x + 0.5 + dcos(aim) * 0.42, y: b.y + 0.5 + dsin(aim) * 0.3 - 0.32 };
 }
 
 /**
@@ -10175,7 +10193,7 @@ function updateFlak(b, def, dt) {
   b.skyTgt = tgt ? tgt.id : 0; // (its searchlights swing onto it at night: see drawFlakSearchlights)
   if (!tgt) { b.status = (b.shells || 0) + (b.stock.ammo || 0) > 0 ? 'Watching the sky (7 tiles out)' : 'No Ammo: haulers bring it from storage'; return; }
   // The barrels follow it round.
-  const want = Math.atan2(tgt.y - cy, tgt.x - cx);
+  const want = datan2(tgt.y - cy, tgt.x - cx);
   b.aim = b.aim === undefined ? want : wrapAngle(b.aim + clamp(wrapAngle(want - b.aim), -4 * dt, 4 * dt));
   if (b.cd > 0) return;
   for (let k = 0; k < f.salvo; k++) {
@@ -10187,20 +10205,20 @@ function updateFlak(b, def, dt) {
     }
     b.shells--;
     // Lead it: where it will be when a shell gets there (the flight time grows with the distance).
-    const vx = Math.cos(tgt.face || 0) * (tgt.vel || 0), vy = Math.sin(tgt.face || 0) * (tgt.vel || 0);
+    const vx = dcos(tgt.face || 0) * (tgt.vel || 0), vy = dsin(tgt.face || 0) * (tgt.vel || 0);
     let tx = tgt.x, ty = tgt.y, tt = 0;
     for (let i = 0; i < 3; i++) { tt = 0.12 + dist(cx, cy, tx, ty) / f.speed; tx = tgt.x + vx * tt; ty = tgt.y + vy * tt; }
     const a = hash2(b.id, S.tick, 11 + k) * Math.PI * 2, r = f.scatter * Math.sqrt(hash2(b.id, S.tick, 17 + k));
     S.flak = S.flak || [];
-    S.flak.push({ owner: b.owner, x0: cx, y0: cy, x: tx + Math.cos(a) * r, y: ty + Math.sin(a) * r, at: S.time + tt + k * 0.12, t0: S.time + k * 0.12 });
+    S.flak.push({ owner: b.owner, x0: cx, y0: cy, x: tx + dcos(a) * r, y: ty + dsin(a) * r, at: S.time + tt + k * 0.12, t0: S.time + k * 0.12 });
   }
   b.cd = f.reload * auraRate(b);
   b.flash = S.time;
   b.working = true;
   b.status = 'Firing at an enemy plane';
-  addFx('muzzle', cx + Math.cos(b.aim) * 0.25, cy + Math.sin(b.aim) * 0.25 - 0.45, { a: b.aim, color: '#ffd9a0', life: 0.1 });
-  addFx('smoke', cx + Math.cos(b.aim) * 0.3, cy + Math.sin(b.aim) * 0.3 - 0.3, { r: 0.3, life: 0.7 });
-  if (b.owner === 0 || tgt.owner === 0) sfx('flakfire');
+  addFx('muzzle', cx + dcos(b.aim) * 0.25, cy + dsin(b.aim) * 0.25 - 0.45, { a: b.aim, color: '#ffd9a0', life: 0.1 });
+  addFx('smoke', cx + dcos(b.aim) * 0.3, cy + dsin(b.aim) * 0.3 - 0.3, { r: 0.3, life: 0.7 });
+  if (isMe(b.owner) || isMe(tgt.owner)) sfx('flakfire');
 }
 
 /** Flak shells in flight: each bursts at its time, hurting every enemy aircraft within the splash (most at the middle). */
@@ -10228,10 +10246,39 @@ function hitAircraft(u, dmg, by) {
   S.drops = S.drops || [];
   const fwd = Math.min(2.5, (u.vel || 0) * 0.7);
   S.drops.push({ id: S.nextId++, owner: u.owner, kind: 'wreck', type: u.type, face: u.face || 0, alt: planeAlt(u), x: u.x, y: u.y,
-    i: clamp(Math.floor(u.x + Math.cos(u.face || 0) * fwd), 0, S.W - 1), j: clamp(Math.floor(u.y + Math.sin(u.face || 0) * fwd), 0, S.H - 1), t0: S.time });
+    i: clamp(Math.floor(u.x + dcos(u.face || 0) * fwd), 0, S.W - 1), j: clamp(Math.floor(u.y + dsin(u.face || 0) * fwd), 0, S.H - 1), t0: S.time });
   blastFx(u.x, u.y, 0.6, { small: true });
   postMsg(u.owner, `Your ${BOTS[u.type].name} was shot down!`, Math.floor(u.x), Math.floor(u.y), 'bad');
   if (by >= 0 && by !== u.owner) postMsg(by, `Your flak shot down an enemy ${BOTS[u.type].name}.`, Math.floor(u.x), Math.floor(u.y), 'good');
-  if (u.owner === 0) sfx('alert');
+  if (isMe(u.owner)) sfx('alert');
   killBot(u, true);
+}
+
+/*
+ * A fingerprint of the game: in multiplayer every device runs the same game, and they compare this now and then to
+ * catch any drift. FNV-1a over what decides the game (the clock, every robot, every building, the roads, track and
+ * plans, each colony's stores and state), number for number, to the last bit. Effects, messages, the camera and
+ * anything else that's only shown are left out.
+ */
+const _hv = new Float64Array(1), _hu = new Uint32Array(_hv.buffer);
+function hashState() {
+  let h = 0x811c9dc5 | 0;
+  const int = (v) => { h = Math.imul(h ^ (v | 0), 16777619); };
+  const num = (v) => { if (typeof v !== 'number') { int(v === undefined ? -7 : v === null ? -8 : v === true ? -9 : v === false ? -10 : -11); return; } _hv[0] = v; int(_hu[0]); int(_hu[1]); };
+  const str = (s) => { if (!s) { int(-3); return; } for (let i = 0; i < s.length; i++) int(s.charCodeAt(i)); int(-4); };
+  const obj = (o) => { if (!o) { int(-5); return; } for (const k in o) { str(k); num(o[k]); } int(-6); };
+  int(S.tick); num(S.time); int(S.nextId); int(S.winner);
+  for (const u of S.bots) {
+    int(u.id); str(u.type); int(u.owner); int(u.dead ? 1 : 0); num(u.x); num(u.y); num(u.hp); num(u.bat); num(u.face);
+    str(u.task && u.task.type); int((u.task && (u.task.target || u.task.bld || u.task.rally)) || 0); str(u.carry); num(u.carryN); int(u.inside || 0);
+    num(u.ammo); num(u.sh); num(u.gel); int(u.fight || 0);
+  }
+  for (const b of S.buildings) {
+    int(b.id); str(b.type); int(b.owner); int(b.dead ? 1 : 0); int(b.built ? 1 : 0); int(b.x); int(b.y); num(b.armor); num(b.progress);
+    obj(b.stock); obj(b.inc); int(b.staff || 0); int(b.paused ? 1 : 0); str(b.mode); obj(b.orders);
+  }
+  for (const P of S.players) { int(P.id); int(P.ai ? 1 : 0); int(P.out ? 1 : 0); obj(P.made); obj(P.used); obj(P.tech); }
+  for (const arr of [S.road, S.rail, S.plan, S.owner, S.res, S.amt]) if (arr) for (let t = 0; t < arr.length; t++) if (arr[t]) { int(t); num(arr[t]); }
+  int(S.loot ? S.loot.length : 0);
+  return h >>> 0;
 }

@@ -106,7 +106,7 @@ function drawWeather(ctx, ox, oy, z) {
   if (!WX_ON || (S.event && S.event.type === 'dust')) return;
   const W = weatherAt(S.time);
   if (!W || W.k < 0.01) return;
-  if (R.wxSlot !== W.slot && W.x < 20 && typeof postMsg === 'function') postMsg(0, `${WEATHER.names[W.kind]} is blowing in.`, undefined, undefined, 'info');
+  if (R.wxSlot !== W.slot && W.x < 20 && typeof postMsg === 'function') postMsg(ME, `${WEATHER.names[W.kind]} is blowing in.`, undefined, undefined, 'info');
   R.wxSlot = W.slot;
   const night = fxNight() > 0.3, k = W.k, dir = W.dir, t = R.time, cw = R.w, ch = R.h;
   const camX = R.cam.x * z, camY = R.cam.y * z; // so the weather moves over the ground, not stuck to the screen

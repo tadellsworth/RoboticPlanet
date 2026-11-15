@@ -59,8 +59,8 @@ function generateMap(seed, W, H, cfg) {
   // The tile with its twins (the same spot on every other side of the map).
   const orbit = (t) => np === 2 ? [t, mir(t)] : quad ? [t, r4(t), r4(r4(t)), r4(r4(r4(t)))] : [t];
   const ccx = (W - 1) / 2, ccy = (H - 1) / 2, discR = Math.min(W, H) / 2 - 0.5, SEC = (2 * Math.PI) / 3;
-  const sector = (x, y) => { let a = Math.atan2(y - ccy, x - ccx) - Math.PI / 6; a = ((a % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI); return Math.floor(a / SEC) % 3; };
-  const rot = (x, y, k) => { const a = k * SEC, c = Math.cos(a), sn = Math.sin(a), dx = x - ccx, dy = y - ccy; return [ccx + dx * c - dy * sn, ccy + dx * sn + dy * c]; };
+  const sector = (x, y) => { let a = datan2(y - ccy, x - ccx) - Math.PI / 6; a = ((a % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI); return Math.floor(a / SEC) % 3; };
+  const rot = (x, y, k) => { const a = k * SEC, c = dcos(a), sn = dsin(a), dx = x - ccx, dy = y - ccy; return [ccx + dx * c - dy * sn, ccy + dx * sn + dy * c]; };
   const inDisc = (i, j) => dist2(i, j, ccx, ccy) <= discR * discR;
   const canon = np === 2 ? (i, j) => j >= half : quad ? (i, j) => i < hw && j >= hw : (i, j) => sector(i, j) === 0 && inDisc(i, j);
   // A random point in the generated part of the map (three players, or a quarter).
@@ -68,7 +68,7 @@ function generateMap(seed, W, H, cfg) {
     if (quad) return [margin + rng() * (hw - 2 * margin), hw + margin + rng() * (hw - 2 * margin)];
     for (;;) {
       const a = Math.PI / 6 + 0.06 + rng() * (SEC - 0.12), r = Math.sqrt(rng()) * (discR - margin);
-      const x = ccx + Math.cos(a) * r, y = ccy + Math.sin(a) * r;
+      const x = ccx + dcos(a) * r, y = ccy + dsin(a) * r;
       if (x >= 1 && y >= 1 && x < W - 2 && y < H - 2) return [x, y];
     }
   };
@@ -101,7 +101,7 @@ function generateMap(seed, W, H, cfg) {
   if (SH.islands) {
     const bx0 = Math.floor(W / 2), by0 = H - 7, halfH = H - half;
     let isles;
-    const edgeD = (o, x, y) => (Math.sqrt(((x - o.x) / o.rx) ** 2 + ((y - o.y) / o.ry) ** 2) - 1) * Math.min(o.rx, o.ry);
+    const edgeD = (o, x, y) => (Math.sqrt(sq((x - o.x) / o.rx) + sq((y - o.y) / o.ry)) - 1) * Math.min(o.rx, o.ry);
     const irng = makeRng((seed ^ 0x1514) >>> 0);
     if (np === 2) {
       // A home island each, and in the middle two or three medium islands (by the seed) with a couple of
@@ -134,10 +134,10 @@ function generateMap(seed, W, H, cfg) {
       // The medium islands sit out toward the rim, sized to leave about the same sea to each home island
       // as on a two-way map, with open sea round an islet in the middle.
       const dB = dist(bx0, by0, ccx, ccy), hr = clamp(dB * 0.42, 9, 15.5), r1 = dist(bx0, by0 - 4, ccx, ccy);
-      const homeA = Math.atan2(by0 - 4 - ccy, bx0 - ccx), mA = homeA + Math.PI / 3, cR = clamp(dB * 0.1, 2.6, 4);
+      const homeA = datan2(by0 - 4 - ccy, bx0 - ccx), mA = homeA + Math.PI / 3, cR = clamp(dB * 0.1, 2.6, 4);
       const toHome = (m) => Math.sqrt(r1 * r1 + m * m - r1 * m), size = (m) => clamp(toHome(m) - hr - ISLE_GAP - 2.5, 3.5, 11);
       const mD = Math.min(dB * 0.95, ccy - 2 - size(dB * 0.95)), mR = size(mD);   // (a copy of it points at the top edge)
-      const base = [{ x: bx0, y: by0 - 4, rx: hr, ry: hr }, { x: ccx + Math.cos(mA) * mD, y: ccy + Math.sin(mA) * mD, rx: mR, ry: mR }];
+      const base = [{ x: bx0, y: by0 - 4, rx: hr, ry: hr }, { x: ccx + dcos(mA) * mD, y: ccy + dsin(mA) * mD, rx: mR, ry: mR }];
       isles = [{ x: ccx, y: ccy, rx: cR, ry: cR }];
       for (const o of base) for (let k = 0; k < 3; k++) { const [x, y] = rot(o.x, o.y, k); isles.push({ x, y, rx: o.rx, ry: o.ry }); }
     }
@@ -171,7 +171,7 @@ function generateMap(seed, W, H, cfg) {
     }
     // Sky islands keep their canyons narrow (short Viaducts); Islands keep a wider sea.
     const gapMin = (SH.sky ? SKY_GAP : ISLE_GAP) + 1.5;
-    const out = (o, i, j) => (Math.sqrt(((i - o.x) / o.rx) ** 2 + ((j - o.y) / o.ry) ** 2) - 1) * Math.min(o.rx, o.ry);
+    const out = (o, i, j) => (Math.sqrt(sq((i - o.x) / o.rx) + sq((j - o.y) / o.ry)) - 1) * Math.min(o.rx, o.ry);
     isleCut = () => {
       for (let j = half; j < H; j++) for (let i = 0; i < W; i++) {
         if (!canon(i, j)) continue;
@@ -279,7 +279,7 @@ function generateMap(seed, W, H, cfg) {
   // More fields scattered over the rest of the half, kept apart from each other and the base.
   // Richer settings mean more fields and slightly bigger ones. Rare fields are placed first so a
   // crowded map never squeezes them out.
-  const areaK = (W * H) / (40 * 56), rK = Math.pow(dens, 0.25);
+  const areaK = (W * H) / (40 * 56), rK = Math.sqrt(Math.sqrt(dens)); // (the fourth root: Math.pow may differ by a bit between browsers)
   const want = (n) => { const x = n * areaK * Math.sqrt(dens); return Math.floor(x) + (rng() < x - Math.floor(x) ? 1 : 0); };
   const bag = [];
   const add = (n, type, r0, r1, fill) => { for (let k = want(n); k > 0; k--) bag.push({ type, r: (r0 + rng() * (r1 - r0)) * rK, fill }); };
@@ -296,7 +296,7 @@ function generateMap(seed, W, H, cfg) {
       const [x, y] = np === 2 ? [2 + rng() * (W - 5), half + 1 + rng() * (H - half - 3)] : canonPoint(rng, 3);
       if (terrain[id(Math.floor(x), Math.floor(y))] !== T_GROUND) continue;
       if (dist2(x, y, bx, by) < 64) continue;
-      if (fields.some((o) => dist2(x, y, o.x, o.y) < (o.r + f.r + gap) ** 2)) continue;
+      if (fields.some((o) => dist2(x, y, o.x, o.y) < sq(o.r + f.r + gap))) continue;
       field(x, y, f.r, f.type, f.fill, false);
       break;
     }
@@ -400,7 +400,7 @@ function generateMap(seed, W, H, cfg) {
     };
     chokeInfo.length = 0;
     const a1 = cr() * 6.28, a2 = cr() * 6.28, f1 = 0.18 + cr() * 0.12, f2 = 0.45 + cr() * 0.2;
-    const thick = (i) => clamp(Math.round(3 + 1.3 * (0.65 * Math.sin(i * f1 + a1) + 0.35 * Math.sin(i * f2 + a2))), 2, 5);
+    const thick = (i) => clamp(Math.round(3 + 1.3 * (0.65 * dsin(i * f1 + a1) + 0.35 * dsin(i * f2 + a2))), 2, 5);
     // The level the passes run at: the commonest ground just in front of the belt.
     const count = {};
     for (let i = 0; i < W; i++) for (let j = half + thick(i); j < Math.min(H, half + thick(i) + 4); j++) { const t = id(i, j); if (terrain[t] === T_GROUND) count[elev[t]] = (count[elev[t]] || 0) + 1; }
@@ -494,7 +494,7 @@ function generateMap(seed, W, H, cfg) {
   // natural rock arches: a pair (each with its twin), and sometimes one down the middle.
   const riftShape = () => {
     const cr = makeRng(seed ^ 0x2a1f77), p1 = cr() * 6.28, f1 = 0.2 + cr() * 0.15;
-    const depth = (i) => clamp(Math.round(2.7 + 1.1 * Math.sin(i * f1 + p1)), 2, 4);
+    const depth = (i) => clamp(Math.round(2.7 + 1.1 * dsin(i * f1 + p1)), 2, 4);
     for (let i = 0; i < W; i++) for (let j = half; j < half + depth(i); j++) put(id(i, j), T_CHASM, undefined, true);
     const c = 3 + Math.floor(cr() * Math.max(1, ca - 7));
     const cols = [c, c + 1, W - 2 - c, W - 1 - c];
@@ -509,8 +509,8 @@ function generateMap(seed, W, H, cfg) {
     const cr = makeRng(seed ^ 0x3b2e11), p = cr() * 6.28;
     const rx = Math.max(5, W / 2 - 7), ry = Math.max(5, half - 15);
     const inside = (i, j) => {
-      const a = Math.atan2(j - ccy, i - ccx), w = 1 + 0.08 * Math.cos(2 * a + p) + 0.05 * Math.cos(4 * a + p * 1.7);
-      return ((i - ccx) / rx) ** 2 + ((j - ccy) / ry) ** 2 <= w * w;
+      const a = datan2(j - ccy, i - ccx), w = 1 + 0.08 * dcos(2 * a + p) + 0.05 * dcos(4 * a + p * 1.7);
+      return sq((i - ccx) / rx) + sq((j - ccy) / ry) <= w * w;
     };
     for (let j = half; j < H; j++) for (let i = 0; i < W; i++) {
       const t = id(i, j);
@@ -636,8 +636,8 @@ function generateMap(seed, W, H, cfg) {
     const rx = W * (0.2 + cr() * 0.06), ry = Math.max(4, half * (0.24 + cr() * 0.08)), p = cr() * 6.28;
     for (let j = half; j < H; j++) for (let i = 0; i < W; i++) {
       if (nearBase(i, j, 9)) continue;
-      const a = Math.atan2(j - ccy, i - ccx), w = 1 + 0.14 * Math.cos(2 * a + p) + 0.3 * (fbm(i / 3, j / 3, sL + 5, 2) - 0.5);
-      if (((i - ccx) / rx) ** 2 + ((j - ccy) / ry) ** 2 <= w * w || fbm(i / 6, j / 6, sL, 3) < LAKES_WET) put(id(i, j), T_WATER);
+      const a = datan2(j - ccy, i - ccx), w = 1 + 0.14 * dcos(2 * a + p) + 0.3 * (fbm(i / 3, j / 3, sL + 5, 2) - 0.5);
+      if (sq((i - ccx) / rx) + sq((j - ccy) / ry) <= w * w || fbm(i / 6, j / 6, sL, 3) < LAKES_WET) put(id(i, j), T_WATER);
     }
     // Ponds too small for a ship go back to land.
     const lab = new Int32Array(N).fill(-1);
@@ -657,15 +657,15 @@ function generateMap(seed, W, H, cfg) {
   const deltaShape = () => {
     const cr = makeRng(seed ^ 0x8d9e67), p1 = cr() * 6.28, p2 = cr() * 6.28;
     // How far the river reaches into the bottom half at column i (its top half is the twin of column W-1-i's).
-    const hw = (i) => clamp(Math.round(3.2 + 1.1 * Math.sin(i * 0.23 + p1) + 0.7 * Math.sin(i * 0.61 + p2)), 2, 5);
+    const hw = (i) => clamp(Math.round(3.2 + 1.1 * dsin(i * 0.23 + p1) + 0.7 * dsin(i * 0.61 + p2)), 2, 5);
     for (let i = 0; i < W; i++) for (let j = half; j < half + hw(i); j++) put(id(i, j), T_WATER, undefined, true);
     // A side channel off each flank: from the river out toward the bottom-left edge (its twin, top right).
     const sx0 = Math.round(W * 0.34), sy0 = half + hw(Math.round(W * 0.34)) - 1, ex = 0, ey = Math.round(half + (H - half) * 0.62);
-    let x = sx0, y = sy0, a = Math.atan2(ey - sy0, ex - sx0);
+    let x = sx0, y = sy0, a = datan2(ey - sy0, ex - sx0);
     const side = [];
     for (let k = 0; k < 400 && x > 0.5 && y < H - 3; k++) {
-      a += (cr() - 0.5) * 0.35 + 0.15 * (Math.atan2(ey - y, ex - x) - a);
-      x += Math.cos(a) * 0.5; y += Math.sin(a) * 0.5;
+      a += (cr() - 0.5) * 0.35 + 0.15 * (datan2(ey - y, ex - x) - a);
+      x += dcos(a) * 0.5; y += dsin(a) * 0.5;
       const i = Math.round(x), j = Math.round(y);
       if (i < 0 || j < half || j >= H || nearBase(i, j, 9)) continue;
       for (const [di, dj] of [[0, 0], [0, 1], [1, 0]]) {
@@ -708,11 +708,11 @@ function generateMap(seed, W, H, cfg) {
     }
     // Lava rivers: two down the bottom flanks (their twins down the top ones), each ending in a pool.
     for (const a0 of [Math.PI / 2 + 0.75 + cr() * 0.35, Math.PI / 2 - 0.75 - cr() * 0.35]) {
-      let a = a0, r = rC - 0.5, x = ccx + Math.cos(a) * r, y = ccy + Math.sin(a) * r;
+      let a = a0, r = rC - 0.5, x = ccx + dcos(a) * r, y = ccy + dsin(a) * r;
       const rEnd = rS * (1.45 + cr() * 0.25);
       for (let k = 0; k < 300 && r < rEnd; k++) {
         a += (cr() - 0.5) * 0.3 + 0.2 * (a0 - a);
-        x += Math.cos(a) * 0.5; y += Math.sin(a) * 0.5; r = dist(x, y, ccx, ccy);
+        x += dcos(a) * 0.5; y += dsin(a) * 0.5; r = dist(x, y, ccx, ccy);
         const i = Math.round(x), j = Math.round(y);
         if (i < 4 || i > W - 5 || j > H - 6 || nearBase(i, j, 10)) break;
         for (const [di, dj] of [[0, 0], [1, 0]]) { const u = id(i + di, j + dj); put(u, T_WATER, undefined, true); flag(lavaA, u); }
@@ -726,7 +726,7 @@ function generateMap(seed, W, H, cfg) {
     if (cfg.nuke) slope.push([R_URANIUM, 0.6]);
     slope.forEach(([type, rad], k) => {
       for (let tries = 0; tries < 80; tries++) {
-        const a = Math.PI * (0.08 + cr() * 0.84), r = rS * (0.45 + cr() * 0.4), x = ccx + Math.cos(a) * r, y = ccy + Math.sin(a) * r;
+        const a = Math.PI * (0.08 + cr() * 0.84), r = rS * (0.45 + cr() * 0.4), x = ccx + dcos(a) * r, y = ccy + dsin(a) * r;
         const t = id(Math.round(x), Math.round(y));
         if (y < half || terrain[t] !== T_GROUND || lavaA[t] || res[t]) continue;
         stampRes(cr, x, y, rad, type, type === R_URANIUM ? 1 : 0.85);
@@ -741,8 +741,8 @@ function generateMap(seed, W, H, cfg) {
   // arches. The band along it is kept level so both sides stay joined to their arches afterwards.
   const faultShape = () => {
     const cr = makeRng(seed ^ 0xa1b2c3), c = (W - 1) / 2, P = W * (0.85 + cr() * 0.3), ph = cr() < 0.5 ? 1 : -1;
-    const f = (i) => ph * (3.2 * Math.sin((2 * Math.PI * (i - c)) / P) + 0.9 * Math.sin((2 * Math.PI * (i - c)) / 5.3));
-    const hw = (i) => 1.15 + 0.45 * Math.abs(Math.sin((i - c) * 0.37));
+    const f = (i) => ph * (3.2 * dsin((2 * Math.PI * (i - c)) / P) + 0.9 * dsin((2 * Math.PI * (i - c)) / 5.3));
+    const hw = (i) => 1.15 + 0.45 * Math.abs(dsin((i - c) * 0.37));
     const ax = Math.round(W * (0.2 + cr() * 0.08));
     const arch = (i) => i === ax || i === ax + 1 || i === W - 1 - ax || i === W - 2 - ax;
     for (let j = half; j < H; j++) for (let i = 0; i < W; i++) {
@@ -929,8 +929,8 @@ function generateMap(seed, W, H, cfg) {
   // symmetric under the half-turn.
   const crR = Math.max(5, Math.round(Math.min(W, H) * 0.18));
   const crEdge = (i, j) => {
-    const a = Math.atan2(j - ccy, i - ccx), h = np === 2 ? 2 : 3; // harmonics that repeat with the bases
-    return crR * (1 + 0.08 * Math.cos(h * a + seed) + 0.05 * Math.sin(2 * h * a + seed * 0.7)) - Math.sqrt(dist2(i, j, ccx, ccy));
+    const a = datan2(j - ccy, i - ccx), h = np === 2 ? 2 : 3; // harmonics that repeat with the bases
+    return crR * (1 + 0.08 * dcos(h * a + seed) + 0.05 * dsin(2 * h * a + seed * 0.7)) - Math.sqrt(dist2(i, j, ccx, ccy));
   };
   const floorLv = 0; // the lowest level, so nothing round it can wear the rim away
   if (SH.crater) {
@@ -962,8 +962,8 @@ function generateMap(seed, W, H, cfg) {
   // down all round it. (Shaped on the bottom half and mirrored.)
   const P = L - 1;
   const plR = 9.5, plEdge = (i, j) => {
-    const a = Math.atan2(j - by, i - bx);
-    return plR * (1 + 0.1 * Math.cos(3 * a + seed) + 0.05 * Math.sin(5 * a + seed * 1.3)) - Math.sqrt(dist2(i, j, bx, by));
+    const a = datan2(j - by, i - bx);
+    return plR * (1 + 0.1 * dcos(3 * a + seed) + 0.05 * dsin(5 * a + seed * 1.3)) - Math.sqrt(dist2(i, j, bx, by));
   };
   if (SH.plateau) {
     const low = new Int8Array(N).fill(-1), q = [];
@@ -1095,7 +1095,7 @@ function generateMap(seed, W, H, cfg) {
       const rayRamp = (x0, y0, a, inside) => {
         let prev = -1;
         for (let k = 0; k < 30; k++) {
-          const i = Math.round(x0 + Math.cos(a) * k), j = Math.round(y0 + Math.sin(a) * k);
+          const i = Math.round(x0 + dcos(a) * k), j = Math.round(y0 + dsin(a) * k);
           if (i < 1 || j < 1 || i >= W - 1 || j >= H - 1) return false;
           const t = id(i, j);
           if (prev >= 0 && !inside(i, j)) {
@@ -1122,8 +1122,8 @@ function generateMap(seed, W, H, cfg) {
           if (onto) ramp[t] = 0;
         }
         // From the floor's centre out toward player 0's base (and its mirror toward player 1's).
-        if (np === 2) tryRamp(ccx, ccy, Math.atan2(by - ccy, bx - ccx), (i, j) => crEdge(i, j) >= 2);
-        else for (const b of bases) tryRamp(ccx, ccy, Math.atan2(b.y - ccy, b.x - ccx), (i, j) => crEdge(i, j) >= 2);
+        if (np === 2) tryRamp(ccx, ccy, datan2(by - ccy, bx - ccx), (i, j) => crEdge(i, j) >= 2);
+        else for (const b of bases) tryRamp(ccx, ccy, datan2(b.y - ccy, b.x - ccx), (i, j) => crEdge(i, j) >= 2);
       } else if (np === 3) {
         // Three plateaus: the same, round each base.
         const plAll = (i, j) => { let e = -99; for (let k = 0; k < 3; k++) { const [x, y] = rot(i, j, -k); e = Math.max(e, plEdge(x, y)); } return e; };
@@ -1329,10 +1329,10 @@ function generateMap(seed, W, H, cfg) {
         dist(t % W, (t / W) | 0, bs.x, bs.y) >= 4;
       // Each tile's place relative to the base, turned so the way to the middle of the map is +x: the
       // same for every side, so ties are broken the same way everywhere and the map stays symmetric.
-      const a0 = Math.atan2(ccy - bs.y, ccx - bs.x), ca = Math.cos(-a0), sa = Math.sin(-a0);
+      const a0 = datan2(ccy - bs.y, ccx - bs.x), ca = dcos(-a0), sa = dsin(-a0);
       const rel = (t) => { const dx = (t % W) - bs.x, dy = ((t / W) | 0) - bs.y; return [Math.round((dx * ca - dy * sa) * 100), Math.round((dx * sa + dy * ca) * 100)]; };
       const before = (a, b) => { const ra = rel(a), rb = rel(b); return ra[0] - rb[0] || ra[1] - rb[1]; };
-      const side = (t) => { const r = rel(t); return Math.abs(Math.abs(Math.atan2(r[1], r[0])) - Math.PI / 2); };
+      const side = (t) => { const r = rel(t); return Math.abs(Math.abs(datan2(r[1], r[0])) - Math.PI / 2); };
       // The field's centre: the free tile 5 to 9 out with the most free ground round it, off to the side.
       let c = -1, cs = -Infinity;
       for (const t of q) {
@@ -1567,6 +1567,10 @@ function newGame(opts) {
   settings.nuke = !!opts.nuke;
   settings.biome = BIOMES[opts.biome] ? opts.biome : 'desert';
   const { W, H } = mapDims(settings);
+  // The players people play: you (player 0), or in multiplayer everyone in opts.humans. The rest are the computer's,
+  // with the difficulty's head start.
+  const humans = Array.isArray(opts.humans) ? opts.humans : [0];
+  const rival = (p) => !humans.includes(p);
   const seed = opts.seed >>> 0;
   const diff = DIFFICULTY[opts.difficulty] ? opts.difficulty : 'normal';
   const m = generateMap(seed, W, H, settings);
@@ -1584,8 +1588,8 @@ function newGame(opts) {
     players: Array.from({ length: settings.players }, (_, p) => ({
       id: p,
       absent: mode === 'colony' && p === 1,
-      ai: (p >= 1 && mode !== 'colony') || (p === 0 && !!opts.autoplay),
-      mult: p >= 1 ? DIFFICULTY[diff].mult : 1,
+      ai: (rival(p) && mode !== 'colony') || (p === 0 && !!opts.autoplay),
+      mult: rival(p) ? DIFFICULTY[diff].mult : 1,
       lander: 0,
       stats: { built: 0, bots: 0, captured: 0, lost: 0, outposts: 0, startBots: 0 },
       made: {}, madeBots: {},
@@ -1626,7 +1630,7 @@ function newGame(opts) {
     const base = m.bases[p];
     const L = addBuilding(p, 'lander', base.x, base.y, true);
     S.players[p].lander = L.id;
-    for (const g in START_STOCK) L.stock[g] = START_STOCK[g] + (p >= 1 ? DIFFICULTY[diff].bonus : 0);
+    for (const g in START_STOCK) L.stock[g] = START_STOCK[g] + (rival(p) ? DIFFICULTY[diff].bonus : 0);
     for (const type in START_BOTS) for (let k = 0; k < START_BOTS[type]; k++) enterBuilding(addBot(p, type, base.x, base.y), L);
     for (let k = 0; k < (mode === 'colony' ? 0 : START_WARBOTS); k++) {
       const w = addBot(p, 'warbot', base.x, base.y);
@@ -1646,8 +1650,8 @@ function newGame(opts) {
   for (const u of S.uplinks || []) S.decor[tIdx(u.x, u.y)] = 0;
   // A word on how this kind of planet plays.
   const SH = SHAPE_PRESETS[settings.shape], quadTip = quadMap(settings) && (settings.players === 3 ? SH.spareTip : SH.quadTip);
-  const L0 = getE(S.players[0].lander), tip = !S.mission && mode === 'versus' && (quadTip || SH.tip);
-  if (tip && L0) postMsg(0, tip, L0.x, L0.y, 'info');
+  const L0 = getE(S.players[ME] ? S.players[ME].lander : 0), tip = !S.mission && mode === 'versus' && (quadTip || SH.tip);
+  if (tip && L0) postMsg(ME, tip, L0.x, L0.y, 'info');
   return S;
 }
 
@@ -2194,7 +2198,7 @@ function cutOff(b) {
   if (BDEFS[b.type].staff && typeof unstaff === 'function') unstaff(b);
   markDirty(b.x, b.y);
   postMsg(b.owner, `${BDEFS[b.type].name} is cut off: a rival's border has taken its ground. It has stopped working and will crumble unless you take the land back (an Outpost or Keep nearer than theirs).`, b.x, b.y, 'bad');
-  if (b.owner === 0 && typeof sfx === 'function') sfx('alert');
+  if (isMe(b.owner) && typeof sfx === 'function') sfx('alert');
 }
 
 /** Share of the walkable land (ground tiles) a player has claimed, 0..1. */
@@ -2505,7 +2509,7 @@ function placeSite(owner, type, i, j, cost, fromStore) {
   if (fromStore) b.fromStore = true;
   // A site in the land of a place supplied by air (a Drop Outpost, or an Outpost you set to it) that no road or
   // ferry line from home reaches is supplied by air too.
-  if (!storeFunded(b) && S.buildings.some((d) => !d.dead && d.owner === owner && d.airSupply && BDEFS[d.type].terr && dist2(d.x, d.y, i, j) <= (BDEFS[d.type].terr + 1) ** 2 && !onHomeGroup(d))) b.airSupply = true;
+  if (!storeFunded(b) && S.buildings.some((d) => !d.dead && d.owner === owner && d.airSupply && BDEFS[d.type].terr && dist2(d.x, d.y, i, j) <= sq(BDEFS[d.type].terr + 1) && !onHomeGroup(d))) b.airSupply = true;
   if (storeFunded(b)) {
     if (S.players[owner].ai) { if (!payInto(b)) queuePlan('b', b.id, owner); }
     else { queuePlan('b', b.id, owner); settlePlans(); } // what storage has goes in now (after older plans)
@@ -2826,9 +2830,9 @@ function wearRoad(t, u) {
   if (w >= WEAR_MAX) {
     setPave(i, j, 1);
     const P = S.players[wayOwner(t)];
-    if (P && !P.ai && wayOwner(t) === 0 && !S.paveMark[t] && S.time - (P.wornMsgAt || -1e9) > 240) {
+    if (P && !P.ai && isMe(wayOwner(t)) && !S.paveMark[t] && S.time - (P.wornMsgAt || -1e9) > 240) {
       P.wornMsgAt = S.time;
-      postMsg(0, 'Busy asphalt has worn back to plain road. Mark roads in Paths (Pave) and a Roadworks will keep them surfaced.', i, j, 'warn');
+      postMsg(ME, 'Busy asphalt has worn back to plain road. Mark roads in Paths (Pave) and a Roadworks will keep them surfaced.', i, j, 'warn');
     }
   } else if ((before / 250 | 0) !== (w / 250 | 0)) markDirty(i, j); // shows its cracks
 }
@@ -3440,8 +3444,19 @@ function destroyBuilding(b, burn, quiet) {
 
 /* ------------------------------------------------------------------ messages & effects */
 
+/*
+ * Who's who. ME is the player on this device: 0 in a single-player game; in multiplayer the lobby sets it. It decides
+ * only what's shown and heard here (messages, sounds, panels, the camera), never the rules: every device runs the same
+ * game, so anything that changes it must come out the same whoever is watching. human(p) is the rules' question
+ * (is colony p played by a person?), the same on every device.
+ */
+let ME = 0;
+function isMe(p) { return p === ME; }
+function human(p) { const P = S.players[p]; return !!P && !P.ai; }
+
+/** A message for player `player`: shown on their device only (the others' messages aren't kept here). */
 function postMsg(player, text, x, y, kind) {
-  if (player !== 0) return;
+  if (player !== ME) return;
   S.msgs.push({ text, x, y, kind: kind || 'info', t: S.time });
 }
 
@@ -3472,7 +3487,7 @@ function addDecal(kind, x, y, r, life) {
  * pocks); opts.structure: hitting a building (sparks off its plating, no marks on the ground).
  */
 function shotFx(x, y, tx, ty, opts) {
-  const o = opts || {}, a = Math.atan2(ty - y, tx - x), mx = x + Math.cos(a) * 0.32, my = y + Math.sin(a) * 0.32;
+  const o = opts || {}, a = datan2(ty - y, tx - x), mx = x + dcos(a) * 0.32, my = y + dsin(a) * 0.32;
   const busy = S.fx.length > FX_MAX;
   addFx('muzzle', mx, my, { a, color: o.pulse ? o.color : '#fff1b8', life: 0.1, pulse: !!o.pulse });
   if (!o.pulse) {
@@ -3486,7 +3501,7 @@ function shotFx(x, y, tx, ty, opts) {
     }
     if (o.structure && !busy && hash2(Math.floor(tx * 7), S.tick, 19) < 0.4) {
       const ra = hash2(S.tick, Math.floor(ty * 9), 23) * Math.PI * 2, rl = 0.6 + 0.6 * hash2(S.tick, 5, 29);
-      addFx('tracer', tx, ty, { x2: tx + Math.cos(ra) * rl, y2: ty + Math.sin(ra) * rl * 0.7, life: 0.14, t: -fly, rico: true, color: '#ffd27a' });
+      addFx('tracer', tx, ty, { x2: tx + dcos(ra) * rl, y2: ty + dsin(ra) * rl * 0.7, life: 0.14, t: -fly, rico: true, color: '#ffd27a' });
     }
   }
   const n = o.pulse ? 1 : 3;
@@ -3554,7 +3569,7 @@ function serializeGame() {
   const o = {};
   for (const k in S) {
     if (k === 'byId' || k === 'fx' || k === 'decals' || k === 'msgs' || k === 'dirtyTiles' || k === 'bAt' || k === 'zone') continue;
-    o[k] = TYPED_FIELDS[k] && S[k] ? Array.from(S[k], (v) => (k === 'grow' ? Math.round(v * 100) / 100 : v)) : S[k];
+    o[k] = TYPED_FIELDS[k] && S[k] ? Array.from(S[k]) : S[k]; // (exactly: a multiplayer game reloads a save to catch up)
   }
   o.buildings = S.buildings.filter((b) => !b.dead);
   o.bots = S.bots.filter((u) => !u.dead);
@@ -3608,7 +3623,7 @@ function deserializeGame(json) {
   // Saves from before roads were paved by workers have no planned roads.
   if (!o.plan) o.plan = new Array(o.W * o.H).fill(0);
   o.planVer = (o.planVer || 0) + 1;
-  o.paveRes = {};
+  o.paveRes = o.paveRes || {}; // (kept as saved: a loaded game must play on exactly as it was)
   for (const k in TYPED_FIELDS) o[k] = MAP_LAYERS.includes(k) && !o[k] ? null : TYPED_FIELDS[k].from(o[k]); // (a map's optional layers are null when it has none)
   o.hist = o.hist || newHistory();
   for (const P of o.players) { P.made = P.made || {}; P.madeBots = P.madeBots || {}; P.stats.outposts = P.stats.outposts || 0; P.stats.startBots = P.stats.startBots ?? 18; }
@@ -3635,7 +3650,7 @@ function deserializeGame(json) {
   computeTerritory(); // land as it's worked out now (every building holds a little round it)
   // Unit types switched off for now (BOTS_OFF) leave the game.
   const off = dropOffBots();
-  if (off) postMsg(0, `${[...BOTS_OFF].map((k) => BOTS[k].plural).join(' and ')} are switched off for now: ${off} left this game.`, undefined, undefined, 'info');
+  if (off) postMsg(ME, `${[...BOTS_OFF].map((k) => BOTS[k].plural).join(' and ')} are switched off for now: ${off} left this game.`, undefined, undefined, 'info');
   return S;
 }
 
@@ -3791,7 +3806,7 @@ function seaRoute(u, x, y) {
   if (!goals.length) return null;
   const isGoal = new Set(goals), gx = x, gy = y;
   const cost = new Float32Array(N).fill(Infinity), from = new Int32Array(N).fill(-2), heap = new MinHeap();
-  for (const s0 of starts) { cost[s0] = 0; from[s0] = -1; heap.push(s0, Math.hypot((s0 % W) - gx, ((s0 / W) | 0) - gy)); }
+  for (const s0 of starts) { cost[s0] = 0; from[s0] = -1; heap.push(s0, dhypot((s0 % W) - gx, ((s0 / W) | 0) - gy)); }
   let hit = -1;
   while (heap.size) {
     const a = heap.pop();
@@ -3805,7 +3820,7 @@ function seaRoute(u, x, y) {
       if (S.terrain[b] !== T_WATER) continue;
       if (di && dj && (S.terrain[aj * W + i] !== T_WATER || S.terrain[j * W + ai] !== T_WATER)) continue;
       const c = cost[a] + (di && dj ? 1.414 : 1);
-      if (c < cost[b]) { cost[b] = c; from[b] = a; heap.push(b, c + Math.hypot(i - gx, j - gy) * 0.9); }
+      if (c < cost[b]) { cost[b] = c; from[b] = a; heap.push(b, c + dhypot(i - gx, j - gy) * 0.9); }
     }
   }
   if (hit < 0) return null;

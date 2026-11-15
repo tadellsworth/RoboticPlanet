@@ -48,7 +48,9 @@ function step(now) {
   _lastFrame = now;
   if (S) {
     const running = UI.inGame ? !UI.paused && S.winner < 0 : true;
-    if (running) {
+    // A multiplayer game keeps time with the other players' devices (lockstep.js), paused or not.
+    if (UI.inGame && MP.on) mpFrame(dt);
+    else if (running) {
       _acc += dt * (UI.inGame ? UI.speed : 1.5) * GAME_PACE;
       let n = 0;
       while (_acc >= SIM_STEP && n < 10) { simStep(SIM_STEP); _acc -= SIM_STEP; n++; }

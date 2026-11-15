@@ -646,7 +646,7 @@ const EVAC_MARGIN = 1.5; // an evacuation clears this much beyond the blast radi
 // You (cyan), the rival (red), and in a free-for-all the green and purple rivals. Purple stands apart
 // from the other three and from every biome's ground (gold would vanish on desert, savanna and lava).
 const PLAYER_COLORS = ['#38d4ff', '#ff5a6e', '#5be06c', '#b36bff'];
-const RIVAL_NAMES = ['', 'Red', 'Green', 'Purple'];
+const RIVAL_NAMES = ['Cyan', 'Red', 'Green', 'Purple'];
 /**
  * The hidden boost menu (tap the clock three times, or press ` on a keyboard): for a game you're winning
  * too easily, or losing. Each button gives you or one rival this much, at its Command Base.
@@ -666,7 +666,7 @@ const BANNABLE = ['warbot', 'bulwark', 'torch', 'rocket', 'bomber', 'ferry'];
  * rival' (three or four). In a sentence (the = true): 'you', 'the rival', 'the Red rival', ...
  */
 function playerName(p, the) {
-  if (p === 0) return the ? 'you' : 'You';
+  if (p === (typeof ME !== 'undefined' ? ME : 0)) return the ? 'you' : 'You'; // (whoever is playing on this device)
   if (typeof S !== 'undefined' && S && S.mode === 'colony' && p === 1) return the ? 'the wildlife' : 'Wildlife';
   const three = typeof S !== 'undefined' && S && S.players && S.players.length > 2;
   const n = three ? RIVAL_NAMES[p] + ' rival' : the ? 'rival' : 'Rival';

@@ -603,7 +603,7 @@ function bakeGlow() {
   ctx.setTransform(k, 0, 0, k, 0, 0);
   ctx.hdScale = k;
   R.glowMap = { c, ctx };
-  glowTiles(0, 0, S.W - 1, S.H - 1);
+  glowTiles(ME, 0, S.W - 1, S.H - 1);
 }
 
 /** Redraw the night glow of tiles i0..i1 × j0..j1 (ground, water, and any plant's glow reaching them). */
@@ -1375,7 +1375,7 @@ function drawPaveMarks(ctx, ox, oy, z, inView) {
   const pulse = 0.75 + 0.25 * Math.sin(R.time * 3);
   ctx.lineWidth = Math.max(1.5, z * 0.05);
   for (let t = 0; t < S.W * S.H; t++) {
-    if (!(S.road[t] ? wayOwner(t) === 0 : S.plan[t] === 1)) continue;
+    if (!(S.road[t] ? wayOwner(t) === ME : S.plan[t] === 1)) continue;
     const worn = S.road[t] && S.pave[t] === 2 && S.wear[t] >= REPAVE_AT;
     if (!S.paveMark[t] && !worn) continue;
     const i = t % S.W, j = (t / S.W) | 0;
@@ -1939,10 +1939,10 @@ function drawPipes(ctx, ox, oy, z, inView) {
 /** In Paths (Pipes): which Oil Pumps reach a Refinery by pipe (green) or don't yet (orange), and the Refineries (blue). */
 function drawPipeRings(ctx, ox, oy, z, inView) {
   if (R.mode === 'road' && typeof UI !== 'undefined' && UI.roadMode === 'pipe') {
-    const joined = refineryPipes(0);
+    const joined = refineryPipes(ME);
     ctx.lineWidth = Math.max(2, z * 0.07);
     for (const b of S.buildings) {
-      if (b.dead || b.owner !== 0 || !inView(b.x, b.y, 1)) continue;
+      if (b.dead || b.owner !== ME || !inView(b.x, b.y, 1)) continue;
       const def = BDEFS[b.type];
       if (!def.pump && !def.explodes) continue;
       const ok = def.explodes || buildingPipes(b).some((c) => joined.has(c));
@@ -3857,7 +3857,7 @@ function drawBot(ctx, u, sx, sy, s) {
       ctx.fillRect(sx - c + ox, sy - s * 0.3 - c + bob + oy, c * 2, c * 2);
     }
   }
-  if (u.owner === 0 && BOTS[u.type].flame && (u.gel ?? TORCH.tank) < TORCH.tank * 0.3) {
+  if (u.owner === ME && BOTS[u.type].flame && (u.gel ?? TORCH.tank) < TORCH.tank * 0.3) {
     // Low on fuel: a short orange bar under the Torch.
     const w = s * 0.26, h = Math.max(2.5, s * 0.07), x = sx - w / 2, y = sy + s * 0.26;
     ctx.fillStyle = 'rgba(0,0,0,0.7)';
@@ -3865,7 +3865,7 @@ function drawBot(ctx, u, sx, sy, s) {
     ctx.fillStyle = '#ff8a2a';
     ctx.fillRect(x, y, (w * Math.max(0, u.gel ?? 0)) / TORCH.tank, h);
   }
-  if (u.owner === 0 && u.type === 'warbot' && (u.ammo ?? WARBOT_AMMO) < WARBOT_AMMO * 0.3) {
+  if (u.owner === ME && u.type === 'warbot' && (u.ammo ?? WARBOT_AMMO) < WARBOT_AMMO * 0.3) {
     // Low on ammo: a short brass bar under the bot (empty = grey outline only).
     const w = s * 0.26, h = Math.max(2.5, s * 0.07), x = sx - w / 2, y = sy + s * 0.26;
     ctx.fillStyle = 'rgba(0,0,0,0.7)';
@@ -3873,7 +3873,7 @@ function drawBot(ctx, u, sx, sy, s) {
     ctx.fillStyle = '#e8c39e';
     ctx.fillRect(x, y, (w * (u.ammo || 0)) / WARBOT_AMMO, h);
   }
-  if (u.owner === 0 && (u.bat ?? 100) < BATTERY.low) {
+  if (u.owner === ME && (u.bat ?? 100) < BATTERY.low) {
     // Low battery: an orange bar; emergency mode: a flashing red one.
     const crit = u.bat < BATTERY.critical;
     if (!crit || Math.sin(R.time * 10) > -0.3) {
@@ -4311,14 +4311,14 @@ function refreshOverlay(type) {
     const A = UI.ropeA;
     for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) for (let k = VIA_MIN; k <= VIA_MAX; k++) {
       const i = A.i + di * k, j = A.j + dj * k;
-      if (inMap(i, j) && !viaductBlocked(0, A.i, A.j, i, j)) valid[j * S.W + i] = 1;
+      if (inMap(i, j) && !viaductBlocked(ME, A.i, A.j, i, j)) valid[j * S.W + i] = 1;
     }
     R.overlay = { type, valid, at: R.time };
     return;
   }
   for (let j = 0; j < S.H; j++) for (let i = 0; i < S.W; i++) {
     const t = j * S.W + i;
-    if ((S.owner[t] === 0 || (S.owner[t] < 0 && inReach(0, t))) && canPlace(0, type, i, j).ok) valid[t] = 1; // (cheap test first: most of the map is out of reach)
+    if ((S.owner[t] === ME || (S.owner[t] < 0 && inReach(ME, t))) && canPlace(ME, type, i, j).ok) valid[t] = 1; // (cheap test first: most of the map is out of reach)
   }
   R.overlay = { type, valid, at: R.time };
 }
@@ -4417,7 +4417,7 @@ function render(dtReal) {
       if (!inView(i, j, 1)) continue;
       if (lightsMode) {
         // Junctions that can take a light.
-        if (!net.junc[t] || wayOwner(t) !== 0 || S.lights[t]) continue;
+        if (!net.junc[t] || wayOwner(t) !== ME || S.lights[t]) continue;
         ctx.strokeStyle = 'rgba(125,255,160,0.9)';
         ctx.lineWidth = 2;
         ctx.setLineDash([z * 0.12, z * 0.08]);
@@ -4425,7 +4425,7 @@ function render(dtReal) {
         ctx.setLineDash([]);
         continue;
       }
-      if (paveMode || S.road[t] || !canRoad(0, i, j)) continue;
+      if (paveMode || S.road[t] || !canRoad(ME, i, j)) continue;
       const cross = crossTile(t);
       // (A road dragged over water becomes a bridge, and through rock a tunnel.)
       ctx.strokeStyle = cross ? 'rgba(140,215,255,0.5)' : roadClears(t) ? 'rgba(255,170,90,0.28)' : 'rgba(255,240,200,0.18)';
@@ -4437,7 +4437,7 @@ function render(dtReal) {
   drawPlans(ctx, ox, oy, z, inView);
   if (typeof UI !== 'undefined') {
     const selB = getE(R.selected);
-    if ((R.mode === 'road' && UI.roadMode === 'pave') || (selB && selB.type === 'roadworks' && selB.owner === 0) || UI.sheetKind === 'road') drawPaveMarks(ctx, ox, oy, z, inView);
+    if ((R.mode === 'road' && UI.roadMode === 'pave') || (selB && selB.type === 'roadworks' && selB.owner === ME) || UI.sheetKind === 'road') drawPaveMarks(ctx, ox, oy, z, inView);
   }
   if (R.mode === 'road') { drawDraft(ctx, ox, oy, z, inView); drawRouteGhost(ctx, ox, oy, z); }
   drawLights(ctx, ox, oy, z, inView);
@@ -4530,10 +4530,10 @@ function render(dtReal) {
         ctx.fillStyle = e.armor / def.armor > 0.4 ? '#ffd166' : '#ff5a5a';
         ctx.fillRect(cx - w / 2, cy - z * 0.62, (w * Math.max(0, e.armor)) / def.armor, Math.max(3, z * 0.08));
       }
-      if (e.owner === 0) drawBadge(ctx, e, cx - z * 0.32, cy - z * 0.32, z);
-      if (e.owner === 0 && S.players[0].rallyPost === e.id) drawRallyMark(ctx, cx + z * 0.34, cy - z * 0.5, z);
-      if (e.owner === 0 && e.unlinked) drawNoRoad(ctx, cx + z * 0.32, cy + z * 0.3, z);
-      if (e.owner === 0 && (e.depleted || (e.type === 'pump' && pumpDry(e)))) drawDryOil(ctx, cx, cy - z * 0.55, z, e);
+      if (e.owner === ME) drawBadge(ctx, e, cx - z * 0.32, cy - z * 0.32, z);
+      if (e.owner === ME && S.players[ME].rallyPost === e.id) drawRallyMark(ctx, cx + z * 0.34, cy - z * 0.5, z);
+      if (e.owner === ME && e.unlinked) drawNoRoad(ctx, cx + z * 0.32, cy + z * 0.3, z);
+      if (e.owner === ME && (e.depleted || (e.type === 'pump' && pumpDry(e)))) drawDryOil(ctx, cx, cy - z * 0.55, z, e);
       if (e.cut) drawCutOff(ctx, cx, cy, z);
       if (e.paused) {
         ctx.fillStyle = 'rgba(0,0,0,0.65)';
@@ -4554,9 +4554,9 @@ function render(dtReal) {
         const lane = rt === 1 ? LANE_OFFSET : 0;
         jx = -Math.sin(e.rface) * lane; jy = Math.cos(e.rface) * lane;
       }
-      if (e.owner === 0 && S.groups && z >= 18) { const g = groupOf(e.id); if (g) drawGroupTag(ctx, ox + (e.x + jx) * z + z * 0.28, oy + (e.y + jy) * z - z * 0.34, z, g); }
+      if (e.owner === ME && S.groups && z >= 18) { const g = groupOf(e.id); if (g) drawGroupTag(ctx, ox + (e.x + jx) * z + z * 0.28, oy + (e.y + jy) * z - z * 0.34, z, g); }
       // Your Howitzers, zoomed out: a marker over each, so they don't get lost among the trucks.
-      if (e.owner === 0 && BOTS[e.type].siege && z < 30) drawUnitMarker(ctx, ox + (e.x + jx) * z, oy + (e.y + jy) * z - Math.max(10, z * 0.5), Math.max(5, z * 0.22), PLAYER_COLORS[0]);
+      if (e.owner === ME && BOTS[e.type].siege && z < 30) drawUnitMarker(ctx, ox + (e.x + jx) * z, oy + (e.y + jy) * z - Math.max(10, z * 0.5), Math.max(5, z * 0.22), PLAYER_COLORS[ME]);
       if (typeof UI !== 'undefined' && UI.selSet && UI.selSet.has(e.id)) {
         // Selected (desktop): a green ring on the ground under it.
         ctx.strokeStyle = 'rgba(125,255,160,0.95)';
@@ -4604,7 +4604,7 @@ function render(dtReal) {
     ctx.strokeRect(ox + E.i * z + 1, oy + E.j * z + 1, z - 2, z - 2);
   }
   if (R.ghost && R.ghost.type === 'airfield' && inMap(R.ghost.x, R.ghost.y)) {
-    const rwy = runwayDir(0, R.ghost.x, R.ghost.y);
+    const rwy = runwayDir(ME, R.ghost.x, R.ghost.y);
     if (rwy) { ctx.globalAlpha = 0.7; drawRunway(ctx, ox, oy, z, R.ghost.x, R.ghost.y, rwy, true); ctx.globalAlpha = 1; }
   }
   if (R.ghost) {
@@ -4619,7 +4619,7 @@ function render(dtReal) {
   if (sel && BDEFS[sel.type] && BDEFS[sel.type].keep) drawKeepAura(ctx, sel.x, sel.y, sel.owner, ox, oy, z);
   if (R.ghost && BDEFS[R.ghost.type] && BDEFS[R.ghost.type].keep && inMap(R.ghost.x, R.ghost.y)) drawKeepAura(ctx, R.ghost.x, R.ghost.y, 0, ox, oy, z);
   if (R.ghost && BDEFS[R.ghost.type] && BDEFS[R.ghost.type].burner) drawBoosted(ctx, R.ghost.type, R.ghost.x, R.ghost.y, 0, ox, oy, z);
-  if (R.ghost && inMap(R.ghost.x, R.ghost.y)) for (const l of feedPreview(0, R.ghost.type, R.ghost.x, R.ghost.y)) drawFeedLink(ctx, ox, oy, z, l.a[0], l.a[1], l.b[0], l.b[1], l.goods, null, true);
+  if (R.ghost && inMap(R.ghost.x, R.ghost.y)) for (const l of feedPreview(ME, R.ghost.type, R.ghost.x, R.ghost.y)) drawFeedLink(ctx, ox, oy, z, l.a[0], l.a[1], l.b[0], l.b[1], l.goods, null, true);
   if (sel) {
     ctx.strokeStyle = '#ffffff';
     ctx.lineWidth = 2;
@@ -4770,9 +4770,9 @@ function drawPlans(ctx, ox, oy, z, inView) {
       if (!inView(i, j, 1)) continue;
       const x = ox + i * z, y = oy + j * z, m = z * 0.16, owed = S.owe && S.owe[t];
       ctx.setLineDash(owed ? [z * 0.06, z * 0.12] : [z * 0.12, z * 0.09]);
-      ctx.fillStyle = p === 0 ? (owed ? 'rgba(255,170,90,0.16)' : 'rgba(200,206,214,0.32)') : 'rgba(200,206,214,0.16)';
+      ctx.fillStyle = p === ME ? (owed ? 'rgba(255,170,90,0.16)' : 'rgba(200,206,214,0.32)') : 'rgba(200,206,214,0.16)';
       ctx.fillRect(x + m, y + m, z - 2 * m, z - 2 * m);
-      ctx.strokeStyle = p === 0 ? (owed ? 'rgba(255,140,60,0.95)' : 'rgba(255,209,102,0.9)') : 'rgba(255,120,120,0.5)';
+      ctx.strokeStyle = p === ME ? (owed ? 'rgba(255,140,60,0.95)' : 'rgba(255,209,102,0.9)') : 'rgba(255,120,120,0.5)';
       ctx.strokeRect(x + m, y + m, z - 2 * m, z - 2 * m);
       const by = getE(S.paveRes[t]);
       if (by && by.task && by.task.type === 'pave' && by.task.tile === t && by.task.phase === 'work') {
@@ -4802,14 +4802,14 @@ function drawPlans(ctx, ox, oy, z, inView) {
       const i = t % S.W, j = (t / S.W) | 0;
       if (!inView(i, j, 1)) continue;
       const x = ox + i * z, y = oy + j * z;
-      ctx.fillStyle = o === 0 ? 'rgba(255,214,140,0.22)' : 'rgba(255,214,140,0.1)';
+      ctx.fillStyle = o === ME ? 'rgba(255,214,140,0.22)' : 'rgba(255,214,140,0.1)';
       ctx.fillRect(x + z * 0.12, y + z * 0.12, z * 0.76, z * 0.76);
-      ctx.strokeStyle = o === 0 ? 'rgba(255,170,90,0.95)' : 'rgba(255,120,120,0.5)';
+      ctx.strokeStyle = o === ME ? 'rgba(255,170,90,0.95)' : 'rgba(255,120,120,0.5)';
       ctx.strokeRect(x + z * 0.12, y + z * 0.12, z * 0.76, z * 0.76);
       // Ghost track along the way the line runs: two rails over three sleepers.
       const rl = (u) => u >= 0 && u < S.W * S.H && (S.rail[u] || S.railPlan[u]);
       const horiz = rl(t - 1) || rl(t + 1) || !(rl(t - S.W) || rl(t + S.W));
-      ctx.save(); ctx.setLineDash([]); ctx.strokeStyle = o === 0 ? 'rgba(255,214,140,0.85)' : 'rgba(255,214,140,0.4)';
+      ctx.save(); ctx.setLineDash([]); ctx.strokeStyle = o === ME ? 'rgba(255,214,140,0.85)' : 'rgba(255,214,140,0.4)';
       ctx.lineWidth = Math.max(1, z * 0.05);
       ctx.beginPath();
       for (const k of [0.3, 0.5, 0.7]) { if (horiz) { ctx.moveTo(x + z * k, y + z * 0.26); ctx.lineTo(x + z * k, y + z * 0.74); } else { ctx.moveTo(x + z * 0.26, y + z * k); ctx.lineTo(x + z * 0.74, y + z * k); } }
@@ -4834,7 +4834,7 @@ function drawLights(ctx, ox, oy, z, inView) {
   if (S.junPlan) for (const k in S.junPlan) {
     const t = +k, P = S.junPlan[k], i = t % S.W, j = (t / S.W) | 0;
     if (!inView(i, j, 1)) continue;
-    const x = ox + i * z, y = oy + j * z, mine = P.owner === 0;
+    const x = ox + i * z, y = oy + j * z, mine = P.owner === ME;
     ctx.save();
     ctx.lineWidth = Math.max(1.5, z * 0.05);
     ctx.setLineDash([z * 0.08, z * 0.08]);
@@ -5288,7 +5288,7 @@ function drawWorkerView(ctx, ox, oy, z) {
   ctx.save();
   ctx.lineCap = 'round';
   for (const u of S.bots) {
-    if (u.dead || u.owner !== 0 || u.type !== 'worker') continue;
+    if (u.dead || u.owner !== ME || u.type !== 'worker') continue;
     if (u.inside) { inside.set(u.inside, (inside.get(u.inside) || 0) + 1); continue; }
     const act = workerViewKind(u), col = WORKER_VIEW[act][0], x = ox + u.x * z, y = oy + u.y * z;
     const t = u.task, goal = t && (getE(t.bld) || getE(t.site) || null);
@@ -5336,7 +5336,7 @@ function drawRallyMark(ctx, x, y, z) {
   ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x, y - h); ctx.stroke();
   ctx.strokeStyle = '#e8eef6'; ctx.lineWidth = Math.max(1.2, z * 0.035);
   ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x, y - h); ctx.stroke();
-  ctx.fillStyle = PLAYER_COLORS[0]; ctx.strokeStyle = 'rgba(10,12,16,0.85)'; ctx.lineWidth = Math.max(1, z * 0.03);
+  ctx.fillStyle = PLAYER_COLORS[ME]; ctx.strokeStyle = 'rgba(10,12,16,0.85)'; ctx.lineWidth = Math.max(1, z * 0.03);
   ctx.beginPath(); ctx.moveTo(x, y - h); ctx.quadraticCurveTo(x + w * 0.5, y - h + wave - h * 0.05, x + w, y - h * 0.8 + wave);
   ctx.quadraticCurveTo(x + w * 0.5, y - h * 0.62 - wave, x, y - h * 0.58); ctx.closePath(); ctx.fill(); ctx.stroke();
   ctx.restore();
@@ -5464,7 +5464,7 @@ function drawLandingPick(ctx, ox, oy, z) {
   if (!f) return;
   for (const [spot, picked] of [[R.aimHover, false], [R.landAt, true]]) {
     if (!spot) continue;
-    const ok = !landingBlocked(0, f, spot.i, spot.j), x = ox + spot.i * z, y = oy + spot.j * z;
+    const ok = !landingBlocked(ME, f, spot.i, spot.j), x = ox + spot.i * z, y = oy + spot.j * z;
     ctx.strokeStyle = !ok ? 'rgba(255,107,107,0.9)' : picked ? '#9dffb8' : 'rgba(157,255,184,0.6)';
     ctx.lineWidth = picked ? Math.max(2.5, z * 0.08) : 2;
     ctx.setLineDash(picked ? [] : [z * 0.15, z * 0.1]);
@@ -5566,7 +5566,7 @@ function drawLoot(ctx, ox, oy, z, inView) {
 
 function drawRallies(ctx, ox, oy, z) {
   for (const r of S.rallies) {
-    if (r.owner !== 0) continue;
+    if (r.owner !== ME) continue;
     const x = ox + r.x * z, y = oy + r.y * z;
     const n = rallyMembers(r.id).length;
     const art = ART.rally;
@@ -5577,7 +5577,7 @@ function drawRallies(ctx, ox, oy, z) {
       ctx.strokeStyle = '#eef2f6'; ctx.lineWidth = Math.max(1.5, z * 0.06);
       ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x, y - z * 0.75); ctx.stroke();
       const wave = Math.sin(R.time * 5) * z * 0.04;
-      ctx.fillStyle = PLAYER_COLORS[0];
+      ctx.fillStyle = PLAYER_COLORS[ME];
       ctx.beginPath(); ctx.moveTo(x, y - z * 0.75); ctx.lineTo(x + z * 0.45, y - z * 0.62 + wave); ctx.lineTo(x, y - z * 0.48); ctx.closePath(); ctx.fill();
       ctx.fillStyle = 'rgba(0,0,0,0.35)';
       ctx.beginPath(); ctx.ellipse(x + 2, y + 2, z * 0.18, z * 0.07, 0, 0, Math.PI * 2); ctx.fill();
@@ -5636,7 +5636,7 @@ function drawMissiles(ctx, ox, oy, z) {
     ctx.fillStyle = 'rgba(0,0,0,0.3)';
     ctx.beginPath(); ctx.ellipse(gx, gy, z * 0.2, z * 0.08, 0, 0, Math.PI * 2); ctx.fill();
     // Target marker so the defender sees where it will land.
-    if (m.owner !== 0 || k > 0.5) {
+    if (m.owner !== ME || k > 0.5) {
       ctx.strokeStyle = `rgba(255,90,90,${0.5 + 0.5 * Math.sin(R.time * 12)})`; ctx.lineWidth = 2;
       ctx.beginPath(); ctx.arc(ox + m.x1 * z, oy + m.y1 * z, z * 0.7, 0, Math.PI * 2); ctx.stroke();
     }
@@ -6255,7 +6255,7 @@ function renderMinimap() {
   }
   for (const u of S.bots) {
     if (u.dead || u.inside || !isArmy(u)) continue;
-    ctx.fillStyle = u.owner === 0 ? '#bff2ff' : '#ffc2ca';
+    ctx.fillStyle = u.owner === ME ? '#bff2ff' : '#ffc2ca';
     ctx.fillRect(u.x * sx - 1, u.y * sy - 1, 2, 2);
   }
   // Uplinks: a ringed dot each, in the holder's colour (white while no one holds it; flashing while jammed).
@@ -6275,7 +6275,7 @@ function renderMinimap() {
     ctx.beginPath(); ctx.moveTo(x, y - r); ctx.lineTo(x + r * 0.9, y + r * 0.7); ctx.lineTo(x - r * 0.9, y + r * 0.7); ctx.closePath(); ctx.fill(); ctx.stroke();
   }
   if (R.workerView) for (const u of S.bots) { // the workers view: your Workers, in the colour of what they're doing
-    if (u.dead || u.inside || u.owner !== 0 || u.type !== 'worker') continue;
+    if (u.dead || u.inside || u.owner !== ME || u.type !== 'worker') continue;
     ctx.fillStyle = WORKER_VIEW[workerViewKind(u)][0];
     ctx.fillRect(u.x * sx - 1.5, u.y * sy - 1.5, 3, 3);
   }
@@ -6286,10 +6286,10 @@ function renderMinimap() {
     ctx.beginPath(); ctx.arc((b.x + 0.5) * sx, (b.y + 0.5) * sy, 4, 0, Math.PI * 2); ctx.stroke();
   }
   for (const r of S.rallies) {
-    if (r.owner !== 0) continue;
+    if (r.owner !== ME) continue;
     ctx.fillStyle = '#ffffff';
     ctx.fillRect(r.x * sx - 0.5, r.y * sy - 5, 1.5, 5);
-    ctx.fillStyle = PLAYER_COLORS[0];
+    ctx.fillStyle = PLAYER_COLORS[ME];
     ctx.fillRect(r.x * sx + 1, r.y * sy - 5, 3, 2.5);
   }
   for (const m of S.missiles) {
@@ -6584,7 +6584,7 @@ function drawAirdropPick(ctx, ox, oy, z) {
   ctx.setLineDash([]);
   for (const [spot, picked] of [[R.aimHover, false], [R.dropAt, true]]) {
     if (!spot) continue;
-    const ok = !airdropBlocked(0, u, UI.dropKind, spot.i, spot.j), x = ox + spot.i * z, y = oy + spot.j * z;
+    const ok = !airdropBlocked(ME, u, UI.dropKind, spot.i, spot.j), x = ox + spot.i * z, y = oy + spot.j * z;
     ctx.strokeStyle = ok ? 'rgba(157,255,184,0.5)' : 'rgba(255,107,107,0.5)'; ctx.lineWidth = Math.max(1.5, z * 0.04);
     ctx.setLineDash([z * 0.2, z * 0.15]);
     ctx.beginPath(); ctx.moveTo(bx, by); ctx.lineTo(x + z / 2, y + z / 2); ctx.stroke();

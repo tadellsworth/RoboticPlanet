@@ -704,13 +704,13 @@ const SIREN = { lo: 150, hi: 560, rise: 3.4, hold: 0.7, fall: 3.6, third: 1.2, l
 
 /** Are enemy Strike Bombers in the air coming for player 0 (at a target of theirs, or over their land)? */
 function raidOn() {
-  if (typeof S === 'undefined' || !S || !S.bots || !S.players[0] || S.players[0].absent) return false;
+  if (typeof S === 'undefined' || !S || !S.bots || !S.players[ME] || S.players[ME].absent) return false;
   for (const u of S.bots) {
     if (u.dead || u.owner <= 0 || u.type !== 'bomber' || !u.flight || !((u.alt || 0) > 0.05)) continue;
     const tg = u.mission && u.mission.target ? getE(u.mission.target) : null;
-    if (tg && !tg.dead && tg.owner === 0) return true;
+    if (tg && !tg.dead && tg.owner === ME) return true;
     const i = Math.floor(u.x), j = Math.floor(u.y);
-    if (inMap(i, j) && S.owner[tIdx(i, j)] === 0) return true;
+    if (inMap(i, j) && S.owner[tIdx(i, j)] === ME) return true;
   }
   return false;
 }
@@ -805,7 +805,7 @@ function audioTick(dt) {
   const on = (x, y) => x > v0.x - 1 && x < v1.x + 1 && y > v0.y - 1 && y < v1.y + 1;
   let welders = [], pavers = [], spreaders = [], moving = 0, trucks = 0;
   for (const u of S.bots) {
-    if (u.dead || u.inside || u.owner !== 0 || !on(u.x, u.y)) continue;
+    if (u.dead || u.inside || u.owner !== ME || !on(u.x, u.y)) continue;
     const t = u.task;
     if (u.path && u.moved) { moving++; if (BOTS[u.type].truck) trucks++; }
     if (t && t.type === 'build' && t.phase === 'work') welders.push(u);
@@ -935,11 +935,11 @@ function musicMood() {
   if (MUSIC.of !== S) { MUSIC.of = S; MUSIC.warUntil = 0; }
   // Under attack, raiders in your land, or your warbots in a fight: war, for at least 40 s after.
   let threat = 0;
-  for (const b of S.buildings) if (!b.dead && b.owner === 0 && S.time - (b.lastHit ?? -99) < 8) threat += 2;
+  for (const b of S.buildings) if (!b.dead && b.owner === ME && S.time - (b.lastHit ?? -99) < 8) threat += 2;
   for (const u of S.bots) {
     if (u.dead || u.inside || !isArmy(u)) continue;
-    if (u.owner !== 0 && S.owner[Math.floor(u.y) * S.W + Math.floor(u.x)] === 0) threat++;
-    else if (u.owner === 0 && u.fight) threat++;
+    if (u.owner !== ME && S.owner[Math.floor(u.y) * S.W + Math.floor(u.x)] === ME) threat++;
+    else if (u.owner === ME && u.fight) threat++;
   }
   if (threat >= 3) MUSIC.warUntil = S.time + 40;
   return S.time < MUSIC.warUntil ? 'war' : BUILD_THEMES[Math.floor(S.time / MUSIC_ROTATE) % BUILD_THEMES.length];
