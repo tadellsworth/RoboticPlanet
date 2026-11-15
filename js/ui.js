@@ -5211,12 +5211,12 @@ function updateHUD() {
   const ct = tod + (S.mode === 'colony' ? `${Math.round(landShare(0) * 100)}% land` : fmtTime(S.time));
   if ($('clock').innerHTML !== ct) $('clock').innerHTML = ct;
   $('clock').title = todEnabled() ? TOD_NAMES[todName()] + (todMode() === 'night' ? ' (always)' : '') : '';
+  updateWinCard(); // (first: folded under the Goal chip, it leaves a summary there)
   const obj = $('objective');
-  obj.innerHTML = UI.objCollapsed && !S.mission ? 'Goal ▸' : objectiveText();
+  obj.innerHTML = UI.objCollapsed && !S.mission ? 'Goal ▸' + (UI.winMini || '') : objectiveText();
   obj.classList.toggle('small', UI.objCollapsed);
   updateEventCard();
   updateNukeCard();
-  updateWinCard();
   if (UI.sheetKind === 'build') {
     // keep build-menu affordability current without rebuilding the buttons
     for (const el of $('sheet-body').querySelectorAll('.bcard[data-t]')) {
@@ -5271,6 +5271,7 @@ function updateEventCard() {
  * to look at the leader's Command Base.
  */
 function updateWinCard() {
+  UI.winMini = '';
   if (S.victory === 'uplinks') { updateUplinkCard(); return; }
   const el = $('win-card'), D = S.victory === 'domination' ? S.dom : null;
   if (!D || !D.held || S.winner >= 0) { el.hidden = true; return; }
@@ -5293,7 +5294,9 @@ function updateWinCard() {
   el.querySelector('.ev-time').textContent = D.lead >= 0 ? clock : '';
   el.querySelector('.win-rows').innerHTML = live.map((P) => `<span class="wn">${playerName(P.id)}</span><span class="win-bar" style="--c:${PLAYER_COLORS[P.id]}"><i style="width:${(pct(P.id) * 100).toFixed(1)}%"></i><b style="left:${share * 100}%"></b></span><span class="wp">${Math.round(pct(P.id) * 100)}%</span>`).join('');
   el.querySelector('.win-note').textContent = `${Math.round((D.held / Math.max(1, D.ground)) * 100)}% of the planet is held: hold ${Math.round(share * 100)}% of that (and ${Math.round(DOM.min * 100)}% of the planet) for ${DOM.hold / 60} minutes to win.`;
-  el.hidden = false;
+  // Folded under the Goal chip (tap it): the card hides, and the chip shows your share (and the count, if one runs).
+  UI.winMini = ` <span class="win-mini"><i style="background:${PLAYER_COLORS[0]}"></i>${Math.round(pct(0) * 100)}%${D.lead >= 0 ? ` <i style="background:${col}"></i>${clock}` : ''}</span>`;
+  el.hidden = !!UI.objCollapsed;
 }
 
 /**
@@ -5321,7 +5324,10 @@ function updateUplinkCard() {
   el.querySelector('.win-rows').innerHTML = live.map((P) => `<span class="wn">${playerName(P.id)}</span><span class="win-bar" style="--c:${PLAYER_COLORS[P.id]}"><i style="width:${Math.min(100, ((clock[P.id] || 0) / UPLINK.hold) * 100).toFixed(1)}%"></i></span><span class="wp">${fmtClock(UPLINK.hold - (clock[P.id] || 0))}</span>`).join('');
   el.querySelector('.win-note').textContent = pre ? `Claim them now: an Uplink is yours while your land covers it. Once they're online, hold ${uplinkGoal()} and your clock runs; ${UPLINK.hold / 60} minutes in all wins. Tap to look at each.`
     : `Bars: time held so far, of ${UPLINK.hold / 60} minutes. An Uplink is yours while your land covers it; enemy warbots beside it jam it. Tap to look at each.`;
-  el.hidden = false;
+  // Folded under the Goal chip (tap it): the card hides, and the chip shows a dot per Uplink and the time.
+  UI.winMini = ` <span class="win-mini">${U.map((u) => `<i class="${u.owner < 0 && !u.jam ? 'free' : ''}" style="background:${u.jam ? '#ff4030' : u.owner >= 0 ? PLAYER_COLORS[u.owner] : 'transparent'}"></i>`).join('')}` +
+    `${pre ? ' ' + fmtClock(UPLINK.online - S.time) : lead >= 0 ? ' ' + fmtClock(UPLINK.hold - clock[lead]) : ''}</span>`;
+  el.hidden = !!UI.objCollapsed;
 }
 
 /**
