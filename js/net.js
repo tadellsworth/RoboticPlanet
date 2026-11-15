@@ -162,7 +162,7 @@ function netIn(text) {
       return;
     case 'start':
       NET.state = 'game'; NET.started = true; NET.startMsg = m;
-      NET.me = m.players.findIndex((p) => p.seat === NET.seat);
+      NET.me = m.players.findIndex((p) => p && p.seat === NET.seat);
       netRemember(true);
       if (NET.onStart) NET.onStart(m);
       return;

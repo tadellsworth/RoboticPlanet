@@ -916,9 +916,9 @@ function playerGoods(p) {
 function nearestEnemyBot(owner, x, y, range, preferWar, ownLand, land) {
   let best = null, bd = range * range, bestWar = null, bwd = range * range;
   for (const u of S.bots) {
-    if (u.dead || u.owner === owner || u.inside || u.dropping || BOTS[u.type].air) continue; // nothing shoots aircraft yet
+    if (u.dead || !foes(u.owner, owner) || u.inside || u.dropping || BOTS[u.type].air) continue; // nothing shoots aircraft yet
     if (land && BOTS[u.type].sea) continue; // warbots can't go after ships (guns on the shore can)
-    if (ownLand && !isArmy(u) && S.owner[tIdx(Math.floor(u.x), Math.floor(u.y))] !== owner) continue;
+    if (ownLand && !isArmy(u) && foes(S.owner[tIdx(Math.floor(u.x), Math.floor(u.y))], owner)) continue;
     const d = dist2(u.x, u.y, x, y);
     if (d <= bd) { bd = d; best = u; }
     if (preferWar && (isArmy(u) || BOTS[u.type].wild) && d <= bwd) { bwd = d; bestWar = u; }
@@ -2035,7 +2035,7 @@ function resumeAfterRepair(u) {
   const r = u.resume;
   u.resume = null; u.retreat = false;
   if (!r || !isArmy(u) || !botArmed(u)) return;
-  if (r.type === 'attack') { const b = getE(r.target); if (b && !b.dead && b.owner !== u.owner) u.task = { type: 'attack', target: r.target }; }
+  if (r.type === 'attack') { const b = getE(r.target); if (b && !b.dead && foes(b.owner, u.owner)) u.task = { type: 'attack', target: r.target }; }
   else if (r.type === 'hold' && rallyById(r.rally)) u.task = { type: 'hold', rally: r.rally, slot: r.slot };
 }
 
@@ -3581,7 +3581,7 @@ function updateDisruptor(b, def, dt) {
   b.cd = (b.cd || 0) - dt;
   if (b.cd > 0) return;
   const cx = b.x + 0.5, cy = b.y + 0.5, rr = def.range + auraRange(b), r2 = rr * rr;
-  const hit = S.bots.filter((u) => !u.dead && !u.inside && u.owner !== b.owner && !BOTS[u.type].wild && !BOTS[u.type].rail && dist2(u.x, u.y, cx, cy) <= r2);
+  const hit = S.bots.filter((u) => !u.dead && !u.inside && foes(u.owner, b.owner) && !BOTS[u.type].wild && !BOTS[u.type].rail && dist2(u.x, u.y, cx, cy) <= r2);
   if (!hit.length) { b.status = (b.pulses || 0) + (b.stock.fuel || 0) > 0 ? 'Watching for enemy robots' : 'No Fuel: a Tanker brings it from storage'; b.cd = 0.5; return; }
   if (!(b.pulses > 0)) {
     if (!((b.stock.fuel || 0) > 0)) { b.status = 'No Fuel to pulse with: a Tanker brings it from storage'; b.cd = 1; return; }
@@ -3615,13 +3615,13 @@ function updateMortar(b, def, dt) {
   b.cd = (b.cd || 0) - dt;
   if (b.cd > 0) return;
   const cx = b.x + 0.5, cy = b.y + 0.5, rr = def.range + auraRange(b), r2 = rr * rr, min2 = def.minRange * def.minRange, s2 = m.splash * m.splash;
-  const foes = S.bots.filter((u) => !u.dead && !u.inside && u.owner !== b.owner && !BOTS[u.type].rail);
+  const near = S.bots.filter((u) => !u.dead && !u.inside && foes(u.owner, b.owner) && !BOTS[u.type].rail);
   let best = null, bs = 0;
-  for (const u of foes) {
+  for (const u of near) {
     const d = dist2(u.x, u.y, cx, cy);
     if (d > r2 || d < min2) continue;
     let s = 0;
-    for (const v of foes) if (dist2(u.x, u.y, v.x, v.y) <= s2) s += isArmy(v) ? 2 : 1;
+    for (const v of near) if (dist2(u.x, u.y, v.x, v.y) <= s2) s += isArmy(v) ? 2 : 1;
     if (s > bs) { bs = s; best = u; }
   }
   if (!best) { b.status = (b.shells || 0) + (b.stock.ammo || 0) > 0 ? 'Watching for targets (3 to 10 tiles out)' : 'No Ammo: haulers bring it from storage'; b.cd = 0.5; return; }
@@ -3653,7 +3653,7 @@ function shellImpact(m) {
   sfx('shellhit', m.x1, m.y1);
   const hit = [];
   for (const u of S.bots) {
-    if (u.dead || u.inside || u.owner === m.owner) continue;
+    if (u.dead || u.inside || !foes(u.owner, m.owner)) continue;
     const d2 = dist2(u.x, u.y, m.x1, m.y1);
     if (d2 <= md.splash * md.splash) hit.push([d2, u]);
   }
@@ -3675,7 +3675,7 @@ function garrisonDefense(b, dt) {
   let threats = 0, out = 0;
   for (const u of S.bots) {
     if (u.dead || u.inside) continue;
-    if (u.owner !== b.owner) {
+    if (foes(u.owner, b.owner)) {
       if ((isArmy(u) || BOTS[u.type].wild) && dist2(u.x, u.y, cx, cy) < 42) threats++;
     } else if (u.task && u.task.type === 'defend' && u.task.home === b.id) out++;
   }
@@ -3843,12 +3843,12 @@ function bulwarkTick(u, dt) {
     if (!th || th.dead) {
       th = null;
       for (const v of S.bots) {
-        if (v.dead || v.inside || v.owner === u.owner || v.owner < 0 || !isArmy(v) || !botArmed(v)) continue;
+        if (v.dead || v.inside || !foes(v.owner, u.owner) || v.owner < 0 || !isArmy(v) || !botArmed(v)) continue;
         const d = dist2(v.x, v.y, u.x, u.y);
         if (d < bd) { bd = d; th = v; }
       }
       for (const b of S.buildings) {
-        if (b.dead || !b.built || b.owner === u.owner || b.owner < 0) continue;
+        if (b.dead || !b.built || !foes(b.owner, u.owner) || b.owner < 0) continue;
         const def = BDEFS[b.type];
         if (!(def.gun || def.minigun || def.bunker || def.keep || b.type === 'turret')) continue;
         const d = dist2(b.x + 0.5, b.y + 0.5, u.x, u.y);
@@ -3878,7 +3878,7 @@ function torchFire(u, tx, ty, power, bld) {
   u.face = ang; u.flameT = S.time;
   u.fought = 1;
   for (const v of S.bots) {
-    if (v.dead || v.inside || v.owner === u.owner || v.dropping || (BOTS[v.type].air && v.flight)) continue;
+    if (v.dead || v.inside || !foes(v.owner, u.owner) || v.dropping || (BOTS[v.type].air && v.flight)) continue;
     const dx = v.x - u.x, dy = v.y - u.y, d = dhypot(dx, dy);
     if (d > R || d < 0.05 || (dx * ca + dy * sa) / d < c) continue;
     damageBot(v, TORCH.bot * power, u.x, u.y);
@@ -3961,7 +3961,7 @@ function hitBuilding(b, dmg, by) {
   dmg = keepShield(b, dmg);
   b.armor -= dmg;
   b.lastHit = S.time;
-  if (by >= 0 && by !== b.owner) (S.players[b.owner].hitBy = S.players[b.owner].hitBy || {})[by] = S.time; // remembered: see rivalOf
+  if (by >= 0 && foes(by, b.owner)) (S.players[b.owner].hitBy = S.players[b.owner].hitBy || {})[by] = S.time; // remembered: see rivalOf
   if (S.time - b.lastAlert > 12) {
     b.lastAlert = S.time;
     postMsg(b.owner, `Enemy warbots are attacking your ${BDEFS[b.type].name}!`, b.x, b.y, 'bad');
@@ -4140,9 +4140,9 @@ function unclaimCrate(l, g, n) {
 
 /** Is anything hostile to player p about: an enemy robot within r tiles of (x, y), or an enemy gun in range of it? */
 function foesNear(p, x, y, r) {
-  for (const u of S.bots) if (!u.dead && !u.inside && u.owner !== p && dist2(u.x, u.y, x, y) <= r * r) return true;
+  for (const u of S.bots) if (!u.dead && !u.inside && foes(u.owner, p) && dist2(u.x, u.y, x, y) <= r * r) return true;
   for (const b of S.buildings) {
-    if (b.dead || !b.built || b.owner === p || !BDEFS[b.type].range) continue;
+    if (b.dead || !b.built || !foes(b.owner, p) || !BDEFS[b.type].range) continue;
     const rr = BDEFS[b.type].range + 1;
     if (dist2(b.x + 0.5, b.y + 0.5, x, y) <= rr * rr) return true;
   }
@@ -4196,7 +4196,7 @@ function updateDanger() {
     if (!r) continue;
     const R = r + DANGER_PAD, R2 = R * R, cx = b.x + 0.5, cy = b.y + 0.5;
     for (let p = 0; p < n; p++) {
-      if (p === b.owner || (S.wildlife && p === WILD_OWNER)) continue;
+      if (!foes(p, b.owner) || (S.wildlife && p === WILD_OWNER)) continue;
       DANGER.guns[p].push({ b, r: R });
       const m = DANGER.maps[p];
       for (let j = Math.max(0, Math.floor(cy - R)); j <= Math.min(H - 1, Math.floor(cy + R)); j++)
@@ -4219,7 +4219,7 @@ function updateDanger() {
     const spots = dist2(lx, ly, v.x, v.y) > 0.25 ? [[v.x, v.y], [lx, ly]] : [[v.x, v.y]];
     const R2 = R * R;
     for (let p = 0; p < n; p++) {
-      if (p === v.owner || (S.wildlife && p === WILD_OWNER)) continue;
+      if (!foes(p, v.owner) || (S.wildlife && p === WILD_OWNER)) continue;
       const m = DANGER.maps[p];
       for (const [cx, cy] of spots)
         for (let j = Math.max(0, Math.floor(cy - R)); j <= Math.min(H - 1, Math.floor(cy + R)); j++)
@@ -4388,9 +4388,9 @@ function fleeingTowards(u) {
 
 /** How far tile t (or point x, y) is from the nearest of the enemy warbots within 20 tiles of bot u that it keeps clear of. */
 function foeDistFn(u) {
-  const foes = [];
-  for (const v of S.bots) if (v.owner !== u.owner && foeReach(v) && dist2(v.x, v.y, u.x, u.y) < 400) foes.push(v);
-  return (x, y) => { let d = Infinity; for (const v of foes) d = Math.min(d, dhypot(v.x - x, v.y - y)); return d; };
+  const near = [];
+  for (const v of S.bots) if (foes(v.owner, u.owner) && foeReach(v) && dist2(v.x, v.y, u.x, u.y) < 400) near.push(v);
+  return (x, y) => { let d = Infinity; for (const v of near) d = Math.min(d, dhypot(v.x - x, v.y - y)); return d; };
 }
 
 /** Bot u, caught near enemy warbots: off into storage of its owner's close by (by a way that never goes nearer them). True if it's on its way. */
@@ -4450,7 +4450,7 @@ function escapeSpot(u) {
 function nearestFoe(u) {
   let best = null, bd = Infinity;
   for (const v of S.bots) {
-    if (v.owner === u.owner || !foeReach(v)) continue;
+    if (!foes(v.owner, u.owner) || !foeReach(v)) continue;
     const d = dist2(v.x, v.y, u.x, u.y);
     if (d < bd) { bd = d; best = v; }
   }
@@ -4685,7 +4685,8 @@ function eliminate(old, by, how) {
     else if (!isMe(by)) postMsg(ME, `The ${playerName(by)} captured ${playerName(old, true)}'s Command Base and took over everything it had.`, x, y, 'warn');
   }
   const left = S.players.filter((Q) => !Q.absent && !Q.out);
-  if (left.length === 1) { S.winner = left[0].id; S.endHow = how || 'capture'; }
+  // The last colony (or team) standing has won; S.winner is one of them (with teams, see teamOf).
+  if (new Set(left.map((Q) => teamOf(Q.id))).size === 1) { S.winner = left[0].id; S.endHow = how || 'capture'; }
   // The last colony people play is gone (you, in a game against the computer): it's over. (A game with nobody's
   // colony in it, the menu's backdrop, ends when the first colony falls.)
   else if (S.players.some((Q) => !Q.ai) ? !left.some((Q) => !Q.ai) : old === 0) { S.winner = by; S.endHow = how || 'capture'; }
@@ -4729,7 +4730,7 @@ function beatenBy(P, live, n) {
   for (const id in P.hitBy || {}) { const Q = S.players[+id]; if (Q && Q !== P && !Q.out && !Q.absent && P.hitBy[id] > last) { last = P.hitBy[id]; by = +id; } }
   if (by >= 0) return by;
   let best = -1;
-  for (const Q of live) if (Q !== P && n[Q.id].b + 2 * n[Q.id].wb > best) { best = n[Q.id].b + 2 * n[Q.id].wb; by = Q.id; }
+  for (const Q of live) if (foes(Q.id, P.id) && n[Q.id].b + 2 * n[Q.id].wb > best) { best = n[Q.id].b + 2 * n[Q.id].wb; by = Q.id; }
   return by;
 }
 
@@ -4789,6 +4790,7 @@ function updateDomination() {
  */
 function rivalOf(p) {
   if (S.players.length === 2) return 1 - p;
+  const enemy = (q) => foes(q, p);
   // Domination: a colony about to win on land is everyone's rival (Uplinks: one whose clock is running).
   if (S.victory === 'domination' && S.dom && S.dom.lead >= 0 && S.dom.lead !== p && !S.players[S.dom.lead].out) return S.dom.lead;
   if (S.victory === 'uplinks' && (S.upLead ?? -1) >= 0 && S.upLead !== p && !S.players[S.upLead].out) return S.upLead;
@@ -4800,7 +4802,7 @@ function rivalOf(p) {
   const mine = army(p);
   let best = -1, bs = Infinity;
   for (const Q of S.players) {
-    if (Q.id === p || Q.absent || Q.out) continue;
+    if (!enemy(Q.id) || Q.absent || Q.out) continue;
     const E = getE(Q.lander);
     let s = L && E ? dist(L.x, L.y, E.x, E.y) : 1;
     s *= 0.8 + 0.4 * hash2(p * 7 + Q.id, Math.floor(S.time / 300), S.seed);
@@ -4810,7 +4812,7 @@ function rivalOf(p) {
     if (theirs <= 3 && mine >= 10) s *= 0.45; // all but defenceless: finish it off and take everything it has
     if (s < bs) { bs = s; best = Q.id; }
   }
-  if (best < 0) return p === 0 ? 1 : 0;
+  if (best < 0) { const Q = S.players.find((R) => enemy(R.id) && !R.absent); return Q ? Q.id : p === 0 ? 1 : 0; }
   P.rival = best;
   P.rivalUntil = S.time + 90;
   return best;
@@ -4863,7 +4865,7 @@ function updateWarbot(u, dt) {
   let d = (u.moved ? BATTERY.warbotMove : 0) + (u.fought ? BATTERY.warbotFight : 0);
   // Loitering in enemy land wears the battery down (see BATTERY.warbotWait).
   const o = S.owner[tIdx(Math.floor(u.x), Math.floor(u.y))];
-  if (!u.moved && !u.fought && o >= 0 && o !== u.owner) {
+  if (!u.moved && !u.fought && o >= 0 && foes(o, u.owner)) {
     u.waitT = (u.waitT || 0) + dt;
     if (u.waitT > BATTERY.waitGrace) d += BATTERY.warbotWait;
   } else u.waitT = 0;
@@ -4887,7 +4889,7 @@ function warbotAct(u, dt) {
   // Battery all but flat out in enemy land with nothing to shoot at: give up the attack and go home to recharge.
   if ((u.bat ?? 100) < BATTERY.critical && t && t.type === 'attack' && !u.fight) {
     const o = S.owner[tIdx(Math.floor(u.x), Math.floor(u.y))];
-    if (o >= 0 && o !== u.owner) { cancelTask(u); u.path = null; return; }
+    if (o >= 0 && foes(o, u.owner)) { cancelTask(u); u.path = null; return; }
   }
   // Badly hurt on an attack, a rally flag or a sortie: pull out to the nearest Repair Station that can
   // fix it (when there is one; otherwise fight on), taking no new fights on the way, and go back to the
@@ -5033,7 +5035,7 @@ function warbotAct(u, dt) {
     }
   } else if (t.type === 'attack') {
     const b = getE(t.target);
-    if (!b || b.owner === u.owner) {
+    if (!b || !foes(b.owner, u.owner)) {
       // Target taken. Hold a captured military building, otherwise carry off a crate of what was
       // inside, or press on to the next enemy building close by before heading home.
       u.task = null;
@@ -5045,7 +5047,7 @@ function warbotAct(u, dt) {
       }
       let next = null, nd = 20;
       for (const e of S.buildings) {
-        if (e.dead || e.owner === u.owner) continue;
+        if (e.dead || !foes(e.owner, u.owner)) continue;
         const d = dist2(e.x + 0.5, e.y + 0.5, u.x, u.y);
         if (d < nd) { nd = d; next = e; }
       }
@@ -5299,7 +5301,7 @@ function spareArmed(b, posted, all) {
 
 /** A garrison far behind the lines (no rival building within 18 tiles): it can send its last warbot. */
 function rearGarrison(b) {
-  for (const e of S.buildings) if (!e.dead && e.owner !== b.owner && e.owner >= 0 && dist2(e.x, e.y, b.x, b.y) < 18 * 18) return false;
+  for (const e of S.buildings) if (!e.dead && foes(e.owner, b.owner) && e.owner >= 0 && dist2(e.x, e.y, b.x, b.y) < 18 * 18) return false;
   return true;
 }
 /** Warbots garrison b can send out: every armed one from the rear (with `rear`), else all but one. */
@@ -5334,7 +5336,7 @@ function ammoNear(u) {
 /* ------------------------------------------------------------------ the Howitzer */
 
 /** Can Howitzer u fire at building b (a rival's, standing)? */
-function rocketTarget(u, b) { return b && !b.dead && b.owner >= 0 && b.owner !== u.owner && !BDEFS[b.type].wild && S.players[b.owner] && !S.players[b.owner].out; }
+function rocketTarget(u, b) { return b && !b.dead && b.owner >= 0 && foes(b.owner, u.owner) && !BDEFS[b.type].wild && S.players[b.owner] && !S.players[b.owner].out; }
 
 /** An enemy building in reach of a parked, loaded Howitzer: forts and guns first, then the nearest. */
 function rocketTargetNear(u) {
@@ -5635,16 +5637,16 @@ function rocketImpact(m) {
   blastFx(m.x1, m.y1, 0.85);
   sfx('howitzerhit', m.x1, m.y1);
   const b = getE(m.target);
-  if (b && !b.dead && b.owner >= 0 && b.owner !== m.owner) (S.players[b.owner].shelledBy = S.players[b.owner].shelledBy || {})[m.from] = S.time; // (the AI hunts it down: aiSiege)
-  const direct = !!(b && !b.dead && b.owner !== m.owner && Math.floor(m.x1) === b.x && Math.floor(m.y1) === b.y);
+  if (b && !b.dead && b.owner >= 0 && foes(b.owner, m.owner)) (S.players[b.owner].shelledBy = S.players[b.owner].shelledBy || {})[m.from] = S.time; // (the AI hunts it down: aiSiege)
+  const direct = !!(b && !b.dead && foes(b.owner, m.owner) && Math.floor(m.x1) === b.x && Math.floor(m.y1) === b.y);
   if (direct) rocketHit(b, ROCKET.damage * (rocketFort(b) ? ROCKET.fortMul : 1), m.owner);
   // Splash on what's round it (the target too, on a near miss: a defence takes fortMul of it there as well).
   const s2 = ROCKET.splash * ROCKET.splash;
   for (const e of S.buildings.slice()) {
-    if ((e === b && direct) || e.dead || e.owner === m.owner || e.owner < 0 || BDEFS[e.type].wild || dist2(e.x + 0.5, e.y + 0.5, m.x1, m.y1) > s2) continue;
+    if ((e === b && direct) || e.dead || !foes(e.owner, m.owner) || e.owner < 0 || BDEFS[e.type].wild || dist2(e.x + 0.5, e.y + 0.5, m.x1, m.y1) > s2) continue;
     rocketHit(e, ROCKET.splashBld * (e === b && rocketFort(e) ? ROCKET.fortMul : 1), m.owner);
   }
-  for (const u of S.bots) if (!u.dead && !u.inside && u.owner !== m.owner && !BOTS[u.type].wild && dist2(u.x, u.y, m.x1, m.y1) <= s2) damageBot(u, ROCKET.botDamage);
+  for (const u of S.bots) if (!u.dead && !u.inside && foes(u.owner, m.owner) && !BOTS[u.type].wild && dist2(u.x, u.y, m.x1, m.y1) <= s2) damageBot(u, ROCKET.botDamage);
 }
 
 function rocketHit(b, dmg, by) {
@@ -5730,7 +5732,7 @@ function holdRally(u, t, r, dt, power) {
     if (!home) {
       // Nowhere to recharge: a flat warbot in enemy land gives up the flag and goes back to a garrison.
       const o = S.owner[tIdx(Math.floor(u.x), Math.floor(u.y))];
-      if (!t.forAmmo && o >= 0 && o !== u.owner) { cancelTask(u); u.path = null; return; }
+      if (!t.forAmmo && o >= 0 && foes(o, u.owner)) { cancelTask(u); u.path = null; return; }
       t.phase = null;
       return;
     }
@@ -5752,7 +5754,7 @@ function holdRally(u, t, r, dt, power) {
   if (dist2(u.x, u.y, r.x, r.y) > 9 && escortWait(u, r.x, r.y, { rally: r.id })) { u.path = null; u.vel = 0; spreadOut(u, dt); return; }
   let tgt = t.target ? getE(t.target) : null;
   if (!botArmed(u) || (r.raid && raidRoadsLeft(r, u.owner))) tgt = null; // raiders cut the road first
-  else if (!tgt || tgt.owner === u.owner || dist2(tgt.x + 0.5, tgt.y + 0.5, r.x, r.y) > 10) {
+  else if (!tgt || !foes(tgt.owner, u.owner) || dist2(tgt.x + 0.5, tgt.y + 0.5, r.x, r.y) > 10) {
     tgt = null;
     t.target = 0;
     u.scanT2 = (u.scanT2 || 0) - dt;
@@ -5760,7 +5762,7 @@ function holdRally(u, t, r, dt, power) {
       u.scanT2 = 0.5;
       let bd = 10;
       for (const e of S.buildings) {
-        if (e.dead || e.owner === u.owner) continue;
+        if (e.dead || !foes(e.owner, u.owner)) continue;
         const d = dist2(e.x + 0.5, e.y + 0.5, r.x, r.y);
         if (d < bd) { bd = d; tgt = e; }
       }
@@ -5795,8 +5797,8 @@ function raidRoadsLeft(r, owner) {
     const i = ri + di, j = rj + dj;
     if (!inMap(i, j) || di * di + dj * dj > SABOTAGE_RANGE * SABOTAGE_RANGE + 0.01) continue;
     const t = tIdx(i, j);
-    if (S.road[t] && !crossTile(t) && wayOwner(t) >= 0 && wayOwner(t) !== owner) { r.roadsLeft = true; break; }
-    if (S.pipe[t] && S.pipe[t] !== owner + 1) { r.roadsLeft = true; break; }
+    if (S.road[t] && !crossTile(t) && wayOwner(t) >= 0 && foes(wayOwner(t), owner)) { r.roadsLeft = true; break; }
+    if (S.pipe[t] && foes(S.pipe[t] - 1, owner)) { r.roadsLeft = true; break; }
   }
   return r.roadsLeft;
 }
@@ -5807,7 +5809,7 @@ function sabotageRoads(u, r, dt) {
   if (!inMap(ri, rj)) return;
   r.sab = (r.sab || 0) + dt;
   if (r.sab < SABOTAGE_WORK) return;
-  const foe = (o) => o >= 0 && o !== u.owner;
+  const foe = (o) => o >= 0 && foes(o, u.owner);
   let best = -1, bd = SABOTAGE_RANGE * SABOTAGE_RANGE + 0.01;
   const R0 = Math.ceil(SABOTAGE_RANGE);
   for (let dj = -R0; dj <= R0; dj++) for (let di = -R0; di <= R0; di++) {
@@ -5919,7 +5921,7 @@ function followRallies() {
   for (const r of S.rallies.slice()) {
     if (!r.follow) continue;
     const e = getE(r.follow);
-    if (!e || e.dead || e.owner === r.owner) {
+    if (!e || e.dead || !foes(e.owner, r.owner)) {
       const n = recallRally(r.id);
       if (n) postMsg(r.owner, `Target destroyed: ${n} warbot${n > 1 ? 's are' : ' is'} coming back.`, Math.floor(r.x), Math.floor(r.y), 'good');
       continue;
@@ -5972,7 +5974,7 @@ function orderMove(owner, ids, i, j) {
 
 /** Send selected warbots after an enemy robot (a flag that follows it: see followRallies). Only armed ones go. */
 function orderHunt(owner, ids, e) {
-  if (!e || e.dead || e.owner === owner) return 0;
+  if (!e || e.dead || !foes(e.owner, owner)) return 0;
   const i = Math.floor(e.x), j = Math.floor(e.y), r0 = S.rallies.length;
   const n = orderMove(owner, ids, i, j);
   if (!n) return 0;
@@ -6007,7 +6009,7 @@ function orderRepair(owner, ids, b) {
 
 /** Send selected warbots to attack an enemy building. Only armed ones go. */
 function orderAttack(owner, ids, target) {
-  if (!target || target.dead || target.owner === owner) return 0;
+  if (!target || target.dead || !foes(target.owner, owner)) return 0;
   const bots = orderable(owner, ids).filter((u) => botArmed(u));
   for (const u of bots) { readyForOrder(u); u.task = { type: 'attack', target: target.id }; }
   return bots.length;
@@ -6180,9 +6182,9 @@ function fireMissile(owner, target) {
 function missileTargetAt(owner, i, j) {
   if (!inMap(i, j)) return null;
   const b = getE(S.bAt[tIdx(i, j)]);
-  if (b && !b.dead && b.owner !== owner) return b;
+  if (b && !b.dead && foes(b.owner, owner)) return b;
   for (const e of S.buildings) {
-    if (!e.dead && e.owner !== owner && e.type === 'lander' && Math.abs(e.x - i) <= 1 && Math.abs(e.y - j) <= 1) return e;
+    if (!e.dead && foes(e.owner, owner) && e.type === 'lander' && Math.abs(e.x - i) <= 1 && Math.abs(e.y - j) <= 1) return e;
   }
   return null;
 }
@@ -6217,7 +6219,7 @@ function fireMissileAt(silo, i, j) {
   addFx('ring', silo.x + 0.5, silo.y + 0.5, { color: '#ffcf4a', r: 1.2 });
   sfx('launch');
   if (target) postMsg(target.owner, `Incoming missile! It is heading for your ${BDEFS[target.type].name}.`, target.x, target.y, 'bad');
-  else if (S.owner[tIdx(tx, ty)] >= 0 && S.owner[tIdx(tx, ty)] !== owner) postMsg(S.owner[tIdx(tx, ty)], 'Incoming missile!', tx, ty, 'bad');
+  else if (S.owner[tIdx(tx, ty)] >= 0 && foes(S.owner[tIdx(tx, ty)], owner)) postMsg(S.owner[tIdx(tx, ty)], 'Incoming missile!', tx, ty, 'bad');
   return true;
 }
 
@@ -6280,7 +6282,7 @@ function missileImpact(m) {
   blastFx(m.x1, m.y1, 2.2);
   sfx('missilehit', m.x1, m.y1);
   const b = getE(m.target);
-  if (b && !b.dead && b.owner !== m.owner) {
+  if (b && !b.dead && foes(b.owner, m.owner)) {
     const name = BDEFS[b.type].name;
     b.armor -= keepShield(b, md.damage);
     b.lastHit = S.time;
@@ -6296,7 +6298,7 @@ function missileImpact(m) {
     }
   }
   for (const e of S.buildings.slice()) {
-    if (e === b || e.dead || e.owner === m.owner || dist2(e.x + 0.5, e.y + 0.5, m.x1, m.y1) > md.splash * md.splash) continue;
+    if (e === b || e.dead || !foes(e.owner, m.owner) || dist2(e.x + 0.5, e.y + 0.5, m.x1, m.y1) > md.splash * md.splash) continue;
     e.armor -= keepShield(e, md.splashDamage);
     e.lastHit = S.time;
     if (e.armor <= 0 && !captureOnly(e)) {
@@ -6305,7 +6307,7 @@ function missileImpact(m) {
     } else if (captureOnly(e) && e.armor < missileFloor(e)) e.armor = Math.min(missileFloor(e), e.armor + md.splashDamage);
   }
   for (const u of S.bots) {
-    if (!u.dead && !u.inside && u.owner !== m.owner && dist2(u.x, u.y, m.x1, m.y1) <= md.splash * md.splash) damageBot(u, md.botDamage);
+    if (!u.dead && !u.inside && foes(u.owner, m.owner) && dist2(u.x, u.y, m.x1, m.y1) <= md.splash * md.splash) damageBot(u, md.botDamage);
   }
   // The blast craters the roads around it.
   const ci = Math.floor(m.x1), cj = Math.floor(m.y1), R0 = Math.ceil(MISSILE_ROAD);
@@ -6314,8 +6316,8 @@ function missileImpact(m) {
     if (!inMap(i, j) || di * di + dj * dj > MISSILE_ROAD * MISSILE_ROAD) continue;
     const t = tIdx(i, j);
     if (S.plan[t]) cancelPlan(t);
-    if (S.road[t] && wayOwner(t) !== m.owner) wreckRoad(t, wayOwner(t), '');
-    if (S.pipe[t] && S.pipe[t] !== m.owner + 1) breakPipe(t);
+    if (S.road[t] && foes(wayOwner(t), m.owner)) wreckRoad(t, wayOwner(t), '');
+    if (S.pipe[t] && foes(S.pipe[t] - 1, m.owner)) breakPipe(t);
   }
 }
 
@@ -9110,7 +9112,7 @@ function disembark(owner, f) {
   }
   f.aboard = [];
   const foe = S.owner[best];
-  if (foe >= 0 && foe !== owner) { postMsg(foe, 'Enemy warbots have landed on your shore!', ox, oy, 'bad'); if (foe === 0) sfx('alert'); }
+  if (foe >= 0 && foes(foe, owner)) { postMsg(foe, 'Enemy warbots have landed on your shore!', ox, oy, 'bad'); if (foe === 0) sfx('alert'); }
   ferryBack(f); // then home to its Port and its line
   return '';
 }
@@ -9363,7 +9365,7 @@ function doLanding(u, dt) {
   u.aboard = []; u.landing = null; u.path = null;
   if (n) postMsg(u.owner, `A Ferry landed ${n} warbot${n === 1 ? '' : 's'} on the shore.`, L.x, L.y, 'good');
   const foe = S.owner[tIdx(L.x, L.y)];
-  if (n && foe >= 0 && foe !== u.owner) { postMsg(foe, 'Enemy warbots have landed on your shore!', L.x, L.y, 'bad'); if (foe === 0) sfx('alert'); }
+  if (n && foe >= 0 && foes(foe, u.owner)) { postMsg(foe, 'Enemy warbots have landed on your shore!', L.x, L.y, 'bad'); if (foe === 0) sfx('alert'); }
   const home = getE(u.home);
   if (!(home && !home.dead && home.owner === u.owner && sailTo(u, home))) { const p2 = nearestPort(u); if (p2) sailTo(u, p2); }
   ferryChanged();
@@ -9891,7 +9893,7 @@ function landed(u, b) {
 
 /** Can bomber u strike `t`: an enemy building, or an enemy vehicle, ship or robot out in the open (not in the air)? */
 function strikeTarget(u, t) {
-  if (!t || t.dead || t.owner === u.owner || t.owner < 0) return false;
+  if (!t || t.dead || !foes(t.owner, u.owner) || t.owner < 0) return false;
   if (BDEFS[t.type]) return !BDEFS[t.type].wild && t.type !== 'nest';
   const bt = BOTS[t.type];
   return !!bt && !bt.air && !bt.wild && !t.inside && !t.dropping;
@@ -9973,13 +9975,13 @@ function bombImpact(m) {
   sfx('bombhit', m.x1, m.y1);
   const tg = getE(m.target);
   const s2 = BOMBER.splash * BOMBER.splash;
-  if (tg && BDEFS[tg.type] && !tg.dead && tg.owner !== m.owner && Math.floor(m.x1) === tg.x && Math.floor(m.y1) === tg.y) bombHit(tg, BOMBER.damage, m.owner);
+  if (tg && BDEFS[tg.type] && !tg.dead && foes(tg.owner, m.owner) && Math.floor(m.x1) === tg.x && Math.floor(m.y1) === tg.y) bombHit(tg, BOMBER.damage, m.owner);
   for (const e of S.buildings.slice()) {
-    if (e === tg || e.dead || e.owner === m.owner || e.owner < 0 || BDEFS[e.type].wild || dist2(e.x + 0.5, e.y + 0.5, m.x1, m.y1) > s2) continue;
+    if (e === tg || e.dead || !foes(e.owner, m.owner) || e.owner < 0 || BDEFS[e.type].wild || dist2(e.x + 0.5, e.y + 0.5, m.x1, m.y1) > s2) continue;
     bombHit(e, BOMBER.splashBld, m.owner);
   }
   for (const u of S.bots) {
-    if (u.dead || u.inside || u.owner === m.owner || BOTS[u.type].wild || BOTS[u.type].air || dist2(u.x, u.y, m.x1, m.y1) > s2) continue;
+    if (u.dead || u.inside || !foes(u.owner, m.owner) || BOTS[u.type].wild || BOTS[u.type].air || dist2(u.x, u.y, m.x1, m.y1) > s2) continue;
     damageBot(u, u === tg ? BOMBER.botDamage * 2 : BOMBER.botDamage); // a direct hit on a vehicle does double
   }
 }
@@ -10064,7 +10066,7 @@ function landDrop(d) {
     postMsg(b.owner, 'A Drop Outpost is down: it claims the land around it and is supplied by air from your Airfield.', b.x, b.y, 'good');
     if (isMe(b.owner)) sfx('complete');
     const foe = S.owner[at];
-    if (foe >= 0 && foe !== b.owner) postMsg(foe, 'The enemy dropped an outpost nearby!', b.x, b.y, 'bad');
+    if (foe >= 0 && foes(foe, b.owner)) postMsg(foe, 'The enemy dropped an outpost nearby!', b.x, b.y, 'bad');
     return;
   }
   // Robots: warbots join a garrison of ours they came down on (if there's room), or hold the spot under a rally
@@ -10095,7 +10097,7 @@ function landDrop(d) {
   if (bots.length) {
     postMsg(d.owner, `${bots.length} ${bots.length === 1 ? BOTS[bots[0].type].name : BOTS[bots[0].type].plural} parachuted in.`, d.i, d.j, 'good');
     const foe = S.owner[t];
-    if (foe >= 0 && foe !== d.owner && bots.some((v) => isArmy(v))) { postMsg(foe, 'Enemy warbots parachuted into your land!', d.i, d.j, 'bad'); if (foe === 0) sfx('alert'); }
+    if (foe >= 0 && foes(foe, d.owner) && bots.some((v) => isArmy(v))) { postMsg(foe, 'Enemy warbots parachuted into your land!', d.i, d.j, 'bad'); if (foe === 0) sfx('alert'); }
     computeZones();
   }
 }
@@ -10229,7 +10231,7 @@ function updateFlakShells() {
     addFx('flak', sh.x, sh.y, { life: 2.2, seed: (sh.x * 7.3 + sh.y * 3.1) % 1 });
     if (S.time - (S.lastFlakSfx || -9) > 0.15) { S.lastFlakSfx = S.time; sfx('flak', sh.x, sh.y); }
     for (const u of S.bots) {
-      if (u.dead || u.owner === sh.owner || !BOTS[u.type].air || !u.flight || planeAlt(u) < 0.15) continue;
+      if (u.dead || !foes(u.owner, sh.owner) || !BOTS[u.type].air || !u.flight || planeAlt(u) < 0.15) continue;
       const d = dist(u.x, u.y, sh.x, sh.y);
       if (d <= f.splash) hitAircraft(u, f.damage * (1 - 0.6 * (d / f.splash)), sh.owner);
     }
@@ -10249,7 +10251,7 @@ function hitAircraft(u, dmg, by) {
     i: clamp(Math.floor(u.x + dcos(u.face || 0) * fwd), 0, S.W - 1), j: clamp(Math.floor(u.y + dsin(u.face || 0) * fwd), 0, S.H - 1), t0: S.time });
   blastFx(u.x, u.y, 0.6, { small: true });
   postMsg(u.owner, `Your ${BOTS[u.type].name} was shot down!`, Math.floor(u.x), Math.floor(u.y), 'bad');
-  if (by >= 0 && by !== u.owner) postMsg(by, `Your flak shot down an enemy ${BOTS[u.type].name}.`, Math.floor(u.x), Math.floor(u.y), 'good');
+  if (by >= 0 && foes(by, u.owner)) postMsg(by, `Your flak shot down an enemy ${BOTS[u.type].name}.`, Math.floor(u.x), Math.floor(u.y), 'good');
   if (isMe(u.owner)) sfx('alert');
   killBot(u, true);
 }

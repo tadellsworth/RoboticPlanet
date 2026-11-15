@@ -842,3 +842,7 @@ canvas.chart.small { height: 110px; }
 @keyframes mpspin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .mp-banner.wait #mp-banner-text::before { animation: none; } }
 #screen-mp { z-index: 25; background: rgba(10, 11, 15, 0.72); }
+.mp-players li.mp-team { background: none; min-height: 0; padding: 6px 2px 0; font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); font-weight: 700; justify-content: space-between; }
+.mp-players li.mp-team small { text-transform: none; letter-spacing: 0; font-weight: 400; }
+.mp-players li.mp-swap { cursor: pointer; }
+.mp-players li.mp-swap:hover { outline: 1px solid var(--line); }

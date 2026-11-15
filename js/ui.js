@@ -236,6 +236,8 @@ function menuPlayers() {
   if (m.mode !== 'versus') return 2;
   return m.shapeRnd ? want : Math.min(want, maxPlayers(m.shape || 0));
 }
+/** A team game: four colonies, two against two (the Teams choice, with four players)? */
+function menuTeams() { return UI.menu.mode === 'versus' && !!UI.menu.teams && menuPlayers() === 4; }
 /** Is this a free-for-all (Versus, three or four players)? */
 function menuThree() { return menuPlayers() > 2; }
 /** The Crossroads map type (four quarters: three or four players get one corner quarter each). */
@@ -269,9 +271,9 @@ function resourceInfo(v) {
 /** The setup in a line (and what isn't the default in a second one), under Play and in Start's bar. */
 function menuSummary() {
   const m = UI.menu, colony = m.mode === 'colony', three = menuThree(), style = menuStyle();
-  const main = [colony ? 'Colony' : three ? `Free-for-all · ${menuPlayers()}` : 'Versus'];
+  const main = [colony ? 'Colony' : menuTeams() ? 'Teams · 2 vs 2' : three ? `Free-for-all · ${menuPlayers()}` : 'Versus'];
   if (!colony) main.push(`${DIFFICULTY[m.diff].label} rival${three ? 's' : ''}`);
-  if (!colony && m.victory && m.victory !== 'capture') main.push(VICTORY[m.victory].name);
+  if (!colony && !menuTeams() && m.victory && m.victory !== 'capture') main.push(VICTORY[m.victory].name);
   main.push(m.shapeRnd ? 'Random map' : SHAPE_PRESETS[m.shape || 0].name, m.biomeRnd ? 'Random biome' : biomeName(m.biome || 0), SIZE_PRESETS[menuSize()].name);
   const extra = [];
   if (!colony && style !== 1) extra.push(style ? PERSONALITIES[PERSONALITY_ORDER[style - 1]].name + ' style' : 'random rival styles');
@@ -310,6 +312,7 @@ function initMenu() {
   for (const btn of $('m-mode').children) btn.onclick = () => { UI.menu.mode = btn.dataset.v; syncMenu(); sfx('click'); };
   for (const btn of $('m-diff').children) { btn.dataset.info = DIFF_INFO[btn.dataset.v] || ''; btn.onclick = pick(() => { UI.menu.diff = btn.dataset.v; }); }
   for (const btn of $('m-players').children) btn.onclick = pick(() => { UI.menu.players = +btn.dataset.v; });
+  for (const btn of $('m-teams').children) btn.onclick = pick(() => { UI.menu.teams = +btn.dataset.v; });
   for (const btn of $('m-victory').children) { btn.dataset.info = VICTORY[btn.dataset.v].info; btn.onclick = pick(() => { UI.menu.victory = btn.dataset.v; }); }
   // Choices are buttons (all the options in view). Terrain and Resources are level meters, a bar per step.
   const choice = (id, labels, get, set, info, meter) => {
@@ -398,7 +401,11 @@ function syncMenu() {
   for (const btn of $('m-diff').children) mark(btn, btn.dataset.v === m.diff);
   $('m-diff-field').hidden = colony;
   for (const btn of $('m-victory').children) mark(btn, btn.dataset.v === (m.victory || 'capture'));
-  $('m-victory-field').hidden = colony;
+  // Teams (four colonies, two against two, Capture only): the Victory choice gives way to it.
+  const teams = menuTeams();
+  $('m-teams-field').hidden = colony || menuPlayers() !== 4;
+  for (const btn of $('m-teams').children) { mark(btn, +btn.dataset.v === (teams ? 1 : 0)); btn.dataset.info = +btn.dataset.v ? '2 vs 2: you and the colony beside you against the other two. Take both of their Command Bases to win.' : 'Every colony for itself: the last one standing wins.'; }
+  $('m-victory-field').hidden = colony || teams;
   // Free-for-all: you and two rivals on the map types with room for three, or three rivals on
   // Crossroads (Random picks a map type with room for them all).
   const shape = m.shape || 0, SH = SHAPE_PRESETS[shape], room = m.shapeRnd ? 4 : maxPlayers(shape), want = clamp(Math.round(m.players) || 2, 2, 4);
@@ -1449,7 +1456,7 @@ function onMapCommand(i, j, wx, wy) {
   // hold the ground (ORDERS.command).
   const foe = !b ? enemyBotAtTap(i, j) : null;
   const spec = foe ? { foe: foe.id } : b ? { b: b.id } : { i, j };
-  const theirs = !!b && b.owner !== ME, mine = !!b && b.owner === ME, bName = b ? BDEFS[b.type].name : '', foeName = foe ? BOTS[foe.type].name : '';
+  const theirs = !!b && foes(b.owner, ME), mine = !!b && b.owner === ME, bName = b ? BDEFS[b.type].name : '', foeName = foe ? BOTS[foe.type].name : '';
   const rx = (b ? b.x : i) + 0.5, ry = (b ? b.y : j) + 0.5;
   act('command', [UI.sel.slice(), spec], (r) => {
     if (!r || r.why) { sfx('error'); toast((r && r.why) || 'Right-click open ground, a rival building or one of your garrisons.', 'warn'); return; }
@@ -1747,15 +1754,18 @@ function renderPlanets() {
 
 /** Where the rivals landed, from your Command Base: "Two rival colonies landed too: red to the north, ..." */
 function rivalsLanded() {
-  const L0 = getE(S.players[ME].lander), rivals = S.players.filter((P) => P.id !== ME && !P.absent);
-  const where = rivals.map((P) => { const L = getE(P.lander); return `${RIVAL_NAMES[P.id].toLowerCase()} ${L0 && L ? 'to the ' + dirText(L0, L).replace(/^\d+ tiles? /, '') : ''}`.trim(); });
+  const L0 = getE(S.players[ME].lander), rivals = S.players.filter((P) => foes(P.id, ME) && !P.absent);
+  const at = (P) => { const L = getE(P.lander); return `${RIVAL_NAMES[P.id].toLowerCase()} ${L0 && L ? 'to the ' + dirText(L0, L).replace(/^\d+ tiles? /, '') : ''}`.trim(); };
+  const where = rivals.map(at);
   const list = where.length > 1 ? where.slice(0, -1).join(', ') + ' and ' + where[where.length - 1] : where[0] || '';
-  return `${['', 'A rival colony', 'Two rival colonies', 'Three rival colonies'][rivals.length]} landed too: ${list}.`;
+  // (teams: your ally landed beside you)
+  const ally = S.teams ? S.players.find((P) => allies(P.id, ME) && !P.absent) : null;
+  return `${['', 'A rival colony', 'Two rival colonies', 'Three rival colonies'][rivals.length]} landed too: ${list}.` + (ally ? ` Your ally, ${at(ally)}, fights on your side.` : '');
 }
 
 /** The rivals' colours, for a hint: 'red', 'red or green', 'red, green or purple'. */
 function rivalColours() {
-  const c = S.players.filter((P) => P.id !== ME && !P.absent).map((P) => (RIVAL_NAMES[P.id] || 'red').toLowerCase());
+  const c = S.players.filter((P) => foes(P.id, ME) && !P.absent).map((P) => (RIVAL_NAMES[P.id] || 'red').toLowerCase());
   return c.length > 1 ? c.slice(0, -1).join(', ') + ' or ' + c[c.length - 1] : c[0] || 'red';
 }
 
@@ -1769,7 +1779,7 @@ function startNewGame() {
     size: UI.menu.size[UI.menu.mode] ?? DEFAULT_SIZE[UI.menu.mode], rough: UI.menu.rough, rich: UI.menu.rich, shape: pick.shape,
     nuke: !!UI.menu.nuke, biome: BIOME_ORDER[pick.biome], players: clamp(Math.round(UI.menu.players) || 2, 2, 4),
     style: UI.menu.style ? PERSONALITY_ORDER[UI.menu.style - 1] : 'random', events: !!UI.menu.events, wildlife: !!UI.menu.wild, unlimited: !!UI.menu.unlimited,
-    victory: UI.menu.victory,
+    victory: UI.menu.victory, teams: menuTeams(),
   });
   enterGame();
   updateHUD();
@@ -1931,7 +1941,7 @@ function showGameOver() {
   $('o-new').textContent = 'New game'; $('o-menu').textContent = 'Main menu';
   $('o-code').hidden = true;
   if (S.mission) { showMissionOver(); return; }
-  const won = S.winner === ME, how = S.endHow || 'capture', many = S.players.length > 2, them = many ? playerName(S.winner) : 'rival';
+  const won = S.winner === ME || allies(S.winner, ME), how = S.endHow || 'capture', many = S.players.length > 2, them = many ? playerName(S.winner) : 'rival';
   const W = S.players[S.winner], The = W && W.name ? W.name : `The ${them}`; // (a person, in multiplayer: by name)
   sfx(won ? 'win' : 'lose');
   $('o-title').textContent = won ? (how === 'domination' ? 'Domination!' : how === 'uplinks' ? 'Uplinks held!' : 'Victory!') : 'Defeat';
@@ -1943,6 +1953,8 @@ function showGameOver() {
     : how === 'domination' ? `${The} held most of the planet's land for ${DOM.hold / 60} minutes. Regroup and try again.`
       : how === 'uplinks' ? `${The} led on the Uplinks for ${UPLINK.hold / 60} minutes. Regroup and try again.`
       : `${The} ${S.players[ME].out ? 'captured your Command Base' : 'took the planet'}. Regroup and try again.`;
+  if (S.teams) $('o-text').textContent = won ? `Your team took ${how === 'surrender' ? 'the planet (the last of them surrendered)' : 'both rival Command Bases'}: the planet is yours${S.players[ME].out ? ', though your own colony fell on the way' : ''}.`
+    : `The rival team ${S.players[ME].out ? 'captured your Command Base' : 'took the planet'}. Regroup and try again.`;
   const st = S.players[ME].stats;
   $('o-stats').innerHTML = [
     ['Time', fmtTime(S.time)], ['Buildings completed', st.built], ['Bots built', st.bots - (st.startBots || 0)],
@@ -2601,8 +2613,8 @@ function onMapTap(i, j, wx, wy) {
     const u = getE(UI.bomber);
     if (!u || u.dead) { setMode('normal'); return; }
     const b = buildingAtTap(i, j, wx, wy);
-    let t = b && b.owner !== ME ? b : null;
-    if (!t) { let bd = 0.5; for (const v of S.bots) { if (v.dead || v.owner === ME || v.inside || BOTS[v.type].air) continue; const d = dist2(v.x, v.y, wx, wy); if (d < bd) { bd = d; t = v; } } }
+    let t = b && foes(b.owner, ME) ? b : null;
+    if (!t) { let bd = 0.5; for (const v of S.bots) { if (v.dead || !foes(v.owner, ME) || v.inside || BOTS[v.type].air) continue; const d = dist2(v.x, v.y, wx, wy); if (d < bd) { bd = d; t = v; } } }
     if (!t) { sfx('error'); showBanner('<span class="err">Tap an enemy building, or an enemy vehicle or robot out in the open.</span>', null, 'Cancel'); return; }
     const tName = BDEFS[t.type] ? `the ${BDEFS[t.type].name}` : `a ${BOTS[t.type].name}`;
     act('strike', [u.id, t.id], (why) => {
@@ -3775,7 +3787,7 @@ function openBuildingSheet(b) {
     if (BDEFS[b.type].mobile) html += '<button class="btn primary" id="sh-pack">Pack up to move</button>';
     else if (b.type !== 'lander') html += `<button class="btn danger" id="sh-demolish">${b.built ? 'Dismantle' : 'Cancel site'}</button>`;
     html += '</div>';
-  } else if (S.mode !== 'colony' || def.wild) {
+  } else if ((S.mode !== 'colony' || def.wild) && foes(b.owner, ME)) {
     html += `<div class="section-label">Attack with warbots</div><div id="sh-attack"></div>
       <div class="stepper" id="sh-stepper"><button class="btn" id="sh-minus">−</button><span class="n" id="sh-n">0</span>
       <button class="btn" id="sh-plus">+</button><button class="btn primary" id="sh-send" style="flex:1">Send warbots</button></div>
@@ -4463,7 +4475,7 @@ function openBotSheet(u) {
     <div class="status" id="sh-status"></div><div id="sh-dyn"></div>
     ${u.owner === ME && isArmy(u) ? '<button class="btn big" id="sh-recall" hidden>Call back this squad</button>' : ''}
     ${u.owner === ME && BOTS[u.type].bomber ? '<button class="btn primary big" id="sh-strike">Pick a target</button>' : ''}
-    ${u.owner !== ME && u.owner >= 0 && !BOTS[u.type].wild && !BOTS[u.type].air && myBombers().length ? '<div class="section-label">Air strike</div><p class="hint" id="sh-bomb-hint"></p><button class="btn big" id="sh-bomb">Bomb it</button>' : ''}
+    ${foes(u.owner, ME) && u.owner >= 0 && !BOTS[u.type].wild && !BOTS[u.type].air && myBombers().length ? '<div class="section-label">Air strike</div><p class="hint" id="sh-bomb-hint"></p><button class="btn big" id="sh-bomb">Bomb it</button>' : ''}
     ${u.owner === ME && BOTS[u.type].ferry ? `<button class="btn big" id="sh-fout"${u.inside && !u.landing ? '' : ' hidden'}>Sail out of the Port</button>
       <div class="actions"><button class="btn primary" id="sh-fsail">Sail somewhere</button><button class="btn" id="sh-fhome">Back to its line</button></div>
       <div class="actions"><button class="btn" id="sh-fembark">Take warbots aboard</button><button class="btn" id="sh-fland">Put them ashore</button></div>
@@ -4916,7 +4928,7 @@ function showArmyCmdBanner(note) {
 function enemyBotAtTap(i, j) {
   let best = null, bd = 1.3 * 1.3;
   for (const u of S.bots) {
-    if (u.dead || u.inside || u.owner === ME || u.owner < 0 || u.dropping || (BOTS[u.type].air && u.flight)) continue;
+    if (u.dead || u.inside || !foes(u.owner, ME) || u.owner < 0 || u.dropping || (BOTS[u.type].air && u.flight)) continue;
     const d = dist2(u.x, u.y, i + 0.5, j + 0.5);
     if (d < bd) { bd = d; best = u; }
   }
@@ -4927,7 +4939,7 @@ function armyTap(cmd, i, j, b) {
   const fail = (why) => { sfx('error'); showArmyCmdBanner(`<span class="err">${why}</span>`); };
   if (cmd === 'attack') {
     // A rival robot (nearest the tap, if there's one there): hunt it down.
-    const foe = !b || b.owner === ME ? enemyBotAtTap(i, j) : null;
+    const foe = !b || !foes(b.owner, ME) ? enemyBotAtTap(i, j) : null;
     if (foe) {
       const name = BOTS[foe.type].name;
       act('hunt', [foe.id, armyWant()], (res) => {
@@ -4936,7 +4948,7 @@ function armyTap(cmd, i, j, b) {
       });
       return;
     }
-    if (!b || b.owner === ME || b.owner < 0 || b.dead) return fail(`Tap a rival building or robot (${rivalColours()}).`);
+    if (!b || !foes(b.owner, ME) || b.owner < 0 || b.dead) return fail(`Tap a rival building or robot (${rivalColours()}).`);
     const name = BDEFS[b.type].name;
     act('assault', [b.id, armyWant()], (sent) => {
       if (!sent) return fail('No armed warbots can get there: they need Ammo, and a way to walk there.');

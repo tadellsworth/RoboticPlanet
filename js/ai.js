@@ -277,8 +277,8 @@ function aiThink(p) {
      (type === 'keep' && wantKeeps > 0));
   // Only Fuel Stations charge robots: the first one comes before anything else.
   // Flak once a rival has aircraft: two Flak Guns by the Command Base (and Ammo to feed them).
-  const enemyAir = S.bots.some((u) => !u.dead && u.owner !== p && BOTS[u.type].air) ||
-    S.buildings.some((b) => !b.dead && b.built && b.owner >= 0 && b.owner !== p && BDEFS[b.type].airfield);
+  const enemyAir = S.bots.some((u) => !u.dead && foes(u.owner, p) && BOTS[u.type].air) ||
+    S.buildings.some((b) => !b.dead && b.built && b.owner >= 0 && foes(b.owner, p) && BDEFS[b.type].airfield);
   if (enemyAir && S.mode !== 'colony' && (counts.flak || 0) < 2 && !plan.some(([t]) => t === 'flak')) plan = [['flak', 2]].concat(plan); // (a copy: AI_PLAN is shared)
   // The first Flak Gun doesn't wait for a free site (nothing else goes past the usual limit for it).
   const flakFirst = enemyAir && S.mode !== 'colony' && !counts.flak, capBefore = Math.max(siteCap, maxSites + 1);
@@ -638,11 +638,11 @@ function aiNaval(p, me, kinds, lvl, lander, canBuild) {
   // nearest enemy building they can walk to (the enemy Command Base if it's not much further).
   for (const r of S.rallies) {
     if (r.owner !== p || !r.landing || S.time - r.landing < 15) continue;
-    if (S.buildings.some((b) => !b.dead && b.owner !== p && b.owner >= 0 && dist2(b.x + 0.5, b.y + 0.5, r.x, r.y) < 16)) continue;
+    if (S.buildings.some((b) => !b.dead && foes(b.owner, p) && b.owner >= 0 && dist2(b.x + 0.5, b.y + 0.5, r.x, r.y) < 16)) continue;
     const z = S.zone[tIdx(Math.floor(r.x), Math.floor(r.y))];
     let tgt = null, bd = Infinity;
     for (const b of S.buildings) {
-      if (b.dead || b.owner === p || b.owner < 0 || BDEFS[b.type].wild || S.zone[tIdx(b.x, b.y)] !== z) continue;
+      if (b.dead || !foes(b.owner, p) || b.owner < 0 || BDEFS[b.type].wild || S.zone[tIdx(b.x, b.y)] !== z) continue;
       const d = dist(b.x, b.y, r.x, r.y) - (b.type === 'lander' ? 8 : 0);
       if (d < bd) { bd = d; tgt = b; }
     }
@@ -658,7 +658,7 @@ function aiNaval(p, me, kinds, lvl, lander, canBuild) {
     if (z === hz || (gb && S.zone[tIdx(gb.x, gb.y)] === z)) continue;
     let tgt = null, bd = Infinity;
     for (const b of S.buildings) {
-      if (b.dead || b.owner === p || b.owner < 0 || BDEFS[b.type].wild || S.zone[tIdx(b.x, b.y)] !== z) continue;
+      if (b.dead || !foes(b.owner, p) || b.owner < 0 || BDEFS[b.type].wild || S.zone[tIdx(b.x, b.y)] !== z) continue;
       const d = dist(b.x, b.y, u.x, u.y) - (b.type === 'lander' ? 8 : 0);
       if (d < bd) { bd = d; tgt = b; }
     }
@@ -694,8 +694,8 @@ function aiNaval(p, me, kinds, lvl, lander, canBuild) {
   if (avail < 4 || army < lvl.threshold + 2) return;
   // The beach: a shore tile the Ferry can reach beside an enemy building, scored by how close it is and
   // how little guards it (turrets and garrisons within 6 tiles count against it).
-  let foes = S.buildings.filter((b) => !b.dead && b.owner >= 0 && b.owner !== p && !BDEFS[b.type].wild && S.players[b.owner] && !S.players[b.owner].out);
-  if (!foes.length) return;
+  let targets = S.buildings.filter((b) => !b.dead && b.owner >= 0 && foes(b.owner, p) && !BDEFS[b.type].wild && S.players[b.owner] && !S.players[b.owner].out);
+  if (!targets.length) return;
   // A rival with next to no army left (the weakest, in a free-for-all): land right by its Command Base to finish it.
   let weak = -1, wa = 4;
   for (let o = 0; o < S.players.length; o++) {
@@ -704,14 +704,14 @@ function aiNaval(p, me, kinds, lvl, lander, canBuild) {
     const n = S.bots.reduce((k, u) => k + (!u.dead && u.owner === o && isArmy(u) ? 1 : 0), 0);
     if (n < wa) { wa = n; weak = o; }
   }
-  if (weak >= 0) foes = [getE(S.players[weak].lander)];
-  const guard = (i, j) => foes.reduce((n, b) => n + (dist2(b.x, b.y, i, j) <= 36 ? (BDEFS[b.type].range ? 3 : 0) + (b.garrison ? b.garrison.length : 0) : 0), 0);
+  if (weak >= 0) targets = [getE(S.players[weak].lander)];
+  const guard = (i, j) => targets.reduce((n, b) => n + (dist2(b.x, b.y, i, j) <= 36 ? (BDEFS[b.type].range ? 3 : 0) + (b.garrison ? b.garrison.length : 0) : 0), 0);
   let best = null, bs = Infinity;
   for (let j = 1; j < S.H - 1; j++) for (let i = 1; i < S.W - 1; i++) {
     const t = j * S.W + i, o = S.owner[t];
     if (o === p || S.terrain[t] !== T_GROUND || S.bAt[t]) continue;
     let near = Infinity;
-    for (const b of foes) { const d = dist2(b.x, b.y, i, j); if (d < near) near = d; }
+    for (const b of targets) { const d = dist2(b.x, b.y, i, j); if (d < near) near = d; }
     if (near > 49 || landingBlocked(p, ferry, i, j)) continue;
     const sc = Math.sqrt(near) + guard(i, j) * 2;
     if (sc < bs) { bs = sc; best = { i, j }; }
@@ -1043,19 +1043,19 @@ function aiBomber(p, me) {
   if (S.time - (P.lastStrike || -999) < (gun && !gun.dead ? AI_BOMB_GAP / 4 : AI_BOMB_GAP)) return;
   const u = bombers.find((v) => !v.mission && !v.flight && !(v.rearmUntil > S.time) && planeBase(v) && v.inside === planeBase(v).id);
   if (!u) return;
-  const flak = S.buildings.filter((b) => !b.dead && b.built && b.owner !== p && BDEFS[b.type].flak);
+  const flak = S.buildings.filter((b) => !b.dead && b.built && foes(b.owner, p) && BDEFS[b.type].flak);
   const covered = (x, y) => flak.some((f) => dist2(f.x + 0.5, f.y + 0.5, x, y) <= 49);
   // An enemy gun keeping our robots off our own buildings: bomb it first.
-  if (gun && !gun.dead && gun.owner !== p && !covered(gun.x + 0.5, gun.y + 0.5) && !strikeBlocked(p, u, gun) && !orderStrike(p, u, gun)) { P.lastStrike = S.time; return; }
+  if (gun && !gun.dead && foes(gun.owner, p) && !covered(gun.x + 0.5, gun.y + 0.5) && !strikeBlocked(p, u, gun) && !orderStrike(p, u, gun)) { P.lastStrike = S.time; return; }
   let best = null, bs = 0;
   for (const b of S.buildings) {
     const v = S.victory === 'uplinks' && holdsUplink(b) ? Math.max(13, AI_BOMB_VALUE[b.type] || 0) : AI_BOMB_VALUE[b.type]; // (Uplinks: the forts that hold them)
-    if (!v || b.dead || !b.built || b.owner === p || b.owner < 0 || covered(b.x + 0.5, b.y + 0.5) || strikeBlocked(p, u, b)) continue;
+    if (!v || b.dead || !b.built || !foes(b.owner, p) || b.owner < 0 || covered(b.x + 0.5, b.y + 0.5) || strikeBlocked(p, u, b)) continue;
     const sc = v - dist(b.x, b.y, field.x, field.y) * 0.05;
     if (sc > bs) { bs = sc; best = b; }
   }
   for (const v of S.bots) {
-    if (v.dead || v.owner === p || v.type !== 'tanker' || !v.carry || v.inside || covered(v.x, v.y) || strikeBlocked(p, u, v)) continue;
+    if (v.dead || !foes(v.owner, p) || v.type !== 'tanker' || !v.carry || v.inside || covered(v.x, v.y) || strikeBlocked(p, u, v)) continue;
     const sc = 8 - dist(v.x, v.y, field.x, field.y) * 0.05;
     if (sc > bs) { bs = sc; best = v; }
   }
@@ -1172,7 +1172,7 @@ function aiSiege(p) {
   // moved with it if it packs up and drives off, until it's dead (or two and a half minutes have passed).
   P.truckHunt = (P.truckHunt || []).filter((h) => { const r = rallyById(h.rally), e = getE(h.truck); if (r && (S.time >= h.until || !e || e.dead)) recallRally(h.rally); return r && S.time < h.until && e && !e.dead; });
   for (const e of S.bots) {
-    if (e.dead || e.owner === p || e.owner < 0 || !BOTS[e.type].siege || e.inside) continue;
+    if (e.dead || !foes(e.owner, p) || e.owner < 0 || !BOTS[e.type].siege || e.inside) continue;
     const tid = e.salvo ? e.salvo.target : e.task && e.task.type === 'bombard' ? e.task.target : 0, tgt = tid ? getE(tid) : null;
     const shelling = P.shelledBy && S.time - (P.shelledBy[e.id] || -999) < 40;
     if (!shelling && !(tgt && tgt.owner === p && (e.deployT > 0 || dist(e.x, e.y, tgt.x, tgt.y) < ROCKET.range + 4))) continue;
@@ -1207,7 +1207,7 @@ function aiCounterRaid(p) {
     return !over && ours;
   });
   for (const r of S.rallies) {
-    if (r.owner === p || P.counters.some((c) => c.enemy === r.id)) continue;
+    if (!foes(r.owner, p) || P.counters.some((c) => c.enemy === r.id)) continue;
     const i = Math.floor(r.x), j = Math.floor(r.y);
     if (!inMap(i, j) || S.owner[tIdx(i, j)] !== p) continue;
     const raiders = rallyMembers(r.id).length;
@@ -1582,7 +1582,7 @@ function aiUplinks(p, lvl, counts) {
       b.gprio = 'high'; b.upHold = true;
     }
     if (!soon) continue;
-    const jammers = u.jam ? S.bots.filter((w) => !w.dead && !w.inside && isArmy(w) && w.owner >= 0 && w.owner !== p && dist2(w.x, w.y, u.x + 0.5, u.y + 0.5) <= 16).length : 0;
+    const jammers = u.jam ? S.bots.filter((w) => !w.dead && !w.inside && isArmy(w) && w.owner >= 0 && foes(w.owner, p) && dist2(w.x, w.y, u.x + 0.5, u.y + 0.5) <= 16).length : 0;
     const want = guards + jammers * 2, have = r ? rallyMembers(r.id).length : 0;
     if (have >= want || S.time - (P.upGuardAt[u.id] || -99) < (jammers ? 5 : 20)) continue;
     P.upGuardAt[u.id] = S.time;

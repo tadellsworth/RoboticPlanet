@@ -13,7 +13,8 @@
  *   fresh   reconnecting with nothing (a reloaded page): skip the log, I'll ask for the game
  *
  * From the relay:  hello {seat, code, host, started, seq}   lobby {seats, host, settings}   error {why}
- *                  start {settings, players}   and every game message, with seq and by (the sender's seat).
+ *                  start {settings, players (null: a computer's colony)}   and every game message, with seq and by
+ *                  (the sender's seat).
  * To the relay:    in the lobby: name, settings and start (the host), leave, ping; in a game: anything (passed on).
  */
 
@@ -113,11 +114,18 @@ export class Room {
       if (seat !== this.host()) return;
       if (msg.t === 'settings') { this.settings = msg.settings || null; this.presence(); return; }
       if (msg.t === 'start') {
-        this.players = this.seats.map((s, k) => (s && s.on ? k : -1)).filter((k) => k >= 0);
-        if (!this.players.length) return;
+        const on = this.seats.map((s, k) => (s && s.on ? k : -1)).filter((k) => k >= 0);
+        if (!on.length) return;
+        // Who plays which colony: the seats in order, or (teams) the host's arrangement, -1 for a computer's colony.
+        let slots = on;
+        if (Array.isArray(msg.slots) && msg.slots.length <= MAX_SEATS) {
+          const sl = msg.slots.map((k) => (Number.isInteger(k) && k >= 0 ? k : -1)), used = sl.filter((k) => k >= 0);
+          if (used.length === on.length && new Set(used).size === used.length && on.every((k) => used.includes(k))) slots = sl;
+        }
+        this.players = slots;
         this.started = true;
         this.settings = msg.settings || this.settings;
-        this.startMsg = { t: 'start', settings: this.settings, players: this.players.map((k) => ({ seat: k, name: this.seats[k].name })) };
+        this.startMsg = { t: 'start', settings: this.settings, players: slots.map((k) => (k >= 0 ? { seat: k, name: this.seats[k].name } : null)) };
         // (seats nobody took up are let go: no-one new joins a game under way)
         this.seats = this.seats.map((s, k) => (this.players.includes(k) ? s : null));
         this.broadcast(this.startMsg);

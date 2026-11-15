@@ -1599,6 +1599,9 @@ function newGame(opts) {
     dirtyTiles: [], territoryVer: 0, tick: 0, hist: newHistory(settings.players),
   };
   if (opts.autoplay) S.players[0].mult = DIFFICULTY[diff].mult;
+  // Teams: four colonies, two against two, side by side (Crossroads: the two on the left against the two on the right).
+  // A team game is won by taking the other team's Command Bases (no Domination or Uplinks).
+  if (opts.teams && mode === 'versus' && S.players.length === 4) { S.teams = [0, 0, 1, 1]; S.victory = 'capture'; }
   if (m.spare) S.spare = { x: m.spare.x, y: m.spare.y }; // Crossroads for three: the free quarter's corner
   mapEventsStart(m);
   // Planet events (see EVENTS): the first one comes after EVENT_FIRST seconds.
@@ -1606,7 +1609,7 @@ function newGame(opts) {
   // Unlimited resources (a testing option on the new-game screen): see unlimitedTopUp.
   if (opts.unlimited && !opts.mission) S.unlimited = true;
   // How the game is won (Versus): see VICTORY. Capture unless another way was picked.
-  if (mode === 'versus' && !opts.mission && !opts.layout && VICTORY[opts.victory] && opts.victory !== 'capture') S.victory = opts.victory;
+  if (mode === 'versus' && !opts.mission && !opts.layout && !S.teams && VICTORY[opts.victory] && opts.victory !== 'capture') S.victory = opts.victory;
   // Wildlife (see WILD): Colony free play only; the nests go down once the landing site is in.
   if (mode === 'colony' && opts.wildlife && !opts.layout && !opts.setup) S.wildlife = true;
   // Each rival AI's personality: the one asked for, or (with 'random') a different one each, picked
@@ -3453,6 +3456,15 @@ function destroyBuilding(b, burn, quiet) {
 let ME = 0;
 function isMe(p) { return p === ME; }
 function human(p) { const P = S.players[p]; return !!P && !P.ai; }
+/**
+ * Teams (S.teams[p], a 2-vs-2 game): are players p and q enemies? Without teams, everyone but yourself is (so this is
+ * just p !== q); neutral owners (-1) are everyone's. Allies don't shoot, shell, bomb, raid or capture each other.
+ */
+function foes(p, q) { return p !== q && !(S && S.teams && p >= 0 && q >= 0 && S.teams[p] !== undefined && S.teams[p] === S.teams[q]); }
+/** ...on the same team (and not the same player). */
+function allies(p, q) { return p !== q && !foes(p, q); }
+/** Player p's team (without teams: their own number). */
+function teamOf(p) { return S && S.teams && S.teams[p] !== undefined ? S.teams[p] : p; }
 
 /** A message for player `player`: shown on their device only (the others' messages aren't kept here). */
 function postMsg(player, text, x, y, kind) {

@@ -15,6 +15,8 @@ how goods move.
   has as many). Capturing a Command Base hands over everything its owner built (`eliminate`); the last colony
   standing wins. Standard, Islands, Crater, Plateaus and Sky islands maps (`ffa: true` in `SHAPE_PRESETS`); the green team's
   art is the red team's recoloured at run time (`recolorArt`), and each AI fights its nearest rival (`rivalOf`).
+  With four players on Crossroads, **Teams: 2 vs 2** puts the two western colonies against the two eastern ones
+  (see Multiplayer).
 - **Colony:** no rival. Settle the planet at your own pace, with colonization milestones. Free play has the full
   building roster, missiles and nuclear silos included, to experiment with, plus the **Research Lab** and optional
   **Wildlife** (creature nests that raid you; on by default).
@@ -803,6 +805,15 @@ game:
   was closed) offers **Rejoin multiplayer game** on the main menu, and gets the game from the others.
 - **Leave the game** hands your colony to the computer for the rest of the game. A multiplayer game isn't saved for
   Continue.
+
+**Teams (2 vs 2).** With four colonies in all on Crossroads, the host can set **Teams: 2 vs 2** in the settings: the
+two western colonies (south-west and north-west) play the two eastern ones. The lobby shows the two teams, people
+first and then computer players, and the host taps a person to move them to the other team (never more than two a
+side). Allies never shoot, shell, raid or capture each other, their turrets and Flak leave each other alone, the
+computer only ever goes after the other team, and a team game is won by **Capture**: take both enemy Command Bases
+and both colonies of your team win. Teams also work in a one-person game (Versus, **You vs 3**: you and a computer
+ally against two computer rivals). Rules: `S.teams` (`[0, 0, 1, 1]`), with `foes(p, q)`, `allies(p, q)` and
+`teamOf(p)` in `world.js`; without teams `foes` is just `p !== q`.
 
 **Setting up the relay (once).** The devices talk through a small relay server: `relay/`, a Cloudflare Worker with
 one Durable Object per game room, free on Cloudflare's free plan. It's deployed from this repository by the

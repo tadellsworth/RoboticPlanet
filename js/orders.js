@@ -207,17 +207,17 @@ const ORDERS = {
       return typeof r === 'string' ? { why: r } : { kind: 'ferry', n: r };
     }
     const b = s.b ? liveB(s.b) : null;
-    if (b && b.owner !== p) out.nr = orderBombard(p, ids, b);
-    else if (b && BDEFS[b.type].mil && b.built) { const t = deploySpot(p, b.x, b.y); if (t >= 0) out.nr = orderPark(p, ids, t % S.W, (t / S.W) | 0); }
+    if (b && foes(b.owner, p)) out.nr = orderBombard(p, ids, b);
+    else if (b && b.owner === p && BDEFS[b.type].mil && b.built) { const t = deploySpot(p, b.x, b.y); if (t >= 0) out.nr = orderPark(p, ids, t % S.W, (t / S.W) | 0); }
     else if (!b && inMap(s.i, s.j) && walkable(tIdx(s.i, s.j))) out.nr = orderPark(p, ids, s.i, s.j);
     if (b && b.owner === p && BDEFS[b.type].repair) {
       const r = orderRepair(p, ids, b);
       return typeof r === 'string' ? { why: r } : { kind: 'repair', n: r };
     }
     const foe = !b && s.foe ? liveU(s.foe) : null;
-    if (foe && foe.owner !== p) { out.kind = 'hunt'; out.n = orderHunt(p, ids, foe); }
-    else if (b && b.owner !== p) { out.kind = 'attack'; out.n = orderAttack(p, ids, b); }
-    else if (b && BDEFS[b.type].mil && b.built) { out.kind = 'station'; out.n = orderStation(p, ids, b); }
+    if (foe && foes(foe.owner, p)) { out.kind = 'hunt'; out.n = orderHunt(p, ids, foe); }
+    else if (b && foes(b.owner, p)) { out.kind = 'attack'; out.n = orderAttack(p, ids, b); }
+    else if (b && b.owner === p && BDEFS[b.type].mil && b.built) { out.kind = 'station'; out.n = orderStation(p, ids, b); }
     else if (!b && inMap(s.i, s.j) && walkable(tIdx(s.i, s.j))) { out.kind = 'move'; out.n = orderMove(p, ids, s.i, s.j); }
     else out.kind = 'none';
     return out;
@@ -242,8 +242,8 @@ const ORDERS = {
   crawl(p, uid, i, j) { const u = ownU(p, uid, 'crawler'); return u ? driveCrawler(u, i, j) : 'That Crawler is gone.'; },
   deploy(p, uid) { const u = ownU(p, uid, 'crawler'); return u ? deployCrawler(u) : 'That Crawler is gone.'; },
   trainArmor(p, uid) { const u = ownU(p, uid, 'rail'); return u ? orderTrainArmor(p, u) : 'That train is gone.'; },
-  sendAttack(p, tid, n, all) { const t = liveB(tid); return t && t.owner !== p ? sendAttack(p, t, n | 0, !!all) : 0; },
-  fireMissile(p, tid) { const t = liveB(tid); return t && t.owner !== p ? fireMissile(p, t) : false; },
+  sendAttack(p, tid, n, all) { const t = liveB(tid); return t && foes(t.owner, p) ? sendAttack(p, t, n | 0, !!all) : 0; },
+  fireMissile(p, tid) { const t = liveB(tid); return t && foes(t.owner, p) ? fireMissile(p, t) : false; },
   missileAt(p, sid, i, j) { const s = ownB(p, sid); return s && BDEFS[s.type].missile ? fireMissileAt(s, i, j) : false; },
   nukeAt(p, sid, i, j) { const s = ownB(p, sid); return s && BDEFS[s.type].nukeSilo ? fireNukeAt(s, i, j) : false; },
   /** `want` warbots (-1: every spare one) out of garrisons to hold the ground round (i, j): { sent, rally } (the flag's id). */
@@ -255,7 +255,7 @@ const ORDERS = {
   },
   /** `want` warbots after enemy robot eid. */
   hunt(p, eid, want) {
-    const e = liveU(eid); if (!e || e.owner === p) return { sent: 0, rally: 0 };
+    const e = liveU(eid); if (!e || !foes(e.owner, p)) return { sent: 0, rally: 0 };
     const n = armyN(want, rallyAvailable(p, Math.floor(e.x), Math.floor(e.y)));
     const r = n > 0 ? sendHunt(p, e, n) : { sent: 0 };
     return { sent: r.sent || 0, rally: r.rally ? r.rally.id : 0 };
@@ -265,7 +265,7 @@ const ORDERS = {
    * (they attack what stands there). How many went.
    */
   assault(p, tid, want) {
-    const b = liveB(tid); if (!b || b.owner === p || b.owner < 0) return 0;
+    const b = liveB(tid); if (!b || !foes(b.owner, p) || b.owner < 0) return 0;
     let n = armyN(want, attackAvailable(p, b)), sent = n > 0 ? sendAttack(p, b, n) : 0;
     if (!sent) {
       for (const [di, dj] of [[1, 1], [-1, 1], [1, -1], [-1, -1], [2, 0], [-2, 0], [0, 2], [0, -2]]) {

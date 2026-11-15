@@ -670,7 +670,8 @@ function playerName(p, the) {
   if (typeof S !== 'undefined' && S && S.mode === 'colony' && p === 1) return the ? 'the wildlife' : 'Wildlife';
   if (typeof S !== 'undefined' && S && S.players && S.players[p] && S.players[p].name) return S.players[p].name; // (a person, in multiplayer)
   const three = typeof S !== 'undefined' && S && S.players && S.players.length > 2;
-  const n = three ? RIVAL_NAMES[p] + ' rival' : the ? 'rival' : 'Rival';
+  const ally = typeof S !== 'undefined' && S && S.teams && typeof allies === 'function' && allies(p, typeof ME !== 'undefined' ? ME : 0);
+  const n = ally ? RIVAL_NAMES[p] + ' ally' : three ? RIVAL_NAMES[p] + ' rival' : the ? 'rival' : 'Rival';
   return the ? 'the ' + n : n;
 }
 

@@ -162,13 +162,27 @@ function mpMenuSettings(final, people) {
     seed: m.seed, diff: m.diff, size: m.size.versus ?? DEFAULT_SIZE.versus, rough: m.rough, rich: m.rich,
     shape: pick.shape, shapeRnd: !final && !!m.shapeRnd, biome: BIOME_ORDER[pick.biome], biomeRnd: !final && !!m.biomeRnd,
     players: clamp(Math.round(m.players) || 2, 2, 4), style: m.style, nuke: !!m.nuke, events: !!m.events, victory: m.victory || 'capture',
+    teams: !!m.teams && total === 4, teamOf: m.teams && total === 4 ? mpTeamSeats() : null,
     sum: mpSummary(),
   };
+}
+
+/**
+ * (the host) Teams: which team each person in the lobby is on (seat → 0 or 1). New arrivals join the smaller team;
+ * no more than two a side; the host moves people across by tapping them.
+ */
+function mpTeamSeats() {
+  const people = NET.seats.map((s) => s.seat), T = UI.mpTeamOf || (UI.mpTeamOf = {}); // (everyone seated, away for a moment or not)
+  for (const k of Object.keys(T)) if (!people.includes(+k)) delete T[k];
+  for (const seat of people) if (T[seat] === undefined) { const a = people.filter((q) => T[q] === 0).length, b = people.filter((q) => T[q] === 1).length; T[seat] = a <= b ? 0 : 1; }
+  for (const t of [0, 1]) { const on = people.filter((q) => T[q] === t); while (on.length > 2) T[on.pop()] = 1 - t; }
+  return { ...T };
 }
 
 /** The game in a line, for the lobby. */
 function mpSummary() {
   const m = UI.menu, bits = [];
+  if (m.teams && Math.round(m.players) === 4) bits.push('Teams, 2 vs 2');
   bits.push(m.shapeRnd ? 'Random map' : SHAPE_PRESETS[m.shape || 0].name, m.biomeRnd ? 'random biome' : biomeName(m.biome || 0), SIZE_PRESETS[m.size.versus ?? DEFAULT_SIZE.versus].name.toLowerCase());
   if (m.victory && m.victory !== 'capture') bits.push(VICTORY[m.victory].name);
   if (m.nuke) bits.push('Nuclear race');
@@ -192,16 +206,29 @@ function renderLobby() {
   const hostV = (NET.seats.find((s) => s.seat === NET.host) || {}).v || gameVersion();
   const odd = people.filter((s) => s.v && s.v !== hostV);
   let k = 0, html = '';
-  for (const s of NET.seats) {
-    const col = s.on ? PLAYER_COLORS[k++ % PLAYER_COLORS.length] : '#555';
-    html += `<li class="${s.on ? '' : 'off'}"><span class="dot" style="background:${col}"></span><span class="nm">${esc(s.name)}</span>` +
-      `<small>${[s.seat === NET.host ? 'host' : '', s.seat === NET.seat ? 'you' : '', s.on ? '' : 'away', s.v && s.v !== hostV ? 'different version' : ''].filter(Boolean).join(' · ')}</small></li>`;
-  }
-  for (let a = 0; a < ai; a++) {
-    const col = PLAYER_COLORS[k++ % PLAYER_COLORS.length];
-    html += `<li class="ai"><span class="dot" style="background:${col}"></span><span class="nm">Computer rival</span><small>${st ? DIFFICULTY[st.diff].label : ''}</small></li>`;
+  const teams = !!(st && st.teams && st.teamOf);
+  const tags = (s) => [s.seat === NET.host ? 'host' : '', s.seat === NET.seat ? 'you' : '', s.on ? '' : 'away', s.v && s.v !== hostV ? 'different version' : ''].filter(Boolean).join(' · ');
+  const person = (s, col) => `<li class="${s.on ? '' : 'off'}${host && teams ? ' mp-swap' : ''}" data-seat="${s.seat}"><span class="dot" style="background:${col}"></span><span class="nm">${esc(s.name)}</span><small>${tags(s)}</small></li>`;
+  const cpu = (col, ally) => `<li class="ai"><span class="dot" style="background:${col}"></span><span class="nm">Computer ${ally ? 'player' : 'rival'}</span><small>${st ? DIFFICULTY[st.diff].label : ''}</small></li>`;
+  if (teams) {
+    // Two a side: the people on each team, then the computer in the empty places (in the colours they'll land in).
+    for (const t of [0, 1]) {
+      html += `<li class="mp-team"><span>Team ${t ? 'B' : 'A'}</span>${host ? '<small>tap a player to move them across</small>' : ''}</li>`;
+      const on = NET.seats.filter((s) => st.teamOf[s.seat] === t);
+      for (let n = 0; n < 2; n++) html += n < on.length ? person(on[n], PLAYER_COLORS[t * 2 + n]) : cpu(PLAYER_COLORS[t * 2 + n], true);
+    }
+  } else {
+    for (const s of NET.seats) html += person(s, s.on ? PLAYER_COLORS[k++ % PLAYER_COLORS.length] : '#555');
+    for (let a = 0; a < ai; a++) html += cpu(PLAYER_COLORS[k++ % PLAYER_COLORS.length], false);
   }
   $('mp-players').innerHTML = html;
+  // (someone seated since the teams were last sent round: put them on one)
+  if (host && teams && NET.seats.some((s) => st.teamOf[s.seat] === undefined)) mpSendSettings();
+  if (host && teams) for (const li of $('mp-players').querySelectorAll('li.mp-swap')) li.onclick = () => {
+    const seat = +li.dataset.seat, T = UI.mpTeamOf || {}, to = 1 - (T[seat] ?? 0);
+    if (NET.seats.filter((s) => T[s.seat] === to).length >= 2) { mpMsg('That team has two players already: move one of them across first.'); return; }
+    T[seat] = to; UI.mpTeamOf = T; sfx('click'); mpSendSettings();
+  };
   $('mp-sum').textContent = st ? st.sum : host ? mpSummary() : 'The host is setting up the game…';
   $('mp-settings').hidden = !host;
   $('mp-start').hidden = !host;
@@ -242,7 +269,14 @@ function mpHostStart() {
   const people = NET.seats.filter((s) => s.on).length;
   if (people < 2) return;
   UI.menu.mode = 'versus';
-  netLobbySend({ t: 'start', settings: mpMenuSettings(true, people) });
+  const settings = mpMenuSettings(true, people);
+  // Teams: Team A takes the first two colonies (one side of the map), Team B the other two; the computer fills the rest.
+  let slots;
+  if (settings.teams && settings.teamOf) {
+    slots = [-1, -1, -1, -1];
+    for (const t of [0, 1]) NET.seats.filter((s) => s.on && settings.teamOf[s.seat] === t).forEach((s, n) => { slots[t * 2 + n] = s.seat; });
+  }
+  netLobbySend({ t: 'start', settings, slots });
 }
 
 function mpLeaveLobby() {
@@ -259,7 +293,7 @@ function mpOnStart(m) {
   if (MP.on || MPJ.on) return; // (a reconnect brings the start again)
   const me = NET.me;
   if (me < 0) return;
-  const humans = m.players.map((_, k) => k);
+  const humans = m.players.map((P, k) => (P ? k : -1)).filter((k) => k >= 0);
   MP.onSnap = mpSnapLoaded;
   MP.onEvent = mpEvent;
   if (NET.fresh) {
@@ -278,18 +312,19 @@ function mpOnStart(m) {
   newGame({
     seed: s.seed, difficulty: s.diff, mode: 'versus', size: s.size, rough: s.rough, rich: s.rich, shape: s.shape, nuke: !!s.nuke,
     biome: s.biome, players: Math.max(s.players, humans.length), style: s.style ? PERSONALITY_ORDER[s.style - 1] : 'random',
-    events: !!s.events, wildlife: false, victory: s.victory, humans,
+    events: !!s.events, wildlife: false, victory: s.victory, humans, teams: !!s.teams,
   });
-  m.players.forEach((P, k) => { S.players[k].name = P.name; });
+  m.players.forEach((P, k) => { if (P) S.players[k].name = P.name; });
   ME = me;
   mpStart({ me, humans, send: netSend });
   MP.onSnap = mpSnapLoaded; MP.onEvent = mpEvent;
   enterGame();
   updateHUD();
   placeMinimap();
-  const others = m.players.filter((_, k) => k !== me).map((P) => P.name);
-  const ai = S.players.length - humans.length;
-  postMsg(ME, `Multiplayer: you against ${others.join(' and ')}${ai ? ` and ${ai} computer rival${ai > 1 ? 's' : ''}` : ''}. Your bots have landed: build up fast!`, 0, 0, 'info');
+  const others = m.players.filter((P, k) => P && k !== me && foes(k, me)).map((P) => P.name);
+  const ai = S.players.filter((P) => P.ai && foes(P.id, me)).length;
+  const ally = S.teams ? S.players.find((P) => allies(P.id, me)) : null;
+  postMsg(ME, `Multiplayer: you against ${[...others, ai ? `${ai} computer rival${ai > 1 ? 's' : ''}` : ''].filter(Boolean).join(' and ')}${ally ? `, with ${ally.name || 'a computer ally'} on your side` : ''}. Your bots have landed: build up fast!`, 0, 0, 'info');
 }
 
 /** The game was replaced (a reloaded page got it, or this device went astray and got the host's). */
