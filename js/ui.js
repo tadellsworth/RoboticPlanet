@@ -433,12 +433,12 @@ function syncMenu() {
     const v = +btn.dataset.v;
     mark(btn, v === menuPlayers());
     if (!btn.dataset.lbl) btn.dataset.lbl = btn.textContent;
-    btn.textContent = mps ? `${v} in all` : btn.dataset.lbl;
+    btn.textContent = mps ? String(v) : btn.dataset.lbl; // (multiplayer: how many colonies, people and computers together)
     btn.disabled = v > room || (!m.shapeRnd && v < minPlayers(shape));
     btn.dataset.info = v === 2 ? 'You vs 1: you and one rival colony, landing at the far end of the planet.'
       : modeInfo('versus', v) + (v <= room ? (m.shapeRnd || v >= minPlayers(shape) ? '' : ` (Not on ${SH.name}: it is for ${minPlayers(shape)} or more.)`)
         : v === 4 ? ` (Not on ${SH.name}: it has room for ${room === 3 ? 'three' : 'two'}. Pick a map type marked “3–4 players”.)` : ` (Not on ${SH.name}: pick a map type marked “3 players” or “3–4 players”.)`);
-    if (mps) btn.dataset.info = `${v} colonies in all: the people in the lobby take the first, computer rivals the rest (more people than this, and they all play).` + (v <= room ? '' : ` (${SH.name} has room for ${room}.)`);
+    if (mps) btn.dataset.info = `${v} colonies: the people in the lobby take the first, computer rivals the rest (more people than this, and they all play).` + (v <= room ? '' : ` (${SH.name} has room for ${room}.)`);
   }
   const few = !m.shapeRnd && want < minPlayers(shape);
   $('m-players-note').hidden = colony || (want <= room && !few);
