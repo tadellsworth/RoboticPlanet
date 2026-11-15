@@ -811,6 +811,9 @@ function generateMap(seed, W, H, cfg) {
       stampRes(cr, mx, my, type === R_URANIUM ? 0.5 : cw * 0.55, type, 0.9);
       n++;
     }
+    // A starter set in each base's clearing, which otherwise holds next to nothing: a stalk grove (Fiber for the
+    // Smelters), Ore, Crystal and boulders, a few tiles out.
+    for (const [dx, dy, rad, type] of [[-5, -2, 1.6, R_STALK], [5, -2, 1.4, R_ORE], [-4.5, 3, 1.2, R_CRYSTAL], [4.5, 3, 1.4, R_BOULDER]]) stampRes(cr, bx + dx, by + dy, rad, type, 0.85);
     links = [[cx(cA), half], [cx(cols - 1 - cA), half]];
   };
   // The cheapest way by land from the base to (tx, ty) on the bottom half, round the shape's barrier,

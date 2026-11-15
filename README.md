@@ -578,7 +578,10 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
   Opening fixes: a Harvester down to its last couple of stalks doesn't count as cutting, and with none cutting and none
   on the way a new one goes up past the usual limit on sites (Alloy-starved sites could otherwise hold every slot while
   the Smelters wait for Fiber); and until its first Bot Foundry has its Alloy, the Ammo Plant and (with Chips enough for
-  the Foundry) the Chip Fab rest, so they don't eat the Alloy the Foundry needs (`forFoundry`).
+  the Foundry) the Chip Fab rest, so they don't eat the Alloy the Foundry needs (`forFoundry`). With no stalks left to
+  cut and Fiber under 6, groves come first (`groveFirst`): a Bio Farm gives its Agribot to a Grove Planter (placed by a
+  Harvester, or else near home) until a Harvester has stalks again, since without Fiber there's no Alloy for another
+  Agribot.
   Once it's ready to march it orders a Bulwark for every five warbots (two, three against a dug-in rival) and a Torch
   for every four (three, four), only with Fuel for Torches. **Raider**: raids three times as often from early on,
   sending every warbot it can spare. **Rusher**: attacks early with a fast-growing army. **Tycoon**: its bots work 15%

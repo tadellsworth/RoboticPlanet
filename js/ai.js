@@ -378,13 +378,23 @@ function aiThink(p) {
   }
 
   // Fuel first: a Grove Planter gives up its Agribot while a Bio Farm has none (and takes one back
-  // once every farm has its own).
-  const farmWaits = me.some((b) => b.built && b.type === 'farm' && !b.paused && !b.staff && !b.staffInc);
+  // once every farm has its own). But with Fiber running out and no stalks left to cut, groves come first:
+  // a Bio Farm gives up its Agribot to a Grove Planter (without Fiber there's no Alloy for another Agribot),
+  // and gets it back once a Harvester has stalks to cut again.
+  const groveFirst = !cutting && playerGoods(p).fiber < 6 && me.some((b) => b.built && b.type === 'grower');
+  const groveStaffed = me.some((b) => b.built && b.type === 'grower' && !b.paused && (b.staff || b.staffInc));
+  let freed = false;
+  for (const b of me) {
+    if (b.type !== 'farm' || !b.built) continue;
+    if (groveFirst && !groveStaffed && !freed && !b.paused && (b.staff || b.staffInc)) { setPaused(b, true); b.forGrove = true; freed = true; }
+    else if (!groveFirst && b.paused && b.forGrove) { setPaused(b, false); delete b.forGrove; }
+  }
+  const farmWaits = !groveFirst && me.some((b) => b.built && b.type === 'farm' && !b.paused && !b.staff && !b.staffInc);
   const farms = me.filter((b) => b.built && b.type === 'farm').length;
   for (const b of me) {
     if (b.type !== 'grower' || !b.built) continue;
     if (farmWaits && !b.paused && (b.staff || b.staffInc)) setPaused(b, true);
-    else if (b.paused && !farmWaits && (kinds.agribot || 0) > farms) setPaused(b, false);
+    else if (b.paused && !farmWaits && (groveFirst || (kinds.agribot || 0) > farms)) setPaused(b, false);
   }
 
   // 2) Retire gatherers and pumps that have run dry so their worker can be reused.
@@ -1420,7 +1430,7 @@ function aiSearchSpot(p, type, lander) {
       } else if (def.plant) {
         let dh = 99;
         for (const b of S.buildings) if (!b.dead && b.owner === p && b.type === 'harvester') dh = Math.min(dh, dist(i, j, b.x, b.y));
-        s = -dh - countResIn(i, j, def.radius, R_STALK) * 0.2;
+        s = -(dh < 99 ? dh : dHome) - countResIn(i, j, def.radius, R_STALK) * 0.2; // (by a Harvester, or else near home)
       } else if (type === 'outpost') {
         const ore = Math.min(sums[0](i, j, 5), 8), cry = Math.min(sums[1](i, j, 5), 8);
         const rest = Math.min(sums[2](i, j, 5), 6) + Math.min(sums[3](i, j, 5), 6) + Math.min(sums[4](i, j, 5), 4) * 1.5;
