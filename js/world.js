@@ -1896,7 +1896,7 @@ function newGame(opts) {
   if (opts.teams && mode === 'versus' && S.players.length === 4) { S.teams = [0, 0, 1, 1]; S.victory = 'capture'; }
   if (m.spare) S.spare = { x: m.spare.x, y: m.spare.y }; // Crossroads for three: the free quarter's corner
   mapEventsStart(m);
-  // Planet events (see EVENTS): the first one comes after EVENT_FIRST seconds.
+  // Planetary events (see EVENTS): the first one comes after EVENT_FIRST seconds.
   if (opts.events) { S.events = true; S.event = null; S.nextEvent = EVENT_FIRST; }
   // Unlimited resources (a testing option on the new-game screen): see unlimitedTopUp.
   if (opts.unlimited && !opts.mission) S.unlimited = true;

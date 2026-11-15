@@ -3,7 +3,7 @@
  * Terrafall — HTML interface: menus, HUD, build menu, info sheets, objectives, messages.
  */
 
-/** Version of the remembered new-game settings: 2 brought new defaults for rival style, Nuclear race and Planet events. */
+/** Version of the remembered new-game settings: 2 brought new defaults for rival style, Nuclear race and Planetary events. */
 const SETTINGS_V = 3;
 
 const UI = {
@@ -65,8 +65,8 @@ function initUI() {
   // The new-game menu (Home and Customise, the map type and biome pickers, the planet preview): initMenu.
   $('p-saveplanet').onclick = () => { if (!S) return; savePlanet(gamePlanet()); sfx('place'); toast(`Saved Planet #${S.seed}: start it again from Saved planets in the new-game menu.`, 'good'); };
   // Map settings (remembered on this device; map size is remembered per mode).
-  // Settings from before v2 drop their rival style, Nuclear race and Planet events, so the new defaults
-  // (a Balanced rival, Nuclear race on, Planet events off) reach every device once. From before v3 (resources
+  // Settings from before v2 drop their rival style, Nuclear race and Planetary events, so the new defaults
+  // (a Balanced rival, Nuclear race on, Planetary events off) reach every device once. From before v3 (resources
   // lowered a notch): Normal stays Normal (the new, leaner default), and the others keep what they gave
   // (Scarce is now Sparse, Sparse Normal, Rich Abundant).
   try {
@@ -298,7 +298,7 @@ function menuSummary() {
   if (m.rich !== DEFAULT_RICH) extra.push(RESOURCE_PRESETS[m.rich].name + ' resources');
   if (!m.nuke) extra.push('no Nuclear race');
   if (colony && !m.wild) extra.push('no wildlife');
-  if (m.events) extra.push('Planet events');
+  if (m.events) extra.push('Planetary events');
   if (todMode() !== 'cycle') extra.push(todMode() === 'day' ? 'always day' : 'always night');
   if (!weatherOn()) extra.push('no weather');
   if (m.unlimited) extra.push('Unlimited resources');
@@ -423,6 +423,8 @@ function syncMenu() {
   $('m-teams-field').hidden = colony || menuPlayers() !== 4;
   for (const btn of $('m-teams').children) { mark(btn, +btn.dataset.v === (teams ? 1 : 0)); btn.dataset.info = +btn.dataset.v ? '2 vs 2: you and the colony beside you against the other two. Take both of their Command Bases to win.' : 'Every colony for itself: the last one standing wins.'; }
   $('m-victory-field').hidden = colony || teams;
+  $('m-victory-note').hidden = colony || teams;
+  $('m-victory-note').textContent = (VICTORY[m.victory] || VICTORY.capture).note;
   // Free-for-all: you and two rivals on the map types with room for three, or three rivals on
   // Crossroads (Random picks a map type with room for them all).
   const shape = m.shape || 0, SH = SHAPE_PRESETS[shape], room = m.shapeRnd ? 4 : maxPlayers(shape), want = clamp(Math.round(m.players) || 2, 2, 4);

@@ -79,9 +79,23 @@ function boot() {
   });
   startDemo();
   requestAnimationFrame(frame);
+  hideSplash();
   if ('serviceWorker' in navigator && location.protocol.startsWith('http') && !window.BOTFALL_NO_SW) {
     navigator.serviceWorker.register('sw.js').catch(() => {});
   }
+}
+
+/**
+ * The loading screen (#splash in index.html): shown from the first paint, it fades out once the game is up, after
+ * a little over a second so it doesn't just flash (at once under test automation). With reduced motion, the
+ * animated icons hold still.
+ */
+function hideSplash() {
+  const el = document.getElementById('splash');
+  if (window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches) for (const svg of document.querySelectorAll('svg.m-icon, svg.splash-icon')) if (svg.pauseAnimations) svg.pauseAnimations();
+  if (!el) return;
+  const wait = typeof navigator !== 'undefined' && navigator.webdriver && !window.BOTFALL_SPLASH ? 0 : Math.max(0, 1250 - performance.now());
+  setTimeout(() => { el.classList.add('done'); setTimeout(() => el.remove(), 500); }, wait);
 }
 
 boot();

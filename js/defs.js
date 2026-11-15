@@ -571,10 +571,14 @@ const MISSILE_FLOOR = 0.35;
  *   domination  hold most of the land for a while (see DOM)
  *   uplinks     hold most of the neutral Uplink towers for a while (see UPLINK)
  */
+// `note`: the one line under the Victory buttons of the new-game menu that says what the chosen one means.
 const VICTORY = {
-  capture: { name: 'Capture', info: 'Capture: take a rival\'s Command Base and all it built is yours; the last colony standing wins.' },
-  domination: { name: 'Domination', info: 'Domination: hold most of the land anyone holds (and a good part of the planet) for 3 minutes straight to win.' },
-  uplinks: { name: 'Uplinks', info: 'Uplinks: neutral relay towers stand across the planet (3 to 5, by the map). One is yours while it stands in your land. Once they come online, 8 minutes in, hold at least half of them (and more than anyone else) for a total of 5 minutes to win.' },
+  capture: { name: 'Capture', info: 'Capture: take a rival\'s Command Base and all it built is yours; the last colony standing wins.',
+    note: 'Win by capturing every rival\'s Command Base: march your warbots in and take it, and all it built is yours.' },
+  domination: { name: 'Domination', info: 'Domination: hold most of the land anyone holds (and a good part of the planet) for 3 minutes straight to win.',
+    note: 'Win by holding most of the land for 3 minutes straight. Outposts and Keeps claim the most; you can win without taking a base.' },
+  uplinks: { name: 'Uplinks', info: 'Uplinks: neutral relay towers stand across the planet (3 to 5, by the map). One is yours while it stands in your land. Once they come online, 8 minutes in, hold at least half of them (and more than anyone else) for a total of 5 minutes to win.',
+    note: 'Win by holding most of the neutral Uplink towers (one is yours while it stands in your land) for 5 minutes in all, once they come online 8 minutes in.' },
 };
 const VICTORY_ORDER = ['capture', 'domination', 'uplinks'];
 /**
@@ -1035,7 +1039,7 @@ const PERSONALITIES = {
 const PERSONALITY_ORDER = ['balanced', 'turtle', 'raider', 'rusher', 'tycoon'];
 
 /*
- * Planet events (a menu option, on by default; never in missions): every five to eight minutes the
+ * Planetary events (a menu option, on by default; never in missions): every five to eight minutes the
  * planet throws something at every colony alike, with a warning EVENT_WARN seconds ahead.
  *   dust    Dust storm: bots move at DUST_SPEED and no Missile can be fired until it blows over.
  *   meteor  Meteor shower: METEOR_HITS strikes on each colony's share of the planet (the same spots

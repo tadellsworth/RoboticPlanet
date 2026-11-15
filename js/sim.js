@@ -7328,7 +7328,7 @@ function evSpeed() { return S.event && S.event.type === 'dust' && S.time >= S.ev
 /** Battery drain in a solar flare. */
 function evDrain() { return S.event && S.event.type === 'flare' && S.time >= S.event.t0 ? FLARE_DRAIN : 1; }
 
-/** Start, run and end planet events (see EVENTS). */
+/** Start, run and end planetary events (see EVENTS). */
 function updateEvents() {
   if (!S.events || (S.mission && !S.mission.events)) return;
   const E = S.event;
@@ -7530,7 +7530,7 @@ function acceptTrade(p) {
 
 /** Has player p researched upgrade k (see TECHS)? */
 function tech(p, k) { const P = S.players[p]; return !!(P && P.tech && P.tech[k]); }
-/** Speed, battery drain and carrying for bot u, with planet events and research applied. */
+/** Speed, battery drain and carrying for bot u, with planetary events and research applied. */
 function speedMul(u) { return evSpeed() * (tech(u.owner, 'motors') ? 1.15 : 1) * (u.pinT > S.time ? MINIGUN_PIN.speed : 1); }
 function drainMul(u) { return evDrain() * (tech(u.owner, 'cells') ? 0.7 : 1); }
 function botCarry(u) { const bt = BOTS[u.type], c = bt.carry || 1; return tech(u.owner, 'cargo') && bt.haul ? c + (bt.rail ? 8 : bt.train ? 6 : bt.truck ? 2 : 1) : c; }

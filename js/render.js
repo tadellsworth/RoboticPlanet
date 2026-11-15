@@ -4737,7 +4737,7 @@ function render(dtReal) {
 }
 
 /**
- * Planet events on screen: a dust storm's haze and blowing grit, a solar flare's glare, meteors
+ * Planetary events on screen: a dust storm's haze and blowing grit, a solar flare's glare, meteors
  * streaking down onto their marked spots, and the trader ship hovering over each Command Base.
  */
 function drawEvent(ctx, ox, oy, z) {

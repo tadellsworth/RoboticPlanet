@@ -186,7 +186,7 @@ function mpSummary() {
   bits.push(m.shapeRnd ? 'Random map' : SHAPE_PRESETS[m.shape || 0].name, m.biomeRnd ? 'random biome' : biomeName(m.biome || 0), SIZE_PRESETS[m.size.versus ?? DEFAULT_SIZE.versus].name.toLowerCase());
   if (m.victory && m.victory !== 'capture') bits.push(VICTORY[m.victory].name);
   if (m.nuke) bits.push('Nuclear race');
-  if (m.events) bits.push('Planet events');
+  if (m.events) bits.push('Planetary events');
   return bits.join(' · ');
 }
 
