@@ -57,7 +57,8 @@ function generateMap(seed, W, H, cfg) {
   const r4back = (t) => { const i = t % W, j = (t / W) | 0; return (W - 1 - i) * W + j; };
   const quarter = (i, j) => (i < hw ? (j >= hw ? 0 : 1) : (j < hw ? 2 : 3)); // BL, TL, TR, BR
   // The tile with its twins (the same spot on every other side of the map).
-  const orbit = (t) => np === 2 ? [t, mir(t)] : quad ? [t, r4(t), r4(r4(t)), r4(r4(r4(t)))] : [t];
+  // (Twin Valleys: four corner quarters, but split west from east by a spine, so only the half turn holds.)
+  const orbit = (t) => np === 2 || SH.twin ? [t, mir(t)] : quad ? [t, r4(t), r4(r4(t)), r4(r4(r4(t)))] : [t];
   const ccx = (W - 1) / 2, ccy = (H - 1) / 2, discR = Math.min(W, H) / 2 - 0.5, SEC = (2 * Math.PI) / 3;
   const sector = (x, y) => { let a = datan2(y - ccy, x - ccx) - Math.PI / 6; a = ((a % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI); return Math.floor(a / SEC) % 3; };
   const rot = (x, y, k) => { const a = k * SEC, c = dcos(a), sn = dsin(a), dx = x - ccx, dy = y - ccy; return [ccx + dx * c - dy * sn, ccy + dx * sn + dy * c]; };
@@ -103,7 +104,19 @@ function generateMap(seed, W, H, cfg) {
     let isles;
     const edgeD = (o, x, y) => (Math.sqrt(sq((x - o.x) / o.rx) + sq((y - o.y) / o.ry)) - 1) * Math.min(o.rx, o.ry);
     const irng = makeRng((seed ^ 0x1514) >>> 0);
-    if (np === 2) {
+    if (quad) {
+      // Four Isles: a home island in each corner quarter, a rich island in the middle, and (where there's room for
+      // the sea round it) an islet on the line between each pair of neighbours. Only the bottom-left quarter is
+      // cut (it holds the islet below the middle and its twin to the left); the turn lays it on the others.
+      const qb = Math.max(10, Math.round(hw * 0.42)), hx = qb, hy = H - 1 - qb;
+      const hr = clamp(hw * 0.29, 8.5, 11), cR = clamp(hw * 0.2, 4.5, 7.5), mR = clamp(hw * 0.1, 2.6, 4), gap = ISLE_GAP + 1.5;
+      isles = [{ x: hx, y: hy, rx: hr, ry: hr }, { x: ccx, y: ccy, rx: cR, ry: cR }];
+      for (let d = cR + mR + gap; d < hw - mR - 1; d += 0.5) {
+        if (dist(hx, hy, ccx, ccy + d) - hr - mR < gap) continue;
+        isles.push({ x: ccx, y: ccy + d, rx: mR, ry: mR }, { x: ccx - d, y: ccy, rx: mR, ry: mR });
+        break;
+      }
+    } else if (np === 2) {
       // A home island each, and in the middle two or three medium islands (by the seed) with a couple of
       // little islets out in the open sea, everything a wide sea apart: ships, or long, dear bridges.
       const homeTop = H - 21.5 - Math.max(0, (halfH - 41) * 0.5);
@@ -628,6 +641,37 @@ function generateMap(seed, W, H, cfg) {
     stampRes(cr, ccx - 1.1, ccy + 4.6, 1.05, R_CRYSTAL, 0.85);
     links = [[hw - 1, hw], [hw - 1, H - 2 - fg], [fg + 1, hw]]; // the plaza and both flank gaps
   };
+  // Pinwheel (three or four): four curved ridges sweep out from a plaza in the middle, one between each pair
+  // of neighbouring quarters. Each ends a few tiles short of the edge (the way round to the next colony) and,
+  // near the plaza, curls round toward the next quarter, so the way from a colony to the plaza bends that
+  // way. Drawn once (the ridge between this quarter and the one above) and laid on the others by put.
+  const pinwheelShape = () => {
+    const cr = makeRng(seed ^ 0x9177e3), sP = seed * 47 + 13, rP = Math.sqrt(31), rb = dist(bx, by, ccx, ccy);
+    const sweep = -1.2, rFlat = Math.max(rP + 6, rb * 0.85), rEnd = hw - 0.5 - Math.max(4, Math.round(qc * 0.4));
+    for (let r = rP + 0.8; r <= rEnd; r += 0.25) {
+      const f = clamp((rFlat - r) / (rFlat - rP), 0, 1), a = Math.PI + sweep * f * f * (3 - 2 * f);
+      const x = ccx + dcos(a) * r, y = ccy + dsin(a) * r, w = 1.35 + 0.9 * fbm(r / 2.5, 3.5, sP, 2);
+      for (let j = Math.floor(y - w); j <= Math.ceil(y + w); j++) for (let i = Math.floor(x - w); i <= Math.ceil(x + w); i++) {
+        if (i < 1 || j < 1 || i >= W - 1 || j >= H - 1 || dist2(i, j, x, y) > w * w || nearBase(i, j, 8.5)) continue;
+        put(id(i, j), T_ROCK, undefined, true);
+      }
+    }
+    // The plaza, with Oil, Ore and Crystal round its rim (as on Crossroads).
+    for (let j = hw; j < H; j++) for (let i = 0; i < hw; i++) if (dist2(i, j, ccx, ccy) <= 31) put(id(i, j), T_GROUND, baseLevel);
+    stampRes(cr, ccx - 3.4, ccy + 3.4, 0.95, R_OIL, 0.9);
+    stampRes(cr, ccx - 4.6, ccy + 1.1, 1.05, R_ORE, 0.85);
+    stampRes(cr, ccx - 1.1, ccy + 4.6, 1.05, R_CRYSTAL, 0.85);
+    links = [[hw - 1, hw], [2, hw], [hw - 1, H - 3]]; // the plaza, and round the outer ends of both ridges
+  };
+  // Four Isles: the island in the middle holds the riches (the Trade Post lands there too).
+  const isles4Shape = () => {
+    const cr = makeRng(seed ^ 0x41e5c7);
+    const k = clamp(hw * 0.12, 3, 4.4); // (round its rim: the middle is kept clear for the Trade Post)
+    stampRes(cr, ccx - k * 0.72, ccy + k * 0.72, 0.9, R_OIL, 0.9);
+    stampRes(cr, ccx - k, ccy + 0.6, 1.0, R_ORE, 0.85);
+    stampRes(cr, ccx - 0.6, ccy + k, 1.0, R_CRYSTAL, 0.85);
+    links = [];
+  };
   // Lakes: a land of many small lakes, roads weaving between them.
   // Lakes: a big lake in the middle and a scatter of smaller ones, wide enough for ships (it's a naval map);
   // the way by land runs round either side of the middle lake.
@@ -842,7 +886,12 @@ function generateMap(seed, W, H, cfg) {
     }
   };
   const shapeExtras = () => {
-    if (quad) crossShape4();
+    if (quad) {
+      if (SH.twin) return; // (Twin Valleys: its spine is laid later, after the turns: see below)
+      if (SH.pinwheel) pinwheelShape();
+      else if (SH.isles4) isles4Shape();
+      else crossShape4();
+    }
     else if (np !== 2) return;
     else if (SH.rift) riftShape();
     else if (SH.ring) ringShape();
@@ -892,7 +941,7 @@ function generateMap(seed, W, H, cfg) {
     for (let j = 0; j < H; j++) for (let i = 0; i < W; i++) if (dist2(i, j, ccx, ccy) <= 6.5) { terrain[id(i, j)] = T_GROUND; res[id(i, j)] = R_NONE; }
     symmetrize();
   }
-  if (quad && !joinedAll(false)) {
+  if (quad && !SH.islands && !joinedAll(false)) {
     // Four quarters: a corridor from player 0's base to the plaza, inside its quarter, turned onto the
     // others; then the ridges are laid again (and linked up) so it can't cut a new way through them.
     let x = bx, y = by;
@@ -990,6 +1039,140 @@ function generateMap(seed, W, H, cfg) {
     }
     for (let t = half * W; t < N; t++) if (low[t] >= 0) { minE[t] = low[t]; if (np === 2) minE[mir(t)] = low[t]; }
     symmetrize();
+  }
+
+  // Three players, the planet in thirds: how far tile (i, j) of player 0's third is from the nearer of its two
+  // sides (the lines at 30° and 150° out from the middle).
+  const S3 = 0.8660254037844386;
+  const sideD = (i, j) => { const dx = i - ccx, dy = j - ccy; return Math.min(Math.abs(0.5 * dx - S3 * dy), Math.abs(0.5 * dx + S3 * dy)); };
+  // (Any tile: turned into player 0's third first.)
+  const inThird0 = (i, j) => { const k = sector(i, j); return k ? rot(i, j, -k) : [i, j]; };
+  // A straight way, three tiles wide, from (x0, y0) toward (x1, y1) as far as `stop` tiles short of it: crags and
+  // water on it become open ground (player 0's third only; the turn lays it on the others).
+  const clearWay = (x0, y0, x1, y1, stop) => {
+    const d = dist(x0, y0, x1, y1);
+    for (let s = 0; s <= d - stop; s += 0.5) {
+      const x = x0 + ((x1 - x0) * s) / d, y = y0 + ((y1 - y0) * s) / d;
+      for (let dj = -1; dj <= 1; dj++) for (let di = -1; di <= 1; di++) {
+        const i = Math.round(x) + di, j = Math.round(y) + dj, t = id(i, j);
+        if (i >= 1 && j >= 1 && i < W - 1 && j < H - 1 && canon(i, j) && terrain[t] !== T_GROUND) { terrain[t] = T_GROUND; res[t] = R_NONE; fert[t] = 0; }
+      }
+    }
+  };
+  // Nothing grows or lies within `w` tiles of the line from the base to the middle, between r0 and r1 tiles from the
+  // middle (player 0's third): where the ramps up or down go, so laying them takes the same from every third.
+  const clearRes = (r0, r1, w) => {
+    const d = dist(bx, by, ccx, ccy), ux = (ccx - bx) / d, uy = (ccy - by) / d;
+    for (let j = 0; j < H; j++) for (let i = 0; i < W; i++) {
+      const r = dist(i, j, ccx, ccy);
+      if (!canon(i, j) || r < r0 || r > r1 || Math.abs((i - bx) * uy - (j - by) * ux) > w) continue;
+      res[id(i, j)] = R_NONE; fert[id(i, j)] = 0;
+    }
+  };
+  // The Wheel (three players): a raised hub in the middle (the richest fields, the only ground on the top level),
+  // a terrace a level down round it, rock spokes from the hub's cliff out along the lines between the thirds, and a
+  // rim road of open ground round the outside where the spokes stop. Everything else is kept below the hub (stepping
+  // down at most a level a tile from the terrace, so smoothing can't wear it away). One ramp up to the hub from each
+  // third (set in step 6).
+  const rHub = Math.max(4.5, discR * 0.24), rRing = rHub + 2.5, rimW = 5;
+  if (SH.wheel && np === 3) {
+    const top = L - 1, mid = L - 2, sW = seed * 61 + 17, low = new Int8Array(N).fill(-1), q = [];
+    clearWay(bx, by, ccx, ccy, rRing - 0.5); // the way from the base to the terrace below the hub
+    for (let j = 0; j < H; j++) for (let i = 0; i < W; i++) {
+      if (!canon(i, j)) continue;
+      const t = id(i, j), r = dist(i, j, ccx, ccy);
+      if (r <= rHub) { terrain[t] = T_GROUND; elev[t] = top; minE[t] = top; continue; }
+      if (r < discR - rimW && sideD(i, j) < 1.4 + 0.8 * fbm(i / 3, j / 3, sW, 2)) { terrain[t] = T_ROCK; res[t] = R_NONE; fert[t] = 0; continue; }
+      if (r >= discR - rimW && terrain[t] !== T_GROUND) { terrain[t] = T_GROUND; res[t] = R_NONE; fert[t] = 0; }
+      if (r <= rRing) { terrain[t] = T_GROUND; elev[t] = mid; minE[t] = mid; low[t] = mid; q.push(t); }
+      else elev[t] = Math.min(elev[t], mid);
+    }
+    for (let h = 0; h < q.length; h++) {
+      orth(q[h], (u) => {
+        if (!canon(u % W, (u / W) | 0) || low[u] >= low[q[h]] - 1) return;
+        low[u] = low[q[h]] - 1;
+        if (elev[u] < low[u]) elev[u] = low[u];
+        minE[u] = Math.max(minE[u], low[u]);
+        if (low[u] > 0) q.push(u);
+      });
+    }
+    // The hub's riches (its third of them: the turn lays the rest).
+    const cr = makeRng(seed ^ 0x3e1f9b);
+    stampRes(cr, ccx - 2.4, ccy + 2.6, 1.3, R_ORE, 0.85);
+    stampRes(cr, ccx + 2.4, ccy + 2.6, 1.2, R_CRYSTAL, 0.85);
+    if (cfg.nuke) putRes(id(Math.round(ccx + 1), Math.round(ccy + 4)), R_URANIUM);
+    clearRes(rHub - 1.5, rRing + 1, 2);
+    symmetrize();
+  }
+  // Three Mesas (three players): each colony on a tall mesa (level 3) that fills most of its third, with terraces a
+  // level and two levels down round its edge and the canyon floor (level 0) below: a basin in the middle, holding the
+  // riches, and a narrow canyon along each line between the thirds, where the mesas come within a Viaduct's span
+  // of each other. One way down off each mesa, toward the basin (set in step 6).
+  const MESA = 3, mesaGap = 4.5, rBasin = discR * 0.45;
+  const mesaE = (i, j) => { const [x, y] = inThird0(i, j); return Math.min(sideD(x, y) - mesaGap, dist(x, y, ccx, ccy) - rBasin); };
+  if (SH.mesas && np === 3) {
+    clearWay(bx, by, ccx, ccy, rBasin - 5); // the way down to the basin
+    for (let j = 0; j < H; j++) for (let i = 0; i < W; i++) {
+      if (!canon(i, j)) continue;
+      const t = id(i, j), e = mesaE(i, j), lv = e >= 0 ? MESA : e >= -2 ? MESA - 1 : e >= -3.5 ? MESA - 2 : 0;
+      elev[t] = lv; minE[t] = lv;
+    }
+    const cr = makeRng(seed ^ 0x5a3e17), rIn = rBasin - 4.5;
+    stampRes(cr, ccx - rIn * 0.42, ccy + rIn * 0.38, 1.7, R_ORE, 0.85);
+    stampRes(cr, ccx + rIn * 0.42, ccy + rIn * 0.38, 1.5, R_CRYSTAL, 0.85);
+    stampRes(cr, ccx + rIn * 0.62, ccy + rIn * 0.05, 1.4, R_BOULDER, 0.8);
+    stampRes(cr, ccx - rIn * 0.62, ccy + rIn * 0.05, 1.8, F_FERTILE, 0.8);
+    if (cfg.nuke) putRes(id(Math.round(ccx), Math.round(ccy + rIn * 0.5)), R_URANIUM);
+    clearRes(rBasin - 5, rBasin + 1.5, 2.5);
+    symmetrize();
+  }
+  // Twin Valleys (four players): a mountain spine down the middle of the planet splits it into a west valley (the
+  // colonies in the bottom-left and top-left corners) and an east one, crossed only by two passes, a south one and its
+  // twin in the north, with rich fields at both ends of each. Laid after the quarters are turned (it is only
+  // symmetric under the half turn), with the ways from each base to the passes, and up its valley, kept open.
+  if (SH.twin && quad) {
+    const sT = seed * 59 + 31, pass = Math.round(hw * 0.45), spine = new Uint8Array(N);
+    const th = (j) => 2 + (fbm(3.5, Math.min(j, H - 1 - j) / 3, sT, 2) > 0.55 ? 1 : 0); // half its width (the same at the twin row)
+    const inPass = (j) => Math.abs(j - (hw + pass)) <= 1 || Math.abs(j - (hw - 1 - pass)) <= 1;
+    for (let j = 0; j < H; j++) for (let i = hw - th(j); i <= hw - 1 + th(j); i++) {
+      const t = id(i, j);
+      if (inPass(j)) { terrain[t] = T_GROUND; res[t] = R_NONE; fert[t] = 0; continue; }
+      terrain[t] = T_ROCK; res[t] = R_NONE; fert[t] = 0; spine[t] = 1;
+    }
+    // The cheapest way by land from tile s to tile g (never through the spine), opened up where it isn't ground,
+    // with its twin.
+    const carve = (s, g) => {
+      const cost = new Float64Array(N).fill(Infinity), from = new Int32Array(N).fill(-1), heap = new MinHeap();
+      cost[s] = 0; heap.push(s, 0);
+      while (heap.size) {
+        const t = heap.pop();
+        if (t === g) break;
+        orth(t, (u) => { if (spine[u]) return; const c = cost[t] + (terrain[u] === T_GROUND ? 1 : 25); if (c < cost[u]) { cost[u] = c; from[u] = t; heap.push(u, c); } });
+      }
+      if (from[g] < 0) return;
+      for (let t = g; t >= 0; t = from[t]) {
+        for (const u of [t, mir(t)]) if (terrain[u] !== T_GROUND) { terrain[u] = T_GROUND; res[u] = R_NONE; fert[u] = 0; }
+        if (t === s) break;
+      }
+    };
+    // (To the passes' own west ends, so the twins reach their east ends.)
+    const sw = id(hw - th(hw + pass), hw + pass), nw = id(hw - th(hw - 1 - pass), hw - 1 - pass), tl = bases[1];
+    carve(id(bx, by), sw); carve(id(tl.x, tl.y), nw); carve(id(bx, by), id(tl.x, tl.y));
+    // Rich fields at the west end of each pass (and, by the half turn, the east end of the other).
+    const cr = makeRng(seed ^ 0x2b7d41);
+    const stamp = (x, y, rad, type, fill) => {
+      for (let j = Math.floor(y - rad); j <= Math.ceil(y + rad); j++) for (let i = Math.floor(x - rad); i <= Math.ceil(x + rad); i++) {
+        const t = id(i, j);
+        if (i < 1 || j < 1 || i >= W - 1 || j >= H - 1 || dist2(i, j, x, y) > rad * rad || cr() >= fill) continue;
+        for (const u of [t, mir(t)]) if (terrain[u] === T_GROUND && !spine[u]) { res[u] = type; fert[u] = 0; }
+      }
+    };
+    for (const pj of [hw + pass, hw - 1 - pass]) {
+      const x = hw - th(pj) - 3.5, up = pj < hw ? -1 : 1;
+      stamp(x - 1, pj + up * 3, 1.4, R_ORE, 0.85);
+      stamp(x - 1, pj - up * 3, 1.3, R_CRYSTAL, 0.85);
+      stamp(x - 4, pj, 1.0, R_OIL, 0.9);
+    }
   }
 
   // 6) Shape the levels into clean terraces, then connect them with ramps.
@@ -1091,7 +1274,7 @@ function generateMap(seed, W, H, cfg) {
     // Crater and Plateau maps: replace the ramps that happened to land on the crater's or the
     // plateaus' cliffs with set ones: one into the crater on each side (facing each base) and two
     // down off each plateau (one toward the middle, one to the side). Each is two tiles wide.
-    if (SH.crater || SH.plateau) {
+    if (SH.crater || SH.plateau || SH.wheel || SH.mesas) {
       const keep = ramp.slice();
       const set = (t) => { ramp[t] = 1; res[t] = R_NONE; if (np === 2) { ramp[mir(t)] = 1; res[mir(t)] = R_NONE; } };
       // The lower tile of a cliff step on ray (x0,y0) → angle a, from `inside` to outside.
@@ -1116,7 +1299,39 @@ function generateMap(seed, W, H, cfg) {
       };
       // A crag in the way: try a little to either side.
       const tryRamp = (x0, y0, a, inside) => { for (const d of [0, 0.15, -0.15, 0.3, -0.3, 0.5, -0.5]) if (rayRamp(x0, y0, a + d, inside)) return true; return false; };
-      if (SH.crater) {
+      if (SH.wheel) {
+        // Clear the ramps on the hub's cliff, then lay one up to it from each third (from the hub out toward its base).
+        const hub = (i, j) => dist2(i, j, ccx, ccy) <= rHub * rHub;
+        for (let t = 0; t < N; t++) {
+          if (!ramp[t]) continue;
+          let edge = false;
+          orth(t, (u) => { if (hub(u % W, (u / W) | 0) && elev[u] === elev[t] + 1) edge = true; });
+          if (edge) ramp[t] = 0;
+        }
+        for (const b of bases) tryRamp(ccx, ccy, datan2(b.y - ccy, b.x - ccx), hub);
+      } else if (SH.mesas) {
+        // The canyon floor is all one level, so every cliff is a mesa's: clear them all and lay one way down off
+        // each mesa, a ramp at each step from its base straight toward the basin (two tiles wide where it can).
+        ramp.fill(0);
+        for (const b of bases) {
+          let a = id(b.x, b.y), x = b.x, y = b.y;
+          const d = dist(b.x, b.y, ccx, ccy), ux = (ccx - b.x) / d, uy = (ccy - b.y) / d, sx = Math.sign(ux), sy = Math.sign(uy);
+          const off = (px, py) => Math.abs((px - b.x) * uy - (py - b.y) * ux); // how far (px, py) is off the straight line
+          for (let n = 0; n < 4 * d && elev[a] > 0; n++) {
+            // A step along the way, across or down, whichever keeps nearer the straight line.
+            if (sx && (!sy || off(x + sx, y) < off(x, y + sy))) x += sx; else y += sy;
+            const t = id(x, y);
+            if (!ground(t) || elev[t] > elev[a] || elev[t] < elev[a] - 1) break;
+            if (elev[t] === elev[a] - 1) {
+              ramp[t] = 1; res[t] = R_NONE;
+              // A second lane: a tile beside it on the same level, under the same step (straight across first).
+              const side = Math.abs(t - a) === 1 ? W : 1, up = (v) => { let ok = false; orth(v, (w) => { if (ground(w) && elev[w] === elev[t] + 1) ok = true; }); return ok; };
+              for (const v of [t + side, t - side, t + (t - a), t - (t - a)]) if (v >= 0 && v < N && v !== a && ground(v) && !ramp[v] && elev[v] === elev[t] && Math.abs((v % W) - (t % W)) <= 1 && up(v)) { ramp[v] = 1; res[v] = R_NONE; break; }
+            }
+            a = t;
+          }
+        }
+      } else if (SH.crater) {
         // Clear every ramp onto the floor (on the floor, or on the rim right beside it).
         for (let t = 0; t < N; t++) {
           if (!ramp[t]) continue;
@@ -1174,6 +1389,17 @@ function generateMap(seed, W, H, cfg) {
       lab[t] = t;
       for (let h = 0; h < q.length; h++) orth(q[h], (u) => { if (lab[u] < 0 && terrain[u] !== T_WATER) { lab[u] = t; q.push(u); } });
       if (q.length < 8 && !q.some((u) => bases.some((b) => id(b.x, b.y) === u))) for (const u of q) { terrain[u] = T_WATER; res[u] = R_NONE; fert[u] = 0; ramp[u] = 0; }
+    }
+  }
+  // Four Isles in a team game: a sandbar joins allies' islands, two tiles wide, from the bottom-left island straight
+  // up to the top-left one (its twin, by the half turn, joins the right-hand pair): shallow water robots can wade
+  // across (trucks need a bridge).
+  if (SH.isles4 && quad && cfg.teams) {
+    const tl = bases[1];
+    for (const i of [bx, bx + 1]) for (let j = tl.y; j <= by; j++) {
+      const t = id(i, j);
+      if (terrain[t] === T_WATER) for (const u of [t, mir(t)]) { fordA[u] = 1; elev[u] = elev[id(bx, by)]; }
+      else if (terrain[t] !== T_GROUND) for (const u of [t, mir(t)]) { terrain[u] = T_GROUND; res[u] = R_NONE; elev[u] = elev[id(bx, by)]; } // (a crag in the way)
     }
   }
   // Crossroads for three: the quarter beside you to the north (top left) has no one in it, and is rich.
@@ -1468,15 +1694,17 @@ function generateMap(seed, W, H, cfg) {
 
 /** The most players map type `shape` has room for: 4 (Crossroads), 3 (the free-for-all maps) or 2. */
 function maxPlayers(shape) { const sh = SHAPE_PRESETS[shape || 0] || {}; return sh.players || (sh.ffa ? 3 : 2); }
+/** The fewest players map type `shape` is made for: 2, or 3 on the maps built round three or four colonies. */
+function minPlayers(shape) { const sh = SHAPE_PRESETS[shape || 0] || {}; return sh.minPlayers || 2; }
 
 /** How many players a game asking for `want` gets: as many as the map type has room for (Versus only). */
-function playerCount(mode, shape, want) { return mode === 'versus' ? clamp(Math.round(want) || 2, 2, maxPlayers(shape)) : 2; }
+function playerCount(mode, shape, want) { return mode === 'versus' ? clamp(Math.round(want) || 2, minPlayers(shape), maxPlayers(shape)) : minPlayers(shape); }
 
 /**
  * Is this a four-quarter map: Crossroads for three or four players (one corner quarter each; three
  * leave the quarter beside you to the north free)?
  */
-function quadMap(st) { return !!st && st.players >= 3 && !!(SHAPE_PRESETS[st.shape || 0] || {}).cross; }
+function quadMap(st) { const sh = SHAPE_PRESETS[(st && st.shape) || 0] || {}; return !!st && st.players >= 3 && !!(sh.cross || sh.quad4); }
 
 /** Map width and height for these settings (size and shape); the height stays even so the map mirrors cleanly. */
 function mapDims(st) {
@@ -1577,7 +1805,8 @@ function newGame(opts) {
   const rival = (p) => !humans.includes(p);
   const seed = opts.seed >>> 0;
   const diff = DIFFICULTY[opts.difficulty] ? opts.difficulty : 'normal';
-  const m = generateMap(seed, W, H, settings);
+  // (Four Isles joins allies' islands with a sandbar in a team game.)
+  const m = generateMap(seed, W, H, opts.teams && mode === 'versus' && settings.players === 4 ? { ...settings, teams: true } : settings);
   if (opts.layout) opts.layout(m, W, H); // missions hand-place features on their planet
   S = {
     v: 1, mode, seed, W, H, settings, difficulty: diff, time: 0, nextId: 1, winner: -1, milestone: 0,
@@ -1591,7 +1820,7 @@ function newGame(opts) {
     bAt: new Int32Array(W * H),
     players: Array.from({ length: settings.players }, (_, p) => ({
       id: p,
-      absent: mode === 'colony' && p === 1,
+      absent: mode === 'colony' && p !== 0,
       ai: (rival(p) && mode !== 'colony') || (p === 0 && !!opts.autoplay),
       mult: rival(p) ? DIFFICULTY[diff].mult : 1,
       lander: 0,

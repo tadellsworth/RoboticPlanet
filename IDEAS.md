@@ -54,6 +54,13 @@ Smelter now waits with Ore stored only while that Ore is already on its way. Wha
 Fuel Stations went dry around minute 10 and its robots crawled, which starved Fiber, Ore and Alloy in turn. It now puts
 Fuel first when it runs low. AI-vs-AI wars on Islands can still run past 40 minutes now and then.
 
+On the maps for three or four (The Wheel, Three Mesas, Pinwheel, Four Isles, Twin Valleys), every colony grows, gets
+off its home ground and fights in AI-vs-AI games, and colonies are captured on every one. Two things to keep an eye
+on: in one Pinwheel game (seed 1) one colony ran out of Fuel by minute 5 and never built an Ore Mine (the others did
+fine on the same ground), and one Three Mesas game (seed 2) went 50 minutes without a capture (each mesa has a single
+way down, which turrets hold well; three other seeds had captures at 16, 26 and 40 minutes). The rival doesn't yet
+span the Three Mesas canyons with Viaducts: its Viaduct search only looks for crossings to land it can't walk to.
+
 ## Balance decisions
 
 Decided: Fuel a bit scarcer (one Fuel recharges 2 batteries); Viaducts stay open to both sides; a nuclear missile that

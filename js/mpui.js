@@ -153,7 +153,7 @@ function mpRejoinGame() {
 
 /** The host's settings, as they're sent round (final: Random picked, for the start). */
 function mpMenuSettings(final, people) {
-  const m = UI.menu, total = clamp(Math.max(Math.round(m.players) || 2, people || 2), 2, 4);
+  const m = UI.menu, least = m.shapeRnd ? 2 : minPlayers(m.shape || 0), total = clamp(Math.max(Math.round(m.players) || 2, people || 2, least), 2, 4);
   const keep = m.players;
   m.players = total;
   const pick = final ? resolveRandom() : { shape: m.shape || 0, biome: m.biome || 0 };
@@ -161,7 +161,7 @@ function mpMenuSettings(final, people) {
   return {
     seed: m.seed, diff: m.diff, size: m.size.versus ?? DEFAULT_SIZE.versus, rough: m.rough, rich: m.rich,
     shape: pick.shape, shapeRnd: !final && !!m.shapeRnd, biome: BIOME_ORDER[pick.biome], biomeRnd: !final && !!m.biomeRnd,
-    players: clamp(Math.round(m.players) || 2, 2, 4), style: m.style, nuke: !!m.nuke, events: !!m.events, victory: m.victory || 'capture',
+    players: clamp(Math.max(Math.round(m.players) || 2, least), 2, 4), style: m.style, nuke: !!m.nuke, events: !!m.events, victory: m.victory || 'capture',
     teams: !!m.teams && total === 4, teamOf: m.teams && total === 4 ? mpTeamSeats() : null,
     sum: mpSummary(),
   };
@@ -236,7 +236,7 @@ function renderLobby() {
   let why = '';
   if (people.length < 2) why = `Waiting for the others: give them the room code ${NET.code}.`;
   else if (odd.length) why = `${odd.map((s) => s.name).join(' and ')} ${odd.length > 1 ? 'have' : 'has'} a different version of the game: close it and open it again (with the internet on) to update, then rejoin.`;
-  else if (total > room) why = `${st && !st.shapeRnd ? SHAPE_PRESETS[st.shape].name : 'That map type'} has room for ${room}: pick another map type in Change settings (Crossroads takes four).`;
+  else if (total > room) why = `${st && !st.shapeRnd ? SHAPE_PRESETS[st.shape].name : 'That map type'} has room for ${room}: pick another map type in Change settings (one marked “3–4 players” takes four).`;
   $('mp-start').disabled = !!why;
   $('mp-lmsg').classList.remove('ok');
   $('mp-lmsg').textContent = host || people.length < 2 || odd.length ? why : 'Waiting for the host to start the game…';

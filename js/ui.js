@@ -237,7 +237,7 @@ const mapGroupName = (g) => { const G = MAP_GROUPS.find((x) => x.key === g); ret
 function menuPlayers() {
   const m = UI.menu, want = clamp(Math.round(m.players) || 2, 2, 4);
   if (m.mode !== 'versus') return 2;
-  return m.shapeRnd ? want : Math.min(want, maxPlayers(m.shape || 0));
+  return m.shapeRnd ? want : clamp(want, minPlayers(m.shape || 0), maxPlayers(m.shape || 0));
 }
 /** A team game: four colonies, two against two (the Teams choice, with four players)? */
 function menuTeams() { return UI.menu.mode === 'versus' && !!UI.menu.teams && menuPlayers() === 4; }
@@ -246,13 +246,14 @@ function menuThree() { return menuPlayers() > 2; }
 /** The Crossroads map type (four quarters: three or four players get one corner quarter each). */
 const crossIdx = () => Math.max(0, SHAPE_PRESETS.findIndex((P) => P.cross));
 function modeInfo(mode, n) {
-  const m = UI.menu, onCross = n === 4 || (!m.shapeRnd && SHAPE_PRESETS[m.shape || 0].cross);
+  const m = UI.menu, SH = SHAPE_PRESETS[m.shape || 0], quad = !m.shapeRnd && !!(SH.cross || SH.quad4), onCross = n === 4 || quad;
+  const where = m.shapeRnd ? 'a square planet' : quad ? SH.name : 'a square planet';
   const win = 'Take a rival\'s Command Base and all it built is yours; the last colony standing wins.';
   return mode === 'colony'
     ? (UI.menu.wild ? 'Colony: no rival, but creatures nest in the wilds and raid what you build near them. Build, research and spread across the planet.'
       : 'Colony: no rival. Settle the planet at your own pace: build, research and spread across the planet.')
-    : n === 4 ? `Free-for-all · 4: you and three rival colonies (red, green and purple) on Crossroads, one in each corner quarter. ${win}`
-      : n === 3 && onCross ? `Free-for-all · 3: you and two rival colonies on Crossroads, each in a corner quarter; the quarter beside you is free and rich. ${win}`
+    : n === 4 ? `Free-for-all · 4: you and three rival colonies (red, green and purple) on ${where}, one in each corner quarter. ${win}`
+      : n === 3 && onCross ? `Free-for-all · 3: you and two rival colonies on ${where}, each in a corner quarter; the quarter beside you is free and rich. ${win}`
         : n === 3 ? `Free-for-all: you and two rival colonies${m.shapeRnd ? '' : ' on a round planet'}. ${win}`
           : 'Versus: race a rival colony across the planet. Build up, then capture its Command Base (or hold most of the land: see Victory) to win.';
 }
@@ -418,14 +419,17 @@ function syncMenu() {
     mark(btn, v === menuPlayers());
     if (!btn.dataset.lbl) btn.dataset.lbl = btn.textContent;
     btn.textContent = mps ? `${v} in all` : btn.dataset.lbl;
-    btn.disabled = v > room;
+    btn.disabled = v > room || (!m.shapeRnd && v < minPlayers(shape));
     btn.dataset.info = v === 2 ? 'You vs 1: you and one rival colony, landing at the far end of the planet.'
-      : modeInfo('versus', v) + (v <= room ? '' : v === 4 ? ` (Crossroads only: ${SH.name} has room for ${room === 3 ? 'three' : 'two'}.)` : ` (Not on ${SH.name}: pick a map type marked “3 players”, or Crossroads.)`);
+      : modeInfo('versus', v) + (v <= room ? (m.shapeRnd || v >= minPlayers(shape) ? '' : ` (Not on ${SH.name}: it is for ${minPlayers(shape)} or more.)`)
+        : v === 4 ? ` (Not on ${SH.name}: it has room for ${room === 3 ? 'three' : 'two'}. Pick a map type marked “3–4 players”.)` : ` (Not on ${SH.name}: pick a map type marked “3 players” or “3–4 players”.)`);
     if (mps) btn.dataset.info = `${v} colonies in all: the people in the lobby take the first, computer rivals the rest (more people than this, and they all play).` + (v <= room ? '' : ` (${SH.name} has room for ${room}.)`);
   }
-  $('m-players-note').hidden = colony || want <= room;
-  $('m-players-note').textContent = want === 4 ? `${SH.name} has room for ${room === 3 ? 'three players' : 'two players only'}: pick Crossroads for four.`
-    : `${SH.name} is for two players only: pick a map type marked “3 players” (or Crossroads) for a free-for-all.`;
+  const few = !m.shapeRnd && want < minPlayers(shape);
+  $('m-players-note').hidden = colony || (want <= room && !few);
+  $('m-players-note').textContent = few ? `${SH.name} is made for ${minPlayers(shape) === room ? ['', '', 'two', 'three', 'four'][room] : 'three or four'} players: you'll play with ${minPlayers(shape) - 1} rivals.`
+    : want === 4 ? `${SH.name} has room for ${room === 3 ? 'three players' : 'two players only'}: pick a map type marked “3–4 players” for four.`
+    : `${SH.name} is for two players only: pick a map type marked “3 players” or “3–4 players” for a free-for-all.`;
   $('m-seed').textContent = 'Planet #' + m.seed;
   renderPlanets();
   for (const id of ['m-size', 'm-rough', 'm-rich', 'm-style']) {
@@ -464,8 +468,8 @@ function syncPickRows() {
   const sRow = $('m-shape'), bRow = $('m-biome'), bk = BIOME_ORDER[m.biome || 0];
   sRow.querySelector('.m-pick-name').textContent = m.shapeRnd ? 'Random' : SH.name;
   const np = menuPlayers();
-  sRow.querySelector('.m-pick-meta').textContent = m.shapeRnd ? (np === 4 ? 'Crossroads (4 players)' : three ? 'any for 3 players' : 'any map type') : mapGroupName(SH.group);
-  sRow.dataset.info = m.shapeRnd ? `Random map type: ${np === 4 ? 'Crossroads, the one with room for four players' : three ? 'one with room for three players' : 'any of them'}, picked when you land.` : `${SH.name}: ${SH.blurb || ''}`;
+  sRow.querySelector('.m-pick-meta').textContent = m.shapeRnd ? (np === 4 ? 'any for 4 players' : three ? 'any for 3 players' : 'any map type') : mapGroupName(SH.group);
+  sRow.dataset.info = m.shapeRnd ? `Random map type: ${np === 4 ? 'one with room for four players' : three ? 'one with room for three players' : 'any made for two'}, picked when you land.` : `${SH.name}: ${SH.blurb || ''}`;
   sRow.setAttribute('aria-label', `Map type: ${m.shapeRnd ? 'Random' : SH.name}. Change`);
   drawThumbOnce(sRow.querySelector('canvas'), 'shape:' + (m.shapeRnd ? 'rnd' : shape), (cv) => drawShapeThumb(cv, m.shapeRnd ? null : SH));
   bRow.querySelector('.m-pick-name').textContent = m.biomeRnd ? 'Random' : biomeName(m.biome || 0);
@@ -493,7 +497,7 @@ function openPicker(kind) {
     for (const g of groups.concat(other)) {
       if (!g.list.length) continue;
       h += `<section class="pgroup" aria-label="${g.name}"><h3>${g.name}</h3><div class="pgrid">` + g.list.map((i) => {
-        const P = SHAPE_PRESETS[i], badges = (maxPlayers(i) > 2 ? `<span class="badge ffa">${maxPlayers(i) === 4 ? '3–4' : '3'} players</span>` : '') + (P.naval ? '<span class="badge naval">Naval</span>' : '');
+        const P = SHAPE_PRESETS[i], badges = (maxPlayers(i) > 2 ? `<span class="badge ffa">${minPlayers(i) === maxPlayers(i) ? maxPlayers(i) : `${Math.max(3, minPlayers(i))}–${maxPlayers(i)}`.replace('3–3', '3')} players${minPlayers(i) > 2 ? ' only' : ''}</span>` : '') + (P.naval ? '<span class="badge naval">Naval</span>' : '');
         return card(i, !m.shapeRnd && i === (m.shape || 0), text(P.name, badges, P.blurb || ''), '', P.blurb);
       }).join('') + '</div></section>';
     }
@@ -579,7 +583,7 @@ function resolveRandom() {
   const m = UI.menu, out = { shape: m.shape || 0, biome: m.biome || 0 };
   if (m.shapeRnd) {
     const want = m.mode === 'versus' ? clamp(Math.round(m.players) || 2, 2, 4) : 2;
-    const pool = SHAPE_PRESETS.map((_, i) => i).filter((i) => maxPlayers(i) >= want);
+    const pool = SHAPE_PRESETS.map((_, i) => i).filter((i) => maxPlayers(i) >= want && minPlayers(i) <= want);
     out.shape = pool.length ? pool[Math.floor(Math.random() * pool.length)] : 0;
   }
   if (m.biomeRnd) out.biome = Math.floor(Math.random() * BIOME_ORDER.length);
@@ -634,7 +638,7 @@ function drawShapeThumb(cv, P) {
     ctx.shadowColor = 'rgba(0,0,0,0.6)'; ctx.shadowBlur = 4; ctx.fillText('?', w / 2, h / 2 + s * 0.02); ctx.shadowBlur = 0;
     return;
   }
-  const i = SHAPE_PRESETS.indexOf(P), d = mapDims({ size: 1, shape: Math.max(0, i), players: 2 });
+  const i = SHAPE_PRESETS.indexOf(P), d = mapDims({ size: 1, shape: Math.max(0, i), players: P.minPlayers || 2 });
   let s = strHash(P.name);
   const rnd = () => ((s = (Math.imul(s, 1664525) + 1013904223) >>> 0) / 4294967296);
   // The map's own proportions (Long haul is tall and narrow), inside the thumbnail.
@@ -687,6 +691,53 @@ function drawShapeThumb(cv, P) {
     for (const q of mids) isle(...q);
     if (!P.tidal) isle(0.12 + rnd() * 0.1, 0.72, 0.035, 0.022);
     crags = 0;
+  }
+  // The maps made for three or four: their own layouts, with a base marker for each colony.
+  let marks = null;
+  const disc = (fill) => { ctx.fillStyle = THUMB.space; ctx.fillRect(x0, y0, mw, mh); ctx.beginPath(); ctx.arc(X(0.5), Y(0.5), U * 0.48, 0, 7); ctx.fillStyle = fill; ctx.fill(); };
+  const polar = (a, r) => [0.5 + (Math.cos(a) * r * U) / mw, 0.5 + (Math.sin(a) * r * U) / mh];
+  const third = (k) => Math.PI / 2 + (k * 2 * Math.PI) / 3; // (the bases: down, then round)
+  if (P.wheel) {
+    disc(THUMB.ground);
+    ctx.beginPath(); ctx.arc(X(0.5), Y(0.5), U * 0.4, 0, 7); ctx.strokeStyle = THUMB.hi; ctx.lineWidth = Math.max(1, U * 0.05); ctx.stroke();
+    for (let k = 0; k < 3; k++) line([polar(third(k) + Math.PI / 3, 0.12), polar(third(k) + Math.PI / 3, 0.36)], THUMB.rock, Math.max(2, U * 0.07));
+    ctx.beginPath(); ctx.arc(X(0.5), Y(0.5), U * 0.13, 0, 7); ctx.fillStyle = THUMB.hi; ctx.fill(); ctx.strokeStyle = 'rgba(40,20,10,0.55)'; ctx.lineWidth = Math.max(1, U * 0.02); ctx.stroke();
+    for (let k = 0; k < 3; k++) { const [u, v] = polar(third(k), 0.14); ctx.fillStyle = THUMB.ramp; ctx.fillRect(X(u) - U * 0.025, Y(v) - U * 0.025, U * 0.05, U * 0.05); }
+    for (let k = 0; k < 4; k++) { ctx.fillStyle = THUMB.res[k % 3 + 1]; const [u, v] = polar(k * 1.6, 0.06); ctx.beginPath(); ctx.arc(X(u), Y(v), Math.max(1, U * 0.025), 0, 7); ctx.fill(); }
+    marks = [0, 1, 2].map((k) => polar(third(k), 0.33)); crags = 0;
+  } else if (P.mesas) {
+    disc(THUMB.lo);
+    for (let k = 0; k < 3; k++) {
+      const a0 = third(k) - Math.PI / 3 + 0.2, a1 = third(k) + Math.PI / 3 - 0.2;
+      ctx.beginPath(); ctx.arc(X(0.5), Y(0.5), U * 0.45, a0, a1); ctx.arc(X(0.5), Y(0.5), U * 0.2, a1, a0, true); ctx.closePath();
+      ctx.save(); ctx.translate(U * 0.02, U * 0.03); ctx.fillStyle = 'rgba(0,0,0,0.45)'; ctx.fill(); ctx.restore();
+      ctx.fillStyle = THUMB.hi; ctx.fill(); ctx.strokeStyle = THUMB.rockHi; ctx.lineWidth = Math.max(1, U * 0.015); ctx.stroke();
+      const [u, v] = polar(third(k), 0.19); ctx.fillStyle = THUMB.ramp; ctx.fillRect(X(u) - U * 0.025, Y(v) - U * 0.025, U * 0.05, U * 0.05);
+    }
+    for (let k = 0; k < 5; k++) { ctx.fillStyle = THUMB.res[k % 3 + 1]; const [u, v] = polar(k * 1.3, 0.08); ctx.beginPath(); ctx.arc(X(u), Y(v), Math.max(1, U * 0.028), 0, 7); ctx.fill(); }
+    marks = [0, 1, 2].map((k) => polar(third(k), 0.33)); crags = 0;
+  } else if (P.pinwheel) {
+    for (let k = 0; k < 4; k++) {
+      const pts = [];
+      for (let r = 0.1; r <= 0.43; r += 0.03) { const f = Math.max(0, Math.min(1, (0.3 - r) / 0.2)); pts.push(polar(Math.PI + (k * Math.PI) / 2 - 1.2 * f * f * (3 - 2 * f), r)); }
+      line(pts, THUMB.rock, Math.max(2, U * 0.07));
+    }
+    ctx.beginPath(); ctx.arc(X(0.5), Y(0.5), U * 0.09, 0, 7); ctx.fillStyle = THUMB.hi; ctx.fill();
+    marks = [[0.22, 0.78], [0.22, 0.22], [0.78, 0.22], [0.78, 0.78]]; crags = 0;
+  } else if (P.isles4) {
+    ctx.fillStyle = THUMB.water; ctx.fillRect(x0, y0, mw, mh);
+    const isle = (u, v, r) => { blob(u, v, r * 1.12, r * 1.12, THUMB.waterHi); s -= 2; blob(u, v, r, r, THUMB.ground); };
+    line([[0.22, 0.65], [0.22, 0.35]], THUMB.sand, Math.max(1.2, U * 0.04), [U * 0.05, U * 0.04]); line([[0.78, 0.65], [0.78, 0.35]], THUMB.sand, Math.max(1.2, U * 0.04), [U * 0.05, U * 0.04]);
+    for (const [u, v] of [[0.22, 0.78], [0.22, 0.22], [0.78, 0.22], [0.78, 0.78]]) isle(u, v, 0.15);
+    isle(0.5, 0.5, 0.1);
+    for (const [u, v] of [[0.5, 0.77], [0.23, 0.5], [0.5, 0.23], [0.77, 0.5]]) isle(u, v, 0.045);
+    for (let k = 0; k < 3; k++) { ctx.fillStyle = THUMB.res[k + 1]; const [u, v] = polar(k * 2.1, 0.05); ctx.beginPath(); ctx.arc(X(u), Y(v), Math.max(1, U * 0.025), 0, 7); ctx.fill(); }
+    marks = [[0.22, 0.78], [0.22, 0.22], [0.78, 0.22], [0.78, 0.78]]; crags = 0;
+  } else if (P.twin) {
+    const lw = Math.max(3, U * 0.1);
+    line([[0.5, 0], [0.5, 0.26]], THUMB.rock, lw); line([[0.5, 0.36], [0.5, 0.64]], THUMB.rock, lw); line([[0.5, 0.74], [0.5, 1]], THUMB.rock, lw);
+    for (const v of [0.31, 0.69]) for (const u of [0.42, 0.58]) { ctx.fillStyle = THUMB.res[v < 0.5 === u < 0.5 ? 1 : 2]; ctx.beginPath(); ctx.arc(X(u), Y(v), Math.max(1, U * 0.03), 0, 7); ctx.fill(); }
+    marks = [[0.22, 0.78], [0.22, 0.22], [0.78, 0.22], [0.78, 0.78]]; crags = 1;
   }
   if (P.lakes) for (let k = 0; k < 4; k++) { const u = 0.12 + rnd() * 0.76, v = 0.52 + rnd() * 0.3; blob(u, v, 0.07 + rnd() * 0.05, 0.035 + rnd() * 0.025, THUMB.water, THUMB.waterHi, true); }
   if (P.oases) {
@@ -774,11 +825,11 @@ function drawShapeThumb(cv, P) {
   }
   for (let k = 0; k < crags; k++) blob(0.15 + rnd() * 0.7, 0.55 + rnd() * 0.2, 0.06, 0.035, THUMB.rock, THUMB.rockHi, true);
   // A few resource fields, and the bases.
-  if (!P.maze && !P.sky) for (let k = 0; k < 3; k++) { const u = 0.15 + rnd() * 0.7, v = 0.6 + rnd() * 0.12; ctx.fillStyle = THUMB.res[k % 4]; for (const [uu, vv] of [[u, v], [1 - u, 1 - v]]) { ctx.beginPath(); ctx.arc(X(uu), Y(vv), Math.max(1, U * 0.03), 0, 7); ctx.fill(); } }
-  const bs = Math.max(3, U * 0.1);
-  for (const [v, c] of [[0.88, PLAYER_COLORS[ME]], [0.12, PLAYER_COLORS[1]]]) {
-    ctx.fillStyle = c; ctx.strokeStyle = '#fff'; ctx.lineWidth = Math.max(1, bs * 0.18);
-    roundRect(ctx, X(0.5) - bs / 2, Y(v) - bs / 2, bs, bs, bs * 0.25); ctx.fill(); ctx.stroke();
+  if (!P.maze && !P.sky && !marks) for (let k = 0; k < 3; k++) { const u = 0.15 + rnd() * 0.7, v = 0.6 + rnd() * 0.12; ctx.fillStyle = THUMB.res[k % 4]; for (const [uu, vv] of [[u, v], [1 - u, 1 - v]]) { ctx.beginPath(); ctx.arc(X(uu), Y(vv), Math.max(1, U * 0.03), 0, 7); ctx.fill(); } }
+  const bs = Math.max(3, U * (marks ? 0.085 : 0.1));
+  for (const [k, [u, v]] of (marks || [[0.5, 0.88], [0.5, 0.12]]).entries()) {
+    ctx.fillStyle = marks ? PLAYER_COLORS[k] : k ? PLAYER_COLORS[1] : PLAYER_COLORS[ME]; ctx.strokeStyle = '#fff'; ctx.lineWidth = Math.max(1, bs * 0.18);
+    roundRect(ctx, X(u) - bs / 2, Y(v) - bs / 2, bs, bs, bs * 0.25); ctx.fill(); ctx.stroke();
   }
   ctx.restore();
   ctx.strokeStyle = 'rgba(255,255,255,0.14)'; ctx.lineWidth = 1; roundRect(ctx, x0 + 0.5, y0 + 0.5, mw - 1, mh - 1, Math.min(4, U * 0.06)); ctx.stroke();
@@ -876,12 +927,13 @@ function previewSettings() {
   st.shape = clamp(m.shape || 0, 0, SHAPE_PRESETS.length - 1);
   st.players = playerCount(mode, st.shape, m.players);
   st.nuke = !!m.nuke;
+  if (mode === 'versus' && m.teams && st.players === 4) st.teams = true; // (Four Isles: the allies' sandbars)
   st.biome = m.biomeRnd ? 'desert' : BIOME_ORDER[m.biome || 0] || 'desert';
   return { seed: m.seed >>> 0, mode, st };
 }
 function previewKey() {
   const p = previewSettings(), s = p.st;
-  return UI.menu.shapeRnd ? 'rnd' : [p.seed, p.mode, s.shape, s.size, s.rough, s.rich, s.players, s.nuke ? 1 : 0, s.biome].join(':');
+  return UI.menu.shapeRnd ? 'rnd' : [p.seed, p.mode, s.shape, s.size, s.rough, s.rich, s.players, s.nuke ? 1 : 0, s.biome, s.teams ? 1 : 0].join(':');
 }
 
 function schedulePreview(now) {

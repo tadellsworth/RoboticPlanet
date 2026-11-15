@@ -7658,7 +7658,9 @@ function placePosts(seed) {
     cands.push({ i, j, d, home: homes.has(S.zone[t]) ? 1 : 0, h: hash2(i, j, (seed ^ 0x7a3d) >>> 0) });
   }
   // As fair as the map allows: within TRADE_POST.fair tiles if it can be, a little less fair if that's the
-  // only way to have two posts at all.
+  // only way to have two posts at all. The first is about as near every colony; where nowhere is (the middle of
+  // Twin Valleys is a mountain), each post is about as near the two colonies nearest it, like the others.
+  let allFair = true;
   for (let k = 0, lim = TRADE_POST.fair; k < want; k++) {
     let best = null, bs = -Infinity;
     for (const c of cands) {
@@ -7668,7 +7670,7 @@ function placePosts(seed) {
       let s;
       if (Ls.length === 1) s = -Math.abs(c.d[0] - TRADE_POST.colonyDist) * 0.6;
       else {
-        const unfair = k === 0 ? c.d[c.d.length - 1] - c.d[0] : c.d[1] - c.d[0];
+        const unfair = k === 0 && allFair ? c.d[c.d.length - 1] - c.d[0] : c.d[1] - c.d[0];
         if (unfair > lim) continue; // (no post nearer one colony than another by more than that)
         s = -unfair * 2 - c.d[0] * 0.15; // fair, and not too far out
       }
@@ -7677,6 +7679,7 @@ function placePosts(seed) {
       if (s > bs) { bs = s; best = c; }
     }
     if (!best) {
+      if (!S.posts.length && allFair && lim >= TRADE_POST.fair * 4 && Ls.length > 2) { allFair = false; lim = TRADE_POST.fair; k--; continue; }
       if (S.posts.length >= 2 || lim >= TRADE_POST.fair * 4 || Ls.length === 1) break;
       lim += TRADE_POST.fair; k--; continue; // try again, a little less strict
     }
@@ -7719,8 +7722,8 @@ function travelCost(from) {
 /** The map's own symmetry: tile t and its twins (the same spot on every other side), or null off the map. */
 function uplinkOrbit(t) {
   const W = S.W, H = S.H, N = W * H, np = S.players.length, SH = SHAPE_PRESETS[S.settings.shape || 0];
-  if (np === 2 && !(SH.cross && false)) return [t, N - 1 - t];
-  if (SH.cross) { const r4 = (u) => { const i = u % W, j = (u / W) | 0; return i * W + (W - 1 - j); }; return [t, r4(t), r4(r4(t)), r4(r4(r4(t)))]; }
+  if (np === 2 || SH.twin) return [t, N - 1 - t]; // (Twin Valleys: only the half turn)
+  if (SH.cross || SH.quad4) { const r4 = (u) => { const i = u % W, j = (u / W) | 0; return i * W + (W - 1 - j); }; return [t, r4(t), r4(r4(t)), r4(r4(r4(t)))]; }
   const ccx = (W - 1) / 2, ccy = (H - 1) / 2, i = t % W, j = (t / W) | 0, out = [t];
   for (let k = 1; k < 3; k++) {
     const a = (k * 2 * Math.PI) / 3, c = dcos(a), s = dsin(a), x = Math.round(ccx + (i - ccx) * c - (j - ccy) * s), y = Math.round(ccy + (i - ccx) * s + (j - ccy) * c);
@@ -7734,13 +7737,14 @@ function uplinkOrbit(t) {
  * The Uplinks, placed fairly on any map by its own symmetry (each one with its twins, so every colony has the
  * same), on open, level ground with room round it, clear of the Trade Posts, lava, the fault, the tide and the
  * Command Bases. Two colonies: one in the middle if there's ground there, and a pair out on the flanks (two
- * pairs if the middle is a rift or the sea); three: one between each pair of colonies; four (Crossroads): the
- * plaza and one in each gap between neighbouring quarters.
+ * pairs if the middle is a rift or the sea); three: one between each pair of colonies; four (Crossroads and the
+ * other four-quarter maps): the middle and one between each pair of neighbouring quarters (Twin Valleys, whose
+ * middle is a mountain: two pairs).
  */
 function placeUplinks(seed) {
   const Ls = S.players.filter((P) => !P.absent).map((P) => getE(P.lander)).filter(Boolean), n = Ls.length;
   const costs = Ls.map((L) => travelCost(tIdx(L.x, L.y)));
-  const W = S.W, H = S.H, SH = SHAPE_PRESETS[S.settings.shape || 0], quad = !!SH.cross && S.players.length >= 3;
+  const W = S.W, H = S.H, SH = SHAPE_PRESETS[S.settings.shape || 0], quad = !!(SH.cross || SH.quad4) && S.players.length >= 3;
   const near = (t, r, f) => { const i = t % W, j = (t / W) | 0; for (let dj = -r; dj <= r; dj++) for (let di = -r; di <= r; di++) { const x = i + di, y = j + dj; if (inMap(x, y) && f(tIdx(x, y))) return true; } return false; };
   const free = (u) => S.terrain[u] === T_GROUND && !S.res[u] && !S.bAt[u] && !S.road[u] && !S.ramp[u] && !(S.tidal && S.tidal[u]) && !(S.lava && S.lava[u]);
   const span = dhypot(W, H), minBase = Math.max(10, span * 0.12);
@@ -7794,7 +7798,7 @@ function placeUplinks(seed) {
   }
   // 2) The rest, an orbit at a time: the fairest band the map has (between the two nearest colonies), and in it
   //    as far out from the middle and each other as can be, not too far from home.
-  const want = n === 2 ? (mid !== null ? 1 : 2) : 1;
+  const want = n === 2 ? (mid !== null ? 1 : 2) : SH.twin ? 2 : 1; // (Twin Valleys' twins are pairs: two of them)
   for (let k = 0; k < want; k++) {
     let best = null;
     // (Roomy spots well out from home first, 16 of the 25 tiles round it open; then a small islet's 9; then,

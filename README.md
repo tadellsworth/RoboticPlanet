@@ -13,10 +13,11 @@ how goods move.
   **Players: Free-for-all · 3** adds a second rival (red and green): a round planet with the three starts 120° apart
   (player 0's third is generated and turned round onto the others, resources placed tile for tile so each third
   has as many). Capturing a Command Base hands over everything its owner built (`eliminate`); the last colony
-  standing wins. Standard, Islands, Crater, Plateaus and Sky islands maps (`ffa: true` in `SHAPE_PRESETS`); the green team's
+  standing wins. Standard, Islands, Crater, Plateaus and Sky islands maps (`ffa: true` in `SHAPE_PRESETS`), and The Wheel and
+  Three Mesas, which are made for three (`minPlayers: 3`); the green team's
   art is the red team's recoloured at run time (`recolorArt`), and each AI fights its nearest rival (`rivalOf`).
-  With four players on Crossroads, **Teams: 2 vs 2** puts the two western colonies against the two eastern ones
-  (see Multiplayer).
+  With four players (Crossroads, Pinwheel, Four Isles or Twin Valleys), **Teams: 2 vs 2** puts the two western colonies
+  against the two eastern ones (see Multiplayer).
 - **Colony:** no rival. Settle the planet at your own pace, with colonization milestones. Free play has the full
   building roster, missiles and nuclear silos included, to experiment with, plus the **Research Lab** and optional
   **Wildlife** (creature nests that raid you; on by default).
@@ -24,8 +25,9 @@ how goods move.
   levels. All of them are open from the start; finishing one ticks it off at that difficulty.
 
 Before each game, the new-game screen picks the mode, players and rival, the **map shape** (Standard, Long haul,
-Chokepoint, Islands, Crater, Plateaus, Sky islands, Rift, Ring valley, Oases, Crossroads or Lakes, as buttons with a line
-on each) and the **map size** (Small to
+Chokepoint, Islands, Crater, Plateaus, Sky islands, Rift, Ring valley, Oases, Crossroads, Lakes, Tidal flats, River delta,
+Volcano, Fault line or Canyon maze, and for three or four players only The Wheel, Three Mesas, Pinwheel, Four Isles and Twin
+Valleys: cards in groups, each with a sketch and a line on it) and the **map size** (Small to
 Huge). **More settings** (a collapsible section, its summary listing whatever isn't the default) holds the planet
 number, the **biome** (Red desert, Jungle or Polar: scenery only, with plants that roads and buildings clear), the
 **terrain** (Flat, Gentle, Rolling, Rugged, Mountainous), the **resources** (Scarce to Abundant; Normal is
@@ -376,6 +378,26 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
   cross between the clifftops; the AI finds one with `aiViaductSpot` (only spans that bring it closer to its rival),
   puts an Outpost on each mesa it lands on, and rests its Ammo Plant and Chip Fab (and, with a fair army, its Foundry)
   while it saves the Alloy for the next span. (`T_CHASM`, the old bottomless canyon, is kept for old saves and is the Rift's chasm.)
+- **Maps for three or four only** (`minPlayers` in `SHAPE_PRESETS`: the player choice can't go below it, Random only
+  picks them for three or four, and Colony games on them leave the other colonies empty). **The Wheel** (`wheel`, three):
+  rock spokes run out along the lines between the thirds from a raised hub (the only ground on the top level, the
+  richest fields) to a rim road of open ground round the outside; the hub's cliff has one ramp up from each third
+  (`tryRamp` from the middle toward each base, the others cleared). **Three Mesas** (`mesas`, three): each third is a
+  mesa at level 3 (`mesaE`, from the sides of the third and the basin's edge), with terraces at 2 and 1 round it and
+  the canyon floor at 0: a basin in the middle holding the riches and a narrow canyon along each line between the
+  thirds, where neighbouring mesas come 9 tiles apart (a Viaduct's span). Every cliff is a mesa's, so all the ramps
+  are cleared and one way down is laid from each base straight toward the basin, a ramp at each step, two lanes where
+  the ground allows. The four-quarter maps (`quad4`, turned a quarter at a time like Crossroads, for three or four):
+  **Pinwheel** (`pinwheelShape`) draws one curved ridge (from the plaza out to a few tiles short of the edge, curling
+  round by about 70° near the plaza) and `put` lays it on all four quarters; **Four Isles** (`isles4`, `islands`, `flat`)
+  cuts the bottom-left quarter into a home island, a quarter of the rich middle island and the islets on the lines to
+  its neighbours (where there's room for the sea round them), and in a team game (`cfg.teams`) lays a two-tile sandbar of
+  fords from each island to its ally's (half-turn twins: west pair and east pair); **Twin Valleys** (`twin`, four only)
+  is the plain four-quarter terrain with a rock spine 4–6 tiles wide down the middle column, laid after the turns with
+  its half-turn twin (`orbit` is the half turn there too), crossed by a south pass and its north twin with rich fields at
+  each end, the ways from each base to its pass and up its valley carved open. The Trade Posts on Twin Valleys (whose
+  middle is a mountain) fall back to being about as near the two nearest colonies (`placePosts`), and its Uplinks are
+  two half-turn pairs.
 - **Shooting across a canyon:** a warbot that can't close in shoots from up to `WARBOT_RANGE_BLOCKED` (2.2) across
   a building or cliff, and up to `WARBOT_RANGE_GAP` (3.6) from a clifftop across lower ground (`overGap`: a narrow
   canyon with no rock, water or building in the line), so garrisons facing each other across a Sky islands canyon
@@ -513,7 +535,7 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
   everything it had changes hands as if captured. **Domination** (`DOM`, `updateDomination`, `domShare`): hold 60% of the
   land anyone holds with one rival (half with two, 45% with three) and a fifth of the planet for 3 minutes straight.
   **Uplinks** (`UPLINK`, `placeUplinks`, `updateUplinks`): 3 to 5 neutral towers (`S.uplinks`) placed by the map's own
-  symmetry (180° for two, 120° for three, quarter turns on Crossroads), so every colony has the same, using a travel-effort
+  symmetry (180° for two, 120° for three, quarter turns on the four-quarter maps, the half turn on Twin Valleys), so every colony has the same, using a travel-effort
   map (`travelCost`) to keep them fair; on Sky islands only on mesa tops. Each belongs to the colony whose land covers it,
   and an armed enemy warbot within 2.5 tiles jams it. From `UPLINK.online` (8 min) the colony holding at least half of
   them and more than anyone else runs its clock (`S.upClock`, kept when it stops); 5 minutes in all wins. The AI plays
@@ -828,7 +850,7 @@ game:
 - **Leave the game** hands your colony to the computer for the rest of the game. A multiplayer game isn't saved for
   Continue.
 
-**Teams (2 vs 2).** With four colonies in all on Crossroads, the host can set **Teams: 2 vs 2** in the settings: the
+**Teams (2 vs 2).** With four colonies in all (Crossroads, Pinwheel, Four Isles or Twin Valleys), the host can set **Teams: 2 vs 2** in the settings: the
 two western colonies (south-west and north-west) play the two eastern ones. The lobby shows the two teams, people
 first and then computer players, and the host taps a person to move them to the other team (never more than two a
 side). Allies never shoot, shell, raid or capture each other, their turrets and Flak leave each other alone, the
