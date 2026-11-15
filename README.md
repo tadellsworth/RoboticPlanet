@@ -432,8 +432,8 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
   keep half-size copies so they shrink cleanly (`drawMapLayer`, `artMip` in `js/render.js`).
 - **Batteries:** bots drain their battery walking, working and fighting, and recharge only at a Fuel Station (or,
   for warbots, inside an Outpost). The Command Base doesn't charge anyone and you land without a Fuel Station, so
-  build the first one straight away (it runs on the 10 Fuel you land with). A flat battery means half speed and half power. Fuel Stations burn Fuel (one Fuel is about
-  two and a half full charges, `FUEL_ENERGY`). A Bio Farm makes about
+  build the first one straight away (it runs on the 10 Fuel you land with). A flat battery means half speed and half power. Fuel Stations burn Fuel (one Fuel is
+  two full charges, `FUEL_ENERGY`). A Bio Farm makes about
   2–3 Fuel a minute; an Oil Pump and Refinery up to 10 a minute until the seep runs dry (both stop at 30 by default).
   A dry Oil Pump shows a crossed-out oil drop over it, frees its worker and says so once: demolish it (any Crude
   still in a demolished building goes to storage). Harvesters, Ore Mines, Crystal Taps and Bio Farms do the
@@ -607,7 +607,8 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
   second player slot of a Colony game), at least 16 tiles from the landing site and reachable on foot. Each keeps
   `guards + level` Scuttlers on guard and from `WILD.first` (7 min) sends a pack every 260–400 s at the nearest building,
   road or bot the colony has within `WILD.reach` (24) tiles: Scuttlers (6 hp, bite 1) go for bots in the open; Brutes (24 hp,
-  bite 3; from level 2) tear up roads and batter buildings (never below 1 armor; construction sites are wrecked). Nests grow a
+  bite 3; from level 2) tear up roads and batter buildings (never below 1 armor; construction sites are wrecked) and
+  break through Walls and Gates, slowly (`WILD.wallBite`, a third of a bite: about 40 s for one Brute on a Wall). Nests grow a
   level every `WILD.grow` s (to 3); packs grow with the colony (`perBuildings`). Turrets, garrisons and warbots treat
   creatures as enemies; warbots clear a nest (`clearNest`: its hoard spills as loot, its creatures scatter). Nothing can be
   built within `WILD.clear` tiles of a nest.
@@ -637,7 +638,9 @@ Pages is on it is at `…/how-to-play.html` next to the game). The short version
   Uranium, 4 Alloy and 2 Chips (60 s), so 12 Uranium a bomb. It flies 30 s (the target is warned and sees the blast
   ring; the **Evacuate** button on the incoming-nuke card, or the AI by itself, sends every robot in the ring plus
   `EVAC_MARGIN` out of it and holds jobs there until the blast: `startEvac`, `evacSweep`, `doFlee`) and wipes out every building, robot and road within 6 tiles, yours included; a Command Base survives with no
-  garrison and 1 armor. The ground stays scorched for 4 minutes: nothing can be built there. The AI races too.
+  garrison and 1 armor, unless the missile lands on it (within `NUKE.direct`, 2 tiles, of its centre): then it's
+  destroyed and that colony is out, what's left of it going to the colony that fired (`eliminate(..., 'nuke')`), so the
+  AI aims for a rival's Command Base whenever one is in range. The ground stays scorched for 4 minutes: nothing can be built there. The AI races too.
   Tunables: `NUKE` and `URANIUM_DEPOSITS` in `js/defs.js`.
 - **Pace:** the whole game runs at 85% speed (`GAME_PACE` in `js/defs.js`) for a calmer feel; the speed button
   gives 2× and 3×.

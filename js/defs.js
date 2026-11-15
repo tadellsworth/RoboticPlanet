@@ -103,7 +103,7 @@ const FIX_RATE = 2;
 const REPAIR_BELOW = { warbot: 0.7, other: 0.6 };
 const REPAIR_IDLE = { foes: 9, reach: 30 }; // an idle warbot with any damage goes to a Repair Station within `reach` tiles, if no enemy robot or gun is within `foes`
 const REPAIR_RETREAT = 0.35;      // a warbot this badly hurt pulls out of a fight for repairs (if a Repair Station can fix it)
-const FUEL_ENERGY = 250;          // battery points one Fuel gives at a Fuel Station (2½ full charges)
+const FUEL_ENERGY = 200;          // battery points one Fuel gives at a Fuel Station (2 full charges)
 /*
  * Trucks burn Fuel. Freight Trucks, Road Trains and Tankers have a fuel tank instead of a battery
  * (u.bat, 0–100): it drains TRUCK_BURN a second while they drive (a Road Train TRAIN_BURN), and
@@ -650,7 +650,7 @@ const NUKE_GOODS = ['uranium', 'fissile'];
  * A Command Base in the blast is left with almost no armor and no garrison, ready to be captured.
  */
 const URANIUM_DEPOSITS = 6;
-const NUKE = { parts: { fissile: 6, alloy: 4, chip: 2 }, assemble: 60, range: 40, flight: 30, radius: 6, scorch: 240 };
+const NUKE = { parts: { fissile: 6, alloy: 4, chip: 2 }, assemble: 60, range: 40, flight: 30, radius: 6, scorch: 240, direct: 2 }; // direct: a Command Base this near the impact is destroyed
 const EVAC_MARGIN = 1.5; // an evacuation clears this much beyond the blast radius
 
 // You (cyan), the rival (red), and in a free-for-all the green and purple rivals. Purple stands apart
@@ -845,7 +845,7 @@ const BDEFS = {
   },
   charger: {
     name: 'Fuel Station',
-    desc: 'Bots recharge their batteries here, four at a time, and trucks fill their fuel tanks. It burns Fuel: one Fuel recharges about two and a half full batteries, or fills one truck. Build them near busy areas far from your Command Base.',
+    desc: 'Bots recharge their batteries here, four at a time, and trucks fill their fuel tanks. It burns Fuel: one Fuel recharges two full batteries, or fills one truck. Build them near busy areas far from your Command Base.',
     cost: { cement: 3, alloy: 1 }, charger: { slots: 4, rate: 25, fuel: true }, fuelCap: 4, armor: 10, buildTime: 10,
   },
   farm: {
@@ -1098,14 +1098,14 @@ const TERMINAL_GET = ['ore', 'crystal', 'stone', 'fiber', 'alloy', 'chip', 'ammo
  * guard (guards + its level) and, from `first` seconds on, sends a pack every `gap` seconds at the
  * nearest thing the colony has built within `reach` tiles of it. The pack goes for bots in the open;
  * Brutes (from level 2) tear up roads and batter buildings (never below 1 armor; construction sites
- * are wrecked). After `raidTime` the pack heads home. A nest grows a level every `grow` seconds (up
+ * are wrecked), and break through Walls and Gates, slowly (`wallBite` of a bite each). After `raidTime` the pack heads home. A nest grows a level every `grow` seconds (up
  * to 3): bigger packs and more hoarded goods. Packs also grow with the colony (one more creature for
  * every `perBuildings` buildings). Nothing can be built within `clear` tiles of a nest.
  */
 const WILD_OWNER = 1;
 const WILD = {
   first: 420, gap: [260, 400], reach: 24, raidTime: 70, grow: 600, guards: 2, guardEvery: 45, perTiles: 800,
-  perBuildings: 14, maxPack: 9, bite: 1.1, roadEvery: 4, clear: 2, loot: { crystal: 8, ore: 8, alloy: 4 },
+  perBuildings: 14, maxPack: 9, bite: 1.1, wallBite: 0.35, roadEvery: 4, clear: 2, loot: { crystal: 8, ore: 8, alloy: 4 },
 };
 
 /*

@@ -1957,12 +1957,13 @@ function showGameOver() {
     ? (how === 'domination' ? `You held most of the planet's land for ${DOM.hold / 60} minutes. The planet is yours.`
       : how === 'uplinks' ? `You led on the Uplinks for ${UPLINK.hold / 60} minutes. The planet is yours.`
       : how === 'surrender' ? (many ? 'The last rival surrendered: the planet is yours.' : 'Your rival surrendered. The planet is yours.')
+      : how === 'nuke' ? (many ? 'Your nuclear missile destroyed the last rival Command Base. The planet is yours.' : 'Your nuclear missile destroyed the rival Command Base. The planet is yours.')
         : many ? `${S.players.length > 3 ? 'All three' : 'Both'} rival Command Bases are yours: the last colony standing. The planet is yours.` : 'Your warbots captured the rival Command Base. The planet is yours.')
     : how === 'domination' ? `${The} held most of the planet's land for ${DOM.hold / 60} minutes. Regroup and try again.`
       : how === 'uplinks' ? `${The} led on the Uplinks for ${UPLINK.hold / 60} minutes. Regroup and try again.`
-      : `${The} ${S.players[ME].out ? 'captured your Command Base' : 'took the planet'}. Regroup and try again.`;
+      : `${The} ${S.players[ME].out ? (how === 'nuke' ? 'destroyed your Command Base with a nuclear missile' : 'captured your Command Base') : 'took the planet'}. Regroup and try again.`;
   if (S.teams) $('o-text').textContent = won ? `Your team took ${how === 'surrender' ? 'the planet (the last of them surrendered)' : 'both rival Command Bases'}: the planet is yours${S.players[ME].out ? ', though your own colony fell on the way' : ''}.`
-    : `The rival team ${S.players[ME].out ? 'captured your Command Base' : 'took the planet'}. Regroup and try again.`;
+    : `The rival team ${S.players[ME].out ? (how === 'nuke' ? 'destroyed your Command Base with a nuclear missile' : 'captured your Command Base') : 'took the planet'}. Regroup and try again.`;
   const st = S.players[ME].stats;
   $('o-stats').innerHTML = [
     ['Time', fmtTime(S.time)], ['Buildings completed', st.built], ['Bots built', st.bots - (st.startBots || 0)],

@@ -54,22 +54,13 @@ Smelter now waits with Ore stored only while that Ore is already on its way. Wha
 Fuel Stations went dry around minute 10 and its robots crawled, which starved Fiber, Ore and Alloy in turn. It now puts
 Fuel first when it runs low. AI-vs-AI wars on Islands can still run past 40 minutes now and then.
 
-## Open balance questions (from the November audit)
+## Balance decisions
 
-Measured, but left for a decision rather than changed:
+Decided: Fuel a bit scarcer (one Fuel recharges 2 batteries); Viaducts stay open to both sides; a nuclear missile that
+lands on a Command Base destroys it; Brutes break through Walls slowly; Road Train wear stays as it is. Still noted:
 
-- **Fuel is still plentiful.** One Fuel charges 2½ batteries (`FUEL_ENERGY` 250). With trucks burning Fuel and
-  Generators, AI colonies use a bit over half what they make (58% across 25 colonies, against 59% before, when Fuel
-  had fewer uses: Bio Farms now get their Agribot first, so more is made). If Fuel should be scarcer, the levers are
-  `FUEL_ENERGY`, `TRUCK_BURN` and the Generator's `perFuel`.
-- **Viaduct bridgeheads can't be shut.** Anyone can cross a Viaduct, so a bridgehead is also the rival's way in.
-  Option: abutments act like Gates.
-- **A nuke still leaves the Command Base at 1 armor.** Robots can now evacuate the blast ring (and the AI does), so
-  the garrison survives to come back and defend it; leaving the Base a third of its armor is still an option.
-- **Walls stop wildlife completely** (Colony): Brutes can't break Walls or Gates.
 - **Smelter recipe.** Tried 2 Ore + 1 Fiber → 2 Alloy to ease Fiber; on Standard maps Ore then ran short
   (Smelters waited for Ore 56–88% of the time) and games stalled, so the 1 + 1 recipe stays.
-- **Road Train wear.** Per good moved it wears roads the least (`WEAR_TRAIN` 8 for 30 goods).
 - **Sky islands AI-vs-AI can stall.** With forts harder to crack (missile floor, sorties, captured garrisons that
   survive), wars between two AIs last longer. On Sky islands, about 3 seeds in 8 then ran past 50 minutes: the
   Viaducts joining the two sides get shot down, both sides run short of Cement (Stone runs out on the mesas),
@@ -78,3 +69,5 @@ Measured, but left for a decision rather than changed:
   Closed Outposts (enemies must break in) make long AI wars a little more likely: in a 13-game batch, 3 ran to the
   time cap. In each, both AIs keep one warbot in every one of their 15–20 forts and never have enough spare to march;
   the AI could pull more from forts far from the front.
+  Since then: its Viaducts keep out of enemy guns and away from where one was lost, and a fort with another fort
+  between it and the enemy can send its last warbot.

@@ -4681,7 +4681,11 @@ function eliminate(old, by, how) {
   computeTerritory();
   const L = getE(P.lander);
   const x = L ? L.x : 0, y = L ? L.y : 0;
-  if (how !== 'surrender') {
+  if (how === 'nuke') {
+    postMsg(by, `Your nuclear missile destroyed ${S.players.length > 2 ? playerName(old, true) + '\'s' : 'the enemy'} Command Base! What's left of the colony is yours.`, x, y, 'good');
+    if (isMe(old)) postMsg(ME, 'A nuclear missile destroyed your Command Base!', x, y, 'lost');
+    else if (!isMe(by)) postMsg(ME, `A nuclear missile from the ${playerName(by)} destroyed ${playerName(old, true)}'s Command Base.`, x, y, 'warn');
+  } else if (how !== 'surrender') {
     postMsg(by, S.players.length > 2 ? `Your warbots captured ${playerName(old, true)}'s Command Base! Everything ${playerName(old, true)} built is yours.` : 'Your warbots captured the enemy Command Base!', x, y, 'good');
     if (isMe(old)) postMsg(ME, 'The enemy captured your Command Base!', x, y, 'lost');
     else if (!isMe(by)) postMsg(ME, `The ${playerName(by)} captured ${playerName(old, true)}'s Command Base and took over everything it had.`, x, y, 'warn');
@@ -6382,8 +6386,9 @@ function fireNukeAt(silo, i, j) {
   postMsg(silo.owner, `Nuclear missile launched: impact in ${NUKE.flight} seconds.`, i, j, 'good');
   // Every launch by a rival is detected (in a free-for-all too), wherever it's aimed.
   if (!isMe(silo.owner)) {
-    const atUs = nukesThreatening(0).includes(S.missiles[S.missiles.length - 1]);
-    postMsg(ME, `NUCLEAR LAUNCH DETECTED! Impact in ${NUKE.flight} seconds` + (atUs ? ': press Evacuate to get your robots out of the red ring!' : ', aimed at a rival.'), i, j, 'bad');
+    const atUs = nukesThreatening(ME).includes(S.missiles[S.missiles.length - 1]), L = getE(S.players[ME].lander);
+    const atBase = L && !L.dead && L.owner === ME && dist2(L.x + 0.5, L.y + 0.5, i + 0.5, j + 0.5) <= NUKE.direct * NUKE.direct;
+    postMsg(ME, `NUCLEAR LAUNCH DETECTED! Impact in ${NUKE.flight} seconds` + (atBase ? ': it is aimed at your Command Base, and a direct hit destroys it!' : atUs ? ': press Evacuate to get your robots out of the red ring!' : ', aimed at a rival.'), i, j, 'bad');
   }
   return true;
 }
@@ -6514,7 +6519,7 @@ function nukeImpact(m) {
   addFx('nuke', cx, cy, { life: 2, r: NUKE.radius });
   addFx('nukeglow', cx, cy, { life: 55, r: NUKE.radius }); // the eerie green afterglow and haze (js/fx.js)
   sfx('nuke', cx, cy);
-  const lost = S.players.map(() => 0);
+  const lost = S.players.map(() => 0), direct = [];
   for (const b of S.buildings.slice()) {
     if (b.dead || dist2(b.x + 0.5, b.y + 0.5, cx, cy) > R2) continue;
     if (b.type === 'lander') {
@@ -6523,6 +6528,8 @@ function nukeImpact(m) {
       for (const u of S.bots) if (!u.dead && u.inside === b.id) killBot(u);
       b.armor = 1;
       b.lastHit = S.time;
+      // A direct hit (aimed at the Command Base itself) destroys it: that colony is out.
+      if (dist2(b.x + 0.5, b.y + 0.5, cx, cy) <= NUKE.direct * NUKE.direct && m.owner >= 0 && b.owner >= 0 && foes(m.owner, b.owner) && S.players[b.owner] && !S.players[b.owner].out) { direct.push(b); lost[b.owner]++; }
     } else {
       lost[b.owner]++;
       destroyBuilding(b, true);
@@ -6547,8 +6554,18 @@ function nukeImpact(m) {
     const p = P.id;
     if (P.absent || P.out) continue;
     const mine = p === m.owner;
+    if (!mine && direct.some((b) => b.owner === p)) continue; // (their Command Base: see below)
     postMsg(p, mine ? `Nuclear strike! ${theirs} rival building${theirs === 1 ? '' : 's'} destroyed.` + (lost[p] ? ` You lost ${lost[p]} of your own.` : '')
       : `A nuclear strike destroyed ${lost[p]} of your buildings!`, ci, cj, mine ? 'good' : 'lost');
+  }
+  // A Command Base hit squarely is gone, and its colony with it: what's left of it goes to the colony that fired
+  // (as when a Command Base is captured), and the base itself is rubble.
+  for (const b of direct) {
+    if (b.dead || S.players[b.owner].out) continue;
+    const old = b.owner;
+    eliminate(old, m.owner, 'nuke');
+    destroyBuilding(b, true);
+    computeTerritory();
   }
 }
 
@@ -7979,6 +7996,10 @@ function critterBite(u, foe) {
     if (!foe.built) {
       foe.armor -= bt.bite;
       if (foe.armor <= 0) { postMsg(foe.owner, `Creatures wrecked your ${BDEFS[foe.type].name} construction site!`, foe.x, foe.y, 'lost'); destroyBuilding(foe, true); }
+    } else if (BDEFS[foe.type].barrier) {
+      // A Wall or Gate holds them up a while, but a Brute breaks through in the end.
+      foe.armor -= bt.bite * WILD.wallBite;
+      if (foe.armor <= 0) { postMsg(foe.owner, `Creatures broke through your ${BDEFS[foe.type].name}!`, foe.x, foe.y, 'lost'); destroyBuilding(foe, true); return; }
     } else foe.armor = Math.max(1, foe.armor - bt.bite);
     if (S.time - foe.lastAlert > 12) {
       foe.lastAlert = S.time;
@@ -8007,9 +8028,10 @@ function bruteTarget(u, r) {
     if (d < bd) { bd = d; best = { road: t, x: i, y: j }; }
   }
   for (const e of S.buildings) {
-    if (e.dead || e.owner === WILD_OWNER || BDEFS[e.type].barrier) continue;
-    const d = dist2(e.x + 0.5, e.y + 0.5, u.x, u.y);
-    if (d < bd * 0.6) { bd = d / 0.6; best = { bld: e, x: e.x, y: e.y }; }
+    if (e.dead || e.owner === WILD_OWNER) continue;
+    // (a Wall or Gate when it's what's nearest: in the way of a walled-in colony)
+    const d = dist2(e.x + 0.5, e.y + 0.5, u.x, u.y), w = BDEFS[e.type].barrier ? 1 : 0.6;
+    if (d < bd * w) { bd = d / w; best = { bld: e, x: e.x, y: e.y }; }
   }
   return best;
 }

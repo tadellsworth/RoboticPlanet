@@ -960,6 +960,7 @@ function aiFireNuke(p, silo) {
       const w = b.type === 'lander' ? 6 : BDEFS[b.type].mil ? 3 : b.type === 'nukesilo' || b.type === 'reactor' ? 5 : 1;
       s += b.owner === enemy ? w : -w * 2;
     }
+    if (c.type === 'lander') s += 40; // (a direct hit on its Command Base ends the enemy colony)
     if (s > bs) { bs = s; best = c; }
   }
   if (best) fireNukeAt(silo, best.x, best.y);
