@@ -7917,7 +7917,7 @@ function startEvent(E) {
     }
     const o = E.offers[ME];
     for (const P of S.players) narrate(P.id, 'wren', undefined, undefined, 1); // (each visit; not in missions)
-    postMsg(ME, o ? `The Wren is in orbit for ${Math.round(E.t1 - E.t0)}s: it offers ${o.m} ${GOOD[o.get].name} (your land is running lowest on it) for ${o.n} of your ${GOOD[o.give].name}. Tap Trade to take it.`
+    postMsg(ME, o ? `The Wren is in orbit for ${Math.round(E.t1 - E.t0)}s: it offers ${o.m} ${goodN(o.get, o.m)} (your land is running lowest on it) for ${o.n} of your ${goodN(o.give, o.n)}. Tap Trade to take it.`
       : 'The Wren is in orbit, but it wants nothing you have spare.', undefined, undefined, 'info');
     sfx('order');
   } else if (E.type === 'dust') postMsg(ME, 'The dust storm is here: bots crawl and Missiles are grounded until it blows over.', undefined, undefined, 'warn');
@@ -8065,7 +8065,7 @@ function traderOffer(p) {
 function acceptTrade(p) {
   const E = eventNow('trader'), o = E && E.offers && E.offers[p];
   if (!o || o.done) return 'The Wren has gone.';
-  if ((spendable(p)[o.give] || 0) < o.n) return `You need ${o.n} ${GOOD[o.give].name} in storage.`;
+  if ((spendable(p)[o.give] || 0) < o.n) return `You need ${o.n} ${goodN(o.give, o.n)} in storage.`;
   const L = getE(S.players[p].lander);
   const store = L && !L.dead && L.owner === p ? L : nearestStoreTo(p, S.W / 2, S.H / 2);
   if (!store) return 'You have nowhere to store the goods.';
@@ -8073,7 +8073,7 @@ function acceptTrade(p) {
   bump(store.stock, o.get, o.m);
   madeGood(p, o.get, o.m);
   o.done = true;
-  if (isMe(p)) postMsg(ME, `Deal done: ${o.m} ${GOOD[o.get].name} are in your Command Base.`, store.x, store.y, 'good');
+  if (isMe(p)) postMsg(ME, `Deal done: ${o.m} ${goodN(o.get, o.m)} are in your Command Base.`, store.x, store.y, 'good');
   return '';
 }
 
@@ -9022,13 +9022,13 @@ function updateTerminal(b, def, dt) {
     o.left--;
     b.working = true;
     addFx('ring', b.x + 0.5, b.y + 0.5, { color: '#7fe3ff', r: 1.6 });
-    postMsg(p, `Trade done: ${o.lot} ${GOOD[o.give].name} for ${pay} ${GOOD[o.get].name}, waiting at the Trade Terminal to go home by train.` + (o.left ? ` ${o.left} more lot${o.left > 1 ? 's' : ''} on this contract.` : ' That contract is filled.'), b.x, b.y, 'good');
+    postMsg(p, `Trade done: ${o.lot} ${goodN(o.give, o.lot)} for ${pay} ${goodN(o.get, pay)}, waiting at the Trade Terminal to go home by train.` + (o.left ? ` ${o.left} more lot${o.left > 1 ? 's' : ''} on this contract.` : ' That contract is filled.'), b.x, b.y, 'good');
     if (isMe(p)) sfx('complete');
     if (!o.left) { T.pick = -1; syncTerminalOrders(p); }
     return;
   }
   const inc = b.inc[o.give] || 0;
-  b.status = `Gathering a lot: ${Math.floor(here)} of ${o.lot} ${GOOD[o.give].name}` + (inc ? ` (${inc} on the way)` : '') + ` for ${tradePay(p, o, b)} ${GOOD[o.get].name}`;
+  b.status = `Gathering a lot: ${Math.floor(here)} of ${o.lot} ${goodN(o.give, o.lot)}` + (inc ? ` (${inc} on the way)` : '') + ` for ${tradePay(p, o, b)} ${goodN(o.get, tradePay(p, o, b))}`;
 }
 
 /* ------------------------------------------------------------------ crawlers */

@@ -4787,7 +4787,7 @@ function renderTrade(b) {
   el.innerHTML = T.offers.map((o, k) => {
     const on = T.pick === k, pay = tradePay(ME, o, b), sat = T.sat[o.give] ?? 1;
     // Spelled out which way it goes: you send `lot` of one good and get `pay` of the other back.
-    return `<div class="kv trade-row${on ? ' on' : ''}"><span>You give <b>${o.lot}</b> <i class="gi ${o.give}"></i>${GOOD[o.give].name} → you get <b>${pay}</b> <i class="gi ${o.get}"></i>${GOOD[o.get].name}` +
+    return `<div class="kv trade-row${on ? ' on' : ''}"><span>You give <b>${o.lot}</b> <i class="gi ${o.give}"></i>${goodN(o.give, o.lot)} → you get <b>${pay}</b> <i class="gi ${o.get}"></i>${goodN(o.get, pay)}` +
       `<small> ${o.left > 0 ? `${o.left} more time${o.left === 1 ? '' : 's'}` : 'filled'}${sat < 0.99 ? ` · ${GOOD[o.give].name} pays ${Math.round(sat * 100)}% for now (you sold a lot lately)` : ''} · you have ${Math.floor(have[o.give] || 0)} ${GOOD[o.give].name}</small></span>` +
       `<button class="btn small${on ? '' : ' primary'}" data-k="${k}" ${o.left > 0 ? '' : 'disabled'}>${o.left > 0 ? (on ? 'Stop' : 'Take') : 'Filled'}</button></div>`;
   }).join('');
@@ -6549,9 +6549,9 @@ function updateEventCard() {
     if (E.type !== 'trader') html += `<div class="ev-desc">${def.desc}</div>`;
     else if (!E.started) html += '';
     else if (!o) html += '<div class="ev-desc">It wants nothing you have spare.</div>';
-    else if (o.done) html += `<div class="ev-desc">Deal done: ${o.m} ${GOOD[o.get].name} delivered to your Command Base.</div>`;
+    else if (o.done) html += `<div class="ev-desc">Deal done: ${o.m} ${goodN(o.get, o.m)} delivered to your Command Base.</div>`;
     else {
-      html += `<div class="ev-deal"><span>Give <b>${o.n}</b> <i class="gi ${o.give}"></i> ${GOOD[o.give].name}, get <b>${o.m}</b> <i class="gi ${o.get}"></i> ${GOOD[o.get].name}</span>` +
+      html += `<div class="ev-deal"><span>Give <b>${o.n}</b> <i class="gi ${o.give}"></i> ${goodN(o.give, o.n)}, get <b>${o.m}</b> <i class="gi ${o.get}"></i> ${goodN(o.get, o.m)}</span>` +
         '<button class="btn small primary" id="ev-trade">Trade</button></div>';
     }
     // The Wren's cargo list, 31 years out of date (LORE.md): goods for a colony that hasn't come.

@@ -665,6 +665,9 @@ const GOOD = {
   uranium: { name: 'Uranium', color: '#9dff3a', desc: 'Scarce radioactive ore (Nuclear race only). Ore Mines dig it from the few deposits on the planet; a Nuclear Reactor enriches it.' },
   fissile: { name: 'Enriched Uranium', color: '#e6ff4a', desc: 'Made from 2 Uranium at a Nuclear Reactor. A Nuclear Silo needs 6 to build a nuclear missile.' },
 };
+/** A good's name for n of it: "5 Chips" (Chip is the one counted good; the rest read "5 Ore", "5 Alloy"). */
+function goodN(g, n) { return GOOD[g].name + (g === 'chip' && n !== 1 ? 's' : ''); }
+
 /** Goods that only matter when there is a rival (hidden in Colony mode), and in a Nuclear race. */
 const WAR_GOODS = ['ammo', 'warhead'];
 const NUKE_GOODS = ['uranium', 'fissile'];
