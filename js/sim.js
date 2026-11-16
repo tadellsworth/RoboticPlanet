@@ -3562,6 +3562,7 @@ function bunkerFire(b, def, dt) {
   if (!target) return;
   let fired = 0;
   for (const id of b.garrison) {
+    if (def.slots && fired >= def.slots) break; // (a Keep houses more warbots than it has gun slots)
     const u = getE(id);
     if (!u || u.dead || target.dead || !useAmmo(u)) continue;
     const power = (u.bat ?? 100) < BATTERY.critical ? 0.5 : 1;
