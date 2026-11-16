@@ -351,7 +351,9 @@ export function molekit(L) {
   //   forelimb(parent, { side (-1 left/-z, +1 right/+z), f, shoulder [x,y,z], wrist [x,y,z], palm (length), claw (length),
   //     armR (arm radius at the shoulder), stride, lift, skin (palm material), arm (arm material), clawMat, splay (how far
   //     the hand points out from straight ahead, rad), swing (extra splay through the stroke), tilt (back of the hand from
-  //     flat, rad), fan (claw fan, rad), clawW (claw breadth factor), curl, droop, plant (feeding: claws dug in, no step) })
+  //     flat, rad), fan (claw fan, rad; small, so the claws rake forward side by side), clawW (claw breadth factor), curl,
+  //     droop, wide (hand half-width / length, 0.4), thick (hand thickness / length, 0.17), plant (feeding: claws dug in,
+  //     no step) })
   function forelimb(parent, o) {
     const s = o.side, [fa, lift] = o.plant ? [0, 0] : gait(true, s, o.f ?? 0);
     const st = o.stride ?? 0.2, lf = o.lift ?? 0.12, P = o.palm;
@@ -364,14 +366,19 @@ export function molekit(L) {
     limb(parent, o.shoulder, W, o.armR, o.armR * 0.78, o.arm, { bulge: 0.3, seg: 18 });
     const H = L.group(W[0], W[1], W[2], 0, parent); H.quaternion.copy(frame(fwd, up));
     seg(H, [0, 0, 0], o.armR * 0.8, o.armR * 0.55, o.armR * 0.8, o.arm, { lump: 0.06, flat: 0.2 });
-    paddle(H, P, P * (o.wide ?? 0.48), P * 0.12, o.skin, { root: 0.5 });
-    if (o.fringe) for (let k = 0; k < 16; k++) { const a = -1.3 + k / 15 * 2.6; tube(H, [[P * (0.52 + 0.4 * Math.cos(a)), 0, -P * 0.48 * Math.sin(a)], [P * (0.52 + 0.52 * Math.cos(a)), -0.02 * P, -P * 0.62 * Math.sin(a)]], t => 0.014 * P * (1 - t) + 0.002, o.fringe, { n: 3, radial: 4 }); }
-    const nC = o.claws ?? 5, fan = o.fan ?? 0.6, CL = o.claw, cw = o.clawW ?? 1;
+    // the hand: a thick, fleshy spade, longer than it is broad (a mole's hand, not a plate), knuckles across its front
+    const hw = o.wide ?? 0.4;
+    paddle(H, P, P * hw, P * (o.thick ?? 0.17), o.skin, { root: 0.6, cup: 0.18 });
+    if (o.fringe) for (let k = 0; k < 14; k++) { const a = -1.25 + k / 13 * 2.5; tube(H, [[P * (0.5 + 0.38 * Math.cos(a)), 0, -P * hw * 0.92 * Math.sin(a)], [P * (0.5 + 0.46 * Math.cos(a)), -0.02 * P, -P * hw * 1.12 * Math.sin(a)]], t => 0.012 * P * (1 - t) + 0.002, o.fringe, { n: 3, radial: 4 }); }
+    // five broad, flat claws side by side along the front edge, all raking forward (barely fanned): the spade's blade
+    const nC = o.claws ?? 5, fan = o.fan ?? 0.3, CL = o.claw, cw = o.clawW ?? 1;
     for (let k = 0; k < nC; k++) {
       const u = nC === 1 ? 0 : (k / (nC - 1)) * 2 - 1;                             // -1..1 across the hand
-      const z = u * P * 0.36, x = P * (0.84 - 0.16 * u * u), len = CL * (1 - 0.2 * u * u) * (u < -0.7 ? 0.8 : 1);
+      const z = u * P * hw * 0.74, x = P * (0.88 - 0.1 * u * u), len = CL * (1 - 0.16 * u * u) * (u < -0.7 ? 0.82 : 1);
       const a = u * fan * 0.5;
-      claw(H, [x, 0.015 * P, z], [Math.cos(a), -0.06, Math.sin(a)], [0, 1, 0], len, P * 0.11 * cw, P * 0.05 * cw, o.clawMat, o.curl ?? 0.25);
+      // a short fat finger under each claw, so the front edge is a row of knuckles, not the rim of a plate
+      seg(H, [x - P * 0.07, P * 0.025, z], P * 0.15, P * 0.085, P * 0.075 * Math.min(1.3, cw), o.skin, { lump: 0.05, flat: 0.3, rot: [0, -a, 0] });
+      claw(H, [x, 0.02 * P, z], [Math.cos(a), -0.06, Math.sin(a)], [0, 1, 0], len, P * 0.135 * cw, P * 0.055 * cw, o.clawMat, o.curl ?? 0.22);
     }
     return { wrist: W, hand: H };
   }
@@ -401,7 +408,8 @@ export function molekit(L) {
     tube(parent, [B, mid, T], t => R * (1 - 0.72 * Math.pow(t, 0.9)) * (1 + 0.04 * Math.sin(t * 50)), o.skin, { n: 30, radial: 16, flat: 0.85 });
     if (o.nostril !== false) {
       const pad = seg(parent, [T[0], T[1], T[2]], R * 0.32, R * 0.3, R * 0.36, o.padMat || o.skin, { lump: 0.02 });
-      for (const s of [-1, 1]) L.sphere(R * 0.09, plain('#120c0c', 0.5), T[0] + R * 0.26, T[1] + R * 0.04, T[2] + s * R * 0.13, { parent, dirt: 0 });
+      // nostrils: two small dark pits sunk in the pad (bigger beads standing proud read as a cartoon's eyes)
+      for (const s of [-1, 1]) { const n = L.sphere(R * 0.06, plain('#2a1c1c', 0.6), T[0] + R * 0.25, T[1] + R * 0.05, T[2] + s * R * 0.12, { parent, dirt: 0 }); n.scale.set(0.6, 0.8, 1); }
     }
     if (o.whisker) for (const s of [-1, 1]) for (let k = 0; k < 4; k++) {
       const x = B[0] + (T[0] - B[0]) * (0.45 + k * 0.1), y = B[1] + (T[1] - B[1]) * (0.5 + k * 0.1), z = s * R * (0.55 - k * 0.06);
