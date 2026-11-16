@@ -165,7 +165,7 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   that leaves it for open ground draws on from there, and built road is never touched by a drag);
   the banner, at the top of the screen, shows the cost, with **Undo**, **Clear** and **Build**. On an upright phone the
   banner (and every mode's banner) is docked across the bottom in place of the tools: the line is up to three lines,
-  the tools are one row to swipe along with Route to and Traffic at its end, Undo, Clear, Build and Done share the row
+  the tools are one row to swipe along (an end with more tools beyond it fades out, `segEdges`) with Route to and Traffic at its end, Undo, Clear, Build and Done share the row
   below, and **How it works** is a tab on the banner's edge that opens as a card over the map. Sketching up to the edge
   of the map scrolls it on under the finger (`paintScroll`), and a tap just above the docked banner glides the map up
   so the banner's new row doesn't cover it (`planInView`). Nothing is spent until
