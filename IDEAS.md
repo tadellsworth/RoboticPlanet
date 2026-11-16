@@ -94,8 +94,11 @@ or drop.
   weakened third; most test games on The Wheel, Three Mesas, Pinwheel, Four Isles and Twin Valleys end undecided.
 - **Long Haul starts slowly:** both rivals sit at 10 workers until minute 12-15 (a Foundry site waits behind a long
   Outpost road being paved).
-- **A Harvester counts regrowing stalks as in reach** (`reachableRes` in the AI's `cutting` test), so no new
-  Harvester comes while it reports "No stalk groves left in reach"; Fiber sat at 0 for 14 minutes in one test.
+- **Where the rival puts a new Harvester.** (Its "is a Harvester cutting?" test now counts only ripe stalks on its own
+  or no-one's land, out of enemy guns: `aiGathers(b, 3)`, Nov 2026.) Its spot score for a new one (`aiFindSpot`, via
+  `reachableRes`/`walkRes`) still counts a rival's stalks across the border and stalks still growing, so in one test
+  (Chokepoint s11, P1, truce) the new Harvesters went up beside the other colony's grove: Fiber hovered near 3 and no
+  Alloy was made. The same land-and-ripeness filter in that score would fix it.
 - **Doctrine balance and text.** The Herald wins 10 of 12 against the Steward. The Architect's text promises a nuke it
   never builds (no Reactor in 10 Nuclear-race games); the Warden's says it "covers its land with turrets" but it
   builds about 2, all within 5 tiles of its base.
