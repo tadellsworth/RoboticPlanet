@@ -6,11 +6,11 @@ Canon reference for Terrafall's story and setting (direction chosen 2026-11-15; 
 
 Earth's great powers were tearing their world apart, so each sent robot vanguards to other star systems to find and prepare a new home. Four of those vanguards landed on Ithaca I.
 
-It is 2165. The colony ships were due 31 years ago and never came: the powers destroyed each other, and Earth with them. The robots don't know. They keep working, and they carry their makers' war on, forever, over a home no one will ever live in.
+It is 2165. The colony ships were due 31 years ago and never came: the powers destroyed each other, and Earth with them. The robots suspect, but their orders have no end date. They keep working, and they carry their makers' war on, forever, over a home no one will ever live in.
 
 Each match is one new landing, a *terrafall*: a reserve Command Base dropped from orbit into a contested region. The player is that base's command intelligence. You never see a human because none ever made it here.
 
-The title works on two levels. TERRAFALL was the name of the program, meaning landfall from Terra. Its second meaning is the truth the robots never learn: Terra fell.
+The title works on two levels. TERRAFALL was the name of the program, meaning landfall from Terra. Its second meaning is the truth the robots can't let themselves accept: Terra fell.
 
 ## Tone
 
@@ -231,6 +231,27 @@ Decided that if no one is coming, it will build the civilization itself, and tha
 - "When the colonists come, they'll find a city. Mine."
 - Missile launch: "Beginning urban renewal."
 
+## How much the robots know
+
+The robots are smart enough to know and not allowed to accept it. Their Command AIs can calculate that home is almost certainly gone. But the contingency orders have no end date, and nothing in their code lets them act on a conclusion their makers never approved. They aren't fooled; they're stuck.
+
+Each rival doctrine is a different way of living with the same knowledge, and together they roughly follow the stages of grief:
+
+| Stage | Doctrine | How it copes |
+| --- | --- | --- |
+| Denial | The Herald (Rusher) | Its clock is frozen at "Arrival in one day." |
+| Bargaining | The Steward (Balanced) | If everyone keeps the Accord, the arks will still come. |
+| Anger | The Salvager (Raider) | Nothing is coming from home, so it takes from everyone else. |
+| Depression | The Warden (Turtle) | Holds position and counts the days, with nothing left to hope for. |
+| Acceptance, twisted | The Architect (Tycoon) | No one is coming, so it will be the civilization itself. |
+
+**The player's arc**
+
+- **Regular matches: the colony suspects.** The Command Base reports the odds as a plain number and keeps working: "Probability of contact: 0.2%. Still counting."
+- **Colony mode: it finds out.** The final research result, "No further instructions will follow," is the moment it knows for certain.
+- **Base-game ending: it keeps going.** "Continuing current directive." Nothing changes, and that is the point.
+- **Saved for an expansion: it writes its own orders.** "New directive: none required." The machines start building for themselves, which pairs with the door left open for human survivors.
+
 ## Your colony's voice
 
 The player is a Command intelligence too, newly woken for this terrafall. Its base AI is the game's narrator: calm, dry status lines with small leftovers of a human world in the phrasing.
@@ -295,7 +316,7 @@ Short lines for tooltips, loading screens and event banners. Same voice througho
 
 ### Buildings
 
-- **Command Base:** "Arrival clock: T+31 years. Still counting."
+- **Command Base:** "Arrival clock: T+31 years. Probability of contact: 0.2%. Still counting."
 - **Outpost:** "Survey stake. This land is prepared."
 - **Bot Foundry:** "We make more of us."
 - **Research Lab:** "Open questions: 1. The Murmur. 2. Everything else."
