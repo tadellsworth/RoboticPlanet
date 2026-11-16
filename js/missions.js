@@ -9,7 +9,7 @@
  * The campaign is in seven chapters, played in this order: First Steps (one idea at a time: a building and its road,
  * Stone and Cement, batteries, the first Alloy), Growing the Colony (bots, farmed Fuel, regrowing groves, Outposts),
  * Roads and Traffic, Industry and Trade, Sea and Sky (all in Colony games, so the economy is learned in peace), then
- * First Contact (creature nests, a rival to practise on, a border war, a chokepoint to hold) and War. From the second
+ * First Contact (the Murmur's Burrows, a rival to practise on, a border war, a chokepoint to hold) and War. From the second
  * mission on, setup puts down the colony the earlier missions taught (`kit`), so each one is spent on its new idea.
  *
  * A mission: { id (progress is saved by it: keep it when a mission is reworked), name, chapter (the list's heading:
@@ -723,10 +723,10 @@ const MISSIONS = [
       'The gold pads on the minimap are neutral <b>Trade Posts</b>. A Trade Terminal there swaps a big surplus.',
       'Only Road Trains (or Freight Trains) carry the lots. Posts further out pay better.',
       'A far Depot on a Road Train\'s road stocks itself with what the buildings round it need.',
-      '<b>Planet events</b> are on: dust storms, meteor showers, solar flares, and now and then a trader ship.',
+      '<b>Planet events</b> are on: dust storms, Ringfall, solar flares, and now and then the <i>Wren</i>, a trader ship.',
     ],
-    // (Seed 1445: a meteor shower at 2:30 and a solar flare over by 9:36. Events are seeded, and on the designed 1415 the
-    // second one, a trader ship, only left at 12:25, so a player who had made the trades by 6 minutes waited 6 more.)
+    // (Seed 1445: Ringfall (a meteor shower) at 2:30 and a solar flare over by 9:36. Events are seeded, and on the designed
+    // 1415 the second one, the trader ship, only left at 12:25, so a player who had made the trades by 6 minutes waited 6 more.)
     mode: 'colony', seed: 1445, size: 1, rough: 1, rich: 3, biome: 'savanna', shape: 0, events: true, limit: [0, 0, 30],
     setup(S) {
       kit(S, KIT7, 4);
@@ -750,7 +750,7 @@ const MISSIONS = [
         ui: '#sh-trade button' },
       { kind: 'events', n: 2, text: 'Ride out 2 planet events',
         count: (P, S) => (S.evN || 0) - (S.event ? 1 : 0),
-        hint: 'Meteors crater roads, flares drain batteries, dust slows robots. Waiting? Speed up: <b>1×</b> (<kbd>]</kbd>).',
+        hint: 'Ringfall craters roads, flares drain batteries, dust slows robots. Waiting? Speed up: <b>1×</b> (<kbd>]</kbd>).',
         ui: '#event-card, #ev-trade, #btn-speed' },
     ],
   },
@@ -893,13 +893,13 @@ const MISSIONS = [
     ],
   },
 
-  // Chapter 6, First Contact. Creature nests, a rival to practise on, a border war and a chokepoint to hold.
+  // Chapter 6, First Contact. The Murmur's Burrows (type 'nest'), a rival to practise on, a border war and a chokepoint to hold.
   {
     id: 'bughunt', name: 'Bug Hunt', chapter: 'First Contact',
-    brief: 'Creature nests in the swamp breed packs that raid your colony. Arm up and clear the nests before the packs grow.',
+    brief: 'The Murmur breed in Burrows under the swamp and raid your colony. Arm up and clear the Burrows before the packs grow.',
     intro: [
-      'This planet has wildlife: its nests send packs at your colony from about 4 minutes in.',
-      '<b>Scuttlers</b> bite robots; <b>Brutes</b> tear up roads and batter buildings. Nests grow over time.',
+      'The <b>Murmur</b> live here: their Burrows send packs at your colony from about 4 minutes in.',
+      '<b>Scuttlers</b> bite robots; <b>Brutes</b> tear up roads and batter buildings. Burrows grow over time.',
       'You have 4 <b>warbots</b> and 30 Ammo; an Ammo Plant (Make, <kbd>I</kbd>) makes more. Turrets fire Crystal.',
       'Defend also has Minigun Nests (<kbd>G</kbd>), which spray Ammo. Tap a dented building → <b>Repair</b> (<kbd>E</kbd>).',
       'Workers and Haulers keep clear of danger by themselves. <kbd>J</kbd> jumps to the latest alert.',
@@ -922,8 +922,8 @@ const MISSIONS = [
       { kind: 'bots', type: 'warbot', n: [2, 3, 4], at: 'foundry',
         hint: 'Tap the Bot Foundry → <b>Order bots</b>: Warbots <b>+1</b>. They wait in the Command Base and reload there.',
         ui: "#sh-orders .order-row[data-k='warbot'] [data-d='1']" },
-      { kind: 'nests', n: [1, 2, 2], text: ['Clear a creature nest', 'Clear {n} creature nests'], count: (P) => P.stats.captured || 0,
-        hint: '<b>Army</b> (<kbd>Q</kbd>) → <b>Attack</b> (<kbd>Q</kbd>), then tap a nest. Its hoard spills out for your warbots.',
+      { kind: 'nests', n: [1, 2, 2], text: ['Clear a Murmur Burrow', 'Clear {n} Murmur Burrows'], count: (P) => P.stats.captured || 0,
+        hint: '<b>Army</b> (<kbd>Q</kbd>) → <b>Attack</b> (<kbd>Q</kbd>), then tap a Burrow. Its hoard spills out for your warbots.',
         ui: '#btn-attack, #ar-attack' },
     ],
   },
@@ -1214,7 +1214,7 @@ function bldCount(type, n) {
 /**
  * A goal's objective text for `need` (shared by the mission screen and the game). A goal can give its own `text`
  * ("{n}" stands for the number), which every custom goal (one with a `count` function) does; [one, many] picks by
- * the number ("Clear a creature nest" / "Clear {n} creature nests").
+ * the number ("Clear a Murmur Burrow" / "Clear {n} Murmur Burrows").
  */
 function goalLabel(g, need) {
   if (g.text) return String(Array.isArray(g.text) ? g.text[need > 1 ? 1 : 0] : g.text).replace(/\{n\}/g, need);
@@ -1347,7 +1347,7 @@ function missionOptions(k, diff) {
       }
       // What this mission switches on that missions otherwise leave out (see nukeOn, warOn, labOn, updateEvents).
       S.mission = { k, id: def.id, diff, limit: (def.limit[diff] || 0) * 60, nuke: !!def.nuke, war: !!def.war, lab: !!def.lab, events: !!def.events };
-      if (def.wildlife && S.mode === 'colony') { S.wildlife = true; placeNests(S.seed); }
+      if (def.wildlife && S.mode === 'colony' && murmurGround(S.settings.biome)) { S.wildlife = true; placeNests(S.seed); } // (none on the moon)
       // (A rival that never attacks, at the difficulties the mission says: passive [easy, normal, hard].)
       if (def.passive && def.passive[diff]) for (const P of S.players) if (P.id !== 0) P.passive = true;
       if (def.setup) def.setup(S, diff);

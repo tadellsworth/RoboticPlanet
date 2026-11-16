@@ -1918,8 +1918,9 @@ function newGame(opts) {
   if (opts.unlimited && !opts.mission) S.unlimited = true;
   // How the game is won (Versus): see VICTORY. Capture unless another way was picked.
   if (mode === 'versus' && !opts.mission && !opts.layout && !S.teams && VICTORY[opts.victory] && opts.victory !== 'capture') S.victory = opts.victory;
-  // Wildlife (see WILD): Colony free play only; the nests go down once the landing site is in.
-  if (mode === 'colony' && opts.wildlife && !opts.layout && !opts.setup) S.wildlife = true;
+  // The Murmur (wildlife, see WILD): Colony free play only, and never on a silent biome (Lunar: see murmurGround); the
+  // Burrows go down once the landing site is in.
+  if (mode === 'colony' && opts.wildlife && !opts.layout && !opts.setup && murmurGround(settings.biome)) S.wildlife = true;
   // Each computer player's doctrine (PERSONALITIES): opts.styles names one for each computer player in turn (the
   // computer's colonies in player order: in Custom Game players 1, 2, 3; in multiplayer the ones nobody took), else
   // opts.style names one for them all. 'random' deals one at random, picked from the planet's seed, that no other
@@ -2728,7 +2729,7 @@ function canPlace(owner, type, i, j, skipBlockCheck) {
   if (def.port && !navalMap()) return { ok: false, reason: 'Ports are for naval maps (Islands and Lakes).' };
   if (def.port && !portDocks(i, j).length) return { ok: false, reason: 'A Port goes on the shore, right beside open water wide enough for ships.' };
   if (S.wildlife) for (const e of S.buildings) {
-    if (!e.dead && BDEFS[e.type].wild && Math.max(Math.abs(e.x - i), Math.abs(e.y - j)) <= WILD.clear) return { ok: false, reason: 'Too close to a creature nest: clear it with warbots first.' };
+    if (!e.dead && BDEFS[e.type].wild && Math.max(Math.abs(e.x - i), Math.abs(e.y - j)) <= WILD.clear) return { ok: false, reason: 'Too close to a Murmur Burrow: clear it with warbots first.' };
   }
   if (S.ramp[t]) return { ok: false, reason: 'Too steep: this is a slope.' };
   // A Ramp is built from either side of its cliff (see rampStands), so it only needs one side your bots can reach.
@@ -3884,6 +3885,42 @@ function teamOf(p) { return S && S.teams && S.teams[p] !== undefined ? S.teams[p
 function postMsg(player, text, x, y, kind) {
   if (player !== ME) return;
   S.msgs.push({ text, x, y, kind: kind || 'info', t: S.time });
+}
+
+/*
+ * The story's voices (see NARRATOR and PERSONALITIES[k].voice in defs.js). Text only: a line goes to its player's
+ * messages, and S.lore remembers what has been said (when, by key and player) so a line isn't said again too soon.
+ * No rule reads S.lore and the multiplayer fingerprint (hashState) leaves it out; it is kept with a save, so a loaded
+ * game doesn't say its "first road" twice. Missions keep their own texts: no narrator and no voices there.
+ */
+function loreDue(key, every) {
+  if (!S || S.mission) return false;
+  const L = S.lore || (S.lore = {});
+  if (L[key] !== undefined && (!every || S.time - L[key] < every)) return false;
+  L[key] = S.time;
+  return true;
+}
+/**
+ * The narrator (your colony's Command AI) tells player p: NARRATOR[key] (or `text`), once a game, or with `every`
+ * at most once every that many seconds. The simulation calls it for every player alike; the interface calls it for
+ * this device's player only (the first nightfall, nightfallLine), so S.lore can differ between devices, which is why
+ * nothing but these lines reads it.
+ */
+function narrate(p, key, x, y, every, text) {
+  if (p < 0 || !loreDue(`n.${key}.${p}`, every)) return;
+  postMsg(p, text || NARRATOR[key], x, y, 'narr');
+}
+/**
+ * Computer player p, in its doctrine's voice, to player `to` (its enemy): what = 'attack', 'missile' or 'surrender',
+ * at most once every `every` seconds for each of them. The line is picked by the time and the players, not the RNG.
+ */
+function doctrineVoice(p, to, what, x, y, every) {
+  const P = S && S.players[p];
+  if (!P || !P.ai || S.mode === 'colony' || to < 0 || !foes(p, to) || !isDoctrine(P.style)) return;
+  const D = PERSONALITIES[P.style], lines = D.voice && D.voice[what];
+  if (!lines || !lines.length || !loreDue(`v.${what}.${p}.${to}`, every)) return;
+  const line = lines[Math.floor(hash2(p * 7 + to, Math.floor(S.time), what.length + (S.seed | 0)) * lines.length)].replace('{day}', wardenDay(S.time));
+  postMsg(to, `${callsign(p)} (${D.name}): \u201c${line}\u201d`, x, y, 'voice');
 }
 
 function addFx(type, x, y, data) {

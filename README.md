@@ -21,12 +21,12 @@ how goods move.
   against the two eastern ones (see Multiplayer).
 - **Colony:** no rival. Settle the planet at your own pace, with colonization milestones. Free play has the full
   building roster, missiles and nuclear silos included, to experiment with, plus the **Research Lab** and optional
-  **Wildlife** (creature nests that raid you; on by default).
+  **the Murmur** (native creatures whose Burrows raid you; on by default, never on Lunar).
 - **Missions:** the tutorial campaign (`MISSIONS` in `js/missions.js`): hand-picked planets, each with its own goals
   and Easy, Normal and Hard levels, that teach the game one idea at a time in seven chapters, in order: **First Steps**
   (a building and its road, Stone and Cement, batteries, the first Alloy), **Growing the Colony**, **Roads and
   Traffic**, **Industry and Trade**, **Sea and Sky** (all Colony games, so the economy is learned in peace), then
-  **First Contact** (creature nests, a passive rival, a border war, a chokepoint against a Herald) and **War** (Ammo and
+  **First Contact** (the Murmur's Burrows, a passive rival, a border war, a chokepoint against a Herald) and **War** (Ammo and
   repairs, Torches, Bulwarks and missiles against a Warden, the Nuclear race, Keeps and bombers). All of them are open
   from the start; finishing one ticks it off at that difficulty (saved by its `id`, so a reworked mission keeps its
   ticks), and the list marks the first unfinished one **Next up**. A mission is plain data: `chapter`, `brief`, `intro`
@@ -36,7 +36,7 @@ how goods move.
   (`placeField`, `placeFertile`, `mapTiles`, `mirrored`), `setup(S, diff)` and up to four `goals`. Built-in goal kinds
   count buildings, goods made, bots made or owned, road tiles, one-way tiles, lights, land, Outposts and the capture;
   any other goal counts itself with `count(P, S)` and its own `text` (bridge tiles, a Ramp up a ledge, research done,
-  trades, nests cleared, minutes held, a nuclear launch). Each goal's `hint` names the real buttons and keys and its
+  trades, Burrows cleared, minutes held, a nuclear launch). Each goal's `hint` names the real buttons and keys and its
   `ui` selector lights up the button it needs (`missionCoach` in `js/ui.js`; with `at`, a ring pulses on the building
   whose panel holds it). Steps already taken stay dark (Build while its menu is open, the card while placing that
   building: then **Build here** lights, as Paths' **Build** does once a sketch is drawn), a lit button below the fold of
@@ -59,7 +59,7 @@ number, the **biome** (Red desert, Jungle or Polar: scenery only, with plants th
 **terrain** (Flat, Gentle, Rolling, Rugged, Mountainous), the **resources** (Scarce to Abundant; Normal is
 `RESOURCE_PRESETS` density 0.78, amount 0.8, which was Sparse until everything was lowered a notch: older saves,
 saved planets and missions move up one, `resLevelUp`), the **rival doctrine** (one for all, or one for each rival),
-and switches for the **Nuclear race** (on by default), **Planetary events** (off by default), **Wildlife** (Colony; on by default),
+and switches for the **Nuclear race** (on by default), **Planetary events** (off by default), **The Murmur** (Colony; on by default; off and greyed on Lunar),
 **Day and night** and **Unlimited resources** (a testing switch: `unlimitedTopUp` keeps your Command Base at
 `UNLIMITED_STOCK` of every good and fills whatever your buildings are waiting for, once a second). Resources come in separate
 fields: your landing zone has a little of everything, and the rich fields beyond it are worth fighting for.
@@ -777,8 +777,35 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   nothing moves). Missions use the Steward unless they name one (Hold the Line's Herald, Siege Breakers' Warden). The
   briefing (`doctrineLines`, multiplayer too), the rival Command Base's panel and the Boosts menu name it, as
   "Warden (turtle)" (`docLabel`).
-- **Wildlife** (Colony; `WILD` in `js/defs.js`, `updateNest`/`updateCritter` in `js/sim.js`; new-game option, on by
-  default; in missions only where one switches it on, `wildlife: true`, as Bug Hunt does): one creature nest per `WILD.perTiles` tiles (3–8), owned by `WILD_OWNER` (the empty
+- **The story** (LORE.md is canon; text and presentation only, nothing in it changes a rule). **Callsigns**
+  (`CALLSIGNS`, `callsign(p, colour)`): players are named COBALT (player 0, cyan), VERMILION (red), VIRIDIAN (green) and
+  TYRIAN (purple) wherever the game used to say "the Red rival" (`playerName`: 'You', a person's name in multiplayer,
+  'VERMILION (ally)' for a team-mate, 'Murmur' for the Colony wildlife slot), with the colour where it helps find them
+  ("VERMILION (red) to the north"); the setup's Each rival dropdowns and the lobby's computer places are named so too.
+  **The narrator** (`NARRATOR`, `narrate(p, key, x, y, every)` in `js/world.js`): your Command AI's dry lines, as toasts
+  of kind `narr` (italic, a grey edge): the first road (`layRoad`), the first nightfall (`nightfallLine`, UI-side, with
+  the day/night cycle on), the first Uplink taken, a rival Command Base captured (or one changing hands between two
+  others), and the landing line on the briefing card (`landingLog`: "Terrafall complete... Landing site: the Rust.")
+  and the end screen's last line (`#o-log`). **Doctrine voices** (`PERSONALITIES[k].voice`, `doctrineVoice(p, to, what)`):
+  a computer rival speaks to the colony it hits, under its callsign, as toasts of kind `voice`: when its warbots or
+  raiders hit you (at most every 4 minutes each), when it fires a Missile at you (every 90 s) or a nuke your way, and
+  when it surrenders; the Warden counts the days (`wardenDay`). Lines are picked by `hash2` of the time and the
+  players, never the game's RNG; what has been said is kept in `S.lore` (saved with the game, left out of `hashState`),
+  so nothing here can split a multiplayer game. Never in missions (`loreDue`), which keep their own texts. A story
+  toast goes in under a newer warning (wide screens show only the newest) and is the first pushed out.
+  **Regions** (`BIOMES[k].region`, `regionName`): the Rust, Greenreach, the White, Emberwood, the Long Grass, the Sump,
+  Cinderlands, Penelope (the moon) and the Bloom, as flavour only (briefing, landing message, loading lines): the
+  setup keeps the plain biome names. **Panel flavour** (`FLAVOR`, `flavorLine`): one quiet italic line at the foot of
+  every building's and robot's panel (and the Trade Post's and Uplink's), below every button; the Command Base's is its
+  Arrival clock (`ARRIVAL_CLOCK`), shown under its name. **Loading lines** (`SPLASH_LINES`, picked at first paint by an
+  inline script in `index.html`, which keeps its own copy): one under the splash bar, which now stays about 2 s.
+- **The Murmur** (players' name for the wildlife: Colony; `WILD` in `js/defs.js`, `updateNest`/`updateCritter` in `js/sim.js`; the
+  new-game option "The Murmur", on by default; in missions only where one switches it on, `wildlife: true`, as Bug Hunt
+  does). **None on a silent biome** (`BIOMES.lunar.silent`, `murmurGround`): on Lunar, Penelope the moon, `newGame`
+  never sets `S.wildlife`, a mission's `wildlife` is ignored and `placeNests` places nothing, so there are no Burrows and
+  no raids in any mode; the setup's switch is off and greyed there (the saved setting is kept for other biomes), and an
+  old Lunar save that has Burrows keeps them. Internally the creatures are still `wildlife`, the Burrows type `'nest'`;
+  players see "the Murmur", "Burrow", Scuttler and Brute. One Burrow per `WILD.perTiles` tiles (3–8), owned by `WILD_OWNER` (the empty
   second player slot of a Colony game), at least 16 tiles from the landing site and reachable on foot. Each keeps
   `guards + level` Scuttlers on guard and from `WILD.first` (7 min) sends a pack every 260–400 s at the nearest building,
   road or bot the colony has within `WILD.reach` (24) tiles: Scuttlers (6 hp, bite 1) go for bots in the open (once there,
@@ -786,8 +813,8 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   bite 3; from level 2) tear up roads and batter buildings (never below 1 armor; construction sites are wrecked) and
   break through Walls and Gates, slowly (`WILD.wallBite`, a third of a bite: about 40 s for one Brute on a Wall). Nests grow a
   level every `WILD.grow` s (to 3); packs grow with the colony (`perBuildings`). Turrets, garrisons and warbots treat
-  creatures as enemies; warbots clear a nest (`clearNest`: its hoard spills as loot, its creatures scatter). Nothing can be
-  built within `WILD.clear` tiles of a nest.
+  creatures as enemies; warbots clear a Burrow (`clearNest`: its hoard spills as loot, its creatures scatter). Nothing can be
+  built within `WILD.clear` tiles of one.
 - **Research** (Colony; `TECHS` in `js/defs.js`, `startResearch`/`updateLab` in `js/sim.js`): a Research Lab (staffed)
   researches one upgrade at a time, cost paid on start (Cancel refunds), progress `dt × mult` per staffed Lab. Upgrades:
   Cargo Racks (`botCarry`), Long-life Cells (`drainMul`, and chargers 50% faster; the old Fast Charging upgrade is folded into it), Rapid Paving, Sentry Optics (`turretRange`,
@@ -795,11 +822,14 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
 - **Planetary events** (`EVENTS` in `js/defs.js`, `updateEvents` in `js/sim.js`; new-game option; in missions only with
   `events: true`, as in Trade Winds, whose setup brings the first one forward with `S.nextEvent`): the
   first after 8 minutes, then one every 5–8 minutes, never one of the last two again, most with a 20 s warning. **Dust
-  storm**: bots at `DUST_SPEED` (⅔) and every missile grounded (`missileBlocked`, `nukeBlocked`). **Meteor shower**:
+  storm**: bots at `DUST_SPEED` (⅔) and every missile grounded (`missileBlocked`, `nukeBlocked`). **Ringfall** (a meteor
+  shower, pieces of the planet's Ring; type `'meteor'`):
   `METEOR_HITS` strikes on each colony's share (mirrored with two players, turned with three: `meteorPlan`), each
   cratering roads (re-planned at once if the Cement allows), denting buildings and bots (never below 1 armor) and
-  leaving a rich Ore or Crystal deposit (Uranium sometimes in a Nuclear race). **Solar flare**: battery drain ×
-  `FLARE_DRAIN` (2). **Trader ship**: 75 s; offers the raw good that runs out (Ore, Crystal, Stone or Crude: the one
+  leaving a rich Ore or Crystal deposit (Uranium sometimes in a Nuclear race); it ends "Ringfall over. Fresh Ore and
+  Crystal in the strike zones. Listen for the Murmur." (without the Murmur on Lunar). **Solar flare**: battery drain ×
+  `FLARE_DRAIN` (2). **The *Wren*** (the trader ship, type `'trader'`; its card shows the name in italics,
+  `EVENTS.trader.html`, and one of its 31-year-old cargo lists, `WREN_CARGO` by the event's number): 75 s; offers the raw good that runs out (Ore, Crystal, Stone or Crude: the one
   lowest in stock plus deposits left on your land, `TRADE_GET`/`TRADE_LEFT`) for a good you hold well over
   `TRADE_KEEP` of (never Chips, Ammo or Missiles) at `TRADE_BONUS` (1.3×) its worth; the AI takes its deal when short.
   An event card under the top bar shows it with a countdown and the Trade button.

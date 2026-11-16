@@ -318,8 +318,8 @@ function menuDocAll() {
   for (let k = 1; k < n; k++) if (menuSeatStyle(k) !== v) return -1;
   return v;
 }
-/** The k-th computer player, as the setup names it: 'Red', or 'Your ally (red)' in a team game. */
-function seatName(k) { return menuTeams() && k === 0 ? 'Your ally (red)' : RIVAL_NAMES[k + 1]; }
+/** The k-th computer player, as the setup names it: its callsign ('VERMILION'), or 'Your ally VERMILION' in a team game. */
+function seatName(k) { return menuTeams() && k === 0 ? `Your ally ${callsign(1)}` : callsign(k + 1); }
 /** The doctrines for newGame: one for each computer player, in player order. */
 function menuStyleKeys() { return [0, 1, 2].map((k) => docKeyOf(menuSeatStyle(k))); }
 /** A doctrine's description, for the line under the doctrine chips: the name in bold, then how it plays. */
@@ -329,6 +329,8 @@ function docHTML(k) {
   return `<b>${docLabel(k)}:</b> <i>\u201c${P.quote}\u201d</i> ${P.play} <b>Weak spot:</b> ${P.weak}`;
 }
 const biomeName = (k) => (BIOMES[BIOME_ORDER[k]] || BIOMES[BIOME_ORDER[0]]).name;
+/** Can the menu's biome have the Murmur? Not Lunar (Random might still pick it: then there are none). */
+function menuMurmur() { return UI.menu.biomeRnd || murmurGround(BIOME_ORDER[UI.menu.biome || 0]); }
 const mapGroupName = (g) => { const G = MAP_GROUPS.find((x) => x.key === g); return G ? G.name : ''; };
 /**
  * How many players the menu is set to (Versus): you and one to three rivals, as many as the map type
@@ -350,7 +352,7 @@ function modeInfo(mode, n) {
   const where = m.shapeRnd ? 'a square planet' : quad ? SH.name : 'a square planet';
   const win = 'Take a rival\'s Command Base and all it built is yours; the last colony standing wins.';
   return mode === 'colony'
-    ? (UI.menu.wild ? 'Colony: no rival, but creatures nest in the wilds and raid what you build near them. Build, research and spread across the planet.'
+    ? (UI.menu.wild && menuMurmur() ? 'Colony: no rival, but the Murmur burrow in the wilds and raid what you build near them. Build, research and spread across the planet.'
       : 'Colony: no rival. Settle the planet at your own pace: build, research and spread across the planet.')
     : n === 4 ? `Free-for-all · 4: you and three rival colonies (red, green and purple) on ${where}, one in each corner quarter. ${win}`
       : n === 3 && onCross ? `Free-for-all · 3: you and two rival colonies on ${where}, each in a corner quarter; the quarter beside you is free and rich. ${win}`
@@ -384,7 +386,7 @@ function menuSummary() {
   if (m.rough !== DEFAULT_ROUGH) extra.push(TERRAIN_PRESETS[m.rough].name + ' terrain');
   if (m.rich !== DEFAULT_RICH) extra.push(RESOURCE_PRESETS[m.rich].name + ' resources');
   if (!m.nuke) extra.push('no Nuclear race');
-  if (colony && !m.wild) extra.push('no wildlife');
+  if (colony && (!m.wild || !menuMurmur())) extra.push('no Murmur');
   if (m.events) extra.push('Planetary events');
   if (todMode() !== 'cycle') extra.push(todMode() === 'day' ? 'always day' : 'always night');
   if (!weatherOn()) extra.push('no weather');
@@ -619,7 +621,14 @@ function syncMenu() {
     lab.dataset.info = docInfo(docKeyOf(v));
   }
   $('m-wild-row').hidden = !colony;
-  for (const [id, on] of [['m-nuke', m.nuke], ['m-wild', m.wild], ['m-events', m.events], ['m-unlimited', m.unlimited], ['m-weather', weatherOn()]]) {
+  // The Murmur: none on Lunar (Penelope, the moon, is silent ground), so there the switch is off and can't be turned on
+  // (the setting itself is kept for the next biome).
+  const silent = !menuMurmur();
+  $('m-wild').disabled = silent;
+  $('m-wild-row').classList.toggle('na', silent);
+  $('m-wild-row').dataset.info = silent ? 'The Murmur: none on Lunar. Penelope, the moon, is the only silent ground: no Burrows, no raids.'
+    : 'The Murmur (Colony): native creatures burrow in the wilds and raid what you build near their Burrows. None on Lunar.';
+  for (const [id, on] of [['m-nuke', m.nuke], ['m-wild', m.wild && !silent], ['m-events', m.events], ['m-unlimited', m.unlimited], ['m-weather', weatherOn()]]) {
     $(id).checked = !!on;
     $(id + '-row').classList.toggle('on', !!on);
   }
@@ -2186,10 +2195,10 @@ function renderPlanets() {
 
 /* ------------------------------------------------------------------ game flow */
 
-/** Where the rivals landed, from your Command Base: "Two rival colonies landed too: red to the north, ..." */
+/** Where the rivals landed, from your Command Base: "Two rival colonies landed too: VERMILION (red) to the north, ..." */
 function rivalsLanded() {
   const L0 = getE(S.players[ME].lander), rivals = S.players.filter((P) => foes(P.id, ME) && !P.absent);
-  const at = (P) => { const L = getE(P.lander); return `${RIVAL_NAMES[P.id].toLowerCase()} ${L0 && L ? 'to the ' + dirText(L0, L).replace(/^\d+ tiles? /, '') : ''}`.trim(); };
+  const at = (P) => { const L = getE(P.lander); return `${P.name || callsign(P.id, true)} ${L0 && L ? 'to the ' + dirText(L0, L).replace(/^\d+ tiles? /, '') : ''}`.trim(); };
   const where = rivals.map(at);
   const list = where.length > 1 ? where.slice(0, -1).join(', ') + ' and ' + where[where.length - 1] : where[0] || '';
   // (teams: your ally landed beside you)
@@ -2197,18 +2206,19 @@ function rivalsLanded() {
   return `${['', 'A rival colony', 'Two rival colonies', 'Three rival colonies'][rivals.length]} landed too: ${list}.` + (ally ? ` Your ally, ${at(ally)}, fights on your side.` : '');
 }
 
-/** The rivals' colours, for a hint: 'red', 'red or green', 'red, green or purple'. */
+/** The rivals' colours, for a hint on the map: 'red', 'red or green', 'red, green or purple'. */
 function rivalColours() {
   const c = S.players.filter((P) => foes(P.id, ME) && !P.absent).map((P) => (RIVAL_NAMES[P.id] || 'red').toLowerCase());
   return c.length > 1 ? c.slice(0, -1).join(', ') + ' or ' + c[c.length - 1] : c[0] || 'red';
 }
 
-/** The briefing names each computer player's doctrine, so you know what's coming: "Your rival is a Warden (turtle): ...". */
+/** The briefing names each computer player's doctrine, so you know what's coming: "VERMILION (red) is a Warden (turtle): ...". */
 function doctrineLines() {
   if (S.mode === 'colony') return;
   for (const P of S.players) {
     const st = P.id !== ME && P.ai && !P.absent && !P.out && isDoctrine(P.style) && PERSONALITIES[P.style];
-    if (st) postMsg(ME, `${S.players.length > 2 ? 'The ' + playerName(P.id) : 'Your rival'} is ${st.noun} (${st.plain}): it ${st.desc}.`, 0, 0, 'info');
+    const who = allies(P.id, ME) ? `Your ally ${callsign(P.id, true)}` : S.players.length > 2 ? callsign(P.id, true) : `Your rival, ${callsign(P.id, true)},`;
+    if (st) postMsg(ME, `${who} is ${st.noun} (${st.plain}): it ${st.desc}.`, 0, 0, 'info');
   }
 }
 
@@ -2228,17 +2238,17 @@ function startNewGame() {
   updateHUD();
   placeMinimap();
   postMsg(ME, UI.menu.mode === 'colony'
-    ? 'Your bots have landed. Build, expand and make this planet home.'
+    ? `Your bots have landed ${BIOMES[S.settings.biome] && BIOMES[S.settings.biome].silent ? 'on' : 'in'} ${regionName(S.settings.biome)}. Build, expand and make this planet home.`
     : S.players.length > 2 ? `Your bots have landed. ${rivalsLanded()} Build up fast!`
-      : 'Your bots have landed. A rival colony landed to the north. Build up fast!', 0, 0, 'info');
+      : `Your bots have landed. A rival colony, ${callsign(1, true)}, landed to the north. Build up fast!`, 0, 0, 'info');
   if (UI.menu.shapeRnd || UI.menu.biomeRnd) postMsg(ME, `Random pick: ${[UI.menu.shapeRnd ? SHAPE_PRESETS[pick.shape].name : '', UI.menu.biomeRnd ? biomeName(pick.biome) : ''].filter(Boolean).join(', ')}.`, 0, 0, 'info');
   doctrineLines();
   if (S.wildlife) {
     // Pointed at the nest nearest home (J jumps there), the rest are red on the minimap.
     const L = getE(S.players[ME].lander), nests = S.buildings.filter((b) => !b.dead && BDEFS[b.type].wild);
     const near = L && nests.length ? nests.reduce((a, b) => (dist2(b.x, b.y, L.x, L.y) < dist2(a.x, a.y, L.x, L.y) ? b : a)) : null;
-    postMsg(ME, `${nests.length} creature nests sit out in the wilds (red on the minimap; the nearest is ${near ? dirText(L, near) : 'out there'}${near ? ': press J or tap here to look' : ''}). From about 7 minutes in they raid whatever you build near their nests. Pulse Turrets (with Crystal) and warbots keep them off; clear a nest with warbots to win the goods it hoards.`, near ? near.x : 0, near ? near.y : 0, 'warn');
-  }
+    postMsg(ME, `The Murmur live here: ${nests.length} Burrows sit out in the wilds (red on the minimap; the nearest is ${near ? dirText(L, near) : 'out there'}${near ? ': press J or tap here to look' : ''}). From about 7 minutes in they raid whatever you build near their Burrows. Pulse Turrets (with Crystal) and warbots keep them off; clear a Burrow with warbots to win the goods it hoards.`, near ? near.x : 0, near ? near.y : 0, 'warn');
+  } else if (UI.menu.mode === 'colony' && UI.menu.wild && !murmurGround(S.settings.biome)) postMsg(ME, 'Penelope is silent ground: no Murmur live on the moon.', 0, 0, 'info');
   if (S.posts && S.posts.length) {
     // Pointed at the post nearest home (J or a tap jumps there); the rest are gold on the minimap.
     const L = getE(S.players[ME].lander), near = L ? S.posts.reduce((a, p) => (dist2(p.x, p.y, L.x, L.y) < dist2(a.x, a.y, L.x, L.y) ? p : a)) : null;
@@ -2251,7 +2261,7 @@ function startNewGame() {
   if (S.victory === 'domination') postMsg(ME, `Domination: hold ${Math.round(domShare() * 100)}% of the land anyone holds (and ${Math.round(DOM.min * 100)}% of the planet) for ${DOM.hold / 60} minutes straight to win. The card at the top shows where everyone stands. Outposts and Keeps claim the most land.`, 0, 0, 'info');
   if (nukeOn()) postMsg(ME, `Nuclear race: a few uranium deposits glow green across the planet. Dig them with Ore Mines, enrich them at a Nuclear Reactor and build the bomb${S.mode === 'colony' ? ' (no rival here, so it is yours to try out)' : ` before ${S.players.length > 2 ? 'the rivals do' : 'the rival does'}`}.`, 0, 0, 'warn');
   $('br-title').textContent = 'Before you start';
-  showBriefing();
+  showBriefing(landingLog());
 }
 
 /* ------------------------------------------------------------------ save files: carry a game between devices */
@@ -2482,17 +2492,21 @@ function showGameOver() {
   UI.overNew = null; UI.overMenu = null;
   $('o-new').textContent = 'New game'; $('o-menu').textContent = 'Main menu';
   $('o-code').hidden = true;
+  $('o-log').hidden = true;
   if (S.mission) { showMissionOver(); return; }
-  const won = S.winner === ME || allies(S.winner, ME), how = S.endHow || 'capture', many = S.players.length > 2, them = many ? playerName(S.winner) : 'rival';
-  const W = S.players[S.winner], The = W && W.name ? W.name : `The ${them}`; // (a person, in multiplayer: by name)
+  const won = S.winner === ME || allies(S.winner, ME), how = S.endHow || 'capture', many = S.players.length > 2;
+  const The = S.players[S.winner] ? playerName(S.winner) : 'The rival'; // (its callsign; a person, in multiplayer: by name)
+  // The narrator's last line (LORE.md): the region secured, or the command core lost.
+  $('o-log').textContent = won ? NARRATOR[how === 'domination' || how === 'uplinks' ? how : 'victory'] : NARRATOR[S.players[ME].out ? 'defeat' : 'outranked'];
+  $('o-log').hidden = false;
   sfx(won ? 'win' : 'lose');
   $('o-title').textContent = won ? (how === 'domination' ? 'Domination!' : how === 'uplinks' ? 'Uplinks held!' : 'Victory!') : 'Defeat';
   $('o-text').textContent = won
     ? (how === 'domination' ? `You held most of the planet's land for ${DOM.hold / 60} minutes. The planet is yours.`
       : how === 'uplinks' ? `You led on the Uplinks for ${UPLINK.hold / 60} minutes. The planet is yours.`
-      : how === 'surrender' ? (many ? 'The last rival surrendered: the planet is yours.' : 'Your rival surrendered. The planet is yours.')
-      : how === 'nuke' ? (many ? 'Your nuclear missile destroyed the last rival Command Base. The planet is yours.' : 'Your nuclear missile destroyed the rival Command Base. The planet is yours.')
-        : many ? `${S.players.length > 3 ? 'All three' : 'Both'} rival Command Bases are yours: the last colony standing. The planet is yours.` : 'Your warbots captured the rival Command Base. The planet is yours.')
+      : how === 'surrender' ? (many ? 'The last rival surrendered: the planet is yours.' : `${playerName(S.players.findIndex((P, k) => k !== ME))} surrendered. The planet is yours.`)
+      : how === 'nuke' ? (many ? 'Your nuclear missile destroyed the last rival Command Base. The planet is yours.' : `Your nuclear missile destroyed ${playerName(S.players.findIndex((P, k) => k !== ME))}'s Command Base. The planet is yours.`)
+        : many ? `${S.players.length > 3 ? 'All three' : 'Both'} rival Command Bases are yours: the last colony standing. The planet is yours.` : `Your warbots captured ${playerName(S.players.findIndex((P, k) => k !== ME))}'s Command Base. The planet is yours.`)
     : how === 'domination' ? `${The} held most of the planet's land for ${DOM.hold / 60} minutes. Regroup and try again.`
       : how === 'uplinks' ? `${The} led on the Uplinks for ${UPLINK.hold / 60} minutes. Regroup and try again.`
       : `${The} ${S.players[ME].out ? (how === 'nuke' ? 'destroyed your Command Base with a nuclear missile' : 'captured your Command Base') : 'took the planet'}. Regroup and try again.`;
@@ -2519,7 +2533,7 @@ function missionMeta(def, diff) {
   const size = SIZE_PRESETS[def.size].name, terr = TERRAIN_PRESETS[def.rough].name, shape = (SHAPE_PRESETS[def.shape || 0] || SHAPE_PRESETS[0]).name;
   const limit = def.limit[diff] ? ` · ${def.limit[diff]} min limit` : '';
   // What the mission switches on that missions otherwise leave out.
-  const extras = [def.mode === 'colony' && def.war && 'Warbots', def.wildlife && 'Wildlife', def.events && 'Planet events', def.nuke && 'Nuclear race', def.lab && 'Research Lab'].filter(Boolean);
+  const extras = [def.mode === 'colony' && def.war && 'Warbots', def.wildlife && 'The Murmur', def.events && 'Planet events', def.nuke && 'Nuclear race', def.lab && 'Research Lab'].filter(Boolean);
   const more = extras.length ? ` · ${extras.join(', ')}` : '';
   if (def.mode === 'colony') return `Colony · ${shape} · ${size} · ${terr}${more}${limit}`;
   const n = playerCount('versus', def.shape || 0, def.players) - 1, style = isDoctrine(def.style) ? ` ${PERSONALITIES[def.style].name}` : '';
@@ -4682,22 +4696,29 @@ function ownedText(type) {
   return `You have ${built}` + (sites ? ` · ${sites} being built` : '');
 }
 
+/**
+ * The line of flavour at the foot of a panel (FLAVOR in defs.js: LORE.md's voice), one subdued line below everything
+ * useful, so it never pushes a button down. (The Command Base's, its Arrival clock, sits under its name instead: see
+ * openBuildingSheet.)
+ */
+function flavorLine(k) { return FLAVOR[k] && k !== 'lander' ? `<p class="flavor">${FLAVOR[k]}</p>` : ''; }
+
 function openBuildingSheet(b) {
   const def = BDEFS[b.type];
   const mine = b.owner === ME;
   R.selected = b.id; R.selTile = -1; UI.selBot = 0;
-  let desc = !mine && b.type === 'lander' ? (S.players.length > 2 ? `The ${playerName(b.owner)}'s fortified headquarters. Capture it and everything the ${playerName(b.owner)} built is yours.` : 'The rival\'s fortified headquarters. Capture it to win.') : def.desc;
+  let desc = !mine && b.type === 'lander' ? (S.players.length > 2 ? `${playerName(b.owner)}'s fortified headquarters. Capture it and everything ${playerName(b.owner)} built is yours.` : `${playerName(b.owner)}'s fortified headquarters. Capture it to win.`) : def.desc;
   const style = !mine && b.type === 'lander' && S.players[b.owner] && S.players[b.owner].ai && isDoctrine(S.players[b.owner].style) && S.players[b.owner].style;
   if (style && S.mode !== 'colony' && !S.mission) desc += ` <b>${docLabel(style)}:</b> it ${PERSONALITIES[style].desc}.`;
   if (!mine && b.type === 'lander' && S.mission && captureLocked(b, ME)) desc += ' <b>Finish your other goals first:</b> until then it holds at 1 armor.';
   if (def.wild) {
     const n = S.bots.filter((u) => !u.dead && u.nest === b.id).length;
-    desc += ` <b>Level ${b.level || 1} of 3</b>, ${n} creature${n === 1 ? '' : 's'} out and about. Hoarded: ${Object.keys(b.stock).filter((g) => b.stock[g] > 0).map((g) => `${b.stock[g]} ${GOOD[g].name}`).join(', ') || 'nothing'}.`;
+    desc += ` <b>Level ${b.level || 1} of 3</b>, ${n} of the Murmur out and about. Hoarded: ${Object.keys(b.stock).filter((g) => b.stock[g] > 0).map((g) => `${b.stock[g]} ${GOOD[g].name}`).join(', ') || 'nothing'}.`;
   }
   // With no road to storage yet, that warning and its Lay road button lead the panel: in view at half height.
   const roadFirst = mine && b.unlinked && needsRoad(b);
   let html = `<div class="sheet-title"><img src="${iconFor(b.type, b.owner)}" alt=""><div><h3>${def.name}</h3>
-    <div class="owner"><span class="dot" style="background:${PLAYER_COLORS[b.owner]}"></span> ${mine ? 'Yours' : playerName(b.owner)}</div></div></div>
+    <div class="owner"><span class="dot" style="background:${PLAYER_COLORS[b.owner]}"></span> ${mine ? 'Yours' : playerName(b.owner)}</div>${b.type === 'lander' ? `<div class="flavor clock">${ARRIVAL_CLOCK}</div>` : ''}</div></div>
     ${roadFirst ? '<div id="sh-road"></div>' : ''}<p class="desc">${desc}</p><div class="status" id="sh-status"></div><div id="sh-dyn"></div>${mine ? '<div id="sh-fix"></div>' : ''}`;
   if (mine) {
     if (def.airfield && b.built && b.owner === ME) html += airfieldSection(b); // its planes and air drops first
@@ -4823,6 +4844,7 @@ function openBuildingSheet(b) {
       <div class="section-label">Missile strike</div><div id="sh-missile"></div>
       <button class="btn primary big" id="sh-fire">Fire missile</button>${myBombers().length ? '<div class="section-label">Air strike</div><p class="hint" id="sh-bomb-hint"></p><button class="btn big" id="sh-bomb">Bomb it</button>' : ''}`;
   }
+  html += flavorLine(b.type);
   openSheet('bld', b.id, html);
   UI.sheetMine = mine;
   if (mine) {
@@ -5050,7 +5072,7 @@ function refreshBuildingSheet(b) {
   const gun = mine && b.underFire && !BDEFS[b.type].war ? gunOver(ME, b.x, b.y) : null;
   const foes = mine && !gun && !BDEFS[b.type].war && !(def.staff && b.staff) && foesAt(b); // (a staffed building says so itself)
   $('sh-status').textContent = gun ? `Under enemy fire: an enemy ${BDEFS[gun.type].name} covers it, so your robots keep clear until the gun is destroyed or runs dry.`
-    : foes ? `${S.wildlife ? 'Creatures' : 'Enemy warbots'} about: your workers and haulers keep clear of it until they've gone${S.wildlife ? '' : ' (send warbots to drive them off)'}.`
+    : foes ? `${S.wildlife ? 'The Murmur are' : 'Enemy warbots'} about: your workers and haulers keep clear of it until they've gone${S.wildlife ? '' : ' (send warbots to drive them off)'}.`
     : mine ? b.status || '' : (b.built ? '' : 'Construction site');
   if (!b.built) {
     parts.push(`<div class="bar"><div style="width:${Math.round(b.progress * 100)}%"></div></div>`);
@@ -5222,7 +5244,7 @@ function refreshBuildingSheet(b) {
     for (const btn of $('sh-hold').children) btn.classList.toggle('on', (btn.dataset.v === '1') === !!b.hold);
     $('sh-hold-hint').textContent = b.hold
       ? 'Holding: its warbots stay inside whatever comes near, until you send them out with the button below (if it falls, they scramble out). Attack orders and rally flags can still take them.'
-      : 'Its warbots go out by themselves to fight enemy warbots and creatures that come near, and come back in once it\'s clear (every one of them when it\'s about to fall).';
+      : `Its warbots go out by themselves to fight ${S.wildlife ? 'enemy warbots and the Murmur' : 'enemy warbots'} that come near, and come back in once it's clear (every one of them when it's about to fall).`;
     const armed = armedIn(b), foe = sortieTarget(b), sb = $('sh-sortie');
     sb.disabled = !armed || !foe;
     sb.textContent = !armed ? 'Send them out to fight (no armed warbots inside)' : !foe ? 'Send them out to fight (no enemies near it)' : `Send ${armed} out to fight`;
@@ -5450,7 +5472,7 @@ function botActivity(u) {
     if (!t) return 'Heading to a Rail Station to have its armor fitted';
   }
   if (u.shyUntil > S.time && gunShy(u) && !(t && t.type === 'staff')) {
-    const who = u.shyOf === 'wild' ? 'creatures' : 'enemy warbots';
+    const who = u.shyOf === 'wild' ? 'the Murmur' : 'enemy warbots';
     return t && t.type === 'home' ? `Keeping clear of ${who}: taking cover in storage` : `Keeping clear of ${who}: waiting for them to go`;
   }
   if (t && t.type === 'charge') return u.inside ? 'Recharging its battery' : 'Going to recharge its battery';
@@ -5537,7 +5559,7 @@ function openBotSheet(u) {
     ${u.owner === ME && BOTS[u.type].siege ? `<div class="actions"><button class="btn primary" id="sh-bombard">Bombard a building</button><button class="btn" id="sh-rgo">Drive somewhere</button></div>
       <div class="section-label">While it waits</div><div class="seg" id="sh-stance"><button data-v="fire">Fire at will</button><button data-v="hold">Hold fire</button></div>
       <p class="hint">It stays where you put it (beside the Foundry when it's new). <b>Fire at will</b>: it shells any enemy building that comes in reach of that spot, without moving. <b>Hold fire</b>: it fires only when you tell it to. After reloading it goes back to its target, or to its spot. With a mouse, select it and right-click a rival building to bombard it, or open ground to move it there.</p>` : ''}`;
-  openSheet('bot', u.id, html);
+  openSheet('bot', u.id, html + flavorLine(u.type));
   if ($('sh-tarmor')) $('sh-tarmor').onclick = () => act('trainArmor', [u.id], (r) => {
     if (r) { sfx('error'); toast(r, 'warn'); } else { sfx('order'); toast('Armor paid for: the train finishes its run, stops at a Rail Station and the yard fits the plating and guns.', 'info'); }
     refreshSheet();
@@ -5690,7 +5712,7 @@ function openPostSheet(post) {
   const html = `<div class="sheet-title"><div><h3>Trade Post</h3><div class="sub">Neutral: nobody owns it</div></div></div>
     <p class="desc">An off-world exchange. Any colony can trade here: dock a <b>Trade Terminal</b> beside it (Build, Move, within ${TRADE_POST.dock} tiles of the pad) and lay a road or track out to the Terminal. Only Road Trains and Freight Trains serve it. A rival's land round the post keeps you out (no Terminal and no road on their ground), so an Outpost of yours beside it keeps them out. Further from your Command Base pays more.</p>
     <div id="sh-dyn"></div>
-    <div class="btn-row"><button class="btn primary" id="sh-dock">Dock a Trade Terminal here</button></div>`;
+    <div class="btn-row"><button class="btn primary" id="sh-dock">Dock a Trade Terminal here</button></div>${flavorLine('post')}`;
   openSheet('post', t, html);
   $('sh-dock').onclick = () => { sfx('click'); enterPlaceMode('terminal'); };
   refreshSheet();
@@ -5703,7 +5725,7 @@ function openUplinkSheet(u) {
   const html = `<div class="sheet-title"><div><h3>Uplink</h3><div class="sub">A neutral relay tower</div></div></div>
     <p class="desc">It belongs to whoever's land it stands in: build an Outpost or a Keep near it (a Drop Outpost will do, or a Port across the water) and it's yours while your land covers it. Armed enemy warbots within ${UPLINK.jam} tiles of it jam it: then it counts for no one. Once they're online (${UPLINK.online / 60} minutes in), hold ${uplinkGoal()} and your clock runs; a total of ${UPLINK.hold / 60} minutes wins.</p>
     <div id="sh-dyn"></div>
-    <div class="btn-row"><button class="btn" id="sh-up-guard">Hold it with warbots</button></div>`;
+    <div class="btn-row"><button class="btn" id="sh-up-guard">Hold it with warbots</button></div>${flavorLine('uplink')}`;
   openSheet('uplink', t, html);
   $('sh-up-guard').onclick = () => { sfx('click'); closeSheet(); setMode('attack'); UI.armyCmd = 'hold'; showArmyCmdBanner('Tap the ground beside the Uplink.'); };
   refreshSheet();
@@ -6345,7 +6367,8 @@ function updateEventCard() {
   if (el.dataset.key !== key) {
     el.dataset.key = key;
     el.className = 'event-card' + (E.type === 'trader' ? ' trader' : '');
-    let html = `<div class="ev-head"><span class="ev-dot" style="background:${def.color};color:${def.color}"></span><b>${soon ? def.name + ' coming' : def.name}</b><span class="ev-time"></span></div>`;
+    const name = def.html || def.name; // (the Wren in italics)
+    let html = `<div class="ev-head"><span class="ev-dot" style="background:${def.color};color:${def.color}"></span><b>${soon ? name + ' coming' : name}</b><span class="ev-time"></span></div>`;
     if (E.type !== 'trader') html += `<div class="ev-desc">${def.desc}</div>`;
     else if (!E.started) html += '';
     else if (!o) html += '<div class="ev-desc">It wants nothing you have spare.</div>';
@@ -6354,6 +6377,8 @@ function updateEventCard() {
       html += `<div class="ev-deal"><span>Give <b>${o.n}</b> <i class="gi ${o.give}"></i> ${GOOD[o.give].name}, get <b>${o.m}</b> <i class="gi ${o.get}"></i> ${GOOD[o.get].name}</span>` +
         '<button class="btn small primary" id="ev-trade">Trade</button></div>';
     }
+    // The Wren's cargo list, 31 years out of date (LORE.md): goods for a colony that hasn't come.
+    if (E.type === 'trader' && E.started) html += `<div class="ev-cargo">Cargo list, 31 years old: ${wrenCargo(E.n)}.</div>`;
     el.innerHTML = html;
     const btn = $('ev-trade');
     if (btn) btn.onclick = () => act('trade', [], (why) => {
@@ -6380,7 +6405,7 @@ function updateWinCard() {
   const left = D.lead >= 0 ? Math.max(0, DOM.hold - D.t) : 0, clock = `${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}`;
   const share = domShare();
   const head = D.lead < 0 ? `Domination: hold ${Math.round(share * 100)}% of the land`
-    : D.lead === ME ? 'You hold most of the land' : `${S.players.length > 2 ? 'The ' + playerName(D.lead) : 'The rival'} holds most of the land`;
+    : D.lead === ME ? 'You hold most of the land' : `${playerName(D.lead)} holds most of the land`;
   const key = `${D.lead}`;
   if (el.dataset.key !== key) {
     el.dataset.key = key;
@@ -6419,7 +6444,7 @@ function updateUplinkCard() {
   el.classList.toggle('theirs', lead >= 0 && lead !== ME);
   const dot = el.querySelector('.ev-dot'), col = lead >= 0 ? PLAYER_COLORS[lead] : '#dfefff';
   dot.style.background = col; dot.style.color = col;
-  el.querySelector('.wc-head').textContent = pre ? 'Uplinks come online in' : lead < 0 ? `Uplinks: hold ${need} of ${U.length}${U.length % 2 ? '' : ' (the most)'}` : lead === 0 ? `You hold ${held[0]} of ${U.length} Uplinks` : `${S.players.length > 2 ? 'The ' + playerName(lead) : 'The rival'} holds ${held[lead]} of ${U.length}`;
+  el.querySelector('.wc-head').textContent = pre ? 'Uplinks come online in' : lead < 0 ? `Uplinks: hold ${need} of ${U.length}${U.length % 2 ? '' : ' (the most)'}` : lead === ME ? `You hold ${held[ME]} of ${U.length} Uplinks` : `${playerName(lead)} holds ${held[lead]} of ${U.length}`;
   el.querySelector('.ev-time').textContent = pre ? fmtClock(UPLINK.online - S.time) : lead >= 0 ? fmtClock(UPLINK.hold - clock[lead]) : '';
   el.querySelector('.up-dots').innerHTML = U.map((u) => `<i title="Uplink ${u.id}" style="--c:${u.jam ? '#ff4030' : u.owner >= 0 ? PLAYER_COLORS[u.owner] : 'transparent'}" class="${u.jam ? 'jam' : u.owner < 0 ? 'free' : ''}"></i>`).join('');
   el.querySelector('.win-rows').innerHTML = live.map((P) => `<span class="wn">${playerName(P.id)}</span><span class="win-bar" style="--c:${PLAYER_COLORS[P.id]}"><i style="width:${Math.min(100, ((clock[P.id] || 0) / UPLINK.hold) * 100).toFixed(1)}%"></i></span><span class="wp">${fmtClock(UPLINK.hold - (clock[P.id] || 0))}</span>`).join('');
@@ -6500,12 +6525,16 @@ function toast(text, kind, x, y) {
     el.appendChild(go);
   }
   el.dataset.text = text;
-  box.appendChild(el);
+  // A story line (the narrator's, a rival's voice) never hides a warning: it goes in under a newest one that is (a
+  // wide screen shows only the newest), and it is the first to go when there are too many.
+  const lore = kind === 'narr' || kind === 'voice', last = box.lastElementChild, story = (c) => c.classList.contains('narr') || c.classList.contains('voice');
+  if (lore && last && /\b(bad|lost|warn)\b/.test(last.className) && !last.classList.contains('out')) box.insertBefore(el, last);
+  else box.appendChild(el);
   // At most 2 at once (3 with a building lost): the oldest go first, but a "lost" toast (a building of
   // yours destroyed) outlasts the others and isn't pushed out by them.
   const lost = kind === 'lost';
   while (box.children.length > (box.querySelector('.toast.lost') ? 3 : 2)) {
-    const old = [...box.children].find((c) => !c.classList.contains('lost') && c !== el) || box.firstChild;
+    const old = [...box.children].find((c) => story(c) && c !== el) || [...box.children].find((c) => !c.classList.contains('lost') && c !== el) || box.firstChild;
     box.removeChild(old);
   }
   const ms = clamp(3800 + 60 * (text.length - 60), 3800, 12000);
@@ -6527,18 +6556,26 @@ function openMsgSheet() {
  * starts the game; otherwise the card closes by itself once there's been time to read it. (Multiplayer can't pause for
  * one player: there it's just the card.)
  */
-function showBriefing() {
+/**
+ * The narrator's first words, for the briefing card of a free game or a multiplayer one (missions keep their own):
+ * the terrafall, and the region it came down in (LORE.md's name for the biome).
+ */
+function landingLog() { return S && !S.mission ? `${NARRATOR.start} Landing site: ${regionName(S.settings.biome)}.` : ''; }
+
+function showBriefing(log) {
   // (Not under test automation, whose scripts expect the game to start at once, unless a test asks for it.)
   if (typeof navigator !== 'undefined' && navigator.webdriver && !window.BOTFALL_BRIEF) return;
   const items = S.msgs.splice(0);
   if (!items.length) return;
+  $('br-narr').textContent = log || '';
+  $('br-narr').hidden = !log;
   // (who landed where first, then the rest as they came: the map, the rivals, the Trade Posts, the rules)
   const first = items.findIndex((m) => / have landed/.test(m.text));
   if (first > 0) items.unshift(items.splice(first, 1)[0]);
   const list = $('br-list');
   list.innerHTML = '';
   for (const m of items) { const li = document.createElement('li'); li.className = m.kind || 'info'; li.textContent = m.text; list.appendChild(li); }
-  const chars = items.reduce((n, m) => n + m.text.length, 0);
+  const chars = items.reduce((n, m) => n + m.text.length, (log || '').length);
   UI.briefing = { t0: performance.now(), dur: clamp(4 + chars / 40, 6, 24), paused: !MP.on };
   if (UI.briefing.paused) UI.paused = true;
   $('br-state').textContent = MP.on ? '' : 'Paused';
@@ -6561,6 +6598,12 @@ function briefingTick() {
   $('br-fill').style.width = ((1 - f) * 100).toFixed(1) + '%';
 }
 
+/** The narrator at the first nightfall (the street lights come on), once a game; not with the day/night cycle off. */
+function nightfallLine() {
+  if (S.mission || S.time < 30 || !todEnabled() || (S.lore && S.lore['n.night.' + ME] !== undefined)) return;
+  if (todNow().lights >= 0.9) narrate(ME, 'night');
+}
+
 function uiTick(dt) {
   briefingTick();
   netTick();
@@ -6576,6 +6619,6 @@ function uiTick(dt) {
   }
   updateMapTip();
   UI.hudT -= dt;
-  if (UI.hudT <= 0) { UI.hudT = 0.25; updateHUD(); refreshSheet(); placeMinimap(); refreshSelection(); missionCoach(); syncWakeLock(); }
+  if (UI.hudT <= 0) { UI.hudT = 0.25; updateHUD(); refreshSheet(); placeMinimap(); refreshSelection(); missionCoach(); syncWakeLock(); nightfallLine(); }
   if (S.winner >= 0 && !UI.overShown) showGameOver();
 }

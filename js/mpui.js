@@ -217,11 +217,12 @@ function renderLobby() {
   // The computer's places, in player order, each with its doctrine: the host picks it here (a dropdown), and it goes
   // round with the settings (st.styles, one for each computer player in turn), so every device deals the same.
   let ck = 0;
+  // (each place by its callsign, the Accord's name for its colour: VERMILION for red...)
   const cpu = (col, ally) => {
-    const k = ck++, v = mpSeatDoc(k), who = `Computer ${ally ? 'player' : 'rival'}`;
-    const doc = host ? `<select class="mp-doc" data-k="${k}" aria-label="${who} ${k + 1}: doctrine">${['Random', ...PERSONALITY_ORDER.map((d) => PERSONALITIES[d].name)].map((n, x) => `<option value="${x}"${x === v ? ' selected' : ''}>${n}</option>`).join('')}</select>`
+    const k = ck++, v = mpSeatDoc(k), sign = CALLSIGNS[PLAYER_COLORS.indexOf(col)] || 'Computer', who = `${sign}, computer ${ally ? 'player' : 'rival'}`;
+    const doc = host ? `<select class="mp-doc" data-k="${k}" aria-label="${who}: doctrine">${['Random', ...PERSONALITY_ORDER.map((d) => PERSONALITIES[d].name)].map((n, x) => `<option value="${x}"${x === v ? ' selected' : ''}>${n}</option>`).join('')}</select>`
       : `<small class="mp-docname">${docNameOf(v)}</small>`;
-    return `<li class="ai" data-k="${k}" title="${esc(docInfo(docKeyOf(v)))}"><span class="dot" style="background:${col}"></span><span class="nm">${who}</span><small>${st ? DIFFICULTY[st.diff].label : ''}</small>${doc}</li>`;
+    return `<li class="ai" data-k="${k}" title="${esc(docInfo(docKeyOf(v)))}"><span class="dot" style="background:${col}"></span><span class="nm">${sign}</span><small>computer${st ? ' · ' + DIFFICULTY[st.diff].label : ''}</small>${doc}</li>`;
   };
   if (teams) {
     // Two a side: the people on each team, then the computer in the empty places (in the colours they'll land in).
@@ -361,10 +362,10 @@ function mpOnStart(m) {
   const others = m.players.filter((P, k) => P && k !== me && foes(k, me)).map((P) => P.name);
   const ai = S.players.filter((P) => P.ai && foes(P.id, me)).length;
   const ally = S.teams ? S.players.find((P) => allies(P.id, me)) : null;
-  postMsg(ME, `Multiplayer: you against ${[...others, ai ? `${ai} computer rival${ai > 1 ? 's' : ''}` : ''].filter(Boolean).join(' and ')}${ally ? `, with ${ally.name || 'a computer ally'} on your side` : ''}. Your bots have landed: build up fast!`, 0, 0, 'info');
+  postMsg(ME, `Multiplayer: you against ${[...others, ai ? `${ai} computer rival${ai > 1 ? 's' : ''}` : ''].filter(Boolean).join(' and ')}${ally ? `, with ${ally.name || 'a computer ally, ' + callsign(ally.id, true) + ','} on your side` : ''}. Your bots have landed: build up fast!`, 0, 0, 'info');
   doctrineLines();
   $('br-title').textContent = 'Before you start';
-  showBriefing();
+  showBriefing(landingLog());
 }
 
 /** The game was replaced (a reloaded page got it, or this device went astray and got the host's). */

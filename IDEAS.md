@@ -130,9 +130,21 @@ lands on a Command Base destroys it; Brutes break through Walls slowly; Road Tra
 ## Lore expansions (held for later)
 
 From the lore bible (LORE.md). The owner's decisions (Nov 2026): the Silence stays 31 years, the Sponsors stay faceless,
-and it stays ambiguous whether the Murmur are only animals. The quick wins (narrator lines, doctrine names and voices,
-callsigns, region names, Ringfall, the *Wren*, panel flavor text, splash lines, the Arrival clock) are being done now;
-these wait for a later expansion:
+and it stays ambiguous whether the Murmur are only animals.
+
+**Done (the quick wins, Nov 2026):** narrator lines (the landing line with its region on the briefing card, the first
+road, the first nightfall, the first Uplink, a rival Command Base taken, the end screen); doctrine names and voices
+(each rival speaks when it attacks you, fires a Missile at you and surrenders); callsigns (COBALT, VERMILION, VIRIDIAN,
+TYRIAN) in messages, panels, statistics, the end screen, the setup and the lobby; region names as flavour (the setup
+keeps the biome names); Ringfall; the *Wren* with its out-of-date cargo lists; a line of flavour on every building and
+robot panel; a line on the loading screen; the Arrival clock on the Command Base; the Murmur as the name of the Colony
+creatures (Scuttlers, Brutes, Burrows); and no Murmur on Lunar (a real rule: no Burrows and no raids on the moon).
+
+Open questions from the quick wins: should the narrator also speak in missions once the mission story pass is done?
+Should a rival's voice answer its own events (its Burrows cleared, a Ringfall on its land)? A Lore Guide page could
+collect the panel lines and loading lines a player has seen.
+
+These wait for a later expansion:
 
 - **Mission story pass.** Rewrite the campaign briefings as "your first terrafall" in the narrator's voice, keeping the
   tutorial clear.

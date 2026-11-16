@@ -2452,6 +2452,7 @@ function layRoad(t) {
   setPlan(t, -1);
   if (S.paveRes) delete S.paveRes[t];
   setRoad(t % S.W, (t / S.W) | 0, true, o >= 0 ? o : undefined);
+  narrate(o, 'road', t % S.W, (t / S.W) | 0); // (a colony's first road: once a game)
   if (crossTile(t)) computeZones(); // a bridge or tunnel joins new land
   if (S.terrain[t] === T_WATER || S.terrain[t] === T_CHASM) computeTerritory(); // a bridge's landing claims a little ground
 }
@@ -3129,7 +3130,7 @@ function doStaff(u, t, dt) {
         t.wait = 3;
       }
       if (!def.gather && !def.plant && !def.farm && !def.roadworks) return; // production happens in updateBuilding
-      if (foesAt(b)) { b.status = `${S.wildlife ? 'Creatures' : 'Enemy warbots'} about: its worker waits inside until they've gone`; t.wait = 1; return; }
+      if (foesAt(b)) { b.status = `${S.wildlife ? 'The Murmur are' : 'Enemy warbots'} about: its worker waits inside until they've gone`; t.wait = 1; return; }
       let node;
       if (def.gather) {
         // Ore Mines dig any uranium in reach first in a Nuclear race.
@@ -4215,10 +4216,11 @@ function hitBuilding(b, dmg, by) {
     const P = S.players[b.owner], R = P.raided || (P.raided = {});
     (P.hitBy = P.hitBy || {})[by] = S.time; // remembered: see rivalOf
     R.x = b.x + 0.5; R.y = b.y + 0.5; R.t = S.time; // where its buildings were last hit: forts near by answer (garrisonDefense)
+    doctrineVoice(by, b.owner, 'attack', b.x, b.y, 240); // (a computer rival has its say, now and then)
   }
   if (S.time - b.lastAlert > 12) {
     b.lastAlert = S.time;
-    postMsg(b.owner, `Enemy warbots are attacking your ${BDEFS[b.type].name}!`, b.x, b.y, 'bad');
+    postMsg(b.owner, `${by >= 0 && S.players[by] && foes(by, b.owner) ? playerName(by) : 'Enemy'} warbots are attacking your ${BDEFS[b.type].name}!`, b.x, b.y, 'bad');
     if (isMe(b.owner)) sfx('alert');
   }
   // (A mission's capture lock: the rival Command Base holds at 1 armor while other goals are open. See captureLocked.)
@@ -4268,8 +4270,8 @@ function captureBuilding(b, by) {
   }
   if (def.mil) {
     S.players[by].stats.outposts = (S.players[by].stats.outposts || 0) + 1;
-    postMsg(by, `Your warbots captured the enemy ${name}!`, b.x, b.y, 'good');
-    postMsg(old, `The enemy captured your ${name}!`, b.x, b.y, 'lost');
+    postMsg(by, `Your warbots captured ${playerName(old, true)}'s ${name}!`, b.x, b.y, 'good');
+    postMsg(old, `${playerName(by)} captured your ${name}!`, b.x, b.y, 'lost');
     computeTerritory();
   } else {
     if (def.explodes) burnLiquids(b); // a Refinery's Crude and Fuel go up with it
@@ -4604,7 +4606,7 @@ function takeCover(u, caught) {
   if (isMe(u.owner) && P && S.time - (P.foeMsgAt || -999) > 60) {
     P.foeMsgAt = S.time;
     const fx = foe ? Math.floor(foe.x) : Math.floor(u.x), fy = foe ? Math.floor(foe.y) : Math.floor(u.y);
-    postMsg(ME, u.shyOf === 'wild' ? 'Creatures about: your workers and haulers keep clear of them, and go back to work once they\'ve gone.'
+    postMsg(ME, u.shyOf === 'wild' ? 'The Murmur are about: your workers and haulers keep clear of them, and go back to work once they\'ve gone.'
       : 'Enemy warbots about: your workers and haulers keep clear of them, and go back to work once they\'ve gone (or your warbots drive them off).', fx, fy, 'warn');
   }
   if (t && t.type === 'staff' && t.phase !== 'go') {
@@ -4958,13 +4960,19 @@ function eliminate(old, by, how) {
   const L = getE(P.lander);
   const x = L ? L.x : 0, y = L ? L.y : 0;
   if (how === 'nuke') {
-    postMsg(by, `Your nuclear missile destroyed ${S.players.length > 2 ? playerName(old, true) + '\'s' : 'the enemy'} Command Base! What's left of the colony is yours.`, x, y, 'good');
-    if (isMe(old)) postMsg(ME, 'A nuclear missile destroyed your Command Base!', x, y, 'lost');
-    else if (!isMe(by)) postMsg(ME, `A nuclear missile from the ${playerName(by)} destroyed ${playerName(old, true)}'s Command Base.`, x, y, 'warn');
+    postMsg(by, `Your nuclear missile destroyed ${playerName(old, true)}'s Command Base! What's left of the colony is yours.`, x, y, 'good');
+    if (isMe(old)) postMsg(ME, `A nuclear missile from ${playerName(by)} destroyed your Command Base!`, x, y, 'lost');
+    else if (!isMe(by)) postMsg(ME, `A nuclear missile from ${playerName(by)} destroyed ${playerName(old, true)}'s Command Base.`, x, y, 'warn');
   } else if (how !== 'surrender') {
-    postMsg(by, S.players.length > 2 ? `Your warbots captured ${playerName(old, true)}'s Command Base! Everything ${playerName(old, true)} built is yours.` : 'Your warbots captured the enemy Command Base!', x, y, 'good');
-    if (isMe(old)) postMsg(ME, 'The enemy captured your Command Base!', x, y, 'lost');
-    else if (!isMe(by)) postMsg(ME, `The ${playerName(by)} captured ${playerName(old, true)}'s Command Base and took over everything it had.`, x, y, 'warn');
+    postMsg(by, `Your warbots captured ${playerName(old, true)}'s Command Base! Everything ${playerName(old, true)} built is yours.`, x, y, 'good');
+    if (isMe(old)) postMsg(ME, `${playerName(by)} captured your Command Base!`, x, y, 'lost');
+    else if (!isMe(by)) postMsg(ME, `${playerName(by)} captured ${playerName(old, true)}'s Command Base and took over everything it had.`, x, y, 'warn');
+  }
+  // The narrator: a rival's command core is ours (its robots answer to us now), or changed hands between two others.
+  // (Losing our own is for the end screen.)
+  if (how !== 'nuke') {
+    narrate(by, 'captured', x, y, 1);
+    for (const Q of S.players) if (Q.id !== by && Q.id !== old && !Q.absent && !Q.out) narrate(Q.id, 'changed', x, y, 1, NARRATOR.changed.replace('{old}', callsign(old)).replace('{by}', callsign(by)));
   }
   const left = S.players.filter((Q) => !Q.absent && !Q.out);
   // The last colony (or team) standing has won; S.winner is one of them (with teams, see teamOf).
@@ -5018,9 +5026,10 @@ function beatenBy(P, live, n) {
 
 /** Player p gives up to player `by` (see checkSurrender): everything it had is theirs, as when a Command Base falls. */
 function surrender(p, by) {
-  const L = getE(S.players[p].lander), x = L ? L.x : 0, y = L ? L.y : 0, two = S.players.length === 2;
-  if (isMe(by)) postMsg(ME, two ? 'The rival has surrendered! Everything it built is yours.' : `The ${playerName(p)} has surrendered to you! Everything it built is yours.`, x, y, 'good');
-  else if (!isMe(p)) postMsg(ME, `The ${playerName(p)} has surrendered to ${playerName(by, true)}: everything it built is theirs.`, x, y, 'warn');
+  const L = getE(S.players[p].lander), x = L ? L.x : 0, y = L ? L.y : 0;
+  doctrineVoice(p, by, 'surrender', x, y); // (its last words, in its doctrine's voice)
+  if (isMe(by)) postMsg(ME, `${playerName(p)} has surrendered to you! Everything it built is yours.`, x, y, 'good');
+  else if (!isMe(p)) postMsg(ME, `${playerName(p)} has surrendered to ${playerName(by, true)}: everything it built is theirs.`, x, y, 'warn');
   eliminate(p, by, 'surrender');
 }
 
@@ -5047,9 +5056,9 @@ function updateDomination() {
   if (lead !== D.lead) {
     const was = D.lead;
     D.lead = lead; D.t = 0; D.warned = 999;
-    if (was >= 0) postMsg(ME, was === ME ? 'You no longer hold most of the land: your Domination count starts again.' : `${S.players.length > 2 ? 'The ' + playerName(was) : 'The rival'} no longer holds most of the land: its Domination count starts again.`, undefined, undefined, was === ME ? 'warn' : 'good');
+    if (was >= 0) postMsg(ME, was === ME ? 'You no longer hold most of the land: your Domination count starts again.' : `${playerName(was)} no longer holds most of the land: its Domination count starts again.`, undefined, undefined, was === ME ? 'warn' : 'good');
     if (lead === ME) postMsg(ME, `You hold ${Math.round((land[ME] / held) * 100)}% of the land! Keep at least ${Math.round(share * 100)}% for ${DOM.hold / 60} minutes to win by Domination.`, undefined, undefined, 'good');
-    else if (lead >= 0 && lead !== ME) { const L = getE(S.players[lead].lander); postMsg(ME, `${S.players.length > 2 ? 'The ' + playerName(lead) : 'The rival'} holds most of the land: take some back within ${DOM.hold / 60} minutes, or it wins by Domination!`, L ? L.x : undefined, L ? L.y : undefined, 'bad'); }
+    else if (lead >= 0 && lead !== ME) { const L = getE(S.players[lead].lander); postMsg(ME, `${playerName(lead)} holds most of the land: take some back within ${DOM.hold / 60} minutes, or it wins by Domination!`, L ? L.x : undefined, L ? L.y : undefined, 'bad'); }
     return;
   }
   if (lead < 0) return;
@@ -5059,7 +5068,7 @@ function updateDomination() {
   for (const w of [60, 20]) {
     if (left > w || D.warned <= w) continue;
     D.warned = w;
-    postMsg(ME, lead === ME ? `${w === 60 ? 'One minute' : '20 seconds'} to Domination: hold on to your land!` : `${S.players.length > 2 ? 'The ' + playerName(lead) : 'The rival'} wins by Domination in ${w === 60 ? 'one minute' : '20 seconds'}: break its hold on the land!`, undefined, undefined, lead === ME ? 'good' : 'bad');
+    postMsg(ME, lead === ME ? `${w === 60 ? 'One minute' : '20 seconds'} to Domination: hold on to your land!` : `${playerName(lead)} wins by Domination in ${w === 60 ? 'one minute' : '20 seconds'}: break its hold on the land!`, undefined, undefined, lead === ME ? 'good' : 'bad');
   }
 }
 
@@ -6198,12 +6207,13 @@ function sabotageRoads(u, r, dt) {
     const P = S.players[victim];
     if (S.time - (P.lastPipeMsg || -99) > 25) {
       P.lastPipeMsg = S.time;
-      postMsg(victim, 'Raiders are cutting your pipeline! It\'s relaid once they\'re driven off and it\'s paid for.', best % S.W, (best / S.W) | 0, 'bad');
+      postMsg(victim, `Raiders from ${playerName(u.owner)} are cutting your pipeline! It's relaid once they're driven off and it's paid for.`, best % S.W, (best / S.W) | 0, 'bad');
       if (isMe(victim)) sfx('alert');
     }
     return;
   }
-  wreckRoad(best, victim, 'Raiders are tearing up your roads');
+  doctrineVoice(u.owner, victim, 'attack', best % S.W, (best / S.W) | 0, 240);
+  wreckRoad(best, victim, `Raiders from ${playerName(u.owner)} are tearing up your roads`);
 }
 
 /** Destroy a road tile (no refund): raids and missiles. Lights and overpasses on it go too. */
@@ -6708,8 +6718,10 @@ function fireMissileAt(silo, i, j) {
   });
   addFx('ring', silo.x + 0.5, silo.y + 0.5, { color: '#ffcf4a', r: 1.2 });
   sfx('launch');
-  if (target) postMsg(target.owner, `Incoming missile! It is heading for your ${BDEFS[target.type].name}.`, target.x, target.y, 'bad');
-  else if (S.owner[tIdx(tx, ty)] >= 0 && foes(S.owner[tIdx(tx, ty)], owner)) postMsg(S.owner[tIdx(tx, ty)], 'Incoming missile!', tx, ty, 'bad');
+  const hit = target ? target.owner : S.owner[tIdx(tx, ty)];
+  if (target) postMsg(target.owner, `Incoming missile from ${playerName(owner)}! It is heading for your ${BDEFS[target.type].name}.`, target.x, target.y, 'bad');
+  else if (hit >= 0 && foes(hit, owner)) postMsg(hit, `Incoming missile from ${playerName(owner)}!`, tx, ty, 'bad');
+  if (hit >= 0) doctrineVoice(owner, hit, 'missile', tx, ty, 90);
   return true;
 }
 
@@ -6866,6 +6878,7 @@ function fireNukeAt(silo, i, j) {
     const atUs = nukesThreatening(ME).includes(S.missiles[S.missiles.length - 1]), L = getE(S.players[ME].lander);
     const atBase = L && !L.dead && L.owner === ME && dist2(L.x + 0.5, L.y + 0.5, i + 0.5, j + 0.5) <= NUKE.direct * NUKE.direct;
     postMsg(ME, `NUCLEAR LAUNCH DETECTED! Impact in ${NUKE.flight} seconds` + (atBase ? ': it is aimed at your Command Base, and a direct hit destroys it!' : atUs ? ': press Evacuate to get your robots out of the red ring!' : ', aimed at a rival.'), i, j, 'bad');
+    if (atUs || atBase) doctrineVoice(silo.owner, ME, 'missile', i, j);
   }
   return true;
 }
@@ -7866,7 +7879,7 @@ function updateEvents() {
   if (type === 'meteor') { S.event.hits = meteorPlan(rng, t0, dur); S.event.dir = rng() < 0.5 ? -1 : 1; S.event.cratered = {}; S.event.relaid = {}; }
   if (def.warn) {
     postMsg(ME, type === 'dust' ? `A dust storm is blowing in (${EVENT_WARN}s): bots will slow down and Missiles will be grounded.`
-      : type === 'meteor' ? `Meteor shower in ${EVENT_WARN}s! Meteors will crater roads, but leave rich Ore and Crystal where they land.`
+      : type === 'meteor' ? `Ringfall in ${EVENT_WARN}s! Pieces of the Ring will crater roads, but leave rich Ore and Crystal where they land.`
         : `Solar flare in ${EVENT_WARN}s: bot batteries will drain twice as fast. Keep your Fuel Stations fuelled.`, undefined, undefined, 'warn');
     sfx('alert');
   }
@@ -7884,9 +7897,10 @@ function startEvent(E) {
       // A rival takes the deal when its land is running short of what's on offer.
       if (P.ai && P.id !== 0 && o.short) acceptTrade(P.id);
     }
-    const o = E.offers[0];
-    postMsg(ME, o ? `A trader ship is in orbit for ${Math.round(E.t1 - E.t0)}s: it offers ${o.m} ${GOOD[o.get].name} (your land is running lowest on it) for ${o.n} of your ${GOOD[o.give].name}. Tap Trade to take it.`
-      : 'A trader ship is in orbit, but it wants nothing you have spare.', undefined, undefined, 'info');
+    const o = E.offers[ME];
+    postMsg(ME, 'The Wren is on approach. On schedule, as always.', undefined, undefined, 'narr');
+    postMsg(ME, o ? `The Wren is in orbit for ${Math.round(E.t1 - E.t0)}s: it offers ${o.m} ${GOOD[o.get].name} (your land is running lowest on it) for ${o.n} of your ${GOOD[o.give].name}. Tap Trade to take it.`
+      : 'The Wren is in orbit, but it wants nothing you have spare.', undefined, undefined, 'info');
     sfx('order');
   } else if (E.type === 'dust') postMsg(ME, 'The dust storm is here: bots crawl and Missiles are grounded until it blows over.', undefined, undefined, 'warn');
   else if (E.type === 'flare') postMsg(ME, 'Solar flare! Bot batteries are draining twice as fast.', undefined, undefined, 'warn');
@@ -7899,11 +7913,12 @@ function endEvent(E) {
   S.nextEvent = S.time + EVENT_GAP[0] + rng() * (EVENT_GAP[1] - EVENT_GAP[0]);
   if (E.type === 'dust') postMsg(ME, 'The dust storm has blown over.', undefined, undefined, 'info');
   else if (E.type === 'flare') postMsg(ME, 'The solar flare has passed.', undefined, undefined, 'info');
-  else if (E.type === 'trader') postMsg(ME, 'The trader ship has left orbit.', undefined, undefined, 'info');
+  else if (E.type === 'trader') postMsg(ME, 'The Wren has left orbit, on schedule.', undefined, undefined, 'info');
   else if (E.type === 'meteor') {
-    const n = E.cratered[0] || 0, k = E.relaid[0] || 0;
-    postMsg(ME, 'The meteor shower is over. Rich Ore and Crystal lie where the meteors fell' +
-      (n ? `; ${n} road tile${n > 1 ? 's were' : ' was'} cratered${k === n ? ' and your workers will re-lay them.' : k ? `: ${k} planned again, the rest need Cement.` : ': re-lay them when you have the Cement.'}` : '.'), undefined, undefined, 'info');
+    // (LORE.md's line; on the moon, where no Murmur live, without its last words)
+    const n = E.cratered[ME] || 0, k = E.relaid[ME] || 0;
+    postMsg(ME, 'Ringfall over. Fresh Ore and Crystal in the strike zones.' + (murmurGround(S.settings && S.settings.biome) ? ' Listen for the Murmur.' : '') +
+      (n ? ` ${n} road tile${n > 1 ? 's were' : ' was'} cratered${k === n ? ': your workers will re-lay them.' : k ? `: ${k} planned again, the rest need Cement.` : ': re-lay them when you have the Cement.'}` : ''), undefined, undefined, 'info');
   }
 }
 
@@ -7949,7 +7964,7 @@ function meteorImpact(E, h) {
   addFx('crater', cx, cy, { life: 6 });
   if (isMe(owner)) {
     sfx('boom', cx, cy);
-    if (S.time - (E.msgT || -99) > 12) { E.msgT = S.time; postMsg(ME, 'A meteor struck your land!', h.x, h.y, 'bad'); }
+    if (S.time - (E.msgT || -99) > 12) { E.msgT = S.time; postMsg(ME, 'A piece of the Ring struck your land!', h.x, h.y, 'bad'); }
   }
   // Roads on the spot and next to it are cratered (bridges and tunnels are too solid).
   const wrecked = [];
@@ -8030,7 +8045,7 @@ function traderOffer(p) {
 /** Take the trader's offer: '' if done, or why not. */
 function acceptTrade(p) {
   const E = eventNow('trader'), o = E && E.offers && E.offers[p];
-  if (!o || o.done) return 'The trader has gone.';
+  if (!o || o.done) return 'The Wren has gone.';
   if ((spendable(p)[o.give] || 0) < o.n) return `You need ${o.n} ${GOOD[o.give].name} in storage.`;
   const L = getE(S.players[p].lander);
   const store = L && !L.dead && L.owner === p ? L : nearestStoreTo(p, S.W / 2, S.H / 2);
@@ -8124,13 +8139,13 @@ function wildOn() { return !!(S && S.wildlife); }
 function isWildBot(u) { return !!BOTS[u.type].wild; }
 
 /**
- * Scatter creature nests over the wilds at the start of a Colony game: one for every WILD.perTiles
+ * Scatter the Murmur's Burrows (type 'nest') over the wilds at the start of a Colony game: one for every WILD.perTiles
  * tiles (3 to 8), on open ground the colony can reach on foot, at least 16 tiles from the landing
  * site and 9 from each other.
  */
 function placeNests(seed) {
   const L = getE(S.players[0].lander);
-  if (!L) return;
+  if (!L || !murmurGround(S.settings && S.settings.biome)) return; // (no Murmur on the moon)
   const rng = makeRng((seed ^ 0x6e357) >>> 0), zone = S.zone[tIdx(L.x, L.y)];
   const want = clamp(Math.round((S.W * S.H) / WILD.perTiles), 3, 8), nests = [];
   for (let tries = 0; tries < 4000 && nests.length < want; tries++) {
@@ -8373,9 +8388,9 @@ function uplinkGoal() {
 function updateUplinks() {
   const U = S.uplinks;
   if (!U || !U.length) return;
-  const clock = S.upClock || (S.upClock = S.players.map(() => 0)), many = S.players.length > 2;
+  const clock = S.upClock || (S.upClock = S.players.map(() => 0));
   const held = S.players.map(() => 0), j2 = UPLINK.jam * UPLINK.jam;
-  const who = (p) => (isMe(p) ? 'You' : many ? 'The ' + playerName(p) : 'The rival');
+  const who = (p) => playerName(p);
   for (const u of U) {
     const o = S.owner[tIdx(u.x, u.y)], was = u.owner;
     u.owner = o >= 0 && S.players[o] && !S.players[o].out && !S.players[o].absent ? o : -1;
@@ -8384,11 +8399,12 @@ function updateUplinks() {
       if (b.dead || b.inside || !isArmy(b) || b.owner < 0 || b.owner === u.owner || !botArmed(b)) continue;
       if (dist2(b.x, b.y, u.x + 0.5, u.y + 0.5) <= j2) { jam = b.owner + 1; break; }
     }
-    if (jam && !u.jam && isMe(u.owner)) postMsg(ME, `${jam - 1 > 0 ? (many ? 'The ' + playerName(jam - 1) : 'Enemy') : 'Your'} warbots are jamming your Uplink: drive them off!`, u.x, u.y, 'bad');
+    if (jam && !u.jam && isMe(u.owner)) postMsg(ME, `${jam - 1 !== ME ? playerName(jam - 1) : 'Your'} warbots are jamming your Uplink: drive them off!`, u.x, u.y, 'bad');
     u.jam = jam;
     if (u.owner !== was) {
       if (isMe(u.owner)) postMsg(ME, 'An Uplink is yours: it stands in your land.', u.x, u.y, 'good');
       else if (was === ME) postMsg(ME, `${u.owner >= 0 ? who(u.owner) + ' took' : 'You lost'} an Uplink!`, u.x, u.y, 'bad');
+      narrate(u.owner, 'uplink', u.x, u.y); // (the first one a colony takes)
     }
     if (u.owner >= 0 && !u.jam) held[u.owner]++;
   }
@@ -8477,7 +8493,7 @@ function updateNest(b) {
     spawnCritter(b, 'scuttler');
     b.guardT = S.time + WILD.guardEvery;
   }
-  b.status = `Level ${b.level} nest · ${guards} on guard` + (b.raidAt > S.time ? '' : ' · ready to raid');
+  b.status = `Level ${b.level} Burrow · ${guards} on guard` + (b.raidAt > S.time ? '' : ' · ready to raid');
   if (S.time < b.raidAt) return;
   b.raidAt = S.time + 30; // nothing in reach: look again soon
   const tgt = wildTarget(b);
@@ -8490,7 +8506,7 @@ function updateNest(b) {
   for (let k = 0; k < size; k++) spawnCritter(b, k < brutes ? 'brute' : 'scuttler', { type: 'raid', x: tgt.x, y: tgt.y, until });
   const gap = WILD.gap[0] + hash2(b.id, Math.floor(S.time), 41) * (WILD.gap[1] - WILD.gap[0]);
   b.raidAt = S.time + gap;
-  postMsg(ME, `A pack of ${size} creature${size === 1 ? '' : 's'}${brutes ? ` (${brutes} Brute${brutes === 1 ? '' : 's'})` : ''} is coming out of a nest!`, b.x, b.y, 'warn');
+  postMsg(ME, `A pack of ${size} Murmur${brutes ? ` (${brutes} Brute${brutes === 1 ? '' : 's'})` : ''} is coming out of a Burrow!`, b.x, b.y, 'warn');
   if (!S.wildWarned) { S.wildWarned = true; sfx('alert'); }
 }
 
@@ -8517,15 +8533,15 @@ function critterBite(u, foe) {
     foe.lastHit = S.time;
     if (!foe.built) {
       foe.armor -= bt.bite;
-      if (foe.armor <= 0) { postMsg(foe.owner, `Creatures wrecked your ${BDEFS[foe.type].name} construction site!`, foe.x, foe.y, 'lost'); destroyBuilding(foe, true); }
+      if (foe.armor <= 0) { postMsg(foe.owner, `The Murmur wrecked your ${BDEFS[foe.type].name} construction site!`, foe.x, foe.y, 'lost'); destroyBuilding(foe, true); }
     } else if (BDEFS[foe.type].barrier) {
       // A Wall or Gate holds them up a while, but a Brute breaks through in the end.
       foe.armor -= bt.bite * WILD.wallBite;
-      if (foe.armor <= 0) { postMsg(foe.owner, `Creatures broke through your ${BDEFS[foe.type].name}!`, foe.x, foe.y, 'lost'); destroyBuilding(foe, true); return; }
+      if (foe.armor <= 0) { postMsg(foe.owner, `The Murmur broke through your ${BDEFS[foe.type].name}!`, foe.x, foe.y, 'lost'); destroyBuilding(foe, true); return; }
     } else foe.armor = Math.max(1, foe.armor - bt.bite);
     if (S.time - foe.lastAlert > 12) {
       foe.lastAlert = S.time;
-      postMsg(foe.owner, `Creatures are attacking your ${BDEFS[foe.type].name}!`, foe.x, foe.y, 'bad');
+      postMsg(foe.owner, `The Murmur are attacking your ${BDEFS[foe.type].name}!`, foe.x, foe.y, 'bad');
       if (isMe(foe.owner)) sfx('alert');
     }
     return;
@@ -8533,7 +8549,7 @@ function critterBite(u, foe) {
   if (isMe(foe.owner)) {
     sfx('hit');
     const P = S.players[ME];
-    if (S.time - (P.lastWildMsg || -99) > 20) { P.lastWildMsg = S.time; postMsg(ME, 'Creatures are attacking your bots!', Math.floor(foe.x), Math.floor(foe.y), 'bad'); }
+    if (S.time - (P.lastWildMsg || -99) > 20) { P.lastWildMsg = S.time; postMsg(ME, 'The Murmur are attacking your bots!', Math.floor(foe.x), Math.floor(foe.y), 'bad'); }
   }
   damageBot(foe, bt.bite);
 }
@@ -8610,7 +8626,7 @@ function updateCritter(u, dt) {
       u.face = datan2(gy - u.y, gx - u.x);
       if (g.bld) { if (u.cd <= 0) critterBite(u, gb); return; }
       t.work += dt; u.fought = 1;
-      if (t.work >= WILD.roadEvery) { wreckRoad(g.road, wayOwner(g.road), 'Creatures are tearing up your roads'); t.smash = null; }
+      if (t.work >= WILD.roadEvery) { wreckRoad(g.road, wayOwner(g.road), 'The Murmur are tearing up your roads'); t.smash = null; }
       return;
     }
     // A Scuttler: hunt for bots a little further out (WILD.hunt: it makes for the nearest it can walk to, and
@@ -8641,7 +8657,7 @@ function updateCritter(u, dt) {
 /** A nest cleared by `by`'s warbots: its goods spill out and its creatures scatter. */
 function clearNest(b, by) {
   const n = dropLoot(b);
-  postMsg(by, `Nest cleared!${n ? ` ${n} goods spilled out: your warbots carry them home, one each.` : ''} The land around it is free to build on.`, b.x, b.y, 'good');
+  postMsg(by, `Burrow cleared!${n ? ` ${n} goods spilled out: your warbots carry them home, one each.` : ''} The land around it is free to build on.`, b.x, b.y, 'good');
   addFx('ring', b.x + 0.5, b.y + 0.5, { color: '#c77dff', r: 2.4 });
   if (isMe(by)) sfx('capture');
   S.players[by].stats.captured++;
@@ -9878,7 +9894,7 @@ function foundPortBlocked(owner, f, i, j) {
   if (S.terrain[t] !== T_GROUND || S.bAt[t] || S.res[t] || S.road[t] || S.plan[t] || S.ramp[t] || (S.rail && S.rail[t]) || scorched(t) || runwayAt(t)) return 'Pick open, empty ground on the shore (no road, deposit or building).';
   if (S.owner[t] >= 0 && S.owner[t] !== owner) return 'Not on land someone else holds.';
   if (ringOverRival(owner, i, j, PORT_FOUND.claim)) return `Too close to a rival's buildings: the Port's land (${PORT_FOUND.claim} tiles round it) would cut them off.`;
-  if (S.wildlife && S.buildings.some((e) => !e.dead && BDEFS[e.type].wild && Math.max(Math.abs(e.x - i), Math.abs(e.y - j)) <= WILD.clear)) return 'Too close to a creature nest.';
+  if (S.wildlife && S.buildings.some((e) => !e.dead && BDEFS[e.type].wild && Math.max(Math.abs(e.x - i), Math.abs(e.y - j)) <= WILD.clear)) return 'Too close to a Murmur Burrow.';
   const docks = portDocks(i, j), comps = shipComps(f), comp = seaNet().comp;
   if (!docks.length) return 'A Port goes right at the water\'s edge, beside open water wide enough for ships.';
   if (!docks.some((d) => comps.includes(comp[d]))) return 'The Ferry can\'t sail there from this Port.';
@@ -10354,7 +10370,7 @@ function airdropBlocked(owner, u, kind, i, j) {
     if (S.terrain[t] !== T_GROUND || S.bAt[t] || S.road[t] || S.plan[t] || S.res[t] || S.ramp[t] || (S.rail && S.rail[t]) || scorched(t) || runwayAt(t)) return 'Drop it on open, empty ground (no road, track, runway or deposit).';
     if (S.owner[t] >= 0 && S.owner[t] !== owner) return 'Not on land someone else holds.';
     if (ringOverRival(owner, i, j, BDEFS.dropost.terr)) return `Too close to a rival's buildings: its ring (${BDEFS.dropost.terr} tiles) would cut them off.`;
-    if (S.wildlife && S.buildings.some((e) => !e.dead && BDEFS[e.type].wild && Math.max(Math.abs(e.x - i), Math.abs(e.y - j)) <= WILD.clear)) return 'Too close to a creature nest.';
+    if (S.wildlife && S.buildings.some((e) => !e.dead && BDEFS[e.type].wild && Math.max(Math.abs(e.x - i), Math.abs(e.y - j)) <= WILD.clear)) return 'Too close to a Murmur Burrow.';
     if (!canAffordRoad(owner, BDEFS.dropost.cost)) return `A Drop Outpost costs ${costText(BDEFS.dropost.cost)}: not enough ${missingGoods(owner, BDEFS.dropost.cost)} in storage.`;
   } else {
     const b = S.bAt[t] ? getE(S.bAt[t]) : null;
@@ -10740,7 +10756,7 @@ function landDrop(d) {
     postMsg(b.owner, 'A Drop Outpost is down: it claims the land around it and is supplied by air from your Airfield.', b.x, b.y, 'good');
     if (isMe(b.owner)) sfx('complete');
     const foe = S.owner[at];
-    if (foe >= 0 && foes(foe, b.owner)) postMsg(foe, 'The enemy dropped an outpost nearby!', b.x, b.y, 'bad');
+    if (foe >= 0 && foes(foe, b.owner)) postMsg(foe, `${playerName(b.owner)} dropped an Outpost nearby!`, b.x, b.y, 'bad');
     return;
   }
   // Robots: warbots join a garrison of ours they came down on (if there's room), or hold the spot under a rally
