@@ -126,7 +126,7 @@ export function molekit(L) {
   // flesh(hex, o): naked moist skin (snout, star rays, palms): soft, a little damp, never glossy
   function flesh(hex, o = {}) {
     const key = 'l' + hex + JSON.stringify(o); if (mats[key]) return mats[key];
-    const m = new THREE.MeshPhysicalMaterial({ color: hex, map: hideMap, normalMap: hideNrm, normalScale: new THREE.Vector2(o.ns ?? 0.35, o.ns ?? 0.35), roughness: o.rough ?? 0.55, metalness: 0,
+    const m = new THREE.MeshPhysicalMaterial({ color: hex, roughness: o.rough ?? 0.55, metalness: 0,
       clearcoat: o.cc ?? 0.12, clearcoatRoughness: 0.5, sheen: 0.4, sheenColor: new THREE.Color('#d8b8b0'), sheenRoughness: 0.4, vertexColors: true });
     m.envMapIntensity = 0.35; return (mats[key] = m);
   }
@@ -471,6 +471,34 @@ export function molekit(L) {
       shard(parent, p, d, len, rad, pal, { collarMat: o.collarMat, collar: o.collar });
     }
   }
+  // scales(parent, body, o): pangolin-like armour, rows of rounded plates laid on the back like roof tiles, their free
+  //   edges lifted toward the tail, each row offset by half a plate. o: { x0, x1 (front of the last and first rows), rows,
+  //   cols, amax (how far round the flanks, rad), size (plate length), width (plate width / length), mat, lift (rad),
+  //   skip (fn(row, col) -> true to leave a gap, e.g. for a shard) }. Returns the plate centres.
+  function scales(parent, body, o) {
+    const out = [], R = o.rows, Cn = o.cols, Ls = o.size, wk = o.width ?? 0.85;
+    for (let i = 0; i < R; i++) {
+      const x = o.x1 - (o.x1 - o.x0) * i / Math.max(1, R - 1), odd = i % 2, nc = Cn - odd;
+      for (let j = 0; j < nc; j++) {
+        if (o.skip && o.skip(i, j)) continue;
+        const a = (nc === 1 ? 0 : (j / (nc - 1) * 2 - 1)) * o.amax * (nc / Cn), { p, n } = onBody(body, x, a, Ls * 0.04);
+        const S = L.group(p[0], p[1], p[2], 0, parent); S.quaternion.copy(frame([1, 0, 0].map((q, k) => q - n[0] * n[k]), n));
+        const g = new THREE.SphereGeometry(1, 20, 10, 0, Math.PI * 2, 0, Math.PI * 0.5), pp = g.attributes.position, col = new Float32Array(pp.count * 3), v = new THREE.Vector3();
+        const tone = 0.8 + 0.4 * L.rnd();
+        for (let k = 0; k < pp.count; k++) {
+          v.fromBufferAttribute(pp, k);
+          // a shield: rounded at the back, the front tucked under the row ahead; a keel down its middle
+          const back = Math.max(0, -v.x), keel = 0.25 * Math.exp(-(v.z * v.z) / 0.05);
+          pp.setXYZ(k, v.x * Ls * 0.5 - Ls * 0.22, v.y * Ls * 0.11 * (1 + keel) * (0.6 + 0.4 * back), v.z * Ls * 0.5 * wk * (1 - 0.4 * back * back));
+          const b = tone * (0.7 + 0.3 * v.y) * (1 - 0.25 * Math.max(0, v.x)); col[k * 3] = b; col[k * 3 + 1] = b; col[k * 3 + 2] = b;
+        }
+        g.setAttribute('color', new THREE.BufferAttribute(col, 3)); g.computeVertexNormals();
+        const m = L.mesh(g, o.mat, 0, 0, 0, { parent: S }); m.rotation.z = -(o.lift ?? 0.22);
+        out.push({ p, n, row: i, col: j });
+      }
+    }
+    return out;
+  }
   // crustSaddle(parent, body, o): a shell of stone crust grown over the back between x0 and x1, out to angle amax on each
   //   flank, thick in the middle and sinking into the fur at its edges; banded like an armadillo's plates (bands), cracked
   //   along the spine (crack: half-width in radians, 0 for none). o: { x0, x1, amax, thick, bands, crack, mat, colour
@@ -482,10 +510,11 @@ export function molekit(L) {
     const off = (x, a) => {
       // the saddle's outline is an oval with a ragged edge; outside it the crust dips under the fur
       const t = (x - x0) / (x1 - x0), Ax = A * Math.pow(Math.max(0, 1 - Math.pow(Math.abs(2 * t - 1), 3)), 0.5) * (1 + 0.12 * nz(x * 3, 1.5, 0.3)) + 1e-3, ea = Math.abs(a) / Ax;
-      const edge = sstep(1.0, 0.7, ea + 0.05 * nz(x * 9, a * 6, 2));
-      let k = T * (0.75 + 0.25 * Math.cos(a)) * edge - 0.05;
+      // thick along the spine, thinning to nothing at the edge so it looks grown out of the hide, not laid on it
+      const e2 = ea + 0.06 * nz(x * 9, a * 6, 2), edge = Math.pow(Math.max(0, 1 - e2 * e2), 1.3);
+      let k = T * edge * (0.9 + 0.35 * nz(x * 3.2, a * 3.5, 1)) - 0.05;
       if (nb) { const u = (t * nb) % 1, wl = 0.16; k += T * 0.35 * (u < wl ? u / wl - 1 : -Math.pow((u - wl) / (1 - wl), 1.5)) * edge; }
-      k += T * 0.35 * nz(x * 2.4, a * 2, 3) + T * 0.18 * nz(x * 6, a * 5, 1);
+      k += (T * 0.3 * nz(x * 2.4, a * 2, 3) + T * 0.2 * nz(x * 7, a * 6, 1)) * Math.min(1, edge * 2.5);
       let inC = 0;
       if (cw) { const w = cw * Math.max(0, 1 - Math.pow(Math.abs(t - 0.5) / 0.48, 3)) * (1 + 0.3 * nz(x * 5, 2, 0.5)), d = Math.abs(a - crackZ(x)) / Math.max(1e-3, w); if (d < 1) { inC = 1 - d; k -= T * 1.3 * Math.pow(inC, 0.5); } }
       return [k, inC];
@@ -538,5 +567,5 @@ export function molekit(L) {
 
   return { THREE, TOD, GLOW, NIGHTISH, V, nz, clamp, sstep, furMap, hideMap, crustMap, fur, hide, crust, flesh, keratin, plain, eye, glowMat, dimGlow, crystalMats,
     XTAL, XTAL_WHITE, XTAL_BLOOM, loft, furShells, seg, limb, tube, curve, cone, frame, clawGeo, claw, gait, paddle, forelimb, hindlimb, snout, tail, eyes,
-    shardGeo, shard, cluster, onBody, spineShards, crustSaddle, camera, centre, heroGround };
+    shardGeo, shard, cluster, onBody, spineShards, scales, crustSaddle, camera, centre, heroGround };
 }

@@ -32,7 +32,7 @@ export default function (L) {
   const heroCams = {
     swarmer: { pos: [6.6, 4.0, 7.6], at: [0.1, 0.55, 0.1], fov: 30 },
     drainer: { pos: [8.8, 5.2, 9.8], at: [0.2, 0.7, 0.1], fov: 30 },
-    brute: { pos: [13.6, 6.6, 11.4], at: [0.0, 1.25, 0.2], fov: 36 },
+    brute: { pos: [15.2, 7.0, 12.6], at: [0.9, 1.2, 0.3], fov: 37 },
   };
   K.camera(W, HERO && heroCams[C]);
   if (HERO) K.heroGround(W);
@@ -47,8 +47,8 @@ export default function (L) {
 // ---------------------------------------------------------------------------------------------------------------
 // palettes. Dark, matte animals; claws pale (the mark that reads from above); snouts a dull grey-pink (never a team red).
 const PAL = {
-  base:  { hide: '#463c3b', belly: '#2a2224', skin: '#a08680', snout: '#a5877f', claw: '#ddd0b4', tooth: '#e6d39c', sheen: '#9a8c86' },
-  rust:  { hide: '#45291d', belly: '#24150f', skin: '#9c7666', snout: '#a07868', claw: '#e0c8a2', tooth: '#e6cf98', plate: '#a8582e', sheen: '#a48270' },
+  base:  { hide: '#463c3b', belly: '#2a2224', skin: '#9c8884', snout: '#a38a84', claw: '#ddd0b4', tooth: '#e6d39c', sheen: '#9a8c86' },
+  rust:  { hide: '#45291d', belly: '#24150f', skin: '#9c7666', snout: '#a07868', claw: '#e0c8a2', tooth: '#e6cf98', plate: '#8c4a2c', sheen: '#a48270' },
   white: { hide: '#c3c8cc', belly: '#9aa0a5', skin: '#b3a29c', snout: '#bba49e', claw: '#efe8da', tooth: '#efe2b8', sheen: '#ffffff' },
   bloom: { hide: '#30243a', belly: '#1c1520', skin: '#8a748c', snout: '#8e7690', claw: '#d8cdbf', tooth: '#e2d4a8', sheen: '#9a86a6' },
 };
@@ -97,17 +97,15 @@ function swarmer(L, K, G, GL, f, v) {
   // ---- four limbs (in GL: the only parts that move)
   for (const s of [-1, 1]) {
     K.forelimb(GL, { side: s, f, shoulder: [0.6, 0.45, s * 0.12 * fat], wrist: [0.95, 0.32, s * 0.31 * fat], palm: 0.5, claw: 0.44, armR: 0.2 * fat,
-      stride: 0.15 * legK, lift: 0.12, skin: skinM, arm: bodyM, clawMat: clawM, splay: 0.62, tilt: 0.3, fan: 0.6 });
+      stride: 0.19 * legK, lift: 0.14, skin: skinM, arm: bodyM, clawMat: clawM, splay: 0.62, tilt: 0.3, fan: 0.6 });
     K.hindlimb(GL, { side: s, f, hip: [-1.02, 0.42, s * 0.2 * fat], foot: [-1.26, 0.08, s * (0.4 + 0.06 * legK) * fat], len: 0.32, r: 0.13 * fat,
-      stride: 0.15 * legK, lift: 0.1, skin: skinM, leg: bodyM, clawMat: clawM, out: 0.75 });
+      stride: 0.18 * legK, lift: 0.12, skin: skinM, leg: bodyM, clawMat: clawM, out: 0.75 });
   }
 
-  // ---- Rust: armour. Bands of rust-red crust plates over the back, like an armadillo's, with blunt studs on the rims
+  // ---- Rust: armour. Overlapping scales of rust-red crust down the back, like a pangolin's (iron grown into the skin)
   if (v === 'rust') {
-    const plateM = K.crust(pal.plate);
-    K.crustSaddle(G, body, { x0: -1.42, x1: 0.95, amax: 1.25, thick: 0.13, bands: 6, crack: 0, mat: plateM,
-      colour: (x, a) => { const n = 0.5 + 0.5 * K.nz(x * 4, a * 3, 1); return [0.75 + 0.35 * n, 0.72 + 0.3 * n, 0.7 + 0.28 * n]; } });
-    for (let i = 0; i < 5; i++) for (const s of [-1, 1]) { const { p, n } = K.onBody(body, -1.2 + i * 0.44, s * 1.05, -0.08); K.cone(G, p, [n[0] - 0.3, n[1] * 0.6, n[2]], 0.16, 0.055, K.plain('#5a2d18', 0.7)); }
+    K.scales(G, body, { x0: -1.42, x1: 0.8, rows: 9, cols: 5, amax: 1.2, size: 0.5, width: 0.82, mat: K.crust(pal.plate, { rough: 0.8 }), lift: 0.28,
+      skip: (i, j) => i % 2 === 0 && j === 2 && i > 0 && i < 8 && i !== 4 });
   }
   // Bloom: soft glowing fronds growing between the shards (the Bloom's own life, riding on its back)
   if (v === 'bloom') {
@@ -119,10 +117,10 @@ function swarmer(L, K, G, GL, f, v) {
   }
 
   // ---- the shards: hackles of crystal down the spine (tallest over the shoulders), and a spray out of each shoulder
-  const n = v === 'rust' ? 0.72 : v === 'white' ? 0.85 : 1, rk = v === 'rust' ? 1.25 : 1;
+  const n = v === 'rust' ? 0.8 : v === 'white' ? 0.85 : 1, rk = 1;
   const collar = v === 'white' ? bodyM : skinM;
   const spine = v === 'rust'
-    ? [[0.5, 0, 0.42, 0.1, 0.45], [0.05, 0, 0.5, 0.11, 0.6], [-0.45, 0, 0.46, 0.1, 0.65], [-0.95, 0, 0.36, 0.09, 0.7]]
+    ? [[0.52, 0, 0.6, 0.075, 1.2], [0.0, 0, 0.66, 0.08, 1.3], [-0.55, 0, 0.6, 0.075, 1.35], [-1.08, 0, 0.5, 0.07, 1.4]]
     : [[0.62, 0, 0.42, 0.07, 0.8], [0.4, -0.16, 0.62, 0.085, 1.0], [0.34, 0.18, 0.58, 0.08, 1.0], [0.1, -0.06, 0.8, 0.1, 1.1],
        [-0.14, 0.16, 0.7, 0.09, 1.15], [-0.36, -0.17, 0.72, 0.09, 1.2], [-0.58, 0.1, 0.64, 0.085, 1.25], [-0.82, -0.12, 0.56, 0.075, 1.3],
        [-1.02, 0.13, 0.46, 0.065, 1.35], [-1.22, -0.03, 0.36, 0.055, 1.4]];
@@ -140,7 +138,7 @@ function swarmer(L, K, G, GL, f, v) {
 // and threads of charge run from the target into the star. Big spade hands, planted wide while it feeds.
 function drainer(L, K, G, GL, f, feed) {
   const { THREE } = K, X = K.XTAL;
-  const furM = K.fur('#3d3534', { sheenColor: '#9a8c84' }), skinM = K.flesh('#a08680'), snoutM = K.flesh('#a5877f'), clawM = K.keratin('#ddd0b4');
+  const furM = K.fur('#3d3534', { sheenColor: '#9a8c84' }), skinM = K.flesh('#9c8884'), snoutM = K.flesh('#a38a84'), clawM = K.keratin('#ddd0b4');
   const FK = feed ? 2.4 : 1;                                             // feeding: everything that carries charge burns
   const body = K.loft(G, [
     [-2.2, 0, 0, 0, 0.74], [-2.08, 0.46, 0.44, 0.34, 0.75], [-1.72, 0.84, 0.78, 0.47, 0.79], [-1.05, 0.98, 0.9, 0.5, 0.81],
@@ -151,8 +149,8 @@ function drainer(L, K, G, GL, f, feed) {
 
   // ---- the charge sac: a bare, swollen bulge of thin dark skin over the rear of the back, glowing veins under it
   const veins = L.canvasTex(1024, (g, n) => {
-    g.fillStyle = '#2a2a2a'; g.fillRect(0, 0, n, n); g.lineCap = 'round';
-    L.blotches(g, n, 40, 60, 200, 0.35, '255,255,255');                   // the charge inside, a soft light through the skin
+    g.fillStyle = '#1e1e1e'; g.fillRect(0, 0, n, n); g.lineCap = 'round';
+    L.blotches(g, n, 40, 60, 200, 0.28, '255,255,255');                   // the charge inside, a soft light through the skin
     const branch = (x, y, a, w, len, d) => {
       for (let k = 0; k < len; k++) {
         const nx = x + Math.sin(a) * 8, ny = y + Math.cos(a) * 8;
@@ -163,8 +161,8 @@ function drainer(L, K, G, GL, f, feed) {
     };
     for (let i = 0; i < 16; i++) branch((i + L.rnd() * 0.6) / 16 * n, n * (0.16 + L.rnd() * 0.06), (L.rnd() - 0.5) * 0.4, 5.5, 56, 0);
   });
-  const sacM = new THREE.MeshPhysicalMaterial({ color: '#6c5860', roughness: 0.5, metalness: 0, clearcoat: 0.45, clearcoatRoughness: 0.35, vertexColors: true,
-    sheen: 0.3, sheenColor: new THREE.Color('#c8a8b0'), emissive: new THREE.Color(X.core).multiplyScalar(FK * (K.GLOW * K.GLOW * 0.5 + (K.NIGHTISH ? 0.15 : 0.32)) / 0.4), emissiveMap: veins, emissiveIntensity: 0.4 });
+  const sacM = new THREE.MeshPhysicalMaterial({ color: '#57454c', roughness: 0.5, metalness: 0, clearcoat: 0.45, clearcoatRoughness: 0.35, vertexColors: true,
+    sheen: 0.3, sheenColor: new THREE.Color('#c8a8b0'), emissive: new THREE.Color(X.core).multiplyScalar(FK * (K.GLOW * K.GLOW * 0.5 + (K.NIGHTISH ? 0.15 : 0.12)) / 0.4), emissiveMap: veins, emissiveIntensity: 0.4 });
   sacM.envMapIntensity = 0.25; sacM.userData.glow = K.dimGlow(X.glow, (K.GLOW > 1 || feed ? 0.8 : 3) * Math.min(2.2, FK));
   {
     const sx = -1.02, sy = 1.08, rx = 1.12, ry = 0.78, rz = 0.84;
@@ -182,22 +180,23 @@ function drainer(L, K, G, GL, f, feed) {
   }
 
   // ---- snout and the star
-  const tilt = feed ? 0.3 : 0.8;                                          // walking: nose raised, star facing up and forward
+  const tilt = feed ? 0.62 : 0.8;                                         // nose raised, the star facing up and forward
   const tip = [1.92, feed ? 0.62 : 0.7, 0];
   K.snout(G, { base: [1.28, 0.7, 0], tip, r: 0.17, skin: snoutM, nostril: false });
   const dn = new THREE.Vector3(Math.cos(tilt), Math.sin(tilt), 0);
   const D = L.group(tip[0] + dn.x * 0.04, tip[1] + dn.y * 0.04, 0, 0, G); D.quaternion.setFromUnitVectors(new THREE.Vector3(1, 0, 0), dn);
   // in D: +x is the way the star faces, the rays radiate in the y-z plane
-  const rayM = feed ? K.glowMat('#f3f0ff', 0.7 * FK, K.dimGlow(X.glow, 2.2)) : K.flesh('#b8958c', { rough: 0.5 });
-  const tipM = K.glowMat('#f3f0ff', feed ? 1.2 * FK : 0.5, K.dimGlow(X.glow, feed ? 2.2 : 0.8));
-  K.seg(D, [0.03, 0, 0], 0.07, 0.12, 0.12, feed ? K.glowMat('#f8f6ff', 1.4 * FK, K.dimGlow(X.glow, 2.2)) : K.flesh('#6e5250'), { lump: 0.04 });
+  // feeding, the rays light up from inside (pale flesh glowing) and their tips burn
+  const rayM = feed ? K.glowMat('#eadfe6', 0.32 * FK, K.dimGlow(X.glow, 0.7)) : K.flesh('#b8958c', { rough: 0.5 });
+  const tipM = K.glowMat('#f3f0ff', feed ? 1.0 * FK : 0.5, K.dimGlow(X.glow, feed ? 2.0 : 0.8));
+  K.seg(D, [0.03, 0, 0], 0.06, 0.1, 0.1, feed ? K.glowMat('#f8f6ff', 0.8 * FK, K.dimGlow(X.glow, 1.6)) : K.flesh('#6e5250'), { lump: 0.04 });
   for (let k = 0; k < 22; k++) {
     const a = (k + 0.5) / 22 * Math.PI * 2, ca = Math.cos(a), sa = Math.sin(a);
     const lowMid = Math.abs(Math.sin(a)) < 0.2 && Math.cos(a) < 0 ? 0.55 : 1;   // the two bottom rays are small, as on the real animal
-    const len = (feed ? 0.42 : 0.3) * lowMid * (0.92 + 0.16 * L.rnd()), wob = feed ? 0 : 0.06 * Math.sin(f * Math.PI / 2 + k * 1.7);
-    const r0 = 0.1, P0 = [0.0, ca * r0, sa * r0];
-    const pts = feed   // splayed wide, then curling forward: closing round the target
-      ? [P0, [0.06, ca * (r0 + len * 0.45), sa * (r0 + len * 0.45)], [0.2, ca * (r0 + len * 0.7), sa * (r0 + len * 0.7)], [0.38, ca * (r0 + len * 0.62), sa * (r0 + len * 0.62)]]
+    const len = (feed ? 0.46 : 0.3) * lowMid * (0.92 + 0.16 * L.rnd()), wob = feed ? 0 : 0.06 * Math.sin(f * Math.PI / 2 + k * 1.7);
+    const r0 = 0.1, P0 = [0.0, ca * r0, sa * r0], R1 = r0 + len;
+    const pts = feed   // splayed wide open, the tips hooking forward: gripping the target
+      ? [P0, [0.0, ca * (r0 + len * 0.5), sa * (r0 + len * 0.5)], [0.05, ca * (r0 + len * 0.88), sa * (r0 + len * 0.88)], [0.2, ca * R1 * 0.96, sa * R1 * 0.96]]
       : [P0, [0.04 + wob, ca * (r0 + len * 0.4), sa * (r0 + len * 0.4)], [0.1 + wob, ca * (r0 + len * 0.75), sa * (r0 + len * 0.75)], [0.18 + wob, ca * (r0 + len * 0.95), sa * (r0 + len * 0.95)]];
     K.tube(D, pts, t => 0.034 * (1 - 0.6 * t) + 0.008, rayM, { n: 12, radial: 7 });
     const e = pts[pts.length - 1]; L.sphere(feed ? 0.028 : 0.02, tipM, e[0], e[1], e[2], { parent: D, dirt: 0, cast: false });
@@ -236,20 +235,20 @@ function drainer(L, K, G, GL, f, feed) {
 function brute(L, K, G, GL, f) {
   const X = { ...K.XTAL, k: 0.82 };
   const furM = K.fur('#3b312b', { coarse: true, sheen: 0.7, sheenColor: '#8f8174', rough: 0.92, ns: 1.0 });
-  const skinM = K.flesh('#94786f', { rough: 0.62 }), snoutM = K.flesh('#987c74'), clawM = K.keratin('#d7c9aa', 0.5);
+  const skinM = K.flesh('#8e7c77', { rough: 0.62 }), snoutM = K.flesh('#96827b'), clawM = K.keratin('#d7c9aa', 0.5);
   const body = K.loft(G, [
     [-3.45, 0, 0, 0, 1.06], [-3.3, 0.66, 0.56, 0.46, 1.08], [-2.85, 1.18, 0.96, 0.66, 1.12], [-1.9, 1.46, 1.18, 0.75, 1.17],
     [-0.65, 1.6, 1.3, 0.78, 1.2], [0.5, 1.66, 1.32, 0.78, 1.18], [1.35, 1.42, 1.1, 0.7, 1.1], [2.05, 0.98, 0.8, 0.54, 0.98],
     [2.55, 0.54, 0.47, 0.34, 0.9], [2.8, 0, 0, 0, 0.86],
   ], furM, { lump: 0.04, seed: 11, uv: 2.2, p: 2.3,
-    col: (x, a0) => { const a = Math.atan2(Math.sin(a0), Math.cos(a0)), s = K.sstep(1.3, 1.9, x) * Math.exp(-(a * a) / 0.09) + K.sstep(1.9, 2.3, x) * 0.6 * Math.exp(-((Math.abs(a) - 1.0) ** 2) / 0.05); const k = 1 + 1.6 * Math.min(1, s); return [k, k * 0.97, k * 0.92]; } });
+    col: (x, a0) => { const a = Math.atan2(Math.sin(a0), Math.cos(a0)), s = K.sstep(0.9, 1.6, x) * Math.exp(-(a * a) / 0.14) + K.sstep(1.8, 2.3, x) * 0.7 * Math.exp(-((Math.abs(a) - 1.0) ** 2) / 0.06); const k = 1 + 3.2 * Math.min(1, s); return [k, k * 0.98, k * 0.95]; } });
   K.furShells(body, furM, { n: 6, len: 0.1, density: 0.9, comb: 0.9, tip: 0.3, scale: 5 });
 
   // ---- the geode ridge: stone crust grown along the spine, split down the middle where the crystal comes through
   const crustM = K.crust('#ffffff');
   const stone = [0.06, 0.055, 0.052], stoneL = [0.15, 0.135, 0.12], rust = [0.2, 0.11, 0.07];
   const bands = [[0.42, 0.4, 0.42], [0.25, 0.23, 0.28], [0.15, 0.13, 0.19], [0.07, 0.06, 0.09], [0.035, 0.03, 0.045]];
-  const sad = K.crustSaddle(G, body, { x0: -2.95, x1: 1.15, amax: 0.66, thick: 0.34, bands: 0, crack: 0.24, mat: crustM,
+  const sad = K.crustSaddle(G, body, { x0: -2.95, x1: 1.0, amax: 0.8, thick: 0.5, bands: 0, crack: 0.24, mat: crustM,
     colour: (x, a, inC) => {
       if (inC > 0) return bands[Math.min(4, Math.floor(Math.pow(inC, 0.6) * 5))].map(q => q * 1.3);
       const lum = 0.5 + 0.5 * K.nz(x * 3 + 9, a * 3, 2); let c = stone.map((q, j) => q + (stoneL[j] - q) * lum);
@@ -295,7 +294,7 @@ function burrow(L, K) {
   L.getRoot().scale.setScalar(1.06);
   const CZ = -0.3;
   // a domed heap with a hole in the top
-  const prof = [[0, -3.8], [0.35, -3.25], [0.75, -1.9], [1.0, -0.55], [1.2, 0.55], [1.45, 1.35], [1.85, 1.75], [2.3, 1.62], [2.85, 1.1], [3.4, 0.56], [3.9, 0.2], [4.3, 0.03], [4.6, -0.08]];
+  const prof = [[0, -3.8], [0.35, -3.2], [0.75, -1.9], [1.0, -0.4], [1.2, 0.85], [1.45, 1.7], [1.85, 2.08], [2.3, 1.95], [2.85, 1.45], [3.4, 0.84], [3.9, 0.34], [4.3, 0.07], [4.6, -0.08]];
   const hProf = (r) => { for (let i = 1; i < prof.length; i++) if (r <= prof[i][0]) { const [r0, h0] = prof[i - 1], [r1, h1] = prof[i], t = (r - r0) / (r1 - r0), s = t * t * (3 - 2 * t); return h0 + (h1 - h0) * s; } return prof[prof.length - 1][1]; };
   const RH = 1.4, RMAX = 4.6;
   const soilM = K.crust('#ffffff', { rough: 0.95, ns: 0.8 });
@@ -308,19 +307,19 @@ function burrow(L, K) {
       const rmax = 4.15 + 0.45 * K.nz(ca * 1.7, 0.9, sa * 1.7) + 0.12 * Math.sin(a * 7 + 1) + 0.06 * Math.sin(a * 17);
       const r = 0.05 + (j / NR) * (rmax - 0.05), rn = r < 2.3 ? r : 2.3 + (r - 2.3) * (RMAX - 2.3) / (rmax - 2.3);
       let h = hProf(rn);
-      if (r > 1.3) h += 0.22 * K.nz(ca * 1.5, 0.3, sa * 1.5) * Math.exp(-((r - 2.2) ** 2) / 1.2)            // the heap is uneven
-        + 0.09 * K.nz(ca * r * 2.2, 3, sa * r * 2.2) + 0.05 * K.nz(ca * r * 5, 7, sa * r * 5);              // and crumbly
+      if (r > 1.3) h += 0.25 * K.nz(ca * 1.5, 0.3, sa * 1.5) * Math.exp(-((r - 2.2) ** 2) / 1.2)            // the heap is uneven
+        + 0.1 * K.nz(ca * r * 2.2, 3, sa * r * 2.2) + 0.07 * K.nz(ca * r * 5, 7, sa * r * 5) + 0.04 * K.nz(ca * r * 11, 2, sa * r * 11);   // and crumbly
       const rib = Math.sin(a * 7 + r * 5.5);                                                                // spiral scrapes down the throat
       if (r < RH + 0.1) h += 0.08 * rib * Math.min(1, (RH + 0.1 - r) / 0.3);
       pos.push(ca * r, h, CZ + sa * r);
       // fresh dark soil on the heap (thrown up from below, still damp), drying paler toward the foot; black depths
-      const fresh = [0.17, 0.12, 0.09], dry = [0.42, 0.34, 0.26], throat = [0.07, 0.055, 0.05], deep = [0.012, 0.01, 0.014], resin = [0.16, 0.11, 0.1];
+      const fresh = [0.11, 0.08, 0.06], dry = [0.26, 0.21, 0.16], throat = [0.07, 0.055, 0.05], deep = [0.012, 0.01, 0.014], resin = [0.16, 0.11, 0.1];
       const mix = (p, q, t) => p.map((v, k) => v + (q[k] - v) * Math.max(0, Math.min(1, t)));
       let c;
-      if (r > 1.6) c = mix(fresh, dry, (rn - 2.6) / 1.8);
+      if (r > 1.6) c = mix(fresh, dry, (rn - 3.4) / 1.2);
       else if (r > RH) c = mix(throat, fresh, (r - RH) / 0.25);
       else { c = mix(deep, throat, (r - 0.2) / (RH - 0.2)); if (rib > 0.5) c = mix(c, resin, (rib - 0.5) * 1.4 * Math.min(1, r / 0.6)); }
-      const nn = 0.82 + 0.36 * K.nz(ca * r * 3, 5, sa * r * 3); c = c.map(v => v * nn);
+      const nn = 0.8 + 0.3 * K.nz(ca * r * 3, 5, sa * r * 3) + 0.25 * K.nz(ca * r * 12, 9, sa * r * 12); c = c.map(v => v * nn);
       col.push(...c.map(v => v * 1.35));
     }
     for (let j = 0; j < NR; j++) for (let i = 0; i < NA; i++) { const a = j * (NA + 1) + i, b = a + 1, c = a + NA + 1, d = c + 1; idx.push(a, b, c, b, d, c); }
@@ -347,23 +346,32 @@ function burrow(L, K) {
     const pm = new THREE.Mesh(pg, m); pm.position.set(0, 0.01, CZ); pm.receiveShadow = true; pm.userData.decal = true; L.getRoot().add(pm);
   }
   // ---- clods: soil thrown up in lumps all over the heap (what makes it read as a molehill)
-  const clodM = [K.crust('#4a3a2e', { rough: 0.95 }), K.crust('#3a2c22', { rough: 0.95 }), K.crust('#5e4a3a', { rough: 0.95 })];
+  const clodM = [K.crust('#3e3026', { rough: 0.97 }), K.crust('#33271f', { rough: 0.97 }), K.crust('#4a3a2e', { rough: 0.97 })];
   const clodGeo = (s, k) => { const g = new THREE.DodecahedronGeometry(1, 1), p = g.attributes.position; for (let i = 0; i < p.count; i++) { const q = 1 + 0.3 * K.nz(p.getX(i) * 2 + k, p.getY(i) * 2, p.getZ(i) * 2); p.setXYZ(i, p.getX(i) * q, p.getY(i) * q, p.getZ(i) * q); } g.scale(s, s * 0.7, s * (0.8 + 0.4 * L.rnd())); g.computeVertexNormals(); return g; };
-  const clod = (x, z, s, k, lift = 0.3) => { const r = Math.hypot(x, z - CZ); L.mesh(clodGeo(s, k), clodM[k % 3], x, hProf(r) + s * lift, z, { dirt: 0.25, dirtH: s, ry: L.rnd() * 6.28 }); };
-  for (let i = 0; i < 220; i++) {
-    const a = L.rnd() * Math.PI * 2, r = 1.5 + Math.pow(L.rnd(), 0.8) * 2.7, s = 0.05 + Math.pow(L.rnd(), 2) * 0.2 * (r < 3 ? 1.2 : 0.8);
+  const clod = (x, z, s, k, lift = 0.1) => { const r = Math.hypot(x, z - CZ); L.mesh(clodGeo(s, k), clodM[k % 3], x, hProf(r) + s * lift, z, { dirt: 0.1, dirtH: s, ry: L.rnd() * 6.28 }); };
+  for (let i = 0; i < 520; i++) {      // crumbs all over the heap, bigger lumps near the rim where they were thrown up
+    const a = L.rnd() * Math.PI * 2, r = 1.45 + Math.pow(L.rnd(), 1.1) * 2.6, s = 0.035 + Math.pow(L.rnd(), 2.2) * 0.17 * (r < 2.6 ? 1.2 : 0.75);
     clod(Math.cos(a) * r, CZ + Math.sin(a) * r, s, i);
   }
-  // ---- raised tunnels running off under the surface, the soil heaved and cracked along them; one ends in a small heap
+  // ---- raised tunnels running off under the surface: a low line of heaved, broken earth (dry soil lumps, two
+  // staggered rows with a crack between), fading out at both ends; one breaks the surface in a small fresh heap
+  const ridgeM = [K.crust('#6e5a46', { rough: 0.97 }), K.crust('#5f4c3b', { rough: 0.97 }), K.crust('#7a6550', { rough: 0.97 })];
   const runs = [[0.6, 1, [0.4, 0.6]], [2.5, -1, [0.3, -0.5]], [4.3, 1, [0.5, 0.3]]];
   runs.forEach(([a0, sgn, [wig, bend]], ri) => {
-    const pts = []; for (let k = 0; k <= 10; k++) { const t = k / 10, r = 3.3 + t * 1.75, a = a0 + sgn * bend * t * t + wig * 0.15 * Math.sin(t * 7 + ri); pts.push([Math.cos(a) * r, -0.12, CZ + Math.sin(a) * r]); }
-    K.tube(null, pts, t => 0.3 * (1 - 0.25 * t), K.crust('#5a4838', { rough: 0.95 }), { n: 40, radial: 12, flat: 0.55, dirt: 0.2 });
-    const c = K.curve(pts, 30);
-    for (let k = 0; k < 30; k++) for (const s of [-1, 1]) { const p = c[k], q = c[k + 1]; const dx = q[0] - p[0], dz = q[2] - p[2], l = Math.hypot(dx, dz); L.mesh(clodGeo(0.06 + L.rnd() * 0.07, k + ri * 40), clodM[(k + ri) % 3], p[0] - dz / l * s * 0.13, 0.04 + L.rnd() * 0.04, p[2] + dx / l * s * 0.13, { dirt: 0.2, ry: L.rnd() * 6 }); }
-    if (ri === 1) {     // a small fresh heap where this tunnel breaks the surface
+    const pts = []; for (let k = 0; k <= 10; k++) { const t = k / 10, r = 3.2 + t * 1.85, a = a0 + sgn * bend * t * t + wig * 0.15 * Math.sin(t * 7 + ri); pts.push([Math.cos(a) * r, 0, CZ + Math.sin(a) * r]); }
+    const c = K.curve(pts, 60);
+    for (let k = 0; k < 60; k++) {
+      const t = k / 60, p = c[k], q = c[k + 1], dx = q[0] - p[0], dz = q[2] - p[2], l = Math.hypot(dx, dz), fade = Math.min(1, t * 6, (1 - t) * 5 + (ri === 1 ? 1 : 0));
+      for (const sd of [-1, 1]) {
+        const s0 = (0.13 + 0.08 * L.rnd()) * (0.4 + 0.6 * fade), off = sd * (0.12 + 0.05 * L.rnd()) * fade;
+        const g = clodGeo(s0, k * 2 + (sd > 0 ? 1 : 0) + ri * 200); g.scale(1.3, 0.75, 1.1);
+        L.mesh(g, ridgeM[(k + ri + (sd > 0 ? 1 : 0)) % 3], p[0] - dz / l * off, -0.02 + s0 * 0.2, p[2] + dx / l * off, { dirt: 0, ry: Math.atan2(-dz, dx) + (L.rnd() - 0.5) * 0.6 });
+      }
+    }
+    if (ri === 1) {     // a small fresh molehill where this tunnel breaks the surface
       const e = pts[pts.length - 1];
-      for (let k = 0; k < 26; k++) { const a = L.rnd() * 6.28, rr = Math.pow(L.rnd(), 0.7) * 0.55, s = 0.08 + L.rnd() * 0.1; L.mesh(clodGeo(s, k), clodM[k % 3], e[0] + Math.cos(a) * rr, 0.05 + (0.55 - rr) * 0.45 + s * 0.3, e[2] + Math.sin(a) * rr, { dirt: 0.2, ry: L.rnd() * 6 }); }
+      K.seg(null, [e[0], -0.04, e[2]], 0.66, 0.42, 0.66, K.crust('#4a3a2e', { rough: 0.97 }), { lump: 0.14, flat: 1 });
+      for (let k = 0; k < 60; k++) { const a = L.rnd() * 6.28, rr = Math.pow(L.rnd(), 0.6) * 0.66, s = 0.035 + L.rnd() * 0.06; L.mesh(clodGeo(s, k), clodM[k % 3], e[0] + Math.cos(a) * rr, -0.04 + 0.42 * Math.sqrt(Math.max(0, 1 - (rr / 0.66) ** 2)) + s * 0.1, e[2] + Math.sin(a) * rr, { dirt: 0, ry: L.rnd() * 6 }); }
     }
   });
   // ---- crystal lining the throat: shards growing inward and up from the walls, brighter the deeper they sit
