@@ -23,6 +23,8 @@ const R = {
   selTile: -1,            // tile index of a selected resource
   hover: -1,              // tile under the mouse pointer
   routePreview: null,     // tiles a building's "Lay road" button would pave
+  goodsMap: false,        // Paths' Goods flow map on (Shift+T)
+  gf: null,               // its counts (see sampleGoodsFlow): display only, never in S
   keys: new Set(),        // arrow / WASD keys held down (desktop panning)
   mode: 'normal',
   time: 0,
@@ -4659,6 +4661,8 @@ function render(dtReal) {
   drawLights(ctx, ox, oy, z, inView);
   drawOverpassShadows(ctx, ox, oy, z, inView);
   if (R.traffic && R.mode === 'road') drawTraffic(ctx, ox, oy, z, inView);
+  if (typeof UI !== 'undefined' && UI.inGame) sampleGoodsFlow(); // (always, so the map has the last minute when it's turned on)
+  if (R.goodsMap && R.mode === 'road') drawGoodsFlow(ctx, ox, oy, z, v0, v1);
   if (R.routePreview) {
     // The road a building's "Lay road" button would pave.
     ctx.strokeStyle = '#ffd166';
@@ -5266,6 +5270,135 @@ function drawTraffic(ctx, ox, oy, z, inView) {
       ctx.beginPath(); ctx.arc(ox + i * z + z / 2, oy + j * z + z / 2, z * (0.42 + 0.08 * pulse), 0, Math.PI * 2); ctx.stroke();
     }
   }
+}
+
+/*
+ * The goods flow map (Paths: Goods flow, Shift+T): what your robots have carried along each road and track tile over
+ * about the last minute. Display only, kept in R.gf and never in S: no rule reads it, it isn't saved, and devices
+ * needn't agree on it. Every few frames each robot of yours with a load, moving on a road or track, adds the goods
+ * aboard times the distance it went since the last look to its tile's count for that good; the counts fade with a
+ * time constant of GFLOW_FADE seconds of game time, so a tile's total is about how many goods passed over it in the
+ * last minute. Drawn as a line along the road: the wider, the more goods; its colour the good most of them were.
+ */
+const GFLOW_FADE = 60;
+const GFLOW_STEPS = [2, 5, 12, 25]; // goods a minute: past each the line is a step wider (five widths)
+const GFLOW_MIN = 0.5; // (less than this over a tile isn't drawn)
+
+function sampleGoodsFlow() {
+  if (!S || !S.road || !S.bots) return;
+  const N = S.W * S.H, G = GOODS.length;
+  let F = R.gf;
+  if (!F || F.of !== S || F.n !== N) {
+    const gi = {};
+    GOODS.forEach((g, k) => { gi[g] = k; });
+    F = R.gf = { of: S, n: N, acc: new Float32Array(N * G), tot: new Float32Array(N), main: new Uint8Array(N), byGood: new Float32Array(G), gi,
+      t: S.time, at: 0, fadeT: S.time, fadeAt: 0, round: 0, pos: new Map(), segs: Array.from({ length: G * 5 }, () => []) };
+  }
+  const dt = S.time - F.t;
+  if (dt < 0) { F.t = F.fadeT = S.time; F.pos.clear(); return; } // (the game was put back: a multiplayer resync)
+  if (dt === 0 || (R.time - F.at < 0.05 && dt < 0.5)) return; // (every few frames; nothing to do while paused)
+  F.at = R.time; F.t = S.time; F.round++;
+  const W = S.W, H = S.H, acc = F.acc, tot = F.tot, gi = F.gi, rail = S.rail;
+  for (const u of S.bots) {
+    if (u.dead || u.owner !== ME || u.inside || !(u.carry || u.mix)) continue;
+    const p = F.pos.get(u.id);
+    if (!p) { F.pos.set(u.id, [u.x, u.y, F.round]); continue; }
+    const dx = u.x - p[0], dy = u.y - p[1], d = Math.sqrt(dx * dx + dy * dy);
+    p[0] = u.x; p[1] = u.y; p[2] = F.round;
+    if (d < 1e-4 || d > 4) continue; // standing, or a jump (off a Ropeway or a Ferry, out of a building)
+    const i = Math.floor(u.x), j = Math.floor(u.y), t = j * W + i;
+    if (i < 0 || j < 0 || i >= W || j >= H || !(S.road[t] || (rail && rail[t]))) continue;
+    if (u.carry && u.carryN > 0 && gi[u.carry] !== undefined) { const v = u.carryN * d; acc[t * G + gi[u.carry]] += v; tot[t] += v; }
+    if (u.mix) for (const g in u.mix) if (u.mix[g] > 0 && gi[g] !== undefined) { const v = u.mix[g] * d; acc[t * G + gi[g]] += v; tot[t] += v; }
+  }
+  if (R.time - F.fadeAt >= 0.5) fadeGoodsFlow(F);
+}
+
+/** Twice a second: the counts fade, and each tile's total and main good are worked out again (what's drawn). */
+function fadeGoodsFlow(F) {
+  const G = GOODS.length, acc = F.acc, tot = F.tot, main = F.main, by = F.byGood, k = Math.exp(-(S.time - F.fadeT) / GFLOW_FADE);
+  F.fadeAt = R.time; F.fadeT = S.time;
+  by.fill(0);
+  for (let t = 0; t < F.n; t++) {
+    if (!tot[t]) continue;
+    let sum = 0, best = 0, bi = 0;
+    for (let g = 0, a = t * G; g < G; g++, a++) {
+      if (!acc[a]) continue;
+      const v = acc[a] * k;
+      acc[a] = v < 0.01 ? 0 : v;
+      sum += acc[a]; by[g] += acc[a];
+      if (acc[a] > best) { best = acc[a]; bi = g; }
+    }
+    if (sum < 0.05) { for (let g = 0, a = t * G; g < G; g++, a++) acc[a] = 0; sum = 0; }
+    tot[t] = sum; main[t] = bi;
+  }
+  for (const [id, p] of F.pos) if (F.round - p[2] > 20) F.pos.delete(id); // (robots that put their load down, or are gone)
+}
+
+/** The good a factory of yours stands idle for (it's waiting for it: "Waiting for Ore"), or null. */
+function flowStarved(b) {
+  const def = BDEFS[b.type];
+  if (b.dead || !b.built || b.paused || b.working || !def.inp || !b.status || b.status.lastIndexOf('Waiting for ', 0) !== 0) return null;
+  for (const g in def.inp) if ((b.stock[g] || 0) < def.inp[g]) return g;
+  return null;
+}
+
+/**
+ * Draw the goods flow map over the tiles in view: each tile's line runs from its middle to each neighbour that
+ * carries goods too, in five widths (GFLOW_STEPS), on a dark edge (red where bots stand in a jam). A dashed ring in a
+ * good's colour marks a factory of yours waiting for that good.
+ */
+function drawGoodsFlow(ctx, ox, oy, z, v0, v1) {
+  const F = R.gf;
+  if (!F || F.of !== S) return;
+  const W = S.W, H = S.H, tot = F.tot, main = F.main, rail = S.rail, G = GOODS.length, segs = F.segs;
+  const i0 = Math.max(0, Math.floor(v0.x) - 1), i1 = Math.min(W - 1, Math.ceil(v1.x) + 1), j0 = Math.max(0, Math.floor(v0.y) - 1), j1 = Math.min(H - 1, Math.ceil(v1.y) + 1);
+  const jam = HEAT.of === S && HEAT.jam ? HEAT.jam : null, jams = [];
+  const used = [], h = z / 2, on = (t) => tot[t] >= GFLOW_MIN && (S.road[t] || (rail && rail[t]));
+  for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) {
+    const t = j * W + i;
+    if (!on(t)) continue;
+    const v = tot[t], b = v < GFLOW_STEPS[0] ? 0 : v < GFLOW_STEPS[1] ? 1 : v < GFLOW_STEPS[2] ? 2 : v < GFLOW_STEPS[3] ? 3 : 4;
+    const key = main[t] * 5 + b, L = segs[key];
+    if (!L.length) used.push(key);
+    const cx = ox + i * z + h, cy = oy + j * z + h, n0 = L.length;
+    if (i + 1 < W && on(t + 1)) L.push(cx, cy, cx + h, cy);
+    if (i > 0 && on(t - 1)) L.push(cx, cy, cx - h, cy);
+    if (j + 1 < H && on(t + W)) L.push(cx, cy, cx, cy + h);
+    if (j > 0 && on(t - W)) L.push(cx, cy, cx, cy - h);
+    if (L.length === n0) L.push(cx - 0.5, cy, cx + 0.5, cy); // (on its own: a dot)
+    if (jam && jam[t] > TRAFFIC_JAM) for (let k = n0; k < L.length; k += 4) jams.push(L[k], L[k + 1], L[k + 2], L[k + 3], b);
+  }
+  const width = (b) => Math.min(z * 0.6, Math.max([2, 3, 4.5, 6, 8][b], z * [0.08, 0.13, 0.19, 0.26, 0.34][b]));
+  const path = (L, k0, step) => { ctx.beginPath(); for (let k = k0; k < L.length; k += step) { ctx.moveTo(L[k], L[k + 1]); ctx.lineTo(L[k + 2], L[k + 3]); } };
+  ctx.save();
+  ctx.lineCap = 'round';
+  // A dark edge under every line (red under a jam), so it reads on any ground.
+  ctx.strokeStyle = 'rgba(12,14,20,0.7)';
+  for (const key of used) { ctx.lineWidth = width(key % 5) + 3; path(segs[key], 0, 4); ctx.stroke(); }
+  if (jams.length) {
+    ctx.strokeStyle = `rgba(255,75,75,${0.65 + 0.3 * Math.sin(R.time * 6)})`;
+    for (let k = 0; k < jams.length; k += 5) { ctx.lineWidth = width(jams[k + 4]) + 6; ctx.beginPath(); ctx.moveTo(jams[k], jams[k + 1]); ctx.lineTo(jams[k + 2], jams[k + 3]); ctx.stroke(); }
+  }
+  for (const key of used) {
+    ctx.strokeStyle = GOOD[GOODS[(key / 5) | 0]].color;
+    ctx.lineWidth = width(key % 5);
+    path(segs[key], 0, 4);
+    ctx.stroke();
+    segs[key].length = 0;
+  }
+  // Factories of yours standing idle for a good: a dashed ring in its colour.
+  ctx.lineWidth = Math.max(2, z * 0.07);
+  ctx.setLineDash([Math.max(3, z * 0.16), Math.max(2, z * 0.1)]);
+  ctx.lineDashOffset = -R.time * z * 0.3;
+  for (const b of S.buildings) {
+    if (b.owner !== ME || b.x < i0 || b.x > i1 || b.y < j0 || b.y > j1) continue;
+    const g = flowStarved(b);
+    if (!g) continue;
+    ctx.strokeStyle = GOOD[g].color;
+    ctx.beginPath(); ctx.arc(ox + b.x * z + h, oy + b.y * z + h, z * 0.62, 0, Math.PI * 2); ctx.stroke();
+  }
+  ctx.restore();
 }
 
 /*

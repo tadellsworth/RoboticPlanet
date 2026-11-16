@@ -1507,7 +1507,7 @@ function hideGoodTip() {
 
 /*
  * WASD or arrow keys pan · B build (then a building's key: a letter, or 1–7; or R for roads) · R or P opens and closes Paths (inside
- * it: R roads, G bridges and tunnels, V ramps, E pave, O one-way arrows, L junctions, T traffic map) · Q army · H base · F select every warbot · 1–9 control groups (Ctrl or
+ * it: R roads, G bridges and tunnels, V ramps, E pave, O one-way arrows, L junctions, T traffic map, Shift+T goods flow map) · Q army · H base · F select every warbot · 1–9 control groups (Ctrl or
  * Shift + digit to save) · Shift+F a Bot Foundry's Order bots list · J jump to the latest alert · Esc back / clear selection / pause ·
  * Space pause · [ ] game speed · + and - zoom · M minimap · ? help
  */
@@ -1707,6 +1707,8 @@ function initKeyboard() {
     if (overlay) return;
     // Shift+F, from anywhere: the Bot Foundry's Order bots list (again: the next Foundry).
     if (k === 'f' && e.shiftKey) { e.preventDefault(); openFoundryOrders(); return; }
+    // Shift+T, from anywhere (a panel's own T included): Paths with the Goods flow map (again: off).
+    if (e.shiftKey && k === 't') { e.preventDefault(); if (R.mode !== 'road') setMode('road'); setRoadMap(R.goodsMap ? '' : 'goods'); showRoadBanner(); sfx('click'); return; }
     // Shift+V and Shift+Y, from anywhere (a panel's own V or Y included): Paths on Viaducts or Ropeways.
     if (e.shiftKey && PATHS_SHIFT_KEYS[k]) { e.preventDefault(); openPaths(PATHS_SHIFT_KEYS[k]); return; }
     // Enter confirms the banner's main button (Build here, Fire, Lay roads...).
@@ -1743,7 +1745,7 @@ function initKeyboard() {
       case 'g': openPaths('bridge'); break;
       case 'v': openPaths('ramp'); break;
       case 'e': openPaths('pave'); break;
-      case 't': if (R.mode !== 'road') setMode('road'); R.traffic = !R.traffic; showRoadBanner(); sfx('click'); break;
+      case 't': if (R.mode !== 'road') setMode('road'); setRoadMap(R.traffic ? '' : 'traffic'); showRoadBanner(); sfx('click'); break;
       case 'l': openPaths('lights'); break;
       case 'x': if (warOn()) openPaths('wall'); break;
       case 'n': openPaths('rail'); break;
@@ -3600,6 +3602,7 @@ function showBanner(html, okLabel, cancelLabel) {
   $('banner').hidden = false;
   $('banner-seg').hidden = true;
   $('banner-traffic').hidden = true;
+  $('banner-goods').hidden = true;
   $('banner-route').hidden = true;
   $('banner-undo').hidden = true;
   $('banner-clear').hidden = true;
@@ -4783,7 +4786,11 @@ function showRoadBanner(problem, info) {
   const tb = $('banner-traffic');
   tb.hidden = false;
   tb.classList.toggle('on', !!R.traffic);
-  tb.onclick = () => { R.traffic = !R.traffic; sfx('click'); showRoadBanner(); };
+  tb.onclick = () => { setRoadMap(R.traffic ? '' : 'traffic'); sfx('click'); showRoadBanner(); };
+  const gb = $('banner-goods');
+  gb.hidden = false;
+  gb.classList.toggle('on', !!R.goodsMap);
+  gb.onclick = () => { setRoadMap(R.goodsMap ? '' : 'goods'); sfx('click'); showRoadBanner(); };
   // Route to: on Roads, Bridges and Rail.
   const rb = $('banner-route');
   rb.hidden = !['road', 'bridge', 'rail'].includes(mode);
@@ -4791,7 +4798,38 @@ function showRoadBanner(problem, info) {
   // (UI.roadMode = mode: in a new game no tool has been picked yet, and Route to stayed off however often it was tapped)
   rb.onclick = () => { UI.roadMode = mode; UI.route = !UI.route; UI.routeGhost = null; UI.routePrev = null; sfx('click'); showRoadBanner(); };
   if (R.traffic) $('banner-text').insertAdjacentHTML('beforeend', ` <span class="traffic-key">${trafficSummary()}</span>`);
+  if (R.goodsMap) { UI.flowKey = goodsFlowKey(); $('banner-text').insertAdjacentHTML('beforeend', ` <span class="traffic-key flow-key">${UI.flowKey}</span>`); }
   bannerMissionHint();
+}
+
+/** Paths' maps over the roads, one at a time: 'traffic' (the Traffic map), 'goods' (the Goods flow map) or '' (neither). */
+function setRoadMap(m) {
+  R.traffic = m === 'traffic';
+  R.goodsMap = m === 'goods';
+}
+
+/**
+ * The Goods flow map's key (in the Paths banner, kept up to date while it's on): the goods on the move, most first,
+ * in their colours; what the widths mean; and the marks for a factory waiting for a good and a jam.
+ */
+function goodsFlowKey() {
+  const F = R.gf, list = [];
+  if (F && F.of === S) GOODS.forEach((g, k) => { if (F.byGood[k] >= 1) list.push([g, F.byGood[k]]); });
+  list.sort((a, c) => c[1] - a[1]);
+  let starved = 0;
+  for (const b of S.buildings) if (b.owner === ME && flowStarved(b)) starved++;
+  const goods = list.length ? list.slice(0, 6).map(([g]) => `<span class="fk-g"><i class="gi ${g}"></i>${GOOD[g].name}</span>`).join(' ') : 'nothing carried on your roads yet';
+  return `<b>Goods flow</b>, last minute: ${goods}. The wider, the more (widest: ${GFLOW_STEPS[3]}+ a minute). ` +
+    `<i class="fk-ring"></i>waiting for that good (${starved}), <i class="fk-jam"></i>a jam.`;
+}
+
+/** Once a second while the Goods flow map is on: its key in the banner, if it has changed. */
+function refreshFlowKey() {
+  if (!R.goodsMap || R.mode !== 'road') return;
+  const el = $('banner-text').querySelector('.flow-key');
+  if (!el) return;
+  const html = goodsFlowKey();
+  if (html !== UI.flowKey) { UI.flowKey = html; el.innerHTML = html; }
 }
 
 /** The Paths tools row (#banner-seg) on show, with `mode` picked (Walls only with war on); each button opens its tool. */
@@ -7148,6 +7186,6 @@ function uiTick(dt) {
   }
   updateMapTip();
   UI.hudT -= dt;
-  if (UI.hudT <= 0) { UI.hudT = 0.25; updateHUD(); refreshSheet(); placeMinimap(); refreshSelection(); missionCoach(); syncWakeLock(); nightfallLine(); }
+  if (UI.hudT <= 0) { UI.hudT = 0.25; updateHUD(); refreshSheet(); placeMinimap(); refreshSelection(); missionCoach(); syncWakeLock(); nightfallLine(); if ((UI.flowKeyN = (UI.flowKeyN || 0) + 1) % 4 === 0) refreshFlowKey(); }
   if (S.winner >= 0 && !UI.overShown) showGameOver();
 }
