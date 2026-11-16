@@ -134,14 +134,10 @@ or drop.
   already come from a seed plus settings; a saved edit layer on top).
 - **Photo mode:** hide the interface, free camera, a time-of-day slider, and save the picture. The art is the game's
   best advert.
-- **Goods-flow overlay:** a map view that draws what each road carries (width by amount, colour by good), next to the
-  Traffic map. It shows at a glance where a chain is starved.
 - **Accessibility:** a colour-blind palette for player colours, territory and goods; a larger-text setting (the open
   "text size" question); captions for alert sounds.
 - **Low-end phone setting:** a "battery saver" switch that lowers resolution, drops night lights and caps the frame
   rate, for older phones and long sessions.
-- **Placement undo:** a building placed by mistake can be taken back with a full refund for 10 seconds (the Paths Undo
-  already does this for roads).
 - **Shared colony co-op:** two players run one colony against the computer, splitting the work (one builds, one
   fights), on the lockstep that's there.
 
