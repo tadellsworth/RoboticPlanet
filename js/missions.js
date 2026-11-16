@@ -10,8 +10,10 @@
  * per difficulty, 0 none), nuke/war/lab/events/wildlife (switch on what missions otherwise leave out), layout(m, W),
  * setup(S, diff), goals }.
  * A goal: { kind, n (one number or [easy, normal, hard]), hint (how to do it, shown while it's the next goal),
- * ui (CSS selector of the button(s) to light up meanwhile), text (its own objective text, "{n}" for the number, or
- * [one, many] to pick by the number), hold (it must still hold at the end: a goal once met otherwise stays met) }.
+ * ui (CSS selector of the button(s) to light up meanwhile; when none is on screen the button that opens them lights
+ * up, and for a panel button a ring pulses on the building to tap: `at`, a building type, or the one the hint names),
+ * text (its own objective text, "{n}" for the number, or [one, many] to pick by the number), hold (it must still hold
+ * at the end: a goal once met otherwise stays met) }.
  * Goal kinds:
  *   built     have `n` finished buildings of `type`
  *   made      produce `n` of `good` over the mission
@@ -274,13 +276,15 @@ function missionStates(M) {
 }
 
 /**
- * The capture lock: taking the rival's Command Base ends the game, which loses the mission if goals are still open.
- * So while any goal other than capturing it is unfinished, the base holds at 1 armor against player 0 (see
+ * The capture lock: taking the last rival's Command Base ends the game, which loses the mission if goals are still
+ * open. So while any goal other than capturing it is unfinished, that base holds at 1 armor against player 0 (see
  * hitBuilding), and its panel says to finish the other goals first. Does rival base b, hit by player `by`, hold?
  */
 function captureLocked(b, by) {
   const M = S.mission, def = missionDef(M);
   if (!def || M.result || by !== 0 || b.owner === 0 || b.type !== 'lander' || !S.players[b.owner] || S.players[b.owner].lander !== b.id) return false;
+  // (With another rival still in, taking this one doesn't end the game: no lock.)
+  if (S.players.some((P) => P.id !== 0 && P.id !== b.owner && !P.absent && !P.out && foes(P.id, 0))) return false;
   const states = missionStates(M);
   return def.goals.some((g, i) => g.kind !== 'capture' && !states[i].done);
 }
