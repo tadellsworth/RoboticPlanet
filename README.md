@@ -756,6 +756,22 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   `UI.paused` (opened over the pause menu the game stays paused; a multiplayer game runs on under its menu as always) and
   takes every key pressed in it, so no hotkey fires while typing. Esc, Back or a phone's Back close it (on the main menu
   opening adds a history entry, as the Lore guide does; in a game `escapeKey` closes it first).
+- **Photo mode** (`js/photo.js`, `#photo-bar`): **Photo mode** in the pause menu, or **Shift+P** (`photoEnter`), hides the
+  whole interface (`body.photo`) and stands the game still (`UI.paused`; a multiplayer game runs on), and taps and drags
+  on the map only move it (`inputSwap` gives `INPUT` handlers that select, order and paint nothing). A small toolbar
+  fades after `PHOTO_IDLE` (3.2 s) left alone and comes back at a tap on the map, a mouse move or a key: **Time of day**
+  (a slider over the 12-minute cycle; it sets `TOD.over`, which `todNow` and `todFrame` show instead of the game's
+  clock: looks only, `S` and `S.time` don't change, the narrator's nightfall line ignores it, and it is let go on
+  exit), **Borders** (`R.terrOff`: the land's tint and border lines) and **Minimap** (both off unless switched on,
+  kept on this device in `terrafall.photo`), **Save picture** and **Exit**. The map is drawn by `photoRender`, which
+  sets aside the selection, range rings, a Paths plan, a building being placed and the hover marks only for the
+  drawing, with `R.clean = 2` (render.js leaves out badges, health bars and paused and cut-off signs). **Save picture**
+  (`photoSave`) draws the map once more at the screen's full resolution (`devicePixelRatio`, up to 3 and
+  `PHOTO_MAX_PX` pixels: `R.dpr` may be lower while the game runs), adds the minimap if it shows and a small
+  Terrafall mark bottom right (`photoMark`), and offers `terrafall-<seed>-<date>-<time>.png` (`toBlob`) the way
+  Download save file does: the artifact `downloads` capability in claude.ai, else an `<a download>` link
+  (`plainDownload`, which takes a Blob too). Esc, Shift+P, **Exit** or a phone's Back (`escapeKey`) leave it, back
+  to the pause menu if it was opened from there; everything set aside comes back as it was.
 - **A failed frame never stops the game:** `frame` books the next frame before running this one and catches its errors
   (reported once each to the console), and each stage of a frame (simulation, camera, drawing, interface, sound) runs
   on its own (`stage` in `js/main.js`): one that keeps failing during a game says so once and pauses saving
@@ -1363,6 +1379,7 @@ js/lockstep.js            multiplayer: every device runs the game, only orders t
 js/net.js                 multiplayer: the connection to the relay (rooms, reconnecting, catching up)
 js/mpui.js                multiplayer screens: host, join, the lobby, the in-game banner, pause and leave
 js/feedback.js            Send feedback: the form (main menu and pause menu) that posts to the relay's /feedback
+js/photo.js               photo mode: the interface hidden, a time-of-day slider and Save picture (a PNG of the map)
 js/charts.js              line and bar charts for the statistics screen
 js/render.js              canvas renderer and placeholder art
 js/daynight.js            day and night: the clock, re-lit art sets, grading, headlights, light pools

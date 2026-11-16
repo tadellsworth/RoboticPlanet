@@ -2194,6 +2194,7 @@ function toggleSpeedMenu(refresh) {
 
 /** Esc steps back: close a panel, leave a mode, close a screen, or open the pause menu. */
 function escapeKey() {
+  if (UI.photo) { photoExit(); return; } // (photo mode: back where it was opened from, js/photo.js)
   if (!$('screen-feedback').hidden) { closeFeedback(); return; } // (over the pause menu: back to it)
   if (!$('speed-menu').hidden) { $('speed-menu').hidden = true; return; }
   if (!$('screen-help').hidden) { $('h-close').click(); return; }
@@ -2438,10 +2439,10 @@ async function downloadSave() {
   say(plainDownload(name, text) ? `Save file ${name} downloaded: load it from the main menu (Load a save file) on any device.` : 'Downloads aren\'t possible here.');
 }
 
-/** An ordinary browser download of `text` as `name`; false if this page can't. */
+/** An ordinary browser download of `text` (or a Blob: photo mode's picture) as `name`; false if this page can't. */
 function plainDownload(name, text) {
   try {
-    const url = URL.createObjectURL(new Blob([text], { type: 'application/json' }));
+    const url = URL.createObjectURL(text instanceof Blob ? text : new Blob([text], { type: 'application/json' }));
     const a = document.createElement('a');
     a.href = url; a.download = name; a.style.display = 'none';
     document.body.appendChild(a); a.click(); a.remove();
@@ -2540,6 +2541,8 @@ function enterGame(unsaved) {
 }
 
 function toMenu() {
+  if (UI.photo) photoExit();
+  if (UI.watch) watchEnd();
   if (MP.on || MPJ.on) mpQuit();
   ME = 0;
   hideGoodTip();
@@ -7055,6 +7058,7 @@ function briefingTick() {
  * loaded later, or caught up after a resync, never says it again); not with the day/night cycle off.
  */
 function nightfallLine() {
+  if (TOD.over != null) return; // (photo mode's time of day is only for the picture)
   if (S.mission || S.time < 30 || S.time > 720 || !todEnabled() || (S.lore && S.lore['n.night.' + ME] !== undefined)) return;
   if (todNow().lights >= 0.9) narrate(ME, 'night');
 }

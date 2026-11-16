@@ -1437,3 +1437,40 @@ a.btn { display: block; text-align: center; text-decoration: none; color: inheri
 .fb-hp { position: absolute; left: -10000px; top: 0; width: 1px; height: 1px; overflow: hidden; }
 .fb-done { display: flex; flex-direction: column; gap: 14px; }
 .fb-thanks { margin: 4px 0 0; font-size: 17px; font-weight: 650; line-height: 1.4; color: var(--text); }
+
+/* ---------- photo mode (js/photo.js) ----------
+   The whole interface goes (the minimap stays if it's asked for), and a small toolbar sits at the bottom: it fades
+   when left alone, and comes back at a tap on the map, a mouse move or a key. Every control is 44 px to press. */
+body.photo #hud > :not(#minimap) { display: none !important; }
+body.photo:not(.photo-mm) #minimap { display: none !important; }
+body.photo #minimap .mm-hide { display: none; }
+.photo-bar {
+  position: fixed; z-index: 15; left: 50%; bottom: calc(var(--safe-b) + 12px); transform: translateX(-50%);
+  width: min(calc(100% - 24px - var(--safe-l) - var(--safe-r)), 760px);
+  display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; padding: 6px 8px 6px 14px;
+  background: rgba(14, 15, 20, 0.84); border: 1px solid var(--line); border-radius: 16px; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+  -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); transition: opacity 0.35s, transform 0.35s;
+}
+.photo-bar.faded { opacity: 0; transform: translate(-50%, 10px); pointer-events: none; }
+.pb-tod { flex: 1 1 260px; display: flex; align-items: center; gap: 8px; min-height: 44px; min-width: 0; font-size: 14px; font-weight: 700; }
+.pb-tod svg { flex: none; color: #ffd166; }
+.pb-tod-name { flex: none; min-width: 62px; }
+.pb-tod-name[data-tod="morning"] { color: #ffb38a; } .pb-tod-name[data-tod="evening"] { color: #ff8a4a; } .pb-tod-name[data-tod="night"] { color: #b8c8ff; }
+.pb-tod input { flex: 1; min-width: 0; height: 44px; margin: 0; accent-color: var(--accent); touch-action: pan-x; }
+.pb-btns { flex: 1 1 auto; display: flex; gap: 6px; }
+.pb-btn {
+  flex: 1 1 auto; display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 44px; padding: 6px 12px;
+  border: 1px solid var(--line); border-radius: 12px; background: rgba(255, 255, 255, 0.07); font-size: 14px; font-weight: 700; white-space: nowrap;
+}
+.pb-btn[aria-pressed="false"] { color: var(--muted); }
+.pb-btn[aria-pressed="true"] { color: var(--text); background: rgba(56, 212, 255, 0.16); border-color: rgba(56, 212, 255, 0.55); }
+.pb-btn.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.pb-btn:disabled { opacity: 0.55; }
+.pb-btn:active { transform: scale(0.96); }
+.pb-btn:focus-visible, .pb-tod input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.pb-msg { flex-basis: 100%; margin: 0 0 2px; font-size: 13px; line-height: 1.35; color: var(--muted); text-align: center; }
+@media (max-width: 499px) {
+  .photo-bar { padding: 6px 8px; }
+  .photo-bar .wide { display: none; }
+  .pb-btn { padding: 6px 8px; }
+}
