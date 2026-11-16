@@ -158,7 +158,7 @@ function initUI() {
 
   // HUD tools
   $('btn-build').onclick = () => { sfx('click'); if (UI.sheetKind === 'build') closeSheet(); else { setMode('normal'); openBuildMenu(); } };
-  $('btn-road').onclick = () => { sfx('click'); setMode(R.mode === 'road' ? 'normal' : 'road'); };
+  $('btn-road').onclick = () => { sfx('click'); setMode(R.mode === 'road' || crossingPlacing() ? 'normal' : 'road'); };
   $('btn-attack').onclick = () => { sfx('click'); if (UI.sheetKind === 'army' || R.mode === 'attack') { setMode('normal'); closeSheet(); } else { setMode('normal'); openArmySheet(); } };
   $('btn-home').onclick = () => {
     const L = getE(S.players[ME].lander);
@@ -172,7 +172,7 @@ function initUI() {
   $('objective').onclick = () => { UI.objCollapsed = !UI.objCollapsed; UI.objManual = true; UI.hudT = 0; };
   $('btn-msgs').onclick = () => { sfx('click'); if (UI.sheetKind === 'msgs') closeSheet(); else { setMode('normal'); openMsgSheet(); } };
   $('sheet-close').onclick = () => closeSheet();
-  $('banner-cancel').onclick = () => setMode('normal');
+  $('banner-cancel').onclick = () => setMode(UI.planKept ? 'road' : 'normal'); // (a Viaduct or Ropeway placed from Paths with a plan there: back to it)
   $('banner-ok').onclick = () => confirmBanner();
 
   // Minimap: tap or drag to move the view; the close button hides it (remembered per device).
@@ -1526,10 +1526,18 @@ const PAN_KEYS = { arrowleft: [-1, 0], arrowright: [1, 0], arrowup: [0, -1], arr
 const BUILD_KEYS = {
   gather: { harvester: 'h', quarry: 'q', mine: 'm', tap: 'c', grower: 'g', farm: 'f', pump: 'p' },
   make: { kiln: 'k', smelter: 'm', fab: 'f', refinery: 'v', tarworks: 't', foundry: 'u', armory: 'i', munitions: 'n', reactor: 'y', lab: 'l', generator: 'g' },
-  move: { charger: 'f', depot: 'e', roadworks: 'o', ropeway: 'y', viaduct: 'v', station: 'n', port: 'p', airfield: 'i', terminal: 'm' },
+  move: { charger: 'f', depot: 'e', roadworks: 'o', station: 'n', port: 'p', airfield: 'i', terminal: 'm' },
   defend: { outpost: 'o', turret: 't', minigun: 'g', bunker: 'u', keep: 'k', disruptor: 'z', mortar: 'm', flak: 'f', repair: 'e', silo: 'i', nukesilo: 'n' },
 };
 const BUILD_TAB_KEYS = { gather: '1', make: '2', move: '3', defend: '4', all: '5' };
+/**
+ * The Paths tools on Shift and a letter, from anywhere: Viaducts and Ropeways (placed with two taps, see
+ * enterPlaceMode). Every plain letter already has a job, so they're Shift with the letters they had in the
+ * build menu (Move, V and Y), V beside Ramps. (Shift+F is the Bot Foundry's Order bots.)
+ */
+const PATHS_SHIFT_KEYS = { v: 'viaduct', y: 'ropeway' };
+/** Is a Viaduct or Ropeway being placed (a Paths tool, though it's placed like a building: R.mode 'place')? */
+function crossingPlacing() { return R.mode === 'place' && (UI.placeType === 'viaduct' || UI.placeType === 'ropeway'); }
 /**
  * Keys for the buttons on a building's or robot's panel, by button id. While that panel is open they win over
  * the same letter's usual job (the key is shown on the button on a computer). Delete or Backspace dismantles,
@@ -1602,8 +1610,12 @@ function openRoadDraw() {
   openPaths('road');
 }
 
-/** Open Paths on one of its tools (roads, bridges, ramps, arrows, junctions). */
+/**
+ * Open Paths on one of its tools (roads, bridges, ramps, arrows, junctions...). Viaducts and Ropeways are placed with
+ * two taps, like a building (enterPlaceMode), with the Paths tools still showing and a plan sketched kept for after.
+ */
 function openPaths(v) {
+  if (v === 'viaduct' || v === 'ropeway') { enterPlaceMode(v); sfx('click'); return; }
   if (R.mode !== 'road') setMode('road');
   UI.roadMode = v;
   showRoadBanner();
@@ -1670,6 +1682,8 @@ function initKeyboard() {
     if (overlay) return;
     // Shift+F, from anywhere: the Bot Foundry's Order bots list (again: the next Foundry).
     if (k === 'f' && e.shiftKey) { e.preventDefault(); openFoundryOrders(); return; }
+    // Shift+V and Shift+Y, from anywhere (a panel's own V or Y included): Paths on Viaducts or Ropeways.
+    if (e.shiftKey && PATHS_SHIFT_KEYS[k]) { e.preventDefault(); openPaths(PATHS_SHIFT_KEYS[k]); return; }
     // Enter confirms the banner's main button (Build here, Fire, Lay roads...).
     if (k === 'enter' && !$('banner').hidden && !$('banner-ok').hidden && !$('banner-ok').disabled) { e.preventDefault(); $('banner-ok').click(); return; }
     // A key on the open panel's buttons (SHEET_KEYS) presses that button.
@@ -2063,29 +2077,32 @@ function updateMapTip() {
   if (!m || !UI.inGame || UI.sheetKind || R.mode !== 'normal' || INPUT.gesture || performance.now() - m.at < 350) { tip.hidden = true; UI.tipKey = ''; return; }
   const w = screenToWorld(m.x, m.y), i = Math.floor(w.x), j = Math.floor(w.y);
   let html = '', key = '';
-  const b = buildingAtTap(i, j, w.x, w.y);
+  // (A building, a robot, then a Viaduct's deck or a Ropeway's cable overhead: as a tap picks them.)
+  const b0 = buildingAtTap(i, j, w.x, w.y);
+  let bot = null;
+  if (!b0) {
+    let bd = 0.3;
+    for (const u of S.bots) {
+      if (u.dead || u.inside) continue;
+      const d = dist2(u.x, u.y, w.x, w.y);
+      if (d < bd) { bd = d; bot = u; }
+    }
+  }
+  const b = b0 || (bot ? null : crossingAtTap(i, j, w.x, w.y));
   if (b) {
     const def = BDEFS[b.type];
     key = 'b' + b.id;
     html = `<b>${b.owner === ME ? '' : playerName(b.owner) + ' '}${def.name}</b>` + (b.owner === ME && b.status ? `<em>${b.status}</em>` : '') +
       (def.mil && !(b.owner === ME && b.status) ? `<em>${b.garrison.length} warbot${b.garrison.length === 1 ? '' : 's'} inside</em>` : '') +
       (b.armor < def.armor ? `<em>Armor ${Math.ceil(b.armor)}/${def.armor}</em>` : '');
-  } else {
-    let bot = null, bd = 0.3;
-    for (const u of S.bots) {
-      if (u.dead || u.inside) continue;
-      const d = dist2(u.x, u.y, w.x, w.y);
-      if (d < bd) { bd = d; bot = u; }
-    }
-    if (bot) {
-      key = 'u' + bot.id;
-      html = `<b>${bot.owner === ME ? '' : playerName(bot.owner) + ' '}${BOTS[bot.type].name}</b>` + (bot.owner === ME ? `<em>${botActivity(bot)}</em>` : '') +
-        `<em>Health ${Math.ceil(bot.hp)}/${bot.maxHp}${bot.owner === ME ? ` · battery ${Math.round(bot.bat ?? 100)}%` : ''}</em>`;
-    } else if (inMap(i, j) && S.res[tIdx(i, j)]) {
-      const t = tIdx(i, j);
-      key = 'r' + t;
-      html = `<b>${richRes(t) ? 'Rich ' + RES[S.res[t]].name.toLowerCase() : RES[S.res[t]].name}</b><em>${S.amt[t]} ${GOOD[RES[S.res[t]].good].name} left</em>`;
-    }
+  } else if (bot) {
+    key = 'u' + bot.id;
+    html = `<b>${bot.owner === ME ? '' : playerName(bot.owner) + ' '}${BOTS[bot.type].name}</b>` + (bot.owner === ME ? `<em>${botActivity(bot)}</em>` : '') +
+      `<em>Health ${Math.ceil(bot.hp)}/${bot.maxHp}${bot.owner === ME ? ` · battery ${Math.round(bot.bat ?? 100)}%` : ''}</em>`;
+  } else if (inMap(i, j) && S.res[tIdx(i, j)]) {
+    const t = tIdx(i, j);
+    key = 'r' + t;
+    html = `<b>${richRes(t) ? 'Rich ' + RES[S.res[t]].name.toLowerCase() : RES[S.res[t]].name}</b><em>${S.amt[t]} ${GOOD[RES[S.res[t]].good].name} left</em>`;
   }
   if (!html) { tip.hidden = true; UI.tipKey = ''; return; }
   if (UI.tipKey !== key + html) { UI.tipKey = key + html; tip.innerHTML = html; }
@@ -2140,7 +2157,7 @@ function escapeKey() {
   if (UI.sheetKind) { closeSheet(); return; }
   // In Paths with a plan sketched, Esc takes back the last stroke (again for the one before); with none left it leaves Paths.
   if (R.mode === 'road' && !draftEmpty()) { draftUndo(); showRoadBanner(draftEmpty() ? 'Plan cleared.' : 'Last stroke taken back (Esc again for the one before; Clear drops the whole plan).', true); return; }
-  if (R.mode !== 'normal') { setMode('normal'); return; }
+  if (R.mode !== 'normal') { setMode(UI.planKept ? 'road' : 'normal'); return; }
   if (UI.sel.length) { selectBots([], false); return; }
   $('btn-pause').click();
 }
@@ -2828,8 +2845,11 @@ function coachTarget(g) {
   if (!sel) return { sel: '', ring: null };
   // (Placing the building the goal's card is for: what's left is a spot on the map, then Build here once it shows.
   // Build, the tab and the card are done with: lit, they'd call the player back to the menu.)
-  if (R.mode === 'place' && sel.split(',').some((p) => (p.match(/\.bcard\[data-t=['"]?(\w+)/) || [])[1] === UI.placeType)) {
-    const rest = sel.split(',').filter((p) => !/\.bcard|#build-tabs|#btn-build|#banner-ok/.test(p));
+  // (So too a Viaduct or Ropeway, picked in Paths: Paths and its tool are done with.)
+  const placing = (p) => (p.match(/\.bcard\[data-t=['"]?(\w+)/) || p.match(/#banner-seg \[data-v=['"]?(viaduct|ropeway)/) || [])[1] === UI.placeType;
+  if (R.mode === 'place' && sel.split(',').some(placing)) {
+    const done = crossingPlacing() ? /\.bcard|#build-tabs|#btn-build|#banner-ok|#btn-road|#banner-seg/ : /\.bcard|#build-tabs|#btn-build|#banner-ok/;
+    const rest = sel.split(',').filter((p) => !done.test(p));
     return { sel: [...rest, '#banner-ok'].join(','), ring: null };
   }
   const c = coachTargetAll(g, sel);
@@ -2848,7 +2868,7 @@ function coachLeft(sel) {
   return sel.split(',').filter((p) => {
     const q = p.trim(), tab = q.match(/^#build-tabs \[data-g=['"]?(\w+)/);
     if (q === '#btn-build') return UI.sheetKind !== 'build';
-    if (q === '#btn-road') return R.mode !== 'road';
+    if (q === '#btn-road') return R.mode !== 'road' && !crossingPlacing();
     if (q === '#btn-attack') return UI.sheetKind !== 'army' && R.mode !== 'attack';
     if (tab && UI.sheetKind === 'build' && $('build-tabs')) { const b = $('build-tabs').querySelector(`[data-g="${tab[1]}"]`); return !(b && b.classList.contains('on')); }
     return true;
@@ -3035,8 +3055,12 @@ function renderStats() {
 
 /* ------------------------------------------------------------------ modes & banner */
 
-function setMode(mode) {
-  if (R.mode === 'road' && mode !== 'road') { dropDraft(); UI.routeGhost = null; } // a plan that was never built costs nothing
+function setMode(mode, keepPlan) {
+  // Leaving Paths drops a plan that was never built (it cost nothing). Placing a Viaduct or Ropeway from Paths keeps it
+  // (keepPlan; UI.planKept while it's placed) for when you're back in Paths; leaving that for anywhere else drops it.
+  if ((R.mode === 'road' || UI.planKept) && mode !== 'road' && !keepPlan) dropDraft();
+  if (R.mode === 'road' && mode !== 'road') UI.routeGhost = null;
+  UI.planKept = !!keepPlan && !draftEmpty();
   R.mode = mode;
   for (const m of ['road', 'place', 'attack', 'aim', 'land', 'airdrop']) document.body.classList.toggle('mode-' + m, mode === m);
   document.body.classList.toggle('mode-on', mode !== 'normal'); // (any mode: on an upright phone its banner takes the bottom bar's place)
@@ -3049,7 +3073,7 @@ function setMode(mode) {
   R.overlay = null;
   R.ropeEnd = null;
   UI.ropeA = null;
-  if (UI.pick) { UI.pick = 0; R.selected = 0; UI.selBot = 0; } // (a strike or shelling target picked by a finger and not confirmed)
+  if (UI.pick) { UI.pick = 0; UI.pickDeck = null; R.selected = 0; UI.selBot = 0; } // (a strike or shelling target picked by a finger and not confirmed)
   UI.placeType = null;
   UI.moveFrom = 0;
   $('btn-road').classList.toggle('on', mode === 'road');
@@ -3180,7 +3204,7 @@ function readyBomber(t) { return myBombers().find((u) => !u.mission && !u.flight
 /** Pick a target for bomber u on the map. */
 function startStrike(u) {
   closeSheet(); setMode('strike'); UI.bomber = u.id;
-  showBanner(`Tap an enemy building, or an enemy vehicle or robot out in the open: the <b>Strike Bomber</b> loads ${BOMBER.ammo} Ammo, flies out and drops its bomb, then comes home to rearm. It reaches ${planeReach(u)} tiles from its Airfield.`, null, 'Cancel');
+  showBanner(`Tap an enemy building (or the deck of an enemy Viaduct), or an enemy vehicle or robot out in the open: the <b>Strike Bomber</b> loads ${BOMBER.ammo} Ammo, flies out and drops its bomb, then comes home to rearm. It reaches ${planeReach(u)} tiles from its Airfield.`, null, 'Cancel');
 }
 
 /** A Cargo Plane parked at Airfield b with nothing to do, or null. */
@@ -3384,21 +3408,26 @@ function fireAimed() {
   });
 }
 
-/** Under a finger: the target of a bomber's strike or a Howitzer's shelling, picked by a tap and ringed, waiting for the banner's button (confirmBanner). */
-function pickTarget(t, html, okLabel) {
+/**
+ * Under a finger: the target of a bomber's strike or a Howitzer's shelling, picked by a tap and ringed, waiting for the
+ * banner's button (confirmBanner). `deck`: the tile of a Viaduct's deck a bomb is aimed at ({ i, j }), ringed too.
+ */
+function pickTarget(t, html, okLabel, deck) {
   UI.pick = t.id;
+  UI.pickDeck = deck || null;
+  if (deck) addFx('ring', deck.i + 0.5, deck.j + 0.5, { color: '#ff5a6e' });
   if (BDEFS[t.type]) { R.selected = t.id; UI.selBot = 0; } else { UI.selBot = t.id; R.selected = 0; }
   sfx('click');
   showBanner(html, okLabel, 'Cancel');
 }
 
-/** Send the bomber being given a target (UI.bomber) at t. */
-function strikePicked(t) {
+/** Send the bomber being given a target (UI.bomber) at t (`deck`: { i, j }, a tile of the deck of the Viaduct t is an end of). */
+function strikePicked(t, deck) {
   const u = getE(UI.bomber);
   if (!u || u.dead) { sfx('error'); showBanner('<span class="err">That bomber is gone.</span>', null, 'Cancel'); return; }
-  if (!t || t.dead) { sfx('error'); UI.pick = 0; showBanner('<span class="err">That target is gone: tap another.</span>', null, 'Cancel'); return; }
-  const tName = BDEFS[t.type] ? `the ${BDEFS[t.type].name}` : `a ${BOTS[t.type].name}`;
-  act('strike', [u.id, t.id], (why) => {
+  if (!t || t.dead) { sfx('error'); UI.pick = 0; UI.pickDeck = null; showBanner('<span class="err">That target is gone: tap another.</span>', null, 'Cancel'); return; }
+  const tName = deck ? `the ${BDEFS[t.type].name}'s deck` : BDEFS[t.type] ? `the ${BDEFS[t.type].name}` : `a ${BOTS[t.type].name}`;
+  act('strike', deck ? [u.id, t.id, deck.i, deck.j] : [u.id, t.id], (why) => {
     if (why) { sfx('error'); showBanner(`<span class="err">${why}</span>`, null, 'Cancel'); return; }
     sfx('order'); setMode('normal');
     toast(`Strike ordered on ${tName}: the bomber loads up and takes off.`, 'good');
@@ -3418,16 +3447,46 @@ function showBanner(html, okLabel, cancelLabel) {
   $('banner-ok').hidden = !okLabel;
   if (okLabel) $('banner-ok').textContent = okLabel;
   $('banner-cancel').textContent = cancelLabel || 'Cancel';
+  if (crossingPlacing()) crossingTools();
+}
+
+/** How it works, for the Viaducts and Ropeways tools in Paths. */
+const CROSSING_HOW = {
+  viaduct: () => `A Viaduct is a level bridge straight across a valley, canyon or water, from one clifftop to another ${VIA_MIN} to ${VIA_MAX} tiles away in the same row or column, no more than ${VIA_RISE} levels up or down, over ground lower than both ends${S.settings && SHAPE_PRESETS[S.settings.shape || 0].sky ? ' (on Sky islands, mesa top to mesa top)' : ''}. ` +
+    `It costs ${costText(BDEFS.viaduct.cost)} for every tile it spans (the Alloy rounded up), paid straight from storage as the goods come in, so no Hauler or road is needed and it doesn't count against the site limit; a Worker builds it out from the near end. ` +
+    'Everything drives across, trucks and Road Trains included (and trains, with track laid onto both ends), while life below carries on underneath. It\'s open to both sides, so enemy bots can cross it too, and a Strike Bomber can bomb its deck: two bombs bring it down.',
+  ropeway: () => `A Ropeway is a cable line with gondolas from a station by your roads straight across anything (cliffs, water, rock, down to a canyon floor) to a far end ${ROPE_MIN} to ${ROPE_MAX} tiles away on clear ground no rival holds. ` +
+    `It's an ordinary site (${costText(BDEFS.ropeway.cost)}): Haulers bring the goods to the near station, so lay a road to it. Once it's built the cable goes across and the far station goes up. ` +
+    'Haulers, Workers and warbots ride it as part of your road network; Freight Trucks, Road Trains and Crawlers are too heavy and keep to the roads.',
+};
+
+/**
+ * Placing a Viaduct or Ropeway, a Paths tool: the Paths tools stay on show with it picked, How it works for it, and in
+ * a mission the goal's hint (the goal list is hidden, as in Paths).
+ */
+function crossingTools() {
+  const type = UI.placeType;
+  $('banner-text').insertAdjacentHTML('beforeend', `<details class="how"${UI.howOpen === type ? ' open' : ''}><summary>How it works</summary><div class="how-text">${CROSSING_HOW[type]()}</div></details>`);
+  const det = $('banner-text').querySelector('details.how');
+  det.ontoggle = () => { UI.howOpen = det.open ? type : null; };
+  pathsSeg(type);
+  $('banner').classList.toggle('noplan', $('banner-ok').hidden);
+  bannerMissionHint();
 }
 
 function enterPlaceMode(type, moveFrom) {
+  // (Viaducts and Ropeways are Paths tools: the Paths banner's place and look, Paths lit, and a plan sketched there kept.)
+  const crossing = type === 'viaduct' || type === 'ropeway';
   closeSheet();
-  setMode('place');
+  setMode('place', crossing);
   UI.placeType = type;
   UI.moveFrom = moveFrom || 0;
+  document.body.classList.toggle('mode-road', crossing);
+  $('btn-road').classList.toggle('on', crossing);
   refreshOverlay(type);
-  showBanner(type === 'ropeway' ? 'Tap a highlighted spot for the Ropeway\'s <b>near station</b>, where your roads are. Then tap the far end.'
-    : type === 'viaduct' ? 'Tap a highlighted spot on a clifftop for the Viaduct\'s <b>near end</b>, where your roads are. Then tap the far end, across the valley.'
+  const have = playerGoods(ME);
+  showBanner(type === 'ropeway' ? `Tap a highlighted spot for the Ropeway's <b>near station</b>, where your roads are. Then tap the far end. ${costInline(BDEFS.ropeway.cost, have)}`
+    : type === 'viaduct' ? `Tap a highlighted spot on a clifftop for the Viaduct's <b>near end</b>, where your roads are. Then tap the far end, across the valley. ${costInline(BDEFS.viaduct.cost, have)} a tile spanned, paid from storage as the goods come in.`
     : moveFrom ? `Tap a highlighted spot to move the <b>${BDEFS[type].name}</b> to. It's put together there for free (it takes its build time), and the old one keeps working until then.`
     : `Tap a highlighted spot to place ${/^[AEIOU]/i.test(BDEFS[type].name) ? 'an' : 'a'} <b>${BDEFS[type].name}</b>.`, null, 'Cancel');
   if (!R.overlay.valid.some((v) => v)) {
@@ -3484,7 +3543,7 @@ function recallAllWarbots() {
 
 function confirmBanner() {
   if (R.mode === 'aim') { fireAimed(); return; }
-  if (R.mode === 'strike' && UI.pick) { strikePicked(getE(UI.pick)); return; }
+  if (R.mode === 'strike' && UI.pick) { strikePicked(getE(UI.pick), UI.pickDeck); return; }
   if (R.mode === 'bombard' && UI.pick) {
     const u = getE(UI.rocket), b = getE(UI.pick);
     if (!u || u.dead || !b || !rocketTarget(u, b)) { sfx('error'); UI.pick = 0; showBanner('<span class="err">That target is gone.</span> Tap an enemy building.', null, 'Cancel'); return; }
@@ -3499,13 +3558,14 @@ function confirmBanner() {
   if (R.mode === 'attack') { if (UI.armyCmd) { setMode('normal'); openArmySheet(); } else recallAllTap(); return; }
   if (R.mode === 'road') { commitDraft(); return; }
   if (R.mode === 'place' && (UI.placeType === 'ropeway' || UI.placeType === 'viaduct')) {
-    const A = UI.ropeA, E = R.ropeEnd;
+    const A = UI.ropeA, E = R.ropeEnd, type = UI.placeType;
     if (!A || !E || !E.ok) return;
-    act('link', [UI.placeType === 'viaduct' ? 'viaduct' : 'ropeway', A.i, A.j, E.i, E.j], (res) => {
+    act('link', [type, A.i, A.j, E.i, E.j], (res) => {
       if (!res.ok) { sfx('error'); showBanner(`<span class="err">${res.reason}</span>`, null, 'Cancel'); return; }
       sfx('place');
       addFx('ring', A.i + 0.5, A.j + 0.5, { color: PLAYER_COLORS[ME] });
-      setMode('normal');
+      // (Back to Paths when a plan sketched there is waiting for its Build, else to the map.)
+      if (UI.planKept) { setMode('road'); showRoadBanner(`${BDEFS[type].name} placed. Your plan is still here: tap Build for it.`, true); } else setMode('normal');
     });
     return;
   }
@@ -3578,6 +3638,26 @@ function buildingAtTap(i, j, wx, wy) {
   return null;
 }
 
+/**
+ * A crossing under a tap that isn't on one of its ends: a Viaduct whose deck runs over the tile (its end nearer the
+ * tap: viaductOver), or a Ropeway whose cable passes within half a tile (its station nearer the tap); or null. It's
+ * picked after any building or robot there (it spans what's below it).
+ */
+function crossingAtTap(i, j, wx, wy) {
+  const v = inMap(i, j) ? viaductOver(i, j) : null;
+  if (v) return v;
+  let best = null, bd = 0.25;
+  for (const b of S.buildings) {
+    if (b.dead || b.far || b.type !== 'ropeway' || !b.link) continue;
+    const o = getE(b.link);
+    if (!o || o.dead) continue;
+    const ax = b.x + 0.5, ay = b.y + 0.5, dx = o.x - b.x, dy = o.y - b.y;
+    const k = clamp(((wx - ax) * dx + (wy - ay) * dy) / (dx * dx + dy * dy || 1), 0, 1), d = dist2(ax + dx * k, ay + dy * k, wx, wy);
+    if (d < bd) { bd = d; best = k > 0.5 ? o : b; }
+  }
+  return best;
+}
+
 function onMapTap(i, j, wx, wy) {
   if (!UI.inGame || UI.paused) return;
   // The first tap on the map folds the goal card away on a small screen (it has been read; the map is wanted now).
@@ -3586,12 +3666,18 @@ function onMapTap(i, j, wx, wy) {
     const u = getE(UI.bomber);
     if (!u || u.dead) { setMode('normal'); return; }
     const b = buildingAtTap(i, j, wx, wy);
-    let t = b && foes(b.owner, ME) ? b : null;
+    let t = b && foes(b.owner, ME) ? b : null, deck = null;
     if (!t) { let bd = 0.5; for (const v of S.bots) { if (v.dead || !foes(v.owner, ME) || v.inside || BOTS[v.type].air) continue; const d = dist2(v.x, v.y, wx, wy); if (d < bd) { bd = d; t = v; } } }
-    if (!t) { sfx('error'); showBanner('<span class="err">Tap an enemy building, or an enemy vehicle or robot out in the open.</span>', null, 'Cancel'); return; }
+    // A Viaduct's deck: the bomb falls on the tile tapped and counts against the span. A Ropeway's cable: its nearer station.
+    if (!t) { const c = crossingAtTap(i, j, wx, wy); if (c && foes(c.owner, ME)) { t = c; if (BDEFS[c.type].viaduct) deck = { i, j }; } }
+    if (!t) { sfx('error'); showBanner('<span class="err">Tap an enemy building or Viaduct deck, or an enemy vehicle or robot out in the open.</span>', null, 'Cancel'); return; }
     // Under a finger the target is picked first (ringed on the map) and the banner's Strike sends the bomber; a mouse click sends it at once.
-    if (!INPUT.mouse) { pickTarget(t, `Strike ${BDEFS[t.type] ? `the ${playerName(t.owner)} <b>${BDEFS[t.type].name}</b>` : `this <b>${BOTS[t.type].name}</b>`}? The bomber loads up and takes off.`, 'Strike'); return; }
-    strikePicked(t);
+    if (!INPUT.mouse) {
+      pickTarget(t, deck ? `Strike the deck of the ${playerName(t.owner)} <b>Viaduct</b>? The bomb falls where you tapped, and two bring the span down.`
+        : `Strike ${BDEFS[t.type] ? `the ${playerName(t.owner)} <b>${BDEFS[t.type].name}</b>` : `this <b>${BOTS[t.type].name}</b>`}? The bomber loads up and takes off.`, 'Strike', deck);
+      return;
+    }
+    strikePicked(t, deck);
     return;
   }
   if (R.mode === 'fsail') {
@@ -3828,7 +3914,13 @@ function onMapTap(i, j, wx, wy) {
   // Everything under the tap: a rally flag, a building, then robots, nearest first. Tapping the same spot
   // again steps on to the next (a Crawler parked on a Foundry, a worker at a site, two warbots together).
   const stack = tapStack(rally, b, wx, wy);
-  if (stack.length) {
+  // A Viaduct's deck or a Ropeway's cable over the spot comes last; past it, what's on the ground below (see the end).
+  const cross = !b ? crossingAtTap(i, j, wx, wy) : null;
+  if (cross) stack.push({ kind: 'bld', e: cross, cross: true });
+  const L0 = UI.lastTap, again = L0 && Math.hypot(L0.wx - wx, L0.wy - wy) < 0.7, t0 = inMap(i, j) ? tIdx(i, j) : -1;
+  const below = t0 >= 0 && (postAt(t0) || uplinkAt(t0) || S.res[t0] || (S.fert[t0] && S.terrain[t0] === T_GROUND) || (S.road[t0] && wayOwner(t0) === 0));
+  const pastCross = cross && again && below && UI.sheetKind === 'bld' && UI.sheetFor === cross.id;
+  if (stack.length && !pastCross) {
     const L = UI.lastTap;
     let k = 0;
     if (L && Math.hypot(L.wx - wx, L.wy - wy) < 0.7) {
@@ -4506,20 +4598,13 @@ function showRoadBanner(problem, info) {
   const det = $('banner-text').querySelector('details.how');
   det.ontoggle = () => { UI.howOpen = det.open ? mode : null; };
   if (UI.howOpen !== mode) UI.howOpen = null;
-  $('banner-seg').hidden = false;
-  for (const btn of $('banner-seg').children) {
-    btn.classList.toggle('on', btn.dataset.v === mode);
-    if (btn.dataset.v === 'wall') btn.hidden = !warOn();
-    btn.onclick = () => { UI.roadMode = btn.dataset.v; sfx('click'); showRoadBanner(); };
-  }
+  pathsSeg(mode);
   // Undo, Clear and Build for a plan.
   const drafting = !draftEmpty(), turned = UI.draft.strokes.some((st) => st.some((o) => o.op === 'dir'));
   $('banner').classList.toggle('noplan', !drafting); // (a phone gives the plan's buttons a row only when there's a plan: Undo alone, for arrows, fits the tools' row)
   $('banner-undo').hidden = !drafting && !turned;
   $('banner-clear').hidden = !drafting;
   $('banner-ok').hidden = !drafting;
-  // The tools are one row to swipe along on a phone: the one in use is brought into view when it changes.
-  if (UI.segShown !== mode) { UI.segShown = mode; const on = $('banner-seg').querySelector('.on'); if (on && on.scrollIntoView) on.scrollIntoView({ block: 'nearest', inline: 'center' }); }
   if (drafting) {
     const sm = draftSummary();
     const wl = sm.walls + sm.gates;
@@ -4542,14 +4627,29 @@ function showRoadBanner(problem, info) {
   rb.classList.toggle('on', routeOn());
   // (UI.roadMode = mode: in a new game no tool has been picked yet, and Route to stayed off however often it was tapped)
   rb.onclick = () => { UI.roadMode = mode; UI.route = !UI.route; UI.routeGhost = null; UI.routePrev = null; sfx('click'); showRoadBanner(); };
-  if (R.traffic) $('banner-text').innerHTML += ` <span class="traffic-key">${trafficSummary()}</span>`;
-  // In a mission, the next goal's hint (the goal list is hidden while Paths is open).
-  const M = S && S.mission, def = M && !M.result && missionDef(M);
-  if (def) {
-    const states = missionStates(M), now = missionGoalNow(states);
-    const h = now >= 0 && missionHint(def, M, states, now);
-    if (h) $('banner-text').innerHTML += `<div class="obj-hint ban-hint"><b>${states[now].text}:</b> ${h}</div>`;
+  if (R.traffic) $('banner-text').insertAdjacentHTML('beforeend', ` <span class="traffic-key">${trafficSummary()}</span>`);
+  bannerMissionHint();
+}
+
+/** The Paths tools row (#banner-seg) on show, with `mode` picked (Walls only with war on); each button opens its tool. */
+function pathsSeg(mode) {
+  $('banner-seg').hidden = false;
+  for (const btn of $('banner-seg').children) {
+    btn.classList.toggle('on', btn.dataset.v === mode);
+    if (btn.dataset.v === 'wall') btn.hidden = !warOn();
+    btn.onclick = () => openPaths(btn.dataset.v);
   }
+  // The tools are one row to swipe along on a phone: the one in use is brought into view when it changes.
+  if (UI.segShown !== mode) { UI.segShown = mode; const on = $('banner-seg').querySelector('.on'); if (on && on.scrollIntoView) on.scrollIntoView({ block: 'nearest', inline: 'center' }); }
+}
+
+/** In a mission, the next goal's hint at the foot of the banner (the goal list is hidden while Paths is open). */
+function bannerMissionHint() {
+  const M = S && S.mission, def = M && !M.result && missionDef(M);
+  if (!def) return;
+  const states = missionStates(M), now = missionGoalNow(states);
+  const h = now >= 0 && missionHint(def, M, states, now);
+  if (h) $('banner-text').insertAdjacentHTML('beforeend', `<div class="obj-hint ban-hint"><b>${states[now].text}:</b> ${h}</div>`);
 }
 
 /** A Rail Station's place on its line, what it stocks automatically, and its conveyors (panel text). */
@@ -4743,9 +4843,9 @@ function openBuildMenu() {
     <div class="build-grid">${nextBuilds().filter((t) => list.includes(t)).map((t) => `<button class="bcard next" data-t="${t}" data-g="next" ${sites >= MAX_SITES ? 'disabled' : ''}>
       <img src="${iconFor(t)}" alt=""><div class="bname">${BDEFS[t].name}</div><div class="bcost">${costHTML(BDEFS[t].cost, have)}</div>
       <div class="bhave">${ownedText(t)}</div></button>`).join('')}<button class="bcard roads" id="build-roads" data-g="move"><kbd data-key="R">R</kbd><svg viewBox="0 0 24 24"><path d="M8 3L5 21M16 3l3 18M12 4v3M12 10.5v3M12 17v3" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
-      <div class="bname">Roads</div><div class="bhave">Plan roads, bridges and ramps</div></button>${warOn() ? `<button class="bcard walls" id="build-walls" data-g="defend"><kbd data-tab="${BUILD_TAB_KEYS.defend}" data-key="X">X</kbd><img src="${iconFor('wall')}" alt=""><div class="bname">Walls</div><div class="bcost">${costHTML(BDEFS.wall.cost, have)}</div>
+      <div class="bname">Roads</div><div class="bhave">Roads, bridges, ramps, Viaducts and Ropeways</div></button>${warOn() ? `<button class="bcard walls" id="build-walls" data-g="defend"><kbd data-tab="${BUILD_TAB_KEYS.defend}" data-key="X">X</kbd><img src="${iconFor('wall')}" alt=""><div class="bname">Walls</div><div class="bcost">${costHTML(BDEFS.wall.cost, have)}</div>
       <div class="bhave">${wallCountText()}</div></button>` : ''}${ordered.map((t) => `<button class="bcard" data-t="${t}" data-g="${groupOf(t)}" ${sites >= MAX_SITES ? 'disabled' : ''}>
-      ${kbd(t)}<img src="${iconFor(t)}" alt=""><div class="bname">${BDEFS[t].name}</div><div class="bcost">${costHTML(BDEFS[t].cost, have)}${t === 'viaduct' ? ' a tile' : ''}</div>
+      ${kbd(t)}<img src="${iconFor(t)}" alt=""><div class="bname">${BDEFS[t].name}</div><div class="bcost">${costHTML(BDEFS[t].cost, have)}</div>
       <div class="bhave">${ownedText(t)}</div></button>`).join('')}</div>`;
   openSheet('build', 0, html);
   for (const el of $('sheet-body').querySelectorAll('.bcard[data-t]')) {
@@ -6522,7 +6622,7 @@ function updateHUD() {
     // keep build-menu affordability current without rebuilding the buttons
     for (const el of $('sheet-body').querySelectorAll('.bcard[data-t]')) {
       const cost = BDEFS[el.dataset.t].cost;
-      el.querySelector('.bcost').innerHTML = costHTML(cost, goods) + (el.dataset.t === 'viaduct' ? ' a tile' : '');
+      el.querySelector('.bcost').innerHTML = costHTML(cost, goods);
       const have = el.querySelector('.bhave');
       const txt = ownedText(el.dataset.t);
       if (have.textContent !== txt) have.textContent = txt;

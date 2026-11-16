@@ -132,7 +132,8 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
 | Nuclear Reactor | 2 Uranium → 1 **Enriched Uranium** (Nuclear race) |
 | Nuclear Silo | 6 Enriched Uranium + 4 Alloy + 2 Chips → one nuclear missile; fires 40 tiles (Nuclear race) |
 | Research Lab | Researches colony-wide upgrades with Chips, Crystal and Alloy (Colony) |
-| Ropeway | Two stations joined by a cable straight across cliffs, water or rock; light bots ride it |
+| Ropeway | Placed in Paths: two stations joined by a cable straight across cliffs, water or rock; light bots ride it |
+| Viaduct | Placed in Paths: a level bridge straight across a valley between two clifftops; every bot crosses it |
 
 - **Cement builds the colony.** Nearly every building costs Cement, and so does every road. Only the Quarry (2 Fiber)
   and the Cement Works (4 Stone, 2 Fiber) are built from raw materials, so you can always restart. Stone goes into
@@ -257,13 +258,18 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   An audit of 35-minute autopilot games: trucks were busy 18–60% before these rules and 76–92% after, Haulers made
   about half as many long trips, and about a quarter more goods moved.
 - **Ropeways** (`ROPE_*` in `js/defs.js`; `ropeLink`, `placeRopeway`, `ropewayAcross`): two stations 3–14 tiles apart
-  joined straight across anything. The near station is the construction site (it takes the whole cost); when it's built
+  joined straight across anything. Placed from Paths, not the Build menu: the **Ropeways** tool (**Shift+Y**), two taps
+  (`ropewayTap`, the `link` order), like the Viaducts tool below. The near station is the construction site (it takes the whole cost); when it's built
   the far one goes up (`b.link` both ways). To the pathfinder a ride is an extra edge between the station tiles
   (`ROPE_COST` × a paved road of that length); zones and the road network join across it (`roadNet().comp`), but not for
   trucks (`compT`, `truckLinked`, `routeOpts.noRope`). Riders move at `ROPE_SPEED` (`u.ride`) and are drawn in gondolas.
 - **Viaducts** (`VIA_*` in `js/defs.js`; `viaductBlocked`, `placeViaduct`, `viaductAcross` in `js/sim.js`; `viaLink` in
   `js/world.js`): two abutment buildings joined straight across lower ground, like a Ropeway's stations but level and
-  open to every bot. Paid up front (`prepaid`, its cost per site in `b.cost`, read with `siteCost`), built in
+  open to every bot. Placed from Paths, not the Build menu: the **Viaducts** tool (**Shift+V**) starts the same two-tap
+  placement a building card does (`enterPlaceMode`, `viaductTap`, the `link` order: `R.mode` is `'place'`), with the
+  Paths tools kept on show (`crossingTools`, `pathsSeg`) and a road plan sketched in Paths kept meanwhile
+  (`setMode(mode, keepPlan)`, `UI.planKept`): Cancel or the Viaduct placed goes back to it. (Their `BDEFS` stay: old
+  saves and the AI build Viaducts through the sim; the AI never builds a Ropeway.) Paid up front (`prepaid`, its cost per site in `b.cost`, read with `siteCost`), built in
   `VIA_TIME` seconds a tile spanned (`b.buildTime`). To the pathfinder it's an edge between the abutment tiles at
   plain-road cost; zones, both road networks (`comp` and `compT`) and the railway (`railNbrs`) join across it. A bot
   out on the deck drives as if on the abutment it left (`moveAlong`), so the ground below is untouched and its traffic
@@ -312,6 +318,12 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   drop goes back into Ammo. Flak Guns shoot it down. The AI (not a Warden) builds an Airfield from 22 minutes with its Ammo
   Plant running, one bomber, and a sortie at most every `AI_BOMB_GAP` (240) s at the most valuable building or loaded
   Tanker no Flak covers (`aiBomber`, `AI_BOMB_VALUE`).
+  A Viaduct's deck can be bombed: a tap on a deck tile (`crossingAtTap` / `viaductOver`, which also make a tap on a deck
+  or a Ropeway's cable select its nearer end) sends the `strike` order with that tile; the mission keeps it
+  (`u.mission.deck`), the bomber flies there (`strikeAim`) and the bomb (`m.deck`) falls on it. It counts against the
+  span: `damage` off the end nearer it, or the other end if that's the weaker (`deckBombEnd`), so two bombs anywhere on
+  a deck bring it down (an end's `armor` is 24, and one end falling takes the other). The check that holds a bomb when
+  those already falling will finish the target reckons a Viaduct as a span (`spanDoomed`).
 - **Flak Guns** (4 Cement, 3 Alloy; Build → Defend; Versus): a twin anti-aircraft gun (`def.flak`, `updateFlak`). It
   tracks the nearest enemy aircraft in the air within 7 tiles (`aircraftNear`; never one on the ground, never a robot)
   and every `reload` s fires a salvo of `salvo` shells, each led to where the plane will be when it gets there (shell
@@ -1082,7 +1094,8 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   letter on a card (`BUILD_KEYS` in js/ui.js: letters are per tab, so every building has one and none needs W, A, S, D, B
   or R; on All a card shows "2 K"; **B R** lays roads, **B X** walls), **R** (or **P**) opens and closes Paths
   and inside it picks a tool (**R** roads, **G** bridges
-  and tunnels, **V** ramps, **E** pave, **O** one-way arrows, **L** junctions, **X** walls, **T** traffic map), **Q** army, **C** recall all warbots, **F** select all warbots, **Shift+F** a Bot Foundry's Order bots list from anywhere without moving the map (again: the next Foundry, `openFoundryOrders`), **J** latest alert,
+  and tunnels, **V** ramps, **Shift+V** viaducts, **Shift+Y** ropeways (`PATHS_SHIFT_KEYS`: every plain letter is taken),
+  **E** pave, **O** one-way arrows, **L** junctions, **X** walls, **T** traffic map), **Q** army, **C** recall all warbots, **F** select all warbots, **Shift+F** a Bot Foundry's Order bots list from anywhere without moving the map (again: the next Foundry, `openFoundryOrders`), **J** latest alert,
   **H** base, **I** statistics, **U** robots, **Y** goods, **[ ]** speed, **+/−** zoom, **M** minimap, **Enter** the banner's main
   button, panel buttons by the key shown on them (`SHEET_KEYS`; **Delete** twice demolishes), **Space** pause, **Esc** back / clear selection (in Paths it takes back the last stroke; **Ctrl+Z** is Undo there), **Alt+Enter**
   full screen (also a top-bar button and a pause-menu item). Chrome opens the installed app in a plain window on a

@@ -4621,6 +4621,7 @@ function render(dtReal) {
     if ((R.mode === 'road' && UI.roadMode === 'pave') || (selB && selB.type === 'roadworks' && selB.owner === ME) || UI.sheetKind === 'road') drawPaveMarks(ctx, ox, oy, z, inView);
   }
   if (R.mode === 'road') { drawDraft(ctx, ox, oy, z, inView); drawRouteGhost(ctx, ox, oy, z); }
+  else if (typeof UI !== 'undefined' && UI.planKept) drawDraft(ctx, ox, oy, z, inView); // (a Paths plan, kept while a Viaduct or Ropeway is placed)
   drawLights(ctx, ox, oy, z, inView);
   drawOverpasses(ctx, ox, oy, z, inView);
   if (R.traffic && R.mode === 'road') drawTraffic(ctx, ox, oy, z, inView);

@@ -517,7 +517,7 @@ const SHAPE_PRESETS = [
   { name: 'Islands', group: 'water', blurb: 'Each base on its own island, with two or three medium islands between, a wide sea apart: cross by ship, or by long, dear bridges.', w: 1.15, h: 1.45, islands: true, naval: true, ffa: true, tip: 'Islands: a wide sea between the islands. Build a Port on your shore and order ships and a Ferry at its shipyard (a Ferry can land warbots on any shore), or push an Outpost out to your shore and build a bridge in Paths (Bridges): long ones cost a lot.' },
   { name: 'Crater', group: 'heights', blurb: 'The richest fields lie in a sunken crater in the middle, with one ramp down on each side.', w: 1, h: 1, crater: true, minLevels: 3, ffa: true, tip: 'Crater: the richest fields lie on the crater floor in the middle. One ramp leads down on your side; cut more in Paths (Ramps).' },
   { name: 'Plateaus', group: 'heights', blurb: 'Each base on a high plateau ringed by cliffs, with only two slopes down: easy to hold, slow to break out of.', w: 1, h: 1, plateau: true, minLevels: 3, ffa: true, tip: 'Plateaus: your base stands on high ground with only two slopes down. Easy to hold: wall the slopes and push out.' },
-  { name: 'Sky islands', group: 'heights', blurb: 'Mesas standing over a canyon floor far below: cross between the clifftops on Viaducts.', w: 1.15, h: 1.45, islands: true, sky: true, ffa: true, tip: 'Sky islands: a home mesa each and around a dozen smaller mesas between, a chain of them always linking the sides, over a canyon floor far below, with sheer drops and no slopes down; deposits on the mesas hold more. Cross between clifftops with Viaducts (Build menu); a Ropeway can reach the floor, but there is little down there.' },
+  { name: 'Sky islands', group: 'heights', blurb: 'Mesas standing over a canyon floor far below: cross between the clifftops on Viaducts.', w: 1.15, h: 1.45, islands: true, sky: true, ffa: true, tip: 'Sky islands: a home mesa each and around a dozen smaller mesas between, a chain of them always linking the sides, over a canyon floor far below, with sheer drops and no slopes down; deposits on the mesas hold more. Cross between clifftops with Viaducts (Paths); a Ropeway (Paths too) can reach the floor, but there is little down there.' },
   { name: 'Rift', group: 'divided', blurb: 'A chasm splits the planet, crossed only by a few natural rock arches: hold yours.', w: 1, h: 1, rift: true, tip: 'Rift: a chasm splits the planet, crossed only by a few natural rock arches. Hold your arches with turrets and Mortar Pits; a bridge over the chasm is the slow way to open another crossing.' },
   { name: 'Ring valley', group: 'divided', blurb: 'A massif too steep to climb fills the middle, with a valley round it on each side: two long ways round.', w: 1, h: 1.1, ring: true, tip: 'Ring valley: a massif too steep to climb fills the middle, and a valley runs round it on each side. Two long ways round: fortify one, raid along the other. (A long tunnel through the massif is the only shortcut.)' },
   { name: 'Oases', group: 'open', blurb: 'A barren, crag-strewn waste with a few rich oases joined by narrow passes: an expansion race.', w: 1.05, h: 1.05, oases: true, tip: 'Oases: a barren, crag-strewn waste. Everything worth having is round your base and in a few rich oases joined by narrow passes: grab them first, and guard the long supply lines.' },
@@ -973,14 +973,14 @@ const BDEFS = {
   },
 };
 
-/** Order of the build menu. */
+/** Order of the build menu. (Viaducts and Ropeways aren't in it: they're placed from Paths, like Ramps and Walls.) */
 const BUILD_MENU = ['harvester', 'quarry', 'mine', 'tap', 'smelter', 'fab', 'foundry', 'charger', 'farm', 'pump', 'refinery', 'generator',
-  'kiln', 'tarworks', 'roadworks', 'ropeway', 'viaduct', 'station', 'port', 'airfield', 'outpost', 'turret', 'minigun', 'bunker', 'keep', 'disruptor', 'mortar', 'flak', 'repair', 'armory', 'munitions', 'silo', 'reactor', 'nukesilo', 'depot', 'grower', 'lab', 'terminal'];
+  'kiln', 'tarworks', 'roadworks', 'station', 'port', 'airfield', 'outpost', 'turret', 'minigun', 'bunker', 'keep', 'disruptor', 'mortar', 'flak', 'repair', 'armory', 'munitions', 'silo', 'reactor', 'nukesilo', 'depot', 'grower', 'lab', 'terminal'];
 /** Build-menu tabs: what each building is for. */
 const BUILD_GROUPS = [
   { key: 'gather', name: 'Gather', types: ['harvester', 'quarry', 'mine', 'tap', 'grower', 'farm', 'pump'] },
   { key: 'make', name: 'Make', types: ['kiln', 'smelter', 'fab', 'refinery', 'tarworks', 'foundry', 'armory', 'munitions', 'reactor', 'lab', 'generator'] },
-  { key: 'move', name: 'Move', types: ['charger', 'depot', 'roadworks', 'ropeway', 'viaduct', 'station', 'port', 'airfield', 'terminal'], roads: true },
+  { key: 'move', name: 'Move', types: ['charger', 'depot', 'roadworks', 'station', 'port', 'airfield', 'terminal'], roads: true },
   { key: 'defend', name: 'Defend', types: ['outpost', 'turret', 'minigun', 'bunker', 'keep', 'disruptor', 'mortar', 'flak', 'repair', 'silo', 'nukesilo'], walls: true },
 ];
 const BUNKER_FIRE = 0.9; // seconds between shots for each warbot in a Bunker (or a Keep)
