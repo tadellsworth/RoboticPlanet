@@ -1091,6 +1091,17 @@ canvas.chart.small { height: 110px; }
 .mp-players small { color: var(--muted); }
 .mp-players li.off { opacity: 0.55; }
 .mp-players li.ai .nm { font-weight: 400; color: var(--muted); }
+/* A computer's doctrine in the lobby: the host picks it (a dropdown), the others see it; the line under the list says
+   how the one last picked or pointed at plays. */
+.mp-players .mp-doc { flex: none; max-width: 46%; -webkit-appearance: none; appearance: none; margin: 0; padding: 5px 22px 5px 10px; border-radius: 999px; border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.05) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.5l5 5 5-5' fill='none' stroke='%23aab2c0' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") no-repeat right 8px center / 10px 7px;
+  color: var(--text); font-family: inherit; font-size: 13px; font-weight: 700; cursor: pointer; text-overflow: ellipsis; }
+.mp-players .mp-doc:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.mp-players .mp-doc option { background: #1b1e27; color: #e8ecf2; }
+.mp-players .mp-docname { color: var(--text); font-weight: 700; }
+.mp-docnote { margin: 0; font-size: 12.5px; line-height: 1.4; color: var(--muted); }
+.mp-docnote[hidden] { display: none; }
+.mp-docnote b { color: #d4dae4; }
 .mp-sum { margin: 0; font-size: 14px; color: var(--text); }
 .mp-banner {
   position: fixed; z-index: 30; left: 50%; transform: translateX(-50%); bottom: calc(var(--safe-b) + 108px);
@@ -1195,6 +1206,22 @@ canvas.chart.small { height: 110px; }
 .m-vnote { margin: -4px 0 6px 96px; font-size: 12.5px; line-height: 1.35; color: var(--muted); text-wrap: pretty; }
 @media (max-width: 420px) { .m-vnote { margin-left: 86px; } }
 @media (max-width: 359px) { .m-vnote { margin-left: 2px; } }
+/* Rival doctrine: the line under the doctrines says in depth how the one under the mouse (or focused, or last picked)
+   plays; it keeps the height of the longest (sizeInfoLines), so nothing below it moves. The section's full width. */
+.m-vnote.m-docnote { margin: 0 2px 4px; }
+.m-docnote b { color: #d4dae4; font-weight: 700; }
+.m-docnote i { color: #c4cad4; }
+/* Each rival (three or four players): a dropdown for each computer player, behind its colour (on a phone, its own picker). */
+.m-seats { display: flex; flex-wrap: wrap; gap: 4px; min-width: 0; }
+.m-seat { position: relative; display: flex; align-items: center; flex: 1 1 88px; min-width: 0; max-width: 150px; }
+.m-seat[hidden] { display: none; }
+.m-seat .dot { position: absolute; left: 9px; top: 50%; width: 10px; height: 10px; margin-top: -5px; border-radius: 50%; pointer-events: none; box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.35); }
+.m-seat select { width: 100%; min-width: 0; -webkit-appearance: none; appearance: none; margin: 0; padding: 5px 20px 5px 25px; border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 999px;
+  background: rgba(255, 255, 255, 0.05) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.5l5 5 5-5' fill='none' stroke='%23aab2c0' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") no-repeat right 8px center / 10px 7px;
+  color: var(--text); font-family: inherit; font-size: 13px; font-weight: 700; line-height: 1.3; cursor: pointer; text-overflow: ellipsis; }
+.m-seat select:hover { border-color: rgba(255, 255, 255, 0.22); }
+.m-seat select:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.m-seat select option { background: #1b1e27; color: #e8ecf2; }
 
 /* A link dressed as a button (the illustrated manual, on the How to play screen). */
 a.btn { display: block; text-align: center; text-decoration: none; color: inherit; }

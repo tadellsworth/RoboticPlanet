@@ -1920,18 +1920,24 @@ function newGame(opts) {
   if (mode === 'versus' && !opts.mission && !opts.layout && !S.teams && VICTORY[opts.victory] && opts.victory !== 'capture') S.victory = opts.victory;
   // Wildlife (see WILD): Colony free play only; the nests go down once the landing site is in.
   if (mode === 'colony' && opts.wildlife && !opts.layout && !opts.setup) S.wildlife = true;
-  // Each rival AI's personality: the one asked for, or (with 'random') a different one each, picked
-  // from the planet's seed. Missions and tests that don't ask get Balanced.
+  // Each computer player's doctrine (PERSONALITIES): opts.styles names one for each computer player in turn (the
+  // computer's colonies in player order: in Custom Game players 1, 2, 3; in multiplayer the ones nobody took), else
+  // opts.style names one for them all. 'random' deals one at random, picked from the planet's seed, that no other
+  // computer player has (the ones asked for by name are taken out first). Missions and tests that don't ask get the
+  // Steward (balanced). (Only from the game's setup, so every device in a multiplayer game deals the same ones.)
   {
     const rng = makeRng(seed ^ 0x2f6a1c3b);
-    const pool = PERSONALITY_ORDER.slice();
+    const seats = S.players.filter((P) => P.ai && !P.absent && rival(P.id));
+    const want = (P) => { const k = Array.isArray(opts.styles) ? opts.styles[seats.indexOf(P)] : undefined; return isDoctrine(k) || k === 'random' ? k : opts.style; };
+    const pool = PERSONALITY_ORDER.filter((k) => !seats.some((P) => want(P) === k));
     for (const P of S.players) {
       if (!P.ai || P.absent) continue;
-      if (P.id === 0) { P.style = 'balanced'; continue; }
-      if (PERSONALITIES[opts.style]) { P.style = opts.style; continue; }
-      if (opts.style !== 'random') { P.style = 'balanced'; continue; }
-      const k = Math.floor(rng() * pool.length);
-      P.style = pool.splice(k, 1)[0];
+      if (P.id === 0 || !rival(P.id)) { P.style = 'balanced'; continue; }
+      const k = want(P);
+      if (isDoctrine(k)) { P.style = k; continue; }
+      if (k !== 'random') { P.style = 'balanced'; continue; }
+      if (!pool.length) pool.push(...PERSONALITY_ORDER); // (more on Random than doctrines left over: they may repeat)
+      P.style = pool.splice(Math.floor(rng() * pool.length), 1)[0];
     }
     for (const P of S.players) if (P.style && PERSONALITIES[P.style].econ) P.mult *= PERSONALITIES[P.style].econ;
   }
@@ -4112,6 +4118,8 @@ function deserializeGame(json) {
   for (const k in TYPED_FIELDS) o[k] = MAP_LAYERS.includes(k) && !o[k] ? null : TYPED_FIELDS[k].from(o[k]); // (a map's optional layers are null when it has none)
   o.hist = o.hist || newHistory();
   for (const P of o.players) { P.made = P.made || {}; P.madeBots = P.madeBots || {}; P.stats.outposts = P.stats.outposts || 0; P.stats.startBots = P.stats.startBots ?? 18; }
+  // Each computer player keeps its own doctrine (saved as `style`); one the game doesn't know (a damaged file) plays as a Steward.
+  for (const P of o.players) if (P.style !== undefined && !isDoctrine(P.style)) P.style = 'balanced';
   o.fx = []; o.decals = []; o.msgs = []; o.dirtyTiles = [];
   o.rallies = o.rallies || [];
   o.loot = o.loot || [];

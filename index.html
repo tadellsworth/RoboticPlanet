@@ -180,10 +180,13 @@
                 <button type="button" role="radio" data-v="hard">Hard</button>
               </div>
             </div>
-            <div class="m-row" id="m-style-row"><span class="m-rl" id="m-l-style">Rival style</span>
+            <div class="m-row" id="m-style-row"><span class="m-rl" id="m-l-style">Rival doctrine</span>
               <div class="chips m-chips" id="m-style" role="radiogroup" aria-labelledby="m-l-style"></div>
             </div>
-            <p class="m-vnote" id="m-style-note" aria-live="polite"></p>
+            <div class="m-row" id="m-seats-row" hidden><span class="m-rl" id="m-l-seats">Each rival</span>
+              <div class="m-seats" id="m-seats" role="group" aria-labelledby="m-l-seats"></div>
+            </div>
+            <p class="m-vnote m-docnote" id="m-style-note" aria-live="polite"></p>
             <p class="m-info" id="m-mode-desc" aria-live="polite"></p>
             <p class="m-note" id="m-players-note" hidden></p>
           </section>
@@ -283,6 +286,7 @@
       </div>
       <div class="section-label">Players</div>
       <ul id="mp-players" class="mp-players"></ul>
+      <p class="mp-docnote" id="mp-docnote" aria-live="polite" hidden></p>
       <div class="section-label">Game</div>
       <p class="mp-sum" id="mp-sum"></p>
       <button type="button" id="mp-settings" class="btn">Change settings</button>
@@ -596,7 +600,7 @@
           <li>Alloy, Chips and Ammo are only ever bought. Cement only buys made goods (Alloy, Chips, Ammo), no contract sells a made good for its own ingredients (no Cement for Stone), and none trades a good down for a much cheaper one.</li>
           <li>It pays 65% of what the goods are worth, so it never beats making them, plus 1.5% for every tile the post stands beyond 16 from your Command Base (up to a quarter more). Each lot of a good you sell fetches less for a while after.</li>
         </ul>
-        <p>Tap <b>Take</b> on a contract and only the big carriers serve it: <b>Road Trains</b> bring the lot from your storage (or <b>Freight Trains</b>, with track beside the Terminal), never Haulers or Freight Trucks. Once the whole lot is in, the trade goes through, and what it paid waits at the Terminal until a Road Train or train takes it home: you can't spend it before then. It's how a big surplus buys the Ore or Crystal your land runs short of late in a game. Rivals dock when they run short of something, from about 20 minutes in (a Tycoon sooner).</p>
+        <p>Tap <b>Take</b> on a contract and only the big carriers serve it: <b>Road Trains</b> bring the lot from your storage (or <b>Freight Trains</b>, with track beside the Terminal), never Haulers or Freight Trucks. Once the whole lot is in, the trade goes through, and what it paid waits at the Terminal until a Road Train or train takes it home: you can't spend it before then. It's how a big surplus buys the Ore or Crystal your land runs short of late in a game. Rivals dock when they run short of something, from about 20 minutes in (an Architect sooner).</p>
         <a class="help-top" href="#hs-top" data-jump="hs-top">Back to top</a>
       </section>
 
@@ -677,7 +681,7 @@
           <li>Walls stop every bot, even a diagonal line of them. Your own bots drive through your Gates; enemy warbots have to go round or shoot their way through (a Wall takes 40 hits, a Gate 32, and a Missile knocks 24 off: two break one open), burning Ammo while your turrets pick them off. A wrecked Gate leaves its road behind.</li>
           <li>Walls are best across a narrow pass, with turrets just behind.</li>
         </ul>
-        <p><b>The rival defends too.</b> Beside a fort under attack it builds whichever of Minigun Nest, Bunker, Mortar Pit or Disruptor it has fewest of, and from about 10 minutes in it puts a Minigun Nest or Bunker by its front fort without waiting to be hit. Most rivals build a Keep about a quarter of an hour in (a Turtle its first early, and up to three), put up Flak once you have an Airfield, and may wall the side that faces you. On Chokepoint maps the rival walls its end of the pass, from Medium up.</p>
+        <p><b>The rival defends too.</b> Beside a fort under attack it builds whichever of Minigun Nest, Bunker, Mortar Pit or Disruptor it has fewest of, and from about 10 minutes in it puts a Minigun Nest or Bunker by its front fort without waiting to be hit. Most rivals build a Keep about a quarter of an hour in (a Warden its first early, and up to three), put up Flak once you have an Airfield, and may wall the side that faces you. On Chokepoint maps the rival walls its end of the pass, from Medium up.</p>
         <a class="help-top" href="#hs-top" data-jump="hs-top">Back to top</a>
       </section>
 
@@ -708,7 +712,7 @@
           <li>or tap an enemy building, or a truck, Tanker, ship or robot out in the open, and press <b>Bomb it</b> (<kbd>Z</kbd>).</li>
         </ul>
         <p>It loads 6 Ammo and Fuel at its Airfield, flies out (chasing a moving target), drops one heavy bomb and flies home to rearm, which takes 25 seconds. The bomb knocks 14 off a building (Command Bases and Keeps no lower than about a third) and hurts what's round it, and a Tanker it hits explodes. Send two at one target and the second, if the first will finish it, brings its bomb home.</p>
-        <p><b>Flak Guns</b> are the answer: a plane gets through one quick pass hurt, but not circling over a few of them. While enemy bombers are in the air coming for you, an <b>air raid siren</b> wails. A rival other than the Turtle builds an Airfield late in a war (about 22 minutes in) and sends a bomber now and then at something valuable that no Flak covers.</p>
+        <p><b>Flak Guns</b> are the answer: a plane gets through one quick pass hurt, but not circling over a few of them. While enemy bombers are in the air coming for you, an <b>air raid siren</b> wails. A rival other than a Warden builds an Airfield late in a war (about 22 minutes in) and sends a bomber now and then at something valuable that no Flak covers.</p>
         <p><b>Beach landings.</b> From a Port's panel a Ferry can land warbots: choose how many (up to six), press <b>Choose the beach</b> and tap any shore it can sail to, the rival's too; they hold the beach under a rally flag. With a mouse you can also select warbots and right-click the Ferry to have them board. A Ferry sunk with warbots aboard takes them down with it. The rival makes landings too.</p>
         <p><b>Sinking ships.</b> Pulse Turrets, Bunkers, Minigun Nests, Keeps, Mortar Pits, Missiles and Strike Bombers can sink ships; warbots can't shoot at them. A Tanker Ship sunk with a load explodes.</p>
         <p><b>Armoured trains</b> (see Freight rail) carry their own pulse cannon and flak gun, and your Workers and Haulers keep clear of an enemy one's cannon.</p>
@@ -724,7 +728,15 @@
           <li><b>Normal</b>: the full game.</li>
           <li><b>Hard</b>: works 30% faster, lands with 6 more of every good, and attacks early and often.</li>
         </ul>
-        <p><b>Rival style</b> picks its personality. <b>Balanced</b> (the usual) builds up, defends and attacks in good measure. A <b>Turtle</b> walls its base in, keeps adding turrets (up to six) and comes late with a big army. A <b>Raider</b> sends small bands to tear up your supply roads, again and again, from early on. A <b>Rusher</b> comes for you early, before its economy is big: get turrets and garrisons up fast. A <b>Tycoon</b> builds a big economy first, then rains Missiles on you (and races for the bomb). <b>Random</b> gives each rival a different one. The briefing card and the rival's Command Base panel tell you which you face.</p>
+        <p><b>Rival doctrine</b> picks how the computer plays. Every rival Command has spent decades reading the last order from home, <i>Hold position. Further instructions to follow.</i>, and each settled into a doctrine (the old style word in brackets):</p>
+        <ul class="chain">
+          <li><b>Steward</b> (balanced; the usual): builds up, defends and attacks in good measure. A fair first opponent.</li>
+          <li><b>Warden</b> (turtle): walls its base in, keeps adding turrets (up to six) and Keeps (up to three), and comes late with a big army. Out-grow it, then break in with Torches, Bulwarks and Missiles.</li>
+          <li><b>Salvager</b> (raider): sends small bands to tear up your supply roads, again and again, from early on, keeping few warbots at home. Guard your roads.</li>
+          <li><b>Herald</b> (rusher): comes for you early, before its economy is big: get turrets and garrisons up fast and it runs short.</li>
+          <li><b>Architect</b> (tycoon): builds a big economy first (its bots work faster), then rains Missiles on you, and races for the bomb in a Nuclear race. Hit it before its Silos are ready.</li>
+        </ul>
+        <p><b>Random</b> gives each rival a doctrine no other rival has. Point at a doctrine on the new-game screen, or tap it, to read in depth how it plays and where it is weak. With <b>You vs 2</b> or <b>You vs 3</b>, <b>Each rival</b> sets one for each computer colony (its colour beside it), so you can mix them; the doctrine buttons set them all at once. The briefing card and each rival's Command Base panel tell you which you face.</p>
         <p><b>Ways to win</b> (<b>Victory</b> on the new-game screen):</p>
         <ul class="chain">
           <li><b>Capture</b> (the usual): take a rival's Command Base and everything it built is yours (its robots shut down). The last colony standing wins, and losing your own Command Base ends your game.</li>
@@ -800,7 +812,7 @@
           <li>They come in chapters, each building on the last: <b>First Steps</b> (your first building and road, Stone and Cement, batteries, the first Alloy), <b>Growing the Colony</b> (bots, farmed Fuel, regrowing groves, Outposts), <b>Roads and Traffic</b>, <b>Industry and Trade</b> and <b>Sea and Sky</b>, all in peace, then <b>First Contact</b> (creature nests and your first rivals) and <b>War</b>.</li>
           <li>Each mission teaches one new idea. From the second one on you land with the colony the earlier missions taught already built and joined up, so you can get straight to it.</li>
           <li>Each has three difficulty levels. <b>Easy</b> lands you with more in the Command Base; <b>Hard</b> gives you less, bigger goals, a tougher rival and (on most) a time limit.</li>
-          <li>Under the difficulty a line describes the planet: the map type, its size and terrain, the rival (and its style, or <b>passive</b> if it never attacks), anything switched on such as Wildlife, Planet events or a Nuclear race, and the time limit.</li>
+          <li>Under the difficulty a line describes the planet: the map type, its size and terrain, the rival (and its doctrine, or <b>passive</b> if it never attacks), anything switched on such as Wildlife, Planet events or a Nuclear race, and the time limit.</li>
           <li>The briefing card sets the scene and says how to start on the first goal.</li>
           <li>The <b>Goal</b> chip lists the goals with your progress and marks the one to do next (▸), with a hint for it, while the buttons it needs light up (or the button that opens them, such as <b>Build</b>; for a button in a building's panel, a ring pulses on the building to tap). Each goal you meet is ticked off with a message and the next one's hint. Once a building the goal asks for is going up, the hint says so and nothing lights until it's built (or, if its site has no road, its <b>Lay road</b> lights).</li>
           <li>Taking the (last) rival Command Base ends the game, so it waits for the rest: while any other goal is unfinished, that base holds at 1 armor (its panel says <b>Finish your other goals first</b>).</li>
@@ -814,7 +826,7 @@
         <p>Play against friends: two to four people, on any mix of phones, tablets and computers. Tap <b>Multiplayer</b> on the main menu and type your name.</p>
         <ul class="chain">
           <li><b>Host a game</b> gets you a room code to give the others (<b>Share</b> sends or copies a link that opens the game with the code filled in: they just tap <b>Join</b>). They type the code and tap <b>Join</b>.</li>
-          <li>The lobby lists everyone, and computer rivals fill the empty places. The host taps <b>Change settings</b> (Versus only, without Unlimited resources), in a 2 vs 2 game taps names to move players between teams, and then <b>Start game</b>.</li>
+          <li>The lobby lists everyone, and computer rivals fill the empty places. The host taps <b>Change settings</b> (Versus only, without Unlimited resources), picks each computer's <b>doctrine</b> from its row (point at a row, or tap it, to read how that doctrine plays), in a 2 vs 2 game taps names to move players between teams, and then <b>Start game</b>.</li>
           <li>Everyone plays at one speed: there's no speed control and no Boosts menu, and the briefing card doesn't pause.</li>
           <li>The pause menu doesn't stop the game; <b>Pause the game for everyone</b> does, and a banner says who paused. If someone drops out, the computer takes over their colony after a few seconds until they're back.</li>
           <li><b>Leave the game</b> (tap twice) hands your colony to the computer. If you reload or lose the connection, <b>Rejoin multiplayer game</b> on the main menu gets you back in.</li>

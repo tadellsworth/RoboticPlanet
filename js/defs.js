@@ -1029,34 +1029,71 @@ const DIFFICULTY = {
   hard:   { label: 'Hard',   mult: 1.3,  grace: 150, threshold: 4, maxSites: 3, think: 1.5, bonus: 6 },
 };
 
-/**
- * Rival personalities: how a rival AI plays, on top of its difficulty. grace, threshold, army
- * (warbots a minute), armyFrom (when the army starts growing), raids (how often), raidFirst and
- * raidSize multiply or replace the difficulty's settings; turrets, walls and missiles switch on
- * extra habits. Balanced plays the plain difficulty.
- */
 /*
- * Rival personalities. Each scales the rival's difficulty settings: grace (when it starts attacking),
- * threshold (warbots it gathers before an attack), army (how fast its army grows; armyFrom, when it
- * starts), raids (how often it raids; raidFirst, the first raid; raidSize and raidKeep, how many go
- * and stay home), econ (how fast its bots work). turrets, walls and missiles switch on its habits.
+ * Rival doctrines (the code calls them personalities: `style` on a player, `PERSONALITIES` here). Every rival
+ * Command AI has spent decades reading the same last order from home ("Hold position. Further instructions to
+ * follow.") and settled into a doctrine (LORE.md, Rival command doctrines). The keys stay the old style words
+ * (saves, missions, multiplayer settings and tests use them); players see `name`, the doctrine, with `plain`, the old
+ * style word, beside it where it helps ("Warden (turtle)": docLabel).
+ * Each scales the rival's difficulty settings: grace (when it starts attacking), threshold (warbots it gathers before
+ * an attack), army (how fast its army grows; armyFrom, when it starts), raids (how often it raids; raidFirst, the
+ * first raid; raidSize and raidKeep, how many go and stay home), econ (how fast its bots work). turrets, walls and
+ * missiles switch on its habits (see js/ai.js: aiStyle, aiLevel, AI_FORT, aiMissilePlan). The Steward (balanced) plays
+ * the plain difficulty.
+ * The words: noun and desc (the landing line: "Your rival is a Warden (turtle): it walls its base in..."), quote (a
+ * line in the doctrine's voice, from LORE.md), play (how it plays, in depth, for the new-game screen: what it builds
+ * first, when and how it attacks, how it defends; times are for Normal, see DIFFICULTY.grace) and weak (its weak spot,
+ * and how to beat it). docInfo puts them together.
  */
 const PERSONALITIES = {
-  balanced: { noun: 'an all-rounder', name: 'Balanced', desc: 'builds up, defends and attacks in good measure' },
-  turtle: { noun: 'a Turtle', name: 'Turtle', desc: 'walls its base in and covers its land with turrets, then comes late with a big army', grace: 1.5, threshold: 1.5, army: 0.9, raids: 0.3, turrets: true, walls: true },
-  raider: { noun: 'a Raider', name: 'Raider', desc: 'sends small bands of warbots to cut your supply lines, again and again', raids: 3, raidFirst: 0.4, raidSize: 3, raidKeep: 0, army: 1.15, armyFrom: 0.7 },
-  rusher: { noun: 'a Rusher', name: 'Rusher', desc: 'comes for you early with warbots, before its economy is big', grace: 0.6, threshold: 0.8, army: 1.35, armyFrom: 0.4, raids: 0.6 },
-  tycoon: { noun: 'a Tycoon', name: 'Tycoon', desc: 'builds a big economy first, then rains Missiles on you (or a nuke, in a Nuclear race)', grace: 1.15, army: 0.9, missiles: true, econ: 1.15 },
+  balanced: {
+    name: 'Steward', plain: 'balanced', noun: 'a Steward', desc: 'builds up, defends and attacks in good measure',
+    quote: 'This action has been logged for review by the Accord tribunal.',
+    play: 'Grows a full economy and a steady army. It attacks from about 4 minutes in (on Normal) once it has five warbots, and from about 7 minutes a band of three raids your roads every few minutes. It defends with up to three Pulse Turrets, a Minigun Nest or Bunker at the front, a Keep at about 15 minutes and, half the time, a Wall on the side facing you. Later come bombers and Missiles.',
+    weak: 'No great strength and no great weakness: a fair first opponent.',
+  },
+  turtle: {
+    name: 'Warden', plain: 'turtle', noun: 'a Warden', desc: 'walls its base in and covers its land with turrets, then comes late with a big army',
+    quote: 'Position held. Day 12,054.',
+    play: 'Fortifies first: an early Pulse Turret, then more, up to six. From about 6 minutes it rings its Command Base with Walls (Gates on its roads), with a Keep at about 7 minutes and up to three in all. It rarely raids and never builds bombers; its first attack waits until about 5½ minutes (on Normal) and comes with eight warbots or more.',
+    weak: 'Slow to grow and slow to strike. Out-grow it while it digs in, then burn through its Walls with Torches, shield your warbots with Bulwarks, or crack the shell with Missiles.',
+    grace: 1.5, threshold: 1.5, army: 0.9, raids: 0.3, turrets: true, walls: true,
+  },
+  raider: {
+    name: 'Salvager', plain: 'raider', noun: 'a Salvager', desc: 'sends small bands of warbots to cut your supply lines, again and again',
+    quote: 'Nothing\'s coming from home. Everything on the road is supply.',
+    play: 'Hits convoys, not cities. Its army grows early and fast, and from about 5 minutes in (on Normal) it sends three warbots at your busiest unguarded road every couple of minutes, keeping none back: they shoot up Haulers and trucks, tear up the road and wreck what stands beside it. It still attacks in force from about 4 minutes, with only two turrets and seldom a Wall at home.',
+    weak: 'A thin home guard. Guard your roads with Outposts, turrets and warbots on rally flags; while its bands are out, its base is open.',
+    raids: 3, raidFirst: 0.4, raidSize: 3, raidKeep: 0, army: 1.15, armyFrom: 0.7,
+  },
+  rusher: {
+    name: 'Herald', plain: 'rusher', noun: 'a Herald', desc: 'comes for you early with warbots, before its economy is big',
+    quote: 'Arrival in one day. Clearing the landing zone.',
+    play: 'Puts everything into warbots: its army grows from the first minutes, a third faster than anyone\'s, and it attacks with as few as four from about 2 minutes in (on Normal), then again and again. It raids now and then, and builds only two turrets and seldom a Wall.',
+    weak: 'Its economy lags. Get a garrison and a turret up early; hold off the first waves and it runs short.',
+    grace: 0.6, threshold: 0.8, army: 1.35, armyFrom: 0.4, raids: 0.6,
+  },
+  tycoon: {
+    name: 'Architect', plain: 'tycoon', noun: 'an Architect', desc: 'builds a big economy first, then rains Missiles on you (or a nuke, in a Nuclear race)',
+    quote: 'When the colonists come, they\'ll find a city. Mine.',
+    play: 'Out-builds everyone: its bots work 15% faster, it adds Smelters and Chip Fabs, and it docks a Trade Terminal from about 14 minutes. Its army is smaller and its first attack a little later, but it starts a Missile Factory once its Bot Foundry runs (about 3 minutes in, on Normal), then up to three Silos. Up to four turrets guard its base.',
+    weak: 'Its army is thin early on. Hit it before its Silos are ready (or capture them), and spread your buildings out so one strike can\'t take many.',
+    grace: 1.15, army: 0.9, missiles: true, econ: 1.15,
+  },
 };
 const PERSONALITY_ORDER = ['balanced', 'turtle', 'raider', 'rusher', 'tycoon'];
-/** The new-game menu's line under the Rival style chips: how each plays, and how to beat it. */
-const PERSONALITY_TIPS = {
-  balanced: 'A fair first opponent.',
-  turtle: 'Out-grow it while it digs in, then bring Torches to burn through its Walls and Bulwarks to shield your warbots.',
-  raider: 'Guard your roads: Outposts and turrets along them, and warbots ready to chase raiders off.',
-  rusher: 'Get a garrison and a turret up early; hold off the first waves and it runs short.',
-  tycoon: 'Hit it early, before its Missile Silos are ready (or capture them), and keep your buildings spread out so one strike can\'t take many.',
-};
+/** Random (on the new-game screen and in the lobby): what it means. */
+const DOCTRINE_RANDOM = 'Each rival on Random gets a doctrine no other rival has, picked from the planet\'s seed (the same planet deals the same ones). The briefing names it when you land, and so does its Command Base\'s panel.';
+/** Is k one of the doctrines (a key of PERSONALITIES, not something every object has, such as 'constructor')? */
+function isDoctrine(k) { return typeof k === 'string' && Object.prototype.hasOwnProperty.call(PERSONALITIES, k); }
+/** A doctrine as players see it: "Warden (turtle)". (Unknown keys: the Steward.) */
+function docLabel(k) { const P = PERSONALITIES[isDoctrine(k) ? k : 'balanced']; return `${P.name} (${P.plain})`; }
+/** How a doctrine plays, in depth (the new-game screen's description of it); 'random': what Random does. */
+function docInfo(k) {
+  if (k === 'random') return 'Random: ' + DOCTRINE_RANDOM;
+  const P = PERSONALITIES[isDoctrine(k) ? k : 'balanced'];
+  return `${docLabel(k)}: “${P.quote}” ${P.play} Weak spot: ${P.weak}`;
+}
 
 /*
  * Planetary events (a menu option, on by default; never in missions): every five to eight minutes the

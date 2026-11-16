@@ -3,12 +3,12 @@
  * Terrafall — HTML interface: menus, HUD, build menu, info sheets, objectives, messages.
  */
 
-/** Version of the remembered new-game settings: 2 brought new defaults for rival style, Nuclear race and Planetary events. */
+/** Version of the remembered new-game settings: 2 brought new defaults for the rival doctrine, Nuclear race and Planetary events. */
 const SETTINGS_V = 3;
 
 const UI = {
   inGame: false, paused: false, speed: 1, overShown: false,
-  menu: { mode: 'versus', diff: 'normal', seed: randomSeed(), size: { ...DEFAULT_SIZE }, rough: DEFAULT_ROUGH, rich: DEFAULT_RICH, shape: 0, style: 1, nuke: 1, events: 0, wild: 1, unlimited: 0, victory: 'capture' },
+  menu: { mode: 'versus', diff: 'normal', seed: randomSeed(), size: { ...DEFAULT_SIZE }, rough: DEFAULT_ROUGH, rich: DEFAULT_RICH, shape: 0, style: 1, styles: [null, null, null], nuke: 1, events: 0, wild: 1, unlimited: 0, victory: 'capture' },
   sheetKind: null, sheetFor: 0, sheetT: 0, hudT: 0,
   icons: {}, attackN: 0, demolishArm: 0, lastPaint: null, placeType: null,
   goodEls: {}, lastGoods: {}, objCollapsed: false, selBot: 0,
@@ -65,8 +65,8 @@ function initUI() {
   // The new-game menu (Home and Customise, the map type and biome pickers, the planet preview): initMenu.
   $('p-saveplanet').onclick = () => { if (!S) return; savePlanet(gamePlanet()); sfx('place'); toast(`Saved Planet #${S.seed}: start it again from Saved planets in the new-game menu.`, 'good'); };
   // Map settings (remembered on this device; map size is remembered per mode).
-  // Settings from before v2 drop their rival style, Nuclear race and Planetary events, so the new defaults
-  // (a Balanced rival, Nuclear race on, Planetary events off) reach every device once. From before v3 (resources
+  // Settings from before v2 drop their rival doctrine, Nuclear race and Planetary events, so the new defaults
+  // (a Steward, the balanced rival, Nuclear race on, Planetary events off) reach every device once. From before v3 (resources
   // lowered a notch): Normal stays Normal (the new, leaner default), and the others keep what they gave
   // (Scarce is now Sparse, Sparse Normal, Rich Abundant).
   try {
@@ -75,7 +75,7 @@ function initUI() {
     if ((saved.v || 0) < 2) { delete saved.style; delete saved.nuke; delete saved.events; }
     if ((saved.v || 0) < 3 && Number.isInteger(saved.rich)) saved.rich = [1, 2, 2, 4, 4][saved.rich] ?? DEFAULT_RICH;
     // (only what saveSettings writes: a stored mode or seed isn't a remembered setting)
-    for (const k of ['size', 'rough', 'rich', 'shape', 'nuke', 'biome', 'players', 'diff', 'style', 'events', 'wild', 'unlimited', 'victory', 'shapeRnd', 'biomeRnd']) if (saved[k] !== undefined) UI.menu[k] = saved[k];
+    for (const k of ['size', 'rough', 'rich', 'shape', 'nuke', 'biome', 'players', 'diff', 'style', 'styles', 'events', 'wild', 'unlimited', 'victory', 'shapeRnd', 'biomeRnd']) if (saved[k] !== undefined) UI.menu[k] = saved[k];
   } catch (e) { /* defaults */ }
   checkMenuSettings();
   initMenu();
@@ -281,6 +281,8 @@ function checkMenuSettings() {
   m.mode = m.mode === 'colony' ? 'colony' : 'versus';
   m.players = ok(m.players, 5) && m.players >= 2 ? m.players : 2;
   m.style = ok(m.style, PERSONALITY_ORDER.length + 1) ? m.style : 1;
+  // Each computer player's own doctrine (null: as the Rival doctrine chips say), for players 1 to 3.
+  m.styles = [0, 1, 2].map((k) => (Array.isArray(m.styles) && ok(m.styles[k], PERSONALITY_ORDER.length + 1) ? m.styles[k] : null));
   for (const k of ['nuke', 'events', 'wild', 'unlimited', 'shapeRnd', 'biomeRnd']) m[k] = m[k] ? 1 : 0;
 }
 
@@ -289,12 +291,43 @@ function saveSettings() {
   const m = UI.menu;
   try {
     localStorage.setItem('botfall.settings', JSON.stringify({ v: SETTINGS_V, size: m.size, rough: m.rough, rich: m.rich, shape: m.shape, nuke: m.nuke, biome: m.biome, players: m.players,
-      diff: m.diff, style: m.style, events: m.events, wild: m.wild, unlimited: m.unlimited, victory: m.victory, shapeRnd: m.shapeRnd ? 1 : 0, biomeRnd: m.biomeRnd ? 1 : 0 }));
+      diff: m.diff, style: m.style, styles: m.styles, events: m.events, wild: m.wild, unlimited: m.unlimited, victory: m.victory, shapeRnd: m.shapeRnd ? 1 : 0, biomeRnd: m.biomeRnd ? 1 : 0 }));
   } catch (e) { /* storage unavailable */ }
 }
 
 const menuSize = () => UI.menu.size[UI.menu.mode] ?? DEFAULT_SIZE[UI.menu.mode];
 const menuStyle = () => Math.min(PERSONALITY_ORDER.length, UI.menu.style || 0);
+/**
+ * Doctrines on the menu are numbers: 0 Random, then 1 to 5 in PERSONALITY_ORDER (the Steward first). UI.menu.style is
+ * the Rival doctrine chips' (every computer player's), UI.menu.styles[k] the k-th computer player's own (null: the
+ * chips'), set in Custom Game with three or four players and by the host in the multiplayer lobby.
+ */
+const docKeyOf = (v) => (v >= 1 && v <= PERSONALITY_ORDER.length ? PERSONALITY_ORDER[v - 1] : 'random');
+const docNameOf = (v) => (v >= 1 && v <= PERSONALITY_ORDER.length ? PERSONALITIES[PERSONALITY_ORDER[v - 1]].name : 'Random');
+/** The k-th computer player's doctrine (0 Random, 1 to 5). */
+function menuSeatStyle(k) { const v = (UI.menu.styles || [])[k]; return v === null || v === undefined ? menuStyle() : v; }
+/** How many computer players the setup makes (a doctrine each): in multiplayer, the places nobody in the lobby takes. */
+function menuSeats() {
+  if (UI.menu.mode === 'colony') return 0;
+  const people = UI.mpSetup && typeof NET !== 'undefined' ? NET.seats.filter((s) => s.on).length : 1;
+  return Math.max(1, menuPlayers() - people);
+}
+/** The doctrine every computer player has (0 to 5), or -1 when they differ. */
+function menuDocAll() {
+  const n = Math.max(1, menuSeats()), v = menuSeatStyle(0);
+  for (let k = 1; k < n; k++) if (menuSeatStyle(k) !== v) return -1;
+  return v;
+}
+/** The k-th computer player, as the setup names it: 'Red', or 'Your ally (red)' in a team game. */
+function seatName(k) { return menuTeams() && k === 0 ? 'Your ally (red)' : RIVAL_NAMES[k + 1]; }
+/** The doctrines for newGame: one for each computer player, in player order. */
+function menuStyleKeys() { return [0, 1, 2].map((k) => docKeyOf(menuSeatStyle(k))); }
+/** A doctrine's description, for the line under the doctrine chips: the name in bold, then how it plays. */
+function docHTML(k) {
+  if (k === 'random') return `<b>Random:</b> ${DOCTRINE_RANDOM}`;
+  const P = PERSONALITIES[isDoctrine(k) ? k : 'balanced'];
+  return `<b>${docLabel(k)}:</b> <i>\u201c${P.quote}\u201d</i> ${P.play} <b>Weak spot:</b> ${P.weak}`;
+}
 const biomeName = (k) => (BIOMES[BIOME_ORDER[k]] || BIOMES[BIOME_ORDER[0]]).name;
 const mapGroupName = (g) => { const G = MAP_GROUPS.find((x) => x.key === g); return G ? G.name : ''; };
 /**
@@ -324,12 +357,6 @@ function modeInfo(mode, n) {
         : n === 3 ? `Free-for-all: you and two rival colonies${m.shapeRnd ? '' : ' on a round planet'}. ${win}`
           : 'Versus: race a rival colony across the planet. Build up, then capture its Command Base (or hold most of the land: see Victory) to win.';
 }
-function styleInfo(v) {
-  const P = v && PERSONALITIES[PERSONALITY_ORDER[v - 1]];
-  if (P) return `${P.name}: it ${P.desc}.`;
-  const names = PERSONALITY_ORDER.map((k) => PERSONALITIES[k].name);
-  return `Random: each rival gets a personality at random (${names.slice(0, -1).join(', ')} or ${names[names.length - 1]}).`;
-}
 function terrainInfo(v) {
   const T = TERRAIN_PRESETS[v];
   return `${T.name} terrain: ${T.levels === 1 ? 'one level, no cliffs to get round' : `${T.levels} levels of ground, with cliffs between and slopes up them`}.`;
@@ -341,13 +368,19 @@ function resourceInfo(v) {
 
 /** The setup in a line (and what isn't the default in a second one), under Play and in Start's bar. */
 function menuSummary() {
-  const m = UI.menu, colony = m.mode === 'colony', three = menuThree(), style = menuStyle();
+  const m = UI.menu, colony = m.mode === 'colony', three = menuThree();
   const main = [colony ? 'Colony' : menuTeams() ? 'Teams · 2 vs 2' : three ? `Free-for-all · ${menuPlayers()}` : 'Versus'];
   if (!colony) main.push(`${DIFFICULTY[m.diff].label} rival${three ? 's' : ''}`);
   if (!colony && !menuTeams() && m.victory && m.victory !== 'capture') main.push(VICTORY[m.victory].name);
   main.push(m.shapeRnd ? 'Random map' : SHAPE_PRESETS[m.shape || 0].name, m.biomeRnd ? 'Random biome' : biomeName(m.biome || 0), SIZE_PRESETS[menuSize()].name);
   const extra = [];
-  if (!colony && style !== 1) extra.push(style ? PERSONALITIES[PERSONALITY_ORDER[style - 1]].name + ' style' : 'random rival styles');
+  if (!colony) {
+    // The rivals' doctrines, unless every one is a Steward (the usual).
+    const all = menuDocAll(), n = menuSeats();
+    if (all === 0) extra.push(n > 1 ? 'Random doctrines' : 'Random doctrine');
+    else if (all > 1) extra.push(`${docNameOf(all)} rival${n > 1 ? 's' : ''}`);
+    else if (all < 0) extra.push('Doctrines: ' + Array.from({ length: n }, (_, k) => docNameOf(menuSeatStyle(k))).join(', '));
+  }
   if (m.rough !== DEFAULT_ROUGH) extra.push(TERRAIN_PRESETS[m.rough].name + ' terrain');
   if (m.rich !== DEFAULT_RICH) extra.push(RESOURCE_PRESETS[m.rich].name + ' resources');
   if (!m.nuke) extra.push('no Nuclear race');
@@ -403,8 +436,17 @@ function initMenu() {
   choice('m-size', SIZE_PRESETS.map((p) => p.name), menuSize, (v) => { UI.menu.size[UI.menu.mode] = v; });
   choice('m-rough', TERRAIN_PRESETS.map((p) => p.name), () => UI.menu.rough, (v) => { UI.menu.rough = v; }, terrainInfo, true);
   choice('m-rich', RESOURCE_PRESETS.map((p) => p.name), () => UI.menu.rich, (v) => { UI.menu.rich = v; }, resourceInfo, true);
-  // Rival style: 0 is a random personality for each rival, then each one in PERSONALITY_ORDER.
-  choice('m-style', ['Random', ...PERSONALITY_ORDER.map((k) => PERSONALITIES[k].name)], menuStyle, (v) => { UI.menu.style = v; }, styleInfo);
+  // Rival doctrine: 0 is Random (a different one for each computer player), then each one in PERSONALITY_ORDER. A chip
+  // sets every computer player's; with three or four players each also has its own (Each rival, below). Each option
+  // says in depth how that rival plays, in the line under them: on the mouse, on focus, or once tapped.
+  const docNames = ['Random', ...PERSONALITY_ORDER.map((k) => PERSONALITIES[k].name)];
+  choice('m-style', docNames, menuDocAll, (v) => { UI.menu.style = v; UI.menu.styles = [null, null, null]; UI.docLast = null; }, (v) => docInfo(docKeyOf(v)));
+  for (const b of $('m-style').children) b.dataset.doc = docKeyOf(+b.dataset.v);
+  $('m-seats').innerHTML = [0, 1, 2].map((k) => `<label class="m-seat" data-k="${k}"><i class="dot" style="background:${PLAYER_COLORS[k + 1]}"></i>` +
+    `<select data-k="${k}">${docNames.map((n, v) => `<option value="${v}">${n}</option>`).join('')}</select></label>`).join('');
+  for (const sel of $('m-seats').querySelectorAll('select')) {
+    sel.onchange = () => { const k = +sel.dataset.k; UI.menu.styles[k] = +sel.value; UI.docLast = k; syncMenu(); saveSettings(); sfx('click'); };
+  }
   for (const [id, k] of [['m-nuke', 'nuke'], ['m-wild', 'wild'], ['m-events', 'events'], ['m-unlimited', 'unlimited']]) {
     $(id).onchange = () => { UI.menu[k] = $(id).checked ? 1 : 0; syncMenu(); saveSettings(); sfx('click'); };
   }
@@ -450,26 +492,48 @@ function initMenu() {
 
 /** Each section's line: the hovered or focused option's, or else the choice's. */
 function syncInfo() {
-  const m = UI.menu, H = UI.menuHover || {}, three = menuThree();
-  const line = (sec, def) => (H[sec] && H[sec].isConnected && !H[sec].closest('[hidden]') ? H[sec].dataset.info : def) || def;
+  const m = UI.menu, H = { ...(UI.menuHover || {}) }, three = menuThree();
+  const live = (el) => el && el.isConnected && !el.closest('[hidden]');
+  // A doctrine (a chip, or a rival's own) speaks in its own line, under the doctrines; the Match line stays put.
+  const doc = live(H['m-sec-match']) && H['m-sec-match'].dataset.doc ? H['m-sec-match'].dataset.doc : null;
+  if (doc) H['m-sec-match'] = null;
+  const line = (sec, def) => (live(H[sec]) ? H[sec].dataset.info : def) || def;
   const P = SHAPE_PRESETS[m.shape || 0];
   $('m-mode-desc').textContent = line('m-sec-match', modeInfo(m.mode, menuPlayers()));
+  const note = $('m-style-note'), html = doc ? docHTML(doc) : docNoteDefault();
+  if (note.innerHTML !== html) note.innerHTML = html;
   $('m-planet-info').textContent = line('m-sec-planet', m.shapeRnd ? $('m-shape').dataset.info : `${P.name}: ${P.blurb || ''}`);
   $('m-rules-info').textContent = line('m-sec-rules', TOD_INFO[todMode()]);
   sizeInfoLines();
 }
 
 /**
+ * The doctrine line when no doctrine is under the mouse: the one last picked for a rival of its own, else the one
+ * every computer player has, else (each its own) who has which.
+ */
+function docNoteDefault() {
+  const n = menuSeats(), all = menuDocAll();
+  if (UI.docLast != null && UI.docLast < n && !$('m-seats-row').hidden) return docHTML(docKeyOf(menuSeatStyle(UI.docLast)));
+  if (all >= 0) return docHTML(docKeyOf(all));
+  const v = Array.from({ length: n }, (_, k) => menuSeatStyle(k));
+  return '<b>Each rival its own doctrine:</b> ' + v.map((x, k) => `${seatName(k)}: ${x ? docLabel(docKeyOf(x)) : 'Random'}`).join(' · ') +
+    (v.includes(0) ? '. Random deals one no other rival has.' : '.') + ' Point at one (or pick it) to see how it plays.';
+}
+
+/**
  * Each section's info line keeps the height of the longest text it can show (any option's, hovered or chosen), so
  * running the mouse over the options doesn't make the menu grow and shrink. Measured again when the texts or the
- * width change.
+ * width change. (The doctrine line likewise: every doctrine's description, and the one it shows now.)
  */
 function sizeInfoLines() {
-  for (const [sec, id] of [['m-sec-match', 'm-mode-desc'], ['m-sec-planet', 'm-planet-info'], ['m-sec-rules', 'm-rules-info']]) {
-    const el = $(id), box = $(sec);
-    if (!el || !box || !el.offsetWidth) continue;
-    const texts = [...box.querySelectorAll('[data-info]')].filter((k) => !k.closest('[hidden]')).map((k) => k.dataset.info || '');
-    texts.push(el.textContent);
+  const lines = [['m-sec-match', 'm-mode-desc'], ['m-sec-planet', 'm-planet-info'], ['m-sec-rules', 'm-rules-info'], [null, 'm-style-note']];
+  for (const [sec, id] of lines) {
+    const el = $(id), box = sec && $(sec);
+    if (!el || (sec && !box) || !el.offsetWidth) continue;
+    const html = !sec;
+    const texts = html ? ['random', ...PERSONALITY_ORDER].map(docHTML)
+      : [...box.querySelectorAll('[data-info]')].filter((k) => !k.closest('[hidden]') && !k.dataset.doc).map((k) => k.dataset.info || '');
+    texts.push(html ? el.innerHTML : el.textContent);
     const key = el.offsetWidth + '|' + texts.join('\u0001');
     if (el.dataset.sizedFor === key) continue;
     const probe = el.cloneNode(false);
@@ -477,7 +541,7 @@ function sizeInfoLines() {
     probe.style.cssText = `position:absolute;visibility:hidden;left:-9999px;top:0;min-height:0;width:${el.offsetWidth}px`;
     el.parentNode.appendChild(probe);
     let h = 0;
-    for (const t of texts) { probe.textContent = t; h = Math.max(h, probe.offsetHeight); }
+    for (const t of texts) { if (html) probe.innerHTML = t; else probe.textContent = t; h = Math.max(h, probe.offsetHeight); }
     probe.remove();
     el.style.minHeight = h + 'px';
     el.dataset.sizedFor = key;
@@ -540,8 +604,20 @@ function syncMenu() {
   $('m-rich-v').textContent = RESOURCE_PRESETS[m.rich].name;
   $('m-style-row').hidden = colony;
   $('m-style-note').hidden = colony;
-  { const v = menuStyle(), k = v && PERSONALITY_ORDER[v - 1];
-    $('m-style-note').textContent = k ? `${PERSONALITIES[k].name}: it ${PERSONALITIES[k].desc}. ${PERSONALITY_TIPS[k]}` : styleInfo(0) + ' You find out which from how it plays.'; }
+  $('m-l-style').textContent = mps ? 'Computer doctrine' : 'Rival doctrine';
+  // Each rival (Custom Game with three or four players): a doctrine for each computer player. (In multiplayer the host
+  // sets them in the lobby, where it's clear which places the computer takes.)
+  const seats = menuSeats();
+  $('m-seats-row').hidden = colony || mps || seats < 2;
+  $('m-l-seats').textContent = menuTeams() ? 'Each computer' : 'Each rival';
+  for (const lab of $('m-seats').children) {
+    const k = +lab.dataset.k, v = menuSeatStyle(k), sel = lab.querySelector('select');
+    lab.hidden = k >= seats;
+    if (sel.value !== String(v)) sel.value = String(v);
+    sel.setAttribute('aria-label', `${seatName(k)}: doctrine`);
+    lab.dataset.doc = docKeyOf(v);
+    lab.dataset.info = docInfo(docKeyOf(v));
+  }
   $('m-wild-row').hidden = !colony;
   for (const [id, on] of [['m-nuke', m.nuke], ['m-wild', m.wild], ['m-events', m.events], ['m-unlimited', m.unlimited], ['m-weather', weatherOn()]]) {
     $(id).checked = !!on;
@@ -1238,7 +1314,7 @@ function renderBoost() {
     (warOn() ? `<button class="btn small" data-k="warbots">+${BOOST.warbots} Warbots</button>` : '') +
     `<button class="btn small" data-k="workers">+${BOOST.workers} Workers</button><button class="btn small" data-k="haulers">+${BOOST.haulers} Haulers</button></div></div>`;
   let html = home && !home.dead ? row(me, 'You', '') : '';
-  html += rivals.length ? rivals.map((P) => { const st = PERSONALITIES[P.style]; return row(P, playerName(P.id), st ? ' · ' + st.name : ''); }).join('')
+  html += rivals.length ? rivals.map((P) => row(P, playerName(P.id), isDoctrine(P.style) ? ' · ' + docLabel(P.style) : '')).join('')
     : '<p class="mode-desc">There\'s no rival colony in this game.</p>';
   // Unit types every rival can be stopped making, for the rest of this game.
   if (rivals.length) {
@@ -2127,6 +2203,15 @@ function rivalColours() {
   return c.length > 1 ? c.slice(0, -1).join(', ') + ' or ' + c[c.length - 1] : c[0] || 'red';
 }
 
+/** The briefing names each computer player's doctrine, so you know what's coming: "Your rival is a Warden (turtle): ...". */
+function doctrineLines() {
+  if (S.mode === 'colony') return;
+  for (const P of S.players) {
+    const st = P.id !== ME && P.ai && !P.absent && !P.out && isDoctrine(P.style) && PERSONALITIES[P.style];
+    if (st) postMsg(ME, `${S.players.length > 2 ? 'The ' + playerName(P.id) : 'Your rival'} is ${st.noun} (${st.plain}): it ${st.desc}.`, 0, 0, 'info');
+  }
+}
+
 function startNewGame() {
   clearSave();
   closePicker(false);
@@ -2136,7 +2221,7 @@ function startNewGame() {
     seed: UI.menu.seed, difficulty: UI.menu.diff, mode: UI.menu.mode,
     size: UI.menu.size[UI.menu.mode] ?? DEFAULT_SIZE[UI.menu.mode], rough: UI.menu.rough, rich: UI.menu.rich, shape: pick.shape,
     nuke: !!UI.menu.nuke, biome: BIOME_ORDER[pick.biome], players: clamp(Math.round(UI.menu.players) || 2, 2, 4),
-    style: UI.menu.style ? PERSONALITY_ORDER[UI.menu.style - 1] : 'random', events: !!UI.menu.events, wildlife: !!UI.menu.wild, unlimited: !!UI.menu.unlimited,
+    style: docKeyOf(menuStyle()), styles: menuStyleKeys(), events: !!UI.menu.events, wildlife: !!UI.menu.wild, unlimited: !!UI.menu.unlimited,
     victory: UI.menu.victory, teams: menuTeams(),
   });
   enterGame();
@@ -2147,11 +2232,7 @@ function startNewGame() {
     : S.players.length > 2 ? `Your bots have landed. ${rivalsLanded()} Build up fast!`
       : 'Your bots have landed. A rival colony landed to the north. Build up fast!', 0, 0, 'info');
   if (UI.menu.shapeRnd || UI.menu.biomeRnd) postMsg(ME, `Random pick: ${[UI.menu.shapeRnd ? SHAPE_PRESETS[pick.shape].name : '', UI.menu.biomeRnd ? biomeName(pick.biome) : ''].filter(Boolean).join(', ')}.`, 0, 0, 'info');
-  // Name each rival's personality, so you know what's coming.
-  if (S.mode !== 'colony') for (const P of S.players) {
-    const st = P.id !== ME && P.ai && !P.absent && PERSONALITIES[P.style];
-    if (st) postMsg(ME, `${S.players.length > 2 ? 'The ' + playerName(P.id) : 'Your rival'} is ${st.noun}: it ${st.desc}.`, 0, 0, 'info');
-  }
+  doctrineLines();
   if (S.wildlife) {
     // Pointed at the nest nearest home (J jumps there), the rest are red on the minimap.
     const L = getE(S.players[ME].lander), nests = S.buildings.filter((b) => !b.dead && BDEFS[b.type].wild);
@@ -2441,7 +2522,7 @@ function missionMeta(def, diff) {
   const extras = [def.mode === 'colony' && def.war && 'Warbots', def.wildlife && 'Wildlife', def.events && 'Planet events', def.nuke && 'Nuclear race', def.lab && 'Research Lab'].filter(Boolean);
   const more = extras.length ? ` · ${extras.join(', ')}` : '';
   if (def.mode === 'colony') return `Colony · ${shape} · ${size} · ${terr}${more}${limit}`;
-  const n = playerCount('versus', def.shape || 0, def.players) - 1, style = PERSONALITIES[def.style] ? ` ${PERSONALITIES[def.style].name}` : '';
+  const n = playerCount('versus', def.shape || 0, def.players) - 1, style = isDoctrine(def.style) ? ` ${PERSONALITIES[def.style].name}` : '';
   const rival = `${n > 1 ? n + ' ' : ''}${DIFFICULTY[def.rival[diff]].label}${style} rival${n > 1 ? 's' : ''}${def.passive && def.passive[diff] ? ' (passive)' : ''}`;
   return `Versus · ${shape} · ${size} · ${terr} · ${rival}${more}${limit}`;
 }
@@ -4606,8 +4687,8 @@ function openBuildingSheet(b) {
   const mine = b.owner === ME;
   R.selected = b.id; R.selTile = -1; UI.selBot = 0;
   let desc = !mine && b.type === 'lander' ? (S.players.length > 2 ? `The ${playerName(b.owner)}'s fortified headquarters. Capture it and everything the ${playerName(b.owner)} built is yours.` : 'The rival\'s fortified headquarters. Capture it to win.') : def.desc;
-  const style = !mine && b.type === 'lander' && S.players[b.owner] && S.players[b.owner].ai && PERSONALITIES[S.players[b.owner].style];
-  if (style && S.mode !== 'colony' && !S.mission) desc += ` <b>${style.name}:</b> it ${style.desc}.`;
+  const style = !mine && b.type === 'lander' && S.players[b.owner] && S.players[b.owner].ai && isDoctrine(S.players[b.owner].style) && S.players[b.owner].style;
+  if (style && S.mode !== 'colony' && !S.mission) desc += ` <b>${docLabel(style)}:</b> it ${PERSONALITIES[style].desc}.`;
   if (!mine && b.type === 'lander' && S.mission && captureLocked(b, ME)) desc += ' <b>Finish your other goals first:</b> until then it holds at 1 armor.';
   if (def.wild) {
     const n = S.bots.filter((u) => !u.dead && u.nest === b.id).length;
@@ -6441,7 +6522,7 @@ function openMsgSheet() {
 }
 
 /**
- * The start of a game: everything it has to tell you (who landed where, the rivals' styles, the map, the Uplinks, a
+ * The start of a game: everything it has to tell you (who landed where, the rivals' doctrines, the map, the Uplinks, a
  * Nuclear race...) in one card instead of a stack of pop-ups, with the game paused behind it. A tap anywhere (or a key)
  * starts the game; otherwise the card closes by itself once there's been time to read it. (Multiplayer can't pause for
  * one player: there it's just the card.)

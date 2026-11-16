@@ -87,6 +87,11 @@ function initMulti() {
     } catch (e) { mpMsg(`The code is ${NET.code}${link ? `, or send this link: ${link}` : ''}`, true); }
   };
   $('mp-settings').onclick = () => { sfx('click'); mpOpenSetup(); };
+  // A computer's doctrine: pointing at its row (or tapping it, or its dropdown) says how it plays, under the list.
+  const docRow = (e) => { const li = e.target.closest && e.target.closest('li.ai[data-k]'); if (li && UI.mpDocK !== +li.dataset.k) { UI.mpDocK = +li.dataset.k; mpDocNote(); } };
+  $('mp-players').addEventListener('pointerover', (e) => { if (e.pointerType === 'mouse') docRow(e); });
+  $('mp-players').addEventListener('click', docRow);
+  $('mp-players').addEventListener('focusin', docRow);
   $('mp-start').onclick = () => { sfx('click'); mpHostStart(); };
   $('mp-leave').onclick = () => { sfx('click'); mpLeaveLobby(); };
   $('mp-joincancel').onclick = () => { sfx('click'); mpStop(); netClose(); netRemember(false); mpView('connect'); closeMulti(); syncRejoin(); };
@@ -161,7 +166,7 @@ function mpMenuSettings(final, people) {
   return {
     seed: m.seed, diff: m.diff, size: m.size.versus ?? DEFAULT_SIZE.versus, rough: m.rough, rich: m.rich,
     shape: pick.shape, shapeRnd: !final && !!m.shapeRnd, biome: BIOME_ORDER[pick.biome], biomeRnd: !final && !!m.biomeRnd,
-    players: clamp(Math.max(Math.round(m.players) || 2, least), 2, 4), style: m.style, nuke: !!m.nuke, events: !!m.events, victory: m.victory || 'capture',
+    players: clamp(Math.max(Math.round(m.players) || 2, least), 2, 4), style: m.style, styles: [0, 1, 2].map((k) => menuSeatStyle(k)), nuke: !!m.nuke, events: !!m.events, victory: m.victory || 'capture',
     teams: !!m.teams && total === 4, teamOf: m.teams && total === 4 ? mpTeamSeats() : null,
     sum: mpSummary(),
   };
@@ -209,7 +214,15 @@ function renderLobby() {
   const teams = !!(st && st.teams && st.teamOf);
   const tags = (s) => [s.seat === NET.host ? 'host' : '', s.seat === NET.seat ? 'you' : '', s.on ? '' : 'away', s.v && s.v !== hostV ? 'different version' : ''].filter(Boolean).join(' · ');
   const person = (s, col) => `<li class="${s.on ? '' : 'off'}${host && teams ? ' mp-swap' : ''}" data-seat="${s.seat}"><span class="dot" style="background:${col}"></span><span class="nm">${esc(s.name)}</span><small>${tags(s)}</small></li>`;
-  const cpu = (col, ally) => `<li class="ai"><span class="dot" style="background:${col}"></span><span class="nm">Computer ${ally ? 'player' : 'rival'}</span><small>${st ? DIFFICULTY[st.diff].label : ''}</small></li>`;
+  // The computer's places, in player order, each with its doctrine: the host picks it here (a dropdown), and it goes
+  // round with the settings (st.styles, one for each computer player in turn), so every device deals the same.
+  let ck = 0;
+  const cpu = (col, ally) => {
+    const k = ck++, v = mpSeatDoc(k), who = `Computer ${ally ? 'player' : 'rival'}`;
+    const doc = host ? `<select class="mp-doc" data-k="${k}" aria-label="${who} ${k + 1}: doctrine">${['Random', ...PERSONALITY_ORDER.map((d) => PERSONALITIES[d].name)].map((n, x) => `<option value="${x}"${x === v ? ' selected' : ''}>${n}</option>`).join('')}</select>`
+      : `<small class="mp-docname">${docNameOf(v)}</small>`;
+    return `<li class="ai" data-k="${k}" title="${esc(docInfo(docKeyOf(v)))}"><span class="dot" style="background:${col}"></span><span class="nm">${who}</span><small>${st ? DIFFICULTY[st.diff].label : ''}</small>${doc}</li>`;
+  };
   if (teams) {
     // Two a side: the people on each team, then the computer in the empty places (in the colours they'll land in).
     for (const t of [0, 1]) {
@@ -221,7 +234,14 @@ function renderLobby() {
     for (const s of NET.seats) html += person(s, s.on ? PLAYER_COLORS[k++ % PLAYER_COLORS.length] : '#555');
     for (let a = 0; a < ai; a++) html += cpu(PLAYER_COLORS[k++ % PLAYER_COLORS.length], false);
   }
-  $('mp-players').innerHTML = html;
+  if (UI.mpLobbyHTML !== html || !$('mp-players').children.length) { $('mp-players').innerHTML = html; UI.mpLobbyHTML = html; }
+  UI.mpCpus = ck;
+  if (host) for (const sel of $('mp-players').querySelectorAll('select.mp-doc')) sel.onchange = () => {
+    const k = +sel.dataset.k;
+    UI.menu.styles[k] = +sel.value; UI.mpDocK = k;
+    saveSettings(); sfx('click'); mpSendSettings(); renderLobby();
+  };
+  mpDocNote();
   // (someone seated since the teams were last sent round: put them on one)
   if (host && teams && NET.seats.some((s) => st.teamOf[s.seat] === undefined)) mpSendSettings();
   if (host && teams) for (const li of $('mp-players').querySelectorAll('li.mp-swap')) li.onclick = () => {
@@ -242,6 +262,22 @@ function renderLobby() {
   $('mp-lmsg').textContent = host || people.length < 2 || odd.length ? why : 'Waiting for the host to start the game…';
   // The host's first look at the lobby: send the settings round.
   if (host && !st) mpSendSettings();
+}
+
+/** The k-th computer player's doctrine in the lobby (0 Random, 1 to 5): the host's own choice, or the settings it sent round. */
+function mpSeatDoc(k) {
+  if (NET.seat === NET.host) return menuSeatStyle(k);
+  const st = NET.settings;
+  if (st && Array.isArray(st.styles) && Number.isInteger(st.styles[k])) return st.styles[k];
+  return st && Number.isInteger(st.style) ? st.style : 1;
+}
+
+/** The line under the lobby's list: how the computer player last picked (or pointed at, or tapped) plays. */
+function mpDocNote() {
+  const el = $('mp-docnote'), k = UI.mpDocK;
+  const on = k != null && k < (UI.mpCpus || 0);
+  el.hidden = !on;
+  if (on) { const html = docHTML(docKeyOf(mpSeatDoc(k))); if (el.innerHTML !== html) el.innerHTML = html; }
 }
 
 function esc(s) { return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
@@ -311,7 +347,8 @@ function mpOnStart(m) {
   closePicker(false);
   newGame({
     seed: s.seed, difficulty: s.diff, mode: 'versus', size: s.size, rough: s.rough, rich: s.rich, shape: s.shape, nuke: !!s.nuke,
-    biome: s.biome, players: Math.max(s.players, humans.length), style: s.style ? PERSONALITY_ORDER[s.style - 1] : 'random',
+    biome: s.biome, players: Math.max(s.players, humans.length), style: docKeyOf(s.style),
+    styles: Array.isArray(s.styles) ? s.styles.map((v) => (Number.isInteger(v) ? docKeyOf(v) : undefined)) : undefined,
     events: !!s.events, wildlife: false, victory: s.victory, humans, teams: !!s.teams,
   });
   m.players.forEach((P, k) => { if (P) S.players[k].name = P.name; });
@@ -325,6 +362,7 @@ function mpOnStart(m) {
   const ai = S.players.filter((P) => P.ai && foes(P.id, me)).length;
   const ally = S.teams ? S.players.find((P) => allies(P.id, me)) : null;
   postMsg(ME, `Multiplayer: you against ${[...others, ai ? `${ai} computer rival${ai > 1 ? 's' : ''}` : ''].filter(Boolean).join(' and ')}${ally ? `, with ${ally.name || 'a computer ally'} on your side` : ''}. Your bots have landed: build up fast!`, 0, 0, 'info');
+  doctrineLines();
   $('br-title').textContent = 'Before you start';
   showBriefing();
 }

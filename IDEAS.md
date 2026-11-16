@@ -52,7 +52,7 @@ Still open: a neutral, shared exchange the rivals compete over; contracts for Ch
 The campaign is now the tutorial, in seven chapters (see the README). Held back, or noticed while each mission was
 built and played through headless:
 
-- **King of the Hill, a bonus mission for Uplinks and free-for-all.** The Wheel, 3 players, rival style Random. Setup
+- **King of the Hill, a bonus mission for Uplinks and free-for-all.** The Wheel, 3 players, rival doctrine Random. Setup
   would set `S.victory = 'uplinks'` and call `placeUplinks(S.seed)` (newGame only sets the victory type outside
   missions); goals: hold an Uplink (counted from `S.uplinks`, owner 0 and not jammed), then win the race.
   `finishMission` would also need `M.why = 'uplinks'` for a rival winning it. Kept out of the campaign until a solver

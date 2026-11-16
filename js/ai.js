@@ -29,17 +29,17 @@ const AI_CORE = ['mine', 'smelter', 'fab', 'foundry'];
 /** Fewer workers than this is an emergency (triage); it's over once there are AI_ENOUGH again. */
 const AI_FEW = 6, AI_ENOUGH = 8;
 
-/** Rival p's personality (see PERSONALITIES). */
+/** Rival p's doctrine (PERSONALITIES; the code says personality and style). */
 function aiStyle(p) { return PERSONALITIES[S.players[p].style] || PERSONALITIES.balanced; }
 
-/** Rival p's difficulty settings with its personality applied (later or earlier attacks, bigger or smaller). */
+/** Rival p's difficulty settings with its doctrine applied (later or earlier attacks, bigger or smaller). */
 function aiLevel(p) {
   const base = DIFFICULTY[S.difficulty], st = aiStyle(p);
   return { ...base, grace: base.grace * (st.grace || 1), threshold: Math.max(3, Math.round(base.threshold * (st.threshold || 1))) };
 }
 
 /**
- * How each personality fortifies (in a war): `turrets` Pulse Turrets at most, one more every `every` seconds after
+ * How each doctrine fortifies (in a war): `turrets` Pulse Turrets at most, one more every `every` seconds after
  * the first; `front` Minigun Nests and Bunkers put up at the front (by the fort nearest the rival) without waiting
  * to be attacked there, one every six minutes from about ten minutes in; and the chance (`walls`, decided once a
  * game) that it walls off the side of its base facing the rival (see aiFortWalls; a Turtle rings it all round,
@@ -319,7 +319,7 @@ function aiThink(p) {
   const held = new Set();
   // Defences come first once the colony is running: the first Pulse Turret, then a Repair Station.
   // In a Nuclear race the Reactor and Nuclear Silo get the same treatment: the race is the point.
-  // More Pulse Turrets as the game goes on: one more every so often, up to its personality's number (aiFort; a
+  // More Pulse Turrets as the game goes on: one more every so often, up to its doctrine's number (aiFort; a
   // Turtle starts early and builds most).
   const turretsWanted = Math.min(FT.turrets, 1 + Math.floor(Math.max(0, S.time - AI_DEFENCE_AT * (st.turrets ? 0.5 : 1)) / FT.every));
   const defence = (type) => S.mode !== 'colony' && (type === 'turret' ? (counts.turret || 0) < turretsWanted : type === 'keep' ? (counts.keep || 0) < wantKeeps : !counts[type]) &&
@@ -1087,7 +1087,7 @@ function aiFireNuke(p, silo) {
 const AI_ARMY_FROM = 240, AI_ARMY_MAX = 30, AI_DEFENCE_AT = 300;
 function aiWantArmy(lvl, p) {
   // A colony with many garrisons (a free-for-all winner owns two colonies' worth) needs more
-  // warbots to man them all and still march. Its personality sets how fast the army grows.
+  // warbots to man them all and still march. Its doctrine sets how fast the army grows.
   let extra = 0;
   if (p !== undefined) for (const b of S.buildings) if (!b.dead && b.owner === p && b.built && BDEFS[b.type].mil) extra++;
   const st = p !== undefined ? aiStyle(p) : PERSONALITIES.balanced;

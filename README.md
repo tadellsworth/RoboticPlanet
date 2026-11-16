@@ -8,8 +8,9 @@ how goods move.
 - **Versus:** race a rival AI colony across the planet. Capture its Command Base to win (about 20–40 minutes), or pick a
   faster **Victory** on the new-game screen: **Domination** (hold most of the land for 3 minutes) or **Uplinks** (hold
   neutral relay towers for a total of 5 minutes). A rival that's clearly beaten surrenders.
-  The rival is **Easy**, **Medium** (between Easy and Normal), **Normal** or **Hard**, and has a **personality**
-  (Rival style: Balanced by default, or Random, Turtle, Raider, Rusher or Tycoon; see below).
+  The rival is **Easy**, **Medium** (between Easy and Normal), **Normal** or **Hard**, and has a **doctrine**
+  (Rival doctrine: the Steward, balanced, by default, or Random, the Warden (turtle), Salvager (raider), Herald (rusher)
+  or Architect (tycoon); with three or four players one for each rival if you like; see below).
   **Players: Free-for-all · 3** adds a second rival (red and green): a round planet with the three starts 120° apart
   (player 0's third is generated and turned round onto the others, resources placed tile for tile so each third
   has as many). Capturing a Command Base hands over everything its owner built (`eliminate`); the last colony
@@ -25,8 +26,8 @@ how goods move.
   and Easy, Normal and Hard levels, that teach the game one idea at a time in seven chapters, in order: **First Steps**
   (a building and its road, Stone and Cement, batteries, the first Alloy), **Growing the Colony**, **Roads and
   Traffic**, **Industry and Trade**, **Sea and Sky** (all Colony games, so the economy is learned in peace), then
-  **First Contact** (creature nests, a passive rival, a border war, a chokepoint against a Rusher) and **War** (Ammo and
-  repairs, Torches, Bulwarks and missiles against a Turtle, the Nuclear race, Keeps and bombers). All of them are open
+  **First Contact** (creature nests, a passive rival, a border war, a chokepoint against a Herald) and **War** (Ammo and
+  repairs, Torches, Bulwarks and missiles against a Warden, the Nuclear race, Keeps and bombers). All of them are open
   from the start; finishing one ticks it off at that difficulty (saved by its `id`, so a reworked mission keeps its
   ticks), and the list marks the first unfinished one **Next up**. A mission is plain data: `chapter`, `brief`, `intro`
   lines for the briefing card, the planet (`seed`, `size`, `rough`, `biome`, `shape`, `players`), the rival (`rival`
@@ -57,7 +58,7 @@ Huge). **More settings** (a collapsible section, its summary listing whatever is
 number, the **biome** (Red desert, Jungle or Polar: scenery only, with plants that roads and buildings clear), the
 **terrain** (Flat, Gentle, Rolling, Rugged, Mountainous), the **resources** (Scarce to Abundant; Normal is
 `RESOURCE_PRESETS` density 0.78, amount 0.8, which was Sparse until everything was lowered a notch: older saves,
-saved planets and missions move up one, `resLevelUp`), the **rival style**,
+saved planets and missions move up one, `resLevelUp`), the **rival doctrine** (one for all, or one for each rival),
 and switches for the **Nuclear race** (on by default), **Planetary events** (off by default), **Wildlife** (Colony; on by default),
 **Day and night** and **Unlimited resources** (a testing switch: `unlimitedTopUp` keeps your Command Base at
 `UNLIMITED_STOCK` of every good and fills whatever your buildings are waiting for, once a second). Resources come in separate
@@ -107,7 +108,7 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
 | Bunker | A pillbox for 2 warbots who fire out (3½ tiles) with their own Ammo; claims no land; wrecked, not captured |
 | Disruptor Tower | A pulse every 2½ s jams enemy robots' guns within 4½ tiles for 2 s (`jam`) and drains 10 battery; kills nothing itself; 1 Fuel per 4 pulses |
 | Mortar Pit | Shells where enemies bunch up, 3–10 tiles out: 6 damage, 3 within 1½ tiles, up to 6 robots a shell (`most`); 3 shells per Ammo |
-| Keep | 14 Cement, 6 Alloy, 2 Chips: a fortified base with a roof cannon (Crystal, 6 tiles) that houses 25 warbots, 6 of them firing from cover (`slots`, 4 tiles); claims land; roads pass through it like an Outpost (`passTile`); captured, not wrecked. Within 7 tiles (`KEEP.aura`) Walls/Gates take damage ÷1.5 and mend after 8 s quiet, and defences get +1 range and ×0.8 reload (`auraRange`, `auraRate`); 16 tiles apart. AI: one (a Turtle up to three) |
+| Keep | 14 Cement, 6 Alloy, 2 Chips: a fortified base with a roof cannon (Crystal, 6 tiles) that houses 25 warbots, 6 of them firing from cover (`slots`, 4 tiles); claims land; roads pass through it like an Outpost (`passTile`); captured, not wrecked. Within 7 tiles (`KEEP.aura`) Walls/Gates take damage ÷1.5 and mend after 8 s quiet, and defences get +1 range and ×0.8 reload (`auraRange`, `auraRate`); 16 tiles apart. AI: one (a Warden up to three) |
 | Bulwark (Foundry, 3 rounds of parts) | Shield robot (`BULWARK`, `shieldBlock`, `bulwarkTick`): a frontal shield (±1.0 rad) soaks 50 damage from shots at it or at its owner's robots within 2.1 tiles behind its line (`SHIELDS`, rebuilt each step), regenerates 4/s after 2.5 s without a hit, fails for 6 s when worn out (back at 35%); shells, bombs, Missiles and blasts from above, and fire from the side or behind, get past; a Disruptor pulse drains 14. Turns to face the nearest armed enemy. Twin blasters, 1 a shot every 0.9 s, no Ammo. Leads its group: warbots and Torches on the same attack or flag keep behind it until it arrives (`escortWait`). 30 health |
 | Torch (Foundry, 2 rounds of parts) | Flamethrower robot (`TORCH`, `torchFire`): every 0.2 s a cone (±0.5 rad, 1.9 tiles) does 0.35 to each enemy robot in it (through `damageBot`, so a facing shield stops it) and 0.8 to the building it burns, ×1.6 to defences, Walls and Gates (a Wall in about 6 s); a 12 s tank, one Fuel a fill (`reloadArmy`, `fuelPoint`, task `refill`); explodes with fuel aboard (`BLAST.torch`). 18 health |
 | Howitzer (Foundry; **switched off for now**: `BOTS_OFF` in `js/defs.js`) | Mobile siege launcher (`ROCKET`): parks 4–11 tiles from a building and fires 4 rockets (5 each, splash 2 to buildings, 4 to robots), reloads 4 Ammo at a garrison or storage; a Command Base or Keep stops at `missileFloor` (anything else it can knock out); hurt below 60% it goes to a Repair Station within `ROCKET.repairReach` (30) tiles; 14 hp. AI builds 1–3 and hunts the enemy's  A new one rolls off the Foundry to a post (`u.post`) it returns to after reloading; `u.stance` `hold` fires only on orders, otherwise it shells what comes in reach of its post without moving |
@@ -303,7 +304,7 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   (`bombDrop`; a vehicle on the move is led, and a target that's gone sends it home): `damage` 14 to the building aimed at
   (a Command Base or Keep held at `missileFloor`, see `captureOnly`), `splashBld` 4 to others and `botDamage` 8 to robots within `splash` 1.3, double on a
   vehicle hit squarely (a Tanker explodes). Home again it rearms for `rearm` 25 s (`bomberOnGround`); a bomb it didn't
-  drop goes back into Ammo. Flak Guns shoot it down. The AI (not a Turtle) builds an Airfield from 22 minutes with its Ammo
+  drop goes back into Ammo. Flak Guns shoot it down. The AI (not a Warden) builds an Airfield from 22 minutes with its Ammo
   Plant running, one bomber, and a sortie at most every `AI_BOMB_GAP` (240) s at the most valuable building or loaded
   Tanker no Flak covers (`aiBomber`, `AI_BOMB_VALUE`).
 - **Flak Guns** (4 Cement, 3 Alloy; Build → Defend; Versus): a twin anti-aircraft gun (`def.flak`, `updateFlak`). It
@@ -464,7 +465,7 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
 - **Raids:** armed warbots holding a rally flag in enemy land with nothing to fight tear up enemy roads (not bridges or
   tunnels, which only a Missile can crater) near the flag,
   one tile per 12 warbot-seconds. The rival raids your busiest road clear of turrets and garrisons every few minutes
-  (Easy rarely, Hard often; a Raider far more) once it has warbots to spare. Missiles crater the roads where they land.
+  (Easy rarely, Hard often; a Salvager far more) once it has warbots to spare. Missiles crater the roads where they land.
 - **Warbot movement:** warbots don't queue in road traffic, give way at junctions or stop at red lights (they still wait
   for trains), and nobody queues behind one, so a squad marching along a road or massing at a Gate it means to break
   down all keeps going (and all shoot). Chasing a foe, a warbot goes straight only when the whole line to it is
@@ -698,7 +699,7 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   away against what the squad carries, `breachShots`, counting one reload near the wall for an attack, see
   `startReload`; a Bulwark never runs dry); the rival can ask before it orders (`attackBreach(owner, target, count, all)`
   gives `{ need, shots, sent }`), and `sendToRally` returns it as `breach`. On Chokepoint maps the AI walls the mouth
-  of each channel on its side on every difficulty but Easy (a Turtle on Easy too: `aiWalls`).
+  of each channel on its side on every difficulty but Easy (a Warden on Easy too: `aiWalls`).
 - **Garrisons and posts** (yours, `usesPosts`; the AI spreads its own to the front as before): every warbot belongs
   somewhere. `u.post` is the Outpost or Bunker it was stationed at; with none it belongs to the Command Base. All your
   warbots stay at the Command Base until you station some: tap an Outpost and **Station here** (how many; from the
@@ -726,10 +727,11 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   (`task.ax`/`ay`: the guards' leash is measured from there, the spot follows the raid, and they go home after
   `AREA_QUIET` (6) quiet seconds). A squad on a rally flag outside rival land guards the ground round it the same
   way (foes within 6.5 tiles of the flag, leash 9).
-- **Rival personalities** (`PERSONALITIES` in `js/defs.js`, applied by `aiStyle`/`aiLevel` in `js/ai.js`): each scales
-  the difficulty's grace period, attack threshold, army growth and raid rate. **Balanced** is the plain AI. **Turtle**:
+- **Rival doctrines** (the lore's command doctrines, LORE.md; `PERSONALITIES` in `js/defs.js`, each player's `style`,
+  applied by `aiStyle`/`aiLevel` in `js/ai.js`; the keys stay the old style words): each scales the difficulty's grace
+  period, attack threshold, army growth and raid rate. The **Steward** (`balanced`) is the plain AI. The **Warden** (`turtle`):
   later and bigger attacks, rare raids, a square ring of Walls and Gates six tiles round its Command Base
-  (`aiTurtleWalls`) and a turret more every four minutes (up to six). Every personality fortifies (`AI_FORT`, `aiFort`):
+  (`aiTurtleWalls`) and a turret more every four minutes (up to six). Every doctrine fortifies (`AI_FORT`, `aiFort`):
   up to `turrets` Pulse Turrets, one more every `every` seconds (round the Command Base on the side facing the rival,
   spread apart), a Minigun Nest or Bunker by its fort nearest the rival every six minutes from about ten minutes in (up to
   `front`, through `P.defWant`), and with chance `walls` (decided once a game from the seed) an arc of Wall seven tiles
@@ -761,12 +763,20 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   warbot for two (the gun may be over the Chip Fab the Foundry needs), every warbot goes, the Command Base's last one too
   (`attackAvailable(p, t, 'every')`).
   Once it's ready to march it orders a Bulwark for every five warbots (two, three against a dug-in rival) and a Torch
-  for every four (three, four), only with Fuel for Torches. **Raider**: raids three times as often from early on,
-  keeping none back: its band of three (`raidSize`) goes as soon as it has three to send (`raidKeep` 0). **Rusher**: attacks early with a fast-growing army. **Tycoon**: its bots work 15%
+  for every four (three, four), only with Fuel for Torches. The **Salvager** (`raider`): raids three times as often from early on,
+  keeping none back: its band of three (`raidSize`) goes as soon as it has three to send (`raidKeep` 0). The **Herald** (`rusher`): attacks early with a fast-growing army. The **Architect** (`tycoon`): its bots work 15%
   faster (`econ`), it builds extra Smelters and Chip Fabs and goes for Missile Silos (up to three) once its Bot Foundry
-  runs. With Random each rival gets a different one, picked from the seed; missions use Balanced unless they name one
-  (Hold the Line's Rusher, Siege Breakers' Turtle). The landing messages
-  and the rival Command Base's panel name it.
+  runs. The new-game screen's **Rival doctrine** chips set every computer player's (`UI.menu.style`: 0 Random, then
+  `PERSONALITY_ORDER`); with three or four players **Each rival** (a dropdown per colour) sets each computer player's own
+  (`UI.menu.styles`, null: as the chips), and in multiplayer the host picks each computer place's in the lobby (sent round
+  with the settings as `styles`, so every device deals the same). `newGame` takes `styles`, one per computer player in
+  player order, over `style` (all of them); Random deals one no other computer player has, picked from the seed after the
+  named ones are taken out. Saves keep each player's `style`. Each doctrine's `quote`, `play` (what it builds first, when
+  and how it attacks, how it defends) and `weak` are the setup's in-depth description (`docInfo`/`docHTML`): point at a
+  doctrine, focus it or tap it, and the line under the doctrines says how it plays (sized to the longest of them, so
+  nothing moves). Missions use the Steward unless they name one (Hold the Line's Herald, Siege Breakers' Warden). The
+  briefing (`doctrineLines`, multiplayer too), the rival Command Base's panel and the Boosts menu name it, as
+  "Warden (turtle)" (`docLabel`).
 - **Wildlife** (Colony; `WILD` in `js/defs.js`, `updateNest`/`updateCritter` in `js/sim.js`; new-game option, on by
   default; in missions only where one switches it on, `wildlife: true`, as Bug Hunt does): one creature nest per `WILD.perTiles` tiles (3–8), owned by `WILD_OWNER` (the empty
   second player slot of a Colony game), at least 16 tiles from the landing site and reachable on foot. Each keeps
@@ -1046,8 +1056,9 @@ in any places left over. Everyone sees the whole map.
 **Playing.** Main menu → **Multiplayer**. One person types their name and taps **Host a game**: the lobby shows a
 five-character room code, and **Share** sends it (with a link that opens the game straight to it). The others type
 their name and the code and tap **Join**. The host can **Change settings** (the usual new-game screen: map type,
-biome, size, rules, how many colonies in all and how hard the computer rivals are) and taps **Start game**. In the
-game:
+biome, size, rules, how many colonies in all and how hard the computer rivals are), picks each computer place's
+**doctrine** from its row in the lobby (pointing at a row, or tapping it, says how that doctrine plays) and taps
+**Start game**. In the game:
 
 - The menu button (top right) opens the menu without stopping the game; **Pause the game for everyone** pauses all
   of you (anyone can resume). The game runs at one speed for everyone.

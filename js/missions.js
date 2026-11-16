@@ -14,7 +14,7 @@
  *
  * A mission: { id (progress is saved by it: keep it when a mission is reworked), name, chapter (the list's heading:
  * a chapter's missions sit together, in order), brief (two sentences at most), intro: [up to 5 lines for the briefing
- * card], mode, seed, size, rough, rich, biome, shape, players, style (the rival's personality), rival: [easy, normal,
+ * card], mode, seed, size, rough, rich, biome, shape, players, style (the rival's doctrine, a PERSONALITIES key), rival: [easy, normal,
  * hard] (its level), rivalBonus (extra of every good in its Command Base), passive: [easy, normal, hard] (a rival that
  * never attacks), limit (minutes per difficulty, 0 none), nuke/war/lab/events/wildlife (switch on what missions
  * otherwise leave out: a Nuclear race, warbots and defences in Colony, the Research Lab, planet events, creature
@@ -1007,9 +1007,9 @@ const MISSIONS = [
   },
   {
     id: 'holdline', name: 'Hold the Line', chapter: 'First Contact',
-    brief: 'A Rusher rival will attack early. Wall the channels through the crags, man the guns and hold out.',
+    brief: 'A Herald (a rusher) will attack early. Wall the channels through the crags, man the guns and hold out.',
     intro: [
-      'This rival is a <b>Rusher</b>: it attacks early. Others are Turtles, Raiders, Tycoons and all-rounders.',
+      'This rival is a <b>Herald</b> (a rusher): its clock stopped a day before Arrival, so it attacks early. Others are Wardens, Salvagers, Architects and Stewards.',
       'A belt of crags with a few narrow channels: wall them and cover them with guns.',
       'Walls stop everyone, your robots too: where a wall line crosses a road, a Gate goes in.',
       'An Outpost can Hold inside or Go out and fight. Mortar Pits, Disruptors and the Keep are in Defend too.',
@@ -1023,10 +1023,10 @@ const MISSIONS = [
       preBuild(0, 'outpost', 23, 36, { road: true, reach: 2 });
       computeTerritory();
       L.stock.cement += 20; L.stock.alloy += 8; L.stock.crystal += 6;
-      // Four more warbots at home (8 in all): enough to man a Bunker and still face the Rusher.
+      // Four more warbots at home (8 in all): enough to man a Bunker and still face the Herald.
       for (let k = 0; k < 4; k++) enterBuilding(addBot(0, 'warbot', L.x, L.y), L);
       S.players[0].stats.startBots = S.players[0].stats.bots;
-      // The Rusher starts with more warbots, and holds its first assault until you've had time to dig in (it comes at
+      // The Herald starts with more warbots, and holds its first assault until you've had time to dig in (it comes at
       // about 7 / 5½ / 4 minutes).
       for (let k = 0; k < [2, 4, 6][diff]; k++) enterBuilding(addBot(1, 'warbot', R.x, R.y), R);
       P1.stats.startBots = P1.stats.bots;
@@ -1091,9 +1091,9 @@ const MISSIONS = [
   },
   {
     id: 'siege', name: 'Siege Breakers', chapter: 'War',
-    brief: 'A Turtle hides behind Walls and turrets. Burn through with Torches, shield the push with a Bulwark and send in missiles.',
+    brief: 'A Warden (a turtle) hides behind Walls and turrets. Burn through with Torches, shield the push with a Bulwark and send in missiles.',
     intro: [
-      'This rival is a <b>Turtle</b>: Walls, turrets and Keeps first, a big army late.',
+      'This rival is a <b>Warden</b> (a turtle): it has held its position for decades. Walls, turrets and Keeps first, a big army late.',
       '<b>Torches</b> burn through Walls fast; a <b>Bulwark</b>\'s shield covers the robots behind it.',
       'A <b>Missile Silo</b> reaches 22 tiles: build it toward them. Missiles wreck most buildings, but a Keep must be captured.',
       'Tap a rival building in range → <b>Fire missile</b> (<kbd>F</kbd>) works too.',
@@ -1333,7 +1333,7 @@ function missionOptions(k, diff) {
   return {
     seed: def.seed, mode: def.mode, size: def.size, rough: def.rough, rich: def.rich, biome: def.biome,
     difficulty: def.rival ? def.rival[diff] : 'normal',
-    // (A map shape, more players, the rival's personality and a Nuclear race, for the missions that teach them.)
+    // (A map shape, more players, the rival's doctrine and a Nuclear race, for the missions that teach them.)
     shape: def.shape || 0, players: def.players, style: def.style, nuke: !!def.nuke, events: !!def.events,
     layout: def.layout,
     setup(S) {
