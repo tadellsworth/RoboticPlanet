@@ -312,6 +312,12 @@ const ORDERS = {
   },
   recallRally(p, rid) { const r = rallyById(rid); return r && r.owner === p ? recallRally(rid) : 0; },
   recallAll(p) { return recallAll(p); },
+  /** Robots (a list of ids, or one) sent to the nearest Bot Foundry to be recycled: how many went, or why none could. */
+  recycle(p, ids) { return orderRecycle(p, ownIds(p, Array.isArray(ids) ? ids : [ids])); },
+  /** Robot `id` kept after all: its trip to be recycled is called off. True if it was on one. */
+  unrecycle(p, id) { const u = ownU(p, id); if (!u || !recycling(u)) return false; stopRecycle(u); return true; },
+  /** The Workers beyond what the colony needs (see workersWanted, spareBots) sent to be recycled: how many went. */
+  recycleSpare(p) { return recycleSpare(p, 'worker', workersWanted(p)); },
   /** Call back the warbots of player p attacking building tid. */
   callBack(p, tid) {
     let n = 0;

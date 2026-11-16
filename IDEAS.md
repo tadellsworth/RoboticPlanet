@@ -28,6 +28,11 @@ Still open: a neutral, shared exchange the rivals compete over; contracts for Ch
     that bots wade slowly (and that a Planet event can flood). Bridges are worth their price here.
 - **Cloud saves.** Saves move between devices by exporting and importing a file today; a cloud save (perhaps kept by
   the multiplayer relay on Cloudflare) would do it without the file.
+- **Recycling: open questions.** A robot is taken apart the moment it reaches the Foundry: should it take a few
+  seconds inside (the Foundry busy meanwhile), and should a damaged one give back less? Planes, ships and trains
+  can't reach a Foundry, so they can't be recycled: should their own yards (Airfield, Port, Rail Station) take them
+  apart instead? Recycle spare Workers has no Hauler counterpart for players (the rival scraps both): wanted? Should
+  the rival also scrap other spares (Freight Trucks with no Depot to run, an Agribot with no farm)?
 - **Send feedback: open questions.** A report's "version" is `gameVersion()`, the fingerprint of the rules code the
   multiplayer lobby compares: it tells two copies apart but not which commit a report came from. Should the published
   game carry a build number (say the commit's short hash, written in when the site is published) for reports to name?
@@ -150,10 +155,12 @@ never got a lot: the lot was fetched from the nearest building holding any of th
 Depot's last Stone, under a Road Train's load, so no train went. Now Crystal is judged by how long it lasts, Taps come
 first, the Terminal and its Road Train come early and buy Crystal or Chips, its Smelters rest on piled-up Alloy so their
 Ore and Fiber can pay for it, and the lot comes from storage with a train load; those two games end at 28 and 34
-minutes.) Still open: the colony left winning a 2 v 2 can sit at the bot limit with some 47 workers and under 20
-warbots, Alloy piling up for want of room, not Crystal, and never finish the other (seed 4 now runs past 75 minutes
-that way; `AI_ARMY_ROOM` keeps room only from new workers, it never thins the ones it has); a colony left with no
-Chips and no Road Train can't trade at all; and on Islands (seed 5, two players) a rival with 35 warbots lands only
+minutes.) (Fixed: the colony left winning a 2 v 2 could sit at the bot limit with 40 to 47 Workers, a dozen more than
+its buildings called for, and some 25 warbots, Alloy piling up for want of room, and never finish the other:
+`AI_ARMY_ROOM` kept room only from new Workers, it never thinned the ones it had. Crossroads seeds 1 and 14 ran past
+90 minutes that way. Now it recycles its spare Workers and Haulers at its Foundry (`AI_SCRAP`) and fills the room with
+warbots: those games end at 44 and 37 minutes, won by the same side. The other long ones, seeds 8, 11 and 13 at an hour or more, are close wars, not full
+colonies.) Still open: a colony left with no Chips and no Road Train can't trade at all; and on Islands (seed 5, two players) a rival with 35 warbots lands only
 four to six at a time (most sit in far garrisons) and hadn't taken a beaten rival with one warbot after an hour.
 
 ## Balance decisions

@@ -181,7 +181,23 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   `(who + 1) * RN_SPAN`, so ferry-line groups (`netGroups`) never mix players up; `roadNet()` (everyone's at once) is
   for drawing roads and junctions. A capture (or a colony knocked out) bumps `S.roadVer`.
   Bots follow roads round corners (no diagonal shortcuts on or off a road).
-- **Your robots:** tap the robot counter in the top bar for every robot by type and what they're doing.
+- **Your robots:** tap the robot counter in the top bar for every robot by type and what they're doing, and the
+  spare Workers (`workersWanted`, `spareBots`) with **Recycle spare Workers**.
+- **Recycling** (`js/sim.js`, the recycling section; `RECYCLE_SHARE` and `RECYCLE_KEEP` in `js/defs.js`): a robot's
+  panel has **Recycle this unit** (**Delete**), a selection of warbots **Recycle these N units** on the selection bar
+  (a second tap to confirm; Undo), and Your robots **Recycle spare Workers** (orders `recycle`, `unrecycle`,
+  `recycleSpare`). The robot drops what it was doing (a load goes down in crates), heads for the nearest finished Bot
+  Foundry it can reach (on its ground; a road vehicle by road: `recycleFoundry`) with task `recycle`, and on arrival is
+  taken apart (`recycleBot`): `RECYCLE_SHARE` (half) of its parts, 1 Alloy and 1 Chip a round, rounded down, Alloy
+  first (`recycleYield`: a Worker or Warbot 1 Alloy, a Freight Truck, Tanker or Torch 1 Alloy and 1 Chip, a Crawler 3
+  and 3, its goods left in crates), goes into that Foundry's stock, and its place under the robot limit is free; a
+  ring, sparks, the goods floating up and a clank. Its status reads *Going to be recycled*; **Keep this unit**
+  (`stopRecycle`) or any other order calls it off; its Foundry wrecked, captured or dismantled on the way, it stops
+  where it is (`releaseBotsFrom`). A Worker or Hauler that takes cover from enemy warbots on the way (`takeCover`) sets
+  off again once they've gone (`u.recycleTo`), and isn't given other work meanwhile. Robots on their way don't count in
+  `dispatch` (free workers, Haulers, Tankers) and `callWorker` passes them over. Planes, ships, trains and the Murmur
+  can't be recycled (`recyclable`). Spare Workers: past one for each building that takes a Worker (sites too) and
+  `MIN_FREE_WORKERS` + `RECYCLE_KEEP` (4) free for building; picked idle first, never one running a building.
 - **Bot Foundry build order:** its panel lists every bot type with ▲ ▼ arrows to move it up or down (`b.order`,
   `foundryList`, `moveFoundryOrder`), and a choice of **Take turns** (one of each ordered type in turn, in the list's
   order) or **Top of the list first** (`b.omode = 'first'`: every bot of the top ordered type before the next). The
@@ -816,7 +832,10 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   stop where they would eat into that room, the Foundry makes warbots, and Haulers, trucks and other helpers aren't
   ordered (but a first Tanker); warbots past what it wants leave `AI_WORKER_ROOM` (6) places for workers. Without it a
   colony that had taken a lot of buildings made workers to staff them all until the limit was full, and never fielded
-  an army again (a 2 v 2 game ran past an hour). **Crystal** (every robot takes a Chip, every Chip a Crystal) runs short
+  an army again (a 2 v 2 game ran past an hour). With less room than that army wants (and outside Colony), it scraps
+  its extras (`AI_SCRAP`): Workers past the ones its buildings call for and 4 more, then Haulers past the ones it wants
+  and 2 more (4 at least), go to its Foundry to be recycled (`recycleSpare`), at most 4 on their way at once, until the
+  room is there; its Foundry fills it with warbots. **Crystal** (every robot takes a Chip, every Chip a Crystal) runs short
   by how long what's left would last, in stock and in the ground on its land, at the rate its Chip Fabs burn it
   (`goodRates`; under `AI_CRYSTAL_MINS`, 10 minutes, counting at least `AI_CRYSTAL_BURN`, 4 a minute, once it has a
   Foundry), not only by the clusters left (`P.short`, by tiles, came only once the last three were all there was,
@@ -1117,7 +1136,8 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   and tunnels, **V** ramps, **Shift+V** viaducts, **Shift+Y** ropeways (`PATHS_SHIFT_KEYS`: every plain letter is taken),
   **E** pave, **O** one-way arrows, **L** junctions, **X** walls, **T** traffic map), **Q** army, **C** recall all warbots, **F** select all warbots, **Shift+F** a Bot Foundry's Order bots list from anywhere without moving the map (again: the next Foundry, `openFoundryOrders`), **J** latest alert,
   **H** base, **I** statistics, **U** robots, **Y** goods, **[ ]** speed, **+/−** zoom, **M** minimap, **Enter** the banner's main
-  button, panel buttons by the key shown on them (`SHEET_KEYS`; **Delete** twice demolishes), **Space** pause, **Esc** back / clear selection (in Paths it takes back the last stroke; **Ctrl+Z** is Undo there), **Alt+Enter**
+  button, panel buttons by the key shown on them (`SHEET_KEYS`; **Delete** twice demolishes, and on a robot's panel
+  recycles it), **Space** pause, **Esc** back / clear selection (in Paths it takes back the last stroke; **Ctrl+Z** is Undo there), **Alt+Enter**
   full screen (also a top-bar button and a pause-menu item). Chrome opens the installed app in a plain window on a
   computer (it ignores the manifest's `fullscreen`), so the app goes full screen itself on the first click unless you
   left full screen last time; Esc stays the game's key (`navigator.keyboard.lock`; hold it to leave). On a screen wider

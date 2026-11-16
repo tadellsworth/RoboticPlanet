@@ -1556,12 +1556,12 @@ const SHEET_KEYS = {
 /** Mark the open panel's buttons with their keys (SHEET_KEYS), for the hints shown on a computer. */
 function markSheetKeys() {
   for (const id in SHEET_KEYS) { const el = $(id); if (el && !el.dataset.key) el.dataset.key = SHEET_KEYS[id].toUpperCase(); }
-  const d = $('sh-demolish'); if (d && !d.dataset.key) d.dataset.key = 'Del';
+  const d = $('sh-demolish') || $('sh-recycle'); if (d && !d.dataset.key) d.dataset.key = 'Del';
 }
 /** The open panel's button for key k, if it's showing and can be pressed. */
 function sheetKeyButton(k) {
   if (!UI.sheetKind || UI.sheetKind === 'build') return null;
-  if (k === 'delete' || k === 'backspace') { const d = $('sh-demolish'); return d && !d.disabled && d.offsetParent ? d : null; }
+  if (k === 'delete' || k === 'backspace') { const d = $('sh-demolish') || $('sh-recycle'); return d && !d.disabled && d.offsetParent ? d : null; }
   for (const id in SHEET_KEYS) {
     if (SHEET_KEYS[id] !== k) continue;
     const el = $(id);
@@ -1776,15 +1776,38 @@ function initSelBar() {
       <button class="btn small ghost" id="selbar-clear" aria-label="Clear selection">✕</button></div>
     <span class="hint" id="sel-status"></span>
     <span class="hint sel-mouse">Right-click open ground to hold it, a rival building or robot to attack, your Outpost to station them, or a Repair Station to get them fixed. Esc clears.</span>
-    <div class="sel-tools"><button class="btn small primary" id="sel-undo" hidden>Undo</button><button class="btn small" id="sel-view">All in view</button><button class="btn small" id="sel-army">Whole army</button><button class="btn small" id="sel-box">Box</button><button class="btn small" id="sel-info">Info</button><button class="btn small ghost" id="selbar-group" title="Save them as a control group (or ⌘/Ctrl/⌥ + 1–9)"></button></div>`;
+    <div class="sel-tools"><button class="btn small primary" id="sel-undo" hidden>Undo</button><button class="btn small" id="sel-view">All in view</button><button class="btn small" id="sel-army">Whole army</button><button class="btn small" id="sel-box">Box</button><button class="btn small" id="sel-info">Info</button><button class="btn small danger" id="sel-recycle" hidden></button><button class="btn small ghost" id="selbar-group" title="Save them as a control group (or ⌘/Ctrl/⌥ + 1–9)"></button></div>`;
   $('selbar-clear').onclick = () => { sfx('click'); selectBots([], false); };
   $('selbar-group').onclick = () => saveGroup(nextGroupNo());
   $('sel-undo').onclick = () => undoOrder();
   $('sel-view').onclick = () => { sfx('click'); selectBots(unitsInView(), false); if (!UI.sel.length) toast('None of your warbots are in view.', 'info'); };
   $('sel-army').onclick = () => { sfx('click'); selectBots(armyIds(ME).concat(S.bots.filter((u) => !u.dead && u.owner === ME && BOTS[u.type].siege).map((u) => u.id)), false); };
   $('sel-info').onclick = () => { sfx('click'); const us = selectable(ME, UI.sel).filter((u) => !u.inside); if (us.length === 1) openBotSheet(us[0]); else openPopSheet(); };
+  $('sel-recycle').onclick = () => recycleSelection();
   // Box: the next one-finger drag on the map draws a selection box (input.js), then it's off again. Tap Box again to call it off.
   $('sel-box').onclick = () => { sfx('click'); INPUT.boxArmed = !INPUT.boxArmed; refreshSelection(); };
+}
+
+/** The selected robots that Recycle on the selection bar would send (not those already on their way). */
+function selRecyclable() { return selectable(ME, UI.sel).filter((u) => recycleOffered(u) && !recycling(u)); }
+
+/**
+ * Recycle on the selection bar: the selected robots go to the nearest Bot Foundry to be taken apart. Several at once
+ * take a second tap to confirm. Undo (or any other order) sends them back to what they were doing.
+ */
+function recycleSelection() {
+  const us = selRecyclable();
+  if (!us.length) return;
+  if (us.length > 1 && !(UI.recycleArm && performance.now() - UI.recycleArm < 3000)) { sfx('click'); UI.recycleArm = performance.now(); refreshSelection(); return; }
+  UI.recycleArm = 0;
+  const was = us.map(orderSnapshot);
+  act('recycle', [us.map((u) => u.id)], (r) => {
+    if (typeof r === 'string') { sfx('error'); toast(r, 'warn'); refreshSelection(); return; }
+    sfx('order');
+    UI.undo = { was, until: performance.now() + ORDER_UNDO, text: `${r === 1 ? 'It\'s' : `${r} are`} on the way to be recycled.` };
+    toast(`${r === 1 ? `The ${BOTS[us[0].type].name} is` : `${r} robots are`} on the way to the Bot Foundry to be taken apart. Any other order calls it off.`, 'info');
+    refreshSelection();
+  });
 }
 
 /** Has the player warbots or Howitzers out in the open? (Then a finger held on the map draws a selection box: see input.js.) */
@@ -1886,7 +1909,7 @@ function refreshSelection() {
   bar.classList.toggle('touch', touch);
   if (!on) { UI.undo = null; INPUT.boxArmed = false; refreshGroupBar(); return; }
   // (its parts are made once, by initSelBar: made again if one isn't there, so a bar that lost a part can't stop this)
-  if (!['sel-title', 'sel-notes', 'sel-status', 'sel-box', 'sel-undo', 'selbar-group'].every((id) => $(id)) || !bar.querySelector('.sel-mouse')) initSelBar();
+  if (!['sel-title', 'sel-notes', 'sel-status', 'sel-box', 'sel-undo', 'sel-recycle', 'selbar-group'].every((id) => $(id)) || !bar.querySelector('.sel-mouse')) initSelBar();
   $('sel-box').classList.toggle('on', INPUT.boxArmed);
   let inside = 0, empty = 0;
   for (const u of orderable(ME, UI.sel)) { if (u.inside) inside++; if (!botArmed(u)) empty++; }
@@ -1898,6 +1921,11 @@ function refreshSelection() {
     : undo ? `<span class="ok">${esc(undo.text)}</span> Undo takes it back.` : (touch ? '<b>Tap the map</b> to send them · ' : '') + esc(selStatus(selectable(ME, UI.sel))));
   set('selbar-group', `Save as group ${nextGroupNo()}`);
   $('sel-undo').hidden = !undo;
+  // Recycle: these robots to the Bot Foundry, to be taken apart (several: a second tap within 3 s).
+  const rec = selRecyclable(), armed = rec.length > 1 && UI.recycleArm && performance.now() - UI.recycleArm < 3000;
+  $('sel-recycle').hidden = !rec.length;
+  set('sel-recycle', armed ? `Tap again: recycle ${rec.length}` : rec.length === 1 ? 'Recycle this unit' : `Recycle these ${rec.length} units`);
+  if (rec.length) $('sel-recycle').title = rec.length === 1 ? `Take it to the Bot Foundry to be taken apart (${recycleText(rec[0].type)} back)` : 'Take them to the Bot Foundry to be taken apart: about half their parts come back';
   refreshGroupBar();
 }
 
@@ -2855,7 +2883,7 @@ function coachScroll(sel) {
 }
 
 /** Where a goal's `ui` selector looks for the button that opens it (when the button itself isn't on screen). */
-const COACH_OPENERS = [[/\.bcard|#build-tabs/, '#btn-build'], [/#banner-/, '#btn-road'], [/#ar-/, '#btn-attack']];
+const COACH_OPENERS = [[/\.bcard|#build-tabs/, '#btn-build'], [/#banner-/, '#btn-road'], [/#ar-/, '#btn-attack'], [/#pop-/, '#pop']];
 
 /**
  * What to light up for goal g: its `ui` buttons if any is on screen; else the buttons that open the way to them (Build
@@ -5772,6 +5800,8 @@ function botActivity(u) {
   const t = u.task;
   if (BOTS[u.type].air) { const b = getE(u.home); return `${planeStatus(u)[0].toUpperCase()}${planeStatus(u).slice(1)}` + (b && !b.dead ? ` (based at the Airfield ${dirText(getE(S.players[u.owner].lander) || b, b)} from the Command Base)` : ' (no Airfield yet)'); }
   const nm = (id) => { const b = getE(id); return b ? BDEFS[b.type].name : 'a building'; };
+  if (t && t.type === 'recycle') return u.packing ? 'Going to be recycled: packing up first' : 'Going to be recycled at the Bot Foundry';
+  if (u.recycleTo) return 'Going to be recycled: taking cover from enemy warbots first, then on to the Bot Foundry';
   if (BOTS[u.type].siege) {
     if (u.salvo) return `Firing at the ${nm(u.salvo.target)}!`;
     if (u.packing) return 'Packing up to move';
@@ -5876,6 +5906,22 @@ function shieldRows(u) {
     `<div class="bar battery"><div style="width:${down ? 0 : Math.round(100 * sh / BULWARK.shield)}%;background:#b77bff"></div></div>`;
 }
 
+/** Does a robot's panel offer Recycle this unit (anything that walks or drives: not a plane, ship or train)? */
+function recycleOffered(u) { const bt = BOTS[u.type]; return !!bt && !bt.air && !bt.sea && !bt.rail && !bt.wild; }
+
+/** The Recycle section of one of your robots' panels: Recycle this unit (or why not), or Keep this unit while it's on its way. */
+function refreshRecycle(u) {
+  const btn = $('sh-recycle'), hint = $('sh-recycle-hint'), got = recycleText(u.type);
+  const on = recycling(u), why = on ? '' : recycleWhy(u);
+  const label = on ? 'Keep this unit' : 'Recycle this unit';
+  const text = on ? `On its way to the Bot Foundry, to be taken apart for ${got}. Keep this unit calls it off (so does any other order).`
+    : why || `It goes to the nearest Bot Foundry and is taken apart there: ${got} (half of what it took to make) goes into the Foundry's stock, and its place under the robot limit (${S.mode === 'colony' ? MAX_BOTS_COLONY : MAX_BOTS}) is free again.`;
+  if (btn.textContent !== label) btn.textContent = label;
+  btn.disabled = !!why;
+  btn.classList.toggle('danger', !on);
+  if (hint.textContent !== text) hint.textContent = text;
+}
+
 function openBotSheet(u) {
   R.selected = 0; R.selTile = -1; UI.selBot = u.id;
   const html = `<div class="sheet-title"><div><h3>${BOTS[u.type].name}</h3>
@@ -5892,6 +5938,7 @@ function openBotSheet(u) {
       <p class="hint"><b>Sail out of the Port</b>: tied up, it sails out to wait just off the Port, where you can tap it on the map. <b>Sail somewhere</b>: it sails to the spot you tap (open water, or right up to a shore) and waits there for your orders; with a mouse, right-click the water while its panel is open. <b>Take warbots aboard</b> loads your warbots standing within ${Math.floor(FERRY_REACH)} tiles of it (with a mouse, select warbots and right-click the Ferry: they walk to the shore beside it and board). <b>Put them ashore</b> lands them on the shore beside it, and it heads home. <b>Found a Port</b>: it loads ${costText(PORT_FOUND.cost)} at its Port and up to ${PORT_FOUND.workers} Workers, and puts up a Port on an empty shore that claims the land round it.</p>` : ''}
     ${u.owner === ME && BOTS[u.type].rail ? '<div class="section-label">Armor</div><p class="hint" id="sh-tarmor-hint"></p><button class="btn big" id="sh-tarmor">Armor this train</button>' : ''}
     ${u.owner === ME && BOTS[u.type].crawler ? '<div class="actions"><button class="btn primary" id="sh-crawl">Drive somewhere</button><button class="btn" id="sh-deploy">Deploy here</button></div>' : ''}
+    ${u.owner === ME && recycleOffered(u) ? '<div class="section-label">Recycle</div><p class="hint" id="sh-recycle-hint"></p><button class="btn big" id="sh-recycle">Recycle this unit</button>' : ''}
     ${u.owner === ME && BOTS[u.type].siege ? `<div class="actions"><button class="btn primary" id="sh-bombard">Bombard a building</button><button class="btn" id="sh-rgo">Drive somewhere</button></div>
       <div class="section-label">While it waits</div><div class="seg" id="sh-stance"><button data-v="fire">Fire at will</button><button data-v="hold">Hold fire</button></div>
       <p class="hint">It stays where you put it (beside the Foundry when it's new). <b>Fire at will</b>: it shells any enemy building that comes in reach of that spot, without moving. <b>Hold fire</b>: it fires only when you tell it to. After reloading it goes back to its target, or to its spot. With a mouse, select it and right-click a rival building to bombard it, or open ground to move it there.</p>` : ''}`;
@@ -5920,6 +5967,18 @@ function openBotSheet(u) {
   }
   if ($('sh-crawl')) $('sh-crawl').onclick = () => { sfx('click'); UI.crawler = u.id; setMode('crawl'); UI.crawler = u.id; showBanner('Tap where the <b>Crawler</b> should go: it rolls there (no road needed, but it can\'t climb cliffs or cross water) and deploys when it arrives.', null, 'Cancel'); };
   if ($('sh-deploy')) $('sh-deploy').onclick = () => act('deploy', [u.id], (why) => { if (why) { sfx('error'); toast(why, 'warn'); } else closeSheet(); });
+  if ($('sh-recycle')) $('sh-recycle').onclick = () => {
+    const name = BOTS[u.type].name;
+    if (recycling(u)) {
+      act('unrecycle', [u.id], (ok) => { sfx('click'); if (ok) toast(`The ${name} stays: it stops where it is.`, 'info'); refreshSheet(); });
+      return;
+    }
+    act('recycle', [[u.id]], (r) => {
+      if (typeof r === 'string') { sfx('error'); toast(r, 'warn'); }
+      else { sfx('order'); toast(`The ${name} is on its way to the Bot Foundry to be taken apart for ${recycleText(u.type)}. Keep this unit (on its panel) calls it off.`, 'info'); }
+      refreshSheet();
+    });
+  };
   if ($('sh-bombard')) $('sh-bombard').onclick = () => { sfx('click'); closeSheet(); setMode('bombard'); UI.rocket = u.id; showBanner(`Tap an enemy building: the <b>Howitzer</b> drives to within ${ROCKET.range} tiles of it, digs in and shells it, one heavy shell after another, until it's rubble.`, null, 'Cancel'); };
   if ($('sh-stance')) {
     const sync = () => { for (const btn of $('sh-stance').children) btn.classList.toggle('on', btn.dataset.v === (u.stance === 'hold' ? 'hold' : 'fire')); };
@@ -6400,6 +6459,7 @@ function openPopSheet() {
 /** What bot u is up to, for the Workers view's colours (a WORKER_VIEW key). */
 function workerViewKind(u) {
   const t = u.task, tt = t && t.type;
+  if (tt === 'recycle' || u.recycleTo) return 'recycling';
   if (tt === 'charge' || tt === 'refuel' || (u.inside && insideCharger(u) && !tt && (u.bat ?? 100) < 99)) return 'charging';
   if (tt === 'haul') return 'carrying';
   if (tt === 'staff') return 'running';
@@ -6408,7 +6468,7 @@ function workerViewKind(u) {
   return 'free';
 }
 const WORKER_VIEW = { running: ['#5dd88a', 'running buildings'], building: ['#ffb24a', 'building or paving'], carrying: ['#6ec8ff', 'carrying goods'],
-  charging: ['#c79bff', 'recharging'], repairing: ['#ff7a8a', 'being repaired'], free: ['#ffe45a', 'free'] };
+  charging: ['#c79bff', 'recharging'], repairing: ['#ff7a8a', 'being repaired'], recycling: ['#b8b2a6', 'going to be recycled'], free: ['#ffe45a', 'free'] };
 
 function refreshPopSheet() {
   const n = {};
@@ -6418,7 +6478,8 @@ function refreshPopSheet() {
     if (u.dead || u.owner !== ME) continue;
     total++;
     const t = u.task, tt = t && t.type;
-    if (isArmy(u)) {
+    if (recycling(u)) add(u.type, 'recycling');
+    else if (isArmy(u)) {
       add(u.type, u.inside ? 'garrison' : 'field');
       if (!botArmed(u)) add(u.type, 'noAmmo'), n[u.type].total--;
     } else if (tt === 'charge' || tt === 'refuel' || (u.inside && insideCharger(u) && !tt && (u.bat ?? 100) < 99)) add(u.type, 'charging');
@@ -6432,9 +6493,9 @@ function refreshPopSheet() {
   const rows = BOT_ORDER.filter((k) => n[k] || (!BOTS_OFF.has(k) && (warOn() || !BOTS[k].war) && (navalMap() || !BOTS[k].naval))).map((k) => {
     const o = n[k] || { total: 0 };
     const bits = BOTS[k].army
-      ? [part(o, 'garrison', 'in garrisons'), part(o, 'field', 'in the field'), part(o, 'noAmmo', BOTS[k].flame ? 'out of Fuel' : 'out of Ammo')]
+      ? [part(o, 'garrison', 'in garrisons'), part(o, 'field', 'in the field'), part(o, 'noAmmo', BOTS[k].flame ? 'out of Fuel' : 'out of Ammo'), part(o, 'recycling', 'going to be recycled')]
       : [part(o, 'running', 'running buildings'), part(o, 'carrying', 'carrying goods'), part(o, 'building', 'building or paving'),
-        part(o, 'charging', 'recharging'), part(o, 'repairing', 'being repaired'), part(o, 'free', 'free')];
+        part(o, 'charging', 'recharging'), part(o, 'repairing', 'being repaired'), part(o, 'recycling', 'going to be recycled'), part(o, 'free', 'free')];
     return `<div class="kv pop-row"><span><b>${o.total}</b> ${o.total === 1 ? BOTS[k].name : BOTS[k].plural}</span><span>${bits.filter(Boolean).join(' · ') || '–'}</span></div>`;
   });
   const cap = S.mode === 'colony' ? MAX_BOTS_COLONY : MAX_BOTS;
@@ -6448,13 +6509,30 @@ function refreshPopSheet() {
   const wv = `<div class="section-label">Where your workers are</div>
     <button class="btn${R.workerView ? ' primary' : ''}" id="sh-wview">${R.workerView ? 'Hide workers on the map' : 'Show workers on the map'}</button>
     <p class="hint">Rings every Worker on the map (and dots it on the minimap) in the colour of what it's doing, with a line to where it's going: ${Object.values(WORKER_VIEW).map(([c, l]) => `<span style="color:${c}">●</span> ${l}`).join(', ')}. Workers inside a building show as a count on it.</p>`;
+  // Spare Workers: those past one for each building that takes a Worker and a few free for building (workersWanted),
+  // offered for recycling at a Bot Foundry while there are any.
+  const want = workersWanted(ME), sp = spareBots(ME, 'worker', want), nw = (n.worker && n.worker.total) || 0, away = (n.worker && n.worker.recycling) || 0;
+  const free = MIN_FREE_WORKERS + RECYCLE_KEEP, takes = want - free, can = sp.list.length;
+  const why = !sp.over ? '' : !S.buildings.some((b) => !b.dead && b.owner === ME && b.built && BDEFS[b.type].bots) ? 'Spare Workers are taken apart at a Bot Foundry: build one first.'
+    : !can ? 'None of them can get to a Bot Foundry from where they are.' : can < sp.over ? `${sp.over - can} of them can't get to a Bot Foundry from where they are.` : '';
+  const spare = `<div class="section-label">Spare Workers</div>` + (sp.over
+    ? `<p class="hint">${nw - away} Workers: ${takes} building${takes === 1 ? ' takes' : 's take'} one and ${free} stay free for building, so <b>${sp.over}</b> ${sp.over === 1 ? 'is' : 'are'} spare.` +
+      ` Each fills a place under the robot limit: recycled at a Bot Foundry, it gives back ${recycleText('worker')} and its place.${away ? ` (${away} already on the way.)` : ''}${why ? ` <span class="err">${why}</span>` : ''}</p>` +
+      `<button class="btn danger" id="pop-recycle"${can ? '' : ' disabled'}>Recycle ${can || sp.over} spare Worker${(can || sp.over) === 1 ? '' : 's'}</button>`
+    : `<p class="hint">None spare: ${takes} building${takes === 1 ? ' takes' : 's take'} a Worker and ${free} stay free for building${away ? ` (${away} on the way to be recycled)` : ''}.</p>`);
   // Rebuilt only when something shown changes: rebuilt four times a second, a click on Show or the workers
   // button was lost when the button under it was replaced between press and release.
-  const el = $('sh-pop'), html = rows.join('') + `<div class="kv"><span>All robots</span><span><b>${total}</b> of ${cap} (the limit)</span></div>` + wv + wb;
+  const el = $('sh-pop'), html = rows.join('') + `<div class="kv"><span>All robots</span><span><b>${total}</b> of ${cap} (the limit)</span></div>` + spare + wv + wb;
   if (el.dataset.html === html) return;
   el.dataset.html = html;
   el.innerHTML = html;
   $('sh-wview').onclick = () => { R.workerView = !R.workerView; sfx('click'); refreshPopSheet(); };
+  if ($('pop-recycle')) $('pop-recycle').onclick = () => act('recycleSpare', [], (k) => {
+    if (!k) { sfx('error'); toast('No spare Workers to recycle.', 'warn'); return; }
+    sfx('order');
+    toast(`${k} spare Worker${k === 1 ? ' is' : 's are'} on the way to the Bot Foundry to be taken apart: ${recycleText('worker')} back for each, and room under the robot limit.`, 'info');
+    refreshPopSheet();
+  });
   for (const btn of $('sh-pop').querySelectorAll('[data-wb]')) btn.onclick = () => showWarbots(btn.dataset.wb);
 }
 
@@ -6531,6 +6609,7 @@ function refreshSheet() {
     if ($('sh-recall')) $('sh-recall').hidden = !(u.task && u.task.type === 'hold');
     if ($('sh-fout')) $('sh-fout').hidden = !u.inside || !!u.landing;
     if ($('sh-tarmor')) refreshTrainArmor(u);
+    if ($('sh-recycle')) refreshRecycle(u);
   } else if (UI.sheetKind === 'move') {
     const t = UI.sheetFor, i = t % S.W, j = (t / S.W) | 0;
     const avail = refreshMoveStepper(i, j);
