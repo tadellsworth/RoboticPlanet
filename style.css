@@ -1458,3 +1458,17 @@ a.btn { display: block; text-align: center; text-decoration: none; color: inheri
 }
 @keyframes starve-pulse { 50% { opacity: 0.35; } }
 @media (prefers-reduced-motion: reduce) { .res-chip.starved::after { animation: none; } }
+.o-report { margin: 4px 0 6px; }
+.o-report h3 { margin: 14px 0 6px; font-size: 15px; color: var(--text); }
+.rp-time { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; font-size: 14px; line-height: 1.35; }
+.rp-time li { display: grid; grid-template-columns: 3.4em 1fr; gap: 8px; padding: 5px 8px 5px 6px; border-left: 3px solid var(--line); border-radius: 0 8px 8px 0; }
+.rp-time li.good { border-left-color: var(--good); }
+.rp-time li.bad { border-left-color: var(--danger); }
+.rp-time li.warn { border-left-color: var(--warn); }
+.rp-time li.key { background: rgba(255, 255, 255, 0.06); }
+.rp-time li.key b { color: var(--warn); }
+.rp-t { color: var(--muted); font-variant-numeric: tabular-nums; text-align: right; }
+.rp-loss { margin: 4px 0; }
+.rp-none { margin: 2px 0; }
+.rp-tip { margin: 12px 0 4px; padding: 9px 11px; border-radius: 12px; font-size: 14px; line-height: 1.4; background: rgba(56, 212, 255, 0.08); border: 1px solid rgba(56, 212, 255, 0.35); }
+.rp-tip b { color: var(--accent); }

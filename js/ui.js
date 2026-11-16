@@ -2698,6 +2698,7 @@ function showGameOver() {
   $('o-code').hidden = true;
   $('o-keep').hidden = true;
   $('o-log').hidden = true;
+  $('o-report').hidden = true;
   if (S.mission) { showMissionOver(); return; }
   const won = S.winner === ME || allies(S.winner, ME), how = S.endHow || 'capture', many = S.players.length > 2;
   const The = S.players[S.winner] ? playerName(S.winner) : 'The rival'; // (its callsign; a person, in multiplayer: by name)
@@ -2723,6 +2724,9 @@ function showGameOver() {
     ['Time', fmtTime(S.time)], ['Buildings completed', st.built], ['Bots built', st.bots - (st.startBots || 0)],
     ['Enemy buildings captured', st.captured], ['Bots lost', st.lost],
   ].map(([k, v]) => `<span>${k}</span><span>${v}</span>`).join('');
+  // The report: the moments that mattered, where goods were lost, a tip for next time (js/insight.js).
+  $('o-report').innerHTML = gameReport(won);
+  $('o-report').hidden = !$('o-report').innerHTML;
   // Won a game against the computer: you can play on (keepPlaying), if it was a fun one and there's more fighting to do.
   $('o-keep').hidden = !(won && !MP.on);
   $('screen-over').hidden = false;
@@ -3015,6 +3019,8 @@ function showMissionOver() {
     : M.why === 'time' ? `${def.name}: time ran out before every goal was met.`
       : M.why === 'lander' ? `${def.name}: the rival captured your Command Base.` : `${def.name}: the game ended before every goal was met.`;
   $('o-stats').innerHTML = states.map((s) => { return `<span>${s.done ? '✓' : '✗'} ${s.text}</span><span>${s.need > 1 ? `${s.have}/${s.need}` : s.done ? 'Done' : '–'}</span>`; }).join('');
+  $('o-report').innerHTML = gameReport(won); // (the moments that mattered, where goods went, a tip: js/insight.js)
+  $('o-report').hidden = !$('o-report').innerHTML;
   if (won) {
     completeMission(k, M.diff);
     if (k + 1 < MISSIONS.length) {
