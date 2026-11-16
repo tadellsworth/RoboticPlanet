@@ -229,6 +229,31 @@ const ORDERS = {
     else out.kind = 'none';
     return out;
   },
+  /**
+   * Undo for a tap's order (the selection bar's Undo, under a finger): each robot goes back to what it was doing
+   * before it, as noted then (orderSnapshot in ui.js): a list of [id, kind, a, b, post, auto], kind 'in' (garrison
+   * a), 'attack' (building a), 'hold' (the ground at a, b), 'bombard' (building a; auto: a target it picked itself),
+   * 'park' (at a, b) or 'free'; post is where it was posted. How many went back.
+   */
+  undoCommand(p, list) {
+    let n = 0;
+    for (const e of Array.isArray(list) ? list : []) {
+      const [id, k, a, b, post, auto] = Array.isArray(e) ? e : [], u = ownU(p, id), ids = [id];
+      if (!u || !(isArmy(u) || BOTS[u.type].siege)) continue;
+      if (k === 'in') { const g = ownB(p, a); if (g) orderStation(p, ids, g); }
+      else if (k === 'attack') { const t = liveB(a); if (t) orderAttack(p, ids, t); }
+      else if (k === 'hold') orderMove(p, ids, a | 0, b | 0);
+      else if (k === 'bombard') { const t = liveB(a); if (t && orderBombard(p, ids, t) && auto && u.task) u.task.auto = true; }
+      else if (k === 'park') orderPark(p, ids, a | 0, b | 0);
+      else if (BOTS[u.type].siege) { u.task = null; u.salvo = null; u.path = null; }
+      else if (!u.inside) { readyForOrder(u); u.task = null; } // it was standing free: free again (it finds itself a garrison)
+      if (post && typeof post === 'object') u.post = { i: post.i | 0, j: post.j | 0 };
+      else if (typeof post === 'number') u.post = post;
+      else delete u.post;
+      n++;
+    }
+    return n;
+  },
   sail(p, fid, i, j) { const f = ownU(p, fid, 'ferry'); return f ? orderSail(p, f, i, j) : 'That Ferry is gone.'; },
   ferryBack(p, fid) { const f = ownU(p, fid, 'ferry'); if (f) ferryBack(f); },
   sailOut(p, fid) { const f = ownU(p, fid, 'ferry'); return f ? sailOut(p, f) : 'That Ferry is gone.'; },

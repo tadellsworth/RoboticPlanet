@@ -6,6 +6,7 @@
 let _lastFrame = performance.now();
 let _acc = 0;
 let _demoT = 0;
+const DEMO_FRAME = 30; // ms between drawn frames of the demo behind the menu: about 30 a second is plenty for a backdrop
 
 function startDemo() {
   const seed = randomSeed();
@@ -42,6 +43,26 @@ function frameError(e) {
   console.error('Terrafall: a frame failed and the game carried on.', e);
 }
 
+/**
+ * Does this frame need drawing? Not when a full screen covers the map in a game (the pause menu, Help,
+ * Statistics, game over...), the game behind it is standing still (paused, or over; a multiplayer game runs on under
+ * its pause menu) and nothing that shows has changed since the last one drawn: the view, the size of the canvas, new
+ * art (R.dirty). A paused game used to be drawn sixty times a second behind its pause menu. And the
+ * demo behind the main menu is drawn every DEMO_FRAME ms, not every frame.
+ */
+const COVERS = ['screen-pause', 'screen-help', 'screen-stats', 'screen-over', 'screen-boost', 'screen-missions', 'screen-mp'];
+let _drawAt = 0, _drawDt = 0, _drawKey = '';
+function drawNeeded(now) {
+  if (!S || !R.map) return true;
+  if (!UI.inGame) return now - _drawAt >= DEMO_FRAME;
+  const still = (UI.paused && !MP.on) || S.winner >= 0;
+  const covered = still && COVERS.some((id) => { const el = document.getElementById(id); return el && !el.hidden; });
+  const c = R.cam, key = covered ? `${c.x},${c.y},${c.z},${R.canvas.width},${R.canvas.height}` : '';
+  const same = key !== '' && key === _drawKey && !R.dirty;
+  _drawKey = key;
+  return !same;
+}
+
 function step(now) {
   const dt = Math.min(0.1, (now - _lastFrame) / 1000);
   if (UI.inGame) watchFrameRate(now - _lastFrame);
@@ -60,7 +81,11 @@ function step(now) {
     if (!UI.inGame) demoCamera(dt);
     else keyPan(dt);
   }
-  render(dt);
+  _drawDt += dt;
+  if (drawNeeded(now)) {
+    render(Math.min(0.1, _drawDt)); // (the time since the last frame drawn, so what moves by the clock keeps its pace)
+    _drawAt = now; _drawDt = 0; R.dirty = false;
+  }
   uiTick(dt);
   audioTick(dt);
 }
@@ -69,13 +94,14 @@ function boot() {
   const canvas = document.getElementById('game');
   initRender(canvas);
   initInput(canvas, { onTap: onMapTap, onPaint: onRoadPaint, onPaintEnd: () => { UI.lastPaint = null; UI.roadWarned = false; }, onHover: onMapHover,
-    onBox: onSelectBox, onCommand: onMapCommand });
+    onBox: onSelectBox, onCommand: onMapCommand, canBox: fieldUnits, onGrab: mapGrab, canPaint: roadPaintStarts });
   initUI();
   // Custom art loads in the background; redraw once after a burst of images arrives.
   let rebake = 0;
   loadArt(() => {
+    R.dirty = true; // (new art shows even on a frame that would otherwise be skipped: see drawNeeded)
     clearTimeout(rebake);
-    rebake = setTimeout(() => { UI.icons = {}; if (S && R.map) bakeMap(); }, 120);
+    rebake = setTimeout(() => { UI.icons = {}; if (S && R.map) { bakeMap(); R.dirty = true; } }, 120);
   });
   startDemo();
   requestAnimationFrame(frame);

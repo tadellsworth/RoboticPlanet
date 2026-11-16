@@ -34,7 +34,12 @@
         <svg viewBox="0 0 24 24" width="16" height="16"><rect x="6" y="5" width="4" height="14" rx="1" fill="currentColor"/><rect x="14" y="5" width="4" height="14" rx="1" fill="currentColor"/></svg>
       </button>
     </div>
-    <button id="objective" class="objective"></button>
+    <div class="objrow">
+      <button id="objective" class="objective"></button>
+      <button id="btn-msgs" class="chip chip-btn msgs-btn" aria-label="Recent messages" title="Recent messages" hidden>
+        <svg viewBox="0 0 24 24" width="18" height="18"><path d="M4 5h16v11H9l-5 4z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M8 9h8M8 12.5h5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+      </button>
+    </div>
     <div id="event-card" class="event-card" hidden></div>
     <div id="nuke-card" class="event-card nuke" hidden></div>
     <div id="win-card" class="event-card win-card" hidden></div>
@@ -67,16 +72,17 @@
     <div id="banner-text"></div>
     <div class="banner-actions">
       <div id="banner-seg" class="seg road-seg" hidden><button data-v="road">Roads<kbd>R</kbd></button><button data-v="bridge">Bridges<kbd>G</kbd></button><button data-v="ramp">Ramps<kbd>V</kbd></button><button data-v="pave">Pave<kbd>E</kbd></button><button data-v="arrows">Arrows<kbd>O</kbd></button><button data-v="lights">Junctions<kbd>L</kbd></button><button data-v="wall" hidden>Walls<kbd>X</kbd></button><button data-v="rail">Rail<kbd>N</kbd></button><button data-v="pipe">Pipes<kbd>K</kbd></button></div>
-      <button id="banner-undo" class="btn" hidden>Undo</button>
+      <button id="banner-undo" class="btn" title="Undo (Ctrl+Z)" hidden>Undo</button>
       <button id="banner-clear" class="btn" hidden>Clear</button>
       <button id="banner-ok" class="btn primary">Build here</button>
       <button id="banner-route" class="btn" hidden title="Route to: tap a spot and the best way there is planned">Route to<kbd>Z</kbd></button>
-      <button id="banner-traffic" class="btn" hidden>Traffic map<kbd>T</kbd></button>
+      <button id="banner-traffic" class="btn" hidden>Traffic<span class="wide"> map</span><kbd>T</kbd></button>
       <button id="banner-cancel" class="btn">Cancel</button>
     </div>
   </div>
 
   <section id="sheet" hidden>
+    <button id="sheet-grab" class="sheet-grab" aria-label="Panel height: drag up or down, or tap to switch between half and full"></button>
     <button id="sheet-close" class="sheet-close" aria-label="Close">
       <svg viewBox="0 0 24 24" width="18" height="18"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/></svg>
     </button>
@@ -343,6 +349,19 @@
   <div class="card help-card">
     <h2>How to play</h2>
     <div class="help-body">
+      <div id="h-touch" class="touch-card" hidden>
+        <h3>Touch controls</h3>
+        <ul class="chain">
+          <li><b>Move:</b> drag with one finger. <b>Zoom:</b> pinch. Tap the minimap to jump.</li>
+          <li><b>Inspect:</b> tap anything; drag its panel's handle up or down.</li>
+          <li><b>Build:</b> tap Build, pick a card, tap a spot, tap it again to confirm.</li>
+          <li><b>Roads:</b> in Paths one finger sketches and <b>two fingers move the map</b>; or tap <b>Route to</b>, then where the road should go.</li>
+          <li><b>Army:</b> tap Army, pick an order, then tap a rival building or open ground.</li>
+          <li><b>Warbots:</b> tap one to select it (again for all in view), then tap where to send them; <b>Undo</b> takes it back. Hold, then drag, to box several.</li>
+          <li><b>Back</b> closes what's open, then pauses. The game saves itself.</li>
+        </ul>
+        <p class="hint">The rest is below: pick a chapter.</p>
+      </div>
       <div id="hs-top">
         <p>Your robots have landed on a small planet: gather its resources, link them into supply chains and grow your colony. Play <b>Versus</b> to race and fight rival colonies, or <b>Colony</b> to build at your own pace with no rival at all.</p>
         <nav class="help-toc" aria-label="Contents">
@@ -489,7 +508,7 @@
       <section id="hs-roads">
         <h3>Roads and traffic</h3>
         <p>Roads are the heart of your colony. Every building that takes goods in or sends them out, and every site, needs a road joined to your Command Base's network (or to a Depot on it). A red <b>road badge</b> marks one with none: tap it and choose <b>Lay road</b> to pave the shortest way.</p>
-        <p><b>Paths</b> (<kbd>R</kbd>) is where you plan roads and everything like them: <b>Roads</b>, <b>Bridges</b>, <b>Ramps</b>, <b>Pave</b>, <b>Arrows</b>, <b>Junctions</b>, <b>Walls</b>, <b>Rail</b> and <b>Pipes</b>, plus <b>Route to</b> and the <b>Traffic map</b>. <b>Sketch</b> a road by dragging across the map, or tap tiles to add them (tap again to drop one). It shows bright blue, with its cost in the banner at the top. <b>Nothing is spent until you tap Build</b>: <b>Undo</b> takes back the last drag and <b>Clear</b> wipes the sketch. Tap an existing road to mark it with a red cross to take up, Cement back.</p>
+        <p><b>Paths</b> (<kbd>R</kbd>) is where you plan roads and everything like them: <b>Roads</b>, <b>Bridges</b>, <b>Ramps</b>, <b>Pave</b>, <b>Arrows</b>, <b>Junctions</b>, <b>Walls</b>, <b>Rail</b> and <b>Pipes</b>, plus <b>Route to</b> and the <b>Traffic map</b>. <b>Sketch</b> a road by dragging across the map, or tap tiles to add them (tap again to drop one). It shows bright blue, with its cost in the banner (at the top; on an upright phone across the bottom, in place of the tools, with <b>How it works</b> as a tab on its edge). Sketch up to the edge of the map and it scrolls on under your finger, so a long road is one stroke; on a touch screen two fingers move the map and zoom. <b>Nothing is spent until you tap Build</b>: <b>Undo</b> takes back the last drag and <b>Clear</b> wipes the sketch. Tap an existing road to mark it with a red cross to take up, Cement back.</p>
         <p><b>Pay as you go.</b> Short of Cement or Alloy? Plan it anyway: what you can't pay for yet waits, and is paid from storage as the goods come in, oldest plans first (a road tile still waiting has an orange outline). Planned tiles show dashed until <b>free Workers pave them</b>, about a second and a half a tile, working out from the roads you have. A long highway is a project: keep a few Workers free.</p>
         <ul class="chain">
           <li>Roads double a bot's speed, and bots follow a road round its corners.</li>
@@ -503,7 +522,7 @@
         <p><b>Ramps.</b> Bots can't climb cliffs. Drag a road straight up a one-level cliff and a <b>Ramp</b> is planned where it climbs (3 Cement, 1 Fiber), or pick <b>Ramps</b> and tap the top or foot of the cliff. Ramps are paid from storage and don't count against the site limit; none climbs two levels at once. A Worker builds each from whichever side is the shorter trip.</p>
         <p><b>Outside your land</b> roads, track and pipes go only over open ground on no-one's land; tunnels, and pipe across water or rock, need your own land. Road and rail bridges can push out over the water a tile at a time from your shore or the end of a bridge, so a channel inside the enemy's border can still be crossed.</p>
         <p><b>Junctions</b>, where three or four roads meet, slow bots as they cross and give way. Pick <b>Junctions</b> and tap one for a <b>traffic light</b> (1 Alloy): one direction at a time, switching when traffic waits the other way. Tap again for an <b>overpass</b> (4 Cement, 3 Alloy): one road passes over the other and nobody slows or waits. Tap again to clear it. Measured with Haulers crossing both ways: a light costs a little with light traffic (about 5%) and moves 50 to 85% more in heavy traffic; an overpass is best everywhere. Short of Alloy? Tap anyway: it's planned (a dashed orange marker) and goes up once paid for.</p>
-        <p><b>One-way roads.</b> Pick <b>Arrows</b> and drag along a road to make it one-way; tap a road to turn its arrow. A loop of one-way roads, one lane out and one back, keeps traffic flowing. Bots can still go the wrong way, but only at a crawl.</p>
+        <p><b>One-way roads.</b> Pick <b>Arrows</b> and drag along a road to make it one-way; tap a road to turn its arrow. <b>Undo</b> turns them back, a drag or tap at a time. A drag that starts off your roads moves the map instead. A loop of one-way roads, one lane out and one back, keeps traffic flowing. Bots can still go the wrong way, but only at a crawl.</p>
         <p><b>Traffic.</b> Bots queue behind the bot ahead, keep to their own side of a two-way road (oncoming traffic slows them), and speed up and brake like real vehicles. Every stop costs time, above all for slow-starting trucks, so long straight roads, one-way loops, lights and overpasses pay off.</p>
         <p><b>Route to</b> (<kbd>Z</kbd>, on Roads, Bridges or Rail): tap a spot and the cheapest road (or track) there from your network is planned for you, round fields, up cliffs with a Ramp, over water or through rock only when that saves a long way round. Tap another spot to try again, or <b>Build</b> to keep it. Drag from one spot to another to route between them; with a mouse, a dashed line previews the way to the pointer.</p>
         <p><b>Traffic map</b> (<kbd>T</kbd>) tints every road by how busy it's been over the last minute, green to red, with pulsing rings where bots stand waiting. The banner shows a quiet/busy/packed key, the number of jams and how many Haulers, Freight Trucks and Tankers are busy.</p>
@@ -620,7 +639,7 @@
           <li><b>Attack</b> (<kbd>Q</kbd>): tap a rival building to attack it, or a robot to hunt it down (they come back once it's dead). Attacks on a building only draw on garrisons within 14 tiles of it; with none in reach, a rally flag is planted beside it instead.</li>
           <li><b>Hold ground</b> (<kbd>G</kbd>): tap open ground and they plant a <b>rally flag</b> there and stand guard. Flags and hunts draw on any garrison your warbots can walk from.</li>
           <li><b>Station</b> (<kbd>V</kbd>): tap an Outpost, Keep or Bunker of yours.</li>
-          <li><b>Recall all</b> (<kbd>C</kbd>) brings every warbot home. <b>In the field</b> lists each flag and attack, with <b>Show</b>, <b>+N</b> (send more), <b>Recall</b> and <b>Call back</b>.</li>
+          <li><b>Recall all</b> (<kbd>C</kbd>) brings every warbot home (on a touch screen, tap it twice). <b>In the field</b> lists each flag and attack, with <b>Show</b>, <b>+N</b> (send more), <b>Recall</b> and <b>Call back</b>.</li>
         </ul>
         <p>Tap a flag for its panel: <b>Call them back</b> (<kbd>C</kbd>), or send more with <b>Send warbots</b>. Tap a rival building itself for <b>Send warbots</b> (from garrisons within 14 tiles), <b>Fire missile</b> and <b>Bomb it</b>. Warbots you move, station or call back march there without stopping to fight. A cut-off post, such as a Drop Outpost, only sends its warbots within 16 tiles of it.</p>
         <p><b>Capturing.</b> Outposts, Keeps and Command Bases have to be captured, not knocked down: warbots shoot their way in. When a fort drops below a quarter of its armour, every armed warbot inside comes out to fight. Enemy bots can't walk through your Outposts (nor yours through theirs) without breaking in. Capturing an Outpost takes its land, and the enemy buildings its ring now covers are cut off.</p>
@@ -663,7 +682,7 @@
         <h3>Missiles and nukes</h3>
         <p>A <b>Missile Factory</b> (Make tab; 4 Cement, 4 Alloy, 2 Chips) builds a Missile from 2 Alloy, 1 Chip and 1 Fuel in 20 seconds, and Haulers load them into a <b>Missile Silo</b> (Defend tab; 5 Cement, 4 Alloy, 2 Chips), which holds two and fires up to 22 tiles. A Silo shows its missile only when one is loaded and ready.</p>
         <ul class="chain">
-          <li><b>To fire</b>, tap your Silo and press <b>Aim missile</b> (<kbd>F</kbd>): its range shows as a red ring. Tap a spot inside (a rival building, or ground where enemy warbots gather) to see the blast, then <b>Fire</b>. Or tap a rival building itself and press <b>Fire missile</b> (<kbd>F</kbd>): your nearest ready Silo in range fires.</li>
+          <li><b>To fire</b>, tap your Silo and press <b>Aim missile</b> (<kbd>F</kbd>): its range shows as a red ring. Tap a spot inside (a rival building, or ground where enemy warbots gather) to see the blast, then <b>Fire</b>. On a touch screen the map stays close enough to aim with a finger: move it to the target, tap to drop the crosshair, drag the crosshair to adjust, then Fire (a second tap doesn't fire). A bomber's strike and a Howitzer's target are picked the same way: tap the target, then the banner's <b>Strike</b> or <b>Bombard</b>. Or tap a rival building itself and press <b>Fire missile</b> (<kbd>F</kbd>): your nearest ready Silo in range fires.</li>
           <li><b>A hit</b> takes 24 armour off the target, damages buildings and bots within about 2 tiles, and craters the roads and pipes where it lands, bridges and tunnels included. That wrecks an Outpost, a Drop Outpost and most other buildings outright. A Bunker at full armour is left with 8, and Walls and Gates take two Missiles (more near their owner's Keep, which shields and mends them). Only Command Bases and Keeps are floored at about a third: warbots still have to capture them.</li>
           <li>Dust storms ground every missile. The rival saves up for them too and aims at turrets, Silos and Outposts, so spread out and keep your turrets covered.</li>
         </ul>
@@ -803,21 +822,26 @@
         <h3>Interface and controls</h3>
         <ul class="chain">
           <li><b>Top bar</b>: your goods (tap one for Goods), the robot counter (tap for Your robots), the clock, the speed (<b>1×</b>), full screen and the pause menu.</li>
-          <li>The <b>Goal</b> chip under it: your first steps in free play (then your next Colony milestone or the capture goal), or a mission's goals. A red line warns of buildings with no road: tap the building and choose <b>Lay road</b> on its panel. Tap the chip to fold it away. Event, nuke and victory cards appear under it too.</li>
-          <li><b>Messages</b> pop up under the top bar: tap one to go to the place it's about, or press <kbd>J</kbd> for the latest warning.</li>
-          <li>The <b>minimap</b>: tap or drag on it to move the view. Land is tinted by owner, buildings are squares (Command Bases bigger), Trade Posts gold diamonds, Uplinks ringed dots and nests red, and buildings under attack flash. Hide it with ×; the map chip (or <kbd>M</kbd>) brings it back.</li>
-          <li><b>Bottom bar</b>: <b>Build</b>, <b>Paths</b>, <b>Army</b> and <b>Base</b> (back to your Command Base).</li>
-          <li>Tap anything for its <b>panel</b>: what it's doing, and the buttons for it. Tap the same spot again to step to the next thing piled there (a Crawler parked on a Foundry, say).</li>
+          <li>The <b>Goal</b> chip under it: your first steps in free play (then your next Colony milestone or the capture goal), or a mission's goals. A red line warns of buildings with no road: tap the building and choose <b>Lay road</b> on its panel. Tap the chip to fold it away (on a phone it folds by itself at your first tap on the map, and opens again for each new step). Event, nuke and victory cards appear under it too.</li>
+          <li><b>Messages</b> pop up under the top bar and stay longer the longer they are; taps go through them to the map. One about a place has a <b>Go</b> button to go there (or press <kbd>J</kbd> for the latest warning). The button beside the folded Goal chip lists the last 20.</li>
+          <li>The <b>minimap</b>: tap or drag on it to move the view. Land is tinted by owner, buildings are squares (Command Bases bigger), Trade Posts gold diamonds, Uplinks ringed dots and nests red, and buildings under attack flash. Hide it with × (on a touch screen a tab hanging under it); the map chip (or <kbd>M</kbd>) brings it back.</li>
+          <li><b>Bottom bar</b>: <b>Build</b>, <b>Paths</b>, <b>Army</b> and <b>Base</b> (back to your Command Base). On a phone held on its side they run down the left edge, panels open down the right, and only the newest message shows (bottom right).</li>
+          <li>In free play the <b>Build</b> list pins the building your next step asks for at the top. A building with no road to storage has <b>Lay road</b> at the top of its panel.</li>
+          <li>Tap anything for its <b>panel</b>: what it's doing, and the buttons for it. Tap the same spot again to step to the next thing piled there (a Crawler parked on a Foundry, say). On a phone a panel opens at half height with what it's about in view above it: drag its <b>handle</b> up for the whole panel or down to its title strip (further down closes it), or tap the handle.</li>
         </ul>
-        <p><b>Touch.</b> Drag to move the map and pinch to zoom; in Paths a drag sketches instead. Place a building with two taps on the same tile, or a tap and <b>Build here</b>. Robots can't be box-selected on a touch screen, so give your army its orders from the Army panel. Triple-tap the clock for Boosts.</p>
-        <p><b>Mouse.</b> Scroll to zoom (on a Mac, pinch the trackpad; swipe sideways or Shift + scroll to pan). Pan with <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> or the arrow keys, by resting the mouse at the edge of the window, or by right- or middle-dragging. Click to select, and rest the mouse on anything for a tip.</p>
+        <p><b>Touch.</b> Drag to move the map and pinch to zoom; in Paths a drag sketches instead. Place a building with two taps on the same tile, or a tap and <b>Build here</b>. The phone's <b>Back</b> button steps back like <kbd>Esc</kbd>: it closes what's open, and with nothing open it brings up the pause menu (the game saves itself). The screen stays awake while a game runs. Triple-tap the clock for Boosts.</p>
         <ul class="chain">
+          <li><b>Warbots:</b> tap one of yours (or a Howitzer) to select it; tap it again quickly for all of its kind in view. The <b>selection bar</b> has <b>All in view</b>, <b>Whole army</b>, <b>Box</b> (then drag a finger round them; or hold a finger still a moment, then drag), <b>Info</b> and <b>Save as group</b>.</li>
+          <li>While it shows, <b>tap the map</b> to send them: open ground to hold it, a rival building or robot to attack, your Outpost to station them, your Repair Station to get them fixed. <b>Undo</b> takes the order back for a few seconds. A drag only moves the map; ✕ clears the selection.</li>
+        </ul>
+        <p class="keys"><b>Mouse.</b> Scroll to zoom (on a Mac, pinch the trackpad; swipe sideways or Shift + scroll to pan). Pan with <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> or the arrow keys, by resting the mouse at the edge of the window, or by right- or middle-dragging. Click to select, and rest the mouse on anything for a tip.</p>
+        <ul class="chain keys">
           <li><b>Drag a box</b> round your warbots, Bulwarks and Torches to select them (a box round a garrison takes all but one inside; Shift adds to the selection).</li>
           <li>Then <b>right-click</b>: open ground to hold it, a rival robot to hunt it, a rival building to attack it, your Outpost, Keep, Bunker, Drop Outpost or Command Base to station them, your Repair Station to get the damaged ones fixed, or your Ferry to walk over and board.</li>
           <li><kbd>Ctrl</kbd>/<kbd>⌘</kbd> (or <kbd>Alt</kbd>/<kbd>⌥</kbd>, or <kbd>Shift</kbd>) + <kbd>1</kbd>–<kbd>9</kbd> saves the selection as a group (in a Mac browser tab ⌘ + a number may switch tabs: use ⌥, or <b>Save as group</b>). <kbd>1</kbd>–<kbd>9</kbd> selects it again, twice to jump to it. Groups show as chips above the selection bar and are kept with the saved game.</li>
         </ul>
-        <p><b>Keys.</b></p>
-        <ul class="chain">
+        <p class="keys"><b>Keys.</b></p>
+        <ul class="chain keys">
           <li><kbd>B</kbd> Build, then a tab (<kbd>1</kbd> Gather, <kbd>2</kbd> Make, <kbd>3</kbd> Move, <kbd>4</kbd> Defend, <kbd>5</kbd> All; <kbd>Tab</kbd> steps through them) and the letter on a card (on All a card shows both, like 2 K). <kbd>B</kbd> <kbd>R</kbd> lays roads, <kbd>B</kbd> <kbd>X</kbd> walls.</li>
           <li><kbd>R</kbd> Paths on Roads (again to close); <kbd>P</kbd> Paths on the tool you used last. The tool keys work straight from the map too: <kbd>G</kbd> Bridges, <kbd>V</kbd> Ramps, <kbd>E</kbd> Pave, <kbd>O</kbd> Arrows, <kbd>L</kbd> Junctions, <kbd>X</kbd> Walls, <kbd>N</kbd> Rail, <kbd>K</kbd> Pipes, <kbd>T</kbd> Traffic map, <kbd>Z</kbd> Route to.</li>
           <li><kbd>Q</kbd> Army panel. Inside it: <kbd>Q</kbd> Attack, <kbd>G</kbd> Hold ground, <kbd>V</kbd> Station, <kbd>1</kbd>–<kbd>4</kbd> group size, <kbd>Z</kbd>/<kbd>X</kbd> Army or Air tab, <kbd>E</kbd> Strike.</li>
@@ -826,7 +850,7 @@
           <li><kbd>I</kbd> Statistics; <kbd>U</kbd> Your robots; <kbd>Y</kbd> Goods; <kbd>?</kbd> How to play; <kbd>`</kbd> Boosts.</li>
           <li><kbd>[</kbd> <kbd>]</kbd> game speed; <kbd>Space</kbd> pause; <kbd>Alt</kbd>+<kbd>Enter</kbd> full screen.</li>
           <li><kbd>Enter</kbd> presses the banner's main button (Build here, Fire...). During an Army order it's <b>Army</b>, back to the panel.</li>
-          <li><kbd>Esc</kbd> steps back: it closes a menu or panel, clears a Paths sketch, leaves the mode you're in, then clears the selection; with nothing open it opens the pause menu.</li>
+          <li><kbd>Esc</kbd> steps back: it closes a menu or panel, takes back the last stroke of a Paths sketch (<kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>Z</kbd> is Undo there too), leaves the mode you're in, then clears the selection; with nothing open it opens the pause menu.</li>
           <li>A panel's buttons show their keys (<kbd>Delete</kbd> twice dismantles, <kbd>M</kbd> moves, <kbd>G</kbd> makes a Wall a Gate...). While a panel is open, its keys come first.</li>
         </ul>
         <a class="help-top" href="#hs-top" data-jump="hs-top">Back to top</a>

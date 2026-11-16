@@ -127,7 +127,12 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   marks buildings with no road: tap one and press **Lay road** to plan the shortest route (shown dashed), or plan your
   own. Placement keeps a side of every building open for a road.
 - **Planning roads:** in Paths, dragging and tapping only sketch a road (and tapping a road marks it to take up);
-  the banner, at the top of the screen, shows the cost, with **Undo**, **Clear** and **Build**. Nothing is spent until
+  the banner, at the top of the screen, shows the cost, with **Undo**, **Clear** and **Build**. On an upright phone the
+  banner (and every mode's banner) is docked across the bottom in place of the tools: the line is up to three lines,
+  the tools are one row to swipe along with Route to and Traffic at its end, Undo, Clear, Build and Done share the row
+  below, and **How it works** is a tab on the banner's edge that opens as a card over the map. Sketching up to the edge
+  of the map scrolls it on under the finger (`paintScroll`), and a tap just above the docked banner glides the map up
+  so the banner's new row doesn't cover it (`planInView`). Nothing is spent until
   Build. Building closes Paths, straight back to the map; leaving Paths any other way drops an unbuilt sketch.
   Arrows and Junctions still act at once. **Ramps** are planned in Paths too (tap the foot or top of a one-level
   cliff, or just drag a road or track up it: `dragCliff`) and count as road once built.
@@ -432,8 +437,10 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   (`spreadOut`) instead of stacking on a single point.
 - **Traffic:** bots queue on roads, each waiting behind the bot ahead of it going the same way. On two-way roads each
   direction keeps to its own side, but passing oncoming traffic slows bots down. Switch the Paths banner to **Arrows** and
-  drag along a road to point it the way you drag (tap a road to turn its arrow). One-way loops keep busy routes flowing;
-  going the wrong way up a one-way road is allowed but crawls.
+  drag along a road to point it the way you drag (tap a road to turn its arrow). The arrows turn at once, but each drag
+  or tap is remembered as a stroke, so **Undo** turns them back (`draftUndo`, op `dir`); a drag that starts off your
+  roads moves the map instead (`roadPaintStarts`), so a habitual pan doesn't turn every road it crosses. One-way loops
+  keep busy routes flowing; going the wrong way up a one-way road is allowed but crawls.
 - **Goods panel:** tap a goods counter in the top bar for that good's stock, production and use per minute, net rate,
   which buildings make and use it, and any shortfall (buildings waiting on it with none in stock). Switch goods at the
   top of the panel.
@@ -466,7 +473,8 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
 - **Storage:** tap your Command Base or a Depot. *Fill first* makes haulers bring finished goods there before
   any other storage; *Empty out* takes nothing new and moves what it holds elsewhere (handy before
   demolishing it). You can also switch individual goods off for that building.
-- **Minimap:** tap or drag it to jump around; red pulses mark buildings under attack. The × hides it.
+- **Minimap:** tap or drag it to jump around; red pulses mark buildings under attack. The × hides it (on a touch
+  screen it is a 44 px tab hanging under the minimap, so a finger-sized button isn't lying over the map).
 - **Sharp map:** the map is baked once at 32 px a tile for zoomed-out views; zoomed in, the part on screen is baked
   again in 8×8-tile chunks at 64 or 128 px a tile (a few per frame, least recently seen dropped), and big art images
   keep half-size copies so they shrink cleanly (`drawMapLayer`, `artMip` in `js/render.js`).
@@ -565,7 +573,8 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   Command Base, jamming them while that rival's clock runs (`aiJamUplink`).
 - **Army orders:** tap **Army**, then a rival building to attack it with warbots or a missile, or open
   ground to send warbots there to hold the area under a rally flag. Tap the flag to call them back, or press
-  **Recall all** in the Army banner (**C** on a computer) to end every attack and rally flag at once.
+  **Recall all** in the Army banner (**C** on a computer) to end every attack and rally flag at once. Under a finger
+  Recall all asks for a second tap within 3 seconds (`recallAllTap`: the button says how many come home).
 - **Saving:** the game saves itself every `AUTOSAVE_EVERY` (20) seconds while you play, and when you switch away or
   close it (`autoSave`); Continue on the main menu picks it up. The pause menu says when it last saved, and a failed
   save (storage full or blocked) is reported once. A long game's save is about 250–300 KB. Saves live in that browser
@@ -677,6 +686,10 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   armed), then the missile fades in (`siloRise`; art `silo-empty`, `nukesilo-empty`).
   To fire, tap a Silo and press **Aim missile**: its 18-tile range shows as a red ring; tap any spot inside it (a
   building or open ground) to see the blast radius, then **Fire**. (Army → rival building → Fire missile also works.)
+  Under a finger the view never zooms out past `AIM_TILE` (20 px a tile; fitting the whole ring on a phone made tiles
+  9 px, twenty under a fingertip): tap to drop the crosshair, drag it to adjust (`mapGrab`, a drag that starts on it;
+  elsewhere a drag moves the map), and only Fire launches (a second tap on the spot fires only with a mouse). A bomber's
+  strike and a Howitzer's target are picked by a tap, ringed, then confirmed on the banner (`pickTarget`).
 - **Nuclear race** (new-game option): six small Uranium deposits glow green across the map. An Ore Mine within 4 tiles
   digs Uranium before ore; a Nuclear Reactor enriches it (2 → 1) and a Nuclear Silo assembles a missile from 6 Enriched
   Uranium, 4 Alloy and 2 Chips (60 s), so 12 Uranium a bomb. It flies 30 s (the target is warned and sees the blast
@@ -719,7 +732,47 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   per event (smooth on a Magic Mouse or trackpad); a Ctrl + wheel pinch zooms faster, a sideways swipe or Shift + wheel
   pans, and Safari's trackpad pinch (`gesture*` events) zooms the map instead of the page. Drawing resolution is capped
   at `RENDER_BUDGET` pixels (about 4K; a 5K iMac at 2× would be four times the work) and `watchFrameRate` lowers it,
-  down to 1×, if frames run below ~45 a second.
+  down to 1×, if frames run below ~45 a second. Nothing is drawn under a full screen (the pause menu, Help,
+  Statistics, game over) while the game behind it stands still, unless the view, the canvas or the art changes
+  (`drawNeeded` in js/main.js), and the demo behind the main menu is drawn 30 times a second (`DEMO_FRAME`).
+- **Phones and tablets (touch):** a touch on the map is only ever a touch there: the click a browser makes after it
+  is cancelled (`initInput`), so the tap that opens a panel can't also press a button that appears under the finger,
+  and a tap on a tile beside a button doesn't press the button. Where panels open across the bottom of the screen
+  they open at **half height** (`setSheetSize`), with the goal card out of the way, and the map glides so that what the
+  panel is about sits in view above it (`sheetMoved`; the map may scroll further up past its last row for this,
+  `R.lift`). Under a finger (`pointer: coarse` in style.css) every button, choice, switch, stepper and slider in a game
+  is at least 44 px to press (the goods counters stay 32 px high, so their two rows don't take more off the map), and no
+  text in a game is under 12 px. The **grab handle** at the top of the panel drags it to full height, to half, or down to just its title
+  strip (further down closes it); a tap on the handle swaps half and full. The Build list, Goods and Your robots open
+  at full height, which stops below the goods and the clock. The panel's body scrolls; its handle and close button
+  stay put.
+- **A phone on its side** (`(orientation: landscape) and (max-height: 519px)` in style.css) has its own layout: the
+  goods in one row across the top, the tools as a **rail down the left edge**, panels as a **column down the right**
+  (as tall as the screen allows, so no grab handle; the map glides to bring the panel's subject out from under it), a
+  mode's banner and the selection bar as a box at the bottom left beside the rail, and only the newest message, at the
+  bottom right. The minimap is sized from the short side (`layoutMinimap`: 84 px there, where it got the desktop's 156
+  and filled two thirds of the height), and a new game opens at a zoom that fits the short side (`enterGame`).
+- **How to play on a touch screen** (`helpForTouch`): the Touch controls card (`#h-touch`) comes first, on one screen,
+  and key names are left out (the mouse and keyboard paragraphs and brackets that only name keys are marked `.keys`,
+  hidden under `(pointer: coarse)`); the chapters follow behind the contents as before.
+- **Messages and the goal card** (`toast`, `openMsgSheet`): a message stays for a time that fits its length (3.8 s up
+  to 12; a building lost, 8 at least), lets taps through to the map, and has a **Go** chip when it's about a place. The
+  last 20 are kept for the messages button beside the folded goal card. On a small screen the goal card folds by
+  itself at the first tap on the map and opens again for each new step (unless you fold or open it yourself); folded
+  it still counts buildings with no road. In free play the Build list pins the building the step asks for at the top
+  (`OBJECTIVES[].build`, `nextBuilds`), and a building with no road to storage has Lay road at the top of its panel.
+- **Back and the screen** (`initBack`, `syncWakeLock`): in a game a phone's (or the browser's) Back button steps back
+  like Esc instead of leaving the page: it closes the start-of-game card, a screen, a panel or a mode, clears the
+  selection, and with nothing open brings up the pause menu (a history entry is added on entering a game and put back
+  each time Back takes it; leaving for the main menu removes it). The screen is kept awake (`navigator.wakeLock`) while
+  a game runs, and let go when it's paused, over, left or hidden. A long press brings up no browser menu.
+- **Warbots by touch** (`touchSelect`, `touchOrder` in js/ui.js): tap one of your warbots or Howitzers to select it
+  (tap it again within half a second for all of its kind in view). The selection bar (docked across the bottom in
+  place of the tools on an upright phone) says what they're doing and has **All in view**, **Whole army**, **Box**,
+  **Info** and **Save as group**; while it shows, a tap on the map is the order a right-click gives, with a ring and
+  **Undo** for 4 seconds (`ORDER_UNDO`; the `undoCommand` order sends each back to what it was doing). A drag or a
+  pinch is never an order. **Box** (or a finger held still 350 ms, `LONG_PRESS` in js/input.js, then dragged, where
+  you have warbots out) draws a selection box. With a panel open the bar steps aside and taps inspect.
 - **Game speed:** the speed chip in the top bar opens 0.75×, 0.875×, 1×, 2× and 3×.
 - **Sound** (`js/audio.js`, all Web Audio, no audio files): a generative synthwave score that follows the game (menu,
   building, war when you're attacked or fighting, and an alarm while a nuke flies; the building music takes turns between
@@ -739,7 +792,7 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   together on one card while the game waits paused behind it; it closes by itself after a few seconds (longer for
   more text), or at a tap or key. In multiplayer the game doesn't pause for it.
 - **Desktop (RTS controls):** on a wide screen the top bar is one row, the tools sit in a small dock and panels open
-  on the right. Drag a box to select warbots (Shift adds; a box round a garrison takes its spare warbots), right-click
+  on the right (the Build list three cards across in a wider panel from 1600 px wide). Drag a box to select warbots (Shift adds; a box round a garrison takes its spare warbots), right-click
   ground to hold it, a rival building to attack, or your garrison to station them. Ctrl/Shift+1–9 saves a control
   group, 1–9 recalls it (twice jumps to it). Pan with **WASD** or the arrow keys, the window edge, or right/middle drag; hover for
   tooltips. Clicking the same spot again steps through what's piled there (a Crawler on a Foundry, workers at a site). Keys:
@@ -749,7 +802,7 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   and inside it picks a tool (**R** roads, **G** bridges
   and tunnels, **V** ramps, **E** pave, **O** one-way arrows, **L** junctions, **X** walls, **T** traffic map), **Q** army, **C** recall all warbots, **F** select all warbots, **J** latest alert,
   **H** base, **I** statistics, **U** robots, **Y** goods, **[ ]** speed, **+/−** zoom, **M** minimap, **Enter** the banner's main
-  button, panel buttons by the key shown on them (`SHEET_KEYS`; **Delete** twice demolishes), **Space** pause, **Esc** back / clear selection, **Alt+Enter**
+  button, panel buttons by the key shown on them (`SHEET_KEYS`; **Delete** twice demolishes), **Space** pause, **Esc** back / clear selection (in Paths it takes back the last stroke; **Ctrl+Z** is Undo there), **Alt+Enter**
   full screen (also a top-bar button and a pause-menu item). Chrome opens the installed app in a plain window on a
   computer (it ignores the manifest's `fullscreen`), so the app goes full screen itself on the first click unless you
   left full screen last time; Esc stays the game's key (`navigator.keyboard.lock`; hold it to leave). On a screen wider

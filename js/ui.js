@@ -12,7 +12,7 @@ const UI = {
   sheetKind: null, sheetFor: 0, sheetT: 0, hudT: 0,
   icons: {}, attackN: 0, demolishArm: 0, lastPaint: null, placeType: null,
   goodEls: {}, lastGoods: {}, objCollapsed: false, selBot: 0,
-  sel: [], groups: {}, lastGroup: { k: 0, at: 0 }, lastAlert: null, tipKey: '',
+  sel: [], groups: {}, lastGroup: { k: 0, at: 0 }, lastAlert: null, tipKey: '', msgLog: [],
 };
 
 const $ = (id) => document.getElementById(id);
@@ -162,7 +162,8 @@ function initUI() {
   window.addEventListener('pointerdown', (e) => {
     if (!$('speed-menu').hidden && !$('speed-menu').contains(e.target) && e.target !== $('btn-speed')) $('speed-menu').hidden = true;
   });
-  $('objective').onclick = () => { UI.objCollapsed = !UI.objCollapsed; UI.hudT = 0; };
+  $('objective').onclick = () => { UI.objCollapsed = !UI.objCollapsed; UI.objManual = true; UI.hudT = 0; };
+  $('btn-msgs').onclick = () => { sfx('click'); if (UI.sheetKind === 'msgs') closeSheet(); else { setMode('normal'); openMsgSheet(); } };
   $('sheet-close').onclick = () => closeSheet();
   $('banner-cancel').onclick = () => setMode('normal');
   $('banner-ok').onclick = () => confirmBanner();
@@ -183,16 +184,57 @@ function initUI() {
   const mmEnd = () => { UI.mmDrag = false; };
   $('mm-canvas').addEventListener('pointerup', mmEnd);
   $('mm-canvas').addEventListener('pointercancel', mmEnd);
+  // A touch on the minimap stays on it (see initInput): one near its edge went to the close button beside it.
+  $('mm-canvas').addEventListener('click', () => {});
+  initSelBar();
+  initSheetGrab();
   $('mm-hide').onclick = () => { setMinimap(false); sfx('click'); };
   $('mm-show').onclick = () => { setMinimap(true); sfx('click'); };
   try { MM.on = localStorage.getItem('botfall.minimap') !== '0'; } catch (e) { MM.on = true; }
-  window.addEventListener('resize', () => { if (UI.inGame) { layoutMinimap(); placeMinimap(); } });
+  window.addEventListener('resize', () => { if (UI.inGame) { layoutMinimap(); placeMinimap(); if (UI.sheetKind) sheetMoved(); } });
 
   initKeyboard();
-  document.addEventListener('visibilitychange', () => { if (document.hidden && UI.inGame) autoSave(); });
+  initBack();
+  // A long press on the interface brings up no browser menu under a finger (Save image, Share...); a mouse keeps its right-click off the map.
+  document.addEventListener('contextmenu', (e) => { if ((e.pointerType ? e.pointerType !== 'mouse' : onTouch()) && !(e.target.closest && e.target.closest('input, textarea, a'))) e.preventDefault(); });
+  document.addEventListener('visibilitychange', () => { if (document.hidden && UI.inGame) autoSave(); syncWakeLock(); });
   window.addEventListener('pagehide', () => { if (UI.inGame) autoSave(); });
   setInterval(() => { if (UI.inGame && !UI.paused) autoSave(); }, AUTOSAVE_EVERY * 1000);
   syncMenu();
+}
+
+/* ------------------------------------------------------------------ a phone's Back button, and keeping the screen on */
+
+/**
+ * In a game the Back button (a phone's, or the browser's) steps back like Esc instead of leaving the page: it
+ * closes what's on top (the start-of-game card, a screen, a panel, a mode, the selection), and with nothing open it
+ * brings up the pause menu, where Save and quit is. A history entry is added on entering a game (armBack) and put
+ * back each time Back takes it; leaving for the main menu removes it, so Back works as usual there.
+ */
+function initBack() {
+  window.addEventListener('popstate', () => {
+    if (!UI.inGame) return;
+    history.pushState({ terrafall: 1 }, '');
+    if (UI.briefing) closeBriefing(); else escapeKey();
+  });
+}
+function armBack() { try { if (!(history.state && history.state.terrafall)) history.pushState({ terrafall: 1 }, ''); } catch (e) { /* no history to add to (a sandboxed frame) */ } }
+function disarmBack() { try { if (history.state && history.state.terrafall) history.back(); } catch (e) { /* as above */ } }
+
+/**
+ * The screen is kept awake while a game is running: a colony is watched for a minute at a time with no touch,
+ * and a phone would dim and lock. Let go as soon as the game is paused, over, left or hidden (the browser drops
+ * it when the page is hidden anyway). Looked at every quarter second from uiTick, and on leaving a game.
+ */
+function syncWakeLock() {
+  const want = UI.inGame && !UI.paused && !document.hidden && !!S && S.winner < 0;
+  if (want && !UI.wake && !UI.wakeAsked && navigator.wakeLock) {
+    UI.wakeAsked = true;
+    navigator.wakeLock.request('screen').then((w) => {
+      UI.wake = w;
+      w.addEventListener('release', () => { if (UI.wake === w) UI.wake = null; });
+    }).catch(() => { /* not allowed just now (battery saver, no permission): tried again next time */ }).then(() => { UI.wakeAsked = false; });
+  } else if (!want && UI.wake) { const w = UI.wake; UI.wake = null; w.release().catch(() => {}); }
 }
 
 /* ------------------------------------------------------------------ new-game menu */
@@ -1391,6 +1433,12 @@ function initKeyboard() {
       return;
     }
     if (e.altKey && e.key === 'Enter' && fsSupported()) { e.preventDefault(); toggleFullscreen(); return; }
+    // Ctrl+Z (Cmd+Z) in Paths is the banner's Undo: the last stroke of the plan, or the arrows a drag turned.
+    if ((e.ctrlKey || e.metaKey) && !e.altKey && e.key.toLowerCase() === 'z' && R.mode === 'road' && $('screen-pause').hidden && $('screen-help').hidden) {
+      e.preventDefault();
+      if (!$('banner-undo').hidden) $('banner-undo').click();
+      return;
+    }
     if (e.ctrlKey || e.metaKey || e.altKey) return;
     const k = e.key.toLowerCase();
     if (k === 'escape') { e.preventDefault(); escapeKey(); return; }
@@ -1455,7 +1503,7 @@ function initKeyboard() {
       case ']': stepSpeed(1); break;
       case '+': case '=': zoomBy(1.25); break;
       case '-': case '_': zoomBy(0.8); break;
-      case '?': $('screen-help').hidden = false; UI.paused = true; break;
+      case '?': showHelp(); break;
       default: return;
     }
     e.preventDefault();
@@ -1464,15 +1512,125 @@ function initKeyboard() {
   window.addEventListener('blur', () => R.keys.clear());
 }
 
-/* ------------------------------------------------------------------ selecting and ordering warbots (mouse) */
+/* ------------------------------------------------------------------ selecting and ordering warbots */
+/*
+ * With a mouse: click or drag a box to select, right-click to order (onMapCommand). Under a finger: tap one of
+ * your warbots or Howitzers to select it (tap it again for all of its kind in view), and while the selection bar
+ * is showing a tap on the map is the order a right-click would give, with a ring where it landed and Undo on the
+ * bar for a few seconds. A drag is never an order: it moves the map as always. The Army panel (send a number of
+ * warbots from your garrisons to a target or a spot) is as it was, for either hand.
+ */
 
 const EDGE_SCROLL = 6; // pixels from the window edge where the map scrolls
+const ORDER_UNDO = 4000; // ms an order given by a tap can be taken back for
 
 /** Select these warbots (or add them to the selection). */
 function selectBots(ids, add) {
   const mine = selectable(ME, ids).map((u) => u.id);
   UI.sel = add ? [...new Set(UI.sel.concat(mine))] : mine;
+  UI.undo = null; // (an order's Undo goes with the selection it was given to)
   refreshSelection();
+}
+
+/** Is a finger, not a mouse, at work? The last pointer used on the map says; before any, the kind of screen. */
+function onTouch() { return INPUT.mouse === undefined ? matchMedia('(pointer: coarse)').matches : !INPUT.mouse; }
+
+/** The selection bar's parts, made once: what's selected and doing what, the mouse's hint, and a finger's buttons. */
+function initSelBar() {
+  $('selbar').innerHTML = `<div class="sel-top"><div class="sel-text"><b id="sel-title"></b> <span id="sel-notes"></span></div>
+      <button class="btn small ghost" id="selbar-clear" aria-label="Clear selection">✕</button></div>
+    <span class="hint" id="sel-status"></span>
+    <span class="hint sel-mouse">Right-click open ground to hold it, a rival building or robot to attack, your Outpost to station them, or a Repair Station to get them fixed. Esc clears.</span>
+    <div class="sel-tools"><button class="btn small primary" id="sel-undo" hidden>Undo</button><button class="btn small" id="sel-view">All in view</button><button class="btn small" id="sel-army">Whole army</button><button class="btn small" id="sel-box">Box</button><button class="btn small" id="sel-info">Info</button><button class="btn small ghost" id="selbar-group" title="Save them as a control group (or ⌘/Ctrl/⌥ + 1–9)"></button></div>`;
+  $('selbar-clear').onclick = () => { sfx('click'); selectBots([], false); };
+  $('selbar-group').onclick = () => saveGroup(nextGroupNo());
+  $('sel-undo').onclick = () => undoOrder();
+  $('sel-view').onclick = () => { sfx('click'); selectBots(unitsInView(), false); if (!UI.sel.length) toast('None of your warbots are in view.', 'info'); };
+  $('sel-army').onclick = () => { sfx('click'); selectBots(armyIds(ME).concat(S.bots.filter((u) => !u.dead && u.owner === ME && BOTS[u.type].siege).map((u) => u.id)), false); };
+  $('sel-info').onclick = () => { sfx('click'); const us = selectable(ME, UI.sel).filter((u) => !u.inside); if (us.length === 1) openBotSheet(us[0]); else openPopSheet(); };
+  // Box: the next one-finger drag on the map draws a selection box (input.js), then it's off again. Tap Box again to call it off.
+  $('sel-box').onclick = () => { sfx('click'); INPUT.boxArmed = !INPUT.boxArmed; refreshSelection(); };
+}
+
+/** Has the player warbots or Howitzers out in the open? (Then a finger held on the map draws a selection box: see input.js.) */
+function fieldUnits() {
+  return UI.inGame && !UI.paused && S.bots.some((u) => !u.dead && u.owner === ME && !u.inside && (isArmy(u) || BOTS[u.type].siege));
+}
+
+/** Your warbots and Howitzers out in the open on the screen now (optionally only warbots, or only Howitzers). */
+function unitsInView(siege) {
+  const ids = [];
+  for (const u of S.bots) {
+    if (u.dead || u.inside || u.owner !== ME || (!isArmy(u) && !BOTS[u.type].siege) || (siege !== undefined && !!BOTS[u.type].siege !== siege)) continue;
+    const p = worldToScreen(u.x, u.y);
+    if (p.x >= 0 && p.x <= R.w && p.y >= 0 && p.y <= R.h) ids.push(u.id);
+  }
+  return ids;
+}
+
+/** What the selected units are doing, in a line: one unit's activity, or the two commonest among several with their counts. */
+function selStatus(units) {
+  const n = {};
+  for (const u of units) { const a = botActivity(u).replace(/ \((stationed at|belongs to)[^)]*\)$/, ''); n[a] = (n[a] || 0) + 1; }
+  const top = Object.keys(n).sort((a, b) => n[b] - n[a]);
+  return units.length === 1 ? top[0] : top.slice(0, 2).map((a) => `${n[a]} × ${a}`).join(' · ') + (top.length > 2 ? ' · …' : '');
+}
+
+/** Your warbot or Howitzer out in the open nearest a tap, within a fingertip of it however far the map is zoomed out; or null. */
+function unitAtTap(wx, wy) {
+  const r = Math.max(0.55, 22 / R.cam.z);
+  let best = null, bd = r * r;
+  for (const u of S.bots) {
+    if (u.dead || u.inside || u.owner !== ME || (!isArmy(u) && !BOTS[u.type].siege)) continue;
+    const d = dist2(u.x, u.y, wx, wy);
+    if (d < bd) { bd = d; best = u; }
+  }
+  return best;
+}
+
+/** A finger's tap on your warbot or Howitzer selects it; a second tap on it within half a second takes all of its kind in view. */
+function touchSelect(u) {
+  const now = performance.now(), L = UI.lastSel;
+  UI.lastSel = { id: u.id, at: now };
+  sfx('click');
+  selectBots(L && L.id === u.id && now - L.at < 500 ? unitsInView(!!BOTS[u.type].siege) : [u.id], false);
+}
+
+/** Is the selection bar on the screen (not hidden behind a panel or a mode's banner on a phone)? Only then are a finger's taps orders. */
+function selBarShowing() { return UI.sel.length > 0 && !$('selbar').hidden && $('selbar').getClientRects().length > 0; }
+
+/**
+ * What a robot is doing, in the terms of the order that would send it back to it (ORDERS.undoCommand): its id,
+ * 'in' a garrison, 'attack' or 'bombard' a building, 'hold' or 'park' at a tile, or 'free'; where it's posted; and
+ * whether a Howitzer's target was its own pick.
+ */
+function orderSnapshot(u) {
+  const t = u.task, r = t && t.type === 'hold' ? rallyById(t.rally) : null;
+  const was = u.inside ? ['in', u.inside] : !t ? ['free'] : t.type === 'garrison' ? ['in', t.bld] : t.type === 'attack' ? ['attack', t.target]
+    : r ? ['hold', Math.floor(r.x), Math.floor(r.y)] : t.type === 'bombard' ? ['bombard', t.target] : t.type === 'park' ? ['park', t.i, t.j] : ['free'];
+  const post = u.post && typeof u.post === 'object' ? { i: u.post.i, j: u.post.j } : u.post ?? null;
+  return [u.id, was[0], was[1] || 0, was[2] || 0, post, !!(t && t.auto)];
+}
+
+/**
+ * A finger's tap on the map with warbots selected: their order, the one a right-click gives (onMapCommand). What
+ * each was doing is noted first, so Undo on the selection bar can send them back to it for ORDER_UNDO ms.
+ */
+function touchOrder(i, j, wx, wy) {
+  const was = selectable(ME, UI.sel).map(orderSnapshot);
+  onMapCommand(i, j, wx, wy, () => { UI.undo = { was, until: performance.now() + ORDER_UNDO, text: 'Order given.' }; refreshSelection(); });
+}
+
+/** Undo on the selection bar: each robot of the last order goes back to what it was doing (its garrison, its flag, its target, its spot). */
+function undoOrder() {
+  const U = UI.undo;
+  UI.undo = null;
+  if (!U) return;
+  act('undoCommand', [U.was], (n) => {
+    sfx('click');
+    toast(`Order taken back: ${n === 1 ? 'it goes' : `${n} go`} back to what ${n === 1 ? 'it was' : 'they were'} doing.`, 'info');
+    refreshSelection();
+  });
 }
 
 /** The group number a Save as group button would use: the selection's own group if it's one already, else the first free one. */
@@ -1487,27 +1645,31 @@ function nextGroupNo() {
 function refreshSelection() {
   if (UI.sel.length) UI.sel = selectable(ME, UI.sel).map((u) => u.id);
   UI.selSet = new Set(UI.sel);
-  const bar = $('selbar');
-  if (!UI.sel.length || !UI.inGame) { bar.hidden = true; refreshGroupBar(); return; }
+  const bar = $('selbar'), touch = onTouch(), on = UI.sel.length > 0 && UI.inGame;
+  bar.hidden = !on;
+  document.body.classList.toggle('sel-on', on && touch); // (on an upright phone the bar takes the bottom bar's place)
+  bar.classList.toggle('touch', touch);
+  if (!on) { UI.undo = null; INPUT.boxArmed = false; refreshGroupBar(); return; }
+  $('sel-box').classList.toggle('on', INPUT.boxArmed);
   let inside = 0, empty = 0;
   for (const u of orderable(ME, UI.sel)) { if (u.inside) inside++; if (!botArmed(u)) empty++; }
-  const html = `<b>${groupWords(UI.sel)} selected</b>` +
-    (inside ? ` <span class="muted">(${inside} in garrisons)</span>` : '') + (empty ? ` <span class="err">${empty} out of Ammo or Fuel</span>` : '') +
-    `<span class="hint">Right-click open ground to hold it, a rival building or robot to attack, your Outpost to station them, or a Repair Station to get them fixed. Esc clears.</span>
-    <button class="btn small ghost" id="selbar-group" title="Save them as a control group (or ⌘/Ctrl/⌥ + 1–9)">Save as group ${nextGroupNo()}</button>
-    <button class="btn small ghost" id="selbar-clear" aria-label="Clear selection">✕</button>`;
-  if (bar.dataset.html !== html) {
-    bar.dataset.html = html;
-    bar.innerHTML = html;
-    $('selbar-clear').onclick = () => { sfx('click'); selectBots([], false); };
-    $('selbar-group').onclick = () => saveGroup(nextGroupNo());
-  }
-  bar.hidden = false;
+  const undo = UI.undo && performance.now() < UI.undo.until ? UI.undo : (UI.undo = null);
+  const set = (id, html) => { const el = $(id); if (el.dataset.html !== html) { el.dataset.html = html; el.innerHTML = html; } };
+  set('sel-title', `${groupWords(UI.sel)} selected`);
+  set('sel-notes', (inside ? `<span class="muted">(${inside} in garrisons)</span> ` : '') + (empty ? `<span class="err">${empty} out of Ammo or Fuel</span>` : ''));
+  set('sel-status', INPUT.boxArmed ? '<b>Box:</b> drag a finger round warbots (two fingers move the map)'
+    : undo ? `<span class="ok">${esc(undo.text)}</span> Undo takes it back.` : (touch ? '<b>Tap the map</b> to send them · ' : '') + esc(selStatus(selectable(ME, UI.sel))));
+  set('selbar-group', `Save as group ${nextGroupNo()}`);
+  $('sel-undo').hidden = !undo;
   refreshGroupBar();
 }
 
-/** A drag box (screen pixels) selects your warbots inside it; with Shift it adds to the selection. */
-function onSelectBox(box, add) {
+/**
+ * A drag box (screen pixels) selects your warbots inside it; with Shift it adds to the selection. `armed`: it
+ * was drawn after Box on the selection bar. A finger's box drawn by holding and dragging that catches nothing
+ * changes nothing (it was most likely meant to move the map).
+ */
+function onSelectBox(box, add, armed) {
   const x0 = Math.min(box.x0, box.x1), x1 = Math.max(box.x0, box.x1), y0 = Math.min(box.y0, box.y1), y1 = Math.max(box.y0, box.y1);
   const ids = [];
   for (const u of S.bots) {
@@ -1521,12 +1683,17 @@ function onSelectBox(box, add) {
     const p = worldToScreen(b.x + 0.5, b.y + 0.5);
     if (p.x >= x0 && p.x <= x1 && p.y >= y0 && p.y <= y1) ids.push(...b.garrison.slice(1));
   }
+  INPUT.boxArmed = false; // (Box on the selection bar is for one drag)
+  if (!ids.length && !armed && onTouch()) { refreshSelection(); return; }
   selectBots(ids, add);
-  if (ids.length) sfx('click');
+  if (ids.length) sfx('click'); else if (onTouch()) toast('No warbots of yours in that box.', 'info');
 }
 
-/** Right-click: order the selected warbots to whatever is under the pointer. */
-function onMapCommand(i, j, wx, wy) {
+/**
+ * Right-click (or, under a finger, a tap with the selection bar showing): order the selected warbots to whatever is
+ * under the pointer. done() runs once an order has gone to them.
+ */
+function onMapCommand(i, j, wx, wy, done) {
   if (!UI.inGame || UI.paused || R.mode !== 'normal') return;
   // Your Ferry, its panel open (nothing else picked): right-click open water, a spot on the shore or one of your Ports to sail it there.
   const fpick = !UI.sel.length && UI.sheetKind === 'bot' ? getE(UI.sheetFor) : null;
@@ -1548,6 +1715,7 @@ function onMapCommand(i, j, wx, wy) {
       if (!r || r.why) { sfx('error'); toast((r && r.why) || 'That Ferry is gone.', 'warn'); return; }
       sfx('order'); addFx('ring', fx, fy, { color: '#7dffa0' });
       toast(`${r.n} warbot${r.n === 1 ? '' : 's'} heading for the Ferry: they board once they're beside it.`, 'info');
+      if (done) done();
     });
     return;
   }
@@ -1559,20 +1727,23 @@ function onMapCommand(i, j, wx, wy) {
   const theirs = !!b && foes(b.owner, ME), mine = !!b && b.owner === ME, bName = b ? BDEFS[b.type].name : '', foeName = foe ? BOTS[foe.type].name : '';
   const rx = (b ? b.x : i) + 0.5, ry = (b ? b.y : j) + 0.5;
   act('command', [UI.sel.slice(), spec], (r) => {
-    if (!r || r.why) { sfx('error'); toast((r && r.why) || 'Right-click open ground, a rival building or one of your garrisons.', 'warn'); return; }
+    const where = `${onTouch() ? 'Tap' : 'Right-click'} open ground, a rival building or one of your garrisons.`;
+    if (!r || r.why) { sfx('error'); toast((r && r.why) || where, 'warn'); return; }
     if (r.kind === 'repair') {
       sfx('order'); addFx('ring', rx, ry, { color: '#7dffa0' });
       toast(`${r.n} robot${r.n === 1 ? '' : 's'} heading to the Repair Station.`, 'info');
+      if (done) done();
       refreshSelection();
       return;
     }
-    if (r.kind === 'none') { sfx('error'); toast('Right-click open ground, a rival building or one of your garrisons.', 'warn'); return; }
+    if (r.kind === 'none') { sfx('error'); toast(where, 'warn'); return; }
     const n = r.n, nr = r.nr;
     const what = r.kind === 'hunt' ? `going after the rival's ${foeName}` : r.kind === 'attack' ? `attacking the ${bName}` : r.kind === 'station' ? `heading to the ${bName}` : 'moving to hold that ground';
     if (nr && !n) {
       sfx('order');
       addFx('ring', rx, ry, { color: theirs ? '#ff5a6e' : '#7dffa0' });
       toast(`${nr} Howitzer${nr > 1 ? 's' : ''} ${theirs ? `shelling the ${bName}` : 'on the move'}.`, 'info');
+      if (done) done();
       refreshSelection();
       return;
     }
@@ -1584,6 +1755,7 @@ function onMapCommand(i, j, wx, wy) {
     sfx('order');
     addFx('ring', rx, ry, { color: theirs ? '#ff5a6e' : '#7dffa0' });
     toast(`${n} warbot${n > 1 ? 's' : ''} ${what}.`, 'info');
+    if (done) done();
     refreshSelection();
   });
 }
@@ -1602,13 +1774,13 @@ function groupWords(ids) {
 
 function saveGroup(k) {
   const mac = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent || '');
-  if (!UI.sel.length) { toast(`Select ${BOTS_OFF.has('rocket') ? 'warbots' : 'warbots or Howitzers'} first (drag a box round them), then ${mac ? '⌘ or ⌥' : 'Ctrl'}+${k} saves them as group ${k}.`, 'info'); return; }
+  if (!UI.sel.length) { toast(onTouch() ? `Select ${BOTS_OFF.has('rocket') ? 'warbots' : 'warbots or Howitzers'} first (tap one), then Save as group.` : `Select ${BOTS_OFF.has('rocket') ? 'warbots' : 'warbots or Howitzers'} first (drag a box round them), then ${mac ? '⌘ or ⌥' : 'Ctrl'}+${k} saves them as group ${k}.`, 'info'); return; }
   const G = ctrlGroups();
   // A robot is in one group at a time: putting it in this one takes it out of any other.
   for (const g in G) G[g] = G[g].filter((id) => !UI.sel.includes(id));
   G[k] = UI.sel.slice();
   sfx('click');
-  toast(`Group ${k}: ${groupWords(G[k])}. Press ${k} to select them again (twice to go to them).`, 'info');
+  toast(`Group ${k}: ${groupWords(G[k])}. ${onTouch() ? `Tap its chip ${k}` : `Press ${k}`} to select them again (twice to go to them).`, 'info');
   refreshGroupBar();
 }
 
@@ -1658,9 +1830,9 @@ function refreshGroupBar() {
     for (const b of bar.querySelectorAll('[data-g]')) b.onclick = () => recallGroup(+b.dataset.g);
   }
   bar.hidden = !chips.length || !UI.inGame;
-  // Above the selection bar when that's showing.
-  const sb = $('selbar');
-  bar.style.bottom = sb && !sb.hidden ? `calc(var(--safe-b) + ${84 + sb.offsetHeight + 8}px)` : '';
+  // Above the selection bar when that's showing (wherever it sits: on an upright phone it's docked at the bottom).
+  const sb = $('selbar'), sr = sb && !sb.hidden ? sb.getBoundingClientRect() : null;
+  bar.style.bottom = sr && sr.height ? `${Math.round(window.innerHeight - sr.top + 8)}px` : '';
 }
 
 /** On a computer, resting the mouse on a building or bot shows what it is and what it's doing. */
@@ -1743,7 +1915,8 @@ function escapeKey() {
   if (!$('screen-pause').hidden) { $('p-resume').click(); return; }
   if (!$('screen-over').hidden) return;
   if (UI.sheetKind) { closeSheet(); return; }
-  if (R.mode === 'road' && !draftEmpty()) { draftReset(); showRoadBanner('Plan cleared.', true); return; }
+  // In Paths with a plan sketched, Esc takes back the last stroke (again for the one before); with none left it leaves Paths.
+  if (R.mode === 'road' && !draftEmpty()) { draftUndo(); showRoadBanner(draftEmpty() ? 'Plan cleared.' : 'Last stroke taken back (Esc again for the one before; Clear drops the whole plan).', true); return; }
   if (R.mode !== 'normal') { setMode('normal'); return; }
   if (UI.sel.length) { selectBots([], false); return; }
   $('btn-pause').click();
@@ -1757,6 +1930,16 @@ function zoomBy(f) {
 /** Held arrow / WASD keys pan the map (called every frame). */
 function keyPan(dt) {
   if (!UI.inGame) return;
+  // A panel bringing its subject into view (sheetMoved): the map glides there, unless a hand takes it over.
+  const g = UI.glide;
+  if (g) {
+    const k = Math.min(1, dt * 12);
+    R.cam.x += (g.x - R.cam.x) * k; R.cam.y += (g.y - R.cam.y) * k;
+    clampCam();
+    g.t -= dt;
+    if (INPUT.gesture || R.keys.size || UI.mmDrag || g.t <= 0 || Math.hypot(g.x - R.cam.x, g.y - R.cam.y) * R.cam.z < 0.5) UI.glide = null;
+  }
+  paintScroll(dt);
   let dx = 0, dy = 0;
   for (const k of R.keys) if (PAN_KEYS[k]) { dx += PAN_KEYS[k][0]; dy += PAN_KEYS[k][1]; }
   // Edge scrolling on a computer: the map moves when the mouse rests at the edge of the window.
@@ -1995,6 +2178,8 @@ function enterGame() {
   bakeMap();
   UI.inGame = true; UI.paused = false; UI.overShown = false;
   UI.sel = []; UI.groups = {}; UI.lastAlert = null;
+  UI.msgLog = []; $('btn-msgs').hidden = true;
+  UI.objAuto = false; UI.objManual = false; UI.objStep = undefined;
   setSpeed(1, true);
   $('btn-speed').hidden = MP.on; // (a multiplayer game runs at one speed for everyone)
   $('screen-menu').hidden = true;
@@ -2007,15 +2192,17 @@ function enterGame() {
   // More than seven goods don't fit one row on a phone: split them over two (widescreen: one row).
   const nGoods = GOODS.length - (warOn() ? 0 : WAR_GOODS.length) - (nukeOn() ? 0 : NUKE_GOODS.length);
   $('goods').style.setProperty('--goods-cols', nGoods > 7 ? Math.ceil(nGoods / 2) : nGoods);
+  $('goods').style.setProperty('--goods-n', nGoods); // (a phone on its side has them in one row)
   $('goods').classList.toggle('two-rows', nGoods > 7);
   $('bottombar').classList.toggle('three', !warOn());
   closeSheet();
   setMode('normal');
   const L = getE(S.players[ME].lander);
-  R.cam.z = clamp(Math.min(R.w, 520) / 11, 26, 48);
+  R.cam.z = clamp(Math.min(R.w, R.h, 520) / 11, 26, 48); // (by the short side: a phone on its side started as close in as a tablet, five tiles of map high)
   if (L) centerOn(L.x + 0.5, L.y - 1);
   layoutMinimap();
   placeMinimap();
+  armBack();
   saveGame();
 }
 
@@ -2025,6 +2212,8 @@ function toMenu() {
   hideGoodTip();
   UI.inGame = false;
   UI.paused = false;
+  disarmBack();
+  syncWakeLock();
   closeSheet();
   setMode('normal');
   $('hud').hidden = true;
@@ -2038,6 +2227,7 @@ function toMenu() {
 
 function showHelp() {
   UI.paused = UI.inGame;
+  helpForTouch();
   $('screen-help').hidden = false;
   helpPage('hs-top');
 }
@@ -2085,6 +2275,24 @@ function helpPage(id) {
     if (k < secs.length - 1) $('hp-next').textContent = `${title(secs[k + 1])} ›`;
   }
   body.scrollTop = 0;
+}
+
+/**
+ * How to play under a finger: the Touch controls card comes first, so the controls are on one screen (the rest is
+ * the whole game, chapter by chapter, behind the contents). Brackets that only name keys ("(Q)", "(or press Y)",
+ * "; T)") are marked once, the first time Help opens, so style.css can leave them out on a touch screen along with
+ * the mouse and keyboard paragraphs.
+ */
+function helpForTouch() {
+  if (!UI.helpKeys) {
+    UI.helpKeys = true;
+    const body = document.querySelector('#screen-help .help-body'), K = '<kbd>[^<]*</kbd>';
+    body.innerHTML = body.innerHTML
+      .replace(new RegExp(` ?\\((?:or press |press |or )?${K}(?:\\s*(?:–|-|\\+|/|,|or|and)?\\s*${K})*\\)`, 'g'), '<span class="keys">$&</span>')
+      .replace(new RegExp(`; ${K}(?:\\s*${K})*(?=\\))`, 'g'), '<span class="keys">$&</span>')
+      .replace(new RegExp(`, (?:${K}\\s*)+(?=;)`, 'g'), '<span class="keys">$&</span>');
+  }
+  $('h-touch').hidden = !onTouch();
 }
 
 function showGameOver() {
@@ -2420,6 +2628,7 @@ function setMode(mode) {
   if (R.mode === 'road' && mode !== 'road') { dropDraft(); UI.routeGhost = null; } // a plan that was never built costs nothing
   R.mode = mode;
   for (const m of ['road', 'place', 'attack', 'aim', 'land', 'airdrop']) document.body.classList.toggle('mode-' + m, mode === m);
+  document.body.classList.toggle('mode-on', mode !== 'normal'); // (any mode: on an upright phone its banner takes the bottom bar's place)
   if (mode !== 'aim') { R.aim = null; UI.aimSilo = 0; }
   if (mode !== 'aim' && mode !== 'land' && mode !== 'airdrop') R.aimHover = null;
   if (mode !== 'land') { R.landAt = null; UI.landFerry = 0; }
@@ -2429,6 +2638,7 @@ function setMode(mode) {
   R.overlay = null;
   R.ropeEnd = null;
   UI.ropeA = null;
+  if (UI.pick) { UI.pick = 0; R.selected = 0; UI.selBot = 0; } // (a strike or shelling target picked by a finger and not confirmed)
   UI.placeType = null;
   UI.moveFrom = 0;
   $('btn-road').classList.toggle('on', mode === 'road');
@@ -2669,12 +2879,36 @@ function startAim(silo) {
   R.selected = silo.id;
   const range = BDEFS[silo.type].nukeSilo ? NUKE.range : BDEFS.silo.missile.range;
   showAimBanner();
-  // Fit the whole range ring in the map area left between the top bar and the banner.
-  const top = $('topbar').getBoundingClientRect().bottom + 8;
-  const bottom = Math.min($('banner').getBoundingClientRect().top, $('bottombar').getBoundingClientRect().top) - 8;
+  // Fit the whole range ring in the map area left between the top bar and the banner (or the tools, where they
+  // lie across the bottom). Under a finger it never zooms out further than AIM_TILE px a tile: at the 9 px a
+  // tile it took to fit the ring on a phone a fingertip covered twenty tiles. The ring then runs off the screen:
+  // move the map to the target, tap to drop the crosshair, drag the crosshair to adjust, and Fire.
+  const top = $('topbar').getBoundingClientRect().bottom + 8, bn = $('banner').getBoundingClientRect(), bb = $('bottombar').getBoundingClientRect();
+  const bottom = Math.min(bn.height && bn.top > R.h / 2 ? bn.top : R.h, bb.height && bb.width > R.w / 2 ? bb.top : R.h) - 8;
   const avail = Math.max(120, Math.min(R.w - 16, bottom - top));
-  R.cam.z = clamp(avail / (2 * range + 2), minZoom(), maxZoom());
+  R.cam.z = clamp(avail / (2 * range + 2), Math.max(minZoom(), onTouch() ? AIM_TILE : 0), maxZoom());
   centerOn(silo.x + 0.5, silo.y + 0.5 + (R.h / 2 - (top + bottom) / 2) / R.cam.z);
+}
+const AIM_TILE = 20;
+
+/**
+ * Under a finger a drag that starts on the aiming crosshair moves it, keeping the distance the finger had from
+ * it (so it can be taken hold of from just below and stay in view); a drag anywhere else moves the map, as
+ * always. Returns what to do with the finger's moves, or null when there is nothing to take hold of there.
+ */
+const AIM_GRAB = 56; // px round the crosshair that take hold of it
+function mapGrab(x, y) {
+  if (R.mode !== 'aim' || !R.aim) return null;
+  const p = worldToScreen(R.aim.i + 0.5, R.aim.j + 0.5), dx = p.x - x, dy = p.y - y;
+  if (Math.hypot(dx, dy) > AIM_GRAB) return null;
+  return (mx, my) => {
+    const w = screenToWorld(mx + dx, my + dy), i = Math.floor(w.x), j = Math.floor(w.y), silo = getE(UI.aimSilo);
+    if (!silo || !inMap(i, j) || (R.aim.i === i && R.aim.j === j)) return;
+    // Out of range or onto ground it can't strike: the crosshair waits at the last good spot and the banner says why.
+    const why = BDEFS[silo.type].nukeSilo ? nukeBlocked(silo, i, j) : missileBlocked(silo, i, j);
+    if (!why) R.aim = { i, j };
+    showAimBanner(why || undefined);
+  };
 }
 
 function showAimBanner(problem) {
@@ -2686,13 +2920,14 @@ function showAimBanner(problem) {
     html += R.aim
       ? `<b>Launch the nuclear missile here?</b> Everything within ${NUKE.radius} tiles is destroyed, yours included, and the ground stays scorched for ${Math.round(NUKE.scorch / 60)} minutes. It lands ${NUKE.flight} seconds after launch, and the rival sees it coming.`
       : `Tap where to strike, inside the red ring (${NUKE.range} tiles). The red circle shows the ${NUKE.radius}-tile blast.`;
-    showBanner(html, R.aim ? 'Launch' : null, 'Cancel');
+    showBanner(html + (R.aim && onTouch() ? ' Drag the crosshair to move it.' : ''), R.aim ? 'Launch' : null, 'Cancel');
     return;
   }
   if (R.aim) {
     const t = missileTargetAt(ME, R.aim.i, R.aim.j);
     html += t ? `Fire at the ${playerName(t.owner)} <b>${BDEFS[t.type].name}</b>? ${BDEFS[t.type].mil ? 'Its armor drops to almost nothing, ready for warbots to capture.' : 'A hit wrecks it.'}`
       : 'Fire at this spot? The blast hurts rival buildings and bots within ' + md.splash + ' tiles.';
+    if (onTouch()) html += ' Drag the crosshair to move it.';
     ok = 'Fire';
   } else {
     const w = silo.stock.warhead || 0;
@@ -2701,14 +2936,14 @@ function showAimBanner(problem) {
   showBanner(html, ok, 'Cancel');
 }
 
-/** A tap while aiming: the first picks the spot, a second tap on it (or Fire) launches. */
+/** A tap while aiming: the first picks the spot; Fire launches, and so does a second click on the spot with a mouse (not a second tap: a finger's double tap is too easily made). */
 function aimTap(i, j) {
   const silo = getE(UI.aimSilo);
   if (!silo) { setMode('normal'); return; }
   if (!inMap(i, j)) return;
   const why = BDEFS[silo.type].nukeSilo ? nukeBlocked(silo, i, j) : missileBlocked(silo, i, j);
   if (why) { sfx('error'); R.aim = null; showAimBanner(why); return; }
-  if (R.aim && R.aim.i === i && R.aim.j === j) { fireAimed(); return; }
+  if (R.aim && R.aim.i === i && R.aim.j === j) { if (INPUT.mouse) fireAimed(); return; }
   R.aim = { i, j };
   sfx('click');
   showAimBanner();
@@ -2738,6 +2973,27 @@ function fireAimed() {
   });
 }
 
+/** Under a finger: the target of a bomber's strike or a Howitzer's shelling, picked by a tap and ringed, waiting for the banner's button (confirmBanner). */
+function pickTarget(t, html, okLabel) {
+  UI.pick = t.id;
+  if (BDEFS[t.type]) { R.selected = t.id; UI.selBot = 0; } else { UI.selBot = t.id; R.selected = 0; }
+  sfx('click');
+  showBanner(html, okLabel, 'Cancel');
+}
+
+/** Send the bomber being given a target (UI.bomber) at t. */
+function strikePicked(t) {
+  const u = getE(UI.bomber);
+  if (!u || u.dead) { sfx('error'); showBanner('<span class="err">That bomber is gone.</span>', null, 'Cancel'); return; }
+  if (!t || t.dead) { sfx('error'); UI.pick = 0; showBanner('<span class="err">That target is gone: tap another.</span>', null, 'Cancel'); return; }
+  const tName = BDEFS[t.type] ? `the ${BDEFS[t.type].name}` : `a ${BOTS[t.type].name}`;
+  act('strike', [u.id, t.id], (why) => {
+    if (why) { sfx('error'); showBanner(`<span class="err">${why}</span>`, null, 'Cancel'); return; }
+    sfx('order'); setMode('normal');
+    toast(`Strike ordered on ${tName}: the bomber loads up and takes off.`, 'good');
+  });
+}
+
 function showBanner(html, okLabel, cancelLabel) {
   $('banner').hidden = false;
   $('banner-seg').hidden = true;
@@ -2746,6 +3002,7 @@ function showBanner(html, okLabel, cancelLabel) {
   $('banner-undo').hidden = true;
   $('banner-clear').hidden = true;
   $('banner-ok').disabled = false;
+  $('banner').classList.remove('noplan');
   $('banner-text').innerHTML = html;
   $('banner-ok').hidden = !okLabel;
   if (okLabel) $('banner-ok').textContent = okLabel;
@@ -2776,7 +3033,8 @@ function showArmyBanner(note) {
   showBanner('Tap a <b>rival building</b> to attack it with warbots or missiles, or tap open ground to send warbots there to <b>hold the area</b>.' +
     (out ? ` ${out} warbot${out > 1 ? 's are' : ' is'} out in the field: <b>Recall all</b> brings them home.` : '') +
     `<span class="keep-all">Every Outpost keeps <span class="seg">${[0, 1, 2, 5].map((v) => `<button data-k="${v}" class="${v === k ? 'on' : ''}">${v}</button>`).join('')}</span> warbot${k === 1 ? '' : 's'}, sent from your Command Base</span>`,
-    out ? 'Recall all' : null, 'Cancel');
+    out ? (recallArmed() ? `Tap again: ${out} come home` : 'Recall all') : null, 'Cancel');
+  $('banner-ok').classList.toggle('danger', !!(out && recallArmed()));
   for (const btn of $('banner-text').querySelectorAll('[data-k]')) btn.onclick = (e) => { e.stopPropagation(); setKeepAll(+btn.dataset.k); showArmyBanner(); };
 }
 
@@ -2786,6 +3044,22 @@ function setKeepAll(v) {
   sfx('click');
   toast(v === 0 ? 'Outposts keep no warbots now: your warbots stay at the Command Base unless you station some at an Outpost.'
     : `Every Outpost now keeps ${v} warbot${v === 1 ? '' : 's'}, sent from your Command Base (and replaced if lost).`, 'info');
+}
+
+/**
+ * Recall all (the Army panel, or the Army banner), under a finger: the first tap arms it (the button says how many
+ * come home), a second within three seconds does it, like Demolish. It ends every attack and rally at once and
+ * sits where a thumb rests. A mouse click, Enter and the C key recall straight away.
+ */
+const RECALL_ARM = 3000;
+function recallArmed() { return !!UI.recallArm && performance.now() - UI.recallArm < RECALL_ARM; }
+function recallAllTap() {
+  const refresh = () => { if (UI.sheetKind === 'army') { UI.armySig = ''; refreshArmySheet(); } if (R.mode === 'attack' && !UI.armyCmd) showArmyBanner(); };
+  if (!onTouch() || recallArmed()) { UI.recallArm = 0; recallAllWarbots(); refresh(); return; }
+  UI.recallArm = performance.now();
+  sfx('click');
+  refresh();
+  setTimeout(() => { if (UI.recallArm && !recallArmed()) { UI.recallArm = 0; refresh(); } }, RECALL_ARM);
 }
 
 /** Bring every warbot in the field home to its garrison. */
@@ -2799,9 +3073,19 @@ function recallAllWarbots() {
 
 function confirmBanner() {
   if (R.mode === 'aim') { fireAimed(); return; }
+  if (R.mode === 'strike' && UI.pick) { strikePicked(getE(UI.pick)); return; }
+  if (R.mode === 'bombard' && UI.pick) {
+    const u = getE(UI.rocket), b = getE(UI.pick);
+    if (!u || u.dead || !b || !rocketTarget(u, b)) { sfx('error'); UI.pick = 0; showBanner('<span class="err">That target is gone.</span> Tap an enemy building.', null, 'Cancel'); return; }
+    act('bombard', [[u.id], b.id]);
+    toast(`The Howitzer is off to shell the ${BDEFS[b.type].name}.`, 'info');
+    sfx('order'); addFx('ring', b.x + 0.5, b.y + 0.5, { color: '#ff5a6e' });
+    setMode('normal');
+    return;
+  }
   if (R.mode === 'land') { confirmLanding(); return; }
   if (R.mode === 'airdrop') { confirmAirdrop(); return; }
-  if (R.mode === 'attack') { if (UI.armyCmd) { setMode('normal'); openArmySheet(); } else recallAllWarbots(); return; }
+  if (R.mode === 'attack') { if (UI.armyCmd) { setMode('normal'); openArmySheet(); } else recallAllTap(); return; }
   if (R.mode === 'road') { commitDraft(); return; }
   if (R.mode === 'place' && (UI.placeType === 'ropeway' || UI.placeType === 'viaduct')) {
     const A = UI.ropeA, E = R.ropeEnd;
@@ -2885,6 +3169,8 @@ function buildingAtTap(i, j, wx, wy) {
 
 function onMapTap(i, j, wx, wy) {
   if (!UI.inGame || UI.paused) return;
+  // The first tap on the map folds the goal card away on a small screen (it has been read; the map is wanted now).
+  if (!UI.objCollapsed && !UI.objManual && !S.mission && !isWide()) { UI.objCollapsed = true; UI.objAuto = true; UI.hudT = 0; }
   if (R.mode === 'strike') {
     const u = getE(UI.bomber);
     if (!u || u.dead) { setMode('normal'); return; }
@@ -2892,12 +3178,9 @@ function onMapTap(i, j, wx, wy) {
     let t = b && foes(b.owner, ME) ? b : null;
     if (!t) { let bd = 0.5; for (const v of S.bots) { if (v.dead || !foes(v.owner, ME) || v.inside || BOTS[v.type].air) continue; const d = dist2(v.x, v.y, wx, wy); if (d < bd) { bd = d; t = v; } } }
     if (!t) { sfx('error'); showBanner('<span class="err">Tap an enemy building, or an enemy vehicle or robot out in the open.</span>', null, 'Cancel'); return; }
-    const tName = BDEFS[t.type] ? `the ${BDEFS[t.type].name}` : `a ${BOTS[t.type].name}`;
-    act('strike', [u.id, t.id], (why) => {
-      if (why) { sfx('error'); showBanner(`<span class="err">${why}</span>`, null, 'Cancel'); return; }
-      sfx('order'); setMode('normal');
-      toast(`Strike ordered on ${tName}: the bomber loads up and takes off.`, 'good');
-    });
+    // Under a finger the target is picked first (ringed on the map) and the banner's Strike sends the bomber; a mouse click sends it at once.
+    if (!INPUT.mouse) { pickTarget(t, `Strike ${BDEFS[t.type] ? `the ${playerName(t.owner)} <b>${BDEFS[t.type].name}</b>` : `this <b>${BOTS[t.type].name}</b>`}? The bomber loads up and takes off.`, 'Strike'); return; }
+    strikePicked(t);
     return;
   }
   if (R.mode === 'fsail') {
@@ -2916,6 +3199,7 @@ function onMapTap(i, j, wx, wy) {
     if (R.mode === 'bombard') {
       const b = buildingAtTap(i, j, wx, wy);
       if (!b || !rocketTarget(u, b)) { sfx('error'); showBanner('<span class="err">Tap an enemy building.</span> The Howitzer drives to within ' + ROCKET.range + ' tiles of it, digs in and shells it.', null, 'Cancel'); return; }
+      if (!INPUT.mouse) { pickTarget(b, `Shell the ${playerName(b.owner)} <b>${BDEFS[b.type].name}</b>? The Howitzer drives to within ${ROCKET.range} tiles of it, digs in and shells it.`, 'Bombard'); return; }
       act('bombard', [[u.id], b.id]);
       toast(`The Howitzer is off to shell the ${BDEFS[b.type].name}.`, 'info');
       sfx('order');
@@ -3005,7 +3289,8 @@ function onMapTap(i, j, wx, wy) {
     if (UI.roadMode === 'arrows') {
       // Turn the arrow: east, south, west, north, then back to two-way.
       if (S.road[t] && !roadOwnedBy(ME, t)) { sfx('error'); showRoadBanner('That road isn\'t yours: you can only change your own roads, or ones on land you hold.'); return; }
-      if (S.road[t]) { act('roadDir', [i, j, S.road[t] >= 5 ? 1 : S.road[t] + 1], () => showRoadBanner()); sfx('click'); }
+      // (Remembered as a stroke of the plan, so Undo turns it back.)
+      if (S.road[t]) { if (!UI.draft) draftReset(); UI.draft.strokes.push([{ t, op: 'dir', from: S.road[t] }]); act('roadDir', [i, j, S.road[t] >= 5 ? 1 : S.road[t] + 1], () => showRoadBanner()); sfx('click'); }
       return;
     }
     if (!UI.draft) draftReset();
@@ -3107,6 +3392,7 @@ function onMapTap(i, j, wx, wy) {
     if (stroke.length) d.strokes.push(stroke);
     sfx('click');
     showRoadBanner(note, true);
+    planInView(t);
     return;
   }
   if (R.mode === 'aim') { aimTap(i, j); return; }
@@ -3120,6 +3406,13 @@ function onMapTap(i, j, wx, wy) {
     else if (!b && inMap(i, j) && S.terrain[tIdx(i, j)] === T_GROUND) { setMode('normal'); openMoveSheet(i, j); }
     else { sfx('error'); showBanner(`<span class="err">Tap a rival building (${rivalColours()}) or open ground.</span>`, null, 'Cancel'); }
     return;
+  }
+  // Under a finger: with warbots selected and their bar showing, a tap on another of yours selects it and a tap
+  // anywhere else is their order; with none selected, a tap on one of yours out in the open selects it.
+  if (!INPUT.mouse && R.mode === 'normal') {
+    const unit = unitAtTap(wx, wy);
+    if (selBarShowing()) { if (unit) touchSelect(unit); else touchOrder(i, j, wx, wy); return; }
+    if (unit && !b && !rally) { closeSheet(); touchSelect(unit); return; }
   }
   // Everything under the tap: a rally flag, a building, then robots, nearest first. Tapping the same spot
   // again steps on to the next (a Crawler parked on a Foundry, a worker at a site, two warbots together).
@@ -3137,8 +3430,9 @@ function onMapTap(i, j, wx, wy) {
     if (s.kind === 'rally') { setMode('normal'); openRallySheet(s.e); }
     else if (s.kind === 'bld') openBuildingSheet(s.e);
     else {
-      const bot = s.e;
-      if (INPUT.mouse && bot.owner === ME && (isArmy(bot) || BOTS[bot.type].siege)) selectBots([bot.id], INPUT.shift);
+      const bot = s.e, mine = bot.owner === ME && (isArmy(bot) || BOTS[bot.type].siege);
+      if (mine && !INPUT.mouse) { closeSheet(); touchSelect(bot); return; } // (a finger selects it: its panel is behind Info on the selection bar)
+      if (mine) selectBots([bot.id], INPUT.shift);
       openBotSheet(bot);
     }
     if (stack.length > 1 && !UI.stackHint) { UI.stackHint = true; toast(`${stack.length} things are here: tap the same spot again for the next one.`, 'info'); }
@@ -3245,6 +3539,7 @@ function draftUndo() {
   const back = { add: 'unadd', unadd: 'add', del: 'undel', undel: 'del', ramp: 'unramp', unramp: 'ramp', rail: 'unrail', unrail: 'rail', raildel: 'unraildel', unraildel: 'raildel', pipe: 'unpipe', unpipe: 'pipe', pipedel: 'unpipedel', unpipedel: 'pipedel' };
   for (let k = s.length - 1; k >= 0; k--) {
     if (s[k].op === 'setw') { if (s[k].from) d.walls.set(s[k].t, s[k].from); else d.walls.delete(s[k].t); continue; }
+    if (s[k].op === 'dir') { act('roadDir', [s[k].t % S.W, (s[k].t / S.W) | 0, s[k].from]); continue; } // an arrow turned back
     draftOp([], s[k].t, back[s[k].op]);
   }
 }
@@ -3320,7 +3615,7 @@ function draftDone(r) {
 
 /** Leaving Paths with a plan that was never built: it's dropped (nothing was spent). */
 function dropDraft() {
-  if (draftEmpty()) return;
+  if (draftEmpty()) { if (UI.draft) UI.draft.strokes.length = 0; return; } // (arrows turned in Arrows stay turned: only their Undo goes)
   draftReset();
   toast('Road plan dropped: nothing was spent.', 'info');
 }
@@ -3353,7 +3648,7 @@ function dragCliff(stroke, p, t) {
 function onRoadPaint(i, j, first) {
   if (R.mode !== 'road' || UI.roadMode === 'lights' || UI.roadMode === 'ramp') return;
   if (!UI.draft) draftReset();
-  if (first) { paintFlagsReset(); UI.stroke = []; UI.draft.strokes.push(UI.stroke); UI.routeGhost = null; }
+  if (first) { paintFlagsReset(); UI.stroke = []; UI.dirShown = 0; UI.draft.strokes.push(UI.stroke); UI.routeGhost = null; }
   const from = first || !UI.lastPaint ? { i, j } : UI.lastPaint;
   const line = tileLine(from.i, from.j, i, j);
   if (UI.roadMode === 'pipe') { pipeDrag(i, j, first); return; }
@@ -3404,7 +3699,9 @@ function paintTiles(line, clear) {
     if (arrows) {
       if (S.road[t] && prev) {
         const v = 2 + [[1, 0], [0, 1], [-1, 0], [0, -1]].findIndex(([dx, dy]) => dx === x - prev[0] && dy === y - prev[1]);
-        if (v >= 2 && roadOwnedBy(ME, t)) { if (S.road[tIdx(prev[0], prev[1])] && roadOwnedBy(ME, tIdx(prev[0], prev[1]))) act('roadDir', [prev[0], prev[1], v]); act('roadDir', [x, y, v]); }
+        // (Arrows turn at once, but each one is remembered in this drag's stroke, so Undo puts them back.)
+        const turn = (u) => { if (S.road[u] && S.road[u] !== v && roadOwnedBy(ME, u)) { UI.stroke.push({ t: u, op: 'dir', from: S.road[u] }); act('roadDir', [u % S.W, (u / S.W) | 0, v]); } };
+        if (v >= 2 && roadOwnedBy(ME, t)) { turn(tIdx(prev[0], prev[1])); turn(t); }
       }
       prev = [x, y];
       continue;
@@ -3449,13 +3746,59 @@ function paintBanner(lead) {
       UI.paintSkipped ? 'Track skips tiles it can\'t go on: outside your border, resources or buildings.' : ''].filter(Boolean).join(' ')), true);
     return;
   }
-  if (!arrows) {
+  if (arrows) {
+    // Say what the drag has done once it has turned something (and each time it turns more), with Undo beside it.
+    const n = new Set(UI.stroke.map((o) => o.t)).size;
+    if (n && n !== UI.dirShown) showRoadBanner(`${n} road tile${n === 1 ? '' : 's'} made one-way: <b>Undo</b> puts ${n === 1 ? 'it' : 'them'} back.`, true);
+    UI.dirShown = n;
+  } else {
     showRoadBanner(lead + (cliffNote || (UI.paintRamp ? 'A <b>Ramp</b> is planned where the road climbs the cliff: workers cut it, paid from storage, and it carries the road up when it\'s done.'
       : UI.paintBridge || UI.paintTunnel ? [UI.paintBridge ? `The road crosses the water as a <b>bridge</b>: ${costText(CROSS[T_WATER].cost)} a tile, built out from the shore${navalMap() ? ' (more a tile out past ' + BRIDGE_NEAR + ' tiles from shore: a Port and ships are the way across wide water)' : ''}.` : '',
         UI.paintTunnel ? `The road goes through the rock as a <b>tunnel</b>: ${costText(CROSS[T_ROCK].cost)} a tile, dug in from the rock face.` : ''].filter(Boolean).join(' ')
       : UI.paintCross ? 'A road stops at your border: only a bridge can reach out past it, over water.'
         : UI.paintSkipped ? 'Dragging goes round resources: tap a boulder, grove, ore or crystal tile to clear it for a road.' : '')), true);
   }
+}
+
+/**
+ * May a drag that starts on tile (i, j) paint? In Arrows only one that starts on a road of yours: from anywhere
+ * else it moves the map, as a one-finger drag does outside Paths (a habitual pan across your roads turned them
+ * all one-way). Every other tool paints from wherever it starts.
+ */
+function roadPaintStarts(i, j) {
+  return UI.roadMode !== 'arrows' || (inMap(i, j) && S.road[tIdx(i, j)] > 0 && roadOwnedBy(ME, tIdx(i, j)));
+}
+
+/**
+ * On a phone a plan's buttons make the Paths banner a row taller: when that leaves the tile just tapped under it
+ * (a tap just above the banner), the map glides up to show it.
+ */
+function planInView(t) {
+  if (isWide() || R.mode !== 'road') return;
+  const r = $('banner').getBoundingClientRect(), z = R.cam.z, p = worldToScreen(t % S.W + 0.5, ((t / S.W) | 0) + 0.5), over = p.y + z - r.top;
+  if (over > 0 && p.y < r.bottom && p.x > r.left - z && p.x < r.right + z) UI.glide = { x: R.cam.x, y: R.cam.y + over / z, t: 0.5 };
+}
+
+/**
+ * Sketching in Paths with the finger (or the mouse) up near an edge of the map: the map scrolls that way and
+ * the sketch carries on under the finger, so a long road is one stroke. Called every frame (keyPan).
+ */
+const PAINT_EDGE = 48; // pixels from the edge of the map where it starts, faster the nearer the edge
+function paintScroll(dt) {
+  const g = INPUT.gesture;
+  if (!g || !g.painting || R.mode !== 'road') return;
+  // The map's edges: the top bar above; below, the Paths banner where it's docked across the bottom, else the screen.
+  const top = document.querySelector('.toprow').getBoundingClientRect().bottom, ban = $('banner').getBoundingClientRect();
+  const bot = ban.width > R.w * 0.9 && ban.bottom > R.h - 2 ? ban.top : R.h, E = PAINT_EDGE;
+  const dx = g.lx < E ? (g.lx - E) / E : g.lx > R.w - E ? (g.lx - (R.w - E)) / E : 0;
+  const dy = g.ly < top + E ? (g.ly - top - E) / E : g.ly > bot - E ? (g.ly - (bot - E)) / E : 0;
+  if (!dx && !dy) return;
+  const sp = (Math.max(R.w, R.h) * 0.6 * dt) / R.cam.z, x0 = R.cam.x, y0 = R.cam.y;
+  R.cam.x += clamp(dx, -1, 1) * sp; R.cam.y += clamp(dy, -1, 1) * sp;
+  clampCam();
+  if (R.cam.x === x0 && R.cam.y === y0) return;
+  const w = screenToWorld(g.lx, g.ly);
+  onRoadPaint(Math.floor(w.x), Math.floor(w.y), false);
 }
 
 /* ------------------------------------------------------------------ Route to (Roads and Track) */
@@ -3547,6 +3890,7 @@ function routeTap(i, j) {
   UI.routeEnd = tIdx(i, j);
   sfx('click');
   paintBanner(routeNote(r, rail));
+  planInView(tIdx(i, j));
 }
 
 /** Route to, by drag: from where the drag started to the finger, found again as it moves. */
@@ -3662,7 +4006,7 @@ function showRoadBanner(problem, info) {
       'The Paver resurfaces marked roads once they are half worn, so a Roadworks near your busiest roads keeps them fast. Red outlines show worn asphalt. ' +
       `Marking is free; you have ${works} Roadworks.`;
   } else if (mode === 'arrows') {
-    line = 'Drag along a road to make it <b>one-way</b> the way you drag. Tap a road to turn its arrow.';
+    line = 'Drag along a road to make it <b>one-way</b> the way you drag (a drag that starts off your roads moves the map). Tap a road to turn its arrow. <b>Undo</b> puts arrows back.';
     how = 'One-way traffic never meets head-on, so a loop of one-way roads (one lane out, one back) keeps busy routes flowing.';
   } else if (mode === 'lights') {
     let lights = 0, junctions = 0, overs = 0;
@@ -3704,9 +4048,14 @@ function showRoadBanner(problem, info) {
       (mode === 'bridge' ? ` and ${have.alloy || 0} Alloy. Workers build bridges and tunnels out from the shore or rock face, and they join land on any level.` : `. Drag a road out over water and it carries on as a bridge (${costText(CROSS[T_WATER].cost)} a tile), and through rock as a tunnel (${costText(CROSS[T_ROCK].cost)}).`) +
       ` After you tap Build, free workers pave the road a tile at a time${waiting ? ` (<b>${waiting}</b> tile${waiting === 1 ? '' : 's'} waiting now)` : ''}. Short of Cement or Alloy? Plan it anyway: tiles you can't pay for yet wait (an orange outline) and are paid from storage as the goods come in, oldest plans first.` + owedText;
   }
-  const text = (problem ? `<span class="${info ? 'ok' : 'err'}">${problem}</span> ` : '') + line +
-    `<details class="how"><summary>How it works</summary>${how}</details>`;
+  // (The line is cut to three lines where the banner is docked across the bottom of a phone: what went wrong, or
+  // what a tap just did, leads. How it works opens over the map there, and stays open while you read it.)
+  const text = `<span class="rb-line">${problem ? `<span class="${info ? 'ok' : 'err'}">${problem}</span> ` : ''}${line}</span>` +
+    `<details class="how"${UI.howOpen === mode ? ' open' : ''}><summary>How it works</summary><div class="how-text">${how}</div></details>`;
   showBanner(text, null, 'Done');
+  const det = $('banner-text').querySelector('details.how');
+  det.ontoggle = () => { UI.howOpen = det.open ? mode : null; };
+  if (UI.howOpen !== mode) UI.howOpen = null;
   $('banner-seg').hidden = false;
   for (const btn of $('banner-seg').children) {
     btn.classList.toggle('on', btn.dataset.v === mode);
@@ -3714,10 +4063,13 @@ function showRoadBanner(problem, info) {
     btn.onclick = () => { UI.roadMode = btn.dataset.v; sfx('click'); showRoadBanner(); };
   }
   // Undo, Clear and Build for a plan.
-  const drafting = !draftEmpty();
-  $('banner-undo').hidden = !drafting;
+  const drafting = !draftEmpty(), turned = UI.draft.strokes.some((st) => st.some((o) => o.op === 'dir'));
+  $('banner').classList.toggle('noplan', !drafting); // (a phone gives the plan's buttons a row only when there's a plan: Undo alone, for arrows, fits the tools' row)
+  $('banner-undo').hidden = !drafting && !turned;
   $('banner-clear').hidden = !drafting;
   $('banner-ok').hidden = !drafting;
+  // The tools are one row to swipe along on a phone: the one in use is brought into view when it changes.
+  if (UI.segShown !== mode) { UI.segShown = mode; const on = $('banner-seg').querySelector('.on'); if (on && on.scrollIntoView) on.scrollIntoView({ block: 'nearest', inline: 'center' }); }
   if (drafting) {
     const sm = draftSummary();
     const wl = sm.walls + sm.gates;
@@ -3726,9 +4078,9 @@ function showRoadBanner(problem, info) {
       : wl ? `Build ${sm.walls ? `${sm.walls} Wall${sm.walls === 1 ? '' : 's'}` : ''}${sm.walls && sm.gates ? ' + ' : ''}${sm.gates ? `${sm.gates} Gate${sm.gates === 1 ? '' : 's'}` : ''}`
       : sm.rail ? `Build ${sm.rail} track tile${sm.rail === 1 ? '' : 's'}` : sm.pipe ? `Lay ${sm.pipe} pipe tile${sm.pipe === 1 ? '' : 's'}` : 'Take up';
     $('banner-ok').disabled = !sm.can;
-    $('banner-undo').onclick = () => { draftUndo(); sfx('click'); showRoadBanner(); };
     $('banner-clear').onclick = () => { draftReset(); sfx('click'); showRoadBanner(); };
   }
+  $('banner-undo').onclick = () => { draftUndo(); sfx('click'); showRoadBanner(); };
   if ($('pipe-all')) $('pipe-all').onclick = (e) => { e.stopPropagation(); pipeAllPumps(); };
   const tb = $('banner-traffic');
   tb.hidden = false;
@@ -3738,7 +4090,8 @@ function showRoadBanner(problem, info) {
   const rb = $('banner-route');
   rb.hidden = !['road', 'bridge', 'rail'].includes(mode);
   rb.classList.toggle('on', routeOn());
-  rb.onclick = () => { UI.route = !UI.route; UI.routeGhost = null; UI.routePrev = null; sfx('click'); showRoadBanner(); };
+  // (UI.roadMode = mode: in a new game no tool has been picked yet, and Route to stayed off however often it was tapped)
+  rb.onclick = () => { UI.roadMode = mode; UI.route = !UI.route; UI.routeGhost = null; UI.routePrev = null; sfx('click'); showRoadBanner(); };
   if (R.traffic) $('banner-text').innerHTML += ` <span class="traffic-key">${trafficSummary()}</span>`;
   // In a mission, the next goal's hint (the goal list is hidden while Paths is open).
   const M = S && S.mission, def = M && !M.result && missionDef(M);
@@ -3793,20 +4146,114 @@ function trafficSummary() {
 /* ------------------------------------------------------------------ sheets */
 
 function openSheet(kind, id, html) {
+  // (Built again for the same thing, a panel keeps its height and its place; a new one starts from the top.)
+  const fresh = $('sheet').hidden || UI.sheetKind !== kind || UI.sheetFor !== id;
   UI.sheetKind = kind;
   UI.sheetFor = id;
   UI.demolishArm = 0;
   $('sheet-body').innerHTML = html;
   $('sheet').hidden = false;
   document.body.classList.add('sheet-open');
+  document.body.classList.toggle('sheet-build', kind === 'build'); // (the Build list is wider on a very wide screen)
   $('banner').hidden = true;
   markSheetKeys();
+  if (fresh) { $('sheet-body').scrollTop = 0; setSheetSize(SHEET_TALL[kind] ? 'full' : 'half'); }
+}
+
+/*
+ * Panel heights where the panel is a sheet across the bottom (phones, upright tablets): half the screen, so the
+ * map and what the panel is about stay in view above it; full; or just its title strip. The grab handle at the
+ * top is dragged between them (further down closes the panel) or tapped to switch between half and full.
+ */
+const SHEET_TALL = { build: 1, goods: 1, pop: 1, msgs: 1 }; // lists and charts open at full height: nothing on the map to watch
+
+function setSheetSize(size) {
+  const s = $('sheet');
+  UI.sheetSize = size;
+  s.classList.toggle('full', size === 'full');
+  s.classList.toggle('peek', size === 'peek');
+  s.style.maxHeight = '';
+  sheetMoved();
+}
+
+/** Where on the map the open panel's subject is (a building, a robot, a rally flag, a tile); null for a list. */
+function sheetSpot() {
+  const k = UI.sheetKind, id = UI.sheetFor;
+  if (k === 'bld') { const b = getE(id); return b ? { x: b.x + 0.5, y: b.y + 0.5 } : null; }
+  if (k === 'bot') { const u = getE(id); if (!u) return null; const h = u.inside ? getE(u.inside) : null; return h ? { x: h.x + 0.5, y: h.y + 0.5 } : { x: u.x, y: u.y }; }
+  if (k === 'rally') { const r = rallyById(id); return r ? { x: r.x, y: r.y } : null; }
+  if (k === 'move' || k === 'res' || k === 'road' || k === 'soil' || k === 'post' || k === 'uplink') return { x: (id % S.W) + 0.5, y: ((id / S.W) | 0) + 0.5 };
+  return null;
+}
+
+/**
+ * The bottom panel has opened, closed or changed height. The map may scroll up past its last row by as much
+ * as the panel covers (R.lift, see clampCam), and what the panel is about is brought into view in the band
+ * between the top bar and the panel, if it's hidden: a building tapped low on the screen isn't left under
+ * its own panel. Nothing moves if it's in view already, or at full height. On a phone held on its side the panel
+ * is a column down the right, and the subject is brought out from under it the same way; on a wide screen
+ * (a computer) the panel takes a small part of the width and the map is left where it is.
+ */
+function sheetMoved() {
+  const s = $('sheet'), open = !s.hidden, bottom = open && $('sheet-grab').getClientRects().length > 0, side = open && !bottom && !isWide();
+  R.lift = bottom ? s.offsetHeight / R.h : 0;
+  UI.glide = null;
+  if (!(bottom || side) || (bottom && UI.sheetSize === 'full') || !S) return;
+  const at = sheetSpot();
+  if (!at) return;
+  // The band it should sit in. Across the bottom: under the top bar, above the panel and its handle (under the
+  // minimap too where that leaves room, else beside it). Down the side (a phone on its side): between the tools'
+  // rail and the panel, under the top bar.
+  const mm = $('minimap').hidden ? null : $('minimap').getBoundingClientRect();
+  let top = $('topbar').getBoundingClientRect().bottom, bot = R.h, left = 0, right = R.w;
+  if (side) { left = $('bottombar').getBoundingClientRect().right; right = s.getBoundingClientRect().left; }
+  else {
+    bot = R.h - s.offsetHeight - 22;
+    if (mm && mm.bottom > top) { if (bot - mm.bottom >= 130) top = mm.bottom + 26; else right = mm.left; }
+  }
+  const p = worldToScreen(at.x, at.y), m = Math.max(4, Math.min(R.cam.z * 0.75, (bot - top) / 3, (right - left) / 3));
+  const offX = p.x < left + m || p.x > right - m, offY = p.y < top + m || p.y > bot - m;
+  if (!offX && !offY) return;
+  UI.glide = { x: offX ? at.x - ((left + right) / 2 - R.w / 2) / R.cam.z : R.cam.x, y: offY ? at.y - ((top + bot) / 2 - R.h / 2) / R.cam.z : R.cam.y, t: 0.5 };
+  if (matchMedia('(prefers-reduced-motion: reduce)').matches) { centerOn(UI.glide.x, UI.glide.y); UI.glide = null; }
+}
+
+/**
+ * The panel's grab handle: dragged, the panel follows the finger and settles at a height when it's let go;
+ * tapped (or clicked, or pressed from the keyboard), half and full swap.
+ */
+function initSheetGrab() {
+  const grab = $('sheet-grab'), s = $('sheet');
+  let d = null, dragged = false;
+  grab.addEventListener('pointerdown', (e) => { grab.setPointerCapture(e.pointerId); dragged = false; d = { y: e.clientY, h: s.offsetHeight }; });
+  grab.addEventListener('pointermove', (e) => {
+    if (!d) return;
+    const dy = e.clientY - d.y;
+    if (!dragged && Math.abs(dy) < 8) return;
+    dragged = true;
+    s.style.maxHeight = clamp(d.h - dy, 24, R.h - document.querySelector('.toprow').getBoundingClientRect().bottom - 6) + 'px';
+  });
+  const end = (e) => {
+    if (!d) return;
+    const dy = e.clientY - d.y, h = d.h - dy, was = UI.sheetSize;
+    d = null;
+    if (!dragged) return; // a tap: the click that follows swaps half and full
+    // Let go: down a stop (or two, from full to the title strip), up a stop (or two), or back where it was.
+    if (e.type === 'pointercancel' || Math.abs(dy) <= 30) setSheetSize(was);
+    else if (dy < 0) setSheetSize(was === 'peek' && h < R.h * 0.6 ? 'half' : 'full');
+    else if (was === 'peek' || h < 44) closeSheet();
+    else setSheetSize(was === 'full' && h > R.h * 0.3 ? 'half' : 'peek');
+  };
+  grab.addEventListener('pointerup', end);
+  grab.addEventListener('pointercancel', end);
+  grab.onclick = () => { if (dragged) { dragged = false; return; } sfx('click'); setSheetSize(UI.sheetSize === 'half' ? 'full' : 'half'); };
 }
 
 function closeSheet() {
   R.routePreview = null;
+  R.lift = 0; UI.glide = null;
   $('sheet').hidden = true;
-  document.body.classList.remove('sheet-open');
+  document.body.classList.remove('sheet-open', 'sheet-build');
   UI.sheetKind = null;
   UI.sheetFor = 0;
   R.selected = 0;
@@ -3842,7 +4289,9 @@ function openBuildMenu() {
   const html = `<div class="sheet-title"><h3>Build</h3></div>
     <p class="desc">Placing a site is free; haulers bring the materials by road, so lay a road to it. <span id="build-sites">${sites}/${MAX_SITES}</span> sites in progress.</p>
     ${tabs}
-    <div class="build-grid"><button class="bcard roads" id="build-roads" data-g="move"><kbd data-key="R">R</kbd><svg viewBox="0 0 24 24"><path d="M8 3L5 21M16 3l3 18M12 4v3M12 10.5v3M12 17v3" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+    <div class="build-grid">${nextBuilds().filter((t) => list.includes(t)).map((t) => `<button class="bcard next" data-t="${t}" data-g="next" ${sites >= MAX_SITES ? 'disabled' : ''}>
+      <img src="${iconFor(t)}" alt=""><div class="bname">${BDEFS[t].name}</div><div class="bcost">${costHTML(BDEFS[t].cost, have)}</div>
+      <div class="bhave">${ownedText(t)}</div></button>`).join('')}<button class="bcard roads" id="build-roads" data-g="move"><kbd data-key="R">R</kbd><svg viewBox="0 0 24 24"><path d="M8 3L5 21M16 3l3 18M12 4v3M12 10.5v3M12 17v3" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
       <div class="bname">Roads</div><div class="bhave">Plan roads, bridges and ramps</div></button>${warOn() ? `<button class="bcard walls" id="build-walls" data-g="defend"><kbd data-tab="${BUILD_TAB_KEYS.defend}" data-key="X">X</kbd><img src="${iconFor('wall')}" alt=""><div class="bname">Walls</div><div class="bcost">${costHTML(BDEFS.wall.cost, have)}</div>
       <div class="bhave">${wallCountText()}</div></button>` : ''}${ordered.map((t) => `<button class="bcard" data-t="${t}" data-g="${groupOf(t)}" ${sites >= MAX_SITES ? 'disabled' : ''}>
       ${kbd(t)}<img src="${iconFor(t)}" alt=""><div class="bname">${BDEFS[t].name}</div><div class="bcost">${costHTML(BDEFS[t].cost, have)}${t === 'viaduct' ? ' a tile' : ''}</div>
@@ -3857,7 +4306,7 @@ function openBuildMenu() {
     UI.buildTab = g;
     try { localStorage.setItem('botfall.buildTab', g); } catch (e) { /* private mode: not remembered */ }
     for (const btn of $('build-tabs').children) btn.classList.toggle('on', btn.dataset.g === g);
-    for (const el of $('sheet-body').querySelectorAll('.build-grid .bcard')) el.hidden = g !== 'all' && el.dataset.g !== g;
+    for (const el of $('sheet-body').querySelectorAll('.build-grid .bcard')) el.hidden = g !== 'all' && el.dataset.g !== g && el.dataset.g !== 'next';
     // On All, a card's key reads "2 K": its tab's number, then its letter.
     for (const el of $('sheet-body').querySelectorAll('.build-grid kbd[data-tab]')) el.textContent = g === 'all' ? `${el.dataset.tab} ${el.dataset.key}` : el.dataset.key;
   };
@@ -3977,9 +4426,11 @@ function openBuildingSheet(b) {
     const n = S.bots.filter((u) => !u.dead && u.nest === b.id).length;
     desc += ` <b>Level ${b.level || 1} of 3</b>, ${n} creature${n === 1 ? '' : 's'} out and about. Hoarded: ${Object.keys(b.stock).filter((g) => b.stock[g] > 0).map((g) => `${b.stock[g]} ${GOOD[g].name}`).join(', ') || 'nothing'}.`;
   }
+  // With no road to storage yet, that warning and its Lay road button lead the panel: in view at half height.
+  const roadFirst = mine && b.unlinked && needsRoad(b);
   let html = `<div class="sheet-title"><img src="${iconFor(b.type, b.owner)}" alt=""><div><h3>${def.name}</h3>
     <div class="owner"><span class="dot" style="background:${PLAYER_COLORS[b.owner]}"></span> ${mine ? 'Yours' : playerName(b.owner)}</div></div></div>
-    <p class="desc">${desc}</p><div class="status" id="sh-status"></div><div id="sh-dyn"></div>${mine ? '<div id="sh-fix"></div>' : ''}`;
+    ${roadFirst ? '<div id="sh-road"></div>' : ''}<p class="desc">${desc}</p><div class="status" id="sh-status"></div><div id="sh-dyn"></div>${mine ? '<div id="sh-fix"></div>' : ''}`;
   if (mine) {
     if (def.airfield && b.built && b.owner === ME) html += airfieldSection(b); // its planes and air drops first
     if (def.yard && b.built && mine) html += `<div class="section-label">${def.port ? 'Shipyard' : def.airfield ? 'Hangar' : 'Rail yard'}</div><div class="status" id="sh-yard-status"></div><div class="bar" id="sh-yard-bar"><div></div></div><div id="sh-yard"></div>${def.station ? '<div class="actions" id="sh-yard-here"></div>' : ''}
@@ -4089,7 +4540,7 @@ function openBuildingSheet(b) {
         <button class="btn" id="sh-lim-plus" aria-label="Raise the limit">+</button></div></div>
         <div class="limit-row"><span class="hint" id="sh-lim-hint"></span><button class="btn small" id="sh-lim-off"></button></div>`;
     }
-    if (needsRoad(b) || (b.unlinked !== undefined && !def.store)) html += '<div id="sh-road"></div>';
+    if (!roadFirst && (needsRoad(b) || (b.unlinked !== undefined && !def.store))) html += '<div id="sh-road"></div>';
     html += '<div class="actions">';
     if (pausable(b) && b.built) html += `<button class="btn" id="sh-pause"></button>`;
     if (b.owner === ME && (movable(b) || b.moving)) html += `<button class="btn" id="sh-move">${b.moving ? 'Cancel move' : 'Move'}</button><p class="hint" id="sh-move-hint">${b.moving ? 'Its new site is going up: when it\'s finished, everything here moves over and this one comes down.' : 'Put it somewhere else: no goods needed, just its build time. It keeps working until the new one is ready.'}</p>`;
@@ -5131,7 +5582,7 @@ function refreshArmyTab() {
   const flags = S.rallies.filter((r) => r.owner === ME).map((r) => ({ r, n: rallyMembers(r.id).length })).filter((f) => f.n > 0);
   const atk = new Map();
   for (const u of g.attack) { const t = getE(u.task.target); if (t && !t.dead) atk.set(t.id, (atk.get(t.id) || 0) + 1); }
-  const sig = JSON.stringify([UI.armyN, wb.length, g.base.length, g.posted.length, field, noAmmo, flags.map((f) => [f.r.id, f.n]), [...atk], rockets.map((u) => [u.id, botActivity(u), Math.round(u.x / 3), Math.round(u.y / 3)]), S.players[ME].keepW ?? 0, !!INPUT.mouse]);
+  const sig = JSON.stringify([UI.armyN, wb.length, g.base.length, g.posted.length, field, noAmmo, flags.map((f) => [f.r.id, f.n]), [...atk], rockets.map((u) => [u.id, botActivity(u), Math.round(u.x / 3), Math.round(u.y / 3)]), S.players[ME].keepW ?? 0, !!INPUT.mouse, recallArmed()]);
   if (sig === UI.armySig) return;
   UI.armySig = sig;
   const L = getE(S.players[ME].lander), where = (x, y) => (L ? dirText(L, { x: Math.floor(x), y: Math.floor(y) }) : '');
@@ -5144,8 +5595,8 @@ function refreshArmyTab() {
       <button class="btn primary" id="ar-attack" data-act="cmd" data-c="attack">Attack</button>
       <button class="btn" id="ar-hold" data-act="cmd" data-c="hold">Hold ground</button>
       <button class="btn" id="ar-station" data-act="cmd" data-c="station">Station</button>
-      <button class="btn" id="ar-recall" data-act="recall"${field ? '' : ' disabled'}>Recall all</button>
-      ${INPUT.mouse ? '<button class="btn ghost" id="ar-select" data-act="select">Select all warbots</button>' : ''}
+      <button class="btn${field && recallArmed() ? ' danger' : ''}" id="ar-recall" data-act="recall"${field ? '' : ' disabled'}>${field && recallArmed() ? `Tap again: ${field} come home` : 'Recall all'}</button>
+      <button class="btn ghost" id="ar-select" data-act="select">Select all warbots</button>
     </div>
     <p class="hint"><b>Attack</b>: tap a rival building and a group of ${armyNText()} goes for it. <b>Hold ground</b>: tap open ground and they plant a rally flag and hold it. <b>Station</b>: tap an Outpost, Keep or Bunker of yours and they move in for good. Each tap sends another group, until you tap Done. Warbots come from your garrisons in reach (each keeps its own).</p>`;
   if (flags.length || atk.size) {
@@ -5159,7 +5610,7 @@ function refreshArmyTab() {
     rockets.forEach((u, k) => {
       h += `<div class="kv army-row"><span><b>Howitzer ${k + 1}</b>${L ? `, ${where(u.x, u.y)}` : ''}: ${botActivity(u)}</span><span><button class="btn small primary" data-act="findbot" data-id="${u.id}">Find</button><button class="btn small" data-act="bombard" data-id="${u.id}">Bombard</button><button class="btn small ghost" data-act="rgo" data-id="${u.id}">Drive</button></span></div>`;
     });
-    if (INPUT.mouse) h += `<div class="army-cmds"><button class="btn ghost" id="ar-select-rockets" data-act="selectrockets">Select all Howitzers</button></div>`;
+    h += `<div class="army-cmds"><button class="btn ghost" id="ar-select-rockets" data-act="selectrockets">Select all Howitzers</button></div>`;
   }
   h += `<div class="section-label">Every Outpost keeps</div><div class="seg" id="ar-keep">${[0, 1, 2, 5].map((v) => `<button data-act="keep" data-k="${v}" class="${v === k ? 'on' : ''}">${v}</button>`).join('')}</div>
     <p class="hint">Warbots each Outpost keeps at home, sent from your Command Base (and replaced if lost). Set one Outpost on its own in its panel.</p>`;
@@ -5201,14 +5652,14 @@ function armyButton(btn) {
   switch (what) {
     case 'size': UI.armyN = btn.dataset.n === 'all' ? 'all' : +btn.dataset.n; UI.armySig = ''; refreshArmySheet(); return;
     case 'cmd': armyCmd(btn.dataset.c); return;
-    case 'recall': recallAllWarbots(); UI.armySig = ''; refreshArmySheet(); return;
-    case 'select': selectBots(armyIds(ME), false); closeSheet(); if (UI.sel.length) toast(`${UI.sel.length} warbots selected: right-click to give orders.`, 'info'); return;
+    case 'recall': recallAllTap(); return;
+    case 'select': selectBots(armyIds(ME), false); closeSheet(); if (UI.sel.length) toast(`${UI.sel.length} warbots selected: ${onTouch() ? 'tap the map' : 'right-click'} to give orders.`, 'info'); return;
     case 'keep': setKeepAll(+btn.dataset.k); UI.armySig = ''; refreshArmySheet(); return;
     case 'showflag': if (e) { centerOn(e.x, e.y); openRallySheet(e); } return;
     case 'showbld': if (e) { centerOn(e.x + 0.5, e.y + 0.5); openBuildingSheet(e); } return;
     case 'showbot': if (e) { const inB = e.inside ? getE(e.inside) : null; centerOn(inB ? inB.x + 0.5 : e.x, inB ? inB.y + 0.5 : e.y); openBotSheet(e); } return;
     case 'findbot': if (e) findBot(e); return;
-    case 'selectrockets': { const ids = S.bots.filter((u) => !u.dead && u.owner === ME && BOTS[u.type].siege).map((u) => u.id); closeSheet(); selectBots(ids, false); if (UI.sel.length) toast(`${UI.sel.length} Howitzer${UI.sel.length > 1 ? 's' : ''} selected: right-click an enemy building to shell it, or open ground to drive there.`, 'info'); return; }
+    case 'selectrockets': { const ids = S.bots.filter((u) => !u.dead && u.owner === ME && BOTS[u.type].siege).map((u) => u.id); closeSheet(); selectBots(ids, false); if (UI.sel.length) toast(`${UI.sel.length} Howitzer${UI.sel.length > 1 ? 's' : ''} selected: ${onTouch() ? 'tap' : 'right-click'} an enemy building to shell it, or open ground to drive there.`, 'info'); return; }
     case 'more': if (e) act('rally', [Math.floor(e.x), Math.floor(e.y), armyWant()], (res) => { if (res.sent) { sfx('order'); toast(`${res.sent} more warbot${res.sent > 1 ? 's are' : ' is'} on the way to the flag.`, 'info'); } else { sfx('error'); toast('No spare warbots in reach of that flag.', 'warn'); } UI.armySig = ''; }); return;
     case 'recallflag': if (e) act('recallRally', [id], (n) => { toast(`${n} warbot${n !== 1 ? 's' : ''} called back.`, 'info'); UI.armySig = ''; }); return;
     case 'callback': act('callBack', [id], (n) => { toast(`${n} warbot${n !== 1 ? 's' : ''} called back to their garrisons.`, 'info'); UI.armySig = ''; }); return;
@@ -5479,20 +5930,20 @@ function refreshSheet() {
 /* ------------------------------------------------------------------ HUD */
 
 const OBJECTIVES = [
-  { text: 'Robots run on batteries, and your Command Base can\'t charge them. Tap <b>Build</b> and place a <b>Fuel Station</b> beside the road ring round your base: it runs on the Fuel you landed with.', done: () => hasBuilt('charger') || hasAny('charger') },
-  { text: 'Tap <b>Build</b> and place a <b>Harvester</b> beside the teal stalk groves.', done: () => hasBuilt('harvester') || hasAny('harvester') },
+  { text: 'Robots run on batteries, and your Command Base can\'t charge them. Tap <b>Build</b> and place a <b>Fuel Station</b> beside the road ring round your base: it runs on the Fuel you landed with.', build: ['charger'], done: () => hasBuilt('charger') || hasAny('charger') },
+  { text: 'Tap <b>Build</b> and place a <b>Harvester</b> beside the teal stalk groves.', build: ['harvester'], done: () => hasBuilt('harvester') || hasAny('harvester') },
   { text: '<b>Haulers only drive on roads.</b> Tap <b>Paths</b>, sketch a road from the ring round your Command Base to the Harvester site and tap <b>Build</b> (or tap the site and choose <b>Lay road</b>). Free workers pave it.', done: () => hasBuilt('harvester') || S.buildings.some((b) => !b.dead && b.owner === ME && b.type === 'harvester' && !b.unlinked) },
-  { text: 'Build a <b>Quarry</b> near the grey boulders to get Stone.', done: () => hasBuilt('quarry') },
-  { text: 'Build a <b>Cement Works</b> near your Command Base: it bakes Stone into <b>Cement</b>, which nearly every building and every road is made of.', done: () => hasBuilt('kiln') },
-  { text: 'Build an <b>Ore Mine</b> by the dark ore veins and a <b>Crystal Tap</b> by the violet crystals.', done: () => hasBuilt('mine') && hasBuilt('tap') },
-  { text: 'Build a <b>Smelter</b>: it turns Ore and Fiber into Alloy.', done: () => hasBuilt('smelter') },
-  { text: 'Build a <b>Chip Fab</b>: it turns Crystal and Alloy into Chips.', done: () => hasBuilt('fab') },
-  { text: 'Build a <b>Bot Foundry</b> so you can make more workers.', done: () => hasBuilt('foundry') },
+  { text: 'Build a <b>Quarry</b> near the grey boulders to get Stone.', build: ['quarry'], done: () => hasBuilt('quarry') },
+  { text: 'Build a <b>Cement Works</b> near your Command Base: it bakes Stone into <b>Cement</b>, which nearly every building and every road is made of.', build: ['kiln'], done: () => hasBuilt('kiln') },
+  { text: 'Build an <b>Ore Mine</b> by the dark ore veins and a <b>Crystal Tap</b> by the violet crystals.', build: ['mine', 'tap'], done: () => hasBuilt('mine') && hasBuilt('tap') },
+  { text: 'Build a <b>Smelter</b>: it turns Ore and Fiber into Alloy.', build: ['smelter'], done: () => hasBuilt('smelter') },
+  { text: 'Build a <b>Chip Fab</b>: it turns Crystal and Alloy into Chips.', build: ['fab'], done: () => hasBuilt('fab') },
+  { text: 'Build a <b>Bot Foundry</b> so you can make more workers.', build: ['foundry'], done: () => hasBuilt('foundry') },
   { text: 'Tap your <b>Bot Foundry</b> and order some <b>Workers</b>: it only builds the bots you ask for.', done: () => S.players[ME].stats.bots > S.players[ME].stats.startBots || S.buildings.some((b) => !b.dead && b.owner === ME && hasOrders(b)) },
-  { text: 'Build an <b>Outpost</b> near your border to claim more land.', done: () => hasBuilt('outpost') },
-  { text: 'Fuel Stations burn <b>Fuel</b>. Build a <b>Bio Farm</b> beside the dark fertile soil to grow it (your Agribot runs it).', done: () => hasBuilt('farm') || hasBuilt('refinery') || playerGoods(ME).fuel >= 20 },
+  { text: 'Build an <b>Outpost</b> near your border to claim more land.', build: ['outpost'], done: () => hasBuilt('outpost') },
+  { text: 'Fuel Stations burn <b>Fuel</b>. Build a <b>Bio Farm</b> beside the dark fertile soil to grow it (your Agribot runs it).', build: ['farm'], done: () => hasBuilt('farm') || hasBuilt('refinery') || playerGoods(ME).fuel >= 20 },
   { text: 'Busy crossings jam up. In <b>Paths</b>, choose <b>Junctions</b> and put a traffic light on a junction where three or four roads meet.', done: () => Object.keys(S.lights).some((k) => S.lights[k].owner === ME) || !ownJunction() },
-  { text: 'Warbots need <b>Ammo</b>. Build an <b>Ammo Plant</b>: haulers stock your Command Base and Outposts and warbots reload there.', done: () => S.mode === 'colony' || hasBuilt('armory') },
+  { text: 'Warbots need <b>Ammo</b>. Build an <b>Ammo Plant</b>: haulers stock your Command Base and Outposts and warbots reload there.', build: ['armory'], done: () => S.mode === 'colony' || hasBuilt('armory') },
 ];
 
 function ownJunction() {
@@ -5509,6 +5960,19 @@ function hasAny(type) {
 function hasBuilt(type) {
   for (const b of S.buildings) if (!b.dead && b.owner === ME && b.built && b.type === type) return true;
   return false;
+}
+
+/** The step the goal card is on (the first not done), or null: in a mission, or with every step done. */
+function objectiveStep() {
+  if (S.mission) return null;
+  for (const o of OBJECTIVES) if (!o.done()) return o;
+  return null;
+}
+
+/** The buildings the current step asks for that you haven't placed yet: the Build list pins them at the top. */
+function nextBuilds() {
+  const o = objectiveStep();
+  return o && o.build ? o.build.filter((t) => !hasAny(t)) : [];
 }
 
 function objectiveText() {
@@ -5556,8 +6020,15 @@ function updateHUD() {
   $('clock').title = todEnabled() ? TOD_NAMES[todName()] + (todMode() === 'night' ? ' (always)' : '') : '';
   updateWinCard(); // (first: folded under the Goal chip, it leaves a summary there)
   const obj = $('objective');
-  obj.innerHTML = UI.objCollapsed && !S.mission ? 'Goal ▸' + (UI.winMini || '') : objectiveText();
+  // Where the screen is small the card folds away at the first tap on the map (onMapTap) and opens again for each
+  // new step, unless you've folded or opened it yourself. Folded, it still says how many buildings have no road.
+  const step = objectiveStep(), stepKey = step ? OBJECTIVES.indexOf(step) : -1;
+  if (UI.objStep !== stepKey) { if (UI.objStep !== undefined && UI.objAuto && !UI.objManual) { UI.objCollapsed = false; UI.objAuto = false; } UI.objStep = stepKey; }
+  const cut = UI.objCollapsed && !S.mission ? S.buildings.filter((b) => !b.dead && b.owner === ME && b.unlinked).length : 0;
+  obj.innerHTML = UI.objCollapsed && !S.mission ? 'Goal ▸' + (UI.winMini || '') + (cut ? ` <span class="err">${cut} with no road</span>` : '') : objectiveText();
   obj.classList.toggle('small', UI.objCollapsed);
+  // (The messages button sits beside the folded card on a small screen: the open card needs the whole width.)
+  $('btn-msgs').hidden = !UI.msgLog.length || (!UI.objCollapsed && !isWide());
   updateEventCard();
   updateNukeCard();
   if (UI.sheetKind === 'build') {
@@ -5709,18 +6180,36 @@ function updateNukeCard() {
   el.hidden = false;
 }
 
+/**
+ * A message at the top of the screen. It stays for a time that fits its length (3.8 s for a short one, up to 12;
+ * a building lost, 8 at least), lets taps through to the map under it, and has a Go chip when it's about a place.
+ * While a game is on it is also kept (the last MSG_KEEP) for the list behind the messages button, by the goal card.
+ */
+const MSG_KEEP = 20;
 function toast(text, kind, x, y) {
-  const box = $('toasts');
-  const el = document.createElement('div');
-  el.className = 'toast ' + (kind || 'info');
-  el.textContent = text;
-  if (x !== undefined && (x || y)) el.onclick = () => centerOn(x + 0.5, y + 0.5);
+  const box = $('toasts'), where = x !== undefined && (x || y);
+  if (UI.inGame && S) {
+    const last = UI.msgLog[UI.msgLog.length - 1];
+    if (last && last.text === text) last.n++;
+    else { UI.msgLog.push({ text, kind: kind || 'info', x: where ? x : -1, y: where ? y : -1, t: S.time, n: 1 }); if (UI.msgLog.length > MSG_KEEP) UI.msgLog.shift(); }
+    if (UI.sheetKind === 'msgs') openMsgSheet();
+  }
   // Repeat messages (e.g. several buildings finishing at once) collapse into one line.
   const prev = box.lastElementChild;
   if (prev && prev.dataset.text === text) {
     prev.dataset.n = (+prev.dataset.n || 1) + 1;
-    prev.textContent = `${text} ×${prev.dataset.n}`;
+    prev.firstChild.textContent = `${text} ×${prev.dataset.n}`;
     return;
+  }
+  const el = document.createElement('div'), line = document.createElement('span');
+  el.className = 'toast ' + (kind || 'info');
+  line.textContent = text;
+  el.appendChild(line);
+  if (where) {
+    const go = document.createElement('button');
+    go.className = 'toast-go'; go.textContent = 'Go'; go.setAttribute('aria-label', 'Go there');
+    go.onclick = () => centerOn(x + 0.5, y + 0.5);
+    el.appendChild(go);
   }
   el.dataset.text = text;
   box.appendChild(el);
@@ -5731,7 +6220,17 @@ function toast(text, kind, x, y) {
     const old = [...box.children].find((c) => !c.classList.contains('lost') && c !== el) || box.firstChild;
     box.removeChild(old);
   }
-  setTimeout(() => { el.classList.add('out'); setTimeout(() => el.remove(), 450); }, lost ? 8000 : 3800);
+  const ms = clamp(3800 + 60 * (text.length - 60), 3800, 12000);
+  setTimeout(() => { el.classList.add('out'); setTimeout(() => el.remove(), 450); }, lost ? Math.max(8000, ms) : ms);
+}
+
+/** The messages that have gone by, newest first, each with the game time it came at and Go if it has a place. */
+function openMsgSheet() {
+  const rows = UI.msgLog.slice().reverse().map((m, k) => `<div class="msg-row ${esc(m.kind)}"><span class="msg-t">${fmtTime(m.t)}</span><span>${esc(m.text)}${m.n > 1 ? ` ×${m.n}` : ''}</span>` +
+    (m.x >= 0 ? `<button class="btn small" data-k="${UI.msgLog.length - 1 - k}">Go</button>` : '<span></span>') + '</div>').join('');
+  openSheet('msgs', 0, `<div class="sheet-title"><div><h3>Messages</h3></div></div>
+    <p class="desc">The last ${UI.msgLog.length} message${UI.msgLog.length === 1 ? '' : 's'}, newest first.</p><div class="msg-list">${rows}</div>`);
+  for (const btn of $('sheet-body').querySelectorAll('.msg-row [data-k]')) btn.onclick = () => { const m = UI.msgLog[+btn.dataset.k]; sfx('click'); closeSheet(); if (m) centerOn(m.x + 0.5, m.y + 0.5); };
 }
 
 /**
@@ -5789,6 +6288,6 @@ function uiTick(dt) {
   }
   updateMapTip();
   UI.hudT -= dt;
-  if (UI.hudT <= 0) { UI.hudT = 0.25; updateHUD(); refreshSheet(); placeMinimap(); refreshSelection(); missionCoach(); }
+  if (UI.hudT <= 0) { UI.hudT = 0.25; updateHUD(); refreshSheet(); placeMinimap(); refreshSelection(); missionCoach(); syncWakeLock(); }
   if (S.winner >= 0 && !UI.overShown) showGameOver();
 }

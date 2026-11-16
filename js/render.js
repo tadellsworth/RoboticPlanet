@@ -515,7 +515,8 @@ function clampCam() {
   // the top bar, the banner and the side panel.
   const wide = isWide();
   const padX = Math.max(1, Math.min(R.w * 0.3, 440) / c.z), padT = Math.max(1.5, (R.h * (wide ? 0.12 : 0.22)) / c.z);
-  const padB = Math.max(2.5, (R.h * (wide ? 0.08 : 0.4)) / c.z);
+  // (R.lift: the share of the screen a bottom panel covers, so the last rows can be brought out above it.)
+  const padB = Math.max(2.5, (R.h * (wide ? 0.08 : Math.max(0.4, (R.lift || 0) + 0.14))) / c.z);
   c.x = S.W / 2 <= hw ? S.W / 2 : clamp(c.x, hw - padX, S.W - hw + padX);
   c.y = S.H / 2 <= hh ? S.H / 2 : clamp(c.y, hh - padT, S.H - hh + padB);
 }
@@ -6220,7 +6221,7 @@ function initMinimap(canvas) {
 /** Size the minimap for the current screen and map. Returns its CSS width. */
 function layoutMinimap() {
   if (!S || !MM.canvas) return 0;
-  MM.w = R.w >= 700 ? 156 : 100;
+  MM.w = R.w > R.h && R.h < 520 ? 84 : R.w >= 700 ? 156 : 100; // (a phone on its side is short, not wide: it had the big one, two thirds of its height)
   MM.h = Math.round((MM.w * S.H) / S.W);
   MM.canvas.style.width = MM.w + 'px';
   MM.canvas.style.height = MM.h + 'px';
