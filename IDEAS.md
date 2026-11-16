@@ -22,6 +22,10 @@ Still open: a neutral, shared exchange the rivals compete over; contracts for Ch
     that bots wade slowly (and that a Planet event can flood). Bridges are worth their price here.
 - **Cloud saves.** Saves move between devices by exporting and importing a file today; a cloud save (perhaps kept by
   the multiplayer relay on Cloudflare) would do it without the file.
+- **Send feedback: open questions.** A report's "version" is `gameVersion()`, the fingerprint of the rules code the
+  multiplayer lobby compares: it tells two copies apart but not which commit a report came from. Should the published
+  game carry a build number (say the commit's short hash, written in when the site is published) for reports to name?
+  And should a Bug report be able to bring a screenshot of the map (a few hundred KB, ticked like the save)?
 - **Fuel.** Built: Tankers, explosions with chain reactions, Crude and Fuel pipelines, the Generator and trucks burning
   Fuel, and the rival keeping its Fuel up (Bio Farms first when it runs low, an Oil Pump and Refinery once its Foundry
   is up). Still open: a Generator that explodes too.

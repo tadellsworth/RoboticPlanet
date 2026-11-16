@@ -243,8 +243,12 @@
         <button type="button" id="m-missions">Missions</button>
         <button type="button" id="m-import" title="Load a game saved to a file with Download save file (from the pause menu), on this device or another">Load a save file</button>
         <button type="button" id="m-help">How to play</button>
-        <!-- The Lore guide: the colony's archive of the story (#screen-lore, openLore in js/ui.js). -->
-        <button type="button" id="m-lore" class="m-lore"><svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true"><circle cx="12" cy="12" r="5" fill="none" stroke="currentColor" stroke-width="2"/><path d="M5.2 15.4C2.6 16.9 1.6 18.5 2.3 19.4c1.2 1.6 6.6-.2 12-4.1s9-8.5 7.8-10.1c-.7-.9-2.6-.6-5 .6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg><span>Lore</span></button>
+        <!-- Two small pills, kept together on a line: the Lore guide, the colony's archive of the story (#screen-lore,
+             openLore in js/ui.js), and Send feedback (#screen-feedback, openFeedback in js/feedback.js). -->
+        <span class="m-pills">
+          <button type="button" id="m-lore" class="m-pill m-lore"><svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true"><circle cx="12" cy="12" r="5" fill="none" stroke="currentColor" stroke-width="2"/><path d="M5.2 15.4C2.6 16.9 1.6 18.5 2.3 19.4c1.2 1.6 6.6-.2 12-4.1s9-8.5 7.8-10.1c-.7-.9-2.6-.6-5 .6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg><span>Lore</span></button>
+          <button type="button" id="m-feedback" class="m-pill m-feedback" title="Report a bug, suggest an idea or say what you think of the balance"><svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true"><path d="M4 5.5h16v10h-9l-4.5 3.8v-3.8H4z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M8 9.5h8M8 12.5h5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg><span>Feedback</span></button>
+        </span>
       </nav>
       <input type="file" id="m-import-file" accept=".json,application/json" hidden>
       <p class="hint" id="m-import-msg" hidden></p>
@@ -324,6 +328,7 @@
     <button id="p-saveplanet" class="btn big" title="Keep this planet (its seed and map settings) to play again from the new-game menu">Save this planet</button>
     <button id="p-export" class="btn big" title="Save this game to a file you can load on any device (main menu, Load a save file)">Download save file</button>
     <button id="p-help" class="btn big">How to play</button>
+    <button id="p-feedback" class="btn big" title="Report a bug, suggest an idea or say what you think of the balance (the game stays as it is)">Send feedback</button>
     <button id="p-quit" class="btn big ghost">Save &amp; quit to menu</button>
     <p class="hint" id="p-saved"></p>
   </div>
@@ -906,9 +911,10 @@
           <li>The <b>end screen</b> says how the game was won or lost, with the time played, buildings, bots, captures and losses. <b>New game</b> plays the same settings on a new planet.</li>
         </ul>
         <p><b>Speed.</b> Tap <b>1×</b> in the top bar (or press <kbd>[</kbd> <kbd>]</kbd>): 0.75× or 0.875× for a calmer game, 2× or 3× when you're waiting on something. Every game starts (or continues) at 1×, and multiplayer has no speed control.</p>
-        <p><b>The pause menu</b> (<kbd>Space</kbd>, or the button top right): Resume, Music and Effects volume, Full screen, Weather, Time of day, Statistics, Save this planet, Download save file, How to play, and Save &amp; quit to menu, with when the game last saved.</p>
+        <p><b>The pause menu</b> (<kbd>Space</kbd>, or the button top right): Resume, Music and Effects volume, Full screen, Weather, Time of day, Statistics, Save this planet, Download save file, How to play, Send feedback, and Save &amp; quit to menu, with when the game last saved.</p>
         <p><b>Saving.</b> The game saves itself every 20 seconds and whenever you leave the tab, and <b>Continue</b> on the main menu picks it up. There's one save: starting a new game or mission replaces it. Saves stay on this device: <b>Download save file</b> in the pause menu, then <b>Load a save file</b> on the other device's main menu, carries a game across (a file that is damaged, or from a version this one can't read, is turned away and your own save stays as it was). Multiplayer games aren't saved for Continue.</p>
-        <p><b>The main menu.</b> <b>Play</b> starts a game with your last settings (summed up beneath it) and <b>Custom Game</b> changes them; there's also <b>Continue</b>, <b>Multiplayer</b>, <b>Missions</b>, <b>Load a save file</b>, <b>How to play</b> and <b>Lore</b> (the story: see The story). Your settings are remembered on this device.</p>
+        <p><b>The main menu.</b> <b>Play</b> starts a game with your last settings (summed up beneath it) and <b>Custom Game</b> changes them; there's also <b>Continue</b>, <b>Multiplayer</b>, <b>Missions</b>, <b>Load a save file</b>, <b>How to play</b>, <b>Lore</b> (the story: see The story) and <b>Feedback</b>. Your settings are remembered on this device.</p>
+        <p><b>Send feedback.</b> Found a bug, have an idea, or think something is too strong or too weak? <b>Feedback</b> on the main menu, or <b>Send feedback</b> in the pause menu, opens a short form: pick <b>Bug</b>, <b>Idea</b>, <b>Balance</b> or <b>Other</b>, write what happened (up to 5,000 characters) and, if you'd like a reply, an email or name. It goes to the game's maker with the game's version and your device and screen size and, from a game, its map, seed, time and last few messages; nothing else. In a game, <b>Attach my current game</b> (ticked for a Bug) sends its save file too, so the bug can be played back exactly. If it can't be sent (no connection, or too many reports at once) the form says why and keeps what you wrote. Opening it changes nothing in the game: a paused game stays paused, and a multiplayer game runs on as usual. <kbd>Esc</kbd> or <b>Back</b> closes it.</p>
         <p><b>Sound.</b> The music is a synthwave score made live as you play: a calm groove while you build (three take turns, a new one every ten minutes), a driving track when you're under attack or at war, an alarm while a nuclear missile is in the air, and an air raid siren while enemy bombers come for you. Zoomed in, you hear what's on screen: traffic, welding, fresh concrete, truck air brakes and horns in jams. Beneath it all runs <b>ambient sound</b> that grows with your colony: a city murmur, factory hum, trains, aircraft, the sea, lava, the wind and wildlife calls of each biome, and crickets on warm nights. Explosions are heard from where they are: close up they crack and thump, off screen they rumble in the distance, bombs whistle as they fall and missiles roar in. Set <b>Music</b> and <b>Effects</b> in the pause menu.</p>
         <p><b>Time of day.</b> <b>Cycle</b> turns the planet every 12 minutes, from a golden morning through the day and an orange evening to night, when buildings glow, streetlights come on and vehicles drive with headlights; or keep it <b>Always day</b> or <b>Always night</b>. It's only for looks. The clock shows a sun or a moon (in Colony, beside your share of the land). Set it in the pause menu or the new-game Rules; it's kept on this device.</p>
         <p><b>Weather.</b> Now and then a spell of weather to suit the biome: a sandstorm, a rainstorm, a blizzard, falling leaves, fog with fireflies, drifting ash, ring dust streaking over the moon, an aurora. It's only for looks; switch it off in the pause menu or the Rules.</p>
@@ -1219,6 +1225,47 @@
   </div>
 </div>
 
+<!-- Send feedback (main menu, Feedback; pause menu, Send feedback): a short form posted to the relay's /feedback, which
+     files it for the game's maker (js/feedback.js; relay/src/feedback.js). Only interface: it sends no game order and
+     leaves the game as it was (paused or not). Attach my current game shows only while a game is running. -->
+<div id="screen-feedback" class="screen" role="dialog" aria-modal="true" aria-labelledby="fb-title" tabindex="-1" hidden>
+  <div class="card fb-card">
+    <div class="stats-head"><h2 id="fb-title">Send feedback</h2><button type="button" id="fb-close" class="btn small">Back</button></div>
+    <form id="fb-form" class="fb-form" novalidate>
+      <div class="fb-field">
+        <span class="fb-lbl" id="fb-l-type">What is it about?</span>
+        <div class="seg fb-type" id="fb-type" role="radiogroup" aria-labelledby="fb-l-type">
+          <button type="button" role="radio" data-v="bug">Bug</button>
+          <button type="button" role="radio" data-v="idea">Idea</button>
+          <button type="button" role="radio" data-v="balance">Balance</button>
+          <button type="button" role="radio" data-v="other">Other</button>
+        </div>
+      </div>
+      <label class="fb-field" for="fb-text">
+        <span class="fb-lbl">Your message <small id="fb-count" class="fb-count">0 / 5000</small></span>
+        <textarea id="fb-text" name="text" rows="6" maxlength="5000" spellcheck="true"></textarea>
+      </label>
+      <label class="fb-field" for="fb-contact">
+        <span class="fb-lbl">Email or name <small>optional, if you'd like a reply</small></span>
+        <input id="fb-contact" name="contact" type="text" maxlength="200" autocomplete="email" autocapitalize="off" spellcheck="false">
+      </label>
+      <!-- (not for people: hidden from sight, screen readers and Tab; anything typed in it marks a bot) -->
+      <div class="fb-hp" aria-hidden="true"><label>Website <input id="fb-website" name="website" type="text" tabindex="-1" autocomplete="off"></label></div>
+      <label class="fb-check" id="fb-save-row" for="fb-save" hidden>
+        <input type="checkbox" id="fb-save" name="save">
+        <span>Attach my current game <small>its save file, so a bug can be played back exactly</small></span>
+      </label>
+      <p class="fb-what" id="fb-what"></p>
+      <p class="fb-msg" id="fb-msg" role="status" aria-live="polite"></p>
+      <button type="submit" id="fb-send" class="btn primary big">Send</button>
+    </form>
+    <div class="fb-done" id="fb-done" hidden>
+      <p class="fb-thanks" id="fb-thanks" role="status"></p>
+      <button type="button" id="fb-ok" class="btn primary big">Done</button>
+    </div>
+  </div>
+</div>
+
 <div id="screen-over" class="screen" role="dialog" aria-modal="true" aria-labelledby="o-title" tabindex="-1" hidden>
   <div class="card">
     <h2 id="o-title">Victory</h2>
@@ -1254,6 +1301,7 @@
 <script src="js/input.js"></script>
 <script src="js/ui.js"></script>
 <script src="js/mpui.js"></script>
+<script src="js/feedback.js"></script>
 <script src="js/main.js"></script>
 </body>
 </html>

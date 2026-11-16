@@ -670,6 +670,23 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   way). One that fails is refused and changes nothing; if
   Continue can't load this device's save, the menu says so. A loaded file becomes this device's save only once its game
   is running (`enterLoaded`), and the save it replaced is kept as a backup (`SAVE_BACKUP_KEY`, `botfall.save.bak`).
+- **Send feedback** (`js/feedback.js`, `#screen-feedback`): the small **Feedback** pill beside **Lore** at the foot of the
+  main menu, and **Send feedback** in the pause menu, open a short form: the kind (**Bug**, **Idea**, **Balance** or
+  **Other**), the message (3 to 5,000 characters, with a counter), an optional email or name (up to 200), a hidden
+  honeypot field (`website`) and, only while a game is running, **Attach my current game** (ticked for a Bug, unticked
+  for the others until the player sets it). It posts JSON to the relay's `/feedback` (`feedbackUrl`: `relayUrl()` with
+  `wss:` as `https:`, see Multiplayer, The relay): `{ type, text, contact?, meta, save?, website }`. `meta`
+  (`feedbackMeta`, kept under 4,000 characters of JSON) is the game's version (`gameVersion`, the fingerprint the lobby
+  compares), the browser's user agent, the window's size, pixel ratio and touch or mouse and, from a game: mode (or
+  mission and its difficulty), map type, biome, size, seed, players, the rival difficulty (Versus), game time and the
+  last five messages (`UI.msgLog`). `save` is `saveFileText()`, the file Download save file writes, left out (and the
+  thanks say so) if it is over 8 MB. The form says in one line what is sent. **Sending…** holds the button; on 200 it
+  thanks the player with the report's number ("Report #n is filed.") and empties the text; 503 `off` (feedback not set up
+  on the relay yet), 429 (too many reports), no connection and any other error each get their own words, and the text is
+  never lost (it stays through closing the form too). It is only interface: it sends no order, doesn't change
+  `UI.paused` (opened over the pause menu the game stays paused; a multiplayer game runs on under its menu as always) and
+  takes every key pressed in it, so no hotkey fires while typing. Esc, Back or a phone's Back close it (on the main menu
+  opening adds a history entry, as the Lore guide does; in a game `escapeKey` closes it first).
 - **A failed frame never stops the game:** `frame` books the next frame before running this one and catches its errors
   (reported once each to the console), and each stage of a frame (simulation, camera, drawing, interface, sound) runs
   on its own (`stage` in `js/main.js`): one that keeps failing during a game says so once and pauses saving
@@ -890,7 +907,7 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   Arrival clock (`ARRIVAL_CLOCK`), shown under its name. **Loading lines** (`SPLASH_LINES`, picked at first paint by an
   inline script in `index.html`, which keeps its own copy): one under the splash bar, which now stays about 2 s.
   **The Lore guide** (`#screen-lore`, `openLore`/`closeLore`/`initLore` in `js/ui.js`): the small **Lore** pill at the
-  end of the main menu's links opens the colony's archive, LORE.md told in ten pages (Terrafall, The Arrival clock,
+  end of the main menu's links (beside **Feedback**) opens the colony's archive, LORE.md told in ten pages (Terrafall, The Arrival clock,
   Ithaca I, The regions, The four vanguards, The doctrines, Neutral ground, The Murmur, Accord standards, Your colony),
   in the archive's own voice: Earth's fate is never stated, only hinted (an unreviewed second reading of "terrafall",
   "no ark construction update on file after T−14", the *Wren*'s waystation last answering at T−2). It pages like the How
@@ -995,7 +1012,7 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   down to 1×, if frames run below ~45 a second and drawing is what's slow (not when the screen or a power-saving mode
   holds a steady beat, such as 30 a second, nor when the simulation is the slow part), and raises it again when there's
   room; the minimap is laid out again whenever it changes. Nothing is drawn under a full screen (the pause menu, Help,
-  Statistics, game over) while the game behind it stands still, unless the view, the canvas or the art changes
+  Statistics, Send feedback, game over) while the game behind it stands still, unless the view, the canvas or the art changes
   (`drawNeeded` in js/main.js), and the demo behind the main menu is drawn 30 times a second (`DEMO_FRAME`).
 - **Phones and tablets (touch):** a touch on the map is only ever a touch there: the click a browser makes after it
   is cancelled (`initInput`), so the tap that opens a panel can't also press a button that appears under the finger,
@@ -1169,6 +1186,7 @@ js/orders.js              every player action as an order: a name and plain argu
 js/lockstep.js            multiplayer: every device runs the game, only orders travel (see Multiplayer below)
 js/net.js                 multiplayer: the connection to the relay (rooms, reconnecting, catching up)
 js/mpui.js                multiplayer screens: host, join, the lobby, the in-game banner, pause and leave
+js/feedback.js            Send feedback: the form (main menu and pause menu) that posts to the relay's /feedback
 js/charts.js              line and bar charts for the statistics screen
 js/render.js              canvas renderer and placeholder art
 js/daynight.js            day and night: the clock, re-lit art sets, grading, headlights, light pools
@@ -1181,7 +1199,7 @@ art/lore/                 the Lore guide's pictures (the planet, the regions, th
 tools/headless-sim.js     AI-vs-AI balance test without a browser
 tools/smoke-test.js       browser test on a phone-sized screen (Playwright)
 tools/build-single.js     bundles everything into dist/terrafall.html (and dist/tod-<time>.js)
-relay/                    the multiplayer relay: a Cloudflare Worker (deployed by .github/workflows/relay.yml)
+relay/                    the multiplayer relay and player feedback: a Cloudflare Worker (deployed by .github/workflows/relay.yml)
 ```
 
 Plain JavaScript, no build step and no dependencies. Balance tweaks mostly live in `js/defs.js`.
@@ -1236,6 +1254,18 @@ the upload (Cloudflare not yet seeing a Worker it has just been sent: "This Work
    it before that, open the game with `?relay=<address>` on the end of its web address: that device remembers it.)
 
 The relay runs locally too: `cd relay && npx wrangler dev`, then open the game with `?relay=ws://127.0.0.1:8787`.
+
+**Player feedback.** The relay also takes the game's **Send feedback** form (`js/feedback.js`; see Send feedback above):
+`POST /feedback` (`relay/src/feedback.js`, whose header has the exact contract) with JSON `{ type, text, contact?, meta?,
+save?, website? }` answers 200 `{ ok: true, n }`, and each report becomes issue #n in a private GitHub repository,
+labelled by type and `from-game`; an attached save is committed to `saves/` there and linked from the issue (load it
+with Load a save file to play the bug back). CORS is open (`*`). Other answers: 503 `{ why: 'off' }` until it is set up,
+429 past 5 reports an hour or 20 a day from one address (counted by a hash of it, never stored), 400 for a text under
+3 characters, 413 for a request over 8 MB, 502 if GitHub refuses it. Anything in the hidden `website` field marks a bot:
+it is thanked and dropped. Setting it up: add two more Actions secrets, `FEEDBACK_REPO` (the private repository, as
+`owner/name`) and `FEEDBACK_TOKEN` (a fine-grained GitHub token for that repository only, with Issues and Contents read
+and write), then run **Deploy multiplayer relay** again: its summary says whether player feedback is on. Until then the
+form says feedback isn't switched on yet, and keeps what the player wrote.
 
 **How it works.** Multiplayer is lockstep: every device runs the whole game, and only the players' orders go between
 them.
