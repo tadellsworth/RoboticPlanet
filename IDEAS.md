@@ -52,7 +52,7 @@ Still open: a neutral, shared exchange the rivals compete over; contracts for Ch
 The campaign is now the tutorial, in seven chapters (see the README). Held back, or noticed while each mission was
 built and played through headless:
 
-- **King of the Hill, a bonus mission for Uplinks and free-for-all.** The Wheel, 3 players, rival style Random. Setup
+- **King of the Hill, a bonus mission for Uplinks and free-for-all.** The Wheel, 3 players, rival doctrine Random. Setup
   would set `S.victory = 'uplinks'` and call `placeUplinks(S.seed)` (newGame only sets the victory type outside
   missions); goals: hold an Uplink (counted from `S.uplinks`, owner 0 and not jammed), then win the race.
   `finishMission` would also need `M.why = 'uplinks'` for a rival winning it. Kept out of the campaign until a solver
@@ -130,9 +130,29 @@ lands on a Command Base destroys it; Brutes break through Walls slowly; Road Tra
 ## Lore expansions (held for later)
 
 From the lore bible (LORE.md). The owner's decisions (Nov 2026): the Silence stays 31 years, the Sponsors stay faceless,
-and it stays ambiguous whether the Murmur are only animals. The quick wins (narrator lines, doctrine names and voices,
-callsigns, region names, Ringfall, the *Wren*, panel flavor text, splash lines, the Arrival clock) are being done now;
-these wait for a later expansion:
+and it stays ambiguous whether the Murmur are only animals.
+
+**Done (the quick wins, Nov 2026):** narrator lines (the landing line with its region on the briefing card, the first
+road, the first nightfall, the first Uplink, a rival Command Base taken, the end screen); doctrine names and voices
+(each rival speaks when it attacks you, fires a Missile at you and surrenders); callsigns (COBALT, VERMILION, VIRIDIAN,
+TYRIAN) in messages, panels, statistics, the end screen, the setup and the lobby; region names as flavour (the setup
+keeps the biome names); Ringfall; the *Wren* with its out-of-date cargo lists; a line of flavour on every building and
+robot panel; a line on the loading screen; the Arrival clock on the Command Base; the Murmur as the name of the Colony
+creatures (Scuttlers, Brutes, Murmur nests); and no Murmur on Lunar (a real rule: no nests and no raids on the moon).
+
+Open questions from the quick wins, for the owner (LORE.md is left as the owner wrote it):
+
+- **"Burrow" or "Murmur nest"?** Decided by the bible: they are Murmur nests on screen (Nov 2026).
+- **The doctrines' timings.** The in-depth descriptions now give what games show rather than what the code allows
+  (a rival only attacks what it outnumbers): headless games on Normal, against a computer-run colony, saw the first
+  attack anywhere from about 6 to 16 minutes in whatever the doctrine (the Herald, on one planet, none in 16 minutes),
+  and the Architect's Missile Factory at 8 to 16 minutes. Should the Herald really rush (take on a garrisoned Command
+  Base sooner), or is the gentler Herald right?
+- Should the narrator also speak in missions once the mission story pass is done? Should a rival's voice answer its
+  own events (its nests cleared, a Ringfall on its land)? A Lore Guide page could collect the panel lines and loading
+  lines a player has seen.
+
+These wait for a later expansion:
 
 - **Mission story pass.** Rewrite the campaign briefings as "your first terrafall" in the narrator's voice, keeping the
   tutorial clear.
@@ -160,7 +180,7 @@ Delver (tunnels under Walls and surfaces behind them: counters turtling). Mechan
 
 - A game setting (Off / Quiet / Active, like Planetary events), in Versus as well as Colony; none on the Lunar biome
   (Penelope, the moon, is the only silent ground).
-- Burrows near Crystal seams and strike sites; surges after a Ringfall.
+- Nests near Crystal seams and strike sites; surges after a Ringfall.
 - Drawn to charge: raids go for Fuel Stations, Generators, Crystal stockpiles; bigger colonies draw more.
 - They feed on the war: battle wreckage feeds their burrows, so long wars grow a third enemy that hits everyone (the
   computer rivals have to handle them too).

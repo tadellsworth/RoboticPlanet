@@ -3830,7 +3830,7 @@ function drawNest(ctx, cx, cy, s, b) {
     if (k) ctx.lineTo(x, y); else ctx.moveTo(x, y);
   }
   ctx.fill();
-  // Burrow holes.
+  // nest holes.
   ctx.fillStyle = '#12060f';
   for (const [hx, hy, hr] of [[-0.16, -0.06, 0.09], [0.15, 0.04, 0.08], [-0.02, 0.16, 0.07]]) { ctx.beginPath(); ctx.ellipse(cx + hx * s, cy + hy * s, hr * s, hr * s * 0.6, 0, 0, Math.PI * 2); ctx.fill(); }
   // Eggs, one more pair per level, pulsing.

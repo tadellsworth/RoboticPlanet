@@ -119,6 +119,8 @@ body::before {
 .event-card .ev-dot { width: 10px; height: 10px; border-radius: 50%; flex: none; box-shadow: 0 0 8px currentColor; }
 .event-card .ev-time { margin-left: auto; font-variant-numeric: tabular-nums; opacity: 0.85; font-weight: 700; }
 .event-card .ev-desc { opacity: 0.9; line-height: 1.3; }
+.event-card .ev-cargo { font-size: 11.5px; font-style: italic; opacity: 0.7; line-height: 1.3; contain: inline-size; } /* (the Wren's out-of-date cargo list: it wraps
+   inside the width the name and the deal give the card, never widening it) */
 .event-card .ev-deal { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .event-card .ev-deal .gi { vertical-align: -3px; }
 .event-card .btn { padding: 4px 12px; }
@@ -184,6 +186,7 @@ body::before {
 body.mm-on .objrow { margin-right: calc(var(--mm-w, 100px) + 8px); }
 body.mm-off .objrow { margin-right: 54px; }
 @media (max-width: 999px) {
+  body.mm-on .event-card { margin-right: calc(var(--mm-w, 100px) + 8px); } /* (an event's card keeps clear of the minimap, as the goal card does) */
   body.mm-on #toasts { left: calc(var(--safe-l) + 8px); right: calc(var(--safe-r) + var(--mm-w, 100px) + 16px); width: auto; transform: none; }
 }
 
@@ -204,6 +207,11 @@ body.mm-off .objrow { margin-right: 54px; }
 .toast.lost { border-left-color: var(--danger); background: #3a2026; border-color: rgba(255, 90, 110, 0.45); font-weight: 700; }
 .toast.lost::before { content: '\26A0\FE0E  '; color: var(--danger); }
 .toast.out { opacity: 0; transition: opacity 0.4s; }
+/* The story's lines: the narrator (your Command AI's log) and a rival's voice. Quiet: italic, a muted edge. */
+.toast.narr, .toast.voice { font-style: italic; color: #cfd6e2; background: #1f232d; }
+.toast.narr { border-left-color: #8c96a8; }
+.toast.voice { border-left-color: #b98cff; }
+.msg-row.narr span:nth-child(2), .msg-row.voice span:nth-child(2) { font-style: italic; }
 .toast > span { flex: 1 1 auto; min-width: 0; }
 .toast-go { pointer-events: auto; flex: none; align-self: stretch; min-width: 44px; min-height: 30px; margin: -3px -6px -3px 0; padding: 0 10px;
   border: 1px solid rgba(56, 212, 255, 0.5); border-radius: 8px; background: rgba(56, 212, 255, 0.12); color: var(--accent); font-weight: 700; }
@@ -233,6 +241,7 @@ body.mm-off .objrow { margin-right: 54px; }
 }
 .br-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; font-size: 16px; }
 .br-state { font-size: 12px; color: var(--muted, #9aa3b5); text-transform: uppercase; letter-spacing: 0.08em; }
+.br-narr { margin: 0; font-size: 13px; font-style: italic; line-height: 1.4; color: var(--muted, #9aa3b5); }
 .br-list { list-style: none; margin: 0; padding: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 7px; min-height: 0; }
 .br-list li { background: #252a36; border-left: 4px solid var(--accent); border-radius: 8px; padding: 7px 10px; font-size: 13.5px; line-height: 1.4; }
 .br-list li.warn { border-left-color: var(--warn); }
@@ -319,6 +328,9 @@ kbd {
 .sheet-title h3 { margin: 0; font-size: 18px; }
 .sheet-title .owner { font-size: 12px; color: var(--muted); font-weight: 600; }
 .desc { color: var(--muted); margin: 0 0 10px; font-size: 14px; }
+/* A panel's line of flavour (FLAVOR): one quiet line at the foot, below everything useful. */
+.flavor { margin: 12px 0 2px; font-size: 12px; font-style: italic; line-height: 1.35; color: var(--muted); opacity: 0.8; }
+.flavor.clock { margin: 2px 0 0; } /* (the Command Base's Arrival clock, under its name) */
 .status { font-weight: 600; margin: 6px 0 10px; }
 .kv { display: flex; justify-content: space-between; gap: 10px; padding: 6px 0; border-top: 1px solid var(--line); font-size: 14px; }
 .trade-row { align-items: center; }
@@ -508,6 +520,7 @@ i.g.crystal { background: var(--g-crystal); } i.g.alloy { background: var(--g-al
 i.g.crude { background: var(--g-crude); } i.g.fuel { background: var(--g-fuel); }
 i.g.cement { background: var(--g-cement); } i.g.asphalt { background: var(--g-asphalt); } i.g.ammo { background: var(--g-ammo); }
 i.g.uranium { background: var(--g-uranium); } i.g.fissile { background: var(--g-fissile); }
+.o-log { margin: -4px 0 8px; font-size: 13px; font-style: italic; color: var(--muted); }
 .stats { display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; margin: 10px 0; font-size: 14px; }
 .stats span:nth-child(odd) { color: var(--muted); }
 .stats span:nth-child(even) { font-weight: 700; text-align: right; }
@@ -542,6 +555,9 @@ i.g.uranium { background: var(--g-uranium); } i.g.fissile { background: var(--g-
   .toprow { grid-area: row; }
   #pop { flex: none; }
   .objrow { grid-area: obj; justify-self: start; }
+  /* An event's card and the Domination or Uplinks card each on a row of their own (side by side, the event's was
+     squeezed into a narrow column beside the other). */
+  #topbar > .event-card { grid-column: 1 / -1; justify-self: start; }
   .objective { max-width: 560px; font-size: 14px; padding: 7px 12px; }
   body.mm-on .objrow, body.mm-off .objrow { margin-right: 0; }
   .minimap { right: calc(var(--safe-r) + 12px); }
@@ -956,6 +972,9 @@ canvas.chart.small { height: 110px; }
 .tchip[hidden] { display: none; }
 .tchip:hover { border-color: rgba(255, 255, 255, 0.25); }
 .tchip.on { color: var(--text); border-color: rgba(56, 212, 255, 0.55); background: rgba(56, 212, 255, 0.1); }
+.tchip.na { opacity: 0.45; cursor: default; } /* (the Murmur on Lunar: none live there) */
+.tchip .tchip-sub { font-size: 0.85em; font-weight: 500; opacity: 0.75; } /* (what an option's name means, beside it: the Murmur are creatures) */
+.tchip.na input { cursor: default; }
 .tchip input { appearance: none; -webkit-appearance: none; margin: 0; width: 16px; height: 16px; flex: none; border-radius: 50%; cursor: pointer;
   border: 2px solid rgba(255, 255, 255, 0.3); display: grid; place-items: center; }
 .tchip input:checked { background: var(--accent); border-color: var(--accent); }
@@ -1091,6 +1110,18 @@ canvas.chart.small { height: 110px; }
 .mp-players small { color: var(--muted); }
 .mp-players li.off { opacity: 0.55; }
 .mp-players li.ai .nm { font-weight: 400; color: var(--muted); }
+/* A computer's doctrine in the lobby: the host picks it (a dropdown), the others see it; the line under the list says
+   how the one last picked or pointed at plays. */
+.mp-players .mp-doc { flex: none; max-width: 46%; -webkit-appearance: none; appearance: none; margin: 0; padding: 5px 22px 5px 10px; border-radius: 999px; border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.05) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.5l5 5 5-5' fill='none' stroke='%23aab2c0' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") no-repeat right 8px center / 10px 7px;
+  color: var(--text); font-family: inherit; font-size: 13px; font-weight: 700; cursor: pointer; text-overflow: ellipsis; }
+.mp-players .mp-doc:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.mp-players .mp-doc option { background: #1b1e27; color: #e8ecf2; }
+.mp-players .mp-docname { color: var(--text); font-weight: 700; }
+.mp-docnote { margin: 0; font-size: 12.5px; line-height: 1.4; color: var(--muted); }
+.mp-docnote[hidden] { display: none; }
+.mp-docnote b { color: #d4dae4; }
+.mp-docnote .mp-docwho { font-size: 11px; font-weight: 700; letter-spacing: 0.06em; color: var(--muted); }
 .mp-sum { margin: 0; font-size: 14px; color: var(--text); }
 .mp-banner {
   position: fixed; z-index: 30; left: 50%; transform: translateX(-50%); bottom: calc(var(--safe-b) + 108px);
@@ -1188,6 +1219,8 @@ canvas.chart.small { height: 110px; }
   background: linear-gradient(180deg, #fff6ec 10%, #ffb08f 60%, #ff6b4a); -webkit-background-clip: text; background-clip: text; color: transparent;
   animation: splashIn 0.6s 0.12s cubic-bezier(.2, .8, .2, 1) both; }
 .splash-bar { width: min(46vw, 180px); height: 4px; border-radius: 4px; background: rgba(241, 228, 211, 0.12); overflow: hidden; }
+.splash-line { margin: 4px 0 0; padding: 0 24px; max-width: 30em; text-align: center; font: italic 14px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  color: rgba(241, 228, 211, 0.72); animation: splashIn 0.6s 0.3s cubic-bezier(.2, .8, .2, 1) both; }
 .splash-bar i { display: block; height: 100%; width: 0; border-radius: 4px; background: linear-gradient(90deg, #ff6b4a, #ffb08f); animation: splashBar 1.1s ease-out forwards; }
 @keyframes splashIn { from { opacity: 0; transform: translateY(10px) scale(0.96); } to { opacity: 1; transform: none; } }
 @keyframes splashBar { to { width: 100%; } }
@@ -1195,6 +1228,29 @@ canvas.chart.small { height: 110px; }
 .m-vnote { margin: -4px 0 6px 96px; font-size: 12.5px; line-height: 1.35; color: var(--muted); text-wrap: pretty; }
 @media (max-width: 420px) { .m-vnote { margin-left: 86px; } }
 @media (max-width: 359px) { .m-vnote { margin-left: 2px; } }
+/* Rival doctrine: the line under the doctrines says in depth how the one under the mouse (or focused, or last picked)
+   plays; it keeps the height of the longest (sizeInfoLines), so nothing below it moves. The section's full width. */
+.m-vnote.m-docnote { margin: 0 2px 4px; }
+.m-docnote b { color: #d4dae4; font-weight: 700; }
+.m-docnote i { color: #c4cad4; }
+/* How it plays / Less (a touch screen; the lobby's line): a small link-like button after the text. */
+.m-docmore { display: inline; margin: 0 0 0 2px; padding: 2px 6px; border: 1px solid rgba(56, 212, 255, 0.35); border-radius: 999px; background: rgba(56, 212, 255, 0.08);
+  color: var(--accent); font: inherit; font-size: 12px; font-weight: 700; line-height: 1.3; cursor: pointer; white-space: nowrap; }
+.m-docmore:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+/* A doctrine chip being looked at (a first tap on a touch screen, while the rivals have their own): a second tap gives it to them all. */
+.m-chips button.peek { color: var(--text); border-style: dashed; border-color: var(--accent); }
+/* Each rival (three or four players): a dropdown for each computer player, behind its colour (on a phone, its own picker). */
+.m-seats { display: flex; flex-wrap: wrap; gap: 4px; min-width: 0; }
+.m-seat { position: relative; display: flex; align-items: center; flex: 1 1 88px; min-width: 0; max-width: 150px; }
+@media (max-width: 520px) { .m-seat { flex: 0 1 calc(50% - 2px); max-width: none; } } /* (a phone: two a row, all the same width) */
+.m-seat[hidden] { display: none; }
+.m-seat .dot { position: absolute; left: 9px; top: 50%; width: 10px; height: 10px; margin-top: -5px; border-radius: 50%; pointer-events: none; box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.35); }
+.m-seat select { width: 100%; min-width: 0; -webkit-appearance: none; appearance: none; margin: 0; padding: 5px 20px 5px 25px; border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 999px;
+  background: rgba(255, 255, 255, 0.05) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.5l5 5 5-5' fill='none' stroke='%23aab2c0' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") no-repeat right 8px center / 10px 7px;
+  color: var(--text); font-family: inherit; font-size: 13px; font-weight: 700; line-height: 1.3; cursor: pointer; text-overflow: ellipsis; }
+.m-seat select:hover { border-color: rgba(255, 255, 255, 0.22); }
+.m-seat select:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.m-seat select option { background: #1b1e27; color: #e8ecf2; }
 
 /* A link dressed as a button (the illustrated manual, on the How to play screen). */
 a.btn { display: block; text-align: center; text-decoration: none; color: inherit; }

@@ -9,12 +9,12 @@
  * The campaign is in seven chapters, played in this order: First Steps (one idea at a time: a building and its road,
  * Stone and Cement, batteries, the first Alloy), Growing the Colony (bots, farmed Fuel, regrowing groves, Outposts),
  * Roads and Traffic, Industry and Trade, Sea and Sky (all in Colony games, so the economy is learned in peace), then
- * First Contact (creature nests, a rival to practise on, a border war, a chokepoint to hold) and War. From the second
+ * First Contact (the Murmur's nests, a rival to practise on, a border war, a chokepoint to hold) and War. From the second
  * mission on, setup puts down the colony the earlier missions taught (`kit`), so each one is spent on its new idea.
  *
  * A mission: { id (progress is saved by it: keep it when a mission is reworked), name, chapter (the list's heading:
  * a chapter's missions sit together, in order), brief (two sentences at most), intro: [up to 5 lines for the briefing
- * card], mode, seed, size, rough, rich, biome, shape, players, style (the rival's personality), rival: [easy, normal,
+ * card], mode, seed, size, rough, rich, biome, shape, players, style (the rival's doctrine, a PERSONALITIES key), rival: [easy, normal,
  * hard] (its level), rivalBonus (extra of every good in its Command Base), passive: [easy, normal, hard] (a rival that
  * never attacks), limit (minutes per difficulty, 0 none), nuke/war/lab/events/wildlife (switch on what missions
  * otherwise leave out: a Nuclear race, warbots and defences in Colony, the Research Lab, planet events, creature
@@ -724,10 +724,10 @@ const MISSIONS = [
       'The gold pads on the minimap are neutral <b>Trade Posts</b>. A Trade Terminal there swaps a big surplus.',
       'Only Road Trains (or Freight Trains) carry the lots. Posts further out pay better.',
       'A far Depot on a Road Train\'s road stocks itself with what the buildings round it need.',
-      '<b>Planet events</b> are on: dust storms, meteor showers, solar flares, and now and then a trader ship.',
+      '<b>Planet events</b> are on: dust storms, Ringfall, solar flares, and now and then the <i>Wren</i>, a trader ship.',
     ],
-    // (Seed 1445: a meteor shower at 2:30 and a solar flare over by 9:36. Events are seeded, and on the designed 1415 the
-    // second one, a trader ship, only left at 12:25, so a player who had made the trades by 6 minutes waited 6 more.)
+    // (Seed 1445: Ringfall (a meteor shower) at 2:30 and a solar flare over by 9:36. Events are seeded, and on the designed
+    // 1415 the second one, the trader ship, only left at 12:25, so a player who had made the trades by 6 minutes waited 6 more.)
     mode: 'colony', seed: 1445, size: 1, rough: 1, rich: 3, biome: 'savanna', shape: 0, events: true, limit: [0, 0, 30],
     setup(S) {
       kit(S, KIT7, 4);
@@ -751,7 +751,7 @@ const MISSIONS = [
         ui: '#sh-trade button' },
       { kind: 'events', n: 2, text: 'Ride out 2 planet events',
         count: (P, S) => (S.evN || 0) - (S.event ? 1 : 0),
-        hint: 'Meteors crater roads, flares drain batteries, dust slows robots. Waiting? Speed up: <b>1×</b> (<kbd>]</kbd>).',
+        hint: 'Ringfall craters roads, flares drain batteries, dust slows robots. Waiting? Speed up: <b>1×</b> (<kbd>]</kbd>).',
         ui: '#event-card, #ev-trade, #btn-speed' },
     ],
   },
@@ -894,12 +894,12 @@ const MISSIONS = [
     ],
   },
 
-  // Chapter 6, First Contact. Creature nests, a rival to practise on, a border war and a chokepoint to hold.
+  // Chapter 6, First Contact. The Murmur's nests (type 'nest'), a rival to practise on, a border war and a chokepoint to hold.
   {
-    id: 'bughunt', name: 'Bug Hunt', chapter: 'First Contact',
-    brief: 'Creature nests in the swamp breed packs that raid your colony. Arm up and clear the nests before the packs grow.',
+    id: 'bughunt', name: 'The Murmur', chapter: 'First Contact', // (id kept: saved progress goes by it)
+    brief: 'The Murmur breed in nests under the swamp and raid your colony. Arm up and clear the nests before the packs grow.',
     intro: [
-      'This planet has wildlife: its nests send packs at your colony from about 4 minutes in.',
+      'The <b>Murmur</b> live here: their nests send packs at your colony from about 4 minutes in.',
       '<b>Scuttlers</b> bite robots; <b>Brutes</b> tear up roads and batter buildings. Nests grow over time.',
       'You have 4 <b>warbots</b> and 30 Ammo; an Ammo Plant (Make, <kbd>I</kbd>) makes more. Turrets fire Crystal.',
       'Defend also has Minigun Nests (<kbd>G</kbd>), which spray Ammo. Tap a dented building → <b>Repair</b> (<kbd>E</kbd>).',
@@ -923,7 +923,7 @@ const MISSIONS = [
       { kind: 'bots', type: 'warbot', n: [2, 3, 4], at: 'foundry',
         hint: 'Tap the Bot Foundry → <b>Order bots</b>: Warbots <b>+1</b>. They wait in the Command Base and reload there.',
         ui: "#sh-orders .order-row[data-k='warbot'] [data-d='1']" },
-      { kind: 'nests', n: [1, 2, 2], text: ['Clear a creature nest', 'Clear {n} creature nests'], count: (P) => P.stats.captured || 0,
+      { kind: 'nests', n: [1, 2, 2], text: ['Clear a Murmur nest', 'Clear {n} Murmur nests'], count: (P) => P.stats.captured || 0,
         hint: '<b>Army</b> (<kbd>Q</kbd>) → <b>Attack</b> (<kbd>Q</kbd>), then tap a nest. Its hoard spills out for your warbots.',
         ui: '#btn-attack, #ar-attack' },
     ],
@@ -933,7 +933,7 @@ const MISSIONS = [
     brief: 'Your first rival: a quiet colony with two empty Outposts. Learn to command warbots, then take its Command Base.',
     intro: [
       '<b>Versus</b>: another colony shares this moon. Capture its Command Base and the planet is yours.',
-      'This rival only defends itself. Red is theirs, cyan is yours. You start with 4 warbots.',
+      'This rival only defends itself. Red is theirs, blue is yours. You start with 4 warbots.',
       'Army (<kbd>Q</kbd>) → Attack, then tap an enemy building or robot. Or tap a building → Send warbots (Q).',
       'With a mouse: drag a box round warbots and right-click; Ctrl+1-9 saves a group. <kbd>C</kbd> calls them home.',
       'Each Ammo reloads 5 shots; the Ammo Plant keeps your Command Base stocked.',
@@ -1008,9 +1008,9 @@ const MISSIONS = [
   },
   {
     id: 'holdline', name: 'Hold the Line', chapter: 'First Contact',
-    brief: 'A Rusher rival will attack early. Wall the channels through the crags, man the guns and hold out.',
+    brief: 'A Herald (a rusher) will attack early. Wall the channels through the crags, man the guns and hold out.',
     intro: [
-      'This rival is a <b>Rusher</b>: it attacks early. Others are Turtles, Raiders, Tycoons and all-rounders.',
+      'This rival is a <b>Herald</b> (a rusher): its clock stopped a day before Arrival, so it attacks early. Others are Wardens, Salvagers, Architects and Stewards.',
       'A belt of crags with a few narrow channels: wall them and cover them with guns.',
       'Walls stop everyone, your robots too: where a wall line crosses a road, a Gate goes in.',
       'An Outpost can Hold inside or Go out and fight. Mortar Pits, Disruptors and the Keep are in Defend too.',
@@ -1024,10 +1024,10 @@ const MISSIONS = [
       preBuild(0, 'outpost', 23, 36, { road: true, reach: 2 });
       computeTerritory();
       L.stock.cement += 20; L.stock.alloy += 8; L.stock.crystal += 6;
-      // Four more warbots at home (8 in all): enough to man a Bunker and still face the Rusher.
+      // Four more warbots at home (8 in all): enough to man a Bunker and still face the Herald.
       for (let k = 0; k < 4; k++) enterBuilding(addBot(0, 'warbot', L.x, L.y), L);
       S.players[0].stats.startBots = S.players[0].stats.bots;
-      // The Rusher starts with more warbots, and holds its first assault until you've had time to dig in (it comes at
+      // The Herald starts with more warbots, and holds its first assault until you've had time to dig in (it comes at
       // about 7 / 5½ / 4 minutes).
       for (let k = 0; k < [2, 4, 6][diff]; k++) enterBuilding(addBot(1, 'warbot', R.x, R.y), R);
       P1.stats.startBots = P1.stats.bots;
@@ -1092,9 +1092,9 @@ const MISSIONS = [
   },
   {
     id: 'siege', name: 'Siege Breakers', chapter: 'War',
-    brief: 'A Turtle hides behind Walls and turrets. Burn through with Torches, shield the push with a Bulwark and send in missiles.',
+    brief: 'A Warden (a turtle) hides behind Walls and turrets. Burn through with Torches, shield the push with a Bulwark and send in missiles.',
     intro: [
-      'This rival is a <b>Turtle</b>: Walls, turrets and Keeps first, a big army late.',
+      'This rival is a <b>Warden</b> (a turtle): it has held its position for decades. Walls, turrets and Keeps first, a big army late.',
       '<b>Torches</b> burn through Walls fast; a <b>Bulwark</b>\'s shield covers the robots behind it.',
       'A <b>Missile Silo</b> reaches 22 tiles: build it toward them. Missiles wreck most buildings, but a Keep must be captured.',
       'Tap a rival building in range → <b>Fire missile</b> (<kbd>F</kbd>) works too.',
@@ -1215,7 +1215,7 @@ function bldCount(type, n) {
 /**
  * A goal's objective text for `need` (shared by the mission screen and the game). A goal can give its own `text`
  * ("{n}" stands for the number), which every custom goal (one with a `count` function) does; [one, many] picks by
- * the number ("Clear a creature nest" / "Clear {n} creature nests").
+ * the number ("Clear a Murmur nest" / "Clear {n} Murmur nests").
  */
 function goalLabel(g, need) {
   if (g.text) return String(Array.isArray(g.text) ? g.text[need > 1 ? 1 : 0] : g.text).replace(/\{n\}/g, need);
@@ -1334,7 +1334,7 @@ function missionOptions(k, diff) {
   return {
     seed: def.seed, mode: def.mode, size: def.size, rough: def.rough, rich: def.rich, biome: def.biome,
     difficulty: def.rival ? def.rival[diff] : 'normal',
-    // (A map shape, more players, the rival's personality and a Nuclear race, for the missions that teach them.)
+    // (A map shape, more players, the rival's doctrine and a Nuclear race, for the missions that teach them.)
     shape: def.shape || 0, players: def.players, style: def.style, nuke: !!def.nuke, events: !!def.events,
     layout: def.layout,
     setup(S) {
@@ -1348,7 +1348,7 @@ function missionOptions(k, diff) {
       }
       // What this mission switches on that missions otherwise leave out (see nukeOn, warOn, labOn, updateEvents).
       S.mission = { k, id: def.id, diff, limit: (def.limit[diff] || 0) * 60, nuke: !!def.nuke, war: !!def.war, lab: !!def.lab, events: !!def.events };
-      if (def.wildlife && S.mode === 'colony') { S.wildlife = true; placeNests(S.seed); }
+      if (def.wildlife && S.mode === 'colony' && murmurGround(S.settings.biome)) { S.wildlife = true; placeNests(S.seed); } // (none on the moon)
       // (A rival that never attacks, at the difficulties the mission says: passive [easy, normal, hard].)
       if (def.passive && def.passive[diff]) for (const P of S.players) if (P.id !== 0) P.passive = true;
       if (def.setup) def.setup(S, diff);

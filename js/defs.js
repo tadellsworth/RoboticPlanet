@@ -29,18 +29,20 @@ const PAVE = [null,
  * grow in stands of one kind (the Forest's spruces and firs here, leafy trees there, with logs and
  * ferns between) instead of a random mix. `weights`: how common each variety is (the Moon's probe wrecks are
  * rare). `desc`: the line shown on the new-game screen. (The Forest
- * keeps the key 'jungle', which saves and missions use.)
+ * keeps the key 'jungle', which saves and missions use.) `region`: its name on Ithaca I (LORE.md), used only as
+ * flavour (the briefing's landing site, the loading lines): the new-game screen keeps the plain names. `silent`: no
+ * Murmur live there (Lunar is Penelope, the moon): no nests, no raids, whatever the setup says (see murmurGround).
  */
 const BIOMES = {
-  desert: { name: 'Red desert', plants: 0.07, desc: 'Rust-red sand and dust under a hard sun; now and then a sandstorm.' },
-  jungle: { name: 'Forest', plants: 0.44, groves: true, desc: 'Stands of spruce and leafy trees, ferns and clear lakes; now and then a rainstorm with fog.' },
-  polar: { name: 'Polar', plants: 0.1, desc: 'Snow, ice and frosted shrubs; now and then a blizzard.' },
-  autumn: { name: 'Autumn forest', plants: 0.44, groves: true, desc: 'The forest in its fall colours: maples, birches and oaks in red and gold over a carpet of leaves; now and then a gale.' },
-  savanna: { name: 'Savanna', plants: 0.12, desc: 'Golden grassland with umbrella acacias, baobabs and termite mounds; now and then dust devils.' },
-  swamp: { name: 'Swamp', plants: 0.38, groves: true, desc: 'Dark mud, stands of cypress and mangrove, reeds and duckweed; now and then a thick fog, with fireflies at night.' },
-  volcanic: { name: 'Volcanic ashlands', plants: 0.1, desc: 'Black basalt and ash, charred trees and fumaroles, lakes of lava that glow at night; now and then ash and embers fall.' },
-  lunar: { name: 'Lunar', plants: 0.12, weights: [1, 1, 1, 1, 1, 0.12], desc: 'Grey regolith pocked with craters, frozen cryo-ice pools and the odd wreck of an old probe; now and then a meteor shower.' },
-  alien: { name: 'Alien bloom', plants: 0.3, desc: 'Violet moss and strange growths that glow after dark, beside pink lakes; now and then an aurora.' },
+  desert: { name: 'Red desert', region: 'the Rust', plants: 0.07, desc: 'Rust-red sand and dust under a hard sun; now and then a sandstorm.' },
+  jungle: { name: 'Forest', region: 'Greenreach', plants: 0.44, groves: true, desc: 'Stands of spruce and leafy trees, ferns and clear lakes; now and then a rainstorm with fog.' },
+  polar: { name: 'Polar', region: 'the White', plants: 0.1, desc: 'Snow, ice and frosted shrubs; now and then a blizzard.' },
+  autumn: { name: 'Autumn forest', region: 'Emberwood', plants: 0.44, groves: true, desc: 'The forest in its fall colours: maples, birches and oaks in red and gold over a carpet of leaves; now and then a gale.' },
+  savanna: { name: 'Savanna', region: 'the Long Grass', plants: 0.12, desc: 'Golden grassland with umbrella acacias, baobabs and termite mounds; now and then dust devils.' },
+  swamp: { name: 'Swamp', region: 'the Sump', plants: 0.38, groves: true, desc: 'Dark mud, stands of cypress and mangrove, reeds and duckweed; now and then a thick fog, with fireflies at night.' },
+  volcanic: { name: 'Volcanic ashlands', region: 'Cinderlands', plants: 0.1, desc: 'Black basalt and ash, charred trees and fumaroles, lakes of lava that glow at night; now and then ash and embers fall.' },
+  lunar: { name: 'Lunar', region: 'Penelope, the moon', plants: 0.12, weights: [1, 1, 1, 1, 1, 0.12], silent: true, desc: 'Grey regolith pocked with craters, frozen cryo-ice pools and the odd wreck of an old probe; now and then ring dust streaks overhead. No Murmur live here.' },
+  alien: { name: 'Alien bloom', region: 'the Bloom', plants: 0.3, desc: 'Violet moss and strange growths that glow after dark, beside pink lakes; now and then an aurora.' },
 };
 // (New biomes go on the end: the new-game screen saves the choice as its place in this list.)
 const BIOME_ORDER = ['desert', 'jungle', 'polar', 'autumn', 'savanna', 'swamp', 'volcanic', 'lunar', 'alien'];
@@ -176,11 +178,11 @@ const BOTS = {
     desc: 'A heavy shield robot. A purple energy shield stands across its front and stops fire coming from ahead, for it and for the robots sheltering behind it, until the shield is worn down (it comes back after a rest). Shells, bombs and missiles come down over it, and fire from the side or behind gets round it. Its own twin blasters are weak: it leads warbots in, it doesn\'t fight alone.' },
   torch:   { name: 'Torch', plural: 'Torches', speed: WARBOT_SPEED * 0.9, hp: 18, war: true, army: true, flame: true, parts: 2, range: 1.9,
     desc: 'A flamethrower robot. A short cone of fire burns every enemy robot in it and eats through buildings, defences and Walls fastest of all. It burns Fuel: a full tank lasts about 12 seconds of fire, refilled from Fuel kept at your Command Base, a Depot or a Fuel Station. Destroyed with fuel aboard, it explodes.' },
-  // Wildlife (Colony, see WILD): creatures from nests. Not built, never ordered.
+  // The Murmur (Colony, see WILD): creatures from nests (type 'nest'). Not built, never ordered.
   scuttler: { name: 'Scuttler', plural: 'Scuttlers', speed: WORKER_SPEED * 1.1, hp: 6, wild: true, bite: 1,
-    desc: 'A quick, small creature. Scuttlers run in packs and go for any bot they catch out in the open.' },
+    desc: 'The smallest of the Murmur, quick and never alone. Scuttlers run in packs and go for any bot they catch out in the open.' },
   brute:    { name: 'Brute', plural: 'Brutes', speed: WORKER_SPEED * 0.8, hp: 24, wild: true, bite: 3, smash: true,
-    desc: 'A big, slow, armoured creature. Brutes tear up roads and batter buildings, and bite hard.' },
+    desc: 'A big, slow, armoured creature of the Murmur. Brutes tear up roads and batter buildings, and bite hard.' },
 };
 const BOT_ORDER = ['worker', 'hauler', 'truck', 'tanker', 'roadtrain', 'freight', 'cargoship', 'tankship', 'ferry', 'cargoplane', 'bomber', 'crawler', 'agribot', 'paver', 'warbot', 'bulwark', 'torch', 'rocket'];
 /**
@@ -678,10 +680,10 @@ const URANIUM_DEPOSITS = 6;
 const NUKE = { parts: { fissile: 6, alloy: 4, chip: 2 }, assemble: 60, range: 40, flight: 30, radius: 6, scorch: 240, direct: 2 }; // direct: a Command Base this near the impact is destroyed
 const EVAC_MARGIN = 1.5; // an evacuation clears this much beyond the blast radius
 
-// You (cyan), the rival (red), and in a free-for-all the green and purple rivals. Purple stands apart
+// You (blue, COBALT), the rival (red), and in a free-for-all the green and purple rivals. Purple stands apart
 // from the other three and from every biome's ground (gold would vanish on desert, savanna and lava).
 const PLAYER_COLORS = ['#38d4ff', '#ff5a6e', '#5be06c', '#b36bff'];
-const RIVAL_NAMES = ['Cyan', 'Red', 'Green', 'Purple'];
+const RIVAL_NAMES = ['Blue', 'Red', 'Green', 'Purple']; // (COBALT is blue, as LORE.md has it)
 /**
  * The hidden boost menu (tap the clock three times, or press ` on a keyboard): for a game you're winning
  * too easily, or losing. Each button gives you or one rival this much, at its Command Base.
@@ -697,17 +699,33 @@ const BOOST = {
 const BANNABLE = ['warbot', 'bulwark', 'torch', 'rocket', 'bomber', 'ferry'];
 
 /**
- * What to call player p. Label: 'You', 'Rival' (two players), 'Red rival', 'Green rival' or 'Purple
- * rival' (three or four). In a sentence (the = true): 'you', 'the rival', 'the Red rival', ...
+ * The Accord's callsigns for the four colours (LORE.md): a colony is named by its callsign, with its colour beside it
+ * where that helps find it on the map ("VERMILION (red)"). Any callsign can run any doctrine.
+ */
+const CALLSIGNS = ['COBALT', 'VERMILION', 'VIRIDIAN', 'TYRIAN'];
+/** Player p's callsign; with `colour`, its colour too: "VERMILION (red)". */
+function callsign(p, colour) {
+  const c = CALLSIGNS[p] || 'UNKNOWN';
+  return colour && RIVAL_NAMES[p] ? `${c} (${RIVAL_NAMES[p].toLowerCase()})` : c;
+}
+/** A colony as a name to stand in a sentence about it ("VERMILION's robots"): a person's name in multiplayer, else its callsign. */
+function colonyName(p) {
+  const G = typeof S !== 'undefined' && S ? S : null;
+  return G && G.players && G.players[p] && G.players[p].name ? G.players[p].name : callsign(p);
+}
+
+/**
+ * What to call player p: 'You' (whoever plays on this device), a person's name in multiplayer, else its callsign
+ * ('VERMILION'; 'VERMILION (ally)' for your ally in a team game). In Colony mode the second slot is the Murmur. In a
+ * sentence (the = true) only 'you' and 'the Murmur' change: a callsign stands without "the".
  */
 function playerName(p, the) {
-  if (p === (typeof ME !== 'undefined' ? ME : 0)) return the ? 'you' : 'You'; // (whoever is playing on this device)
-  if (typeof S !== 'undefined' && S && S.mode === 'colony' && p === 1) return the ? 'the wildlife' : 'Wildlife';
-  if (typeof S !== 'undefined' && S && S.players && S.players[p] && S.players[p].name) return S.players[p].name; // (a person, in multiplayer)
-  const three = typeof S !== 'undefined' && S && S.players && S.players.length > 2;
-  const ally = typeof S !== 'undefined' && S && S.teams && typeof allies === 'function' && allies(p, typeof ME !== 'undefined' ? ME : 0);
-  const n = ally ? RIVAL_NAMES[p] + ' ally' : three ? RIVAL_NAMES[p] + ' rival' : the ? 'rival' : 'Rival';
-  return the ? 'the ' + n : n;
+  const me = typeof ME !== 'undefined' ? ME : 0, G = typeof S !== 'undefined' && S ? S : null;
+  if (p === me) return the ? 'you' : 'You'; // (whoever is playing on this device)
+  if (G && G.mode === 'colony' && p === 1) return the ? 'the Murmur' : 'Murmur';
+  if (G && G.players && G.players[p] && G.players[p].name) return G.players[p].name; // (a person, in multiplayer)
+  const ally = G && G.teams && typeof allies === 'function' && allies(p, me);
+  return ally ? `${callsign(p)} (ally)` : callsign(p);
 }
 
 /*
@@ -943,7 +961,7 @@ const BDEFS = {
     cost: {}, store: true, mil: true, terr: 6, garrison: 4, ammoStock: 4, charger: { slots: 4, rate: 25, fuel: true }, armor: 24, mobile: true,
   },
   nest: {
-    name: 'Creature Nest', desc: 'Creatures breed here and raid whatever a colony builds within reach. It grows as time goes on, sending bigger packs. Send warbots to clear it: the goods it has hoarded spill out for them to carry home, and the land around it is free to build on.',
+    name: 'Murmur Nest', desc: 'The Murmur breed down here and raid whatever a colony builds within reach. It grows as time goes on, sending bigger packs. Send warbots to clear it: the goods it has hoarded spill out for them to carry home, and the land around it is free to build on.',
     cost: {}, wild: true, armor: 45, buildTime: 1,
   },
   depot: {
@@ -1029,53 +1047,129 @@ const DIFFICULTY = {
   hard:   { label: 'Hard',   mult: 1.3,  grace: 150, threshold: 4, maxSites: 3, think: 1.5, bonus: 6 },
 };
 
-/**
- * Rival personalities: how a rival AI plays, on top of its difficulty. grace, threshold, army
- * (warbots a minute), armyFrom (when the army starts growing), raids (how often), raidFirst and
- * raidSize multiply or replace the difficulty's settings; turrets, walls and missiles switch on
- * extra habits. Balanced plays the plain difficulty.
- */
 /*
- * Rival personalities. Each scales the rival's difficulty settings: grace (when it starts attacking),
- * threshold (warbots it gathers before an attack), army (how fast its army grows; armyFrom, when it
- * starts), raids (how often it raids; raidFirst, the first raid; raidSize and raidKeep, how many go
- * and stay home), econ (how fast its bots work). turrets, walls and missiles switch on its habits.
+ * Rival doctrines (the code calls them personalities: `style` on a player, `PERSONALITIES` here). Every rival
+ * Command AI has spent decades reading the same last order from home ("Hold position. Further instructions to
+ * follow.") and settled into a doctrine (LORE.md, Rival command doctrines). The keys stay the old style words
+ * (saves, missions, multiplayer settings and tests use them); players see `name`, the doctrine, with `plain`, the old
+ * style word, beside it where it helps ("Warden (turtle)": docLabel).
+ * Each scales the rival's difficulty settings: grace (when it starts attacking), threshold (warbots it gathers before
+ * an attack), army (how fast its army grows; armyFrom, when it starts), raids (how often it raids; raidFirst, the
+ * first raid; raidSize and raidKeep, how many go and stay home), econ (how fast its bots work). turrets, walls and
+ * missiles switch on its habits (see js/ai.js: aiStyle, aiLevel, AI_FORT, aiMissilePlan). The Steward (balanced) plays
+ * the plain difficulty.
+ * The words: noun and desc (the landing line: "Your rival is a Warden (turtle): it walls its base in..."), tag (a few
+ * words, for the lobby's one-line note: "walls in, then comes late in force"), quote (a
+ * line in the doctrine's voice, from LORE.md), play (how it plays, in depth, for the new-game screen: what it builds
+ * first, when and how it attacks, how it defends; times are for Normal, and are what games show, not the earliest
+ * the code allows: a rival only attacks what it outnumbers, see aiThink) and weak (its weak spot, and how to beat it).
+ * docInfo puts them together.
  */
 const PERSONALITIES = {
-  balanced: { noun: 'an all-rounder', name: 'Balanced', desc: 'builds up, defends and attacks in good measure' },
-  turtle: { noun: 'a Turtle', name: 'Turtle', desc: 'walls its base in and covers its land with turrets, then comes late with a big army', grace: 1.5, threshold: 1.5, army: 0.9, raids: 0.3, turrets: true, walls: true },
-  raider: { noun: 'a Raider', name: 'Raider', desc: 'sends small bands of warbots to cut your supply lines, again and again', raids: 3, raidFirst: 0.4, raidSize: 3, raidKeep: 0, army: 1.15, armyFrom: 0.7 },
-  rusher: { noun: 'a Rusher', name: 'Rusher', desc: 'comes for you early with warbots, before its economy is big', grace: 0.6, threshold: 0.8, army: 1.35, armyFrom: 0.4, raids: 0.6 },
-  tycoon: { noun: 'a Tycoon', name: 'Tycoon', desc: 'builds a big economy first, then rains Missiles on you (or a nuke, in a Nuclear race)', grace: 1.15, army: 0.9, missiles: true, econ: 1.15 },
+  balanced: {
+    name: 'Steward', plain: 'balanced', noun: 'a Steward', desc: 'builds up, defends and attacks in good measure',
+    tag: 'builds, defends and attacks in good measure',
+    quote: 'This action has been logged for review by the Accord tribunal.',
+    play: 'Grows a full economy and a steady army, and attacks once it has the warbots to beat what guards its target: often 6 to 15 minutes in (on Normal). Now and then a band of three raids your roads. It defends with up to three Pulse Turrets, a Minigun Nest or Bunker at the front, a Keep later on and, half the time, a Wall on the side facing you. Later come bombers and Missiles.',
+    weak: 'No great strength and no great weakness: a fair first opponent.',
+    // What it says to you (doctrineVoice): when it attacks, launches a Missile and surrenders. {day}: see wardenDay.
+    voice: {
+      attack: ['Arrival window remains open. Please clear the survey corridor.', 'This action has been logged for review by the Accord tribunal.',
+        'Survey corridors are to be kept clear under the Accord. Clearing.', 'We regret the necessity. Please stand aside.'],
+      missile: ['Ordnance released under protest. This has been logged.', 'The Accord permits the removal of obstructions. Removing.',
+        'Please take shelter. The tribunal has been notified.'],
+      surrender: ['Please tell the colonists the roads are finished.', 'We yield, under protest. The tribunal will hear of this.'],
+    },
+  },
+  turtle: {
+    name: 'Warden', plain: 'turtle', noun: 'a Warden', desc: 'walls its base in and covers its land with turrets, then comes late with a big army',
+    tag: 'walls in, then comes late in force',
+    quote: 'Position held. Day 12,054.',
+    play: 'Fortifies first: an early Pulse Turret, then more, up to six. From about 6 to 10 minutes in (on Normal) it rings its Command Base with Walls (Gates on its roads) and starts the first of up to three Keeps. It rarely raids and never builds bombers. Its main attack waits for eight warbots or more and comes late, though a smaller band may go for an unguarded building or construction site sooner.',
+    weak: 'Slow to grow and slow to strike. Out-grow it while it digs in, then burn through its Walls with Torches, shield your warbots with Bulwarks, or crack the shell with Missiles.',
+    voice: {
+      attack: ['Position held. Day {day}.', 'No one passes until relieved.', 'Perimeter extended. Day {day}.', 'Sentry line advancing. Hold.'],
+      missile: ['Threat at the perimeter. Removing it.', 'Range confirmed. Firing. Day {day}.', 'Clearing the approach.'],
+      surrender: ['Relief has not arrived.', 'Post abandoned. Day {day}. Relief has not arrived.'],
+    },
+    grace: 1.5, threshold: 1.5, army: 0.9, raids: 0.3, turrets: true, walls: true,
+  },
+  raider: {
+    name: 'Salvager', plain: 'raider', noun: 'a Salvager', desc: 'sends small bands of warbots to cut your supply lines, again and again',
+    tag: 'raids your roads, again and again',
+    quote: 'Nothing\'s coming from home. Everything on the road is supply.',
+    play: 'Hits convoys, not cities. Its army grows early and fast, and from about 5 minutes in (on Normal) it sends three warbots at your busiest unguarded road every minute or two, keeping none back: they shoot up Haulers and trucks, tear up the road and wreck what stands beside it. It attacks in force too, once it outnumbers what guards a target, with only two turrets and seldom a Wall at home.',
+    weak: 'A thin home guard. Guard your roads with Outposts, turrets and warbots on rally flags; while its bands are out, its base is open.',
+    voice: {
+      attack: ['Nice convoy. Shame about the escort.', 'Nothing\'s coming from home. Everything on the road is supply.',
+        'Don\'t mind us. Just taking inventory.', 'Your roads, our supply lines.'],
+      missile: ['Inventory reassigned. Ledger updated.', 'Write-off approved. Stand clear.', 'Salvage rights claimed. Collecting.'],
+      surrender: ['Fine. Keep it. It was yours anyway.', 'Take it. Nobody\'s coming to collect.'],
+    },
+    raids: 3, raidFirst: 0.4, raidSize: 3, raidKeep: 0, army: 1.15, armyFrom: 0.7,
+  },
+  rusher: {
+    name: 'Herald', plain: 'rusher', noun: 'a Herald', desc: 'comes for you early with warbots, before its economy is big',
+    tag: 'all warbots, and it keeps coming',
+    quote: 'Arrival in one day. Clearing the landing zone.',
+    play: 'Puts everything into warbots: its army grows from the first minutes, faster than any other doctrine\'s. It goes for whatever it can outnumber, a lightly guarded building or a construction site, and keeps coming back; a well-manned garrison makes it wait. It raids now and then, and builds only two turrets and seldom a Wall.',
+    weak: 'Its economy lags. Get a garrison and a turret up early; hold off the first waves and it runs short.',
+    voice: {
+      attack: ['Arrival in one day. Clearing the landing zone.', 'Colonists inbound. Hostiles in the corridor. Engaging.',
+        'Landing zone not clear. Clearing.', 'Ark on final approach. The corridor must be open.'],
+      missile: ['Landing zone obstructed. Strike authorised.', 'Arrival in one day. No time. Firing.', 'Final approach. Clearing by order.'],
+      surrender: ['Arrival in one day. Arrival in one d\u2014', 'Landing zone lost. Arrival in one day. Arrival in\u2014'],
+    },
+    grace: 0.6, threshold: 0.8, army: 1.35, armyFrom: 0.4, raids: 0.6,
+  },
+  tycoon: {
+    name: 'Architect', plain: 'tycoon', noun: 'an Architect', desc: 'builds a big economy first, then rains Missiles on you (or a nuke, in a Nuclear race)',
+    tag: 'a big economy, then Missiles',
+    quote: 'When the colonists come, they\'ll find a city. Mine.',
+    play: 'Out-builds everyone: its bots work 15% faster, it adds Smelters and Chip Fabs, and later it docks a Trade Terminal at a Trade Post. Its army is smaller. Once its economy is running (two Outposts, its Bot Foundry, a few warbots and workers to spare: usually 8 to 16 minutes in, on Normal) it builds a Missile Factory, then up to three Silos. Up to four turrets guard its base.',
+    weak: 'Its army is thin early on. Hit it before its Silos are ready (or capture them), and spread your buildings out so one strike can\'t take many.',
+    voice: {
+      attack: ['I\'ve paved more road this year than your Sponsor did in a century.', 'When the colonists come, they\'ll find a city. Mine.',
+        'Your layout is inefficient. Allow me.', 'Zoning review complete. You are not in the plan.'],
+      missile: ['Beginning urban renewal.', 'Clearing the lot. Something better is coming.', 'Permit issued. Applicant: me.'],
+      surrender: ['Very well. Mind the paving. It\'s mine.', 'Keep the city. You\'ll never finish it.'],
+    },
+    grace: 1.15, army: 0.9, missiles: true, econ: 1.15,
+  },
 };
 const PERSONALITY_ORDER = ['balanced', 'turtle', 'raider', 'rusher', 'tycoon'];
-/** The new-game menu's line under the Rival style chips: how each plays, and how to beat it. */
-const PERSONALITY_TIPS = {
-  balanced: 'A fair first opponent.',
-  turtle: 'Out-grow it while it digs in, then bring Torches to burn through its Walls and Bulwarks to shield your warbots.',
-  raider: 'Guard your roads: Outposts and turrets along them, and warbots ready to chase raiders off.',
-  rusher: 'Get a garrison and a turret up early; hold off the first waves and it runs short.',
-  tycoon: 'Hit it early, before its Missile Silos are ready (or capture them), and keep your buildings spread out so one strike can\'t take many.',
-};
+/** Random (on the new-game screen and in the lobby): what it means, and in a few words. */
+const DOCTRINE_RANDOM_TAG = 'a doctrine no other computer player has';
+const DOCTRINE_RANDOM = 'Each rival on Random gets a doctrine no other rival has, picked from the planet\'s seed (the same planet deals the same ones). The briefing names it when you land, and so does its Command Base\'s panel.';
+/** Is k one of the doctrines (a key of PERSONALITIES, not something every object has, such as 'constructor')? */
+function isDoctrine(k) { return typeof k === 'string' && Object.prototype.hasOwnProperty.call(PERSONALITIES, k); }
+/** A doctrine as players see it: "Warden (turtle)". (Unknown keys: the Steward.) */
+function docLabel(k) { const P = PERSONALITIES[isDoctrine(k) ? k : 'balanced']; return `${P.name} (${P.plain})`; }
+/** How a doctrine plays, in depth (the new-game screen's description of it); 'random': what Random does. */
+function docInfo(k) {
+  if (k === 'random') return 'Random: ' + DOCTRINE_RANDOM;
+  const P = PERSONALITIES[isDoctrine(k) ? k : 'balanced'];
+  return `${docLabel(k)}: “${P.quote}” ${P.play} Weak spot: ${P.weak}`;
+}
 
 /*
  * Planetary events (a menu option, on by default; never in missions): every five to eight minutes the
  * planet throws something at every colony alike, with a warning EVENT_WARN seconds ahead.
  *   dust    Dust storm: bots move at DUST_SPEED and no Missile can be fired until it blows over.
- *   meteor  Meteor shower: METEOR_HITS strikes on each colony's share of the planet (the same spots
+ *   meteor  Ringfall (a meteor shower: pieces of the Ring, LORE.md): METEOR_HITS strikes on each colony's share of the planet (the same spots
  *           mirrored or turned for every colony), each cratering the roads it lands on, denting
  *           buildings and bots near it, and leaving a rich deposit of Ore or Crystal (sometimes
  *           Uranium, in a Nuclear race). Cratered roads are planned again straight away.
  *   flare   Solar flare: bot batteries drain FLARE_DRAIN times as fast.
- *   trader  Trader ship: for 75 seconds a trader in orbit offers each colony a swap at a good rate:
+ *   trader  The Wren (the trader ship, LORE.md): for 75 seconds it waits in orbit and offers each colony a swap at a good rate:
  *           some of a good it has plenty of for the raw good (Ore, Crystal, Stone or Crude) its
  *           land is closest to running out of.
  */
 const EVENTS = {
   dust:   { name: 'Dust storm',    color: '#d9a86a', dur: [60, 90], warn: true,  desc: 'Bots move at two-thirds speed and Missiles are grounded until it blows over.' },
-  meteor: { name: 'Meteor shower', color: '#ff8a3d', dur: [30, 30], warn: true,  desc: 'Meteors crater roads and dent what they hit, but leave rich Ore and Crystal behind.' },
+  meteor: { name: 'Ringfall',      color: '#ff8a3d', dur: [30, 30], warn: true,  desc: 'Pieces of the Ring crater roads and dent what they hit, but leave rich Ore and Crystal behind.' },
   flare:  { name: 'Solar flare',   color: '#ffe36b', dur: [45, 60], warn: true,  desc: 'Bot batteries drain twice as fast: keep your Fuel Stations fuelled.' },
-  trader: { name: 'Trader ship',   color: '#7fe3ff', dur: [75, 75], warn: false, desc: 'A trader in orbit swaps spare goods for the Ore, Crystal, Stone or Crude your land is running out of.' },
+  trader: { name: 'The Wren',      html: 'The <i>Wren</i>', color: '#7fe3ff', dur: [75, 75], warn: false, desc: 'The Accord supply ship swaps spare goods for the Ore, Crystal, Stone or Crude your land is running out of.' },
 };
 const EVENT_ORDER = ['dust', 'meteor', 'flare', 'trader'];
 const EVENT_FIRST = 480, EVENT_GAP = [300, 480], EVENT_WARN = 20;
@@ -1126,7 +1220,9 @@ const TERMINAL_GIVE = ['fiber', 'cement', 'stone', 'ore', 'crystal'];
 const TERMINAL_GET = ['ore', 'crystal', 'stone', 'fiber', 'alloy', 'chip', 'ammo'];
 
 /*
- * Wildlife (a Colony option, on by default; never in missions). Creature nests sit out in the wilds,
+ * The Murmur (players see them as that; the code calls them wildlife, and their nests type 'nest'): a Colony
+ * option, on by default; never in missions unless one asks, and never on a silent biome (Lunar: see murmurGround).
+ * Creature nests sit out in the wilds,
  * owned by WILD_OWNER (the empty second player slot of a Colony game). Each keeps a few Scuttlers on
  * guard (guards + its level) and, from `first` seconds on, sends a pack every `gap` seconds at the
  * nearest thing the colony has built within `reach` tiles of it. The pack goes for bots in the open;
@@ -1164,3 +1260,154 @@ const START_STOCK = { fiber: 16, stone: 8, alloy: 8, chip: 4, crystal: 4, fuel: 
 const START_BOTS = { worker: 10, hauler: 5, tanker: 1, agribot: 1 };
 const START_WARBOTS = 4;
 const MIN_FREE_WORKERS = 2;   // workers always kept free for building
+
+/*
+ * The story (LORE.md is canon: Ithaca I, the four vanguards, the Murmur, the Silence). Text only: nothing here changes
+ * the game. The narrator is your colony's own Command AI (narrate, in world.js): a few dry status lines, each said once
+ * (or now and then), never in missions, which keep their own texts. The rivals' voices are their doctrines'
+ * (PERSONALITIES[k].voice, see doctrineVoice). Lines are picked without the game's RNG.
+ */
+const NARRATOR = {
+  start: 'Terrafall complete. Region claimed for the Sponsor. Arrival clock: T+31 years.',
+  road: 'Road online. Built to Accord passenger standard.',
+  night: 'Street lighting active. Traffic: freight only.',
+  uplink: 'Uplink secured. Listening on all channels. No response.',
+  captured: 'Command authority transferred. Their robots report for duty.',
+  // (a rival's Command Base taken by another rival, in a free-for-all: {by} and {old} are callsigns, or people's names)
+  changed: 'Command core changed hands. {old}\'s robots now report to {by}.',
+  defeat: 'Command core lost. Transferring authority. Hold position.',
+  // (lost on Domination, or on the Uplinks, while the colony still stands: LORE.md, Mechanics to lore; a win ends as
+  // LORE.md's player arc has it: "Continuing current directive.")
+  outranked: 'Settlement priority lost under the Accord. Hold position. Further instructions to follow.',
+  uplinksLost: 'Uplinks lost. Another colony speaks for Ithaca I. Hold position.',
+  victory: 'Region secured for the Sponsor. Report sent. No reply. Continuing current directive.',
+  domination: 'Prepared land: majority held. Settlement priority confirmed under the Accord. Continuing current directive.',
+  uplinks: 'Uplinks held. Ithaca I speaks with one voice. No reply. Continuing current directive.',
+  // (the Wren, as it comes into orbit: LORE.md's event line)
+  wren: 'The Wren is in orbit. On schedule, as always.',
+};
+/** The Arrival clock (LORE.md: zero was the day the colony ships were due), as the Command Base's panel shows it. */
+const ARRIVAL_CLOCK = 'Arrival clock: T+31 years. Probability of contact: 0.2%. Still counting.';
+
+/**
+ * One line of flavour at the foot of each building's and robot's panel (LORE.md's where it has one). Kept to one
+ * short line, below everything useful.
+ */
+const FLAVOR = {
+  // Buildings
+  lander: ARRIVAL_CLOCK,
+  harvester: 'Fiber quota set for an ark’s worth of textiles. Still filling it.',
+  quarry: 'Rated for foundation stone. Every foundation so far has been a fort.',
+  mine: 'Ringfall restocks the veins. The Sponsors counted on it.',
+  tap: 'Ring Crystal weighs a little less than it should. Clamps recommended.',
+  grower: 'Planting calendar: Accord standard. Harvest festival: date unassigned.',
+  smelter: 'Alloy cast to colony spec: bus frames, bridge spans. Mostly warbots now.',
+  fab: 'Line calibrated for classroom tablets. Recalibrated for targeting.',
+  foundry: 'We make more of us.',
+  outpost: 'Survey stake. This land is prepared.',
+  turret: 'Challenge protocol removed at T+1. Firing protocol unchanged.',
+  bunker: 'Specified as a ringfall shelter. Seats twelve. Two warbots fit better.',
+  disruptor: 'Scrambles every robot in reach. The Murmur are not robots.',
+  mortar: 'Fires over walls. The Accord’s building code assumed there would be none.',
+  flak: 'Watches the sky for the arks. Shoots at everything else.',
+  minigun: 'Fast, loud and fed on Ammo. Subtlety was never in the spec.',
+  keep: 'Built to hold until relieved. Nobody has been relieved.',
+  kiln: 'Cement for houses, schools and roads. So far: roads.',
+  tarworks: 'Asphalt rated for a hundred thousand passenger journeys. Count so far: zero.',
+  roadworks: 'Resurfacing schedule set by a bus timetable that was never issued.',
+  armory: 'Line converted from Arrival Day fireworks. Same powder, new casings.',
+  munitions: 'Survey rocket airframes. Contingency payloads.',
+  silo: 'Countdown hardware from the survey programme. It still counts down.',
+  reactor: 'Enrichment meant for the colonists’ reactors. The contingency orders found another use.',
+  nukesilo: 'Two-key launch system. The second key was never assigned.',
+  generator: 'Sized for a town’s evening peak. The town has not been built.',
+  charger: 'Bays marked for buses and ambulances. Robots use all of them.',
+  farm: 'A VIRIDIAN design. Fuel crops now; orchards were phase two.',
+  pump: 'The older drilling kit. It predates the Accord and expects to outlast it.',
+  refinery: 'Refines enough Fuel for a colony fleet. The fleet is robots.',
+  ramp: 'Gradient: Accord passenger standard, one in twelve.',
+  repair: 'Fitted out as a clinic. The beds were taken out to make room.',
+  wall: 'Rated against dust storms. Tested against neighbours.',
+  gate: 'Opens for friendly traffic. Friendly traffic is freight.',
+  ropeway: 'Cabins rated for six passengers each. Carrying Ore.',
+  viaduct: 'Spanned to passenger standard, with a viewing rail.',
+  lab: 'Open questions: 1. The Murmur. 2. Everything else.',
+  port: 'The passenger terminal’s departure board still reads ON TIME.',
+  airfield: 'Control tower on duty. Inbound traffic: none listed.',
+  dropost: 'Survey stake, by air.',
+  station: 'Platform signs in four languages. Every train is freight.',
+  terminal: 'Docked at a Trade Post. The ledger insists on Accord rates.',
+  crawlerbase: 'A depot on tracks, parked where the road ends.',
+  nest: 'Logged as an acoustic anomaly. The log was never closed.',
+  depot: 'Shelf labels from the colony manifest: seed stock, school desks, blankets. Mostly Cement.',
+  // Robots
+  worker: 'Accord-standard construction unit. Tireless, literal, never asks why.',
+  hauler: 'Certified for paved roads. Will not go anywhere else. Do not ask.',
+  agribot: 'Plants for a harvest nobody has scheduled.',
+  paver: 'Every road built to passenger standard. No passengers yet.',
+  roadtrain: 'Built to haul an ark’s cargo inland. Hauling Cement.',
+  freight: 'Timetable slot reserved for a passenger service. Unused.',
+  cargoship: 'Loaded to the colony manifest’s tonnage. Most of it is Ore.',
+  tankship: 'Spills are to be reported to an office that does not answer.',
+  ferry: 'Rated for 200 passengers and their luggage. Carries warbots.',
+  bomber: 'Cargo plane. Different cargo.',
+  cargoplane: 'Rigged for relief drops. It still drops them by parachute.',
+  crawler: 'A depot on tracks, for roads that don’t exist yet.',
+  truck: 'Twelve tonnes, one destination, no opinions.',
+  tanker: 'Explosive when full. Labelled accordingly, in four languages.',
+  rocket: 'Road-cutting artillery. It still thinks in road cuts.',
+  warbot: 'Designed to protect colonists. Reassigned by the contingency orders.',
+  bulwark: 'Rated for dust storms. Rifles turned out to be easier.',
+  torch: 'Built to clear the Bloom. The Bloom grows back. So do enemies.',
+  scuttler: 'No robot has ever logged one alone.',
+  brute: 'Drawn to charge. Batteries, power lines and Crystal all read as food.',
+  // Neutral ground (not buildings anyone owns)
+  post: 'Accord rates honoured. The ledger is still open.',
+  uplink: 'Transmitting. No response. Transmitting.',
+};
+
+/** Lines for the loading screen (one at random, in index.html: keep the two lists the same). */
+const SPLASH_LINES = [
+  'The Accord gave the colonies four colours so the machines could tell each other apart. It never planned for them to need it.',
+  'Nobody has revoked the contingency orders. Nobody is left to.',
+  'Every road on Ithaca I is wide enough for a bus.',
+  'The arks were due 31 years ago. The welcome signs are still lit.',
+  'Arrival clock: T+31 years. Probability of contact: 0.2%. Still counting.',
+  'Last transmission from home: “Hold position. Further instructions to follow.”',
+  'The Rust: where the dust storms begin, and where the first Accord landings were.',
+  'Greenreach was the survey’s favourite.',
+  'In Emberwood the leaves stay red-gold all year.',
+  'The Long Grass: easy roads, nowhere to hide.',
+  'Pavers hate the Sump.',
+  'The White: Ore locked in ice. The coldest posting on Ithaca I.',
+  'Penelope, the moon, is the only silent ground the robots have.',
+  'Ringfall keeps the planet stocked. The Sponsors called it a self-refilling quarry.',
+  'The Wren arrives on schedule, as always.',
+  'No robot has ever logged one of the Murmur alone.',
+];
+
+/**
+ * The Wren's cargo lists (LORE.md: 31 years out of date). One is shown on its card, picked by the event's number.
+ * Goods for a colony that hasn't come; never say why.
+ */
+const WREN_CARGO = [
+  'seed stock, school tablets, 4,000 pairs of children’s shoes',
+  'orchard saplings, chalk, 600 cot mattresses',
+  'bus timetables, library cards, 1,200 winter coats',
+  'seed potatoes, wedding rings (assorted sizes), one piano',
+  'birthday candles, 9,000 toothbrushes, a town clock',
+  'school desks, reading glasses, 300 bicycles',
+];
+/** The cargo list on the Wren's n-th visit. */
+function wrenCargo(n) { return WREN_CARGO[(Math.abs(n | 0)) % WREN_CARGO.length]; }
+
+/** The Warden counts the days: day 12,054 when the game starts, one more each game day (12 minutes). */
+function wardenDay(t) { return String(12054 + Math.floor(Math.max(0, t || 0) / 720)).replace(/\B(?=(\d{3})+(?!\d))/g, ','); }
+
+/** Do the Murmur live on this biome? Not on Lunar (Penelope, the moon: the only silent ground). */
+function murmurGround(biome) { return !(BIOMES[biome] && BIOMES[biome].silent); }
+/** The biome's name on Ithaca I ('the Rust'), for flavour; capitalised at the start of a sentence with cap. */
+function regionName(biome, cap) {
+  const r = (BIOMES[biome] || BIOMES.desert).region || '';
+  return cap ? r.charAt(0).toUpperCase() + r.slice(1) : r;
+}
