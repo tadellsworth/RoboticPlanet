@@ -3790,7 +3790,7 @@ function openBuildMenu() {
   const tabs = `<div class="seg build-tabs" id="build-tabs">${groups.map((g) => `<button data-g="${g.key}"><kbd>${BUILD_TAB_KEYS[g.key]}</kbd>${g.name}<span class="n">${ordered.filter((t) => groupOf(t) === g.key).length}</span></button>`).join('')}<button data-g="all"><kbd>${BUILD_TAB_KEYS.all}</kbd>All</button></div>`;
   const kbd = (t) => { const k = buildKeyOf(t); return k ? `<kbd data-tab="${BUILD_TAB_KEYS[k.tab]}" data-key="${k.key.toUpperCase()}">${k.key.toUpperCase()}</kbd>` : ''; };
   const html = `<div class="sheet-title"><h3>Build</h3></div>
-    <p class="desc">Placing a site is free; haulers bring the materials by road, so lay a road to it. ${sites}/${MAX_SITES} sites in progress.</p>
+    <p class="desc">Placing a site is free; haulers bring the materials by road, so lay a road to it. <span id="build-sites">${sites}/${MAX_SITES}</span> sites in progress.</p>
     ${tabs}
     <div class="build-grid"><button class="bcard roads" id="build-roads" data-g="move"><kbd data-key="R">R</kbd><svg viewBox="0 0 24 24"><path d="M8 3L5 21M16 3l3 18M12 4v3M12 10.5v3M12 17v3" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
       <div class="bname">Roads</div><div class="bhave">Plan roads, bridges and ramps</div></button>${warOn() ? `<button class="bcard walls" id="build-walls" data-g="defend"><kbd data-tab="${BUILD_TAB_KEYS.defend}" data-key="X">X</kbd><img src="${iconFor('wall')}" alt=""><div class="bname">Walls</div><div class="bcost">${costHTML(BDEFS.wall.cost, have)}</div>
@@ -3885,6 +3885,27 @@ function ownedCount(type) {
     if (b.built) built++; else sites++;
   }
   return { built, sites };
+}
+
+/**
+ * The open build menu, kept current (with the HUD, every quarter second): its cards grey out when the site limit is
+ * reached and come back as soon as a site finishes, costs turn red and back as goods come and go, and the counts
+ * of what you have and are building move on. (It used to be fixed when opened, so the cards stayed grey until
+ * you closed and reopened it.)
+ */
+function refreshBuildMenu() {
+  const body = $('sheet-body');
+  if (!body || !S) return;
+  const sites = siteCount(ME), full = sites >= MAX_SITES, have = playerGoods(ME);
+  if ($('build-sites')) $('build-sites').textContent = `${sites}/${MAX_SITES}`;
+  for (const el of body.querySelectorAll('.build-grid .bcard[data-t]')) {
+    const t = el.dataset.t, cost = BDEFS[t].cost;
+    if (el.disabled !== full) el.disabled = full;
+    const spans = el.querySelectorAll('.bcost > span');
+    Object.keys(cost).forEach((g, i) => { if (spans[i]) spans[i].classList.toggle('short', have[g] < cost[g]); });
+    const h = el.querySelector('.bhave'), txt = ownedText(t);
+    if (h && h.textContent !== txt) h.textContent = txt;
+  }
 }
 
 function ownedText(type) {
@@ -5332,7 +5353,8 @@ function showWarbots(k) {
 }
 
 function refreshSheet() {
-  if (!UI.sheetKind || UI.sheetKind === 'build') return;
+  if (!UI.sheetKind) return;
+  if (UI.sheetKind === 'build') { refreshBuildMenu(); return; }
   markSheetKeys();
   if (UI.sheetKind === 'pop') { refreshPopSheet(); return; }
   if (UI.sheetKind === 'army') { refreshArmySheet(); return; }
