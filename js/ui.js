@@ -2222,6 +2222,13 @@ function coachTarget(g) {
   if (!sel) return { sel: '', ring: null };
   let els;
   try { els = [...document.querySelectorAll(sel)]; } catch (e) { return { sel: '', ring: null }; }
+  // (The panel open is another building's, say the Quarry's when the goal means the spent Ore Mine's Dismantle: its
+  // buttons don't light. The rest of the selector does, and the building the goal means gets the ring.)
+  const open = UI.sheetKind === 'bld' && getE(UI.sheetFor), want = open && /#sh-/.test(sel) ? coachBuilding(g) : null;
+  if (want && want.type !== open.type) {
+    const rest = sel.split(',').filter((p) => !/#sh-/.test(p)).join(',');
+    return { sel: rest ? coachTarget({ ...g, ui: rest }).sel : '', ring: want };
+  }
   if (els.some((el) => el.getClientRects().length > 0)) return { sel, ring: null };
   const open = [];
   let panel = false;
@@ -2319,7 +2326,7 @@ function renderStats() {
   const P = S.players[ME], st = P.stats;
   const made = Object.values(P.made || {}).reduce((a, v) => a + v, 0);
   const tiles = [['Time', fmtTime(S.time)], ['Buildings built', st.built], ['Bots built', st.bots - (st.startBots || 0)],
-    ['Goods produced', made.toLocaleString()], versus ? ['Rival buildings taken', st.captured] : ['Land claimed', Math.round(landShare(ME) * 100) + '%'],
+    ['Goods produced', made.toLocaleString()], versus ? ['Rival buildings taken', st.captured] : ['Land claimed', Math.floor(landShare(ME) * 100) + '%'],
     ['Bots lost', st.lost]];
   const players = versus ? S.players.map((P) => P.id) : [0];
   const ser = (fn) => players.map((p) => ({ name: playerName(p), color: CHART.series[p], values: fn(H.p[p] || {}) }));
@@ -5471,7 +5478,7 @@ function objectiveText() {
   for (const o of OBJECTIVES) if (!o.done()) return warn + o.text;
   if (warn) return warn;
   if (S.mode === 'colony') {
-    const pct = Math.round(landShare(ME) * 100);
+    const pct = Math.floor(landShare(ME) * 100);
     const next = COLONY_MILESTONES[S.milestone];
     return next !== undefined
       ? `Colonize the planet: <b>${pct}%</b> claimed. Next milestone at ${Math.round(next * 100)}%.`
@@ -5503,7 +5510,7 @@ function updateHUD() {
     (warOn() ? ` <span class="dot" style="background:${PLAYER_COLORS[ME]};border-radius:2px;transform:rotate(45deg)"></span>${war}` : '');
   // With day and night on, the time of day leads (a sun, a half-lit disc at dawn and dusk, a moon).
   const tn = todName(), tod = todEnabled() ? `<span class="tod-mark" style="color:${{ morning: '#ffb38a', day: '#ffd166', evening: '#ff8a4a', night: '#b8c8ff' }[tn]}">${tn === 'night' ? '☾' : '☀'}</span> ` : '';
-  const ct = tod + (S.mode === 'colony' ? `${Math.round(landShare(ME) * 100)}% land` : fmtTime(S.time));
+  const ct = tod + (S.mode === 'colony' ? `${Math.floor(landShare(ME) * 100)}% land` : fmtTime(S.time));
   if ($('clock').innerHTML !== ct) $('clock').innerHTML = ct;
   $('clock').title = todEnabled() ? TOD_NAMES[todName()] + (todMode() === 'night' ? ' (always)' : '') : '';
   updateWinCard(); // (first: folded under the Goal chip, it leaves a summary there)
