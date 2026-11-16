@@ -1339,9 +1339,10 @@ Ground marks fade over a minute or so (at most 350 at once). Each effect can be 
 ## Enabling GitHub Pages
 
 1. In the repository: **Settings → Pages → Build and deployment → Source: GitHub Actions**.
-2. The workflow in `.github/workflows/pages.yml` publishes the game on every push to `main` or to the development
-   branch `claude/elegant-cori-a8yj96`. To publish right away without a push, open **Actions → Deploy to GitHub Pages →
-   Run workflow**.
+2. The workflow in `.github/workflows/pages.yml` publishes the game on every push to `main` (the development branch
+   `claude/elegant-cori-a8yj96` no longer deploys: work reaches the site once it's on `main`). The `github-pages`
+   environment must allow `main`: **Settings → Environments → github-pages → Deployment branches and tags**, a Branch
+   rule for `main`. To publish right away without a push, open **Actions → Deploy to GitHub Pages → Run workflow**.
 3. Installed copies (Add to Home Screen) check for a newer version each time they open with internet, so they update
    by themselves.
 

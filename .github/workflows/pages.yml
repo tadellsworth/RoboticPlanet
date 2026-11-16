@@ -1,12 +1,11 @@
-# Publishes the game to GitHub Pages on every push to the development branch (the repository's
-# default branch), so the installed app picks up each update. Pushes to main don't deploy: the
-# github-pages environment only accepts the default branch, so a main run was always rejected
-# (and emailed a failure) while the same commit's development-branch run published the site.
-# One-time setup: repo Settings → Pages → Build and deployment → Source: "GitHub Actions".
+# Publishes the game to GitHub Pages (terrafall.app) on every push to main, so the installed app picks up each
+# update. The github-pages environment allows main (Settings -> Environments -> github-pages -> Deployment branches
+# and tags); pushes to the development branch no longer deploy, so work reaches the site once it is on main.
+# One-time setup: repo Settings -> Pages -> Build and deployment -> Source: "GitHub Actions".
 name: Deploy to GitHub Pages
 on:
   push:
-    branches: [claude/elegant-cori-a8yj96]
+    branches: [main]
   workflow_dispatch:
 permissions:
   contents: read
