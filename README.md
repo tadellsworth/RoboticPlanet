@@ -478,7 +478,9 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   `sendToRally`: the Army panel's orders and the rival's marches, not its raids, counter-raids or hunts) times each
   one's walk along its route (`paceSquad`, `walkTime`), and the nearer ones wait where they stand for the difference
   (`task.wait`, at most `PACE_MAX` 45 s, not under `PACE_MIN` 2 s) so the squad arrives together; one shot at while it
-  waits goes at once. Selected warbots sent directly, and orders given with `hurry`, go at once. Army units ordered
+  waits goes at once, and one whose target falls or changes hands meanwhile (an ally took it, say) stops waiting and
+  drops it at once (as an attack does: crates, the fort, or the next building near by). Selected warbots sent
+  directly, and orders given with `hurry`, go at once. Army units ordered
   together share their route searches (`squadRoute`: the routes planned in the same tick, by start tile, goal, owner,
   kind, armed and fighting; each gets a copy), and a squad on its way to a flag makes for the flag tile itself until
   it is within 4 tiles, then for its own spot round it, so a 20-warbot order costs one search, not twenty.

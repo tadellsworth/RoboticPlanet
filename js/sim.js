@@ -5303,9 +5303,11 @@ function warbotAct(u, dt) {
     if (!pathing) u.path = null;
     return;
   }
-  // Waiting to set off with its squad (paceSquad): it stands where it is until its time, unless it's shot at.
+  // Waiting to set off with its squad (paceSquad): it stands where it is until its time, unless it's shot at, or what it
+  // was sent against is gone or no longer an enemy's (an ally took it, say): then it stops waiting and drops it (below).
   if (t && t.wait) {
-    if (S.time >= t.wait || S.time - (u.hurtT || -9) < 1) t.wait = 0;
+    const tg = t.type === 'attack' ? getE(t.target) : null;
+    if (S.time >= t.wait || S.time - (u.hurtT || -9) < 1 || (t.type === 'attack' && (!tg || !foes(tg.owner, u.owner)))) t.wait = 0;
     else { u.path = null; u.vel = 0; return; }
   }
   if (!t) {
