@@ -171,16 +171,17 @@ function aiShut(b) {
 /**
  * Has gatherer b anything left to gather: a node in its reach, on its ground, with something in it, on no rival's land
  * and out of enemy guns' reach (what its worker can go to: see findNode)? A Tap whose last Crystal lies just across the
- * border still counts it in gatherReach, and its worker stands there saying none is left in reach.
+ * border still counts it in gatherReach, and its worker stands there saying none is left in reach. With n: at least n
+ * such nodes. A stalk grove counts only once it's ripe (findNode skips one still growing).
  */
-function aiGathers(b) {
+function aiGathers(b, n = 1) {
   const def = BDEFS[b.type], r = def.radius, r2 = r * r + 0.3, zone = S.zone[tIdx(b.x, b.y)], types = gatherTypes(b.type);
   if (!b.built || aiShut(b)) return false;
   for (let j = Math.max(0, b.y - r); j <= Math.min(S.H - 1, b.y + r); j++) {
     for (let i = Math.max(0, b.x - r); i <= Math.min(S.W - 1, b.x + r); i++) {
       const t = j * S.W + i;
-      if (!types.includes(S.res[t]) || !S.amt[t] || S.zone[t] !== zone || dist2(i, j, b.x, b.y) > r2) continue;
-      if ((S.owner[t] < 0 || S.owner[t] === b.owner) && !hotFor(b.owner, t)) return true;
+      if (!types.includes(S.res[t]) || !S.amt[t] || S.zone[t] !== zone || dist2(i, j, b.x, b.y) > r2 || (S.res[t] === R_STALK && S.grow[t] < 1)) continue;
+      if ((S.owner[t] < 0 || S.owner[t] === b.owner) && !hotFor(b.owner, t) && --n <= 0) return true;
     }
   }
   return false;
@@ -417,9 +418,11 @@ function aiThink(p) {
   if (tapsFirst) plan = [['tap', (counts.tap || 0) + 1]].concat(plan);
   // A Harvester site only counts once its materials are in: one waiting for Fiber never gets any. Nor does a
   // Harvester down to its last couple of stalks (a few regrow round a cut-out grove, enough to look busy but not to
-  // keep the Smelters going).
+  // keep the Smelters going). Only stalks it can cut now count (aiGathers: ripe, on our side, out of enemy guns):
+  // counting the ones still growing, or the rival's across the border, a Harvester said "No stalk groves left in
+  // reach" while it counted four to eight, no new one went up, and Fiber sat at 0 for many minutes.
   const cutting = me.some((b) => b.type === 'harvester' &&
-    (b.built ? reachableRes(b.x, b.y, BDEFS.harvester.radius, R_STALK) >= 3 : sumValues(b.stock) >= sumValues(BDEFS.harvester.cost)));
+    (b.built ? aiGathers(b, 3) : sumValues(b.stock) >= sumValues(BDEFS.harvester.cost)));
   const fiberLow = !cutting || playerGoods(p).fiber < 4;
   // With none cutting, a new Harvester goes first; and with none on the way either, past the usual limit on sites:
   // sites waiting for Alloy could otherwise hold every place while the Smelters wait for the Fiber to make it.
