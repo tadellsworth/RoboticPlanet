@@ -895,7 +895,8 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   more enemy warbots stand within 12 tiles of its base, or the base was hit in the last half minute (`P.homeCall`),
   about a third of its army (2 to 8) stays in its Command Base and up to 3 in each Keep, out of every attack, raid and
   march, the rear's too, and new and idle warbots go there first (`goGarrison`); otherwise 2, and the usual one when no
-  enemy army can walk to its base (on an island). With twice its rivals' warbots and two more its Outposts keep none
+  enemy army can walk to its base (on an island). A Salvager keeps the usual one, threatened or not (its doctrine's
+  thin home guard: with two its first raid waited for a fifth warbot, four minutes late). With twice its rivals' warbots and two more its Outposts keep none
   back. A Normal or Hard rival (a Warden on any level) answers an army parked on its land, or within 14 tiles of its
   Command Base, with a Mortar Pit: four or more enemy warbots there, while no other defence is on order, put one by its
   fort nearest them, 7 to 10 tiles from where they stand (`P.defWant.ax`/`ay`, see `aiSearchSpot`), up to three, one at
