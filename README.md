@@ -1209,6 +1209,11 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   **Undo** for 4 seconds (`ORDER_UNDO`; the `undoCommand` order sends each back to what it was doing). A drag or a
   pinch is never an order. **Box** (or a finger held still 350 ms, `LONG_PRESS` in js/input.js, then dragged, where
   you have warbots out) draws a selection box. With a panel open the bar steps aside and taps inspect.
+- **Vibration** (`haptic` in js/input.js): under a finger, on a device that can vibrate (`navigator.vibrate`), a short
+  buzz says an order went through (a tap-to-order with warbots selected or in the Army banner, a building, Viaduct or
+  Ropeway placed, a Paths plan built, Lay road) and marks a warning or alarm from the game (at most one every 2.5 s).
+  **Vibration** in the pause menu (shown only on a touch screen that can vibrate) switches it off; it is kept on this
+  device (`botfall.haptics`), on by default.
 - **Game speed:** the speed chip in the top bar opens 0.75×, 0.875×, 1×, 2× and 3×.
 - **Sound** (`js/audio.js`, all Web Audio, no audio files): a generative synthwave score that follows the game (menu,
   building, war when you're attacked or fighting, and an alarm while a nuke flies; the building music takes turns between

@@ -135,6 +135,12 @@ function initUI() {
   const syncWx = () => { $('p-weather').textContent = `Weather: ${weatherOn() ? 'On' : 'Off'}`; };
   syncWx();
   $('p-weather').onclick = () => { setWeatherOn(!weatherOn()); syncWx(); sfx('click'); };
+  // Vibration (input.js haptic): on a touch screen that can vibrate; on, a buzz says so.
+  const syncHaptics = () => { $('p-haptics').textContent = `Vibration: ${HAPTIC.on ? 'On' : 'Off'}`; };
+  const touchScreen = (typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches) || navigator.maxTouchPoints > 0;
+  $('p-haptics').hidden = !hapticsSupported() || !touchScreen;
+  syncHaptics();
+  $('p-haptics').onclick = () => { setHaptics(!HAPTIC.on); syncHaptics(); sfx('click'); if (HAPTIC.on) try { navigator.vibrate(HAPTIC_PATTERNS.order); } catch (e) { /* not allowed here */ } };
   initFullscreen();
   syncVol();
   $('p-help').onclick = () => showHelp();
@@ -1905,7 +1911,7 @@ function orderSnapshot(u) {
  */
 function touchOrder(i, j, wx, wy) {
   const was = selectable(ME, UI.sel).map(orderSnapshot);
-  onMapCommand(i, j, wx, wy, () => { UI.undo = { was, until: performance.now() + ORDER_UNDO, text: 'Order given.' }; refreshSelection(); });
+  onMapCommand(i, j, wx, wy, () => { haptic('order'); UI.undo = { was, until: performance.now() + ORDER_UNDO, text: 'Order given.' }; refreshSelection(); });
 }
 
 /** Undo on the selection bar: each robot of the last order goes back to what it was doing (its garrison, its flag, its target, its spot). */
@@ -3673,7 +3679,7 @@ function confirmBanner() {
     if (!A || !E || !E.ok) return;
     act('link', [type, A.i, A.j, E.i, E.j], (res) => {
       if (!res.ok) { sfx('error'); showBanner(`<span class="err">${res.reason}</span>`, null, 'Cancel'); return; }
-      sfx('place');
+      sfx('place'); haptic('order');
       addFx('ring', A.i + 0.5, A.j + 0.5, { color: PLAYER_COLORS[ME] });
       // (Back to Paths when a plan sketched there is waiting for its Build, else to the map.)
       if (UI.planKept) { setMode('road'); showRoadBanner(`${BDEFS[type].name} placed. Your plan is still here: tap Build for it.`, true); } else setMode('normal');
@@ -3687,7 +3693,7 @@ function confirmBanner() {
     if (!res.ok) { sfx('error'); showBanner(`<span class="err">${res.reason}</span>`, null, 'Cancel'); return; }
     if (from) toast(`Moving the ${BDEFS[type].name}: workers put it together here (no goods needed), and the old one keeps working until it's ready.`, 'good');
     UI.moveFrom = 0;
-    sfx('place');
+    sfx('place'); haptic('order');
     addFx('ring', x + 0.5, y + 0.5, { color: PLAYER_COLORS[ME] });
     setMode('normal');
   });
@@ -4217,7 +4223,7 @@ function draftDone(r) {
   if (!why && R.mode === 'road') setMode('normal');
   const wallText = walls || gates ? ` ${[walls ? `${walls} Wall${walls === 1 ? '' : 's'}` : '', gates ? `${gates} Gate${gates === 1 ? '' : 's'}` : ''].filter(Boolean).join(' and ')} planned: free workers will build ${walls + gates === 1 ? 'it' : 'them'}.` : '';
   if (why) { sfx('error'); toast(`Planned ${laid} tile${laid === 1 ? '' : 's'} before running short: ${why}`, 'warn'); }
-  else { sfx('place'); toast((laid ? `Planned ${laid} road tile${laid === 1 ? '' : 's'}: free workers will pave them.` : '') + (ramps ? ` ${ramps} Ramp site${ramps === 1 ? '' : 's'} started.` : '') + wallText + (removed ? ` Took up ${removed} tile${removed === 1 ? '' : 's'}.` : ''), 'info'); }
+  else { sfx('place'); haptic('order'); toast((laid ? `Planned ${laid} road tile${laid === 1 ? '' : 's'}: free workers will pave them.` : '') + (ramps ? ` ${ramps} Ramp site${ramps === 1 ? '' : 's'} started.` : '') + wallText + (removed ? ` Took up ${removed} tile${removed === 1 ? '' : 's'}.` : ''), 'info'); }
   if (wallWhy) toast(`Some of the wall couldn't go up: ${wallWhy}`, 'warn');
   if (rampWhy) toast(`A Ramp couldn't be planned: ${rampWhy} The road or track there won't climb the cliff until one is.`, 'warn');
   if (rails || railsUp) toast(`${rails ? `Planned ${rails} tile${rails === 1 ? '' : 's'} of track.` : ''}${railsUp ? ` Took up ${railsUp} tile${railsUp === 1 ? '' : 's'} of track.` : ''}`, 'info');
@@ -5503,7 +5509,7 @@ function refreshRoadLink(b) {
     <button class="btn primary" id="sh-layroad" ${can ? '' : 'disabled'}>Lay road: ${route.length} tile${route.length === 1 ? '' : 's'}, ${costText(route.goods)}</button>
     ${can ? '' : `<span class="err">Not enough ${short.join(' or ')}${short.includes('Cement') ? ': build a Cement Works' : ''}.</span>`}</div>`;
   $('sh-layroad').onclick = () => act('layRoad', [b.id], ({ laid, why }) => {
-    if (why) { sfx('error'); toast(why, 'warn'); } else { sfx('place'); toast(`Planned ${laid} road tile${laid === 1 ? '' : 's'}: free workers will pave them.`, 'info'); }
+    if (why) { sfx('error'); toast(why, 'warn'); } else { sfx('place'); haptic('order'); toast(`Planned ${laid} road tile${laid === 1 ? '' : 's'}: free workers will pave them.`, 'info'); }
     el.dataset.key = '';
     refreshSheet();
   });
@@ -6512,7 +6518,7 @@ function armyTap(cmd, i, j, b) {
       const name = BOTS[foe.type].name;
       act('hunt', [foe.id, armyWant()], (res) => {
         if (!res.sent) return fail('No armed warbots can get there: they need Ammo, and a way to walk there.');
-        sfx('order'); showArmyCmdBanner(`${res.sent} warbot${res.sent > 1 ? 's are' : ' is'} going after the rival's ${name}.`);
+        sfx('order'); haptic('order'); showArmyCmdBanner(`${res.sent} warbot${res.sent > 1 ? 's are' : ' is'} going after the rival's ${name}.`);
       });
       return;
     }
@@ -6520,7 +6526,7 @@ function armyTap(cmd, i, j, b) {
     const name = BDEFS[b.type].name;
     act('assault', [b.id, armyWant()], (sent) => {
       if (!sent) return fail('No armed warbots can get there: they need Ammo, and a way to walk there.');
-      sfx('order'); showArmyCmdBanner(`${sent} warbot${sent > 1 ? 's are' : ' is'} going for the ${name}.`);
+      sfx('order'); haptic('order'); showArmyCmdBanner(`${sent} warbot${sent > 1 ? 's are' : ' is'} going for the ${name}.`);
     });
     return;
   }
@@ -6528,7 +6534,7 @@ function armyTap(cmd, i, j, b) {
     if (b || !inMap(i, j) || !walkable(tIdx(i, j))) return fail('Tap open ground your warbots can walk to.');
     act('rally', [i, j, armyWant()], (res) => {
       if (!res.sent) return fail('No spare armed warbots can get there.');
-      sfx('order'); showArmyCmdBanner(`${res.sent} warbot${res.sent > 1 ? 's are' : ' is'} on the way to hold it.`);
+      sfx('order'); haptic('order'); showArmyCmdBanner(`${res.sent} warbot${res.sent > 1 ? 's are' : ' is'} on the way to hold it.`);
     });
     return;
   }
@@ -6537,7 +6543,7 @@ function armyTap(cmd, i, j, b) {
     const name = BDEFS[b.type].name;
     act('station', [b.id, armyWant()], (n) => {
       if (!n) return fail(!b.dead && garrisonRoom(b) ? 'No spare warbots to send there.' : `The ${name} is full.`);
-      sfx('order'); showArmyCmdBanner(`${n} warbot${n > 1 ? 's are' : ' is'} moving into the ${name}.`);
+      sfx('order'); haptic('order'); showArmyCmdBanner(`${n} warbot${n > 1 ? 's are' : ' is'} moving into the ${name}.`);
     });
   }
 }
@@ -7134,6 +7140,7 @@ function uiTick(dt) {
     toast(m.text, m.kind, m.x, m.y);
     if ((m.kind === 'bad' || m.kind === 'warn' || m.kind === 'lost') && (m.x || m.y)) UI.lastAlert = { x: m.x, y: m.y };
     if (m.kind === 'lost') sfx('alert');
+    if (m.kind === 'bad' || m.kind === 'warn' || m.kind === 'lost') haptic(m.kind === 'warn' ? 'warn' : 'bad'); // (a short buzz under a finger: input.js)
   }
   updateMapTip();
   UI.hudT -= dt;
