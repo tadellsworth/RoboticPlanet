@@ -109,7 +109,7 @@
   </nav>
 </div>
 
-<div id="screen-menu" class="screen">
+<div id="screen-menu" class="screen" role="dialog" aria-modal="true" aria-label="Terrafall: main menu" tabindex="-1">
   <div class="card menu-card" id="menu-card">
     <!-- Home: what shows on load. -->
     <div class="m-home" id="m-home">
@@ -256,7 +256,7 @@
 </div>
 
 <!-- Multiplayer: host or join a game by its room code, then the lobby (see the Multiplayer section of ui.js). -->
-<div id="screen-mp" class="screen" hidden>
+<div id="screen-mp" class="screen" tabindex="-1" hidden>
   <div class="card mp-card" role="dialog" aria-labelledby="mp-title">
     <header class="mp-head">
       <button type="button" id="mp-back" class="btn small ghost m-back" aria-label="Back to the main menu">
@@ -297,7 +297,7 @@
   </div>
 </div>
 
-<div id="screen-pause" class="screen" hidden>
+<div id="screen-pause" class="screen" role="dialog" aria-modal="true" aria-labelledby="p-title" tabindex="-1" hidden>
   <div class="card">
     <h2 id="p-title">Paused</h2>
     <button id="p-resume" class="btn primary big">Resume</button>
@@ -320,7 +320,7 @@
   </div>
 </div>
 
-<div id="screen-boost" class="screen" hidden>
+<div id="screen-boost" class="screen" role="dialog" aria-modal="true" aria-label="Boosts" tabindex="-1" hidden>
   <div class="card">
     <h2>Boosts</h2>
     <p class="mode-desc">Give yourself or a rival a hand: everything lands at the Command Base. Below, you can stop the rivals making a kind of unit.</p>
@@ -330,7 +330,7 @@
   </div>
 </div>
 
-<div id="screen-missions" class="screen" hidden>
+<div id="screen-missions" class="screen" role="dialog" aria-modal="true" aria-label="Missions" tabindex="-1" hidden>
   <div class="card help-card missions-card">
     <div class="stats-head"><h2>Missions</h2><button id="ms-close" class="btn small">Back</button></div>
     <div class="help-body" id="ms-body"></div>
@@ -338,14 +338,14 @@
   </div>
 </div>
 
-<div id="screen-stats" class="screen" hidden>
+<div id="screen-stats" class="screen" role="dialog" aria-modal="true" aria-label="Statistics" tabindex="-1" hidden>
   <div class="card help-card stats-card">
     <div class="stats-head"><h2>Statistics</h2><button id="st-close" class="btn small">Close</button></div>
     <div class="help-body" id="st-body"></div>
   </div>
 </div>
 
-<div id="screen-help" class="screen" hidden>
+<div id="screen-help" class="screen" role="dialog" aria-modal="true" aria-label="How to play" tabindex="-1" hidden>
   <div class="card help-card">
     <h2>How to play</h2>
     <div class="help-body">
@@ -824,7 +824,7 @@
           <li><b>Top bar</b>: your goods (tap one for Goods), the robot counter (tap for Your robots), the clock, the speed (<b>1×</b>), full screen and the pause menu.</li>
           <li>The <b>Goal</b> chip under it: your first steps in free play (then your next Colony milestone or the capture goal), or a mission's goals. A red line warns of buildings with no road: tap the building and choose <b>Lay road</b> on its panel. Tap the chip to fold it away (on a phone it folds by itself at your first tap on the map, and opens again for each new step). Event, nuke and victory cards appear under it too.</li>
           <li><b>Messages</b> pop up under the top bar and stay longer the longer they are; taps go through them to the map. One about a place has a <b>Go</b> button to go there (or press <kbd>J</kbd> for the latest warning). The button beside the folded Goal chip lists the last 20.</li>
-          <li>The <b>minimap</b>: tap or drag on it to move the view. Land is tinted by owner, buildings are squares (Command Bases bigger), Trade Posts gold diamonds, Uplinks ringed dots and nests red, and buildings under attack flash. Hide it with × (on a touch screen a tab hanging under it); the map chip (or <kbd>M</kbd>) brings it back.</li>
+          <li>The <b>minimap</b>: tap or drag on it to move the view. Land is tinted by owner, buildings are squares (Command Bases bigger), Trade Posts gold diamonds, Uplinks ringed dots and nests red, warbots small dots in a pale shade of their colony's colour, and buildings under attack flash. Hide it with × (on a touch screen a tab hanging under it); the map chip (or <kbd>M</kbd>) brings it back.</li>
           <li><b>Bottom bar</b>: <b>Build</b>, <b>Paths</b>, <b>Army</b> and <b>Base</b> (back to your Command Base). On a phone held on its side they run down the left edge, panels open down the right, and only the newest message shows (bottom right).</li>
           <li>In free play the <b>Build</b> list pins the building your next step asks for at the top. A building with no road to storage has <b>Lay road</b> at the top of its panel.</li>
           <li>Tap anything for its <b>panel</b>: what it's doing, and the buttons for it. Tap the same spot again to step to the next thing piled there (a Crawler parked on a Foundry, say). On a phone a panel opens at half height with what it's about in view above it: drag its <b>handle</b> up for the whole panel or down to its title strip (further down closes it), or tap the handle.</li>
@@ -867,7 +867,7 @@
         </ul>
         <p><b>Speed.</b> Tap <b>1×</b> in the top bar (or press <kbd>[</kbd> <kbd>]</kbd>): 0.75× or 0.875× for a calmer game, 2× or 3× when you're waiting on something. Every game starts (or continues) at 1×, and multiplayer has no speed control.</p>
         <p><b>The pause menu</b> (<kbd>Space</kbd>, or the button top right): Resume, Music and Effects volume, Full screen, Weather, Time of day, Statistics, Save this planet, Download save file, How to play, and Save &amp; quit to menu, with when the game last saved.</p>
-        <p><b>Saving.</b> The game saves itself every 20 seconds and whenever you leave the tab, and <b>Continue</b> on the main menu picks it up. There's one save: starting a new game or mission replaces it. Saves stay on this device: <b>Download save file</b> in the pause menu, then <b>Load a save file</b> on the other device's main menu, carries a game across. Multiplayer games aren't saved for Continue.</p>
+        <p><b>Saving.</b> The game saves itself every 20 seconds and whenever you leave the tab, and <b>Continue</b> on the main menu picks it up. There's one save: starting a new game or mission replaces it. Saves stay on this device: <b>Download save file</b> in the pause menu, then <b>Load a save file</b> on the other device's main menu, carries a game across (a file that is damaged, or from a version this one can't read, is turned away and your own save stays as it was). Multiplayer games aren't saved for Continue.</p>
         <p><b>The main menu.</b> <b>Play</b> starts a game with your last settings (summed up beneath it) and <b>Custom Game</b> changes them; there's also <b>Continue</b>, <b>Multiplayer</b>, <b>Missions</b>, <b>Load a save file</b> and <b>How to play</b>. Your settings are remembered on this device.</p>
         <p><b>Sound.</b> The music is a synthwave score made live as you play: a calm groove while you build (three take turns, a new one every ten minutes), a driving track when you're under attack or at war, an alarm while a nuclear missile is in the air, and an air raid siren while enemy bombers come for you. Zoomed in, you hear what's on screen: traffic, welding, fresh concrete, truck air brakes and horns in jams. Beneath it all runs <b>ambient sound</b> that grows with your colony: a city murmur, factory hum, trains, aircraft, the sea, lava, the wind and wildlife calls of each biome, and crickets on warm nights. Explosions are heard from where they are: close up they crack and thump, off screen they rumble in the distance, bombs whistle as they fall and missiles roar in. Set <b>Music</b> and <b>Effects</b> in the pause menu.</p>
         <p><b>Time of day.</b> <b>Cycle</b> turns the planet every 12 minutes, from a golden morning through the day and an orange evening to night, when buildings glow, streetlights come on and vehicles drive with headlights; or keep it <b>Always day</b> or <b>Always night</b>. It's only for looks. The clock shows a sun or a moon (in Colony, beside your share of the land). Set it in the pause menu or the new-game Rules; it's kept on this device.</p>
@@ -876,11 +876,12 @@
         <a class="help-top" href="#hs-top" data-jump="hs-top">Back to top</a>
       </section>
     </div>
+    <a id="h-manual" class="btn big ghost" href="how-to-play.html" target="_blank" rel="noopener">Open the illustrated manual</a>
     <button id="h-close" class="btn primary big">Got it</button>
   </div>
 </div>
 
-<div id="screen-over" class="screen" hidden>
+<div id="screen-over" class="screen" role="dialog" aria-modal="true" aria-labelledby="o-title" tabindex="-1" hidden>
   <div class="card">
     <h2 id="o-title">Victory</h2>
     <p id="o-text"></p>

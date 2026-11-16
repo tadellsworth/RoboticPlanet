@@ -3883,9 +3883,70 @@ function serializeGame() {
   return JSON.stringify(o);
 }
 
+/** Is k one of table's own entries? (A save's type "constructor" is not a building.) */
+function ownKey(table, k) { return typeof k === 'string' && Object.prototype.hasOwnProperty.call(table, k); }
+
+/*
+ * A save is untrusted: people pass save files around, and one may be damaged, hand-edited or from a newer
+ * version (and a multiplayer catch-up comes from another device). checkSave throws on one this version
+ * can't run, before anything is loaded: unknown building, robot, good, biome, map type, mission or event,
+ * map layers of the wrong size, owners or places off the map. And no text in a save may hold < > or ":
+ * the game never writes them (statuses are plain sentences, names are letters and digits), and the panels
+ * show what a save holds as HTML, so a file carrying markup would run it the moment it loaded.
+ */
+function checkSave(o) {
+  const bad = () => { throw new Error('Unsupported save'); };
+  const obj = (v) => !!v && typeof v === 'object' && !Array.isArray(v);
+  if (!obj(o) || o.v !== 1) bad();
+  if (!Number.isInteger(o.W) || !Number.isInteger(o.H) || o.W < 1 || o.H < 1 || o.W * o.H > 1e6) bad();
+  if (o.mode != null && o.mode !== 'versus' && o.mode !== 'colony') bad();
+  for (const k in TYPED_FIELDS) if (o[k] != null && (!Array.isArray(o[k]) || o[k].length !== o.W * o.H)) bad();
+  if (!Array.isArray(o.players) || !o.players.length || o.players.length > PLAYER_COLORS.length || !Array.isArray(o.buildings) || !Array.isArray(o.bots)) bad();
+  const owner = (p) => p === -1 || (Number.isInteger(p) && !!o.players[p]);
+  for (const P of o.players) if (!obj(P) || !obj(P.stats) || (P.research && !(obj(P.research) && ownKey(TECHS, P.research.key)))) bad();
+  const deal = (f) => { if (!obj(f) || !ownKey(GOOD, f.give) || !ownKey(GOOD, f.get)) bad(); };
+  for (const P of o.players) if (P.trade != null) { if (!obj(P.trade) || !Array.isArray(P.trade.offers)) bad(); P.trade.offers.forEach(deal); }
+  for (const b of o.buildings) {
+    if (!obj(b) || !ownKey(BDEFS, b.type) || !owner(b.owner) || !Number.isInteger(b.x) || !Number.isInteger(b.y) || b.x < 0 || b.y < 0 || b.x >= o.W || b.y >= o.H) bad();
+    for (const c of ['stock', 'inc']) if (b[c] != null) { if (!obj(b[c])) bad(); for (const g in b[c]) if (!ownKey(GOOD, g)) bad(); }
+  }
+  for (const u of o.bots) if (!obj(u) || !ownKey(BOTS, u.type) || !owner(u.owner) || !Number.isFinite(u.x) || !Number.isFinite(u.y) || (u.carry != null && !ownKey(GOOD, u.carry))) bad();
+  if (o.settings != null) {
+    const st = o.settings;
+    if (!obj(st) || (st.biome != null && !ownKey(BIOMES, st.biome)) || (st.shape != null && !(Number.isInteger(st.shape) && st.shape >= 0 && st.shape < SHAPE_PRESETS.length))) bad();
+  }
+  if (o.mission) {
+    const M = o.mission;
+    if (!obj(M) || ![0, 1, 2].includes(M.diff)) bad();
+    if (typeof MISSIONS !== 'undefined' && !(MISSIONS.some((m) => m.id === M.id) || (Number.isInteger(M.k) && MISSIONS[M.k]))) bad();
+  }
+  if (o.event) {
+    const E = o.event;
+    if (!obj(E) || !ownKey(EVENTS, E.type) || (E.offers != null && !obj(E.offers))) bad();
+    for (const p in E.offers || {}) deal(E.offers[p]);
+  }
+  // No markup anywhere (the map layers are numbers, whatever they hold). A name with markup in it is refused (the game's
+  // own names never have any); in text (a message, a status, a player's name) <, > and " are swapped for look-alikes
+  // that can't make markup, so a crafted file can't run script while a line of the game's own with a stray " in it
+  // still loads, here and in a multiplayer catch-up.
+  const MARK = /[<>"]/, unmark = (t) => t.replace(/</g, '‹').replace(/>/g, '›').replace(/"/g, '”');
+  const text = (v) => {
+    if (!v || typeof v !== 'object') return;
+    for (const k in v) {
+      if (MARK.test(k)) bad();
+      if (typeof v[k] === 'string') { if (MARK.test(v[k])) v[k] = unmark(v[k]); } else text(v[k]);
+    }
+  };
+  for (const k in o) {
+    if (MARK.test(k)) bad();
+    if (TYPED_FIELDS[k]) continue;
+    if (typeof o[k] === 'string') { if (MARK.test(o[k])) o[k] = unmark(o[k]); } else text(o[k]);
+  }
+}
+
 function deserializeGame(json) {
   const o = JSON.parse(json);
-  if (!o || o.v !== 1) throw new Error('Unsupported save');
+  checkSave(o);
   // Saves from before resources were lowered a notch: the setting that matches the map they were made with.
   if (o.settings && !o.settings.resV) { o.settings.rich = resLevelUp(o.settings.rich); o.settings.resV = RES_V; }
   // Saves from before elevation existed load as flat maps.
@@ -3942,21 +4003,25 @@ function deserializeGame(json) {
   o.missiles = o.missiles || [];
   o.bAt = new Int32Array(o.W * o.H);
   o.byId = new Map();
+  // The rest works on S. A save that fails part-way leaves the game that was running as it was.
+  const prev = S;
   S = o;
-  for (const b of S.buildings) {
-    S.byId.set(b.id, b);
-    S.bAt[tIdx(b.x, b.y)] = b.id;
-    if (b.type === 'foundry' && !S.players[b.owner].ai) b.mode = 'off'; // older saves: build on order only
-  }
-  for (const u of S.bots) {
-    S.byId.set(u.id, u);
-    if (u.type === 'warbot') u.ammo = u.ammo === undefined ? WARBOT_AMMO : Math.min(u.ammo, WARBOT_AMMO); // older saves carried more
-    u.carryN = u.carry ? u.carryN || 1 : 0;
-  }
-  computeZones();
-  if (oldWays) wayOwnersFromLand();
-  if (!S.posts) { placePosts(S.seed); for (const p of S.posts) if (S.decor) S.decor[tIdx(p.x, p.y)] = 0; } // saves from before Trade Posts
-  computeTerritory(); // land as it's worked out now (every building holds a little round it)
+  try {
+    for (const b of S.buildings) {
+      S.byId.set(b.id, b);
+      S.bAt[tIdx(b.x, b.y)] = b.id;
+      if (b.type === 'foundry' && !S.players[b.owner].ai) b.mode = 'off'; // older saves: build on order only
+    }
+    for (const u of S.bots) {
+      S.byId.set(u.id, u);
+      if (u.type === 'warbot') u.ammo = u.ammo === undefined ? WARBOT_AMMO : Math.min(u.ammo, WARBOT_AMMO); // older saves carried more
+      u.carryN = u.carry ? u.carryN || 1 : 0;
+    }
+    computeZones();
+    if (oldWays) wayOwnersFromLand();
+    if (!S.posts) { placePosts(S.seed); for (const p of S.posts) if (S.decor) S.decor[tIdx(p.x, p.y)] = 0; } // saves from before Trade Posts
+    computeTerritory(); // land as it's worked out now (every building holds a little round it)
+  } catch (e) { S = prev; throw e; }
   // Unit types switched off for now (BOTS_OFF) leave the game.
   const off = dropOffBots();
   if (off) postMsg(ME, `${[...BOTS_OFF].map((k) => BOTS[k].plural).join(' and ')} are switched off for now: ${off} left this game.`, undefined, undefined, 'info');

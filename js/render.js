@@ -8,6 +8,9 @@
  */
 
 const TP = 32; // baked map pixels per tile
+const NO_DASH = [];
+/** The device's "reduce motion" setting (null where it can't be asked). */
+const LESS_MOTION = typeof matchMedia === 'function' ? matchMedia('(prefers-reduced-motion: reduce)') : null;
 
 const R = {
   canvas: null, ctx: null, dpr: 1, w: 0, h: 0,
@@ -222,7 +225,20 @@ function adjustArt(art, adj) {
 /* ------------------------------------------------------------------ custom art */
 
 const ART = {};
-let artLoaded = 0;
+let artLoaded = 0, artTotal = 0, artFailed = 0, artBakedLeft = 0;
+
+/** How many art images are still on their way. */
+function artPending() { return artTotal - artLoaded - artFailed; }
+/** How much of the art the map is baked from (bakedArt) is still on its way: it's asked for first, and the map is baked when it's in. */
+function bakedArtPending() { return artBakedLeft; }
+
+/**
+ * Art the baked map is drawn from (ground, water, rock, cliffs, lava and canyons and their night glow, plants,
+ * resources, the pieces of bridges and track): only these arriving call for the map to be baked again.
+ */
+function bakedArt(key) {
+  return /^((ground|water|rock|cliff|chasm|lava)(-|$)|plant-|bridge-|skybridge-|railbridge-|rail-)/.test(key) || Object.values(RES).some((r) => r.key === key);
+}
 
 /*
  * The newer biomes' art (ground, water, rock, cliff, plants, glow and canyon art) loads only when it's
@@ -256,19 +272,34 @@ function ensureBiomeArt(b) {
 function loadArt(onChange) {
   if (typeof ART_MANIFEST !== 'object') return;
   R.artChange = onChange;
-  for (const key in ART_MANIFEST) {
+  // (What the map is baked from goes first, so the map can be baked once, early, while the rest is still coming.)
+  for (const key of Object.keys(ART_MANIFEST).sort((a, b) => bakedArt(b) - bakedArt(a))) {
     if (lazyBiomeOf(key)) continue; // (see ensureBiomeArt)
     loadArtKey(key, typeof ART_MANIFEST[key] === 'string' ? { src: ART_MANIFEST[key] } : ART_MANIFEST[key]);
   }
 }
 
+/** Load an image, then ok(img). A download that fails is tried once more a moment later; then fail(), if given. */
+function loadImg(src, ok, fail) {
+  const img = new Image();
+  let again = !/^data:/.test(src);
+  img.onload = () => ok(img);
+  img.onerror = () => {
+    if (again) { again = false; setTimeout(() => { img.src = src; }, 2000); }
+    else if (fail) fail();
+  };
+  img.src = src;
+}
+
 function loadArtKey(key, entry) {
-  const onChange = R.artChange;
+  const onChange = R.artChange, baked = bakedArt(key);
+  artTotal++;
+  if (baked) artBakedLeft++;
   {
-    const img = new Image();
-    img.onload = () => {
+    loadImg(/^(data:|https?:)/.test(entry.src) ? entry.src : 'art/' + entry.src, (img) => {
       ART[key] = { img, scale: entry.scale || 0, anchor: entry.anchor || '', shadow: !!entry.shadow, key, frames: entry.frames || 0, cols: entry.cols || 0 };
       artLoaded++;
+      if (baked) artBakedLeft--;
       // The third and fourth teams (green, purple) get the rival's red art recoloured, made the first
       // time it's asked for.
       if (key.includes('@1')) {
@@ -283,9 +314,7 @@ function loadArtKey(key, entry) {
       }
       if (key.startsWith('icon-')) applyGoodIcons();
       if (onChange) onChange(key);
-    };
-    img.onerror = () => console.warn('Terrafall: could not load art for', key, entry.src);
-    img.src = /^(data:|https?:)/.test(entry.src) ? entry.src : 'art/' + entry.src;
+    }, () => { artFailed++; if (baked) artBakedLeft--; console.warn('Terrafall: could not load art for', key, entry.src); });
   }
 }
 
@@ -384,17 +413,27 @@ function turretHead(owner, aim, type) {
  * its size) on (cx, cy).
  */
 function drawArt(ctx, art, cx, cy, sizePx, angle) {
-  // Morning, evening or night: the re-lit version of the art, fading into the next time's.
+  // Morning, evening or night: the re-lit version of the art, fading into the next time's. Whichever of the two
+  // is nearer is drawn whole and the other faded over it (the old one whole for the first half of the change,
+  // the new one for the second), so the see-through parts of a sprite, its soft shadow above all, keep their
+  // weight right through. (The old one whole all the way made the two shadows add up as the new one faded in,
+  // then snap back to one when the change ended.)
+  if (art && !R.inMap) artSeen(art);
   if (TOD.active && !R.inMap && art) {
-    const st = TOD.state, A = todVariant(art, st.a);
-    drawArtRaw(ctx, A, cx, cy, sizePx, angle);
-    if (st.f > 0.002 && st.b !== st.a) {
-      const B = todVariant(art, st.b), ga = ctx.globalAlpha;
-      if (B !== A) { ctx.globalAlpha = ga * st.f; drawArtRaw(ctx, B, cx, cy, sizePx, angle); ctx.globalAlpha = ga; }
-    }
+    const st = TOD.state, A = todVariant(art, st.a), B = st.f > 0.002 && st.b !== st.a ? todVariant(art, st.b) : A;
+    if (B === A) { drawArtRaw(ctx, A, cx, cy, sizePx, angle); return; }
+    const late = st.f >= 0.5, over = late ? 1 - st.f : st.f, ga = ctx.globalAlpha;
+    drawArtRaw(ctx, late ? B : A, cx, cy, sizePx, angle);
+    if (over > 0.002) { ctx.globalAlpha = ga * over; drawArtRaw(ctx, late ? A : B, cx, cy, sizePx, angle); ctx.globalAlpha = ga; }
     return;
   }
   drawArtRaw(ctx, art, cx, cy, sizePx, angle);
+}
+
+/** Note that `art` is being drawn now: what has been on screen lately gets its next time-of-day version ready ahead (todWarm). */
+function artSeen(art) {
+  if (art.seen === undefined) (R.artSeen || (R.artSeen = [])).push(art);
+  art.seen = R.time;
 }
 
 /**
@@ -403,16 +442,17 @@ function drawArt(ctx, art, cx, cy, sizePx, angle) {
  * (or a graded copy), and again the next time's at its share while the light changes.
  */
 function withTod(ctx, art, draw) {
+  if (art && !R.inMap) artSeen(art);
   if (!TOD.active || R.inMap || !art) { draw(art); return; }
-  const st = TOD.state, A = todVariant(art, st.a);
-  draw(A);
-  if (st.f > 0.002 && st.b !== st.a) {
-    const B = todVariant(art, st.b);
-    if (B !== A) { const ga = ctx.globalAlpha; ctx.globalAlpha = ga * st.f; draw(B); ctx.globalAlpha = ga; }
-  }
+  const st = TOD.state, A = todVariant(art, st.a), B = st.f > 0.002 && st.b !== st.a ? todVariant(art, st.b) : A;
+  if (B === A) { draw(A); return; }
+  const late = st.f >= 0.5, over = late ? 1 - st.f : st.f, ga = ctx.globalAlpha; // (as in drawArt)
+  draw(late ? B : A);
+  if (over > 0.002) { ctx.globalAlpha = ga * over; draw(late ? A : B); ctx.globalAlpha = ga; }
 }
 
 function drawArtRaw(ctx, art, cx, cy, sizePx, angle) {
+  if (!art) return; // (an image that failed to load: nothing, rather than a frame that throws)
   const s = sizePx * (art.scale || 1);
   const img = artMip(art, s * (R.drawScale || 1));
   if (Array.isArray(art.anchor) && !angle) {
@@ -468,7 +508,8 @@ function initRender(canvas) {
 
 // Drawing resolution. Retina screens draw at up to 2x, but never more than R.budget pixels (about a
 // 4K screen's worth): a 5K iMac at 2x would be 15 million pixels a frame, four times the work, and
-// drop to a few frames a second. If frames still come slowly, watchFrameRate lowers the budget.
+// drop to a few frames a second. If frames still come slowly, watchFrameRate lowers the budget (and
+// raises it again when there's room).
 const RENDER_BUDGET = 8.3e6;
 
 function resizeRender() {
@@ -484,24 +525,47 @@ function resizeRender() {
   R.canvas.style.width = R.w + 'px';
   R.canvas.style.height = R.h + 'px';
   if (S) clampCam();
+  layoutMinimap(); // (it's drawn at the same resolution: sized again whenever that changes)
 }
 
 /**
- * Called every frame with the milliseconds since the last one. If the game runs below about 45
- * frames a second for a couple of seconds while drawing at more than 1x, draw at a lower
- * resolution (never below 1x; the buttons and text stay sharp, they aren't on the canvas).
+ * Called every frame with the milliseconds since the last one. If the game runs below about 45 frames a
+ * second for a couple of seconds while drawing at more than 1x, and drawing is what's slow, draw at a lower
+ * resolution (never below 1x; the buttons and text stay sharp, they aren't on the canvas); when frames come
+ * easily again, go back up a step at a time.
+ *
+ * What's slow: render adds up how long each frame spent drawing (fw.draw) and doing everything before it,
+ * the simulation mostly (fw.other). Frames that come at a steady beat with little of it spent working are
+ * being held there by the screen or a power-saving mode (an iPhone in Low Power Mode draws 30 a second), and
+ * a game at 3× speed is slow in its simulation: a smaller picture helps neither, so those are left alone.
+ * A step back up that has to be undone straight away waits twice as long before it's tried again.
  */
 function watchFrameRate(ms) {
-  const fw = R.fw || (R.fw = { n: 0, sum: 0 });
-  if (ms > 250 || document.hidden) { fw.n = 0; fw.sum = 0; return; }
-  fw.n++; fw.sum += ms;
+  const fw = R.fw || (R.fw = { n: 0, sum: 0, sq: 0, draw: 0, other: 0, t0: 0, good: 0, wait: 5, upAt: -9 });
+  if (ms > 250 || document.hidden) { fw.n = fw.sum = fw.sq = fw.draw = fw.other = fw.t0 = 0; return; }
+  fw.t0 = performance.now();
+  fw.n++; fw.sum += ms; fw.sq += ms * ms;
   if (fw.n < 120) return;
-  const avg = fw.sum / fw.n;
-  fw.n = 0; fw.sum = 0;
-  if (avg > 22 && R.dpr > 1.05) {
-    R.budget = Math.max(R.w * R.h, R.w * R.h * R.dpr * R.dpr * 0.6);
+  const avg = fw.sum / fw.n, dev = Math.sqrt(Math.max(0, fw.sq / fw.n - avg * avg)), draw = fw.draw / fw.n, other = fw.other / fw.n;
+  fw.n = fw.sum = fw.sq = fw.draw = fw.other = 0;
+  fw.win = (fw.win || 0) + 1;
+  const held = dev < 1.5 && draw + other < avg * 0.5; // a steady beat the game isn't filling
+  const simBound = other > avg * 0.5 && draw < avg * 0.25;
+  if (avg > 22 && !held && !simBound) {
+    fw.good = 0;
+    if (R.dpr > 1.05) {
+      if (fw.win - fw.upAt <= 3) fw.wait = Math.min(80, fw.wait * 2); // (the last step up was too much)
+      R.budget = Math.max(R.w * R.h, R.w * R.h * R.dpr * R.dpr * 0.6);
+      resizeRender();
+    }
+  } else if (R.budget && (avg < 19 || held) && draw * 1.7 < 11) {
+    // Room to spare: after `wait` such stretches in a row (ten seconds' worth at first), a step back up.
+    if (++fw.good < fw.wait) return;
+    fw.good = 0; fw.upAt = fw.win;
+    R.budget = R.budget / 0.6;
+    if (R.budget >= RENDER_BUDGET || Math.sqrt(R.budget / Math.max(1, R.w * R.h)) >= Math.min(2, window.devicePixelRatio || 1)) R.budget = 0;
     resizeRender();
-  }
+  } else fw.good = 0;
 }
 
 function minZoom() { return Math.max(8, Math.min(R.w / (S.W + 2), R.h / (S.H + 2))); }
@@ -537,7 +601,9 @@ function bakeMap() {
   R.levelOffset = maxElev === 0 ? 1 : 0;
   R.skyFloor = !!(S.settings && SHAPE_PRESETS[S.settings.shape || 0] && SHAPE_PRESETS[S.settings.shape || 0].sky);
   applyBiome();
-  R.map = document.createElement('canvas');
+  // The same canvases are used again (sizing one empties it): a new one for every bake left the last whole-map
+  // image, tens of megabytes of it, waiting to be collected, and a phone has only so much canvas memory.
+  if (!R.map) R.map = document.createElement('canvas');
   R.map.width = S.W * TP;
   R.map.height = S.H * TP;
   R.mapCtx = R.map.getContext('2d');
@@ -546,7 +612,7 @@ function bakeMap() {
   for (let j = 0; j < S.H; j++) for (let i = 0; i < S.W; i++) drawTile(i, j);
   drawPlants(R.mapCtx, 0, 0, S.W - 1, S.H - 1);
   bakeGlow();
-  R.terr = document.createElement('canvas');
+  if (!R.terr) R.terr = document.createElement('canvas');
   R.terr.width = S.W; R.terr.height = S.H;
   R.terrCtx = R.terr.getContext('2d');
   R.terrVer = -1;
@@ -593,18 +659,19 @@ function redrawAround(ctx, i, j) {
  */
 const GLOW_PX = 16;
 function bakeGlow() {
+  const old = R.glowMap && R.glowMap.c;
   R.glowMap = null;
   const b = R.biome;
   let any = !!(ART['ground-glow-' + b] || ART['water-glow-' + b]);
   for (let k = 1; k <= PLANT_KINDS && !any; k++) if (ART[`plant-${b}-${k}-glow`]) any = true;
-  if (!any) return;
-  const c = document.createElement('canvas');
+  if (!any) { if (old) old.width = old.height = 0; return; }
+  const c = old || document.createElement('canvas'); // (used again, as bakeMap's are)
   c.width = S.W * GLOW_PX; c.height = S.H * GLOW_PX;
   const ctx = c.getContext('2d'), k = GLOW_PX / TP;
   ctx.setTransform(k, 0, 0, k, 0, 0);
   ctx.hdScale = k;
   R.glowMap = { c, ctx };
-  glowTiles(ME, 0, S.W - 1, S.H - 1);
+  glowTiles(0, 0, S.W - 1, S.H - 1);
 }
 
 /** Redraw the night glow of tiles i0..i1 × j0..j1 (ground, water, and any plant's glow reaching them). */
@@ -669,7 +736,8 @@ function drawPlants(ctx, i0, j0, i1, j1, glow) {
 // plants stay sharp instead of being stretched. Chunks are made a few at a time, nearest the middle
 // of the screen first, and the least recently seen are dropped to keep memory in check.
 const HD_CHUNK = 8;      // tiles along each side of a chunk
-const HD_SPARE = 10e6;   // pixels of off-screen chunks kept for when you pan back
+const HD_SPARE = 10e6;   // pixels of off-screen chunks kept for when you pan back (and never more than four screens' worth)
+const HD_TOTAL = 18e6;   // pixels of chunks in all: the off-screen ones give way to keep under it (what's on screen is always there)
 const HD_BAKE_MS = 6;    // baking time allowed per frame
 
 function hdReset() {
@@ -728,9 +796,8 @@ function drawOffMap(ctx, ox, oy, z) {
 
 function drawMapLayer(ctx, ox, oy, z) {
   ctx.imageSmoothingEnabled = true;
-  ctx.drawImage(R.map, ox, oy, S.W * z, S.H * z);
   const level = hdLevel(z);
-  if (!level) return;
+  if (!level) { ctx.drawImage(R.map, ox, oy, S.W * z, S.H * z); return; }
   if (!R.hd) hdReset();
   const hd = R.hd, C = HD_CHUNK, d = R.dpr;
   hd.frame++;
@@ -738,10 +805,10 @@ function drawMapLayer(ctx, ox, oy, z) {
   const nx = Math.ceil(S.W / C), ny = Math.ceil(S.H / C);
   const cx0 = Math.floor(v0.x / C), cx1 = Math.floor(v1.x / C), cy0 = Math.floor(v0.y / C), cy1 = Math.floor(v1.y / C);
   const key = (lv, cx, cy) => (lv * 4096 + cy) * 4096 + cx;
+  // Snap to whole device pixels so neighbouring chunks meet without a seam.
+  const edge = (v) => Math.round(v * d) / d;
   const draw = (ch) => {
-    // Snap to whole device pixels so neighbouring chunks meet without a seam.
-    const x0 = Math.round((ox + ch.i0 * z) * d) / d, y0 = Math.round((oy + ch.j0 * z) * d) / d;
-    const x1 = Math.round((ox + (ch.i0 + C) * z) * d) / d, y1 = Math.round((oy + (ch.j0 + C) * z) * d) / d;
+    const x0 = edge(ox + ch.i0 * z), y0 = edge(oy + ch.j0 * z), x1 = edge(ox + (ch.i0 + C) * z), y1 = edge(oy + (ch.j0 + C) * z);
     ctx.drawImage(ch.c, x0, y0, x1 - x0, y1 - y0);
   };
   const todo = [], ring = [];
@@ -749,40 +816,49 @@ function drawMapLayer(ctx, ox, oy, z) {
     if (cx < 0 || cy < 0 || cx >= nx || cy >= ny) continue;
     const onScreen = cx >= cx0 && cx <= cx1 && cy >= cy0 && cy <= cy1;
     const ch = hd.chunks.get(key(level, cx, cy));
-    if (ch) { if (onScreen) { ch.used = hd.frame; draw(ch); } continue; }
+    if (ch) { if (onScreen) { ch.used = hd.frame; draw(ch); } else ch.used = hd.frame - 1; continue; }
     if (!onScreen) { ring.push([cx, cy]); continue; }
-    // Not made yet: show the other sharpness level meanwhile, if there is one.
+    // Not made yet: show the other sharpness level meanwhile, if there is one, or else that part of the
+    // whole-map bake. (The whole-map bake isn't drawn under chunks: they cover it.)
     const alt = hd.chunks.get(key(level === 64 ? 128 : 64, cx, cy));
     if (alt) { alt.used = hd.frame; draw(alt); }
-    todo.push([cx, cy]);
+    todo.push([cx, cy, !alt]);
   }
   const mx = R.cam.x / C - 0.5, my = R.cam.y / C - 0.5;
   const near = (a, b) => Math.hypot(a[0] - mx, a[1] - my) - Math.hypot(b[0] - mx, b[1] - my);
   todo.sort(near); ring.sort(near);
   const t0 = performance.now(), size = (C * level) ** 2;
-  for (const [cx, cy] of todo) {
-    if (performance.now() - t0 > HD_BAKE_MS) break;
+  for (const [cx, cy, bare] of todo) {
+    if (performance.now() - t0 > HD_BAKE_MS) {
+      if (!bare) continue;
+      const i0 = cx * C, j0 = cy * C, w = Math.min(C, S.W - i0), h = Math.min(C, S.H - j0);
+      const x0 = edge(ox + i0 * z), y0 = edge(oy + j0 * z);
+      ctx.drawImage(R.map, i0 * TP, j0 * TP, w * TP, h * TP, x0, y0, edge(ox + (i0 + w) * z) - x0, edge(oy + (j0 + h) * z) - y0);
+      continue;
+    }
     const ch = hdBake(level, cx, cy);
     ch.used = hd.frame;
     hd.chunks.set(key(level, cx, cy), ch);
     hd.px += size;
     draw(ch);
   }
+  // How much may be kept off screen: HD_SPARE, four screens' worth, or what's left under HD_TOTAL, whichever is least.
+  let on = 0, spare = 0;
+  for (const ch of hd.chunks.values()) { if (ch.used === hd.frame) on += ch.c.width * ch.c.height; else spare += ch.c.width * ch.c.height; }
+  const allow = Math.max(0, Math.min(HD_SPARE, 4 * R.canvas.width * R.canvas.height, HD_TOTAL - on));
   // Spare time: get the chunks just off screen ready for panning.
-  let spare = 0;
-  for (const ch of hd.chunks.values()) if (ch.used !== hd.frame) spare += ch.c.width * ch.c.height;
   for (const [cx, cy] of ring) {
-    if (performance.now() - t0 > HD_BAKE_MS || spare + size > HD_SPARE) break;
+    if (performance.now() - t0 > HD_BAKE_MS || spare + size > allow) break;
     const ch = hdBake(level, cx, cy);
     ch.used = hd.frame - 1;
     hd.chunks.set(key(level, cx, cy), ch);
     hd.px += size; spare += size;
   }
-  // Drop the least recently seen off-screen chunks beyond the allowance.
-  if (spare > HD_SPARE) {
-    const old = [...hd.chunks.entries()].filter(([, ch]) => ch.used < hd.frame - 1).sort((a, b) => a[1].used - b[1].used);
+  // Drop the least recently seen off-screen chunks beyond the allowance (those just off screen go last).
+  if (spare > allow) {
+    const old = [...hd.chunks.entries()].filter(([, ch]) => ch.used !== hd.frame).sort((a, b) => a[1].used - b[1].used);
     for (const [k, ch] of old) {
-      if (spare <= HD_SPARE) break;
+      if (spare <= allow) break;
       const px = ch.c.width * ch.c.height;
       spare -= px; hd.px -= px;
       ch.c.width = 0;
@@ -1325,9 +1401,10 @@ function drawRimLips(ctx, i, j, x, y, e) {
     const u = tIdx(i + di, j + dj);
     return S.terrain[u] === T_CHASM || (S.terrain[u] === T_GROUND && e - S.elev[u] >= 3);
   };
+  const lipW = canyonArt('chasm-lip-w'), lipE = canyonArt('chasm-lip-e'); // (each may be missing by itself: an image can fail to load)
   if (drop(0, -1)) drawTileArt(ctx, canyonArt('chasm-lip-n'), x, y, 0);
-  if (drop(-1, 0)) drawTileArt(ctx, canyonArt('chasm-lip-w'), x, y, 0);
-  if (drop(1, 0)) drawTileArt(ctx, canyonArt('chasm-lip-e'), x, y, 0);
+  if (lipW && drop(-1, 0)) drawTileArt(ctx, lipW, x, y, 0);
+  if (lipE && drop(1, 0)) drawTileArt(ctx, lipE, x, y, 0);
 }
 
 /** Cliff edges, shadows and slopes that show which level a ground tile is on. */
@@ -1852,7 +1929,7 @@ function drawViaductDeckArt(ctx, ox, oy, z, a, b, frac, building) {
     }
   }
   // Suspension towers by each end, cables between them, on spans of four deck tiles or more.
-  if (built === n - 1 && n - 1 >= 4 && !rail) {
+  if (built === n - 1 && n - 1 >= 4 && !rail && ART['skybridge-tower']) {
     const t1 = { x: X(2) + z / 2, y: Y(2) + z / 2, di: ew ? -1 : 0, dj: ew ? 0 : -1, L: n - 3, landed: true };
     const t2 = { x: X(n - 2) + z / 2, y: Y(n - 2) + z / 2, di: ew ? 1 : 0, dj: ew ? 0 : 1, L: n - 3, landed: true };
     if (!ew || di > 0) drawTowerArt(ctx, [t1, t2].sort((p, q) => p.y - q.y), z);
@@ -2038,7 +2115,7 @@ function drawCrossingGates(ctx, ox, oy, z, inView) {
     const i = t % S.W, j = (t / S.W) | 0;
     if (!inView(i, j, 2)) continue;
     const near = trainNear(t), x = ox + i * z, y = oy + j * z;
-    const art = ART[near ? 'rail-barrier-down' : 'rail-barrier-up'];
+    const art = (near && ART['rail-barrier-down']) || ART['rail-barrier-up'];
     ctx.save(); ctx.translate(x + z / 2, y + z / 2); ctx.rotate((q * Math.PI) / 2);
     withTod(ctx, art, (v) => ctx.drawImage(artMip(v, z * (R.drawScale || 1)), -z / 2, -z / 2, z, z));
     if (near && Math.sin(R.time * 9) > 0 && ART['rail-lights-on']) ctx.drawImage(artMip(ART['rail-lights-on'], z * (R.drawScale || 1)), -z / 2, -z / 2, z, z);
@@ -2063,7 +2140,7 @@ function drawTowerArt(ctx, towers, z) {
     withTod(ctx, cable, (v) => ctx.drawImage(artMip(v, (x1 - x0) * (R.drawScale || 1)), x0, y0, x1 - x0, h));
   };
   for (const tw of spans) cab(tw, true);
-  for (const tw of towers) {
+  if (tower) for (const tw of towers) {
     const x = tw.x - z / 2, y = tw.y + z / 2 - 2 * z;
     withTod(ctx, tower, (v) => ctx.drawImage(artMip(v, z * (R.drawScale || 1)), x, y, z, 2 * z));
     if (lamp && Math.sin(R.time * 2.4 + tw.x * 0.01) > -0.2) ctx.drawImage(artMip(lamp, z * (R.drawScale || 1)), x, y, z, 2 * z);
@@ -2289,9 +2366,9 @@ function drawResource(ctx, type, amt, grow, cx, cy, s, i, j) {
   const u = s / 32;
   const h = (k) => hash2(i * 13 + k, j * 7 - k, 5);
   if (type === R_STALK) {
-    const n = Math.max(1, amt);
-    const g = 0.45 + 0.55 * grow;
     const spots = [[-6, 4], [5, 6], [0, -3]];
+    const n = Math.min(spots.length, Math.max(1, amt)); // (a rich field holds more than three: three stalks drawn)
+    const g = 0.45 + 0.55 * grow;
     for (let k = 0; k < n; k++) {
       const bx = cx + (spots[k][0] + (h(k) - 0.5) * 4) * u, by = cy + (spots[k][1] + (h(k + 5) - 0.5) * 3) * u;
       const hgt = (12 + h(k + 9) * 5) * g * u;
@@ -2439,7 +2516,8 @@ function hullBase(ctx, cx, cy, s, color, shape) {
  */
 const SILO_RISE = 0.8;
 function siloRise(b, ready) {
-  const m = R.siloSeen || (R.siloSeen = new Map());
+  if (!R.siloSeen || R.siloOf !== S) { R.siloSeen = new Map(); R.siloOf = S; } // (ids start again with each game)
+  const m = R.siloSeen;
   if (!ready) { m.set(b.id, -1); return 0; }
   let t0 = m.get(b.id);
   if (t0 === undefined) { m.set(b.id, -Infinity); return 1; }
@@ -3359,6 +3437,7 @@ function drawSite(ctx, type, cx, cy, s, owner, b) {
  */
 /** Draw art image `art` over tile (x, y), turned `quarter` quarter-turns clockwise. */
 function drawTileArt(ctx, art, x, y, quarter) {
+  if (!art) return; // (an image that failed to load: each canyon lip, say, can be missing by itself)
   const img = artMip(art, TP * (ctx.hdScale || 1) * (R.drawScale || 1));
   if (!quarter) { ctx.drawImage(img, x, y, TP, TP); return; }
   ctx.save(); ctx.translate(x + TP / 2, y + TP / 2); ctx.rotate((quarter * Math.PI) / 2);
@@ -3430,9 +3509,7 @@ function drawRail(ctx, i, j, x, y, t) {
  */
 function drawFreightTrain(ctx, u, sx, sy, s) {
   const color = PLAYER_COLORS[u.owner];
-  const trails = R.trails || (R.trails = new Map());
-  let tr = trails.get(u.id);
-  if (!tr) { tr = [{ x: u.x, y: u.y }]; for (let k = 1; k <= 12; k++) tr.push({ x: u.x - Math.cos(u.face || 0) * k * 0.3, y: u.y - Math.sin(u.face || 0) * k * 0.3 }); trails.set(u.id, tr); }
+  const tr = trailOf(u, 12);
   if (dist2(tr[0].x, tr[0].y, u.x, u.y) > 0.0025) tr.unshift({ x: u.x, y: u.y });
   let len = 0;
   for (let k = 1; k < tr.length; k++) { len += Math.sqrt(dist2(tr[k - 1].x, tr[k - 1].y, tr[k].x, tr[k].y)); if (len > 3.6) { tr.length = k + 1; break; } }
@@ -3450,7 +3527,7 @@ function drawFreightTrain(ctx, u, sx, sy, s) {
   // The art: each car is 8 of its frame's 10 units coupler to coupler (0.62 tiles), so cars sit 0.62
   // tiles apart along the track, each turned to its own bit of the curve. Flat cars and hoppers alternate.
   const loco = ART['freight-loco@' + u.owner + '-f0'];
-  if (loco) {
+  if (loco && artFor('freight-wagon-hopper', u.owner) && artFor('freight-wagon-flat', u.owner)) { // (all three, or it's drawn in code below)
     const size = s * 0.775, n = cargoCount(u);
     const cars = [];
     for (let k = 0; k <= 4; k++) {
@@ -4226,15 +4303,31 @@ function drawTanker(ctx, u, sx, sy, s, color) {
 }
 
 /**
+ * The trail of where a train's (or Road Train's) front has lately been, newest first, which its wagons follow:
+ * kept by the renderer per bot, for this game only. It's only added to while the train is being drawn, so one
+ * that comes back into view (or a new bot with an old one's id) starts again with `n` points straight out
+ * behind it, rather than having its wagons point at wherever it was last seen.
+ */
+function trailOf(u, n) {
+  if (!R.trails || R.trailsOf !== S) { R.trails = new Map(); R.trailsOf = S; }
+  let tr = R.trails.get(u.id);
+  if (!tr || dist2(tr[0].x, tr[0].y, u.x, u.y) > 1) {
+    if (!tr && R.trails.size > 60) for (const id of [...R.trails.keys()]) { const e = getE(id); if (!e || e.dead) R.trails.delete(id); } // (those of trains long gone)
+    tr = [{ x: u.x, y: u.y }];
+    for (let k = 1; k <= n; k++) tr.push({ x: u.x - Math.cos(u.face || 0) * k * 0.3, y: u.y - Math.sin(u.face || 0) * k * 0.3 });
+    R.trails.set(u.id, tr);
+  }
+  return tr;
+}
+
+/**
  * A Road Train: the Freight Truck's tractor unit with two trailers behind it, each trailer following
  * the road the cab took (a trail of the cab's recent positions, kept by the renderer). The load is
  * spread over the cab's bed and both trailers.
  */
 function drawRoadTrain(ctx, u, sx, sy, s) {
   const color = PLAYER_COLORS[u.owner];
-  const trails = R.trails || (R.trails = new Map());
-  let tr = trails.get(u.id);
-  if (!tr) { tr = [{ x: u.x, y: u.y }]; for (let k = 1; k <= 6; k++) tr.push({ x: u.x - Math.cos(u.face || 0) * k * 0.3, y: u.y - Math.sin(u.face || 0) * k * 0.3 }); trails.set(u.id, tr); }
+  const tr = trailOf(u, 6);
   if (dist2(tr[0].x, tr[0].y, u.x, u.y) > 0.0025) tr.unshift({ x: u.x, y: u.y });
   // Keep about 2.5 tiles of trail.
   let len = 0;
@@ -4396,8 +4489,12 @@ function refreshOverlay(type) {
 function render(dtReal) {
   R.time += dtReal;
   R.dt = dtReal;
-  const ctx = R.ctx, z = R.cam.z;
+  const ctx = R.ctx, z = R.cam.z, began = performance.now(), fw = R.fw && R.fw.t0 ? R.fw : null;
+  if (fw) { fw.other += began - fw.t0; fw.t0 = 0; } // (what the frame did before drawing, and below how long drawing took: see watchFrameRate)
   ctx.setTransform(R.dpr, 0, 0, R.dpr, 0, 0);
+  // Nothing one frame's drawing left set carries into the next (a dash offset, round line ends, a text baseline).
+  ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
+  ctx.lineCap = 'butt'; ctx.lineJoin = 'miter'; ctx.setLineDash(NO_DASH); ctx.lineDashOffset = 0; ctx.textBaseline = 'alphabetic';
   R.drawScale = R.dpr;
   ctx.fillStyle = '#120f14';
   ctx.fillRect(0, 0, R.w, R.h);
@@ -4408,7 +4505,8 @@ function render(dtReal) {
 
   let ox = R.w / 2 - R.cam.x * z, oy = R.h / 2 - R.cam.y * z;
   // Big blasts near the middle of the screen shake it for a moment (a nuclear blast hardest; see fxShake).
-  { const a = fxShake(ox, oy, z); if (a > 0.2) { ox += (Math.random() - 0.5) * a; oy += (Math.random() - 0.5) * a; } }
+  // (Not when the device is set to reduce motion.)
+  if (!(LESS_MOTION && LESS_MOTION.matches)) { const a = fxShake(ox, oy, z); if (a > 0.2) { ox += (Math.random() - 0.5) * a; oy += (Math.random() - 0.5) * a; } }
   const v0 = screenToWorld(0, 0), v1 = screenToWorld(R.w, R.h);
   const inView = (x, y, m) => x > v0.x - m && x < v1.x + m && y > v0.y - m && y < v1.y + m;
 
@@ -4480,6 +4578,14 @@ function render(dtReal) {
     } else if (R.overlay && R.overlay.type === 'ramp') R.overlay = null;
     ctx.lineWidth = 1;
     const net = roadNet();
+    // Where a road could go. canRoad looks through the buildings, so asking it of every tile in view every frame
+    // cost more than drawing the rest of the frame: the answers are kept, a thirtieth of them asked again each
+    // frame (none is ever more than half a second old), and the outlines of each colour are stroked together.
+    let C = R.roadable;
+    if (!C || C.of !== S || C.ok.length !== S.W * S.H) C = R.roadable = { of: S, ok: new Uint8Array(S.W * S.H), n: 0, at: 0 };
+    if (R.time - C.at > 1) C.ok.fill(0);
+    C.at = R.time; C.n = (C.n + 1) % 30;
+    const outline = [[], [], []];
     for (let t = 0; t < S.W * S.H; t++) {
       const i = t % S.W, j = (t / S.W) | 0;
       if (!inView(i, j, 1)) continue;
@@ -4493,11 +4599,18 @@ function render(dtReal) {
         ctx.setLineDash([]);
         continue;
       }
-      if (paveMode || S.road[t] || !canRoad(ME, i, j)) continue;
-      const cross = crossTile(t);
+      if (paveMode || S.road[t]) continue;
+      if (!C.ok[t] || t % 30 === C.n) C.ok[t] = canRoad(ME, i, j) ? 2 : 1;
+      if (C.ok[t] !== 2) continue;
       // (A road dragged over water becomes a bridge, and through rock a tunnel.)
-      ctx.strokeStyle = cross ? 'rgba(140,215,255,0.5)' : roadClears(t) ? 'rgba(255,170,90,0.28)' : 'rgba(255,240,200,0.18)';
-      ctx.strokeRect(ox + i * z + 1.5, oy + j * z + 1.5, z - 3, z - 3);
+      outline[crossTile(t) ? 0 : roadClears(t) ? 1 : 2].push(i, j);
+    }
+    for (let k = 0; k < 3; k++) {
+      if (!outline[k].length) continue;
+      ctx.strokeStyle = k === 0 ? 'rgba(140,215,255,0.5)' : k === 1 ? 'rgba(255,170,90,0.28)' : 'rgba(255,240,200,0.18)';
+      ctx.beginPath();
+      for (let n = 0; n < outline[k].length; n += 2) ctx.rect(ox + outline[k][n] * z + 1.5, oy + outline[k][n + 1] * z + 1.5, z - 3, z - 3);
+      ctx.stroke();
     }
   }
   drawScorch(ctx, ox, oy, z);
@@ -4573,14 +4686,20 @@ function render(dtReal) {
   // Walls glow a little along their live rail, Gates more; Pulse Turrets sweep searchlights.
   if (TOD.active && TOD.state.pools > 0.01) {
     drawCityGlow(ctx, ox, oy, z, items);
+    // (All of it light added to the ground, so the pools go down together: one change of blending for the lot.)
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.globalAlpha *= TOD.state.pools;
+    const pool = (x, y, zz, color) => { const img = lightPool(color), s = zz * 2.2; if (img) ctx.drawImage(img, x - s / 2, y - s / 2, s, s); };
     for (const e of items) {
+      if (e.ent === 'post') { pool(ox + (e.post.x + 0.5) * z, oy + (e.post.y + 0.5) * z, z * 1.4, '#ffd27a'); continue; }
+      if (e.ent === 'uplink') { pool(ox + (e.up.x + 0.5) * z, oy + (e.up.y + 0.5) * z, z * 1.5, e.up.owner >= 0 ? PLAYER_COLORS[e.up.owner] : '#dfefff'); continue; }
       if (e.ent !== 'b' || !e.built || BDEFS[e.type].viaduct) continue;
       const size = e.type === 'lander' ? 1.7 : e.type === 'wall' ? 0.45 : e.type === 'gate' ? 0.8 : 1.2;
-      drawLightPool(ctx, ox + (e.x + 0.5) * z, oy + (e.y + 0.5) * z, z * size, BDEFS[e.type].wild ? '#9dff6a' : PLAYER_COLORS[e.owner] || '#ffd9a0');
+      pool(ox + (e.x + 0.5) * z, oy + (e.y + 0.5) * z, z * size, BDEFS[e.type].wild ? '#9dff6a' : PLAYER_COLORS[e.owner] || '#ffd9a0');
     }
+    ctx.restore();
     for (const e of items) if (e.ent === 'b' && (e.type === 'turret' || e.type === 'minigun') && e.built && !e.paused) drawSearchlight(ctx, e, ox, oy, z);
-    for (const e of items) if (e.ent === 'post') drawLightPool(ctx, ox + (e.post.x + 0.5) * z, oy + (e.post.y + 0.5) * z, z * 1.4, '#ffd27a');
-    for (const e of items) if (e.ent === 'uplink') drawLightPool(ctx, ox + (e.up.x + 0.5) * z, oy + (e.up.y + 0.5) * z, z * 1.5, e.up.owner >= 0 ? PLAYER_COLORS[e.up.owner] : '#dfefff');
   }
   for (const e of items) {
     if (e.ent === 'lamp') { drawStreetLamp(ctx, e, ox, oy, z); continue; }
@@ -4735,6 +4854,7 @@ function render(dtReal) {
     ctx.strokeRect(x + 0.5, y + 0.5, w, h);
   }
   if (typeof UI !== 'undefined' && UI.inGame) renderMinimap();
+  if (fw) fw.draw += performance.now() - began;
 }
 
 /**
@@ -6207,6 +6327,9 @@ function buildingIcon(type, size, owner) {
 
 const MM = { canvas: null, ctx: null, base: null, baseCtx: null, dirty: true, ver: -1, builtAt: -9, w: 0, h: 0, on: true };
 
+/** Warbots on the minimap: a pale tint of each player's colour (cyan, red, green, purple: every rival its own). */
+const MM_WARBOT = ['#bff2ff', '#ffc2ca', '#c6f4cc', '#e4cbff'];
+
 const MM_COLORS = {
   ground: [169, 113, 74], water: [28, 75, 93], rock: [74, 51, 41], ramp: [235, 205, 150], chasm: [18, 12, 10],
   [R_STALK]: [47, 174, 134], [R_BOULDER]: [160, 154, 145], [R_ORE]: [235, 120, 50], [R_CRYSTAL]: [150, 105, 245],
@@ -6302,8 +6425,8 @@ function renderMinimap() {
   if (!MM.on || !S || !MM.ctx || !MM.w) return;
   if ((MM.dirty || MM.ver !== S.territoryVer) && R.time - MM.builtAt > 0.4) rebuildMinimapBase();
   if (!MM.base) rebuildMinimapBase();
-  const ctx = MM.ctx, sx = MM.w / S.W, sy = MM.h / S.H;
-  ctx.setTransform(R.dpr, 0, 0, R.dpr, 0, 0);
+  const ctx = MM.ctx, sx = MM.w / S.W, sy = MM.h / S.H, k = MM.canvas.width / MM.w;
+  ctx.setTransform(k, 0, 0, k, 0, 0); // (from the canvas itself, whatever the drawing resolution is now)
   ctx.imageSmoothingEnabled = false;
   ctx.drawImage(MM.base, 0, 0, MM.w, MM.h);
   for (const b of S.buildings) {
@@ -6323,7 +6446,7 @@ function renderMinimap() {
   }
   for (const u of S.bots) {
     if (u.dead || u.inside || !isArmy(u)) continue;
-    ctx.fillStyle = u.owner === ME ? '#bff2ff' : '#ffc2ca';
+    ctx.fillStyle = MM_WARBOT[u.owner] || MM_WARBOT[1];
     ctx.fillRect(u.x * sx - 1, u.y * sy - 1, 2, 2);
   }
   // Uplinks: a ringed dot each, in the holder's colour (white while no one holds it; flashing while jammed).

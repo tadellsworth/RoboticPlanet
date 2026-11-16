@@ -49,7 +49,9 @@ any other game.
 
 - **Hosted:** once GitHub Pages is enabled (see below) the game lives at https://tadellsworth.github.io/RoboticPlanet/ (in general
   `https://<your-user>.github.io/<repo>/`). On a phone, open it and use **Add to Home Screen**: it runs
-  full-screen like an app and works offline.
+  full-screen like an app and works offline. The service worker (`sw.js`) asks the server for a newer copy of every file
+  each time the game is opened; art already checked since then comes straight from its cache (the day-and-night sets
+  are let go and loaded again every few minutes), and cached art waits at most `ART_WAIT` (3 s) for a slow server.
 - **Locally:** from this folder run a static server and open the address it prints:
 
   ```bash
@@ -64,7 +66,8 @@ Progress auto-saves in the browser every 20 seconds and whenever you leave the p
 ## How to play
 
 The full illustrated guide is **[how-to-play.html](how-to-play.html)** (open it in a browser; once GitHub
-Pages is on it is at `…/how-to-play.html` next to the game). In the game, **How to play** (main menu and pause menu)
+Pages is on it is at `…/how-to-play.html` next to the game; the in-game How to play links to it, except in the
+single-file build, which has no page beside it). In the game, **How to play** (main menu and pause menu)
 opens on its contents; tapping a topic shows that one section, with a bar above it that stays put (Contents, a picker
 for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.js`). The short version:
 
@@ -473,11 +476,14 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
 - **Storage:** tap your Command Base or a Depot. *Fill first* makes haulers bring finished goods there before
   any other storage; *Empty out* takes nothing new and moves what it holds elsewhere (handy before
   demolishing it). You can also switch individual goods off for that building.
-- **Minimap:** tap or drag it to jump around; red pulses mark buildings under attack. The × hides it (on a touch
-  screen it is a 44 px tab hanging under the minimap, so a finger-sized button isn't lying over the map).
+- **Minimap:** tap or drag it to jump around; red pulses mark buildings under attack; warbots are dots in a pale shade of
+  their colony's colour (`MM_WARBOT`: every rival its own). The × hides it (on a touch screen it is a 44 px tab hanging
+  under the minimap, so a finger-sized button isn't lying over the map).
 - **Sharp map:** the map is baked once at 32 px a tile for zoomed-out views; zoomed in, the part on screen is baked
-  again in 8×8-tile chunks at 64 or 128 px a tile (a few per frame, least recently seen dropped), and big art images
-  keep half-size copies so they shrink cleanly (`drawMapLayer`, `artMip` in `js/render.js`).
+  again in 8×8-tile chunks at 64 or 128 px a tile (a few per frame, least recently seen dropped: off-screen ones give way
+  to keep the lot under `HD_TOTAL` pixels and four screens' worth; the whole-map bake isn't drawn under chunks that
+  cover it), `bakeMap` reuses its canvases and runs again only when art the map is drawn from arrives (`bakedArt`; at most
+  every 2 s while more is coming, and at launch once that art is in or after `BAKE_WAIT`), and big art images keep half-size copies so they shrink cleanly (`drawMapLayer`, `artMip` in `js/render.js`).
 - **Batteries:** bots drain their battery walking, working and fighting, and recharge only at a Fuel Station (or,
   for warbots, inside an Outpost). The Command Base doesn't charge anyone and you land without a Fuel Station, so
   build the first one straight away (it runs on the 10 Fuel you land with). A flat battery means half speed and half power. Fuel Stations burn Fuel (one Fuel is
@@ -499,7 +505,9 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
 - **Saved planets:** **Save** beside the planet number (More settings), or **Save this planet** in the pause menu, keeps
   the seed and the settings that shape the map (shape, size, terrain, resources, biome, players) on this device
   (`terrafall.planets` in localStorage, newest first, up to 40). Tap one in Saved planets to set the menu to it; ×
-  forgets it (`savedPlanets`, `renderPlanets` in `js/ui.js`).
+  forgets it (`savedPlanets`, `renderPlanets` in `js/ui.js`). A saved planet, or a remembered menu setting, that this
+  version doesn't offer (from another version, or damaged) is left out or falls back to its default (`planetOk`,
+  `checkMenuSettings`): one used to stop the game booting, and a planet's seed was shown as markup.
 - **Alloy** (balance audit, AI games): Alloy income was set by how much Ore reached the Smelters, not how many Smelters
   there were. A Smelter eats Ore much faster than a Mine worker, who walks out and back for every Ore, can bring it, so
   extra Smelters just sat idle. Now a Smelter makes 3 Alloy from 2 Ore and 2 Fiber (the same 12 a minute flat out, a
@@ -580,10 +588,24 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   save (storage full or blocked) is reported once. A long game's save is about 250–300 KB. Saves live in that browser
   only: **Download save file** (pause menu, `downloadSave`: through the artifact `downloads` capability in claude.ai,
   an ordinary download elsewhere) writes `terrafall-<mode>-<date>-<time>.json` (`saveFileText`: the save with when and
-  what), and **Load a save file** (main menu, `importSaveFile`) loads one, a bare save too, and keeps it as this device's save.
+  what), and **Load a save file** (main menu, `importSaveFile`) loads one, a bare save too. A save is checked before it is used
+  (`checkSave` in `js/world.js`: unknown building, robot, good, biome, map type, mission or event, map layers of the wrong
+  size, owners or places off the map, or a name holding `<`, `>` or `"`; in text those three are swapped for look-alikes
+  that can't make markup, so nothing in a save can run script in the panels; a multiplayer catch-up is checked the same
+  way). One that fails is refused and changes nothing; if
+  Continue can't load this device's save, the menu says so. A loaded file becomes this device's save only once its game
+  is running (`enterLoaded`), and the save it replaced is kept as a backup (`SAVE_BACKUP_KEY`, `botfall.save.bak`).
 - **A failed frame never stops the game:** `frame` books the next frame before running this one and catches its errors
-  (reported once each to the console). A Missile Silo's placement preview used to throw (`siloReady` on a stand-in
-  with no stock), which stopped the drawing loop: the game froze when you went to place one.
+  (reported once each to the console), and each stage of a frame (simulation, camera, drawing, interface, sound) runs
+  on its own (`stage` in `js/main.js`): one that keeps failing during a game says so once and pauses saving
+  (`UI.saveHold`), so the last good save is still there to reload. A Missile Silo's placement preview used to throw (`siloReady` on a stand-in
+  with no stock), which stopped the drawing loop: the game froze when you went to place one. An art image that fails
+  to download is tried once more a moment later (`loadImg`), and one that still fails draws nothing or the shape drawn
+  in code: a missing canyon lip, Viaduct tower, Freight Train wagon or crossing barrier no longer makes the map throw
+  (a Rift or Sky islands map could not start).
+- **The menu's backdrop:** an AI-vs-AI demo game plays behind the main menu. It opens 150 s into its game, fast-forwarded
+  a slice each frame (`DEMO_WARM`, at most `WARM_MS` of a frame, in daylight: `TOD.dayHold`), so the page never waits
+  for it at launch or on Save and quit (it ran all 4,500 steps at once: seconds on a phone).
 - **Gates on track:** a Gate can stand across railway track (`canPlace`; a wall line crossing track puts one there,
   `wallKind`), and track can be laid through your own Gate (`railBlocked`). Your trains run straight through it (rail
   routes ignore it; it's `passTile` for its owner); enemy robots can't walk through.
@@ -733,7 +755,9 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   per event (smooth on a Magic Mouse or trackpad); a Ctrl + wheel pinch zooms faster, a sideways swipe or Shift + wheel
   pans, and Safari's trackpad pinch (`gesture*` events) zooms the map instead of the page. Drawing resolution is capped
   at `RENDER_BUDGET` pixels (about 4K; a 5K iMac at 2× would be four times the work) and `watchFrameRate` lowers it,
-  down to 1×, if frames run below ~45 a second. Nothing is drawn under a full screen (the pause menu, Help,
+  down to 1×, if frames run below ~45 a second and drawing is what's slow (not when the screen or a power-saving mode
+  holds a steady beat, such as 30 a second, nor when the simulation is the slow part), and raises it again when there's
+  room; the minimap is laid out again whenever it changes. Nothing is drawn under a full screen (the pause menu, Help,
   Statistics, game over) while the game behind it stands still, unless the view, the canvas or the art changes
   (`drawNeeded` in js/main.js), and the demo behind the main menu is drawn 30 times a second (`DEMO_FRAME`).
 - **Phones and tablets (touch):** a touch on the map is only ever a touch there: the click a browser makes after it
@@ -753,9 +777,10 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   mode's banner and the selection bar as a box at the bottom left beside the rail, and only the newest message, at the
   bottom right. The minimap is sized from the short side (`layoutMinimap`: 84 px there, where it got the desktop's 156
   and filled two thirds of the height), and a new game opens at a zoom that fits the short side (`enterGame`).
-- **How to play on a touch screen** (`helpForTouch`): the Touch controls card (`#h-touch`) comes first, on one screen,
-  and key names are left out (the mouse and keyboard paragraphs and brackets that only name keys are marked `.keys`,
-  hidden under `(pointer: coarse)`); the chapters follow behind the contents as before.
+- **How to play on a touch screen** (`helpForTouch`): the Touch controls card (`#h-touch`) heads the contents page,
+  on one screen, and key names are left out (the mouse and keyboard paragraphs and brackets that only name keys are
+  marked `.keys` once at start-up, before the section pager is built, by `helpMarkKeys`, and hidden under
+  `(pointer: coarse)`).
 - **Messages and the goal card** (`toast`, `openMsgSheet`): a message stays for a time that fits its length (3.8 s up
   to 12; a building lost, 8 at least), lets taps through to the map, and has a **Go** chip when it's about a place. The
   last 20 are kept for the messages button beside the folded goal card. On a small screen the goal card folds by
@@ -841,6 +866,9 @@ including the remaining pieces (Ramp, slope and cliff textures, goods icons).
 Weapon effects are drawn in code: muzzle flashes, tracers, gun smoke, dust kicks and bullet pockmarks round each
 target (sparks on buildings), the Disruptor's arcs, and blasts with a fireball, flying debris, smoke and a scorch mark.
 A destroyed building shakes, leans and sinks into the ground in a dust cloud, with secondary blasts, and leaves rubble.
+Big blasts and quakes near the middle of the screen shake the view (`fxShake`), unless the device is set to reduce
+motion (`LESS_MOTION`). Each frame starts from a clean canvas state (no dash offset, line ends or text baseline left
+over from the last one), and a train's wagons start again behind it after it drove unseen (`trailOf`).
 A Pulse Turret charges for 0.45 s before each shot (`PULSE_CHARGE`; the charge builds while it reloads, so its rate of
 fire is unchanged), energy gathering at its muzzle, then fires a thick electric beam wrapped in arcs. At night,
 streetlights light every third road tile (`drawStreetLights`): sodium orange over concrete, white over asphalt.
@@ -869,7 +897,10 @@ night; a display setting kept on the device).
   `art/tod/tod-keys.js`) has a morning, evening and night version from the Claude Design day/night kit, at
   `art/tod/<time>/<same path as the day art>` (WebP, the day file's size; the kit's design names, such as cement-works
   for the Cement Works, are installed under the game's). `drawArt` draws the current time's version and fades in the
-  next one over a transition (`todVariant`); only the sets in use now and next are loaded (`todFrame`). The single-file
+  next one over a transition (`todVariant`); only the sets in use now and next are loaded (`todFrame`), and a set's
+  re-lit and graded copies of each sprite, the green and purple teams' too, are let go with it (`todDropSet`, `todFree`;
+  a graded stand-in goes as soon as the re-lit image arrives), and the sprites drawn lately get the coming set's versions
+  ready a couple a frame ahead of the change (`todWarm`, `artSeen`). The single-file
   build puts each set in a bundle beside the page (`dist/tod-<time>.js`, loaded when needed).
 - **Graded in code** (`out = in × multiply + add`, values from the kit's `art/tod/shared/time-of-day.json`): the baked
   ground, roads, track, pipes, plants, resources and territory tint (`todGradeGround`), and any sprite without a
@@ -877,7 +908,7 @@ night; a display setting kept on the device).
   towers and cables, Viaduct decks, level-crossing barriers) goes through `withTod`, like `drawArt`. Light overlays (brake lights, boost glow,
   lamps), the UI and nuke blasts are never graded.
 - **Evening and night:** vehicles' headlights (`drawHeadlights`, the kit's overlays at 3× the sprite), a glow in team
-  colour under every finished building (`drawLightPool`; small ones along Walls, bigger at Gates), a searchlight
+  colour under every finished building (`lightPool`, all drawn in one additive pass; small ones along Walls, bigger at Gates), a searchlight
   sweeping ahead of every Pulse Turret's gun as it turns (`drawSearchlight`), and bots' drop shadows lean left at dawn, right at dusk and
   fade at night (`todShadow`).
 - Every building and robot has a re-lit set (lit windows, beacons and team-colour glows; headlights on everything that

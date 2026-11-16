@@ -1195,3 +1195,8 @@ canvas.chart.small { height: 110px; }
 .m-vnote { margin: -4px 0 6px 96px; font-size: 12.5px; line-height: 1.35; color: var(--muted); text-wrap: pretty; }
 @media (max-width: 420px) { .m-vnote { margin-left: 86px; } }
 @media (max-width: 359px) { .m-vnote { margin-left: 2px; } }
+
+/* A link dressed as a button (the illustrated manual, on the How to play screen). */
+a.btn { display: block; text-align: center; text-decoration: none; color: inherit; }
+/* The overlays are dialogs: opening one puts the keyboard focus on it (Tab then walks its buttons), with no ring round the whole screen. */
+.screen:focus { outline: none; }

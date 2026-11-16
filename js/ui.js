@@ -70,10 +70,12 @@ function initUI() {
   // lowered a notch): Normal stays Normal (the new, leaner default), and the others keep what they gave
   // (Scarce is now Sparse, Sparse Normal, Rich Abundant).
   try {
-    const saved = JSON.parse(localStorage.getItem('botfall.settings') || '{}');
+    let saved = JSON.parse(localStorage.getItem('botfall.settings') || '{}');
+    if (!saved || typeof saved !== 'object') saved = {}; // (damaged: the defaults)
     if ((saved.v || 0) < 2) { delete saved.style; delete saved.nuke; delete saved.events; }
     if ((saved.v || 0) < 3 && Number.isInteger(saved.rich)) saved.rich = [1, 2, 2, 4, 4][saved.rich] ?? DEFAULT_RICH;
-    Object.assign(UI.menu, saved);
+    // (only what saveSettings writes: a stored mode or seed isn't a remembered setting)
+    for (const k of ['size', 'rough', 'rich', 'shape', 'nuke', 'biome', 'players', 'diff', 'style', 'events', 'wild', 'unlimited', 'victory', 'shapeRnd', 'biomeRnd']) if (saved[k] !== undefined) UI.menu[k] = saved[k];
   } catch (e) { /* defaults */ }
   checkMenuSettings();
   initMenu();
@@ -84,6 +86,8 @@ function initUI() {
   $('p-export').onclick = () => { sfx('click'); downloadSave(); };
   $('m-help').onclick = () => showHelp();
   $('h-close').onclick = () => { $('screen-help').hidden = true; UI.paused = !$('screen-pause').hidden; };
+  // The illustrated manual is a page beside this one: the single-file build has none, so there the link is left out.
+  if ($('h-manual')) $('h-manual').hidden = !!window.TOD_BUNDLE;
   // The How to play shows one section at a time: the contents first, then a section with a bar above it that stays
   // put (Contents, a picker, previous and next) and Previous / Next buttons at its end (see helpPage).
   helpMarkKeys(); // (before the pager is built: it rewrites the Help text once)
@@ -136,7 +140,7 @@ function initUI() {
     if (MP.on) {
       if (!UI.mpQuitArm) { UI.mpQuitArm = true; mpSyncPauseMenu(); return; }
       mpQuit();
-    } else saveGame();
+    } else if (!UI.saveHold) saveGame(); // (UI.saveHold: the game keeps failing, see `stage` in main.js; the last good save is left alone)
     $('screen-pause').hidden = true;
     toMenu();
   };
@@ -196,6 +200,7 @@ function initUI() {
 
   initKeyboard();
   initBack();
+  initDialogs();
   // A long press on the interface brings up no browser menu under a finger (Save image, Share...); a mouse keeps its right-click off the map.
   document.addEventListener('contextmenu', (e) => { if ((e.pointerType ? e.pointerType !== 'mouse' : onTouch()) && !(e.target.closest && e.target.closest('input, textarea, a'))) e.preventDefault(); });
   document.addEventListener('visibilitychange', () => { if (document.hidden && UI.inGame) autoSave(); syncWakeLock(); });
@@ -270,8 +275,13 @@ function checkMenuSettings() {
   if (!ok(m.rich, RESOURCE_PRESETS.length)) m.rich = DEFAULT_RICH;
   if (!m.size || typeof m.size !== 'object') m.size = { ...DEFAULT_SIZE };
   for (const k in DEFAULT_SIZE) if (!ok(m.size[k], SIZE_PRESETS.length)) m.size[k] = DEFAULT_SIZE[k];
-  if (!DIFFICULTY[m.diff]) m.diff = 'normal';
-  if (!VICTORY[m.victory]) m.victory = 'capture';
+  if (!Object.prototype.hasOwnProperty.call(DIFFICULTY, m.diff)) m.diff = 'normal';
+  if (!Object.prototype.hasOwnProperty.call(VICTORY, m.victory)) m.victory = 'capture';
+  // (a value another version or a damaged store left: one the menu can't show stopped the game booting)
+  m.mode = m.mode === 'colony' ? 'colony' : 'versus';
+  m.players = ok(m.players, 5) && m.players >= 2 ? m.players : 2;
+  m.style = ok(m.style, PERSONALITY_ORDER.length + 1) ? m.style : 1;
+  for (const k of ['nuke', 'events', 'wild', 'unlimited', 'shapeRnd', 'biomeRnd']) m[k] = m[k] ? 1 : 0;
 }
 
 /** Remember the new-game settings on this device. */
@@ -1137,7 +1147,8 @@ function renderPreview(cv, m, p) {
  */
 const AUTOSAVE_EVERY = 20;
 function autoSave() {
-  if (!S || S.winner >= 0 || S.players[ME].ai) return;
+  // (UI.saveHold: the game keeps failing, see `stage` in main.js. The last good save is left alone.)
+  if (!S || UI.saveHold || S.winner >= 0 || S.players[ME].ai) return;
   if (saveGame()) { UI.savedAt = Date.now(); UI.saveFailed = false; }
   else if (!UI.saveFailed) {
     UI.saveFailed = true;
@@ -1145,11 +1156,58 @@ function autoSave() {
   }
 }
 
+/* ------------------------------------------------------------------ overlays as dialogs */
+
+/** The overlay on top (Help over the pause menu, say), or null when none is showing. */
+function topScreen() {
+  let top = null, tz = -1;
+  for (const el of document.querySelectorAll('.screen')) {
+    if (el.hidden) continue;
+    const z = +getComputedStyle(el).zIndex || 0;
+    if (z >= tz) { top = el; tz = z; }
+  }
+  return top;
+}
+
+/**
+ * The overlays (menu, pause, help, statistics, game over...) work as dialogs for the keyboard and for screen
+ * readers: opening one moves the focus into it, Tab stays inside the one on top, and closing it puts the focus
+ * back where it was. (Tab reached the buttons behind the pause menu.)
+ */
+function initDialogs() {
+  const stops = (scr) => [...scr.querySelectorAll('button, a[href], input, select, summary')].filter((el) => !el.disabled && el.tabIndex >= 0 && el.offsetParent);
+  const watch = new MutationObserver((list) => {
+    for (const m of list) {
+      const scr = m.target, open = !scr.hidden, a = document.activeElement;
+      if (open === !!scr._open) continue;
+      scr._open = open;
+      if (open) {
+        scr._back = a && a !== document.body && !scr.contains(a) ? a : null;
+        scr.focus({ preventScroll: true });
+      } else if (!a || a === document.body || scr.contains(a)) {
+        const b = scr._back;
+        if (b && b.isConnected && b.offsetParent) b.focus({ preventScroll: true }); else if (a && a !== document.body) a.blur();
+      }
+    }
+  });
+  for (const scr of document.querySelectorAll('.screen')) { scr._open = !scr.hidden; watch.observe(scr, { attributes: true, attributeFilter: ['hidden'] }); }
+  document.addEventListener('keydown', (e) => {
+    const scr = e.key === 'Tab' && !e.ctrlKey && !e.metaKey && !e.altKey ? topScreen() : null;
+    if (!scr) return;
+    const f = stops(scr), a = document.activeElement, first = f[0], last = f[f.length - 1];
+    if (a && a.closest && a.closest('[aria-modal="true"]:not(.screen)')) return; // (a dialog of its own, such as the menu's pickers, keeps its Tab)
+    if (!f.length) { e.preventDefault(); return; }
+    if (!scr.contains(a)) { e.preventDefault(); (e.shiftKey ? last : first).focus(); }
+    else if (e.shiftKey ? a === first || !f.includes(a) : a === last) { e.preventDefault(); (e.shiftKey ? last : first).focus(); }
+  }, true);
+}
+
 function syncSaved() {
   const el = $('p-saved');
   if (!el) return;
   const s = UI.savedAt ? Math.round((Date.now() - UI.savedAt) / 1000) : -1;
-  el.textContent = UI.saveFailed ? 'Saving isn\'t working in this browser right now: keep this tab open.'
+  el.textContent = UI.saveHold ? 'Saving is paused: something in the game keeps going wrong. Reload the page to carry on from your last save.'
+    : UI.saveFailed ? 'Saving isn\'t working in this browser right now: keep this tab open.'
     : `Your game saves itself every ${AUTOSAVE_EVERY} seconds` + (s >= 0 ? ` (last saved ${s < 5 ? 'just now' : s < 60 ? s + ' s ago' : Math.round(s / 60) + ' min ago'})` : '') + '. If it closes, tap Continue on the main menu.';
 }
 
@@ -1400,7 +1458,9 @@ function openPaths(v) {
 function initKeyboard() {
   window.addEventListener('keydown', (e) => {
     const tag = (e.target && e.target.tagName) || '';
-    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+    if (tag === 'TEXTAREA' || tag === 'SELECT') return;
+    // A slider or switch keeps its own keys (arrows, Home, End); Esc and Space still reach the game from one.
+    if (tag === 'INPUT' && !(/^(range|checkbox)$/.test(e.target.type) && (e.key === 'Escape' || e.key === ' '))) return;
     if (!UI.inGame) return;
     // Control groups: Cmd/Ctrl (or Shift, or Option/Alt) + 1–9 saves the selected warbots and Howitzers as
     // a group, 1–9 selects it again (press twice to jump to it). Option/Alt and Shift always reach the game;
@@ -1422,7 +1482,7 @@ function initKeyboard() {
       return;
     }
     // Tab (Shift+Tab back) steps through the build menu's tabs.
-    if (e.key === 'Tab' && UI.sheetKind === 'build' && $('build-tabs') && !e.ctrlKey && !e.metaKey && !e.altKey) {
+    if (e.key === 'Tab' && UI.sheetKind === 'build' && $('build-tabs') && !topScreen() && !e.ctrlKey && !e.metaKey && !e.altKey) {
       e.preventDefault();
       const tabs = [...$('build-tabs').children], i = tabs.findIndex((b) => b.classList.contains('on'));
       tabs[(i + (e.shiftKey ? tabs.length - 1 : 1)) % tabs.length].click();
@@ -1987,17 +2047,24 @@ function placeMinimap() {
  * in the new-game menu's Customise view to set the menu to it; × forgets it.
  */
 const PLANETS_KEY = 'terrafall.planets', PLANETS_MAX = 40;
+/** A saved planet this version can show and start: a number for a seed, and no setting the menu doesn't offer. */
+function planetOk(p) {
+  const fits = (v, list) => v == null || (Number.isInteger(v) && v >= 0 && v < list.length);
+  return !!p && typeof p === 'object' && Number.isFinite(p.seed) && (p.players == null || (Number.isInteger(p.players) && p.players >= 2 && p.players <= 4)) &&
+    fits(p.shape, SHAPE_PRESETS) && fits(p.size, SIZE_PRESETS) && fits(p.rough, TERRAIN_PRESETS) && fits(p.rich, RESOURCE_PRESETS) && fits(p.biome, BIOME_ORDER);
+}
 function savedPlanets() {
   let l;
   try { l = JSON.parse(localStorage.getItem(PLANETS_KEY) || '[]'); } catch (e) { return []; }
   if (!Array.isArray(l)) return [];
+  l = l.filter(planetOk); // (one damaged or from another version is left out: it stopped the game booting, or ran as markup)
   // Planets saved before resources were lowered a notch: the setting that makes the same planet now.
   if (l.some((p) => p && !p.rv)) { for (const p of l) if (p && !p.rv) { p.rich = resLevelUp(p.rich); p.rv = RES_V; } writePlanets(l); }
   return l;
 }
 function writePlanets(list) { try { localStorage.setItem(PLANETS_KEY, JSON.stringify(list.slice(0, PLANETS_MAX))); } catch (e) { /* storage unavailable */ } }
 const planetKey = (p) => [p.seed, p.shape, p.size, p.rough, p.rich, p.biome, p.players].join(':');
-function savePlanet(p) { writePlanets([{ ...p, rv: RES_V, at: Date.now() }].concat(savedPlanets().filter((q) => planetKey(q) !== planetKey(p)))); }
+function savePlanet(p) { if (planetOk(p)) writePlanets([{ ...p, rv: RES_V, at: Date.now() }].concat(savedPlanets().filter((q) => planetKey(q) !== planetKey(p)))); }
 /** The planet the new-game menu is set to. */
 function menuPlanet() {
   return { seed: UI.menu.seed, shape: UI.menu.shape || 0, size: UI.menu.size[UI.menu.mode] ?? DEFAULT_SIZE[UI.menu.mode], rough: UI.menu.rough, rich: UI.menu.rich,
@@ -2005,7 +2072,7 @@ function menuPlanet() {
 }
 /** The planet being played. */
 function gamePlanet() {
-  const st = S.settings;
+  const st = S.settings || {}; // (a very old save has none)
   return { seed: S.seed, shape: st.shape || 0, size: st.size, rough: st.rough, rich: st.rich, biome: Math.max(0, BIOME_ORDER.indexOf(st.biome)), players: st.players || 2 };
 }
 function planetLabel(p) {
@@ -2013,7 +2080,7 @@ function planetLabel(p) {
   if (p.rough !== DEFAULT_ROUGH && TERRAIN_PRESETS[p.rough]) bits.push(TERRAIN_PRESETS[p.rough].name + ' terrain');
   if (p.rich !== DEFAULT_RICH && RESOURCE_PRESETS[p.rich]) bits.push(RESOURCE_PRESETS[p.rich].name + ' resources');
   if (p.players > 2) bits.push(`${p.players} players`);
-  return `<b>Planet #${p.seed}</b><span> · ${bits.filter(Boolean).join(' · ')}</span>`;
+  return `<b>Planet #${esc(p.seed)}</b><span> · ${bits.filter(Boolean).join(' · ')}</span>`;
 }
 function renderPlanets() {
   const el = $('m-planets');
@@ -2021,7 +2088,7 @@ function renderPlanets() {
   const list = savedPlanets(), cur = UI.menu.shapeRnd || UI.menu.biomeRnd ? '' : planetKey(menuPlanet());
   el.hidden = !list.length;
   el.innerHTML = list.length ? `<span class="planets-title">Saved planets <small>${list.length}</small></span>` + list.map((p, k) =>
-    `<div class="planet-row"><button class="btn small ghost use${planetKey(p) === cur ? ' on' : ''}" data-use="${k}" title="${planetLabel(p).replace(/<[^>]+>/g, '')}">${planetLabel(p)}</button><button class="btn small ghost del" data-del="${k}" aria-label="Forget Planet #${p.seed}" title="Forget this planet">×</button></div>`).join('') : '';
+    `<div class="planet-row"><button class="btn small ghost use${planetKey(p) === cur ? ' on' : ''}" data-use="${k}" title="${planetLabel(p).replace(/<[^>]+>/g, '')}">${planetLabel(p)}</button><button class="btn small ghost del" data-del="${k}" aria-label="Forget Planet #${esc(p.seed)}" title="Forget this planet">×</button></div>`).join('') : '';
   for (const b of el.querySelectorAll('[data-use]')) b.onclick = () => {
     const p = savedPlanets()[+b.dataset.use];
     if (!p) return;
@@ -2120,7 +2187,7 @@ async function downloadSave() {
   const d = new Date(), pad = (n) => String(n).padStart(2, '0');
   const name = `terrafall-${S.mission ? 'mission' : S.mode}-${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}.json`;
   const text = saveFileText();
-  saveGame(); // the save on this device is up to date too
+  if (!UI.saveHold) saveGame(); // the save on this device is up to date too
   const say = (m) => { $('p-saved').textContent = m; };
   let dl = null;
   try { if (window.claude && typeof window.claude.use === 'function') dl = await window.claude.use('downloads'); } catch (e) { dl = null; }
@@ -2149,41 +2216,72 @@ function plainDownload(name, text) {
   } catch (e) { return false; }
 }
 
-/** Load a save file picked on the main menu: it becomes this device's save too, and the game starts. */
+/** The save a loaded file replaced on this device: kept (the latest one only) in case the file was the wrong one. */
+const SAVE_BACKUP_KEY = 'botfall.save.bak';
+
+/** A line under the main menu's buttons: why a save didn't load. */
+function menuMsg(m) { $('m-import-msg').textContent = m; $('m-import-msg').hidden = false; }
+
+/**
+ * Start playing the game just loaded into S (a save file, or this device's save), without saving it yet.
+ * If it can't be started, the menu comes back and it's false.
+ */
+function enterLoaded(prev) {
+  try { enterGame(true); updateHUD(); return true; } catch (e) {
+    console.error('Terrafall: a save loaded but could not be started.', e);
+    S = prev;
+    toMenu();
+    return false;
+  }
+}
+
+/**
+ * Load a save file picked on the main menu: the game starts, and once it is running it becomes this device's
+ * save too (the save it replaces is kept as a backup, SAVE_BACKUP_KEY). A file that can't be read, checked
+ * (checkSave) or started changes nothing.
+ */
 function importSaveFile(file) {
-  const msg = (m) => { $('m-import-msg').textContent = m; $('m-import-msg').hidden = false; };
   const r = new FileReader();
-  r.onerror = () => msg('That file couldn\'t be read.');
+  r.onerror = () => menuMsg('That file couldn\'t be read.');
   r.onload = () => {
     let json = String(r.result || '');
-    const prev = S;
+    const prev = S, no = () => menuMsg('That isn\'t a Terrafall save file (or it\'s from a version this one can\'t read).');
     try {
       const o = JSON.parse(json);
       if (o && o.terrafall && typeof o.game === 'string') json = o.game; // a save file; a bare save works too
       deserializeGame(json);
-    } catch (e) { S = prev; msg('That isn\'t a Terrafall save file (or it\'s from a version this one can\'t read).'); return; }
-    try { localStorage.setItem(SAVE_KEY, json); } catch (e) { /* storage unavailable: it still plays */ }
-    enterGame();
+    } catch (e) { S = prev; no(); return; }
+    if (!enterLoaded(prev)) { no(); return; }
+    try { const old = localStorage.getItem(SAVE_KEY); if (old) localStorage.setItem(SAVE_BACKUP_KEY, old); } catch (e) { /* storage unavailable or full: it still plays */ }
+    saveGame();
     postMsg(ME, 'Save file loaded. Welcome back.', 0, 0, 'info');
   };
   r.readAsText(file);
 }
 
 function continueGame() {
-  if (!loadGame()) { syncMenu(); return; }
-  enterGame();
+  const prev = S;
+  if (!loadGame() || !enterLoaded(prev)) {
+    syncMenu();
+    menuMsg('Your saved game couldn\'t be loaded: it may be damaged, or from a newer version of the game. It stays on this device until you start a new game.');
+    return;
+  }
+  saveGame();
   postMsg(ME, 'Welcome back.', 0, 0, 'info');
 }
 
-function enterGame() {
+/** Into the game in S: the HUD comes up and (unless `unsaved`: a save still being tried out) it's saved. */
+function enterGame(unsaved) {
   bakeMap();
   UI.inGame = true; UI.paused = false; UI.overShown = false;
   UI.sel = []; UI.groups = {}; UI.lastAlert = null;
   UI.msgLog = []; $('btn-msgs').hidden = true;
   UI.objAuto = false; UI.objManual = false; UI.objStep = undefined;
+  UI.saveHold = false;
   setSpeed(1, true);
   $('btn-speed').hidden = MP.on; // (a multiplayer game runs at one speed for everyone)
   $('screen-menu').hidden = true;
+  $('m-import-msg').hidden = true;
   $('hud').hidden = false;
   $('toasts').innerHTML = '';
   const colony = S.mode === 'colony';
@@ -2204,7 +2302,7 @@ function enterGame() {
   layoutMinimap();
   placeMinimap();
   armBack();
-  saveGame();
+  if (!unsaved) saveGame();
 }
 
 function toMenu() {
@@ -4564,6 +4662,7 @@ function openBuildingSheet(b) {
       <button class="btn primary big" id="sh-fire">Fire missile</button>${myBombers().length ? '<div class="section-label">Air strike</div><p class="hint" id="sh-bomb-hint"></p><button class="btn big" id="sh-bomb">Bomb it</button>' : ''}`;
   }
   openSheet('bld', b.id, html);
+  UI.sheetMine = mine;
   if (mine) {
     // (each setting is an order: refreshSheet once it's done)
     const set = (name, ...args) => { act(name, [b.id, ...args], () => refreshSheet()); sfx('click'); };
@@ -5525,7 +5624,11 @@ function refreshGoodsSheet(full) {
     ? Object.keys(o).map((t) => `<span class="gtag">${o[t].n} ${o[t].n === 1 ? BDEFS[t].name : BDEFS[t].name + (BDEFS[t].name.endsWith('s') ? '' : 's')}${o[t].working !== undefined ? ` <small>${o[t].working} working${o[t].stopped ? `, ${o[t].stopped} at limit` : ''}</small>` : ''}</span>`).join('')
     : `<span class="hint">${label}</span>`;
   const extraUse = g === 'cement' ? ' Also construction and roads.' : (BDEFS.depot.cost[g] || ['fiber', 'alloy', 'chip', 'stone'].includes(g)) ? ' Also construction.' : '';
-  $('gs-body').innerHTML = `<p class="desc">${GOOD[g].desc}</p>${status}
+  // The figures are rewritten when they change; the chart's canvas stays put (a drag across it reads it) and is
+  // redrawn only for another good or a new sample.
+  if (full || !$('gs-info')) $('gs-body').innerHTML = `<div id="gs-info"></div><div class="section-label">On hand over time</div><canvas class="chart small" id="gs-chart"></canvas>
+    <p class="hint">Rates are over the last two minutes. The Statistics screen in the pause menu shows the whole game.</p>`;
+  const info = `<p class="desc">${GOOD[g].desc}</p>${status}
     <div class="gs-stats">
       <div><b>${fmt(total)}</b><span>on hand</span></div>
       <div><b class="up">+${fmt(rate.made)}</b><span>made / min</span></div>
@@ -5536,11 +5639,13 @@ function refreshGoodsSheet(full) {
     <div class="kv"><span>Waiting for pickup at buildings</span><span>${waiting}</span></div>
     <div class="kv"><span>Wanted right now</span><span>${wantN ? `${wantN} by ${wantB} building${wantB === 1 ? '' : 's'}` : 'Nothing waiting'}</span></div>
     <div class="section-label">Made by</div><div class="goodlist">${list(makers, g === 'cement' || g === 'alloy' ? 'Nothing yet.' : 'Nothing makes it yet.')}</div>
-    <div class="section-label">Used by</div><div class="goodlist">${list(users, 'No buildings use it.')}</div>${extraUse ? `<p class="hint">${extraUse.trim()}</p>` : ''}
-    <div class="section-label">On hand over time</div><canvas class="chart small" id="gs-chart"></canvas>
-    <p class="hint">Rates are over the last two minutes. The Statistics screen in the pause menu shows the whole game.</p>`;
-  const H = S.hist;
-  if (H && H.t.length > 1 && H.p[0].goods && H.p[0].goods[g]) lineChart($('gs-chart'), { xs: H.t, series: [{ name: GOOD[g].name, color: GOOD[g].color, values: H.p[0].goods[g] }] });
+    <div class="section-label">Used by</div><div class="goodlist">${list(users, 'No buildings use it.')}</div>${extraUse ? `<p class="hint">${extraUse.trim()}</p>` : ''}`;
+  const box = $('gs-info'), cv = $('gs-chart');
+  if (box.dataset.html !== info) { box.dataset.html = info; box.innerHTML = info; }
+  const H = S.hist, key = g + ':' + (H ? H.t.length + ':' + (H.t[H.t.length - 1] || 0) : '');
+  if (cv.dataset.key === key) return;
+  cv.dataset.key = key;
+  if (H && H.t.length > 1 && H.p[0].goods && H.p[0].goods[g]) lineChart(cv, { xs: H.t, series: [{ name: GOOD[g].name, color: GOOD[g].color, values: H.p[0].goods[g] }] });
 }
 
 /** Your robots by type: how many, and what they're doing. Opened from the population chip. */
@@ -5820,7 +5925,12 @@ function refreshPopSheet() {
   const wv = `<div class="section-label">Where your workers are</div>
     <button class="btn${R.workerView ? ' primary' : ''}" id="sh-wview">${R.workerView ? 'Hide workers on the map' : 'Show workers on the map'}</button>
     <p class="hint">Rings every Worker on the map (and dots it on the minimap) in the colour of what it's doing, with a line to where it's going: ${Object.values(WORKER_VIEW).map(([c, l]) => `<span style="color:${c}">●</span> ${l}`).join(', ')}. Workers inside a building show as a count on it.</p>`;
-  $('sh-pop').innerHTML = rows.join('') + `<div class="kv"><span>All robots</span><span><b>${total}</b> of ${cap} (the limit)</span></div>` + wv + wb;
+  // Rebuilt only when something shown changes: rebuilt four times a second, a click on Show or the workers
+  // button was lost when the button under it was replaced between press and release.
+  const el = $('sh-pop'), html = rows.join('') + `<div class="kv"><span>All robots</span><span><b>${total}</b> of ${cap} (the limit)</span></div>` + wv + wb;
+  if (el.dataset.html === html) return;
+  el.dataset.html = html;
+  el.innerHTML = html;
   $('sh-wview').onclick = () => { R.workerView = !R.workerView; sfx('click'); refreshPopSheet(); };
   for (const btn of $('sh-pop').querySelectorAll('[data-wb]')) btn.onclick = () => showWarbots(btn.dataset.wb);
 }
@@ -5874,7 +5984,9 @@ function refreshSheet() {
   if (UI.sheetKind === 'road') { refreshRoadSheet(UI.sheetFor); return; }
   if (UI.sheetKind === 'bld') {
     const b = getE(UI.sheetFor);
-    if (!b) { closeSheet(); return; }
+    if (!b || b.dead) { closeSheet(); return; }
+    // Captured (or won back) while its panel was open: the panel is built again for its new owner.
+    if ((b.owner === ME) !== UI.sheetMine) { openBuildingSheet(b); return; }
     refreshBuildingSheet(b);
   } else if (UI.sheetKind === 'bot') {
     const u = getE(UI.sheetFor);
