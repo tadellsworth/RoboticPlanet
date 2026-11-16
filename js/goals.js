@@ -1,18 +1,28 @@
 /*
- * Colony goals: display only. Nothing here changes S (or sends an order): it reads the game once a second (metaTick,
- * from uiTick in js/ui.js) and keeps what it learns on this device, in localStorage, wrapped in try/catch so a browser
- * with storage blocked still plays.
+ * Colony goals, records and achievements: display only. Nothing here changes S (or sends an order): it reads the game
+ * once a second (metaTick, from uiTick in js/ui.js) and keeps what it learns on this device, in localStorage, wrapped
+ * in try/catch so a browser with storage blocked still plays.
  *
  * - Colony goals (COLONY_GOALS): an optional ladder of steps into the deeper systems, in four tiers, for Colony free
  *   play. Each goal counts itself from S (`count(P)`, P = your player); a goal met stays met: its "done" flag goes in
  *   this game's entry on the device (META_GAMES_KEY), keyed by the planet's seed and the time the game started here
  *   (metaStart), so it survives a save and a load without touching the save or the lockstep. The goals button beside
  *   the Goal card (#btn-goals) opens the list (sheet kind 'goals'); finishing one says so in a message.
+ * - Records (RECORDS_KEY): fastest win for each map type and rival level, the biggest colony (robots, buildings), the
+ *   longest game and the most land held. Single-player free games only (no missions, no multiplayer, nothing with
+ *   Boosts, rival bans or Unlimited resources). The Records screen (main menu) shows them; the end screen says when one
+ *   falls.
+ * - Achievements (ACHIEVEMENTS, ACHIEVE_KEY): earned from a game's result and stats (metaGameOver) or from what you do
+ *   during one (metaDeeds); a few open a page of the Lore guide from the Records screen.
  */
 
 const META_GAMES_KEY = 'terrafall.games';
+const RECORDS_KEY = 'terrafall.records';
+const ACHIEVE_KEY = 'terrafall.achievements';
 const META_GAMES_MAX = 12;   // games remembered (for their goal flags), newest first
 const META_FLUSH = 15;       // seconds between writes of what only creeps up (the game's clock, a record growing)
+const STORM_MIN = 20;        // warbots near a rival Command Base as it falls, for Full escort
+const STORM_R = 9;           // ... within this many tiles of it
 
 const META = {
   t: 0, for: null, game: null, gamesDirty: false, flushT: 0,
@@ -31,12 +41,21 @@ function metaGames() {
   if (!META.games) { const l = metaRead(META_GAMES_KEY, []); META.games = Array.isArray(l) ? l.filter((g) => g && typeof g === 'object' && g.k) : []; }
   return META.games;
 }
+function metaRecords() {
+  if (!META.rec) {
+    const r = metaRead(RECORDS_KEY, {});
+    META.rec = { fast: {}, beaten: {}, shapes: {}, ...r };
+  }
+  return META.rec;
+}
+function metaAchieved() { if (!META.ach) META.ach = metaRead(ACHIEVE_KEY, {}); return META.ach; }
 
 /** Write what has changed: now (`force`), or at most every META_FLUSH seconds for the things that only creep up. */
 function metaFlush(force) {
   if (!force && META.flushT > 0) return;
   META.flushT = META_FLUSH;
   if (META.gamesDirty) { META.gamesDirty = false; metaWrite(META_GAMES_KEY, metaGames().slice(0, META_GAMES_MAX)); }
+  if (META.recDirty) { META.recDirty = false; metaWrite(RECORDS_KEY, metaRecords()); }
 }
 
 /* ------------------------------------------------------------------ this game */
@@ -321,6 +340,114 @@ function refreshGoalsSheet() {
   if ($('gl-land').innerHTML !== land) $('gl-land').innerHTML = land;
 }
 
+/* ------------------------------------------------------------------ records */
+
+/** A record went up: kept (and written soon), and noted on this game's entry if it beat an earlier one. */
+function metaRecord(kind, val, extra) {
+  const R0 = metaRecords(), old = R0[kind];
+  if (old && old.v >= val) return;
+  R0[kind] = { v: val, at: Date.now(), k: META.game.k, mode: S.mode, shape: metaShape(), ...(extra || {}) };
+  META.recDirty = true;
+  if (old && old.k !== META.game.k) { (META.game.f.fell = META.game.f.fell || {})[kind] = old.v; META.gamesDirty = true; }
+}
+function metaShape() { const sh = SHAPE_PRESETS[(S.settings && S.settings.shape) || 0]; return sh ? sh.name : 'Standard'; }
+
+/** Once a second in a game that counts: the colony's size, the clock and the land. */
+function metaRecordsTick() {
+  let blds = 0;
+  for (const b of S.buildings) if (!b.dead && b.owner === ME && b.built && b.type !== 'wall' && b.type !== 'gate' && b.type !== 'ramp') blds++;
+  metaRecord('robots', botCount(ME));
+  metaRecord('blds', blds);
+  metaRecord('longest', Math.floor(S.time));
+  metaRecord('land', Math.round(landShare(ME) * 1000) / 10);
+}
+
+/* ------------------------------------------------------------------ achievements */
+
+/*
+ * `lore`: a page of the Lore guide the Records screen links to. `of` / `have`: a count to show on the way there.
+ * Victory ones need a game against the computer that counts (metaCounts); the rest (deeds) any game played without
+ * help, multiplayer and missions included.
+ */
+const ACHIEVEMENTS = [
+  { id: 'win', name: 'Command authority transferred', text: 'Win a game against the computer.' },
+  { id: 'win-hard', name: 'Probability revised', text: 'Win against a Hard rival.' },
+  { id: 'no-turret', name: 'Open roads', text: 'Win against a Normal or Hard rival without building a Pulse Turret.' },
+  { id: 'storm', name: 'Full escort', text: `Capture a rival Command Base with ${STORM_MIN} or more of your warbots round it (not on Easy).` },
+  { id: 'ffa', name: 'Last colony standing', text: 'Win a free-for-all against two or three rivals.' },
+  { id: 'domination', name: 'Settlement priority', text: 'Win by Domination.', lore: 'ls-standards' },
+  { id: 'uplinks', name: 'One voice', text: 'Win on the Uplinks.', lore: 'ls-neutral' },
+  { id: 'shapes', name: 'Survey complete', text: 'Win on every map type.', of: () => SHAPE_PRESETS.length, have: (R0) => SHAPE_PRESETS.filter((s) => R0.shapes[s.name]).length },
+  { id: 'beat-balanced', name: 'The roads are finished', text: 'Beat a Steward, Medium or harder.', lore: 'ls-doctrines' },
+  { id: 'beat-turtle', name: 'Relief has not arrived', text: 'Beat a Warden, Medium or harder.', lore: 'ls-doctrines' },
+  { id: 'beat-raider', name: 'It was yours anyway', text: 'Beat a Salvager, Medium or harder.', lore: 'ls-doctrines' },
+  { id: 'beat-rusher', name: 'Arrival in one d—', text: 'Beat a Herald, Medium or harder.', lore: 'ls-doctrines' },
+  { id: 'beat-tycoon', name: 'Mind the paving', text: 'Beat an Architect, Medium or harder.', lore: 'ls-doctrines' },
+  { id: 'beat-all', name: 'Every doctrine answered', text: 'Beat all five rival doctrines.', lore: 'ls-doctrines', of: () => PERSONALITY_ORDER.length, have: (R0) => PERSONALITY_ORDER.filter((k) => R0.beaten[k]).length },
+  { id: 'ropeway', name: 'Cable crossing', text: 'Run your first Ropeway.' },
+  { id: 'train', name: 'Timetable', text: 'Run your first Freight Train.' },
+  { id: 'nest', name: 'Anomaly cleared', text: 'Clear a Murmur nest.', lore: 'ls-murmur' },
+  { id: 'labdone', name: 'Everything else', text: 'Finish every upgrade at the Research Lab in one game.' },
+  { id: 'colony', name: 'Prepared land', text: 'Reach the last Colony milestone: 80% of the land.', lore: 'ls-standards' },
+  { id: 'goals', name: 'Build phase complete', text: 'Finish every Colony goal in one game.' },
+  { id: 'mission', name: 'Basic training', text: 'Finish a mission.' },
+  { id: 'campaign', name: 'Every chapter', text: 'Finish every mission, at any level.' },
+];
+
+/** Earn one (once, ever, on this device): a message in a game still going, the end screen's list otherwise. */
+function metaEarn(id) {
+  const A = metaAchieved(), a = ACHIEVEMENTS.find((x) => x.id === id);
+  if (!a || A[id]) return false;
+  A[id] = Date.now();
+  metaWrite(ACHIEVE_KEY, A);
+  if (META.game && META.for === S) { (META.game.f.ach = META.game.f.ach || []).push(id); META.gamesDirty = true; }
+  if (UI.inGame && S && S.winner < 0 && $('screen-over').hidden) { toast(`Achievement: ${a.name}. ${a.text}`, 'good'); sfx('complete'); }
+  return true;
+}
+
+/** Things done in a game (any game played without help), looked at once a second. */
+function metaDeeds() {
+  const A = metaAchieved(), P = S.players[ME];
+  if (!A.ropeway && S.buildings.some((b) => !b.dead && b.owner === ME && b.type === 'ropeway' && b.far)) metaEarn('ropeway');
+  if (!A.train && metaMade(P, 'freight') > 0) metaEarn('train');
+  if (!A.nest && S.mode === 'colony' && S.wildlife && (P.stats.captured || 0) > 0) metaEarn('nest');
+  if (!A.labdone && metaTechs(P) >= TECH_ORDER.length) metaEarn('labdone');
+  if (!A.colony && S.mode === 'colony' && !S.mission && S.milestone >= COLONY_MILESTONES.length) metaEarn('colony');
+  if (!A.goals && goalsOn() && META.goals) { const l = goalList(); if (l.length && l.every((g) => META.goals[g.id] && META.goals[g.id].done)) metaEarn('goals'); }
+}
+
+/**
+ * A rival Command Base storming: how many of your armed robots are near each rival's base, kept over the last few
+ * seconds; when that rival falls with its base in your hands, that count decides Full escort. (Its own robots are
+ * scrapped as it falls, so only yours are near it then.)
+ */
+function metaStormTick() {
+  if (S.mode !== 'versus') return;
+  for (const Q of S.players) {
+    if (Q.absent || Q.id === ME || !foes(Q.id, ME)) continue;
+    const L = getE(Q.lander);
+    if (!Q.out) {
+      let n = 0;
+      if (L && !L.dead) for (const u of S.bots) if (!u.dead && u.owner === ME && isArmy(u) && dist2(u.x, u.y, L.x + 0.5, L.y + 0.5) <= STORM_R * STORM_R) n++;
+      const h = META.near[Q.id] = META.near[Q.id] || [];
+      h.push(n); if (h.length > 4) h.shift();
+    }
+    if (Q.out && !META.out[Q.id]) {
+      META.out[Q.id] = true;
+      const most = Math.max(0, ...(META.near[Q.id] || []));
+      if (L && !L.dead && L.owner === ME && most >= STORM_MIN && S.difficulty !== 'easy' && metaCounts()) metaEarn('storm');
+    }
+  }
+}
+
+/** The missions finished on this device (js/missions.js keeps them): Basic training, Every chapter. */
+function metaCampaign() {
+  if (typeof loadCampaign !== 'function' || typeof MISSIONS === 'undefined') return;
+  const done = loadCampaign().done || {}, fin = (m) => Array.isArray(done[m.id]) && done[m.id].some(Boolean);
+  if (MISSIONS.some(fin)) metaEarn('mission');
+  if (MISSIONS.length && MISSIONS.every(fin)) metaEarn('campaign');
+}
+
 /* ------------------------------------------------------------------ the clock */
 
 /** From uiTick: once a second of real time, while a game is on screen. */
@@ -339,13 +466,146 @@ function metaTick(dt) {
     if (!META.game.f.assist && (S.unlimited || P.boosts || (S.ban && Object.keys(S.ban).length))) { META.game.f.assist = 1; META.gamesDirty = true; }
     if (!META.game.f.turret && S.winner < 0 && S.buildings.some((b) => !b.dead && b.owner === ME && b.type === 'turret' && !b.built)) { META.game.f.turret = 1; META.gamesDirty = true; }
     if (goalsOn()) goalsTick();
+    if (metaCounts()) metaRecordsTick();
+    if (!metaAssisted()) { metaDeeds(); metaStormTick(); }
     if (UI.sheetKind === 'goals') refreshGoalsSheet();
     metaFlush(false);
   } catch (e) { console.error('Terrafall: goals and records skipped a beat.', e); }
 }
 
-/** From initUI: the goals button, and a last write when the page goes. */
+/* ------------------------------------------------------------------ the end of a game */
+
+/**
+ * From the end screen (showGameOver, showMissionOver): the result's records and achievements, listed under the stats
+ * (#o-meta). A game's win counts once, even if the screen comes up again (playing on past a victory, then losing).
+ */
+function metaGameOver() {
+  const box = $('o-meta');
+  if (box) { box.hidden = true; box.innerHTML = ''; }
+  if (!S || !S.players[ME]) return;
+  try {
+    if (META.for !== S) metaStart();
+    const g = META.game, lines = [];
+    if (metaWatched() && !metaAssisted()) { metaStormTick(); metaDeeds(); }
+    if (S.mission) metaCampaign();
+    const won = S.winner === ME || allies(S.winner, ME);
+    if (!g.f.ended && S.mode === 'versus' && metaCounts()) {
+      g.f.ended = 1; META.gamesDirty = true;
+      metaRecordsTick();
+      const R0 = metaRecords();
+      if (won) {
+        const shape = metaShape(), diff = S.difficulty, t = Math.floor(S.time);
+        const row = R0.fast[shape] = R0.fast[shape] || {}, old = row[diff];
+        if (!old || t < old.t) {
+          row[diff] = { t, at: Date.now(), k: g.k };
+          g.f.fast = { shape, diff, t, was: old ? old.t : null };
+        }
+        R0.shapes[shape] = 1;
+        R0.wins = (R0.wins || 0) + 1;
+        if (diff !== 'easy') for (const Q of S.players) if (!Q.absent && Q.ai && foes(Q.id, ME) && isDoctrine(Q.style)) R0.beaten[Q.style] = 1;
+        META.recDirty = true;
+        metaEarn('win');
+        if (diff === 'hard') metaEarn('win-hard');
+        if ((diff === 'normal' || diff === 'hard') && !g.f.turret) metaEarn('no-turret');
+        if (S.players.length > 2 && !S.teams) metaEarn('ffa');
+        if (S.endHow === 'domination') metaEarn('domination');
+        if (S.endHow === 'uplinks') metaEarn('uplinks');
+        if (SHAPE_PRESETS.every((s) => R0.shapes[s.name])) metaEarn('shapes');
+        for (const k of PERSONALITY_ORDER) if (R0.beaten[k]) metaEarn('beat-' + k);
+        if (PERSONALITY_ORDER.every((k) => R0.beaten[k])) metaEarn('beat-all');
+      }
+    }
+    metaFlush(true);
+    // What fell in this game: the fastest win, and the other records this game holds that beat an earlier one.
+    const R0 = metaRecords(), f = g.f;
+    if (f.fast) lines.push(['rec', `New record: fastest win on ${f.fast.shape}, ${DIFFICULTY[f.fast.diff].label}: ${fmtTime(f.fast.t)}` + (f.fast.was != null ? ` (was ${fmtTime(f.fast.was)}).` : '.')]);
+    const fell = RECORD_KINDS.filter(([kind]) => f.fell && f.fell[kind] !== undefined && R0[kind] && R0[kind].k === g.k);
+    if (fell.length) lines.push(['rec', (f.fast ? 'And ' : 'New ') + (fell.length > 1 ? 'records: ' : 'record: ') + fell.map(([kind, , said, fmt]) => `${said} ${fmt(R0[kind].v)}`).join(', ') + '.']);
+    for (const id of f.ach || []) { const a = ACHIEVEMENTS.find((x) => x.id === id); if (a) lines.push(['ach', `Achievement: ${a.name}. ${a.text}`]); }
+    if (box && lines.length) {
+      box.innerHTML = lines.map(([k, t]) => `<div class="om-${k}"><i aria-hidden="true">${k === 'rec' ? '★' : '◆'}</i><span>${esc(t)}</span></div>`).join('');
+      box.hidden = false;
+    }
+  } catch (e) { console.error('Terrafall: the end-of-game records failed.', e); }
+}
+
+/* ------------------------------------------------------------------ the Records screen (main menu) */
+
+/** A long game's length: 1:05:12, or 42:10 under an hour. */
+function metaClock(s) {
+  s = Math.max(0, Math.floor(s));
+  return s >= 3600 ? `${Math.floor(s / 3600)}:${String(Math.floor(s / 60) % 60).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}` : fmtTime(s);
+}
+/** The records kept besides the fastest wins: key, name on the Records screen, words on the end screen, format. */
+const RECORD_KINDS = [
+  ['longest', 'Longest game', 'longest game', (v) => metaClock(v)],
+  ['land', 'Most land held', 'most land held', (v) => `${v}%`],
+  ['robots', 'Biggest colony: robots', 'most robots', (v) => `${v}`],
+  ['blds', 'Biggest colony: buildings', 'most buildings', (v) => `${v}`],
+];
+
+function metaDate(ms) { try { return new Date(ms).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' }); } catch (e) { return ''; } }
+
+function renderRecords() {
+  const R0 = metaRecords(), A = metaAchieved();
+  const tiles = RECORD_KINDS.map(([kind, label, , fmt]) => {
+    const r = R0[kind];
+    const sub = r ? [r.mode === 'colony' ? 'Colony' : 'Versus', r.shape].filter(Boolean).join(' · ') : 'None yet';
+    return `<div class="rc-tile"><span>${label}</span><b>${r ? fmt(r.v) : '–'}</b><small>${esc(sub)}</small>${r ? `<small>${metaDate(r.at)}</small>` : ''}</div>`;
+  }).join('');
+  const shapes = SHAPE_PRESETS.filter((s) => R0.fast[s.name]);
+  const diffs = Object.keys(DIFFICULTY);
+  const fast = shapes.length
+    ? `<table class="rc-fast"><thead><tr><th>Map type</th>${diffs.map((d) => `<th>${DIFFICULTY[d].label}</th>`).join('')}</tr></thead><tbody>` +
+      shapes.map((s) => `<tr><th>${esc(s.name)}</th>${diffs.map((d) => { const r = R0.fast[s.name][d]; return `<td>${r ? fmtTime(r.t) : '–'}</td>`; }).join('')}</tr>`).join('') + '</tbody></table>'
+    : '<p class="hint">No wins yet. Win a Versus game against the computer and its time goes here, by map type and rival level.</p>';
+  const got = ACHIEVEMENTS.filter((a) => A[a.id]).length;
+  const achs = ACHIEVEMENTS.map((a) => {
+    const on = !!A[a.id], prog = !on && a.of ? ` <span class="rc-of">${a.have(R0)}/${a.of()}</span>` : '';
+    return `<div class="rc-ach${on ? ' on' : ''}"><i aria-hidden="true">${on ? '◆' : '◇'}</i><div><b>${esc(a.name)}</b>${prog}<p>${esc(a.text)}</p>` +
+      `<small>${on ? 'Earned ' + metaDate(A[a.id]) : 'Not yet'}</small>` +
+      (a.lore && on ? `<button type="button" class="btn small ghost rc-lore" data-lore-at="${a.lore}">Lore ›</button>` : '') + '</div></div>';
+  }).join('');
+  $('rc-body').innerHTML = `<p class="mode-desc">Kept on this device. Records and wins count single-player Versus and Colony games (not missions or multiplayer) played without Boosts, rival bans or Unlimited resources.</p>
+    <div class="rc-tiles">${tiles}</div>
+    <h3>Fastest wins</h3>${fast}
+    <h3>Achievements <span class="rc-count">${got} of ${ACHIEVEMENTS.length}</span></h3><div class="rc-achs">${achs}</div>
+    <div class="rc-foot"><button type="button" class="btn small ghost" id="rc-forget">Forget records and achievements</button></div>`;
+  for (const b of $('rc-body').querySelectorAll('[data-lore-at]')) b.onclick = () => { sfx('click'); openLore(b.dataset.loreAt); };
+  $('rc-forget').onclick = () => {
+    const b = $('rc-forget');
+    if (!b.classList.contains('arm')) { b.classList.add('arm'); b.textContent = 'Tap again to forget them all on this device'; return; }
+    META.rec = { fast: {}, beaten: {}, shapes: {} }; META.ach = {};
+    try { localStorage.removeItem(RECORDS_KEY); localStorage.removeItem(ACHIEVE_KEY); } catch (e) { /* storage blocked */ }
+    sfx('click');
+    renderRecords();
+  };
+}
+
+function openRecords() {
+  metaCampaign(); // (missions finished before achievements existed count too)
+  renderRecords();
+  $('screen-records').hidden = false;
+  $('rc-body').scrollTop = 0;
+  try { history.pushState({ records: 1 }, ''); } catch (e) { /* no history to add to (a sandboxed frame) */ }
+}
+
+function closeRecords(fromBack) {
+  if ($('screen-records').hidden) return;
+  $('screen-records').hidden = true;
+  if (!fromBack) try { if (history.state && history.state.records) history.back(); } catch (e) { /* as above */ }
+}
+
+/** From initUI: the Records button and screen, the goals button, and a last write when the page goes. */
 function initMeta() {
+  if ($('m-records')) $('m-records').onclick = () => { sfx('click'); openRecords(); };
+  if ($('rc-close')) $('rc-close').onclick = () => { sfx('click'); closeRecords(); };
   if ($('btn-goals')) $('btn-goals').onclick = () => { sfx('click'); if (UI.sheetKind === 'goals') closeSheet(); else openGoalsSheet(); };
+  // Esc and the phone's Back close the screen (the Lore guide over it closes first: see initMenu and initLore).
+  window.addEventListener('keydown', (e) => {
+    if (UI.inGame || e.key !== 'Escape' || e.defaultPrevented || $('screen-records').hidden || !$('screen-lore').hidden) return;
+    e.preventDefault(); closeRecords();
+  });
+  window.addEventListener('popstate', () => { if (!UI.inGame && !(history.state && history.state.records)) closeRecords(true); });
   window.addEventListener('pagehide', () => metaFlush(true));
 }

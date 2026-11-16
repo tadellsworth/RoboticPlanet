@@ -2631,7 +2631,7 @@ function helpPage(id) { pagerShow(HELP_PAGER, id); }
  * Its pictures are fetched the first time it opens (data-src), all at once, so the service worker keeps them for
  * offline play from then on. A phone's Back button closes it: opening adds an entry to the history, closing takes it back.
  */
-function openLore() {
+function openLore(at) {
   const scr = $('screen-lore');
   // (In the one-file copy of the game the pictures are a bundle beside the page, lore.js, fetched the first time.)
   const show = () => { for (const img of scr.querySelectorAll('img[data-src]')) { const d = window.LORE_DATA; img.src = (d && d[img.dataset.src]) || img.dataset.src; img.removeAttribute('data-src'); } };
@@ -2642,7 +2642,7 @@ function openLore() {
     document.head.appendChild(s);
   } else show();
   scr.hidden = false;
-  pagerShow(LORE_PAGER, pagerSections(LORE_PAGER)[0].id);
+  pagerShow(LORE_PAGER, at && $(at) ? at : pagerSections(LORE_PAGER)[0].id); // (`at`: a page to open on, from the Records screen)
   try { history.pushState({ lore: 1 }, ''); } catch (e) { /* no history to add to (a sandboxed frame) */ }
 }
 
@@ -2726,6 +2726,7 @@ function showGameOver() {
   ].map(([k, v]) => `<span>${k}</span><span>${v}</span>`).join('');
   // Won a game against the computer: you can play on (keepPlaying), if it was a fun one and there's more fighting to do.
   $('o-keep').hidden = !(won && !MP.on);
+  metaGameOver(); // (records that fell and achievements earned: js/goals.js)
   $('screen-over').hidden = false;
 }
 
@@ -3035,6 +3036,7 @@ function showMissionOver() {
   }
   $('o-menu').textContent = 'Missions';
   UI.overMenu = () => { openMissions(); UI.msSel = won && k + 1 < MISSIONS.length ? k + 1 : k; UI.msDiff = M.diff; renderMissions(); };
+  metaGameOver(); // (achievements earned: js/goals.js)
   $('screen-over').hidden = false;
 }
 
