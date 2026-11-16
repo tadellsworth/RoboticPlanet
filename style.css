@@ -24,10 +24,12 @@ html, body {
   margin: 0; height: 100%; overflow: hidden; background: var(--bg); color: var(--text);
   font: 15px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   overscroll-behavior: none; touch-action: none; user-select: none; -webkit-user-select: none;
+  -webkit-touch-callout: none; /* no Copy / Save image bubble on a long press (iOS) */
 }
 [hidden] { display: none !important; }
 canvas#game { position: fixed; inset: 0; display: block; touch-action: none; }
 button { font: inherit; color: inherit; cursor: pointer; }
+#hud small, #screen-pause small, #screen-stats small, #screen-boost small, #screen-help small { font-size: 12px; } /* (nothing in a game is set smaller than 12 px) */
 
 /* ---------- top bar ---------- */
 #topbar {
@@ -97,6 +99,10 @@ body::before {
   box-shadow: 0 4px 14px rgba(0, 0, 0, 0.3);
 }
 .objective b { color: var(--accent); }
+/* The goal card and, beside it, the button that brings back the messages that have gone by. */
+.objrow { align-self: flex-start; max-width: 100%; display: flex; align-items: flex-start; gap: 6px; }
+.objrow .objective { align-self: auto; min-width: 0; }
+.msgs-btn { flex: none; min-height: 32px; padding: 5px 8px; box-shadow: 0 4px 14px rgba(0, 0, 0, 0.3); }
 /* Planet event under way (or coming): name, countdown, what it does; the trader's deal. */
 .event-card {
   align-self: flex-start; max-width: min(100%, 420px); background: #2a2216; border: 1px solid rgba(255, 196, 120, 0.45);
@@ -130,7 +136,7 @@ body::before {
 .win-bar { position: relative; height: 8px; border-radius: 4px; background: rgba(255, 255, 255, 0.1); }
 .win-bar i { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 4px; background: var(--c); }
 .win-bar b { position: absolute; top: -3px; bottom: -3px; width: 2px; margin-left: -1px; background: #fff; opacity: 0.8; border-radius: 1px; }
-.win-note { font-size: 11.5px; opacity: 0.75; }
+.win-note { font-size: 12px; opacity: 0.75; }
 .up-dots { display: flex; gap: 6px; }
 .up-dots i { width: 14px; height: 14px; border-radius: 50%; background: var(--c); border: 2px solid rgba(255, 255, 255, 0.85); box-sizing: border-box; }
 .up-dots i.free { background: transparent; border-color: rgba(255, 255, 255, 0.5); }
@@ -165,8 +171,18 @@ body::before {
   background: rgba(14, 15, 20, 0.72); color: var(--text); display: grid; place-items: center;
 }
 .mm-show { position: fixed; right: calc(var(--safe-r) + 8px); top: calc(var(--safe-t) + 96px); z-index: 5; min-height: 36px; }
-body.mm-on .objective { margin-right: calc(var(--mm-w, 100px) + 8px); }
-body.mm-off .objective { margin-right: 54px; }
+/* Under a finger the minimap's close button hangs under it as a tab, 44 px to press. On the minimap itself, sized
+   for a finger, it took the taps meant for the map beneath (the top right corner, where a rival's base often is). */
+@media (pointer: coarse) {
+  .minimap { overflow: visible; }
+  .minimap canvas { border-radius: 9px; }
+  .mm-hide { top: calc(100% + 1px); right: 8px; width: 44px; height: 24px; border-radius: 0 0 10px 10px;
+    background: #0c0d11; border: 1px solid rgba(255, 255, 255, 0.2); border-top: 0; box-shadow: 0 6px 12px rgba(0, 0, 0, 0.35); }
+  .mm-hide::after { content: ''; position: absolute; left: 0; right: 0; top: 0; height: 44px; }
+  .mm-show { min-width: 44px; min-height: 44px; }
+}
+body.mm-on .objrow { margin-right: calc(var(--mm-w, 100px) + 8px); }
+body.mm-off .objrow { margin-right: 54px; }
 @media (max-width: 999px) {
   body.mm-on #toasts { left: calc(var(--safe-l) + 8px); right: calc(var(--safe-r) + var(--mm-w, 100px) + 16px); width: auto; transform: none; }
 }
@@ -176,8 +192,9 @@ body.mm-off .objective { margin-right: 54px; }
   position: fixed; left: 50%; transform: translateX(-50%); top: calc(var(--safe-t) + 150px);
   width: min(94vw, 460px); display: flex; flex-direction: column; gap: 5px; z-index: 6; pointer-events: none;
 }
+/* A message lets taps through to the map under it; only its Go chip (there when it has a place to show) takes them. */
 .toast {
-  pointer-events: auto; background: #252a36; border: 1px solid var(--line); border-left: 4px solid var(--accent);
+  pointer-events: none; display: flex; align-items: center; gap: 8px; background: #252a36; border: 1px solid var(--line); border-left: 4px solid var(--accent);
   border-radius: 10px; padding: 6px 10px; font-size: 13px; text-align: left; box-shadow: 0 6px 20px rgba(0,0,0,0.35); animation: toastIn 0.25s;
 }
 .toast.bad { border-left-color: var(--danger); }
@@ -187,6 +204,19 @@ body.mm-off .objective { margin-right: 54px; }
 .toast.lost { border-left-color: var(--danger); background: #3a2026; border-color: rgba(255, 90, 110, 0.45); font-weight: 700; }
 .toast.lost::before { content: '\26A0\FE0E  '; color: var(--danger); }
 .toast.out { opacity: 0; transition: opacity 0.4s; }
+.toast > span { flex: 1 1 auto; min-width: 0; }
+.toast-go { pointer-events: auto; flex: none; align-self: stretch; min-width: 44px; min-height: 30px; margin: -3px -6px -3px 0; padding: 0 10px;
+  border: 1px solid rgba(56, 212, 255, 0.5); border-radius: 8px; background: rgba(56, 212, 255, 0.12); color: var(--accent); font-weight: 700; }
+/* The message list (the button beside the goal card). */
+.msg-list { display: flex; flex-direction: column; }
+.msg-row { display: grid; grid-template-columns: 44px 1fr auto; gap: 8px; align-items: center; padding: 8px 0 8px 8px; border-top: 1px solid var(--line);
+  border-left: 3px solid var(--accent); font-size: 14px; }
+.msg-row.bad, .msg-row.lost { border-left-color: var(--danger); } .msg-row.good { border-left-color: var(--good); } .msg-row.warn { border-left-color: var(--warn); }
+.msg-row .msg-t { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+.msg-row .btn { min-width: 44px; }
+/* The building the goal card asks for, pinned at the top of the Build list whichever tab is showing. */
+.bcard.next { grid-column: 1 / -1; border-color: rgba(56, 212, 255, 0.6); background: rgba(56, 212, 255, 0.08); }
+.bcard.next .bhave::before { content: 'Next step · '; color: var(--accent); font-weight: 700; }
 @keyframes toastIn { from { transform: translateY(-8px); opacity: 0; } }
 
 /* ---------- the briefing at the start of a game ---------- */
@@ -255,17 +285,34 @@ kbd {
 .banner-actions .btn { flex: 1; }
 
 /* ---------- bottom sheet ---------- */
+/* A panel opens at half height, so the map (and what the panel is about) stays in view above it; its grab
+   handle takes it to full height or down to its title strip (setSheetSize). Lists and charts open full. The
+   body scrolls inside; the handle and the close button stay put. */
 #sheet {
-  position: fixed; left: 0; right: 0; bottom: 0; z-index: 8; max-height: 72vh; overflow-y: auto; touch-action: pan-y;
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 8; max-height: 46vh; max-height: 46dvh; display: flex; flex-direction: column;
   background: #181a22; border-top: 1px solid var(--line); border-radius: 18px 18px 0 0;
-  padding: 14px calc(var(--safe-r) + 14px) calc(var(--safe-b) + 16px) calc(var(--safe-l) + 14px);
   box-shadow: 0 -10px 40px rgba(0,0,0,0.5); animation: sheetIn 0.22s ease-out;
 }
+/* (dvh: the height that is really showing. A phone browser's vh counts the space under its own bars; vh stays as
+   the fallback for browsers without dvh.) Full height reaches up to the goods and the clock, which stay in view. */
+#sheet.full { max-height: calc(100vh - var(--hud-top, 130px)); max-height: calc(100dvh - var(--hud-top, 130px)); }
+#sheet.peek { max-height: 80px; }
+#sheet-body {
+  flex: 1 1 auto; min-height: 0; overflow-y: auto; touch-action: pan-y; overscroll-behavior: contain;
+  padding: 2px calc(var(--safe-r) + 14px) calc(var(--safe-b) + 16px) calc(var(--safe-l) + 14px);
+}
+#sheet.peek #sheet-body { overflow: hidden; }
+.sheet-grab { flex: none; position: relative; height: 22px; padding: 0; border: 0; background: none; touch-action: none; cursor: ns-resize; }
+.sheet-grab::before { content: ''; position: absolute; left: 50%; top: 9px; width: 40px; height: 5px; margin-left: -20px; border-radius: 3px; background: rgba(255, 255, 255, 0.28); }
+/* 44 px to take hold of: the strip, and as much again above the panel's edge. */
+.sheet-grab::after { content: ''; position: absolute; left: 0; right: 0; top: -22px; bottom: 0; }
 @keyframes sheetIn { from { transform: translateY(30px); opacity: 0.4; } }
 @media (min-width: 700px) { #sheet { left: 50%; right: auto; width: 520px; transform: translateX(-50%); animation: none; } }
+/* While a panel is open across the bottom the goal card steps aside: the map between the two is what's left to see. */
+@media (max-width: 999px), (max-height: 519px) { body.sheet-open .objrow { display: none; } }
 .sheet-close {
-  position: absolute; top: 10px; right: calc(var(--safe-r) + 10px); width: 36px; height: 36px; border-radius: 50%;
-  background: rgba(255,255,255,0.07); border: 0; display: grid; place-items: center;
+  position: absolute; top: 12px; right: calc(var(--safe-r) + 10px); width: 36px; height: 36px; border-radius: 50%;
+  background: #262933; border: 0; display: grid; place-items: center; z-index: 1;
 }
 .sheet-title { display: flex; align-items: center; gap: 10px; margin: 0 40px 6px 0; }
 .sheet-title img { width: 46px; height: 46px; }
@@ -303,7 +350,7 @@ kbd {
 .build-tabs { margin-top: 6px; overflow-x: auto; scrollbar-width: none; }
 .build-tabs::-webkit-scrollbar { display: none; }
 .build-tabs button { white-space: nowrap; padding: 8px 10px; display: inline-flex; align-items: center; justify-content: center; gap: 5px; }
-.build-tabs .n { font-size: 11px; font-weight: 700; opacity: 0.65; background: rgba(255,255,255,0.08); border-radius: 8px; padding: 1px 6px; }
+.build-tabs .n { font-size: 12px; font-weight: 700; opacity: 0.65; background: rgba(255,255,255,0.08); border-radius: 8px; padding: 1px 6px; }
 @media (max-width: 480px) { .build-tabs button { padding: 8px 4px; font-size: 13px; } .build-tabs .n { display: none; } }
 .bcard {
   display: grid; grid-template-columns: 44px 1fr; gap: 2px 8px; align-items: center; text-align: left;
@@ -403,7 +450,7 @@ canvas.chart { display: block; width: 100%; height: 170px; touch-action: pan-y; 
 .hb-track b { position: absolute; top: 50%; transform: translate(6px, -50%); font-size: 12px; font-weight: 700; color: var(--text); }
 .spark { margin: 2px 0 6px; }
 .spark svg { display: block; width: 100%; height: 26px; }
-.spark span { font-size: 11px; color: var(--muted); }
+.spark span { font-size: 12px; color: var(--muted); }
 .card {
   width: min(100%, 420px); background: var(--panel); border: 1px solid var(--line); border-radius: 20px;
   padding: 22px 20px; box-shadow: 0 20px 60px rgba(0,0,0,0.5);
@@ -432,6 +479,26 @@ canvas.chart { display: block; width: 100%; height: 170px; touch-action: pan-y; 
 .ms-foot { flex-shrink: 0; }
 .ms-foot[hidden] { display: none; }
 .help-body h3 { margin: 14px 0 4px; font-size: 16px; color: var(--accent); }
+/* How to play under a finger (helpForTouch): the touch controls first, and no key names (the keyboard and mouse
+   paragraphs, and brackets that only name keys, are marked .keys). */
+.touch-card { border: 1px solid rgba(255, 107, 74, 0.45); border-radius: 12px; background: rgba(255, 107, 74, 0.08); padding: 2px 12px 8px; margin-bottom: 8px; }
+.touch-card h3 { margin-top: 10px; }
+.touch-card .chain li { margin: 4px 0; }
+.touch-card .hint { margin: 4px 0 0; }
+@media (pointer: coarse) { .help-body .keys { display: none; } }
+/* On a phone the How to play card's title and button are compact, so the text has the height; held on its side the
+   card takes the whole width and the touch card's lines sit in two columns, so it shows on one screen. */
+@media (max-width: 699px) and (min-height: 520px), (orientation: landscape) and (max-height: 519px) {
+  #screen-help .help-card { padding: 12px 16px; }
+  #screen-help .help-card h2 { font-size: 18px; margin: 0 0 4px; }
+  #screen-help .help-card .btn.big { padding: 9px; margin-top: 6px; font-size: 15px; }
+}
+@media (orientation: landscape) and (max-height: 519px) {
+  #screen-help { padding: calc(var(--safe-t) + 8px) calc(var(--safe-r) + 8px) calc(var(--safe-b) + 8px) calc(var(--safe-l) + 8px); }
+  #screen-help .help-card { width: 100%; max-height: calc(100vh - 16px); max-height: calc(100dvh - 16px - var(--safe-t) - var(--safe-b)); }
+  .touch-card { position: relative; } .touch-card h3 { margin: 8px 0 2px; } .touch-card .hint { position: absolute; top: 10px; right: 12px; margin: 0; }
+  .touch-card .chain { columns: 2; column-gap: 28px; margin: 2px 0; } .touch-card .chain li { break-inside: avoid; margin: 2px 0; }
+}
 .help-body p { margin: 4px 0; color: #d3d9e2; }
 .chain { margin: 4px 0; padding-left: 18px; color: #d3d9e2; }
 .chain li { margin: 3px 0; }
@@ -474,8 +541,9 @@ i.g.uranium { background: var(--g-uranium); } i.g.fissile { background: var(--g-
   .res-chip, .goods.two-rows .res-chip { min-width: 62px; padding: 6px 10px; font-size: 14px; border-radius: 10px; }
   .toprow { grid-area: row; }
   #pop { flex: none; }
-  .objective { grid-area: obj; justify-self: start; max-width: 560px; font-size: 14px; padding: 7px 12px; }
-  body.mm-on .objective, body.mm-off .objective { margin-right: 0; }
+  .objrow { grid-area: obj; justify-self: start; }
+  .objective { max-width: 560px; font-size: 14px; padding: 7px 12px; }
+  body.mm-on .objrow, body.mm-off .objrow { margin-right: 0; }
   .minimap { right: calc(var(--safe-r) + 12px); }
   #toasts { top: auto; width: 440px; left: 50%; transform: translateX(-50%); }
 
@@ -502,11 +570,13 @@ i.g.uranium { background: var(--g-uranium); } i.g.fissile { background: var(--g-
   body.sheet-open #bottombar, body.sheet-open #toasts { left: calc((100% - 444px) / 2); }
 
   /* Panels dock on the right instead of covering the middle of the map. */
-  #sheet { left: auto; right: calc(var(--safe-r) + 12px); top: var(--hud-top, 70px); bottom: calc(var(--safe-b) + 14px);
+  #sheet, #sheet.full, #sheet.peek { left: auto; right: calc(var(--safe-r) + 12px); top: var(--hud-top, 70px); bottom: calc(var(--safe-b) + 14px);
     width: 420px; max-height: none; transform: none; border: 1px solid var(--line); border-radius: 16px;
-    padding: 14px 16px 16px; animation: panelIn 0.18s ease-out; }
+    overflow: hidden; animation: panelIn 0.18s ease-out; }
+  #sheet-body, #sheet.peek #sheet-body { padding: 14px 16px 16px; overflow-y: auto; }
+  .sheet-grab { display: none; }
   @keyframes panelIn { from { transform: translateX(24px); opacity: 0.4; } }
-  .sheet-close { right: 10px; }
+  .sheet-close { top: 10px; right: 10px; }
   .build-grid { grid-template-columns: repeat(2, 1fr); }
   #banner { bottom: calc(var(--safe-b) + 80px); width: 600px; }
 
@@ -515,9 +585,15 @@ i.g.uranium { background: var(--g-uranium); } i.g.fissile { background: var(--g-
   .card.missions-card { width: min(100%, 680px); }
   .btn:hover:not(:disabled), .chip-btn:hover, .seg button:hover:not(.on) { filter: brightness(1.15); }
 }
+/* A very wide screen: the Build list is three cards across in a wider panel (the whole list in about one screen at 1080p). */
+@media (min-width: 1600px) and (min-height: 520px) {
+  body.sheet-build #sheet { width: 620px; }
+  body.sheet-build .build-grid { grid-template-columns: repeat(3, 1fr); }
+  body.sheet-build #bottombar, body.sheet-build #toasts { left: calc((100% - 644px) / 2); }
+}
 @media (pointer: fine) { body.mode-road canvas#game, body.mode-place canvas#game, body.mode-attack canvas#game, body.mode-aim canvas#game, body.mode-land canvas#game, body.mode-airdrop canvas#game { cursor: crosshair; } }
 /* Aiming a Missile Silo: keep the map clear to tap. */
-body.mode-aim .objective, body.mode-land .objective, body.mode-airdrop .objective { display: none; }
+body.mode-aim .objrow, body.mode-land .objrow, body.mode-airdrop .objrow { display: none; }
 .air-drops { display: flex; flex-wrap: wrap; gap: 6px; }
 .air-drops .btn { flex: 1 1 auto; }
 .air-drops .cost-inline { display: block; font-size: 0.85em; opacity: 0.85; }
@@ -565,6 +641,25 @@ body.mode-aim .objective, body.mode-land .objective, body.mode-airdrop .objectiv
 .gchip.on kbd { background: rgba(125, 255, 160, 0.25); }
 .gchip:hover { border-color: rgba(255, 255, 255, 0.3); }
 .selbar #selbar-clear { position: absolute; top: 6px; right: 6px; padding: 4px 8px; min-height: 0; }
+/* What's selected, a line of what they're doing, then the tools: under a finger All in view, Whole army, Box,
+   Info (and Undo just after an order), with a mouse Save as group only and the right-click hint above it. Under a
+   finger the bar runs the width of the screen, with the close button beside the title. */
+.selbar .sel-tools { display: flex; gap: 6px; margin-top: 6px; overflow-x: auto; touch-action: pan-x; scrollbar-width: none; }
+.selbar .sel-tools::-webkit-scrollbar { display: none; }
+.selbar .sel-tools .btn { flex: none; white-space: nowrap; }
+.selbar:not(.touch) .sel-tools > :not(#selbar-group) { display: none; }
+.selbar .sel-tools #selbar-group { margin-top: 0; }
+.selbar .ok { color: var(--good); }
+.selbar.touch { left: calc(var(--safe-l) + 8px); right: calc(var(--safe-r) + 8px); max-width: 520px; padding: 8px 10px 9px 12px; }
+.selbar.touch .sel-top { display: flex; align-items: center; gap: 6px; }
+.selbar.touch .sel-text { flex: 1 1 auto; min-width: 0; }
+.selbar.touch .sel-mouse { display: none; }
+.selbar.touch #sel-status { margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.selbar.touch #selbar-clear { position: static; flex: none; width: 44px; height: 44px; padding: 0; }
+.selbar #sel-box.on { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+/* Where panels cover the bottom of the screen the bar steps aside for them (and taps are then not orders: selBarShowing),
+   and so do the control-group chips, for a panel or a mode's banner. */
+@media (max-width: 999px), (max-height: 519px) { body.sheet-open .selbar.touch, body.sheet-open .groupbar, body.mode-on .groupbar { display: none; } }
 .map-tip { position: fixed; z-index: 18; pointer-events: none; max-width: 260px;
   background: #0d0f15; border: 1px solid rgba(255, 255, 255, 0.16); border-radius: 10px; padding: 7px 10px;
   font-size: 13px; line-height: 1.35; box-shadow: 0 8px 22px rgba(0, 0, 0, 0.5); }
@@ -577,7 +672,7 @@ body.mode-aim .objective, body.mode-land .objective, body.mode-airdrop .objectiv
 /* Paths: the banner sits at the top so it never covers where you're drawing, and the plan buttons
    sit three to a row (Undo, Clear, Build), then Traffic map and Done. */
 body.mode-road #banner { top: calc(var(--hud-top, 64px) + 6px); bottom: auto; }
-body.mode-road .objective { display: none; }
+body.mode-road .objrow { display: none; }
 .banner-actions .btn { flex: 1 1 28%; }
 #banner-text details.how { margin-top: 4px; color: var(--muted); font-size: 13px; }
 #banner-text details.how summary { cursor: pointer; color: var(--accent); font-weight: 600; font-size: 13px; }
@@ -589,6 +684,133 @@ body.mode-road .objective { display: none; }
   body.mode-road .banner-actions .btn { padding: 8px 6px; font-size: 14px; min-height: 0; }
   body.mode-road .banner-actions .road-seg button { padding: 6px 2px; font-size: 13px; flex: 1 0 calc(25% - 3px); min-width: 0; }
 }
+/* ---------- a phone on its side ----------
+   The tools are a rail down the left edge, panels a column down the right, the goods one row across the top,
+   a mode's banner and the selection bar a box at the bottom left beside the rail, messages at the bottom right.
+   (It had the upright layout squeezed into a third of the height: a quarter to a third of the screen was map.) */
+@media (orientation: landscape) and (max-height: 519px) {
+  :root { --rail: calc(var(--safe-l) + 60px); --col: min(48vw, calc(400px + var(--safe-r))); }
+  #topbar { gap: 4px; padding-top: calc(var(--safe-t) + 4px); }
+  .goods, .goods.two-rows { grid-template-columns: repeat(var(--goods-n, 14), 1fr); gap: 3px; }
+  .res-chip, .goods.two-rows .res-chip { padding: 2px; font-size: 12px; gap: 3px; min-height: 26px; border-radius: 8px; }
+  .toprow .chip { min-height: 36px; padding: 3px 9px; }
+  .objective { padding: 5px 9px; }
+  /* Tools: a rail down the left edge. */
+  #bottombar, #bottombar.three { left: 0; right: auto; bottom: 0; width: var(--rail); grid-template-columns: 1fr; gap: 5px;
+    padding: 6px 6px calc(var(--safe-b) + 6px) calc(var(--safe-l) + 6px); background: linear-gradient(to right, rgba(14, 15, 20, 0.85), rgba(14, 15, 20, 0)); }
+  .tool { padding: 4px 2px 3px; min-height: 44px; gap: 0; }
+  .tool svg { width: 20px; height: 20px; }
+  .event-card { margin-left: var(--rail); } /* (beside the top of the rail, not over it) */
+  /* Panels: a column down the right, under the top bar (no handle: it's as tall as it can be). */
+  #sheet, #sheet.full, #sheet.peek { left: auto; right: 0; top: var(--hud-top, 70px); bottom: 0; width: var(--col); max-height: none; transform: none;
+    border-top: 0; border-left: 1px solid var(--line); border-radius: 14px 0 0 0; overflow: hidden; animation: none; }
+  #sheet-body, #sheet.peek #sheet-body { padding: 10px calc(var(--safe-r) + 12px) calc(var(--safe-b) + 12px) 12px; overflow-y: auto; }
+  .sheet-grab { display: none; }
+  .sheet-close { top: 6px; }
+  .build-grid { grid-template-columns: repeat(2, 1fr); }
+  /* A mode's banner, and the selection bar: a box at the bottom left, beside the rail. */
+  #banner, body.mode-road #banner { left: calc(var(--rail) + 2px); right: auto; top: auto; bottom: calc(var(--safe-b) + 6px); width: min(54vw, 440px);
+    transform: none; padding: 8px 10px; }
+  #banner-text { font-size: 13px; margin-bottom: 6px; line-height: 1.35; }
+  #banner-text .keep-all { margin-top: 5px; }
+  .banner-actions .btn { min-height: 40px; padding: 7px 10px; }
+  .selbar.touch { left: calc(var(--rail) + 2px); right: auto; bottom: calc(var(--safe-b) + 6px); width: min(54vw, 440px); max-width: none; }
+  body.mode-on .selbar.touch { display: none; }
+  .groupbar { left: calc(var(--rail) + 2px); bottom: calc(var(--safe-b) + 6px); }
+  .mp-banner { bottom: calc(var(--safe-b) + 6px); left: calc(50% + var(--rail) / 2); }
+  /* Messages: the bottom right corner (beside the panel, when one is open). */
+  #toasts, body.mm-on #toasts { top: auto !important; bottom: calc(var(--safe-b) + 6px); left: auto; right: calc(var(--safe-r) + 8px); width: min(34vw, 320px); transform: none; }
+  body.sheet-open #toasts { right: calc(var(--col) + 8px); }
+  #toasts .toast:not(:last-child) { display: none; } /* (the newest only: two long ones reached up to the minimap) */
+}
+/* ---------- phones held upright: a mode's banner is docked across the bottom, in the bottom bar's place ----------
+   Its Cancel or Done leads back to the tools. In Paths the banner used to sit at the top, where it hid the first
+   rows of the map and the minimap. The selection bar is docked the same way while warbots are selected (✕ brings
+   the tools back), and a mode's banner takes that place in turn. */
+@media (max-width: 699px) and (min-height: 520px) {
+  body.mode-on #bottombar, body.sel-on #bottombar { display: none; }
+  .selbar.touch { left: 0; right: 0; bottom: 0; max-width: none; border-radius: 16px 16px 0 0; border-width: 1px 0 0;
+    padding: 8px calc(var(--safe-r) + 10px) calc(var(--safe-b) + 10px) calc(var(--safe-l) + 12px); }
+  body.mode-on .selbar.touch { display: none; }
+  body.mode-on #banner, body.mode-road #banner {
+    left: 0; right: 0; top: auto; bottom: 0; width: auto; transform: none; border-radius: 16px 16px 0 0; border-width: 1px 0 0;
+    padding: 10px calc(var(--safe-r) + 10px) calc(var(--safe-b) + 10px) calc(var(--safe-l) + 10px);
+  }
+}
+/* The Paths banner's insides where it is a dock or a box (an upright phone, or one on its side): the status up
+   to three lines, the tools one row to swipe along with Route to and Traffic at its end, Undo, Clear, Build and
+   Done in the row below, and How it works as a tab on its top edge that opens as a card over the map. */
+@media (max-width: 699px) and (min-height: 520px), (orientation: landscape) and (max-height: 519px) {
+  body.mode-road #banner { padding-top: 8px; }
+  body.mode-road #banner-text { margin-bottom: 6px; }
+  body.mode-road .rb-line { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden; }
+  body.mode-road .rb-line .btn { padding: 4px 10px; margin-top: 4px; }
+  body.mode-road .banner-actions { display: grid; grid-template-columns: auto auto minmax(0, 1fr) auto auto; gap: 6px; }
+  body.mode-road .banner-actions .road-seg { grid-column: 1 / 4; grid-row: 1; min-width: 0; flex-wrap: nowrap; overflow-x: auto; touch-action: pan-x;
+    overscroll-behavior: contain; scrollbar-width: none; }
+  body.mode-road .banner-actions .road-seg::-webkit-scrollbar { display: none; }
+  body.mode-road .banner-actions .road-seg button { flex: 0 0 auto; min-width: 44px; min-height: 44px; padding: 6px 9px; font-size: 13px; }
+  body.mode-road #banner-route { grid-column: 4; grid-row: 1; }
+  body.mode-road #banner-traffic { grid-column: 5; grid-row: 1; }
+  body.mode-road #banner-traffic .wide { display: none; }
+  body.mode-road #banner-undo { grid-column: 1; grid-row: 2; }
+  body.mode-road #banner-clear { grid-column: 2; grid-row: 2; }
+  body.mode-road #banner-ok { grid-column: 3; grid-row: 2; }
+  body.mode-road #banner-cancel { grid-column: 4 / 6; grid-row: 2; min-width: 76px; }
+  body.mode-road .banner-actions .btn { min-height: 44px; padding: 8px 12px; font-size: 14px; }
+  /* With nothing sketched there is no second row: Route to, Traffic and Done sit at the end of the tools' row. */
+  body.mode-road #banner.noplan .banner-actions { grid-template-columns: minmax(0, 1fr) auto auto auto auto; }
+  body.mode-road #banner.noplan .road-seg { grid-column: 1; }
+  body.mode-road #banner.noplan #banner-undo { grid-column: 2; grid-row: 1; }
+  body.mode-road #banner.noplan #banner-route { grid-column: 3; }
+  body.mode-road #banner.noplan #banner-traffic { grid-column: 4; }
+  body.mode-road #banner.noplan #banner-cancel { grid-column: 5; grid-row: 1; min-width: 60px; }
+  /* How it works: a tab on the banner's top edge; open, a card over the map above the banner. */
+  body.mode-road #banner-text details.how { position: absolute; right: calc(var(--safe-r) + 8px); bottom: 100%; margin: 0; }
+  body.mode-road #banner-text details.how summary { list-style: none; padding: 6px 12px; min-height: 32px; border-radius: 10px 10px 0 0;
+    background: #252a36; border: 1px solid var(--line); border-bottom: 0; position: relative; }
+  body.mode-road #banner-text details.how summary::-webkit-details-marker { display: none; }
+  body.mode-road #banner-text details.how summary::after { content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 44px; }
+  body.mode-road #banner-text details.how[open] { left: calc(var(--safe-l) + 8px); margin-bottom: 6px; padding: 0 12px 10px; max-height: 46vh; max-height: 46dvh; overflow-y: auto;
+    touch-action: pan-y; background: #252a36; border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 8px 28px rgba(0, 0, 0, 0.45); color: #c9d0db; }
+  body.mode-road #banner-text details.how[open] summary { position: sticky; top: 0; margin: 0 -12px 4px; border: 0; border-radius: 12px 12px 0 0; }
+  body.mode-road #banner-text details.how[open] summary::before { content: '✕'; float: right; color: var(--text); }
+}
+@media (orientation: landscape) and (max-height: 519px) {
+  body.mode-road #banner-text details.how[open] { left: 0; max-height: calc(100vh - 215px); max-height: calc(100dvh - 215px); }
+}
+/* ---------- touch: controls sized for a finger (44 px), where a mouse gets the compact ones ----------
+   Every button, choice and switch in a game is a full 44 px to press: panels' buttons and choices, the Build tabs,
+   the goods a storage keeps, supply steppers, the Foundry's order arrows (side by side), the speed menu, the
+   selection bar's tools, the sliders and Statistics. (The goods counters in the top bar stay 32 px high, wide and
+   well apart: taller, their two rows would take that much off the map.) */
+@media (pointer: coarse) {
+  #hud .btn, #hud .seg button, #hud .chips button, #hud .gtag.toggle, #hud .stepper .btn, #hud .keep-cell .btn, .objective.small,
+  .speed-menu button, .pick-row button, .hbar, .stats-head .btn, #screen-pause .btn, #screen-help .btn { min-height: 44px; }
+  .sheet-close { width: 44px; height: 44px; margin: -4px -4px 0 0; }
+  .sheet-title { margin-right: 46px; }
+  .order-row { grid-template-columns: 92px 1fr 48px 48px 58px; gap: 6px; font-size: 15px; }
+  .order-move { flex-direction: row; gap: 4px; }
+  .order-row .order-move .btn { width: 44px; min-height: 44px; padding: 0; font-size: 14px; }
+  .pick-row button { padding: 5px 14px; }
+  #hud .gtag.toggle { padding: 4px 12px; }
+  #banner-text .keep-all .seg button { min-width: 44px; padding: 4px 10px; }
+  .event-card .btn { padding: 4px 14px; }
+  .msgs-btn, .toast-go { min-width: 44px; min-height: 44px; }
+  .gchip { min-height: 44px; padding-right: 12px; }
+  #screen-pause .slider-row input { height: 44px; }
+  .help-toc a { display: inline-flex; align-items: center; min-height: 44px; }
+}
+/* The top bar grows only where there's height for it (not on a phone held sideways). */
+@media (pointer: coarse) and (min-height: 520px) {
+  .toprow .chip { min-height: 44px; }
+  .res-chip, .goods.two-rows .res-chip { min-height: 32px; }
+}
+/* How it works in a banner that isn't docked (tablets): the line is as it was, with 44 px round it to tap. */
+@media (pointer: coarse) and (min-width: 700px) {
+  #banner-text details.how summary { position: relative; }
+  #banner-text details.how summary::after { content: ''; position: absolute; left: 0; right: 0; top: -18px; bottom: -8px; }
+}
 .btn.danger-glow { background: #ff4b4b; color: #fff; border-color: #ff7a7a; box-shadow: 0 0 16px rgba(255, 75, 75, 0.45); }
 .btn.danger-glow:disabled { background: rgba(255, 75, 75, 0.25); box-shadow: none; color: #ffc9cf; }
 
@@ -599,7 +821,7 @@ body.mode-road .objective { display: none; }
 .gs-stats div { background: rgba(255,255,255,0.05); border-radius: 10px; padding: 8px 6px; text-align: center; }
 .gs-stats b { display: block; font-size: 20px; font-variant-numeric: tabular-nums; }
 .gs-stats b.up { color: var(--good); } .gs-stats b.down { color: var(--danger); }
-.gs-stats span { font-size: 11px; color: var(--muted); }
+.gs-stats span { font-size: 12px; color: var(--muted); }
 .gs-alert { border-radius: 10px; padding: 8px 10px; margin: 6px 0; font-size: 13px; }
 .gs-alert.bad { background: rgba(255,90,110,0.14); color: #ffc0c8; }
 .gs-alert.warn { background: rgba(255,196,87,0.14); color: #ffe1a6; }
@@ -973,3 +1195,8 @@ canvas.chart.small { height: 110px; }
 .m-vnote { margin: -4px 0 6px 96px; font-size: 12.5px; line-height: 1.35; color: var(--muted); text-wrap: pretty; }
 @media (max-width: 420px) { .m-vnote { margin-left: 86px; } }
 @media (max-width: 359px) { .m-vnote { margin-left: 2px; } }
+
+/* A link dressed as a button (the illustrated manual, on the How to play screen). */
+a.btn { display: block; text-align: center; text-decoration: none; color: inherit; }
+/* The overlays are dialogs: opening one puts the keyboard focus on it (Tab then walks its buttons), with no ring round the whole screen. */
+.screen:focus { outline: none; }

@@ -70,7 +70,9 @@ any other game.
 
 - **Hosted:** once GitHub Pages is enabled (see below) the game lives at https://tadellsworth.github.io/RoboticPlanet/ (in general
   `https://<your-user>.github.io/<repo>/`). On a phone, open it and use **Add to Home Screen**: it runs
-  full-screen like an app and works offline.
+  full-screen like an app and works offline. The service worker (`sw.js`) asks the server for a newer copy of every file
+  each time the game is opened; art already checked since then comes straight from its cache (the day-and-night sets
+  are let go and loaded again every few minutes), and cached art waits at most `ART_WAIT` (3 s) for a slow server.
 - **Locally:** from this folder run a static server and open the address it prints:
 
   ```bash
@@ -85,7 +87,8 @@ Progress auto-saves in the browser every 20 seconds and whenever you leave the p
 ## How to play
 
 The full illustrated guide is **[how-to-play.html](how-to-play.html)** (open it in a browser; once GitHub
-Pages is on it is at `…/how-to-play.html` next to the game). In the game, **How to play** (main menu and pause menu)
+Pages is on it is at `…/how-to-play.html` next to the game; the in-game How to play links to it, except in the
+single-file build, which has no page beside it). In the game, **How to play** (main menu and pause menu)
 opens on its contents; tapping a topic shows that one section, with a bar above it that stays put (Contents, a picker
 for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.js`). The short version:
 
@@ -137,18 +140,28 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   Factory at 4 (so Chips and Ammo don't swallow the Foundry's Alloy); the rest have no limit until you set one.
   Gatherers and Bio Farms have none (they make no recipe): pause them if their goods pile up.
 
-- **Workers and Haulers:** Workers run buildings (one inside each production building), go out to cut, dig and mine,
+- **Workers and Haulers:** Workers run buildings (one inside each production building), go out to cut, dig and mine
+  (the nearest node in reach, unless the walk there is over `NODE_DETOUR` (1.75) times the straight line: then the
+  shortest walk of the four nearest, `findNode`, `routeCost`),
   and build construction sites. They can go anywhere, but off the road they move at 40% speed, except while out
   gathering for their building. **Haulers** move every good between buildings (except Crude and Fuel: see Tankers),
-  two at a time, and **only drive on roads**. If every Hauler is lost, workers carry goods slowly until the Foundry
+  two at a time, and **only drive on roads**. A factory less than a Hauler's load short of an input, with more than
+  its next batch in hand or on the way, waits to be topped up (`dispatch`), so Haulers carry full loads instead of one
+  unit after every batch. If every Hauler is lost, workers carry goods slowly until the Foundry
   makes more. **Agribots** run Bio Farms and Grove Planters, **Pavers** run the Roadworks and **Warbots** fight. You
   start with 10 Workers, 5 Haulers, a Tanker and an Agribot (plus 4 Warbots in Versus).
 - **Every building needs a road to storage.** Your Command Base starts with a ring of road around it; join each building and construction
   site to that network (or to a Depot on it), or Haulers can't bring it materials or collect its goods. A red road badge
-  marks buildings with no road: tap one and press **Lay road** to plan the shortest route (shown dashed), or plan your
+  marks buildings with no road: tap one and press **Lay road** to plan the shortest route (shown dashed; of the
+  routes as short, the one with fewest bends: `roadSearch` pays `ROAD_TURN` 0.05 a turn, as the rival's roads do), or plan your
   own. Placement keeps a side of every building open for a road.
 - **Planning roads:** in Paths, dragging and tapping only sketch a road (and tapping a road marks it to take up);
-  the banner, at the top of the screen, shows the cost, with **Undo**, **Clear** and **Build**. Nothing is spent until
+  the banner, at the top of the screen, shows the cost, with **Undo**, **Clear** and **Build**. On an upright phone the
+  banner (and every mode's banner) is docked across the bottom in place of the tools: the line is up to three lines,
+  the tools are one row to swipe along with Route to and Traffic at its end, Undo, Clear, Build and Done share the row
+  below, and **How it works** is a tab on the banner's edge that opens as a card over the map. Sketching up to the edge
+  of the map scrolls it on under the finger (`paintScroll`), and a tap just above the docked banner glides the map up
+  so the banner's new row doesn't cover it (`planInView`). Nothing is spent until
   Build. Building closes Paths, straight back to the map; leaving Paths any other way drops an unbuilt sketch.
   Arrows and Junctions still act at once. **Ramps** are planned in Paths too (tap the foot or top of a one-level
   cliff, or just drag a road or track up it: `dragCliff`) and count as road once built.
@@ -174,8 +187,7 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   plans roads round resources; tap a boulder, grove, ore or crystal tile to clear it for a road at 3× the Cement. A Roadworks' Paver
   upgrades roads to asphalt (2.75×) with Asphalt, driving out along the roads joined to its Roadworks, however far.
 - **Paving and road wear:** Paths → **Pave** (E): drag along roads to mark them for asphalt (drag over marked road to
-  clear it). Roadworks pave the marked roads joined to them (or, set to *Every joined road*, everything; the AI uses
-  that). Every bot driving onto asphalt wears it (`WEAR_BOT`, Freight Trucks `WEAR_TRUCK`, three times as much): past
+  clear it). Roadworks pave the marked roads joined to them (or, set to *Every joined road*, everything; the AI builds no Roadworks). Every bot driving onto asphalt wears it (`WEAR_BOT`, Freight Trucks `WEAR_TRUCK`, three times as much): past
   half worn it slows bots (to 2.3× when nearly through), at `REPAVE_AT` the Paver resurfaces marked road, and worn
   through it drops back to plain road. On a busy trunk road that's every 8–10 minutes. Tap any of your roads to see its
   wear and mark it. Removing a road refunds its Cement.
@@ -214,9 +226,11 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   are in (oldest plans first) and goes up then; a light already standing keeps working while its overpass waits, and its
   Alloy counts toward it (`junPlanCost`). Calling a plan off gives nothing back; the AI pays up front.
 - **Traffic map:** **Traffic map** in the Paths banner (or **T**) tints each road green to red by how busy it has been
-  over the last minute and rings the spots where bots stand waiting.
+  over the last minute and rings the spots where bots stand waiting. How busy each road has been (`HEAT.flow`, `countTraffic`)
+  is kept in the save (`S.heat`): the AI picks its raids by it (`aiRaid`), and a loaded game must raid the same.
 - **Long hauls:** tap a Depot and set **supply orders** (how much of each good to keep there). Goods come from your other
-  storage, and anything nearby then draws on the Depot. Who carries what (see the comment above `TRUCK_MIN_DIST` in
+  storage, and anything nearby then draws on the Depot. A garrison that is storage too (the Command Base, a Drop Outpost,
+  a Crawler) holds its own `ammoStock` back from supply orders and from other such garrisons (`ammoHeld`, `keepSupply`). Who carries what (see the comment above `TRUCK_MIN_DIST` in
   `js/defs.js` and `dispatch` in `js/sim.js`): **Haulers** (2) do runs under `TRUCK_MIN_DIST` (12) tiles. **Freight
   Trucks** (8; 2 Alloy and 2 Chips at the Foundry) do the long runs from any building, with a full load (a far
   factory gets up to `LONG_BUFFER` of each input), and storage to storage. With trucks around, Haulers take a long run
@@ -251,7 +265,8 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   mesa tops (level 3+), so a Viaduct never reaches the floor or its low rises. A far end may land on
   no-one's land or in a rival's (a bridgehead); `computeTerritory` keeps a Viaduct while either end stands in its
   owner's land (or the abutment is on no-one's), and takes it down once neither does. When one comes down, `offDeck`
-  moves any bot on its deck to the nearer end, and a bot whose route jumps a Viaduct or Ropeway that's gone drops the
+  moves any bot on its deck to the nearer end (a civilian bot drops its order there, its load put down in crates; a
+  warbot plans its way again), and a bot whose route jumps a Viaduct or Ropeway that's gone drops the
   route and its order (`moveAlong`). `roadSearch` crosses Viaducts, so roads (and the AI's) reach sites on far mesas,
   and `wouldBlock` / `canPlace` treat Outposts and Viaduct ends as walkable. A far end claims the no-one's ground
   within `VIA_CLAIM` (3) tiles, never anyone's land, so a new mesa can take an Outpost. A bot out on a deck keeps
@@ -307,7 +322,9 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   loaded at its Port, up to 4 Workers) on an empty shore nobody holds; it claims `claim` 4 tiles (`b.claim`, read by
   `computeTerritory`), and the Ferry heads home running a ferry line to it. A Ferry under your orders (`f.manual`:
   `orderSail`, `embarkWarbots`, `orderBoardFerry` with `v.embarkOn`, `disembark`, then `ferryBack`) sails anywhere, takes
-  warbots aboard off a beach within `FERRY_REACH` and puts them ashore beside it.
+  warbots aboard off a beach within `FERRY_REACH` and puts them ashore beside it; meanwhile it doesn't serve its line
+  (`ferryLines`), and a line with no Ferry or no far Port puts its waiting passengers off again (`unloadFerry`). Warbots
+  aboard stay aboard when the Port or Airfield they left from is lost (`releaseBotsFrom`, `aboardHold`).
   Ships are built at a Port's shipyard (`BDEFS.port.yard`, `updateYard`,
   `YARD`: a round of 1 Alloy + 1 Chip every 8 s, haulers bring `YARD.hopper` of each) and put to sea there (`launchFromYard`); they sail open water by `seaRoute` (8-way A*, never cutting a corner of land, under
   bridges) and move like trains. They burn Fuel under way (`SHIP_BURN`, a tank of 100 like a truck's) and fill up from a
@@ -384,7 +401,8 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   the shape's own random numbers so laying one again gives the same map): **Rift** cuts a chasm (`T_CHASM`, 4–8 tiles
   across) along the middle line, crossed only by natural rock arches, a pair with their twins and sometimes one down the
   middle (a Sky bridge is the slow way to open another); **Ring valley** fills the middle with a massif too steep to
-  climb, a valley running round it on each side (a long tunnel is the only shortcut); **Oases** is a barren,
+  climb, a valley running round it on each side (a long tunnel is the only shortcut; the massif stops short of each
+  landing zone, so the starter fertile field is never buried); **Oases** is a barren,
   crag-strewn waste with nothing worth having outside the home ground and a few rich oases (three a side and one in the
   middle, fertile with two fields each) joined by narrow, winding passes; **Crossroads** (a wider map) splits the
   planet into four quarters with ridges along both middle lines, meeting at an open plaza with the richest fields, the
@@ -400,7 +418,8 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   kept narrow by `SKY_GAP`, so the typical Viaduct spans 4 tiles and the route between bases never needs one over 6), then turns the sea into a canyon floor at level 0 and lifts every
   island into a mesa (home islands +3 levels, the rest +4; small ones flattened to one level), so every drop is 3+ levels: no Ramp can
   reach the floor, only a Ropeway. The outermost rim of every mesa is kept clear of resources (moved up to 3 tiles inland)
-  and crags so a Viaduct can start or land anywhere on it. Each home mesa is topped up to at least 10 Ore and 8 Crystal tiles (a
+  and crags so a Viaduct can start or land anywhere on it (with two players worked out on one half and copied to each
+  tile's twin, so the map stays point-symmetric). Each home mesa is topped up to at least 10 Ore and 8 Crystal tiles (a
   compact field 5–7 tiles out, placed the same for every side), and Ore, Crystal and Stalk on the mesas hold
   `SKY_RES_MUL` (1.8) times the usual amount, since half the fields fall into the canyons (`richRes` scales its mark to
   match). The floor gets low rises, rock formations, plants and a thin scatter of boulders and ore. Viaducts
@@ -452,16 +471,37 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   walkable (`clearLine`); otherwise it follows a route (`viaT`: committed for 1.5 s, re-planned only when the foe moves
   off its end), gives up on foes that are only reachable the long way round (more than 3 times the distance) or not at
   all (left alone for 12 s, unless they come within shooting reach), and squads holding one spot edge apart
-  (`spreadOut`) instead of stacking on a single point.
+  (`spreadOut`) instead of stacking on a single point. On the march (not in a fight) warbots, Bulwarks and Torches
+  plan round enemy guns: a tile an enemy gun reaches (`dangerMap` bit 1, the map civilians keep clear of) costs
+  `COVER_COST` (4) more (`routeOpts` sets `opts.cover`, see `findPath`), so a short detour beats walking through it.
+- **Setting off together:** an attack or rally flag that draws warbots from several garrisons (`sendAttack`,
+  `sendToRally`: the Army panel's orders and the rival's marches, not its raids, counter-raids or hunts) times each
+  one's walk along its route (`paceSquad`, `walkTime`), and the nearer ones wait where they stand for the difference
+  (`task.wait`, at most `PACE_MAX` 45 s, not under `PACE_MIN` 2 s) so the squad arrives together; one shot at while it
+  waits goes at once. Selected warbots sent directly, and orders given with `hurry`, go at once. Army units ordered
+  together share their route searches (`squadRoute`: the routes planned in the same tick, by start tile, goal, owner,
+  kind, armed and fighting; each gets a copy), and a squad on its way to a flag makes for the flag tile itself until
+  it is within 4 tiles, then for its own spot round it, so a 20-warbot order costs one search, not twenty.
+- **Routes looked over again** (`routeCheck`, from `moveAlong`): when the roads change or a building is put up
+  (`routeVer`: `S.roadVer` and the newest building), a moving bot looks over the rest of its route. One that now
+  crosses water or rock (a bridge or tunnel gone) plans again at once, and with no other way drops its job there (a
+  load goes down in crates) instead of driving on over open water; a civilian bot also plans again when a new building
+  stands on its route, or (road-bound) when its road was taken up and the way round is quicker than crawling across
+  the gap (`GAP_DETOUR`). Fighting units' routes are only cleared, so they plan their own way again.
 - **Traffic:** bots queue on roads, each waiting behind the bot ahead of it going the same way. On two-way roads each
   direction keeps to its own side, but passing oncoming traffic slows bots down. Switch the Paths banner to **Arrows** and
-  drag along a road to point it the way you drag (tap a road to turn its arrow). One-way loops keep busy routes flowing;
-  going the wrong way up a one-way road is allowed but crawls.
+  drag along a road to point it the way you drag (tap a road to turn its arrow). The arrows turn at once, but each drag
+  or tap is remembered as a stroke, so **Undo** turns them back (`draftUndo`, op `dir`); a drag that starts off your
+  roads moves the map instead (`roadPaintStarts`), so a habitual pan doesn't turn every road it crosses. One-way loops
+  keep busy routes flowing; going the wrong way up a one-way road is allowed but crawls.
 - **Goods panel:** tap a goods counter in the top bar for that good's stock, production and use per minute, net rate,
   which buildings make and use it, and any shortfall (buildings waiting on it with none in stock). Switch goods at the
   top of the panel.
 - **Ammo:** warbots carry 10 shots (each Ammo reloads 5) and reload in your Command Base and Outposts, which haulers stock from an Ammo Plant. Out of
   ammo, a warbot can't fight at all: it heads back to a garrison to reload, and only armed warbots answer orders.
+  On an attack, one that runs dry while the target stands and squad-mates are still on it goes to reload at a garrison
+  with Ammo within `RELOAD_REACH` (16) tiles (a Torch: refills where Fuel is kept) and comes back, once per attack
+  (`startReload`, `task.reload`, `task.trips`), so attacks no longer melt away at the wall.
   A rival's empty warbot sitting in a garrison with no Ammo and none on the way (an Outpost no road reaches yet)
   goes to reload where there is some and keeps away from that one for 90 s; yours stay where you posted them.
 - **Rival boost (hidden):** tap the clock three times quickly, or press **`**, to give a rival a supply drop, 4 armed
@@ -470,7 +510,8 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
 - **Repairs:** nothing heals by itself. Damaged bots go to a Repair Station (workers below 60% health, warbots below
   70% once their garrison is quiet; Colony free play too), which uses 1 Alloy per 12 health. A warbot below 35%
   (`REPAIR_RETREAT`) on an attack, a rally flag or a sortie pulls out of the fight for repairs when a Repair Station can
-  fix it (otherwise it fights on), takes no new fights on the way (`u.retreat`), and goes back to its attack or flag
+  fix it (otherwise it fights on), but not while it stands where an enemy gun reaches (`gunCovers`: walking out hurt
+  through the guns killed more than it saved), takes no new fights on the way (`u.retreat`), and goes back to its attack or flag
   once mended (`u.resume`, `resumeAfterRepair`; the flag stays up meanwhile, and Recall cancels the return). Haulers keep up to 3 Alloy
   in it, and an empty one gets the first Alloy that reaches storage (like an empty Fuel Station's Fuel). To fix a building, tap it and press **Repair**:
   you pay 1 Cement for every 6 missing armor and a free worker restores it.
@@ -489,13 +530,20 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
 - **Storage:** tap your Command Base or a Depot. *Fill first* makes haulers bring finished goods there before
   any other storage; *Empty out* takes nothing new and moves what it holds elsewhere (handy before
   demolishing it). You can also switch individual goods off for that building.
-- **Minimap:** tap or drag it to jump around; red pulses mark buildings under attack. The × hides it.
+- **Minimap:** tap or drag it to jump around; red pulses mark buildings under attack; warbots are dots in a pale shade of
+  their colony's colour (`MM_WARBOT`: every rival its own). The × hides it (on a touch screen it is a 44 px tab hanging
+  under the minimap, so a finger-sized button isn't lying over the map).
 - **Sharp map:** the map is baked once at 32 px a tile for zoomed-out views; zoomed in, the part on screen is baked
-  again in 8×8-tile chunks at 64 or 128 px a tile (a few per frame, least recently seen dropped), and big art images
-  keep half-size copies so they shrink cleanly (`drawMapLayer`, `artMip` in `js/render.js`).
+  again in 8×8-tile chunks at 64 or 128 px a tile (a few per frame, least recently seen dropped: off-screen ones give way
+  to keep the lot under `HD_TOTAL` pixels and four screens' worth; the whole-map bake isn't drawn under chunks that
+  cover it), `bakeMap` reuses its canvases and runs again only when art the map is drawn from arrives (`bakedArt`; at most
+  every 2 s while more is coming, and at launch once that art is in or after `BAKE_WAIT`), and big art images keep half-size copies so they shrink cleanly (`drawMapLayer`, `artMip` in `js/render.js`).
 - **Batteries:** bots drain their battery walking, working and fighting, and recharge only at a Fuel Station (or,
   for warbots, inside an Outpost). The Command Base doesn't charge anyone and you land without a Fuel Station, so
-  build the first one straight away (it runs on the 10 Fuel you land with). A flat battery means half speed and half power. Fuel Stations burn Fuel (one Fuel is
+  build the first one straight away (it runs on the 10 Fuel you land with). A flat battery means half speed and half power.
+  A factory's worker goes to recharge at `BATTERY.low`, or below `IDLE_TOP` (60) while its factory has nothing for
+  it to do (`standingBy`: short of an input with none on the way, or full with no pickup coming), so the walk costs
+  no working time. Fuel Stations burn Fuel (one Fuel is
   two full charges, `FUEL_ENERGY`). A Bio Farm makes about
   2–3 Fuel a minute; an Oil Pump and Refinery up to 10 a minute until the seep runs dry (both stop at 30 by default).
   A dry Oil Pump shows a crossed-out oil drop over it, frees its worker and says so once: demolish it (any Crude
@@ -508,13 +556,16 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
 - **Moving buildings:** tap Move on one of your finished buildings (`movable`: not the Command Base or Outposts, which
   hold your land, nor Walls, Gates, Ramps, Viaducts, Ropeways or a deployed Crawler), then the new spot. `startMove`
   puts a site of the same kind there that costs nothing (`siteFrac` treats it as fully supplied); workers put it
-  together in its build time while the old one keeps working, and `finishMove` hands over its goods, settings
-  (`MOVE_KEEPS`) and stationed warbots, then takes the old one down quietly. Calling the move off, demolishing either
+  together in its build time while the old one keeps working, and `finishMove` hands over its goods, settings and
+  work in hand (`MOVE_KEEPS`: orders and parts, a Silo's reload, a finished nuclear missile), its armor as it stood, a
+  Port's ferry line and stationed warbots, then takes the old one down quietly. Calling the move off, demolishing either
   end or losing the old one takes the site down (`cancelMove`), so no building comes free.
 - **Saved planets:** **Save** beside the planet number (More settings), or **Save this planet** in the pause menu, keeps
   the seed and the settings that shape the map (shape, size, terrain, resources, biome, players) on this device
   (`terrafall.planets` in localStorage, newest first, up to 40). Tap one in Saved planets to set the menu to it; ×
-  forgets it (`savedPlanets`, `renderPlanets` in `js/ui.js`).
+  forgets it (`savedPlanets`, `renderPlanets` in `js/ui.js`). A saved planet, or a remembered menu setting, that this
+  version doesn't offer (from another version, or damaged) is left out or falls back to its default (`planetOk`,
+  `checkMenuSettings`): one used to stop the game booting, and a planet's seed was shown as markup.
 - **Alloy** (balance audit, AI games): Alloy income was set by how much Ore reached the Smelters, not how many Smelters
   there were. A Smelter eats Ore much faster than a Mine worker, who walks out and back for every Ore, can bring it, so
   extra Smelters just sat idle. Now a Smelter makes 3 Alloy from 2 Ore and 2 Fiber (the same 12 a minute flat out, a
@@ -594,16 +645,31 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   plants a flag beside it that targets it (`assault` sets `rally.target`): the warbots there shoot it first
   (`holdRally`), and once it falls or changes hands the flag comes down (`followRallies`), so they carry off the crates
   that spilled out and come home, as after any attack. Tap the flag to call them back, or press
-  **Recall all** in the Army banner (**C** on a computer) to end every attack and rally flag at once.
+  **Recall all** in the Army banner (**C** on a computer) to end every attack and rally flag at once. Under a finger
+  Recall all asks for a second tap within 3 seconds (`recallAllTap`: the button says how many come home).
 - **Saving:** the game saves itself every `AUTOSAVE_EVERY` (20) seconds while you play, and when you switch away or
   close it (`autoSave`); Continue on the main menu picks it up. The pause menu says when it last saved, and a failed
   save (storage full or blocked) is reported once. A long game's save is about 250–300 KB. Saves live in that browser
   only: **Download save file** (pause menu, `downloadSave`: through the artifact `downloads` capability in claude.ai,
   an ordinary download elsewhere) writes `terrafall-<mode>-<date>-<time>.json` (`saveFileText`: the save with when and
-  what), and **Load a save file** (main menu, `importSaveFile`) loads one, a bare save too, and keeps it as this device's save.
+  what), and **Load a save file** (main menu, `importSaveFile`) loads one, a bare save too. A save is checked before it is used
+  (`checkSave` in `js/world.js`: unknown building, robot, good, biome, map type, mission or event, map layers of the wrong
+  size, owners or places off the map, or a name holding `<`, `>` or `"`; in text those three are swapped for look-alikes
+  that can't make markup, so nothing in a save can run script in the panels; a multiplayer catch-up is checked the same
+  way). One that fails is refused and changes nothing; if
+  Continue can't load this device's save, the menu says so. A loaded file becomes this device's save only once its game
+  is running (`enterLoaded`), and the save it replaced is kept as a backup (`SAVE_BACKUP_KEY`, `botfall.save.bak`).
 - **A failed frame never stops the game:** `frame` books the next frame before running this one and catches its errors
-  (reported once each to the console). A Missile Silo's placement preview used to throw (`siloReady` on a stand-in
-  with no stock), which stopped the drawing loop: the game froze when you went to place one.
+  (reported once each to the console), and each stage of a frame (simulation, camera, drawing, interface, sound) runs
+  on its own (`stage` in `js/main.js`): one that keeps failing during a game says so once and pauses saving
+  (`UI.saveHold`), so the last good save is still there to reload. A Missile Silo's placement preview used to throw (`siloReady` on a stand-in
+  with no stock), which stopped the drawing loop: the game froze when you went to place one. An art image that fails
+  to download is tried once more a moment later (`loadImg`), and one that still fails draws nothing or the shape drawn
+  in code: a missing canyon lip, Viaduct tower, Freight Train wagon or crossing barrier no longer makes the map throw
+  (a Rift or Sky islands map could not start).
+- **The menu's backdrop:** an AI-vs-AI demo game plays behind the main menu. It opens 150 s into its game, fast-forwarded
+  a slice each frame (`DEMO_WARM`, at most `WARM_MS` of a frame, in daylight: `TOD.dayHold`), so the page never waits
+  for it at launch or on Save and quit (it ran all 4,500 steps at once: seconds on a phone).
 - **Gates on track:** a Gate can stand across railway track (`canPlace`; a wall line crossing track puts one there,
   `wallKind`), and track can be laid through your own Gate (`railBlocked`). Your trains run straight through it (rail
   routes ignore it; it's `passTile` for its owner); enemy robots can't walk through.
@@ -625,8 +691,12 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   They're `prepaid` (paid from storage on Build, no Hauler or road, outside the site limit). Walls block every bot;
   Gates let their owner's bots and road through (`passTile(t, who)`). Armed enemy warbots plan through a Wall or
   Gate as if it were `BREACH_COST + armor` tiles long, so they go round a short way or stop and shoot through
-  (`breachHit`); a bot whose route gets walled off re-plans (`blockedStep`). On Chokepoint maps the AI walls the mouth
-  of each channel on its side on Normal and Hard (`aiWalls`).
+  (`breachHit`); a bot whose route gets walled off re-plans (`blockedStep`). An order whose squad can't shoot
+  through the walls on its routes says so to the player who gave it (`squadBreach`, `breachCheck`: the armor to shoot
+  away against what the squad carries, `breachShots`, counting one reload near the wall for an attack, see
+  `startReload`; a Bulwark never runs dry); the rival can ask before it orders (`attackBreach(owner, target, count, all)`
+  gives `{ need, shots, sent }`), and `sendToRally` returns it as `breach`. On Chokepoint maps the AI walls the mouth
+  of each channel on its side on every difficulty but Easy (a Turtle on Easy too: `aiWalls`).
 - **Garrisons and posts** (yours, `usesPosts`; the AI spreads its own to the front as before): every warbot belongs
   somewhere. `u.post` is the Outpost or Bunker it was stationed at; with none it belongs to the Command Base. All your
   warbots stay at the Command Base until you station some: tap an Outpost and **Station here** (how many; from the
@@ -645,6 +715,15 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   attacking, on a rally flag, guarding, being repaired, carrying loot, or standing with nowhere to go), and **Show**
   takes you to each in turn. Garrison priority (High/Low) still orders the AI's and any warbot with nowhere else to go. A garrison's panel shows how
   many are inside and what kinds (`garrisonMix`: "3 Warbots, 1 Bulwark, 1 Torch").
+- **Guards** (`garrisonDefense`): enemy warbots near a garrison bring out one more guard than there are of them, and
+  the guards fight foes within `SORTIE_REACH` (6.5) of it. A guard lets a foe go (and leaves it alone 12 s) once it's
+  more than `SORTIE_LEASH` (9) tiles from the fort and out of the guard's reach, so a passer-by can't lead the guards
+  off into its own side's guns. A fort with no enemy at its own walls also answers for the buildings round it: where
+  enemy warbots (or creatures) are hitting one of its owner's buildings within `AREA_DEFENCE` (14) tiles
+  (`P.raided`, set in `hitBuilding`), it sends one guard more than there are raiders, never its last armed warbot
+  (`task.ax`/`ay`: the guards' leash is measured from there, the spot follows the raid, and they go home after
+  `AREA_QUIET` (6) quiet seconds). A squad on a rally flag outside rival land guards the ground round it the same
+  way (foes within 6.5 tiles of the flag, leash 9).
 - **Rival personalities** (`PERSONALITIES` in `js/defs.js`, applied by `aiStyle`/`aiLevel` in `js/ai.js`): each scales
   the difficulty's grace period, attack threshold, army growth and raid rate. **Balanced** is the plain AI. **Turtle**:
   later and bigger attacks, rare raids, a square ring of Walls and Gates six tiles round its Command Base
@@ -662,7 +741,16 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   Agribot. Fuel first too: with Fuel under 6 for half a minute (`P.fuelLow`) a Bio Farm goes first (never while one
   waits for its Agribot; at most two plus one for every 15 robots), an Oil Pump once the Bot Foundry is up (oil costs
   Alloy), and a Refinery for a pump that has none; without it the Fuel Stations went dry around minute 10 and the
-  workers crawled, which in turn starved the Fiber, Ore and Alloy. Its forts (`rearGarrison`): one counts as behind the
+  workers crawled, which in turn starved the Fiber, Ore and Alloy. Down to fewer than `AI_FEW` (6) workers after the first
+  minute (a raid got the rest), it triages until it has `AI_ENOUGH` (8) again: its open sites are called off and only a
+  missing link of the chain that makes bots (`AI_CHAIN`) is started, every staffed building rests but the Mine,
+  Smelter, Chip Fab and Foundry while they have what they work with (and a gatherer short of its good), so the few
+  workers go down the chain to the link that can work, and the Foundry makes workers alone (`P.triage`). Without it
+  a colony left with two to four workers kept them all busy and never made another. Its Missile Factory and Silos come
+  only through `aiMissilePlan` (not the plain build plan, where a Hard rival put a factory up four minutes in), one
+  site at a time, and the factory rests while no built Silo has room for another Missile. It walks its best spots for a
+  gatherer (`walkRes`: only nodes within three times the reach on foot count), so it never puts a Harvester at the foot
+  of a cliff below groves fifty tiles away by the ramp. Its forts (`rearGarrison`): one counts as behind the
   lines, free to send its last warbot on a march, when no rival building is within 18 tiles, or when every one that
   near has another fort of ours, with someone in it, at least 4 tiles nearer to it. Its Viaducts (Sky islands): not
   into the enemy's guns, nor for four minutes where one was just knocked down (`P.viaLost`). Under an enemy gun
@@ -672,7 +760,7 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   (`attackAvailable(p, t, 'every')`).
   Once it's ready to march it orders a Bulwark for every five warbots (two, three against a dug-in rival) and a Torch
   for every four (three, four), only with Fuel for Torches. **Raider**: raids three times as often from early on,
-  sending every warbot it can spare. **Rusher**: attacks early with a fast-growing army. **Tycoon**: its bots work 15%
+  keeping none back: its band of three (`raidSize`) goes as soon as it has three to send (`raidKeep` 0). **Rusher**: attacks early with a fast-growing army. **Tycoon**: its bots work 15%
   faster (`econ`), it builds extra Smelters and Chip Fabs and goes for Missile Silos (up to three) once its Bot Foundry
   runs. With Random each rival gets a different one, picked from the seed; missions use Balanced unless they name one
   (Hold the Line's Rusher, Siege Breakers' Turtle). The landing messages
@@ -681,7 +769,8 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   default; in missions only where one switches it on, `wildlife: true`, as Bug Hunt does): one creature nest per `WILD.perTiles` tiles (3–8), owned by `WILD_OWNER` (the empty
   second player slot of a Colony game), at least 16 tiles from the landing site and reachable on foot. Each keeps
   `guards + level` Scuttlers on guard and from `WILD.first` (7 min) sends a pack every 260–400 s at the nearest building,
-  road or bot the colony has within `WILD.reach` (24) tiles: Scuttlers (6 hp, bite 1) go for bots in the open; Brutes (24 hp,
+  road or bot the colony has within `WILD.reach` (24) tiles: Scuttlers (6 hp, bite 1) go for bots in the open (once there,
+  any within `WILD.hunt`, 6, tiles they can walk to; with none, they move on); Brutes (24 hp,
   bite 3; from level 2) tear up roads and batter buildings (never below 1 armor; construction sites are wrecked) and
   break through Walls and Gates, slowly (`WILD.wallBite`, a third of a bite: about 40 s for one Brute on a Wall). Nests grow a
   level every `WILD.grow` s (to 3); packs grow with the colony (`perBuildings`). Turrets, garrisons and warbots treat
@@ -709,7 +798,11 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   armed), then the missile fades in (`siloRise`; art `silo-empty`, `nukesilo-empty`).
   To fire, tap a Silo and press **Aim missile**: its 18-tile range shows as a red ring; tap any spot inside it (a
   building or open ground) to see the blast radius, then **Fire**. (Army → rival building → Fire missile also works.)
-- **Nuclear race** (new-game option): six small Uranium deposits glow green across the map. An Ore Mine within 4 tiles
+  Under a finger the view never zooms out past `AIM_TILE` (20 px a tile; fitting the whole ring on a phone made tiles
+  9 px, twenty under a fingertip): tap to drop the crosshair, drag it to adjust (`mapGrab`, a drag that starts on it;
+  elsewhere a drag moves the map), and only Fire launches (a second tap on the spot fires only with a mouse). A bomber's
+  strike and a Howitzer's target are picked by a tap, ringed, then confirmed on the banner (`pickTarget`).
+- **Nuclear race** (new-game option): six small Uranium deposits on each side (`URANIUM_DEPOSITS`, in each colony's half, third or quarter) glow green. An Ore Mine within 4 tiles
   digs Uranium before ore; a Nuclear Reactor enriches it (2 → 1) and a Nuclear Silo assembles a missile from 6 Enriched
   Uranium, 4 Alloy and 2 Chips (60 s), so 12 Uranium a bomb. It flies 30 s (the target is warned and sees the blast
   ring; the **Evacuate** button on the incoming-nuke card, or the AI by itself, sends every robot in the ring plus
@@ -742,8 +835,8 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
 - **Cut off** (`cutOff`, `crumble`): a finished building whose ground a rival's ring takes stops working (nothing is
   hauled to it, its worker leaves) and loses `armor / CUT_CRUMBLE` (90 s) a second until it's lost (`dropLoot`); it
   recovers if its owner takes the land back. A construction site on a rival's ground is lost at once. A land-claiming
-  building can't go where its ring would cover a rival's ordinary building (`ringOverRival`): cut-offs come from capture
-  or a fort falling. The AI builds on its own land first and on open ground only when it has no spot at home.
+  building can't go where its ring would cover a rival's ordinary building (`ringOverRival`; a Drop Outpost dropped, a
+  Port a Ferry founds and a Crawler deploying too): cut-offs come from capture or a fort falling. The AI builds on its own land first and on open ground only when it has no spot at home.
 - **Salvage:** a colony out of Stone or Fiber with no Quarry or Harvester that can still work salvages 1 every 20 s from
   its Command Base (up to 6), so it can always rebuild. Capturing an enemy Outpost takes its land,
   and enemy buildings its ring now covers are cut off (see above).
@@ -751,7 +844,50 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   per event (smooth on a Magic Mouse or trackpad); a Ctrl + wheel pinch zooms faster, a sideways swipe or Shift + wheel
   pans, and Safari's trackpad pinch (`gesture*` events) zooms the map instead of the page. Drawing resolution is capped
   at `RENDER_BUDGET` pixels (about 4K; a 5K iMac at 2× would be four times the work) and `watchFrameRate` lowers it,
-  down to 1×, if frames run below ~45 a second.
+  down to 1×, if frames run below ~45 a second and drawing is what's slow (not when the screen or a power-saving mode
+  holds a steady beat, such as 30 a second, nor when the simulation is the slow part), and raises it again when there's
+  room; the minimap is laid out again whenever it changes. Nothing is drawn under a full screen (the pause menu, Help,
+  Statistics, game over) while the game behind it stands still, unless the view, the canvas or the art changes
+  (`drawNeeded` in js/main.js), and the demo behind the main menu is drawn 30 times a second (`DEMO_FRAME`).
+- **Phones and tablets (touch):** a touch on the map is only ever a touch there: the click a browser makes after it
+  is cancelled (`initInput`), so the tap that opens a panel can't also press a button that appears under the finger,
+  and a tap on a tile beside a button doesn't press the button. Where panels open across the bottom of the screen
+  they open at **half height** (`setSheetSize`), with the goal card out of the way, and the map glides so that what the
+  panel is about sits in view above it (`sheetMoved`; the map may scroll further up past its last row for this,
+  `R.lift`). Under a finger (`pointer: coarse` in style.css) every button, choice, switch, stepper and slider in a game
+  is at least 44 px to press (the goods counters stay 32 px high, so their two rows don't take more off the map), and no
+  text in a game is under 12 px. The **grab handle** at the top of the panel drags it to full height, to half, or down to just its title
+  strip (further down closes it); a tap on the handle swaps half and full. The Build list, Goods and Your robots open
+  at full height, which stops below the goods and the clock. The panel's body scrolls; its handle and close button
+  stay put.
+- **A phone on its side** (`(orientation: landscape) and (max-height: 519px)` in style.css) has its own layout: the
+  goods in one row across the top, the tools as a **rail down the left edge**, panels as a **column down the right**
+  (as tall as the screen allows, so no grab handle; the map glides to bring the panel's subject out from under it), a
+  mode's banner and the selection bar as a box at the bottom left beside the rail, and only the newest message, at the
+  bottom right. The minimap is sized from the short side (`layoutMinimap`: 84 px there, where it got the desktop's 156
+  and filled two thirds of the height), and a new game opens at a zoom that fits the short side (`enterGame`).
+- **How to play on a touch screen** (`helpForTouch`): the Touch controls card (`#h-touch`) heads the contents page,
+  on one screen, and key names are left out (the mouse and keyboard paragraphs and brackets that only name keys are
+  marked `.keys` once at start-up, before the section pager is built, by `helpMarkKeys`, and hidden under
+  `(pointer: coarse)`).
+- **Messages and the goal card** (`toast`, `openMsgSheet`): a message stays for a time that fits its length (3.8 s up
+  to 12; a building lost, 8 at least), lets taps through to the map, and has a **Go** chip when it's about a place. The
+  last 20 are kept for the messages button beside the folded goal card. On a small screen the goal card folds by
+  itself at the first tap on the map and opens again for each new step (unless you fold or open it yourself); folded
+  it still counts buildings with no road. In free play the Build list pins the building the step asks for at the top
+  (`OBJECTIVES[].build`, `nextBuilds`), and a building with no road to storage has Lay road at the top of its panel.
+- **Back and the screen** (`initBack`, `syncWakeLock`): in a game a phone's (or the browser's) Back button steps back
+  like Esc instead of leaving the page: it closes the start-of-game card, a screen, a panel or a mode, clears the
+  selection, and with nothing open brings up the pause menu (a history entry is added on entering a game and put back
+  each time Back takes it; leaving for the main menu removes it). The screen is kept awake (`navigator.wakeLock`) while
+  a game runs, and let go when it's paused, over, left or hidden. A long press brings up no browser menu.
+- **Warbots by touch** (`touchSelect`, `touchOrder` in js/ui.js): tap one of your warbots or Howitzers to select it
+  (tap it again within half a second for all of its kind in view). The selection bar (docked across the bottom in
+  place of the tools on an upright phone) says what they're doing and has **All in view**, **Whole army**, **Box**,
+  **Info** and **Save as group**; while it shows, a tap on the map is the order a right-click gives, with a ring and
+  **Undo** for 4 seconds (`ORDER_UNDO`; the `undoCommand` order sends each back to what it was doing). A drag or a
+  pinch is never an order. **Box** (or a finger held still 350 ms, `LONG_PRESS` in js/input.js, then dragged, where
+  you have warbots out) draws a selection box. With a panel open the bar steps aside and taps inspect.
 - **Game speed:** the speed chip in the top bar opens 0.75×, 0.875×, 1×, 2× and 3×.
 - **Sound** (`js/audio.js`, all Web Audio, no audio files): a generative synthwave score that follows the game (menu,
   building, war when you're attacked or fighting, and an alarm while a nuke flies; the building music takes turns between
@@ -771,7 +907,7 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   together on one card while the game waits paused behind it; it closes by itself after a few seconds (longer for
   more text), or at a tap or key. In multiplayer the game doesn't pause for it.
 - **Desktop (RTS controls):** on a wide screen the top bar is one row, the tools sit in a small dock and panels open
-  on the right. Drag a box to select warbots (Shift adds; a box round a garrison takes its spare warbots), right-click
+  on the right (the Build list three cards across in a wider panel from 1600 px wide). Drag a box to select warbots (Shift adds; a box round a garrison takes its spare warbots), right-click
   ground to hold it, a rival building to attack, or your garrison to station them. Ctrl/Shift+1–9 saves a control
   group, 1–9 recalls it (twice jumps to it). Pan with **WASD** or the arrow keys, the window edge, or right/middle drag; hover for
   tooltips. Clicking the same spot again steps through what's piled there (a Crawler on a Foundry, workers at a site). Keys:
@@ -781,7 +917,7 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   and inside it picks a tool (**R** roads, **G** bridges
   and tunnels, **V** ramps, **E** pave, **O** one-way arrows, **L** junctions, **X** walls, **T** traffic map), **Q** army, **C** recall all warbots, **F** select all warbots, **J** latest alert,
   **H** base, **I** statistics, **U** robots, **Y** goods, **[ ]** speed, **+/−** zoom, **M** minimap, **Enter** the banner's main
-  button, panel buttons by the key shown on them (`SHEET_KEYS`; **Delete** twice demolishes), **Space** pause, **Esc** back / clear selection, **Alt+Enter**
+  button, panel buttons by the key shown on them (`SHEET_KEYS`; **Delete** twice demolishes), **Space** pause, **Esc** back / clear selection (in Paths it takes back the last stroke; **Ctrl+Z** is Undo there), **Alt+Enter**
   full screen (also a top-bar button and a pause-menu item). Chrome opens the installed app in a plain window on a
   computer (it ignores the manifest's `fullscreen`), so the app goes full screen itself on the first click unless you
   left full screen last time; Esc stays the game's key (`navigator.keyboard.lock`; hold it to leave). On a screen wider
@@ -819,6 +955,9 @@ including the remaining pieces (Ramp, slope and cliff textures, goods icons).
 Weapon effects are drawn in code: muzzle flashes, tracers, gun smoke, dust kicks and bullet pockmarks round each
 target (sparks on buildings), the Disruptor's arcs, and blasts with a fireball, flying debris, smoke and a scorch mark.
 A destroyed building shakes, leans and sinks into the ground in a dust cloud, with secondary blasts, and leaves rubble.
+Big blasts and quakes near the middle of the screen shake the view (`fxShake`), unless the device is set to reduce
+motion (`LESS_MOTION`). Each frame starts from a clean canvas state (no dash offset, line ends or text baseline left
+over from the last one), and a train's wagons start again behind it after it drove unseen (`trailOf`).
 A Pulse Turret charges for 0.45 s before each shot (`PULSE_CHARGE`; the charge builds while it reloads, so its rate of
 fire is unchanged), energy gathering at its muzzle, then fires a thick electric beam wrapped in arcs. At night,
 streetlights light every third road tile (`drawStreetLights`): sodium orange over concrete, white over asphalt.
@@ -847,7 +986,10 @@ night; a display setting kept on the device).
   `art/tod/tod-keys.js`) has a morning, evening and night version from the Claude Design day/night kit, at
   `art/tod/<time>/<same path as the day art>` (WebP, the day file's size; the kit's design names, such as cement-works
   for the Cement Works, are installed under the game's). `drawArt` draws the current time's version and fades in the
-  next one over a transition (`todVariant`); only the sets in use now and next are loaded (`todFrame`). The single-file
+  next one over a transition (`todVariant`); only the sets in use now and next are loaded (`todFrame`), and a set's
+  re-lit and graded copies of each sprite, the green and purple teams' too, are let go with it (`todDropSet`, `todFree`;
+  a graded stand-in goes as soon as the re-lit image arrives), and the sprites drawn lately get the coming set's versions
+  ready a couple a frame ahead of the change (`todWarm`, `artSeen`). The single-file
   build puts each set in a bundle beside the page (`dist/tod-<time>.js`, loaded when needed).
 - **Graded in code** (`out = in × multiply + add`, values from the kit's `art/tod/shared/time-of-day.json`): the baked
   ground, roads, track, pipes, plants, resources and territory tint (`todGradeGround`), and any sprite without a
@@ -855,7 +997,7 @@ night; a display setting kept on the device).
   towers and cables, Viaduct decks, level-crossing barriers) goes through `withTod`, like `drawArt`. Light overlays (brake lights, boost glow,
   lamps), the UI and nuke blasts are never graded.
 - **Evening and night:** vehicles' headlights (`drawHeadlights`, the kit's overlays at 3× the sprite), a glow in team
-  colour under every finished building (`drawLightPool`; small ones along Walls, bigger at Gates), a searchlight
+  colour under every finished building (`lightPool`, all drawn in one additive pass; small ones along Walls, bigger at Gates), a searchlight
   sweeping ahead of every Pulse Turret's gun as it turns (`drawSearchlight`), and bots' drop shadows lean left at dawn, right at dusk and
   fade at night (`todShadow`).
 - Every building and robot has a re-lit set (lit windows, beacons and team-colour glows; headlights on everything that

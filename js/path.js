@@ -44,12 +44,14 @@ const _DIRS = [[1, 0, 1], [-1, 0, 1], [0, 1, 1], [0, -1, 1], [1, 1, 1.4142], [1,
  * opts.who: the player whose bot this is (only its own Gates let it through).
  * opts.breach: an armed warbot: enemy Walls and Gates count as passable but dear (BREACH_COST plus
  *   their armor), so it goes round a short way and plans to shoot through a long one.
+ * opts.cover: a player id (the army on the march): tiles its enemies' guns reach cost COVER_COST more (dangerMap).
  */
 function findPath(sx, sy, gx, gy, avoidFor, opts) {
   const roadOnly = !!(opts && opts.roadOnly), offMul = (opts && opts.offMul) || 1;
   const who = opts ? opts.who : undefined, breach = !!(opts && opts.breach);
   const ferryOk = who !== undefined && !(opts && opts.noFerry) && navalMap();
   const guns = avoidFor !== undefined && avoidFor >= 0 && typeof dangerMap === 'function' && S.players[avoidFor] ? dangerMap(avoidFor) : null;
+  const cover = opts && opts.cover !== undefined && S.players[opts.cover] ? dangerMap(opts.cover) : null;
   const W = S.W, H = S.H, N = W * H;
   if (!inMap(gx, gy)) return null;
   const start = sy * W + sx, goal = gy * W + gx;
@@ -100,6 +102,8 @@ function findPath(sx, sy, gx, gy, avoidFor, opts) {
       let ng = g[cur] + dir[2] * (tileCost(cur, dir[0], dir[1], offMul) + tileCost(nt, dir[0], dir[1], offMul)) * 0.5 + wall;
       // Workers steer clear of enemy territory unless there is no other way, and well clear of enemy guns.
       if (avoidFor !== undefined) { const o = S.owner[nt]; if (o >= 0 && o !== avoidFor) ng += 6; if (guns && guns[nt]) ng += DANGER_COST; }
+      // The army keeps out of the enemy's guns where the way round is short.
+      if (cover && (cover[nt] & 1)) ng += COVER_COST * dir[2];
       if (stamp[nt] !== gen || ng < g[nt]) {
         stamp[nt] = gen; g[nt] = ng; from[nt] = cur;
         heap.push(nt, ng + h(ni, nj));
