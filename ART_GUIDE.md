@@ -1419,6 +1419,21 @@ colours, no team colour, no glow. Transparent background, the heap filling about
 rival building: you'll see the gunfire, and the blast and collapse when it falls. If an effect plays too fast or too
 slow, tell Claude Code: each effect's length is one number in the code.
 
+### The Lore guide's pictures (`art/lore/`)
+
+The main menu's Lore guide (`#screen-lore` in `index.html`) shows a few pictures of its own. They are plain `<img>`
+tags (with `data-src`, loaded when the guide first opens), not manifest keys: to change one, replace the file at the
+same size, or point the tag at a new one. Keep them small (WebP; the whole set is under 400 KB).
+
+| File | Size | What, and how it was made |
+|---|---|---|
+| `lore/ithaca.webp` | 1280×720 | Ithaca I from orbit: the coral-red patchwork of regions, the bright Ring (the planet's shadow across it, its own shadow on the planet), Argos, ringfall streaks, Corvane flaring top left; colony lights in the four callsign colours, lava and the Bloom glowing on the night side. `renderer/b/lore_planet.js` (`node run.js out/lore 'lore_planet:::ithaca:w=2560&h=1440'`, from `renderer/`), then `python3 post/lore_planet.py out/lore/ithaca.beauty.png ../art/lore/ithaca.webp --q 86` (ringfall, bloom, a Kuwahara filter for the painted look, grain, vignette). |
+| `lore/region-<biome>.webp` | 480×270 | A patch of each region's ground (`desert`, `jungle`, `polar`, `autumn`, `savanna`, `swamp`, `volcanic`, `lunar`, `alien`), screenshots of the game's own map in daylight at about 54 px a tile. |
+| `lore/murmur-<class>.webp` | 480×360 | The Scuttler, Brute, Leech (feeding), Spitter and Delver at night, 3/4 view: the direction-B moles, `renderer/b/murmur_moles.js` with `hero=1&hi=2&tod=night` (the Leech `pose=feed`), composed like the creature heroes and cropped round the animal. **To be replaced** when the Murmur are reworked to LORE.md's art brief. |
+
+The guide also shows the game's own `buildings/lander@0`, `lander@1`, the night Trade Post, Uplink, Command Base and
+*Wren* (`tod/night/...`); the Ithaca I page's catalog plate and the four callsign emblems are inline SVG in the page.
+
 ### Not swappable yet (ask Claude Code if you want these)
 
 - Menu background and logo

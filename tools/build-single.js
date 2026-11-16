@@ -63,6 +63,15 @@ for (const f of fs.readdirSync(path.join(root, 'art/tod/shared'))) {
   if (f.endsWith('.webp')) todShared[f.replace('.webp', '')] = `data:image/webp;base64,${fs.readFileSync(path.join(root, 'art/tod/shared', f)).toString('base64')}`;
 }
 
+// The Lore guide's pictures (#screen-lore: data-src, made each img's src when the guide first opens) go inline too.
+let loreBytes = 0, loreN = 0;
+html = html.replace(/data-src="(art\/[^"]+)"/g, (m, src) => {
+  const file = path.join(root, src);
+  if (!fs.existsSync(file)) { console.warn('missing Lore image, skipped:', src); return m; }
+  const d = fs.readFileSync(file); loreBytes += d.length; loreN++;
+  return `data-src="data:${mime[path.extname(file).toLowerCase()] || 'image/png'};base64,${d.toString('base64')}"`;
+});
+
 const icon = `data:image/png;base64,${fs.readFileSync(path.join(root, 'icons/favicon-32.png')).toString('base64')}`;
 html = html
   .replace(/<link rel="manifest"[^>]*>\n/, '')
@@ -74,4 +83,4 @@ html = html
 fs.mkdirSync(path.join(root, 'dist'), { recursive: true });
 const out = path.join(root, 'dist', 'terrafall.html');
 fs.writeFileSync(out, html);
-console.log(`wrote ${path.relative(root, out)} (${Math.round(html.length / 1024)} KB, ${Object.keys(inlined).length} custom art files) and dist/tod-{morning,evening,night}.js (${Math.round(todBytes / 1024)} KB) and dist/biome-*.js (${Math.round(biomeBytes / 1024)} KB)`);
+console.log(`wrote ${path.relative(root, out)} (${Math.round(html.length / 1024)} KB, ${Object.keys(inlined).length} custom art files, ${loreN} Lore pictures of ${Math.round(loreBytes / 1024)} KB) and dist/tod-{morning,evening,night}.js (${Math.round(todBytes / 1024)} KB) and dist/biome-*.js (${Math.round(biomeBytes / 1024)} KB)`);

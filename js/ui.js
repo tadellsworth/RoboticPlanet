@@ -92,6 +92,7 @@ function initUI() {
   // put (Contents, a picker, previous and next) and Previous / Next buttons at its end (see helpPage).
   helpMarkKeys(); // (before the pager is built: it rewrites the Help text once)
   helpPagerInit();
+  initLore();
   $('screen-help').addEventListener('click', (e) => {
     const a = e.target.closest && e.target.closest('[data-jump]');
     if (!a) return;
@@ -505,6 +506,7 @@ function initMenu() {
   // Esc: close the picker, then go back from Customise to Home.
   window.addEventListener('keydown', (e) => {
     if (UI.inGame || e.key !== 'Escape' || $('screen-menu').hidden) return;
+    if (!$('screen-lore').hidden) { e.preventDefault(); closeLore(); return; }
     if (UI.picker) { e.preventDefault(); closePicker(); return; }
     const over = !$('screen-help').hidden || !$('screen-missions').hidden || !$('screen-stats').hidden;
     if (!over && UI.menuView === 'setup') { e.preventDefault(); showMenuView('home', true); }
@@ -2493,49 +2495,105 @@ function showHelp() {
   helpPage('hs-top');
 }
 
-/** The How to play's sections, in order. */
-function helpSections() { return [...$('screen-help').querySelectorAll('.help-body > section[id]')]; }
+/**
+ * The paged screens, How to play and Lore: one section at a time, with a bar above the text that stays put (Contents
+ * when the screen has a contents page, a picker for any section, ‹ ›) and Previous / Next buttons at the section's
+ * end. `top`: the contents page's id, or null (Lore: it opens on its first section, which links to the rest).
+ */
+const HELP_PAGER = { scr: 'screen-help', top: 'hs-top', nav: 'help-nav', toc: 'hn-toc', pick: 'hn-pick', prev: 'hn-prev', next: 'hn-next', foot: 'help-pager', fprev: 'hp-prev', fnext: 'hp-next' };
+const LORE_PAGER = { scr: 'screen-lore', top: null, nav: 'lore-nav', pick: 'ln-pick', prev: 'ln-prev', next: 'ln-next', foot: 'lore-pager', fprev: 'lp-prev', fnext: 'lp-next' };
 
-/** Build the How to play's page bar (above the text, outside its scroll) and its Previous / Next footer, once. */
-function helpPagerInit() {
-  const card = $('screen-help').querySelector('.help-card'), body = card.querySelector('.help-body');
-  const secs = helpSections(), title = (s) => (s.querySelector('h3') || s).textContent.trim();
+/** A paged screen's sections, in order, and a section's name (its heading). */
+function pagerSections(P) { return [...$(P.scr).querySelectorAll('.help-body > section[id]')]; }
+function pagerTitle(s) { return (s.querySelector('h3') || s).textContent.trim(); }
+
+/** Build a paged screen's bar (above the text, outside its scroll) and its Previous / Next footer, once. */
+function pagerInit(P) {
+  const card = $(P.scr).querySelector('.help-card'), body = card.querySelector('.help-body');
   const nav = document.createElement('div');
-  nav.className = 'help-nav'; nav.id = 'help-nav'; nav.hidden = true;
-  nav.innerHTML = '<button type="button" class="btn small" id="hn-toc">Contents</button>' +
-    '<select id="hn-pick" aria-label="Go to a section"></select>' +
-    '<button type="button" class="btn small" id="hn-prev" aria-label="Previous section">‹</button>' +
-    '<button type="button" class="btn small" id="hn-next" aria-label="Next section">›</button>';
-  for (const s of secs) { const o = document.createElement('option'); o.value = s.id; o.textContent = title(s); nav.querySelector('select').appendChild(o); }
+  nav.className = 'help-nav'; nav.id = P.nav; nav.hidden = !!P.top;
+  nav.innerHTML = (P.top ? `<button type="button" class="btn small" id="${P.toc}">Contents</button>` : '') +
+    `<select id="${P.pick}" aria-label="Go to a section"></select>` +
+    `<button type="button" class="btn small pn-prev" id="${P.prev}" aria-label="Previous section">‹</button>` +
+    `<button type="button" class="btn small pn-next" id="${P.next}" aria-label="Next section">›</button>`;
+  for (const s of pagerSections(P)) { const o = document.createElement('option'); o.value = s.id; o.textContent = pagerTitle(s); nav.querySelector('select').appendChild(o); }
   card.insertBefore(nav, body);
   const foot = document.createElement('div');
-  foot.className = 'help-pager'; foot.id = 'help-pager'; foot.hidden = true;
-  foot.innerHTML = '<button type="button" class="btn" id="hp-prev"></button><button type="button" class="btn" id="hp-next"></button>';
+  foot.className = 'help-pager'; foot.id = P.foot; foot.hidden = !!P.top;
+  foot.innerHTML = `<button type="button" class="btn fp-prev" id="${P.fprev}"></button><button type="button" class="btn fp-next" id="${P.fnext}"></button>`;
   body.appendChild(foot);
-  const step = (d) => { const k = helpSections().findIndex((s) => !s.hidden); const t = helpSections()[k + d]; helpPage(t ? t.id : 'hs-top'); };
-  $('hn-toc').onclick = () => helpPage('hs-top');
-  $('hn-pick').onchange = () => helpPage($('hn-pick').value);
-  $('hn-prev').onclick = $('hp-prev').onclick = () => step(-1);
-  $('hn-next').onclick = $('hp-next').onclick = () => step(1);
+  const step = (d) => { const secs = pagerSections(P), k = secs.findIndex((s) => !s.hidden), t = secs[k + d]; pagerShow(P, t ? t.id : P.top || secs[0].id); };
+  if (P.top) $(P.toc).onclick = () => pagerShow(P, P.top);
+  $(P.pick).onchange = () => pagerShow(P, $(P.pick).value);
+  $(P.prev).onclick = $(P.fprev).onclick = () => step(-1);
+  $(P.next).onclick = $(P.fnext).onclick = () => step(1);
 }
 
-/** Show one page of the How to play: 'hs-top' is the contents, any other id one section; back at the top of it. */
-function helpPage(id) {
-  const secs = helpSections(), k = secs.findIndex((s) => s.id === id), body = $('screen-help').querySelector('.help-body');
-  const title = (s) => (s.querySelector('h3') || s).textContent.trim();
-  if ($('hs-top')) $('hs-top').hidden = k >= 0;
+/** Show one page of a paged screen: its contents page (P.top), or one section; back at the top of it. */
+function pagerShow(P, id) {
+  const secs = pagerSections(P), k = secs.findIndex((s) => s.id === id), body = $(P.scr).querySelector('.help-body');
+  if (P.top && $(P.top)) $(P.top).hidden = k >= 0;
   secs.forEach((s, i) => { s.hidden = i !== k; });
-  $('help-nav').hidden = k < 0;
-  $('help-pager').hidden = k < 0;
+  $(P.nav).hidden = k < 0;
+  $(P.foot).hidden = k < 0;
   if (k >= 0) {
-    $('hn-pick').value = id;
-    $('hn-prev').disabled = false; // (from the first section, back is the contents)
-    $('hn-next').disabled = k === secs.length - 1;
-    $('hp-prev').textContent = k > 0 ? `‹ ${title(secs[k - 1])}` : '‹ Contents';
-    $('hp-next').hidden = k === secs.length - 1;
-    if (k < secs.length - 1) $('hp-next').textContent = `${title(secs[k + 1])} ›`;
+    const first = k === 0 && !P.top; // (with a contents page, back from the first section is the contents)
+    $(P.pick).value = id;
+    $(P.prev).disabled = first;
+    $(P.next).disabled = k === secs.length - 1;
+    $(P.fprev).hidden = first;
+    if (!first) $(P.fprev).textContent = k > 0 ? `‹ ${pagerTitle(secs[k - 1])}` : '‹ Contents';
+    $(P.fnext).hidden = k === secs.length - 1;
+    if (k < secs.length - 1) $(P.fnext).textContent = `${pagerTitle(secs[k + 1])} ›`;
   }
   body.scrollTop = 0;
+}
+
+function helpPagerInit() { pagerInit(HELP_PAGER); }
+/** Show one page of the How to play: 'hs-top' is the contents, any other id one section. */
+function helpPage(id) { pagerShow(HELP_PAGER, id); }
+
+/* ------------------------------------------------------------------ the Lore guide (main menu) */
+
+/**
+ * The Lore guide (#screen-lore): the colony's archive of the story (LORE.md), a page at a time like the How to play.
+ * Its pictures are fetched the first time it opens (data-src), all at once, so the service worker keeps them for
+ * offline play from then on. A phone's Back button closes it: opening adds an entry to the history, closing takes it back.
+ */
+function openLore() {
+  const scr = $('screen-lore');
+  for (const img of scr.querySelectorAll('img[data-src]')) { img.src = img.dataset.src; img.removeAttribute('data-src'); }
+  scr.hidden = false;
+  pagerShow(LORE_PAGER, pagerSections(LORE_PAGER)[0].id);
+  try { history.pushState({ lore: 1 }, ''); } catch (e) { /* no history to add to (a sandboxed frame) */ }
+}
+
+function closeLore(fromBack) {
+  if ($('screen-lore').hidden) return;
+  $('screen-lore').hidden = true;
+  if (!fromBack) try { if (history.state && history.state.lore) history.back(); } catch (e) { /* as above */ }
+}
+
+function initLore() {
+  pagerInit(LORE_PAGER);
+  $('m-lore').onclick = () => { sfx('click'); openLore(); };
+  $('lr-close').onclick = () => { sfx('click'); closeLore(); };
+  // The first page's list of contents, and links between pages.
+  $('screen-lore').addEventListener('click', (e) => {
+    const a = e.target.closest && e.target.closest('[data-lore]');
+    if (!a) return;
+    e.preventDefault();
+    pagerShow(LORE_PAGER, a.dataset.lore);
+  });
+  // ← and → turn the pages (a picker keeps its own arrows); Esc closes it (initMenu).
+  $('screen-lore').addEventListener('keydown', (e) => {
+    if (e.ctrlKey || e.metaKey || e.altKey || (e.target && e.target.tagName === 'SELECT')) return;
+    const b = e.key === 'ArrowRight' ? $(LORE_PAGER.next) : e.key === 'ArrowLeft' ? $(LORE_PAGER.prev) : null;
+    if (!b) return;
+    e.preventDefault();
+    if (!b.disabled) b.click();
+  });
+  window.addEventListener('popstate', () => { if (!UI.inGame) closeLore(true); });
 }
 
 /**

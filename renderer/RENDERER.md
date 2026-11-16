@@ -34,7 +34,7 @@ This folder is the complete setup behind the Terrafall art. It covers every 3D s
 | Vehicles | truck, tanker, roadtrain, freight (loco and wagons), crawler, trader |
 | Robots | rob_worker, rob_hauler, rob_agribot, rob_paver, rob_warbot (the shared `robkit.js`) |
 | Wildlife | creature (scuttler, brute), nest |
-| Other | icon (the app-icon hero render) |
+| Other | icon (the app-icon hero render); lore_planet (the Lore guide's Ithaca I from orbit: a 16:9 illustration with its own camera and shaders, finished by `post/lore_planet.py`) |
 | Walls (in `walls/b/`) | wall, gate |
 
 ## Install

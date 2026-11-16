@@ -62,7 +62,7 @@ function frameError(e) {
  * art (R.dirty). A paused game used to be drawn sixty times a second behind its pause menu. And the
  * demo behind the main menu is drawn every DEMO_FRAME ms, not every frame.
  */
-const COVERS = ['screen-pause', 'screen-help', 'screen-stats', 'screen-over', 'screen-boost', 'screen-missions', 'screen-mp'];
+const COVERS = ['screen-pause', 'screen-help', 'screen-stats', 'screen-over', 'screen-boost', 'screen-missions', 'screen-mp', 'screen-lore'];
 let _drawAt = 0, _drawDt = 0, _drawKey = '';
 function drawNeeded(now) {
   if (!S || !R.map) return true;

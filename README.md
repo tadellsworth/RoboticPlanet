@@ -873,6 +873,21 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   every building's and robot's panel (and the Trade Post's and Uplink's), below every button; the Command Base's is its
   Arrival clock (`ARRIVAL_CLOCK`), shown under its name. **Loading lines** (`SPLASH_LINES`, picked at first paint by an
   inline script in `index.html`, which keeps its own copy): one under the splash bar, which now stays about 2 s.
+  **The Lore guide** (`#screen-lore`, `openLore`/`closeLore`/`initLore` in `js/ui.js`): the small **Lore** pill at the
+  end of the main menu's links opens the colony's archive, LORE.md told in ten pages (Terrafall, The Arrival clock,
+  Ithaca I, The regions, The four vanguards, The doctrines, Neutral ground, The Murmur, Accord standards, Your colony),
+  in the archive's own voice: Earth's fate is never stated, only hinted (an unreviewed second reading of "terrafall",
+  "no ark construction update on file after T−14", the *Wren*'s waystation last answering at T−2). It pages like the How
+  to play, on the same code (`pagerInit`/`pagerShow`, `HELP_PAGER` and `LORE_PAGER`): it opens on its first page, which
+  lists the rest; a picker stays on top, Previous / Next end each page, ← → turn them; Esc, Back or a phone's Back
+  closes it (opening adds a history entry; closing takes it back). Its pictures are `data-src` until it first opens,
+  then all fetched at once, so the service worker keeps them for offline play, and `tools/build-single.js` inlines them:
+  `art/lore/ithaca.webp` (Ithaca I from orbit, the Ring, Argos and Corvane: `renderer/b/lore_planet.js` and
+  `renderer/post/lore_planet.py`), `art/lore/region-<biome>.webp` (each region's ground, shot from the game),
+  `art/lore/murmur-<class>.webp` (the direction-B mole renders at night, `renderer/b/murmur_moles.js` with `hero=1`: to
+  be replaced when the Murmur are reworked to LORE.md's art brief), and the game's own Command Base, Trade Post, Uplink
+  and *Wren* art. The Ithaca I page's catalog plate and the callsign emblems are inline SVG. Only the Scuttler and the
+  Brute are met in the game so far, so the Leech, Spitter and Delver are on file as "sighted".
 - **The Murmur** (players' name for the wildlife: Colony; `WILD` in `js/defs.js`, `updateNest`/`updateCritter` in `js/sim.js`; the
   new-game option "The Murmur", on by default; in missions only where one switches it on, `wildlife: true`, as The Murmur (id `bughunt`)
   does). **None on a silent biome** (`BIOMES.lunar.silent`, `murmurGround`): on Lunar, Argos the moon, `newGame`
@@ -1146,6 +1161,7 @@ js/ui.js                  HUD, build menu, info panels, objectives
 js/audio.js               synthesized sound effects
 js/main.js                boot and main loop
 art/art-manifest.js       register custom art here
+art/lore/                 the Lore guide's pictures (the planet, the regions, the Murmur)
 tools/headless-sim.js     AI-vs-AI balance test without a browser
 tools/smoke-test.js       browser test on a phone-sized screen (Playwright)
 tools/build-single.js     bundles everything into dist/terrafall.html (and dist/tod-<time>.js)
