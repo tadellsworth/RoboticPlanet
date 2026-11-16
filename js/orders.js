@@ -146,8 +146,8 @@ const ORDERS = {
   paths(p, d) {
     d = d && typeof d === 'object' ? d : {};
     const L = (a) => (Array.isArray(a) ? a : []), out = { removed: 0, laid: 0, ramps: 0, walls: 0, gates: 0, rails: 0, railsUp: 0, pipes: 0, pipesUp: 0, why: '', wallWhy: '', rampWhy: '', railWhy: '' };
-    for (const t of L(d.del)) if (S.road[t] || S.plan[t] === 1) { removeRoad(p, t % S.W, (t / S.W) | 0); out.removed++; }
-    for (const t of L(d.railDel)) if (S.rail[t] || S.railPlan[t] === 1) { takeUpRail(p, t); out.railsUp++; }
+    for (const t of L(d.del)) if (S.road[t] || S.plan[t] === p + 1) { removeRoad(p, t % S.W, (t / S.W) | 0); out.removed++; }
+    for (const t of L(d.railDel)) if (S.rail[t] || S.railPlan[t] === p + 1) { takeUpRail(p, t); out.railsUp++; }
     const ramps = new Set(L(d.ramps));
     for (const t of ramps) {
       const r = placeSite(p, 'ramp', t % S.W, (t / S.W) | 0, null, true);
@@ -166,7 +166,7 @@ const ORDERS = {
       out.laid++;
     }
     for (const t of L(d.rail)) { const w = queueRail(p, t); if (w) { out.railWhy = out.railWhy || w; } else out.rails++; }
-    for (const t of L(d.pipeDel)) if (S.pipe[t] === 1 || S.pipePlan[t] === 1) { takeUpPipe(p, t); out.pipesUp++; }
+    for (const t of L(d.pipeDel)) if (S.pipe[t] === p + 1 || S.pipePlan[t] === p + 1) { takeUpPipe(p, t); out.pipesUp++; }
     for (const t of L(d.pipe)) if (!queuePipe(p, t)) out.pipes++;
     settlePlans(); // pay for what we can now, oldest plans first; the rest waits for the goods
     return out;
