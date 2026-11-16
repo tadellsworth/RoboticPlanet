@@ -1371,6 +1371,7 @@ function initDialogs() {
 function syncSaved() {
   const el = $('p-saved');
   if (!el) return;
+  if (UI.watch) { el.textContent = 'Watching: nothing here is saved, and your own game stays as it was.'; $('p-quit').textContent = 'Back to the menu'; return; }
   const s = UI.savedAt ? Math.round((Date.now() - UI.savedAt) / 1000) : -1;
   el.textContent = UI.saveHold ? 'Saving is paused: something in the game keeps going wrong. Reload the page to carry on from your last save.'
     : UI.saveFailed ? 'Saving isn\'t working in this browser right now: keep this tab open.'
@@ -2257,6 +2258,8 @@ function updateMapTip() {
 
 /** Game speeds on offer: two slower than normal for a calmer game, two faster for waiting on something. */
 const SPEEDS = [0.75, 0.875, 1, 2, 3];
+/** The speeds on offer now: a game being watched runs up to 8× (WATCH_SPEEDS, js/watch.js). */
+function speedList() { return UI.watch ? WATCH_SPEEDS : SPEEDS; }
 
 function setSpeed(v, quiet) {
   UI.speed = v;
@@ -2270,8 +2273,8 @@ function setSpeed(v, quiet) {
 /** Step to the next slower (-1) or faster (+1) speed. */
 function stepSpeed(d) {
   if (MP.on) return;
-  const k = SPEEDS.indexOf(UI.speed);
-  setSpeed(SPEEDS[clamp((k < 0 ? 2 : k) + d, 0, SPEEDS.length - 1)]);
+  const L = speedList(), k = L.indexOf(UI.speed);
+  setSpeed(L[clamp((k < 0 ? L.indexOf(1) : k) + d, 0, L.length - 1)]);
   toast(`Game speed ${UI.speed}×`, 'info');
 }
 
@@ -2279,7 +2282,7 @@ function stepSpeed(d) {
 function toggleSpeedMenu(refresh) {
   const m = $('speed-menu');
   if (!refresh && !m.hidden) { m.hidden = true; return; }
-  m.innerHTML = SPEEDS.map((v) => `<button role="menuitemradio" aria-checked="${v === UI.speed}" class="${v === UI.speed ? 'on' : ''}" data-v="${v}">${v}×</button>`).join('');
+  m.innerHTML = speedList().map((v) => `<button role="menuitemradio" aria-checked="${v === UI.speed}" class="${v === UI.speed ? 'on' : ''}" data-v="${v}">${v}×</button>`).join('');
   for (const b of m.children) b.onclick = () => { setSpeed(+b.dataset.v); m.hidden = true; };
   const r = $('btn-speed').getBoundingClientRect();
   m.hidden = false;
@@ -2289,6 +2292,7 @@ function toggleSpeedMenu(refresh) {
 
 /** Esc steps back: close a panel, leave a mode, close a screen, or open the pause menu. */
 function escapeKey() {
+  if (UI.photo) { photoExit(); return; } // (photo mode: back where it was opened from, js/photo.js)
   if (!$('screen-feedback').hidden) { closeFeedback(); return; } // (over the pause menu: back to it)
   if (!$('speed-menu').hidden) { $('speed-menu').hidden = true; return; }
   if (!$('screen-help').hidden) { $('h-close').click(); return; }
@@ -2534,10 +2538,10 @@ async function downloadSave() {
   say(plainDownload(name, text) ? `Save file ${name} downloaded: load it from the main menu (Load a save file) on any device.` : 'Downloads aren\'t possible here.');
 }
 
-/** An ordinary browser download of `text` as `name`; false if this page can't. */
+/** An ordinary browser download of `text` (or a Blob: photo mode's picture) as `name`; false if this page can't. */
 function plainDownload(name, text) {
   try {
-    const url = URL.createObjectURL(new Blob([text], { type: 'application/json' }));
+    const url = URL.createObjectURL(text instanceof Blob ? text : new Blob([text], { type: 'application/json' }));
     const a = document.createElement('a');
     a.href = url; a.download = name; a.style.display = 'none';
     document.body.appendChild(a); a.click(); a.remove();
@@ -2636,6 +2640,8 @@ function enterGame(unsaved) {
 }
 
 function toMenu() {
+  if (UI.photo) photoExit();
+  if (UI.watch) watchEnd();
   if (MP.on || MPJ.on) mpQuit();
   ME = 0;
   hideGoodTip();
@@ -2788,6 +2794,7 @@ function helpForTouch() {
 
 function showGameOver() {
   UI.overShown = true;
+  if (UI.watch) { watchOver(); return; } // (a game being watched has its own end, and saves nothing: js/watch.js)
   clearSave();
   UI.overNew = null; UI.overMenu = null;
   $('o-new').textContent = 'New game'; $('o-menu').textContent = 'Main menu';
@@ -7431,6 +7438,7 @@ function briefingTick() {
  * loaded later, or caught up after a resync, never says it again); not with the day/night cycle off.
  */
 function nightfallLine() {
+  if (TOD.over != null) return; // (photo mode's time of day is only for the picture)
   if (S.mission || S.time < 30 || S.time > 720 || !todEnabled() || (S.lore && S.lore['n.night.' + ME] !== undefined)) return;
   if (todNow().lights >= 0.9) narrate(ME, 'night');
 }
@@ -7443,6 +7451,7 @@ function uiTick(dt) {
   if (!UI.inGame) menuArtTick();
   siteUndoTick(); // (hides itself out of a game)
   if (!UI.inGame || !S) return;
+  if (UI.watch) watchTick(dt); // (Watch mode: the scout report and the camera, js/watch.js)
   if (S.msgs.length) UI.toastBatch = (UI.toastBatch || 0) + 1; // (the messages of one moment: see toast)
   while (S.msgs.length) {
     const m = S.msgs.shift();

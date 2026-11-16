@@ -51,6 +51,9 @@ how goods move.
   `ownTiles(test)`. Goals once met stay met (`M.got`) unless they say `hold`. **Capture lock:** while any goal other
   than capturing the rival Command Base is open, that base holds at 1 armor against you (`captureLocked`, applied in
   `hitBuilding`; its panel says to finish the other goals first), so winning too soon can't lose a mission.
+- **Watch:** the computer plays every colony (two to four, on any map type, each with the doctrine you pick) while you
+  look on at up to 8×, with a scout report on what each is doing and a camera that follows the fighting; nothing is
+  saved (see Watch mode below).
 
 Before each game, the new-game screen picks the mode, players and rival, the **map shape** (Standard, Long haul,
 Chokepoint, Islands, Crater, Plateaus, Sky islands, Rift, Ring valley, Oases, Crossroads, Lakes, Tidal flats, River delta,
@@ -839,6 +842,50 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   `UI.paused` (opened over the pause menu the game stays paused; a multiplayer game runs on under its menu as always) and
   takes every key pressed in it, so no hotkey fires while typing. Esc, Back or a phone's Back close it (on the main menu
   opening adds a history entry, as the Lore guide does; in a game `escapeKey` closes it first).
+- **Photo mode** (`js/photo.js`, `#photo-bar`): **Photo mode** in the pause menu, or **Shift+P** (`photoEnter`), hides the
+  whole interface (`body.photo`) and stands the game still (`UI.paused`; a multiplayer game runs on), and taps and drags
+  on the map only move it (`inputSwap` gives `INPUT` handlers that select, order and paint nothing). A small toolbar
+  fades after `PHOTO_IDLE` (3.2 s) left alone and comes back at a tap on the map, a mouse move or a key: **Time of day**
+  (a slider over the 12-minute cycle; it sets `TOD.over`, which `todNow` and `todFrame` show instead of the game's
+  clock: looks only, `S` and `S.time` don't change, the narrator's nightfall line ignores it, and it is let go on
+  exit), **Borders** (`R.terrOff`: the land's tint and border lines) and **Minimap** (both off unless switched on,
+  kept on this device in `terrafall.photo`), **Save picture** and **Exit**. The map is drawn by `photoRender`, which
+  sets aside the selection, range rings, a Paths plan, a building being placed and the hover marks only for the
+  drawing, with `R.clean = 2` (render.js leaves out badges, health bars and paused and cut-off signs). **Save picture**
+  (`photoSave`) draws the map once more at the screen's full resolution (`devicePixelRatio`, up to 3 and
+  `PHOTO_MAX_PX` pixels: `R.dpr` may be lower while the game runs), adds the minimap if it shows and a small
+  Terrafall mark bottom right (`photoMark`), and offers `terrafall-<seed>-<date>-<time>.png` (`toBlob`) the way
+  Download save file does: the artifact `downloads` capability in claude.ai, else an `<a download>` link
+  (`plainDownload`, which takes a Blob too). Esc, Shift+P, **Exit** or a phone's Back (`escapeKey`) leave it, back
+  to the pause menu if it was opened from there; everything set aside comes back as it was.
+- **Watch mode** (`js/watch.js`, `#screen-watch`, `#watch-card`): the **Watch** pill on the main menu opens a setup card
+  (`openWatch`): the map type (grouped as in the Custom Game picker), how many colonies (2, or up to the map type's
+  `maxPlayers`) and each one's doctrine (or Random: one no other colony has), kept on this device in `terrafall.watch`.
+  **Start watching** (`watchStart`) is a normal game in which the computer plays every colony: `newGame` with
+  `humans: []` (each gets the rival's difficulty settings and doctrine; COBALT's doctrine is set straight after, since
+  `newGame` gives player 0 the Steward), Normal difficulty, Nuclear race on, no planetary events, a random biome. `ME`
+  stays 0, a colony the computer plays like the rest (as in the menu's backdrop game), for what this device shows and
+  hears; `S.watch` has the game play on to the last colony standing (`eliminate`: a game with nobody in it otherwise
+  ends when COBALT falls), and `playerName` says COBALT, not You. Nothing is saved: `saveGame` and `autoSave` never save
+  a game whose player 0 the computer plays, and `clearSave` isn't called, so the player's own save stays as it was
+  (Download save file is hidden). The HUD keeps the clock, the speed (`WATCH_SPEEDS`: 1×, 2×, 4×, 8×; `speedList`) and the
+  pause menu (**Back to the menu**, Photo mode, Statistics); the minimap works; goods, the goal, the tools and the
+  selection are hidden (`body.watching`). Taps and drags select and order nothing (`inputSwap`), and only the keys that
+  move the map, pause, change speed, show the minimap, Statistics or How to play reach the game (F follows the
+  action). `R.clean = 1` leaves out the marks render.js draws for this device's own colony. **The Scout report**
+  (`watchReport`, once a second by the clock; its title folds it away to the colonies' line) lists each colony by doctrine ("the Warden", or "the blue Warden" when
+  two share one) with its warbots, then up to two lines: news first for 15 s (a Command Base taken, a surrender, a
+  nuclear launch: `watchEvents`), then the busiest colonies, read from the computer's own plans in `js/ai.js` without
+  touching them (`watchDoing`: `P.stormOn` storming or forming up to storm a Command Base, `P.march` and `P.siegeAt` a
+  march and its target, `P.homeCall` under attack at home, Missiles and bombers in flight, `P.raid` a band raiding a
+  colony's road, named by its compass point from that colony's Command Base, `P.pushOn` a Warden's big push,
+  `P.massFor` massing for a push; when quiet, an opening line for its doctrine or what it has built). The game's own
+  messages are for a colony's player ("your Command Base"), so they're dropped. **The camera** (`watchCamera`) glides to
+  the busiest fighting (`watchSpot`: warbots in a fight, buildings just hit, shells and missiles landing, in 10-tile
+  cells; a spot keeps the camera while it's half as busy as the busiest), else the biggest band on the move, else each
+  Command Base in turn; once the map is moved by hand it stays (**Follow the action**, or F, takes it back). The end
+  (`watchOver`, from `showGameOver`) says who won and when each colony fell, with **Watch another** (the same setup on a
+  new planet) and **Main menu**; `toMenu` ends Watch mode (`watchEnd`).
 - **A failed frame never stops the game:** `frame` books the next frame before running this one and catches its errors
   (reported once each to the console), and each stage of a frame (simulation, camera, drawing, interface, sound) runs
   on its own (`stage` in `js/main.js`): one that keeps failing during a game says so once and pauses saving
@@ -1487,6 +1534,8 @@ js/net.js                 multiplayer: the connection to the relay (rooms, recon
 js/mpui.js                multiplayer screens: host, join, the lobby, the in-game banner, pause and leave
 js/feedback.js            Send feedback: the form (main menu and pause menu) that posts to the relay's /feedback
 js/goals.js               Colony goals, Records and achievements: read from the game, kept on the device (display only)
+js/photo.js               photo mode: the interface hidden, a time-of-day slider and Save picture (a PNG of the map)
+js/watch.js               Watch mode: computer colonies play while you watch, with a scout report and a camera that follows the fighting
 js/charts.js              line and bar charts for the statistics screen
 js/render.js              canvas renderer and placeholder art
 js/daynight.js            day and night: the clock, re-lit art sets, grading, headlights, light pools

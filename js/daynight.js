@@ -30,7 +30,7 @@ const TOD_NAMES = { morning: 'Morning', day: 'Day', evening: 'Evening', night: '
 const TOD_NEVER = /(-brake|-boost|-lights|-headlights|-spark|-lamp|^rail-lights-on|^light-pool|^icon-|^nuke-blast|^rally|^oneway|^bunker-fire|^disruptor-pulse|^mortar-flash|^streetlamp-.*-(lit|pool)|^fx-|^(smelter|refinery)-work-|^turret-charge-)/;
 const TOD_VEHICLES = ['truck', 'tanker', 'roadtrain', 'freight-loco', 'crawler', 'worker', 'hauler', 'agribot', 'paver', 'warbot'];
 
-const TOD = { on: true, state: null, active: false, sets: {}, shared: {}, keys: null, poolTint: {} };
+const TOD = { on: true, state: null, active: false, sets: {}, shared: {}, keys: null, poolTint: {}, over: null };
 
 /**
  * The time of day setting (a display setting kept on this device): 'cycle' (morning to night, 12 minutes
@@ -77,8 +77,15 @@ function todMix(a, b, f) {
   };
 }
 
-/** The time of day now (the game's clock; always day with the cycle off, always night set to night). */
-function todNow() { return TOD.mode === 'night' ? todMix('night', 'night', 0) : TOD.on && S && !todHeld() ? todAt(S.time) : todMix('day', 'day', 0); }
+/**
+ * The time of day now (the game's clock; always day with the cycle off, always night set to night). Photo mode's
+ * slider shows the light at another time instead (TOD.over, seconds into the cycle; null otherwise): for looks only,
+ * the game's clock goes on as it was (see js/photo.js).
+ */
+function todNow() {
+  if (TOD.over != null) return todAt(TOD.over);
+  return TOD.mode === 'night' ? todMix('night', 'night', 0) : TOD.on && S && !todHeld() ? todAt(S.time) : todMix('day', 'day', 0);
+}
 /** Is the menu's demo held at daylight while it fast-forwards (TOD.dayHold, set in main.js; never in a game)? */
 function todHeld() { return !!TOD.dayHold && !(typeof UI !== 'undefined' && UI.inGame); }
 /** The name of the time of day now ('morning', 'day', 'evening' or 'night'). */
@@ -89,9 +96,11 @@ function todFrame() {
   const st = todNow();
   TOD.state = st;
   TOD.active = st.a !== 'day' || st.b !== 'day';
-  if (!TOD.on || !S || (todHeld() && TOD.mode !== 'night')) { for (const name in TOD.sets) todDropSet(name); return; } // (switched off, or held at day: nothing is kept)
+  const over = TOD.over != null; // (photo mode's time of day: its sets load whatever the setting)
+  if (!S || (!over && (!TOD.on || (todHeld() && TOD.mode !== 'night')))) { for (const name in TOD.sets) todDropSet(name); return; } // (switched off, or held at day: nothing is kept)
   // The sets in use now and the next one coming (looked up a little ahead), and no others.
-  const want = TOD.mode === 'night' ? new Set(['night']) : new Set([st.a, st.b, todAt(S.time + 45).a, todAt(S.time + 45).b]);
+  const at = over ? TOD.over : S.time;
+  const want = TOD.mode === 'night' && !over ? new Set(['night']) : new Set([st.a, st.b, todAt(at + 45).a, todAt(at + 45).b]);
   want.delete('day');
   for (const name of want) todLoadSet(name);
   for (const name in TOD.sets) if (!want.has(name)) todDropSet(name);

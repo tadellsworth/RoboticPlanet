@@ -122,7 +122,8 @@ function step(now) {
     _drawDt += dt;
     if (!drawNeeded(now)) return;
     if (UI.inGame) watchFrameRate(ms);
-    render(Math.min(0.1, _drawDt)); // (the time since the last frame drawn, so what moves by the clock keeps its pace)
+    const dtDraw = Math.min(0.1, _drawDt); // (the time since the last frame drawn, so what moves by the clock keeps its pace)
+    if (UI.photo) photoRender(dtDraw); else render(dtDraw); // (photo mode: the picture without the interface's marks, js/photo.js)
     _drawAt = now; _drawDt = 0; R.dirty = false;
   });
   stage('ui', now, () => uiTick(dt));

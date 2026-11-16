@@ -28,6 +28,10 @@ const R = {
   keys: new Set(),        // arrow / WASD keys held down (desktop panning)
   mode: 'normal',
   time: 0,
+  // What the map leaves out: clean 1 (Watch mode, js/watch.js) the marks drawn for this device's own colony only
+  // (badges, low-fuel bars, group tags, rally flags), 2 (photo mode, js/photo.js) those and every other mark too
+  // (health bars, paused and cut-off signs); terrOff, the land's tint and its borders (photo mode's Borders).
+  clean: 0, terrOff: false,
 };
 
 // Ground colour pairs per elevation level, from canyon floor (0) up to the high mesas (4).
@@ -3949,7 +3953,7 @@ function drawCritter(ctx, u, x, y, s) {
   ctx.beginPath(); ctx.arc(s * 0.12 * k, -s * 0.03 * k, s * 0.022 * k, 0, Math.PI * 2); ctx.arc(s * 0.12 * k, s * 0.03 * k, s * 0.022 * k, 0, Math.PI * 2); ctx.fill();
   ctx.restore();
   }
-  if (u.hp < u.maxHp) {
+  if (u.hp < u.maxHp && R.clean < 2) {
     const w = s * 0.34 * k;
     ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fillRect(x - w / 2, y - s * 0.24 * k, w, Math.max(2, s * 0.05));
     ctx.fillStyle = '#ff5a5a'; ctx.fillRect(x - w / 2, y - s * 0.24 * k, (w * Math.max(0, u.hp)) / u.maxHp, Math.max(2, s * 0.05));
@@ -4001,7 +4005,7 @@ function drawShip(ctx, u, sx, sy, s) {
     ctx.fillRect(-L * 0.95, -B * 0.6, L * 0.3, B * 1.2);
     ctx.restore();
   }
-  if (u.hp < u.maxHp) {
+  if (u.hp < u.maxHp && R.clean < 2) {
     const w = s * 0.6;
     ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fillRect(sx - w / 2, sy - s * 0.42, w, Math.max(2, s * 0.05));
     ctx.fillStyle = '#ff5a5a'; ctx.fillRect(sx - w / 2, sy - s * 0.42, (w * Math.max(0, u.hp)) / u.maxHp, Math.max(2, s * 0.05));
@@ -4072,7 +4076,7 @@ function drawBot(ctx, u, sx, sy, s) {
       ctx.fillRect(sx - c + ox, sy - s * 0.3 - c + bob + oy, c * 2, c * 2);
     }
   }
-  if (u.owner === ME && BOTS[u.type].flame && (u.gel ?? TORCH.tank) < TORCH.tank * 0.3) {
+  if (u.owner === ME && !R.clean && BOTS[u.type].flame && (u.gel ?? TORCH.tank) < TORCH.tank * 0.3) {
     // Low on fuel: a short orange bar under the Torch.
     const w = s * 0.26, h = Math.max(2.5, s * 0.07), x = sx - w / 2, y = sy + s * 0.26;
     ctx.fillStyle = 'rgba(0,0,0,0.7)';
@@ -4080,7 +4084,7 @@ function drawBot(ctx, u, sx, sy, s) {
     ctx.fillStyle = '#ff8a2a';
     ctx.fillRect(x, y, (w * Math.max(0, u.gel ?? 0)) / TORCH.tank, h);
   }
-  if (u.owner === ME && u.type === 'warbot' && (u.ammo ?? WARBOT_AMMO) < WARBOT_AMMO * 0.3) {
+  if (u.owner === ME && !R.clean && u.type === 'warbot' && (u.ammo ?? WARBOT_AMMO) < WARBOT_AMMO * 0.3) {
     // Low on ammo: a short brass bar under the bot (empty = grey outline only).
     const w = s * 0.26, h = Math.max(2.5, s * 0.07), x = sx - w / 2, y = sy + s * 0.26;
     ctx.fillStyle = 'rgba(0,0,0,0.7)';
@@ -4088,7 +4092,7 @@ function drawBot(ctx, u, sx, sy, s) {
     ctx.fillStyle = '#e8c39e';
     ctx.fillRect(x, y, (w * (u.ammo || 0)) / WARBOT_AMMO, h);
   }
-  if (u.owner === ME && (u.bat ?? 100) < BATTERY.low) {
+  if (u.owner === ME && !R.clean && (u.bat ?? 100) < BATTERY.low) {
     // Low battery: an orange bar; emergency mode: a flashing red one.
     const crit = u.bat < BATTERY.critical;
     if (!crit || Math.sin(R.time * 10) > -0.3) {
@@ -4099,7 +4103,7 @@ function drawBot(ctx, u, sx, sy, s) {
       ctx.fillRect(x, y, Math.max(1.5, (w * u.bat) / 100), h);
     }
   }
-  if (u.hp < u.maxHp) {
+  if (u.hp < u.maxHp && R.clean < 2) {
     const w = s * 0.4;
     ctx.fillStyle = 'rgba(0,0,0,0.6)';
     ctx.fillRect(sx - w / 2, sy - s * 0.36, w, 3);
@@ -4582,7 +4586,7 @@ function render(dtReal) {
 
   drawOffMap(ctx, ox, oy, z);
   drawMapLayer(ctx, ox, oy, z);
-  ctx.drawImage(R.terr, ox, oy, S.W * z, S.H * z);
+  if (!R.terrOff) ctx.drawImage(R.terr, ox, oy, S.W * z, S.H * z);
   drawPipes(ctx, ox, oy, z, inView); // (graded with the ground at dusk and night)
   todGradeGround(ctx); // morning, evening and night light on the ground and its territory tint (buildings and bots have their own re-lit art)
   drawLavaGlow(ctx, ox, oy, z);
@@ -4593,7 +4597,7 @@ function render(dtReal) {
   // Territory borders
   ctx.lineWidth = Math.max(1.5, z * 0.07);
   ctx.setLineDash([z * 0.28, z * 0.18]);
-  for (let p = 0; p < S.players.length; p++) {
+  for (let p = 0; p < S.players.length && !R.terrOff; p++) {
     ctx.strokeStyle = PLAYER_COLORS[p];
     ctx.globalAlpha = 0.85;
     ctx.beginPath();
@@ -4799,19 +4803,20 @@ function render(dtReal) {
       drawBuilding(ctx, e.type, cx, cy, z, e.owner, e);
       buildingSmoke(e);
       const def = BDEFS[e.type];
-      if (e.built && e.armor < def.armor - 0.05) {
+      if (e.built && e.armor < def.armor - 0.05 && R.clean < 2) {
         const w = z * 0.8;
         ctx.fillStyle = 'rgba(0,0,0,0.6)';
         ctx.fillRect(cx - w / 2, cy - z * 0.62, w, Math.max(3, z * 0.08));
         ctx.fillStyle = e.armor / def.armor > 0.4 ? '#ffd166' : '#ff5a5a';
         ctx.fillRect(cx - w / 2, cy - z * 0.62, (w * Math.max(0, e.armor)) / def.armor, Math.max(3, z * 0.08));
       }
-      if (e.owner === ME) drawBadge(ctx, e, cx - z * 0.32, cy - z * 0.32, z);
-      if (e.owner === ME && S.players[ME].rallyPost === e.id) drawRallyMark(ctx, cx + z * 0.34, cy - z * 0.5, z);
-      if (e.owner === ME && e.unlinked) drawNoRoad(ctx, cx + z * 0.32, cy + z * 0.3, z);
-      if (e.owner === ME && (e.depleted || (e.type === 'pump' && pumpDry(e)))) drawDryOil(ctx, cx, cy - z * 0.55, z, e);
-      if (e.cut) drawCutOff(ctx, cx, cy, z);
-      if (e.paused) {
+      const mine = e.owner === ME && !R.clean;
+      if (mine) drawBadge(ctx, e, cx - z * 0.32, cy - z * 0.32, z);
+      if (mine && S.players[ME].rallyPost === e.id) drawRallyMark(ctx, cx + z * 0.34, cy - z * 0.5, z);
+      if (mine && e.unlinked) drawNoRoad(ctx, cx + z * 0.32, cy + z * 0.3, z);
+      if (mine && (e.depleted || (e.type === 'pump' && pumpDry(e)))) drawDryOil(ctx, cx, cy - z * 0.55, z, e);
+      if (e.cut && R.clean < 2) drawCutOff(ctx, cx, cy, z);
+      if (e.paused && R.clean < 2) {
         ctx.fillStyle = 'rgba(0,0,0,0.65)';
         ctx.beginPath(); ctx.arc(cx + z * 0.3, cy - z * 0.3, z * 0.16, 0, Math.PI * 2); ctx.fill();
         ctx.fillStyle = '#fff';
@@ -4830,9 +4835,9 @@ function render(dtReal) {
         const lane = rt === 1 ? LANE_OFFSET : 0;
         jx = -Math.sin(e.rface) * lane; jy = Math.cos(e.rface) * lane;
       }
-      if (e.owner === ME && S.groups && z >= 18) { const g = groupOf(e.id); if (g) drawGroupTag(ctx, ox + (e.x + jx) * z + z * 0.28, oy + (e.y + jy) * z - z * 0.34, z, g); }
+      if (e.owner === ME && !R.clean && S.groups && z >= 18) { const g = groupOf(e.id); if (g) drawGroupTag(ctx, ox + (e.x + jx) * z + z * 0.28, oy + (e.y + jy) * z - z * 0.34, z, g); }
       // Your Howitzers, zoomed out: a marker over each, so they don't get lost among the trucks.
-      if (e.owner === ME && BOTS[e.type].siege && z < 30) drawUnitMarker(ctx, ox + (e.x + jx) * z, oy + (e.y + jy) * z - Math.max(10, z * 0.5), Math.max(5, z * 0.22), PLAYER_COLORS[ME]);
+      if (e.owner === ME && !R.clean && BOTS[e.type].siege && z < 30) drawUnitMarker(ctx, ox + (e.x + jx) * z, oy + (e.y + jy) * z - Math.max(10, z * 0.5), Math.max(5, z * 0.22), PLAYER_COLORS[ME]);
       if (typeof UI !== 'undefined' && UI.selSet && UI.selSet.has(e.id)) {
         // Selected (desktop): a green ring on the ground under it.
         ctx.strokeStyle = 'rgba(125,255,160,0.95)';
@@ -4855,7 +4860,7 @@ function render(dtReal) {
   drawFeeds(ctx, ox, oy, z, inView);
   drawSmoke(ctx, ox, oy, z, inView);
   drawAirLayer(ctx, ox, oy, z, inView);
-  if (z >= 14) for (const t of hangarTags) drawHangarTag(ctx, ox + (t.b.x + 0.5) * z, oy + (t.b.y + 0.08) * z, z, t.n);
+  if (z >= 14 && R.clean < 2) for (const t of hangarTags) drawHangarTag(ctx, ox + (t.b.x + 0.5) * z, oy + (t.b.y + 0.08) * z, z, t.n);
 
   // Placing a Viaduct: the deck from the near end to the far end picked so far.
   if (typeof UI !== 'undefined' && UI.ropeA && R.ropeEnd && UI.placeType === 'viaduct') {
@@ -5977,7 +5982,7 @@ function drawLoot(ctx, ox, oy, z, inView) {
 
 function drawRallies(ctx, ox, oy, z) {
   for (const r of S.rallies) {
-    if (r.owner !== ME) continue;
+    if (r.owner !== ME || R.clean) continue;
     const x = ox + r.x * z, y = oy + r.y * z;
     const n = rallyMembers(r.id).length;
     const art = ART.rally;
@@ -6778,14 +6783,14 @@ function drawPlane(ctx, u, sx, sy, s, alt) {
     ctx.restore();
   }
   const bh = Math.max(2, s * 0.05);
-  if (u.hp < u.maxHp && !u.parked) {
+  if (u.hp < u.maxHp && !u.parked && R.clean < 2) {
     const w = s * 0.6;
     ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fillRect(sx - w / 2, sy - s * 0.6, w, bh);
     ctx.fillStyle = '#ff5a5a'; ctx.fillRect(sx - w / 2, sy - s * 0.6, (w * Math.max(0, u.hp)) / u.maxHp, bh);
   }
   // Its fuel gauge (yours only), below it (the health bar is above): the tank, in the Fuel colour, going orange
   // when it runs low.
-  if (u.owner === ME && u.bat !== undefined) { // (not a wreck: it has no tank)
+  if (u.owner === ME && !R.clean && u.bat !== undefined) { // (not a wreck: it has no tank)
     const w = s * 0.6, y = sy + s * 0.62, f = clamp(u.bat, 0, 100) / 100;
     ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fillRect(sx - w / 2 - 1, y - 1, w + 2, bh + 2);
     ctx.fillStyle = f < 0.25 ? '#ff8a3c' : GOOD.fuel.color; ctx.fillRect(sx - w / 2, y, w * f, bh);
