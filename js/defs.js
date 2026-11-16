@@ -9,6 +9,7 @@ const HIST_STEP = 15;             // seconds between statistics samples
 const MAX_BOTS = 90;              // per player (versus)
 const MAX_BOTS_COLONY = 150;      // colony mode allows a bigger population
 const MAX_SITES = 6;              // simultaneous construction sites per player
+const SITE_UNDO = 10;             // seconds after placing a construction site that it can be taken back in full (Undo, Ctrl+Z)
 const ATTACK_RANGE = 14;          // tiles from a garrison to a target it can attack
 const WORKER_SPEED = 1.2;         // tiles per second off roads: bots are unhurried, so roads matter
 const WARBOT_SPEED = 1.0;

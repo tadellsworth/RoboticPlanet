@@ -132,7 +132,12 @@ const ORDERS = {
   evac(p) { return startEvac(p); },
 
   /* ---------------------------------------------------------------- building and paths */
-  place(p, type, i, j) { if (!BDEFS[type]) return { ok: false, reason: 'Unknown building.' }; const r = placeSite(p, type, i, j); return { ok: r.ok, reason: r.reason, id: r.building ? r.building.id : 0 }; },
+  place(p, type, i, j) {
+    if (!BDEFS[type]) return { ok: false, reason: 'Unknown building.' };
+    const r = placeSite(p, type, i, j);
+    if (r.ok) r.building.placedAt = S.time; // (when: it can be taken back for SITE_UNDO s, see undoSite)
+    return { ok: r.ok, reason: r.reason, id: r.building ? r.building.id : 0 };
+  },
   moveBuilding(p, id, i, j) { const b = ownB(p, id); if (!b) return { ok: false, reason: 'That building is gone.' }; const r = startMove(p, b, i, j); return { ok: r.ok, reason: r.reason }; },
   link(p, kind, ai, aj, bi, bj) {
     const r = kind === 'viaduct' ? placeViaduct(p, ai, aj, bi, bj) : placeRopeway(p, ai, aj, bi, bj);
@@ -324,6 +329,18 @@ const ORDERS = {
     let n = 0;
     for (const u of S.bots) if (!u.dead && u.owner === p && isArmy(u) && u.task && u.task.type === 'attack' && u.task.target === tid) { u.task = null; u.path = null; n++; }
     return n;
+  },
+  /**
+   * Take back construction site `id` (Undo after placing it, or Ctrl+Z): only a site of yours placed with `place` no
+   * more than SITE_UNDO s ago and not finished yet. Everything paid or delivered for it comes back (see undoSite):
+   * { back: {good: n}, type } (or { why }).
+   */
+  undoSite(p, id) {
+    const b = ownB(p, id);
+    if (!b) return { why: 'That site is gone.' };
+    if (b.built) return { why: `The ${BDEFS[b.type].name} is finished already: Dismantle it from its panel instead.` };
+    if (typeof b.placedAt !== 'number' || b.moveFrom || S.time - b.placedAt > SITE_UNDO) return { why: `Too late to take the ${BDEFS[b.type].name} back: Dismantle it from its panel instead.` };
+    return { back: undoSite(b), type: b.type };
   },
 };
 
