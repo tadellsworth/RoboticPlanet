@@ -285,6 +285,7 @@ const MISSIONS = [
       'The <b>Bot Foundry</b> builds robots from Alloy and Chips, one round of parts at a time.',
       'A <b>Chip Fab</b> etches Crystal onto Alloy to make the Chips.',
       'The Foundry builds only what you order. Two Workers are always kept free for building.',
+      'On a computer, <kbd>Shift</kbd>+<kbd>F</kbd> opens its <b>Order bots</b> list from anywhere.',
       'At most 6 building sites at once; a colony holds up to 150 robots.',
     ],
     mode: 'colony', seed: 2203, size: 0, rough: 2, rich: 3, biome: 'desert', limit: [0, 0, 15],

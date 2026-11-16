@@ -1356,9 +1356,31 @@ function hideGoodTip() {
 /*
  * WASD or arrow keys pan · B build (then a building's key: a letter, or 1–7; or R for roads) · R or P opens and closes Paths (inside
  * it: R roads, G bridges and tunnels, V ramps, E pave, O one-way arrows, L junctions, T traffic map) · Q army · H base · F select every warbot · 1–9 control groups (Ctrl or
- * Shift + digit to save) · J jump to the latest alert · Esc back / clear selection / pause ·
+ * Shift + digit to save) · Shift+F a Bot Foundry's Order bots list · J jump to the latest alert · Esc back / clear selection / pause ·
  * Space pause · [ ] game speed · + and - zoom · M minimap · ? help
  */
+/**
+ * Shift+F, from anywhere on a computer: a Bot Foundry's panel, scrolled to its Order bots list, without moving the map.
+ * Pressed again while a Foundry's panel is open, the next one's (oldest first), when there are several.
+ */
+function openFoundryOrders() {
+  const all = S.buildings.filter((b) => !b.dead && b.owner === ME && b.type === 'foundry');
+  const ready = all.filter((b) => b.built).sort((a, b) => a.id - b.id);
+  if (!ready.length) {
+    sfx('error');
+    toast(all.length ? 'Your Bot Foundry is still being built.' : 'You have no Bot Foundry yet: Build (B) → Make (2) → Bot Foundry (U).', 'warn');
+    return;
+  }
+  const at = UI.sheetKind === 'bld' ? ready.findIndex((b) => b.id === UI.sheetFor) : -1;
+  const f = ready[(at + 1) % ready.length];
+  setMode('normal');
+  openBuildingSheet(f);
+  sfx('click');
+  const list = $('sh-omode');
+  if (list && list.previousElementSibling) list.previousElementSibling.scrollIntoView({ block: 'start' });
+  if (ready.length > 1) toast(`Bot Foundry ${ready.indexOf(f) + 1} of ${ready.length}: Shift+F again for the next.`, 'info');
+}
+
 const PAN_KEYS = { arrowleft: [-1, 0], arrowright: [1, 0], arrowup: [0, -1], arrowdown: [0, 1], a: [-1, 0], d: [1, 0], w: [0, -1], s: [0, 1] };
 
 /**
@@ -1511,6 +1533,8 @@ function initKeyboard() {
       return;
     }
     if (overlay) return;
+    // Shift+F, from anywhere: the Bot Foundry's Order bots list (again: the next Foundry).
+    if (k === 'f' && e.shiftKey) { e.preventDefault(); openFoundryOrders(); return; }
     // Enter confirms the banner's main button (Build here, Fire, Lay roads...).
     if (k === 'enter' && !$('banner').hidden && !$('banner-ok').hidden && !$('banner-ok').disabled) { e.preventDefault(); $('banner-ok').click(); return; }
     // A key on the open panel's buttons (SHEET_KEYS) presses that button.

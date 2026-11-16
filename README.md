@@ -939,7 +939,7 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   letter on a card (`BUILD_KEYS` in js/ui.js: letters are per tab, so every building has one and none needs W, A, S, D, B
   or R; on All a card shows "2 K"; **B R** lays roads, **B X** walls), **R** (or **P**) opens and closes Paths
   and inside it picks a tool (**R** roads, **G** bridges
-  and tunnels, **V** ramps, **E** pave, **O** one-way arrows, **L** junctions, **X** walls, **T** traffic map), **Q** army, **C** recall all warbots, **F** select all warbots, **J** latest alert,
+  and tunnels, **V** ramps, **E** pave, **O** one-way arrows, **L** junctions, **X** walls, **T** traffic map), **Q** army, **C** recall all warbots, **F** select all warbots, **Shift+F** a Bot Foundry's Order bots list from anywhere without moving the map (again: the next Foundry, `openFoundryOrders`), **J** latest alert,
   **H** base, **I** statistics, **U** robots, **Y** goods, **[ ]** speed, **+/−** zoom, **M** minimap, **Enter** the banner's main
   button, panel buttons by the key shown on them (`SHEET_KEYS`; **Delete** twice demolishes), **Space** pause, **Esc** back / clear selection (in Paths it takes back the last stroke; **Ctrl+Z** is Undo there), **Alt+Enter**
   full screen (also a top-bar button and a pause-menu item). Chrome opens the installed app in a plain window on a
