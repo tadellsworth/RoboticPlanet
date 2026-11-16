@@ -14,6 +14,12 @@ Still open: a neutral, shared exchange the rivals compete over; contracts for Ch
 
 ## Held for later
 
+- **A hauler turned back by raiders can still pass close to them** (a known edge case): a hauler with a load turns
+  back before rival warbots on the road ahead, but on some maps the only other way to storage runs back past them
+  (within about 2 tiles), and a worker caught at a site can fail to find cover. Seen with the foe-shy test's scenario
+  on seeds 4242 (after the Fuel batch changed how the rival builds) and 4243 (before it); the test now plays seed 4244.
+  A fix would have the hauler hold position or wait for the road to clear when every way home passes the threat.
+
 - **More map shapes** (Rift, Ring valley, Oases, Crossroads and Lakes are now in the game; each would be a
   `SHAPE_PRESETS` entry with its own step in `shapeExtras`, mirrored for fairness like the others):
   - **Terraces:** the land climbs in steps toward a summit in the middle, a ramp or two per step, the richest fields
