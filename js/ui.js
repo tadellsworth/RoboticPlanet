@@ -2224,8 +2224,8 @@ function coachTarget(g) {
   try { els = [...document.querySelectorAll(sel)]; } catch (e) { return { sel: '', ring: null }; }
   // (The panel open is another building's, say the Quarry's when the goal means the spent Ore Mine's Dismantle: its
   // buttons don't light. The rest of the selector does, and the building the goal means gets the ring.)
-  const open = UI.sheetKind === 'bld' && getE(UI.sheetFor), want = open && /#sh-/.test(sel) ? coachBuilding(g) : null;
-  if (want && want.type !== open.type) {
+  const shown = UI.sheetKind === 'bld' && getE(UI.sheetFor), want = shown && /#sh-/.test(sel) ? coachBuilding(g) : null;
+  if (want && want.type !== shown.type) {
     const rest = sel.split(',').filter((p) => !/#sh-/.test(p)).join(',');
     return { sel: rest ? coachTarget({ ...g, ui: rest }).sel : '', ring: want };
   }
