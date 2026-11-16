@@ -127,6 +127,8 @@ function aiShut(b) {
 function aiThink(p) {
   const P = S.players[p];
   const lvl = aiLevel(p), st = aiStyle(p);
+  // An Easy rival keeps to the plain rules: the ones marked `smart` below are for Medium, Normal and Hard.
+  const smart = S.difficulty !== 'easy';
   let me = playerBuildings(p);
   const lander = getE(P.lander);
   if (!lander || lander.owner !== p) return;
@@ -309,13 +311,18 @@ function aiThink(p) {
     if (fuelNow < 3) siteCap = Math.max(siteCap, maxSites + 1);
   }
   // With Fiber nearly gone (no Harvester at work, or construction waiting for it), the Smelters
-  // stop burning it until there's some to spare.
+  // stop burning it until there's some to spare. Construction waits for it at a site that is short of it, and
+  // before there is a site at all: none is started without the Fiber in storage (P.fiberWait, set below), and a
+  // busy Smelter burned every Fiber the Harvesters cut, so a colony could go many minutes unable to start a
+  // Harvester, a Mine or an Outpost.
   const fiberNow = playerGoods(p).fiber;
-  const sitesWantFiber = me.some((b) => !b.built && (siteCost(b).fiber || 0) > (b.stock.fiber || 0) + (b.inc.fiber || 0));
+  const sitesWantFiber = S.time - (P.fiberWait ?? -99) < 8 || me.some((b) => !b.built && !b.unlinked && (siteCost(b).fiber || 0) > (b.stock.fiber || 0) + (b.inc.fiber || 0)); // (a site no road reaches yet can't take any)
   for (const b of me) {
     if (b.type !== 'smelter' || !b.built) continue;
     if (!b.paused && fiberNow < 3 && (!cutting || sitesWantFiber)) setPaused(b, true);
-    else if (b.paused && cutting && (fiberNow >= 6 || !sitesWantFiber)) setPaused(b, false);
+    // (Back to work once there's some to spare, Harvester or not: with none cutting it used to stay off while the
+    // Fiber a cut-out grove still gave piled up, and the Bot Foundry's site waited minutes for its Alloy.)
+    else if (b.paused && (cutting ? fiberNow >= 6 || !sitesWantFiber : fiberNow >= 6 && !sitesWantFiber)) setPaused(b, false);
   }
   // Goods held back for a key building we can't afford yet: nothing that needs them starts first.
   const held = new Set();
@@ -374,6 +381,7 @@ function aiThink(p) {
       // into factories, so it never piles up in storage; the high-priority site gets it delivered.
       const defenceNow = (defence(type) && counts.smelter && aiAffordable(p, type, ['alloy', 'chip'])) || ((type === 'terminal' || type === 'airfield') && aiAffordable(p, type, ['alloy']));
       if (!aiAffordable(p, type) && !defenceNow) {
+        if ((BDEFS[type].cost.fiber || 0) > playerGoods(p).fiber) P.fiberWait = S.time; // (the Smelters rest for it: see above)
         if (key(type) && (!counts[type] || type === 'outpost')) {
           const have = playerGoods(p), cost = BDEFS[type].cost;
           for (const g in cost) if (have[g] < cost[g]) held.add(g);
@@ -558,8 +566,12 @@ function aiThink(p) {
     // (Not while the army is well behind: warbots come first.)
     // Saving for a bridge to the enemy's island too: until it's built the army can't reach anyone.
     const bridging = P.bridgeWant > 0 && S.time - P.bridgeWant < 30;
-    // A Tycoon rests it for missiles even with a small army (as long as a few warbots stand guard).
-    const forMissiles = (saving || P.feedMissiles) && (!armyBehind || (st.missiles && army >= wantArmy * 0.7));
+    // A Tycoon rests it for missiles even with a small army (as long as a few warbots stand guard). The others only
+    // while the army isn't well behind and the colony has the workers and the Haulers its buildings call for: with the
+    // army alone to go by it stood off for missiles up to two fifths of a war while buildings stood empty. (An Easy
+    // rival keeps the old rule.)
+    const forMissiles = (saving || P.feedMissiles) && (st.missiles ? !armyBehind || army >= wantArmy * 0.7
+      : !armyBehind && (!smart || (workers >= wantWorkers && (kinds.hauler || 0) >= wantHaulers)));
     // (Saving for a crossing with a fair army already: the Foundry rests even if workers are short.)
     if (((forMissiles || needArmory || bridging) && workers >= staffed + 3) || (bridging && P.bridgeNeed && army >= Math.min(wantArmy, 8))) { b.mode = 'off'; delete b.orders.hauler; delete b.orders.truck; }
     // Haulers when short; while the army is well behind, only when badly short.
@@ -586,11 +598,13 @@ function aiThink(p) {
     if (!civilOk) for (const k in b.orders) if (!(BOTS[k] && BOTS[k].army) && !(k === 'tanker' && !(kinds.tanker > 0))) delete b.orders[k];
     break;
   }
-  // Depots out towards the front keep Cement for building there.
+  // Depots out towards the front keep Cement for building there (and Ammo), and take in nothing that is dug or cut:
+  // a Depot among the far Mines was the nearest storage for their Ore, which then lay there, a long run from the
+  // Smelters that stood waiting for it.
   for (const d of me) {
-    if (d.type !== 'depot' || !d.built || d.keep || dist(d.x, d.y, lander.x, lander.y) < 12) continue;
-    setKeep(d, 'cement', 12);
-    if (S.mode !== 'colony') setKeep(d, 'ammo', 4);
+    if (d.type !== 'depot' || !d.built || dist(d.x, d.y, lander.x, lander.y) < 12) continue;
+    if (!d.keep) { setKeep(d, 'cement', 12); if (S.mode !== 'colony') setKeep(d, 'ammo', 4); }
+    if (smart && !d.reject) d.reject = { ore: true, crystal: true, stone: true, fiber: true };
   }
 
   // 3b) An enemy gun covering our buildings: our robots keep clear of them, so the work there has stopped.
@@ -1043,24 +1057,35 @@ function aiViaductSpot(p, home, E, onto) {
 
 /**
  * Chokepoint maps (Normal and Hard): once the mouth of a channel through the crags on our side is
- * inside our border, wall it off, with a Gate on our road through it (or in the middle), and put back
- * any piece the enemy breaks.
+ * inside our border, wall it off, with a Gate where our own bots still get through it to the middle of the map (see
+ * aiWallGate: an existing Gate, our road through it, or the middle tile), and put back any piece the enemy breaks.
+ * A mouth no Gate would keep open is left alone: a Wall on the one tile that leads on, and the Gate on a spur beside
+ * it, shut the colony's own warbots in.
  * Cement for the colony comes first.
  */
 function aiWalls(p) {
   const cp = chokePass();
   if (!cp || !warOn() || (S.difficulty === 'easy' && !aiStyle(p).walls) || S.time < 240) return;
-  const L = getE(S.players[p].lander);
+  const P = S.players[p], L = getE(P.lander);
   if (!L) return;
   const bottom = L.y > S.H / 2;
   // Each channel's mouth on our side of the crags, once it's inside our border.
-  for (const mouth of cp.mouths) {
-    const tiles = mouth.filter((t) => (((t / S.W) | 0) > S.H / 2) === bottom && S.terrain[t] === T_GROUND);
-    if (!tiles.length || tiles.some((t) => S.owner[t] !== p)) continue;
-    const at = (t) => getE(S.bAt[t]);
-    let gate = tiles.find((t) => at(t) && at(t).type === 'gate');
-    if (gate === undefined) gate = tiles.find((t) => S.road[t] || S.plan[t]);
-    if (gate === undefined) gate = tiles[Math.floor(tiles.length / 2)];
+  const mouths = cp.mouths.map((m) => m.filter((t) => (((t / S.W) | 0) > S.H / 2) === bottom && S.terrain[t] === T_GROUND)).filter((m) => m.length);
+  // (A mouth with every piece in place is looked at again twice a minute, in case it's one that was walled shut.)
+  const recheck = S.time - (P.gateChk || -99) > 30;
+  if (recheck) P.gateChk = S.time;
+  for (const tiles of mouths) {
+    if (tiles.some((t) => S.owner[t] !== p) || (!recheck && tiles.every((t) => S.bAt[t]))) continue;
+    if (!recheck && spendable(p).cement < BDEFS.wall.cost.cement + 10) return; // (nothing to place yet: no need to walk the ground)
+    const others = mouths.filter((m) => m !== tiles).flat();
+    const gate = aiWallGate(p, L, tiles, others, bottom, false);
+    if (gate < 0) {
+      // Shut by a Wall of our own (a save from before the Gate was checked): the piece that stands in the way comes
+      // down, and a Gate goes there next time.
+      const w = aiWallGate(p, L, tiles, others, bottom, true);
+      if (w >= 0) demolish(getE(S.bAt[w]));
+      continue;
+    }
     for (const t of tiles) {
       if (S.bAt[t]) continue;
       const kind = t === gate || S.road[t] || S.plan[t] ? 'gate' : 'wall';
@@ -1069,6 +1094,61 @@ function aiWalls(p) {
       if (canPlace(p, kind, i, j).ok) placeSite(p, kind, i, j);
     }
   }
+}
+
+/**
+ * The tile of a channel mouth (`tiles`) for player p's Gate: one its bots can walk to from the Command Base (L)
+ * without going through any mouth (`others`: the other mouths on its side), and from which, with a Wall on every
+ * other free tile of this mouth (road tiles get Gates), they get on across the middle line of the map. A Gate already
+ * standing comes first, then our road through the mouth, then the middle tile and outwards. -1 if there is none:
+ * then the mouth isn't walled. With `walls`, the Wall of ours that stands on such a tile instead (or -1).
+ */
+function aiWallGate(p, L, tiles, others, bottom, walls) {
+  const W = S.W, at = (t) => getE(S.bAt[t]);
+  const isGate = (t) => !!at(t) && at(t).type === 'gate';
+  // The ground our bots reach without going through a mouth.
+  const home = new Uint8Array(W * S.H);
+  for (const t of others) home[t] = 1;
+  for (const t of tiles) home[t] = 1;
+  aiFlood(p, L.y * W + L.x, home, bottom);
+  const mid = (tiles.length - 1) / 2;
+  const order = tiles.map((t, k) => ({ t, s: isGate(t) ? -2 : S.road[t] || S.plan[t] ? -1 : Math.abs(k - mid) })).sort((a, b) => a.s - b.s || a.t - b.t);
+  for (const { t } of order) {
+    if (walls ? !(at(t) && at(t).owner === p && at(t).type === 'wall') : S.bAt[t] && !isGate(t)) continue;
+    const i = t % W;
+    if (![i > 0 ? t - 1 : -1, i < W - 1 ? t + 1 : -1, t - W, t + W].some((u) => u >= 0 && home[u] === 2 && canStep(u, t))) continue;
+    // On from there: not back over the home ground, nor through the tiles that get Walls.
+    const seen = home.slice();
+    for (const u of tiles) seen[u] = u !== t && !S.bAt[u] && !S.road[u] && !S.plan[u] ? 1 : 0;
+    if (aiFlood(p, t, seen, bottom, true)) return t;
+  }
+  return -1;
+}
+
+/**
+ * Flood out from tile `from` over the ground player p's bots can walk (stepping as they do, and through the
+ * buildings that let them pass: their own Gates and Outposts), marking it 2 in `seen`; tiles already set there are
+ * closed. True if the flood gets across the middle line of the map (to the far half from a base in the `bottom` half);
+ * with `early`, it stops as soon as it does.
+ */
+function aiFlood(p, from, seen, bottom, early) {
+  const W = S.W, N = W * S.H, mid = Math.floor(S.H / 2) * W, q = [from];
+  const step = (a, b) => {
+    if (b < 0 || b >= N || seen[b] || !walkable(b) || !canStep(a, b) || (S.bAt[b] && !passTile(b, p))) return;
+    seen[b] = 2;
+    q.push(b);
+  };
+  let across = false;
+  seen[from] = 2;
+  for (let h = 0; h < q.length; h++) {
+    const a = q[h], i = a % W;
+    if (bottom ? a < mid : a >= mid) { across = true; if (early) return true; }
+    if (i > 0) step(a, a - 1);
+    if (i < W - 1) step(a, a + 1);
+    step(a, a - W);
+    step(a, a + W);
+  }
+  return across;
 }
 
 /**
