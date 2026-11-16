@@ -45,7 +45,8 @@ function simStep(dt) {
   if (S.events) updateEvents();
   if (S.tide || S.volcano || (S.quake && !S.quake.done)) updateMapEvents(dt);
   if (S.tick % 30 === 25) naniteRepair();
-  if (S.tick % 30 === 9) { checkSurrender(); if (S.victory === 'domination' && S.winner < 0) updateDomination(); if (S.victory === 'uplinks' && S.winner < 0) updateUplinks(); }
+  // (Played on past a victory, S.endless: nothing wins any more; see keepPlaying.)
+  if (S.tick % 30 === 9 && !S.endless) { checkSurrender(); if (S.victory === 'domination' && S.winner < 0) updateDomination(); if (S.victory === 'uplinks' && S.winner < 0) updateUplinks(); }
   // Only one AI thinks in a step (its search for building spots is the dearest thing in one): another that's due
   // the same step waits a few steps, which also pulls apart timers that start (or an older save has) in step.
   let thought = false;
@@ -766,6 +767,7 @@ function botZone(u) { return S.zone[tIdx(Math.floor(u.x), Math.floor(u.y))]; }
 /** A civilian bot (any type but warbot) with nothing to do and enough charge for a job. */
 function isIdleWorker(u) {
   if (isArmy(u) || u.dead || u.carry || u.ferryWait || u.dropping || (u.task && u.task.type !== 'home')) return false; // (dropping: still on its parachute)
+  if (u.recycleTo) return false; // on its way to be recycled, sheltering for now (see takeCover)
   if (u.shyUntil > S.time) return false; // just gave way to enemy warbots: it waits a moment (see foeSweep)
   if (u.armorOrder) return false; // a train with armor on order parks at a station to have it fitted (see fitTrainArmor)
   if (u.inside && gunShy(u)) { const b = getE(u.inside); if (b && b.owner === u.owner && foesAt(b)) return false; } // enemy warbots right outside: it stays in
@@ -1179,7 +1181,20 @@ function countTraffic() {
  * LIGHT_CLEAR seconds of all-red in between.
  */
 function updateLights(dt) {
-  if (S.tick % 15 === 0) for (const k in S.over) if (!S.road[+k] || !isJunction(+k)) removeOverpass(+k);
+  if (S.tick % 15 === 0) {
+    // Overpasses no longer on a junction come down; one left where only three roads meet (a crossing that lost a
+    // road, or an older save) becomes a traffic light, as does an overpass planned there: one road would end under it.
+    for (const k in S.over) {
+      const t = +k;
+      if (!S.road[t] || !isJunction(t)) removeOverpass(t);
+      else if (!isCrossing(t)) overToLight(t);
+    }
+    if (S.junPlan) for (const k in S.junPlan) {
+      const t = +k, P = S.junPlan[k];
+      if (P.kind !== 'over' || !S.road[t] || !isJunction(t) || isCrossing(t)) continue;
+      if (S.lights[t]) cancelJunPlan(t); else P.kind = 'light';
+    }
+  }
   for (const k in S.lights) {
     const t = +k, L = S.lights[k];
     if (!S.road[t] || !isJunction(t)) { removeLight(t); continue; }
@@ -1212,11 +1227,15 @@ function placeLight(owner, i, j) {
   return '';
 }
 
-/** Build an overpass on the junction at (i, j), replacing any traffic light there. Returns '' or the reason it can't. */
+/**
+ * Build an overpass on the crossing at (i, j), replacing any traffic light there. Returns '' or the reason it can't.
+ * Only where four roads cross: each road runs straight on, one over the other, and nobody turns there.
+ */
 function placeOverpass(owner, i, j) {
   const t = tIdx(i, j);
   if (S.over[t]) return '';
-  if (!S.road[t] || !isJunction(t) || crossTile(t)) return 'Overpasses go on road junctions on open ground: a road tile with roads on three or four sides.';
+  if (!S.road[t] || !isJunction(t) || crossTile(t)) return 'Overpasses go where four roads cross, on open ground.';
+  if (!isCrossing(t)) return OVER_T_WHY;
   if (wayOwner(t) !== owner) return 'That road isn\'t yours: overpasses go on your own roads.';
   // Yours is planned (a planned light becomes a planned overpass) and goes up once it's paid for; a
   // light already standing keeps working meanwhile, and its Alloy counts toward the overpass.
@@ -1229,8 +1248,33 @@ function placeOverpass(owner, i, j) {
   if (light) removeLight(t);
   for (const g in OVERPASS_COST) takeGood(owner, g, OVERPASS_COST[g]);
   S.over[t] = { owner };
-  markDirty(i, j);
+  overpassChanged(t);
   return '';
+}
+
+/** Why a T-junction takes no overpass (the Junctions tool says so, and a light is the fix there). */
+const OVER_T_WHY = 'An overpass needs four roads crossing: on a T-junction one road would end under it. A traffic light suits it.';
+
+/**
+ * An overpass went up or came down on tile t: which roads meet changes (roadNet, findPath, the zones), so routes are
+ * looked over again (routeVer), and the tile redraws.
+ */
+function overpassChanged(t) {
+  S.roadVer = (S.roadVer || 0) + 1;
+  if (LAND_HOLD) LAND_HOLD = 2; else computeZones(); // (in a nuclear blast, once it's over)
+  markDirty(t % S.W, (t / S.W) | 0);
+}
+
+/** The overpass on tile t, left where only three roads meet, becomes a traffic light: the rest of its cost goes back to storage. */
+function overToLight(t) {
+  const o = S.over[t];
+  if (!o) return;
+  delete S.over[t];
+  S.lights[t] = { owner: o.owner, ph: 0, tm: 0, clr: 0 };
+  const i = t % S.W, j = (t / S.W) | 0, store = nearestStoreTo(o.owner, i + 0.5, j + 0.5);
+  if (store) for (const g in OVERPASS_COST) { const n = OVERPASS_COST[g] - (LIGHT_COST[g] || 0); if (n > 0) bump(store.stock, g, n); }
+  overpassChanged(t);
+  postMsg(o.owner, 'Only three roads meet at an overpass now: it is a traffic light instead (an overpass needs four), and the rest of its Cement and Alloy is back in storage.', i, j, 'info');
 }
 
 /** The traffic light or overpass planned on junction t, still waiting for its goods ({ owner, kind }), or null. */
@@ -1259,6 +1303,7 @@ function removeOverpass(t) {
   const o = S.over[t];
   if (!o) return;
   delete S.over[t];
+  overpassChanged(t);
   const store = nearestStoreTo(o.owner, (t % S.W) + 0.5, ((t / S.W) | 0) + 0.5);
   if (store) for (const g in OVERPASS_COST) bump(store.stock, g, OVERPASS_COST[g]);
 }
@@ -1355,16 +1400,18 @@ function routeCheck(u) {
   const bt = BOTS[u.type], p = u.path, last = p.length - 1, W = S.W;
   if (bt.rail || bt.sea || bt.air || u.ride >= 0 || u.deck || u.ferryWait || last < 0) return true;
   const civ = !isArmy(u) && !bt.siege && !bt.wild && !bt.crawler; // (driven by updateWorker: a job with no route counts as arrived)
-  const here = tIdx(Math.floor(u.x), Math.floor(u.y)), onRoad = civ && bt.roadOnly && !haulerStranded(u);
-  let bad = 0, gap = 0;
+  const here = tIdx(Math.floor(u.x), Math.floor(u.y)), onRoad = civ && bt.roadOnly && !haulerStranded(u), ov = anyOverpass();
+  let bad = 0, gap = 0, turn = false;
   for (let k = u.pi; k <= last; k++) {
     const t = p[k], q = k > 0 ? p[k - 1] : here;
     if (Math.max(Math.abs((t % W) - (q % W)), Math.abs(((t / W) | 0) - ((q / W) | 0))) > 1) continue; // a Ropeway, Viaduct or ferry leg: moveAlong looks after those
     if (!walkable(t)) { bad = 2; break; }
+    if (ov && k < last && S.over[t] && q !== t && p[k + 1] - t !== t - q) turn = true; // turning on an overpass built since: not any more
     if (!civ || k === last) continue;
     if (S.bAt[t]) { if (!passTile(t, u.owner) && !(ferryLink(t) >= 0 && getE(S.bAt[t]).owner === u.owner)) bad = 1; }
     else if (onRoad && !S.road[t]) gap++;
   }
+  if (turn && !bad) bad = 1;
   if (!bad && !gap) return true;
   if (bad === 2 && !walkable(here) && !S.bAt[here]) {
     // Standing where the bridge was: back to the nearest tile of its route that still stands (as offDeck does on a Viaduct).
@@ -1372,7 +1419,7 @@ function routeCheck(u) {
     for (const t of p) { if (!walkable(t)) continue; const d = dist2((t % W) + 0.5, ((t / W) | 0) + 0.5, u.x, u.y); if (d < bd) { bd = d; best = t; } }
     if (best >= 0) { u.x = (best % W) + 0.5; u.y = ((best / W) | 0) + 0.5; u.vel = 0; }
   }
-  if (!civ) { if (bad === 2) { u.path = null; u.vel = 0; return false; } return true; }
+  if (!civ) { if (bad === 2 || turn) { u.path = null; u.vel = 0; return false; } return true; }
   const pi = u.pi, g = p[last];
   if (goTo(u, g % W, (g / W) | 0)) {
     if (!bad && u.path.length - (last + 1 - pi) >= GAP_DETOUR * gap) { u.path = p; u.pi = pi; } // crawling across the gap is quicker
@@ -1653,7 +1700,7 @@ function dispatch(p) {
   // The road networks (truck networks: no Ropeways) a Tanker of ours is on: liquids there wait for a Tanker.
   const tankNets = new Set();
   for (const u of S.bots) {
-    if (u.dead || u.owner !== p) continue;
+    if (u.dead || u.owner !== p || recycling(u)) continue; // (on their way to be recycled: they don't count)
     if (u.type === 'hauler') haulers++;
     if (BOTS[u.type].rail) trains++;
     if (BOTS[u.type].sea && BOTS[u.type].haul) ships++;
@@ -1696,12 +1743,16 @@ function dispatch(p) {
     b.unlinked = !P.noHaulers && needsRoad(b) && !onHomeG(b) && !b.airSupply && !convLinked(b) && !bySea(b) &&
       !hubs.some((s) => s !== b && footLinked(s, b));
   }
-  const minFree = siteCount(p) > 0 ? MIN_FREE_WORKERS : 1;
+  // (A rival AI in triage keeps one free only while it has a site to build or no Hauler to carry for it, and with no
+  // Hauler a link of its chain that holds a round of what it works with takes even that one (lastLink), giving it back
+  // to carry once the round is used: two workers left after a raid otherwise carried for ever and nothing was made.)
+  const minFree = P.triage ? (siteCount(p) > 0 || P.noHaulers ? 1 : 0) : siteCount(p) > 0 ? MIN_FREE_WORKERS : 1;
+  const lastLink = (b) => !!(P.triage && P.noHaulers && BDEFS[b.type].inp && hasRound(b));
   // Can this colony charge anywhere right now (a Fuel Station with Fuel)? Can its trucks fill up?
   P.canCharge = blds.some((b) => b.built && BDEFS[b.type].charger && !chargerDry(b));
   P.canRefuel = blds.some((b) => b.built && (BDEFS[b.type].store || BDEFS[b.type].charger) && (b.stock.fuel || 0) - (b.res.fuel || 0) >= 1);
   if (free < minFree) {
-    const cands = blds.filter((b) => b.built && b.staff && b.type !== 'foundry' && !BDEFS[b.type].crew);
+    const cands = blds.filter((b) => b.built && b.staff && !BDEFS[b.type].crew && !lastLink(b) && (b.type !== 'foundry' || (P.triage && P.noHaulers)));
     cands.sort((a, c) => releaseScore(c) - releaseScore(a));
     if (cands.length) {
       unstaff(cands[0]);
@@ -1813,7 +1864,7 @@ function dispatch(p) {
   //    while a worker close by will soon be free: see nearSoon).
   for (const b of blds) {
     if (!idle.length) return;
-    if (!b.built && !b.builder && siteFrac(b) > b.progress + 0.01) {
+    if (!b.built && !b.builder && siteFrac(b) > b.progress + 0.01 && !(P.danger && dangerAt(p, b.x, b.y))) { // (a rival AI's: see noteDanger)
       const u = take(b.x, b.y, 'build');
       if (u && nearSoon(u, b)) { idle.push(u); continue; }
       assignBuild(u, b);
@@ -1822,7 +1873,7 @@ function dispatch(p) {
   // 1b) A worker for every building you've paid to repair.
   for (const b of blds) {
     if (!idle.length) return;
-    if (b.built && b.fixLeft > 0 && !b.fixer) {
+    if (b.built && b.fixLeft > 0 && !b.fixer && !(P.danger && dangerAt(p, b.x, b.y))) {
       const u = take(b.x, b.y, 'build');
       if (u && nearSoon(u, b)) { idle.push(u); continue; }
       if (u) assignFix(u, b);
@@ -1833,11 +1884,12 @@ function dispatch(p) {
     .sort((a, c) => prioRank(a) - prioRank(c) || staffPriority(a) - staffPriority(c) || a.born - c.born);
   for (const b of staffQueue) {
     if (!idle.length) return;
-    if (free <= minFree) {
+    if (free <= minFree && !lastLink(b)) {
       if (S.time - (S.players[p].lastShortMsg || -99) > 60) {
         S.players[p].lastShortMsg = S.time;
         postMsg(p, 'Not enough workers to run every building. Build a Bot Foundry to make more.', b.x, b.y, 'warn');
       }
+      if (P.triage && P.noHaulers) continue; // (a link further down the queue may hold its round)
       break;
     }
     const u = take(b.x, b.y, 'staff');
@@ -2144,7 +2196,8 @@ function dispatch(p) {
   // 4c) Trunk runs: a store far from the Command Base sends home, in bulk, what nothing near it uses.
   if ((trucks || trains || tankers || ships) && idle.some((u) => BOTS[u.type].truck || BOTS[u.type].rail || BOTS[u.type].sea)) trunkRuns(p, blds, take, canCarry, vans, trains, ships);
   // 4e) A Trade Terminal's goods (the trades it paid, and anything beyond the lot it's gathering) go home by
-  //     Freight Train to the station on its track nearest the Command Base, or by Road Train to storage.
+  //     Freight Train to the station on its track nearest the Command Base, or by Road Train to storage; the Fuel a
+  //     contract paid (a liquid) by Tanker to storage, a load at a time, unless a pipeline takes it (see updatePipes).
   for (const R of blds) {
     if (!BDEFS[R.type].terminal || !R.built || !idle.length) continue;
     const hub = getE(P.lander);
@@ -2153,7 +2206,14 @@ function dispatch(p) {
     for (const g of GOODS) {
       if (!idle.length) break;
       const n = terminalSpare(R, g);
-      if (n < 1 || isLiquid(g)) continue;
+      if (n < 1) continue;
+      if (isLiquid(g)) {
+        if (R.pipedFuel && g === 'fuel') continue;
+        const store = tankerReach(R) && storeFor(p, g, R.x + 0.5, R.y + 0.5, R, R);
+        const u = store && take(R.x, R.y, 'train', R, g); // ('train': of the haulers, only a Tanker takes a liquid on it)
+        if (u) assignHaul(u, R, store, g, canCarry(u, n, g));
+        continue;
+      }
       const tu = home && take(R.x, R.y, 'rail', R);
       if (tu) { assignHaul(tu, R, home, g, canCarry(tu, n)); continue; }
       const store = storeFor(p, g, R.x + 0.5, R.y + 0.5, R, R);
@@ -2382,6 +2442,7 @@ function nextPaveTile(u, p, maxD) {
     const by = S.paveRes[t];
     if (by && getE(by) && !getE(by).dead) continue;
     if (skip[t] > S.time || hotFor(p, t)) continue; // (not where an enemy gun reaches, or enemy warbots are about)
+    if (S.players[p].danger && dangerAt(p, t % W, (t / W) | 0)) continue; // (nor, a rival AI's, where its robots were just shot down)
     const cross = crossTile(t);
     // A bridge or tunnel is built from the tile next to it: the shore, the rock face, or the deck so far.
     if (cross ? paveStand(t, zone) < 0 : S.zone[t] !== zone) continue;
@@ -2520,7 +2581,7 @@ function botNets(u) {
   const tr = !!BOTS[u.type].truck; // trucks can't ride a Ropeway
   if (u.inside) { const b = getE(u.inside); return b ? buildingNets(b, tr) : []; }
   const t = tIdx(Math.floor(u.x), Math.floor(u.y));
-  if (S.road[t]) return [tr ? roadNet(u.owner).compT[t] : roadNet(u.owner).comp[t]];
+  if (S.road[t]) return tileNets(roadNet(u.owner), t, tr); // (on an overpass: either road)
   if (S.bAt[t]) { const b = getE(S.bAt[t]); return b ? buildingNets(b, tr) : []; }
   return [];
 }
@@ -2537,7 +2598,7 @@ function botGroups(u) {
   const tr = !!BOTS[u.type].truck;
   if (u.inside) { const b = getE(u.inside); return b ? buildingGroups(b, tr) : []; }
   const t = tIdx(Math.floor(u.x), Math.floor(u.y));
-  if (S.road[t]) return [netGroup(tr ? roadNet(u.owner).compT[t] : roadNet(u.owner).comp[t], tr)];
+  if (S.road[t]) return tileNets(roadNet(u.owner), t, tr).map((c) => netGroup(c, tr));
   if (S.bAt[t]) { const b = getE(S.bAt[t]); return b ? buildingGroups(b, tr) : []; }
   return [];
 }
@@ -2619,7 +2680,7 @@ function callWorker(owner, b) {
   const zone = S.zone[tIdx(b.x, b.y)];
   let best = null, bs = Infinity;
   for (const u of S.bots) {
-    if (u.dead || u.owner !== owner || u.type !== 'worker' || u.dropping) continue;
+    if (u.dead || u.owner !== owner || u.type !== 'worker' || u.dropping || recycling(u)) continue;
     const here = u.inside ? getE(u.inside) : null, ux = here ? here.x : Math.floor(u.x), uy = here ? here.y : Math.floor(u.y);
     if (!inMap(ux, uy) || S.zone[tIdx(ux, uy)] !== zone) continue;
     const t = u.task, tt = t && t.type;
@@ -2649,6 +2710,12 @@ function updateWorker(u, dt) {
   if (BOTS[u.type].sea && !afloat(u)) { if (S.tick % 30 === u.id % 30) deliverShip(u); return; }
   if (BOTS[u.type].ferry) { updateFerry(u, dt); workerBattery(u, dt); return; }
   const t = u.task;
+  // On its way to be recycled when it took cover (see takeCover): once they've gone, it sets off again.
+  if (!t && u.recycleTo && !(u.shyUntil > S.time)) {
+    const f = getE(u.recycleTo);
+    u.recycleTo = 0;
+    if (f && !f.dead && f.built && f.owner === u.owner) { startRecycle(u, f); return; }
+  }
   if (!t) {
     if (u.shyUntil > S.time && !u.inside && gunShy(u)) { u.idleT = 0; u.vel = 0; } // giving way to enemy warbots, with no cover to make for: it waits here (see foeSweep)
     else if (u.carry) { if (!(u.stashAt > S.time)) stashCarry(u); }
@@ -2699,6 +2766,7 @@ function updateWorker(u, dt) {
     else if (moveAlong(u, dt)) enterBuilding(u, c);
   }
   else if (t.type === 'staff') doStaff(u, t, dt);
+  else if (t.type === 'recycle') doRecycle(u, t, dt);
   workerBattery(u, dt);
 }
 
@@ -3051,7 +3119,7 @@ function findPaveSpot(b, x, y) {
   const seen = _pave.seen, q = _pave.q, gen = ++_pave.gen;
   let head = 0, tail = 0;
   const all = paveMode(b) === 'all';
-  const push = (t) => { if (t >= 0 && t < N && seen[t] !== gen && roadLike(t) && nets.indexOf(net.comp[t]) >= 0) { seen[t] = gen; q[tail++] = t; } };
+  const push = (t) => { if (t >= 0 && t < N && seen[t] !== gen && roadLike(t) && onNets(net, t, nets)) { seen[t] = gen; q[tail++] = t; } };
   // Start where the Paver is (or at the roads beside the Roadworks).
   push(tIdx(x, y));
   if (!tail) for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) if (inMap(b.x + di, b.y + dj)) push(tIdx(b.x + di, b.y + dj));
@@ -3604,6 +3672,188 @@ function spawnFromFoundry(b) {
   if (BOTS[kind].siege && !S.players[b.owner].ai) { const t = crawlerPark(u); if (t >= 0) { u.post = { i: t % S.W, j: (t / S.W) | 0 }; u.task = { type: 'park', i: u.post.i, j: u.post.j, home: true }; } }
 }
 
+/* ------------------------------------------------------------------ recycling */
+
+/*
+ * A robot can be sent back to a Bot Foundry to be taken apart (see RECYCLE_SHARE): it drops what it was doing, walks or
+ * drives there (task 'recycle', bld: the Foundry) and is taken apart on arrival; part of its Alloy and Chips go into
+ * that Foundry's stock and its place under the robot limit is free again. Any other order on the way calls it off (so
+ * does Keep this unit on its panel); a Foundry wrecked, captured or dismantled meanwhile leaves it standing where it is.
+ * A Worker or Hauler that has to take cover from enemy warbots on the way sets off again once they've gone (recycleTo).
+ */
+
+/** Could robot u be taken to a Bot Foundry and recycled? Not planes, ships, trains or the Murmur: nothing that can't get there. */
+function recyclable(u) {
+  const bt = u && BOTS[u.type];
+  return !!bt && !u.dead && !bt.wild && !bt.air && !bt.sea && !bt.rail && !u.dropping && !(u.ferryWait && u.ferryWait.ferry);
+}
+
+/** Is robot u on its way to be recycled (or waiting to set off again once it's safe)? */
+function recycling(u) { return !!((u.task && u.task.type === 'recycle') || u.recycleTo); }
+
+/** What a robot of `kind` gives back when it's taken apart: RECYCLE_SHARE of its parts, rounded down, Alloy first ({ alloy, chip }). */
+function recycleYield(kind) {
+  const parts = (BOTS[kind] && BOTS[kind].parts) || 1, inp = BDEFS.foundry.inp, cost = {}, out = {};
+  let n = 0;
+  for (const g in inp) { cost[g] = inp[g] * parts; n += cost[g]; }
+  n = Math.floor(n * RECYCLE_SHARE + 1e-9);
+  while (n > 0) for (const g in cost) if (n > 0 && (out[g] || 0) < cost[g]) { out[g] = (out[g] || 0) + 1; n--; }
+  return out;
+}
+
+/** A count of good g in words: "1 Alloy", "2 Chips". */
+function goodCount(g, n) { return `${n} ${GOOD[g].name}${n !== 1 && g === 'chip' ? 's' : ''}`; }
+
+/** What a robot of `kind` gives back, in words: "1 Alloy", "1 Alloy and 1 Chip". */
+function recycleText(kind) { const got = recycleYield(kind); return Object.keys(got).map((g) => goodCount(g, got[g])).join(' and ') || 'nothing'; }
+
+/** The nearest finished Bot Foundry of u's owner that robot u can get to (on its ground; a road vehicle, by road), or null. */
+function recycleFoundry(u) {
+  const here = u.inside ? getE(u.inside) : null, x = here ? here.x + 0.5 : u.x, y = here ? here.y + 0.5 : u.y;
+  const zone = S.zone[tIdx(Math.floor(x), Math.floor(y))], road = roadBound(u);
+  let best = null, bd = Infinity;
+  for (const b of S.buildings) {
+    if (b.dead || b.owner !== u.owner || !b.built || !BDEFS[b.type].bots || evacuated(b)) continue;
+    if (S.zone[tIdx(b.x, b.y)] !== zone || (road && !botLinked(u, b))) continue;
+    const d = dist2(b.x + 0.5, b.y + 0.5, x, y);
+    if (d < bd) { bd = d; best = b; }
+  }
+  return best;
+}
+
+/** Why robot u can't be sent to be recycled now ('' if it can). */
+function recycleWhy(u) {
+  if (!u || u.dead) return 'That robot is gone.';
+  const bt = BOTS[u.type];
+  if (bt.air || bt.sea || bt.rail) return `${aOrAn(bt.name)} can't get to a Bot Foundry, so it can't be recycled.`;
+  if (!recyclable(u)) return 'It can\'t be recycled right now.';
+  if (u.task && u.task.type === 'recycle') return 'It\'s already on its way to be recycled.';
+  if (recycleFoundry(u)) return '';
+  return S.buildings.some((b) => !b.dead && b.owner === u.owner && b.built && BDEFS[b.type].bots)
+    ? (roadBound(u) ? 'No road leads from it to a Bot Foundry.' : 'It can\'t get to a Bot Foundry from where it is.')
+    : 'Robots are recycled at a Bot Foundry: build one first.';
+}
+
+/** Robot u drops what it was doing (a load it carries is put down in crates) and sets off for Foundry f to be recycled. */
+function startRecycle(u, f) {
+  if (u.ferryWait && !u.ferryWait.ferry) leaveFerryQueue(u); // (waiting at a Port for a ferry: it stops waiting)
+  if (isArmy(u)) readyForOrder(u);
+  else { cancelTask(u); exitBuilding(u); u.march = 0; }
+  if (u.carry) dropCarried(u);
+  u.salvo = null;
+  u.recycleTo = 0;
+  u.task = { type: 'recycle', bld: f.id };
+  u.path = null; u.vel = 0; u.idleT = 0;
+}
+
+/** Send robot u to the nearest Bot Foundry it can get to, to be recycled. '' if it's on its way, otherwise why not. */
+function goRecycle(u) {
+  const why = recycleWhy(u);
+  if (why) return why;
+  startRecycle(u, recycleFoundry(u));
+  return '';
+}
+
+/** Player `owner`'s robots `ids` sent to be recycled (each to the nearest Foundry it can get to): how many went, or why none could. */
+function orderRecycle(owner, ids) {
+  let n = 0, why = '';
+  for (const id of ids) {
+    const u = getE(id);
+    if (!u || u.dead || u.owner !== owner || !BOTS[u.type]) continue;
+    if (u.task && u.task.type === 'recycle') { n++; continue; } // (on its way already)
+    const w = goRecycle(u);
+    if (w) why = why || w; else n++;
+  }
+  return n || why || 'Nothing to recycle.';
+}
+
+/** Call off robot u's trip to be recycled: it stops where it is (a warbot heads back to a garrison, a Worker finds a job). */
+function stopRecycle(u) {
+  if (u.task && u.task.type === 'recycle') { u.task = null; u.path = null; u.vel = 0; }
+  u.recycleTo = 0;
+}
+
+/** A robot on its way to be recycled: on to its Foundry (gone, or no longer its owner's: it stops), and taken apart there. */
+function doRecycle(u, t, dt) {
+  const f = getE(t.bld);
+  if (!f || f.dead || f.owner !== u.owner || !f.built) { stopRecycle(u); return; }
+  const r = travel(u, f.x, f.y, dt);
+  if (r === null) {
+    stopRecycle(u);
+    postMsg(u.owner, `${aOrAn(BOTS[u.type].name)} on its way to be recycled can't get to the Bot Foundry: it has stopped.`, Math.floor(u.x), Math.floor(u.y), 'warn');
+  } else if (r) recycleBot(u, f);
+}
+
+/**
+ * Robot u, at Bot Foundry f, is taken apart: what it gives back (recycleYield) goes into f's stock, and anything it still
+ * had on board (a crate, a Crawler's goods) is left in crates by the Foundry. Its place under the robot limit is free.
+ */
+function recycleBot(u, f) {
+  const got = recycleYield(u.type), P = S.players[u.owner];
+  for (const g in got) bump(f.stock, g, got[g]);
+  if (u.carry) dropCarried(u);
+  if (u.loot) { addLoot(f.x, f.y, { [u.loot]: 1 }); u.loot = null; }
+  if (u.cargo && Object.keys(u.cargo).length) { addLoot(f.x, f.y, u.cargo); u.cargo = null; }
+  u.task = null;
+  for (const b of S.buildings) {
+    if (b.staff === u.id) b.staff = 0;
+    if (b.staffInc === u.id) b.staffInc = 0;
+    if (b.builder === u.id) b.builder = 0;
+  }
+  removeBot(u);
+  P.stats.recycled = (P.stats.recycled || 0) + 1;
+  P.recycledBots = P.recycledBots || {};
+  P.recycledBots[u.type] = (P.recycledBots[u.type] || 0) + 1;
+  // (Seen: a ring and a shower of sparks at the Foundry, what came back floating up, and a clank.)
+  addFx('ring', f.x + 0.5, f.y + 0.5, { color: '#ffc861', r: 1.1 });
+  for (let k = 0; k < 3; k++) addFx('spark', f.x + 0.2 + 0.6 * hash2(u.id, k, 41), f.y + 0.2 + 0.6 * hash2(u.id, k, 43), { color: '#ffd98a' });
+  let k = 0;
+  for (const g in got) addFx('float', f.x + 0.5, f.y + 0.1 - 0.3 * k++, { text: '+' + goodCount(g, got[g]), color: GOOD[g].color });
+  if (isMe(u.owner)) sfx('clank');
+}
+
+/**
+ * How many Workers player p's colony has a use for: one for each building that takes a Worker (sites too: they will
+ * once they're up), and MIN_FREE_WORKERS + RECYCLE_KEEP free for building.
+ */
+function workersWanted(p) {
+  let n = MIN_FREE_WORKERS + RECYCLE_KEEP;
+  for (const b of S.buildings) if (!b.dead && b.owner === p && BDEFS[b.type].staff && !BDEFS[b.type].crew) n++;
+  return n;
+}
+
+/**
+ * Player p's spare robots of `type`: how many it has beyond `keep` (not counting any on their way to be recycled), and
+ * which of them to recycle, at most `max`: [robot, its Foundry] for each, those with nothing to do first, then those
+ * recharging, then those carrying or building (never one running a building), nearest a Foundry first; only ones that
+ * can get to a Foundry. { over, list }.
+ */
+function spareBots(p, type, keep, max) {
+  let have = 0;
+  for (const u of S.bots) if (!u.dead && u.owner === p && u.type === type && !recycling(u)) have++;
+  const over = Math.max(0, have - keep), list = [];
+  if (!over) return { over, list };
+  for (const u of S.bots) {
+    if (u.dead || u.owner !== p || u.type !== type || recycling(u) || !recyclable(u)) continue;
+    const tt = u.task && u.task.type;
+    if (tt === 'staff' || tt === 'flee') continue;
+    const f = recycleFoundry(u);
+    if (!f) continue;
+    const rank = !tt || tt === 'home' || tt === 'cover' ? 0 : tt === 'charge' || tt === 'refuel' || tt === 'repair' ? 1 : 2;
+    const here = u.inside ? getE(u.inside) : null;
+    list.push({ u, f, rank, d: dist2(f.x + 0.5, f.y + 0.5, here ? here.x + 0.5 : u.x, here ? here.y + 0.5 : u.y) });
+  }
+  list.sort((a, b) => a.rank - b.rank || a.d - b.d || a.u.id - b.u.id);
+  return { over, list: list.slice(0, Math.min(over, max === undefined ? over : max)) };
+}
+
+/** Send player p's spare robots of `type` (beyond `keep`, see spareBots) to be recycled, at most `max`. How many went. */
+function recycleSpare(p, type, keep, max) {
+  const { list } = spareBots(p, type, keep, max);
+  for (const s of list) startRecycle(s.u, s.f);
+  return list.length;
+}
+
 /** The rivals still in the game (a Versus game's AI colonies), for the hidden boost menu. */
 function boostableRivals() {
   if (!S || S.mode === 'colony') return [];
@@ -4002,7 +4252,7 @@ function goGarrison(u) {
     const keep = keepAt(b);
     // The player's garrison priority: High ones fill first, Low ones only when the rest are full; and
     // every garrison fills up to its Keep before any goes past it.
-    const pr = (b.gprio === 'high' ? -30 : b.gprio === 'low' ? 30 : 0) + (n < keep ? -60 : 0) +
+    const pr = (b.gprio === 'high' ? -30 : b.gprio === 'low' ? 30 : 0) + (n < keep || (b.type === 'lander' && S.players[u.owner].homeCall > S.time) ? -60 : 0) + // (a rival AI's base under threat calls them all home)
       (!botArmed(u) && !(b.stock.ammo > 0) ? 25 : 0); // out of Ammo: go where it can reload
     const s = (n / Math.min(cap, 10)) * 12 + front * 0.25 + dist(b.x, b.y, u.x, u.y) * 0.05 + pr;
     // A garrison set to keep none isn't stocked: only if nowhere else has room.
@@ -4210,7 +4460,7 @@ function damageBot(u, dmg, sx, sy) {
   if (u.armored) dmg *= TRAIN_ARMOR.takes; // an armored train's plating
   u.hp -= dmg;
   u.hurtT = S.time;
-  if (u.hp <= 0) killBot(u);
+  if (u.hp <= 0) { noteDanger(u); killBot(u); }
 }
 
 function hitBuilding(b, dmg, by) {
@@ -4503,6 +4753,42 @@ function updateDanger() {
   }
 }
 
+/**
+ * A rival AI's memory of where its robots were shot down (P.danger, optional in a save). When one of its civilians (not
+ * an army robot or a Howitzer) is killed out in the open, the spot is remembered: for DANGER_TIME the first time, and
+ * as long again for every one more that dies within 3 tiles of it, up to DANGER_MAX. Its workers neither build, mend
+ * nor pave within DANGER_R tiles of it meanwhile (dangerAt), nor does it put a site there; the same goes for where the
+ * robot was going. The danger map (DANGER) sees what stands there now; this sees what only fires now and then: a Pulse
+ * Turret with one shot in it is out of the map while it waits for its next Crystal, and workers sent past it to pave a
+ * road beyond were shot on the way, one a minute (12 in a row).
+ */
+function noteDanger(bot) {
+  const P = S.players[bot.owner], bt = BOTS[bot.type], i = Math.floor(bot.x), j = Math.floor(bot.y);
+  if (!P || !P.ai || bot.inside || bt.war || bt.wild || bt.air || bt.sea || isArmy(bot) || !inMap(i, j)) return;
+  P.danger = (P.danger || []).filter((d) => S.time - d.last < DANGER_MAX);
+  const mark = (x, y) => {
+    const D = P.danger;
+    let d = D.find((q) => (q.x - x) * (q.x - x) + (q.y - y) * (q.y - y) <= 9);
+    if (!d) { d = { x, y, n: 0 }; D.push(d); if (D.length > 24) D.shift(); }
+    d.n++;
+    d.last = S.time;
+    d.until = S.time + Math.min(DANGER_MAX, DANGER_TIME * d.n);
+  };
+  mark(i, j);
+  // ...and where it was going, a road tile to pave or a site to build or mend: shot on the way there, by a gun the map
+  // didn't show, it had only been sent the way the next would go (the route keeps to the danger map, not to this).
+  const t = bot.task, g = t && t.type === 'build' ? getE(t.site) : t && t.type === 'fix' ? getE(t.bld) : null;
+  const ti = t && t.type === 'pave' ? t.tile % S.W : g ? g.x : -1, tj = t && t.type === 'pave' ? (t.tile / S.W) | 0 : g ? g.y : -1;
+  if (ti >= 0 && (ti - i) * (ti - i) + (tj - j) * (tj - j) > DANGER_R * DANGER_R) mark(ti, tj);
+}
+/** Is tile (i, j) within DANGER_R tiles of a danger spot of player p's still in force (see noteDanger)? */
+function dangerAt(p, i, j) {
+  const D = S.players[p] && S.players[p].danger;
+  if (!D) return false;
+  for (const d of D) if (d.until > S.time && (d.x - i) * (d.x - i) + (d.y - j) * (d.y - j) <= DANGER_R * DANGER_R) return true;
+  return false;
+}
+
 /** How far robots that don't fight keep from bot v, an enemy to them (0: it's no threat out there now). */
 function foeReach(v) {
   if (v.dead || v.dropping || v.owner < 0) return 0;
@@ -4609,6 +4895,7 @@ function foeSweep() {
 function takeCover(u, caught) {
   const t = u.task, P = S.players[u.owner];
   u.coverT = S.time;
+  if (t && t.type === 'recycle') u.recycleTo = t.bld; // (on its way to be recycled: it sets off again once they've gone)
   const foe = nearestFoe(u);
   u.shyOf = foe && BOTS[foe.type].wild ? 'wild' : 'warbots';
   if (isMe(u.owner) && P && S.time - (P.foeMsgAt || -999) > 60) {
@@ -4757,12 +5044,12 @@ function coverStore(u) {
 
 /** The road networks a pile of crates can be reached from (its own tile, or a road beside it) by player who's bots. */
 function pileNets(l, trucks, who) {
-  const net = roadNet(who), comp = trucks ? net.compT : net.comp, t = tIdx(l.x, l.y), nets = [];
-  if (comp[t] >= 0) nets.push(comp[t]);
+  const net = roadNet(who), t = tIdx(l.x, l.y), nets = [];
+  for (const c of tileNets(net, t, trucks)) if (c >= 0 && nets.indexOf(c) < 0) nets.push(c); // (on an overpass: either road)
   for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
     if (!inMap(l.x + di, l.y + dj)) continue;
-    const u = tIdx(l.x + di, l.y + dj);
-    if (comp[u] >= 0 && nets.indexOf(comp[u]) < 0) nets.push(comp[u]);
+    const c = laneComp(net, t, tIdx(l.x + di, l.y + dj), trucks);
+    if (c >= 0 && nets.indexOf(c) < 0) nets.push(c);
   }
   return nets;
 }
@@ -4983,6 +5270,8 @@ function eliminate(old, by, how) {
     for (const Q of S.players) if (Q.id !== by && Q.id !== old && !Q.absent && !Q.out) narrate(Q.id, 'changed', x, y, 1, NARRATOR.changed.replace('{old}', colonyName(old)).replace('{by}', colonyName(by)));
   }
   const left = S.players.filter((Q) => !Q.absent && !Q.out);
+  // Played on past a victory (S.endless): no one wins again, but losing your own colony still ends it.
+  if (S.endless) { if (!left.some((Q) => !Q.ai)) { S.winner = by; S.endHow = how || 'capture'; } return; }
   // The last colony (or team) standing has won; S.winner is one of them (with teams, see teamOf).
   if (new Set(left.map((Q) => teamOf(Q.id))).size === 1) { S.winner = left[0].id; S.endHow = how || 'capture'; }
   // The last colony people play is gone (you, in a game against the computer): it's over. (A game with nobody's
@@ -5192,6 +5481,8 @@ function startReload(u, t) {
 function warbotAct(u, dt) {
   u.cd -= dt;
   const t = u.task;
+  // On its way to be recycled: it marches to the Foundry, fighting nothing on the way.
+  if (t && t.type === 'recycle') { u.fight = 0; doRecycle(u, t, dt); return; }
   const defending = t && t.type === 'defend';
   const rally = t && t.type === 'hold' ? rallyById(t.rally) : null;
   // Ordered somewhere (move, station, call back): it marches there without stopping to fight, until it
@@ -5565,8 +5856,10 @@ function armedIn(b) {
 function keepAt(b) {
   if (BDEFS[b.type].bunker) return BDEFS[b.type].garrison; // a Bunker's two stay put
   if (b.keepW !== undefined) return b.keepW;
-  if (b.type === 'lander') return 1;
   const P = S.players[b.owner];
+  // A rival AI from Medium up keeps a home guard in its Command Base (P.homeGuard, see aiThink), and up to three in each Keep.
+  if (homeGuarded(b)) return b.type === 'lander' ? P.homeGuard : Math.min(3, P.homeGuard);
+  if (b.type === 'lander') return 1;
   return P && P.keepW !== undefined ? P.keepW : usesPosts(b.owner) ? 0 : 1; // yours keep none unless you say
 }
 
@@ -5683,7 +5976,9 @@ function rearGarrison(b) {
   return true;
 }
 /** Warbots garrison b can send out: every armed one from the rear (with `rear`), else all but one. */
-function spareFrom(b, rear, posted) { return BDEFS[b.type].bunker ? 0 : rear && !usesPosts(b.owner) && rearGarrison(b) ? armedIn(b) : spareArmed(b, posted); }
+function spareFrom(b, rear, posted) { return BDEFS[b.type].bunker ? 0 : rear && !usesPosts(b.owner) && rearGarrison(b) && !homeGuarded(b) ? armedIn(b) : spareArmed(b, posted); }
+/** Does garrison b hold a rival AI's home guard (its Command Base or a Keep: see keepAt), which never goes, even from the rear? */
+function homeGuarded(b) { const P = S.players[b.owner]; return !!(P && P.ai && P.homeGuard && (b.type === 'lander' || BDEFS[b.type].keep)); }
 
 /**
  * Take one armed warbot out of garrison b (or null): not one stationed there, unless `posted` (it comes back after).
@@ -5869,6 +6164,7 @@ function doArtySupply(u, t, dt) {
 function updateRocket(u, dt) {
   if (u.rockets === undefined || u.rockets > ROCKET.mag) u.rockets = Math.min(ROCKET.mag, u.rockets ?? ROCKET.mag);
   if (u.task && u.task.type === 'flee') { u.salvo = null; if (rocketPacked(u, dt, true)) doFlee(u, dt); return; }
+  if (u.task && u.task.type === 'recycle') { u.salvo = null; if (rocketPacked(u, dt)) doRecycle(u, u.task, dt); return; } // (dug in: it packs up first)
   u.cd = (u.cd || 0) - dt;
   // A salvo under way: `salvo` shells `gap` s apart, then the crew reloads (`cycle` s) for the next one.
   if (u.salvo) {
@@ -6240,7 +6536,7 @@ function wreckRoad(t, victim, why) {
   if (LAND_HOLD) { if (cross) LAND_HOLD = 2; }
   else if (S.terrain[t] === T_WATER || S.terrain[t] === T_CHASM) computeTerritory();
   delete S.lights[t];
-  delete S.over[t];
+  if (S.over[t]) { delete S.over[t]; overpassChanged(t); }
   if (cross && !LAND_HOLD) computeZones();
   addFx('smoke', i + 0.5, j + 0.5, { r: 0.6 });
   if (victim >= 0 && why) {
@@ -6469,6 +6765,7 @@ function orderPark(owner, ids, i, j) {
 function readyForOrder(u) {
   exitBuilding(u);
   cancelTask(u);
+  u.recycleTo = 0;
   u.fight = 0;
   u.march = 0;
   u.embarkOn = 0; // a new order: no longer heading to board a Ferry
@@ -7245,13 +7542,14 @@ function settlePlans() {
       // A planned light or overpass: paid all at once, then it goes up. Dropped if the junction is gone.
       const P = junPlanAt(t);
       if (!P || P.owner !== o) continue;
+      if (P.kind === 'over' && S.road[t] && isJunction(t) && !isCrossing(t)) P.kind = 'light'; // (an overpass only where four roads cross)
       if (!S.road[t] || !isJunction(t) || wayOwner(t) !== o || S.over[t] || (P.kind === 'light' && S.lights[t]) || (P.kind === 'over' && crossTile(t))) { cancelJunPlan(t); continue; }
       const cost = junPlanCost(t, P), have = spendable(o);
       if (Object.keys(cost).some((g) => sh.has(g))) { keep.push(it); continue; }
       const lack = Object.keys(cost).filter((g) => (have[g] || 0) < cost[g]);
       if (lack.length) { for (const g of lack) sh.add(g); keep.push(it); continue; }
       for (const g in cost) takeGood(o, g, cost[g]);
-      if (P.kind === 'over') { delete S.lights[t]; S.over[t] = { owner: o }; markDirty(t % S.W, (t / S.W) | 0); }
+      if (P.kind === 'over') { delete S.lights[t]; S.over[t] = { owner: o }; overpassChanged(t); }
       else S.lights[t] = { owner: o, ph: 0, tm: 0, clr: 0 };
       cancelJunPlan(t);
       continue;
@@ -7441,6 +7739,14 @@ function unstaff(b) {
   }
   b.staff = 0;
   b.staffInc = 0;
+}
+
+/** Can factory b do a round of its work now: everything the round takes in its hopper, and room for what it makes (see standingBy)? */
+function hasRound(b) {
+  const def = BDEFS[b.type];
+  for (const g in def.inp || {}) if ((b.stock[g] || 0) < def.inp[g]) return false;
+  for (const g in def.make || {}) if ((b.stock[g] || 0) + def.make[g] > def.out[g]) return false;
+  return true;
 }
 
 /** Higher = released first when workers run short. */
@@ -7917,7 +8223,7 @@ function startEvent(E) {
     }
     const o = E.offers[ME];
     for (const P of S.players) narrate(P.id, 'wren', undefined, undefined, 1); // (each visit; not in missions)
-    postMsg(ME, o ? `The Wren is in orbit for ${Math.round(E.t1 - E.t0)}s: it offers ${o.m} ${GOOD[o.get].name} (your land is running lowest on it) for ${o.n} of your ${GOOD[o.give].name}. Tap Trade to take it.`
+    postMsg(ME, o ? `The Wren is in orbit for ${Math.round(E.t1 - E.t0)}s: it offers ${o.m} ${goodN(o.get, o.m)} (your land is running lowest on it) for ${o.n} of your ${goodN(o.give, o.n)}. Tap Trade to take it.`
       : 'The Wren is in orbit, but it wants nothing you have spare.', undefined, undefined, 'info');
     sfx('order');
   } else if (E.type === 'dust') postMsg(ME, 'The dust storm is here: bots crawl and Missiles are grounded until it blows over.', undefined, undefined, 'warn');
@@ -8068,7 +8374,7 @@ function traderOffer(p) {
 function acceptTrade(p) {
   const E = eventNow('trader'), o = E && E.offers && E.offers[p];
   if (!o || o.done) return 'The Wren has gone.';
-  if ((spendable(p)[o.give] || 0) < o.n) return `You need ${o.n} ${GOOD[o.give].name} in storage.`;
+  if ((spendable(p)[o.give] || 0) < o.n) return `You need ${o.n} ${goodN(o.give, o.n)} in storage.`;
   const L = getE(S.players[p].lander);
   const store = L && !L.dead && L.owner === p ? L : nearestStoreTo(p, S.W / 2, S.H / 2);
   if (!store) return 'You have nowhere to store the goods.';
@@ -8076,7 +8382,7 @@ function acceptTrade(p) {
   bump(store.stock, o.get, o.m);
   madeGood(p, o.get, o.m);
   o.done = true;
-  if (isMe(p)) postMsg(ME, `Deal done: ${o.m} ${GOOD[o.get].name} are in your Command Base.`, store.x, store.y, 'good');
+  if (isMe(p)) postMsg(ME, `Deal done: ${o.m} ${goodN(o.get, o.m)} are in your Command Base.`, store.x, store.y, 'good');
   return '';
 }
 
@@ -8811,6 +9117,42 @@ function placeViaduct(owner, ai, aj, bi, bj) {
   return r;
 }
 
+/**
+ * The standing Viaduct whose deck runs over tile (i, j), between its ends: the end nearer the tile (at the middle of
+ * the span, the near end, the one it was built from), or null.
+ */
+function viaductOver(i, j) {
+  for (const b of S.buildings) {
+    if (b.dead || b.far || !b.link || !BDEFS[b.type].viaduct) continue; // (each span once, from its near end)
+    const f = getE(b.link);
+    if (!f || f.dead) continue;
+    const over = b.y === f.y ? j === b.y && i > Math.min(b.x, f.x) && i < Math.max(b.x, f.x)
+      : b.x === f.x && i === b.x && j > Math.min(b.y, f.y) && j < Math.max(b.y, f.y);
+    if (over) return Math.abs(i - f.x) + Math.abs(j - f.y) < Math.abs(i - b.x) + Math.abs(j - b.y) ? f : b;
+  }
+  return null;
+}
+
+/** The end of Viaduct b's span a bomb on its deck counts against: b (the end nearer it), or the other if that's weaker. */
+function deckBombEnd(b) {
+  const o = b.link ? getE(b.link) : null;
+  return o && !o.dead && o.armor < b.armor ? o : b;
+}
+
+/** Will the bombs already falling on the span Viaduct end b is one end of (on either end, or its deck) bring it down? */
+function spanDoomed(b) {
+  const o = b.link ? getE(b.link) : null, arm = new Map([[b.id, b.armor]]);
+  if (o && !o.dead) arm.set(o.id, o.armor);
+  for (const m of S.missiles) {
+    if (!m.bomb || !arm.has(m.target)) continue;
+    let e = m.target;
+    if (m.deck) for (const [id, a] of arm) if (a < arm.get(e)) e = id; // (as deckBombEnd: the weaker end)
+    arm.set(e, arm.get(e) - BOMBER.damage);
+  }
+  for (const a of arm.values()) if (a <= 0) return true;
+  return false;
+}
+
 /** The near abutment is built: put up the far one and open the Viaduct (or wait while the far end is blocked). */
 function viaductAcross(b) {
   if (!(b.viaTo >= 0)) return;
@@ -8931,14 +9273,17 @@ function tradeShortest(p) {
   return out;
 }
 
-/** A fresh set of contracts for player p: the first gets what it's shortest of for what it has most to spare, the rest mix it up. */
+/**
+ * A fresh set of contracts for player p: the first gets what it's shortest of for what it has most to spare, the rest
+ * mix it up, and the steep Fuel contract (fuelContract) comes last, always. The one taken stays, in its place.
+ */
 function newTradeOffers(p) {
   const T = tradeState(p), have = spendable(p);
   T.round++;
   const keep = T.pick >= 0 && T.offers[T.pick] && T.offers[T.pick].left > 0 ? T.offers[T.pick] : null;
   const short = tradeShortest(p);
   const spare = TERMINAL_GIVE.slice().sort((a, b) => (have[b] || 0) / TRADE_KEEP[b] - (have[a] || 0) / TRADE_KEEP[a]);
-  const out = keep ? [keep] : [];
+  const out = keep && !keep.steep ? [keep] : [];
   const seen = new Set(out.map((o) => o.give + '>' + o.get));
   for (let k = 0; out.length < TERMINAL.offers && k < 24; k++) {
     const r1 = hash2(T.round * 31 + k, p * 7 + 3, S.seed || 1), r2 = hash2(T.round * 17 + k, p * 11 + 5, S.seed || 1);
@@ -8949,10 +9294,20 @@ function newTradeOffers(p) {
     seen.add(give + '>' + get);
     out.push({ give, get, lot: tradeLot(give), left: TERMINAL.lots });
   }
-  T.pick = keep ? 0 : -1;
+  out.push(keep && keep.steep ? keep : fuelContract(have));
+  T.pick = keep ? out.indexOf(keep) : -1;
   T.offers = out;
   T.next = S.time + TERMINAL.every;
   syncTerminalOrders(p);
+}
+
+/**
+ * The contract that always brings Fuel, at the steep TERMINAL.fuelRate: a lot of whichever of TERMINAL.fuelGive (Stone,
+ * Fiber) the colony has most to spare (`have`: spendable), for Fuel. For a colony with no oil and poor soil.
+ */
+function fuelContract(have) {
+  const give = TERMINAL.fuelGive.slice().sort((a, b) => (have[b] || 0) / TRADE_KEEP[b] - (have[a] || 0) / TRADE_KEEP[a])[0];
+  return { give, get: 'fuel', lot: tradeLot(give), left: TERMINAL.lots, steep: true };
 }
 
 /** How much more Terminal b pays for standing further out than TERMINAL.minDist from its owner's Command Base (1 to 1 + maxBonus). */
@@ -8983,7 +9338,7 @@ function tradePairOk(give, get) {
 function tradePay(p, o, b) {
   const T = tradeState(p);
   b = b || S.buildings.find((e) => !e.dead && e.owner === p && BDEFS[e.type].terminal);
-  const mul = TERMINAL.rate * (b ? terminalBonus(b) : 1) * (T.sat[o.give] ?? 1);
+  const mul = (o.steep ? TERMINAL.fuelRate : TERMINAL.rate) * (b ? terminalBonus(b) : 1) * (T.sat[o.give] ?? 1);
   return Math.max(1, Math.round((o.lot * TRADE_VALUE[o.give] * mul) / TRADE_VALUE[o.get]));
 }
 
@@ -9034,13 +9389,13 @@ function updateTerminal(b, def, dt) {
     o.left--;
     b.working = true;
     addFx('ring', b.x + 0.5, b.y + 0.5, { color: '#7fe3ff', r: 1.6 });
-    postMsg(p, `Trade done: ${o.lot} ${GOOD[o.give].name} for ${pay} ${GOOD[o.get].name}, waiting at the Trade Terminal to go home by train.` + (o.left ? ` ${o.left} more lot${o.left > 1 ? 's' : ''} on this contract.` : ' That contract is filled.'), b.x, b.y, 'good');
+    postMsg(p, `Trade done: ${o.lot} ${goodN(o.give, o.lot)} for ${pay} ${goodN(o.get, pay)}, waiting at the Trade Terminal to go home ${isLiquid(o.get) ? 'by Tanker (or by pipeline to storage)' : 'by train'}.` + (o.left ? ` ${o.left} more lot${o.left > 1 ? 's' : ''} on this contract.` : ' That contract is filled.'), b.x, b.y, 'good');
     if (isMe(p)) sfx('complete');
     if (!o.left) { T.pick = -1; syncTerminalOrders(p); }
     return;
   }
   const inc = b.inc[o.give] || 0;
-  b.status = `Gathering a lot: ${Math.floor(here)} of ${o.lot} ${GOOD[o.give].name}` + (inc ? ` (${inc} on the way)` : '') + ` for ${tradePay(p, o, b)} ${GOOD[o.get].name}`;
+  b.status = `Gathering a lot: ${Math.floor(here)} of ${o.lot} ${goodN(o.give, o.lot)}` + (inc ? ` (${inc} on the way)` : '') + ` for ${tradePay(p, o, b)} ${goodN(o.get, tradePay(p, o, b))}`;
 }
 
 /* ------------------------------------------------------------------ crawlers */
@@ -9116,6 +9471,7 @@ function updateCrawler(u, dt) {
     }
     return;
   }
+  if (t.type === 'recycle') { doRecycle(u, t, dt); return; }
   if (t.type !== 'drive') return;
   const r = travel(u, t.x, t.y, dt);
   if (r === null) { u.task = null; if (!t.park) postMsg(u.owner, 'The Crawler can\'t find a way there.', t.x, t.y, 'warn'); return; }
@@ -9227,6 +9583,7 @@ function updatePipes() {
     for (const c of buildingPipes(b, net)) {
       let N = nets.get(c);
       if (!N) nets.set(c, (N = { pumps: [], users: [], stores: [], makers: [], burners: [] }));
+      if (def.terminal) { N.makers.push(b); continue; } // (the Fuel a contract paid: it gives, like a Bio Farm, and takes nothing)
       if (def.store) { N.stores.push(b); continue; }
       if (def.pump) N.pumps.push(b);
       if (def.inp && def.inp.crude) N.users.push(b);
@@ -9269,16 +9626,18 @@ function updatePipes() {
     const room = new Map(N.burners.map((u) => [u, Math.floor(pipeRoom(u, 'fuel'))]));
     const fgive = (from, to, n) => { bump(from.stock, 'fuel', -n); bump(to.stock, 'fuel', n); fleft -= n; fmoved += n; if (room.has(to)) room.set(to, room.get(to) - n); };
     const fstores = N.stores.filter((s) => storeTakes(s, 'fuel'));
+    // (A Trade Terminal gives what its Fuel contract paid: terminalSpare, as its goods are never anyone's supply.)
+    const msup = (m) => Math.floor(BDEFS[m.type].terminal ? terminalSpare(m, 'fuel') : supplyOf(m, 'fuel'));
     for (const m of N.makers) {
       if (fstores.length) m.pipedFuel = true; // its Fuel goes by pipe: no Tanker needed
       else if (N.burners.some((u) => u !== m)) m.fuelLine = true; // (what burns it on the line comes first: a Tanker takes only the surplus)
-      for (const u of N.burners) { if (u === m) continue; const n = Math.min(Math.floor(supplyOf(m, 'fuel')), room.get(u), fleft); if (n > 0) fgive(m, u, n); }
-      for (const s of fstores) { const n = Math.min(Math.floor(supplyOf(m, 'fuel')), fleft); if (n > 0) fgive(m, s, n); }
+      for (const u of N.burners) { if (u === m) continue; const n = Math.min(msup(m), room.get(u), fleft); if (n > 0) fgive(m, u, n); }
+      for (const s of fstores) { const n = Math.min(msup(m), fleft); if (n > 0) fgive(m, s, n); }
     }
     for (const u of N.burners) for (const s of N.stores) { const n = Math.min(Math.floor(supplyOf(s, 'fuel')), room.get(u), fleft); if (n > 0) fgive(s, u, n); }
     // What burns Fuel on a line with somewhere it's made, or storage with some, gets it by pipe: no Tanker brings
     // it. (Unless it has sat empty for PIPE_DRY s: then the line isn't keeping up, and Tankers bring it again.)
-    const onLine = N.makers.some((m) => !m.paused) || N.stores.some((s) => supplyOf(s, 'fuel') >= 1);
+    const onLine = N.makers.some((m) => (BDEFS[m.type].terminal ? msup(m) >= 1 : !m.paused)) || N.stores.some((s) => supplyOf(s, 'fuel') >= 1);
     for (const u of N.burners) {
       if ((u.stock.fuel || 0) >= 1) u.pipeDry = 0; else if (!u.pipeDry) u.pipeDry = S.time;
       if (onLine && !(u.pipeDry && S.time - u.pipeDry > PIPE_DRY)) u.fuelByPipe = true;
@@ -10376,14 +10735,27 @@ function flyStep(u, dt) {
 /** How high plane u flies (0 on the ground, 1 cruising). */
 function planeAlt(u) { return u.flight ? u.alt || 0 : 0; }
 
-/** Top up plane u's tank from Airfield b's Fuel, one Fuel (PLANE_FILL) at a time, to at least `want`. */
+/** Top up plane u's tank from Airfield b's Fuel, one Fuel (planeFill) at a time, to at least `want`. */
 function fuelPlane(u, b, want) {
+  const fill = planeFill(u);
   while (u.bat < want - 1e-6 && (b.stock.fuel || 0) - (b.res.fuel || 0) >= 1) {
     bump(b.stock, 'fuel', -1);
     usedGood(u.owner, 'fuel', 1);
-    u.bat = Math.min(100, u.bat + PLANE_FILL);
+    u.bat = Math.min(100, u.bat + fill);
   }
   return u.bat >= want - 1e-6;
+}
+
+/** The Fuel it takes to fill plane u's tank to at least `want` (one Fuel puts back planeFill). */
+function tankFuel(u, want) { return Math.max(0, Math.ceil((want - (u.bat ?? 100) - 1e-6) / planeFill(u))); }
+
+/**
+ * About how much Fuel a flight of plane u (or a plane of that type) takes: a round trip of AIR_TYPICAL tiles each way,
+ * and a bomber's sortie charge (BOMBER.fuel) on top. For the Airfield's panel.
+ */
+function typicalFlight(u) {
+  const burn = flightFuel(u, 2 * AIR_TYPICAL + 2 * RUNWAY_LEN + 34);
+  return burn / planeFill(u) + (BOTS[u.type].bomber ? BOMBER.fuel : 0);
 }
 
 /** What a sortie from base b to (x, y) and back needs in the tank (with a margin). */
@@ -10533,7 +10905,7 @@ function updatePlane(u, dt) {
   if (u.hp < u.maxHp) u.hp = Math.min(u.maxHp, u.hp + PLANE_MEND * dt);
   if (BOTS[u.type].bomber) { bomberOnGround(u, base, dt); return; }
   if (!M) {
-    if (u.bat < 100 - PLANE_FILL + 1 && S.tick % 15 === u.id % 15) fuelPlane(u, base, 100 - PLANE_FILL + 1);
+    if (u.bat < 100 - planeFill(u) + 1 && S.tick % 15 === u.id % 15) fuelPlane(u, base, 100 - planeFill(u) + 1);
     if (S.tick % 30 !== u.id % 30) return;
     const run = airSupplyRun(u, base);
     if (!run) return;
@@ -10558,10 +10930,11 @@ function updatePlane(u, dt) {
   } else if (S.time - M.since < PLANE_LOAD) return;
   // Fuel for the trip out and back (it waits for some to be brought).
   const tx = M.x + 0.5, ty = M.y + 0.5;
-  if (!fuelPlane(u, base, sortieFuel(u, base, tx, ty))) {
+  const want = sortieFuel(u, base, tx, ty);
+  if (!fuelPlane(u, base, want)) {
     const P = S.players[u.owner];
-    M.noFuel = 1;
-    if (S.time - (P.planeFuelMsg || -999) > 90) { P.planeFuelMsg = S.time; postMsg(u.owner, 'A Cargo Plane is waiting for Fuel at its Airfield: it needs some for the flight.', base.x, base.y, 'warn'); }
+    M.noFuel = tankFuel(u, want);
+    if (S.time - (P.planeFuelMsg || -999) > 90) { P.planeFuelMsg = S.time; postMsg(u.owner, `A Cargo Plane is waiting for Fuel at its Airfield: it needs ${M.noFuel} more for the flight (Tankers bring it).`, base.x, base.y, 'warn'); }
     return;
   }
   M.noFuel = 0;
@@ -10605,7 +10978,7 @@ function landed(u, b) {
   }
 }
 
-/* ------------------------------------------------------------------ Strike Bombers */
+/* ------------------------------------------------------------------ Vulcan Bombers */
 
 /** Can bomber u strike `t`: an enemy building, or an enemy vehicle, ship or robot out in the open (not in the air)? */
 function strikeTarget(u, t) {
@@ -10615,30 +10988,47 @@ function strikeTarget(u, t) {
   return !!bt && !bt.air && !bt.wild && !t.inside && !t.dropping;
 }
 
-/** Why owner's bomber u can't strike `t` (a building or a bot), or '' if it can. */
-function strikeBlocked(owner, u, t) {
-  if (!u || u.dead || u.owner !== owner || !BOTS[u.type].bomber) return 'Pick one of your Strike Bombers.';
+/** Why owner's bomber u can't strike `t` (a building or a bot; `deck`: [i, j], a tile of a Viaduct's deck), or '' if it can. */
+function strikeBlocked(owner, u, t, deck) {
+  if (!u || u.dead || u.owner !== owner || !BOTS[u.type].bomber) return 'Pick one of your Vulcan Bombers.';
   const base = planeBase(u);
   if (!base || u.inside !== base.id) return 'The bomber must be parked at its Airfield.';
   if (u.mission) return 'That bomber already has a target.';
   if (!strikeTarget(u, t)) return 'Pick an enemy building, or an enemy vehicle or robot out in the open.';
-  const tx = BDEFS[t.type] ? t.x + 0.5 : t.x, ty = BDEFS[t.type] ? t.y + 0.5 : t.y;
+  const [tx, ty] = strikeAim(t, deck);
   if (sortieFuel(u, base, tx, ty) > 99.5) return `Too far: a full tank takes the bomber ${planeReach(u)} tiles out and back.`;
   return '';
 }
 
-/** Send bomber u at `t`: it loads its bomb and Fuel at its Airfield, then takes off. '' or why not. */
-function orderStrike(owner, u, t) {
-  const why = strikeBlocked(owner, u, t);
+/** Where a bomber aims at `t`: a building's middle, a bot, or the middle of a Viaduct's deck tile `deck` ([i, j]). [x, y] */
+function strikeAim(t, deck) {
+  if (deck) return [deck[0] + 0.5, deck[1] + 0.5];
+  return BDEFS[t.type] ? [t.x + 0.5, t.y + 0.5] : [t.x, t.y];
+}
+
+/**
+ * Send bomber u at `t`: it loads its bomb and Fuel at its Airfield, then takes off. '' or why not. With (ai, aj), a tile
+ * of the deck of the Viaduct `t` is one end of: the bomb falls there, and the strike is on the end nearer it (the mission
+ * keeps the tile: see bombDrop).
+ */
+function orderStrike(owner, u, t, ai, aj) {
+  let deck = null;
+  if (ai !== undefined && ai !== null) {
+    const v = BDEFS[t.type] && BDEFS[t.type].viaduct && Number.isInteger(ai) && Number.isInteger(aj) && inMap(ai, aj) ? viaductOver(ai, aj) : null;
+    if (!v || (v !== t && v.id !== t.link)) return 'Pick an enemy building, the deck of an enemy Viaduct, or an enemy vehicle or robot out in the open.';
+    t = v; deck = [ai, aj];
+  }
+  const why = strikeBlocked(owner, u, t, deck);
   if (why) return why;
   u.mission = { kind: 'strike', target: t.id, phase: 'load', since: S.time };
+  if (deck) u.mission.deck = deck;
   return '';
 }
 
 /** A bomber on the ground: rearming after a sortie, then loading its bomb and Fuel for the next one and taking off. */
 function bomberOnGround(u, base, dt) {
   const M = u.mission;
-  if (u.bat < 100 - PLANE_FILL + 1 && S.tick % 15 === u.id % 15) fuelPlane(u, base, 100 - PLANE_FILL + 1);
+  if (u.bat < 100 - planeFill(u) + 1 && S.tick % 15 === u.id % 15) fuelPlane(u, base, 100 - planeFill(u) + 1);
   if (!M || M.kind !== 'strike' || M.phase !== 'load') return;
   const tg = getE(M.target);
   if (!strikeTarget(u, tg)) { u.mission = null; return; }
@@ -10647,7 +11037,7 @@ function bomberOnGround(u, base, dt) {
     if ((base.stock.ammo || 0) - (base.res.ammo || 0) < BOMBER.ammo) {
       M.noAmmo = 1;
       const P = S.players[u.owner];
-      if (isMe(u.owner) && S.time - (P.bombAmmoMsg || -999) > 90) { P.bombAmmoMsg = S.time; postMsg(u.owner, `A Strike Bomber is waiting for Ammo: it needs ${BOMBER.ammo} at its Airfield (haulers bring it).`, base.x, base.y, 'warn'); }
+      if (isMe(u.owner) && S.time - (P.bombAmmoMsg || -999) > 90) { P.bombAmmoMsg = S.time; postMsg(u.owner, `A Vulcan Bomber is waiting for Ammo: it needs ${BOMBER.ammo} at its Airfield (haulers bring it).`, base.x, base.y, 'warn'); }
       return;
     }
     M.noAmmo = 0;
@@ -10655,8 +11045,19 @@ function bomberOnGround(u, base, dt) {
     usedGood(u.owner, 'ammo', BOMBER.ammo);
     u.bombLoad = BOMBER.ammo;
   }
-  const tx = BDEFS[tg.type] ? tg.x + 0.5 : tg.x, ty = BDEFS[tg.type] ? tg.y + 0.5 : tg.y;
-  if (!fuelPlane(u, base, sortieFuel(u, base, tx, ty))) { M.noFuel = 1; return; }
+  const [tx, ty] = strikeAim(tg, M.deck);
+  // Fuel: its tank filled for the trip out and back, and the sortie's own BOMBER.fuel on top. It takes off only with
+  // all of it at the Airfield (none is taken until then), and waits, saying so, until Tankers bring it.
+  const want = sortieFuel(u, base, tx, ty), need = tankFuel(u, want) + BOMBER.fuel;
+  if ((base.stock.fuel || 0) - (base.res.fuel || 0) < need) {
+    M.noFuel = need;
+    const P = S.players[u.owner];
+    if (S.time - (P.bombFuelMsg || -999) > 90) { P.bombFuelMsg = S.time; postMsg(u.owner, `A Vulcan Bomber is waiting for Fuel: a sortie takes ${BOMBER.fuel} Fuel at its Airfield on top of its tank, ${need} in all this time (Tankers bring it).`, base.x, base.y, 'warn'); }
+    return;
+  }
+  fuelPlane(u, base, want);
+  bump(base.stock, 'fuel', -BOMBER.fuel);
+  usedGood(u.owner, 'fuel', BOMBER.fuel);
   M.noFuel = 0;
   M.phase = 'out';
   startTakeoff(u, base, tx, ty);
@@ -10668,16 +11069,24 @@ function bombDrop(u) {
   const M = u.mission, tg = getE(M.target);
   const bld = tg && BDEFS[tg.type];
   // Bombs already falling on it (another bomber's) will finish it: this one holds its bomb and flies home with
-  // it, so its Ammo goes back into the Airfield (only the Fuel for the trip is spent).
+  // it, so its Ammo goes back into the Airfield (only the Fuel for the trip is spent). A Viaduct is reckoned as a whole
+  // span: bombs on either end or its deck (spanDoomed).
   if (tg && !tg.dead && !(bld && captureOnly(tg))) { // (bombs only knock a Command Base or Keep down: every bomb counts there)
-    let due = 0;
-    for (const m of S.missiles) if (m.bomb && m.target === M.target) due += bld ? BOMBER.damage : BOMBER.botDamage * 2;
-    if (due > 0 && due >= (bld ? tg.armor : tg.hp)) { u.mission = null; headHome(u); return; }
+    if (bld && bld.viaduct && tg.link) { if (spanDoomed(tg)) { u.mission = null; headHome(u); return; } }
+    else {
+      let due = 0;
+      for (const m of S.missiles) if (m.bomb && m.target === M.target) due += bld ? BOMBER.damage : BOMBER.botDamage * 2;
+      if (due > 0 && due >= (bld ? tg.armor : tg.hp)) { u.mission = null; headHome(u); return; }
+    }
   }
+  // Aimed at a Viaduct's deck: the bomb falls on that tile (while the deck's still there, over the target's span).
+  const dv = bld && M.deck ? viaductOver(M.deck[0], M.deck[1]) : null, deck = !!dv && (dv === tg || dv.id === tg.link);
   // A vehicle on the move is led: the bomb's aimed where it will be when it lands.
   const lead = !bld && tg && (tg.vel || 0) > 0.05 ? (tg.vel || 0) * BOMBER.fall : 0, fa = tg ? tg.face || 0 : 0;
-  const x1 = bld ? tg.x + 0.5 : tg ? tg.x + dcos(fa) * lead : u.x, y1 = bld ? tg.y + 0.5 : tg ? tg.y + dsin(fa) * lead : u.y;
-  S.missiles.push({ bomb: true, owner: u.owner, from: u.id, target: M.target, t: 0, dur: BOMBER.fall, x0: u.x, y0: u.y, x1, y1 });
+  const x1 = deck ? M.deck[0] + 0.5 : bld ? tg.x + 0.5 : tg ? tg.x + dcos(fa) * lead : u.x, y1 = deck ? M.deck[1] + 0.5 : bld ? tg.y + 0.5 : tg ? tg.y + dsin(fa) * lead : u.y;
+  const bomb = { bomb: true, owner: u.owner, from: u.id, target: M.target, t: 0, dur: BOMBER.fall, x0: u.x, y0: u.y, x1, y1 };
+  if (deck) bomb.deck = 1;
+  S.missiles.push(bomb);
   u.bombLoad = 0;
   u.mission = null;
   headHome(u);
@@ -10685,15 +11094,23 @@ function bombDrop(u) {
   sfx('bombfall', x1, y1); // (its whistle as it falls, heard from where it will land)
 }
 
-/** A bomb lands: BOMBER.damage off the building it was aimed at, and harm to what's round it. */
+/**
+ * A bomb lands: BOMBER.damage off the building it was aimed at, and harm to what's round it. One on a Viaduct's deck
+ * (m.deck) counts against the span: off the end nearer it, or the other end if that's the weaker (deckBombEnd).
+ */
 function bombImpact(m) {
   blastFx(m.x1, m.y1, 1.0);
   sfx('bombhit', m.x1, m.y1);
   const tg = getE(m.target);
   const s2 = BOMBER.splash * BOMBER.splash;
-  if (tg && BDEFS[tg.type] && !tg.dead && foes(tg.owner, m.owner) && Math.floor(m.x1) === tg.x && Math.floor(m.y1) === tg.y) bombHit(tg, BOMBER.damage, m.owner);
+  let hit = null;
+  if (tg && BDEFS[tg.type] && !tg.dead && foes(tg.owner, m.owner)) {
+    if (m.deck) { const v = viaductOver(Math.floor(m.x1), Math.floor(m.y1)); if (v && (v === tg || v.id === tg.link)) hit = deckBombEnd(v); }
+    else if (Math.floor(m.x1) === tg.x && Math.floor(m.y1) === tg.y) hit = tg;
+  }
+  if (hit) bombHit(hit, BOMBER.damage, m.owner);
   for (const e of S.buildings.slice()) {
-    if (e === tg || e.dead || !foes(e.owner, m.owner) || e.owner < 0 || BDEFS[e.type].wild || dist2(e.x + 0.5, e.y + 0.5, m.x1, m.y1) > s2) continue;
+    if (e === hit || (e === tg && !m.deck) || e.dead || !foes(e.owner, m.owner) || e.owner < 0 || BDEFS[e.type].wild || dist2(e.x + 0.5, e.y + 0.5, m.x1, m.y1) > s2) continue;
     bombHit(e, BOMBER.splashBld, m.owner);
   }
   for (const u of S.bots) {

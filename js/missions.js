@@ -401,7 +401,7 @@ const MISSIONS = [
       'In Paths, <b>Route to</b> (Z) plans the cheapest road to wherever you tap.',
       'Haulers keep their distance, slow for oncoming traffic and give way at junctions.',
       'The <b>Traffic map</b> (T) colours the roads by how busy they are.',
-      'One-way lanes, traffic lights and overpasses keep it all moving.',
+      'One-way lanes, traffic lights and overpasses keep it all moving. Nobody turns on an overpass: its two roads just cross.',
     ],
     mode: 'colony', seed: 4409, size: 1, rough: 0, rich: 3, biome: 'autumn', shape: 0, limit: [0, 0, 20],
     setup(S) {
@@ -439,7 +439,7 @@ const MISSIONS = [
         ui: "#btn-road, #banner-seg [data-v='arrows'], #banner-traffic" },
       { kind: 'junctions', n: [2, 2, 3], text: 'Put lights on {n} junctions',
         count: (P, S) => Object.values(S.lights).filter((l) => l.owner === 0).length + Object.values(S.over).filter((o) => o.owner === 0).length,
-        hint: '<b>Paths</b> → <b>Junctions</b> (<kbd>L</kbd>): tap a junction for a light (1 Alloy). Tap it again for an overpass.',
+        hint: '<b>Paths</b> → <b>Junctions</b> (<kbd>L</kbd>): tap a junction for a light (1 Alloy). Again on a crossing: an overpass (no turning).',
         ui: "#btn-road, #banner-seg [data-v='lights']" },
     ],
   },
@@ -724,6 +724,7 @@ const MISSIONS = [
       'The gold pads on the minimap are neutral <b>Trade Posts</b>. A Trade Terminal there swaps a big surplus.',
       'Only Road Trains (or Freight Trains) carry the lots. Posts further out pay better.',
       'A far Depot on a Road Train\'s road stocks itself with what the buildings round it need.',
+      'One contract always brings <b>Fuel</b>, at a steep price: a <b>Tanker</b> takes it home.',
       '<b>Planet events</b> are on: dust storms, Ringfall, solar flares, and now and then the <i>Wren</i>, a trader ship.',
     ],
     // (Seed 1445: Ringfall (a meteor shower) at 2:30 and a solar flare over by 9:36. Events are seeded, and on the designed
@@ -747,7 +748,7 @@ const MISSIONS = [
         ui: "#sh-dock, #sh-layroad, #build-tabs [data-g='move'], .bcard[data-t='terminal']" },
       { kind: 'trades', n: [1, 2, 3], text: ['Make a trade at the Terminal', 'Make {n} trades at the Terminal'], at: 'terminal',
         count: (P) => (P.trade && P.trade.sold) || 0,
-        hint: 'Tap the Terminal → <b>Take</b> a contract you can fill, like 30 Stone. The Road Train hauls each lot.',
+        hint: 'Tap the Terminal → <b>Take</b> a contract, like 30 Stone (a Road Train hauls it). The last always buys Fuel.',
         ui: '#sh-trade button' },
       { kind: 'events', n: 2, text: 'Ride out 2 planet events',
         count: (P, S) => (S.evN || 0) - (S.event ? 1 : 0),
@@ -825,8 +826,8 @@ const MISSIONS = [
     goals: [
       { kind: 'viaduct', n: 1, text: 'Span the canyon with a Viaduct',
         count: (P, S) => S.buildings.filter((b) => !b.dead && b.owner === 0 && b.built && b.type === 'viaduct' && b.far).length,
-        hint: '<b>Build</b> (<kbd>B</kbd>) → <b>Move</b> (<kbd>3</kbd>) → <b>Viaduct</b> (<kbd>V</kbd>): tap your mesa\'s north rim, then the clifftop across.',
-        ui: "#btn-build, #build-tabs [data-g='move'], .bcard[data-t='viaduct']" },
+        hint: '<b>Paths</b> (<kbd>R</kbd>) → <b>Viaducts</b> (<kbd>Shift</kbd>+<kbd>V</kbd>): tap your mesa\'s north rim, then the clifftop across.',
+        ui: "#btn-road, #banner-seg [data-v='viaduct']" },
       { kind: 'ropeway', n: 1, text: 'Run a Ropeway to another mesa',
         count: (P, S) => S.buildings.filter((b) => {
           // (Its far end is up, where bots couldn't walk to from the near end: another mesa, or the canyon floor. Not a
@@ -842,8 +843,8 @@ const MISSIONS = [
           }
           return true;
         }).length,
-        hint: '<b>Build</b> (<kbd>B</kbd>) → <b>Move</b> (<kbd>3</kbd>) → <b>Ropeway</b> (<kbd>Y</kbd>): a station by your roads, then a far end on another mesa.',
-        ui: "#btn-build, #build-tabs [data-g='move'], .bcard[data-t='ropeway'], #sh-layroad" },
+        hint: '<b>Paths</b> (<kbd>R</kbd>) → <b>Ropeways</b> (<kbd>Shift</kbd>+<kbd>Y</kbd>): a station by your roads, then a far end on another mesa.',
+        ui: "#btn-road, #banner-seg [data-v='ropeway'], #sh-layroad" },
       { kind: 'made', good: 'crystal', n: [20, 30, 40],
         hint: '<b>Build</b> (<kbd>B</kbd>) → <b>Gather</b> (<kbd>1</kbd>) → <b>Crystal Tap</b> (<kbd>C</kbd>) by the Crystal across the canyon. Then tap its site → <b>Lay road</b> (<kbd>R</kbd>).',
         ui: "#btn-build, #build-tabs [data-g='gather'], .bcard[data-t='tap'], #sh-layroad" },
@@ -857,7 +858,7 @@ const MISSIONS = [
       'An <b>Airfield</b>\'s Cargo Plane flies over anything and drops its load by parachute.',
       'It drops a Drop Outpost on open ground nobody else holds, or two Workers on any open ground.',
       'Places switched to <b>Supply by air</b> get what they are short of, 8 goods a flight.',
-      'In Versus, planes also drop warbots, and Strike Bombers fly from the Airfield.',
+      'In Versus, planes also drop warbots, and Vulcan Bombers fly from the Airfield.',
     ],
     mode: 'colony', seed: 1818, size: 1, rough: 2, rich: 3, biome: 'polar', shape: 5, limit: [0, 0, 20],
     setup(S) {
@@ -933,10 +934,10 @@ const MISSIONS = [
     brief: 'Your first rival: a quiet colony with two empty Outposts. Learn to command warbots, then take its Command Base.',
     intro: [
       '<b>Versus</b>: another colony shares this moon. Capture its Command Base and the planet is yours.',
-      'This rival only defends itself. Red is theirs, blue is yours. You start with 4 warbots.',
+      'This rival only defends itself. Red is theirs, blue is yours. Each Ammo reloads a warbot\'s 5 shots.',
       'Army (<kbd>Q</kbd>) → Attack, then tap an enemy building or robot. Or tap a building → Send warbots (Q).',
       'With a mouse: drag a box round warbots and right-click; Ctrl+1-9 saves a group. <kbd>C</kbd> calls them home.',
-      'Each Ammo reloads 5 shots; the Ammo Plant keeps your Command Base stocked.',
+      'A colony holds 90 robots, and you landed with Workers to spare: <b>recycle</b> them at the Bot Foundry for Alloy.',
     ],
     mode: 'versus', seed: 20103, size: 0, rough: 1, rich: 3, biome: 'lunar', players: 2, style: 'balanced',
     rival: ['easy', 'easy', 'medium'], passive: [true, true, true], limit: [0, 0, 25],
@@ -949,12 +950,16 @@ const MISSIONS = [
       preBuild(1, 'outpost', Math.floor(W / 2) - 5, Math.floor(H / 2) - 4, { reach: 8 });
       preBuild(1, 'outpost', Math.floor(W / 2) + 5, Math.floor(H / 2) - 5, { reach: 8 });
       computeTerritory();
-      // The colony so far, and an Ammo Plant.
-      kit(S, KIT7, 2);
+      // The colony so far, and an Ammo Plant; and more Workers than it has work for (spare ones to recycle).
+      kit(S, KIT7, 10);
       preBuild(0, 'armory', L.x - 3, L.y - 3, { road: true });
       computeTerritory();
     },
     goals: [
+      { kind: 'recycled', n: [3, 4, 5], text: 'Recycle {n} spare Workers',
+        count: (P) => (P.recycledBots && P.recycledBots.worker) || 0,
+        hint: 'Tap the robot count at the top (<kbd>U</kbd>) → <b>Recycle spare Workers</b>. They walk to the Bot Foundry.',
+        ui: '#pop-recycle' },
       { kind: 'bots', type: 'warbot', n: [3, 4, 6], at: 'foundry',
         hint: 'Tap the Bot Foundry → <b>Order bots</b>: Warbots <b>+1</b>. The Ammo Plant keeps them loaded.',
         ui: "#sh-orders .order-row[data-k='warbot'] [data-d='1']" },
@@ -1182,7 +1187,7 @@ const MISSIONS = [
     brief: 'A maze of canyons and a seasoned rival. Use everything you have learned, and take to the air.',
     intro: [
       'The last landing: narrow canyons, long routes and a seasoned rival.',
-      'A <b>Keep</b> houses 25 warbots (6 fire from it) and toughens Walls near it. <b>Strike Bombers</b> fly from an Airfield.',
+      'A <b>Keep</b> houses 25 warbots (6 fire from it) and toughens Walls near it. <b>Vulcan Bombers</b> fly from an Airfield.',
       'If their bombers come, a siren sounds: <b>Flak Guns</b> fill the sky round what they guard.',
       'Then free play: Domination, Uplinks, free-for-alls of 3-4 colonies, 2 vs 2 teams and Multiplayer.',
       'Custom Game picks the map type, size, terrain, resources, biome and seed. Beaten rivals may surrender.',
@@ -1198,7 +1203,7 @@ const MISSIONS = [
         hint: '<b>Defend</b> → <b>Flak Gun</b> (<kbd>F</kbd>), by what their bombers would hit. It shoots only aircraft.',
         ui: "#btn-build, #build-tabs [data-g='defend'], .bcard[data-t='flak']" },
       { kind: 'bots', type: 'bomber', n: 1, at: 'airfield',
-        hint: '<b>Move</b> (<kbd>3</kbd>) → <b>Airfield</b> (<kbd>I</kbd>). Tap it → <b>Hangar</b>: Strike Bombers <b>+1</b>.',
+        hint: '<b>Move</b> (<kbd>3</kbd>) → <b>Airfield</b> (<kbd>I</kbd>). Tap it → <b>Hangar</b>: Vulcan Bombers <b>+1</b>.',
         ui: ".bcard[data-t='airfield'], #sh-yard .order-row[data-k='bomber'] [data-d='1']" },
       { kind: 'capture',
         hint: 'Tap their base → <b>Bomb it</b> (<kbd>Z</kbd>) to soften it. <b>Army</b> (<kbd>Q</kbd>) → <b>All</b> (<kbd>4</kbd>) → <b>Hold ground</b> (<kbd>G</kbd>) right beside it.',

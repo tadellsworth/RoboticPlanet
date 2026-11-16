@@ -14,21 +14,40 @@ Still open: a neutral, shared exchange the rivals compete over; contracts for Ch
 
 ## Held for later
 
+- **A hauler turned back by raiders can still pass close to them** (a known edge case): a hauler with a load turns
+  back before rival warbots on the road ahead, but on some maps the only other way to storage runs back past them
+  (within about 2 tiles), and a worker caught at a site can fail to find cover. Seen with the foe-shy test's scenario
+  on seeds 4242 (after the Fuel batch changed how the rival builds) and 4243 (before it); the test now plays seed 4244.
+  A fix would have the hauler hold position or wait for the road to clear when every way home passes the threat.
+
 - **More map shapes** (Rift, Ring valley, Oases, Crossroads and Lakes are now in the game; each would be a
   `SHAPE_PRESETS` entry with its own step in `shapeExtras`, mirrored for fairness like the others):
   - **Terraces:** the land climbs in steps toward a summit in the middle, a ramp or two per step, the richest fields
     (and a Nuclear race's Uranium) on top. Whoever holds the high ground sees and shoots down onto the rest.
   - **Twin rivers:** two rivers run the length of the map, splitting it into three lanes joined by shallow fords
     that bots wade slowly (and that a Planet event can flood). Bridges are worth their price here.
+- **Interchanges.** An overpass is a grade-separated crossing: both roads run straight through it and nobody turns
+  there (turning traffic goes round by another junction). Still open: an interchange, an overpass with slip roads (a
+  bigger footprint, dearer) that lets traffic turn without stopping; and whether the rival should put overpasses on its
+  busiest crossings (it builds neither lights nor overpasses today).
 - **Cloud saves.** Saves move between devices by exporting and importing a file today; a cloud save (perhaps kept by
   the multiplayer relay on Cloudflare) would do it without the file.
+- **Recycling: open questions.** A robot is taken apart the moment it reaches the Foundry: should it take a few
+  seconds inside (the Foundry busy meanwhile), and should a damaged one give back less? Planes, ships and trains
+  can't reach a Foundry, so they can't be recycled: should their own yards (Airfield, Port, Rail Station) take them
+  apart instead? Recycle spare Workers has no Hauler counterpart for players (the rival scraps both): wanted? Should
+  the rival also scrap other spares (Freight Trucks with no Depot to run, an Agribot with no farm)?
+- **Send feedback: open questions.** A report's "version" is `gameVersion()`, the fingerprint of the rules code the
+  multiplayer lobby compares: it tells two copies apart but not which commit a report came from. Should the published
+  game carry a build number (say the commit's short hash, written in when the site is published) for reports to name?
+  And should a Bug report be able to bring a screenshot of the map (a few hundred KB, ticked like the save)?
 - **Fuel.** Built: Tankers, explosions with chain reactions, Crude and Fuel pipelines, the Generator and trucks burning
   Fuel, and the rival keeping its Fuel up (Bio Farms first when it runs low, an Oil Pump and Refinery once its Foundry
   is up). Still open: a Generator that explodes too.
 - **Ships.** Ports, Container Ships, Tanker Ships, Ferries and beach landings are in the game, and the rival keeps a
   forward Port stocked by Container Ship. Still open: a gunboat or patrol boat to escort ships and shell the shore
   (held back for now); the rival running ferry lines.
-- **Air (after ships).** An **Airfield** (done, with the Cargo Plane and air drops), a **strike bomber** (its look follows
+- **Air (after ships).** An **Airfield** (done, with the Cargo Plane and air drops), a **Vulcan Bomber** (its look follows
   a Foxbat three-view, mocked up in renderer/b/bomber.js: a long black radome, big box intakes, a broad flat body, a
   43-degree wing with tip pods, swept stabilators, twin canted fins, two big nozzles, bombs under the wings; up to
   two per Airfield beside its one Cargo Plane; the AI never uses the Cargo Plane and should fly bombers only seldom; each hits one target a sortie, then needs a while on the ground to rearm
@@ -140,10 +159,12 @@ never got a lot: the lot was fetched from the nearest building holding any of th
 Depot's last Stone, under a Road Train's load, so no train went. Now Crystal is judged by how long it lasts, Taps come
 first, the Terminal and its Road Train come early and buy Crystal or Chips, its Smelters rest on piled-up Alloy so their
 Ore and Fiber can pay for it, and the lot comes from storage with a train load; those two games end at 28 and 34
-minutes.) Still open: the colony left winning a 2 v 2 can sit at the bot limit with some 47 workers and under 20
-warbots, Alloy piling up for want of room, not Crystal, and never finish the other (seed 4 now runs past 75 minutes
-that way; `AI_ARMY_ROOM` keeps room only from new workers, it never thins the ones it has); a colony left with no
-Chips and no Road Train can't trade at all; and on Islands (seed 5, two players) a rival with 35 warbots lands only
+minutes.) (Fixed: the colony left winning a 2 v 2 could sit at the bot limit with 40 to 47 Workers, a dozen more than
+its buildings called for, and some 25 warbots, Alloy piling up for want of room, and never finish the other:
+`AI_ARMY_ROOM` kept room only from new Workers, it never thinned the ones it had. Crossroads seeds 1 and 14 ran past
+90 minutes that way. Now it recycles its spare Workers and Haulers at its Foundry (`AI_SCRAP`) and fills the room with
+warbots: those games end at 44 and 37 minutes, won by the same side. The other long ones, seeds 8, 11 and 13 at an hour or more, are close wars, not full
+colonies.) Still open: a colony left with no Chips and no Road Train can't trade at all; and on Islands (seed 5, two players) a rival with 35 warbots lands only
 four to six at a time (most sit in far garrisons) and hadn't taken a beaten rival with one warbot after an hour.
 
 ## Balance decisions
@@ -163,6 +184,10 @@ lands on a Command Base destroys it; Brutes break through Walls slowly; Road Tra
   the AI could pull more from forts far from the front.
   Since then: its Viaducts keep out of enemy guns and away from where one was lost, and a fort with another fort
   between it and the enemy can send its last warbot.
+- **Bombing a Viaduct's deck** (Nov 2026). A bomb on the deck counts against the span: 14 off the end nearer it, or
+  off the other end if that one's weaker, so two bombs anywhere on a deck bring it down (bombs on each end tower still
+  leave both at 10). Open: should a deck be a target for warbots' Attack and the Army panel too (today they go for an
+  end tower)? And the rival never bombs a Viaduct (`AI_BOMB_VALUE` has none): on Sky islands that could break a stall.
 
 ## Lore expansions (held for later)
 

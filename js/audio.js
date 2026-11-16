@@ -8,7 +8,7 @@
  * and horns in jams, and the wind of each biome (with birds and insects in the forest). A built-up
  * colony on screen has its own bustle, thicker the more there is of it (see updateBeds): a city
  * murmur, the hum of its working factories and each kind of factory at its work (clanking furnaces,
- * drills, pumps, beeping fabs), far-off horns in a big city. Trains rumble along with their wheels
+ * presses, wrenches and machine tools, drills, pumps, beeping fabs), far-off horns in a big city. Trains rumble along with their wheels
  * clacking over the joints, sound their horn pulling out and squeal braking in; aircraft drone
  * overhead, whine in on the approach and screech down on the runway; ships hoot leaving port; the
  * sea washes the shore, lava bubbles, and crickets sing on warm nights.
@@ -217,10 +217,10 @@ function _noise(dur, vol, o) {
   src.stop(t0 + dur + 0.05);
 }
 
-const SFX_GAP = { rumble: 2.5, eruption: 3, clank: 0.12, furnace: 0.6, drill: 0.35, pumpthump: 0.3, beeps: 0.3, chop: 0.2, honkfar: 1.5,
+const SFX_GAP = { rumble: 2.5, eruption: 3, clank: 0.12, furnace: 0.6, machine: 0.5, ratchet: 0.4, press: 0.6, drill: 0.35, pumpthump: 0.3, beeps: 0.3, chop: 0.2, honkfar: 1.5,
   touchdown: 0.4, approach: 0.8, planetakeoff: 0.8, trainhorn: 1.2, brakes: 1, clack: 0.05, shiphorn: 2.5, bubble: 0.15, cricket: 0.1,
   launch: 0.3, rocket: 0.12, takeoff: 1.5, chute: 0.4, flakfire: 0.25, flak: 0.12, boom: 0.12, shellhit: 0.09, missilehit: 0.2, laser: 0.08, pulse: 0.14, hit: 0.07, produce: 0.25, alert: 1.5, complete: 0.3, order: 0.15,
-  weld: 0.25, scrape: 0.3, hiss: 0.6, airbrake: 1.2, honk: 2.5, nuke: 2, siren: 4,
+  weld: 0.25, scrape: 0.3, hiss: 0.6, airbrake: 1.2, honk: 2.5, passby: 0.35, beepback: 0.9, toot: 1, chirp: 0.15, servo: 0.25, nuke: 2, siren: 4,
   bombhit: 0.12, howitzerhit: 0.12, fireball: 0.2, collapse: 0.15, botboom: 0.1, bombfall: 0.15, incoming: 0.3, nukefall: 3,
   flame: 0.45, shieldhit: 0.08, shieldbreak: 0.3,
 };
@@ -540,7 +540,7 @@ function sfx(name, dest, y) {
       duckMusic(0.5, 2.5);
       break;
     // Explosions (see blast): a building going up, a Mortar shell landing; heavy ordnance with a deep boom (a
-    // Howitzer shell, a Strike Bomber's bomb, a Silo's missile); a Refinery or loaded Tanker going up in a fireball.
+    // Howitzer shell, a Vulcan Bomber's bomb, a Silo's missile); a Refinery or loaded Tanker going up in a fireball.
     case 'boom': blast(D, { size: 1, far, gain: 0.6 }); duckMusic(0.6, 0.7); break;
     case 'shellhit': blast(D, { size: 0.55, far, gain: 0.6 }); duckMusic(0.75, 0.4); break;
     case 'bombhit': blast(D, { size: 1.35, far, gain: 0.72, deep: true }); duckMusic(0.5, 1.2); break;
@@ -639,6 +639,21 @@ function sfx(name, dest, y) {
       break;
     }
     case 'furnace': _noise(1.1, 0.04, { freq: 260, to: 180, attack: 0.25, dest: D }); break; // the roar of a fire drawing
+    case 'machine': { // a lathe or mill biting: a tool whine rising into the cut and falling away, with a metallic hiss
+      const f = 520 + Math.random() * 260;
+      _tone(f, 0.55, 'sawtooth', 0.006, f * 1.35, 0, D); _tone(f * 1.5, 0.45, 'triangle', 0.004, f * 1.9, 0.08, D);
+      _noise(0.4, 0.02, { type: 'bandpass', freq: 4200, q: 3, attack: 0.12, delay: 0.1, dest: D });
+      break;
+    }
+    case 'ratchet': { // an impact wrench: a quick burst of hammering clicks
+      const n = 5 + Math.floor(Math.random() * 5);
+      for (let k = 0; k < n; k++) { _noise(0.025, 0.035, { type: 'bandpass', freq: 1700 + Math.random() * 400, q: 4, delay: k * 0.045, dest: D }); _tone(260, 0.03, 'square', 0.008, null, k * 0.045, D); }
+      break;
+    }
+    case 'press': // a hydraulic press: a deep thump, then the hiss of air let out
+      _tone(58, 0.3, 'sine', 0.08, 40, 0, D); _noise(0.08, 0.05, { type: 'bandpass', freq: 900, q: 1.5, dest: D });
+      _noise(0.6, 0.02, { type: 'highpass', freq: 3200, attack: 0.05, delay: 0.25, dest: D });
+      break;
     case 'drill': for (let k = 0; k < 6; k++) _noise(0.05, 0.035, { type: 'bandpass', freq: 900 + Math.random() * 300, q: 2, delay: k * 0.06, dest: D }); break;
     case 'pumpthump': _tone(70, 0.18, 'sine', 0.07, 48, 0, D); _noise(0.25, 0.018, { type: 'highpass', freq: 3000, delay: 0.12, dest: D }); break;
     case 'beeps': for (let k = 0; k < 3; k++) _tone([1320, 1760, 1480, 1980][Math.floor(Math.random() * 4)], 0.05, 'square', 0.012, null, k * 0.08, D); break;
@@ -670,6 +685,12 @@ function sfx(name, dest, y) {
       _tone(170, 0.06, 'square', 0.03, 90, 0, D);
       _noise(0.45, 0.06, { type: 'highpass', freq: 2500, to: 5000, attack: 0.01, delay: 0.04, dest: D });
       break;
+    // Busy streets (see audioTick: from where the traffic on screen bunches up).
+    case 'passby': { const f = 85 + Math.random() * 30; _tone(f, 0.9, 'sawtooth', 0.011, f * 0.8, 0, D); _noise(0.9, 0.02, { type: 'bandpass', freq: 380, to: 820, q: 0.8, attack: 0.35, dest: D }); break; } // an engine going by
+    case 'beepback': for (let k = 0; k < 3; k++) _tone(1040, 0.12, 'square', 0.006, null, k * 0.32, D); break; // a truck's warning beeps, backing or pulling round
+    case 'toot': { const f = 420 + Math.random() * 80; _tone(f, 0.12, 'square', 0.009, null, 0, D); _tone(f * 1.25, 0.12, 'square', 0.007, null, 0, D); break; } // a quick tap on the horn
+    case 'chirp': _tone(1500 + Math.random() * 500, 0.05, 'sine', 0.011, 2100, 0, D); _tone(1900 + Math.random() * 400, 0.05, 'sine', 0.009, 1500, 0.08, D); break; // a robot's 'coming through'
+    case 'servo': _tone(700, 0.22, 'sawtooth', 0.004, 1150, 0, D); _noise(0.2, 0.009, { type: 'bandpass', freq: 2500, q: 2, dest: D }); break; // a servo whirring
     // A Freight Truck's horn, stuck in traffic.
     case 'honk': {
       const lp = AUDIO.ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 1400; lp.connect(D);
@@ -734,14 +755,14 @@ function mapVoice(wx, wy, vol) {
 function zoomLoud() { return Math.max(0.15, Math.min(1, (R.cam.z - 10) / 40)); }
 
 /*
- * The air raid siren. While enemy Strike Bombers are in the air coming for you (a target of yours, or flying
+ * The air raid siren. While enemy Vulcan Bombers are in the air coming for you (a target of yours, or flying
  * over your land), a motor siren wails out across the colony: two rotors a third apart spinning up and down,
  * echoing off the hills. When the last one has gone it winds down, and it won't start again for a few seconds.
  */
 const RAID = { voice: null, quietUntil: 0, last: 0, next: 0 };
 const SIREN = { lo: 150, hi: 560, rise: 3.4, hold: 0.7, fall: 3.6, third: 1.2, level: 0.055, rest: 6 };
 
-/** Are enemy Strike Bombers in the air coming for player 0 (at a target of theirs, or over their land)? */
+/** Are enemy Vulcan Bombers in the air coming for player 0 (at a target of theirs, or over their land)? */
 function raidOn() {
   if (typeof S === 'undefined' || !S || !S.bots || !S.players[ME] || S.players[ME].absent) return false;
   for (const u of S.bots) {
@@ -821,8 +842,11 @@ const WORLD = { t: 0, honk: {}, brake: {}, mood: 0, bed: null, ph: {}, vel: {}, 
 
 /** What each kind of working factory sounds like (see audioTick). */
 const WORK_SOUNDS = {
-  smelter: ['clank', 'furnace'], foundry: ['clank', 'clank', 'furnace'], kiln: ['furnace', 'clank'], tarworks: ['furnace'], munitions: ['clank', 'beeps'],
-  fab: ['beeps'], lab: ['beeps'], armory: ['clank'], mine: ['drill'], quarry: ['drill', 'chop'], harvester: ['chop'], pump: ['pumpthump'],
+  // (The Smelter and the Bot Foundry have the most to say: under the factory hum, a mix of clanks, presses, wrenches
+  // and machine tools keeps it from droning.)
+  smelter: ['clank', 'furnace', 'press', 'clank', 'machine'], foundry: ['clank', 'ratchet', 'machine', 'press', 'clank', 'furnace', 'ratchet'],
+  kiln: ['furnace', 'clank'], tarworks: ['furnace'], munitions: ['clank', 'beeps', 'machine'],
+  fab: ['beeps', 'machine'], lab: ['beeps'], armory: ['clank', 'machine', 'ratchet'], mine: ['drill'], quarry: ['drill', 'chop'], harvester: ['chop'], pump: ['pumpthump'],
   refinery: ['pumpthump', 'furnace'], tap: ['pumpthump'], roadworks: ['clank'], generator: ['pumpthump'], repair: ['clank'],
 };
 
@@ -934,6 +958,29 @@ function audioTick(dt) {
   if (spreaders.length && Math.random() < 0.3 + 0.1 * spreaders.length) at(pick(spreaders), 'scrape', 0.9);
   if (pavers.length && Math.random() < 0.4) at(pick(pavers), 'hiss', 1);
   WORLD.moving = moving; WORLD.trucks = trucks;
+  // Traffic where it bunches up: the robots and vehicles on the move on screen (every colony's), counted in 5-tile
+  // squares. The busiest square swells the traffic hum (updateBeds), and from squares with three or more on the move
+  // come engines going by, a truck's warning beeps, a toot of a horn and robots' chirps and servos: the busier the
+  // streets, the more often, and from where the traffic is.
+  const cells = new Map();
+  for (const u of S.bots) {
+    if (u.dead || u.inside || !u.path || !u.moved || !on(u.x, u.y)) continue;
+    const B = BOTS[u.type];
+    if (B.air || B.rail || B.sea || B.wild || B.war) continue;
+    const k = Math.floor(u.x / 5) * 4096 + Math.floor(u.y / 5);
+    let c = cells.get(k);
+    if (!c) cells.set(k, (c = []));
+    c.push(u);
+  }
+  let jam = 0;
+  const busy = [];
+  for (const c of cells.values()) { if (c.length > jam) jam = c.length; if (c.length >= 3) for (const u of c) busy.push(u); }
+  WORLD.jam = jam;
+  if (busy.length && Math.random() < Math.min(0.75, 0.04 * busy.length)) {
+    const u = pick(busy);
+    const kinds = BOTS[u.type].truck ? ['passby', 'passby', 'beepback', 'toot'] : ['chirp', 'chirp', 'servo', 'passby'];
+    at(u, pick(kinds), 0.5 + Math.min(0.35, busy.length * 0.02));
+  }
   if (WORLD.lava > 0.02 && Math.random() < Math.min(0.5, WORLD.lava * 3)) { // lava bubbling and popping somewhere on screen
     const ac = AUDIO.ctx, g = ac.createGain();
     g.gain.value = 0.6 * zoomLoud(); g.connect(AUDIO.fxBus);
@@ -967,14 +1014,18 @@ function updateBeds(live, dt) {
     const wg = ac.createGain(); wg.gain.value = 0;
     wind.connect(bp).connect(wg).connect(A.fxBus);
     wind.start();
-    WORLD.bed = { hum, g3, lp, bp, wg, gust: 0, chirp: 3 };
+    WORLD.bed = { hum, g3, lp, bp, wg, o1, o2, gust: 0, chirp: 3 };
   }
   const B = WORLD.bed;
   const zl = live ? zoomLoud() : 0;
   ambienceBeds(live, dt, zl);
-  B.hum.gain.setTargetAtTime(live ? Math.min(0.05, 0.006 * (WORLD.moving || 0)) * zl : 0, t, 0.4);
+  // (Traffic comes and goes: the engines' pitch wanders and the level swells and eases, never one steady drone; and it's
+  // two thirds as loud as it was, sitting under the music.)
+  const tSwell = 0.82 + 0.18 * Math.sin(t * 0.13) * Math.sin(t * 0.051 + 1.3);
+  B.hum.gain.setTargetAtTime(live ? Math.min(0.032, 0.0025 * (WORLD.moving || 0) + 0.0035 * (WORLD.jam || 0)) * zl * tSwell : 0, t, 0.4); // (louder where it bunches up)
+  if (live && WORLD.moving) { B.o1.frequency.setTargetAtTime(52 * (1 + 0.03 * Math.sin(t * 0.17)), t, 1.5); B.o2.frequency.setTargetAtTime(78.5 * (1 + 0.025 * Math.sin(t * 0.11 + 2)), t, 1.5); }
   B.g3.gain.setTargetAtTime(Math.min(1, (WORLD.trucks || 0) * 0.5), t, 0.4);
-  B.lp.frequency.setTargetAtTime(160 + Math.min(200, (WORLD.moving || 0) * 8), t, 0.5);
+  B.lp.frequency.setTargetAtTime(160 + Math.min(240, (WORLD.moving || 0) * 6 + (WORLD.jam || 0) * 10), t, 0.5);
   const b = typeof biome === 'function' && S ? biome() : 'desert';
   const wind = { desert: [480, 0.7, 0.03], jungle: [320, 0.6, 0.016], polar: [1100, 2.2, 0.035], volcanic: [180, 0.5, 0.03], lunar: [90, 0.4, 0.008],
     autumn: [600, 0.8, 0.028], savanna: [700, 0.9, 0.024], alien: [260, 3, 0.014], swamp: [240, 0.5, 0.01] }[b] || [480, 0.7, 0.03];
@@ -1014,11 +1065,16 @@ function ambienceBeds(live, dt, zl) {
     };
     const city = noiseVoice('bandpass', 420, 0.6), chatter = noiseVoice('bandpass', 1500, 1.4);
     city.g.connect(A.fxBus); chatter.g.connect(A.fxBus);
-    // Industry: mains hum and its harmonic, through a low filter.
+    // Industry: a soft machine hum (a low tone and two harmonics) through a low filter. It never sits still: each
+    // tone wanders a little in pitch, the filter drifts, and the whole swells and eases on two slow, unrelated
+    // cycles (a steady, unchanging hum was distracting: see the update below).
     const ind = ac.createGain(); ind.gain.value = 0;
-    const ilp = ac.createBiquadFilter(); ilp.type = 'lowpass'; ilp.frequency.value = 320;
-    for (const [f, k] of [[60, 0.6], [120, 0.35], [181, 0.15]]) { const o = ac.createOscillator(), g = ac.createGain(); o.type = 'sawtooth'; o.frequency.value = f; g.gain.value = k; o.connect(g).connect(ilp); o.start(); }
-    ilp.connect(ind).connect(A.fxBus);
+    const ilp = ac.createBiquadFilter(); ilp.type = 'lowpass'; ilp.frequency.value = 260; ilp.Q.value = 0.4;
+    const indOsc = [];
+    for (const [f, k, w] of [[60, 0.55, 'triangle'], [120, 0.25, 'sawtooth'], [181, 0.08, 'sawtooth']]) { const o = ac.createOscillator(), g = ac.createGain(); o.type = w; o.frequency.value = f; g.gain.value = k; o.connect(g).connect(ilp); o.start(); indOsc.push({ o, f }); }
+    const indAm = ac.createGain(); indAm.gain.value = 1;
+    for (const [rate, depth] of [[0.11, 0.22], [0.047, 0.18]]) { const l = ac.createOscillator(), lg = ac.createGain(); l.frequency.value = rate; lg.gain.value = depth; l.connect(lg).connect(indAm.gain); l.start(); }
+    ilp.connect(indAm).connect(ind).connect(A.fxBus);
     // Trains: a diesel throb (two low tones, pulsing).
     const rail = ac.createGain(); rail.gain.value = 0;
     const rlp = ac.createBiquadFilter(); rlp.type = 'lowpass'; rlp.frequency.value = 240;
@@ -1036,7 +1092,7 @@ function ambienceBeds(live, dt, zl) {
     if (airPan) { air.g.connect(airPan); abg.connect(airPan); airPan.connect(A.fxBus); } else { air.g.connect(A.fxBus); abg.connect(A.fxBus); }
     // The sea: low, rumbling wash.
     const sea = noiseVoice('lowpass', 520, 0.5); sea.g.connect(A.fxBus);
-    WORLD.amb = { city, chatter, ind, rail, air, airPan, abg, sea, clack: 0, cricket: 4 };
+    WORLD.amb = { city, chatter, ind, ilp, indOsc, rail, air, airPan, abg, sea, clack: 0, cricket: 4 };
   }
   const M = WORLD.amb, on = live && AUDIO.fx > 0;
   const night = typeof todNow === 'function' && S ? todNow().lights || 0 : 0;
@@ -1047,7 +1103,12 @@ function ambienceBeds(live, dt, zl) {
   M.city.g.gain.setTargetAtTime(cityLv, t, 0.8);
   M.chatter.g.gain.setTargetAtTime(cityLv * 0.35, t, 0.8);
   M.city.f.frequency.setTargetAtTime(380 + 80 * Math.sin(t * 0.21), t, 1);
-  M.ind.gain.setTargetAtTime(on ? Math.min(0.016, 0.003 * Math.sqrt(WORLD.works || 0)) * zl : 0, t, 0.6);
+  // (about half as loud as it was, and wandering: see where it's made)
+  M.ind.gain.setTargetAtTime(on ? Math.min(0.009, 0.0018 * Math.sqrt(WORLD.works || 0)) * zl : 0, t, 0.6);
+  if (on && WORLD.works) {
+    M.indOsc.forEach((v, k) => v.o.frequency.setTargetAtTime(v.f * (1 + 0.012 * Math.sin(t * (0.07 + 0.03 * k) + k * 2.1)), t, 2));
+    M.ilp.frequency.setTargetAtTime(230 + 70 * Math.sin(t * 0.09 + 1) * Math.sin(t * 0.023), t, 2);
+  }
   // Trains.
   const rv = WORLD.railV || 0;
   M.rail.gain.setTargetAtTime(on && WORLD.rail ? Math.min(0.06, 0.03 * Math.sqrt(WORLD.rail)) * zl : 0, t, 0.4);

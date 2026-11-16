@@ -63,14 +63,18 @@ for (const f of fs.readdirSync(path.join(root, 'art/tod/shared'))) {
   if (f.endsWith('.webp')) todShared[f.replace('.webp', '')] = `data:image/webp;base64,${fs.readFileSync(path.join(root, 'art/tod/shared', f)).toString('base64')}`;
 }
 
-// The Lore guide's pictures (#screen-lore: data-src, made each img's src when the guide first opens) go inline too.
+// The Lore guide's pictures (#screen-lore: data-src, made each img's src when the guide first opens) go in a
+// bundle of their own beside the page (dist/lore.js, loaded when the guide first opens: see openLore).
 let loreBytes = 0, loreN = 0;
-html = html.replace(/data-src="(art\/[^"]+)"/g, (m, src) => {
-  const file = path.join(root, src);
-  if (!fs.existsSync(file)) { console.warn('missing Lore image, skipped:', src); return m; }
+const loreData = {};
+for (const m of html.matchAll(/data-src="(art\/[^"]+)"/g)) {
+  const src = m[1], file = path.join(root, src);
+  if (loreData[src]) continue;
+  if (!fs.existsSync(file)) { console.warn('missing Lore image, skipped:', src); continue; }
   const d = fs.readFileSync(file); loreBytes += d.length; loreN++;
-  return `data-src="data:${mime[path.extname(file).toLowerCase()] || 'image/png'};base64,${d.toString('base64')}"`;
-});
+  loreData[src] = `data:${mime[path.extname(file).toLowerCase()] || 'image/png'};base64,${d.toString('base64')}`;
+}
+fs.writeFileSync(path.join(root, 'dist', 'lore.js'), `window.LORE_DATA = ${JSON.stringify(loreData)};\n`);
 
 const icon = `data:image/png;base64,${fs.readFileSync(path.join(root, 'icons/favicon-32.png')).toString('base64')}`;
 html = html
@@ -78,9 +82,9 @@ html = html
   .replace(/<link rel="apple-touch-icon"[^>]*>\n/, '')
   .replace(/<link rel="icon"[^>]*>/, `<link rel="icon" href="${icon}" type="image/png">`)
   .replace('<link rel="stylesheet" href="style.css">', () => `<style>\n${read('style.css')}</style>`)
-  .replace(/(<script src="[^"]+"><\/script>\n?)+/, () => `<script>\nwindow.BOTFALL_NO_SW = true;\nwindow.TOD_BUNDLE = true;\nwindow.BIOME_BUNDLE = true;\nwindow.TOD_SHARED = ${JSON.stringify(todShared)};\n${code.replace(/<\/script/g, '<\\/script')}\n</script>\n`);
+  .replace(/(<script src="[^"]+"><\/script>\n?)+/, () => `<script>\nwindow.BOTFALL_NO_SW = true;\nwindow.TOD_BUNDLE = true;\nwindow.BIOME_BUNDLE = true;\nwindow.LORE_BUNDLE = true;\nwindow.TOD_SHARED = ${JSON.stringify(todShared)};\n${code.replace(/<\/script/g, '<\\/script')}\n</script>\n`);
 
 fs.mkdirSync(path.join(root, 'dist'), { recursive: true });
 const out = path.join(root, 'dist', 'terrafall.html');
 fs.writeFileSync(out, html);
-console.log(`wrote ${path.relative(root, out)} (${Math.round(html.length / 1024)} KB, ${Object.keys(inlined).length} custom art files, ${loreN} Lore pictures of ${Math.round(loreBytes / 1024)} KB) and dist/tod-{morning,evening,night}.js (${Math.round(todBytes / 1024)} KB) and dist/biome-*.js (${Math.round(biomeBytes / 1024)} KB)`);
+console.log(`wrote ${path.relative(root, out)} (${Math.round(html.length / 1024)} KB, ${Object.keys(inlined).length} custom art files, ${loreN} Lore pictures) and dist/lore.js (${Math.round(loreBytes / 1024)} KB) and dist/tod-{morning,evening,night}.js (${Math.round(todBytes / 1024)} KB) and dist/biome-*.js (${Math.round(biomeBytes / 1024)} KB)`);

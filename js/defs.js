@@ -108,6 +108,8 @@ const FIX_RATE = 2;
 const REPAIR_BELOW = { warbot: 0.7, other: 0.6 };
 const REPAIR_IDLE = { foes: 9, reach: 30 }; // an idle warbot with any damage goes to a Repair Station within `reach` tiles, if no enemy robot or gun is within `foes`
 const REPAIR_RETREAT = 0.35;      // a warbot this badly hurt pulls out of a fight for repairs (if a Repair Station can fix it)
+// A rival AI's danger spots (see noteDanger): how near one counts, how long the first death keeps it, and the longest it lasts.
+const DANGER_R = 4, DANGER_TIME = 180, DANGER_MAX = 900;
 const FUEL_ENERGY = 200;          // battery points one Fuel gives at a Fuel Station (2 full charges)
 /*
  * Trucks burn Fuel. Freight Trucks, Road Trains and Tankers have a fuel tank instead of a battery
@@ -159,10 +161,10 @@ const BOTS = {
   ferry: { name: 'Ferry', plural: 'Ferries', speed: WORKER_SPEED * 2.8, hp: 26, sea: true, ferry: true, seats: 6, parts: 4, accel: 0.7, brake: 1.4, naval: true,
     desc: 'Carries robots and trucks across the water. Give a Port a ferry line to another Port and your bots take the ferry whenever it is the shorter way (six seats: a truck takes two, a Road Train three). From a Port it can also land up to six warbots on any shore, enemy shores too: a beach landing.' },
   // Aircraft: they fly straight over anything (water, cliffs, rock, the enemy), burning Fuel (PLANE_BURN), from an Airfield.
-  bomber: { name: 'Strike Bomber', plural: 'Strike Bombers', speed: WORKER_SPEED * 5.2, hp: 16, air: true, war: true, bomber: true, parts: 5, accel: 1.3, brake: 1.6, turn: 1.5, // a jet: it turns tighter, about the Cargo Plane's circle at its speed
-    desc: 'A fast twin-engined strike jet, based at an Airfield (two to a hangar; built there). Pick a target, an enemy building, or a truck, Tanker, ship or robot out in the open, and it flies out, drops one heavy bomb and flies home: it knocks 14 off a building (forts no lower than a third of their armor) and hurts what\'s round it, and a Tanker it hits explodes. Each sortie takes 6 Ammo and Fuel from its Airfield, and it needs a while on the ground to rearm. Flak Guns are the answer to it.' },
+  bomber: { name: 'Vulcan Bomber', plural: 'Vulcan Bombers', speed: WORKER_SPEED * 5.2, hp: 16, air: true, war: true, bomber: true, parts: 5, accel: 1.3, brake: 1.6, turn: 1.5, // a jet: it turns tighter, about the Cargo Plane's circle at its speed
+    desc: 'A fast twin-engined strike jet, based at an Airfield (two to a hangar; built there). Pick a target, an enemy building, or a truck, Tanker, ship or robot out in the open, and it flies out, drops one heavy bomb and flies home: it knocks 14 off a building (forts no lower than a third of their armor) and hurts what\'s round it, and a Tanker it hits explodes. Each sortie takes 6 Ammo and 3 Fuel from its Airfield, on top of the Fuel in its tank (it can\'t take off without them), and it needs a while on the ground to rearm. Flak Guns are the answer to it.' },
   cargoplane: { name: 'Cargo Plane', plural: 'Cargo Planes', speed: WORKER_SPEED * 3.75, hp: 24, air: true, carry: 8, seats: 2, parts: 6, accel: 0.9, brake: 1.3,
-    desc: 'A big four-engined transport, based at an Airfield. It flies straight over anything and drops what it carries by parachute, one load a flight: a Drop Outpost anywhere on open ground nobody else holds, two robots (Warbots or Workers) wherever you like, the enemy\'s land too, or up to 8 goods for a place you supply by air. It burns Fuel in the air and fills up at its Airfield. It flies to the nearest Airfield when the Foundry finishes it.' },
+    desc: 'A big four-engined transport, based at an Airfield. It flies straight over anything and drops what it carries by parachute, one load a flight: a Drop Outpost anywhere on open ground nobody else holds, two robots (Warbots or Workers) wherever you like, the enemy\'s land too, or up to 8 goods for a place you supply by air. It burns Fuel in the air and fills up at its Airfield: a full tank takes 5 Fuel, a long round trip 4 to 6. It flies to the nearest Airfield when the Foundry finishes it.' },
   crawler: { name: 'Crawler', plural: 'Crawlers', speed: WORKER_SPEED * 0.45, hp: 80, crawler: true, parts: 6,
     desc: 'A colossal tracked base on the move. Drive it anywhere it can roll (no road needed) and it deploys where it stops: a Depot, a Fuel Station and an Outpost in one, claiming the land around it. Pack it up to move on: it takes everything stored in it along.' },
   truck:   { name: 'Freight Truck', plural: 'Freight Trucks', speed: WORKER_SPEED * 1.35, hp: 8, haul: true, truck: true, carry: 8, roadOnly: true, parts: 2, accel: 1.5, brake: 3.5,
@@ -419,9 +421,12 @@ const SEA_MIN = 20, FERRY_SEATS = 6, FERRY_WAIT = 5, FERRY_GIVEUP = 90, FERRY_CO
 const PORT_FOUND = { cost: { cement: 12, alloy: 4 }, claim: 4, workers: 4 };
 const LANDING_GATHER = 40; // a Ferry on a beach landing sails this long after the order even if some warbots haven't come aboard
 const SHIP_BURN = 0.3, SHIP_REFUEL = 70, PORT_FUEL = 4; // a ship's tank (0–100) drains this a second under way; it fills up (one Fuel) when tied up below SHIP_REFUEL; a Port keeps PORT_FUEL for them
-// Cargo Planes: a tank (0–100) drains PLANE_BURN a second in the air; one Fuel at the Airfield puts back PLANE_FILL of it
-// (a long sortie takes two or three); an Airfield keeps AIRFIELD_FUEL for its planes. Loading takes PLANE_LOAD s; robots
-// have PLANE_GATHER s to get aboard (then it goes with whoever is); a parachute takes AIR_DROP_FALL s to come down.
+// Planes: a tank (0–100) drains PLANE_BURN a second in the air (a full tank is about 45 s of flight); one Fuel at the
+// Airfield puts back PLANE_FILL[type] of it: a Cargo Plane's big tank takes five Fuel to fill (a long round trip four to
+// six), a Vulcan Bomber's two and a half, and each bomber sortie takes BOMBER.fuel more on top. An Airfield keeps
+// AIRFIELD_FUEL for its planes; its panel counts the flights that covers as round trips of AIR_TYPICAL tiles each way.
+// Loading takes PLANE_LOAD s; robots have PLANE_GATHER s to get aboard (then it goes with whoever is); a parachute takes
+// AIR_DROP_FALL s to come down.
 // Armored Freight Trains: an upgrade a train is given on its panel, paid for from storage there and then and fitted at the
 // next Rail Station it stops at (it waits there while the yard works). Plating (more hit points, and it takes less of any
 // damage), a pulse cannon on the locomotive for enemy robots and vehicles on the ground, and a twin flak gun on the last
@@ -434,20 +439,24 @@ const TRAIN_ARMOR = {
   pulse: { range: 4.5, damage: 4, reload: 1.6 }, // (a Pulse Turret: 5 tiles, 4 a shot, every 1.3 s)
   flak: { range: 6, reload: 1.5 },               // one shell a time (a Flak Gun: 7 tiles, two every second)
 };
-const PLANE_BURN = 2.2, PLANE_FILL = 40, AIRFIELD_FUEL = 6, PLANE_LOAD = 3, PLANE_GATHER = 45, AIR_DROP_FALL = 2.2;
+const PLANE_BURN = 2.2, PLANE_FILL = { cargoplane: 20, bomber: 40 }, AIRFIELD_FUEL = 12, AIR_TYPICAL = 30;
+const PLANE_LOAD = 3, PLANE_GATHER = 45, AIR_DROP_FALL = 2.2;
+/** How much of plane u's tank (0–100) one Fuel fills. */
+function planeFill(u) { return PLANE_FILL[u.type] || 40; }
 const PLANE_MEND = 0.6;    // hit points a second a plane parked at its Airfield gets back
 // Airfields: a runway RUNWAY_LEN tiles long runs straight out from the hangar. A plane rolls down it from the
 // head, gathering speed (ROLL_ACCEL tiles/s²), and lifts off at the far end; in the air it turns at up to
 // PLANE_TURN radians a second; it lands at the far end and brakes (ROLL_BRAKE) back to the head.
 const AIRFIELD_HOLDS = { cargoplane: 1, bomber: 2 }; // planes of each type an Airfield has room for
 /**
- * The Strike Bomber (BOTS.bomber): a sortie loads `ammo` Ammo at its Airfield (and Fuel for the trip), flies to
+ * The Vulcan Bomber (BOTS.bomber): a sortie loads `ammo` Ammo and `fuel` Fuel at its Airfield (and Fuel in its tank for
+ * the trip; it can't take off without both), flies to
  * one target (an enemy building, or a vehicle or robot out in the open, which it chases), drops its bomb (`fall`
  * s to the ground) and flies home: `damage` to the building it's aimed at (forts no lower than MISSILE_FLOOR),
  * `splashBld` to other buildings and `botDamage` to robots within `splash` tiles. Back on the ground it needs
  * `rearm` s before the next sortie. Flak Guns shoot it down.
  */
-const BOMBER = { ammo: 6, damage: 14, splash: 1.3, splashBld: 4, botDamage: 8, fall: 0.8, rearm: 25 };
+const BOMBER = { ammo: 6, fuel: 3, damage: 14, splash: 1.3, splashBld: 4, botDamage: 8, fall: 0.8, rearm: 25 };
 /*
  * Influence. Every finished building but the military ones holds CIV_CLAIM tiles round itself (the military
  * ones claim their wider ring, BDEFS terr), so a colony's land grows as it builds. You can build on any
@@ -517,7 +526,7 @@ const SHAPE_PRESETS = [
   { name: 'Islands', group: 'water', blurb: 'Each base on its own island, with two or three medium islands between, a wide sea apart: cross by ship, or by long, dear bridges.', w: 1.15, h: 1.45, islands: true, naval: true, ffa: true, tip: 'Islands: a wide sea between the islands. Build a Port on your shore and order ships and a Ferry at its shipyard (a Ferry can land warbots on any shore), or push an Outpost out to your shore and build a bridge in Paths (Bridges): long ones cost a lot.' },
   { name: 'Crater', group: 'heights', blurb: 'The richest fields lie in a sunken crater in the middle, with one ramp down on each side.', w: 1, h: 1, crater: true, minLevels: 3, ffa: true, tip: 'Crater: the richest fields lie on the crater floor in the middle. One ramp leads down on your side; cut more in Paths (Ramps).' },
   { name: 'Plateaus', group: 'heights', blurb: 'Each base on a high plateau ringed by cliffs, with only two slopes down: easy to hold, slow to break out of.', w: 1, h: 1, plateau: true, minLevels: 3, ffa: true, tip: 'Plateaus: your base stands on high ground with only two slopes down. Easy to hold: wall the slopes and push out.' },
-  { name: 'Sky islands', group: 'heights', blurb: 'Mesas standing over a canyon floor far below: cross between the clifftops on Viaducts.', w: 1.15, h: 1.45, islands: true, sky: true, ffa: true, tip: 'Sky islands: a home mesa each and around a dozen smaller mesas between, a chain of them always linking the sides, over a canyon floor far below, with sheer drops and no slopes down; deposits on the mesas hold more. Cross between clifftops with Viaducts (Build menu); a Ropeway can reach the floor, but there is little down there.' },
+  { name: 'Sky islands', group: 'heights', blurb: 'Mesas standing over a canyon floor far below: cross between the clifftops on Viaducts.', w: 1.15, h: 1.45, islands: true, sky: true, ffa: true, tip: 'Sky islands: a home mesa each and around a dozen smaller mesas between, a chain of them always linking the sides, over a canyon floor far below, with sheer drops and no slopes down; deposits on the mesas hold more. Cross between clifftops with Viaducts (Paths); a Ropeway (Paths too) can reach the floor, but there is little down there.' },
   { name: 'Rift', group: 'divided', blurb: 'A chasm splits the planet, crossed only by a few natural rock arches: hold yours.', w: 1, h: 1, rift: true, tip: 'Rift: a chasm splits the planet, crossed only by a few natural rock arches. Hold your arches with turrets and Mortar Pits; a bridge over the chasm is the slow way to open another crossing.' },
   { name: 'Ring valley', group: 'divided', blurb: 'A massif too steep to climb fills the middle, with a valley round it on each side: two long ways round.', w: 1, h: 1.1, ring: true, tip: 'Ring valley: a massif too steep to climb fills the middle, and a valley runs round it on each side. Two long ways round: fortify one, raid along the other. (A long tunnel through the massif is the only shortcut.)' },
   { name: 'Oases', group: 'open', blurb: 'A barren, crag-strewn waste with a few rich oases joined by narrow passes: an expansion race.', w: 1.05, h: 1.05, oases: true, tip: 'Oases: a barren, crag-strewn waste. Everything worth having is round your base and in a few rich oases joined by narrow passes: grab them first, and guard the long supply lines.' },
@@ -669,6 +678,9 @@ const GOOD = {
   uranium: { name: 'Uranium', color: '#9dff3a', desc: 'Scarce radioactive ore (Nuclear race only). Ore Mines dig it from the few deposits on the planet; a Nuclear Reactor enriches it.' },
   fissile: { name: 'Enriched Uranium', color: '#e6ff4a', desc: 'Made from 2 Uranium at a Nuclear Reactor. A Nuclear Silo needs 6 to build a nuclear missile.' },
 };
+/** A good's name for n of it: "5 Chips" (Chip is the one counted good; the rest read "5 Ore", "5 Alloy"). */
+function goodN(g, n) { return GOOD[g].name + (g === 'chip' && n !== 1 ? 's' : ''); }
+
 /** Goods that only matter when there is a rival (hidden in Colony mode), and in a Nuclear race. */
 const WAR_GOODS = ['ammo', 'warhead'];
 const NUKE_GOODS = ['uranium', 'fissile'];
@@ -900,9 +912,9 @@ const BDEFS = {
     cost: { fiber: 2, cement: 2 }, staff: true, crew: 'agribot', farm: true, radius: 3, out: { fuel: 6 }, armor: 8, buildTime: 9,
   },
   pump: {
-    name: 'Oil Pump', desc: 'Built on top of an oil seep. Its worker pumps Crude until the seep runs dry, or until you have 30 (its stock limit).',
+    name: 'Oil Pump', desc: 'Built on top of an oil seep. Its worker pumps Crude until the seep runs dry (set a stock limit in its panel to stop it sooner).',
     cost: { cement: 2, alloy: 2 }, staff: true, pump: true, inp: {}, make: { crude: 1 }, out: { crude: 6 },
-    work: 6, armor: 8, buildTime: 10, limit: 30,
+    work: 6, armor: 8, buildTime: 10, // (no stock limit: it pumps until the seep runs dry, unless you set one)
   },
   refinery: {
     name: 'Refinery', desc: 'Refines Crude into Fuel, one for one. Stops at 30 Fuel unless you change its stock limit. Keep it out of harm\'s way: destroyed, it explodes, the fuller the bigger, hurting everything round it.',
@@ -943,7 +955,7 @@ const BDEFS = {
     cost: { cement: 8, alloy: 3 }, store: true, port: true, naval: true, armor: 14, buildTime: 14, yard: ['cargoship', 'tankship', 'ferry'],
   },
   airfield: {
-    name: 'Airfield', desc: 'A runway and hangar for a Cargo Plane and two Strike Bombers (order them on its panel: the hangar builds them from Alloy and Chips). A plane drops a Drop Outpost anywhere on open ground nobody else holds, two Warbots or Workers wherever you like, or keeps a place you supply by air stocked, 8 goods a flight. Haulers bring the Airfield what those places are short of, and Fuel for the planes. It is storage too, like a Depot.',
+    name: 'Airfield', desc: 'A runway and hangar for a Cargo Plane and two Vulcan Bombers (order them on its panel: the hangar builds them from Alloy and Chips). A plane drops a Drop Outpost anywhere on open ground nobody else holds, two Warbots or Workers wherever you like, or keeps a place you supply by air stocked, 8 goods a flight. Haulers bring the Airfield what those places are short of, and Tankers its planes\' Fuel: it keeps 12, and every flight burns some (a Cargo Plane\'s long round trip 4 to 6, a bomber sortie 3 on top of its tank). It is storage too, like a Depot.',
     cost: { cement: 10, alloy: 4 }, store: true, airfield: true, armor: 16, buildTime: 16, yard: ['cargoplane', 'bomber'],
   },
   dropost: {
@@ -956,7 +968,7 @@ const BDEFS = {
     cost: { cement: 6, alloy: 2 }, store: true, station: true, armor: 12, buildTime: 12, yard: ['freight'],
   },
   terminal: {
-    name: 'Trade Terminal', desc: 'An off-world freight exchange: it trades a full lot of one good for another, at rates below what making them yourself is worth, so a big surplus can buy what your land is running out of (the Ore, Crystal or Stone of a late game). Pick one of its contracts; Road Trains (or Freight Trains, with track beside it) bring the lot, and take the goods it pays home. Nothing smaller serves it. It docks at a neutral Trade Post (gold on the minimap), within 2 tiles of the pad, one per post: lay a road out to it. The further the post from your Command Base, the better it pays.',
+    name: 'Trade Terminal', desc: 'An off-world freight exchange: it trades a full lot of one good for another, at rates below what making them yourself is worth, so a big surplus can buy what your land is running out of (the Ore, Crystal or Stone of a late game). Pick one of its contracts; Road Trains (or Freight Trains, with track beside it) bring the lot, and take the goods it pays home. Nothing smaller serves it. One contract always brings Fuel, at a steep price (30 Stone or Fiber for about 6): a Tanker takes it home, or a pipeline to storage. It docks at a neutral Trade Post (gold on the minimap), within 2 tiles of the pad, one per post: lay a road out to it. The further the post from your Command Base, the better it pays.',
     cost: { cement: 12, alloy: 5 }, store: true, station: true, terminal: true, armor: 16, buildTime: 20,
   },
   crawlerbase: {
@@ -974,14 +986,14 @@ const BDEFS = {
   },
 };
 
-/** Order of the build menu. */
+/** Order of the build menu. (Viaducts and Ropeways aren't in it: they're placed from Paths, like Ramps and Walls.) */
 const BUILD_MENU = ['harvester', 'quarry', 'mine', 'tap', 'smelter', 'fab', 'foundry', 'charger', 'farm', 'pump', 'refinery', 'generator',
-  'kiln', 'tarworks', 'roadworks', 'ropeway', 'viaduct', 'station', 'port', 'airfield', 'outpost', 'turret', 'minigun', 'bunker', 'keep', 'disruptor', 'mortar', 'flak', 'repair', 'armory', 'munitions', 'silo', 'reactor', 'nukesilo', 'depot', 'grower', 'lab', 'terminal'];
+  'kiln', 'tarworks', 'roadworks', 'station', 'port', 'airfield', 'outpost', 'turret', 'minigun', 'bunker', 'keep', 'disruptor', 'mortar', 'flak', 'repair', 'armory', 'munitions', 'silo', 'reactor', 'nukesilo', 'depot', 'grower', 'lab', 'terminal'];
 /** Build-menu tabs: what each building is for. */
 const BUILD_GROUPS = [
   { key: 'gather', name: 'Gather', types: ['harvester', 'quarry', 'mine', 'tap', 'grower', 'farm', 'pump'] },
   { key: 'make', name: 'Make', types: ['kiln', 'smelter', 'fab', 'refinery', 'tarworks', 'foundry', 'armory', 'munitions', 'reactor', 'lab', 'generator'] },
-  { key: 'move', name: 'Move', types: ['charger', 'depot', 'roadworks', 'ropeway', 'viaduct', 'station', 'port', 'airfield', 'terminal'], roads: true },
+  { key: 'move', name: 'Move', types: ['charger', 'depot', 'roadworks', 'station', 'port', 'airfield', 'terminal'], roads: true },
   { key: 'defend', name: 'Defend', types: ['outpost', 'turret', 'minigun', 'bunker', 'keep', 'disruptor', 'mortar', 'flak', 'repair', 'silo', 'nukesilo'], walls: true },
 ];
 const BUNKER_FIRE = 0.9; // seconds between shots for each warbot in a Bunker (or a Keep)
@@ -1059,9 +1071,10 @@ const DIFFICULTY = {
  * style word, beside it where it helps ("Warden (turtle)": docLabel).
  * Each scales the rival's difficulty settings: grace (when it starts attacking), threshold (warbots it gathers before
  * an attack), army (how fast its army grows; armyFrom, when it starts), raids (how often it raids; raidFirst, the
- * first raid; raidSize and raidKeep, how many go and stay home), econ (how fast its bots work). turrets, walls and
- * missiles switch on its habits (see js/ai.js: aiStyle, aiLevel, AI_FORT, aiMissilePlan). The Steward (balanced) plays
- * the plain difficulty.
+ * first raid; raidSize and raidKeep, how many go and stay home), econ (how fast its bots work). turrets, walls,
+ * push (it marches only in one big push: aiPush), harass (raids that form up out of sight and go for the roads by its
+ * rival's working buildings, attacks on unguarded economy: aiRaid) and missiles switch on its habits (see js/ai.js:
+ * aiStyle, aiLevel, AI_FORT, aiMissilePlan). The Steward (balanced) plays the plain difficulty.
  * The words: noun and desc (the landing line: "Your rival is a Warden (turtle): it walls its base in..."), tag (a few
  * words, for the lobby's one-line note: "walls in, then comes late in force"), quote (a
  * line in the doctrine's voice, from LORE.md), play (how it plays, in depth, for the new-game screen: what it builds
@@ -1096,7 +1109,7 @@ const PERSONALITIES = {
       missile: ['Threat at the perimeter. Removing it.', 'Range confirmed. Firing. Day {day}.', 'Clearing the approach.'],
       surrender: ['Relief has not arrived.', 'Post abandoned. Day {day}. Relief has not arrived.'],
     },
-    grace: 1.5, threshold: 1.5, army: 0.9, raids: 0.3, turrets: true, walls: true,
+    grace: 1.5, threshold: 1.5, army: 0.9, raids: 0.3, turrets: true, walls: true, push: true,
   },
   raider: {
     name: 'Salvager', plain: 'raider', noun: 'a Salvager', desc: 'sends small bands of warbots to cut your supply lines, again and again',
@@ -1110,7 +1123,7 @@ const PERSONALITIES = {
       missile: ['Inventory reassigned. Ledger updated.', 'Write-off approved. Stand clear.', 'Salvage rights claimed. Collecting.'],
       surrender: ['Fine. Keep it. It was yours anyway.', 'Take it. Nobody\'s coming to collect.'],
     },
-    raids: 3, raidFirst: 0.4, raidSize: 3, raidKeep: 0, army: 1.15, armyFrom: 0.7,
+    raids: 3, raidFirst: 0.4, raidSize: 3, raidKeep: 0, army: 1.15, armyFrom: 0.7, harass: true,
   },
   rusher: {
     name: 'Herald', plain: 'rusher', noun: 'a Herald', desc: 'comes for you early with warbots, before its economy is big',
@@ -1205,8 +1218,13 @@ const TRADE_BONUS = 1.3;
  * Stone), never a made good for one it's made from (TRADE_MADE_FROM: no Cement for Stone), Cement only for
  * made goods (Alloy, Chips, Ammo), and never pays back under `minPay`. 30 Stone buys about 9 Alloy (11 at a
  * Terminal far out); 60 Cement about 16 Ammo (20).
+ * On top of the `offers`, one contract always brings Fuel (o.steep), for a lot of whichever of `fuelGive` the colony
+ * has most to spare, at the steep `fuelRate` (about half the usual): 30 Stone or Fiber for 6 Fuel (8 far out). It's
+ * the way to Fuel for a colony with no oil and poor soil. Fuel is a liquid: what it pays waits at the Terminal for a
+ * Tanker (or flows home by pipeline to storage on the line), never a train.
  */
-const TERMINAL = { minDist: 16, lot: 30, lotWorth: 30, rate: 0.65, perTile: 0.015, maxBonus: 0.25, offers: 3, every: 300, lots: 3, sat: 0.12, satMin: 0.5, recover: 0.05, minLoad: 10, downMax: 1.3, minPay: 4 };
+const TERMINAL = { minDist: 16, lot: 30, lotWorth: 30, rate: 0.65, perTile: 0.015, maxBonus: 0.25, offers: 3, every: 300, lots: 3, sat: 0.12, satMin: 0.5, recover: 0.05, minLoad: 10, downMax: 1.3, minPay: 4,
+  fuelRate: 0.3, fuelGive: ['stone', 'fiber'] };
 /** What each made good is made from: a contract never sells one for its own ingredients. */
 const TRADE_MADE_FROM = { cement: ['stone'], alloy: ['ore', 'fiber'], chip: ['crystal', 'alloy'], ammo: ['alloy', 'cement'], fuel: ['crude'] };
 /** Goods only bought, made in factories: what Cement can buy. */
@@ -1264,6 +1282,16 @@ const START_STOCK = { fiber: 16, stone: 8, alloy: 8, chip: 4, crystal: 4, fuel: 
 const START_BOTS = { worker: 10, hauler: 5, tanker: 1, agribot: 1 };
 const START_WARBOTS = 4;
 const MIN_FREE_WORKERS = 2;   // workers always kept free for building
+/*
+ * Recycling (see recycleBot): a robot sent to a Bot Foundry (its panel's Recycle this unit, the Robots panel's Recycle
+ * spare Workers) walks or drives there and is taken apart. RECYCLE_SHARE of the Alloy and Chips that went into it (a
+ * round of parts, 1 Alloy and 1 Chip, for each of BOTS[k].parts) goes into that Foundry's stock, rounded down, Alloy
+ * first: a Worker gives 1 Alloy, a Freight Truck 1 Alloy and 1 Chip. Its place under the robot limit is free again.
+ * Spare Workers: those beyond one for each building that takes a Worker (sites too) and MIN_FREE_WORKERS +
+ * RECYCLE_KEEP free for building.
+ */
+const RECYCLE_SHARE = 0.5;
+const RECYCLE_KEEP = 2;
 
 /*
  * The story (LORE.md is canon: Ithaca I, the four vanguards, the Murmur, the Silence). Text only: nothing here changes

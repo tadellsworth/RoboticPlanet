@@ -2563,6 +2563,7 @@ function drawBuilding(ctx, type, cx, cy, s, owner, b) {
     // A working loop (<type>-work-0…7, only the parts that move), played at 8 frames a second while it works.
     if (b && b.built && working && ART[type + '-work-0']) drawArt(ctx, ART[`${type}-work-${Math.floor(t * 8) % 8}`] || ART[type + '-work-0'], cx, cy, s);
     if (full) { ctx.globalAlpha = fade; drawArt(ctx, full, cx, cy, s); ctx.globalAlpha = 1; }
+    if (type === 'viaduct' && b) viaductJoins(ctx, b, cx, cy, s);
     if (type === 'turret' && art.anchor) {
       const head = turretHead(owner, b ? b.aim : Math.PI / 4);
       if (head) drawArt(ctx, head, cx, cy, s);
@@ -2769,6 +2770,7 @@ function drawBuilding(ctx, type, cx, cy, s, owner, b) {
       ctx.fillStyle = '#e8e4dc';
       for (const sgn of [-1, 1]) { ctx.beginPath(); ctx.arc(cx + px * sgn * (hw + 1 * u) - ax * 3 * u, cy + py * sgn * (hw + 1 * u) - ay * 3 * u, 2.2 * u, 0, Math.PI * 2); ctx.fill(); }
       ctx.fillStyle = color; ctx.beginPath(); ctx.arc(cx - ax * 7 * u - px * 7 * u, cy - ay * 7 * u - py * 7 * u, 2 * u, 0, Math.PI * 2); ctx.fill();
+      if (b) viaductJoins(ctx, b, cx, cy, s);
       break;
     }
     case 'ropeway': {
@@ -3180,6 +3182,38 @@ function gateOpen(g) {
 }
 
 /** Which way a Viaduct's span leaves its abutment b: [dx, dy] (east when it isn't known yet). */
+/**
+ * Roads joining a Viaduct's abutment from the sides or behind (any of the three sides the span doesn't leave
+ * from): the road's surface carries on across the abutment's curb onto its deck, so it reads as one road and not
+ * a road that stops at a concrete block. Drawn over the abutment, in the joining road's own surface.
+ */
+function viaductJoins(ctx, b, cx, cy, s) {
+  const [ax, ay] = viaductDir(b), t = tIdx(b.x, b.y), k = s / TP, joins = [];
+  for (const [di, dj] of [[0, -1], [1, 0], [0, 1], [-1, 0]]) {
+    if (di === ax && dj === ay) continue; // (the span's own side)
+    const i = b.x + di, j = b.y + dj;
+    if (!inMap(i, j)) continue;
+    const n = tIdx(i, j);
+    if (!roadLike(n) || !canStep(t, n)) continue;
+    joins.push([di, dj, ROAD_LOOK[S.pave[n] || 1] || ROAD_LOOK[1]]);
+  }
+  if (!joins.length) return;
+  // The arms from the abutment's edges in to its middle, where the deck is, and a junction there (as a road tile
+  // draws one): the edges first, then the surfaces over them, so arms meeting in the middle read as one crossing.
+  const best = joins.reduce((a, j) => (j[2].w >= a.w ? j[2] : a), joins[0][2]);
+  for (const layer of ['edge', 'fill']) {
+    for (const [di, dj, look] of joins) {
+      const ww = look.w * k + (layer === 'edge' ? 4 * k : 0);
+      ctx.fillStyle = look[layer];
+      if (di) ctx.fillRect(di > 0 ? cx : cx - s / 2, cy - ww / 2, s / 2, ww);
+      else ctx.fillRect(cx - ww / 2, dj > 0 ? cy : cy - s / 2, ww, s / 2);
+    }
+    const ww = best.w * k + (layer === 'edge' ? 4 * k : 0);
+    ctx.fillStyle = best[layer];
+    ctx.fillRect(cx - ww / 2, cy - ww / 2, ww, ww);
+  }
+}
+
 function viaductDir(b) {
   const far = b && b.link ? getE(b.link) : null;
   const to = far ? far.y * S.W + far.x : b && b.viaTo >= 0 ? b.viaTo : -1;
@@ -4621,8 +4655,9 @@ function render(dtReal) {
     if ((R.mode === 'road' && UI.roadMode === 'pave') || (selB && selB.type === 'roadworks' && selB.owner === ME) || UI.sheetKind === 'road') drawPaveMarks(ctx, ox, oy, z, inView);
   }
   if (R.mode === 'road') { drawDraft(ctx, ox, oy, z, inView); drawRouteGhost(ctx, ox, oy, z); }
+  else if (typeof UI !== 'undefined' && UI.planKept) drawDraft(ctx, ox, oy, z, inView); // (a Paths plan, kept while a Viaduct or Ropeway is placed)
   drawLights(ctx, ox, oy, z, inView);
-  drawOverpasses(ctx, ox, oy, z, inView);
+  drawOverpassShadows(ctx, ox, oy, z, inView);
   if (R.traffic && R.mode === 'road') drawTraffic(ctx, ox, oy, z, inView);
   if (R.routePreview) {
     // The road a building's "Lay road" button would pave.
@@ -4681,7 +4716,20 @@ function render(dtReal) {
   if (artFor('streetlamp-road', 0)) for (const l of streetLamps(v0, v1)) items.push(l); // posts stand among buildings and bots
   if (S.posts) for (const p of S.posts) if (inView(p.x, p.y, 2)) items.push({ ent: 'post', x: p.x, y: p.y + 0.5, post: p });
   if (S.uplinks) for (const u of S.uplinks) if (inView(u.x, u.y, 3)) items.push({ ent: 'uplink', x: u.x, y: u.y + 0.5, up: u });
-  items.sort((a, b) => (a.ent === 'b' ? a.y + 0.5 : a.y) - (b.ent === 'b' ? b.y + 0.5 : b.y));
+  // Overpass decks stand among the bots: the east-west road is up on the deck, so a bot driving along it is drawn on
+  // top, and one driving north or south under it (in the deck's tile) goes below.
+  let under = null;
+  if (anyOverpass()) {
+    under = new Map();
+    for (const k in S.over) { const t = +k, i = t % S.W, j = (t / S.W) | 0; if (inView(i, j, 2)) items.push({ ent: 'deck', t, x: i + 0.5, y: j + 0.45 }); }
+    for (const e of items) {
+      if (e.ent !== 'u' || BOTS[e.type].air) continue;
+      const i = Math.floor(e.x), j = Math.floor(e.y);
+      if (inMap(i, j) && S.over[tIdx(i, j)] && Math.abs(dsin(e.face || 0)) > Math.abs(dcos(e.face || 0)) && e.y > j + 0.4) under.set(e, j + 0.4);
+    }
+  }
+  const sortY = (a) => (a.ent === 'b' ? a.y + 0.5 : under && under.has(a) ? under.get(a) : a.y);
+  items.sort((a, b) => sortY(a) - sortY(b));
   // At dusk and night, every finished building's lights spill onto the ground round its pad.
   // Walls glow a little along their live rail, Gates more; Pulse Turrets sweep searchlights.
   if (TOD.active && TOD.state.pools > 0.01) {
@@ -4703,6 +4751,7 @@ function render(dtReal) {
   }
   for (const e of items) {
     if (e.ent === 'lamp') { drawStreetLamp(ctx, e, ox, oy, z); continue; }
+    if (e.ent === 'deck') { drawOverpassDeck(ctx, ox, oy, z, e.t); continue; }
     if (e.ent === 'post') { drawTradePost(ctx, ox + (e.post.x + 0.5) * z, oy + (e.post.y + 0.5) * z, z, e.post); continue; }
     if (e.ent === 'uplink') { drawUplink(ctx, ox + (e.up.x + 0.5) * z, oy + (e.up.y + 0.5) * z, z, e.up); continue; }
     if (e.ent === 'b') {
@@ -5219,35 +5268,40 @@ function drawTraffic(ctx, ox, oy, z, inView) {
   }
 }
 
-/**
- * Overpasses: the east-west road rises onto a short deck over the junction (ramps reaching into the
- * tiles either side), casting a shadow on the road below.
+/*
+ * Overpasses: the east-west road rises onto a short deck over the crossing (ramps reaching into the
+ * tiles either side), casting a shadow on the north-south road running under it. The shadow is drawn
+ * with the roads; the deck among the buildings and bots (see render), over the traffic going under it.
  */
-function drawOverpasses(ctx, ox, oy, z, inView) {
+function drawOverpassShadows(ctx, ox, oy, z, inView) {
+  ctx.fillStyle = 'rgba(0,0,0,0.38)';
   for (const k in S.over) {
     const t = +k, i = t % S.W, j = (t / S.W) | 0;
     if (!inView(i, j, 2)) continue;
-    const x = ox + i * z, y = oy + j * z;
-    const w = z * 0.46, y0 = y + (z - w) / 2, e = Math.max(1, z * 0.04);
-    // Shadow cast on the road underneath.
-    ctx.fillStyle = 'rgba(0,0,0,0.38)';
-    ctx.fillRect(x - z * 0.12, y0 + z * 0.17, z * 1.24, w);
-    // Approach ramps either side, then the raised deck over the junction.
-    for (const [rx, rw] of [[x - z * 0.55, z * 0.45], [x + z * 1.1, z * 0.45]]) {
-      ctx.fillStyle = '#9aa1a9'; ctx.fillRect(rx, y0 + e, rw, w - 2 * e);
-      ctx.fillStyle = '#4a5058'; ctx.fillRect(rx, y0, rw, e); ctx.fillRect(rx, y0 + w - e, rw, e);
-    }
-    ctx.fillStyle = '#3c4249';
-    ctx.fillRect(x - z * 0.12, y0 - e, z * 1.24, w + 2 * e);
-    ctx.fillStyle = '#c9ced5';
-    ctx.fillRect(x - z * 0.1, y0 + e, z * 1.2, w - 2 * e);
-    // Railings and a centre line.
-    ctx.fillStyle = '#f2f4f7';
-    ctx.fillRect(x - z * 0.1, y0 + e, z * 1.2, e);
-    ctx.fillRect(x - z * 0.1, y0 + w - 2 * e, z * 1.2, e);
-    ctx.fillStyle = 'rgba(255,209,102,0.85)';
-    for (let k2 = 0; k2 < 3; k2++) ctx.fillRect(x + z * (0.05 + k2 * 0.36), y + z / 2 - e / 2, z * 0.18, e);
+    const w = z * 0.46;
+    ctx.fillRect(ox + i * z - z * 0.12, oy + j * z + (z - w) / 2 + z * 0.17, z * 1.24, w);
   }
+}
+
+function drawOverpassDeck(ctx, ox, oy, z, t) {
+  const i = t % S.W, j = (t / S.W) | 0, x = ox + i * z, y = oy + j * z;
+  const w = z * 0.46, y0 = y + (z - w) / 2, e = Math.max(1, z * 0.04);
+  // Approach ramps either side (not toward another overpass in a row: the deck runs on), then the raised deck.
+  for (const [rx, rw, di] of [[x - z * 0.55, z * 0.45, -1], [x + z * 1.1, z * 0.45, 1]]) {
+    if (inMap(i + di, j) && S.over[tIdx(i + di, j)]) continue;
+    ctx.fillStyle = '#9aa1a9'; ctx.fillRect(rx, y0 + e, rw, w - 2 * e);
+    ctx.fillStyle = '#4a5058'; ctx.fillRect(rx, y0, rw, e); ctx.fillRect(rx, y0 + w - e, rw, e);
+  }
+  ctx.fillStyle = '#3c4249';
+  ctx.fillRect(x - z * 0.12, y0 - e, z * 1.24, w + 2 * e);
+  ctx.fillStyle = '#c9ced5';
+  ctx.fillRect(x - z * 0.1, y0 + e, z * 1.2, w - 2 * e);
+  // Railings and a centre line.
+  ctx.fillStyle = '#f2f4f7';
+  ctx.fillRect(x - z * 0.1, y0 + e, z * 1.2, e);
+  ctx.fillRect(x - z * 0.1, y0 + w - 2 * e, z * 1.2, e);
+  ctx.fillStyle = 'rgba(255,209,102,0.85)';
+  for (let k2 = 0; k2 < 3; k2++) ctx.fillRect(x + z * (0.05 + k2 * 0.36), y + z / 2 - e / 2, z * 0.18, e);
 }
 
 /** On Missile Silo art: a pip for each Missile loaded and a ring while it reloads. */
@@ -6554,10 +6608,18 @@ function drawPlane(ctx, u, sx, sy, s, alt) {
     for (const k of [-0.3, -0.17, 0.17, 0.3]) ctx.fillRect(-L * 0.02 + Math.abs(k) * L * 0.18, k * L - L * 0.018, L * 0.09, L * 0.036);
     ctx.restore();
   }
+  const bh = Math.max(2, s * 0.05);
   if (u.hp < u.maxHp && !u.parked) {
     const w = s * 0.6;
-    ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fillRect(sx - w / 2, sy - s * 0.6, w, Math.max(2, s * 0.05));
-    ctx.fillStyle = '#ff5a5a'; ctx.fillRect(sx - w / 2, sy - s * 0.6, (w * Math.max(0, u.hp)) / u.maxHp, Math.max(2, s * 0.05));
+    ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fillRect(sx - w / 2, sy - s * 0.6, w, bh);
+    ctx.fillStyle = '#ff5a5a'; ctx.fillRect(sx - w / 2, sy - s * 0.6, (w * Math.max(0, u.hp)) / u.maxHp, bh);
+  }
+  // Its fuel gauge (yours only), below it (the health bar is above): the tank, in the Fuel colour, going orange
+  // when it runs low.
+  if (u.owner === ME && u.bat !== undefined) { // (not a wreck: it has no tank)
+    const w = s * 0.6, y = sy + s * 0.62, f = clamp(u.bat, 0, 100) / 100;
+    ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fillRect(sx - w / 2 - 1, y - 1, w + 2, bh + 2);
+    ctx.fillStyle = f < 0.25 ? '#ff8a3c' : GOOD.fuel.color; ctx.fillRect(sx - w / 2, y, w * f, bh);
   }
 }
 

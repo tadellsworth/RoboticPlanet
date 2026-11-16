@@ -287,7 +287,7 @@ Every system keeps working exactly as it does now; the lore only explains it.
 | Bulwarks | Built to shield convoys from dust storms and ringfall. Now they shield troops. |
 | Torches | Built to burn back the Bloom for farmland. |
 | Howitzers | Demolition artillery for blasting road cuts through rock. |
-| Strike Bombers | Cargo plane airframes refitted under the contingency orders. |
+| Vulcan Bombers | Cargo plane airframes refitted under the contingency orders. |
 | Dust storms | Winds off the Rust. |
 | Meteor showers | Ringfall, restocking Ore and Crystal. |
 | Solar flares | Corvane's flares draining stored charge. |
@@ -312,7 +312,7 @@ Short lines for tooltips, loading screens and event banners. Same voice througho
 - **Bulwark:** "Rated for dust storms. Rifles turned out to be easier."
 - **Torch:** "Built to clear the Bloom. The Bloom grows back. So do enemies."
 - **Howitzer:** "Road-cutting artillery. It still thinks in road cuts."
-- **Strike Bomber:** "Cargo plane. Different cargo."
+- **Vulcan Bomber:** "Cargo plane. Different cargo."
 
 ### Buildings
 
