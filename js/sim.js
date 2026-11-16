@@ -781,6 +781,20 @@ function countCharging() {
 }
 
 /**
+ * Has factory b nothing for its worker to do just now: short of an input with none on the way, or its output full
+ * with no carrier coming for it? Then a worker below IDLE_TOP goes to recharge now, not at BATTERY.low in the middle
+ * of a batch, when the walk would cost working time.
+ */
+const IDLE_TOP = 60;
+function standingBy(b) {
+  const def = BDEFS[b.type];
+  if (!def.inp || beingFed(b)) return false;
+  for (const g in def.inp) if ((b.stock[g] || 0) < def.inp[g] && !(b.inc[g] > 0)) return true;
+  if (def.make) for (const g in def.make) if ((b.stock[g] || 0) + def.make[g] > def.out[g] && !(b.res[g] > 0)) return true;
+  return false;
+}
+
+/**
  * The charger bot u can walk to where it would be charged soonest: the walk there (a straight line, plus a
  * quarter as paths wind), its turn (the bots inside and on their way share the slots) and, at one that has run
  * out of Fuel with more on its way, the wait for it. So a busy Fuel Station at home beats a long walk out to an
@@ -974,7 +988,8 @@ function haulerStranded(u) {
 
 /**
  * How bot u plans routes: haulers stick to roads; others pay more for off-road tiles. Only its own
- * Gates let a bot through, and an armed warbot will break through enemy Walls and Gates.
+ * Gates let a bot through, and an armed warbot will break through enemy Walls and Gates. The army on
+ * the march (not in a fight) pays extra for tiles an enemy gun reaches (opts.cover, COVER_COST).
  */
 function routeOpts(u) {
   const bt = BOTS[u.type];
@@ -982,6 +997,7 @@ function routeOpts(u) {
   if (bt.roadOnly && !haulerStranded(u)) o.roadOnly = true;
   else if ((bt.offroad || bt.roadOnly) && !harvestTrip(u)) o.offMul = 1 / OFFROAD_SLOW;
   else if (isArmy(u) && !u.fight) o.offMul = WARBOT_OFFROAD; // on the march: keep to the roads
+  if (isArmy(u) && !u.fight) o.cover = u.owner; // and out of the enemy's guns
   return o;
 }
 
@@ -1008,6 +1024,22 @@ function breachHit(u, b) {
   shotFx(u.x, u.y, b.x + 0.5 + (hash2(u.id, S.tick, 3) - 0.5) * 0.6, b.y + 0.5 + (hash2(u.id, S.tick, 5) - 0.5) * 0.6, { color: PLAYER_COLORS[u.owner], structure: true });
   if (isMe(u.owner) || isMe(b.owner)) sfx('hit');
   hitBuilding(b, ((u.bat ?? 100) < BATTERY.critical ? 0.5 : 1) * (BDEFS[b.type].barrier ? WARBOT_HIT.wall : WARBOT_HIT.building), u.owner);
+}
+
+let ROUTES = { s: null, tick: -1, list: [] };
+/**
+ * Army unit u's route from tile `st` to (x, y), as findPath gives it (null: no way). Units ordered together from one
+ * place to one goal share a single search: the routes planned this tick are kept (by start, goal, owner, kind of
+ * robot, armed and fighting) and each asker gets its own copy. (Only this tick's: a cache that outlived a tick could
+ * hand out a route a fresh search after a save and load wouldn't give.)
+ */
+function squadRoute(u, st, x, y) {
+  if (ROUTES.s !== S || ROUTES.tick !== S.tick) ROUTES = { s: S, tick: S.tick, list: [] };
+  const goal = y * S.W + x, o = routeOpts(u), key = u.owner + ':' + u.type + ':' + (o.breach ? 1 : 0) + (u.fight ? 1 : 0);
+  for (const e of ROUTES.list) if (e.st === st && e.goal === goal && e.key === key) return e.p && e.p.slice();
+  const p = findPath(st % S.W, (st / S.W) | 0, x, y, undefined, o);
+  ROUTES.list.push({ st, goal, key, p });
+  return p && p.slice();
 }
 
 function goTo(u, x, y) {
@@ -1047,7 +1079,8 @@ function goTo(u, x, y) {
     u.path = [e].concat(rest); u.pi = 0; u.idleT = 0; u.goal = goal; u.breach = 0;
     return true;
   }
-  const p = findPath(Math.floor(u.x), Math.floor(u.y), x, y, !isArmy(u) && !BOTS[u.type].wild ? u.owner : undefined, routeOpts(u));
+  const p = isArmy(u) ? squadRoute(u, tIdx(Math.floor(u.x), Math.floor(u.y)), x, y)
+    : findPath(Math.floor(u.x), Math.floor(u.y), x, y, !BOTS[u.type].wild ? u.owner : undefined, routeOpts(u));
   u.breach = 0;
   if (!p) { u.failGoal = goal; u.failUntil = S.time + 2; return false; }
   // Starting on a Viaduct's abutment straight across it: keep the abutment in the route, so the
@@ -1267,9 +1300,66 @@ function queueRoom(u) {
   return Math.max(0, room);
 }
 
+/**
+ * What a planned route depends on: the roads (and bridges), and the buildings put up since. A bot looks its route
+ * over when this changes (routeCheck). (The newest building still standing: the list is only tidied every 15 ticks
+ * and a save leaves the dead out, so its length would differ after a load.)
+ */
+function routeVer() {
+  const B = S.buildings;
+  let k = B.length - 1;
+  while (k >= 0 && B[k].dead) k--;
+  return (S.roadVer || 0) * 16777216 + (k >= 0 ? B[k].id % 16777216 : 0);
+}
+
+/** How many road tiles of detour one tile crawled off the road is worth to a road-bound bot (see HAULER_STRANDED). */
+const GAP_DETOUR = PAVE[1].speed / HAULER_STRANDED - 1;
+
+/**
+ * Roads or buildings have changed since bot u last looked at its route (routeVer): it looks over what is left of
+ * it. If the route now crosses water or rock (a bridge or tunnel is gone) it plans again at once; with no other way
+ * the job is dropped there (it used to drive on, over open water). A civilian bot plans again too when a new
+ * building stands on the route, or (road-bound) when its road was taken up and the way round is quicker than
+ * crawling across the gap. Fighting units plan their own way again (travel): their route is only cleared.
+ * False if the bot has no route left to follow this tick.
+ */
+function routeCheck(u) {
+  u.rv = routeVer();
+  const bt = BOTS[u.type], p = u.path, last = p.length - 1, W = S.W;
+  if (bt.rail || bt.sea || bt.air || u.ride >= 0 || u.deck || u.ferryWait || last < 0) return true;
+  const civ = !isArmy(u) && !bt.siege && !bt.wild && !bt.crawler; // (driven by updateWorker: a job with no route counts as arrived)
+  const here = tIdx(Math.floor(u.x), Math.floor(u.y)), onRoad = civ && bt.roadOnly && !haulerStranded(u);
+  let bad = 0, gap = 0;
+  for (let k = u.pi; k <= last; k++) {
+    const t = p[k], q = k > 0 ? p[k - 1] : here;
+    if (Math.max(Math.abs((t % W) - (q % W)), Math.abs(((t / W) | 0) - ((q / W) | 0))) > 1) continue; // a Ropeway, Viaduct or ferry leg: moveAlong looks after those
+    if (!walkable(t)) { bad = 2; break; }
+    if (!civ || k === last) continue;
+    if (S.bAt[t]) { if (!passTile(t, u.owner) && !(ferryLink(t) >= 0 && getE(S.bAt[t]).owner === u.owner)) bad = 1; }
+    else if (onRoad && !S.road[t]) gap++;
+  }
+  if (!bad && !gap) return true;
+  if (bad === 2 && !walkable(here) && !S.bAt[here]) {
+    // Standing where the bridge was: back to the nearest tile of its route that still stands (as offDeck does on a Viaduct).
+    let best = -1, bd = Infinity;
+    for (const t of p) { if (!walkable(t)) continue; const d = dist2((t % W) + 0.5, ((t / W) | 0) + 0.5, u.x, u.y); if (d < bd) { bd = d; best = t; } }
+    if (best >= 0) { u.x = (best % W) + 0.5; u.y = ((best / W) | 0) + 0.5; u.vel = 0; }
+  }
+  if (!civ) { if (bad === 2) { u.path = null; u.vel = 0; return false; } return true; }
+  const pi = u.pi, g = p[last];
+  if (goTo(u, g % W, (g / W) | 0)) {
+    if (!bad && u.path.length - (last + 1 - pi) >= GAP_DETOUR * gap) { u.path = p; u.pi = pi; } // crawling across the gap is quicker
+    return true;
+  }
+  u.path = p; u.pi = pi;
+  if (bad === 2) { u.vel = 0; cancelTask(u); u.task = null; u.path = null; return false; }
+  return true;
+}
+
 /** Walk along the current path. Returns true once the destination is reached. */
 function moveAlong(u, dt) {
   if (!u.path) return true;
+  if (u.rv !== routeVer() && !routeCheck(u)) return false;
   let here = Math.floor(u.y) * S.W + Math.floor(u.x);
   // The next step jumps a gap (a Viaduct or Ropeway) that has come down since the route was
   // planned: back to the end it set out from, and the order is dropped so it plans again.
@@ -1729,14 +1819,22 @@ function dispatch(p) {
   // 3) Deliveries, one unit per request per pass. Player priority comes first; within the same
   //    priority the Foundry goes first (new workers unblock everything), then construction sites
   //    and production inputs share turns, whichever has the fewest goods on the way first.
-  const reqs = [];
+  const reqs = [], load = botCarry({ type: 'hauler', owner: p }); // (what a Hauler of ours carries: 2, or 3 with the cargo research)
   for (const b of blds) {
     const pri = prioRank(b) * 3 + (b.built && BDEFS[b.type].bots ? 0 : 1);
     // Fuel for an empty Fuel Station comes before anything else: nothing moves without charge.
     // So does one Alloy for an empty Repair Station, so it always has some on hand for the next robot.
     const dry = (BDEFS[b.type].charger && b.built && chargerDry(b)) ||
       (BDEFS[b.type].repair && b.built && !(b.stock.alloy > 0) && !(b.inc.alloy > 0) && (b.repairPts || 0) < REPAIR_HP_PER_ALLOY / 2);
-    for (const [g, n, keep, autoOnly] of needsOf(b)) if (n > 0 && !(g === 'fuel' && b.fuelByPipe)) reqs.push({ b, g, n, pri: dry ? -1 : keep ? prioRank(b) * 3 + 2 : pri, inc: sumValues(b.inc), keep, autoOnly });
+    const inp = b.built && BDEFS[b.type].inp;
+    for (const [g, n, keep, autoOnly] of needsOf(b)) {
+      if (n <= 0 || (g === 'fuel' && b.fuelByPipe)) continue;
+      // Full loads: a factory that is less than a Hauler's load short of an input, with more than its next batch
+      // still in hand or on the way, waits to be topped up. (Asked after every batch, a third of all Hauler trips
+      // carried a single unit to a factory that wasn't short.) Liquids go as they come.
+      if (inp && inp[g] && !keep && n < load && !isLiquid(g) && (b.stock[g] || 0) + (b.inc[g] || 0) >= 2 * inp[g]) continue;
+      reqs.push({ b, g, n, pri: dry ? -1 : keep ? prioRank(b) * 3 + 2 : pri, inc: sumValues(b.inc), keep, autoOnly });
+    }
   }
   reqs.sort((a, c) => a.pri - c.pri || a.inc - c.inc || a.b.born - c.b.born);
   for (let pass = 0; pass < 4 && idle.length; pass++) {
@@ -2801,8 +2899,25 @@ function findFace(b, radius) {
   return best;
 }
 
+/** What walking the route `path` from tile `a` costs, as findPath counts it (tileCost). */
+function routeCost(a, path) {
+  let c = 0;
+  for (const t of path) {
+    const dx = Math.sign((t % S.W) - (a % S.W)), dy = Math.sign(((t / S.W) | 0) - ((a / S.W) | 0));
+    c += (dx && dy ? 1.4142 : 1) * (tileCost(a, dx, dy, 1) + tileCost(t, dx, dy, 1)) * 0.5;
+    a = t;
+  }
+  return c;
+}
+
+/**
+ * The node of `type` b's worker goes to next: the nearest, unless the walk to it is a long way round (a cliff,
+ * water or a building in between): then, of the four nearest, the one with the shortest walk. A walk of up to
+ * NODE_DETOUR times the straight line counts as straight (groves and corners make it that much longer).
+ */
+const NODE_DETOUR = 1.75;
 function findNode(b, type, radius) {
-  let best = -1, bd = Infinity;
+  const near = []; // [distance squared, tile] of the four nearest, nearest first
   const r2 = radius * radius + 0.3;
   const zone = S.zone[tIdx(b.x, b.y)];
   for (let j = Math.max(0, b.y - radius); j <= Math.min(S.H - 1, b.y + radius); j++) {
@@ -2813,8 +2928,20 @@ function findNode(b, type, radius) {
       if (hotFor(b.owner, t)) continue; // nor where an enemy gun reaches (or enemy warbots are about)
       if ((type === R_STALK || type === R_CROP) && S.grow[t] < 1) continue;
       const d = dist2(i, j, b.x, b.y);
-      if (d <= r2 && d < bd) { bd = d; best = t; }
+      if (d > r2 || (near.length === 4 && d >= near[3][0])) continue;
+      let k = near.length;
+      while (k && near[k - 1][0] > d) k--;
+      near.splice(k, 0, [d, t]);
+      if (near.length > 4) near.pop();
     }
+  }
+  if (near.length < 2) return near.length ? near[0][1] : -1;
+  let best = near[0][1], bc = Infinity;
+  for (const [d, t] of near) {
+    const p = findPath(b.x, b.y, t % S.W, (t / S.W) | 0, b.owner, { who: b.owner });
+    const c = p ? routeCost(tIdx(b.x, b.y), p) : Infinity;
+    if (c < bc) { bc = c; best = t; }
+    if (bc <= NODE_DETOUR * Math.sqrt(d)) break; // (as good as straight there: the ones further off are no nearer)
   }
   return best;
 }
@@ -2952,8 +3079,8 @@ function doStaff(u, t, dt) {
     case 'in': {
       t.wait -= dt;
       if (t.wait > 0) return;
-      if ((u.bat ?? 100) < BATTERY.low) {
-        // Step out to recharge, then come back to this job.
+      if ((u.bat ?? 100) < BATTERY.low || ((u.bat ?? 100) < IDLE_TOP && standingBy(b))) {
+        // Step out to recharge, then come back to this job (early, while there is nothing to do here: see standingBy).
         const c = findCharger(u);
         t.trip = false;
         if (c && goTo(u, c.x, c.y)) { t.phase = 'toCharge'; t.charger = c.id; return; }
@@ -3724,7 +3851,8 @@ function shellImpact(m) {
 }
 
 /**
- * Military buildings send warbots out when enemy warbots come close, unless you set one to hold (b.hold,
+ * Military buildings send warbots out when enemy warbots come close (or shoot at one of their owner's buildings
+ * within AREA_DEFENCE while none are at its own walls), unless you set one to hold (b.hold,
  * from its panel): then its warbots stay inside whatever comes near, until you send them out (sortieNow)
  * or it falls (they scramble out alive, see releaseBotsFrom). Attack orders and rally flags can still take them.
  */
@@ -3745,11 +3873,25 @@ function garrisonDefense(b, dt) {
   // Guards go out against enemy warbots (one more than there are), not to patrol; when the walls are
   // about to fall (under SORTIE_ARMOR of its armor), every armed warbot inside goes out.
   let want = !threats ? 0 : b.armor < BDEFS[b.type].armor * SORTIE_ARMOR ? armedIn(b) : Math.min(armedIn(b), threats + 1 - out);
+  // Nobody at its own walls: it answers for the buildings round it too. Where enemy warbots are shooting at one of
+  // its owner's buildings within AREA_DEFENCE tiles (P.raided, see hitBuilding), it sends one more guard than there
+  // are raiders, less those already on their way there, and never its last armed warbot.
+  let spot = null;
+  const R = threats ? null : S.players[b.owner].raided;
+  if (R && S.time - R.t <= 4 && dist2(R.x, R.y, cx, cy) <= AREA_DEFENCE * AREA_DEFENCE && S.zone[tIdx(Math.floor(R.x), Math.floor(R.y))] === S.zone[tIdx(b.x, b.y)]) {
+    let raiders = 0, sent = 0;
+    for (const u of S.bots) {
+      if (u.dead || u.inside) continue;
+      if (foes(u.owner, b.owner)) { if ((isArmy(u) || BOTS[u.type].wild) && dist2(u.x, u.y, R.x, R.y) < 36) raiders++; }
+      else if (u.owner === b.owner && u.task && u.task.type === 'defend' && u.task.ax !== undefined && dist2(u.task.ax, u.task.ay, R.x, R.y) < 64) sent++;
+    }
+    if (raiders) { want = Math.min(armedIn(b) - 1, raiders + 1 - sent); spot = R; }
+  }
   while (want-- > 0) {
     const u = takeArmed(b, true); // only warbots with Ammo go out to fight (those stationed here too: it's their post)
     if (!u) break;
     u.inside = 0;
-    u.task = { type: 'defend', home: b.id };
+    u.task = spot ? { type: 'defend', home: b.id, ax: spot.x, ay: spot.y, atT: S.time } : { type: 'defend', home: b.id };
     u.path = null;
   }
 }
@@ -4027,7 +4169,11 @@ function hitBuilding(b, dmg, by) {
   dmg = keepShield(b, dmg);
   b.armor -= dmg;
   b.lastHit = S.time;
-  if (by >= 0 && foes(by, b.owner)) (S.players[b.owner].hitBy = S.players[b.owner].hitBy || {})[by] = S.time; // remembered: see rivalOf
+  if (by >= 0 && foes(by, b.owner)) {
+    const P = S.players[b.owner], R = P.raided || (P.raided = {});
+    (P.hitBy = P.hitBy || {})[by] = S.time; // remembered: see rivalOf
+    R.x = b.x + 0.5; R.y = b.y + 0.5; R.t = S.time; // where its buildings were last hit: forts near by answer (garrisonDefense)
+  }
   if (S.time - b.lastAlert > 12) {
     b.lastAlert = S.time;
     postMsg(b.owner, `Enemy warbots are attacking your ${BDEFS[b.type].name}!`, b.x, b.y, 'bad');
@@ -4966,6 +5112,24 @@ function updateWarbot(u, dt) {
   if (d) u.bat = Math.max(0, u.bat - d * dt * drainMul(u));
 }
 
+/**
+ * A warbot (or Torch) gone dry on an attack: is it worth going to reload (refill) and coming back? It is (t.reload:
+ * the building it goes to) while the target still stands, a squad-mate is still on it (firing, or gone to reload too), a garrison with
+ * Ammo (a Torch: Fuel) is within RELOAD_REACH tiles, and it hasn't been once already on this attack (a siege that
+ * needs more than that is given up, as before: no endless ones).
+ */
+function startReload(u, t) {
+  if (t.trips || BOTS[u.type].shield) return false;
+  const b = getE(t.target);
+  if (!b || b.dead || !foes(b.owner, u.owner)) return false;
+  const home = BOTS[u.type].flame ? fuelPoint(u) : rechargePoint(u, true);
+  if (!home || dist2(home.x + 0.5, home.y + 0.5, u.x, u.y) > RELOAD_REACH * RELOAD_REACH) return false;
+  if (!S.bots.some((v) => v !== u && !v.dead && v.owner === u.owner && v.task && v.task.type === 'attack' && v.task.target === t.target)) return false; // (not alone)
+  t.reload = home.id; t.trips = 1;
+  u.path = null; u.fight = 0;
+  return true;
+}
+
 function warbotAct(u, dt) {
   u.cd -= dt;
   const t = u.task;
@@ -4979,7 +5143,8 @@ function warbotAct(u, dt) {
   // Out of Ammo: it can't fight at all. It drops any fight and an attack or sortie, and goes back
   // to a garrison to reload (one holding a rally flag reloads and comes back, see holdRally).
   const armed = botArmed(u);
-  if (!armed && t && (t.type === 'attack' || t.type === 'defend')) { cancelTask(u); u.path = null; u.fight = 0; return; }
+  // (On an attack it first goes to reload and comes back, when that's worth it: see startReload.)
+  if (!armed && t && (t.type === 'attack' || t.type === 'defend') && !(t.type === 'attack' && (t.reload || startReload(u, t)))) { cancelTask(u); u.path = null; u.fight = 0; return; }
   // Battery all but flat out in enemy land with nothing to shoot at: give up the attack and go home to recharge.
   if ((u.bat ?? 100) < BATTERY.critical && t && t.type === 'attack' && !u.fight) {
     const o = S.owner[tIdx(Math.floor(u.x), Math.floor(u.y))];
@@ -4989,7 +5154,8 @@ function warbotAct(u, dt) {
   // fix it (when there is one; otherwise fight on), taking no new fights on the way, and go back to the
   // attack or the flag once it's mended (resumeAfterRepair).
   if (u.retreat && !(t && t.type === 'repair')) { u.retreat = false; u.resume = null; } // (its Repair Station went: no going back hurt)
-  if (t && (t.type === 'attack' || t.type === 'hold' || t.type === 'defend') && u.hp < u.maxHp * REPAIR_RETREAT && S.tick % 10 === u.id % 10 && findRepair(u)) {
+  // Not while it stands where an enemy gun reaches (gunCovers): walking out through the guns hurt killed more than it saved.
+  if (t && (t.type === 'attack' || t.type === 'hold' || t.type === 'defend') && u.hp < u.maxHp * REPAIR_RETREAT && S.tick % 10 === u.id % 10 && !gunCovers(u.owner, tIdx(Math.floor(u.x), Math.floor(u.y))) && findRepair(u)) {
     const back = t.type === 'attack' ? { type: 'attack', target: t.target } : t.type === 'hold' ? { type: 'hold', rally: t.rally, slot: t.slot } : null;
     cancelTask(u); u.task = null; u.fight = 0; u.path = null;
     if (goRepair(u)) {
@@ -5009,9 +5175,22 @@ function warbotAct(u, dt) {
     const tg = getE(rally.follow);
     if (tg && !tg.dead && !tg.inside && dist2(tg.x, tg.y, u.x, u.y) <= 30) { foe = tg; u.fight = tg.id; }
   }
-  const leash = defending ? 9 : rally ? 6 : 4;
+  // A squad on a flag that isn't in a rival's land guards the ground round it, as a garrison does round its fort.
+  const flagO = rally ? S.owner[tIdx(Math.floor(rally.x), Math.floor(rally.y))] : -1;
+  const guardFlag = !!rally && !(flagO >= 0 && flagO !== u.owner);
+  const leash = defending || guardFlag ? 9 : rally ? 6 : 4;
   if (foe && (foe.dead || foe.inside || dist2(foe.x, foe.y, u.x, u.y) > leash * leash ||
       (rally && dist2(foe.x, foe.y, rally.x, rally.y) > 49))) foe = null;
+  // A guard's leash is measured from its fort as well: a foe that walks away is let go (and left alone a while)
+  // once it's SORTIE_LEASH from there, unless it's still close enough to shoot. It used to lead the guards off for good.
+  // (Sent out to a building under attack, t.ax: from there instead, and that spot moves with the raid.)
+  if (foe && defending) {
+    const h = getE(t.home), ax = t.ax !== undefined ? t.ax : h ? h.x + 0.5 : foe.x, ay = t.ax !== undefined ? t.ay : h ? h.y + 0.5 : foe.y;
+    const rr = BOTS[u.type].range || WARBOT_RANGE;
+    if (dist2(foe.x, foe.y, ax, ay) > SORTIE_LEASH * SORTIE_LEASH && dist2(foe.x, foe.y, u.x, u.y) > rr * rr) {
+      u.ignoreFoe = foe.id; u.ignoreUntil = S.time + 12; foe = null;
+    }
+  }
   if (!foe) {
     u.fight = 0;
     u.scanT -= dt;
@@ -5022,7 +5201,9 @@ function warbotAct(u, dt) {
       if (!foe && defending) {
         const h = getE(t.home);
         if (h) foe = nearestEnemyBot(u.owner, h.x + 0.5, h.y + 0.5, SORTIE_REACH, true, true, true);
+        if (!foe && t.ax !== undefined) foe = nearestEnemyBot(u.owner, t.ax, t.ay, SORTIE_REACH, true, true, true);
       }
+      if (!foe && guardFlag && !rally.follow) foe = nearestEnemyBot(u.owner, rally.x, rally.y, SORTIE_REACH, true, true, true);
       // A foe it gave up chasing is left alone, unless it comes close enough to shoot.
       if (foe && foe.id === u.ignoreFoe && S.time < u.ignoreUntil && dist2(foe.x, foe.y, u.x, u.y) > WARBOT_RANGE_BLOCKED * WARBOT_RANGE_BLOCKED) foe = null;
       if (foe) u.fight = foe.id;
@@ -5079,6 +5260,11 @@ function warbotAct(u, dt) {
     }
     if (!pathing) u.path = null;
     return;
+  }
+  // Waiting to set off with its squad (paceSquad): it stands where it is until its time, unless it's shot at.
+  if (t && t.wait) {
+    if (S.time >= t.wait || S.time - (u.hurtT || -9) < 1) t.wait = 0;
+    else { u.path = null; u.vel = 0; return; }
   }
   if (!t) {
     const l = lootNear(u, 6);
@@ -5148,6 +5334,17 @@ function warbotAct(u, dt) {
       if (next) u.task = { type: 'attack', target: next.id };
       return;
     }
+    if (t.reload) {
+      // Gone dry: to the garrison with Ammo (or storage with Fuel, a Torch: startReload), a full load, and back to the attack.
+      const home = getE(t.reload);
+      if (!home || home.dead || home.owner !== u.owner) { cancelTask(u); u.path = null; return; }
+      if (dist2(u.x, u.y, home.x + 0.5, home.y + 0.5) <= 2.2) {
+        u.path = null;
+        if (reloadArmy(u, home)) return;
+        if (botArmed(u)) t.reload = 0; else cancelTask(u); // (none left there after all: home)
+      } else if (travel(u, home.x, home.y, dt) === null) { cancelTask(u); u.path = null; }
+      return;
+    }
     // In formation: behind the group's Bulwark until it gets there.
     if (dist2(u.x, u.y, b.x + 0.5, b.y + 0.5) > 9 && escortWait(u, b.x + 0.5, b.y + 0.5, { attack: b.id })) { u.path = null; u.vel = 0; spreadOut(u, dt); return; }
     if (strikeBuilding(u, b, dt, power) === null) u.task = null;
@@ -5157,6 +5354,19 @@ function warbotAct(u, dt) {
   else if (t.type === 'defend') {
     const h = getE(t.home);
     if (!h || h.owner !== u.owner) { u.task = null; return; }
+    // Sent to a building of ours under attack near the fort (t.ax, t.ay: see garrisonDefense): it goes there, follows
+    // the raid from building to building while that keeps within reach of the fort, and heads home once the place
+    // has been quiet AREA_QUIET seconds.
+    if (t.ax !== undefined) {
+      const R = S.players[u.owner].raided;
+      if (R && S.time - R.t <= 4 && dist2(R.x, R.y, t.ax, t.ay) <= 64 && dist2(R.x, R.y, h.x + 0.5, h.y + 0.5) <= (AREA_DEFENCE + 2) * (AREA_DEFENCE + 2)) { t.ax = R.x; t.ay = R.y; t.atT = S.time; }
+      if (S.time - t.atT <= AREA_QUIET) {
+        if (dist2(u.x, u.y, t.ax, t.ay) <= 4) u.path = null;
+        else if (travel(u, Math.floor(t.ax), Math.floor(t.ay), dt) === null) t.atT = -99;
+        return;
+      }
+      delete t.ax; delete t.ay; delete t.atT;
+    }
     const r = travel(u, h.x, h.y, dt);
     if (r) {
       u.task = null;
@@ -5893,6 +6103,9 @@ function holdRally(u, t, r, dt, power) {
     if (botArmed(u) && !u.fight) sabotageRoads(u, r, dt);
     return;
   }
+  // On the march it makes for the flag itself (one route for the whole squad: squadRoute), and for its own spot
+  // only over the last few tiles.
+  if (dist2(u.x, u.y, r.x, r.y) > 16 && isWalkable(Math.floor(r.x), Math.floor(r.y))) { gx = Math.floor(r.x); gy = Math.floor(r.y); }
   if (travel(u, gx, gy, dt) === null) t.slot = 0;
 }
 
@@ -5990,14 +6203,127 @@ function rallyAvailable(owner, i, j, rear) {
   return n;
 }
 
+/** About how long (seconds) bot u takes to walk route p (tiles, as findPath gives them) from where it stands: by road and slope speeds, no traffic. */
+function walkTime(u, p) {
+  const W = S.W, v = BOTS[u.type].speed;
+  let t = 0, pi = Math.floor(u.x), pj = Math.floor(u.y);
+  for (const k of p) {
+    const i = k % W, j = (k / W) | 0;
+    t += (i !== pi && j !== pj ? 1.4142 : 1) / (v * (S.road[k] ? PAVE[S.pave[k] || 1].speed : S.ramp[k] ? SLOPE_SPEED : S.res[k] ? 0.75 : 1));
+    pi = i; pj = j;
+  }
+  return t;
+}
+
+/**
+ * Staggered departure: warbots `us`, just ordered to (i, j) from more than one place, set off so as to get there
+ * together instead of in pieces. Each one's walk is timed along its route (one route planned per starting tile and
+ * kind of robot), and those with a shorter walk than the longest wait where they stand for the difference
+ * (task.wait, the time they go: see warbotAct), PACE_MAX at most. Returns the longest wait given (0: nobody waits).
+ */
+function paceSquad(us, i, j) {
+  if (us.length < 2) return 0;
+  const eta = new Map(), key = (u) => tIdx(Math.floor(u.x), Math.floor(u.y)) + ':' + u.type;
+  let far = 0, most = 0;
+  for (const u of us) {
+    const k = key(u);
+    if (!eta.has(k)) { const p = squadRoute(u, tIdx(Math.floor(u.x), Math.floor(u.y)), i, j); eta.set(k, p ? walkTime(u, p) : -1); }
+    far = Math.max(far, eta.get(k));
+  }
+  for (const u of us) {
+    const e = eta.get(key(u));
+    if (e < 0 || far - e <= PACE_MIN) continue;
+    const w = Math.min(PACE_MAX, far - e);
+    u.task.wait = S.time + w;
+    most = Math.max(most, w);
+  }
+  return most;
+}
+/** paceSquad for an order from the Army screen or the rival AI, with a word to the player who gave it when some of the squad wait. */
+function paceOrder(owner, us, i, j) {
+  const w = paceSquad(us, i, j);
+  if (w > 0) postMsg(owner, `The nearest warbots wait up to ${Math.ceil(w)} seconds before setting off, so the squad arrives together.`, i, j);
+  return w;
+}
+
+/** How much enemy Wall, Gate or fort armor army unit u can shoot away before it runs dry (a Bulwark's blasters never do). */
+function breachShots(u) {
+  const bt = BOTS[u.type];
+  if (bt.shield) return Infinity;
+  if (bt.flame) return Math.floor(((u.gel ?? TORCH.tank) / TORCH.tick) * TORCH.bld * TORCH.fort);
+  return (u.ammo ?? WARBOT_AMMO) * WARBOT_HIT.wall;
+}
+
+/**
+ * The rival Walls and Gates (and Outposts astride the way) army units `us` would have to shoot through on their routes
+ * to (i, j), against what they carry: { need, shots }, the armor to shoot away to break them all (more in a Keep's
+ * aura) and what the squad can shoot away before it runs dry (breachShots). need > shots: they can't get through,
+ * and would only empty their magazines on the wall. The routes they will set off along (squadRoute), looked at from
+ * up to four of their starting tiles (a scattered selection takes about the same way in). With `attack`, units that
+ * can reload once at a garrison within RELOAD_REACH of the first wall (startReload) count a second load.
+ */
+function squadBreach(us, i, j, attack) {
+  const walls = new Map(), seen = new Set(), goal = j * S.W + i;
+  let shots = 0, need = 0, first = null, again = false;
+  for (const u of us) {
+    shots += breachShots(u);
+    const st = tIdx(Math.floor(u.x), Math.floor(u.y));
+    if (seen.has(st) || seen.size >= 4) continue;
+    seen.add(st);
+    const p = squadRoute(u, st, i, j);
+    if (!p) continue;
+    for (const k of p) {
+      if (!S.bAt[k] || k === goal || passTile(k, u.owner) || !breachable(k, u.owner)) continue;
+      const b = getE(S.bAt[k]);
+      if (!first) first = b;
+      walls.set(b.id, Math.max(0, b.armor) / keepShield(b, 1));
+    }
+  }
+  for (const v of walls.values()) need += v;
+  if (attack && first && need > shots && us.length > 1) {
+    // (a second load for those that can fetch one near the wall: see startReload)
+    const near = (b) => !b.dead && b.built && b.owner === us[0].owner && dist2(b.x, b.y, first.x, first.y) <= RELOAD_REACH * RELOAD_REACH;
+    const ammo = S.buildings.some((b) => near(b) && BDEFS[b.type].mil && (b.stock.ammo || 0) > 0), fuel = S.buildings.some((b) => near(b) && (BDEFS[b.type].store || BDEFS[b.type].charger) && (b.stock.fuel || 0) >= 1);
+    for (const u of us) if (BOTS[u.type].flame ? fuel : !BOTS[u.type].shield && ammo) { again = true; shots += BOTS[u.type].flame ? Math.floor((TORCH.tank / TORCH.tick) * TORCH.bld * TORCH.fort) : WARBOT_AMMO * WARBOT_HIT.wall; }
+  }
+  return again ? { need: Math.ceil(need), shots, reload: true } : { need: Math.ceil(need), shots };
+}
+/** squadBreach after an order, with a warning to the player who gave it when the squad can't shoot its way through. Returns it. */
+function breachCheck(owner, us, i, j, attack) {
+  const r = squadBreach(us, i, j, attack);
+  if (r.need > r.shots) postMsg(owner, `These warbots carry ${r.shots} shots between them${r.reload ? ', with a reload' : ''}: not enough to break through the enemy defences in their way (${r.need} to shoot through). Send more (Torches burn through fastest), or open the wall with a Missile first.`, i, j, 'warn');
+  return r;
+}
+/**
+ * Before an attack order, for an owner without posts (the rival AI): what squadBreach makes of the squad that
+ * sendAttack(owner, target, count, all) would send: { need, shots, sent }. need > shots: it couldn't reach the target.
+ */
+function attackBreach(owner, target, count, all) {
+  const us = [];
+  for (const b of attackSources(owner, target, false, all)) {
+    let n = Math.min(spareArmed(b, false, all), count - us.length);
+    for (let k = b.garrison.length - 1; k >= 0 && n > 0; k--) {
+      const u = getE(b.garrison[k]);
+      if (u && botArmed(u)) { us.push(u); n--; }
+    }
+  }
+  const r = squadBreach(us, target.x, target.y, true);
+  r.sent = us.length;
+  return r;
+}
+
 /**
  * Send warbots to hold the area around tile (i, j) until they are called back. With `rear` (the
- * AI's marches), garrisons far behind the lines send their last warbot too.
+ * AI's marches), garrisons far behind the lines send their last warbot too. Drawn from several
+ * garrisons, they set off so as to arrive together (paceSquad): the player's flags and the rival's
+ * marches, not its raids and counter-raids (no `rear`), nor anything sent with `hurry`. `breach`: squadBreach of
+ * the squad (need > shots: walls in the way it can't shoot through; the player who gave the order is told).
  */
-function sendToRally(owner, i, j, count, rear) {
+function sendToRally(owner, i, j, count, rear, hurry) {
   let r = S.rallies.find((q) => q.owner === owner && Math.abs(q.x - (i + 0.5)) < 1.5 && Math.abs(q.y - (j + 0.5)) < 1.5);
   if (!r) { r = { id: S.nextId++, owner, x: i + 0.5, y: j + 0.5 }; S.rallies.push(r); }
   let slot = rallyMembers(r.id).length, sent = 0;
+  const squad = [];
   // Free warbots first (the Command Base's), then (yours) those stationed at Outposts, nearest first.
   for (const posted of usesPosts(owner) ? [false, true] : [false]) {
     for (const b of rallySources(owner, i, j, rear, posted)) {
@@ -6007,12 +6333,14 @@ function sendToRally(owner, i, j, count, rear) {
         u.inside = 0;
         u.task = { type: 'hold', rally: r.id, slot: slot++ };
         u.path = null;
+        squad.push(u);
         sent++;
       }
     }
   }
-  if (!sent) cleanRallies();
-  return { sent, rally: r };
+  if (!sent) { cleanRallies(); return { sent, rally: r }; }
+  if (!hurry && (rear || !S.players[owner].ai)) paceOrder(owner, squad, i, j);
+  return { sent, rally: r, breach: breachCheck(owner, squad, i, j) };
 }
 
 /**
@@ -6022,7 +6350,7 @@ function sendToRally(owner, i, j, count, rear) {
 function sendHunt(owner, e, count) {
   const i = Math.floor(e.x), j = Math.floor(e.y);
   if (!inMap(i, j) || !walkable(tIdx(i, j))) return { sent: 0 };
-  const res = sendToRally(owner, i, j, count);
+  const res = sendToRally(owner, i, j, count, false, true); // (a chase: nobody waits)
   if (res.sent) { res.rally.follow = e.id; for (const u of rallyMembers(res.rally.id)) u.march = 0; }
   return res;
 }
@@ -6080,6 +6408,7 @@ function orderMove(owner, ids, i, j) {
   if (!r) { r = { id: S.nextId++, owner, x: i + 0.5, y: j + 0.5 }; S.rallies.push(r); }
   let slot = rallyMembers(r.id).length;
   for (const u of bots) { readyForOrder(u); u.task = { type: 'hold', rally: r.id, slot: slot++ }; if (usesPosts(owner)) u.march = S.time + MARCH_MAX; }
+  breachCheck(owner, bots, i, j);
   return bots.length;
 }
 
@@ -6123,6 +6452,7 @@ function orderAttack(owner, ids, target) {
   if (!target || target.dead || !foes(target.owner, owner)) return 0;
   const bots = orderable(owner, ids).filter((u) => botArmed(u));
   for (const u of bots) { readyForOrder(u); u.task = { type: 'attack', target: target.id }; }
+  if (bots.length) breachCheck(owner, bots, target.x, target.y, true);
   return bots.length;
 }
 
@@ -6706,9 +7036,13 @@ function attackAvailable(owner, target, all) {
   return n;
 }
 
-/** Send up to `count` armed warbots to attack `target`: free ones first, then (yours) those stationed at Outposts, nearest first. */
-function sendAttack(owner, target, count, all) {
+/**
+ * Send up to `count` armed warbots to attack `target`: free ones first, then (yours) those stationed at Outposts, nearest
+ * first. From several garrisons they set off so as to arrive together (paceSquad), unless sent with `hurry`.
+ */
+function sendAttack(owner, target, count, all, hurry) {
   let sent = 0;
+  const squad = [];
   for (const posted of usesPosts(owner) ? [false, true] : [false]) {
     for (const b of attackSources(owner, target, posted, all)) {
       while (spareArmed(b, posted, all) > 0 && sent < count) {
@@ -6717,10 +7051,13 @@ function sendAttack(owner, target, count, all) {
         u.inside = 0;
         u.task = { type: 'attack', target: target.id };
         u.path = null;
+        squad.push(u);
         sent++;
       }
     }
   }
+  if (!hurry) paceOrder(owner, squad, target.x, target.y);
+  if (sent) breachCheck(owner, squad, target.x, target.y, true); // (the rival can ask beforehand: attackBreach)
   return sent;
 }
 

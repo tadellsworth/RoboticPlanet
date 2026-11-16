@@ -119,15 +119,20 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   Factory at 4 (so Chips and Ammo don't swallow the Foundry's Alloy); the rest have no limit until you set one.
   Gatherers and Bio Farms have none (they make no recipe): pause them if their goods pile up.
 
-- **Workers and Haulers:** Workers run buildings (one inside each production building), go out to cut, dig and mine,
+- **Workers and Haulers:** Workers run buildings (one inside each production building), go out to cut, dig and mine
+  (the nearest node in reach, unless the walk there is over `NODE_DETOUR` (1.75) times the straight line: then the
+  shortest walk of the four nearest, `findNode`, `routeCost`),
   and build construction sites. They can go anywhere, but off the road they move at 40% speed, except while out
   gathering for their building. **Haulers** move every good between buildings (except Crude and Fuel: see Tankers),
-  two at a time, and **only drive on roads**. If every Hauler is lost, workers carry goods slowly until the Foundry
+  two at a time, and **only drive on roads**. A factory less than a Hauler's load short of an input, with more than
+  its next batch in hand or on the way, waits to be topped up (`dispatch`), so Haulers carry full loads instead of one
+  unit after every batch. If every Hauler is lost, workers carry goods slowly until the Foundry
   makes more. **Agribots** run Bio Farms and Grove Planters, **Pavers** run the Roadworks and **Warbots** fight. You
   start with 10 Workers, 5 Haulers, a Tanker and an Agribot (plus 4 Warbots in Versus).
 - **Every building needs a road to storage.** Your Command Base starts with a ring of road around it; join each building and construction
   site to that network (or to a Depot on it), or Haulers can't bring it materials or collect its goods. A red road badge
-  marks buildings with no road: tap one and press **Lay road** to plan the shortest route (shown dashed), or plan your
+  marks buildings with no road: tap one and press **Lay road** to plan the shortest route (shown dashed; of the
+  routes as short, the one with fewest bends: `roadSearch` pays `ROAD_TURN` 0.05 a turn, as the rival's roads do), or plan your
   own. Placement keeps a side of every building open for a road.
 - **Planning roads:** in Paths, dragging and tapping only sketch a road (and tapping a road marks it to take up);
   the banner, at the top of the screen, shows the cost, with **Undo**, **Clear** and **Build**. On an upright phone the
@@ -443,7 +448,23 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   walkable (`clearLine`); otherwise it follows a route (`viaT`: committed for 1.5 s, re-planned only when the foe moves
   off its end), gives up on foes that are only reachable the long way round (more than 3 times the distance) or not at
   all (left alone for 12 s, unless they come within shooting reach), and squads holding one spot edge apart
-  (`spreadOut`) instead of stacking on a single point.
+  (`spreadOut`) instead of stacking on a single point. On the march (not in a fight) warbots, Bulwarks and Torches
+  plan round enemy guns: a tile an enemy gun reaches (`dangerMap` bit 1, the map civilians keep clear of) costs
+  `COVER_COST` (4) more (`routeOpts` sets `opts.cover`, see `findPath`), so a short detour beats walking through it.
+- **Setting off together:** an attack or rally flag that draws warbots from several garrisons (`sendAttack`,
+  `sendToRally`: the Army panel's orders and the rival's marches, not its raids, counter-raids or hunts) times each
+  one's walk along its route (`paceSquad`, `walkTime`), and the nearer ones wait where they stand for the difference
+  (`task.wait`, at most `PACE_MAX` 45 s, not under `PACE_MIN` 2 s) so the squad arrives together; one shot at while it
+  waits goes at once. Selected warbots sent directly, and orders given with `hurry`, go at once. Army units ordered
+  together share their route searches (`squadRoute`: the routes planned in the same tick, by start tile, goal, owner,
+  kind, armed and fighting; each gets a copy), and a squad on its way to a flag makes for the flag tile itself until
+  it is within 4 tiles, then for its own spot round it, so a 20-warbot order costs one search, not twenty.
+- **Routes looked over again** (`routeCheck`, from `moveAlong`): when the roads change or a building is put up
+  (`routeVer`: `S.roadVer` and the newest building), a moving bot looks over the rest of its route. One that now
+  crosses water or rock (a bridge or tunnel gone) plans again at once, and with no other way drops its job there (a
+  load goes down in crates) instead of driving on over open water; a civilian bot also plans again when a new building
+  stands on its route, or (road-bound) when its road was taken up and the way round is quicker than crawling across
+  the gap (`GAP_DETOUR`). Fighting units' routes are only cleared, so they plan their own way again.
 - **Traffic:** bots queue on roads, each waiting behind the bot ahead of it going the same way. On two-way roads each
   direction keeps to its own side, but passing oncoming traffic slows bots down. Switch the Paths banner to **Arrows** and
   drag along a road to point it the way you drag (tap a road to turn its arrow). The arrows turn at once, but each drag
@@ -455,6 +476,9 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   top of the panel.
 - **Ammo:** warbots carry 10 shots (each Ammo reloads 5) and reload in your Command Base and Outposts, which haulers stock from an Ammo Plant. Out of
   ammo, a warbot can't fight at all: it heads back to a garrison to reload, and only armed warbots answer orders.
+  On an attack, one that runs dry while the target stands and squad-mates are still on it goes to reload at a garrison
+  with Ammo within `RELOAD_REACH` (16) tiles (a Torch: refills where Fuel is kept) and comes back, once per attack
+  (`startReload`, `task.reload`, `task.trips`), so attacks no longer melt away at the wall.
   A rival's empty warbot sitting in a garrison with no Ammo and none on the way (an Outpost no road reaches yet)
   goes to reload where there is some and keeps away from that one for 90 s; yours stay where you posted them.
 - **Rival boost (hidden):** tap the clock three times quickly, or press **`**, to give a rival a supply drop, 4 armed
@@ -463,7 +487,8 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
 - **Repairs:** nothing heals by itself. Damaged bots go to a Repair Station (workers below 60% health, warbots below
   70% once their garrison is quiet; Colony free play too), which uses 1 Alloy per 12 health. A warbot below 35%
   (`REPAIR_RETREAT`) on an attack, a rally flag or a sortie pulls out of the fight for repairs when a Repair Station can
-  fix it (otherwise it fights on), takes no new fights on the way (`u.retreat`), and goes back to its attack or flag
+  fix it (otherwise it fights on), but not while it stands where an enemy gun reaches (`gunCovers`: walking out hurt
+  through the guns killed more than it saved), takes no new fights on the way (`u.retreat`), and goes back to its attack or flag
   once mended (`u.resume`, `resumeAfterRepair`; the flag stays up meanwhile, and Recall cancels the return). Haulers keep up to 3 Alloy
   in it, and an empty one gets the first Alloy that reaches storage (like an empty Fuel Station's Fuel). To fix a building, tap it and press **Repair**:
   you pay 1 Cement for every 6 missing armor and a free worker restores it.
@@ -492,7 +517,10 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   every 2 s while more is coming, and at launch once that art is in or after `BAKE_WAIT`), and big art images keep half-size copies so they shrink cleanly (`drawMapLayer`, `artMip` in `js/render.js`).
 - **Batteries:** bots drain their battery walking, working and fighting, and recharge only at a Fuel Station (or,
   for warbots, inside an Outpost). The Command Base doesn't charge anyone and you land without a Fuel Station, so
-  build the first one straight away (it runs on the 10 Fuel you land with). A flat battery means half speed and half power. Fuel Stations burn Fuel (one Fuel is
+  build the first one straight away (it runs on the 10 Fuel you land with). A flat battery means half speed and half power.
+  A factory's worker goes to recharge at `BATTERY.low`, or below `IDLE_TOP` (60) while its factory has nothing for
+  it to do (`standingBy`: short of an input with none on the way, or full with no pickup coming), so the walk costs
+  no working time. Fuel Stations burn Fuel (one Fuel is
   two full charges, `FUEL_ENERGY`). A Bio Farm makes about
   2–3 Fuel a minute; an Oil Pump and Refinery up to 10 a minute until the seep runs dry (both stop at 30 by default).
   A dry Oil Pump shows a crossed-out oil drop over it, frees its worker and says so once: demolish it (any Crude
@@ -634,7 +662,11 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   They're `prepaid` (paid from storage on Build, no Hauler or road, outside the site limit). Walls block every bot;
   Gates let their owner's bots and road through (`passTile(t, who)`). Armed enemy warbots plan through a Wall or
   Gate as if it were `BREACH_COST + armor` tiles long, so they go round a short way or stop and shoot through
-  (`breachHit`); a bot whose route gets walled off re-plans (`blockedStep`). On Chokepoint maps the AI walls the mouth
+  (`breachHit`); a bot whose route gets walled off re-plans (`blockedStep`). An order whose squad can't shoot
+  through the walls on its routes says so to the player who gave it (`squadBreach`, `breachCheck`: the armor to shoot
+  away against what the squad carries, `breachShots`, counting one reload near the wall for an attack, see
+  `startReload`; a Bulwark never runs dry); the rival can ask before it orders (`attackBreach(owner, target, count, all)`
+  gives `{ need, shots, sent }`), and `sendToRally` returns it as `breach`. On Chokepoint maps the AI walls the mouth
   of each channel on its side on every difficulty but Easy (a Turtle on Easy too: `aiWalls`).
 - **Garrisons and posts** (yours, `usesPosts`; the AI spreads its own to the front as before): every warbot belongs
   somewhere. `u.post` is the Outpost or Bunker it was stationed at; with none it belongs to the Command Base. All your
@@ -654,6 +686,15 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   attacking, on a rally flag, guarding, being repaired, carrying loot, or standing with nowhere to go), and **Show**
   takes you to each in turn. Garrison priority (High/Low) still orders the AI's and any warbot with nowhere else to go. A garrison's panel shows how
   many are inside and what kinds (`garrisonMix`: "3 Warbots, 1 Bulwark, 1 Torch").
+- **Guards** (`garrisonDefense`): enemy warbots near a garrison bring out one more guard than there are of them, and
+  the guards fight foes within `SORTIE_REACH` (6.5) of it. A guard lets a foe go (and leaves it alone 12 s) once it's
+  more than `SORTIE_LEASH` (9) tiles from the fort and out of the guard's reach, so a passer-by can't lead the guards
+  off into its own side's guns. A fort with no enemy at its own walls also answers for the buildings round it: where
+  enemy warbots (or creatures) are hitting one of its owner's buildings within `AREA_DEFENCE` (14) tiles
+  (`P.raided`, set in `hitBuilding`), it sends one guard more than there are raiders, never its last armed warbot
+  (`task.ax`/`ay`: the guards' leash is measured from there, the spot follows the raid, and they go home after
+  `AREA_QUIET` (6) quiet seconds). A squad on a rally flag outside rival land guards the ground round it the same
+  way (foes within 6.5 tiles of the flag, leash 9).
 - **Rival personalities** (`PERSONALITIES` in `js/defs.js`, applied by `aiStyle`/`aiLevel` in `js/ai.js`): each scales
   the difficulty's grace period, attack threshold, army growth and raid rate. **Balanced** is the plain AI. **Turtle**:
   later and bigger attacks, rare raids, a square ring of Walls and Gates six tiles round its Command Base

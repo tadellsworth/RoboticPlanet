@@ -3432,9 +3432,11 @@ function roadGoals(owner, except) {
  * Cheapest road through the owner's land, by Dijkstra: existing road is free, open ground costs 1
  * and resources (which a road clears) ROAD_AVOID, so routes go round fields unless the detour is
  * long (an oil seep a road would only cover, but it couldn't be pumped till the road went). Starting from `seeds`, stopping at the first tile where done(t) holds (or exploring
- * everything if done is null). Returns { cost, prev, end }.
+ * everything if done is null). Returns { cost, prev, end }. A route to a goal also pays ROAD_TURN for every turn,
+ * so of the routes that cost the same the straightest is laid, never a longer one (twenty turns weigh one tile):
+ * bots brake for every corner, trucks most of all. The map of costs with no goal (roadReach) stays in whole tiles.
  */
-const ROAD_AVOID = 10;
+const ROAD_AVOID = 10, ROAD_TURN = 0.05;
 function roadWeight(t) {
   if (S.road[t] || S.plan[t] || (S.bAt[t] && passTile(t))) return 0;
   const c = CROSS[S.terrain[t]];
@@ -3449,6 +3451,7 @@ function roadSearch(owner, seeds, done) {
   // (Through our own Outposts and Gates, never a rival's: its bots can't pass one, so a road through it links nothing.)
   const like = (t) => roadLikeFor(t, owner);
   const open = (t) => S.bAt[t] > 0 ? passTile(t, owner) : S.road[t] || canRoad(owner, t % W, (t / W) | 0);
+  const turn = done ? ROAD_TURN : 0;
   while (heap.size) {
     const c = heap.pri[0], t = heap.pop();
     if (c > cost[t]) continue;
@@ -3456,7 +3459,7 @@ function roadSearch(owner, seeds, done) {
     const i = t % W;
     for (const u of [i > 0 ? t - 1 : -1, i < W - 1 ? t + 1 : -1, t - W, t + W]) {
       if (u < 0 || u >= N || !open(u) || !(like(t) && like(u) ? canStep(t, u) : stepPlan(t, u))) continue;
-      const nc = c + roadWeight(u);
+      const nc0 = c + roadWeight(u), nc = turn ? Math.fround(nc0 + (prev[t] >= 0 && u - t !== t - prev[t] ? turn : 0)) : nc0; // (with turns: as cost[] holds it, a turn being no whole number)
       if (nc < cost[u]) { cost[u] = nc; prev[u] = t; heap.push(u, nc); }
     }
     // Across a Viaduct: its deck carries the road from one end to the other.

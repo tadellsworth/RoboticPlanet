@@ -80,6 +80,9 @@ const QUEUE_PATIENCE = 6;
  * for a tile when planning a route, so a squad keeps to the roads a little longer.
  */
 const WARBOT_GAP = 0.45, WARBOT_SPREAD = 3, WARBOT_OFFROAD = 1.3;
+// A squad drawn from several places sets off so as to arrive together (paceSquad): a warbot with a shorter walk than
+// the longest waits where it stands for the difference, PACE_MAX seconds at most; under PACE_MIN it doesn't bother.
+const PACE_MAX = 45, PACE_MIN = 2;
 /** Traffic map: bot-seconds a minute on a road tile that show as packed (red), and seconds a minute of standing still that mark a jam. */
 const TRAFFIC_BUSY = 25;
 const TRAFFIC_JAM = 6;
@@ -368,6 +371,7 @@ const LIGHT_CLEAR = 0.45;
 /* Warbot ammunition: each warbot holds WARBOT_AMMO shots and reloads in a garrison stocked with Ammo. */
 const WARBOT_AMMO = 10;      // a full load: two Ammo's worth, so warbots go back to reload often
 const AMMO_SHOTS = 5;             // shots in one Ammo
+const RELOAD_REACH = 16;          // a warbot out of Ammo on an attack reloads and comes back (once) when a garrison with Ammo is this near (startReload)
 // A warbot with no ammo can't fight at all: it leaves the fight and goes back to reload.
 /**
  * Raiding: armed warbots holding a rally flag in enemy land, with nothing there to fight, tear up the
@@ -560,6 +564,9 @@ const CRATE_SAFE = 6;     // haulers collect crates on their own land only with 
 // long, plus one per point of armor left, so it walks round a short way and breaks through a long one.
 const BREACH_COST = 8;
 const BREACH_PER_ARMOR = 1;
+// Route planning for the army on the march (warbots, Bulwarks, Torches): a tile an enemy gun reaches (dangerMap bit 1)
+// costs this much more, so they go round a gun when the way round is short. A cost, not a ban.
+const COVER_COST = 4;
 // Forts (Outposts, the Command Base): a missile can't take one below MISSILE_FLOOR of its armor, and
 // once it's under SORTIE_ARMOR every armed warbot inside goes out to fight. Taking one ejects whoever
 // is still inside instead of killing them.
@@ -606,6 +613,11 @@ const DOM = { share: [0, 0, 0.6, 0.5, 0.45], min: 0.2, hold: 180 };
 const MISSILE_WARN = 1.3;
 const SORTIE_ARMOR = 0.25;
 const SORTIE_REACH = 6.5; // guards out on a sortie fight enemies within this of their garrison
+// A guard out on a sortie gives up a foe that is more than this many tiles from the fort (or the building) it defends.
+const SORTIE_LEASH = 9;
+// Area defence (garrisonDefense): a fort with nobody at its own walls sends guards to a building of its owner's that
+// enemy warbots are shooting at within AREA_DEFENCE tiles; they come home once it has been quiet AREA_QUIET seconds.
+const AREA_DEFENCE = 14, AREA_QUIET = 6;
 const DEFAULT_SIZE = { versus: 1, colony: 3 };
 const DEFAULT_ROUGH = 2;
 const DEFAULT_RICH = 2;

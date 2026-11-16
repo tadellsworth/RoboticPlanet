@@ -5268,7 +5268,10 @@ function botActivity(u) {
       if (u.fight) return 'Fighting!';
       if (!t) return u.inside ? 'Standing guard inside' : 'Waiting for orders: no garrison with room';
       if (t.type === 'garrison') return `Marching to the ${nm(t.bld)}`;
+      if (t.wait > S.time) return 'Waiting to set off with its squad'; // (staggered departure: paceSquad)
+      if (t.type === 'attack' && t.reload) return u.type === 'torch' ? 'Tank empty: refilling it, then back to the attack' : 'Out of Ammo: reloading, then back to the attack';
       if (t.type === 'attack') return `Attacking the rival ${nm(t.target)}`;
+      if (t.type === 'defend' && t.ax !== undefined) return `Defending a building near the ${nm(t.home)}`; // (area defence: garrisonDefense)
       if (t.type === 'defend') return `Defending the ${nm(t.home)}`;
       if (t.type === 'hold') return t.phase === 'recharge' ? 'Battery flat: going to recharge' : t.target ? `Attacking the rival ${nm(t.target)}` : 'Holding the rally point';
       if (t.type === 'repair') return u.retreat ? 'Badly hurt: pulling out of the fight for repairs' + (u.resume ? ', then back to it' : '') : 'Going for repairs';
