@@ -2968,6 +2968,7 @@ function completeBuilding(b) {
   b.builder = 0;
   b.armor = def.armor;
   b.born = S.time;
+  delete b.placedAt; // (finished: it can't be taken back now, see undoSite)
   // A priority set on the construction site was for building it: the finished building starts at Normal.
   if (b.sitePrio) { delete b.prio; delete b.sitePrio; }
   S.players[b.owner].stats.built++;
@@ -7948,6 +7949,41 @@ function demolish(b) {
   if (n) addLoot(near.x, near.y, cost);
   destroyBuilding(b, false);
   return { cost, crates: inside + n, inside };
+}
+
+/**
+ * Take back construction site b a moment after it was placed (ORDERS.undoSite checks it's yours, unfinished and no
+ * more than SITE_UNDO seconds old). Unlike Dismantle, nothing is left in crates: everything comes back in full,
+ * into the storage nearest it, the way a road's Cement does (refundRoad): what was delivered to it or paid into it
+ * from storage, a Hauler's load on its way to it, and a Cargo Plane's load for it. With no storage to take it in,
+ * it's put down in crates on the spot after all. Returns the goods that came back ({ good: n }).
+ */
+function undoSite(b) {
+  const owner = b.owner;
+  for (const u of S.bots) {
+    if (u.dead || u.owner !== owner) continue;
+    // (a load picked up for it: haulers and trucks on the way; crates being fetched for it are left where they lie)
+    if (u.task && u.task.type === 'haul' && u.task.dst === b.id && u.task.phase === 'toDst') {
+      for (const [g, n] of cargoList(u)) if (GOOD[g] && n > 0) bump(b.stock, g, n);
+      u.carry = null; u.carryN = 0; delete u.mix;
+      cancelTask(u);
+    }
+    // A Cargo Plane's load for it comes back too; one still loading stays home.
+    const M = u.mission;
+    if (M && M.kind === 'supply' && M.to === b.id) {
+      for (const g in u.cargo || {}) if (GOOD[g] && u.cargo[g] > 0) bump(b.stock, g, u.cargo[g]);
+      u.cargo = null;
+      if (M.phase === 'load') u.mission = null;
+    }
+  }
+  const back = {}, store = nearestStoreTo(owner, b.x + 0.5, b.y + 0.5);
+  if (store) {
+    for (const g in b.stock) if (GOOD[g] && b.stock[g] > 0) { back[g] = b.stock[g]; bump(store.stock, g, b.stock[g]); }
+    b.stock = {};
+  }
+  addFx('smoke', b.x + 0.5, b.y + 0.5, { r: 0.5 });
+  destroyBuilding(b, false, true); // (what's still in it, with no storage to go to, is put down in crates)
+  return back;
 }
 
 /* ------------------------------------------------------------------ moving buildings */

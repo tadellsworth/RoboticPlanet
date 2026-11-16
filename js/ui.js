@@ -1521,7 +1521,7 @@ function hideGoodTip() {
 
 /*
  * WASD or arrow keys pan · B build (then a building's key: a letter, or 1–7; or R for roads) · R or P opens and closes Paths (inside
- * it: R roads, G bridges and tunnels, V ramps, E pave, O one-way arrows, L junctions, T traffic map) · Q army · H base · F select every warbot · 1–9 control groups (Ctrl or
+ * it: R roads, G bridges and tunnels, V ramps, E pave, O one-way arrows, L junctions, T traffic map, Shift+T goods flow map) · Q army · H base · F select every warbot · 1–9 control groups (Ctrl or
  * Shift + digit to save) · Shift+F a Bot Foundry's Order bots list · J jump to the latest alert · Esc back / clear selection / pause ·
  * Space pause · [ ] game speed · + and - zoom · M minimap · ? help
  */
@@ -1702,6 +1702,12 @@ function initKeyboard() {
       if (!$('banner-undo').hidden) $('banner-undo').click();
       return;
     }
+    // Ctrl+Z (Cmd+Z) on the map, for a few seconds after placing a building: the Undo chip (takes the site back).
+    if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && e.key.toLowerCase() === 'z' && R.mode === 'normal' && !topScreen() && siteUndoNow()) {
+      e.preventDefault();
+      undoLastSite();
+      return;
+    }
     if (e.ctrlKey || e.metaKey || e.altKey) return;
     const k = e.key.toLowerCase();
     if (k === 'escape') { e.preventDefault(); escapeKey(); return; }
@@ -1715,6 +1721,8 @@ function initKeyboard() {
     if (overlay) return;
     // Shift+F, from anywhere: the Bot Foundry's Order bots list (again: the next Foundry).
     if (k === 'f' && e.shiftKey) { e.preventDefault(); openFoundryOrders(); return; }
+    // Shift+T, from anywhere (a panel's own T included): Paths with the Goods flow map (again: off).
+    if (e.shiftKey && k === 't') { e.preventDefault(); if (R.mode !== 'road') setMode('road'); setRoadMap(R.goodsMap ? '' : 'goods'); showRoadBanner(); sfx('click'); return; }
     // Shift+V and Shift+Y, from anywhere (a panel's own V or Y included): Paths on Viaducts or Ropeways.
     if (e.shiftKey && PATHS_SHIFT_KEYS[k]) { e.preventDefault(); openPaths(PATHS_SHIFT_KEYS[k]); return; }
     // Enter confirms the banner's main button (Build here, Fire, Lay roads...).
@@ -1753,7 +1761,7 @@ function initKeyboard() {
       case 'g': openPaths('bridge'); break;
       case 'v': openPaths('ramp'); break;
       case 'e': openPaths('pave'); break;
-      case 't': if (R.mode !== 'road') setMode('road'); R.traffic = !R.traffic; showRoadBanner(); sfx('click'); break;
+      case 't': if (R.mode !== 'road') setMode('road'); setRoadMap(R.traffic ? '' : 'traffic'); showRoadBanner(); sfx('click'); break;
       case 'l': openPaths('lights'); break;
       case 'x': if (warOn()) openPaths('wall'); break;
       case 'n': openPaths('rail'); break;
@@ -1928,6 +1936,71 @@ function undoOrder() {
     toast(`Order taken back: ${n === 1 ? 'it goes' : `${n} go`} back to what ${n === 1 ? 'it was' : 'they were'} doing.`, 'info');
     refreshSelection();
   });
+}
+
+/*
+ * Placement undo. For SITE_UNDO seconds after you place a building, the Undo chip at the foot of the map (or Ctrl+Z / Cmd+Z
+ * on the map, outside Paths, whose Ctrl+Z is its own) takes the construction site back, with everything paid or
+ * delivered for it refunded in full (ORDERS.undoSite, which checks the time by the game's clock). Each site placed
+ * is noted here; the newest still in its time is the one taken back, then the one before it.
+ */
+function noteSiteUndo(id) {
+  if (!id) return;
+  UI.siteUndo = (UI.siteUndo || []).filter((e) => e.of === S).concat([{ id, of: S }]);
+  siteUndoTick();
+}
+
+/** How much sooner than the rules' SITE_UNDO the chip goes: in multiplayer an order is done a few turns after it's given. */
+function siteUndoLead() { return typeof MP !== 'undefined' && MP.on ? ((MP.d || LS.DELAY) + 1) * LS.TURN * SIM_STEP + 0.25 : 0; }
+
+/** The newest site of yours that Undo can still take back, and the seconds left ({ b, left }), or null. */
+function siteUndoNow() {
+  const L = UI.siteUndo;
+  if (!L || !L.length || !S) return null;
+  const lead = siteUndoLead();
+  while (L.length) {
+    const e = L[L.length - 1], b = e.of === S ? getE(e.id) : null;
+    const left = b && !b.dead && !b.built && b.owner === ME && typeof b.placedAt === 'number' ? SITE_UNDO - lead - (S.time - b.placedAt) : -1;
+    if (left > 0) return { b, left };
+    L.pop();
+  }
+  return null;
+}
+
+/** The Undo chip (#undo-site): on show on the map (no mode, no screen over it) while a site can be taken back, its bar running down. */
+function siteUndoTick() {
+  const el = $('undo-site');
+  if (!el) return;
+  const U = UI.inGame && R.mode === 'normal' ? siteUndoNow() : null;
+  if (el.hidden !== !U) el.hidden = !U;
+  if (!U) return;
+  if (!el.onclick) el.onclick = () => undoLastSite();
+  const key = `${U.b.id}:${Math.ceil(U.left)}`;
+  if (el.dataset.key !== key) {
+    el.dataset.key = key;
+    const mac = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent || '');
+    el.innerHTML = `<b>Undo</b><span class="us-name">${BDEFS[U.b.type].name}</span><span class="us-n">${Math.ceil(U.left)}s</span><kbd>${mac ? '⌘Z' : 'Ctrl+Z'}</kbd><i class="us-bar"></i>`;
+    el.title = `Take the ${BDEFS[U.b.type].name} back: everything spent on it comes back`;
+  }
+  el.style.setProperty('--us-left', (U.left / SITE_UNDO).toFixed(3));
+}
+
+/** Undo on the chip (or Ctrl+Z): the newest site placed is taken back, its goods refunded. False if there's none to take back. */
+function undoLastSite() {
+  const U = siteUndoNow();
+  if (!U) return false;
+  UI.siteUndo.pop();
+  const id = U.b.id, name = BDEFS[U.b.type].name;
+  act('undoSite', [id], (r) => {
+    if (!r || r.why) { sfx('error'); toast((r && r.why) || 'That site is gone.', 'warn'); return; }
+    sfx('click');
+    const back = Object.keys(r.back || {}).filter((g) => r.back[g] >= 1).map((g) => `${Math.floor(r.back[g])} ${goodN(g, Math.floor(r.back[g]))}`);
+    toast(`Took back the ${name}: ` + (back.length ? `${back.join(', ')} back in storage.` : 'nothing had been spent on it yet.'), 'info');
+    if (UI.sheetKind === 'bld' && UI.sheetFor === id) closeSheet();
+    if (R.selected === id) R.selected = 0;
+  });
+  siteUndoTick();
+  return true;
 }
 
 /** The group number a Save as group button would use: the selection's own group if it's one already, else the first free one. */
@@ -3703,6 +3776,7 @@ function showBanner(html, okLabel, cancelLabel) {
   $('banner-tool').hidden = true;
   $('banner').classList.remove('picking');
   $('banner-traffic').hidden = true;
+  $('banner-goods').hidden = true;
   $('banner-route').hidden = true;
   $('banner-undo').hidden = true;
   $('banner-clear').hidden = true;
@@ -3843,6 +3917,7 @@ function confirmBanner() {
   act(from ? 'moveBuilding' : 'place', from ? [from.id, x, y] : [type, x, y], (res) => {
     if (!res.ok) { sfx('error'); showBanner(`<span class="err">${res.reason}</span>`, null, 'Cancel'); return; }
     if (from) toast(`Moving the ${BDEFS[type].name}: workers put it together here (no goods needed), and the old one keeps working until it's ready.`, 'good');
+    else noteSiteUndo(res.id);
     UI.moveFrom = 0;
     sfx('place'); haptic('order');
     addFx('ring', x + 0.5, y + 0.5, { color: PLAYER_COLORS[ME] });
@@ -4891,7 +4966,11 @@ function showRoadBanner(problem, info) {
   const tb = $('banner-traffic');
   tb.hidden = false;
   tb.classList.toggle('on', !!R.traffic);
-  tb.onclick = () => { R.traffic = !R.traffic; sfx('click'); showRoadBanner(); };
+  tb.onclick = () => { setRoadMap(R.traffic ? '' : 'traffic'); sfx('click'); showRoadBanner(); };
+  const gb = $('banner-goods');
+  gb.hidden = false;
+  gb.classList.toggle('on', !!R.goodsMap);
+  gb.onclick = () => { setRoadMap(R.goodsMap ? '' : 'goods'); sfx('click'); showRoadBanner(); };
   // Route to: on Roads, Bridges and Rail.
   const rb = $('banner-route');
   rb.hidden = !['road', 'bridge', 'rail'].includes(mode);
@@ -4899,8 +4978,39 @@ function showRoadBanner(problem, info) {
   // (UI.roadMode = mode: in a new game no tool has been picked yet, and Route to stayed off however often it was tapped)
   rb.onclick = () => { UI.roadMode = mode; UI.route = !UI.route; UI.routeGhost = null; UI.routePrev = null; sfx('click'); showRoadBanner(); };
   if (R.traffic) $('banner-text').insertAdjacentHTML('beforeend', ` <span class="traffic-key">${trafficSummary()}</span>`);
+  if (R.goodsMap) { UI.flowKey = goodsFlowKey(); $('banner-text').insertAdjacentHTML('beforeend', ` <span class="traffic-key flow-key">${UI.flowKey}</span>`); }
   bannerMissionHint();
   toolFit();
+}
+
+/** Paths' maps over the roads, one at a time: 'traffic' (the Traffic map), 'goods' (the Goods flow map) or '' (neither). */
+function setRoadMap(m) {
+  R.traffic = m === 'traffic';
+  R.goodsMap = m === 'goods';
+}
+
+/**
+ * The Goods flow map's key (in the Paths banner, kept up to date while it's on): the goods on the move, most first,
+ * in their colours; what the widths mean; and the marks for a factory waiting for a good and a jam.
+ */
+function goodsFlowKey() {
+  const F = R.gf, list = [];
+  if (F && F.of === S) GOODS.forEach((g, k) => { if (F.byGood[k] >= 1) list.push([g, F.byGood[k]]); });
+  list.sort((a, c) => c[1] - a[1]);
+  let starved = 0;
+  for (const b of S.buildings) if (b.owner === ME && flowStarved(b)) starved++;
+  const goods = list.length ? list.slice(0, 6).map(([g]) => `<span class="fk-g"><i class="gi ${g}"></i>${GOOD[g].name}</span>`).join(' ') : 'nothing carried on your roads yet';
+  return `<b>Goods flow</b>, last minute: ${goods}. The wider, the more (widest: ${GFLOW_STEPS[3]}+ a minute). ` +
+    `<i class="fk-ring"></i>waiting for that good (${starved}), <i class="fk-jam"></i>a jam.`;
+}
+
+/** Once a second while the Goods flow map is on: its key in the banner, if it has changed. */
+function refreshFlowKey() {
+  if (!R.goodsMap || R.mode !== 'road') return;
+  const el = $('banner-text').querySelector('.flow-key');
+  if (!el) return;
+  const html = goodsFlowKey();
+  if (html !== UI.flowKey) { UI.flowKey = html; el.innerHTML = html; }
 }
 
 /**
@@ -7313,6 +7423,7 @@ function uiTick(dt) {
   mpBannerTick();
   AUDIO.suppress = !UI.inGame;
   if (!UI.inGame) menuArtTick();
+  siteUndoTick(); // (hides itself out of a game)
   if (!UI.inGame || !S) return;
   if (S.msgs.length) UI.toastBatch = (UI.toastBatch || 0) + 1; // (the messages of one moment: see toast)
   while (S.msgs.length) {
@@ -7324,7 +7435,7 @@ function uiTick(dt) {
   }
   updateMapTip();
   UI.hudT -= dt;
-  if (UI.hudT <= 0) { UI.hudT = 0.25; updateHUD(); refreshSheet(); placeMinimap(); refreshSelection(); missionCoach(); syncWakeLock(); nightfallLine(); }
+  if (UI.hudT <= 0) { UI.hudT = 0.25; updateHUD(); refreshSheet(); placeMinimap(); refreshSelection(); missionCoach(); syncWakeLock(); nightfallLine(); if ((UI.flowKeyN = (UI.flowKeyN || 0) + 1) % 4 === 0) refreshFlowKey(); }
   metaTick(dt); // (Colony goals, records and achievements, once a second: js/goals.js)
   if (S.winner >= 0 && !UI.overShown) showGameOver();
 }
