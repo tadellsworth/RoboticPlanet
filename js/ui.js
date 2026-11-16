@@ -390,8 +390,8 @@ function initMenu() {
     el.addEventListener('focusin', (e) => show(e.target));
     el.addEventListener('focusout', (e) => { if (!el.contains(e.relatedTarget)) show(null); });
   }
-  // The preview follows the size of its box.
-  if (window.ResizeObserver) new ResizeObserver(() => { PV.drawn = ''; schedulePreview(true); }).observe($('m-pv'));
+  // The preview follows the size of its box (and the info lines are measured again at the new width).
+  if (window.ResizeObserver) new ResizeObserver(() => { PV.drawn = ''; schedulePreview(true); sizeInfoLines(); }).observe($('m-pv'));
   showMenuView('home');
 }
 
@@ -403,6 +403,32 @@ function syncInfo() {
   $('m-mode-desc').textContent = line('m-sec-match', modeInfo(m.mode, menuPlayers()));
   $('m-planet-info').textContent = line('m-sec-planet', m.shapeRnd ? $('m-shape').dataset.info : `${P.name}: ${P.blurb || ''}`);
   $('m-rules-info').textContent = line('m-sec-rules', TOD_INFO[todMode()]);
+  sizeInfoLines();
+}
+
+/**
+ * Each section's info line keeps the height of the longest text it can show (any option's, hovered or chosen), so
+ * running the mouse over the options doesn't make the menu grow and shrink. Measured again when the texts or the
+ * width change.
+ */
+function sizeInfoLines() {
+  for (const [sec, id] of [['m-sec-match', 'm-mode-desc'], ['m-sec-planet', 'm-planet-info'], ['m-sec-rules', 'm-rules-info']]) {
+    const el = $(id), box = $(sec);
+    if (!el || !box || !el.offsetWidth) continue;
+    const texts = [...box.querySelectorAll('[data-info]')].filter((k) => !k.closest('[hidden]')).map((k) => k.dataset.info || '');
+    texts.push(el.textContent);
+    const key = el.offsetWidth + '|' + texts.join('\u0001');
+    if (el.dataset.sizedFor === key) continue;
+    const probe = el.cloneNode(false);
+    probe.removeAttribute('id'); probe.removeAttribute('aria-live');
+    probe.style.cssText = `position:absolute;visibility:hidden;left:-9999px;top:0;min-height:0;width:${el.offsetWidth}px`;
+    el.parentNode.appendChild(probe);
+    let h = 0;
+    for (const t of texts) { probe.textContent = t; h = Math.max(h, probe.offsetHeight); }
+    probe.remove();
+    el.style.minHeight = h + 'px';
+    el.dataset.sizedFor = key;
+  }
 }
 
 /** Bring every control in the menu up to date with UI.menu (and the device's time of day and weather). */
