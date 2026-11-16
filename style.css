@@ -765,6 +765,10 @@ body.mode-road .objrow { display: none; }
   body.mode-road .banner-actions .road-seg { grid-column: 1 / 4; grid-row: 1; min-width: 0; flex-wrap: nowrap; overflow-x: auto; touch-action: pan-x;
     overscroll-behavior: contain; scrollbar-width: none; }
   body.mode-road .banner-actions .road-seg::-webkit-scrollbar { display: none; }
+  /* More tools beyond an edge: that edge fades out (segEdges), so a swipe along the row is the obvious thing to try. */
+  body.mode-road .banner-actions .road-seg.more-r { -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 34px), transparent); mask-image: linear-gradient(90deg, #000 calc(100% - 34px), transparent); }
+  body.mode-road .banner-actions .road-seg.more-l { -webkit-mask-image: linear-gradient(90deg, transparent, #000 34px); mask-image: linear-gradient(90deg, transparent, #000 34px); }
+  body.mode-road .banner-actions .road-seg.more-l.more-r { -webkit-mask-image: linear-gradient(90deg, transparent, #000 34px, #000 calc(100% - 34px), transparent); mask-image: linear-gradient(90deg, transparent, #000 34px, #000 calc(100% - 34px), transparent); }
   body.mode-road .banner-actions .road-seg button { flex: 0 0 auto; min-width: 44px; min-height: 44px; padding: 6px 9px; font-size: 13px; }
   body.mode-road #banner-route { grid-column: 4; grid-row: 1; }
   body.mode-road #banner-traffic { grid-column: 5; grid-row: 1; }
