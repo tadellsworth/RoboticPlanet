@@ -788,8 +788,9 @@ function aiThink(p) {
     // Warden (turtle) starts no push (aiPush), an Architect (tycoon) fires its Missiles into the army at its gates (below).
     if (P.homeCall > S.time && st.harass && P.nextRaid > S.time + 15 && !P.raid) P.nextRaid = S.time + 15;
     const pushing = P.pushOn > S.time; // (a Warden's big push: see aiPush)
-    // (A Warden keeps a third home until its push, outnumbered or not: it digs in, then comes late in one go.)
-    if (smart) P.homeGuard = P.homeCall > S.time || (st.walls && !pushing && army < them * 1.5 + 4) ? clamp(Math.ceil(army / 3), 2, 8) : reach ? 2 : 0;
+    // (A Warden keeps a third home until its push, outnumbered or not: it digs in, then comes late in one go. A Salvager
+    // keeps only the usual one, threatened or not: its home guard is thin, its bands go out from five minutes in.)
+    if (smart) P.homeGuard = st.harass ? 0 : P.homeCall > S.time || (st.walls && !pushing && army < them * 1.5 + 4) ? clamp(Math.ceil(army / 3), 2, 8) : reach ? 2 : 0;
     const allIn = (smart && army >= lvl.threshold * 2 && army >= them * 2 + 2) || pushing, massing = P.massFor && S.time <= P.massFor.until;
     for (const b of me) {
       if (b.type !== 'outpost' || b.dead || !b.built) continue;
