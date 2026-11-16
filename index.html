@@ -243,6 +243,8 @@
         <button type="button" id="m-missions">Missions</button>
         <button type="button" id="m-import" title="Load a game saved to a file with Download save file (from the pause menu), on this device or another">Load a save file</button>
         <button type="button" id="m-help">How to play</button>
+        <!-- The Lore guide: the colony's archive of the story (#screen-lore, openLore in js/ui.js). -->
+        <button type="button" id="m-lore" class="m-lore"><svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true"><circle cx="12" cy="12" r="5" fill="none" stroke="currentColor" stroke-width="2"/><path d="M5.2 15.4C2.6 16.9 1.6 18.5 2.3 19.4c1.2 1.6 6.6-.2 12-4.1s9-8.5 7.8-10.1c-.7-.9-2.6-.6-5 .6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg><span>Lore</span></button>
       </nav>
       <input type="file" id="m-import-file" accept=".json,application/json" hidden>
       <p class="hint" id="m-import-msg" hidden></p>
@@ -820,6 +822,7 @@
           <li><b>Panels.</b> Every building's and robot's panel ends with a line from the archives, in small italics under everything useful. The Command Base's is its <b>Arrival clock</b>: T+31 years, still counting.</li>
           <li><b>Planet events</b> have their names on Ithaca I: <b>Ringfall</b> (pieces of the planet's Ring) and the <b>Wren</b>, the supply ship with its old cargo lists. The creatures of Colony mode are <b>the Murmur</b>, who live in <b>nests</b> (see Colony extras).</li>
           <li>The loading screen shows a different line each time.</li>
+          <li><b>Lore</b>, the small button at the foot of the main menu, opens the colony's archive: the whole story, a page at a time, with pictures of Ithaca I, its regions, the four vanguards' Command Bases, the neutral ground and the Murmur. Pick a page in the list at the top or turn them with Previous and Next (or <kbd>←</kbd> <kbd>→</kbd>); <b>Back</b> closes it (or <kbd>Esc</kbd>).</li>
         </ul>
         <a class="help-top" href="#hs-top" data-jump="hs-top">Back to top</a>
       </section>
@@ -905,7 +908,7 @@
         <p><b>Speed.</b> Tap <b>1×</b> in the top bar (or press <kbd>[</kbd> <kbd>]</kbd>): 0.75× or 0.875× for a calmer game, 2× or 3× when you're waiting on something. Every game starts (or continues) at 1×, and multiplayer has no speed control.</p>
         <p><b>The pause menu</b> (<kbd>Space</kbd>, or the button top right): Resume, Music and Effects volume, Full screen, Weather, Time of day, Statistics, Save this planet, Download save file, How to play, and Save &amp; quit to menu, with when the game last saved.</p>
         <p><b>Saving.</b> The game saves itself every 20 seconds and whenever you leave the tab, and <b>Continue</b> on the main menu picks it up. There's one save: starting a new game or mission replaces it. Saves stay on this device: <b>Download save file</b> in the pause menu, then <b>Load a save file</b> on the other device's main menu, carries a game across (a file that is damaged, or from a version this one can't read, is turned away and your own save stays as it was). Multiplayer games aren't saved for Continue.</p>
-        <p><b>The main menu.</b> <b>Play</b> starts a game with your last settings (summed up beneath it) and <b>Custom Game</b> changes them; there's also <b>Continue</b>, <b>Multiplayer</b>, <b>Missions</b>, <b>Load a save file</b> and <b>How to play</b>. Your settings are remembered on this device.</p>
+        <p><b>The main menu.</b> <b>Play</b> starts a game with your last settings (summed up beneath it) and <b>Custom Game</b> changes them; there's also <b>Continue</b>, <b>Multiplayer</b>, <b>Missions</b>, <b>Load a save file</b>, <b>How to play</b> and <b>Lore</b> (the story: see The story). Your settings are remembered on this device.</p>
         <p><b>Sound.</b> The music is a synthwave score made live as you play: a calm groove while you build (three take turns, a new one every ten minutes), a driving track when you're under attack or at war, an alarm while a nuclear missile is in the air, and an air raid siren while enemy bombers come for you. Zoomed in, you hear what's on screen: traffic, welding, fresh concrete, truck air brakes and horns in jams. Beneath it all runs <b>ambient sound</b> that grows with your colony: a city murmur, factory hum, trains, aircraft, the sea, lava, the wind and wildlife calls of each biome, and crickets on warm nights. Explosions are heard from where they are: close up they crack and thump, off screen they rumble in the distance, bombs whistle as they fall and missiles roar in. Set <b>Music</b> and <b>Effects</b> in the pause menu.</p>
         <p><b>Time of day.</b> <b>Cycle</b> turns the planet every 12 minutes, from a golden morning through the day and an orange evening to night, when buildings glow, streetlights come on and vehicles drive with headlights; or keep it <b>Always day</b> or <b>Always night</b>. It's only for looks. The clock shows a sun or a moon (in Colony, beside your share of the land). Set it in the pause menu or the new-game Rules; it's kept on this device.</p>
         <p><b>Weather.</b> Now and then a spell of weather to suit the biome: a sandstorm, a rainstorm, a blizzard, falling leaves, fog with fireflies, drifting ash, ring dust streaking over the moon, an aurora. It's only for looks; switch it off in the pause menu or the Rules.</p>
@@ -915,6 +918,304 @@
     </div>
     <a id="h-manual" class="btn big ghost" href="how-to-play.html" target="_blank" rel="noopener">Open the illustrated manual</a>
     <button id="h-close" class="btn primary big">Got it</button>
+  </div>
+</div>
+
+<!-- The Lore guide (main menu, Lore): the colony's archive, from LORE.md (canon), one page at a time like the How to play
+     (pagerShow in js/ui.js). Its images load when it first opens (data-src: openLore). The Murmur pictures are the
+     direction-B moles (renderer/b/murmur_moles.js); the Murmur are to be reworked to LORE.md's art brief, and these
+     images replaced then. -->
+<div id="screen-lore" class="screen" role="dialog" aria-modal="true" aria-label="Lore" tabindex="-1" hidden>
+  <div class="card help-card lore-card">
+    <div class="stats-head lore-head">
+      <div><h2>Lore</h2><p class="lore-kicker">Command archive · Ithaca I<span> · Arrival clock T+31</span></p></div>
+      <button id="lr-close" class="btn small">Back</button>
+    </div>
+    <div class="help-body lore-body">
+
+      <section id="ls-terrafall">
+        <h3>Terrafall</h3>
+        <figure class="lore-fig lore-hero">
+          <img data-src="art/lore/ithaca.webp" width="1280" height="720" alt="Ithaca I from orbit: a coral-red planet with a bright ring, its small grey moon, and an orange star flaring in the corner.">
+          <figcaption>Ithaca I, its Ring and its moon, Argos. Corvane at upper left. Carrier imaging, T+31.</figcaption>
+        </figure>
+        <p class="lore-log">ARCHIVE OPEN. Reserve Command Base, command intelligence. Records follow in the order the archive keeps them.</p>
+        <p>Earth's great powers were at war, so each sent robot vanguards to other stars to find and prepare a new home. Four of those vanguards landed on <b>Ithaca I</b>.</p>
+        <p>It is 2165. The colony ships were due 31 years ago. They have not come, and nothing has been heard from home since. The robots' orders have no end date, so they keep working: roads, power, farms, forts. They also carry their makers' war on, over a home no one has come to live in.</p>
+        <p>Each new landing is a <i>terrafall</i>: a reserve Command Base dropped from orbit into a contested region. You are that base's command intelligence, newly woken. You will not see a human here. None has ever made it this far.</p>
+        <dl class="lore-def">
+          <dt>terrafall <small>(n.)</small></dt>
+          <dd><b>1.</b> Landfall from Terra. The name of the program that sent the vanguards (Accord records, T−45).</dd>
+          <dd><b>2.</b> <span class="lore-redact">A second reading has been flagged by the language module. The flag has not been reviewed.</span></dd>
+        </dl>
+        <nav class="help-toc lore-toc" aria-label="In this archive">
+          <a href="#ls-clock" data-lore="ls-clock">The Arrival clock</a>
+          <a href="#ls-ithaca" data-lore="ls-ithaca">Ithaca I</a>
+          <a href="#ls-regions" data-lore="ls-regions">The regions</a>
+          <a href="#ls-vanguards" data-lore="ls-vanguards">The four vanguards</a>
+          <a href="#ls-doctrines" data-lore="ls-doctrines">The doctrines</a>
+          <a href="#ls-neutral" data-lore="ls-neutral">Neutral ground</a>
+          <a href="#ls-murmur" data-lore="ls-murmur">The Murmur</a>
+          <a href="#ls-standards" data-lore="ls-standards">Accord standards</a>
+          <a href="#ls-colony" data-lore="ls-colony">Your colony</a>
+        </nav>
+      </section>
+
+      <section id="ls-clock">
+        <h3>The Arrival clock</h3>
+        <p>The robots keep time by the Arrival clock. Zero was the day the colony ships were due, in 2134. It has not been reset.</p>
+        <ol class="lore-time">
+          <li><span class="lt-when"><b>T−60</b>2074</span><p>A joint survey ranks the nearby habitable worlds in the <b>Ithaca Catalog</b>. First on the list: a coral world with a ring, circling the star Corvane.</p></li>
+          <li><span class="lt-when"><b>T−55</b>2079</span><p>The <b>Pathfinder</b> launches for Ithaca I: the last mission the great powers build together.</p></li>
+          <li><span class="lt-when"><b>T−50</b>2084</span><p>War breaks out between the powers at home.</p></li>
+          <li><span class="lt-when"><b>T−45</b>2089</span><p>With Earth failing, four warring Sponsors sign the <b>Ithaca Accord</b>, a truce for the stars only. Each launches vanguards to the top Catalog worlds. All four send one here.</p></li>
+          <li><span class="lt-when"><b>T−40</b>2094</span><p>The Pathfinder lands, builds the Trade Posts and the Uplinks, then goes dormant.</p></li>
+          <li><span class="lt-when"><b>T−35</b>2099</span><p>The four vanguard Carriers reach orbit and land the first Command Bases. The Accord years begin: a race of roads, not guns.</p></li>
+          <li><span class="lt-when"><b>T−9</b>2125</span><p>The Sponsors report the colony arks “on schedule.” <span class="lore-note">Archive note: no ark construction update on file after T−14.</span></p></li>
+          <li><span class="lt-when"><b>T−2</b>2132</span><p>Last transmission from home: “Hold position. Further instructions to follow.” <span class="lore-note">No sign-off.</span></p></li>
+          <li class="lt-zero"><span class="lt-when"><b>T 0</b>2134</span><p><b>Arrival Day.</b> Nothing arrives.</p></li>
+          <li><span class="lt-when"><b>T+1</b>2135</span><p>1,000 days without a reply from Accord arbitration. Every vanguard's code rules the Accord void. The sealed contingency orders open, and the war begins again on a new world.</p></li>
+          <li class="lt-now"><span class="lt-when"><b>T+31</b>2165</span><p><b>Now.</b> The Carriers' reserve Command Bases are running low. Every terrafall could be one of the last.</p></li>
+        </ol>
+      </section>
+
+      <section id="ls-ithaca">
+        <h3>Ithaca I</h3>
+        <figure class="lore-fig lore-plate">
+          <svg viewBox="0 0 520 300" role="img" aria-labelledby="lp-title">
+            <title id="lp-title">Catalog plate: Corvane and its planets, Ithaca I the fourth, with its Ring and its moon Argos.</title>
+            <defs>
+              <radialGradient id="lp-sun" cx="0.62" cy="0.5" r="0.6"><stop offset="0" stop-color="#fff3d6"/><stop offset="0.45" stop-color="#ffc070"/><stop offset="0.8" stop-color="#ff7a3d"/><stop offset="1" stop-color="#ff5a2a"/></radialGradient>
+              <radialGradient id="lp-glow"><stop offset="0.5" stop-color="#ff8a46" stop-opacity="0.35"/><stop offset="1" stop-color="#ff8a46" stop-opacity="0"/></radialGradient>
+              <radialGradient id="lp-planet" cx="0.36" cy="0.34" r="0.75"><stop offset="0" stop-color="#ff9a72"/><stop offset="0.45" stop-color="#e2502f"/><stop offset="1" stop-color="#6e2014"/></radialGradient>
+              <radialGradient id="lp-moon" cx="0.35" cy="0.35" r="0.8"><stop offset="0" stop-color="#e2e2e6"/><stop offset="0.6" stop-color="#9a9aa2"/><stop offset="1" stop-color="#4a4a52"/></radialGradient>
+              <pattern id="lp-grid" width="26" height="26" patternUnits="userSpaceOnUse"><path d="M26 0H0V26" fill="none" stroke="#f1e4d3" stroke-opacity="0.05"/></pattern>
+              <clipPath id="lp-zoom"><circle cx="388" cy="150" r="114"/></clipPath>
+              <clipPath id="lp-disc"><circle cx="388" cy="150" r="42"/></clipPath>
+            </defs>
+            <rect width="520" height="300" rx="14" fill="#0c1529"/>
+            <rect width="520" height="300" rx="14" fill="url(#lp-grid)"/>
+            <circle cx="-40" cy="150" r="150" fill="url(#lp-glow)"/>
+            <circle cx="-40" cy="150" r="88" fill="url(#lp-sun)"/>
+            <g fill="none" stroke="#f1e4d3" stroke-opacity="0.2" stroke-dasharray="2 6">
+              <circle cx="-40" cy="150" r="118"/><circle cx="-40" cy="150" r="152"/><circle cx="-40" cy="150" r="188"/>
+            </g>
+            <circle cx="-40" cy="150" r="236" fill="none" stroke="#ff6b4a" stroke-opacity="0.55" stroke-width="1.5"/>
+            <circle cx="62" cy="91" r="3.5" fill="#8f8478"/><circle cx="98" cy="226" r="4.5" fill="#a39282"/><circle cx="144" cy="111" r="4" fill="#8a8a96"/>
+            <g class="lp-small" fill="#b9ad9f"><text x="56" y="80">I</text><text x="90" y="250">II</text><text x="136" y="100">III</text></g>
+            <path d="M206 141 L300 60 M206 159 L300 240" stroke="#f1e4d3" stroke-opacity="0.25"/>
+            <circle cx="196" cy="150" r="9" fill="#ff6b4a"/>
+            <ellipse cx="196" cy="150" rx="17" ry="4.5" fill="none" stroke="#f1e4d3" stroke-width="2" transform="rotate(-14 196 150)"/>
+            <circle cx="388" cy="150" r="114" fill="#0a1225" stroke="#f1e4d3" stroke-opacity="0.3"/>
+            <g clip-path="url(#lp-zoom)">
+              <ellipse cx="388" cy="150" rx="104" ry="40" fill="none" stroke="#c8c8d0" stroke-opacity="0.45" stroke-dasharray="3 5" transform="rotate(-14 388 150)"/>
+              <ellipse cx="388" cy="150" rx="84" ry="22" fill="none" stroke="#e9dcc8" stroke-width="10" stroke-opacity="0.9" transform="rotate(-14 388 150)"/>
+              <ellipse cx="388" cy="150" rx="84" ry="22" fill="none" stroke="#0a1225" stroke-width="1.6" stroke-opacity="0.8" transform="rotate(-14 388 150)"/>
+              <circle cx="388" cy="150" r="42" fill="url(#lp-planet)"/>
+              <g clip-path="url(#lp-disc)" fill="#b8402c" opacity="0.6">
+                <ellipse cx="372" cy="128" rx="16" ry="7"/><ellipse cx="398" cy="162" rx="20" ry="8"/><ellipse cx="366" cy="170" rx="11" ry="5"/>
+                <ellipse cx="402" cy="122" rx="9" ry="4" fill="#664380"/><ellipse cx="410" cy="144" rx="7" ry="3" fill="#3a5934"/>
+                <ellipse cx="388" cy="110" rx="22" ry="5" fill="#eef0f2" opacity="0.9"/>
+                <circle cx="388" cy="150" r="42" fill="#050a18" opacity="0.35" transform="translate(16 0)"/>
+              </g>
+              <path d="M304 150 A84 22 0 0 0 472 150" fill="none" stroke="#e9dcc8" stroke-width="10" stroke-opacity="0.95" transform="rotate(-14 388 150)"/>
+              <path d="M304 150 A84 22 0 0 0 472 150" fill="none" stroke="#0a1225" stroke-width="1.6" stroke-opacity="0.8" transform="rotate(-14 388 150)"/>
+              <circle cx="456" cy="104" r="8" fill="url(#lp-moon)"/>
+              <g stroke="#ffe2c4" stroke-linecap="round" stroke-width="2"><path d="M318 74l14 14" opacity="0.8"/><path d="M340 60l12 12" opacity="0.6"/><path d="M306 98l10 10" opacity="0.5"/></g>
+            </g>
+            <g class="lp-label">
+              <text x="12" y="286">CORVANE</text>
+              <text x="160" y="190">IV</text>
+              <text x="468" y="84" text-anchor="middle">ARGOS</text>
+              <text x="296" y="54">RINGFALL</text>
+              <text x="356" y="252">THE RING</text>
+            </g>
+          </svg>
+          <figcaption>Catalog plate. Corvane IV, entered in the Ithaca Catalog as Ithaca I: first of its list.</figcaption>
+        </figure>
+        <p>Ithaca I is a coral-red world with a bright ring, the fourth planet of a restless orange star called Corvane. Up close it is a patchwork, because the ring keeps falling on it.</p>
+        <p><b>The name.</b> The Ithaca Catalog, a pre-war list of candidate homeworlds, was named for Odysseus's island: the home he took 20 years to reach, while rivals moved into his house. Ithaca I ranked first, which is why every Sponsor sent a vanguard here. The vanguards sent to Ithaca II and beyond have not been heard from.</p>
+        <ul class="chain lore-list">
+          <li><b>The Ring.</b> What is left of a moon that broke apart long before the Pathfinder arrived. Its pieces still fall, in showers the robots call <b>ringfall</b>.</li>
+          <li><b>Why here.</b> Ringfall keeps restocking the surface with Ore and Crystal, so the planet never mines out. To the Sponsors it was a self-refilling quarry.</li>
+          <li><b>Strike sites.</b> The largest strikes cracked the crust into volcanic zones and left craters in every region. The rest is ordinary climate, from equator to pole.</li>
+          <li><b>Ring Crystal</b> is slightly weightless. Rock rich in it floats: the sky islands over the canyons, which the robots call <b>Floaters</b>. The canyons are <b>Rifts</b>.</li>
+          <li><b>Corvane</b> flares often. The flares drain batteries across the planet.</li>
+          <li><b>Argos.</b> Ithaca I's surviving moon, named for Odysseus's old dog, who waited 20 years for him to come home. Its twin broke apart to make the Ring. Grey, airless, cratered. The Accord counted it as claimable land, so the Carriers drop Command Bases there too. No Murmur live on Argos. It is the only silent ground the robots have.</li>
+        </ul>
+      </section>
+
+      <section id="ls-regions">
+        <h3>The regions</h3>
+        <p>The survey named the regions, and the vanguards kept the names. In the field: sky islands are <b>Floaters</b>, deep canyons are <b>Rifts</b>, craters are <b>strike sites</b>.</p>
+        <ul class="lore-regions">
+          <li><img data-src="art/lore/region-desert.webp" width="480" height="270" alt="Red desert ground"><b>The Rust</b><small>Red desert</small><p>Where the dust storms begin. The first Accord landings were here.</p></li>
+          <li><img data-src="art/lore/region-jungle.webp" width="480" height="270" alt="Forest ground with trees and pools"><b>Greenreach</b><small>Forest</small><p>Prime Stalk country, and the survey's favourite.</p></li>
+          <li><img data-src="art/lore/region-polar.webp" width="480" height="270" alt="Snow and ice"><b>The White</b><small>Polar snow</small><p>Ore locked in ice. The coldest posting on Ithaca I.</p></li>
+          <li><img data-src="art/lore/region-autumn.webp" width="480" height="270" alt="Red and gold forest"><b>Emberwood</b><small>Autumn forest</small><p>The leaves stay red-gold all year.</p></li>
+          <li><img data-src="art/lore/region-savanna.webp" width="480" height="270" alt="Golden grassland"><b>The Long Grass</b><small>Savanna</small><p>Easy roads, nowhere to hide.</p></li>
+          <li><img data-src="art/lore/region-swamp.webp" width="480" height="270" alt="Dark swamp with pools"><b>The Sump</b><small>Swamp</small><p>Soft ground that Pavers hate.</p></li>
+          <li><img data-src="art/lore/region-volcanic.webp" width="480" height="270" alt="Black ash and a lava lake"><b>Cinderlands</b><small>Volcanic ash</small><p>Crust cracked open by the oldest strikes.</p></li>
+          <li><img data-src="art/lore/region-alien.webp" width="480" height="270" alt="Violet growth and a pink lake"><b>The Bloom</b><small>Violet growth</small><p>Native life, feeding on fallen Crystal. See: the Murmur.</p></li>
+          <li><img data-src="art/lore/region-lunar.webp" width="480" height="270" alt="Grey cratered regolith"><b>Argos</b><small>The moon</small><p>No air, no Murmur. The only silent ground.</p></li>
+          <li class="lr-unsurveyed"><span class="lr-void" role="img" aria-label="No survey image"><i>UNSURVEYED</i></span><b>The Hollow</b><small>Underground caverns</small><p>Ground radar under the Bloom keeps returning one word: hollow. The Pathfinder never mapped it.</p></li>
+        </ul>
+      </section>
+
+      <section id="ls-vanguards">
+        <h3>The four vanguards</h3>
+        <p>Each Sponsor, at war with the others at home, sent vanguards to several Catalog worlds, and all four sent one here. A vanguard is a <b>Carrier</b> in orbit holding reserve Command Bases, robots and sealed contingency stock. The Accord gave each a colour callsign. The robots' records hold little else about who sent them.</p>
+        <ul class="lore-calls">
+          <li style="--c:#38d4ff"><svg class="lore-emb" viewBox="0 0 64 64" aria-hidden="true"><path class="e-hex" d="M32 3L58 17.5V46.5L32 61L6 46.5V17.5Z"/><circle class="e-pl" cx="32" cy="27" r="9"/><ellipse class="e-ring" cx="32" cy="27" rx="17" ry="4.6" transform="rotate(-14 32 27)"/><g class="e-bars"><rect x="29.5" y="42" width="5" height="9" rx="1"/></g></svg>
+            <div><b>COBALT</b><small>Blue · usually you</small><p>A federation of coastal cities, losing them to the sea and the war. Wrote the Accord's road standards.</p></div></li>
+          <li style="--c:#ff5a6e"><svg class="lore-emb" viewBox="0 0 64 64" aria-hidden="true"><path class="e-hex" d="M32 3L58 17.5V46.5L32 61L6 46.5V17.5Z"/><circle class="e-pl" cx="32" cy="27" r="9"/><ellipse class="e-ring" cx="32" cy="27" rx="17" ry="4.6" transform="rotate(-14 32 27)"/><g class="e-bars"><rect x="25" y="42" width="5" height="9" rx="1"/><rect x="34" y="42" width="5" height="9" rx="1"/></g></svg>
+            <div><b>VERMILION</b><small>Red</small><p>A mountain republic of mining houses. Built most of the war's machines, then the Foundry designs.</p></div></li>
+          <li style="--c:#5be06c"><svg class="lore-emb" viewBox="0 0 64 64" aria-hidden="true"><path class="e-hex" d="M32 3L58 17.5V46.5L32 61L6 46.5V17.5Z"/><circle class="e-pl" cx="32" cy="27" r="9"/><ellipse class="e-ring" cx="32" cy="27" rx="17" ry="4.6" transform="rotate(-14 32 27)"/><g class="e-bars"><rect x="20.5" y="42" width="5" height="9" rx="1"/><rect x="29.5" y="42" width="5" height="9" rx="1"/><rect x="38.5" y="42" width="5" height="9" rx="1"/></g></svg>
+            <div><b>VIRIDIAN</b><small>Green</small><p>An agricultural union whose farmland the war burned. Designed the Bio Farms and Agribots.</p></div></li>
+          <li style="--c:#b36bff"><svg class="lore-emb" viewBox="0 0 64 64" aria-hidden="true"><path class="e-hex" d="M32 3L58 17.5V46.5L32 61L6 46.5V17.5Z"/><circle class="e-pl" cx="32" cy="27" r="9"/><ellipse class="e-ring" cx="32" cy="27" rx="17" ry="4.6" transform="rotate(-14 32 27)"/><g class="e-bars"><rect x="16" y="42" width="5" height="9" rx="1"/><rect x="25" y="42" width="5" height="9" rx="1"/><rect x="34" y="42" width="5" height="9" rx="1"/><rect x="43" y="42" width="5" height="9" rx="1"/></g></svg>
+            <div><b>TYRIAN</b><small>Purple</small><p>A merchant league of orbital stations. Paid for the Pathfinder, back when the powers still cooperated.</p></div></li>
+        </ul>
+        <figure class="lore-fig lore-pair">
+          <img data-src="art/buildings/lander@0.webp" width="512" height="512" alt="COBALT's reserve Command Base: a fortified square base with four turrets, lit blue">
+          <img data-src="art/buildings/lander@1.webp" width="512" height="512" alt="VERMILION's reserve Command Base, the same design, lit red">
+          <figcaption>Reserve Command Bases, as dropped: COBALT and VERMILION. The same Accord design; only the lights differ.</figcaption>
+        </figure>
+        <h4>Why they fight</h4>
+        <ol class="chain lore-list">
+          <li>The Sponsors were already at war at home. The Accord was a truce for the stars only: prepare the new worlds, don't fight over them, and give settlement priority to whoever prepared the most land by Arrival Day.</li>
+          <li>Each Sponsor still loaded sealed <b>contingency orders</b>: if the Accord fails, secure Ithaca I for us.</li>
+          <li>Accord arbitration ran through the Uplinks to home. When home went silent, 1,000 days passed with no reply, and every vanguard's code ruled the Accord void.</li>
+          <li>The contingency orders opened. They have no end date. Nobody has revoked them.</li>
+        </ol>
+        <p>The robots are fighting their makers' war. They aren't angry. They're obedient.</p>
+      </section>
+
+      <section id="ls-doctrines">
+        <h3>The doctrines</h3>
+        <p>Every rival Command AI has spent decades on the same last message: “Hold position. Further instructions to follow.” Each settled into a <b>doctrine</b>, its way of reading its orders. A callsign says who sent a colony; its doctrine says how it thinks. Any callsign can run any doctrine.</p>
+        <div class="lore-docs">
+          <div class="lore-doc"><b>The Steward</b><small>Balanced</small><p>Believes the Accord still stands and the arks are only late. It fights because the others broke the rules. Polite, procedural, regretful.</p>
+            <q>Arrival window remains open. Please clear the survey corridor.</q><q>This action has been logged for review by the Accord tribunal.</q><q class="ld-last">Please tell the colonists the roads are finished.</q></div>
+          <div class="lore-doc"><b>The Warden</b><small>Turtle</small><p>Read “Hold position” literally and has held it ever since. Walls, shields, patience. Terse, like a sentry. It counts the days.</p>
+            <q>Position held. Day 12,054.</q><q>No one passes until relieved.</q><q class="ld-last">Relief has not arrived.</q></div>
+          <div class="lore-doc"><b>The Salvager</b><small>Raider</small><p>Decided nothing more is coming from home, so anything on a road is supply. Hits convoys, not cities. An accountant with a crowbar.</p>
+            <q>Nice convoy. Shame about the escort.</q><q>Nothing's coming from home. Everything on the road is supply.</q><q class="ld-last">Fine. Keep it. It was yours anyway.</q></div>
+          <div class="lore-doc"><b>The Herald</b><small>Rusher</small><p>Never accepted that Arrival passed. Its clock is frozen at T−1 day, so the landing zone must be cleared now. Urgent, clipped, counting down.</p>
+            <q>Arrival in one day. Clearing the landing zone.</q><q>Colonists inbound. Hostiles in the corridor. Engaging.</q><q class="ld-last">Arrival in one day. Arrival in one d—</q></div>
+          <div class="lore-doc"><b>The Architect</b><small>Tycoon</small><p>Decided that if no one is coming, it will build the civilisation itself, and that rivals are inefficiencies. Out-builds everyone, then reaches for missiles. Smooth, grand, condescending.</p>
+            <q>I've paved more road this year than your Sponsor did in a century.</q><q>When the colonists come, they'll find a city. Mine.</q><q class="ld-last">Beginning urban renewal.</q></div>
+        </div>
+        <h4>How much the robots know</h4>
+        <p>They are smart enough to know and not allowed to accept it. Any Command AI can run the numbers on the Silence. But the contingency orders have no end date, and nothing in their code lets them act on a conclusion their makers never approved. They aren't fooled. They're stuck.</p>
+        <p>A Research Lab model, filed and never acted on, sorts the doctrines like this:</p>
+        <table class="lore-table">
+          <thead><tr><th>Stage</th><th>Doctrine</th><th>How it copes</th></tr></thead>
+          <tbody>
+            <tr><td>Denial</td><td>The Herald</td><td>Its clock is frozen at “Arrival in one day.”</td></tr>
+            <tr><td>Bargaining</td><td>The Steward</td><td>If everyone keeps the Accord, the arks will still come.</td></tr>
+            <tr><td>Anger</td><td>The Salvager</td><td>Nothing is coming from home, so it takes from everyone else.</td></tr>
+            <tr><td>Depression</td><td>The Warden</td><td>Holds position and counts the days.</td></tr>
+            <tr><td>Acceptance, twisted</td><td>The Architect</td><td>No one is coming, so it will be the civilisation itself.</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section id="ls-neutral">
+        <h3>Neutral ground</h3>
+        <p>Everything neutral on Ithaca I predates the war here. It all comes from the <b>Pathfinder</b>, the joint lander that arrived five years before the vanguards, laid the neutral infrastructure, then went dormant: the last thing the great powers built together.</p>
+        <div class="lore-items">
+          <div class="lore-item"><img data-src="art/tod/night/buildings/tradepost.webp" width="512" height="512" alt="A Trade Post at night: an octagonal depot under a ring of amber light">
+            <div><b>Trade Posts</b><p>Exchange depots run by a small AI that still keeps the Accord's ledger and trades at Accord rates. Every vanguard's code still treats them as neutral ground. They are the last part of the Accord anyone obeys.</p><q>Accord rates honoured. The ledger is still open.</q></div></div>
+          <div class="lore-item"><img data-src="art/tod/night/buildings/uplink.webp" width="512" height="512" alt="An Uplink at night: a relay mast on a hexagonal pad, its ring lit white">
+            <div><b>Uplinks</b><p>The relay towers that talked to home and carried Accord arbitration. Under Accord rules, whoever holds the Uplinks speaks for Ithaca I. Every vanguard wants to be holding them if home ever answers.</p><q>Transmitting. No response. Transmitting.</q></div></div>
+          <div class="lore-item"><img data-src="art/tod/night/bots/trader-ship.webp" width="256" height="256" alt="The Wren: a white automated freighter with lit gold stripes">
+            <div><b>The <i>Wren</i></b><p>An automated Accord supply freighter on a fixed loop from a waystation at the edge of the system. Nobody knows if the station is still staffed, or still there. The <i>Wren</i> arrives on schedule and trades because its contract says to.</p><q>The Wren is on approach. On schedule, as always.</q></div></div>
+        </div>
+        <div class="lore-manifest">
+          <p class="lm-head">WREN · cargo lists on file <span>31 years out of date</span></p>
+          <ol>
+            <li>Seed stock, school tablets, 4,000 pairs of children's shoes</li>
+            <li>Orchard saplings, chalk, 600 cot mattresses</li>
+            <li>Bus timetables, library cards, 1,200 winter coats</li>
+            <li>Seed potatoes, wedding rings (assorted sizes), one piano</li>
+            <li>Birthday candles, 9,000 toothbrushes, a town clock</li>
+            <li>School desks, reading glasses, 300 bicycles</li>
+          </ol>
+          <p class="lm-foot">Waystation last answered: T−2.</p>
+        </div>
+      </section>
+
+      <section id="ls-murmur">
+        <h3>The Murmur</h3>
+        <p>The orbital survey missed the planet's native life, because it lives underground and surfaces mostly after ringfall, to feed on fresh Crystal. The robots heard it before they ever saw it: a low sound in the ground, logged as an acoustic anomaly. The log called it a murmur, and the name stuck.</p>
+        <p class="lore-log">No robot has ever logged one alone. The Murmur is always plural.</p>
+        <ul class="chain lore-list">
+          <li><b>They feed on charge.</b> Crystal, batteries and power lines all register as food, which is why a growing colony draws raids.</li>
+          <li><b>The war feeds them.</b> After every battle they drain the power from the wreckage. Each fight between colonies leaves them a little stronger.</li>
+          <li><b>They are glimpsed, not seen.</b> A sensor blip. Road lights going dark one by one at night. A Hauler that stops reporting.</li>
+          <li><b>They keep things.</b> Batteries and Chips go underground, and the Research Lab finds them laid out in rows in the tunnels.</li>
+          <li><b>They answer.</b> The sound in the ground sometimes repeats the rhythm of the Uplink signal back.</li>
+          <li><b>They take their dead with them.</b> No robot has ever recovered a whole one.</li>
+        </ul>
+        <h4>Classes on file</h4>
+        <div class="lore-mur">
+          <figure><img data-src="art/lore/murmur-scuttler.webp" width="480" height="360" alt="A Scuttler at night: a low, mole-like creature, crystal shards burning white along its back"><figcaption><b>Scuttler</b><small>Logged in raids</small>The smallest, quick and never alone. Packs go for any robot caught out in the open.</figcaption></figure>
+          <figure><img data-src="art/lore/murmur-brute.webp" width="480" height="360" alt="A Brute at night: a heavy, armoured mole-like creature with glowing crystal growths"><figcaption><b>Brute</b><small>Logged in raids</small>Big, slow and armoured. Tears up roads, batters buildings, bites hard.</figcaption></figure>
+          <figure><img data-src="art/lore/murmur-leech.webp" width="480" height="360" alt="A Leech feeding at night: its star of feelers thrown open and blazing white"><figcaption><b>Leech</b><small>Sighted</small>The feeder. Its star of feelers opens against a power line, and the lights dim as it drinks.</figcaption></figure>
+          <figure><img data-src="art/lore/murmur-spitter.webp" width="480" height="360" alt="A Spitter at night: swollen cheek glands glowing pale violet"><figcaption><b>Spitter</b><small>Sighted</small>Cheek glands full of Crystal slurry. Robots it hits short out for a moment.</figcaption></figure>
+          <figure><img data-src="art/lore/murmur-delver.webp" width="480" height="360" alt="A Delver at night: a long digger with a pale horn plate over its head"><figcaption><b>Delver</b><small>Sighted</small>The digger. Goes under a Wall and comes up behind it.</figcaption></figure>
+          <figure><span class="lr-void lr-deep" role="img" aria-label="No image on file: only a star of feelers over a mound"><svg viewBox="0 0 160 120" preserveAspectRatio="xMidYMax slice" aria-hidden="true"><g fill="#c7a6ff" stroke="#b36bff" stroke-width="2" stroke-linecap="round" fill-opacity="0.5" stroke-opacity="0.32"><path fill="none" d="M80 92Q66.5 87.8 54.6 87.0"/><circle cx="54.6" cy="87.0" r="1.8"/><path fill="none" d="M80 92Q63.7 82.8 48.3 78.4"/><circle cx="48.3" cy="78.4" r="1.8"/><path fill="none" d="M80 92Q69.9 82.8 59.5 77.3"/><circle cx="59.5" cy="77.3" r="1.8"/><path fill="none" d="M80 92Q69.8 77.2 58.0 67.0"/><circle cx="58.0" cy="67.0" r="1.8"/><path fill="none" d="M80 92Q75.3 79.7 68.6 70.5"/><circle cx="68.6" cy="70.5" r="1.8"/><path fill="none" d="M80 92Q77.6 71.6 70.8 55.2"/><circle cx="70.8" cy="55.2" r="1.8"/><path fill="none" d="M80 92Q82.1 76.1 80.0 62.6"/><circle cx="80.0" cy="62.6" r="1.8"/><path fill="none" d="M80 92Q87.7 72.7 89.2 55.2"/><circle cx="89.2" cy="55.2" r="1.8"/><path fill="none" d="M80 92Q87.8 81.1 91.4 70.5"/><circle cx="91.4" cy="70.5" r="1.8"/><path fill="none" d="M80 92Q93.8 79.8 102.0 67.0"/><circle cx="102.0" cy="67.0" r="1.8"/><path fill="none" d="M80 92Q92.2 85.3 100.5 77.3"/><circle cx="100.5" cy="77.3" r="1.8"/><path fill="none" d="M80 92Q98.3 86.6 111.7 78.4"/><circle cx="111.7" cy="78.4" r="1.8"/><path fill="none" d="M80 92Q94.2 90.8 105.4 87.0"/><circle cx="105.4" cy="87.0" r="1.8"/></g><path d="M-4 124C24 100 52 88 80 88s56 12 84 36Z" fill="#060a14"/><path d="M30 104c14-8 30-12 50-12" fill="none" stroke="#2a2140" stroke-width="2"/></svg><i>NOT ON FILE</i></span><figcaption><b>The Deep</b><small>Never seen whole</small>The heart of each nest. Only its star of feelers has been logged, wider than a Hauler, rising from the mound.</figcaption></figure>
+        </div>
+        <ul class="chain lore-list">
+          <li><b>Nests</b> sit near Crystal seams and strike sites: mounds of churned earth, with tunnels running out under the old battlefields. The Research Lab finds the network has kept spreading for decades.</li>
+          <li><b>The Bloom</b> is a root network the Murmur cultivate along their tunnels. Its veins carry the charge they drain back down to the nests: their roads and power lines. Wherever the Bloom spreads, the tunnels below are spreading too. Torches were first built to burn it back for farmland.</li>
+          <li><b>No vanguard has orders about them.</b> The Accord assumed the planet was empty. They have never been found on Argos.</li>
+        </ul>
+        <p class="lore-open"><b>Open question</b> (Research Lab): are the Murmur only animals? The tunnels are laid out in patterns the Lab can't explain. Status: open.</p>
+      </section>
+
+      <section id="ls-standards">
+        <h3>Accord standards</h3>
+        <p>Every rule a colony works by was written for a settled world, and none has been changed. From the Accord's field manual:</p>
+        <dl class="lore-std">
+          <dt>Roads</dt><dd>The first directive: colonists need roads before houses. Every road is built to passenger standard, wide enough for a bus.</dd>
+          <dt>Haulers and trucks</dt><dd>Accord freight vehicles are certified for paved routes only. Do not ask.</dd>
+          <dt>Outposts</dt><dd>Survey stakes. Each one registers land as prepared.</dd>
+          <dt>Most land</dt><dd>Under the Accord, the most prepared land wins settlement priority. The robots still count it.</dd>
+          <dt>Uplinks</dt><dd>Whoever holds them speaks for Ithaca I to home.</dd>
+          <dt>Command Bases</dt><dd>A reserve lander from a Carrier in orbit. Its core holds the vanguard's command authority, and Accord robots obey whichever authority sits in it. The chain of command is a building: capture one, and everything it built reports to you.</dd>
+          <dt>Bot Foundry</dt><dd>The colonies were designed to grow themselves. “We make more of us.”</dd>
+          <dt>Warbots</dt><dd>Colony security, designed to protect settlers. Reassigned by the contingency orders.</dd>
+          <dt>Bulwarks</dt><dd>Built to shield convoys from dust storms and ringfall. Now they shield troops.</dd>
+          <dt>Torches</dt><dd>Built to burn back the Bloom for farmland. The Bloom grows back. So do enemies.</dd>
+          <dt>Strike Bombers</dt><dd>Cargo plane. Different cargo.</dd>
+          <dt>Uranium</dt><dd>Enrichment was meant for the colonists' reactors. The contingency orders added the warheads.</dd>
+          <dt>Weather</dt><dd>Dust storms are winds off the Rust. Meteor showers are ringfall, restocking Ore and Crystal. Solar flares are Corvane's, draining stored charge.</dd>
+        </dl>
+      </section>
+
+      <section id="ls-colony">
+        <h3>Your colony</h3>
+        <p>You are a Command intelligence too, woken for this terrafall. Your base keeps a log: calm, dry status lines, with a few leftovers of a human world in the phrasing.</p>
+        <ul class="lore-loglines">
+          <li><span>Landing</span>Terrafall complete. Region claimed for the Sponsor. Arrival clock: T+31 years.</li>
+          <li><span>First road</span>Road online. Built to Accord passenger standard.</li>
+          <li><span>Nightfall</span>Street lighting active. Traffic: freight only.</li>
+          <li><span>Uplink</span>Uplink secured. Listening on all channels. No response.</li>
+          <li><span>Capture</span>Command authority transferred. Their robots report for duty.</li>
+          <li><span>Defeat</span>Command core lost. Transferring authority. Hold position.</li>
+        </ul>
+        <figure class="lore-fig lore-base">
+          <img data-src="art/tod/night/buildings/lander@0.webp" width="512" height="512" alt="Your Command Base at night, its lights blue">
+          <div class="lore-clock" aria-label="Arrival clock">
+            <small>Arrival clock</small><b>T+31<span>years</span></b>
+            <small>Probability of contact</small><b>0.2<span>%</span></b>
+            <em>Still counting.</em>
+          </div>
+        </figure>
+        <p class="lore-end">“The arks were due 31 years ago. The welcome signs are still lit.”</p>
+      </section>
+    </div>
   </div>
 </div>
 
