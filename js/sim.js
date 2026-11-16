@@ -1954,8 +1954,13 @@ function dispatch(p) {
         const su = ps && take(ps.x, ps.y, 'sea', ps, r.g);
         if (su) { const n = canCarry(su, Math.min(r.n, portHas(ps)), r.g); assignHaul(su, ps, r.b, r.g, n); r.n -= n; any = true; continue; }
       }
+      // A Trade Terminal's lot comes by Road Train from storage that holds a worthwhile load of it (see below): picked
+      // as the nearest with any at all, a Harvester's few Fiber or a Depot's last Stone, no train was ever sent and the
+      // lot waited for good while the Command Base had plenty.
+      const termMin = BDEFS[r.b.type].terminal && r.b.built ? Math.min(TERMINAL.minLoad, r.n) : 0;
       for (const s of blds) {
         if (s === r.b || sup(s, r.g) <= 0 || !reachable(s) || !linked(s, r.b)) continue;
+        if (termMin && (sup(s, r.g) < termMin || !truckLinked(s, r.b))) continue;
         // (Not from a neighbour that feeds it this good by conveyor: that hands it over itself.)
         if (!r.keep && !s.paused && !s.cut && Math.abs(s.x - r.b.x) <= 1 && Math.abs(s.y - r.b.y) <= 1 && feedTargets(s).some((l) => l.c === r.b && l.goods.includes(r.g))) continue;
         const d = dist2(s.x, s.y, r.b.x, r.b.y);

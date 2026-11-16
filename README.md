@@ -112,7 +112,7 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
 | Torch (Foundry, 2 rounds of parts) | Flamethrower robot (`TORCH`, `torchFire`): every 0.2 s a cone (±0.5 rad, 1.9 tiles) does 0.35 to each enemy robot in it (through `damageBot`, so a facing shield stops it) and 0.8 to the building it burns, ×1.6 to defences, Walls and Gates (a Wall in about 6 s); a 12 s tank, one Fuel a fill (`reloadArmy`, `fuelPoint`, task `refill`); explodes with fuel aboard (`BLAST.torch`). 18 health |
 | Howitzer (Foundry; **switched off for now**: `BOTS_OFF` in `js/defs.js`) | Mobile siege launcher (`ROCKET`): parks 4–11 tiles from a building and fires 4 rockets (5 each, splash 2 to buildings, 4 to robots), reloads 4 Ammo at a garrison or storage; a Command Base or Keep stops at `missileFloor` (anything else it can knock out); hurt below 60% it goes to a Repair Station within `ROCKET.repairReach` (30) tiles; 14 hp. AI builds 1–3 and hunts the enemy's  A new one rolls off the Foundry to a post (`u.post`) it returns to after reloading; `u.stance` `hold` fires only on orders, otherwise it shells what comes in reach of its post without moving |
 | Depot | Extra storage, shortens hauling trips; give it supply orders to stock it as a forward base |
-| Trade Terminal | Bulk trade, docked within 2 tiles of a neutral Trade Post (`S.posts`, `TRADE_POST`, `placePosts`: placed fairly between the colonies at the start, one more than there are colonies, two in Colony; `nearPost`), one per post per colony, out past the usual reach; a rival's land round a post keeps you out (`TERMINAL`): 3 contracts at a time (new every 5 min), a lot of 30 of one good for Ore, Crystal, Stone, Fiber or Alloy at 65% of worth (`TRADE_VALUE`; Alloy only bought, never a good traded down for one worth under 1/1.3 of it, `tradePairOk`), +1.5%/tile beyond 16 (max +25%), each lot sold fetching 12% less for a while; served only by Road Trains and Freight Trains (`terminalSpare`, `updateTerminal`); its goods can't be spent until a train takes them home |
+| Trade Terminal | Bulk trade, docked within 2 tiles of a neutral Trade Post (`S.posts`, `TRADE_POST`, `placePosts`: placed fairly between the colonies at the start, one more than there are colonies, two in Colony; `nearPost`), one per post per colony, out past the usual reach; a rival's land round a post keeps you out (`TERMINAL`): 3 contracts at a time (new every 5 min), a lot of 30 of one good for Ore, Crystal, Stone, Fiber or Alloy at 65% of worth (`TRADE_VALUE`; Alloy only bought, never a good traded down for one worth under 1/1.3 of it, `tradePairOk`), +1.5%/tile beyond 16 (max +25%), each lot sold fetching 12% less for a while; served only by Road Trains and Freight Trains (`terminalSpare`, `updateTerminal`), a Road Train bringing the lot from storage that holds 10 or more of it (`TERMINAL.minLoad`: the nearest with only a few, a Harvester's Fiber, say, used to hold the lot up for good); its goods can't be spent until a train takes them home |
 | Ramp | Planned in Paths: cuts a slope into a one-level cliff so bots can climb it; counts as road |
 | Fuel Station | Recharges bots' batteries, four at a time; burns **Fuel** |
 | Bio Farm | A worker plants energy crops on fertile soil and harvests them into **Fuel** |
@@ -753,7 +753,23 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   stop where they would eat into that room, the Foundry makes warbots, and Haulers, trucks and other helpers aren't
   ordered (but a first Tanker); warbots past what it wants leave `AI_WORKER_ROOM` (6) places for workers. Without it a
   colony that had taken a lot of buildings made workers to staff them all until the limit was full, and never fielded
-  an army again (a 2 v 2 game ran past an hour). Its Missile Factory and Silos come
+  an army again (a 2 v 2 game ran past an hour). **Crystal** (every robot takes a Chip, every Chip a Crystal) runs short
+  by how long what's left would last, in stock and in the ground on its land, at the rate its Chip Fabs burn it
+  (`goodRates`; under `AI_CRYSTAL_MINS`, 10 minutes, counting at least `AI_CRYSTAL_BURN`, 4 a minute, once it has a
+  Foundry), not only by the clusters left (`P.short`, by tiles, came only once the last three were all there was,
+  too late to do anything). Short, with Crystal no-one holds within `AI_CRYSTAL_REACH` (20) tiles of a fort of its own
+  on the same ground, its Outposts head for it (the nearest pulls the next one its way); forts holding Crystal are worth more to attack
+  (`crystalHeld`); it docks a Trade Terminal from 10 minutes (`AI_CRYSTAL_TRADE_AT`), past the usual limit on sites,
+  and orders the Road Train for it straight away (it takes four Chips: once the Crystal had gone there were none left
+  to make it). Running low (`P.crLow`: short, or under 10 in stock with the Taps bringing in less than the Fabs use),
+  it puts up Crystal Taps first wherever clusters are left on its land, up to `AI_CRYSTAL_TAPS` (4), even with every
+  worker busy, and they get a worker first; its Smelters rest while it holds `AI_ALLOY_PILE` (40) Alloy, until it's
+  down to half (`b.alloyRest`: Alloy can't be sold, so the Ore and Fiber they'd burn go to the Terminal instead, and
+  their workers to the Taps); and at the Terminal (`aiTrade`) a contract that brings Crystal, or else Chips, comes
+  first, it never gives Crystal away, and a contract under way that brings neither is given up for one. Any contract
+  with no lot sold for `AI_TRADE_STALL` (5 minutes) is dropped for another. Before, in long 2 v 2 games the colony
+  left on the losing side took Alloy for Stone while its Foundry stood idle for want of Chips, Alloy piling up, and the
+  game ran to an hour. Its Missile Factory and Silos come
   only through `aiMissilePlan` (not the plain build plan, where a Hard rival put a factory up four minutes in), one
   site at a time, and the factory rests while no built Silo has room for another Missile. It walks its best spots for a
   gatherer (`walkRes`: only nodes within three times the reach on foot count), so it never puts a Harvester at the foot
