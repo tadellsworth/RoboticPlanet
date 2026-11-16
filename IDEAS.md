@@ -87,3 +87,39 @@ lands on a Command Base destroys it; Brutes break through Walls slowly; Road Tra
   the AI could pull more from forts far from the front.
   Since then: its Viaducts keep out of enemy guns and away from where one was lost, and a fort with another fort
   between it and the enemy can send its last warbot.
+
+## Lore expansions (held for later)
+
+From the lore bible (LORE.md). The owner's decisions (Nov 2026): the Silence stays 31 years, the Sponsors stay faceless,
+and it stays ambiguous whether the Murmur are only animals. The quick wins (narrator lines, doctrine names and voices,
+callsigns, region names, Ringfall, the *Wren*, panel flavor text, splash lines, the Arrival clock) are being done now;
+these wait for a later expansion:
+
+- **Mission story pass.** Rewrite the campaign briefings as "your first terrafall" in the narrator's voice, keeping the
+  tutorial clear.
+- **Research Lab story.** Results written as findings about the Murmur and the Silence, the last one "Home signal
+  analysis complete. No further instructions will follow."
+- **The Pathfinder wreck.** A neutral landmark on some maps (the joint lander that built the Trade Posts and Uplinks),
+  holding archive logs.
+- **Archives.** A page that fills with logs found across games (ark construction updates that stop, the last
+  transmission's background noise, the *Wren*'s silent waystation, machine traffic from other Catalog worlds, one signal
+  that matches no robot protocol), so players piece together Earth's fate without ever being told.
+
+### The Murmur as a real enemy (after the models are chosen)
+
+"The Murmur" is the blanket name; each class has its own, and each counters something robotic. Classes so far:
+Scuttler (small, fast, packs), Brute (armoured, breaks Walls), and new ones to design in the chosen style, such as a
+Drainer/Leech (latches onto vehicles, trains and buildings and drains their charge, shutting them down while it feeds),
+a Spitter (spits conductive crystal slurry that shorts robots and turrets for a moment: counters defence lines) and a
+Delver (tunnels under Walls and surfaces behind them: counters turtling). Mechanics from the lore:
+
+- A game setting (Off / Quiet / Active, like Planetary events), in Versus as well as Colony; none on the Lunar biome
+  (Penelope, the moon, is the only silent ground).
+- Burrows near Crystal seams and strike sites; surges after a Ringfall.
+- Drawn to charge: raids go for Fuel Stations, Generators, Crystal stockpiles; bigger colonies draw more.
+- They feed on the war: battle wreckage feeds their burrows, so long wars grow a third enemy that hits everyone (the
+  computer rivals have to handle them too).
+- Glimpsed, not seen: road lights going dark one by one at night as they come; sensor blips before contact.
+- Counters: Torches (built to burn back the Bloom) do extra damage to them and clear burrows; the Research Lab studies
+  them (earlier warnings, better counters). Regional variants: armoured in the Rust, pale and slow in the White,
+  violet-glowing in the Bloom.

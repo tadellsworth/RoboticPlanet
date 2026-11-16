@@ -263,7 +263,14 @@ How the game hints at it:
 
 ### Open decisions
 
-- [ ] Length of the Silence: 31 years is a placeholder. If it changes, keep 2165 as the present and shift the earlier dates.
-- [ ] Name the four Sponsors? Skipped for now; they stay faceless.
-- [ ] Are the Murmur only animals?
-- [ ] Should the Pathfinder wreck appear as a map landmark?
+- [x] Length of the Silence: 31 years (decided). The present stays 2165.
+- [x] Name the four Sponsors? No: they stay faceless (decided).
+- [x] Are the Murmur only animals? Never answered: it stays ambiguous (decided).
+- [ ] Should the Pathfinder wreck appear as a map landmark? (Held for a later expansion; see IDEAS.md.)
+
+### In the game
+
+Adopted names: the trader ship is the *Wren*; meteor showers are **Ringfall**; the rival styles are the doctrines
+(Balanced: the Steward, Turtle: the Warden, Raider: the Salvager, Rusher: the Herald, Tycoon: the Architect); "the
+Murmur" is the blanket name for the creatures, with classes such as the Scuttler and the Brute; the Lunar biome is
+Penelope, where no Murmur live.
