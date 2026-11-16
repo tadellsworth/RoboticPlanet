@@ -913,7 +913,10 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   worker busy, and they get a worker first; its Smelters rest while it holds `AI_ALLOY_PILE` (40) Alloy, until it's
   down to half (`b.alloyRest`: Alloy can't be sold, so the Ore and Fiber they'd burn go to the Terminal instead, and
   their workers to the Taps); and at the Terminal (`aiTrade`) a contract that brings Crystal, or else Chips, comes
-  first, it never gives Crystal away, and a contract under way that brings neither is given up for one. Any contract
+  first, it never gives Crystal away, and a contract under way that brings neither is given up for one. Its Terminal's
+  contracts are made for it the same way (`tradeShortest`: Crystal, then Chips, count as what it's shortest of while it
+  runs low, whatever lies in the ground on its land, which can be land out by the enemy's guns it can't work: a set of
+  contracts with neither had left one starving for ten minutes). Any contract
   with no lot sold for `AI_TRADE_STALL` (5 minutes) is dropped for another. Before, in long 2 v 2 games the colony
   left on the losing side took Alloy for Stone while its Foundry stood idle for want of Chips, Alloy piling up, and the
   game ran to an hour. Its Missile Factory and Silos come

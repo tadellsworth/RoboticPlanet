@@ -20,6 +20,13 @@ Still open: a neutral, shared exchange the rivals compete over; contracts for Ch
   on seeds 4242 (after the Fuel batch changed how the rival builds) and 4243 (before it); the test now plays seed 4244.
   A fix would have the hauler hold position or wait for the road to clear when every way home passes the threat.
 
+- **A passive rival never trades, builds a Port or a Howitzer, or raids** (to decide): `P.passive` (an early
+  mission's rival, on Easy) returns from `aiThink` before the missiles, and everything after them is skipped too:
+  the Port, Ferry and landings (`aiNaval`), Howitzers, the Trade Terminal's contracts (`aiTrade`), the Vulcan Bomber
+  and supply raids. "It builds, grows and defends, but never strikes first" reads as if only the strikes should go;
+  moving the Port and the trade above that line would let a passive rival on an island map, or short of Crystal, still
+  grow. It changes the early missions' rivals, so their mission runs would want checking.
+
 - **Does the south pair have an edge on Long Haul 2v2?** (to look into) In four computer-only 2 vs 2 games (seeds
   1 to 4, every rival Balanced) the south pair (players 0 and 1) won three, at 37, 19 and 25 minutes, and was ahead in
   the fourth when it stopped at 45 minutes. The map is the same for all four colonies, tile for tile (ground, deposits,

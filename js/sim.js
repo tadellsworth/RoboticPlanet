@@ -9426,6 +9426,11 @@ function tradeShortest(p) {
   // Alloy is never in the ground: it's short when there's little in stock.)
   const need = (g) => left[g] / (TRADE_LEFT[g] || 60) + (g === 'fiber' && S.buildings.some((b) => !b.dead && b.owner === p && (b.type === 'farm' || b.type === 'grower') && b.built) ? 1 : 0);
   const out = tradeGets().sort((a, b) => need(a) - need(b));
+  // A rival AI running low on Crystal by its own reckoning (P.crLow: what it has against what its Chip Fabs burn, see
+  // aiThink) is shortest of Crystal, then Chips, whatever lies in the ground on its land: that can be land it can't
+  // work, out by the enemy's guns, and a set of contracts with neither left one starving for ten minutes.
+  const P = S.players[p];
+  if (P && P.ai && P.crLow) for (const g of ['chip', 'crystal']) { const k = out.indexOf(g); if (k > 0) { out.splice(k, 1); out.unshift(g); } }
   out.left = left; // what's left of each, for the AI
   return out;
 }
