@@ -522,8 +522,11 @@ function metaGameOver() {
     const fell = RECORD_KINDS.filter(([kind]) => f.fell && f.fell[kind] !== undefined && R0[kind] && R0[kind].k === g.k);
     if (fell.length) lines.push(['rec', (f.fast ? 'And ' : 'New ') + (fell.length > 1 ? 'records: ' : 'record: ') + fell.map(([kind, , said, fmt]) => `${said} ${fmt(R0[kind].v)}`).join(', ') + '.']);
     for (const id of f.ach || []) { const a = ACHIEVEMENTS.find((x) => x.id === id); if (a) lines.push(['ach', `Achievement: ${a.name}. ${a.text}`]); }
-    if (box && lines.length) {
-      box.innerHTML = lines.map(([k, t]) => `<div class="om-${k}"><i aria-hidden="true">${k === 'rec' ? '★' : '◆'}</i><span>${esc(t)}</span></div>`).join('');
+    // (Each said once: played on past a victory and then lost, the second end screen has only what's new since.)
+    const said = f.said || [], fresh = lines.filter(([, t]) => !said.includes(t));
+    f.said = said.concat(fresh.map(([, t]) => t)); META.gamesDirty = true; metaFlush(true);
+    if (box && fresh.length) {
+      box.innerHTML = fresh.map(([k, t]) => `<div class="om-${k}"><i aria-hidden="true">${k === 'rec' ? '★' : '◆'}</i><span>${esc(t)}</span></div>`).join('');
       box.hidden = false;
     }
   } catch (e) { console.error('Terrafall: the end-of-game records failed.', e); }
