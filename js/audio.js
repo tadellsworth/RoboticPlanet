@@ -220,7 +220,7 @@ function _noise(dur, vol, o) {
 const SFX_GAP = { rumble: 2.5, eruption: 3, clank: 0.12, furnace: 0.6, machine: 0.5, ratchet: 0.4, press: 0.6, drill: 0.35, pumpthump: 0.3, beeps: 0.3, chop: 0.2, honkfar: 1.5,
   touchdown: 0.4, approach: 0.8, planetakeoff: 0.8, trainhorn: 1.2, brakes: 1, clack: 0.05, shiphorn: 2.5, bubble: 0.15, cricket: 0.1,
   launch: 0.3, rocket: 0.12, takeoff: 1.5, chute: 0.4, flakfire: 0.25, flak: 0.12, boom: 0.12, shellhit: 0.09, missilehit: 0.2, laser: 0.08, pulse: 0.14, hit: 0.07, produce: 0.25, alert: 1.5, complete: 0.3, order: 0.15,
-  weld: 0.25, scrape: 0.3, hiss: 0.6, airbrake: 1.2, honk: 2.5, nuke: 2, siren: 4,
+  weld: 0.25, scrape: 0.3, hiss: 0.6, airbrake: 1.2, honk: 2.5, passby: 0.35, beepback: 0.9, toot: 1, chirp: 0.15, servo: 0.25, nuke: 2, siren: 4,
   bombhit: 0.12, howitzerhit: 0.12, fireball: 0.2, collapse: 0.15, botboom: 0.1, bombfall: 0.15, incoming: 0.3, nukefall: 3,
   flame: 0.45, shieldhit: 0.08, shieldbreak: 0.3,
 };
@@ -685,6 +685,12 @@ function sfx(name, dest, y) {
       _tone(170, 0.06, 'square', 0.03, 90, 0, D);
       _noise(0.45, 0.06, { type: 'highpass', freq: 2500, to: 5000, attack: 0.01, delay: 0.04, dest: D });
       break;
+    // Busy streets (see audioTick: from where the traffic on screen bunches up).
+    case 'passby': { const f = 85 + Math.random() * 30; _tone(f, 0.9, 'sawtooth', 0.011, f * 0.8, 0, D); _noise(0.9, 0.02, { type: 'bandpass', freq: 380, to: 820, q: 0.8, attack: 0.35, dest: D }); break; } // an engine going by
+    case 'beepback': for (let k = 0; k < 3; k++) _tone(1040, 0.12, 'square', 0.006, null, k * 0.32, D); break; // a truck's warning beeps, backing or pulling round
+    case 'toot': { const f = 420 + Math.random() * 80; _tone(f, 0.12, 'square', 0.009, null, 0, D); _tone(f * 1.25, 0.12, 'square', 0.007, null, 0, D); break; } // a quick tap on the horn
+    case 'chirp': _tone(1500 + Math.random() * 500, 0.05, 'sine', 0.011, 2100, 0, D); _tone(1900 + Math.random() * 400, 0.05, 'sine', 0.009, 1500, 0.08, D); break; // a robot's 'coming through'
+    case 'servo': _tone(700, 0.22, 'sawtooth', 0.004, 1150, 0, D); _noise(0.2, 0.009, { type: 'bandpass', freq: 2500, q: 2, dest: D }); break; // a servo whirring
     // A Freight Truck's horn, stuck in traffic.
     case 'honk': {
       const lp = AUDIO.ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 1400; lp.connect(D);
@@ -952,6 +958,29 @@ function audioTick(dt) {
   if (spreaders.length && Math.random() < 0.3 + 0.1 * spreaders.length) at(pick(spreaders), 'scrape', 0.9);
   if (pavers.length && Math.random() < 0.4) at(pick(pavers), 'hiss', 1);
   WORLD.moving = moving; WORLD.trucks = trucks;
+  // Traffic where it bunches up: the robots and vehicles on the move on screen (every colony's), counted in 5-tile
+  // squares. The busiest square swells the traffic hum (updateBeds), and from squares with three or more on the move
+  // come engines going by, a truck's warning beeps, a toot of a horn and robots' chirps and servos: the busier the
+  // streets, the more often, and from where the traffic is.
+  const cells = new Map();
+  for (const u of S.bots) {
+    if (u.dead || u.inside || !u.path || !u.moved || !on(u.x, u.y)) continue;
+    const B = BOTS[u.type];
+    if (B.air || B.rail || B.sea || B.wild || B.war) continue;
+    const k = Math.floor(u.x / 5) * 4096 + Math.floor(u.y / 5);
+    let c = cells.get(k);
+    if (!c) cells.set(k, (c = []));
+    c.push(u);
+  }
+  let jam = 0;
+  const busy = [];
+  for (const c of cells.values()) { if (c.length > jam) jam = c.length; if (c.length >= 3) for (const u of c) busy.push(u); }
+  WORLD.jam = jam;
+  if (busy.length && Math.random() < Math.min(0.75, 0.04 * busy.length)) {
+    const u = pick(busy);
+    const kinds = BOTS[u.type].truck ? ['passby', 'passby', 'beepback', 'toot'] : ['chirp', 'chirp', 'servo', 'passby'];
+    at(u, pick(kinds), 0.5 + Math.min(0.35, busy.length * 0.02));
+  }
   if (WORLD.lava > 0.02 && Math.random() < Math.min(0.5, WORLD.lava * 3)) { // lava bubbling and popping somewhere on screen
     const ac = AUDIO.ctx, g = ac.createGain();
     g.gain.value = 0.6 * zoomLoud(); g.connect(AUDIO.fxBus);
@@ -993,10 +1022,10 @@ function updateBeds(live, dt) {
   // (Traffic comes and goes: the engines' pitch wanders and the level swells and eases, never one steady drone; and it's
   // two thirds as loud as it was, sitting under the music.)
   const tSwell = 0.82 + 0.18 * Math.sin(t * 0.13) * Math.sin(t * 0.051 + 1.3);
-  B.hum.gain.setTargetAtTime(live ? Math.min(0.032, 0.004 * (WORLD.moving || 0)) * zl * tSwell : 0, t, 0.4);
+  B.hum.gain.setTargetAtTime(live ? Math.min(0.032, 0.0025 * (WORLD.moving || 0) + 0.0035 * (WORLD.jam || 0)) * zl * tSwell : 0, t, 0.4); // (louder where it bunches up)
   if (live && WORLD.moving) { B.o1.frequency.setTargetAtTime(52 * (1 + 0.03 * Math.sin(t * 0.17)), t, 1.5); B.o2.frequency.setTargetAtTime(78.5 * (1 + 0.025 * Math.sin(t * 0.11 + 2)), t, 1.5); }
   B.g3.gain.setTargetAtTime(Math.min(1, (WORLD.trucks || 0) * 0.5), t, 0.4);
-  B.lp.frequency.setTargetAtTime(160 + Math.min(200, (WORLD.moving || 0) * 8), t, 0.5);
+  B.lp.frequency.setTargetAtTime(160 + Math.min(240, (WORLD.moving || 0) * 6 + (WORLD.jam || 0) * 10), t, 0.5);
   const b = typeof biome === 'function' && S ? biome() : 'desert';
   const wind = { desert: [480, 0.7, 0.03], jungle: [320, 0.6, 0.016], polar: [1100, 2.2, 0.035], volcanic: [180, 0.5, 0.03], lunar: [90, 0.4, 0.008],
     autumn: [600, 0.8, 0.028], savanna: [700, 0.9, 0.024], alien: [260, 3, 0.014], swamp: [240, 0.5, 0.01] }[b] || [480, 0.7, 0.03];
