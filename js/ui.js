@@ -2307,6 +2307,8 @@ function showMissionOver() {
 
 function openStats() {
   UI.stats = UI.stats || { good: 'alloy', type: null };
+  UI.stats.econ = UI.stats.econ || 'output';
+  UI.stats.mil = UI.stats.mil || 'army';
   $('screen-stats').hidden = false;
   renderStats();
 }
@@ -2317,7 +2319,7 @@ function renderStats() {
   const P = S.players[ME], st = P.stats;
   const made = Object.values(P.made || {}).reduce((a, v) => a + v, 0);
   const tiles = [['Time', fmtTime(S.time)], ['Buildings built', st.built], ['Bots built', st.bots - (st.startBots || 0)],
-    ['Goods produced', made.toLocaleString()], versus ? ['Rival buildings taken', st.captured] : ['Land claimed', Math.round(landShare(ME) * 100) + '%'],
+    ['Goods produced', made.toLocaleString()], versus ? ['Rival buildings taken', st.captured] : ['Land claimed', Math.floor(landShare(ME) * 100) + '%'],
     ['Bots lost', st.lost]];
   const players = versus ? S.players.map((P) => P.id) : [0];
   const ser = (fn) => players.map((p) => ({ name: playerName(p), color: CHART.series[p], values: fn(H.p[p] || {}) }));
@@ -2326,8 +2328,23 @@ function renderStats() {
   const use = usageByType(ME);
   const rows = Object.keys(use).map((k) => ({ key: k, label: BDEFS[k].name, note: use[k].n > 1 ? '×' + use[k].n : '', value: Math.round((use[k].use / use[k].up) * 100) }))
     .sort((a, b) => b.value - a.value);
-  if (!UI.stats.type || !use[UI.stats.type]) UI.stats.type = rows.length ? rows[0].key : null;
   const botsSer = ser((h) => (h.civ || []).map((v, k) => v + ((h.war || [])[k] || 0)));
+  // Economy and Military over time (series a save from before them lacks are padded at the start).
+  const pad = (vals) => { const v = vals.slice(); while (v.length < H.t.length) v.unshift(null); return v; };
+  const ECON = {
+    output: { label: 'Output', sub: 'Goods made a minute: everything your colony gathers and makes.', fn: (h) => (h.made || []).map((v, k, a) => (k && v !== null && a[k - 1] !== null && H.t[k] > H.t[k - 1] ? Math.max(0, Math.round(((v - a[k - 1]) / (H.t[k] - H.t[k - 1])) * 60)) : null)) },
+    blds: { label: 'Buildings', sub: 'Finished buildings that gather, make, store and move goods (not forts or guns).', fn: (h) => h.econ || [] },
+    bots: { label: 'Workers and vehicles', sub: 'Every robot and vehicle that isn\'t a fighter: Workers, Haulers, trucks, trains, ships, planes.', fn: (h) => h.civ || [] },
+  };
+  const MIL = {
+    army: { label: 'Army', sub: 'Warbots and the other fighters: Bulwarks, Torches, Strike Bombers.', fn: (h) => h.war || [] },
+    def: { label: 'Defences', sub: 'Forts and guns: Outposts, Bunkers, Keeps, turrets, Mortar Pits, Silos and the rest.', fn: (h) => h.def || [] },
+  };
+  const war = warOn();
+  if (!ECON[UI.stats.econ]) UI.stats.econ = 'output';
+  if (!MIL[UI.stats.mil]) UI.stats.mil = 'army';
+  const econSer = () => ser((h) => pad(ECON[UI.stats.econ].fn(h)));
+  const milSer = () => ser((h) => pad(MIL[UI.stats.mil].fn(h)));
   const landSer = ser((h) => h.land || []);
   const goodSer = ser((h) => (h.goods && h.goods[UI.stats.good]) || []);
   $('st-body').innerHTML = `
@@ -2337,30 +2354,37 @@ function renderStats() {
     <div class="chart-block"><h3>Goods on hand</h3><p class="sub">In storage plus finished goods waiting in buildings.</p>
       <div class="pick-row" id="st-goods">${goodsList.map((g) => `<button data-g="${g}" class="${g === UI.stats.good ? 'on' : ''}"><i class="gi ${g}"></i>${GOOD[g].name}</button>`).join('')}</div>
       ${chartLegend(goodSer)}<canvas class="chart" id="ch-goods"></canvas></div>
-    <div class="chart-block"><h3>How busy your buildings were</h3><p class="sub">Share of the time each kind of building was working, over the whole game. Tap one to see it over time.</p>
-      <div id="st-bars">${barChartHTML(rows, UI.stats.type)}</div></div>
-    <div class="chart-block" id="st-use-block" ${UI.stats.type ? '' : 'hidden'}><h3 id="st-use-title"></h3><p class="sub">Average share of the time busy, per 15 seconds.</p><canvas class="chart" id="ch-use"></canvas></div>`;
+    <div class="chart-block"><h3>Economy size</h3><p class="sub" id="st-econ-sub">${ECON[UI.stats.econ].sub}</p>
+      <div class="pick-row" id="st-econ">${Object.keys(ECON).map((k) => `<button data-k="${k}" class="${k === UI.stats.econ ? 'on' : ''}">${ECON[k].label}</button>`).join('')}</div>
+      ${chartLegend(econSer())}<canvas class="chart" id="ch-econ"></canvas></div>
+    ${war ? `<div class="chart-block"><h3>Military size</h3><p class="sub" id="st-mil-sub">${MIL[UI.stats.mil].sub}</p>
+      <div class="pick-row" id="st-mil">${Object.keys(MIL).map((k) => `<button data-k="${k}" class="${k === UI.stats.mil ? 'on' : ''}">${MIL[k].label}</button>`).join('')}</div>
+      ${chartLegend(milSer())}<canvas class="chart" id="ch-mil"></canvas></div>` : ''}
+    <div class="chart-block"><h3>How busy your buildings were</h3><p class="sub">Share of the time each kind of building was working, over the whole game.</p>
+      <div id="st-bars">${barChartHTML(rows, null)}</div></div>`;
   const xs = H.t;
   lineChart($('ch-bots'), { xs, series: botsSer });
   lineChart($('ch-land'), { xs, series: landSer, unit: '%' });
   lineChart($('ch-goods'), { xs, series: goodSer });
-  const drawUse = () => {
-    if (!UI.stats.type) return;
-    $('st-use-title').textContent = `${BDEFS[UI.stats.type].name}: busy over time`;
-    const vals = ((H.p[0] && H.p[0].use && H.p[0].use[UI.stats.type]) || []).slice();
-    while (vals.length < xs.length) vals.unshift(null);
-    lineChart($('ch-use'), { xs, series: [{ name: BDEFS[UI.stats.type].name, color: CHART.series[0], values: vals }], unit: '%', max: 100 });
+  lineChart($('ch-econ'), { xs, series: econSer() });
+  if (war) lineChart($('ch-mil'), { xs, series: milSer() });
+  // The Economy and Military pickers: which measure each graph shows.
+  for (const btn of $('st-econ').children) btn.onclick = () => {
+    UI.stats.econ = btn.dataset.k; sfx('click');
+    for (const b2 of $('st-econ').children) b2.classList.toggle('on', b2 === btn);
+    $('st-econ-sub').textContent = ECON[UI.stats.econ].sub;
+    lineChart($('ch-econ'), { xs, series: econSer() });
   };
-  drawUse();
+  if (war) for (const btn of $('st-mil').children) btn.onclick = () => {
+    UI.stats.mil = btn.dataset.k; sfx('click');
+    for (const b2 of $('st-mil').children) b2.classList.toggle('on', b2 === btn);
+    $('st-mil-sub').textContent = MIL[UI.stats.mil].sub;
+    lineChart($('ch-mil'), { xs, series: milSer() });
+  };
   for (const btn of $('st-goods').children) btn.onclick = () => {
     UI.stats.good = btn.dataset.g; sfx('click');
     for (const b2 of $('st-goods').children) b2.classList.toggle('on', b2 === btn);
     lineChart($('ch-goods'), { xs, series: ser((h) => (h.goods && h.goods[UI.stats.good]) || []) });
-  };
-  for (const btn of $('st-bars').querySelectorAll('.hbar')) btn.onclick = () => {
-    UI.stats.type = btn.dataset.k; sfx('click');
-    for (const b2 of $('st-bars').querySelectorAll('.hbar')) b2.classList.toggle('on', b2 === btn);
-    drawUse();
   };
 }
 
