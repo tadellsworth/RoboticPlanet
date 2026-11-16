@@ -825,8 +825,8 @@ const MISSIONS = [
     goals: [
       { kind: 'viaduct', n: 1, text: 'Span the canyon with a Viaduct',
         count: (P, S) => S.buildings.filter((b) => !b.dead && b.owner === 0 && b.built && b.type === 'viaduct' && b.far).length,
-        hint: '<b>Build</b> (<kbd>B</kbd>) → <b>Move</b> (<kbd>3</kbd>) → <b>Viaduct</b> (<kbd>V</kbd>): tap your mesa\'s north rim, then the clifftop across.',
-        ui: "#btn-build, #build-tabs [data-g='move'], .bcard[data-t='viaduct']" },
+        hint: '<b>Paths</b> (<kbd>R</kbd>) → <b>Viaducts</b> (<kbd>Shift</kbd>+<kbd>V</kbd>): tap your mesa\'s north rim, then the clifftop across.',
+        ui: "#btn-road, #banner-seg [data-v='viaduct']" },
       { kind: 'ropeway', n: 1, text: 'Run a Ropeway to another mesa',
         count: (P, S) => S.buildings.filter((b) => {
           // (Its far end is up, where bots couldn't walk to from the near end: another mesa, or the canyon floor. Not a
@@ -842,8 +842,8 @@ const MISSIONS = [
           }
           return true;
         }).length,
-        hint: '<b>Build</b> (<kbd>B</kbd>) → <b>Move</b> (<kbd>3</kbd>) → <b>Ropeway</b> (<kbd>Y</kbd>): a station by your roads, then a far end on another mesa.',
-        ui: "#btn-build, #build-tabs [data-g='move'], .bcard[data-t='ropeway'], #sh-layroad" },
+        hint: '<b>Paths</b> (<kbd>R</kbd>) → <b>Ropeways</b> (<kbd>Shift</kbd>+<kbd>Y</kbd>): a station by your roads, then a far end on another mesa.',
+        ui: "#btn-road, #banner-seg [data-v='ropeway'], #sh-layroad" },
       { kind: 'made', good: 'crystal', n: [20, 30, 40],
         hint: '<b>Build</b> (<kbd>B</kbd>) → <b>Gather</b> (<kbd>1</kbd>) → <b>Crystal Tap</b> (<kbd>C</kbd>) by the Crystal across the canyon. Then tap its site → <b>Lay road</b> (<kbd>R</kbd>).',
         ui: "#btn-build, #build-tabs [data-g='gather'], .bcard[data-t='tap'], #sh-layroad" },

@@ -167,6 +167,10 @@ lands on a Command Base destroys it; Brutes break through Walls slowly; Road Tra
   the AI could pull more from forts far from the front.
   Since then: its Viaducts keep out of enemy guns and away from where one was lost, and a fort with another fort
   between it and the enemy can send its last warbot.
+- **Bombing a Viaduct's deck** (Nov 2026). A bomb on the deck counts against the span: 14 off the end nearer it, or
+  off the other end if that one's weaker, so two bombs anywhere on a deck bring it down (bombs on each end tower still
+  leave both at 10). Open: should a deck be a target for warbots' Attack and the Army panel too (today they go for an
+  end tower)? And the rival never bombs a Viaduct (`AI_BOMB_VALUE` has none): on Sky islands that could break a stall.
 
 ## Lore expansions (held for later)
 

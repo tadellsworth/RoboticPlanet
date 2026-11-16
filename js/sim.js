@@ -8799,6 +8799,42 @@ function placeViaduct(owner, ai, aj, bi, bj) {
   return r;
 }
 
+/**
+ * The standing Viaduct whose deck runs over tile (i, j), between its ends: the end nearer the tile (at the middle of
+ * the span, the near end, the one it was built from), or null.
+ */
+function viaductOver(i, j) {
+  for (const b of S.buildings) {
+    if (b.dead || b.far || !b.link || !BDEFS[b.type].viaduct) continue; // (each span once, from its near end)
+    const f = getE(b.link);
+    if (!f || f.dead) continue;
+    const over = b.y === f.y ? j === b.y && i > Math.min(b.x, f.x) && i < Math.max(b.x, f.x)
+      : b.x === f.x && i === b.x && j > Math.min(b.y, f.y) && j < Math.max(b.y, f.y);
+    if (over) return Math.abs(i - f.x) + Math.abs(j - f.y) < Math.abs(i - b.x) + Math.abs(j - b.y) ? f : b;
+  }
+  return null;
+}
+
+/** The end of Viaduct b's span a bomb on its deck counts against: b (the end nearer it), or the other if that's weaker. */
+function deckBombEnd(b) {
+  const o = b.link ? getE(b.link) : null;
+  return o && !o.dead && o.armor < b.armor ? o : b;
+}
+
+/** Will the bombs already falling on the span Viaduct end b is one end of (on either end, or its deck) bring it down? */
+function spanDoomed(b) {
+  const o = b.link ? getE(b.link) : null, arm = new Map([[b.id, b.armor]]);
+  if (o && !o.dead) arm.set(o.id, o.armor);
+  for (const m of S.missiles) {
+    if (!m.bomb || !arm.has(m.target)) continue;
+    let e = m.target;
+    if (m.deck) for (const [id, a] of arm) if (a < arm.get(e)) e = id; // (as deckBombEnd: the weaker end)
+    arm.set(e, arm.get(e) - BOMBER.damage);
+  }
+  for (const a of arm.values()) if (a <= 0) return true;
+  return false;
+}
+
 /** The near abutment is built: put up the far one and open the Viaduct (or wait while the far end is blocked). */
 function viaductAcross(b) {
   if (!(b.viaTo >= 0)) return;
@@ -10603,23 +10639,40 @@ function strikeTarget(u, t) {
   return !!bt && !bt.air && !bt.wild && !t.inside && !t.dropping;
 }
 
-/** Why owner's bomber u can't strike `t` (a building or a bot), or '' if it can. */
-function strikeBlocked(owner, u, t) {
+/** Why owner's bomber u can't strike `t` (a building or a bot; `deck`: [i, j], a tile of a Viaduct's deck), or '' if it can. */
+function strikeBlocked(owner, u, t, deck) {
   if (!u || u.dead || u.owner !== owner || !BOTS[u.type].bomber) return 'Pick one of your Strike Bombers.';
   const base = planeBase(u);
   if (!base || u.inside !== base.id) return 'The bomber must be parked at its Airfield.';
   if (u.mission) return 'That bomber already has a target.';
   if (!strikeTarget(u, t)) return 'Pick an enemy building, or an enemy vehicle or robot out in the open.';
-  const tx = BDEFS[t.type] ? t.x + 0.5 : t.x, ty = BDEFS[t.type] ? t.y + 0.5 : t.y;
+  const [tx, ty] = strikeAim(t, deck);
   if (sortieFuel(u, base, tx, ty) > 99.5) return `Too far: a full tank takes the bomber ${planeReach(u)} tiles out and back.`;
   return '';
 }
 
-/** Send bomber u at `t`: it loads its bomb and Fuel at its Airfield, then takes off. '' or why not. */
-function orderStrike(owner, u, t) {
-  const why = strikeBlocked(owner, u, t);
+/** Where a bomber aims at `t`: a building's middle, a bot, or the middle of a Viaduct's deck tile `deck` ([i, j]). [x, y] */
+function strikeAim(t, deck) {
+  if (deck) return [deck[0] + 0.5, deck[1] + 0.5];
+  return BDEFS[t.type] ? [t.x + 0.5, t.y + 0.5] : [t.x, t.y];
+}
+
+/**
+ * Send bomber u at `t`: it loads its bomb and Fuel at its Airfield, then takes off. '' or why not. With (ai, aj), a tile
+ * of the deck of the Viaduct `t` is one end of: the bomb falls there, and the strike is on the end nearer it (the mission
+ * keeps the tile: see bombDrop).
+ */
+function orderStrike(owner, u, t, ai, aj) {
+  let deck = null;
+  if (ai !== undefined && ai !== null) {
+    const v = BDEFS[t.type] && BDEFS[t.type].viaduct && Number.isInteger(ai) && Number.isInteger(aj) && inMap(ai, aj) ? viaductOver(ai, aj) : null;
+    if (!v || (v !== t && v.id !== t.link)) return 'Pick an enemy building, the deck of an enemy Viaduct, or an enemy vehicle or robot out in the open.';
+    t = v; deck = [ai, aj];
+  }
+  const why = strikeBlocked(owner, u, t, deck);
   if (why) return why;
   u.mission = { kind: 'strike', target: t.id, phase: 'load', since: S.time };
+  if (deck) u.mission.deck = deck;
   return '';
 }
 
@@ -10643,7 +10696,7 @@ function bomberOnGround(u, base, dt) {
     usedGood(u.owner, 'ammo', BOMBER.ammo);
     u.bombLoad = BOMBER.ammo;
   }
-  const tx = BDEFS[tg.type] ? tg.x + 0.5 : tg.x, ty = BDEFS[tg.type] ? tg.y + 0.5 : tg.y;
+  const [tx, ty] = strikeAim(tg, M.deck);
   if (!fuelPlane(u, base, sortieFuel(u, base, tx, ty))) { M.noFuel = 1; return; }
   M.noFuel = 0;
   M.phase = 'out';
@@ -10656,16 +10709,24 @@ function bombDrop(u) {
   const M = u.mission, tg = getE(M.target);
   const bld = tg && BDEFS[tg.type];
   // Bombs already falling on it (another bomber's) will finish it: this one holds its bomb and flies home with
-  // it, so its Ammo goes back into the Airfield (only the Fuel for the trip is spent).
+  // it, so its Ammo goes back into the Airfield (only the Fuel for the trip is spent). A Viaduct is reckoned as a whole
+  // span: bombs on either end or its deck (spanDoomed).
   if (tg && !tg.dead && !(bld && captureOnly(tg))) { // (bombs only knock a Command Base or Keep down: every bomb counts there)
-    let due = 0;
-    for (const m of S.missiles) if (m.bomb && m.target === M.target) due += bld ? BOMBER.damage : BOMBER.botDamage * 2;
-    if (due > 0 && due >= (bld ? tg.armor : tg.hp)) { u.mission = null; headHome(u); return; }
+    if (bld && bld.viaduct && tg.link) { if (spanDoomed(tg)) { u.mission = null; headHome(u); return; } }
+    else {
+      let due = 0;
+      for (const m of S.missiles) if (m.bomb && m.target === M.target) due += bld ? BOMBER.damage : BOMBER.botDamage * 2;
+      if (due > 0 && due >= (bld ? tg.armor : tg.hp)) { u.mission = null; headHome(u); return; }
+    }
   }
+  // Aimed at a Viaduct's deck: the bomb falls on that tile (while the deck's still there, over the target's span).
+  const dv = bld && M.deck ? viaductOver(M.deck[0], M.deck[1]) : null, deck = !!dv && (dv === tg || dv.id === tg.link);
   // A vehicle on the move is led: the bomb's aimed where it will be when it lands.
   const lead = !bld && tg && (tg.vel || 0) > 0.05 ? (tg.vel || 0) * BOMBER.fall : 0, fa = tg ? tg.face || 0 : 0;
-  const x1 = bld ? tg.x + 0.5 : tg ? tg.x + dcos(fa) * lead : u.x, y1 = bld ? tg.y + 0.5 : tg ? tg.y + dsin(fa) * lead : u.y;
-  S.missiles.push({ bomb: true, owner: u.owner, from: u.id, target: M.target, t: 0, dur: BOMBER.fall, x0: u.x, y0: u.y, x1, y1 });
+  const x1 = deck ? M.deck[0] + 0.5 : bld ? tg.x + 0.5 : tg ? tg.x + dcos(fa) * lead : u.x, y1 = deck ? M.deck[1] + 0.5 : bld ? tg.y + 0.5 : tg ? tg.y + dsin(fa) * lead : u.y;
+  const bomb = { bomb: true, owner: u.owner, from: u.id, target: M.target, t: 0, dur: BOMBER.fall, x0: u.x, y0: u.y, x1, y1 };
+  if (deck) bomb.deck = 1;
+  S.missiles.push(bomb);
   u.bombLoad = 0;
   u.mission = null;
   headHome(u);
@@ -10673,15 +10734,23 @@ function bombDrop(u) {
   sfx('bombfall', x1, y1); // (its whistle as it falls, heard from where it will land)
 }
 
-/** A bomb lands: BOMBER.damage off the building it was aimed at, and harm to what's round it. */
+/**
+ * A bomb lands: BOMBER.damage off the building it was aimed at, and harm to what's round it. One on a Viaduct's deck
+ * (m.deck) counts against the span: off the end nearer it, or the other end if that's the weaker (deckBombEnd).
+ */
 function bombImpact(m) {
   blastFx(m.x1, m.y1, 1.0);
   sfx('bombhit', m.x1, m.y1);
   const tg = getE(m.target);
   const s2 = BOMBER.splash * BOMBER.splash;
-  if (tg && BDEFS[tg.type] && !tg.dead && foes(tg.owner, m.owner) && Math.floor(m.x1) === tg.x && Math.floor(m.y1) === tg.y) bombHit(tg, BOMBER.damage, m.owner);
+  let hit = null;
+  if (tg && BDEFS[tg.type] && !tg.dead && foes(tg.owner, m.owner)) {
+    if (m.deck) { const v = viaductOver(Math.floor(m.x1), Math.floor(m.y1)); if (v && (v === tg || v.id === tg.link)) hit = deckBombEnd(v); }
+    else if (Math.floor(m.x1) === tg.x && Math.floor(m.y1) === tg.y) hit = tg;
+  }
+  if (hit) bombHit(hit, BOMBER.damage, m.owner);
   for (const e of S.buildings.slice()) {
-    if (e === tg || e.dead || !foes(e.owner, m.owner) || e.owner < 0 || BDEFS[e.type].wild || dist2(e.x + 0.5, e.y + 0.5, m.x1, m.y1) > s2) continue;
+    if (e === hit || (e === tg && !m.deck) || e.dead || !foes(e.owner, m.owner) || e.owner < 0 || BDEFS[e.type].wild || dist2(e.x + 0.5, e.y + 0.5, m.x1, m.y1) > s2) continue;
     bombHit(e, BOMBER.splashBld, m.owner);
   }
   for (const u of S.bots) {
