@@ -3967,6 +3967,14 @@ function refreshBuildMenu() {
   }
 }
 
+/** What a garrison is made of, by kind, in the usual order: "4 Warbots, 1 Bulwark, 1 Torch". */
+function garrisonMix(b) {
+  const n = {};
+  for (const id of b.garrison) { const u = getE(id); if (u && !u.dead) n[u.type] = (n[u.type] || 0) + 1; }
+  return BOT_ORDER.filter((t) => n[t]).concat(Object.keys(n).filter((t) => !BOT_ORDER.includes(t)))
+    .map((t) => `${n[t]} ${n[t] === 1 ? BOTS[t].name : BOTS[t].plural || BOTS[t].name}`).join(', ');
+}
+
 function ownedText(type) {
   const { built, sites } = ownedCount(type);
   if (type === 'ramp') return sites ? `${sites} being built` : '';
@@ -4438,7 +4446,10 @@ function refreshBuildingSheet(b) {
       for (const u of S.bots) if (!u.dead && u.inside === b.id && u.type === 'worker') idle++;
       parts.push(`<div class="kv"><span>Workers resting here</span><span>${idle}</span></div>`);
     }
-    if (def.mil) parts.push(`<div class="kv"><span>${mine ? 'Warbots inside' : 'Defenders inside'}</span><span>${b.garrison.length} / ${def.garrison}</span></div>`);
+    if (def.mil) {
+      parts.push(`<div class="kv"><span>${mine ? 'Warbots inside' : 'Defenders inside'}</span><span>${b.garrison.length} / ${def.garrison}</span></div>`);
+      if (b.garrison.length) parts.push(`<div class="kv"><span>Made up of</span><span>${garrisonMix(b)}</span></div>`);
+    }
     if (def.mil && mine && !def.bunker) parts.push(`<div class="kv"><span>Territory radius</span><span>${def.terr} tiles</span></div>`);
     if (def.bunker) parts.push(`<div class="kv"><span>Fires at</span><span>enemy robots within ${def.range} tiles</span></div>`);
     if (def.keep) {
