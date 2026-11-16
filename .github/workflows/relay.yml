@@ -4,7 +4,7 @@
 #   CLOUDFLARE_ACCOUNT_ID  the Account ID shown on the Cloudflare dashboard (Workers & Pages, on the right)
 # Then Actions → Deploy multiplayer relay → Run workflow. Without the secrets it does nothing (and doesn't fail).
 # Player feedback (relay/src/feedback.js, the game's "Send feedback" form) needs two more secrets, then a run:
-#   FEEDBACK_REPO    the private repository reports go to, as owner/name (e.g. tadellsworth/terrafall-feedback)
+#   FEEDBACK_REPO    the private repository reports go to, as owner/name (here tadellsworth/terrafallfeedback)
 #   FEEDBACK_TOKEN   a fine-grained GitHub token for that repository only: Issues and Contents, read and write
 # Without them the relay still runs and the form says feedback isn't set up yet.
 name: Deploy multiplayer relay
