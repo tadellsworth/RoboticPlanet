@@ -45,6 +45,11 @@ const _DIRS = [[1, 0, 1], [-1, 0, 1], [0, 1, 1], [0, -1, 1], [1, 1, 1.4142], [1,
  * opts.breach: an armed warbot: enemy Walls and Gates count as passable but dear (BREACH_COST plus
  *   their armor), so it goes round a short way and plans to shoot through a long one.
  * opts.cover: a player id (the army on the march): tiles its enemies' guns reach cost COVER_COST more (dangerMap).
+ *
+ * An overpass (S.over) carries two roads that cross without meeting: nobody turns on one. A route only goes onto
+ * an overpass straight on and out the far side: one move from the tile before it to the tile after it (across any
+ * overpasses in a row), costing every step, with the overpass tiles kept in the path so bots drive over them. A
+ * route may still start on one (any way off it) or end on one (from any side).
  */
 function findPath(sx, sy, gx, gy, avoidFor, opts) {
   const roadOnly = !!(opts && opts.roadOnly), offMul = (opts && opts.offMul) || 1;
@@ -52,7 +57,7 @@ function findPath(sx, sy, gx, gy, avoidFor, opts) {
   const ferryOk = who !== undefined && !(opts && opts.noFerry) && navalMap();
   const guns = avoidFor !== undefined && avoidFor >= 0 && typeof dangerMap === 'function' && S.players[avoidFor] ? dangerMap(avoidFor) : null;
   const cover = opts && opts.cover !== undefined && S.players[opts.cover] ? dangerMap(opts.cover) : null;
-  const W = S.W, H = S.H, N = W * H;
+  const W = S.W, H = S.H, N = W * H, ov = anyOverpass();
   if (!inMap(gx, gy)) return null;
   const start = sy * W + sx, goal = gy * W + gx;
   if (start === goal) return [];
@@ -68,6 +73,39 @@ function findPath(sx, sy, gx, gy, avoidFor, opts) {
   };
   g[start] = 0; stamp[start] = gen; from[start] = -1;
   heap.push(start, h(sx, sy));
+  // Straight on from cur onto overpass tile a (direction dir) and out the far side: the tile after it (and after any
+  // more overpasses in a row), or the goal if it lies on one of them. The way there is kept as from = -2 - cur.
+  const overpass = (cur, a, dir, wall) => {
+    const dx = dir[0], dy = dir[1];
+    let ng = g[cur] + (tileCost(cur, dx, dy, offMul) + tileCost(a, dx, dy, offMul)) * 0.5 + wall + extra(a);
+    let ai = a % W, aj = (a / W) | 0, b = a;
+    while (b !== goal && S.over[b]) {
+      const bi = ai + dx, bj = aj + dy;
+      if (bi < 0 || bj < 0 || bi >= W || bj >= H) return;
+      const nb = bj * W + bi;
+      if (!walkable(nb) || !canStep(b, nb)) return;
+      let w = 0;
+      if (S.bAt[nb] && nb !== goal && !passTile(nb, who) && !(ferryOk && ferryLink(nb) >= 0 && getE(S.bAt[nb]).owner === who)) {
+        if (!breach || !breachable(nb, who)) return;
+        w = BREACH_COST + Math.max(0, getE(S.bAt[nb]).armor) * BREACH_PER_ARMOR;
+      }
+      if (roadOnly && !roadLike(nb) && nb !== goal && !(ferryOk && ferryLink(nb) >= 0)) return;
+      ng += (tileCost(b, dx, dy, offMul) + tileCost(nb, dx, dy, offMul)) * 0.5 + w + extra(nb);
+      b = nb; ai = bi; aj = bj;
+    }
+    if (closed[b] === gen) return;
+    if (stamp[b] !== gen || ng < g[b]) {
+      stamp[b] = gen; g[b] = ng; from[b] = -2 - cur;
+      heap.push(b, ng + h(ai, aj));
+    }
+  };
+  // What entering tile t costs on top of the going (as below): enemy land and guns, and the army's cover.
+  const extra = (t) => {
+    let e = 0;
+    if (avoidFor !== undefined) { const o = S.owner[t]; if (o >= 0 && o !== avoidFor) e += 6; if (guns && guns[t]) e += DANGER_COST; }
+    if (cover && (cover[t] & 1)) e += COVER_COST;
+    return e;
+  };
   let expanded = 0;
   while (heap.size) {
     const cur = heap.pop();
@@ -99,6 +137,7 @@ function findPath(sx, sy, gx, gy, avoidFor, opts) {
         const e = S.elev[cur];
         if (S.elev[nt] !== e || S.elev[a] !== e || S.elev[b] !== e) continue;
       } else if (!canStep(cur, nt)) continue; // cliffs block; ramps connect levels
+      else if (ov && S.road[nt] && S.over[nt] && nt !== goal) { overpass(cur, nt, dir, wall); continue; }
       let ng = g[cur] + dir[2] * (tileCost(cur, dir[0], dir[1], offMul) + tileCost(nt, dir[0], dir[1], offMul)) * 0.5 + wall;
       // Workers steer clear of enemy territory unless there is no other way, and well clear of enemy guns.
       if (avoidFor !== undefined) { const o = S.owner[nt]; if (o >= 0 && o !== avoidFor) ng += 6; if (guns && guns[nt]) ng += DANGER_COST; }
@@ -148,7 +187,17 @@ function findPath(sx, sy, gx, gy, avoidFor, opts) {
   }
   if (closed[goal] !== gen) return null;
   const path = [];
-  for (let t = goal; t !== start; t = from[t]) path.push(t);
+  for (let t = goal; t !== start;) {
+    path.push(t);
+    let f = from[t];
+    if (f <= -2) {
+      // Straight over an overpass (or a few) from f: they go in the path too.
+      f = -2 - f;
+      const d = Math.abs(t - f) < W ? Math.sign(t - f) : Math.sign(t - f) * W;
+      for (let k = t - d; k !== f; k -= d) path.push(k);
+    }
+    t = f;
+  }
   path.reverse();
   return path;
 }

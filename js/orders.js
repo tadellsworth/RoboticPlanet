@@ -176,7 +176,8 @@ const ORDERS = {
   roadDir(p, i, j, v) { if (inMap(i, j) && S.road[tIdx(i, j)] && roadOwnedBy(p, tIdx(i, j)) && v >= 1 && v <= 5) setRoadDir(i, j, v | 0); },
   /**
    * The junction tool, one tap: a light becomes a (planned) overpass, an overpass comes down, a planned overpass is
-   * called off, and a plain junction gets a (planned) light. What happened comes back for the banner.
+   * called off, and a plain junction gets a (planned) light. A light where an overpass can't go (a T-junction: only
+   * three roads) comes down instead, and why comes back. What happened comes back for the banner.
    */
   junction(p, i, j) {
     if (!inMap(i, j)) return { what: 'none' };
@@ -191,7 +192,7 @@ const ORDERS = {
     }
     if (S.lights[t] || P) {
       const why = placeOverpass(p, i, j);
-      if (why) { if (S.lights[t]) removeLight(t); cancelJunPlan(t); return { what: 'lightDown', why }; }
+      if (why) { const lit = !!S.lights[t]; if (lit) removeLight(t); cancelJunPlan(t); return { what: 'lightDown', why, lit }; }
       return { what: S.over[t] ? 'overUp' : 'overPlanned', lit: !!S.lights[t] };
     }
     const why = placeLight(p, i, j);
@@ -316,6 +317,12 @@ const ORDERS = {
   },
   recallRally(p, rid) { const r = rallyById(rid); return r && r.owner === p ? recallRally(rid) : 0; },
   recallAll(p) { return recallAll(p); },
+  /** Robots (a list of ids, or one) sent to the nearest Bot Foundry to be recycled: how many went, or why none could. */
+  recycle(p, ids) { return orderRecycle(p, ownIds(p, Array.isArray(ids) ? ids : [ids])); },
+  /** Robot `id` kept after all: its trip to be recycled is called off. True if it was on one. */
+  unrecycle(p, id) { const u = ownU(p, id); if (!u || !recycling(u)) return false; stopRecycle(u); return true; },
+  /** The Workers beyond what the colony needs (see workersWanted, spareBots) sent to be recycled: how many went. */
+  recycleSpare(p) { return recycleSpare(p, 'worker', workersWanted(p)); },
   /** Call back the warbots of player p attacking building tid. */
   callBack(p, tid) {
     let n = 0;

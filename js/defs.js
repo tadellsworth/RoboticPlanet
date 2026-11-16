@@ -108,6 +108,8 @@ const FIX_RATE = 2;
 const REPAIR_BELOW = { warbot: 0.7, other: 0.6 };
 const REPAIR_IDLE = { foes: 9, reach: 30 }; // an idle warbot with any damage goes to a Repair Station within `reach` tiles, if no enemy robot or gun is within `foes`
 const REPAIR_RETREAT = 0.35;      // a warbot this badly hurt pulls out of a fight for repairs (if a Repair Station can fix it)
+// A rival AI's danger spots (see noteDanger): how near one counts, how long the first death keeps it, and the longest it lasts.
+const DANGER_R = 4, DANGER_TIME = 180, DANGER_MAX = 900;
 const FUEL_ENERGY = 200;          // battery points one Fuel gives at a Fuel Station (2 full charges)
 /*
  * Trucks burn Fuel. Freight Trucks, Road Trains and Tankers have a fuel tank instead of a battery
@@ -1078,9 +1080,10 @@ const DIFFICULTY = {
  * style word, beside it where it helps ("Warden (turtle)": docLabel).
  * Each scales the rival's difficulty settings: grace (when it starts attacking), threshold (warbots it gathers before
  * an attack), army (how fast its army grows; armyFrom, when it starts), raids (how often it raids; raidFirst, the
- * first raid; raidSize and raidKeep, how many go and stay home), econ (how fast its bots work). turrets, walls and
- * missiles switch on its habits (see js/ai.js: aiStyle, aiLevel, AI_FORT, aiMissilePlan). The Steward (balanced) plays
- * the plain difficulty.
+ * first raid; raidSize and raidKeep, how many go and stay home), econ (how fast its bots work). turrets, walls,
+ * push (it marches only in one big push: aiPush), harass (raids that form up out of sight and go for the roads by its
+ * rival's working buildings, attacks on unguarded economy: aiRaid) and missiles switch on its habits (see js/ai.js:
+ * aiStyle, aiLevel, AI_FORT, aiMissilePlan). The Steward (balanced) plays the plain difficulty.
  * The words: noun and desc (the landing line: "Your rival is a Warden (turtle): it walls its base in..."), tag (a few
  * words, for the lobby's one-line note: "walls in, then comes late in force"), quote (a
  * line in the doctrine's voice, from LORE.md), play (how it plays, in depth, for the new-game screen: what it builds
@@ -1115,7 +1118,7 @@ const PERSONALITIES = {
       missile: ['Threat at the perimeter. Removing it.', 'Range confirmed. Firing. Day {day}.', 'Clearing the approach.'],
       surrender: ['Relief has not arrived.', 'Post abandoned. Day {day}. Relief has not arrived.'],
     },
-    grace: 1.5, threshold: 1.5, army: 0.9, raids: 0.3, turrets: true, walls: true,
+    grace: 1.5, threshold: 1.5, army: 0.9, raids: 0.3, turrets: true, walls: true, push: true,
   },
   raider: {
     name: 'Salvager', plain: 'raider', noun: 'a Salvager', desc: 'sends small bands of warbots to cut your supply lines, again and again',
@@ -1129,7 +1132,7 @@ const PERSONALITIES = {
       missile: ['Inventory reassigned. Ledger updated.', 'Write-off approved. Stand clear.', 'Salvage rights claimed. Collecting.'],
       surrender: ['Fine. Keep it. It was yours anyway.', 'Take it. Nobody\'s coming to collect.'],
     },
-    raids: 3, raidFirst: 0.4, raidSize: 3, raidKeep: 0, army: 1.15, armyFrom: 0.7,
+    raids: 3, raidFirst: 0.4, raidSize: 3, raidKeep: 0, army: 1.15, armyFrom: 0.7, harass: true,
   },
   rusher: {
     name: 'Herald', plain: 'rusher', noun: 'a Herald', desc: 'comes for you early with warbots, before its economy is big',
@@ -1288,6 +1291,16 @@ const START_STOCK = { fiber: 16, stone: 8, alloy: 8, chip: 4, crystal: 4, fuel: 
 const START_BOTS = { worker: 10, hauler: 5, tanker: 1, agribot: 1 };
 const START_WARBOTS = 4;
 const MIN_FREE_WORKERS = 2;   // workers always kept free for building
+/*
+ * Recycling (see recycleBot): a robot sent to a Bot Foundry (its panel's Recycle this unit, the Robots panel's Recycle
+ * spare Workers) walks or drives there and is taken apart. RECYCLE_SHARE of the Alloy and Chips that went into it (a
+ * round of parts, 1 Alloy and 1 Chip, for each of BOTS[k].parts) goes into that Foundry's stock, rounded down, Alloy
+ * first: a Worker gives 1 Alloy, a Freight Truck 1 Alloy and 1 Chip. Its place under the robot limit is free again.
+ * Spare Workers: those beyond one for each building that takes a Worker (sites too) and MIN_FREE_WORKERS +
+ * RECYCLE_KEEP free for building.
+ */
+const RECYCLE_SHARE = 0.5;
+const RECYCLE_KEEP = 2;
 
 /*
  * The story (LORE.md is canon: Ithaca I, the four vanguards, the Murmur, the Silence). Text only: nothing here changes

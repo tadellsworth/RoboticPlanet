@@ -691,7 +691,9 @@ Ask Claude Code if you'd like biome versions of the resources too (snow-capped b
 for now the resources look the same on every world.
 
 Bridges, tunnels and overpasses are drawn by the game itself for now (they have to join up with each other on any
-side); ask Claude Code if you'd like those as art too.
+side); ask Claude Code if you'd like those as art too. An overpass is drawn in two layers: its shadow on the
+north-south road, and the east-west deck (with its approach ramps) among the robots, so traffic on the deck drives
+over it and north-south traffic passes under it. Art for one would come the same way: a deck over a plain crossing.
 
 ### Batch 10: Walls and Gates
 

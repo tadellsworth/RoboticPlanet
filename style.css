@@ -659,13 +659,13 @@ body.mode-aim .objrow, body.mode-land .objrow, body.mode-airdrop .objrow { displ
 .gchip:hover { border-color: rgba(255, 255, 255, 0.3); }
 .selbar #selbar-clear { position: absolute; top: 6px; right: 6px; padding: 4px 8px; min-height: 0; }
 /* What's selected, a line of what they're doing, then the tools: under a finger All in view, Whole army, Box,
-   Info (and Undo just after an order), with a mouse Save as group only and the right-click hint above it; with
-   Torches selected, Scorch the earth either way. Under a finger the bar runs the width of the screen, with the close
-   button beside the title. */
+   Info, Recycle (and Undo just after an order), with a mouse Recycle and Save as group only and the right-click hint
+   above them; with Torches selected, Scorch the earth either way. Under a finger the bar runs the width of the screen,
+   with the close button beside the title. */
 .selbar .sel-tools { display: flex; gap: 6px; margin-top: 6px; overflow-x: auto; touch-action: pan-x; scrollbar-width: none; }
 .selbar .sel-tools::-webkit-scrollbar { display: none; }
 .selbar .sel-tools .btn { flex: none; white-space: nowrap; }
-.selbar:not(.touch) .sel-tools > :not(#selbar-group):not(#sel-scorch) { display: none; }
+.selbar:not(.touch) .sel-tools > :not(#selbar-group):not(#sel-recycle):not(#sel-undo):not(#sel-scorch) { display: none; }
 .selbar .sel-tools #selbar-group { margin-top: 0; }
 .selbar .ok { color: var(--good); }
 .selbar.touch { left: calc(var(--safe-l) + 8px); right: calc(var(--safe-r) + 8px); max-width: 520px; padding: 8px 10px 9px 12px; }
@@ -767,6 +767,10 @@ body.mode-road .objrow { display: none; }
   body.mode-road .banner-actions .road-seg { grid-column: 1 / 4; grid-row: 1; min-width: 0; flex-wrap: nowrap; overflow-x: auto; touch-action: pan-x;
     overscroll-behavior: contain; scrollbar-width: none; }
   body.mode-road .banner-actions .road-seg::-webkit-scrollbar { display: none; }
+  /* More tools beyond an edge: that edge fades out (segEdges), so a swipe along the row is the obvious thing to try. */
+  body.mode-road .banner-actions .road-seg.more-r { -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 34px), transparent); mask-image: linear-gradient(90deg, #000 calc(100% - 34px), transparent); }
+  body.mode-road .banner-actions .road-seg.more-l { -webkit-mask-image: linear-gradient(90deg, transparent, #000 34px); mask-image: linear-gradient(90deg, transparent, #000 34px); }
+  body.mode-road .banner-actions .road-seg.more-l.more-r { -webkit-mask-image: linear-gradient(90deg, transparent, #000 34px, #000 calc(100% - 34px), transparent); mask-image: linear-gradient(90deg, transparent, #000 34px, #000 calc(100% - 34px), transparent); }
   body.mode-road .banner-actions .road-seg button { flex: 0 0 auto; min-width: 44px; min-height: 44px; padding: 6px 9px; font-size: 13px; }
   body.mode-road #banner-route { grid-column: 4; grid-row: 1; }
   body.mode-road #banner-traffic { grid-column: 5; grid-row: 1; }

@@ -165,7 +165,7 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   that leaves it for open ground draws on from there, and built road is never touched by a drag);
   the banner, at the top of the screen, shows the cost, with **Undo**, **Clear** and **Build**. On an upright phone the
   banner (and every mode's banner) is docked across the bottom in place of the tools: the line is up to three lines,
-  the tools are one row to swipe along with Route to and Traffic at its end, Undo, Clear, Build and Done share the row
+  the tools are one row to swipe along (an end with more tools beyond it fades out, `segEdges`) with Route to and Traffic at its end, Undo, Clear, Build and Done share the row
   below, and **How it works** is a tab on the banner's edge that opens as a card over the map. Sketching up to the edge
   of the map scrolls it on under the finger (`paintScroll`), and a tap just above the docked banner glides the map up
   so the banner's new row doesn't cover it (`planInView`). Nothing is spent until
@@ -177,11 +177,28 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   So connectivity is worked out per player (`roadNet(who)`, `roadLikeFor`): an Outpost, Keep, Gate or Ropeway station
   joins roads only for its owner, and a building anyone can't pass blocks the road under it, exactly as `findPath` has
   it; `buildingNets`, `botNets`/`botGroups`, `pileNets`, `onHomeNet`, `roadRouteTo` and `roadReach` all use the
-  owner's view, so nothing counts as linked that a hauler can't drive. Each player's networks are numbered from
+  owner's view, so nothing counts as linked that a hauler can't drive. An overpass is two straight roads in all of
+  them (`tileNets`, `laneComp`: see Junctions below), as in `findPath`. Each player's networks are numbered from
   `(who + 1) * RN_SPAN`, so ferry-line groups (`netGroups`) never mix players up; `roadNet()` (everyone's at once) is
   for drawing roads and junctions. A capture (or a colony knocked out) bumps `S.roadVer`.
   Bots follow roads round corners (no diagonal shortcuts on or off a road).
-- **Your robots:** tap the robot counter in the top bar for every robot by type and what they're doing.
+- **Your robots:** tap the robot counter in the top bar for every robot by type and what they're doing, and the
+  spare Workers (`workersWanted`, `spareBots`) with **Recycle spare Workers**.
+- **Recycling** (`js/sim.js`, the recycling section; `RECYCLE_SHARE` and `RECYCLE_KEEP` in `js/defs.js`): a robot's
+  panel has **Recycle this unit** (**Delete**), a selection of warbots **Recycle these N units** on the selection bar
+  (a second tap to confirm; Undo), and Your robots **Recycle spare Workers** (orders `recycle`, `unrecycle`,
+  `recycleSpare`). The robot drops what it was doing (a load goes down in crates), heads for the nearest finished Bot
+  Foundry it can reach (on its ground; a road vehicle by road: `recycleFoundry`) with task `recycle`, and on arrival is
+  taken apart (`recycleBot`): `RECYCLE_SHARE` (half) of its parts, 1 Alloy and 1 Chip a round, rounded down, Alloy
+  first (`recycleYield`: a Worker or Warbot 1 Alloy, a Freight Truck, Tanker or Torch 1 Alloy and 1 Chip, a Crawler 3
+  and 3, its goods left in crates), goes into that Foundry's stock, and its place under the robot limit is free; a
+  ring, sparks, the goods floating up and a clank. Its status reads *Going to be recycled*; **Keep this unit**
+  (`stopRecycle`) or any other order calls it off; its Foundry wrecked, captured or dismantled on the way, it stops
+  where it is (`releaseBotsFrom`). A Worker or Hauler that takes cover from enemy warbots on the way (`takeCover`) sets
+  off again once they've gone (`u.recycleTo`), and isn't given other work meanwhile. Robots on their way don't count in
+  `dispatch` (free workers, Haulers, Tankers) and `callWorker` passes them over. Planes, ships, trains and the Murmur
+  can't be recycled (`recyclable`). Spare Workers: past one for each building that takes a Worker (sites too) and
+  `MIN_FREE_WORKERS` + `RECYCLE_KEEP` (4) free for building; picked idle first, never one running a building.
 - **Bot Foundry build order:** its panel lists every bot type with ▲ ▼ arrows to move it up or down (`b.order`,
   `foundryList`, `moveFoundryOrder`), and a choice of **Take turns** (one of each ordered type in turn, in the list's
   order) or **Top of the list first** (`b.omode = 'first'`: every bot of the top ordered type before the next). The
@@ -228,7 +245,16 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   lets one direction through at a time, switching when traffic waits the other way. On a busy crossing a light moves
   half as many goods again or more, while on a quiet one it costs a few percent (a light switches as soon as nobody is
   coming on green; `LIGHT_MIN_GREEN` only holds while green traffic is still coming). Tap the light again for an **overpass** (4 Cement,
-  3 Alloy): one road passes over the other and nobody slows or waits. Tap again to clear it. Short of goods, a tap
+  3 Alloy), only on a crossing of four roads (`isCrossing`: `roadNet().junc` holds 3 or 4): the east-west road passes over
+  the north-south one and nobody slows or waits, but **nobody turns there**. `findPath` only steps onto an overpass
+  straight on, as one move from the tile before it to the tile after it (across overpasses in a row, every step paid
+  for, the overpass tiles kept in the path); a route may still start or end on one. `roadNet` gives the tile two
+  labels, `comp` for its east-west road and `compV` for its north-south one (see `tileNets`, `laneComp`), so roads that
+  only meet at an overpass are separate networks, and `roadSearch`, Route to (`routeSearch`) and the zones
+  (`computeZones`) go straight across too. A route planned before the overpass went up and turning on it is planned
+  again (`routeCheck`). On a T-junction the second tap clears the light and says why (`OVER_T_WHY`); an overpass left on
+  one (a crossing that lost a road, or an older save) becomes a traffic light (`overToLight`, the rest of its cost
+  refunded) and a planned one a planned light. Tap again to clear it. Short of goods, a tap
   plans the light or overpass instead (`S.junPlan`, a `'j'` entry in `S.planQ`): it's paid all at once when the goods
   are in (oldest plans first) and goes up then; a light already standing keeps working while its overpass waits, and its
   Alloy counts toward it (`junPlanCost`). Calling a plan off gives nothing back; the AI pays up front.
@@ -515,7 +541,10 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   rarely, Hard often; a Salvager far more) once it has warbots to spare: out of reach of every gun (Pulse Turrets, Minigun
   Nests, Bunkers, Mortar Pits, Disruptor Towers, Keeps: `aiDefReach`, plus 3½ tiles for the raiders' spread) and of
   garrisons with two armed warbots in them, by a way in that crosses no gun's reach (`aiRouteHot`: the best four
-  stretches are tried in turn). Every other raid (`P.raidN`), with a Torch of its own ready in a garrison, it picks a
+  stretches are tried in turn). A raid's clock (`RAID_TIME`) starts when the first raider reaches the flag (`P.raid.at`;
+  until then it has two seconds a tile from home and half a minute), and the band comes home early when the enemy
+  army within 5 tiles of it outnumbers it. The rival answers your raids (`aiCounterRaid`) only when it can send a third
+  more warbots than the flag has. Every other raid (`P.raidN`), with a Torch of its own ready in a garrison, it picks a
   road within `AI_SCORCH_NEAR` (6) tiles of an enemy Bio Farm instead and sends a Torch along (`aiRaidTorch`); a Torch on
   a raid with a full tank burns the nearest patch of an enemy farm's soil within `AI_SCORCH_REACH` (8) tiles that no gun
   covers (`aiRaidScorch`), refills and comes back to the flag (`u.resume`). Missiles crater the roads where they land.
@@ -808,9 +837,16 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   way (foes within 6.5 tiles of the flag, leash 9).
 - **Rival doctrines** (the lore's command doctrines, LORE.md; `PERSONALITIES` in `js/defs.js`, each player's `style`,
   applied by `aiStyle`/`aiLevel` in `js/ai.js`; the keys stay the old style words): each scales the difficulty's grace
-  period, attack threshold, army growth and raid rate. The **Steward** (`balanced`) is the plain AI. The **Warden** (`turtle`):
+  period, attack threshold, army growth and raid rate (the attack threshold stays between 3 and `AI_THRESHOLD_MAX`, 9:
+  an Easy Warden's came to 11, more than its army ever grew to). The **Steward** (`balanced`) is the plain AI. The **Warden** (`turtle`):
   later and bigger attacks, rare raids, a square ring of Walls and Gates six tiles round its Command Base
-  (`aiTurtleWalls`) and a turret more every four minutes (up to six). Every doctrine fortifies (`AI_FORT`, `aiFort`):
+  (`aiTurtleWalls`) and a turret more every four minutes (up to six). It marches only in one big push (`aiPush`,
+  `push`): before 22 minutes (`AI_PUSH_AT`) only with twice its attack threshold and half as many again as its rival's
+  army and two more; from then on with its threshold and two more than its rival's (after a push, as many as that push
+  took less two). For four minutes (`P.pushOn`) its home guard is two, its Keeps hold two and its Outposts none, and the
+  march takes all it can gather, its threshold at least; never while its base is threatened, and until its push it
+  keeps a third of its army at home (see the home guard below). (It used to march in a quarter of its games, half an
+  hour in, with a third of its army kept back.) Every doctrine fortifies (`AI_FORT`, `aiFort`):
   up to `turrets` Pulse Turrets, one more every `every` seconds (round the Command Base on the side facing the rival,
   spread apart), a Minigun Nest or Bunker by its fort nearest the rival every six minutes from about ten minutes in (up to
   `front`, through `P.defWant`), and with chance `walls` (decided once a game from the seed) an arc of Wall seven tiles
@@ -830,17 +866,25 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   workers crawled, which in turn starved the Fiber, Ore and Alloy. Low for `AI_FUEL_DRY` (60 s) with no Bio Farm that
   has soil and no Refinery with a working pump (`aiFuelSource`), it is dry (`P.fuelDry`): at its Trade Terminal it
   takes the steep Fuel contract (after a Crystal one, before Chips), and dry for `AI_FUEL_TRADE` (3 minutes) it docks a
-  Terminal for it, from 10 minutes. Down to fewer than `AI_FEW` (6) workers after the first
-  minute (a raid got the rest), it triages until it has `AI_ENOUGH` (8) again: its open sites are called off and only a
-  missing link of the chain that makes bots (`AI_CHAIN`) is started, every staffed building rests but the Mine,
-  Smelter, Chip Fab and Foundry while they have what they work with (and a gatherer short of its good), so the few
-  workers go down the chain to the link that can work, and the Foundry makes workers alone (`P.triage`). Without it
-  a colony left with two to four workers kept them all busy and never made another. At the bot limit (90 in Versus) it
+  Terminal for it, from 10 minutes. Down to fewer than `AI_FEW` (8) workers after the first
+  minute (a raid got the rest), it triages until it has as many as its staffed buildings want and two more
+  (`AI_ENOUGH` 10 at least, `AI_PLENTY` 16 at most): its open sites are called off and only a missing link of the
+  chain that makes bots (`AI_CHAIN`) is started, every staffed building rests but the links the next robot waits for
+  (the Foundry while it has a part of each kind, or always with more than three workers; the Chip Fab while Chips are
+  short; the Smelter while Alloy is short; a Mine while Alloy and Ore both are; and a gatherer short of its good), so
+  the few workers go down the chain to the link that can work, and the Foundry makes workers alone, a Hauler first
+  when it has none and three workers (`P.triage`). With no Hauler left, one worker stays free to carry, and a link
+  that holds a round of its inputs, with room for what it makes (`hasRound`), takes even that one until the round
+  is used (`dispatch`). Without it a colony left with one to three workers carried, or ran a Smelter piling up Alloy
+  with no Chips, and never made another. At the bot limit (90 in Versus) it
   keeps room for the army it wants (`aiWantArmy`, but no more than `AI_ARMY_ROOM`, two fifths of the limit): workers
   stop where they would eat into that room, the Foundry makes warbots, and Haulers, trucks and other helpers aren't
   ordered (but a first Tanker); warbots past what it wants leave `AI_WORKER_ROOM` (6) places for workers. Without it a
   colony that had taken a lot of buildings made workers to staff them all until the limit was full, and never fielded
-  an army again (a 2 v 2 game ran past an hour). **Crystal** (every robot takes a Chip, every Chip a Crystal) runs short
+  an army again (a 2 v 2 game ran past an hour). With less room than that army wants (and outside Colony), it scraps
+  its extras (`AI_SCRAP`): Workers past the ones its buildings call for and 4 more, then Haulers past the ones it wants
+  and 2 more (4 at least), go to its Foundry to be recycled (`recycleSpare`), at most 4 on their way at once, until the
+  room is there; its Foundry fills it with warbots. **Crystal** (every robot takes a Chip, every Chip a Crystal) runs short
   by how long what's left would last, in stock and in the ground on its land, at the rate its Chip Fabs burn it
   (`goodRates`; under `AI_CRYSTAL_MINS`, 10 minutes, counting at least `AI_CRYSTAL_BURN`, 4 a minute, once it has a
   Foundry), not only by the clusters left (`P.short`, by tiles, came only once the last three were all there was,
@@ -897,11 +941,60 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   beach covered by more than the boatload less two) count them the same way. Measured in the sim on open ground: two
   warbots beat a lone nest with the lead at 5 of 12 health, a Bulwark and a warbot kill it in about 14 s untouched;
   two warbots die to a Pulse Turret, three sent at the building beside one all die, three at the turret lose one.
+  **Marches, storms and the home guard** (Medium and up; `aiMarch`, `aiStorm`, `aiStage`, `aiBattles`): nothing goes
+  for five minutes within 8 tiles of where an attack or march lost more than half its warbots, unless half as many
+  again go (`P.fights`, `P.beaten`); an attack whose squad couldn't shoot through the walls on its way (`attackBreach`)
+  isn't sent, nor tried there again for a minute (every level). With nothing in reach, a big army (twice the attack
+  threshold) marches on the enemy fort that takes the fewest to beat (`aiTakeNeed`: what an attack on it counts, and
+  never less than the plain march, twice the threshold and the guns at the flag; plus 0.15 a tile from home), with that
+  many and two more (14 to 22), Bulwarks at its head and at the gun covering the flag first (`r.first`); with fewer it
+  masses: the army target rises (`P.massFor`, `aiWantArmy`), its Outposts with no enemy near keep no warbot back
+  (`keepW` 0), the spot is softened (`P.soften`) and a Bulwark ordered (`P.shieldWant`), until it marches. With a
+  decisive lead (half as many again as the enemy's army, and four more) the next march is a storm of the enemy Command
+  Base (`P.stormOn`): up to 30 warbots form up under a flag about 9 tiles out, on the side it comes from, where the
+  fewest enemy guns reach with three tiles to spare (`aiStage`, on `DANGER.guns`); once three in five stand there the
+  flag moves beside the base and they go in at the gun covering it first (`r.first`, the next one as each falls), then
+  the base. It masses for it up to four minutes (`P.stormT`) and calls it off when under two in five are left armed.
+  Against a crushed rival (twice its army and two more) it storms however the base's guns count, once it can gather
+  twice the enemy's whole army and two more, 8 at least, and three in five of its own armed army outside Bunkers (or
+  the full count, if that is less); with three times the enemy's army and four more it masses for that and marches on
+  nothing else meanwhile. An Easy rival marches as the plain rule says, and in an Uplinks game the forts holding the
+  enemy's Uplinks still come first. The home guard (`P.homeGuard`, through `keepAt` and `homeGuarded`): while four or
+  more enemy warbots stand within 12 tiles of its base, or the base was hit in the last half minute (`P.homeCall`),
+  about a third of its army (2 to 8) stays in its Command Base and up to 3 in each Keep, out of every attack, raid and
+  march, the rear's too, and new and idle warbots go there first (`goGarrison`); otherwise 2, and the usual one when no
+  enemy army can walk to its base (on an island). A Salvager keeps the usual one, threatened or not (its doctrine's
+  thin home guard: with two its first raid waited for a fifth warbot, four minutes late). With twice its rivals' warbots and two more its Outposts keep none
+  back. A Normal or Hard rival (a Warden on any level) answers an army parked on its land, or within 14 tiles of its
+  Command Base, with a Mortar Pit: four or more enemy warbots there, while no other defence is on order, put one by its
+  fort nearest them, 7 to 10 tiles from where they stand (`P.defWant.ax`/`ay`, see `aiSearchSpot`), up to three, one at
+  most every three minutes (`P.parkAt`). It remembers where its civilians were shot down (`noteDanger`, `P.danger`):
+  for 3 minutes, 3 more for each further death within 3 tiles, up to 15, its workers neither build, mend nor pave
+  within `DANGER_R` (4) tiles of the spot (or of where the one shot was going) and it puts no site there (`dangerAt`).
+  The danger map sees the guns that can fire now; this sees one that fires now and then, such as a Pulse Turret out of
+  the map while it waits for its next Crystal. Nor does it build for five minutes within 4 tiles of where a building
+  or site of its own was destroyed by force (`destroyBuilding` adds a `P.avoid` entry with `r2` 16).
   Once it's ready to march it orders a Bulwark for every five warbots (two, three against a dug-in rival) and a Torch
   for every four (three, four), only with Fuel for Torches. The **Salvager** (`raider`): raids three times as often from early on,
-  keeping none back: its band of three (`raidSize`) goes as soon as it has three to send (`raidKeep` 0). The **Herald** (`rusher`): the fastest-growing army, raids now and then, few turrets. The **Architect** (`tycoon`): its bots work 15%
-  faster (`econ`), it builds extra Smelters and Chip Fabs and goes for Missile Silos (up to three) once its Bot Foundry
-  runs. The new-game screen's **Rival doctrine** chips set every computer player's (`UI.menu.style`: 0 Random, then
+  keeping none back: its band of three (`raidSize`) goes as soon as it has three to send (`raidKeep` 0), and may take a
+  rear fort's last warbot. Its raids (`harass`) go for the busiest road by the most of its rival's working buildings
+  (half as much again for each within 3 tiles, up to four), clear of every manned fort by 10 tiles and of the rival's
+  warbots in the field by 8, and the band forms up on the way out of the rival's land (`aiRaidStage`: the first tile back
+  toward home 4 tiles clear of it, `P.raid.to`) before its flag moves on to the road, so the rival's warbots aren't
+  waiting there (they answer a flag on their land). Its attacks put a working building, Fuel Station or Depot that
+  little guards ahead of a fort. The **Herald** (`rusher`): the fastest-growing army, raids now and then, few turrets. The **Architect** (`tycoon`): its bots work 15%
+  faster (`econ`), it builds extra Smelters and Chip Fabs (and a second Crystal Tap) and goes for Missile Silos (up to
+  three) once its Bot Foundry runs: its programme (`aiMissilePlan`) starts from ten minutes once it has two warbots
+  more than its rival (five at least) and two workers to spare; the Missile Factory and then each Silo (the next once
+  the ones it has hold a Missile each) go down as soon as the Cement is there, one past its site limit, its first Ammo
+  Plant and turret still going ahead; its Bot Foundry rests for them only while it has three warbots more than its
+  rival, the factory rests while no Silo has room or its army is more than two behind its rival's, and from
+  `AI_ALL_IN` (28 minutes) it rests for good. Its Silos stand back from the border, nearest home with six of its
+  rival's buildings in reach (`aiSearchSpot`). On Normal and Hard its Missiles go at what its rival lives on
+  (`aiMissileWorth`, by `AI_BOMB_VALUE`), then any other working building, and at a fort only when its warbots in reach
+  could follow; nothing worth less, a Wall say, gets one. Under siege (`P.homeCall`) the doctrines answer in their own
+  ways: a Salvager raids at once, a Warden starts no push, and an Architect on Normal or Hard fires its Missiles into the
+  biggest knot of enemy warbots within 12 tiles of its Command Base (`aiMissileKnot`). The new-game screen's **Rival doctrine** chips set every computer player's (`UI.menu.style`: 0 Random, then
   `PERSONALITY_ORDER`); with three or four players **Each rival** (a dropdown per colour) sets each computer player's own
   (`UI.menu.styles`, by player slot 0 to 3, null: as the chips), and in multiplayer the host picks each computer place's
   in the lobby (sent round with the settings as `styles`, by player slot, so a choice stays with its colony when people
@@ -931,8 +1024,18 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   the Command Base) keep Cement and Ammo and take in no Ore, Crystal, Stone or Fiber (`reject`): a Depot among the far
   Mines used to collect their whole output, a long run from the Smelters waiting for it. Its Bot Foundry rests to save
   for a Missile Factory or Silo (`aiMissilePlan`) only while the army isn't well behind and the colony has the workers
-  and the Haulers its buildings call for (an Architect rests it sooner, as before): with the army alone to go by, it stood
-  off up to two fifths of a war game while buildings waited for workers.
+  and the Haulers its buildings call for (an Architect by its rival's army: see Rival doctrines): with the army alone to
+  go by, it stood off up to two fifths of a war game while buildings waited for workers. A rival with one site at a time
+  (Easy) puts the plan's opening, up to its first Bot Foundry (`AI_OPENING`), ahead of every other ask from six minutes
+  in (`AI_EASY_OPENING`) until its Foundry is under way: expansion Outposts, a spare gatherer and the Ammo Plant used
+  to take its only slot first, the Outposts then waited minutes for their roads, and most Easy rivals never built a
+  Smelter or a robot. (Its first minutes go as before, so it still opens slower than a Normal rival.) On every
+  difficulty, once its Bot Foundry stands, with no Mine (or no Crystal Tap) at work, none on the way and under 4 Ore
+  (or Crystal) in store, one goes up first, past the usual limit on sites (`starved`): a gatherer counts as at work
+  while it has a node it can go to, on no rival's land and out of enemy guns (`aiGathers`), and a site as on the way
+  for 150 s or once a road reaches it. Sites stuck where its robots won't go (their road through ground where they were
+  shot, see `noteDanger`) used to hold every place while the last field ran dry, and two rivals could sit at 0 Chips
+  with a few warbots each for 20 minutes.
 - **The story** (LORE.md is canon; text and presentation only, nothing in it changes a rule). **Callsigns**
   (`CALLSIGNS`, `callsign(p, colour)`): players are named COBALT (player 0, blue), VERMILION (red), VIRIDIAN (green) and
   TYRIAN (purple) wherever the game used to say "the Red rival" (`playerName`: 'You', a person's name in multiplayer,
@@ -1141,7 +1244,8 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   and tunnels, **V** ramps, **Shift+V** viaducts, **Shift+Y** ropeways (`PATHS_SHIFT_KEYS`: every plain letter is taken),
   **E** pave, **O** one-way arrows, **L** junctions, **X** walls, **T** traffic map), **Q** army, **C** recall all warbots, **F** select all warbots, **Shift+F** a Bot Foundry's Order bots list from anywhere without moving the map (again: the next Foundry, `openFoundryOrders`), **J** latest alert,
   **H** base, **I** statistics, **U** robots, **Y** goods, **[ ]** speed, **+/−** zoom, **M** minimap, **Enter** the banner's main
-  button, panel buttons by the key shown on them (`SHEET_KEYS`; **Delete** twice demolishes), **Space** pause, **Esc** back / clear selection (in Paths it takes back the last stroke; **Ctrl+Z** is Undo there), **Alt+Enter**
+  button, panel buttons by the key shown on them (`SHEET_KEYS`; **Delete** twice demolishes, and on a robot's panel
+  recycles it), **Space** pause, **Esc** back / clear selection (in Paths it takes back the last stroke; **Ctrl+Z** is Undo there), **Alt+Enter**
   full screen (also a top-bar button and a pause-menu item). Chrome opens the installed app in a plain window on a
   computer (it ignores the manifest's `fullscreen`), so the app goes full screen itself on the first click unless you
   left full screen last time; Esc stays the game's key (`navigator.keyboard.lock`; hold it to leave). On a screen wider
