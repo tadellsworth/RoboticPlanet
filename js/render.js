@@ -2563,6 +2563,7 @@ function drawBuilding(ctx, type, cx, cy, s, owner, b) {
     // A working loop (<type>-work-0…7, only the parts that move), played at 8 frames a second while it works.
     if (b && b.built && working && ART[type + '-work-0']) drawArt(ctx, ART[`${type}-work-${Math.floor(t * 8) % 8}`] || ART[type + '-work-0'], cx, cy, s);
     if (full) { ctx.globalAlpha = fade; drawArt(ctx, full, cx, cy, s); ctx.globalAlpha = 1; }
+    if (type === 'viaduct' && b) viaductJoins(ctx, b, cx, cy, s);
     if (type === 'turret' && art.anchor) {
       const head = turretHead(owner, b ? b.aim : Math.PI / 4);
       if (head) drawArt(ctx, head, cx, cy, s);
@@ -2769,6 +2770,7 @@ function drawBuilding(ctx, type, cx, cy, s, owner, b) {
       ctx.fillStyle = '#e8e4dc';
       for (const sgn of [-1, 1]) { ctx.beginPath(); ctx.arc(cx + px * sgn * (hw + 1 * u) - ax * 3 * u, cy + py * sgn * (hw + 1 * u) - ay * 3 * u, 2.2 * u, 0, Math.PI * 2); ctx.fill(); }
       ctx.fillStyle = color; ctx.beginPath(); ctx.arc(cx - ax * 7 * u - px * 7 * u, cy - ay * 7 * u - py * 7 * u, 2 * u, 0, Math.PI * 2); ctx.fill();
+      if (b) viaductJoins(ctx, b, cx, cy, s);
       break;
     }
     case 'ropeway': {
@@ -3180,6 +3182,38 @@ function gateOpen(g) {
 }
 
 /** Which way a Viaduct's span leaves its abutment b: [dx, dy] (east when it isn't known yet). */
+/**
+ * Roads joining a Viaduct's abutment from the sides or behind (any of the three sides the span doesn't leave
+ * from): the road's surface carries on across the abutment's curb onto its deck, so it reads as one road and not
+ * a road that stops at a concrete block. Drawn over the abutment, in the joining road's own surface.
+ */
+function viaductJoins(ctx, b, cx, cy, s) {
+  const [ax, ay] = viaductDir(b), t = tIdx(b.x, b.y), k = s / TP, joins = [];
+  for (const [di, dj] of [[0, -1], [1, 0], [0, 1], [-1, 0]]) {
+    if (di === ax && dj === ay) continue; // (the span's own side)
+    const i = b.x + di, j = b.y + dj;
+    if (!inMap(i, j)) continue;
+    const n = tIdx(i, j);
+    if (!roadLike(n) || !canStep(t, n)) continue;
+    joins.push([di, dj, ROAD_LOOK[S.pave[n] || 1] || ROAD_LOOK[1]]);
+  }
+  if (!joins.length) return;
+  // The arms from the abutment's edges in to its middle, where the deck is, and a junction there (as a road tile
+  // draws one): the edges first, then the surfaces over them, so arms meeting in the middle read as one crossing.
+  const best = joins.reduce((a, j) => (j[2].w >= a.w ? j[2] : a), joins[0][2]);
+  for (const layer of ['edge', 'fill']) {
+    for (const [di, dj, look] of joins) {
+      const ww = look.w * k + (layer === 'edge' ? 4 * k : 0);
+      ctx.fillStyle = look[layer];
+      if (di) ctx.fillRect(di > 0 ? cx : cx - s / 2, cy - ww / 2, s / 2, ww);
+      else ctx.fillRect(cx - ww / 2, dj > 0 ? cy : cy - s / 2, ww, s / 2);
+    }
+    const ww = best.w * k + (layer === 'edge' ? 4 * k : 0);
+    ctx.fillStyle = best[layer];
+    ctx.fillRect(cx - ww / 2, cy - ww / 2, ww, ww);
+  }
+}
+
 function viaductDir(b) {
   const far = b && b.link ? getE(b.link) : null;
   const to = far ? far.y * S.W + far.x : b && b.viaTo >= 0 ? b.viaTo : -1;
