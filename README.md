@@ -155,7 +155,10 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   marks buildings with no road: tap one and press **Lay road** to plan the shortest route (shown dashed; of the
   routes as short, the one with fewest bends: `roadSearch` pays `ROAD_TURN` 0.05 a turn, as the rival's roads do), or plan your
   own. Placement keeps a side of every building open for a road.
-- **Planning roads:** in Paths, dragging and tapping only sketch a road (and tapping a road marks it to take up);
+- **Planning roads:** in Paths, dragging and tapping only sketch a road (and tapping a road marks it to take up; a
+  drag that starts on planned road or track of yours and goes on along it calls the plan off tile by tile instead,
+  `planErasable` / `eraseTile`: sketched tiles drop out, waiting ones are marked to call off at Build, cost back; one
+  that leaves it for open ground draws on from there, and built road is never touched by a drag);
   the banner, at the top of the screen, shows the cost, with **Undo**, **Clear** and **Build**. On an upright phone the
   banner (and every mode's banner) is docked across the bottom in place of the tools: the line is up to three lines,
   the tools are one row to swipe along with Route to and Traffic at its end, Undo, Clear, Build and Done share the row

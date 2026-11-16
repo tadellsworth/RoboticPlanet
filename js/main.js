@@ -132,7 +132,7 @@ function step(now) {
 function boot() {
   const canvas = document.getElementById('game');
   initRender(canvas);
-  initInput(canvas, { onTap: onMapTap, onPaint: onRoadPaint, onPaintEnd: () => { UI.lastPaint = null; UI.roadWarned = false; }, onHover: onMapHover,
+  initInput(canvas, { onTap: onMapTap, onPaint: onRoadPaint, onPaintEnd: () => { UI.lastPaint = null; UI.roadWarned = false; UI.paintErase = false; }, onHover: onMapHover,
     onBox: onSelectBox, onCommand: onMapCommand, canBox: fieldUnits, onGrab: mapGrab, canPaint: roadPaintStarts });
   initUI();
   // Custom art loads in the background; redraw once after a burst of images arrives. The map is baked again only

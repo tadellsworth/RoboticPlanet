@@ -176,7 +176,7 @@ const MISSIONS = [
     intro: [
       'Nearly every building and every road is made of Cement, baked from Stone.',
       'The boulders lie past your border: this time draw the road out first, in Paths (R), then build at its end.',
-      'Plans are paid as goods come in. In Paths, tap a road to take it up again.',
+      'Plans are paid as goods come in. In Paths, tap a road to take it up again, or drag along a planned one to call it off.',
       'When the boulders run out, a Quarry cuts Stone from crags and cliffs or digs it: it never runs dry.',
       'The 1× chip at the top (or ]) speeds time up; [ slows it. The game saves itself: Continue picks up where you left off.',
     ],

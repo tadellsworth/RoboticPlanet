@@ -3537,7 +3537,7 @@ function onMapTap(i, j, wx, wy) {
       }
       if (UI.draft.pipe.has(t)) draftOp(stroke, t, 'unpipe');
       else if (UI.draft.pipeDel.has(t)) draftOp(stroke, t, 'unpipedel');
-      else if (S.pipe[t] === 1 || S.pipePlan[t] === 1) draftOp(stroke, t, 'pipedel');
+      else if (S.pipe[t] === ME + 1 || S.pipePlan[t] === ME + 1) draftOp(stroke, t, 'pipedel');
       else { const why = pipeBlocked(ME, t); if (why) { sfx('error'); showRoadBanner(why); return; } draftOp(stroke, t, 'pipe'); }
       UI.draft.strokes.push(stroke);
       sfx('click');
@@ -3551,7 +3551,7 @@ function onMapTap(i, j, wx, wy) {
       if (UI.draft.rail.has(t)) draftOp(stroke, t, 'unrail');
       else if (UI.draft.railDel.has(t)) draftOp(stroke, t, 'unraildel');
       else if (S.rail[t] && !roadOwnedBy(ME, t)) { sfx('error'); showRoadBanner('That track isn\'t yours: you can only take up your own track, or track on land you hold.'); return; }
-      else if (S.rail[t] || S.railPlan[t] === 1) draftOp(stroke, t, 'raildel');
+      else if (S.rail[t] || S.railPlan[t] === ME + 1) draftOp(stroke, t, 'raildel');
       else if (S.bAt[t] && getE(S.bAt[t]).owner === ME && BDEFS[getE(S.bAt[t]).type].station) { showRoadBanner('Drag from this station to another: the track is laid beside each of them, and trains run between them.'); return; }
       else { const why = railBlocked(ME, t); if (why) { sfx('error'); showRoadBanner(why); return; } draftOp(stroke, t, 'rail'); }
       UI.draft.strokes.push(stroke);
@@ -3582,7 +3582,7 @@ function onMapTap(i, j, wx, wy) {
     if (d.addSet.has(t)) draftOp(stroke, t, 'unadd');
     else if (d.del.has(t)) draftOp(stroke, t, 'undel');
     else if (S.road[t] && !roadOwnedBy(ME, t) && S.plan[t] !== 1) { sfx('error'); showRoadBanner('That road isn\'t yours: you can only take up your own roads, or ones on land you hold.'); return; }
-    else if (S.road[t] || S.plan[t] === 1) { draftOp(stroke, t, 'del'); note = S.plan[t] ? 'Planned tile marked to call off.' : 'Road marked to take up: its Cement comes back when you tap Build.'; }
+    else if (S.road[t] || S.plan[t] === ME + 1) { draftOp(stroke, t, 'del'); note = S.plan[t] ? 'Planned tile marked to call off.' : 'Road marked to take up: its Cement comes back when you tap Build.'; }
     else if (canRoad(ME, i, j) || draftBridge(t)) {
       draftOp(stroke, t, 'add');
       if (crossTile(t)) note = `${CROSS[S.terrain[t]].name} tile: ${costText(crossCost(t))}${bridgeMul(t) > 1 ? ' (far from shore: bridges cost more out here)' : ''}.`;
@@ -3843,12 +3843,18 @@ function dragCliff(stroke, p, t) {
 /**
  * Dragging: in Roads and Bridges it sketches new road along the drag (round resources; water and
  * rock only with Bridges), planning a Ramp wherever it climbs a one-level cliff. In Arrows each
- * road tile points the way the finger moved, at once.
+ * road tile points the way the finger moved, at once. A drag that starts on planned road (or track) of yours and
+ * goes on along it calls that plan off instead, tile by tile (see paintErase); one that leaves it for open ground
+ * carries the road on from there as before.
  */
 function onRoadPaint(i, j, first) {
   if (R.mode !== 'road' || UI.roadMode === 'lights' || UI.roadMode === 'ramp') return;
   if (!UI.draft) draftReset();
-  if (first) { paintFlagsReset(); UI.stroke = []; UI.dirShown = 0; UI.draft.strokes.push(UI.stroke); UI.routeGhost = null; }
+  if (first) {
+    paintFlagsReset(); UI.stroke = []; UI.dirShown = 0; UI.draft.strokes.push(UI.stroke); UI.routeGhost = null;
+    const t0 = inMap(i, j) ? tIdx(i, j) : -1;
+    UI.paintStart = t0; UI.paintErase = t0 >= 0 && !routeOn() && planErasable(t0) ? null : false; UI.paintErased = 0;
+  }
   const from = first || !UI.lastPaint ? { i, j } : UI.lastPaint;
   const line = tileLine(from.i, from.j, i, j);
   if (UI.roadMode === 'pipe') { pipeDrag(i, j, first); return; }
@@ -3858,6 +3864,27 @@ function onRoadPaint(i, j, first) {
   paintTiles(line);
   UI.lastPaint = { i, j };
   paintBanner();
+}
+
+/** A planned tile of yours the current tool (Roads, Bridges or Rail) can call off with a drag: in this sketch, or waiting for workers. */
+function planErasable(t) {
+  const d = UI.draft, m = UI.roadMode;
+  if (m === 'rail') return d.rail.has(t) || (S.railPlan[t] === ME + 1 && !S.rail[t]);
+  if (m !== 'road' && m !== 'bridge') return false;
+  return d.addSet.has(t) || (S.plan[t] === ME + 1 && !S.road[t]);
+}
+
+/** Call off the planned tile t in the current stroke (a tile only sketched just drops out; one waiting for workers is marked to call off). */
+function eraseTile(t) {
+  const d = UI.draft, rail = UI.roadMode === 'rail';
+  if (rail) {
+    if (d.rail.has(t)) draftOp(UI.stroke, t, 'unrail');
+    else if (S.railPlan[t] === ME + 1 && !S.rail[t] && !d.railDel.has(t)) draftOp(UI.stroke, t, 'raildel');
+    else return;
+  } else if (d.addSet.has(t)) draftOp(UI.stroke, t, 'unadd');
+  else if (S.plan[t] === ME + 1 && !S.road[t] && !d.del.has(t)) draftOp(UI.stroke, t, 'del');
+  else return;
+  UI.paintErased++;
 }
 
 function paintFlagsReset() { UI.paintSkipped = false; UI.paintCross = false; UI.paintBridge = false; UI.paintTunnel = false; UI.paintCliff = false; UI.paintRamp = false; UI.paintSteep = false; }
@@ -3872,6 +3899,11 @@ function paintTiles(line, clear) {
   for (const [x, y] of line) {
     if (!inMap(x, y)) break;
     const t = tIdx(x, y);
+    // Started on planned road: the first step decides. Along more of it, the drag calls the plan off (the tile it
+    // started on too); out onto anything else, it draws as usual.
+    if (UI.paintErase === null && t !== UI.paintStart) { UI.paintErase = planErasable(t); if (UI.paintErase) eraseTile(UI.paintStart); }
+    if (UI.paintErase) { eraseTile(t); prev = [x, y]; continue; }
+    if (UI.paintErase === null) { prev = [x, y]; continue; } // (still on the planned tile it started on: nothing to draw there)
     if (pave) { if (paveMarkable(t) && !!S.paveMark[t] !== !!UI.paveOn) act('paveMark', [x, y, !!UI.paveOn]); continue; }
     if (rail) {
       // Climbing a one-level cliff with no Ramp: plan one for the track (see dragCliff).
@@ -3935,6 +3967,11 @@ function paintBanner(lead) {
   const pave = UI.roadMode === 'pave', wall = UI.roadMode === 'wall', rail = UI.roadMode === 'rail', arrows = UI.roadMode === 'arrows';
   lead = lead ? lead + ' ' : '';
   if (pave) { showRoadBanner(); return; }
+  if (UI.paintErase) {
+    const n = UI.paintErased || 0, what = rail ? 'track' : 'road';
+    showRoadBanner(n ? `${n} planned ${what} tile${n === 1 ? '' : 's'} called off along the drag (ones only sketched drop out; ones waiting for workers go when you tap <b>Build</b>, their cost back). <b>Undo</b> puts ${n === 1 ? 'it' : 'them'} back.` : '', true);
+    return;
+  }
   if (wall) { showRoadBanner(UI.paintSkipped ? 'The wall skips tiles it can\'t go on (outside your border, resources, cliffs, or right beside your Command Base).' : '', true); return; }
   const what = rail ? 'Track' : 'A road';
   const cliffNote = UI.paintSteep ? `${what} can't climb a cliff two levels high, and no Ramp can: go round it to a one-level step (or bridge the valley with a Viaduct).`
@@ -4023,8 +4060,8 @@ function routeHave(rail) {
 function routeSeeds(rail) {
   const d = UI.draft, out = [];
   for (let t = 0; t < S.W * S.H; t++) {
-    if (rail ? (S.rail[t] && wayOwner(t) === ME) || S.railPlan[t] === 1 || d.rail.has(t)
-      : (S.road[t] && wayOwner(t) === ME) || S.plan[t] === 1 || d.addSet.has(t) || d.ramps.has(t)) out.push(t);
+    if (rail ? (S.rail[t] && wayOwner(t) === ME) || S.railPlan[t] === ME + 1 || d.rail.has(t)
+      : (S.road[t] && wayOwner(t) === ME) || S.plan[t] === ME + 1 || d.addSet.has(t) || d.ramps.has(t)) out.push(t);
   }
   for (const b of S.buildings) {
     if (b.dead || b.owner !== ME) continue;
@@ -5584,7 +5621,7 @@ function openResourceSheet(t) {
 
 /** Can the player mark this tile for asphalt? Their own roads, and roads they've planned. */
 function paveMarkable(t) {
-  return S.road[t] ? wayOwner(t) === ME : S.plan[t] === 1;
+  return S.road[t] ? wayOwner(t) === ME : S.plan[t] === ME + 1;
 }
 
 /** The player's roads marked for asphalt: how many, and how many are fresh, worn or still to pave. */
