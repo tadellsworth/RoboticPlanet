@@ -2562,7 +2562,14 @@ function helpPage(id) { pagerShow(HELP_PAGER, id); }
  */
 function openLore() {
   const scr = $('screen-lore');
-  for (const img of scr.querySelectorAll('img[data-src]')) { img.src = img.dataset.src; img.removeAttribute('data-src'); }
+  // (In the one-file copy of the game the pictures are a bundle beside the page, lore.js, fetched the first time.)
+  const show = () => { for (const img of scr.querySelectorAll('img[data-src]')) { const d = window.LORE_DATA; img.src = (d && d[img.dataset.src]) || img.dataset.src; img.removeAttribute('data-src'); } };
+  if (window.LORE_BUNDLE && !window.LORE_DATA && scr.querySelector('img[data-src]')) {
+    const s = document.createElement('script');
+    s.src = 'lore.js';
+    s.onload = s.onerror = show;
+    document.head.appendChild(s);
+  } else show();
   scr.hidden = false;
   pagerShow(LORE_PAGER, pagerSections(LORE_PAGER)[0].id);
   try { history.pushState({ lore: 1 }, ''); } catch (e) { /* no history to add to (a sandboxed frame) */ }

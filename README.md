@@ -881,7 +881,8 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   to play, on the same code (`pagerInit`/`pagerShow`, `HELP_PAGER` and `LORE_PAGER`): it opens on its first page, which
   lists the rest; a picker stays on top, Previous / Next end each page, ← → turn them; Esc, Back or a phone's Back
   closes it (opening adds a history entry; closing takes it back). Its pictures are `data-src` until it first opens,
-  then all fetched at once, so the service worker keeps them for offline play, and `tools/build-single.js` inlines them:
+  then all fetched at once, so the service worker keeps them for offline play, and `tools/build-single.js` puts them in a
+  bundle beside the page (`dist/lore.js`, fetched when the guide first opens, so the page stays under 16 MB):
   `art/lore/ithaca.webp` (Ithaca I from orbit, the Ring, Argos and Corvane: `renderer/b/lore_planet.js` and
   `renderer/post/lore_planet.py`), `art/lore/region-<biome>.webp` (each region's ground, shot from the game),
   `art/lore/murmur-<class>.webp` (the direction-B mole renders at night, `renderer/b/murmur_moles.js` with `hero=1`: to
@@ -1164,7 +1165,7 @@ art/art-manifest.js       register custom art here
 art/lore/                 the Lore guide's pictures (the planet, the regions, the Murmur)
 tools/headless-sim.js     AI-vs-AI balance test without a browser
 tools/smoke-test.js       browser test on a phone-sized screen (Playwright)
-tools/build-single.js     bundles everything into dist/terrafall.html (and dist/tod-<time>.js)
+tools/build-single.js     bundles everything into dist/terrafall.html (and dist/tod-<time>.js, biome-<b>.js, lore.js)
 relay/                    the multiplayer relay: a Cloudflare Worker (deployed by .github/workflows/relay.yml)
 ```
 
