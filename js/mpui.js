@@ -203,7 +203,8 @@ function mpTeamSeats() {
 /** The game in a line, for the lobby. */
 function mpSummary() {
   const m = UI.menu, bits = [];
-  if (m.teams && Math.round(m.players) === 4) bits.push('Teams, 2 vs 2');
+  // (four colonies: as many as asked for, or as the map type is made for: Twin Valleys and Long Haul 2v2 take four)
+  if (m.teams && Math.max(Math.round(m.players) || 2, m.shapeRnd ? 2 : minPlayers(m.shape || 0)) >= 4) bits.push('Teams, 2 vs 2');
   bits.push(m.shapeRnd ? 'Random map' : SHAPE_PRESETS[m.shape || 0].name, m.biomeRnd ? 'random biome' : biomeName(m.biome || 0), SIZE_PRESETS[m.size.versus ?? DEFAULT_SIZE.versus].name.toLowerCase());
   if (m.victory && m.victory !== 'capture') bits.push(VICTORY[m.victory].name);
   if (m.nuke) bits.push('Nuclear race');

@@ -7944,7 +7944,8 @@ function endEvent(E) {
 /**
  * Where a meteor shower's meteors fall: METEOR_HITS spots on player 0's share of the planet (half
  * of them near its landing site), each copied to the same spot on every other colony's share
- * (mirrored with two players, turned with three, a quarter at a time on Crossroads for three or four),
+ * (mirrored with two players, turned with three, a quarter at a time on Crossroads for three or four, mirrored both
+ * ways on Long Haul 2v2),
  * so the shower is fair.
  */
 function meteorPlan(rng, t0, dur) {
@@ -7952,7 +7953,8 @@ function meteorPlan(rng, t0, dur) {
   const ccx = (W - 1) / 2, ccy = (H - 1) / 2, SEC = (2 * Math.PI) / 3;
   const sector = (x, y) => { let a = datan2(y - ccy, x - ccx) - Math.PI / 6; a = ((a % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI); return Math.floor(a / SEC) % 3; };
   const quad = !alone && quadMap(S.settings); // (four quarters: each spot is turned onto the other three)
-  const mine = (i, j) => alone || (quad ? i < W / 2 && j >= H / 2 : np === 2 ? j >= H / 2 : sector(i, j) === 0);
+  const h4 = !alone && haul4Map(S.settings); // (Long Haul 2v2: each spot mirrored onto the other three)
+  const mine = (i, j) => alone || (quad || h4 ? i < W / 2 && j >= H / 2 : np === 2 ? j >= H / 2 : sector(i, j) === 0);
   const L = getE(S.players[0].lander), hits = [], n = METEOR_HITS * (alone ? 2 : 1);
   for (let k = 0; k < n; k++) {
     let x = -1, y = -1;
@@ -7964,7 +7966,8 @@ function meteorPlan(rng, t0, dur) {
     if (x < 0) continue;
     const at = t0 + 1.5 + ((k + rng() * 0.8) * (dur - 4)) / n, roll = rng();
     const spots = [[x, y]];
-    if (quad) for (let r = 1, a = x, b = y; r < 4; r++) { [a, b] = [W - 1 - b, a]; spots.push([a, b]); }
+    if (h4) spots.push([W - 1 - x, y], [W - 1 - x, H - 1 - y], [x, H - 1 - y]);
+    else if (quad) for (let r = 1, a = x, b = y; r < 4; r++) { [a, b] = [W - 1 - b, a]; spots.push([a, b]); }
     else if (!alone && np === 2) spots.push([W - 1 - x, H - 1 - y]);
     else if (!alone && np === 3) for (let r = 1; r < 3; r++) {
       const a = r * SEC, c = dcos(a), s = dsin(a), dx = x - ccx, dy = y - ccy;
@@ -8187,7 +8190,8 @@ function placeNests(seed) {
  * The neutral Trade Posts (TRADE_POST), placed fairly: the first as near the middle of the colonies as it
  * can be (as far from each Command Base), each of the rest fair between the two nearest colonies and spread
  * out from the others; in Colony mode, about colonyDist tiles out. On open, level ground with room round it
- * to dock, the colonies' own land (reachable on foot) first.
+ * to dock, the colonies' own land (reachable on foot) first. (Long Haul 2v2: after the first, they come in pairs, each
+ * with its twin turned half round, so both teams have the same.)
  */
 function placePosts(seed) {
   S.posts = [];
@@ -8208,16 +8212,21 @@ function placePosts(seed) {
     if (d[0] < TRADE_POST.minFromBase) continue;
     cands.push({ i, j, d, home: homes.has(S.zone[t]) ? 1 : 0, h: hash2(i, j, (seed ^ 0x7a3d) >>> 0) });
   }
+  const pairs = haul4Map(S.settings) && Ls.length === 4, at = new Map(cands.map((c) => [tIdx(c.i, c.j), c]));
+  const twinOf = (c) => at.get(tIdx(S.W - 1 - c.i, S.H - 1 - c.j));
   // As fair as the map allows: within TRADE_POST.fair tiles if it can be, a little less fair if that's the
   // only way to have two posts at all. The first is about as near every colony; where nowhere is (the middle of
   // Twin Valleys is a mountain), each post is about as near the two colonies nearest it, like the others.
   let allFair = true;
   for (let k = 0, lim = TRADE_POST.fair; k < want; k++) {
+    if (pairs && S.posts.length && want - S.posts.length < 2) break; // (no room left for a pair)
     let best = null, bs = -Infinity;
     for (const c of cands) {
       let near = Infinity;
       for (const p of S.posts) near = Math.min(near, dist(p.x, p.y, c.i, c.j));
       if (near < TRADE_POST.apart) continue;
+      const tw = pairs && S.posts.length ? twinOf(c) : null;
+      if (pairs && S.posts.length && (!tw || dist(c.i, c.j, tw.i, tw.j) < TRADE_POST.apart || S.posts.some((p) => dist(p.x, p.y, tw.i, tw.j) < TRADE_POST.apart))) continue;
       let s;
       if (Ls.length === 1) s = -Math.abs(c.d[0] - TRADE_POST.colonyDist) * 0.6;
       else {
@@ -8231,10 +8240,12 @@ function placePosts(seed) {
     }
     if (!best) {
       if (!S.posts.length && allFair && lim >= TRADE_POST.fair * 4 && Ls.length > 2) { allFair = false; lim = TRADE_POST.fair; k--; continue; }
-      if (S.posts.length >= 2 || lim >= TRADE_POST.fair * 4 || Ls.length === 1) break;
+      // (Long Haul 2v2: a pair is fair between the teams however it leans, so up to twice as far, to have all of them.)
+      if ((S.posts.length >= 2 && !(pairs && lim < TRADE_POST.fair * 2)) || lim >= TRADE_POST.fair * 4 || Ls.length === 1) break;
       lim += TRADE_POST.fair; k--; continue; // try again, a little less strict
     }
     S.posts.push({ id: S.posts.length + 1, x: best.i, y: best.j });
+    if (pairs && S.posts.length > 1) { const tw = twinOf(best); S.posts.push({ id: S.posts.length + 1, x: tw.i, y: tw.j }); k++; }
   }
 }
 
@@ -8273,6 +8284,7 @@ function travelCost(from) {
 /** The map's own symmetry: tile t and its twins (the same spot on every other side), or null off the map. */
 function uplinkOrbit(t) {
   const W = S.W, H = S.H, N = W * H, np = S.players.length, SH = SHAPE_PRESETS[S.settings.shape || 0];
+  if (haul4Map(S.settings)) { const i = t % W, j = (t / W) | 0; return [t, j * W + (W - 1 - i), N - 1 - t, (H - 1 - j) * W + i]; } // (Long Haul 2v2: mirrored both ways)
   if (np === 2 || SH.twin) return [t, N - 1 - t]; // (Twin Valleys: only the half turn)
   if (SH.cross || SH.quad4) { const r4 = (u) => { const i = u % W, j = (u / W) | 0; return i * W + (W - 1 - j); }; return [t, r4(t), r4(r4(t)), r4(r4(r4(t)))]; }
   const ccx = (W - 1) / 2, ccy = (H - 1) / 2, i = t % W, j = (t / W) | 0, out = [t];
@@ -8295,7 +8307,7 @@ function uplinkOrbit(t) {
 function placeUplinks(seed) {
   const Ls = S.players.filter((P) => !P.absent).map((P) => getE(P.lander)).filter(Boolean), n = Ls.length;
   const costs = Ls.map((L) => travelCost(tIdx(L.x, L.y)));
-  const W = S.W, H = S.H, SH = SHAPE_PRESETS[S.settings.shape || 0], quad = !!(SH.cross || SH.quad4) && S.players.length >= 3;
+  const W = S.W, H = S.H, SH = SHAPE_PRESETS[S.settings.shape || 0], quad = (!!(SH.cross || SH.quad4) && S.players.length >= 3) || haul4Map(S.settings);
   const near = (t, r, f) => { const i = t % W, j = (t / W) | 0; for (let dj = -r; dj <= r; dj++) for (let di = -r; di <= r; di++) { const x = i + di, y = j + dj; if (inMap(x, y) && f(tIdx(x, y))) return true; } return false; };
   const free = (u) => S.terrain[u] === T_GROUND && !S.res[u] && !S.bAt[u] && !S.road[u] && !S.ramp[u] && !(S.tidal && S.tidal[u]) && !(S.lava && S.lava[u]);
   const span = dhypot(W, H), minBase = Math.max(10, span * 0.12);

@@ -287,6 +287,8 @@ function checkMenuSettings() {
   const st = Array.isArray(m.styles) ? (m.styles.length === 3 ? [null, ...m.styles] : m.styles) : [];
   m.styles = [0, 1, 2, 3].map((p) => (ok(st[p], PERSONALITY_ORDER.length + 1) ? st[p] : null));
   for (const k of ['nuke', 'events', 'wild', 'unlimited', 'shapeRnd', 'biomeRnd']) m[k] = m[k] ? 1 : 0;
+  // (Teams isn't remembered: on a map made for 2 vs 2 it starts on.)
+  if (m.teams === undefined && !m.shapeRnd && SHAPE_PRESETS[m.shape].teamDefault) m.teams = 1;
 }
 
 /** Remember the new-game settings on this device. */
@@ -367,13 +369,17 @@ function menuTeams() { return UI.menu.mode === 'versus' && !!UI.menu.teams && me
 function menuThree() { return menuPlayers() > 2; }
 /** The Crossroads map type (four quarters: three or four players get one corner quarter each). */
 const crossIdx = () => Math.max(0, SHAPE_PRESETS.findIndex((P) => P.cross));
-function modeInfo(mode, n) {
+function modeInfo(mode, n, teams) {
   const m = UI.menu, SH = SHAPE_PRESETS[m.shape || 0], quad = !m.shapeRnd && !!(SH.cross || SH.quad4), onCross = n === 4 || quad;
+  const haul = !m.shapeRnd && !!SH.haul4; // (Long Haul 2v2: two colonies side by side at each end)
   const where = m.shapeRnd ? 'a square planet' : quad ? SH.name : 'a square planet';
   const win = 'Take a rival\'s Command Base and all it built is yours; the last colony standing wins.';
   return mode === 'colony'
     ? (UI.menu.wild && menuMurmur() ? 'Colony: no rival, but the Murmur burrow in the wilds and raid what you build near them. Build, research and spread across the planet.'
       : 'Colony: no rival. Settle the planet at your own pace: build, research and spread across the planet.')
+    : n === 4 && teams ? (haul ? `Teams · 2 vs 2 on ${SH.name}: you and your red ally land side by side at the south end, green and purple at the far north end. Take both of their Command Bases to win.`
+      : `Teams · 2 vs 2${m.shapeRnd ? '' : ' on ' + SH.name}: you and the red colony beside you against green and purple. Take both of their Command Bases to win.`)
+    : n === 4 && haul ? `Free-for-all · 4 on ${SH.name}: you and red side by side at the south end, green and purple at the far north end. ${win}`
     : n === 4 ? `Free-for-all · 4: you and three rival colonies (red, green and purple) on ${where}, one in each corner quarter. ${win}`
       : n === 3 && onCross ? `Free-for-all · 3: you and two rival colonies on ${where}, each in a corner quarter; the quarter beside you is free and rich. ${win}`
         : n === 3 ? `Free-for-all: you and two rival colonies${m.shapeRnd ? '' : ' on a round planet'}. ${win}`
@@ -536,7 +542,7 @@ function syncInfo() {
   if (isDoc) H['m-sec-match'] = null;
   const line = (sec, def) => (live(H[sec]) ? H[sec].dataset.info : def) || def;
   const P = SHAPE_PRESETS[m.shape || 0];
-  $('m-mode-desc').textContent = line('m-sec-match', modeInfo(m.mode, menuPlayers()));
+  $('m-mode-desc').textContent = line('m-sec-match', modeInfo(m.mode, menuPlayers(), menuTeams()));
   const note = $('m-style-note'), html = doc ? docHTML(doc) : docNoteDefault();
   if (note.innerHTML !== html) note.innerHTML = html;
   $('m-planet-info').textContent = line('m-sec-planet', m.shapeRnd ? $('m-shape').dataset.info : `${P.name}: ${P.blurb || ''}`);
@@ -632,7 +638,7 @@ function syncMenu() {
   }
   const few = !m.shapeRnd && want < minPlayers(shape);
   $('m-players-note').hidden = colony || (want <= room && !few);
-  $('m-players-note').textContent = few ? `${SH.name} is made for ${minPlayers(shape) === room ? ['', '', 'two', 'three', 'four'][room] : 'three or four'} players: you'll play with ${minPlayers(shape) - 1} rivals.`
+  $('m-players-note').textContent = few ? `${SH.name} is made for ${minPlayers(shape) === room ? ['', '', 'two', 'three', 'four'][room] : 'three or four'} players: you'll play ${menuTeams() ? 'with an ally against two rivals' : `with ${minPlayers(shape) - 1} rivals`}.`
     : want === 4 ? `${SH.name} has room for ${room === 3 ? 'three players' : 'two players only'}: pick a map type marked “3–4 players” for four.`
     : `${SH.name} is for two players only: pick a map type marked “3 players” or “3–4 players” for a free-for-all.`;
   $('m-seed').textContent = 'Planet #' + m.seed;
@@ -761,6 +767,7 @@ function drawPickerArt() {
 function choosePicked(kind, v) {
   const m = UI.menu, rnd = v === 'rnd';
   if (kind === 'shape') { m.shapeRnd = rnd ? 1 : 0; if (!rnd) m.shape = +v; } else { m.biomeRnd = rnd ? 1 : 0; if (!rnd) m.biome = +v; }
+  if (kind === 'shape' && !rnd && SHAPE_PRESETS[m.shape].teamDefault) { m.teams = 1; m.players = 4; } // (a map made for 2 vs 2: four players, Teams on, which you can still turn off)
   sfx('click');
   closePicker();
   syncMenu();
@@ -967,6 +974,17 @@ function drawShapeThumb(cv, P) {
     line([[0.5, 0], [0.5, 0.26]], THUMB.rock, lw); line([[0.5, 0.36], [0.5, 0.64]], THUMB.rock, lw); line([[0.5, 0.74], [0.5, 1]], THUMB.rock, lw);
     for (const v of [0.31, 0.69]) for (const u of [0.42, 0.58]) { ctx.fillStyle = THUMB.res[v < 0.5 === u < 0.5 ? 1 : 2]; ctx.beginPath(); ctx.arc(X(u), Y(v), Math.max(1, U * 0.03), 0, 7); ctx.fill(); }
     marks = [[0.22, 0.78], [0.22, 0.22], [0.78, 0.22], [0.78, 0.78]]; crags = 1;
+  } else if (P.haul4) {
+    // Long Haul 2v2: two colonies side by side at each end, the riches strung along the long middle, the plaza with its
+    // Trade Post at the very centre and more posts down the middle line (all mirrored both ways).
+    const four = (u, v, f) => { for (const [uu, vv] of [[u, v], [1 - u, v], [1 - u, 1 - v], [u, 1 - v]]) f(uu, vv); };
+    four(0.1, 0.66, (u, v) => blob(u, v, 0.07, 0.025, THUMB.rock, THUMB.rockHi));
+    four(0.36, 0.78, (u, v) => blob(u, v, 0.08, 0.03, THUMB.hi));
+    line([[0.5, 0.82], [0.5, 0.18]], THUMB.sand, Math.max(1, U * 0.035), [U * 0.06, U * 0.05]);
+    ctx.beginPath(); ctx.arc(X(0.5), Y(0.5), U * 0.11, 0, 7); ctx.fillStyle = THUMB.hi; ctx.fill();
+    for (const [u, v, k] of [[0.2, 0.6, 1], [0.38, 0.56, 2], [0.28, 0.68, 0], [0.4, 0.62, 1]]) four(u, v, (uu, vv) => { ctx.fillStyle = THUMB.res[k]; ctx.beginPath(); ctx.arc(X(uu), Y(vv), Math.max(1, U * 0.035), 0, 7); ctx.fill(); });
+    for (const v of [0.5, 0.34, 0.66]) { ctx.fillStyle = '#ffd166'; ctx.fillRect(X(0.5) - U * 0.03, Y(v) - U * 0.03, U * 0.06, U * 0.06); }
+    marks = [[0.28, 0.9], [0.72, 0.9], [0.72, 0.1], [0.28, 0.1]]; crags = 0;
   }
   if (P.lakes) for (let k = 0; k < 4; k++) { const u = 0.12 + rnd() * 0.76, v = 0.52 + rnd() * 0.3; blob(u, v, 0.07 + rnd() * 0.05, 0.035 + rnd() * 0.025, THUMB.water, THUMB.waterHi, true); }
   if (P.oases) {
@@ -2251,6 +2269,7 @@ function renderPlanets() {
     if (!p) return;
     Object.assign(UI.menu, { seed: p.seed, shape: p.shape, rough: p.rough, rich: p.rich, biome: p.biome, players: p.players || 2, shapeRnd: 0, biomeRnd: 0 });
     UI.menu.size[UI.menu.mode] = p.size;
+    if (SHAPE_PRESETS[p.shape] && SHAPE_PRESETS[p.shape].teamDefault) UI.menu.teams = 1; // (a planet of a map made for 2 vs 2: Teams on)
     checkMenuSettings();
     sfx('click'); syncMenu();
     toast(`Set to Planet #${p.seed}. Tap Start to play it.`, 'info');

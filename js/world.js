@@ -50,23 +50,29 @@ function generateMap(seed, W, H, cfg) {
   // Crossroads for three or four players (quad): a square map in four quarters, one base in each
   // corner (three players leave the quarter beside you to the north free). The bottom-left quarter is generated
   // and turned a quarter at a time onto the other three, tile for tile, so every quarter is the same.
-  const quad = quadMap(cfg);
-  const np = quad ? 4 : cfg.players === 3 ? 3 : 2;
-  const hw = W / 2; // (quad: W === H, even)
+  // Long Haul 2v2 (h4): a tall map, two bases side by side at each end. The bottom-left quarter is generated and
+  // mirrored left to right and end to end (so its top-right twin is the half turn), tile for tile: every colony the same.
+  const quad = quadMap(cfg), h4 = haul4Map(cfg);
+  const np = quad || h4 ? 4 : cfg.players === 3 ? 3 : 2;
+  const hw = W / 2; // (quad: W === H, even; h4: W even)
+  const lr = (t) => { const i = t % W; return t - i + (W - 1 - i); }; // h4: mirrored left to right
+  const tb = (t) => { const i = t % W, j = (t / W) | 0; return (H - 1 - j) * W + i; }; // ...and end to end
   const r4 = (t) => { const i = t % W, j = (t / W) | 0; return i * W + (W - 1 - j); }; // a quarter turn: BL → TL → TR → BR
   const r4back = (t) => { const i = t % W, j = (t / W) | 0; return (W - 1 - i) * W + j; };
   const quarter = (i, j) => (i < hw ? (j >= hw ? 0 : 1) : (j < hw ? 2 : 3)); // BL, TL, TR, BR
   // The tile with its twins (the same spot on every other side of the map).
   // (Twin Valleys: four corner quarters, but split west from east by a spine, so only the half turn holds.)
-  const orbit = (t) => np === 2 || SH.twin ? [t, mir(t)] : quad ? [t, r4(t), r4(r4(t)), r4(r4(r4(t)))] : [t];
+  // (Long Haul 2v2: in player order, SW, SE, NE, NW.)
+  const orbit = (t) => h4 ? [t, lr(t), mir(t), tb(t)] : np === 2 || SH.twin ? [t, mir(t)] : quad ? [t, r4(t), r4(r4(t)), r4(r4(r4(t)))] : [t];
   const ccx = (W - 1) / 2, ccy = (H - 1) / 2, discR = Math.min(W, H) / 2 - 0.5, SEC = (2 * Math.PI) / 3;
   const sector = (x, y) => { let a = datan2(y - ccy, x - ccx) - Math.PI / 6; a = ((a % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI); return Math.floor(a / SEC) % 3; };
   const rot = (x, y, k) => { const a = k * SEC, c = dcos(a), sn = dsin(a), dx = x - ccx, dy = y - ccy; return [ccx + dx * c - dy * sn, ccy + dx * sn + dy * c]; };
   const inDisc = (i, j) => dist2(i, j, ccx, ccy) <= discR * discR;
-  const canon = np === 2 ? (i, j) => j >= half : quad ? (i, j) => i < hw && j >= hw : (i, j) => sector(i, j) === 0 && inDisc(i, j);
+  const canon = np === 2 ? (i, j) => j >= half : quad ? (i, j) => i < hw && j >= hw : h4 ? (i, j) => i < hw && j >= half : (i, j) => sector(i, j) === 0 && inDisc(i, j);
   // A random point in the generated part of the map (three players, or a quarter).
   const canonPoint = (rng, margin) => {
     if (quad) return [margin + rng() * (hw - 2 * margin), hw + margin + rng() * (hw - 2 * margin)];
+    if (h4) return [margin + rng() * (hw - margin - 0.5), half + margin + rng() * (H - half - 2 * margin)]; // (up to the middle line: its twin is beside it)
     for (;;) {
       const a = Math.PI / 6 + 0.06 + rng() * (SEC - 0.12), r = Math.sqrt(rng()) * (discR - margin);
       const x = ccx + dcos(a) * r, y = ccy + dsin(a) * r;
@@ -215,10 +221,12 @@ function generateMap(seed, W, H, cfg) {
   //    the land around a field matters. Fields are laid out on the bottom half, then mirrored.
   const rng = makeRng(seed ^ 0x5bd1e995);
   // Crossroads: in a corner quarter (with four, in the corner of the bottom-left quarter, as far in from both edges).
+  // (Long Haul 2v2: at the south end, about 21 tiles from the ally's base beside it, close enough to share roads.)
   const qc = quad ? Math.max(10, Math.round(hw * 0.42)) : 0;
-  const bx = quad ? qc : SH.cross ? Math.max(8, Math.round(W * 0.25)) : Math.floor(W / 2), by = quad ? H - 1 - qc : H - 7;
+  const bx = quad ? qc : h4 ? clamp(Math.round(hw - 11), 9, hw - 9) : SH.cross ? Math.max(8, Math.round(W * 0.25)) : Math.floor(W / 2), by = quad ? H - 1 - qc : H - 7;
   const bases = [{ x: bx, y: by }];
   if (np === 2) bases.push({ x: W - 1 - bx, y: H - 1 - by });
+  else if (h4) for (const t of orbit(id(bx, by)).slice(1)) bases.push({ x: t % W, y: (t / W) | 0 });
   else if (quad) for (let k = 1, t = id(bx, by); k < 4; k++) { t = r4(t); bases.push({ x: t % W, y: (t / W) | 0 }); }
   else for (let k = 1; k < 3; k++) { const [x, y] = rot(bx, by, k); bases.push({ x: Math.round(x), y: Math.round(y) }); }
   const F_FERTILE = 100;
@@ -269,8 +277,9 @@ function generateMap(seed, W, H, cfg) {
   field(bx, by - 7.5, 2.0, F_FERTILE, 0.85, true);
   // Richer fields just beyond the starting border reward expanding with Outposts. (In a corner
   // quarter, they lie out toward the middle of the map, turned 45° and a little closer on small maps.)
+  // (Long Haul 2v2: squeezed into the colony's half of the width, and stretched up the map.)
   const beyond = quad ? (dx, dy) => { const f = clamp((hw - 4) / 31, 0.7, 1), c = Math.SQRT1_2; return [bx + (dx * c - dy * c) * f, by + (dx * c + dy * c) * f]; }
-    : (dx, dy) => [bx + dx, by + dy];
+    : h4 ? (dx, dy) => [bx + dx * 0.7, by + dy * 1.25] : (dx, dy) => [bx + dx, by + dy];
   field(...beyond(8 + jit(), -11 + jit()), 1.6, R_ORE, 0.8 * stampDens, true);
   field(...beyond(-9 + jit(), -10 + jit()), 1.5, R_CRYSTAL, 0.8 * stampDens, true);
   field(...beyond(1 + jit(), -13), 1.1, R_OIL, 0.9, true);
@@ -280,6 +289,18 @@ function generateMap(seed, W, H, cfg) {
     // (By the plaza; Crossroads lays the plaza's own fields over the middle.)
     field(ccx - 7, ccy + 3.5, 1.6, R_ORE, 0.85, true);
     field(ccx - 3.5, ccy + 7, 1.4, R_CRYSTAL, 0.85, true);
+  } else if (h4) {
+    // Long Haul 2v2: the richest fields are strung along the long middle (each with its three twins, one for every
+    // colony at the same spot), and round the plaza at the very centre (laid in shapeExtras), where both teams meet.
+    const span = by - ccy, out = (f, x, rad, type, fill) => field(clamp(x + rng() * 2 - 1, 2, hw - 1.5), ccy + span * f + rng() * 2 - 1, rad, type, fill, true);
+    field(ccx - 6, ccy + 4.5, 1.6, R_ORE, 0.85, true);
+    field(ccx - 2.5, ccy + 7.5, 1.4, R_CRYSTAL, 0.85, true);
+    field(ccx - 9.5, ccy + 1.5, 1.1, R_OIL, 0.9, true);
+    out(0.2, hw * 0.25, 1.5, R_CRYSTAL, 0.85);
+    out(0.32, hw * 0.62, 1.7, R_ORE, 0.85);
+    out(0.45, hw * 0.3, 1.6, R_BOULDER, 0.8);
+    out(0.5, hw * 0.8, 1.1, R_OIL, 0.9);
+    out(0.6, hw * 0.45, 1.6, R_ORE, 0.85);
   } else if (np === 2) {
     field(Math.floor(W / 2) - 6, half + 3, 1.7, R_ORE, 0.85, true);
     field(Math.floor(W / 2) + 5, half + 2, 1.4, R_CRYSTAL, 0.85, true);
@@ -292,7 +313,8 @@ function generateMap(seed, W, H, cfg) {
   // More fields scattered over the rest of the half, kept apart from each other and the base.
   // Richer settings mean more fields and slightly bigger ones. Rare fields are placed first so a
   // crowded map never squeezes them out.
-  const areaK = (W * H) / (40 * 56), rK = Math.sqrt(Math.sqrt(dens)); // (the fourth root: Math.pow may differ by a bit between browsers)
+  // (Long Haul 2v2: a little sparser, its quarters being narrow; the middle's own fields make up for it.)
+  const areaK = ((W * H) / (40 * 56)) * (h4 ? 0.75 : 1), rK = Math.sqrt(Math.sqrt(dens)); // (the fourth root: Math.pow may differ by a bit between browsers)
   const want = (n) => { const x = n * areaK * Math.sqrt(dens); return Math.floor(x) + (rng() < x - Math.floor(x) ? 1 : 0); };
   const bag = [];
   const add = (n, type, r0, r1, fill) => { for (let k = want(n); k > 0; k--) bag.push({ type, r: (r0 + rng() * (r1 - r0)) * rK, fill }); };
@@ -351,6 +373,15 @@ function generateMap(seed, W, H, cfg) {
       terrain[t] = terrain[m2]; res[t] = res[m2]; elev[t] = elev[m2]; fert[t] = fert[m2];
     }
   };
+  // Long Haul 2v2: each tile of the other three quarters takes the value of its mirror image in the bottom-left one.
+  const mirror4 = () => {
+    for (let t = 0; t < N; t++) {
+      const i = t % W, j = (t / W) | 0;
+      if (i < hw && j >= half) continue;
+      const s = id(i < hw ? i : W - 1 - i, j >= half ? j : H - 1 - j);
+      terrain[t] = terrain[s]; res[t] = res[s]; elev[t] = elev[s]; fert[t] = fert[s]; minE[t] = minE[s];
+    }
+  };
   // Three players: turn player 0's third round onto the other two (each tile takes the value of
   // its twin in the first third), and close the corners off.
   const turn = () => {
@@ -393,7 +424,7 @@ function generateMap(seed, W, H, cfg) {
       }
     }
   };
-  const symmetrize = np === 2 ? mirror : quad ? turn4 : turn;
+  const symmetrize = np === 2 ? mirror : quad ? turn4 : h4 ? mirror4 : turn;
   symmetrize();
 
   // Chokepoint maps: a ragged belt of crags across the middle of the planet, a few tiles thick (more
@@ -886,8 +917,19 @@ function generateMap(seed, W, H, cfg) {
       }
     }
   };
+  // Long Haul 2v2: a plaza of open, level ground at the very centre (where the first Trade Post lands, as near every
+  // colony), the ground round it kept within a level of it, and a way to it from the base.
+  const haul4Shape = () => {
+    for (let j = half; j < H; j++) for (let i = 0; i < hw; i++) {
+      const d2 = dist2(i, j, ccx, ccy), t = id(i, j);
+      if (d2 <= 13) put(t, T_GROUND, baseLevel);
+      else if (d2 <= 42 && terrain[t] === T_GROUND) for (const u of orbit(t)) elev[u] = clamp(elev[u], Math.max(0, baseLevel - 1), baseLevel + 1);
+    }
+    links = [[hw - 1, half]];
+  };
   const shapeExtras = () => {
-    if (quad) {
+    if (h4) haul4Shape();
+    else if (quad) {
       if (SH.twin) return; // (Twin Valleys: its spine is laid later, after the turns: see below)
       if (SH.pinwheel) pinwheelShape();
       else if (SH.isles4) isles4Shape();
@@ -942,9 +984,10 @@ function generateMap(seed, W, H, cfg) {
     for (let j = 0; j < H; j++) for (let i = 0; i < W; i++) if (dist2(i, j, ccx, ccy) <= 6.5) { terrain[id(i, j)] = T_GROUND; res[id(i, j)] = R_NONE; }
     symmetrize();
   }
-  if (quad && !SH.islands && !joinedAll(false)) {
+  if ((quad || h4) && !SH.islands && !joinedAll(false)) {
     // Four quarters: a corridor from player 0's base to the plaza, inside its quarter, turned onto the
     // others; then the ridges are laid again (and linked up) so it can't cut a new way through them.
+    // (Long Haul 2v2: to the plaza at the very centre, mirrored onto the others.)
     let x = bx, y = by;
     for (let n = 0; n < 200 && dist(x, y, ccx, ccy) > 1; n++) {
       for (let dj = -1; dj <= 1; dj++) for (let di = -1; di <= 1; di++) {
@@ -1778,11 +1821,19 @@ function playerCount(mode, shape, want) { return mode === 'versus' ? clamp(Math.
  */
 function quadMap(st) { const sh = SHAPE_PRESETS[(st && st.shape) || 0] || {}; return !!st && st.players >= 3 && !!(sh.cross || sh.quad4); }
 
+/**
+ * Is this Long Haul 2v2: a tall map with two colonies side by side at each end (south-west, south-east, north-east,
+ * north-west in player order), its bottom-left quarter mirrored left to right and end to end onto the others?
+ */
+function haul4Map(st) { const sh = SHAPE_PRESETS[(st && st.shape) || 0] || {}; return !!st && st.players >= 3 && !!sh.haul4; }
+
 /** Map width and height for these settings (size and shape); the height stays even so the map mirrors cleanly. */
 function mapDims(st) {
   const sz = SIZE_PRESETS[st.size], sh = SHAPE_PRESETS[st.shape || 0];
   // Crossroads for three or four: a square map in four quarters, 80% more ground than for two.
   if (quadMap(st)) { const side = 2 * Math.round(Math.sqrt(sz.w * sz.h * sh.w * sh.h * 1.8) / 2); return { W: side, H: side }; }
+  // Long Haul 2v2: its own proportions, the width even too (it is mirrored left to right).
+  if (haul4Map(st)) return { W: 2 * Math.round((sz.w * sh.w) / 2), H: 2 * Math.round((sz.h * sh.h) / 2) };
   // Three players: a square map (the planet is the circle inside it), 40% more ground.
   if (st.players === 3) { const side = 2 * Math.round(Math.sqrt(sz.w * sz.h * sh.w * sh.h * 1.4) / 2); return { W: side, H: side }; }
   return { W: Math.round(sz.w * sh.w), H: 2 * Math.round((sz.h * sh.h) / 2) };

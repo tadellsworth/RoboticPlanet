@@ -18,7 +18,8 @@ how goods move.
   Three Mesas, which are made for three (`minPlayers: 3`); the green team's
   art is the red team's recoloured at run time (`recolorArt`), and each AI fights its nearest rival (`rivalOf`).
   With four players (Crossroads, Pinwheel, Four Isles or Twin Valleys), **Teams: 2 vs 2** puts the two western colonies
-  against the two eastern ones (see Multiplayer).
+  against the two eastern ones; on **Long Haul 2v2** (made for it: picking it turns Teams on) the two southern colonies
+  against the two northern ones (see Multiplayer).
 - **Colony:** no rival. Settle the planet at your own pace, with colonization milestones. Free play has the full
   building roster, missiles and nuclear silos included, to experiment with, plus the **Research Lab** and optional
   **the Murmur** (native creatures whose nests raid you; on by default, never on Lunar).
@@ -52,8 +53,8 @@ how goods move.
 
 Before each game, the new-game screen picks the mode, players and rival, the **map shape** (Standard, Long haul,
 Chokepoint, Islands, Crater, Plateaus, Sky islands, Rift, Ring valley, Oases, Crossroads, Lakes, Tidal flats, River delta,
-Volcano, Fault line or Canyon maze, and for three or four players only The Wheel, Three Mesas, Pinwheel, Four Isles and Twin
-Valleys: cards in groups, each with a sketch and a line on it) and the **map size** (Small to
+Volcano, Fault line or Canyon maze, and for three or four players only The Wheel, Three Mesas, Pinwheel, Four Isles, Twin
+Valleys and Long Haul 2v2: cards in groups, each with a sketch and a line on it) and the **map size** (Small to
 Huge). **More settings** (a collapsible section, its summary listing whatever isn't the default) holds the planet
 number, the **biome** (named for its region of Ithaca I, `BIOMES[k].name`, with its kind of ground under it, `kind`: the
 Rust (red desert), Greenreach (forest), the White (polar snow), Emberwood, the Long Grass, the Sump, Cinderlands, the
@@ -451,7 +452,22 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   its half-turn twin (`orbit` is the half turn there too), crossed by a south pass and its north twin with rich fields at
   each end, the ways from each base to its pass and up its valley carved open. The Trade Posts on Twin Valleys (whose
   middle is a mountain) fall back to being about as near the two nearest colonies (`placePosts`), and its Uplinks are
-  two half-turn pairs.
+  two half-turn pairs. **Long Haul 2v2** (`haul4`, four only, `haul4Map`; not a four-quarter map) is the Long haul
+  planet as long and 1.6 times as wide (`w: 1.2, h: 1.7`: 36×72 Small, 48×96 Medium, 60×120 Large, 72×142 Huge, the width
+  kept even), standing upright, with two colonies side by side at each end: south-west and south-east (players 0 and 1,
+  a team in 2 vs 2), north-east and north-west (2 and 3), allies about 21 tiles apart (17 on Small). The bottom-left
+  quarter is generated (the plain terrain, a little sparser in scattered fields, `areaK` × 0.75) and mirrored left to
+  right and end to end onto the others (`mirror4`; `orbit` is the tile with its three mirror images, so ramps and
+  everything laid with `put` stay the same for all four). Its own fields: the "beyond" fields squeezed into the
+  colony's half of the width and stretched up the map, five more strung along the middle stretch (Crystal, Ore,
+  Boulders, Oil, Ore, from about a fifth to three fifths of the way from the middle line to the base row), and Ore,
+  Crystal and Oil round a plaza of open, level ground at the very centre (`haul4Shape`, the ground round it kept within a
+  level, a way to it from the base carved open). The frontier riches peak there, so the rich deposits crowd the middle third
+  of the length (on a Medium map about four times as many as in each end third). Its Trade Posts: the first on the plaza, the rest in pairs, each with its half-turn twin
+  (down the middle line between allies, or out at the flanks of the middle line), so both teams have the same; its
+  Uplinks: the middle and one for each colony, mirrored both ways; meteor showers fall mirrored both ways too.
+  **Teams: 2 vs 2** starts on when it's picked (`teamDefault`: in the map picker, a saved planet, or on loading
+  remembered settings), and can be turned off for a free-for-all of four.
 - **Three players, the same in every third:** the terrain is turned from player 0's third onto the others, and turned
   again after the specks and slopes are smoothed (a patch just under the 10-tile limit in one third could be just over
   it in another); the ramps are laid in player 0's third and turned onto the others (`turned`: the nearest tile at the
@@ -641,7 +657,7 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   everything it had changes hands as if captured. **Domination** (`DOM`, `updateDomination`, `domShare`): hold 60% of the
   land anyone holds with one rival (half with two, 45% with three) and a fifth of the planet for 3 minutes straight.
   **Uplinks** (`UPLINK`, `placeUplinks`, `updateUplinks`): 3 to 5 neutral towers (`S.uplinks`) placed by the map's own
-  symmetry (180° for two, 120° for three, quarter turns on the four-quarter maps, the half turn on Twin Valleys), so every colony has the same, using a travel-effort
+  symmetry (180° for two, 120° for three, quarter turns on the four-quarter maps, the half turn on Twin Valleys, mirrored both ways on Long Haul 2v2), so every colony has the same, using a travel-effort
   map (`travelCost`) to keep them fair; on Sky islands only on mesa tops. Each belongs to the colony whose land covers it,
   and an armed enemy warbot within 2.5 tiles jams it. From `UPLINK.online` (8 min) the colony holding at least half of
   them and more than anyone else runs its clock (`S.upClock`, kept when it stops); 5 minutes in all wins. The AI plays
@@ -1207,8 +1223,9 @@ How it plays opens the whole of it) and taps
 - **Leave the game** hands your colony to the computer for the rest of the game. A multiplayer game isn't saved for
   Continue.
 
-**Teams (2 vs 2).** With four colonies in all (Crossroads, Pinwheel, Four Isles or Twin Valleys), the host can set **Teams: 2 vs 2** in the settings: the
-two western colonies (south-west and north-west) play the two eastern ones. The lobby shows the two teams, people
+**Teams (2 vs 2).** With four colonies in all (Crossroads, Pinwheel, Four Isles, Twin Valleys or Long Haul 2v2), the host can set **Teams: 2 vs 2** in the settings: the
+two western colonies (south-west and north-west) play the two eastern ones (on Long Haul 2v2, where picking the map turns
+Teams on, the two southern colonies play the two northern ones). The lobby shows the two teams, people
 first and then computer players, and the host taps a person to move them to the other team (never more than two a
 side). Allies never shoot, shell, raid or capture each other, their turrets and Flak leave each other alone, the
 computer only ever goes after the other team, and a team game is won by **Capture**: take both enemy Command Bases
