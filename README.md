@@ -698,7 +698,13 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   away against what the squad carries, `breachShots`, counting one reload near the wall for an attack, see
   `startReload`; a Bulwark never runs dry); the rival can ask before it orders (`attackBreach(owner, target, count, all)`
   gives `{ need, shots, sent }`), and `sendToRally` returns it as `breach`. On Chokepoint maps the AI walls the mouth
-  of each channel on its side on every difficulty but Easy (a Turtle on Easy too: `aiWalls`).
+  of each channel on its side on every difficulty but Easy (a Turtle on Easy too: `aiWalls`). Its Gate goes on a mouth
+  tile its bots can walk to from the Command Base without going through another mouth, and get on from to the middle
+  of the map with Walls on the rest (`aiWallGate`, walking the ground with `aiFlood`): an existing Gate, its road
+  through, or the middle tile and outwards. The middle tile (or the road) could be a spur beside the one tile that
+  leads on, and the Wall there shut the colony's own warbots in. A mouth no Gate keeps open is left unwalled, and a
+  Wall of its own that shuts one (an older save) comes down; mouths with every piece up are looked at again every 30 s
+  (`P.gateChk`).
 - **Garrisons and posts** (yours, `usesPosts`; the AI spreads its own to the front as before): every warbot belongs
   somewhere. `u.post` is the Outpost or Bunker it was stationed at; with none it belongs to the Command Base. All your
   warbots stay at the Command Base until you station some: tap an Outpost and **Station here** (how many; from the
@@ -767,6 +773,17 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   runs. With Random each rival gets a different one, picked from the seed; missions use Balanced unless they name one
   (Hold the Line's Rusher, Siege Breakers' Turtle). The landing messages
   and the rival Command Base's panel name it.
+- **The rival's economy** (`aiThink` in `js/ai.js`): on every difficulty its Smelters rest while Fiber is nearly gone
+  and a site is short of it, or while a building it wants can't be started for lack of it (`P.fiberWait`): a busy
+  Smelter used to burn every Fiber the Harvesters cut, and nothing that costs Fiber could go up. A site no road reaches
+  yet doesn't count (it can't take any), and with no Harvester cutting they start again once there are 6 Fiber and
+  nothing waits for it, where they used to stay off while the Fiber a cut-out grove still gave piled up. On Medium,
+  Normal and Hard (`smart`; an Easy rival keeps the old habits) its Depots out toward the front (12 tiles or more from
+  the Command Base) keep Cement and Ammo and take in no Ore, Crystal, Stone or Fiber (`reject`): a Depot among the far
+  Mines used to collect their whole output, a long run from the Smelters waiting for it. Its Bot Foundry rests to save
+  for a Missile Factory or Silo (`aiMissilePlan`) only while the army isn't well behind and the colony has the workers
+  and the Haulers its buildings call for (a Tycoon rests it sooner, as before): with the army alone to go by, it stood
+  off up to two fifths of a war game while buildings waited for workers.
 - **Wildlife** (Colony; `WILD` in `js/defs.js`, `updateNest`/`updateCritter` in `js/sim.js`; new-game option, on by
   default; in missions only where one switches it on, `wildlife: true`, as Bug Hunt does): one creature nest per `WILD.perTiles` tiles (3–8), owned by `WILD_OWNER` (the empty
   second player slot of a Colony game), at least 16 tiles from the landing site and reachable on foot. Each keeps
