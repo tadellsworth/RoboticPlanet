@@ -140,6 +140,12 @@ these wait for a later expansion:
   analysis complete. No further instructions will follow."
 - **The Pathfinder wreck.** A neutral landmark on some maps (the joint lander that built the Trade Posts and Uplinks),
   holding archive logs.
+- **The Hollow (planned by the owner, after the Murmur design is settled).** A new biome and map in the Murmur's
+  cavern lair under the Bloom (LORE.md, The Hollow): always night, daylight only down the breach shafts where Command
+  Bases land, floating Crystal masses, chasms, underground lakes, ceiling tremors, Ringfall only through the breaches,
+  no solar flares, Fiber from Bloom veins (which draws the Murmur), the most nests of any map with the Deep's mound at
+  the centre.
+- **A campaign mode built around the Murmur** (the owner's long-term wish).
 - **Archives.** A page that fills with logs found across games (ark construction updates that stop, the last
   transmission's background noise, the *Wren*'s silent waystation, machine traffic from other Catalog worlds, one signal
   that matches no robot protocol), so players piece together Earth's fate without ever being told.
