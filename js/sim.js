@@ -59,6 +59,8 @@ function simStep(dt) {
     P.aiT = DIFFICULTY[S.difficulty].think;
     aiThink(P.id);
   }
+  noteGone(); // (the game's story, S.log: buildings lost in this step)
+  if (S.tick % 60 === 41) logTick();
   if (S.tick % 15 === 0) {
     S.buildings = S.buildings.filter((b) => !b.dead);
     S.bots = S.bots.filter((u) => !u.dead);
@@ -2970,6 +2972,7 @@ function completeBuilding(b) {
   // A priority set on the construction site was for building it: the finished building starts at Normal.
   if (b.sitePrio) { delete b.prio; delete b.sitePrio; }
   S.players[b.owner].stats.built++;
+  if (DEFENCE_TYPES.has(b.type) && !def.barrier && !def.missile && !def.nukeSilo) logFirst('def', b.owner, { b: b.type }); // (the game's story)
   markDirty(b.x, b.y);
   postMsg(b.owner, `${def.name} is complete.` + (def.roadworks && paveMode(b) === 'marked' && !roadsMarked(b.owner) ? ' Mark the roads it should pave in Paths (Pave).' : ''), b.x, b.y, 'good');
   if (isMe(b.owner)) sfx('complete');
@@ -2983,7 +2986,7 @@ function completeBuilding(b) {
 function completeRamp(b) {
   if (S.players[b.owner]) S.players[b.owner].stats.ramps = (S.players[b.owner].stats.ramps || 0) + 1;
   releaseBotsFrom(b, false);
-  b.dead = true;
+  b.dead = true; b.gone = 1; // (finished, not lost: see noteGone)
   S.byId.delete(b.id);
   S.bAt[tIdx(b.x, b.y)] = 0;
   S.ramp[tIdx(b.x, b.y)] = 1;
@@ -3481,6 +3484,7 @@ function updateDepleted(b, def) {
         : 'Your Bio Farm has no fertile soil left in reach. Dismantle it and build one beside open fertile soil.', b.x, b.y, 'warn');
     }
     if (!b.depleted) b.dryMsg = 0;
+    if (b.depleted !== !!b.dryAt) b.dryAt = b.depleted ? S.time : 0; // (when it ran dry: "Why idle?", js/insight.js)
   }
   if (!b.depleted) return false;
   b.status = def.gather ? `No ${RES[def.gather].name.toLowerCase()}s left in reach: dismantle it` : 'No fertile soil left in reach: dismantle it';
@@ -3648,6 +3652,7 @@ function spawnFromFoundry(b) {
   const P = S.players[b.owner];
   P.madeBots = P.madeBots || {};
   P.madeBots[kind] = (P.madeBots[kind] || 0) + 1;
+  if (sumValues(P.madeBots) === 1) logFirst('bot', b.owner, { u: kind }); // (the game's story: see S.log)
   if (hasOrders(b) && b.orders[kind] > 0) {
     b.orders[kind]--;
     const list = foundryList(b);
@@ -4469,6 +4474,7 @@ function hitBuilding(b, dmg, by) {
   b.lastHit = S.time;
   if (by >= 0 && foes(by, b.owner)) {
     const P = S.players[b.owner], R = P.raided || (P.raided = {});
+    if (!(P.hitBy && P.hitBy[by])) logEvent({ t: S.time, k: 'hit', p: b.owner, q: by, b: b.type }); // (the first: see S.log)
     (P.hitBy = P.hitBy || {})[by] = S.time; // remembered: see rivalOf
     R.x = b.x + 0.5; R.y = b.y + 0.5; R.t = S.time; // where its buildings were last hit: forts near by answer (garrisonDefense)
   }
@@ -4511,6 +4517,7 @@ function captureBuilding(b, by) {
   // Only a fort changes hands. Anything else is wrecked (below) as its old owner's: the attackers keep
   // their orders (releaseBotsFrom calls off only the owner's), and a Gate's road stays the defender's.
   if (def.mil) {
+    noteLost(b, by); // (the game's story: see S.log)
     b.owner = by; b.tgt = 0; // (a Keep's cannon was tracking its new owner's warbots)
     if (b.type === 'outpost' || b.type === 'keep') S.roadVer = (S.roadVer || 0) + 1; // (the road through it changes hands: see roadNet)
   }
@@ -4641,6 +4648,7 @@ function dropLoot(b) {
   }
   if (b.loot) b.loot = null;
   if (n) addLoot(b.x, b.y, goods);
+  b.spilt = (b.spilt || 0) + n; // (for the game's story, noteLost: it is coming down)
   return n;
 }
 
@@ -4651,6 +4659,7 @@ function dropCarried(u) {
     const goods = {};
     for (const [g, n] of cargoList(u)) if (GOOD[g] && n >= 1) goods[g] = (goods[g] || 0) + Math.floor(n);
     if (Object.keys(goods).length) addLoot(Math.floor(u.x), Math.floor(u.y), goods);
+    if (!(u.hp > 0)) noteAboard(u, goods); // (destroyed with its load: the game's story)
   }
   u.carry = null;
   u.carryN = 0;
@@ -5222,6 +5231,7 @@ function doLoot(u, t, dt) {
  */
 function eliminate(old, by, how) {
   const P = S.players[old];
+  logEvent({ t: S.time, k: 'out', p: old, q: by, how: how || 'capture' }); // (the game's story: see S.log)
   P.out = true;
   for (const u of S.bots) if (!u.dead && u.owner === old) killBot(u, true);
   sfx('boom');
@@ -7094,7 +7104,11 @@ function missileFloor(b) { return Math.max(1, Math.round(BDEFS[b.type].armor * M
 function captureOnly(b) { return !!(b.built && (b.type === 'lander' || BDEFS[b.type].keep)); }
 
 /** Player p was hit by a Missile of `by`'s just now (a nuclear one too): remembered like a warbot's or a shell's hit (see rivalOf). */
-function hitByNow(p, by) { if (by >= 0 && p >= 0 && foes(by, p) && S.players[p]) (S.players[p].hitBy = S.players[p].hitBy || {})[by] = S.time; }
+function hitByNow(p, by) {
+  if (!(by >= 0 && p >= 0 && foes(by, p) && S.players[p])) return;
+  if (!(S.players[p].hitBy && S.players[p].hitBy[by])) logEvent({ t: S.time, k: 'hit', p, q: by }); // (the first: see S.log)
+  (S.players[p].hitBy = S.players[p].hitBy || {})[by] = S.time;
+}
 
 function missileImpact(m) {
   const md = BDEFS.silo.missile;
@@ -7771,11 +7785,12 @@ function releaseScore(b) {
 function demolish(b) {
   if (b.dead || b.type === 'lander') return null;
   // A building on the move: dismantling either end calls the move off (the old one stays as it was; the new site cost nothing).
-  if (b.moveFrom && !b.built) { const o = getE(b.moveFrom); if (o) o.moving = 0; b.moveFrom = 0; destroyBuilding(b, false, true); return { cost: {}, crates: 0, inside: 0 }; }
+  if (b.moveFrom && !b.built) { const o = getE(b.moveFrom); if (o) o.moving = 0; b.moveFrom = 0; b.gone = 1; destroyBuilding(b, false, true); return { cost: {}, crates: 0, inside: 0 }; }
   if (b.moving) cancelMove(b);
   const def = BDEFS[b.type];
   if ((def.keep || def.terminal) && !b.built && S.players[b.owner]) S.players[b.owner][def.keep ? 'keepFail' : 'termFail'] = S.time; // an AI waits a while before trying again
   const pair = (b.type === 'ropeway' || b.type === 'viaduct') && b.link ? getE(b.link) : null;
+  b.gone = 1; if (pair) pair.gone = 1; // (taken down on purpose: not lost, see noteGone)
   const near = b.far && pair && !pair.dead ? pair : b; // (the end by your roads)
   const cost = {};
   if (b.built && S.players[b.owner]) S.players[b.owner].stats.dismantled = (S.players[b.owner].stats.dismantled || 0) + 1;
@@ -7828,7 +7843,7 @@ function startMove(owner, b, i, j) {
 function cancelMove(b) {
   const s = getE(b.moving);
   b.moving = 0;
-  if (s && !s.dead && !s.built && s.moveFrom === b.id) { s.moveFrom = 0; destroyBuilding(s, false, true); }
+  if (s && !s.dead && !s.built && s.moveFrom === b.id) { s.moveFrom = 0; s.gone = 1; destroyBuilding(s, false, true); }
 }
 
 /** The moved building nb is finished: it takes over from the old one, which is taken down. */
@@ -7867,6 +7882,7 @@ function finishMove(nb) {
     if (far && !far.dead && far.ferryTo === old.id && setFerryLine(nb, far)) far.ferryTo = 0;
     old.ferryTo = 0;
   }
+  old.gone = 1; // (moved, not lost: see noteGone)
   destroyBuilding(old, false, true);
   addFx('smoke', old.x + 0.5, old.y + 0.5, { r: 0.7 });
   postMsg(nb.owner, `The ${BDEFS[nb.type].name} has moved here.`, nb.x, nb.y, 'good');
@@ -7935,6 +7951,93 @@ function recordHistory() {
         if (Array.isArray(h[k])) h[k] = thin(h[k]);
         else for (const g in h[k]) h[k][g] = thin(h[k][g]);
       }
+    }
+  }
+}
+
+/* ------------------------------------------------------------------ the game's story (for the end screen) */
+
+/*
+ * S.log: the moments that mattered, for the report on the end screen (gameReport in js/insight.js). Display only: no
+ * rule reads it and hashState leaves it out, but the simulation writes it (the same on every device) and a save keeps
+ * it. Each entry is { t, k, p } and more, by its kind k:
+ *   bot   p's first robot from a Bot Foundry (u: its kind)
+ *   def   p's first defence finished (b: its type)
+ *   hit   q's robots, missiles or bombs first hit one of p's buildings (q; b: the building's type, when known)
+ *   lost  a run of p's buildings lost (wrecked, captured, blown up, crumbled away), each within LOG_RUN seconds of the
+ *         last: t1 the last, n how many, q who by (-1 nobody, -2 several), ty { type: how many }
+ *   dry   p had none of good g while something of p's waited for it, from t for d seconds (see LOG_DRY)
+ *   out   p's colony fell to q (how: as eliminate has it)
+ * Past LOG_MAX entries the least of the runs of losses and shortages goes (the oldest of equals); firsts stay. Totals
+ * that mustn't shrink with it are in P.stats: lostBld, lostMat (their materials), lostIn (goods inside), lostAboard
+ * (goods on robots destroyed). S.logFrom: when the log began (0, or when a save from before it was played on).
+ */
+const LOG_MAX = 60, LOG_RUN = 60, LOG_GOODS = ['fiber', 'stone', 'ore', 'crystal', 'alloy', 'chip', 'cement', 'fuel'];
+const LOG_DRY = { min: 45, gap: 30 }; // shorter than `min` seconds isn't a shortage; one back within `gap` carries the last on
+
+function logEvent(e) {
+  if (!S.log) { S.log = []; S.logFrom = S.time > 30 ? Math.round(S.time) : 0; }
+  S.log.push(e);
+  if (S.log.length <= LOG_MAX) return;
+  let k = 0, w = Infinity;
+  S.log.forEach((x, i) => { const v = x.k === 'lost' ? x.n : x.k === 'dry' ? x.d / 60 : Infinity; if (v < w) { w = v; k = i; } });
+  S.log.splice(k, 1);
+}
+
+/** Who took building b: whoever hit its owner's buildings in the last 15 s (the latest), else a rival holding its ground, else -1. */
+function lostTo(b) {
+  const H = (S.players[b.owner] && S.players[b.owner].hitBy) || {}, o = S.owner[tIdx(b.x, b.y)];
+  let q = -1, t = S.time - 15;
+  for (const k in H) if (H[k] >= t) { t = H[k]; q = +k; }
+  return q >= 0 ? q : o >= 0 && foes(o, b.owner) ? o : -1;
+}
+
+/** Building b is lost to `by` (-1: worked out): counted, and added to the latest run of its owner's losses or a new one. */
+function noteLost(b, by) {
+  const def = BDEFS[b.type], P = S.players[b.owner];
+  if (!P || def.wild || def.ramp) return;
+  if (!(by >= 0)) by = lostTo(b);
+  const st = P.stats;
+  st.lostBld = (st.lostBld || 0) + 1;
+  st.lostMat = (st.lostMat || 0) + Math.round(sumValues(b.built ? siteCost(b) : b.stock)); // (a wrecked site: what had come for it)
+  st.lostIn = (st.lostIn || 0) + Math.round(b.dead ? b.spilt || 0 : b.built ? sumValues(b.stock) : 0); // (a captured fort: what's in it)
+  let e = null;
+  for (let i = (S.log || []).length - 1; i >= 0 && !e; i--) if (S.log[i].k === 'lost' && S.log[i].p === b.owner) e = S.log[i];
+  if (e && S.time - e.t1 <= LOG_RUN) { e.n++; e.t1 = S.time; e.ty[b.type] = (e.ty[b.type] || 0) + 1; if (e.q === -1) e.q = by; else if (by >= 0 && e.q !== by) e.q = -2; }
+  else logEvent({ t: S.time, k: 'lost', p: b.owner, t1: S.time, n: 1, q: by, ty: { [b.type]: 1 } });
+}
+
+/** Every step: the buildings that went in it, but for those taken down on purpose (b.gone: dismantled, moved, a Ramp finished). */
+function noteGone() {
+  for (const b of S.buildings) if (b.dead && !b.noted) { b.noted = 1; if (!b.gone) noteLost(b, -1); }
+}
+
+/** The goods on a robot destroyed (dropped in crates where it fell). */
+function noteAboard(u, goods) { const P = S.players[u.owner]; if (P) P.stats.lostAboard = (P.stats.lostAboard || 0) + sumValues(goods); }
+
+/** A first (kind k) for p, once a game: logged unless p's log has one. */
+function logFirst(k, p, e) { if (!(S.log && S.log.some((x) => x.k === k && x.p === p))) logEvent({ t: S.time, k, p, ...e }); }
+
+/** Every 2 s: each colony's shortages of LOG_GOODS (none on hand while a factory, a Fuel Station or a site waits for it). */
+function logTick() {
+  if (!S.log) { S.log = []; S.logFrom = S.time > 30 ? Math.round(S.time) : 0; }
+  for (const P of S.players) {
+    if (P.absent || P.out || (S.wildlife && P.id === WILD_OWNER)) continue;
+    const have = {}, want = {};
+    for (const b of S.buildings) {
+      if (b.dead || b.owner !== P.id) continue;
+      const def = BDEFS[b.type];
+      if (!b.built) { if (!storeFunded(b)) { const c = siteCost(b); for (const g in c) if ((b.stock[g] || 0) < c[g]) want[g] = 1; } continue; }
+      for (const g in b.stock) if (b.stock[g] >= 1 && (def.store || (def.out && def.out[g]))) have[g] = 1;
+      if (b.paused || b.cut) continue;
+      if (def.inp && b.status && b.status.startsWith('Waiting for ')) for (const g in def.inp) if (b.status.startsWith('Waiting for ' + GOOD[g].name)) want[g] = 1;
+      if (!def.store && chargerDry(b)) want.fuel = 1;
+    }
+    const D = P.dry || (P.dry = {});
+    for (const g of LOG_GOODS) {
+      const r = D[g];
+      if (!have[g] && want[g]) { const t = Math.round(S.time); if (r) r[1] = t; else D[g] = [t, t]; }
+      else if (r && S.time - r[1] > LOG_DRY.gap) { if (r[1] - r[0] >= LOG_DRY.min) logEvent({ t: r[0], k: 'dry', p: P.id, g, d: Math.round(r[1] - r[0]) }); delete D[g]; }
     }
   }
 }
@@ -9511,7 +9614,7 @@ function packCrawler(b) {
   for (const g in b.stock) if (b.stock[g] > 0) u.cargo[g] = b.stock[g];
   if (b.keep) u.cargoKeep = b.keep;
   u.hp = Math.max(1, Math.round(u.maxHp * clamp(b.armor / BDEFS[b.type].armor, 0.1, 1)));
-  b.dead = true;
+  b.dead = true; b.gone = 1; // (packed up, not lost: see noteGone)
   S.byId.delete(b.id);
   S.bAt[tIdx(b.x, b.y)] = 0;
   markDirty(b.x, b.y);
