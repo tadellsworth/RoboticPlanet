@@ -1008,7 +1008,8 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
 - **Game speed:** the speed chip in the top bar opens 0.75×, 0.875×, 1×, 2× and 3×.
 - **Sound** (`js/audio.js`, all Web Audio, no audio files): a generative synthwave score that follows the game (menu,
   building, war when you're attacked or fighting, and an alarm while a nuke flies; the building music takes turns between
-  three themes, `BUILD_THEMES`, every `MUSIC_ROTATE` seconds of play: the original, Night Drive (Dorian, octave bass,
+  three themes, `BUILD_THEMES`, every `MUSIC_ROTATE` seconds of play: Lost in a Dream, the main theme (the menu music is a
+  slow take on its chords), Night Drive (Dorian, octave bass,
   claps, a plucked lead) and Horizon (half-time, a chord every two bars, an arpeggio in threes)), written a bar at a time from chord
   progressions, arpeggios, bass, drums and short melodies in 8-bar sections. Effects include radio blips for orders, a
   Pulse Turret's tesla-coil discharge (a short charge whine, then a buzzing arc crackling with sparks: `pulse`), a

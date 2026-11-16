@@ -1164,6 +1164,7 @@ const MOODS = {
     progs: [[[0, 'm'], [8, 'M'], [3, 'M'], [10, 'M']], [[0, 'm7'], [5, 'm'], [8, 'M7'], [10, 'M']]],
     arrange: [['pad', 'arp8'], ['pad', 'arp8', 'bassW'], ['pad', 'arp8', 'bassW', 'shimmer'], ['pad', 'shimmer', 'bassW']],
   },
+  // Lost in a Dream: the main theme (the menu plays it slowly, on the same chords).
   build: {
     bpm: 96, keys: [57, 55, 59, 52], scale: MINOR, chordBars: 1,
     progs: [[[0, 'm'], [8, 'M'], [3, 'M'], [10, 'M']], [[0, 'm'], [10, 'M'], [8, 'M'], [10, 'M']], [[0, 'm7'], [5, 'm'], [8, 'M7'], [7, 'M']], [[8, 'M7'], [10, 'M'], [0, 'm'], [0, 'm7']]],
