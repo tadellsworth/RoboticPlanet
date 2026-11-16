@@ -339,16 +339,16 @@ How the game hints at it:
 - [x] Name the four Sponsors? No: they stay faceless (decided).
 - [x] Are the Murmur only animals? Never answered: it stays ambiguous (decided).
 - [ ] Should the Pathfinder wreck appear as a map landmark? (Held for a later expansion; see IDEAS.md.)
-- [ ] Murmur names in the game: the art brief's forms (Runners, Breakers, the Deep) or the classes adopted so far
-  (Scuttler, Brute, Leech, Spitter, Delver), or both (forms as sizes, classes as kinds)?
+- [x] Murmur names in the game: the classes adopted so far stay, for now (decided): the Scuttler, the Brute, the
+  Leech, the Spitter and the Delver. (The art brief's Runners and Breakers describe their sizes; the Deep stays the
+  unseen heart of a nest.)
 
 ### In the game
 
 Decisions the owner made in chat (Nov 2026), kept here with the bible. Adopted names: the trader ship is the *Wren*;
 meteor showers are **Ringfall**; the rival styles are the doctrines (Balanced: the Steward, Turtle: the Warden, Raider:
 the Salvager, Rusher: the Herald, Tycoon: the Architect); "the Murmur" is the blanket name for the creatures, with
-classes so far: the Scuttler, the Brute, the Leech (drains charge), the Spitter and the Delver (see the open decision
-above); their look so far is direction B, crystal-backed but mole-like (design/murmur), to be reworked to the art brief
+classes: the Scuttler, the Brute, the Leech (drains charge), the Spitter and the Delver (kept for now, decided); their look so far is direction B, crystal-backed but mole-like (design/murmur), to be reworked to the art brief
 above; the Lunar biome is Penelope, where no Murmur live. The new-game setup keeps the plain biome names (Red desert,
 Forest...); the region names are for flavor elsewhere. On the setup screen each rival doctrine has a tooltip saying in
 depth how it plays. Planned: the Hollow as a new biome and map once the Murmur design is settled, and later a campaign
