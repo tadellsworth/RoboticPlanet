@@ -215,7 +215,7 @@ function goalLabel(g, need) {
   if (g.text) return String(Array.isArray(g.text) ? g.text[need > 1 ? 1 : 0] : g.text).replace(/\{n\}/g, need);
   switch (g.kind) {
     case 'built': return `Build ${bldCount(g.type, need)}`;
-    case 'made': return `Make ${need} ${GOOD[g.good].name}`;
+    case 'made': return `Make ${need} ${GOOD[g.good].name}${need !== 1 && (g.good === 'chip' || g.good === 'warhead') ? 's' : ''}`; // (Chips and Missiles count one by one)
     case 'bots': return g.type && need === 1 ? `Build ${aOrAn(BOTS[g.type].name)}` : `Build ${need} new ${g.type ? BOTS[g.type].plural : 'bots'}`;
     case 'own': return `Have ${need} ${BOTS[g.type].plural}`;
     case 'paths': return `${['', 'Lay', 'Surface'][g.tier]} ${need} ${['', 'road', 'asphalt road'][g.tier]} tiles`;
