@@ -1014,11 +1014,16 @@ function ambienceBeds(live, dt, zl) {
     };
     const city = noiseVoice('bandpass', 420, 0.6), chatter = noiseVoice('bandpass', 1500, 1.4);
     city.g.connect(A.fxBus); chatter.g.connect(A.fxBus);
-    // Industry: mains hum and its harmonic, through a low filter.
+    // Industry: a soft machine hum (a low tone and two harmonics) through a low filter. It never sits still: each
+    // tone wanders a little in pitch, the filter drifts, and the whole swells and eases on two slow, unrelated
+    // cycles (a steady, unchanging hum was distracting: see the update below).
     const ind = ac.createGain(); ind.gain.value = 0;
-    const ilp = ac.createBiquadFilter(); ilp.type = 'lowpass'; ilp.frequency.value = 320;
-    for (const [f, k] of [[60, 0.6], [120, 0.35], [181, 0.15]]) { const o = ac.createOscillator(), g = ac.createGain(); o.type = 'sawtooth'; o.frequency.value = f; g.gain.value = k; o.connect(g).connect(ilp); o.start(); }
-    ilp.connect(ind).connect(A.fxBus);
+    const ilp = ac.createBiquadFilter(); ilp.type = 'lowpass'; ilp.frequency.value = 260; ilp.Q.value = 0.4;
+    const indOsc = [];
+    for (const [f, k, w] of [[60, 0.55, 'triangle'], [120, 0.25, 'sawtooth'], [181, 0.08, 'sawtooth']]) { const o = ac.createOscillator(), g = ac.createGain(); o.type = w; o.frequency.value = f; g.gain.value = k; o.connect(g).connect(ilp); o.start(); indOsc.push({ o, f }); }
+    const indAm = ac.createGain(); indAm.gain.value = 1;
+    for (const [rate, depth] of [[0.11, 0.22], [0.047, 0.18]]) { const l = ac.createOscillator(), lg = ac.createGain(); l.frequency.value = rate; lg.gain.value = depth; l.connect(lg).connect(indAm.gain); l.start(); }
+    ilp.connect(indAm).connect(ind).connect(A.fxBus);
     // Trains: a diesel throb (two low tones, pulsing).
     const rail = ac.createGain(); rail.gain.value = 0;
     const rlp = ac.createBiquadFilter(); rlp.type = 'lowpass'; rlp.frequency.value = 240;
@@ -1036,7 +1041,7 @@ function ambienceBeds(live, dt, zl) {
     if (airPan) { air.g.connect(airPan); abg.connect(airPan); airPan.connect(A.fxBus); } else { air.g.connect(A.fxBus); abg.connect(A.fxBus); }
     // The sea: low, rumbling wash.
     const sea = noiseVoice('lowpass', 520, 0.5); sea.g.connect(A.fxBus);
-    WORLD.amb = { city, chatter, ind, rail, air, airPan, abg, sea, clack: 0, cricket: 4 };
+    WORLD.amb = { city, chatter, ind, ilp, indOsc, rail, air, airPan, abg, sea, clack: 0, cricket: 4 };
   }
   const M = WORLD.amb, on = live && AUDIO.fx > 0;
   const night = typeof todNow === 'function' && S ? todNow().lights || 0 : 0;
@@ -1047,7 +1052,12 @@ function ambienceBeds(live, dt, zl) {
   M.city.g.gain.setTargetAtTime(cityLv, t, 0.8);
   M.chatter.g.gain.setTargetAtTime(cityLv * 0.35, t, 0.8);
   M.city.f.frequency.setTargetAtTime(380 + 80 * Math.sin(t * 0.21), t, 1);
-  M.ind.gain.setTargetAtTime(on ? Math.min(0.016, 0.003 * Math.sqrt(WORLD.works || 0)) * zl : 0, t, 0.6);
+  // (about half as loud as it was, and wandering: see where it's made)
+  M.ind.gain.setTargetAtTime(on ? Math.min(0.009, 0.0018 * Math.sqrt(WORLD.works || 0)) * zl : 0, t, 0.6);
+  if (on && WORLD.works) {
+    M.indOsc.forEach((v, k) => v.o.frequency.setTargetAtTime(v.f * (1 + 0.012 * Math.sin(t * (0.07 + 0.03 * k) + k * 2.1)), t, 2));
+    M.ilp.frequency.setTargetAtTime(230 + 70 * Math.sin(t * 0.09 + 1) * Math.sin(t * 0.023), t, 2);
+  }
   // Trains.
   const rv = WORLD.railV || 0;
   M.rail.gain.setTargetAtTime(on && WORLD.rail ? Math.min(0.06, 0.03 * Math.sqrt(WORLD.rail)) * zl : 0, t, 0.4);
