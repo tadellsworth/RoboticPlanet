@@ -115,7 +115,7 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
 | Torch (Foundry, 2 rounds of parts) | Flamethrower robot (`TORCH`, `torchFire`): every 0.2 s a cone (±0.5 rad, 1.9 tiles) does 0.35 to each enemy robot in it (through `damageBot`, so a facing shield stops it) and 0.8 to the building it burns, ×1.6 to defences, Walls and Gates (a Wall in about 6 s); a 12 s tank, one Fuel a fill (`reloadArmy`, `fuelPoint`, task `refill`); explodes with fuel aboard (`BLAST.torch`). 18 health |
 | Howitzer (Foundry; **switched off for now**: `BOTS_OFF` in `js/defs.js`) | Mobile siege launcher (`ROCKET`): parks 4–11 tiles from a building and fires 4 rockets (5 each, splash 2 to buildings, 4 to robots), reloads 4 Ammo at a garrison or storage; a Command Base or Keep stops at `missileFloor` (anything else it can knock out); hurt below 60% it goes to a Repair Station within `ROCKET.repairReach` (30) tiles; 14 hp. AI builds 1–3 and hunts the enemy's  A new one rolls off the Foundry to a post (`u.post`) it returns to after reloading; `u.stance` `hold` fires only on orders, otherwise it shells what comes in reach of its post without moving |
 | Depot | Extra storage, shortens hauling trips; give it supply orders to stock it as a forward base |
-| Trade Terminal | Bulk trade, docked within 2 tiles of a neutral Trade Post (`S.posts`, `TRADE_POST`, `placePosts`: placed fairly between the colonies at the start, one more than there are colonies, two in Colony; `nearPost`), one per post per colony, out past the usual reach; a rival's land round a post keeps you out (`TERMINAL`): 3 contracts at a time (new every 5 min), a lot of 30 of one good for Ore, Crystal, Stone, Fiber or Alloy at 65% of worth (`TRADE_VALUE`; Alloy only bought, never a good traded down for one worth under 1/1.3 of it, `tradePairOk`), +1.5%/tile beyond 16 (max +25%), each lot sold fetching 12% less for a while; served only by Road Trains and Freight Trains (`terminalSpare`, `updateTerminal`); its goods can't be spent until a train takes them home |
+| Trade Terminal | Bulk trade, docked within 2 tiles of a neutral Trade Post (`S.posts`, `TRADE_POST`, `placePosts`: placed fairly between the colonies at the start, one more than there are colonies, two in Colony; `nearPost`), one per post per colony, out past the usual reach; a rival's land round a post keeps you out (`TERMINAL`): 3 contracts at a time (new every 5 min), a lot of 30 of one good for Ore, Crystal, Stone, Fiber or Alloy at 65% of worth (`TRADE_VALUE`; Alloy only bought, never a good traded down for one worth under 1/1.3 of it, `tradePairOk`), +1.5%/tile beyond 16 (max +25%), each lot sold fetching 12% less for a while; served only by Road Trains and Freight Trains (`terminalSpare`, `updateTerminal`), a Road Train bringing the lot from storage that holds 10 or more of it (`TERMINAL.minLoad`: the nearest with only a few, a Harvester's Fiber, say, used to hold the lot up for good); its goods can't be spent until a train takes them home |
 | Ramp | Planned in Paths: cuts a slope into a one-level cliff so bots can climb it; counts as road |
 | Fuel Station | Recharges bots' batteries, four at a time; burns **Fuel** |
 | Bio Farm | A worker plants energy crops on fertile soil and harvests them into **Fuel** |
@@ -670,6 +670,23 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   way). One that fails is refused and changes nothing; if
   Continue can't load this device's save, the menu says so. A loaded file becomes this device's save only once its game
   is running (`enterLoaded`), and the save it replaced is kept as a backup (`SAVE_BACKUP_KEY`, `botfall.save.bak`).
+- **Send feedback** (`js/feedback.js`, `#screen-feedback`): the small **Feedback** pill beside **Lore** at the foot of the
+  main menu, and **Send feedback** in the pause menu, open a short form: the kind (**Bug**, **Idea**, **Balance** or
+  **Other**), the message (3 to 5,000 characters, with a counter), an optional email or name (up to 200), a hidden
+  honeypot field (`website`) and, only while a game is running, **Attach my current game** (ticked for a Bug, unticked
+  for the others until the player sets it). It posts JSON to the relay's `/feedback` (`feedbackUrl`: `relayUrl()` with
+  `wss:` as `https:`, see Multiplayer, The relay): `{ type, text, contact?, meta, save?, website }`. `meta`
+  (`feedbackMeta`, kept under 4,000 characters of JSON) is the game's version (`gameVersion`, the fingerprint the lobby
+  compares), the browser's user agent, the window's size, pixel ratio and touch or mouse and, from a game: mode (or
+  mission and its difficulty), map type, biome, size, seed, players, the rival difficulty (Versus), game time and the
+  last five messages (`UI.msgLog`). `save` is `saveFileText()`, the file Download save file writes, left out (and the
+  thanks say so) if it is over 8 MB. The form says in one line what is sent. **Sending…** holds the button; on 200 it
+  thanks the player with the report's number ("Report #n is filed.") and empties the text; 503 `off` (feedback not set up
+  on the relay yet), 429 (too many reports), no connection and any other error each get their own words, and the text is
+  never lost (it stays through closing the form too). It is only interface: it sends no order, doesn't change
+  `UI.paused` (opened over the pause menu the game stays paused; a multiplayer game runs on under its menu as always) and
+  takes every key pressed in it, so no hotkey fires while typing. Esc, Back or a phone's Back close it (on the main menu
+  opening adds a history entry, as the Lore guide does; in a game `escapeKey` closes it first).
 - **A failed frame never stops the game:** `frame` books the next frame before running this one and catches its errors
   (reported once each to the console), and each stage of a frame (simulation, camera, drawing, interface, sound) runs
   on its own (`stage` in `js/main.js`): one that keeps failing during a game says so once and pauses saving
@@ -769,7 +786,23 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   stop where they would eat into that room, the Foundry makes warbots, and Haulers, trucks and other helpers aren't
   ordered (but a first Tanker); warbots past what it wants leave `AI_WORKER_ROOM` (6) places for workers. Without it a
   colony that had taken a lot of buildings made workers to staff them all until the limit was full, and never fielded
-  an army again (a 2 v 2 game ran past an hour). Its Missile Factory and Silos come
+  an army again (a 2 v 2 game ran past an hour). **Crystal** (every robot takes a Chip, every Chip a Crystal) runs short
+  by how long what's left would last, in stock and in the ground on its land, at the rate its Chip Fabs burn it
+  (`goodRates`; under `AI_CRYSTAL_MINS`, 10 minutes, counting at least `AI_CRYSTAL_BURN`, 4 a minute, once it has a
+  Foundry), not only by the clusters left (`P.short`, by tiles, came only once the last three were all there was,
+  too late to do anything). Short, with Crystal no-one holds within `AI_CRYSTAL_REACH` (20) tiles of a fort of its own
+  on the same ground, its Outposts head for it (the nearest pulls the next one its way); forts holding Crystal are worth more to attack
+  (`crystalHeld`); it docks a Trade Terminal from 10 minutes (`AI_CRYSTAL_TRADE_AT`), past the usual limit on sites,
+  and orders the Road Train for it straight away (it takes four Chips: once the Crystal had gone there were none left
+  to make it). Running low (`P.crLow`: short, or under 10 in stock with the Taps bringing in less than the Fabs use),
+  it puts up Crystal Taps first wherever clusters are left on its land, up to `AI_CRYSTAL_TAPS` (4), even with every
+  worker busy, and they get a worker first; its Smelters rest while it holds `AI_ALLOY_PILE` (40) Alloy, until it's
+  down to half (`b.alloyRest`: Alloy can't be sold, so the Ore and Fiber they'd burn go to the Terminal instead, and
+  their workers to the Taps); and at the Terminal (`aiTrade`) a contract that brings Crystal, or else Chips, comes
+  first, it never gives Crystal away, and a contract under way that brings neither is given up for one. Any contract
+  with no lot sold for `AI_TRADE_STALL` (5 minutes) is dropped for another. Before, in long 2 v 2 games the colony
+  left on the losing side took Alloy for Stone while its Foundry stood idle for want of Chips, Alloy piling up, and the
+  game ran to an hour. Its Missile Factory and Silos come
   only through `aiMissilePlan` (not the plain build plan, where a Hard rival put a factory up four minutes in), one
   site at a time, and the factory rests while no built Silo has room for another Missile. It walks its best spots for a
   gatherer (`walkRes`: only nodes within three times the reach on foot count), so it never puts a Harvester at the foot
@@ -874,7 +907,7 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   Arrival clock (`ARRIVAL_CLOCK`), shown under its name. **Loading lines** (`SPLASH_LINES`, picked at first paint by an
   inline script in `index.html`, which keeps its own copy): one under the splash bar, which now stays about 2 s.
   **The Lore guide** (`#screen-lore`, `openLore`/`closeLore`/`initLore` in `js/ui.js`): the small **Lore** pill at the
-  end of the main menu's links opens the colony's archive, LORE.md told in ten pages (Terrafall, The Arrival clock,
+  end of the main menu's links (beside **Feedback**) opens the colony's archive, LORE.md told in ten pages (Terrafall, The Arrival clock,
   Ithaca I, The regions, The four vanguards, The doctrines, Neutral ground, The Murmur, Accord standards, Your colony),
   in the archive's own voice: Earth's fate is never stated, only hinted (an unreviewed second reading of "terrafall",
   "no ark construction update on file after T−14", the *Wren*'s waystation last answering at T−2). It pages like the How
@@ -980,7 +1013,7 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   down to 1×, if frames run below ~45 a second and drawing is what's slow (not when the screen or a power-saving mode
   holds a steady beat, such as 30 a second, nor when the simulation is the slow part), and raises it again when there's
   room; the minimap is laid out again whenever it changes. Nothing is drawn under a full screen (the pause menu, Help,
-  Statistics, game over) while the game behind it stands still, unless the view, the canvas or the art changes
+  Statistics, Send feedback, game over) while the game behind it stands still, unless the view, the canvas or the art changes
   (`drawNeeded` in js/main.js), and the demo behind the main menu is drawn 30 times a second (`DEMO_FRAME`).
 - **Phones and tablets (touch):** a touch on the map is only ever a touch there: the click a browser makes after it
   is cancelled (`initInput`), so the tap that opens a panel can't also press a button that appears under the finger,
@@ -1154,6 +1187,7 @@ js/orders.js              every player action as an order: a name and plain argu
 js/lockstep.js            multiplayer: every device runs the game, only orders travel (see Multiplayer below)
 js/net.js                 multiplayer: the connection to the relay (rooms, reconnecting, catching up)
 js/mpui.js                multiplayer screens: host, join, the lobby, the in-game banner, pause and leave
+js/feedback.js            Send feedback: the form (main menu and pause menu) that posts to the relay's /feedback
 js/charts.js              line and bar charts for the statistics screen
 js/render.js              canvas renderer and placeholder art
 js/daynight.js            day and night: the clock, re-lit art sets, grading, headlights, light pools
@@ -1166,7 +1200,7 @@ art/lore/                 the Lore guide's pictures (the planet, the regions, th
 tools/headless-sim.js     AI-vs-AI balance test without a browser
 tools/smoke-test.js       browser test on a phone-sized screen (Playwright)
 tools/build-single.js     bundles everything into dist/terrafall.html (and dist/tod-<time>.js, biome-<b>.js, lore.js)
-relay/                    the multiplayer relay: a Cloudflare Worker (deployed by .github/workflows/relay.yml)
+relay/                    the multiplayer relay and player feedback: a Cloudflare Worker (deployed by .github/workflows/relay.yml)
 ```
 
 Plain JavaScript, no build step and no dependencies. Balance tweaks mostly live in `js/defs.js`.
@@ -1221,6 +1255,18 @@ the upload (Cloudflare not yet seeing a Worker it has just been sent: "This Work
    it before that, open the game with `?relay=<address>` on the end of its web address: that device remembers it.)
 
 The relay runs locally too: `cd relay && npx wrangler dev`, then open the game with `?relay=ws://127.0.0.1:8787`.
+
+**Player feedback.** The relay also takes the game's **Send feedback** form (`js/feedback.js`; see Send feedback above):
+`POST /feedback` (`relay/src/feedback.js`, whose header has the exact contract) with JSON `{ type, text, contact?, meta?,
+save?, website? }` answers 200 `{ ok: true, n }`, and each report becomes issue #n in a private GitHub repository,
+labelled by type and `from-game`; an attached save is committed to `saves/` there and linked from the issue (load it
+with Load a save file to play the bug back). CORS is open (`*`). Other answers: 503 `{ why: 'off' }` until it is set up,
+429 past 5 reports an hour or 20 a day from one address (counted by a hash of it, never stored), 400 for a text under
+3 characters, 413 for a request over 8 MB, 502 if GitHub refuses it. Anything in the hidden `website` field marks a bot:
+it is thanked and dropped. Setting it up: add two more Actions secrets, `FEEDBACK_REPO` (the private repository, as
+`owner/name`) and `FEEDBACK_TOKEN` (a fine-grained GitHub token for that repository only, with Issues and Contents read
+and write), then run **Deploy multiplayer relay** again: its summary says whether player feedback is on. Until then the
+form says feedback isn't switched on yet, and keeps what the player wrote.
 
 **How it works.** Multiplayer is lockstep: every device runs the whole game, and only the players' orders go between
 them.

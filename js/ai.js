@@ -30,6 +30,17 @@ const AI_CORE = ['mine', 'smelter', 'fab', 'foundry'];
 const AI_FEW = 6, AI_ENOUGH = 8;
 /** Room kept under the bot limit for the army it wants (a share of the limit at most), and for workers past that. */
 const AI_ARMY_ROOM = 0.4, AI_WORKER_ROOM = 6;
+/**
+ * Crystal: every robot takes a Chip, and every Chip a Crystal. It counts as running short once what's left (in stock and
+ * in the ground on its land) would last under AI_CRYSTAL_MINS minutes at the rate it's used (AI_CRYSTAL_BURN a minute at
+ * least, once there's a Foundry); a colony short of it docks a Trade Terminal from AI_CRYSTAL_TRADE_AT seconds, and one
+ * whose Crystal runs low puts up Crystal Taps first, up to AI_CRYSTAL_TAPS. Short of it, its Outposts head for Crystal
+ * no-one holds within AI_CRYSTAL_REACH tiles of its forts. Its Smelters rest while its Crystal runs low with
+ * AI_ALLOY_PILE Alloy in stock (until it's down to half that). A contract that has sold no lot for AI_TRADE_STALL
+ * seconds is dropped for another.
+ */
+const AI_CRYSTAL_MINS = 10, AI_CRYSTAL_BURN = 4, AI_CRYSTAL_TRADE_AT = 600, AI_CRYSTAL_TAPS = 4, AI_CRYSTAL_REACH = 20;
+const AI_ALLOY_PILE = 40, AI_TRADE_STALL = 300;
 
 /** Rival p's doctrine (PERSONALITIES; the code says personality and style). */
 function aiStyle(p) { return PERSONALITIES[S.players[p].style] || PERSONALITIES.balanced; }
@@ -170,9 +181,31 @@ function aiThink(p) {
   // Resources are in separate fields: when one kind runs short inside our land, expanding toward
   // more of it comes before anything else.
   const inLand = {};
-  for (let t = 0; t < S.W * S.H; t++) if (S.owner[t] === p && S.res[t]) inLand[S.res[t]] = (inLand[S.res[t]] || 0) + 1;
+  let crGround = 0;
+  for (let t = 0; t < S.W * S.H; t++) if (S.owner[t] === p && S.res[t]) {
+    inLand[S.res[t]] = (inLand[S.res[t]] || 0) + 1;
+    if (S.res[t] === R_CRYSTAL) crGround += S.amt[t];
+  }
+  // Crystal is judged by how long what's left would last at the rate the Chip Fabs burn it (see AI_CRYSTAL_MINS), not
+  // only by the clusters left: counted by tiles, it ran short only once the last three were all that was left, too late
+  // to expand or trade for more, and the army stopped for good while Alloy piled up. It runs low (crLow) when it's short,
+  // or when the Taps bring in less than the Fabs use with little in stock: then more Taps, and Crystal by trade.
+  const crRate = goodRates(p).crystal, crHave = playerGoods(p).crystal || 0;
+  const crBurn = Math.max(crRate.used, counts.foundry ? AI_CRYSTAL_BURN : 0);
+  const crShort = S.mode !== 'colony' && crBurn > 0 && crGround + crHave < crBurn * AI_CRYSTAL_MINS;
+  const crLow = P.crLow = crShort || (S.mode !== 'colony' && crHave < 10 && crRate.made < crBurn);
+  // Short of it by what's left, it expands toward Crystal no-one holds, if there's some within AI_CRYSTAL_REACH tiles of
+  // a fort of ours, on the same ground (with none, an Outpost every 40 seconds only takes a site the Terminal or a Port
+  // could use: the Trade Terminal brings Crystal instead).
+  let crNear = false;
+  if (crShort) {
+    const forts = me.filter((b) => b.built && BDEFS[b.type].mil && BDEFS[b.type].terr), R2 = AI_CRYSTAL_REACH * AI_CRYSTAL_REACH;
+    for (let t = 0; t < S.W * S.H && !crNear; t++) {
+      if (S.res[t] === R_CRYSTAL && S.owner[t] < 0) crNear = forts.some((b) => S.zone[tIdx(b.x, b.y)] === S.zone[t] && dist2(b.x, b.y, t % S.W, (t / S.W) | 0) <= R2);
+    }
+  }
   // Stone goes into nearly everything (and Cement for roads), so boulders count as running short sooner.
-  P.short = [R_STALK, R_BOULDER, R_ORE, R_CRYSTAL].filter((r) => (inLand[r] || 0) < (r === R_BOULDER ? 6 : 4));
+  P.short = [R_STALK, R_BOULDER, R_ORE, R_CRYSTAL].filter((r) => (inLand[r] || 0) < (r === R_BOULDER ? 6 : 4) || (r === R_CRYSTAL && crShort && crNear));
   const stoneLow = (inLand[R_BOULDER] || 0) < 10;
   const quarrying = me.some((b) => b.type === 'quarry'); // a Quarry always has Stone to cut or dig (see BDEFS.quarry.bedrock)
   // While boulders run low, keep enough Cement for the Outpost that reaches new ones.
@@ -205,11 +238,14 @@ function aiThink(p) {
   // Ammo Plant running) for a single Strike Bomber (see aiBomber).
   if (S.mode !== 'colony' && !st.walls && S.time >= 1320 && !counts.airfield && !botBanned(p, 'bomber') && me.some((b) => b.type === 'armory' && b.built)) plan = [['airfield', 1]].concat(plan); // (only for a bomber)
   // Bulk trade: a Trade Terminal once the colony is running short of Ore, Crystal or Stone (a Tycoon from 14
-  // minutes, the rest from 20), with a Road Train to serve it (see the Foundry, and aiTrade).
-  const tradeAt = st.missiles ? 840 : 1200;
+  // minutes, the rest from 20, any rival from 10 once its Crystal runs short, and then past the usual limit on sites),
+  // with a Road Train to serve it (see the Foundry, and aiTrade).
+  const tradeAt = st.missiles ? 840 : crShort ? AI_CRYSTAL_TRADE_AT : 1200;
+  let tradeFirst = false;
   if (S.mode !== 'colony' && S.time >= tradeAt && !counts.terminal && counts.foundry && S.time - (P.termFail ?? -999) > 240) {
     const sh = tradeShortest(p), g = sh.find((x) => x !== 'alloy'); // short of something in the ground
-    if (sh.left[g] < (TRADE_LEFT[g] || 60) * 1.5 || st.missiles) plan = [['terminal', 1]].concat(plan); // only when short: it goes first
+    if (sh.left[g] < (TRADE_LEFT[g] || 60) * 1.5 || st.missiles || crShort) plan = [['terminal', 1]].concat(plan); // only when short: it goes first
+    tradeFirst = crShort;
   }
   if (st.missiles) { const k = plan.findIndex(([t]) => t === 'armory') + 1; plan = plan.slice(0, k).concat([['smelter', 2], ['fab', 2]], plan.slice(k)); } // (its Missile Factory and Silos come through aiMissilePlan)
   // Nuclear race: a Reactor once there's Uranium to enrich (or a mine on a deposit), then a Nuclear Silo.
@@ -281,6 +317,12 @@ function aiThink(p) {
       .sort((a, c) => (have[RES[BDEFS[a].gather].good] || 0) - (have[RES[BDEFS[c].gather].good] || 0));
     if (g.length) plan = [[g[0], (counts[g[0]] || 0) + 1]].concat(plan);
   }
+  // Crystal running low with clusters left on our land: another Crystal Tap first (up to AI_CRYSTAL_TAPS of them), even
+  // with every worker busy, and it gets a worker before the rest (see where it's placed). With one Tap at work the Fabs
+  // burned Crystal twice as fast as it came in while clusters lay untouched on its land.
+  const tapSite = me.some((b) => b.type === 'tap' && !b.built);
+  const tapsFirst = crLow && !few && !tapSite && (counts.tap || 0) < AI_CRYSTAL_TAPS && (inLand[R_CRYSTAL] || 0) >= 2;
+  if (tapsFirst) plan = [['tap', (counts.tap || 0) + 1]].concat(plan);
   // A Harvester site only counts once its materials are in: one waiting for Fiber never gets any. Nor does a
   // Harvester down to its last couple of stalks (a few regrow round a cut-out grove, enough to look busy but not to
   // keep the Smelters going).
@@ -292,6 +334,9 @@ function aiThink(p) {
   const fiberStarved = !cutting && !me.some((b) => b.type === 'harvester' && !b.built);
   if (!cutting) plan = [['harvester', (counts.harvester || 0) + 1]].concat(plan);
   if (fiberStarved) siteCap = Math.max(siteCap, maxSites + 1) + (cementStarved ? 1 : 0);
+  // (Crystal running out: the Terminal that buys more doesn't wait for a free site either. It waited minutes behind
+  // Outposts and Mines while the last Crystal went, and with no Chips left there was no Road Train to serve it.)
+  if (tradeFirst) siteCap = Math.max(siteCap, maxSites + 1);
   // Fuel first when it runs low: with the Fuel Stations dry every robot slows to a crawl, and everything else with
   // it. A Bio Farm (or an Oil Pump where there's oil on our land), and an Oil Pump with no Refinery gets one.
   // (Low for half a minute, not a dip; never while a Bio Farm still waits for its Agribot; at most a Bio Farm for
@@ -316,9 +361,16 @@ function aiThink(p) {
   // busy Smelter burned every Fiber the Harvesters cut, so a colony could go many minutes unable to start a
   // Harvester, a Mine or an Outpost.
   const fiberNow = playerGoods(p).fiber;
+  // ...and while Crystal runs low with Alloy piling up (no Chips to make robots with, so nothing to spend it on), they
+  // rest too, until it's down to half: the Ore and Fiber they'd burn can buy Crystal at the Trade Terminal (Alloy can't
+  // be sold), and their workers go to the Taps. Crystal-starved colonies sat on 60 to 90 Alloy with nothing to trade.
+  const alloyNow = playerGoods(p).alloy || 0, resting = me.some((b) => b.alloyRest);
+  const alloyPile = !few && crLow && alloyNow >= (resting ? AI_ALLOY_PILE / 2 : AI_ALLOY_PILE);
   const sitesWantFiber = S.time - (P.fiberWait ?? -99) < 8 || me.some((b) => !b.built && !b.unlinked && (siteCost(b).fiber || 0) > (b.stock.fiber || 0) + (b.inc.fiber || 0)); // (a site no road reaches yet can't take any)
   for (const b of me) {
     if (b.type !== 'smelter' || !b.built) continue;
+    if (alloyPile) { if (!b.paused) { setPaused(b, true); b.alloyRest = true; } continue; }
+    if (b.alloyRest) { delete b.alloyRest; if (b.paused) setPaused(b, false); }
     if (!b.paused && fiberNow < 3 && (!cutting || sitesWantFiber)) setPaused(b, true);
     // (Back to work once there's some to spare, Harvester or not: with none cutting it used to stay off while the
     // Fiber a cut-out grove still gave piled up, and the Bot Foundry's site waited minutes for its Alloy.)
@@ -348,12 +400,13 @@ function aiThink(p) {
   if (upFirst) { siteCap = Math.max(siteCap, capBefore, sites + 1); plan = [['bunker', P.defWant.n]].concat(plan); }
   const key = (type) => (type === 'charger' && !counts.charger) || type === 'foundry' || type === 'harvester' || type === 'quarry' || (type === 'kiln' && (playerGoods(p).cement || 0) < 3) || defence(type) ||
     (P.defWant && P.defWant.type === type && S.time < P.defWant.until) ||
-    (type === 'outpost' && P.short.length > 0);
+    (type === 'outpost' && P.short.length > 0) || (type === 'tap' && tapsFirst);
   if (sites < siteCap) {
     for (const [type, want0] of plan) {
       if (few && (!AI_CHAIN.includes(type) || counts[type])) continue; // triage: only a missing link of the chain
       // (past the usual limit only for what's starving the colony: a Cement Works, a Harvester)
       if ((cementStarved || fiberStarved) && sites >= maxSites && !(cementStarved && type === 'kiln') && !(fiberStarved && type === 'harvester')) continue;
+      if (tradeFirst && sites >= maxSites && type !== 'terminal') continue;
       if (flakFirst && sites >= capBefore && type !== 'flak') continue;
       if (upFirst && sites >= capBefore && type !== 'bunker') continue;
       if (S.mode === 'colony' && BDEFS[type].war) continue;
@@ -372,8 +425,9 @@ function aiThink(p) {
       if (saving && type !== saving && type !== 'keep' && type !== 'terminal' && type !== 'airfield' && !(type === 'flak' && flakFirst) && !BDEFS[type].nuke && (BDEFS[type].cost.alloy || BDEFS[type].cost.chip)) continue;
       // Keep enough Fiber for a Harvester while none is cutting: without Fiber there's no way back.
       if (type !== 'harvester' && fiberLow && (BDEFS[type].cost.fiber || 0) > 0 && playerGoods(p).fiber - BDEFS[type].cost.fiber < BDEFS.harvester.cost.fiber) continue;
-      // The first of each staffed building is always allowed, so the production chain is complete.
-      if (BDEFS[type].staff && !BDEFS[type].crew && !canStaffMore && counts[type]) continue;
+      // The first of each staffed building is always allowed, so the production chain is complete (and a Crystal Tap
+      // while Crystal runs low).
+      if (BDEFS[type].staff && !BDEFS[type].crew && !canStaffMore && counts[type] && !(type === 'tap' && tapsFirst)) continue;
       if (Object.keys(BDEFS[type].cost).some((g) => held.has(g))) continue;
       if (reserveCement && type !== 'outpost' && type !== 'quarry' && type !== 'kiln' && BDEFS[type].cost.cement) continue;
       if (type === 'kiln' && stoneLow && counts.kiln) continue;
@@ -382,7 +436,7 @@ function aiThink(p) {
       const defenceNow = (defence(type) && counts.smelter && aiAffordable(p, type, ['alloy', 'chip'])) || ((type === 'terminal' || type === 'airfield') && aiAffordable(p, type, ['alloy']));
       if (!aiAffordable(p, type) && !defenceNow) {
         if ((BDEFS[type].cost.fiber || 0) > playerGoods(p).fiber) P.fiberWait = S.time; // (the Smelters rest for it: see above)
-        if (key(type) && (!counts[type] || type === 'outpost')) {
+        if (key(type) && (!counts[type] || type === 'outpost' || type === 'tap')) {
           const have = playerGoods(p), cost = BDEFS[type].cost;
           for (const g in cost) if (have[g] < cost[g]) held.add(g);
         }
@@ -395,7 +449,7 @@ function aiThink(p) {
         // The chain that makes new bots gets workers first; the Ammo Plant gives its worker up first.
         if (['mine', 'smelter', 'fab', 'foundry'].includes(type) && !counts[type]) placed.building.prio = 'high';
         if (type === 'armory') placed.building.prio = 'low';
-        if (defenceNow || defence(type)) placed.building.prio = 'high';
+        if (defenceNow || defence(type) || (type === 'tap' && tapsFirst)) placed.building.prio = 'high';
         break;
       }
     }
@@ -595,8 +649,9 @@ function aiThink(p) {
     // An attack held back by enemy guns (P.shieldWant, in the last minute): a Bulwark to lead the next one, if it has
     // none, whatever the size of its army.
     if (S.mode !== 'colony' && S.time - (P.shieldWant ?? -999) < 60 && !(kinds.bulwark > 0) && !(b.orders.bulwark > 0) && !botBanned(p, 'bulwark')) b.orders.bulwark = 1;
-    // A Trade Terminal is served only by Road Trains: one for it.
-    if (me.some((t) => BDEFS[t.type].terminal) && !(kinds.roadtrain > 0) && !(b.orders.roadtrain > 0)) b.orders.roadtrain = 1;
+    // A Trade Terminal is served only by Road Trains: one for it. Short of Crystal, one as soon as the Terminal is
+    // wanted, before it stands: it takes four Chips, and once the Crystal had run out there were none left to make it.
+    if ((tradeFirst || me.some((t) => BDEFS[t.type].terminal)) && !(kinds.roadtrain > 0) && !(b.orders.roadtrain > 0)) b.orders.roadtrain = 1;
     // No room under the bot limit but the army's: only the army's specialists (and a first Tanker) are made.
     if (!civilOk) for (const k in b.orders) if (!(BOTS[k] && BOTS[k].army) && !(k === 'tanker' && !(kinds.tanker > 0))) delete b.orders[k];
     break;
@@ -692,6 +747,8 @@ function aiThink(p) {
     const def = BDEFS[b.type];
     let score = (def.mil ? 12 : 0) + (b.type === 'lander' ? (S.victory === 'uplinks' ? 5 : 25) : 0) - dist(b.x, b.y, lander.x, lander.y) * 0.4 - b.garrison.length * 2;
     if (b.owner === domFoe && b.built && def.mil && def.terr && b.type !== 'lander') score += 30;
+    // Short of Crystal: a fort whose land holds Crystal is worth more (taken, its land and the clusters on it are ours).
+    if (crShort && b.built && def.mil && def.terr) score += Math.min(crystalHeld(b, def.terr), 80) * 0.1;
     if (S.victory === 'uplinks' && holdsUplink(b)) score += b.owner === upFoe ? 40 : 30;
     if (!b.built) score -= 8;
     // Held back by the guns over it (it had the warbots for the rest): noted, for what it does instead (below). A
@@ -1423,21 +1480,43 @@ function aiRouteHot(p, i, j) {
  */
 /**
  * The Trade Terminal's contract: the one that brings what we're shortest of, paid with a good we have a lot
- * to spare of (a lot and TRADE_KEEP besides). None if nothing's worth it.
+ * to spare of (a lot and TRADE_KEEP besides). None if nothing's worth it. While its Crystal runs low (P.crLow, see
+ * aiThink) one that brings Crystal comes first, then Chips (every robot takes one), and it never gives Crystal away;
+ * a contract under way is dropped for one of those, and any contract that has sold no lot for AI_TRADE_STALL seconds
+ * (its good spread too thin to make a train load, say) for another. Before, it took Alloy for Stone while its Foundry
+ * stood idle for want of Chips, with Alloy piling up.
  */
 function aiTrade(p, me) {
   if (!me.some((b) => BDEFS[b.type].terminal && b.built)) return;
-  const T = tradeState(p);
-  if (!T.offers.length || (T.pick >= 0 && T.offers[T.pick] && T.offers[T.pick].left > 0)) return;
+  const T = tradeState(p), P = S.players[p];
+  if (!T.offers.length) return;
+  const cur = T.pick >= 0 && T.offers[T.pick] && T.offers[T.pick].left > 0 ? T.offers[T.pick] : null;
+  if (cur && P.tradeSold !== T.sold) { P.tradeSold = T.sold; P.tradeAt = S.time; } // (a lot sold: it's moving)
+  const want = (g) => (P.crLow ? (g === 'crystal' ? 2 : g === 'chip' ? 1 : 0) : 0);
+  const stalled = !!cur && S.time - (P.tradeAt ?? S.time) > AI_TRADE_STALL;
+  if (cur && !stalled && !(P.crLow && !want(cur.get))) return;
   const have = spendable(p), short = tradeShortest(p);
   let best = -1, bs = -Infinity;
   T.offers.forEach((o, k) => {
     const spare = (have[o.give] || 0) - TRADE_KEEP[o.give] - o.lot;
-    if (o.left <= 0 || spare < 0) return;
-    const sc = (short.length - short.indexOf(o.get)) * 10 + Math.min(spare, 60) * 0.1;
+    if (o.left <= 0 || spare < 0 || (P.crLow && o.give === 'crystal') || (stalled && o === cur)) return;
+    const sc = want(o.get) * 100 + (short.length - short.indexOf(o.get)) * 10 + Math.min(spare, 60) * 0.1;
     if (sc > bs) { bs = sc; best = k; }
   });
-  if (best >= 0) pickContract(p, best);
+  // (One under way is only given up for something better: a stalled one for any other, the rest for Crystal or Chips.)
+  if (best < 0 || (cur && !stalled && want(T.offers[best].get) <= want(cur.get))) return;
+  pickContract(p, best);
+  P.tradeAt = S.time; P.tradeSold = T.sold;
+}
+
+/** The Crystal in the ground on b's owner's land within r tiles of b (what taking a fort would bring). */
+function crystalHeld(b, r) {
+  let n = 0;
+  for (let j = Math.max(0, b.y - r); j <= Math.min(S.H - 1, b.y + r); j++) for (let i = Math.max(0, b.x - r); i <= Math.min(S.W - 1, b.x + r); i++) {
+    const t = j * S.W + i;
+    if (S.res[t] === R_CRYSTAL && S.owner[t] === b.owner && dist2(i, j, b.x, b.y) <= r * r) n += S.amt[t];
+  }
+  return n;
 }
 
 /** What a bomb is worth dropping on, for the AI: its most valuable buildings, and a loaded Tanker. */
@@ -1862,6 +1941,9 @@ function rivalLandNear(p, i, j, r) {
 function aiSearchSpot(p, type, lander) {
   const def = BDEFS[type], P = S.players[p];
   const sums = type === 'outpost' ? [R_ORE, R_CRYSTAL, R_STALK, R_BOULDER, R_OIL, R_URANIUM].map(resourceSums) : null;
+  // Short of Crystal: the Crystal no-one holds, for an Outpost to head toward (see below).
+  const freeCr = type === 'outpost' && (P.short || []).includes(R_CRYSTAL) ? [] : null;
+  if (freeCr) for (let t = 0; t < S.W * S.H; t++) if (S.res[t] === R_CRYSTAL && S.owner[t] < 0) freeCr.push(t);
   const enemyL = getE(S.players[rivalOf(p)].lander);
   const ex = enemyL ? enemyL.x : S.W / 2, ey = enemyL ? enemyL.y : S.H / 2;
   const cands = [];
@@ -1953,6 +2035,13 @@ function aiSearchSpot(p, type, lander) {
         if (S.spare) s += Math.max(0, 34 - dist(i, j, S.spare.x, S.spare.y)) * 0.3;
         // Head for whatever we're running out of.
         for (const r of P.short || []) s += Math.min(sums[[R_ORE, R_CRYSTAL, R_STALK, R_BOULDER].indexOf(r)](i, j, 5), 6) * 1.5;
+        // ...and short of Crystal, the way to the nearest no-one holds on this ground too, when none is in reach yet (a
+        // chain of Outposts).
+        if (freeCr && freeCr.length) {
+          let dc = Infinity;
+          for (const t of freeCr) if (S.zone[t] === S.zone[j * S.W + i]) dc = Math.min(dc, dist2(i, j, t % S.W, (t / S.W) | 0));
+          s += Math.max(0, AI_CRYSTAL_REACH - Math.sqrt(dc)) * 0.6;
+        }
       } else if (def.farm) {
         const n = fertileIn(i, j, def.radius);
         if (n < 3) continue;

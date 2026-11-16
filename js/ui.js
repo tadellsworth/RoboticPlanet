@@ -93,6 +93,7 @@ function initUI() {
   helpMarkKeys(); // (before the pager is built: it rewrites the Help text once)
   helpPagerInit();
   initLore();
+  initFeedback(); // (Send feedback: main menu and pause menu, js/feedback.js)
   $('screen-help').addEventListener('click', (e) => {
     const a = e.target.closest && e.target.closest('[data-jump]');
     if (!a) return;
@@ -506,6 +507,7 @@ function initMenu() {
   // Esc: close the picker, then go back from Customise to Home.
   window.addEventListener('keydown', (e) => {
     if (UI.inGame || e.key !== 'Escape' || $('screen-menu').hidden) return;
+    if (!$('screen-feedback').hidden) { e.preventDefault(); closeFeedback(); return; }
     if (!$('screen-lore').hidden) { e.preventDefault(); closeLore(); return; }
     if (UI.picker) { e.preventDefault(); closePicker(); return; }
     const over = !$('screen-help').hidden || !$('screen-missions').hidden || !$('screen-stats').hidden;
@@ -1306,7 +1308,7 @@ function topScreen() {
  * back where it was. (Tab reached the buttons behind the pause menu.)
  */
 function initDialogs() {
-  const stops = (scr) => [...scr.querySelectorAll('button, a[href], input, select, summary')].filter((el) => !el.disabled && el.tabIndex >= 0 && el.offsetParent);
+  const stops = (scr) => [...scr.querySelectorAll('button, a[href], input, select, textarea, summary')].filter((el) => !el.disabled && el.tabIndex >= 0 && el.offsetParent);
   const watch = new MutationObserver((list) => {
     for (const m of list) {
       const scr = m.target, open = !scr.hidden, a = document.activeElement;
@@ -1615,6 +1617,8 @@ function initKeyboard() {
     // A slider or switch keeps its own keys (arrows, Home, End); Esc and Space still reach the game from one.
     if (tag === 'INPUT' && !(/^(range|checkbox)$/.test(e.target.type) && (e.key === 'Escape' || e.key === ' '))) return;
     if (!UI.inGame) return;
+    // Send feedback open: no key is the game's (its own keys stop there; this is one from outside it, the focus lost).
+    if (!$('screen-feedback').hidden) { if (e.key === 'Escape') { e.preventDefault(); closeFeedback(); } return; }
     // Control groups: Cmd/Ctrl (or Shift, or Option/Alt) + 1–9 saves the selected warbots and Howitzers as
     // a group, 1–9 selects it again (press twice to jump to it). Option/Alt and Shift always reach the game;
     // a browser tab on a Mac may keep Cmd+1–9 for itself (it switches tabs).
@@ -2126,6 +2130,7 @@ function toggleSpeedMenu(refresh) {
 
 /** Esc steps back: close a panel, leave a mode, close a screen, or open the pause menu. */
 function escapeKey() {
+  if (!$('screen-feedback').hidden) { closeFeedback(); return; } // (over the pause menu: back to it)
   if (!$('speed-menu').hidden) { $('speed-menu').hidden = true; return; }
   if (!$('screen-help').hidden) { $('h-close').click(); return; }
   if (!$('screen-stats').hidden) { $('st-close').click(); return; }
