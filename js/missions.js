@@ -1014,6 +1014,7 @@ const MISSIONS = [
       'A belt of crags with a few narrow channels: wall them and cover them with guns.',
       'Walls stop everyone, your robots too: where a wall line crosses a road, a Gate goes in.',
       'An Outpost can Hold inside or Go out and fight. Mortar Pits, Disruptors and the Keep are in Defend too.',
+      'Its warbots come behind a <b>Bulwark</b>, a shield robot: fire from in front can\'t reach them, so cover the channels from the side.',
     ],
     mode: 'versus', seed: 2121, size: 1, rough: 2, rich: 3, biome: 'polar', shape: 2, players: 2, style: 'rusher',
     rival: ['medium', 'medium', 'normal'], limit: [0, 0, 0],
@@ -1032,6 +1033,9 @@ const MISSIONS = [
       for (let k = 0; k < [2, 4, 6][diff]; k++) enterBuilding(addBot(1, 'warbot', R.x, R.y), R);
       P1.stats.startBots = P1.stats.bots;
       P1.nextAttack = [420, 330, 240][diff];
+      // ...with a Bulwark at its head, and its assault comes whatever your guns (P.bold): this mission is about holding it.
+      for (let k = 0; k < [1, 1, 2][diff]; k++) enterBuilding(addBot(1, 'bulwark', R.x, R.y), R);
+      P1.bold = true;
     },
     goals: [
       { kind: 'built', type: 'turret', n: [1, 2, 2],

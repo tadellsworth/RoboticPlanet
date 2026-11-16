@@ -592,6 +592,9 @@ function aiThink(p) {
       if ((kinds.bulwark || 0) < wantB && !(b.orders.bulwark > 0) && !botBanned(p, 'bulwark')) b.orders.bulwark = 1;
       else if ((kinds.torch || 0) < wantT && !(b.orders.torch > 0) && !botBanned(p, 'torch') && goodTotal(p, 'fuel') >= 3) b.orders.torch = 1;
     }
+    // An attack held back by enemy guns (P.shieldWant, in the last minute): a Bulwark to lead the next one, if it has
+    // none, whatever the size of its army.
+    if (S.mode !== 'colony' && S.time - (P.shieldWant ?? -999) < 60 && !(kinds.bulwark > 0) && !(b.orders.bulwark > 0) && !botBanned(p, 'bulwark')) b.orders.bulwark = 1;
     // A Trade Terminal is served only by Road Trains: one for it.
     if (me.some((t) => BDEFS[t.type].terminal) && !(kinds.roadtrain > 0) && !(b.orders.roadtrain > 0)) b.orders.roadtrain = 1;
     // No room under the bot limit but the army's: only the army's specialists (and a first Tanker) are made.
@@ -620,7 +623,7 @@ function aiThink(p) {
   if (S.mode !== 'colony' && S.time >= lvl.grace) {
     // Damage already on its way: never two missiles for a target one wrecks, nor a Command Base or Keep a
     // missile can knock no lower (see captureOnly).
-    const dmg = BDEFS.silo.missile.damage, coming = new Map();
+    const dmg = BDEFS.silo.missile.damage, coming = new Map(), soft = P.soften && S.time < P.soften.until ? P.soften : null;
     for (const m of S.missiles) if (m.owner === p && m.target && !m.nuke) coming.set(m.target, (coming.get(m.target) || 0) + dmg);
     for (const silo of me) {
       if (!siloReady(silo)) continue;
@@ -633,7 +636,8 @@ function aiThink(p) {
         if (captureOnly(e) ? left <= missileFloor(e) + 2 : left <= 0) continue;
         const s = (e.type === 'turret' ? 10 : e.type === 'nukesilo' ? 12 : e.type === 'silo' || e.type === 'reactor' ? 9 : e.type === 'outpost' ? 8 :
           e.type === 'mortar' || e.type === 'disruptor' || e.type === 'bunker' || e.type === 'keep' ? 7 : e.type === 'lander' ? (S.victory === 'uplinks' ? 1 : 5) : 3) - d * 0.1 +
-          (S.victory === 'uplinks' && holdsUplink(e) ? 7 : 0); // (Uplinks: knock out the forts that hold them)
+          (S.victory === 'uplinks' && holdsUplink(e) ? 7 : 0) + // (Uplinks: knock out the forts that hold them)
+          (soft && aiDefReach(e) && dist2(e.x, e.y, soft.x, soft.y) <= 64 ? 6 : 0); // (the guns holding back an attack: see step 5)
         if (s > bs) { bs = s; best = e; }
       }
       if (best && fireMissile(p, best)) coming.set(best.id, (coming.get(best.id) || 0) + dmg);
@@ -669,29 +673,51 @@ function aiThink(p) {
   if ((domFoe >= 0 || upFoe >= 0 || upWant) && S.time >= lvl.grace) P.nextAttack = Math.min(P.nextAttack, S.time);
   if (upFoe >= 0 && S.time >= lvl.grace) aiJamUplink(p, upFoe);
   if (S.time < lvl.grace || S.time < P.nextAttack) return;
-  let best = null, bestScore = -Infinity, bestAvail = 0;
+  let best = null, bestScore = -Infinity, bestAvail = 0, bestNeed = 0, heldB = null, heldScore = -Infinity;
   for (const b of S.buildings) {
     if (b.dead || !rival(b.owner)) continue; // whichever rival's building is in reach
-    const avail = attackAvailable(p, b);
+    const sp = aiSpare(p, b, false), avail = sp.n;
     if (avail < 2) continue;
-    // Enough for the garrison, the turrets covering it and any warbots standing guard nearby; a fort
-    // already shot down to a quarter of its armor needs only the usual band.
+    // Enough for the garrison, the defences that cover it (aiGuards: Pulse Turrets, Minigun Nests, Bunkers, Mortar
+    // Pits, Disruptor Towers, a Keep, garrisons close enough to sortie) and any warbots standing guard nearby, fewer
+    // with Bulwarks at the head of the squad (they go first: aiFire); a gun, enough for its own fire too (aiGunNeed).
+    // A fort already shot down to a quarter of its armor, or a construction site, needs only the usual band, or one
+    // more than the guns over it are worth. Under heavy guns with no Bulwark to lead, a third more (aiBare).
     const weak = b.built && BDEFS[b.type].mil && b.armor <= BDEFS[b.type].armor * SORTIE_ARMOR;
-    const base = !b.built ? 2 : weak ? lvl.threshold : Math.max(lvl.threshold, Math.ceil(b.garrison.length * 1.3) + 2);
-    if (avail < base || (b.built && !weak && avail < Math.ceil(b.garrison.length * 1.3) + 2 + guardsNear(b))) continue;
+    const gar = b.built && !weak ? Math.ceil(b.garrison.length * 1.3) : 0;
+    const base = !b.built ? 2 : weak ? lvl.threshold : Math.max(lvl.threshold, gar + 2);
+    if (avail < base || (gar && avail < gar + 2)) continue;
+    const guard = guardsNear(b, sp.shields), gun = aiDefReach(b) > 0;
+    const need = aiBare(Math.max(base, !b.built || weak ? guard + 1 : gar + 2 + guard, gun ? aiGunNeed(b, sp.shields) : 0), gun ? aiGunNeed(b) - 1 : guardsNear(b), sp.shields);
     const def = BDEFS[b.type];
     let score = (def.mil ? 12 : 0) + (b.type === 'lander' ? (S.victory === 'uplinks' ? 5 : 25) : 0) - dist(b.x, b.y, lander.x, lander.y) * 0.4 - b.garrison.length * 2;
     if (b.owner === domFoe && b.built && def.mil && def.terr && b.type !== 'lander') score += 30;
     if (S.victory === 'uplinks' && holdsUplink(b)) score += b.owner === upFoe ? 40 : 30;
     if (!b.built) score -= 8;
-    if (score > bestScore) { bestScore = score; best = b; bestAvail = avail; }
+    // Held back by the guns over it (it had the warbots for the rest): noted, for what it does instead (below). A
+    // mission's scripted rival (P.bold: Hold the Line's Herald) makes its assault whatever the guns.
+    if (avail < need && !P.bold) { if (score > heldScore) { heldScore = score; heldB = b; } continue; }
+    score -= guard; // (an unguarded target, if there's one as good)
+    if (score > bestScore) { bestScore = score; best = b; bestAvail = avail; bestNeed = need; }
   }
   if (best) {
-    sendAttack(p, best, bestAvail);
+    // A target under a gun: the gun first. Warbots on an attack shoot back only at robots, so a squad sent at a building
+    // a turret or Minigun Nest covers stood there hitting it while the gun shot them down; at the gun they knock it out.
+    const gun = aiDefReach(best) ? null : getE(aiFirstGun(best.owner, best.x, best.y, best, (e) => attackAvailable(p, e) >= bestNeed));
+    if (gun) sendAttack(p, gun, attackAvailable(p, gun), false, false, true);
+    else sendAttack(p, best, bestAvail, false, false, true);
     P.siegeAt = { x: best.x, y: best.y, until: S.time + 120 };
     P.nextAttack = S.time + 25;
     P.lastAttack = S.time;
     return;
+  }
+  // Nothing it can take: the best target the guns held back gets softened up while the army gathers (its Howitzers
+  // shell the defences round it, its Missiles go for them, see aiSiege and step 4), and the Foundry makes a Bulwark
+  // to lead the next attack (P.shieldWant).
+  if (heldB) {
+    P.shieldWant = S.time;
+    if (!(P.siegeAt && S.time < P.siegeAt.until)) P.siegeAt = { x: heldB.x, y: heldB.y, until: S.time + 60 };
+    P.soften = { x: heldB.x, y: heldB.y, until: S.time + 60 };
   }
   // A big army with nothing in reach marches on the nearest enemy garrison (a rally flag beside it:
   // the warbots fight what they meet and attack what stands there). With twice the enemy's army it
@@ -721,13 +747,15 @@ function aiThink(p) {
         if (inMap(i, j) && walkable(tIdx(i, j)) && !S.bAt[tIdx(i, j)] && S.zone[tIdx(i, j)] === homeZone(p)) { spot = { i, j }; break; }
       }
       // A march may empty the garrisons far behind the lines (a big empire keeps one warbot in each).
-      // Against a rival with next to no army, a small band is enough to finish it.
-      const avail = spot ? rallyAvailable(p, spot.i, spot.j, true) : 0;
-      const need = crushing ? Math.max(4, enemyArmy * 2 + 2) : lvl.threshold * 2;
+      // Against a rival with next to no army, a small band is enough to finish it; and either way, more for the
+      // guns that cover the flag (their worth in warbots: aiGuards, less what its Bulwarks take, which lead it).
+      const sp = spot ? aiSpare(p, { x: spot.i, y: spot.j }, 'flag') : null, avail = sp ? sp.n : 0;
+      const guns = spot ? Math.ceil(aiFire(aiGuards(tgt.owner, spot.i, spot.j, 2, null).filter((e) => aiDefReach(e.b)), sp.shields) - 1e-9) : 0;
+      const need = (crushing ? Math.max(4, enemyArmy * 2 + 2) : lvl.threshold * 2) + guns;
       if (spot && avail >= need) {
-        const { sent, rally } = sendToRally(p, spot.i, spot.j, Math.min(crushing ? 22 : 14, crushing ? avail : avail - 2), true);
-        if (sent) { P.march = rally.id; P.lastMarch = S.time; return; }
-      }
+        const { sent, rally } = sendToRally(p, spot.i, spot.j, Math.min((crushing ? 22 : 14) + guns, crushing ? avail : avail - 2), true, false, true);
+        if (sent) { rally.first = aiFirstGun(tgt.owner, spot.i, spot.j); P.march = rally.id; P.lastMarch = S.time; return; }
+      } else if (spot && avail >= need - guns) P.shieldWant = S.time; // (held back by the guns there)
     }
   }
   // Recall a march that has nothing left to fight.
@@ -826,7 +854,7 @@ function aiNaval(p, me, kinds, lvl, lander, canBuild) {
     if (n < wa) { wa = n; weak = o; }
   }
   if (weak >= 0) targets = [getE(S.players[weak].lander)];
-  const guard = (i, j) => targets.reduce((n, b) => n + (dist2(b.x, b.y, i, j) <= 36 ? (BDEFS[b.type].range ? 3 : 0) + (b.garrison ? b.garrison.length : 0) : 0), 0);
+  const guard = (i, j) => targets.reduce((n, b) => n + (dist2(b.x, b.y, i, j) <= 36 ? (aiDefReach(b) ? 3 : 0) + (b.garrison ? b.garrison.length : 0) : 0), 0);
   let best = null, bs = Infinity;
   for (let j = 1; j < S.H - 1; j++) for (let i = 1; i < S.W - 1; i++) {
     const t = j * S.W + i, o = S.owner[t];
@@ -838,6 +866,9 @@ function aiNaval(p, me, kinds, lvl, lander, canBuild) {
     if (sc < bs) { bs = sc; best = { i, j }; }
   }
   if (!best) { P.lastLanding = S.time - 100; return; }
+  // Not onto a beach under guns the boatload can't beat (two more than what covers it: aiGuards): look again later.
+  const near = targets.reduce((a, b) => (!a || dist2(b.x, b.y, best.i, best.j) < dist2(a.x, a.y, best.i, best.j) ? b : a), null);
+  if (near && Math.min(FERRY_SEATS, avail) < 2 + Math.ceil(aiFire(aiGuards(near.owner, best.i, best.j, 2, null), 0) - 1e-9)) { P.lastLanding = S.time - 100; return; }
   if (!orderLanding(p, ferry, best.i, best.j, Math.min(FERRY_SEATS, avail))) P.lastLanding = S.time;
   else P.lastLanding = S.time - 100;
 }
@@ -1192,22 +1223,126 @@ function aiWantArmy(lvl, p) {
 }
 
 /**
- * What stands guard round building b besides its garrison: 3 for each of its owner's turrets within 6
- * tiles, plus its owner's warbots out in the field within 7 (on a rally flag, say).
+ * How far building b reaches as a defence against an army (tiles; 0: it isn't one): a Pulse Turret, Minigun Nest,
+ * Mortar Pit, Disruptor Tower, a Bunker with armed warbots inside, a Keep (its roof cannon and gun slots). Loaded or
+ * not (a gun that is out of ammo now may not be by the time the squad gets there); not one that is cut off or paused.
  */
-function guardsNear(b) {
-  let n = 0;
+function aiDefReach(b) {
+  if (b.dead || !b.built || b.cut || b.paused || b.owner < 0) return 0;
+  const def = BDEFS[b.type];
+  if (b.type === 'turret') return turretRange(b);
+  if (def.keep) return Math.max(turretRange(b), KEEP.fire);
+  if (def.bunker) return armedIn(b) ? def.range + auraRange(b) : 0;
+  if (def.minigun || def.mortar || def.disrupt) return def.range + auraRange(b);
+  return 0;
+}
+
+/**
+ * The defences of `owner` (and its allies) that would fire on an enemy army round tile (x, y), its target there or its
+ * flag: each one whose reach comes within `pad` tiles of the spot (a squad stands round what it attacks, and comes in
+ * from one side), as { b, v, shield } with what it's worth in warbots (v): a Pulse Turret 3, a Mortar Pit 3 (its shells
+ * burst among a squad bunched on its way in), a Minigun Nest 2, a Disruptor Tower 2, a Bunker 2 for each armed warbot
+ * inside, a Keep 3 for its roof cannon, 1.3 for each warbot at its gun slots and 1 for each of the rest (they come out
+ * to fight); a quarter more for one in a Keep's aura (it fires a quarter faster); and the armed warbots of any other
+ * garrison close enough to come out at them (one each). `shield`: its fire comes straight at the squad, so a Bulwark's
+ * shield can take it (a Mortar lobs its shells over, a Disruptor's pulse and a sortie's warbots come from every side).
+ * Never the building `except`.
+ */
+function aiGuards(owner, x, y, pad, except) {
+  const out = [], cx = x + 0.5, cy = y + 0.5;
   for (const e of S.buildings) {
-    if (e.dead || e.owner !== b.owner || !e.built || e === b) continue;
-    const d2 = dist2(e.x, e.y, b.x, b.y);
-    if (e.type === 'turret' && d2 <= 36) n += 3;
-    else if (e.type === 'bunker' && d2 <= 25) n += e.garrison.length * 2;
-    else if (e.type === 'disruptor' && d2 <= 25) n += 2;
-    else if (e.type === 'mortar' && d2 <= 100) n += 2;
-    else if (e.type === 'keep' && d2 <= 36) n += 3 + e.garrison.length;
+    if (e === except || e.dead || !e.built || e.owner < 0 || (e.owner !== owner && !allies(e.owner, owner))) continue;
+    const def = BDEFS[e.type], r = aiDefReach(e);
+    if (r) {
+      if (dist2(e.x + 0.5, e.y + 0.5, cx, cy) > (r + pad) * (r + pad)) continue;
+      const n = def.keep || def.bunker ? armedIn(e) : 0;
+      const v = e.type === 'turret' || def.mortar ? 3 : def.keep ? 3 + 1.3 * Math.min(n, def.slots) + Math.max(0, n - def.slots) : def.bunker ? 2 * n : 2;
+      out.push({ b: e, v: v * (!def.keep && keepOver(e) ? 1 / KEEP.rate : 1), shield: !def.mortar && !def.disrupt });
+    } else if (def.mil && !def.bunker && e.garrison && e.garrison.length && dist2(e.x + 0.5, e.y + 0.5, cx, cy) <= (SORTIE_REACH + pad) * (SORTIE_REACH + pad)) {
+      const n = armedIn(e);
+      if (n) out.push({ b: e, v: n, shield: false });
+    }
   }
+  return out;
+}
+
+/** How much of a gun's fire (in warbots) a Bulwark's shield takes when it faces it: about one Pulse Turret's. */
+const AI_SHIELD_TAKES = 2.25;
+/**
+ * The gun covering tile (x, y) for `owner` that a squad there should knock out first (aiGuards: a Pulse Turret, Minigun
+ * Nest, Mortar Pit, Disruptor Tower or Bunker, the strongest, then the nearest, and `ok` of it if given), or 0. Not a
+ * Keep or other fort: those are taken, not knocked out first.
+ */
+function aiFirstGun(owner, x, y, except, ok) {
+  let best = null;
+  for (const e of aiGuards(owner, x, y, 2, except)) {
+    const def = BDEFS[e.b.type];
+    if ((def.mil && !def.bunker) || !aiDefReach(e.b) || (ok && !ok(e.b))) continue;
+    if (!best || e.v > best.v || (e.v === best.v && (dist2(e.b.x, e.b.y, x, y) - dist2(best.b.x, best.b.y, x, y) || e.b.id - best.b.id) < 0)) best = e;
+  }
+  return best ? best.b.id : 0;
+}
+
+/**
+ * What guards g (aiGuards) come to against a squad led by `shields` Bulwarks: each Bulwark faces one gun firing
+ * straight at the squad (the strongest left), and its shield takes up to AI_SHIELD_TAKES of that gun's worth (never
+ * more than three quarters of it: shots get round it, and it's down a while once worn through). The rest counts in full.
+ */
+function aiFire(g, shields) {
+  let f = 0, k = shields || 0;
+  for (const e of g.slice().sort((a, c) => c.v - a.v || a.b.id - c.b.id)) {
+    f += e.v;
+    if (k > 0 && e.shield) { f -= Math.min(e.v * 0.75, AI_SHIELD_TAKES); k--; }
+  }
+  return f;
+}
+
+/**
+ * What stands guard round building b besides its garrison (in warbots, rounded up): its owner's defences that
+ * reach within two tiles of it (aiGuards: Pulse Turrets, Minigun Nests, Mortar Pits, Disruptor Towers, Bunkers,
+ * Keeps, and the garrisons close enough to sortie), less what `shields` Bulwarks leading the attack take (aiFire),
+ * plus its owner's warbots out in the field within 7 (on a rally flag, say).
+ */
+function guardsNear(b, shields) {
+  let n = aiFire(aiGuards(b.owner, b.x, b.y, 2, b), shields);
   for (const u of S.bots) if (!u.dead && !u.inside && u.owner === b.owner && isArmy(u) && dist2(u.x, u.y, b.x + 0.5, b.y + 0.5) <= 49) n++;
-  return n;
+  return Math.ceil(n - 1e-9);
+}
+
+/**
+ * The army units of p's garrisons that an attack on `target` (sendAttack with `all`) or a flag at tile `target`
+ * (sendToRally with `rear`, for all = 'flag') could send: { n, shields, by }, how many, how many of them Bulwarks
+ * (they go first, sent with `lead`: a spare place in a garrison that has one goes to it), and per garrison, nearest
+ * first, as they are drawn on ([spare, Bulwarks]).
+ */
+function aiSpare(p, target, all) {
+  const out = { n: 0, shields: 0, by: [] };
+  const flag = all === 'flag', srcs = flag ? rallySources(p, target.x, target.y, true, false) : attackSources(p, target, false, all);
+  for (const b of srcs) {
+    const n = flag ? spareFrom(b, true, false) : spareArmed(b, false, all);
+    let sh = 0;
+    for (const id of b.garrison) { const u = getE(id); if (u && botArmed(u) && BOTS[u.type].shield) sh++; }
+    sh = Math.min(sh, n);
+    out.n += n; out.shields += sh; out.by.push([n, sh]);
+  }
+  return out;
+}
+/** How many Bulwarks are among the first k units sent from spare `sp` (aiSpare): garrisons are drawn on nearest first. */
+function aiShieldsIn(sp, k) {
+  let sh = 0;
+  for (const [n, s] of sp.by) { if (k <= 0) break; sh += Math.min(s, k); k -= n; }
+  return sh;
+}
+/**
+ * The squad to send from spare `sp` against something that takes need(shields) army units with that many Bulwarks
+ * leading (and `help` already at it): { count, need }, count 0 when it can't be done. It sends a couple more than it
+ * needs where it can, and works out the need again if the Bulwarks are in garrisons further off than that squad draws on.
+ */
+function aiSquad(sp, need, help) {
+  let n = need(sp.shields), k = Math.min(sp.n, n - help + 2);
+  const sh = aiShieldsIn(sp, k);
+  if (sh < sp.shields) { n = need(sh); k = Math.min(sp.n, n - help + 2); }
+  return sp.n > 0 && sp.n + help >= n ? { count: Math.max(1, k), need: n } : { count: 0, need: n };
 }
 
 /**
@@ -1233,23 +1368,51 @@ function aiRaid(p, lvl) {
   if (S.time < (P.nextRaid || lvl.grace + RAID_FIRST * (st.raidFirst || 1))) return;
   P.nextRaid = S.time + 30; // nothing worth raiding yet: look again soon
   if (HEAT.of !== S || !HEAT.flow) return;
-  // Keep clear of turrets, and of garrisons with warbots in them.
-  const guards = S.buildings.filter((b) => !b.dead && b.owner === enemy && b.built && (b.type === 'turret' || (BDEFS[b.type].mil && armedIn(b) >= 2)))
-    .map((b) => ({ x: b.x, y: b.y, r2: b.type === 'turret' ? 36 : 56 })); // turret range, and beyond where a garrison sorties
-  let best = -1, bs = 0;
+  // Keep clear of every defence (Pulse Turrets, Minigun Nests, Bunkers, Mortar Pits, Disruptor Towers, Keeps: what they
+  // reach, and the three and a half tiles round the flag where the raiders spread out and hit what stands), and of
+  // garrisons with warbots in them.
+  const guards = [];
+  for (const b of S.buildings) {
+    if (b.dead || b.owner < 0 || !foes(b.owner, p) || !b.built) continue;
+    const r = aiDefReach(b);
+    if (r) guards.push({ x: b.x, y: b.y, r2: (r + 3.5) * (r + 3.5) });
+    else if (BDEFS[b.type].mil && armedIn(b) >= 2) guards.push({ x: b.x, y: b.y, r2: 56 }); // (beyond where a garrison sorties)
+  }
+  const spots = [];
   for (let t = 0; t < S.W * S.H; t++) {
     if (!S.road[t] || wayOwner(t) !== enemy || HEAT.flow[t] < 1) continue;
     const i = t % S.W, j = (t / S.W) | 0;
     if (guards.some((g) => dist2(g.x, g.y, i, j) < g.r2)) continue;
-    const s = HEAT.flow[t] - dist(i, j, S.W / 2, S.H / 2) * 0.05;
-    if (s > bs) { bs = s; best = t; }
+    spots.push({ t, s: HEAT.flow[t] - dist(i, j, S.W / 2, S.H / 2) * 0.05 });
   }
-  if (best < 0) return;
-  const i = best % S.W, j = (best / S.W) | 0;
+  if (!spots.length) return;
+  spots.sort((a, c) => c.s - a.s || a.t - c.t);
   const size = st.raidSize || 3;
-  if (rallyAvailable(p, i, j) < size + (st.raidKeep ?? 2)) return; // keep enough warbots at home (a Raider sends all it can spare)
-  const { sent, rally } = sendToRally(p, i, j, size);
-  if (sent) { rally.raid = true; P.raid = { id: rally.id, until: S.time + RAID_TIME }; }
+  // The busiest stretch whose way in doesn't run through the reach of a gun (the army goes round where it can: if the
+  // way there still crosses one, there's no way round it); a few tried, from the best down.
+  for (const { t } of spots.slice(0, 4)) {
+    const i = t % S.W, j = (t / S.W) | 0;
+    if (rallyAvailable(p, i, j) < size + (st.raidKeep ?? 2)) return; // keep enough warbots at home (a Raider sends all it can spare)
+    if (aiRouteHot(p, i, j)) continue;
+    const { sent, rally } = sendToRally(p, i, j, size);
+    if (sent) { rally.raid = true; P.raid = { id: rally.id, until: S.time + RAID_TIME }; }
+    return;
+  }
+}
+
+/**
+ * Does the way p's army would take to tile (i, j), from the nearest of its garrisons that could send warbots there,
+ * cross ground an enemy gun reaches (dangerMap)? (Routes on the march go round guns where they can: see routeOpts.)
+ * True too if there's no way there.
+ */
+function aiRouteHot(p, i, j) {
+  const src = rallySources(p, i, j, false, false)[0];
+  if (!src) return true;
+  const u = { owner: p, type: 'warbot', x: src.x + 0.5, y: src.y + 0.5, ammo: WARBOT_AMMO, fight: 0 };
+  const path = squadRoute(u, tIdx(src.x, src.y), i, j);
+  if (!path) return true;
+  const m = dangerMap(p);
+  return path.some((t) => (m[t] & 1) === 1);
 }
 
 /**
@@ -1300,8 +1463,10 @@ function aiBomber(p, me) {
   // An enemy gun keeping our robots off our own buildings: bomb it first.
   if (gun && !gun.dead && foes(gun.owner, p) && !covered(gun.x + 0.5, gun.y + 0.5) && !strikeBlocked(p, u, gun) && !orderStrike(p, u, gun)) { P.lastStrike = S.time; return; }
   let best = null, bs = 0;
+  const soft = P.soften && S.time < P.soften.until ? P.soften : null; // (the guns holding back an attack: see aiThink, step 5)
   for (const b of S.buildings) {
-    const v = S.victory === 'uplinks' && holdsUplink(b) ? Math.max(13, AI_BOMB_VALUE[b.type] || 0) : AI_BOMB_VALUE[b.type]; // (Uplinks: the forts that hold them)
+    let v = S.victory === 'uplinks' && holdsUplink(b) ? Math.max(13, AI_BOMB_VALUE[b.type] || 0) : AI_BOMB_VALUE[b.type]; // (Uplinks: the forts that hold them)
+    if (soft && aiDefReach(b) && dist2(b.x, b.y, soft.x, soft.y) <= 64) v = Math.max(v || 0, 9);
     if (!v || b.dead || !b.built || !foes(b.owner, p) || b.owner < 0 || covered(b.x + 0.5, b.y + 0.5) || strikeBlocked(p, u, b)) continue;
     const sc = v - dist(b.x, b.y, field.x, field.y) * 0.05;
     if (sc > bs) { bs = sc; best = b; }
@@ -1339,11 +1504,26 @@ function aiGunThreats(p) {
   return out;
 }
 
-/** Warbots it takes to knock out gun b: its guards, its garrison, and a margin. */
-function aiGunNeed(b) {
-  const shooting = Math.min(b.garrison ? b.garrison.length : 0, BDEFS[b.type].slots || Infinity); // (only a Keep's gun slots fire)
-  return Math.ceil(shooting * 1.3) + guardsNear(b) + (b.type === 'turret' || BDEFS[b.type].keep ? 3 : 2) + 1;
+/**
+ * Army units it takes to knock out gun b: what it fires itself (a Pulse Turret or Keep 3, any other 2, and the
+ * warbots shooting from it), its guards (guardsNear), and a margin. With `shields` Bulwarks leading, the first faces
+ * b itself and its shield takes some of b's own fire (not a Mortar's or a Disruptor's: then it faces a guard), any
+ * more face its guards (aiFire).
+ */
+function aiGunNeed(b, shields) {
+  const def = BDEFS[b.type], shooting = Math.min(b.garrison ? b.garrison.length : 0, def.slots || Infinity); // (only a Keep's gun slots fire)
+  let own = Math.ceil(shooting * 1.3) + (b.type === 'turret' || def.keep ? 3 : 2), sh = shields || 0;
+  if (sh > 0 && !def.mortar && !def.disrupt) { own = Math.ceil(own - Math.min(own * 0.75, AI_SHIELD_TAKES) - 1e-9); sh--; }
+  return own + guardsNear(b, sh) + 1;
 }
+
+/**
+ * Heavy defences and no Bulwark to lead: a squad attacking where guns worth AI_HEAVY warbots or more (`fire`) cover
+ * it takes a third more than `need` when none of its units is a Bulwark (with several guns on it, from more than one
+ * side, the losses on the way in add up faster than the count says).
+ */
+const AI_HEAVY = 5;
+function aiBare(need, fire, shields) { return !shields && fire >= AI_HEAVY ? Math.ceil(need * 1.3 - 1e-9) : need; }
 
 /**
  * Clear the worst enemy gun covering our buildings: a missile if a Silo can reach it, Howitzers (they
@@ -1373,36 +1553,49 @@ function aiClearGuns(p, lvl) {
     if (S.zone[tIdx(Math.floor(u.x), Math.floor(u.y))] !== z || !rocketTarget(u, t)) continue;
     orderBombard(p, [u.id], t);
   }
-  // Warbots: enough to win, from the garrisons in reach. Already on their way: wait for them. Too few to spare
-  // (each garrison keeps one at home): the Foundry makes up the difference (P.gunWant sets the army it wants).
-  const need = aiGunNeed(t);
+  // Warbots: a squad that can win, from the garrisons in reach, a Bulwark at its head when there's one (it goes first,
+  // and its shield takes the gun's fire: fewer are needed). Already on their way: wait for them. A new squad goes only
+  // when it can win with half the ones still at it (those left of one being shot down are no great help), never a
+  // few at a time to feed the gun. Too few to spare (each garrison keeps one at home): the Foundry makes up the
+  // difference (P.gunWant sets the army it wants) and a Bulwark if it has none (P.shieldWant).
   const going = S.bots.filter((u) => !u.dead && u.owner === p && isArmy(u) && u.task && u.task.type === 'attack' && u.task.target === t.id).length;
-  let avail = attackAvailable(p, t), all = false;
-  P.gunWant = Math.max(need + 2, army + Math.max(0, need - going - avail));
-  P.gunNeed = Math.max(0, need - going);
-  if (going >= need || S.time < (P.gunAttackAt || 0)) return;
+  const help = Math.floor(going / 2), needOf = (sh) => aiBare(aiGunNeed(t, sh), aiGunNeed(t) - 1, sh);
+  let sp = aiSpare(p, t, false), sq = aiSquad(sp, needOf, help), all = false;
+  P.gunWant = Math.max(aiGunNeed(t) + 2, army + Math.max(0, sq.need - help - sp.n));
+  P.gunNeed = Math.max(0, sq.need - going);
+  if (going >= sq.need || S.time < (P.gunAttackAt || 0)) return;
   // Just short: the forts in reach send their last warbots too (never the Command Base's), the gun is that bad.
-  if (avail + going < need && attackAvailable(p, t, true) + going >= need) { avail = attackAvailable(p, t, true); all = true; }
+  if (!sq.count) { const s = aiSpare(p, t, true), q = aiSquad(s, needOf, help); if (q.count) { sp = s; sq = q; all = true; } }
   // Stuck: the gun has stood for over two and a half minutes and no new warbot has come for two (the gun may be what
-  // stops the Foundry: a Chip Fab or Fuel Station under it). Then every warbot goes, the Command Base's last one too.
+  // stops the Foundry: a Chip Fab or Fuel Station under it). Then every warbot goes, the Command Base's last one too:
+  // when that gives it a real chance (enough without the margin), or when the colony can make no more army anyway
+  // (no Bot Foundry at work: it's that or nothing, as before).
   const stuck = S.time - (P.gunSince ?? S.time) > 150 && S.time - (P.gunArmyT ?? S.time) > 120;
-  if (avail + going < need && stuck && attackAvailable(p, t, 'every') + going >= need) { avail = attackAvailable(p, t, 'every'); all = 'every'; }
-  if (avail + going >= need) {
-    const sent = sendAttack(p, t, Math.min(avail, need - going + 2), all);
+  if (!sq.count && stuck) {
+    const stalled = !S.buildings.some((b) => !b.dead && b.owner === p && b.type === 'foundry' && b.built && !aiShut(b));
+    const s = aiSpare(p, t, 'every'), q = aiSquad(s, (sh) => needOf(sh) - 1, help);
+    if (q.count) { sp = s; sq = q; all = 'every'; }
+    else if (stalled && s.n && s.n + going >= needOf(s.shields)) { sp = s; sq = { count: s.n, need: s.n }; all = 'every'; }
+  }
+  if (!sq.count) P.shieldWant = S.time;
+  else {
+    const sent = sendAttack(p, t, sq.count, all, false, true);
     if (sent) { P.gunAttackAt = S.time + 20; P.lastAttack = S.time; P.siegeAt = { x: t.x, y: t.y, until: S.time + 90 }; }
     return;
   }
   // No garrison near enough to attack from: a rally flag beside the gun (they fight what they meet there
-  // and attack what stands there), called home once the gun is gone.
+  // and attack what stands there), called home once the gun is gone. The same rule: a squad that can win.
   if (P.gunRally && rallyById(P.gunRally)) return;
   let spot = null;
   for (const [di, dj] of [[1, 1], [-1, 1], [1, -1], [-1, -1], [2, 0], [-2, 0], [0, 2], [0, -2], [2, 2], [-2, -2]]) {
     const i = t.x + di, j = t.y + dj;
     if (inMap(i, j) && walkable(tIdx(i, j)) && !S.bAt[tIdx(i, j)] && S.zone[tIdx(i, j)] === homeZone(p)) { spot = { i, j }; break; }
   }
-  if (spot && rallyAvailable(p, spot.i, spot.j, true) + going >= need) {
-    const { sent, rally } = sendToRally(p, spot.i, spot.j, need - going + 2, true);
-    if (sent) { P.gunRally = rally.id; P.gunAttackAt = S.time + 20; P.lastAttack = S.time; }
+  if (!spot) return;
+  const fq = aiSquad(aiSpare(p, { x: spot.i, y: spot.j }, 'flag'), needOf, help);
+  if (fq.count) {
+    const { sent, rally } = sendToRally(p, spot.i, spot.j, fq.count, true, false, true);
+    if (sent) { rally.first = t.id; P.gunRally = rally.id; P.gunAttackAt = S.time + 20; P.lastAttack = S.time; }
   }
 }
 
@@ -1438,10 +1631,14 @@ function aiSiege(p) {
     const i = Math.floor(e.x), j = Math.floor(e.y);
     if (!inMap(i, j) || !walkable(tIdx(i, j))) continue;
     const escort = S.bots.filter((v) => !v.dead && !v.inside && v.owner === e.owner && isArmy(v) && dist2(v.x, v.y, e.x, e.y) <= 20).length;
-    const want = Math.min(14, 4 + Math.ceil(escort * 1.5));
+    // (One parked under its owner's guns: more hunters for them, a Bulwark leading; and none at all until there are
+    // that many, not a few at a time to be shot down there.)
+    const sp = aiSpare(p, { x: i, y: j }, 'flag'), guns = Math.ceil(aiFire(aiGuards(e.owner, i, j, 2, null), sp.shields) - 1e-9);
+    const want = Math.min(14 + guns, 4 + Math.ceil(escort * 1.5) + guns);
     const h = P.truckHunt.find((x) => x.truck === e.id);
     if (!h) {
-      const { sent, rally } = sendToRally(p, i, j, want, true);
+      if (guns && sp.n < want) { P.shieldWant = S.time; continue; }
+      const { sent, rally } = sendToRally(p, i, j, want, true, false, guns > 0);
       if (sent) P.truckHunt.push({ truck: e.id, rally: rally.id, until: S.time + 150, at: S.time });
       continue;
     }
@@ -1449,7 +1646,7 @@ function aiSiege(p) {
     if (!r) continue;
     if (dist2(r.x, r.y, e.x, e.y) > 4) { r.x = i + 0.5; r.y = j + 0.5; } // it moved: so does the flag
     const have = rallyMembers(h.rally).length;
-    if (have < want && S.time - (h.at || 0) > 15) { h.at = S.time; sendToRally(p, Math.floor(r.x), Math.floor(r.y), want - have, true); }
+    if (have < want && S.time - (h.at || 0) > 15 && (!guns || want - have >= 3)) { h.at = S.time; sendToRally(p, Math.floor(r.x), Math.floor(r.y), want - have, true); }
   }
 }
 
@@ -1954,10 +2151,12 @@ function aiJamUplink(p, foe) {
   if (!best) return;
   const spot = besideUplink(best, L);
   if (!spot) return;
-  const avail = rallyAvailable(p, spot.i, spot.j, true);
-  if (avail < 5) return;
-  const { sent, rally } = sendToRally(p, spot.i, spot.j, Math.min(8, avail - 2), true);
-  if (sent) { P.jamRally = rally.id; P.lastJam = S.time; }
+  // (Five at least, and more for the defences round it: they'd stand there under its guns.)
+  const sp = aiSpare(p, { x: spot.i, y: spot.j }, 'flag'), avail = sp.n;
+  const guns = Math.ceil(aiFire(aiGuards(foe, spot.i, spot.j, 2, null), sp.shields) - 1e-9);
+  if (avail < 5 + guns) { if (guns && avail >= 5) P.shieldWant = S.time; return; }
+  const { sent, rally } = sendToRally(p, spot.i, spot.j, Math.min(8 + guns, avail - 2), true, false, true);
+  if (sent) { rally.first = aiFirstGun(foe, spot.i, spot.j); P.jamRally = rally.id; P.lastJam = S.time; }
 }
 
 /** Uplinks: how far the nearest free Uplink lies past the rings of our Outposts, Keeps and Command Base (sites too), or Infinity with none free. */
