@@ -273,4 +273,5 @@ How the game hints at it:
 Adopted names: the trader ship is the *Wren*; meteor showers are **Ringfall**; the rival styles are the doctrines
 (Balanced: the Steward, Turtle: the Warden, Raider: the Salvager, Rusher: the Herald, Tycoon: the Architect); "the
 Murmur" is the blanket name for the creatures, with classes such as the Scuttler and the Brute; the Lunar biome is
-Penelope, where no Murmur live.
+Penelope, where no Murmur live. The new-game setup keeps the plain biome names (Red desert, Forest...); the region
+names are for flavor elsewhere. On the setup screen each rival doctrine has a tooltip saying in depth how it plays.
