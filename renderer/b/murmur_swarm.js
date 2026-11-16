@@ -27,7 +27,7 @@ export default function (L) {
   const heroCams = {
     swarmer: { pos: [5.2, 3.2, 6.2], at: [0.1, 0.5, 0.2], fov: 30 },
     drainer: { pos: [7.0, 4.6, 7.8], at: [0.4, 0.6, 0.2], fov: 30 },
-    brute: { pos: [9.6, 5.4, 9.4], at: [0.2, 1.1, 0.3], fov: 32 },
+    brute: { pos: [12.0, 4.4, 7.4], at: [0.4, 0.95, 0.1], fov: 40 },
   };
   K.camera(W, HERO && heroCams[C]);
   if (HERO) heroGround(L, K, W);
@@ -208,17 +208,19 @@ function drainer(L, K, G, f, feed) {
     };
     for (let i = 0; i < 18; i++) branch((i + L.rnd() * 0.6) / 18 * n, n * (0.16 + L.rnd() * 0.06), (L.rnd() - 0.5) * 0.4, 5, 56, 0);
   });
-  const sacM = new THREE.MeshPhysicalMaterial({ color: '#40231f', map: K.chitinMap, roughness: 0.4, metalness: 0.0, clearcoat: 0.8, clearcoatRoughness: 0.18, vertexColors: true,
-    emissive: new THREE.Color(X.core).multiplyScalar(FK * (0.0 + K.GLOW * 0.7) / 0.4), emissiveMap: veins, emissiveIntensity: 0.4 });
-  sacM.envMapIntensity = 0.3; sacM.userData.glow = K.dimGlow(X.glow, 0.8 * Math.min(2.2, FK));
+  const sacM = new THREE.MeshPhysicalMaterial({ color: '#4a2a24', map: K.chitinMap, roughness: 0.5, metalness: 0.0, clearcoat: 0.45, clearcoatRoughness: 0.3, vertexColors: true,
+    emissive: new THREE.Color(X.core).multiplyScalar(FK * (K.GLOW * K.GLOW * 0.32 + 0.02) / 0.4), emissiveMap: veins, emissiveIntensity: 0.4 });
+  sacM.envMapIntensity = 0.25; sacM.userData.glow = K.dimGlow(X.glow, 0.8 * Math.min(2.2, FK));
   const sx = -0.98, sy = 0.62, srx = 1.28, sry = 0.66, srz = 1.08;
-  K.seg(G, [sx, sy, 0], srx, sry, srz, sacM, { bands: 7, depth: 0.035, shade: 0.35, lump: 0.03, crease: 0.14, axisFlat: 0.35, seed: 11, ws: 96, hs: 48 });
+  K.seg(G, [sx, sy, 0], srx, sry, srz, sacM, { bands: 7, depth: 0.06, shade: 0.5, lump: 0.03, crease: 0.14, axisFlat: 0.35, seed: 11, ws: 96, hs: 48 });
+  // the scutum: a hard plate over the front of the sac
+  K.seg(G, [-0.45, sy + 0.18, 0], 0.7, 0.5, 0.82, bodyM, { bands: 2, depth: 0.08, crease: 0.2, lump: 0.02, seed: 13, axisFlat: 0.9, taper: 0.25 });
   // ---- front shield (prosoma): flat, banded
   K.seg(G, [0.66, 0.42, 0], 0.78, 0.3, 0.72, bodyM, { bands: 2, depth: 0.1, crease: 0.22, seed: 3, axisFlat: 0.6 });
   // shards round the shield's rear rim, two big shoulder shards, a spine of small ones down the sac and a cluster at its tail
   for (let i = 0; i < 7; i++) { const a = -1.2 + i * 0.4, z = Math.sin(a) * 0.62; K.shard(G, [0.33 - Math.abs(z) * 0.35, 0.62, z], [-0.55, 1, z * 1.1], 0.34 + (i % 2) * 0.12, 0.07, X, { collarMat: bodyM }); }
   for (const s of [-1, 1]) K.shard(G, [0.62, 0.62, s * 0.5], [-0.25, 0.9, s * 0.9], 0.64, 0.12, X, { collarMat: bodyM });
-  for (let i = 0; i < 5; i++) { const x = -0.55 - i * 0.3, y = sy + sry * Math.sqrt(Math.max(0, 1 - ((x - sx) / srx) ** 2)) - 0.06; K.shard(G, [x, y, (i % 2 ? 1 : -1) * 0.05], [-0.4, 1, (i % 2 ? 1 : -1) * 0.25], 0.26 + 0.06 * (i % 2), 0.06, X, { collar: false }); }
+  for (let i = 0; i < 6; i++) { const a = -1.1 + i * 0.44, z = Math.sin(a) * 0.72, x = -1.08 + Math.abs(Math.sin(a)) * 0.25, y = sy + sry * Math.sqrt(Math.max(0, 1 - ((x - sx) / srx) ** 2 - (z / srz) ** 2)) - 0.04; K.shard(G, [x, y, z], [-0.7, 1, z * 0.9], 0.3 + 0.08 * (i % 2), 0.07, X, { collarMat: bodyM }); }
   K.cluster(G, [-2.05, 0.75, 0], [-1, 0.7, 0], 4, 0.5, 0.09, X, 0.6, { collarMat: bodyM });
 
   // ---- the mouth: a fleshy, wrinkled collar ending in a puckered, toothed disc that faces forward and up
@@ -293,16 +295,17 @@ function brute(L, K, G, f) {
   // ---- legs: six, thick, armoured, slow heavy steps; crust plates on the femurs
   const LG = [];
   for (const [hx, hz, fx, fz, kf] of [[1.15, 0.95, 2.15, 2.05, -0.1], [0.0, 1.1, 0.15, 2.45, 0.05], [-1.15, 1.0, -2.05, 2.15, 0.15]]) for (const s of [-1, 1]) LG.push([[hx, 0.3, s * hz], [fx, 0, s * fz], { kneeFwd: kf, kneeOut: 0.12 }]);
-  K.legs(GL, LG, f, { mat: legM, tipMat: tipM, jointMat: jointM, r: 0.22, kneeUp: 0.32, kneeT: 0.5, ankT: 0.3, stride: 0.3, lift: 0.28, spines: 0.9, claw: true, ankUp: 0.3, bulge: 0.3, shin: K.crust('#5d544c') });
+  K.legs(GL, LG, f, { mat: legM, tipMat: tipM, jointMat: jointM, r: 0.22, kneeUp: 0.32, kneeT: 0.5, ankT: 0.3, stride: 0.3, lift: 0.28, spines: 0.9, claw: true, ankUp: 0.3, bulge: 0.3, shin: K.chitin('#4b423b', { irid: 0, rough: 0.75, cc: 0.15, ns: 0.9 }) });
   // ---- underbody
   K.seg(G, [-0.1, 0.42, 0], 2.1, 0.35, 1.25, K.plain('#221a16', 0.7), { bands: 4, depth: 0.08 });
   // ---- the shell
   const SX = 2.35, SY = 1.12, SZ = 1.68, CX = -0.25, CY = 0.42, NB = 5;
-  const crackW = (x) => Math.max(0, 0.32 * (1 - Math.pow(Math.abs(x + 0.08) / 0.8, 2.4)));   // half-width of the split, unit-sphere z
+  const crackW = (x) => Math.max(0, 0.3 * (1 - Math.pow(Math.abs(x + 0.08) / 0.8, 2.4)));   // half-width of the split, unit-sphere z
+  const crackZ = (x) => 0.07 * Math.sin(x * 7.5 + 0.6) + 0.04 * Math.sin(x * 17);              // and it zig-zags
   {
     const g = new THREE.SphereGeometry(1, 180, 90), pos = g.attributes.position, col = new Float32Array(pos.count * 3), v = new THREE.Vector3();
     const stone = [0.075, 0.07, 0.068], stoneL = [0.17, 0.155, 0.14], rust = [0.2, 0.11, 0.07];
-    const bands = [[0.7, 0.68, 0.64], [0.3, 0.34, 0.38], [0.82, 0.82, 0.8], [0.16, 0.24, 0.3], [0.05, 0.06, 0.07]];
+    const bands = [[0.42, 0.41, 0.4], [0.2, 0.24, 0.28], [0.1, 0.16, 0.2], [0.05, 0.08, 0.1], [0.03, 0.04, 0.05]];
     for (let i = 0; i < pos.count; i++) {
       v.fromBufferAttribute(pos, i);
       const t = (v.x + 1) / 2, u = (t * NB) % 1, wl = 0.12;
@@ -316,11 +319,11 @@ function brute(L, K, G, f) {
       const rs = Math.max(0, K.nz(v.x * 3.5, v.y * 3.5 + 2, v.z * 3.5) - 0.25); c = c.map((q, j) => q + (rust[j] - q) * Math.min(1, rs * 2));
       if (u < wl) c = c.map(q => q * (0.55 + 0.45 * u / wl));                      // dark gap under each lip
       else if (u < wl + 0.1) c = c.map(q => q * (1.25 - 0.25 * (u - wl) / 0.1));   // the lip catches the light
-      const w = crackW(v.x);
+      const w = crackW(v.x) * (1 + 0.35 * K.nz(v.x * 9, 2, 0.5)) + 0.03 * Math.abs(Math.sin(v.x * 23)), zc = crackZ(v.x);
       if (v.y > 0.15 && w > 0) {
-        const d = Math.abs(v.z) / w;                      // 0 in the middle of the crack, 1 at its edge
-        if (d < 1) { k -= 0.34 * Math.pow(1 - d, 0.5) * Math.min(1, w / 0.1); const b = bands[Math.min(4, Math.floor(Math.pow(1 - d, 0.7) * 5))]; c = b.slice(); }
-        else if (d < 1.4) { k += 0.06 * (1 - (d - 1) / 0.4); c = c.map((q, j) => q + (bands[0][j] - q) * 0.25 * (1 - (d - 1) / 0.4)); }
+        const d = Math.abs(v.z - zc) / w;                 // 0 in the middle of the crack, 1 at its edge
+        if (d < 1) { k -= 0.34 * Math.pow(1 - d, 0.5) * Math.min(1, w / 0.1); const b = bands[Math.min(4, Math.floor(Math.pow(1 - d, 0.6) * 5))]; c = b.slice(); }
+        else if (d < 1.35) { k += 0.05 * (1 - (d - 1) / 0.35); }
       }
       let x = v.x * k * SX, y = v.y * k * SY, z = v.z * k * SZ;
       if (y < 0) y *= 0.25;
@@ -335,14 +338,10 @@ function brute(L, K, G, f) {
   const shellTop = (x, z) => CY + SY * Math.sqrt(Math.max(0, 1 - ((x - CX) / SX) ** 2 - (z / SZ) ** 2));
   // the seam of crystal: druzy points packed along the crack floor, and a jagged ridge of big ones, tallest mid-back
   // two rows of crystal growing from the crack walls toward the middle and up, plus druzy points along the floor
-  for (let i = 0; i < 30; i++) {
-    const t = L.rnd(), ux = -0.7 + 1.4 * t, x = CX + SX * ux, w = crackW(ux) * SZ * 0.5, z = (L.rnd() - 0.5) * 2 * w;
-    K.shard(G, [x, shellTop(x, 0) - 0.4, z], [(L.rnd() - 0.5) * 0.5, 1, (L.rnd() - 0.5) * 0.6], 0.14 + L.rnd() * 0.14, 0.05 + L.rnd() * 0.03, X, { collar: false });
-  }
-  for (const s of [-1, 1]) for (let i = 0; i < 11; i++) {
-    const t = (i + (s > 0 ? 0.5 : 0)) / 11, ux = -0.66 + 1.3 * t, x = CX + SX * ux, mid = Math.max(0, 1 - Math.abs(t - 0.42) * 1.9);
-    const w = crackW(ux) * SZ;
-    K.shard(G, [x, shellTop(x, 0) - 0.33, s * w * 0.55], [(L.rnd() - 0.55) * 0.35, 1, -s * (0.15 + L.rnd() * 0.25)], 0.3 + 0.75 * mid * (0.8 + L.rnd() * 0.35), 0.09 + 0.07 * mid, X, { collar: false });
+  for (let i = 0; i < 12; i++) {
+    const t = (i + 0.2 + L.rnd() * 0.6) / 12, ux = -0.7 + 1.4 * t, x = CX + SX * ux, mid = Math.max(0, 1 - Math.abs(t - 0.42) * 1.8);
+    const w = crackW(ux) * SZ, z = crackZ(ux) * SZ + (L.rnd() - 0.5) * w * 0.8;
+    K.cluster(G, [x, shellTop(x, 0) - 0.42, z], [(L.rnd() - 0.55) * 0.5, 1, (L.rnd() - 0.5) * 0.7], 3 + Math.round(L.rnd() * 2), 0.3 + 0.75 * mid * (0.75 + L.rnd() * 0.4), 0.08 + 0.07 * mid, X, 0.55, { collar: false });
   }
   // clusters breaking through the flanks, each in a socket of cracked crust
   for (const [ux, uz, n, len] of [[-0.25, 0.64, 4, 0.7], [0.35, -0.62, 4, 0.66], [-0.75, -0.5, 3, 0.55], [0.62, 0.48, 3, 0.5], [-1.0, 0.36, 3, 0.45]]) {
@@ -350,14 +349,15 @@ function brute(L, K, G, f) {
     K.cluster(G, [x, y - 0.04, z], [nrm[0] * 0.6, nrm[1], nrm[2] * 0.9], n, len, 0.11, X, 0.5, { collarMat: crustM });
   }
   // ---- head: a low shield of crust tucked under the shell's front lip; its brow crusted with stubby shards (the ram)
-  K.seg(G, [1.98, 0.48, 0], 0.62, 0.44, 1.02, K.crust('#6b625b'), { bands: 2, depth: 0.1, crease: 0.25, seed: 21, lump: 0.05 });
-  K.cluster(G, [2.3, 0.72, -0.35], [1, 0.7, -0.3], 3, 0.42, 0.08, X, 0.4, { collar: false });
-  K.cluster(G, [2.32, 0.74, 0.32], [1, 0.7, 0.3], 3, 0.4, 0.08, X, 0.4, { collar: false });
-  K.cluster(G, [2.38, 0.68, 0], [1, 0.6, 0], 2, 0.34, 0.08, X, 0.35, { collar: false });
+  K.seg(G, [1.98, 0.5, 0], 0.68, 0.44, 1.06, K.crust('#5b534c'), { bands: 2, depth: 0.12, crease: 0.25, seed: 21, lump: 0.06 });
+  // the ram: a brow of crystal growing forward off the head shield
+  K.cluster(G, [2.32, 0.74, -0.38], [1, 0.55, -0.35], 3, 0.55, 0.09, X, 0.35, { collar: false });
+  K.cluster(G, [2.34, 0.76, 0.36], [1, 0.55, 0.35], 3, 0.52, 0.09, X, 0.35, { collar: false });
+  K.cluster(G, [2.42, 0.72, 0], [1, 0.45, 0], 3, 0.6, 0.1, X, 0.3, { collar: false });
   for (const s of [-1, 1]) {
-    L.sphere(0.08, K.eye(), 2.28, 0.72, s * 0.66, { parent: G, dirt: 0 });
-    const m = [[2.35, 0.38, s * 0.62], [2.7, 0.4, s * 0.78], [3.02, 0.36, s * 0.56], [3.14, 0.34, s * 0.24]];
-    K.tube(G, m, t => 0.21 * (1 - t) + 0.035, legM, { n: 30, radial: 14 });
+    for (const [x, z, r] of [[2.3, 0.62, 0.045], [2.36, 0.55, 0.035], [2.24, 0.7, 0.035]]) L.sphere(r, K.eye(), x, 0.66, s * z, { parent: G, dirt: 0 });
+    const m = [[2.35, 0.36, s * 0.62], [2.72, 0.42, s * 0.8], [3.06, 0.5, s * 0.58], [3.2, 0.6, s * 0.26]];
+    K.tube(G, m, t => 0.23 * (1 - t) + 0.035, legM, { n: 30, radial: 14 });
     const c = new THREE.CatmullRomCurve3(m.map(p => new THREE.Vector3(...p)));
     for (const t of [0.5, 0.72]) { const p = c.getPointAt(t); K.cone(G, [p.x, p.y, p.z], [0.15, 0, -s], 0.22, 0.055, K.plain('#cfc6b4', 0.5)); }
   }
@@ -369,34 +369,37 @@ function brute(L, K, G, f) {
 // glowing crystal. Six crystal pillars stand on the rim, evenly spaced, the one detail that looks planned.
 function burrow(L, K) {
   const { THREE } = K, X = XTAL;
+  L.getRoot().scale.setScalar(1.1);
   const CZ = -0.3;
-  const prof = [[0, -3.4], [0.35, -2.9], [0.75, -1.7], [1.05, -0.55], [1.28, 0.3], [1.6, 0.78], [2.0, 0.86], [2.5, 0.6], [3.1, 0.28], [3.6, 0.07], [4.0, -0.05]];
+  const prof = [[0, -3.8], [0.4, -3.3], [0.85, -2.0], [1.2, -0.8], [1.5, 0.35], [1.85, 1.1], [2.25, 1.28], [2.75, 0.95], [3.35, 0.48], [3.9, 0.14], [4.3, 0.0], [4.5, -0.12]];
   const hProf = (r) => { for (let i = 1; i < prof.length; i++) if (r <= prof[i][0]) { const [r0, h0] = prof[i - 1], [r1, h1] = prof[i], t = (r - r0) / (r1 - r0), s = t * t * (3 - 2 * t); return h0 + (h1 - h0) * s; } return prof[prof.length - 1][1]; };
-  const RH = 1.25, RMAX = 4.0;
+  const RH = 1.5, RMAX = 4.5;
   // ---- the crater mound: polar heightfield, vertex coloured
   {
     const NR = 90, NA = 180, pos = [], col = [], idx = [];
     for (let j = 0; j <= NR; j++) for (let i = 0; i <= NA; i++) {
-      const r = 0.05 + (j / NR) * (RMAX - 0.05), a = i / NA * Math.PI * 2, ca = Math.cos(a), sa = Math.sin(a);
-      let h = hProf(r);
+      const a = i / NA * Math.PI * 2, ca = Math.cos(a), sa = Math.sin(a);
+      const rmax = 4.1 + 0.5 * K.nz(ca * 1.7, 0.9, sa * 1.7) + 0.14 * Math.sin(a * 7 + 1) + 0.07 * Math.sin(a * 17);   // a ragged spoil edge
+      const r = 0.05 + (j / NR) * (rmax - 0.05), rn = r < 2.3 ? r : 2.3 + (r - 2.3) * (RMAX - 2.3) / (rmax - 2.3);
+      let h = hProf(rn);
       const ang = 0.18 * K.nz(ca * 1.5, 0.3, sa * 1.5) + 0.12 * K.nz(ca * 3.2, 1.7, sa * 3.2);
-      if (r > 1.3) h += ang * Math.exp(-((r - 2.1) ** 2) / 0.8) + 0.05 * K.nz(ca * r * 2, 3, sa * r * 2);
+      if (r > 1.5) h += ang * 1.6 * Math.exp(-((r - 2.3) ** 2) / 0.9) + 0.06 * K.nz(ca * r * 2, 3, sa * r * 2);
       const fur = Math.pow(Math.abs(Math.sin(a * 13 + 1.5 * K.nz(ca, 0.5, sa))), 14);    // radial claw furrows down the outer slope
-      if (r > 2.1) h -= 0.07 * fur * Math.min(1, (r - 2.1) / 0.4) * Math.max(0, 1 - (r - 2.1) / 1.6);
+      if (r > 2.4) h -= 0.09 * fur * Math.min(1, (r - 2.4) / 0.4) * Math.max(0, 1 - (r - 2.4) / 1.8);
       const rib = Math.sin(a * 7 + r * 5.5);                                             // spiral ribs down the throat
       if (r < RH + 0.1) h += 0.09 * rib * Math.min(1, (RH + 0.1 - r) / 0.3);
       pos.push(ca * r, h, CZ + sa * r);
       // colours: disturbed soil outside, churned dark earth on the rim, wet resin-dark throat, black depths
       let c;
-      const soil = [0.6, 0.5, 0.4], dark = [0.32, 0.26, 0.22], throat = [0.2, 0.15, 0.15], resin = [0.34, 0.24, 0.24], deep = [0.04, 0.035, 0.04];
+      const soil = [0.5, 0.42, 0.34], dark = [0.24, 0.19, 0.16], throat = [0.09, 0.07, 0.075], resin = [0.2, 0.13, 0.13], deep = [0.015, 0.012, 0.016];
       const mix = (p, q, t) => p.map((v, k) => v + (q[k] - v) * Math.max(0, Math.min(1, t)));
-      if (r > 2.0) c = mix(dark, soil, (r - 2.0) / 1.6);
-      else if (r > RH) c = mix(throat, dark, (r - RH) / 0.75);
+      if (r > 2.3) c = mix(dark, soil, (rn - 2.3) / 1.6);
+      else if (r > RH) c = mix(throat, dark, (r - RH) / 0.8);
       else { c = mix(deep, throat, (r - 0.2) / (RH - 0.2)); if (rib > 0.5) c = mix(c, resin, (rib - 0.5) * 1.4 * Math.min(1, r / 0.6)); }
-      const n = 0.85 + 0.3 * K.nz(ca * r * 3, 5, sa * r * 3); c = c.map(v => v * n * (1 - 0.35 * fur * (r > 2.1 ? 1 : 0)));
-      col.push(...c.map(v => v * 1.6));
+      const n = 0.85 + 0.3 * K.nz(ca * r * 3, 5, sa * r * 3); c = c.map(v => v * n * (1 - 0.35 * fur * (r > 2.4 ? 1 : 0)));
+      col.push(...c.map(v => v * 1.3));
     }
-    for (let j = 0; j < NR; j++) for (let i = 0; i < NA; i++) { const a = j * (NA + 1) + i, b = a + 1, c = a + NA + 1, d = c + 1; idx.push(a, c, b, b, c, d); }
+    for (let j = 0; j < NR; j++) for (let i = 0; i < NA; i++) { const a = j * (NA + 1) + i, b = a + 1, c = a + NA + 1, d = c + 1; idx.push(a, b, c, b, d, c); }
     const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
     const uv = []; for (let k = 0; k < pos.length; k += 3) uv.push(pos[k] / 3, pos[k + 2] / 3); g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
     g.setIndex(idx); g.computeVertexNormals();
@@ -409,54 +412,56 @@ function burrow(L, K) {
       const c = n / 2, img = g.createImageData(n, n), D = img.data;
       for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) {
         const dx = (x - c) / c, dy = (y - c) / c, rr = Math.hypot(dx, dy), a = Math.atan2(dy, dx);
-        const edge = 0.86 + 0.07 * K.nz(Math.cos(a) * 1.8, 0.2, Math.sin(a) * 1.8) + 0.04 * Math.sin(a * 9 + 2 * K.nz(dx * 3, 1, dy * 3));
-        let al = Math.min(1, Math.max(0, (edge - rr) / 0.12)) * 0.85;
+        const edge = 0.93 + 0.05 * K.nz(Math.cos(a) * 1.8, 0.2, Math.sin(a) * 1.8) + 0.03 * Math.sin(a * 9 + 2 * K.nz(dx * 3, 1, dy * 3));
+        let al = Math.min(1, Math.max(0, (edge - rr) / 0.12)) * 0.85 * Math.min(1, Math.max(0, (rr - 0.4) / 0.05));
         const speck = K.nz(dx * 40, 7, dy * 40) > 0.55 ? 1 : 0;
-        const i4 = (y * n + x) * 4; D[i4] = 70 + 30 * speck; D[i4 + 1] = 56 + 40 * speck; D[i4 + 2] = 46 + 50 * speck; D[i4 + 3] = Math.round(al * 255);
+        const fade = Math.max(0, Math.min(1, (rr - 0.8) / 0.15)), rr2 = 1 - fade * 0.25;
+        const i4 = (y * n + x) * 4; D[i4] = (78 + 40 * speck) * rr2; D[i4 + 1] = (62 + 50 * speck) * rr2; D[i4 + 2] = (50 + 60 * speck) * rr2; D[i4 + 3] = Math.round(al * 255);
       }
       g.putImageData(img, 0, 0);
     });
     const m = new THREE.MeshStandardMaterial({ map: tex, transparent: true, roughness: 0.95, depthWrite: false });
-    const pg = new THREE.PlaneGeometry(9.6, 9.6); pg.rotateX(-Math.PI / 2);
+    const pg = new THREE.PlaneGeometry(10.4, 10.4); pg.rotateX(-Math.PI / 2);
     const pm = new THREE.Mesh(pg, m); pm.position.set(0, 0.01, CZ); pm.receiveShadow = true; pm.userData.decal = true; L.getRoot().add(pm);
   }
   // ---- crystal lining the throat: shards growing inward and up from the ribbed walls, brighter the deeper they sit
-  for (let i = 0; i < 26; i++) {
-    const a = i / 26 * Math.PI * 2 + L.rnd() * 0.2, r = 0.45 + L.rnd() * 0.75, h = hProf(r) + 0.02, deep = Math.max(0, Math.min(1, -h / 2.5));
+  for (let i = 0; i < 30; i++) {
+    const a = i / 30 * Math.PI * 2 + L.rnd() * 0.2, r = 0.5 + L.rnd() * 0.95, h = hProf(r) + 0.02, deep = Math.max(0, Math.min(1, -h / 2.5));
     K.shard(null, [Math.cos(a) * r, h, CZ + Math.sin(a) * r], [-Math.cos(a) * 0.8, 1.0, -Math.sin(a) * 0.8], 0.35 + L.rnd() * 0.4, 0.07 + L.rnd() * 0.04, { ...X, k: 0.8 + deep * 0.9 }, { collar: false });
   }
   // the glow down in the dark
   const coreM = K.glowMat('#bff2ff', 1.2, K.dimGlow(X.glow, 1.5));
-  L.mesh(new THREE.CircleGeometry(0.42, 24).rotateX(-Math.PI / 2), coreM, 0, -3.25, CZ, { cast: false, dirt: 0 });
-  L.pointLight('#9fe9ff', 3 + K.GLOW * 10, 0, -1.6, CZ, 3.2);
+  L.mesh(new THREE.CircleGeometry(0.5, 24).rotateX(-Math.PI / 2), coreM, 0, -3.6, CZ, { cast: false, dirt: 0 });
+  L.pointLight('#9fe9ff', 1.5 + K.GLOW * 7, 0, -2.4, CZ, 3.5);
   // ---- six pillars of crystal on the rim, evenly spaced and tilted outward, each with smaller companions
   for (let k = 0; k < 6; k++) {
-    const a = k / 6 * Math.PI * 2 + 0.26, r = 1.72, ca = Math.cos(a), sa = Math.sin(a), h = hProf(r) - 0.12;
-    K.shard(null, [ca * r, h, CZ + sa * r], [ca * 0.5, 1, sa * 0.5], 1.55 + (k % 2) * 0.35, 0.24, X, { collarMat: K.crust('#5a5048') });
+    const a = k / 6 * Math.PI * 2 + 0.26, r = 2.05, ca = Math.cos(a), sa = Math.sin(a), h = hProf(r) - 0.15;
+    K.shard(null, [ca * r, h, CZ + sa * r], [ca * 0.42, 1, sa * 0.42], 2.0 + (k % 2) * 0.45, 0.3, X, { collarMat: K.crust('#4a423c') });
     for (const d of [-0.28, 0.3]) { const b = a + d; K.shard(null, [Math.cos(b) * (r + 0.12), hProf(r + 0.12) - 0.08, CZ + Math.sin(b) * (r + 0.12)], [Math.cos(b) * 0.9 + Math.cos(a) * 0.2, 1, Math.sin(b) * 0.9], 0.55 + L.rnd() * 0.3, 0.1, X, { collar: false }); }
   }
   // ---- broken slabs of crust heaved up and tipped outward between the pillars
-  const slabM = K.crust('#7a6e62');
-  for (let k = 0; k < 6; k++) {
-    const a = (k + 0.5) / 6 * Math.PI * 2 + 0.26 + (L.rnd() - 0.5) * 0.25, r = 2.35 + L.rnd() * 0.35, ca = Math.cos(a), sa = Math.sin(a);
-    const w = 0.7 + L.rnd() * 0.5, g = new THREE.BoxGeometry(w, 0.16, 0.5 + L.rnd() * 0.3, 3, 1, 3);
-    const p = g.attributes.position; for (let i = 0; i < p.count; i++) p.setXYZ(i, p.getX(i) * (1 + (L.rnd() - 0.5) * 0.2), p.getY(i), p.getZ(i) * (1 + (L.rnd() - 0.5) * 0.25)); g.computeVertexNormals();
-    const m = L.mesh(g, slabM, ca * r, hProf(r) + 0.12, CZ + sa * r, { dirt: 0.3 });
-    m.rotation.set(0, -a + Math.PI / 2, 0); m.rotateX(-(0.35 + L.rnd() * 0.35));
+  const slabM = K.crust('#8a7f74');
+  for (let k = 0; k < 9; k++) {
+    const a = (k + 0.5) / 9 * Math.PI * 2 + 0.26 + (L.rnd() - 0.5) * 0.3, r = 2.6 + L.rnd() * 0.5, ca = Math.cos(a), sa = Math.sin(a);
+    const g = new THREE.DodecahedronGeometry(1, 1), p = g.attributes.position;
+    for (let i = 0; i < p.count; i++) { const q = 1 + 0.25 * K.nz(p.getX(i) * 2 + k, p.getY(i) * 2, p.getZ(i) * 2); p.setXYZ(i, p.getX(i) * q, p.getY(i) * q, p.getZ(i) * q); }
+    g.scale(0.5 + L.rnd() * 0.3, 0.16 + L.rnd() * 0.06, 0.38 + L.rnd() * 0.2); g.computeVertexNormals();
+    const m = L.mesh(g, slabM, ca * r, hProf(r) + 0.1, CZ + sa * r, { dirt: 0.4, dirtH: 0.4 });
+    m.rotation.set(0, -a + Math.PI / 2, 0); m.rotateX(-(0.4 + L.rnd() * 0.4));
   }
   // ---- spoil: clods and stones thrown out, chips of crystal, and husks of shed shells
   const rockM = K.crust('#6b5f55');
   for (let i = 0; i < 34; i++) {
-    const a = L.rnd() * Math.PI * 2, r = 2.0 + L.rnd() * 1.9, s = 0.07 + L.rnd() * 0.16;
+    const a = L.rnd() * Math.PI * 2, r = 2.4 + L.rnd() * 2.0, s = 0.07 + L.rnd() * 0.16;
     const g = new THREE.DodecahedronGeometry(s, 0); g.scale(1, 0.6, 1);
     L.mesh(g, rockM, Math.cos(a) * r, hProf(r) + s * 0.25, CZ + Math.sin(a) * r, { dirt: 0.3, ry: L.rnd() * 3 });
   }
   for (let i = 0; i < 10; i++) {
-    const a = L.rnd() * Math.PI * 2, r = 2.3 + L.rnd() * 1.4;
+    const a = L.rnd() * Math.PI * 2, r = 2.7 + L.rnd() * 1.4;
     K.shard(null, [Math.cos(a) * r, hProf(r) - 0.03, CZ + Math.sin(a) * r], [L.rnd() - 0.5, 0.5, L.rnd() - 0.5], 0.18 + L.rnd() * 0.14, 0.05, X, { collar: false });
   }
   const huskM = K.chitin('#3b2c24', { irid: 0.5 });
-  for (const [a, r, s] of [[2.3, 2.9, 0.5], [3.9, 2.7, 0.42], [5.4, 3.2, 0.36], [0.9, 3.3, 0.3]]) {
+  for (const [a, r, s] of [[2.3, 3.3, 0.5], [3.9, 3.1, 0.42], [5.4, 3.6, 0.36], [0.9, 3.7, 0.3]]) {
     const g = new THREE.SphereGeometry(1, 24, 12, 0, Math.PI * 2, 0, Math.PI * 0.42); g.scale(s, s * 0.45, s * 0.7);
     const m = L.mesh(g, huskM, Math.cos(a) * r, hProf(r) + 0.02, CZ + Math.sin(a) * r, { dirt: 0.2 }); m.rotation.set(Math.PI * (0.85 + L.rnd() * 0.2), a, 0.3);
   }
@@ -466,10 +471,11 @@ function burrow(L, K) {
 function heroGround(L, K, W) {
   const { THREE } = K;
   const n = 512, tex = L.canvasTex(n, (g) => {
-    const c = n / 2; const gr = g.createRadialGradient(c, c, 0, c, c, c); gr.addColorStop(0, 'rgba(255,255,255,1)'); gr.addColorStop(0.55, 'rgba(255,255,255,0.9)'); gr.addColorStop(1, 'rgba(255,255,255,0)');
+    const c = n / 2; g.fillStyle = '#000'; g.fillRect(0, 0, n, n);
+    const gr = g.createRadialGradient(c, c, 0, c, c, c); gr.addColorStop(0, '#ffffff'); gr.addColorStop(0.22, '#e0e0e0'); gr.addColorStop(0.42, '#303030'); gr.addColorStop(0.5, '#000000'); gr.addColorStop(1, '#000000');
     g.fillStyle = gr; g.fillRect(0, 0, n, n);
   }, false);
-  const m = new THREE.MeshStandardMaterial({ map: L.M.rough('#b8935f').map, color: '#c9a575', alphaMap: tex, transparent: true, roughness: 0.95, depthWrite: false });
+  const m = new THREE.MeshStandardMaterial({ map: L.M.rough('#b39470').map, color: '#ffffff', alphaMap: tex, transparent: true, roughness: 0.95, depthWrite: false });
   const pg = new THREE.PlaneGeometry(W * 2.2, W * 2.2); pg.rotateX(-Math.PI / 2);
   const pm = new THREE.Mesh(pg, m); pm.receiveShadow = true; pm.position.y = 0.0; pm.userData.decal = true; L.getRoot().add(pm);
 }

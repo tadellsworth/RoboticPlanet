@@ -231,7 +231,7 @@ export function mkit(L) {
     if (o.claw) cone(parent, foot, [1, -0.1, s * 0.4], r * 0.9, r * 0.2, o.tipMat || o.mat);
     if (o.shin) {                                                   // an armour plate riding on the outside of the shin
       const A = V(knee), B = V(ank), mid = A.clone().lerp(B, 0.45), len = A.distanceTo(B);
-      const g = segGeo(len * 0.42, r * 0.55, r * 0.95, { lump: 0.08, axisFlat: 0.8, seed: hip[0] * 7 + s });
+      const g = segGeo(len * 0.4, r * 0.45, r * 0.75, { lump: 0.05, axisFlat: 0.8, seed: hip[0] * 7 + s });
       const m = L.mesh(g, o.shin, mid.x, mid.y + r * 0.45, mid.z, { parent });
       m.quaternion.setFromUnitVectors(new THREE.Vector3(1, 0, 0), B.clone().sub(A).normalize());
     }
