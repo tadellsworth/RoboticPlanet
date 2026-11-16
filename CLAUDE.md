@@ -13,6 +13,9 @@ Standing rules from the owner, for every change to the game:
   lights up the button it needs.
 - **Keep the docs current:** README.md (the reference), the how-to-play guide (`how-to-play.html`: edit
   `tools/guide/template.html`, then `python3 tools/guide/build.py`), ART_GUIDE.md for art, IDEAS.md for open questions.
+- **The story is canon in LORE.md** (the owner's lore bible: Ithaca I, the four vanguards, the Murmur, the Silence).
+  Text that touches the setting (briefings, flavor lines, names) follows its tone and vocabulary; don't contradict it,
+  and never state Earth's fate outright. Changes to the canon come from the owner.
 - Commit and push to both the working branch and `main`; never open pull requests.
 - Never put model names in commits or code.
 
