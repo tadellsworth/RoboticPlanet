@@ -101,11 +101,6 @@ or drop.
   builds about 2, all within 5 tiles of its base.
 
 ### Helping players see what's going on
-- **Post-game report:** a timeline of the moments that mattered (first robot, first attack, when Fiber ran out, the
-  deciding battle), where goods were lost, and one "next time, try..." tip drawn from the game's own stats.
-- **Bottleneck finder:** a button (or a line in the Foundry's panel) that follows an idle Foundry back to the cause:
-  "No Crystal: your Tap ran dry 3 minutes ago and none is being built." The rival AI already reasons like this
-  (`aiGathers`, triage); showing it to the player cuts most "why is nothing happening?" moments.
 - **Scout reports on the rival:** a line on what its doctrine is doing now ("massing for a push", "raiding your east
   road"), read from its real state (`P.massFor`, `P.raid`, `P.stormOn`). Drama for little cost.
 - **Replays:** lockstep already makes a game its seed plus its orders. Keep the order list, replay at up to 4x with a
@@ -126,14 +121,10 @@ or drop.
   phone.
 
 ### Ten more
-- **Watch mode:** two computer rivals, doctrines picked, with speed control and the scout reports. It shows off the
-  doctrines and teaches by example (the menu demo already runs one).
 - **Holdout:** a survival mode where rival drop pods land every few minutes in growing waves; score is minutes held.
   Reuses drops, Outposts and the siege rules.
 - **Map editor:** paint terrain and cliffs, place deposits and starts, and share the planet as a short code (maps
   already come from a seed plus settings; a saved edit layer on top).
-- **Photo mode:** hide the interface, free camera, a time-of-day slider, and save the picture. The art is the game's
-  best advert.
 - **Accessibility:** a colour-blind palette for player colours, territory and goods; a larger-text setting (the open
   "text size" question); captions for alert sounds.
 - **Low-end phone setting:** a "battery saver" switch that lowers resolution, drops night lights and caps the frame
