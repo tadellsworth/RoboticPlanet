@@ -745,7 +745,7 @@ function aiThink(p) {
 
   // 4b) Raids on the enemy's supply lines, and answering the enemy's raids on ours.
   if (S.mode !== 'colony') aiCounterRaid(p);
-  if (S.mode !== 'colony' && S.time >= lvl.grace) aiRaid(p, lvl);
+  if (S.mode !== 'colony' && S.time >= lvl.grace) { aiRaid(p, lvl); aiRaidScorch(p); }
 
   // 5) Attack. Domination: a rival about to win on land is attacked at once, at the Outposts and Keeps that hold it.
   // Uplinks: the same for one whose clock is running, at the forts whose land holds its Uplinks (and a band of
@@ -1474,14 +1474,76 @@ function aiRaid(p, lvl) {
   if (!spots.length) return;
   spots.sort((a, c) => c.s - a.s || a.t - c.t);
   const size = st.raidSize || 3;
+  // Every other raid, with a Torch of ours ready to burn (a full tank, in a garrison), on an enemy that farms: the
+  // busiest road near its farmland instead, and the Torch goes along to scorch it (aiRaidTorch, aiRaidScorch).
+  let pick = spots, farmRaid = false;
+  if (!((P.raidN || 0) % 2) && S.bots.some((u) => !u.dead && u.owner === p && BOTS[u.type].flame && u.inside && scorchReady(u))) {
+    const farms = aiFoeFarms(p), near = spots.filter(({ t }) => farms.some((f) => dist2(f.x, f.y, t % S.W, (t / S.W) | 0) <= AI_SCORCH_NEAR * AI_SCORCH_NEAR));
+    if (near.length) { pick = near; farmRaid = true; }
+  }
   // The busiest stretch whose way in doesn't run through the reach of a gun (the army goes round where it can: if the
   // way there still crosses one, there's no way round it); a few tried, from the best down.
-  for (const { t } of spots.slice(0, 4)) {
+  for (const { t } of pick.slice(0, 4)) {
     const i = t % S.W, j = (t / S.W) | 0;
     if (rallyAvailable(p, i, j) < size + (st.raidKeep ?? 2)) return; // keep enough warbots at home (a Raider sends all it can spare)
     if (aiRouteHot(p, i, j)) continue;
     const { sent, rally } = sendToRally(p, i, j, size);
-    if (sent) { rally.raid = true; P.raid = { id: rally.id, until: S.time + RAID_TIME }; }
+    if (sent) {
+      rally.raid = true; P.raid = { id: rally.id, until: S.time + RAID_TIME };
+      P.raidN = (P.raidN || 0) + 1;
+      if (farmRaid) aiRaidTorch(p, rally, i, j);
+    }
+    return;
+  }
+}
+
+/** Built Bio Farms of p's enemies that still have soil to work. */
+function aiFoeFarms(p) { return S.buildings.filter((b) => !b.dead && b.built && b.type === 'farm' && b.owner >= 0 && foes(b.owner, p) && !b.depleted); }
+
+/**
+ * Scorched earth on a raid: a Torch with a full tank on our raid's flag (and not in a fight) burns the nearest patch
+ * of an enemy Bio Farm's soil within AI_SCORCH_REACH tiles of it that no enemy gun covers, one patch each (its whole
+ * tank: doScorch), then refills and comes back to the flag if the raid's still on. A farmland raid (AI_SCORCH_NEAR:
+ * a road that near an enemy farm) takes a Torch along (aiRaidTorch).
+ */
+const AI_SCORCH_NEAR = 6, AI_SCORCH_REACH = 8;
+function aiRaidScorch(p) {
+  const P = S.players[p];
+  if (!P.raid) return;
+  const torches = rallyMembers(P.raid.id).filter((u) => BOTS[u.type].flame && u.task && u.task.type === 'hold' && !u.fight && scorchReady(u));
+  if (!torches.length) return;
+  const farms = aiFoeFarms(p), r2 = BDEFS.farm.radius * BDEFS.farm.radius + 0.3, R = AI_SCORCH_REACH;
+  if (!farms.length) return;
+  const taken = new Set();
+  for (const v of S.bots) if (!v.dead && v.task && v.task.type === 'scorch') taken.add(v.task.tile);
+  for (const u of torches) {
+    const ui = Math.floor(u.x), uj = Math.floor(u.y), zone = S.zone[tIdx(ui, uj)];
+    let best = -1, bd = Infinity;
+    for (let j = uj - R; j <= uj + R; j++) for (let i = ui - R; i <= ui + R; i++) {
+      if (!inMap(i, j)) continue;
+      const t = tIdx(i, j), d = dist2(i, j, ui, uj);
+      if (d >= bd || !S.fert[t] || taken.has(t) || S.zone[t] !== zone || scorchTileWhy(t) || gunCovers(p, t)) continue;
+      if (!farms.some((f) => dist2(f.x, f.y, i, j) <= r2)) continue;
+      bd = d; best = t;
+    }
+    if (best < 0) continue;
+    taken.add(best);
+    u.resume = { type: 'hold', rally: u.task.rally, slot: u.task.slot };
+    u.task = { type: 'scorch', tile: best };
+    u.path = null;
+  }
+}
+
+/** A farmland raid (rally r, at (i, j)): one Torch with a full tank from our nearest garrison goes too, if none is in the squad. */
+function aiRaidTorch(p, r, i, j) {
+  if (rallyMembers(r.id).some((u) => BOTS[u.type].flame)) return;
+  for (const b of rallySources(p, i, j, false, false)) {
+    const k = b.garrison.findIndex((id) => { const u = getE(id); return !!u && BOTS[u.type].flame && scorchReady(u) && freeToGo(u, b); });
+    if (k < 0) continue;
+    const u = getE(b.garrison[k]), slot = rallyMembers(r.id).length;
+    b.garrison.splice(k, 1);
+    u.inside = 0; u.path = null;
+    u.task = { type: 'hold', rally: r.id, slot };
     return;
   }
 }
@@ -1578,6 +1640,11 @@ function aiBomber(p, me) {
   const covered = (x, y) => flak.some((f) => dist2(f.x + 0.5, f.y + 0.5, x, y) <= 49);
   // An enemy gun keeping our robots off our own buildings: bomb it first.
   if (gun && !gun.dead && foes(gun.owner, p) && !covered(gun.x + 0.5, gun.y + 0.5) && !strikeBlocked(p, u, gun) && !orderStrike(p, u, gun)) { P.lastStrike = S.time; return; }
+  // Napalm on the farmland of an enemy that lives on Bio Farm Fuel (aiNapalmSpot), at most every AI_NAPALM_GAP s.
+  if (S.time - (P.napalmAt ?? -999) >= AI_NAPALM_GAP) {
+    const spot = aiNapalmSpot(p, u, covered);
+    if (spot && !orderNapalm(p, u, spot.i, spot.j)) { P.lastStrike = S.time; P.napalmAt = S.time; return; }
+  }
   let best = null, bs = 0;
   const soft = P.soften && S.time < P.soften.until ? P.soften : null; // (the guns holding back an attack: see aiThink, step 5)
   for (const b of S.buildings) {
@@ -1593,6 +1660,34 @@ function aiBomber(p, me) {
     if (sc > bs) { bs = sc; best = v; }
   }
   if (best && !orderStrike(p, u, best)) P.lastStrike = S.time;
+}
+
+/**
+ * Napalm, for the AI: an enemy getting its Fuel mainly from Bio Farms (AI_NAPALM_FARMS or more at work, and no Oil
+ * Pump that isn't dry) has its farmland burned, while our own Fuel is fine (AI_NAPALM_FUEL in hand: a napalm sortie
+ * takes BOMBER.fuel + NAPALM.fuel and its tank). The spot: where the napalm scorches the most soil round one of its
+ * farms (AI_NAPALM_SOIL patches at least), with no Flak Gun covering it and in the bomber's reach; or null.
+ */
+const AI_NAPALM_FARMS = 2, AI_NAPALM_FUEL = 12, AI_NAPALM_SOIL = 3, AI_NAPALM_GAP = 480;
+function aiNapalmSpot(p, u, covered) {
+  if (goodTotal(p, 'fuel') < AI_NAPALM_FUEL) return null;
+  const R = BDEFS.farm.radius;
+  let best = null, bs = -Infinity;
+  for (const Q of S.players) {
+    const q = Q.id;
+    if (q === p || Q.out || !foes(q, p)) continue;
+    const farms = S.buildings.filter((b) => !b.dead && b.built && b.owner === q && b.type === 'farm' && !b.depleted);
+    if (farms.length < AI_NAPALM_FARMS || S.buildings.some((b) => !b.dead && b.built && b.owner === q && b.type === 'pump' && !pumpDry(b))) continue;
+    for (const f of farms) {
+      if (covered(f.x + 0.5, f.y + 0.5)) continue;
+      for (let j = f.y - R + 1; j <= f.y + R - 1; j++) for (let i = f.x - R + 1; i <= f.x + R - 1; i++) {
+        if (!inMap(i, j)) continue;
+        const n = napalmSoil(i, j), sc = n - dist(i, j, f.x, f.y) * 0.1;
+        if (n >= AI_NAPALM_SOIL && sc > bs && !covered(i + 0.5, j + 0.5) && !napalmBlocked(p, u, i, j)) { bs = sc; best = { i, j }; }
+      }
+    }
+  }
+  return best;
 }
 
 /**

@@ -455,6 +455,15 @@ const AIRFIELD_HOLDS = { cargoplane: 1, bomber: 2 }; // planes of each type an A
  * `rearm` s before the next sortie. Flak Guns shoot it down.
  */
 const BOMBER = { ammo: 6, fuel: 3, damage: 14, splash: 1.3, splashBld: 4, botDamage: 8, fall: 0.8, rearm: 25 };
+/**
+ * Napalm, the Vulcan Bomber's other payload (Bomb or Napalm, picked with its target): no bomb and no Ammo, but `fuel`
+ * more Fuel loaded at its Airfield on top of the sortie (BOMBER.fuel and its tank), and it can be aimed at any ground.
+ * Where it lands the tile and the eight round it (everything within `radius` tiles) burn for `burn` s: enemy robots
+ * standing in it take `bot` damage a second and enemy buildings `bld` a second (a little: forts no lower than
+ * MISSILE_FLOOR), crops and stalk groves there burn, and every patch of fertile soil in it is scorched for good: no
+ * Bio Farm grows anything there again (see scorchSoil). The fire is worked out every `tick` s.
+ */
+const NAPALM = { fuel: 3, radius: 1.5, burn: 6, bot: 0.6, bld: 0.6, tick: 0.5 };
 /*
  * Influence. Every finished building but the military ones holds CIV_CLAIM tiles round itself (the military
  * ones claim their wider ring, BDEFS terr), so a colony's land grows as it builds. You can build on any
@@ -1040,8 +1049,12 @@ const BULWARK = { shield: 50, regen: 4, wait: 2.5, down: 6, reboot: 0.35, arc: 1
  * radians either side of its aim: `bot` damage to each enemy robot in it and `bld` to the building it's burning
  * (`fort` times that to defences and Walls/Gates). Its tank holds `tank` seconds of fire; a Fuel refills `perFuel`
  * seconds, from its owner's Command Base, a Depot or a Fuel Station.
+ * Scorch the earth (its panel): a Torch whose tank is at least `scorchMin` full (nearly full: 90%, 10.8 of its 12 s)
+ * walks to a patch of fertile soil, stands within `scorchReach` tiles of it and sprays its whole tank into it over
+ * `scorch` s, scorching it for good (scorchSoil, as napalm does); then it goes to refill. A group given the order
+ * takes a patch each, the tapped one and the nearest round it within `scorchSpread` tiles.
  */
-const TORCH = { cone: 0.5, tick: 0.2, bot: 0.35, bld: 0.8, fort: 1.6, tank: 12, perFuel: 12 };
+const TORCH = { cone: 0.5, tick: 0.2, bot: 0.35, bld: 0.8, fort: 1.6, tank: 12, perFuel: 12, scorch: 3, scorchMin: 0.9, scorchReach: 1.3, scorchSpread: 3 };
 /** Ramps are planned in Paths (with roads), not from the build menu. */
 
 const INPUT_CAP = 3;   // how many of each input a production building stockpiles (its def.hopper instead, if it has one)

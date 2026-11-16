@@ -1845,6 +1845,8 @@ function gatherReach(i, j, type) {
 
 /** Is tile t still scorched by a nuclear blast (nothing can be built or paved there)? */
 function scorched(t) { return !!(S.scorch && S.scorch[t] > S.time); }
+/** Was tile t fertile soil, burned for good by napalm or a Torch (S.burnt: see scorchSoil)? Nothing grows there again. */
+function burntSoil(t) { return !!(S.burnt && S.burnt[t]); }
 
 /** Is the resource on tile t a rich deposit (much more than usual, out towards the frontier)? */
 function richRes(t) {
@@ -1887,7 +1889,7 @@ function newGame(opts) {
     v: 1, mode, seed, W, H, settings, difficulty: diff, time: 0, nextId: 1, winner: -1, milestone: 0,
     terrain: m.terrain, res: m.res, amt: m.amt, grow: m.grow, elev: m.elev, ramp: m.ramp, fert: m.fert, choke: m.choke,
     lava: m.lava || null, ford: m.ford || null, tidal: m.tidal || null, fault: m.fault || null,
-    road: new Uint8Array(W * H), rail: new Uint8Array(W * H), pave: new Uint8Array(W * H), wear: new Uint16Array(W * H), paveMark: new Uint8Array(W * H), oneRoad: true, roadVer: 0, lights: {}, over: {}, scorch: {},
+    road: new Uint8Array(W * H), rail: new Uint8Array(W * H), pave: new Uint8Array(W * H), wear: new Uint16Array(W * H), paveMark: new Uint8Array(W * H), oneRoad: true, roadVer: 0, lights: {}, over: {}, scorch: {}, burnt: {}, fires: [],
     plan: new Uint8Array(W * H), planVer: 0, paveRes: {}, owe: new Uint8Array(W * H), railPlan: new Uint8Array(W * H), planQ: [], junPlan: {},
     pipe: new Uint8Array(W * H), pipePlan: new Uint8Array(W * H), pipeVer: 0,
     owner: new Int8Array(W * H).fill(-1), wown: new Int8Array(W * H).fill(-1),
@@ -4148,6 +4150,8 @@ function deserializeGame(json) {
   o.lights = o.lights || {};
   o.over = o.over || {};
   o.scorch = o.scorch || {};
+  o.burnt = o.burnt && typeof o.burnt === 'object' && !Array.isArray(o.burnt) ? o.burnt : {}; // farmland burned for good (saves from before napalm: none)
+  o.fires = Array.isArray(o.fires) ? o.fires : [];
   o.roadVer = (o.roadVer || 0) + 1;
   // Saves from before roads were paved by workers have no planned roads.
   if (!o.plan) o.plan = new Array(o.W * o.H).fill(0);

@@ -172,6 +172,15 @@ lands on a Command Base destroys it; Brutes break through Walls slowly; Road Tra
   leave both at 10). Open: should a deck be a target for warbots' Attack and the Army panel too (today they go for an
   end tower)? And the rival never bombs a Viaduct (`AI_BOMB_VALUE` has none): on Sky islands that could break a stall.
 
+- **Napalm and scorched earth** (Nov 2026). A Vulcan Bomber can carry Napalm instead of its bomb (3 more Fuel, no
+  Ammo, any ground in reach): the tile and the eight round it burn for 6 s, and fertile soil there is scorched for good.
+  A Torch's Scorch the earth burns one patch with its whole tank (it needs 90% of a tank, then refills). The rival
+  napalms a colony living on Bio Farm Fuel (two farms or more, no Oil Pump) every eight minutes at most, and every other
+  raid takes a Torch to the farmland. Open: should burned soil ever recover (it doesn't: the owner asked for permanent),
+  or a Grove Planter's stalk groves be scorchable too (napalm burns the groves but the ground still grows them)? Should
+  the rival notice its own farms burning and turn to oil, or put Flak over its fields? Napalm on a Murmur nest or the
+  Bloom (the Torches' first job in the lore) could be a later use.
+
 ## Lore expansions (held for later)
 
 From the lore bible (LORE.md). The owner's decisions (Nov 2026): the Silence stays 31 years, the Sponsors stay faceless,

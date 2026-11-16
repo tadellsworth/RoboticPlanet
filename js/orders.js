@@ -264,6 +264,10 @@ const ORDERS = {
   airdrop(p, uid, kind, i, j) { const u = ownU(p, uid, 'air'); return u && (kind === 'outpost' || BOTS[kind]) ? orderAirdrop(p, u, kind, i, j, BOTS[u.type].seats) : 'That plane is gone.'; },
   /** A Vulcan Bomber (uid) sent at a target: a building or a robot (tid); (ai, aj): a tile of the deck of the Viaduct tid is an end of. */
   strike(p, uid, tid, ai, aj) { const u = ownU(p, uid, 'bomber'), t = liveE(tid); return u && t ? orderStrike(p, u, t, ai, aj) : 'That target is gone.'; },
+  /** A Vulcan Bomber (uid) sent to drop napalm on the ground at tile (i, j). '' or why not. */
+  napalm(p, uid, i, j) { const u = ownU(p, uid, 'bomber'); return u ? orderNapalm(p, u, i, j) : 'That bomber is gone.'; },
+  /** Scorch the earth: the Torches among `ids` each burn a patch of fertile soil at or round tile (i, j). { n, why } */
+  scorch(p, ids, i, j) { return orderScorch(p, ownIds(p, ids), i, j); },
   bombard(p, ids, tid) { const t = liveB(tid); return t ? orderBombard(p, ownIds(p, ids), t) : 0; },
   park(p, ids, i, j) { return orderPark(p, ownIds(p, ids), i, j); },
   stance(p, uid, hold) {
