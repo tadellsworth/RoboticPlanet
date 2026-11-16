@@ -973,7 +973,8 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   spread apart), a Minigun Nest or Bunker by its fort nearest the rival every six minutes from about ten minutes in (up to
   `front`, through `P.defWant`), and with chance `walls` (decided once a game from the seed) an arc of Wall seven tiles
   out on the side facing the rival, two pieces every 30 s from nine minutes, up to 16 (`aiFortWalls`); Easy halves it all.
-  Opening fixes: a Harvester down to its last couple of stalks doesn't count as cutting, and with none cutting and none
+  Opening fixes: a Harvester down to its last couple of stalks it can cut (ripe, on its own side, out of enemy guns:
+  `aiGathers`) doesn't count as cutting, and with none cutting and none
   on the way a new one goes up past the usual limit on sites (Alloy-starved sites could otherwise hold every slot while
   the Smelters wait for Fiber); and until its first Bot Foundry has its Alloy, the Ammo Plant and (with Chips enough for
   the Foundry) the Chip Fab rest, so they don't eat the Alloy the Foundry needs (`forFoundry`). With no stalks left to
