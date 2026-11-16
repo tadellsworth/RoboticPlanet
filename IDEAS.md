@@ -27,14 +27,14 @@ Still open: a neutral, shared exchange the rivals compete over; contracts for Ch
   moving the Port and the trade above that line would let a passive rival on an island map, or short of Crystal, still
   grow. It changes the early missions' rivals, so their mission runs would want checking.
 
-- **Does the south pair have an edge on Long Haul 2v2?** (to look into) In four computer-only 2 vs 2 games (seeds
-  1 to 4, every rival Balanced) the south pair (players 0 and 1) won three, at 37, 19 and 25 minutes, and was ahead in
-  the fourth when it stopped at 45 minutes. The map is the same for all four colonies, tile for tile (ground, deposits,
-  heights, soil and roads checked against each tile's three twins on all four seeds), and the Trade Posts come in
-  half-turn pairs, fair between the teams. So if the lean is real it comes from the order things happen in, not the
-  map: players 0 and 1 think first each tick, and their robots, made first, act first. Next: run the same games on
-  Crossroads and Twin Valleys 2 vs 2 (west pair against east pair, also players 0 and 1 against 2 and 3), and a few
-  Long Haul games with the seats swapped, to see whether the first pair wins there too.
+- **The first pair wins most 2 vs 2 games, on every map** (to decide). Computer-only 2 vs 2 games, every rival
+  Balanced and none held back: players 0 and 1 won 10 of 12 (Long Haul 2v2 4 of 4, Twin Valleys 3 of 4, Crossroads 3
+  of 4); by chance on fair maps, about a 2% outcome. The maps are fair (Long Haul 2v2 checked tile for tile against
+  each tile's twins, its Trade Posts in fair pairs), so it's the order of play: players 0 and 1 think first each tick
+  (only one rival AI thinks in a step, ties going to the lowest number), and their robots, made first, move and shoot
+  first. In single player that quietly helps the person's side (player 0 and the ally, player 1). A fix would take turns
+  (start each tick's robots and AIs from a different player, or run them forward one tick and backward the next); it
+  changes every game's course, so seed-pinned tests would need new seeds.
 
 - **More map shapes** (Rift, Ring valley, Oases, Crossroads and Lakes are now in the game; each would be a
   `SHAPE_PRESETS` entry with its own step in `shapeExtras`, mirrored for fairness like the others):
