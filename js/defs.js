@@ -899,9 +899,9 @@ const BDEFS = {
     cost: { fiber: 2, cement: 2 }, staff: true, crew: 'agribot', farm: true, radius: 3, out: { fuel: 6 }, armor: 8, buildTime: 9,
   },
   pump: {
-    name: 'Oil Pump', desc: 'Built on top of an oil seep. Its worker pumps Crude until the seep runs dry, or until you have 30 (its stock limit).',
+    name: 'Oil Pump', desc: 'Built on top of an oil seep. Its worker pumps Crude until the seep runs dry (set a stock limit in its panel to stop it sooner).',
     cost: { cement: 2, alloy: 2 }, staff: true, pump: true, inp: {}, make: { crude: 1 }, out: { crude: 6 },
-    work: 6, armor: 8, buildTime: 10, limit: 30,
+    work: 6, armor: 8, buildTime: 10, // (no stock limit: it pumps until the seep runs dry, unless you set one)
   },
   refinery: {
     name: 'Refinery', desc: 'Refines Crude into Fuel, one for one. Stops at 30 Fuel unless you change its stock limit. Keep it out of harm\'s way: destroyed, it explodes, the fuller the bigger, hurting everything round it.',
