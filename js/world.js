@@ -3911,13 +3911,15 @@ function narrate(p, key, x, y, every, text) {
   postMsg(p, text || NARRATOR[key], x, y, 'narr');
 }
 /**
- * Computer player p, in its doctrine's voice, to player `to` (its enemy): what = 'attack', 'missile' or 'surrender',
- * at most once every `every` seconds for each of them. The line is picked by the time and the players, not the RNG.
+ * Computer player p, in its doctrine's voice, to player `to` (its enemy): what = 'attack', 'missile', 'nuke' (a
+ * nuclear launch: the Missile lines, under a key of its own, so an earlier Missile's line doesn't silence it) or
+ * 'surrender', at most once every `every` seconds for each of them (without `every`: once a game). The line is picked
+ * by the time and the players, not the RNG.
  */
 function doctrineVoice(p, to, what, x, y, every) {
   const P = S && S.players[p];
   if (!P || !P.ai || S.mode === 'colony' || to < 0 || !foes(p, to) || !isDoctrine(P.style)) return;
-  const D = PERSONALITIES[P.style], lines = D.voice && D.voice[what];
+  const D = PERSONALITIES[P.style], lines = D.voice && D.voice[what === 'nuke' ? 'missile' : what];
   if (!lines || !lines.length || !loreDue(`v.${what}.${p}.${to}`, every)) return;
   const line = lines[Math.floor(hash2(p * 7 + to, Math.floor(S.time), what.length + (S.seed | 0)) * lines.length)].replace('{day}', wardenDay(S.time));
   postMsg(to, `${callsign(p)} (${D.name}): \u201c${line}\u201d`, x, y, 'voice');
@@ -4157,6 +4159,15 @@ function deserializeGame(json) {
   for (const P of o.players) { P.made = P.made || {}; P.madeBots = P.madeBots || {}; P.stats.outposts = P.stats.outposts || 0; P.stats.startBots = P.stats.startBots ?? 18; }
   // Each computer player keeps its own doctrine (saved as `style`); one the game doesn't know (a damaged file) plays as a Steward.
   for (const P of o.players) if (P.style !== undefined && !isDoctrine(P.style)) P.style = 'balanced';
+  // A save from before the narrator (no S.lore): what it would already have said, so a game loaded an hour in doesn't
+  // announce its "first" road or Uplink, or the first nightfall, all over again. (Text only: see loreDue.)
+  if (!o.lore || typeof o.lore !== 'object') {
+    const L = (o.lore = {}), t = o.time || 0, said = new Set();
+    for (let k = 0; k < o.W * o.H; k++) if (o.road[k] && o.wown && o.wown[k] >= 0) said.add(o.wown[k]);
+    for (const p of said) L[`n.road.${p}`] = t;
+    for (const u of o.uplinks || []) if (u.owner >= 0) L[`n.uplink.${u.owner}`] = t;
+    if (t > 500) for (const P of o.players) L[`n.night.${P.id}`] = t; // (the first nightfall comes at about 8½ minutes)
+  }
   o.fx = []; o.decals = []; o.msgs = []; o.dirtyTiles = [];
   o.rallies = o.rallies || [];
   o.loot = o.loot || [];

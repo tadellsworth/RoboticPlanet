@@ -895,7 +895,7 @@ const MISSIONS = [
 
   // Chapter 6, First Contact. The Murmur's Burrows (type 'nest'), a rival to practise on, a border war and a chokepoint to hold.
   {
-    id: 'bughunt', name: 'Bug Hunt', chapter: 'First Contact',
+    id: 'bughunt', name: 'The Murmur', chapter: 'First Contact', // (id kept: saved progress goes by it)
     brief: 'The Murmur breed in Burrows under the swamp and raid your colony. Arm up and clear the Burrows before the packs grow.',
     intro: [
       'The <b>Murmur</b> live here: their Burrows send packs at your colony from about 4 minutes in.',
@@ -932,7 +932,7 @@ const MISSIONS = [
     brief: 'Your first rival: a quiet colony with two empty Outposts. Learn to command warbots, then take its Command Base.',
     intro: [
       '<b>Versus</b>: another colony shares this moon. Capture its Command Base and the planet is yours.',
-      'This rival only defends itself. Red is theirs, cyan is yours. You start with 4 warbots.',
+      'This rival only defends itself. Red is theirs, blue is yours. You start with 4 warbots.',
       'Army (<kbd>Q</kbd>) → Attack, then tap an enemy building or robot. Or tap a building → Send warbots (Q).',
       'With a mouse: drag a box round warbots and right-click; Ctrl+1-9 saves a group. <kbd>C</kbd> calls them home.',
       'Each Ammo reloads 5 shots; the Ammo Plant keeps your Command Base stocked.',

@@ -764,21 +764,29 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   (`attackAvailable(p, t, 'every')`).
   Once it's ready to march it orders a Bulwark for every five warbots (two, three against a dug-in rival) and a Torch
   for every four (three, four), only with Fuel for Torches. The **Salvager** (`raider`): raids three times as often from early on,
-  keeping none back: its band of three (`raidSize`) goes as soon as it has three to send (`raidKeep` 0). The **Herald** (`rusher`): attacks early with a fast-growing army. The **Architect** (`tycoon`): its bots work 15%
+  keeping none back: its band of three (`raidSize`) goes as soon as it has three to send (`raidKeep` 0). The **Herald** (`rusher`): the fastest-growing army, raids now and then, few turrets. The **Architect** (`tycoon`): its bots work 15%
   faster (`econ`), it builds extra Smelters and Chip Fabs and goes for Missile Silos (up to three) once its Bot Foundry
   runs. The new-game screen's **Rival doctrine** chips set every computer player's (`UI.menu.style`: 0 Random, then
   `PERSONALITY_ORDER`); with three or four players **Each rival** (a dropdown per colour) sets each computer player's own
-  (`UI.menu.styles`, null: as the chips), and in multiplayer the host picks each computer place's in the lobby (sent round
-  with the settings as `styles`, so every device deals the same). `newGame` takes `styles`, one per computer player in
-  player order, over `style` (all of them); Random deals one no other computer player has, picked from the seed after the
-  named ones are taken out. Saves keep each player's `style`. Each doctrine's `quote`, `play` (what it builds first, when
-  and how it attacks, how it defends) and `weak` are the setup's in-depth description (`docInfo`/`docHTML`): point at a
-  doctrine, focus it or tap it, and the line under the doctrines says how it plays (sized to the longest of them, so
-  nothing moves). Missions use the Steward unless they name one (Hold the Line's Herald, Siege Breakers' Warden). The
+  (`UI.menu.styles`, by player slot 0 to 3, null: as the chips), and in multiplayer the host picks each computer place's
+  in the lobby (sent round with the settings as `styles`, by player slot, so a choice stays with its colony when people
+  come and go or the teams change, and every device deals the same; the lobby lists exactly the places the game will
+  have, `mpCpuSlots`: people away at the start get none). `newGame` takes `styles`, one per computer player in player
+  order (`mpOnStart` turns the lobby's by-slot list into that), over `style` (all of them); Random deals one no other
+  computer player has, picked from the seed after the named ones are taken out. Saves keep each player's `style`. Each
+  doctrine's `quote`, `play` (what it builds first, when and how it attacks, how it defends: what headless games on
+  Normal show, not the earliest the code allows, since a rival only attacks what it outnumbers) and `weak` are the
+  setup's in-depth description (`docInfo`/`docHTML`). With a mouse, pointing at a doctrine (or focusing it) shows it in
+  the line under the doctrines, which keeps the height of the longest so nothing moves. On a touch screen (`canHover`)
+  the line is a sentence (`docShortHTML`) with **How it plays** until a tap opens the whole of it, and nothing is held for
+  it; while the rivals have doctrines of their own, a first tap on a chip only shows it (`UI.docPeek`, a dashed chip) and
+  a second gives it to them all. The lobby's line (`mpDocNote`) is shorter still, a few words per doctrine (`tag`), with
+  How it plays for the rest: with a mouse it is always there and sized to the longest; on a touch screen it opens with a
+  tap on a row and closes with another. Missions use the Steward unless they name one (Hold the Line's Herald, Siege Breakers' Warden). The
   briefing (`doctrineLines`, multiplayer too), the rival Command Base's panel and the Boosts menu name it, as
   "Warden (turtle)" (`docLabel`).
 - **The story** (LORE.md is canon; text and presentation only, nothing in it changes a rule). **Callsigns**
-  (`CALLSIGNS`, `callsign(p, colour)`): players are named COBALT (player 0, cyan), VERMILION (red), VIRIDIAN (green) and
+  (`CALLSIGNS`, `callsign(p, colour)`): players are named COBALT (player 0, blue), VERMILION (red), VIRIDIAN (green) and
   TYRIAN (purple) wherever the game used to say "the Red rival" (`playerName`: 'You', a person's name in multiplayer,
   'VERMILION (ally)' for a team-mate, 'Murmur' for the Colony wildlife slot), with the colour where it helps find them
   ("VERMILION (red) to the north"); the setup's Each rival dropdowns and the lobby's computer places are named so too.
@@ -786,21 +794,26 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   of kind `narr` (italic, a grey edge): the first road (`layRoad`), the first nightfall (`nightfallLine`, UI-side, with
   the day/night cycle on), the first Uplink taken, a rival Command Base captured (or one changing hands between two
   others), and the landing line on the briefing card (`landingLog`: "Terrafall complete... Landing site: the Rust.")
-  and the end screen's last line (`#o-log`). **Doctrine voices** (`PERSONALITIES[k].voice`, `doctrineVoice(p, to, what)`):
-  a computer rival speaks to the colony it hits, under its callsign, as toasts of kind `voice`: when its warbots or
-  raiders hit you (at most every 4 minutes each), when it fires a Missile at you (every 90 s) or a nuke your way, and
-  when it surrenders; the Warden counts the days (`wardenDay`). Lines are picked by `hash2` of the time and the
+  and the end screen's last line (`#o-log`: the region secured, or lost on the Uplinks, "another colony speaks for Ithaca
+  I", or on land, "settlement priority lost"), and the *Wren*'s arrival, each visit. **Doctrine voices** (`PERSONALITIES[k].voice`, `doctrineVoice(p, to, what)`):
+  a computer rival speaks to the colony it hits, under its callsign, as toasts of kind `voice`, after the alert it goes
+  with: when its warbots or raiders hit you (at most every 4 minutes each), when it fires a Missile at you (every 90 s)
+  or a nuke your way (every launch: a key of its own), and when it surrenders; the Warden counts the days (`wardenDay`). Lines are picked by `hash2` of the time and the
   players, never the game's RNG; what has been said is kept in `S.lore` (saved with the game, left out of `hashState`),
-  so nothing here can split a multiplayer game. Never in missions (`loreDue`), which keep their own texts. A story
-  toast goes in under a newer warning (wide screens show only the newest) and is the first pushed out.
+  so nothing here can split a multiplayer game. A save from before the narrator gets `S.lore` filled in on loading (the
+  first road, Uplink and nightfall already said), the first nightfall is only said in the first game day, and a
+  multiplayer resync keeps this device's own nightfall key. Never in missions (`loreDue`), which keep their own texts
+  (the *Wren*'s arrival line included). A story toast never counts towards the toast limit or pushes a warning out: it
+  goes in under a newer warning (a phone on its side shows only the newest) and gives way only to a newer story line,
+  the lines of one moment (a surrender's last words and the narrator's line after them) staying together.
   **Regions** (`BIOMES[k].region`, `regionName`): the Rust, Greenreach, the White, Emberwood, the Long Grass, the Sump,
-  Cinderlands, Penelope (the moon) and the Bloom, as flavour only (briefing, landing message, loading lines): the
+  Cinderlands and the Bloom, regions of Ithaca I, and Penelope, its moon (Lunar), as flavour only (briefing, landing message, loading lines): the
   setup keeps the plain biome names. **Panel flavour** (`FLAVOR`, `flavorLine`): one quiet italic line at the foot of
   every building's and robot's panel (and the Trade Post's and Uplink's), below every button; the Command Base's is its
   Arrival clock (`ARRIVAL_CLOCK`), shown under its name. **Loading lines** (`SPLASH_LINES`, picked at first paint by an
   inline script in `index.html`, which keeps its own copy): one under the splash bar, which now stays about 2 s.
 - **The Murmur** (players' name for the wildlife: Colony; `WILD` in `js/defs.js`, `updateNest`/`updateCritter` in `js/sim.js`; the
-  new-game option "The Murmur", on by default; in missions only where one switches it on, `wildlife: true`, as Bug Hunt
+  new-game option "The Murmur", on by default; in missions only where one switches it on, `wildlife: true`, as The Murmur (id `bughunt`)
   does). **None on a silent biome** (`BIOMES.lunar.silent`, `murmurGround`): on Lunar, Penelope the moon, `newGame`
   never sets `S.wildlife`, a mission's `wildlife` is ignored and `placeNests` places nothing, so there are no Burrows and
   no raids in any mode; the setup's switch is off and greyed there (the saved setting is kept for other biomes), and an
@@ -827,7 +840,8 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   `METEOR_HITS` strikes on each colony's share (mirrored with two players, turned with three: `meteorPlan`), each
   cratering roads (re-planned at once if the Cement allows), denting buildings and bots (never below 1 armor) and
   leaving a rich Ore or Crystal deposit (Uranium sometimes in a Nuclear race); it ends "Ringfall over. Fresh Ore and
-  Crystal in the strike zones. Listen for the Murmur." (without the Murmur on Lunar). **Solar flare**: battery drain ×
+  Crystal in the strike zones. Listen for the Murmur." (its last words only where the Murmur are in the game: Colony
+  with them on, never on Lunar). **Solar flare**: battery drain ×
   `FLARE_DRAIN` (2). **The *Wren*** (the trader ship, type `'trader'`; its card shows the name in italics,
   `EVENTS.trader.html`, and one of its 31-year-old cargo lists, `WREN_CARGO` by the event's number): 75 s; offers the raw good that runs out (Ore, Crystal, Stone or Crude: the one
   lowest in stock plus deposits left on your land, `TRADE_GET`/`TRADE_LEFT`) for a good you hold well over
@@ -1087,7 +1101,8 @@ in any places left over. Everyone sees the whole map.
 five-character room code, and **Share** sends it (with a link that opens the game straight to it). The others type
 their name and the code and tap **Join**. The host can **Change settings** (the usual new-game screen: map type,
 biome, size, rules, how many colonies in all and how hard the computer rivals are), picks each computer place's
-**doctrine** from its row in the lobby (pointing at a row, or tapping it, says how that doctrine plays) and taps
+**doctrine** from its row in the lobby (pointing at a row, or tapping it, says in a line how that doctrine plays, and
+How it plays opens the whole of it) and taps
 **Start game**. In the game:
 
 - The menu button (top right) opens the menu without stopping the game; **Pause the game for everyone** pauses all

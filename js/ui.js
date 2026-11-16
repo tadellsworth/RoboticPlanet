@@ -8,7 +8,7 @@ const SETTINGS_V = 3;
 
 const UI = {
   inGame: false, paused: false, speed: 1, overShown: false,
-  menu: { mode: 'versus', diff: 'normal', seed: randomSeed(), size: { ...DEFAULT_SIZE }, rough: DEFAULT_ROUGH, rich: DEFAULT_RICH, shape: 0, style: 1, styles: [null, null, null], nuke: 1, events: 0, wild: 1, unlimited: 0, victory: 'capture' },
+  menu: { mode: 'versus', diff: 'normal', seed: randomSeed(), size: { ...DEFAULT_SIZE }, rough: DEFAULT_ROUGH, rich: DEFAULT_RICH, shape: 0, style: 1, styles: [null, null, null, null], nuke: 1, events: 0, wild: 1, unlimited: 0, victory: 'capture' },
   sheetKind: null, sheetFor: 0, sheetT: 0, hudT: 0,
   icons: {}, attackN: 0, demolishArm: 0, lastPaint: null, placeType: null,
   goodEls: {}, lastGoods: {}, objCollapsed: false, selBot: 0,
@@ -281,8 +281,10 @@ function checkMenuSettings() {
   m.mode = m.mode === 'colony' ? 'colony' : 'versus';
   m.players = ok(m.players, 5) && m.players >= 2 ? m.players : 2;
   m.style = ok(m.style, PERSONALITY_ORDER.length + 1) ? m.style : 1;
-  // Each computer player's own doctrine (null: as the Rival doctrine chips say), for players 1 to 3.
-  m.styles = [0, 1, 2].map((k) => (Array.isArray(m.styles) && ok(m.styles[k], PERSONALITY_ORDER.length + 1) ? m.styles[k] : null));
+  // Each computer player's own doctrine (null: as the Rival doctrine chips say), by player slot 0 to 3. (A list of three
+  // is how an earlier build kept them, for players 1 to 3.)
+  const st = Array.isArray(m.styles) ? (m.styles.length === 3 ? [null, ...m.styles] : m.styles) : [];
+  m.styles = [0, 1, 2, 3].map((p) => (ok(st[p], PERSONALITY_ORDER.length + 1) ? st[p] : null));
   for (const k of ['nuke', 'events', 'wild', 'unlimited', 'shapeRnd', 'biomeRnd']) m[k] = m[k] ? 1 : 0;
 }
 
@@ -299,35 +301,52 @@ const menuSize = () => UI.menu.size[UI.menu.mode] ?? DEFAULT_SIZE[UI.menu.mode];
 const menuStyle = () => Math.min(PERSONALITY_ORDER.length, UI.menu.style || 0);
 /**
  * Doctrines on the menu are numbers: 0 Random, then 1 to 5 in PERSONALITY_ORDER (the Steward first). UI.menu.style is
- * the Rival doctrine chips' (every computer player's), UI.menu.styles[k] the k-th computer player's own (null: the
- * chips'), set in Custom Game with three or four players and by the host in the multiplayer lobby.
+ * the Rival doctrine chips' (every computer player's); UI.menu.styles[p] is player p's own (null: the chips'), kept by
+ * colony (player slot, so by colour): in Custom Game the computer plays players 1 to 3 (Each rival, three or four
+ * players); in the multiplayer lobby the host picks one for each place the computer takes, which in a team game can be
+ * any of the four. A choice stays with its colony when the seating changes.
  */
 const docKeyOf = (v) => (v >= 1 && v <= PERSONALITY_ORDER.length ? PERSONALITY_ORDER[v - 1] : 'random');
 const docNameOf = (v) => (v >= 1 && v <= PERSONALITY_ORDER.length ? PERSONALITIES[PERSONALITY_ORDER[v - 1]].name : 'Random');
-/** The k-th computer player's doctrine (0 Random, 1 to 5). */
-function menuSeatStyle(k) { const v = (UI.menu.styles || [])[k]; return v === null || v === undefined ? menuStyle() : v; }
-/** How many computer players the setup makes (a doctrine each): in multiplayer, the places nobody in the lobby takes. */
-function menuSeats() {
-  if (UI.menu.mode === 'colony') return 0;
-  const people = UI.mpSetup && typeof NET !== 'undefined' ? NET.seats.filter((s) => s.on).length : 1;
-  return Math.max(1, menuPlayers() - people);
+/** Player p's doctrine (0 Random, 1 to 5). */
+function menuSlotStyle(p) { const v = (UI.menu.styles || [])[p]; return v === null || v === undefined ? menuStyle() : v; }
+/**
+ * The places the computer plays, by player slot (a doctrine each): in Custom Game players 1 to 3; in multiplayer the
+ * ones nobody in the lobby takes, as the lobby lists them and the game seats them (mpCpuSlots).
+ */
+function menuCpuSlots() {
+  if (UI.menu.mode === 'colony') return [];
+  if (UI.mpSetup && typeof mpCpuSlots === 'function') return mpCpuSlots(menuPlayers(), menuTeams() ? mpTeamSeats() : null);
+  return Array.from({ length: menuPlayers() - 1 }, (_, k) => k + 1);
 }
 /** The doctrine every computer player has (0 to 5), or -1 when they differ. */
 function menuDocAll() {
-  const n = Math.max(1, menuSeats()), v = menuSeatStyle(0);
-  for (let k = 1; k < n; k++) if (menuSeatStyle(k) !== v) return -1;
-  return v;
+  const slots = menuCpuSlots();
+  if (!slots.length) return menuStyle();
+  const v = menuSlotStyle(slots[0]);
+  return slots.every((p) => menuSlotStyle(p) === v) ? v : -1;
 }
-/** The k-th computer player, as the setup names it: its callsign ('VERMILION'), or 'Your ally VERMILION' in a team game. */
-function seatName(k) { return menuTeams() && k === 0 ? `Your ally ${callsign(1)}` : callsign(k + 1); }
-/** The doctrines for newGame: one for each computer player, in player order. */
-function menuStyleKeys() { return [0, 1, 2].map((k) => docKeyOf(menuSeatStyle(k))); }
-/** A doctrine's description, for the line under the doctrine chips: the name in bold, then how it plays. */
+/** Player p (a computer player), as the setup names it: its callsign ('VERMILION'), or 'Your ally VERMILION' in a team game. */
+function seatName(p) { return menuTeams() && !UI.mpSetup && p === 1 ? `Your ally ${callsign(1)}` : callsign(p); }
+/** The doctrines for newGame: one for each computer player, in player order (Custom Game: players 1 to 3). */
+function menuStyleKeys() { return [1, 2, 3].map((p) => docKeyOf(menuSlotStyle(p))); }
+/** A doctrine's description, in depth: the name in bold, its voice, how it plays and its weak spot. */
 function docHTML(k) {
   if (k === 'random') return `<b>Random:</b> ${DOCTRINE_RANDOM}`;
   const P = PERSONALITIES[isDoctrine(k) ? k : 'balanced'];
-  return `<b>${docLabel(k)}:</b> <i>\u201c${P.quote}\u201d</i> ${P.play} <b>Weak spot:</b> ${P.weak}`;
+  return `<b>${docLabel(k)}:</b> <i>“${P.quote}”</i> ${P.play} <b>Weak spot:</b> ${P.weak}`;
 }
+/** ...and in a sentence: the name and what it does ("Warden (turtle): it walls its base in ..."). */
+function docShortHTML(k) {
+  if (k === 'random') return `<b>Random:</b> ${DOCTRINE_RANDOM_TAG}, picked from the planet's seed.`;
+  const P = PERSONALITIES[isDoctrine(k) ? k : 'balanced'];
+  return `<b>${docLabel(k)}:</b> it ${P.desc}.`;
+}
+/**
+ * Can this device point at things (a mouse or trackpad)? Then the doctrine lines follow the pointer and keep their
+ * height; on a touch screen they follow taps, show a short line first and grow only when asked (How it plays).
+ */
+function canHover() { return !!(window.matchMedia && matchMedia('(hover: hover) and (pointer: fine)').matches); }
 const biomeName = (k) => (BIOMES[BIOME_ORDER[k]] || BIOMES[BIOME_ORDER[0]]).name;
 /** Can the menu's biome have the Murmur? Not Lunar (Random might still pick it: then there are none). */
 function menuMurmur() { return UI.menu.biomeRnd || murmurGround(BIOME_ORDER[UI.menu.biome || 0]); }
@@ -378,10 +397,10 @@ function menuSummary() {
   const extra = [];
   if (!colony) {
     // The rivals' doctrines, unless every one is a Steward (the usual).
-    const all = menuDocAll(), n = menuSeats();
+    const all = menuDocAll(), slots = menuCpuSlots(), n = slots.length;
     if (all === 0) extra.push(n > 1 ? 'Random doctrines' : 'Random doctrine');
     else if (all > 1) extra.push(`${docNameOf(all)} rival${n > 1 ? 's' : ''}`);
-    else if (all < 0) extra.push('Doctrines: ' + Array.from({ length: n }, (_, k) => docNameOf(menuSeatStyle(k))).join(', '));
+    else if (all < 0) extra.push((innerWidth < 600 ? '' : 'Doctrines: ') + slots.map((p) => docNameOf(menuSlotStyle(p))).join(', ')); // (a phone: the names alone, so they fit)
   }
   if (m.rough !== DEFAULT_ROUGH) extra.push(TERRAIN_PRESETS[m.rough].name + ' terrain');
   if (m.rich !== DEFAULT_RICH) extra.push(RESOURCE_PRESETS[m.rich].name + ' resources');
@@ -440,15 +459,26 @@ function initMenu() {
   choice('m-rich', RESOURCE_PRESETS.map((p) => p.name), () => UI.menu.rich, (v) => { UI.menu.rich = v; }, resourceInfo, true);
   // Rival doctrine: 0 is Random (a different one for each computer player), then each one in PERSONALITY_ORDER. A chip
   // sets every computer player's; with three or four players each also has its own (Each rival, below). Each option
-  // says in depth how that rival plays, in the line under them: on the mouse, on focus, or once tapped.
+  // says in depth how that rival plays, in the line under them: under the mouse or on focus, or once tapped. On a touch
+  // screen, while the rivals have doctrines of their own, the first tap on a chip only shows how it plays (it would
+  // wipe them): a second tap gives it to them all.
   const docNames = ['Random', ...PERSONALITY_ORDER.map((k) => PERSONALITIES[k].name)];
-  choice('m-style', docNames, menuDocAll, (v) => { UI.menu.style = v; UI.menu.styles = [null, null, null]; UI.docLast = null; }, (v) => docInfo(docKeyOf(v)));
+  choice('m-style', docNames, menuDocAll, (v) => {
+    UI.docOpen = true; UI.docLast = null;
+    if (!canHover() && menuDocAll() === -1 && UI.docPeek !== v) { UI.docPeek = v; return; }
+    UI.docPeek = null; UI.menu.style = v; UI.menu.styles = [null, null, null, null];
+  }, (v) => docInfo(docKeyOf(v)));
   for (const b of $('m-style').children) b.dataset.doc = docKeyOf(+b.dataset.v);
+  // Each rival: the k-th dropdown is player k + 1's (red, green, purple).
   $('m-seats').innerHTML = [0, 1, 2].map((k) => `<label class="m-seat" data-k="${k}"><i class="dot" style="background:${PLAYER_COLORS[k + 1]}"></i>` +
     `<select data-k="${k}">${docNames.map((n, v) => `<option value="${v}">${n}</option>`).join('')}</select></label>`).join('');
   for (const sel of $('m-seats').querySelectorAll('select')) {
-    sel.onchange = () => { const k = +sel.dataset.k; UI.menu.styles[k] = +sel.value; UI.docLast = k; syncMenu(); saveSettings(); sfx('click'); };
+    sel.onchange = () => { const p = +sel.dataset.k + 1; UI.menu.styles[p] = +sel.value; UI.docLast = p; UI.docPeek = null; UI.docOpen = true; syncMenu(); saveSettings(); sfx('click'); };
   }
+  // The doctrine line's own buttons (a touch screen): How it plays opens the whole of it, Less closes it again.
+  $('m-style-note').addEventListener('click', (e) => { const b = e.target.closest && e.target.closest('[data-docmore]'); if (b) { UI.docOpen = b.dataset.docmore === '1'; sfx('click'); syncInfo(); } });
+  // The Murmur's switch can't be turned on on Lunar: a tap on it still says why (in the Rules line).
+  $('m-wild-row').addEventListener('click', () => { if ($('m-wild').disabled) { UI.menuHover['m-sec-rules'] = $('m-wild-row'); syncInfo(); } });
   for (const [id, k] of [['m-nuke', 'nuke'], ['m-wild', 'wild'], ['m-events', 'events'], ['m-unlimited', 'unlimited']]) {
     $(id).onchange = () => { UI.menu[k] = $(id).checked ? 1 : 0; syncMenu(); saveSettings(); sfx('click'); };
   }
@@ -496,30 +526,40 @@ function initMenu() {
 function syncInfo() {
   const m = UI.menu, H = { ...(UI.menuHover || {}) }, three = menuThree();
   const live = (el) => el && el.isConnected && !el.closest('[hidden]');
-  // A doctrine (a chip, or a rival's own) speaks in its own line, under the doctrines; the Match line stays put.
-  const doc = live(H['m-sec-match']) && H['m-sec-match'].dataset.doc ? H['m-sec-match'].dataset.doc : null;
-  if (doc) H['m-sec-match'] = null;
+  // A doctrine (a chip, or a rival's own) speaks in its own line, under the doctrines; the Match line stays put. Under
+  // the mouse, or focused from the keyboard: on a touch screen a tap focuses it too, and there the taps decide what the
+  // line says (see docNoteDefault).
+  const isDoc = live(H['m-sec-match']) && !!H['m-sec-match'].dataset.doc;
+  const doc = isDoc && (canHover() || H['m-sec-match'].matches(':focus-visible')) ? H['m-sec-match'].dataset.doc : null;
+  if (isDoc) H['m-sec-match'] = null;
   const line = (sec, def) => (live(H[sec]) ? H[sec].dataset.info : def) || def;
   const P = SHAPE_PRESETS[m.shape || 0];
   $('m-mode-desc').textContent = line('m-sec-match', modeInfo(m.mode, menuPlayers()));
   const note = $('m-style-note'), html = doc ? docHTML(doc) : docNoteDefault();
   if (note.innerHTML !== html) note.innerHTML = html;
   $('m-planet-info').textContent = line('m-sec-planet', m.shapeRnd ? $('m-shape').dataset.info : `${P.name}: ${P.blurb || ''}`);
-  $('m-rules-info').textContent = line('m-sec-rules', TOD_INFO[todMode()]);
+  // (Colony on Lunar: the Rules line says why the Murmur's switch is off, a touch screen having no hover to ask with)
+  $('m-rules-info').textContent = line('m-sec-rules', m.mode === 'colony' && !menuMurmur() ? $('m-wild-row').dataset.info : TOD_INFO[todMode()]);
   sizeInfoLines();
 }
 
 /**
- * The doctrine line when no doctrine is under the mouse: the one last picked for a rival of its own, else the one
- * every computer player has, else (each its own) who has which.
+ * The doctrine line when no doctrine is under the mouse: the chip being looked at (a first tap on a touch screen), the
+ * one last picked for a rival of its own, the one every computer player has, or else (each its own) who has which. With
+ * a mouse it is said in full; on a touch screen in a sentence until a tap (or How it plays) opens the whole of it.
  */
 function docNoteDefault() {
-  const n = menuSeats(), all = menuDocAll();
-  if (UI.docLast != null && UI.docLast < n && !$('m-seats-row').hidden) return docHTML(docKeyOf(menuSeatStyle(UI.docLast)));
-  if (all >= 0) return docHTML(docKeyOf(all));
-  const v = Array.from({ length: n }, (_, k) => menuSeatStyle(k));
-  return '<b>Each rival its own doctrine:</b> ' + v.map((x, k) => `${seatName(k)}: ${x ? docLabel(docKeyOf(x)) : 'Random'}`).join(' · ') +
-    (v.includes(0) ? '. Random deals one no other rival has.' : '.') + ' Point at one (or pick it) to see how it plays.';
+  const slots = menuCpuSlots(), all = menuDocAll(), touch = !canHover(), mps = !!UI.mpSetup;
+  const who = mps || menuTeams() ? 'computer' : 'rival';
+  const more = (open) => ` <button type="button" class="m-docmore" data-docmore="${open ? 1 : 0}">${open ? 'How it plays' : 'Less'}</button>`;
+  let k = null, hint = '';
+  if (UI.docPeek != null && all === -1) { k = docKeyOf(UI.docPeek); hint = ` <b>Tap ${docNameOf(UI.docPeek)} again</b> to give it to every ${who}.`; }
+  else if (UI.docLast != null && slots.includes(UI.docLast) && !$('m-seats-row').hidden) k = docKeyOf(menuSlotStyle(UI.docLast));
+  else if (all >= 0) k = docKeyOf(all);
+  if (k) return touch && !UI.docOpen ? docShortHTML(k) + more(true) : docHTML(k) + hint + (touch ? more(false) : '');
+  const v = slots.map((p) => menuSlotStyle(p));
+  return `<b>Each ${who} has its own doctrine${mps ? ' (set them in the lobby)' : ''}:</b> ` + slots.map((p, i) => `${seatName(p)}: ${v[i] ? docLabel(docKeyOf(v[i])) : 'Random'}`).join(' · ') +
+    (v.includes(0) ? `. Random deals one no other ${who} has.` : '.') + (touch ? ' Tap a doctrine above to read how it plays.' : ' Point at a doctrine to see how it plays.');
 }
 
 /**
@@ -533,6 +573,8 @@ function sizeInfoLines() {
     const el = $(id), box = sec && $(sec);
     if (!el || (sec && !box) || !el.offsetWidth) continue;
     const html = !sec;
+    // (On a touch screen the doctrine line changes only with a tap, and grows when asked: no height held for it.)
+    if (html && !canHover()) { el.style.minHeight = ''; el.dataset.sizedFor = ''; continue; }
     const texts = html ? ['random', ...PERSONALITY_ORDER].map(docHTML)
       : [...box.querySelectorAll('[data-info]')].filter((k) => !k.closest('[hidden]') && !k.dataset.doc).map((k) => k.dataset.info || '');
     texts.push(html ? el.innerHTML : el.textContent);
@@ -593,10 +635,12 @@ function syncMenu() {
     : `${SH.name} is for two players only: pick a map type marked “3 players” or “3–4 players” for a free-for-all.`;
   $('m-seed').textContent = 'Planet #' + m.seed;
   renderPlanets();
+  if (menuDocAll() !== -1) UI.docPeek = null; // (a chip looked at before a tap gives it to them all: only while they differ)
   for (const id of ['m-size', 'm-rough', 'm-rich', 'm-style']) {
     const el = $(id), v = el._get();
     for (const b of el.children) { mark(b, +b.dataset.v === v); b.classList.toggle('lit', +b.dataset.v <= v); }
   }
+  for (const b of $('m-style').children) b.classList.toggle('peek', UI.docPeek === +b.dataset.v);
   // (Random map type: sizes as on a Standard map; the others differ a little.)
   const players = menuPlayers(), dShape = m.shapeRnd ? (players === 4 ? crossIdx() : 0) : shape, dims = mapDims({ size: menuSize(), shape: dShape, players });
   for (const b of $('m-size').children) { const d = mapDims({ size: +b.dataset.v, shape: dShape, players }); b.dataset.info = `${SIZE_PRESETS[+b.dataset.v].name}: ${m.shapeRnd ? 'about ' : ''}${d.W}×${d.H} tiles${m.shapeRnd ? ' (map types differ a little)' : ''}.`; }
@@ -609,14 +653,14 @@ function syncMenu() {
   $('m-l-style').textContent = mps ? 'Computer doctrine' : 'Rival doctrine';
   // Each rival (Custom Game with three or four players): a doctrine for each computer player. (In multiplayer the host
   // sets them in the lobby, where it's clear which places the computer takes.)
-  const seats = menuSeats();
-  $('m-seats-row').hidden = colony || mps || seats < 2;
+  const cpus = menuCpuSlots();
+  $('m-seats-row').hidden = colony || mps || cpus.length < 2;
   $('m-l-seats').textContent = menuTeams() ? 'Each computer' : 'Each rival';
   for (const lab of $('m-seats').children) {
-    const k = +lab.dataset.k, v = menuSeatStyle(k), sel = lab.querySelector('select');
-    lab.hidden = k >= seats;
+    const p = +lab.dataset.k + 1, v = menuSlotStyle(p), sel = lab.querySelector('select');
+    lab.hidden = !cpus.includes(p);
     if (sel.value !== String(v)) sel.value = String(v);
-    sel.setAttribute('aria-label', `${seatName(k)}: doctrine`);
+    sel.setAttribute('aria-label', `${seatName(p)}: doctrine`);
     lab.dataset.doc = docKeyOf(v);
     lab.dataset.info = docInfo(docKeyOf(v));
   }
@@ -626,7 +670,7 @@ function syncMenu() {
   const silent = !menuMurmur();
   $('m-wild').disabled = silent;
   $('m-wild-row').classList.toggle('na', silent);
-  $('m-wild-row').dataset.info = silent ? 'The Murmur: none on Lunar. Penelope, the moon, is the only silent ground: no Burrows, no raids.'
+  $('m-wild-row').dataset.info = silent ? 'The Murmur: none on Lunar (no Burrows, no raids).'
     : 'The Murmur (Colony): native creatures burrow in the wilds and raid what you build near their Burrows. None on Lunar.';
   for (const [id, on] of [['m-nuke', m.nuke], ['m-wild', m.wild && !silent], ['m-events', m.events], ['m-unlimited', m.unlimited], ['m-weather', weatherOn()]]) {
     $(id).checked = !!on;
@@ -2238,7 +2282,8 @@ function startNewGame() {
   updateHUD();
   placeMinimap();
   postMsg(ME, UI.menu.mode === 'colony'
-    ? `Your bots have landed ${BIOMES[S.settings.biome] && BIOMES[S.settings.biome].silent ? 'on' : 'in'} ${regionName(S.settings.biome)}. Build, expand and make this planet home.`
+    ? (BIOMES[S.settings.biome] && BIOMES[S.settings.biome].silent ? `Your bots have landed on ${regionName(S.settings.biome)}. Build, expand and make this moon home.`
+      : `Your bots have landed in ${regionName(S.settings.biome)}. Build, expand and make this planet home.`)
     : S.players.length > 2 ? `Your bots have landed. ${rivalsLanded()} Build up fast!`
       : `Your bots have landed. A rival colony, ${callsign(1, true)}, landed to the north. Build up fast!`, 0, 0, 'info');
   if (UI.menu.shapeRnd || UI.menu.biomeRnd) postMsg(ME, `Random pick: ${[UI.menu.shapeRnd ? SHAPE_PRESETS[pick.shape].name : '', UI.menu.biomeRnd ? biomeName(pick.biome) : ''].filter(Boolean).join(', ')}.`, 0, 0, 'info');
@@ -2497,7 +2542,8 @@ function showGameOver() {
   const won = S.winner === ME || allies(S.winner, ME), how = S.endHow || 'capture', many = S.players.length > 2;
   const The = S.players[S.winner] ? playerName(S.winner) : 'The rival'; // (its callsign; a person, in multiplayer: by name)
   // The narrator's last line (LORE.md): the region secured, or the command core lost.
-  $('o-log').textContent = won ? NARRATOR[how === 'domination' || how === 'uplinks' ? how : 'victory'] : NARRATOR[S.players[ME].out ? 'defeat' : 'outranked'];
+  // (lost while the colony stands: on the Uplinks another colony speaks for the planet; else, settlement priority)
+  $('o-log').textContent = won ? NARRATOR[how === 'domination' || how === 'uplinks' ? how : 'victory'] : NARRATOR[S.players[ME].out ? 'defeat' : how === 'uplinks' ? 'uplinksLost' : 'outranked'];
   $('o-log').hidden = false;
   sfx(won ? 'win' : 'lose');
   $('o-title').textContent = won ? (how === 'domination' ? 'Domination!' : how === 'uplinks' ? 'Uplinks held!' : 'Victory!') : 'Defeat';
@@ -6362,7 +6408,7 @@ function updateHUD() {
 function updateEventCard() {
   const el = $('event-card'), E = S.events ? S.event : null;
   if (!E) { el.hidden = true; el.dataset.key = ''; return; }
-  const def = EVENTS[E.type], soon = S.time < E.t0, o = E.offers && E.offers[0];
+  const def = EVENTS[E.type], soon = S.time < E.t0, o = E.offers && E.offers[ME]; // (this device's own deal, as Trade takes it)
   const key = `${E.n}|${soon}|${o ? (o.done ? 'done' : 'open') : 'none'}|${!!E.started}`;
   if (el.dataset.key !== key) {
     el.dataset.key = key;
@@ -6525,16 +6571,20 @@ function toast(text, kind, x, y) {
     el.appendChild(go);
   }
   el.dataset.text = text;
-  // A story line (the narrator's, a rival's voice) never hides a warning: it goes in under a newest one that is (a
-  // wide screen shows only the newest), and it is the first to go when there are too many.
+  // A story line (the narrator's, a rival's voice) sits beside the warnings, never in their place: it doesn't count
+  // towards the limit below and pushes none of them out. It goes in under a newest one that is a warning (a narrow
+  // phone on its side shows only the newest), and it gives way only to a newer story line (one at a time, but the lines
+  // of one moment, such as a surrender's last words and the narrator after them, stay together).
   const lore = kind === 'narr' || kind === 'voice', last = box.lastElementChild, story = (c) => c.classList.contains('narr') || c.classList.contains('voice');
+  el.dataset.batch = UI.toastBatch || 0;
+  if (lore) for (const c of [...box.children]) if (story(c) && c.dataset.batch !== el.dataset.batch) c.remove();
   if (lore && last && /\b(bad|lost|warn)\b/.test(last.className) && !last.classList.contains('out')) box.insertBefore(el, last);
   else box.appendChild(el);
-  // At most 2 at once (3 with a building lost): the oldest go first, but a "lost" toast (a building of
-  // yours destroyed) outlasts the others and isn't pushed out by them.
-  const lost = kind === 'lost';
-  while (box.children.length > (box.querySelector('.toast.lost') ? 3 : 2)) {
-    const old = [...box.children].find((c) => story(c) && c !== el) || [...box.children].find((c) => !c.classList.contains('lost') && c !== el) || box.firstChild;
+  // At most 2 at once (3 with a building lost), story lines aside: the oldest go first, but a "lost" toast (a building
+  // of yours destroyed) outlasts the others and isn't pushed out by them.
+  const lost = kind === 'lost', plain = () => [...box.children].filter((c) => !story(c));
+  while (plain().length > (box.querySelector('.toast.lost') ? 3 : 2)) {
+    const old = plain().find((c) => !c.classList.contains('lost') && c !== el) || plain()[0];
     box.removeChild(old);
   }
   const ms = clamp(3800 + 60 * (text.length - 60), 3800, 12000);
@@ -6598,9 +6648,12 @@ function briefingTick() {
   $('br-fill').style.width = ((1 - f) * 100).toFixed(1) + '%';
 }
 
-/** The narrator at the first nightfall (the street lights come on), once a game; not with the day/night cycle off. */
+/**
+ * The narrator at the first nightfall (the street lights come on), once a game, in the first day of it (so a game
+ * loaded later, or caught up after a resync, never says it again); not with the day/night cycle off.
+ */
 function nightfallLine() {
-  if (S.mission || S.time < 30 || !todEnabled() || (S.lore && S.lore['n.night.' + ME] !== undefined)) return;
+  if (S.mission || S.time < 30 || S.time > 720 || !todEnabled() || (S.lore && S.lore['n.night.' + ME] !== undefined)) return;
   if (todNow().lights >= 0.9) narrate(ME, 'night');
 }
 
@@ -6611,6 +6664,7 @@ function uiTick(dt) {
   AUDIO.suppress = !UI.inGame;
   if (!UI.inGame) menuArtTick();
   if (!UI.inGame || !S) return;
+  if (S.msgs.length) UI.toastBatch = (UI.toastBatch || 0) + 1; // (the messages of one moment: see toast)
   while (S.msgs.length) {
     const m = S.msgs.shift();
     toast(m.text, m.kind, m.x, m.y);

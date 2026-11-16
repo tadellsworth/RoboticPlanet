@@ -119,7 +119,8 @@ body::before {
 .event-card .ev-dot { width: 10px; height: 10px; border-radius: 50%; flex: none; box-shadow: 0 0 8px currentColor; }
 .event-card .ev-time { margin-left: auto; font-variant-numeric: tabular-nums; opacity: 0.85; font-weight: 700; }
 .event-card .ev-desc { opacity: 0.9; line-height: 1.3; }
-.event-card .ev-cargo { font-size: 11.5px; font-style: italic; opacity: 0.7; line-height: 1.3; } /* (the Wren's out-of-date cargo list) */
+.event-card .ev-cargo { font-size: 11.5px; font-style: italic; opacity: 0.7; line-height: 1.3; contain: inline-size; } /* (the Wren's out-of-date cargo list: it wraps
+   inside the width the name and the deal give the card, never widening it) */
 .event-card .ev-deal { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .event-card .ev-deal .gi { vertical-align: -3px; }
 .event-card .btn { padding: 4px 12px; }
@@ -185,6 +186,7 @@ body::before {
 body.mm-on .objrow { margin-right: calc(var(--mm-w, 100px) + 8px); }
 body.mm-off .objrow { margin-right: 54px; }
 @media (max-width: 999px) {
+  body.mm-on .event-card { margin-right: calc(var(--mm-w, 100px) + 8px); } /* (an event's card keeps clear of the minimap, as the goal card does) */
   body.mm-on #toasts { left: calc(var(--safe-l) + 8px); right: calc(var(--safe-r) + var(--mm-w, 100px) + 16px); width: auto; transform: none; }
 }
 
@@ -553,6 +555,9 @@ i.g.uranium { background: var(--g-uranium); } i.g.fissile { background: var(--g-
   .toprow { grid-area: row; }
   #pop { flex: none; }
   .objrow { grid-area: obj; justify-self: start; }
+  /* An event's card and the Domination or Uplinks card each on a row of their own (side by side, the event's was
+     squeezed into a narrow column beside the other). */
+  #topbar > .event-card { grid-column: 1 / -1; justify-self: start; }
   .objective { max-width: 560px; font-size: 14px; padding: 7px 12px; }
   body.mm-on .objrow, body.mm-off .objrow { margin-right: 0; }
   .minimap { right: calc(var(--safe-r) + 12px); }
@@ -968,6 +973,7 @@ canvas.chart.small { height: 110px; }
 .tchip:hover { border-color: rgba(255, 255, 255, 0.25); }
 .tchip.on { color: var(--text); border-color: rgba(56, 212, 255, 0.55); background: rgba(56, 212, 255, 0.1); }
 .tchip.na { opacity: 0.45; cursor: default; } /* (the Murmur on Lunar: none live there) */
+.tchip .tchip-sub { font-size: 0.85em; font-weight: 500; opacity: 0.75; } /* (what an option's name means, beside it: the Murmur are creatures) */
 .tchip.na input { cursor: default; }
 .tchip input { appearance: none; -webkit-appearance: none; margin: 0; width: 16px; height: 16px; flex: none; border-radius: 50%; cursor: pointer;
   border: 2px solid rgba(255, 255, 255, 0.3); display: grid; place-items: center; }
@@ -1115,6 +1121,7 @@ canvas.chart.small { height: 110px; }
 .mp-docnote { margin: 0; font-size: 12.5px; line-height: 1.4; color: var(--muted); }
 .mp-docnote[hidden] { display: none; }
 .mp-docnote b { color: #d4dae4; }
+.mp-docnote .mp-docwho { font-size: 11px; font-weight: 700; letter-spacing: 0.06em; color: var(--muted); }
 .mp-sum { margin: 0; font-size: 14px; color: var(--text); }
 .mp-banner {
   position: fixed; z-index: 30; left: 50%; transform: translateX(-50%); bottom: calc(var(--safe-b) + 108px);
@@ -1226,9 +1233,16 @@ canvas.chart.small { height: 110px; }
 .m-vnote.m-docnote { margin: 0 2px 4px; }
 .m-docnote b { color: #d4dae4; font-weight: 700; }
 .m-docnote i { color: #c4cad4; }
+/* How it plays / Less (a touch screen; the lobby's line): a small link-like button after the text. */
+.m-docmore { display: inline; margin: 0 0 0 2px; padding: 2px 6px; border: 1px solid rgba(56, 212, 255, 0.35); border-radius: 999px; background: rgba(56, 212, 255, 0.08);
+  color: var(--accent); font: inherit; font-size: 12px; font-weight: 700; line-height: 1.3; cursor: pointer; white-space: nowrap; }
+.m-docmore:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+/* A doctrine chip being looked at (a first tap on a touch screen, while the rivals have their own): a second tap gives it to them all. */
+.m-chips button.peek { color: var(--text); border-style: dashed; border-color: var(--accent); }
 /* Each rival (three or four players): a dropdown for each computer player, behind its colour (on a phone, its own picker). */
 .m-seats { display: flex; flex-wrap: wrap; gap: 4px; min-width: 0; }
 .m-seat { position: relative; display: flex; align-items: center; flex: 1 1 88px; min-width: 0; max-width: 150px; }
+@media (max-width: 520px) { .m-seat { flex: 0 1 calc(50% - 2px); max-width: none; } } /* (a phone: two a row, all the same width) */
 .m-seat[hidden] { display: none; }
 .m-seat .dot { position: absolute; left: 9px; top: 50%; width: 10px; height: 10px; margin-top: -5px; border-radius: 50%; pointer-events: none; box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.35); }
 .m-seat select { width: 100%; min-width: 0; -webkit-appearance: none; appearance: none; margin: 0; padding: 5px 20px 5px 25px; border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 999px;

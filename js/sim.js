@@ -4216,13 +4216,16 @@ function hitBuilding(b, dmg, by) {
     const P = S.players[b.owner], R = P.raided || (P.raided = {});
     (P.hitBy = P.hitBy || {})[by] = S.time; // remembered: see rivalOf
     R.x = b.x + 0.5; R.y = b.y + 0.5; R.t = S.time; // where its buildings were last hit: forts near by answer (garrisonDefense)
-    doctrineVoice(by, b.owner, 'attack', b.x, b.y, 240); // (a computer rival has its say, now and then)
   }
   if (S.time - b.lastAlert > 12) {
     b.lastAlert = S.time;
-    postMsg(b.owner, `${by >= 0 && S.players[by] && foes(by, b.owner) ? playerName(by) : 'Enemy'} warbots are attacking your ${BDEFS[b.type].name}!`, b.x, b.y, 'bad');
+    // (who by name: "Warbots from VERMILION", or from a person, "Warbots from Alice")
+    postMsg(b.owner, by >= 0 && S.players[by] && foes(by, b.owner) && S.mode !== 'colony' ? `Warbots from ${playerName(by)} are attacking your ${BDEFS[b.type].name}!`
+      : `Enemy warbots are attacking your ${BDEFS[b.type].name}!`, b.x, b.y, 'bad');
     if (isMe(b.owner)) sfx('alert');
   }
+  // A computer rival has its say now and then, after the alert it goes with (see toast: a story line never hides one).
+  if (by >= 0 && foes(by, b.owner)) doctrineVoice(by, b.owner, 'attack', b.x, b.y, 240);
   // (A mission's capture lock: the rival Command Base holds at 1 armor while other goals are open. See captureLocked.)
   if (b.armor < 1 && S.mission && b.type === 'lander' && typeof captureLocked === 'function' && captureLocked(b, by)) b.armor = 1;
   if (b.armor <= 0) captureBuilding(b, by);
@@ -4972,7 +4975,7 @@ function eliminate(old, by, how) {
   // (Losing our own is for the end screen.)
   if (how !== 'nuke') {
     narrate(by, 'captured', x, y, 1);
-    for (const Q of S.players) if (Q.id !== by && Q.id !== old && !Q.absent && !Q.out) narrate(Q.id, 'changed', x, y, 1, NARRATOR.changed.replace('{old}', callsign(old)).replace('{by}', callsign(by)));
+    for (const Q of S.players) if (Q.id !== by && Q.id !== old && !Q.absent && !Q.out) narrate(Q.id, 'changed', x, y, 1, NARRATOR.changed.replace('{old}', colonyName(old)).replace('{by}', colonyName(by)));
   }
   const left = S.players.filter((Q) => !Q.absent && !Q.out);
   // The last colony (or team) standing has won; S.winner is one of them (with teams, see teamOf).
@@ -5027,9 +5030,9 @@ function beatenBy(P, live, n) {
 /** Player p gives up to player `by` (see checkSurrender): everything it had is theirs, as when a Command Base falls. */
 function surrender(p, by) {
   const L = getE(S.players[p].lander), x = L ? L.x : 0, y = L ? L.y : 0;
-  doctrineVoice(p, by, 'surrender', x, y); // (its last words, in its doctrine's voice)
   if (isMe(by)) postMsg(ME, `${playerName(p)} has surrendered to you! Everything it built is yours.`, x, y, 'good');
   else if (!isMe(p)) postMsg(ME, `${playerName(p)} has surrendered to ${playerName(by, true)}: everything it built is theirs.`, x, y, 'warn');
+  doctrineVoice(p, by, 'surrender', x, y); // (its last words, in its doctrine's voice)
   eliminate(p, by, 'surrender');
 }
 
@@ -6878,7 +6881,7 @@ function fireNukeAt(silo, i, j) {
     const atUs = nukesThreatening(ME).includes(S.missiles[S.missiles.length - 1]), L = getE(S.players[ME].lander);
     const atBase = L && !L.dead && L.owner === ME && dist2(L.x + 0.5, L.y + 0.5, i + 0.5, j + 0.5) <= NUKE.direct * NUKE.direct;
     postMsg(ME, `NUCLEAR LAUNCH DETECTED! Impact in ${NUKE.flight} seconds` + (atBase ? ': it is aimed at your Command Base, and a direct hit destroys it!' : atUs ? ': press Evacuate to get your robots out of the red ring!' : ', aimed at a rival.'), i, j, 'bad');
-    if (atUs || atBase) doctrineVoice(silo.owner, ME, 'missile', i, j);
+    if (atUs || atBase) doctrineVoice(silo.owner, ME, 'nuke', i, j, 1);
   }
   return true;
 }
@@ -7898,7 +7901,7 @@ function startEvent(E) {
       if (P.ai && P.id !== 0 && o.short) acceptTrade(P.id);
     }
     const o = E.offers[ME];
-    postMsg(ME, 'The Wren is on approach. On schedule, as always.', undefined, undefined, 'narr');
+    for (const P of S.players) narrate(P.id, 'wren', undefined, undefined, 1); // (each visit; not in missions)
     postMsg(ME, o ? `The Wren is in orbit for ${Math.round(E.t1 - E.t0)}s: it offers ${o.m} ${GOOD[o.get].name} (your land is running lowest on it) for ${o.n} of your ${GOOD[o.give].name}. Tap Trade to take it.`
       : 'The Wren is in orbit, but it wants nothing you have spare.', undefined, undefined, 'info');
     sfx('order');
@@ -7915,9 +7918,10 @@ function endEvent(E) {
   else if (E.type === 'flare') postMsg(ME, 'The solar flare has passed.', undefined, undefined, 'info');
   else if (E.type === 'trader') postMsg(ME, 'The Wren has left orbit, on schedule.', undefined, undefined, 'info');
   else if (E.type === 'meteor') {
-    // (LORE.md's line; on the moon, where no Murmur live, without its last words)
+    // (LORE.md's line; its last words only where the Murmur are in the game: never on the moon, in Versus or in a
+    // mission without them)
     const n = E.cratered[ME] || 0, k = E.relaid[ME] || 0;
-    postMsg(ME, 'Ringfall over. Fresh Ore and Crystal in the strike zones.' + (murmurGround(S.settings && S.settings.biome) ? ' Listen for the Murmur.' : '') +
+    postMsg(ME, 'Ringfall over. Fresh Ore and Crystal in the strike zones.' + (wildOn() && murmurGround(S.settings && S.settings.biome) ? ' Listen for the Murmur.' : '') +
       (n ? ` ${n} road tile${n > 1 ? 's were' : ' was'} cratered${k === n ? ': your workers will re-lay them.' : k ? `: ${k} planned again, the rest need Cement.` : ': re-lay them when you have the Cement.'}` : ''), undefined, undefined, 'info');
   }
 }
@@ -8399,7 +8403,7 @@ function updateUplinks() {
       if (b.dead || b.inside || !isArmy(b) || b.owner < 0 || b.owner === u.owner || !botArmed(b)) continue;
       if (dist2(b.x, b.y, u.x + 0.5, u.y + 0.5) <= j2) { jam = b.owner + 1; break; }
     }
-    if (jam && !u.jam && isMe(u.owner)) postMsg(ME, `${jam - 1 !== ME ? playerName(jam - 1) : 'Your'} warbots are jamming your Uplink: drive them off!`, u.x, u.y, 'bad');
+    if (jam && !u.jam && isMe(u.owner)) postMsg(ME, `${jam - 1 !== ME ? 'Warbots from ' + playerName(jam - 1) : 'Your warbots'} are jamming your Uplink: drive them off!`, u.x, u.y, 'bad');
     u.jam = jam;
     if (u.owner !== was) {
       if (isMe(u.owner)) postMsg(ME, 'An Uplink is yours: it stands in your land.', u.x, u.y, 'good');

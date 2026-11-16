@@ -140,9 +140,18 @@ keeps the biome names); Ringfall; the *Wren* with its out-of-date cargo lists; a
 robot panel; a line on the loading screen; the Arrival clock on the Command Base; the Murmur as the name of the Colony
 creatures (Scuttlers, Brutes, Burrows); and no Murmur on Lunar (a real rule: no Burrows and no raids on the moon).
 
-Open questions from the quick wins: should the narrator also speak in missions once the mission story pass is done?
-Should a rival's voice answer its own events (its Burrows cleared, a Ringfall on its land)? A Lore Guide page could
-collect the panel lines and loading lines a player has seen.
+Open questions from the quick wins, for the owner (LORE.md is left as the owner wrote it):
+
+- **"Burrow" for a Murmur nest?** The game calls the creatures' nests Burrows (the name the Murmur designs gave the
+  tunnel mouth); the bible says Murmur nests. Keep Burrow, or go back to "Murmur nest" on screen?
+- **The doctrines' timings.** The in-depth descriptions now give what games show rather than what the code allows
+  (a rival only attacks what it outnumbers): headless games on Normal, against a computer-run colony, saw the first
+  attack anywhere from about 6 to 16 minutes in whatever the doctrine (the Herald, on one planet, none in 16 minutes),
+  and the Architect's Missile Factory at 8 to 16 minutes. Should the Herald really rush (take on a garrisoned Command
+  Base sooner), or is the gentler Herald right?
+- Should the narrator also speak in missions once the mission story pass is done? Should a rival's voice answer its
+  own events (its Burrows cleared, a Ringfall on its land)? A Lore Guide page could collect the panel lines and loading
+  lines a player has seen.
 
 These wait for a later expansion:
 

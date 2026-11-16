@@ -680,10 +680,10 @@ const URANIUM_DEPOSITS = 6;
 const NUKE = { parts: { fissile: 6, alloy: 4, chip: 2 }, assemble: 60, range: 40, flight: 30, radius: 6, scorch: 240, direct: 2 }; // direct: a Command Base this near the impact is destroyed
 const EVAC_MARGIN = 1.5; // an evacuation clears this much beyond the blast radius
 
-// You (cyan), the rival (red), and in a free-for-all the green and purple rivals. Purple stands apart
+// You (blue, COBALT), the rival (red), and in a free-for-all the green and purple rivals. Purple stands apart
 // from the other three and from every biome's ground (gold would vanish on desert, savanna and lava).
 const PLAYER_COLORS = ['#38d4ff', '#ff5a6e', '#5be06c', '#b36bff'];
-const RIVAL_NAMES = ['Cyan', 'Red', 'Green', 'Purple'];
+const RIVAL_NAMES = ['Blue', 'Red', 'Green', 'Purple']; // (COBALT is blue, as LORE.md has it)
 /**
  * The hidden boost menu (tap the clock three times, or press ` on a keyboard): for a game you're winning
  * too easily, or losing. Each button gives you or one rival this much, at its Command Base.
@@ -707,6 +707,11 @@ const CALLSIGNS = ['COBALT', 'VERMILION', 'VIRIDIAN', 'TYRIAN'];
 function callsign(p, colour) {
   const c = CALLSIGNS[p] || 'UNKNOWN';
   return colour && RIVAL_NAMES[p] ? `${c} (${RIVAL_NAMES[p].toLowerCase()})` : c;
+}
+/** A colony as a name to stand in a sentence about it ("VERMILION's robots"): a person's name in multiplayer, else its callsign. */
+function colonyName(p) {
+  const G = typeof S !== 'undefined' && S ? S : null;
+  return G && G.players && G.players[p] && G.players[p].name ? G.players[p].name : callsign(p);
 }
 
 /**
@@ -1053,16 +1058,19 @@ const DIFFICULTY = {
  * first raid; raidSize and raidKeep, how many go and stay home), econ (how fast its bots work). turrets, walls and
  * missiles switch on its habits (see js/ai.js: aiStyle, aiLevel, AI_FORT, aiMissilePlan). The Steward (balanced) plays
  * the plain difficulty.
- * The words: noun and desc (the landing line: "Your rival is a Warden (turtle): it walls its base in..."), quote (a
+ * The words: noun and desc (the landing line: "Your rival is a Warden (turtle): it walls its base in..."), tag (a few
+ * words, for the lobby's one-line note: "walls in, then comes late in force"), quote (a
  * line in the doctrine's voice, from LORE.md), play (how it plays, in depth, for the new-game screen: what it builds
- * first, when and how it attacks, how it defends; times are for Normal, see DIFFICULTY.grace) and weak (its weak spot,
- * and how to beat it). docInfo puts them together.
+ * first, when and how it attacks, how it defends; times are for Normal, and are what games show, not the earliest
+ * the code allows: a rival only attacks what it outnumbers, see aiThink) and weak (its weak spot, and how to beat it).
+ * docInfo puts them together.
  */
 const PERSONALITIES = {
   balanced: {
     name: 'Steward', plain: 'balanced', noun: 'a Steward', desc: 'builds up, defends and attacks in good measure',
+    tag: 'builds, defends and attacks in good measure',
     quote: 'This action has been logged for review by the Accord tribunal.',
-    play: 'Grows a full economy and a steady army. It attacks from about 4 minutes in (on Normal) once it has five warbots, and from about 7 minutes a band of three raids your roads every few minutes. It defends with up to three Pulse Turrets, a Minigun Nest or Bunker at the front, a Keep at about 15 minutes and, half the time, a Wall on the side facing you. Later come bombers and Missiles.',
+    play: 'Grows a full economy and a steady army, and attacks once it has the warbots to beat what guards its target: often 6 to 15 minutes in (on Normal). Now and then a band of three raids your roads. It defends with up to three Pulse Turrets, a Minigun Nest or Bunker at the front, a Keep later on and, half the time, a Wall on the side facing you. Later come bombers and Missiles.',
     weak: 'No great strength and no great weakness: a fair first opponent.',
     // What it says to you (doctrineVoice): when it attacks, launches a Missile and surrenders. {day}: see wardenDay.
     voice: {
@@ -1075,8 +1083,9 @@ const PERSONALITIES = {
   },
   turtle: {
     name: 'Warden', plain: 'turtle', noun: 'a Warden', desc: 'walls its base in and covers its land with turrets, then comes late with a big army',
+    tag: 'walls in, then comes late in force',
     quote: 'Position held. Day 12,054.',
-    play: 'Fortifies first: an early Pulse Turret, then more, up to six. From about 6 minutes it rings its Command Base with Walls (Gates on its roads), with a Keep at about 7 minutes and up to three in all. It rarely raids and never builds bombers; its first attack waits until about 5½ minutes (on Normal) and comes with eight warbots or more.',
+    play: 'Fortifies first: an early Pulse Turret, then more, up to six. From about 6 to 10 minutes in (on Normal) it rings its Command Base with Walls (Gates on its roads) and starts the first of up to three Keeps. It rarely raids and never builds bombers. Its main attack waits for eight warbots or more and comes late, though a smaller band may go for an unguarded building or construction site sooner.',
     weak: 'Slow to grow and slow to strike. Out-grow it while it digs in, then burn through its Walls with Torches, shield your warbots with Bulwarks, or crack the shell with Missiles.',
     voice: {
       attack: ['Position held. Day {day}.', 'No one passes until relieved.', 'Perimeter extended. Day {day}.', 'Sentry line advancing. Hold.'],
@@ -1087,21 +1096,23 @@ const PERSONALITIES = {
   },
   raider: {
     name: 'Salvager', plain: 'raider', noun: 'a Salvager', desc: 'sends small bands of warbots to cut your supply lines, again and again',
+    tag: 'raids your roads, again and again',
     quote: 'Nothing\'s coming from home. Everything on the road is supply.',
-    play: 'Hits convoys, not cities. Its army grows early and fast, and from about 5 minutes in (on Normal) it sends three warbots at your busiest unguarded road every couple of minutes, keeping none back: they shoot up Haulers and trucks, tear up the road and wreck what stands beside it. It still attacks in force from about 4 minutes, with only two turrets and seldom a Wall at home.',
+    play: 'Hits convoys, not cities. Its army grows early and fast, and from about 5 minutes in (on Normal) it sends three warbots at your busiest unguarded road every minute or two, keeping none back: they shoot up Haulers and trucks, tear up the road and wreck what stands beside it. It attacks in force too, once it outnumbers what guards a target, with only two turrets and seldom a Wall at home.',
     weak: 'A thin home guard. Guard your roads with Outposts, turrets and warbots on rally flags; while its bands are out, its base is open.',
     voice: {
       attack: ['Nice convoy. Shame about the escort.', 'Nothing\'s coming from home. Everything on the road is supply.',
         'Don\'t mind us. Just taking inventory.', 'Your roads, our supply lines.'],
-      missile: ['Special delivery. No returns.', 'Consider it a rebate.', 'Clearance sale. Everything must go.'],
+      missile: ['Inventory reassigned. Ledger updated.', 'Write-off approved. Stand clear.', 'Salvage rights claimed. Collecting.'],
       surrender: ['Fine. Keep it. It was yours anyway.', 'Take it. Nobody\'s coming to collect.'],
     },
     raids: 3, raidFirst: 0.4, raidSize: 3, raidKeep: 0, army: 1.15, armyFrom: 0.7,
   },
   rusher: {
     name: 'Herald', plain: 'rusher', noun: 'a Herald', desc: 'comes for you early with warbots, before its economy is big',
+    tag: 'all warbots, and it keeps coming',
     quote: 'Arrival in one day. Clearing the landing zone.',
-    play: 'Puts everything into warbots: its army grows from the first minutes, a third faster than anyone\'s, and it attacks with as few as four from about 2 minutes in (on Normal), then again and again. It raids now and then, and builds only two turrets and seldom a Wall.',
+    play: 'Puts everything into warbots: its army grows from the first minutes, faster than any other doctrine\'s. It goes for whatever it can outnumber, a lightly guarded building or a construction site, and keeps coming back; a well-manned garrison makes it wait. It raids now and then, and builds only two turrets and seldom a Wall.',
     weak: 'Its economy lags. Get a garrison and a turret up early; hold off the first waves and it runs short.',
     voice: {
       attack: ['Arrival in one day. Clearing the landing zone.', 'Colonists inbound. Hostiles in the corridor. Engaging.',
@@ -1113,20 +1124,22 @@ const PERSONALITIES = {
   },
   tycoon: {
     name: 'Architect', plain: 'tycoon', noun: 'an Architect', desc: 'builds a big economy first, then rains Missiles on you (or a nuke, in a Nuclear race)',
+    tag: 'a big economy, then Missiles',
     quote: 'When the colonists come, they\'ll find a city. Mine.',
-    play: 'Out-builds everyone: its bots work 15% faster, it adds Smelters and Chip Fabs, and it docks a Trade Terminal from about 14 minutes. Its army is smaller and its first attack a little later, but it starts a Missile Factory once its Bot Foundry runs (about 3 minutes in, on Normal), then up to three Silos. Up to four turrets guard its base.',
+    play: 'Out-builds everyone: its bots work 15% faster, it adds Smelters and Chip Fabs, and later it docks a Trade Terminal at a Trade Post. Its army is smaller. Once its economy is running (two Outposts, its Bot Foundry, a few warbots and workers to spare: usually 8 to 16 minutes in, on Normal) it builds a Missile Factory, then up to three Silos. Up to four turrets guard its base.',
     weak: 'Its army is thin early on. Hit it before its Silos are ready (or capture them), and spread your buildings out so one strike can\'t take many.',
     voice: {
       attack: ['I\'ve paved more road this year than your Sponsor did in a century.', 'When the colonists come, they\'ll find a city. Mine.',
         'Your layout is inefficient. Allow me.', 'Zoning review complete. You are not in the plan.'],
-      missile: ['Beginning urban renewal.', 'Clearing the lot. Something better is coming.', 'Demolition permit approved. By me.'],
+      missile: ['Beginning urban renewal.', 'Clearing the lot. Something better is coming.', 'Permit issued. Applicant: me.'],
       surrender: ['Very well. Mind the paving. It\'s mine.', 'Keep the city. You\'ll never finish it.'],
     },
     grace: 1.15, army: 0.9, missiles: true, econ: 1.15,
   },
 };
 const PERSONALITY_ORDER = ['balanced', 'turtle', 'raider', 'rusher', 'tycoon'];
-/** Random (on the new-game screen and in the lobby): what it means. */
+/** Random (on the new-game screen and in the lobby): what it means, and in a few words. */
+const DOCTRINE_RANDOM_TAG = 'a doctrine no other computer player has';
 const DOCTRINE_RANDOM = 'Each rival on Random gets a doctrine no other rival has, picked from the planet\'s seed (the same planet deals the same ones). The briefing names it when you land, and so does its Command Base\'s panel.';
 /** Is k one of the doctrines (a key of PERSONALITIES, not something every object has, such as 'constructor')? */
 function isDoctrine(k) { return typeof k === 'string' && Object.prototype.hasOwnProperty.call(PERSONALITIES, k); }
@@ -1260,14 +1273,17 @@ const NARRATOR = {
   night: 'Street lighting active. Traffic: freight only.',
   uplink: 'Uplink secured. Listening on all channels. No response.',
   captured: 'Command authority transferred. Their robots report for duty.',
-  // (a rival's Command Base taken by another rival, in a free-for-all: {by} and {old} are callsigns)
-  changed: 'Command core changed hands. {old} robots now report to {by}.',
+  // (a rival's Command Base taken by another rival, in a free-for-all: {by} and {old} are callsigns, or people's names)
+  changed: 'Command core changed hands. {old}\'s robots now report to {by}.',
   defeat: 'Command core lost. Transferring authority. Hold position.',
-  // (lost on Domination or the Uplinks: the colony still stands)
+  // (lost on Domination, or on the Uplinks, while the colony still stands: LORE.md, Mechanics to lore)
   outranked: 'Settlement priority lost under the Accord. Hold position. Further instructions to follow.',
+  uplinksLost: 'Uplinks lost. Another colony speaks for Ithaca I. Hold position.',
   victory: 'Region secured for the Sponsor. Report sent. Awaiting further instructions.',
   domination: 'Prepared land: majority held. Settlement priority confirmed under the Accord. Report sent.',
   uplinks: 'Uplinks held. Ithaca I speaks with one voice. Listening for a reply.',
+  // (the Wren, as it comes into orbit: LORE.md's event line)
+  wren: 'The Wren is in orbit. On schedule, as always.',
 };
 /** The Arrival clock (LORE.md: zero was the day the colony ships were due), as the Command Base's panel shows it. */
 const ARRIVAL_CLOCK = 'Arrival clock: T+31 years. Still counting.';
@@ -1300,7 +1316,7 @@ const FLAVOR = {
   roadworks: 'Resurfacing schedule set by a bus timetable that was never issued.',
   armory: 'Line converted from Arrival Day fireworks. Same powder, new casings.',
   munitions: 'Survey rocket airframes. Contingency payloads.',
-  silo: 'Countdown hardware from the survey program. It still counts down.',
+  silo: 'Countdown hardware from the survey programme. It still counts down.',
   reactor: 'Enrichment meant for the colonists’ reactors. The contingency orders found another use.',
   nukesilo: 'Two-key launch system. The second key was never assigned.',
   generator: 'Sized for a town’s evening peak. The town has not been built.',
@@ -1345,20 +1361,20 @@ const FLAVOR = {
   scuttler: 'No robot has ever logged one alone.',
   brute: 'Drawn to charge. Batteries, power lines and Crystal all read as food.',
   // Neutral ground (not buildings anyone owns)
-  post: 'Accord rates honored. The ledger is still open.',
+  post: 'Accord rates honoured. The ledger is still open.',
   uplink: 'Transmitting. No response. Transmitting.',
 };
 
 /** Lines for the loading screen (one at random, in index.html: keep the two lists the same). */
 const SPLASH_LINES = [
-  'The Accord gave the colonies four colors so the machines could tell each other apart. It never planned for them to need it.',
+  'The Accord gave the colonies four colours so the machines could tell each other apart. It never planned for them to need it.',
   'Nobody has revoked the contingency orders. Nobody is left to.',
   'Every road on Ithaca I is wide enough for a bus.',
   'The arks were due 31 years ago. The welcome signs are still lit.',
   'Arrival clock: T+31 years. Still counting.',
   'Last transmission from home: “Hold position. Further instructions to follow.”',
   'The Rust: where the dust storms begin, and where the first Accord landings were.',
-  'Greenreach was the survey’s favorite.',
+  'Greenreach was the survey’s favourite.',
   'In Emberwood the leaves stay red-gold all year.',
   'The Long Grass: easy roads, nowhere to hide.',
   'Pavers hate the Sump.',

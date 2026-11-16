@@ -87,11 +87,27 @@ function initMulti() {
     } catch (e) { mpMsg(`The code is ${NET.code}${link ? `, or send this link: ${link}` : ''}`, true); }
   };
   $('mp-settings').onclick = () => { sfx('click'); mpOpenSetup(); };
-  // A computer's doctrine: pointing at its row (or tapping it, or its dropdown) says how it plays, under the list.
-  const docRow = (e) => { const li = e.target.closest && e.target.closest('li.ai[data-k]'); if (li && UI.mpDocK !== +li.dataset.k) { UI.mpDocK = +li.dataset.k; mpDocNote(); } };
-  $('mp-players').addEventListener('pointerover', (e) => { if (e.pointerType === 'mouse') docRow(e); });
-  $('mp-players').addEventListener('click', docRow);
-  $('mp-players').addEventListener('focusin', docRow);
+  // A computer's doctrine, in a line under the list (mpDocNote): with a mouse, the row under it (the line keeps its
+  // height, so nothing moves); on a touch screen, the row tapped (tap it again to close the line). How it plays opens
+  // the whole description; a click on another row closes it again.
+  const rowOf = (e) => { const li = e.target.closest && e.target.closest('li.ai[data-k]'); return li ? +li.dataset.k : null; };
+  $('mp-players').addEventListener('pointerover', (e) => { const k = rowOf(e); if (e.pointerType === 'mouse' && k !== null && !UI.mpDocOpen && UI.mpDocK !== k) { UI.mpDocK = k; mpDocNote(); } });
+  $('mp-players').addEventListener('click', (e) => {
+    const k = rowOf(e);
+    if (k === null) return;
+    const onSelect = e.target.closest('select');
+    if (!canHover() && UI.mpDocK === k && !onSelect) UI.mpDocK = null; // (the same row again: close)
+    else { if (UI.mpDocK !== k) UI.mpDocOpen = false; UI.mpDocK = k; }
+    mpDocNote();
+  });
+  $('mp-players').addEventListener('focusin', (e) => { const k = rowOf(e); if (k !== null && e.target.matches(':focus-visible') && UI.mpDocK !== k) { UI.mpDocK = k; UI.mpDocOpen = false; mpDocNote(); } });
+  $('mp-docnote').addEventListener('click', (e) => {
+    const b = e.target.closest && e.target.closest('button[data-doc]');
+    if (!b) return;
+    sfx('click');
+    if (b.dataset.doc === 'close') UI.mpDocK = null; else UI.mpDocOpen = b.dataset.doc === 'more';
+    mpDocNote();
+  });
   $('mp-start').onclick = () => { sfx('click'); mpHostStart(); };
   $('mp-leave').onclick = () => { sfx('click'); mpLeaveLobby(); };
   $('mp-joincancel').onclick = () => { sfx('click'); mpStop(); netClose(); netRemember(false); mpView('connect'); closeMulti(); syncRejoin(); };
@@ -166,7 +182,7 @@ function mpMenuSettings(final, people) {
   return {
     seed: m.seed, diff: m.diff, size: m.size.versus ?? DEFAULT_SIZE.versus, rough: m.rough, rich: m.rich,
     shape: pick.shape, shapeRnd: !final && !!m.shapeRnd, biome: BIOME_ORDER[pick.biome], biomeRnd: !final && !!m.biomeRnd,
-    players: clamp(Math.max(Math.round(m.players) || 2, least), 2, 4), style: m.style, styles: [0, 1, 2].map((k) => menuSeatStyle(k)), nuke: !!m.nuke, events: !!m.events, victory: m.victory || 'capture',
+    players: clamp(Math.max(Math.round(m.players) || 2, least), 2, 4), style: m.style, styles: [0, 1, 2, 3].map((p) => menuSlotStyle(p)), nuke: !!m.nuke, events: !!m.events, victory: m.victory || 'capture',
     teams: !!m.teams && total === 4, teamOf: m.teams && total === 4 ? mpTeamSeats() : null,
     sum: mpSummary(),
   };
@@ -213,33 +229,37 @@ function renderLobby() {
   let k = 0, html = '';
   const teams = !!(st && st.teams && st.teamOf);
   const tags = (s) => [s.seat === NET.host ? 'host' : '', s.seat === NET.seat ? 'you' : '', s.on ? '' : 'away', s.v && s.v !== hostV ? 'different version' : ''].filter(Boolean).join(' · ');
-  const person = (s, col) => `<li class="${s.on ? '' : 'off'}${host && teams ? ' mp-swap' : ''}" data-seat="${s.seat}"><span class="dot" style="background:${col}"></span><span class="nm">${esc(s.name)}</span><small>${tags(s)}</small></li>`;
-  // The computer's places, in player order, each with its doctrine: the host picks it here (a dropdown), and it goes
-  // round with the settings (st.styles, one for each computer player in turn), so every device deals the same.
-  let ck = 0;
+  const person = (s, col, also) => `<li class="${s.on ? '' : 'off'}${host && teams ? ' mp-swap' : ''}" data-seat="${s.seat}"><span class="dot" style="background:${col}"></span><span class="nm">${esc(s.name)}</span><small>${[tags(s), also].filter(Boolean).join(' · ')}</small></li>`;
+  // The computer's places, each with its doctrine: the host picks it here (a dropdown), and it goes round with the
+  // settings (st.styles, by player slot: a choice stays with its colony), so every device deals the same. The rows are
+  // the places the game will have: people away at the start get none (see mpHostStart), so they're listed apart.
+  const slots = [];
   // (each place by its callsign, the Accord's name for its colour: VERMILION for red...)
-  const cpu = (col, ally) => {
-    const k = ck++, v = mpSeatDoc(k), sign = CALLSIGNS[PLAYER_COLORS.indexOf(col)] || 'Computer', who = `${sign}, computer ${ally ? 'player' : 'rival'}`;
-    const doc = host ? `<select class="mp-doc" data-k="${k}" aria-label="${who}: doctrine">${['Random', ...PERSONALITY_ORDER.map((d) => PERSONALITIES[d].name)].map((n, x) => `<option value="${x}"${x === v ? ' selected' : ''}>${n}</option>`).join('')}</select>`
+  const cpu = (slot, ally) => {
+    slots.push(slot);
+    const v = mpSeatDoc(slot), sign = CALLSIGNS[slot] || 'Computer', who = `${sign}, computer ${ally ? 'player' : 'rival'}`;
+    const doc = host ? `<select class="mp-doc" data-k="${slot}" aria-label="${who}: doctrine">${['Random', ...PERSONALITY_ORDER.map((d) => PERSONALITIES[d].name)].map((n, x) => `<option value="${x}"${x === v ? ' selected' : ''}>${n}</option>`).join('')}</select>`
       : `<small class="mp-docname">${docNameOf(v)}</small>`;
-    return `<li class="ai" data-k="${k}" title="${esc(docInfo(docKeyOf(v)))}"><span class="dot" style="background:${col}"></span><span class="nm">${sign}</span><small>computer${st ? ' · ' + DIFFICULTY[st.diff].label : ''}</small>${doc}</li>`;
+    return `<li class="ai" data-k="${slot}" title="${esc(docInfo(docKeyOf(v)))}"><span class="dot" style="background:${PLAYER_COLORS[slot]}"></span><span class="nm">${sign}</span><small>computer${st ? ' · ' + DIFFICULTY[st.diff].label : ''}</small>${doc}</li>`;
   };
   if (teams) {
     // Two a side: the people on each team, then the computer in the empty places (in the colours they'll land in).
     for (const t of [0, 1]) {
       html += `<li class="mp-team"><span>Team ${t ? 'B' : 'A'}</span>${host ? '<small>tap a player to move them across</small>' : ''}</li>`;
-      const on = NET.seats.filter((s) => st.teamOf[s.seat] === t);
-      for (let n = 0; n < 2; n++) html += n < on.length ? person(on[n], PLAYER_COLORS[t * 2 + n]) : cpu(PLAYER_COLORS[t * 2 + n], true);
+      const on = people.filter((s) => st.teamOf[s.seat] === t);
+      for (let n = 0; n < 2; n++) html += n < on.length ? person(on[n], PLAYER_COLORS[t * 2 + n]) : cpu(t * 2 + n, true);
     }
+    const away = NET.seats.filter((s) => !s.on);
+    if (away.length) html += '<li class="mp-team"><span>Away</span></li>' + away.map((s) => person(s, '#555', `Team ${st.teamOf[s.seat] ? 'B' : 'A'}`)).join('');
   } else {
     for (const s of NET.seats) html += person(s, s.on ? PLAYER_COLORS[k++ % PLAYER_COLORS.length] : '#555');
-    for (let a = 0; a < ai; a++) html += cpu(PLAYER_COLORS[k++ % PLAYER_COLORS.length], false);
+    for (let a = 0; a < ai; a++) html += cpu(k++ % PLAYER_COLORS.length, false);
   }
   if (UI.mpLobbyHTML !== html || !$('mp-players').children.length) { $('mp-players').innerHTML = html; UI.mpLobbyHTML = html; }
-  UI.mpCpus = ck;
+  UI.mpCpuSlots = slots;
   if (host) for (const sel of $('mp-players').querySelectorAll('select.mp-doc')) sel.onchange = () => {
-    const k = +sel.dataset.k;
-    UI.menu.styles[k] = +sel.value; UI.mpDocK = k;
+    const p = +sel.dataset.k;
+    UI.menu.styles[p] = +sel.value; UI.mpDocK = p; UI.mpDocOpen = false;
     saveSettings(); sfx('click'); mpSendSettings(); renderLobby();
   };
   mpDocNote();
@@ -265,20 +285,68 @@ function renderLobby() {
   if (host && !st) mpSendSettings();
 }
 
-/** The k-th computer player's doctrine in the lobby (0 Random, 1 to 5): the host's own choice, or the settings it sent round. */
-function mpSeatDoc(k) {
-  if (NET.seat === NET.host) return menuSeatStyle(k);
+/** Player slot p's doctrine in the lobby (0 Random, 1 to 5): the host's own choice, or the settings it sent round. */
+function mpSeatDoc(p) {
+  if (NET.seat === NET.host) return menuSlotStyle(p);
   const st = NET.settings;
-  if (st && Array.isArray(st.styles) && Number.isInteger(st.styles[k])) return st.styles[k];
+  if (st && Array.isArray(st.styles) && Number.isInteger(st.styles[p])) return st.styles[p];
   return st && Number.isInteger(st.style) ? st.style : 1;
 }
 
-/** The line under the lobby's list: how the computer player last picked (or pointed at, or tapped) plays. */
+/**
+ * The places (player slots) the computer will take, as mpHostStart and the relay seat the game: the people in the lobby
+ * first, in the order they sat down, or (teamOf: a team game) two a side, Team A in places 0 and 1; people away at the
+ * start get no place. `total`: the colonies the settings ask for.
+ */
+function mpCpuSlots(total, teamOf) {
+  const on = NET.seats.filter((s) => s.on), n = Math.max(total, on.length);
+  if (teamOf && n === 4) {
+    const used = new Set();
+    for (const t of [0, 1]) on.filter((s) => teamOf[s.seat] === t).slice(0, 2).forEach((s, i) => used.add(t * 2 + i));
+    return [0, 1, 2, 3].filter((p) => !used.has(p));
+  }
+  return Array.from({ length: n - on.length }, (_, i) => on.length + i);
+}
+
+/** Can the lobby's doctrine line follow the mouse (see canHover)? */
+const mpHover = () => typeof canHover === 'function' && canHover();
+
+/**
+ * The line under the lobby's list: the doctrine of the computer place last pointed at or tapped, in a sentence, with
+ * How it plays for the whole of it. With a mouse it is always there (the first computer's until another is pointed
+ * at) and keeps the height of the longest sentence, so pointing along the rows moves nothing; on a touch screen it
+ * shows once a row is tapped, and closes again.
+ */
 function mpDocNote() {
-  const el = $('mp-docnote'), k = UI.mpDocK;
-  const on = k != null && k < (UI.mpCpus || 0);
-  el.hidden = !on;
-  if (on) { const html = docHTML(docKeyOf(mpSeatDoc(k))); if (el.innerHTML !== html) el.innerHTML = html; }
+  const el = $('mp-docnote'), slots = UI.mpCpuSlots || [], hover = mpHover();
+  if (!slots.includes(UI.mpDocK)) { UI.mpDocK = hover && slots.length ? slots[0] : null; UI.mpDocOpen = false; }
+  const k = UI.mpDocK;
+  el.hidden = k == null;
+  if (k == null) return;
+  const d = docKeyOf(mpSeatDoc(k)), sign = CALLSIGNS[k] || 'Computer';
+  const btn = (what, label) => `<button type="button" class="m-docmore" data-doc="${what}">${label}</button>`;
+  // (on a touch screen the row just tapped is right above: no callsign, and a × to close the line)
+  const html = (hover ? `<span class="mp-docwho">${sign}</span> ` : '') + (UI.mpDocOpen ? docHTML(d) + ' ' + btn('less', 'Less') : mpDocLine(d) + ' ' + btn('more', 'How it plays')) +
+    (hover ? '' : ` <button type="button" class="m-docmore" data-doc="close" aria-label="Close">×</button>`);
+  if (el.innerHTML !== html) el.innerHTML = html;
+  // (with a mouse: the height of the longest line, measured at this width)
+  const key = hover ? el.offsetWidth + '|' + (UI.mpDocOpen ? 1 : 0) : '';
+  if (el.dataset.sizedFor === key) return;
+  el.dataset.sizedFor = key;
+  el.style.minHeight = '';
+  if (!hover || !el.offsetWidth) return;
+  const probe = el.cloneNode(false);
+  probe.removeAttribute('id'); probe.hidden = false;
+  probe.style.cssText = `position:absolute;visibility:hidden;left:-9999px;top:0;min-height:0;width:${el.offsetWidth}px`;
+  el.parentNode.appendChild(probe);
+  let h = 0;
+  for (const x of ['random', ...PERSONALITY_ORDER]) { probe.innerHTML = `<span class="mp-docwho">VERMILION</span> ${mpDocLine(x)} ${btn('more', 'How it plays')}`; h = Math.max(h, probe.offsetHeight); }
+  probe.remove();
+  el.style.minHeight = h + 'px';
+}
+/** A doctrine in a few words, for the lobby's line: "Warden (turtle): walls in, then comes late in force." */
+function mpDocLine(d) {
+  return d === 'random' ? `<b>Random:</b> ${DOCTRINE_RANDOM_TAG}.` : `<b>${docLabel(d)}:</b> ${PERSONALITIES[d].tag}.`;
 }
 
 function esc(s) { return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
@@ -325,6 +393,20 @@ function mpLeaveLobby() {
 
 /* ------------------------------------------------------------------ the game */
 
+/**
+ * The game every device builds from the start's settings `s` and the player slots people play (`humans`). The
+ * doctrines the host picked are by place (player slot, `s.styles`); newGame takes them for its computer players in turn.
+ */
+function mpGameOpts(s, humans) {
+  const total = Math.max(s.players, humans.length), cpus = Array.from({ length: total }, (_, p) => p).filter((p) => !humans.includes(p));
+  return {
+    seed: s.seed, difficulty: s.diff, mode: 'versus', size: s.size, rough: s.rough, rich: s.rich, shape: s.shape, nuke: !!s.nuke,
+    biome: s.biome, players: total, style: docKeyOf(s.style),
+    styles: Array.isArray(s.styles) ? cpus.map((p) => (Number.isInteger(s.styles[p]) ? docKeyOf(s.styles[p]) : undefined)) : undefined,
+    events: !!s.events, wildlife: false, victory: s.victory, humans, teams: !!s.teams,
+  };
+}
+
 /** The start (from the relay): make the game, or (a reloaded page) ask for it. */
 function mpOnStart(m) {
   if (MP.on || MPJ.on) return; // (a reconnect brings the start again)
@@ -346,12 +428,7 @@ function mpOnStart(m) {
   const s = m.settings;
   closeMulti();
   closePicker(false);
-  newGame({
-    seed: s.seed, difficulty: s.diff, mode: 'versus', size: s.size, rough: s.rough, rich: s.rich, shape: s.shape, nuke: !!s.nuke,
-    biome: s.biome, players: Math.max(s.players, humans.length), style: docKeyOf(s.style),
-    styles: Array.isArray(s.styles) ? s.styles.map((v) => (Number.isInteger(v) ? docKeyOf(v) : undefined)) : undefined,
-    events: !!s.events, wildlife: false, victory: s.victory, humans, teams: !!s.teams,
-  });
+  newGame(mpGameOpts(s, humans));
   m.players.forEach((P, k) => { if (P) S.players[k].name = P.name; });
   ME = me;
   mpStart({ me, humans, send: netSend });

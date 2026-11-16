@@ -276,13 +276,3 @@ Murmur" is the blanket name for the creatures, with classes: the Scuttler, the B
 Spitter and the Delver; their look is direction B, crystal-backed but mole-like (design/murmur); the Lunar biome is
 Penelope, where no Murmur live. The new-game setup keeps the plain biome names (Red desert, Forest...); the region
 names are for flavor elsewhere. On the setup screen each rival doctrine has a tooltip saying in depth how it plays.
-
-Now in the game (Nov 2026): the narrator's lines above (match start, with "Landing site:" and the region; first road;
-nightfall; Uplink taken; a rival base captured; defeat), plus a victory line ("Region secured for the Sponsor. Report
-sent. Awaiting further instructions.") and lines for winning or losing on Domination or the Uplinks; the doctrines'
-sample lines and more like them, spoken when a rival attacks you, fires a Missile at you and surrenders; the callsigns
-for the four colours; the region names on the briefing card and the loading screen; Ringfall's and the *Wren*'s event
-lines, with the *Wren*'s cargo lists (seed stock, school tablets, 4,000 pairs of children's shoes, and others in the same
-vein); a flavor line on every building and robot panel (the samples above, the rest written in the same voice); the
-loading-screen lines; the Arrival clock on the Command Base; and no Murmur on Penelope (no Burrows, no raids). The
-creatures in the game so far are the Scuttler and the Brute, and their nests are called Burrows.
