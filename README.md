@@ -166,8 +166,13 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   that leaves it for open ground draws on from there, and built road is never touched by a drag);
   the banner, at the top of the screen, shows the cost, with **Undo**, **Clear** and **Build**. On an upright phone the
   banner (and every mode's banner) is docked across the bottom in place of the tools: the line is up to three lines,
-  the tools are one row to swipe along (an end with more tools beyond it fades out, `segEdges`) with Route to and Traffic at its end, Undo, Clear, Build and Done share the row
-  below, and **How it works** is a tab on the banner's edge that opens as a card over the map. Sketching up to the edge
+  the tools are behind one button, **Tool: Roads ▾** (the tool in use; it drops the word Tool where Route to leaves
+  it too narrow, `toolFit`), that opens all of them at once as a grid over the map, the one in use lit, and shuts when
+  one is picked (`toolPicker`; a touch elsewhere shuts it too, and one on the map does nothing more), with Route to,
+  Traffic and Done beside it and Undo, Clear, Build and Done in the row below; a mission goal that lights a Paths
+  tool lights the Tool button while that tool isn't the one in use (`coachTarget`). On a phone on its side the tools
+  are one row to swipe along (an end with more tools beyond it fades out, `segEdges`). **How it works** is a tab on
+  the banner's edge that opens as a card over the map. Sketching up to the edge
   of the map scrolls it on under the finger (`paintScroll`), and a tap just above the docked banner glides the map up
   so the banner's new row doesn't cover it (`planInView`). Nothing is spent until
   Build. Building closes Paths, straight back to the map; leaving Paths any other way drops an unbuilt sketch.

@@ -170,6 +170,13 @@ function initUI() {
   window.addEventListener('pointerdown', (e) => {
     if (!$('speed-menu').hidden && !$('speed-menu').contains(e.target) && e.target !== $('btn-speed')) $('speed-menu').hidden = true;
   });
+  // The Paths tools picker (an upright phone's Tool button) shuts at a touch anywhere else; one on the map does nothing more.
+  window.addEventListener('pointerdown', (e) => {
+    if (!UI.toolPick || $('banner-seg').contains(e.target) || $('banner-tool').contains(e.target)) return;
+    const shown = $('banner-tool').getClientRects().length > 0;
+    toolPicker(false);
+    if (shown && e.target === $('game')) e.stopPropagation();
+  }, true);
   $('objective').onclick = () => { UI.objCollapsed = !UI.objCollapsed; UI.objManual = true; UI.hudT = 0; };
   $('btn-msgs').onclick = () => { sfx('click'); if (UI.sheetKind === 'msgs') closeSheet(); else { setMode('normal'); openMsgSheet(); } };
   $('sheet-close').onclick = () => closeSheet();
@@ -2202,6 +2209,7 @@ function escapeKey() {
   if (!$('screen-pause').hidden) { $('p-resume').click(); return; }
   if (!$('screen-over').hidden) return;
   if (UI.sheetKind) { closeSheet(); return; }
+  if (UI.toolPick && !$('banner').hidden) { toolPicker(false); return; } // (the Paths tools picker of an upright phone)
   // In Paths with a plan sketched, Esc takes back the last stroke (again for the one before); with none left it leaves Paths.
   if (R.mode === 'road' && !draftEmpty()) { draftUndo(); showRoadBanner(draftEmpty() ? 'Plan cleared.' : 'Last stroke taken back (Esc again for the one before; Clear drops the whole plan).', true); return; }
   if (R.mode !== 'normal') { setMode(UI.planKept ? 'road' : 'normal'); return; }
@@ -2925,6 +2933,10 @@ function coachTarget(g) {
   let left = coachLeft(c.sel);
   // (In Paths with a sketch drawn, for a goal done there: its Build makes the sketch real.)
   if (R.mode === 'road' && /#btn-road|#banner-/.test(sel) && !/#banner-ok/.test(left) && !$('banner-ok').hidden) left = left ? `${left}, #banner-ok` : '#banner-ok';
+  // (An upright phone keeps the Paths tools behind the Tool button: with the picker shut, the button lights for a goal's
+  // tool that isn't the one in use. Open, the tool's own button in it lights, as in the row elsewhere.)
+  const tools = [...sel.matchAll(/#banner-seg \[data-v=['"]?(\w+)/g)].map((m) => m[1]);
+  if (tools.length && !tools.some(pathsToolOn) && toolButtonShut()) left = left ? `${left}, #banner-tool` : '#banner-tool';
   return { sel: left, ring: c.ring };
 }
 
@@ -3130,6 +3142,7 @@ function setMode(mode, keepPlan) {
   if ((R.mode === 'road' || UI.planKept) && mode !== 'road' && !keepPlan) dropDraft();
   if (R.mode === 'road' && mode !== 'road') UI.routeGhost = null;
   UI.planKept = !!keepPlan && !draftEmpty();
+  UI.toolPick = false; // (the Paths tools picker of an upright phone: see toolPicker)
   R.mode = mode;
   for (const m of ['road', 'place', 'attack', 'aim', 'land', 'airdrop']) document.body.classList.toggle('mode-' + m, mode === m);
   document.body.classList.toggle('mode-on', mode !== 'normal'); // (any mode: on an upright phone its banner takes the bottom bar's place)
@@ -3528,6 +3541,8 @@ function strikePicked(t, deck) {
 function showBanner(html, okLabel, cancelLabel) {
   $('banner').hidden = false;
   $('banner-seg').hidden = true;
+  $('banner-tool').hidden = true;
+  $('banner').classList.remove('picking');
   $('banner-traffic').hidden = true;
   $('banner-route').hidden = true;
   $('banner-undo').hidden = true;
@@ -3563,6 +3578,7 @@ function crossingTools() {
   pathsSeg(type);
   $('banner').classList.toggle('noplan', $('banner-ok').hidden);
   bannerMissionHint();
+  toolFit();
 }
 
 function enterPlaceMode(type, moveFrom) {
@@ -4720,24 +4736,66 @@ function showRoadBanner(problem, info) {
   rb.onclick = () => { UI.roadMode = mode; UI.route = !UI.route; UI.routeGhost = null; UI.routePrev = null; sfx('click'); showRoadBanner(); };
   if (R.traffic) $('banner-text').insertAdjacentHTML('beforeend', ` <span class="traffic-key">${trafficSummary()}</span>`);
   bannerMissionHint();
+  toolFit();
 }
 
-/** The Paths tools row (#banner-seg) on show, with `mode` picked (Walls only with war on); each button opens its tool. */
+/**
+ * The Paths tools row (#banner-seg) on show, with `mode` picked (Walls only with war on); each button opens its tool.
+ * On an upright phone the row is put away behind one button, Tool: Roads ▾ (#banner-tool), that opens all the tools at
+ * once as a grid over the map (toolPicker; style.css): picking one closes it.
+ */
 function pathsSeg(mode) {
   $('banner-seg').hidden = false;
+  let name = '';
   for (const btn of $('banner-seg').children) {
     btn.classList.toggle('on', btn.dataset.v === mode);
+    if (btn.dataset.v === mode) name = btn.firstChild.textContent;
     if (btn.dataset.v === 'wall') btn.hidden = !warOn();
-    btn.onclick = () => openPaths(btn.dataset.v);
+    btn.onclick = () => { UI.toolPick = false; openPaths(btn.dataset.v); };
   }
+  const tb = $('banner-tool');
+  tb.hidden = false;
+  tb.querySelector('.bt-v').textContent = name;
+  tb.setAttribute('aria-label', `Tool: ${name}. Pick another`);
+  tb.onclick = () => { sfx('click'); toolPicker(!UI.toolPick); };
+  toolPicker(UI.toolPick);
   // The tools are one row to swipe along on a phone: the one in use is brought into view when it changes.
   if (UI.segShown !== mode) { UI.segShown = mode; const on = $('banner-seg').querySelector('.on'); if (on && on.scrollIntoView) on.scrollIntoView({ block: 'nearest', inline: 'center' }); }
   // Where it runs on past the edge, that edge fades out (style.css: .more-l, .more-r), so the tools out of sight show.
   const seg = $('banner-seg');
-  if (!seg.onscroll) { seg.onscroll = () => segEdges(seg); window.addEventListener('resize', () => segEdges(seg)); }
+  if (!seg.onscroll) { seg.onscroll = () => segEdges(seg); window.addEventListener('resize', () => { segEdges(seg); toolFit(); }); }
   segEdges(seg);
   requestAnimationFrame(() => segEdges(seg)); // (once the scroll to the tool in use has landed)
 }
+/**
+ * The Paths tools picker (an upright phone's Tool button) open or shut. Open, How it works is put away (they'd take
+ * the same place over the map). A tap anywhere else shuts it, and one on the map does nothing else (initUI).
+ */
+function toolPicker(open) {
+  UI.toolPick = !!open;
+  $('banner').classList.toggle('picking', UI.toolPick);
+  $('banner-tool').setAttribute('aria-expanded', UI.toolPick ? 'true' : 'false');
+  const how = UI.toolPick && $('banner-text').querySelector('details.how');
+  if (how && how.open) how.open = false;
+}
+/**
+ * The Tool button says "Tool:" only where that leaves room for the whole name of the tool (not beside Route to on a
+ * narrow phone). Called once the banner's buttons are settled (showRoadBanner, crossingTools) and on a resize; measured
+ * again only when something that sets the button's width has changed.
+ */
+function toolFit() {
+  const tb = $('banner-tool'), v = tb.querySelector('.bt-v');
+  const key = `${v.textContent}|${$('banner').classList.contains('noplan')}|${$('banner-route').hidden}|${$('banner-undo').hidden}|${innerWidth}x${innerHeight}`;
+  if (tb.hidden || tb.dataset.fit === key) return;
+  tb.dataset.fit = key;
+  tb.classList.remove('tight');
+  if (v.scrollWidth > v.clientWidth + 1) tb.classList.add('tight');
+}
+/** Is the Tool button showing (an upright phone in Paths, or placing a Viaduct or Ropeway), with its picker shut? */
+function toolButtonShut() { return !UI.toolPick && !$('banner').hidden && !$('banner-tool').hidden && $('banner-tool').getClientRects().length > 0; }
+/** Is v the Paths tool in use (a Viaduct or Ropeway: being placed)? */
+function pathsToolOn(v) { return R.mode === 'road' ? UI.roadMode === v : crossingPlacing() && UI.placeType === v; }
+
 /** Mark which ends of a row that scrolls sideways have more beyond them. */
 function segEdges(el) {
   const more = el.scrollWidth - el.clientWidth > 2;
