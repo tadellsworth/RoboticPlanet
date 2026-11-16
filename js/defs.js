@@ -31,7 +31,7 @@ const PAVE = [null,
  * rare). `desc`: the line shown on the new-game screen. (The Forest
  * keeps the key 'jungle', which saves and missions use.) `region`: its name on Ithaca I (LORE.md), used only as
  * flavour (the briefing's landing site, the loading lines): the new-game screen keeps the plain names. `silent`: no
- * Murmur live there (Lunar is Penelope, the moon): no nests, no raids, whatever the setup says (see murmurGround).
+ * Murmur live there (Lunar is Argos, the moon): no nests, no raids, whatever the setup says (see murmurGround).
  */
 const BIOMES = {
   desert: { name: 'The Rust', kind: 'Red desert', region: 'the Rust', plants: 0.07, desc: 'Rust-red sand and dust under a hard sun; now and then a sandstorm.' },
@@ -41,7 +41,7 @@ const BIOMES = {
   savanna: { name: 'The Long Grass', kind: 'Savanna', region: 'the Long Grass', plants: 0.12, desc: 'Golden grassland with umbrella acacias, baobabs and termite mounds; now and then dust devils.' },
   swamp: { name: 'The Sump', kind: 'Swamp', region: 'the Sump', plants: 0.38, groves: true, desc: 'Dark mud, stands of cypress and mangrove, reeds and duckweed; now and then a thick fog, with fireflies at night.' },
   volcanic: { name: 'Cinderlands', kind: 'Volcanic ashlands', region: 'Cinderlands', plants: 0.1, desc: 'Black basalt and ash, charred trees and fumaroles, lakes of lava that glow at night; now and then ash and embers fall.' },
-  lunar: { name: 'Penelope', kind: 'Lunar: the moon', region: 'Penelope, the moon', plants: 0.12, weights: [1, 1, 1, 1, 1, 0.12], silent: true, desc: 'Grey regolith pocked with craters, frozen cryo-ice pools and the odd wreck of an old probe; now and then ring dust streaks overhead. No Murmur live here.' },
+  lunar: { name: 'Argos', kind: 'Lunar: the moon', region: 'Argos, the moon', plants: 0.12, weights: [1, 1, 1, 1, 1, 0.12], silent: true, desc: 'Grey regolith pocked with craters, frozen cryo-ice pools and the odd wreck of an old probe; now and then ring dust streaks overhead. No Murmur live here.' },
   alien: { name: 'The Bloom', kind: 'Alien bloom', region: 'the Bloom', plants: 0.3, desc: 'Violet moss and strange growths that glow after dark, beside pink lakes; now and then an aurora.' },
 };
 // (New biomes go on the end: the new-game screen saves the choice as its place in this list.)
@@ -1380,7 +1380,7 @@ const SPLASH_LINES = [
   'The Long Grass: easy roads, nowhere to hide.',
   'Pavers hate the Sump.',
   'The White: Ore locked in ice. The coldest posting on Ithaca I.',
-  'Penelope, the moon, is the only silent ground the robots have.',
+  'Argos, the moon, is the only silent ground the robots have.',
   'Ringfall keeps the planet stocked. The Sponsors called it a self-refilling quarry.',
   'The Wren arrives on schedule, as always.',
   'No robot has ever logged one of the Murmur alone.',
@@ -1404,7 +1404,7 @@ function wrenCargo(n) { return WREN_CARGO[(Math.abs(n | 0)) % WREN_CARGO.length]
 /** The Warden counts the days: day 12,054 when the game starts, one more each game day (12 minutes). */
 function wardenDay(t) { return String(12054 + Math.floor(Math.max(0, t || 0) / 720)).replace(/\B(?=(\d{3})+(?!\d))/g, ','); }
 
-/** Do the Murmur live on this biome? Not on Lunar (Penelope, the moon: the only silent ground). */
+/** Do the Murmur live on this biome? Not on Lunar (Argos, the moon: the only silent ground). */
 function murmurGround(biome) { return !(BIOMES[biome] && BIOMES[biome].silent); }
 /** The biome's name on Ithaca I ('the Rust'), for flavour; capitalised at the start of a sentence with cap. */
 function regionName(biome, cap) {

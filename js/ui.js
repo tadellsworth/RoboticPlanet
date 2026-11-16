@@ -665,13 +665,13 @@ function syncMenu() {
     lab.dataset.info = docInfo(docKeyOf(v));
   }
   $('m-wild-row').hidden = !colony;
-  // The Murmur: none on Lunar (Penelope, the moon, is silent ground), so there the switch is off and can't be turned on
+  // The Murmur: none on Lunar (Argos, the moon, is silent ground), so there the switch is off and can't be turned on
   // (the setting itself is kept for the next biome).
   const silent = !menuMurmur();
   $('m-wild').disabled = silent;
   $('m-wild-row').classList.toggle('na', silent);
-  $('m-wild-row').dataset.info = silent ? 'The Murmur: none on Penelope, the moon (no nests, no raids).'
-    : 'The Murmur (Colony): native creatures burrow in the wilds and raid what you build near their nests. None on Penelope, the moon.';
+  $('m-wild-row').dataset.info = silent ? 'The Murmur: none on Argos, the moon (no nests, no raids).'
+    : 'The Murmur (Colony): native creatures burrow in the wilds and raid what you build near their nests. None on Argos, the moon.';
   for (const [id, on] of [['m-nuke', m.nuke], ['m-wild', m.wild && !silent], ['m-events', m.events], ['m-unlimited', m.unlimited], ['m-weather', weatherOn()]]) {
     $(id).checked = !!on;
     $(id + '-row').classList.toggle('on', !!on);
@@ -2317,7 +2317,7 @@ function startNewGame() {
     const L = getE(S.players[ME].lander), nests = S.buildings.filter((b) => !b.dead && BDEFS[b.type].wild);
     const near = L && nests.length ? nests.reduce((a, b) => (dist2(b.x, b.y, L.x, L.y) < dist2(a.x, a.y, L.x, L.y) ? b : a)) : null;
     postMsg(ME, `The Murmur live here: ${nests.length} nests sit out in the wilds (red on the minimap; the nearest is ${near ? dirText(L, near) : 'out there'}${near ? ': press J or tap here to look' : ''}). From about 7 minutes in they raid whatever you build near their nests. Pulse Turrets (with Crystal) and warbots keep them off; clear a nest with warbots to win the goods it hoards.`, near ? near.x : 0, near ? near.y : 0, 'warn');
-  } else if (UI.menu.mode === 'colony' && UI.menu.wild && !murmurGround(S.settings.biome)) postMsg(ME, 'Penelope is silent ground: no Murmur live on the moon.', 0, 0, 'info');
+  } else if (UI.menu.mode === 'colony' && UI.menu.wild && !murmurGround(S.settings.biome)) postMsg(ME, 'Argos is silent ground: no Murmur live on the moon.', 0, 0, 'info');
   if (S.posts && S.posts.length) {
     // Pointed at the post nearest home (J or a tap jumps there); the rest are gold on the minimap.
     const L = getE(S.players[ME].lander), near = L ? S.posts.reduce((a, p) => (dist2(p.x, p.y, L.x, L.y) < dist2(a.x, a.y, L.x, L.y) ? p : a)) : null;

@@ -57,7 +57,7 @@ Valleys: cards in groups, each with a sketch and a line on it) and the **map siz
 Huge). **More settings** (a collapsible section, its summary listing whatever isn't the default) holds the planet
 number, the **biome** (named for its region of Ithaca I, `BIOMES[k].name`, with its kind of ground under it, `kind`: the
 Rust (red desert), Greenreach (forest), the White (polar snow), Emberwood, the Long Grass, the Sump, Cinderlands, the
-Bloom and Penelope, the moon; scenery only, with plants that roads and buildings clear), the
+Bloom and Argos, the moon; scenery only, with plants that roads and buildings clear), the
 **terrain** (Flat, Gentle, Rolling, Rugged, Mountainous), the **resources** (Scarce to Abundant; Normal is
 `RESOURCE_PRESETS` density 0.78, amount 0.8, which was Sparse until everything was lowered a notch: older saves,
 saved planets and missions move up one, `resLevelUp`), the **rival doctrine** (one for all, or one for each rival),
@@ -834,14 +834,14 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   goes in under a newer warning (a phone on its side shows only the newest) and gives way only to a newer story line,
   the lines of one moment (a surrender's last words and the narrator's line after them) staying together.
   **Regions** (`BIOMES[k].region`, `regionName`): the Rust, Greenreach, the White, Emberwood, the Long Grass, the Sump,
-  Cinderlands and the Bloom, regions of Ithaca I, and Penelope, its moon (Lunar), as flavour only (briefing, landing message, loading lines): the
+  Cinderlands and the Bloom, regions of Ithaca I, and Argos, its moon (Lunar), as flavour only (briefing, landing message, loading lines): the
   setup keeps the plain biome names. **Panel flavour** (`FLAVOR`, `flavorLine`): one quiet italic line at the foot of
   every building's and robot's panel (and the Trade Post's and Uplink's), below every button; the Command Base's is its
   Arrival clock (`ARRIVAL_CLOCK`), shown under its name. **Loading lines** (`SPLASH_LINES`, picked at first paint by an
   inline script in `index.html`, which keeps its own copy): one under the splash bar, which now stays about 2 s.
 - **The Murmur** (players' name for the wildlife: Colony; `WILD` in `js/defs.js`, `updateNest`/`updateCritter` in `js/sim.js`; the
   new-game option "The Murmur", on by default; in missions only where one switches it on, `wildlife: true`, as The Murmur (id `bughunt`)
-  does). **None on a silent biome** (`BIOMES.lunar.silent`, `murmurGround`): on Lunar, Penelope the moon, `newGame`
+  does). **None on a silent biome** (`BIOMES.lunar.silent`, `murmurGround`): on Lunar, Argos the moon, `newGame`
   never sets `S.wildlife`, a mission's `wildlife` is ignored and `placeNests` places nothing, so there are no nests and
   no raids in any mode; the setup's switch is off and greyed there (the saved setting is kept for other biomes), and an
   old Lunar save that has nests keeps them. Internally the creatures are still `wildlife`, the nests type `'nest'`;

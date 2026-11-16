@@ -179,7 +179,7 @@ a Spitter (spits conductive crystal slurry that shorts robots and turrets for a 
 Delver (tunnels under Walls and surfaces behind them: counters turtling). Mechanics from the lore:
 
 - A game setting (Off / Quiet / Active, like Planetary events), in Versus as well as Colony; none on the Lunar biome
-  (Penelope, the moon, is the only silent ground).
+  (Argos, the moon, is the only silent ground).
 - Nests near Crystal seams and strike sites; surges after a Ringfall.
 - Drawn to charge: raids go for Fuel Stations, Generators, Crystal stockpiles; bigger colonies draw more.
 - They feed on the war: battle wreckage feeds their burrows, so long wars grow a third enemy that hits everyone (the
