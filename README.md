@@ -72,8 +72,11 @@ any other game.
 
 ## Play it
 
-- **Hosted:** once GitHub Pages is enabled (see below) the game lives at https://tadellsworth.github.io/RoboticPlanet/ (in general
-  `https://<your-user>.github.io/<repo>/`). On a phone, open it and use **Add to Home Screen**: it runs
+- **Hosted:** the game lives at https://terrafall.app (and www.terrafall.app), served by GitHub Pages under a custom
+  domain; the old https://tadellsworth.github.io/RoboticPlanet/ forwards there. (A fork without a domain is at
+  `https://<your-user>.github.io/<repo>/` once Pages is enabled, see below.) Saves are kept per address, so a save made
+  on the old address moves over by Download save file and Load a save file. Link previews (`og:` and `twitter:` tags,
+  `icons/og-image.jpg`), `robots.txt` and `sitemap.xml` point at the domain. On a phone, open it and use **Add to Home Screen**: it runs
   full-screen like an app and works offline. The service worker (`sw.js`) asks the server for a newer copy of every file
   each time the game is opened; art already checked since then comes straight from its cache (the day-and-night sets
   are let go and loaded again every few minutes), and cached art waits at most `ART_WAIT` (3 s) for a slow server.
