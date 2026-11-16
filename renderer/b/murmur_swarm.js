@@ -287,7 +287,7 @@ function drainer(L, K, G, f, feed) {
 // crystal points, tall in the middle. More crystal breaks through the flanks. A low head shield crusted with shards
 // for ramming walls, two short crushing mandibles, six thick legs.
 function brute(L, K, G, f) {
-  const { THREE } = K, X = { ...XTAL, k: 0.95 };
+  const { THREE } = K, X = { ...XTAL, k: 0.82 };
   G.scale.setScalar(1.6);
   const legM = K.chitin('#2c231e', { irid: 0.2, ns: 0.45, rough: 0.5, cc: 0.35 }), tipM = K.plain('#16100d', 0.5), jointM = K.plain('#211814', 0.6);
   const GL = L.group(0, 0, 0, 0, G);

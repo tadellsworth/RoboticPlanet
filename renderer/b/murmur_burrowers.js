@@ -34,9 +34,9 @@ export default function (L) {
 
   // ---- palettes per region. Glow is amber (not a team colour); the Bloom variant glows violet as the lore says.
   const PAL = {
-    base:  { plate: '#3a2e29', edge: '#9a8268', tuck: '#17110f', dust: '#b39a7c', mem: '#a8806c', memD: '#4a322c', leg: '#4a3a31', tip: '#d6c09e', glow: '#ffa526', core: '#ffe6a0', pore: '#ff9c22' },
+    base:  { plate: '#43342b', edge: '#a3896c', tuck: '#17110f', dust: '#b8a083', mem: '#a8806c', memD: '#4a322c', leg: '#4a3a31', tip: '#d6c09e', glow: '#ffa526', core: '#ffe6a0', pore: '#ff9c22' },
     rust:  { plate: '#8e4620', edge: '#dc8c4c', tuck: '#33140a', dust: '#c98f62', mem: '#7c4434', memD: '#3c1f18', leg: '#4f2516', tip: '#e2b27c', glow: '#ff9622', core: '#ffd68a', pore: '#ff8a1c' },
-    white: { plate: '#b9c1c5', edge: '#eef2f4', tuck: '#5f6a70', dust: '#f6faff', mem: '#c9b3ac', memD: '#7c6a66', leg: '#8b8682', tip: '#eee9e1', glow: '#ffcf78', core: '#fff3d0', pore: '#ffc870' },
+    white: { plate: '#b9c1c5', edge: '#eef2f4', tuck: '#5f6a70', dust: '#f6faff', mem: '#c9b3ac', memD: '#7c6a66', leg: '#a7a19b', tip: '#eee9e1', glow: '#ffcf78', core: '#fff3d0', pore: '#ffc870' },
     bloom: { plate: '#2c2431', edge: '#6e5a79', tuck: '#120d15', dust: '#4b3a55', mem: '#5b3a66', memD: '#2a1a30', leg: '#241b29', tip: '#a28cae', glow: '#dd8cff', core: '#f8e2ff', pore: '#d27dff' },
   };
   const P = PAL[V] || PAL.base;
@@ -79,7 +79,7 @@ export default function (L) {
     const d = detail(); const m = new THREE.MeshPhysicalMaterial({ color: '#ffffff', map: d.map, normalMap: d.normal, roughness: rough, metalness: 0, clearcoat: clear, clearcoatRoughness: 0.6, vertexColors: true });
     m.normalScale.set(0.9, 0.9); m.envMapIntensity = 0.15; return m;
   };
-  const flesh = (hex, rough = 0.5) => { const m = new THREE.MeshPhysicalMaterial({ color: hex, roughness: rough, metalness: 0, clearcoat: 0.5, clearcoatRoughness: 0.35, sheen: 0.4, sheenColor: new THREE.Color(P.mem), vertexColors: true }); m.envMapIntensity = 0.3; return m; };
+  const flesh = (hex, rough = 0.5) => { const m = new THREE.MeshPhysicalMaterial({ color: hex, roughness: rough, metalness: 0, clearcoat: 0.5, clearcoatRoughness: 0.35, sheen: 0.25, sheenColor: new THREE.Color(P.memD), vertexColors: true }); m.envMapIntensity = 0.3; return m; };
   const glowMat = (hex, k, glowHex) => { const m = new THREE.MeshStandardMaterial({ color: hex, emissive: hex, emissiveIntensity: k, roughness: 0.3 }); m.userData.glow = glowHex || hex; return m; };
   // bioluminescent pores: dim by day, bright at night
   const poreMat = () => { if (NIGHT) return glowMat(P.pore, 2.6, P.pore);
@@ -285,7 +285,7 @@ export default function (L) {
       const g = segGroup(sp, XS[i]), W = WS[i] * (0.97 + 0.06 * rnd());
       const pl = plate({ L: LS[i], W, H: 0.5 * tall, sweep: rust ? 0.4 : 0.34, sweepP: 6, taperF: 0.25, taperR: 0.04, front: 0.1, keel: rust ? 0.12 : 0.07, rim: 0, pw: white ? 0.7 : 1.0, dust: white ? 0.85 : 0.6,
         paintFn: bloom ? bloomSpots(i) : null }, g, 0, 0.36 * tall, 0, 0);
-      for (const s of [-1, 1]) pore(g, pl.at(0.4 + 0.15 * rnd(), s * (0.66 + 0.1 * rnd())), 0.065);
+      for (const s of [-1, 1]) if ((i + (s > 0 ? 1 : 0)) % 2 === 0 || i === 2) pore(g, pl.at(0.38 + 0.18 * rnd(), s * (0.6 + 0.16 * rnd())), 0.06 + 0.02 * rnd());
       if (rust) {   // armoured: studs along the rear rim, spurs off the corners
         for (const v of [-0.5, 0, 0.5]) stud(g, pl.at(0.14, v), 0.09);
         for (const s of [-1, 1]) { const p = pl.at(0.06, s * 0.98); cone(0.08, 0.34, chitM, g, [p.x, p.y, p.z], [-0.8, 0.12, s], { color: P.edge, colorB: P.plate }); }
@@ -346,9 +346,9 @@ export default function (L) {
   // A legless, plated lamprey-worm. Walks by undulating; feeds by hooking its rear segments into the ground and pushing
   // a long telescoping proboscis into anything that holds charge. Blister sacs along its flanks fill with stolen charge.
   function drainer() {
-    const off = FEED ? -1.1 : 0;
-    const sp = spine(-3.7 + off, 2.9 + off, FEED ? 0.1 : 0.42, 1.05, FEED ? 0 : 0.22);
-    const XS = [2.18, 1.6, 1.02, 0.44, -0.14, -0.72, -1.3, -1.88, -2.44, -2.96].map(x => x + off);
+    const off = FEED ? -1.25 : 0, sc = FEED ? 0.88 : 1;   // anchored, the body bunches up behind the proboscis
+    const sp = spine(-3.7 * sc + off, 2.9 * sc + off, FEED ? 0.1 : 0.42, 1.05, FEED ? 0 : 0.22);
+    const XS = [2.18, 1.6, 1.02, 0.44, -0.14, -0.72, -1.3, -1.88, -2.44, -2.96].map(x => x * sc + off);
     const WS = [1.38, 1.7, 2.0, 2.22, 2.3, 2.2, 1.95, 1.65, 1.4, 1.1];
     const swell = (i) => FEED ? 1 + 0.05 * Math.sin(i * 1.3) : 1 + 0.06 * Math.sin(PH - i * 0.9);
     const full = FEED ? 1 : 0.6;
@@ -372,10 +372,10 @@ export default function (L) {
         hook(pts, 0.12 * k, 0.025, chitM, g, { color: P.edge, colorB: P.plate });
       }
     }
-    { const g = segGroup(sp, -3.45 + off); ell(0.5, 0.3, 0.42, memM, g, 0.15, 0.32, 0, { color: P.mem, colorB: P.memD });
+    { const g = segGroup(sp, -3.45 * sc + off); ell(0.5, 0.3, 0.42, memM, g, 0.15, 0.32, 0, { color: P.mem, colorB: P.memD });
       plate({ L: 0.8, W: 0.95, H: 0.28, sweep: -0.3, front: 0.05, keel: 0.05, rim: 0.04, pw: 1.0 }, g, -0.05, 0.42, 0, -0.05); }
     {   // head: three armoured petals round an oral sucker; closed into a digging cone while walking, opened to feed
-      const g = segGroup(sp, 2.72 + off);
+      const g = segGroup(sp, 2.72 * sc + off);
       ell(0.55, 0.42, 0.62, memM, g, -0.1, 0.45, 0, { color: P.memD, colorB: P.tuck });
       const open = FEED ? 1 : 0;
       mouth(g, 0.48 + 0.12 * open, 0.48, 0, FEED ? 0.48 : 0.4, FEED ? 72 : 80, { teeth: 14, k: FEED ? 1.3 : 0.9 });
@@ -385,7 +385,7 @@ export default function (L) {
         plate({ shield: true, L: 1.2, W: w, H: 0.3, sweep: -0.15, front: 0.75, keel: 0.08, rim: 0.03, dip: 0.55, lipF: 0.03, wearF: 0.7, pw: 0.9, dust: 0.6 }, hg, 0.62, 0.14, 0, -0.1);
       };
       petal(-1.3, 0.92); petal(1.3, 0.92); petal(0, 1.08);
-      const ext = FEED ? 2.75 : 0.36, p0 = new THREE.Vector3(0.62 + 0.12 * open, 0.5, 0), pm = flesh('#ffffff', 0.35);
+      const ext = FEED ? 2.3 : 0.36, p0 = new THREE.Vector3(0.62 + 0.12 * open, 0.5, 0), pm = flesh('#ffffff', 0.35);
       const curve = new THREE.CatmullRomCurve3([p0, p0.clone().add(new THREE.Vector3(ext * 0.35, 0.06, FEED ? 0.12 : 0)), p0.clone().add(new THREE.Vector3(ext * 0.7, -0.02, FEED ? -0.08 : 0)), p0.clone().add(new THREE.Vector3(ext, FEED ? -0.18 : 0, 0))]);
       const tube = (r0, r1, mat, color, colorB, rot = 0, off = 0) => {
         const N = 40, R = 12, g2 = new THREE.TubeGeometry(curve, N, 1, R, false), pos = g2.attributes.position;
@@ -456,24 +456,25 @@ export default function (L) {
     }
   }
   // ========================================================================================================= BURROW
-  // The tunnel mouth they come out of: a crater of upthrust crust round a dark throat that slants down and away, its
-  // ribbed lining glowing amber deep inside; spoil, drained Crystal, a shed plate, furrows, and Bloom taking hold.
+  // The tunnel mouth they come out of: a crater of thrown-up soil and upthrust crust round a dark throat that slants down
+  // and away, ribbed with a hardened lining, a faint amber glow far down; spoil, drained Crystal, shed plates, furrows
+  // where bodies dragged, and the Bloom starting to take hold. Building camera, no pad.
   function burrow() {
-    const CX = 0.1, CZ = -0.2, RH = 1.55, RO = 4.3;
-    const crest = (a) => 1.0 + 0.25 * nz(Math.cos(a) * 1.4, 2, Math.sin(a) * 1.4) + 0.15 * Math.sin(a * 5 + 1);
-    // mound of thrown-out soil: radial profile from the lip (r = RH) to the ground (r = RO)
-    {
-      const NA = 140, NR = 36, pos = [], cl = [], idx = [], uv = [];
-      const wet = col('#3d2a1f'), dry = col('#a37a52'), mid = col('#6e4c33');
+    const CX = 0.1, CZ = -0.15, RH = 1.6, RO = 4.6;
+    const crest = (a) => 1.0 + 0.7 * Math.max(0, -Math.sin(a)) + 0.22 * nz(Math.cos(a) * 1.4, 2, Math.sin(a) * 1.4) + 0.12 * Math.sin(a * 5 + 1);
+    const prof = (a, t) => crest(a) * (t < 0.1 ? 0.78 + 0.22 * sstep(0, 0.1, t) : Math.pow(1 - sstep(0.1, 1, t), 1.35));
+    const outer = (a) => RO * (1 + 0.14 * nz(Math.cos(a) * 2, 7, Math.sin(a) * 2) + 0.06 * Math.sin(a * 3));
+    function groundH(x, z) { const dx = x - CX, dz = z - CZ, rr = Math.hypot(dx, dz), a = Math.atan2(dz, dx), t = (rr - RH) / (outer(a) - RH); if (t < 0) return 0.9; if (t > 1) return 0; return prof(a, t); }
+    {   // the mound of thrown-out soil, wet and dark at the lip, drying pale toward its edge
+      const NA = 160, NR = 40, pos = [], cl = [], idx = [], uv = [];
+      const wet = col('#2e2018'), mid = col('#6a4a32'), dry = col('#a8805a');
       for (let j = 0; j <= NR; j++) for (let i = 0; i <= NA; i++) {
-        const a = i / NA * Math.PI * 2, t = j / NR;
-        const ro = RO * (1 + 0.12 * nz(Math.cos(a) * 2, 7, Math.sin(a) * 2)), rr = RH + (ro - RH) * t;
-        const hc = crest(a), prof = t < 0.12 ? hc * (0.75 + 0.25 * sstep(0, 0.12, t)) : hc * Math.pow(1 - sstep(0.12, 1, t), 1.5);
+        const a = i / NA * Math.PI * 2, t = j / NR, rr = RH + (outer(a) - RH) * t;
         const x = CX + Math.cos(a) * rr, z = CZ + Math.sin(a) * rr;
-        const y = prof + 0.18 * nz(x * 1.8, 1, z * 1.8) * (1 - t) + 0.06 * nz(x * 5, 3, z * 5) * (1 - t * 0.5) - 0.02;
+        const y = prof(a, t) + (0.22 * nz(x * 1.9, 1, z * 1.9) + 0.08 * nz(x * 5.5, 3, z * 5.5)) * (1 - t * 0.7) * sstep(0, 0.05, t);
         pos.push(x, Math.max(0, y), z); uv.push(x * 0.4, z * 0.4);
-        const c = wet.clone().lerp(mid, sstep(0.05, 0.4, t)).lerp(dry, sstep(0.35, 0.95, t) * (0.7 + 0.3 * nz(x * 2, 4, z * 2)));
-        c.multiplyScalar(0.85 + 0.3 * (0.5 + nz(x * 4, 9, z * 4)));
+        const c = wet.clone().lerp(mid, sstep(0.0, 0.35, t)).lerp(dry, sstep(0.3, 0.9, t) * (0.75 + 0.25 * nz(x * 2, 4, z * 2)));
+        c.multiplyScalar(0.82 + 0.36 * (0.5 + nz(x * 4, 9, z * 4)));
         cl.push(c.r, c.g, c.b);
       }
       for (let j = 0; j < NR; j++) for (let i = 0; i < NA; i++) { const a = j * (NA + 1) + i, b = a + 1, c = a + NA + 1, d = c + 1; idx.push(a, c, b, b, c, d); }
@@ -481,81 +482,85 @@ export default function (L) {
       const m = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.95, metalness: 0, map: M.rough('#ffffff').map }); m.envMapIntensity = 0.35;
       L.mesh(g, m, 0, 0, 0, {});
     }
-    // the throat: a ribbed tube from the lip down and away (-z), hardened lining, amber glow at the bottom
+    // the throat: a ribbed tube from the lip, down and away (-z); dark lining, amber only far down
+    const centre = (t) => new THREE.Vector3(CX, 0.75 - 4.4 * t, CZ - 2.6 * t * t);
     {
-      const NA = 72, NS = 30, pos = [], cl = [], idx = [];
-      const lining = col('#2a1a14'), rib = col('#5a3a2a'), hot = col(P.glow);
-      const centre = (t) => new THREE.Vector3(CX + 0.0, 0.9 - 3.4 * t, CZ - 2.2 * t * t);
+      const NA = 80, NS = 36, pos = [], cl = [], idx = [];
+      const lining = col('#100a07'), rib = col('#2c1e16'), hot = col(P.glow);
       for (let j = 0; j <= NS; j++) for (let i = 0; i <= NA; i++) {
         const t = j / NS, a = i / NA * Math.PI * 2, c = centre(t);
-        const ribk = Math.pow(0.5 + 0.5 * Math.cos(t * 26), 3);
-        const r = (RH * (1 - 0.35 * t) + 0.06 * ribk) * (1 + 0.06 * nz(Math.cos(a) * 2, t * 4, Math.sin(a) * 2));
-        const lipH = t === 0 ? crest(a) * 0.75 : 0;
-        pos.push(c.x + Math.cos(a) * r, c.y + (t === 0 ? lipH - 0.9 : 0), c.z + Math.sin(a) * r);
-        const k = lining.clone().lerp(rib, ribk * 0.6).lerp(hot, sstep(0.55, 1, t) * 0.55);
+        const ribk = Math.pow(0.5 + 0.5 * Math.cos(t * 30), 4) * (1 - t * 0.5);
+        const r = (RH * (1 - 0.42 * t) - 0.07 * ribk) * (1 + 0.07 * nz(Math.cos(a) * 2, t * 4, Math.sin(a) * 2));
+        const y = j === 0 ? prof(a, 0) : c.y;
+        pos.push(c.x + Math.cos(a) * r, y, c.z + Math.sin(a) * r);
+        const k = lining.clone().lerp(rib, ribk * 0.8).lerp(col(P.memD), 0.25 * (1 - sstep(0, 0.2, t))).lerp(hot, sstep(0.8, 1, t) * (NIGHT ? 0.5 : 0.25));
         cl.push(k.r, k.g, k.b);
       }
       for (let j = 0; j < NS; j++) for (let i = 0; i < NA; i++) { const a = j * (NA + 1) + i, b = a + 1, c = a + NA + 1, d = c + 1; idx.push(a, b, c, b, d, c); }
       const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('color', new THREE.Float32BufferAttribute(cl, 3)); g.setIndex(idx); g.computeVertexNormals();
-      const m = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.55, metalness: 0.05, side: THREE.DoubleSide }); m.envMapIntensity = 0.3;
+      const m = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.85, metalness: 0, side: THREE.DoubleSide }); m.envMapIntensity = 0.2;
       L.mesh(g, m, 0, 0, 0, { cast: false });
-      const c = centre(0.92), fl = new THREE.CircleGeometry(RH * 0.75, 32); fl.rotateX(-Math.PI / 2);
-      L.mesh(fl, glowMat(P.glow, NIGHT ? 2.4 : 1.4, NIGHT ? P.glow : dim(P.glow, 0.75)), c.x, c.y, c.z, { cast: false });
-      L.pointLight(P.glow, NIGHT ? 26 : 12, c.x, c.y + 1.2, c.z + 0.6, 4.5);
-      // glowing beads of charge on the ribs, brighter toward the bottom
-      for (let k = 0; k < 26; k++) { const t = RR(0.15, 0.85), a = RR(0.2, Math.PI - 0.2) + (rnd() < 0.4 ? Math.PI : 0), cc = centre(t), r = RH * (1 - 0.35 * t) - 0.03;
-        ell(0.07, 0.07, 0.07, t > 0.45 || NIGHT ? glowMat(P.pore, NIGHT ? 2.4 : 1.2, NIGHT ? P.pore : dim(P.pore, 0.7)) : poreMat(), root, cc.x + Math.cos(a) * r, cc.y, cc.z + Math.sin(a) * r, { dirt: 0, cast: false }); }
+      const c = centre(0.97), fl = new THREE.CircleGeometry(RH * 0.3, 32); fl.rotateX(-Math.PI / 2);
+      L.mesh(fl, glowMat(P.glow, NIGHT ? 2.2 : 1.1, NIGHT ? dim(P.glow, 0.8) : dim(P.glow, 0.45)), c.x, c.y + 0.02, c.z, { cast: false });
+      L.pointLight(P.glow, NIGHT ? 4 : 1.5, c.x, c.y + 0.5, c.z + 0.3, 2.2);
+      // beads of charge on the lining, brighter toward the bottom
+      for (let k = 0; k < (NIGHT ? 9 : 18); k++) { const t = RR(0.2, 0.85), a = RR(0, Math.PI * 2), cc = centre(t), r = RH * (1 - 0.42 * t) - 0.06;
+        const hot2 = t > 0.55; const bm = NIGHT ? glowMat(P.pore, 2.2, P.pore) : hot2 ? glowMat(P.pore, 0.9, dim(P.pore, 0.45)) : M.plain(dim(P.pore, 0.3), 0.4);
+        ell(0.05 + 0.03 * rnd(), 0.05, 0.05 + 0.03 * rnd(), bm, root, cc.x + Math.cos(a) * r, cc.y, cc.z + Math.sin(a) * r, { dirt: 0, cast: false }); }
     }
-    // upthrust slabs of crust, tipped outward round the lip, as if something burst up from below
-    const slabM = M.rough('#8e6a4a'), slabTop = M.rough('#b38a62');
-    for (let i = 0; i < 11; i++) {
-      const a = i / 11 * Math.PI * 2 + RR(-0.2, 0.2), r = RH + RR(0.35, 0.8), w = RR(0.8, 1.4), h = RR(0.18, 0.32), d = RR(0.6, 1.0);
-      if (Math.abs(Math.sin(a) + 1) < 0.25 && rnd() < 0.5) continue;
-      const g = L.group(CX + Math.cos(a) * r, crest(a) * 0.55, CZ + Math.sin(a) * r, -a, root);
-      const geo = new THREE.BoxGeometry(d, h, w, 3, 1, 3); const p = geo.attributes.position;
-      for (let k = 0; k < p.count; k++) p.setXYZ(k, p.getX(k) * (1 + 0.25 * nz(p.getX(k) * 4 + i, 1, p.getZ(k) * 4)), p.getY(k), p.getZ(k) * (1 + 0.2 * nz(p.getZ(k) * 3, i, 2)));
+    // upthrust slabs of crust tipped outward round the lip, bigger on the far side, uneven and broken
+    const slabA = M.rough('#9c7550'), slabB = M.rough('#b8916a'), slabC = M.rough('#7d5c40');
+    for (let i = 0; i < 20; i++) {
+      const a = i / 20 * Math.PI * 2 + RR(-0.25, 0.25), far = Math.max(0, -Math.sin(a));
+      if (Math.sin(a) > 0.75 && rnd() < 0.6) continue;              // keep the near lip low so the mouth shows
+      const fallen = rnd() < 0.3, r = RH + (fallen ? RR(1.0, 2.2) : RR(0.25, 0.8)), w = RR(0.4, 1.15) * (0.8 + 0.6 * far) * (fallen ? 0.6 : 1), h = RR(0.14, 0.26), d = RR(0.4, 0.85) * (0.8 + 0.5 * far);
+      const x = CX + Math.cos(a) * r, z = CZ + Math.sin(a) * r;
+      const g = L.group(x, groundH(x, z) - 0.12, z, -a, root);
+      const geo = new THREE.BoxGeometry(d, h, w, 4, 1, 4); const p = geo.attributes.position;
+      for (let k = 0; k < p.count; k++) { const px = p.getX(k), pz = p.getZ(k); p.setXYZ(k, px * (1 + 0.3 * nz(px * 4 + i, 1, pz * 4)), p.getY(k) * (1 + 0.4 * nz(px * 3, i, pz * 3)), pz * (1 + 0.25 * nz(pz * 3, i, 2))); }
       geo.computeVertexNormals();
-      const m = L.mesh(geo, rnd() < 0.5 ? slabM : slabTop, 0, 0, 0, { parent: g, dirt: 0.5, dirtH: h }); m.rotation.z = RR(0.35, 0.75); m.rotation.x = RR(-0.25, 0.25);
+      const m = L.mesh(geo, [slabA, slabB, slabC][i % 3], 0, 0, 0, { parent: g, dirt: 0.7, dirtH: h }); m.rotation.z = fallen ? RR(-0.2, 0.3) : RR(0.45, 1.05); m.rotation.x = RR(-0.35, 0.35); m.rotation.y = RR(-0.5, 0.5);
     }
-    // spoil: clods and stones thrown out in a fan toward the front-right
-    const clodM = M.rough('#5a3d2a'), stoneM = M.rough('#9a8068');
-    for (let i = 0; i < 46; i++) {
-      const a = RR(-0.6, 2.4), r = RR(RH + 0.9, RO + 0.9), s = RR(0.07, 0.24) * (1.4 - r / (RO + 1));
+    // spoil: clods and stones thrown out, mostly toward the front-right
+    const clodM = M.rough('#4e3526'), stoneM = M.rough('#9a8068');
+    for (let i = 0; i < 60; i++) {
+      const a = RR(-0.8, 2.6), r = RR(RH + 1.0, RO + 1.2), s = RR(0.05, 0.2) * (1.5 - r / (RO + 1.4));
       const x = CX + Math.cos(a) * r, z = CZ + Math.sin(a) * r;
       const geo = new THREE.DodecahedronGeometry(s, 0); geo.scale(1, 0.65, 1);
-      const m = L.mesh(geo, rnd() < 0.7 ? clodM : stoneM, x, groundH(x, z) + s * 0.3, z, { dirt: 0.3 }); m.rotation.y = RR(0, 3);
+      const m = L.mesh(geo, rnd() < 0.7 ? clodM : stoneM, x, groundH(x, z) + s * 0.25, z, { dirt: 0.3 }); m.rotation.y = RR(0, 3);
     }
-    function groundH(x, z) { const dx = x - CX, dz = z - CZ, rr = Math.hypot(dx, dz), a = Math.atan2(dz, dx), t = (rr - RH) / (RO - RH); if (t < 0) return 1; if (t > 1) return 0; return (t < 0.12 ? crest(a) : crest(a) * Math.pow(1 - sstep(0.12, 1, t), 1.5)); }
-    // drained Crystal: grey, cracked shards (one still faintly lit), and a shed Swarmer plate
-    const deadX = M.crystal('#5b5560', '#000000', 0.05); deadX.userData.glow = null; deadX.emissiveIntensity = 0.0;
-    const halfX = M.crystal('#8f6fb0', NIGHT ? '#a57cff' : '#3a2a55', NIGHT ? 0.7 : 0.25);
-    for (const [x, z, r, len, rx, rz, mat] of [[-3.0, 0.9, 0.22, 0.9, 0.3, 0.5, deadX], [-3.35, 0.35, 0.16, 0.6, -0.2, 0.7, deadX], [-2.6, 1.45, 0.14, 0.5, 0.5, -0.2, halfX], [2.9, -1.9, 0.18, 0.7, -0.4, -0.5, deadX]]) {
-      L.crystal(r, len, r * 1.6, mat, x, groundH(x, z) - 0.05, z, rx, rz);
+    // drained Crystal: grey, cracked shards, one still faintly lit
+    const deadX = new THREE.MeshStandardMaterial({ color: '#6a6470', roughness: 0.35, metalness: 0.1, flatShading: true }); deadX.envMapIntensity = 1.1;
+    const halfX = M.crystal('#9a7cc0', NIGHT ? '#a57cff' : '#3a2a55', NIGHT ? 0.8 : 0.3);
+    for (const [x, z, r, len, rx, rz, mat] of [[-3.2, 0.7, 0.26, 1.1, 0.25, 0.45, deadX], [-3.55, 0.05, 0.19, 0.75, -0.25, 0.7, deadX], [-2.75, 1.35, 0.17, 0.6, 0.5, -0.15, halfX], [-3.05, 1.6, 0.12, 0.45, 0.2, 0.3, deadX], [3.05, -2.2, 0.2, 0.8, -0.4, -0.5, deadX]])
+      L.crystal(r, len, r * 1.6, mat, x, groundH(x, z) - 0.06, z, rx, rz);
+    // a shed Swarmer plate and a broken one, at the creatures' true size
+    for (const [x, z, ry, sc] of [[2.45, 1.75, 0.6, 0.32], [2.9, 1.25, 2.2, 0.26]]) {
+      const g = L.group(x, groundH(x, z) + 0.02, z, ry, root); g.scale.setScalar(sc);
+      plate({ L: 0.98, W: 1.8, H: 0.42, sweep: 0.34, sweepP: 6, front: 0.1, keel: 0.07, rim: 0, pal: { plate: '#8f7b66', edge: '#d2c0a2', tuck: '#55463a', dust: '#c9a97e' }, dust: 0.8 }, g, 0, 0, 0, 0.1);
     }
-    { const g = L.group(2.55, groundH(2.55, 1.6) + 0.02, 1.6, 0.6, root);
-      plate({ L: 0.98, W: 2.0, H: 0.32, sweep: 0.32, front: 0.14, keel: 0.05, rim: 0.07, pal: { plate: '#9a8670', edge: '#d8c7a8', tuck: '#5a4a3a', dust: '#c9a97e' }, dust: 0.8 }, g, 0, 0.0, 0, 0.12).m.rotation.x = 0.25; }
-    // Bloom taking hold on the far side: violet fronds and bulbs (glow at night)
-    const bm = NIGHT ? glowMat('#e2a0ff', 1.8, '#c46bff') : glowMat('#a86ccc', 0.35, '#3a1a55'), stalk = M.plain('#4a3352', 0.6);
-    for (let i = 0; i < 9; i++) {
-      const a = RR(3.6, 5.2), r = RR(RH + 1.2, RO - 0.2), x = CX + Math.cos(a) * r, z = CZ + Math.sin(a) * r, y0 = groundH(x, z);
-      for (let j = 0; j < 5; j++) { const b = RR(0, 6.28), len = RR(0.25, 0.6);
-        hook([[x, y0 - 0.03, z], [x + Math.cos(b) * 0.06, y0 + len * 0.8, z + Math.sin(b) * 0.06], [x + Math.cos(b) * len * 0.5, y0 + len, z + Math.sin(b) * len * 0.5]], 0.03, 0.012, stalk, root, { cast: false });
-        ell(0.07, 0.07, 0.07, bm, root, x + Math.cos(b) * len * 0.5, y0 + len, z + Math.sin(b) * len * 0.5, { dirt: 0, cast: false }); }
+    // the Bloom taking hold on the far-left side: violet fronds and bulbs (glow at night)
+    const bm = NIGHT ? glowMat('#e2a0ff', 1.8, '#c46bff') : glowMat('#b07ad2', 0.3, '#2e1544'), stalk = M.plain('#4a3352', 0.6);
+    for (let i = 0; i < 8; i++) {
+      const a = RR(3.5, 4.6), r = RR(RH + 1.1, RO - 0.4), x = CX + Math.cos(a) * r, z = CZ + Math.sin(a) * r, y0 = groundH(x, z);
+      for (let j = 0; j < 6; j++) { const b = RR(0, 6.28), len = RR(0.2, 0.5);
+        hook([[x, y0 - 0.03, z], [x + Math.cos(b) * 0.06, y0 + len * 0.8, z + Math.sin(b) * 0.06], [x + Math.cos(b) * len * 0.5, y0 + len, z + Math.sin(b) * len * 0.5]], 0.028, 0.012, stalk, root, { cast: false });
+        ell(0.06, 0.07, 0.06, bm, root, x + Math.cos(b) * len * 0.5, y0 + len, z + Math.sin(b) * len * 0.5, { dirt: 0, cast: false }); }
     }
-    // the ground disturbance: furrows of trails radiating out and a darker damp halo (a decal, transparent at its edge)
+    // ground decal: a damp halo of disturbed soil and the furrows where segmented bodies dragged
     {
       const n = 1024, S = 11;
       const tex = L.canvasTex(n, (g) => {
         const img = g.createImageData(n, n), Dd = img.data;
-        const trails = [0.5, 1.4, 2.3, 3.9, 5.2].map(a => a + RR(-0.2, 0.2));
+        const trails = [0.45, 1.35, 2.35, 3.75, 5.3].map(a => a + RR(-0.2, 0.2));
         for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) {
           const wx = (x / n - 0.5) * S, wz = (y / n - 0.5) * S, dx = wx - CX, dz = wz - CZ, rr = Math.hypot(dx, dz), a = Math.atan2(dz, dx);
-          let al = 0, R0 = 0x4a, G0 = 0x33, B0 = 0x24;
-          const halo = 1 - sstep(RO * 0.85, RO + 1.0 + 0.4 * nz(Math.cos(a) * 2, 1, Math.sin(a) * 2), rr); al = Math.max(al, halo * 0.55);
+          let al = 0, R0 = 0x52, G0 = 0x3a, B0 = 0x28;
+          const ro = outer(a), halo = 1 - sstep(ro * 0.9, ro + 0.9 + 0.4 * nz(Math.cos(a) * 2, 1, Math.sin(a) * 2), rr); al = Math.max(al, halo * 0.5);
           for (const ta of trails) {
-            const wig = ta + 0.08 * Math.sin(rr * 2.2 + ta * 3); let da = Math.abs(((a - wig + Math.PI * 3) % (Math.PI * 2)) - Math.PI);
-            const off = da * rr, w = 0.32 * (1 - sstep(RO, RO + 2.4, rr));
-            if (off < w && rr > RO * 0.7) { const k = 1 - off / w; al = Math.max(al, 0.6 * k * (1 - sstep(RO + 1.2, RO + 2.4, rr))); const ring = 0.5 + 0.5 * Math.cos(rr * 9); R0 -= 10 * ring; G0 -= 8 * ring; }
+            const wig = ta + 0.1 * Math.sin(rr * 1.8 + ta * 3); const da = Math.abs(((a - wig + Math.PI * 3) % (Math.PI * 2)) - Math.PI);
+            const off = da * rr, w = 0.26 * (1 - sstep(ro, ro + 2.2, rr));
+            if (off < w && rr > ro * 0.8) { const k = 1 - off / w, ring = 0.5 + 0.5 * Math.cos(rr * 10); al = Math.max(al, (0.22 + 0.2 * ring) * Math.sqrt(k) * (1 - sstep(ro + 1.0, ro + 2.2, rr))); R0 -= 8 * ring; G0 -= 6 * ring; }
           }
           const i4 = (y * n + x) * 4; Dd[i4] = R0; Dd[i4 + 1] = G0; Dd[i4 + 2] = B0; Dd[i4 + 3] = Math.round(clamp(al) * 255);
         }
