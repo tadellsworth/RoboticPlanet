@@ -976,7 +976,9 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   Opening fixes: a Harvester down to its last couple of stalks it can cut (ripe, on its own side, out of enemy guns:
   `aiGathers`) doesn't count as cutting, and with none cutting and none
   on the way a new one goes up past the usual limit on sites (Alloy-starved sites could otherwise hold every slot while
-  the Smelters wait for Fiber); and until its first Bot Foundry has its Alloy, the Ammo Plant and (with Chips enough for
+  the Smelters wait for Fiber); a new gatherer's spot is scored by what it could really work there (`aiUsableRes`: not a
+  rival's groves across the border, nor ground under enemy guns, and a grove still growing at half), where it used to
+  go up beside the other colony's grove and cut next to nothing; and until its first Bot Foundry has its Alloy, the Ammo Plant and (with Chips enough for
   the Foundry) the Chip Fab rest, so they don't eat the Alloy the Foundry needs (`forFoundry`). With no stalks left to
   cut and Fiber under 6, groves come first (`groveFirst`): a Bio Farm gives its Agribot to a Grove Planter (placed by a
   Harvester, or else near home) until a Harvester has stalks again, since without Fiber there's no Alloy for another

@@ -187,6 +187,26 @@ function aiGathers(b, n = 1) {
   return false;
 }
 
+/**
+ * What a gatherer at (i, j) could really work, for picking its spot: nodes of `type` in reach and in the same walkable
+ * area, on p's own or no-one's land, out of enemy guns' reach; a stalk grove still growing counts half (it will be
+ * ripe soon), and one on a rival's land not at all. (reachableRes counted the other colony's groves across the border,
+ * and its new Harvester went up beside them, cutting next to nothing.)
+ */
+function aiUsableRes(p, i0, j0, radius, type) {
+  const r2 = radius * radius + 0.3, zone = S.zone[tIdx(i0, j0)];
+  let n = 0;
+  for (let j = Math.max(0, j0 - radius); j <= Math.min(S.H - 1, j0 + radius); j++) {
+    for (let i = Math.max(0, i0 - radius); i <= Math.min(S.W - 1, i0 + radius); i++) {
+      const t = j * S.W + i;
+      if (S.res[t] !== type || S.zone[t] !== zone || dist2(i, j, i0, j0) > r2) continue;
+      if ((S.owner[t] >= 0 && S.owner[t] !== p) || hotFor(p, t)) continue;
+      n += type === R_STALK && S.grow[t] < 1 ? 0.5 : 1;
+    }
+  }
+  return n;
+}
+
 function aiThink(p) {
   const P = S.players[p];
   const lvl = aiLevel(p), st = aiStyle(p);
@@ -2626,7 +2646,7 @@ function aiSearchSpot(p, type, lander) {
       const jitter = hash2(i, j, S.seed + p) * 0.8;
       let s, gn = -1;
       if (def.gather) {
-        const n = type === 'mine' ? freeRes(i, j) : reachableRes(i, j, def.radius, def.gather);
+        const n = type === 'mine' ? freeRes(i, j) : aiUsableRes(p, i, j, def.radius, def.gather); // (only what it could work: see aiUsableRes)
         gn = n;
         const u = type === 'mine' && nukeOn() ? reachableRes(i, j, def.radius, R_URANIUM) : 0;
         if (n < 2 && !u) {
