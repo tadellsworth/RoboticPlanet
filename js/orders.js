@@ -176,7 +176,8 @@ const ORDERS = {
   roadDir(p, i, j, v) { if (inMap(i, j) && S.road[tIdx(i, j)] && roadOwnedBy(p, tIdx(i, j)) && v >= 1 && v <= 5) setRoadDir(i, j, v | 0); },
   /**
    * The junction tool, one tap: a light becomes a (planned) overpass, an overpass comes down, a planned overpass is
-   * called off, and a plain junction gets a (planned) light. What happened comes back for the banner.
+   * called off, and a plain junction gets a (planned) light. A light where an overpass can't go (a T-junction: only
+   * three roads) comes down instead, and why comes back. What happened comes back for the banner.
    */
   junction(p, i, j) {
     if (!inMap(i, j)) return { what: 'none' };
@@ -191,7 +192,7 @@ const ORDERS = {
     }
     if (S.lights[t] || P) {
       const why = placeOverpass(p, i, j);
-      if (why) { if (S.lights[t]) removeLight(t); cancelJunPlan(t); return { what: 'lightDown', why }; }
+      if (why) { const lit = !!S.lights[t]; if (lit) removeLight(t); cancelJunPlan(t); return { what: 'lightDown', why, lit }; }
       return { what: S.over[t] ? 'overUp' : 'overPlanned', lit: !!S.lights[t] };
     }
     const why = placeLight(p, i, j);

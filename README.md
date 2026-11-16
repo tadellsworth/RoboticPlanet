@@ -177,7 +177,8 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   So connectivity is worked out per player (`roadNet(who)`, `roadLikeFor`): an Outpost, Keep, Gate or Ropeway station
   joins roads only for its owner, and a building anyone can't pass blocks the road under it, exactly as `findPath` has
   it; `buildingNets`, `botNets`/`botGroups`, `pileNets`, `onHomeNet`, `roadRouteTo` and `roadReach` all use the
-  owner's view, so nothing counts as linked that a hauler can't drive. Each player's networks are numbered from
+  owner's view, so nothing counts as linked that a hauler can't drive. An overpass is two straight roads in all of
+  them (`tileNets`, `laneComp`: see Junctions below), as in `findPath`. Each player's networks are numbered from
   `(who + 1) * RN_SPAN`, so ferry-line groups (`netGroups`) never mix players up; `roadNet()` (everyone's at once) is
   for drawing roads and junctions. A capture (or a colony knocked out) bumps `S.roadVer`.
   Bots follow roads round corners (no diagonal shortcuts on or off a road).
@@ -228,7 +229,16 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   lets one direction through at a time, switching when traffic waits the other way. On a busy crossing a light moves
   half as many goods again or more, while on a quiet one it costs a few percent (a light switches as soon as nobody is
   coming on green; `LIGHT_MIN_GREEN` only holds while green traffic is still coming). Tap the light again for an **overpass** (4 Cement,
-  3 Alloy): one road passes over the other and nobody slows or waits. Tap again to clear it. Short of goods, a tap
+  3 Alloy), only on a crossing of four roads (`isCrossing`: `roadNet().junc` holds 3 or 4): the east-west road passes over
+  the north-south one and nobody slows or waits, but **nobody turns there**. `findPath` only steps onto an overpass
+  straight on, as one move from the tile before it to the tile after it (across overpasses in a row, every step paid
+  for, the overpass tiles kept in the path); a route may still start or end on one. `roadNet` gives the tile two
+  labels, `comp` for its east-west road and `compV` for its north-south one (see `tileNets`, `laneComp`), so roads that
+  only meet at an overpass are separate networks, and `roadSearch`, Route to (`routeSearch`) and the zones
+  (`computeZones`) go straight across too. A route planned before the overpass went up and turning on it is planned
+  again (`routeCheck`). On a T-junction the second tap clears the light and says why (`OVER_T_WHY`); an overpass left on
+  one (a crossing that lost a road, or an older save) becomes a traffic light (`overToLight`, the rest of its cost
+  refunded) and a planned one a planned light. Tap again to clear it. Short of goods, a tap
   plans the light or overpass instead (`S.junPlan`, a `'j'` entry in `S.planQ`): it's paid all at once when the goods
   are in (oldest plans first) and goes up then; a light already standing keeps working while its overpass waits, and its
   Alloy counts toward it (`junPlanCost`). Calling a plan off gives nothing back; the AI pays up front.

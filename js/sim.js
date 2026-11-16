@@ -1179,7 +1179,20 @@ function countTraffic() {
  * LIGHT_CLEAR seconds of all-red in between.
  */
 function updateLights(dt) {
-  if (S.tick % 15 === 0) for (const k in S.over) if (!S.road[+k] || !isJunction(+k)) removeOverpass(+k);
+  if (S.tick % 15 === 0) {
+    // Overpasses no longer on a junction come down; one left where only three roads meet (a crossing that lost a
+    // road, or an older save) becomes a traffic light, as does an overpass planned there: one road would end under it.
+    for (const k in S.over) {
+      const t = +k;
+      if (!S.road[t] || !isJunction(t)) removeOverpass(t);
+      else if (!isCrossing(t)) overToLight(t);
+    }
+    if (S.junPlan) for (const k in S.junPlan) {
+      const t = +k, P = S.junPlan[k];
+      if (P.kind !== 'over' || !S.road[t] || !isJunction(t) || isCrossing(t)) continue;
+      if (S.lights[t]) cancelJunPlan(t); else P.kind = 'light';
+    }
+  }
   for (const k in S.lights) {
     const t = +k, L = S.lights[k];
     if (!S.road[t] || !isJunction(t)) { removeLight(t); continue; }
@@ -1212,11 +1225,15 @@ function placeLight(owner, i, j) {
   return '';
 }
 
-/** Build an overpass on the junction at (i, j), replacing any traffic light there. Returns '' or the reason it can't. */
+/**
+ * Build an overpass on the crossing at (i, j), replacing any traffic light there. Returns '' or the reason it can't.
+ * Only where four roads cross: each road runs straight on, one over the other, and nobody turns there.
+ */
 function placeOverpass(owner, i, j) {
   const t = tIdx(i, j);
   if (S.over[t]) return '';
-  if (!S.road[t] || !isJunction(t) || crossTile(t)) return 'Overpasses go on road junctions on open ground: a road tile with roads on three or four sides.';
+  if (!S.road[t] || !isJunction(t) || crossTile(t)) return 'Overpasses go where four roads cross, on open ground.';
+  if (!isCrossing(t)) return OVER_T_WHY;
   if (wayOwner(t) !== owner) return 'That road isn\'t yours: overpasses go on your own roads.';
   // Yours is planned (a planned light becomes a planned overpass) and goes up once it's paid for; a
   // light already standing keeps working meanwhile, and its Alloy counts toward the overpass.
@@ -1229,8 +1246,33 @@ function placeOverpass(owner, i, j) {
   if (light) removeLight(t);
   for (const g in OVERPASS_COST) takeGood(owner, g, OVERPASS_COST[g]);
   S.over[t] = { owner };
-  markDirty(i, j);
+  overpassChanged(t);
   return '';
+}
+
+/** Why a T-junction takes no overpass (the Junctions tool says so, and a light is the fix there). */
+const OVER_T_WHY = 'An overpass needs four roads crossing: on a T-junction one road would end under it. A traffic light suits it.';
+
+/**
+ * An overpass went up or came down on tile t: which roads meet changes (roadNet, findPath, the zones), so routes are
+ * looked over again (routeVer), and the tile redraws.
+ */
+function overpassChanged(t) {
+  S.roadVer = (S.roadVer || 0) + 1;
+  if (LAND_HOLD) LAND_HOLD = 2; else computeZones(); // (in a nuclear blast, once it's over)
+  markDirty(t % S.W, (t / S.W) | 0);
+}
+
+/** The overpass on tile t, left where only three roads meet, becomes a traffic light: the rest of its cost goes back to storage. */
+function overToLight(t) {
+  const o = S.over[t];
+  if (!o) return;
+  delete S.over[t];
+  S.lights[t] = { owner: o.owner, ph: 0, tm: 0, clr: 0 };
+  const i = t % S.W, j = (t / S.W) | 0, store = nearestStoreTo(o.owner, i + 0.5, j + 0.5);
+  if (store) for (const g in OVERPASS_COST) { const n = OVERPASS_COST[g] - (LIGHT_COST[g] || 0); if (n > 0) bump(store.stock, g, n); }
+  overpassChanged(t);
+  postMsg(o.owner, 'Only three roads meet at an overpass now: it is a traffic light instead (an overpass needs four), and the rest of its Cement and Alloy is back in storage.', i, j, 'info');
 }
 
 /** The traffic light or overpass planned on junction t, still waiting for its goods ({ owner, kind }), or null. */
@@ -1259,6 +1301,7 @@ function removeOverpass(t) {
   const o = S.over[t];
   if (!o) return;
   delete S.over[t];
+  overpassChanged(t);
   const store = nearestStoreTo(o.owner, (t % S.W) + 0.5, ((t / S.W) | 0) + 0.5);
   if (store) for (const g in OVERPASS_COST) bump(store.stock, g, OVERPASS_COST[g]);
 }
@@ -1355,16 +1398,18 @@ function routeCheck(u) {
   const bt = BOTS[u.type], p = u.path, last = p.length - 1, W = S.W;
   if (bt.rail || bt.sea || bt.air || u.ride >= 0 || u.deck || u.ferryWait || last < 0) return true;
   const civ = !isArmy(u) && !bt.siege && !bt.wild && !bt.crawler; // (driven by updateWorker: a job with no route counts as arrived)
-  const here = tIdx(Math.floor(u.x), Math.floor(u.y)), onRoad = civ && bt.roadOnly && !haulerStranded(u);
-  let bad = 0, gap = 0;
+  const here = tIdx(Math.floor(u.x), Math.floor(u.y)), onRoad = civ && bt.roadOnly && !haulerStranded(u), ov = anyOverpass();
+  let bad = 0, gap = 0, turn = false;
   for (let k = u.pi; k <= last; k++) {
     const t = p[k], q = k > 0 ? p[k - 1] : here;
     if (Math.max(Math.abs((t % W) - (q % W)), Math.abs(((t / W) | 0) - ((q / W) | 0))) > 1) continue; // a Ropeway, Viaduct or ferry leg: moveAlong looks after those
     if (!walkable(t)) { bad = 2; break; }
+    if (ov && k < last && S.over[t] && q !== t && p[k + 1] - t !== t - q) turn = true; // turning on an overpass built since: not any more
     if (!civ || k === last) continue;
     if (S.bAt[t]) { if (!passTile(t, u.owner) && !(ferryLink(t) >= 0 && getE(S.bAt[t]).owner === u.owner)) bad = 1; }
     else if (onRoad && !S.road[t]) gap++;
   }
+  if (turn && !bad) bad = 1;
   if (!bad && !gap) return true;
   if (bad === 2 && !walkable(here) && !S.bAt[here]) {
     // Standing where the bridge was: back to the nearest tile of its route that still stands (as offDeck does on a Viaduct).
@@ -1372,7 +1417,7 @@ function routeCheck(u) {
     for (const t of p) { if (!walkable(t)) continue; const d = dist2((t % W) + 0.5, ((t / W) | 0) + 0.5, u.x, u.y); if (d < bd) { bd = d; best = t; } }
     if (best >= 0) { u.x = (best % W) + 0.5; u.y = ((best / W) | 0) + 0.5; u.vel = 0; }
   }
-  if (!civ) { if (bad === 2) { u.path = null; u.vel = 0; return false; } return true; }
+  if (!civ) { if (bad === 2 || turn) { u.path = null; u.vel = 0; return false; } return true; }
   const pi = u.pi, g = p[last];
   if (goTo(u, g % W, (g / W) | 0)) {
     if (!bad && u.path.length - (last + 1 - pi) >= GAP_DETOUR * gap) { u.path = p; u.pi = pi; } // crawling across the gap is quicker
@@ -2520,7 +2565,7 @@ function botNets(u) {
   const tr = !!BOTS[u.type].truck; // trucks can't ride a Ropeway
   if (u.inside) { const b = getE(u.inside); return b ? buildingNets(b, tr) : []; }
   const t = tIdx(Math.floor(u.x), Math.floor(u.y));
-  if (S.road[t]) return [tr ? roadNet(u.owner).compT[t] : roadNet(u.owner).comp[t]];
+  if (S.road[t]) return tileNets(roadNet(u.owner), t, tr); // (on an overpass: either road)
   if (S.bAt[t]) { const b = getE(S.bAt[t]); return b ? buildingNets(b, tr) : []; }
   return [];
 }
@@ -2537,7 +2582,7 @@ function botGroups(u) {
   const tr = !!BOTS[u.type].truck;
   if (u.inside) { const b = getE(u.inside); return b ? buildingGroups(b, tr) : []; }
   const t = tIdx(Math.floor(u.x), Math.floor(u.y));
-  if (S.road[t]) return [netGroup(tr ? roadNet(u.owner).compT[t] : roadNet(u.owner).comp[t], tr)];
+  if (S.road[t]) return tileNets(roadNet(u.owner), t, tr).map((c) => netGroup(c, tr));
   if (S.bAt[t]) { const b = getE(S.bAt[t]); return b ? buildingGroups(b, tr) : []; }
   return [];
 }
@@ -3051,7 +3096,7 @@ function findPaveSpot(b, x, y) {
   const seen = _pave.seen, q = _pave.q, gen = ++_pave.gen;
   let head = 0, tail = 0;
   const all = paveMode(b) === 'all';
-  const push = (t) => { if (t >= 0 && t < N && seen[t] !== gen && roadLike(t) && nets.indexOf(net.comp[t]) >= 0) { seen[t] = gen; q[tail++] = t; } };
+  const push = (t) => { if (t >= 0 && t < N && seen[t] !== gen && roadLike(t) && onNets(net, t, nets)) { seen[t] = gen; q[tail++] = t; } };
   // Start where the Paver is (or at the roads beside the Roadworks).
   push(tIdx(x, y));
   if (!tail) for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) if (inMap(b.x + di, b.y + dj)) push(tIdx(b.x + di, b.y + dj));
@@ -4757,12 +4802,12 @@ function coverStore(u) {
 
 /** The road networks a pile of crates can be reached from (its own tile, or a road beside it) by player who's bots. */
 function pileNets(l, trucks, who) {
-  const net = roadNet(who), comp = trucks ? net.compT : net.comp, t = tIdx(l.x, l.y), nets = [];
-  if (comp[t] >= 0) nets.push(comp[t]);
+  const net = roadNet(who), t = tIdx(l.x, l.y), nets = [];
+  for (const c of tileNets(net, t, trucks)) if (c >= 0 && nets.indexOf(c) < 0) nets.push(c); // (on an overpass: either road)
   for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
     if (!inMap(l.x + di, l.y + dj)) continue;
-    const u = tIdx(l.x + di, l.y + dj);
-    if (comp[u] >= 0 && nets.indexOf(comp[u]) < 0) nets.push(comp[u]);
+    const c = laneComp(net, t, tIdx(l.x + di, l.y + dj), trucks);
+    if (c >= 0 && nets.indexOf(c) < 0) nets.push(c);
   }
   return nets;
 }
@@ -6240,7 +6285,7 @@ function wreckRoad(t, victim, why) {
   if (LAND_HOLD) { if (cross) LAND_HOLD = 2; }
   else if (S.terrain[t] === T_WATER || S.terrain[t] === T_CHASM) computeTerritory();
   delete S.lights[t];
-  delete S.over[t];
+  if (S.over[t]) { delete S.over[t]; overpassChanged(t); }
   if (cross && !LAND_HOLD) computeZones();
   addFx('smoke', i + 0.5, j + 0.5, { r: 0.6 });
   if (victim >= 0 && why) {
@@ -7245,13 +7290,14 @@ function settlePlans() {
       // A planned light or overpass: paid all at once, then it goes up. Dropped if the junction is gone.
       const P = junPlanAt(t);
       if (!P || P.owner !== o) continue;
+      if (P.kind === 'over' && S.road[t] && isJunction(t) && !isCrossing(t)) P.kind = 'light'; // (an overpass only where four roads cross)
       if (!S.road[t] || !isJunction(t) || wayOwner(t) !== o || S.over[t] || (P.kind === 'light' && S.lights[t]) || (P.kind === 'over' && crossTile(t))) { cancelJunPlan(t); continue; }
       const cost = junPlanCost(t, P), have = spendable(o);
       if (Object.keys(cost).some((g) => sh.has(g))) { keep.push(it); continue; }
       const lack = Object.keys(cost).filter((g) => (have[g] || 0) < cost[g]);
       if (lack.length) { for (const g of lack) sh.add(g); keep.push(it); continue; }
       for (const g in cost) takeGood(o, g, cost[g]);
-      if (P.kind === 'over') { delete S.lights[t]; S.over[t] = { owner: o }; markDirty(t % S.W, (t / S.W) | 0); }
+      if (P.kind === 'over') { delete S.lights[t]; S.over[t] = { owner: o }; overpassChanged(t); }
       else S.lights[t] = { owner: o, ph: 0, tm: 0, clr: 0 };
       cancelJunPlan(t);
       continue;

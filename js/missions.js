@@ -401,7 +401,7 @@ const MISSIONS = [
       'In Paths, <b>Route to</b> (Z) plans the cheapest road to wherever you tap.',
       'Haulers keep their distance, slow for oncoming traffic and give way at junctions.',
       'The <b>Traffic map</b> (T) colours the roads by how busy they are.',
-      'One-way lanes, traffic lights and overpasses keep it all moving.',
+      'One-way lanes, traffic lights and overpasses keep it all moving. Nobody turns on an overpass: its two roads just cross.',
     ],
     mode: 'colony', seed: 4409, size: 1, rough: 0, rich: 3, biome: 'autumn', shape: 0, limit: [0, 0, 20],
     setup(S) {
@@ -439,7 +439,7 @@ const MISSIONS = [
         ui: "#btn-road, #banner-seg [data-v='arrows'], #banner-traffic" },
       { kind: 'junctions', n: [2, 2, 3], text: 'Put lights on {n} junctions',
         count: (P, S) => Object.values(S.lights).filter((l) => l.owner === 0).length + Object.values(S.over).filter((o) => o.owner === 0).length,
-        hint: '<b>Paths</b> → <b>Junctions</b> (<kbd>L</kbd>): tap a junction for a light (1 Alloy). Tap it again for an overpass.',
+        hint: '<b>Paths</b> → <b>Junctions</b> (<kbd>L</kbd>): tap a junction for a light (1 Alloy). Again on a crossing: an overpass (no turning).',
         ui: "#btn-road, #banner-seg [data-v='lights']" },
     ],
   },
