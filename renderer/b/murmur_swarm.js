@@ -50,7 +50,7 @@ const PAL = {
   base:  { body: '#3b2c24', plate: '#3b2c24', leg: '#2e231e', tip: '#140f0c', joint: '#3e2a20', mand: '#3b2618', xtal: XTAL, irid: 0.5 },
   rust:  { body: '#3a2419', plate: '#a5512a', leg: '#4a2a1b', tip: '#1c120c', joint: '#6a3a22', mand: '#4a2a18', xtal: XTAL, irid: 0.15 },
   white: { body: '#c8cdd0', plate: '#d7dbdd', leg: '#9da4a8', tip: '#5e666b', joint: '#b9a9a0', mand: '#7f878c', xtal: { shell: '#eef1f4', core: '#e9edf2', glow: '#e4e9ef', opacity: 0.75, k: 0.55, dayCore: 0.5 }, irid: 0.1 },
-  bloom: { body: '#251a2b', plate: '#2a1c31', leg: '#20162a', tip: '#0f0a14', joint: '#5a2a66', mand: '#2f1c38', xtal: { shell: '#efe0ff', core: '#c48dff', glow: '#b67cff', opacity: 0.55, k: 1.15 }, irid: 0.7 },
+  bloom: { body: '#251a2b', plate: '#2a1c31', leg: '#20162a', tip: '#0f0a14', joint: '#5a2a66', mand: '#2f1c38', xtal: { shell: '#a274ea', core: '#c48dff', glow: '#b67cff', opacity: 0.6, k: 1.15, dayCore: 0.6 }, irid: 0.7 },
 };
 
 // ---------------------------------------------------------------------------------------------------------------
@@ -215,9 +215,10 @@ function drainer(L, K, G, f, feed) {
     for (let i = 0; i < 18; i++) branch((i + L.rnd() * 0.6) / 18 * n, n * (0.16 + L.rnd() * 0.06), (L.rnd() - 0.5) * 0.4, 5, 56, 0);
   });
   const sacM = new THREE.MeshPhysicalMaterial({ color: '#4a2a24', map: K.chitinMap, roughness: 0.5, metalness: 0.0, clearcoat: 0.45, clearcoatRoughness: 0.3, vertexColors: true,
-    emissive: new THREE.Color(X.core).multiplyScalar(FK * (K.GLOW * K.GLOW * 0.32 + 0.1) / 0.4), emissiveMap: veins, emissiveIntensity: 0.4 });
-  // by day the veins only shimmer (little bloom); at night, or feeding, the whole sac lights up
-  sacM.envMapIntensity = 0.25; sacM.userData.glow = K.dimGlow(X.glow, (K.GLOW > 1 || feed ? 0.8 : 0.25) * Math.min(2.2, FK));
+    emissive: new THREE.Color(X.core).multiplyScalar(FK * (K.GLOW * K.GLOW * 0.32 + (K.NIGHTISH ? 0.1 : 0.32)) / 0.4), emissiveMap: veins, emissiveIntensity: 0.4 });
+  // by day the veins show as a pale net with a little bloom (the Drainer's own mark at 30 px: the bag of stolen charge);
+  // at night, or feeding, the whole sac lights up
+  sacM.envMapIntensity = 0.25; sacM.userData.glow = K.dimGlow(X.glow, (K.GLOW > 1 || feed ? 0.8 : 3) * Math.min(2.2, FK));
   const sx = -0.98, sy = 0.62, srx = 1.28, sry = 0.66, srz = 1.08;
   K.seg(G, [sx, sy, 0], srx, sry, srz, sacM, { bands: 7, depth: 0.06, shade: 0.5, lump: 0.03, crease: 0.14, axisFlat: 0.35, seed: 11, ws: 96, hs: 48 });
   // the scutum: a hard plate over the front of the sac

@@ -5783,7 +5783,9 @@ function holdRally(u, t, r, dt, power) {
     if (u.scanT2 <= 0) {
       u.scanT2 = 0.5;
       let bd = 10;
-      for (const e of S.buildings) {
+      const own = r.target ? getE(r.target) : null; // (a flag planted for an Attack goes for that building first)
+      if (own && !own.dead && foes(own.owner, u.owner)) tgt = own;
+      else for (const e of S.buildings) {
         if (e.dead || !foes(e.owner, u.owner)) continue;
         const d = dist2(e.x + 0.5, e.y + 0.5, r.x, r.y);
         if (d < bd) { bd = d; tgt = e; }

@@ -10,26 +10,31 @@ export function mkit(L) {
   const TOD = L.TOD;
   // the creatures' own light: dim by day, bright at night (the game swaps in the night sprites)
   const GLOW = { day: 0.5, morning: 0.6, evening: 1.1, night: 1.5 }[TOD] ?? 0.5;
+  // the vein web through the flesh and the threads along the roots: only faint lines by day, so the dark body and its
+  // few lit points (feeler tips, eyes, charge sacs) carry the sprite; at night the whole web lights up
+  const VEIN = { day: 0.22, morning: 0.3, evening: 0.9, night: 1.25 }[TOD] ?? 0.22;
   const NIGHT = TOD === 'night' || TOD === 'evening';
   const V = Q.get('v') || 'base';
 
   // ---- palettes. Glow is foxfire lemon (no team uses yellow); the Bloom variant glows violet as the lore says.
   const PALS = {
-    base:  { core: '#262b27', body: '#3c443c', rim: '#a9a688', sheen: '#c9c7a6', root: '#3a2b22', rootTip: '#d8ccae', crys: '#c9c3b2', crysD: '#5e594f',
-             cap: '#d9c9a0', capRim: '#8a6a44', gill: '#4a3a2c', bark: '#5b5146', barkD: '#2e2822', glow: '#eaff5c', hot: '#fbffd6' },
-    rust:  { core: '#2a1d17', body: '#4a2f22', rim: '#b8805a', sheen: '#d49a6a', root: '#3a2216', rootTip: '#dca878', crys: '#d8a679', crysD: '#6a3f26',
-             cap: '#d9b48a', capRim: '#8a4a2a', gill: '#4a2a1c', bark: '#6a3f2a', barkD: '#2e1a12', glow: '#f4ff5c', hot: '#fffbd6',
+    base:  { core: '#1b1f1c', body: '#2c332d', rim: '#8e8a6c', sheen: '#9c9a80', root: '#3a2b22', rootTip: '#d8ccae', crys: '#a29b87', crysD: '#5e594f',
+             cap: '#d9c9a0', capRim: '#8a6a44', gill: '#4a3a2c', bark: '#4f463c', barkD: '#272019', glow: '#f2f75a', hot: '#fdffd8' },
+    rust:  { core: '#22160f', body: '#3c261b', rim: '#a8744f', sheen: '#b8835a', root: '#3a2216', rootTip: '#dca878', crys: '#d8a679', crysD: '#6a3f26',
+             cap: '#d9b48a', capRim: '#8a4a2a', gill: '#4a2a1c', bark: '#6a3f2a', barkD: '#2e1a12', glow: '#f6f45a', hot: '#fffbd6',
              plate: '#a5532a', plateE: '#e0904f' },
-    white: { core: '#8d9aa3', body: '#b9c4ca', rim: '#eef3f5', sheen: '#ffffff', root: '#6e6862', rootTip: '#f2f0ea', crys: '#eaf6fa', crysD: '#9fb4bd',
-             cap: '#eeeae0', capRim: '#a9a196', gill: '#6e6862', bark: '#a8a49c', barkD: '#5e5a54', glow: '#f2ffb0', hot: '#ffffff' },
-    bloom: { core: '#1d1422', body: '#33243b', rim: '#8e6aa6', sheen: '#c79ae0', root: '#2a1a2e', rootTip: '#c9a3dc', crys: '#cfa6ff', crysD: '#5a3a7a',
-             cap: '#d6c0e6', capRim: '#7a4a96', gill: '#3a2244', bark: '#4a3552', barkD: '#22162a', glow: '#cc7dff', hot: '#f6e6ff' },
+    white: { core: '#55626c', body: '#8d9aa3', rim: '#d6dfe3', sheen: '#c8d4da', root: '#5e5852', rootTip: '#e6e4de', crys: '#d4e6ee', crysD: '#8aa0aa',
+             cap: '#eeeae0', capRim: '#a9a196', gill: '#6e6862', bark: '#a8a49c', barkD: '#5e5a54', glow: '#e4f77a', hot: '#fbffe0' },
+    bloom: { core: '#1a1020', body: '#2c1d33', rim: '#86609a', sheen: '#a77cbc', root: '#2a1a2e', rootTip: '#c9a3dc', crys: '#d7b0f0', crysD: '#5a3a7a',
+             cap: '#d6c0e6', capRim: '#7a4a96', gill: '#3a2244', bark: '#4a3552', barkD: '#22162a', glow: '#e57af2', hot: '#fbe8ff' },
   };
   const P = PALS[V] || PALS.base;
   const C = h => new THREE.Color(h);
   const dimHex = (hex, k) => '#' + C(hex).multiplyScalar(k).getHexString();
   // what the glow pass (and so the bloom) sees: dim by day, full at night
-  const GLOWHEX = dimHex(P.glow, NIGHT ? 0.85 : TOD === 'morning' ? 0.55 : 0.45);
+  const GLOWHEX = dimHex(P.glow, (NIGHT ? 0.85 : TOD === 'morning' ? 0.55 : 0.45) * (V === 'white' ? 0.2 : 1));
+  // what the glow pass sees of the veins: almost nothing by day (no bloom wash over the body), most of it at night
+  const VEINHEX = dimHex(P.glow, (NIGHT ? 0.62 : TOD === 'morning' ? 0.14 : 0.1) * (V === 'white' ? 0.35 : 1));
 
   // ---- deterministic randomness of our own, so every walking frame builds the same creature
   let s0 = 1;
@@ -87,10 +92,10 @@ export function mkit(L) {
   // jelly-fungus flesh: dark, glossy, a sheen like wet wax on the thin edges, veins glowing through
   function flesh(emapCanvas, o = {}) {
     const m = new THREE.MeshPhysicalMaterial({ color: '#ffffff', vertexColors: true, roughness: o.rough ?? 0.4, metalness: 0,
-      clearcoat: o.cc ?? 0.85, clearcoatRoughness: 0.25, sheen: o.sheen ?? 0.7, sheenColor: C(P.sheen), sheenRoughness: 0.4 });
-    m.envMapIntensity = o.env ?? 0.6;
+      clearcoat: o.cc ?? 0.85, clearcoatRoughness: 0.32, sheen: (o.sheen ?? 0.7) * 0.5, sheenColor: C(P.sheen), sheenRoughness: 0.45 });
+    m.envMapIntensity = o.env ?? 0.26;
     // the brightness lives in the colour so lib.js's night pass doesn't turn the whole body into one big lamp
-    if (emapCanvas) { m.emissive = C(P.glow).multiplyScalar((o.k ?? 1.7) * GLOW / 0.3); m.emissiveMap = texOf(emapCanvas); m.emissiveIntensity = 0.3; m.userData.glow = GLOWHEX; }
+    if (emapCanvas) { m.emissive = C(P.glow).multiplyScalar((o.k ?? 1.7) * VEIN / 0.3); m.emissiveMap = texOf(emapCanvas); m.emissiveIntensity = 0.3; m.userData.glow = VEINHEX; }
     return m;
   }
   // roots and tendrils: velvety umber, pale toward the tip (vertex colours)
@@ -103,21 +108,22 @@ export function mkit(L) {
     const c = canvas(256, (g, n) => { const gr = g.createLinearGradient(0, 0, n, 0); gr.addColorStop(0, '#ffffff'); gr.addColorStop(from, '#ffffff'); gr.addColorStop(to, '#000000'); gr.addColorStop(1, '#000000'); g.fillStyle = gr; g.fillRect(0, 0, n, n); }, false);
     return (_fade[key] = texOf(c));
   }
-  function glowMat(k = 2.2, map = null, hex = P.glow) {
-    const m = new THREE.MeshStandardMaterial({ color: dimHex(hex, 0.6), emissive: C(hex), emissiveIntensity: k * GLOW, roughness: 0.35, emissiveMap: map });
+  function glowMat(k = 2.2, map = null, hex = P.glow, vein = false) {
+    const m = new THREE.MeshStandardMaterial({ color: dimHex(hex, vein && !NIGHT ? 0.35 : 0.6), emissive: C(hex), emissiveIntensity: k * (vein ? VEIN : GLOW), roughness: 0.35, emissiveMap: map });
     if (map) m.map = map;
-    m.userData.glow = hex === P.glow ? GLOWHEX : dimHex(hex, NIGHT ? 1 : 0.45); return m;
+    m.userData.glow = vein ? VEINHEX : hex === P.glow ? GLOWHEX : dimHex(hex, NIGHT ? 1 : 0.45); return m;
   }
   // smoky quartz grown out of the flesh: faceted, glossy, glowing from the base up (emissive gradient along its length)
   let _crys = null;
   function crystalMat() {
     if (_crys) return _crys;
-    const c = canvas(64, (g, n) => { const gr = g.createLinearGradient(0, n, 0, 0); gr.addColorStop(0, '#ffffff'); gr.addColorStop(0.35, '#b0b0b0'); gr.addColorStop(0.75, '#303030'); gr.addColorStop(1, '#1a1a1a'); g.fillStyle = gr; g.fillRect(0, 0, n, n); }, false);
-    const m = new THREE.MeshPhysicalMaterial({ color: P.crys, roughness: 0.14, metalness: 0.05, clearcoat: 1, clearcoatRoughness: 0.1, flatShading: true,
-      emissive: C(P.glow), emissiveMap: texOf(c), emissiveIntensity: 1.25 * GLOW, sheen: 0.3, sheenColor: C('#ffffff') });
-    m.envMapIntensity = 1.3; m.userData.glow = GLOWHEX; return (_crys = m);
+    const c = canvas(64, (g, n) => { const gr = g.createLinearGradient(0, n, 0, 0); gr.addColorStop(0, '#ffffff'); gr.addColorStop(0.16, '#9a9a9a'); gr.addColorStop(0.42, '#262626'); gr.addColorStop(1, '#101010'); g.fillStyle = gr; g.fillRect(0, 0, n, n); }, false);
+    const m = new THREE.MeshPhysicalMaterial({ color: P.crys, roughness: 0.1, metalness: 0.05, clearcoat: 1, clearcoatRoughness: 0.06, flatShading: true,
+      emissive: C(P.glow), emissiveMap: texOf(c), emissiveIntensity: (V === 'white' ? 0.2 : 0.75) * VEIN });
+    m.envMapIntensity = 0.75; m.userData.glow = VEINHEX; return (_crys = m);
   }
-  const crystalDark = () => { const m = new THREE.MeshPhysicalMaterial({ color: P.crysD, roughness: 0.2, metalness: 0.05, clearcoat: 1, flatShading: true }); m.envMapIntensity = 1.1; return m; };
+  // dark smoky quartz (the Brute's ram and boulders): glossy but deep, so it reads as crystal and not as grey rock
+  const crystalDark = () => { const m = new THREE.MeshPhysicalMaterial({ color: dimHex(P.crysD, 0.7), roughness: 0.12, metalness: 0.05, clearcoat: 1, clearcoatRoughness: 0.05, sheen: 0.4, sheenColor: C(P.glow).multiplyScalar(0.35), flatShading: true }); m.envMapIntensity = 0.7; return m; };
   // fruiting caps: pale, matte, finely speckled
   let _capT = null;
   function capMat() {
@@ -129,17 +135,17 @@ export function mkit(L) {
     const m = new THREE.MeshPhysicalMaterial({ color: '#ffffff', map: _capT, vertexColors: true, roughness: 0.58, sheen: 1, sheenColor: C('#fff6e0'), sheenRoughness: 0.5 }); m.envMapIntensity = 0.5; return m;
   }
   // fibrous bark tissue: long fibres along v, with a normal map from the same streaks
-  let _bark = null;
-  function barkMat(rep = 3) {
-    if (_bark) return _bark;
+  let _bark = {};
+  function barkMat(rep = 3, rot = 0) {
+    const key = rep + ',' + rot; if (_bark[key]) return _bark[key];
     const n = 512, h = document.createElement('canvas'); h.width = h.height = n; const hg = h.getContext('2d');
     hg.fillStyle = '#808080'; hg.fillRect(0, 0, n, n);
     const col = canvas(n, (g) => {
       g.fillStyle = '#ffffff'; g.fillRect(0, 0, n, n);
-      for (let i = 0; i < 900; i++) {
-        const x = R(0, n), w = R(1, 5), y = R(-n, n), l = R(60, 400), d = R(0, 1);
-        g.fillStyle = d < 0.5 ? `rgba(0,0,0,${R(0.08, 0.3)})` : `rgba(255,250,235,${R(0.05, 0.2)})`; g.fillRect(x, y, w, l); g.fillRect(x, y + n, w, l); g.fillRect(x, y - n, w, l);
-        const k = d < 0.5 ? Math.round(R(40, 110)) : Math.round(R(150, 220)); hg.fillStyle = `rgb(${k},${k},${k})`; hg.fillRect(x, y, w, l); hg.fillRect(x, y + n, w, l); hg.fillRect(x, y - n, w, l);
+      for (let i = 0; i < 420; i++) {
+        const x = R(0, n), w = R(3, 12), y = R(-n, n), l = R(80, 420), d = R(0, 1);
+        g.fillStyle = d < 0.5 ? `rgba(0,0,0,${R(0.05, 0.18)})` : `rgba(255,250,235,${R(0.03, 0.12)})`; g.fillRect(x, y, w, l); g.fillRect(x, y + n, w, l); g.fillRect(x, y - n, w, l);
+        const k = d < 0.5 ? Math.round(R(70, 115)) : Math.round(R(140, 190)); hg.fillStyle = `rgb(${k},${k},${k})`; hg.fillRect(x, y, w, l); hg.fillRect(x, y + n, w, l); hg.fillRect(x, y - n, w, l);
       }
     }, false);
     // height -> normal
@@ -151,9 +157,9 @@ export function mkit(L) {
     }
     og.putImageData(od, 0, 0);
     const map = texOf(col), nm = texOf(out, false);
-    for (const t of [map, nm]) { t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(rep, 1); }
-    const m = new THREE.MeshPhysicalMaterial({ color: '#ffffff', map, normalMap: nm, normalScale: new THREE.Vector2(0.9, 0.9), vertexColors: true, roughness: 0.68, sheen: 0.5, sheenColor: C(P.rootTip), sheenRoughness: 0.6 });
-    m.envMapIntensity = 0.45; return (_bark = m);
+    for (const t of [map, nm]) { t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(rep, rot ? rep : 1); if (rot) { t.center.set(0.5, 0.5); t.rotation = rot; } }
+    const m = new THREE.MeshPhysicalMaterial({ color: '#ffffff', map, normalMap: nm, normalScale: new THREE.Vector2(0.55, 0.55), vertexColors: true, roughness: 0.68, sheen: 0.5, sheenColor: C(P.rootTip), sheenRoughness: 0.6 });
+    m.envMapIntensity = 0.45; return (_bark[key] = m);
   }
 
   // ---- geometry
@@ -194,7 +200,7 @@ export function mkit(L) {
     for (let i = 0; i <= n; i++) { const q = curve.getPointAt(u0 + (u1 - u0) * i / n); pts.push([q.x, q.y + (typeof lift === 'function' ? lift(u0 + (u1 - u0) * i / n) : lift), q.z]); }
     const c = new THREE.CatmullRomCurve3(pts.map(q => new THREE.Vector3(...q)));
     const g = new THREE.TubeGeometry(c, 24, r, 6, false);
-    const m = glowMat(o.k ?? 2.4, fadeTex(o.from ?? 0.15, o.to ?? 0.95), o.hex);
+    const m = glowMat(o.k ?? 2.4, fadeTex(o.from ?? 0.15, o.to ?? 0.95), o.hex, o.vein ?? true);
     return L.mesh(g, m, 0, 0, 0, { parent: o.parent, cast: false, dirt: 0 });
   }
   // hexagonal crystal (prism + point) from base b along dir
@@ -231,13 +237,13 @@ export function mkit(L) {
   // a shelf (bracket) fungus on a surface: a half-disc ledge sticking out along 'out' (horizontal angle)
   function shelf(x, y, z, ang, r, o = {}) {
     const g = L.group(x, y, z, -ang, o.parent);
-    const s = new THREE.SphereGeometry(r, 30, 10, -Math.PI / 2, Math.PI, 0, Math.PI / 2); s.scale(1, 0.32, 1);
+    const s = new THREE.SphereGeometry(r, 30, 10, Math.PI / 2, Math.PI, 0, Math.PI / 2); s.scale(1, 0.32, 1);
     const p = s.attributes.position, cols = new Float32Array(p.count * 3), cT = C(P.cap), cR = C(P.capRim);
     for (let i = 0; i < p.count; i++) { const t = Math.hypot(p.getX(i), p.getZ(i)) / r, rings = 0.5 + 0.5 * Math.sin(t * 22); const c = cR.clone().lerp(cT, 0.35 + 0.5 * t).multiplyScalar(0.88 + 0.12 * rings); cols.set([c.r, c.g, c.b], i * 3); }
     s.setAttribute('color', new THREE.BufferAttribute(cols, 3));
     L.mesh(s, capMat(), 0, 0, 0, { parent: g });
     const u = new THREE.CircleGeometry(r * 0.99, 30, -Math.PI / 2, Math.PI); u.rotateX(Math.PI / 2);
-    L.mesh(u, NIGHT ? glowMat(0.7, null) : L.M.plain(P.gill, 0.85), 0, -0.002, 0, { parent: g, dirt: 0 });
+    L.mesh(u, L.M.plain(P.gill, 0.85), 0, -0.002, 0, { parent: g, dirt: 0 });
     return g;
   }
 
@@ -248,7 +254,7 @@ export function mkit(L) {
     const r = u => (rA + (r0 - rA) * Math.pow(1 - u, 1.2)) * (1 + (o.knob ?? 0.12) * Math.sin(u * 21 + ph));
     const mid = (a, b, t, up, side) => [a[0] + (b[0] - a[0]) * t + side[0], a[1] + (b[1] - a[1]) * t + up, a[2] + (b[2] - a[2]) * t + side[1]];
     const wob = () => [R(-1, 1) * 0.06, R(-1, 1) * 0.06];
-    const curve = tube([hip, mid(hip, knee, 0.5, 0.06, wob()), knee, mid(knee, ankle, 0.5, 0.05, wob()), ankle], r, mat, { seg: o.seg ?? 34, rad: o.rad ?? 10, tipFrom: 0.75, c0: o.c0, c1: o.c1, parent: o.parent });
+    const curve = tube([hip, mid(hip, knee, 0.5, 0.06, wob()), knee, mid(knee, ankle, 0.5, 0.05, wob()), ankle], r, mat, { seg: o.seg ?? 34, rad: o.rad ?? 10, tipFrom: o.tipFrom ?? 0.75, c0: o.c0, c1: o.c1m ?? o.c1, parent: o.parent });
     if (o.glow !== false) glowThread(curve, 0.0, o.glowTo ?? 0.8, (o.gw ?? 0.024), u => r(u) * 0.86, { parent: o.parent, k: o.gk ?? 2.3, from: 0.1, to: 1.0, hex: o.hex });
     const out = Math.atan2(ankle[2] - hip[2], ankle[0] - hip[0]);
     const spread = (o.spread ?? 0.95) * (1 - 0.55 * sw), len = (o.len ?? 0.6) * (1 - 0.35 * sw);
@@ -258,7 +264,7 @@ export function mkit(L) {
       const p2 = [ankle[0] + Math.cos(a) * l * 0.75, 0.035 + sw * (0.1 + ankle[1] * 0.2), ankle[2] + Math.sin(a) * l * 0.75];
       const a2 = a + R(-0.35, 0.35), p3 = [p2[0] + Math.cos(a2) * l * 0.32, 0.02 + sw * 0.05, p2[2] + Math.sin(a2) * l * 0.32];
       const rr0 = r(1) * 0.85;
-      tube([ankle, p1, p2, p3], u => rr0 * (1 - u) * 0.9 + 0.008, mat, { seg: 16, rad: 7, tipFrom: 0.05, c0: o.c1m ?? o.c0, c1: o.c1, parent: o.parent });
+      tube([ankle, p1, p2, p3], u => rr0 * (1 - u) * 0.9 + 0.008, o.rootletMat || mat, { seg: 16, rad: 7, tipFrom: o.rootletTip ?? 0.05, c0: o.c1m ?? o.c0, c1: o.c1, parent: o.parent });
       if (o.hairs !== false && sw < 0.5) for (const hk of [-1, 1]) { const b = a2 + hk * 0.6; tube([p3, [p3[0] + Math.cos(b) * l * 0.18, 0.012, p3[2] + Math.sin(b) * l * 0.18]], 0.006, mat, { seg: 2, rad: 4, tipFrom: 0, c0: o.c1, c1: o.c1, parent: o.parent, cap: false }); }
     }
     return curve;
@@ -307,7 +313,7 @@ export function mkit(L) {
     const pm = new THREE.Mesh(pg, m); pm.receiveShadow = true; pm.userData.decal = true; L.getRoot().add(pm); return pm;
   }
 
-  return { THREE, Q, TOD, NIGHT, GLOW, GLOWHEX, V, P, C, dimHex, seed, rnd, R, noise3, sstep, texSpace, planarUV, canvas, texOf, vein, node,
+  return { THREE, Q, TOD, NIGHT, GLOW, GLOWHEX, VEIN, VEINHEX, V, P, C, dimHex, seed, rnd, R, noise3, sstep, texSpace, planarUV, canvas, texOf, vein, node,
     flesh, rootMat, rootLeg, fadeTex, glowMat, crystalMat, crystalDark, capMat, barkMat, blob, tube, glowThread, crystal, crystalCluster, cap, shelf,
     topDown, hero, groundPatch, tameLights, myLight };
 }
