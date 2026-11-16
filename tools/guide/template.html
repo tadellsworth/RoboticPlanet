@@ -270,11 +270,11 @@ footer { padding-block: 28px 40px; color: var(--muted); font-size: 14px; border-
     <tr><th>C</th><td>Recall all: every warbot out attacking or holding a rally flag comes home to its garrison.</td></tr>
     <tr><th>R · G · N · V · E · O · L · X</th><td>Inside Paths: lay roads, bridges and tunnels, rail, ramps, mark roads to pave, one-way arrows, junctions (traffic lights and overpasses), walls and gates (Versus).</td></tr>
     <tr><th>Shift + V · Shift + Y</th><td>Paths on <b>Viaducts</b> or <b>Ropeways</b>, from anywhere: then tap the near end and the far end.</td></tr>
-    <tr><th>T</th><td>Traffic map on or off.</td></tr>
+    <tr><th>T · Shift + T</th><td>Traffic map on or off; Goods flow map on or off (one at a time).</td></tr>
     <tr><th>Z</th><td>Route to on or off (Roads, Bridges, Rail): tap a spot and the best route there is planned.</td></tr>
     <tr><th>WASD · arrows · edge</th><td>Pan the map with W, A, S and D or the arrow keys, or rest the mouse at the edge of the window; right- or middle-drag pans too. <b>+</b> and <b>−</b> zoom.</td></tr>
     <tr><th>[ · ]</th><td>Slower or faster game speed.</td></tr>
-    <tr><th>M · Space · Esc</th><td>Minimap on or off, pause, and back (close a panel, take back the last stroke of a Paths sketch, leave a mode, clear the selection, or open the pause menu). In Paths, Ctrl+Z (⌘Z) is Undo.</td></tr>
+    <tr><th>M · Space · Esc</th><td>Minimap on or off, pause, and back (close a panel, take back the last stroke of a Paths sketch, leave a mode, clear the selection, or open the pause menu). In Paths, Ctrl+Z (⌘Z) is Undo; on the map, for 10 seconds after you place a building, it takes the site back.</td></tr>
     <tr><th>Alt+Enter</th><td>Full screen on or off (or the button beside pause, or the pause menu). The installed app on a computer goes full screen when you first click; hold Esc to leave it, and it remembers.</td></tr>
   </table>
 </section>
@@ -388,6 +388,7 @@ footer { padding-block: 28px 40px; color: var(--muted); font-size: 14px; border-
     <li><b>Enough Haulers.</b> If goods pile up waiting for pickup, order more Haulers. If every Hauler is lost, workers carry goods slowly until the Foundry makes more.</li>
     <li><b>Priority.</b> Tap a building or site and choose Low, Normal or High. High-priority ones get workers, builders and deliveries first. Low ones are served last and lose their worker first when you run short. A badge on the map shows anything you've changed. A priority set on a construction site is just for building it: once built, the building goes back to Normal.</li>
     <li><b>Pause</b> a building to free its worker until you resume it. A <b>Generator</b>, <b>Mortar Pit</b> or <b>Pulse Turret</b> has <b>Turn off</b> instead: it burns no Fuel, or holds its fire and its Ammo, and nothing more is brought to it until it's back on.</li>
+    <li><b>Undo</b> a building you've just placed in the wrong spot: for 10 seconds an <b>Undo</b> chip shows at the foot of the map (on a computer, <kbd>Ctrl</kbd>+<kbd>Z</kbd> or <kbd>⌘Z</kbd> too, outside Paths). It takes the site back with everything refunded in full: what was delivered or paid into it, and a Hauler's load on its way there, goes straight back into storage, with no crates left behind. Tap again for the site before it, while its 10 seconds last.</li>
     <li><b>Move</b> a building you put in the wrong spot: tap Move, then the new spot. It's put together there for free in its build time, the old one keeps working meanwhile, and the new one takes over its goods and settings when it's ready. (Not the Command Base or Outposts: they hold your land, so build a new Outpost and dismantle the old one.)</li>
     <li><b>Storage.</b> Tap your Command Base or a Depot. <i>Fill first</i> makes haulers bring finished goods there before any other storage, even a closer one. <i>Empty out</i> takes nothing new and moves what it holds elsewhere, which is handy before dismantling it. Tap individual goods to stop that building keeping them.</li>
   </ul>
@@ -432,6 +433,8 @@ footer { padding-block: 28px 40px; color: var(--muted); font-size: 14px; border-
   <h3>Traffic map</h3>
   <figure><img src="%%shot_traffic%%" alt="The same road tinted green at the quiet ends, through yellow and orange to red near the bridge, with a red ring where bots wait"><figcaption>The traffic map: green is quiet, red is packed, and the red ring marks a jam.</figcaption></figure>
   <p>In Paths, tap <b>Traffic map</b> (or press <kbd>T</kbd>) to tint every road by how much traffic it carried over the last minute, from green to red. Pulsing red rings mark the spots where bots stand waiting, the places to fix first: add a second lane, make a loop one-way, put a light or an overpass on the crossing, or move a busy building off the main road. The banner also shows how many of your Haulers and Freight Trucks are busy: if they all are, order more.</p>
+  <h3>Goods flow</h3>
+  <p>Beside it, <b>Goods flow</b> (or <kbd>Shift</kbd>+<kbd>T</kbd>) shows <i>what</i> your roads carry instead of how crowded they are. Every road and track tile your robots carried goods over in the last minute gets a line, wider the more goods went over it (the widest means 25 or more a minute) and coloured by the good most of them were, in the same colours as the counters in the top bar. A <b>dashed ring</b> in a good's colour marks a factory standing idle waiting for that good, and a <b>red edge</b> on a line a jam. Read it like this: a ring with no line of its colour leading to it is a <b>starved chain</b> (more of that good, or a road to it, needed); a wide line with a red edge is an <b>overloaded road</b> (a second road, a one-way loop or a light). The banner lists the goods on the move, most first.</p>
 </section>
 
 <section id="longhaul">

@@ -262,6 +262,17 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
 - **Traffic map:** **Traffic map** in the Paths banner (or **T**) tints each road green to red by how busy it has been
   over the last minute and rings the spots where bots stand waiting. How busy each road has been (`HEAT.flow`, `countTraffic`)
   is kept in the save (`S.heat`): the AI picks its raids by it (`aiRaid`), and a loaded game must raid the same.
+- **Goods flow map:** **Goods flow** beside it in the Paths banner (or **Shift+T**; one of the two maps at a time,
+  `setRoadMap`) draws what each road and track tile has carried over about the last minute: a line along the road,
+  wider the more goods went over it (five widths, `GFLOW_STEPS`: past 2, 5, 12 and 25 goods a minute), coloured by the
+  good most of them were (`GOOD[g].color`), on a dark edge, red where bots stand in a jam (`HEAT.jam`, only read). A
+  dashed ring in a good's colour marks a factory of yours idle for want of it (`flowStarved`), and the banner's key
+  (`goodsFlowKey`) lists the goods on the move and how many factories wait. It is display only and outside `S`
+  (`R.gf`, not saved, never read by a rule): `sampleGoodsFlow` (in `render`, every few frames, while a game is on) adds
+  the goods aboard each of your moving robots times the distance it went since the last look to its tile's count for
+  each good (a `Float32Array`, tiles × goods), and twice a second `fadeGoodsFlow` lets them fade with a time constant of
+  a minute of game time (`GFLOW_FADE`) and works out each tile's total and main good. Only tiles in view are drawn, one
+  stroke per good and width.
 - **Long hauls:** tap a Depot and set **supply orders** (how much of each good to keep there). Goods come from your other
   storage, and anything nearby then draws on the Depot. A garrison that is storage too (the Command Base, a Drop Outpost,
   a Crawler) holds its own `ammoStock` back from supply orders and from other such garrisons (`ammoHeld`, `keepSupply`). Who carries what (see the comment above `TRUCK_MIN_DIST` in
@@ -601,6 +612,15 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   can't climb cliffs; they use slopes at narrow passes, so some routes are long. Pave busy routes with
   Paths (slopes too) and build a **Ramp** (Paths, Ramps) on the top or at the foot of a cliff to open your own way up or down. Its worker builds it from whichever side of the cliff is the shorter trip (`rampStand`: the Ramp's tile or the ground across the cliff, `rampSides`), so a Ramp down off a plateau is built from the top, and its foot can even be ground no bot can reach yet. Buildings can't be placed where they
   would block the only way through a pass.
+- **Placement undo:** for `SITE_UNDO` (10) seconds after you place a building (the `place` order notes `b.placedAt`,
+  game time) an **Undo** chip shows at the foot of the map (`siteUndoTick`, `#undo-site`), and **Ctrl+Z** / **Cmd+Z**
+  on the map does the same (outside Paths, whose Ctrl+Z stays its own Undo). It is an order (`undoSite`, the last in
+  the table): only the sender's own site, not finished, placed with `place` (not a move) no more than 10 s ago by the
+  game's clock, so every device agrees. Unlike Dismantle, nothing is left in crates: what was delivered or paid into
+  the site, a Hauler's load on its way to it and a Cargo Plane's load for it go straight into the storage nearest it,
+  the way a road's Cement is refunded (`undoSite` in `js/sim.js`; crates only if you have no storage at all). In
+  multiplayer the chip goes a little early, by the order delay (`siteUndoLead`). Placing several sites in a row, Undo
+  takes back the newest, then the one before while its 10 s last. `b.placedAt` is dropped when the site is finished.
 - **Priorities:** tap a building or construction site and set it to Low, Normal or High. High-priority
   buildings get workers and goods first; low ones are served last and lose their worker first when
   workers run short. A priority set on a construction site ends when it's built (back to Normal). **Pause** frees a building's worker entirely. A Generator, Mortar Pit or Pulse Turret can be **turned off** (`pausable`, `setPaused`): it burns no Fuel, or holds its fire, and nothing more is hauled to it until it's back on.
@@ -1256,10 +1276,10 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   or R; on All a card shows "2 K"; **B R** lays roads, **B X** walls), **R** (or **P**) opens and closes Paths
   and inside it picks a tool (**R** roads, **G** bridges
   and tunnels, **V** ramps, **Shift+V** viaducts, **Shift+Y** ropeways (`PATHS_SHIFT_KEYS`: every plain letter is taken),
-  **E** pave, **O** one-way arrows, **L** junctions, **X** walls, **T** traffic map), **Q** army, **C** recall all warbots, **F** select all warbots, **Shift+F** a Bot Foundry's Order bots list from anywhere without moving the map (again: the next Foundry, `openFoundryOrders`), **J** latest alert,
+  **E** pave, **O** one-way arrows, **L** junctions, **X** walls, **T** traffic map, **Shift+T** goods flow map), **Q** army, **C** recall all warbots, **F** select all warbots, **Shift+F** a Bot Foundry's Order bots list from anywhere without moving the map (again: the next Foundry, `openFoundryOrders`), **J** latest alert,
   **H** base, **I** statistics, **U** robots, **Y** goods, **[ ]** speed, **+/−** zoom, **M** minimap, **Enter** the banner's main
   button, panel buttons by the key shown on them (`SHEET_KEYS`; **Delete** twice demolishes, and on a robot's panel
-  recycles it), **Space** pause, **Esc** back / clear selection (in Paths it takes back the last stroke; **Ctrl+Z** is Undo there), **Alt+Enter**
+  recycles it), **Space** pause, **Esc** back / clear selection (in Paths it takes back the last stroke; **Ctrl+Z** is Undo there, and on the map, for 10 s after placing a building, it takes the site back), **Alt+Enter**
   full screen (also a top-bar button and a pause-menu item). Chrome opens the installed app in a plain window on a
   computer (it ignores the manifest's `fullscreen`), so the app goes full screen itself on the first click unless you
   left full screen last time; Esc stays the game's key (`navigator.keyboard.lock`; hold it to leave). On a screen wider
