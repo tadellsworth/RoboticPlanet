@@ -45,6 +45,13 @@
     <div id="event-card" class="event-card" hidden></div>
     <div id="nuke-card" class="event-card nuke" hidden></div>
     <div id="win-card" class="event-card win-card" hidden></div>
+    <!-- Watch mode (js/watch.js): who's who, and a line or two on what each colony is doing. -->
+    <div id="watch-card" class="watch-card" hidden>
+      <div class="wc-head"><button type="button" class="wc-title" id="wc-fold" aria-expanded="true" title="Fold the report away, or open it again">Scout report<svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+        <button type="button" id="wc-follow" class="btn small wc-follow" aria-pressed="true" title="The camera follows the fighting (F)"></button></div>
+      <div class="wc-sides" id="wc-sides"></div>
+      <ul class="wc-lines" id="wc-lines" aria-live="polite"></ul>
+    </div>
   </header>
 
   <div id="minimap" class="minimap">
@@ -260,6 +267,7 @@
         <!-- Two small pills, kept together on a line: the Lore guide, the colony's archive of the story (#screen-lore,
              openLore in js/ui.js), and Send feedback (#screen-feedback, openFeedback in js/feedback.js). -->
         <span class="m-pills">
+          <button type="button" id="m-watch" class="m-pill m-watch" title="Watch a game: computer colonies play it out while you look on"><svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true"><path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><circle cx="12" cy="12" r="3" fill="currentColor"/></svg><span>Watch</span></button>
           <button type="button" id="m-lore" class="m-pill m-lore"><svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true"><circle cx="12" cy="12" r="5" fill="none" stroke="currentColor" stroke-width="2"/><path d="M5.2 15.4C2.6 16.9 1.6 18.5 2.3 19.4c1.2 1.6 6.6-.2 12-4.1s9-8.5 7.8-10.1c-.7-.9-2.6-.6-5 .6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg><span>Lore</span></button>
           <button type="button" id="m-feedback" class="m-pill m-feedback" title="Report a bug, suggest an idea or say what you think of the balance"><svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true"><path d="M4 5.5h16v10h-9l-4.5 3.8v-3.8H4z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M8 9.5h8M8 12.5h5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg><span>Feedback</span></button>
         </span>
@@ -364,6 +372,20 @@
     <div class="stats-head"><h2>Missions</h2><button id="ms-close" class="btn small">Back</button></div>
     <div class="help-body" id="ms-body"></div>
     <div class="ms-foot" id="ms-foot" hidden><button class="btn primary big" id="ms-start">Start mission</button></div>
+  </div>
+</div>
+
+<!-- Watch a game (main menu; js/watch.js): the map type and each computer colony's doctrine. -->
+<div id="screen-watch" class="screen" role="dialog" aria-modal="true" aria-labelledby="w-title" tabindex="-1" hidden>
+  <div class="card watch-setup">
+    <div class="stats-head"><h2 id="w-title">Watch a game</h2><button id="w-close" class="btn small">Back</button></div>
+    <p class="w-lead">Computer colonies fight it out while you watch, at up to 8× speed. Nothing is saved, and your own game stays as it was.</p>
+    <div class="w-row"><label class="m-rl" for="w-shape">Map type</label><select id="w-shape" class="w-select"></select></div>
+    <div class="w-row" id="w-n-row"><span class="m-rl" id="w-l-n">Colonies</span>
+      <div class="seg" id="w-n" role="radiogroup" aria-labelledby="w-l-n"><button type="button" role="radio" data-v="2">2</button><button type="button" role="radio" data-v="3">3</button><button type="button" role="radio" data-v="4">4</button></div></div>
+    <div class="w-row"><span class="m-rl" id="w-l-docs">Doctrines</span><div class="m-seats w-seats" id="w-seats" role="group" aria-labelledby="w-l-docs"></div></div>
+    <p class="w-note" id="w-note" aria-live="polite"></p>
+    <button id="w-start" class="btn primary big">Start watching</button>
   </div>
 </div>
 
@@ -945,7 +967,8 @@
         <p><b>The pause menu</b> (<kbd>Space</kbd>, or the button top right): Resume, Music and Effects volume, Full screen, Weather, Time of day, Statistics, Photo mode, Save this planet, Download save file, How to play, Send feedback, and Save &amp; quit to menu, with when the game last saved.</p>
         <p><b>Photo mode.</b> For a picture of your colony: <b>Photo mode</b> in the pause menu (or <kbd>Shift</kbd>+<kbd>P</kbd>). The game stands still (in multiplayer it runs on) and the whole interface goes, so you can frame the shot: drag and pinch, or scroll, the arrow keys and <kbd>+</kbd>/<kbd>−</kbd>. The bar at the bottom fades when you leave it alone (tap the map or move the mouse to bring it back). Slide <b>Time of day</b> for morning, evening or night light (in the picture only: the game's clock doesn't change), switch on <b>Borders</b> (the colonies' land) or the <b>Minimap</b>, and <b>Save picture</b> downloads a PNG at your screen's full sharpness with a small Terrafall mark in the corner. <b>Exit</b>, <kbd>Esc</kbd> or <b>Back</b> returns you to where you were.</p>
         <p><b>Saving.</b> The game saves itself every 20 seconds and whenever you leave the tab, and <b>Continue</b> on the main menu picks it up. There's one save: starting a new game or mission replaces it. Saves stay on this device: <b>Download save file</b> in the pause menu, then <b>Load a save file</b> on the other device's main menu, carries a game across (a file that is damaged, or from a version this one can't read, is turned away and your own save stays as it was). Multiplayer games aren't saved for Continue.</p>
-        <p><b>The main menu.</b> <b>Play</b> starts a game with your last settings (summed up beneath it) and <b>Custom Game</b> changes them; there's also <b>Continue</b>, <b>Multiplayer</b>, <b>Missions</b>, <b>Load a save file</b>, <b>How to play</b>, <b>Lore</b> (the story: see The story) and <b>Feedback</b>. Your settings are remembered on this device.</p>
+        <p><b>The main menu.</b> <b>Play</b> starts a game with your last settings (summed up beneath it) and <b>Custom Game</b> changes them; there's also <b>Continue</b>, <b>Multiplayer</b>, <b>Missions</b>, <b>Load a save file</b>, <b>How to play</b>, <b>Watch</b> (see below), <b>Lore</b> (the story: see The story) and <b>Feedback</b>. Your settings are remembered on this device.</p>
+        <p><b>Watch a game.</b> <b>Watch</b> on the main menu lets the computer play every colony while you look on: pick the map type, how many colonies (three or four where the map has room) and each one's doctrine (or Random), then <b>Start watching</b>. Speed it up to 2×, 4× or 8× with the speed chip (or <kbd>[</kbd> <kbd>]</kbd>). The <b>Scout report</b> under the top bar names each colony by its doctrine with its warbots, and says what they're up to: massing for a push, raiding a road, storming a Command Base (tap its title to fold it away). The camera follows the fighting; move the map yourself and it stays where you put it until you tap <b>Follow</b> (or press <kbd>F</kbd>). The minimap, Statistics and Photo mode work as usual. Nothing is saved, and your own game stays as it was: <b>Back to the menu</b> in the pause menu leaves, and at the end <b>Watch another</b> plays the same setup on a new planet.</p>
         <p><b>Send feedback.</b> Found a bug, have an idea, or think something is too strong or too weak? <b>Feedback</b> on the main menu, or <b>Send feedback</b> in the pause menu, opens a short form: pick <b>Bug</b>, <b>Idea</b>, <b>Balance</b> or <b>Other</b>, write what happened (up to 5,000 characters) and, if you'd like a reply, an email or name. It goes to the game's maker with the game's version and your device and screen size and, from a game, its map, seed, time and last few messages; nothing else. In a game, <b>Attach my current game</b> (ticked for a Bug) sends its save file too, so the bug can be played back exactly. If it can't be sent (no connection, or too many reports at once) the form says why and keeps what you wrote. Opening it changes nothing in the game: a paused game stays paused, and a multiplayer game runs on as usual. <kbd>Esc</kbd> or <b>Back</b> closes it.</p>
         <p><b>Sound.</b> The music is a synthwave score made live as you play: a calm groove while you build (three take turns, a new one every ten minutes), a driving track when you're under attack or at war, an alarm while a nuclear missile is in the air, and an air raid siren while enemy bombers come for you. Zoomed in, you hear what's on screen: traffic, welding, fresh concrete, truck air brakes and horns in jams. Traffic is loudest where it bunches up: round a busy factory you hear engines go by, warning beeps, toots and robots chirping, more the busier the streets. Beneath it all runs <b>ambient sound</b> that grows with your colony: a city murmur, factory hum, trains, aircraft and the sea. Away from your streets the land takes over: each biome's own sounds (leaves and grass rustling in the wind, sand or snow hissing, insects and frogs, birds by day and night calls after dark, the Bloom's shimmer, cracking ice, the ash plains' rumbling ground), fading as you look over a built-up town. You hear surf on the shores of a sea map and water lapping at lakes and rivers, the ground rumbling near a volcano (louder when it's about to erupt), and the weather: rain with thunder after the lightning, gales, sandstorms, blizzards and falling embers. Near a Murmur nest you may hear a low sound in the ground. Argos is near-silent: there's no air. Explosions are heard from where they are: close up they crack and thump, off screen they rumble in the distance, bombs whistle as they fall and missiles roar in. Set <b>Music</b> and <b>Effects</b> in the pause menu.</p>
         <p><b>Time of day.</b> <b>Cycle</b> turns the planet every 12 minutes, from a golden morning through the day and an orange evening to night, when buildings glow, streetlights come on and vehicles drive with headlights; or keep it <b>Always day</b> or <b>Always night</b>. It's only for looks. The clock shows a sun or a moon (in Colony, beside your share of the land). Set it in the pause menu or the new-game Rules; it's kept on this device.</p>
@@ -1336,6 +1359,7 @@
 <script src="js/mpui.js"></script>
 <script src="js/feedback.js"></script>
 <script src="js/photo.js"></script>
+<script src="js/watch.js"></script>
 <script src="js/main.js"></script>
 </body>
 </html>

@@ -737,7 +737,7 @@ function colonyName(p) {
  */
 function playerName(p, the) {
   const me = typeof ME !== 'undefined' ? ME : 0, G = typeof S !== 'undefined' && S ? S : null;
-  if (p === me) return the ? 'you' : 'You'; // (whoever is playing on this device)
+  if (p === me && !(G && G.watch)) return the ? 'you' : 'You'; // (whoever is playing on this device; nobody, in a game being watched)
   if (G && G.mode === 'colony' && p === 1) return the ? 'the Murmur' : 'Murmur';
   if (G && G.players && G.players[p] && G.players[p].name) return G.players[p].name; // (a person, in multiplayer)
   const ally = G && G.teams && typeof allies === 'function' && allies(p, me);

@@ -1357,6 +1357,7 @@ function initDialogs() {
 function syncSaved() {
   const el = $('p-saved');
   if (!el) return;
+  if (UI.watch) { el.textContent = 'Watching: nothing here is saved, and your own game stays as it was.'; $('p-quit').textContent = 'Back to the menu'; return; }
   const s = UI.savedAt ? Math.round((Date.now() - UI.savedAt) / 1000) : -1;
   el.textContent = UI.saveHold ? 'Saving is paused: something in the game keeps going wrong. Reload the page to carry on from your last save.'
     : UI.saveFailed ? 'Saving isn\'t working in this browser right now: keep this tab open.'
@@ -2162,6 +2163,8 @@ function updateMapTip() {
 
 /** Game speeds on offer: two slower than normal for a calmer game, two faster for waiting on something. */
 const SPEEDS = [0.75, 0.875, 1, 2, 3];
+/** The speeds on offer now: a game being watched runs up to 8× (WATCH_SPEEDS, js/watch.js). */
+function speedList() { return UI.watch ? WATCH_SPEEDS : SPEEDS; }
 
 function setSpeed(v, quiet) {
   UI.speed = v;
@@ -2175,8 +2178,8 @@ function setSpeed(v, quiet) {
 /** Step to the next slower (-1) or faster (+1) speed. */
 function stepSpeed(d) {
   if (MP.on) return;
-  const k = SPEEDS.indexOf(UI.speed);
-  setSpeed(SPEEDS[clamp((k < 0 ? 2 : k) + d, 0, SPEEDS.length - 1)]);
+  const L = speedList(), k = L.indexOf(UI.speed);
+  setSpeed(L[clamp((k < 0 ? L.indexOf(1) : k) + d, 0, L.length - 1)]);
   toast(`Game speed ${UI.speed}×`, 'info');
 }
 
@@ -2184,7 +2187,7 @@ function stepSpeed(d) {
 function toggleSpeedMenu(refresh) {
   const m = $('speed-menu');
   if (!refresh && !m.hidden) { m.hidden = true; return; }
-  m.innerHTML = SPEEDS.map((v) => `<button role="menuitemradio" aria-checked="${v === UI.speed}" class="${v === UI.speed ? 'on' : ''}" data-v="${v}">${v}×</button>`).join('');
+  m.innerHTML = speedList().map((v) => `<button role="menuitemradio" aria-checked="${v === UI.speed}" class="${v === UI.speed ? 'on' : ''}" data-v="${v}">${v}×</button>`).join('');
   for (const b of m.children) b.onclick = () => { setSpeed(+b.dataset.v); m.hidden = true; };
   const r = $('btn-speed').getBoundingClientRect();
   m.hidden = false;
@@ -2695,6 +2698,7 @@ function helpForTouch() {
 
 function showGameOver() {
   UI.overShown = true;
+  if (UI.watch) { watchOver(); return; } // (a game being watched has its own end, and saves nothing: js/watch.js)
   clearSave();
   UI.overNew = null; UI.overMenu = null;
   $('o-new').textContent = 'New game'; $('o-menu').textContent = 'Main menu';
@@ -7070,6 +7074,7 @@ function uiTick(dt) {
   AUDIO.suppress = !UI.inGame;
   if (!UI.inGame) menuArtTick();
   if (!UI.inGame || !S) return;
+  if (UI.watch) watchTick(dt); // (Watch mode: the scout report and the camera, js/watch.js)
   if (S.msgs.length) UI.toastBatch = (UI.toastBatch || 0) + 1; // (the messages of one moment: see toast)
   while (S.msgs.length) {
     const m = S.msgs.shift();

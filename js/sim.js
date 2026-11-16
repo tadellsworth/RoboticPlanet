@@ -5275,8 +5275,9 @@ function eliminate(old, by, how) {
   // The last colony (or team) standing has won; S.winner is one of them (with teams, see teamOf).
   if (new Set(left.map((Q) => teamOf(Q.id))).size === 1) { S.winner = left[0].id; S.endHow = how || 'capture'; }
   // The last colony people play is gone (you, in a game against the computer): it's over. (A game with nobody's
-  // colony in it, the menu's backdrop, ends when the first colony falls.)
-  else if (S.players.some((Q) => !Q.ai) ? !left.some((Q) => !Q.ai) : old === 0) { S.winner = by; S.endHow = how || 'capture'; }
+  // colony in it, the menu's backdrop, ends when the first colony falls; one being watched, S.watch, plays on to the
+  // last colony standing: see js/watch.js.)
+  else if (S.players.some((Q) => !Q.ai) ? !left.some((Q) => !Q.ai) : old === 0 && !S.watch) { S.winner = by; S.endHow = how || 'capture'; }
 }
 
 /* ------------------------------------------------------------------ surrender and Domination */

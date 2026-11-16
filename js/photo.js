@@ -158,9 +158,10 @@ function photoFade() {
   bar.classList.add('faded');
 }
 
-/** A tap on the map: the toolbar comes and goes. */
+/** A tap on the map: the toolbar comes and goes (under a finger). */
 function photoTapMap() {
   if (!UI.photo) return;
+  if (INPUT.mouse) { photoWake(); return; } // (a mouse brings it back by moving: a click doesn't hide it)
   if ($('photo-bar').classList.contains('faded')) photoWake();
   else { clearTimeout(PHOTO.timer); $('photo-bar').classList.add('faded'); }
 }
