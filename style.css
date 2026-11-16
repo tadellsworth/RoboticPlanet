@@ -428,6 +428,9 @@ canvas.chart { display: block; width: 100%; height: 170px; touch-action: pan-y; 
 }
 .help-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; touch-action: pan-y; padding-right: 4px; }
 .help-card > .btn, .help-card > .stats-head { flex-shrink: 0; }
+/* The Missions detail view's Start button: below the scrolling part, always on screen. */
+.ms-foot { flex-shrink: 0; }
+.ms-foot[hidden] { display: none; }
 .help-body h3 { margin: 14px 0 4px; font-size: 16px; color: var(--accent); }
 .help-body p { margin: 4px 0; color: #d3d9e2; }
 .chain { margin: 4px 0; padding-left: 18px; color: #d3d9e2; }

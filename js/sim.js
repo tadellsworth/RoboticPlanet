@@ -3970,6 +3970,8 @@ function hitBuilding(b, dmg, by) {
     postMsg(b.owner, `Enemy warbots are attacking your ${BDEFS[b.type].name}!`, b.x, b.y, 'bad');
     if (isMe(b.owner)) sfx('alert');
   }
+  // (A mission's capture lock: the rival Command Base holds at 1 armor while other goals are open. See captureLocked.)
+  if (b.armor < 1 && S.mission && b.type === 'lander' && typeof captureLocked === 'function' && captureLocked(b, by)) b.armor = 1;
   if (b.armor <= 0) captureBuilding(b, by);
 }
 

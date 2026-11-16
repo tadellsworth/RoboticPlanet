@@ -2053,15 +2053,23 @@ function openMissions() {
   renderMissions();
 }
 
+/** The planet and rules of a mission at difficulty diff, in a line: mode, map type, size, terrain, rival, extras, clock. */
 function missionMeta(def, diff) {
-  const size = SIZE_PRESETS[def.size].name, terr = TERRAIN_PRESETS[def.rough].name;
+  const size = SIZE_PRESETS[def.size].name, terr = TERRAIN_PRESETS[def.rough].name, shape = (SHAPE_PRESETS[def.shape || 0] || SHAPE_PRESETS[0]).name;
   const limit = def.limit[diff] ? ` · ${def.limit[diff]} min limit` : '';
-  return def.mode === 'colony' ? `Colony · ${size} · ${terr}${limit}` : `Versus · ${size} · ${terr} · ${DIFFICULTY[def.rival[diff]].label} rival${limit}`;
+  // What the mission switches on that missions otherwise leave out.
+  const extras = [def.mode === 'colony' && def.war && 'Warbots', def.wildlife && 'Wildlife', def.events && 'Planet events', def.nuke && 'Nuclear race', def.lab && 'Research Lab'].filter(Boolean);
+  const more = extras.length ? ` · ${extras.join(', ')}` : '';
+  if (def.mode === 'colony') return `Colony · ${shape} · ${size} · ${terr}${more}${limit}`;
+  const n = playerCount('versus', def.shape || 0, def.players) - 1, style = PERSONALITIES[def.style] ? ` ${PERSONALITIES[def.style].name}` : '';
+  const rival = `${n > 1 ? n + ' ' : ''}${DIFFICULTY[def.rival[diff]].label}${style} rival${n > 1 ? 's' : ''}${def.passive && def.passive[diff] ? ' (passive)' : ''}`;
+  return `Versus · ${shape} · ${size} · ${terr} · ${rival}${more}${limit}`;
 }
 
 function renderMissions(msg) {
   const c = loadCampaign();
   const body = $('ms-body');
+  $('ms-foot').hidden = UI.msSel == null; // (Start sits below the scrolling part, so it's on screen however long the brief)
   if (UI.msSel == null) {
     // (The next to play: the first not yet finished at any difficulty. In order, they teach the whole game.)
     const next = MISSIONS.findIndex((m) => !(c.done[m.id] || []).some(Boolean));
@@ -2086,8 +2094,7 @@ function renderMissions(msg) {
     <div class="seg" id="ms-diff">${MISSION_DIFF_NAMES.map((n, d) => `<button data-d="${d}" class="${d === diff ? 'on' : ''}">${n}${done[d] ? ' ✓' : ''}</button>`).join('')}</div>
     <p class="hint">${missionMeta(def, diff)}</p>
     <div class="section-label" style="margin-top:12px">Goals</div>
-    <ul class="ms-goals">${def.goals.map((g) => `<li>${goalText(g, diff)}</li>`).join('')}</ul>
-    <button class="btn primary big" id="ms-start">Start mission</button>`;
+    <ul class="ms-goals">${def.goals.map((g) => `<li>${goalText(g, diff)}</li>`).join('')}</ul>`;
   for (const btn of $('ms-diff').children) btn.onclick = () => { UI.msDiff = +btn.dataset.d; sfx('click'); renderMissions(); };
   $('ms-start').onclick = () => { audioUnlock(); startMission(k, diff); };
 }
@@ -2139,11 +2146,66 @@ function missionCoach() {
       }
     }
     UI.msDone = states.map((x) => x.done);
-    if (now >= 0) sel = def.goals[now].ui || '';
+    if (now >= 0) {
+      const c = coachTarget(def.goals[now]);
+      sel = c.sel;
+      // A panel button whose panel isn't open: a ring pulses on the building to tap (every 1.5 s of game time).
+      if (c.ring && S.time - (UI.coachRingT ?? -9) >= 1.5) {
+        UI.coachRingT = S.time;
+        addFx('ring', c.ring.x + 0.5, c.ring.y + 0.5, { color: '#38d4ff', r: 1.6, life: 1.1 });
+      }
+    }
   }
   if (sel !== UI.glowSel) { for (const el of document.querySelectorAll('.tut-glow')) el.classList.remove('tut-glow'); UI.glowSel = sel; }
   // (Panels and menus rebuild their buttons, so the light goes back on each time.)
   if (sel) { try { for (const el of document.querySelectorAll(sel)) el.classList.add('tut-glow'); } catch (e) { UI.glowSel = ''; } }
+}
+
+/** Where a goal's `ui` selector looks for the button that opens it (when the button itself isn't on screen). */
+const COACH_OPENERS = [[/\.bcard|#build-tabs/, '#btn-build'], [/#banner-/, '#btn-road'], [/#ar-/, '#btn-attack']];
+
+/**
+ * What to light up for goal g: its `ui` buttons if any is on screen; else the buttons that open the way to them (Build
+ * for a card or tab of the build menu, Paths for the Paths banner, Army for the Army menu). A panel button (#sh-…)
+ * that isn't on screen also gives `ring`: the building to tap (see coachBuilding). { sel, ring }
+ */
+function coachTarget(g) {
+  const sel = g.ui || '';
+  if (!sel) return { sel: '', ring: null };
+  let els;
+  try { els = [...document.querySelectorAll(sel)]; } catch (e) { return { sel: '', ring: null }; }
+  if (els.some((el) => el.getClientRects().length > 0)) return { sel, ring: null };
+  const open = [];
+  let panel = false;
+  for (const part of sel.split(',')) {
+    for (const [re, opener] of COACH_OPENERS) if (re.test(part) && !open.includes(opener)) open.push(opener);
+    if (/#sh-/.test(part)) panel = true;
+  }
+  return { sel: open.join(', ') || sel, ring: panel ? coachBuilding(g) : null };
+}
+
+/**
+ * The building a goal's panel button is on: the goal's `at` (a building type) if it gives one, else the building named
+ * first in its hint ("Tap the Cement Works → Move"; a short name like "the Foundry" or "the Lab" counts too), yours
+ * first, then anyone's (a rival Command Base to bomb). The first of that type, or null.
+ */
+function coachBuilding(g) {
+  const live = S.buildings.filter((b) => !b.dead && BDEFS[b.type]);
+  if (g.at) return live.find((b) => b.owner === ME && b.type === g.at) || live.find((b) => b.type === g.at) || null;
+  const hint = plainHint(g.hint);
+  if (!hint) return null;
+  for (const mineOnly of [true, false]) {
+    let best = null, at = Infinity;
+    for (const b of live) {
+      if (mineOnly && b.owner !== ME) continue;
+      const name = BDEFS[b.type].name, last = name.split(' ').pop();
+      let k = hint.indexOf(name);
+      if (k < 0 && last !== name && /^[A-Z][a-z]{2,}$/.test(last)) k = hint.search(new RegExp(`\\b${last}\\b`));
+      if (k >= 0 && k < at) { at = k; best = b; }
+    }
+    if (best) return best;
+  }
+  return null;
 }
 
 /** The goal banner during a mission: each goal with progress, and the clock if there's a limit. */
@@ -2151,7 +2213,10 @@ function missionObjectiveHTML() {
   const M = S.mission, def = missionDef(M);
   const states = missionStates(M);
   if (UI.objCollapsed) return `Mission ▸ ${states.filter((s) => s.done).length}/${states.length}`;
-  const left = M.limit ? Math.max(0, M.limit - S.time) : 0, now = missionGoalNow(states), hint = now >= 0 && def.goals[now].hint;
+  const left = M.limit ? Math.max(0, M.limit - S.time) : 0, now = missionGoalNow(states);
+  // (The capture lock: the rival Command Base holds at 1 armor until the other goals are done. See captureLocked.)
+  const hint = now >= 0 && (def.goals[now].kind === 'capture' && def.goals.some((g, i) => g.kind !== 'capture' && !states[i].done)
+    ? '<b>Finish your other goals first:</b> until then the rival Command Base holds at 1 armor.' : def.goals[now].hint);
   return `<b>${def.name}</b>${M.limit ? ` · ${fmtTime(left)} left` : ''}<ul class="obj-goals">${states.map((s, i) =>
     `<li class="${s.done ? 'done' : i === now ? 'now' : ''}">${s.done ? '✓' : i === now ? '▸' : '○'} ${s.text}${s.need > 1 && !s.done ? ` (${s.have}/${s.need})` : ''}</li>`).join('')}</ul>${hint ? `<div class="obj-hint">${hint}</div>` : ''}`;
 }
@@ -3787,6 +3852,7 @@ function openBuildingSheet(b) {
   let desc = !mine && b.type === 'lander' ? (S.players.length > 2 ? `The ${playerName(b.owner)}'s fortified headquarters. Capture it and everything the ${playerName(b.owner)} built is yours.` : 'The rival\'s fortified headquarters. Capture it to win.') : def.desc;
   const style = !mine && b.type === 'lander' && S.players[b.owner] && S.players[b.owner].ai && PERSONALITIES[S.players[b.owner].style];
   if (style && S.mode !== 'colony' && !S.mission) desc += ` <b>${style.name}:</b> it ${style.desc}.`;
+  if (!mine && b.type === 'lander' && S.mission && captureLocked(b, ME)) desc += ' <b>Finish your other goals first:</b> until then it holds at 1 armor.';
   if (def.wild) {
     const n = S.bots.filter((u) => !u.dead && u.nest === b.id).length;
     desc += ` <b>Level ${b.level || 1} of 3</b>, ${n} creature${n === 1 ? '' : 's'} out and about. Hoarded: ${Object.keys(b.stock).filter((g) => b.stock[g] > 0).map((g) => `${b.stock[g]} ${GOOD[g].name}`).join(', ') || 'nothing'}.`;

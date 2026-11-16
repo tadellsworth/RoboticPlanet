@@ -10,7 +10,8 @@
  * per difficulty, 0 none), nuke/war/lab/events/wildlife (switch on what missions otherwise leave out), layout(m, W),
  * setup(S, diff), goals }.
  * A goal: { kind, n (one number or [easy, normal, hard]), hint (how to do it, shown while it's the next goal),
- * ui (CSS selector of the button(s) to light up meanwhile), text (its own objective text, "{n}" for the number) }.
+ * ui (CSS selector of the button(s) to light up meanwhile), text (its own objective text, "{n}" for the number, or
+ * [one, many] to pick by the number), hold (it must still hold at the end: a goal once met otherwise stays met) }.
  * Goal kinds:
  *   built     have `n` finished buildings of `type`
  *   made      produce `n` of `good` over the mission
@@ -76,6 +77,41 @@ function preBuild(owner, type, x, y, opts) {
 
 /** The same feature at (x, y) and at its mirror image, so both sides stay fair in Versus. */
 function mirrored(W, H, x, y, fn) { fn(x, y); fn(W - 1 - x, H - 1 - y); }
+
+/** The colony the first chapters have taught (kit's usual lists): gathering, Cement, a Fuel Station, Alloy, Chips, bots; KIT7 adds a Bio Farm. */
+const KIT6 = ['harvester', 'quarry', 'kiln', 'charger', 'mine', 'tap', 'smelter', 'fab', 'foundry'];
+const KIT7 = [...KIT6, 'farm'];
+
+/**
+ * For a mission's setup: the colony the player has built so far. Each building of `types`, finished, where the rival
+ * AI would put it (aiFindSpot), joined to the roads (a Fuel Station with 4 Fuel in it); a type with no spot is
+ * skipped. Then `workers` more Workers in the Command Base (they count as the colony's start, not as bots made).
+ * Returns the buildings it put down, by type.
+ */
+function kit(S, types, workers) {
+  const P = S.players[0], L = getE(P.lander), out = {};
+  for (const type of types) {
+    const s = aiFindSpot(0, type, L);
+    if (!s) continue;
+    const b = preBuild(0, type, s.x, s.y, { road: true, reach: 3, stock: type === 'charger' ? { fuel: 4 } : null });
+    if (b) out[type] = b;
+    computeTerritory();
+  }
+  for (let k = 0; k < (workers || 0); k++) enterBuilding(addBot(0, 'worker', L.x, L.y), L);
+  P.stats.startBots = P.stats.bots;
+  return out;
+}
+
+/**
+ * For goals: how many tiles pass test(t) and are player 0's. A tile with road or track on it counts when that way is
+ * player 0's (wayOwner); one with neither (pipe, say) counts on the test alone, so a pipe test says whose it is
+ * itself (S.pipe[t] === 1 is player 0's pipe).
+ */
+function ownTiles(test) {
+  let n = 0;
+  for (let t = 0, N = S.W * S.H; t < N; t++) if (test(t) && (S.road[t] || S.rail[t] ? wayOwner(t) === 0 : true)) n++;
+  return n;
+}
 
 /* --- the campaign --- */
 
@@ -172,10 +208,11 @@ function bldCount(type, n) {
 
 /**
  * A goal's objective text for `need` (shared by the mission screen and the game). A goal can give its own `text`
- * ("{n}" stands for the number), which every custom goal (one with a `count` function) does.
+ * ("{n}" stands for the number), which every custom goal (one with a `count` function) does; [one, many] picks by
+ * the number ("Clear a creature nest" / "Clear {n} creature nests").
  */
 function goalLabel(g, need) {
-  if (g.text) return g.text.replace(/\{n\}/g, need);
+  if (g.text) return String(Array.isArray(g.text) ? g.text[need > 1 ? 1 : 0] : g.text).replace(/\{n\}/g, need);
   switch (g.kind) {
     case 'built': return `Build ${bldCount(g.type, need)}`;
     case 'made': return `Make ${need} ${GOOD[g.good].name}`;
@@ -234,6 +271,18 @@ function missionStates(M) {
     else if (M.got[i] && !g.hold) { st.done = true; st.have = st.need; }
     return st;
   });
+}
+
+/**
+ * The capture lock: taking the rival's Command Base ends the game, which loses the mission if goals are still open.
+ * So while any goal other than capturing it is unfinished, the base holds at 1 armor against player 0 (see
+ * hitBuilding), and its panel says to finish the other goals first. Does rival base b, hit by player `by`, hold?
+ */
+function captureLocked(b, by) {
+  const M = S.mission, def = missionDef(M);
+  if (!def || M.result || by !== 0 || b.owner === 0 || b.type !== 'lander' || !S.players[b.owner] || S.players[b.owner].lander !== b.id) return false;
+  const states = missionStates(M);
+  return def.goals.some((g, i) => g.kind !== 'capture' && !states[i].done);
 }
 
 /** Runs once a second while a mission is in play: success, or failure when the clock runs out. */
