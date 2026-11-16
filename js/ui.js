@@ -1918,7 +1918,7 @@ function undoOrder() {
 }
 
 /*
- * Placement undo. For SITE_UNDO seconds after you place a building, the Undo chip above the tools (or Ctrl+Z / Cmd+Z
+ * Placement undo. For SITE_UNDO seconds after you place a building, the Undo chip at the foot of the map (or Ctrl+Z / Cmd+Z
  * on the map, outside Paths, whose Ctrl+Z is its own) takes the construction site back, with everything paid or
  * delivered for it refunded in full (ORDERS.undoSite, which checks the time by the game's clock). Each site placed
  * is noted here; the newest still in its time is the one taken back, then the one before it.
