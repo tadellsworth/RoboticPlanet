@@ -86,6 +86,7 @@ function initUI() {
   $('h-close').onclick = () => { $('screen-help').hidden = true; UI.paused = !$('screen-pause').hidden; };
   // The How to play shows one section at a time: the contents first, then a section with a bar above it that stays
   // put (Contents, a picker, previous and next) and Previous / Next buttons at its end (see helpPage).
+  helpMarkKeys(); // (before the pager is built: it rewrites the Help text once)
   helpPagerInit();
   $('screen-help').addEventListener('click', (e) => {
     const a = e.target.closest && e.target.closest('[data-jump]');
@@ -2278,20 +2279,19 @@ function helpPage(id) {
 }
 
 /**
- * How to play under a finger: the Touch controls card comes first, so the controls are on one screen (the rest is
- * the whole game, chapter by chapter, behind the contents). Brackets that only name keys ("(Q)", "(or press Y)",
- * "; T)") are marked once, the first time Help opens, so style.css can leave them out on a touch screen along with
- * the mouse and keyboard paragraphs.
+ * How to play under a finger: the Touch controls card heads the contents page, so the controls are on one screen
+ * (the rest is the whole game, chapter by chapter, behind the contents). Brackets that only name keys ("(Q)",
+ * "(or press Y)", "; T)") are marked once, at start-up before the pager is built (helpMarkKeys), so style.css can
+ * leave them out on a touch screen along with the mouse and keyboard paragraphs.
  */
+function helpMarkKeys() {
+  const body = document.querySelector('#screen-help .help-body'), K = '<kbd>[^<]*</kbd>';
+  body.innerHTML = body.innerHTML
+    .replace(new RegExp(` ?\\((?:or press |press |or )?${K}(?:\\s*(?:–|-|\\+|/|,|or|and)?\\s*${K})*\\)`, 'g'), '<span class="keys">$&</span>')
+    .replace(new RegExp(`; ${K}(?:\\s*${K})*(?=\\))`, 'g'), '<span class="keys">$&</span>')
+    .replace(new RegExp(`, (?:${K}\\s*)+(?=;)`, 'g'), '<span class="keys">$&</span>');
+}
 function helpForTouch() {
-  if (!UI.helpKeys) {
-    UI.helpKeys = true;
-    const body = document.querySelector('#screen-help .help-body'), K = '<kbd>[^<]*</kbd>';
-    body.innerHTML = body.innerHTML
-      .replace(new RegExp(` ?\\((?:or press |press |or )?${K}(?:\\s*(?:–|-|\\+|/|,|or|and)?\\s*${K})*\\)`, 'g'), '<span class="keys">$&</span>')
-      .replace(new RegExp(`; ${K}(?:\\s*${K})*(?=\\))`, 'g'), '<span class="keys">$&</span>')
-      .replace(new RegExp(`, (?:${K}\\s*)+(?=;)`, 'g'), '<span class="keys">$&</span>');
-  }
   $('h-touch').hidden = !onTouch();
 }
 
