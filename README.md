@@ -623,7 +623,8 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   Outpost's warbots and sets its Keep to 0. A Bunker always keeps its two (stocked the same way). **Your robots** (the
   population chip) lists where your warbots are (`warbotGroups`: at the Command Base, in Outposts, heading home,
   attacking, on a rally flag, guarding, being repaired, carrying loot, or standing with nowhere to go), and **Show**
-  takes you to each in turn. Garrison priority (High/Low) still orders the AI's and any warbot with nowhere else to go.
+  takes you to each in turn. Garrison priority (High/Low) still orders the AI's and any warbot with nowhere else to go. A garrison's panel shows how
+  many are inside and what kinds (`garrisonMix`: "3 Warbots, 1 Bulwark, 1 Torch").
 - **Rival personalities** (`PERSONALITIES` in `js/defs.js`, applied by `aiStyle`/`aiLevel` in `js/ai.js`): each scales
   the difficulty's grace period, attack threshold, army growth and raid rate. **Balanced** is the plain AI. **Turtle**:
   later and bigger attacks, rare raids, a square ring of Walls and Gates six tiles round its Command Base
