@@ -1437,3 +1437,32 @@ a.btn { display: block; text-align: center; text-decoration: none; color: inheri
 .fb-hp { position: absolute; left: -10000px; top: 0; width: 1px; height: 1px; overflow: hidden; }
 .fb-done { display: flex; flex-direction: column; gap: 14px; }
 .fb-thanks { margin: 4px 0 0; font-size: 17px; font-weight: 650; line-height: 1.4; color: var(--text); }
+
+/* ---- Colony goals, Records and achievements (js/goals.js) ---- */
+/* The goals button beside the Goal card (Colony free play): a ladder and how many are done; it flashes when one is. */
+.goals-btn { gap: 4px; color: #d9f6ff; }
+.goals-btn svg { color: var(--accent); }
+.goals-btn.flash { animation: goalflash 1.2s ease-out 2; }
+@keyframes goalflash { 30% { background: rgba(126, 224, 138, 0.4); border-color: rgba(126, 224, 138, 0.9); } }
+@media (prefers-reduced-motion: reduce) { .goals-btn.flash { animation: none; } }
+/* The goals panel: the land milestones, then the ladder tier by tier, each goal with its count, hint and button. */
+.gl-land { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; margin: 0 0 6px; padding: 7px 10px; border-radius: 10px; background: rgba(255, 255, 255, 0.04); font-size: 13px; color: var(--muted); }
+.gl-land b { color: var(--text); }
+.gl-pips { display: inline-flex; gap: 4px; }
+.gl-pips i { width: 10px; height: 10px; border-radius: 50%; border: 2px solid rgba(255, 255, 255, 0.35); box-sizing: border-box; }
+.gl-pips i.on { background: var(--good); border-color: var(--good); }
+.gl-tier h4 { display: flex; align-items: center; gap: 8px; margin: 12px 0 4px; font-size: 14px; color: var(--accent); }
+.gl-num { display: inline-grid; place-items: center; min-width: 26px; height: 20px; padding: 0 4px; border-radius: 6px; background: var(--panel-2); font-size: 11.5px; color: var(--text); }
+.gl-tc { margin-left: auto; color: var(--muted); font-variant-numeric: tabular-nums; font-size: 13px; }
+.gl-row { display: grid; grid-template-columns: 20px 1fr auto; align-items: start; gap: 8px; padding: 7px 8px; border-top: 1px solid var(--line); }
+.gl-row.next { border: 1px solid rgba(56, 212, 255, 0.55); border-radius: 10px; background: rgba(56, 212, 255, 0.06); }
+.gl-row.done { opacity: 0.6; }
+.gl-mark { width: 18px; height: 18px; margin-top: 1px; border-radius: 50%; border: 2px solid rgba(255, 255, 255, 0.3); box-sizing: border-box; display: grid; place-items: center; font-size: 11px; font-weight: 800; }
+.gl-row.done .gl-mark { background: var(--good); border-color: var(--good); color: #0c1a10; }
+.gl-head { display: flex; align-items: baseline; gap: 6px; font-size: 14px; }
+.gl-tag { font-size: 11px; font-weight: 800; letter-spacing: 0.04em; text-transform: uppercase; color: var(--accent); }
+.gl-prog { margin-left: auto; font-variant-numeric: tabular-nums; font-weight: 700; color: var(--muted); white-space: nowrap; }
+.gl-text { font-size: 13px; color: #d3d9e2; line-height: 1.35; }
+.gl-hint { font-size: 12.5px; color: var(--muted); line-height: 1.35; margin-top: 2px; }
+.gl-go { align-self: center; }
+.bcard.goal-pick { outline: 2px solid var(--accent); outline-offset: 2px; }

@@ -94,6 +94,7 @@ function initUI() {
   helpPagerInit();
   initLore();
   initFeedback(); // (Send feedback: main menu and pause menu, js/feedback.js)
+  initMeta(); // (Colony goals, Records and achievements: js/goals.js)
   $('screen-help').addEventListener('click', (e) => {
     const a = e.target.closest && e.target.closest('[data-jump]');
     if (!a) return;
@@ -4818,7 +4819,7 @@ function openSheet(kind, id, html) {
  * map and what the panel is about stay in view above it; full; or just its title strip. The grab handle at the
  * top is dragged between them (further down closes the panel) or tapped to switch between half and full.
  */
-const SHEET_TALL = { build: 1, goods: 1, pop: 1, msgs: 1 }; // lists and charts open at full height: nothing on the map to watch
+const SHEET_TALL = { build: 1, goods: 1, pop: 1, msgs: 1, goals: 1 }; // lists and charts open at full height: nothing on the map to watch
 
 function setSheetSize(size) {
   const s = $('sheet');
@@ -6777,6 +6778,7 @@ function updateHUD() {
   if ($('clock').innerHTML !== ct) $('clock').innerHTML = ct;
   $('clock').title = todEnabled() ? TOD_NAMES[todName()] + (todMode() === 'night' ? ' (always)' : '') : '';
   updateWinCard(); // (first: folded under the Goal chip, it leaves a summary there)
+  goalsHUD(); // (Colony free play: the goals button beside the Goal card, js/goals.js)
   const obj = $('objective');
   // Where the screen is small the card folds away at the first tap on the map (onMapTap) and opens again for each
   // new step, unless you've folded or opened it yourself. Folded, it still says how many buildings have no road.
@@ -7076,5 +7078,6 @@ function uiTick(dt) {
   updateMapTip();
   UI.hudT -= dt;
   if (UI.hudT <= 0) { UI.hudT = 0.25; updateHUD(); refreshSheet(); placeMinimap(); refreshSelection(); missionCoach(); syncWakeLock(); nightfallLine(); }
+  metaTick(dt); // (Colony goals, records and achievements, once a second: js/goals.js)
   if (S.winner >= 0 && !UI.overShown) showGameOver();
 }
