@@ -91,6 +91,7 @@
     <div id="banner-text"></div>
     <div class="banner-actions">
       <div id="banner-seg" class="seg road-seg" hidden><button data-v="road">Roads<kbd>R</kbd></button><button data-v="bridge">Bridges<kbd>G</kbd></button><button data-v="ramp">Ramps<kbd>V</kbd></button><button data-v="viaduct" title="Viaducts (Shift+V)">Viaducts<kbd>⇧V</kbd></button><button data-v="ropeway" title="Ropeways (Shift+Y)">Ropeways<kbd>⇧Y</kbd></button><button data-v="pave">Pave<kbd>E</kbd></button><button data-v="arrows">Arrows<kbd>O</kbd></button><button data-v="lights">Junctions<kbd>L</kbd></button><button data-v="wall" hidden>Walls<kbd>X</kbd></button><button data-v="rail">Rail<kbd>N</kbd></button><button data-v="pipe">Pipes<kbd>K</kbd></button></div>
+      <button id="banner-tool" class="btn" hidden aria-haspopup="true" aria-expanded="false" aria-controls="banner-seg"><span class="bt-k">Tool: </span><span class="bt-v">Roads</span><span class="bt-c" aria-hidden="true">▾</span></button>
       <button id="banner-undo" class="btn" title="Undo (Ctrl+Z)" hidden>Undo</button>
       <button id="banner-clear" class="btn" hidden>Clear</button>
       <button id="banner-ok" class="btn primary">Build here</button>
@@ -340,6 +341,7 @@
     </div>
     <button id="p-full" class="btn big" hidden>Full screen: Off</button>
     <button id="p-weather" class="btn big" title="Sandstorms on the red desert, rainstorms with fog in the forest, blizzards on the poles: now and then, for looks only">Weather: On</button>
+    <button id="p-haptics" class="btn big" hidden title="A short buzz when an order is given, a building placed or a road built, and for a warning (on a phone that can vibrate)">Vibration: On</button>
     <button id="p-daynight" class="btn big" title="Cycle (morning to night, 12 minutes round), always day or always night (a display setting)">Time of day: Cycle</button>
     <button id="p-stats" class="btn big">Statistics</button>
     <button id="p-saveplanet" class="btn big" title="Keep this planet (its seed and map settings) to play again from the new-game menu">Save this planet</button>
@@ -558,6 +560,7 @@
         <h3>Roads and traffic</h3>
         <p>Roads are the heart of your colony. Every building that takes goods in or sends them out, and every site, needs a road joined to your Command Base's network (or to a Depot on it). A red <b>road badge</b> marks one with none: tap it and choose <b>Lay road</b> to pave the shortest way (with as few bends as it can: bots slow down for every corner).</p>
         <p><b>Paths</b> (<kbd>R</kbd>) is where you plan roads and everything like them: <b>Roads</b>, <b>Bridges</b>, <b>Ramps</b>, <b>Viaducts</b>, <b>Ropeways</b>, <b>Pave</b>, <b>Arrows</b>, <b>Junctions</b>, <b>Walls</b>, <b>Rail</b> and <b>Pipes</b>, plus <b>Route to</b> and the <b>Traffic map</b>. <b>Sketch</b> a road by dragging across the map, or tap tiles to add them (tap again to drop one). It shows bright blue, with its cost in the banner (at the top; on an upright phone across the bottom, in place of the tools, with <b>How it works</b> as a tab on its edge). Sketch up to the edge of the map and it scrolls on under your finger, so a long road is one stroke; on a touch screen two fingers move the map and zoom. <b>Nothing is spent until you tap Build</b>: <b>Undo</b> takes back the last drag and <b>Clear</b> wipes the sketch. Tap an existing road to mark it with a red cross to take up, Cement back. <b>Planned by mistake?</b> Drag along planned road (dashed, or still in your sketch) from one of its tiles and every planned tile you pass is called off when you tap Build, its cost back; drag from it out onto open ground instead and the road carries on from there. Rail works the same; built road is never touched by a drag.</p>
+        <p><b>On a phone held upright</b> the tools are behind one button, <b>Tool: Roads ▾</b> (the tool in use): tap it and all of them show at once over the map, the one in use lit. Tap one to use it.</p>
         <p><b>Pay as you go.</b> Short of Cement or Alloy? Plan it anyway: what you can't pay for yet waits, and is paid from storage as the goods come in, oldest plans first (a road tile still waiting has an orange outline). Planned tiles show dashed until <b>free Workers pave them</b>, about a second and a half a tile, working out from the roads you have. A long highway is a project: keep a few Workers free.</p>
         <ul class="chain">
           <li>Roads double a bot's speed, and bots follow a road round its corners.</li>
@@ -934,6 +937,7 @@
           <li><b>Warbots:</b> tap one of yours (or a Howitzer) to select it; tap it again quickly for all of its kind in view. The <b>selection bar</b> has <b>All in view</b>, <b>Whole army</b>, <b>Box</b> (then drag a finger round them; or hold a finger still a moment, then drag), <b>Info</b>, <b>Recycle</b> (see Workers, Haulers and the Foundry) and <b>Save as group</b>.</li>
           <li>While it shows, <b>tap the map</b> to send them: open ground to hold it, a rival building or robot to attack, your Outpost to station them, your Repair Station to get them fixed. <b>Undo</b> takes the order back for a few seconds. A drag only moves the map; ✕ clears the selection.</li>
         </ul>
+        <p><b>Vibration.</b> On a phone that can vibrate, a short buzz says an order went through (warbots sent, a building placed, a road built) and marks a warning. Switch it off with <b>Vibration</b> in the pause menu.</p>
         <p class="keys"><b>Mouse.</b> Scroll to zoom (on a Mac, pinch the trackpad; swipe sideways or Shift + scroll to pan). Pan with <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> or the arrow keys, by resting the mouse at the edge of the window, or by right- or middle-dragging. Click to select, and rest the mouse on anything for a tip.</p>
         <ul class="chain keys">
           <li><b>Drag a box</b> round your warbots, Bulwarks and Torches to select them (a box round a garrison takes all but one inside; Shift adds to the selection).</li>

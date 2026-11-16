@@ -674,6 +674,14 @@ body.mode-aim .objrow, body.mode-land .objrow, body.mode-airdrop .objrow { displ
 .selbar.touch .sel-mouse { display: none; }
 .selbar.touch #sel-status { margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .selbar.touch #selbar-clear { position: static; flex: none; width: 44px; height: 44px; padding: 0; }
+/* Under a finger the tools are two rows that fit without scrolling: who to select, then what to do with them (Undo,
+   Recycle, Save as group). Where the bar is narrow, a few words go: Recycle 6, Save group 1, Tap again. */
+.selbar .sel-br { display: none; }
+.selbar.touch .sel-tools { flex-wrap: wrap; row-gap: 0; overflow: visible; touch-action: manipulation; container-type: inline-size; }
+.selbar.touch .sel-tools .btn { flex: 1 1 auto; }
+.selbar.touch .sel-br { display: block; flex: 0 0 100%; height: 0; }
+.selbar.touch .sel-br ~ .btn, .selbar.touch .sel-tools #selbar-group { margin-top: 6px; }
+@container (max-width: 379px) { .selbar.touch .sl-long { display: none; } }
 .selbar #sel-box.on { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
 /* Where panels cover the bottom of the screen the bar steps aside for them (and taps are then not orders: selBarShowing),
    and so do the control-group chips, for a panel or a mode's banner. */
@@ -798,6 +806,35 @@ body.mode-road .objrow { display: none; }
   body.mode-road #banner-text details.how[open] summary { position: sticky; top: 0; margin: 0 -12px 4px; border: 0; border-radius: 12px 12px 0 0; }
   body.mode-road #banner-text details.how[open] summary::before { content: '✕'; float: right; color: var(--text); }
 }
+/* ---------- an upright phone: the Paths tools behind one button ----------
+   The row showed two or three of the eleven tools at a time. In its place, Tool: Roads ▾ (the tool in use) opens all of
+   them at once, a grid over the map above the banner, the one in use lit; a tap on one opens it and shuts the grid
+   (toolPicker in ui.js). Where the button is too narrow for it (Route to beside it) it drops the word Tool (toolFit). Build takes the room
+   under Route to, so Done keeps to the width of Traffic above it. */
+#banner-tool { display: none; }
+@media (max-width: 699px) and (min-height: 520px) {
+  body.mode-road .banner-actions .road-seg { display: none; }
+  body.mode-road #banner-tool:not([hidden]) { display: flex; grid-column: 1 / 4; grid-row: 1; align-items: center; gap: 4px; min-width: 0;
+    padding: 8px 10px 8px 12px; text-align: left; }
+  body.mode-road #banner.noplan #banner-tool { grid-column: 1; }
+  #banner-tool .bt-k { flex: none; color: var(--muted); font-weight: 600; }
+  #banner-tool.tight .bt-k { display: none; }
+  #banner-tool .bt-v { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #banner-tool .bt-c { flex: none; color: var(--accent); font-size: 12px; transition: transform 0.15s; }
+  body.mode-road #banner.picking #banner-tool { border-color: var(--accent); background: var(--panel-2); }
+  body.mode-road #banner.picking #banner-tool .bt-c { transform: rotate(180deg); }
+  body.mode-road #banner.picking .banner-actions .road-seg:not([hidden]) { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px;
+    position: absolute; z-index: 2; left: calc(var(--safe-l) + 8px); right: calc(var(--safe-r) + 8px); bottom: calc(100% + 6px); padding: 8px;
+    overflow: visible; background: #252a36; border: 1px solid var(--line); border-radius: 14px; box-shadow: 0 8px 28px rgba(0, 0, 0, 0.45);
+    -webkit-mask-image: none; mask-image: none; }
+  body.mode-road #banner.picking .banner-actions .road-seg button { min-width: 0; min-height: 48px; padding: 6px 2px; font-size: 14px;
+    color: var(--text); background: rgba(255, 255, 255, 0.06); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  body.mode-road #banner.picking .banner-actions .road-seg button.on { background: var(--accent); color: var(--accent-ink); box-shadow: none; }
+  body.mode-road #banner.picking #banner-text details.how { display: none; }
+  body.mode-road #banner-ok { grid-column: 3 / 5; }
+  body.mode-road #banner-cancel { grid-column: 5; min-width: 60px; }
+}
+@media (max-width: 374px) and (min-height: 520px) { body.mode-road #banner.picking .banner-actions .road-seg button { font-size: 13px; } }
 @media (orientation: landscape) and (max-height: 519px) {
   body.mode-road #banner-text details.how[open] { left: 0; max-height: calc(100vh - 215px); max-height: calc(100dvh - 215px); }
 }

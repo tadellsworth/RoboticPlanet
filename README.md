@@ -170,8 +170,13 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   that leaves it for open ground draws on from there, and built road is never touched by a drag);
   the banner, at the top of the screen, shows the cost, with **Undo**, **Clear** and **Build**. On an upright phone the
   banner (and every mode's banner) is docked across the bottom in place of the tools: the line is up to three lines,
-  the tools are one row to swipe along (an end with more tools beyond it fades out, `segEdges`) with Route to and Traffic at its end, Undo, Clear, Build and Done share the row
-  below, and **How it works** is a tab on the banner's edge that opens as a card over the map. Sketching up to the edge
+  the tools are behind one button, **Tool: Roads ▾** (the tool in use; it drops the word Tool where Route to leaves
+  it too narrow, `toolFit`), that opens all of them at once as a grid over the map, the one in use lit, and shuts when
+  one is picked (`toolPicker`; a touch elsewhere shuts it too, and one on the map does nothing more), with Route to,
+  Traffic and Done beside it and Undo, Clear, Build and Done in the row below; a mission goal that lights a Paths
+  tool lights the Tool button while that tool isn't the one in use (`coachTarget`). On a phone on its side the tools
+  are one row to swipe along (an end with more tools beyond it fades out, `segEdges`). **How it works** is a tab on
+  the banner's edge that opens as a card over the map. Sketching up to the edge
   of the map scrolls it on under the finger (`paintScroll`), and a tap just above the docked banner glides the map up
   so the banner's new row doesn't cover it (`planInView`). Nothing is spent until
   Build. Building closes Paths, straight back to the map; leaving Paths any other way drops an unbuilt sketch.
@@ -1259,11 +1264,17 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   a game runs, and let go when it's paused, over, left or hidden. A long press brings up no browser menu.
 - **Warbots by touch** (`touchSelect`, `touchOrder` in js/ui.js): tap one of your warbots or Howitzers to select it
   (tap it again within half a second for all of its kind in view). The selection bar (docked across the bottom in
-  place of the tools on an upright phone) says what they're doing and has **All in view**, **Whole army**, **Box**,
-  **Info** and **Save as group**; while it shows, a tap on the map is the order a right-click gives, with a ring and
+  place of the tools on an upright phone) says what they're doing and has two rows of buttons that fit without
+  scrolling: **All in view**, **Whole army**, **Box** and **Info**, then **Undo**, **Recycle** and **Save as group**
+  (where the bar is under 380 px wide a few words go: Recycle 6, Save group 1, Tap again); while it shows, a tap on the map is the order a right-click gives, with a ring and
   **Undo** for 4 seconds (`ORDER_UNDO`; the `undoCommand` order sends each back to what it was doing). A drag or a
   pinch is never an order. **Box** (or a finger held still 350 ms, `LONG_PRESS` in js/input.js, then dragged, where
   you have warbots out) draws a selection box. With a panel open the bar steps aside and taps inspect.
+- **Vibration** (`haptic` in js/input.js): under a finger, on a device that can vibrate (`navigator.vibrate`), a short
+  buzz says an order went through (a tap-to-order with warbots selected or in the Army banner, a building, Viaduct or
+  Ropeway placed, a Paths plan built, Lay road) and marks a warning or alarm from the game (at most one every 2.5 s).
+  **Vibration** in the pause menu (shown only on a touch screen that can vibrate) switches it off; it is kept on this
+  device (`botfall.haptics`), on by default.
 - **Game speed:** the speed chip in the top bar opens 0.75×, 0.875×, 1×, 2× and 3×.
 - **Sound** (`js/audio.js`, all Web Audio, no audio files): a generative synthwave score that follows the game (menu,
   building, war when you're attacked or fighting, and an alarm while a nuke flies; the building music takes turns between

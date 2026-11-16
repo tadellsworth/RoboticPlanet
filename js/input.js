@@ -16,6 +16,31 @@
 const INPUT = { pointers: new Map(), gesture: null, onTap: null, onPaint: null, onPaintEnd: null, onHover: null, onBox: null, onCommand: null, onGrab: null, canBox: null, canPaint: null, shift: false, tap: null, boxArmed: false };
 const LONG_PRESS = 350; // ms a finger rests on the map before its drag draws a selection box (where there are warbots to select)
 
+/*
+ * Haptics: a short buzz under a finger when an order is confirmed (a tap-to-order, a building placed, a road built),
+ * for a warning, and as a held finger turns into a selection box. Only where the browser can vibrate and a finger, not
+ * a mouse, is in use; Vibration in the pause menu switches it off (kept on this device, on by default). A warning buzzes
+ * at most every HAPTIC_ALERT_GAP ms, so a burst of them is one buzz.
+ */
+const HAPTIC_KEY = 'botfall.haptics';
+const HAPTIC_ALERT_GAP = 2500;
+const HAPTIC_PATTERNS = { order: 15, hold: 12, warn: [20, 70, 20], bad: [35, 60, 35] };
+const HAPTIC = { on: true, alertAt: -1e9 };
+try { HAPTIC.on = localStorage.getItem(HAPTIC_KEY) !== '0'; } catch (e) { /* storage unavailable: on */ }
+function hapticsSupported() { return typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function'; }
+function setHaptics(on) { HAPTIC.on = !!on; try { localStorage.setItem(HAPTIC_KEY, on ? '1' : '0'); } catch (e) { /* storage unavailable */ } }
+/** A finger at work: the last pointer on the map was one (before any, the kind of screen says). */
+function hapticTouch() { return INPUT.mouse === undefined ? typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches : !INPUT.mouse; }
+function haptic(kind) {
+  if (!HAPTIC.on || !hapticsSupported() || !hapticTouch()) return;
+  if (kind === 'warn' || kind === 'bad') {
+    const now = performance.now();
+    if (now - HAPTIC.alertAt < HAPTIC_ALERT_GAP) return;
+    HAPTIC.alertAt = now;
+  }
+  try { navigator.vibrate(HAPTIC_PATTERNS[kind] || 15); } catch (e) { /* not allowed here (no tap yet, or a frame that can't) */ }
+}
+
 function initInput(canvas, handlers) {
   Object.assign(INPUT, handlers);
   canvas.addEventListener('pointerdown', onPointerDown);
@@ -67,7 +92,7 @@ function onPointerDown(e) {
     const g = INPUT.gesture = { type: 'single', sx: e.clientX, sy: e.clientY, lx: e.clientX, ly: e.clientY, moved: false, painting: false, panOnly, box, armed, grab, button: e.button, hold: 0 };
     // ...or once the finger has rested where it landed for LONG_PRESS ms (a short buzz says so), if there are warbots to box.
     if (!mouse && !box && R.mode === 'normal' && INPUT.onBox && (!INPUT.canBox || INPUT.canBox())) {
-      g.hold = setTimeout(() => { if (INPUT.gesture === g && !g.moved) { g.box = true; if (navigator.vibrate) navigator.vibrate(12); } }, LONG_PRESS);
+      g.hold = setTimeout(() => { if (INPUT.gesture === g && !g.moved) { g.box = true; haptic('hold'); } }, LONG_PRESS);
     }
   } else if (INPUT.pointers.size === 2) {
     if (INPUT.gesture) clearTimeout(INPUT.gesture.hold);

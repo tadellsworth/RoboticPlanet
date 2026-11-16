@@ -136,6 +136,12 @@ function initUI() {
   const syncWx = () => { $('p-weather').textContent = `Weather: ${weatherOn() ? 'On' : 'Off'}`; };
   syncWx();
   $('p-weather').onclick = () => { setWeatherOn(!weatherOn()); syncWx(); sfx('click'); };
+  // Vibration (input.js haptic): on a touch screen that can vibrate; on, a buzz says so.
+  const syncHaptics = () => { $('p-haptics').textContent = `Vibration: ${HAPTIC.on ? 'On' : 'Off'}`; };
+  const touchScreen = (typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches) || navigator.maxTouchPoints > 0;
+  $('p-haptics').hidden = !hapticsSupported() || !touchScreen;
+  syncHaptics();
+  $('p-haptics').onclick = () => { setHaptics(!HAPTIC.on); syncHaptics(); sfx('click'); if (HAPTIC.on) try { navigator.vibrate(HAPTIC_PATTERNS.order); } catch (e) { /* not allowed here */ } };
   initFullscreen();
   syncVol();
   $('p-help').onclick = () => showHelp();
@@ -171,6 +177,13 @@ function initUI() {
   window.addEventListener('pointerdown', (e) => {
     if (!$('speed-menu').hidden && !$('speed-menu').contains(e.target) && e.target !== $('btn-speed')) $('speed-menu').hidden = true;
   });
+  // The Paths tools picker (an upright phone's Tool button) shuts at a touch anywhere else; one on the map does nothing more.
+  window.addEventListener('pointerdown', (e) => {
+    if (!UI.toolPick || $('banner-seg').contains(e.target) || $('banner-tool').contains(e.target)) return;
+    const shown = $('banner-tool').getClientRects().length > 0;
+    toolPicker(false);
+    if (shown && e.target === $('game')) e.stopPropagation();
+  }, true);
   $('objective').onclick = () => { UI.objCollapsed = !UI.objCollapsed; UI.objManual = true; UI.hudT = 0; };
   $('btn-msgs').onclick = () => { sfx('click'); if (UI.sheetKind === 'msgs') closeSheet(); else { setMode('normal'); openMsgSheet(); } };
   $('sheet-close').onclick = () => closeSheet();
@@ -1791,13 +1804,17 @@ function selectBots(ids, add) {
 /** Is a finger, not a mouse, at work? The last pointer used on the map says; before any, the kind of screen. */
 function onTouch() { return INPUT.mouse === undefined ? matchMedia('(pointer: coarse)').matches : !INPUT.mouse; }
 
-/** The selection bar's parts, made once: what's selected and doing what, the mouse's hint, and a finger's buttons. */
+/**
+ * The selection bar's parts, made once: what's selected and doing what, the mouse's hint, and a finger's buttons. Under a
+ * finger the buttons are two rows that fit the bar without scrolling (style.css): who to select (All in view, Whole army,
+ * Box, Info), then what to do with them (Undo, Recycle, Save as group). The words in .sl-long go where the bar is narrow.
+ */
 function initSelBar() {
   $('selbar').innerHTML = `<div class="sel-top"><div class="sel-text"><b id="sel-title"></b> <span id="sel-notes"></span></div>
       <button class="btn small ghost" id="selbar-clear" aria-label="Clear selection">✕</button></div>
     <span class="hint" id="sel-status"></span>
     <span class="hint sel-mouse">Right-click open ground to hold it, a rival building or robot to attack, your Outpost to station them, or a Repair Station to get them fixed. Esc clears.</span>
-    <div class="sel-tools"><button class="btn small primary" id="sel-undo" hidden>Undo</button><button class="btn small" id="sel-view">All in view</button><button class="btn small" id="sel-army">Whole army</button><button class="btn small" id="sel-box">Box</button><button class="btn small" id="sel-info">Info</button><button class="btn small" id="sel-scorch" hidden>Scorch the earth</button><button class="btn small danger" id="sel-recycle" hidden></button><button class="btn small ghost" id="selbar-group" title="Save them as a control group (or ⌘/Ctrl/⌥ + 1–9)"></button></div>`;
+    <div class="sel-tools"><button class="btn small" id="sel-view">All in view</button><button class="btn small" id="sel-army">Whole army</button><button class="btn small" id="sel-box">Box</button><button class="btn small" id="sel-info">Info</button><i class="sel-br"></i><button class="btn small primary" id="sel-undo" hidden>Undo</button><button class="btn small" id="sel-scorch" hidden>Scorch the earth</button><button class="btn small danger" id="sel-recycle" hidden></button><button class="btn small ghost" id="selbar-group" title="Save them as a control group (or ⌘/Ctrl/⌥ + 1–9)"></button></div>`;
   $('selbar-clear').onclick = () => { sfx('click'); selectBots([], false); };
   $('selbar-group').onclick = () => saveGroup(nextGroupNo());
   $('sel-undo').onclick = () => undoOrder();
@@ -1898,7 +1915,7 @@ function orderSnapshot(u) {
  */
 function touchOrder(i, j, wx, wy) {
   const was = selectable(ME, UI.sel).map(orderSnapshot);
-  onMapCommand(i, j, wx, wy, () => { UI.undo = { was, until: performance.now() + ORDER_UNDO, text: 'Order given.' }; refreshSelection(); });
+  onMapCommand(i, j, wx, wy, () => { haptic('order'); UI.undo = { was, until: performance.now() + ORDER_UNDO, text: 'Order given.' }; refreshSelection(); });
 }
 
 /** Undo on the selection bar: each robot of the last order goes back to what it was doing (its garrison, its flag, its target, its spot). */
@@ -1942,12 +1959,12 @@ function refreshSelection() {
   set('sel-notes', (inside ? `<span class="muted">(${inside} in garrisons)</span> ` : '') + (empty ? `<span class="err">${empty} out of Ammo or Fuel</span>` : ''));
   set('sel-status', INPUT.boxArmed ? '<b>Box:</b> drag a finger round warbots (two fingers move the map)'
     : undo ? `<span class="ok">${esc(undo.text)}</span> Undo takes it back.` : (touch ? '<b>Tap the map</b> to send them · ' : '') + esc(selStatus(selectable(ME, UI.sel))));
-  set('selbar-group', `Save as group ${nextGroupNo()}`);
+  set('selbar-group', `Save<span class="sl-long"> as</span> group ${nextGroupNo()}`);
   $('sel-undo').hidden = !undo;
   // Recycle: these robots to the Bot Foundry, to be taken apart (several: a second tap within 3 s).
   const rec = selRecyclable(), armed = rec.length > 1 && UI.recycleArm && performance.now() - UI.recycleArm < 3000;
   $('sel-recycle').hidden = !rec.length;
-  set('sel-recycle', armed ? `Tap again: recycle ${rec.length}` : rec.length === 1 ? 'Recycle this unit' : `Recycle these ${rec.length} units`);
+  set('sel-recycle', armed ? `Tap again<span class="sl-long">: recycle ${rec.length}</span>` : rec.length === 1 ? 'Recycle<span class="sl-long"> this unit</span>' : `Recycle <span class="sl-long">these </span>${rec.length}<span class="sl-long"> units</span>`);
   if (rec.length) $('sel-recycle').title = rec.length === 1 ? `Take it to the Bot Foundry to be taken apart (${recycleText(rec[0].type)} back)` : 'Take them to the Bot Foundry to be taken apart: about half their parts come back';
   refreshGroupBar();
 }
@@ -2207,6 +2224,7 @@ function escapeKey() {
   if (!$('screen-pause').hidden) { $('p-resume').click(); return; }
   if (!$('screen-over').hidden) return;
   if (UI.sheetKind) { closeSheet(); return; }
+  if (UI.toolPick && !$('banner').hidden) { toolPicker(false); return; } // (the Paths tools picker of an upright phone)
   // In Paths with a plan sketched, Esc takes back the last stroke (again for the one before); with none left it leaves Paths.
   if (R.mode === 'road' && !draftEmpty()) { draftUndo(); showRoadBanner(draftEmpty() ? 'Plan cleared.' : 'Last stroke taken back (Esc again for the one before; Clear drops the whole plan).', true); return; }
   if (R.mode !== 'normal') { setMode(UI.planKept ? 'road' : 'normal'); return; }
@@ -2931,6 +2949,10 @@ function coachTarget(g) {
   let left = coachLeft(c.sel);
   // (In Paths with a sketch drawn, for a goal done there: its Build makes the sketch real.)
   if (R.mode === 'road' && /#btn-road|#banner-/.test(sel) && !/#banner-ok/.test(left) && !$('banner-ok').hidden) left = left ? `${left}, #banner-ok` : '#banner-ok';
+  // (An upright phone keeps the Paths tools behind the Tool button: with the picker shut, the button lights for a goal's
+  // tool that isn't the one in use. Open, the tool's own button in it lights, as in the row elsewhere.)
+  const tools = [...sel.matchAll(/#banner-seg \[data-v=['"]?(\w+)/g)].map((m) => m[1]);
+  if (tools.length && !tools.some(pathsToolOn) && toolButtonShut()) left = left ? `${left}, #banner-tool` : '#banner-tool';
   return { sel: left, ring: c.ring };
 }
 
@@ -3137,6 +3159,7 @@ function setMode(mode, keepPlan) {
   if ((R.mode === 'road' || UI.planKept) && mode !== 'road' && !keepPlan) dropDraft();
   if (R.mode === 'road' && mode !== 'road') UI.routeGhost = null;
   UI.planKept = !!keepPlan && !draftEmpty();
+  UI.toolPick = false; // (the Paths tools picker of an upright phone: see toolPicker)
   R.mode = mode;
   for (const m of ['road', 'place', 'attack', 'aim', 'land', 'airdrop']) document.body.classList.toggle('mode-' + m, mode === m);
   document.body.classList.toggle('mode-on', mode !== 'normal'); // (any mode: on an upright phone its banner takes the bottom bar's place)
@@ -3677,6 +3700,8 @@ function strikePicked(t, deck) {
 function showBanner(html, okLabel, cancelLabel) {
   $('banner').hidden = false;
   $('banner-seg').hidden = true;
+  $('banner-tool').hidden = true;
+  $('banner').classList.remove('picking');
   $('banner-traffic').hidden = true;
   $('banner-route').hidden = true;
   $('banner-undo').hidden = true;
@@ -3712,6 +3737,7 @@ function crossingTools() {
   pathsSeg(type);
   $('banner').classList.toggle('noplan', $('banner-ok').hidden);
   bannerMissionHint();
+  toolFit();
 }
 
 function enterPlaceMode(type, moveFrom) {
@@ -3804,7 +3830,7 @@ function confirmBanner() {
     if (!A || !E || !E.ok) return;
     act('link', [type, A.i, A.j, E.i, E.j], (res) => {
       if (!res.ok) { sfx('error'); showBanner(`<span class="err">${res.reason}</span>`, null, 'Cancel'); return; }
-      sfx('place');
+      sfx('place'); haptic('order');
       addFx('ring', A.i + 0.5, A.j + 0.5, { color: PLAYER_COLORS[ME] });
       // (Back to Paths when a plan sketched there is waiting for its Build, else to the map.)
       if (UI.planKept) { setMode('road'); showRoadBanner(`${BDEFS[type].name} placed. Your plan is still here: tap Build for it.`, true); } else setMode('normal');
@@ -3818,7 +3844,7 @@ function confirmBanner() {
     if (!res.ok) { sfx('error'); showBanner(`<span class="err">${res.reason}</span>`, null, 'Cancel'); return; }
     if (from) toast(`Moving the ${BDEFS[type].name}: workers put it together here (no goods needed), and the old one keeps working until it's ready.`, 'good');
     UI.moveFrom = 0;
-    sfx('place');
+    sfx('place'); haptic('order');
     addFx('ring', x + 0.5, y + 0.5, { color: PLAYER_COLORS[ME] });
     setMode('normal');
   });
@@ -4351,7 +4377,7 @@ function draftDone(r) {
   if (!why && R.mode === 'road') setMode('normal');
   const wallText = walls || gates ? ` ${[walls ? `${walls} Wall${walls === 1 ? '' : 's'}` : '', gates ? `${gates} Gate${gates === 1 ? '' : 's'}` : ''].filter(Boolean).join(' and ')} planned: free workers will build ${walls + gates === 1 ? 'it' : 'them'}.` : '';
   if (why) { sfx('error'); toast(`Planned ${laid} tile${laid === 1 ? '' : 's'} before running short: ${why}`, 'warn'); }
-  else { sfx('place'); toast((laid ? `Planned ${laid} road tile${laid === 1 ? '' : 's'}: free workers will pave them.` : '') + (ramps ? ` ${ramps} Ramp site${ramps === 1 ? '' : 's'} started.` : '') + wallText + (removed ? ` Took up ${removed} tile${removed === 1 ? '' : 's'}.` : ''), 'info'); }
+  else { sfx('place'); haptic('order'); toast((laid ? `Planned ${laid} road tile${laid === 1 ? '' : 's'}: free workers will pave them.` : '') + (ramps ? ` ${ramps} Ramp site${ramps === 1 ? '' : 's'} started.` : '') + wallText + (removed ? ` Took up ${removed} tile${removed === 1 ? '' : 's'}.` : ''), 'info'); }
   if (wallWhy) toast(`Some of the wall couldn't go up: ${wallWhy}`, 'warn');
   if (rampWhy) toast(`A Ramp couldn't be planned: ${rampWhy} The road or track there won't climb the cliff until one is.`, 'warn');
   if (rails || railsUp) toast(`${rails ? `Planned ${rails} tile${rails === 1 ? '' : 's'} of track.` : ''}${railsUp ? ` Took up ${railsUp} tile${railsUp === 1 ? '' : 's'} of track.` : ''}`, 'info');
@@ -4874,24 +4900,66 @@ function showRoadBanner(problem, info) {
   rb.onclick = () => { UI.roadMode = mode; UI.route = !UI.route; UI.routeGhost = null; UI.routePrev = null; sfx('click'); showRoadBanner(); };
   if (R.traffic) $('banner-text').insertAdjacentHTML('beforeend', ` <span class="traffic-key">${trafficSummary()}</span>`);
   bannerMissionHint();
+  toolFit();
 }
 
-/** The Paths tools row (#banner-seg) on show, with `mode` picked (Walls only with war on); each button opens its tool. */
+/**
+ * The Paths tools row (#banner-seg) on show, with `mode` picked (Walls only with war on); each button opens its tool.
+ * On an upright phone the row is put away behind one button, Tool: Roads ▾ (#banner-tool), that opens all the tools at
+ * once as a grid over the map (toolPicker; style.css): picking one closes it.
+ */
 function pathsSeg(mode) {
   $('banner-seg').hidden = false;
+  let name = '';
   for (const btn of $('banner-seg').children) {
     btn.classList.toggle('on', btn.dataset.v === mode);
+    if (btn.dataset.v === mode) name = btn.firstChild.textContent;
     if (btn.dataset.v === 'wall') btn.hidden = !warOn();
-    btn.onclick = () => openPaths(btn.dataset.v);
+    btn.onclick = () => { UI.toolPick = false; openPaths(btn.dataset.v); };
   }
+  const tb = $('banner-tool');
+  tb.hidden = false;
+  tb.querySelector('.bt-v').textContent = name;
+  tb.setAttribute('aria-label', `Tool: ${name}. Pick another`);
+  tb.onclick = () => { sfx('click'); toolPicker(!UI.toolPick); };
+  toolPicker(UI.toolPick);
   // The tools are one row to swipe along on a phone: the one in use is brought into view when it changes.
   if (UI.segShown !== mode) { UI.segShown = mode; const on = $('banner-seg').querySelector('.on'); if (on && on.scrollIntoView) on.scrollIntoView({ block: 'nearest', inline: 'center' }); }
   // Where it runs on past the edge, that edge fades out (style.css: .more-l, .more-r), so the tools out of sight show.
   const seg = $('banner-seg');
-  if (!seg.onscroll) { seg.onscroll = () => segEdges(seg); window.addEventListener('resize', () => segEdges(seg)); }
+  if (!seg.onscroll) { seg.onscroll = () => segEdges(seg); window.addEventListener('resize', () => { segEdges(seg); toolFit(); }); }
   segEdges(seg);
   requestAnimationFrame(() => segEdges(seg)); // (once the scroll to the tool in use has landed)
 }
+/**
+ * The Paths tools picker (an upright phone's Tool button) open or shut. Open, How it works is put away (they'd take
+ * the same place over the map). A tap anywhere else shuts it, and one on the map does nothing else (initUI).
+ */
+function toolPicker(open) {
+  UI.toolPick = !!open;
+  $('banner').classList.toggle('picking', UI.toolPick);
+  $('banner-tool').setAttribute('aria-expanded', UI.toolPick ? 'true' : 'false');
+  const how = UI.toolPick && $('banner-text').querySelector('details.how');
+  if (how && how.open) how.open = false;
+}
+/**
+ * The Tool button says "Tool:" only where that leaves room for the whole name of the tool (not beside Route to on a
+ * narrow phone). Called once the banner's buttons are settled (showRoadBanner, crossingTools) and on a resize; measured
+ * again only when something that sets the button's width has changed.
+ */
+function toolFit() {
+  const tb = $('banner-tool'), v = tb.querySelector('.bt-v');
+  const key = `${v.textContent}|${$('banner').classList.contains('noplan')}|${$('banner-route').hidden}|${$('banner-undo').hidden}|${innerWidth}x${innerHeight}`;
+  if (tb.hidden || tb.dataset.fit === key) return;
+  tb.dataset.fit = key;
+  tb.classList.remove('tight');
+  if (v.scrollWidth > v.clientWidth + 1) tb.classList.add('tight');
+}
+/** Is the Tool button showing (an upright phone in Paths, or placing a Viaduct or Ropeway), with its picker shut? */
+function toolButtonShut() { return !UI.toolPick && !$('banner').hidden && !$('banner-tool').hidden && $('banner-tool').getClientRects().length > 0; }
+/** Is v the Paths tool in use (a Viaduct or Ropeway: being placed)? */
+function pathsToolOn(v) { return R.mode === 'road' ? UI.roadMode === v : crossingPlacing() && UI.placeType === v; }
+
 /** Mark which ends of a row that scrolls sideways have more beyond them. */
 function segEdges(el) {
   const more = el.scrollWidth - el.clientWidth > 2;
@@ -5596,7 +5664,7 @@ function refreshRoadLink(b) {
     <button class="btn primary" id="sh-layroad" ${can ? '' : 'disabled'}>Lay road: ${route.length} tile${route.length === 1 ? '' : 's'}, ${costText(route.goods)}</button>
     ${can ? '' : `<span class="err">Not enough ${short.join(' or ')}${short.includes('Cement') ? ': build a Cement Works' : ''}.</span>`}</div>`;
   $('sh-layroad').onclick = () => act('layRoad', [b.id], ({ laid, why }) => {
-    if (why) { sfx('error'); toast(why, 'warn'); } else { sfx('place'); toast(`Planned ${laid} road tile${laid === 1 ? '' : 's'}: free workers will pave them.`, 'info'); }
+    if (why) { sfx('error'); toast(why, 'warn'); } else { sfx('place'); haptic('order'); toast(`Planned ${laid} road tile${laid === 1 ? '' : 's'}: free workers will pave them.`, 'info'); }
     el.dataset.key = '';
     refreshSheet();
   });
@@ -6628,7 +6696,7 @@ function armyTap(cmd, i, j, b) {
       const name = BOTS[foe.type].name;
       act('hunt', [foe.id, armyWant()], (res) => {
         if (!res.sent) return fail('No armed warbots can get there: they need Ammo, and a way to walk there.');
-        sfx('order'); showArmyCmdBanner(`${res.sent} warbot${res.sent > 1 ? 's are' : ' is'} going after the rival's ${name}.`);
+        sfx('order'); haptic('order'); showArmyCmdBanner(`${res.sent} warbot${res.sent > 1 ? 's are' : ' is'} going after the rival's ${name}.`);
       });
       return;
     }
@@ -6636,7 +6704,7 @@ function armyTap(cmd, i, j, b) {
     const name = BDEFS[b.type].name;
     act('assault', [b.id, armyWant()], (sent) => {
       if (!sent) return fail('No armed warbots can get there: they need Ammo, and a way to walk there.');
-      sfx('order'); showArmyCmdBanner(`${sent} warbot${sent > 1 ? 's are' : ' is'} going for the ${name}.`);
+      sfx('order'); haptic('order'); showArmyCmdBanner(`${sent} warbot${sent > 1 ? 's are' : ' is'} going for the ${name}.`);
     });
     return;
   }
@@ -6644,7 +6712,7 @@ function armyTap(cmd, i, j, b) {
     if (b || !inMap(i, j) || !walkable(tIdx(i, j))) return fail('Tap open ground your warbots can walk to.');
     act('rally', [i, j, armyWant()], (res) => {
       if (!res.sent) return fail('No spare armed warbots can get there.');
-      sfx('order'); showArmyCmdBanner(`${res.sent} warbot${res.sent > 1 ? 's are' : ' is'} on the way to hold it.`);
+      sfx('order'); haptic('order'); showArmyCmdBanner(`${res.sent} warbot${res.sent > 1 ? 's are' : ' is'} on the way to hold it.`);
     });
     return;
   }
@@ -6653,7 +6721,7 @@ function armyTap(cmd, i, j, b) {
     const name = BDEFS[b.type].name;
     act('station', [b.id, armyWant()], (n) => {
       if (!n) return fail(!b.dead && garrisonRoom(b) ? 'No spare warbots to send there.' : `The ${name} is full.`);
-      sfx('order'); showArmyCmdBanner(`${n} warbot${n > 1 ? 's are' : ' is'} moving into the ${name}.`);
+      sfx('order'); haptic('order'); showArmyCmdBanner(`${n} warbot${n > 1 ? 's are' : ' is'} moving into the ${name}.`);
     });
   }
 }
@@ -7252,6 +7320,7 @@ function uiTick(dt) {
     toast(m.text, m.kind, m.x, m.y);
     if ((m.kind === 'bad' || m.kind === 'warn' || m.kind === 'lost') && (m.x || m.y)) UI.lastAlert = { x: m.x, y: m.y };
     if (m.kind === 'lost') sfx('alert');
+    if (m.kind === 'bad' || m.kind === 'warn' || m.kind === 'lost') haptic(m.kind === 'warn' ? 'warn' : 'bad'); // (a short buzz under a finger: input.js)
   }
   updateMapTip();
   UI.hudT -= dt;
