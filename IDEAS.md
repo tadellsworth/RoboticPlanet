@@ -20,6 +20,15 @@ Still open: a neutral, shared exchange the rivals compete over; contracts for Ch
   on seeds 4242 (after the Fuel batch changed how the rival builds) and 4243 (before it); the test now plays seed 4244.
   A fix would have the hauler hold position or wait for the road to clear when every way home passes the threat.
 
+- **Does the south pair have an edge on Long Haul 2v2?** (to look into) In four computer-only 2 vs 2 games (seeds
+  1 to 4, every rival Balanced) the south pair (players 0 and 1) won three, at 37, 19 and 25 minutes, and was ahead in
+  the fourth when it stopped at 45 minutes. The map is the same for all four colonies, tile for tile (ground, deposits,
+  heights, soil and roads checked against each tile's three twins on all four seeds), and the Trade Posts come in
+  half-turn pairs, fair between the teams. So if the lean is real it comes from the order things happen in, not the
+  map: players 0 and 1 think first each tick, and their robots, made first, act first. Next: run the same games on
+  Crossroads and Twin Valleys 2 vs 2 (west pair against east pair, also players 0 and 1 against 2 and 3), and a few
+  Long Haul games with the seats swapped, to see whether the first pair wins there too.
+
 - **More map shapes** (Rift, Ring valley, Oases, Crossroads and Lakes are now in the game; each would be a
   `SHAPE_PRESETS` entry with its own step in `shapeExtras`, mirrored for fairness like the others):
   - **Terraces:** the land climbs in steps toward a summit in the middle, a ramp or two per step, the richest fields
