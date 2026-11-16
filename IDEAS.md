@@ -75,6 +75,79 @@ Still open: a neutral, shared exchange the rivals compete over; contracts for Ch
 - **Graphics.** A first pass is done (rounded shorelines on ponds, lakes and seas, by day and in the night glow). Worth
   another look when new art comes in.
 
+## Suggestions from the November review (not decided)
+
+From a full review of the game after the audit work was merged. None is planned yet; each is for the owner to pick
+or drop.
+
+### Rough edges in what's there
+- **Island maps stall.** The leading rival lands six warbots at a time (one Ferry load) and can't break a healthy
+  base. Options: back-to-back landings that wait on the beach for the next load, or a staging island it takes first.
+- **Free-for-alls run to the cap.** In 3- and 4-player games the rivals don't gang up on the leader or finish off a
+  weakened third; most test games on The Wheel, Three Mesas, Pinwheel, Four Isles and Twin Valleys end undecided.
+- **Long Haul starts slowly:** both rivals sit at 10 workers until minute 12-15 (a Foundry site waits behind a long
+  Outpost road being paved).
+- **A Harvester counts regrowing stalks as in reach** (`reachableRes` in the AI's `cutting` test), so no new
+  Harvester comes while it reports "No stalk groves left in reach"; Fiber sat at 0 for 14 minutes in one test.
+- **Doctrine balance and text.** The Herald wins 10 of 12 against the Steward. The Architect's text promises a nuke it
+  never builds (no Reactor in 10 Nuclear-race games); the Warden's says it "covers its land with turrets" but it
+  builds about 2, all within 5 tiles of its base.
+
+### Helping players see what's going on
+- **Post-game report:** a timeline of the moments that mattered (first robot, first attack, when Fiber ran out, the
+  deciding battle), where goods were lost, and one "next time, try..." tip drawn from the game's own stats.
+- **Bottleneck finder:** a button (or a line in the Foundry's panel) that follows an idle Foundry back to the cause:
+  "No Crystal: your Tap ran dry 3 minutes ago and none is being built." The rival AI already reasons like this
+  (`aiGathers`, triage); showing it to the player cuts most "why is nothing happening?" moments.
+- **Scout reports on the rival:** a line on what its doctrine is doing now ("massing for a push", "raiding your east
+  road"), read from its real state (`P.massFor`, `P.raid`, `P.stormOn`). Drama for little cost.
+- **Replays:** lockstep already makes a game its seed plus its orders. Keep the order list, replay at up to 4x with a
+  scrubber: "watch how I lost", sharing, and bug reports that can be played back exactly.
+
+### Reasons to come back
+- **Daily planet:** the same seed, map shape and rival doctrine for everyone each day, with a score (time to win,
+  robots made) and a local best; the relay could keep a shared board later.
+- **Challenge modifiers** in Custom Game, mixed freely: no roads over water, half Fuel, a dust storm that never ends,
+  a rival with a head start. Each won gives a small badge on the planet card.
+- **A ladder of Colony goals** beyond land share: "run 3 Freight Trains", "a Ropeway to the canyon floor",
+  "100 Alloy a minute". It leads players into the logistics most never touch.
+
+### Deeper play without new systems
+- **Truce and tribute in free-for-all:** pay a rival (say 20 Alloy) to leave you alone, or to hit the leader, for
+  five minutes. It also gives stalled three- and four-player games a way to end.
+- **Veteran warbots:** a warbot that survives fights earns a pip (a little more armor or accuracy), so pulling a hurt
+  one back for repairs matters.
+- **Blueprints:** save a stamped layout (a Smelter block and its roads) and paste it elsewhere. Far fewer taps on a
+  phone.
+
+### Phone polish
+- **Paths tools on an upright phone:** the row shows 2-3 of its 11 tools (the edge with more fades). A "Tool"
+  picker that opens all of them at once would be clearer.
+- **The selection bar's last button** (Save as group) needs a sideways swipe on a 390 px phone.
+- **Haptics** (`navigator.vibrate`) on a confirmed order, a placed building and an alert.
+
+### Ten more
+- **Watch mode:** two computer rivals, doctrines picked, with speed control and the scout reports. It shows off the
+  doctrines and teaches by example (the menu demo already runs one).
+- **Holdout:** a survival mode where rival drop pods land every few minutes in growing waves; score is minutes held.
+  Reuses drops, Outposts and the siege rules.
+- **Map editor:** paint terrain and cliffs, place deposits and starts, and share the planet as a short code (maps
+  already come from a seed plus settings; a saved edit layer on top).
+- **Photo mode:** hide the interface, free camera, a time-of-day slider, and save the picture. The art is the game's
+  best advert.
+- **Goods-flow overlay:** a map view that draws what each road carries (width by amount, colour by good), next to the
+  Traffic map. It shows at a glance where a chain is starved.
+- **Accessibility:** a colour-blind palette for player colours, territory and goods; a larger-text setting (the open
+  "text size" question); captions for alert sounds.
+- **Low-end phone setting:** a "battery saver" switch that lowers resolution, drops night lights and caps the frame
+  rate, for older phones and long sessions.
+- **Placement undo:** a building placed by mistake can be taken back with a full refund for 10 seconds (the Paths Undo
+  already does this for roads).
+- **Shared colony co-op:** two players run one colony against the computer, splitting the work (one builds, one
+  fights), on the lockstep that's there.
+- **Records and achievements:** fastest win per map shape, biggest colony, first Ropeway and so on, kept on the
+  device and shown on the planet card. Some can open Archive pages, tying them to the lore.
+
 ## Trade routes and the finished-goods market (planned, after the current list)
 
 The owner wants trade to be a steady supply line all game, not a deal or two, so trade convoys become a constant
