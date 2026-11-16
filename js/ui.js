@@ -2794,6 +2794,7 @@ function showGameOver() {
   $('o-code').hidden = true;
   $('o-keep').hidden = true;
   $('o-log').hidden = true;
+  $('o-report').hidden = true;
   if (S.mission) { showMissionOver(); return; }
   const won = S.winner === ME || allies(S.winner, ME), how = S.endHow || 'capture', many = S.players.length > 2;
   const The = S.players[S.winner] ? playerName(S.winner) : 'The rival'; // (its callsign; a person, in multiplayer: by name)
@@ -2819,6 +2820,9 @@ function showGameOver() {
     ['Time', fmtTime(S.time)], ['Buildings completed', st.built], ['Bots built', st.bots - (st.startBots || 0)],
     ['Enemy buildings captured', st.captured], ['Bots lost', st.lost],
   ].map(([k, v]) => `<span>${k}</span><span>${v}</span>`).join('');
+  // The report: the moments that mattered, where goods were lost, a tip for next time (js/insight.js).
+  $('o-report').innerHTML = gameReport(won);
+  $('o-report').hidden = !$('o-report').innerHTML;
   // Won a game against the computer: you can play on (keepPlaying), if it was a fun one and there's more fighting to do.
   $('o-keep').hidden = !(won && !MP.on);
   metaGameOver(); // (records that fell and achievements earned: js/goals.js)
@@ -3116,6 +3120,8 @@ function showMissionOver() {
     : M.why === 'time' ? `${def.name}: time ran out before every goal was met.`
       : M.why === 'lander' ? `${def.name}: the rival captured your Command Base.` : `${def.name}: the game ended before every goal was met.`;
   $('o-stats').innerHTML = states.map((s) => { return `<span>${s.done ? '✓' : '✗'} ${s.text}</span><span>${s.need > 1 ? `${s.have}/${s.need}` : s.done ? 'Done' : '–'}</span>`; }).join('');
+  $('o-report').innerHTML = gameReport(won); // (the moments that mattered, where goods went, a tip: js/insight.js)
+  $('o-report').hidden = !$('o-report').innerHTML;
   if (won) {
     completeMission(k, M.diff);
     if (k + 1 < MISSIONS.length) {
@@ -5436,7 +5442,7 @@ function openBuildingSheet(b) {
   const roadFirst = mine && b.unlinked && needsRoad(b);
   let html = `<div class="sheet-title"><img src="${iconFor(b.type, b.owner)}" alt=""><div><h3>${def.name}</h3>
     <div class="owner"><span class="dot" style="background:${PLAYER_COLORS[b.owner]}"></span> ${mine ? 'Yours' : playerName(b.owner)}</div>${b.type === 'lander' ? `<div class="flavor clock">${ARRIVAL_CLOCK}</div>` : ''}</div></div>
-    ${roadFirst ? '<div id="sh-road"></div>' : ''}<p class="desc">${desc}</p><div class="status" id="sh-status"></div><div id="sh-dyn"></div>${mine ? '<div id="sh-fix"></div>' : ''}`;
+    ${roadFirst ? '<div id="sh-road"></div>' : ''}<p class="desc">${desc}</p><div class="status" id="sh-status"></div>${mine && def.inp && !def.pump ? '<div id="sh-why"></div>' : ''}<div id="sh-dyn"></div>${mine ? '<div id="sh-fix"></div>' : ''}`;
   if (mine) {
     if (def.airfield && b.built && b.owner === ME) html += airfieldSection(b); // its planes and air drops first
     if (def.yard && b.built && mine) html += `<div class="section-label">${def.port ? 'Shipyard' : def.airfield ? 'Hangar' : 'Rail yard'}</div><div class="status" id="sh-yard-status"></div><div class="bar" id="sh-yard-bar"><div></div></div><div id="sh-yard"></div>${def.station ? '<div class="actions" id="sh-yard-here"></div>' : ''}
@@ -5792,6 +5798,7 @@ function refreshBuildingSheet(b) {
   $('sh-status').textContent = gun ? `Under enemy fire: an enemy ${BDEFS[gun.type].name} covers it, so your robots keep clear until the gun is destroyed or runs dry.`
     : foes ? `${S.wildlife ? 'The Murmur are' : 'Enemy warbots'} about: your workers and haulers keep clear of it until they've gone${S.wildlife ? '' : ' (send warbots to drive them off)'}.`
     : mine ? b.status || '' : (b.built ? '' : 'Construction site');
+  if ($('sh-why')) refreshWhy(b); // why it isn't making anything, down the supply chain (js/insight.js)
   if (!b.built) {
     parts.push(`<div class="bar"><div style="width:${Math.round(b.progress * 100)}%"></div></div>`);
     parts.push('<div class="section-label">Materials delivered</div><div class="goodlist">' +
@@ -6545,7 +6552,7 @@ function openGoodsSheet(g) {
 }
 
 function refreshGoodsSheet(full) {
-  const g = UI.goodSel, p = 0;
+  const g = UI.goodSel, p = ME;
   for (const btn of $('gs-pick').children) btn.classList.toggle('on', btn.dataset.g === g);
   if (full) $('gs-pick').querySelector('.on')?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
   const rate = goodRates(p)[g], net = rate.made - rate.used;
@@ -6587,7 +6594,7 @@ function refreshGoodsSheet(full) {
   const fmt = (v) => (v >= 10 ? Math.round(v) : Math.round(v * 10) / 10);
   const runOut = net < -0.05 && total > 0 ? total / -net : Infinity;
   const short = wantB > 0 && total <= 0;
-  const status = short ? `<div class="gs-alert bad"><b>Shortfall:</b> ${wantB} building${wantB === 1 ? '' : 's'}${sites ? ` (${sites} construction site${sites === 1 ? '' : 's'})` : ''} waiting for ${GOOD[g].name}, and none in stock.</div>`
+  const status = short ? `<div class="gs-alert bad"><b>Shortfall:</b> ${wantB} building${wantB === 1 ? '' : 's'}${sites ? ` (${sites} construction site${sites === 1 ? '' : 's'})` : ''} waiting for ${GOOD[g].name}, and none in stock.${goodShortWhy(g)}</div>`
     : runOut < 5 ? `<div class="gs-alert warn"><b>Running low:</b> at this rate you run out in about ${Math.max(1, Math.round(runOut))} minute${Math.round(runOut) === 1 ? '' : 's'}.</div>`
       : net > 0.05 ? '<div class="gs-alert good">Growing: you make more than you use.</div>' : '';
   const list = (o, label) => Object.keys(o).length
@@ -6596,7 +6603,7 @@ function refreshGoodsSheet(full) {
   const extraUse = g === 'cement' ? ' Also construction and roads.' : (BDEFS.depot.cost[g] || ['fiber', 'alloy', 'chip', 'stone'].includes(g)) ? ' Also construction.' : '';
   // The figures are rewritten when they change; the chart's canvas stays put (a drag across it reads it) and is
   // redrawn only for another good or a new sample.
-  if (full || !$('gs-info')) $('gs-body').innerHTML = `<div id="gs-info"></div><div class="section-label">On hand over time</div><canvas class="chart small" id="gs-chart"></canvas>
+  if (full || !$('gs-info')) $('gs-body').innerHTML = `<div id="gs-why"></div><div id="gs-info"></div><div class="section-label">On hand over time</div><canvas class="chart small" id="gs-chart"></canvas>
     <p class="hint">Rates are over the last two minutes. The Statistics screen in the pause menu shows the whole game.</p>`;
   const info = `<p class="desc">${GOOD[g].desc}</p>${status}
     <div class="gs-stats">
@@ -6610,8 +6617,11 @@ function refreshGoodsSheet(full) {
     <div class="kv"><span>Wanted right now</span><span>${wantN ? `${wantN} by ${wantB} building${wantB === 1 ? '' : 's'}` : 'Nothing waiting'}</span></div>
     <div class="section-label">Made by</div><div class="goodlist">${list(makers, g === 'cement' || g === 'alloy' ? 'Nothing yet.' : 'Nothing makes it yet.')}</div>
     <div class="section-label">Used by</div><div class="goodlist">${list(users, 'No buildings use it.')}</div>${extraUse ? `<p class="hint">${extraUse.trim()}</p>` : ''}`;
+  // What is holding the colony up (js/insight.js), above the figures: rewritten only when it changes.
+  const why = goodsWhyHTML(g), we = $('gs-why');
+  if (we.dataset.html !== why) { we.dataset.html = why; we.innerHTML = why; whyWire(we); }
   const box = $('gs-info'), cv = $('gs-chart');
-  if (box.dataset.html !== info) { box.dataset.html = info; box.innerHTML = info; }
+  if (box.dataset.html !== info) { box.dataset.html = info; box.innerHTML = info; whyWire(box); }
   const H = S.hist, key = g + ':' + (H ? H.t.length + ':' + (H.t[H.t.length - 1] || 0) : '');
   if (cv.dataset.key === key) return;
   cv.dataset.key = key;
@@ -7116,6 +7126,14 @@ function updateHUD() {
     if (UI.lastGoods[g] !== undefined && v > UI.lastGoods[g]) { el.classList.remove('flash'); void el.offsetWidth; el.classList.add('flash'); }
     UI.lastGoods[g] = v;
     el.lastChild.textContent = v;
+  }
+  // A good the colony has gone without for a while, something waiting for it, is ringed (js/insight.js: insightColony).
+  const short = insightColony();
+  for (const g of GOODS) {
+    const on = !!short && short.starved.includes(g), el = UI.goodEls[g];
+    if (el.classList.contains('starved') === on) continue;
+    el.classList.toggle('starved', on);
+    el.setAttribute('aria-label', GOOD[g].name + (on ? ': running short (tap to see why)' : ''));
   }
   let workers = 0, idle = 0, war = 0, haulers = 0;
   for (const u of S.bots) {

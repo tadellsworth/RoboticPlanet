@@ -477,6 +477,7 @@
         <p><b>Stock limits.</b> Tap a factory to set how much of its product to keep: at that it stops, takes no more inputs and its worker goes off to other jobs until it's needed. The Cement Works stops at 40, the Refinery and Oil Pump at 30, the Ammo Plant at 24, the Asphalt Plant at 20, the Chip Fab at 10 and the Missile Factory at 4 unless you change them (so Chips and Ammo don't eat the Alloy the Foundry needs). The Smelter has no limit unless you set one. Gatherers (Harvester, Quarry, Ore Mine, Crystal Tap), Grove Planters, Bio Farms and the Bot Foundry have none: pause them if their goods pile up.</p>
         <p><b>Feed links.</b> Put a factory right beside the building that makes what it uses and a short conveyor joins them (a pipe for Crude and Fuel): goods go straight across, one every 2 seconds, with no Hauler, and the factory fed that way works a tenth faster. An Ore Mine beside a Smelter beside a Chip Fab, a Quarry by a Cement Works, or a Refinery, Asphalt Plant and Roadworks in a row (the Refinery passes its Crude along) all work as blocks. Each building feeds at most two neighbours, and storage never takes part. While you place a building, green arrows show the links it would make. Packed blocks are efficient, but one missile or fuel blast hurts them all.</p>
         <p><b>Goods.</b> Tap a good's counter in the top bar (or press <kbd>Y</kbd>) to see how much you have, how fast it's made and used a minute, which buildings make and use it, and any shortfall.</p>
+        <p><b>Why idle?</b> A factory that isn't making anything (the Bot Foundry, the Smelter or any other) says why in its panel: <b>Why idle?</b> follows the missing input back down the supply chain to the real cause, in plain words (<i>No Crystal: your Crystal Tap ran dry 3 minutes ago and no new one is being built.</i>), with <b>Show</b> to go to the building at fault, or <b>Build</b> to put up the missing one. A good your colony has gone without for a while, with something waiting for it, gets a red ring on its counter in the top bar, and the Goods panel leads with what's holding the colony up.</p>
         <a class="help-top" href="#hs-top" data-jump="hs-top">Back to top</a>
       </section>
 
@@ -973,6 +974,7 @@
           <li><b>Traffic map</b> (<kbd>T</kbd>) and <b>Goods flow</b> (<kbd>Shift</kbd>+<kbd>T</kbd>): see Roads and traffic.</li>
           <li><b>Statistics</b> (<kbd>I</kbd>, the pause menu and the end screen): graphs over time of your bots, land and goods, your <b>Economy size</b> (pick Output: goods made a minute, Buildings, or Workers and vehicles) and, with war on, your <b>Military size</b> (pick Army or Defences), against your rivals in Versus; then how busy each kind of building was over the game. Each building's panel shows how busy it's been lately.</li>
           <li>The <b>end screen</b> says how the game was won or lost, with the time played, buildings, bots, captures and losses. <b>New game</b> plays the same settings on a new planet.</li>
+          <li>Below that, the <b>report</b>: the moments that mattered (your first robot, the first attacks each way, buildings lost, when Fiber, Alloy, Crystal or another good ran out and for how long, the deciding battle or capture), where your goods were lost (buildings destroyed, robots destroyed with their loads, crates left lying), and one <b>Next time, try</b> tip drawn from what happened.</li>
         </ul>
         <p><b>Speed.</b> Tap <b>1×</b> in the top bar (or press <kbd>[</kbd> <kbd>]</kbd>): 0.75× or 0.875× for a calmer game, 2× or 3× when you're waiting on something. Every game starts (or continues) at 1×, and multiplayer has no speed control.</p>
         <p><b>The pause menu</b> (<kbd>Space</kbd>, or the button top right): Resume, Music and Effects volume, Full screen, Weather, Time of day, Statistics, Save this planet, Download save file, How to play, Send feedback, and Save &amp; quit to menu, with when the game last saved.</p>
@@ -1337,6 +1339,7 @@
     <p id="o-text"></p>
     <div id="o-stats" class="stats"></div>
     <div id="o-meta" class="o-meta" hidden></div>
+    <div id="o-report" class="o-report" hidden></div>
     <div id="o-code" class="code-box" hidden></div>
     <button id="o-statsbtn" class="btn big">Statistics and graphs</button>
     <button id="o-keep" class="btn big" hidden>Keep playing</button>
@@ -1366,6 +1369,7 @@
 <script src="js/weather.js"></script>
 <script src="js/input.js"></script>
 <script src="js/ui.js"></script>
+<script src="js/insight.js"></script>
 <script src="js/mpui.js"></script>
 <script src="js/feedback.js"></script>
 <script src="js/goals.js"></script>
