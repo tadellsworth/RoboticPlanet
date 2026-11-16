@@ -527,7 +527,8 @@ function generateMap(seed, W, H, cfg) {
     };
     for (let j = half; j < H; j++) for (let i = 0; i < W; i++) {
       const t = id(i, j);
-      if (inside(i, j)) put(t, T_ROCK, undefined, true);
+      // (Its foot wobbles out further on a big planet: it stops short of the landing zone and the fertile soil just past it.)
+      if (inside(i, j)) { if (!nearBase(i, j, 9.5)) put(t, T_ROCK, undefined, true); }
       else if ((i <= 5 || i >= W - 6) && terrain[t] !== T_GROUND && !nearBase(i, j, 3)) put(t, T_GROUND, baseLevel); // the valleys stay open
     }
     stampRes(cr, 3.2, ccy + ry * 0.45, 1.5, R_ORE, 0.8);
@@ -1289,8 +1290,20 @@ function generateMap(seed, W, H, cfg) {
         for (let k = 0; k < 30; k++) {
           const i = Math.round(x0 + dcos(a) * k), j = Math.round(y0 + dsin(a) * k);
           if (i < 1 || j < 1 || i >= W - 1 || j >= H - 1) return false;
-          const t = id(i, j);
+          let t = id(i, j);
           if (prev >= 0 && !inside(i, j)) {
+            // The ray can leave past a corner of the cliff (a diagonal step): a slope there would climb nothing, so the
+            // step is taken in two, through whichever of the two tiles between has the cliff on one side.
+            if (Math.abs(t - prev) !== 1 && Math.abs(t - prev) !== W) {
+              let ok = false;
+              for (const m of [id(i, (prev / W) | 0), id(prev % W, j)]) {
+                const [p, q] = inside(m % W, (m / W) | 0) ? [m, t] : [prev, m];
+                if (!ground(p) || !ground(q) || Math.abs(elev[p] - elev[q]) !== 1) continue;
+                prev = p; t = q; ok = true;
+                break;
+              }
+              if (!ok) return false;
+            }
             const lo = elev[t] < elev[prev] ? t : prev, hi = lo === t ? prev : t;
             if (!ground(lo) || !ground(hi) || Math.abs(elev[t] - elev[prev]) !== 1) return false;
             set(lo);
@@ -1537,13 +1550,16 @@ function generateMap(seed, W, H, cfg) {
     // resource moves a tile inland (or goes, if there's no room).
     const rim = new Uint8Array(N);
     for (let t = 0; t < N; t++) if (isFloor[t]) orth(t, (u) => { if (!isFloor[u]) rim[u] = 1; });
-    for (let u = 0; u < N; u++) {
+    // (Each change here depends on the ones before it, so with two players it is worked out on player 0's half and
+    // made to each tile's twin as well: the map stays the same turned half round.)
+    const twin = np === 2 ? (t) => [t, mir(t)] : (t) => [t];
+    for (let u = np === 2 ? half * W : 0; u < N; u++) {
       if (!rim[u]) continue;
       if (terrain[u] === T_ROCK) {
         let lv = 99;
         orth(u, (v) => { if (!isFloor[v] && terrain[v] === T_GROUND && elev[v] >= 3) lv = Math.min(lv, elev[v]); });
         if (lv === 99) continue;
-        terrain[u] = T_GROUND; elev[u] = lv; ramp[u] = 0;
+        for (const a of twin(u)) { terrain[a] = T_GROUND; elev[a] = lv; ramp[a] = 0; }
       }
       if (terrain[u] !== T_GROUND || !res[u]) continue;
       const ui = u % W, uj = (u / W) | 0;
@@ -1553,8 +1569,8 @@ function generateMap(seed, W, H, cfg) {
         const v = j * W + i, d = dist2(i, j, ui, uj);
         if (d < td && !isFloor[v] && !rim[v] && terrain[v] === T_GROUND && !res[v] && !ramp[v] && elev[v] === elev[u]) { td = d; to = v; }
       }
-      if (to >= 0) { res[to] = res[u]; amt[to] = amt[u]; }
-      res[u] = R_NONE;
+      const from = twin(u), dest = to >= 0 ? twin(to) : [];
+      from.forEach((a, k) => { if (to >= 0) { res[dest[k]] = res[a]; amt[dest[k]] = amt[a]; } res[a] = R_NONE; });
     }
     // The canyon floor isn't a flat plain: low rises a level up and rock formations, both kept clear
     // of the walls (so every drop stays sheer), plants (see makeDecor) and, very rarely, a boulder or
@@ -2178,10 +2194,11 @@ function homeZone(p) {
  * garrison (a Drop Outpost dropped on another island, a Port founded by sea, an Outpost taken in a landing...).
  * Cached for the tick.
  */
-let _buildZones = { S: null, key: '', sets: [] };
+let _buildZones = { S: null, key: '', zone: null, sets: [] };
 function buildZones(p) {
   const key = S.tick + ':' + S.buildings.length;
-  if (_buildZones.S !== S || _buildZones.key !== key) _buildZones = { S, key, sets: [] };
+  // (computeZones numbers the areas afresh, into a new S.zone: sets worked out before it mean nothing after.)
+  if (_buildZones.S !== S || _buildZones.key !== key || _buildZones.zone !== S.zone) _buildZones = { S, key, zone: S.zone, sets: [] };
   let set = _buildZones.sets[p];
   if (set) return set;
   set = new Set([homeZone(p)]);
@@ -2267,6 +2284,40 @@ function landRule(owner, type, t) {
 /** Count resource nodes in reach of (cx, cy) that bots there can actually walk to. */
 function reachableRes(cx, cy, radius, type) {
   return countResIn(cx, cy, radius, type, false, S.zone[tIdx(cx, cy)]);
+}
+
+/** How many times a building's reach a walk to one of its nodes may be, for walkRes. */
+const REACH_WALK = 3;
+const _walk = { n: 0, seen: null, q: null, gen: 0 };
+
+/**
+ * Nodes in reach of (cx, cy) that are a short walk away too: no more than REACH_WALK times the radius in steps,
+ * round cliffs and buildings (reachableRes counts the whole walkable area, so groves on a clifftop two tiles off
+ * count as much as those beside the building, when the only way up is fifty tiles round). For the AI's choice of
+ * a spot for a gatherer (aiSearchSpot).
+ */
+function walkRes(cx, cy, radius, type) {
+  const start = tIdx(cx, cy), n = reachableRes(cx, cy, radius, type);
+  if (!n) return 0;
+  const W = S.W, N = W * S.H, r2 = radius * radius + 0.3;
+  if (_walk.n !== N) { _walk.n = N; _walk.seen = new Uint32Array(N); _walk.q = new Int32Array(N); _walk.gen = 0; }
+  const seen = _walk.seen, q = _walk.q, gen = ++_walk.gen;
+  // Breadth first from the building's tile, a ring of steps at a time (straight steps: cliffs block, Ramps join levels).
+  let head = 0, tail = 1, found = 0;
+  seen[start] = gen; q[0] = start;
+  for (let steps = radius * REACH_WALK; steps >= 0 && head < tail && found < n; steps--) {
+    for (const end = tail; head < end; head++) {
+      const t = q[head], i = t % W;
+      if (S.res[t] === type && dist2(i, (t / W) | 0, cx, cy) <= r2) found++;
+      if (!steps) continue;
+      for (let d = 0; d < 4; d++) {
+        const u = d === 0 ? (i + 1 < W ? t + 1 : -1) : d === 1 ? (i > 0 ? t - 1 : -1) : d === 2 ? (t + W < N ? t + W : -1) : t - W;
+        if (u < 0 || seen[u] === gen || !walkable(u) || !canStep(t, u) || (S.bAt[u] && !passTile(u))) continue;
+        seen[u] = gen; q[tail++] = u;
+      }
+    }
+  }
+  return found;
 }
 
 /* ------------------------------------------------------------------ entities */
@@ -2584,14 +2635,36 @@ function wouldBlock(t) {
 /** Can `owner` start a `type` construction site at tile (i, j)? Returns {ok, reason}. */
 /* ------------------------------------------------------------------ Airfield runways */
 
-/** The Airfield whose runway covers tile t (built or being built), or null. */
-function runwayAt(t) {
-  if (!S.buildings.some((b) => !b.dead && b.rwy)) return null;
-  const i = t % S.W, j = (t / S.W) | 0;
+/*
+ * Every runway tile and the Airfield it belongs to (tile -> building id; null while there are no runways).
+ * canRoad and canPlace ask about a tile at a time, thousands of times in one road search, so the runways are
+ * mapped once and kept until the list of buildings changes, an Airfield is given its runway (runwayEnds)
+ * or the tick moves on; a new or loaded game starts afresh (a different S).
+ */
+let _rwy = { S: null, list: null, n: -1, tick: -1, at: null };
+function runwayMap() {
+  if (_rwy.S === S && _rwy.list === S.buildings && _rwy.n === S.buildings.length && _rwy.tick === S.tick) return _rwy.at;
+  let at = null;
   for (const b of S.buildings) {
     if (b.dead || !b.rwy || !BDEFS[b.type].airfield) continue;
-    const r = b.rwy, k = r.dx ? (i - b.x) * r.dx : (j - b.y) * r.dy;
-    if (k >= 1 && k <= RUNWAY_LEN && (r.dx ? j === b.y : i === b.x)) return b;
+    if (!at) at = new Map();
+    for (let k = 1; k <= RUNWAY_LEN; k++) {
+      const x = b.x + b.rwy.dx * k, y = b.y + b.rwy.dy * k;
+      if (inMap(x, y) && !at.has(tIdx(x, y))) at.set(tIdx(x, y), b.id);
+    }
+  }
+  _rwy = { S, list: S.buildings, n: S.buildings.length, tick: S.tick, at };
+  return at;
+}
+
+/** The Airfield whose runway covers tile t (built or being built), or null. */
+function runwayAt(t) {
+  for (let again = 0; again < 2; again++) {
+    const at = runwayMap(), id = at ? at.get(t) : 0;
+    if (!id) return null;
+    const b = getE(id);
+    if (b && !b.dead) return b;
+    _rwy.S = null; // that Airfield has gone since they were mapped: map them again
   }
   return null;
 }
@@ -2620,7 +2693,8 @@ function runwayDir(owner, i, j, self) {
 
 /** Airfield b's runway: its head (x0, y0), where planes park and start their roll, its far end (x1, y1), and direction. */
 function runwayEnds(b) {
-  const r = b.rwy || (b.rwy = runwayDir(b.owner, b.x, b.y, b)) || { dx: 1, dy: 0 };
+  if (!b.rwy && (b.rwy = runwayDir(b.owner, b.x, b.y, b))) _rwy.S = null; // (kept clear from now on: see runwayMap)
+  const r = b.rwy || { dx: 1, dy: 0 };
   return { x0: b.x + 0.5 + r.dx * 1.45, y0: b.y + 0.5 + r.dy * 1.45, x1: b.x + 0.5 + r.dx * RUNWAY_LEN, y1: b.y + 0.5 + r.dy * RUNWAY_LEN, dx: r.dx, dy: r.dy };
 }
 
@@ -2790,14 +2864,16 @@ function placeSite(owner, type, i, j, cost, fromStore) {
   if (!chk.ok) return chk;
   const def = BDEFS[type];
   if (!def.prepaid && !def.ramp && siteCount(owner) >= MAX_SITES) return { ok: false, reason: `Maximum of ${MAX_SITES} construction sites reached.` };
-  // An Outpost or Gate on a road takes the road's place (its Cement comes back); the road runs through it.
+  // An Outpost on a road takes the road's place (its Cement comes back); the road runs through it. A Gate
+  // holds the road it stands on (b.road): the road is laid again when the Gate goes (destroyBuilding), so its
+  // Cement stays in it. A road only planned there is called off: there was no road, so none comes back.
   const t = tIdx(i, j);
-  const onRoad = !!(S.road[t] || S.plan[t]);
+  const held = type === 'gate' && S.road[t] > 0 && roadOwnedBy(owner, t);
   if (S.plan[t]) cancelPlan(t);
-  if (S.road[t]) removeRoad(owner, i, j);
+  if (S.road[t]) removeRoad(owner, i, j, held);
   const b = addBuilding(owner, type, i, j, false);
-  if (type === 'gate' && onRoad) b.road = true;
-  if (chk.rwy) b.rwy = chk.rwy; // an Airfield's runway is kept clear from now on
+  if (held) b.road = true;
+  if (chk.rwy) { b.rwy = chk.rwy; _rwy.S = null; } // an Airfield's runway is kept clear from now on (see runwayMap)
   // Walls, Gates, Viaducts (and Ramps a rail line needs) are paid straight from storage: the
   // computer pays now; your plans queue and are paid for as the goods come in (settlePlans).
   if (cost) b.cost = cost;
@@ -2933,10 +3009,13 @@ function seaLinked(a, b) { const cb = portComps(b); return portComps(a).some((c)
  * Map of port id -> the far port's tile, worked out once a tick.
  */
 let _ferryTick = -1, _ferryFor = null, _ferryMap = null;
+const _noFerries = new Map(); // (a planet with no sea has no Ports and no ferry lines: nothing to work out)
 function ferryLines() {
+  if (!navalMap()) return _noFerries;
   if (_ferryFor === S && _ferryTick === S.tick && _ferryMap) return _ferryMap;
   const m = new Map(), served = new Set();
-  for (const u of S.bots) if (!u.dead && BOTS[u.type].ferry && !u.landing) served.add(u.home);
+  // (A Ferry out on a landing, or sailing under your orders, isn't running its line meanwhile.)
+  for (const u of S.bots) if (!u.dead && BOTS[u.type].ferry && !u.landing && !u.manual) served.add(u.home);
   for (const b of S.buildings) {
     if (b.dead || !b.built || !b.ferryTo || !BDEFS[b.type].port) continue;
     const o = getE(b.ferryTo);
@@ -3364,7 +3443,7 @@ function roadWeight(t) {
 
 function roadSearch(owner, seeds, done) {
   const W = S.W, N = S.W * S.H;
-  const cost = new Float32Array(N).fill(Infinity), prev = new Int32Array(N).fill(-2);
+  const cost = new Float64Array(N).fill(Infinity), prev = new Int32Array(N).fill(-2); // (doubles, like the heap's keys: see the stale test below)
   const heap = new MinHeap();
   for (const t of seeds) { cost[t] = roadWeight(t); prev[t] = -1; heap.push(t, cost[t]); }
   // (Through our own Outposts and Gates, never a rival's: its bots can't pass one, so a road through it links nothing.)
@@ -3633,8 +3712,8 @@ function killBot(bot, quiet) {
   if (bot.dead) return;
   // A warbot carrying loot drops its crate where it falls (anyone's warbots can pick it up).
   if (bot.loot && typeof addLoot === 'function' && inMap(Math.floor(bot.x), Math.floor(bot.y))) { addLoot(Math.floor(bot.x), Math.floor(bot.y), { [bot.loot]: 1 }); bot.loot = null; }
-  // A Crawler wrecked on the move spills the goods it was carrying.
-  if (bot.cargo && typeof addLoot === 'function' && inMap(Math.floor(bot.x), Math.floor(bot.y))) { addLoot(Math.floor(bot.x), Math.floor(bot.y), bot.cargo); bot.cargo = null; }
+  // A Crawler wrecked on the move spills the goods it was carrying. (A plane's load is lost with it.)
+  if (bot.cargo && !BOTS[bot.type].air && typeof addLoot === 'function' && inMap(Math.floor(bot.x), Math.floor(bot.y))) { addLoot(Math.floor(bot.x), Math.floor(bot.y), bot.cargo); bot.cargo = null; }
   // A Tanker with a load on board explodes (see fuelBlast), and its load burns. Any other hauler, truck
   // or train with goods on board drops them.
   const boom = !quiet && (BOTS[bot.type].tanker || BOTS[bot.type].tankShip) && bot.carry && bot.carryN > 0 && typeof fuelBlast === 'function' ? Math.min(1, bot.carryN / BOTS[bot.type].carry) : -1;
@@ -3670,13 +3749,31 @@ function killBot(bot, quiet) {
   if (!quiet) sfx('botboom', bot.x, bot.y);
 }
 
+/**
+ * Another finished building of b's owner for the bots aboard a Ferry or a plane to count as inside once b
+ * is gone (see releaseBotsFrom): a Port or Airfield first, a garrison only if there's nothing else. Null if none.
+ */
+function aboardHold(b) {
+  let best = null, bs = 0;
+  for (const o of S.buildings) {
+    if (o === b || o.dead || !o.built || o.owner !== b.owner) continue;
+    const d = BDEFS[o.type], s = d.port || d.airfield ? 3 : d.mil ? 1 : 2;
+    if (s > bs) { bs = s; best = o; }
+  }
+  return best;
+}
+
 /** Detach every bot that depends on building b (tasks, staff, garrison, idle inside). */
 function releaseBotsFrom(b, killInside) {
+  let hold;
   for (const u of S.bots) {
     if (u.dead) continue;
     // Its owner's bots drop jobs there; attackers keep their orders (an attack moves on, a march goes on).
     if (u.owner === b.owner && taskRefs(u.task, b.id)) cancelTask(u);
     if (u.inside === b.id) {
+      // Aboard a Ferry or a plane that took it on here ("inside" only keeps it out of sight and out of reach):
+      // it isn't in the building, wherever its ride is by now. It stays aboard, and stays hidden.
+      if (u.ferryWait && u.ferryWait.ferry) { if (hold === undefined) hold = aboardHold(b); u.inside = hold ? hold.id : 0; continue; }
       // A plane parked in a hangar goes with it; so do warbots in an ordinary building, but a fort's garrison
       // (an Outpost or Bunker a Missile or bomb knocks out) scrambles out alive. (A nuke kills them first.)
       if (killInside && ((BOTS[u.type].army && !BDEFS[b.type].mil) || b.staff === u.id || BOTS[u.type].air)) { killBot(u); continue; }
@@ -3702,7 +3799,14 @@ function offDeck(a, c) {
     if (!on) continue;
     const near = dist2(u.x, u.y, ax, ay) <= dist2(u.x, u.y, cx, cy) ? a : c;
     u.x = near.x + 0.5; u.y = near.y + 0.5; u.deck = null;
-    if (u.path) { u.path = null; u.pi = 0; }
+    if (u.path) {
+      u.path = null; u.pi = 0;
+      // A civilian bot drops its order with the route (its load is put down in crates), like one whose next
+      // step jumps a gap that's gone (see moveAlong): left with the order and no route, it counted as arrived,
+      // and delivered across the canyon. Warbots, Howitzers, Crawlers and creatures plan their way again (travel).
+      const bt = BOTS[u.type];
+      if (u.task && !bt.army && !bt.siege && !bt.wild && !bt.crawler) cancelTask(u);
+    }
     u.vel = 0;
   }
 }
@@ -3734,9 +3838,15 @@ function destroyBuilding(b, burn, quiet) {
   // A Gate that stood on a road leaves the road behind when it goes.
   if (b.type === 'gate' && b.road) setRoad(b.x, b.y, true, b.owner);
   markDirty(b.x, b.y);
+  // A Port at one end of a ferry line: the line goes with it, and the areas it joined are apart again.
+  if (BDEFS[b.type].port && b.ferryTo) {
+    const o = getE(b.ferryTo);
+    if (o && o.ferryTo === b.id) o.ferryTo = 0;
+    if (typeof ferryChanged === 'function') ferryChanged();
+  }
   // (blown up: an explosion; taken down on purpose, dismantled or moved: no wreck, the rubble just comes down)
   if (!quiet) { collapseFx(b, burn); sfx(burn ? 'boom' : 'collapse', b.x + 0.5, b.y + 0.5); }
-  if ((BDEFS[b.type].mil || civClaims(b)) && b.built) computeTerritory();
+  if ((BDEFS[b.type].mil || civClaims(b)) && b.built && !(typeof LAND_HOLD !== 'undefined' && LAND_HOLD)) computeTerritory(); // (a nuclear blast works the land out once, when it's done: nukeImpact)
   if (boom >= 0) fuelBlast(b.x + 0.5, b.y + 0.5, b.type, boom, b.owner);
 }
 
@@ -3870,6 +3980,7 @@ const TYPED_FIELDS = {
   resRes: Uint8Array, elev: Uint8Array, ramp: Uint8Array, fert: Uint8Array, pave: Uint8Array, plan: Uint8Array,
   wear: Uint16Array, paveMark: Uint8Array, decor: Uint8Array, rail: Uint8Array, owe: Uint8Array, railPlan: Uint8Array,
   pipe: Uint8Array, pipePlan: Uint8Array, wown: Int8Array, lava: Uint8Array, ford: Uint8Array, tidal: Uint8Array, fault: Uint8Array,
+  heat: Float32Array, // (the traffic map's flow: see HEAT)
 };
 
 function serializeGame() {
@@ -3994,6 +4105,7 @@ function deserializeGame(json) {
   if (!o.plan) o.plan = new Array(o.W * o.H).fill(0);
   o.planVer = (o.planVer || 0) + 1;
   o.paveRes = o.paveRes || {}; // (kept as saved: a loaded game must play on exactly as it was)
+  if (!o.heat || o.heat.length !== o.W * o.H) o.heat = new Array(o.W * o.H).fill(0); // (saves from before the traffic map was kept)
   for (const k in TYPED_FIELDS) o[k] = MAP_LAYERS.includes(k) && !o[k] ? null : TYPED_FIELDS[k].from(o[k]); // (a map's optional layers are null when it has none)
   o.hist = o.hist || newHistory();
   for (const P of o.players) { P.made = P.made || {}; P.madeBots = P.madeBots || {}; P.stats.outposts = P.stats.outposts || 0; P.stats.startBots = P.stats.startBots ?? 18; }
@@ -4180,11 +4292,15 @@ function seaRoute(u, x, y) {
   goals = goals.filter((t) => starts.some((s) => comp[s] === comp[t]));
   if (!goals.length) return null;
   const isGoal = new Set(goals), gx = x, gy = y;
-  const cost = new Float32Array(N).fill(Infinity), from = new Int32Array(N).fill(-2), heap = new MinHeap();
-  for (const s0 of starts) { cost[s0] = 0; from[s0] = -1; heap.push(s0, dhypot((s0 % W) - gx, ((s0 / W) | 0) - gy)); }
+  // (Costs in doubles: kept as floats, a cost that rounded up looked "beaten" by itself again and again,
+  // and a long voyage's search never ended. A tile is settled the first time it comes off the heap.)
+  const cost = new Float64Array(N).fill(Infinity), from = new Int32Array(N).fill(-2), settled = new Uint8Array(N), heap = new MinHeap();
+  for (const s0 of starts) { cost[s0] = 0; from[s0] = -1; heap.push(s0, dhypot((s0 % W) - gx, ((s0 / W) | 0) - gy) * 0.9); }
   let hit = -1;
   while (heap.size) {
     const a = heap.pop();
+    if (settled[a]) continue; // a stale entry: this tile was reached more cheaply since
+    settled[a] = 1;
     if (isGoal.has(a)) { hit = a; break; }
     const ai = a % W, aj = (a / W) | 0;
     for (let dj = -1; dj <= 1; dj++) for (let di = -1; di <= 1; di++) {
@@ -4192,7 +4308,7 @@ function seaRoute(u, x, y) {
       const i = ai + di, j = aj + dj;
       if (i < 0 || j < 0 || i >= W || j >= H) continue;
       const b = j * W + i;
-      if (S.terrain[b] !== T_WATER) continue;
+      if (S.terrain[b] !== T_WATER || settled[b]) continue;
       if (di && dj && (S.terrain[aj * W + i] !== T_WATER || S.terrain[j * W + ai] !== T_WATER)) continue;
       const c = cost[a] + (di && dj ? 1.414 : 1);
       if (c < cost[b]) { cost[b] = c; from[b] = a; heap.push(b, c + dhypot(i - gx, j - gy) * 0.9); }

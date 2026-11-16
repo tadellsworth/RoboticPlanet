@@ -7,16 +7,27 @@
 
 /** [good, pause at, resume below]: producers the AI rests when it has plenty. */
 const AI_CAPS = { fab: ['chip', 8, 3], armory: ['ammo', 18, 6], refinery: ['fuel', 30, 10] };
-/** [building type, how many the AI wants]. Entries are tried in order. */
+/**
+ * [building type, how many the AI wants]. Entries are tried in order. (No Missile Factory or Silo here: those
+ * come only through aiMissilePlan, which waits for an economy and an army and saves up for them. As ordinary
+ * entries they went up as soon as the goods happened to be there, a Hard rival's four minutes in.)
+ */
 const AI_PLAN = [
   ['charger', 1], ['harvester', 1], ['quarry', 1], ['kiln', 1], ['harvester', 2], ['mine', 1], ['tap', 1], ['smelter', 1],
   ['fab', 1], ['foundry', 1], ['outpost', 1], ['armory', 1], ['farm', 1], ['quarry', 2], ['grower', 1], ['mine', 2],
   ['smelter', 2], ['kiln', 2],
   ['turret', 1], ['repair', 1], ['outpost', 2], ['tap', 2], ['pump', 1], ['refinery', 1], ['harvester', 3], ['outpost', 3], ['generator', 1],
-  ['munitions', 1], ['silo', 1], ['depot', 1], ['charger', 2], ['farm', 2], ['mine', 3], ['outpost', 4], ['turret', 2], ['bunker', 1],
-  ['grower', 2], ['fab', 2], ['outpost', 5], ['mortar', 1], ['disruptor', 1], ['armory', 2], ['quarry', 3], ['silo', 2], ['outpost', 6], ['bunker', 2], ['charger', 3], ['pump', 2],
+  ['depot', 1], ['charger', 2], ['farm', 2], ['mine', 3], ['outpost', 4], ['turret', 2], ['bunker', 1],
+  ['grower', 2], ['fab', 2], ['outpost', 5], ['mortar', 1], ['disruptor', 1], ['armory', 2], ['quarry', 3], ['outpost', 6], ['bunker', 2], ['charger', 3], ['pump', 2],
   ['tap', 3], ['farm', 3], ['generator', 2], ['outpost', 8], ['turret', 3], ['mortar', 2], ['bunker', 3],
 ];
+
+/** The buildings that make new bots between them (and what they run on), and the ones a colony down to a handful of
+ * workers keeps running come what may (see the triage in aiThink). */
+const AI_CHAIN = ['harvester', 'quarry', 'kiln', 'mine', 'tap', 'smelter', 'fab', 'foundry'];
+const AI_CORE = ['mine', 'smelter', 'fab', 'foundry'];
+/** Fewer workers than this is an emergency (triage); it's over once there are AI_ENOUGH again. */
+const AI_FEW = 6, AI_ENOUGH = 8;
 
 /** Rival p's personality (see PERSONALITIES). */
 function aiStyle(p) { return PERSONALITIES[S.players[p].style] || PERSONALITIES.balanced; }
@@ -114,10 +125,19 @@ function aiShut(b) {
 function aiThink(p) {
   const P = S.players[p];
   const lvl = aiLevel(p), st = aiStyle(p);
-  const me = playerBuildings(p);
+  let me = playerBuildings(p);
   const lander = getE(P.lander);
   if (!lander || lander.owner !== p) return;
   aiArmorTrains(p);
+  // Triage: down to a handful of workers (a raid got the rest), the colony does one thing only, make more. Nothing
+  // new is started but a missing link of the chain that makes bots (AI_CHAIN), the other open sites are called off
+  // (dispatch keeps two workers free for building while any site stands, which left no one to run the Foundry),
+  // every building rests but the ones that make bots, and the Foundry builds workers alone, until there are enough.
+  let nWorkers = 0;
+  for (const u of S.bots) if (!u.dead && u.owner === p && u.type === 'worker') nWorkers++;
+  const few = S.mode !== 'colony' && S.time > 60 && nWorkers < (P.triage ? AI_ENOUGH : AI_FEW);
+  if (few) for (const b of me) if (!b.built && !BDEFS[b.type].prepaid && !AI_CHAIN.includes(b.type)) demolish(b);
+  if (few) me = me.filter((b) => !b.dead);
 
   // 1) Construction
   const counts = {};
@@ -127,10 +147,12 @@ function aiThink(p) {
     if (!b.built && !BDEFS[b.type].prepaid) sites++;
   }
   const maxSites = p === 0 && P.ai ? 2 : lvl.maxSites;
-  aiWalls(p);
-  aiTurtleWalls(p);
-  aiFortWalls(p);
-  aiBridge(p, maxSites);
+  if (!few) {
+    aiWalls(p);
+    aiTurtleWalls(p);
+    aiFortWalls(p);
+    aiBridge(p, maxSites);
+  }
   // Warbots can't fight without Ammo: in a war, once the opening is done, an Ammo Plant comes
   // first, its site is never given up, and the Foundry rests so the Alloy reaches it.
   const needArmory = warOn() && S.time > 150 && !me.some((b) => b.type === 'armory' && b.built);
@@ -185,10 +207,10 @@ function aiThink(p) {
     const sh = tradeShortest(p), g = sh.find((x) => x !== 'alloy'); // short of something in the ground
     if (sh.left[g] < (TRADE_LEFT[g] || 60) * 1.5 || st.missiles) plan = [['terminal', 1]].concat(plan); // only when short: it goes first
   }
-  if (st.missiles) { const k = plan.findIndex(([t]) => t === 'armory') + 1; plan = plan.slice(0, k).concat([['smelter', 2], ['fab', 2], ['munitions', 1], ['silo', 2]], plan.slice(k)); }
+  if (st.missiles) { const k = plan.findIndex(([t]) => t === 'armory') + 1; plan = plan.slice(0, k).concat([['smelter', 2], ['fab', 2]], plan.slice(k)); } // (its Missile Factory and Silos come through aiMissilePlan)
   // Nuclear race: a Reactor once there's Uranium to enrich (or a mine on a deposit), then a Nuclear Silo.
   if (nukeOn()) {
-    const k = plan.findIndex(([t]) => t === 'munitions');
+    const k = plan.findIndex(([t]) => t === 'depot'); // (after the first Generator, where the Missile Factory used to stand in the plan)
     const nuke = [];
     if (goodTotal(p, 'uranium') > 0 || me.some((b) => b.type === 'mine' && reachableRes(b.x, b.y, BDEFS.mine.radius, R_URANIUM) > 0)) nuke.push(['reactor', 1]);
     if (counts.reactor && goodTotal(p, 'fissile') + goodTotal(p, 'uranium') / 2 >= 2) nuke.push(['nukesilo', 1]);
@@ -243,8 +265,10 @@ function aiThink(p) {
   }
   // Missiles are expensive, so the AI saves up for them (see aiMissilePlan): while it is saving,
   // the building it saves for goes first and nothing else that costs Alloy or Chips is started.
-  const saving = aiMissilePlan(p, me, counts, kinds, workers, staffed);
-  if (saving) plan = [[saving, (counts[saving] || 0) + 1]].concat(plan);
+  // (A site of that kind already going up is the one being saved for, not a reason for one more: asking for
+  // "one more" every time left some rivals with several Missile Factories, or many Silos.)
+  const saving = few ? null : aiMissilePlan(p, me, counts, kinds, workers, staffed);
+  if (saving) plan = [[saving, (counts[saving] || 0) + (me.some((b) => b.type === saving && !b.built) ? 0 : 1)]].concat(plan);
   if (needArmory) plan = [['armory', 1]].concat(plan);
   // Workers no longer haul, so spare ones go to work: another gatherer for the scarcest raw good.
   if (S.time > 150 && workers - staffed >= 4 && canStaffMore) {
@@ -318,6 +342,7 @@ function aiThink(p) {
     (type === 'outpost' && P.short.length > 0);
   if (sites < siteCap) {
     for (const [type, want0] of plan) {
+      if (few && (!AI_CHAIN.includes(type) || counts[type])) continue; // triage: only a missing link of the chain
       // (past the usual limit only for what's starving the colony: a Cement Works, a Harvester)
       if ((cementStarved || fiberStarved) && sites >= maxSites && !(cementStarved && type === 'kiln') && !(fiberStarved && type === 'harvester')) continue;
       if (flakFirst && sites >= capBefore && type !== 'flak') continue;
@@ -485,8 +510,28 @@ function aiThink(p) {
     const crew = BDEFS[b.type].crew;
     if (crew && b.built) crewNeed[crew] = (crewNeed[crew] || 0) + 1;
   }
+  // Triage (see above): every building that takes a worker rests but the Mine, Smelter, Chip Fab and Foundry while
+  // they have what they work with (and a gatherer, or the Quarry and Cement Works, while there's next to none of
+  // what they're for), so the few workers go down the chain to the link that can work; the ones rested here are
+  // switched back on when it's over.
+  if (few) {
+    P.triage = P.triage || [];
+    const have = playerGoods(p);
+    const can = (b) => { const inp = BDEFS[b.type].inp; for (const g in inp || {}) if ((have[g] || 0) + (b.stock[g] || 0) < inp[g]) return false; return true; };
+    for (const b of me) {
+      const def = BDEFS[b.type];
+      if (!b.built || !def.staff || def.crew) continue;
+      const need = (AI_CORE.includes(b.type) && can(b)) || (b.type === 'quarry' || b.type === 'kiln' ? (have.cement || 0) < 4 : !!def.gather && (have[RES[def.gather].good] || 0) < 4);
+      if (need) { if (b.paused && P.triage.includes(b.id)) setPaused(b, false); }
+      else if (!b.paused) { setPaused(b, true); if (!P.triage.includes(b.id)) P.triage.push(b.id); }
+    }
+  } else if (P.triage) {
+    for (const id of P.triage) { const b = getE(id); if (b && !b.dead && b.owner === p && b.paused) setPaused(b, false); }
+    delete P.triage;
+  }
   for (const b of me) {
     if (b.type !== 'foundry' || !b.built) continue;
+    if (few) { b.mode = 'worker'; b.orders = {}; continue; } // triage: workers, and nothing else, until there are enough
     // Workers first while buildings stand empty; then the army gets its share as the game goes on.
     b.mode = S.mode === 'colony' ? 'worker' : workers < staffed + MIN_FREE_WORKERS ? 'worker'
       : army < wantArmy ? (workers < wantWorkers ? 'alt' : 'warbot')
@@ -575,7 +620,7 @@ function aiThink(p) {
   if (S.missiles.some((m) => m.nuke) && nukesThreatening(p).some((m) => !evacuating(p, m))) startEvac(p);
 
   // 4c) Naval maps: a Port, a Ferry, and beach landings on the enemy's shore.
-  if (S.mode !== 'colony' && navalMap()) aiNaval(p, me, kinds, lvl, lander, sites < maxSites);
+  if (S.mode !== 'colony' && navalMap()) aiNaval(p, me, kinds, lvl, lander, !few && sites < maxSites);
 
   // 4e) Howitzers: shell the defences round what we're attacking, and hunt down the enemy's.
   if (S.mode !== 'colony') aiSiege(p);
@@ -1351,8 +1396,12 @@ function aiMissilePlan(p, me, counts, kinds, workers, staffed) {
   P.feedMissiles = false;
   if (S.mode === 'colony') return null;
   const site = me.find((b) => !b.built && (b.type === 'munitions' || b.type === 'silo'));
-  // A Silo site waiting for Alloy: the Missile Factory stops eating it until the Silo stands.
-  for (const b of me) if (b.type === 'munitions' && b.built && !!b.paused !== (site && site.type === 'silo')) setPaused(b, !!(site && site.type === 'silo'));
+  // A Silo site waiting for Alloy: the Missile Factory stops eating it until the Silo stands. It rests too while
+  // no Silo that's built has room for another Missile: with nowhere to load them it only turned Alloy, Chips
+  // and Fuel into Missiles lying in storage.
+  const room = me.some((b) => b.type === 'silo' && b.built && (b.stock.warhead || 0) + (b.inc.warhead || 0) < BDEFS.silo.ammoCap);
+  const rest = !!(site && site.type === 'silo') || !room;
+  for (const b of me) if (b.type === 'munitions' && b.built && !!b.paused !== rest) setPaused(b, rest);
   if (site) { site.prio = 'high'; return site.type; } // keep the Foundry resting (and goods coming here first) until the site has its materials
   // A Tycoon goes for missiles sooner, with fewer warbots at home, once its Bot Foundry runs. The
   // others start no sooner than a Balanced rival would (a Rusher spends on warbots instead).
@@ -1579,9 +1628,10 @@ function aiSearchSpot(p, type, lander) {
       if (rc > budget) continue;
       const dHome = dist(i, j, lander.x, lander.y);
       const jitter = hash2(i, j, S.seed + p) * 0.8;
-      let s;
+      let s, gn = -1;
       if (def.gather) {
         const n = type === 'mine' ? freeRes(i, j) : reachableRes(i, j, def.radius, def.gather);
+        gn = n;
         const u = type === 'mine' && nukeOn() ? reachableRes(i, j, def.radius, R_URANIUM) : 0;
         if (n < 2 && !u) {
           // No boulders left anywhere near: a Quarry by a cliff or crag cuts Stone from it instead.
@@ -1700,12 +1750,30 @@ function aiSearchSpot(p, type, lander) {
       if (AI_FEED.has(type)) s += Math.min(2, feedPreview(p, type, i, j).length) * 3;
       s += jitter;
       if (out && type !== 'outpost') s -= AI_OUT_COST; // (our own land first)
-      cands.push({ x: i, y: j, s });
+      cands.push({ x: i, y: j, s, gn });
     }
   }
   // Only the best few spots get the (costly) checks that a building won't block a pass and that
   // a road can reach it.
   cands.sort((a, b) => b.s - a.s);
+  if (def.gather) {
+    // A gatherer's best spots are walked (walkRes): groves on a clifftop two tiles off can be fifty tiles away on
+    // foot, and a Harvester below them cut one Fiber every other minute. Best first, each scored again with the
+    // nodes it can reach on a short walk, until no spot left could beat the best found (a walked score is never higher).
+    let best = null;
+    for (let k = 0; k < Math.min(cands.length, 120) && !(best && cands[k].s <= best.s); k++) {
+      const c = cands[k];
+      let s = c.s;
+      if (c.gn >= 2) {
+        const w = Math.min(c.gn, walkRes(c.x, c.y, def.radius, def.gather)); // (a Mine counts only the Ore no Mine of ours works: never more)
+        if (w < 2 && !(type === 'mine' && nukeOn() && reachableRes(c.x, c.y, def.radius, R_URANIUM))) continue;
+        s += (Math.min(w, 10) - Math.min(c.gn, 10)) * 2;
+      }
+      if ((best && s <= best.s) || wouldBlock(tIdx(c.x, c.y))) continue;
+      best = { x: c.x, y: c.y, s };
+    }
+    return best;
+  }
   for (let k = 0; k < Math.min(cands.length, 12); k++) {
     if (!wouldBlock(tIdx(cands[k].x, cands[k].y))) return cands[k];
   }

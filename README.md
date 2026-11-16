@@ -159,8 +159,7 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   plans roads round resources; tap a boulder, grove, ore or crystal tile to clear it for a road at 3× the Cement. A Roadworks' Paver
   upgrades roads to asphalt (2.75×) with Asphalt, driving out along the roads joined to its Roadworks, however far.
 - **Paving and road wear:** Paths → **Pave** (E): drag along roads to mark them for asphalt (drag over marked road to
-  clear it). Roadworks pave the marked roads joined to them (or, set to *Every joined road*, everything; the AI uses
-  that). Every bot driving onto asphalt wears it (`WEAR_BOT`, Freight Trucks `WEAR_TRUCK`, three times as much): past
+  clear it). Roadworks pave the marked roads joined to them (or, set to *Every joined road*, everything; the AI builds no Roadworks). Every bot driving onto asphalt wears it (`WEAR_BOT`, Freight Trucks `WEAR_TRUCK`, three times as much): past
   half worn it slows bots (to 2.3× when nearly through), at `REPAVE_AT` the Paver resurfaces marked road, and worn
   through it drops back to plain road. On a busy trunk road that's every 8–10 minutes. Tap any of your roads to see its
   wear and mark it. Removing a road refunds its Cement.
@@ -199,9 +198,11 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   are in (oldest plans first) and goes up then; a light already standing keeps working while its overpass waits, and its
   Alloy counts toward it (`junPlanCost`). Calling a plan off gives nothing back; the AI pays up front.
 - **Traffic map:** **Traffic map** in the Paths banner (or **T**) tints each road green to red by how busy it has been
-  over the last minute and rings the spots where bots stand waiting.
+  over the last minute and rings the spots where bots stand waiting. How busy each road has been (`HEAT.flow`, `countTraffic`)
+  is kept in the save (`S.heat`): the AI picks its raids by it (`aiRaid`), and a loaded game must raid the same.
 - **Long hauls:** tap a Depot and set **supply orders** (how much of each good to keep there). Goods come from your other
-  storage, and anything nearby then draws on the Depot. Who carries what (see the comment above `TRUCK_MIN_DIST` in
+  storage, and anything nearby then draws on the Depot. A garrison that is storage too (the Command Base, a Drop Outpost,
+  a Crawler) holds its own `ammoStock` back from supply orders and from other such garrisons (`ammoHeld`, `keepSupply`). Who carries what (see the comment above `TRUCK_MIN_DIST` in
   `js/defs.js` and `dispatch` in `js/sim.js`): **Haulers** (2) do runs under `TRUCK_MIN_DIST` (12) tiles. **Freight
   Trucks** (8; 2 Alloy and 2 Chips at the Foundry) do the long runs from any building, with a full load (a far
   factory gets up to `LONG_BUFFER` of each input), and storage to storage. With trucks around, Haulers take a long run
@@ -236,7 +237,8 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   mesa tops (level 3+), so a Viaduct never reaches the floor or its low rises. A far end may land on
   no-one's land or in a rival's (a bridgehead); `computeTerritory` keeps a Viaduct while either end stands in its
   owner's land (or the abutment is on no-one's), and takes it down once neither does. When one comes down, `offDeck`
-  moves any bot on its deck to the nearer end, and a bot whose route jumps a Viaduct or Ropeway that's gone drops the
+  moves any bot on its deck to the nearer end (a civilian bot drops its order there, its load put down in crates; a
+  warbot plans its way again), and a bot whose route jumps a Viaduct or Ropeway that's gone drops the
   route and its order (`moveAlong`). `roadSearch` crosses Viaducts, so roads (and the AI's) reach sites on far mesas,
   and `wouldBlock` / `canPlace` treat Outposts and Viaduct ends as walkable. A far end claims the no-one's ground
   within `VIA_CLAIM` (3) tiles, never anyone's land, so a new mesa can take an Outpost. A bot out on a deck keeps
@@ -292,7 +294,9 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   loaded at its Port, up to 4 Workers) on an empty shore nobody holds; it claims `claim` 4 tiles (`b.claim`, read by
   `computeTerritory`), and the Ferry heads home running a ferry line to it. A Ferry under your orders (`f.manual`:
   `orderSail`, `embarkWarbots`, `orderBoardFerry` with `v.embarkOn`, `disembark`, then `ferryBack`) sails anywhere, takes
-  warbots aboard off a beach within `FERRY_REACH` and puts them ashore beside it.
+  warbots aboard off a beach within `FERRY_REACH` and puts them ashore beside it; meanwhile it doesn't serve its line
+  (`ferryLines`), and a line with no Ferry or no far Port puts its waiting passengers off again (`unloadFerry`). Warbots
+  aboard stay aboard when the Port or Airfield they left from is lost (`releaseBotsFrom`, `aboardHold`).
   Ships are built at a Port's shipyard (`BDEFS.port.yard`, `updateYard`,
   `YARD`: a round of 1 Alloy + 1 Chip every 8 s, haulers bring `YARD.hopper` of each) and put to sea there (`launchFromYard`); they sail open water by `seaRoute` (8-way A*, never cutting a corner of land, under
   bridges) and move like trains. They burn Fuel under way (`SHIP_BURN`, a tank of 100 like a truck's) and fill up from a
@@ -369,7 +373,8 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   the shape's own random numbers so laying one again gives the same map): **Rift** cuts a chasm (`T_CHASM`, 4–8 tiles
   across) along the middle line, crossed only by natural rock arches, a pair with their twins and sometimes one down the
   middle (a Sky bridge is the slow way to open another); **Ring valley** fills the middle with a massif too steep to
-  climb, a valley running round it on each side (a long tunnel is the only shortcut); **Oases** is a barren,
+  climb, a valley running round it on each side (a long tunnel is the only shortcut; the massif stops short of each
+  landing zone, so the starter fertile field is never buried); **Oases** is a barren,
   crag-strewn waste with nothing worth having outside the home ground and a few rich oases (three a side and one in the
   middle, fertile with two fields each) joined by narrow, winding passes; **Crossroads** (a wider map) splits the
   planet into four quarters with ridges along both middle lines, meeting at an open plaza with the richest fields, the
@@ -385,7 +390,8 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   kept narrow by `SKY_GAP`, so the typical Viaduct spans 4 tiles and the route between bases never needs one over 6), then turns the sea into a canyon floor at level 0 and lifts every
   island into a mesa (home islands +3 levels, the rest +4; small ones flattened to one level), so every drop is 3+ levels: no Ramp can
   reach the floor, only a Ropeway. The outermost rim of every mesa is kept clear of resources (moved up to 3 tiles inland)
-  and crags so a Viaduct can start or land anywhere on it. Each home mesa is topped up to at least 10 Ore and 8 Crystal tiles (a
+  and crags so a Viaduct can start or land anywhere on it (with two players worked out on one half and copied to each
+  tile's twin, so the map stays point-symmetric). Each home mesa is topped up to at least 10 Ore and 8 Crystal tiles (a
   compact field 5–7 tiles out, placed the same for every side), and Ore, Crystal and Stalk on the mesas hold
   `SKY_RES_MUL` (1.8) times the usual amount, since half the fields fall into the canyons (`richRes` scales its mark to
   match). The floor gets low rises, rock formations, plants and a thin scatter of boulders and ore. Viaducts
@@ -499,8 +505,9 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
 - **Moving buildings:** tap Move on one of your finished buildings (`movable`: not the Command Base or Outposts, which
   hold your land, nor Walls, Gates, Ramps, Viaducts, Ropeways or a deployed Crawler), then the new spot. `startMove`
   puts a site of the same kind there that costs nothing (`siteFrac` treats it as fully supplied); workers put it
-  together in its build time while the old one keeps working, and `finishMove` hands over its goods, settings
-  (`MOVE_KEEPS`) and stationed warbots, then takes the old one down quietly. Calling the move off, demolishing either
+  together in its build time while the old one keeps working, and `finishMove` hands over its goods, settings and
+  work in hand (`MOVE_KEEPS`: orders and parts, a Silo's reload, a finished nuclear missile), its armor as it stood, a
+  Port's ferry line and stationed warbots, then takes the old one down quietly. Calling the move off, demolishing either
   end or losing the old one takes the site down (`cancelMove`), so no building comes free.
 - **Saved planets:** **Save** beside the planet number (More settings), or **Save this planet** in the pause menu, keeps
   the seed and the settings that shape the map (shape, size, terrain, resources, biome, players) on this device
@@ -628,7 +635,7 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   Gates let their owner's bots and road through (`passTile(t, who)`). Armed enemy warbots plan through a Wall or
   Gate as if it were `BREACH_COST + armor` tiles long, so they go round a short way or stop and shoot through
   (`breachHit`); a bot whose route gets walled off re-plans (`blockedStep`). On Chokepoint maps the AI walls the mouth
-  of each channel on its side on Normal and Hard (`aiWalls`).
+  of each channel on its side on every difficulty but Easy (a Turtle on Easy too: `aiWalls`).
 - **Garrisons and posts** (yours, `usesPosts`; the AI spreads its own to the front as before): every warbot belongs
   somewhere. `u.post` is the Outpost or Bunker it was stationed at; with none it belongs to the Command Base. All your
   warbots stay at the Command Base until you station some: tap an Outpost and **Station here** (how many; from the
@@ -664,7 +671,16 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   Agribot. Fuel first too: with Fuel under 6 for half a minute (`P.fuelLow`) a Bio Farm goes first (never while one
   waits for its Agribot; at most two plus one for every 15 robots), an Oil Pump once the Bot Foundry is up (oil costs
   Alloy), and a Refinery for a pump that has none; without it the Fuel Stations went dry around minute 10 and the
-  workers crawled, which in turn starved the Fiber, Ore and Alloy. Its forts (`rearGarrison`): one counts as behind the
+  workers crawled, which in turn starved the Fiber, Ore and Alloy. Down to fewer than `AI_FEW` (6) workers after the first
+  minute (a raid got the rest), it triages until it has `AI_ENOUGH` (8) again: its open sites are called off and only a
+  missing link of the chain that makes bots (`AI_CHAIN`) is started, every staffed building rests but the Mine,
+  Smelter, Chip Fab and Foundry while they have what they work with (and a gatherer short of its good), so the few
+  workers go down the chain to the link that can work, and the Foundry makes workers alone (`P.triage`). Without it
+  a colony left with two to four workers kept them all busy and never made another. Its Missile Factory and Silos come
+  only through `aiMissilePlan` (not the plain build plan, where a Hard rival put a factory up four minutes in), one
+  site at a time, and the factory rests while no built Silo has room for another Missile. It walks its best spots for a
+  gatherer (`walkRes`: only nodes within three times the reach on foot count), so it never puts a Harvester at the foot
+  of a cliff below groves fifty tiles away by the ramp. Its forts (`rearGarrison`): one counts as behind the
   lines, free to send its last warbot on a march, when no rival building is within 18 tiles, or when every one that
   near has another fort of ours, with someone in it, at least 4 tiles nearer to it. Its Viaducts (Sky islands): not
   into the enemy's guns, nor for four minutes where one was just knocked down (`P.viaLost`). Under an enemy gun
@@ -674,7 +690,7 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   (`attackAvailable(p, t, 'every')`).
   Once it's ready to march it orders a Bulwark for every five warbots (two, three against a dug-in rival) and a Torch
   for every four (three, four), only with Fuel for Torches. **Raider**: raids three times as often from early on,
-  sending every warbot it can spare. **Rusher**: attacks early with a fast-growing army. **Tycoon**: its bots work 15%
+  keeping none back: its band of three (`raidSize`) goes as soon as it has three to send (`raidKeep` 0). **Rusher**: attacks early with a fast-growing army. **Tycoon**: its bots work 15%
   faster (`econ`), it builds extra Smelters and Chip Fabs and goes for Missile Silos (up to three) once its Bot Foundry
   runs. With Random each rival gets a different one, picked from the seed; missions use Balanced. The landing messages
   and the rival Command Base's panel name it.
@@ -682,7 +698,8 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   default, never in missions): one creature nest per `WILD.perTiles` tiles (3–8), owned by `WILD_OWNER` (the empty
   second player slot of a Colony game), at least 16 tiles from the landing site and reachable on foot. Each keeps
   `guards + level` Scuttlers on guard and from `WILD.first` (7 min) sends a pack every 260–400 s at the nearest building,
-  road or bot the colony has within `WILD.reach` (24) tiles: Scuttlers (6 hp, bite 1) go for bots in the open; Brutes (24 hp,
+  road or bot the colony has within `WILD.reach` (24) tiles: Scuttlers (6 hp, bite 1) go for bots in the open (once there,
+  any within `WILD.hunt`, 6, tiles they can walk to; with none, they move on); Brutes (24 hp,
   bite 3; from level 2) tear up roads and batter buildings (never below 1 armor; construction sites are wrecked) and
   break through Walls and Gates, slowly (`WILD.wallBite`, a third of a bite: about 40 s for one Brute on a Wall). Nests grow a
   level every `WILD.grow` s (to 3); packs grow with the colony (`perBuildings`). Turrets, garrisons and warbots treat
@@ -713,7 +730,7 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   9 px, twenty under a fingertip): tap to drop the crosshair, drag it to adjust (`mapGrab`, a drag that starts on it;
   elsewhere a drag moves the map), and only Fire launches (a second tap on the spot fires only with a mouse). A bomber's
   strike and a Howitzer's target are picked by a tap, ringed, then confirmed on the banner (`pickTarget`).
-- **Nuclear race** (new-game option): six small Uranium deposits glow green across the map. An Ore Mine within 4 tiles
+- **Nuclear race** (new-game option): six small Uranium deposits on each side (`URANIUM_DEPOSITS`, in each colony's half, third or quarter) glow green. An Ore Mine within 4 tiles
   digs Uranium before ore; a Nuclear Reactor enriches it (2 → 1) and a Nuclear Silo assembles a missile from 6 Enriched
   Uranium, 4 Alloy and 2 Chips (60 s), so 12 Uranium a bomb. It flies 30 s (the target is warned and sees the blast
   ring; the **Evacuate** button on the incoming-nuke card, or the AI by itself, sends every robot in the ring plus
@@ -746,8 +763,8 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
 - **Cut off** (`cutOff`, `crumble`): a finished building whose ground a rival's ring takes stops working (nothing is
   hauled to it, its worker leaves) and loses `armor / CUT_CRUMBLE` (90 s) a second until it's lost (`dropLoot`); it
   recovers if its owner takes the land back. A construction site on a rival's ground is lost at once. A land-claiming
-  building can't go where its ring would cover a rival's ordinary building (`ringOverRival`): cut-offs come from capture
-  or a fort falling. The AI builds on its own land first and on open ground only when it has no spot at home.
+  building can't go where its ring would cover a rival's ordinary building (`ringOverRival`; a Drop Outpost dropped, a
+  Port a Ferry founds and a Crawler deploying too): cut-offs come from capture or a fort falling. The AI builds on its own land first and on open ground only when it has no spot at home.
 - **Salvage:** a colony out of Stone or Fiber with no Quarry or Harvester that can still work salvages 1 every 20 s from
   its Command Base (up to 6), so it can always rebuild. Capturing an enemy Outpost takes its land,
   and enemy buildings its ring now covers are cut off (see above).
