@@ -149,6 +149,7 @@ function initUI() {
 
   // Game over (missions swap in their own actions)
   $('o-new').onclick = () => { $('screen-over').hidden = true; if (MP.on) mpQuit(); if (UI.overNew) UI.overNew(); else { UI.menu.seed = randomSeed(); startNewGame(); } };
+  $('o-keep').onclick = () => { sfx('click'); keepPlaying(); };
   $('o-menu').onclick = () => { $('screen-over').hidden = true; if (MP.on) mpQuit(); toMenu(); if (UI.overMenu) UI.overMenu(); };
   $('m-missions').onclick = () => { sfx('click'); openMissions(); };
   $('ms-close').onclick = () => { sfx('click'); if (UI.msSel != null) { UI.msSel = null; renderMissions(); } else $('screen-missions').hidden = true; };
@@ -2648,6 +2649,7 @@ function showGameOver() {
   UI.overNew = null; UI.overMenu = null;
   $('o-new').textContent = 'New game'; $('o-menu').textContent = 'Main menu';
   $('o-code').hidden = true;
+  $('o-keep').hidden = true;
   $('o-log').hidden = true;
   if (S.mission) { showMissionOver(); return; }
   const won = S.winner === ME || allies(S.winner, ME), how = S.endHow || 'capture', many = S.players.length > 2;
@@ -2674,7 +2676,27 @@ function showGameOver() {
     ['Time', fmtTime(S.time)], ['Buildings completed', st.built], ['Bots built', st.bots - (st.startBots || 0)],
     ['Enemy buildings captured', st.captured], ['Bots lost', st.lost],
   ].map(([k, v]) => `<span>${k}</span><span>${v}</span>`).join('');
+  // Won a game against the computer: you can play on (keepPlaying), if it was a fun one and there's more fighting to do.
+  $('o-keep').hidden = !(won && !MP.on);
   $('screen-over').hidden = false;
+}
+
+/**
+ * Keep playing past a victory (a game against the computer only: in multiplayer everyone would have to agree): the
+ * end screen goes, the game runs on, and nothing wins any more (S.endless, see eliminate and the checks in simStep):
+ * rivals still standing fight on and no longer surrender; Domination and the Uplinks stop counting. Losing your own
+ * colony still ends it. The victory is in the past: its screen isn't shown again.
+ */
+function keepPlaying() {
+  if (MP.on || S.winner < 0 || !(S.winner === ME || allies(S.winner, ME))) return;
+  S.endless = true;
+  S.winner = -1; S.endHow = null;
+  UI.overShown = false;
+  $('screen-over').hidden = true;
+  UI.paused = false;
+  const foesLeft = S.players.some((Q) => !Q.absent && !Q.out && foes(Q.id, ME));
+  toast(foesLeft ? 'Playing on: the war goes on, and the game won\'t end until you leave it (or lose your colony).' : 'Playing on: no rivals left, so the planet is yours to build on. The game won\'t end until you leave it.', 'info');
+  if (typeof saveGame === 'function') saveGame(); // (the victory cleared the save: this game is worth keeping again)
 }
 
 /* ------------------------------------------------------------------ missions */

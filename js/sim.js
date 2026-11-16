@@ -45,7 +45,8 @@ function simStep(dt) {
   if (S.events) updateEvents();
   if (S.tide || S.volcano || (S.quake && !S.quake.done)) updateMapEvents(dt);
   if (S.tick % 30 === 25) naniteRepair();
-  if (S.tick % 30 === 9) { checkSurrender(); if (S.victory === 'domination' && S.winner < 0) updateDomination(); if (S.victory === 'uplinks' && S.winner < 0) updateUplinks(); }
+  // (Played on past a victory, S.endless: nothing wins any more; see keepPlaying.)
+  if (S.tick % 30 === 9 && !S.endless) { checkSurrender(); if (S.victory === 'domination' && S.winner < 0) updateDomination(); if (S.victory === 'uplinks' && S.winner < 0) updateUplinks(); }
   // Only one AI thinks in a step (its search for building spots is the dearest thing in one): another that's due
   // the same step waits a few steps, which also pulls apart timers that start (or an older save has) in step.
   let thought = false;
@@ -4983,6 +4984,8 @@ function eliminate(old, by, how) {
     for (const Q of S.players) if (Q.id !== by && Q.id !== old && !Q.absent && !Q.out) narrate(Q.id, 'changed', x, y, 1, NARRATOR.changed.replace('{old}', colonyName(old)).replace('{by}', colonyName(by)));
   }
   const left = S.players.filter((Q) => !Q.absent && !Q.out);
+  // Played on past a victory (S.endless): no one wins again, but losing your own colony still ends it.
+  if (S.endless) { if (!left.some((Q) => !Q.ai)) { S.winner = by; S.endHow = how || 'capture'; } return; }
   // The last colony (or team) standing has won; S.winner is one of them (with teams, see teamOf).
   if (new Set(left.map((Q) => teamOf(Q.id))).size === 1) { S.winner = left[0].id; S.endHow = how || 'capture'; }
   // The last colony people play is gone (you, in a game against the computer): it's over. (A game with nobody's

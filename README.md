@@ -650,7 +650,10 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
 - **Ways to win** (`VICTORY`, `S.victory`, `S.endHow`; Versus only, not missions): **Capture** is the default.
   **Surrender** (`SURRENDER`, `checkSurrender`): in any mode, 12 minutes in, a rival down to 40% of its best (buildings,
   warbots counting double) against a colony 4× as strong, or with nothing to rebuild with, gives up after about 40 s and
-  everything it had changes hands as if captured. **Domination** (`DOM`, `updateDomination`, `domShare`): hold 60% of the
+  everything it had changes hands as if captured. **Keep playing** (`keepPlaying`, `S.endless`): after a victory against
+  the computer (not multiplayer, not missions) the end screen can carry on with the same game: no one wins again (no
+  surrender, Domination or Uplinks count, and the last rival falling ends nothing), but losing your own colony still
+  ends it. **Domination** (`DOM`, `updateDomination`, `domShare`): hold 60% of the
   land anyone holds with one rival (half with two, 45% with three) and a fifth of the planet for 3 minutes straight.
   **Uplinks** (`UPLINK`, `placeUplinks`, `updateUplinks`): 3 to 5 neutral towers (`S.uplinks`) placed by the map's own
   symmetry (180° for two, 120° for three, quarter turns on the four-quarter maps, the half turn on Twin Valleys), so every colony has the same, using a travel-effort
