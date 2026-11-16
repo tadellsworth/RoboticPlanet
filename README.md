@@ -1065,8 +1065,9 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   nuke siren and blast, and sounds from the map when on screen (traffic hum, welding, concrete, asphalt, truck air
   brakes and horns, biome wind, jungle birds and insects). Ambience that grows with the colony (`ambienceBeds`): a
   city murmur that rises with the built-up area on screen (and a little with the colony's size; quieter at night),
-  far-off horns in a big town, an industrial hum under working factories plus their own one-shots (`WORK_SOUNDS`:
-  furnaces, clanks, drills, pump thumps, beeps), a train's diesel throb and rail clack that quickens with its speed,
+  far-off horns in a big town, a soft industrial hum under working factories (it and the traffic hum wander in pitch and swell and ease, never one
+  steady drone) plus their own one-shots (`WORK_SOUNDS`:
+  furnaces, clanks, drills, pump thumps, beeps; the Smelter and the Bot Foundry also press, ratchet and machine), a train's diesel throb and rail clack that quickens with its speed,
   its horn as it pulls out and brakes as it slows, aircraft engines panned to where they fly, with a rival's take-off
   roll, the approach whine and the touchdown chirp, a ship's horn leaving port, the sea's wash, bubbling lava and
   crickets on warm nights. Music and Effects volumes are in the pause menu.
