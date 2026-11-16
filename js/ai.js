@@ -1204,7 +1204,8 @@ function aiGunThreats(p) {
 
 /** Warbots it takes to knock out gun b: its guards, its garrison, and a margin. */
 function aiGunNeed(b) {
-  return Math.ceil((b.garrison ? b.garrison.length : 0) * 1.3) + guardsNear(b) + (b.type === 'turret' || BDEFS[b.type].keep ? 3 : 2) + 1;
+  const shooting = Math.min(b.garrison ? b.garrison.length : 0, BDEFS[b.type].slots || Infinity); // (only a Keep's gun slots fire)
+  return Math.ceil(shooting * 1.3) + guardsNear(b) + (b.type === 'turret' || BDEFS[b.type].keep ? 3 : 2) + 1;
 }
 
 /**

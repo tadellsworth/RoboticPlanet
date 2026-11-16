@@ -312,6 +312,33 @@ function feedersOf(b) {
 }
 
 /**
+ * Factory b, with its feeders `fed` (feedersOf): how much of good g Haulers should bring it when a neighbour feeds it g
+ * by conveyor (null when none does). Only its next round's worth, less what it has, has coming and its feeders hold:
+ * the conveyor fills the rest, so goods driven out from storage don't beat it to the factory (see feedHold).
+ */
+function feedHaul(b, g, fed) {
+  const inp = BDEFS[b.type].inp;
+  const on = (f) => f.link.goods.includes(g) && !f.from.paused && !f.from.cut; // (a paused or cut-off one passes nothing)
+  if (!inp || !inp[g] || !fed.some(on)) return null;
+  let held = (b.stock[g] || 0) + (b.inc[g] || 0);
+  for (const f of fed) if (on(f)) held += feedSupply(f.from, g);
+  return inp[g] - held;
+}
+
+/** What of good g producer b keeps back from the Haulers for the factories it feeds by conveyor: what they still need of it. */
+function feedHold(b, g) {
+  if (b.paused || b.cut) return 0; // (its conveyors stand still)
+  let n = 0;
+  for (const { c, goods } of feedTargets(b)) {
+    const inp = BDEFS[c.type].inp;
+    if (!goods.includes(g) || !inp || !inp[g]) continue;
+    const need = needsOf(c).find((x) => x[0] === g);
+    if (need && need[1] > 0) n += need[1];
+  }
+  return n;
+}
+
+/**
  * The feed links a building of `type` placed at (x, y) by `owner` would make with its neighbours, for the
  * placement preview: [{a, b, goods}] from producer tile a to user tile b (ignoring FEED_MAX).
  */
@@ -1581,6 +1608,9 @@ function dispatch(p) {
         if (bt.rail && src && !trainAt(u, src)) continue;
         if (bt.roadOnly && src && !botLinked(u, src)) continue;
       } else if (role === 'build' ? !bt.build : role === 'staff' ? !bt.staff : bt.crew !== role) continue;
+      // (A builder that just found no way somewhere, say one walled in by the Wall it built, sits this round out: as the
+      // nearest it would otherwise be picked for the same site again and again, and no one else would come.)
+      if (role === 'build' && u.failUntil > S.time) continue;
       const d = dist2(u.x, u.y, x + 0.5, y + 0.5);
       // Only send a bot with enough charge (a truck, Fuel) for the trip there and back (unless there's nowhere to top up).
       if ((u.bat ?? 100) < BATTERY.low + 0.5 * Math.sqrt(d) && (bt.truck || bt.sea ? P.canRefuel : P.canCharge)) continue;
@@ -1682,7 +1712,12 @@ function dispatch(p) {
     // So does one Alloy for an empty Repair Station, so it always has some on hand for the next robot.
     const dry = (BDEFS[b.type].charger && b.built && chargerDry(b)) ||
       (BDEFS[b.type].repair && b.built && !(b.stock.alloy > 0) && !(b.inc.alloy > 0) && (b.repairPts || 0) < REPAIR_HP_PER_ALLOY / 2);
-    for (const [g, n, keep, autoOnly] of needsOf(b)) if (n > 0 && !(g === 'fuel' && b.fuelByPipe)) reqs.push({ b, g, n, pri: dry ? -1 : keep ? prioRank(b) * 3 + 2 : pri, inc: sumValues(b.inc), keep, autoOnly });
+    // (A factory a neighbour feeds by conveyor gets only its next round's worth of that good by Hauler: see feedHaul.)
+    const fed = b.built && BDEFS[b.type].inp ? feedersOf(b) : null;
+    for (const [g, n0, keep, autoOnly] of needsOf(b)) {
+      const h = fed && fed.length && !keep ? feedHaul(b, g, fed) : null, n = h === null ? n0 : Math.min(n0, h);
+      if (n > 0 && !(g === 'fuel' && b.fuelByPipe)) reqs.push({ b, g, n, pri: dry ? -1 : keep ? prioRank(b) * 3 + 2 : pri, inc: sumValues(b.inc), keep, autoOnly });
+    }
   }
   reqs.sort((a, c) => a.pri - c.pri || a.inc - c.inc || a.b.born - c.b.born);
   for (let pass = 0; pass < 4 && idle.length; pass++) {
@@ -1771,6 +1806,8 @@ function dispatch(p) {
       }
       for (const s of blds) {
         if (s === r.b || sup(s, r.g) <= 0 || !reachable(s) || !linked(s, r.b)) continue;
+        // (Not from a neighbour that feeds it this good by conveyor: that hands it over itself.)
+        if (!r.keep && !s.paused && !s.cut && Math.abs(s.x - r.b.x) <= 1 && Math.abs(s.y - r.b.y) <= 1 && feedTargets(s).some((l) => l.c === r.b && l.goods.includes(r.g))) continue;
         const d = dist2(s.x, s.y, r.b.x, r.b.y);
         if (d < bd) { bd = d; src = s; }
       }
@@ -1868,7 +1905,8 @@ function dispatch(p) {
     for (const g in def.out) {
       if (!idle.length) return;
       if (conv && !isLiquid(g) && storeTakes(conv, g)) continue;
-      const avail = supplyOf(b, g);
+      // (What the factories it feeds by conveyor still need stays for the conveyor: see feedHold.)
+      const has = supplyOf(b, g), avail = has >= 1 ? has - feedHold(b, g) : has;
       if (avail >= 2 || (avail >= 1 && !b.staff)) {
         let store = storeFor(p, g, b.x + 0.5, b.y + 0.5, null, P.noHaulers ? null : b);
         if (!store) continue;
@@ -2355,7 +2393,7 @@ function nearSoon(u, b) {
   if (dist2(u.x, u.y, cx, cy) <= BUILD_FAR * BUILD_FAR) return false;
   const z = S.zone[tIdx(b.x, b.y)];
   for (const v of S.bots) {
-    if (v === u || v.dead || v.owner !== b.owner || !BOTS[v.type].build || dist2(v.x, v.y, cx, cy) > FOOT_CARRY * FOOT_CARRY) continue;
+    if (v === u || v.dead || v.owner !== b.owner || !BOTS[v.type].build || v.failUntil > S.time || dist2(v.x, v.y, cx, cy) > FOOT_CARRY * FOOT_CARRY) continue;
     if (S.zone[tIdx(Math.floor(v.x), Math.floor(v.y))] !== z) continue;
     const t = v.task;
     if (!t || ['build', 'fix', 'haul', 'charge', 'cover', 'home', 'crate'].indexOf(t.type) >= 0) return true;
@@ -3562,6 +3600,7 @@ function bunkerFire(b, def, dt) {
   if (!target) return;
   let fired = 0;
   for (const id of b.garrison) {
+    if (def.slots && fired >= def.slots) break; // (a Keep houses more warbots than it has gun slots)
     const u = getE(id);
     if (!u || u.dead || target.dead || !useAmmo(u)) continue;
     const power = (u.bat ?? 100) < BATTERY.critical ? 0.5 : 1;

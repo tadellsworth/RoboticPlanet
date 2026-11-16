@@ -808,8 +808,8 @@ const BDEFS = {
   // The Keep: a big fort (see KEEP): its warbots fire from cover like a Bunker's, its roof cannon fires Crystal,
   // and its aura toughens Walls and Gates and sharpens the defences round it.
   keep: {
-    name: 'Keep', desc: 'A massive fortified concrete base with a heavy twin pulse cannon on its roof. Up to 6 warbots fire from its gun slots at enemy robots within 4 tiles, with their own Ammo, and recharge inside; nothing can hit them until it falls, and it has to be captured, not knocked down. Its cannon fires Crystal out to 6 tiles. Within 7 tiles your Walls and Gates take a third less damage and slowly mend themselves, and your Pulse Turrets, Bunkers, Mortar Pits, Flak Guns and Disruptor Towers reach a tile further and fire a fifth faster. Keeps stand at least 16 tiles apart. It claims land like an Outpost, and like an Outpost your roads run straight through it (enemies have to break it to get past).',
-    cost: { cement: 14, alloy: 6, chip: 2 }, mil: true, keep: true, terr: 6, garrison: 6, ammoStock: 6, armor: 60, buildTime: 24, war: true,
+    name: 'Keep', desc: 'A massive fortified concrete base with a heavy twin pulse cannon on its roof. It houses up to 25 warbots: 6 of them fire from its gun slots at enemy robots within 4 tiles, with their own Ammo, and all of them recharge and reload inside; nothing can hit them until it falls, and it has to be captured, not knocked down. Its cannon fires Crystal out to 6 tiles. Within 7 tiles your Walls and Gates take a third less damage and slowly mend themselves, and your Pulse Turrets, Bunkers, Mortar Pits, Flak Guns and Disruptor Towers reach a tile further and fire a fifth faster. Keeps stand at least 16 tiles apart. It claims land like an Outpost, and like an Outpost your roads run straight through it (enemies have to break it to get past).',
+    cost: { cement: 14, alloy: 6, chip: 2 }, mil: true, keep: true, terr: 6, garrison: 25, slots: 6, ammoStock: 12, armor: 60, buildTime: 24, war: true,
     ammo: 'crystal', ammoCap: 3, range: 6, gun: { damage: 5, reload: 1.55 }, // (was 1.3 s: toned down a touch)
   },
   kiln: {
