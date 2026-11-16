@@ -857,7 +857,7 @@ const MISSIONS = [
       'An <b>Airfield</b>\'s Cargo Plane flies over anything and drops its load by parachute.',
       'It drops a Drop Outpost on open ground nobody else holds, or two Workers on any open ground.',
       'Places switched to <b>Supply by air</b> get what they are short of, 8 goods a flight.',
-      'In Versus, planes also drop warbots, and Strike Bombers fly from the Airfield.',
+      'In Versus, planes also drop warbots, and Vulcan Bombers fly from the Airfield.',
     ],
     mode: 'colony', seed: 1818, size: 1, rough: 2, rich: 3, biome: 'polar', shape: 5, limit: [0, 0, 20],
     setup(S) {
@@ -1182,7 +1182,7 @@ const MISSIONS = [
     brief: 'A maze of canyons and a seasoned rival. Use everything you have learned, and take to the air.',
     intro: [
       'The last landing: narrow canyons, long routes and a seasoned rival.',
-      'A <b>Keep</b> houses 25 warbots (6 fire from it) and toughens Walls near it. <b>Strike Bombers</b> fly from an Airfield.',
+      'A <b>Keep</b> houses 25 warbots (6 fire from it) and toughens Walls near it. <b>Vulcan Bombers</b> fly from an Airfield.',
       'If their bombers come, a siren sounds: <b>Flak Guns</b> fill the sky round what they guard.',
       'Then free play: Domination, Uplinks, free-for-alls of 3-4 colonies, 2 vs 2 teams and Multiplayer.',
       'Custom Game picks the map type, size, terrain, resources, biome and seed. Beaten rivals may surrender.',
@@ -1198,7 +1198,7 @@ const MISSIONS = [
         hint: '<b>Defend</b> → <b>Flak Gun</b> (<kbd>F</kbd>), by what their bombers would hit. It shoots only aircraft.',
         ui: "#btn-build, #build-tabs [data-g='defend'], .bcard[data-t='flak']" },
       { kind: 'bots', type: 'bomber', n: 1, at: 'airfield',
-        hint: '<b>Move</b> (<kbd>3</kbd>) → <b>Airfield</b> (<kbd>I</kbd>). Tap it → <b>Hangar</b>: Strike Bombers <b>+1</b>.',
+        hint: '<b>Move</b> (<kbd>3</kbd>) → <b>Airfield</b> (<kbd>I</kbd>). Tap it → <b>Hangar</b>: Vulcan Bombers <b>+1</b>.',
         ui: ".bcard[data-t='airfield'], #sh-yard .order-row[data-k='bomber'] [data-d='1']" },
       { kind: 'capture',
         hint: 'Tap their base → <b>Bomb it</b> (<kbd>Z</kbd>) to soften it. <b>Army</b> (<kbd>Q</kbd>) → <b>All</b> (<kbd>4</kbd>) → <b>Hold ground</b> (<kbd>G</kbd>) right beside it.',

@@ -32,7 +32,7 @@ Still open: a neutral, shared exchange the rivals compete over; contracts for Ch
 - **Ships.** Ports, Container Ships, Tanker Ships, Ferries and beach landings are in the game, and the rival keeps a
   forward Port stocked by Container Ship. Still open: a gunboat or patrol boat to escort ships and shell the shore
   (held back for now); the rival running ferry lines.
-- **Air (after ships).** An **Airfield** (done, with the Cargo Plane and air drops), a **strike bomber** (its look follows
+- **Air (after ships).** An **Airfield** (done, with the Cargo Plane and air drops), a **Vulcan Bomber** (its look follows
   a Foxbat three-view, mocked up in renderer/b/bomber.js: a long black radome, big box intakes, a broad flat body, a
   43-degree wing with tip pods, swept stabilators, twin canted fins, two big nozzles, bombs under the wings; up to
   two per Airfield beside its one Cargo Plane; the AI never uses the Cargo Plane and should fly bombers only seldom; each hits one target a sortie, then needs a while on the ground to rearm

@@ -159,7 +159,7 @@ const BOTS = {
   ferry: { name: 'Ferry', plural: 'Ferries', speed: WORKER_SPEED * 2.8, hp: 26, sea: true, ferry: true, seats: 6, parts: 4, accel: 0.7, brake: 1.4, naval: true,
     desc: 'Carries robots and trucks across the water. Give a Port a ferry line to another Port and your bots take the ferry whenever it is the shorter way (six seats: a truck takes two, a Road Train three). From a Port it can also land up to six warbots on any shore, enemy shores too: a beach landing.' },
   // Aircraft: they fly straight over anything (water, cliffs, rock, the enemy), burning Fuel (PLANE_BURN), from an Airfield.
-  bomber: { name: 'Strike Bomber', plural: 'Strike Bombers', speed: WORKER_SPEED * 5.2, hp: 16, air: true, war: true, bomber: true, parts: 5, accel: 1.3, brake: 1.6, turn: 1.5, // a jet: it turns tighter, about the Cargo Plane's circle at its speed
+  bomber: { name: 'Vulcan Bomber', plural: 'Vulcan Bombers', speed: WORKER_SPEED * 5.2, hp: 16, air: true, war: true, bomber: true, parts: 5, accel: 1.3, brake: 1.6, turn: 1.5, // a jet: it turns tighter, about the Cargo Plane's circle at its speed
     desc: 'A fast twin-engined strike jet, based at an Airfield (two to a hangar; built there). Pick a target, an enemy building, or a truck, Tanker, ship or robot out in the open, and it flies out, drops one heavy bomb and flies home: it knocks 14 off a building (forts no lower than a third of their armor) and hurts what\'s round it, and a Tanker it hits explodes. Each sortie takes 6 Ammo and Fuel from its Airfield, and it needs a while on the ground to rearm. Flak Guns are the answer to it.' },
   cargoplane: { name: 'Cargo Plane', plural: 'Cargo Planes', speed: WORKER_SPEED * 3.75, hp: 24, air: true, carry: 8, seats: 2, parts: 6, accel: 0.9, brake: 1.3,
     desc: 'A big four-engined transport, based at an Airfield. It flies straight over anything and drops what it carries by parachute, one load a flight: a Drop Outpost anywhere on open ground nobody else holds, two robots (Warbots or Workers) wherever you like, the enemy\'s land too, or up to 8 goods for a place you supply by air. It burns Fuel in the air and fills up at its Airfield. It flies to the nearest Airfield when the Foundry finishes it.' },
@@ -441,7 +441,7 @@ const PLANE_MEND = 0.6;    // hit points a second a plane parked at its Airfield
 // PLANE_TURN radians a second; it lands at the far end and brakes (ROLL_BRAKE) back to the head.
 const AIRFIELD_HOLDS = { cargoplane: 1, bomber: 2 }; // planes of each type an Airfield has room for
 /**
- * The Strike Bomber (BOTS.bomber): a sortie loads `ammo` Ammo at its Airfield (and Fuel for the trip), flies to
+ * The Vulcan Bomber (BOTS.bomber): a sortie loads `ammo` Ammo at its Airfield (and Fuel for the trip), flies to
  * one target (an enemy building, or a vehicle or robot out in the open, which it chases), drops its bomb (`fall`
  * s to the ground) and flies home: `damage` to the building it's aimed at (forts no lower than MISSILE_FLOOR),
  * `splashBld` to other buildings and `botDamage` to robots within `splash` tiles. Back on the ground it needs
@@ -942,7 +942,7 @@ const BDEFS = {
     cost: { cement: 8, alloy: 3 }, store: true, port: true, naval: true, armor: 14, buildTime: 14, yard: ['cargoship', 'tankship', 'ferry'],
   },
   airfield: {
-    name: 'Airfield', desc: 'A runway and hangar for a Cargo Plane and two Strike Bombers (order them on its panel: the hangar builds them from Alloy and Chips). A plane drops a Drop Outpost anywhere on open ground nobody else holds, two Warbots or Workers wherever you like, or keeps a place you supply by air stocked, 8 goods a flight. Haulers bring the Airfield what those places are short of, and Fuel for the planes. It is storage too, like a Depot.',
+    name: 'Airfield', desc: 'A runway and hangar for a Cargo Plane and two Vulcan Bombers (order them on its panel: the hangar builds them from Alloy and Chips). A plane drops a Drop Outpost anywhere on open ground nobody else holds, two Warbots or Workers wherever you like, or keeps a place you supply by air stocked, 8 goods a flight. Haulers bring the Airfield what those places are short of, and Fuel for the planes. It is storage too, like a Depot.',
     cost: { cement: 10, alloy: 4 }, store: true, airfield: true, armor: 16, buildTime: 16, yard: ['cargoplane', 'bomber'],
   },
   dropost: {

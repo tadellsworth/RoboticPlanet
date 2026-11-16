@@ -235,7 +235,7 @@ function aiThink(p) {
   if (S.time - (S.players[p].keepFail ?? -999) < 300) wantKeeps = Math.min(wantKeeps, counts.keep || 0);
   if ((counts.keep || 0) < wantKeeps) plan = [['keep', wantKeeps]].concat(plan);
   // Bombers, now and then: every rival but a Turtle puts up an Airfield late in a war (from 22 minutes, with its
-  // Ammo Plant running) for a single Strike Bomber (see aiBomber).
+  // Ammo Plant running) for a single Vulcan Bomber (see aiBomber).
   if (S.mode !== 'colony' && !st.walls && S.time >= 1320 && !counts.airfield && !botBanned(p, 'bomber') && me.some((b) => b.type === 'armory' && b.built)) plan = [['airfield', 1]].concat(plan); // (only for a bomber)
   // Bulk trade: a Trade Terminal once the colony is running short of Ore, Crystal or Stone (a Tycoon from 14
   // minutes, the rest from 20, any rival from 10 once its Crystal runs short, and then past the usual limit on sites),
@@ -711,7 +711,7 @@ function aiThink(p) {
   if (S.mode !== 'colony') aiSiege(p);
   // 4f) Bulk trade: pick a contract at the Trade Terminal.
   aiTrade(p, me);
-  // 4g) A Strike Bomber now and then.
+  // 4g) A Vulcan Bomber now and then.
   if (S.mode !== 'colony') aiBomber(p, me);
 
   // 4b) Raids on the enemy's supply lines, and answering the enemy's raids on ours.
@@ -1523,7 +1523,7 @@ function crystalHeld(b, r) {
 const AI_BOMB_VALUE = { nukesilo: 14, silo: 12, munitions: 10, reactor: 9, keep: 7, refinery: 7, foundry: 6, armory: 6, airfield: 6, fab: 5, generator: 4, smelter: 4, terminal: 4 };
 
 /**
- * The AI's Strike Bomber: one, built at its Airfield's hangar, and a sortie at most every AI_BOMB_GAP s, at the
+ * The AI's Vulcan Bomber: one, built at its Airfield's hangar, and a sortie at most every AI_BOMB_GAP s, at the
  * enemy building (or loaded Tanker) worth most that no Flak Gun covers.
  */
 const AI_BOMB_GAP = 240;
@@ -1606,7 +1606,7 @@ function aiBare(need, fire, shields) { return !shields && fire >= AI_HEAVY ? Mat
 
 /**
  * Clear the worst enemy gun covering our buildings: a missile if a Silo can reach it, Howitzers (they
- * outrange a Pulse Turret), a Strike Bomber, and a band of warbots big enough to win. Until the army can
+ * outrange a Pulse Turret), a Vulcan Bomber, and a band of warbots big enough to win. Until the army can
  * win, the Foundry makes warbots (P.gunNeed). P.gunTarget names the gun for aiSiege and aiBomber.
  */
 function aiClearGuns(p, lvl) {

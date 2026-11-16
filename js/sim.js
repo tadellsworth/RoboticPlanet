@@ -10629,7 +10629,7 @@ function landed(u, b) {
   }
 }
 
-/* ------------------------------------------------------------------ Strike Bombers */
+/* ------------------------------------------------------------------ Vulcan Bombers */
 
 /** Can bomber u strike `t`: an enemy building, or an enemy vehicle, ship or robot out in the open (not in the air)? */
 function strikeTarget(u, t) {
@@ -10641,7 +10641,7 @@ function strikeTarget(u, t) {
 
 /** Why owner's bomber u can't strike `t` (a building or a bot; `deck`: [i, j], a tile of a Viaduct's deck), or '' if it can. */
 function strikeBlocked(owner, u, t, deck) {
-  if (!u || u.dead || u.owner !== owner || !BOTS[u.type].bomber) return 'Pick one of your Strike Bombers.';
+  if (!u || u.dead || u.owner !== owner || !BOTS[u.type].bomber) return 'Pick one of your Vulcan Bombers.';
   const base = planeBase(u);
   if (!base || u.inside !== base.id) return 'The bomber must be parked at its Airfield.';
   if (u.mission) return 'That bomber already has a target.';
@@ -10688,7 +10688,7 @@ function bomberOnGround(u, base, dt) {
     if ((base.stock.ammo || 0) - (base.res.ammo || 0) < BOMBER.ammo) {
       M.noAmmo = 1;
       const P = S.players[u.owner];
-      if (isMe(u.owner) && S.time - (P.bombAmmoMsg || -999) > 90) { P.bombAmmoMsg = S.time; postMsg(u.owner, `A Strike Bomber is waiting for Ammo: it needs ${BOMBER.ammo} at its Airfield (haulers bring it).`, base.x, base.y, 'warn'); }
+      if (isMe(u.owner) && S.time - (P.bombAmmoMsg || -999) > 90) { P.bombAmmoMsg = S.time; postMsg(u.owner, `A Vulcan Bomber is waiting for Ammo: it needs ${BOMBER.ammo} at its Airfield (haulers bring it).`, base.x, base.y, 'warn'); }
       return;
     }
     M.noAmmo = 0;

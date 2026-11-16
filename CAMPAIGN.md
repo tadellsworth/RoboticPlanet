@@ -93,8 +93,8 @@ The war turns serious, and the colony reaches for home. Every answer it gets is 
 ### 9. Floaters
 
 - **Map:** Sky islands over the Rifts. Rival: a TYRIAN colony run by the Architect (Tycoon), introduced here.
-- **Objectives:** Set up cargo planes to haul Crystal off the Floaters. Deliver more Chips than the Architect before the deadline, or break its air bridge with Strike Bombers.
-- **Teaches:** cargo planes, Strike Bombers.
+- **Objectives:** Set up cargo planes to haul Crystal off the Floaters. Deliver more Chips than the Architect before the deadline, or break its air bridge with Vulcan Bombers.
+- **Teaches:** cargo planes, Vulcan Bombers.
 - **Story:** The Architect has stopped waiting and is building a city for itself. "I've paved more road this year than your Sponsor did in a century."
 
 ### 10. Argos
