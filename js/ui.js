@@ -1371,7 +1371,7 @@ function initDialogs() {
 function syncSaved() {
   const el = $('p-saved');
   if (!el) return;
-  if (UI.watch) { el.textContent = 'Watching: nothing here is saved, and your own game stays as it was.'; $('p-quit').textContent = 'Back to the menu'; return; }
+  if (UI.watch) { el.textContent = 'Observer mode: nothing here is saved, and your own game stays as it was.'; $('p-quit').textContent = 'Back to the menu'; return; }
   const s = UI.savedAt ? Math.round((Date.now() - UI.savedAt) / 1000) : -1;
   el.textContent = UI.saveHold ? 'Saving is paused: something in the game keeps going wrong. Reload the page to carry on from your last save.'
     : UI.saveFailed ? 'Saving isn\'t working in this browser right now: keep this tab open.'
@@ -7451,7 +7451,7 @@ function uiTick(dt) {
   if (!UI.inGame) menuArtTick();
   siteUndoTick(); // (hides itself out of a game)
   if (!UI.inGame || !S) return;
-  if (UI.watch) watchTick(dt); // (Watch mode: the scout report and the camera, js/watch.js)
+  if (UI.watch) watchTick(dt); // (Observer mode: the scout report and the camera, js/watch.js)
   if (S.msgs.length) UI.toastBatch = (UI.toastBatch || 0) + 1; // (the messages of one moment: see toast)
   while (S.msgs.length) {
     const m = S.msgs.shift();

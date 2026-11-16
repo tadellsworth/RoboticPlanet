@@ -51,9 +51,9 @@ how goods move.
   `ownTiles(test)`. Goals once met stay met (`M.got`) unless they say `hold`. **Capture lock:** while any goal other
   than capturing the rival Command Base is open, that base holds at 1 armor against you (`captureLocked`, applied in
   `hitBuilding`; its panel says to finish the other goals first), so winning too soon can't lose a mission.
-- **Watch:** the computer plays every colony (two to four, on any map type, each with the doctrine you pick) while you
+- **Observer mode:** the computer plays every colony (two to four, on any map type, each with the doctrine you pick) while you
   look on at up to 8×, with a scout report on what each is doing and a camera that follows the fighting; nothing is
-  saved (see Watch mode below).
+  saved (see Observer mode below).
 
 Before each game, the new-game screen picks the mode, players and rival, the **map shape** (Standard, Long haul,
 Chokepoint, Islands, Crater, Plateaus, Sky islands, Rift, Ring valley, Oases, Crossroads, Lakes, Tidal flats, River delta,
@@ -858,10 +858,10 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   Download save file does: the artifact `downloads` capability in claude.ai, else an `<a download>` link
   (`plainDownload`, which takes a Blob too). Esc, Shift+P, **Exit** or a phone's Back (`escapeKey`) leave it, back
   to the pause menu if it was opened from there; everything set aside comes back as it was.
-- **Watch mode** (`js/watch.js`, `#screen-watch`, `#watch-card`): the **Watch** pill on the main menu opens a setup card
+- **Observer mode** (`js/watch.js`, `#screen-watch`, `#watch-card`): the **Observer** pill on the main menu opens a setup card
   (`openWatch`): the map type (grouped as in the Custom Game picker), how many colonies (2, or up to the map type's
   `maxPlayers`) and each one's doctrine (or Random: one no other colony has), kept on this device in `terrafall.watch`.
-  **Start watching** (`watchStart`) is a normal game in which the computer plays every colony: `newGame` with
+  **Start observing** (`watchStart`) is a normal game in which the computer plays every colony: `newGame` with
   `humans: []` (each gets the rival's difficulty settings and doctrine; COBALT's doctrine is set straight after, since
   `newGame` gives player 0 the Steward), Normal difficulty, Nuclear race on, no planetary events, a random biome. `ME`
   stays 0, a colony the computer plays like the rest (as in the menu's backdrop game), for what this device shows and
@@ -884,8 +884,8 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   the busiest fighting (`watchSpot`: warbots in a fight, buildings just hit, shells and missiles landing, in 10-tile
   cells; a spot keeps the camera while it's half as busy as the busiest), else the biggest band on the move, else each
   Command Base in turn; once the map is moved by hand it stays (**Follow the action**, or F, takes it back). The end
-  (`watchOver`, from `showGameOver`) says who won and when each colony fell, with **Watch another** (the same setup on a
-  new planet) and **Main menu**; `toMenu` ends Watch mode (`watchEnd`).
+  (`watchOver`, from `showGameOver`) says who won and when each colony fell, with **Observe another** (the same setup on a
+  new planet) and **Main menu**; `toMenu` ends Observer mode (`watchEnd`).
 - **A failed frame never stops the game:** `frame` books the next frame before running this one and catches its errors
   (reported once each to the console), and each stage of a frame (simulation, camera, drawing, interface, sound) runs
   on its own (`stage` in `js/main.js`): one that keeps failing during a game says so once and pauses saving
@@ -1535,7 +1535,7 @@ js/mpui.js                multiplayer screens: host, join, the lobby, the in-gam
 js/feedback.js            Send feedback: the form (main menu and pause menu) that posts to the relay's /feedback
 js/goals.js               Colony goals, Records and achievements: read from the game, kept on the device (display only)
 js/photo.js               photo mode: the interface hidden, a time-of-day slider and Save picture (a PNG of the map)
-js/watch.js               Watch mode: computer colonies play while you watch, with a scout report and a camera that follows the fighting
+js/watch.js               Observer mode: computer colonies play while you watch, with a scout report and a camera that follows the fighting
 js/charts.js              line and bar charts for the statistics screen
 js/render.js              canvas renderer and placeholder art
 js/daynight.js            day and night: the clock, re-lit art sets, grading, headlights, light pools

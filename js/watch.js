@@ -1,9 +1,9 @@
 'use strict';
 /*
- * Terrafall — Watch mode: computer colonies play a game out while you watch.
+ * Terrafall — Observer mode: computer colonies play a game out while you watch.
  *
- * Main menu, Watch a game: pick the map type, how many colonies (two, or three or four where the map type has room)
- * and each one's doctrine (or Random: one no other colony has), then Start watching. It's a normal game in which the
+ * Main menu, Observer: pick the map type, how many colonies (two, or three or four where the map type has room)
+ * and each one's doctrine (or Random: one no other colony has), then Start observing. It's a normal game in which the
  * computer runs every colony: newGame with no human seat (humans: []), so each gets the rival's head start and its
  * doctrine. ME stays 0 (COBALT, run by the computer like the rest, as in the menu's backdrop game) for what this device
  * shows and hears; nothing is saved (saveGame never saves a game whose COBALT the computer plays, and clearSave is
@@ -17,7 +17,7 @@
  * The camera follows the fighting (Follow the action), until the map is moved by hand; F or the button takes it back.
  * Taps on the map select and order nothing (inputSwap), and no key gives an order. The game's own messages are
  * written to a colony's player ("your Command Base"): the scout report speaks instead. At the end a card says who won,
- * with Watch another (the same setup, a new planet) and Main menu.
+ * with Observe another (the same setup, a new planet) and Main menu.
  */
 
 const WATCH_SPEEDS = [1, 2, 4, 8];
@@ -97,7 +97,7 @@ function syncWatch() {
 
 /* ------------------------------------------------------------------ starting and leaving */
 
-/** Start a game to watch (from the setup screen, or Watch another at the end of one). */
+/** Start a game to observe (from the setup screen, or Observe another at the end of one). */
 function watchStart(setup) {
   const again = UI.watch;
   if (UI.photo) photoExit();
@@ -143,7 +143,7 @@ function watchStart(setup) {
   watchReport();
 }
 
-/** Leave Watch mode (toMenu calls it, on the way back to the main menu). */
+/** Leave Observer mode (toMenu calls it, on the way back to the main menu). */
 function watchEnd() {
   const w = UI.watch;
   if (!w) return;
@@ -161,7 +161,7 @@ function watchOver() {
   UI.overNew = () => watchStart(w.setup);
   UI.overMenu = null;
   $('o-code').hidden = true; $('o-keep').hidden = true; $('o-log').hidden = true;
-  $('o-new').textContent = 'Watch another'; $('o-menu').textContent = 'Main menu';
+  $('o-new').textContent = 'Observe another'; $('o-menu').textContent = 'Main menu';
   $('o-title').textContent = `${watchThe(win, true)} wins`;
   $('o-text').textContent = `${callsign(win)}, the ${(RIVAL_NAMES[win] || '').toLowerCase()} ${watchDoc(win)}, took the planet after ${fmtTime(S.time)}: ` + (how === 'surrender' ? 'the last colony against it surrendered.'
     : how === 'nuke' ? 'its nuclear missile destroyed the last Command Base against it.' : 'the last Command Base against it is its own.');
