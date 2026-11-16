@@ -20,7 +20,8 @@ how goods move.
   With four players (Crossroads, Pinwheel, Four Isles or Twin Valleys), **Teams: 2 vs 2** puts the two western colonies
   against the two eastern ones; on **Long Haul 2v2** (made for it: picking it turns Teams on) the two southern colonies
   against the two northern ones (see Multiplayer).
-- **Colony:** no rival. Settle the planet at your own pace, with colonization milestones. Free play has the full
+- **Colony:** no rival. Settle the planet at your own pace, with colonization milestones and an optional ladder of
+  **Colony goals** (see Colony goals, Records and achievements below). Free play has the full
   building roster, missiles and nuclear silos included, to experiment with, plus the **Research Lab** and optional
   **the Murmur** (native creatures whose nests raid you; on by default, never on Lunar).
 - **Missions:** the tutorial campaign (`MISSIONS` in `js/missions.js`): hand-picked planets, each with its own goals
@@ -1191,6 +1192,36 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   itself at the first tap on the map and opens again for each new step (unless you fold or open it yourself); folded
   it still counts buildings with no road. In free play the Build list pins the building the step asks for at the top
   (`OBJECTIVES[].build`, `nextBuilds`), and a building with no road to storage has Lay road at the top of its panel.
+- **Colony goals, Records and achievements** (`js/goals.js`; display and device only: nothing there changes `S` or
+  sends an order, so the save and the lockstep are untouched). `metaTick` (from `uiTick`, once a second of real time)
+  reads the game. **Colony goals** (`COLONY_GOALS`, Colony free play): about 16 optional goals in four tiers
+  (`GOAL_TIERS`: Groundwork, Long hauls, Across the planet, Accord scale), each counted from `S` by its own `count(P)`
+  (a traffic light or overpass, a pipeline joining two buildings, a Generator, a Depot with supply orders, a Research Lab
+  upgrade; 30 tiles of asphalt, a Road Train, a Freight Train, a Trade Terminal contract, a Murmur nest; a Ropeway, a
+  Viaduct, a Port and a Container Ship, a Cargo Plane delivery; three Freight Trains at once, 100 Alloy a minute
+  (`goodRates`), 100 robots, every upgrade), with `when` leaving out the ones the planet can't offer (`navalMap`, no
+  cliffs, no Murmur, no Trade Posts). A goal met stays met: its flag goes in this game's entry in `terrafall.games`
+  (localStorage, `metaStart`: a new game gets an entry keyed by its seed and the time it started on this device; a
+  loaded save finds the newest entry for its seed and mode that isn't further on than the save, so goals met before a
+  save stay met, and those met before a load bring no second message). The goals button beside the Goal card
+  (`#btn-goals`, `goalsHUD`) opens the panel (`openGoalsSheet`, sheet kind `'goals'`): the land milestones, then each
+  goal with its count, a hint and a button (`goalAction`: **Show** goes to the nearest building of `at` and opens its
+  panel, else the `paths` tool opens, else the Build list on the `build` building's tab with its card ringed). A goal
+  met brings a message and a flash of the button. **Records** (`terrafall.records`, `metaRecordsTick`, `metaGameOver`):
+  fastest win per map type and rival level, most robots, most buildings (not Walls, Gates or Ramps), longest game and
+  most land held, from single-player Versus and Colony games (`metaCounts`: no mission, no multiplayer, no autopilot,
+  and never Boosts, rival bans or Unlimited resources at any point, `metaAssisted`). The end screen (`#o-meta`) lists
+  the records a game beat (one it set where there was none isn't news, except a first win on a map type and level) and
+  the achievements it earned. **Achievements** (`ACHIEVEMENTS`, 22, `terrafall.achievements`): victories from the
+  result (a win; on Hard; by Domination; on the Uplinks; a free-for-all; on every map type; each doctrine beaten at
+  Medium or harder, and all five; no Pulse Turret site placed, Normal or Hard; **Full escort**, a rival Command Base
+  taken with `STORM_MIN` (20) of your armed robots within `STORM_R` of it, counted each second before it fell,
+  `metaStormTick`), deeds from any game played without help, multiplayer and missions too (`metaDeeds`: the first
+  Ropeway and Freight Train, a nest cleared, every upgrade, the last Colony milestone, every Colony goal), and the
+  missions (`metaCampaign`, from `loadCampaign`). Earned in a game they pop up as a message. **Records** on the main
+  menu (`#screen-records`, `openRecords`, a pill beside Lore and Feedback) shows them all; an earned achievement with
+  `lore` has a button that opens the Lore guide on that page (`openLore(id)`). **Forget records and achievements**
+  (two taps) clears both.
 - **Back and the screen** (`initBack`, `syncWakeLock`): in a game a phone's (or the browser's) Back button steps back
   like Esc instead of leaving the page: it closes the start-of-game card, a screen, a panel or a mode, clears the
   selection, and with nothing open brings up the pause menu (a history entry is added on entering a game and put back
@@ -1363,6 +1394,7 @@ js/lockstep.js            multiplayer: every device runs the game, only orders t
 js/net.js                 multiplayer: the connection to the relay (rooms, reconnecting, catching up)
 js/mpui.js                multiplayer screens: host, join, the lobby, the in-game banner, pause and leave
 js/feedback.js            Send feedback: the form (main menu and pause menu) that posts to the relay's /feedback
+js/goals.js               Colony goals, Records and achievements: read from the game, kept on the device (display only)
 js/charts.js              line and bar charts for the statistics screen
 js/render.js              canvas renderer and placeholder art
 js/daynight.js            day and night: the clock, re-lit art sets, grading, headlights, light pools
