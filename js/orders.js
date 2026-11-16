@@ -262,7 +262,7 @@ const ORDERS = {
   foundPort(p, fid, i, j) { const f = ownU(p, fid, 'ferry'); return f ? orderFoundPort(p, f, i, j) : 'That Ferry is gone.'; },
   landing(p, fid, i, j, n) { const f = ownU(p, fid, 'ferry'); return f ? orderLanding(p, f, i, j, n | 0) : 'That Ferry is gone.'; },
   airdrop(p, uid, kind, i, j) { const u = ownU(p, uid, 'air'); return u && (kind === 'outpost' || BOTS[kind]) ? orderAirdrop(p, u, kind, i, j, BOTS[u.type].seats) : 'That plane is gone.'; },
-  /** A Strike Bomber (uid) sent at a target: a building or a robot (tid). */
+  /** A Vulcan Bomber (uid) sent at a target: a building or a robot (tid). */
   strike(p, uid, tid) { const u = ownU(p, uid, 'bomber'), t = liveE(tid); return u && t ? orderStrike(p, u, t) : 'That target is gone.'; },
   bombard(p, ids, tid) { const t = liveB(tid); return t ? orderBombard(p, ownIds(p, ids), t) : 0; },
   park(p, ids, i, j) { return orderPark(p, ownIds(p, ids), i, j); },

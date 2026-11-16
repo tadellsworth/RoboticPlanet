@@ -2970,7 +2970,7 @@ function renderStats() {
     bots: { label: 'Workers and vehicles', sub: 'Every robot and vehicle that isn\'t a fighter: Workers, Haulers, trucks, trains, ships, planes.', fn: (h) => h.civ || [] },
   };
   const MIL = {
-    army: { label: 'Army', sub: 'Warbots and the other fighters: Bulwarks, Torches, Strike Bombers.', fn: (h) => h.war || [] },
+    army: { label: 'Army', sub: 'Warbots and the other fighters: Bulwarks, Torches, Vulcan Bombers.', fn: (h) => h.war || [] },
     def: { label: 'Defences', sub: 'Forts and guns: Outposts, Bunkers, Keeps, turrets, Mortar Pits, Silos and the rest.', fn: (h) => h.def || [] },
   };
   const war = warOn();
@@ -3161,14 +3161,14 @@ function confirmLanding() {
 /** Your Cargo Planes based at Airfield b. */
 function basePlanes(b) { return S.bots.filter((u) => !u.dead && u.owner === b.owner && BOTS[u.type].air && u.home === b.id); }
 
-/** Your Strike Bombers, and the first that's parked, rearmed and free to fly a sortie (optionally: at `t`). */
+/** Your Vulcan Bombers, and the first that's parked, rearmed and free to fly a sortie (optionally: at `t`). */
 function myBombers() { return S.bots.filter((u) => !u.dead && u.owner === ME && BOTS[u.type].bomber); }
 function readyBomber(t) { return myBombers().find((u) => !u.mission && !u.flight && !(u.rearmUntil > S.time) && planeBase(u) && u.inside === planeBase(u).id && (!t || !strikeBlocked(ME, u, t))) || null; }
 
 /** Pick a target for bomber u on the map. */
 function startStrike(u) {
   closeSheet(); setMode('strike'); UI.bomber = u.id;
-  showBanner(`Tap an enemy building, or an enemy vehicle or robot out in the open: the <b>Strike Bomber</b> loads ${BOMBER.ammo} Ammo and ${BOMBER.fuel} Fuel (on top of its tank), flies out and drops its bomb, then comes home to rearm. It reaches ${planeReach(u)} tiles from its Airfield.`, null, 'Cancel');
+  showBanner(`Tap an enemy building, or an enemy vehicle or robot out in the open: the <b>Vulcan Bomber</b> loads ${BOMBER.ammo} Ammo and ${BOMBER.fuel} Fuel (on top of its tank), flies out and drops its bomb, then comes home to rearm. It reaches ${planeReach(u)} tiles from its Airfield.`, null, 'Cancel');
 }
 
 /** A Cargo Plane parked at Airfield b with nothing to do, or null. */
@@ -3218,7 +3218,7 @@ function airfieldSection(b) {
   const planes = basePlanes(b), f = freePlane(b);
   let html = '<div class="section-label">Fuel</div><div class="bar battery" id="sh-air-fbar"><div></div></div><p class="hint" id="sh-air-fuel"></p>';
   html += '<div class="section-label">Cargo Plane</div><p class="hint" id="sh-air-planes"></p><div id="sh-air-pgauge"></div>';
-  if (warOn()) html += '<div class="section-label">Strike Bombers</div><div id="sh-air-bombers"></div>';
+  if (warOn()) html += '<div class="section-label">Vulcan Bombers</div><div id="sh-air-bombers"></div>';
   html += '<div class="section-label">Air drop <span class="label-note">by parachute</span></div>';
   if (f) {
     html += `<div class="air-drops" id="sh-air">
@@ -5182,7 +5182,7 @@ function openBuildingSheet(b) {
     });
     if ($('sh-bomb')) $('sh-bomb').onclick = () => {
       const u = readyBomber(b);
-      if (!u) { sfx('error'); toast('No Strike Bomber is ready that can reach it.', 'warn'); return; }
+      if (!u) { sfx('error'); toast('No Vulcan Bomber is ready that can reach it.', 'warn'); return; }
       act('strike', [u.id, b.id], (why) => {
         if (why) { sfx('error'); toast(why, 'warn'); return; }
         sfx('order'); toast(`Strike ordered on the ${def.name}: a bomber loads up and takes off.`, 'good'); refreshSheet();
@@ -5511,7 +5511,7 @@ function refreshBuildingSheet(b) {
       el.dataset.sig = sig;
       el.innerHTML = bs.length ? bs.map((u, k) => `<div class="kv trade-row"><span>Bomber ${k + 1}<small>${planeStatus(u)} · Fuel tank ${Math.round(u.bat ?? 100)}%</small>${fuelGauge(u)}</span><button class="btn small primary" data-b="${u.id}" ${u.mission || u.flight ? 'disabled' : ''}>Strike</button></div>`).join('') +
         `<p class="hint">A sortie takes ${BOMBER.ammo} Ammo (this Airfield keeps some for them; haulers bring it) and ${BOMBER.fuel} Fuel on top of what its tank needs (Tankers bring it): it can't take off without both. Back on the ground a bomber needs ${BOMBER.rearm} s to rearm. Or open a rival building and tap <b>Bomb it</b>.</p>`
-        : '<p class="hint">None based here: order Strike Bombers in the hangar below (two fit).</p>';
+        : '<p class="hint">None based here: order Vulcan Bombers in the hangar below (two fit).</p>';
       for (const btn of el.querySelectorAll('button[data-b]')) btn.onclick = () => { const u = getE(+btn.dataset.b); if (u) { sfx('click'); startStrike(u); } };
     }
   }
@@ -5699,13 +5699,13 @@ function botActivity(u) {
   return 'Busy';
 }
 
-/** The Bomb it button on an enemy building's or unit's panel: enabled when a Strike Bomber is ready that can reach t. */
+/** The Bomb it button on an enemy building's or unit's panel: enabled when a Vulcan Bomber is ready that can reach t. */
 function refreshBombButton(t) {
   if (!$('sh-bomb')) return;
   const u = readyBomber(t), any = myBombers(), bot = !BDEFS[t.type];
   $('sh-bomb').disabled = !u;
-  $('sh-bomb-hint').textContent = u ? (bot ? `A Strike Bomber is ready: it flies out, leads it if it's moving and drops one bomb (a direct hit does ${BOMBER.botDamage * 2}; ${BOMBER.ammo} Ammo and ${BOMBER.fuel} Fuel a sortie). Flak Guns can shoot it down.`
-      : `A Strike Bomber is ready: it drops one bomb (${BOMBER.damage} off the target; ${BOMBER.ammo} Ammo and ${BOMBER.fuel} Fuel a sortie). Flak Guns can shoot it down.`)
+  $('sh-bomb-hint').textContent = u ? (bot ? `A Vulcan Bomber is ready: it flies out, leads it if it's moving and drops one bomb (a direct hit does ${BOMBER.botDamage * 2}; ${BOMBER.ammo} Ammo and ${BOMBER.fuel} Fuel a sortie). Flak Guns can shoot it down.`
+      : `A Vulcan Bomber is ready: it drops one bomb (${BOMBER.damage} off the target; ${BOMBER.ammo} Ammo and ${BOMBER.fuel} Fuel a sortie). Flak Guns can shoot it down.`)
     : bot && (t.inside || t.dropping) ? 'It\'s under cover: bombers only hit vehicles and robots out in the open.'
       : any.some((v) => v.mission || v.flight) ? 'Your bombers are out on sorties.' : any.some((v) => v.rearmUntil > S.time) ? 'Your bombers are rearming.' : 'Out of your bombers\' reach.';
 }
@@ -5768,7 +5768,7 @@ function openBotSheet(u) {
   });
   if ($('sh-bomb')) $('sh-bomb').onclick = () => {
     const v = readyBomber(u);
-    if (!v) { sfx('error'); toast('No Strike Bomber is ready that can reach it.', 'warn'); return; }
+    if (!v) { sfx('error'); toast('No Vulcan Bomber is ready that can reach it.', 'warn'); return; }
     act('strike', [v.id, u.id], (why) => {
       if (why) { sfx('error'); toast(why, 'warn'); return; }
       sfx('order'); toast(`Strike ordered on the ${BOTS[u.type].name}: a bomber loads up, takes off and hunts it down.`, 'good'); refreshSheet();
@@ -6044,7 +6044,7 @@ function refreshGoodsSheet(full) {
  * The Army panel: your warbots and Howitzers at a glance and orders for them. Pick a group size, then an
  * order (Attack a rival building, Hold ground, Station at a garrison of yours) and tap the map: each tap sends
  * another group, until Done. Groups out in the field and every Howitzer are listed with their own orders.
- * The Air tab (with an Airfield): each Airfield's hangar, every Strike Bomber (Strike) and Cargo Plane (air drops).
+ * The Air tab (with an Airfield): each Airfield's hangar, every Vulcan Bomber (Strike) and Cargo Plane (air drops).
  */
 function openArmySheet(tab) {
   if (tab) UI.armyTab = tab;
@@ -6138,9 +6138,9 @@ function refreshAirTab() {
     h += `<div class="kv army-row"><span>${L ? `${dirText(L, b)} from the Command Base` : 'Airfield'}: ${n} plane${n === 1 ? '' : 's'}${ord.length ? `; ordered ${ord.join(', ')}` : ''}</span><span>${kinds.map((kk) => `<button class="btn small" data-act="yard" data-id="${b.id}" data-k="${kk}">+ ${BOTS[kk].name}</button>`).join('')}<button class="btn small ghost" data-act="showbld" data-id="${b.id}">Open</button></span></div>`;
   }
   if (warOn()) {
-    h += '<div class="section-label">Strike Bombers</div>';
+    h += '<div class="section-label">Vulcan Bombers</div>';
     h += bombers.length ? bombers.map((u) => `<div class="kv army-row"><span>${planeStatus(u)}</span><span><button class="btn small" data-act="strike" data-id="${u.id}"${!u.mission && !u.flight && planeBase(u) && u.inside === planeBase(u).id ? '' : ' disabled'}>Strike</button><button class="btn small ghost" data-act="showbot" data-id="${u.id}">Show</button></span></div>`).join('')
-      : '<p class="hint">None yet: order one in an Airfield\'s hangar (+ Strike Bomber above). It bombs any enemy building but a Keep or Command Base, or a vehicle or robot out in the open.</p>';
+      : '<p class="hint">None yet: order one in an Airfield\'s hangar (+ Vulcan Bomber above). It bombs any enemy building but a Keep or Command Base, or a vehicle or robot out in the open.</p>';
   }
   h += '<div class="section-label">Cargo Planes <span class="label-note">air drops by parachute</span></div>';
   h += cargo.length ? cargo.map((u) => {
@@ -6170,7 +6170,7 @@ function armyButton(btn) {
     case 'callback': act('callBack', [id], (n) => { toast(`${n} warbot${n !== 1 ? 's' : ''} called back to their garrisons.`, 'info'); UI.armySig = ''; }); return;
     case 'bombard': if (e) { closeSheet(); setMode('bombard'); UI.rocket = id; showBanner(`Tap an enemy building: the <b>Howitzer</b> drives to within ${ROCKET.range} tiles of it, digs in and shells it, one heavy shell after another, until it's rubble.`, null, 'Cancel'); } return;
     case 'rgo': if (e) { closeSheet(); setMode('rgo'); UI.rocket = id; showBanner('Tap where the <b>Howitzer</b> should wait: it stays there, and (unless it holds fire) shells any enemy building in reach of it.', null, 'Cancel'); } return;
-    case 'strikeany': { const u = readyBomber(); if (u) startStrike(u); else { sfx('error'); toast('No Strike Bomber is ready on the ground.', 'warn'); } return; }
+    case 'strikeany': { const u = readyBomber(); if (u) startStrike(u); else { sfx('error'); toast('No Vulcan Bomber is ready on the ground.', 'warn'); } return; }
     case 'strike': if (e) startStrike(e); return;
     case 'drop': if (e) { closeSheet(); startAirdrop(e, btn.dataset.k); } return;
     case 'yard': if (e) { act('yard', [e.id, btn.dataset.k, 1]); toast(`${BOTS[btn.dataset.k].name} ordered: the Airfield's hangar builds it from Alloy and Chips.`, 'info'); UI.armySig = ''; refreshArmySheet(); } return;

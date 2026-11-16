@@ -1,4 +1,4 @@
-// Strike Bomber, Lancer style: the Foxbat planform of bomber_old.js re-skinned in the Lancer robot-tank's
+// Vulcan Bomber, Lancer style: the Foxbat planform of bomber_old.js re-skinned in the Lancer robot-tank's
 // language. Top-down, facing +x, orthographic camera straight down, no ground; 20 world units across the frame, the
 // same planform, size and placement as bomber.js so it drops in. Dark gunmetal armour built up from faceted,
 // bevelled plates with thin dark seams: a long slab-sided body with a raised spine, huge angular box intakes,

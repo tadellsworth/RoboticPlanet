@@ -1,4 +1,4 @@
-// Strike Bomber: a big, flat twin-engine high-speed bomber in the manner of a Foxbat, top-down, facing +x,
+// Vulcan Bomber: a big, flat twin-engine high-speed bomber in the manner of a Foxbat, top-down, facing +x,
 // orthographic camera straight down, no ground (the game draws its shadow). 20 world units across the frame; it is
 // 18.6 long (19.3 with the nose probe) with an 11.5 span. Its planform follows a three-view: a long black radome on
 // a slim nose, a light-blue tandem canopy, big box intakes either side running back into a broad, flat body with a

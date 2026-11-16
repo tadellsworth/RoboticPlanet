@@ -309,7 +309,7 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   it: they recharge and reload there, go for repairs, rally flags and attacks only within `SECLUDED_REACH` (16) of it,
   and dropped beside a garrison of yours they're posted to it.
   The AI never flies Cargo Planes.
-- **Strike Bombers** (Versus; `BOTS.bomber`, `BOMBER`): built in an Airfield's hangar, two to a hangar. A sortie
+- **Vulcan Bombers** (Versus; `BOTS.bomber`, `BOMBER`): built in an Airfield's hangar, two to a hangar. A sortie
   (`orderStrike`, `strikeBlocked`: parked, in reach of a full tank) loads `BOMBER.ammo` (6) Ammo at its Airfield (which
   keeps that much a bomber, `airKeep`) and `BOMBER.fuel` (3) Fuel on top of what its tank needs (`tankFuel`; it takes
   off only with all of it there, none taken till then, and says what it waits for), flies out like a Cargo Plane and over the target drops one bomb

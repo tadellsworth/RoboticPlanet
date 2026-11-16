@@ -540,7 +540,7 @@ function sfx(name, dest, y) {
       duckMusic(0.5, 2.5);
       break;
     // Explosions (see blast): a building going up, a Mortar shell landing; heavy ordnance with a deep boom (a
-    // Howitzer shell, a Strike Bomber's bomb, a Silo's missile); a Refinery or loaded Tanker going up in a fireball.
+    // Howitzer shell, a Vulcan Bomber's bomb, a Silo's missile); a Refinery or loaded Tanker going up in a fireball.
     case 'boom': blast(D, { size: 1, far, gain: 0.6 }); duckMusic(0.6, 0.7); break;
     case 'shellhit': blast(D, { size: 0.55, far, gain: 0.6 }); duckMusic(0.75, 0.4); break;
     case 'bombhit': blast(D, { size: 1.35, far, gain: 0.72, deep: true }); duckMusic(0.5, 1.2); break;
@@ -734,14 +734,14 @@ function mapVoice(wx, wy, vol) {
 function zoomLoud() { return Math.max(0.15, Math.min(1, (R.cam.z - 10) / 40)); }
 
 /*
- * The air raid siren. While enemy Strike Bombers are in the air coming for you (a target of yours, or flying
+ * The air raid siren. While enemy Vulcan Bombers are in the air coming for you (a target of yours, or flying
  * over your land), a motor siren wails out across the colony: two rotors a third apart spinning up and down,
  * echoing off the hills. When the last one has gone it winds down, and it won't start again for a few seconds.
  */
 const RAID = { voice: null, quietUntil: 0, last: 0, next: 0 };
 const SIREN = { lo: 150, hi: 560, rise: 3.4, hold: 0.7, fall: 3.6, third: 1.2, level: 0.055, rest: 6 };
 
-/** Are enemy Strike Bombers in the air coming for player 0 (at a target of theirs, or over their land)? */
+/** Are enemy Vulcan Bombers in the air coming for player 0 (at a target of theirs, or over their land)? */
 function raidOn() {
   if (typeof S === 'undefined' || !S || !S.bots || !S.players[ME] || S.players[ME].absent) return false;
   for (const u of S.bots) {
