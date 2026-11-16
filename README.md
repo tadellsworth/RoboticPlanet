@@ -574,6 +574,36 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
 - **Goods panel:** tap a goods counter in the top bar for that good's stock, production and use per minute, net rate,
   which buildings make and use it, and any shortfall (buildings waiting on it with none in stock). Switch goods at the
   top of the panel.
+- **Why idle? (the bottleneck finder, `js/insight.js`):** a factory that isn't making anything (the Bot Foundry first,
+  the Smelter, every factory with a recipe) shows **Why idle?** under its status (`whyIdle`, `refreshWhy`), worked out
+  for the open panel only, once a second. It follows the missing input back down the chain and stops at the first real
+  cause (`goodWhy`, `makerWhy`, `siteWhy`, at most three links down): is any in storage (then: no road, no Hauler or
+  Tanker, storage no road joins to it, enemy guns, every Hauler busy: `haulWhy`)? Is there a building that makes it,
+  and is it paused, cut off, under enemy guns, unstaffed (no free Worker: `workerWhy`), waiting for its own input
+  (asked again, a link down), with no road, or for a gatherer out of deposits in reach (`insLeft`: none left, all on a
+  rival's land, or all under guns; "ran dry N minutes ago" from `b.dryAt`, set in `updateDepleted`)? With none, is one
+  going up (and why it isn't done), was one destroyed (from `S.log`), and are all `MAX_SITES` sites taken? A **Show**
+  button opens the culprit's panel, **Build** places the missing building. **The colony's shortage**
+  (`insightColony`, once a second): the good gone longest without while something waits for it (`P.dry`, below), the
+  Foundry's first; its counter in the top bar is ringed red (`.res-chip.starved`) and the Goods panel leads with it
+  and its cause (`goodsWhyHTML`). Display only: it never asks the danger map unless it is current (`insGuns`), so it
+  can't change when the simulation works it out.
+- **Post-game report (`gameReport`, on the end screen, `#o-report`; missions too):** the moments that mattered
+  (`reportMoments`, the dozen weightiest, in order): your first robot and first defence, the first attack each way,
+  runs of buildings lost or taken, every shortage of 45 s or more and how long it lasted (still going at the end
+  too), Command Bases falling and surrenders, and the deciding moment (the last big run of losses before the fall, the
+  fall itself, or the Domination or Uplinks hold); where your goods were lost (buildings destroyed or taken, their
+  materials and the goods inside, goods on robots destroyed, crates still lying on your land); and one **Next time,
+  try** tip chosen from what happened (`reportTip`: an early rush, no defences, the longest shortage, raided supply
+  roads, heavy losses, or a harder rival after a win). It reads **`S.log`**, the game's story, written by the
+  simulation with one-line hooks (`logEvent`, `logFirst`, `noteLost`, `noteGone`, `logTick` in `js/sim.js`): kinds
+  `bot`, `def`, `hit`, `lost` (a run of losses, each within `LOG_RUN` 60 s of the last), `dry` (`LOG_GOODS`, checked
+  every 2 s: none on hand while a factory, a Fuel Station or a site waits for it; `LOG_DRY`) and `out`, capped at
+  `LOG_MAX` (60: past it the smallest run of losses or shortage goes; firsts stay), saved, the same on every device, and
+  left out of `hashState`. A building is lost when it goes without `b.gone` (set when it is dismantled, moved, packed
+  up or a Ramp is finished); a fort captured is noted in `captureBuilding`. Totals that mustn't shrink with the cap
+  are in `P.stats` (`lostBld`, `lostMat`, `lostIn`, `lostAboard`); open shortages in `P.dry`. A save from before the
+  log starts it where it was loaded (`S.logFrom`).
 - **Ammo:** warbots carry 10 shots (each Ammo reloads 5) and reload in your Command Base and Outposts, which haulers stock from an Ammo Plant. Out of
   ammo, a warbot can't fight at all: it heads back to a garrison to reload, and only armed warbots answer orders.
   On an attack, one that runs dry while the target stands and squad-mates are still on it goes to reload at a garrison
