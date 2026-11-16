@@ -41,6 +41,18 @@ const AI_ARMY_ROOM = 0.4, AI_WORKER_ROOM = 6;
  */
 const AI_CRYSTAL_MINS = 10, AI_CRYSTAL_BURN = 4, AI_CRYSTAL_TRADE_AT = 600, AI_CRYSTAL_TAPS = 4, AI_CRYSTAL_REACH = 20;
 const AI_ALLOY_PILE = 40, AI_TRADE_STALL = 300;
+/**
+ * Fuel with no source: low (P.fuelLow) for AI_FUEL_DRY s with no Bio Farm that has soil and no Refinery with oil
+ * (aiFuelSource), it's dry (P.fuelDry): at its Trade Terminal it takes the steep Fuel contract, and dry for
+ * AI_FUEL_TRADE s (from AI_CRYSTAL_TRADE_AT on) it docks one for it.
+ */
+const AI_FUEL_DRY = 60, AI_FUEL_TRADE = 180;
+/**
+ * Bio Farms go by the patch: a farm works about AI_FARM_TILES fertile tiles (its Agribot keeps up with no more), so
+ * each farm of ours claims its nearest AI_FARM_TILES in reach, and a new one counts only the tiles none has claimed;
+ * a site with fewer than AI_FARM_MIN of them isn't worth a farm (see aiFarmClaims).
+ */
+const AI_FARM_TILES = 5, AI_FARM_MIN = 3;
 
 /** Rival p's doctrine (PERSONALITIES; the code says personality and style). */
 function aiStyle(p) { return PERSONALITIES[S.players[p].style] || PERSONALITIES.balanced; }
@@ -237,14 +249,29 @@ function aiThink(p) {
   // Bombers, now and then: every rival but a Turtle puts up an Airfield late in a war (from 22 minutes, with its
   // Ammo Plant running) for a single Vulcan Bomber (see aiBomber).
   if (S.mode !== 'colony' && !st.walls && S.time >= 1320 && !counts.airfield && !botBanned(p, 'bomber') && me.some((b) => b.type === 'armory' && b.built)) plan = [['airfield', 1]].concat(plan); // (only for a bomber)
+  // Its planes burn Fuel (a bomber sortie BOMBER.fuel on top of its tank): with an Airfield going up, one more Fuel
+  // maker, whichever fits its land (decided once, P.airFuel): a Refinery while it pumps more Crude than its Refineries
+  // take, or else a Bio Farm where there's soil none of its farms works, or else a Refinery (and Oil Pump) on oil.
+  if (counts.airfield && !P.airFuel) {
+    const pumps = me.filter((b) => b.built && b.type === 'pump' && !pumpDry(b)).length;
+    const type = pumps > (counts.refinery || 0) ? 'refinery' : aiFindSpot(p, 'farm', lander) ? 'farm' : pumps || aiFindSpot(p, 'pump', lander) ? 'refinery' : 'farm';
+    P.airFuel = { type, n: (counts[type] || 0) + 1 };
+  }
+  const airFuel = P.airFuel && counts.airfield && (counts[P.airFuel.type] || 0) < P.airFuel.n ? P.airFuel : null;
+  if (airFuel) {
+    plan = [[airFuel.type, airFuel.n]].concat(plan);
+    if (airFuel.type === 'refinery' && !counts.pump) plan = [['pump', 1]].concat(plan); // (a Refinery waits for a pump)
+  }
   // Bulk trade: a Trade Terminal once the colony is running short of Ore, Crystal or Stone (a Tycoon from 14
   // minutes, the rest from 20, any rival from 10 once its Crystal runs short, and then past the usual limit on sites),
   // with a Road Train to serve it (see the Foundry, and aiTrade).
-  const tradeAt = st.missiles ? 840 : crShort ? AI_CRYSTAL_TRADE_AT : 1200;
+  // (Dry of Fuel with no way to make any, from 10 minutes too: the Terminal's Fuel contract is the way.)
+  const fuelTrade = !!P.fuelDry && S.time - P.fuelLow > AI_FUEL_TRADE;
+  const tradeAt = st.missiles ? 840 : crShort || fuelTrade ? AI_CRYSTAL_TRADE_AT : 1200;
   let tradeFirst = false;
   if (S.mode !== 'colony' && S.time >= tradeAt && !counts.terminal && counts.foundry && S.time - (P.termFail ?? -999) > 240) {
     const sh = tradeShortest(p), g = sh.find((x) => x !== 'alloy'); // short of something in the ground
-    if (sh.left[g] < (TRADE_LEFT[g] || 60) * 1.5 || st.missiles || crShort) plan = [['terminal', 1]].concat(plan); // only when short: it goes first
+    if (sh.left[g] < (TRADE_LEFT[g] || 60) * 1.5 || st.missiles || crShort || fuelTrade) plan = [['terminal', 1]].concat(plan); // only when short: it goes first
     tradeFirst = crShort;
   }
   if (st.missiles) { const k = plan.findIndex(([t]) => t === 'armory') + 1; plan = plan.slice(0, k).concat([['smelter', 2], ['fab', 2]], plan.slice(k)); } // (its Missile Factory and Silos come through aiMissilePlan)
@@ -344,6 +371,7 @@ function aiThink(p) {
   const fuelNow = playerGoods(p).fuel || 0;
   const fuelSite = me.some((b) => !b.built && (b.type === 'farm' || b.type === 'pump' || b.type === 'refinery'));
   P.fuelLow = fuelNow < 6 ? (P.fuelLow ?? S.time) : undefined;
+  P.fuelDry = P.fuelLow !== undefined && S.time - P.fuelLow > AI_FUEL_DRY && !aiFuelSource(p, me);
   if (P.fuelLow !== undefined && S.time - P.fuelLow > 30 && !fuelSite && S.time > 60) {
     const pumped = me.some((b) => b.built && b.type === 'pump' && !pumpDry(b));
     const farmWaiting = me.some((b) => b.built && b.type === 'farm' && !b.paused && !b.staff);
@@ -420,7 +448,8 @@ function aiThink(p) {
       // A Generator only once there's Fuel to spare for it (and a refinery or farm to keep it coming).
       if (type === 'generator' && ((playerGoods(p).fuel || 0) < 15 || !(counts.refinery || (counts.farm || 0) >= 2))) continue;
       // Plenty of Fuel in stock: no need for more farms or oil yet.
-      if ((type === 'farm' || type === 'pump' || type === 'refinery') && (counts[type] || 0) >= 1 && playerGoods(p).fuel > 10) continue;
+      // (Not the one more that goes with an Airfield: see P.airFuel.)
+      if ((type === 'farm' || type === 'pump' || type === 'refinery') && (counts[type] || 0) >= 1 && playerGoods(p).fuel > 10 && !(airFuel && (type === airFuel.type || type === 'pump'))) continue;
       if ((counts[type] || 0) >= want) continue;
       if (saving && type !== saving && type !== 'keep' && type !== 'terminal' && type !== 'airfield' && !(type === 'flak' && flakFirst) && !BDEFS[type].nuke && (BDEFS[type].cost.alloy || BDEFS[type].cost.chip)) continue;
       // Keep enough Fiber for a Harvester while none is cutting: without Fiber there's no way back.
@@ -1492,21 +1521,29 @@ function aiTrade(p, me) {
   if (!T.offers.length) return;
   const cur = T.pick >= 0 && T.offers[T.pick] && T.offers[T.pick].left > 0 ? T.offers[T.pick] : null;
   if (cur && P.tradeSold !== T.sold) { P.tradeSold = T.sold; P.tradeAt = S.time; } // (a lot sold: it's moving)
-  const want = (g) => (P.crLow ? (g === 'crystal' ? 2 : g === 'chip' ? 1 : 0) : 0);
+  // Dry of Fuel with no way to make any (P.fuelDry): the steep Fuel contract, after Crystal (every robot takes one),
+  // before Chips. Never otherwise: it pays half the usual rate.
+  const want = (g) => (P.crLow ? (g === 'crystal' ? 2 : g === 'chip' ? 1 : 0) : 0) + (P.fuelDry && g === 'fuel' ? 1.5 : 0);
   const stalled = !!cur && S.time - (P.tradeAt ?? S.time) > AI_TRADE_STALL;
-  if (cur && !stalled && !(P.crLow && !want(cur.get))) return;
+  if (cur && !stalled && !((P.crLow || P.fuelDry) && !want(cur.get))) return;
   const have = spendable(p), short = tradeShortest(p);
   let best = -1, bs = -Infinity;
   T.offers.forEach((o, k) => {
     const spare = (have[o.give] || 0) - TRADE_KEEP[o.give] - o.lot;
-    if (o.left <= 0 || spare < 0 || (P.crLow && o.give === 'crystal') || (stalled && o === cur)) return;
-    const sc = want(o.get) * 100 + (short.length - short.indexOf(o.get)) * 10 + Math.min(spare, 60) * 0.1;
+    if (o.left <= 0 || spare < 0 || (P.crLow && o.give === 'crystal') || (stalled && o === cur) || (o.steep && !P.fuelDry)) return;
+    const sc = want(o.get) * 100 + (o.steep ? 0 : (short.length - short.indexOf(o.get)) * 10) + Math.min(spare, 60) * 0.1;
     if (sc > bs) { bs = sc; best = k; }
   });
   // (One under way is only given up for something better: a stalled one for any other, the rest for Crystal or Chips.)
   if (best < 0 || (cur && !stalled && want(T.offers[best].get) <= want(cur.get))) return;
   pickContract(p, best);
   P.tradeAt = S.time; P.tradeSold = T.sold;
+}
+
+/** Has rival p a Fuel source at work: a Bio Farm with soil left in reach, or a Refinery with an Oil Pump that isn't dry? */
+function aiFuelSource(p, me) {
+  const pumped = me.some((b) => b.built && b.type === 'pump' && !pumpDry(b));
+  return me.some((b) => b.built && ((b.type === 'farm' && !b.depleted) || (b.type === 'refinery' && pumped)));
 }
 
 /** The Crystal in the ground on b's owner's land within r tiles of b (what taking a fort would bring). */
@@ -1938,6 +1975,44 @@ function rivalLandNear(p, i, j, r) {
   return false;
 }
 
+/** Can a Bio Farm of p's standing at (cx, cy) farm tile t (i, j): fertile, free to plant, in reach, on its ground? */
+function aiFarmable(p, t, i, j, cx, cy, zone) {
+  if (!S.fert[t] || (S.res[t] && S.res[t] !== R_CROP) || S.bAt[t] || S.road[t] || S.ramp[t] || S.zone[t] !== zone || (i === cx && j === cy)) return false;
+  if (S.owner[t] >= 0 && S.owner[t] !== p) return false;
+  const r = BDEFS.farm.radius;
+  return dist2(i, j, cx, cy) <= r * r + 0.3;
+}
+
+/**
+ * The fertile tiles p's Bio Farms (sites too) already work: each claims the nearest AI_FARM_TILES it can farm that no
+ * farm before it claimed (by id, so it's the same every time). A Uint8Array over the map, 1 where claimed.
+ */
+function aiFarmClaims(p) {
+  const claimed = new Uint8Array(S.W * S.H), r = BDEFS.farm.radius;
+  for (const b of S.buildings) {
+    if (b.dead || b.owner !== p || b.type !== 'farm') continue;
+    const zone = S.zone[tIdx(b.x, b.y)], mine = [];
+    for (let j = Math.max(0, b.y - r); j <= Math.min(S.H - 1, b.y + r); j++) for (let i = Math.max(0, b.x - r); i <= Math.min(S.W - 1, b.x + r); i++) {
+      const t = j * S.W + i;
+      if (!claimed[t] && aiFarmable(p, t, i, j, b.x, b.y, zone)) mine.push(t);
+    }
+    mine.sort((a, c) => dist2(a % S.W, (a / S.W) | 0, b.x, b.y) - dist2(c % S.W, (c / S.W) | 0, b.x, b.y) || a - c);
+    for (const t of mine.slice(0, AI_FARM_TILES)) claimed[t] = 1;
+  }
+  return claimed;
+}
+
+/** The fertile tiles a Bio Farm of p's at (cx, cy) could farm that none of p's farms claims (see aiFarmClaims). */
+function aiFarmSoil(p, cx, cy, claimed) {
+  const r = BDEFS.farm.radius, zone = S.zone[tIdx(cx, cy)];
+  let n = 0;
+  for (let j = Math.max(0, cy - r); j <= Math.min(S.H - 1, cy + r); j++) for (let i = Math.max(0, cx - r); i <= Math.min(S.W - 1, cx + r); i++) {
+    const t = j * S.W + i;
+    if (!claimed[t] && aiFarmable(p, t, i, j, cx, cy, zone)) n++;
+  }
+  return n;
+}
+
 function aiSearchSpot(p, type, lander) {
   const def = BDEFS[type], P = S.players[p];
   const sums = type === 'outpost' ? [R_ORE, R_CRYSTAL, R_STALK, R_BOULDER, R_OIL, R_URANIUM].map(resourceSums) : null;
@@ -1967,6 +2042,8 @@ function aiSearchSpot(p, type, lander) {
       }
     }
   }
+  // Bio Farms go by the patch: only the fertile tiles none of our farms works yet count (see AI_FARM_TILES).
+  const claimed = def.farm ? aiFarmClaims(p) : null;
   const freeRes = (cx, cy) => {
     const r = def.radius, r2 = r * r + 0.3, zone = S.zone[tIdx(cx, cy)];
     let n = 0;
@@ -2043,9 +2120,11 @@ function aiSearchSpot(p, type, lander) {
           s += Math.max(0, AI_CRYSTAL_REACH - Math.sqrt(dc)) * 0.6;
         }
       } else if (def.farm) {
-        const n = fertileIn(i, j, def.radius);
-        if (n < 3) continue;
-        s = Math.min(n, 12) * 1.5 - dHome * 0.3;
+        // The best patch none of our farms works: up to what one farm keeps up with (a little more for a spare tile
+        // or two), off the soil itself where it can be.
+        const n = aiFarmSoil(p, i, j, claimed);
+        if (n < AI_FARM_MIN) continue;
+        s = Math.min(n, AI_FARM_TILES) * 3 + Math.min(Math.max(0, n - AI_FARM_TILES), 3) * 0.5 - dHome * 0.3 - (S.fert[j * S.W + i] ? 2 : 0);
       } else if (def.pump) {
         let oil = 0;
         for (let dj = -1; dj <= 1; dj++) for (let di = -1; di <= 1; di++) {

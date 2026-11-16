@@ -2145,7 +2145,8 @@ function dispatch(p) {
   // 4c) Trunk runs: a store far from the Command Base sends home, in bulk, what nothing near it uses.
   if ((trucks || trains || tankers || ships) && idle.some((u) => BOTS[u.type].truck || BOTS[u.type].rail || BOTS[u.type].sea)) trunkRuns(p, blds, take, canCarry, vans, trains, ships);
   // 4e) A Trade Terminal's goods (the trades it paid, and anything beyond the lot it's gathering) go home by
-  //     Freight Train to the station on its track nearest the Command Base, or by Road Train to storage.
+  //     Freight Train to the station on its track nearest the Command Base, or by Road Train to storage; the Fuel a
+  //     contract paid (a liquid) by Tanker to storage, a load at a time, unless a pipeline takes it (see updatePipes).
   for (const R of blds) {
     if (!BDEFS[R.type].terminal || !R.built || !idle.length) continue;
     const hub = getE(P.lander);
@@ -2154,7 +2155,14 @@ function dispatch(p) {
     for (const g of GOODS) {
       if (!idle.length) break;
       const n = terminalSpare(R, g);
-      if (n < 1 || isLiquid(g)) continue;
+      if (n < 1) continue;
+      if (isLiquid(g)) {
+        if (R.pipedFuel && g === 'fuel') continue;
+        const store = tankerReach(R) && storeFor(p, g, R.x + 0.5, R.y + 0.5, R, R);
+        const u = store && take(R.x, R.y, 'train', R, g); // ('train': of the haulers, only a Tanker takes a liquid on it)
+        if (u) assignHaul(u, R, store, g, canCarry(u, n, g));
+        continue;
+      }
       const tu = home && take(R.x, R.y, 'rail', R);
       if (tu) { assignHaul(tu, R, home, g, canCarry(tu, n)); continue; }
       const store = storeFor(p, g, R.x + 0.5, R.y + 0.5, R, R);
@@ -8958,14 +8966,17 @@ function tradeShortest(p) {
   return out;
 }
 
-/** A fresh set of contracts for player p: the first gets what it's shortest of for what it has most to spare, the rest mix it up. */
+/**
+ * A fresh set of contracts for player p: the first gets what it's shortest of for what it has most to spare, the rest
+ * mix it up, and the steep Fuel contract (fuelContract) comes last, always. The one taken stays, in its place.
+ */
 function newTradeOffers(p) {
   const T = tradeState(p), have = spendable(p);
   T.round++;
   const keep = T.pick >= 0 && T.offers[T.pick] && T.offers[T.pick].left > 0 ? T.offers[T.pick] : null;
   const short = tradeShortest(p);
   const spare = TERMINAL_GIVE.slice().sort((a, b) => (have[b] || 0) / TRADE_KEEP[b] - (have[a] || 0) / TRADE_KEEP[a]);
-  const out = keep ? [keep] : [];
+  const out = keep && !keep.steep ? [keep] : [];
   const seen = new Set(out.map((o) => o.give + '>' + o.get));
   for (let k = 0; out.length < TERMINAL.offers && k < 24; k++) {
     const r1 = hash2(T.round * 31 + k, p * 7 + 3, S.seed || 1), r2 = hash2(T.round * 17 + k, p * 11 + 5, S.seed || 1);
@@ -8976,10 +8987,20 @@ function newTradeOffers(p) {
     seen.add(give + '>' + get);
     out.push({ give, get, lot: tradeLot(give), left: TERMINAL.lots });
   }
-  T.pick = keep ? 0 : -1;
+  out.push(keep && keep.steep ? keep : fuelContract(have));
+  T.pick = keep ? out.indexOf(keep) : -1;
   T.offers = out;
   T.next = S.time + TERMINAL.every;
   syncTerminalOrders(p);
+}
+
+/**
+ * The contract that always brings Fuel, at the steep TERMINAL.fuelRate: a lot of whichever of TERMINAL.fuelGive (Stone,
+ * Fiber) the colony has most to spare (`have`: spendable), for Fuel. For a colony with no oil and poor soil.
+ */
+function fuelContract(have) {
+  const give = TERMINAL.fuelGive.slice().sort((a, b) => (have[b] || 0) / TRADE_KEEP[b] - (have[a] || 0) / TRADE_KEEP[a])[0];
+  return { give, get: 'fuel', lot: tradeLot(give), left: TERMINAL.lots, steep: true };
 }
 
 /** How much more Terminal b pays for standing further out than TERMINAL.minDist from its owner's Command Base (1 to 1 + maxBonus). */
@@ -9010,7 +9031,7 @@ function tradePairOk(give, get) {
 function tradePay(p, o, b) {
   const T = tradeState(p);
   b = b || S.buildings.find((e) => !e.dead && e.owner === p && BDEFS[e.type].terminal);
-  const mul = TERMINAL.rate * (b ? terminalBonus(b) : 1) * (T.sat[o.give] ?? 1);
+  const mul = (o.steep ? TERMINAL.fuelRate : TERMINAL.rate) * (b ? terminalBonus(b) : 1) * (T.sat[o.give] ?? 1);
   return Math.max(1, Math.round((o.lot * TRADE_VALUE[o.give] * mul) / TRADE_VALUE[o.get]));
 }
 
@@ -9061,7 +9082,7 @@ function updateTerminal(b, def, dt) {
     o.left--;
     b.working = true;
     addFx('ring', b.x + 0.5, b.y + 0.5, { color: '#7fe3ff', r: 1.6 });
-    postMsg(p, `Trade done: ${o.lot} ${goodN(o.give, o.lot)} for ${pay} ${goodN(o.get, pay)}, waiting at the Trade Terminal to go home by train.` + (o.left ? ` ${o.left} more lot${o.left > 1 ? 's' : ''} on this contract.` : ' That contract is filled.'), b.x, b.y, 'good');
+    postMsg(p, `Trade done: ${o.lot} ${goodN(o.give, o.lot)} for ${pay} ${goodN(o.get, pay)}, waiting at the Trade Terminal to go home ${isLiquid(o.get) ? 'by Tanker (or by pipeline to storage)' : 'by train'}.` + (o.left ? ` ${o.left} more lot${o.left > 1 ? 's' : ''} on this contract.` : ' That contract is filled.'), b.x, b.y, 'good');
     if (isMe(p)) sfx('complete');
     if (!o.left) { T.pick = -1; syncTerminalOrders(p); }
     return;
@@ -9254,6 +9275,7 @@ function updatePipes() {
     for (const c of buildingPipes(b, net)) {
       let N = nets.get(c);
       if (!N) nets.set(c, (N = { pumps: [], users: [], stores: [], makers: [], burners: [] }));
+      if (def.terminal) { N.makers.push(b); continue; } // (the Fuel a contract paid: it gives, like a Bio Farm, and takes nothing)
       if (def.store) { N.stores.push(b); continue; }
       if (def.pump) N.pumps.push(b);
       if (def.inp && def.inp.crude) N.users.push(b);
@@ -9296,16 +9318,18 @@ function updatePipes() {
     const room = new Map(N.burners.map((u) => [u, Math.floor(pipeRoom(u, 'fuel'))]));
     const fgive = (from, to, n) => { bump(from.stock, 'fuel', -n); bump(to.stock, 'fuel', n); fleft -= n; fmoved += n; if (room.has(to)) room.set(to, room.get(to) - n); };
     const fstores = N.stores.filter((s) => storeTakes(s, 'fuel'));
+    // (A Trade Terminal gives what its Fuel contract paid: terminalSpare, as its goods are never anyone's supply.)
+    const msup = (m) => Math.floor(BDEFS[m.type].terminal ? terminalSpare(m, 'fuel') : supplyOf(m, 'fuel'));
     for (const m of N.makers) {
       if (fstores.length) m.pipedFuel = true; // its Fuel goes by pipe: no Tanker needed
       else if (N.burners.some((u) => u !== m)) m.fuelLine = true; // (what burns it on the line comes first: a Tanker takes only the surplus)
-      for (const u of N.burners) { if (u === m) continue; const n = Math.min(Math.floor(supplyOf(m, 'fuel')), room.get(u), fleft); if (n > 0) fgive(m, u, n); }
-      for (const s of fstores) { const n = Math.min(Math.floor(supplyOf(m, 'fuel')), fleft); if (n > 0) fgive(m, s, n); }
+      for (const u of N.burners) { if (u === m) continue; const n = Math.min(msup(m), room.get(u), fleft); if (n > 0) fgive(m, u, n); }
+      for (const s of fstores) { const n = Math.min(msup(m), fleft); if (n > 0) fgive(m, s, n); }
     }
     for (const u of N.burners) for (const s of N.stores) { const n = Math.min(Math.floor(supplyOf(s, 'fuel')), room.get(u), fleft); if (n > 0) fgive(s, u, n); }
     // What burns Fuel on a line with somewhere it's made, or storage with some, gets it by pipe: no Tanker brings
     // it. (Unless it has sat empty for PIPE_DRY s: then the line isn't keeping up, and Tankers bring it again.)
-    const onLine = N.makers.some((m) => !m.paused) || N.stores.some((s) => supplyOf(s, 'fuel') >= 1);
+    const onLine = N.makers.some((m) => (BDEFS[m.type].terminal ? msup(m) >= 1 : !m.paused)) || N.stores.some((s) => supplyOf(s, 'fuel') >= 1);
     for (const u of N.burners) {
       if ((u.stock.fuel || 0) >= 1) u.pipeDry = 0; else if (!u.pipeDry) u.pipeDry = S.time;
       if (onLine && !(u.pipeDry && S.time - u.pipeDry > PIPE_DRY)) u.fuelByPipe = true;
@@ -10403,14 +10427,27 @@ function flyStep(u, dt) {
 /** How high plane u flies (0 on the ground, 1 cruising). */
 function planeAlt(u) { return u.flight ? u.alt || 0 : 0; }
 
-/** Top up plane u's tank from Airfield b's Fuel, one Fuel (PLANE_FILL) at a time, to at least `want`. */
+/** Top up plane u's tank from Airfield b's Fuel, one Fuel (planeFill) at a time, to at least `want`. */
 function fuelPlane(u, b, want) {
+  const fill = planeFill(u);
   while (u.bat < want - 1e-6 && (b.stock.fuel || 0) - (b.res.fuel || 0) >= 1) {
     bump(b.stock, 'fuel', -1);
     usedGood(u.owner, 'fuel', 1);
-    u.bat = Math.min(100, u.bat + PLANE_FILL);
+    u.bat = Math.min(100, u.bat + fill);
   }
   return u.bat >= want - 1e-6;
+}
+
+/** The Fuel it takes to fill plane u's tank to at least `want` (one Fuel puts back planeFill). */
+function tankFuel(u, want) { return Math.max(0, Math.ceil((want - (u.bat ?? 100) - 1e-6) / planeFill(u))); }
+
+/**
+ * About how much Fuel a flight of plane u (or a plane of that type) takes: a round trip of AIR_TYPICAL tiles each way,
+ * and a bomber's sortie charge (BOMBER.fuel) on top. For the Airfield's panel.
+ */
+function typicalFlight(u) {
+  const burn = flightFuel(u, 2 * AIR_TYPICAL + 2 * RUNWAY_LEN + 34);
+  return burn / planeFill(u) + (BOTS[u.type].bomber ? BOMBER.fuel : 0);
 }
 
 /** What a sortie from base b to (x, y) and back needs in the tank (with a margin). */
@@ -10560,7 +10597,7 @@ function updatePlane(u, dt) {
   if (u.hp < u.maxHp) u.hp = Math.min(u.maxHp, u.hp + PLANE_MEND * dt);
   if (BOTS[u.type].bomber) { bomberOnGround(u, base, dt); return; }
   if (!M) {
-    if (u.bat < 100 - PLANE_FILL + 1 && S.tick % 15 === u.id % 15) fuelPlane(u, base, 100 - PLANE_FILL + 1);
+    if (u.bat < 100 - planeFill(u) + 1 && S.tick % 15 === u.id % 15) fuelPlane(u, base, 100 - planeFill(u) + 1);
     if (S.tick % 30 !== u.id % 30) return;
     const run = airSupplyRun(u, base);
     if (!run) return;
@@ -10585,10 +10622,11 @@ function updatePlane(u, dt) {
   } else if (S.time - M.since < PLANE_LOAD) return;
   // Fuel for the trip out and back (it waits for some to be brought).
   const tx = M.x + 0.5, ty = M.y + 0.5;
-  if (!fuelPlane(u, base, sortieFuel(u, base, tx, ty))) {
+  const want = sortieFuel(u, base, tx, ty);
+  if (!fuelPlane(u, base, want)) {
     const P = S.players[u.owner];
-    M.noFuel = 1;
-    if (S.time - (P.planeFuelMsg || -999) > 90) { P.planeFuelMsg = S.time; postMsg(u.owner, 'A Cargo Plane is waiting for Fuel at its Airfield: it needs some for the flight.', base.x, base.y, 'warn'); }
+    M.noFuel = tankFuel(u, want);
+    if (S.time - (P.planeFuelMsg || -999) > 90) { P.planeFuelMsg = S.time; postMsg(u.owner, `A Cargo Plane is waiting for Fuel at its Airfield: it needs ${M.noFuel} more for the flight (Tankers bring it).`, base.x, base.y, 'warn'); }
     return;
   }
   M.noFuel = 0;
@@ -10682,7 +10720,7 @@ function orderStrike(owner, u, t, ai, aj) {
 /** A bomber on the ground: rearming after a sortie, then loading its bomb and Fuel for the next one and taking off. */
 function bomberOnGround(u, base, dt) {
   const M = u.mission;
-  if (u.bat < 100 - PLANE_FILL + 1 && S.tick % 15 === u.id % 15) fuelPlane(u, base, 100 - PLANE_FILL + 1);
+  if (u.bat < 100 - planeFill(u) + 1 && S.tick % 15 === u.id % 15) fuelPlane(u, base, 100 - planeFill(u) + 1);
   if (!M || M.kind !== 'strike' || M.phase !== 'load') return;
   const tg = getE(M.target);
   if (!strikeTarget(u, tg)) { u.mission = null; return; }
@@ -10700,7 +10738,18 @@ function bomberOnGround(u, base, dt) {
     u.bombLoad = BOMBER.ammo;
   }
   const [tx, ty] = strikeAim(tg, M.deck);
-  if (!fuelPlane(u, base, sortieFuel(u, base, tx, ty))) { M.noFuel = 1; return; }
+  // Fuel: its tank filled for the trip out and back, and the sortie's own BOMBER.fuel on top. It takes off only with
+  // all of it at the Airfield (none is taken until then), and waits, saying so, until Tankers bring it.
+  const want = sortieFuel(u, base, tx, ty), need = tankFuel(u, want) + BOMBER.fuel;
+  if ((base.stock.fuel || 0) - (base.res.fuel || 0) < need) {
+    M.noFuel = need;
+    const P = S.players[u.owner];
+    if (S.time - (P.bombFuelMsg || -999) > 90) { P.bombFuelMsg = S.time; postMsg(u.owner, `A Vulcan Bomber is waiting for Fuel: a sortie takes ${BOMBER.fuel} Fuel at its Airfield on top of its tank, ${need} in all this time (Tankers bring it).`, base.x, base.y, 'warn'); }
+    return;
+  }
+  fuelPlane(u, base, want);
+  bump(base.stock, 'fuel', -BOMBER.fuel);
+  usedGood(u.owner, 'fuel', BOMBER.fuel);
   M.noFuel = 0;
   M.phase = 'out';
   startTakeoff(u, base, tx, ty);

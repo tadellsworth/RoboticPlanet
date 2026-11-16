@@ -3226,7 +3226,7 @@ function readyBomber(t) { return myBombers().find((u) => !u.mission && !u.flight
 /** Pick a target for bomber u on the map. */
 function startStrike(u) {
   closeSheet(); setMode('strike'); UI.bomber = u.id;
-  showBanner(`Tap an enemy building (or the deck of an enemy Viaduct), or an enemy vehicle or robot out in the open: the <b>Vulcan Bomber</b> loads ${BOMBER.ammo} Ammo, flies out and drops its bomb, then comes home to rearm. It reaches ${planeReach(u)} tiles from its Airfield.`, null, 'Cancel');
+  showBanner(`Tap an enemy building (or the deck of an enemy Viaduct), or an enemy vehicle or robot out in the open: the <b>Vulcan Bomber</b> loads ${BOMBER.ammo} Ammo and ${BOMBER.fuel} Fuel (on top of its tank), flies out and drops its bomb, then comes home to rearm. It reaches ${planeReach(u)} tiles from its Airfield.`, null, 'Cancel');
 }
 
 /** A Cargo Plane parked at Airfield b with nothing to do, or null. */
@@ -3237,23 +3237,45 @@ function planeStatus(u) {
   if (BOTS[u.type].bomber) {
     const M = u.mission, tg = M && getE(M.target), what = tg ? (BDEFS[tg.type] ? `the ${BDEFS[tg.type].name}` : `a ${BOTS[tg.type].name}`) : 'its target';
     if (u.flight) return M && M.phase === 'out' ? `flying out to bomb ${what}` : 'flying home';
-    if (M && M.phase === 'load') return u.rearmUntil > S.time ? `rearming (${Math.ceil(u.rearmUntil - S.time)} s), then off to bomb ${what}` : M.noAmmo ? `waiting for ${BOMBER.ammo} Ammo at its Airfield` : M.noFuel ? 'waiting for Fuel' : `loading its bomb for ${what}`;
+    if (M && M.phase === 'load') return u.rearmUntil > S.time ? `rearming (${Math.ceil(u.rearmUntil - S.time)} s), then off to bomb ${what}` : M.noAmmo ? `waiting for ${BOMBER.ammo} Ammo at its Airfield` : M.noFuel ? `waiting for ${M.noFuel} Fuel at its Airfield (a sortie takes ${BOMBER.fuel} on top of its tank)` : `loading its bomb for ${what}`;
     return u.rearmUntil > S.time ? `rearming (${Math.ceil(u.rearmUntil - S.time)} s)` : 'ready on the ground';
   }
   const M = u.mission, load = (m) => (m.kind === 'outpost' ? 'a Drop Outpost' : m.kind === 'supply' ? 'supplies' : `${m.n} ${m.n === 1 ? BOTS[m.kind].name : BOTS[m.kind].plural}`);
   if (u.flight) return M && M.phase === 'out' ? `flying out with ${load(M)}` : 'flying home';
   if (M && M.phase === 'load') {
-    if (M.noFuel) return 'waiting for Fuel to fly';
+    if (M.noFuel) return `waiting for ${M.noFuel} more Fuel at its Airfield to fly`;
     if (M.kind === 'warbot' || M.kind === 'worker') return `boarding ${BOTS[M.kind].plural}: ${ferryAboard(u).length} of ${M.n} aboard`;
     return `loading ${load(M)}`;
   }
   return `parked, Fuel ${Math.round(u.bat ?? 100)}%`;
 }
 
-/** The Airfield panel's sections: its planes, air drops, and the places it supplies by air. */
+/** A plane's fuel gauge (its tank, 0–100), as in its panel: a bar in the Fuel colour. */
+function fuelGauge(u) {
+  const pct = Math.round(clamp(u.bat ?? 100, 0, 100));
+  return `<div class="bar battery"><div style="width:${pct}%;background:${pct < BATTERY.critical ? '#ff4d4d' : 'var(--g-fuel)'}"></div></div>`;
+}
+
+/**
+ * Airfield b's Fuel: what it holds against what it keeps for its planes (AIRFIELD_FUEL), and about how many flights
+ * that covers (typicalFlight: a round trip of AIR_TYPICAL tiles each way, a bomber's sortie charge on top).
+ */
+function airFuelText(b) {
+  const have = Math.floor((b.stock.fuel || 0) - (b.res.fuel || 0)), planes = basePlanes(b);
+  if (!planes.length) return `${have} Fuel here. Once a plane is based here it keeps ${AIRFIELD_FUEL} for it, and Tankers bring it.`;
+  const per = (bomber) => { const ps = planes.filter((u) => !!BOTS[u.type].bomber === bomber); return ps.length ? ps.reduce((a, u) => a + typicalFlight(u), 0) / ps.length : 0; };
+  const cargo = per(false), bomb = per(true), n = (f) => Math.floor(have / f + 1e-9);
+  const covers = [cargo && `${n(cargo)} Cargo Plane flight${n(cargo) === 1 ? '' : 's'}`, bomb && `${n(bomb)} bomber sortie${n(bomb) === 1 ? '' : 's'}`].filter(Boolean).join(' or ');
+  return `${have} of the ${AIRFIELD_FUEL} Fuel it keeps for its planes (Tankers bring it): about ${covers}, ${AIR_TYPICAL} tiles out and back.` +
+    (cargo ? ` A Cargo Plane takes about ${Math.round(cargo)} Fuel a flight like that (one Fuel fills ${planeFill({ type: 'cargoplane' })}% of its tank).` : '') +
+    (bomb ? ` A bomber sortie takes ${BOMBER.fuel} Fuel on top of its tank, and it can't take off without it.` : '');
+}
+
+/** The Airfield panel's sections: its Fuel, its planes, air drops, and the places it supplies by air. */
 function airfieldSection(b) {
   const planes = basePlanes(b), f = freePlane(b);
-  let html = '<div class="section-label">Cargo Plane</div><p class="hint" id="sh-air-planes"></p>';
+  let html = '<div class="section-label">Fuel</div><div class="bar battery" id="sh-air-fbar"><div></div></div><p class="hint" id="sh-air-fuel"></p>';
+  html += '<div class="section-label">Cargo Plane</div><p class="hint" id="sh-air-planes"></p><div id="sh-air-pgauge"></div>';
   if (warOn()) html += '<div class="section-label">Vulcan Bombers</div><div id="sh-air-bombers"></div>';
   html += '<div class="section-label">Air drop <span class="label-note">by parachute</span></div>';
   if (f) {
@@ -4900,9 +4922,15 @@ function renderTrade(b) {
   const trainNear = S.bots.some((u) => !u.dead && u.owner === ME && BOTS[u.type].train && botLinked(u, b));
   const railNear = S.bots.some((u) => !u.dead && u.owner === ME && BOTS[u.type].rail) && S.buildings.some((s) => !s.dead && s.owner === ME && s.built && BDEFS[s.type].station && !BDEFS[s.type].terminal && railLinked(s, b));
   const bonus = Math.round((terminalBonus(b) - 1) * 100);
+  // Fuel a contract paid (a liquid) goes home by Tanker, or by a pipeline to storage: say so when none can take it.
+  const fuelHere = Math.floor(terminalSpare(b, 'fuel')), fuelPick = T.pick >= 0 && T.offers[T.pick] && T.offers[T.pick].steep;
+  const tankerNear = S.bots.some((u) => !u.dead && u.owner === ME && BOTS[u.type].tanker && botLinked(u, b));
   $('sh-trade-hint').innerHTML = (!trainNear && !railNear ? '<span class="err">No Road Train can reach it, and no Freight Train runs to it: order a Road Train at the Bot Foundry and lay a road here (or lay track beside it from a Rail Station).</span> ' : '') +
-    `Only Road Trains and Freight Trains serve a Terminal: they bring a contract's lot and take what it pays home. Rates are ${Math.round(TERMINAL.rate * 100)}% of what the goods are worth` +
-    (bonus ? `, +${bonus}% for standing this far out` : `; one further than ${TERMINAL.minDist} tiles from your Command Base pays more`) + '. Each contract runs up to ' + TERMINAL.lots + ' times, and each lot of a good you sell pays a little less for a while.';
+    ((fuelHere >= 1 || fuelPick) && !tankerNear && !b.pipedFuel ? '<span class="err">No Tanker can reach it to take its Fuel home: order one at the Bot Foundry (or pipe the Terminal to storage).</span> ' : '') +
+    (fuelHere >= 1 ? `${fuelHere} Fuel waits here for ${b.pipedFuel ? 'the pipeline' : 'a Tanker'}. ` : '') +
+    `Only Road Trains and Freight Trains serve a Terminal: they bring a contract's lot and take what it pays home (Fuel goes by Tanker, or by pipeline to storage). Rates are ${Math.round(TERMINAL.rate * 100)}% of what the goods are worth` +
+    (bonus ? `, +${bonus}% for standing this far out` : `; one further than ${TERMINAL.minDist} tiles from your Command Base pays more`) + '. Each contract runs up to ' + TERMINAL.lots + ' times, and each lot of a good you sell pays a little less for a while. ' +
+    `The last contract always brings Fuel, at a steep ${Math.round(TERMINAL.fuelRate * 100)}%: for a colony with no oil and poor soil.`;
   if (el.dataset.sig === sig) return;
   el.dataset.sig = sig;
   if (!T.offers.length) { el.innerHTML = '<p class="hint">Contracts arrive in a moment.</p>'; return; }
@@ -4910,7 +4938,7 @@ function renderTrade(b) {
     const on = T.pick === k, pay = tradePay(ME, o, b), sat = T.sat[o.give] ?? 1;
     // Spelled out which way it goes: you send `lot` of one good and get `pay` of the other back.
     return `<div class="kv trade-row${on ? ' on' : ''}"><span>You give <b>${o.lot}</b> <i class="gi ${o.give}"></i>${goodN(o.give, o.lot)} → you get <b>${pay}</b> <i class="gi ${o.get}"></i>${goodN(o.get, pay)}` +
-      `<small> ${o.left > 0 ? `${o.left} more time${o.left === 1 ? '' : 's'}` : 'filled'}${sat < 0.99 ? ` · ${GOOD[o.give].name} pays ${Math.round(sat * 100)}% for now (you sold a lot lately)` : ''} · you have ${Math.floor(have[o.give] || 0)} ${GOOD[o.give].name}</small></span>` +
+      `<small> ${o.steep ? 'Always on offer, at a steep price (half the usual rate); a Tanker takes the Fuel home · ' : ''}${o.left > 0 ? `${o.left} more time${o.left === 1 ? '' : 's'}` : 'filled'}${sat < 0.99 ? ` · ${GOOD[o.give].name} pays ${Math.round(sat * 100)}% for now (you sold a lot lately)` : ''} · you have ${Math.floor(have[o.give] || 0)} ${GOOD[o.give].name}</small></span>` +
       `<button class="btn small${on ? '' : ' primary'}" data-k="${k}" ${o.left > 0 ? '' : 'disabled'}>${o.left > 0 ? (on ? 'Stop' : 'Take') : 'Filled'}</button></div>`;
   }).join('');
   for (const btn of el.querySelectorAll('button[data-k]')) btn.onclick = () => {
@@ -5600,14 +5628,23 @@ function refreshBuildingSheet(b) {
   // can't be tapped on the map while it's inside).
   hereButtons($('sh-port-shipbtns'), b, (u) => BOTS[u.type].sea);
   hereButtons($('sh-yard-here'), b, (u) => BOTS[u.type].rail);
-  if ($('sh-air-planes')) { const ps = basePlanes(b).filter((u) => !BOTS[u.type].bomber); $('sh-air-planes').textContent = ps.length ? ps.map((u) => `Its plane is ${planeStatus(u)}.`).join(' ') : 'None based here: order one in the hangar below.'; }
+  if ($('sh-air-fuel')) {
+    $('sh-air-fuel').textContent = airFuelText(b);
+    $('sh-air-fbar').firstElementChild.style.width = `${Math.round(clamp(((b.stock.fuel || 0) - (b.res.fuel || 0)) / AIRFIELD_FUEL, 0, 1) * 100)}%`;
+    $('sh-air-fbar').firstElementChild.style.background = 'var(--g-fuel)';
+  }
+  if ($('sh-air-planes')) {
+    const ps = basePlanes(b).filter((u) => !BOTS[u.type].bomber);
+    $('sh-air-planes').textContent = ps.length ? ps.map((u) => `Its plane is ${planeStatus(u)}.` + (/Fuel/.test(planeStatus(u)) ? '' : ` Fuel tank ${Math.round(u.bat ?? 100)}%.`)).join(' ') : 'None based here: order one in the hangar below.';
+    $('sh-air-pgauge').innerHTML = ps.map(fuelGauge).join('');
+  }
   if ($('sh-air-bombers')) {
     const bs = basePlanes(b).filter((u) => BOTS[u.type].bomber), el = $('sh-air-bombers');
-    const sig = bs.map((u) => u.id + ':' + planeStatus(u)).join('|');
+    const sig = bs.map((u) => u.id + ':' + planeStatus(u) + ':' + Math.round(u.bat ?? 100)).join('|');
     if (el.dataset.sig !== sig) {
       el.dataset.sig = sig;
-      el.innerHTML = bs.length ? bs.map((u, k) => `<div class="kv trade-row"><span>Bomber ${k + 1}<small>${planeStatus(u)}</small></span><button class="btn small primary" data-b="${u.id}" ${u.mission || u.flight ? 'disabled' : ''}>Strike</button></div>`).join('') +
-        `<p class="hint">A sortie takes ${BOMBER.ammo} Ammo (this Airfield keeps some for them; haulers bring it) and Fuel; back on the ground a bomber needs ${BOMBER.rearm} s to rearm. Or open a rival building and tap <b>Bomb it</b>.</p>`
+      el.innerHTML = bs.length ? bs.map((u, k) => `<div class="kv trade-row"><span>Bomber ${k + 1}<small>${planeStatus(u)} · Fuel tank ${Math.round(u.bat ?? 100)}%</small>${fuelGauge(u)}</span><button class="btn small primary" data-b="${u.id}" ${u.mission || u.flight ? 'disabled' : ''}>Strike</button></div>`).join('') +
+        `<p class="hint">A sortie takes ${BOMBER.ammo} Ammo (this Airfield keeps some for them; haulers bring it) and ${BOMBER.fuel} Fuel on top of what its tank needs (Tankers bring it): it can't take off without both. Back on the ground a bomber needs ${BOMBER.rearm} s to rearm. Or open a rival building and tap <b>Bomb it</b>.</p>`
         : '<p class="hint">None based here: order Vulcan Bombers in the hangar below (two fit).</p>';
       for (const btn of el.querySelectorAll('button[data-b]')) btn.onclick = () => { const u = getE(+btn.dataset.b); if (u) { sfx('click'); startStrike(u); } };
     }
@@ -5801,8 +5838,8 @@ function refreshBombButton(t) {
   if (!$('sh-bomb')) return;
   const u = readyBomber(t), any = myBombers(), bot = !BDEFS[t.type];
   $('sh-bomb').disabled = !u;
-  $('sh-bomb-hint').textContent = u ? (bot ? `A Vulcan Bomber is ready: it flies out, leads it if it's moving and drops one bomb (a direct hit does ${BOMBER.botDamage * 2}, ${BOMBER.ammo} Ammo a sortie). Flak Guns can shoot it down.`
-      : `A Vulcan Bomber is ready: it drops one bomb (${BOMBER.damage} off the target, ${BOMBER.ammo} Ammo a sortie). Flak Guns can shoot it down.`)
+  $('sh-bomb-hint').textContent = u ? (bot ? `A Vulcan Bomber is ready: it flies out, leads it if it's moving and drops one bomb (a direct hit does ${BOMBER.botDamage * 2}; ${BOMBER.ammo} Ammo and ${BOMBER.fuel} Fuel a sortie). Flak Guns can shoot it down.`
+      : `A Vulcan Bomber is ready: it drops one bomb (${BOMBER.damage} off the target; ${BOMBER.ammo} Ammo and ${BOMBER.fuel} Fuel a sortie). Flak Guns can shoot it down.`)
     : bot && (t.inside || t.dropping) ? 'It\'s under cover: bombers only hit vehicles and robots out in the open.'
       : any.some((v) => v.mission || v.flight) ? 'Your bombers are out on sorties.' : any.some((v) => v.rearmUntil > S.time) ? 'Your bombers are rearming.' : 'Out of your bombers\' reach.';
 }
@@ -6483,6 +6520,7 @@ function refreshSheet() {
     $('sh-dyn').innerHTML = `<div class="kv"><span>Health</span><span>${Math.ceil(u.hp)} / ${u.maxHp}</span></div>` +
       `<div class="kv"><span>${tankOf(u) ? 'Fuel tank' : 'Battery'}</span><span>${bat}%${bat < BATTERY.critical ? (tankOf(u) ? ' (empty: crawling)' : ' (flat: slow and weak)') : bat < BATTERY.low ? ' (low)' : ''}</span></div>` +
       `<div class="bar battery"><div style="width:${bat}%;background:${bat < BATTERY.critical ? '#ff4d4d' : bat < BATTERY.low ? '#ffb347' : '#7ee08a'}"></div></div>` +
+      (BOTS[u.type].air ? `<div class="kv"><span>Fuel</span><span>fills up at its Airfield, one Fuel ${planeFill(u)}% of the tank (${tankFuel(u, 100)} to fill it now)${BOTS[u.type].bomber ? `; each sortie takes ${BOMBER.fuel} Fuel on top` : ''}; a full tank reaches ${planeReach(u)} tiles out and back</span></div>` : '') +
       (BOTS[u.type].shield ? shieldRows(u) : '') +
       (BOTS[u.type].flame ? `<div class="kv"><span>Flame tank</span><span>${Math.round(u.gel ?? TORCH.tank)} / ${TORCH.tank} seconds of fire${(u.gel ?? TORCH.tank) <= 0.05 ? ' (empty: going to refill with Fuel)' : ''}</span></div>` +
         `<div class="bar battery"><div style="width:${Math.round(100 * (u.gel ?? TORCH.tank) / TORCH.tank)}%;background:#ff8a2a"></div></div>` : '') +
