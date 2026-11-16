@@ -1196,18 +1196,21 @@ function ambienceBeds(live, dt, zl) {
  * - near a Murmur nest, now and then (more at night), a low sound in the ground.
  * Argos, the moon, is near-silent: no air to carry a wind, and no Murmur.
  */
+// (Levels measured against the build music at the default volumes: a calm wild scene sits about 16 to 20 dB under the
+// music, a storm about 12 to 16 dB under; see the mix notes in README.)
 const NATURE = {
-  desert: { hiss: 0.004 },
-  jungle: { leaves: [2800, 0.008], drone: [4800, 8, 27, 0.0016, 0] },
-  autumn: { leaves: [4200, 0.01] },
-  savanna: { leaves: [2300, 0.007], drone: [5600, 10, 31, 0.003, 0] },
-  swamp: { drone: [2100, 3, 11, 0.0012, 0.004], lap: 0.003 },
-  alien: { glow: [0.0022, 0.0045] },
-  volcanic: { rumble: 0.012, hiss: 0.0015 },
-  polar: { hiss: 0.0045 },
+  desert: { hiss: 0.006 },
+  jungle: { leaves: [2800, 0.011], drone: [4800, 8, 27, 0.03, 0] },
+  autumn: { leaves: [4200, 0.013] },
+  savanna: { leaves: [2300, 0.01], drone: [5600, 10, 31, 0.045, 0] },
+  swamp: { drone: [2100, 3, 11, 0.02, 0.06], lap: 0.005 },
+  alien: { glow: [0.006, 0.012] },
+  volcanic: { rumble: 0.018, hiss: 0.002 },
+  polar: { hiss: 0.0065 },
   lunar: {},
 };
-// (leaves: [filter Hz, level]; drone: [filter Hz, Q, pulse rate, level by day, level by night]; glow: [by day, by night])
+// (leaves: [filter Hz, level]; drone: [filter Hz, Q, pulse rate, level by day, level by night]; glow: [by day, by night].
+// A drone is a narrow band of noise, so it needs a far higher level than the broad rustle and hiss to be heard at all.)
 // How much harder the wind blows in each kind of weather (see weatherAt) at its height (fog stills it).
 const STORM_WIND = { sand: 3, snow: 2.5, leaves: 2, dust: 1, rain: 0.8, ash: 0.3, fog: -0.6 };
 
@@ -1283,21 +1286,22 @@ function natureBeds(live, dt, zl, b, sway, wx) {
   // The ground rumbling: the ashlands, near the volcano (harder once it's about to blow, and while it does), lava on
   // screen, and an ashfall.
   const V = on && S.volcano, vk = V ? (V.erupting ? 2.6 : V.warned ? 1.8 : 1) : 0;
-  const rum = (N.rumble || 0) * (0.5 + 0.5 * W) + 0.028 * (WORLD.volc || 0) * vk + 0.02 * Math.sqrt(WORLD.lava || 0) + (kind === 'ash' ? 0.008 * wk : 0);
-  M.rumble.f.frequency.setTargetAtTime(60 + 25 * Math.sin(t * 0.13) * Math.sin(t * 0.07 + 2), t, 1.5);
-  set(M.rumble, Math.min(0.075, rum) * zq, 1.2);
+  const rum = (N.rumble || 0) * (0.5 + 0.5 * W) + 0.065 * (WORLD.volc || 0) * vk + 0.025 * Math.sqrt(WORLD.lava || 0) + (kind === 'ash' ? 0.008 * wk : 0);
+  // (an eruption roars higher, so a small speaker plays it too)
+  M.rumble.f.frequency.setTargetAtTime(60 + 25 * Math.sin(t * 0.13) * Math.sin(t * 0.07 + 2) + (V && V.erupting ? 90 * (WORLD.volc || 0) : 0), t, 1.5);
+  set(M.rumble, Math.min(0.15, rum) * zq, 1.2);
   // Water lapping at the banks of lakes and rivers (a river delta's channels quicker), and the swamp's wet ground.
   const SH = (S && SHAPE_PRESETS[S.settings.shape || 0]) || {}, ocean = !!SH.islands, shoreF = Math.min(1, (WORLD.shore || 0) * 12);
   M.lap.lfo.frequency.setTargetAtTime(SH.delta ? 1.6 : 0.7, t, 1);
-  set(M.lap, ((ocean ? 0.003 : 0.009) * shoreF + (N.lap || 0) * W) * zq);
+  set(M.lap, ((ocean ? 0.004 : 0.012) * shoreF + (N.lap || 0) * W) * zq);
   set(M.rain, kind === 'rain' ? 0.03 * wk * zq : 0, 1.2);
   if (!on || !sfxReady()) return;
   // Surf breaking on the shore of a sea map; little waves lapping at a lake's or a river's banks.
   if (shoreF > 0.05) {
     M.surf -= dt;
-    if (ocean && M.surf <= 0) { M.surf = 3 + Math.random() * 5; _noise(2.4, 0.045 * shoreF * zq, { type: 'bandpass', freq: 1100, to: 350, q: 0.6, attack: 0.7, dest: aroundVoice(0.5) }); }
+    if (ocean && M.surf <= 0) { M.surf = 2.5 + Math.random() * 4; _noise(2.4, 0.13 * shoreF * zq, { type: 'bandpass', freq: 1100, to: 350, q: 0.6, attack: 0.7, dest: aroundVoice(0.5) }); }
     M.lapping -= dt;
-    if (!ocean && M.lapping <= 0) { M.lapping = 0.5 + Math.random() * 1.4; _noise(0.22, 0.012 * shoreF * zq, { type: 'bandpass', freq: 1200 + Math.random() * 900, q: 2.5, attack: 0.03, dest: aroundVoice(0.6) }); }
+    if (!ocean && M.lapping <= 0) { M.lapping = 0.5 + Math.random() * 1.4; _noise(0.22, 0.018 * shoreF * zq, { type: 'bandpass', freq: 1200 + Math.random() * 900, q: 2.5, attack: 0.03, dest: aroundVoice(0.6) }); }
   }
   // Embers ticking as they fall.
   if (kind === 'ash' && wk > 0.1) {

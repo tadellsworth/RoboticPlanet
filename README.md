@@ -1238,7 +1238,11 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   sand and snow hissing, leaves in a gale, embers ticking as they fall in an ashfall, an aurora's shimmer. Near a Murmur
   nest, now and then (more at night), a low sound in the ground (`groundMurmur`). Argos is near-silent: only the
   faintest rumble for a wind, no calls, and its frozen pools make no water sounds; the Cinderlands' lakes sound like the
-  lava they look like. Music and Effects volumes are in the pause menu.
+  lava they look like. The mix, measured against the build music at the default volumes (a tap on the music bus and one
+  on these voices): a calm wild scene sits about 18 to 22 dB under the music, a storm about 11 to 14 dB under, an
+  eruption about 16 dB under, and a town about 25 dB under (the land fades there); thunder and surf peak at least 8 dB
+  under the music's peaks. (A drone is a narrow band of noise, so its level number is far higher than a rustle's for
+  the same loudness.) Music and Effects volumes are in the pause menu.
 - **Briefing at the start:** the messages a new game opens with (where you landed, your goal, the map's notes) come
   together on one card while the game waits paused behind it; it closes by itself after a few seconds (longer for
   more text), or at a tap or key. In multiplayer the game doesn't pause for it.
