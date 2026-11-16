@@ -5680,12 +5680,18 @@ function rearGarrison(b) {
 /** Warbots garrison b can send out: every armed one from the rear (with `rear`), else all but one. */
 function spareFrom(b, rear, posted) { return BDEFS[b.type].bunker ? 0 : rear && !usesPosts(b.owner) && rearGarrison(b) ? armedIn(b) : spareArmed(b, posted); }
 
-/** Take one armed warbot out of garrison b (or null): not one stationed there, unless `posted` (it comes back after). */
-function takeArmed(b, posted) {
+/**
+ * Take one armed warbot out of garrison b (or null): not one stationed there, unless `posted` (it comes back after).
+ * With `lead` (the rival AI's attacks), a Bulwark first, then a Torch: they lead the squad and burn down what it's
+ * sent against, and are no use as the one a garrison keeps at home.
+ */
+function takeArmed(b, posted, lead) {
   for (const pass of posted ? [false, true] : [false]) {
-    for (let k = b.garrison.length - 1; k >= 0; k--) {
-      const u = getE(b.garrison[k]);
-      if (u && botArmed(u) && (freeToGo(u, b) || pass)) { b.garrison.splice(k, 1); return u; }
+    for (const kind of lead ? ['shield', 'flame', ''] : ['']) {
+      for (let k = b.garrison.length - 1; k >= 0; k--) {
+        const u = getE(b.garrison[k]);
+        if (u && botArmed(u) && (freeToGo(u, b) || pass) && (!kind || BOTS[u.type][kind])) { b.garrison.splice(k, 1); return u; }
+      }
     }
   }
   return null;
@@ -6129,14 +6135,16 @@ function holdRally(u, t, r, dt, power) {
   if (dist2(u.x, u.y, r.x, r.y) > 9 && escortWait(u, r.x, r.y, { rally: r.id })) { u.path = null; u.vel = 0; spreadOut(u, dt); return; }
   let tgt = t.target ? getE(t.target) : null;
   if (!botArmed(u) || (r.raid && raidRoadsLeft(r, u.owner))) tgt = null; // raiders cut the road first
-  else if (!tgt || !foes(tgt.owner, u.owner) || dist2(tgt.x + 0.5, tgt.y + 0.5, r.x, r.y) > 10) {
+  else if (!tgt || !foes(tgt.owner, u.owner) || (dist2(tgt.x + 0.5, tgt.y + 0.5, r.x, r.y) > 10 && tgt.id !== r.first)) {
     tgt = null;
     t.target = 0;
     u.scanT2 = (u.scanT2 || 0) - dt;
     if (u.scanT2 <= 0) {
       u.scanT2 = 0.5;
       let bd = 10;
-      const own = r.target ? getE(r.target) : null; // (a flag planted for an Attack goes for that building first)
+      // (A flag planted for an Attack goes for that building first; the rival AI's marches for the gun that covers
+      // the flag, r.first, then on as usual: warbots only shoot back at robots, so the gun has to be their target.)
+      const own = r.target ? getE(r.target) : r.first ? getE(r.first) : null;
       if (own && !own.dead && foes(own.owner, u.owner)) tgt = own;
       else for (const e of S.buildings) {
         if (e.dead || !foes(e.owner, u.owner)) continue;
@@ -6377,8 +6385,9 @@ function attackBreach(owner, target, count, all) {
  * garrisons, they set off so as to arrive together (paceSquad): the player's flags and the rival's
  * marches, not its raids and counter-raids (no `rear`), nor anything sent with `hurry`. `breach`: squadBreach of
  * the squad (need > shots: walls in the way it can't shoot through; the player who gave the order is told).
+ * `lead`: Bulwarks and Torches go first (see takeArmed).
  */
-function sendToRally(owner, i, j, count, rear, hurry) {
+function sendToRally(owner, i, j, count, rear, hurry, lead) {
   let r = S.rallies.find((q) => q.owner === owner && Math.abs(q.x - (i + 0.5)) < 1.5 && Math.abs(q.y - (j + 0.5)) < 1.5);
   if (!r) { r = { id: S.nextId++, owner, x: i + 0.5, y: j + 0.5 }; S.rallies.push(r); }
   let slot = rallyMembers(r.id).length, sent = 0;
@@ -6387,7 +6396,7 @@ function sendToRally(owner, i, j, count, rear, hurry) {
   for (const posted of usesPosts(owner) ? [false, true] : [false]) {
     for (const b of rallySources(owner, i, j, rear, posted)) {
       while (spareFrom(b, rear, posted) > 0 && sent < count) {
-        const u = takeArmed(b, posted);
+        const u = takeArmed(b, posted, lead);
         if (!u) break;
         u.inside = 0;
         u.task = { type: 'hold', rally: r.id, slot: slot++ };
@@ -7103,15 +7112,16 @@ function attackAvailable(owner, target, all) {
 
 /**
  * Send up to `count` armed warbots to attack `target`: free ones first, then (yours) those stationed at Outposts, nearest
- * first. From several garrisons they set off so as to arrive together (paceSquad), unless sent with `hurry`.
+ * first. From several garrisons they set off so as to arrive together (paceSquad), unless sent with `hurry`. `lead`:
+ * Bulwarks and Torches go first (see takeArmed).
  */
-function sendAttack(owner, target, count, all, hurry) {
+function sendAttack(owner, target, count, all, hurry, lead) {
   let sent = 0;
   const squad = [];
   for (const posted of usesPosts(owner) ? [false, true] : [false]) {
     for (const b of attackSources(owner, target, posted, all)) {
       while (spareArmed(b, posted, all) > 0 && sent < count) {
-        const u = takeArmed(b, posted);
+        const u = takeArmed(b, posted, lead);
         if (!u) break;
         u.inside = 0;
         u.task = { type: 'attack', target: target.id };

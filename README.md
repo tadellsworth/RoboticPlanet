@@ -467,8 +467,11 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   `BATTERY.warbotWait` a second; once flat it gives up its attack, or leaves its rally flag, to recharge at home.
 - **Raids:** armed warbots holding a rally flag in enemy land with nothing to fight tear up enemy roads (not bridges or
   tunnels, which only a Missile can crater) near the flag,
-  one tile per 12 warbot-seconds. The rival raids your busiest road clear of turrets and garrisons every few minutes
-  (Easy rarely, Hard often; a Salvager far more) once it has warbots to spare. Missiles crater the roads where they land.
+  one tile per 12 warbot-seconds. The rival raids your busiest road clear of your defences every few minutes (Easy
+  rarely, Hard often; a Salvager far more) once it has warbots to spare: out of reach of every gun (Pulse Turrets, Minigun
+  Nests, Bunkers, Mortar Pits, Disruptor Towers, Keeps: `aiDefReach`, plus 3½ tiles for the raiders' spread) and of
+  garrisons with two armed warbots in them, by a way in that crosses no gun's reach (`aiRouteHot`: the best four
+  stretches are tried in turn). Missiles crater the roads where they land.
 - **Warbot movement:** warbots don't queue in road traffic, give way at junctions or stop at red lights (they still wait
   for trains), and nobody queues behind one, so a squad marching along a road or massing at a Gate it means to break
   down all keeps going (and all shoot). Chasing a foe, a warbot goes straight only when the whole line to it is
@@ -773,9 +776,38 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   near has another fort of ours, with someone in it, at least 4 tiles nearer to it. Its Viaducts (Sky islands): not
   into the enemy's guns, nor for four minutes where one was just knocked down (`P.viaLost`). Under an enemy gun
   (`aiClearGuns`): a factory, gatherer or Fuel Station a gun has covered for over a minute doesn't count in its build
-  plan (`aiShut`), so another goes up out of reach; and when the gun has stood for two and a half minutes with no new
-  warbot for two (the gun may be over the Chip Fab the Foundry needs), every warbot goes, the Command Base's last one too
-  (`attackAvailable(p, t, 'every')`).
+  plan (`aiShut`), so another goes up out of reach. It sends a squad that can win (`aiGunNeed`), and a new one only when
+  it can win with half of those still at the gun counted, never a few at a time into one being shot down (before, two
+  went to join one left of a squad the gun had cut down). When the gun has stood for two and a half minutes with no new
+  warbot for two (the gun may be over the Chip Fab the Foundry needs), every warbot goes, the Command Base's last one
+  too (`attackAvailable(p, t, 'every')`), if that gives it a real chance (enough but for the margin of one), or its Bot
+  Foundry is shut down anyway (none at work: it's that or nothing).
+  **Attacks into defences** (`aiGuards`, `aiFire`, `guardsNear`, `aiSpare`, `aiSquad`): before any attack the rival
+  counts, in warbots, the defences that would fire on the squad at its target (their reach plus two tiles): a Pulse Turret
+  or Mortar Pit 3 (a Mortar's shells burst among a squad bunched on its way in), a Minigun Nest or Disruptor Tower 2, a
+  Bunker 2 for each armed warbot in it, a Keep 3 and 1.3 for each manned gun slot and 1 for each warbot past them (they
+  come out), a quarter more for a defence in a Keep's aura, the armed warbots of any other garrison close enough to
+  sortie, and its owner's armed warbots in the field within 7 (not a Flak Gun, nor a gun that is cut off or switched
+  off; a gun out of ammo still counts). A Bulwark at the head of the squad takes `AI_SHIELD_TAKES` (2.25, about a Pulse
+  Turret; never more than three quarters of a gun) off the strongest gun firing straight at it (not a Mortar's shells or
+  a Disruptor's pulse); the rival's Bulwarks, then Torches, leave a garrison first (`lead` on `sendAttack` and
+  `sendToRally`, see `takeArmed`). A construction site or a fort shot down to a quarter of its armor takes the usual
+  band (2, or the threshold) or one more than its guards; anything else its garrison ×1.3 + 2 + its guards; a gun its
+  own fire too (`aiGunNeed`); never fewer than the threshold for a finished building; and with guards worth
+  `AI_HEAVY` (5) or more and no Bulwark in the squad, a third more (`aiBare`: fire from several sides adds up faster than
+  the count says). So clearing a lone Minigun Nest over its buildings takes 3 warbots, or a Bulwark and 1; a building
+  beside a nest and a Pulse Turret takes 10 (5 with a Bulwark). With the squad for
+  it, an attack on a building a gun covers goes at the gun first (`aiFirstGun`): warbots on an attack shoot back only at
+  robots, so sent at the building they stood hitting it while the gun shot them down; and the squad on a flag it plants
+  (a march, a flag beside a gun it is clearing, an Uplink jam) goes for the gun covering the flag first (`r.first`, see
+  `holdRally`), then on as usual. Without, it attacks what it can take
+  (an unguarded target scores a little higher), or waits and gathers: the best target the guns held back is marked
+  (`P.soften`) for its Howitzers (`P.siegeAt`), its Missiles (+6) and its bomber, and the Foundry orders a Bulwark if it
+  has none (`P.shieldWant`, whatever the size of its army). Marches (more for the guns at the flag), Howitzer hunts
+  (none until there are enough for the guns round it), Uplink jams (five and the guns) and beach landings (not onto a
+  beach covered by more than the boatload less two) count them the same way. Measured in the sim on open ground: two
+  warbots beat a lone nest with the lead at 5 of 12 health, a Bulwark and a warbot kill it in about 14 s untouched;
+  two warbots die to a Pulse Turret, three sent at the building beside one all die, three at the turret lose one.
   Once it's ready to march it orders a Bulwark for every five warbots (two, three against a dug-in rival) and a Torch
   for every four (three, four), only with Fuel for Torches. The **Salvager** (`raider`): raids three times as often from early on,
   keeping none back: its band of three (`raidSize`) goes as soon as it has three to send (`raidKeep` 0). The **Herald** (`rusher`): the fastest-growing army, raids now and then, few turrets. The **Architect** (`tycoon`): its bots work 15%
