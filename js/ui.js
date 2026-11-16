@@ -1711,6 +1711,8 @@ function refreshSelection() {
   document.body.classList.toggle('sel-on', on && touch); // (on an upright phone the bar takes the bottom bar's place)
   bar.classList.toggle('touch', touch);
   if (!on) { UI.undo = null; INPUT.boxArmed = false; refreshGroupBar(); return; }
+  // (its parts are made once, by initSelBar: made again if one isn't there, so a bar that lost a part can't stop this)
+  if (!['sel-title', 'sel-notes', 'sel-status', 'sel-box', 'sel-undo', 'selbar-group'].every((id) => $(id)) || !bar.querySelector('.sel-mouse')) initSelBar();
   $('sel-box').classList.toggle('on', INPUT.boxArmed);
   let inside = 0, empty = 0;
   for (const u of orderable(ME, UI.sel)) { if (u.inside) inside++; if (!botArmed(u)) empty++; }
