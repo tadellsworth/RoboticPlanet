@@ -16,6 +16,8 @@
  *                  start {settings, players (null: a computer's colony)}   and every game message, with seq and by
  *                  (the sender's seat).
  * To the relay:    in the lobby: name, settings and start (the host), leave, ping; in a game: anything (passed on).
+ *
+ * It also takes players' feedback: POST /feedback (see feedback.js).
  */
 
 const MAX_SEATS = 4;
@@ -23,9 +25,14 @@ const MAX_MSG = 1 << 20;     // bytes: bigger messages (a whole game) come in pi
 const MAX_LOG = 48 << 20;    // bytes of log kept (the oldest pieces of whole games go first)
 const CODE = /^[A-Z2-9]{4,8}$/;
 
+import { handleFeedback, Gate } from './feedback.js';
+export { Gate };
+
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
+    // Player feedback from the game's form (see feedback.js).
+    if (url.pathname === '/feedback') return handleFeedback(request, env);
     if (url.pathname === '/' || url.pathname === '/health') {
       return new Response('Terrafall relay: ok', { headers: { 'content-type': 'text/plain', 'access-control-allow-origin': '*' } });
     }

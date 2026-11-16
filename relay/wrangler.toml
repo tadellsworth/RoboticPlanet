@@ -11,3 +11,12 @@ class_name = "Room"
 [[migrations]]
 tag = "v1"
 new_sqlite_classes = ["Room"]
+
+# Player feedback (src/feedback.js): one Durable Object that counts reports per sender, to stop floods.
+[[durable_objects.bindings]]
+name = "GATE"
+class_name = "Gate"
+
+[[migrations]]
+tag = "v2"
+new_sqlite_classes = ["Gate"]

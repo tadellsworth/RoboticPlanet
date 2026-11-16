@@ -3,6 +3,10 @@
 #   CLOUDFLARE_API_TOKEN   a Cloudflare API token made from the "Edit Cloudflare Workers" template
 #   CLOUDFLARE_ACCOUNT_ID  the Account ID shown on the Cloudflare dashboard (Workers & Pages, on the right)
 # Then Actions → Deploy multiplayer relay → Run workflow. Without the secrets it does nothing (and doesn't fail).
+# Player feedback (relay/src/feedback.js, the game's "Send feedback" form) needs two more secrets, then a run:
+#   FEEDBACK_REPO    the private repository reports go to, as owner/name (e.g. tadellsworth/terrafall-feedback)
+#   FEEDBACK_TOKEN   a fine-grained GitHub token for that repository only: Issues and Contents, read and write
+# Without them the relay still runs and the form says feedback isn't set up yet.
 name: Deploy multiplayer relay
 on:
   workflow_dispatch:
@@ -60,11 +64,30 @@ jobs:
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           workingDirectory: relay
           wranglerVersion: '4.40.0'
+      # Feedback: hand the token and the repository to the Worker as secrets (only when both are set).
+      - if: steps.check.outputs.ok == 'true'
+        id: feedback
+        working-directory: relay
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          FEEDBACK_TOKEN: ${{ secrets.FEEDBACK_TOKEN }}
+          FEEDBACK_REPO: ${{ secrets.FEEDBACK_REPO }}
+        run: |
+          if [ -n "$FEEDBACK_TOKEN" ] && [ -n "$FEEDBACK_REPO" ]; then
+            printf '%s' "$FEEDBACK_TOKEN" | npx --yes wrangler@4.40.0 secret put FEEDBACK_TOKEN
+            printf '%s' "$FEEDBACK_REPO" | npx --yes wrangler@4.40.0 secret put FEEDBACK_REPO
+            echo "state=on" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice::Player feedback isn't set up yet: add the FEEDBACK_REPO and FEEDBACK_TOKEN secrets (see the top of relay.yml), then run this again."
+            echo "state=off" >> "$GITHUB_OUTPUT"
+          fi
       - if: steps.check.outputs.ok == 'true'
         env:
+          FEEDBACK: ${{ steps.feedback.outputs.state }}
           OUT: ${{ steps.deploy1.outputs.command-output }}${{ steps.deploy2.outputs.command-output }}${{ steps.deploy3.outputs.command-output }}
           URL: ${{ steps.deploy1.outputs.deployment-url || steps.deploy2.outputs.deployment-url || steps.deploy3.outputs.deployment-url }}
         run: |
           U="$URL"; [ -n "$U" ] || U=$(printf '%s' "$OUT" | grep -o 'https://[a-zA-Z0-9.-]*workers\.dev' | head -1)
           echo "Relay address: $U"
-          { echo "### Multiplayer relay deployed"; echo; echo "Address: **$U**"; echo; echo "Check it: open $U in a browser; it should say *Terrafall relay: ok*."; } >> "$GITHUB_STEP_SUMMARY"
+          { echo "### Multiplayer relay deployed"; echo; echo "Address: **$U**"; echo; echo "Check it: open $U in a browser; it should say *Terrafall relay: ok*."; echo; echo "Player feedback: **$FEEDBACK**"; } >> "$GITHUB_STEP_SUMMARY"
