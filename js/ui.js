@@ -670,8 +670,8 @@ function syncMenu() {
   const silent = !menuMurmur();
   $('m-wild').disabled = silent;
   $('m-wild-row').classList.toggle('na', silent);
-  $('m-wild-row').dataset.info = silent ? 'The Murmur: none on Lunar (no nests, no raids).'
-    : 'The Murmur (Colony): native creatures burrow in the wilds and raid what you build near their nests. None on Lunar.';
+  $('m-wild-row').dataset.info = silent ? 'The Murmur: none on Penelope, the moon (no nests, no raids).'
+    : 'The Murmur (Colony): native creatures burrow in the wilds and raid what you build near their nests. None on Penelope, the moon.';
   for (const [id, on] of [['m-nuke', m.nuke], ['m-wild', m.wild && !silent], ['m-events', m.events], ['m-unlimited', m.unlimited], ['m-weather', weatherOn()]]) {
     $(id).checked = !!on;
     $(id + '-row').classList.toggle('on', !!on);
@@ -700,8 +700,8 @@ function syncPickRows() {
   sRow.setAttribute('aria-label', `Map type: ${m.shapeRnd ? 'Random' : SH.name}. Change`);
   drawThumbOnce(sRow.querySelector('canvas'), 'shape:' + (m.shapeRnd ? 'rnd' : shape), (cv) => drawShapeThumb(cv, m.shapeRnd ? null : SH));
   bRow.querySelector('.m-pick-name').textContent = m.biomeRnd ? 'Random' : biomeName(m.biome || 0);
-  bRow.querySelector('.m-pick-meta').textContent = m.biomeRnd ? 'any biome' : '';
-  bRow.dataset.info = m.biomeRnd ? 'Random biome: any of them, picked when you land.' : `${biomeName(m.biome || 0)}: ${(BIOMES[bk] && BIOMES[bk].desc) || ''}`;
+  bRow.querySelector('.m-pick-meta').textContent = m.biomeRnd ? 'any biome' : (BIOMES[bk] && BIOMES[bk].kind) || '';
+  bRow.dataset.info = m.biomeRnd ? 'Random biome: any of them, picked when you land.' : `${biomeName(m.biome || 0)} (${((BIOMES[bk] && BIOMES[bk].kind) || '').toLowerCase()}): ${(BIOMES[bk] && BIOMES[bk].desc) || ''}`;
   bRow.setAttribute('aria-label', `Biome: ${m.biomeRnd ? 'Random' : biomeName(m.biome || 0)}. Change`);
   drawThumbOnce(bRow.querySelector('canvas'), 'biome:' + (m.biomeRnd ? 'rnd' : bk) + ':' + artCount(), (cv) => drawBiomeSwatch(cv, m.biomeRnd ? null : bk));
 }
@@ -731,7 +731,7 @@ function openPicker(kind) {
   } else {
     const inner = (name, desc) => `<canvas class="pc-swatch" aria-hidden="true"></canvas><span class="pc-name">${name}</span><span class="pc-blurb">${desc}</span>`;
     h += '<div class="pgrid">' + card('rnd', m.biomeRnd, inner('Random', 'Any biome, picked when you land.'), 'rnd')
-      + BIOME_ORDER.map((k, i) => card(i, !m.biomeRnd && i === (m.biome || 0), inner(BIOMES[k].name, BIOMES[k].desc || ''), '', BIOMES[k].desc)).join('') + '</div>';
+      + BIOME_ORDER.map((k, i) => card(i, !m.biomeRnd && i === (m.biome || 0), inner(BIOMES[k].name, `<b>${BIOMES[k].kind}.</b> ${BIOMES[k].desc || ''}`), '', `${BIOMES[k].kind}: ${BIOMES[k].desc}`)).join('') + '</div>';
   }
   body.innerHTML = h;
   for (const b of body.querySelectorAll('.pcard')) {
@@ -1147,7 +1147,7 @@ function menuArtTick() {
  */
 const PV = { timer: 0, maps: new Map(), drawn: '', failed: false };
 
-/** The settings newGame would make of the menu (Random biome: drawn as the Red desert). */
+/** The settings newGame would make of the menu (Random biome: drawn as the Rust, the red desert). */
 function previewSettings() {
   const m = UI.menu, mode = m.mode === 'colony' ? 'colony' : 'versus';
   const st = { size: clamp(menuSize(), 0, SIZE_PRESETS.length - 1), rough: clamp(m.rough ?? DEFAULT_ROUGH, 0, TERRAIN_PRESETS.length - 1), rich: clamp(m.rich ?? DEFAULT_RICH, 0, RESOURCE_PRESETS.length - 1) };

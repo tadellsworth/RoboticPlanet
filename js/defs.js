@@ -34,15 +34,15 @@ const PAVE = [null,
  * Murmur live there (Lunar is Penelope, the moon): no nests, no raids, whatever the setup says (see murmurGround).
  */
 const BIOMES = {
-  desert: { name: 'Red desert', region: 'the Rust', plants: 0.07, desc: 'Rust-red sand and dust under a hard sun; now and then a sandstorm.' },
-  jungle: { name: 'Forest', region: 'Greenreach', plants: 0.44, groves: true, desc: 'Stands of spruce and leafy trees, ferns and clear lakes; now and then a rainstorm with fog.' },
-  polar: { name: 'Polar', region: 'the White', plants: 0.1, desc: 'Snow, ice and frosted shrubs; now and then a blizzard.' },
-  autumn: { name: 'Autumn forest', region: 'Emberwood', plants: 0.44, groves: true, desc: 'The forest in its fall colours: maples, birches and oaks in red and gold over a carpet of leaves; now and then a gale.' },
-  savanna: { name: 'Savanna', region: 'the Long Grass', plants: 0.12, desc: 'Golden grassland with umbrella acacias, baobabs and termite mounds; now and then dust devils.' },
-  swamp: { name: 'Swamp', region: 'the Sump', plants: 0.38, groves: true, desc: 'Dark mud, stands of cypress and mangrove, reeds and duckweed; now and then a thick fog, with fireflies at night.' },
-  volcanic: { name: 'Volcanic ashlands', region: 'Cinderlands', plants: 0.1, desc: 'Black basalt and ash, charred trees and fumaroles, lakes of lava that glow at night; now and then ash and embers fall.' },
-  lunar: { name: 'Lunar', region: 'Penelope, the moon', plants: 0.12, weights: [1, 1, 1, 1, 1, 0.12], silent: true, desc: 'Grey regolith pocked with craters, frozen cryo-ice pools and the odd wreck of an old probe; now and then ring dust streaks overhead. No Murmur live here.' },
-  alien: { name: 'Alien bloom', region: 'the Bloom', plants: 0.3, desc: 'Violet moss and strange growths that glow after dark, beside pink lakes; now and then an aurora.' },
+  desert: { name: 'The Rust', kind: 'Red desert', region: 'the Rust', plants: 0.07, desc: 'Rust-red sand and dust under a hard sun; now and then a sandstorm.' },
+  jungle: { name: 'Greenreach', kind: 'Forest', region: 'Greenreach', plants: 0.44, groves: true, desc: 'Stands of spruce and leafy trees, ferns and clear lakes; now and then a rainstorm with fog.' },
+  polar: { name: 'The White', kind: 'Polar snow', region: 'the White', plants: 0.1, desc: 'Snow, ice and frosted shrubs; now and then a blizzard.' },
+  autumn: { name: 'Emberwood', kind: 'Autumn forest', region: 'Emberwood', plants: 0.44, groves: true, desc: 'The forest in its fall colours: maples, birches and oaks in red and gold over a carpet of leaves; now and then a gale.' },
+  savanna: { name: 'The Long Grass', kind: 'Savanna', region: 'the Long Grass', plants: 0.12, desc: 'Golden grassland with umbrella acacias, baobabs and termite mounds; now and then dust devils.' },
+  swamp: { name: 'The Sump', kind: 'Swamp', region: 'the Sump', plants: 0.38, groves: true, desc: 'Dark mud, stands of cypress and mangrove, reeds and duckweed; now and then a thick fog, with fireflies at night.' },
+  volcanic: { name: 'Cinderlands', kind: 'Volcanic ashlands', region: 'Cinderlands', plants: 0.1, desc: 'Black basalt and ash, charred trees and fumaroles, lakes of lava that glow at night; now and then ash and embers fall.' },
+  lunar: { name: 'Penelope', kind: 'Lunar: the moon', region: 'Penelope, the moon', plants: 0.12, weights: [1, 1, 1, 1, 1, 0.12], silent: true, desc: 'Grey regolith pocked with craters, frozen cryo-ice pools and the odd wreck of an old probe; now and then ring dust streaks overhead. No Murmur live here.' },
+  alien: { name: 'The Bloom', kind: 'Alien bloom', region: 'the Bloom', plants: 0.3, desc: 'Violet moss and strange growths that glow after dark, beside pink lakes; now and then an aurora.' },
 };
 // (New biomes go on the end: the new-game screen saves the choice as its place in this list.)
 const BIOME_ORDER = ['desert', 'jungle', 'polar', 'autumn', 'savanna', 'swamp', 'volcanic', 'lunar', 'alien'];

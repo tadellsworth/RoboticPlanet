@@ -370,7 +370,7 @@ Decisions the owner made in chat (Nov 2026), kept here with the bible. Adopted n
 meteor showers are **Ringfall**; the rival styles are the doctrines (Balanced: the Steward, Turtle: the Warden, Raider:
 the Salvager, Rusher: the Herald, Tycoon: the Architect); "the Murmur" is the blanket name for the creatures, with
 classes: the Scuttler, the Brute, the Leech (drains charge), the Spitter and the Delver (kept for now, decided); their look so far is direction B, crystal-backed but mole-like (design/murmur), to be reworked to the art brief
-above; the Lunar biome is Penelope, where no Murmur live. The new-game setup keeps the plain biome names (Red desert,
-Forest...); the region names are for flavor elsewhere. On the setup screen each rival doctrine has a tooltip saying in
+above; the Lunar biome is Penelope, where no Murmur live. The biomes take their region names everywhere, the new-game
+setup included (the owner's decision, Nov 2026), with the kind of ground shown under each (the Rust: red desert). On the setup screen each rival doctrine has a tooltip saying in
 depth how it plays. Planned: the Hollow as a new biome and map once the Murmur design is settled, and later a campaign
 mode built around the Murmur.

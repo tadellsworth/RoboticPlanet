@@ -55,7 +55,9 @@ Chokepoint, Islands, Crater, Plateaus, Sky islands, Rift, Ring valley, Oases, Cr
 Volcano, Fault line or Canyon maze, and for three or four players only The Wheel, Three Mesas, Pinwheel, Four Isles and Twin
 Valleys: cards in groups, each with a sketch and a line on it) and the **map size** (Small to
 Huge). **More settings** (a collapsible section, its summary listing whatever isn't the default) holds the planet
-number, the **biome** (Red desert, Jungle or Polar: scenery only, with plants that roads and buildings clear), the
+number, the **biome** (named for its region of Ithaca I, `BIOMES[k].name`, with its kind of ground under it, `kind`: the
+Rust (red desert), Greenreach (forest), the White (polar snow), Emberwood, the Long Grass, the Sump, Cinderlands, the
+Bloom and Penelope, the moon; scenery only, with plants that roads and buildings clear), the
 **terrain** (Flat, Gentle, Rolling, Rugged, Mountainous), the **resources** (Scarce to Abundant; Normal is
 `RESOURCE_PRESETS` density 0.78, amount 0.8, which was Sparse until everything was lowered a notch: older saves,
 saved planets and missions move up one, `resLevelUp`), the **rival doctrine** (one for all, or one for each rival),
