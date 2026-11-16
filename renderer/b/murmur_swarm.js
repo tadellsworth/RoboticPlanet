@@ -175,8 +175,301 @@ function centre(L, G, skip) {
   G.position.x -= (b.min.x + b.max.x) / 2;
 }
 
-// placeholders filled in below
-function drainer(L, K, G, f, feed) {}
-function brute(L, K, G, f) {}
-function burrow(L, K) {}
-function heroGround(L, K, W) {}
+// ---------------------------------------------------------------------------------------------------------------
+// DRAINER: the feeder. A tick-like body: a flat armoured front shield ringed with shards, eight short splayed legs for
+// clinging, and a swollen, wrinkled charge sac whose veins glow with what it has drunk. In front, a fleshy mouth disc
+// (a puckered, toothed ring, lamprey-like) with soft feeding tendrils round it, between two big jointed palps that
+// close round the target like arms. Feeding (?feed=1): palps clamped, tendrils reaching, disc and sac blazing.
+function drainer(L, K, G, f, feed) {
+  const { THREE } = K;
+  G.scale.setScalar(1.25);
+  const bodyM = K.chitin('#3d2e26', { irid: 0.45 }), legM = K.chitin('#30241e', { irid: 0.3, ns: 0.25 });
+  const tipM = K.plain('#150f0c', 0.4), jointM = K.plain('#2a1d17', 0.5), X = XTAL;
+  const fleshM = K.chitin('#5e3a33', { irid: 0.1, rough: 0.45, cc: 0.9, ccr: 0.15, ns: 0.8 });
+  const FK = feed ? 2.4 : 1;                                             // feeding: everything that carries charge burns
+  const GL = L.group(0, 0, 0, 0, G);
+
+  // ---- legs: eight, short and splayed, built for gripping (alternating tetrapod gait)
+  const LG = [];
+  const legDef = [[1.0, 0.5, 1.55, 1.3, -0.05], [0.78, 0.6, 0.85, 1.72, 0.05], [0.5, 0.62, -0.1, 1.78, 0.1], [0.22, 0.55, -0.95, 1.58, 0.12]];
+  for (const [hx, hz, fx, fz, kf] of legDef) for (const s of [-1, 1]) LG.push([[hx, 0.3, s * hz], [fx, 0, s * fz], { kneeFwd: kf, kneeOut: 0.12 }]);
+  K.legs(GL, LG, f, { mat: legM, tipMat: tipM, jointMat: jointM, r: 0.08, kneeUp: 0.5, stride: feed ? 0 : 0.2, lift: feed ? 0 : 0.22, spines: 0.8, claw: true, ankUp: 0.14 });
+
+  // ---- the charge sac: dark, wrinkled, glossy skin over glowing veins
+  const veins = L.canvasTex(1024, (g, n) => {
+    g.fillStyle = '#000'; g.fillRect(0, 0, n, n); g.lineCap = 'round';
+    const branch = (x, y, a, w, len, d) => {
+      for (let k = 0; k < len; k++) {
+        const nx = x + Math.sin(a) * 8, ny = y + Math.cos(a) * 8;
+        g.strokeStyle = `rgba(255,255,255,${0.25 + 0.75 * w / 6})`; g.lineWidth = w; g.beginPath(); g.moveTo(x, y); g.lineTo(nx, ny); g.stroke();
+        x = nx; y = ny; a += (L.rnd() - 0.5) * 0.55; w = Math.max(0.8, w * 0.965);
+        if (d < 3 && L.rnd() < 0.1) branch(x, y, a + (L.rnd() < 0.5 ? -0.8 : 0.8), w * 0.7, len - k, d + 1);
+      }
+    };
+    for (let i = 0; i < 18; i++) branch((i + L.rnd() * 0.6) / 18 * n, n * (0.16 + L.rnd() * 0.06), (L.rnd() - 0.5) * 0.4, 5, 56, 0);
+  });
+  const sacM = new THREE.MeshPhysicalMaterial({ color: '#40231f', map: K.chitinMap, roughness: 0.4, metalness: 0.0, clearcoat: 0.8, clearcoatRoughness: 0.18, vertexColors: true,
+    emissive: new THREE.Color(X.core).multiplyScalar(FK * (0.0 + K.GLOW * 0.7) / 0.4), emissiveMap: veins, emissiveIntensity: 0.4 });
+  sacM.envMapIntensity = 0.3; sacM.userData.glow = K.dimGlow(X.glow, 0.8 * Math.min(2.2, FK));
+  const sx = -0.98, sy = 0.62, srx = 1.28, sry = 0.66, srz = 1.08;
+  K.seg(G, [sx, sy, 0], srx, sry, srz, sacM, { bands: 7, depth: 0.035, shade: 0.35, lump: 0.03, crease: 0.14, axisFlat: 0.35, seed: 11, ws: 96, hs: 48 });
+  // ---- front shield (prosoma): flat, banded
+  K.seg(G, [0.66, 0.42, 0], 0.78, 0.3, 0.72, bodyM, { bands: 2, depth: 0.1, crease: 0.22, seed: 3, axisFlat: 0.6 });
+  // shards round the shield's rear rim, two big shoulder shards, a spine of small ones down the sac and a cluster at its tail
+  for (let i = 0; i < 7; i++) { const a = -1.2 + i * 0.4, z = Math.sin(a) * 0.62; K.shard(G, [0.33 - Math.abs(z) * 0.35, 0.62, z], [-0.55, 1, z * 1.1], 0.34 + (i % 2) * 0.12, 0.07, X, { collarMat: bodyM }); }
+  for (const s of [-1, 1]) K.shard(G, [0.62, 0.62, s * 0.5], [-0.25, 0.9, s * 0.9], 0.64, 0.12, X, { collarMat: bodyM });
+  for (let i = 0; i < 5; i++) { const x = -0.55 - i * 0.3, y = sy + sry * Math.sqrt(Math.max(0, 1 - ((x - sx) / srx) ** 2)) - 0.06; K.shard(G, [x, y, (i % 2 ? 1 : -1) * 0.05], [-0.4, 1, (i % 2 ? 1 : -1) * 0.25], 0.26 + 0.06 * (i % 2), 0.06, X, { collar: false }); }
+  K.cluster(G, [-2.05, 0.75, 0], [-1, 0.7, 0], 4, 0.5, 0.09, X, 0.6, { collarMat: bodyM });
+
+  // ---- the mouth: a fleshy, wrinkled collar ending in a puckered, toothed disc that faces forward and up
+  const tilt = feed ? 0.3 : 0.85;                                       // feeding: the disc turns to face the target
+  const dc = new THREE.Vector3(feed ? 1.98 : 1.82, 0.5, 0), dn = new THREE.Vector3(Math.cos(tilt), Math.sin(tilt), 0);
+  K.tube(G, [[1.2, 0.42, 0], [1.5, 0.46, 0], [dc.x - dn.x * 0.1, dc.y - dn.y * 0.1, 0]], t => (0.27 + 0.03 * t) * (1 + 0.07 * Math.sin(t * 40)), fleshM, { radial: 20, n: 40 });
+  const D = L.group(dc.x, dc.y, dc.z, 0, G); D.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), dn);
+  {   // a lumpy lip: a torus pinched into eight lobes
+    const lip = new THREE.TorusGeometry(0.3, 0.1, 14, 64), p = lip.attributes.position, v = new THREE.Vector3();
+    for (let i = 0; i < p.count; i++) { v.fromBufferAttribute(p, i); const a = Math.atan2(v.y, v.x), k = 1 + 0.12 * Math.sin(a * 8) + 0.05 * K.nz(v.x * 6, v.y * 6, v.z * 6); p.setXYZ(i, v.x * k, v.y * k, v.z * (1 + 0.3 * Math.sin(a * 8))); }
+    lip.computeVertexNormals(); L.mesh(lip, fleshM, 0, 0, 0, { parent: D, dirt: 0 });
+  }
+  const disc = L.canvasTex(256, (g, n) => {
+    const c = n / 2; g.fillStyle = '#000'; g.fillRect(0, 0, n, n);
+    const gr = g.createRadialGradient(c, c, n * 0.05, c, c, n * 0.5); gr.addColorStop(0, 'rgba(0,0,0,1)'); gr.addColorStop(0.16, 'rgba(255,255,255,1)'); gr.addColorStop(0.35, 'rgba(120,120,120,0.7)'); gr.addColorStop(1, 'rgba(0,0,0,0)');
+    g.fillStyle = gr; g.beginPath(); g.arc(c, c, n * 0.5, 0, 7); g.fill();
+  });
+  const memM = new THREE.MeshStandardMaterial({ color: '#3a1f1d', roughness: 0.4, emissive: new THREE.Color(X.core).multiplyScalar(FK * (0.15 + K.GLOW * 1.1) / 0.4), emissiveMap: disc, emissiveIntensity: 0.4 });
+  memM.userData.glow = K.dimGlow(X.glow, Math.min(2.2, FK));
+  L.mesh(new THREE.CircleGeometry(0.31, 40), memM, 0, 0, -0.02, { parent: D, dirt: 0, cast: false });
+  const toothM = K.plain('#d9cfbd', 0.4);
+  for (let ring = 0; ring < 2; ring++) for (let k = 0; k < 14; k++) { const a = (k + ring * 0.5) / 14 * 6.283, rr = 0.26 - ring * 0.08; K.cone(D, [Math.cos(a) * rr, Math.sin(a) * rr, 0.0], [-Math.cos(a), -Math.sin(a), 0.5], 0.1 - ring * 0.025, 0.022, toothM); }
+
+  // ---- soft feeding tendrils round the mouth, their tips lit
+  const tipGlow = K.glowMat('#c6f6ff', 0.6 * FK, K.dimGlow(X.glow, Math.min(2.2, FK)));
+  for (const [s, zz, yy] of [[-1, 0.2, 0.62], [1, 0.2, 0.62], [-1, 0.32, 0.4], [1, 0.32, 0.4]]) {
+    const base = [1.55, yy, s * zz], reach = feed ? 1.25 : 0.75, wob = 0.1 * Math.sin(f * Math.PI / 2 + zz * 9);
+    const pts = feed
+      ? [base, [2.1, yy + 0.08, s * (zz + 0.25)], [2.65, yy - 0.05, s * (zz + 0.18)], [2.95, 0.45, s * 0.05]]
+      : [base, [1.95, yy + 0.18, s * (zz + 0.28 + wob)], [2.15 + reach * 0.2, yy + 0.05, s * (zz + 0.42 + wob)], [2.2 + reach * 0.3, yy - 0.1, s * (zz + 0.3 + wob)]];
+    K.tube(G, pts, t => 0.07 * (1 - t) + 0.018, fleshM, { n: 24, radial: 10 });
+    const e = pts[pts.length - 1]; L.sphere(0.035, tipGlow, e[0], e[1], e[2], { parent: G, dirt: 0, cast: false });
+  }
+  // ---- two big jointed palps: thick at the base, three segments, spined on the inner face, a hooked tip.
+  // Walking they are held open round the mouth; feeding they clamp shut on the target.
+  const palpM = K.chitin('#33251f', { irid: 0.4, ns: 0.4 }), spineM = K.plain('#1e1612', 0.45);
+  for (const s of [-1, 1]) {
+    const sw = feed ? 0 : 0.06 * Math.sin(f * Math.PI / 2);
+    const P0 = [1.15, 0.48, s * 0.52], P1 = feed ? [1.75, 0.9, s * 1.0] : [1.65, 0.95, s * 1.12], P2 = feed ? [2.6, 0.7, s * 0.95] : [2.55, 0.75, s * (1.18 + sw)], P3 = feed ? [3.15, 0.45, s * 0.45] : [3.1, 0.5, s * (0.78 + sw)], P4 = feed ? [3.1, 0.42, s * 0.1] : [3.2, 0.42, s * (0.42 + sw)];
+    const segs = [[P0, P1, 0.13, 0.11], [P1, P2, 0.11, 0.085], [P2, P3, 0.085, 0.06], [P3, P4, 0.06, 0.025]];
+    for (const [a, b, r0, r1] of segs) { K.limb(G, a, b, r0, r1, palpM, { bulge: 0.3, seg: 14 }); L.sphere(r1 * 1.05, jointM, b[0], b[1], b[2], { parent: G, dirt: 0 }); }
+    // spines on the inner face of the two outer segments
+    for (const [a, b] of [[P1, P2], [P2, P3]]) for (const t of [0.25, 0.5, 0.75]) {
+      const p = [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
+      K.cone(G, p, [0.3, -0.1, -s], 0.14, 0.022, spineM);
+    }
+    K.cone(G, P4, [0.2, -0.3, -s], 0.2, 0.03, tipM);
+  }
+  // feeding: a thread of stolen charge running from the target into the disc
+  if (feed) {
+    const arcM = K.glowMat('#effcff', 1.8, K.dimGlow(X.glow, 2.2));
+    for (const s of [-1, 0, 1]) {
+      const pts = [[3.05, 0.45, s * 0.12]];
+      for (let k = 1; k <= 6; k++) { const t = k / 6; pts.push([3.05 + (dc.x + 0.12 - 3.05) * t + (L.rnd() - 0.5) * 0.1, 0.45 + (dc.y + 0.12 - 0.45) * t + L.rnd() * 0.08, s * (0.12 * (1 - t)) + (L.rnd() - 0.5) * 0.12]); }
+      K.tube(G, pts, () => 0.02, arcM, { n: 30, radial: 6 });
+    }
+  }
+  centre(L, G, GL);
+}
+
+// ---------------------------------------------------------------------------------------------------------------
+// BRUTE: a walking geode. A great domed shell of rock-hard crust in five overlapping bands (like a pill bug), split
+// down the spine where a seam of Ring Crystal has grown out: the crack is lined with agate banding and packed with
+// crystal points, tall in the middle. More crystal breaks through the flanks. A low head shield crusted with shards
+// for ramming walls, two short crushing mandibles, six thick legs.
+function brute(L, K, G, f) {
+  const { THREE } = K, X = { ...XTAL, k: 0.95 };
+  G.scale.setScalar(1.6);
+  const legM = K.chitin('#2c231e', { irid: 0.2, ns: 0.45, rough: 0.5, cc: 0.35 }), tipM = K.plain('#16100d', 0.5), jointM = K.plain('#211814', 0.6);
+  const GL = L.group(0, 0, 0, 0, G);
+  const crustM = K.crust('#ffffff');
+  // ---- legs: six, thick, armoured, slow heavy steps; crust plates on the femurs
+  const LG = [];
+  for (const [hx, hz, fx, fz, kf] of [[1.15, 0.95, 2.15, 2.05, -0.1], [0.0, 1.1, 0.15, 2.45, 0.05], [-1.15, 1.0, -2.05, 2.15, 0.15]]) for (const s of [-1, 1]) LG.push([[hx, 0.3, s * hz], [fx, 0, s * fz], { kneeFwd: kf, kneeOut: 0.12 }]);
+  K.legs(GL, LG, f, { mat: legM, tipMat: tipM, jointMat: jointM, r: 0.22, kneeUp: 0.32, kneeT: 0.5, ankT: 0.3, stride: 0.3, lift: 0.28, spines: 0.9, claw: true, ankUp: 0.3, bulge: 0.3, shin: K.crust('#5d544c') });
+  // ---- underbody
+  K.seg(G, [-0.1, 0.42, 0], 2.1, 0.35, 1.25, K.plain('#221a16', 0.7), { bands: 4, depth: 0.08 });
+  // ---- the shell
+  const SX = 2.35, SY = 1.12, SZ = 1.68, CX = -0.25, CY = 0.42, NB = 5;
+  const crackW = (x) => Math.max(0, 0.32 * (1 - Math.pow(Math.abs(x + 0.08) / 0.8, 2.4)));   // half-width of the split, unit-sphere z
+  {
+    const g = new THREE.SphereGeometry(1, 180, 90), pos = g.attributes.position, col = new Float32Array(pos.count * 3), v = new THREE.Vector3();
+    const stone = [0.075, 0.07, 0.068], stoneL = [0.17, 0.155, 0.14], rust = [0.2, 0.11, 0.07];
+    const bands = [[0.7, 0.68, 0.64], [0.3, 0.34, 0.38], [0.82, 0.82, 0.8], [0.16, 0.24, 0.3], [0.05, 0.06, 0.07]];
+    for (let i = 0; i < pos.count; i++) {
+      v.fromBufferAttribute(pos, i);
+      const t = (v.x + 1) / 2, u = (t * NB) % 1, wl = 0.12;
+      const prof = u < wl ? u / wl : Math.pow(1 - (u - wl) / (1 - wl), 1.3);   // each band's rear lip stands proud
+      let k = 1 + 0.07 * (prof - 0.5) * (v.x > -0.9 && v.x < 0.92 ? 1 : 0);
+      k += 0.06 * K.nz(v.x * 2.6, v.y * 2.6, v.z * 2.6) + 0.04 * K.nz(v.x * 6 + 3, v.y * 6, v.z * 6) + 0.025 * K.nz(v.x * 14, v.y * 14 + 5, v.z * 14);
+      // pleura: each band pokes out a little at the sides, scalloping the outline
+      const side = Math.exp(-((v.y - 0.1) ** 2) / 0.05); k += 0.05 * side * (prof - 0.3);
+      const lum = 0.5 + 0.5 * K.nz(v.x * 5 + 9, v.y * 5, v.z * 5);
+      let c = stone.map((q, j) => q + (stoneL[j] - q) * lum);
+      const rs = Math.max(0, K.nz(v.x * 3.5, v.y * 3.5 + 2, v.z * 3.5) - 0.25); c = c.map((q, j) => q + (rust[j] - q) * Math.min(1, rs * 2));
+      if (u < wl) c = c.map(q => q * (0.55 + 0.45 * u / wl));                      // dark gap under each lip
+      else if (u < wl + 0.1) c = c.map(q => q * (1.25 - 0.25 * (u - wl) / 0.1));   // the lip catches the light
+      const w = crackW(v.x);
+      if (v.y > 0.15 && w > 0) {
+        const d = Math.abs(v.z) / w;                      // 0 in the middle of the crack, 1 at its edge
+        if (d < 1) { k -= 0.34 * Math.pow(1 - d, 0.5) * Math.min(1, w / 0.1); const b = bands[Math.min(4, Math.floor(Math.pow(1 - d, 0.7) * 5))]; c = b.slice(); }
+        else if (d < 1.4) { k += 0.06 * (1 - (d - 1) / 0.4); c = c.map((q, j) => q + (bands[0][j] - q) * 0.25 * (1 - (d - 1) / 0.4)); }
+      }
+      let x = v.x * k * SX, y = v.y * k * SY, z = v.z * k * SZ;
+      if (y < 0) y *= 0.25;
+      const rim = Math.exp(-((v.y - 0.05) ** 2) / 0.02); x *= 1 + 0.04 * rim; z *= 1 + 0.06 * rim;
+      pos.setXYZ(i, x, y, z);
+      const shade = 0.55 + 0.45 * Math.min(1, Math.max(0, (v.y + 0.1) / 0.6));
+      col[i * 3] = c[0] * shade * 1.35; col[i * 3 + 1] = c[1] * shade * 1.35; col[i * 3 + 2] = c[2] * shade * 1.35;
+    }
+    g.setAttribute('color', new THREE.BufferAttribute(col, 3)); g.computeVertexNormals();
+    L.mesh(g, crustM, CX, CY, 0, { parent: G });
+  }
+  const shellTop = (x, z) => CY + SY * Math.sqrt(Math.max(0, 1 - ((x - CX) / SX) ** 2 - (z / SZ) ** 2));
+  // the seam of crystal: druzy points packed along the crack floor, and a jagged ridge of big ones, tallest mid-back
+  // two rows of crystal growing from the crack walls toward the middle and up, plus druzy points along the floor
+  for (let i = 0; i < 30; i++) {
+    const t = L.rnd(), ux = -0.7 + 1.4 * t, x = CX + SX * ux, w = crackW(ux) * SZ * 0.5, z = (L.rnd() - 0.5) * 2 * w;
+    K.shard(G, [x, shellTop(x, 0) - 0.4, z], [(L.rnd() - 0.5) * 0.5, 1, (L.rnd() - 0.5) * 0.6], 0.14 + L.rnd() * 0.14, 0.05 + L.rnd() * 0.03, X, { collar: false });
+  }
+  for (const s of [-1, 1]) for (let i = 0; i < 11; i++) {
+    const t = (i + (s > 0 ? 0.5 : 0)) / 11, ux = -0.66 + 1.3 * t, x = CX + SX * ux, mid = Math.max(0, 1 - Math.abs(t - 0.42) * 1.9);
+    const w = crackW(ux) * SZ;
+    K.shard(G, [x, shellTop(x, 0) - 0.33, s * w * 0.55], [(L.rnd() - 0.55) * 0.35, 1, -s * (0.15 + L.rnd() * 0.25)], 0.3 + 0.75 * mid * (0.8 + L.rnd() * 0.35), 0.09 + 0.07 * mid, X, { collar: false });
+  }
+  // clusters breaking through the flanks, each in a socket of cracked crust
+  for (const [ux, uz, n, len] of [[-0.25, 0.64, 4, 0.7], [0.35, -0.62, 4, 0.66], [-0.75, -0.5, 3, 0.55], [0.62, 0.48, 3, 0.5], [-1.0, 0.36, 3, 0.45]]) {
+    const x = CX + SX * ux, z = SZ * uz, y = shellTop(x, z) - 0.05, nrm = [(x - CX) / SX ** 2, (y - CY) / SY ** 2, z / SZ ** 2];
+    K.cluster(G, [x, y - 0.04, z], [nrm[0] * 0.6, nrm[1], nrm[2] * 0.9], n, len, 0.11, X, 0.5, { collarMat: crustM });
+  }
+  // ---- head: a low shield of crust tucked under the shell's front lip; its brow crusted with stubby shards (the ram)
+  K.seg(G, [1.98, 0.48, 0], 0.62, 0.44, 1.02, K.crust('#6b625b'), { bands: 2, depth: 0.1, crease: 0.25, seed: 21, lump: 0.05 });
+  K.cluster(G, [2.3, 0.72, -0.35], [1, 0.7, -0.3], 3, 0.42, 0.08, X, 0.4, { collar: false });
+  K.cluster(G, [2.32, 0.74, 0.32], [1, 0.7, 0.3], 3, 0.4, 0.08, X, 0.4, { collar: false });
+  K.cluster(G, [2.38, 0.68, 0], [1, 0.6, 0], 2, 0.34, 0.08, X, 0.35, { collar: false });
+  for (const s of [-1, 1]) {
+    L.sphere(0.08, K.eye(), 2.28, 0.72, s * 0.66, { parent: G, dirt: 0 });
+    const m = [[2.35, 0.38, s * 0.62], [2.7, 0.4, s * 0.78], [3.02, 0.36, s * 0.56], [3.14, 0.34, s * 0.24]];
+    K.tube(G, m, t => 0.21 * (1 - t) + 0.035, legM, { n: 30, radial: 14 });
+    const c = new THREE.CatmullRomCurve3(m.map(p => new THREE.Vector3(...p)));
+    for (const t of [0.5, 0.72]) { const p = c.getPointAt(t); K.cone(G, [p.x, p.y, p.z], [0.15, 0, -s], 0.22, 0.055, K.plain('#cfc6b4', 0.5)); }
+  }
+  centre(L, G, GL);
+}
+
+// ---------------------------------------------------------------------------------------------------------------
+// BURROW: the tunnel mouth. A crater of churned earth heaped round a dark throat whose ribbed walls are lined with
+// glowing crystal. Six crystal pillars stand on the rim, evenly spaced, the one detail that looks planned.
+function burrow(L, K) {
+  const { THREE } = K, X = XTAL;
+  const CZ = -0.3;
+  const prof = [[0, -3.4], [0.35, -2.9], [0.75, -1.7], [1.05, -0.55], [1.28, 0.3], [1.6, 0.78], [2.0, 0.86], [2.5, 0.6], [3.1, 0.28], [3.6, 0.07], [4.0, -0.05]];
+  const hProf = (r) => { for (let i = 1; i < prof.length; i++) if (r <= prof[i][0]) { const [r0, h0] = prof[i - 1], [r1, h1] = prof[i], t = (r - r0) / (r1 - r0), s = t * t * (3 - 2 * t); return h0 + (h1 - h0) * s; } return prof[prof.length - 1][1]; };
+  const RH = 1.25, RMAX = 4.0;
+  // ---- the crater mound: polar heightfield, vertex coloured
+  {
+    const NR = 90, NA = 180, pos = [], col = [], idx = [];
+    for (let j = 0; j <= NR; j++) for (let i = 0; i <= NA; i++) {
+      const r = 0.05 + (j / NR) * (RMAX - 0.05), a = i / NA * Math.PI * 2, ca = Math.cos(a), sa = Math.sin(a);
+      let h = hProf(r);
+      const ang = 0.18 * K.nz(ca * 1.5, 0.3, sa * 1.5) + 0.12 * K.nz(ca * 3.2, 1.7, sa * 3.2);
+      if (r > 1.3) h += ang * Math.exp(-((r - 2.1) ** 2) / 0.8) + 0.05 * K.nz(ca * r * 2, 3, sa * r * 2);
+      const fur = Math.pow(Math.abs(Math.sin(a * 13 + 1.5 * K.nz(ca, 0.5, sa))), 14);    // radial claw furrows down the outer slope
+      if (r > 2.1) h -= 0.07 * fur * Math.min(1, (r - 2.1) / 0.4) * Math.max(0, 1 - (r - 2.1) / 1.6);
+      const rib = Math.sin(a * 7 + r * 5.5);                                             // spiral ribs down the throat
+      if (r < RH + 0.1) h += 0.09 * rib * Math.min(1, (RH + 0.1 - r) / 0.3);
+      pos.push(ca * r, h, CZ + sa * r);
+      // colours: disturbed soil outside, churned dark earth on the rim, wet resin-dark throat, black depths
+      let c;
+      const soil = [0.6, 0.5, 0.4], dark = [0.32, 0.26, 0.22], throat = [0.2, 0.15, 0.15], resin = [0.34, 0.24, 0.24], deep = [0.04, 0.035, 0.04];
+      const mix = (p, q, t) => p.map((v, k) => v + (q[k] - v) * Math.max(0, Math.min(1, t)));
+      if (r > 2.0) c = mix(dark, soil, (r - 2.0) / 1.6);
+      else if (r > RH) c = mix(throat, dark, (r - RH) / 0.75);
+      else { c = mix(deep, throat, (r - 0.2) / (RH - 0.2)); if (rib > 0.5) c = mix(c, resin, (rib - 0.5) * 1.4 * Math.min(1, r / 0.6)); }
+      const n = 0.85 + 0.3 * K.nz(ca * r * 3, 5, sa * r * 3); c = c.map(v => v * n * (1 - 0.35 * fur * (r > 2.1 ? 1 : 0)));
+      col.push(...c.map(v => v * 1.6));
+    }
+    for (let j = 0; j < NR; j++) for (let i = 0; i < NA; i++) { const a = j * (NA + 1) + i, b = a + 1, c = a + NA + 1, d = c + 1; idx.push(a, c, b, b, c, d); }
+    const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+    const uv = []; for (let k = 0; k < pos.length; k += 3) uv.push(pos[k] / 3, pos[k + 2] / 3); g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+    g.setIndex(idx); g.computeVertexNormals();
+    const m = K.crust('#ffffff'); const mm = m.clone(); mm.roughness = 0.9; mm.normalScale = new THREE.Vector2(0.6, 0.6);
+    L.mesh(g, mm, 0, 0, 0, {});
+  }
+  // the ground stain round the crater: dark disturbed earth with a ragged edge, fading into whatever ground it sits on
+  {
+    const n = 1024, tex = L.canvasTex(n, (g) => {
+      const c = n / 2, img = g.createImageData(n, n), D = img.data;
+      for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) {
+        const dx = (x - c) / c, dy = (y - c) / c, rr = Math.hypot(dx, dy), a = Math.atan2(dy, dx);
+        const edge = 0.86 + 0.07 * K.nz(Math.cos(a) * 1.8, 0.2, Math.sin(a) * 1.8) + 0.04 * Math.sin(a * 9 + 2 * K.nz(dx * 3, 1, dy * 3));
+        let al = Math.min(1, Math.max(0, (edge - rr) / 0.12)) * 0.85;
+        const speck = K.nz(dx * 40, 7, dy * 40) > 0.55 ? 1 : 0;
+        const i4 = (y * n + x) * 4; D[i4] = 70 + 30 * speck; D[i4 + 1] = 56 + 40 * speck; D[i4 + 2] = 46 + 50 * speck; D[i4 + 3] = Math.round(al * 255);
+      }
+      g.putImageData(img, 0, 0);
+    });
+    const m = new THREE.MeshStandardMaterial({ map: tex, transparent: true, roughness: 0.95, depthWrite: false });
+    const pg = new THREE.PlaneGeometry(9.6, 9.6); pg.rotateX(-Math.PI / 2);
+    const pm = new THREE.Mesh(pg, m); pm.position.set(0, 0.01, CZ); pm.receiveShadow = true; pm.userData.decal = true; L.getRoot().add(pm);
+  }
+  // ---- crystal lining the throat: shards growing inward and up from the ribbed walls, brighter the deeper they sit
+  for (let i = 0; i < 26; i++) {
+    const a = i / 26 * Math.PI * 2 + L.rnd() * 0.2, r = 0.45 + L.rnd() * 0.75, h = hProf(r) + 0.02, deep = Math.max(0, Math.min(1, -h / 2.5));
+    K.shard(null, [Math.cos(a) * r, h, CZ + Math.sin(a) * r], [-Math.cos(a) * 0.8, 1.0, -Math.sin(a) * 0.8], 0.35 + L.rnd() * 0.4, 0.07 + L.rnd() * 0.04, { ...X, k: 0.8 + deep * 0.9 }, { collar: false });
+  }
+  // the glow down in the dark
+  const coreM = K.glowMat('#bff2ff', 1.2, K.dimGlow(X.glow, 1.5));
+  L.mesh(new THREE.CircleGeometry(0.42, 24).rotateX(-Math.PI / 2), coreM, 0, -3.25, CZ, { cast: false, dirt: 0 });
+  L.pointLight('#9fe9ff', 3 + K.GLOW * 10, 0, -1.6, CZ, 3.2);
+  // ---- six pillars of crystal on the rim, evenly spaced and tilted outward, each with smaller companions
+  for (let k = 0; k < 6; k++) {
+    const a = k / 6 * Math.PI * 2 + 0.26, r = 1.72, ca = Math.cos(a), sa = Math.sin(a), h = hProf(r) - 0.12;
+    K.shard(null, [ca * r, h, CZ + sa * r], [ca * 0.5, 1, sa * 0.5], 1.55 + (k % 2) * 0.35, 0.24, X, { collarMat: K.crust('#5a5048') });
+    for (const d of [-0.28, 0.3]) { const b = a + d; K.shard(null, [Math.cos(b) * (r + 0.12), hProf(r + 0.12) - 0.08, CZ + Math.sin(b) * (r + 0.12)], [Math.cos(b) * 0.9 + Math.cos(a) * 0.2, 1, Math.sin(b) * 0.9], 0.55 + L.rnd() * 0.3, 0.1, X, { collar: false }); }
+  }
+  // ---- broken slabs of crust heaved up and tipped outward between the pillars
+  const slabM = K.crust('#7a6e62');
+  for (let k = 0; k < 6; k++) {
+    const a = (k + 0.5) / 6 * Math.PI * 2 + 0.26 + (L.rnd() - 0.5) * 0.25, r = 2.35 + L.rnd() * 0.35, ca = Math.cos(a), sa = Math.sin(a);
+    const w = 0.7 + L.rnd() * 0.5, g = new THREE.BoxGeometry(w, 0.16, 0.5 + L.rnd() * 0.3, 3, 1, 3);
+    const p = g.attributes.position; for (let i = 0; i < p.count; i++) p.setXYZ(i, p.getX(i) * (1 + (L.rnd() - 0.5) * 0.2), p.getY(i), p.getZ(i) * (1 + (L.rnd() - 0.5) * 0.25)); g.computeVertexNormals();
+    const m = L.mesh(g, slabM, ca * r, hProf(r) + 0.12, CZ + sa * r, { dirt: 0.3 });
+    m.rotation.set(0, -a + Math.PI / 2, 0); m.rotateX(-(0.35 + L.rnd() * 0.35));
+  }
+  // ---- spoil: clods and stones thrown out, chips of crystal, and husks of shed shells
+  const rockM = K.crust('#6b5f55');
+  for (let i = 0; i < 34; i++) {
+    const a = L.rnd() * Math.PI * 2, r = 2.0 + L.rnd() * 1.9, s = 0.07 + L.rnd() * 0.16;
+    const g = new THREE.DodecahedronGeometry(s, 0); g.scale(1, 0.6, 1);
+    L.mesh(g, rockM, Math.cos(a) * r, hProf(r) + s * 0.25, CZ + Math.sin(a) * r, { dirt: 0.3, ry: L.rnd() * 3 });
+  }
+  for (let i = 0; i < 10; i++) {
+    const a = L.rnd() * Math.PI * 2, r = 2.3 + L.rnd() * 1.4;
+    K.shard(null, [Math.cos(a) * r, hProf(r) - 0.03, CZ + Math.sin(a) * r], [L.rnd() - 0.5, 0.5, L.rnd() - 0.5], 0.18 + L.rnd() * 0.14, 0.05, X, { collar: false });
+  }
+  const huskM = K.chitin('#3b2c24', { irid: 0.5 });
+  for (const [a, r, s] of [[2.3, 2.9, 0.5], [3.9, 2.7, 0.42], [5.4, 3.2, 0.36], [0.9, 3.3, 0.3]]) {
+    const g = new THREE.SphereGeometry(1, 24, 12, 0, Math.PI * 2, 0, Math.PI * 0.42); g.scale(s, s * 0.45, s * 0.7);
+    const m = L.mesh(g, huskM, Math.cos(a) * r, hProf(r) + 0.02, CZ + Math.sin(a) * r, { dirt: 0.2 }); m.rotation.set(Math.PI * (0.85 + L.rnd() * 0.2), a, 0.3);
+  }
+}
+
+// a patch of ground for the hero shot (catches the shadow; fades out at the edge)
+function heroGround(L, K, W) {
+  const { THREE } = K;
+  const n = 512, tex = L.canvasTex(n, (g) => {
+    const c = n / 2; const gr = g.createRadialGradient(c, c, 0, c, c, c); gr.addColorStop(0, 'rgba(255,255,255,1)'); gr.addColorStop(0.55, 'rgba(255,255,255,0.9)'); gr.addColorStop(1, 'rgba(255,255,255,0)');
+    g.fillStyle = gr; g.fillRect(0, 0, n, n);
+  }, false);
+  const m = new THREE.MeshStandardMaterial({ map: L.M.rough('#b8935f').map, color: '#c9a575', alphaMap: tex, transparent: true, roughness: 0.95, depthWrite: false });
+  const pg = new THREE.PlaneGeometry(W * 2.2, W * 2.2); pg.rotateX(-Math.PI / 2);
+  const pm = new THREE.Mesh(pg, m); pm.receiveShadow = true; pm.position.y = 0.0; pm.userData.decal = true; L.getRoot().add(pm);
+}

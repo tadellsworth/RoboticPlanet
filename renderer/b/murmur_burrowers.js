@@ -22,7 +22,7 @@ export default function (L) {
   const clamp = (x, a = 0, b = 1) => Math.max(a, Math.min(b, x));
   const sstep = (a, b, x) => { const t = clamp((x - a) / (b - a)); return t * t * (3 - 2 * t); };
   const col = (h) => new THREE.Color(h);
-  const dim = (hex, k) => '#' + new THREE.Color(hex).multiplyScalar(k).getHexString();
+  const dim = (hex, k) => '#' + [1, 3, 5].map(i => Math.round(Math.min(255, parseInt(hex.slice(i, i + 2), 16) * k)).toString(16).padStart(2, '0')).join('');   // in sRGB
 
   // ---- smooth pseudo-noise from random plane waves
   function makeNoise(seed) {
@@ -34,7 +34,7 @@ export default function (L) {
 
   // ---- palettes per region. Glow is amber (not a team colour); the Bloom variant glows violet as the lore says.
   const PAL = {
-    base:  { plate: '#4e3e34', edge: '#a3876c', tuck: '#211814', dust: '#b59b7d', mem: '#a7806e', memD: '#5a3d35', leg: '#3d2d26', tip: '#cfb795', glow: '#ffa526', core: '#ffe6a0', pore: '#ff9c22' },
+    base:  { plate: '#3a2e29', edge: '#9a8268', tuck: '#17110f', dust: '#b39a7c', mem: '#a8806c', memD: '#4a322c', leg: '#4a3a31', tip: '#d6c09e', glow: '#ffa526', core: '#ffe6a0', pore: '#ff9c22' },
     rust:  { plate: '#8e4620', edge: '#dc8c4c', tuck: '#33140a', dust: '#c98f62', mem: '#7c4434', memD: '#3c1f18', leg: '#4f2516', tip: '#e2b27c', glow: '#ff9622', core: '#ffd68a', pore: '#ff8a1c' },
     white: { plate: '#b9c1c5', edge: '#eef2f4', tuck: '#5f6a70', dust: '#f6faff', mem: '#c9b3ac', memD: '#7c6a66', leg: '#8b8682', tip: '#eee9e1', glow: '#ffcf78', core: '#fff3d0', pore: '#ffc870' },
     bloom: { plate: '#2c2431', edge: '#6e5a79', tuck: '#120d15', dust: '#4b3a55', mem: '#5b3a66', memD: '#2a1a30', leg: '#241b29', tip: '#a28cae', glow: '#dd8cff', core: '#f8e2ff', pore: '#d27dff' },
@@ -60,29 +60,30 @@ export default function (L) {
     const g = c.getContext('2d'), hg = h.getContext('2d');
     g.fillStyle = '#e4e4e4'; g.fillRect(0, 0, n, n); hg.fillStyle = '#808080'; hg.fillRect(0, 0, n, n);
     L.blotches(g, n, 80, 10, 60, 0.07); L.blotches(g, n, 40, 10, 50, 0.08, '255,255,255');
-    for (let i = 0; i < 70; i++) {     // growth lines: long faint arcs
+    for (let i = 0; i < 0; i++) {      // (growth lines: off, they read as woven cloth)
       const y = RR(0, n), a = RR(-0.25, 0.25); g.strokeStyle = `rgba(0,0,0,${RR(0.04, 0.12)})`; hg.strokeStyle = `rgba(160,160,160,${RR(0.3, 0.6)})`; g.lineWidth = hg.lineWidth = RR(1, 2.5);
       for (const k of [g, hg]) { k.beginPath(); k.moveTo(0, y); k.bezierCurveTo(n * 0.3, y + a * 80, n * 0.7, y - a * 80, n, y); k.stroke(); }
     }
-    for (let i = 0; i < 2600; i++) {   // pits
-      const x = RR(0, n), y = RR(0, n), r = RR(0.8, 3.2);
-      g.fillStyle = `rgba(20,14,10,${RR(0.12, 0.4)})`; g.beginPath(); g.ellipse(x, y, r, r * RR(0.6, 1), RR(0, 3), 0, 7); g.fill();
-      hg.fillStyle = `rgba(30,30,30,${RR(0.5, 0.9)})`; hg.beginPath(); hg.arc(x, y, r, 0, 7); hg.fill();
+    L.blotches(g, n, 60, 30, 120, 0.1); L.blotches(g, n, 30, 20, 90, 0.08, '255,250,240');
+    for (let i = 0; i < 900; i++) {   // pits
+      const x = RR(0, n), y = RR(0, n), r = RR(1.2, 3.6);
+      g.fillStyle = `rgba(20,14,10,${RR(0.06, 0.2)})`; g.beginPath(); g.ellipse(x, y, r, r * RR(0.6, 1), RR(0, 3), 0, 7); g.fill();
+      hg.fillStyle = `rgba(50,50,50,${RR(0.3, 0.6)})`; hg.beginPath(); hg.arc(x, y, r, 0, 7); hg.fill();
     }
     for (let i = 0; i < 60; i++) { g.strokeStyle = `rgba(255,255,255,${RR(0.08, 0.22)})`; g.lineWidth = 1; const x = RR(0, n), y = RR(0, n); g.beginPath(); g.moveTo(x, y); g.lineTo(x + RR(-40, 40), y + RR(-10, 10)); g.stroke(); }
-    L.speckle(g, n, 6000, 0.12);
+    L.speckle(g, n, 2500, 0.08);
     const map = new THREE.CanvasTexture(c); map.wrapS = map.wrapT = THREE.RepeatWrapping; map.colorSpace = THREE.SRGBColorSpace; map.anisotropy = 8;
-    return (_detail = { map, normal: heightToNormal(h, 2.2) });
+    return (_detail = { map, normal: heightToNormal(h, 1.4) });
   }
-  const chitin = (rough = 0.56, clear = 0.22) => {
-    const d = detail(); const m = new THREE.MeshPhysicalMaterial({ color: '#ffffff', map: d.map, normalMap: d.normal, roughness: rough, metalness: 0, clearcoat: clear, clearcoatRoughness: 0.55, vertexColors: true });
-    m.normalScale.set(0.9, 0.9); m.envMapIntensity = 0.28; return m;
+  const chitin = (rough = 0.66, clear = 0.18) => {
+    const d = detail(); const m = new THREE.MeshPhysicalMaterial({ color: '#ffffff', map: d.map, normalMap: d.normal, roughness: rough, metalness: 0, clearcoat: clear, clearcoatRoughness: 0.6, vertexColors: true });
+    m.normalScale.set(0.9, 0.9); m.envMapIntensity = 0.15; return m;
   };
   const flesh = (hex, rough = 0.5) => { const m = new THREE.MeshPhysicalMaterial({ color: hex, roughness: rough, metalness: 0, clearcoat: 0.5, clearcoatRoughness: 0.35, sheen: 0.4, sheenColor: new THREE.Color(P.mem), vertexColors: true }); m.envMapIntensity = 0.3; return m; };
   const glowMat = (hex, k, glowHex) => { const m = new THREE.MeshStandardMaterial({ color: hex, emissive: hex, emissiveIntensity: k, roughness: 0.3 }); m.userData.glow = glowHex || hex; return m; };
   // bioluminescent pores: dim by day, bright at night
   const poreMat = () => { if (NIGHT) return glowMat(P.pore, 2.6, P.pore);
-    const m = new THREE.MeshStandardMaterial({ color: dim(P.pore, 0.38), emissive: P.pore, emissiveIntensity: 0.1, roughness: 0.4 }); return m; };
+    return M.plain(dim(P.pore, 0.16), 0.5); };
   // a pore: a small flat disc sunk into the surface
   function pore(parent, p, r) { const g = new THREE.SphereGeometry(r, 14, 8); g.scale(1, 0.35, 1); return addMesh(g, poreMat(), parent, p.x, p.y - r * 0.08, p.z, { cast: false }); }
   const chitM = chitin(), legM = chitin(0.5, 0.3), memM = flesh('#ffffff');
@@ -140,19 +141,21 @@ export default function (L) {
   // v -1 left .. 1 right; at() gives a point on the top surface in the plate's frame).
   function plate(o, parent, x = 0, y = 0, z = 0, rz = 0) {
     const NU = o.nu ?? 26, NV = o.nv ?? 34, Lh = o.L, Wd = o.W, H = o.H;
-    const sweep = o.sweep ?? 0.25, front = o.front ?? 0.2, keel = o.keel ?? 0.05, rim = o.rim ?? 0.06, pw = o.pw ?? 0.55;
+    const sweep = o.sweep ?? 0.25, front = o.front ?? 0.2, keel = o.keel ?? 0.05, rim = o.rim ?? 0.06, pw = o.pw ?? 1.1;
     const rearIn = o.rearIn ?? 0, notch = o.notch ?? 0, lipF = o.lipF ?? 0, ribN = o.ribN ?? 0, ribH = o.ribH ?? 0;
     const pal = o.pal || P, A = col(pal.plate), E = col(pal.edge), T = col(pal.tuck), D = col(pal.dust);
     const S = (u, v, top) => {
       const av = Math.abs(v);
-      const xr = -Lh / 2 + rearIn * (1 - av * av) - sweep * Math.pow(av, o.sweepP ?? 3);
+      const xr = -Lh / 2 + rearIn * (1 - av * av) - sweep * Math.pow(av, o.sweepP ?? 3) + (o.ragged ?? 0.035) * Lh * nz2(v * 6 + x * 3, 2, z * 3);
       const xf = Lh / 2 - front * av * av - notch * Math.exp(-v * v / 0.012) + (o.wavy ?? 0) * Math.sin(v * Math.PI * 7.5) * (1 - av * 0.5);
       const xx = xr + (xf - xr) * u;
       const wz = 1 - (o.taperF ?? 0) * Math.pow(u, 0.8) - (o.taperR ?? 0) * (1 - u);
       const zz = v * Wd / 2 * wz;
       const dome = Math.pow(Math.max(0, 1 - av * av), pw);
       if (!top) return [xx, -H * 0.2 * dome, zz, dome];
-      const along = (0.8 + 0.2 * Math.sin(Math.PI * u)) * (1 - (o.dip ?? 0.35) * u * u);
+      // shields dome along their length; trunk plates rise gently toward the front (facing the sun), then slide under the plate ahead
+      const along = o.shield ? (0.82 + 0.18 * Math.sin(Math.PI * Math.min(1, u * 1.4))) * (1 - (o.dip ?? 0.2) * u * u)
+        : (1 - (o.rise ?? 0.16) * (1 - sstep(0, 0.6, u))) * (1 - (o.slide ?? 0.7) * sstep(0.6, 1, u));
       let yy = H * dome * along + keel * Math.exp(-v * v / 0.02) * dome * (0.4 + 0.6 * u)
         + rim * Math.exp(-Math.pow(u / 0.09, 2)) * Math.pow(dome, 0.3) + lipF * Math.exp(-Math.pow((1 - u) / 0.08, 2)) * Math.pow(dome, 0.3);
       if (ribN) yy += ribH * Math.pow(0.5 + 0.5 * Math.cos(v * Math.PI * ribN), 5) * dome * sstep(0.1, 0.8, u);
@@ -168,12 +171,15 @@ export default function (L) {
         if (!top) c = T.clone();
         else {
           const av = Math.abs(v);
-          c = A.clone().multiplyScalar(tone);
-          c.lerp(E, clamp(sstep(0.7, 1, av) * 0.7 + Math.exp(-Math.pow(u / 0.07, 2)) * 0.55 * Math.pow(dome, 0.5) + (o.wearF ?? 0) * sstep(0.85, 1, u)));
+          c = A.clone().multiplyScalar(tone * (0.86 + 0.32 * (0.5 + nz2(px * 2.2 + x * 1.3, 4, pz * 2.2 + z * 1.1))));
+          c.lerp(E, clamp(sstep(0.78, 1, av) * 0.45 + (o.shield ? 0 : Math.exp(-Math.pow(u / 0.045, 2)) * 0.85 * Math.pow(dome, 0.3)) + (o.wearF ?? 0) * sstep(0.8, 1, u)));
+          if (!o.shield) c.lerp(T, sstep(0.05, 0.08, u) * (1 - sstep(0.13, 0.2, u)) * 0.55 * (o.band ?? 1));
+          if (ribN) c.multiplyScalar(0.78 + 0.3 * Math.pow(0.5 + 0.5 * Math.cos(v * Math.PI * ribN), 3));
           c.lerp(T, sstep(0.72, 1, u) * (o.tuckK ?? 0.55) * (1 - (o.wearF ? 1 : 0)));
           const dn = clamp((nz(px * 1.6 + x, 5, pz * 1.6 + z) + 0.02) * 2.4) * (o.dust ?? 0.55);
           c.lerp(D, dn * sstep(0.05, 0.5, dome));
           if (o.paintFn) o.paintFn(c, u, v, px, pz);
+          if (Q.get('dbg')) c.setRGB(1 - u, u, Math.abs(v) > 0.9 ? 1 : 0);
         }
         cl.push(c.r, c.g, c.b);
       }
@@ -191,17 +197,33 @@ export default function (L) {
 
   // ---- the round lamprey mouth: lip, rings of inward teeth, a dark throat with a glowing core. Faces local +y, tilted
   // toward +x by `tilt` degrees.
+  const _throat = {};
+  function throatMat(k) {   // a glowing throat: hot core, amber, then dark folds toward the lip (emissive map = glow pass)
+    const key = P.glow + k; if (_throat[key]) return _throat[key];
+    const tex = L.canvasTex(256, (g, n) => {
+      const gr = g.createRadialGradient(n / 2, n / 2, 0, n / 2, n / 2, n / 2);
+      gr.addColorStop(0, '#ffffff'); gr.addColorStop(0.14, P.core); gr.addColorStop(0.38, P.glow); gr.addColorStop(0.66, dim(P.glow, 0.28)); gr.addColorStop(0.9, '#0c0504'); gr.addColorStop(1, '#0c0504');
+      g.fillStyle = gr; g.fillRect(0, 0, n, n);
+      for (let i = 0; i < 16; i++) { const a = i / 16 * Math.PI * 2 + 0.1 * Math.sin(i * 3); g.strokeStyle = 'rgba(12,4,2,0.55)'; g.lineWidth = 6; g.beginPath(); g.moveTo(n / 2 + Math.cos(a) * n * 0.16, n / 2 + Math.sin(a) * n * 0.16); g.lineTo(n / 2 + Math.cos(a) * n * 0.5, n / 2 + Math.sin(a) * n * 0.5); g.stroke(); }
+    });
+    const m = new THREE.MeshStandardMaterial({ color: '#000000', emissive: '#ffffff', emissiveMap: tex, emissiveIntensity: k, roughness: 0.6 });
+    m.userData.glow = '#ffffff'; return (_throat[key] = m);
+  }
+  // ---- the round lamprey mouth: a lobed fleshy lip, two rings of inward teeth, a throat glowing with stolen charge.
+  // Faces local +y, tilted toward +x by `tilt` degrees.
   function mouth(parent, x, y, z, R, tilt, o = {}) {
     const g = new THREE.Group(); g.position.set(x, y, z); g.rotation.z = -tilt * Math.PI / 180; if (o.yaw) g.rotation.y = o.yaw; parent.add(g);
-    const lip = new THREE.TorusGeometry(R, R * 0.3, 12, 36); lip.rotateX(Math.PI / 2); paint(lip, P.memD, P.tuck, 0.6, 0.2); addMesh(lip, memM, g, 0, 0, 0, { dirt: 0 });
-    const k = o.k ?? 1;
-    const ring = new THREE.TorusGeometry(R * 0.74, R * 0.13, 8, 36); ring.rotateX(Math.PI / 2); addMesh(ring, glowMat(P.glow, 2.2 * k), g, 0, R * 0.05, 0, { cast: false });
-    const throat = new THREE.CircleGeometry(R * 0.78, 32); throat.rotateX(-Math.PI / 2); addMesh(throat, M.plain('#140805', 0.9), g, 0, -R * 0.08, 0, { cast: false });
-    const core = new THREE.CircleGeometry(R * 0.36, 28); core.rotateX(-Math.PI / 2); addMesh(core, glowMat(P.core, 3 * k, P.core), g, 0, -R * 0.04, 0, { cast: false });
+    const lip = new THREE.TorusGeometry(R, R * 0.3, 12, 48); lip.rotateX(Math.PI / 2);
+    { const p = lip.attributes.position; for (let i = 0; i < p.count; i++) { const px = p.getX(i), pz = p.getZ(i), a = Math.atan2(pz, px), k = 1 + 0.08 * Math.sin(a * 7 + 1) + 0.04 * Math.sin(a * 13); p.setXYZ(i, px * k, p.getY(i), pz * k); } lip.computeVertexNormals(); }
+    paint(lip, P.memD, P.tuck, 0.6, 0.15); addMesh(lip, memM, g, 0, 0, 0, { dirt: 0 });
+    const k = (o.k ?? 1) * (NIGHT ? 2.4 : 1.7);
+    const th = new THREE.CircleGeometry(R * 0.92, 40); th.rotateX(-Math.PI / 2); addMesh(th, throatMat(k), g, 0, -R * 0.12, 0, { cast: false });
     const N = o.teeth ?? 12, toothM = M.plain(P.tip, 0.45);
     for (let i = 0; i < N; i++) {
-      const a = i / N * Math.PI * 2, rr = R * 0.86, b = [Math.cos(a) * rr, R * 0.12, Math.sin(a) * rr];
-      cone(R * 0.1, R * 0.42, toothM, g, b, [-Math.cos(a), -0.35, -Math.sin(a)], { n: 6, cast: false });
+      const a = i / N * Math.PI * 2, rr = R * 0.84;
+      cone(R * 0.11, R * 0.46, toothM, g, [Math.cos(a) * rr, R * 0.1, Math.sin(a) * rr], [-Math.cos(a), -0.3, -Math.sin(a)], { n: 6, cast: false });
+      const b = a + Math.PI / N, r2 = R * 0.6;
+      if (i % 2 === 0) cone(R * 0.07, R * 0.28, toothM, g, [Math.cos(b) * r2, -R * 0.04, Math.sin(b) * r2], [-Math.cos(b), -0.6, -Math.sin(b)], { n: 5, cast: false });
     }
     return g;
   }
@@ -220,7 +242,8 @@ export default function (L) {
     const s = Math.sign(hip[2]);
     const dx = stride * Math.cos(phase), up = Math.max(0, -Math.sin(phase)) * lift;
     const foot = [hip[0] + footFwd + dx, 0.04 + up, s * (Math.abs(hip[2]) + footOut - up * 0.5)];
-    const knee = [hip[0] + (footFwd + dx) * 0.45, hip[1] + kneeUp + up * 0.5, s * (Math.abs(hip[2]) + footOut * 0.5)];
+    const kf = o.kneeFwd ?? 0;
+    const knee = [hip[0] + (footFwd + dx) * 0.35 + kf, hip[1] + kneeUp + up * 0.5, s * (Math.abs(hip[2]) + footOut * (o.kneeOut ?? 0.5))];
     seg(hip, knee, r0, r0 * 0.82, mat, parent, { color: P.leg, colorB: P.tuck });
     seg(knee, foot, r0 * 0.82, r0 * 0.3, tipMat || mat, parent, { color: P.leg, colorB: P.tip });
     if (o.claw) cone(r0 * 0.35, o.claw, M.plain(P.tip, 0.45), parent, foot, [1, -0.3, s * 0.6], { n: 6 });
@@ -236,58 +259,48 @@ export default function (L) {
   }
 
   // ======================================================================================================== SWARMER
-  // A blind, plated centipede the size of a big dog: a spade head with a glowing lamprey mouth, eight shingled plates
-  // with swept-back points, sixteen short legs rippling in waves, two tail feelers.
+  // A blind, plated centipede the size of a big dog: a spade head wider than its neck with a glowing lamprey mouth
+  // under the lip, eight shingled plates with pointed, swept-back corners, sixteen jointed legs rippling in waves, and
+  // two long tail feelers.
+  function stud(g, p, r, pal = P) { const kb = new THREE.SphereGeometry(r, 14, 9); kb.scale(1, 0.8, 1); paint(kb, pal.edge, pal.plate, 0.7, 0.3); return addMesh(kb, chitM, g, p.x, p.y - r * 0.25, p.z, { dirt: 0 }); }
   function swarmer() {
     const rust = V === 'rust', white = V === 'white', bloom = V === 'bloom';
-    const fat = white ? 1.12 : 1, tall = white ? 1.3 : rust ? 1.25 : 1;
-    const sp = spine(-4.0, 3.4, white ? 0.09 : 0.2, 0.75, 0.15);
-    // trunk plates, front to back
-    const XS = [1.92, 1.25, 0.58, -0.09, -0.76, -1.43, -2.1, -2.74];
-    const WS = [1.95, 2.12, 2.18, 2.12, 2.0, 1.8, 1.55, 1.25].map(w => w * fat * (rust ? 1.04 : 1));
-    // soft body under the plates
-    for (let i = 0; i < XS.length; i++) {
-      const g = segGroup(sp, XS[i] - 0.33);
-      ell(0.5, 0.36 * tall, WS[i] * 0.42, memM, g, 0, 0.36 * tall, 0, { color: P.mem, colorB: P.memD, colorK: 0.7 });
-    }
-    // plates (drawn back to front so the overlaps stack correctly; each tips its nose down under the plate ahead)
-    const plates = [];
+    const fat = white ? 1.15 : rust ? 1.05 : 1, tall = white ? 1.3 : rust ? 1.2 : 1;
+    const sp = spine(-4.1, 3.5, white ? 0.1 : 0.22, 0.8, 0.12);
+    const XS = [1.95, 1.3, 0.62, -0.06, -0.74, -1.4, -2.05, -2.68];
+    const LS = [0.95, 1.02, 0.9, 1.02, 0.9, 1.0, 0.88, 0.85];       // long / short alternation, as on a real centipede
+    const WS = [1.5, 1.72, 1.82, 1.8, 1.7, 1.55, 1.36, 1.12].map(w => w * fat);
+    for (let i = 0; i < XS.length; i++) { const g = segGroup(sp, XS[i] - 0.3); ell(0.48, 0.34 * tall, WS[i] * 0.4, memM, g, 0, 0.34 * tall, 0, { color: P.memD, colorB: P.tuck, colorK: 0.6 }); }
     for (let i = XS.length - 1; i >= 0; i--) {
-      const g = segGroup(sp, XS[i]);
-      const pl = plate({ L: 0.98, W: WS[i], H: 0.36 * tall, sweep: rust ? 0.42 : 0.32, front: 0.14, keel: rust ? 0.1 : 0.05, rim: rust ? 0.1 : 0.07, pw: white ? 0.38 : 0.55, dust: white ? 0.75 : 0.5,
-        paintFn: bloom ? bloomSpots(i) : null }, g, 0, 0.42 * tall, 0, -0.1);
-      plates[i] = { g, pl };
-      // pores on the flanks: a pair per plate
-      for (const s of [-1, 1]) { const p = pl.at(0.42, s * 0.8); ell(0.075, 0.05, 0.075, poreMat(), g, p.x, p.y + 0.01, p.z, { dirt: 0, cast: false }); }
-      if (rust) for (const v of [-0.55, 0, 0.55]) { const p = pl.at(0.12, v); cone(0.09, 0.2, chitM, g, [p.x, p.y - 0.04, p.z], [-0.5, 1, v * 0.4], { color: P.edge, colorB: P.plate }); }
-      if (rust) for (const s of [-1, 1]) { const p = pl.at(0.2, s * 0.97); cone(0.08, 0.32, chitM, g, [p.x, p.y, p.z], [-0.7, 0.15, s], { color: P.edge, colorB: P.plate }); }
-      if (white) frost(g, pl, 7);
-      if (bloom && i % 2 === 1) bloomFronds(g, pl, 2);
-      // legs: one pair per plate, metachronal wave down the body; left and right in antiphase
-      const reach = (white ? 0.55 : 0.78) * (i > 5 ? 0.9 : 1), r0 = white ? 0.1 : 0.075;
-      for (const s of [-1, 1]) {
-        const ph = PH + i * 0.95 + (s > 0 ? Math.PI : 0);
-        leg(g, [0.05, 0.3, s * WS[i] * 0.36], reach, (i < 3 ? 0.18 : i > 5 ? -0.25 : 0), 0.24, r0, ph, white ? 0.12 : 0.22, white ? 0.12 : 0.2, legM);
+      const g = segGroup(sp, XS[i]), W = WS[i] * (0.97 + 0.06 * rnd());
+      const pl = plate({ L: LS[i], W, H: 0.5 * tall, sweep: rust ? 0.55 : 0.48, sweepP: 4, taperF: 0.2, front: 0.1, keel: rust ? 0.12 : 0.07, rim: rust ? 0.11 : 0.08, pw: white ? 0.7 : 1.0, dust: white ? 0.85 : 0.6,
+        slide: 0.7, paintFn: bloom ? bloomSpots(i) : null }, g, 0, (0.36 + 0.045 * (7 - i)) * tall, 0, -0.05);
+      for (const s of [-1, 1]) pore(g, pl.at(0.4 + 0.15 * rnd(), s * (0.66 + 0.1 * rnd())), 0.065);
+      if (rust) {   // armoured: studs along the rear rim, spurs off the corners
+        for (const v of [-0.5, 0, 0.5]) stud(g, pl.at(0.14, v), 0.09);
+        for (const s of [-1, 1]) { const p = pl.at(0.06, s * 0.98); cone(0.08, 0.34, chitM, g, [p.x, p.y, p.z], [-0.8, 0.12, s], { color: P.edge, colorB: P.plate }); }
       }
+      if (white) frost(g, pl, 6);
+      if (bloom && i % 2 === 1) bloomFronds(g, pl, 2);
+      // a pair of jointed legs; front legs reach forward, rear legs trail back
+      const reach = (white ? 0.62 : 0.95) * (i > 5 ? 0.92 : 1), r0 = white ? 0.1 : 0.075, fwd = [0.45, 0.3, 0.12, 0, -0.12, -0.25, -0.38, -0.5][i];
+      for (const s of [-1, 1]) leg(g, [0.05, 0.3 * tall, s * W * 0.34], reach, fwd, 0.28, r0, PH + i * 0.95 + (s > 0 ? Math.PI : 0), white ? 0.12 : 0.24, white ? 0.12 : 0.22, legM, null, { kneeOut: 0.62 });
     }
-    // tail plate and two feelers
-    {
-      const g = segGroup(sp, -3.32);
-      ell(0.42, 0.3 * tall, 0.5 * fat, memM, g, 0.1, 0.32, 0, { color: P.mem, colorB: P.memD });
-      const pl = plate({ L: 0.82, W: 1.0 * fat, H: 0.3 * tall, sweep: -0.25, front: 0.1, rim: 0.05, keel: 0.04, pw: 0.6 }, g, 0, 0.38 * tall, 0, -0.06);
-      for (const s of [-1, 1]) hook([[-0.3, 0.45, s * 0.25], [-0.9, 0.5, s * 0.45], [-1.15, 0.42, s * 0.85 + s * 0.12 * Math.sin(PH + s)]], 0.07, 0.015, legM, g, { color: P.leg, colorB: P.tip });
+    {   // tail: a small rounded plate and two long feelers
+      const g = segGroup(sp, -3.28);
+      ell(0.4, 0.28 * tall, 0.44 * fat, memM, g, 0.1, 0.3, 0, { color: P.memD, colorB: P.tuck });
+      plate({ L: 0.78, W: 0.92 * fat, H: 0.36 * tall, sweep: -0.3, front: 0.08, rim: 0.05, keel: 0.05, pw: 1.0 }, g, 0, 0.36 * tall, 0, -0.06);
+      for (const s of [-1, 1]) hook([[-0.3, 0.42, s * 0.22], [-1.0, 0.5, s * 0.42], [-1.35, 0.42, s * 0.85 + s * 0.12 * Math.sin(PH + s)]], 0.07, 0.015, legM, g, { color: P.leg, colorB: P.tip });
     }
-    // head: a spade-shaped digging plate with three blunt tines, the mouth set under its lip, two short curved hooks
-    {
-      const g = segGroup(sp, 2.72);
-      ell(0.62, 0.4 * tall, 0.78 * fat, memM, g, -0.2, 0.36, 0, { color: P.memD, colorB: P.tuck });
-      const hd = plate({ L: 1.2, W: 1.8 * fat, H: 0.42 * tall, sweep: 0.05, front: 0.55, keel: 0.09, rim: 0.05, dip: 0.62, lipF: 0.05, wearF: 0.6, pw: 0.5, dust: 0.65,
-        paintFn: bloom ? bloomSpots(9) : null }, g, 0.1, 0.5 * tall, 0, -0.12);
-      for (const v of [-0.42, 0, 0.42]) { const p = hd.at(0.97, v); cone(0.1, 0.24, chitM, g, [p.x - 0.04, p.y - 0.06, p.z], [1, -0.35, v * 0.7], { color: P.edge, colorB: P.plate }); }
-      // the head's sensory pits (eyeless): two rows of dim pores
-      for (const s of [-1, 1]) for (const u of [0.45, 0.65]) { const p = hd.at(u, s * 0.62); ell(0.055, 0.04, 0.055, poreMat(), g, p.x, p.y, p.z, { dirt: 0, cast: false }); }
-      mouth(g, 0.83, 0.42 * tall, 0, 0.3, 58, { teeth: 10 });
-      for (const s of [-1, 1]) hook([[0.55, 0.3, s * 0.5], [1.05, 0.28, s * 0.78], [1.25, 0.26, s * 0.28]], 0.09, 0.025, legM, g, { color: P.leg, colorB: P.tip });
+    {   // head: a spade-shaped digging shield, wider than the neck, scraped pale at its edge; the mouth under its lip
+      const g = segGroup(sp, 2.78);
+      ell(0.55, 0.36 * tall, 0.6 * fat, memM, g, -0.3, 0.34, 0, { color: P.memD, colorB: P.tuck });
+      const hd = plate({ shield: true, L: 1.25, W: 1.95 * fat, H: 0.55 * tall, sweep: -0.1, rearIn: 0.15, front: 0.6, keel: 0.1, rim: 0.04, dip: 0.6, lipF: 0.06, wearF: 0.75, pw: 0.9, dust: 0.7, wavy: 0.025, nv: 44,
+        paintFn: bloom ? bloomSpots(9) : null }, g, 0.12, 0.46 * tall, 0, -0.13);
+      for (const v of [-0.5, 0, 0.5]) { const p = hd.at(0.97, v); cone(0.1, 0.26, chitM, g, [p.x - 0.05, p.y - 0.07, p.z], [1, -0.35, v * 0.8], { color: P.tip, colorB: P.edge }); }
+      for (const s of [-1, 1]) for (const u of [0.45, 0.62]) pore(g, hd.at(u, s * 0.55), 0.05);
+      mouth(g, 0.9, 0.38 * tall, 0, 0.34, 60, { teeth: 10 });
+      for (const s of [-1, 1]) hook([[0.55, 0.28, s * 0.5], [1.12, 0.26, s * 0.8], [1.32, 0.24, s * 0.3]], 0.09, 0.025, legM, g, { color: P.leg, colorB: P.tip });
       if (white) frost(g, hd, 5);
     }
   }
@@ -328,21 +341,21 @@ export default function (L) {
     const XS = [2.18, 1.6, 1.02, 0.44, -0.14, -0.72, -1.3, -1.88, -2.44, -2.96].map(x => x + off);
     const WS = [1.38, 1.7, 2.0, 2.22, 2.3, 2.2, 1.95, 1.65, 1.4, 1.1];
     const swell = (i) => FEED ? 1 + 0.05 * Math.sin(i * 1.3) : 1 + 0.06 * Math.sin(PH - i * 0.9);
-    const full = FEED ? 1 : 0.55;
+    const full = FEED ? 1 : 0.6;
+    const sacM = () => {
+      const m = new THREE.MeshPhysicalMaterial({ color: NIGHT ? '#ffe3a6' : '#d8b98c', emissive: P.glow, emissiveIntensity: NIGHT ? 1.6 * full : 0.14 * full, roughness: 0.2, clearcoat: 0.9, clearcoatRoughness: 0.15 });
+      if (NIGHT) m.userData.glow = dim(P.glow, 0.55 + 0.45 * full); m.envMapIntensity = 0.6; return m;
+    };
     for (let i = XS.length - 1; i >= 0; i--) {
       const g = segGroup(sp, XS[i]), W = WS[i] * swell(i);
       ell(0.42, 0.42, W * 0.48, memM, g, -0.05, 0.42, 0, { color: P.mem, colorB: P.memD, colorK: 0.75 });
-      // a narrow dorsal plate with a keel; the soft flanks stay bare
-      const pl = plate({ L: 0.7, W: W * 0.66, H: 0.3, sweep: 0.14, front: 0.08, keel: 0.07, rim: 0.06, pw: 0.6, dust: 0.6 }, g, 0, 0.6, 0, -0.08);
-      // charge blisters on the widest segments
-      if (i >= 2 && i <= 6) for (const s of [-1, 1]) {
-        const sm = new THREE.MeshPhysicalMaterial({ color: '#f3dcae', emissive: P.glow, emissiveIntensity: (NIGHT ? 1.5 : 0.38) * full, roughness: 0.18, clearcoat: 1, clearcoatRoughness: 0.1 });
-        sm.userData.glow = NIGHT ? P.glow : dim(P.glow, 0.32 * full + 0.1); sm.envMapIntensity = 0.9;
-        const r = 0.2 + 0.05 * Math.sin(i * 2.1 + s);
-        ell(r * 1.25, r * 0.9, r, sm, g, -0.02, 0.5, s * W * 0.42, { dirt: 0, cast: false });
-      } else if (i > 0) for (const s of [-1, 1]) { const p = pl.at(0.45, s * 0.9); ell(0.06, 0.045, 0.06, poreMat(), g, p.x, p.y, p.z, { dirt: 0, cast: false }); }
-      // the rear anchors: two pairs of big hooks; folded back while it walks, splayed and driven into the ground to feed
-      if (i >= 8) for (const s of [-1, 1]) {
+      const pl = plate({ L: 0.72, W: W * 0.64, H: 0.36, sweep: 0.2, sweepP: 3, taperF: 0.12, front: 0.08, keel: 0.08, rim: 0.07, pw: 1.0, dust: 0.65 }, g, 0, 0.6, 0, -0.08);
+      if (i >= 2 && i <= 6) for (const s of [-1, 1]) {   // charge blisters, uneven
+        const r = 0.15 + 0.07 * (0.5 + 0.5 * Math.sin(i * 2.3 + s * 1.7));
+        ell(r * 1.3, r * 0.85, r, sacM(), g, -0.04 + 0.1 * Math.sin(i + s), 0.52, s * W * 0.41, { dirt: 0, cast: false });
+        if (i % 2) ell(r * 0.7, r * 0.5, r * 0.6, sacM(), g, 0.18, 0.48, s * W * 0.36, { dirt: 0, cast: false });
+      } else if (i > 0) for (const s of [-1, 1]) pore(g, pl.at(0.45, s * 0.86), 0.055);
+      if (i >= 8) for (const s of [-1, 1]) {   // rear anchors: folded back while walking, splayed and driven in to feed
         const k = i === 8 ? 1 : 0.8;
         const pts = FEED
           ? [[0, 0.5, s * W * 0.4], [-0.15 * k, 0.55, s * (W * 0.5 + 1.1 * k)], [-0.55 * k, 0.02, s * (W * 0.5 + 1.25 * k)]]
@@ -350,26 +363,21 @@ export default function (L) {
         hook(pts, 0.12 * k, 0.025, chitM, g, { color: P.edge, colorB: P.plate });
       }
     }
-    // tail: a short spade
     { const g = segGroup(sp, -3.45 + off); ell(0.5, 0.3, 0.42, memM, g, 0.15, 0.32, 0, { color: P.mem, colorB: P.memD });
-      plate({ L: 0.8, W: 0.95, H: 0.24, sweep: -0.3, front: 0.05, keel: 0.05, rim: 0.04 }, g, -0.05, 0.42, 0, -0.05); }
-    // head: three armoured petals round an oral sucker; closed into a digging cone while walking, opened to feed
-    {
+      plate({ L: 0.8, W: 0.95, H: 0.28, sweep: -0.3, front: 0.05, keel: 0.05, rim: 0.04, pw: 1.0 }, g, -0.05, 0.42, 0, -0.05); }
+    {   // head: three armoured petals round an oral sucker; closed into a digging cone while walking, opened to feed
       const g = segGroup(sp, 2.72 + off);
       ell(0.55, 0.42, 0.62, memM, g, -0.1, 0.45, 0, { color: P.memD, colorB: P.tuck });
       const open = FEED ? 1 : 0;
       mouth(g, 0.48 + 0.12 * open, 0.48, 0, FEED ? 0.48 : 0.4, FEED ? 72 : 80, { teeth: 14, k: FEED ? 1.3 : 0.9 });
-      // each petal: rolled round the body axis to its place, hinged at its rear so its tip swings away from the mouth
       const petal = (roll, w) => {
         const pg = new THREE.Group(); pg.position.set(-0.25, 0.48, 0); pg.rotation.x = roll; g.add(pg);
         const hg = new THREE.Group(); hg.rotation.z = open ? 0.8 : 0.05; pg.add(hg);
-        plate({ L: 1.2, W: w, H: 0.26, sweep: -0.15, front: 0.75, keel: 0.08, rim: 0.03, dip: 0.55, lipF: 0.03, wearF: 0.7, pw: 0.5, dust: 0.6 }, hg, 0.62, 0.14, 0, -0.1);
+        plate({ shield: true, L: 1.2, W: w, H: 0.3, sweep: -0.15, front: 0.75, keel: 0.08, rim: 0.03, dip: 0.55, lipF: 0.03, wearF: 0.7, pw: 0.9, dust: 0.6 }, hg, 0.62, 0.14, 0, -0.1);
       };
       petal(-1.3, 0.92); petal(1.3, 0.92); petal(0, 1.08);
-      // the proboscis: telescoping rings with glowing joints and a barbed glowing tip
       const ext = FEED ? 3.3 : 0.38, rings = FEED ? 7 : 1, dir = new THREE.Vector3(1, FEED ? -0.08 : 0, 0).normalize();
-      const p0 = new THREE.Vector3(0.62 + 0.12 * open, 0.5, 0);
-      const pm = flesh('#ffffff', 0.35);
+      const p0 = new THREE.Vector3(0.62 + 0.12 * open, 0.5, 0), pm = flesh('#ffffff', 0.35);
       for (let k = 0; k < rings; k++) {
         const a = p0.clone().add(dir.clone().multiplyScalar(ext * k / rings)), b = p0.clone().add(dir.clone().multiplyScalar(ext * (k + 1) / rings));
         const r = 0.17 - 0.08 * (k / rings);
@@ -380,69 +388,60 @@ export default function (L) {
       const tip = p0.clone().add(dir.clone().multiplyScalar(ext));
       ell(0.13, 0.1, 0.1, glowMat(P.core, FEED ? 3.2 : 2, P.core), g, tip.x + 0.06, tip.y, tip.z, { dirt: 0, cast: false });
       for (let k = 0; k < 5; k++) { const a = k / 5 * Math.PI * 2; cone(0.03, 0.16, M.plain(P.tip, 0.4), g, [tip.x + 0.04, tip.y + Math.cos(a) * 0.08, tip.z + Math.sin(a) * 0.08], [0.6, Math.cos(a), Math.sin(a)], { n: 5, cast: false }); }
-      if (FEED) {   // a charge vein running back along the extended proboscis
-        const vm = glowMat(P.glow, 2.4);
-        for (const s of [-1, 1]) seg([p0.x, p0.y + 0.1, s * 0.06], [tip.x - 0.1, tip.y + 0.06, s * 0.04], 0.025, 0.018, vm, g, { joint: false });
-      }
+      if (FEED) { const vm = glowMat(P.glow, 2.4); for (const s of [-1, 1]) seg([p0.x, p0.y + 0.1, s * 0.06], [tip.x - 0.1, tip.y + 0.06, s * 0.04], 0.025, 0.018, vm, g, { joint: false }); }
     }
   }
 
   // ========================================================================================================== BRUTE
-  // A wide tunnelling beast: a crescent shovel-shield with a ribbed scraping edge and the mouth in a notch at its front,
-  // mole-like spade claws either side, four broad shingled plates with blunt knobs, glowing seams.
+  // A wide tunnelling beast: a pale, ribbed crescent shovel-shield scraped bare at its edge, the mouth glowing in a notch
+  // at its front, mole-like spade claws either side, four broad rock-rough plates with blunt knobs, glowing seams.
   function brute() {
-    const sp = spine(-4.2, 3.9, 0.12, 0.6, 0.35);
-    const XS = [0.5, -0.62, -1.72, -2.75], WS = [4.5, 4.3, 3.75, 2.95];
-    // body
-    for (let i = 0; i < XS.length; i++) { const g = segGroup(sp, XS[i] - 0.4); ell(0.8, 0.75, WS[i] * 0.4, memM, g, 0, 0.75, 0, { color: P.mem, colorB: P.memD, colorK: 0.75 }); }
-    // hind legs (two pairs), heavy and short
-    const hips = [[-0.55, 1.75, 0], [-1.9, 1.55, Math.PI]];
-    for (const [hx, hz, p0] of hips) {
+    const sp = spine(-4.3, 3.9, 0.12, 0.6, 0.35);
+    const XS = [0.45, -0.68, -1.78, -2.8], WS = [4.3, 4.15, 3.6, 2.8], LS = [1.62, 1.55, 1.5, 1.4];
+    const SH = V === 'base' ? { plate: '#9c8263', edge: '#e2d2b4', tuck: '#3e2e22', dust: P.dust } : { plate: P.edge, edge: '#efe4cf', tuck: P.tuck, dust: P.dust };
+    for (let i = 0; i < XS.length; i++) { const g = segGroup(sp, XS[i] - 0.4); ell(0.8, 0.75, WS[i] * 0.4, memM, g, 0, 0.75, 0, { color: P.memD, colorB: P.tuck, colorK: 0.6 }); }
+    for (const [hx, hz, p0, fw] of [[-0.55, 1.75, 0, 0.15], [-1.9, 1.55, Math.PI, -0.45]]) {   // hind legs, heavy and short
       const g = segGroup(sp, hx);
-      for (const s of [-1, 1]) leg(g, [0, 0.62, s * hz], 1.15, hx > -1 ? 0.1 : -0.35, 0.45, 0.24, PH + p0 + (s > 0 ? Math.PI : 0), 0.32, 0.32, legM, null, { claw: 0.3 });
+      for (const s of [-1, 1]) leg(g, [0, 0.62, s * hz], 1.2, fw, 0.5, 0.26, PH + p0 + (s > 0 ? Math.PI : 0), 0.32, 0.32, legM, null, { claw: 0.32 });
     }
-    // plates, back to front
-    const ruststuds = V === 'rust';
     for (let i = XS.length - 1; i >= 0; i--) {
       const g = segGroup(sp, XS[i]);
-      const pl = plate({ L: 1.6, W: WS[i], H: 0.75, sweep: 0.5, front: 0.25, keel: 0.08, rim: 0.14, pw: 0.42, dust: 0.6, nu: 30, nv: 44 }, g, 0, 0.95, 0, -0.1);
-      // blunt knobs along the rear rim
-      const nK = i < 3 ? 5 : 3;
-      for (let k = 0; k < nK; k++) { const v = -0.62 + 1.24 * k / (nK - 1), p = pl.at(0.16, v); const kb = new THREE.SphereGeometry(0.17, 16, 10); kb.scale(1, 0.75, 1); paint(kb, P.edge, P.plate, 0.6, 0.3); addMesh(kb, chitM, g, p.x, p.y - 0.02, p.z, { dirt: 0 }); }
-      // glowing seam pores along both flanks
-      for (const s of [-1, 1]) for (const v of [0.72, 0.86]) { const p = pl.at(0.06, s * v); ell(0.09, 0.06, 0.09, poreMat(), g, p.x - 0.04, p.y - 0.03, p.z, { dirt: 0, cast: false }); }
+      const pl = plate({ L: LS[i], W: WS[i], H: 1.1, sweep: 0.6, sweepP: 4, taperF: 0.12, front: 0.22, keel: 0.1, rim: 0.16, pw: 0.75, dust: 0.7, bumpy: 0.07, nu: 30, nv: 48 }, g, 0, 0.82 + 0.1 * (3 - i), 0, -0.03);
+      const nK = i < 3 ? 5 : 3;   // blunt knobs along the rear rim, uneven
+      for (let k = 0; k < nK; k++) { const v = -0.64 + 1.28 * k / (nK - 1) + RR(-0.06, 0.06); stud(g, pl.at(0.14 + RR(0, 0.12), v), RR(0.13, 0.2)); }
+      for (const s of [-1, 1]) for (const v of [0.7, 0.84]) pore(g, pl.at(0.05 + 0.08 * rnd(), s * v), 0.085);
     }
-    // tail plate with a blunt spike
-    { const g = segGroup(sp, -3.65); ell(0.6, 0.5, 0.8, memM, g, 0.2, 0.55, 0, { color: P.mem, colorB: P.memD });
-      const pl = plate({ L: 1.15, W: 2.0, H: 0.55, sweep: -0.4, front: 0.15, keel: 0.12, rim: 0.08, pw: 0.5 }, g, 0, 0.75, 0, -0.08);
+    { const g = segGroup(sp, -3.65); ell(0.6, 0.5, 0.8, memM, g, 0.2, 0.55, 0, { color: P.memD, colorB: P.tuck });
+      plate({ L: 1.15, W: 2.0, H: 0.65, sweep: -0.4, front: 0.15, keel: 0.12, rim: 0.08, pw: 0.9 }, g, 0, 0.75, 0, -0.08);
       cone(0.22, 0.6, chitM, g, [-0.5, 0.95, 0], [-1, 0.25, 0], { color: P.edge, colorB: P.plate }); }
-    // spade forelimbs: arm out from under the shield, a broad flat hand with four digging claws; they alternate strokes
-    {
-      const g = segGroup(sp, 2.0);
+    {   // spade forelimbs: thick arms from under the shield, broad hands with four curved digging claws; alternate strokes
+      const g = segGroup(sp, 2.0), boneM = chitin(0.5, 0.3);
       for (const s of [-1, 1]) {
         const ph = PH + (s > 0 ? Math.PI : 0), dx = 0.4 * Math.cos(ph), up = Math.max(0, -Math.sin(ph)) * 0.35;
-        const sh = [-0.2, 0.75, s * 1.6], el = [0.55 + dx * 0.5, 0.95 + up * 0.5, s * 2.75], hand = [1.25 + dx, 0.45 + up, s * 2.95];
-        seg(sh, el, 0.38, 0.32, legM, g, { color: P.leg, colorB: P.tuck });
-        seg(el, hand, 0.32, 0.28, legM, g, { color: P.leg, colorB: P.tuck });
-        const hg = new THREE.Group(); hg.position.set(...hand); hg.rotation.y = -s * 0.5; hg.rotation.x = s * 0.25; g.add(hg);
-        ell(0.55, 0.22, 0.5, chitM, hg, 0, 0, 0, { color: P.plate, colorB: P.tuck });
-        for (let k = 0; k < 4; k++) { const z = (-0.36 + 0.24 * k); cone(0.12, 0.62, M.plain(P.tip, 0.45), hg, [0.35, 0, z], [1, -0.18, z * 0.45], { n: 8, color: P.tip, colorB: P.leg }); }
+        const sh = [-0.3, 0.8, s * 1.5], el = [0.5 + dx * 0.5, 1.0 + up * 0.5, s * 2.3], hand = [1.35 + dx, 0.5 + up, s * 2.9];
+        seg(sh, el, 0.46, 0.36, legM, g, { color: P.leg, colorB: P.tuck });
+        seg(el, hand, 0.36, 0.3, legM, g, { color: P.leg, colorB: P.tuck });
+        { const A = new THREE.Vector3(...el), B = new THREE.Vector3(...hand), len = A.distanceTo(B) + 0.35;
+          const fg = new THREE.SphereGeometry(1, 28, 16); fg.scale(len / 2, 0.42, 0.44); paint(fg, SH.plate, P.tuck, 0.8, 0.5);
+          const fm = addMesh(fg, chitM, g, (A.x + B.x) / 2, (A.y + B.y) / 2 + 0.08, (A.z + B.z) / 2, { dirt: 0 });
+          fm.quaternion.setFromUnitVectors(new THREE.Vector3(1, 0, 0), B.clone().sub(A).normalize()); }
+        const hg = new THREE.Group(); hg.position.set(...hand); hg.rotation.y = -s * 0.45; g.add(hg);
+        ell(0.5, 0.24, 0.52, legM, hg, 0.05, 0, 0, { color: P.leg, colorB: P.tuck });
+        plate({ L: 0.8, W: 0.95, H: 0.18, sweep: 0.1, front: 0.2, keel: 0.03, rim: 0.05, pw: 0.5, pal: SH, dust: 0.6, wearF: 0.5 }, hg, 0.0, 0.12, 0, 0);
+        for (let k = 0; k < 4; k++) { const z = -0.39 + 0.26 * k, len = 0.85 - Math.abs(z) * 0.5;
+          hook([[0.3, 0.02, z], [0.3 + len * 0.8, 0.08, z * 1.25], [0.3 + len, -0.32, z * 1.35]], 0.12, 0.025, boneM, hg, { color: SH.edge, colorB: SH.plate }); }
       }
     }
-    // the shovel-shield: a wide crescent, ribbed, sloping to a scraped lip with a notch for the mouth
-    {
+    {   // the shovel-shield: a wide crescent of pale bone, ribbed, sloping to a scraped, toothed lip with a notch for the mouth
       const g = segGroup(sp, 2.05);
       ell(0.9, 0.7, 1.7, memM, g, -0.4, 0.75, 0, { color: P.memD, colorB: P.tuck });
-      const sh = plate({ L: 2.45, W: 5.3, H: 0.95, sweep: 0.15, front: 1.15, rearIn: 0.55, notch: 0.42, keel: 0.1, rim: 0.0, dip: 0.6, lipF: 0.1, wearF: 0.75, ribN: 7, ribH: 0.07, pw: 0.35, dust: 0.7, nu: 40, nv: 64,
+      const sh = plate({ shield: true, L: 2.45, W: 5.3, H: 1.2, sweep: 0.15, front: 1.15, rearIn: 0.55, notch: 0.42, keel: 0.12, rim: 0.0, dip: 0.6, lipF: 0.1, wearF: 0.75, ribN: 7, ribH: 0.1, pw: 0.9, dust: 0.55, wavy: 0.03, bumpy: 0.05, nu: 40, nv: 72, pal: SH,
         paintFn: V === 'bloom' ? bloomSpots(0) : null }, g, 0.15, 0.85, 0, -0.16);
-      // blunt scraping teeth along the front edge (skipping the notch)
-      for (const v of [-0.86, -0.66, -0.46, -0.27, 0.27, 0.46, 0.66, 0.86]) { const p = sh.at(0.985, v); cone(0.13, 0.32, chitM, g, [p.x - 0.05, p.y - 0.08, p.z], [1, -0.5, v * 0.9], { color: P.tip, colorB: P.edge }); }
-      // eyeless sensor pits: dim pores in two arcs
-      for (const s of [-1, 1]) for (const [u, v] of [[0.55, 0.3], [0.62, 0.45], [0.5, 0.58]]) { const p = sh.at(u, s * v); ell(0.08, 0.05, 0.08, poreMat(), g, p.x, p.y, p.z, { dirt: 0, cast: false }); }
+      for (const v of [-0.86, -0.66, -0.46, -0.27, 0.27, 0.46, 0.66, 0.86]) { const p = sh.at(0.985, v), k = 0.8 + 0.4 * rnd(); cone(0.13 * k, 0.32 * k, chitM, g, [p.x - 0.05, p.y - 0.08, p.z], [1, -0.5, v * 0.9], { color: SH.edge, colorB: SH.plate }); }
+      for (const s of [-1, 1]) for (const [u, v] of [[0.55, 0.3], [0.62, 0.45], [0.5, 0.58]]) pore(g, sh.at(u, s * v), 0.07);
       const m = sh.at(0.98, 0); mouth(g, m.x - 0.05, 0.75, 0, 0.5, 52, { teeth: 14 });
     }
   }
-
   // ========================================================================================================= BURROW
   // The tunnel mouth they come out of: a crater of upthrust crust round a dark throat that slants down and away, its
   // ribbed lining glowing amber deep inside; spoil, drained Crystal, a shed plate, furrows, and Bloom taking hold.

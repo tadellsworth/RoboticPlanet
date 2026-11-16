@@ -71,7 +71,7 @@ export function mkit(L) {
   }
   const plain = (hex, rough = 0.5, metal = 0.02) => { const key = 'p' + hex + rough; if (mats[key]) return mats[key]; const m = new THREE.MeshStandardMaterial({ color: hex, roughness: rough, metalness: metal, vertexColors: true }); m.envMapIntensity = 0.5; return (mats[key] = m); };
   // glossy black compound eye
-  const eye = () => mats.eye || (mats.eye = (() => { const m = new THREE.MeshPhysicalMaterial({ color: '#0b0a0c', roughness: 0.12, metalness: 0.1, clearcoat: 1, clearcoatRoughness: 0.05 }); m.envMapIntensity = 1.4; return m; })());
+  const eye = () => mats.eye || (mats.eye = (() => { const m = new THREE.MeshPhysicalMaterial({ color: '#120c0c', roughness: 0.3, metalness: 0.0, clearcoat: 0.5, clearcoatRoughness: 0.25 }); m.envMapIntensity = 0.35; return m; })());
   // a glowing organ (mouth disc, sucker pads, Bloom spots): flat emissive with a glow colour for the bloom pass
   function glowMat(hex, k = 1, glowHex) {
     const key = 'g' + hex + k + glowHex; if (mats[key]) return mats[key];
@@ -229,6 +229,12 @@ export function mkit(L) {
       cone(parent, p, [-0.6, 0.5, s * 0.5], r * 0.9 * o.spines, r * 0.18, o.tipMat || o.mat);
     }
     if (o.claw) cone(parent, foot, [1, -0.1, s * 0.4], r * 0.9, r * 0.2, o.tipMat || o.mat);
+    if (o.shin) {                                                   // an armour plate riding on the outside of the shin
+      const A = V(knee), B = V(ank), mid = A.clone().lerp(B, 0.45), len = A.distanceTo(B);
+      const g = segGeo(len * 0.42, r * 0.55, r * 0.95, { lump: 0.08, axisFlat: 0.8, seed: hip[0] * 7 + s });
+      const m = L.mesh(g, o.shin, mid.x, mid.y + r * 0.45, mid.z, { parent });
+      m.quaternion.setFromUnitVectors(new THREE.Vector3(1, 0, 0), B.clone().sub(A).normalize());
+    }
     return { knee, ank };
   }
   function legs(parent, list, f, o) {
@@ -255,5 +261,5 @@ export function mkit(L) {
     return cam;
   }
 
-  return { THREE, TOD, GLOW, NIGHTISH, nz, tube, chitin, crust, plain, eye, glowMat, dimGlow, crystalMats, segGeo, seg, limb, chain, curve, cone, shard, cluster, leg, legs, legPhase, camera, V };
+  return { THREE, TOD, GLOW, NIGHTISH, nz, tube, chitinMap, chitin, crust, plain, eye, glowMat, dimGlow, crystalMats, segGeo, seg, limb, chain, curve, cone, shard, cluster, leg, legs, legPhase, camera, V };
 }
