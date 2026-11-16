@@ -79,18 +79,22 @@ export function mkit(L) {
     m.userData.glow = glowHex || dimGlow(hex); return (mats[key] = m);
   }
   // the glow-pass colour sets how much bloom a part gets: keep it low by day so the shards only shimmer
-  function dimGlow(hex, k = 1) { const c = new THREE.Color(hex); c.multiplyScalar(Math.min(1, (0.1 + GLOW * 0.5) * k)); return '#' + c.getHexString(); }
+  function dimGlow(hex, k = 1) { const c = new THREE.Color(hex); c.multiplyScalar(Math.min(1, (NIGHTISH ? 0.1 + GLOW * 0.5 : 0.008 + GLOW * 0.055) * k)); return '#' + c.getHexString(); }
   // Ring Crystal: a pale faceted shell with a brighter core glowing through it
   function crystalMats(pal) {
     const key = 'x' + JSON.stringify(pal); if (mats[key]) return mats[key];
     // brightness rides on the emissive colour, not the intensity, so the night point lights lib.js hangs on every glowing
     // part (weighted by emissiveIntensity) stay soft and only tint the chitin next to the shards
-    const k = pal.k ?? 1, B = k * (0.3 + GLOW * 1.25);
-    const shell = new THREE.MeshPhysicalMaterial({ color: pal.shell, emissive: new THREE.Color(pal.core).multiplyScalar(k * (0.02 + GLOW * 0.32)), emissiveIntensity: 1, roughness: 0.22, metalness: 0, flatShading: true,
+    // by day the core is only a soft light inside the glass, so the shards read as violet crystal, not as lamps;
+    // from dusk the core burns near-white
+    const k = pal.k ?? 1, B = k * (NIGHTISH ? 0.3 + GLOW * 1.25 : 0.06 + GLOW * 0.55);
+    const shell = new THREE.MeshPhysicalMaterial({ color: pal.shell, emissive: new THREE.Color(pal.core).multiplyScalar(k * (NIGHTISH ? 0.02 + GLOW * 0.32 : 0.01 + GLOW * 0.1)), emissiveIntensity: 1, roughness: 0.22, metalness: 0, flatShading: true,
       clearcoat: 0.6, clearcoatRoughness: 0.1, transparent: true, opacity: pal.opacity ?? 0.8, depthWrite: true, side: THREE.FrontSide, specularIntensity: 0.6 });
     shell.envMapIntensity = 0.55;
-    const core = new THREE.MeshStandardMaterial({ color: pal.core, emissive: new THREE.Color(pal.core).multiplyScalar(B / 0.3), emissiveIntensity: 0.3, roughness: 0.3, flatShading: true });
-    core.userData.glow = dimGlow(pal.glow || pal.core, k);
+    const coreCol = NIGHTISH ? new THREE.Color(pal.core) : new THREE.Color(pal.shell).lerp(new THREE.Color(pal.core), pal.dayCore ?? 0.45);
+    const core = new THREE.MeshStandardMaterial({ color: coreCol, emissive: new THREE.Color(pal.core).multiplyScalar(B / 0.3), emissiveIntensity: 0.3, roughness: 0.3, flatShading: true });
+    // by day only a faint lilac shimmer blooms off the shards; at night the full near-white light
+    core.userData.glow = dimGlow(NIGHTISH ? (pal.glow || pal.core) : '#' + new THREE.Color(pal.glow || pal.core).lerp(new THREE.Color(pal.shell), 0.35).getHexString(), k);
     return (mats[key] = { shell, core });
   }
 

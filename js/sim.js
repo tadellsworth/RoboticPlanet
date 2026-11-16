@@ -5941,6 +5941,9 @@ function sendHunt(owner, e, count) {
 /** Flags that follow an enemy robot: each moves with its quarry; when it's gone, the hunters come back. */
 function followRallies() {
   for (const r of S.rallies.slice()) {
+    // A flag planted beside a building attacked from too far for a garrison (the assault order): once it's down or
+    // taken, its warbots finish as an attack does (crates within reach, then home), instead of holding the flag.
+    if (r.target) { const b = getE(r.target); if (!b || b.dead || !foes(b.owner, r.owner)) recallRally(r.id); continue; }
     if (!r.follow) continue;
     const e = getE(r.follow);
     if (!e || e.dead || !foes(e.owner, r.owner)) {

@@ -279,7 +279,7 @@ const ORDERS = {
         const ii = b.x + di, jj = b.y + dj;
         if (!inMap(ii, jj) || !walkable(tIdx(ii, jj)) || S.bAt[tIdx(ii, jj)]) continue;
         n = armyN(want, rallyAvailable(p, ii, jj));
-        if (n > 0) sent = sendToRally(p, ii, jj, n).sent;
+        if (n > 0) { const res = sendToRally(p, ii, jj, n); sent = res.sent; if (sent) res.rally.target = b.id; } // (it comes down with the target: followRallies)
         break;
       }
     }

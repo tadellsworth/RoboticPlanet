@@ -1,11 +1,12 @@
 // The Murmur, design direction B: "Crystal-backed swarm". Arthropods with dark chitin, studded with shards of the Ring
-// Crystal they have eaten; the shards glow from inside (pale by day, bright at night).
+// Crystal they have eaten; the shards glow from inside (a faint shimmer by day, white lanterns at night).
 //   ?c=swarmer | drainer | brute | burrow
 //   ?v=base | rust | white | bloom      (regional variants, Swarmer)
 //   ?f=0..3                             walking frame (alternating gait; legs, antennae and palps move)
 //   ?feed=1                             Drainer latched on and feeding: palps clamped, mouth disc and sac blazing
 //   ?hero=1                             a 3/4 perspective hero shot on a patch of ground instead of the top-down sprite
 //   ?hi=1|2                             render 2x / 4x bigger (presentation)
+//   ?xt=violet                          the shards in the Crystal resource's violet instead of white (a colour option)
 // Sprites follow the robots: orthographic straight down, facing +x, centred, no ground and no shadow (the game draws
 // those), sun from the top-left, toned like robkit.js. W (world units across the frame) differs per creature so each
 // fills its frame; in the game draw it at tile * 0.06 * W to keep the robots' scale (the Warbot is drawn at 0.6, W 10).
@@ -39,11 +40,16 @@ export default function (L) {
 
 // ---------------------------------------------------------------------------------------------------------------
 // palettes
-const XTAL = { shell: '#4f9fb3', core: '#9ff0ff', glow: '#a6ecff', opacity: 0.7 };
+// Ring Crystal as eaten and grown back: smoky glass with a breath of the Crystal resource's violet, and a near-white light
+// inside. White is the one glow no team owns (the robots' lights are cyan, red, green or purple), so a Murmur spark can
+// never be mistaken for one of your own units at night. By day the shards read as glass, not as lamps.
+const XTAL = P.get('xt') === 'violet'
+  ? { shell: '#7a5fc0', core: '#d9c4ff', glow: '#b98cff', opacity: 0.78, dayCore: 0.5 }      // ?xt=violet: the alternative shown on the sheet
+  : { shell: '#9a92b6', core: '#f7f5ff', glow: '#f1efff', opacity: 0.78, dayCore: 0.62 };
 const PAL = {
   base:  { body: '#3b2c24', plate: '#3b2c24', leg: '#2e231e', tip: '#140f0c', joint: '#3e2a20', mand: '#3b2618', xtal: XTAL, irid: 0.5 },
   rust:  { body: '#3a2419', plate: '#a5512a', leg: '#4a2a1b', tip: '#1c120c', joint: '#6a3a22', mand: '#4a2a18', xtal: XTAL, irid: 0.15 },
-  white: { body: '#c8cdd0', plate: '#d7dbdd', leg: '#9da4a8', tip: '#5e666b', joint: '#b9a9a0', mand: '#7f878c', xtal: { shell: '#f2fbff', core: '#d6f2ff', glow: '#cfeeff', opacity: 0.75, k: 0.55 }, irid: 0.1 },
+  white: { body: '#c8cdd0', plate: '#d7dbdd', leg: '#9da4a8', tip: '#5e666b', joint: '#b9a9a0', mand: '#7f878c', xtal: { shell: '#eef1f4', core: '#e9edf2', glow: '#e4e9ef', opacity: 0.75, k: 0.55, dayCore: 0.5 }, irid: 0.1 },
   bloom: { body: '#251a2b', plate: '#2a1c31', leg: '#20162a', tip: '#0f0a14', joint: '#5a2a66', mand: '#2f1c38', xtal: { shell: '#efe0ff', core: '#c48dff', glow: '#b67cff', opacity: 0.55, k: 1.15 }, irid: 0.7 },
 };
 
@@ -209,8 +215,9 @@ function drainer(L, K, G, f, feed) {
     for (let i = 0; i < 18; i++) branch((i + L.rnd() * 0.6) / 18 * n, n * (0.16 + L.rnd() * 0.06), (L.rnd() - 0.5) * 0.4, 5, 56, 0);
   });
   const sacM = new THREE.MeshPhysicalMaterial({ color: '#4a2a24', map: K.chitinMap, roughness: 0.5, metalness: 0.0, clearcoat: 0.45, clearcoatRoughness: 0.3, vertexColors: true,
-    emissive: new THREE.Color(X.core).multiplyScalar(FK * (K.GLOW * K.GLOW * 0.32 + 0.02) / 0.4), emissiveMap: veins, emissiveIntensity: 0.4 });
-  sacM.envMapIntensity = 0.25; sacM.userData.glow = K.dimGlow(X.glow, 0.8 * Math.min(2.2, FK));
+    emissive: new THREE.Color(X.core).multiplyScalar(FK * (K.GLOW * K.GLOW * 0.32 + 0.1) / 0.4), emissiveMap: veins, emissiveIntensity: 0.4 });
+  // by day the veins only shimmer (little bloom); at night, or feeding, the whole sac lights up
+  sacM.envMapIntensity = 0.25; sacM.userData.glow = K.dimGlow(X.glow, (K.GLOW > 1 || feed ? 0.8 : 0.25) * Math.min(2.2, FK));
   const sx = -0.98, sy = 0.62, srx = 1.28, sry = 0.66, srz = 1.08;
   K.seg(G, [sx, sy, 0], srx, sry, srz, sacM, { bands: 7, depth: 0.06, shade: 0.5, lump: 0.03, crease: 0.14, axisFlat: 0.35, seed: 11, ws: 96, hs: 48 });
   // the scutum: a hard plate over the front of the sac
@@ -245,7 +252,7 @@ function drainer(L, K, G, f, feed) {
   for (let ring = 0; ring < 2; ring++) for (let k = 0; k < 14; k++) { const a = (k + ring * 0.5) / 14 * 6.283, rr = 0.26 - ring * 0.08; K.cone(D, [Math.cos(a) * rr, Math.sin(a) * rr, 0.0], [-Math.cos(a), -Math.sin(a), 0.5], 0.1 - ring * 0.025, 0.022, toothM); }
 
   // ---- soft feeding tendrils round the mouth, their tips lit
-  const tipGlow = K.glowMat('#c6f6ff', 0.6 * FK, K.dimGlow(X.glow, Math.min(2.2, FK)));
+  const tipGlow = K.glowMat('#f3f0ff', 0.6 * FK, K.dimGlow(X.glow, Math.min(2.2, FK)));
   for (const [s, zz, yy] of [[-1, 0.2, 0.62], [1, 0.2, 0.62], [-1, 0.32, 0.4], [1, 0.32, 0.4]]) {
     const base = [1.55, yy, s * zz], reach = feed ? 1.25 : 0.75, wob = 0.1 * Math.sin(f * Math.PI / 2 + zz * 9);
     const pts = feed
@@ -271,7 +278,7 @@ function drainer(L, K, G, f, feed) {
   }
   // feeding: a thread of stolen charge running from the target into the disc
   if (feed) {
-    const arcM = K.glowMat('#effcff', 1.8, K.dimGlow(X.glow, 2.2));
+    const arcM = K.glowMat('#fbfaff', 1.8, K.dimGlow(X.glow, 2.2));
     for (const s of [-1, 0, 1]) {
       const pts = [[3.05, 0.45, s * 0.12]];
       for (let k = 1; k <= 6; k++) { const t = k / 6; pts.push([3.05 + (dc.x + 0.12 - 3.05) * t + (L.rnd() - 0.5) * 0.1, 0.45 + (dc.y + 0.12 - 0.45) * t + L.rnd() * 0.08, s * (0.12 * (1 - t)) + (L.rnd() - 0.5) * 0.12]); }
@@ -305,7 +312,7 @@ function brute(L, K, G, f) {
   {
     const g = new THREE.SphereGeometry(1, 180, 90), pos = g.attributes.position, col = new Float32Array(pos.count * 3), v = new THREE.Vector3();
     const stone = [0.075, 0.07, 0.068], stoneL = [0.17, 0.155, 0.14], rust = [0.2, 0.11, 0.07];
-    const bands = [[0.42, 0.41, 0.4], [0.2, 0.24, 0.28], [0.1, 0.16, 0.2], [0.05, 0.08, 0.1], [0.03, 0.04, 0.05]];
+    const bands = [[0.42, 0.4, 0.4], [0.24, 0.22, 0.27], [0.15, 0.13, 0.19], [0.07, 0.06, 0.09], [0.035, 0.03, 0.045]];
     for (let i = 0; i < pos.count; i++) {
       v.fromBufferAttribute(pos, i);
       const t = (v.x + 1) / 2, u = (t * NB) % 1, wl = 0.12;
@@ -338,10 +345,11 @@ function brute(L, K, G, f) {
   const shellTop = (x, z) => CY + SY * Math.sqrt(Math.max(0, 1 - ((x - CX) / SX) ** 2 - (z / SZ) ** 2));
   // the seam of crystal: druzy points packed along the crack floor, and a jagged ridge of big ones, tallest mid-back
   // two rows of crystal growing from the crack walls toward the middle and up, plus druzy points along the floor
-  for (let i = 0; i < 12; i++) {
-    const t = (i + 0.2 + L.rnd() * 0.6) / 12, ux = -0.7 + 1.4 * t, x = CX + SX * ux, mid = Math.max(0, 1 - Math.abs(t - 0.42) * 1.8);
-    const w = crackW(ux) * SZ, z = crackZ(ux) * SZ + (L.rnd() - 0.5) * w * 0.8;
-    K.cluster(G, [x, shellTop(x, 0) - 0.42, z], [(L.rnd() - 0.55) * 0.5, 1, (L.rnd() - 0.5) * 0.7], 3 + Math.round(L.rnd() * 2), 0.3 + 0.75 * mid * (0.75 + L.rnd() * 0.4), 0.08 + 0.07 * mid, X, 0.55, { collar: false });
+  // (fewer, bigger points than a druzy froth, leaning back and out of the crack, so the seam still reads as crystal at 30 px)
+  for (let i = 0; i < 8; i++) {
+    const t = (i + 0.2 + L.rnd() * 0.6) / 8, ux = -0.7 + 1.4 * t, x = CX + SX * ux, mid = Math.max(0, 1 - Math.abs(t - 0.42) * 1.8);
+    const w = crackW(ux) * SZ, z = crackZ(ux) * SZ + (L.rnd() - 0.5) * w * 0.6;
+    K.cluster(G, [x, shellTop(x, 0) - 0.42, z], [-0.55 - L.rnd() * 0.3, 1, (i % 2 ? 1 : -1) * (0.35 + L.rnd() * 0.35)], 2 + Math.round(L.rnd()), 0.42 + 0.9 * mid * (0.8 + L.rnd() * 0.3), 0.1 + 0.09 * mid, X, 0.45, { collar: false });
   }
   // clusters breaking through the flanks, each in a socket of cracked crust
   for (const [ux, uz, n, len] of [[-0.25, 0.64, 4, 0.7], [0.35, -0.62, 4, 0.66], [-0.75, -0.5, 3, 0.55], [0.62, 0.48, 3, 0.5], [-1.0, 0.36, 3, 0.45]]) {
@@ -430,9 +438,9 @@ function burrow(L, K) {
     K.shard(null, [Math.cos(a) * r, h, CZ + Math.sin(a) * r], [-Math.cos(a) * 0.8, 1.0, -Math.sin(a) * 0.8], 0.35 + L.rnd() * 0.4, 0.07 + L.rnd() * 0.04, { ...X, k: 0.8 + deep * 0.9 }, { collar: false });
   }
   // the glow down in the dark
-  const coreM = K.glowMat('#bff2ff', 1.2, K.dimGlow(X.glow, 1.5));
+  const coreM = K.glowMat('#f1eeff', 1.2, K.dimGlow(X.glow, 1.5));
   L.mesh(new THREE.CircleGeometry(0.5, 24).rotateX(-Math.PI / 2), coreM, 0, -3.6, CZ, { cast: false, dirt: 0 });
-  L.pointLight('#9fe9ff', 1.5 + K.GLOW * 7, 0, -2.4, CZ, 3.5);
+  L.pointLight('#e6e0ff', 1.5 + K.GLOW * 7, 0, -2.4, CZ, 3.5);
   // ---- six pillars of crystal on the rim, evenly spaced and tilted outward, each with smaller companions
   for (let k = 0; k < 6; k++) {
     const a = k / 6 * Math.PI * 2 + 0.26, r = 2.05, ca = Math.cos(a), sa = Math.sin(a), h = hProf(r) - 0.15;

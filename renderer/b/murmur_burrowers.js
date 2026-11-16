@@ -7,10 +7,11 @@
 //   ?v=base | rust | white | bloom   regional variant (palette and build)
 //   ?pose=feed     Drainer: anchored by its rear hooks, proboscis pushed out and glowing
 //   ?hero=1        3/4 perspective presentation render with a ground patch (1536 -> 768)
+//   ?px=1024       render the sprite at twice the game size (for presentation sheets)
 //   tod=night|evening: the creatures' own bioluminescence (pores, sacs, Bloom spots) turns up.
 const Q = new URLSearchParams(location.search);
 const C = Q.get('c') || 'swarmer', HERO = Q.get('hero') === '1';
-export const config = C === 'burrow' ? { pad: false } : { pad: false, size: HERO ? 1536 : 512 };
+export const config = C === 'burrow' ? { pad: false } : { pad: false, size: HERO ? 1536 : +(Q.get('px') || 512) };   // ?px=1024: a 2x render for presentation sheets
 
 export default function (L) {
   const { THREE, M } = L;
@@ -414,7 +415,7 @@ export default function (L) {
     for (let i = 0; i < XS.length; i++) { const g = segGroup(sp, XS[i] - 0.4); ell(0.8, 0.75, WS[i] * 0.4, memM, g, 0, 0.75, 0, { color: P.memD, colorB: P.tuck, colorK: 0.6 }); }
     for (const [hx, hz, p0, fw] of [[-0.55, 1.75, 0, 0.15], [-1.9, 1.55, Math.PI, -0.45]]) {   // hind legs, heavy and short
       const g = segGroup(sp, hx);
-      for (const s of [-1, 1]) leg(g, [0, 0.62, s * hz], 1.2, fw, 0.5, 0.26, PH + p0 + (s > 0 ? Math.PI : 0), 0.32, 0.32, legM, null, { claw: 0.32 });
+      for (const s of [-1, 1]) leg(g, [0, 0.62, s * hz], 1.2, fw, 0.62, 0.32, PH + p0 + (s > 0 ? Math.PI : 0), 0.32, 0.32, legM, null, { claw: 0.32 });
     }
     for (let i = XS.length - 1; i >= 0; i--) {
       const g = segGroup(sp, XS[i]);
@@ -448,11 +449,11 @@ export default function (L) {
     {   // the shovel-shield: a wide crescent of pale bone, ribbed, sloping to a scraped, toothed lip with a notch for the mouth
       const g = segGroup(sp, 2.05);
       ell(0.9, 0.7, 1.7, memM, g, -0.4, 0.75, 0, { color: P.memD, colorB: P.tuck });
-      const sh = plate({ shield: true, L: 2.45, W: 5.3, H: 1.2, sweep: 0.15, front: 1.15, rearIn: 0.55, notch: 0.42, keel: 0.12, rim: 0.0, dip: 0.6, lipF: 0.1, wearF: 0.75, ribN: 7, ribH: 0.1, pw: 0.9, dust: 0.55, wavy: 0.03, bumpy: 0.05, nu: 40, nv: 72, pal: SH,
-        paintFn: V === 'bloom' ? bloomSpots(0) : null }, g, 0.15, 0.85, 0, -0.16);
+      const sh = plate({ shield: true, L: 2.45, W: 5.3, H: 1.2, sweep: 0.15, front: 1.15, rearIn: 0.55, notch: 0.42, keel: 0.12, rim: 0.0, dip: 0.6, lipF: 0.14, wearF: 0.75, ribN: 7, ribH: 0.14, pw: 0.9, dust: 0.55, wavy: 0.03, bumpy: 0.05, nu: 40, nv: 72, pal: SH,
+        paintFn: V === 'bloom' ? bloomSpots(0) : null }, g, 0.15, 0.95, 0, -0.24);
       for (const v of [-0.86, -0.66, -0.46, -0.27, 0.27, 0.46, 0.66, 0.86]) { const p = sh.at(0.985, v), k = 0.8 + 0.4 * rnd(); cone(0.13 * k, 0.32 * k, chitM, g, [p.x - 0.05, p.y - 0.08, p.z], [1, -0.5, v * 0.9], { color: SH.edge, colorB: SH.plate }); }
       for (const s of [-1, 1]) for (const [u, v] of [[0.55, 0.3], [0.62, 0.45], [0.5, 0.58]]) pore(g, sh.at(u, s * v), 0.07);
-      const m = sh.at(0.98, 0); mouth(g, m.x - 0.05, 0.75, 0, 0.5, 52, { teeth: 14 });
+      const m = sh.at(0.98, 0); mouth(g, m.x + 0.12, 0.95, 0, 0.56, 42, { teeth: 14, k: 1.2 });
     }
   }
   // ========================================================================================================= BURROW
@@ -577,14 +578,21 @@ export default function (L) {
 
   if (HERO) {
     // 3/4 presentation: a sand patch with the shadow, a warm key from the camera side, a cool rim from behind
-    const sand = M.rough('#a6754a'), gg = new THREE.CircleGeometry(14, 64); gg.rotateX(-Math.PI / 2);
+    const sand = M.rough('#a6754a'), gg = new THREE.CircleGeometry(70, 96); gg.rotateX(-Math.PI / 2);
     const gm = L.mesh(gg, sand, 0, 0, 0, { cast: false });
-    for (let i = 0; i < 40; i++) { const a = RR(0, 6.28), r = RR(3.5, 9), s = RR(0.06, 0.3); const geo = new THREE.DodecahedronGeometry(s, 0); geo.scale(1, 0.6, 1); L.mesh(geo, M.rough(rnd() < 0.5 ? '#7d5a3c' : '#9c8064'), Math.cos(a) * r, s * 0.2, Math.sin(a) * r, { dirt: 0.3 }); }
+    for (let i = 0; i < 90; i++) { const a = RR(0, 6.28), r = RR(3.5, 16), s = RR(0.06, 0.34); const geo = new THREE.DodecahedronGeometry(s, 0); geo.scale(1, 0.6, 1); L.mesh(geo, M.rough(rnd() < 0.5 ? '#7d5a3c' : '#9c8064'), Math.cos(a) * r, s * 0.2, Math.sin(a) * r, { dirt: 0.3 }); }
     const key = new THREE.DirectionalLight('#ffd8b0', 1.6); key.position.set(12, 9, 10); L.getScene().add(key);
     const rimL = new THREE.DirectionalLight('#9fb8ff', 1.4); rimL.position.set(-10, 6, -8); L.getScene().add(rimL);
-    const cam = new THREE.PerspectiveCamera(26, 1, 0.5, 200);
-    const tgt = new THREE.Vector3(0.6, 0.6, 0.2);
-    cam.position.set(12.5, 7.6, 11.5); cam.lookAt(tgt); cam.updateMatrixWorld(); cam.updateProjectionMatrix();
+    {   // a dusty sky dome behind (an ordinary mesh, so it stays black in the glow pass)
+      const sg = new THREE.SphereGeometry(80, 48, 24), sp2 = sg.attributes.position, sc = new Float32Array(sp2.count * 3);
+      const top = col('#3b4a63'), hor = col('#c99a6a');
+      for (let i = 0; i < sp2.count; i++) { const t = clamp(sp2.getY(i) / 40); const c = hor.clone().lerp(top, Math.pow(t, 0.6)); sc[i * 3] = c.r; sc[i * 3 + 1] = c.g; sc[i * 3 + 2] = c.b; }
+      sg.setAttribute('color', new THREE.BufferAttribute(sc, 3));
+      const sm = new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.BackSide, fog: false }); const dome = new THREE.Mesh(sg, sm); dome.userData.decal = false; L.getRoot().add(dome);
+    }
+    const cam = new THREE.PerspectiveCamera(34, 1, 0.5, 300);
+    const tgt = new THREE.Vector3(0.9, 0.9, -0.6);
+    cam.position.set(12.0, 5.0, 9.6); cam.lookAt(tgt); cam.updateMatrixWorld(); cam.updateProjectionMatrix();
     L.useCamera(cam);
   }
 }
