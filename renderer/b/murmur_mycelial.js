@@ -350,7 +350,8 @@ export default function (L) {
       for (const [dx, dz, el, r] of [[0.55, -1, 0.42, 0.42], [-0.15, 1, 0.5, 0.5], [-0.95, -1, 0.45, 0.4], [0.75, 1, 0.38, 0.34], [-0.55, -1, 0.68, 0.32], [-1, 1, 0.3, 0.36]]) {
         const d = new THREE.Vector3(dx, el, dz * Math.sqrt(Math.max(0.1, 1 - dx * dx))).normalize(), q = barkFn(d.x, d.y, d.z);
         const g = new THREE.DodecahedronGeometry(r, 0); g.scale(1.25, 0.8, 1);
-        const m = L.mesh(g, rnd() < 0.5 ? dark : K.crystalMat(), q[0], q[1], q[2], { parent: G, dirt: 0 }); m.rotation.set(R(0, 3), R(0, 3), R(0, 3));
+        rnd();   // (keeps the random sequence of the earlier version, so the rest of the Brute is unchanged)
+        const m = L.mesh(g, dark, q[0], q[1], q[2], { parent: G, dirt: 0 }); m.rotation.set(R(0, 3), R(0, 3), R(0, 3));   // all dark: the only pale mark seen from above is the spine ridge
       }
     }
     // ---- glowing cracks: veins of light running from the crest down the bark to the legs
@@ -368,8 +369,8 @@ export default function (L) {
     for (const [dx, dz, el, r] of [[0.45, 1, 0.25, 0.5], [-0.35, 1, 0.38, 0.6], [-0.95, 1, 0.22, 0.45], [0.15, -1, 0.32, 0.52], [-0.7, -1, 0.3, 0.6], [0.8, -1, 0.15, 0.36]]) {
       const d = new THREE.Vector3(dx, el, dz * Math.sqrt(Math.max(0.1, 1 - dx * dx))).normalize(), q = barkFn(d.x, d.y, d.z);
       const ang = Math.atan2(q[2], q[0] - CX);
-      K.shelf(q[0] - Math.cos(ang) * 0.08, q[1], q[2] - Math.sin(ang) * 0.08, ang, r, { parent: G });
-      K.shelf(q[0] - Math.cos(ang) * 0.06, q[1] - r * 0.4, q[2] - Math.sin(ang) * 0.06 + 0.12, ang + 0.2, r * 0.7, { parent: G });
+      K.shelf(q[0] - Math.cos(ang) * 0.14, q[1], q[2] - Math.sin(ang) * 0.14, ang, r * 0.72, { parent: G });                       // small, tucked in: they no longer fuzz the outline
+      K.shelf(q[0] - Math.cos(ang) * 0.1, q[1] - r * 0.4, q[2] - Math.sin(ang) * 0.1 + 0.12, ang + 0.2, r * 0.5, { parent: G });
     }
     for (const [dx, dz, r] of [[-0.25, 0.3, 0.2], [0.18, -0.25, 0.17], [-0.6, -0.28, 0.18], [0.3, 0.42, 0.15]]) { const q = topOf(fleshFn, dx, dz); K.cap(q[0], q[1] - 0.06, q[2], r, r * 0.5, [dz * 0.4, 0], { parent: G, stem: r * 0.6, glowGill: true }); }
 
