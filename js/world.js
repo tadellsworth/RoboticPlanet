@@ -2153,20 +2153,34 @@ function stepPlan(a, b) {
   return S.terrain[a] !== T_GROUND || S.terrain[b] !== T_GROUND ? true : canStep(a, b);
 }
 
-/** Label every walkable tile with the id of the area bots can reach from it (ignoring buildings). */
+/**
+ * Label every walkable tile with the id of the area bots can reach from it (ignoring buildings). Nobody turns on
+ * an overpass (see findPath): the areas are joined straight across one, and its own tile goes with its east-west road.
+ */
 function computeZones() {
-  const N = S.W * S.H, W = S.W;
+  const N = S.W * S.H, W = S.W, ov = anyOverpass();
   const z = new Int32Array(N).fill(-1);
   let next = 0;
+  // Straight on from a onto b (b itself, or past the overpass(es) b starts), or -1.
+  const across = (a, b) => {
+    if (!canStep(a, b)) return -1;
+    if (!ov || !S.over[b]) return b;
+    const c = overHop(a, b);
+    if (c < 0) return -1;
+    for (let x = b, d = b - a; x !== c; x += d) if (!canStep(x, x + d)) return -1;
+    return c;
+  };
   for (let t = 0; t < N; t++) {
-    if (!walkable(t) || z[t] >= 0) continue;
+    if (!walkable(t) || z[t] >= 0 || (ov && S.over[t])) continue;
     const q = [t];
     z[t] = next;
     while (q.length) {
       const a = q.pop(), i = a % W;
       const nb = [i > 0 ? a - 1 : -1, i < W - 1 ? a + 1 : -1, a - W, a + W];
-      for (const b of nb) {
-        if (b < 0 || b >= N || z[b] >= 0 || !canStep(a, b)) continue;
+      for (const b0 of nb) {
+        if (b0 < 0 || b0 >= N) continue;
+        const b = across(a, b0);
+        if (b < 0 || z[b] >= 0) continue;
         z[b] = next;
         q.push(b);
       }
@@ -2174,6 +2188,12 @@ function computeZones() {
       if (S.bAt[a]) for (const r of [ropeLink(a), viaLink(a), ferryLink(a)]) if (r >= 0 && z[r] < 0) { z[r] = next; q.push(r); }
     }
     next++;
+  }
+  if (ov) for (const k in S.over) {
+    const t = +k, i = t % W;
+    if (!walkable(t) || z[t] >= 0) continue;
+    for (const u of [i > 0 ? t - 1 : -1, i < W - 1 ? t + 1 : -1, t - W, t + W]) if (u >= 0 && u < N && z[u] >= 0 && !S.over[u] && canStep(t, u)) { z[t] = z[u]; break; }
+    if (z[t] < 0) z[t] = next++;
   }
   S.zone = z;
 }
@@ -3239,7 +3259,8 @@ function setPaveMark(owner, i, j, on) {
 /*
  * Road tiles joined along roads (respecting cliffs and ramps) form networks. Haulers can only
  * carry goods between buildings that touch the same network. A junction is a road tile with
- * roads on three or four sides. Labels are rebuilt lazily whenever S.roadVer changes.
+ * roads on three or four sides (junc holds how many: 3, or 4 for a crossing). Labels are rebuilt
+ * lazily whenever S.roadVer changes.
  *
  * roadNet(who) is player who's own view: an Outpost, Keep, Gate or Ropeway station joins roads only
  * for its owner (as findPath lets only its owner's bots through), so a road running through one the
@@ -3247,6 +3268,11 @@ function setPaveMark(owner, i, j, on) {
  * networks are numbered apart from the others' (from (who + 1) * RN_SPAN), so ferry lines joining
  * them (netGroups) never mix two players' networks up. roadNet() is everyone's at once: for drawing
  * roads and junctions.
+ *
+ * An overpass carries two roads that cross without meeting (nobody turns there: see findPath). Its
+ * east-west road is the tile's own label (comp); its north-south road has a label of its own (compV,
+ * by the overpass's place in ovk), so two roads that only meet at an overpass are two networks. Ask
+ * tileNets for the networks a tile is on, laneComp for the one a bot drives onto from a neighbour.
  */
 const _rn = { ver: -1, of: null, comp: null, compT: null, junc: null, bnet: new Map(), bnetT: new Map() };
 const _rnBy = [];
@@ -3258,6 +3284,9 @@ const RN_SPAN = 1 << 20;
  */
 function roadLikeFor(t, who) { return S.bAt[t] > 0 ? passTile(t, who) : S.road[t] > 0; }
 
+/** Is there an overpass anywhere on the map? (Most games have none: the searches skip asking about each tile.) */
+function anyOverpass() { if (S.over) for (const k in S.over) return true; return false; }
+
 function roadNet(who) {
   const own = who !== undefined && who !== null && who >= 0;
   let rn = _rn;
@@ -3265,30 +3294,41 @@ function roadNet(who) {
   const N = S.W * S.H;
   if (rn.of === S && rn.ver === (S.roadVer || 0) && rn.comp && rn.comp.length === N) return rn;
   const rl = own ? (t) => roadLikeFor(t, who) : roadLike;
-  const comp = new Int32Array(N).fill(-1), junc = new Uint8Array(N);
   const W = S.W;
+  // Overpasses: node t is the east-west road over tile t, node N + k the north-south road under the k-th overpass.
+  const ovs = [], ovk = new Map();
+  if (S.over) for (const k in S.over) { const t = +k; if (t >= 0 && t < N && rl(t)) { ovk.set(t, ovs.length); ovs.push(t); } }
+  const lab = new Int32Array(N + ovs.length).fill(-1), junc = new Uint8Array(N);
+  // The node a road from tile a runs onto at its neighbour b: on an overpass, the road that goes straight on from a's side.
+  const enter = (a, b) => { const k = ovs.length ? ovk.get(b) : undefined; return k === undefined || b - a === 1 || a - b === 1 ? b : N + k; };
   let next = 0;
   const q = [];
+  const flood = (s) => {
+    lab[s] = next; q.length = 0; q.push(s);
+    while (q.length) {
+      const x = q.pop(), a = x < N ? x : ovs[x - N], ai = a % W;
+      const k = x >= N ? 2 : ovs.length && ovk.has(a) ? 1 : 0; // (on an overpass: only straight on, along its own road)
+      for (const b of [k === 2 || ai === 0 ? -1 : a - 1, k === 2 || ai === W - 1 ? -1 : a + 1, k === 1 ? -1 : a - W, k === 1 ? -1 : a + W]) {
+        if (b < 0 || b >= N || !rl(b) || !canStep(a, b)) continue;
+        const y = enter(a, b);
+        if (lab[y] < 0) { lab[y] = next; q.push(y); }
+      }
+    }
+    next++;
+  };
   for (let t = 0; t < N; t++) {
     if (!rl(t)) continue;
     let k = 0;
     const i = t % W;
     for (const u of [i > 0 ? t - 1 : -1, i < W - 1 ? t + 1 : -1, t - W, t + W]) if (u >= 0 && u < N && rl(u) && canStep(t, u)) k++;
-    if (k >= 3 && S.road[t]) junc[t] = 1;
-    if (comp[t] >= 0) continue;
-    comp[t] = next; q.length = 0; q.push(t);
-    while (q.length) {
-      const a = q.pop(), ai = a % W;
-      for (const b of [ai > 0 ? a - 1 : -1, ai < W - 1 ? a + 1 : -1, a - W, a + W]) {
-        if (b < 0 || b >= N || comp[b] >= 0 || !rl(b) || !canStep(a, b)) continue;
-        comp[b] = next; q.push(b);
-      }
-    }
-    next++;
+    if (k >= 3 && S.road[t]) junc[t] = k;
+    if (lab[t] < 0) flood(t);
   }
+  for (let k = 0; k < ovs.length; k++) if (lab[N + k] < 0) flood(N + k);
+  const comp = lab.slice(0, N), compV = lab.slice(N);
   // Ropeways join networks for the light bots that ride them (comp); trucks keep to the roads
   // (compT). Viaducts join both: anything can drive across one.
-  const compT = comp.slice(), parent = Array.from({ length: next }, (_, k) => k), parentT = parent.slice();
+  const compT = comp.slice(), compVT = compV.slice(), parent = Array.from({ length: next }, (_, k) => k), parentT = parent.slice();
   const find = (p, k) => { while (p[k] !== k) { p[k] = p[p[k]]; k = p[k]; } return k; };
   for (const b of S.buildings) {
     if (b.dead || !b.built || (b.type !== 'ropeway' && b.type !== 'viaduct')) continue;
@@ -3299,10 +3339,53 @@ function roadNet(who) {
   }
   const base = own ? (who + 1) * RN_SPAN : 0;
   for (let t = 0; t < N; t++) if (comp[t] >= 0) { comp[t] = find(parent, comp[t]) + base; compT[t] = find(parentT, compT[t]) + base; }
-  Object.assign(rn, { of: S, ver: S.roadVer || 0, comp, compT, junc });
+  for (let k = 0; k < ovs.length; k++) { compV[k] = find(parent, compV[k]) + base; compVT[k] = find(parentT, compVT[k]) + base; }
+  Object.assign(rn, { of: S, ver: S.roadVer || 0, comp, compT, junc, ovk, compV, compVT });
   rn.bnet.clear();
   rn.bnetT.clear();
   return rn;
+}
+
+/**
+ * The road networks tile t is on, in roadNet `net` (compT's with trucks): one (-1 off the roads), or on an
+ * overpass its east-west road's and its north-south road's, when they aren't joined elsewhere.
+ */
+function tileNets(net, t, trucks) {
+  const c = (trucks ? net.compT : net.comp)[t], k = net.ovk.size ? net.ovk.get(t) : undefined;
+  if (k === undefined) return [c];
+  const v = (trucks ? net.compVT : net.compV)[k];
+  return v === c ? [c] : [c, v];
+}
+
+/** Is tile t on any of the road networks in `nets` (an array)? (On an overpass, either of its roads.) */
+function onNets(net, t, nets, trucks) {
+  for (const c of tileNets(net, t, trucks)) if (c >= 0 && nets.indexOf(c) >= 0) return true;
+  return false;
+}
+
+/** The road network of tile u for a bot driving onto it from neighbour a: on an overpass, that of the road going straight on. */
+function laneComp(net, a, u, trucks) {
+  const k = net.ovk.size ? net.ovk.get(u) : undefined;
+  if (k === undefined || u - a === 1 || a - u === 1) return (trucks ? net.compT : net.comp)[u];
+  return (trucks ? net.compVT : net.compV)[k];
+}
+
+/** Is road tile t a crossing: roads on all four sides (where an overpass can go)? */
+function isCrossing(t) { return roadNet().junc[t] === 4; }
+
+/**
+ * Straight on from tile a onto its neighbour b, an overpass, and over (or under) it and any more beyond: the first
+ * tile past them, or -1 at the map's edge. Nobody turns on an overpass (see findPath).
+ */
+function overHop(a, b) {
+  const d = b - a, W = S.W, N = W * S.H;
+  let t = b;
+  while (S.over[t]) {
+    const i = t % W;
+    if ((d === 1 && i === W - 1) || (d === -1 && i === 0) || t + d < 0 || t + d >= N) return -1;
+    t += d;
+  }
+  return t;
 }
 
 /** Can a Freight Truck or Road Train drive between buildings a and b (by road, not by ropeway)? */
@@ -3373,8 +3456,8 @@ function buildingNets(b, trucks) {
   if (comp[t] >= 0) nets.push(comp[t]); // an Outpost is part of the road through it
   for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
     if (!inMap(b.x + di, b.y + dj)) continue;
-    const u = tIdx(b.x + di, b.y + dj);
-    if (comp[u] >= 0 && canStep(t, u) && nets.indexOf(comp[u]) < 0) nets.push(comp[u]);
+    const u = tIdx(b.x + di, b.y + dj), c = laneComp(net, t, u, trucks); // (an Outpost beside an overpass: the road through both)
+    if (c >= 0 && canStep(t, u) && nets.indexOf(c) < 0) nets.push(c);
   }
   if (b.id) cache.set(b.id, nets);
   return nets;
@@ -3458,15 +3541,30 @@ function roadSearch(owner, seeds, done) {
   // (Through our own Outposts and Gates, never a rival's: its bots can't pass one, so a road through it links nothing.)
   const like = (t) => roadLikeFor(t, owner);
   const open = (t) => S.bAt[t] > 0 ? passTile(t, owner) : S.road[t] || canRoad(owner, t % W, (t / W) | 0);
-  const turn = done ? ROAD_TURN : 0;
+  const turn = done ? ROAD_TURN : 0, ov = anyOverpass();
+  const step = (a, b) => (like(a) && like(b) ? canStep(a, b) : stepPlan(a, b));
+  // The way the route came into tile t: from prev[t], or straight over the overpass(es) just behind it.
+  const way = (t) => {
+    const d = t - prev[t];
+    if (!ov || d === 1 || d === -1 || d === W || d === -W) return d;
+    const e = d > 0 ? (d < W ? 1 : W) : (d > -W ? -1 : -W);
+    return S.over[t - e] ? e : d;
+  };
   while (heap.size) {
     const c = heap.pri[0], t = heap.pop();
     if (c > cost[t]) continue;
     if (done && done(t)) return { cost, prev, end: t };
     const i = t % W;
-    for (const u of [i > 0 ? t - 1 : -1, i < W - 1 ? t + 1 : -1, t - W, t + W]) {
-      if (u < 0 || u >= N || !open(u) || !(like(t) && like(u) ? canStep(t, u) : stepPlan(t, u))) continue;
-      const nc0 = c + roadWeight(u), nc = turn ? Math.fround(nc0 + (prev[t] >= 0 && u - t !== t - prev[t] ? turn : 0)) : nc0; // (with turns: as cost[] holds it, a turn being no whole number)
+    for (const n of [i > 0 ? t - 1 : -1, i < W - 1 ? t + 1 : -1, t - W, t + W]) {
+      if (n < 0 || n >= N || !open(n) || !step(t, n)) continue;
+      let u = n, nc0 = c + roadWeight(n);
+      if (ov && S.over[n]) {
+        // An overpass: the road runs straight on over (or under) it, never round the corner there.
+        u = overHop(t, n);
+        for (let x = n; u >= 0 && x !== u; x += n - t) if (!open(x + n - t) || !step(x, x + n - t)) u = -1; else nc0 += roadWeight(x + n - t);
+        if (u < 0) continue;
+      }
+      const nc = turn ? Math.fround(nc0 + (prev[t] >= 0 && n - t !== way(t) ? turn : 0)) : nc0; // (with turns: as cost[] holds it, a turn being no whole number)
       if (nc < cost[u]) { cost[u] = nc; prev[u] = t; heap.push(u, nc); }
     }
     // Across a Viaduct: its deck carries the road from one end to the other.
@@ -3476,13 +3574,14 @@ function roadSearch(owner, seeds, done) {
   return { cost, prev, end: -1 };
 }
 
-/** The open sides of tile (x, y) where a road is or could go. */
+/** The open sides of tile (x, y) where a road is or could go. (Beside an overpass: the road straight on past it.) */
 function roadSides(owner, x, y) {
   const out = [], bt = tIdx(x, y);
   for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
     if (!inMap(x + di, y + dj)) continue;
     const u = tIdx(x + di, y + dj);
-    if ((roadLike(u) || canRoad(owner, x + di, y + dj)) && (roadLike(u) ? canStep(bt, u) : stepPlan(bt, u))) out.push(u);
+    if (!((roadLike(u) || canRoad(owner, x + di, y + dj)) && (roadLike(u) ? canStep(bt, u) : stepPlan(bt, u)))) continue;
+    if (S.over[u]) { const v = overHop(bt, u); if (v >= 0 && roadLike(v) && canStep(v - (u - bt), v)) out.push(v); } else out.push(u);
   }
   return out;
 }
@@ -3584,7 +3683,7 @@ function routeSearch(owner, kind, seeds, goal, have) {
     for (let d = 0; d < 4; d++) if (c < best[t * 4 + d]) { best[t * 4 + d] = c; prev[t * 4 + d] = -2; heap.push(t * 4 + d, c); }
   }
   if (!heap.size) return { why: rail ? 'Start from your own ground, track or a Rail Station.' : 'Start from your own ground or road.' };
-  const DIRS = [1, W, -1, -W], bend = ROUTE_BEND[rail ? 'rail' : 'road'];
+  const DIRS = [1, W, -1, -W], bend = ROUTE_BEND[rail ? 'rail' : 'road'], ov = !rail && anyOverpass();
   let end = -1, steps = 0;
   while (heap.size) {
     const c = heap.pri[0], s = heap.pop();
@@ -3598,7 +3697,9 @@ function routeSearch(owner, kind, seeds, goal, have) {
       const ns = u * 4 + nd, nc = c + weight(u) + extra + (nd !== d ? bend : 0);
       if (nc < best[ns]) { best[ns] = nc; prev[ns] = s; heap.push(ns, nc); }
     };
+    const over = ov && S.over[t] && prev[s] !== -2; // nobody turns on an overpass: the road goes straight on (see findPath)
     for (let nd = 0; nd < 4; nd++) {
+      if (over && nd !== d) continue;
       const u = t + DIRS[nd];
       if (u < 0 || u >= N || (nd === 0 && i === W - 1) || (nd === 2 && i === 0)) continue;
       if (blocks(u) && !(goals ? goals.has(u) : false)) continue;
@@ -3641,7 +3742,8 @@ function routeFromTree(T, goal, nSeeds) {
  */
 function roadReach(owner) {
   const g = roadGoals(owner, null), net = roadNet(owner), seeds = [];
-  for (let t = 0; t < S.W * S.H; t++) if ((net.comp[t] >= 0 && g.nets.has(net.comp[t])) || g.next[t]) seeds.push(t);
+  // (Not an overpass's own tile: roads leave it only straight on, from the roads either side, which are seeds if joined.)
+  for (let t = 0; t < S.W * S.H; t++) if (((net.comp[t] >= 0 && g.nets.has(net.comp[t])) || g.next[t]) && !S.over[t]) seeds.push(t);
   return roadSearch(owner, seeds, null).cost;
 }
 

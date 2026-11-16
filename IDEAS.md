@@ -26,6 +26,10 @@ Still open: a neutral, shared exchange the rivals compete over; contracts for Ch
     (and a Nuclear race's Uranium) on top. Whoever holds the high ground sees and shoots down onto the rest.
   - **Twin rivers:** two rivers run the length of the map, splitting it into three lanes joined by shallow fords
     that bots wade slowly (and that a Planet event can flood). Bridges are worth their price here.
+- **Interchanges.** An overpass is a grade-separated crossing: both roads run straight through it and nobody turns
+  there (turning traffic goes round by another junction). Still open: an interchange, an overpass with slip roads (a
+  bigger footprint, dearer) that lets traffic turn without stopping; and whether the rival should put overpasses on its
+  busiest crossings (it builds neither lights nor overpasses today).
 - **Cloud saves.** Saves move between devices by exporting and importing a file today; a cloud save (perhaps kept by
   the multiplayer relay on Cloudflare) would do it without the file.
 - **Recycling: open questions.** A robot is taken apart the moment it reaches the Foundry: should it take a few

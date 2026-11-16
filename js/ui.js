@@ -3837,8 +3837,8 @@ function onMapTap(i, j, wx, wy) {
           case 'notYours': sfx('error'); showRoadBanner('That junction isn\'t yours: you can only change junctions in your own land.'); return;
           case 'overDown': sfx('click'); showRoadBanner('Overpass taken down: its Cement and Alloy are back.', true); return;
           case 'overOff': sfx('click'); showRoadBanner(`Planned overpass called off (nothing was spent on it yet)${r.lit ? '; the light is taken down and its Alloy is back' : ''}.`, true); return;
-          case 'lightDown': sfx('click'); showRoadBanner(`Light taken down. ${r.why}`, true); return;
-          case 'overUp': sfx('place'); addFx('ring', i + 0.5, j + 0.5, { color: '#ffd166' }); showRoadBanner('Overpass built: traffic flows through without stopping.', true); return;
+          case 'lightDown': sfx('click'); showRoadBanner(`${r.lit === false ? 'Planned light called off' : 'Light taken down (its Alloy is back)'}. ${r.why}`, true); return;
+          case 'overUp': sfx('place'); addFx('ring', i + 0.5, j + 0.5, { color: '#ffd166' }); showRoadBanner('Overpass built: both roads run straight through without stopping. Nobody turns here now: bots that need to turn use another junction.', true); return;
           case 'overPlanned': { const P = junPlanAt(t); sfx('place'); showRoadBanner(`Overpass planned: it goes up once its ${P ? costText(junPlanCost(t, P)) : 'cost'} is paid for from storage (oldest plans first)${r.lit ? '; the light keeps working meanwhile' : ''}.`, true); return; }
           case 'error': sfx('error'); showRoadBanner(r.why); return;
           case 'lightUp': sfx('place'); addFx('ring', i + 0.5, j + 0.5, { color: '#7dffa0' }); showRoadBanner(); return;
@@ -4626,9 +4626,9 @@ function showRoadBanner(problem, info) {
     for (const k in S.over) if (S.over[k].owner === ME) overs++;
     const net = roadNet();
     for (let t = 0; t < S.W * S.H; t++) if (net.junc[t] && wayOwner(t) === ME) junctions++;
-    line = `Tap a <b>junction</b> for a traffic light (${costText(LIGHT_COST)}), tap the light for an <b>overpass</b> (${costText(OVERPASS_COST)}), tap again to clear it.`;
+    line = `Tap a <b>junction</b> for a traffic light (${costText(LIGHT_COST)}), tap the light for an <b>overpass</b> (${costText(OVERPASS_COST)}, only where four roads cross), tap again to clear it.`;
     const jp = plansWaiting(ME).junctions;
-    how = `A light lets one direction through at a time: it pays where two busy roads cross (50 to 85% more goods through), and costs a little on a quiet crossing. On an overpass nobody stops: best everywhere, and more than twice as much on a jammed crossing. Short of Alloy? Tap anyway: the light or overpass is planned (a dashed orange marker) and goes up once it's paid for from storage, oldest plans first${jp ? ` (<b>${jp}</b> waiting now)` : ''}. You have ${lights} light${lights === 1 ? '' : 's'}, ${overs} overpass${overs === 1 ? '' : 'es'} and ${junctions} junction${junctions === 1 ? '' : 's'}.`;
+    how = `A light lets one direction through at a time: it pays where two busy roads cross (50 to 85% more goods through), and costs a little on a quiet crossing. An overpass lifts one road over the other: both run straight through without stopping, but <b>nobody turns there</b>, so bots that need to turn go round by another junction. Best on a jammed crossing of two through roads (more than twice the goods through); a T-junction takes only a light. Short of Alloy? Tap anyway: the light or overpass is planned (a dashed orange marker) and goes up once it's paid for from storage, oldest plans first${jp ? ` (<b>${jp}</b> waiting now)` : ''}. You have ${lights} light${lights === 1 ? '' : 's'}, ${overs} overpass${overs === 1 ? '' : 'es'} and ${junctions} junction${junctions === 1 ? '' : 's'}.`;
   } else {
     const sm = draftSummary();
     if (draftEmpty() && routeOn()) {
@@ -5445,7 +5445,7 @@ function refreshBuildingSheet(b) {
       let fresh = 0, worn = 0, todo = 0;
       const nets = buildingNets(b), net = roadNet(b.owner), all = paveMode(b) === 'all';
       for (let t = 0; t < S.W * S.H; t++) {
-        if (!S.road[t] || wayOwner(t) !== b.owner || !(all || S.paveMark[t]) || nets.indexOf(net.comp[t]) < 0) continue;
+        if (!S.road[t] || wayOwner(t) !== b.owner || !(all || S.paveMark[t]) || !onNets(net, t, nets)) continue;
         if (S.pave[t] !== 2) todo++; else if (S.wear[t] >= REPAVE_AT) worn++; else fresh++;
       }
       parts.push(`<div class="kv"><span>${all ? 'Joined roads' : 'Marked roads joined to it'}</span><span>${fresh + worn + todo} tiles</span></div>
@@ -6091,7 +6091,9 @@ function refreshRoadSheet(t) {
   const cross = crossTile(t) ? (S.terrain[t] === T_ROCK ? ' tunnel' : S.terrain[t] === T_CHASM ? ' sky bridge' : ' bridge') : '';
   $('rd-name').textContent = (asphalt ? 'Asphalt' : 'Concrete') + (cross || ' road');
   const speed = asphalt ? asphaltSpeed(S.wear[t]) : PAVE[1].speed;
-  $('sh-dyn').innerHTML = `<div class="kv"><span>Speed</span><span>${Math.round(speed * 100) / 100}× off-road</span></div>` +
+  $('sh-dyn').innerHTML = (S.over[t] ? '<div class="kv"><span>Overpass</span><span>Straight through only, no turning</span></div>'
+      : S.lights[t] ? '<div class="kv"><span>Traffic light</span><span>One way across at a time</span></div>' : '') +
+    `<div class="kv"><span>Speed</span><span>${Math.round(speed * 100) / 100}× off-road</span></div>` +
     (asphalt ? `<div class="kv"><span>Wear</span><span>${w}%${S.wear[t] >= REPAVE_AT ? ' (due for resurfacing)' : ''}</span></div>
       <div class="bar"><div style="width:${w}%;background:${w >= 75 ? '#ff4d4d' : w >= 50 ? '#ffb347' : '#7ee08a'}"></div></div>` : '') +
     `<p class="desc">${S.paveMark[t] ? 'Marked for asphalt: a Roadworks joined to it paves it and resurfaces it as it wears.'
