@@ -387,14 +387,14 @@ function reportMoments() {
   const bname = (t) => (BDEFS[t] ? BDEFS[t].name : 'building');
   for (const e of L) {
     if (!(e.t >= 0)) continue;
-    if (e.k === 'bot' && e.p === ME && BOTS[e.u]) out.push({ t: e.t, kind: 'good', w: 6, text: `Your first robot: ${aOrAn(BOTS[e.u].name)} from the Bot Foundry.` });
-    else if (e.k === 'def' && e.p === ME && BDEFS[e.b]) out.push({ t: e.t, kind: 'good', w: 5, text: `Your first defence: ${aOrAn(BDEFS[e.b].name)}.` });
-    else if (e.k === 'hit' && e.p === ME && e.q >= 0) out.push({ t: e.t, kind: 'bad', w: 7, text: e.b ? `First attack on you: ${insWho(e.q)}'s robots hit your ${bname(e.b)}.` : `First attack on you: ${insWho(e.q)} struck your colony from afar.` });
-    else if (e.k === 'hit' && e.q === ME && e.p >= 0) out.push({ t: e.t, kind: 'good', w: 6, text: e.b ? `Your first attack: your robots hit ${insWho(e.p)}'s ${bname(e.b)}.` : `Your first strike on ${insWho(e.p)}.` });
+    if (e.k === 'bot' && e.p === ME && BOTS[e.u]) out.push({ t: e.t, kind: 'good', w: 20, text: `Your first robot: ${aOrAn(BOTS[e.u].name)} from the Bot Foundry.` });
+    else if (e.k === 'def' && e.p === ME && BDEFS[e.b]) out.push({ t: e.t, kind: 'good', w: 19, text: `Your first defence: ${aOrAn(BDEFS[e.b].name)}.` });
+    else if (e.k === 'hit' && e.p === ME && e.q >= 0) out.push({ t: e.t, kind: 'bad', w: 21, text: e.b ? `First attack on you: ${insWho(e.q)}'s robots hit your ${bname(e.b)}.` : `First attack on you: ${insWho(e.q)} struck your colony from afar.` });
+    else if (e.k === 'hit' && e.q === ME && e.p >= 0) out.push({ t: e.t, kind: 'good', w: 20, text: e.b ? `Your first attack: your robots hit ${insWho(e.p)}'s ${bname(e.b)}.` : `Your first strike on ${insWho(e.p)}.` });
     else if (e.k === 'lost' && e.p === ME) {
       const span = e.t1 - e.t > 40 ? ` (to ${fmtTime(e.t1)})` : '';
       out.push({ t: e.t, kind: 'bad', w: 2 + e.n * 2, n: e.n, p: e.p, t1: e.t1, text: `You lost ${e.n === 1 ? 'a building' : e.n + ' buildings'}${e.q >= 0 ? ` to ${insWho(e.q, true)}` : e.q === -2 ? ' to several rivals' : ''}${span}: ${insTypes(e.ty)}.` });
-    } else if (e.k === 'lost' && e.q === ME) out.push({ t: e.t, kind: 'good', w: 1 + e.n * 2, n: e.n, p: e.p, t1: e.t1, text: `Your robots wrecked or took ${e.n === 1 ? 'a building' : e.n + ' buildings'} of ${insWho(e.p, true)}'s: ${insTypes(e.ty)}.` });
+    } else if (e.k === 'lost' && e.q === ME) out.push({ t: e.t, kind: 'good', w: 1 + e.n * 2, n: e.n, p: e.p, t1: e.t1, text: `Your robots wrecked or took ${e.n === 1 ? 'one' : e.n} of ${insWho(e.p, true)}'s buildings: ${insTypes(e.ty)}.` });
     else if (e.k === 'lost' && e.n >= 4) out.push({ t: e.t, kind: 'info', w: e.n, n: e.n, p: e.p, t1: e.t1, text: `${insWho(e.p)} lost ${e.n} buildings${e.q >= 0 ? ` to ${insWho(e.q, true)}` : ''}.` });
     else if (e.k === 'dry' && e.p === ME && GOOD[e.g] && e.d >= 60) out.push({ t: e.t, kind: 'warn', w: 2 + e.d / 40, text: `Out of ${goodN(e.g, 2)} for ${insDur(e.d)}.`, g: e.g, d: e.d });
     else if (e.k === 'out') {
@@ -451,7 +451,7 @@ function reportTip(won, moments) {
   if (worst && short[worst] >= 240 && SHORT_TIP[worst]) tips.push([short[worst] / 10, `${SHORT_TIP[worst]}. You were out of ${goodN(worst, 2)} for ${insDur(short[worst])} in all.`]);
   if ((st.lostAboard || 0) >= 15) tips.push([30 + st.lostAboard / 2, `guarding your supply roads: raiders destroyed robots carrying ${st.lostAboard} goods. An Outpost or a turret where they cross, or Walls with a Gate.`]);
   if (war && hadDef && (st.lostBld || 0) >= 8) tips.push([20 + st.lostBld, `more defences where the attacks came from: you lost ${st.lostBld} buildings in all. A Keep toughens the Walls and guns round it.`]);
-  if (won) tips.push([5, S.difficulty === 'hard' ? 'another map type or doctrine: every one plays differently.' : 'a harder rival: you won this one.']);
+  if (won) tips.push([5, S.mission ? 'the next mission, or this one at a harder level.' : S.difficulty === 'hard' ? 'another map type or doctrine: every one plays differently.' : 'a harder rival: you won this one.']);
   tips.push([1, 'Statistics and graphs: flat stretches in your goods and output show where the colony stalled.']);
   tips.sort((a, c) => c[0] - a[0]);
   return `<div class="rp-tip"><b>Next time, try</b> ${insEsc(tips[0][1])}</div>`;
@@ -461,7 +461,7 @@ function reportTip(won, moments) {
 function gameReport(won) {
   if (!S || !S.players[ME]) return '';
   const all = reportMoments();
-  // The dozen that matter most, in order (the deciding one, falls and firsts always).
+  // The dozen that matter most, in order (the deciding one, falls and firsts first).
   const keep = all.slice().sort((a, c) => (c.key ? 1e3 : 0) + c.w - ((a.key ? 1e3 : 0) + a.w)).slice(0, 12);
   const ms = all.filter((m) => keep.includes(m)).sort((a, c) => a.t - c.t);
   const st = S.players[ME].stats || {};
