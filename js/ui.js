@@ -2179,6 +2179,9 @@ function coachTarget(g) {
   let panel = false;
   for (const part of sel.split(',')) {
     for (const [re, opener] of COACH_OPENERS) if (re.test(part) && !open.includes(opener)) open.push(opener);
+    // (A card on another tab of the open build menu: that tab.)
+    const card = part.match(/\.bcard\[data-t=['"]?(\w+)/), grp = card && BUILD_GROUPS.find((gr) => gr.types.includes(card[1]));
+    if (grp && !open.includes(`#build-tabs [data-g="${grp.key}"]`)) open.push(`#build-tabs [data-g="${grp.key}"]`);
     if (/#sh-/.test(part)) panel = true;
   }
   return { sel: open.join(', ') || sel, ring: panel ? coachBuilding(g) : null };
@@ -2194,13 +2197,13 @@ function coachBuilding(g) {
   if (g.at) return live.find((b) => b.owner === ME && b.type === g.at) || live.find((b) => b.type === g.at) || null;
   const hint = plainHint(g.hint);
   if (!hint) return null;
-  for (const mineOnly of [true, false]) {
+  // Full names first ("the Bot Foundry"), then short ones after "the" or "a" ("the Foundry": not the verb in "Tap the").
+  for (const short of [false, true]) for (const mineOnly of [true, false]) {
     let best = null, at = Infinity;
     for (const b of live) {
       if (mineOnly && b.owner !== ME) continue;
       const name = BDEFS[b.type].name, last = name.split(' ').pop();
-      let k = hint.indexOf(name);
-      if (k < 0 && last !== name && /^[A-Z][a-z]{2,}$/.test(last)) k = hint.search(new RegExp(`\\b${last}\\b`));
+      const k = !short ? hint.indexOf(name) : last !== name && /^[A-Z][a-z]{2,}$/.test(last) ? hint.search(new RegExp(`\\b(the|a|an|your) ${last}\\b`)) : -1;
       if (k >= 0 && k < at) { at = k; best = b; }
     }
     if (best) return best;
