@@ -11,7 +11,9 @@
  * presses, wrenches and machine tools, drills, pumps, beeping fabs), far-off horns in a big city. Trains rumble along with their wheels
  * clacking over the joints, sound their horn pulling out and squeal braking in; aircraft drone
  * overhead, whine in on the approach and screech down on the runway; ships hoot leaving port; the
- * sea washes the shore, lava bubbles, and crickets sing on warm nights.
+ * sea washes the shore, lava bubbles, and crickets sing on warm nights. Away from the streets the land itself is
+ * heard (see natureBeds and biomeCall): each biome's rustle, hiss, drone or shimmer and its calls, surf and lapping
+ * water, a volcano's rumble, the weather (rain and thunder, storms, embers), and near a nest, the Murmur in the ground.
  *
  * Music: a generative synthwave score that follows the game. A slow theme on the menu, a calm
  * groove while you build (three of them, taking turns every ten minutes of play: the original,
@@ -930,15 +932,37 @@ function audioTick(dt) {
     const b = S.buildings[Math.floor(Math.random() * S.buildings.length)];
     if (b && !b.dead && on(b.x, b.y)) { const v = mapVoice(b.x + 0.5, b.y + 0.5, 0.5); if (v) sfx('honkfar', v); }
   }
-  // The sea and lava on screen (a coarse look, every third tile).
-  let tiles = 0, sea = 0, lava = 0;
+  // The ground on screen (a coarse look, every third tile): the sea and lava, the shore (water beside land), and how
+  // wild it is: the share of its land that isn't built on, paved or laid with track (with a third of it built up,
+  // it's all town). See natureBeds.
+  let tiles = 0, sea = 0, lava = 0, land = 0, urban = 0, shore = 0;
   const i0 = Math.max(0, Math.floor(v0.x)), i1 = Math.min(S.W - 1, Math.ceil(v1.x)), j0 = Math.max(0, Math.floor(v0.y)), j1 = Math.min(S.H - 1, Math.ceil(v1.y));
+  // (On Argos the pools are frozen: no water to hear. In the Cinderlands the lakes are lava, as they look.)
+  const bm = biome(), frozen = bm === 'lunar', molten = bm === 'volcanic';
+  const isLava = (u) => molten || !!(S.lava && S.lava[u]);
+  const wet = (u) => S.terrain[u] === T_WATER && !isLava(u);
   for (let j = j0; j <= j1; j += 3) for (let i = i0; i <= i1; i += 3) {
     const t = j * S.W + i;
     tiles++;
-    if (S.terrain[t] === T_WATER) { if (S.lava && S.lava[t]) lava++; else if (!(S.ford && S.ford[t])) sea++; }
+    if (S.terrain[t] === T_WATER) {
+      if (frozen) { land++; continue; }
+      if (isLava(t)) { lava++; continue; }
+      if (!(S.ford && S.ford[t])) sea++;
+      if ((i > 0 && !wet(t - 1)) || (i < S.W - 1 && !wet(t + 1)) || (j > 0 && !wet(t - S.W)) || (j < S.H - 1 && !wet(t + S.W))) shore++;
+    } else {
+      land++;
+      if (S.bAt[t] || S.road[t] || (S.rail && S.rail[t])) urban++;
+    }
   }
-  WORLD.sea = tiles ? sea / tiles : 0; WORLD.lava = tiles ? lava / tiles : 0;
+  WORLD.sea = tiles ? sea / tiles : 0; WORLD.lava = tiles ? lava / tiles : 0; WORLD.shore = tiles ? shore / tiles : 0;
+  WORLD.wildT = land ? Math.max(0, 1 - (3 * urban) / land) : 0;
+  // How near a Murmur nest the view is (none live on Argos), and the volcano (see natureBeds).
+  const cx = (v0.x + v1.x) / 2, cy = (v0.y + v1.y) / 2, span = Math.max(8, Math.abs(v1.x - v0.x) / 2);
+  let nest = 0;
+  if (typeof murmurGround !== 'function' || murmurGround(biome())) for (const b of S.buildings) if (!b.dead && b.type === 'nest') nest = Math.max(nest, 1 - Math.hypot(b.x - cx, b.y - cy) / (span + 18));
+  WORLD.nest = nest;
+  const V = S.volcano;
+  WORLD.volc = V ? Math.max(0, Math.min(1, 1 - (Math.hypot(V.x - cx, V.y - cy) - (V.r || 0)) / (span + 20))) : 0;
   for (const u of S.bots) {
     if (u.dead || u.inside || u.owner !== ME || !on(u.x, u.y)) continue;
     const t = u.task;
@@ -996,7 +1020,8 @@ function at(u, name, vol) {
 
 /*
  * Two steady beds under everything: the hum of the traffic on screen (deeper with trucks), and the
- * wind of the biome, gusting. In the forest, birds and insects call now and then.
+ * wind of the biome, gusting (harder in a storm; on airless Argos only the faintest rumble). Under them the land
+ * itself (natureBeds), and calls from out in the wilds (biomeCall), fewer the more built-up the view.
  */
 function updateBeds(live, dt) {
   const ac = AUDIO.ctx, A = AUDIO, t = ac.currentTime;
@@ -1027,20 +1052,32 @@ function updateBeds(live, dt) {
   B.g3.gain.setTargetAtTime(Math.min(1, (WORLD.trucks || 0) * 0.5), t, 0.4);
   B.lp.frequency.setTargetAtTime(160 + Math.min(240, (WORLD.moving || 0) * 6 + (WORLD.jam || 0) * 10), t, 0.5);
   const b = typeof biome === 'function' && S ? biome() : 'desert';
-  const wind = { desert: [480, 0.7, 0.03], jungle: [320, 0.6, 0.016], polar: [1100, 2.2, 0.035], volcanic: [180, 0.5, 0.03], lunar: [90, 0.4, 0.008],
+  const wind = { desert: [480, 0.7, 0.03], jungle: [320, 0.6, 0.016], polar: [1100, 2.2, 0.035], volcanic: [180, 0.5, 0.03], lunar: [70, 0.4, 0.0025],
     autumn: [600, 0.8, 0.028], savanna: [700, 0.9, 0.024], alien: [260, 3, 0.014], swamp: [240, 0.5, 0.01] }[b] || [480, 0.7, 0.03];
+  const wx = live ? weatherSound() : null, wk = wx ? wx.k : 0, storm = wx ? STORM_WIND[wx.kind] || 0 : 0;
   B.gust -= dt;
   if (B.gust <= 0) {
-    // A new gust every few seconds: the wind swells, drops and changes pitch.
+    // A new gust every few seconds: the wind swells, drops and changes pitch (higher in a sandstorm, blizzard or gale).
     B.gust = 2 + Math.random() * 4;
-    B.bp.frequency.setTargetAtTime(wind[0] * (0.7 + Math.random() * 0.7), t, 1.2);
+    B.bp.frequency.setTargetAtTime(wind[0] * (storm > 1 ? 1 + 0.5 * wk : 1) * (0.7 + Math.random() * 0.7), t, 1.2);
     B.bp.Q.value = wind[1];
   }
-  const windLevel = live ? wind[2] * (0.5 + 0.5 * Math.sin(t * 0.37) * Math.sin(t * 0.23 + 1)) + wind[2] * 0.5 : 0;
-  B.wg.gain.setTargetAtTime(windLevel, t, 0.8);
+  const sway = 0.5 + 0.5 * Math.sin(t * 0.37) * Math.sin(t * 0.23 + 1);
+  const windLevel = live ? wind[2] * (sway + 0.5) * Math.max(0.3, 1 + storm * wk) : 0;
+  B.wg.gain.setTargetAtTime(Math.min(0.09, windLevel), t, 0.8);
+  // How wild the view is (WORLD.wildT, from the ground on screen), eased so it doesn't jump as you scroll.
+  WORLD.wild = (WORLD.wild || 0) + ((live ? WORLD.wildT || 0 : 0) - (WORLD.wild || 0)) * Math.min(1, dt * 0.8);
+  natureBeds(live, dt, zl, b, sway, wx);
   if (live && BIOME_CALLS[b]) {
     B.chirp -= dt;
-    if (B.chirp <= 0) { B.chirp = 2 + Math.random() * 6; biomeCall(b); }
+    if (B.chirp <= 0) {
+      // Out in the wilds, a call every few seconds; at a town's edge now and then; in its streets hardly ever. More
+      // at dawn, fewer in rain or fog; and on the ashlands the ground hisses and grumbles more near the volcano.
+      const w = Math.max(WORLD.wild || 0, b === 'volcanic' ? WORLD.volc || 0 : 0), tod = typeof todNow === 'function' ? todNow() : null;
+      const dawn = tod && (tod.a === 'morning' || tod.b === 'morning') ? 0.5 : 1, damp = wx && (wx.kind === 'rain' || wx.kind === 'fog') ? 1 + wk : 1;
+      B.chirp = ((2 + Math.random() * 6) * dawn * damp) / Math.max(0.2, w);
+      if (w > 0.12) biomeCall(b, w, tod ? tod.lights || 0 : 0);
+    }
   }
 }
 
@@ -1126,15 +1163,17 @@ function ambienceBeds(live, dt, zl) {
   if (M.airPan) M.airPan.pan.setTargetAtTime(WORLD.flyPan || 0, t, 0.5);
   // The sea, swelling and falling every eight seconds or so.
   const swell = 0.55 + 0.45 * Math.sin(t * 0.75) * Math.sin(t * 0.31 + 2);
-  M.sea.g.gain.setTargetAtTime(on ? Math.min(0.05, 0.06 * Math.sqrt(WORLD.sea || 0)) * swell * (0.5 + 0.5 * zl) : 0, t, 0.6);
-  // Crickets on warm nights.
-  const b = typeof biome === 'function' && S ? biome() : 'desert';
-  if (on && night > 0.5 && ['jungle', 'autumn', 'savanna', 'swamp', 'desert'].includes(b)) {
+  // (The open sea's: lakes and rivers only murmur, and lap at their banks: see natureBeds.)
+  const openSea = !!(S && (SHAPE_PRESETS[S.settings.shape || 0] || {}).islands);
+  M.sea.g.gain.setTargetAtTime(on ? Math.min(0.05, 0.06 * Math.sqrt(WORLD.sea || 0)) * swell * (0.5 + 0.5 * zl) * (openSea ? 1 : 0.35) : 0, t, 0.6);
+  // Crickets on warm nights, out in the wilds (fewer at a town's edge, none in its streets).
+  const b = typeof biome === 'function' && S ? biome() : 'desert', W = WORLD.wild || 0;
+  if (on && night > 0.5 && W > 0.12 && ['jungle', 'autumn', 'savanna', 'swamp', 'desert'].includes(b)) {
     M.cricket -= dt;
     if (M.cricket <= 0) {
-      M.cricket = 0.6 + Math.random() * 2.2;
+      M.cricket = (0.6 + Math.random() * 2.2) / Math.max(0.3, W);
       const g = ac.createGain(), pan = ac.createStereoPanner ? ac.createStereoPanner() : null;
-      g.gain.value = 0.5 * night;
+      g.gain.value = 0.5 * night * (0.3 + 0.7 * W);
       if (pan) { pan.pan.value = Math.random() * 1.6 - 0.8; g.connect(pan).connect(A.fxBus); } else g.connect(A.fxBus);
       sfx('cricket', g);
       setTimeout(() => { try { g.disconnect(); } catch (e) { /* gone */ } }, 2000);
@@ -1142,45 +1181,216 @@ function ambienceBeds(live, dt, zl) {
   }
 }
 
-// The life (and the land) heard now and then in each biome: see biomeCall.
-const BIOME_CALLS = { jungle: 1, autumn: 1, savanna: 1, swamp: 1, alien: 1, volcanic: 1 };
+/*
+ * The land itself, under the colony's own sounds (called from updateBeds):
+ * - each biome's bed (NATURE): leaves rustling in the forests and grass on the savanna as the wind gusts, sand or snow
+ *   hissing, insects droning (cicadas in the heat of the day, the swamp's frogs and insects at night), the Bloom's
+ *   shimmer (brighter by night), the ashlands' ground rumbling. It is loudest out in the wilds and fades as the view
+ *   fills with a town (WORLD.wild), where the city's own sounds take over (ambienceBeds);
+ * - water: surf breaking on the shores of the sea maps (Islands, Tidal flats, Four Isles); at lakes and rivers, water
+ *   lapping at the banks (quicker on a river delta's channels);
+ * - the volcano: the ground rumbles nearer it, harder once it's about to erupt and while it does; lava rumbles too;
+ * - the weather (weatherSound): rain, with thunder after the lightning the storm shows; a gale in the leaves; a
+ *   sandstorm's or a blizzard's hiss (the wind blows harder too: see updateBeds); embers ticking as they fall; an
+ *   aurora's shimmer; fog damping the calls;
+ * - near a Murmur nest, now and then (more at night), a low sound in the ground.
+ * Argos, the moon, is near-silent: no air to carry a wind, and no Murmur.
+ */
+const NATURE = {
+  desert: { hiss: 0.004 },
+  jungle: { leaves: [2800, 0.008], drone: [4800, 8, 27, 0.0016, 0] },
+  autumn: { leaves: [4200, 0.01] },
+  savanna: { leaves: [2300, 0.007], drone: [5600, 10, 31, 0.003, 0] },
+  swamp: { drone: [2100, 3, 11, 0.0012, 0.004], lap: 0.003 },
+  alien: { glow: [0.0022, 0.0045] },
+  volcanic: { rumble: 0.012, hiss: 0.0015 },
+  polar: { hiss: 0.0045 },
+  lunar: {},
+};
+// (leaves: [filter Hz, level]; drone: [filter Hz, Q, pulse rate, level by day, level by night]; glow: [by day, by night])
+// How much harder the wind blows in each kind of weather (see weatherAt) at its height (fog stills it).
+const STORM_WIND = { sand: 3, snow: 2.5, leaves: 2, dust: 1, rain: 0.8, ash: 0.3, fog: -0.6 };
 
-/** Something heard somewhere out in the biome: birds and insects, frogs in the swamp, strange calls on the alien bloom, the ground hissing and grumbling on the ashlands. */
-function biomeCall(b) {
-  if (b === 'jungle' || b === 'autumn') return jungleCall();
+/** The weather heard now: a planet event's dust storm, or the weather (while it's shown): { kind, k } or null. */
+function weatherSound() {
+  if (!S) return null;
+  const E = S.event;
+  if (E && E.type === 'dust' && S.time >= E.t0 && S.time < E.t1) return { kind: 'sand', k: Math.max(0, Math.min(1, (S.time - E.t0) / 15, (E.t1 - S.time) / 15)) };
+  if (typeof weatherOn !== 'function' || !weatherOn() || typeof weatherAt !== 'function') return null;
+  return weatherAt(S.time);
+}
+
+/** A gain for a sound from somewhere round about (panned at random within ±spread), that lets go of itself after a while. */
+function aroundVoice(spread, vol) {
+  const ac = AUDIO.ctx, g = ac.createGain();
+  g.gain.value = vol === undefined ? 1 : vol;
+  if (ac.createStereoPanner) { const p = ac.createStereoPanner(); p.pan.value = (Math.random() * 2 - 1) * spread; g.connect(p).connect(AUDIO.fxBus); } else g.connect(AUDIO.fxBus);
+  setTimeout(() => { try { g.disconnect(); } catch (e) { /* gone */ } }, 8000);
+  return g;
+}
+
+function natureBeds(live, dt, zl, b, sway, wx) {
+  const ac = AUDIO.ctx, A = AUDIO, t = ac.currentTime;
+  if (!WORLD.nat) {
+    const voice = (type, freq, q) => {
+      const src = ac.createBufferSource(); src.buffer = A.noise; src.loop = true;
+      const f = ac.createBiquadFilter(); f.type = type; f.frequency.value = freq; if (q) f.Q.value = q;
+      const g = ac.createGain(); g.gain.value = 0;
+      src.connect(f).connect(g).connect(A.fxBus); src.start(0, Math.random() * 1.5);
+      return { f, g };
+    };
+    // (a voice that pulses: insects, frogs, lapping water; its noise through a gain an oscillator swings)
+    const pulsed = (type, freq, q, rate, depth) => {
+      const src = ac.createBufferSource(); src.buffer = A.noise; src.loop = true;
+      const f = ac.createBiquadFilter(); f.type = type; f.frequency.value = freq; f.Q.value = q;
+      const am = ac.createGain(); am.gain.value = 1 - depth;
+      const lfo = ac.createOscillator(), lg = ac.createGain(); lfo.frequency.value = rate; lg.gain.value = depth; lfo.connect(lg).connect(am.gain); lfo.start();
+      const g = ac.createGain(); g.gain.value = 0;
+      src.connect(f).connect(am).connect(g).connect(A.fxBus); src.start(0, Math.random() * 1.5);
+      return { f, g, lfo };
+    };
+    const leaves = voice('bandpass', 3000, 0.6), hiss = voice('highpass', 5000), rain = voice('bandpass', 2200, 0.35), rumble = voice('lowpass', 70, 0.7);
+    const drone = pulsed('bandpass', 4800, 8, 27, 0.6), lap = pulsed('bandpass', 1000, 1.2, 0.7, 0.55);
+    // The Bloom's shimmer: three soft tones close together, beating and drifting, swelling slowly.
+    const glow = { g: ac.createGain() }; glow.g.gain.value = 0;
+    const glp = ac.createBiquadFilter(); glp.type = 'lowpass'; glp.frequency.value = 1400;
+    const gAm = ac.createGain(); gAm.gain.value = 0.7;
+    const gl = ac.createOscillator(), gLg = ac.createGain(); gl.frequency.value = 0.06; gLg.gain.value = 0.3; gl.connect(gLg).connect(gAm.gain); gl.start();
+    const glowOsc = [];
+    for (const [f, k] of [[412, 0.5], [415.5, 0.4], [618.7, 0.25]]) { const o = ac.createOscillator(), og = ac.createGain(); o.type = 'sine'; o.frequency.value = f; og.gain.value = k; o.connect(og).connect(glp); o.start(); glowOsc.push({ o, f }); }
+    glp.connect(gAm).connect(glow.g).connect(A.fxBus);
+    WORLD.nat = { leaves, hiss, rain, rumble, drone, lap, glow, glowOsc, surf: 4, lapping: 1, ember: 1, bolt: -1, thunderAt: 0, murmur: 20 };
+  }
+  const M = WORLD.nat, on = live && AUDIO.fx > 0 && !!S, N = NATURE[b] || {};
+  const W = on ? WORLD.wild || 0 : 0, zq = 0.55 + 0.45 * zl;
+  const night = on && typeof todNow === 'function' ? todNow().lights || 0 : 0;
+  const wk = on && wx ? wx.k : 0, kind = on && wx ? wx.kind : '';
+  const gust = 0.5 + 0.7 * Math.max(0, Math.min(1, sway));
+  const set = (v, level, tc) => v.g.gain.setTargetAtTime(on ? Math.max(0, level) : 0, t, tc || 0.8);
+  // Leaves and grass in the wind, and in a gale.
+  if (N.leaves) M.leaves.f.frequency.setTargetAtTime(N.leaves[0], t, 1);
+  set(M.leaves, ((N.leaves ? N.leaves[1] : 0) * W * gust + (kind === 'leaves' ? 0.016 * wk : 0)) * zq);
+  // Sand, snow and dust hissing; the ashlands' vents.
+  set(M.hiss, ((N.hiss || 0) * W * gust + (kind === 'sand' ? 0.02 : kind === 'snow' ? 0.014 : kind === 'dust' ? 0.007 : 0) * wk) * zq);
+  // Insects and frogs (hushed by rain).
+  const D = N.drone;
+  if (D) { M.drone.f.frequency.setTargetAtTime(D[0], t, 1); M.drone.f.Q.value = D[1]; M.drone.lfo.frequency.setTargetAtTime(D[2], t, 1); }
+  set(M.drone, D ? (D[3] * (1 - night) + D[4] * night) * W * zq * (kind === 'rain' ? 1 - 0.7 * wk : 1) : 0);
+  // The Bloom's shimmer, brighter by night and under an aurora.
+  const G = N.glow;
+  if (on && G) M.glowOsc.forEach((v, k) => v.o.frequency.setTargetAtTime(v.f * (1 + 0.02 * Math.sin(t * (0.05 + 0.02 * k) + k)), t, 2));
+  set(M.glow, ((G ? G[0] * (1 - night) + G[1] * night : 0) * W + (kind === 'aurora' ? 0.006 * wk : 0)) * zq, 1.5);
+  // The ground rumbling: the ashlands, near the volcano (harder once it's about to blow, and while it does), lava on
+  // screen, and an ashfall.
+  const V = on && S.volcano, vk = V ? (V.erupting ? 2.6 : V.warned ? 1.8 : 1) : 0;
+  const rum = (N.rumble || 0) * (0.5 + 0.5 * W) + 0.028 * (WORLD.volc || 0) * vk + 0.02 * Math.sqrt(WORLD.lava || 0) + (kind === 'ash' ? 0.008 * wk : 0);
+  M.rumble.f.frequency.setTargetAtTime(60 + 25 * Math.sin(t * 0.13) * Math.sin(t * 0.07 + 2), t, 1.5);
+  set(M.rumble, Math.min(0.075, rum) * zq, 1.2);
+  // Water lapping at the banks of lakes and rivers (a river delta's channels quicker), and the swamp's wet ground.
+  const SH = (S && SHAPE_PRESETS[S.settings.shape || 0]) || {}, ocean = !!SH.islands, shoreF = Math.min(1, (WORLD.shore || 0) * 12);
+  M.lap.lfo.frequency.setTargetAtTime(SH.delta ? 1.6 : 0.7, t, 1);
+  set(M.lap, ((ocean ? 0.003 : 0.009) * shoreF + (N.lap || 0) * W) * zq);
+  set(M.rain, kind === 'rain' ? 0.03 * wk * zq : 0, 1.2);
+  if (!on || !sfxReady()) return;
+  // Surf breaking on the shore of a sea map; little waves lapping at a lake's or a river's banks.
+  if (shoreF > 0.05) {
+    M.surf -= dt;
+    if (ocean && M.surf <= 0) { M.surf = 3 + Math.random() * 5; _noise(2.4, 0.045 * shoreF * zq, { type: 'bandpass', freq: 1100, to: 350, q: 0.6, attack: 0.7, dest: aroundVoice(0.5) }); }
+    M.lapping -= dt;
+    if (!ocean && M.lapping <= 0) { M.lapping = 0.5 + Math.random() * 1.4; _noise(0.22, 0.012 * shoreF * zq, { type: 'bandpass', freq: 1200 + Math.random() * 900, q: 2.5, attack: 0.03, dest: aroundVoice(0.6) }); }
+  }
+  // Embers ticking as they fall.
+  if (kind === 'ash' && wk > 0.1) {
+    M.ember -= dt;
+    if (M.ember <= 0) { M.ember = 0.15 + (Math.random() * 0.8) / wk; _noise(0.03, 0.012 * wk * zq, { type: 'highpass', freq: 3000 + Math.random() * 2000, dest: aroundVoice(0.8) }); }
+  }
+  // Thunder after the lightning: the same flashes the rainstorm shows (drawWeather), heard a moment later from off a way.
+  if (kind === 'rain' && wk > 0.2) {
+    const bolt = Math.floor(S.time / 5), at = bolt * 5 + hash2(S.seed | 0, bolt, 81) * 5;
+    if (bolt !== M.bolt && S.time < at) { M.bolt = bolt; if (hash2(bolt, 3, 83) < 0.4) M.thunderAt = at + 0.5 + Math.random() * 2.5; }
+  }
+  if (M.thunderAt && S.time >= M.thunderAt) { M.thunderAt = 0; if (kind === 'rain') thunder(Math.max(0.4, wk) * zq); }
+  // The Murmur: near a nest, now and then (more often at night), a low sound in the ground.
+  if (WORLD.nest > 0) {
+    M.murmur -= dt;
+    if (M.murmur <= 0) { M.murmur = ((25 + Math.random() * 40) / (0.3 + WORLD.nest)) * (night > 0.5 ? 0.6 : 1); groundMurmur(WORLD.nest * zq); }
+  }
+}
+
+/** Thunder: a crack, then a long roll, from somewhere off to one side. */
+function thunder(k) {
   if (!sfxReady()) return;
-  const ac = AUDIO.ctx, pan = ac.createStereoPanner ? ac.createStereoPanner() : null, g = ac.createGain();
-  g.gain.value = 0.5;
-  if (pan) { pan.pan.value = Math.random() * 1.6 - 0.8; g.connect(pan).connect(AUDIO.fxBus); } else g.connect(AUDIO.fxBus);
-  const r = Math.random();
-  if (b === 'savanna') {
-    // Cicadas buzzing, or a far-off bird's two-note call.
-    if (r < 0.6) { const f = 5200 + Math.random() * 1500; for (let k = 0; k < 14; k++) _tone(f, 0.02, 'square', 0.006, f * 1.02, k * 0.03, g); }
+  const g = aroundVoice(0.7);
+  _noise(0.3, 0.07 * k, { type: 'lowpass', freq: 1800, to: 500, attack: 0.01, dest: g });
+  _noise(3.8, 0.075 * k, { type: 'lowpass', freq: 280, to: 55, attack: 0.3, delay: 0.1, dest: g });
+  _noise(2.6, 0.04 * k, { type: 'lowpass', freq: 160, to: 50, attack: 0.5, delay: 1.1, dest: g });
+}
+
+/** The Murmur somewhere under the ground: a slow, low throb, two tones beating against each other, with grit in it. */
+function groundMurmur(v) {
+  if (!sfxReady()) return;
+  const ac = AUDIO.ctx, t0 = ac.currentTime, g = aroundVoice(0.6, Math.min(1, v)), f0 = 44 + Math.random() * 8;
+  for (const [f, vol, d] of [[f0, 0.05, 0], [f0 * 1.07, 0.035, 0.25], [f0 * 2, 0.014, 0.1]]) {
+    const o = ac.createOscillator(), og = ac.createGain();
+    o.frequency.setValueAtTime(f, t0 + d); o.frequency.exponentialRampToValueAtTime(f * 0.94, t0 + d + 3);
+    og.gain.value = 0.0001;
+    og.gain.setValueAtTime(0.0001, t0 + d); og.gain.exponentialRampToValueAtTime(vol, t0 + d + 1); og.gain.exponentialRampToValueAtTime(0.0001, t0 + d + 3);
+    o.connect(og).connect(g); o.start(t0 + d); o.stop(t0 + d + 3.1);
+  }
+  _noise(3, 0.025, { freq: 180, to: 70, attack: 0.9, dest: g });
+}
+
+// The life (and the land) heard now and then out in each biome: see biomeCall. (None on Argos: it's silent.)
+const BIOME_CALLS = { jungle: 1, autumn: 1, savanna: 1, swamp: 1, alien: 1, volcanic: 1, desert: 1, polar: 1 };
+
+/**
+ * Something heard somewhere out in the biome (w: how wild the view is, night: 0 to 1): birds by day and a night
+ * bird's hoot in the forests, cicadas and a far-off call on the savanna, frogs (most at night), drips and bubbling mud
+ * in the swamp, strange sliding calls on the Bloom and chimes there by night, vents hissing and the ground grumbling on
+ * the ashlands, sand skittering and the wind whistling through the rocks in the desert (rock ticking as it cools at
+ * night), ice cracking and groaning and snow sliding at the poles.
+ */
+function biomeCall(b, w, night) {
+  if (!sfxReady()) return;
+  w = w === undefined ? 1 : w;
+  const g = aroundVoice(0.8, 0.5 * (0.3 + 0.7 * w)), r = Math.random(), dark = Math.random() < (night || 0);
+  if (b === 'jungle' || b === 'autumn') {
+    if (dark && r < 0.45) { const f = 380 + Math.random() * 80; _tone(f, 0.3, 'sine', 0.02, f * 0.95, 0, g); _tone(f * 0.86, 0.45, 'sine', 0.018, f * 0.8, 0.42, g); } // a night bird
+    else jungleCall(g, dark);
+  } else if (b === 'savanna') {
+    // Cicadas buzzing in the heat, or a far-off bird's two-note call; by night the grass hissing in a breath of wind.
+    if (dark) _noise(0.9, 0.012, { type: 'bandpass', freq: 2600, q: 0.8, attack: 0.35, dest: g });
+    else if (r < 0.6) { const f = 5200 + Math.random() * 1500; for (let k = 0; k < 14; k++) _tone(f, 0.02, 'square', 0.006, f * 1.02, k * 0.03, g); }
     else { const f = 900 + Math.random() * 300; _tone(f, 0.22, 'sine', 0.025, f * 0.92, 0, g); _tone(f * 1.25, 0.25, 'sine', 0.022, f, 0.3, g); }
   } else if (b === 'swamp') {
-    // Frogs croaking, a chorus, or a drip.
-    if (r < 0.7) { const f = 140 + Math.random() * 120; for (let k = 0; k < 2 + Math.floor(Math.random() * 3); k++) _tone(f, 0.09, 'square', 0.02, f * 0.8, k * 0.22, g); }
-    else _tone(1800 + Math.random() * 600, 0.05, 'sine', 0.02, 900, 0, g);
+    // Frogs croaking (a chorus, most at night), or a drip, or mud bubbling.
+    if (r < 0.45 + 0.45 * (night || 0)) { const f = 140 + Math.random() * 120; for (let k = 0; k < 2 + Math.floor(Math.random() * 3); k++) _tone(f, 0.09, 'square', 0.02, f * 0.8, k * 0.22, g); }
+    else if (Math.random() < 0.5) _tone(1800 + Math.random() * 600, 0.05, 'sine', 0.02, 900, 0, g);
+    else for (let k = 0; k < 2 + Math.floor(Math.random() * 2); k++) _tone(150 + Math.random() * 60, 0.07, 'sine', 0.02, 85, k * (0.12 + Math.random() * 0.2), g);
   } else if (b === 'alien') {
-    // Strange, sliding, warbling calls.
-    const f = 300 + Math.random() * 900;
-    _tone(f, 0.6, 'sine', 0.02, f * (Math.random() < 0.5 ? 2.2 : 0.45), 0, g);
-    if (r < 0.5) _tone(f * 1.5, 0.4, 'triangle', 0.012, f * 0.8, 0.35, g);
+    // Strange, sliding, warbling calls; by night, soft chimes from the glowing growth.
+    if (dark && r < 0.5) { const f = 1100 + Math.random() * 1300; _tone(f, 1.1, 'sine', 0.01, f * 0.995, 0, g); _tone(f * 1.5, 0.9, 'sine', 0.006, f * 1.49, 0.12, g); }
+    else { const f = 300 + Math.random() * 900; _tone(f, 0.6, 'sine', 0.02, f * (Math.random() < 0.5 ? 2.2 : 0.45), 0, g); if (r < 0.5) _tone(f * 1.5, 0.4, 'triangle', 0.012, f * 0.8, 0.35, g); }
   } else if (b === 'volcanic') {
     // A vent hissing, or the ground grumbling.
     if (r < 0.6) _noise(1.2, 0.03, { type: 'highpass', freq: 2500, attack: 0.2, dest: g });
     else _noise(1.6, 0.06, { freq: 140, to: 60, attack: 0.3, dest: g });
+  } else if (b === 'desert') {
+    // By day sand skittering, or the wind whistling through the rocks; by night the rock ticking as it cools.
+    if (dark && r < 0.7) for (let k = 0; k < 2 + Math.floor(Math.random() * 3); k++) _tone(2200 + Math.random() * 1500, 0.012, 'square', 0.008, 0, k * (0.15 + Math.random() * 0.3), g);
+    else if (r < 0.6) _noise(0.5, 0.02, { type: 'bandpass', freq: 3500, to: 2500, q: 1.5, attack: 0.12, dest: g });
+    else { const f = 650 + Math.random() * 300; _tone(f, 1.4, 'sine', 0.008, f * 1.08, 0, g); }
+  } else if (b === 'polar') {
+    // Ice cracking, ice groaning, or snow sliding.
+    if (r < 0.45) { _noise(0.06, 0.05, { type: 'highpass', freq: 2500, dest: g }); _tone(110, 0.5, 'sine', 0.03, 55, 0.02, g); }
+    else if (r < 0.8) _tone(75 + Math.random() * 20, 1.8, 'triangle', 0.02, 55, 0, g);
+    else _noise(1.4, 0.02, { freq: 900, to: 250, attack: 0.3, dest: g });
   }
-  setTimeout(() => { try { g.disconnect(); } catch (e) { /* gone */ } }, 3000);
 }
 
-/** A bird or an insect somewhere in the forest. */
-function jungleCall() {
-  if (!sfxReady()) return;
-  const ac = AUDIO.ctx, pan = ac.createStereoPanner ? ac.createStereoPanner() : null, g = ac.createGain();
-  g.gain.value = 0.5;
-  if (pan) { pan.pan.value = Math.random() * 1.6 - 0.8; g.connect(pan).connect(AUDIO.fxBus); } else g.connect(AUDIO.fxBus);
-  if (Math.random() < 0.5) {
+/** A bird (by day) or an insect somewhere in the forest, into gain g. */
+function jungleCall(g, dark) {
+  if (!dark && Math.random() < 0.5) {
     // A bird: two or three falling whistles.
     const base = 1700 + Math.random() * 1400;
     for (let k = 0; k < 2 + Math.floor(Math.random() * 2); k++) _tone(base, 0.12, 'sine', 0.025, base * 0.7, k * 0.17, g);
@@ -1189,7 +1399,6 @@ function jungleCall() {
     const f = 4000 + Math.random() * 2500;
     for (let k = 0; k < 8; k++) _tone(f, 0.025, 'triangle', 0.012, f * 1.04, k * 0.035, g);
   }
-  setTimeout(() => { try { g.disconnect(); } catch (e) { /* gone */ } }, 3000);
 }
 
 /* ------------------------------------------------------------------ music */

@@ -1219,8 +1219,26 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   steady drone) plus their own one-shots (`WORK_SOUNDS`:
   furnaces, clanks, drills, pump thumps, beeps; the Smelter and the Bot Foundry also press, ratchet and machine), a train's diesel throb and rail clack that quickens with its speed,
   its horn as it pulls out and brakes as it slows, aircraft engines panned to where they fly, with a rival's take-off
-  roll, the approach whine and the touchdown chirp, a ship's horn leaving port, the sea's wash, bubbling lava and
-  crickets on warm nights. Music and Effects volumes are in the pause menu.
+  roll, the approach whine and the touchdown chirp, a ship's horn leaving port, the sea's wash (full on the sea maps,
+  Islands, Tidal flats and Four Isles; softer on lakes and rivers), bubbling lava and crickets on warm nights. Under it
+  all, **the land's own sounds** (`natureBeds`, `biomeCall`): each biome's bed (`NATURE`: leaves rustling as the wind
+  gusts in the forests, grass on the savanna, sand or snow hissing in the desert and at the poles, cicadas in the
+  savanna's heat and insects in the forest by day, the swamp's frogs and insects by night, the Bloom's shimmer, brighter
+  by night, the ashlands' ground rumbling) and calls now and then (forest birds by day and a night bird's hoot, cicadas
+  and far-off calls, frogs, drips and bubbling mud, the Bloom's sliding calls and night chimes, vents hissing, sand
+  skittering, wind whistling through rock and rock ticking as it cools at night, ice cracking and groaning, snow
+  sliding). Both are loudest out in the wilds and fade as the view fills with a town: `WORLD.wild` is the share of the
+  land on screen that isn't built on, paved or laid with track (a third built up is all town), eased so it doesn't jump;
+  the calls come every few seconds in the wilds, hardly ever in the streets, more at dawn and fewer in rain or fog.
+  Water: surf breaking on a sea map's shore, little waves lapping at a lake's or a river's banks (quicker on a river
+  delta). The ground rumbles near the volcano on a Volcano map, harder once it rumbles its warning and while it erupts,
+  and over lava. The weather (`weatherSound`: `weatherAt` while weather is shown, or a planet event's dust storm) is
+  heard too: rain, with thunder a moment after each lightning flash the storm shows (the same flashes: `hash2` of the
+  seed and the 5-second stretch), the wind blowing up in a sandstorm, blizzard or gale (`STORM_WIND`; fog stills it),
+  sand and snow hissing, leaves in a gale, embers ticking as they fall in an ashfall, an aurora's shimmer. Near a Murmur
+  nest, now and then (more at night), a low sound in the ground (`groundMurmur`). Argos is near-silent: only the
+  faintest rumble for a wind, no calls, and its frozen pools make no water sounds; the Cinderlands' lakes sound like the
+  lava they look like. Music and Effects volumes are in the pause menu.
 - **Briefing at the start:** the messages a new game opens with (where you landed, your goal, the map's notes) come
   together on one card while the game waits paused behind it; it closes by itself after a few seconds (longer for
   more text), or at a tap or key. In multiplayer the game doesn't pause for it.
