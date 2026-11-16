@@ -2115,8 +2115,9 @@ function startMission(k, diff) {
   const def = MISSIONS[k];
   $('br-title').textContent = `Mission ${k + 1}: ${def.name}`;
   S.msgs.length = 0;
-  postMsg(ME, def.brief, 0, 0, 'info');
-  for (const line of def.intro || []) postMsg(ME, line, 0, 0, 'info');
+  // (The card shows plain text: a <b> in the brief or an intro line would show as typed.)
+  postMsg(ME, plainHint(def.brief), 0, 0, 'info');
+  for (const line of def.intro || []) postMsg(ME, plainHint(line), 0, 0, 'info');
   const g0 = def.goals[0];
   if (g0 && g0.hint) postMsg(ME, `First: ${goalText(g0, diff)}. ${plainHint(g0.hint)}`, 0, 0, 'good');
   showBriefing();
@@ -2150,7 +2151,8 @@ function missionCoach() {
       const c = coachTarget(def.goals[now]);
       sel = c.sel;
       // A panel button whose panel isn't open: a ring pulses on the building to tap (every 1.5 s of game time).
-      if (c.ring && S.time - (UI.coachRingT ?? -9) >= 1.5) {
+      // (A later time than now is from an earlier game this session: ring again at once.)
+      if (c.ring && (S.time - (UI.coachRingT ?? -9) >= 1.5 || S.time < UI.coachRingT)) {
         UI.coachRingT = S.time;
         addFx('ring', c.ring.x + 0.5, c.ring.y + 0.5, { color: '#38d4ff', r: 1.6, life: 1.1 });
       }
