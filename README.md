@@ -21,12 +21,33 @@ how goods move.
 - **Colony:** no rival. Settle the planet at your own pace, with colonization milestones. Free play has the full
   building roster, missiles and nuclear silos included, to experiment with, plus the **Research Lab** and optional
   **Wildlife** (creature nests that raid you; on by default).
-- **Missions:** eight set challenges on hand-picked planets, each with its own goals and Easy, Normal and Hard
-  levels. All of them are open from the start; finishing one ticks it off at that difficulty. While any goal other
+- **Missions:** the tutorial campaign (`MISSIONS` in `js/missions.js`): hand-picked planets, each with its own goals
+  and Easy, Normal and Hard levels, that teach the game one idea at a time in seven chapters, in order: **First Steps**
+  (a building and its road, Stone and Cement, batteries, the first Alloy), **Growing the Colony**, **Roads and
+  Traffic**, **Industry and Trade**, **Sea and Sky** (all Colony games, so the economy is learned in peace), then
+  **First Contact** (creature nests, a passive rival, a border war, a chokepoint against a Rusher) and **War** (Ammo and
+  repairs, Torches, Bulwarks and missiles against a Turtle, the Nuclear race, Keeps and bombers). All of them are open
+  from the start; finishing one ticks it off at that difficulty (saved by its `id`, so a reworked mission keeps its
+  ticks), and the list marks the first unfinished one **Next up**. A mission is plain data: `chapter`, `brief`, `intro`
+  lines for the briefing card, the planet (`seed`, `size`, `rough`, `biome`, `shape`, `players`), the rival (`rival`
+  level per difficulty, `style`, `rivalBonus`, `passive`), `limit` (minutes per difficulty), switches for what
+  missions otherwise leave out (`war`, `lab`, `events`, `wildlife`, `nuke`), `layout(m, W)` to edit the generated map
+  (`placeField`, `placeFertile`, `mapTiles`, `mirrored`), `setup(S, diff)` and up to four `goals`. Built-in goal kinds
+  count buildings, goods made, bots made or owned, road tiles, one-way tiles, lights, land, Outposts and the capture;
+  any other goal counts itself with `count(P, S)` and its own `text` (bridge tiles, a Ramp up a ledge, research done,
+  trades, nests cleared, minutes held, a nuclear launch). Each goal's `hint` names the real buttons and keys and its
+  `ui` selector lights up the button it needs (`missionCoach` in `js/ui.js`; with `at`, a ring pulses on the building
+  whose panel holds it). Steps already taken stay dark (Build while its menu is open, the card while placing that
+  building: then **Build here** lights, as Paths' **Build** does once a sketch is drawn), a lit button below the fold of
+  a panel is scrolled into view once, and a `built` goal whose site is already going up (`goalSites`) says to wait for
+  it, or to **Lay road** to a site with none (`siteNeedsRoad`), instead of asking for another (its own `wait` text if
+  it has one). From the second mission on, setup puts down the colony the earlier missions taught:
+  `kit(S, types, workers)` builds each type where the rival AI would (`aiFindSpot`), finished and road-joined (`KIT6`:
+  Harvester, Quarry, Cement Works, Fuel Station, Ore Mine, Crystal Tap, Smelter, Chip Fab, Bot Foundry; `KIT7` adds a
+  Bio Farm), and `preBuild` puts down one building where the mission wants it; custom goals count tiles with
+  `ownTiles(test)`. Goals once met stay met (`M.got`) unless they say `hold`. **Capture lock:** while any goal other
   than capturing the rival Command Base is open, that base holds at 1 armor against you (`captureLocked`, applied in
-  `hitBuilding`), so winning too soon can't lose a mission. A mission's setup can start you with the colony the earlier
-  missions taught (`kit(S, types, workers)`, with the lists `KIT6` and `KIT7`), and custom goals count tiles with
-  `ownTiles(test)`.
+  `hitBuilding`; its panel says to finish the other goals first), so winning too soon can't lose a mission.
 
 Before each game, the new-game screen picks the mode, players and rival, the **map shape** (Standard, Long haul,
 Chokepoint, Islands, Crater, Plateaus, Sky islands, Rift, Ring valley, Oases, Crossroads, Lakes, Tidal flats, River delta,
@@ -147,7 +168,9 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   type being built is highlighted. The AI keeps the default order, taking turns.
 - **Roads** cost Cement (1 Cement paves 5 tiles), paid when you build the plan. Planned tiles show dashed
   until free workers pave them: 1.5 s a tile (3 s through resources), working out from the existing network, so long
-  highways take planning and spare workers. Calling off a planned tile refunds it. Roads double a bot's speed. Dragging
+  highways take planning and spare workers. A worker that just found no way somewhere (walled in on the Wall it built,
+  say: `u.failUntil`) sits out the next building and paving rounds, and isn't counted as soon free (`nearSoon`), so
+  the others still come; a tile nobody can reach is skipped for a while (`paveSkip`). Calling off a planned tile refunds it. Roads double a bot's speed. Dragging
   plans roads round resources; tap a boulder, grove, ore or crystal tile to clear it for a road at 3× the Cement. A Roadworks' Paver
   upgrades roads to asphalt (2.75×) with Asphalt, driving out along the roads joined to its Roadworks, however far.
 - **Paving and road wear:** Paths → **Pave** (E): drag along roads to mark them for asphalt (drag over marked road to
@@ -538,6 +561,9 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   Each producer feeds at most two neighbours (side by side before corners); storage and walls never take part, and a
   Refinery also passes Crude on from its intake. So Mine → Smelter → Chip Fab → Foundry, Quarry → Cement Works,
   Smelter + Cement Works → Ammo Plant, Refinery → Asphalt Plant → Roadworks, Missile Factory → Silo work as blocks.
+  Haulers leave a fed factory's input to the conveyor: they bring only its next round's worth of that good
+  (`feedHaul`), never drive it over from the touching producer, and that producer keeps back for its neighbours what
+  they still need instead of sending it to storage (`feedHold`; not while it is paused or cut off).
   Placing a building shows the links it would make as green arrows (`feedPreview`); a building's panel lists what it
   feeds and what feeds it; the belts are drawn over the gap between buildings, a crate riding across with each good
   (`drawFeeds`, `drawFeedLink`). The AI puts its factories beside their suppliers (`AI_FEED` in `aiSearchSpot`).
@@ -564,7 +590,10 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   bombers and missiles at the forts holding a rival's Uplinks (`holdsUplink`), even ahead of a crushed rival's
   Command Base, jamming them while that rival's clock runs (`aiJamUplink`).
 - **Army orders:** tap **Army**, then a rival building to attack it with warbots or a missile, or open
-  ground to send warbots there to hold the area under a rally flag. Tap the flag to call them back, or press
+  ground to send warbots there to hold the area under a rally flag. An Attack on a building no garrison is in reach of
+  plants a flag beside it that targets it (`assault` sets `rally.target`): the warbots there shoot it first
+  (`holdRally`), and once it falls or changes hands the flag comes down (`followRallies`), so they carry off the crates
+  that spilled out and come home, as after any attack. Tap the flag to call them back, or press
   **Recall all** in the Army banner (**C** on a computer) to end every attack and rally flag at once.
 - **Saving:** the game saves itself every `AUTOSAVE_EVERY` (20) seconds while you play, and when you switch away or
   close it (`autoSave`); Continue on the main menu picks it up. The pause menu says when it last saved, and a failed
@@ -645,10 +674,11 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   for every four (three, four), only with Fuel for Torches. **Raider**: raids three times as often from early on,
   sending every warbot it can spare. **Rusher**: attacks early with a fast-growing army. **Tycoon**: its bots work 15%
   faster (`econ`), it builds extra Smelters and Chip Fabs and goes for Missile Silos (up to three) once its Bot Foundry
-  runs. With Random each rival gets a different one, picked from the seed; missions use Balanced. The landing messages
+  runs. With Random each rival gets a different one, picked from the seed; missions use Balanced unless they name one
+  (Hold the Line's Rusher, Siege Breakers' Turtle). The landing messages
   and the rival Command Base's panel name it.
 - **Wildlife** (Colony; `WILD` in `js/defs.js`, `updateNest`/`updateCritter` in `js/sim.js`; new-game option, on by
-  default, never in missions): one creature nest per `WILD.perTiles` tiles (3–8), owned by `WILD_OWNER` (the empty
+  default; in missions only where one switches it on, `wildlife: true`, as Bug Hunt does): one creature nest per `WILD.perTiles` tiles (3–8), owned by `WILD_OWNER` (the empty
   second player slot of a Colony game), at least 16 tiles from the landing site and reachable on foot. Each keeps
   `guards + level` Scuttlers on guard and from `WILD.first` (7 min) sends a pack every 260–400 s at the nearest building,
   road or bot the colony has within `WILD.reach` (24) tiles: Scuttlers (6 hp, bite 1) go for bots in the open; Brutes (24 hp,
@@ -661,7 +691,8 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   researches one upgrade at a time, cost paid on start (Cancel refunds), progress `dt × mult` per staffed Lab. Upgrades:
   Cargo Racks (`botCarry`), Long-life Cells (`drainMul`, and chargers 50% faster; the old Fast Charging upgrade is folded into it), Rapid Paving, Sentry Optics (`turretRange`,
   `shotsPer`), Turbo Motors (`speedMul`), Power Tools (`mult` × 1.15), Nanite Repair (`naniteRepair`).
-- **Planetary events** (`EVENTS` in `js/defs.js`, `updateEvents` in `js/sim.js`; new-game option, never in missions): the
+- **Planetary events** (`EVENTS` in `js/defs.js`, `updateEvents` in `js/sim.js`; new-game option; in missions only with
+  `events: true`, as in Trade Winds, whose setup brings the first one forward with `S.nextEvent`): the
   first after 8 minutes, then one every 5–8 minutes, never one of the last two again, most with a 20 s warning. **Dust
   storm**: bots at `DUST_SPEED` (⅔) and every missile grounded (`missileBlocked`, `nukeBlocked`). **Meteor shower**:
   `METEOR_HITS` strikes on each colony's share (mirrored with two players, turned with three: `meteorPlan`), each

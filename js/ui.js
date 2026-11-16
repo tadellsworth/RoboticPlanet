@@ -2198,6 +2198,22 @@ function startMission(k, diff) {
 /** A hint as plain text (for messages, which show text, not markup). */
 function plainHint(h) { return String(h || '').replace(/<[^>]+>/g, ''); }
 
+/**
+ * The hint for goal i (the next to do): its own, or, for a building whose site is already going up, to wait for it; for
+ * capturing the rival Command Base while other goals are open, to finish them first (the capture lock).
+ */
+function missionHint(def, M, states, i) {
+  const g = def.goals[i];
+  if (!g) return '';
+  if (g.kind === 'capture' && def.goals.some((x, k) => x.kind !== 'capture' && !states[k].done)) return '<b>Finish your other goals first:</b> until then the rival Command Base holds at 1 armor.';
+  const sites = goalSites(g, M.diff), name = sites.length && BDEFS[g.type].name, noRoad = sites.some(siteNeedsRoad);
+  if (sites.length && !noRoad && g.wait) return g.wait;
+  if (noRoad) return `Your <b>${name}</b> site has no road to storage, so Haulers can't bring its materials: tap it → <b>Lay road</b> (<kbd>R</kbd>).`;
+  if (sites.length > 1) return `Your ${sites.length} <b>${name}</b> sites are going up: Haulers bring their materials, then Workers build them. Tap one to see how it's doing; <b>1×</b> (<kbd>]</kbd>) speeds time up.`;
+  if (sites.length) return `Your <b>${name}</b> is going up: Haulers bring its materials, then a Worker builds it. Tap it to see how it's doing; <b>1×</b> (<kbd>]</kbd>) speeds time up.`;
+  return g.hint || '';
+}
+
 /** The mission goal to do next: the first not done yet (or -1). */
 function missionGoalNow(states) { return states.findIndex((s) => !s.done); }
 
@@ -2214,13 +2230,17 @@ function missionCoach() {
       for (let i = 0; i < states.length; i++) {
         if (!states[i].done || UI.msDone[i]) continue;
         sfx('complete');
-        const g = now >= 0 ? def.goals[now] : null;
-        toast(`✓ ${states[i].text}.${g && g.hint ? ' Next: ' + plainHint(g.hint) : ''}`, 'good');
+        const h = now >= 0 ? missionHint(def, M, states, now) : '';
+        toast(`✓ ${states[i].text}.${h ? ' Next: ' + plainHint(h) : ''}`, 'good');
       }
     }
     UI.msDone = states.map((x) => x.done);
     if (now >= 0) {
-      const c = coachTarget(def.goals[now]);
+      // (Its site already going up: nothing to press but the goal's own buttons on the site's panel, if any; with no
+      // road to it, its Lay road. See missionHint.)
+      const g = def.goals[now], sites = goalSites(g, M.diff), lone = sites.find(siteNeedsRoad);
+      const onSite = (g.ui || '').split(',').filter((p) => /#sh-/.test(p) && !/#sh-layroad/.test(p)).join(',');
+      const c = lone ? coachTarget({ ui: '#sh-layroad', site: lone }) : sites.length ? coachTarget({ ...g, ui: onSite, site: sites[0] }) : coachTarget(g);
       sel = c.sel;
       // A panel button whose panel isn't open: a ring pulses on the building to tap (every 1.5 s of game time).
       // (A later time than now is from an earlier game this session: ring again at once.)
@@ -2233,6 +2253,23 @@ function missionCoach() {
   if (sel !== UI.glowSel) { for (const el of document.querySelectorAll('.tut-glow')) el.classList.remove('tut-glow'); UI.glowSel = sel; }
   // (Panels and menus rebuild their buttons, so the light goes back on each time.)
   if (sel) { try { for (const el of document.querySelectorAll(sel)) el.classList.add('tut-glow'); } catch (e) { UI.glowSel = ''; } }
+  coachScroll(sel);
+}
+
+/**
+ * A lit button below the fold of an open panel (Order bots, low on the Bot Foundry's, say) is scrolled into sight, once
+ * for each goal and panel: after that the panel scrolls as the player likes.
+ */
+function coachScroll(sel) {
+  const box = $('sheet');
+  if (!sel || box.hidden) { if (box.hidden) UI.coachScrolled = null; return; }
+  const key = `${sel}|${UI.sheetKind}|${UI.sheetFor}`;
+  if (UI.coachScrolled === key) return;
+  const lit = [...box.querySelectorAll('.tut-glow')].filter((el) => el.getClientRects().length);
+  if (!lit.length) return;
+  UI.coachScrolled = key;
+  const r0 = box.getBoundingClientRect(), seen = (el) => { const r = el.getBoundingClientRect(); return r.top >= r0.top && r.bottom <= Math.min(r0.bottom, innerHeight); };
+  if (!lit.some(seen)) lit[0].scrollIntoView({ block: 'center', behavior: 'smooth' });
 }
 
 /** Where a goal's `ui` selector looks for the button that opens it (when the button itself isn't on screen). */
@@ -2246,6 +2283,36 @@ const COACH_OPENERS = [[/\.bcard|#build-tabs/, '#btn-build'], [/#banner-/, '#btn
 function coachTarget(g) {
   const sel = g.ui || '';
   if (!sel) return { sel: '', ring: null };
+  // (Placing the building the goal's card is for: what's left is a spot on the map, then Build here once it shows.
+  // Build, the tab and the card are done with: lit, they'd call the player back to the menu.)
+  if (R.mode === 'place' && sel.split(',').some((p) => (p.match(/\.bcard\[data-t=['"]?(\w+)/) || [])[1] === UI.placeType)) {
+    const rest = sel.split(',').filter((p) => !/\.bcard|#build-tabs|#btn-build|#banner-ok/.test(p));
+    return { sel: [...rest, '#banner-ok'].join(','), ring: null };
+  }
+  const c = coachTargetAll(g, sel);
+  let left = coachLeft(c.sel);
+  // (In Paths with a sketch drawn, for a goal done there: its Build makes the sketch real.)
+  if (R.mode === 'road' && /#btn-road|#banner-/.test(sel) && !/#banner-ok/.test(left) && !$('banner-ok').hidden) left = left ? `${left}, #banner-ok` : '#banner-ok';
+  return { sel: left, ring: c.ring };
+}
+
+/**
+ * A selector less the steps already taken: the button that opened the menu or mode on screen (Build while the Build
+ * menu is open, Paths in Paths, Army in its menu or in attack mode: tapped again, it would close them) and a Build tab
+ * already picked.
+ */
+function coachLeft(sel) {
+  return sel.split(',').filter((p) => {
+    const q = p.trim(), tab = q.match(/^#build-tabs \[data-g=['"]?(\w+)/);
+    if (q === '#btn-build') return UI.sheetKind !== 'build';
+    if (q === '#btn-road') return R.mode !== 'road';
+    if (q === '#btn-attack') return UI.sheetKind !== 'army' && R.mode !== 'attack';
+    if (tab && UI.sheetKind === 'build' && $('build-tabs')) { const b = $('build-tabs').querySelector(`[data-g="${tab[1]}"]`); return !(b && b.classList.contains('on')); }
+    return true;
+  }).join(',');
+}
+
+function coachTargetAll(g, sel) {
   let els;
   try { els = [...document.querySelectorAll(sel)]; } catch (e) { return { sel: '', ring: null }; }
   // (The panel open is another building's, say the Quarry's when the goal means the spent Ore Mine's Dismantle: its
@@ -2269,11 +2336,12 @@ function coachTarget(g) {
 }
 
 /**
- * The building a goal's panel button is on: the goal's `at` (a building type) if it gives one, else the building named
+ * The building a goal's panel button is on: the goal's `site` (that building) or `at` (a building type) if it gives one, else the building named
  * first in its hint ("Tap the Cement Works → Move"; a short name like "the Foundry" or "the Lab" counts too), yours
  * first, then anyone's (a rival Command Base to bomb). The first of that type, or null.
  */
 function coachBuilding(g) {
+  if (g.site) return g.site.dead ? null : g.site; // (a given building: see missionCoach)
   const live = S.buildings.filter((b) => !b.dead && BDEFS[b.type]);
   if (g.at) return live.find((b) => b.owner === ME && b.type === g.at) || live.find((b) => b.type === g.at) || null;
   const hint = plainHint(g.hint);
@@ -2299,8 +2367,7 @@ function missionObjectiveHTML() {
   if (UI.objCollapsed) return `Mission ▸ ${states.filter((s) => s.done).length}/${states.length}`;
   const left = M.limit ? Math.max(0, M.limit - S.time) : 0, now = missionGoalNow(states);
   // (The capture lock: the rival Command Base holds at 1 armor until the other goals are done. See captureLocked.)
-  const hint = now >= 0 && (def.goals[now].kind === 'capture' && def.goals.some((g, i) => g.kind !== 'capture' && !states[i].done)
-    ? '<b>Finish your other goals first:</b> until then the rival Command Base holds at 1 armor.' : def.goals[now].hint);
+  const hint = now >= 0 && missionHint(def, M, states, now);
   return `<b>${def.name}</b>${M.limit ? ` · ${fmtTime(left)} left` : ''}<ul class="obj-goals">${states.map((s, i) =>
     `<li class="${s.done ? 'done' : i === now ? 'now' : ''}">${s.done ? '✓' : i === now ? '▸' : '○'} ${s.text}${s.need > 1 && !s.done ? ` (${s.have}/${s.need})` : ''}</li>`).join('')}</ul>${hint ? `<div class="obj-hint">${hint}</div>` : ''}`;
 }
@@ -2770,11 +2837,11 @@ function enterPlaceMode(type, moveFrom) {
   showBanner(type === 'ropeway' ? 'Tap a highlighted spot for the Ropeway\'s <b>near station</b>, where your roads are. Then tap the far end.'
     : type === 'viaduct' ? 'Tap a highlighted spot on a clifftop for the Viaduct\'s <b>near end</b>, where your roads are. Then tap the far end, across the valley.'
     : moveFrom ? `Tap a highlighted spot to move the <b>${BDEFS[type].name}</b> to. It's put together there for free (it takes its build time), and the old one keeps working until then.`
-    : `Tap a highlighted spot to place a <b>${BDEFS[type].name}</b>.`, null, 'Cancel');
+    : `Tap a highlighted spot to place ${/^[AEIOU]/i.test(BDEFS[type].name) ? 'an' : 'a'} <b>${BDEFS[type].name}</b>.`, null, 'Cancel');
   if (!R.overlay.valid.some((v) => v)) {
     const near = BDEFS[type].gather ? ' near the right resource' : BDEFS[type].farm ? ' near fertile soil' : BDEFS[type].pump ? ' on an oil seep' : '';
     const how = DEFENCE_TYPES.has(type) ? `inside your border${near}. Defences only go on your own land: an Outpost or Keep extends it.` : `within ${BUILD_REACH} tiles of your buildings, roads or track${near}. Lay a road out toward where you want it.`;
-    showBanner(`<span class="err">There is no valid spot for a ${BDEFS[type].name} ${how}</span>`, null, 'Close');
+    showBanner(`<span class="err">There is no valid spot for ${aOrAn(BDEFS[type].name)} ${how}</span>`, null, 'Close');
   }
 }
 
@@ -3687,9 +3754,11 @@ function showRoadBanner(problem, info) {
     if (draftEmpty() && routeOn()) {
       line = `<b>Route to:</b> tap a spot and the cheapest road there from your road network is planned: round fields where it can, up one-level cliffs with a Ramp, over water as a bridge (or through rock as a tunnel) only when that saves a long way round.${INPUT.mouse ? ' The dashed line shows the way to the pointer.' : ''} Or drag from a start to the end. Tap another spot to try again; nothing is spent until you tap <b>Build</b>.`;
     } else if (draftEmpty()) {
+      // (On a touch screen a one-finger drag sketches here, so say how to move the map.)
+      const fingers = !INPUT.mouse && typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches ? ' Two fingers move the map.' : '';
       line = mode === 'bridge'
-        ? `<b>Sketch</b> a road across water (bridge, ${costText(CROSS[T_WATER].cost)} a tile${navalMap() ? ' near the shore, more further out' : ''}) or through rock (tunnel, ${costText(CROSS[T_ROCK].cost)}). Nothing is spent until you tap <b>Build</b>.`
-        : '<b>Sketch</b> roads by dragging; tap a tile to add or drop it, or tap a road to take it up. Nothing is spent until you tap <b>Build</b>.';
+        ? `<b>Sketch</b> a road across water (bridge, ${costText(CROSS[T_WATER].cost)} a tile${navalMap() ? ' near the shore, more further out' : ''}) or through rock (tunnel, ${costText(CROSS[T_ROCK].cost)}). Nothing is spent until you tap <b>Build</b>.${fingers}`
+        : `<b>Sketch</b> roads by dragging; tap a tile to add or drop it, or tap a road to take it up. Nothing is spent until you tap <b>Build</b>.${fingers}`;
     } else {
       const parts = [];
       if (sm.add) parts.push(`<b>${sm.add}</b> new tile${sm.add === 1 ? '' : 's'}` + (sm.cross ? ` (${sm.cross} bridge or tunnel)` : '') + (sm.clear ? ` (${sm.clear} through resources)` : ''));
@@ -3753,7 +3822,8 @@ function showRoadBanner(problem, info) {
   const M = S && S.mission, def = M && !M.result && missionDef(M);
   if (def) {
     const states = missionStates(M), now = missionGoalNow(states);
-    if (now >= 0 && def.goals[now].hint) $('banner-text').innerHTML += `<div class="obj-hint ban-hint"><b>${states[now].text}:</b> ${def.goals[now].hint}</div>`;
+    const h = now >= 0 && missionHint(def, M, states, now);
+    if (h) $('banner-text').innerHTML += `<div class="obj-hint ban-hint"><b>${states[now].text}:</b> ${h}</div>`;
   }
 }
 
@@ -4753,7 +4823,7 @@ function botActivity(u) {
   if (!t) return u.carry ? `Looking for somewhere to store ${GOOD[u.carry].name}` : u.inside ? 'Resting in storage' : 'Waiting for a job';
   if (t.type === 'home') return 'Heading back to storage';
   if (t.type === 'haul') return t.phase === 'toSrc' ? `Fetching ${GOOD[t.good].name} from the ${nm(t.src)}` : `Delivering ${GOOD[t.good].name} to the ${nm(t.dst)}`;
-  if (t.type === 'build') return t.phase === 'go' ? `Walking to build a ${nm(t.site)}` : `Constructing a ${nm(t.site)}`;
+  if (t.type === 'build') { const a = getE(t.site) ? aOrAn(nm(t.site)) : 'a building'; return t.phase === 'go' ? `Walking to build ${a}` : `Constructing ${a}`; }
   if (t.type === 'staff') {
     const b = getE(t.bld), def = b ? BDEFS[b.type] : {};
     if (t.phase === 'go') return `Walking to its job at the ${nm(t.bld)}`;

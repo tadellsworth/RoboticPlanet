@@ -113,7 +113,10 @@ section:first-of-type { border-top: 0; }
 .bots b { display: block; font-family: var(--display); font-size: 17px; }
 .bots span { font-size: 15px; color: #cfd5de; }
 @media (max-width: 520px) { .bots { grid-template-columns: 1fr; } }
-.missions { counter-reset: m; list-style: none; padding: 0; margin: 12px 0 0; display: grid; gap: 8px; }
+.campaign { counter-reset: m; }
+.missions { list-style: none; padding: 0; margin: 12px 0 0; display: grid; gap: 8px; }
+.campaign h3 { margin: 22px 0 2px; }
+.campaign h3 + p { margin: 0; color: #cfd5de; }
 .missions li { counter-increment: m; display: grid; grid-template-columns: 34px 1fr; gap: 2px 10px; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; }
 .missions li::before { content: counter(m); grid-row: span 2; width: 34px; height: 34px; border-radius: 9px; display: grid; place-items: center; font: 700 16px/1 var(--display); background: rgba(255,255,255,0.06); color: var(--accent); }
 .missions b { font-family: var(--display); font-size: 17px; }
@@ -210,7 +213,7 @@ footer { padding-block: 28px 40px; color: var(--muted); font-size: 14px; border-
   <p>Gather raw resources, turn them into better goods, build more robots and spread across the planet. Pick a mode before each game.</p>
   <div class="modes">
     <div class="mode"><img src="%%rival_lander%%" alt=""><div><h3>Versus</h3><p>A rival colony lands at the far end of the map. Capture its Command Base to win. If it captures yours, you lose. A game runs about 20–40 minutes, longer on hilly maps. Pick another way to win with <b>Victory</b> on the new-game screen (see <a href="#victory">Ways to win</a>), and a rival that has clearly lost surrenders.</p></div></div>
-    <div class="mode"><img src="%%foundry%%" alt=""><div><h3>Missions</h3><p>Eight set challenges on hand-picked planets, each with its own goals and Easy, Normal and Hard levels. See <a href="#missions">Missions</a>.</p></div></div>
+    <div class="mode"><img src="%%foundry%%" alt=""><div><h3>Missions</h3><p>The tutorial campaign: hand-picked planets in seven chapters, each mission with its own goals and Easy, Normal and Hard levels, from your first building to all-out war. See <a href="#missions">Missions</a>.</p></div></div>
     <div class="mode"><img src="%%outpost%%" alt=""><div><h3>Colony</h3><p>No rival and no clock. Build supply chains and spread out. Milestones pop up at 10, 25, 40, 60 and 80% of the land your bots can reach. Free play has every building and missiles included (Nuclear race adds uranium and nuclear silos), to experiment with, plus the Research Lab and, if you like, creature nests to fight off: see <a href="#colony">Wildlife &amp; research</a>.</p></div></div>
   </div>
   <h3>New-game settings</h3>
@@ -240,7 +243,7 @@ footer { padding-block: 28px 40px; color: var(--muted); font-size: 14px; border-
 <section id="controls">
   <div class="sec-head"><h2>Controls</h2></div>
   <table class="kv">
-    <tr><th>Drag</th><td>Move the map.</td></tr>
+    <tr><th>Drag</th><td>Move the map. In Paths a drag sketches instead, and two fingers move the map.</td></tr>
     <tr><th>Pinch or scroll</th><td>Zoom in and out. On a Mac, a trackpad pinch zooms the map (not the page), and a Magic Mouse or trackpad scrolls smoothly; swipe sideways (or Shift + scroll) to pan. Cmd + and Cmd − make the buttons and text bigger or smaller on a large screen.</td></tr>
     <tr><th>Tap</th><td>Inspect anything: a building, a bot, a resource or a rally flag. The panel that opens shows what it's doing and the buttons for it.</td></tr>
     <tr><th>Minimap</th><td>Top right. Tap or drag on it to jump anywhere. A flashing ring marks a building under attack. The × hides it, and the map button brings it back.</td></tr>
@@ -524,7 +527,7 @@ footer { padding-block: 28px 40px; color: var(--muted); font-size: 14px; border-
   </table>
   <p><b>Every rival fortifies as the game goes on:</b> more Pulse Turrets round its Command Base on the side facing you (up to three for a Balanced rival, four for a Tycoon, two for a Raider or Rusher, six for a Turtle), a Minigun Nest or Bunker by its fort nearest you every six minutes or so, and sometimes (about half the time for a Balanced rival, less for a Raider or Rusher) an arc of Wall on the side of its base that faces you, with Gates on its roads. An Easy rival builds half as much. Bring Torches.</p>
   <h3>The Army panel</h3>
-  <p>Tap <b>Army</b> (<kbd>Q</kbd>) for the Army panel: how many warbots you have and where (at the Command Base, in garrisons, in the field, out of Ammo), and your orders. Pick a <b>group size</b> (2, 4, 8 or All; keys <kbd>1</kbd>–<kbd>4</kbd>), then an order and tap the map: <b>Attack</b> (<kbd>Q</kbd>) a rival building, or a rival robot (they chase it down under a flag that follows it, then come back once it's destroyed), <b>Hold ground</b> (<kbd>G</kbd>) on open ground, or <b>Station</b> (<kbd>V</kbd>) them in an Outpost, Keep or Bunker of yours. Each tap sends another group until you tap <b>Done</b> (<b>Army</b> takes you back to the panel). A target too far from your garrisons to attack gets a rally flag beside it instead, and the warbots there attack what stands there. Below: every group <b>in the field</b> (Show, send more, Recall or Call back), every <b>Howitzer</b> by number and where it is, with <b>Find</b> (it takes you to it and picks it out with pulsing rings), Bombard and Drive, <b>Recall all</b> (<kbd>C</kbd>), and how many warbots every Outpost keeps. On a computer, <b>Select all warbots</b> (<kbd>F</kbd>) or <b>Select all Howitzers</b> to right-click orders. Your Howitzers are triangles on the minimap, and zoomed out a marker floats over each.</p>
+  <p>Tap <b>Army</b> (<kbd>Q</kbd>) for the Army panel: how many warbots you have and where (at the Command Base, in garrisons, in the field, out of Ammo), and your orders. Pick a <b>group size</b> (2, 4, 8 or All; keys <kbd>1</kbd>–<kbd>4</kbd>), then an order and tap the map: <b>Attack</b> (<kbd>Q</kbd>) a rival building, or a rival robot (they chase it down under a flag that follows it, then come back once it's destroyed), <b>Hold ground</b> (<kbd>G</kbd>) on open ground, or <b>Station</b> (<kbd>V</kbd>) them in an Outpost, Keep or Bunker of yours. Each tap sends another group until you tap <b>Done</b> (<b>Army</b> takes you back to the panel). A target too far from your garrisons to attack gets a rally flag beside it instead: they attack it, and once it falls they carry off what spilled out and come home. Below: every group <b>in the field</b> (Show, send more, Recall or Call back), every <b>Howitzer</b> by number and where it is, with <b>Find</b> (it takes you to it and picks it out with pulsing rings), Bombard and Drive, <b>Recall all</b> (<kbd>C</kbd>), and how many warbots every Outpost keeps. On a computer, <b>Select all warbots</b> (<kbd>F</kbd>) or <b>Select all Howitzers</b> to right-click orders. Your Howitzers are triangles on the minimap, and zoomed out a marker floats over each.</p>
   <p><b>Marching:</b> warbots you send to hold ground, station somewhere or call back march straight there without stopping to fight anything on the way (for up to a minute and a half), so you can pull them out of a losing fight. Once there, they fight as usual.</p>
   <p><b>Rally point:</b> tap an Outpost or Keep of yours and <b>Make this the rally point for new warbots</b>: every warbot the Bot Foundry makes from then on is stationed there instead of at the Command Base (a little flag flies over it), and comes back there after its orders. Ones that don't fit wait beside it. One at a time; tap it again to clear it.</p>
   <p><b>Air</b> (a second tab once you have an Airfield): each Airfield and its planes, with <b>+ Cargo Plane</b> and <b>+ Strike Bomber</b> to order more in its hangar; every Strike Bomber with <b>Strike</b> (or the big <b>Strike: tap a target</b>, <kbd>E</kbd>, for whichever is ready); every Cargo Plane with its air drops (<b>Drop Outpost</b>, <b>2 Warbots</b>, <b>2 Workers</b>).</p>
@@ -620,20 +623,67 @@ footer { padding-block: 28px 40px; color: var(--muted); font-size: 14px; border-
 </section>
 
 <section id="missions">
-  <div class="sec-head"><h2>Missions</h2></div>
-  <p>Tap <b>Missions</b> on the main menu. Each mission is a hand-picked planet with its own goals, starting conditions and features. Pick Easy, Normal or Hard: harder levels raise the goals, tighten the clock, start you with fewer goods and bring a tougher rival. The goal banner shows your progress and any time left. All eight are open from the start, so play them in any order.</p>
+  <div class="sec-head"><h2>Missions</h2><span class="tag">The tutorial</span></div>
+  <p>Tap <b>Missions</b> on the main menu. The missions are the tutorial campaign: hand-picked planets, each with its own goals, starting conditions and features, that teach the game one idea at a time, from your very first building to all-out war. They come in seven chapters, each building on the last: the colony and its logistics first, in peace, then creatures and rivals. From the second mission on you land with the colony the earlier missions taught already built and joined up, so you get straight to the new idea. Play them in order (the first one you haven't finished is marked <b>Next up</b>) or pick any: every mission is open from the start.</p>
+  <p>Pick Easy, Normal or Hard: harder levels raise the goals, start you with fewer goods and bring a tougher rival, and Hard puts most missions on the clock. The briefing card sets the scene; the goal banner marks the next goal with a hint, lights up the button it needs (or rings the building to tap) and shows any time left. Once a building it asks for is going up, the hint says to wait for it (or to lay its road) rather than build another.</p>
   <p>Taking the last rival Command Base ends the game, so in a mission it waits for the rest of your goals: until they are done it holds at 1 armor, and its panel says <b>Finish your other goals first</b>.</p>
-  <figure><img src="%%shot_missions%%" alt="The Missions menu: all eight missions open, with ticks on the finished difficulty levels"><figcaption>The Missions menu. Finished difficulty levels get a tick.</figcaption></figure>
-  <ol class="missions">
-    <li><b>Touchdown</b><span>Colony. Build a Harvester, Quarry and Smelter and make your first Alloy.</span></li>
-    <li><b>Assembly Line</b><span>Colony. Make Chips and order new bots from the Foundry.</span></li>
-    <li><b>Green Fuel</b><span>Colony. No Fuel left: grow it at a Bio Farm and keep two Fuel Stations running.</span></li>
-    <li><b>Rush Hour</b><span>Colony. A far-off depot and heavy traffic: order more Haulers, lay roads with one-way lanes and put up traffic lights.</span></li>
-    <li><b>Blacktop</b><span>Colony. Make Cement, lay roads, and upgrade them to asphalt using the oil seep beside your base.</span></li>
-    <li><b>Border Dispute</b><span>Versus. Capture rival Outposts and hold a share of the land.</span></li>
-    <li><b>Supply Lines</b><span>Versus. Your warbots land nearly empty: make Ammo and capture the rival Command Base.</span></li>
-    <li><b>Final Descent</b><span>Versus. A deep canyon world and a veteran rival. Capture its Command Base.</span></li>
-  </ol>
+  <figure><img src="%%shot_missions%%" alt="The Missions menu: the first chapters, with ticks on the finished difficulty levels and the next mission marked Next up"><figcaption>The Missions menu. Finished difficulty levels get a tick.</figcaption></figure>
+  <div class="campaign">
+    <h3>1. First Steps</h3>
+    <p>One idea at a time, in peace.</p>
+    <ol class="missions">
+      <li><b>Touchdown</b><span>Colony. Place a Harvester by the stalk groves, join it to your roads and watch the Fiber come in.</span></li>
+      <li><b>Groundwork</b><span>Colony. Draw your first road in Paths out to the boulders, quarry Stone and bake it into Cement.</span></li>
+      <li><b>Recharge</b><span>Colony. Robots run on batteries: build a Fuel Station, then dig Ore and tap Crystal.</span></li>
+      <li><b>Hot Metal</b><span>Colony. Move a Cement Works beside its Quarry, then smelt your first Alloy beside an Ore Mine: conveyors feed them.</span></li>
+    </ol>
+    <h3>2. Growing the Colony</h3>
+    <p>Bots that build bots, Fuel from farms, groves that regrow, and Outposts that push the border out.</p>
+    <ol class="missions">
+      <li><b>Assembly Line</b><span>Colony. Etch Chips, build a Bot Foundry, order new robots and raise a stock limit.</span></li>
+      <li><b>Green Fuel</b><span>Colony. The landing burned your Fuel: grow it at a Bio Farm with Agribots, and plant groves that regrow.</span></li>
+      <li><b>Frontier</b><span>Colony. Dismantle a spent mine, push your border out with Outposts and mine the rich frontier.</span></li>
+    </ol>
+    <h3>3. Roads and Traffic</h3>
+    <p>Keep the Haulers moving.</p>
+    <ol class="missions">
+      <li><b>Rush Hour</b><span>Colony. Join a far Depot with Route to, add Haulers, then sort the traffic with one-way lanes and lights.</span></li>
+      <li><b>Crossings</b><span>Colony. Bridge a pond, tunnel through a crag and cut a Ramp up a ledge.</span></li>
+      <li><b>Blacktop</b><span>Colony. Pump oil, cook Asphalt and send a Paver out to surface your roads.</span></li>
+    </ol>
+    <h3>4. Industry and Trade</h3>
+    <p>Pipelines and power, research, far Depots and trucks, railways, trade and planet events.</p>
+    <ol class="missions">
+      <li><b>Pipe Dreams</b><span>Colony. Refine Crude into Fuel, pipe it, and speed your factories up with a Generator.</span></li>
+      <li><b>Breakthrough</b><span>Colony. Build a Research Lab and research upgrades for the whole colony.</span></li>
+      <li><b>Long Haul</b><span>Colony. A forward Depot up a long valley, a supply order to keep it stocked, and Freight Trucks.</span></li>
+      <li><b>Iron Road</b><span>Colony. Lay track to a far Crystal field and run a Freight Train between two stations.</span></li>
+      <li><b>Trade Winds</b><span>Colony. Dock a Trade Terminal at a Trade Post, fill contracts by Road Train and ride out planet events.</span></li>
+    </ol>
+    <h3>5. Sea and Sky</h3>
+    <p>Ports and ships, Viaducts and Ropeways, a Crawler and an airlift.</p>
+    <ol class="missions">
+      <li><b>Harbour</b><span>Colony. Islands: build a Port and ships, and found a second Port across the sea.</span></li>
+      <li><b>Sky Bridges</b><span>Colony. Sky islands: span the canyon with a Viaduct and a Ropeway to reach the Crystal beyond.</span></li>
+      <li><b>Airlift</b><span>Colony. Plateaus: drive a Crawler off the plateau, drop an Outpost by parachute and supply by air.</span></li>
+    </ol>
+    <h3>6. First Contact</h3>
+    <p>Creature nests, a rival to practise on, a border war and a chokepoint to hold.</p>
+    <ol class="missions">
+      <li><b>Bug Hunt</b><span>Colony with wildlife. Turrets and warbots against raiding creature packs: clear the nests.</span></li>
+      <li><b>Live Fire</b><span>Versus. Your first rival, a quiet one: command warbots, take its Outposts, then its Command Base.</span></li>
+      <li><b>Border Dispute</b><span>Versus. Take the rival’s Outposts, carry off loot and hold a share of the land.</span></li>
+      <li><b>Hold the Line</b><span>Versus. Chokepoint: a Rusher attacks early. Wall the channels, man a Bunker and hold out.</span></li>
+    </ol>
+    <h3>7. War</h3>
+    <p>Ammo and repairs, siege robots and missiles, the nuclear race and a final assault.</p>
+    <ol class="missions">
+      <li><b>Supply Lines</b><span>Versus. Keep the Ammo flowing, mend the wounded, set a rally point and take the rival base.</span></li>
+      <li><b>Siege Breakers</b><span>Versus. A Turtle behind Walls and turrets: break in with Torches, a Bulwark and missiles.</span></li>
+      <li><b>Chain Reaction</b><span>Versus. A Nuclear race: enrich Uranium, build a Nuclear Silo and launch.</span></li>
+      <li><b>Final Descent</b><span>Versus. Canyon maze and a seasoned rival: a Keep, Flak Guns, Strike Bombers and the final capture.</span></li>
+    </ol>
+  </div>
 </section>
 
 <section id="multiplayer">

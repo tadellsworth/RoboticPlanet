@@ -2021,7 +2021,7 @@ function dispatch(p) {
   if (planList(p).length) {
     for (let k = idle.length - 1; k >= 0; k--) {
       const u = idle[k];
-      if (!BOTS[u.type].build) continue;
+      if (!BOTS[u.type].build || u.failUntil > S.time) continue; // (one that just found no way somewhere sits this round out)
       const t = nextPaveTile(u, p, -1);
       if (t < 0) break;
       idle.splice(k, 1);
@@ -2257,12 +2257,18 @@ function paveStand(t, zone) {
 function assignPave(u, t) {
   cancelTask(u);
   const stand = crossTile(t) ? paveStand(t, homeZone(u.owner)) : t;
+  const stuck = u.failUntil > S.time - 18; // (it found no way somewhere else a moment ago too)
   u.task = { type: 'pave', tile: t, phase: 'go', prog: 0 };
   S.paveRes[t] = u.id;
   if (stand < 0 || !goTo(u, stand % S.W, (stand / S.W) | 0)) {
-    const P = S.players[u.owner];
-    P.paveSkip = P.paveSkip || {};
-    P.paveSkip[t] = S.time + 15;
+    // No way there. For a worker that can't get anywhere (walled in on the Wall it built, say) that's the worker's
+    // trouble, not the tile's: it sits out a while and the others still pave the tile. Otherwise nobody tries the tile for a while.
+    if (stuck && stand >= 0) u.failUntil = S.time + 15;
+    else {
+      const P = S.players[u.owner];
+      P.paveSkip = P.paveSkip || {};
+      P.paveSkip[t] = S.time + 15;
+    }
     cancelTask(u);
   }
 }
