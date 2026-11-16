@@ -19,7 +19,9 @@ import { molekit } from './murmur_moleskit.js';
 const P = new URLSearchParams(location.search);
 const C = P.get('c') || 'swarmer', HI = +(P.get('hi') || 0), HERO = !!+(P.get('hero') || 0);
 export const config = C === 'burrow' ? { pad: false } : { pad: false, size: [512, 1024, 2048][HI] };
-export const SPRITE_W = { swarmer: 5.6, drainer: 7.2, brute: 10.4 };
+export const SPRITE_W = { swarmer: 5.8, drainer: 7.6, brute: 11.4 };
+// every model is built at one world scale, then grown by this much (so the game's 0.078 per unit gives B's sizes)
+const GROW = 1.2;
 
 export default function (L) {
   const K = molekit(L);
@@ -28,9 +30,9 @@ export default function (L) {
   if (C === 'burrow') return burrow(L, K);
   const W = SPRITE_W[C];
   const heroCams = {
-    swarmer: { pos: [5.6, 3.4, 6.4], at: [0.1, 0.45, 0.1], fov: 30 },
-    drainer: { pos: [7.4, 4.4, 8.2], at: [0.2, 0.6, 0.1], fov: 30 },
-    brute: { pos: [11.5, 5.6, 9.6], at: [0.0, 1.05, 0.2], fov: 36 },
+    swarmer: { pos: [6.6, 4.0, 7.6], at: [0.1, 0.55, 0.1], fov: 30 },
+    drainer: { pos: [8.8, 5.2, 9.8], at: [0.2, 0.7, 0.1], fov: 30 },
+    brute: { pos: [13.6, 6.6, 11.4], at: [0.0, 1.25, 0.2], fov: 36 },
   };
   K.camera(W, HERO && heroCams[C]);
   if (HERO) K.heroGround(W);
@@ -38,16 +40,17 @@ export default function (L) {
   if (C === 'swarmer') swarmer(L, K, G, GL, f, V);
   else if (C === 'drainer') drainer(L, K, G, GL, f, FEED);
   else brute(L, K, G, GL, f);
+  G.scale.setScalar(GROW);
   K.centre(G, GL);
 }
 
 // ---------------------------------------------------------------------------------------------------------------
 // palettes. Dark, matte animals; claws pale (the mark that reads from above); snouts a dull grey-pink (never a team red).
 const PAL = {
-  base:  { hide: '#463b3c', belly: '#2a2224', skin: '#8c726c', snout: '#93766f', claw: '#ddd0b4', tooth: '#e6d39c', sheen: '#9a8c86' },
-  rust:  { hide: '#40281e', belly: '#24150f', skin: '#8a6656', snout: '#91695a', claw: '#e0c8a2', tooth: '#e6cf98', plate: '#a8582e', sheen: '#a48270' },
+  base:  { hide: '#463c3b', belly: '#2a2224', skin: '#a08680', snout: '#a5877f', claw: '#ddd0b4', tooth: '#e6d39c', sheen: '#9a8c86' },
+  rust:  { hide: '#45291d', belly: '#24150f', skin: '#9c7666', snout: '#a07868', claw: '#e0c8a2', tooth: '#e6cf98', plate: '#a8582e', sheen: '#a48270' },
   white: { hide: '#c3c8cc', belly: '#9aa0a5', skin: '#b3a29c', snout: '#bba49e', claw: '#efe8da', tooth: '#efe2b8', sheen: '#ffffff' },
-  bloom: { hide: '#30243a', belly: '#1c1520', skin: '#77627a', snout: '#7e6680', claw: '#d8cdbf', tooth: '#e2d4a8', sheen: '#9a86a6' },
+  bloom: { hide: '#30243a', belly: '#1c1520', skin: '#8a748c', snout: '#8e7690', claw: '#d8cdbf', tooth: '#e2d4a8', sheen: '#9a86a6' },
 };
 
 // ---------------------------------------------------------------------------------------------------------------
@@ -66,9 +69,9 @@ function swarmer(L, K, G, GL, f, v) {
       g.strokeStyle = 'rgba(255,255,255,0.5)'; g.lineWidth = 2;
       for (let i = 0; i < 22; i++) { let x = L.rnd() * n, y = L.rnd() * n; g.beginPath(); g.moveTo(x, y); for (let k = 0; k < 8; k++) { x += (L.rnd() - 0.5) * 50; y += (L.rnd() - 0.2) * 30; g.lineTo(x, y); } g.stroke(); }
     });
-    bodyM = K.hide(pal.hide, { sheenColor: pal.sheen, emissiveMap: spots, emissive: '#b26bff', glow: K.dimGlow('#b070ff'), ek: 0.9 });
+    bodyM = K.fur(pal.hide, { sheenColor: pal.sheen, emissiveMap: spots, emissive: '#b26bff', glow: K.dimGlow('#b070ff'), ek: 0.9 });
   } else if (v === 'white') bodyM = K.fur(pal.hide, { coarse: true, sheen: 1, sheenColor: pal.sheen, rough: 0.92 });
-  else bodyM = K.hide(pal.hide, { sheenColor: pal.sheen });
+  else bodyM = K.fur(pal.hide, { sheenColor: pal.sheen });
   const skinM = K.flesh(pal.skin), snoutM = K.flesh(pal.snout), clawM = K.keratin(pal.claw), toothM = K.keratin(pal.tooth, 0.35);
   const X = v === 'white' ? K.XTAL_WHITE : v === 'bloom' ? K.XTAL_BLOOM : K.XTAL;
 
@@ -79,22 +82,24 @@ function swarmer(L, K, G, GL, f, v) {
     S(-0.25, 0.5, 0.45, 0.32, 0.58), S(0.3, 0.47, 0.45, 0.31, 0.58), S(0.75, 0.38, 0.37, 0.27, 0.56), S(1.08, 0.27, 0.27, 0.2, 0.53),
     S(1.34, 0.15, 0.15, 0.12, 0.5), S(1.46, 0.0, 0.0, 0.0, 0.49),
   ], bodyM, { lump: 0.035, seed: 3, uv: 1.4 });
+  // the coat: the White ones shaggy, the rest a short bristly pelt over the wrinkled hide
+  K.furShells(body, bodyM, v === 'white' ? { n: 6, len: 0.075, density: 1, comb: 0.8, tip: 0.25 } : { n: 5, len: 0.045, density: 0.9, comb: 0.9, tip: 0.3 });
 
   // ---- snout, buck teeth, eyes, tail
-  const tip = K.snout(G, { base: [1.25, 0.52, 0], tip: [1.86, 0.45, 0], r: 0.14, skin: snoutM, whisker: K.plain(v === 'white' ? '#f6f6f2' : '#cfc6bc', 0.6) });
-  for (const s of [-1, 1]) {                                                  // upper and lower incisors, jutting out
-    K.claw(G, [1.74, 0.4, s * 0.032], [1, -0.35, s * 0.05], [0, 1, 0], 0.2, 0.026, 0.016, toothM, 0.35);
-    K.claw(G, [1.7, 0.33, s * 0.03], [1, 0.25, s * 0.04], [0, 1, 0], 0.24, 0.024, 0.015, toothM, -0.25);
+  const tip = K.snout(G, { base: [1.2, 0.52, 0], tip: [1.86, 0.46, 0], r: 0.155, skin: snoutM, whisker: K.plain(v === 'white' ? '#f6f6f2' : '#cfc6bc', 0.6) });
+  for (const s of [-1, 1]) {                                                  // upper and lower incisors, jutting out past the nose
+    K.claw(G, [1.74, 0.4, s * 0.034], [1, -0.32, s * 0.06], [0, 1, 0], 0.28, 0.03, 0.017, toothM, 0.3);
+    K.claw(G, [1.72, 0.33, s * 0.03], [1, 0.2, s * 0.05], [0, 1, 0], 0.27, 0.026, 0.015, toothM, -0.2);
   }
   K.eyes(G, [1.08, 0.66, 0], 0.2 * fat, 0.028);
   K.tail(G, { base: [-1.48, 0.55, 0], tip: [-2.05, 0.42, 0.04], r: 0.055, mat: v === 'white' ? bodyM : skinM, bristle: K.plain('#8a7f78', 0.7) });
 
   // ---- four limbs (in GL: the only parts that move)
   for (const s of [-1, 1]) {
-    K.forelimb(GL, { side: s, f, shoulder: [0.6, 0.45, s * 0.16 * fat], wrist: [0.98, 0.3, s * 0.38 * fat], palm: 0.5, claw: 0.3, armR: 0.16 * fat,
-      stride: 0.15 * legK, lift: 0.12, skin: skinM, arm: bodyM, clawMat: clawM, splay: 0.55, tilt: 0.4, fan: 0.6 });
-    K.hindlimb(GL, { side: s, f, hip: [-1.0, 0.42, s * 0.2 * fat], foot: [-1.24, 0.07, s * (0.4 + 0.08 * legK) * fat], len: 0.3, r: 0.1 * fat,
-      stride: 0.15 * legK, lift: 0.1, skin: skinM, leg: bodyM, clawMat: clawM, out: 0.7 });
+    K.forelimb(GL, { side: s, f, shoulder: [0.6, 0.45, s * 0.12 * fat], wrist: [0.95, 0.32, s * 0.31 * fat], palm: 0.5, claw: 0.44, armR: 0.2 * fat,
+      stride: 0.15 * legK, lift: 0.12, skin: skinM, arm: bodyM, clawMat: clawM, splay: 0.62, tilt: 0.3, fan: 0.6 });
+    K.hindlimb(GL, { side: s, f, hip: [-1.02, 0.42, s * 0.2 * fat], foot: [-1.26, 0.08, s * (0.4 + 0.06 * legK) * fat], len: 0.32, r: 0.13 * fat,
+      stride: 0.15 * legK, lift: 0.1, skin: skinM, leg: bodyM, clawMat: clawM, out: 0.75 });
   }
 
   // ---- Rust: armour. Bands of rust-red crust plates over the back, like an armadillo's, with blunt studs on the rims
@@ -135,17 +140,19 @@ function swarmer(L, K, G, GL, f, v) {
 // and threads of charge run from the target into the star. Big spade hands, planted wide while it feeds.
 function drainer(L, K, G, GL, f, feed) {
   const { THREE } = K, X = K.XTAL;
-  const furM = K.fur('#3d3534', { sheenColor: '#9a8c84' }), skinM = K.flesh('#8c726c'), snoutM = K.flesh('#93766f'), clawM = K.keratin('#ddd0b4');
+  const furM = K.fur('#3d3534', { sheenColor: '#9a8c84' }), skinM = K.flesh('#a08680'), snoutM = K.flesh('#a5877f'), clawM = K.keratin('#ddd0b4');
   const FK = feed ? 2.4 : 1;                                             // feeding: everything that carries charge burns
   const body = K.loft(G, [
     [-2.2, 0, 0, 0, 0.74], [-2.08, 0.46, 0.44, 0.34, 0.75], [-1.72, 0.84, 0.78, 0.47, 0.79], [-1.05, 0.98, 0.9, 0.5, 0.81],
     [-0.35, 0.9, 0.82, 0.49, 0.8], [0.3, 0.74, 0.68, 0.45, 0.75], [0.82, 0.57, 0.52, 0.38, 0.7], [1.25, 0.37, 0.35, 0.27, 0.64],
     [1.52, 0.19, 0.19, 0.15, 0.59], [1.64, 0, 0, 0, 0.58],
   ], furM, { lump: 0.03, seed: 7, uv: 1.3 });
+  K.furShells(body, furM, { n: 5, len: 0.055, density: 0.95, comb: 0.8 });
 
   // ---- the charge sac: a bare, swollen bulge of thin dark skin over the rear of the back, glowing veins under it
   const veins = L.canvasTex(1024, (g, n) => {
-    g.fillStyle = '#000'; g.fillRect(0, 0, n, n); g.lineCap = 'round';
+    g.fillStyle = '#2a2a2a'; g.fillRect(0, 0, n, n); g.lineCap = 'round';
+    L.blotches(g, n, 40, 60, 200, 0.35, '255,255,255');                   // the charge inside, a soft light through the skin
     const branch = (x, y, a, w, len, d) => {
       for (let k = 0; k < len; k++) {
         const nx = x + Math.sin(a) * 8, ny = y + Math.cos(a) * 8;
@@ -156,17 +163,17 @@ function drainer(L, K, G, GL, f, feed) {
     };
     for (let i = 0; i < 16; i++) branch((i + L.rnd() * 0.6) / 16 * n, n * (0.16 + L.rnd() * 0.06), (L.rnd() - 0.5) * 0.4, 5.5, 56, 0);
   });
-  const sacM = new THREE.MeshPhysicalMaterial({ color: '#6a5258', map: K.hideMap, roughness: 0.55, metalness: 0, clearcoat: 0.25, clearcoatRoughness: 0.4, vertexColors: true,
-    sheen: 0.3, sheenColor: new THREE.Color('#c8a8b0'), emissive: new THREE.Color(X.core).multiplyScalar(FK * (K.GLOW * K.GLOW * 0.32 + (K.NIGHTISH ? 0.1 : 0.32)) / 0.4), emissiveMap: veins, emissiveIntensity: 0.4 });
+  const sacM = new THREE.MeshPhysicalMaterial({ color: '#6c5860', roughness: 0.5, metalness: 0, clearcoat: 0.45, clearcoatRoughness: 0.35, vertexColors: true,
+    sheen: 0.3, sheenColor: new THREE.Color('#c8a8b0'), emissive: new THREE.Color(X.core).multiplyScalar(FK * (K.GLOW * K.GLOW * 0.5 + (K.NIGHTISH ? 0.15 : 0.32)) / 0.4), emissiveMap: veins, emissiveIntensity: 0.4 });
   sacM.envMapIntensity = 0.25; sacM.userData.glow = K.dimGlow(X.glow, (K.GLOW > 1 || feed ? 0.8 : 3) * Math.min(2.2, FK));
   {
     const sx = -1.02, sy = 1.08, rx = 1.12, ry = 0.78, rz = 0.84;
     const g = new THREE.SphereGeometry(1, 96, 48), p = g.attributes.position, col = new Float32Array(p.count * 3), v = new THREE.Vector3();
     for (let i = 0; i < p.count; i++) {
       v.fromBufferAttribute(p, i);
-      // taut skin, creased in folds across the bulge; a little lop-sided
-      const t = (v.x + 1) / 2, fold = Math.pow(Math.abs(Math.sin(t * Math.PI * 5.5)), 6);
-      const k = 1 + 0.035 * K.nz(v.x * 3, v.y * 3, v.z * 3) - 0.025 * fold * Math.max(0, v.y);
+      // taut skin over lumps of stored charge; a little lop-sided
+      const fold = Math.max(0, K.nz(v.x * 5 + 2, v.y * 5, v.z * 5)) ** 2;
+      const k = 1 + 0.05 * K.nz(v.x * 2.6, v.y * 2.6, v.z * 2.6) + 0.025 * K.nz(v.x * 7, v.y * 7 + 3, v.z * 7) - 0.03 * fold;
       p.setXYZ(i, v.x * rx * k, v.y * ry * k * (v.y < 0 ? 0.6 : 1), v.z * rz * k);
       const b = (0.55 + 0.45 * Math.max(0, v.y)) * (1 - 0.35 * fold); col[i * 3] = col[i * 3 + 1] = col[i * 3 + 2] = b;
     }
@@ -181,7 +188,7 @@ function drainer(L, K, G, GL, f, feed) {
   const dn = new THREE.Vector3(Math.cos(tilt), Math.sin(tilt), 0);
   const D = L.group(tip[0] + dn.x * 0.04, tip[1] + dn.y * 0.04, 0, 0, G); D.quaternion.setFromUnitVectors(new THREE.Vector3(1, 0, 0), dn);
   // in D: +x is the way the star faces, the rays radiate in the y-z plane
-  const rayM = feed ? K.glowMat('#f3f0ff', 0.7 * FK, K.dimGlow(X.glow, 2.2)) : K.flesh('#a8867f', { rough: 0.5 });
+  const rayM = feed ? K.glowMat('#f3f0ff', 0.7 * FK, K.dimGlow(X.glow, 2.2)) : K.flesh('#b8958c', { rough: 0.5 });
   const tipM = K.glowMat('#f3f0ff', feed ? 1.2 * FK : 0.5, K.dimGlow(X.glow, feed ? 2.2 : 0.8));
   K.seg(D, [0.03, 0, 0], 0.07, 0.12, 0.12, feed ? K.glowMat('#f8f6ff', 1.4 * FK, K.dimGlow(X.glow, 2.2)) : K.flesh('#6e5250'), { lump: 0.04 });
   for (let k = 0; k < 22; k++) {
@@ -200,9 +207,9 @@ function drainer(L, K, G, GL, f, feed) {
 
   // ---- limbs: big spade hands (planted wide and dug in while feeding), small hind feet
   for (const s of [-1, 1]) {
-    K.forelimb(GL, { side: s, f, plant: feed, shoulder: [0.62, 0.62, s * 0.3], wrist: feed ? [1.2, 0.24, s * 0.74] : [1.02, 0.34, s * 0.55], palm: 0.62, claw: 0.36, armR: 0.21,
+    K.forelimb(GL, { side: s, f, plant: feed, shoulder: [0.62, 0.62, s * 0.26], wrist: feed ? [1.2, 0.26, s * 0.62] : [1.02, 0.36, s * 0.44], palm: 0.62, claw: 0.52, armR: 0.25,
       stride: 0.16, lift: 0.13, skin: skinM, arm: furM, clawMat: clawM, splay: feed ? 0.85 : 0.55, tilt: feed ? 0.3 : 0.4, fan: 0.6, droop: feed ? 0.22 : 0.06, fringe: K.plain('#6a605a', 0.8) });
-    K.hindlimb(GL, { side: s, f, plant: feed, hip: [-1.62, 0.56, s * 0.42], foot: [-1.94, 0.07, s * 0.76], len: 0.38, r: 0.14,
+    K.hindlimb(GL, { side: s, f, plant: feed, hip: [-1.62, 0.56, s * 0.4], foot: [-1.94, 0.08, s * 0.72], len: 0.38, r: 0.17,
       stride: 0.15, lift: 0.11, skin: skinM, leg: furM, clawMat: clawM, out: 0.7 });
   }
 
@@ -229,24 +236,25 @@ function drainer(L, K, G, GL, f, feed) {
 function brute(L, K, G, GL, f) {
   const X = { ...K.XTAL, k: 0.82 };
   const furM = K.fur('#3b312b', { coarse: true, sheen: 0.7, sheenColor: '#8f8174', rough: 0.92, ns: 1.0 });
-  const skinM = K.flesh('#7e655f', { rough: 0.62 }), snoutM = K.flesh('#866a64'), clawM = K.keratin('#d7c9aa', 0.5);
+  const skinM = K.flesh('#94786f', { rough: 0.62 }), snoutM = K.flesh('#987c74'), clawM = K.keratin('#d7c9aa', 0.5);
   const body = K.loft(G, [
     [-3.45, 0, 0, 0, 1.06], [-3.3, 0.66, 0.56, 0.46, 1.08], [-2.85, 1.18, 0.96, 0.66, 1.12], [-1.9, 1.46, 1.18, 0.75, 1.17],
     [-0.65, 1.6, 1.3, 0.78, 1.2], [0.5, 1.66, 1.32, 0.78, 1.18], [1.35, 1.42, 1.1, 0.7, 1.1], [2.05, 0.98, 0.8, 0.54, 0.98],
     [2.55, 0.54, 0.47, 0.34, 0.9], [2.8, 0, 0, 0, 0.86],
   ], furM, { lump: 0.04, seed: 11, uv: 2.2, p: 2.3,
-    col: (x, a) => { const s = K.sstep(1.55, 2.0, x) * Math.exp(-(a * a) / 0.05) + K.sstep(2.0, 2.4, x) * 0.5 * Math.exp(-((Math.abs(a) - 0.9) ** 2) / 0.04); const k = 1 + 1.35 * Math.min(1, s); return [k, k * 0.97, k * 0.92]; } });
+    col: (x, a0) => { const a = Math.atan2(Math.sin(a0), Math.cos(a0)), s = K.sstep(1.3, 1.9, x) * Math.exp(-(a * a) / 0.09) + K.sstep(1.9, 2.3, x) * 0.6 * Math.exp(-((Math.abs(a) - 1.0) ** 2) / 0.05); const k = 1 + 1.6 * Math.min(1, s); return [k, k * 0.97, k * 0.92]; } });
+  K.furShells(body, furM, { n: 6, len: 0.1, density: 0.9, comb: 0.9, tip: 0.3, scale: 5 });
 
-  // ---- the geode saddle: stone crust over the back, split along the spine
+  // ---- the geode ridge: stone crust grown along the spine, split down the middle where the crystal comes through
   const crustM = K.crust('#ffffff');
-  const stone = [0.09, 0.085, 0.08], stoneL = [0.21, 0.19, 0.17], rust = [0.24, 0.13, 0.08];
+  const stone = [0.06, 0.055, 0.052], stoneL = [0.15, 0.135, 0.12], rust = [0.2, 0.11, 0.07];
   const bands = [[0.42, 0.4, 0.42], [0.25, 0.23, 0.28], [0.15, 0.13, 0.19], [0.07, 0.06, 0.09], [0.035, 0.03, 0.045]];
-  const sad = K.crustSaddle(G, body, { x0: -3.05, x1: 1.25, amax: 1.2, thick: 0.3, bands: 0, crack: 0.3, mat: crustM,
+  const sad = K.crustSaddle(G, body, { x0: -2.95, x1: 1.15, amax: 0.66, thick: 0.34, bands: 0, crack: 0.24, mat: crustM,
     colour: (x, a, inC) => {
       if (inC > 0) return bands[Math.min(4, Math.floor(Math.pow(inC, 0.6) * 5))].map(q => q * 1.3);
       const lum = 0.5 + 0.5 * K.nz(x * 3 + 9, a * 3, 2); let c = stone.map((q, j) => q + (stoneL[j] - q) * lum);
       const rs = Math.max(0, K.nz(x * 2, a * 2 + 2, 3.5) - 0.25); c = c.map((q, j) => q + (rust[j] - q) * Math.min(1, rs * 2));
-      return c.map(q => q * 1.5);
+      return c.map(q => q * 1.35);
     } });
   // the seam: crystal packed along the crack, tallest mid-back, leaning back and out of it
   for (let i = 0; i < 8; i++) {
@@ -254,23 +262,26 @@ function brute(L, K, G, GL, f) {
     const a = sad.crackZ(x) + (L.rnd() - 0.5) * 0.12, p = sad.top(x, a);
     K.cluster(G, [p[0], p[1] - 0.18, p[2]], [-0.5 - L.rnd() * 0.3, 1, (i % 2 ? 1 : -1) * (0.3 + L.rnd() * 0.35)], 2 + Math.round(L.rnd()), 0.5 + 0.9 * mid * (0.8 + L.rnd() * 0.3), 0.11 + 0.09 * mid, X, 0.45, { collar: false });
   }
-  // clusters breaking out through the flanks of the crust, and two at the shoulders
-  for (const [x, a, n, len] of [[-1.4, 0.82, 4, 0.7], [-0.2, -0.85, 4, 0.66], [-2.4, -0.7, 3, 0.55], [0.6, 0.78, 3, 0.55], [-2.6, 0.62, 3, 0.45]]) {
-    const p = sad.top(x, a), { n: nn } = K.onBody(body, x, a);
-    K.cluster(G, [p[0], p[1] - 0.06, p[2]], [nn[0] * 0.6 - 0.2, nn[1], nn[2] * 0.9], n, len, 0.11, X, 0.5, { collarMat: crustM });
+  // scabs of crust on the flanks, crystal breaking out of each; and two sprays at the shoulders
+  const scabM = K.crust('#4c443e');
+  for (const [x, a, n, len, sz] of [[-1.35, 0.98, 4, 0.7, 0.5], [-0.15, -1.0, 4, 0.66, 0.48], [-2.35, -0.88, 3, 0.55, 0.4], [0.55, 0.95, 3, 0.55, 0.42], [-2.5, 0.8, 3, 0.45, 0.36]]) {
+    const { p, n: nn } = K.onBody(body, x, a, 0.06);
+    const S = L.group(p[0], p[1], p[2], 0, G); S.quaternion.setFromUnitVectors(new K.THREE.Vector3(0, 1, 0), new K.THREE.Vector3(...nn));
+    K.seg(S, [0, 0, 0], sz, sz * 0.32, sz * 0.8, scabM, { lump: 0.18, seed: x * 3, flat: 0 });
+    K.cluster(G, [p[0] + nn[0] * 0.1, p[1] + nn[1] * 0.1, p[2] + nn[2] * 0.1], [nn[0] * 0.6 - 0.3, nn[1], nn[2] * 0.9], n, len, 0.11, X, 0.5, { collar: false });
   }
   for (const s of [-1, 1]) { const { p, n } = K.onBody(body, 1.15, s * 0.75, 0.08); K.cluster(G, p, [n[0] - 0.2, n[1] + 0.3, n[2]], 3, 0.55, 0.1, X, 0.45, { collarMat: skinM }); }
 
   // ---- the head: snout, tiny eyes, a stub tail
-  K.snout(G, { base: [2.35, 1.0, 0], tip: [3.28, 0.8, 0], r: 0.3, skin: snoutM, whisker: K.plain('#bdb3a6', 0.6) });
+  K.snout(G, { base: [2.2, 1.02, 0], tip: [3.32, 0.82, 0], r: 0.42, skin: snoutM, whisker: K.plain('#bdb3a6', 0.6) });
   K.eyes(G, [2.2, 1.5, 0], 0.5, 0.045);
   K.tail(G, { base: [-3.3, 1.12, 0], tip: [-4.0, 0.92, 0.08], r: 0.15, mat: furM });
 
   // ---- limbs: enormous spade hands, thick hind legs
   for (const s of [-1, 1]) {
-    K.forelimb(GL, { side: s, f, shoulder: [1.3, 0.95, s * 0.72], wrist: [2.02, 0.5, s * 1.1], palm: 1.25, claw: 0.8, armR: 0.5, clawW: 1.1,
+    K.forelimb(GL, { side: s, f, shoulder: [1.3, 0.95, s * 0.6], wrist: [1.95, 0.55, s * 0.95], palm: 1.25, claw: 1.15, armR: 0.55, clawW: 1.1,
       stride: 0.26, lift: 0.22, skin: skinM, arm: furM, clawMat: clawM, splay: 0.5, tilt: 0.4, fan: 0.55, fringe: K.plain('#5a4f48', 0.8) });
-    K.hindlimb(GL, { side: s, f, hip: [-2.6, 0.85, s * 0.8], foot: [-3.0, 0.12, s * 1.38], len: 0.66, r: 0.3,
+    K.hindlimb(GL, { side: s, f, hip: [-2.6, 0.85, s * 0.7], foot: [-3.0, 0.14, s * 1.25], len: 0.66, r: 0.36,
       stride: 0.24, lift: 0.18, skin: skinM, leg: furM, clawMat: clawM, out: 0.65 });
   }
 }

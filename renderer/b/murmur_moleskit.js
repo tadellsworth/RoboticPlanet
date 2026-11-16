@@ -55,16 +55,20 @@ export function molekit(L) {
     const out = texPair(512, (g, hg, n) => {
       g.fillStyle = '#bdbdbd'; g.fillRect(0, 0, n, n); hg.fillStyle = '#707070'; hg.fillRect(0, 0, n, n); g.lineCap = hg.lineCap = 'round';
       L.blotches(g, n, 140, 18, 90, 0.14); L.blotches(g, n, 60, 12, 60, 0.1, '255,255,255');
-      for (let i = 0; i < count; i++) {
-        const x = r() * n, y = r() * n, l = len * (0.6 + r() * 0.8), a = (r() - 0.5) * 0.5, dk = r() < 0.55;
-        const col = dk ? `rgba(10,10,10,${0.12 + 0.3 * r()})` : `rgba(255,255,255,${0.08 + 0.22 * r()})`;
-        stroke2(g, hg, n, x, y, Math.sin(a) * l, Math.cos(a) * l, 0.7 + r() * 0.9, col, `rgba(${dk ? '20,20,20' : '255,255,255'},${0.25 + 0.4 * r()})`);
+      // strands grow in tufts: each tuft a little fan of strands combed the same way, light at the tips
+      for (let i = 0; i < count / 6; i++) {
+        const cx = r() * n, cy = r() * n, a0 = (r() - 0.5) * 0.45, dk = r() < 0.5, lum = r();
+        for (let k = 0; k < 6; k++) {
+          const x = cx + (r() - 0.5) * len * 0.5, y = cy + (r() - 0.5) * len * 0.3, l = len * (0.7 + r() * 0.6), a = a0 + (r() - 0.5) * 0.25;
+          const col = dk ? `rgba(8,8,8,${0.2 + 0.3 * lum})` : `rgba(255,255,255,${0.12 + 0.26 * lum})`;
+          stroke2(g, hg, n, x, y, Math.sin(a) * l, Math.cos(a) * l, 1 + r() * 1.2, col, `rgba(${dk ? '10,10,10' : '255,255,255'},${0.35 + 0.4 * r()})`);
+        }
       }
     }, 2.4);
     s0 = keep; return out;
   }
-  const [furMap, furNrm] = furTex(9, 30000, 911);
-  const [coarseMap, coarseNrm] = furTex(18, 16000, 913);           // the Brute's longer, shaggier coat
+  const [furMap, furNrm] = furTex(16, 26000, 911);
+  const [coarseMap, coarseNrm] = furTex(28, 15000, 913);           // the Brute's longer, shaggier coat
   // leathery hide (the Swarmer, a mole-rat): folds across the body, pores, a few stiff bristles
   const [hideMap, hideNrm] = texPair(512, (g, hg, n) => {
     g.fillStyle = '#c4c4c4'; g.fillRect(0, 0, n, n); hg.fillStyle = '#808080'; hg.fillRect(0, 0, n, n); g.lineCap = hg.lineCap = 'round';
@@ -202,7 +206,7 @@ export function molekit(L) {
         const sh = o.shade ? o.shade(x, side) : 1 - 0.5 * sstep(0.45, 0.95, side);
         const c = o.col ? o.col(x, a, side) : [1, 1, 1];
         col.push(c[0] * sh, c[1] * sh, c[2] * sh);
-        uv.push(j / NA * (o.uvU ?? 4), x / uvs);
+        uv.push(j / NA * (o.uvU ?? 2.5), x / uvs);
       }
     }
     for (let i = 0; i < NX; i++) for (let j = 0; j < NA; j++) {
@@ -214,6 +218,33 @@ export function molekit(L) {
     g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2)); g.setIndex(idx); g.computeVertexNormals();
     const mesh = L.mesh(g, mat, 0, 0, 0, { parent });
     return { mesh, at, surf, top, stations };
+  }
+  // furShells(body, mat, o): a soft coat over a loft: n thin shells pushed out along the normals, each cut out of a
+  // strand pattern (alpha test), thinner toward the tips and combed back, so the outline goes fuzzy like fur instead of
+  // hard like a shell. o: { n (5), len (coat depth, world units), comb (how far the tips lean back), density (0..1),
+  //   tip (brightness of the tips), scale (strand pattern tiles per u unit), x0 / x1 (only between these x) }
+  let strandTex = null;
+  function furShells(body, mat, o = {}) {
+    if (!strandTex) strandTex = L.canvasTex(256, (g, n) => {
+      g.fillStyle = '#000'; g.fillRect(0, 0, n, n);
+      for (let i = 0; i < 2600; i++) { const x = L.rnd() * n, y = L.rnd() * n, rr = 1.2 + L.rnd() * 1.6, k = 0.55 + 0.45 * L.rnd();
+        for (const ox of [-n, 0, n]) for (const oy of [-n, 0, n]) { const gr = g.createRadialGradient(x + ox, y + oy, 0, x + ox, y + oy, rr); gr.addColorStop(0, `rgba(255,255,255,${k})`); gr.addColorStop(1, 'rgba(255,255,255,0)'); g.fillStyle = gr; g.fillRect(x + ox - rr, y + oy - rr, rr * 2, rr * 2); } }
+    }, false);
+    const src = body.mesh.geometry, N = o.n ?? 5, len = o.len ?? 0.05, comb = o.comb ?? 0.6, dens = o.density ?? 1, out = [];
+    const P = src.attributes.position, Nn = src.attributes.normal, C = src.attributes.color;
+    for (let i = 1; i <= N; i++) {
+      const t = i / N, g = src.clone(), p = g.attributes.position, c = g.attributes.color;
+      for (let k = 0; k < p.count; k++) {
+        const x = P.getX(k), keep = (o.x0 === undefined || x > o.x0) && (o.x1 === undefined || x < o.x1) ? 1 : 0;
+        const d = len * t * keep;
+        p.setXYZ(k, x + Nn.getX(k) * d - comb * d, P.getY(k) + Nn.getY(k) * d, P.getZ(k) + Nn.getZ(k) * d);
+        const b = 1 + (o.tip ?? 0.35) * t; c.setXYZ(k, C.getX(k) * b, C.getY(k) * b, C.getZ(k) * b);
+      }
+      const m = mat.clone(); const a = strandTex.clone(); a.needsUpdate = true; a.repeat.set(o.scale ?? 7, (o.scale ?? 7) * 1.1);
+      m.alphaMap = a; m.alphaTest = 0.08 + (0.62 + (1 - dens) * 0.3) * Math.pow(t, 0.8); m.transparent = false;
+      const mesh = L.mesh(g, m, 0, 0, 0, { parent: body.mesh.parent }); mesh.castShadow = false; out.push(mesh);
+    }
+    return out;
   }
   // seg(parent, at, rx, ry, rz, mat, o): a plain lumpy ellipsoid (o: { lump, seed, flat (belly flattening), rot })
   function seg(parent, at, rx, ry, rz, mat, o = {}) {
@@ -332,15 +363,15 @@ export function molekit(L) {
     // the arm: one fat limb, fur to the wrist, a cuff of fur over the root of the hand
     limb(parent, o.shoulder, W, o.armR, o.armR * 0.78, o.arm, { bulge: 0.3, seg: 18 });
     const H = L.group(W[0], W[1], W[2], 0, parent); H.quaternion.copy(frame(fwd, up));
-    seg(H, [P * 0.06, 0, 0], o.armR * 0.95, o.armR * 0.62, o.armR * 0.95, o.arm, { lump: 0.06, flat: 0.2 });
-    paddle(H, P, P * (o.wide ?? 0.5), P * 0.13, o.skin);
+    seg(H, [0, 0, 0], o.armR * 0.8, o.armR * 0.55, o.armR * 0.8, o.arm, { lump: 0.06, flat: 0.2 });
+    paddle(H, P, P * (o.wide ?? 0.48), P * 0.12, o.skin, { root: 0.5 });
     if (o.fringe) for (let k = 0; k < 16; k++) { const a = -1.3 + k / 15 * 2.6; tube(H, [[P * (0.52 + 0.4 * Math.cos(a)), 0, -P * 0.48 * Math.sin(a)], [P * (0.52 + 0.52 * Math.cos(a)), -0.02 * P, -P * 0.62 * Math.sin(a)]], t => 0.014 * P * (1 - t) + 0.002, o.fringe, { n: 3, radial: 4 }); }
     const nC = o.claws ?? 5, fan = o.fan ?? 0.6, CL = o.claw, cw = o.clawW ?? 1;
     for (let k = 0; k < nC; k++) {
       const u = nC === 1 ? 0 : (k / (nC - 1)) * 2 - 1;                             // -1..1 across the hand
-      const z = u * P * 0.36, x = P * (0.84 - 0.14 * u * u), len = CL * (1 - 0.2 * u * u) * (u < -0.7 ? 0.8 : 1);
+      const z = u * P * 0.36, x = P * (0.84 - 0.16 * u * u), len = CL * (1 - 0.2 * u * u) * (u < -0.7 ? 0.8 : 1);
       const a = u * fan * 0.5;
-      claw(H, [x, 0.015 * P, z], [Math.cos(a), -0.08, Math.sin(a)], [0, 1, 0], len, P * 0.1 * cw, P * 0.055 * cw, o.clawMat, o.curl ?? 0.3);
+      claw(H, [x, 0.015 * P, z], [Math.cos(a), -0.06, Math.sin(a)], [0, 1, 0], len, P * 0.11 * cw, P * 0.05 * cw, o.clawMat, o.curl ?? 0.25);
     }
     return { wrist: W, hand: H };
   }
@@ -351,12 +382,11 @@ export function molekit(L) {
   function hindlimb(parent, o) {
     const s = o.side, [fa, lift] = o.plant ? [0, 0] : gait(false, s, o.f ?? 0), st = o.stride ?? 0.2, lf = o.lift ?? 0.12;
     const F = [o.foot[0] + fa * st, o.foot[1] + lift * lf, o.foot[2]];
-    limb(parent, o.hip, F, o.r, o.r * 0.7, o.leg, { bulge: 0.35, seg: 16 });
+    limb(parent, o.hip, F, o.r, o.r * 0.75, o.leg, { bulge: 0.35, seg: 16 });
     const out = (o.out ?? 0.5) - fa * 0.12, dir = [-Math.cos(out), -0.04 + lift * 0.35, s * Math.sin(out)];
     const Fq = L.group(F[0], F[1], F[2], 0, parent); Fq.quaternion.copy(frame(dir, [0, 1, 0]));
     const Ln = o.len;
-    seg(Fq, [Ln * 0.04, 0, 0], o.r * 0.8, o.r * 0.55, o.r * 0.8, o.leg, { lump: 0.05, flat: 0.2 });
-    paddle(Fq, Ln, Ln * 0.3, Ln * 0.13, o.skin, { root: 0.6, cup: 0.1 });
+    paddle(Fq, Ln, Ln * 0.32, Ln * 0.12, o.skin, { root: 0.65, cup: 0.1 });
     for (let k = 0; k < 5; k++) {
       const u = k / 4 * 2 - 1, z = u * Ln * 0.21, x = Ln * (0.86 - 0.12 * u * u);
       claw(Fq, [x, 0.01 * Ln, z], [1, -0.15, u * 0.35], [0, 1, 0], Ln * 0.3, Ln * 0.055, Ln * 0.03, o.clawMat, 0.35);
@@ -507,6 +537,6 @@ export function molekit(L) {
   }
 
   return { THREE, TOD, GLOW, NIGHTISH, V, nz, clamp, sstep, furMap, hideMap, crustMap, fur, hide, crust, flesh, keratin, plain, eye, glowMat, dimGlow, crystalMats,
-    XTAL, XTAL_WHITE, XTAL_BLOOM, loft, seg, limb, tube, curve, cone, frame, clawGeo, claw, gait, paddle, forelimb, hindlimb, snout, tail, eyes,
+    XTAL, XTAL_WHITE, XTAL_BLOOM, loft, furShells, seg, limb, tube, curve, cone, frame, clawGeo, claw, gait, paddle, forelimb, hindlimb, snout, tail, eyes,
     shardGeo, shard, cluster, onBody, spineShards, crustSaddle, camera, centre, heroGround };
 }
