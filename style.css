@@ -685,6 +685,31 @@ body.mode-aim .objrow, body.mode-land .objrow, body.mode-airdrop .objrow { displ
 .pop-row span:last-child { text-align: right; color: var(--muted); font-size: 13px; }
 .pop-row b { color: var(--text); }
 
+/* Placement undo: for a few seconds after a building is placed, a chip above the tools takes it back (siteUndoTick).
+   Its bar runs down with the time left. Panels and the selection bar cover the bottom on a phone: it steps aside. */
+.undo-site { position: fixed; z-index: 8; left: 50%; transform: translateX(-50%); bottom: calc(var(--safe-b) + 84px);
+  display: flex; align-items: center; gap: 8px; min-height: 44px; max-width: calc(100vw - 24px); padding: 6px 16px 8px; overflow: hidden;
+  background: #252a36; color: var(--text); border: 1px solid rgba(56, 212, 255, 0.55); border-radius: 22px; font-size: 14px; white-space: nowrap;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.45); animation: usIn 0.25s; cursor: pointer; }
+@keyframes usIn { from { opacity: 0; } }
+.undo-site b { color: var(--accent); }
+.undo-site .us-name { overflow: hidden; text-overflow: ellipsis; }
+.undo-site .us-n { color: var(--muted); font-variant-numeric: tabular-nums; }
+.undo-site kbd { display: none; font-size: 11px; opacity: 0.7; }
+.undo-site .us-bar { position: absolute; left: 0; bottom: 0; height: 3px; width: calc(var(--us-left, 1) * 100%); background: var(--accent); }
+@media (pointer: fine) { .undo-site kbd { display: inline-block; } .undo-site:hover { filter: brightness(1.15); } }
+@media (max-width: 999px), (max-height: 519px) { body.sel-on .undo-site { display: none; } }
+@media (max-width: 699px) and (min-height: 520px) { body.sheet-open .undo-site { display: none; } }
+@media (orientation: landscape) and (max-height: 519px) {
+  .undo-site { left: calc(50% + var(--rail) / 2); bottom: calc(var(--safe-b) + 8px); }
+  body.sheet-open .undo-site { left: calc((100% + var(--rail) - var(--col)) / 2); }
+}
+@media (min-width: 1000px) and (min-height: 520px) {
+  .undo-site { bottom: calc(var(--safe-b) + 70px); }
+  body.sheet-open .undo-site { left: calc((100% - 444px) / 2); }
+}
+@media (min-width: 1600px) and (min-height: 520px) { body.sheet-build .undo-site { left: calc((100% - 644px) / 2); } }
+
 /* Paths: the banner sits at the top so it never covers where you're drawing, and the plan buttons
    sit three to a row (Undo, Clear, Build), then Traffic map and Done. */
 body.mode-road #banner { top: calc(var(--hud-top, 64px) + 6px); bottom: auto; }

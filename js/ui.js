@@ -1688,6 +1688,12 @@ function initKeyboard() {
       if (!$('banner-undo').hidden) $('banner-undo').click();
       return;
     }
+    // Ctrl+Z (Cmd+Z) on the map, for a few seconds after placing a building: the Undo chip (takes the site back).
+    if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && e.key.toLowerCase() === 'z' && R.mode === 'normal' && !topScreen() && siteUndoNow()) {
+      e.preventDefault();
+      undoLastSite();
+      return;
+    }
     if (e.ctrlKey || e.metaKey || e.altKey) return;
     const k = e.key.toLowerCase();
     if (k === 'escape') { e.preventDefault(); escapeKey(); return; }
@@ -1907,6 +1913,71 @@ function undoOrder() {
     toast(`Order taken back: ${n === 1 ? 'it goes' : `${n} go`} back to what ${n === 1 ? 'it was' : 'they were'} doing.`, 'info');
     refreshSelection();
   });
+}
+
+/*
+ * Placement undo. For SITE_UNDO seconds after you place a building, the Undo chip above the tools (or Ctrl+Z / Cmd+Z
+ * on the map, outside Paths, whose Ctrl+Z is its own) takes the construction site back, with everything paid or
+ * delivered for it refunded in full (ORDERS.undoSite, which checks the time by the game's clock). Each site placed
+ * is noted here; the newest still in its time is the one taken back, then the one before it.
+ */
+function noteSiteUndo(id) {
+  if (!id) return;
+  UI.siteUndo = (UI.siteUndo || []).filter((e) => e.of === S).concat([{ id, of: S }]);
+  siteUndoTick();
+}
+
+/** How much sooner than the rules' SITE_UNDO the chip goes: in multiplayer an order is done a few turns after it's given. */
+function siteUndoLead() { return typeof MP !== 'undefined' && MP.on ? ((MP.d || LS.DELAY) + 1) * LS.TURN * SIM_STEP + 0.25 : 0; }
+
+/** The newest site of yours that Undo can still take back, and the seconds left ({ b, left }), or null. */
+function siteUndoNow() {
+  const L = UI.siteUndo;
+  if (!L || !L.length || !S) return null;
+  const lead = siteUndoLead();
+  while (L.length) {
+    const e = L[L.length - 1], b = e.of === S ? getE(e.id) : null;
+    const left = b && !b.dead && !b.built && b.owner === ME && typeof b.placedAt === 'number' ? SITE_UNDO - lead - (S.time - b.placedAt) : -1;
+    if (left > 0) return { b, left };
+    L.pop();
+  }
+  return null;
+}
+
+/** The Undo chip (#undo-site): on show on the map (no mode, no screen over it) while a site can be taken back, its bar running down. */
+function siteUndoTick() {
+  const el = $('undo-site');
+  if (!el) return;
+  const U = UI.inGame && R.mode === 'normal' ? siteUndoNow() : null;
+  if (el.hidden !== !U) el.hidden = !U;
+  if (!U) return;
+  if (!el.onclick) el.onclick = () => undoLastSite();
+  const key = `${U.b.id}:${Math.ceil(U.left)}`;
+  if (el.dataset.key !== key) {
+    el.dataset.key = key;
+    const mac = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent || '');
+    el.innerHTML = `<b>Undo</b><span class="us-name">${BDEFS[U.b.type].name}</span><span class="us-n">${Math.ceil(U.left)}s</span><kbd>${mac ? '⌘Z' : 'Ctrl+Z'}</kbd><i class="us-bar"></i>`;
+    el.title = `Take the ${BDEFS[U.b.type].name} back: everything spent on it comes back`;
+  }
+  el.style.setProperty('--us-left', (U.left / SITE_UNDO).toFixed(3));
+}
+
+/** Undo on the chip (or Ctrl+Z): the newest site placed is taken back, its goods refunded. False if there's none to take back. */
+function undoLastSite() {
+  const U = siteUndoNow();
+  if (!U) return false;
+  UI.siteUndo.pop();
+  const id = U.b.id, name = BDEFS[U.b.type].name;
+  act('undoSite', [id], (r) => {
+    if (!r || r.why) { sfx('error'); toast((r && r.why) || 'That site is gone.', 'warn'); return; }
+    sfx('click');
+    const back = Object.keys(r.back || {}).filter((g) => r.back[g] >= 1).map((g) => `${Math.floor(r.back[g])} ${goodN(g, Math.floor(r.back[g]))}`);
+    toast(`Took back the ${name}: ` + (back.length ? `${back.join(', ')} back in storage.` : 'nothing had been spent on it yet.'), 'info');
+    if (UI.sheetKind === 'bld' && UI.sheetFor === id) closeSheet();
+    if (R.selected === id) R.selected = 0;
+  });
+  siteUndoTick();
+  return true;
 }
 
 /** The group number a Save as group button would use: the selection's own group if it's one already, else the first free one. */
@@ -3666,6 +3737,7 @@ function confirmBanner() {
   act(from ? 'moveBuilding' : 'place', from ? [from.id, x, y] : [type, x, y], (res) => {
     if (!res.ok) { sfx('error'); showBanner(`<span class="err">${res.reason}</span>`, null, 'Cancel'); return; }
     if (from) toast(`Moving the ${BDEFS[type].name}: workers put it together here (no goods needed), and the old one keeps working until it's ready.`, 'good');
+    else noteSiteUndo(res.id);
     UI.moveFrom = 0;
     sfx('place');
     addFx('ring', x + 0.5, y + 0.5, { color: PLAYER_COLORS[ME] });
@@ -7065,6 +7137,7 @@ function uiTick(dt) {
   mpBannerTick();
   AUDIO.suppress = !UI.inGame;
   if (!UI.inGame) menuArtTick();
+  siteUndoTick(); // (hides itself out of a game)
   if (!UI.inGame || !S) return;
   if (S.msgs.length) UI.toastBatch = (UI.toastBatch || 0) + 1; // (the messages of one moment: see toast)
   while (S.msgs.length) {
