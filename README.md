@@ -1203,8 +1203,9 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   a game runs, and let go when it's paused, over, left or hidden. A long press brings up no browser menu.
 - **Warbots by touch** (`touchSelect`, `touchOrder` in js/ui.js): tap one of your warbots or Howitzers to select it
   (tap it again within half a second for all of its kind in view). The selection bar (docked across the bottom in
-  place of the tools on an upright phone) says what they're doing and has **All in view**, **Whole army**, **Box**,
-  **Info** and **Save as group**; while it shows, a tap on the map is the order a right-click gives, with a ring and
+  place of the tools on an upright phone) says what they're doing and has two rows of buttons that fit without
+  scrolling: **All in view**, **Whole army**, **Box** and **Info**, then **Undo**, **Recycle** and **Save as group**
+  (where the bar is under 380 px wide a few words go: Recycle 6, Save group 1, Tap again); while it shows, a tap on the map is the order a right-click gives, with a ring and
   **Undo** for 4 seconds (`ORDER_UNDO`; the `undoCommand` order sends each back to what it was doing). A drag or a
   pinch is never an order. **Box** (or a finger held still 350 ms, `LONG_PRESS` in js/input.js, then dragged, where
   you have warbots out) draws a selection box. With a panel open the bar steps aside and taps inspect.

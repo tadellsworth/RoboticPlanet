@@ -1795,13 +1795,17 @@ function selectBots(ids, add) {
 /** Is a finger, not a mouse, at work? The last pointer used on the map says; before any, the kind of screen. */
 function onTouch() { return INPUT.mouse === undefined ? matchMedia('(pointer: coarse)').matches : !INPUT.mouse; }
 
-/** The selection bar's parts, made once: what's selected and doing what, the mouse's hint, and a finger's buttons. */
+/**
+ * The selection bar's parts, made once: what's selected and doing what, the mouse's hint, and a finger's buttons. Under a
+ * finger the buttons are two rows that fit the bar without scrolling (style.css): who to select (All in view, Whole army,
+ * Box, Info), then what to do with them (Undo, Recycle, Save as group). The words in .sl-long go where the bar is narrow.
+ */
 function initSelBar() {
   $('selbar').innerHTML = `<div class="sel-top"><div class="sel-text"><b id="sel-title"></b> <span id="sel-notes"></span></div>
       <button class="btn small ghost" id="selbar-clear" aria-label="Clear selection">✕</button></div>
     <span class="hint" id="sel-status"></span>
     <span class="hint sel-mouse">Right-click open ground to hold it, a rival building or robot to attack, your Outpost to station them, or a Repair Station to get them fixed. Esc clears.</span>
-    <div class="sel-tools"><button class="btn small primary" id="sel-undo" hidden>Undo</button><button class="btn small" id="sel-view">All in view</button><button class="btn small" id="sel-army">Whole army</button><button class="btn small" id="sel-box">Box</button><button class="btn small" id="sel-info">Info</button><button class="btn small danger" id="sel-recycle" hidden></button><button class="btn small ghost" id="selbar-group" title="Save them as a control group (or ⌘/Ctrl/⌥ + 1–9)"></button></div>`;
+    <div class="sel-tools"><button class="btn small" id="sel-view">All in view</button><button class="btn small" id="sel-army">Whole army</button><button class="btn small" id="sel-box">Box</button><button class="btn small" id="sel-info">Info</button><i class="sel-br"></i><button class="btn small primary" id="sel-undo" hidden>Undo</button><button class="btn small danger" id="sel-recycle" hidden></button><button class="btn small ghost" id="selbar-group" title="Save them as a control group (or ⌘/Ctrl/⌥ + 1–9)"></button></div>`;
   $('selbar-clear').onclick = () => { sfx('click'); selectBots([], false); };
   $('selbar-group').onclick = () => saveGroup(nextGroupNo());
   $('sel-undo').onclick = () => undoOrder();
@@ -1944,12 +1948,12 @@ function refreshSelection() {
   set('sel-notes', (inside ? `<span class="muted">(${inside} in garrisons)</span> ` : '') + (empty ? `<span class="err">${empty} out of Ammo or Fuel</span>` : ''));
   set('sel-status', INPUT.boxArmed ? '<b>Box:</b> drag a finger round warbots (two fingers move the map)'
     : undo ? `<span class="ok">${esc(undo.text)}</span> Undo takes it back.` : (touch ? '<b>Tap the map</b> to send them · ' : '') + esc(selStatus(selectable(ME, UI.sel))));
-  set('selbar-group', `Save as group ${nextGroupNo()}`);
+  set('selbar-group', `Save<span class="sl-long"> as</span> group ${nextGroupNo()}`);
   $('sel-undo').hidden = !undo;
   // Recycle: these robots to the Bot Foundry, to be taken apart (several: a second tap within 3 s).
   const rec = selRecyclable(), armed = rec.length > 1 && UI.recycleArm && performance.now() - UI.recycleArm < 3000;
   $('sel-recycle').hidden = !rec.length;
-  set('sel-recycle', armed ? `Tap again: recycle ${rec.length}` : rec.length === 1 ? 'Recycle this unit' : `Recycle these ${rec.length} units`);
+  set('sel-recycle', armed ? `Tap again<span class="sl-long">: recycle ${rec.length}</span>` : rec.length === 1 ? 'Recycle<span class="sl-long"> this unit</span>' : `Recycle <span class="sl-long">these </span>${rec.length}<span class="sl-long"> units</span>`);
   if (rec.length) $('sel-recycle').title = rec.length === 1 ? `Take it to the Bot Foundry to be taken apart (${recycleText(rec[0].type)} back)` : 'Take them to the Bot Foundry to be taken apart: about half their parts come back';
   refreshGroupBar();
 }
