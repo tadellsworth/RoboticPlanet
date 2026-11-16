@@ -1263,6 +1263,16 @@ const START_STOCK = { fiber: 16, stone: 8, alloy: 8, chip: 4, crystal: 4, fuel: 
 const START_BOTS = { worker: 10, hauler: 5, tanker: 1, agribot: 1 };
 const START_WARBOTS = 4;
 const MIN_FREE_WORKERS = 2;   // workers always kept free for building
+/*
+ * Recycling (see recycleBot): a robot sent to a Bot Foundry (its panel's Recycle this unit, the Robots panel's Recycle
+ * spare Workers) walks or drives there and is taken apart. RECYCLE_SHARE of the Alloy and Chips that went into it (a
+ * round of parts, 1 Alloy and 1 Chip, for each of BOTS[k].parts) goes into that Foundry's stock, rounded down, Alloy
+ * first: a Worker gives 1 Alloy, a Freight Truck 1 Alloy and 1 Chip. Its place under the robot limit is free again.
+ * Spare Workers: those beyond one for each building that takes a Worker (sites too) and MIN_FREE_WORKERS +
+ * RECYCLE_KEEP free for building.
+ */
+const RECYCLE_SHARE = 0.5;
+const RECYCLE_KEEP = 2;
 
 /*
  * The story (LORE.md is canon: Ithaca I, the four vanguards, the Murmur, the Silence). Text only: nothing here changes

@@ -766,6 +766,7 @@ function botZone(u) { return S.zone[tIdx(Math.floor(u.x), Math.floor(u.y))]; }
 /** A civilian bot (any type but warbot) with nothing to do and enough charge for a job. */
 function isIdleWorker(u) {
   if (isArmy(u) || u.dead || u.carry || u.ferryWait || u.dropping || (u.task && u.task.type !== 'home')) return false; // (dropping: still on its parachute)
+  if (u.recycleTo) return false; // on its way to be recycled, sheltering for now (see takeCover)
   if (u.shyUntil > S.time) return false; // just gave way to enemy warbots: it waits a moment (see foeSweep)
   if (u.armorOrder) return false; // a train with armor on order parks at a station to have it fitted (see fitTrainArmor)
   if (u.inside && gunShy(u)) { const b = getE(u.inside); if (b && b.owner === u.owner && foesAt(b)) return false; } // enemy warbots right outside: it stays in
@@ -1653,7 +1654,7 @@ function dispatch(p) {
   // The road networks (truck networks: no Ropeways) a Tanker of ours is on: liquids there wait for a Tanker.
   const tankNets = new Set();
   for (const u of S.bots) {
-    if (u.dead || u.owner !== p) continue;
+    if (u.dead || u.owner !== p || recycling(u)) continue; // (on their way to be recycled: they don't count)
     if (u.type === 'hauler') haulers++;
     if (BOTS[u.type].rail) trains++;
     if (BOTS[u.type].sea && BOTS[u.type].haul) ships++;
@@ -2619,7 +2620,7 @@ function callWorker(owner, b) {
   const zone = S.zone[tIdx(b.x, b.y)];
   let best = null, bs = Infinity;
   for (const u of S.bots) {
-    if (u.dead || u.owner !== owner || u.type !== 'worker' || u.dropping) continue;
+    if (u.dead || u.owner !== owner || u.type !== 'worker' || u.dropping || recycling(u)) continue;
     const here = u.inside ? getE(u.inside) : null, ux = here ? here.x : Math.floor(u.x), uy = here ? here.y : Math.floor(u.y);
     if (!inMap(ux, uy) || S.zone[tIdx(ux, uy)] !== zone) continue;
     const t = u.task, tt = t && t.type;
@@ -2649,6 +2650,12 @@ function updateWorker(u, dt) {
   if (BOTS[u.type].sea && !afloat(u)) { if (S.tick % 30 === u.id % 30) deliverShip(u); return; }
   if (BOTS[u.type].ferry) { updateFerry(u, dt); workerBattery(u, dt); return; }
   const t = u.task;
+  // On its way to be recycled when it took cover (see takeCover): once they've gone, it sets off again.
+  if (!t && u.recycleTo && !(u.shyUntil > S.time)) {
+    const f = getE(u.recycleTo);
+    u.recycleTo = 0;
+    if (f && !f.dead && f.built && f.owner === u.owner) { startRecycle(u, f); return; }
+  }
   if (!t) {
     if (u.shyUntil > S.time && !u.inside && gunShy(u)) { u.idleT = 0; u.vel = 0; } // giving way to enemy warbots, with no cover to make for: it waits here (see foeSweep)
     else if (u.carry) { if (!(u.stashAt > S.time)) stashCarry(u); }
@@ -2699,6 +2706,7 @@ function updateWorker(u, dt) {
     else if (moveAlong(u, dt)) enterBuilding(u, c);
   }
   else if (t.type === 'staff') doStaff(u, t, dt);
+  else if (t.type === 'recycle') doRecycle(u, t, dt);
   workerBattery(u, dt);
 }
 
@@ -3602,6 +3610,188 @@ function spawnFromFoundry(b) {
   // A Howitzer rolls off onto open ground beside the Foundry and waits there for orders (its post).
   // (Yours only: the computer moves its own trucks about, see aiSiege.)
   if (BOTS[kind].siege && !S.players[b.owner].ai) { const t = crawlerPark(u); if (t >= 0) { u.post = { i: t % S.W, j: (t / S.W) | 0 }; u.task = { type: 'park', i: u.post.i, j: u.post.j, home: true }; } }
+}
+
+/* ------------------------------------------------------------------ recycling */
+
+/*
+ * A robot can be sent back to a Bot Foundry to be taken apart (see RECYCLE_SHARE): it drops what it was doing, walks or
+ * drives there (task 'recycle', bld: the Foundry) and is taken apart on arrival; part of its Alloy and Chips go into
+ * that Foundry's stock and its place under the robot limit is free again. Any other order on the way calls it off (so
+ * does Keep this unit on its panel); a Foundry wrecked, captured or dismantled meanwhile leaves it standing where it is.
+ * A Worker or Hauler that has to take cover from enemy warbots on the way sets off again once they've gone (recycleTo).
+ */
+
+/** Could robot u be taken to a Bot Foundry and recycled? Not planes, ships, trains or the Murmur: nothing that can't get there. */
+function recyclable(u) {
+  const bt = u && BOTS[u.type];
+  return !!bt && !u.dead && !bt.wild && !bt.air && !bt.sea && !bt.rail && !u.dropping && !(u.ferryWait && u.ferryWait.ferry);
+}
+
+/** Is robot u on its way to be recycled (or waiting to set off again once it's safe)? */
+function recycling(u) { return !!((u.task && u.task.type === 'recycle') || u.recycleTo); }
+
+/** What a robot of `kind` gives back when it's taken apart: RECYCLE_SHARE of its parts, rounded down, Alloy first ({ alloy, chip }). */
+function recycleYield(kind) {
+  const parts = (BOTS[kind] && BOTS[kind].parts) || 1, inp = BDEFS.foundry.inp, cost = {}, out = {};
+  let n = 0;
+  for (const g in inp) { cost[g] = inp[g] * parts; n += cost[g]; }
+  n = Math.floor(n * RECYCLE_SHARE + 1e-9);
+  while (n > 0) for (const g in cost) if (n > 0 && (out[g] || 0) < cost[g]) { out[g] = (out[g] || 0) + 1; n--; }
+  return out;
+}
+
+/** A count of good g in words: "1 Alloy", "2 Chips". */
+function goodCount(g, n) { return `${n} ${GOOD[g].name}${n !== 1 && g === 'chip' ? 's' : ''}`; }
+
+/** What a robot of `kind` gives back, in words: "1 Alloy", "1 Alloy and 1 Chip". */
+function recycleText(kind) { const got = recycleYield(kind); return Object.keys(got).map((g) => goodCount(g, got[g])).join(' and ') || 'nothing'; }
+
+/** The nearest finished Bot Foundry of u's owner that robot u can get to (on its ground; a road vehicle, by road), or null. */
+function recycleFoundry(u) {
+  const here = u.inside ? getE(u.inside) : null, x = here ? here.x + 0.5 : u.x, y = here ? here.y + 0.5 : u.y;
+  const zone = S.zone[tIdx(Math.floor(x), Math.floor(y))], road = roadBound(u);
+  let best = null, bd = Infinity;
+  for (const b of S.buildings) {
+    if (b.dead || b.owner !== u.owner || !b.built || !BDEFS[b.type].bots || evacuated(b)) continue;
+    if (S.zone[tIdx(b.x, b.y)] !== zone || (road && !botLinked(u, b))) continue;
+    const d = dist2(b.x + 0.5, b.y + 0.5, x, y);
+    if (d < bd) { bd = d; best = b; }
+  }
+  return best;
+}
+
+/** Why robot u can't be sent to be recycled now ('' if it can). */
+function recycleWhy(u) {
+  if (!u || u.dead) return 'That robot is gone.';
+  const bt = BOTS[u.type];
+  if (bt.air || bt.sea || bt.rail) return `${aOrAn(bt.name)} can't get to a Bot Foundry, so it can't be recycled.`;
+  if (!recyclable(u)) return 'It can\'t be recycled right now.';
+  if (u.task && u.task.type === 'recycle') return 'It\'s already on its way to be recycled.';
+  if (recycleFoundry(u)) return '';
+  return S.buildings.some((b) => !b.dead && b.owner === u.owner && b.built && BDEFS[b.type].bots)
+    ? (roadBound(u) ? 'No road leads from it to a Bot Foundry.' : 'It can\'t get to a Bot Foundry from where it is.')
+    : 'Robots are recycled at a Bot Foundry: build one first.';
+}
+
+/** Robot u drops what it was doing (a load it carries is put down in crates) and sets off for Foundry f to be recycled. */
+function startRecycle(u, f) {
+  if (u.ferryWait && !u.ferryWait.ferry) leaveFerryQueue(u); // (waiting at a Port for a ferry: it stops waiting)
+  if (isArmy(u)) readyForOrder(u);
+  else { cancelTask(u); exitBuilding(u); u.march = 0; }
+  if (u.carry) dropCarried(u);
+  u.salvo = null;
+  u.recycleTo = 0;
+  u.task = { type: 'recycle', bld: f.id };
+  u.path = null; u.vel = 0; u.idleT = 0;
+}
+
+/** Send robot u to the nearest Bot Foundry it can get to, to be recycled. '' if it's on its way, otherwise why not. */
+function goRecycle(u) {
+  const why = recycleWhy(u);
+  if (why) return why;
+  startRecycle(u, recycleFoundry(u));
+  return '';
+}
+
+/** Player `owner`'s robots `ids` sent to be recycled (each to the nearest Foundry it can get to): how many went, or why none could. */
+function orderRecycle(owner, ids) {
+  let n = 0, why = '';
+  for (const id of ids) {
+    const u = getE(id);
+    if (!u || u.dead || u.owner !== owner || !BOTS[u.type]) continue;
+    if (u.task && u.task.type === 'recycle') { n++; continue; } // (on its way already)
+    const w = goRecycle(u);
+    if (w) why = why || w; else n++;
+  }
+  return n || why || 'Nothing to recycle.';
+}
+
+/** Call off robot u's trip to be recycled: it stops where it is (a warbot heads back to a garrison, a Worker finds a job). */
+function stopRecycle(u) {
+  if (u.task && u.task.type === 'recycle') { u.task = null; u.path = null; u.vel = 0; }
+  u.recycleTo = 0;
+}
+
+/** A robot on its way to be recycled: on to its Foundry (gone, or no longer its owner's: it stops), and taken apart there. */
+function doRecycle(u, t, dt) {
+  const f = getE(t.bld);
+  if (!f || f.dead || f.owner !== u.owner || !f.built) { stopRecycle(u); return; }
+  const r = travel(u, f.x, f.y, dt);
+  if (r === null) {
+    stopRecycle(u);
+    postMsg(u.owner, `${aOrAn(BOTS[u.type].name)} on its way to be recycled can't get to the Bot Foundry: it has stopped.`, Math.floor(u.x), Math.floor(u.y), 'warn');
+  } else if (r) recycleBot(u, f);
+}
+
+/**
+ * Robot u, at Bot Foundry f, is taken apart: what it gives back (recycleYield) goes into f's stock, and anything it still
+ * had on board (a crate, a Crawler's goods) is left in crates by the Foundry. Its place under the robot limit is free.
+ */
+function recycleBot(u, f) {
+  const got = recycleYield(u.type), P = S.players[u.owner];
+  for (const g in got) bump(f.stock, g, got[g]);
+  if (u.carry) dropCarried(u);
+  if (u.loot) { addLoot(f.x, f.y, { [u.loot]: 1 }); u.loot = null; }
+  if (u.cargo && Object.keys(u.cargo).length) { addLoot(f.x, f.y, u.cargo); u.cargo = null; }
+  u.task = null;
+  for (const b of S.buildings) {
+    if (b.staff === u.id) b.staff = 0;
+    if (b.staffInc === u.id) b.staffInc = 0;
+    if (b.builder === u.id) b.builder = 0;
+  }
+  removeBot(u);
+  P.stats.recycled = (P.stats.recycled || 0) + 1;
+  P.recycledBots = P.recycledBots || {};
+  P.recycledBots[u.type] = (P.recycledBots[u.type] || 0) + 1;
+  // (Seen: a ring and a shower of sparks at the Foundry, what came back floating up, and a clank.)
+  addFx('ring', f.x + 0.5, f.y + 0.5, { color: '#ffc861', r: 1.1 });
+  for (let k = 0; k < 3; k++) addFx('spark', f.x + 0.2 + 0.6 * hash2(u.id, k, 41), f.y + 0.2 + 0.6 * hash2(u.id, k, 43), { color: '#ffd98a' });
+  let k = 0;
+  for (const g in got) addFx('float', f.x + 0.5, f.y + 0.1 - 0.3 * k++, { text: '+' + goodCount(g, got[g]), color: GOOD[g].color });
+  if (isMe(u.owner)) sfx('clank');
+}
+
+/**
+ * How many Workers player p's colony has a use for: one for each building that takes a Worker (sites too: they will
+ * once they're up), and MIN_FREE_WORKERS + RECYCLE_KEEP free for building.
+ */
+function workersWanted(p) {
+  let n = MIN_FREE_WORKERS + RECYCLE_KEEP;
+  for (const b of S.buildings) if (!b.dead && b.owner === p && BDEFS[b.type].staff && !BDEFS[b.type].crew) n++;
+  return n;
+}
+
+/**
+ * Player p's spare robots of `type`: how many it has beyond `keep` (not counting any on their way to be recycled), and
+ * which of them to recycle, at most `max`: [robot, its Foundry] for each, those with nothing to do first, then those
+ * recharging, then those carrying or building (never one running a building), nearest a Foundry first; only ones that
+ * can get to a Foundry. { over, list }.
+ */
+function spareBots(p, type, keep, max) {
+  let have = 0;
+  for (const u of S.bots) if (!u.dead && u.owner === p && u.type === type && !recycling(u)) have++;
+  const over = Math.max(0, have - keep), list = [];
+  if (!over) return { over, list };
+  for (const u of S.bots) {
+    if (u.dead || u.owner !== p || u.type !== type || recycling(u) || !recyclable(u)) continue;
+    const tt = u.task && u.task.type;
+    if (tt === 'staff' || tt === 'flee') continue;
+    const f = recycleFoundry(u);
+    if (!f) continue;
+    const rank = !tt || tt === 'home' || tt === 'cover' ? 0 : tt === 'charge' || tt === 'refuel' || tt === 'repair' ? 1 : 2;
+    const here = u.inside ? getE(u.inside) : null;
+    list.push({ u, f, rank, d: dist2(f.x + 0.5, f.y + 0.5, here ? here.x + 0.5 : u.x, here ? here.y + 0.5 : u.y) });
+  }
+  list.sort((a, b) => a.rank - b.rank || a.d - b.d || a.u.id - b.u.id);
+  return { over, list: list.slice(0, Math.min(over, max === undefined ? over : max)) };
+}
+
+/** Send player p's spare robots of `type` (beyond `keep`, see spareBots) to be recycled, at most `max`. How many went. */
+function recycleSpare(p, type, keep, max) {
+  const { list } = spareBots(p, type, keep, max);
+  for (const s of list) startRecycle(s.u, s.f);
+  return list.length;
 }
 
 /** The rivals still in the game (a Versus game's AI colonies), for the hidden boost menu. */
@@ -4609,6 +4799,7 @@ function foeSweep() {
 function takeCover(u, caught) {
   const t = u.task, P = S.players[u.owner];
   u.coverT = S.time;
+  if (t && t.type === 'recycle') u.recycleTo = t.bld; // (on its way to be recycled: it sets off again once they've gone)
   const foe = nearestFoe(u);
   u.shyOf = foe && BOTS[foe.type].wild ? 'wild' : 'warbots';
   if (isMe(u.owner) && P && S.time - (P.foeMsgAt || -999) > 60) {
@@ -5192,6 +5383,8 @@ function startReload(u, t) {
 function warbotAct(u, dt) {
   u.cd -= dt;
   const t = u.task;
+  // On its way to be recycled: it marches to the Foundry, fighting nothing on the way.
+  if (t && t.type === 'recycle') { u.fight = 0; doRecycle(u, t, dt); return; }
   const defending = t && t.type === 'defend';
   const rally = t && t.type === 'hold' ? rallyById(t.rally) : null;
   // Ordered somewhere (move, station, call back): it marches there without stopping to fight, until it
@@ -5869,6 +6062,7 @@ function doArtySupply(u, t, dt) {
 function updateRocket(u, dt) {
   if (u.rockets === undefined || u.rockets > ROCKET.mag) u.rockets = Math.min(ROCKET.mag, u.rockets ?? ROCKET.mag);
   if (u.task && u.task.type === 'flee') { u.salvo = null; if (rocketPacked(u, dt, true)) doFlee(u, dt); return; }
+  if (u.task && u.task.type === 'recycle') { u.salvo = null; if (rocketPacked(u, dt)) doRecycle(u, u.task, dt); return; } // (dug in: it packs up first)
   u.cd = (u.cd || 0) - dt;
   // A salvo under way: `salvo` shells `gap` s apart, then the crew reloads (`cycle` s) for the next one.
   if (u.salvo) {
@@ -6469,6 +6663,7 @@ function orderPark(owner, ids, i, j) {
 function readyForOrder(u) {
   exitBuilding(u);
   cancelTask(u);
+  u.recycleTo = 0;
   u.fight = 0;
   u.march = 0;
   u.embarkOn = 0; // a new order: no longer heading to board a Ferry
@@ -9104,6 +9299,7 @@ function updateCrawler(u, dt) {
     }
     return;
   }
+  if (t.type === 'recycle') { doRecycle(u, t, dt); return; }
   if (t.type !== 'drive') return;
   const r = travel(u, t.x, t.y, dt);
   if (r === null) { u.task = null; if (!t.park) postMsg(u.owner, 'The Crawler can\'t find a way there.', t.x, t.y, 'warn'); return; }

@@ -31,6 +31,12 @@ const AI_FEW = 6, AI_ENOUGH = 8;
 /** Room kept under the bot limit for the army it wants (a share of the limit at most), and for workers past that. */
 const AI_ARMY_ROOM = 0.4, AI_WORKER_ROOM = 6;
 /**
+ * Scrapping extras (see step 3 of aiThink): with less room under the bot limit than the army it wants, Workers past the
+ * ones its buildings call for and `workers` more, and Haulers past the ones it wants and `haulers` more (`minHaulers` at
+ * least), go to its Bot Foundry to be recycled, at most `batch` on their way at once.
+ */
+const AI_SCRAP = { workers: 4, haulers: 2, minHaulers: 4, batch: 4 };
+/**
  * Crystal: every robot takes a Chip, and every Chip a Crystal. It counts as running short once what's left (in stock and
  * in the ground on its land) would last under AI_CRYSTAL_MINS minutes at the rate it's used (AI_CRYSTAL_BURN a minute at
  * least, once there's a Foundry); a colony short of it docks a Trade Terminal from AI_CRYSTAL_TRADE_AT seconds, and one
@@ -554,6 +560,7 @@ function aiThink(p) {
   // 3) Foundry: keep enough workers, then grow the army. Order specialists when a building needs
   //    one, and enough Haulers (a Freight Truck counts as one and a half) to carry every good in the colony.
   let wantWorkers = staffed + 3 + Math.min(3, sites);
+  const needWorkers = wantWorkers; // (what its buildings call for, before the bot limit has its say)
   // A Freight Truck takes the long runs off the Haulers, but sits idle much of the time: it counts as one and a half.
   const wantHaulers = clamp(Math.ceil(me.length * 0.35), 4, 16) - Math.floor(1.5 * (kinds.truck || 0));
   // Tankers carry every drop of Crude and Fuel: one, and another for every five buildings that make or burn them.
@@ -655,6 +662,16 @@ function aiThink(p) {
     // No room under the bot limit but the army's: only the army's specialists (and a first Tanker) are made.
     if (!civilOk) for (const k in b.orders) if (!(BOTS[k] && BOTS[k].army) && !(k === 'tanker' && !(kinds.tanker > 0))) delete b.orders[k];
     break;
+  }
+  // Scrap the extras: no room under the bot limit for the army it wants (a colony that took a lot of buildings and lost
+  // them again, say, sits at the limit full of Workers it has no work for), so Workers and Haulers past what it needs
+  // (AI_SCRAP) go to its Foundry to be recycled, a few at a time, until there's room: its Foundry fills it with warbots.
+  if (S.mode !== 'colony' && !few && armyRoom > spare) {
+    let away = 0;
+    for (const u of S.bots) if (!u.dead && u.owner === p && recycling(u)) away++;
+    let n = Math.min(AI_SCRAP.batch - away, armyRoom - spare - away);
+    if (n > 0) n -= recycleSpare(p, 'worker', needWorkers + AI_SCRAP.workers, n);
+    if (n > 0) recycleSpare(p, 'hauler', Math.max(AI_SCRAP.minHaulers, wantHaulers + AI_SCRAP.haulers), n);
   }
   // Depots out towards the front keep Cement for building there (and Ammo), and take in nothing that is dug or cut:
   // a Depot among the far Mines was the nearest storage for their Ore, which then lay there, a long run from the

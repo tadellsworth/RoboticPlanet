@@ -470,6 +470,14 @@
           <li>Ships, Freight Trains and planes come from the yards at Ports, Rail Stations and Airfields instead.</li>
         </ul>
         <p>You can have up to <b>90 robots</b> in Versus and <b>150</b> in Colony; at the limit the Foundry and yards stop.</p>
+        <p><b>Recycling.</b> A robot you no longer need still fills a place under the limit. Tap it → <b>Recycle this unit</b> (<kbd>Delete</kbd>): it walks or drives to the nearest Bot Foundry and is taken apart there. Half of what it took to make (rounded down, Alloy first) goes into that Foundry's stock, and its place is free again:</p>
+        <ul class="chain">
+          <li>1 Alloy for a Worker, Hauler, Agribot, Paver or Warbot; 1 Alloy and 1 Chip for a Freight Truck, Tanker or Torch; 2 Alloy and 1 Chip for a Bulwark; 2 and 2 for a Road Train; 3 and 3 for a Crawler (its goods are left in crates by the Foundry).</li>
+          <li>On its way it says <i>Going to be recycled</i>, and <b>Keep this unit</b> on its panel (or any other order) calls it off. If the Foundry is wrecked or captured first, it just stops where it is.</li>
+          <li>Selected warbots: <b>Recycle these 3 units</b> on the selection bar (tap it twice; <b>Undo</b> takes it back for a few seconds).</li>
+          <li><b>Your robots</b> (<kbd>U</kbd>) counts your <b>spare Workers</b>: those past one for each building that takes a Worker (sites too) and 4 kept free for building. <b>Recycle spare Workers</b> sends them all, never one running a building.</li>
+          <li>Planes, ships and trains can't get to a Foundry, so they can't be recycled. Rivals scrap their own spare Workers and Haulers this way when the limit leaves no room for the army they want.</li>
+        </ul>
         <p><b>Batteries.</b> Every bot runs on a battery that drains as it moves and works. Below 30% it goes to recharge once its job is done. Below 12% it's in emergency mode: half speed, and half the work or firepower. With nowhere to charge it carries on, slowly.</p>
         <ul class="chain">
           <li>Bots charge at a <b>Fuel Station</b> (Move tab; 3 Cement, 1 Alloy; four at a time), a deployed <b>Crawler</b> (four) or a <b>Drop Outpost</b> (two), each burning the Fuel stored in it: one Fuel is two full charges.</li>
@@ -477,7 +485,7 @@
           <li>An empty station gets Fuel before any other delivery, and idle bots top up at one close by. Build more near busy areas, above all far from home.</li>
           <li>Trucks, ships and planes have fuel tanks, not batteries: see Fuel, Crude and pipes.</li>
         </ul>
-        <p><b>Your robots.</b> Tap the robot counter in the top bar (<kbd>U</kbd>) for every robot you have by type, what they're all doing and how near you are to the limit, with <b>Show</b> buttons for your warbots, and <b>Show workers on the map</b> (see Views, statistics and settings).</p>
+        <p><b>Your robots.</b> Tap the robot counter in the top bar (<kbd>U</kbd>) for every robot you have by type, what they're all doing and how near you are to the limit, your spare Workers (with <b>Recycle spare Workers</b>), <b>Show</b> buttons for your warbots, and <b>Show workers on the map</b> (see Views, statistics and settings).</p>
         <a class="help-top" href="#hs-top" data-jump="hs-top">Back to top</a>
       </section>
 
@@ -875,7 +883,7 @@
         </ul>
         <p><b>Touch.</b> Drag to move the map and pinch to zoom; in Paths a drag sketches instead, and two fingers move the map. Place a building with two taps on the same tile, or a tap and <b>Build here</b>. Robots can't be box-selected on a touch screen, so give your army its orders from the Army panel. The phone's <b>Back</b> button steps back like <kbd>Esc</kbd>: it closes what's open, and with nothing open it brings up the pause menu (the game saves itself). The screen stays awake while a game runs. Triple-tap the clock for Boosts.</p>
         <ul class="chain">
-          <li><b>Warbots:</b> tap one of yours (or a Howitzer) to select it; tap it again quickly for all of its kind in view. The <b>selection bar</b> has <b>All in view</b>, <b>Whole army</b>, <b>Box</b> (then drag a finger round them; or hold a finger still a moment, then drag), <b>Info</b> and <b>Save as group</b>.</li>
+          <li><b>Warbots:</b> tap one of yours (or a Howitzer) to select it; tap it again quickly for all of its kind in view. The <b>selection bar</b> has <b>All in view</b>, <b>Whole army</b>, <b>Box</b> (then drag a finger round them; or hold a finger still a moment, then drag), <b>Info</b>, <b>Recycle</b> (see Workers, Haulers and the Foundry) and <b>Save as group</b>.</li>
           <li>While it shows, <b>tap the map</b> to send them: open ground to hold it, a rival building or robot to attack, your Outpost to station them, your Repair Station to get them fixed. <b>Undo</b> takes the order back for a few seconds. A drag only moves the map; ✕ clears the selection.</li>
         </ul>
         <p class="keys"><b>Mouse.</b> Scroll to zoom (on a Mac, pinch the trackpad; swipe sideways or Shift + scroll to pan). Pan with <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> or the arrow keys, by resting the mouse at the edge of the window, or by right- or middle-dragging. Click to select, and rest the mouse on anything for a tip.</p>
@@ -896,7 +904,7 @@
           <li><kbd>[</kbd> <kbd>]</kbd> game speed; <kbd>Space</kbd> pause; <kbd>Alt</kbd>+<kbd>Enter</kbd> full screen.</li>
           <li><kbd>Enter</kbd> presses the banner's main button (Build here, Fire...). During an Army order it's <b>Army</b>, back to the panel.</li>
           <li><kbd>Esc</kbd> steps back: it closes a menu or panel, takes back the last stroke of a Paths sketch (<kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>Z</kbd> is Undo there too), leaves the mode you're in, then clears the selection; with nothing open it opens the pause menu.</li>
-          <li>A panel's buttons show their keys (<kbd>Delete</kbd> twice dismantles, <kbd>M</kbd> moves, <kbd>G</kbd> makes a Wall a Gate...). While a panel is open, its keys come first.</li>
+          <li>A panel's buttons show their keys (<kbd>Delete</kbd> twice dismantles, and on a robot's panel recycles it; <kbd>M</kbd> moves, <kbd>G</kbd> makes a Wall a Gate...). While a panel is open, its keys come first.</li>
         </ul>
         <a class="help-top" href="#hs-top" data-jump="hs-top">Back to top</a>
       </section>
@@ -905,7 +913,7 @@
         <h3>Views, statistics and settings</h3>
         <ul class="chain">
           <li><b>Goods</b> (<kbd>Y</kbd>, or tap a counter): stock, made and used a minute, which buildings make and use it, and any shortfall. Switch goods at the top of the panel.</li>
-          <li><b>Your robots</b> (<kbd>U</kbd>): every robot by type and job, against the limit, and where each warbot is, with <b>Show</b>. <b>Show workers on the map</b> rings every Worker (and dots it on the minimap) by what it's doing: green running buildings, orange building or paving, blue carrying, purple recharging, red being repaired, yellow free, with a line to where it's going.</li>
+          <li><b>Your robots</b> (<kbd>U</kbd>): every robot by type and job, against the limit, your spare Workers with <b>Recycle spare Workers</b>, and where each warbot is, with <b>Show</b>. <b>Show workers on the map</b> rings every Worker (and dots it on the minimap) by what it's doing: green running buildings, orange building or paving, blue carrying, purple recharging, red being repaired, grey going to be recycled, yellow free, with a line to where it's going.</li>
           <li><b>Traffic map</b> (<kbd>T</kbd>): see Roads and traffic.</li>
           <li><b>Statistics</b> (<kbd>I</kbd>, the pause menu and the end screen): graphs over time of your bots, land and goods, your <b>Economy size</b> (pick Output: goods made a minute, Buildings, or Workers and vehicles) and, with war on, your <b>Military size</b> (pick Army or Defences), against your rivals in Versus; then how busy each kind of building was over the game. Each building's panel shows how busy it's been lately.</li>
           <li>The <b>end screen</b> says how the game was won or lost, with the time played, buildings, bots, captures and losses. <b>New game</b> plays the same settings on a new planet.</li>
