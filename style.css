@@ -1439,3 +1439,71 @@ a.btn { display: block; text-align: center; text-decoration: none; color: inheri
 .fb-hp { position: absolute; left: -10000px; top: 0; width: 1px; height: 1px; overflow: hidden; }
 .fb-done { display: flex; flex-direction: column; gap: 14px; }
 .fb-thanks { margin: 4px 0 0; font-size: 17px; font-weight: 650; line-height: 1.4; color: var(--text); }
+
+/* ---- Colony goals, Records and achievements (js/goals.js) ---- */
+/* The goals button beside the Goal card (Colony free play): a ladder and how many are done; it flashes when one is. */
+.goals-btn { gap: 4px; color: #d9f6ff; }
+.goals-btn svg { color: var(--accent); }
+.goals-btn.flash { animation: goalflash 1.2s ease-out 2; }
+@keyframes goalflash { 30% { background: rgba(126, 224, 138, 0.4); border-color: rgba(126, 224, 138, 0.9); } }
+@media (prefers-reduced-motion: reduce) { .goals-btn.flash { animation: none; } }
+/* The goals panel: the land milestones, then the ladder tier by tier, each goal with its count, hint and button. */
+.gl-land { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; margin: 0 0 6px; padding: 7px 10px; border-radius: 10px; background: rgba(255, 255, 255, 0.04); font-size: 13px; color: var(--muted); }
+.gl-land b { color: var(--text); }
+.gl-pips { display: inline-flex; gap: 4px; }
+.gl-pips i { width: 10px; height: 10px; border-radius: 50%; border: 2px solid rgba(255, 255, 255, 0.35); box-sizing: border-box; }
+.gl-pips i.on { background: var(--good); border-color: var(--good); }
+.gl-tier h4 { display: flex; align-items: center; gap: 8px; margin: 12px 0 4px; font-size: 14px; color: var(--accent); }
+.gl-num { display: inline-grid; place-items: center; min-width: 26px; height: 20px; padding: 0 4px; border-radius: 6px; background: var(--panel-2); font-size: 12px; color: var(--text); }
+.gl-tc { margin-left: auto; color: var(--muted); font-variant-numeric: tabular-nums; font-size: 13px; }
+.gl-row { display: grid; grid-template-columns: 20px 1fr auto; align-items: start; gap: 8px; padding: 7px 8px; border-top: 1px solid var(--line); }
+.gl-row.next { border: 1px solid rgba(56, 212, 255, 0.55); border-radius: 10px; background: rgba(56, 212, 255, 0.06); }
+.gl-row.done { opacity: 0.6; }
+.gl-mark { width: 18px; height: 18px; margin-top: 1px; border-radius: 50%; border: 2px solid rgba(255, 255, 255, 0.3); box-sizing: border-box; display: grid; place-items: center; font-size: 12px; font-weight: 800; }
+.gl-row.done .gl-mark { background: var(--good); border-color: var(--good); color: #0c1a10; }
+.gl-head { display: flex; align-items: baseline; gap: 6px; font-size: 14px; }
+.gl-tag { font-size: 12px; font-weight: 800; letter-spacing: 0.04em; text-transform: uppercase; color: var(--accent); }
+.gl-prog { margin-left: auto; font-variant-numeric: tabular-nums; font-weight: 700; color: var(--muted); white-space: nowrap; }
+.gl-text { font-size: 13px; color: #d3d9e2; line-height: 1.35; }
+.gl-hint { font-size: 12.5px; color: var(--muted); line-height: 1.35; margin-top: 2px; }
+.gl-go { align-self: center; }
+.bcard.goal-pick { outline: 2px solid var(--accent); outline-offset: 2px; }
+/* The end screen: records that fell and achievements earned in this game. */
+.o-meta { display: flex; flex-direction: column; gap: 5px; margin: 4px 0 10px; padding: 8px 10px; border-radius: 12px; border: 1px solid rgba(255, 209, 102, 0.35); background: rgba(255, 209, 102, 0.06); font-size: 13.5px; text-align: left; }
+.o-meta[hidden] { display: none; }
+.o-meta > div { display: flex; gap: 8px; align-items: baseline; line-height: 1.35; }
+.o-meta i { font-style: normal; flex: none; color: #ffd166; }
+.o-meta .om-ach i { color: var(--accent); }
+/* The Records screen (main menu). */
+#screen-records {
+  z-index: 25; background: rgba(10, 11, 15, 0.9);
+  --accent: #ff6b4a; --accent-ink: #14213d; --panel: rgba(17, 27, 51, 0.95); --panel-2: rgba(30, 44, 78, 0.96);
+  --line: rgba(241, 228, 211, 0.12); --text: #f4ece2; --muted: #b9ad9f;
+}
+#screen-records .card { background: var(--panel); border-color: rgba(241, 228, 211, 0.14); }
+.card.records-card { width: min(100%, 620px); }
+#screen-records .help-body h3 { display: flex; align-items: baseline; gap: 8px; color: #ff8a66; }
+.rc-count { margin-left: auto; font-size: 13px; color: var(--muted); font-weight: 600; }
+.rc-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(132px, 1fr)); gap: 8px; margin: 10px 0 4px; }
+.rc-tile { background: rgba(255, 255, 255, 0.04); border: 1px solid var(--line); border-radius: 12px; padding: 8px 10px; min-width: 0; }
+.rc-tile span { display: block; font-size: 12px; color: var(--muted); }
+.rc-tile b { display: block; font-size: 20px; font-variant-numeric: tabular-nums; }
+.rc-tile small { display: block; font-size: 12px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rc-fast { width: 100%; border-collapse: collapse; font-size: 13px; font-variant-numeric: tabular-nums; }
+.rc-fast th, .rc-fast td { padding: 5px 4px; border-top: 1px solid var(--line); text-align: right; }
+.rc-fast th:first-child { text-align: left; font-weight: 650; }
+.rc-fast thead th { color: var(--muted); font-weight: 650; font-size: 12px; border-top: 0; }
+.rc-achs { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 8px; margin-top: 6px; }
+.rc-ach { display: flex; gap: 10px; padding: 8px 10px; border-radius: 12px; border: 1px solid var(--line); background: rgba(255, 255, 255, 0.03); opacity: 0.62; }
+.rc-ach.on { opacity: 1; border-color: rgba(255, 107, 74, 0.45); background: rgba(255, 107, 74, 0.07); }
+.rc-ach > i { font-style: normal; font-size: 18px; line-height: 1.2; color: var(--muted); }
+.rc-ach.on > i { color: var(--accent); }
+.rc-ach > div { min-width: 0; flex: 1; }
+.rc-ach b { font-size: 14px; }
+.rc-ach p { margin: 2px 0; font-size: 13px; color: #d3d9e2; line-height: 1.35; }
+.rc-ach small { font-size: 12px; color: var(--muted); }
+.rc-of { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; margin-left: 4px; }
+.rc-lore { float: right; margin-top: -4px; }
+.rc-foot { display: flex; justify-content: center; margin: 14px 0 4px; }
+#rc-forget.arm { color: #ff9aa8; border-color: rgba(255, 90, 110, 0.6); }
+@media (pointer: coarse) { #screen-records .btn, .m-links .m-pill { min-height: 44px; } }

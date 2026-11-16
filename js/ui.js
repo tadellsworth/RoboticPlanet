@@ -94,6 +94,7 @@ function initUI() {
   helpPagerInit();
   initLore();
   initFeedback(); // (Send feedback: main menu and pause menu, js/feedback.js)
+  initMeta(); // (Colony goals, Records and achievements: js/goals.js)
   $('screen-help').addEventListener('click', (e) => {
     const a = e.target.closest && e.target.closest('[data-jump]');
     if (!a) return;
@@ -2634,7 +2635,7 @@ function helpPage(id) { pagerShow(HELP_PAGER, id); }
  * Its pictures are fetched the first time it opens (data-src), all at once, so the service worker keeps them for
  * offline play from then on. A phone's Back button closes it: opening adds an entry to the history, closing takes it back.
  */
-function openLore() {
+function openLore(at) {
   const scr = $('screen-lore');
   // (In the one-file copy of the game the pictures are a bundle beside the page, lore.js, fetched the first time.)
   const show = () => { for (const img of scr.querySelectorAll('img[data-src]')) { const d = window.LORE_DATA; img.src = (d && d[img.dataset.src]) || img.dataset.src; img.removeAttribute('data-src'); } };
@@ -2645,7 +2646,7 @@ function openLore() {
     document.head.appendChild(s);
   } else show();
   scr.hidden = false;
-  pagerShow(LORE_PAGER, pagerSections(LORE_PAGER)[0].id);
+  pagerShow(LORE_PAGER, at && $(at) ? at : pagerSections(LORE_PAGER)[0].id); // (`at`: a page to open on, from the Records screen)
   try { history.pushState({ lore: 1 }, ''); } catch (e) { /* no history to add to (a sandboxed frame) */ }
 }
 
@@ -2729,6 +2730,7 @@ function showGameOver() {
   ].map(([k, v]) => `<span>${k}</span><span>${v}</span>`).join('');
   // Won a game against the computer: you can play on (keepPlaying), if it was a fun one and there's more fighting to do.
   $('o-keep').hidden = !(won && !MP.on);
+  metaGameOver(); // (records that fell and achievements earned: js/goals.js)
   $('screen-over').hidden = false;
 }
 
@@ -3038,6 +3040,7 @@ function showMissionOver() {
   }
   $('o-menu').textContent = 'Missions';
   UI.overMenu = () => { openMissions(); UI.msSel = won && k + 1 < MISSIONS.length ? k + 1 : k; UI.msDiff = M.diff; renderMissions(); };
+  metaGameOver(); // (achievements earned: js/goals.js)
   $('screen-over').hidden = false;
 }
 
@@ -4969,7 +4972,7 @@ function openSheet(kind, id, html) {
  * map and what the panel is about stay in view above it; full; or just its title strip. The grab handle at the
  * top is dragged between them (further down closes the panel) or tapped to switch between half and full.
  */
-const SHEET_TALL = { build: 1, goods: 1, pop: 1, msgs: 1 }; // lists and charts open at full height: nothing on the map to watch
+const SHEET_TALL = { build: 1, goods: 1, pop: 1, msgs: 1, goals: 1 }; // lists and charts open at full height: nothing on the map to watch
 
 function setSheetSize(size) {
   const s = $('sheet');
@@ -6953,6 +6956,7 @@ function updateHUD() {
   if ($('clock').innerHTML !== ct) $('clock').innerHTML = ct;
   $('clock').title = todEnabled() ? TOD_NAMES[todName()] + (todMode() === 'night' ? ' (always)' : '') : '';
   updateWinCard(); // (first: folded under the Goal chip, it leaves a summary there)
+  goalsHUD(); // (Colony free play: the goals button beside the Goal card, js/goals.js)
   const obj = $('objective');
   // Where the screen is small the card folds away at the first tap on the map (onMapTap) and opens again for each
   // new step, unless you've folded or opened it yourself. Folded, it still says how many buildings have no road.
@@ -7252,5 +7256,6 @@ function uiTick(dt) {
   updateMapTip();
   UI.hudT -= dt;
   if (UI.hudT <= 0) { UI.hudT = 0.25; updateHUD(); refreshSheet(); placeMinimap(); refreshSelection(); missionCoach(); syncWakeLock(); nightfallLine(); }
+  metaTick(dt); // (Colony goals, records and achievements, once a second: js/goals.js)
   if (S.winner >= 0 && !UI.overShown) showGameOver();
 }

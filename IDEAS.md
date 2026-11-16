@@ -117,7 +117,8 @@ or drop.
 - **Challenge modifiers** in Custom Game, mixed freely: no roads over water, half Fuel, a dust storm that never ends,
   a rival with a head start. Each won gives a small badge on the planet card.
 - **A ladder of Colony goals** beyond land share: "run 3 Freight Trains", "a Ropeway to the canyon floor",
-  "100 Alloy a minute". It leads players into the logistics most never touch.
+  "100 Alloy a minute". It leads players into the logistics most never touch. (Done, Nov 2026: four tiers of Colony
+  goals behind the goals button beside the Goal card, `js/goals.js`.)
 
 ### Deeper play without new systems
 - **Truce and tribute in free-for-all:** pay a rival (say 20 Alloy) to leave you alone, or to hit the leader, for
@@ -153,7 +154,8 @@ or drop.
 - **Shared colony co-op:** two players run one colony against the computer, splitting the work (one builds, one
   fights), on the lockstep that's there.
 - **Records and achievements:** fastest win per map shape, biggest colony, first Ropeway and so on, kept on the
-  device and shown on the planet card. Some can open Archive pages, tying them to the lore.
+  device and shown on the planet card. Some can open Archive pages, tying them to the lore. (Done, Nov 2026, on a
+  Records screen from the main menu rather than the planet card: `js/goals.js`. Open: show a planet's best on its card.)
 
 ## Trade routes and the finished-goods market (planned, after the current list)
 
