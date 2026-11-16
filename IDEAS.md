@@ -47,6 +47,30 @@ Still open: a neutral, shared exchange the rivals compete over; contracts for Ch
 - **Graphics.** A first pass is done (rounded shorelines on ponds, lakes and seas, by day and in the night glow). Worth
   another look when new art comes in.
 
+## Trade routes and the finished-goods market (planned, after the current list)
+
+The owner wants trade to be a steady supply line all game, not a deal or two, so trade convoys become a constant
+target and the computer rivals build and guard their own. Plan so far (Nov 2026):
+
+- **Standing trade routes** replace one-off contracts: set a route at the Terminal once ("send Stone, bring back
+  Alloy") and it runs until changed. Merged with the finished-goods market: the market board sets what sells and buys
+  at what price, the route moves the goods.
+- **One convoy every 2 minutes or so** per colony (decided): the Trade Post's ledger takes one delivery per window,
+  so convoys run on a schedule.
+- **Small runs at modest rates:** about half a Road Train load a run at ~55-60% of value, the price of a good easing
+  with each run and recovering over time, so a route settles at about one small factory's output. A cheaper
+  Terminal (about 8 Cement, 3 Alloy) so it is worth building early.
+- **The Trade Post is a no-fire zone** (decided): nothing shoots within its ground, so the fighting happens along the
+  routes, never at the dock.
+- **Convoys worth fighting over:** a flag on trade convoys, the route on the minimap, an alert when one is hit, and a
+  destroyed convoy's cargo spilling as loot crates the raiders can carry home; an Escort option at the Terminal.
+- **The rivals:** they build a Terminal earlier, run their own route, escort it with 2-3 warbots and an Outpost on the
+  way; the Salvager makes enemy convoys its favourite target (outside the guns' reach).
+- **Open: raw materials.** Can they be traded without being exploited (Stone never runs out)? Options to test:
+  raw goods sell only at a low rate and buy at a markup; no raw-for-raw swaps; a good's price falls faster the more
+  of it you sell; Stone sells only as Cement; a cap per window. Decide with balance runs.
+- The *Wren* keeps its occasional big deals as the one-off event.
+
 ## Missions: follow-ups from the tutorial campaign
 
 The campaign is now the tutorial, in seven chapters (see the README). Held back, or noticed while each mission was
