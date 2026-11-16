@@ -66,6 +66,7 @@ The name comes from the Ithaca Catalog, a pre-war list of candidate homeworlds n
 | The White | Polar snow | Ore locked in ice. The coldest posting on Ithaca I. |
 | Cinderlands | Volcanic ash | Crust cracked open by the oldest strikes. |
 | The Bloom | Violet alien growth | Native life feeding on fallen Crystal (see Native life). |
+| The Hollow | Underground caverns | The Murmur's lair beneath the Bloom (see The Hollow). |
 
 Terrain names: sky islands are *Floaters*, deep canyons are *Rifts*, craters are *strike sites*.
 
@@ -111,9 +112,80 @@ No robot has ever logged one alone. The Murmur is always plural, and it is the t
 - **They're glimpsed, not seen.** A sensor blip, road lights going dark one by one at night, a Hauler that stops reporting.
 - **Their tunnels run under the old battlefields,** and the Research Lab finds the network has kept spreading for decades.
 - **They nest near Crystal seams and strike sites.** The violet Bloom is their ecosystem above ground. They have never been found on the moon.
+- **They grow the Bloom.** The Bloom is a root network the Murmur cultivate along their tunnels. Its veins carry the charge they drain back down to the nests: their version of roads and power lines. Wherever the Bloom spreads, the tunnels below are spreading too.
 - **No vanguard has orders about them.** The Accord assumed the planet was empty. Torches were first built to burn back the Bloom for farmland.
 - **Regional variants (art suggestion):** armored Rust variants, pale slow ones in the White, and Bloom variants that glow violet at night.
 - **A thread for Colony mode:** the tunnels are laid out in patterns the Research Lab can't explain. Are the Murmur only animals? Never answer outright.
+
+### Art brief: the Murmur
+
+Build them from real burrowing mammals, not insects. Two animals do most of the work: the star-nosed mole (the tendril star on its nose becomes their face) and the naked mole-rat (a real mammal that lives in colonies with one breeding queen and worker castes).
+
+**Body**
+
+- Low, heavy and barrel-chested, like a mole crossed with a badger.
+- Near-black velvet fur, dusted with Crystal grit that glints violet.
+- Eaten Crystal hardens under the skin and splits through at the shoulders and spine like broken geodes. It glows when they're full of charge and dims when they're hungry.
+- Huge spade forelimbs with five long fingers, turned outward like a mole's. They should look a little too much like hands.
+- No visible eyes. In place of a nose, a star of tendrils that senses electricity. It flares open and pulses when it finds power. They feed by pressing it against a power line, and the lights dim as they drink.
+
+**What makes them scary without making them human**
+
+- **They're patient.** Robots log them standing still at the edge of sensor range, facing the colony. Then they're gone.
+- **They plan.** Road lights going dark one by one is the Murmur cutting the power before they come.
+- **They keep things.** They drag batteries and Chips underground, and the Research Lab finds them laid out in rows in the tunnels.
+- **They answer.** The sound in the ground sometimes repeats the rhythm of the Uplink signal back.
+- **They take their dead with them.** No robot has ever recovered a whole one.
+
+**Forms**
+
+| Form | Size | Role |
+| --- | --- | --- |
+| Runners | Dog-sized | Fast, in packs. Raids are mostly these. |
+| Breakers | Rhino-sized | Heavy raiders, plated in crystal growths. |
+| The Deep | Unknown | The heart of each nest, like a mole-rat queen. Never seen whole: only its tendril star, wider than a Hauler, rising from the mound. |
+
+**The Bloom, their answer to the Creep**
+
+Moles leave raised ridges where they tunnel, so the Bloom follows those ridges instead of spreading as a carpet. Heaved lines of earth branch toward power sources, with violet root-veins breaking through along them. At night, pulses of light run along the veins back to the nest: a dark mirror of the player's road network. Nests are giant molehills of churned earth, ringed with crystal spires, veins running out from them. (Art direction only; the Bloom plays as it does now.)
+
+**Rules:** no shells, mandibles, extra legs, wings or slime. Fur, skin, soil and stone only. Palette: near-black fur, violet glow and pale lilac crystal against the robots' clean lights.
+
+## The Hollow: the Murmur's lair
+
+The Hollow is a cavern system under the Bloom, larger than any region on the surface, and it is where the Murmur live. Ground radar under the Bloom kept returning one word, "hollow," and the name stuck. The Pathfinder never mapped it; every robot map still marks it "unsurveyed."
+
+**Why the robots go down.** Ringfall punched breaches through the cavern roof and exposed the richest Crystal seams on the planet, the ones the Murmur have fed on for ages. The Carriers drop Command Bases through the breaches. Nobody ordered the war underground; the Crystal pulled it there.
+
+**The look**
+
+- Caverns so large the ceiling disappears into the dark. The only daylight falls down the breach shafts in columns of pale gold.
+- Weightless Crystal masses hang in midair, some still tethered to the ceiling by roots: the Hollow's version of sky islands.
+- The Bloom covers walls and ceiling as well as the floor. Its veins pulse violet, and tunnel ridges lace the ground.
+- Black underground lakes and slow rivers, faintly lit at the edges.
+- Chasms that drop into deeper dark, crossed by robot bridges.
+- Stone pillars worn smooth in spiral patterns. Too regular to be natural, though no log says so.
+- Side chambers where robot parts lie laid out in rows.
+- At the center, a chamber the size of a cathedral holds the largest mound, and somewhere inside it, the Deep.
+- It is always night. The colony's roads become the main light: ribbons of white and amber threading through violet dark.
+
+**Sound:** the murmur never stops down here. It grows louder toward the center, and it goes dead silent just before a raid.
+
+**Gameplay hooks (optional, pick what fits)**
+
+| Surface feature | Hollow version |
+| --- | --- |
+| Sky islands | Floating Crystal masses |
+| Canyons and rifts | Chasms |
+| Water for ports and ferries | Underground lakes and rivers |
+| Starting positions | Command Bases land only beneath a breach |
+| Uplinks | Stand under breaches, the only places with a line to the sky |
+| Meteor showers | Ringfall falls only through the breaches, in concentrated drops |
+| Dust storms | Tremors that shake dust and rock from the ceiling |
+| Solar flares | None reach underground; the one biome safe from them |
+| Stalks and Bio Farms | Little or no light, so Fiber comes from harvesting Bloom veins, which draws the Murmur |
+| Murmur nests | More than any other map, with the Deep's mound at the center |
+| Cargo planes and bombers | Fly only through the largest caverns and breach shafts |
 
 ## Rival command doctrines
 
@@ -267,12 +339,17 @@ How the game hints at it:
 - [x] Name the four Sponsors? No: they stay faceless (decided).
 - [x] Are the Murmur only animals? Never answered: it stays ambiguous (decided).
 - [ ] Should the Pathfinder wreck appear as a map landmark? (Held for a later expansion; see IDEAS.md.)
+- [ ] Murmur names in the game: the art brief's forms (Runners, Breakers, the Deep) or the classes adopted so far
+  (Scuttler, Brute, Leech, Spitter, Delver), or both (forms as sizes, classes as kinds)?
 
 ### In the game
 
-Adopted names: the trader ship is the *Wren*; meteor showers are **Ringfall**; the rival styles are the doctrines
-(Balanced: the Steward, Turtle: the Warden, Raider: the Salvager, Rusher: the Herald, Tycoon: the Architect); "the
-Murmur" is the blanket name for the creatures, with classes: the Scuttler, the Brute, the Leech (drains charge), the
-Spitter and the Delver; their look is direction B, crystal-backed but mole-like (design/murmur); the Lunar biome is
-Penelope, where no Murmur live. The new-game setup keeps the plain biome names (Red desert, Forest...); the region
-names are for flavor elsewhere. On the setup screen each rival doctrine has a tooltip saying in depth how it plays.
+Decisions the owner made in chat (Nov 2026), kept here with the bible. Adopted names: the trader ship is the *Wren*;
+meteor showers are **Ringfall**; the rival styles are the doctrines (Balanced: the Steward, Turtle: the Warden, Raider:
+the Salvager, Rusher: the Herald, Tycoon: the Architect); "the Murmur" is the blanket name for the creatures, with
+classes so far: the Scuttler, the Brute, the Leech (drains charge), the Spitter and the Delver (see the open decision
+above); their look so far is direction B, crystal-backed but mole-like (design/murmur), to be reworked to the art brief
+above; the Lunar biome is Penelope, where no Murmur live. The new-game setup keeps the plain biome names (Red desert,
+Forest...); the region names are for flavor elsewhere. On the setup screen each rival doctrine has a tooltip saying in
+depth how it plays. Planned: the Hollow as a new biome and map once the Murmur design is settled, and later a campaign
+mode built around the Murmur.
