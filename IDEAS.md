@@ -132,6 +132,19 @@ minute no longer counts in its build plan (`aiShut`: another goes up out of reac
 and a half minutes with no new warbot for two, every warbot goes, the Command Base's last one too.) (Fixed: in a 2 v 2 a rival
 that captured a Command Base had two road networks, each counting as home, so Crystal piled on one side while the Chip
 Fabs on the other went without, and its army stopped growing; `aiJoinBases` now joins a captured base by road.)
+(Fixed: in long 2 v 2 games on Crossroads the colony left on the losing side ran out of Crystal, so of Chips, and made
+no more warbots while Alloy piled up; seed 3 ran to 59 minutes and seed 8 past an hour. Nearly all its Crystal went
+into Chips (turret shots were a few in a hundred), but only one or two Taps were at work while it burned it twice as fast,
+it counted Crystal short by tiles only once three clusters were left, and its Trade Terminal took Alloy for Stone and
+never got a lot: the lot was fetched from the nearest building holding any of the good, a Harvester's four Fiber or a
+Depot's last Stone, under a Road Train's load, so no train went. Now Crystal is judged by how long it lasts, Taps come
+first, the Terminal and its Road Train come early and buy Crystal or Chips, its Smelters rest on piled-up Alloy so their
+Ore and Fiber can pay for it, and the lot comes from storage with a train load; those two games end at 28 and 34
+minutes.) Still open: the colony left winning a 2 v 2 can sit at the bot limit with some 47 workers and under 20
+warbots, Alloy piling up for want of room, not Crystal, and never finish the other (seed 4 now runs past 75 minutes
+that way; `AI_ARMY_ROOM` keeps room only from new workers, it never thins the ones it has); a colony left with no
+Chips and no Road Train can't trade at all; and on Islands (seed 5, two players) a rival with 35 warbots lands only
+four to six at a time (most sit in far garrisons) and hadn't taken a beaten rival with one warbot after an hour.
 
 ## Balance decisions
 
