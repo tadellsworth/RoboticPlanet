@@ -115,15 +115,16 @@ function swarmer(L, K, G, GL, f, v) {
 
   // ---- four limbs (in GL: the only parts that move)
   for (const s of [-1, 1]) {
-    K.forelimb(GL, { side: s, f, shoulder: [0.6, 0.45, s * 0.12 * fat], wrist: [0.95, 0.32, s * 0.31 * fat], palm: 0.5, claw: 0.44, armR: 0.2 * fat,
-      stride: 0.19 * legK, lift: 0.14, skin: skinM, arm: bodyM, clawMat: clawM, splay: 0.62, tilt: 0.3 });
+    K.forelimb(GL, { side: s, f, shoulder: [0.6, 0.45, s * 0.12 * fat], wrist: [0.98, 0.32, s * 0.36 * fat], palm: 0.6, claw: 0.46, armR: 0.2 * fat,
+      stride: 0.19 * legK, lift: 0.14, skin: skinM, arm: bodyM, clawMat: clawM, splay: 0.72, tilt: 0.3 });
     K.hindlimb(GL, { side: s, f, hip: [-1.02, 0.42, s * 0.2 * fat], foot: [-1.26, 0.08, s * (0.4 + 0.06 * legK) * fat], len: 0.32, r: 0.13 * fat,
       stride: 0.18 * legK, lift: 0.12, skin: skinM, leg: bodyM, clawMat: clawM, out: 0.75 });
   }
 
-  // ---- Rust: armour. Overlapping scales of rust-red crust down the back, like a pangolin's (iron grown into the skin)
+  // ---- Rust: armour. Overlapping scales of rust-red crust down the back, like a pangolin's (iron grown into the skin).
+  // Only on the back: the fur shows on the flanks, so the outline stays furry (plates out to the edge read as a grub's rings)
   if (v === 'rust') {
-    K.scales(G, body, { x0: -1.42, x1: 0.8, rows: 9, cols: 5, amax: 1.2, size: 0.5, width: 0.82, mat: K.crust(pal.plate, { rough: 0.8 }), lift: 0.28,
+    K.scales(G, body, { x0: -1.42, x1: 0.8, rows: 9, cols: 5, amax: 0.5, size: 0.42, width: 0.82, mat: K.crust(pal.plate, { rough: 0.8 }), lift: 0.28,
       skip: (i, j) => i % 2 === 0 && j === 2 && i > 0 && i < 8 && i !== 4 });
   }
   // Bloom: soft glowing fronds growing between the shards (the Bloom's own life, riding on its back)
@@ -136,17 +137,18 @@ function swarmer(L, K, G, GL, f, v) {
   }
 
   // ---- the shards: hackles of crystal down the spine (tallest over the shoulders), and a spray out of each shoulder
-  const n = v === 'rust' ? 0.8 : v === 'white' ? 0.85 : 1, rk = 1;
+  const n = v === 'rust' ? 0.8 : v === 'white' ? 0.72 : 1, rk = 1;
   const collar = v === 'white' ? bodyM : rawMat(K, v);
   const spine = v === 'rust'
     ? [[0.52, 0, 0.6, 0.075, 1.2], [0.0, 0, 0.66, 0.08, 1.3], [-0.55, 0, 0.6, 0.075, 1.35], [-1.08, 0, 0.5, 0.07, 1.4]]
     : [[0.62, 0, 0.42, 0.07, 0.8], [0.4, -0.16, 0.62, 0.085, 1.0], [0.34, 0.18, 0.58, 0.08, 1.0], [0.1, -0.06, 0.8, 0.1, 1.1],
        [-0.14, 0.16, 0.7, 0.09, 1.15], [-0.36, -0.17, 0.72, 0.09, 1.2], [-0.58, 0.1, 0.64, 0.085, 1.25], [-0.82, -0.12, 0.56, 0.075, 1.3],
        [-1.02, 0.13, 0.46, 0.065, 1.35], [-1.22, -0.03, 0.36, 0.055, 1.4]];
-  K.spineShards(G, body, spine.map(([x, a, l, r, lean]) => [x, a, l * n, r * rk, lean, 1.2]), X, { collarMat: collar });
+  const keep = v === 'white' ? spine.filter((_, i) => i % 2 === 0 || i === 1) : spine;
+  K.spineShards(G, body, keep.map(([x, a, l, r, lean]) => [x, a, l * n, r * rk, lean, 1.2]), X, { collarMat: collar });
   if (v !== 'rust') for (const s of [-1, 1]) {
     const { p, n: nn } = K.onBody(body, 0.42, s * 0.8, 0.05);
-    K.cluster(G, p, [nn[0] - 0.9, nn[1] + 0.2, nn[2] * 1.3], 3, 0.5 * n, 0.075, X, 0.45, { collarMat: collar });
+    K.cluster(G, p, [nn[0] - 0.9, nn[1] + 0.2, nn[2] * 1.3], v === 'white' ? 2 : 3, 0.5 * n, 0.075, X, 0.45, { collarMat: collar });
   }
 }
 
@@ -628,7 +630,7 @@ function spitter(L, K, G, GL, f, v, spit) {
   }
 
   // ---- regional extras
-  if (v === 'rust') K.scales(G, body, { x0: -1.35, x1: 0.5, rows: 8, cols: 5, amax: 1.2, size: 0.5, width: 0.82, mat: K.crust(PAL.rust.plate, { rough: 0.8 }), lift: 0.28, skip: (i, j) => j === 2 && i % 2 === 0 && i > 0 && i < 7 });
+  if (v === 'rust') K.scales(G, body, { x0: -1.35, x1: 0.5, rows: 8, cols: 5, amax: 0.5, size: 0.42, width: 0.82, mat: K.crust(PAL.rust.plate, { rough: 0.8 }), lift: 0.28, skip: (i, j) => j === 2 && i % 2 === 0 && i > 0 && i < 7 });
   if (v === 'bloom') bloomFronds(L, K, G, body, 0.2, 8);
 
   // ---- the crystal: short chevrons down the back (pairs leaning out to either side), the biggest behind the glands
@@ -706,7 +708,7 @@ function delver(L, K, G, GL, f, v, surface) {
 
   if (!surface) {
     K.tail(G, { base: [-2.7, 0.52, 0], tip: [-3.1, 0.42, 0.03], r: 0.055, mat: v === 'white' ? furM : skinM, bristle: K.plain('#8a7f78', 0.7) });
-    if (v === 'rust') K.scales(G, body, { x0: -2.4, x1: 1.0, rows: 11, cols: 5, amax: 1.2, size: 0.48, width: 0.82, mat: K.crust(PAL.rust.plate, { rough: 0.8 }), lift: 0.22, skip: (i, j) => j === 2 && i % 3 === 1 });
+    if (v === 'rust') K.scales(G, body, { x0: -2.4, x1: 1.0, rows: 11, cols: 5, amax: 0.5, size: 0.4, width: 0.82, mat: K.crust(PAL.rust.plate, { rough: 0.8 }), lift: 0.22, skip: (i, j) => j === 2 && i % 3 === 1 });
     if (v === 'bloom') bloomFronds(L, K, G, body, 0.2, 10, 0.24);
   }
 
