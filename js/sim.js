@@ -1697,12 +1697,16 @@ function dispatch(p) {
     b.unlinked = !P.noHaulers && needsRoad(b) && !onHomeG(b) && !b.airSupply && !convLinked(b) && !bySea(b) &&
       !hubs.some((s) => s !== b && footLinked(s, b));
   }
-  const minFree = siteCount(p) > 0 ? MIN_FREE_WORKERS : 1;
+  // (A rival AI in triage keeps one free only while it has a site to build or no Hauler to carry for it, and with no
+  // Hauler a link of its chain that holds a round of what it works with takes even that one (lastLink), giving it back
+  // to carry once the round is used: two workers left after a raid otherwise carried for ever and nothing was made.)
+  const minFree = P.triage ? (siteCount(p) > 0 || P.noHaulers ? 1 : 0) : siteCount(p) > 0 ? MIN_FREE_WORKERS : 1;
+  const lastLink = (b) => !!(P.triage && P.noHaulers && BDEFS[b.type].inp && hasRound(b));
   // Can this colony charge anywhere right now (a Fuel Station with Fuel)? Can its trucks fill up?
   P.canCharge = blds.some((b) => b.built && BDEFS[b.type].charger && !chargerDry(b));
   P.canRefuel = blds.some((b) => b.built && (BDEFS[b.type].store || BDEFS[b.type].charger) && (b.stock.fuel || 0) - (b.res.fuel || 0) >= 1);
   if (free < minFree) {
-    const cands = blds.filter((b) => b.built && b.staff && b.type !== 'foundry' && !BDEFS[b.type].crew);
+    const cands = blds.filter((b) => b.built && b.staff && !BDEFS[b.type].crew && !lastLink(b) && (b.type !== 'foundry' || (P.triage && P.noHaulers)));
     cands.sort((a, c) => releaseScore(c) - releaseScore(a));
     if (cands.length) {
       unstaff(cands[0]);
@@ -1814,7 +1818,7 @@ function dispatch(p) {
   //    while a worker close by will soon be free: see nearSoon).
   for (const b of blds) {
     if (!idle.length) return;
-    if (!b.built && !b.builder && siteFrac(b) > b.progress + 0.01) {
+    if (!b.built && !b.builder && siteFrac(b) > b.progress + 0.01 && !(P.danger && dangerAt(p, b.x, b.y))) { // (a rival AI's: see noteDanger)
       const u = take(b.x, b.y, 'build');
       if (u && nearSoon(u, b)) { idle.push(u); continue; }
       assignBuild(u, b);
@@ -1823,7 +1827,7 @@ function dispatch(p) {
   // 1b) A worker for every building you've paid to repair.
   for (const b of blds) {
     if (!idle.length) return;
-    if (b.built && b.fixLeft > 0 && !b.fixer) {
+    if (b.built && b.fixLeft > 0 && !b.fixer && !(P.danger && dangerAt(p, b.x, b.y))) {
       const u = take(b.x, b.y, 'build');
       if (u && nearSoon(u, b)) { idle.push(u); continue; }
       if (u) assignFix(u, b);
@@ -1834,11 +1838,12 @@ function dispatch(p) {
     .sort((a, c) => prioRank(a) - prioRank(c) || staffPriority(a) - staffPriority(c) || a.born - c.born);
   for (const b of staffQueue) {
     if (!idle.length) return;
-    if (free <= minFree) {
+    if (free <= minFree && !lastLink(b)) {
       if (S.time - (S.players[p].lastShortMsg || -99) > 60) {
         S.players[p].lastShortMsg = S.time;
         postMsg(p, 'Not enough workers to run every building. Build a Bot Foundry to make more.', b.x, b.y, 'warn');
       }
+      if (P.triage && P.noHaulers) continue; // (a link further down the queue may hold its round)
       break;
     }
     const u = take(b.x, b.y, 'staff');
@@ -2391,6 +2396,7 @@ function nextPaveTile(u, p, maxD) {
     const by = S.paveRes[t];
     if (by && getE(by) && !getE(by).dead) continue;
     if (skip[t] > S.time || hotFor(p, t)) continue; // (not where an enemy gun reaches, or enemy warbots are about)
+    if (S.players[p].danger && dangerAt(p, t % W, (t / W) | 0)) continue; // (nor, a rival AI's, where its robots were just shot down)
     const cross = crossTile(t);
     // A bridge or tunnel is built from the tile next to it: the shore, the rock face, or the deck so far.
     if (cross ? paveStand(t, zone) < 0 : S.zone[t] !== zone) continue;
@@ -4011,7 +4017,7 @@ function goGarrison(u) {
     const keep = keepAt(b);
     // The player's garrison priority: High ones fill first, Low ones only when the rest are full; and
     // every garrison fills up to its Keep before any goes past it.
-    const pr = (b.gprio === 'high' ? -30 : b.gprio === 'low' ? 30 : 0) + (n < keep ? -60 : 0) +
+    const pr = (b.gprio === 'high' ? -30 : b.gprio === 'low' ? 30 : 0) + (n < keep || (b.type === 'lander' && S.players[u.owner].homeCall > S.time) ? -60 : 0) + // (a rival AI's base under threat calls them all home)
       (!botArmed(u) && !(b.stock.ammo > 0) ? 25 : 0); // out of Ammo: go where it can reload
     const s = (n / Math.min(cap, 10)) * 12 + front * 0.25 + dist(b.x, b.y, u.x, u.y) * 0.05 + pr;
     // A garrison set to keep none isn't stocked: only if nowhere else has room.
@@ -4219,7 +4225,7 @@ function damageBot(u, dmg, sx, sy) {
   if (u.armored) dmg *= TRAIN_ARMOR.takes; // an armored train's plating
   u.hp -= dmg;
   u.hurtT = S.time;
-  if (u.hp <= 0) killBot(u);
+  if (u.hp <= 0) { noteDanger(u); killBot(u); }
 }
 
 function hitBuilding(b, dmg, by) {
@@ -4510,6 +4516,42 @@ function updateDanger() {
             if (dist2(i + 0.5, j + 0.5, cx, cy) <= R2) m[j * W + i] |= 2;
     }
   }
+}
+
+/**
+ * A rival AI's memory of where its robots were shot down (P.danger, optional in a save). When one of its civilians (not
+ * an army robot or a Howitzer) is killed out in the open, the spot is remembered: for DANGER_TIME the first time, and
+ * as long again for every one more that dies within 3 tiles of it, up to DANGER_MAX. Its workers neither build, mend
+ * nor pave within DANGER_R tiles of it meanwhile (dangerAt), nor does it put a site there; the same goes for where the
+ * robot was going. The danger map (DANGER) sees what stands there now; this sees what only fires now and then: a Pulse
+ * Turret with one shot in it is out of the map while it waits for its next Crystal, and workers sent past it to pave a
+ * road beyond were shot on the way, one a minute (12 in a row).
+ */
+function noteDanger(bot) {
+  const P = S.players[bot.owner], bt = BOTS[bot.type], i = Math.floor(bot.x), j = Math.floor(bot.y);
+  if (!P || !P.ai || bot.inside || bt.war || bt.wild || bt.air || bt.sea || isArmy(bot) || !inMap(i, j)) return;
+  P.danger = (P.danger || []).filter((d) => S.time - d.last < DANGER_MAX);
+  const mark = (x, y) => {
+    const D = P.danger;
+    let d = D.find((q) => (q.x - x) * (q.x - x) + (q.y - y) * (q.y - y) <= 9);
+    if (!d) { d = { x, y, n: 0 }; D.push(d); if (D.length > 24) D.shift(); }
+    d.n++;
+    d.last = S.time;
+    d.until = S.time + Math.min(DANGER_MAX, DANGER_TIME * d.n);
+  };
+  mark(i, j);
+  // ...and where it was going, a road tile to pave or a site to build or mend: shot on the way there, by a gun the map
+  // didn't show, it had only been sent the way the next would go (the route keeps to the danger map, not to this).
+  const t = bot.task, g = t && t.type === 'build' ? getE(t.site) : t && t.type === 'fix' ? getE(t.bld) : null;
+  const ti = t && t.type === 'pave' ? t.tile % S.W : g ? g.x : -1, tj = t && t.type === 'pave' ? (t.tile / S.W) | 0 : g ? g.y : -1;
+  if (ti >= 0 && (ti - i) * (ti - i) + (tj - j) * (tj - j) > DANGER_R * DANGER_R) mark(ti, tj);
+}
+/** Is tile (i, j) within DANGER_R tiles of a danger spot of player p's still in force (see noteDanger)? */
+function dangerAt(p, i, j) {
+  const D = S.players[p] && S.players[p].danger;
+  if (!D) return false;
+  for (const d of D) if (d.until > S.time && (d.x - i) * (d.x - i) + (d.y - j) * (d.y - j) <= DANGER_R * DANGER_R) return true;
+  return false;
 }
 
 /** How far robots that don't fight keep from bot v, an enemy to them (0: it's no threat out there now). */
@@ -5576,8 +5618,10 @@ function armedIn(b) {
 function keepAt(b) {
   if (BDEFS[b.type].bunker) return BDEFS[b.type].garrison; // a Bunker's two stay put
   if (b.keepW !== undefined) return b.keepW;
-  if (b.type === 'lander') return 1;
   const P = S.players[b.owner];
+  // A rival AI from Medium up keeps a home guard in its Command Base (P.homeGuard, see aiThink), and up to three in each Keep.
+  if (homeGuarded(b)) return b.type === 'lander' ? P.homeGuard : Math.min(3, P.homeGuard);
+  if (b.type === 'lander') return 1;
   return P && P.keepW !== undefined ? P.keepW : usesPosts(b.owner) ? 0 : 1; // yours keep none unless you say
 }
 
@@ -5694,7 +5738,9 @@ function rearGarrison(b) {
   return true;
 }
 /** Warbots garrison b can send out: every armed one from the rear (with `rear`), else all but one. */
-function spareFrom(b, rear, posted) { return BDEFS[b.type].bunker ? 0 : rear && !usesPosts(b.owner) && rearGarrison(b) ? armedIn(b) : spareArmed(b, posted); }
+function spareFrom(b, rear, posted) { return BDEFS[b.type].bunker ? 0 : rear && !usesPosts(b.owner) && rearGarrison(b) && !homeGuarded(b) ? armedIn(b) : spareArmed(b, posted); }
+/** Does garrison b hold a rival AI's home guard (its Command Base or a Keep: see keepAt), which never goes, even from the rear? */
+function homeGuarded(b) { const P = S.players[b.owner]; return !!(P && P.ai && P.homeGuard && (b.type === 'lander' || BDEFS[b.type].keep)); }
 
 /**
  * Take one armed warbot out of garrison b (or null): not one stationed there, unless `posted` (it comes back after).
@@ -7452,6 +7498,14 @@ function unstaff(b) {
   }
   b.staff = 0;
   b.staffInc = 0;
+}
+
+/** Can factory b do a round of its work now: everything the round takes in its hopper, and room for what it makes (see standingBy)? */
+function hasRound(b) {
+  const def = BDEFS[b.type];
+  for (const g in def.inp || {}) if ((b.stock[g] || 0) < def.inp[g]) return false;
+  for (const g in def.make || {}) if ((b.stock[g] || 0) + def.make[g] > def.out[g]) return false;
+  return true;
 }
 
 /** Higher = released first when workers run short. */

@@ -4685,6 +4685,17 @@ function pathsSeg(mode) {
   }
   // The tools are one row to swipe along on a phone: the one in use is brought into view when it changes.
   if (UI.segShown !== mode) { UI.segShown = mode; const on = $('banner-seg').querySelector('.on'); if (on && on.scrollIntoView) on.scrollIntoView({ block: 'nearest', inline: 'center' }); }
+  // Where it runs on past the edge, that edge fades out (style.css: .more-l, .more-r), so the tools out of sight show.
+  const seg = $('banner-seg');
+  if (!seg.onscroll) { seg.onscroll = () => segEdges(seg); window.addEventListener('resize', () => segEdges(seg)); }
+  segEdges(seg);
+  requestAnimationFrame(() => segEdges(seg)); // (once the scroll to the tool in use has landed)
+}
+/** Mark which ends of a row that scrolls sideways have more beyond them. */
+function segEdges(el) {
+  const more = el.scrollWidth - el.clientWidth > 2;
+  el.classList.toggle('more-l', more && el.scrollLeft > 2);
+  el.classList.toggle('more-r', more && el.scrollLeft < el.scrollWidth - el.clientWidth - 2);
 }
 
 /** In a mission, the next goal's hint at the foot of the banner (the goal list is hidden while Paths is open). */

@@ -22,12 +22,20 @@ const AI_PLAN = [
   ['tap', 3], ['farm', 3], ['generator', 2], ['outpost', 8], ['turret', 3], ['mortar', 2], ['bunker', 3],
 ];
 
+/** The build plan's opening, up to the first Bot Foundry: what a colony with one site at a time builds first (see aiThink). */
+const AI_OPENING = AI_PLAN.slice(0, AI_PLAN.findIndex(([t]) => t === 'foundry') + 1), AI_EASY_OPENING = 360;
+
 /** The buildings that make new bots between them (and what they run on), and the ones a colony down to a handful of
  * workers keeps running come what may (see the triage in aiThink). */
 const AI_CHAIN = ['harvester', 'quarry', 'kiln', 'mine', 'tap', 'smelter', 'fab', 'foundry'];
 const AI_CORE = ['mine', 'smelter', 'fab', 'foundry'];
-/** Fewer workers than this is an emergency (triage); it's over once there are AI_ENOUGH again. */
-const AI_FEW = 6, AI_ENOUGH = 8;
+/**
+ * Fewer workers than AI_FEW is an emergency (triage); it's over once there are as many as its buildings want and two
+ * to spare, AI_ENOUGH at least and AI_PLENTY at most. (The chain alone takes eight and two are kept free to build: out
+ * of triage at eight, with thirty buildings, the workers sat in the Smelter, the Chip Fab and the Quarries, two kept
+ * free, while no Harvester had one, and the colony stood still for want of Fiber.)
+ */
+const AI_FEW = 8, AI_ENOUGH = 10, AI_PLENTY = 16;
 /** Room kept under the bot limit for the army it wants (a share of the limit at most), and for workers past that. */
 const AI_ARMY_ROOM = 0.4, AI_WORKER_ROOM = 6;
 /**
@@ -56,11 +64,18 @@ const AI_FARM_TILES = 5, AI_FARM_MIN = 3;
 
 /** Rival p's doctrine (PERSONALITIES; the code says personality and style). */
 function aiStyle(p) { return PERSONALITIES[S.players[p].style] || PERSONALITIES.balanced; }
+/** Player q's army: its warbots, Bulwarks and Torches (none for no player). */
+function aiArmyOf(q) { let n = 0; if (q >= 0) for (const u of S.bots) if (!u.dead && u.owner === q && isArmy(u)) n++; return n; }
 
-/** Rival p's difficulty settings with its doctrine applied (later or earlier attacks, bigger or smaller). */
+/**
+ * Rival p's difficulty settings with its doctrine applied (later or earlier attacks, bigger or smaller). The attack
+ * threshold stays between 3 and AI_THRESHOLD_MAX: an Easy Warden's came to 11 (22 warbots to march), more than its army
+ * ever grew to.
+ */
+const AI_THRESHOLD_MAX = 9;
 function aiLevel(p) {
   const base = DIFFICULTY[S.difficulty], st = aiStyle(p);
-  return { ...base, grace: base.grace * (st.grace || 1), threshold: Math.max(3, Math.round(base.threshold * (st.threshold || 1))) };
+  return { ...base, grace: base.grace * (st.grace || 1), threshold: clamp(Math.round(base.threshold * (st.threshold || 1)), 3, AI_THRESHOLD_MAX) };
 }
 
 /**
@@ -147,6 +162,24 @@ function aiShut(b) {
   return b.built && !!b.underFire && S.time - b.underFire > 60 && !BDEFS[b.type].mil && (!!BDEFS[b.type].staff || b.type === 'charger');
 }
 
+/**
+ * Has gatherer b anything left to gather: a node in its reach, on its ground, with something in it, on no rival's land
+ * and out of enemy guns' reach (what its worker can go to: see findNode)? A Tap whose last Crystal lies just across the
+ * border still counts it in gatherReach, and its worker stands there saying none is left in reach.
+ */
+function aiGathers(b) {
+  const def = BDEFS[b.type], r = def.radius, r2 = r * r + 0.3, zone = S.zone[tIdx(b.x, b.y)], types = gatherTypes(b.type);
+  if (!b.built || aiShut(b)) return false;
+  for (let j = Math.max(0, b.y - r); j <= Math.min(S.H - 1, b.y + r); j++) {
+    for (let i = Math.max(0, b.x - r); i <= Math.min(S.W - 1, b.x + r); i++) {
+      const t = j * S.W + i;
+      if (!types.includes(S.res[t]) || !S.amt[t] || S.zone[t] !== zone || dist2(i, j, b.x, b.y) > r2) continue;
+      if ((S.owner[t] < 0 || S.owner[t] === b.owner) && !hotFor(b.owner, t)) return true;
+    }
+  }
+  return false;
+}
+
 function aiThink(p) {
   const P = S.players[p];
   const lvl = aiLevel(p), st = aiStyle(p);
@@ -162,7 +195,8 @@ function aiThink(p) {
   // every building rests but the ones that make bots, and the Foundry builds workers alone, until there are enough.
   let nWorkers = 0;
   for (const u of S.bots) if (!u.dead && u.owner === p && u.type === 'worker') nWorkers++;
-  const few = S.mode !== 'colony' && S.time > 60 && nWorkers < (P.triage ? AI_ENOUGH : AI_FEW);
+  const wantStaff = me.reduce((n, b) => n + (b.built && BDEFS[b.type].staff && !BDEFS[b.type].crew ? 1 : 0), 0);
+  const few = S.mode !== 'colony' && S.time > 60 && nWorkers < (P.triage ? clamp(wantStaff + MIN_FREE_WORKERS, AI_ENOUGH, AI_PLENTY) : AI_FEW);
   if (few) for (const b of me) if (!b.built && !BDEFS[b.type].prepaid && !AI_CHAIN.includes(b.type)) demolish(b);
   if (few) me = me.filter((b) => !b.dead);
 
@@ -274,7 +308,8 @@ function aiThink(p) {
     if (sh.left[g] < (TRADE_LEFT[g] || 60) * 1.5 || st.missiles || crShort || fuelTrade) plan = [['terminal', 1]].concat(plan); // only when short: it goes first
     tradeFirst = crShort;
   }
-  if (st.missiles) { const k = plan.findIndex(([t]) => t === 'armory') + 1; plan = plan.slice(0, k).concat([['smelter', 2], ['fab', 2]], plan.slice(k)); } // (its Missile Factory and Silos come through aiMissilePlan)
+  // (An Architect's second Crystal Tap with them: Chips are what its Missiles and its warbots both wait for.)
+  if (st.missiles) { const k = plan.findIndex(([t]) => t === 'armory') + 1; plan = plan.slice(0, k).concat([['smelter', 2], ['tap', 2], ['fab', 2]], plan.slice(k)); } // (its Missile Factory and Silos come through aiMissilePlan)
   // Nuclear race: a Reactor once there's Uranium to enrich (or a mine on a deposit), then a Nuclear Silo.
   if (nukeOn()) {
     const k = plan.findIndex(([t]) => t === 'depot'); // (after the first Generator, where the Missile Factory used to stand in the plan)
@@ -293,6 +328,28 @@ function aiThink(p) {
       const type = ['minigun', 'bunker', 'mortar', 'disruptor'].sort((a, c) => (counts[a] || 0) - (counts[c] || 0))[0];
       P.defWant = { type, n: (counts[type] || 0) + 1, until: S.time + 120, x: hitFort.x, y: hitFort.y };
       P.defAt = S.time;
+    }
+  }
+  // An army parked on its land, or within 14 tiles of its Command Base, while none of its forts is being hit (so
+  // nothing above asks for a defence): four or more enemy warbots standing there call for a Mortar Pit, the one gun
+  // that reaches them from out of their own reach, by the fort nearest them, 7 to 10 tiles from where they stand (see
+  // aiSearchSpot; its builder keeps out of their way), up to three, one at most every three minutes (P.parkAt: a raiding
+  // besieger wrecked the sites as fast as they went up). Normal and Hard rivals, and a Warden (turtle) on any. (Nothing
+  // answered a besieger parked just outside the guns.)
+  if ((S.difficulty === 'normal' || S.difficulty === 'hard' || st.walls) && S.mode !== 'colony' && S.time > AI_DEFENCE_AT && !few &&
+      !(P.defWant && S.time < P.defWant.until) && S.time - (P.defAt || -999) > 60 && S.time - (P.parkAt ?? -999) > 180 && (counts.mortar || 0) < 3) {
+    let n = 0, sx = 0, sy = 0;
+    for (const u of S.bots) {
+      if (u.dead || u.inside || u.owner < 0 || !foes(u.owner, p) || !isArmy(u)) continue;
+      const ti = Math.floor(u.x), tj = Math.floor(u.y);
+      if (!inMap(ti, tj) || (S.owner[tIdx(ti, tj)] !== p && dist2(u.x, u.y, lander.x, lander.y) > 196)) continue;
+      n++; sx += u.x; sy += u.y;
+    }
+    if (n >= 4) {
+      sx /= n; sy /= n;
+      let f = null, fd = Infinity;
+      for (const b of me) { if (!b.built || !BDEFS[b.type].mil || BDEFS[b.type].bunker) continue; const d = dist2(b.x, b.y, sx, sy); if (d < fd) { fd = d; f = b; } }
+      if (f) { P.defWant = { type: 'mortar', n: (counts.mortar || 0) + 1, until: S.time + 120, x: f.x, y: f.y, ax: Math.round(sx), ay: Math.round(sy) }; P.defAt = P.parkAt = S.time; }
     }
   }
   // Front defences without waiting to be hit there: a Minigun Nest or a Bunker (whichever it has fewer of) by its
@@ -336,6 +393,8 @@ function aiThink(p) {
   // "one more" every time left some rivals with several Missile Factories, or many Silos.)
   const saving = few ? null : aiMissilePlan(p, me, counts, kinds, workers, staffed);
   if (saving) plan = [[saving, (counts[saving] || 0) + (me.some((b) => b.type === saving && !b.built) ? 0 : 1)]].concat(plan);
+  // (An Architect's doesn't wait for a free site either: with both sites always taken it stood in the queue for minutes.)
+  if (saving && st.missiles && !me.some((b) => b.type === saving && !b.built)) siteCap = Math.max(siteCap, maxSites + 1);
   if (needArmory) plan = [['armory', 1]].concat(plan);
   // Workers no longer haul, so spare ones go to work: another gatherer for the scarcest raw good.
   if (S.time > 150 && workers - staffed >= 4 && canStaffMore) {
@@ -359,6 +418,17 @@ function aiThink(p) {
   // With none cutting, a new Harvester goes first; and with none on the way either, past the usual limit on sites:
   // sites waiting for Alloy could otherwise hold every place while the Smelters wait for the Fiber to make it.
   const fiberStarved = !cutting && !me.some((b) => b.type === 'harvester' && !b.built);
+  // The same for Ore and Crystal once the Bot Foundry stands: with no Mine (or no Crystal Tap) at work, none on the way
+  // and next to none in store, one goes first, past the usual limit (`starved`). Sites stuck where the colony's robots
+  // won't go (a road to pave across ground where they were just shot, see noteDanger) could hold every place for ten
+  // minutes and more while the last field ran dry: no Alloy or no Chips, so the Bot Foundry made nothing, and both
+  // rivals sat at 0 Chips with a few warbots each until the clock ran out. (On the way: a site placed in the last
+  // 150 s, or one a road reaches. The opening, before the Foundry, goes as it always has.)
+  const haveG = playerGoods(p);
+  const starved = !me.some((b) => b.type === 'foundry' && b.built) ? [] : ['mine', 'tap'].filter((t) => (haveG[RES[BDEFS[t].gather].good] || 0) < 4 &&
+    !me.some((b) => b.type === t && (b.built ? aiGathers(b) : S.time - b.born < 150 || !b.unlinked)));
+  for (const t of starved) plan = [[t, (counts[t] || 0) + 1]].concat(plan);
+  if (starved.length) siteCap = Math.max(siteCap, sites + 1);
   if (!cutting) plan = [['harvester', (counts.harvester || 0) + 1]].concat(plan);
   if (fiberStarved) siteCap = Math.max(siteCap, maxSites + 1) + (cementStarved ? 1 : 0);
   // (Crystal running out: the Terminal that buys more doesn't wait for a free site either. It waited minutes behind
@@ -429,11 +499,17 @@ function aiThink(p) {
   const key = (type) => (type === 'charger' && !counts.charger) || type === 'foundry' || type === 'harvester' || type === 'quarry' || (type === 'kiln' && (playerGoods(p).cement || 0) < 3) || defence(type) ||
     (P.defWant && P.defWant.type === type && S.time < P.defWant.until) ||
     (type === 'outpost' && P.short.length > 0) || (type === 'tap' && tapsFirst);
+  // One site at a time (an Easy rival): from AI_EASY_OPENING on, until its Bot Foundry is under way, the plan's opening
+  // (AI_OPENING) comes before every other ask. Expansion Outposts, a spare gatherer and the Ammo Plant took the only slot
+  // first, the Outposts then waited minutes for their roads, and most Easy rivals never built a Smelter or a robot.
+  // (Its first minutes go as they always have: with the opening first from the start it had its Foundry as soon as a
+  // Normal rival and beat one in half its games.)
+  if (maxSites === 1 && !counts.foundry && S.mode !== 'colony' && S.time >= AI_EASY_OPENING) plan = AI_OPENING.concat(plan);
   if (sites < siteCap) {
     for (const [type, want0] of plan) {
       if (few && (!AI_CHAIN.includes(type) || counts[type])) continue; // triage: only a missing link of the chain
-      // (past the usual limit only for what's starving the colony: a Cement Works, a Harvester)
-      if ((cementStarved || fiberStarved) && sites >= maxSites && !(cementStarved && type === 'kiln') && !(fiberStarved && type === 'harvester')) continue;
+      // (past the usual limit only for what's starving the colony: a Cement Works, a Harvester, a Mine or a Crystal Tap)
+      if ((cementStarved || fiberStarved || starved.length) && sites >= maxSites && !(cementStarved && type === 'kiln') && !(fiberStarved && type === 'harvester') && !starved.includes(type)) continue;
       if (tradeFirst && sites >= maxSites && type !== 'terminal') continue;
       if (flakFirst && sites >= capBefore && type !== 'flak') continue;
       if (upFirst && sites >= capBefore && type !== 'bunker') continue;
@@ -451,18 +527,23 @@ function aiThink(p) {
       // (Not the one more that goes with an Airfield: see P.airFuel.)
       if ((type === 'farm' || type === 'pump' || type === 'refinery') && (counts[type] || 0) >= 1 && playerGoods(p).fuel > 10 && !(airFuel && (type === airFuel.type || type === 'pump'))) continue;
       if ((counts[type] || 0) >= want) continue;
-      if (saving && type !== saving && type !== 'keep' && type !== 'terminal' && type !== 'airfield' && !(type === 'flak' && flakFirst) && !BDEFS[type].nuke && (BDEFS[type].cost.alloy || BDEFS[type].cost.chip)) continue;
+      // (An Architect saves from early on: its first Ammo Plant and first turret don't wait for it.)
+      if (saving && type !== saving && type !== 'keep' && type !== 'terminal' && type !== 'airfield' && !(type === 'flak' && flakFirst) && !BDEFS[type].nuke &&
+          !(st.missiles && !counts[type] && (type === 'turret' || type === 'armory')) && (BDEFS[type].cost.alloy || BDEFS[type].cost.chip)) continue;
       // Keep enough Fiber for a Harvester while none is cutting: without Fiber there's no way back.
       if (type !== 'harvester' && fiberLow && (BDEFS[type].cost.fiber || 0) > 0 && playerGoods(p).fiber - BDEFS[type].cost.fiber < BDEFS.harvester.cost.fiber) continue;
       // The first of each staffed building is always allowed, so the production chain is complete (and a Crystal Tap
-      // while Crystal runs low).
-      if (BDEFS[type].staff && !BDEFS[type].crew && !canStaffMore && counts[type] && !(type === 'tap' && tapsFirst)) continue;
+      // while Crystal runs low, and a Mine or Tap the colony is starved of).
+      if (BDEFS[type].staff && !BDEFS[type].crew && !canStaffMore && counts[type] && !(type === 'tap' && tapsFirst) && !starved.includes(type)) continue;
       if (Object.keys(BDEFS[type].cost).some((g) => held.has(g))) continue;
       if (reserveCement && type !== 'outpost' && type !== 'quarry' && type !== 'kiln' && BDEFS[type].cost.cement) continue;
       if (type === 'kiln' && stoneLow && counts.kiln) continue;
       // A turret or Repair Station is started as soon as the Cement is there: new Alloy goes straight
       // into factories, so it never piles up in storage; the high-priority site gets it delivered.
-      const defenceNow = (defence(type) && counts.smelter && aiAffordable(p, type, ['alloy', 'chip'])) || ((type === 'terminal' || type === 'airfield') && aiAffordable(p, type, ['alloy']));
+      // So is an Architect's Missile Factory or Silo: waiting for the whole price to lie in storage while the Foundry and
+      // the Chip Fab drew on it, it saved for a Silo for minutes at a time and seldom built one.
+      const defenceNow = (defence(type) && counts.smelter && aiAffordable(p, type, ['alloy', 'chip'])) || ((type === 'terminal' || type === 'airfield') && aiAffordable(p, type, ['alloy'])) ||
+        (st.missiles && type === saving && counts.smelter && counts.fab && aiAffordable(p, type, ['alloy', 'chip']));
       if (!aiAffordable(p, type) && !defenceNow) {
         if ((BDEFS[type].cost.fiber || 0) > playerGoods(p).fiber) P.fiberWait = S.time; // (the Smelters rest for it: see above)
         if (key(type) && (!counts[type] || type === 'outpost' || type === 'tap')) {
@@ -611,18 +692,26 @@ function aiThink(p) {
     const crew = BDEFS[b.type].crew;
     if (crew && b.built) crewNeed[crew] = (crewNeed[crew] || 0) + 1;
   }
-  // Triage (see above): every building that takes a worker rests but the Mine, Smelter, Chip Fab and Foundry while
-  // they have what they work with (and a gatherer, or the Quarry and Cement Works, while there's next to none of
-  // what they're for), so the few workers go down the chain to the link that can work; the ones rested here are
-  // switched back on when it's over.
+  // Triage (see above): every building that takes a worker rests but the links of the chain the next robot waits for
+  // (and a gatherer, or the Quarry and Cement Works, while there's next to none of what they're for), so the few
+  // workers go down the chain to the link that can work; the ones rested here are switched back on when it's over.
+  // Each link of the chain works only while what it makes is short and what it needs is there (counting what lies in
+  // the chain's hoppers): the Foundry while it has a part of each kind (always, with more than three workers), the
+  // Chip Fab while Chips are short, the Smelter while Alloy is short, a Mine while Alloy and Ore are both short. (Two
+  // workers left after a raid ran the Smelter for ten minutes, Alloy piling up to 25 with no Chips, while the Chip
+  // Fab and the Foundry stood still.)
   if (few) {
     P.triage = P.triage || [];
-    const have = playerGoods(p);
-    const can = (b) => { const inp = BDEFS[b.type].inp; for (const g in inp || {}) if ((have[g] || 0) + (b.stock[g] || 0) < inp[g]) return false; return true; };
+    const have = { ...playerGoods(p) }, got = (g) => have[g] || 0;
+    for (const b of me) if (b.built && AI_CORE.includes(b.type)) for (const g in BDEFS[b.type].inp || {}) have[g] = got(g) + (b.stock[g] || 0);
     for (const b of me) {
       const def = BDEFS[b.type];
       if (!b.built || !def.staff || def.crew) continue;
-      const need = (AI_CORE.includes(b.type) && can(b)) || (b.type === 'quarry' || b.type === 'kiln' ? (have.cement || 0) < 4 : !!def.gather && (have[RES[def.gather].good] || 0) < 4);
+      const need = b.type === 'foundry' ? workers > 3 || (got('alloy') >= 1 && got('chip') >= 1)
+        : b.type === 'fab' ? got('chip') < 4 && got('crystal') >= 1 && got('alloy') >= 1
+        : b.type === 'smelter' ? got('alloy') < 6 && got('ore') >= 2 && got('fiber') >= 2
+        : b.type === 'mine' ? got('alloy') < 6 && got('ore') < 4
+        : b.type === 'quarry' || b.type === 'kiln' ? got('cement') < 4 : !!def.gather && got(RES[def.gather].good) < 4;
       if (need) { if (b.paused && P.triage.includes(b.id)) setPaused(b, false); }
       else if (!b.paused) { setPaused(b, true); if (!P.triage.includes(b.id)) P.triage.push(b.id); }
     }
@@ -632,7 +721,9 @@ function aiThink(p) {
   }
   for (const b of me) {
     if (b.type !== 'foundry' || !b.built) continue;
-    if (few) { b.mode = 'worker'; b.orders = {}; continue; } // triage: workers, and nothing else, until there are enough
+    // Triage: workers, and nothing else, until there are enough (but one Hauler first when there is none and a few
+    // workers already: until then a worker has to stay free to carry).
+    if (few) { b.mode = 'worker'; b.orders = !kinds.hauler && workers >= 3 ? { hauler: 1 } : {}; continue; }
     // Workers first while buildings stand empty; then the army gets its share as the game goes on.
     b.mode = S.mode === 'colony' ? 'worker' : workers < Math.min(staffed + MIN_FREE_WORKERS, wantWorkers) ? 'worker'
       : army < wantArmy ? (workers < wantWorkers ? 'alt' : 'warbot')
@@ -653,7 +744,9 @@ function aiThink(p) {
     // while the army isn't well behind and the colony has the workers and the Haulers its buildings call for: with the
     // army alone to go by it stood off for missiles up to two fifths of a war while buildings stood empty. (An Easy
     // rival keeps the old rule.)
-    const forMissiles = (saving || P.feedMissiles) && (st.missiles ? !armyBehind || army >= wantArmy * 0.7
+    // (An Architect rests it while it has three warbots more than its rival, six at least: by its army target, which
+    // climbs with the clock, it hardly ever rested once a war was on, and its missile sites waited for goods the Foundry took.)
+    const forMissiles = (saving || P.feedMissiles) && (st.missiles ? army >= Math.max(START_WARBOTS + 2, aiArmyOf(rivalOf(p)) + 3)
       : !armyBehind && (!smart || (workers >= wantWorkers && (kinds.hauler || 0) >= wantHaulers)));
     // (Saving for a crossing with a fair army already: the Foundry rests even if workers are short.)
     if (((forMissiles || needArmory || bridging) && workers >= staffed + 3) || (bridging && P.bridgeNeed && army >= Math.min(wantArmy, 8))) { b.mode = 'off'; delete b.orders.hauler; delete b.orders.truck; }
@@ -698,6 +791,43 @@ function aiThink(p) {
   //     Knock it out (missile, Howitzer, bomber, warbots) so they can get back to work.
   if (S.mode !== 'colony') aiClearGuns(p, lvl);
 
+  // 3c) Home guard (Medium and up): while four or more enemy warbots stand within 12 tiles of the base, or it has been
+  //     hit in the last half minute (P.homeCall), the Command Base keeps about a third of the army (2 to 8), and each
+  //     Keep up to three, out of every attack, raid and march (P.homeGuard, see keepAt), and every new and idle
+  //     warbot goes there (goGarrison); otherwise 2, and the plain one when no enemy army can walk to the base. (New
+  //     warbots used to walk to the Outpost nearest the enemy: at minute 34 a Hard rival had 26 of 28 out there and
+  //     one at home. Kept back all the time, a third of the army never fought, and evenly matched wars ran out the
+  //     clock.) With twice its rivals' warbots and two more it throws everything in: its Outposts keep no warbot back
+  //     (keepW 0, as a player can set), so a march can gather the army; and while it masses for a march (P.massFor,
+  //     see aiMarch) so do its Outposts with no enemy near. Each keeps one again afterwards. (`smart`: not Easy.)
+  if (S.mode !== 'colony') {
+    // (Only against an army that can walk to the base, `reach`: across the sea, where only a landing of six can come,
+    // it kept a third of its warbots out of its own landings, and island wars it led ran out the clock.)
+    let them = 0, near = 0, reach = 0;
+    const hz = S.zone[tIdx(lander.x, lander.y)];
+    if (smart) for (const u of S.bots) {
+      if (u.dead || u.owner < 0 || !isArmy(u) || !foes(u.owner, p)) continue;
+      them++;
+      const h = u.inside ? getE(u.inside) : null, zi = h ? h.x : Math.floor(u.x), zj = h ? h.y : Math.floor(u.y);
+      if (inMap(zi, zj) && S.zone[tIdx(zi, zj)] === hz) reach++;
+      if (!u.inside && dist2(u.x, u.y, lander.x + 0.5, lander.y + 0.5) <= 144) near++;
+    }
+    if (smart && (near >= 4 || S.time - (lander.lastHit || -99) < 30)) P.homeCall = S.time + 20;
+    // Under siege (P.homeCall), each doctrine answers in its own way: a Salvager (raider) raids at once (aiRaid), a
+    // Warden (turtle) starts no push (aiPush), an Architect (tycoon) fires its Missiles into the army at its gates (below).
+    if (P.homeCall > S.time && st.harass && P.nextRaid > S.time + 15 && !P.raid) P.nextRaid = S.time + 15;
+    const pushing = P.pushOn > S.time; // (a Warden's big push: see aiPush)
+    // (A Warden keeps a third home until its push, outnumbered or not: it digs in, then comes late in one go. A Salvager
+    // keeps only the usual one, threatened or not: its home guard is thin, its bands go out from five minutes in.)
+    if (smart) P.homeGuard = st.harass ? 0 : P.homeCall > S.time || (st.walls && !pushing && army < them * 1.5 + 4) ? clamp(Math.ceil(army / 3), 2, 8) : reach ? 2 : 0;
+    const allIn = (smart && army >= lvl.threshold * 2 && army >= them * 2 + 2) || pushing, massing = P.massFor && S.time <= P.massFor.until;
+    for (const b of me) {
+      if (b.type !== 'outpost' || b.dead || !b.built) continue;
+      if (allIn || (massing && S.time - (b.lastHit || -99) > 30 && !nearestEnemyBot(p, b.x + 0.5, b.y + 0.5, 10, true, false, true))) b.keepW = 0;
+      else if (b.keepW !== undefined) delete b.keepW;
+    }
+  }
+
   // A passive rival (an early mission's, on Easy): it builds, grows and defends, but never strikes first.
   if (P.passive) return;
   // 4) Missiles: soften turrets and Outposts first, the Command Base once the army is big. (With
@@ -709,6 +839,10 @@ function aiThink(p) {
     // missile can knock no lower (see captureOnly).
     const dmg = BDEFS.silo.missile.damage, coming = new Map(), soft = P.soften && S.time < P.soften.until ? P.soften : null;
     for (const m of S.missiles) if (m.owner === p && m.target && !m.nuke) coming.set(m.target, (coming.get(m.target) || 0) + dmg);
+    // An Architect on Normal or Hard rains them on what its rival lives on (aiMissileWorth), and under siege into the
+    // army at its gates (aiMissileKnot).
+    const rain = !!st.missiles && (S.difficulty === 'normal' || S.difficulty === 'hard');
+    if (rain && P.homeCall > S.time) for (const silo of me) { const k = siloReady(silo) && aiMissileKnot(p, lander, silo); if (k) fireMissileAt(silo, k.i, k.j); }
     for (const silo of me) {
       if (!siloReady(silo)) continue;
       let best = null, bs = -Infinity;
@@ -718,11 +852,11 @@ function aiThink(p) {
         if (d > BDEFS.silo.missile.range) continue;
         const left = e.armor - (coming.get(e.id) || 0);
         if (captureOnly(e) ? left <= missileFloor(e) + 2 : left <= 0) continue;
-        const s = (e.type === 'turret' ? 10 : e.type === 'nukesilo' ? 12 : e.type === 'silo' || e.type === 'reactor' ? 9 : e.type === 'outpost' ? 8 :
+        const s = (rain ? aiMissileWorth(p, e, lvl) : e.type === 'turret' ? 10 : e.type === 'nukesilo' ? 12 : e.type === 'silo' || e.type === 'reactor' ? 9 : e.type === 'outpost' ? 8 :
           e.type === 'mortar' || e.type === 'disruptor' || e.type === 'bunker' || e.type === 'keep' ? 7 : e.type === 'lander' ? (S.victory === 'uplinks' ? 1 : 5) : 3) - d * 0.1 +
           (S.victory === 'uplinks' && holdsUplink(e) ? 7 : 0) + // (Uplinks: knock out the forts that hold them)
           (soft && aiDefReach(e) && dist2(e.x, e.y, soft.x, soft.y) <= 64 ? 6 : 0); // (the guns holding back an attack: see step 5)
-        if (s > bs) { bs = s; best = e; }
+        if (s > bs && !(rain && s < 1)) { bs = s; best = e; } // (an Architect's: nothing worth less, such as a Wall)
       }
       if (best && fireMissile(p, best)) coming.set(best.id, (coming.get(best.id) || 0) + dmg);
     }
@@ -756,7 +890,11 @@ function aiThink(p) {
     (S.uplinks || []).some((u) => u.owner >= 0 && u.owner !== p);
   if ((domFoe >= 0 || upFoe >= 0 || upWant) && S.time >= lvl.grace) P.nextAttack = Math.min(P.nextAttack, S.time);
   if (upFoe >= 0 && S.time >= lvl.grace) aiJamUplink(p, upFoe);
+  // Medium, Normal and Hard rivals (`smart`) remember where their attacks were beaten (aiBattles), choose their marches
+  // by what it takes to win there, mass before they march and storm the base with a decisive lead (aiMarch, aiStorm).
+  if (P.stormOn) aiStorm(p);
   if (S.time < lvl.grace || S.time < P.nextAttack) return;
+  aiBattles(P);
   let best = null, bestScore = -Infinity, bestAvail = 0, bestNeed = 0, heldB = null, heldScore = -Infinity;
   for (const b of S.buildings) {
     if (b.dead || !rival(b.owner)) continue; // whichever rival's building is in reach
@@ -771,6 +909,7 @@ function aiThink(p) {
     const gar = b.built && !weak ? Math.ceil(b.garrison.length * 1.3) : 0;
     const base = !b.built ? 2 : weak ? lvl.threshold : Math.max(lvl.threshold, gar + 2);
     if (avail < base || (gar && avail < gar + 2)) continue;
+    if (aiBeaten(P, b, avail)) continue; // (not where an attack was just beaten, without half as many again: aiBattles)
     const guard = guardsNear(b, sp.shields), gun = aiDefReach(b) > 0;
     const need = aiBare(Math.max(base, !b.built || weak ? guard + 1 : gar + 2 + guard, gun ? aiGunNeed(b, sp.shields) : 0), gun ? aiGunNeed(b) - 1 : guardsNear(b), sp.shields);
     const def = BDEFS[b.type];
@@ -778,6 +917,9 @@ function aiThink(p) {
     if (b.owner === domFoe && b.built && def.mil && def.terr && b.type !== 'lander') score += 30;
     // Short of Crystal: a fort whose land holds Crystal is worth more (taken, its land and the clusters on it are ours).
     if (crShort && b.built && def.mil && def.terr) score += Math.min(crystalHeld(b, def.terr), 80) * 0.1;
+    // A Salvager (raider) goes for what the enemy lives on: a working building, a Fuel Station or a Depot over a fort
+    // (where little guards it: it got this far). (It used to attack forts twice as often as anything else.)
+    if (st.harass && b.built && !def.mil && !def.barrier && (def.staff || def.charger || def.store)) score += 16;
     if (S.victory === 'uplinks' && holdsUplink(b)) score += b.owner === upFoe ? 40 : 30;
     if (!b.built) score -= 8;
     // Held back by the guns over it (it had the warbots for the rest): noted, for what it does instead (below). A
@@ -790,8 +932,13 @@ function aiThink(p) {
     // A target under a gun: the gun first. Warbots on an attack shoot back only at robots, so a squad sent at a building
     // a turret or Minigun Nest covers stood there hitting it while the gun shot them down; at the gun they knock it out.
     const gun = aiDefReach(best) ? null : getE(aiFirstGun(best.owner, best.x, best.y, best, (e) => attackAvailable(p, e) >= bestNeed));
-    if (gun) sendAttack(p, gun, attackAvailable(p, gun), false, false, true);
-    else sendAttack(p, best, bestAvail, false, false, true);
+    // (Not at walls the band couldn't shoot its way through: see attackBreach. The place is left alone a minute.)
+    const tg = gun || best, n = gun ? attackAvailable(p, gun) : bestAvail, br = attackBreach(p, tg, n);
+    if (br.need > br.shots) { aiWalled(P, tg); return; }
+    const was = new Set();
+    if (smart) for (const u of S.bots) if (!u.dead && u.owner === p && u.task && u.task.type === 'attack' && u.task.target === tg.id) was.add(u.id);
+    const sent = sendAttack(p, tg, n, false, false, true);
+    if (smart && sent && tg.built) (P.fights = P.fights || []).push({ x: tg.x, y: tg.y, n: sent, t: S.time, ids: S.bots.filter((u) => !u.dead && u.owner === p && u.task && u.task.type === 'attack' && u.task.target === tg.id && !was.has(u.id)).map((u) => u.id) });
     P.siegeAt = { x: best.x, y: best.y, until: S.time + 120 };
     P.nextAttack = S.time + 25;
     P.lastAttack = S.time;
@@ -805,12 +952,16 @@ function aiThink(p) {
     if (!(P.siegeAt && S.time < P.siegeAt.until)) P.siegeAt = { x: heldB.x, y: heldB.y, until: S.time + 60 };
     P.soften = { x: heldB.x, y: heldB.y, until: S.time + 60 };
   }
-  // A big army with nothing in reach marches on the nearest enemy garrison (a rally flag beside it:
-  // the warbots fight what they meet and attack what stands there). With twice the enemy's army it
-  // goes for the enemy Command Base itself.
+  // A big army with nothing in reach marches on an enemy garrison (a rally flag beside it: the warbots fight what
+  // they meet and attack what stands there): Medium and up, the one that takes the fewest to beat, with enough, or it
+  // masses first; with a decisive lead, a storm of the enemy Command Base (aiMarch). An Easy rival marches on the
+  // nearest, and with twice the enemy's army on the enemy Command Base itself.
   const enemyArmy = S.bots.reduce((n, u) => n + (!u.dead && u.owner === enemy && isArmy(u) ? 1 : 0), 0);
   const crushing = army >= lvl.threshold * 2 && army >= enemyArmy * 2 + 2;
-  if (army >= lvl.threshold * 2 && S.time - (P.lastMarch || -999) > 120 && !(P.march && rallyById(P.march))) {
+  if (P.massFor && S.time > P.massFor.until) P.massFor = null;
+  if (st.push) aiPush(p, lvl, army, enemyArmy);
+  const pushing = P.pushOn > S.time; // (a Warden marches only on its push)
+  if ((st.push ? pushing : army >= lvl.threshold * 2) && S.time - (P.lastMarch || -999) > 120 && !(P.march && rallyById(P.march)) && !P.stormOn) {
     let tgt = null, bd = Infinity;
     const enemyBase = getE(S.players[enemy].lander);
     // Uplinks: the nearest fort holding one of the enemy's Uplinks comes first, even ahead of a crushed rival's Command Base.
@@ -820,6 +971,7 @@ function aiThink(p) {
       if (d < bd) { bd = d; tgt = b; }
     }
     if (tgt) { /* (an Uplink fort) */ }
+    else if (smart) { if (aiMarch(p, lvl, enemy, army, enemyArmy, crushing)) return; }
     else if (crushing && enemyBase && !enemyBase.dead && enemyBase.owner === enemy) tgt = enemyBase;
     else for (const b of S.buildings) {
       if (b.dead || b.owner !== enemy || !b.built || !BDEFS[b.type].mil) continue;
@@ -837,15 +989,15 @@ function aiThink(p) {
       // guns that cover the flag (their worth in warbots: aiGuards, less what its Bulwarks take, which lead it).
       const sp = spot ? aiSpare(p, { x: spot.i, y: spot.j }, 'flag') : null, avail = sp ? sp.n : 0;
       const guns = spot ? Math.ceil(aiFire(aiGuards(tgt.owner, spot.i, spot.j, 2, null).filter((e) => aiDefReach(e.b)), sp.shields) - 1e-9) : 0;
-      const need = (crushing ? Math.max(4, enemyArmy * 2 + 2) : lvl.threshold * 2) + guns;
+      const need = (crushing ? Math.max(4, enemyArmy * 2 + 2) : pushing ? lvl.threshold : lvl.threshold * 2) + guns;
       if (spot && avail >= need) {
-        const { sent, rally } = sendToRally(p, spot.i, spot.j, Math.min((crushing ? 22 : 14) + guns, crushing ? avail : avail - 2), true, false, true);
+        const { sent, rally } = sendToRally(p, spot.i, spot.j, pushing ? Math.min(30, avail) : Math.min((crushing ? 22 : 14) + guns, crushing ? avail : avail - 2), true, false, true);
         if (sent) { rally.first = aiFirstGun(tgt.owner, spot.i, spot.j); P.march = rally.id; P.lastMarch = S.time; return; }
       } else if (spot && avail >= need - guns) P.shieldWant = S.time; // (held back by the guns there)
     }
   }
-  // Recall a march that has nothing left to fight.
-  if (P.march && rallyById(P.march) && S.time - (P.lastMarch || 0) > 150) { recallRally(P.march); P.march = 0; }
+  // Recall a march that has nothing left to fight. (Not a storm: see aiStorm.)
+  if (P.march && rallyById(P.march) && S.time - (P.lastMarch || 0) > 150 && !(P.stormOn && P.stormOn.id === P.march)) { recallRally(P.march); P.march = 0; }
   // A big army with nothing in reach: push a forward Outpost toward the enemy Command Base.
   const enemyL = getE(S.players[enemy].lander);
   if (enemyL && army >= lvl.threshold * 2 && S.time - (P.lastAttack || 0) > 60 && siteCount(p) < maxSites && aiAffordable(p, 'outpost')) {
@@ -1305,7 +1457,9 @@ function aiWantArmy(lvl, p) {
   let rivalArmy = 0;
   if (p !== undefined) { const e = rivalOf(p); for (const u of S.bots) if (!u.dead && u.owner === e && isArmy(u)) rivalArmy++; }
   const cap = Math.max(AI_ARMY_MAX, rivalArmy + 6) + Math.max(0, extra - 8);
-  return Math.min(cap, START_WARBOTS + 1 + Math.floor((Math.max(0, S.time - from) / 60) * rate));
+  // Massing for a march (P.massFor, see aiMarch): that many, the home guard and one for each fort besides.
+  const P = p !== undefined ? S.players[p] : null, mass = P && P.massFor && S.time <= P.massFor.until ? P.massFor.need + (P.homeGuard || 1) + extra : 0;
+  return Math.max(Math.min(cap, START_WARBOTS + 1 + Math.floor((Math.max(0, S.time - from) / 60) * rate)), Math.min(mass, cap + 10));
 }
 
 /**
@@ -1434,7 +1588,7 @@ function aiSquad(sp, need, help) {
 /**
  * Raids: every few minutes a small band of warbots goes to the enemy's busiest road clear of its
  * turrets and garrisons, shoots up passing haulers, tears up the road (then hits whatever stands
- * near it), and comes home.
+ * near it), and comes home: RAID_TIME after it gets there, or as soon as it is outnumbered.
  */
 const RAID_GAP = { easy: 320, medium: 250, normal: 180, hard: 120 };
 const RAID_TIME = 60;    // seconds a raid lasts before the raiders head home
@@ -1442,8 +1596,26 @@ const RAID_FIRST = 200;  // the first raid comes this long after the grace perio
 function aiRaid(p, lvl) {
   const P = S.players[p], enemy = rivalOf(p);
   if (P.raid) {
-    const r = rallyById(P.raid.id);
-    if (!r || S.time > P.raid.until || !rallyMembers(P.raid.id).length) {
+    const r = rallyById(P.raid.id), band = r ? rallyMembers(P.raid.id) : [];
+    // A Salvager's band forms up out of the enemy's land first (P.raid.to: the road tile it is going for, see below): once
+    // the first of it gets there, the flag moves on to the road, and it has two seconds a tile and half a minute more.
+    if (r && P.raid.to !== undefined && band.some((u) => dist2(u.x, u.y, r.x, r.y) <= 9)) {
+      const ti = P.raid.to % S.W, tj = (P.raid.to / S.W) | 0;
+      P.raid.until = S.time + 30 + 2 * dist(ti, tj, r.x, r.y);
+      r.x = ti + 0.5; r.y = tj + 0.5; r.raid = true; delete P.raid.to;
+      return;
+    }
+    // The raid's clock starts when the first raider reaches the flag (P.raid.at; it used to start as they set off, and
+    // bands were called home before they got there), and the band comes home early when the enemy warbots within 5
+    // tiles of it outnumber it.
+    if (r && P.raid.at === 0 && P.raid.to === undefined && band.some((u) => dist2(u.x, u.y, r.x, r.y) <= 9)) { P.raid.at = S.time; P.raid.until = S.time + RAID_TIME; }
+    let them = 0;
+    if (band.length) {
+      let cx = 0, cy = 0;
+      for (const u of band) { cx += u.x / band.length; cy += u.y / band.length; }
+      for (const u of S.bots) if (!u.dead && !u.inside && u.owner >= 0 && foes(u.owner, p) && isArmy(u) && dist2(u.x, u.y, cx, cy) <= 25) them++;
+    }
+    if (!r || S.time > P.raid.until || !band.length || them > band.length) {
       if (r) recallRally(P.raid.id);
       P.raid = null;
       P.nextRaid = S.time + (RAID_GAP[S.difficulty] || 170) / (aiStyle(p).raids || 1);
@@ -1457,19 +1629,27 @@ function aiRaid(p, lvl) {
   // Keep clear of every defence (Pulse Turrets, Minigun Nests, Bunkers, Mortar Pits, Disruptor Towers, Keeps: what they
   // reach, and the three and a half tiles round the flag where the raiders spread out and hit what stands), and of
   // garrisons with warbots in them.
-  const guards = [];
+  // (A Salvager keeps 10 tiles clear of any fort with an armed warbot in it, and 8 of enemy warbots out in the field:
+  // most of its bands that never got there were met by them on the way.)
+  const H = !!st.harass, guards = [];
   for (const b of S.buildings) {
     if (b.dead || b.owner < 0 || !foes(b.owner, p) || !b.built) continue;
     const r = aiDefReach(b);
     if (r) guards.push({ x: b.x, y: b.y, r2: (r + 3.5) * (r + 3.5) });
-    else if (BDEFS[b.type].mil && armedIn(b) >= 2) guards.push({ x: b.x, y: b.y, r2: 56 }); // (beyond where a garrison sorties)
+    else if (BDEFS[b.type].mil && armedIn(b) >= (H ? 1 : 2)) guards.push({ x: b.x, y: b.y, r2: H ? 100 : 56 }); // (beyond where a garrison sorties)
   }
+  if (H) for (const u of S.bots) if (!u.dead && !u.inside && u.owner >= 0 && foes(u.owner, p) && isArmy(u)) guards.push({ x: u.x, y: u.y, r2: 64 });
+  // (A Salvager counts what its band can wreck once the road is cut, too: half as much again for each of the enemy's
+  // working buildings, Fuel Stations and Depots within 3 tiles.)
+  const econ = H ? S.buildings.filter((b) => !b.dead && b.owner === enemy && b.built && !BDEFS[b.type].mil && (BDEFS[b.type].staff || BDEFS[b.type].charger || BDEFS[b.type].store)) : null;
   const spots = [];
   for (let t = 0; t < S.W * S.H; t++) {
     if (!S.road[t] || wayOwner(t) !== enemy || HEAT.flow[t] < 1) continue;
     const i = t % S.W, j = (t / S.W) | 0;
     if (guards.some((g) => dist2(g.x, g.y, i, j) < g.r2)) continue;
-    spots.push({ t, s: HEAT.flow[t] - dist(i, j, S.W / 2, S.H / 2) * 0.05 });
+    let sc = HEAT.flow[t] - dist(i, j, S.W / 2, S.H / 2) * 0.05;
+    if (H && sc > 0) { let n = 0; for (const b of econ) if (dist2(b.x, b.y, i, j) <= 9) n++; sc *= 1 + 0.5 * Math.min(n, 4); }
+    spots.push({ t, s: sc });
   }
   if (!spots.length) return;
   spots.sort((a, c) => c.s - a.s || a.t - c.t);
@@ -1478,12 +1658,39 @@ function aiRaid(p, lvl) {
   // way there still crosses one, there's no way round it); a few tried, from the best down.
   for (const { t } of spots.slice(0, 4)) {
     const i = t % S.W, j = (t / S.W) | 0;
-    if (rallyAvailable(p, i, j) < size + (st.raidKeep ?? 2)) return; // keep enough warbots at home (a Raider sends all it can spare)
+    // (A Salvager's band may take the last warbot of a fort behind the lines: rear, see rallySources.)
+    if (rallyAvailable(p, i, j, H) < size + (st.raidKeep ?? 2)) return; // keep enough warbots at home (a Raider sends all it can spare)
     if (aiRouteHot(p, i, j)) continue;
-    const { sent, rally } = sendToRally(p, i, j, size);
-    if (sent) { rally.raid = true; P.raid = { id: rally.id, until: S.time + RAID_TIME }; }
+    // (Until they get there the raid has a walking allowance: two seconds a tile from home, and half a minute.) A
+    // Salvager plants its flag first on the way there, out of the enemy's land (4 tiles clear of it), so the enemy's
+    // warbots aren't waiting at the road when it arrives (they answer a flag in their land: aiCounterRaid).
+    const L = getE(P.lander), stage = H && L ? aiRaidStage(p, t, L) : -1;
+    const at = stage >= 0 ? stage : t, ai = at % S.W, aj = (at / S.W) | 0;
+    const { sent, rally } = sendToRally(p, ai, aj, size, H);
+    if (sent) {
+      rally.raid = stage < 0;
+      P.raid = { id: rally.id, at: 0, until: S.time + RAID_TIME + 30 + 2 * (L ? dist(ai, aj, L.x, L.y) : 30) };
+      if (stage >= 0) P.raid.to = t;
+    }
     return;
   }
+}
+
+/**
+ * Where a Salvager's band forms up before a raid on road tile t: the first tile on the straight way back from t to its
+ * Command Base L that its warbots can walk to and that lies 4 tiles clear of every rival's land, if that is within
+ * 24 tiles of t; else -1 (it goes straight there).
+ */
+function aiRaidStage(p, t, L) {
+  const ti = t % S.W, tj = (t / S.W) | 0, D = dist(ti, tj, L.x, L.y), z = S.zone[t];
+  for (let k = 1; k <= Math.min(24, D); k++) {
+    const i = Math.round(ti + ((L.x - ti) * k) / D), j = Math.round(tj + ((L.y - tj) * k) / D);
+    if (!inMap(i, j)) continue;
+    const u = tIdx(i, j);
+    if (S.zone[u] !== z || !walkable(u) || S.bAt[u]) continue;
+    if (!rivalLandNear(p, i, j, 4)) return k < 3 ? -1 : u;
+  }
+  return -1;
 }
 
 /**
@@ -1642,6 +1849,186 @@ const AI_HEAVY = 5;
 function aiBare(need, fire, shields) { return !shields && fire >= AI_HEAVY ? Math.ceil(need * 1.3 - 1e-9) : need; }
 
 /**
+ * Army units it takes to take enemy building b with `shields` Bulwarks leading, counted as an attack counts it (aiThink,
+ * step 5): its garrison and two more, the defences that cover it (guardsNear: aiGuards, less what the Bulwarks take),
+ * a gun's own fire (aiGunNeed), and a third more under heavy guns with no Bulwark (aiBare). (The march and the storm
+ * size themselves by it: see aiMarch.)
+ */
+function aiTakeNeed(b, lvl, shields) {
+  const weak = b.built && BDEFS[b.type].mil && b.armor <= BDEFS[b.type].armor * SORTIE_ARMOR;
+  const gar = b.built && !weak ? Math.ceil(b.garrison.length * 1.3) : 0, base = !b.built ? 2 : weak ? lvl.threshold : Math.max(lvl.threshold, gar + 2);
+  const guard = guardsNear(b, shields), gun = aiDefReach(b) > 0;
+  return aiBare(Math.max(base, !b.built || weak ? guard + 1 : gar + 2 + guard, gun ? aiGunNeed(b, shields) : 0), gun ? aiGunNeed(b) - 1 : guardsNear(b), shields);
+}
+
+/**
+ * What became of rival P's attacks and marches (P.fights: where each went, how many, who; Medium and up): one that
+ * lost more than half its warbots within three minutes is remembered (P.beaten), and nothing goes within 8 tiles of
+ * that place for five minutes unless half as many again go (aiBeaten). A place it can't get at through the enemy's
+ * walls is left alone for a minute the same way (aiWalled, every level).
+ */
+function aiBattles(P) {
+  if (P.fights) P.fights = P.fights.filter((f) => {
+    if (f.ids.reduce((n, id) => { const u = getE(id); return n + (u && !u.dead ? 1 : 0); }, 0) * 2 < f.n) { (P.beaten = P.beaten || []).push({ x: f.x, y: f.y, n: f.n, until: S.time + 300 }); return false; }
+    return S.time - f.t < 180;
+  });
+  if (P.beaten) P.beaten = P.beaten.filter((q) => q.until > S.time);
+}
+function aiBeaten(P, b, n) { return !!P.beaten && P.beaten.some((q) => q.until > S.time && dist2(q.x, q.y, b.x, b.y) <= 64 && n < q.n * 1.5); }
+function aiWalled(P, b) { (P.beaten = P.beaten || []).push({ x: b.x, y: b.y, n: 1e6, until: S.time + 60 }); }
+
+/**
+ * A Warden's big push (st.push): it marches only on a push. Before AI_PUSH_AT one starts only with twice its attack
+ * threshold and half as many again as its rival's army and two more; from then on, with its attack threshold and two
+ * more than its rival's (and, after a push, as many as that push took less two). For four minutes (P.pushOn) its home
+ * guard is two, its Keeps hold two and its Outposts none, and its march takes all it can gather, its attack threshold
+ * at least (aiMarch). Not while its base is threatened. (It used to march in a quarter of its games, half an hour in,
+ * with a third of its army kept back.)
+ */
+const AI_ALL_IN = 1680; // from 28 minutes, when long wars are fought out, an Architect stops its missile programme (see aiMissilePlan)
+const AI_PUSH_AT = 1320;
+function aiPush(p, lvl, army, enemyArmy) {
+  const P = S.players[p];
+  if (P.pushOn > S.time || P.homeCall > S.time || S.mode === 'colony') return; // (not while its base is threatened)
+  const need = S.time < AI_PUSH_AT ? Math.max(lvl.threshold * 2, Math.ceil(enemyArmy * 1.5) + 2) : Math.max(lvl.threshold, enemyArmy + 2, (P.pushN || 0) - 2);
+  if (army >= need) { P.pushOn = S.time + 240; P.pushN = army; }
+}
+
+/**
+ * A march by a Medium, Normal or Hard rival p (its army `army`, the enemy's `enemyArmy`) on an enemy garrison: the one
+ * that takes the fewest to beat (what taking it takes, aiTakeNeed, and never less than the plain march sends: twice
+ * its attack threshold, or against a crushed rival twice the enemy's army and two more, and the guns that cover the
+ * flag; a little more for every tile it stands from home, the enemy Command Base a little cheaper, much cheaper
+ * against a crushed rival). It goes only with that many (14 at least, 22 at most; up to 30 against a crushed rival),
+ * Bulwarks and Torches at its head, at the gun covering the flag first (rally.first); with fewer it masses for it
+ * (P.massFor: the army target rises, see aiWantArmy, and its Outposts give up their keepers), softens the spot and
+ * orders a Bulwark (P.soften, P.shieldWant), and goes once it has them. (It used to send the 10 to 14 it had to stand
+ * beside the nearest fort, whatever guarded it, and lose most of them.)
+ * With a decisive lead (half as many warbots again as the enemy and four more) the next march is a storm of the
+ * enemy Command Base: with every warbot it can gather (up to 30), as soon as that is enough to take the base;
+ * until then, while its whole army would be, it masses for the base and marches on nothing else, for up to four
+ * minutes (P.stormT; then a cheaper fort first, as above). Against a crushed rival (twice its army and two more) it
+ * goes however the base's guns count, once it can gather twice the enemy's whole army and two more, 8 at least, and
+ * three in five of its own armed army outside Bunkers (or the full count, if that is less); with three times the
+ * enemy's army and four more it masses for that meanwhile and marches on nothing else. The band forms up out of the
+ * guns' reach (aiStage) and goes in once it has (aiStorm). Not in an Uplinks game, which is won at the Uplinks.
+ * (With the bases defended, a rival far ahead used to march on the cheapest Outpost every few minutes and never on
+ * the base, losing band after band, until the game ran out.) Returns true when a march set off.
+ */
+function aiMarch(p, lvl, enemy, army, enemyArmy, crushing) {
+  const P = S.players[p], lander = getE(P.lander), hz = homeZone(p);
+  const spotBy = (b) => {
+    for (const [di, dj] of [[1, 1], [-1, 1], [1, -1], [-1, -1], [2, 0], [-2, 0], [0, 2], [0, -2]]) {
+      const i = b.x + di, j = b.y + dj;
+      if (inMap(i, j) && walkable(tIdx(i, j)) && !S.bAt[tIdx(i, j)] && S.zone[tIdx(i, j)] === hz) return { i, j };
+    }
+    return null;
+  };
+  const pushing = P.pushOn > S.time, floor = crushing ? Math.max(4, enemyArmy * 2 + 2) : pushing ? lvl.threshold : lvl.threshold * 2;
+  // What a march on b from flag spot `at` takes, with the spare army there (aiSpare) and its Bulwarks leading.
+  const needAt = (b, at, sp) => Math.max(aiTakeNeed(b, lvl, sp.shields), floor + Math.ceil(aiFire(aiGuards(b.owner, at.i, at.j, 2, null).filter((e) => aiDefReach(e.b)), sp.shields) - 1e-9));
+  let tgt = null, spot = null, size = 0, bs = Infinity, hard = null, hs = Infinity, storm = false;
+  const strong = S.victory !== 'uplinks' && army >= enemyArmy * 1.5 + 4;
+  const eb = getE(S.players[enemy].lander), by = strong && eb && !eb.dead && eb.owner === enemy && !aiBeaten(P, eb, 30) ? aiStage(p, eb) || spotBy(eb) : null;
+  if (by) {
+    const sp = aiSpare(p, { x: by.i, y: by.j }, 'flag'), n = Math.min(30, sp.n), g = aiTakeNeed(eb, lvl, aiShieldsIn(sp, n));
+    let whole = 0; // (its armed army outside Bunkers)
+    if (crushing) for (const u of S.bots) if (!u.dead && u.owner === p && isArmy(u) && botArmed(u) && !(u.inside && BDEFS[getE(u.inside).type].bunker)) whole++;
+    const go = crushing ? Math.max(8, enemyArmy * 2 + 2, Math.min(g, Math.ceil(whole * 0.6))) : Infinity;
+    if (n >= Math.max(4, g) || n >= go) { tgt = eb; spot = by; size = n; storm = true; }
+    else if (crushing && army >= enemyArmy * 3 + 4) { storm = true; hard = { b: eb, need: go - 2 }; } // (overwhelming: it masses for that, and marches on nothing else)
+    else if (g <= army - 2 && S.time - (P.stormT || (P.stormT = S.time)) < 240) { storm = true; hard = { b: eb, need: g }; }
+  }
+  if (!storm || tgt) P.stormT = 0;
+  if (!storm) for (const b of S.buildings) {
+    if (b.dead || b.owner !== enemy || !b.built || !BDEFS[b.type].mil || BDEFS[b.type].bunker) continue;
+    const at = !aiBeaten(P, b, 22) && spotBy(b);
+    if (!at) continue;
+    // (A march may empty the garrisons far behind the lines; against a rival with next to no army, a small band is
+    // enough to finish it.)
+    const sp = aiSpare(p, { x: at.i, y: at.j }, 'flag'), avail = sp.n, g = needAt(b, at, sp);
+    const sc = g + dist(b.x, b.y, lander.x, lander.y) * 0.15 - (b.type === 'lander' ? (crushing ? 12 : 3) : 0);
+    if (sc >= bs && sc >= hs) continue;
+    const n = pushing ? Math.min(30, avail) : Math.min(crushing ? 30 : 22, crushing ? avail : avail - 2, Math.max(14, g + 2)); // (a Warden's push: all it can gather)
+    if (n >= g && !aiBeaten(P, b, n)) { if (sc < bs) { bs = sc; tgt = b; spot = at; size = n; } }
+    else if (sc < hs && g <= 28) { hs = sc; hard = { b, need: g }; }
+  }
+  if (tgt) {
+    const { sent, rally, breach } = sendToRally(p, spot.i, spot.j, size, true, false, true);
+    if (sent && breach && breach.need > breach.shots) { recallRally(rally.id); aiWalled(P, tgt); } // (walls in the way it can't shoot through)
+    else if (sent) {
+      P.march = rally.id; P.lastMarch = S.time; P.massFor = null;
+      if (storm) P.stormOn = { id: rally.id, base: tgt.id, foe: tgt.owner, n: sent, go: 0 };
+      else rally.first = aiFirstGun(tgt.owner, spot.i, spot.j); // (at the gun covering the flag first: see holdRally)
+      (P.fights = P.fights || []).push({ x: tgt.x, y: tgt.y, n: sent, t: S.time, ids: rallyMembers(rally.id).map((u) => u.id) });
+      P.siegeAt = { x: tgt.x, y: tgt.y, until: S.time + 150 };
+      return true;
+    }
+  } else if (hard) {
+    // Held back: it masses for it, its Howitzers, Missiles and bomber soften the spot meanwhile, and a Bulwark comes to lead.
+    P.massFor = { need: hard.need + 2, until: S.time + 240 };
+    P.siegeAt = { x: hard.b.x, y: hard.b.y, until: S.time + 60 };
+    P.soften = { x: hard.b.x, y: hard.b.y, until: S.time + 60 };
+    P.shieldWant = S.time;
+  }
+  return false;
+}
+
+/**
+ * A storm of the enemy Command Base under way (P.stormOn: the march's flag `id`, the `base` and its owner `foe`, the
+ * `n` sent, and `go` once it goes in). The band forms up under its flag, out of the guns' reach (aiStage); once three in
+ * five of it stand within 5 tiles of the flag, the flag moves beside the base and the band goes in, at the gun that
+ * covers the flag first (rally.first, see holdRally), then the next, then the base. It is called off when fewer than
+ * two in five are left armed, or when the band hasn't formed up five minutes after setting off.
+ */
+function aiStorm(p) {
+  const P = S.players[p], T = P.stormOn, eb = getE(T.base), r = rallyById(T.id);
+  const band = r ? rallyMembers(r.id).filter((u) => botArmed(u)) : [];
+  if (!eb || eb.dead || eb.owner !== T.foe || !r || band.length * 5 < T.n * 2 || (!T.go && S.time - (P.lastMarch || 0) > 300)) {
+    if (r) recallRally(r.id);
+    if (P.march === T.id) P.march = 0;
+    P.stormOn = null;
+    return;
+  }
+  if (!T.go) {
+    if (band.filter((u) => dist2(u.x, u.y, r.x, r.y) <= 25).length * 5 < band.length * 3) return; // (forming up)
+    const z = S.zone[tIdx(Math.floor(r.x), Math.floor(r.y))];
+    for (const [di, dj] of [[1, 1], [-1, 1], [1, -1], [-1, -1], [2, 0], [-2, 0], [0, 2], [0, -2]]) {
+      const i = eb.x + di, j = eb.y + dj;
+      if (inMap(i, j) && walkable(tIdx(i, j)) && !S.bAt[tIdx(i, j)] && S.zone[tIdx(i, j)] === z) { r.x = i + 0.5; r.y = j + 0.5; break; }
+    }
+    T.go = 1;
+  }
+  const g = getE(r.first);
+  if (!g || g.dead || !foes(g.owner, p)) r.first = aiFirstGun(eb.owner, Math.floor(r.x), Math.floor(r.y));
+  P.siegeAt = { x: eb.x, y: eb.y, until: S.time + 30 };
+}
+
+/**
+ * Where a storm of enemy building b forms up: a free tile within 16 tiles of it that p's warbots can walk to, that as
+ * few enemy guns reach, with three tiles to spare, as can be (none, where there is such a tile: DANGER.guns), more
+ * than 7 tiles from the enemy's forts if that can be had, about 9 tiles out, and on the side p comes from (a band
+ * staged beyond the base walked past its guns to get there). Null if there is none.
+ */
+function aiStage(p, b) {
+  dangerMap(p);
+  const guns = DANGER.guns[p] || [], z = homeZone(p), forts = S.buildings.filter((e) => !e.dead && e.built && e.owner === b.owner && BDEFS[e.type].mil);
+  const home = getE(S.players[p].lander), dh = home ? dist(b.x, b.y, home.x, home.y) : 0;
+  let best = null, bs = Infinity;
+  for (let j = Math.max(0, b.y - 16); j <= Math.min(S.H - 1, b.y + 16); j++) for (let i = Math.max(0, b.x - 16); i <= Math.min(S.W - 1, b.x + 16); i++) {
+    const t = tIdx(i, j), d = dist(i, j, b.x, b.y);
+    if (d > 16 || d < 4 || !walkable(t) || S.bAt[t] || S.zone[t] !== z) continue;
+    // (Three tiles clear of each gun's reach: the band spreads round its flag and goes for what comes near, and one
+    // formed up just outside a turret's reach was shot down piecemeal while it waited for the rest.)
+    let cover = 0;
+    for (const g of guns) if (dist2(g.b.x + 0.5, g.b.y + 0.5, i + 0.5, j + 0.5) <= (g.r + 3) * (g.r + 3)) cover++;
+    const sc = cover * 8 + Math.abs(d - 9) * 0.5 + (forts.some((e) => dist2(e.x, e.y, i, j) <= 49) ? 3 : 0) + (home ? (dist(i, j, home.x, home.y) - dh) * 0.4 : 0); // (on the side it comes from: not past the guns)
+    if (sc < bs) { bs = sc; best = { i, j }; }
+  }
+  return best;
+}
+
+/**
  * Clear the worst enemy gun covering our buildings: a missile if a Silo can reach it, Howitzers (they
  * outrange a Pulse Turret), a Vulcan Bomber, and a band of warbots big enough to win. Until the army can
  * win, the Foundry makes warbots (P.gunNeed). P.gunTarget names the gun for aiSiege and aiBomber.
@@ -1768,7 +2155,8 @@ function aiSiege(p) {
 
 /**
  * Answer raids: an enemy rally flag inside our land with warbots at it gets twice as many of ours
- * sent to the same spot (they fight whatever is there), called home once the raiders are gone.
+ * sent to the same spot (they fight whatever is there), called home once the raiders are gone; none
+ * when it can't spare a third more than the flag has.
  */
 function aiCounterRaid(p) {
   const P = S.players[p];
@@ -1783,10 +2171,42 @@ function aiCounterRaid(p) {
     const i = Math.floor(r.x), j = Math.floor(r.y);
     if (!inMap(i, j) || S.owner[tIdx(i, j)] !== p) continue;
     const raiders = rallyMembers(r.id).length;
-    if (!raiders) continue;
+    // (Only with a third more warbots than the flag has, at least: fewer stay behind their walls. It used to send
+    // whatever it had, one warbot as often as not.)
+    if (!raiders || rallyAvailable(p, i, j) < Math.ceil(raiders * 1.3)) continue;
     const { sent, rally } = sendToRally(p, i, j, raiders * 2);
     if (sent) P.counters.push({ enemy: r.id, mine: rally.id, at: S.time });
   }
+}
+
+/**
+ * What a Missile on enemy building e is worth to an Architect p (Normal and Hard): what its rival lives on first, by
+ * AI_BOMB_VALUE (Silos and the Missile Factory, the Ammo Plant, the Bot Foundry, Fuel, the Chip Fab and Smelters),
+ * then any other building with a worker or that charges robots, and a fort (an Outpost too) only when it has the
+ * warbots in reach to follow the Missile in. (Most of its Missiles used to go into Outposts and turrets.)
+ */
+function aiMissileWorth(p, e, lvl) {
+  const def = BDEFS[e.type];
+  if (AI_BOMB_VALUE[e.type] && !captureOnly(e)) return AI_BOMB_VALUE[e.type];
+  if (def.mil) return attackAvailable(p, e) >= lvl.threshold ? 3 : 0.5;
+  return def.barrier ? 0 : def.staff || def.charger || def.pump ? 4 : def.war ? 3 : 2;
+}
+
+/**
+ * Where an Architect p under siege fires a Missile from `silo` (see aiThink): at the enemy warbot, out in the open
+ * within 12 tiles of its Command Base L and in the Silo's reach, with the most others within a blast's reach of it
+ * (three or more, counting itself). {i, j} or null.
+ */
+function aiMissileKnot(p, L, silo) {
+  const md = BDEFS.silo.missile, foesNear = S.bots.filter((u) => !u.dead && !u.inside && u.owner >= 0 && foes(u.owner, p) && isArmy(u) && dist2(u.x, u.y, L.x, L.y) <= 144);
+  let best = null, bn = 2;
+  for (const u of foesNear) {
+    if (dist(silo.x, silo.y, u.x, u.y) > md.range) continue;
+    let n = 0;
+    for (const v of foesNear) if (dist2(u.x, u.y, v.x, v.y) <= md.splash * md.splash) n++;
+    if (n > bn) { bn = n; best = { i: Math.floor(u.x), j: Math.floor(u.y) }; }
+  }
+  return best;
 }
 
 /**
@@ -1805,20 +2225,34 @@ function aiMissilePlan(p, me, counts, kinds, workers, staffed) {
   // no Silo that's built has room for another Missile: with nowhere to load them it only turned Alloy, Chips
   // and Fuel into Missiles lying in storage.
   const room = me.some((b) => b.type === 'silo' && b.built && (b.stock.warhead || 0) + (b.inc.warhead || 0) < BDEFS.silo.ammoCap);
-  const rest = !!(site && site.type === 'silo') || !room;
-  for (const b of me) if (b.type === 'munitions' && b.built && !!b.paused !== rest) setPaused(b, rest);
+  // (An Architect's doesn't rest for a Silo site, its next one goes down early, but while its army is more than two behind
+  // its rival's, until it is level again: the Chips go to warbots first. From AI_ALL_IN, when long wars are fought out,
+  // its factory rests and it saves for no more Silos: short of Chips, its factory kept its army just above its rival's
+  // and some wars ran to the end undecided.)
+  const army = st.missiles ? aiArmyOf(p) : 0, foeArmy = st.missiles ? aiArmyOf(rivalOf(p)) : 0, late = st.missiles && S.time >= AI_ALL_IN;
+  for (const b of me) {
+    if (b.type !== 'munitions' || !b.built) continue;
+    const rest = st.missiles ? late || !room || army < foeArmy - (b.paused ? 0 : 2) : !!(site && site.type === 'silo') || !room;
+    if (!!b.paused !== rest) setPaused(b, rest);
+  }
+  if (late) { P.saveStart = 0; return null; }
   if (site) { site.prio = 'high'; return site.type; } // keep the Foundry resting (and goods coming here first) until the site has its materials
   // A Tycoon goes for missiles sooner, with fewer warbots at home, once its Bot Foundry runs. The
   // others start no sooner than a Balanced rival would (a Rusher spends on warbots instead).
   const base = DIFFICULTY[S.difficulty];
+  // An Architect's starts from ten minutes, once its army is two up on its rival's (five at least), with two workers to
+  // spare (four was more than its extra Smelter and Chip Fab left it). (From five minutes with an army level with its
+  // rival's, it spent the Alloy on Silos early and was stormed; waiting for an army up to its target, it hardly began.)
   const ready = (st.missiles
-    ? S.time >= base.grace * 0.8 && me.some((b) => b.type === 'foundry' && b.built) && (kinds.warbot || 0) >= 3
+    ? S.time >= Math.max(base.grace * 0.8, 600) && me.some((b) => b.type === 'foundry' && b.built) && army >= Math.max(5, foeArmy + 2)
     : S.time >= base.grace * 0.7 * Math.max(1, st.grace || 1) && (kinds.warbot || 0) >= Math.max(base.threshold, lvl.threshold)) &&
-    (counts.outpost || 0) >= 2 && workers >= staffed + 4;
+    (counts.outpost || 0) >= 2 && workers >= staffed + (st.missiles ? 2 : 4);
   if (!ready || S.time < (P.saveCooldown || 0)) { P.saveStart = 0; return null; }
   let want = null;
   if (!counts.munitions) want = 'munitions';
-  else if (!counts.silo || (counts.silo < (st.missiles ? 3 : 2) && S.time > lvl.grace * (st.missiles ? 1.2 : 2.5))) want = 'silo';
+  // (An Architect's next Silo, up to three, once the ones it has hold a Missile each.)
+  else if (!counts.silo || (counts.silo < (st.missiles ? 3 : 2) && S.time > lvl.grace * (st.missiles ? 1.2 : 2.5) &&
+    (!st.missiles || me.every((b) => b.type !== 'silo' || (b.stock.warhead || 0) >= 1)))) want = 'silo';
   if (want) {
     P.saveStart = P.saveStart || S.time;
     if (S.time - P.saveStart > (st.missiles ? 300 : 180)) { P.saveCooldown = S.time + (st.missiles ? 120 : 240); P.saveStart = 0; return null; }
@@ -2029,6 +2463,7 @@ function aiSearchSpot(p, type, lander) {
   const avoid = (S.players[p].avoid || []).filter((a) => a.until > S.time);
   S.players[p].avoid = avoid;
   const defence = DEFENCE_TYPES.has(type);
+  const foeB = type === 'silo' && aiStyle(p).missiles ? S.buildings.filter((b) => !b.dead && b.built && b.owner === rivalOf(p)) : null;
   // An Ore Mine counts only the Ore none of our Mines already works (two side by side on a small patch both ran dry
   // inside a minute). Not the others: Stone and Fiber lie thick, and spreading Quarries out slowed whole colonies.
   let covered = null;
@@ -2068,8 +2503,8 @@ function aiSearchSpot(p, type, lander) {
         out = true;
       }
       if (S.fert[j * S.W + i] && type !== 'farm') continue; // keep fertile soil for farming
-      if (gunCovers(p, j * S.W + i)) continue; // not where an enemy gun reaches: nobody could build it
-      if (avoid.some((a) => dist2(a.x, a.y, i, j) < 12)) continue;
+      if (gunCovers(p, j * S.W + i) || dangerAt(p, i, j)) continue; // not where an enemy gun reaches: nobody could build it (nor where its robots were just shot down: noteDanger)
+      if (avoid.some((a) => dist2(a.x, a.y, i, j) < (a.r2 || 12))) continue;
       if (!canPlace(p, type, i, j, true).ok) continue;
       let rc = Infinity;
       for (const u of roadSides(p, i, j)) rc = Math.min(rc, reach[u]);
@@ -2165,6 +2600,8 @@ function aiSearchSpot(p, type, lander) {
         if (at && at.up) { df = dist(i, j, at.x, at.y); dk = 8; } // (beside an Uplink: its guns reach all round it)
         const want = at && at.up ? 1.5 : type === 'mortar' ? 4 : 2.5;
         s = -Math.abs(df - want - 0) * 1.5 - dist(i, j, ex, ey) * 0.25 + Math.min(dk, 8) * 0.5;
+        // (Against a parked army, at.ax: 7 to 10 tiles from it, so that it is in reach and the builder isn't.)
+        if (at && at.ax !== undefined) { const da = dist(i, j, at.ax, at.ay); if (da < 7) continue; s = -Math.abs(da - 8.5) * 2 - Math.abs(df - want) * 0.5 + Math.min(dk, 8) * 0.3; }
       } else if (type === 'port') {
         let dp = 99;
         for (const b of S.buildings) if (!b.dead && b.owner === p && BDEFS[b.type].port) dp = Math.min(dp, dist(i, j, b.x, b.y));
@@ -2185,6 +2622,14 @@ function aiSearchSpot(p, type, lander) {
         s = Math.min(dHome, TERMINAL.minDist + TERMINAL.maxBonus / TERMINAL.perTile) * 0.5 + dist(i, j, ex, ey) * 0.3 - rc * 0.4;
       } else if (type === 'silo') {
         s = -dist(i, j, ex, ey); // as close to the enemy as our land allows
+        // An Architect's stand back: the spot nearest home with six of its rival's buildings in a Missile's reach (fewer
+        // count for less), out of reach of an attack from any of them if it can be. (Up at the border its Silos were
+        // the first thing the rival's warbots reached.)
+        if (foeB) {
+          let n = 0, near = Infinity;
+          for (const b of foeB) { const d = dist(i, j, b.x, b.y); if (d <= BDEFS.silo.missile.range) n++; if (d < near) near = d; }
+          s = n ? Math.min(n, 6) * 4 - Math.max(0, ATTACK_RANGE + 2 - near) * 1.5 - dHome * 0.15 : s - 50;
+        }
       } else if (type === 'depot') {
         // A forward base: out towards the Outposts, but on the road network.
         s = Math.min(dHome, 18) * 0.6 - dist(i, j, ex, ey) * 0.1;
