@@ -748,7 +748,12 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   missing link of the chain that makes bots (`AI_CHAIN`) is started, every staffed building rests but the Mine,
   Smelter, Chip Fab and Foundry while they have what they work with (and a gatherer short of its good), so the few
   workers go down the chain to the link that can work, and the Foundry makes workers alone (`P.triage`). Without it
-  a colony left with two to four workers kept them all busy and never made another. Its Missile Factory and Silos come
+  a colony left with two to four workers kept them all busy and never made another. At the bot limit (90 in Versus) it
+  keeps room for the army it wants (`aiWantArmy`, but no more than `AI_ARMY_ROOM`, two fifths of the limit): workers
+  stop where they would eat into that room, the Foundry makes warbots, and Haulers, trucks and other helpers aren't
+  ordered (but a first Tanker); warbots past what it wants leave `AI_WORKER_ROOM` (6) places for workers. Without it a
+  colony that had taken a lot of buildings made workers to staff them all until the limit was full, and never fielded
+  an army again (a 2 v 2 game ran past an hour). Its Missile Factory and Silos come
   only through `aiMissilePlan` (not the plain build plan, where a Hard rival put a factory up four minutes in), one
   site at a time, and the factory rests while no built Silo has room for another Missile. It walks its best spots for a
   gatherer (`walkRes`: only nodes within three times the reach on foot count), so it never puts a Harvester at the foot

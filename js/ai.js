@@ -28,6 +28,8 @@ const AI_CHAIN = ['harvester', 'quarry', 'kiln', 'mine', 'tap', 'smelter', 'fab'
 const AI_CORE = ['mine', 'smelter', 'fab', 'foundry'];
 /** Fewer workers than this is an emergency (triage); it's over once there are AI_ENOUGH again. */
 const AI_FEW = 6, AI_ENOUGH = 8;
+/** Room kept under the bot limit for the army it wants (a share of the limit at most), and for workers past that. */
+const AI_ARMY_ROOM = 0.4, AI_WORKER_ROOM = 6;
 
 /** Rival p's personality (see PERSONALITIES). */
 function aiStyle(p) { return PERSONALITIES[S.players[p].style] || PERSONALITIES.balanced; }
@@ -489,7 +491,7 @@ function aiThink(p) {
 
   // 3) Foundry: keep enough workers, then grow the army. Order specialists when a building needs
   //    one, and enough Haulers (a Freight Truck counts as one and a half) to carry every good in the colony.
-  const wantWorkers = staffed + 3 + Math.min(3, sites);
+  let wantWorkers = staffed + 3 + Math.min(3, sites);
   // A Freight Truck takes the long runs off the Haulers, but sits idle much of the time: it counts as one and a half.
   const wantHaulers = clamp(Math.ceil(me.length * 0.35), 4, 16) - Math.floor(1.5 * (kinds.truck || 0));
   // Tankers carry every drop of Crude and Fuel: one, and another for every five buildings that make or burn them.
@@ -500,6 +502,14 @@ function aiThink(p) {
   // (An enemy gun covering our buildings: at least enough warbots to knock it out, see aiClearGuns.)
   const wantArmy = S.mode === 'colony' || botBanned(p, 'warbot') ? 0 : Math.max(aiWantArmy(lvl, p), P.gunWant || 0); // (barred from making warbots: no army to build)
   const armyBehind = army < wantArmy - 2;
+  // The bot limit: the room left under it is kept for the army it wants (AI_ARMY_ROOM of the limit at most), so a
+  // colony that has taken a lot of buildings can't fill the limit with workers, Haulers and the rest and never field an
+  // army again. Workers stop where they would eat into that room, and so do the other non-fighting robots (but the one
+  // Tanker it can't do without); warbots past what it wants leave AI_WORKER_ROOM free, for the workers it loses.
+  const botCap = S.mode === 'colony' ? MAX_BOTS_COLONY : MAX_BOTS, spare = botCap - sumValues(kinds);
+  const armyRoom = S.mode === 'colony' ? 0 : Math.max(0, Math.min(wantArmy, Math.floor(botCap * AI_ARMY_ROOM)) - army);
+  const civilOk = spare > armyRoom;
+  wantWorkers = Math.min(wantWorkers, workers + Math.max(0, spare - armyRoom));
   let unarmed = 0;
   // (Warbots stranded across the water, say landed on an enemy shore, can't get home to rearm: they don't count.)
   const hzA = homeZone(p);
@@ -533,9 +543,9 @@ function aiThink(p) {
     if (b.type !== 'foundry' || !b.built) continue;
     if (few) { b.mode = 'worker'; b.orders = {}; continue; } // triage: workers, and nothing else, until there are enough
     // Workers first while buildings stand empty; then the army gets its share as the game goes on.
-    b.mode = S.mode === 'colony' ? 'worker' : workers < staffed + MIN_FREE_WORKERS ? 'worker'
+    b.mode = S.mode === 'colony' ? 'worker' : workers < Math.min(staffed + MIN_FREE_WORKERS, wantWorkers) ? 'worker'
       : army < wantArmy ? (workers < wantWorkers ? 'alt' : 'warbot')
-        : workers < wantWorkers ? 'worker' : workers > wantWorkers + 4 ? 'warbot' : 'alt';
+        : workers < wantWorkers ? 'worker' : spare <= AI_WORKER_ROOM ? 'off' : workers > wantWorkers + 4 ? 'warbot' : 'alt';
     // A third of the army with no Ammo: no more warbots until it's armed (the Alloy goes to Ammo).
     if (unarmed >= Math.max(4, army / 3) && (b.mode === 'warbot' || b.mode === 'alt')) b.mode = workers < wantWorkers ? 'worker' : 'off';
     if (botBanned(p, 'warbot') && (b.mode === 'warbot' || b.mode === 'alt')) b.mode = workers < wantWorkers ? 'worker' : 'off';
@@ -572,6 +582,8 @@ function aiThink(p) {
     }
     // A Trade Terminal is served only by Road Trains: one for it.
     if (me.some((t) => BDEFS[t.type].terminal) && !(kinds.roadtrain > 0) && !(b.orders.roadtrain > 0)) b.orders.roadtrain = 1;
+    // No room under the bot limit but the army's: only the army's specialists (and a first Tanker) are made.
+    if (!civilOk) for (const k in b.orders) if (!(BOTS[k] && BOTS[k].army) && !(k === 'tanker' && !(kinds.tanker > 0))) delete b.orders[k];
     break;
   }
   // Depots out towards the front keep Cement for building there.
