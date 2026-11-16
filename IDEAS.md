@@ -108,8 +108,8 @@ these wait for a later expansion:
 ### The Murmur as a real enemy (after the models are chosen)
 
 "The Murmur" is the blanket name; each class has its own, and each counters something robotic. Classes so far:
-Scuttler (small, fast, packs), Brute (armoured, breaks Walls), and new ones to design in the chosen style, such as a
-Drainer/Leech (latches onto vehicles, trains and buildings and drains their charge, shutting them down while it feeds),
+Scuttler (small, fast, packs), Brute (armoured, breaks Walls), and new ones to design in the chosen style: the
+Leech (named by the owner; latches onto vehicles, trains and buildings and drains their charge, shutting them down while it feeds),
 a Spitter (spits conductive crystal slurry that shorts robots and turrets for a moment: counters defence lines) and a
 Delver (tunnels under Walls and surfaces behind them: counters turtling). Mechanics from the lore:
 

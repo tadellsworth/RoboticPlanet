@@ -451,8 +451,11 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   once mended (`u.resume`, `resumeAfterRepair`; the flag stays up meanwhile, and Recall cancels the return). Haulers keep up to 3 Alloy
   in it, and an empty one gets the first Alloy that reaches storage (like an empty Fuel Station's Fuel). To fix a building, tap it and press **Repair**:
   you pay 1 Cement for every 6 missing armor and a free worker restores it.
-- **Statistics:** the pause menu and the end-of-game screen show graphs of bots, land and goods over time and how busy
-  each kind of building was; each building's panel shows its recent busy time.
+- **Statistics:** the pause menu and the end-of-game screen show graphs over time of bots, land, goods, **Economy size**
+  (Output: goods made a minute, from the running total `made`; Buildings: finished non-military buildings, `econ`;
+  Workers and vehicles, `civ`) and, with war on, **Military size** (Army, `war`; Defences: forts and guns, `def`),
+  every colony a line (`recordHistory`), then how busy each kind of building was over the game; each building's panel
+  shows its recent busy time.
 - **Terrain levels:** the planet has terraces at different heights (lighter ground is higher). Bots
   can't climb cliffs; they use slopes at narrow passes, so some routes are long. Pave busy routes with
   Paths (slopes too) and build a **Ramp** (Paths, Ramps) on the top or at the foot of a cliff to open your own way up or down. Its worker builds it from whichever side of the cliff is the shorter trip (`rampStand`: the Ramp's tile or the ground across the cliff, `rampSides`), so a Ramp down off a plateau is built from the top, and its foot can even be ground no bot can reach yet. Buildings can't be placed where they

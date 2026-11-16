@@ -7050,12 +7050,13 @@ function recordHistory() {
     if (P.absent) continue;
     const h = H.p[P.id] || (H.p[P.id] = {});
     const push = (k, v) => (h[k] = h[k] || []).push(v);
-    let civ = 0, war = 0, blds = 0;
+    let civ = 0, war = 0, blds = 0, econ = 0, def = 0;
     for (const u of S.bots) if (!u.dead && u.owner === P.id) { if (isArmy(u)) war++; else civ++; }
     const use = {};
     for (const b of S.buildings) {
       if (b.dead || b.owner !== P.id || !b.built) continue;
       blds++;
+      if (BDEFS[b.type].war || BDEFS[b.type].mil) def++; else econ++; // (forts and guns; everything else is the economy)
       if (!(b.upI > 0)) continue;
       const pct = Math.round(Math.min(1, (b.useI || 0) / b.upI) * 100);
       (b.useHist = b.useHist || []).push(pct);
@@ -7064,6 +7065,8 @@ function recordHistory() {
       b.useI = 0; b.upI = 0;
     }
     push('civ', civ); push('war', war); push('blds', blds);
+    // For the Economy and Military graphs: buildings of each kind, and everything made so far (its rise is the output).
+    push('econ', econ); push('def', def); push('made', Math.round(sumValues(P.made || {})));
     // Totals made and used, kept for the last two minutes, for the goods panel's rates.
     P.rateLog = (P.rateLog || []).concat([{ t: S.time, made: { ...(P.made || {}) }, used: { ...(P.used || {}) } }]);
     while (P.rateLog.length > 9) P.rateLog.shift();
