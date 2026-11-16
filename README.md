@@ -22,7 +22,11 @@ how goods move.
   building roster, missiles and nuclear silos included, to experiment with, plus the **Research Lab** and optional
   **Wildlife** (creature nests that raid you; on by default).
 - **Missions:** eight set challenges on hand-picked planets, each with its own goals and Easy, Normal and Hard
-  levels. All of them are open from the start; finishing one ticks it off at that difficulty.
+  levels. All of them are open from the start; finishing one ticks it off at that difficulty. While any goal other
+  than capturing the rival Command Base is open, that base holds at 1 armor against you (`captureLocked`, applied in
+  `hitBuilding`), so winning too soon can't lose a mission. A mission's setup can start you with the colony the earlier
+  missions taught (`kit(S, types, workers)`, with the lists `KIT6` and `KIT7`), and custom goals count tiles with
+  `ownTiles(test)`.
 
 Before each game, the new-game screen picks the mode, players and rival, the **map shape** (Standard, Long haul,
 Chokepoint, Islands, Crater, Plateaus, Sky islands, Rift, Ring valley, Oases, Crossroads, Lakes, Tidal flats, River delta,
