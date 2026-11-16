@@ -125,12 +125,6 @@ or drop.
 - **Blueprints:** save a stamped layout (a Smelter block and its roads) and paste it elsewhere. Far fewer taps on a
   phone.
 
-### Phone polish
-- **Paths tools on an upright phone:** the row shows 2-3 of its 11 tools (the edge with more fades). A "Tool"
-  picker that opens all of them at once would be clearer.
-- **The selection bar's last button** (Save as group) needs a sideways swipe on a 390 px phone.
-- **Haptics** (`navigator.vibrate`) on a confirmed order, a placed building and an alert.
-
 ### Ten more
 - **Watch mode:** two computer rivals, doctrines picked, with speed control and the scout reports. It shows off the
   doctrines and teaches by example (the menu demo already runs one).
