@@ -1101,10 +1101,10 @@ const MISSIONS = [
   },
   {
     id: 'siege', name: 'Siege Breakers', chapter: 'War',
-    brief: 'A Warden (a turtle) hides behind Walls and turrets. Burn through with Torches, shield the push with a Bulwark and send in missiles.',
+    brief: 'A Warden (a turtle) hides behind Walls and turrets. Burn through, and burn its farmland, with Torches; shield the push with a Bulwark and send in missiles.',
     intro: [
       'This rival is a <b>Warden</b> (a turtle): it has held its position for decades. Walls, turrets and Keeps first, a big army late.',
-      '<b>Torches</b> burn through Walls fast; a <b>Bulwark</b>\'s shield covers the robots behind it.',
+      '<b>Torches</b> burn through Walls fast, and <b>Scorch the earth</b> burns farmland for good; a <b>Bulwark</b>\'s shield covers the robots behind it.',
       'A <b>Missile Silo</b> reaches 22 tiles: build it toward them. Missiles wreck most buildings, but a Keep must be captured.',
       'Tap a rival building in range → <b>Fire missile</b> (<kbd>F</kbd>) works too.',
       'Their base can wait: this is about breaking in.',
@@ -1117,12 +1117,15 @@ const MISSIONS = [
       L.stock.alloy += 10; L.stock.chip += 4; L.stock.fuel += 10;
     },
     goals: [
-      { kind: 'bots', type: 'torch', n: [1, 2, 2], at: 'foundry',
-        hint: 'Tap the Bot Foundry → <b>Order bots</b>: Torches <b>+1</b>. They burn Fuel: keep some in storage.',
-        ui: "#sh-orders .order-row[data-k='torch'] [data-d='1']" },
-      { kind: 'bots', type: 'bulwark', n: 1, at: 'foundry',
-        hint: 'Bot Foundry → <b>Order bots</b>: Bulwarks <b>+1</b>. Its shield stops fire from ahead.',
-        ui: "#sh-orders .order-row[data-k='bulwark'] [data-d='1']" },
+      { kind: 'army', n: [2, 3, 3], text: 'Build Torches and a Bulwark', at: 'foundry',
+        // (Torches: one on Easy, two on Normal and Hard; and a Bulwark.)
+        count: (P, S) => Math.min((P.madeBots && P.madeBots.torch) || 0, [1, 2, 2][S.mission.diff]) + Math.min((P.madeBots && P.madeBots.bulwark) || 0, 1),
+        hint: 'Tap the Bot Foundry → <b>Order bots</b>: Torches <b>+1</b>, Bulwarks <b>+1</b>. Torches burn Fuel: keep some.',
+        ui: "#sh-orders .order-row[data-k='torch'] [data-d='1'], #sh-orders .order-row[data-k='bulwark'] [data-d='1']" },
+      { kind: 'scorch', n: [2, 3, 4], text: 'Scorch {n} patches of their farmland',
+        count: (P) => P.stats.scorchedFoe || 0, // (fertile soil a rival farms, or on its land, burned for good: see scorchSoil)
+        hint: 'Tap a Torch (or <b>Army</b> → <b>Select all warbots</b>) → <b>Scorch the earth</b> (<kbd>X</kbd>): their farmland.',
+        ui: '#sh-scorch, #sel-scorch, #btn-attack, #ar-select' },
       { kind: 'missiles', n: [2, 2, 3], text: 'Fire {n} missiles', at: 'silo',
         count: (P) => (P.used && P.used.warhead) || 0,
         hint: '<b>Make</b> (<kbd>2</kbd>) → <b>Missile Factory</b> (<kbd>N</kbd>), <b>Defend</b> (<kbd>4</kbd>) → <b>Missile Silo</b> (<kbd>I</kbd>) toward them. Silo → <b>Aim missile</b> (<kbd>F</kbd>).',

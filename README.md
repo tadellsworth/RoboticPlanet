@@ -113,7 +113,7 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
 | Mortar Pit | Shells where enemies bunch up, 3–10 tiles out: 6 damage, 3 within 1½ tiles, up to 6 robots a shell (`most`); 3 shells per Ammo |
 | Keep | 14 Cement, 6 Alloy, 2 Chips: a fortified base with a roof cannon (Crystal, 6 tiles) that houses 25 warbots, 6 of them firing from cover (`slots`, 4 tiles); claims land; roads pass through it like an Outpost (`passTile`); captured, not wrecked. Within 7 tiles (`KEEP.aura`) Walls/Gates take damage ÷1.5 and mend after 8 s quiet, and defences get +1 range and ×0.8 reload (`auraRange`, `auraRate`); 16 tiles apart. AI: one (a Warden up to three) |
 | Bulwark (Foundry, 3 rounds of parts) | Shield robot (`BULWARK`, `shieldBlock`, `bulwarkTick`): a frontal shield (±1.0 rad) soaks 50 damage from shots at it or at its owner's robots within 2.1 tiles behind its line (`SHIELDS`, rebuilt each step), regenerates 4/s after 2.5 s without a hit, fails for 6 s when worn out (back at 35%); shells, bombs, Missiles and blasts from above, and fire from the side or behind, get past; a Disruptor pulse drains 14. Turns to face the nearest armed enemy. Twin blasters, 1 a shot every 0.9 s, no Ammo. Leads its group: warbots and Torches on the same attack or flag keep behind it until it arrives (`escortWait`). 30 health |
-| Torch (Foundry, 2 rounds of parts) | Flamethrower robot (`TORCH`, `torchFire`): every 0.2 s a cone (±0.5 rad, 1.9 tiles) does 0.35 to each enemy robot in it (through `damageBot`, so a facing shield stops it) and 0.8 to the building it burns, ×1.6 to defences, Walls and Gates (a Wall in about 6 s); a 12 s tank, one Fuel a fill (`reloadArmy`, `fuelPoint`, task `refill`); explodes with fuel aboard (`BLAST.torch`). 18 health |
+| Torch (Foundry, 2 rounds of parts) | Flamethrower robot (`TORCH`, `torchFire`): every 0.2 s a cone (±0.5 rad, 1.9 tiles) does 0.35 to each enemy robot in it (through `damageBot`, so a facing shield stops it) and 0.8 to the building it burns, ×1.6 to defences, Walls and Gates (a Wall in about 6 s); a 12 s tank, one Fuel a fill (`reloadArmy`, `fuelPoint`, task `refill`); explodes with fuel aboard (`BLAST.torch`). **Scorch the earth** (its panel, X; the selection bar with Torches selected; the `scorch` order, `orderScorch`): with its tank at least `scorchMin` (90%) full it walks to a patch of fertile soil (`scorchTileWhy`), stops within `scorchReach` (1.3) tiles, sprays its whole tank into it over `scorch` (3) s (task `scorch`, `doScorch`) and the soil burns for good (`scorchSoil`); then it refills (`scorchDone`). A group takes a patch each, nearest Torch first, within `scorchSpread` (3) tiles of the one tapped. 18 health |
 | Howitzer (Foundry; **switched off for now**: `BOTS_OFF` in `js/defs.js`) | Mobile siege launcher (`ROCKET`): parks 4–11 tiles from a building and fires 4 rockets (5 each, splash 2 to buildings, 4 to robots), reloads 4 Ammo at a garrison or storage; a Command Base or Keep stops at `missileFloor` (anything else it can knock out); hurt below 60% it goes to a Repair Station within `ROCKET.repairReach` (30) tiles; 14 hp. AI builds 1–3 and hunts the enemy's  A new one rolls off the Foundry to a post (`u.post`) it returns to after reloading; `u.stance` `hold` fires only on orders, otherwise it shells what comes in reach of its post without moving |
 | Depot | Extra storage, shortens hauling trips; give it supply orders to stock it as a forward base |
 | Trade Terminal | Bulk trade, docked within 2 tiles of a neutral Trade Post (`S.posts`, `TRADE_POST`, `placePosts`: placed fairly between the colonies at the start, one more than there are colonies, two in Colony; `nearPost`), one per post per colony, out past the usual reach; a rival's land round a post keeps you out (`TERMINAL`): 3 contracts at a time (new every 5 min), a lot of 30 of one good for Ore, Crystal, Stone, Fiber or Alloy at 65% of worth (`TRADE_VALUE`; Alloy only bought, never a good traded down for one worth under 1/1.3 of it, `tradePairOk`), +1.5%/tile beyond 16 (max +25%), each lot sold fetching 12% less for a while; served only by Road Trains and Freight Trains (`terminalSpare`, `updateTerminal`), a Road Train bringing the lot from storage that holds 10 or more of it (`TERMINAL.minLoad`: the nearest with only a few, a Harvester's Fiber, say, used to hold the lot up for good); its goods can't be spent until a train takes them home. On top, always, a steep **Fuel contract** (`fuelContract`, `o.steep`, last in the list): 30 Stone or Fiber (whichever the colony has more to spare, `TERMINAL.fuelGive`) for Fuel at `TERMINAL.fuelRate` (30%, about half the usual): 6 Fuel, 8 far out. Its Fuel goes home by Tanker to storage (logistics step 4e; never a train), or by pipeline: a Terminal on a Fuel line gives it to the storage and Fuel users there (`updatePipes`) and no Tanker comes. The rival takes it only when dry of Fuel with no source (`P.fuelDry`, `aiFuelSource`), and docks a Terminal for it from 10 minutes |
@@ -360,6 +360,27 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   span: `damage` off the end nearer it, or the other end if that's the weaker (`deckBombEnd`), so two bombs anywhere on
   a deck bring it down (an end's `armor` is 24, and one end falling takes the other). The check that holds a bomb when
   those already falling will finish the target reckons a Viaduct as a span (`spanDoomed`).
+- **Napalm** (`NAPALM`, the bomber's other payload): picking a bomber's target the strike banner's **Payload** switch
+  (`strikeSeg`, keys B and N, `UI.strikeKind`) chooses Bomb or Napalm; a building's panel has **Napalm** beside **Bomb
+  it**, and a rival's fertile soil **Napalm it** (`napalmFromPanel`). The `napalm` order (`orderNapalm`,
+  `napalmBlocked`: parked, any `T_GROUND` tile in reach) makes a `strike` mission with `napalm: 1` and the tile (`x`,
+  `y`, no target). On the ground it takes no Ammo but `NAPALM.fuel` (3) Fuel on top of `BOMBER.fuel` and its tank
+  (`bomberOnGround`: it waits, saying so, until all of it is there; `u.napalmLoad` goes back into the Airfield if it
+  lands with it). Over the tile it drops a canister (`napalmDrop`, a `bomb` missile with `napalm`), and where it lands
+  (`napalmImpact`) every tile within `radius` 1.5 (`napalmTiles`: the tile and the eight round it) has its crops and
+  stalk groves burned and its fertile soil scorched for good (`scorchSoil`), and a fire (`S.fires`, `updateFires`,
+  `napalmBurn`, every `tick` 0.5 s, saved with the game) burns for `burn` 6 s: `bot` 0.6 a second to enemy robots on
+  those tiles and `bld` 0.6 a second to enemy buildings (`bombHit`, so forts stop at their floor). The aiming overlay
+  (`drawNapalmPick`) shows the bomber's reach and the soil it would burn (`napalmSoil`). The AI (`aiNapalmSpot`, in
+  `aiBomber`) napalms an enemy that gets its Fuel from Bio Farms (`AI_NAPALM_FARMS` (2) or more at work, no Oil Pump that
+  isn't dry) while its own Fuel is at least `AI_NAPALM_FUEL` (12), at most every `AI_NAPALM_GAP` (480) s, on the tile
+  round one of its farms (no Flak covering it) where it scorches the most soil, `AI_NAPALM_SOIL` (3) patches at least.
+- **Scorched earth** (`scorchSoil`): fertile soil burned by napalm or a Torch loses `S.fert` for good and is marked in
+  `S.burnt` (tile → 1, saved; `burntSoil`), drawn as charred black earth (`drawBurnt`, a dark tile on the minimap) and
+  repainted at once (`markDirty`); a crop on it burns; soil under a building is spared. The burner's tally:
+  `stats.scorched`, and `stats.scorchedFoe` when the soil was a foe's (`soilHolder`: the owner of the nearest Bio Farm
+  whose fields reach it, else the land's). A Bio Farm with no soil left says its fields were burned (`burntIn`).
+  `hashState` covers `S.fert` and the fires.
 - **Flak Guns** (4 Cement, 3 Alloy; Build → Defend; Versus): a twin anti-aircraft gun (`def.flak`, `updateFlak`). It
   tracks the nearest enemy aircraft in the air within 7 tiles (`aircraftNear`; never one on the ground, never a robot)
   and every `reload` s fires a salvo of `salvo` shells, each led to where the plane will be when it gets there (shell
@@ -539,7 +560,10 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   stretches are tried in turn). A raid's clock (`RAID_TIME`) starts when the first raider reaches the flag (`P.raid.at`;
   until then it has two seconds a tile from home and half a minute), and the band comes home early when the enemy
   army within 5 tiles of it outnumbers it. The rival answers your raids (`aiCounterRaid`) only when it can send a third
-  more warbots than the flag has. Missiles crater the roads where they land.
+  more warbots than the flag has. Every other raid (`P.raidN`), with a Torch of its own ready in a garrison, it picks a
+  road within `AI_SCORCH_NEAR` (6) tiles of an enemy Bio Farm instead and sends a Torch along (`aiRaidTorch`); a Torch on
+  a raid with a full tank burns the nearest patch of an enemy farm's soil within `AI_SCORCH_REACH` (8) tiles that no gun
+  covers (`aiRaidScorch`), refills and comes back to the flag (`u.resume`). Missiles crater the roads where they land.
 - **Warbot movement:** warbots don't queue in road traffic, give way at junctions or stop at red lights (they still wait
   for trains), and nobody queues behind one, so a squad marching along a road or massing at a Gate it means to break
   down all keeps going (and all shoot). Chasing a foe, a warbot goes straight only when the whole line to it is

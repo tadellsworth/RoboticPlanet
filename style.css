@@ -282,6 +282,7 @@ kbd {
 #banner-text .err { color: var(--danger); }
 #banner-text .keep-all { display: flex; align-items: center; gap: 8px; margin-top: 8px; color: var(--muted); font-size: 13px; }
 #banner-text .keep-all .seg button { padding: 4px 12px; }
+#banner-text #strike-kind button { flex: none; white-space: nowrap; } /* the bomber's payload: Bomb or Napalm */
 #banner-text .ok { color: var(--good); }
 .banner-actions { display: flex; gap: 8px; flex-wrap: wrap; }
 .banner-actions .road-seg { flex: 1 1 100%; }
@@ -659,11 +660,12 @@ body.mode-aim .objrow, body.mode-land .objrow, body.mode-airdrop .objrow { displ
 .selbar #selbar-clear { position: absolute; top: 6px; right: 6px; padding: 4px 8px; min-height: 0; }
 /* What's selected, a line of what they're doing, then the tools: under a finger All in view, Whole army, Box,
    Info, Recycle (and Undo just after an order), with a mouse Recycle and Save as group only and the right-click hint
-   above them. Under a finger the bar runs the width of the screen, with the close button beside the title. */
+   above them; with Torches selected, Scorch the earth either way. Under a finger the bar runs the width of the screen,
+   with the close button beside the title. */
 .selbar .sel-tools { display: flex; gap: 6px; margin-top: 6px; overflow-x: auto; touch-action: pan-x; scrollbar-width: none; }
 .selbar .sel-tools::-webkit-scrollbar { display: none; }
 .selbar .sel-tools .btn { flex: none; white-space: nowrap; }
-.selbar:not(.touch) .sel-tools > :not(#selbar-group):not(#sel-recycle):not(#sel-undo) { display: none; }
+.selbar:not(.touch) .sel-tools > :not(#selbar-group):not(#sel-recycle):not(#sel-undo):not(#sel-scorch) { display: none; }
 .selbar .sel-tools #selbar-group { margin-top: 0; }
 .selbar .ok { color: var(--good); }
 .selbar.touch { left: calc(var(--safe-l) + 8px); right: calc(var(--safe-r) + 8px); max-width: 520px; padding: 8px 10px 9px 12px; }

@@ -771,6 +771,7 @@ function raidOn() {
     if (u.dead || u.owner <= 0 || u.type !== 'bomber' || !u.flight || !((u.alt || 0) > 0.05)) continue;
     const tg = u.mission && u.mission.target ? getE(u.mission.target) : null;
     if (tg && !tg.dead && tg.owner === ME) return true;
+    if (u.mission && u.mission.napalm && inMap(u.mission.x, u.mission.y) && soilHolder(tIdx(u.mission.x, u.mission.y)) === ME) return true; // (napalm for our farmland)
     const i = Math.floor(u.x), j = Math.floor(u.y);
     if (inMap(i, j) && S.owner[tIdx(i, j)] === ME) return true;
   }

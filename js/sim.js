@@ -38,6 +38,7 @@ function simStep(dt) {
   if (S.drops && S.drops.length) updateDrops();
   if (S.flak && S.flak.length) updateFlakShells();
   if (S.missiles.length) updateMissiles(dt);
+  if (S.fires && S.fires.length) updateFires();
   if (S.blowing > 0) updateBlasts();
   if (S.tick % 30 === 15) cleanRallies();
   if (S.tick % 10 === 4 && S.rallies.length) followRallies();
@@ -3478,7 +3479,8 @@ function updateDepleted(b, def) {
       b.dryMsg = 1;
       postMsg(b.owner, def.gather
         ? `Your ${def.name} has no ${RES[def.gather].name.toLowerCase()}s left in reach. Dismantle it (your haulers bring back all its materials) and build one by a fresh field.`
-        : 'Your Bio Farm has no fertile soil left in reach. Dismantle it and build one beside open fertile soil.', b.x, b.y, 'warn');
+        : burntIn(b.x, b.y, def.radius) ? 'Your Bio Farm has no fertile soil left in reach: its fields were burned, and nothing grows there again. Dismantle it and build one beside open fertile soil.'
+          : 'Your Bio Farm has no fertile soil left in reach. Dismantle it and build one beside open fertile soil.', b.x, b.y, 'warn');
     }
     if (!b.depleted) b.dryMsg = 0;
   }
@@ -4413,6 +4415,159 @@ function reloadArmy(u, b) {
     return true;
   }
   return (u.ammo ?? WARBOT_AMMO) <= WARBOT_AMMO - AMMO_SHOTS ? reloadAmmo(u, b) : false;
+}
+
+/* ------------------------------------------------------------------ scorched earth */
+
+/** Patches of burned soil (burntSoil) within `radius` tiles of (cx, cy). */
+function burntIn(cx, cy, radius) {
+  let n = 0;
+  const r2 = radius * radius + 0.3;
+  for (let j = Math.max(0, cy - radius); j <= Math.min(S.H - 1, cy + radius); j++) {
+    for (let i = Math.max(0, cx - radius); i <= Math.min(S.W - 1, cx + radius); i++) if (burntSoil(j * S.W + i) && dist2(i, j, cx, cy) <= r2) n++;
+  }
+  return n;
+}
+
+/** Who farms the soil at tile t: the owner of the nearest Bio Farm whose fields reach it, else whoever holds the land (-1: nobody). */
+function soilHolder(t) {
+  const i = t % S.W, j = (t / S.W) | 0, r2 = BDEFS.farm.radius * BDEFS.farm.radius + 0.3;
+  let best = -1, bd = Infinity;
+  for (const b of S.buildings) {
+    if (b.dead || b.type !== 'farm' || b.owner < 0) continue;
+    const d = dist2(b.x, b.y, i, j);
+    if (d <= r2 && d < bd) { bd = d; best = b.owner; }
+  }
+  return best >= 0 ? best : S.owner[t];
+}
+
+/**
+ * Fertile soil at tile t scorched for good, by napalm or a Torch's Scorch the earth: no Bio Farm can plant there again,
+ * and a crop growing on it burns (soil with a building on it is spared). S.burnt marks the tile (drawn charred, and kept in saves). `by`: who burned it, for
+ * their tally (stats.scorched, and stats.scorchedFoe when it was an enemy's farmland); the farm's owner is told, unless
+ * `quiet` (napalm tells them once for the lot). True if there was soil to scorch.
+ */
+function scorchSoil(t, by, quiet) {
+  if (!S.fert[t] || S.terrain[t] !== T_GROUND || S.bAt[t]) return false; // (a building on it keeps it)
+  const who = soilHolder(t), i = t % S.W, j = (t / S.W) | 0;
+  S.fert[t] = 0;
+  (S.burnt || (S.burnt = {}))[t] = 1;
+  if (S.res[t] === R_CROP) { S.res[t] = R_NONE; S.amt[t] = 0; S.grow[t] = 0; }
+  markDirty(i, j);
+  for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) if (inMap(i + di, j + dj)) markDirty(i + di, j + dj); // (the soil's edges round it)
+  const P = by >= 0 ? S.players[by] : null, foe = who >= 0 && by >= 0 && foes(who, by);
+  if (P) { P.stats.scorched = (P.stats.scorched || 0) + 1; if (foe) P.stats.scorchedFoe = (P.stats.scorchedFoe || 0) + 1; }
+  if (!quiet && foe) {
+    const Q = S.players[who];
+    if (S.time - (Q.burnMsg ?? -999) > 30) { Q.burnMsg = S.time; postMsg(who, 'Enemy Torches are burning your farmland for good: nothing will grow there again.', i, j, 'lost'); }
+  }
+  return true;
+}
+
+/** Why the soil at tile t can't be scorched, or '' if it can: fertile soil (open, or with a crop on it) with no building on it. */
+function scorchTileWhy(t) {
+  if (!(t >= 0 && t < S.W * S.H)) return 'Outside the map.';
+  if (burntSoil(t)) return 'That soil is burned already.';
+  if (!S.fert[t] || S.terrain[t] !== T_GROUND) return 'Pick fertile soil: the dark farmland Bio Farms grow crops on.';
+  if (S.bAt[t]) return 'A building stands on it.';
+  return '';
+}
+
+/** Is Torch u's tank full enough to scorch the earth (TORCH.scorchMin of it)? */
+function scorchReady(u) { return (u.gel ?? TORCH.tank) >= TORCH.tank * TORCH.scorchMin - 1e-6; }
+
+/**
+ * Scorch the earth: owner's Torches among `ids` whose tanks are full enough (scorchReady) each burn a patch of fertile
+ * soil: the one at (i, j), then the nearest round it within TORCH.scorchSpread tiles that no Torch is on yet, each
+ * patch to the nearest Torch that can walk there. { n, why }: how many went, or why none could.
+ */
+function orderScorch(owner, ids, i, j) {
+  if (!Number.isInteger(i) || !Number.isInteger(j) || !inMap(i, j)) return { n: 0, why: 'Outside the map.' };
+  const torches = orderable(owner, Array.isArray(ids) ? ids : []).filter((u) => BOTS[u.type].flame);
+  if (!torches.length) return { n: 0, why: 'Pick one of your Torches.' };
+  const why = scorchTileWhy(tIdx(i, j));
+  if (why) return { n: 0, why };
+  const ready = torches.filter(scorchReady);
+  if (!ready.length) return { n: 0, why: `It takes a nearly full tank (${Math.round(TORCH.scorchMin * 100)}%): let it refill with Fuel at storage or a Fuel Station first.` };
+  const taken = new Set();
+  for (const v of S.bots) if (!v.dead && v.task && v.task.type === 'scorch') taken.add(v.task.tile);
+  const R = TORCH.scorchSpread, tiles = [];
+  for (let dj = -R; dj <= R; dj++) for (let di = -R; di <= R; di++) {
+    if (!inMap(i + di, j + dj) || di * di + dj * dj > R * R + 0.5) continue;
+    const t = tIdx(i + di, j + dj);
+    if (!taken.has(t) && !scorchTileWhy(t)) tiles.push([di * di + dj * dj, t]);
+  }
+  tiles.sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+  let n = 0;
+  for (const [, t] of tiles) {
+    if (!ready.length) break;
+    let k = -1, bd = Infinity;
+    for (let q = 0; q < ready.length; q++) {
+      const u = ready[q], at = u.inside ? getE(u.inside) : null, ux = at ? at.x + 0.5 : u.x, uy = at ? at.y + 0.5 : u.y;
+      if (S.zone[tIdx(Math.floor(ux), Math.floor(uy))] !== S.zone[t]) continue;
+      const d = dist2(ux, uy, (t % S.W) + 0.5, ((t / S.W) | 0) + 0.5);
+      if (d < bd) { bd = d; k = q; }
+    }
+    if (k < 0) continue;
+    const u = ready.splice(k, 1)[0];
+    readyForOrder(u);
+    u.task = { type: 'scorch', tile: t };
+    u.resume = null; u.retreat = false;
+    n++;
+  }
+  return n ? { n, why: '' } : { n: 0, why: tiles.length ? 'Your Torches can\'t walk there.' : 'Every patch there already has a Torch on it.' };
+}
+
+/**
+ * A Torch scorching the earth (task.tile): it walks up to the patch (within TORCH.scorchReach tiles), sprays its whole
+ * tank into it over TORCH.scorch s, and the soil is scorched for good (scorchSoil). Enemy robots standing on the patch
+ * are burned too. Then it goes to refill (scorchDone).
+ */
+function doScorch(u, t, dt) {
+  const i = t.tile % S.W, j = (t.tile / S.W) | 0, x = i + 0.5, y = j + 0.5;
+  if (!(t.spray > 0)) {
+    // (The patch was burned by another, or built on, or its tank ran dry on the way: the job's over.)
+    if (scorchTileWhy(t.tile) || !scorchReady(u)) { scorchDone(u); return; }
+    if (dist2(u.x, u.y, x, y) > TORCH.scorchReach * TORCH.scorchReach) {
+      const r = travel(u, i, j, dt);
+      if (r === null) { scorchDone(u); return; }
+      if (!r && dist2(u.x, u.y, x, y) > TORCH.scorchReach * TORCH.scorchReach) return;
+    }
+    t.spray = TORCH.scorch; t.gel0 = u.gel ?? TORCH.tank;
+    u.path = null; u.vel = 0; u.cd = 0;
+  }
+  // Spraying: the tank runs down to nothing over TORCH.scorch s.
+  u.path = null; u.vel = 0;
+  t.spray -= dt;
+  u.gel = Math.max(0, t.gel0 * Math.max(0, t.spray) / TORCH.scorch);
+  u.fought = 1;
+  if (u.cd <= 0) {
+    u.cd = TORCH.tick;
+    const d = dist(u.x, u.y, x, y), ang = d > 0.05 ? datan2(y - u.y, x - u.x) : u.face || 0, ca = dcos(ang), sa = dsin(ang), h = hash2(u.id, S.tick, 21);
+    u.face = ang; u.flameT = S.time;
+    addFx('flame', u.x + ca * 0.42, u.y + sa * 0.42, { a: ang, len: Math.max(0.5, d + 0.2), life: 0.34, seed: S.tick + u.id * 7, owner: u.owner });
+    if (h < 0.35) addFx('fire', x + (hash2(u.id, S.tick, 22) - 0.5) * 0.6, y + (hash2(u.id, S.tick, 23) - 0.5) * 0.5, { r: 0.16 + 0.12 * h, life: 2.5, seed: S.tick % 97 });
+    for (const v of S.bots) {
+      if (v.dead || v.inside || v.owner < 0 || !foes(v.owner, u.owner) || BOTS[v.type].air || dist2(v.x, v.y, x, y) > 0.5) continue;
+      damageBot(v, TORCH.bot, u.x, u.y);
+    }
+    if (S.time - (u.flSnd || 0) > 0.55) { u.flSnd = S.time; sfx('flame', u.x, u.y); }
+  }
+  if (t.spray > 0) return;
+  u.gel = 0;
+  scorchSoil(t.tile, u.owner);
+  addFx('fire', x, y, { r: 0.34, life: 6, seed: t.tile % 97 });
+  addDecal('scorch', x, y, 0.55, 150);
+  scorchDone(u);
+}
+
+/** A Torch's scorching over (or called off): off to refill its tank where Fuel is kept, then back to what it was doing (u.resume) or a garrison. */
+function scorchDone(u) {
+  u.task = null; u.path = null;
+  const f = scorchReady(u) ? null : fuelPoint(u);
+  if (f) { u.task = { type: 'refill', bld: f.id }; return; } // (refill takes u.resume up again once it's full)
+  if (u.resume && (u.resume.type !== 'hold' || rallyById(u.resume.rally))) u.task = u.resume;
+  u.resume = null;
 }
 
 /** Where a Torch with an empty tank can fill it: the nearest building of its owner's holding Fuel (storage or a Fuel Station) it can reach. */
@@ -5493,6 +5648,8 @@ function warbotAct(u, dt) {
   // Out of Ammo: it can't fight at all. It drops any fight and an attack or sortie, and goes back
   // to a garrison to reload (one holding a rally flag reloads and comes back, see holdRally).
   const armed = botArmed(u);
+  // Scorching the earth (a Torch's Scorch the earth): that, and nothing else, until it's done (doScorch).
+  if (t && t.type === 'scorch') { doScorch(u, t, dt); return; }
   // (On an attack it first goes to reload and comes back, when that's worth it: see startReload.)
   if (!armed && t && (t.type === 'attack' || t.type === 'defend') && !(t.type === 'attack' && (t.reload || startReload(u, t)))) { cancelTask(u); u.path = null; u.fight = 0; return; }
   // Battery all but flat out in enemy land with nothing to shoot at: give up the attack and go home to recharge.
@@ -10873,7 +11030,7 @@ function updatePlane(u, dt) {
     u.bat = Math.max(0, u.bat - PLANE_BURN * dt * drainMul(u));
     let F = u.flight;
     // On a strike: it follows a moving target, and turns for home if the target's gone.
-    if (M && M.kind === 'strike' && M.phase === 'out' && !F.home) {
+    if (M && M.kind === 'strike' && !M.napalm && M.phase === 'out' && !F.home) {
       const tg = getE(M.target);
       if (!strikeTarget(u, tg)) { u.mission = M = null; headHome(u); F = u.flight; } // (the way home is a new flight: the sortie is over)
       else if (!BDEFS[tg.type]) { F.tx = tg.x; F.ty = tg.y; }
@@ -10971,10 +11128,13 @@ function airDrop(u) {
 function landed(u, b) {
   if (u.cargo) { for (const g in u.cargo) bump(b.stock, g, u.cargo[g]); u.cargo = null; }
   if (BOTS[u.type].bomber) {
-    // Back with its bomb (the target was gone, or another bomber's finished it): the Ammo goes back into the
-    // Airfield and there's nothing to rearm. Otherwise it rearms before its next sortie.
-    if (u.bombLoad) { bump(b.stock, 'ammo', u.bombLoad); u.bombLoad = 0; }
-    else u.rearmUntil = S.time + BOMBER.rearm;
+    // Back with its bomb (the target was gone, or another bomber's finished it) or its napalm: the Ammo (the napalm's
+    // Fuel) goes back into the Airfield and there's nothing to rearm. Otherwise it rearms before its next sortie.
+    if (u.bombLoad || u.napalmLoad) {
+      if (u.bombLoad) bump(b.stock, 'ammo', u.bombLoad);
+      if (u.napalmLoad) bump(b.stock, 'fuel', u.napalmLoad);
+      u.bombLoad = 0; u.napalmLoad = 0;
+    } else u.rearmUntil = S.time + BOMBER.rearm;
   }
 }
 
@@ -11025,15 +11185,45 @@ function orderStrike(owner, u, t, ai, aj) {
   return '';
 }
 
+/** Why owner's bomber u can't drop napalm on tile (i, j) (any ground it can reach), or '' if it can. */
+function napalmBlocked(owner, u, i, j) {
+  if (!u || u.dead || u.owner !== owner || !BOTS[u.type].bomber) return 'Pick one of your Vulcan Bombers.';
+  const base = planeBase(u);
+  if (!base || u.inside !== base.id) return 'The bomber must be parked at its Airfield.';
+  if (u.mission) return 'That bomber already has a target.';
+  if (!Number.isInteger(i) || !Number.isInteger(j) || !inMap(i, j)) return 'Outside the map.';
+  if (S.terrain[tIdx(i, j)] !== T_GROUND) return 'Aim napalm at the ground, not water, rock or a chasm.';
+  if (sortieFuel(u, base, i + 0.5, j + 0.5) > 99.5) return `Too far: a full tank takes the bomber ${planeReach(u)} tiles out and back.`;
+  return '';
+}
+
+/** Send bomber u to drop napalm on tile (i, j): it loads the napalm's Fuel and its own at its Airfield, then takes off. '' or why not. */
+function orderNapalm(owner, u, i, j) {
+  const why = napalmBlocked(owner, u, i, j);
+  if (why) return why;
+  u.mission = { kind: 'strike', napalm: 1, x: i, y: j, target: 0, phase: 'load', since: S.time };
+  return '';
+}
+
+/** The tiles napalm landing on tile (ci, cj) sets on fire: every one within NAPALM.radius (that tile and the eight round it). */
+function napalmTiles(ci, cj) {
+  const out = [], r = Math.ceil(NAPALM.radius), r2 = NAPALM.radius * NAPALM.radius + 1e-6;
+  for (let j = cj - r; j <= cj + r; j++) for (let i = ci - r; i <= ci + r; i++) if (inMap(i, j) && dist2(i, j, ci, cj) <= r2) out.push(tIdx(i, j));
+  return out;
+}
+
+/** Fertile soil the tiles of napalm on (ci, cj) would scorch (for the aiming and the AI). */
+function napalmSoil(ci, cj) { return napalmTiles(ci, cj).filter((t) => S.fert[t] && S.terrain[t] === T_GROUND && !S.bAt[t]).length; }
+
 /** A bomber on the ground: rearming after a sortie, then loading its bomb and Fuel for the next one and taking off. */
 function bomberOnGround(u, base, dt) {
   const M = u.mission;
   if (u.bat < 100 - planeFill(u) + 1 && S.tick % 15 === u.id % 15) fuelPlane(u, base, 100 - planeFill(u) + 1);
   if (!M || M.kind !== 'strike' || M.phase !== 'load') return;
-  const tg = getE(M.target);
-  if (!strikeTarget(u, tg)) { u.mission = null; return; }
+  const tg = M.napalm ? null : getE(M.target);
+  if (!M.napalm && !strikeTarget(u, tg)) { u.mission = null; return; }
   if (u.rearmUntil > S.time) return;
-  if (!u.bombLoad) {
+  if (!M.napalm && !u.bombLoad) {
     if ((base.stock.ammo || 0) - (base.res.ammo || 0) < BOMBER.ammo) {
       M.noAmmo = 1;
       const P = S.players[u.owner];
@@ -11045,27 +11235,35 @@ function bomberOnGround(u, base, dt) {
     usedGood(u.owner, 'ammo', BOMBER.ammo);
     u.bombLoad = BOMBER.ammo;
   }
-  const [tx, ty] = strikeAim(tg, M.deck);
-  // Fuel: its tank filled for the trip out and back, and the sortie's own BOMBER.fuel on top. It takes off only with
-  // all of it at the Airfield (none is taken until then), and waits, saying so, until Tankers bring it.
-  const want = sortieFuel(u, base, tx, ty), need = tankFuel(u, want) + BOMBER.fuel;
+  const [tx, ty] = M.napalm ? [M.x + 0.5, M.y + 0.5] : strikeAim(tg, M.deck);
+  // Fuel: its tank filled for the trip out and back, and the sortie's own BOMBER.fuel on top (napalm: NAPALM.fuel more,
+  // its payload). It takes off only with all of it at the Airfield (none is taken until then), and waits, saying so,
+  // until Tankers bring it.
+  const extra = BOMBER.fuel + (M.napalm ? NAPALM.fuel : 0);
+  const want = sortieFuel(u, base, tx, ty), need = tankFuel(u, want) + extra;
   if ((base.stock.fuel || 0) - (base.res.fuel || 0) < need) {
     M.noFuel = need;
     const P = S.players[u.owner];
-    if (S.time - (P.bombFuelMsg || -999) > 90) { P.bombFuelMsg = S.time; postMsg(u.owner, `A Vulcan Bomber is waiting for Fuel: a sortie takes ${BOMBER.fuel} Fuel at its Airfield on top of its tank, ${need} in all this time (Tankers bring it).`, base.x, base.y, 'warn'); }
+    if (S.time - (P.bombFuelMsg || -999) > 90) {
+      P.bombFuelMsg = S.time;
+      postMsg(u.owner, M.napalm ? `A Vulcan Bomber is waiting for Fuel: a napalm sortie takes ${extra} Fuel at its Airfield on top of its tank (${BOMBER.fuel} for the sortie, ${NAPALM.fuel} for the napalm), ${need} in all this time (Tankers bring it).`
+        : `A Vulcan Bomber is waiting for Fuel: a sortie takes ${BOMBER.fuel} Fuel at its Airfield on top of its tank, ${need} in all this time (Tankers bring it).`, base.x, base.y, 'warn');
+    }
     return;
   }
   fuelPlane(u, base, want);
-  bump(base.stock, 'fuel', -BOMBER.fuel);
-  usedGood(u.owner, 'fuel', BOMBER.fuel);
+  bump(base.stock, 'fuel', -extra);
+  usedGood(u.owner, 'fuel', extra);
+  if (M.napalm) u.napalmLoad = NAPALM.fuel; // (aboard: it goes back into the Airfield if the bomber comes home with it)
   M.noFuel = 0;
   M.phase = 'out';
   startTakeoff(u, base, tx, ty);
   if (isMe(u.owner)) sfx('takeoff');
 }
 
-/** Bomber u is over its target: the bomb falls (BOMBER.fall s), and it turns for home. */
+/** Bomber u is over its target: the bomb (or the napalm) falls (BOMBER.fall s), and it turns for home. */
 function bombDrop(u) {
+  if (u.mission.napalm) { napalmDrop(u); return; }
   const M = u.mission, tg = getE(M.target);
   const bld = tg && BDEFS[tg.type];
   // Bombs already falling on it (another bomber's) will finish it: this one holds its bomb and flies home with
@@ -11094,11 +11292,73 @@ function bombDrop(u) {
   sfx('bombfall', x1, y1); // (its whistle as it falls, heard from where it will land)
 }
 
+/** Bomber u over the ground its napalm is for: the canister falls (BOMBER.fall s) on the middle of that tile, and it turns for home. */
+function napalmDrop(u) {
+  const M = u.mission, x1 = M.x + 0.5, y1 = M.y + 0.5;
+  S.missiles.push({ bomb: true, napalm: true, owner: u.owner, from: u.id, target: 0, t: 0, dur: BOMBER.fall, x0: u.x, y0: u.y, x1, y1 });
+  u.napalmLoad = 0;
+  u.mission = null;
+  headHome(u);
+  if (isMe(u.owner) || isMe(S.owner[tIdx(M.x, M.y)])) sfx('chute');
+  sfx('bombfall', x1, y1);
+}
+
+/**
+ * Napalm lands: burning fuel over the tile it was aimed at and the eight round it (napalmTiles). Crops and stalk groves
+ * there burn, every patch of fertile soil is scorched for good (scorchSoil), and the ground burns on for NAPALM.burn s
+ * (S.fires, see updateFires), hurting enemy robots and buildings in it a little.
+ */
+function napalmImpact(m) {
+  const ci = Math.floor(m.x1), cj = Math.floor(m.y1);
+  if (typeof ART !== 'undefined' && ART['fx-fuel-blast']) addFx('fuelblast', m.x1, m.y1, { r: NAPALM.radius, life: 1.15 });
+  else { blastFx(m.x1, m.y1, 0.9); blastFx(m.x1 + 0.3, m.y1 - 0.2, 0.6, { small: true, delay: 0.15 }); }
+  addFx('smoke', m.x1, m.y1 - 0.3, { r: 1.1, life: NAPALM.burn + 2, dark: true });
+  sfx('fireball', m.x1, m.y1);
+  const lost = new Map(); // farm owner → patches of their soil burned
+  let n = 0;
+  for (const t of napalmTiles(ci, cj)) {
+    const i = t % S.W, j = (t / S.W) | 0, h = hash2(i, j, S.tick);
+    if (S.res[t] === R_STALK || S.res[t] === R_CROP) { S.res[t] = R_NONE; S.amt[t] = 0; S.grow[t] = 0; markDirty(i, j); }
+    const who = soilHolder(t);
+    if (scorchSoil(t, m.owner, true)) { n++; if (who >= 0) lost.set(who, (lost.get(who) || 0) + 1); }
+    if (S.terrain[t] !== T_GROUND) continue;
+    addFx('fire', i + 0.25 + h * 0.5, j + 0.3 + hash2(j, i, S.tick + 3) * 0.45, { r: 0.28 + 0.12 * h, life: NAPALM.burn * 1.3 + h, t: -h * 0.35, seed: (t * 7 + S.tick) % 97 });
+    addDecal('scorch', i + 0.5, j + 0.5, 0.6, 150);
+  }
+  (S.fires || (S.fires = [])).push({ i: ci, j: cj, owner: m.owner, until: S.time + NAPALM.burn, next: S.time });
+  const P = S.players[m.owner];
+  if (P) P.stats.napalm = (P.stats.napalm || 0) + 1;
+  if (n) postMsg(m.owner, `Napalm scorched ${n} patch${n === 1 ? '' : 'es'} of farmland for good: no Bio Farm will grow anything there again.`, ci, cj, 'good');
+  for (const [who, k] of lost) if (foes(who, m.owner)) postMsg(who, `Enemy napalm burned ${k} patch${k === 1 ? '' : 'es'} of your farmland for good: nothing will grow there again.`, ci, cj, 'lost');
+}
+
+/** The burning napalm (S.fires): every NAPALM.tick s it hurts enemy robots and buildings on its tiles, until it burns out. */
+function updateFires() {
+  if (!S.fires || !S.fires.length) return;
+  S.fires = S.fires.filter((f) => {
+    while (S.time >= f.next && f.next < f.until) { napalmBurn(f); f.next += NAPALM.tick; }
+    return S.time < f.until;
+  });
+}
+
+function napalmBurn(f) {
+  const r2 = NAPALM.radius * NAPALM.radius + 1e-6, on = (x, y) => dist2(Math.floor(x), Math.floor(y), f.i, f.j) <= r2;
+  for (const u of S.bots) {
+    if (u.dead || u.inside || u.owner < 0 || !foes(u.owner, f.owner) || BOTS[u.type].wild || BOTS[u.type].air || !on(u.x, u.y)) continue;
+    damageBot(u, NAPALM.bot * NAPALM.tick); // (from above: no shield stops it)
+  }
+  for (const b of S.buildings.slice()) {
+    if (b.dead || b.owner < 0 || !foes(b.owner, f.owner) || BDEFS[b.type].wild || !on(b.x + 0.5, b.y + 0.5)) continue;
+    bombHit(b, NAPALM.bld * NAPALM.tick, f.owner);
+  }
+}
+
 /**
  * A bomb lands: BOMBER.damage off the building it was aimed at, and harm to what's round it. One on a Viaduct's deck
  * (m.deck) counts against the span: off the end nearer it, or the other end if that's the weaker (deckBombEnd).
  */
 function bombImpact(m) {
+  if (m.napalm) { napalmImpact(m); return; }
   blastFx(m.x1, m.y1, 1.0);
   sfx('bombhit', m.x1, m.y1);
   const tg = getE(m.target);
@@ -11410,7 +11670,7 @@ function hashState() {
   int(S.tick); num(S.time); int(S.nextId); int(S.winner);
   for (const u of S.bots) {
     int(u.id); str(u.type); int(u.owner); int(u.dead ? 1 : 0); num(u.x); num(u.y); num(u.hp); num(u.bat); num(u.face);
-    str(u.task && u.task.type); int((u.task && (u.task.target || u.task.bld || u.task.rally)) || 0); str(u.carry); num(u.carryN); int(u.inside || 0);
+    str(u.task && u.task.type); int((u.task && (u.task.target || u.task.bld || u.task.rally || u.task.tile)) || 0); str(u.carry); num(u.carryN); int(u.inside || 0);
     num(u.ammo); num(u.sh); num(u.gel); int(u.fight || 0);
   }
   for (const b of S.buildings) {
@@ -11418,7 +11678,7 @@ function hashState() {
     obj(b.stock); obj(b.inc); int(b.staff || 0); int(b.paused ? 1 : 0); str(b.mode); obj(b.orders);
   }
   for (const P of S.players) { int(P.id); int(P.ai ? 1 : 0); int(P.out ? 1 : 0); obj(P.made); obj(P.used); obj(P.tech); }
-  for (const arr of [S.road, S.rail, S.plan, S.owner, S.res, S.amt]) if (arr) for (let t = 0; t < arr.length; t++) if (arr[t]) { int(t); num(arr[t]); }
-  int(S.loot ? S.loot.length : 0);
+  for (const arr of [S.road, S.rail, S.plan, S.owner, S.res, S.amt, S.fert]) if (arr) for (let t = 0; t < arr.length; t++) if (arr[t]) { int(t); num(arr[t]); }
+  int(S.loot ? S.loot.length : 0); int(S.fires ? S.fires.length : 0);
   return h >>> 0;
 }

@@ -1566,7 +1566,7 @@ const SHEET_KEYS = {
   'sh-send': 'q', 'sh-bombard': 'q', 'sh-fire': 'f', 'sh-aim': 'f', 'sh-rgo': 'g', 'sh-crawl': 'g', 'sh-deploy': 'e',
   'sh-gate': 'g', 'sh-move': 'm', 'sh-pack': 'm', 'sh-pause': 'p', 'sh-fixbtn': 'e', 'sh-layroad': 'r', 'sh-pipe': 'k',
   'sh-recall': 'c', 'sh-unpost': 'c', 'rl-recall': 'c', 'sh-land': 'l', 'sh-st-send': 'v', 'nk-evac': 'v',
-  'sh-bomb': 'z', 'sh-strike': 'q', 'sh-fsail': 'g', 'sh-fembark': 'e', 'sh-fland': 'l', 'sh-fhome': 'h', 'sh-found': 'p', 'sh-fout': 'o', 'sh-tarmor': 'r',
+  'sh-bomb': 'z', 'sh-napalm': 'n', 'sh-scorch': 'x', 'sh-strike': 'q', 'sh-fsail': 'g', 'sh-fembark': 'e', 'sh-fland': 'l', 'sh-fhome': 'h', 'sh-found': 'p', 'sh-fout': 'o', 'sh-tarmor': 'r',
   // The Army panel (Q): its orders, the group size, and its Air tab.
   'ar-attack': 'q', 'ar-hold': 'g', 'ar-station': 'v', 'ar-recall': 'c', 'ar-select': 'f', 'ar-n2': '1', 'ar-n4': '2', 'ar-n8': '3', 'ar-nall': '4',
   'ar-tab-army': 'z', 'ar-tab-air': 'x', 'ar-strike': 'e',
@@ -1705,6 +1705,8 @@ function initKeyboard() {
     if (e.shiftKey && PATHS_SHIFT_KEYS[k]) { e.preventDefault(); openPaths(PATHS_SHIFT_KEYS[k]); return; }
     // Enter confirms the banner's main button (Build here, Fire, Lay roads...).
     if (k === 'enter' && !$('banner').hidden && !$('banner-ok').hidden && !$('banner-ok').disabled) { e.preventDefault(); $('banner-ok').click(); return; }
+    // Picking a bomber's target: B and N switch its payload (Bomb or Napalm).
+    if (R.mode === 'strike' && (k === 'b' || k === 'n')) { e.preventDefault(); setStrikeKind(k === 'n' ? 'napalm' : 'bomb'); return; }
     // A key on the open panel's buttons (SHEET_KEYS) presses that button.
     const sk = sheetKeyButton(k);
     if (sk) { e.preventDefault(); sk.click(); return; }
@@ -1794,13 +1796,14 @@ function initSelBar() {
       <button class="btn small ghost" id="selbar-clear" aria-label="Clear selection">✕</button></div>
     <span class="hint" id="sel-status"></span>
     <span class="hint sel-mouse">Right-click open ground to hold it, a rival building or robot to attack, your Outpost to station them, or a Repair Station to get them fixed. Esc clears.</span>
-    <div class="sel-tools"><button class="btn small primary" id="sel-undo" hidden>Undo</button><button class="btn small" id="sel-view">All in view</button><button class="btn small" id="sel-army">Whole army</button><button class="btn small" id="sel-box">Box</button><button class="btn small" id="sel-info">Info</button><button class="btn small danger" id="sel-recycle" hidden></button><button class="btn small ghost" id="selbar-group" title="Save them as a control group (or ⌘/Ctrl/⌥ + 1–9)"></button></div>`;
+    <div class="sel-tools"><button class="btn small primary" id="sel-undo" hidden>Undo</button><button class="btn small" id="sel-view">All in view</button><button class="btn small" id="sel-army">Whole army</button><button class="btn small" id="sel-box">Box</button><button class="btn small" id="sel-info">Info</button><button class="btn small" id="sel-scorch" hidden>Scorch the earth</button><button class="btn small danger" id="sel-recycle" hidden></button><button class="btn small ghost" id="selbar-group" title="Save them as a control group (or ⌘/Ctrl/⌥ + 1–9)"></button></div>`;
   $('selbar-clear').onclick = () => { sfx('click'); selectBots([], false); };
   $('selbar-group').onclick = () => saveGroup(nextGroupNo());
   $('sel-undo').onclick = () => undoOrder();
   $('sel-view').onclick = () => { sfx('click'); selectBots(unitsInView(), false); if (!UI.sel.length) toast('None of your warbots are in view.', 'info'); };
   $('sel-army').onclick = () => { sfx('click'); selectBots(armyIds(ME).concat(S.bots.filter((u) => !u.dead && u.owner === ME && BOTS[u.type].siege).map((u) => u.id)), false); };
   $('sel-info').onclick = () => { sfx('click'); const us = selectable(ME, UI.sel).filter((u) => !u.inside); if (us.length === 1) openBotSheet(us[0]); else openPopSheet(); };
+  $('sel-scorch').onclick = () => { const us = orderable(ME, UI.sel).filter((u) => BOTS[u.type].flame); if (!us.length) return; sfx('click'); startScorch(us.map((u) => u.id)); };
   $('sel-recycle').onclick = () => recycleSelection();
   // Box: the next one-finger drag on the map draws a selection box (input.js), then it's off again. Tap Box again to call it off.
   $('sel-box').onclick = () => { sfx('click'); INPUT.boxArmed = !INPUT.boxArmed; refreshSelection(); };
@@ -1927,7 +1930,8 @@ function refreshSelection() {
   bar.classList.toggle('touch', touch);
   if (!on) { UI.undo = null; INPUT.boxArmed = false; refreshGroupBar(); return; }
   // (its parts are made once, by initSelBar: made again if one isn't there, so a bar that lost a part can't stop this)
-  if (!['sel-title', 'sel-notes', 'sel-status', 'sel-box', 'sel-undo', 'sel-recycle', 'selbar-group'].every((id) => $(id)) || !bar.querySelector('.sel-mouse')) initSelBar();
+  if (!['sel-title', 'sel-notes', 'sel-status', 'sel-box', 'sel-undo', 'sel-scorch', 'sel-recycle', 'selbar-group'].every((id) => $(id)) || !bar.querySelector('.sel-mouse')) initSelBar();
+  $('sel-scorch').hidden = !orderable(ME, UI.sel).some((u) => BOTS[u.type].flame); // (Torches selected: Scorch the earth)
   $('sel-box').classList.toggle('on', INPUT.boxArmed);
   let inside = 0, empty = 0;
   for (const u of orderable(ME, UI.sel)) { if (u.inside) inside++; if (!botArmed(u)) empty++; }
@@ -3134,7 +3138,9 @@ function setMode(mode, keepPlan) {
   for (const m of ['road', 'place', 'attack', 'aim', 'land', 'airdrop']) document.body.classList.toggle('mode-' + m, mode === m);
   document.body.classList.toggle('mode-on', mode !== 'normal'); // (any mode: on an upright phone its banner takes the bottom bar's place)
   if (mode !== 'aim') { R.aim = null; UI.aimSilo = 0; }
-  if (mode !== 'aim' && mode !== 'land' && mode !== 'airdrop') R.aimHover = null;
+  if (mode !== 'aim' && mode !== 'land' && mode !== 'airdrop' && mode !== 'strike' && mode !== 'scorch') R.aimHover = null;
+  if (mode !== 'strike') R.napalmAt = null;
+  if (mode !== 'scorch') { R.scorchAt = null; UI.scorchIds = null; }
   if (mode !== 'land') { R.landAt = null; UI.landFerry = 0; }
   if (mode !== 'airdrop') { R.dropAt = null; UI.dropPlane = 0; }
   if (mode !== 'attack') UI.armyCmd = null;
@@ -3270,10 +3276,149 @@ function basePlanes(b) { return S.bots.filter((u) => !u.dead && u.owner === b.ow
 function myBombers() { return S.bots.filter((u) => !u.dead && u.owner === ME && BOTS[u.type].bomber); }
 function readyBomber(t) { return myBombers().find((u) => !u.mission && !u.flight && !(u.rearmUntil > S.time) && planeBase(u) && u.inside === planeBase(u).id && (!t || !strikeBlocked(ME, u, t))) || null; }
 
-/** Pick a target for bomber u on the map. */
+/** Pick a target for bomber u on the map: its payload first (Bomb or Napalm, on the banner; the last one picked stays). */
 function startStrike(u) {
   closeSheet(); setMode('strike'); UI.bomber = u.id;
-  showBanner(`Tap an enemy building (or the deck of an enemy Viaduct), or an enemy vehicle or robot out in the open: the <b>Vulcan Bomber</b> loads ${BOMBER.ammo} Ammo and ${BOMBER.fuel} Fuel (on top of its tank), flies out and drops its bomb, then comes home to rearm. It reaches ${planeReach(u)} tiles from its Airfield.`, null, 'Cancel');
+  UI.strikeKind = UI.strikeKind === 'napalm' ? 'napalm' : 'bomb';
+  R.napalmAt = null;
+  showStrikeBanner();
+}
+
+/** The strike banner's payload switch: Bomb (B) or Napalm (N). */
+function strikeSeg() {
+  const nap = UI.strikeKind === 'napalm';
+  return `<span class="keep-all">Payload <span class="seg" id="strike-kind"><button data-v="bomb" class="${nap ? '' : 'on'}">Bomb<kbd>B</kbd></button><button data-v="napalm" class="${nap ? 'on' : ''}">Napalm<kbd>N</kbd></button></span></span>`;
+}
+
+/** A banner while picking a bomber's target, with the payload switch under it. */
+function strikeBanner(html, okLabel) {
+  showBanner(html + strikeSeg(), okLabel, 'Cancel');
+  for (const btn of $('banner-text').querySelectorAll('#strike-kind button')) btn.onclick = (e) => { e.stopPropagation(); setStrikeKind(btn.dataset.v); };
+}
+
+/** Switch the bomber's payload while picking its target (anything picked so far is let go). */
+function setStrikeKind(k) {
+  if (R.mode !== 'strike' || (k !== 'bomb' && k !== 'napalm')) return;
+  if (UI.strikeKind === k) return;
+  UI.strikeKind = k;
+  if (UI.pick) { UI.pick = 0; UI.pickDeck = null; R.selected = 0; UI.selBot = 0; }
+  R.napalmAt = null;
+  sfx('click');
+  showStrikeBanner();
+}
+
+function showStrikeBanner(problem) {
+  const u = getE(UI.bomber);
+  if (!u || u.dead) { setMode('normal'); return; }
+  const err = problem ? `<span class="err">${problem}</span> ` : '';
+  if (UI.strikeKind !== 'napalm') {
+    strikeBanner(err + `Tap an enemy building (or the deck of an enemy Viaduct), or an enemy vehicle or robot out in the open: the <b>Vulcan Bomber</b> loads ${BOMBER.ammo} Ammo and ${BOMBER.fuel} Fuel (on top of its tank), flies out and drops its bomb, then comes home to rearm. It reaches ${planeReach(u)} tiles from its Airfield.`);
+    return;
+  }
+  const at = R.napalmAt, n = at ? napalmSoil(at.i, at.j) : 0;
+  strikeBanner(err + (at
+    ? `<b>Drop napalm here?</b> ${n ? `It burns ${n} patch${n === 1 ? '' : 'es'} of fertile soil for good (no Bio Farm grows crops there again), and` : 'There\'s no fertile soil here: it'} sets the ground on fire for ${NAPALM.burn} seconds.`
+    : `Tap any ground in reach. <b>Napalm</b> (${BOMBER.fuel + NAPALM.fuel} Fuel on top of its tank, the sortie's ${BOMBER.fuel} and ${NAPALM.fuel} more; no Ammo) sets everything within ${NAPALM.radius} tiles on fire for ${NAPALM.burn} seconds, burning enemy robots and buildings a little, and scorches fertile soil there <b>for good</b>: no Bio Farm grows crops on it again. It reaches ${planeReach(u)} tiles from its Airfield.`), at ? 'Napalm' : null);
+}
+
+/** A tap or click on the map with Napalm picked: a click (or the banner's Napalm, under a finger) sends the bomber. */
+function napalmTap(i, j) {
+  const u = getE(UI.bomber);
+  if (!u || u.dead) { setMode('normal'); return; }
+  const why = napalmBlocked(ME, u, i, j);
+  if (why) { sfx('error'); R.napalmAt = null; showStrikeBanner(why); return; }
+  if (INPUT.mouse) { sendNapalm(i, j); return; }
+  R.napalmAt = { i, j };
+  sfx('click');
+  showStrikeBanner();
+}
+
+function sendNapalm(i, j) {
+  const u = getE(UI.bomber);
+  if (!u || u.dead) { sfx('error'); showStrikeBanner('That bomber is gone.'); return; }
+  const n = napalmSoil(i, j);
+  act('napalm', [u.id, i, j], (why) => {
+    if (why) { sfx('error'); R.napalmAt = null; showStrikeBanner(why); return; }
+    sfx('order'); setMode('normal');
+    addFx('ring', i + 0.5, j + 0.5, { color: '#ff8a2a', r: NAPALM.radius + 0.3 });
+    toast(`Napalm ordered: the bomber loads ${BOMBER.fuel + NAPALM.fuel} Fuel and takes off.${n ? ` ${n} patch${n === 1 ? '' : 'es'} of fertile soil will burn for good.` : ''}`, 'good');
+  });
+}
+
+/** A Vulcan Bomber ready on the ground that can drop napalm on tile (i, j), or null. */
+function readyNapalm(i, j) { return myBombers().find((u) => !u.mission && !u.flight && !(u.rearmUntil > S.time) && !napalmBlocked(ME, u, i, j)) || null; }
+
+/** A panel's Napalm button: the first ready bomber drops napalm on tile (i, j) (`what`: for the toast). */
+function napalmFromPanel(i, j, what) {
+  const u = readyNapalm(i, j);
+  if (!u) { sfx('error'); toast('No Vulcan Bomber is ready that can reach it.', 'warn'); return; }
+  const n = napalmSoil(i, j);
+  act('napalm', [u.id, i, j], (why) => {
+    if (why) { sfx('error'); toast(why, 'warn'); return; }
+    sfx('order'); toast(`Napalm ordered on ${what}: a bomber loads ${BOMBER.fuel + NAPALM.fuel} Fuel and takes off.${n ? ` ${n} patch${n === 1 ? '' : 'es'} of fertile soil will burn for good.` : ''}`, 'good');
+    refreshSheet();
+  });
+}
+
+/* ------------------------------------------------------------------ Torches: Scorch the earth */
+
+/** Your Torches among the selection (when Torch u is one of them), else u alone: the ones a Scorch the earth goes to. */
+function scorchGroup(u) {
+  const sel = UI.sel.includes(u.id) ? orderable(ME, UI.sel).filter((v) => BOTS[v.type].flame) : [];
+  return sel.length ? sel : [u];
+}
+
+/** Scorch the earth: pick the patch of fertile soil on the map for these Torches (each takes a patch). */
+function startScorch(ids) {
+  closeSheet(); setMode('scorch');
+  UI.scorchIds = ids.slice();
+  R.scorchAt = null;
+  showScorchBanner();
+}
+
+function showScorchBanner(problem) {
+  const us = orderable(ME, UI.scorchIds || []).filter((v) => BOTS[v.type].flame);
+  if (!us.length) { setMode('normal'); return; }
+  const ready = us.filter(scorchReady).length, n = us.length;
+  const err = problem ? `<span class="err">${problem}</span> ` : '';
+  const who = n === 1 ? 'the <b>Torch</b> walks there and sprays its whole tank into it'
+    : `your <b>${n} Torches</b> (${ready} with a full enough tank) each take a patch, there and round it, and spray their whole tanks into it`;
+  showBanner(err + (R.scorchAt
+    ? `<b>Scorch this soil?</b> It's burned for good: no Bio Farm grows crops there again.`
+    : `Tap fertile soil (the dark farmland Bio Farms grow crops on): ${who}, ${TORCH.scorch} seconds of fire. The soil is <b>burned for good</b>: no Bio Farm grows crops there again. Then ${n === 1 ? 'it goes' : 'they go'} back to refill (1 Fuel a tank).`), R.scorchAt ? 'Scorch' : null, 'Cancel');
+}
+
+/** A tap or click on the map while picking soil to scorch: a click (or the banner's Scorch, under a finger) sends them. */
+function scorchTap(i, j) {
+  if (!inMap(i, j)) return;
+  const why = scorchTileWhy(tIdx(i, j));
+  if (why) { sfx('error'); R.scorchAt = null; showScorchBanner(why); return; }
+  if (INPUT.mouse) { sendScorch(i, j); return; }
+  R.scorchAt = { i, j };
+  sfx('click');
+  showScorchBanner();
+}
+
+function sendScorch(i, j) {
+  act('scorch', [(UI.scorchIds || []).slice(), i, j], (r) => {
+    if (!r || !r.n) { sfx('error'); R.scorchAt = null; showScorchBanner((r && r.why) || 'Those Torches are gone.'); return; }
+    sfx('order'); setMode('normal');
+    addFx('ring', i + 0.5, j + 0.5, { color: '#ff8a2a' });
+    toast(r.n === 1 ? 'The Torch is off to scorch the soil: it empties its tank into it, then goes back to refill.'
+      : `${r.n} Torches are off to scorch the soil there, a patch each: they empty their tanks into it, then go back to refill.`, 'good');
+  });
+}
+
+/** The Scorch the earth button on a Torch's panel: on while it (or a Torch selected with it) has a full enough tank. */
+function refreshScorchButton(u) {
+  const btn = $('sh-scorch'), hint = $('sh-scorch-hint');
+  if (!btn) return;
+  const us = scorchGroup(u), ready = us.filter(scorchReady).length, busy = u.task && u.task.type === 'scorch';
+  btn.disabled = !ready || u.owner !== ME;
+  btn.textContent = us.length > 1 ? `Scorch the earth (${us.length} Torches)` : 'Scorch the earth';
+  hint.textContent = busy ? 'It\'s on its way to burn a patch of farmland.'
+    : ready ? `Tap fertile soil: ${us.length > 1 ? 'each Torch walks to a patch' : 'it walks there'} and sprays its whole tank into it (${TORCH.scorch} seconds), burning the soil for good so no Bio Farm grows crops there again. Then it refills (1 Fuel).`
+      : `It takes a nearly full tank (${Math.round(TORCH.scorchMin * 100)}%): it has ${Math.round(u.gel ?? TORCH.tank)} of ${TORCH.tank} seconds of fire. It refills with Fuel at storage or a Fuel Station.`;
 }
 
 /** A Cargo Plane parked at Airfield b with nothing to do, or null. */
@@ -3282,9 +3427,10 @@ function freePlane(b) { return basePlanes(b).find((u) => !BOTS[u.type].bomber &&
 /** What a plane is doing, in a few words. */
 function planeStatus(u) {
   if (BOTS[u.type].bomber) {
-    const M = u.mission, tg = M && getE(M.target), what = tg ? (BDEFS[tg.type] ? `the ${BDEFS[tg.type].name}` : `a ${BOTS[tg.type].name}`) : 'its target';
-    if (u.flight) return M && M.phase === 'out' ? `flying out to bomb ${what}` : 'flying home';
-    if (M && M.phase === 'load') return u.rearmUntil > S.time ? `rearming (${Math.ceil(u.rearmUntil - S.time)} s), then off to bomb ${what}` : M.noAmmo ? `waiting for ${BOMBER.ammo} Ammo at its Airfield` : M.noFuel ? `waiting for ${M.noFuel} Fuel at its Airfield (a sortie takes ${BOMBER.fuel} on top of its tank)` : `loading its bomb for ${what}`;
+    const M = u.mission, nap = !!(M && M.napalm), tg = M && !nap && getE(M.target), what = tg ? (BDEFS[tg.type] ? `the ${BDEFS[tg.type].name}` : `a ${BOTS[tg.type].name}`) : 'its target';
+    const job = nap ? 'to drop napalm' : `to bomb ${what}`;
+    if (u.flight) return M && M.phase === 'out' ? `flying out ${job}` : 'flying home';
+    if (M && M.phase === 'load') return u.rearmUntil > S.time ? `rearming (${Math.ceil(u.rearmUntil - S.time)} s), then off ${job}` : M.noAmmo ? `waiting for ${BOMBER.ammo} Ammo at its Airfield` : M.noFuel ? `waiting for ${M.noFuel} Fuel at its Airfield (a ${nap ? 'napalm ' : ''}sortie takes ${BOMBER.fuel + (nap ? NAPALM.fuel : 0)} on top of its tank)` : nap ? 'loading napalm' : `loading its bomb for ${what}`;
     return u.rearmUntil > S.time ? `rearming (${Math.ceil(u.rearmUntil - S.time)} s)` : 'ready on the ground';
   }
   const M = u.mission, load = (m) => (m.kind === 'outpost' ? 'a Drop Outpost' : m.kind === 'supply' ? 'supplies' : `${m.n} ${m.n === 1 ? BOTS[m.kind].name : BOTS[m.kind].plural}`);
@@ -3315,7 +3461,7 @@ function airFuelText(b) {
   const covers = [cargo && `${n(cargo)} Cargo Plane flight${n(cargo) === 1 ? '' : 's'}`, bomb && `${n(bomb)} bomber sortie${n(bomb) === 1 ? '' : 's'}`].filter(Boolean).join(' or ');
   return `${have} of the ${AIRFIELD_FUEL} Fuel it keeps for its planes (Tankers bring it): about ${covers}, ${AIR_TYPICAL} tiles out and back.` +
     (cargo ? ` A Cargo Plane takes about ${Math.round(cargo)} Fuel a flight like that (one Fuel fills ${planeFill({ type: 'cargoplane' })}% of its tank).` : '') +
-    (bomb ? ` A bomber sortie takes ${BOMBER.fuel} Fuel on top of its tank, and it can't take off without it.` : '');
+    (bomb ? ` A bomber sortie takes ${BOMBER.fuel} Fuel on top of its tank (${BOMBER.fuel + NAPALM.fuel} with napalm), and it can't take off without it.` : '');
 }
 
 /** The Airfield panel's sections: its Fuel, its planes, air drops, and the places it supplies by air. */
@@ -3509,17 +3655,17 @@ function pickTarget(t, html, okLabel, deck) {
   if (deck) addFx('ring', deck.i + 0.5, deck.j + 0.5, { color: '#ff5a6e' });
   if (BDEFS[t.type]) { R.selected = t.id; UI.selBot = 0; } else { UI.selBot = t.id; R.selected = 0; }
   sfx('click');
-  showBanner(html, okLabel, 'Cancel');
+  if (R.mode === 'strike') strikeBanner(html, okLabel); else showBanner(html, okLabel, 'Cancel');
 }
 
 /** Send the bomber being given a target (UI.bomber) at t (`deck`: { i, j }, a tile of the deck of the Viaduct t is an end of). */
 function strikePicked(t, deck) {
   const u = getE(UI.bomber);
   if (!u || u.dead) { sfx('error'); showBanner('<span class="err">That bomber is gone.</span>', null, 'Cancel'); return; }
-  if (!t || t.dead) { sfx('error'); UI.pick = 0; UI.pickDeck = null; showBanner('<span class="err">That target is gone: tap another.</span>', null, 'Cancel'); return; }
+  if (!t || t.dead) { sfx('error'); UI.pick = 0; UI.pickDeck = null; strikeBanner('<span class="err">That target is gone: tap another.</span>'); return; }
   const tName = deck ? `the ${BDEFS[t.type].name}'s deck` : BDEFS[t.type] ? `the ${BDEFS[t.type].name}` : `a ${BOTS[t.type].name}`;
   act('strike', deck ? [u.id, t.id, deck.i, deck.j] : [u.id, t.id], (why) => {
-    if (why) { sfx('error'); showBanner(`<span class="err">${why}</span>`, null, 'Cancel'); return; }
+    if (why) { sfx('error'); strikeBanner(`<span class="err">${why}</span>`); return; }
     sfx('order'); setMode('normal');
     toast(`Strike ordered on ${tName}: the bomber loads up and takes off.`, 'good');
   });
@@ -3634,7 +3780,9 @@ function recallAllWarbots() {
 
 function confirmBanner() {
   if (R.mode === 'aim') { fireAimed(); return; }
+  if (R.mode === 'strike' && UI.strikeKind === 'napalm' && R.napalmAt) { sendNapalm(R.napalmAt.i, R.napalmAt.j); return; }
   if (R.mode === 'strike' && UI.pick) { strikePicked(getE(UI.pick), UI.pickDeck); return; }
+  if (R.mode === 'scorch' && R.scorchAt) { sendScorch(R.scorchAt.i, R.scorchAt.j); return; }
   if (R.mode === 'bombard' && UI.pick) {
     const u = getE(UI.rocket), b = getE(UI.pick);
     if (!u || u.dead || !b || !rocketTarget(u, b)) { sfx('error'); UI.pick = 0; showBanner('<span class="err">That target is gone.</span> Tap an enemy building.', null, 'Cancel'); return; }
@@ -3753,15 +3901,17 @@ function onMapTap(i, j, wx, wy) {
   if (!UI.inGame || UI.paused) return;
   // The first tap on the map folds the goal card away on a small screen (it has been read; the map is wanted now).
   if (!UI.objCollapsed && !UI.objManual && !S.mission && !isWide()) { UI.objCollapsed = true; UI.objAuto = true; UI.hudT = 0; }
+  if (R.mode === 'scorch') { scorchTap(i, j); return; }
   if (R.mode === 'strike') {
     const u = getE(UI.bomber);
     if (!u || u.dead) { setMode('normal'); return; }
+    if (UI.strikeKind === 'napalm') { napalmTap(i, j); return; }
     const b = buildingAtTap(i, j, wx, wy);
     let t = b && foes(b.owner, ME) ? b : null, deck = null;
     if (!t) { let bd = 0.5; for (const v of S.bots) { if (v.dead || !foes(v.owner, ME) || v.inside || BOTS[v.type].air) continue; const d = dist2(v.x, v.y, wx, wy); if (d < bd) { bd = d; t = v; } } }
     // A Viaduct's deck: the bomb falls on the tile tapped and counts against the span. A Ropeway's cable: its nearer station.
     if (!t) { const c = crossingAtTap(i, j, wx, wy); if (c && foes(c.owner, ME)) { t = c; if (BDEFS[c.type].viaduct) deck = { i, j }; } }
-    if (!t) { sfx('error'); showBanner('<span class="err">Tap an enemy building or Viaduct deck, or an enemy vehicle or robot out in the open.</span>', null, 'Cancel'); return; }
+    if (!t) { sfx('error'); strikeBanner('<span class="err">Tap an enemy building or Viaduct deck, or an enemy vehicle or robot out in the open (or switch to Napalm for any ground).</span>'); return; }
     // Under a finger the target is picked first (ringed on the map) and the banner's Strike sends the bomber; a mouse click sends it at once.
     if (!INPUT.mouse) {
       pickTarget(t, deck ? `Strike the deck of the ${playerName(t.owner)} <b>Viaduct</b>? The bomb falls where you tapped, and two bring the span down.`
@@ -4038,6 +4188,7 @@ function onMapTap(i, j, wx, wy) {
   if (inMap(i, j) && uplinkAt(tIdx(i, j))) { sfx('click'); openUplinkSheet(uplinkAt(tIdx(i, j))); return; }
   if (inMap(i, j) && S.res[tIdx(i, j)]) { sfx('click'); openResourceSheet(tIdx(i, j)); return; }
   if (inMap(i, j) && S.fert[tIdx(i, j)] && S.terrain[tIdx(i, j)] === T_GROUND) { sfx('click'); openSoilSheet(tIdx(i, j)); return; }
+  if (inMap(i, j) && burntSoil(tIdx(i, j)) && S.terrain[tIdx(i, j)] === T_GROUND && !S.road[tIdx(i, j)]) { sfx('click'); openBurntSheet(tIdx(i, j)); return; }
   if (inMap(i, j) && S.road[tIdx(i, j)] && wayOwner(tIdx(i, j)) === 0) { sfx('click'); openRoadSheet(tIdx(i, j)); return; }
   closeSheet();
 }
@@ -4046,7 +4197,7 @@ function onMapTap(i, j, wx, wy) {
 function onMapHover(i, j) {
   UI.hoverTile = inMap(i, j) ? tIdx(i, j) : -1;
   if (R.mode === 'road' && routeOn()) { routeHover(i, j); return; }
-  if (R.mode === 'aim' || R.mode === 'land' || R.mode === 'airdrop') { R.aimHover = inMap(i, j) ? { i, j } : null; return; }
+  if (R.mode === 'aim' || R.mode === 'land' || R.mode === 'airdrop' || R.mode === 'strike' || R.mode === 'scorch') { R.aimHover = inMap(i, j) ? { i, j } : null; return; }
   if (R.mode !== 'place' || !R.overlay || !UI.placeType || !inMap(i, j)) return;
   R.ghost = { type: UI.placeType, x: i, y: j, ok: !!R.overlay.valid[tIdx(i, j)], hover: true };
 }
@@ -5227,7 +5378,7 @@ function openBuildingSheet(b) {
       <div class="stepper" id="sh-stepper"><button class="btn" id="sh-minus">−</button><span class="n" id="sh-n">0</span>
       <button class="btn" id="sh-plus">+</button><button class="btn primary" id="sh-send" style="flex:1">Send warbots</button></div>
       <div class="section-label">Missile strike</div><div id="sh-missile"></div>
-      <button class="btn primary big" id="sh-fire">Fire missile</button>${myBombers().length ? '<div class="section-label">Air strike</div><p class="hint" id="sh-bomb-hint"></p><button class="btn big" id="sh-bomb">Bomb it</button>' : ''}`;
+      <button class="btn primary big" id="sh-fire">Fire missile</button>${myBombers().length ? '<div class="section-label">Air strike</div><p class="hint" id="sh-bomb-hint"></p><div class="actions"><button class="btn big" id="sh-bomb">Bomb it</button><button class="btn big" id="sh-napalm">Napalm</button></div>' : ''}`;
   }
   html += flavorLine(b.type);
   openSheet('bld', b.id, html);
@@ -5372,6 +5523,7 @@ function openBuildingSheet(b) {
       if (ok) { toast(`Missile away: it will hit the ${def.name} in a few seconds.`, 'info'); refreshSheet(); }
       else sfx('error');
     });
+    if ($('sh-napalm')) $('sh-napalm').onclick = () => napalmFromPanel(b.x, b.y, `the ground round the ${def.name}`);
     if ($('sh-bomb')) $('sh-bomb').onclick = () => {
       const u = readyBomber(b);
       if (!u) { sfx('error'); toast('No Vulcan Bomber is ready that can reach it.', 'warn'); return; }
@@ -5702,7 +5854,7 @@ function refreshBuildingSheet(b) {
     if (el.dataset.sig !== sig) {
       el.dataset.sig = sig;
       el.innerHTML = bs.length ? bs.map((u, k) => `<div class="kv trade-row"><span>Bomber ${k + 1}<small>${planeStatus(u)} · Fuel tank ${Math.round(u.bat ?? 100)}%</small>${fuelGauge(u)}</span><button class="btn small primary" data-b="${u.id}" ${u.mission || u.flight ? 'disabled' : ''}>Strike</button></div>`).join('') +
-        `<p class="hint">A sortie takes ${BOMBER.ammo} Ammo (this Airfield keeps some for them; haulers bring it) and ${BOMBER.fuel} Fuel on top of what its tank needs (Tankers bring it): it can't take off without both. Back on the ground a bomber needs ${BOMBER.rearm} s to rearm. Or open a rival building and tap <b>Bomb it</b>.</p>`
+        `<p class="hint">A sortie takes ${BOMBER.ammo} Ammo (this Airfield keeps some for them; haulers bring it) and ${BOMBER.fuel} Fuel on top of what its tank needs (Tankers bring it): it can't take off without both. Back on the ground a bomber needs ${BOMBER.rearm} s to rearm. <b>Strike</b> lets you pick its payload: a bomb, or <b>Napalm</b> (${NAPALM.fuel} more Fuel, no Ammo) for any ground, which burns fertile soil for good. Or open a rival building and tap <b>Bomb it</b> or <b>Napalm</b>.</p>`
         : '<p class="hint">None based here: order Vulcan Bombers in the hangar below (two fit).</p>';
       for (const btn of el.querySelectorAll('button[data-b]')) btn.onclick = () => { const u = getE(+btn.dataset.b); if (u) { sfx('click'); startStrike(u); } };
     }
@@ -5848,6 +6000,7 @@ function botActivity(u) {
       if (u.fight) return 'Fighting!';
       if (!t) return u.inside ? 'Standing guard inside' : 'Waiting for orders: no garrison with room';
       if (t.type === 'garrison') return `Marching to the ${nm(t.bld)}`;
+      if (t.type === 'scorch') return t.spray > 0 ? 'Scorching the earth: burning a patch of farmland for good' : 'Off to scorch a patch of farmland';
       if (t.wait > S.time) return 'Waiting to set off with its squad'; // (staggered departure: paceSquad)
       if (t.type === 'attack' && t.reload) return u.type === 'torch' ? 'Tank empty: refilling it, then back to the attack' : 'Out of Ammo: reloading, then back to the attack';
       if (t.type === 'attack') return `Attacking the rival ${nm(t.target)}`;
@@ -5902,6 +6055,11 @@ function refreshBombButton(t) {
       : `A Vulcan Bomber is ready: it drops one bomb (${BOMBER.damage} off the target; ${BOMBER.ammo} Ammo and ${BOMBER.fuel} Fuel a sortie). Flak Guns can shoot it down.`)
     : bot && (t.inside || t.dropping) ? 'It\'s under cover: bombers only hit vehicles and robots out in the open.'
       : any.some((v) => v.mission || v.flight) ? 'Your bombers are out on sorties.' : any.some((v) => v.rearmUntil > S.time) ? 'Your bombers are rearming.' : 'Out of your bombers\' reach.';
+  if ($('sh-napalm') && BDEFS[t.type]) {
+    const n = napalmSoil(t.x, t.y);
+    $('sh-napalm').disabled = !readyNapalm(t.x, t.y);
+    if (!$('sh-napalm').disabled) $('sh-bomb-hint').textContent += ` Or Napalm: ${BOMBER.fuel + NAPALM.fuel} Fuel and no Ammo; the ground round it burns for ${NAPALM.burn} s${n ? `, and ${n} patch${n === 1 ? '' : 'es'} of fertile soil there for good` : ''}.`;
+  }
 }
 
 /** The Armor section of one of your Freight Trains' panels (see TRAIN_ARMOR). */
@@ -5960,6 +6118,7 @@ function openBotSheet(u) {
     <div class="status" id="sh-status"></div><div id="sh-dyn"></div>
     ${u.owner === ME && isArmy(u) ? '<button class="btn big" id="sh-recall" hidden>Call back this squad</button>' : ''}
     ${u.owner === ME && BOTS[u.type].bomber ? '<button class="btn primary big" id="sh-strike">Pick a target</button>' : ''}
+    ${u.owner === ME && BOTS[u.type].flame ? '<div class="section-label">Scorch the earth</div><p class="hint" id="sh-scorch-hint"></p><button class="btn big" id="sh-scorch">Scorch the earth</button>' : ''}
     ${foes(u.owner, ME) && u.owner >= 0 && !BOTS[u.type].wild && !BOTS[u.type].air && myBombers().length ? '<div class="section-label">Air strike</div><p class="hint" id="sh-bomb-hint"></p><button class="btn big" id="sh-bomb">Bomb it</button>' : ''}
     ${u.owner === ME && BOTS[u.type].ferry ? `<button class="btn big" id="sh-fout"${u.inside && !u.landing ? '' : ' hidden'}>Sail out of the Port</button>
       <div class="actions"><button class="btn primary" id="sh-fsail">Sail somewhere</button><button class="btn" id="sh-fhome">Back to its line</button></div>
@@ -5986,6 +6145,11 @@ function openBotSheet(u) {
     });
   };
   if ($('sh-strike')) $('sh-strike').onclick = () => { const why = u.mission || u.flight ? 'It\'s already out on a sortie.' : ''; if (why) { sfx('error'); toast(why, 'warn'); return; } sfx('click'); startStrike(u); };
+  if ($('sh-scorch')) $('sh-scorch').onclick = () => {
+    const us = scorchGroup(u).filter(scorchReady);
+    if (!us.length) { sfx('error'); toast(`It takes a nearly full tank (${Math.round(TORCH.scorchMin * 100)}%): let it refill with Fuel first.`, 'warn'); return; }
+    sfx('click'); startScorch(us.map((v) => v.id));
+  };
   if ($('sh-fsail')) {
     const done = (r, ok) => { if (typeof r === 'string' && r) { sfx('error'); toast(r, 'warn'); } else { sfx('order'); if (ok) toast(ok, 'info'); } refreshSheet(); };
     $('sh-fsail').onclick = () => { sfx('click'); closeSheet(); setMode('fsail'); UI.ferry = u.id; showBanner('Tap where the <b>Ferry</b> should sail: open water, a spot on the shore (it comes right up to it), or one of your Ports.', null, 'Cancel'); };
@@ -6160,9 +6324,20 @@ function openUplinkSheet(u) {
 
 function openSoilSheet(t) {
   R.selected = 0; R.selTile = t; UI.selBot = 0;
+  const i = t % S.W, j = (t / S.W) | 0, theirs = soilHolder(t) !== ME, n = napalmSoil(i, j);
+  const air = warOn() && theirs && myBombers().length;
   const html = `<div class="sheet-title"><div><h3>Fertile soil</h3></div></div>
-    <p class="desc">Dark, rich ground. A Bio Farm within ${BDEFS.farm.radius} tiles plants energy crops here and harvests them into Fuel for your Fuel Stations. Paths and buildings on it leave less room to farm.</p>`;
+    <p class="desc">Dark, rich ground. A Bio Farm within ${BDEFS.farm.radius} tiles plants energy crops here and harvests them into Fuel for your Fuel Stations. Paths and buildings on it leave less room to farm. Burned (by napalm, or a Torch's Scorch the earth), it's lost for good.</p>` +
+    (air ? `<div class="section-label">Air strike</div><p class="hint">Napalm here: ${BOMBER.fuel + NAPALM.fuel} Fuel at the Airfield and no Ammo. It burns ${n} patch${n === 1 ? '' : 'es'} of fertile soil within ${NAPALM.radius} tiles for good, and whatever stands there for ${NAPALM.burn} seconds.</p><button class="btn big" id="sh-napalm">Napalm it</button>` : '');
   openSheet('soil', t, html);
+  if ($('sh-napalm')) { $('sh-napalm').disabled = !readyNapalm(i, j); $('sh-napalm').onclick = () => napalmFromPanel(i, j, 'the farmland'); }
+}
+
+/** Burned soil (burntSoil): what's left of fertile soil after napalm or a Torch. */
+function openBurntSheet(t) {
+  R.selected = 0; R.selTile = t; UI.selBot = 0;
+  openSheet('soil', t, `<div class="sheet-title"><div><h3>Burned farmland</h3></div></div>
+    <p class="desc">This was fertile soil until napalm or a Torch burned it. Nothing grows here again: no Bio Farm can plant energy crops on it. Roads and buildings can still go on it.</p>`);
 }
 
 /** Crude left in the oil seep tiles around (i, j) that an Oil Pump there would draw from. */
@@ -6630,7 +6805,7 @@ function refreshSheet() {
     $('sh-dyn').innerHTML = `<div class="kv"><span>Health</span><span>${Math.ceil(u.hp)} / ${u.maxHp}</span></div>` +
       `<div class="kv"><span>${tankOf(u) ? 'Fuel tank' : 'Battery'}</span><span>${bat}%${bat < BATTERY.critical ? (tankOf(u) ? ' (empty: crawling)' : ' (flat: slow and weak)') : bat < BATTERY.low ? ' (low)' : ''}</span></div>` +
       `<div class="bar battery"><div style="width:${bat}%;background:${bat < BATTERY.critical ? '#ff4d4d' : bat < BATTERY.low ? '#ffb347' : '#7ee08a'}"></div></div>` +
-      (BOTS[u.type].air ? `<div class="kv"><span>Fuel</span><span>fills up at its Airfield, one Fuel ${planeFill(u)}% of the tank (${tankFuel(u, 100)} to fill it now)${BOTS[u.type].bomber ? `; each sortie takes ${BOMBER.fuel} Fuel on top` : ''}; a full tank reaches ${planeReach(u)} tiles out and back</span></div>` : '') +
+      (BOTS[u.type].air ? `<div class="kv"><span>Fuel</span><span>fills up at its Airfield, one Fuel ${planeFill(u)}% of the tank (${tankFuel(u, 100)} to fill it now)${BOTS[u.type].bomber ? `; each sortie takes ${BOMBER.fuel} Fuel on top (${NAPALM.fuel} more with napalm)` : ''}; a full tank reaches ${planeReach(u)} tiles out and back</span></div>` : '') +
       (BOTS[u.type].shield ? shieldRows(u) : '') +
       (BOTS[u.type].flame ? `<div class="kv"><span>Flame tank</span><span>${Math.round(u.gel ?? TORCH.tank)} / ${TORCH.tank} seconds of fire${(u.gel ?? TORCH.tank) <= 0.05 ? ' (empty: going to refill with Fuel)' : ''}</span></div>` +
         `<div class="bar battery"><div style="width:${Math.round(100 * (u.gel ?? TORCH.tank) / TORCH.tank)}%;background:#ff8a2a"></div></div>` : '') +
@@ -6641,6 +6816,7 @@ function refreshSheet() {
     if ($('sh-recall')) $('sh-recall').hidden = !(u.task && u.task.type === 'hold');
     if ($('sh-fout')) $('sh-fout').hidden = !u.inside || !!u.landing;
     if ($('sh-tarmor')) refreshTrainArmor(u);
+    if ($('sh-scorch')) refreshScorchButton(u);
     if ($('sh-recycle')) refreshRecycle(u);
   } else if (UI.sheetKind === 'move') {
     const t = UI.sheetFor, i = t % S.W, j = (t / S.W) | 0;

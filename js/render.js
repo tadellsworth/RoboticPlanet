@@ -975,6 +975,7 @@ function paintTile(ctx, i, j) {
   if (S.tidal && S.tidal[t]) drawFlat(ctx, i, j, x, y, terr === T_WATER);
   if (S.fault && S.fault[t] && terr !== T_CHASM) drawFaultScar(ctx, i, j, x, y);
   if (terr === T_GROUND && S.fert && S.fert[t] && !S.ramp[t]) drawFertile(ctx, i, j, x, y);
+  else if (terr === T_GROUND && S.burnt && S.burnt[t] && !S.ramp[t]) drawBurnt(ctx, i, j, x, y);
   if (S.road[t]) { if (terr === T_GROUND) drawRoad(ctx, i, j, x, y); else drawCrossing(ctx, i, j, x, y, t); }
   if (S.rail && S.rail[t]) {
     if (!S.road[t] && bridgeable(t)) drawBridge(ctx, i, j, x, y, t, true);
@@ -1222,7 +1223,7 @@ function shoreRounds(i, j) {
   if ((terr !== T_WATER && terr !== T_GROUND) || !(R.tex && R.tex.water) || R.biome === 'volcanic') return out;
   const plainWater = (a, b) => terrAt(a, b) === T_WATER && !(S.lava && S.lava[tIdx(a, b)]) && !(S.ford && S.ford[tIdx(a, b)]) && !(S.tidal && S.tidal[tIdx(a, b)]) && !S.road[tIdx(a, b)];
   if (terr === T_WATER && !plainWater(i, j)) return out;
-  if (terr === T_GROUND && (S.road[t] || S.bAt[t] || S.res[t] || S.ramp[t] || (S.rail && S.rail[t]) || (S.fert && S.fert[t]) || (S.tidal && S.tidal[t]))) return out;
+  if (terr === T_GROUND && (S.road[t] || S.bAt[t] || S.res[t] || S.ramp[t] || (S.rail && S.rail[t]) || (S.fert && S.fert[t]) || (S.burnt && S.burnt[t]) || (S.tidal && S.tidal[t]))) return out;
   for (const [dx, dy] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) {
     if (terr === T_WATER && terrAt(i + dx, j) === T_GROUND && terrAt(i, j + dy) === T_GROUND && terrAt(i + dx, j + dy) === T_GROUND) out.push({ fill: 'land', dx, dy });
     else if (terr === T_GROUND && plainWater(i + dx, j) && plainWater(i, j + dy) && plainWater(i + dx, j + dy)) out.push({ fill: 'water', dx, dy });
@@ -2351,6 +2352,39 @@ function drawFertile(ctx, i, j, x, y) {
     ctx.fillRect(x + l, yy, TP - l - r, 2);
     ctx.fillStyle = 'rgba(160,180,90,0.22)';
     ctx.fillRect(x + l, yy - 1.5, TP - l - r, 1);
+  }
+}
+
+/**
+ * Burned soil (fertile soil scorched for good by napalm or a Torch: see scorchSoil): charred black earth, the old
+ * furrows burnt darker, flecked with grey ash and a few rust-brown cinders. Drawn in code (no art).
+ */
+function drawBurnt(ctx, i, j, x, y) {
+  const burnt = (di, dj) => inMap(i + di, j + dj) && S.burnt[tIdx(i + di, j + dj)];
+  const l = burnt(-1, 0) ? 0 : 2, r = burnt(1, 0) ? 0 : 2, tp = burnt(0, -1) ? 0 : 2, b = burnt(0, 1) ? 0 : 2;
+  // A soft dark halo where the burn meets unburnt ground, then the char itself.
+  ctx.fillStyle = 'rgba(14,10,8,0.35)';
+  ctx.fillRect(x + l - (l ? 1 : 0), y + tp - (tp ? 1 : 0), TP - l - r + (l ? 1 : 0) + (r ? 1 : 0), TP - tp - b + (tp ? 1 : 0) + (b ? 1 : 0));
+  ctx.fillStyle = 'rgba(20,15,12,0.86)';
+  ctx.fillRect(x + l, y + tp, TP - l - r, TP - tp - b);
+  // The furrows, burnt deeper (with a faint ashy lip).
+  for (let k = 0; k < 4; k++) {
+    const yy = y + 4 + k * 8;
+    ctx.fillStyle = 'rgba(0,0,0,0.55)';
+    ctx.fillRect(x + l, yy, TP - l - r, 2);
+    ctx.fillStyle = 'rgba(150,140,128,0.12)';
+    ctx.fillRect(x + l, yy - 1.5, TP - l - r, 1);
+  }
+  // Drifts of pale ash, then flecks of it and a few cinders.
+  for (let k = 0; k < 2; k++) {
+    const ax = x + 4 + hash2(i, j, 30 + k) * (TP - 14), ay = y + 4 + hash2(i, j, 34 + k) * (TP - 12);
+    ctx.fillStyle = 'rgba(150,142,132,0.13)';
+    ctx.fillRect(ax, ay, 8, 5); ctx.fillRect(ax + 2, ay - 1, 4, 7);
+  }
+  for (let k = 0; k < 10; k++) {
+    const ax = x + 2 + hash2(i, j, 40 + k) * (TP - 6), ay = y + 2 + hash2(i, j, 60 + k) * (TP - 5), w = 2 + Math.floor(hash2(i, j, 80 + k) * 3);
+    ctx.fillStyle = k < 8 ? `rgba(170,162,150,${0.25 + 0.22 * hash2(i, j, 100 + k)})` : 'rgba(130,56,24,0.5)';
+    ctx.fillRect(ax, ay, w, k < 8 ? 1 + (k % 2) : 2);
   }
 }
 
@@ -4681,6 +4715,8 @@ function render(dtReal) {
   if (R.mode === 'aim') drawAim(ctx, ox, oy, z);
   else if (R.mode === 'land') drawLandingPick(ctx, ox, oy, z);
   else if (R.mode === 'airdrop') drawAirdropPick(ctx, ox, oy, z);
+  else if (R.mode === 'strike' && UI.strikeKind === 'napalm') drawNapalmPick(ctx, ox, oy, z);
+  else if (R.mode === 'scorch') drawScorchPick(ctx, ox, oy, z);
   else if (sel) drawRanges(ctx, sel.type, sel.x, sel.y, ox, oy, z, sel.owner);
   if (R.ghost) drawRanges(ctx, R.ghost.type, R.ghost.x, R.ghost.y, ox, oy, z, 0);
 
@@ -5842,8 +5878,8 @@ function drawMissiles(ctx, ox, oy, z) {
       const k = Math.min(1, m.t / m.dur), gx = ox + lerp(m.x0, m.x1, k) * z, gy = oy + lerp(m.y0, m.y1, k) * z, h = (1 - k * k) * 1.25 * z;
       ctx.fillStyle = `rgba(0,0,0,${0.15 + 0.25 * k})`; ctx.beginPath(); ctx.ellipse(gx, gy, z * (0.06 + 0.06 * k), z * (0.03 + 0.03 * k), 0, 0, Math.PI * 2); ctx.fill();
       ctx.save(); ctx.translate(gx + h * 0.7, gy - h); ctx.rotate(Math.atan2(m.y1 - m.y0, m.x1 - m.x0));
-      ctx.fillStyle = '#2b2f33'; ctx.beginPath(); ctx.ellipse(0, 0, z * 0.16, z * 0.055, 0, 0, Math.PI * 2); ctx.fill();
-      ctx.fillStyle = PLAYER_COLORS[m.owner]; ctx.fillRect(-z * 0.03, -z * 0.055, z * 0.04, z * 0.11);
+      ctx.fillStyle = m.napalm ? '#5a4632' : '#2b2f33'; ctx.beginPath(); ctx.ellipse(0, 0, z * 0.16, z * (m.napalm ? 0.07 : 0.055), 0, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = m.napalm ? '#ff9a3c' : PLAYER_COLORS[m.owner]; ctx.fillRect(-z * 0.03, -z * 0.055, z * 0.04, z * 0.11);
       ctx.fillStyle = '#4a5056'; ctx.fillRect(-z * 0.2, -z * 0.07, z * 0.05, z * 0.14);
       ctx.restore();
       continue;
@@ -6387,7 +6423,7 @@ const MM_WARBOT = ['#bff2ff', '#ffc2ca', '#c6f4cc', '#e4cbff'];
 const MM_COLORS = {
   ground: [169, 113, 74], water: [28, 75, 93], rock: [74, 51, 41], ramp: [235, 205, 150], chasm: [18, 12, 10],
   [R_STALK]: [47, 174, 134], [R_BOULDER]: [160, 154, 145], [R_ORE]: [235, 120, 50], [R_CRYSTAL]: [150, 105, 245],
-  [R_CROP]: [255, 92, 138], [R_OIL]: [22, 18, 15], [R_URANIUM]: [157, 255, 58], fertile: [92, 98, 40],
+  [R_CROP]: [255, 92, 138], [R_OIL]: [22, 18, 15], [R_URANIUM]: [157, 255, 58], fertile: [92, 98, 40], burnt: [38, 32, 29],
 };
 
 function initMinimap(canvas) {
@@ -6419,7 +6455,7 @@ function rebuildMinimapBase() {
   for (let t = 0; t < S.W * S.H; t++) {
     const terr = S.terrain[t];
     let c = terr === T_WATER ? MM_COLORS.water : terr === T_CHASM ? MM_COLORS.chasm : terr === T_ROCK ? MM_COLORS.rock : S.res[t] ? MM_COLORS[S.res[t]] : S.ramp[t] ? MM_COLORS.ramp
-      : S.fert && S.fert[t] ? MM_COLORS.fertile : MM_COLORS.ground;
+      : S.fert && S.fert[t] ? MM_COLORS.fertile : S.burnt && S.burnt[t] ? MM_COLORS.burnt : MM_COLORS.ground;
     // Lava glows orange, fords show as gravel shallows, tidal flats as sand (or shallows), the fault as a dark scar.
     if (terr === T_WATER && ((S.lava && S.lava[t]) || R.biome === 'volcanic')) c = [236, 104, 34];
     else if (terr === T_WATER && S.ford && S.ford[t]) c = [150, 160, 140];
@@ -6850,6 +6886,43 @@ function drawAirdropPick(ctx, ox, oy, z) {
   }
 }
 
+
+/**
+ * Napalm: the bomber's reach round its Airfield, and the ground it would set on fire under the pointer or picked:
+ * the fertile soil it would burn for good in amber, the rest of the fire's tiles faintly.
+ */
+function drawNapalmPick(ctx, ox, oy, z) {
+  const u = getE(UI.bomber), base = u && planeBase(u);
+  if (!u || !base) return;
+  const bx = ox + (base.x + 0.5) * z, by = oy + (base.y + 0.5) * z;
+  ctx.strokeStyle = 'rgba(255,154,60,0.5)'; ctx.lineWidth = 2; ctx.setLineDash([z * 0.3, z * 0.2]);
+  ctx.beginPath(); ctx.arc(bx, by, planeReach(u) * z, 0, Math.PI * 2); ctx.stroke();
+  ctx.setLineDash([]);
+  for (const [spot, picked] of [[R.aimHover, false], [R.napalmAt, true]]) {
+    if (!spot || !inMap(spot.i, spot.j)) continue;
+    const ok = !napalmBlocked(ME, u, spot.i, spot.j), cx = ox + (spot.i + 0.5) * z, cy = oy + (spot.j + 0.5) * z;
+    if (ok) for (const t of napalmTiles(spot.i, spot.j)) {
+      if (S.terrain[t] !== T_GROUND) continue;
+      ctx.fillStyle = S.fert[t] ? `rgba(255,120,30,${picked ? 0.5 : 0.38})` : 'rgba(255,170,90,0.13)';
+      ctx.fillRect(ox + (t % S.W) * z + 1, oy + ((t / S.W) | 0) * z + 1, z - 2, z - 2);
+    }
+    ctx.strokeStyle = !ok ? 'rgba(255,107,107,0.9)' : picked ? '#ff9a3c' : 'rgba(255,154,60,0.7)';
+    ctx.lineWidth = picked ? Math.max(2.5, z * 0.07) : 2;
+    ctx.beginPath(); ctx.arc(cx, cy, (NAPALM.radius + 0.2) * z, 0, Math.PI * 2); ctx.stroke();
+  }
+}
+
+/** Scorch the earth: the patch of soil under the pointer or picked (amber where it can be burned, red where it can't). */
+function drawScorchPick(ctx, ox, oy, z) {
+  for (const [spot, picked] of [[R.aimHover, false], [R.scorchAt, true]]) {
+    if (!spot || !inMap(spot.i, spot.j)) continue;
+    const ok = !scorchTileWhy(tIdx(spot.i, spot.j)), x = ox + spot.i * z, y = oy + spot.j * z;
+    if (ok) { ctx.fillStyle = `rgba(255,120,30,${picked ? 0.45 : 0.28})`; ctx.fillRect(x + 2, y + 2, z - 4, z - 4); }
+    ctx.strokeStyle = !ok ? 'rgba(255,107,107,0.9)' : picked ? '#ff9a3c' : 'rgba(255,154,60,0.75)';
+    ctx.lineWidth = picked ? Math.max(2.5, z * 0.07) : 2;
+    ctx.strokeRect(x + 2, y + 2, z - 4, z - 4);
+  }
+}
 
 /** Every Airfield's runway, on the ground under buildings and bots. */
 /**
