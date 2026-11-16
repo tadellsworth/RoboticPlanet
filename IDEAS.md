@@ -165,7 +165,8 @@ These wait for a later expansion:
   Bases land, floating Crystal masses, chasms, underground lakes, ceiling tremors, Ringfall only through the breaches,
   no solar flares, Fiber from Bloom veins (which draws the Murmur), the most nests of any map with the Deep's mound at
   the centre.
-- **A campaign mode built around the Murmur** (the owner's long-term wish).
+- **A campaign mode built around the Murmur** (the owner's long-term wish): the owner's outline is in CAMPAIGN.md, 15
+  missions in three acts, from the landing in the Rust to "No further instructions" at the Pathfinder.
 - **Archives.** A page that fills with logs found across games (ark construction updates that stop, the last
   transmission's background noise, the *Wren*'s silent waystation, machine traffic from other Catalog worlds, one signal
   that matches no robot protocol), so players piece together Earth's fate without ever being told.

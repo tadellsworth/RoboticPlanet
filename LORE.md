@@ -50,7 +50,7 @@ Ithaca I is a coral-red world with a bright ring, the fourth planet of a restles
 The name comes from the Ithaca Catalog, a pre-war list of candidate homeworlds named for Odysseus's island, the home he took 20 years to reach while rivals moved into his house. Ithaca I ranked first, which is why every Sponsor sent a vanguard here. The vanguards sent to Ithaca II and beyond have not been heard from.
 
 - **The Ring.** What's left of a moon that broke apart long before the probe arrived. Its pieces still fall in showers the robots call *ringfall*.
-- **Argos.** Ithaca I's surviving moon, named for Odysseus's dog, who waited 20 years and still knew him when he came home. Its twin broke apart to form the Ring. Argos is a grey, airless field of craters, and the Accord counted it as claimable land, so the Carriers drop Command Bases there too. No Murmur live there: it is the only silent ground the robots have.
+- **Argos.** Ithaca I's surviving moon, named for Odysseus's old dog, who waited 20 years for him to come home. Its twin broke apart to form the Ring. Argos is a grey, airless field of craters, and the Accord counted it as claimable land, so the Carriers drop Command Bases there too. No Murmur live there: it is the only silent ground the robots have.
 - **Why Ithaca I was chosen.** Ringfall keeps restocking the surface with Ore and Crystal, so the planet never mines out. To the Sponsors it was a self-refilling quarry.
 - **Why the faces differ.** The largest strikes cracked the crust into volcanic zones and left craters in every region. The rest is ordinary climate, from equator to pole.
 - **Crystal.** Ring Crystal is slightly weightless. Rock rich in it floats, which is where the sky islands over the canyons come from.
