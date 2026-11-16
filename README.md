@@ -64,7 +64,9 @@ Progress auto-saves in the browser every 20 seconds and whenever you leave the p
 ## How to play
 
 The full illustrated guide is **[how-to-play.html](how-to-play.html)** (open it in a browser; once GitHub
-Pages is on it is at `…/how-to-play.html` next to the game). The short version:
+Pages is on it is at `…/how-to-play.html` next to the game). In the game, **How to play** (main menu and pause menu)
+opens on its contents; tapping a topic shows that one section, with a bar above it that stays put (Contents, a picker
+for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.js`). The short version:
 
 | Building | Does |
 |---|---|

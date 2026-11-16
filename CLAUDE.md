@@ -3,7 +3,8 @@
 Standing rules from the owner, for every change to the game:
 
 - **Keep the in-game How to play current.** It is the `#screen-help` block in `index.html` (a contents list with
-  jump links at the top, then one `<section id="hs-…">` per topic). Any change that adds, removes or alters something
+  jump links at the top, then one `<section id="hs-…">` per topic, shown one at a time by `helpPage` in `js/ui.js`; a
+  section's `<h3>` is its name in the picker). Any change that adds, removes or alters something
   a player sees or does (a building, robot, rule, number, key, button, map, mode) updates the matching section in
   the same commit. `node tools/help-coverage-test.js` fails when a
   buildable building or available robot is not mentioned there, or when a contents link has no section.

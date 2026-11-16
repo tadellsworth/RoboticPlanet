@@ -910,6 +910,18 @@ canvas.chart.small { height: 110px; }
 .help-body section { scroll-margin-top: 6px; }
 .help-top { display: inline-block; margin: 6px 0 2px; font-size: 12px; color: var(--muted); text-decoration: none; }
 .help-top:hover { color: var(--accent); }
+/* One section at a time: a bar above the text that doesn't scroll away, and Previous / Next at the section's end. */
+.help-nav { display: flex; align-items: center; gap: 6px; margin: 2px 0 8px; flex-shrink: 0; }
+.help-nav select { flex: 1 1 auto; width: 0; min-width: 0; height: 36px; /* (width 0: the longest title mustn't widen the card) */ padding: 0 8px; border: 1px solid var(--line); border-radius: 10px;
+  background: rgba(255,255,255,0.05); color: var(--text); font: inherit; font-size: 14px; }
+.help-nav select option { background: #14213d; color: #f1e4d3; }
+.help-nav .btn { flex-shrink: 0; min-width: 40px; height: 36px; padding: 0 12px; }
+.help-nav .btn:disabled { opacity: 0.35; }
+.help-body section .help-top { display: none; } /* (the bar and the footer do its job now) */
+.help-pager { display: flex; gap: 8px; margin: 16px 0 6px; }
+.help-pager .btn { flex: 1 1 0; width: 0; min-width: 0; white-space: normal; line-height: 1.25; padding: 9px 10px; font-size: 14px; }
+@media (max-width: 420px) { .help-nav #hn-prev, .help-nav #hn-next { display: none; } } /* (a phone: the picker gets the room; Previous / Next are at the end) */
+.help-pager #hp-next { text-align: right; }
 
 /* ---- The menus in the app icon's colours: midnight navy, coral and cream (icons/icon.svg) ---- */
 #screen-menu, .m-picker, #screen-missions, #screen-help {

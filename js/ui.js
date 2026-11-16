@@ -84,14 +84,14 @@ function initUI() {
   $('p-export').onclick = () => { sfx('click'); downloadSave(); };
   $('m-help').onclick = () => showHelp();
   $('h-close').onclick = () => { $('screen-help').hidden = true; UI.paused = !$('screen-pause').hidden; };
-  // The How to play's contents and "Back to top" links: scroll its text to the section.
+  // The How to play shows one section at a time: the contents first, then a section with a bar above it that stays
+  // put (Contents, a picker, previous and next) and Previous / Next buttons at its end (see helpPage).
+  helpPagerInit();
   $('screen-help').addEventListener('click', (e) => {
     const a = e.target.closest && e.target.closest('[data-jump]');
     if (!a) return;
     e.preventDefault();
-    // (straight there: a smooth scroll down a long text takes a while, and scrollIntoView can move the page too)
-    const el = document.getElementById(a.dataset.jump), body = $('screen-help').querySelector('.help-body');
-    if (el && body) body.scrollTop += el.getBoundingClientRect().top - body.getBoundingClientRect().top - 4;
+    helpPage(a.dataset.jump);
   });
 
   // Pause menu
@@ -2013,6 +2013,52 @@ function toMenu() {
 function showHelp() {
   UI.paused = UI.inGame;
   $('screen-help').hidden = false;
+  helpPage('hs-top');
+}
+
+/** The How to play's sections, in order. */
+function helpSections() { return [...$('screen-help').querySelectorAll('.help-body > section[id]')]; }
+
+/** Build the How to play's page bar (above the text, outside its scroll) and its Previous / Next footer, once. */
+function helpPagerInit() {
+  const card = $('screen-help').querySelector('.help-card'), body = card.querySelector('.help-body');
+  const secs = helpSections(), title = (s) => (s.querySelector('h3') || s).textContent.trim();
+  const nav = document.createElement('div');
+  nav.className = 'help-nav'; nav.id = 'help-nav'; nav.hidden = true;
+  nav.innerHTML = '<button type="button" class="btn small" id="hn-toc">Contents</button>' +
+    '<select id="hn-pick" aria-label="Go to a section"></select>' +
+    '<button type="button" class="btn small" id="hn-prev" aria-label="Previous section">‹</button>' +
+    '<button type="button" class="btn small" id="hn-next" aria-label="Next section">›</button>';
+  for (const s of secs) { const o = document.createElement('option'); o.value = s.id; o.textContent = title(s); nav.querySelector('select').appendChild(o); }
+  card.insertBefore(nav, body);
+  const foot = document.createElement('div');
+  foot.className = 'help-pager'; foot.id = 'help-pager'; foot.hidden = true;
+  foot.innerHTML = '<button type="button" class="btn" id="hp-prev"></button><button type="button" class="btn" id="hp-next"></button>';
+  body.appendChild(foot);
+  const step = (d) => { const k = helpSections().findIndex((s) => !s.hidden); const t = helpSections()[k + d]; helpPage(t ? t.id : 'hs-top'); };
+  $('hn-toc').onclick = () => helpPage('hs-top');
+  $('hn-pick').onchange = () => helpPage($('hn-pick').value);
+  $('hn-prev').onclick = $('hp-prev').onclick = () => step(-1);
+  $('hn-next').onclick = $('hp-next').onclick = () => step(1);
+}
+
+/** Show one page of the How to play: 'hs-top' is the contents, any other id one section; back at the top of it. */
+function helpPage(id) {
+  const secs = helpSections(), k = secs.findIndex((s) => s.id === id), body = $('screen-help').querySelector('.help-body');
+  const title = (s) => (s.querySelector('h3') || s).textContent.trim();
+  if ($('hs-top')) $('hs-top').hidden = k >= 0;
+  secs.forEach((s, i) => { s.hidden = i !== k; });
+  $('help-nav').hidden = k < 0;
+  $('help-pager').hidden = k < 0;
+  if (k >= 0) {
+    $('hn-pick').value = id;
+    $('hn-prev').disabled = false; // (from the first section, back is the contents)
+    $('hn-next').disabled = k === secs.length - 1;
+    $('hp-prev').textContent = k > 0 ? `‹ ${title(secs[k - 1])}` : '‹ Contents';
+    $('hp-next').hidden = k === secs.length - 1;
+    if (k < secs.length - 1) $('hp-next').textContent = `${title(secs[k + 1])} ›`;
+  }
+  body.scrollTop = 0;
 }
 
 function showGameOver() {
