@@ -6554,10 +6554,18 @@ function drawPlane(ctx, u, sx, sy, s, alt) {
     for (const k of [-0.3, -0.17, 0.17, 0.3]) ctx.fillRect(-L * 0.02 + Math.abs(k) * L * 0.18, k * L - L * 0.018, L * 0.09, L * 0.036);
     ctx.restore();
   }
+  const bh = Math.max(2, s * 0.05);
   if (u.hp < u.maxHp && !u.parked) {
     const w = s * 0.6;
-    ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fillRect(sx - w / 2, sy - s * 0.6, w, Math.max(2, s * 0.05));
-    ctx.fillStyle = '#ff5a5a'; ctx.fillRect(sx - w / 2, sy - s * 0.6, (w * Math.max(0, u.hp)) / u.maxHp, Math.max(2, s * 0.05));
+    ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fillRect(sx - w / 2, sy - s * 0.6, w, bh);
+    ctx.fillStyle = '#ff5a5a'; ctx.fillRect(sx - w / 2, sy - s * 0.6, (w * Math.max(0, u.hp)) / u.maxHp, bh);
+  }
+  // Its fuel gauge (yours only), below it (the health bar is above): the tank, in the Fuel colour, going orange
+  // when it runs low.
+  if (u.owner === ME && u.bat !== undefined) { // (not a wreck: it has no tank)
+    const w = s * 0.6, y = sy + s * 0.62, f = clamp(u.bat, 0, 100) / 100;
+    ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fillRect(sx - w / 2 - 1, y - 1, w + 2, bh + 2);
+    ctx.fillStyle = f < 0.25 ? '#ff8a3c' : GOOD.fuel.color; ctx.fillRect(sx - w / 2, y, w * f, bh);
   }
 }
 

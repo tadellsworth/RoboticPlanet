@@ -115,7 +115,7 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
 | Torch (Foundry, 2 rounds of parts) | Flamethrower robot (`TORCH`, `torchFire`): every 0.2 s a cone (±0.5 rad, 1.9 tiles) does 0.35 to each enemy robot in it (through `damageBot`, so a facing shield stops it) and 0.8 to the building it burns, ×1.6 to defences, Walls and Gates (a Wall in about 6 s); a 12 s tank, one Fuel a fill (`reloadArmy`, `fuelPoint`, task `refill`); explodes with fuel aboard (`BLAST.torch`). 18 health |
 | Howitzer (Foundry; **switched off for now**: `BOTS_OFF` in `js/defs.js`) | Mobile siege launcher (`ROCKET`): parks 4–11 tiles from a building and fires 4 rockets (5 each, splash 2 to buildings, 4 to robots), reloads 4 Ammo at a garrison or storage; a Command Base or Keep stops at `missileFloor` (anything else it can knock out); hurt below 60% it goes to a Repair Station within `ROCKET.repairReach` (30) tiles; 14 hp. AI builds 1–3 and hunts the enemy's  A new one rolls off the Foundry to a post (`u.post`) it returns to after reloading; `u.stance` `hold` fires only on orders, otherwise it shells what comes in reach of its post without moving |
 | Depot | Extra storage, shortens hauling trips; give it supply orders to stock it as a forward base |
-| Trade Terminal | Bulk trade, docked within 2 tiles of a neutral Trade Post (`S.posts`, `TRADE_POST`, `placePosts`: placed fairly between the colonies at the start, one more than there are colonies, two in Colony; `nearPost`), one per post per colony, out past the usual reach; a rival's land round a post keeps you out (`TERMINAL`): 3 contracts at a time (new every 5 min), a lot of 30 of one good for Ore, Crystal, Stone, Fiber or Alloy at 65% of worth (`TRADE_VALUE`; Alloy only bought, never a good traded down for one worth under 1/1.3 of it, `tradePairOk`), +1.5%/tile beyond 16 (max +25%), each lot sold fetching 12% less for a while; served only by Road Trains and Freight Trains (`terminalSpare`, `updateTerminal`), a Road Train bringing the lot from storage that holds 10 or more of it (`TERMINAL.minLoad`: the nearest with only a few, a Harvester's Fiber, say, used to hold the lot up for good); its goods can't be spent until a train takes them home |
+| Trade Terminal | Bulk trade, docked within 2 tiles of a neutral Trade Post (`S.posts`, `TRADE_POST`, `placePosts`: placed fairly between the colonies at the start, one more than there are colonies, two in Colony; `nearPost`), one per post per colony, out past the usual reach; a rival's land round a post keeps you out (`TERMINAL`): 3 contracts at a time (new every 5 min), a lot of 30 of one good for Ore, Crystal, Stone, Fiber or Alloy at 65% of worth (`TRADE_VALUE`; Alloy only bought, never a good traded down for one worth under 1/1.3 of it, `tradePairOk`), +1.5%/tile beyond 16 (max +25%), each lot sold fetching 12% less for a while; served only by Road Trains and Freight Trains (`terminalSpare`, `updateTerminal`), a Road Train bringing the lot from storage that holds 10 or more of it (`TERMINAL.minLoad`: the nearest with only a few, a Harvester's Fiber, say, used to hold the lot up for good); its goods can't be spent until a train takes them home. On top, always, a steep **Fuel contract** (`fuelContract`, `o.steep`, last in the list): 30 Stone or Fiber (whichever the colony has more to spare, `TERMINAL.fuelGive`) for Fuel at `TERMINAL.fuelRate` (30%, about half the usual): 6 Fuel, 8 far out. Its Fuel goes home by Tanker to storage (logistics step 4e; never a train), or by pipeline: a Terminal on a Fuel line gives it to the storage and Fuel users there (`updatePipes`) and no Tanker comes. The rival takes it only when dry of Fuel with no source (`P.fuelDry`, `aiFuelSource`), and docks a Terminal for it from 10 minutes |
 | Ramp | Planned in Paths: cuts a slope into a one-level cliff so bots can climb it; counts as road |
 | Fuel Station | Recharges bots' batteries, four at a time; burns **Fuel** |
 | Bio Farm | A worker plants energy crops on fertile soil and harvests them into **Fuel** |
@@ -291,12 +291,18 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   the building with a puff of dust, its parachute collapsing out flat beside it, before it's taken in (`crateland`;
   art from `renderer/b/airdrop.js`: chute-fall, chute, crate-drop, chute-flat). Each place is served from its nearest
   Airfield with a plane (`airBaseNear`); that Airfield keeps what they're
-  short of (`airWant`, up to `AIR_KEEP` of each) plus `AIRFIELD_FUEL` for its plane (`airKeep`), and haulers bring it.
+  short of (`airWant`, up to `AIR_KEEP` of each) plus `AIRFIELD_FUEL` (12) Fuel for its planes (`airKeep`), and haulers
+  (Tankers, for the Fuel) bring it.
   A flight (`flyStep`): it rolls down the runway from its head gathering speed (`ROLL_ACCEL`), lifts off at the far end,
   climbs (`PLANE_CLIMB` s) and turns at up to `PLANE_TURN` (never circling a spot it can't turn onto: `steerPlane`), drops
   over the spot, flies a circuit round to line up with the runway (`headHome`), comes down on final, touches down at the
-  far end and brakes (`ROLL_BRAKE`) back to the head. It burns `PLANE_BURN` of its tank a second (one Fuel at the
-  Airfield puts back `PLANE_FILL`; `sortieFuel`, `planeReach`); with no Airfield left it comes down in the field and
+  far end and brakes (`ROLL_BRAKE`) back to the head. It burns `PLANE_BURN` of its tank a second (a full tank is about
+  45 s of flight; `sortieFuel`, `planeReach`: it checks its range before it takes off); one Fuel at the Airfield puts
+  back `PLANE_FILL[type]` of it (`planeFill`, `fuelPlane`): 20 for a Cargo Plane, whose long round trip so takes 4 to 6
+  Fuel, 40 for a bomber. Short of the Fuel for a flight it waits at the Airfield and says so (`M.noFuel`: how much
+  more). Each of your planes shows a fuel gauge over it (`drawPlane`) and in its panel; the Airfield's panel shows its
+  Fuel against `AIRFIELD_FUEL` and about how many flights that covers (`airFuelText`, `typicalFlight`: a round trip of
+  `AIR_TYPICAL` (30) tiles each way, a bomber's charge on top). With no Airfield left it comes down in the field and
   flies to the next one built. Only Flak Guns hurt aircraft in the air (`damageBot` passes them by). Off the road network, within `FOOT_CARRY` (12) tiles,
   Workers carry goods by hand between buildings no Hauler reaches (a Drop Outpost's goods to a site beside it).
   Warbots posted to a cut-off post (`secluded`: supplied by air, or where they can't walk to the Command Base) stay with
@@ -305,13 +311,16 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   The AI never flies Cargo Planes.
 - **Strike Bombers** (Versus; `BOTS.bomber`, `BOMBER`): built in an Airfield's hangar, two to a hangar. A sortie
   (`orderStrike`, `strikeBlocked`: parked, in reach of a full tank) loads `BOMBER.ammo` (6) Ammo at its Airfield (which
-  keeps that much a bomber, `airKeep`) and Fuel, flies out like a Cargo Plane and over the target drops one bomb
+  keeps that much a bomber, `airKeep`) and `BOMBER.fuel` (3) Fuel on top of what its tank needs (`tankFuel`; it takes
+  off only with all of it there, none taken till then, and says what it waits for), flies out like a Cargo Plane and over the target drops one bomb
   (`bombDrop`; a vehicle on the move is led, and a target that's gone sends it home): `damage` 14 to the building aimed at
   (a Command Base or Keep held at `missileFloor`, see `captureOnly`), `splashBld` 4 to others and `botDamage` 8 to robots within `splash` 1.3, double on a
   vehicle hit squarely (a Tanker explodes). Home again it rearms for `rearm` 25 s (`bomberOnGround`); a bomb it didn't
-  drop goes back into Ammo. Flak Guns shoot it down. The AI (not a Warden) builds an Airfield from 22 minutes with its Ammo
+  drop goes back into Ammo (the sortie's Fuel is spent). Flak Guns shoot it down. The AI (not a Warden) builds an Airfield from 22 minutes with its Ammo
   Plant running, one bomber, and a sortie at most every `AI_BOMB_GAP` (240) s at the most valuable building or loaded
-  Tanker no Flak covers (`aiBomber`, `AI_BOMB_VALUE`).
+  Tanker no Flak covers (`aiBomber`, `AI_BOMB_VALUE`). With the Airfield it puts up one more Fuel maker, decided once
+  (`P.airFuel`): a Refinery while its Oil Pumps outnumber its Refineries, else a Bio Farm where there's soil its farms
+  don't work, else a Refinery (and a pump) on oil; it goes up even with Fuel in stock.
 - **Flak Guns** (4 Cement, 3 Alloy; Build → Defend; Versus): a twin anti-aircraft gun (`def.flak`, `updateFlak`). It
   tracks the nearest enemy aircraft in the air within 7 tiles (`aircraftNear`; never one on the ground, never a robot)
   and every `reload` s fires a salvo of `salvo` shells, each led to where the plane will be when it gets there (shell
@@ -556,7 +565,7 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   it to do (`standingBy`: short of an input with none on the way, or full with no pickup coming), so the walk costs
   no working time. Fuel Stations burn Fuel (one Fuel is
   two full charges, `FUEL_ENERGY`). A Bio Farm makes about
-  2–3 Fuel a minute; an Oil Pump and Refinery up to 10 a minute until the seep runs dry (both stop at 30 by default).
+  2–3 Fuel a minute (its Agribot keeps up with about 4 or 5 fertile tiles: more soil than that doesn't make more); an Oil Pump and Refinery up to 10 a minute until the seep runs dry (both stop at 30 by default).
   A dry Oil Pump shows a crossed-out oil drop over it, frees its worker and says so once: demolish it (any Crude
   still in a demolished building goes to storage). Harvesters, Ore Mines, Crystal Taps and Bio Farms do the
   same with their own resource crossed out when nothing is left in reach (and go back to work if groves regrow).
@@ -756,10 +765,16 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   the Foundry) the Chip Fab rest, so they don't eat the Alloy the Foundry needs (`forFoundry`). With no stalks left to
   cut and Fiber under 6, groves come first (`groveFirst`): a Bio Farm gives its Agribot to a Grove Planter (placed by a
   Harvester, or else near home) until a Harvester has stalks again, since without Fiber there's no Alloy for another
-  Agribot. Fuel first too: with Fuel under 6 for half a minute (`P.fuelLow`) a Bio Farm goes first (never while one
+  Agribot. Bio Farms go by the patch (`aiFarmClaims`, `aiFarmSoil`): each of its farms claims the nearest
+  `AI_FARM_TILES` (5) fertile tiles it can farm, a new farm counts only the tiles none claims, a site with fewer than
+  `AI_FARM_MIN` (3) isn't used, and the best unworked patch wins (so one farm a patch, two on a big one; before, farms
+  crowded onto small patches, several sharing three or four tiles). Fuel first too: with Fuel under 6 for half a minute (`P.fuelLow`) a Bio Farm goes first (never while one
   waits for its Agribot; at most two plus one for every 15 robots), an Oil Pump once the Bot Foundry is up (oil costs
   Alloy), and a Refinery for a pump that has none; without it the Fuel Stations went dry around minute 10 and the
-  workers crawled, which in turn starved the Fiber, Ore and Alloy. Down to fewer than `AI_FEW` (6) workers after the first
+  workers crawled, which in turn starved the Fiber, Ore and Alloy. Low for `AI_FUEL_DRY` (60 s) with no Bio Farm that
+  has soil and no Refinery with a working pump (`aiFuelSource`), it is dry (`P.fuelDry`): at its Trade Terminal it
+  takes the steep Fuel contract (after a Crystal one, before Chips), and dry for `AI_FUEL_TRADE` (3 minutes) it docks a
+  Terminal for it, from 10 minutes. Down to fewer than `AI_FEW` (6) workers after the first
   minute (a raid got the rest), it triages until it has `AI_ENOUGH` (8) again: its open sites are called off and only a
   missing link of the chain that makes bots (`AI_CHAIN`) is started, every staffed building rests but the Mine,
   Smelter, Chip Fab and Foundry while they have what they work with (and a gatherer short of its good), so the few

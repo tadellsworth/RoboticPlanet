@@ -724,6 +724,7 @@ const MISSIONS = [
       'The gold pads on the minimap are neutral <b>Trade Posts</b>. A Trade Terminal there swaps a big surplus.',
       'Only Road Trains (or Freight Trains) carry the lots. Posts further out pay better.',
       'A far Depot on a Road Train\'s road stocks itself with what the buildings round it need.',
+      'One contract always brings <b>Fuel</b>, at a steep price: a <b>Tanker</b> takes it home.',
       '<b>Planet events</b> are on: dust storms, Ringfall, solar flares, and now and then the <i>Wren</i>, a trader ship.',
     ],
     // (Seed 1445: Ringfall (a meteor shower) at 2:30 and a solar flare over by 9:36. Events are seeded, and on the designed
@@ -747,7 +748,7 @@ const MISSIONS = [
         ui: "#sh-dock, #sh-layroad, #build-tabs [data-g='move'], .bcard[data-t='terminal']" },
       { kind: 'trades', n: [1, 2, 3], text: ['Make a trade at the Terminal', 'Make {n} trades at the Terminal'], at: 'terminal',
         count: (P) => (P.trade && P.trade.sold) || 0,
-        hint: 'Tap the Terminal → <b>Take</b> a contract you can fill, like 30 Stone. The Road Train hauls each lot.',
+        hint: 'Tap the Terminal → <b>Take</b> a contract, like 30 Stone (a Road Train hauls it). The last always buys Fuel.',
         ui: '#sh-trade button' },
       { kind: 'events', n: 2, text: 'Ride out 2 planet events',
         count: (P, S) => (S.evN || 0) - (S.event ? 1 : 0),
