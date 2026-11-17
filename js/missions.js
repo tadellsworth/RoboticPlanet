@@ -96,6 +96,27 @@ function preBuild(owner, type, x, y, opts) {
   return null;
 }
 
+/**
+ * Siege Breakers: the Warden's outer works, there from the start whatever it goes on to build itself (since the rival
+ * AI got thriftier, the Easy Warden built two turrets and no Wall, its army was gone by minute 8, and "Take out 3 Walls
+ * or turrets" was left with nothing to take out). A line of Wall across the way in from the player's side, 7 tiles
+ * out from its Command Base and 7 long, with guns behind it: two Pulse Turrets, and a Minigun Nest on Normal and Hard.
+ */
+function siegeWorks(S, diff) {
+  const R = getE(S.players[1].lander), L = getE(S.players[0].lander);
+  const dx = L.x - R.x, dy = L.y - R.y, d = Math.sqrt(dx * dx + dy * dy) || 1, fx = dx / d, fy = dy / d, px = -fy, py = fx;
+  const cx = R.x + fx * 7, cy = R.y + fy * 7;
+  for (let k = -3; k <= 3; k++) {
+    const i = Math.round(cx + px * k), j = Math.round(cy + py * k);
+    if (inMap(i, j) && canPlace(1, 'wall', i, j).ok) addBuilding(1, 'wall', i, j, true);
+  }
+  const gun = (type, side, stock) => preBuild(1, type, Math.round(cx - fx * 2.5 + px * side), Math.round(cy - fy * 2.5 + py * side), { reach: 3, stock });
+  gun('turret', -2, { crystal: 20 });
+  gun('turret', 2, { crystal: 20 });
+  if (diff > 0) gun('minigun', 0, { ammo: 12 });
+  computeTerritory();
+}
+
 /** The same feature at (x, y) and at its mirror image, so both sides stay fair in Versus. */
 function mirrored(W, H, x, y, fn) { fn(x, y); fn(W - 1 - x, H - 1 - y); }
 
@@ -1111,10 +1132,11 @@ const MISSIONS = [
     ],
     mode: 'versus', seed: 2323, size: 1, rough: 1, rich: 3, biome: 'volcanic', shape: 0, style: 'turtle',
     rival: ['easy', 'medium', 'normal'], limit: [0, 0, 45],
-    setup(S) {
+    setup(S, diff) {
       kit(S, [...KIT7, 'armory'], 4); // (the colony so far, with Supply Lines' Ammo Plant; the Bio Farm grows the Fuel that Torches and Missiles burn)
       const L = getE(S.players[0].lander);
       L.stock.alloy += 10; L.stock.chip += 4; L.stock.fuel += 10;
+      siegeWorks(S, diff);
     },
     goals: [
       { kind: 'army', n: [2, 3, 3], text: 'Build Torches and a Bulwark', at: 'foundry',
