@@ -14,6 +14,16 @@ Still open: a neutral, shared exchange the rivals compete over; contracts for Ch
 
 ## Held for later
 
+- **Room to grow in the single-file game** (owner's to-do, Nov 17). `dist/terrafall.html` must stay under 16 MB (its
+  host's limit for a page; each file beside it has its own 16 MB). It reached 16,346 KB with the Hollow's and the new
+  Fiber and Oil art, so the Forest's and Hoarfell's biome art moved into bundles beside the page like the newer biomes'
+  (`LAZY_BIOMES`), freeing about 1 MB (15,409 KB). That buys a few batches of art and code, not the long run. The page
+  still carries every other image as text (about 9.7 MB of WebP, a third more once inlined): buildings 5 MB (each in two
+  team colours), bots 2 MB, effects 1.2 MB. The lasting fix is to move the rest of the art beside the page too, in a
+  few bundles (buildings, bots, effects and the Desert) that load before the game starts (or as the Lore and night
+  sets do), so the page holds code alone and can't fill up again. Then check that the single file still opens straight
+  from a folder and still plays offline. Meanwhile, the biggest single images are `effects/nuke-blast-sheet.webp`
+  (377 KB) and `effects/fx-fuel-blast.webp` (125 KB), if a quick re-encode is ever wanted.
 - **The rival doctrines' texts** (owner: on hold until the owner has finished fine-tuning the rivals). Then play each
   doctrine again, measure what it really does, and rewrite its text to match. Known gaps are under "Doctrine balance
   and text" in the November review below.

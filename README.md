@@ -1888,7 +1888,8 @@ art/art-manifest.js       register custom art here
 art/lore/                 the Lore guide's pictures (the planet, the regions, the Murmur)
 tools/headless-sim.js     AI-vs-AI balance test without a browser
 tools/smoke-test.js       browser test on a phone-sized screen (Playwright)
-tools/build-single.js     bundles everything into dist/terrafall.html (and dist/tod-<time>.js, biome-<b>.js, lore.js)
+tools/build-single.js     bundles everything into dist/terrafall.html (and dist/tod-<time>.js, lore.js and biome-<b>.js:
+                          every biome's art but the Desert's, so the page stays under its 16 MB: LAZY_BIOMES)
 relay/                    the multiplayer relay and player feedback: a Cloudflare Worker (deployed by .github/workflows/relay.yml)
 ```
 

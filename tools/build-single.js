@@ -17,7 +17,7 @@ const manifest = sandbox.ART_MANIFEST || {};
 const mime = { '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp', '.svg': 'image/svg+xml' };
 // The newer biomes' art goes in a bundle of its own beside the page (dist/biome-<b>.js, loaded when that
 // biome is wanted: see ensureBiomeArt), so the page stays small; its manifest entries stay, without the data.
-const LAZY_BIOMES = ['autumn', 'savanna', 'swamp', 'volcanic', 'lunar', 'alien', 'hollow'];
+const LAZY_BIOMES = ['jungle', 'polar', 'autumn', 'savanna', 'swamp', 'volcanic', 'lunar', 'alien', 'hollow']; // (as js/render.js: every biome but the Desert)
 const lazyBiomeOf = (key) => LAZY_BIOMES.find((b) => key.endsWith('-' + b) || key.startsWith('plant-' + b + '-')) || null;
 const inlined = {}, biomeData = {};
 for (const key of Object.keys(manifest)) {
