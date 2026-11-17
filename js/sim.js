@@ -1741,6 +1741,14 @@ function dispatch(p) {
   for (const t of planAll(p).slice()) {
     if (S.bAt[t] || (S.owner[t] >= 0 && S.owner[t] !== p && !(bridgeable(t) && bridgeHead(p, t % S.W, (t / S.W) | 0)))) cancelPlan(t);
   }
+  // Supply by air switches itself off once a road from home reaches the place (onHomeNet: a road, not a ferry line,
+  // the sea or a conveyor): Haulers supply it from then on. Only places switched to it are looked at. A finished
+  // building's owner hears of it; a site goes over quietly.
+  for (const b of S.buildings) {
+    if (!b.airSupply || b.dead || b.owner !== p || !onHomeNet(b)) continue;
+    b.airSupply = false;
+    if (b.built) postMsg(p, `A road reaches the ${BDEFS[b.type].name} now: Haulers supply it, and Supply by air is off.`, b.x, b.y, 'info');
+  }
   // Out past the roads (a foothold dropped by air), Workers carry goods by hand between buildings no
   // Hauler's road reaches, over ground they can walk: a Drop Outpost's goods to a site beside it.
   const zoneAt = (x, y) => S.zone[tIdx(Math.floor(x), Math.floor(y))];
@@ -1939,7 +1947,7 @@ function dispatch(p) {
     for (const [g, n0, keep, autoOnly] of needsOf(b)) {
       const h = fed && fed.length && !keep ? feedHaul(b, g, fed) : null, n = h === null ? n0 : Math.min(n0, h);
       if (n <= 0 || (g === 'fuel' && b.fuelByPipe) || (b.built && P.salvaging && P.salvaging[g])) continue; // (salvage is for sites: see landerSalvage)
-      if (keep && b.airSupply && airBaseNear(p, b.x, b.y)) continue; // (a place switched to Supply by air gets its supply orders by plane, once one is based)
+      if (keep && b.airSupply && airBaseNear(p, b.x, b.y)) continue; // (a place switched to Supply by air gets its supply orders by plane, once one is based, until a road reaches it: see above)
       // Full loads: a factory that is less than a Hauler's load short of an input, with more than its next batch
       // still in hand or on the way, waits to be topped up. (Asked after every batch, a third of all Hauler trips
       // carried a single unit to a factory that wasn't short.) Liquids go as they come.

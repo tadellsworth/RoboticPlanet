@@ -3818,7 +3818,7 @@ function airfieldSection(b) {
     html += `<div class="air-drops" id="sh-air">
       <button class="btn primary" data-k="outpost">Drop Outpost ${costInline(BDEFS.dropost.cost)}</button>
       ${warOn() ? '<button class="btn" data-k="warbot">Drop 2 Warbots</button>' : ''}<button class="btn" data-k="worker">Drop 2 Workers</button></div>
-      <p class="hint">Then tap the spot. A Drop Outpost lands on any open ground nobody else holds (paid from storage now): it claims a little land, holds 2 warbots, stores goods, charges 2 bots and is supplied by air. Robots board here first (Warbots from your garrisons, idle Workers) and can be dropped anywhere, the enemy's land too. A full tank reaches ${planeReach(f)} tiles out and back.</p>`;
+      <p class="hint">Then tap the spot. A Drop Outpost lands on any open ground nobody else holds (paid from storage now): it claims a little land, holds 2 warbots, stores goods, charges 2 bots and is supplied by air until a road from home reaches it. Robots board here first (Warbots from your garrisons, idle Workers) and can be dropped anywhere, the enemy's land too. A full tank reaches ${planeReach(f)} tiles out and back.</p>`;
   } else html += `<p class="hint">${planes.some((u) => !BOTS[u.type].bomber) ? 'Its Cargo Plane is out on a flight.' : 'No Cargo Plane is based here yet: order one in the hangar below.'}</p>`;
   html += '<div class="section-label">Supplied by air</div><p class="hint" id="sh-air-places"></p>';
   return html;
@@ -3837,9 +3837,13 @@ function airSupplySection(b) {
   return '<div class="section-label">Supply by air</div><div class="seg" id="sh-airsup"><button data-v="1">On</button><button data-v="0">Off</button></div><p class="hint" id="sh-airsup-hint"></p>';
 }
 
+/** Can't be switched on here: a road from home reaches it (Haulers supply it; see the airSupply order). */
+function airSupplyRoad(b) { return !b.airSupply && onHomeNet(b); }
+
 function airSupplyHint(b) {
   const base = airBaseNear(b.owner, b.x, b.y);
-  if (!b.airSupply) return 'On: a Cargo Plane from your nearest Airfield keeps this place stocked by parachute (its supply orders, Ammo for its warbots), wherever it is. For a place no road reaches.';
+  if (airSupplyRoad(b)) return 'A road from home reaches this place: Haulers supply it. Supply by air is for places no road reaches.';
+  if (!b.airSupply) return 'On: a Cargo Plane from your nearest Airfield keeps this place stocked by parachute (its supply orders, Ammo for its warbots), wherever it is. For a place no road reaches: it switches off by itself once a road from home reaches it.';
   if (!base) return 'Waiting for a Cargo Plane: none is based at an Airfield yet (order one in an Airfield\'s hangar).';
   const coming = S.bots.some((u) => !u.dead && u.owner === b.owner && u.mission && u.mission.to === b.id);
   return `Supplied from the Airfield ${dirText(b, base)}, ${BOTS.cargoplane.carry} goods a flight.` + (coming ? ' A plane is on its way.' : '');
@@ -6355,7 +6359,11 @@ function refreshBuildingSheet(b) {
     }
   }
   if ($('sh-air-places')) $('sh-air-places').textContent = airPlacesText(b);
-  if ($('sh-airsup')) { for (const btn of $('sh-airsup').children) btn.classList.toggle('on', (btn.dataset.v === '1') === !!b.airSupply); $('sh-airsup-hint').textContent = airSupplyHint(b); }
+  if ($('sh-airsup')) {
+    const road = airSupplyRoad(b); // (On is greyed out where a road from home reaches)
+    for (const btn of $('sh-airsup').children) { btn.classList.toggle('on', (btn.dataset.v === '1') === !!b.airSupply); btn.disabled = road && btn.dataset.v === '1'; }
+    $('sh-airsup-hint').textContent = airSupplyHint(b);
+  }
   if ($('sh-dauto-status')) {
     for (const btn of $('sh-auto').children) btn.classList.toggle('on', (btn.dataset.v === '1') === !b.autoOff);
     $('sh-dauto-status').innerHTML = depotAutoText(b);

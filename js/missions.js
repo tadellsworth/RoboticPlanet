@@ -907,7 +907,7 @@ const MISSIONS = [
       'A <b>Crawler</b> is a base on tracks: where it stops it unfolds into a Depot, Fuel Station and Outpost.',
       'An <b>Airfield</b>\'s Cargo Plane flies over anything and drops its load by parachute.',
       'It drops a Drop Outpost on open ground nobody else holds, or two Workers on any open ground.',
-      'Places switched to <b>Supply by air</b> get what they are short of, 8 goods a flight.',
+      'Places no road reaches, switched to <b>Supply by air</b>, get what they are short of, 8 goods a flight.',
       'In Versus, planes also drop warbots, and Vulcan Bombers fly from the Airfield.',
     ],
     mode: 'colony', seed: 1818, size: 1, rough: 2, rich: 3, biome: 'polar', shape: 5, limit: [0, 0, 20],
@@ -941,10 +941,14 @@ const MISSIONS = [
         hint: 'Tap the Airfield → <b>Hangar</b>: Cargo Planes <b>+1</b>. Then <b>Drop Outpost</b>, and tap open ground.',
         ui: "#sh-yard .order-row[data-k='cargoplane'] [data-d='1'], #sh-air [data-k='outpost']" },
       { kind: 'airSupplied', n: 1, text: 'Supply a building by air', at: 'crawlerbase',
-        // (Once its crates have landed, `airIn`: a plane loads up for it, `airAt`, about a minute before.)
-        count: (P, S) => S.buildings.filter((b) => !b.dead && b.owner === 0 && b.type !== 'dropost' && b.airSupply && b.airIn !== undefined).length,
-        // (Supply by air first: from then on its supply orders come by plane only, where a road would let Haulers fill them.)
-        hint: 'Tap the deployed Crawler → <b>Supply by air</b>: <b>On</b>. Then its Supply orders: <b>+5</b> Cement, and a plane flies it in.',
+        // (Once its crates have landed, `airIn`: a plane loads up for it, `airAt`, about a minute before. Only a place
+        // switched to Supply by air gets crates, so a road reaching it afterwards, which switches that off, doesn't undo
+        // this. A site in the Drop Outpost's land, supplied by air, counts too.)
+        count: (P, S) => S.buildings.filter((b) => !b.dead && b.owner === 0 && b.type !== 'dropost' && b.airIn !== undefined).length,
+        // (Off the plateau no road reaches the Crawler unless you lay one, so its supply orders come by plane only, once
+        // one is based. With a road from home to it On does nothing, as Haulers supply it, and its panel says so: pack it
+        // up and drive it on past the roads, hence "out past your roads".)
+        hint: 'Tap the deployed Crawler, out past your roads → <b>Supply by air</b>: <b>On</b>. Then its Supply orders: <b>+5</b> Cement, and a plane flies it in.',
         ui: "#sh-airsup [data-v='1'], #sh-keep .keep-cell[data-g='cement'] [data-d='5']" },
     ],
   },

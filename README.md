@@ -370,7 +370,11 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   two robots (Warbots from garrisons as for a march, or idle Workers, who board at the Airfield: the `board` task and
   `ferryWait`, as for a Ferry) anywhere, the enemy's land too, or up to 8 goods (`u.cargo`) for a place **supplied by
   air** (`b.airSupply`: any building with needs, construction sites too; a Drop Outpost and sites in its land have it
-  on). Its supply orders then come by plane only, once one is based at an Airfield, not by Hauler (`dispatch`). The
+  on). Its supply orders then come by plane only, once one is based at an Airfield, not by Hauler (`dispatch`), until a
+  road from home reaches the place (`onHomeNet`: a road, not a ferry line, the sea or a Rail Station's conveyor): then
+  it switches itself off in `dispatch`, Drop Outposts and sites in their land too, and Haulers supply it (a finished
+  building's owner is told; a site goes over quietly). Where a road from home already reaches, the `airSupply` order
+  can't switch it on (its On button is greyed out, `airSupplyRoad`). Only the places switched to it are looked at. The
   places take turns (`airSupplyRun`: the one served longest ago, `c.airAt`, or run dry of something, first; `c.airIn`
   is when crates last landed there). A
   supply drop comes down as a crate for every few goods (`d.crates`), swaying under team parachutes, and lands in front of

@@ -54,7 +54,7 @@ const ORDERS = {
   pack(p, id) { const b = ownB(p, id); if (!b || !BDEFS[b.type].mobile) return 0; const u = packCrawler(b); return u ? u.id : 0; },
   gate(p, id) { const b = ownB(p, id); return b ? wallToGate(p, b) : 'That Wall is gone.'; },
   ferryLine(p, id, to) { const b = ownB(p, id); if (!b) return 'That Port is gone.'; return setFerryLine(b, to ? ownB(p, to) : null); },
-  airSupply(p, id, on) { const b = ownB(p, id); if (b) b.airSupply = !!on; },
+  airSupply(p, id, on) { const b = ownB(p, id); if (b && !(on && onHomeNet(b))) b.airSupply = !!on; }, // (On does nothing where a road from home reaches: Haulers supply it, see dispatch)
   pipeToRefinery(p, id) {
     const b = ownB(p, id); if (!b || !BDEFS[b.type].pump) return { why: 'That Oil Pump is gone.' };
     const r = pipeToRefinery(p, b);
