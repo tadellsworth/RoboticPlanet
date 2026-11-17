@@ -57,35 +57,6 @@ Still open: a neutral, shared exchange the rivals compete over; contracts for Ch
   there (turning traffic goes round by another junction). Still open: an interchange, an overpass with slip roads (a
   bigger footprint, dearer) that lets traffic turn without stopping; and whether the rival should put overpasses on its
   busiest crossings (it builds neither lights nor overpasses today).
-- **Cloud saves (a proposal, to decide).** Saves move between devices as a file today (Download save file, Load a save
-  file). A small store on the relay (Cloudflare Workers, `relay/`) would move them with a code instead. Nothing is
-  built.
-  - *How:* a Workers KV namespace (`SAVES`) bound to the relay. **Save to the cloud** (pause menu) gzips the save file
-    in the browser (`CompressionStream`) and posts it to `POST /save`; the relay keeps it under a fresh random code of
-    10 letters from the room-code alphabet (about 50 bits, shown as `K7PQ4-XMR2B`) and answers `{ code, key }`. **Load
-    from a code** (main menu) fetches `GET /save/<code>` and loads it as Load a save file does (`checkSave`, the old
-    save kept as the backup). The `key` stays on the uploading device and lets it overwrite or delete that entry
-    (`PUT` / `DELETE /save/<code>`), so one code can follow a game.
-  - *Size:* today's saves are 120-360 KB of JSON and gzip to 6-23 KB (six saves, Colony to a three-player map); cap an
-    entry at 256 KB gzipped (KV's own limit is 25 MB).
-  - *Keeping:* an entry expires 30 days after it was last written (`expirationTtl`; reads don't renew it, to keep
-    writes down). It's a way across, not a backup: the device's own save stays the real one.
-  - *Privacy:* no accounts. A save holds the planet, the colony and any multiplayer name typed in, nothing else. The
-    code is the only key, as with a shared file: codes are long and random, never listed, and wrong codes count
-    against the rate limit.
-  - *Abuse:* the feedback Gate's count by a hash of the address (say 20 uploads and 200 lookups a day); only bodies that
-    gunzip to JSON with `terrafall: 1` and a `game` are kept; served as `application/json` with `nosniff` (it can't
-    host pages); CORS for terrafall.app only.
-  - *Cost:* KV's free tier (100,000 reads and 1,000 writes a day, 1 GB stored) covers about 1,000 uploads a day, and
-    at 20 KB an entry 1 GB holds about 50,000 live saves. Past that, Workers Paid ($5 a month) includes 1 million
-    writes a month.
-  - *Catch:* KV is eventually consistent: a save written in one place can take up to a minute to show at another
-    Cloudflare location, so a second device far away may need a retry. A Durable Object (as the rooms are) is
-    consistent at once, within the free plan's SQLite storage, for a little more code.
-  - *From the owner:* a yes; then `wrangler kv namespace create SAVES` with its id in `relay/wrangler.toml`, and a
-    relay deploy.
-  - *A stop-gap with no server* (not built): **Copy save as text** and **Paste a save**, the save file gzipped and in
-    base64 (8-31 KB of text), carried by the clipboard or a message to yourself.
 - **Recycling: open questions.** (Settled: a robot is taken apart standing at the Foundry, 2 s a round of parts, while
   the Foundry carries on; a damaged one gives back as much as a sound one, since most give back a single Alloy.) Still
   open: planes, ships and trains can't reach a Foundry, so they can't be recycled: should their own yards (Airfield,
@@ -201,23 +172,25 @@ lanes on the minimap, alerts and crates when one is lost, the Escort switch (two
 from about 8 minutes with Escort on and the Salvager raiding convoy lanes. The *Wren* is unchanged. A new War mission,
 *Convoy* (against a Salvager), teaches the route, Escort, wrecking a rival convoy and carrying its crates home.
 
-Open questions for the owner:
+Kept as built (the owner, Nov 17):
 
-- **Volume.** At these rates a raw-for-made route is a trickle (15 Stone brings back 2.4 Alloy every 2 minutes; three
-  Terminals selling Stone for 40 minutes brought home goods worth about a sixth of one busy Smelter's output), while a
-  made good buying a raw one is generous (15 Alloy brings back about 17 Crystal). Is that the balance wanted, or should
-  raw-for-made pay a little more?
+- **Prices.** Raw goods cost 75% of their worth, so a raw-for-made route is a trickle (15 Stone brings back 2.4
+  Alloy every 2 minutes; three Terminals selling Stone for 40 minutes earned about a sixth of one busy Smelter) and a
+  made good buying a raw one is generous (15 Alloy brings back about 17 Crystal).
+- **Docked Terminals can't be attacked at all** (they stand on the no-fire ground); they change hands only with the
+  colony.
+- **Raiders leave a convoy lane's road be** and lie in wait for the convoys instead of tearing it up (a cut road meant
+  no convoy ever came to fight over); raiders on a flag go after an enemy convoy within 6 tiles of it.
+- **An escorted convoy holds** while its escort fights instead of turning back; an unescorted one still turns back,
+  like any hauler. In nine computer-only games (Nov 17) convoys were hit in five and one or two lost in four; the games
+  ran about two minutes longer on average and all ended.
+
+Still open:
+
 - **One market or one each?** Each colony's prices ease only with what it sells; the Post's ledger could keep one
   board for everyone, so rivals selling the same good push its price down for each other. Buying never raises a price.
-- **Docked Terminals can't be attacked at all** (they stand on the no-fire ground); they change hands only with the
-  colony. Fine, or should a Terminal be fair game when its colony loses the land round the post?
 - **The rivals' escort:** two warbots, as for a person; the plan's "an Outpost on the way" isn't built. Rivals mostly
   run Cement for Chips (one Chip a run), and a Crystal-short one Alloy for Crystal.
-- **Raids against convoys** (decided while building, worth the owner's look): raiders on a flag go after an enemy
-  convoy within 6 tiles of it, and leave a convoy lane's road be (lying in wait) instead of tearing it up, since a cut
-  road meant no convoy ever came to fight over; an escorted convoy no longer turns back from raiders (it holds while
-  its escort fights), an unescorted one still does, like any hauler. In nine computer-only games (Nov 17) convoys were
-  hit in five and one or two lost in four; the games ran about two minutes longer on average and all ended.
 - **Ports and ships:** a Terminal is served by road and rail only; a Port-side Terminal (Container Ship convoys) would
   suit the island maps.
 

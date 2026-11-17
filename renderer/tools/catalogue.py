@@ -66,7 +66,7 @@ for tod in ALL:
             add(path(tod, 'buildings', f'{name}{t}.png'), 'main', job(scene, '', c, f'{name}{t}', at(extra, tod)), 'compose.py')
         add(path(tod, 'buildings', f'disruptor{t}.png'), 'main', job('disruptor', '', c, f'disruptor{t}', at('', tod)), 'compose.py --glow 0.4')
     for s in (1, 2, 3):
-        add(path(tod, 'buildings', f'nest-{s}.png'), 'main', job('nest', '', '', f'nest-{s}', at(f's={s}', tod)), 'compose.py')
+        add(path(tod, 'buildings', f'nest-{s}.png'), 'main', job('murmur_moles', '', '', f'nest-{s}', at(f'c=burrow&s={s}', tod)), 'compose.py')   # the Murmur's Burrow
 
     section(f'Gun heads ({tod}): K turns clockwise on screen from right')
     for t, c in TEAMS:
@@ -157,9 +157,14 @@ for tod in ALL:
         add(path(tod, 'units', f'gondola{t}.png'), 'main', job('gondola', '', c, f'gondola{t}', at('', tod)), VEH)
     add(path(tod, 'units', 'crawler-dish.png'), 'main', job('crawler', '', P0, 'crawler-dish', at('part=dish', tod)), CRAWL)
     add(path(tod, 'units', 'trader-ship.png'), 'main', job('trader', '', '', 'trader-ship', at('', tod)), VEH)
-    for cr in ('scuttler', 'brute'):
+    for cr, cc in (('scuttler', 'swarmer'), ('brute', 'brute')):      # the Murmur (murmur_moles.js calls the Scuttler 'swarmer')
         for f in range(4):
-            add(path(tod, 'units', f'{cr}-f{f}.png'), 'main', job('creature', '', '', f'{cr}-f{f}', at(f'c={cr}&f={f}', tod)), ROB)
+            add(path(tod, 'units', f'{cr}-f{f}.png'), 'main', job('murmur_moles', '', '', f'{cr}-f{f}', at(f'c={cc}&f={f}', tod)), ROB)
+
+section("The Lore guide's Murmur pictures (art/lore, 480 x 360 WebP): night hero renders, cropped round the animal")
+for cr, q in (('scuttler', 'c=swarmer'), ('brute', 'c=brute'), ('leech', 'c=drainer&pose=feed'), ('spitter', 'c=spitter'), ('delver', 'c=delver')):
+    add(f'art/lore/murmur-{cr}.webp', 'main', job('murmur_moles', '', '', f'murmur-{cr}-hero', f'{q}&hero=1&hi=2&tod=night'),
+        f'compose_any.py --b1 12 --b2 34 --glow 1.3 | post/murmur_lore.py {{raw}}/murmur-{cr}-hero.png {{fin}}/murmur-{cr}.webp --class {cr}')
 
 section('Vehicle light overlays (day only: light, drawn over the sprite at every time of day)')
 add('art/units/truck-brake.png', 'main', job('truck', '', P0, 'truck-brake', 'part=brake'), TRUCK + ' | post/truck_overlays.py {raw} {fin}')

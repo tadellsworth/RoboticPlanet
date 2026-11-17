@@ -1,12 +1,17 @@
-// The Murmur, direction B reworked as moles ("Crystal-backed moles"): the shared kit for murmur_moles.js.
-// Burrowing animals with matte fur or leathery hide, huge outward-turned spade forepaws with long pale claws, small hind
-// feet, a pointed fleshy snout and a stub of a tail; shards of eaten Ring Crystal erupt through the hide along the spine
-// and shoulders (smoky glass by day, burning white at night). Use it for any further Murmur creature:
+// The Murmur (LORE.md, "Art brief: the Murmur"): the shared kit for murmur_moles.js. Burrowing mammals built from the
+// star-nosed mole and the naked mole-rat: low, heavy, barrel-chested bodies (a mole crossed with a badger) in near-black
+// velvet fur dusted with Crystal grit that glints violet; huge spade hands with five long fingers turned outward, a little
+// too much like hands; no eyes, and in place of a nose a star of fleshy tendrils that senses charge (gathered while it
+// walks, flared open and pulsing when it finds power); eaten Crystal hardened under the skin and split out through the
+// shoulders and spine like broken geodes: pale lilac crystal that glows violet when they are full of charge and goes dull
+// when they are hungry. Fur, skin, soil and stone only: no shells, mandibles, extra legs, wings or slime.
 //   const K = molekit(L);
-//   const body = K.loft(G, stations, K.fur('#38302e'));      // a body from cross-sections, tail to nose
-//   K.forelimb(GL, body, { side, f, ... }); K.hindlimb(GL, body, { side, f, ... });
-//   K.snout(G, ...); K.tail(G, ...); K.shard / K.cluster / K.spineShards(G, body, ...)
+//   const body = K.loft(G, stations, K.fur('#19161b'));          // a body from cross-sections, tail to nose
+//   K.forelimb(GL, { side, f, ... }); K.hindlimb(GL, { side, f, ... });
+//   K.muzzle(G, ...); K.star(G, ...); K.tail(G, ...)
+//   K.geode(G, ...) / K.geodeOn(G, body, ...); K.shard / K.cluster for loose crystal
 //   K.camera(W, hero); K.centre(G, GL)
+//   ?charge=0..1 (default 0.75, a raider well fed): how full of charge they are. The crystal glows with it.
 // Every function is listed (with its options) in the comment above it.
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
@@ -16,6 +21,9 @@ export function molekit(L) {
   // how strongly the creatures' own lights burn: dim by day, bright at night (the game swaps in the night sprites)
   const GLOW = { day: 0.35, morning: 0.45, evening: 1.15, night: 1.7 }[TOD] ?? 0.35;
   const NIGHTISH = TOD === 'night' || TOD === 'evening';
+  // how bright the grit in the fur glints (it catches the light, so it shows most by day)
+  const GRIT = { day: 0.75, morning: 0.65, evening: 0.5, night: 0.38 }[TOD] ?? 0.75;
+  const CHARGE = Math.max(0, Math.min(1, +(new URLSearchParams(location.search).get('charge') ?? 0.75)));
   const V = (a) => (a.isVector3 ? a.clone() : new THREE.Vector3(...a));
   const UP = new THREE.Vector3(0, 1, 0);
   const clamp = (x, a = 0, b = 1) => Math.max(a, Math.min(b, x));
@@ -96,76 +104,119 @@ export function molekit(L) {
     L.speckle(g, n, 16000, 0.22);
   }, 3.5);
 
-  // ---- materials (all matte: fur and hide never get the clear-coat gloss of chitin)
+  // grit: chips of eaten Crystal caught in the coat, drawn as a sparse speck map. It lights the specks violet (emissive,
+  // so they show on the near-black fur) and makes them smooth (a roughness map), so they glint where the light catches
+  // them. gritSpecks(g, n, mode) draws the same specks onto any canvas: mode 'e' white on black, 'r' dark on white.
+  function gritSpecks(g, n, mode) {
+    const keep = s0; s0 = 4243;
+    for (let i = 0; i < 1700; i++) {
+      const x = r() * n, y = r() * n, s = 0.7 + r() * 1.5, a = r() * Math.PI, k = r();
+      for (const ox of [-n, 0, n]) for (const oy of [-n, 0, n]) {
+        const X = x + ox, Y = y + oy; if (X < -5 || X > n + 5 || Y < -5 || Y > n + 5) continue;
+        g.save(); g.translate(X, Y); g.rotate(a);
+        if (mode === 'e') g.fillStyle = `rgba(255,255,255,${0.3 + 0.7 * k})`; else { const v = Math.round(30 + 70 * (1 - k)); g.fillStyle = `rgb(${v},${v},${v})`; }
+        g.beginPath(); g.moveTo(-s, 0); g.lineTo(0, -s * 0.55); g.lineTo(s, 0); g.lineTo(0, s * 0.55); g.closePath(); g.fill(); g.restore();
+      }
+    }
+    s0 = keep;
+  }
+  const gritMap = L.canvasTex(512, (g, n) => { g.fillStyle = '#000'; g.fillRect(0, 0, n, n); gritSpecks(g, n, 'e'); });
+  const gritRough = L.canvasTex(512, (g, n) => { g.fillStyle = '#fff'; g.fillRect(0, 0, n, n); gritSpecks(g, n, 'r'); }, false);
+
+  // ---- materials (all matte: fur and skin never get the clear-coat gloss of chitin)
   const mats = {};
-  // fur(hex, o): velvety coat. o: { coarse (the Brute's shaggy coat), sheen 0..1, sheenColor, rough, ns (normal strength),
-  //   emissiveMap + emissive + glow + ek (glowing spots: the Bloom ones) }
+  // fur(hex, o): near-black velvet with the violet grit in it. o: { coarse (the Brute's shaggy coat), sheen 0..1,
+  //   sheenColor (the velvet's soft rim light), rough, ns (normal strength), grit (0..1, default 1), gritColor,
+  //   emissiveMap + emissive + glow + ek (glowing marks: the Bloom ones' veins; draw the grit into that map too) }
   function fur(hex, o = {}) {
     const key = 'f' + hex + JSON.stringify(o, (k, v) => (v && v.isTexture ? v.uuid : v)); if (mats[key]) return mats[key];
     const m = new THREE.MeshPhysicalMaterial({ color: hex, map: o.coarse ? coarseMap : furMap, normalMap: o.coarse ? coarseNrm : furNrm, normalScale: new THREE.Vector2(o.ns ?? 0.8, o.ns ?? 0.8),
-      roughness: o.rough ?? 0.86, metalness: 0, sheen: o.sheen ?? 0.9, sheenColor: new THREE.Color(o.sheenColor ?? '#8c8480'), sheenRoughness: o.sheenRough ?? 0.5, vertexColors: true });
+      roughness: o.rough ?? 0.86, roughnessMap: gritRough, metalness: 0, sheen: o.sheen ?? 1, sheenColor: new THREE.Color(o.sheenColor ?? '#6e6680'), sheenRoughness: o.sheenRough ?? 0.42, vertexColors: true });
     m.envMapIntensity = o.env ?? 0.3;
-    if (o.emissiveMap) { m.emissive = new THREE.Color(o.emissive); m.emissiveMap = o.emissiveMap; m.emissiveIntensity = (o.ek ?? 1) * GLOW; m.userData.glow = o.glow; }
+    const gk = o.grit ?? 1;
+    // glowing marks: the brightness rides on the colour and the intensity stays low, so the night point lights lib.js hangs
+    // on every glowing part stay soft (a whole glowing coat would otherwise floodlight itself)
+    if (o.emissiveMap) { m.emissive = new THREE.Color(o.emissive).multiplyScalar((o.ek ?? 1) * GLOW / 0.08); m.emissiveMap = o.emissiveMap; m.emissiveIntensity = 0.08; m.userData.glow = o.glow; }
+    else if (gk > 0) { m.emissive = new THREE.Color(o.gritColor ?? '#9a6cff'); m.emissiveMap = gritMap; m.emissiveIntensity = gk * GRIT; }
     return (mats[key] = m);
   }
-  // hide(hex, o): wrinkled leather, matte with a faint sheen. Same options as fur.
+  // hide(hex, o): wrinkled naked skin (the muzzle, the Leech's stretched back), matte with a faint sheen. Same options
+  //   as fur (no grit).
   function hide(hex, o = {}) {
     const key = 'h' + hex + JSON.stringify(o, (k, v) => (v && v.isTexture ? v.uuid : v)); if (mats[key]) return mats[key];
     const m = new THREE.MeshPhysicalMaterial({ color: hex, map: hideMap, normalMap: hideNrm, normalScale: new THREE.Vector2(o.ns ?? 0.9, o.ns ?? 0.9),
-      roughness: o.rough ?? 0.74, metalness: 0, sheen: o.sheen ?? 0.35, sheenColor: new THREE.Color(o.sheenColor ?? '#9a8c86'), sheenRoughness: 0.55, vertexColors: true });
+      roughness: o.rough ?? 0.74, metalness: 0, sheen: o.sheen ?? 0.35, sheenColor: new THREE.Color(o.sheenColor ?? '#9a8c96'), sheenRoughness: 0.55, vertexColors: true });
     m.envMapIntensity = o.env ?? 0.35;
     if (o.emissiveMap) { m.emissive = new THREE.Color(o.emissive); m.emissiveMap = o.emissiveMap; m.emissiveIntensity = (o.ek ?? 1) * GLOW; m.userData.glow = o.glow; }
     return (mats[key] = m);
   }
-  // crust(hex, o): stone crust (rough, cracked). o: { rough, ns }
+  // crust(hex, o): stone (the geodes' rind, the Brute's mantle, the Rust ones' ironstone plates, soil). o: { rough, ns, side }
   function crust(hex, o = {}) {
     const key = 'r' + hex + JSON.stringify(o); if (mats[key]) return mats[key];
-    const m = new THREE.MeshStandardMaterial({ color: hex, map: crustMap, normalMap: crustNrm, normalScale: new THREE.Vector2(o.ns ?? 1.1, o.ns ?? 1.1), roughness: o.rough ?? 0.88, metalness: 0.02, vertexColors: true });
+    const m = new THREE.MeshStandardMaterial({ color: hex, map: crustMap, normalMap: crustNrm, normalScale: new THREE.Vector2(o.ns ?? 1.1, o.ns ?? 1.1), roughness: o.rough ?? 0.88, metalness: 0.02, vertexColors: true, side: o.side ?? THREE.FrontSide });
     m.envMapIntensity = 0.4; return (mats[key] = m);
   }
-  // flesh(hex, o): naked moist skin (snout, star rays, palms): soft, a little damp, never glossy
+  // flesh(hex, o): naked skin (the hands, the star's hub): soft, a little damp, never glossy
   function flesh(hex, o = {}) {
     const key = 'l' + hex + JSON.stringify(o); if (mats[key]) return mats[key];
-    const m = new THREE.MeshPhysicalMaterial({ color: hex, roughness: o.rough ?? 0.55, metalness: 0,
-      clearcoat: o.cc ?? 0.12, clearcoatRoughness: 0.5, sheen: 0.4, sheenColor: new THREE.Color('#d8b8b0'), sheenRoughness: 0.4, vertexColors: true });
+    const m = new THREE.MeshPhysicalMaterial({ color: hex, roughness: o.rough ?? 0.58, metalness: 0,
+      clearcoat: o.cc ?? 0.1, clearcoatRoughness: 0.5, sheen: 0.45, sheenColor: new THREE.Color(o.sheenColor ?? '#c8b8c4'), sheenRoughness: 0.45, vertexColors: true });
     m.envMapIntensity = 0.35; return (mats[key] = m);
   }
-  // keratin(hex): claws and teeth. Pale, with a dark root (vertex colours from the claw geometry)
-  function keratin(hex = '#ddd0b4', rough = 0.42) {
+  // keratin(hex): nails and teeth. Pale, with a dark root (vertex colours from the claw geometry)
+  function keratin(hex = '#d8ccb6', rough = 0.42) {
     const key = 'k' + hex + rough; if (mats[key]) return mats[key];
     const m = new THREE.MeshStandardMaterial({ color: hex, roughness: rough, metalness: 0, vertexColors: true }); m.envMapIntensity = 0.55; return (mats[key] = m);
   }
   const plain = (hex, rough = 0.6, metal = 0) => { const key = 'p' + hex + rough; if (mats[key]) return mats[key]; const m = new THREE.MeshStandardMaterial({ color: hex, roughness: rough, metalness: metal, vertexColors: true }); m.envMapIntensity = 0.45; return (mats[key] = m); };
-  // a tiny wet black eye, mostly lost in the fur
-  const eye = () => mats.eye || (mats.eye = (() => { const m = new THREE.MeshPhysicalMaterial({ color: '#0c0909', roughness: 0.25, clearcoat: 0.6, clearcoatRoughness: 0.2 }); m.envMapIntensity = 0.4; return m; })());
-  // the glow-pass colour sets how much bloom a part gets: kept low by day so the shards only shimmer
+  // the glow-pass colour sets how much bloom a part gets: kept low by day so the crystal only shimmers
   function dimGlow(hex, k = 1) { const c = new THREE.Color(hex); c.multiplyScalar(Math.min(1, (NIGHTISH ? 0.1 + GLOW * 0.5 : 0.008 + GLOW * 0.055) * k)); return '#' + c.getHexString(); }
-  // glowMat(hex, k, glowHex): a glowing organ (star rays while feeding, Bloom spots, feeding threads)
+  // glowMat(hex, k, glowHex): a glowing part (charge threads, the Burrow's vein pulses)
   function glowMat(hex, k = 1, glowHex) {
     const key = 'g' + hex + k + glowHex; if (mats[key]) return mats[key];
     const m = new THREE.MeshStandardMaterial({ color: hex, emissive: hex, emissiveIntensity: k * GLOW * 2.2, roughness: 0.4 });
     m.userData.glow = glowHex || dimGlow(hex); return (mats[key] = m);
   }
-  // crystalMats(pal): Ring Crystal as the Murmur grow it back: a smoky glass shell with a brighter core glowing through.
-  // pal: { shell, core, glow, opacity, dayCore (how much of the core shows by day), k (brightness) }. Use XTAL or PAL[v].xtal.
+  // crystalMats(pal): a free-standing crystal point (a geode's spire, a chip in the soil): a glass shell with a brighter
+  // core glowing through. pal: { shell, core, glow, opacity, dayCore (how much of the core shows by day), k (brightness) }.
   function crystalMats(pal) {
     const key = 'x' + JSON.stringify(pal); if (mats[key]) return mats[key];
     // brightness rides on the emissive colour, not the intensity, so the night point lights lib.js hangs on every glowing
-    // part stay soft and only tint the fur next to the shards; by day the core is a soft light inside the glass
+    // part stay soft and only tint the fur next to the crystal; by day the core is a soft light inside the glass
     const k = pal.k ?? 1, B = k * (NIGHTISH ? 0.3 + GLOW * 1.25 : 0.06 + GLOW * 0.55);
     const shell = new THREE.MeshPhysicalMaterial({ color: pal.shell, emissive: new THREE.Color(pal.core).multiplyScalar(k * (NIGHTISH ? 0.02 + GLOW * 0.32 : 0.01 + GLOW * 0.1)), emissiveIntensity: 1, roughness: 0.22, metalness: 0, flatShading: true,
       clearcoat: 0.6, clearcoatRoughness: 0.1, transparent: true, opacity: pal.opacity ?? 0.8, depthWrite: true, side: THREE.FrontSide, specularIntensity: 0.6 });
     shell.envMapIntensity = 0.55;
     const coreCol = NIGHTISH ? new THREE.Color(pal.core) : new THREE.Color(pal.shell).lerp(new THREE.Color(pal.core), pal.dayCore ?? 0.45);
     const core = new THREE.MeshStandardMaterial({ color: coreCol, emissive: new THREE.Color(pal.core).multiplyScalar(B / 0.3), emissiveIntensity: 0.3, roughness: 0.3, flatShading: true });
-    core.userData.glow = dimGlow(NIGHTISH ? (pal.glow || pal.core) : '#' + new THREE.Color(pal.glow || pal.core).lerp(new THREE.Color(pal.shell), 0.35).getHexString(), k);
+    if (k >= 0.12) core.userData.glow = dimGlow(NIGHTISH ? (pal.glow || pal.core) : '#' + new THREE.Color(pal.glow || pal.core).lerp(new THREE.Color(pal.shell), 0.35).getHexString(), k);
     return (mats[key] = { shell, core });
   }
-  // the crystal palettes. White light (no team owns white: the robots' lights are cyan, red, green or purple) in
-  // smoky glass with a breath of the Crystal's violet; the White's frosted and dim; the Bloom's violet.
-  const XTAL = { shell: '#9a92b6', core: '#f7f5ff', glow: '#f1efff', opacity: 0.78, dayCore: 0.62 };
-  const XTAL_WHITE = { shell: '#eef1f4', core: '#e9edf2', glow: '#e4e9ef', opacity: 0.75, k: 0.55, dayCore: 0.5 };
-  const XTAL_BLOOM = { shell: '#a274ea', core: '#c48dff', glow: '#b67cff', opacity: 0.6, k: 1.15, dayCore: 0.6 };
+  // the crystal palettes: pale lilac crystal with a violet glow (the brief's palette: near-black fur, violet glow and pale
+  // lilac crystal against the robots' clean lights); the White's frosted and dim; the Bloom's deep violet and bright.
+  const XTAL = { shell: '#c6b0f2', core: '#a06cff', glow: '#9658ff', opacity: 0.86, dayCore: 0.55 };
+  const XTAL_WHITE = { shell: '#eceff5', core: '#c6bdec', glow: '#b3a8e2', opacity: 0.78, k: 0.5, dayCore: 0.35 };
+  const XTAL_BLOOM = { shell: '#a982f2', core: '#c06aff', glow: '#b048ff', opacity: 0.68, k: 1.3, dayCore: 0.65 };
+  // charged(pal, ch): the palette as full (1) or hungry (0) as the animal is: the glow scales with the charge
+  const chargeK = (ch) => 0.03 + 0.97 * Math.pow(ch, 1.5);
+  const charged = (pal, ch = CHARGE) => ({ ...pal, k: +((pal.k ?? 1) * chargeK(ch)).toFixed(3) });
+  // druseMat(pal, ch): the crystal points lining a geode's hollow: faceted pale lilac, glowing violet with the charge
+  function druseMat(pal, ch = CHARGE) {
+    const key = 'd' + JSON.stringify(pal) + ch; if (mats[key]) return mats[key];
+    const k = (pal.k ?? 1) * chargeK(ch), B = k * (NIGHTISH ? 0.2 + GLOW * 0.7 : 0.1 + GLOW * 0.8);
+    const m = new THREE.MeshPhysicalMaterial({ color: pal.shell, emissive: new THREE.Color(pal.core).multiplyScalar(B / 0.3), emissiveIntensity: 0.3, roughness: 0.2, metalness: 0, flatShading: true,
+      clearcoat: 0.5, clearcoatRoughness: 0.12, specularIntensity: 0.8, vertexColors: true });
+    m.envMapIntensity = 0.6; if (k >= 0.12) m.userData.glow = dimGlow(pal.glow, k * 1.1);   // starved crystal throws no light at all
+    return (mats[key] = m);
+  }
+  // starMat(hex, b): the star's flesh, pale grey-pink; b > 0 when it has found power: lit violet from inside
+  function starMat(hex, b = 0) {
+    const key = 's' + hex + b.toFixed(2); if (mats[key]) return mats[key];
+    const m = new THREE.MeshPhysicalMaterial({ color: hex, roughness: 0.5, metalness: 0, clearcoat: 0.15, clearcoatRoughness: 0.5, sheen: 0.4, sheenColor: new THREE.Color('#e4c4d4'), sheenRoughness: 0.4, vertexColors: true });
+    m.envMapIntensity = 0.35;
+    if (b > 0) { m.emissive = new THREE.Color('#b07aff'); m.emissiveIntensity = b * (NIGHTISH ? 0.5 + GLOW * 0.45 : 0.2 + GLOW * 0.9); m.userData.glow = dimGlow('#b07cff', b * 1.5); }
+    return (mats[key] = m);
+  }
 
   // ---- geometry helpers
   // loft(parent, stations, mat, o): a body built from elliptical cross-sections, tail (first) to nose (last).
@@ -344,42 +395,49 @@ export function molekit(L) {
     g.setAttribute('color', new THREE.BufferAttribute(col, 3)); g.computeVertexNormals();
     return L.mesh(g, skin, 0, 0, 0, { parent });
   }
-  // ---- the spade forepaw: the mole's signature. A fat furred arm from the shoulder (inside the body) out to the wrist,
-  // where the fur stops in a cuff; then a huge rounded palm turned outward (its back faces up and leans in toward the
-  // body, so from above it reads as a broad paddle), and five broad pale claws fanning forward and out from its front
-  // edge, the middle ones longest. On the walk the hands row: forward and out, then back.
-  //   forelimb(parent, { side (-1 left/-z, +1 right/+z), f, shoulder [x,y,z], wrist [x,y,z], palm (length), claw (length),
-  //     armR (arm radius at the shoulder), stride, lift, skin (palm material), arm (arm material), clawMat, splay (how far
-  //     the hand points out from straight ahead, rad), swing (extra splay through the stroke), tilt (back of the hand from
-  //     flat, rad), fan (claw fan, rad; small, so the claws rake forward side by side), clawW (claw breadth factor), curl,
-  //     droop, wide (hand half-width / length, 0.4), thick (hand thickness / length, 0.17), plant (feeding: claws dug in,
-  //     no step) })
+  // ---- the spade hand: the Murmur's signature, and the part that should look a little too much like a hand. A fat furred
+  // arm from the shoulder (inside the body) to the wrist and a cuff of fur; then a broad, thick palm of naked skin turned
+  // outward (the back of the hand faces up and in toward the body, so the palm faces down and out, like a mole's), four
+  // long fingers fanned across its front edge and a shorter thumb on the inner side, each finger knuckled at two joints
+  // and tipped with a heavy digging nail. On the walk the hands row: forward and out, then back.
+  //   forelimb(parent, { side (-1 left/-z, +1 right/+z), f, shoulder [x,y,z], wrist [x,y,z], hand (length, wrist to the
+  //     fingertips), armR (arm radius at the shoulder), stride, lift, skin (hand material), arm (arm material), nailMat,
+  //     splay (how far the hand points out from straight ahead, rad), swing (extra splay through the stroke), tilt (the
+  //     back of the hand from flat, rad), fan (finger fan, rad), finger (finger length / hand length, 0.54), wide (palm
+  //     half-width / hand length, 0.25), thick (palm thickness / hand length, 0.085), nail (nail length / hand length,
+  //     0.17), fat (finger thickness factor), curl (bend at each joint, rad), droop, plant (feeding or bracing: no step,
+  //     the fingers dug in) }) -> { wrist, hand (the hand's group: +x along the hand, +y its back) }
   function forelimb(parent, o) {
     const s = o.side, [fa, lift] = o.plant ? [0, 0] : gait(true, s, o.f ?? 0);
-    const st = o.stride ?? 0.2, lf = o.lift ?? 0.12, P = o.palm;
+    const st = o.stride ?? 0.2, lf = o.lift ?? 0.12, P = o.hand;
     const W = [o.wrist[0] + fa * st, o.wrist[1] + lift * lf, o.wrist[2] + s * (lift * lf * 0.3 + Math.max(0, fa) * st * 0.35)];
     const sw = (o.splay ?? 0.5) + fa * (o.swing ?? 0.14);
     const fwd = [Math.cos(sw), -(o.droop ?? 0.06) + lift * 0.35, s * Math.sin(sw)];
-    const tilt = o.tilt ?? 0.45;
-    const up = [0, Math.cos(tilt), -s * Math.sin(tilt)];
-    // the arm: one fat limb, fur to the wrist, a cuff of fur over the root of the hand
+    const tilt = o.tilt ?? 0.45, up = [0, Math.cos(tilt), -s * Math.sin(tilt)];
     limb(parent, o.shoulder, W, o.armR, o.armR * 0.78, o.arm, { bulge: 0.3, seg: 18 });
     const H = L.group(W[0], W[1], W[2], 0, parent); H.quaternion.copy(frame(fwd, up));
     seg(H, [0, 0, 0], o.armR * 0.8, o.armR * 0.55, o.armR * 0.8, o.arm, { lump: 0.06, flat: 0.2 });
-    // the hand: a thick, fleshy spade, longer than it is broad (a mole's hand, not a plate), knuckles across its front
-    const hw = o.wide ?? 0.4;
-    paddle(H, P, P * hw, P * (o.thick ?? 0.17), o.skin, { root: 0.6, cup: 0.18 });
-    if (o.fringe) for (let k = 0; k < 14; k++) { const a = -1.25 + k / 13 * 2.5; tube(H, [[P * (0.5 + 0.38 * Math.cos(a)), 0, -P * hw * 0.92 * Math.sin(a)], [P * (0.5 + 0.46 * Math.cos(a)), -0.02 * P, -P * hw * 1.12 * Math.sin(a)]], t => 0.012 * P * (1 - t) + 0.002, o.fringe, { n: 3, radial: 4 }); }
-    // five broad, flat claws side by side along the front edge, all raking forward (barely fanned): the spade's blade
-    const nC = o.claws ?? 5, fan = o.fan ?? 0.3, CL = o.claw, cw = o.clawW ?? 1;
-    for (let k = 0; k < nC; k++) {
-      const u = nC === 1 ? 0 : (k / (nC - 1)) * 2 - 1;                             // -1..1 across the hand
-      const z = u * P * hw * 0.74, x = P * (0.88 - 0.1 * u * u), len = CL * (1 - 0.16 * u * u) * (u < -0.7 ? 0.82 : 1);
-      const a = u * fan * 0.5;
-      // a short fat finger under each claw, so the front edge is a row of knuckles, not the rim of a plate
-      seg(H, [x - P * 0.07, P * 0.025, z], P * 0.15, P * 0.085, P * 0.075 * Math.min(1.3, cw), o.skin, { lump: 0.05, flat: 0.3, rot: [0, -a, 0] });
-      claw(H, [x, 0.02 * P, z], [Math.cos(a), -0.06, Math.sin(a)], [0, 1, 0], len, P * 0.135 * cw, P * 0.055 * cw, o.clawMat, o.curl ?? 0.22);
+    const PL = P * 0.46, PW = P * (o.wide ?? 0.25), FL = P * (o.finger ?? 0.54), curl = o.curl ?? 0.2, fan = o.fan ?? 0.34, NL = P * (o.nail ?? 0.17);
+    paddle(H, PL, PW, P * (o.thick ?? 0.085), o.skin, { root: 0.74, cup: 0.12 });
+    const r0 = P * 0.05 * (o.fat ?? 1);
+    // one finger: three bones, each bent down a little more at its joint; a bulge at each knuckle; a nail on the tip
+    const digit = (base, yaw, len, rad, bends) => {
+      const segs = [0.42, 0.33, 0.25], dir = new THREE.Vector3(Math.cos(yaw), 0, Math.sin(yaw));
+      let pitch = 0, p = V(base); const pts = [p.clone()];
+      for (let j = 0; j < 3; j++) { pitch += bends[j]; const d = dir.clone().multiplyScalar(Math.cos(pitch)); d.y = -Math.sin(pitch); const q = p.clone().addScaledVector(d, len * segs[j]); pts.push(p.clone().lerp(q, 0.5), q); p = q; }
+      const rf = (t) => rad * (1 - 0.36 * t) * (1 + 0.17 * Math.exp(-(((t - 0.42) / 0.06) ** 2)) + 0.13 * Math.exp(-(((t - 0.75) / 0.06) ** 2)));
+      tube(H, pts.map(q => [q.x, q.y, q.z]), rf, o.skin, { n: 26, radial: 10, dirt: 0.04 });
+      const a = pts[5], b = pts[6], d = b.clone().sub(a).normalize();
+      claw(H, [b.x - d.x * rad * 1.0, b.y - d.y * rad + rad * 0.3, b.z - d.z * rad * 1.0], [d.x, d.y, d.z], [0, 1, 0], NL * Math.sqrt(len / FL), rad * 0.82, rad * 0.4, o.nailMat, 0.3);
+    };
+    const bends = o.plant ? [curl * 1.3, curl * 1.9, curl * 1.5] : [curl * 0.45, curl, curl * 0.8];
+    // the four fingers: [across the hand (-1 the inner edge, toward the body; +1 the outer), length, thickness, set back]
+    for (const [u, lk, rk, back] of [[-0.68, 0.9, 1, 0.03], [-0.23, 1, 1, 0], [0.23, 0.95, 0.95, 0.015], [0.68, 0.78, 0.86, 0.07]]) {
+      const z = s * u * PW * 0.8, x = PL * (0.95 - back);
+      digit([x - r0 * 0.8, P * 0.012, z], s * u * fan * 0.5, FL * lk, r0 * rk, bends);
     }
+    // the thumb: shorter and thicker, from the inner edge of the palm, pointing forward and in
+    digit([PL * 0.5, -P * 0.004, -s * PW * 0.86], -s * 0.6, FL * 0.6, r0 * 1.1, bends.map(b => b * 0.8));
     return { wrist: W, hand: H };
   }
   // the hind foot: a short thick leg from the hip (inside the body) to a small narrow foot with five toes and little
@@ -400,31 +458,126 @@ export function molekit(L) {
     }
     return { foot: F };
   }
-  // the snout: a pointed fleshy nose running forward from the face, a damp nostril pad at its tip, a few whiskers.
-  //   snout(parent, { base [x,y,z], tip [x,y,z], r (radius at the base), skin, nostril (true), whisker (material or null),
-  //     droop }) -> the tip position
-  function snout(parent, o) {
-    const B = o.base, T = o.tip, R = o.r, mid = [(B[0] + T[0]) / 2, (B[1] + T[1]) / 2 + R * 0.12, (B[2] + T[2]) / 2];
-    tube(parent, [B, mid, T], t => R * (1 - 0.72 * Math.pow(t, 0.9)) * (1 + 0.04 * Math.sin(t * 50)), o.skin, { n: 30, radial: 16, flat: 0.85 });
-    if (o.nostril !== false) {
-      const pad = seg(parent, [T[0], T[1], T[2]], R * 0.32, R * 0.3, R * 0.36, o.padMat || o.skin, { lump: 0.02 });
-      // nostrils: two small dark pits sunk in the pad (bigger beads standing proud read as a cartoon's eyes)
-      for (const s of [-1, 1]) { const n = L.sphere(R * 0.06, plain('#2a1c1c', 0.6), T[0] + R * 0.25, T[1] + R * 0.05, T[2] + s * R * 0.12, { parent, dirt: 0 }); n.scale.set(0.6, 0.8, 1); }
-    }
-    if (o.whisker) for (const s of [-1, 1]) for (let k = 0; k < 4; k++) {
-      const x = B[0] + (T[0] - B[0]) * (0.45 + k * 0.1), y = B[1] + (T[1] - B[1]) * (0.5 + k * 0.1), z = s * R * (0.55 - k * 0.06);
-      tube(parent, [[x, y, z], [x + 0.08 * R * 4, y + 0.02, z + s * R * (0.9 + k * 0.15)], [x - 0.02 + (0.05 + k * 0.03) * R * 4, y - 0.04, z + s * R * (1.7 + k * 0.25)]], t => 0.012 * R * 4 * (1 - t) + 0.003, o.whisker, { n: 8, radial: 4 });
-    }
+  // ---- the face. No eyes. A short, thick, naked muzzle, and on its end, in place of a nose, the star.
+  // muzzle(parent, { base, tip, r, skin }): wrinkled skin, thickest where the fur stops; returns the tip
+  function muzzle(parent, o) {
+    const B = o.base, T = o.tip, R = o.r, mid = [(B[0] + T[0]) / 2, (B[1] + T[1]) / 2 + R * 0.08, (B[2] + T[2]) / 2];
+    tube(parent, [B, mid, T], t => R * (1 - 0.32 * t) * (1 + 0.05 * Math.sin(t * 40)), o.skin, { n: 22, radial: 16, flat: o.flat ?? 0.85 });
     return T;
   }
-  // the tail: a short tapered stub with a few stiff hairs (tail(parent, { base, tip, r, mat, bristle }))
+  // star(parent, o): the star of tendrils that senses electricity, the star-nosed mole's: 22 fleshy rays round a hub, the
+  //   two under the hub short. o: { at [x,y,z], dir (the way it faces), r0 (hub radius), len (ray length), n (22),
+  //   open (0 gathered shut into a pointed bud, 0.5 relaxed, 1 flared wide open with the tips hooked forward, gripping),
+  //   glow (0 dark .. 1 it has found power: lit violet from inside, the light pulsing round the rays), phase (where the
+  //   pulse is), skin (ray colour), hub (hub colour), seed } -> the star's group (+x the way it faces)
+  function star(parent, o) {
+    const n = o.n ?? 22, r0 = o.r0, len = o.len, op = o.open ?? 0.5, gl = o.glow ?? 0, skin = o.skin ?? '#b38f9a', sd = o.seed ?? 1;
+    const D = L.group(o.at[0], o.at[1], o.at[2], 0, parent); D.quaternion.setFromUnitVectors(new THREE.Vector3(1, 0, 0), V(o.dir).normalize());
+    seg(D, [-r0 * 0.2, 0, 0], r0 * 0.62, r0 * 1.06, r0 * 1.06, starMat(o.hub ?? '#80606a', gl > 0 ? Math.min(1, gl * 1.2) : 0), { lump: 0.05, flat: 0 });
+    const rr = Math.max(len * 0.1, r0 * 0.24);
+    for (let k = 0; k < n; k++) {
+      const a = (k + 0.5) / n * Math.PI * 2, ca = Math.cos(a), sa = Math.sin(a);
+      const short = Math.abs(sa) < 0.2 && ca < 0 ? 0.55 : 1;
+      const l = len * short * (0.9 + 0.2 * Math.abs(Math.sin(k * 2.3 + sd)));
+      const pts = [];
+      for (const t of [0, 0.3, 0.65, 1]) {
+        const Xc = l * t * 0.9, Rc = r0 * (1 - 0.82 * t);                       // shut: the rays meet in a point ahead
+        const Xf = l * (0.04 * t + 0.32 * t * t * t), Rf = r0 + l * t * 0.94;   // flared: straight out, the tips hooked forward
+        const X = Xc + (Xf - Xc) * op, Rr = Rc + (Rf - Rc) * op;
+        pts.push([X + 0.03 * l * Math.sin(k * 1.7 + sd) * t, ca * Rr, sa * Rr]);
+      }
+      const pulse = gl > 0 ? gl * (0.4 + 0.6 * Math.pow(0.5 + 0.5 * Math.cos(a * 2 - (o.phase ?? 0.6)), 2)) : 0, b = Math.round(pulse * 4) / 4;
+      tube(D, pts, t => rr * (1 - 0.55 * t) + rr * 0.12, starMat(skin, b), { n: 12, radial: 7, dirt: 0 });
+      const e = pts[3]; L.sphere(rr * 0.72, starMat(skin, gl > 0 ? Math.min(1, b + 0.35) : 0), e[0], e[1], e[2], { parent: D, dirt: 0, cast: false });
+    }
+    return D;
+  }
+  // the tail: a short blunt stub of fur (or with a few stiff hairs) (tail(parent, { base, tip, r, mat, bristle }))
   function tail(parent, o) {
     const B = o.base, T = o.tip, m = [(B[0] + T[0]) / 2, (B[1] + T[1]) / 2 + o.r * 0.6, (B[2] + T[2]) / 2 + (o.bend ?? 0)];
-    tube(parent, [B, m, T], t => o.r * (1 - 0.6 * t), o.mat, { n: 16, radial: 10 });
+    tube(parent, [B, m, T], t => o.r * (1 - 0.35 * t), o.mat, { n: 16, radial: 10 });   // a blunt stub
     if (o.bristle) for (let k = 0; k < 6; k++) { const p = curve([B, m, T], 6)[k + 1], a = k * 2.1; tube(parent, [p, [p[0] - o.r * 1.6, p[1] + o.r * 0.8 * Math.cos(a), p[2] + o.r * 1.4 * Math.sin(a)]], t => 0.01 * (1 - t) + 0.003, o.bristle, { n: 3, radial: 4 }); }
   }
-  // eyes: tiny black beads half sunk in the fur either side of the face
-  function eyes(parent, at, gap, rr) { for (const s of [-1, 1]) { const e = L.sphere(rr, eye(), at[0], at[1], at[2] + s * gap, { parent, dirt: 0 }); e.scale.set(1, 0.7, 0.8); } }
+  // ---- geodes: eaten Crystal hardened under the skin and split out through it like a broken geode. A rough stone rind
+  // (grey outside, banded pale agate where it broke), its hollow lined with crystal points that glow violet with the
+  // animal's charge (bright when full, dull when hungry); the biggest stand up out of the break as spires.
+  //   geode(parent, at, dir, r, pal, o): at is the point on the skin it breaks through, dir the way it faces, r its size.
+  //   o: { sx (stretched along the body, for a seam down the spine), hk (height / r), open (how wide the break is, rad),
+  //     th (rind thickness / r), sink (how deep the stone sits under the skin), fwd (the body's forward, default +x),
+  //     n (crystal points), spires (how many tall points stand out of it), spireLen, spireLean (swept back),
+  //     charge (0..1, default ?charge), collarMat (a torn lip of fur or skin round it), seed } -> its group (+y out)
+  function geode(parent, at, dir, r, pal, o = {}) {
+    const sx = o.sx ?? 1, hk = o.hk ?? 1, open = o.open ?? 0.72, th = o.th ?? 0.24, ch = o.charge ?? CHARGE, sd = o.seed ?? (at[0] * 7.1 + at[2] * 13.3 + at[1] * 3.7);
+    const D = V(dir).normalize(), F = V(o.fwd ?? [1, 0, 0]); F.addScaledVector(D, -F.dot(D)); if (F.lengthSq() < 1e-6) F.set(0, 0, 1); F.normalize();
+    const sink = o.sink ?? r * 0.3;
+    // the hollow's floor sits above the skin and the fur (or the body would fill it), so the crystal fills the break
+    const floor = o.floor ?? sink + Math.max(0.15 * r, o.furLen ?? 0.055);
+    const Gq = L.group(at[0] - D.x * sink, at[1] - D.y * sink, at[2] - D.z * sink, 0, parent); Gq.quaternion.copy(frame(F, D));
+    const lump = (t, ph) => 1 + 0.14 * nz(Math.sin(t) * Math.cos(ph) * 2.4 + sd, Math.cos(t) * 2.4, Math.sin(t) * Math.sin(ph) * 2.4) + 0.05 * nz(Math.sin(t) * Math.cos(ph) * 7, Math.cos(t) * 7 + sd, Math.sin(t) * Math.sin(ph) * 7);
+    const P = (t, ph, k) => { const q = lump(t, ph) * k, y = Math.cos(t) * r * hk * q; return [Math.sin(t) * Math.cos(ph) * r * sx * q, k < 0.99 ? Math.max(y, floor) : y, Math.sin(t) * Math.sin(ph) * r * q]; };
+    // the break: a jagged, uneven edge, one side broken lower than the other
+    const brk = (ph) => open * (1 + 0.16 * Math.cos(ph - sd) + 0.2 * Math.abs(Math.sin(ph * 3 + sd)) - 0.1 + 0.14 * Math.sin(ph * 7 + sd * 1.7) + 0.1 * Math.sin(ph * 13 + sd) + 0.12 * nz(Math.cos(ph) * 3, sd, Math.sin(ph) * 3));
+    // the rind as rings from the bottom of the stone up its outside to the break, across the broken edge, and down the hollow
+    const NPH = 44, NO = 9, NI = 7, rows = [];
+    for (let i = 0; i <= NO; i++) rows.push((tb) => [Math.PI + (tb - Math.PI) * i / NO, 1, 0]);
+    rows.push((tb) => [tb + 0.02, 1 - th * 0.4, 1]);
+    rows.push((tb) => [tb + 0.035, 1 - th * 0.8, 2]);
+    for (let i = 0; i <= NI; i++) rows.push((tb) => [tb + 0.06 + (Math.PI - tb - 0.06) * i / NI, 1 - th, 3]);
+    const pos = [], col = [], uv = [], idx = [];
+    const stone = [0.11, 0.1, 0.11], stoneL = [0.24, 0.215, 0.23], band = [0.95, 0.93, 1.05], lilac = [0.62, 0.52, 0.95], hollow = [0.6, 0.48, 0.98];
+    for (const row of rows) for (let j = 0; j <= NPH; j++) {
+      const ph = j / NPH * Math.PI * 2, tb = brk(ph), [t, k, kind] = row(tb);
+      pos.push(...P(t, ph, k)); uv.push(j / NPH * 2 * sx, t * 0.8);
+      let c;
+      if (kind === 0) { const v = 0.5 + 0.5 * nz(Math.cos(ph) * 4 + sd, t * 3, Math.sin(ph) * 4); c = stone.map((q, m) => q + (stoneL[m] - q) * v); }
+      else if (kind === 1) c = band; else if (kind === 2) c = lilac;
+      else { const deep = (t - tb) / Math.max(0.01, Math.PI - tb); c = hollow.map(q => q * (1 - 0.35 * deep)); }
+      col.push(...c);
+    }
+    const W = NPH + 1;
+    for (let ri = 0; ri < rows.length - 1; ri++) for (let j = 0; j < NPH; j++) { const a = ri * W + j, b = a + W; idx.push(a, b, a + 1, a + 1, b, b + 1); }
+    const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+    g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2)); g.setIndex(idx); g.computeVertexNormals();
+    L.mesh(g, crust('#ffffff', { side: THREE.DoubleSide, rough: 0.9 }), 0, 0, 0, { parent: Gq });
+    // the crystal lining the hollow: small faceted points growing in from the walls, toward the middle and up
+    const n = o.n ?? Math.round(24 + 150 * r * Math.sqrt(sx)), geos = [];
+    for (let i = 0; i < n; i++) {
+      const ph = L.rnd() * Math.PI * 2, tb = brk(ph), t = tb + 0.08 + Math.pow(L.rnd(), 0.7) * (Math.PI * 0.92 - tb - 0.08);
+      const p = new THREE.Vector3(...P(t, ph, 1 - th));
+      const d = new THREE.Vector3(-p.x / sx, 0, -p.z).normalize().multiplyScalar(0.55).add(new THREE.Vector3((L.rnd() - 0.5) * 0.6, 0.7 + L.rnd() * 0.6, (L.rnd() - 0.5) * 0.6)).normalize();
+      const len = r * (0.22 + 0.3 * L.rnd()) * (1 - 0.25 * (t - tb) / (Math.PI - tb)), rad = len * (0.24 + 0.1 * L.rnd());
+      const cg = new THREE.ConeGeometry(rad, len, 5, 1); cg.translate(0, len / 2, 0);
+      const cp = cg.attributes.position, cc = new Float32Array(cp.count * 3);
+      for (let k = 0; k < cp.count; k++) { const b = 0.6 + 0.4 * cp.getY(k) / len; cc[k * 3] = cc[k * 3 + 1] = cc[k * 3 + 2] = b; }
+      cg.setAttribute('color', new THREE.BufferAttribute(cc, 3));
+      cg.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(UP, d)); cg.translate(p.x - d.x * len * 0.15, p.y - d.y * len * 0.15, p.z - d.z * len * 0.15);
+      geos.push(cg.toNonIndexed());
+    }
+    if (geos.length) L.mesh(mergeGeometries(geos), druseMat(pal, ch), 0, 0, 0, { parent: Gq, dirt: 0 }).receiveShadow = false;   // lit by its own light, never lost in the rind's shadow
+    // spires: the biggest points, standing up out of the break
+    const cpal = charged(pal, ch);
+    for (let i = 0; i < (o.spires ?? 0); i++) {
+      const a = i * 2.4 + sd, off = i ? r * 0.28 : 0, lean = o.spireLean ?? 0;
+      shard(Gq, [Math.cos(a) * off * sx, -r * hk * 0.25, Math.sin(a) * off], [Math.cos(a) * (i ? 0.4 : 0.12) - lean, 1, Math.sin(a) * (i ? 0.4 : 0.12)],
+        r * (i ? 0.85 + 0.35 * L.rnd() : 1.5) * (o.spireLen ?? 1), r * (i ? 0.17 : 0.24), cpal, { collar: false });
+    }
+    // a torn lip of fur pushed up round the stone where it broke out
+    if (o.collarMat) {
+      const R1 = r * 0.98, R2 = r * 1.18, hh = r * 0.22, cl = new THREE.CylinderGeometry(R1, R2, hh, 30, 2, true), p = cl.attributes.position;
+      for (let i = 0; i < p.count; i++) { const a = Math.atan2(p.getZ(i), p.getX(i)), top = p.getY(i) > 0, k = 1 + 0.12 * Math.sin(a * 5 + sd) * (top ? 1 : 0.3); p.setXYZ(i, p.getX(i) * k * sx, p.getY(i) + (top ? hh * 0.3 * Math.sin(a * 4 + sd * 2) : 0), p.getZ(i) * k); }
+      cl.computeVertexNormals();
+      const cm = o.collarMat.clone(); cm.side = THREE.DoubleSide;
+      L.mesh(cl, cm, 0, sink - hh * 0.75, 0, { parent: Gq, dirt: 0.3, dirtH: hh });
+    }
+    return Gq;
+  }
+  // geodeOn(parent, body, x, a, r, pal, o): a geode breaking out of a loft at (x, a) (a: 0 the spine, +-PI/2 the flanks).
+  //   o as geode, plus up (how far it turns from the skin's normal toward straight up, 0..1) and lean (swept back)
+  function geodeOn(parent, body, x, a, r, pal, o = {}) {
+    const { p, n } = onBody(body, x, a, 0);
+    const u = o.up ?? 0.25, d = [n[0] * (1 - u) - (o.lean ?? 0), n[1] * (1 - u) + u, n[2] * (1 - u)];
+    return geode(parent, p, d, r, pal, o);
+  }
 
   // ---- Ring Crystal shards: an irregular hexagonal prism with a pointed tip; a glass shell over a glowing core; a torn
   // collar of skin where it breaks out through the hide. base is sunk into the body; dir is the way it grows.
@@ -510,7 +663,8 @@ export function molekit(L) {
   // crustSaddle(parent, body, o): a shell of stone crust grown over the back between x0 and x1, out to angle amax on each
   //   flank, thick in the middle and sinking into the fur at its edges; banded like an armadillo's plates (bands), cracked
   //   along the spine (crack: half-width in radians, 0 for none). o: { x0, x1, amax, thick, bands, crack, mat, colour
-  //   (fn(x, a, inCrack) -> [r,g,b]) }. Returns { mesh, top(x, a) -> point on the crust }.
+  //   (fn(x, a, inCrack) -> [r,g,b]), crackDepth (how deep the crack goes / thick, 1.3) }. Returns { mesh, top(x, a) -> point
+  //   on the crust }.
   function crustSaddle(parent, body, o) {
     const NX = 120, NA = 80, x0 = o.x0, x1 = o.x1, A = o.amax, T = o.thick, nb = o.bands ?? 0, cw = o.crack ?? 0;
     const pos = [], col = [], uv = [], idx = [];
@@ -524,7 +678,7 @@ export function molekit(L) {
       if (nb) { const u = (t * nb) % 1, wl = 0.16; k += T * 0.35 * (u < wl ? u / wl - 1 : -Math.pow((u - wl) / (1 - wl), 1.5)) * edge; }
       k += (T * 0.3 * nz(x * 2.4, a * 2, 3) + T * 0.2 * nz(x * 7, a * 6, 1)) * Math.min(1, edge * 2.5);
       let inC = 0;
-      if (cw) { const w = cw * Math.max(0, 1 - Math.pow(Math.abs(t - 0.5) / 0.48, 3)) * (1 + 0.3 * nz(x * 5, 2, 0.5)), d = Math.abs(a - crackZ(x)) / Math.max(1e-3, w); if (d < 1) { inC = 1 - d; k -= T * 1.3 * Math.pow(inC, 0.5); } }
+      if (cw) { const w = cw * Math.max(0, 1 - Math.pow(Math.abs(t - 0.5) / 0.48, 3)) * (1 + 0.3 * nz(x * 5, 2, 0.5)), d = Math.abs(a - crackZ(x)) / Math.max(1e-3, w); if (d < 1) { inC = 1 - d; k -= T * (o.crackDepth ?? 1.3) * Math.pow(inC, 0.5); } }
       return [k, inC];
     };
     const pt = (x, a) => { const s = body.at(x), [k, inC] = off(x, a), se = (c) => Math.sign(c) * Math.pow(Math.abs(c), 2 / 2.2), ca = Math.cos(a), sa = Math.sin(a);
@@ -573,7 +727,7 @@ export function molekit(L) {
     const pm = new THREE.Mesh(pg, m); pm.receiveShadow = true; pm.userData.decal = true; L.getRoot().add(pm);
   }
 
-  return { THREE, TOD, GLOW, NIGHTISH, V, nz, clamp, sstep, furMap, hideMap, crustMap, fur, hide, crust, flesh, keratin, plain, eye, glowMat, dimGlow, crystalMats,
-    XTAL, XTAL_WHITE, XTAL_BLOOM, loft, furShells, seg, limb, tube, curve, cone, frame, clawGeo, claw, gait, paddle, forelimb, hindlimb, snout, tail, eyes,
-    shardGeo, shard, cluster, onBody, spineShards, scales, crustSaddle, camera, centre, heroGround };
+  return { THREE, TOD, GLOW, NIGHTISH, CHARGE, V, nz, clamp, sstep, furMap, hideMap, crustMap, gritSpecks, fur, hide, crust, flesh, keratin, plain, glowMat, dimGlow,
+    crystalMats, druseMat, starMat, charged, chargeK, XTAL, XTAL_WHITE, XTAL_BLOOM, loft, furShells, seg, limb, tube, curve, cone, frame, clawGeo, claw, gait, paddle,
+    forelimb, hindlimb, muzzle, star, tail, shardGeo, shard, cluster, onBody, spineShards, geode, geodeOn, scales, crustSaddle, camera, centre, heroGround };
 }

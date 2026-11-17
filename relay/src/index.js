@@ -17,7 +17,7 @@
  *                  (the sender's seat).
  * To the relay:    in the lobby: name, settings and start (the host), leave, ping; in a game: anything (passed on).
  *
- * It also takes players' feedback: POST /feedback (see feedback.js).
+ * It also takes players' feedback: POST /feedback (see feedback.js), and keeps cloud saves: /save (see saves.js).
  */
 
 const MAX_SEATS = 4;
@@ -26,13 +26,16 @@ const MAX_LOG = 48 << 20;    // bytes of log kept (the oldest pieces of whole ga
 const CODE = /^[A-Z2-9]{4,8}$/;
 
 import { handleFeedback, Gate } from './feedback.js';
-export { Gate };
+import { handleSaves, Saves } from './saves.js';
+export { Gate, Saves };
 
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
     // Player feedback from the game's form (see feedback.js).
     if (url.pathname === '/feedback') return handleFeedback(request, env);
+    // Cloud saves: a game moved between devices by a code (see saves.js).
+    if (url.pathname === '/save' || url.pathname.startsWith('/save/')) return handleSaves(request, env);
     if (url.pathname === '/' || url.pathname === '/health') {
       return new Response('Terrafall relay: ok', { headers: { 'content-type': 'text/plain', 'access-control-allow-origin': '*' } });
     }

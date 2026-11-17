@@ -5418,7 +5418,7 @@ function updateLoot() {
 
 /** A loot pile within `range` tiles of warbot u that it could walk to, or null. */
 function lootNear(u, range) {
-  if (!S.loot || !S.loot.length || u.loot) return null;
+  if (!S.loot || !S.loot.length || u.loot || u.noLoot > S.time) return null; // (called home: it leaves crates be a while)
   const zone = S.zone[tIdx(Math.floor(u.x), Math.floor(u.y))];
   let best = null, bd = range * range;
   for (const l of S.loot) {
@@ -7228,15 +7228,35 @@ function unstation(owner, b) {
   return n;
 }
 
-/** Call a rally point's warbots back to their garrisons. */
-/** Warbots out in the field (attacking, holding a rally flag, or out defending). */
+/** The jobs that put a warbot out in the field, for Recall all: attacking, out defending, holding a rally flag, or carrying off crates (loot). */
+const FIELD_TASKS = ['attack', 'defend', 'hold', 'loot'];
+
+/** Warbots out in the field (attacking, holding a rally flag, out defending, or picking up crates). */
 function warbotsOut(owner) {
   let n = 0;
-  for (const u of S.bots) if (!u.dead && u.owner === owner && isArmy(u) && !u.inside && u.task && ['attack', 'defend', 'hold'].includes(u.task.type)) n++;
+  for (const u of S.bots) if (!u.dead && u.owner === owner && isArmy(u) && !u.inside && u.task && FIELD_TASKS.includes(u.task.type)) n++;
   return n;
 }
 
-/** Recall every warbot in the field: every rally flag comes down and they go back to their garrisons. */
+/**
+ * Warbot u called back. A person's heads home now (to be repaired first if it badly needs it, else its garrison),
+ * marching (without stopping to fight), and leaves crates be for RECALL_NO_LOOT seconds; it's given its way home at
+ * once, since with no job for even one step it would drop the march (see updateWarbot). A rival AI's just drops what
+ * it was doing and finds its own way next step (as before).
+ */
+function callBack(u) {
+  u.task = null; u.path = null; u.fight = 0;
+  if (!usesPosts(u.owner)) return;
+  u.noLoot = S.time + RECALL_NO_LOOT;
+  u.march = S.time + MARCH_MAX;
+  if (!(wantsRepair(u) && goRepair(u))) goGarrison(u);
+}
+
+/**
+ * Recall every warbot in the field: every rally flag comes down and they go back to their garrisons, marching.
+ * One picking up crates stops: on its way to the pile it turns back empty; one already carrying a crate brings it
+ * in (to the nearest garrison, as it was), marching too.
+ */
 function recallAll(owner) {
   let n = 0;
   for (const r of S.rallies.slice()) if (r.owner === owner) n += recallRally(r.id);
@@ -7244,16 +7264,22 @@ function recallAll(owner) {
     if (u.dead || u.owner !== owner || !isArmy(u)) continue;
     u.resume = null; // away for repairs: home afterwards, not back to the fight
     if (u.inside || !u.task) continue;
-    if (!['attack', 'defend', 'hold'].includes(u.task.type)) continue;
-    cancelTask(u); u.task = null; u.path = null; u.fight = 0; n++;
-    if (usesPosts(owner)) u.march = S.time + MARCH_MAX; // called back: home without stopping to fight
+    if (!FIELD_TASKS.includes(u.task.type)) continue;
+    n++;
+    if (u.task.type === 'loot' && u.task.phase === 'home' && u.loot) {
+      u.fight = 0; u.path = null;
+      if (usesPosts(owner)) { u.noLoot = S.time + RECALL_NO_LOOT; u.march = S.time + MARCH_MAX; }
+      continue;
+    }
+    cancelTask(u);
+    callBack(u);
   }
   return n;
 }
 
 function recallRally(id) {
   let n = 0;
-  for (const u of rallyMembers(id)) { u.task = null; u.path = null; u.fight = 0; n++; if (usesPosts(u.owner)) u.march = S.time + MARCH_MAX; } // called back: home without stopping to fight
+  for (const u of rallyMembers(id)) { callBack(u); n++; } // called back: home without stopping to fight
   for (const u of S.bots) if (u.resume && u.resume.type === 'hold' && u.resume.rally === id) u.resume = null; // away for repairs: not going back
   S.rallies = S.rallies.filter((r) => r.id !== id);
   return n;

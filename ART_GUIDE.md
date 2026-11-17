@@ -742,16 +742,16 @@ or `wall-post` for each tile from its neighbours, and the Gate pieces from the r
 
 Colony mode now has creature nests and two kinds of creature, the Research Lab, and Silos that look empty until a
 missile is ready. Until art arrives the game draws the nest, the creatures and the Lab itself, and uses edited
-copies of the Silo images for the empty ones. Make the Lab and the nests in the same Claude Design chat as Batch 6
-(paste the Batch 6 style brief first, and attach the Smelter as the style anchor); the creatures follow the Batch 8
-robot pattern (seen from straight above, facing right, four walking frames).
+copies of the Silo images for the empty ones. Make the Lab in the same Claude Design chat as Batch 6 (paste the Batch 6
+style brief first, and attach the Smelter as the style anchor). The Murmur's nests and creatures are no longer made in
+Claude Design: they come from the 3D renderer, built to LORE.md's art brief (see **The Murmur** just below the table).
 
 | Key | Size | What |
 |---|---|---|
 | `lab` | 512×512, transparent | Research Lab (one version: the game adds the team bar) |
-| `nest-1`, `nest-2`, `nest-3` | 512×512, transparent | Creature Nest at levels 1, 2 and 3 |
-| `scuttler-f0` … `scuttler-f3` | 256×256, transparent | Scuttler walking frames, facing right, no shadow |
-| `brute-f0` … `brute-f3` | 256×256, transparent | Brute walking frames, facing right, no shadow |
+| `nest-1`, `nest-2`, `nest-3` | 512×512, transparent | The Murmur's Burrow (the nest) at levels 1, 2 and 3 (rendered: see below) |
+| `scuttler-f0` … `scuttler-f3` | 256×256, transparent | Scuttler walking frames, facing right, no shadow (rendered) |
+| `brute-f0` … `brute-f3` | 256×256, transparent | Brute walking frames, facing right, no shadow (rendered) |
 | `silo-empty@0`, `silo-empty@1` | 512×512, transparent | Missile Silo with no missile in it (team versions) |
 | `nukesilo-empty@0`, `nukesilo-empty@1` | 512×512, transparent | Nuclear Silo with no missile in it (team versions) |
 | `trader-ship` | 256×256, transparent | Optional: the trader ship that hovers over a Command Base during a Planet event |
@@ -766,42 +766,51 @@ other. Cleaner and more precise than the industrial buildings, but still a littl
 Same camera angle, lighting, materials and scale as the Smelter.
 ```
 
-**`nest-1.png`, `nest-2.png`, `nest-3.png`**
+**The Murmur: the Scuttler, the Brute and the nests** (rendered by `renderer/b/murmur_moles.js`, which uses the shared kit
+`renderer/b/murmur_moleskit.js`, to the brief in LORE.md, "Art brief: the Murmur")
+
+They are burrowing mammals, built from the star-nosed mole and the naked mole-rat. Fur, skin, soil and stone only: no
+shells, mandibles, extra legs, wings or slime.
+
+- **Body.** Low, heavy and barrel-chested, like a mole crossed with a badger: a deep chest under a hump of shoulder, a
+  narrower waist and a low wedge of a head.
+- **Fur.** Near-black velvet, dusted with Crystal grit that glints violet.
+- **Face.** No eyes. In place of a nose, a star of 22 fleshy tendrils. It is gathered while they walk, and flares open
+  and lights up violet when they find power.
+- **Hands.** Huge spade hands turned outward, with four long jointed fingers, a thumb and heavy nails, a little too
+  much like hands.
+- **Crystal.** Eaten Crystal splits out through the shoulders and spine like broken geodes: a grey stone rind, a pale
+  agate edge, and pale lilac crystal inside that glows violet. It glows when they are full of charge and goes dull when
+  they are hungry; the game's raiders are drawn well fed (`charge=0.75`).
+- **Palette.** Near-black fur, violet glow and pale lilac crystal, against the robots' clean lights.
+
+Each class:
+
+- **Scuttler** (the brief's Runners). The lightest build with the longest legs, and the mole-rat's buck teeth under the
+  star. Geodes split out of each shoulder and in a seam down the spine.
+- **Brute** (the Breakers). A huge barrel chest and shoulder hump. Its back is a mantle of geode stone split along the
+  spine, with the crack packed with crystal and geodes along the mantle's edge. It has the biggest hands.
+- **The nest** (`nest-1` to `nest-3`, the Burrow). A molehill of churned earth, ringed with crystal spires round a
+  throat lined with crystal like a geode. Raised tunnel ridges branch away from it, with the Bloom's violet root-veins
+  breaking through along them and pulses of light that show at night.
+  - Level 1: a small heap with 3 spires and 1 tunnel.
+  - Level 2: 6 spires and 3 tunnels.
+  - Level 3: a giant mound with taller spires and more between them, 5 tunnels, and the tendril star of the Deep rising
+    out of the throat.
+
+Sprites follow the robots: seen from straight above, facing right, centred on the body, with no ground or shadow (the
+game draws the shadow). Only the limbs move across the four frames, in diagonal pairs. The nests use the buildings'
+camera, with no pad. Every one has morning, evening and night versions in `art/tod/<time>/` (the crystal lights up after
+dark). The same scene also makes the Leech, Spitter and Delver, the regional variants (`v=rust|white|bloom`) and the hero
+shots: see `renderer/RENDERER.md` for all its options.
+
+To re-render them and install them (from `renderer/`):
 ```
-A creature nest on the alien planet, in three growth stages, as three separate images with identical framing.
-It is organic, not built: a low mound of hardened dark purple-brown resin and fused rock, ribbed and knobbly
-like a termite mound crossed with a beetle shell, with three or four dark burrow holes, and a sticky purple
-creep spreading over the sand around its base. Clusters of pale glowing green eggs sit in hollows on the mound.
-No foundation pad: the mound's base sits on the bottom edge (about 4% margin) and spans about 75% of the width,
-like the buildings' pads. Same camera angle and lighting as the Smelter.
-Stage 1: small and low, a few eggs. Stage 2: bigger, with bony spikes starting to grow and more eggs.
-Stage 3: large and menacing, tall jagged spikes, many glowing eggs, a faint green glow from the burrows.
-Make it read as hostile and alive at 50 pixels wide: a strong dark silhouette with the green eggs as the accent.
+python3 tools/rerender.py 'units/(scuttler|brute)-f|buildings/nest-|lore/murmur-'   # renders and finishes every time of day
+python3 tools/install_murmur.py out/rerender/art ../art                             # WebP into art/bots, art/buildings, art/tod, art/lore
 ```
-
-**Creatures** (one chat; paste this first)
-```
-Creature sprites for the same game. Two alien creatures that raid the robot colony. Render each as a realistic
-3D model with an orthographic camera looking straight down and a soft sun from the top-left, like the robots in
-my game: seen from directly above, facing RIGHT (head at the right), centred on a 256x256 transparent canvas.
-No drop shadow and no ground: the game draws the shadow. The game turns each sprite round its centre to face
-where it walks, so keep the body centred.
-
-For each creature make 4 walking frames (f0 to f3): the legs step forward a quarter of a stride each frame so
-f0, f1, f2, f3 loop smoothly back to f0. Nothing else may change between frames.
-
-Scuttler (scuttler-f0 to f3): small and quick, about the size of a large dog next to the robots. A low beetle-
-like body with a glossy dark purple carapace (#55306a, lighter ridges), six thin jointed legs splayed out to the
-sides, short mandibles at the front and two small glowing magenta-pink eyes (#ff5fd2). The body fills about 45% of
-the canvas width with the legs reaching to about 65%.
-
-Brute (brute-f0 to f3): big, slow and armoured, about twice the Scuttler's size. A heavy six-legged creature with
-thick overlapping brown-bronze armour plates (#6b4430), pale bony spikes along its back and sides, big crushing
-mandibles and two glowing amber eyes (#ffb347). The body fills about 70% of the canvas width.
-
-Both should be clearly creatures, not robots, and read at 20-30 pixels wide: bold silhouettes, the glowing eyes
-as the accent.
-```
+`install_murmur.py` saves the sprites as lossy WebP at quality 80 (`--q`), and prints each file's size and the byte
+totals before and after. The one-file build is close to its size limit, so keep the new set no bigger than the old.
 
 **Empty Silos** (attach `silo@0.png`, `silo@1.png`, `nuclear-silo@0.png` and `nuclear-silo@1.png`)
 ```
@@ -820,9 +829,9 @@ cargo hatch with a winch on its belly and blinking landing lights. 256x256 trans
 about 75% of the width, no shadow and no ground (it floats; the game draws its shadow).
 ```
 
-Send them in a zip like the earlier batches (WebP or PNG). Claude Code will register them: the Lab and the nests
-with the same `B3D` sizing as the other buildings, the nest picked by its level, the creatures with `driveSet`-style
-walking frames played by distance walked, and the empty Silos replacing the current edited ones.
+Send them in a zip like the earlier batches (WebP or PNG). Claude Code will register them: the Lab with the same `B3D`
+sizing as the other buildings, and the empty Silos replacing the current edited ones. (The nests use `B3D` too, picked
+by their level, and the creatures' four walking frames play while they move.)
 
 ### Batch 12: Ropeway and Road Train
 
@@ -1431,7 +1440,7 @@ same size, or point the tag at a new one. Keep them small (WebP; the whole set i
 |---|---|---|
 | `lore/ithaca.webp` | 1280×720 | Ithaca I from orbit: the coral-red patchwork of regions, the bright Ring (the planet's shadow across it, its own shadow on the planet), Argos, ringfall streaks, Corvane flaring top left; colony lights in the four callsign colours, lava and the Bloom glowing on the night side. `renderer/b/lore_planet.js` (`node run.js out/lore 'lore_planet:::ithaca:w=2560&h=1440'`, from `renderer/`), then `python3 post/lore_planet.py out/lore/ithaca.beauty.png ../art/lore/ithaca.webp --q 86` (ringfall, bloom, a Kuwahara filter for the painted look, grain, vignette). |
 | `lore/region-<biome>.webp` | 480×270 | A patch of each region's ground (`desert`, `jungle`, `polar`, `autumn`, `savanna`, `swamp`, `volcanic`, `lunar`, `alien`), screenshots of the game's own map in daylight at about 54 px a tile. |
-| `lore/murmur-<class>.webp` | 480×360 | The Scuttler, Brute, Leech (feeding), Spitter and Delver at night, 3/4 view: the direction-B moles, `renderer/b/murmur_moles.js` with `hero=1&hi=2&tod=night` (the Leech `pose=feed`), composed like the creature heroes and cropped round the animal. **To be replaced** when the Murmur are reworked to LORE.md's art brief. |
+| `lore/murmur-<class>.webp` | 480×360 | The Scuttler, Brute, Leech (feeding, with the power line it drinks from), Spitter and Delver at night, 3/4 view, built to LORE.md's art brief. Made with `renderer/b/murmur_moles.js` (`hero=1&hi=2&tod=night`, the Leech `pose=feed`), bloomed with `compose_any.py --b1 12 --b2 34 --glow 1.3`, then cropped round the animal to 480×360 WebP by `renderer/post/murmur_lore.py`. The exact jobs are in `renderer/jobs.txt`; `tools/rerender.py 'lore/murmur-'` remakes them. |
 
 The guide also shows the game's own `buildings/lander@0`, `lander@1`, the night Trade Post, Uplink, Command Base and
 *Wren* (`tod/night/...`); the Ithaca I page's catalog plate and the four callsign emblems are inline SVG in the page.

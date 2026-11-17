@@ -185,7 +185,7 @@ const BOTS = {
   scuttler: { name: 'Scuttler', plural: 'Scuttlers', speed: WORKER_SPEED * 1.1, hp: 6, wild: true, bite: 1,
     desc: 'The smallest of the Murmur, quick and never alone. Scuttlers run in packs and go for any bot they catch out in the open.' },
   brute:    { name: 'Brute', plural: 'Brutes', speed: WORKER_SPEED * 0.8, hp: 24, wild: true, bite: 3, smash: true,
-    desc: 'A big, slow, armoured creature of the Murmur. Brutes tear up roads and batter buildings, and bite hard.' },
+    desc: 'A big, slow, armoured creature of the Murmur. Brutes tear up roads, batter buildings and smash bots.' },
 };
 const BOT_ORDER = ['worker', 'hauler', 'truck', 'tanker', 'roadtrain', 'freight', 'cargoship', 'tankship', 'ferry', 'cargoplane', 'bomber', 'crawler', 'agribot', 'paver', 'warbot', 'bulwark', 'torch', 'rocket'];
 /**
@@ -576,6 +576,7 @@ const QUAKE = { at: 900, jitter: 90, warn: [120, 30] };
 const FORD_SLOW = 0.45, FORD_COST = 2.5;
 // Warbots you order somewhere (move, station, call back) march there without stopping to fight, for at most this long (s).
 const MARCH_MAX = 90;
+const RECALL_NO_LOOT = 60; // a warbot called home (Recall all, or its rally flag taken down) leaves crates be this long (see lootNear)
 const CHOKE_BAND = 3;   // Chokepoint maps: rows of crags each side of the middle line
 const CHOKE_APPROACH = 3; // ...and rows of open ground kept clear each side of the pass
 const ISLE_GAP = 4;       // Islands maps: at least this much sea between islands (a wide sea: ships, or long, dear bridges)

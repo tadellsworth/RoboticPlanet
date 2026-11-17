@@ -1024,6 +1024,8 @@ canvas.chart.small { height: 110px; }
 .m-links button { position: relative; border: 0; background: none; color: var(--muted); font-weight: 650; font-size: 13.5px; padding: 6px 6px; border-radius: 8px; }
 .m-links button + button:not(.m-pill)::before { content: ''; position: absolute; left: -7px; top: 50%; width: 3px; height: 3px; margin-top: -1.5px; border-radius: 50%; background: rgba(255, 255, 255, 0.22); }
 .m-links button:hover { color: var(--text); }
+.m-links .m-loads { flex-basis: 100%; display: flex; flex-wrap: wrap; justify-content: center; gap: 2px 10px; }
+@media (pointer: coarse) { .m-links .m-loads button { min-height: 44px; } }
 #m-import-msg { text-align: center; }
 
 /* Customise: a header, the scrolling settings, and Start in a bar that stays in view. */
@@ -1585,6 +1587,53 @@ a.btn { display: block; text-align: center; text-decoration: none; color: inheri
 .fb-hp { position: absolute; left: -10000px; top: 0; width: 1px; height: 1px; overflow: hidden; }
 .fb-done { display: flex; flex-direction: column; gap: 14px; }
 .fb-thanks { margin: 4px 0 0; font-size: 17px; font-weight: 650; line-height: 1.4; color: var(--text); }
+
+/* ---- Cloud saves (#screen-cloud, js/cloud.js): the code, its link and QR code; or a code to load. As Send feedback. ---- */
+#screen-cloud { z-index: 35; background: radial-gradient(ellipse at 50% 28%, rgba(20, 33, 61, 0.55), rgba(8, 12, 24, 0.9)); }
+#screen-cloud .cl-card { width: min(100%, 440px); min-width: 0; display: flex; flex-direction: column; gap: 12px;
+  background: #111b33; border-color: rgba(241, 228, 211, 0.14); }
+.cl-save, .cl-form { display: flex; flex-direction: column; gap: 12px; min-width: 0; margin: 0; }
+.cl-save[hidden], .cl-form[hidden], .cl-out[hidden] { display: none; }
+.cl-busy { margin: 6px 0; font-size: 15px; color: var(--text); }
+.cl-out { display: flex; flex-direction: column; align-items: center; gap: 12px; min-width: 0; }
+.cl-qr { flex: none; width: min(184px, 52vw); aspect-ratio: 1; border-radius: 10px; overflow: hidden; background: #fff; }
+.cl-qr svg { display: block; width: 100%; height: 100%; }
+.cl-side { display: flex; flex-direction: column; gap: 10px; width: 100%; min-width: 0; }
+.cl-lead, .cl-ask { margin: 0; font-size: 14px; line-height: 1.45; color: var(--muted); }
+.cl-ask { font-size: 16px; font-weight: 650; color: var(--text); }
+.cl-code { margin: 0; text-align: center; font-size: 30px; line-height: 1.15; font-weight: 800; letter-spacing: 0.1em; color: var(--accent);
+  font-variant-numeric: tabular-nums; user-select: text; -webkit-user-select: text; overflow-wrap: anywhere; }
+.cl-link { display: block; width: 100%; min-width: 0; min-height: 44px; margin: 0; padding: 10px 12px; font: inherit; font-size: 14px; color: var(--text);
+  background: var(--panel-2); border: 1px solid var(--line); border-radius: 10px; text-overflow: ellipsis;
+  user-select: text; -webkit-user-select: text; touch-action: auto; -webkit-touch-callout: default; }
+.fb-field .cl-input { font-size: 22px; letter-spacing: 0.12em; text-transform: uppercase; font-variant-numeric: tabular-nums; }
+.cl-input::placeholder { letter-spacing: 0.12em; }
+.cl-link:focus, .cl-input:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+.cl-btns { display: flex; gap: 8px; }
+.cl-btns .btn { flex: 1; min-height: 44px; margin: 0; }
+.cl-btns .btn[hidden] { display: none; }
+.cl-foot .btn.ghost { flex: 0 1 auto; padding-left: 16px; padding-right: 16px; }
+.cl-exp { margin: 0; font-size: 12.5px; line-height: 1.45; color: var(--muted); }
+.cl-msg { margin: 0; font-size: 14px; line-height: 1.4; color: var(--muted); }
+.cl-msg:empty { display: none; }
+.cl-msg.warn { color: var(--warn); }
+.cl-msg.good { color: var(--good); }
+.cl-msg.bad { padding: 9px 12px; border-radius: 10px; color: #ffd0c4; background: rgba(255, 90, 110, 0.1); border: 1px solid rgba(255, 90, 110, 0.35); }
+#screen-cloud button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+@media (pointer: coarse) { #screen-cloud .stats-head .btn { min-height: 44px; } }
+/* A phone on its side: the QR code beside the rest, so it all fits the height. */
+@media (orientation: landscape) and (max-height: 519px) {
+  #screen-cloud { padding: calc(var(--safe-t) + 8px) calc(var(--safe-r) + 12px) calc(var(--safe-b) + 8px) calc(var(--safe-l) + 12px); }
+  #screen-cloud .cl-card { width: min(100%, 620px); padding: 12px 16px; gap: 8px; }
+  #screen-cloud .cl-card h2 { font-size: 20px; }
+  .cl-save { gap: 8px; }
+  .cl-out { flex-direction: row; align-items: flex-start; gap: 14px; }
+  .cl-qr { width: 156px; }
+  .cl-side { gap: 7px; }
+  .cl-code { font-size: 26px; text-align: left; }
+  .cl-lead { font-size: 13px; line-height: 1.35; }
+  .cl-exp { font-size: 12px; line-height: 1.35; }
+}
 
 /* ---- Colony goals, Records and achievements (js/goals.js) ---- */
 /* The goals button beside the Goal card (Colony free play): a ladder and how many are done; it flashes when one is. */

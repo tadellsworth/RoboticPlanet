@@ -20,3 +20,12 @@ class_name = "Gate"
 [[migrations]]
 tag = "v2"
 new_sqlite_classes = ["Gate"]
+
+# Cloud saves (src/saves.js): one Durable Object that keeps the games people save to the cloud, by code, for 30 days.
+[[durable_objects.bindings]]
+name = "SAVES"
+class_name = "Saves"
+
+[[migrations]]
+tag = "v3"
+new_sqlite_classes = ["Saves"]
