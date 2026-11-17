@@ -1164,6 +1164,12 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   for 150 s or once a road reaches it. Sites stuck where its robots won't go (their road through ground where they were
   shot, see `noteDanger`) used to hold every place while the last field ran dry, and two rivals could sit at 0 Chips
   with a few warbots each for 20 minutes.
+- **The rival's roads and Ramps** (`aiRoads`, `aiRampCut` in `js/ai.js`): where its road to a site would run the long
+  way round a one-level cliff (8 tiles or more), or no slope leads there at all, it cuts up to two Ramps instead, as
+  Route to does in Paths, when that way (each Ramp counted as 6 tiles) is at most 60% of the long road and 6 tiles
+  shorter. The site's road waits for the Ramps (`P.rampWait`, 3 minutes at most) and then takes the short way. It
+  cuts none for a Ramp, and none onto its own plateau or mesa home (`fortressHome`). It used to run a road forty
+  tiles round a low cliff to a site eight tiles away, and gave up sites no slope led to.
 - **The story** (LORE.md is canon; text and presentation only, nothing in it changes a rule). **Callsigns**
   (`CALLSIGNS`, `callsign(p, colour)`): players are named COBALT (player 0, blue), VERMILION (red), VIRIDIAN (green) and
   TYRIAN (purple) wherever the game used to say "the Red rival" (`playerName`: 'You', a person's name in multiplayer,

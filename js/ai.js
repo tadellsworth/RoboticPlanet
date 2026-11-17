@@ -2414,7 +2414,17 @@ function aiRoads(p, me) {
     .sort((a, b) => (a.built - b.built) || a.born - b.born);
   for (const b of todo) {
     if (done >= 3) break;
+    // Ramps cut for this one's road still going up: wait for them (aiRampCut), the road then takes the short way.
+    const rw = P.rampWait && P.rampWait[b.id];
+    if (rw) {
+      if (rw.until > S.time && rw.ids.some((id) => { const r = getE(id); return r && !r.dead && !r.built; })) continue;
+      delete P.rampWait[b.id];
+    }
     const route = roadRouteTo(p, b);
+    if (BDEFS[b.type].ramp) {
+      // A Ramp cut for another site waits for the Ramp before it on the way (its road follows once that stands).
+      if (!route && P.rampWait && Object.keys(P.rampWait).some((k) => P.rampWait[k].until > S.time && P.rampWait[k].ids.includes(b.id))) continue;
+    } else if ((!route || route.length >= AI_RAMP_MIN) && aiRampCut(p, b, route)) continue;
     if (!route) {
       if (!b.built && S.time - b.born > 60) {
         P.avoid = (P.avoid || []).concat([{ x: b.x, y: b.y, until: S.time + 240 }]);
@@ -2440,6 +2450,58 @@ function aiRoads(p, me) {
     done++;
   }
   if (done < 3) aiJoinBases(p);
+}
+
+/**
+ * A road that goes the long way round a low cliff, or can't get there at all: cut a Ramp instead, as Route to does in
+ * Paths (a Ramp is only 3 Cement and 1 Fiber, and needs no build slot). The cheapest way from the roads that reach
+ * storage to b, Ramps allowed (pathRoute: a Ramp costs as much as ROUTE_RAMP tiles), against the road the usual way
+ * (roadRouteTo, which only follows the slopes there are): when the Ramp way is at most AI_RAMP_GAIN of it (counting
+ * each Ramp as AI_RAMP_TILES tiles) and saves AI_RAMP_SAVE tiles or more, its Ramps go up and b's road waits for them
+ * (P.rampWait; a few minutes at most), then takes the short way through. Two Ramps at most, and none for a Ramp. Not
+ * off a fortress home (fortressHome: Plateaus and Three Mesas, where its few slopes are what its guns hold). (A rival
+ * used to run a road forty tiles round a one-level cliff to a site eight tiles away, and gave up a site no slope led
+ * to.) Returns true if it cut any.
+ */
+const AI_RAMP_MIN = 8, AI_RAMP_TILES = 6, AI_RAMP_GAIN = 0.6, AI_RAMP_SAVE = 6, AI_RAMP_MAX = 2;
+function aiRampCut(p, b, route) {
+  const g = roadGoals(p, b);
+  if (!g.stores.length) return false;
+  const net = roadNet(p), seeds = [], N = S.W * S.H;
+  for (let t = 0; t < N; t++) if ((net.comp[t] >= 0 && g.nets.has(net.comp[t])) || g.next[t]) seeds.push(t);
+  if (!seeds.length) return false;
+  const r = pathRoute(p, 'road', seeds, tIdx(b.x, b.y));
+  if (!r.tiles) return false;
+  const busy = (u) => (S.road[u] || S.plan[u] ? 1 : 0);
+  let fresh = 0, fort;
+  const cuts = [];
+  for (let k = 0; k < r.tiles.length; k++) {
+    const t = r.tiles[k];
+    if (!roadLike(t) && !S.plan[t] && !S.bAt[t]) fresh++;
+    if (!k) continue;
+    const a = r.tiles[k - 1], dx = Math.abs((a % S.W) - (t % S.W)), dy = Math.abs(((a / S.W) | 0) - ((t / S.W) | 0));
+    if (dx + dy !== 1 || S.terrain[a] !== T_GROUND || S.terrain[t] !== T_GROUND || Math.abs(S.elev[a] - S.elev[t]) !== 1 || canStep(a, t)) continue;
+    if (fort === undefined) fort = fortressHome(p);
+    if (fort && (fort[a] || fort[t])) return false; // (not a new way up onto its own fortress)
+    const ok = [t, a].filter((u) => canPlace(p, 'ramp', u % S.W, (u / S.W) | 0).ok).sort((x, y) => busy(x) - busy(y));
+    if (!ok.length) return false;
+    cuts.push(ok[0]);
+    if (cuts.length > AI_RAMP_MAX) return false;
+  }
+  if (!cuts.length) return false;
+  const before = route ? route.length : Infinity, after = fresh + cuts.length * AI_RAMP_TILES;
+  if (after > before * AI_RAMP_GAIN || before - after < AI_RAMP_SAVE) return false;
+  const have = playerGoods(p), cost = BDEFS.ramp.cost;
+  for (const k in cost) if ((have[k] || 0) < cost[k] * cuts.length) return false;
+  const ids = [];
+  for (const t of cuts) {
+    const res = placeSite(p, 'ramp', t % S.W, (t / S.W) | 0);
+    if (!res || !res.ok) break;
+    ids.push(res.building.id);
+  }
+  if (!ids.length) return false;
+  (S.players[p].rampWait = S.players[p].rampWait || {})[b.id] = { until: S.time + 180, ids };
+  return true;
 }
 
 /**
