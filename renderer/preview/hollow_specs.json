@@ -1,0 +1,21 @@
+{
+  "note": "How the game would draw the Hollow set and the tunnel exits (proposed keys; scale = the canvas's width in tiles, anchor = the image point on the tile centre, as in art/art-manifest.js). Keys ending -hollow go in the lazy biome bundle (dist/biome-hollow.js) by build-single.js's existing rule. The Hollow pieces are night renders only (it is always night there): draw them ungraded. The tunnel exit has the usual day art plus morning/evening/night re-lights.",
+  "sprites": {
+    "tunnel-exit": { "src": "buildings/tunnel-exit.webp", "scale": 1.05, "anchor": [0.5, 0.6145], "render": "hollow c=exit (512, composed with compose_any.py --b1 3.5 --b2 11)" },
+    "tunnel-exit-collapsed": { "src": "buildings/tunnel-exit-collapsed.webp", "scale": 1.05, "anchor": [0.5, 0.6145], "render": "hollow c=exit&state=collapsed" },
+    "veins-hollow": { "src": "biomes/hollow/veins.webp", "scale": 1.4, "anchor": [0.5, 0.6145], "render": "hollow c=veins&tod=night (512, --b1 3.5 --b2 11)" },
+    "floater-hollow": { "src": "biomes/hollow/floater.webp", "scale": 6.4, "anchor": [0.5, 0.4], "render": "hollow c=floater&tod=night (1536, --b1 10.5 --b2 33 --glow 0.7)" },
+    "pillar-1-hollow": { "src": "biomes/hollow/pillar-1.webp", "scale": 4.2, "anchor": [0.5, 0.8], "render": "hollow c=pillar&v=1&tod=night (1024, then post/hollow_post.py fade 0.04 0.42)" },
+    "pillar-2-hollow": { "src": "biomes/hollow/pillar-2.webp", "scale": 4.2, "anchor": [0.5, 0.8], "render": "hollow c=pillar&v=2&tod=night" },
+    "chamber-hollow": { "src": "biomes/hollow/chamber.webp", "scale": 3.35, "anchor": [0.5, 0.52], "render": "hollow c=chamber&tod=night (1024)" },
+    "deep-mound-hollow": { "src": "biomes/hollow/deep-mound.webp", "scale": 5.6, "anchor": [0.5, 0.6145], "render": "murmur_moles c=burrow&s=4&tod=night (1536, --b1 10.5 --b2 33 --glow 0.7)" },
+    "breach-light-hollow": { "src": "biomes/hollow/breach-light.webp", "tiles": [7.5, 7.5], "use": "mask: under it the ground and sprites show as by day, warmed (1.0, 0.93, 0.8)" },
+    "breach-beam-hollow": { "src": "biomes/hollow/breach-beam.webp", "tiles": [7, 14], "anchor": [0.5, 0.86], "use": "added ('lighter') over everything at 0.75" },
+    "breach-motes-hollow": { "src": "biomes/hollow/breach-motes.webp", "frames": 4, "use": "optional: dust drifting up the beam" }
+  },
+  "terrain": {
+    "ground-hollow": "512 seamless, 4 x 4 tiles", "ground-glow-hollow": "night glow", "water-hollow": "512", "water-glow-hollow": "night glow",
+    "rock-hollow": "512", "cliff-hollow": "128 x 48", "wall-hollow": "128 x 64: the wall face on a floor tile under a rock tile (new)",
+    "chasm-*-hollow": "the canyon set: chasm, chasm-wall, chasm-wall-2, chasm-lip-n/w/e (128)", "plant-hollow-1..6": "256, with -glow"
+  }
+}

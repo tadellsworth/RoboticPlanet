@@ -15,6 +15,10 @@
 //   ?pose=surface                       Sapper breaking the surface: head, hands and a ring of thrown-up soil
 //   c=spit-glob                         the Spitter's clot on its own (a projectile the game can draw), flying +x
 //   c=burrow&s=1|2|3                    the Burrow (the nest) at its three growth levels (the game's nest-1..3)
+//   c=burrow&s=4                        the Deep's mound, the Hollow's heart (LORE.md): bigger than any nest, nine spires
+//                                       and an outer ring, eight tunnels, satellite molehills, and the Deep's tendril star
+//                                       risen high out of the throat. Rendered at 1536 with the whole scene at DEEP_K of
+//                                       its size, so the canvas covers more ground (see renderer/preview/hollow_specs.json)
 //   ?hero=1                             a 3/4 perspective presentation shot on a patch of ground (the Leech feeding gets
 //                                       the power line it is drinking from)
 //   ?ground=0                           a hero shot without its patch of ground (to measure where the animal sits)
@@ -30,7 +34,9 @@ import { molekit } from './murmur_moleskit.js';
 
 const P = new URLSearchParams(location.search);
 const C = P.get('c') || 'swarmer', HI = +(P.get('hi') || 0), HERO = !!+(P.get('hero') || 0);
-export const config = C === 'burrow' ? { pad: false } : { pad: false, size: [512, 1024, 2048][HI] };
+export const config = C === 'burrow' ? (+(P.get('s')) === 4 ? { pad: false, size: 1536 } : { pad: false }) : { pad: false, size: [512, 1024, 2048][HI] };
+// the Deep's mound (s=4) is built 1.25 times a nest-3, then the whole scene drawn at this fraction so it fits the frame
+export const DEEP_K = 0.5;
 export const SPRITE_W = { swarmer: 5.8, drainer: 7.6, brute: 11.4, spitter: 6.8, sapper: 8.4, 'spit-glob': 2.6 };
 // every model is built at one world scale, then grown by this much (so the game's 0.078 per unit gives these sizes)
 const GROW = 1.2;
@@ -40,7 +46,7 @@ export default function (L) {
   const f = +(P.get('f') || 0), V = P.get('v') || 'base';
   const POSE = P.get('pose') || (+(P.get('feed') || 0) ? 'feed' : '');
   L.seed({ swarmer: 8100, drainer: 8200, brute: 8300, burrow: 8400, spitter: 8500, sapper: 8600, 'spit-glob': 8700 }[C] + (V === 'base' ? 0 : V.length));
-  if (C === 'burrow') return burrow(L, K, Math.max(1, Math.min(3, +(P.get('s') || 3))));
+  if (C === 'burrow') return burrow(L, K, Math.max(1, Math.min(4, +(P.get('s') || 3))));
   const W = SPRITE_W[C];
   const heroCams = {
     swarmer: { pos: [6.4, 3.9, 7.4], at: [0.15, 0.55, 0.1], fov: 30 },
@@ -600,8 +606,8 @@ function sapper(L, K, G, GL, f, v, pose) {
 // rising out of the throat the tendril star of the Deep, the nest's heart, wider than a Hauler and never seen whole.
 function burrow(L, K, lv) {
   const { THREE } = K, X = K.XTAL;
-  const SC = [0, 0.64, 0.84, 1][lv];
-  L.getRoot().scale.setScalar(1.06 * SC);
+  const SC = [0, 0.64, 0.84, 1, 1.25][lv];
+  L.getRoot().scale.setScalar(1.06 * SC * (lv === 4 ? DEEP_K : 1));
   const CZ = -0.3;
   const prof = [[0, -3.8], [0.35, -3.2], [0.75, -1.9], [1.0, -0.4], [1.2, 0.85], [1.45, 1.7], [1.85, 2.08], [2.3, 1.95], [2.85, 1.45], [3.4, 0.84], [3.9, 0.34], [4.3, 0.07], [4.6, -0.08]];
   const hProf = (r) => { for (let i = 1; i < prof.length; i++) if (r <= prof[i][0]) { const [r0, h0] = prof[i - 1], [r1, h1] = prof[i], t = (r - r0) / (r1 - r0), s = t * t * (3 - 2 * t); return h0 + (h1 - h0) * s; } return prof[prof.length - 1][1]; };
@@ -670,7 +676,7 @@ function burrow(L, K, lv) {
   veinM.userData.glow = K.dimGlow('#9a4cff', 1.2);
   const pulseM = K.glowMat('#d8b8ff', 1.1, K.dimGlow('#b070ff', 2.6));
   const runsAll = [[0.6, 1, [0.4, 0.6], 1.85, 0.62], [2.5, -1, [0.3, -0.5], 1.85, 0.4], [4.3, 1, [0.5, 0.3], 2.0, 0.7], [3.5, -1, [0.6, 0.4], 1.6, 0.5], [5.4, 1, [0.35, -0.45], 1.7, 0.3]];
-  const runs = runsAll.slice(0, [0, 1, 3, 5][lv]);
+  const runs = runsAll.slice(0, [0, 1, 3, 5, 5][lv]);
   const vein = (pts, r0, seed) => {
     const c = K.curve(pts, 80);
     K.tube(null, c.map(([x, y, z], k) => [x, y + 0.012 * Math.sin(k * 0.9 + seed), z]), t => r0 * (1 - 0.6 * t) + 0.012, veinM, { n: 120, radial: 7, dirt: 0 });
@@ -728,12 +734,12 @@ function burrow(L, K, lv) {
   L.mesh(new THREE.CircleGeometry(0.5, 24).rotateX(-Math.PI / 2), coreM, 0, -3.6, CZ, { cast: false, dirt: 0 });
   L.pointLight('#b48cff', 1.5 + K.GLOW * 7, 0, -2.4, CZ, 3.5);
   // ---- the spires round the rim, evenly spaced and tilted outward, each with smaller companions
-  const nS = lv === 1 ? 3 : 6, hS = [0, 1.25, 1.75, 2.1][lv];
+  const nS = lv === 1 ? 3 : lv === 4 ? 9 : 6, hS = [0, 1.25, 1.75, 2.1, 2.5][lv];
   for (let k = 0; k < nS; k++) {
     const a = k / nS * Math.PI * 2 + 0.26, r = 1.75, ca = Math.cos(a), sa = Math.sin(a), h = hProf(r) - 0.15;
     K.shard(null, [ca * r, h, CZ + sa * r], [ca * 0.42, 1, sa * 0.42], (hS + (k % 2) * 0.4) / Math.sqrt(SC), 0.28 / Math.sqrt(SC), X, { collarMat: clodM[1] });
     for (const d of (lv === 1 ? [0.3] : [-0.3, 0.32])) { const b = a + d; K.shard(null, [Math.cos(b) * (r + 0.12), hProf(r + 0.12) - 0.08, CZ + Math.sin(b) * (r + 0.12)], [Math.cos(b) * 0.9 + Math.cos(a) * 0.2, 1, Math.sin(b) * 0.9], (0.55 + L.rnd() * 0.3) / Math.sqrt(SC), 0.1, X, { collar: false }); }
-    if (lv === 3) { const b = a + Math.PI / nS, rr = 2.35; K.shard(null, [Math.cos(b) * rr, hProf(rr) - 0.12, CZ + Math.sin(b) * rr], [Math.cos(b) * 0.55, 1, Math.sin(b) * 0.55], 1.0 + 0.3 * L.rnd(), 0.17, X, { collarMat: clodM[0] }); }
+    if (lv >= 3) { const b = a + Math.PI / nS, rr = 2.35; K.shard(null, [Math.cos(b) * rr, hProf(rr) - 0.12, CZ + Math.sin(b) * rr], [Math.cos(b) * 0.55, 1, Math.sin(b) * 0.55], 1.0 + 0.3 * L.rnd(), 0.17, X, { collarMat: clodM[0] }); }
   }
   // ---- chips of crystal kicked out with the soil
   for (let i = 0; i < 10; i++) {
@@ -742,20 +748,47 @@ function burrow(L, K, lv) {
   }
   // ---- level 3: the Deep. Only its tendril star shows, rising out of the throat: thick fleshy rays, dark at the root,
   // their tips curling over and lit violet
-  if (lv === 3) {
+  if (lv >= 3) {
+    const SS = lv === 4 ? 1.6 : 1;      // the Deep's star: half as big again on its own mound, rising higher
     // thick fleshy rays coming up from deep in the throat and arching out over the rim between the spires, dark mauve at
     // the root, paler and lit violet toward the tips, the tips curled down
-    const rayM = K.starMat('#4e3640', 0), midM = [0.2, 0.4].map(b => K.starMat('#8a6472', b)), outM = [0.55, 0.75].map(b => K.starMat('#a8808e', b)), tipM = K.starMat('#c8a0b0', 1);
-    const N = 12;
+    const BK = lv === 4 ? 0.55 : 1;   // the Deep's bigger star burns no brighter per ray (more of it would blow out)
+    const rayM = K.starMat('#4e3640', 0), midM = [0.2, 0.4].map(b => K.starMat('#8a6472', b * BK)), outM = [0.55, 0.75].map(b => K.starMat('#a8808e', b * BK)), tipM = K.starMat('#c8a0b0', BK);
+    const N = lv === 4 ? 16 : 12;
     for (let k = 0; k < N; k++) {
       const a = (k + 0.5) / N * Math.PI * 2 + 0.26, ca = Math.cos(a), sa = Math.sin(a), L1 = 0.88 + 0.24 * Math.abs(Math.sin(k * 1.9 + 0.4));
-      const P = [[0.12, -3.0], [0.28, -1.5], [0.5, -0.1], [0.82, 1.15], [1.25, 1.95 * (0.9 + 0.1 * L1)], [1.75 * L1, 2.2 * (0.85 + 0.15 * L1)], [2.2 * L1, 2.0], [2.45 * L1, 1.55]].map(([r, y]) => [ca * r, y, CZ + sa * r]);
-      K.tube(null, P.slice(0, 5), t => 0.24 * (1 - 0.25 * t), rayM, { n: 40, radial: 12, dirt: 0 });
-      K.tube(null, P.slice(3, 7), t => 0.19 * (1 - 0.45 * t), midM[k % 2], { n: 30, radial: 11, dirt: 0 });
-      K.tube(null, P.slice(5), t => 0.11 * (1 - 0.55 * t) + 0.03, outM[k % 2], { n: 24, radial: 10, dirt: 0 });
-      L.sphere(0.07, tipM, P[7][0], P[7][1], P[7][2], { dirt: 0, cast: false });
+      const P = [[0.12, -3.0], [0.28, -1.5], [0.5, -0.1], [0.82, 1.15], [1.25, 1.95 * (0.9 + 0.1 * L1)], [1.75 * L1, 2.2 * (0.85 + 0.15 * L1)], [2.2 * L1, 2.0], [2.45 * L1, 1.55]].map(([r, y]) => [ca * r * SS, y >= 0 ? y * SS : y, CZ + sa * r * SS]);
+      const TK = SS === 1 ? 1 : SS * 0.85;
+      K.tube(null, P.slice(0, 5), t => 0.24 * TK * (1 - 0.25 * t), rayM, { n: 40, radial: 12, dirt: 0 });
+      K.tube(null, P.slice(3, 7), t => 0.19 * TK * (1 - 0.45 * t), midM[k % 2], { n: 30, radial: 11, dirt: 0 });
+      K.tube(null, P.slice(5), t => (0.11 * (1 - 0.55 * t) + 0.03) * TK, outM[k % 2], { n: 24, radial: 10, dirt: 0 });
+      L.sphere(0.07 * TK, tipM, P[7][0], P[7][1], P[7][2], { dirt: 0, cast: false });
     }
     K.seg(null, [0, -0.6, CZ], 0.75, 0.5, 0.75, K.starMat('#3e2a34', 0), { lump: 0.08 });      // the hub, deep in the throat
+  }
+  if (lv === 4) deepExtras();
+  // ---- level 4 only: the cathedral floor round the Deep's mound. Three more tunnels (eight in all), satellite molehills
+  // where they break the surface, and an outer ring of tall spires leaning out (built last, so levels 1-3 are unchanged)
+  function deepExtras() {
+    [[1.5, 1, [0.3, 0.5], 2.1, 0.5], [3.0, -1, [0.45, -0.4], 1.9, 0.6], [6.0, -1, [0.4, 0.35], 2.2, 0.45]].forEach(([a0, sgn, [wig, bend], len, br], ri) => {
+      const pts = []; for (let k = 0; k <= 10; k++) { const t = k / 10, r = 3.2 + t * len / SC, a = a0 + sgn * bend * t * t + wig * 0.15 * Math.sin(t * 7 + ri); pts.push([Math.cos(a) * r, 0, CZ + Math.sin(a) * r]); }
+      const c = K.curve(pts, 60);
+      ridge(c, ri + 10);
+      const up = []; for (let k = 4; k >= 0; k--) { const r = 1.55 + k * 0.4, a = a0 + 0.04 * Math.sin(k * 2 + ri); up.push([Math.cos(a) * r, hProf(r) + 0.03, CZ + Math.sin(a) * r]); }
+      vein([...c.slice().reverse().filter((_, k) => k % 6 === 0).map(([x, , z]) => [x, 0.02, z]), ...up], 0.055, ri * 4.7 + 2);
+    });
+    // satellite molehills: fresh heaps where tunnels come up round the mound, each with a few small spires
+    for (const [a, r, s0] of [[0.9, 5.2, 0.8], [2.9, 5.6, 0.65], [4.1, 5.0, 0.9], [5.3, 5.5, 0.7]]) {
+      const x = Math.cos(a) * r, z = CZ + Math.sin(a) * r;
+      K.seg(null, [x, -0.05, z], 0.9 * s0, 0.55 * s0, 0.9 * s0, K.crust('#4a3a2e', { rough: 0.97 }), { lump: 0.16, flat: 1 });
+      for (let k = 0; k < 50; k++) { const b = L.rnd() * 6.28, rr = Math.pow(L.rnd(), 0.6) * 1.1 * s0, sz = 0.04 + L.rnd() * 0.07; L.mesh(clodGeo(sz, k + 900), clodM[k % 3], x + Math.cos(b) * rr, -0.04 + 0.5 * s0 * Math.sqrt(Math.max(0, 1 - (rr / (1.1 * s0)) ** 2)) + sz * 0.1, z + Math.sin(b) * rr, { dirt: 0, ry: L.rnd() * 6 }); }
+      for (let k = 0; k < 3; k++) { const b = a + (k - 1) * 0.9; K.shard(null, [x + Math.cos(b) * 0.4 * s0, 0.3 * s0, z + Math.sin(b) * 0.4 * s0], [Math.cos(b) * 0.4, 1, Math.sin(b) * 0.4], (0.5 + L.rnd() * 0.4) * s0, 0.1, X, { collar: false }); }
+    }
+    for (let k = 0; k < 12; k++) {
+      const a = k / 12 * Math.PI * 2 + 0.13, rr = 3.0 + 0.25 * Math.sin(k * 2.3);
+      K.shard(null, [Math.cos(a) * rr, hProf(rr) - 0.1, CZ + Math.sin(a) * rr], [Math.cos(a) * 0.7, 1, Math.sin(a) * 0.7], 1.3 + 0.5 * L.rnd(), 0.2, X, { collarMat: clodM[2] });
+    }
+    L.pointLight('#b48cff', 0.4 + K.GLOW * 1.2, 0, 3.2, CZ, 6);
   }
 }
 // mergeAll(K, geos): merge a pile of small geometries into one

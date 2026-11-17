@@ -34,6 +34,7 @@ This folder is the complete setup behind the Terrafall art. It covers every 3D s
 | Vehicles | truck, tanker, roadtrain, freight (loco and wagons), crawler, trader |
 | Robots | rob_worker, rob_hauler, rob_agribot, rob_paver, rob_warbot (the shared `robkit.js`) |
 | The Murmur (Colony wildlife) | murmur_moles: every Murmur class, the Burrow (the nest) at its three levels, and their 3/4 hero shots (the shared `murmur_moleskit.js`). `creature` (the old beetle Scuttler and Brute) and `nest` (the old resin mound) are kept for reference and no longer shipped; `murmur_swarm`, `murmur_burrowers` and `murmur_mycelial` are earlier design directions, not shipped. |
+| The Hollow (proposed, not shipped) | hollow: the tunnel exit (`c=exit`, `state=collapsed`), the Bloom-vein node (`c=veins`), the floating Crystal (`c=floater`), the stone pillars (`c=pillar&v=1\|2`) and the side chamber (`c=chamber`); murmur_moles `c=burrow&s=4` is the Deep's mound. See [The Hollow set](#the-hollow-set). |
 | Other | icon (the app-icon hero render); lore_planet (the Lore guide's Ithaca I from orbit: a 16:9 illustration with its own camera and shaders, finished by `post/lore_planet.py`) |
 | Walls (in `walls/b/`) | wall, gate |
 
@@ -388,3 +389,32 @@ I then used `tools/rerender.py --shipped` to compare against every shipped file 
 - **The two that differ:** the night Charging Station and the night Roadworks. They differ only in the `Math.random()` grime described above: the Roadworks by at most 3 levels, the Charging Station by more, in its ground stains.
 - **Previews:** `preview/exhaust_preview.py` and `preview/generator_preview.py` ran against a folder of the shipped art and produced their videos.
 - **Not compared here:** I couldn't compare the day robots and their overlays, 11 day buildings, the nuke blast or the icon, because those files were delivered in earlier sessions and aren't in this workspace. Run `tools/rerender.py --shipped <game>/art` on them to check.
+
+## The Hollow set
+
+A proposed art set for the Hollow (LORE.md) and the Murmur's tunnels, made for the owner's approval and not installed. Run from this folder:
+
+```
+python3 terrain/terrain_hollow.py          # ground, water, rock, cliff, wall and their glow maps -> out/art/biomes/hollow
+python3 terrain/canyon_hollow.py           # the chasm tiles
+python3 terrain/plants_hollow.py           # the six plants and their glows
+node run.js out/hollow 'hollow:::exit-open:c=exit' 'hollow:::exit-open-night:c=exit&tod=night' \
+  'hollow:::exit-collapsed:c=exit&state=collapsed' 'hollow:::exit-collapsed-night:c=exit&state=collapsed&tod=night' \
+  'hollow:::veins:c=veins&tod=night' 'hollow:::floater:c=floater&tod=night' 'hollow:::pillar-1:c=pillar&v=1&tod=night' \
+  'hollow:::pillar-2:c=pillar&v=2&tod=night' 'hollow:::chamber:c=chamber&tod=night' 'murmur_moles:::deep-mound:c=burrow&s=4&tod=night' \
+  'murmur_moles:::scuttler-rust-night:c=swarmer&v=rust&tod=night' 'murmur_moles:::scuttler-white-night:c=swarmer&v=white&tod=night'
+python3 compose_any.py out/hollow exit-open exit-open-night exit-collapsed exit-collapsed-night veins scuttler-rust-night scuttler-white-night --b1 3.5 --b2 11
+python3 compose_any.py out/hollow pillar-1 pillar-2 chamber
+python3 compose_any.py out/hollow floater deep-mound --b1 10.5 --b2 33 --glow 0.7
+python3 post/hollow_post.py fade out/hollow pillar-1 0.04 0.42 && python3 post/hollow_post.py fade out/hollow pillar-2 0.04 0.42
+python3 post/hollow_post.py breach out/hollow  # the breach shaft's pool of light, its column and motes
+python3 preview/hollow_mock.py out/preview/hollow mock mockbig tunnels assets
+python3 preview/hollow_sheet.py <sheet folder>   # the design sheet (one HTML page) and the renders beside it
+```
+
+- The Hollow is always night, so its set pieces are night renders only. Its tiles are lit like the other biomes', for the
+  game's night grade to darken, with glow maps for what gives light.
+- `tunnels/ridges.js` draws the tunnel ridges in Canvas 2D, the way the game would (the sheet recommends drawing them in
+  code rather than from tiles); `tunnels/run.js` renders it in headless Chrome for the mock-ups.
+- `preview/hollow_specs.json` gives the proposed keys, sizes and anchors. Level 4 of the Burrow leaves levels 1-3 exactly as
+  they were (checked pixel for pixel).
