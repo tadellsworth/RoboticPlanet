@@ -1099,9 +1099,16 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   ordered (but a first Tanker); warbots past what it wants leave `AI_WORKER_ROOM` (6) places for workers. Without it a
   colony that had taken a lot of buildings made workers to staff them all until the limit was full, and never fielded
   an army again (a 2 v 2 game ran past an hour). With less room than that army wants (and outside Colony), it scraps
-  its extras (`AI_SCRAP`): Workers past the ones its buildings call for and 4 more, then Haulers past the ones it wants
-  and 2 more (4 at least), go to its Foundry to be recycled (`recycleSpare`), at most 4 on their way at once, until the
-  room is there; its Foundry fills it with warbots. **Crystal** (every robot takes a Chip, every Chip a Crystal) runs short
+  its extras (`AI_SCRAP`, `aiScrap`): Freight Trucks, Tankers, Road Trains and Agribots past the ones it uses (trucks
+  for its far Depots, Tankers for its Fuel runs and one more, a Road Train for a Terminal or a far Depot, Agribots for
+  its farms and Grove Planters, sites too, and one more) that have stood idle two minutes (or any with nothing to do
+  while it has three or more past those), then Workers past the ones its buildings call for and 4 more, then Haulers
+  past the ones it wants and 2 more (4 at least), go to its Foundry to be recycled, at most 4 on their way at once and
+  never one at work or carrying goods, until the room is there; its Foundry fills it with warbots. It scraps the same
+  spares when it's starved (no Alloy or no Chips for a minute and a half, `P.dry`, with under one a minute being made;
+  short of Chips, only vehicles, which give Chips back), and on Medium and up one vehicle, Agribot or Hauler idle five
+  minutes at a time while its Foundry waits for the parts it would give back. A kind it has scrapped isn't ordered
+  again for five minutes (`P.scrapT`). **Crystal** (every robot takes a Chip, every Chip a Crystal) runs short
   by how long what's left would last, in stock and in the ground on its land, at the rate its Chip Fabs burn it
   (`goodRates`; under `AI_CRYSTAL_MINS`, 10 minutes, counting at least `AI_CRYSTAL_BURN`, 4 a minute, once it has a
   Foundry), not only by the clusters left (`P.short`, by tiles, came only once the last three were all there was,
