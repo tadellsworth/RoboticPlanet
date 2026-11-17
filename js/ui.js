@@ -6179,6 +6179,7 @@ function botActivity(u) {
   const t = u.task;
   if (BOTS[u.type].air) { const b = getE(u.home); return `${planeStatus(u)[0].toUpperCase()}${planeStatus(u).slice(1)}` + (b && !b.dead ? ` (based at the Airfield ${dirText(getE(S.players[u.owner].lander) || b, b)} from the Command Base)` : ' (no Airfield yet)'); }
   const nm = (id) => { const b = getE(id); return b ? BDEFS[b.type].name : 'a building'; };
+  if (recyclingNow(u)) return `Being taken apart at the Bot Foundry (${Math.max(1, Math.ceil(recycleTime(u.type) - t.t))} s)`;
   if (t && t.type === 'recycle') return u.packing ? 'Going to be recycled: packing up first' : 'Going to be recycled at the Bot Foundry';
   if (u.recycleTo) return 'Going to be recycled: taking cover from enemy warbots first, then on to the Bot Foundry';
   if (BOTS[u.type].siege) {
@@ -6299,8 +6300,8 @@ function refreshRecycle(u) {
   const btn = $('sh-recycle'), hint = $('sh-recycle-hint'), got = recycleText(u.type);
   const on = recycling(u), why = on ? '' : recycleWhy(u);
   const label = on ? 'Keep this unit' : 'Recycle this unit';
-  const text = on ? `On its way to the Bot Foundry, to be taken apart for ${got}. Keep this unit calls it off (so does any other order).`
-    : why || `It goes to the nearest Bot Foundry and is taken apart there: ${got} (half of what it took to make) goes into the Foundry's stock, and its place under the robot limit (${S.mode === 'colony' ? MAX_BOTS_COLONY : MAX_BOTS}) is free again.`;
+  const text = on ? `${recyclingNow(u) ? 'Being taken apart at the Bot Foundry' : 'On its way to the Bot Foundry, to be taken apart'} for ${got}. Keep this unit calls it off (so does any other order).`
+    : why || `It goes to the nearest Bot Foundry and is taken apart there (${recycleTime(u.type)} s): ${got} (half of what it took to make) goes into the Foundry's stock, and its place under the robot limit (${S.mode === 'colony' ? MAX_BOTS_COLONY : MAX_BOTS}) is free again.`;
   if (btn.textContent !== label) btn.textContent = label;
   btn.disabled = !!why;
   btn.classList.toggle('danger', !on);

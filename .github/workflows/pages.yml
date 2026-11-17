@@ -24,6 +24,13 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
+      # The build number: the commit's short hash and the date, written into index.html's terrafall-build tag (it reads
+      # "dev" in the repository), so a report sent with Send feedback says which commit it came from.
+      - name: Stamp the build
+        run: |
+          BUILD="${GITHUB_SHA::7} $(date -u +%Y-%m-%d)"
+          sed -i "s|<meta name=\"terrafall-build\" content=\"dev\">|<meta name=\"terrafall-build\" content=\"$BUILD\">|" index.html
+          grep -q "content=\"$BUILD\"" index.html && echo "Build $BUILD" || echo "::warning::index.html has no terrafall-build tag to stamp"
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:

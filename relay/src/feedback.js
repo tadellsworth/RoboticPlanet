@@ -2,14 +2,16 @@
  * Player feedback: the game's "Send feedback" form posts here, and each report becomes an issue in a private GitHub
  * repository, labelled by type (bug, idea, balance, other) and "from-game". A bug report can bring the player's
  * current game (a save file): it is committed to saves/ in the same repository and linked from the issue, so the
- * bug can be replayed exactly.
+ * bug can be replayed exactly. A picture of the map (a JPEG the game makes of its map canvas) goes to shots/ the same
+ * way, shown in the issue.
  *
- *   POST /feedback   JSON { type, text, contact?, meta?, save?, website? }
+ *   POST /feedback   JSON { type, text, contact?, meta?, save?, shot?, website? }
  *     type     'bug' | 'idea' | 'balance' | 'other'
  *     text     what the player wrote (3 to 5000 characters)
  *     contact  optional: an email or name to reply to (up to 200 characters)
  *     meta     optional: { version, device, screen, mode, map, seed, time, ... } added by the game (small)
  *     save     optional: the save file (JSON text, up to 8 MB)
+ *     shot     optional: a picture of the map, as a data: URL of a JPEG, PNG or WebP (up to 1 MB of text)
  *     website  a field people can't see: anything in it marks a bot, and the report is dropped
  *   → 200 { ok: true, n: <issue number> } | 4xx/5xx { ok: false, why }
  *
@@ -24,7 +26,8 @@
  */
 
 const TYPES = { bug: 'Bug', idea: 'Idea', balance: 'Balance', other: 'Other' };
-const MAX_TEXT = 5000, MAX_CONTACT = 200, MAX_META = 4000, MAX_SAVE = 8 << 20;
+const MAX_TEXT = 5000, MAX_CONTACT = 200, MAX_META = 4000, MAX_SAVE = 8 << 20, MAX_SHOT = 1 << 20;
+const SHOT = /^data:image\/(jpeg|png|webp);base64,([A-Za-z0-9+/]+={0,2})$/;
 const PER_HOUR = 5, PER_DAY = 20;
 
 export const CORS = {
@@ -60,7 +63,7 @@ export async function handleFeedback(request, env) {
   if (request.method !== 'POST') return reply(405, { ok: false, why: 'post' });
   if (!env.FEEDBACK_TOKEN || !env.FEEDBACK_REPO) return reply(503, { ok: false, why: 'off' });
   const size = +(request.headers.get('content-length') || 0);
-  if (size > MAX_SAVE + 64 * 1024) return reply(413, { ok: false, why: 'big' });
+  if (size > MAX_SAVE + MAX_SHOT + 64 * 1024) return reply(413, { ok: false, why: 'big' });
   let f;
   try { f = await request.json(); } catch (e) { return reply(400, { ok: false, why: 'json' }); }
   if (!f || typeof f !== 'object') return reply(400, { ok: false, why: 'json' });
@@ -76,6 +79,7 @@ export async function handleFeedback(request, env) {
     if (m.length <= MAX_META) meta = f.meta;
   }
   const save = typeof f.save === 'string' && f.save.length <= MAX_SAVE ? f.save : '';
+  const shot = typeof f.shot === 'string' && f.shot.length <= MAX_SHOT ? SHOT.exec(f.shot) : null;
 
   // Rate limit by a hash of the address (the address itself is never stored).
   const who = await sha((request.headers.get('cf-connecting-ip') || 'local') + ':' + (env.FEEDBACK_REPO || ''));
@@ -105,7 +109,13 @@ export async function handleFeedback(request, env) {
   if (save) {
     const path = `saves/${stamp}-${who.slice(0, 6)}.json`;
     const r = await gh(`/repos/${repo}/contents/${path}`, 'PUT', { message: `Save file for a ${TYPES[type].toLowerCase()} report`, content: base64(save) });
-    saveLine = r.ok ? `**Save file:** [${path}](../blob/HEAD/${path}) (load it in the game: Pause → Load a save file)` : `**Save file:** couldn't be stored (GitHub said ${r.status})`;
+    saveLine = r.ok ? `**Save file:** [${path}](../blob/HEAD/${path}) (load it in the game: main menu → Load a save file)` : `**Save file:** couldn't be stored (GitHub said ${r.status})`;
+  }
+  let shotLine = '';
+  if (shot) {
+    const path = `shots/${stamp}-${who.slice(0, 6)}.${shot[1] === 'jpeg' ? 'jpg' : shot[1]}`;
+    const r = await gh(`/repos/${repo}/contents/${path}`, 'PUT', { message: `Picture of the map for a ${TYPES[type].toLowerCase()} report`, content: shot[2] });
+    shotLine = r.ok ? `**Picture of the map:** [${path}](../blob/HEAD/${path})\n\n![The map as the player saw it](../blob/HEAD/${path}?raw=true)` : `**Picture of the map:** couldn't be stored (GitHub said ${r.status})`;
   }
 
   const first = text.split('\n')[0].replace(/\s+/g, ' ').slice(0, 70);
@@ -117,6 +127,7 @@ export async function handleFeedback(request, env) {
     '---',
     contact ? `**Contact:** \`${contact}\`` : '**Contact:** none given',
     saveLine,
+    shotLine,
     rows.length ? '\n| | |\n|---|---|\n' + rows.join('\n') : '',
     '',
     `\n_Sent from the game's feedback form; sender ${who.slice(0, 8)}._`, // (a blank line first: it would join the table)
