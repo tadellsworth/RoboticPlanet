@@ -1715,7 +1715,8 @@ function moveDirect(u, x, y, dt, cap) {
 function dispatch(p) {
   railPlan(p);
   const blds = [];
-  for (const b of S.buildings) if (b.owner === p && !b.dead && !evacuated(b) && !shunned(b)) blds.push(b); // nothing inside a blast ring being evacuated, in an enemy gun's reach or with enemy warbots about
+  const press = convoysPress(p);
+  for (const b of S.buildings) if (b.owner === p && !b.dead && !evacuated(b) && (!shunned(b) || (press && BDEFS[b.type].terminal))) blds.push(b); // nothing inside a blast ring being evacuated, in an enemy gun's reach or with enemy warbots about (but a Terminal whose convoys press on)
   blds.sort((a, c) => prioRank(a) - prioRank(c) || a.born - c.born);
 
   // Keep a worker or two free to build. If raids or new buildings took them all, pull one off the
@@ -2046,7 +2047,8 @@ function dispatch(p) {
       // below): picked as the nearest with any at all, a Harvester's few Fiber or a Depot's last Stone, no train was
       // ever sent and the run waited for good while the Command Base had plenty.
       const termMin = BDEFS[r.b.type].terminal && r.b.built ? r.n : 0;
-      for (const s of blds) {
+      // (Convoys that press on take the run from storage enemy warbots are at too: a Command Base under siege.)
+      for (const s of termMin && press ? S.buildings.filter((b) => b.owner === p && !b.dead && !evacuated(b)) : blds) {
         if (s === r.b || sup(s, r.g) <= 0 || !reachable(s) || !linked(s, r.b)) continue;
         if (termMin && (sup(s, r.g) < termMin || !truckLinked(s, r.b))) continue;
         // (Not from a neighbour that feeds it this good by conveyor: that hands it over itself.)
@@ -4818,7 +4820,7 @@ function damageBot(u, dmg, sx, sy, nat) {
 }
 
 function hitBuilding(b, dmg, by) {
-  if (calmB(b)) return; // nothing shoots on a Trade Post's ground
+  if (calmShield(b)) return; // nothing shoots on a Trade Post's ground (but a Terminal's site there: see calmShield)
   dmg = keepShield(b, dmg);
   b.armor -= dmg;
   b.lastHit = S.time;
@@ -5199,8 +5201,11 @@ function gunOver(p, x, y) {
   return best;
 }
 
-/** Does robot u stay clear of enemy guns (anything but a fighter: warbots, Howitzers and aircraft go in)? */
-function gunShy(u) { const bt = BOTS[u.type]; return !isArmy(u) && !bt.siege && !bt.air && !bt.wild && !bt.sea && !bt.rail && !(u.trade && escorted(u)); }
+/**
+ * Does robot u stay clear of enemy guns (anything but a fighter: warbots, Howitzers and aircraft go in)? Not a trade
+ * convoy with its escort, nor a Road Train of a rival whose convoys press on (convoysPress).
+ */
+function gunShy(u) { const bt = BOTS[u.type]; return !isArmy(u) && !bt.siege && !bt.air && !bt.wild && !bt.sea && !bt.rail && !(u.trade && escorted(u)) && !(bt.train && convoysPress(u.owner)); }
 /** Has trade convoy u its escort with it (within 6 tiles)? Then it doesn't give way to enemy warbots: it holds while they fight (convoyHolds). */
 function escorted(u) {
   for (const v of S.bots) if (!v.dead && v.owner === u.owner && v.task && v.task.type === 'escort' && v.task.bot === u.id && dist2(v.x, v.y, u.x, u.y) < 36) return true;
@@ -6189,8 +6194,9 @@ function overGap(a, b) {
   return gap;
 }
 
-/** Walk up to an enemy building and hit it. Returns null if it can't be reached. */
+/** Walk up to an enemy building and hit it. Returns null if it can't be reached (or can't be hurt: on a Trade Post's ground). */
 function strikeBuilding(u, b, dt, power) {
+  if (calmShield(b)) return null; // (a finished Trade Terminal there: shots would only waste Ammo, see hitBuilding)
   const bt = BOTS[u.type], reach = bt.shield ? 1.7 : bt.flame ? 2.05 : WARBOT_HIT.reach; // (a Bulwark goes in closest, in front of its group)
   if (dist2(u.x, u.y, b.x + 0.5, b.y + 0.5) <= reach * reach) {
     u.path = null;
@@ -6842,9 +6848,9 @@ function holdRally(u, t, r, dt, power) {
       // (A flag planted for an Attack goes for that building first; the rival AI's marches for the gun that covers
       // the flag, r.first, then on as usual: warbots only shoot back at robots, so the gun has to be their target.)
       const own = r.target ? getE(r.target) : r.first ? getE(r.first) : null;
-      if (own && !own.dead && foes(own.owner, u.owner)) tgt = own;
+      if (own && !own.dead && foes(own.owner, u.owner) && !calmShield(own)) tgt = own;
       else for (const e of S.buildings) {
-        if (e.dead || !foes(e.owner, u.owner)) continue;
+        if (e.dead || !foes(e.owner, u.owner) || calmShield(e)) continue; // (not a finished Trade Terminal on a Trade Post's ground: nothing is hurt there)
         const d = dist2(e.x + 0.5, e.y + 0.5, r.x, r.y);
         if (d < bd) { bd = d; tgt = e; }
       }
@@ -7219,7 +7225,7 @@ function orderRepair(owner, ids, b) {
 
 /** Send selected warbots to attack an enemy building. Only armed ones go. */
 function orderAttack(owner, ids, target) {
-  if (!target || target.dead || !foes(target.owner, owner) || calmB(target)) return 0; // (nothing is attacked on a Trade Post's ground)
+  if (!target || target.dead || !foes(target.owner, owner) || calmShield(target)) return 0; // (nothing is attacked on a Trade Post's ground, but a Terminal's site)
   const bots = orderable(owner, ids).filter((u) => botArmed(u));
   for (const u of bots) { readyForOrder(u); u.task = { type: 'attack', target: target.id }; }
   if (bots.length) breachCheck(owner, bots, target.x, target.y, true);
@@ -7851,7 +7857,7 @@ function attackAvailable(owner, target, all) {
  */
 function sendAttack(owner, target, count, all, hurry, lead) {
   let sent = 0;
-  if (calmB(target)) return 0; // (nothing is attacked on a Trade Post's ground)
+  if (calmShield(target)) return 0; // (nothing is attacked on a Trade Post's ground, but a Terminal's site)
   const squad = [];
   for (const posted of usesPosts(owner) ? [false, true] : [false]) {
     for (const b of attackSources(owner, target, posted, all)) {
@@ -11556,6 +11562,15 @@ function fmtSecs(s) { s = Math.max(0, Math.ceil(s)); return s < 60 ? `${s} s` : 
 
 /* ------------------------------------------------------------------ trade convoys */
 
+/**
+ * Do player p's trade convoys press on whatever comes? Only in a mission that says so (`pressOn`: Convoy), and only a
+ * rival's (player 0 is the person): its Road Trains set out on schedule from a Command Base under siege, take the run
+ * from storage enemy warbots are at, and never turn back from warbots in their way (gunShy), so a raid on the road can
+ * always catch one. (Unescorted, a convoy turns back from a band on its lane, and a besieged base sends none out: the
+ * mission's "Wreck a rival trade convoy" could be left with nothing to wreck.)
+ */
+function convoysPress(p) { return p > 0 && !!(S.mission && S.mission.pressOn); }
+
 /** The Terminal convoy u is running for (a Road Train, Freight Train or Tanker to or from one), or null. */
 function convoyOf(u) { const b = u.trade ? getE(u.trade) : null; return b && !b.dead && BDEFS[b.type].terminal ? b : null; }
 
@@ -11682,6 +11697,12 @@ function calmAt(x, y) {
 }
 /** Is building b on a Trade Post's ground? */
 function calmB(b) { return calmAt(b.x + 0.5, b.y + 0.5); }
+/**
+ * Is building b out of the robots' reach, a finished one on a Trade Post's ground? A Trade Terminal's construction site
+ * there is not: enemy robots can wreck it like any site, as they could a site anywhere else (the owner's call, Nov 2026:
+ * warbots used to fire at one for ever). Bombs, shells and Missiles still spare everything there.
+ */
+function calmShield(b) { return b.built && calmB(b); }
 
 /* ------------------------------------------------------------------ crawlers */
 

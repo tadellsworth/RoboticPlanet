@@ -143,6 +143,27 @@ The colony learns the truth, the Murmur rise from what the war left behind, and 
 - **Story:** The colony sends its report: "Ithaca I prepared." It listens. "Home signal analysis complete. No further instructions will follow." A pause. "Continuing current directive." The credits roll over the colony's roads, lit at night for freight only.
 - **Post-credits hook:** among the machine traffic from other Catalog worlds, one signal matches no robot protocol.
 
+## The world and its set pieces (notes for when the campaign is built)
+
+Decided by the owner, Nov 17 2026. Every game gets the living-world layer: Earth's animals from the Pathfinder's garden (LORE.md) and the native creatures of the strange regions, which scatter from the fighting and fall silent before the Murmur; cloud shadows; wrecks that slowly overgrow; and a beam of light each Command Base shines into the sky every night, for ships that never come. The campaign builds its set pieces on top of that layer:
+
+- **1. Terrafall:** the first murmur is logged after the birds go quiet.
+- **2. Passenger Standard:** the empty town is the Pathfinder's garden at its most painful. Deer graze the lawns, birds nest in the bus shelter, and the welcome signs light up at night. A cargo list can be tapped: seed packets, school desks, children's shoes.
+- **3. The Ledger:** herds cross the Long Grass, and the convoys pass through them.
+- **4. Arrival in One Day:** geese cross Emberwood in a V. The Herald's beacon has burned every night for 31 years.
+- **5. Ringfall:** before the road lights die one by one, the animals go quiet first.
+- **6. Day 12,054:** the Warden's beacon has burned 12,054 nights in a row.
+- **7. The Delta:** herons in the shallows, fireflies over the channels at night.
+- **10. Argos:** no animals and no sound. After nine missions of birdsong, the silence should land.
+- **11. What the War Feeds:** the Bloom's native floaters dim wherever the Murmur feed.
+- **12. Urban Renewal:** birds live in the Architect's empty city, and it is a city built for no one.
+- **14. The Deep:** when the mound falls and the murmur stops, the glow-worms on the cavern walls brighten again.
+- **15. No Further Instructions:** the Pathfinder's hull stands in its oldest garden. Its seed-vault manifest is the last log recovered: the colony learns what the probe did, and that it worked. "Ithaca I prepared." The animals are the proof, and no one is coming to see it.
+
+**For every hand-made campaign map:**
+- named places and landmarks (a waterfall, a fallen ring shard with a crystal spire, a stone forest, a frozen lake), labelled in faded atlas lettering when zoomed out;
+- the wrecks of earlier landings that failed, half-buried, each with a log to recover. These can fill the Archive pages planned in IDEAS.
+
 ## Open questions
 
 - [ ] Is the player's colony COBALT? Any callsign works; COBALT fits because it wrote the Accord's road standards.

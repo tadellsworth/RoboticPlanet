@@ -1,0 +1,41 @@
+/* The Murmur forms sheet: one reading column, the art on its own plates; light and dark themes */
+:root {
+  --bg: #f2f0f3; --surface: #ffffff; --plate: #131119; --fg: #1d1a22; --muted: #655f6e; --line: #dcd7e0;
+  --accent: #6c3fc4; --display: "Space Grotesk", "Segoe UI", system-ui, sans-serif; --body: Inter, "Segoe UI", system-ui, sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #121016; --surface: #1b1820; --plate: #09080c; --fg: #ebe7f0; --muted: #a39cad; --line: #2e2a35; --accent: #b99bff; color-scheme: dark; } }
+:root[data-theme="dark"] {
+  --bg: #121016; --surface: #1b1820; --plate: #09080c; --fg: #ebe7f0; --muted: #a39cad; --line: #2e2a35; --accent: #b99bff; color-scheme: dark; }
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--fg); font: 15px/1.6 var(--body); margin: 0;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 32px 64px; }
+main { max-width: 1260px; margin: 0 auto; display: grid; gap: 64px; }
+h1, h2, h3 { font-family: var(--display); text-wrap: balance; margin: 0; letter-spacing: -0.01em; }
+h1 { font-size: clamp(30px, 5vw, 46px); line-height: 1.08; }
+h2 { font-size: 28px; } h3 { font-size: 19px; margin-top: 10px; }
+p { margin: 0; max-width: 72ch; }
+code { font: 0.86em var(--mono); color: var(--accent); }
+.eyebrow { font: 500 12px var(--mono); text-transform: uppercase; letter-spacing: 0.12em; color: var(--accent); }
+.lede { font-size: 17px; color: var(--muted); }
+header.top, section { display: grid; gap: 16px; min-width: 0; }
+.plate { background: var(--plate); border-radius: 6px; overflow: hidden; line-height: 0; width: fit-content; max-width: 100%; }
+.plate img { display: block; max-width: 100%; height: auto; }
+figure { margin: 0; display: grid; gap: 6px; min-width: 0; align-content: start; }
+figcaption { font-size: 13px; color: var(--muted); max-width: 60ch; }
+.dn { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 380px), 1fr)); gap: 14px; align-items: start; }
+.sprites { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 192px), 192px)); gap: 14px; }
+.pair { display: flex; flex-wrap: wrap; gap: 14px; align-items: start; }
+.pair figure { width: min(100%, 384px); }
+.pair figure:first-child { width: 192px; }
+.phone { display: flex; flex-wrap: wrap; gap: 18px; align-items: start; }
+.phone .plate img { image-rendering: auto; }
+.gridwrap { overflow-x: auto; }
+table { border-collapse: collapse; font-size: 14px; }
+.grid th, .grid td { text-align: left; padding: 7px 18px 7px 0; border-bottom: 1px solid var(--line); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.grid thead th { font: 500 12px var(--mono); text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
+.grid th.rowh { font: 600 14px var(--display); }
+.tag { font: 500 11px var(--mono); color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; margin-left: 6px; }
+.questions ol { margin: 0; padding-left: 22px; display: grid; gap: 10px; max-width: 80ch; }
+.notes p { color: var(--muted); font-size: 14px; }

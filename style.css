@@ -488,6 +488,59 @@ canvas.chart { display: block; width: 100%; height: 170px; touch-action: pan-y; 
 /* The pause menu's line of challenge modifiers (this game's). */
 .p-mods { margin: -2px 0 10px; font-size: 13px; line-height: 1.4; color: #ffd2b8; }
 .p-mods b { color: var(--muted); font-weight: 800; }
+/* The pause menu (pauseView in js/ui.js). Main view: Resume, a grid of compact buttons, the saves under a label, the
+   save line, then Feedback and Save & quit. Settings view: the volumes and Graphics, then the switches and Time of day. */
+#screen-pause { padding-top: calc(var(--safe-t) + 10px); padding-bottom: calc(var(--safe-b) + 10px); }
+.card.p-card { padding: 16px 16px 14px; }
+.p-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; }
+.p-row { display: flex; gap: 8px; }
+.p-row > .btn { flex: 1 1 0; min-width: 0; }
+.p-grid .btn, .p-row .btn { min-height: 44px; padding: 8px 6px; font-size: 15px; line-height: 1.2; }
+.p-save { margin-top: 12px; }
+.p-label { display: block; margin: 0 0 5px 2px; font-size: 12px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+#p-saved { margin: 8px 2px 0; font-size: 12px; line-height: 1.35; }
+.p-foot { flex-wrap: wrap; margin-top: 12px; }
+.p-foot .p-arm { flex-basis: 100%; } /* (multiplayer: Tap again to leave..., a line of its own) */
+.p-set-head h2 { font-size: 22px; }
+.p-box { display: flex; flex-direction: column; margin-top: 6px; padding: 0 12px; border: 1px solid var(--line); border-radius: 12px;
+  background: rgba(255,255,255,0.03); text-align: left; }
+.p-box > :not([hidden]) ~ :not([hidden]) { border-top: 1px solid var(--line); } /* (a line between rows) */
+.p-box > .gfx-row { padding-top: 2px; }
+/* An on/off setting: its name, and a switch on the right; the whole row is the button. */
+.p-sw-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; width: 100%; min-height: 44px; padding: 2px 0;
+  border: 0; border-radius: 0; background: none; text-align: left; font-size: 14px; font-weight: 400; }
+.p-sw { display: inline-flex; align-items: center; gap: 8px; flex: none; font-size: 13px; font-weight: 700; color: var(--muted); }
+.p-sw i { position: relative; width: 40px; height: 24px; border-radius: 12px; background: rgba(255,255,255,0.16); transition: background 0.15s; }
+.p-sw i::after { content: ''; position: absolute; top: 3px; left: 3px; width: 18px; height: 18px; border-radius: 50%; background: #c9d0db; transition: transform 0.15s; }
+.p-sw-row[aria-checked="true"] .p-sw { color: var(--accent); }
+.p-sw-row[aria-checked="true"] .p-sw i { background: var(--accent); }
+.p-sw-row[aria-checked="true"] .p-sw i::after { transform: translateX(16px); background: #fff; }
+.p-tod-row > span { white-space: nowrap; }
+.p-tod-seg { flex: 0 1 210px; padding: 2px; }
+.p-tod-seg button { padding: 7px 4px; font-size: 14px; }
+.p-tod .p-tod-note { margin: -2px 0 8px; font-size: 12px; line-height: 1.35; }
+#screen-pause button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+#screen-pause .seg button:focus-visible, #screen-pause .p-sw-row:focus-visible { outline-offset: -2px; }
+/* A phone held sideways: the main view in fewer, wider rows (Resume beside Pause for everyone, the four buttons in a row,
+   the saves beside their label), and Settings in two columns. */
+@media (orientation: landscape) and (max-height: 519px) {
+  #screen-pause { padding-top: calc(var(--safe-t) + 8px); padding-bottom: calc(var(--safe-b) + 8px); }
+  .card.p-card { width: min(100%, 640px); padding: 12px 16px; }
+  .card.p-card.p-set { width: min(100%, 780px); }
+  .p-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 14px; }
+  .p-head h2 { margin: 0; font-size: 21px; }
+  .p-head .p-mods { margin: 0; }
+  .p-top { display: flex; gap: 8px; }
+  .p-top .btn.big { padding: 9px 10px; }
+  .p-grid { grid-template-columns: repeat(4, 1fr); }
+  .p-save { display: flex; align-items: center; gap: 10px; margin-top: 8px; }
+  .p-save .p-label { margin: 0; }
+  .p-save .p-row { flex: 1; }
+  #p-saved { margin-top: 6px; }
+  .p-foot { margin-top: 8px; }
+  #p-setview:not([hidden]) { display: grid; grid-template-columns: 1fr 1fr; align-items: start; gap: 0 12px; }
+  #p-setview .p-set-head { grid-column: 1 / -1; }
+}
 .logo {
   margin: 0; font-size: clamp(34px, 11vw, 46px); letter-spacing: 0.08em; font-weight: 900; text-align: center;
   background: linear-gradient(180deg, #ffffff, var(--accent)); -webkit-background-clip: text; background-clip: text; color: transparent;
@@ -496,9 +549,10 @@ canvas.chart { display: block; width: 100%; height: 170px; touch-action: pan-y; 
 .mode-desc { color: var(--muted); font-size: 13px; margin: 8px 2px 0; min-height: 36px; }
 .seed { font-variant-numeric: tabular-nums; font-weight: 700; }
 .sliders { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; }
-.slider-row { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 2px 10px; font-size: 14px; }
-.slider-row output { font-weight: 700; font-variant-numeric: tabular-nums; color: var(--accent); }
-.slider-row input { grid-column: 1 / -1; width: 100%; height: 28px; margin: 0; accent-color: var(--accent); touch-action: pan-x; }
+/* (the pause menu's volumes: a row each, the name, the slider and its value) */
+.slider-row { display: grid; grid-template-columns: 5.2em minmax(0, 1fr) 2.9em; align-items: center; gap: 10px; min-height: 40px; font-size: 14px; }
+.slider-row output { font-weight: 700; font-variant-numeric: tabular-nums; text-align: right; color: var(--accent); }
+.slider-row input { width: 100%; height: 28px; margin: 0; accent-color: var(--accent); touch-action: pan-x; }
 .help-card { width: min(100%, 560px); max-height: calc(100vh - 32px); display: flex; flex-direction: column; }
 /* (The visible height on a phone: dvh leaves out the browser's bars, and the safe areas the screen's padding keeps
    clear are taken off too, so the button at the bottom is never under the home bar.) */
@@ -944,6 +998,7 @@ body.mode-road .objrow { display: none; }
   .msgs-btn, .toast-go { min-width: 44px; min-height: 44px; }
   .gchip { min-height: 44px; padding-right: 12px; }
   #screen-pause .slider-row input { height: 44px; }
+  #screen-pause .p-tod-seg button { min-height: 44px; }
   .help-toc a { display: inline-flex; align-items: center; min-height: 44px; }
 }
 /* The top bar grows only where there's height for it (not on a phone held sideways). */
@@ -974,7 +1029,7 @@ body.mode-road .objrow { display: none; }
 .gtag small { color: var(--muted); font-weight: 600; margin-left: 4px; }
 canvas.chart.small { height: 110px; }
 
-/* sound volume sliders in the pause menu */
+/* Boosts (the hidden screen: three taps on the clock) */
 .boost-row { text-align: left; padding: 8px 10px; margin: 8px 0; border: 1px solid var(--line); border-radius: 12px; background: rgba(255,255,255,0.03); }
 .boost-head { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
 .boost-head .dot { width: 10px; height: 10px; border-radius: 50%; flex: none; }
@@ -985,13 +1040,14 @@ canvas.chart.small { height: 110px; }
 .ban-chip.on { background: rgba(255,90,110,0.16); border-color: rgba(255,90,110,0.7); color: #ffb3bd; }
 .ban-row .hint { margin: 6px 0 0; }
 .boost-btns .btn { padding-left: 4px; padding-right: 4px; }
-.sound-sliders { display: grid; gap: 6px; margin-top: 8px; padding: 8px 12px; border: 1px solid var(--line); border-radius: 12px; background: rgba(255,255,255,0.03); text-align: left; }
-/* Graphics (pause menu): its name and how sharp the map is drawn now, the four steps under them, and what the step does. */
-.gfx-row { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 4px 10px; margin-top: 2px; font-size: 14px; }
-.gfx-row output { font-weight: 700; font-size: 13px; font-variant-numeric: tabular-nums; color: var(--accent); }
-.gfx-row .seg, .gfx-note { grid-column: 1 / -1; }
-.gfx-seg button { padding: 8px 4px; font-size: 14px; }
-.gfx-note { color: var(--muted); font-size: 12px; line-height: 1.35; }
+/* Graphics (pause menu, Settings): its name and how sharp the map is drawn now on the left, the four steps on the right,
+   and what the step does under them. */
+.gfx-row { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 4px 10px; font-size: 14px; }
+.p-set-l { display: flex; flex-direction: column; line-height: 1.25; }
+.gfx-row output { font-weight: 700; font-size: 12px; font-variant-numeric: tabular-nums; color: var(--accent); }
+.gfx-row .seg { padding: 2px; }
+.gfx-note { grid-column: 1 / -1; padding-bottom: 6px; color: var(--muted); font-size: 12px; line-height: 1.35; }
+.gfx-seg button { padding: 7px 2px; font-size: 14px; }
 @media (pointer: coarse) { #screen-pause .gfx-seg button, #m-gfx button { min-height: 44px; } }
 /* The Army panel (Q): order buttons in a grid, and list rows with their buttons on the right. */
 .army-cmds { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin: 8px 0 4px; }

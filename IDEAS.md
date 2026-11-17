@@ -14,6 +14,40 @@ Still open: a neutral, shared exchange the rivals compete over; contracts for Ch
 
 ## Held for later
 
+- **Workers should pave roads outward from home** (the owner, Nov 17 2026: rework). Today a Worker paving a planned
+  road often walks to its far end first, runs its battery low out there, and paves back toward base, so the road is
+  no use until it's finished and the Worker can be stranded. Wanted: a road always grows from the end nearest the
+  home network (the closest end possible) outward, one joined tile after another, usable as it goes. What the code
+  does now (`nextPaveTile` in `js/sim.js`): the worker takes the nearest planned tile, with a penalty of only 8 tiles
+  for one that doesn't join anything; and a tile beside *any* building or site counts as joining, so the tile at a
+  far-off site's door counts as much as one at the end of a road that reaches home. A rework would:
+  - count only tiles that join road already on the home network (or a foothold's own network, for its workers);
+  - keep a worker on the growing end;
+  - send it to charge before it walks out further than its battery brings it back.
+  The rival's roads use the same code, so measure rival-vs-rival games before and after.
+- **Room to grow in the single-file game** (owner's to-do, Nov 17). `dist/terrafall.html` must stay under 16 MB (its
+  host's limit for a page; each file beside it has its own 16 MB). It reached 16,346 KB with the Hollow's and the new
+  Fiber and Oil art, so the Forest's and Hoarfell's biome art moved into bundles beside the page like the newer biomes'
+  (`LAZY_BIOMES`), freeing about 1 MB (15,409 KB). That buys a few batches of art and code, not the long run. The page
+  still carries every other image as text (about 9.7 MB of WebP, a third more once inlined): buildings 5 MB (each in two
+  team colours), bots 2 MB, effects 1.2 MB. The lasting fix is to move the rest of the art beside the page too, in a
+  few bundles (buildings, bots, effects and the Desert) that load before the game starts (or as the Lore and night
+  sets do), so the page holds code alone and can't fill up again. Then check that the single file still opens straight
+  from a folder and still plays offline. Meanwhile, the biggest single images are `effects/nuke-blast-sheet.webp`
+  (377 KB) and `effects/fx-fuel-blast.webp` (125 KB), if a quick re-encode is ever wanted.
+- **A new look for the oil seeps** (owner's to-do, Nov 17: "I don't like the current one"). The owner's two reference
+  pictures show a puddle of crude: glossy, jet black, with a soft, wavy, irregular outline (lobes and pinched waists,
+  no straight edges), a few separate small round droplets and smaller puddles scattered beside it, faint dark-grey
+  sheen patches inside, and thin bright white highlights along the lower (front) rims, as if lit from above and
+  behind. Today's seep is a texture drawn across all its tiles as one shape (`drawSeep` in `js/render.js`, the
+  `oil-seep` art) with its night glow in `resourceGlow`; the Hollow's seeps use the same art. A redo would make the
+  puddle (and its droplets) the art, keep it reading as one shape across a seep's tiles, darken as it is pumped dry,
+  and keep a faint gleam at night. Render a sample sheet for the owner to pick from first.
+- **The rival doctrines' texts** (owner: on hold until the owner has finished fine-tuning the rivals). Then play each
+  doctrine again, measure what it really does, and rewrite its text to match. Known gaps are under "Doctrine balance
+  and text" in the November review below.
+- **Bigger graphics upgrades** (owner: on hold). More detailed close-zoom art and a WebGL renderer: see the entry of
+  that name below.
 - **A hauler turned back by raiders can still pass close to them** (a known edge case): a hauler with a load turns
   back before rival warbots on the road ahead, but on some maps the only other way to storage runs back past them
   (within about 2 tiles), and a worker caught at a site can fail to find cover. Seen with the foe-shy test's scenario
@@ -206,18 +240,40 @@ built and played through headless:
   so Iron Road asks for one. Trains bringing a station site its materials would make a track-only line possible.
 - **Bombs on a Command Base** didn't visibly dent it in the Final Descent solver runs (armor 30/30 at each minute
   mark). Not needed for the goal, but worth a look with the bombers.
-- **Kits and Fiber, Trade Winds.** From Pipe Dreams on the kits bring a Grove Planter (`KIT8`): without one the
-  Harvester's 30-45 Fiber were gone into the Smelter in 5-8 minutes and an idle player lived on salvage. Trade Winds'
-  kit is still `KIT7` (it was left alone while the trade missions were reworked): an idle player there runs low on
-  Fiber at about 6 minutes. Its comment on seed 1445's events (a flare over by 9:36) predates the shorter gap between
-  events in missions (`MISSION_EVENT_GAP`): the flare is now over by 6:33.
+- **Kits and Fiber, Trade Winds** (done). From Pipe Dreams on the kits bring a Grove Planter (`KIT8`): without one the
+  Harvester's 30-45 Fiber were gone into the Smelter in 5-8 minutes and an idle player lived on salvage. Trade Winds
+  was still on `KIT7` (it was left alone while the trade missions were reworked) and now has `KIT8` too: left idle on
+  Normal, its colony had made 30 Fiber and no more by 6 minutes, with none in store from 8; with the Grove Planter it
+  makes about 7 a minute (110 by 16 minutes) and keeps 9-12 in store. Its comment on seed 1445's events now says what
+  they are since the shorter gap between events in missions (`MISSION_EVENT_GAP`): Ringfall 2:30-3:21 and a solar flare
+  5:22-6:33 (not over by 9:36). Played with its hints' steps (Road Trains +1, dock at the nearer post and Lay road, then
+  Send Stone and Bring back Alloy), it is won at 6:33 on Easy and Normal (the second event is the last goal met) and at
+  8:06 on Hard (the third run), as with `KIT7`: no hint or line of the briefing needed changing. Long Haul (`KIT8`
+  without the Mine now: its Ore is far up the valley) and Convoy have it too. Long Haul played at a newcomer's pace
+  (its hints' steps, the AI off) is won at 6:41, 7:18 and 8:05 on Easy, Normal and Hard (7:05, 7:20 and 7:53 before).
 - **Mostly waiting.** Breakthrough is mostly research timers, and Assembly Line and Pipe Dreams take a scripted player
   4-7 minutes; their Hard clocks are generous on purpose.
-- **Convoy against a rival with the opening** (for the trade work). Mission rivals now have the rival's opening, so
-  Convoy's Salvager (Medium on Normal, Normal on Hard) keeps an army: the old one's was gone by minute 10 to 15. Played
-  by the AI alone (no hint steps), Normal went from still open at 41 minutes to won at 19, and Hard from lost on the
-  clock to the Command Base lost at 21 minutes (23 warbots to the AI's 2). Left as it is, being a trade mission: its
-  Hard level, clock or setup want a look with the convoy goals played.
+- **Convoy: Hard with the Grove Planter** (retuned Nov 17: a Medium rival on Hard). Mission rivals have the
+  rival's opening, so Convoy's Salvager (Medium on Normal, Normal on Hard until this retune) keeps an army; the note that Hard was lost at
+  21 minutes (the AI alone) didn't hold on later code, where it was won at 9 to 12 minutes. As the owner then decided:
+  Hard's clock is 13 minutes (40 before); the raid goal comes first, so its hint shows from the start (it says to start
+  the route first); the Salvager's convoys press on (`pressOn`, `convoysPress`: out of a besieged Command Base, and
+  past warbots in their way even unescorted), which ends the soft lock where besieging the rival before wrecking one
+  of its convoys left nothing to wreck, and the Easy trap of unescorted convoys turning back from every band; and the
+  kit has the Grove Planter (`KIT8`). Played with the hints' steps and the AI on your side (work speeds 1 to 1.3), and
+  by the AI alone, before (`KIT7`, 13 minutes, the old order, no pressing on) and after:
+  - Easy: before 8:46, 21:59 and still open at 40 minutes with the steps, 10:04 and twice open at 40 alone; now
+    9:04 to 10:39 with the steps and 8:25 to 10:22 alone.
+  - Normal: before 6:47 to 12:53 with the steps and 10:22 to 22:36 alone; now 6:47 to 13:00 and 6:43 to 10:04.
+  - Hard: before 6 of 7 with the steps (9:21 to 12:24) and 3 of 3 alone (8:53 to 9:13); now 2 of 7 (10:12, 10:23)
+    and 2 of 3 (8:43, 10:28), the rest lost on the clock, mostly with no convoy wrecked yet.
+  - It's the Grove Planter, not the pressing on: with `KIT7` and the convoys pressing on Hard was won 4 of 4 (8:57 to
+    10:17), with `KIT8` and no pressing on 1 of 4. The layouts differ only by the Grove Planter and its Agribot, so it's
+    most likely the war tipping the other way. With no clock, `KIT8` and pressing on, Hard went 10:12 to 24:42 and the
+    Command Base was captured at 15:02 and 17:38 in 2 of 7: a longer clock alone doesn't fix it.
+  - Retunes measured: a Medium rival on Hard (as on Normal) with the 13-minute clock won 4 of 4 with the steps (9:09
+    to 11:14) and 1 of 2 alone (9:12; the other lost on the clock); or Convoy's kit back to `KIT7`. **Made: the Medium
+    rival on Hard** (the kit the owner chose stays), tight against 13 minutes, close to the 6 of 7 before the kit change.
 - **Final Descent is a real war now.** With the opening its rival keeps an army (the old one's was gone by minute 10).
   A scripted player (the AI on your side plus the hints' steps) won six of seven runs on Normal and on Hard; one lost
   its Command Base at 22 minutes on Hard, and one on Normal was still open at 41 minutes, its army shrinking. If
@@ -323,8 +379,16 @@ These wait for a later expansion:
   tutorial clear.
 - **Research Lab story.** Results written as findings about the Murmur and the Silence, the last one "Home signal
   analysis complete. No further instructions will follow."
-- **The Pathfinder wreck.** A neutral landmark on some maps (the joint lander that built the Trade Posts and Uplinks),
-  holding archive logs.
+- **The Pathfinder wreck.** A neutral landmark on some maps (the joint lander that built the Trade Posts and Uplinks
+  and sowed the garden: LORE.md, The Pathfinder's garden), holding archive logs. The campaign's last mission is played
+  around it (CAMPAIGN.md).
+- **Landmarks and named places for every map** (the owner: second batch, after the living-world layer). Each map gets a
+  name and a few named landmarks (a waterfall off a cliff, a fallen ring shard with a crystal spire, a stone forest, a
+  frozen lake), labelled in faded atlas lettering when zoomed out, each with a line of flavour on tap. Also: the
+  Pathfinder's arrival camps (empty shelters, a lit "Welcome to Ithaca" sign, a landing field whose lights still blink
+  at night) and the half-buried wrecks of earlier landings that failed, each with a log for the Archives. A
+  once-a-game moment for each biome: a herd crossing the Long Grass, geese over Emberwood, a lava flow in the
+  Cinderlands. Needs new art. The campaign's set pieces are listed in CAMPAIGN.md.
 - **The Hollow (decided by the owner, Nov 17; built Nov 2026).** The Murmur's cavern lair under the Bloom (LORE.md, The
   Hollow), as **its own map type with its own underground look** (not a biome for other maps). Always night; chasms,
   black lakes and the most nests of any map, with the Deep's mound at the centre. All four lore features in the first
@@ -429,16 +493,28 @@ These wait for a later expansion:
   Spitter shorts out the guns and eats at Walls from a few tiles off, the Sapper goes under the Walls and guns (out
   of reach; its route stays a tunnel) and comes up by the target. Repair brings a cut building's power back. Under
   ground a Sapper can't be hit at all: the chosen answer is to meet it where it comes up (warbots there; the rival
-  does it too), with a moment as it heaves up when it can't fight back. The art is another helper's (u.pose, u.poseT,
-  u.charge, u.fx/u.fy, b.shortT, fx 'spit' and 'spitHit'); until it lands they're drawn in code. Taught in *What Comes
+  does it too), with a moment as it heaves up when it can't fight back. Their art reads u.pose, u.poseT, u.charge,
+  u.fx/u.fy, b.shortT and the fx 'spit' and 'spitHit' (installed Nov 17). Taught in *What Comes
   Up* (First Contact), which also teaches the craft: a Fuel Station a Leech drank dry to repair, a Pulse Turret by a
   Fuel Station, warbots where the watcher stood, and a Leech, a Spitter and a Sapper to kill.
-  For the owner: the Hollow in Colony is now harder for a computer-run colony (its robots lost go from a handful to a
-  dozen or so in 35 minutes; its size is the same): the lair, or soften it there?
+  Measured with the forms (the same games as for the craft, before → after the forms): Colony, robots lost to the
+  Murmur in all eight 84 → 70, buildings at 15 minutes 231 → 231, at 30 minutes 287 → 293 (the Leech takes the power
+  cut, so the Brutes go in with the rest); Versus, the same nine all end, mean 21.6 minutes (was 23.9, with one still
+  going on the Hollow before the craft), the first seat 7 to 2 (was 6 to 3), 2.9 robots a colony lost to the Murmur
+  (was 3.1). Most Versus games end by the second or third night, so the forms show up in few of them.
+  The Hollow in Colony is now harder for a computer-run colony (its robots lost go from a handful to a dozen or so in
+  35 minutes; its size is the same). The owner (Nov 17): keep it hard there, it's their lair.
   Open: art for the tunnels and exits (procedural for now: `paintTunnelTile`, `paintTunnelVeins`, `drawBurrow`,
-  `drawExitScar` in js/render.js); the Leech, Spitter and Sapper as raiders; whether Torches should burn tunnels out.
+  `drawExitScar` in js/render.js); whether Torches should burn tunnels out.
 - **A campaign mode built around the Murmur** (the owner's long-term wish): the owner's outline is in CAMPAIGN.md, 15
   missions in three acts, from the landing in the Rust to "No further instructions" at the Pathfinder.
+  Its music is ready (Nov 17): **The Long Silence**, the campaign theme (`MOODS.campaign` in js/audio.js; see the README's
+  Sound), which tells the story's arc from a level the campaign sets with `musicStory(level)`: at `(mission - 1) / 14`
+  missions 1 and 2 are Landfall, 3 and 4 the colony at work, 5 and 6 the first murmur, 7 to 10 Contingency, 11 to 14
+  the Murmur rising (the climax) and 15 the Silence. Until then the Lore guide plays it. Open: whether a mission should
+  play it all through in place of the build themes (as wired now: the war, the Murmur and a nuke still take over), or
+  only in its briefing and quiet stretches, taking turns with the build themes; and whether the Now playing card should
+  show over the Lore guide, which it doesn't (a full screen covers it).
 - **Archives.** The main menu's Lore guide (`#screen-lore`) is the archive as it stands, the same for everyone. Next: pages that fill with logs found across games (ark construction updates that stop, the last
   transmission's background noise, the *Wren*'s silent waystation, machine traffic from other Catalog worlds, one signal
   that matches no robot protocol), so players piece together Earth's fate without ever being told.
@@ -461,3 +537,8 @@ Sapper (tunnels under Walls and surfaces behind them: counters turtling). Mechan
 - Counters: Torches (built to burn back the Bloom) do extra damage to them and clear burrows; the Research Lab studies
   them (earlier warnings, better counters). Regional variants: armoured in the Rust, pale and slow in Hoarfell,
   violet-glowing in the Bloom.
+- **The new forms' art is in** (Nov 2026, ART_GUIDE Batch 17): drawn true size with their action loops, glow and light
+  pools; the behaviour is the sim's. Open, for whoever builds it: a Sapper under the ground shows only within
+  `SIGHT_R` (6) tiles of the colony on this device (`colonySees` in js/render.js), so the tap and hover there (js/ui.js)
+  should skip one the player can't see; the regional variants (`v=rust|white|bloom` in murmur_moles.js) aren't rendered
+  for the game yet; and whether the Murmur's light should show on the minimap at night.

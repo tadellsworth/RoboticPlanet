@@ -39,7 +39,8 @@ how goods move.
   ticks), and the list marks the first unfinished one **Next up**. A mission is plain data: `chapter`, `brief`, `intro`
   lines for the briefing card, the planet (`seed`, `size`, `rough`, `biome`, `shape`, `players`), the rival (`rival`
   level per difficulty, `style`, `rivalBonus`, `passive`), `limit` (minutes per difficulty), switches for what
-  missions otherwise leave out (`war`, `lab`, `events`, `wildlife`, `nuke`), `layout(m, W)` to edit the generated map
+  missions otherwise leave out (`war`, `lab`, `events`, `wildlife`, `nuke`), `pressOn` (the rival's trade convoys keep to
+  schedule whatever comes: Convoy's), `layout(m, W)` to edit the generated map
   (`placeField`, `placeFertile`, `mapTiles`, `mirrored`), `setup(S, diff)` and up to four `goals`. Built-in goal kinds
   count buildings, goods made, bots made or owned, road tiles, one-way tiles, lights, land, Outposts and the capture;
   any other goal counts itself with `count(P, S)` and its own `text` (bridge tiles, a Ramp up a ledge, research done,
@@ -149,7 +150,7 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
 | Torch (Foundry, 2 rounds of parts) | Flamethrower robot (`TORCH`, `torchFire`): every 0.2 s a cone (±0.5 rad, 1.9 tiles) does 0.35 to each enemy robot in it (through `damageBot`, so a facing shield stops it) and 0.8 to the building it burns, ×1.6 to defences, Walls and Gates (a Wall in about 6 s); a 12 s tank, one Fuel a fill (`reloadArmy`, `fuelPoint`, task `refill`); explodes with fuel aboard (`BLAST.torch`). **Scorch the earth** (its panel, X; the selection bar with Torches selected; the `scorch` order, `orderScorch`): with its tank at least `scorchMin` (90%) full it walks to a patch of fertile soil (`scorchTileWhy`), stops within `scorchReach` (1.3) tiles, sprays its whole tank into it over `scorch` (3) s (task `scorch`, `doScorch`) and the soil burns for good (`scorchSoil`); then it refills (`scorchDone`). A group takes a patch each, nearest Torch first, within `scorchSpread` (3) tiles of the one tapped. 18 health |
 | Howitzer (Foundry; **switched off for now**: `BOTS_OFF` in `js/defs.js`) | Mobile siege launcher (`ROCKET`): parks 4–11 tiles from a building and fires 4 rockets (5 each, splash 2 to buildings, 4 to robots), reloads 4 Ammo at a garrison or storage; a Command Base or Keep stops at `missileFloor` (anything else it can knock out); hurt below 60% it goes to a Repair Station within `ROCKET.repairReach` (30) tiles; 14 hp. AI builds 1–3 and hunts the enemy's  A new one rolls off the Foundry to a post (`u.post`) it returns to after reloading; `u.stance` `hold` fires only on orders, otherwise it shells what comes in reach of its post without moving |
 | Depot | Extra storage, shortens hauling trips; give it supply orders to stock it as a forward base |
-| Trade Terminal | A standing trade route, docked within 2 tiles of a neutral Trade Post (`S.posts`, `TRADE_POST`, `placePosts`: placed fairly between the colonies at the start, one more than there are colonies, two in Colony; `nearPost`), one per post per colony, out past the usual reach; a rival's land round a post keeps you out. 8 Cement, 3 Alloy. One route per Terminal (`b.route` `{ give, get }`, the `tradeRoute` order, `setTradeRoute`): send one good, bring back another, until changed. The post's ledger takes one run per Terminal every `TERMINAL.every` (120 s: `b.tnext`, its window); the Terminal asks for its run (`syncTerminalOrders`: a supply order of `routeLot`) a trip ahead of the window (`terminalLead`: `TERMINAL.lead`, 60 s, at first, then the last trip's time and 15 s, `b.lead`). A convoy (a Road Train from storage holding the whole run, or a Freight Train where track runs beside it; never Haulers or Freight Trucks) brings `TERMINAL.lot` (15) of the good, waits at the dock if early (task `dock`, inside the Terminal), and the run is made (`terminalRun`): it takes home what was bought, and anything else spare there, in a mixed load (`convoyHome`; `convoyAtDock`). Bought Fuel or Crude goes by Tanker (logistics step 4e) or Fuel by pipeline to storage (`updatePipes`). The **market board** (`sellPrice`, `buyPrice`): a good sells for its worth (`TRADE_VALUE`) × `TERMINAL.sell` and costs its worth × `TERMINAL.buy`, raw goods (`TRADE_RAW`: Stone, Fiber, Ore, Crystal, Crude) 0.35 and 0.75, made goods 0.575 and 1, Fuel `fuelMarkup` (1.5) dearer; a run brings back lot × sell(give) × `terminalBonus` (+1.5%/tile beyond 16 from the Command Base, max +25%) ÷ buy(get), its fraction carried to the next run (`b.tfrac`). 15 Stone → 2.4 Alloy, 15 Cement → 2 Alloy, 15 Alloy → 16.9 Crystal; a rich good goes out in fewer so a run brings back at most `carryBack` (30). No raw good for a raw good, no made good for its ingredients (`TRADE_MADE_FROM`), Cement only for made goods (`TRADE_MADE`), Crude and Fuel only bought (`tradePairWhy`). Each run sold of a good knocks `TERMINAL.sat` (0.1) off its sell price for that colony (`P.trade.sat`, down to `satMin` 0.5), and each second it gets back `recover` (0.3%) of the gap (`tradeRecover`: about half in four minutes): one route on a good settles near 0.7, two drive it to the floor. Its goods can't be spent until a convoy takes them home (`terminalSpare`, never `supplyOf`). A convoy flies a gold pennant (`u.trade`, the Terminal's id, while it carries for it; `drawTradeFlag`), its lane is kept (`b.lane`, the path out) and drawn on the minimap with the convoys as gold dots, its owner is alerted when it's hit (`convoyHit`, every 20 s at most) and told when it's lost (`convoyLost`: the cargo spills as crates, `dropCarried`). Warbots holding a rally flag go after an enemy convoy passing within `TERMINAL.hunt` (6) tiles of it, wherever it is (`convoyNear`), not only in their own land as with other civilians, and raiders leave a rival's convoy lane be (`convoyLanes`: no road torn up there) to lie in wait for its convoys. A convoy with its escort near (`escorted`) doesn't give way to enemy warbots (`gunShy`); an unescorted one turns back like any hauler. **Escort** (`b.escort`, the `tradeEscort` order): `TERMINAL.escort` (2) armed warbots from the nearest garrisons within `escortReach` (24) tiles (the Command Base keeps its last) ride along with each convoy (task `escort`, `doEscort`: kept beside it as it drives), get off to fight armed enemies near it (the convoy holds back while they do, and at the start of a trip waits half a minute at most for them to get on: `convoyHolds`), wait beside the Terminal at the dock, and walk back once it's home. **No-fire zone** (`calmAt`, `TRADE_POST.calm` 3 tiles round the pad): nothing targets anything there (`nearestEnemyBot`, turrets, Minigun Nests, Mortar Pits, Disruptor Towers, Flak, warbots, Howitzers, the Murmur), nothing there fires out, and no damage lands there (`damageBot` but for Ringfall and the ground giving way, `hitBuilding`, `rocketHit`, `bombHit`, Missiles, nukes); and only a Terminal (or a Ramp) can be built there (`canPlace`: an Outpost or Wall there would be a door no enemy could ever break); warbots can't be sent at a Terminal there, and bombs, napalm, Missiles and nukes can't be aimed at it. The rival docks a Terminal from `AI_TRADE_AT` (8 minutes; an Architect 7) and runs a route with Escort on (`aiTrade`); the *Wren* keeps its one-off deals. |
+| Trade Terminal | A standing trade route, docked within 2 tiles of a neutral Trade Post (`S.posts`, `TRADE_POST`, `placePosts`: placed fairly between the colonies at the start, one more than there are colonies, two in Colony; `nearPost`), one per post per colony, out past the usual reach; a rival's land round a post keeps you out. 8 Cement, 3 Alloy. One route per Terminal (`b.route` `{ give, get }`, the `tradeRoute` order, `setTradeRoute`): send one good, bring back another, until changed. The post's ledger takes one run per Terminal every `TERMINAL.every` (120 s: `b.tnext`, its window); the Terminal asks for its run (`syncTerminalOrders`: a supply order of `routeLot`) a trip ahead of the window (`terminalLead`: `TERMINAL.lead`, 60 s, at first, then the last trip's time and 15 s, `b.lead`). A convoy (a Road Train from storage holding the whole run, or a Freight Train where track runs beside it; never Haulers or Freight Trucks) brings `TERMINAL.lot` (15) of the good, waits at the dock if early (task `dock`, inside the Terminal), and the run is made (`terminalRun`): it takes home what was bought, and anything else spare there, in a mixed load (`convoyHome`; `convoyAtDock`). Bought Fuel or Crude goes by Tanker (logistics step 4e) or Fuel by pipeline to storage (`updatePipes`). The **market board** (`sellPrice`, `buyPrice`): a good sells for its worth (`TRADE_VALUE`) × `TERMINAL.sell` and costs its worth × `TERMINAL.buy`, raw goods (`TRADE_RAW`: Stone, Fiber, Ore, Crystal, Crude) 0.35 and 0.75, made goods 0.575 and 1, Fuel `fuelMarkup` (1.5) dearer; a run brings back lot × sell(give) × `terminalBonus` (+1.5%/tile beyond 16 from the Command Base, max +25%) ÷ buy(get), its fraction carried to the next run (`b.tfrac`). 15 Stone → 2.4 Alloy, 15 Cement → 2 Alloy, 15 Alloy → 16.9 Crystal; a rich good goes out in fewer so a run brings back at most `carryBack` (30). No raw good for a raw good, no made good for its ingredients (`TRADE_MADE_FROM`), Cement only for made goods (`TRADE_MADE`), Crude and Fuel only bought (`tradePairWhy`). Each run sold of a good knocks `TERMINAL.sat` (0.1) off its sell price for that colony (`P.trade.sat`, down to `satMin` 0.5), and each second it gets back `recover` (0.3%) of the gap (`tradeRecover`: about half in four minutes): one route on a good settles near 0.7, two drive it to the floor. Its goods can't be spent until a convoy takes them home (`terminalSpare`, never `supplyOf`). A convoy flies a gold pennant (`u.trade`, the Terminal's id, while it carries for it; `drawTradeFlag`), its lane is kept (`b.lane`, the path out) and drawn on the minimap with the convoys as gold dots, its owner is alerted when it's hit (`convoyHit`, every 20 s at most) and told when it's lost (`convoyLost`: the cargo spills as crates, `dropCarried`). Warbots holding a rally flag go after an enemy convoy passing within `TERMINAL.hunt` (6) tiles of it, wherever it is (`convoyNear`), not only in their own land as with other civilians, and raiders leave a rival's convoy lane be (`convoyLanes`: no road torn up there) to lie in wait for its convoys. A convoy with its escort near (`escorted`) doesn't give way to enemy warbots (`gunShy`); an unescorted one turns back like any hauler. (In a mission with `pressOn`, Convoy, the rival's Road Trains press on: `convoysPress` takes them off `gunShy`, so they never turn back and set out from a besieged Command Base, its run taken from storage enemy warbots are at.) **Escort** (`b.escort`, the `tradeEscort` order): `TERMINAL.escort` (2) armed warbots from the nearest garrisons within `escortReach` (24) tiles (the Command Base keeps its last) ride along with each convoy (task `escort`, `doEscort`: kept beside it as it drives), get off to fight armed enemies near it (the convoy holds back while they do, and at the start of a trip waits half a minute at most for them to get on: `convoyHolds`), wait beside the Terminal at the dock, and walk back once it's home. **No-fire zone** (`calmAt`, `TRADE_POST.calm` 3 tiles round the pad): nothing targets anything there (`nearestEnemyBot`, turrets, Minigun Nests, Mortar Pits, Disruptor Towers, Flak, warbots, Howitzers, the Murmur), nothing there fires out, and no damage lands there (`damageBot` but for Ringfall and the ground giving way, `hitBuilding`, `rocketHit`, `bombHit`, Missiles, nukes), but for a Trade Terminal's construction site: enemy robots can wreck one there like any site, by an attack order, `sendAttack` or a flag held beside it (`calmShield`: only a finished building there is spared; bombs, shells and Missiles still spare the site; warbots used to fire at one for ever, the owner's call, Nov 2026); and only a Terminal (or a Ramp) can be built there (`canPlace`: an Outpost or Wall there would be a door no enemy could ever break); warbots can't be sent at a Terminal there, and bombs, napalm, Missiles and nukes can't be aimed at it. The rival docks a Terminal from `AI_TRADE_AT` (8 minutes; an Architect 7) and runs a route with Escort on (`aiTrade`); the *Wren* keeps its one-off deals. |
 | Ramp | Planned in Paths: cuts a slope into a one-level cliff so bots can climb it; counts as road |
 | Fuel Station | Recharges bots' batteries, four at a time; burns **Fuel** |
 | Bio Farm | A worker plants energy crops on fertile soil and harvests them into **Fuel** |
@@ -191,7 +192,8 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   start with 10 Workers, 5 Haulers, a Tanker and an Agribot (plus 4 Warbots in Versus).
 - **Every building needs a road to storage.** Your Command Base starts with a ring of road around it; join each building and construction
   site to that network (or to a Depot on it), or Haulers can't bring it materials or collect its goods. A red road badge
-  marks buildings with no road: tap one and press **Lay road** to plan the shortest route (shown dashed; of the
+  marks buildings with no road (the Goal card's red line counts only those with no road planned to them either:
+  `cutOffUnplanned`, `roadOnItsWay` in `js/ui.js`): tap one and press **Lay road** to plan the shortest route (shown dashed; of the
   routes as short, the one with fewest bends: `roadSearch` pays `ROAD_TURN` 0.05 a turn, as the rival's roads do), or plan your
   own. Placement keeps a side of every building open for a road.
 - **Planning roads:** in Paths, dragging and tapping only sketch a road (and tapping a road marks it to take up; a
@@ -1069,7 +1071,17 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   (`quiet` while it isn't you). Fair: bands are counted as the map shows them (warbots out in the open, `watchBand`),
   an army's size is "about" (`scoutAbout`, from the warbot count Statistics shows), and the number a rival waits for
   (`P.massFor.need`) is never told. It's a `toast` (Go to the place, kept in the message list) starting "Scouts:".
-  **Scout reports: On/Off** in the pause menu, kept on the device (`terrafall.scouts`). Display only.
+  **Scout reports** (a switch in the pause menu's Settings), kept on the device (`terrafall.scouts`). Display only.
+- **Mouse cursor** (`js/cursor.js`): with a mouse (`any-pointer: fine`), the game draws its own cursors at start-up,
+  sharp at 1× and 2× (`drawCursorImage`; `image-set` where the browser takes it): a gunmetal arrow edged in the accent
+  cyan; the arrow lit cyan over what takes a click; a cyan frame for placing and painting; a red reticle for attacking
+  and aiming, amber for landings and air drops; four arrows while a drag moves the map. `buildCursorSheet` reads every
+  cursor rule in the page's stylesheets and asks it again under `html.tf-cur` with ours in its place (pointer → lit,
+  crosshair → frame, default → arrow; the rest, such as not-allowed, stay the system's), so new styles need nothing
+  here; text fields keep the I-beam. The map's cursor follows what's under the mouse (`cursorTick`, from `render`, a
+  look every 0.1 s): lit over any building or one of your robots, the red reticle over a rival's with warbots picked
+  (`canvas#game[data-cur]`). **Custom cursor** (a switch in the pause menu's Settings, shown only with a mouse), kept
+  on the device (`botfall.cursor`). Display only.
 - **Blueprints** (`js/blueprint.js`): kept on the device (`terrafall.blueprints`, up to `BP_MAX` = 8, newest first,
   each `{ name, b: [[type, dx, dy]...], r: [[dx, dy]...] }` round its middle; `bpList` drops anything damaged). Saving:
   **Build → Blueprints** (`openBlueprints`, the `#build-bp` card shown on every tab) → **New blueprint** enters mode
@@ -1400,8 +1412,9 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   about 30 minutes instead of 22 (its 45-minute clock stands); Final Descent on Normal and Hard is a real war now,
   where the old rival's army was gone by minute 10 (six wins in seven on each: one lost on Hard, one still open at 41
   minutes on Normal); Hold the Line's Herald hits a colony that only follows the hints a minute or two sooner on Easy
-  and Normal (about 8½ and 7½ minutes in). Easy rivals are as they were. Convoy, left to the trade work, was played
-  only by the AI (see IDEAS). No mission's rival is across the water, so none makes beach landings (`aiBeach`) yet;
+  and Normal (about 8½ and 7½ minutes in). Easy rivals are as they were. Convoy, played the same way, was won on Hard at
+  about 9 to 12 minutes, so its Hard clock went from 40 minutes to 13; with the Grove Planter in its kit since, Hard was
+  won in only 2 of 7 such runs, so its Hard rival is Medium, as on Normal: 4 of 4 won, at 9 to 11 minutes (see IDEAS). No mission's rival is across the water, so none makes beach landings (`aiBeach`) yet;
   Harbour's briefing tells of them.
 - **The story** (LORE.md is canon; text and presentation only, nothing in it changes a rule). **Callsigns**
   (`CALLSIGNS`, `callsign(p, colour)`): players are named COBALT (player 0, blue), VERMILION (red), VIRIDIAN (green) and
@@ -1437,7 +1450,8 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   "no ark construction update on file after T−14", the *Wren*'s waystation last answering at T−2). It pages like the How
   to play, on the same code (`pagerInit`/`pagerShow`, `HELP_PAGER` and `LORE_PAGER`): it opens on its first page, which
   lists the rest; a picker stays on top, Previous / Next end each page, ← → turn them; Esc, Back or a phone's Back
-  closes it (opening adds a history entry; closing takes it back). Its pictures are `data-src` until it first opens,
+  closes it (opening adds a history entry; closing takes it back). While it's open the music is the campaign theme, The
+  Long Silence (`musicLore`; see Sound). Its pictures are `data-src` until it first opens,
   then all fetched at once, so the service worker keeps them for offline play, and `tools/build-single.js` puts them in a
   bundle beside the page (`dist/lore.js`, fetched when the guide first opens, so the page stays under 16 MB):
   `art/lore/ithaca.webp` (Ithaca I from orbit, the Ring, Argos and Corvane: `renderer/b/lore_planet.js` and
@@ -1506,6 +1520,27 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
     on the minimap (`minimapTunnels`); exits are art (`drawBurrow`: `tunnel-exit`, re-lit for the time of day), violet
     rings on the minimap, and collapsed ones a caved-in mound fading as it settles (`drawExitScar`:
     `tunnel-exit-collapsed`).
+  - **How they're drawn** (`drawCritter`; art from `renderer/b/murmur_moles.js`). Each form true to the others' size,
+    but the Brute shrunk to fit the map (`MURMUR_LOOK`, the sprite's width in tiles): Scuttler 0.62, Spitter 0.73,
+    Leech 0.81, Brute 0.82, Sapper 0.9, with a shadow turned with it. Four walking frames each, and the forms' actions
+    as loops timed by `u.poseT` (`MURMUR_POSES`, `murmurFrame`): the Leech feeding (`u.pose` `feed`: the star pulsing,
+    the sac swelling), the Spitter spitting (`spit`: wind-up, the spit, recoil, recovering), the Sapper digging in
+    (`dig`), under the ground (`under`: only the heave of soil shows) and coming up (`up`: the ground bursting, played
+    once). The sprites are rendered hungry; each has a glow image (`<key>-glow`) added over it as bright as it's charged
+    (`u.charge`, 0..1; none kept, as in an older save: 0.75), stronger as the light goes, breathing slowly (the Leech's
+    quick throb while it drinks, the Spitter's pouches flaring as it winds up, the heave's crystal chips glinting:
+    `murmurGlow`). At dusk and night each throws violet light on the ground round it, as bright as it's charged
+    (`drawMurmurLights`), and the lamps and the glow of a building a Leech drinks beside dim (`drunkLight`). A Sapper under
+    the ground shows only where the colony on this device can see it (`colonySees`: within `SIGHT_R`, 6 tiles, of any of its
+    or its allies' buildings, bots or streetlamps; watching with no colony of your own, everywhere), and so does the fresh
+    ridge it leaves behind it (`sapperTrails`, `drawFreshRidges`: kept as it goes, drawn like the tunnels; once it's
+    through, the sim's tunnel takes over). The Spitter's volley (`addFx('spit', x, y, { tx, ty })`: the shards flying to
+    the target, `drawSpitFx`) and its hit (`'spitHit'`: eight frames, turned the way the volley came, `drawSpitHitFx`)
+    are effects; a building it has shorted (`b.shortT` > `S.time`) has its gun dark and charge crawling over it
+    (`drawHeadDark`, `drawShortArcs`) and no searchlight. Their art loads only in a game with them (`ensureMurmurArt`,
+    from `applyBiome`, with their re-lit sets: `MURMUR_TOD_KEYS`, `todMurmurAdd`); in the single file it's a bundle beside
+    the page (`dist/murmur.js`). Fields the drawing reads and doesn't find (an older save, a Quiet game) fall back to
+    today's walk.
   - **Counterplay.** Turrets, garrisons and warbots treat creatures as enemies; a creature battering a building marks it
     raided (`P.raided`), so forts round it answer (`garrisonDefense`). Warbots **collapse an exit** (`MURMUR.exitArmor`, 30;
     `collapseExit`: gone, nothing opens within 3 tiles for `MURMUR.shut`, 15 min, `S.mur.shut`; `stats.collapsed`) and
@@ -1574,8 +1609,9 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
     the target at `speed`, every tile it passes (that can be tunnelled) becoming its nest's tunnel (`S.tun`, so exits
     can open there), comes up (`up` s, pose `up`: open to a strike, not striking back) and then fights as a Brute
     does. Every form keeps `u.pose` ('walk' otherwise), `u.poseT` and `u.charge` (its glow); saved, checked by
-    `checkSave`, in `hashState`. The drawing (`drawCritter`): a glow for the charge, a heave over a Sapper underground
-    within 12 tiles of this device's colony (`critterSeen`, `drawHeave`). Repair brings a cut building's power back
+    `checkSave`, in `hashState`. The drawing reads those fields (`drawCritter` with `MURMUR_LOOK`, `murmurFrame`,
+    `murmurGlow`; a Sapper underground shows, and can be tapped, only where this device's colony sees it:
+    `murmurInSight`; `enemyBotAtTap` never picks one). Repair brings a cut building's power back
     (`doFix` at full armor → `murmurPowerBack`; a cut dents it so it can be repaired; `stats.powerBack`). Kills of
     each kind are counted (`S.mur.slain`). The rival: warbots to a rally flag where an underground Sapper will come up
     (`aiMurmur`, one at a time, called home after 40 s: `P.sapRally`); a shorted gun counts as a place to cover
@@ -1751,6 +1787,18 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   Ropeway placed, a Paths plan built, Lay road) and marks a warning or alarm from the game (at most one every 2.5 s).
   **Vibration** in the pause menu (shown only on a touch screen that can vibrate) switches it off; it is kept on this
   device (`botfall.haptics`), on by default.
+- **The pause menu** (`#screen-pause`; Space, Esc or the button top right): two views in one card (`pauseView` in
+  js/ui.js), and it opens on the first each time. The main view: **Resume** (in multiplayer **Back to the game**, and
+  **Pause the game for everyone** beside it), a grid of **Settings**, **Statistics**, **Photo mode** and **How to play**,
+  the saves under a **Save** label (**This planet**, **File** and **Cloud**: Save this planet, Download save file and
+  Save to the cloud, their full names in `aria-label` and `title`), the line on when the game last saved, then
+  **Feedback** and **Save & quit**. **Settings** (`#p-setview`; **Back** or Esc returns, and the focus goes to Back on
+  the way in and to Settings on the way out): the Music, Effects and Ambience sliders, **Graphics**, a switch each
+  (`role="switch"`, `pauseSwitch`) for Full screen, Weather, Scout reports and Vibration where they apply on the device,
+  and **Time of day** as a Cycle / Day / Night radio group (Day locked with the Murmur, Cycle and Day on an
+  always-night map, with the line under it saying why). A goal's `ui` selector for a pause-menu button lights the
+  pause button while the menu is shut, and Settings or Back for a button in the other view (`COACH_OPENERS`). It fits
+  without scrolling at 390×664, 844×390 (laid out wider there, Settings in two columns) and on a computer.
 - **Game speed:** the speed chip in the top bar opens 0.75×, 0.875×, 1×, 2× and 3×.
 - **Sound** (`js/audio.js`, all Web Audio, no audio files): a generative synthwave score that follows the game (menu,
   building, war when you're attacked or fighting, **Night Murmurs** when the Murmur come close (`MUSIC_MURMUR` (2) of them
@@ -1760,9 +1808,36 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   three themes, `BUILD_THEMES`, every `MUSIC_ROTATE` seconds of play: Lost in a Dream, the main theme (the menu music is a
   slow take on its chords), Night Drive (Dorian, octave bass,
   claps, a plucked lead) and Horizon (half-time, a chord every two bars, an arpeggio in threes)), written a bar at a time from chord
-  progressions, arpeggios, bass, drums and short melodies in 8-bar sections. **Now playing** (`nowPlayingTick` in js/ui.js,
+  progressions, arpeggios, bass, drums and short melodies in 8-bar sections. **The war music** takes turns between two
+  themes, `WAR_THEMES` (`warTheme`): a game's first fight gets Overdrive (112 bpm Phrygian, sixteenth-note bass,
+  four-on-the-floor kick, stabs, the bell lead) and each new fight (war music again after `WAR_GAP` (30) s of game time
+  without it) the other one; within a fight it stays the same. **Redline** (`war2`), the second, is built on the buzzy
+  bass pushed harder (`mGrowl`: two saws, one a little sharp, through a resonant low-pass that snaps down within a
+  quarter second, into a soft clipper, `driveCurve`, over a clean sine an octave down; played dry): a galloping riff on
+  the chord's root with an octave leap and a half-step neighbour (`RIFF`), its filter opening over each chord's two bars
+  and snapping back on the change (over a whole section in the breakdown, `growlOpen`); 124 bpm harmonic minor, a
+  driven kick in a broken beat (`mKickHard`; four to the bar at the peak), an 80s gated snare (`mGate`), open hats, a
+  gliding saw lead with a late vibrato (`mSaw`) and a noise riser (`mRiser`) into a crash on each new section.
+  **The campaign theme**, **The Long Silence** (`campaign`), tells the story's arc from a level (`storyLevel`, 0 to 1)
+  instead of the game: `musicStory(level)` sets it (the campaign, planned in CAMPAIGN.md, would raise it chapter by
+  chapter, `(mission - 1) / 14`; while set, the theme plays in a game in place of the build themes; `null` ends it), and
+  until the campaign exists the **Lore guide** plays it while it's open (`musicLore` from `openLore`/`closeLore`, at
+  `LORE_STORY` (0.33), the first murmur, quiet enough to read by). At each 8-bar section the level picks a stage (its
+  `stages`, each standing over the theme's own settings: `moodDef`); one key, D, all through, the stages walking the
+  modes from the brightest to the darkest, and the same four-bar tune (`STORY_THEME`, played in each stage's scale, so it
+  darkens with them): Landfall (0; Lydian, hopeful and wide: a halo of high chords spread across the stereo, `mHalo`, the
+  shimmer, the arpeggio in threes, the bell), the colony at work (0.1; Mixolydian, half-time drums), the first murmur
+  (0.25; Dorian: the drums fall away, the choir comes in, a heartbeat, the Uplink's call, `mBeacon`, which the ground
+  sometimes answers in its rhythm, `mThud`), Contingency (0.4; minor, the main theme's chords, drums back, the bass
+  creeping a half step), the Murmur rising (0.68; Phrygian, the climax: Redline's drums and growl, a drone, the tune on
+  the saw) and the Silence (0.96: everything stops; suspended chords, every progression ending away from home, two lights
+  left, the tune's first bar alone, the choir again, fainter and far off). Bar by bar the level also sets how much of
+  the Murmur is heard: the choir grows 15 dB from 0.25 to 0.75 (an octave higher too from 0.6), glints come oftener,
+  the heartbeat beats harder, the ground answers oftener, and the road lights (the `lights` arpeggio, eight a bar) go dark
+  one by one (`LIGHTS_OUT`). **Now playing** (`nowPlayingTick` in js/ui.js,
   display only): on a computer (a mouse, the wide layout) a card in the bottom left corner names each theme as it starts
-  (`MUSIC_TITLES`: the menu's slow take is Lost in a Dream too, the war theme Overdrive, the Murmur's Night Murmurs, the nuke alarm Zero Hour, `end`
+  (`MUSIC_TITLES`: the menu's slow take is Lost in a Dream too, the war themes Overdrive and Redline, the Murmur's Night
+  Murmurs, the nuke alarm Zero Hour, the campaign theme The Long Silence (not shown over the Lore guide, a full screen), `end`
   none) for `NP_SHOW` ms, then fades away (nothing stays in the corner between themes); a title shown in the last `NP_AGAIN` ms (a minute) isn't
   shown again, and nothing shows with the Music at 0, in photo mode, under a full screen (the main menu is fine) or where
   it would run into the tools or the menu's card (a new theme's card waits for room). Effects include radio blips for orders, a
@@ -1777,7 +1852,8 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   its horn as it pulls out and brakes as it slows, aircraft engines panned to where they fly, with a rival's take-off
   roll, the approach whine and the touchdown chirp, a ship's horn leaving port, the sea's wash (full on the sea maps,
   Islands, Tidal flats and Four Isles; softer on lakes and rivers), bubbling lava and crickets on warm nights. Under it
-  all, **the land's own sounds** (`natureBeds`, `biomeCall`): each biome's bed (`NATURE`: leaves rustling as the wind
+  all, **the land's own sounds** (`natureBeds`, `biomeCall`; with the wind, crickets and the sea they go through a bus of
+  their own, `AUDIO.natureBus`, set by the Ambience volume apart from the effects, `NATURE_LEVEL` at full): each biome's bed (`NATURE`: leaves rustling as the wind
   gusts in the forests, grass on the savanna, sand or snow hissing in the desert and at the poles, cicadas in the
   savanna's heat and insects in the forest by day, the swamp's frogs and insects by night, the Bloom's shimmer, brighter
   by night, the ashlands' ground rumbling) and calls now and then (forest birds by day and a night bird's hoot, cicadas
@@ -1800,7 +1876,8 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   on these voices): a calm wild scene sits about 18 to 22 dB under the music, a storm about 11 to 14 dB under, an
   eruption about 16 dB under, and a town about 25 dB under (the land fades there); thunder and surf peak at least 8 dB
   under the music's peaks. (A drone is a narrow band of noise, so its level number is far higher than a rustle's for
-  the same loudness.) Music and Effects volumes are in the pause menu.
+  the same loudness.) Music, Effects and Ambience volumes are in the pause menu (Ambience: the land's own sounds, `AUDIO.amb` on
+  `AUDIO.natureBus`, apart from the effects; default 50%, where the owner turned them down to).
 - **Briefing at the start:** the messages a new game opens with (where you landed, your goal, the map's notes) come
   together on one card while the game waits paused behind it; it closes by itself after a few seconds (longer for
   more text), or at a tap or key. In multiplayer the game doesn't pause for it.
@@ -1856,6 +1933,20 @@ are 512×512 (one image per 4×4 tiles, sharp on the zoomed-in map); all WebP to
 added one piece at a time. See **[ART_GUIDE.md](ART_GUIDE.md)** for specs, the style brief and prompts,
 including the remaining pieces (Ramp, slope and cliff textures, goods icons).
 
+Work is acted out in code (`workPose`, `drawWorkUnder` and `drawWorkOver` in `js/render.js`): a builder circles its site
+welding, sparks flying; a worker paving spreads fresh concrete across the tile (bridge decks and tunnel linings too);
+a Paver lays asphalt that steams behind it. **Gathering** (`harvestPose`, `harvestAnim`, `drawHarvest`): a robot stops
+at the near edge of what it gathers, facing in (it eases back onto its path as it leaves), and works it with an arm.
+It scythes Reedcane in sweeping arcs, flecks of cane flying the way the blade went (Bloom veins shed glowing violet
+and teal motes as they're cut); drills Ore a few holes at a time, shaking as the bit bores in, cuttings and sparks
+spraying (Uranium's cuttings glow green); breaks boulders and rock faces with a hammer, rearing back between blows,
+each blow a flash, chips flung back off the rock and a cloud of dust; and scores Crystal with a cutting beam that
+traces across the cluster, glints twinkling and slivers coming away. An Agribot turns from plant to plant, snipping
+ripe pods and lifting them back to its hopper as leaves flutter down, or plants a row of three seedlings (crop sprouts,
+or Reedcane shoots for the Grove Planter), the soil puffing up as each goes in. The glows brighten at night. It is all
+drawn from the render clock and the job's own timer (`harvestTime` matches the simulation's), so nothing of it is in
+the simulation; the old up-and-down bob is left for the few jobs without a pose of their own.
+
 Weapon effects are drawn in code: muzzle flashes, tracers, gun smoke, dust kicks and bullet pockmarks round each
 target (sparks on buildings), the Disruptor's arcs, and blasts with a fireball, flying debris, smoke and a scorch mark.
 A destroyed building shakes, leans and sinks into the ground in a dust cloud, with secondary blasts, and leaves rubble.
@@ -1903,7 +1994,8 @@ pause menu's line under the button says so, as does the new-game Rules' Always n
   re-lit and graded copies of each sprite, the green and purple teams' too, are let go with it (`todDropSet`, `todFree`;
   a graded stand-in goes as soon as the re-lit image arrives), and the sprites drawn lately get the coming set's versions
   ready a couple a frame ahead of the change (`todWarm`, `artSeen`). The single-file
-  build puts each set in a bundle beside the page (`dist/tod-<time>.js`, loaded when needed).
+  build puts each set in a bundle beside the page (`dist/tod-<time>.js`, loaded when needed); the Murmur's re-lit
+  sprites (`MURMUR_TOD_KEYS`) join a set only in a game with them, from their own bundle (`dist/murmur.js`).
 - **Graded in code** (`out = in × multiply + add`, values from the kit's `art/tod/shared/time-of-day.json`): the baked
   ground, roads, track, pipes, plants, resources and territory tint (`todGradeGround`), and any sprite without a
   re-lit version or whose set hasn't loaded yet (`todGraded`). Tile art drawn over the graded ground (bridge piers,
@@ -1917,6 +2009,42 @@ pause menu's line under the button says so, as does the new-game Rules' Always n
   drives), including the 3D Pulse Turret and its heads, every Wall and Gate piece, the Viaduct's abutments and the
   moving parts of the Generator's and Oil Pump's working loops. Light loops (the Smelter's furnace, the Refinery's
   column lights, the turret's charge-up, the walls' sparks) are never graded.
+
+### Cloud shadows, remains and beacons
+
+Three touches that keep the world going on without its people, all in `js/ambient.js` and for looks only: nothing there
+changes the game, `S`, saves or orders. What they keep is display-only (`R.amb`, made afresh for each game and each
+load); they read the game's clock, seed, buildings and effects. Hooks: `drawRemains` after the game's ground marks
+(`drawDecals`) and `drawAmbientSky` after the aircraft (`drawAirLayer`) in `render`, and the `beacon` sound in `sfx`.
+
+- **Cloud shadows** (`drawCloudShadows`). By day soft shadows of clouds drift over everything on the ground. The sky is
+  a field of cells (`AMB.cloud.cell` tiles), each with a cloud if its hash from the seed is under the cover, each cloud
+  a cluster of soft puffs; the wind carries the field (`ambDrift`), each stretch of the weather's clock (`WEATHER.slot`)
+  blowing the way a spell in it would (`weatherAt`'s `dir`), faster in a stretch with a spell, veering smoothly between
+  stretches. So, like the weather, it comes from the seed and the game clock alone and every device sees the same sky.
+  A spell of weather (or a dust storm event) thickens and darkens it (`AMB.thick` by kind); the light fades it out toward
+  night (`AMB.sun`). Made in a buffer at an eighth of the screen (a quarter on Ultra) and laid over the view in one draw.
+  None on Argos or in the Hollow, none with Weather off, none on Graphics Saver.
+- **Remains** (`drawRemains`). The game's own marks of a fight fade in a minute or two (`S.decals`: rubble, scorch; a
+  wreck's fire in `S.fx`) and aren't saved. `ambScan` looks through the effects added since the last frame: a building's
+  `collapse` with its fire on the same step (destroyed by force; one taken down on purpose only drops its rubble), a
+  robot's or vehicle's wreck fire (`killBot`: the robot is found by where it fell and its id), a plane's crash fire
+  (`landDrop`). Murmur nests and creatures leave nothing (they take their dead with them), nor do ships. Each becomes a
+  remains record in `R.amb.ruins` (at most `AMB.ruin.max`, one wreck pile to a tile, only on open ground) that carries the
+  rubble on as the game's mark fades (the same pieces from the same seed) and, from its age in game time, grows over by
+  biome (`AMB_GROW`): grass, moss and vines in the green biomes, drifting snow in Hoarfell, sand in the Rust, ash in the
+  Cinderlands, violet Bloom veins and nodules (glowing after dark) in the Bloom and the Hollow, only dust on Argos (slower).
+  After `AMB.ruin` seconds they go back into the ground; a building or site, road or track on the tile clears them at
+  once. Each is drawn from a small picture (`ambSprite`, one per time of day in use, blended across the change as
+  `drawArt` blends the re-lit art), made again only when its growth steps on, the zoom needs another size or the wind
+  turns, a few a frame; out of view for 20 seconds, its pictures are let go. Kept in `R`, not `S`, so the simulation is
+  untouched and nothing new is saved: remains don't outlive a save and load.
+- **Beacons** (`drawBeacons`). From evening until dawn (`AMB.beam`, faded in over the evening crossfade and out at dawn,
+  so never in Always day and always in Always night or the Hollow) every standing, finished Command Base, whoever holds
+  it, shines a pale beam straight up from the top of its mast, a hint of its owner's colour in it, with a soft halo, light
+  on its pad, and a slow pulse every beacon keeps in time (`AMB.pulse`). In the Hollow it goes up its breach (`breachAt`);
+  a base under rock would only light the roof. When your own base's beacon comes on in view, a soft low hum
+  (`ambHum`, through `sfx('beacon')` and `mapVoice`).
 
 ## Project layout
 
@@ -1942,6 +2070,7 @@ js/blueprint.js           blueprints: a block of buildings and its roads kept on
 js/charts.js              line and bar charts for the statistics screen
 js/render.js              canvas renderer and placeholder art
 js/daynight.js            day and night: the clock, re-lit art sets, grading, headlights, light pools
+js/ambient.js             cloud shadows by day, remains that overgrow, the Command Bases' beacons by night (looks only)
 js/input.js               touch and mouse controls
 js/ui.js                  HUD, build menu, info panels, objectives
 js/audio.js               synthesized sound effects
@@ -1950,7 +2079,9 @@ art/art-manifest.js       register custom art here
 art/lore/                 the Lore guide's pictures (the planet, the regions, the Murmur)
 tools/headless-sim.js     AI-vs-AI balance test without a browser
 tools/smoke-test.js       browser test on a phone-sized screen (Playwright)
-tools/build-single.js     bundles everything into dist/terrafall.html (and dist/tod-<time>.js, biome-<b>.js, lore.js)
+tools/build-single.js     bundles everything into dist/terrafall.html (and dist/tod-<time>.js, lore.js, biome-<b>.js:
+                          every biome's art but the Desert's, so the page stays under its 16 MB: LAZY_BIOMES, and
+                          murmur.js: the Murmur's art, for a game with them)
 relay/                    the multiplayer relay and player feedback: a Cloudflare Worker (deployed by .github/workflows/relay.yml)
 ```
 

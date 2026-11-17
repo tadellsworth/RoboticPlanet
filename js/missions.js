@@ -19,7 +19,8 @@
  * victory (a way to win other than capture, a VICTORY key: 'uplinks' places the Uplinks), rival: [easy, normal,
  * hard] (its level), rivalBonus (extra of every good in its Command Base), passive: [easy, normal, hard] (a rival that
  * never attacks), limit (minutes per difficulty, 0 none), nuke/war/lab/events (switch on what missions otherwise
- * leave out: a Nuclear race, warbots and defences in Colony, the Research Lab, planet events), murmur ('quiet' or
+ * leave out: a Nuclear race, warbots and defences in Colony, the Research Lab, planet events), pressOn (the rival's
+ * trade convoys keep to schedule, out of a besieged base and past raiders: convoysPress), murmur ('quiet' or
  * 'active': the Murmur, with their nests, tunnels and nights; the older wildlife: true is Active), layout(m, W) (edits the generated map), setup(S, diff) (after the landing; S.mission already exists), goals
  * (1 to 4, met in any order, shown one at a time as the next goal) }.
  * A goal: { kind, n (one number or [easy, normal, hard]), hint (how to do it, shown while it's the next goal: the
@@ -693,7 +694,7 @@ const MISSIONS = [
       placeField(m, W, b.x, b.y - 22, 2.4, R_ORE, 0.75, 41);
     },
     setup(S) {
-      kit(S, KIT7.filter((t) => t !== 'mine'), 4); // (no Ore near home: the Mine goes up the valley)
+      kit(S, KIT8.filter((t) => t !== 'mine'), 4); // (no Ore near home: the Mine goes up the valley)
       const L = getE(S.players[0].lander);
       L.stock.cement += 10;
       L.stock.fuel += 10;
@@ -775,11 +776,12 @@ const MISSIONS = [
       'A route can buy <b>Fuel</b>, at a markup: a <b>Tanker</b> takes it home.',
       '<b>Planet events</b> are on: dust storms, Ringfall, solar flares, and now and then the <i>Wren</i>, a trader ship.',
     ],
-    // (Seed 1445: Ringfall (a meteor shower) at 2:30 and a solar flare over by 9:36. Events are seeded, and on the designed
-    // 1415 the second one, the trader ship, only left at 12:25, so a player who had made the trades by 6 minutes waited 6 more.)
+    // (Seed 1445: Ringfall (a meteor shower) from 2:30 to 3:20 and a solar flare over by 6:33, missions having the shorter
+    // gap between events (MISSION_EVENT_GAP). Events are seeded, and on the designed 1415 the second one, the trader ship,
+    // only left at 12:25, so a player who had made the trades by 6 minutes waited 6 more.)
     mode: 'colony', seed: 1445, size: 1, rough: 1, rich: 3, biome: 'savanna', shape: 0, events: true, limit: [0, 0, 30],
     setup(S) {
-      kit(S, KIT7, 4);
+      kit(S, KIT8, 4); // (with the Grove Planter, as from Pipe Dreams on: without it the Fiber ran out 6 or 7 minutes in)
       const L = getE(S.players[0].lander);
       L.stock.stone += 40;
       L.stock.cement += 20;
@@ -1260,11 +1262,19 @@ const MISSIONS = [
       'Nothing shoots on a Trade Post\'s ground, so raids come out on the road. <b>Escort</b> sends two warbots along.',
       'The rival runs convoys too, dashed on the minimap. Warbots on a flag by it, out past its land, go for them.',
       'A wrecked convoy spills its cargo as crates. Your warbots carry them home.',
+      'Their Command Base can\'t be taken here: raid the road. Their convoys keep to schedule and never turn back.',
     ],
     mode: 'versus', seed: 7711, size: 1, rough: 1, rich: 3, biome: 'desert', shape: 0, style: 'raider',
-    rival: ['easy', 'medium', 'normal'], limit: [0, 0, 40],
+    // (Hard's clock: with the old kit (KIT7) the AI on your side, playing the hints' steps, won at 8:53 to 12:24, so 13
+    // minutes left little to spare; five runs of a route every 2 minutes can't be done much before 9. With the Grove
+    // Planter it's a harder war: see IDEAS, Convoy.)
+    rival: ['easy', 'medium', 'medium'], limit: [0, 0, 13], // (Hard: a Medium rival against the 13-minute clock; see IDEAS, Convoy)
+    // (The Salvager's convoys press on, convoysPress: out of a besieged Command Base, and past warbots in their way even
+    // unescorted. Without it, besieging the rival before wrecking a convoy left the goal with nothing to wreck, and the
+    // Easy rival's unescorted convoys turned back from every band on their lane.)
+    pressOn: true,
     setup(S) {
-      kit(S, [...KIT7, 'armory'], 4); // (the colony so far, with Supply Lines' Ammo Plant)
+      kit(S, [...KIT8, 'armory'], 4); // (the colony so far, with Supply Lines' Ammo Plant)
       const L = getE(S.players[0].lander), E = getE(S.players[1].lander);
       L.stock.stone += 60; L.stock.cement += 40; L.stock.alloy += 6;
       // Each side's Terminal docked at the Trade Post nearest it, a road out to it and a Road Train to serve it: the rival's
@@ -1278,6 +1288,11 @@ const MISSIONS = [
       E.stock.cement += 60;
     },
     goals: [
+      { kind: 'convoys', n: 1, text: 'Wreck a rival trade convoy',
+        count: (P, S) => S.players.reduce((n, Q) => n + (Q.id !== 0 && Q.stats.convoysLost ? Q.stats.convoysLost : 0), 0),
+        // (First, so its hint shows from the start; it says to start the route first, which the runs need.)
+        hint: '<b>Start route</b> at your Terminal first, then <b>Army</b> (<kbd>Q</kbd>) → <b>Hold ground</b> (<kbd>G</kbd>) by theirs, past their land.',
+        ui: '#btn-attack, #ar-hold' },
       { kind: 'trades', n: [3, 4, 5], text: ['Make a trade run', 'Make {n} trade runs'], at: 'terminal',
         count: (P) => (P.trade && P.trade.sold) || 0,
         hint: 'Tap the Terminal → a <b>Send</b> good, a <b>Bring back</b> one → <b>Start route</b> (<kbd>G</kbd>).',
@@ -1286,10 +1301,6 @@ const MISSIONS = [
         count: (P, S) => (S.buildings.some((b) => !b.dead && b.owner === 0 && BDEFS[b.type].terminal && b.escort) ? 1 : 0),
         hint: 'Tap the Terminal → <b>Escort</b> (<kbd>E</kbd>): two warbots from the nearest garrison ride with each convoy.',
         ui: '#sh-escort' },
-      { kind: 'convoys', n: 1, text: 'Wreck a rival trade convoy',
-        count: (P, S) => S.players.reduce((n, Q) => n + (Q.id !== 0 && Q.stats.convoysLost ? Q.stats.convoysLost : 0), 0),
-        hint: '<b>Army</b> (<kbd>Q</kbd>) → <b>Hold ground</b> (<kbd>G</kbd>) by their route (dashed on the minimap), past their land.',
-        ui: '#btn-attack, #ar-hold' },
       { kind: 'looted', n: [3, 5, 6], text: 'Carry home {n} crates of loot',
         count: (P) => P.stats.looted || 0,
         hint: 'Warbots near crates carry them to a garrison. <b>Hold ground</b> (<kbd>G</kbd>) by a wreck to fetch them.',
@@ -1581,7 +1592,7 @@ function missionOptions(k, diff) {
         for (const g in R2.stock) R2.stock[g] += def.rivalBonus[diff];
       }
       // What this mission switches on that missions otherwise leave out (see nukeOn, warOn, labOn, updateEvents).
-      S.mission = { k, id: def.id, diff, limit: (def.limit[diff] || 0) * 60, nuke: !!def.nuke, war: !!def.war, lab: !!def.lab, events: !!def.events };
+      S.mission = { k, id: def.id, diff, limit: (def.limit[diff] || 0) * 60, nuke: !!def.nuke, war: !!def.war, lab: !!def.lab, events: !!def.events, pressOn: !!def.pressOn };
       // The Murmur, only where the mission asks (its murmur: 'quiet' or 'active'; the older wildlife flag is Active). None on the moon.
       if (def.murmur || def.wildlife) murmurStart(def.murmur || 'active');
       // (A way to win other than capture: newGame sets one only outside missions. The Uplinks go where free play puts them.)
