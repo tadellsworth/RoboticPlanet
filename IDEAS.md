@@ -128,6 +128,16 @@ Still open: a neutral, shared exchange the rivals compete over; contracts for Ch
     `fx.js`), a big project, with the 2D renderer kept as the fallback for phones that can't run it. WebGPU, newer
     still, isn't needed.
 
+- **A Tank Farm: big storage for Crude and Fuel (the owner's idea).** Put up beside a cluster of Oil Pumps (five, say),
+  it holds a lot of Crude or Fuel, like a small Depot for liquids only. Today each Pump holds just 6 Crude and a
+  Refinery 8 Fuel, so Tankers make many small runs. With a Tank Farm the pumps nearby fill it (by pipe or feed link),
+  Tankers and pipelines draw full loads from one place, and a stock of Fuel builds up for trucks, ships and aircraft.
+  It is the most dangerous thing in a colony: destroyed (not dismantled), it goes up in a huge fuel blast that grows
+  with how full it is, setting off loaded Tankers and Refineries nearby in a chain. That makes it a prize target for
+  bombers, missiles and raids, so it needs guarding and room around it. To settle: how much it holds and costs,
+  whether it holds one liquid or both, if Fuel Stations and the Airfield draw from it, how big the blast is next to
+  the existing ones (Tanker, Refinery), and how the rival builds, guards and hunts it.
+
 ## Suggestions from the November review (not decided)
 
 From a full review of the game after the audit work was merged. None is planned yet; each is for the owner to pick
