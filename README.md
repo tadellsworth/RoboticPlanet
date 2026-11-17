@@ -249,8 +249,23 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   order) or **Top of the list first** (`b.omode = 'first'`: every bot of the top ordered type before the next). The
   type being built is highlighted. The AI keeps the default order, taking turns.
 - **Roads** cost Cement (1 Cement paves 5 tiles), paid when you build the plan. Planned tiles show dashed
-  until free workers pave them: 1.5 s a tile (3 s through resources), working out from the existing network, so long
-  highways take planning and spare workers. A worker that just found no way somewhere (walled in on the Wall it built,
+  until free workers pave them: 1.5 s a tile (3 s through resources), so long highways take planning and spare workers.
+  **Paving order** (`paveMap`, `nextPaveTile`): a planned road grows out from the network its workers belong to (home's,
+  the roads joined to a Command Base on their ground; or, for workers posted on a foothold, the roads joined to its
+  stores and garrisons), one joined tile after another, so each stretch is usable as soon as it's down. A tile joins
+  beside road on that network (or on a road leaving a finished building on it) or beside such a building; a site at
+  the far end, or a building cut off from home, doesn't count. A bridge or tunnel is built from the road beside it on
+  that network: the home side. The tile goes to the free worker nearest it, and a worker still walking out from far
+  off hands its tile over to one `PAVE_TAKE` (8) tiles nearer. A tile being paved counts as down already, so a second
+  worker takes the next tile just past it (still growing outward, never past a bridge or tunnel going up) or another
+  road. Before it sets off, a worker reckons up the walk there (its route, by road and off-road speeds), the paving and
+  the walk back to the nearest charger it can reach (`paveShort`); if that would take it below `BATTERY.critical`
+  (+2), it charges first (unless it's charged to 95% already, or there's nowhere to charge). A stretch of plan that
+  joins nothing (laid out on its own) is still built, once nothing joined is left to pave: from its end nearest home
+  (an end of the stretch, or a tile beside road or a building), inward. Measured on a 30-tile road from home to a far
+  site (one to three workers, with and without a bridge): no worker runs flat any more (51 times before), the first 10
+  tiles are down sooner, and the whole road usually sooner too; workers that start out by the far end walk back to the
+  home end first, so those finish later than when they paved inward from the far end. A worker that just found no way somewhere (walled in on the Wall it built,
   say: `u.failUntil`) sits out the next building and paving rounds, and isn't counted as soon free (`nearSoon`), so
   the others still come; a tile nobody can reach is skipped for a while (`paveSkip`). Calling off a planned tile refunds it. Roads double a bot's speed. Dragging
   plans roads round resources; tap a boulder, grove, ore or crystal tile to clear it for a road at 3× the Cement. A Roadworks' Paver

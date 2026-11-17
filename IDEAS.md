@@ -14,17 +14,6 @@ Still open: a neutral, shared exchange the rivals compete over; contracts for Ch
 
 ## Held for later
 
-- **Workers should pave roads outward from home** (the owner, Nov 17 2026: rework). Today a Worker paving a planned
-  road often walks to its far end first, runs its battery low out there, and paves back toward base, so the road is
-  no use until it's finished and the Worker can be stranded. Wanted: a road always grows from the end nearest the
-  home network (the closest end possible) outward, one joined tile after another, usable as it goes. What the code
-  does now (`nextPaveTile` in `js/sim.js`): the worker takes the nearest planned tile, with a penalty of only 8 tiles
-  for one that doesn't join anything; and a tile beside *any* building or site counts as joining, so the tile at a
-  far-off site's door counts as much as one at the end of a road that reaches home. A rework would:
-  - count only tiles that join road already on the home network (or a foothold's own network, for its workers);
-  - keep a worker on the growing end;
-  - send it to charge before it walks out further than its battery brings it back.
-  The rival's roads use the same code, so measure rival-vs-rival games before and after.
 - **Room to grow in the single-file game** (owner's to-do, Nov 17). `dist/terrafall.html` must stay under 16 MB (its
   host's limit for a page; each file beside it has its own 16 MB). It reached 16,346 KB with the Hollow's and the new
   Fiber and Oil art, so the Forest's and Hoarfell's biome art moved into bundles beside the page like the newer biomes'
