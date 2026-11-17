@@ -978,7 +978,7 @@ function workerBattery(u, dt) {
     const b = getE(u.inside);
     const ch = b && b.built && BDEFS[b.type].charger;
     if (ch) {
-      if (u.bat < 100) {
+      if (u.bat < 100 && !murmurCutOn(b)) { // (one the Murmur cut charges nothing till dawn)
         let gain = Math.min(100 - u.bat, ch.rate * (tech(b.owner, 'cells') || tech(b.owner, 'charge') ? 1.5 : 1) * Math.min(1, ch.slots / Math.max(1, b.charging)) * dt);
         if (ch.fuel) {
           // Fuel Stations burn a Fuel whenever their energy runs low.
@@ -10923,7 +10923,8 @@ function murmurDeadTick() {
     if (S.time - d.t > K.bodyLast) { addFx('dust', d.x, d.y, { r: 0.5 }); continue; }
     let best = null, bd = K.dragR * K.dragR;
     for (const u of S.bots) {
-      if (u.dead || !isWildBot(u) || u.drag || u.fight || !u.task || !['raid', 'rally', 'guard', 'back'].includes(u.task.type)) continue;
+      // (Scuttlers and Brutes fetch their dead; the other forms keep to their own work: a Sapper underground never does.)
+      if (u.dead || !isWildBot(u) || murmurForm(u) || u.under || u.drag || u.fight || !u.task || !['raid', 'rally', 'guard', 'back'].includes(u.task.type)) continue;
       const dd = dist2(u.x, u.y, d.x, d.y);
       if (dd < bd || (dd === bd && best && u.id < best.id)) { bd = dd; best = u; }
     }

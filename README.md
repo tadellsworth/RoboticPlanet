@@ -1599,7 +1599,7 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
     adds `COVER_COST` there), `murmurPrey` scores what a gun covers 6 a gun lower, and Scuttlers scatter `scatterFor` s
     when `scatterN` armed warbots are within `scatter` tiles (`murmurScatter`, `murmurFlee`; not again for
     `scatterCd`). One killed on Active leaves no blast or fire (`killBot` → `murmurBody`): a body in `S.mur.dead`, which
-    the nearest creature within `dragR` drags (task `drag`, at `dragSlow`, `u.drag` drawn behind it) down the nearest
+    the nearest Scuttler or Brute within `dragR` (the Leech, Spitter and Sapper keep to their own work) drags (task `drag`, at `dragSlow`, `u.drag` drawn behind it) down the nearest
     exit (a guard, into its nest); one nobody comes for sinks after `bodyLast` s, and all at dawn. Memory
     (`S.mur.mem`: `kill` and `fed`, each up to `memMost` [x, y, weight], merged within 3 tiles, × `memDecay` each
     nightfall, gone under 0.3; `murmurRemember`, `murmurMem` within `memR`): a creature on a strike killed by a gun or
