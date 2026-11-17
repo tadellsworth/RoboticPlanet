@@ -337,6 +337,22 @@ kbd {
 .trade-row { align-items: center; }
 .trade-row small { display: block; color: var(--muted); font-size: 12px; margin-top: 2px; }
 .trade-row.on > span { color: var(--accent); }
+/* A Trade Terminal's route (the goods to send and to bring back) and the market board. */
+.trade-side { font-size: 12px; color: var(--muted); font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; margin-top: 8px; }
+.gtag.tpick { cursor: pointer; color: var(--text); }
+.gtag.tpick.on { border-color: var(--accent); background: rgba(127,227,255,0.16); color: var(--accent); }
+.gtag.tpick:disabled { opacity: 0.35; cursor: not-allowed; }
+.trade-cur { padding: 6px 0; border-top: 1px solid var(--line); font-size: 14px; }
+.trade-cur.on { color: var(--accent); }
+.trade-cur small { display: block; color: var(--muted); font-size: 12px; margin-top: 2px; }
+.trade-cur .gi, .board-row .gi { display: inline-block; vertical-align: -1px; margin: 0 5px 0 3px; }
+.board { margin: 2px 0 6px; }
+.board-row { display: grid; grid-template-columns: 1fr 76px 56px; gap: 6px; align-items: center; padding: 3px 0; border-top: 1px solid var(--line); font-size: 13px; font-variant-numeric: tabular-nums; }
+.board-row > span:not(:first-child) { text-align: right; font-weight: 600; }
+.board-row small { color: var(--muted); font-size: 11px; margin-left: 6px; font-weight: 500; }
+.board-row .eased { color: var(--warn); }
+.board-head { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; border-top: 0; }
+.board-head > span:not(:first-child) { font-weight: 700; }
 .kv span:last-child { font-weight: 600; text-align: right; }
 .bar { height: 8px; border-radius: 4px; background: rgba(255,255,255,0.08); overflow: hidden; margin: 4px 0 10px; }
 .bar > div { height: 100%; background: var(--accent); }

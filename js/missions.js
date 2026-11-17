@@ -719,12 +719,12 @@ const MISSIONS = [
   },
   {
     id: 'trade', name: 'Trade Winds', chapter: 'Industry and Trade',
-    brief: 'Dock a Trade Terminal at a neutral Trade Post and fill a contract by Road Train, through the planet\'s storms.',
+    brief: 'Dock a Trade Terminal at a neutral Trade Post and run a trade route by Road Train, through the planet\'s storms.',
     intro: [
-      'The gold pads on the minimap are neutral <b>Trade Posts</b>. A Trade Terminal there swaps a big surplus.',
-      'Only Road Trains (or Freight Trains) carry the lots. Posts further out pay better.',
-      'A far Depot on a Road Train\'s road stocks itself with what the buildings round it need.',
-      'One contract always brings <b>Fuel</b>, at a steep price: a <b>Tanker</b> takes it home.',
+      'The gold pads on the minimap are neutral <b>Trade Posts</b>. A Trade Terminal there runs a standing trade route.',
+      'Pick a good to send and one to bring back: a <b>Road Train</b> convoy runs it every 2 minutes.',
+      'Raw goods sell cheap and made goods dearer (the market board). Posts further out pay better.',
+      'A route can buy <b>Fuel</b>, at a markup: a <b>Tanker</b> takes it home.',
       '<b>Planet events</b> are on: dust storms, Ringfall, solar flares, and now and then the <i>Wren</i>, a trader ship.',
     ],
     // (Seed 1445: Ringfall (a meteor shower) at 2:30 and a solar flare over by 9:36. Events are seeded, and on the designed
@@ -746,10 +746,10 @@ const MISSIONS = [
         hint: 'Tap a gold Trade Post → <b>Dock a Trade Terminal here</b>. Then tap its site → <b>Lay road</b> (<kbd>R</kbd>).',
         // (No #btn-build: always on screen, it would always be what lit up and the Terminal site would get no ring.)
         ui: "#sh-dock, #sh-layroad, #build-tabs [data-g='move'], .bcard[data-t='terminal']" },
-      { kind: 'trades', n: [1, 2, 3], text: ['Make a trade at the Terminal', 'Make {n} trades at the Terminal'], at: 'terminal',
+      { kind: 'trades', n: [1, 2, 3], text: ['Make a trade run at the Terminal', 'Make {n} trade runs at the Terminal'], at: 'terminal',
         count: (P) => (P.trade && P.trade.sold) || 0,
-        hint: 'Tap the Terminal → <b>Take</b> a contract, like 30 Stone (a Road Train hauls it). The last always buys Fuel.',
-        ui: '#sh-trade button' },
+        hint: 'Tap the Terminal → a <b>Send</b> good, a <b>Bring back</b> one → <b>Start route</b> (<kbd>G</kbd>). A run every 2 min.',
+        ui: '#sh-tgive, #sh-tget, #sh-tgo' },
       { kind: 'events', n: 2, text: 'Ride out 2 planet events',
         count: (P, S) => (S.evN || 0) - (S.event ? 1 : 0),
         hint: 'Ringfall craters roads, flares drain batteries, dust slows robots. Waiting? Speed up: <b>1×</b> (<kbd>]</kbd>).',
