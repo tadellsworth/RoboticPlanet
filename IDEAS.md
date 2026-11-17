@@ -365,6 +365,9 @@ These wait for a later expansion:
   - Colony with today's raids (until the night system replaces them): with five nests a side and cutting veins drawing
     the packs, a computer-run colony stalls at about 22 buildings by 15 minutes (on Standard, with 3 nests, it reaches
     about 31). Hard by design, or soften the lure (`VEIN`) or the nests nearest home?
+  - Computer-only games end in 15 to 40 minutes, neither seat favoured (11 wins to 13 over 25 games, one still going
+    at 45). On Small maps both computer colonies are slow to get Fuel (one oil seep each, a few tiles from home):
+    a second seep near home, or leave it lean?
   - Three or four players: not built (the layout is made for two, turned half round).
 - **The Murmur in regular games (decided by the owner, Nov 17; being built).** A Custom Game setting for every map,
   **Off / Quiet / Active, Active by default** (never on Argos, the moon). It **forces the day/night cycle on**: the
