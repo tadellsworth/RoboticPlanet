@@ -487,8 +487,8 @@ These wait for a later expansion:
   Versus, nine computer-only games: seven on Standard, shape 2 and shape 4 end in 13.9 to 40.5 minutes (mean 23.9, was
   22.1), the first seat winning 5 to 2 (was 3 to 4), about 3 robots a colony lost to the Murmur (was 3.5); on the
   Hollow, Medium seed 11 ends at 34.8 (before: still going at 75) and Small seed 21 at 17.7 (was 29.4).
-  For the owner: the Hollow in Colony is now harder for a computer-run colony (its robots lost go from a handful to a
-  dozen or so in 35 minutes; its size is the same): the lair, or soften it there?
+  The Hollow in Colony is now harder for a computer-run colony (its robots lost go from a handful to a dozen or so in
+  35 minutes; its size is the same). The owner (Nov 17): keep it hard there, it's their lair.
   Open: art for the tunnels and exits (procedural for now: `paintTunnelTile`, `paintTunnelVeins`, `drawBurrow`,
   `drawExitScar` in js/render.js); the Leech, Spitter and Sapper as raiders; whether Torches should burn tunnels out.
 - **A campaign mode built around the Murmur** (the owner's long-term wish): the owner's outline is in CAMPAIGN.md, 15
