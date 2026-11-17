@@ -1133,7 +1133,9 @@ function aiNaval(p, me, kinds, lvl, lander, canBuild) {
   if (built.length >= 2 && yard) {
     const far = built.reduce((a, b) => (dist2(b.x, b.y, lander.x, lander.y) > dist2(a.x, a.y, lander.x, lander.y) ? b : a));
     if (!far.keep) { setKeep(far, 'cement', 12); setKeep(far, 'ammo', 6); }
-    if (!S.bots.some((u) => !u.dead && u.owner === p && u.type === 'cargoship') && !(yard.yard && yard.yard.cargoship > 0)) orderAtYard(yard, 'cargoship', 1);
+    // (Not while a Ferry is on order: the yard builds a Container Ship first, and short of Alloy that held the Ferry back
+    // for half an hour.)
+    if (!S.bots.some((u) => !u.dead && u.owner === p && u.type === 'cargoship') && !(yard.yard && (yard.yard.cargoship > 0 || yard.yard.ferry > 0))) orderAtYard(yard, 'cargoship', 1);
   }
   // Medium and up, against a rival across the water: a band that gathers on a beach first (aiBeach).
   if (S.difficulty !== 'easy' && !S.mission && aiBeach(p, lvl, army, ferries, yard)) return;
