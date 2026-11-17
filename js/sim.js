@@ -1660,15 +1660,15 @@ function deckEnds(u) {
   return d(a) <= d(b) ? [a, b] : [b, a];
 }
 
-/** Straight-line step used while chasing in combat. */
-function moveDirect(u, x, y, dt) {
+/** Straight-line step used while chasing in combat (and keeping place in a formation: `cap`, a top speed). */
+function moveDirect(u, x, y, dt, cap) {
   // On a Viaduct's deck there's nowhere to go but along it: head for its nearer end.
   const deck = deckEnds(u);
   if (deck) { x = (deck[0] % S.W) + 0.5; y = ((deck[0] / S.W) | 0) + 0.5; }
   const dx = x - u.x, dy = y - u.y, d = Math.sqrt(dx * dx + dy * dy);
   if (d < 1e-4) return true;
   u.face = datan2(dy, dx);
-  const s = Math.min(WARBOT_SPEED * batFactor(u) * speedMul(u) * dt, d);
+  const s = Math.min(WARBOT_SPEED * batFactor(u) * speedMul(u) * dt, cap !== undefined ? cap * dt : Infinity, d);
   const nx = u.x + (dx / d) * s, ny = u.y + (dy / d) * s;
   const ti = Math.floor(nx), tj = Math.floor(ny), ci = Math.floor(u.x), cj = Math.floor(u.y);
   if (!inMap(ti, tj)) return false;
@@ -4591,25 +4591,88 @@ function fuelPoint(u) {
 }
 
 /**
- * Formation: a warbot or Torch on an attack or a rally flag with a Bulwark of its own in the same group lets the
- * Bulwark lead: until the Bulwark gets there, it keeps `behind` tiles further from the goal than the Bulwark (a Torch
- * close at its back, ready to step out and burn; warbots a little further back), holding back behind the shield
- * while it would be ahead of that. True while it should wait.
+ * Formation: a warbot or Torch on an attack or a rally flag, with a Bulwark of its own on the same job close by,
+ * lets the Bulwark lead. Each has a place in its lee (formPlace): Torches right at its back, warbots in rows of
+ * FORM.row behind them, FORM.gap apart, all within the shield's cover and set square to the way the Bulwark is going.
+ * It walks to its place, then keeps pace with the Bulwark (no faster than it goes) instead of stopping and starting,
+ * so the squad moves as one and doesn't pile up in a heap behind the shield. It's let go to fight as usual when:
+ * - the Bulwark is at the target (within 2.6 tiles of it, or of the flag);
+ * - it can already shoot the target from where it is;
+ * - the Bulwark is in a fight with a robot, or hasn't got a tile nearer in FORM.stuck seconds (held up at a Wall,
+ *   say): the squad comes round it and joins in, rather than standing behind a Bulwark that isn't going anywhere.
+ * (Before, a warbot just stopped dead whenever it was nearer the goal than the Bulwark: the squad stuttered along,
+ * slower than the Bulwark itself, bunched almost on top of itself, and stood idle behind it while it fought.)
+ * True while it's in formation (it has moved for this step); false to carry on with its job as usual.
  */
-function escortWait(u, gx, gy, key) {
+const FORM = { row: 3, gap: 0.6, back: 1.05, rowBack: 0.6, torch: 0.6, stuck: 4, near: 12, far: 2.2 };
+function escortMove(u, gx, gy, key, dt) {
   if (BOTS[u.type].shield) return false;
   let lead = null, ld = Infinity;
   for (const w of SHIELDS) {
     if (w.owner !== u.owner || !w.task || w.retreat) continue;
     if ((key.attack && !(w.task.type === 'attack' && w.task.target === key.attack)) || (key.rally && !(w.task.type === 'hold' && w.task.rally === key.rally))) continue;
     const d = dist2(w.x, w.y, u.x, u.y);
-    if (d < ld && d < 144) { ld = d; lead = w; }
+    if (d < ld && d < FORM.near * FORM.near) { ld = d; lead = w; }
   }
   if (!lead) return false;
   const dl = dist(lead.x, lead.y, gx, gy);
-  if (dl < 2.6) return false; // the Bulwark is there: in behind it
-  const behind = BOTS[u.type].flame ? 0.3 : 0.75;
-  return dist(u.x, u.y, gx, gy) < dl + behind;
+  if (dl < 2.6) return false; // the Bulwark is there: in to fight
+  // How the Bulwark is getting on: the nearest it's been to the goal on this job, and when.
+  const job = key.attack ? 'a' + key.attack : 'r' + key.rally;
+  if (lead.formJob !== job || dl < lead.formD - 1) { lead.formJob = job; lead.formD = dl; lead.formT = S.time; }
+  if (lead.fight || S.time - lead.formT > FORM.stuck) return false; // it's fighting, or held up: come round and join in
+  const bt = BOTS[u.type], reach = bt.flame ? 2.05 : WARBOT_HIT.reach;
+  if (key.attack && dist(u.x, u.y, gx, gy) <= reach) return false; // already in reach of the target: shoot
+  const at = formPlace(u, lead, gx, gy, dl, key);
+  const ds = dist(u.x, u.y, at.x, at.y);
+  if (ds > FORM.far) { // well off its place: walk there (the way round, if need be)
+    if (travel(u, Math.floor(at.x), Math.floor(at.y), dt) === null) return false;
+    return true;
+  }
+  u.path = null;
+  // Keep pace: it follows its place as that moves with the Bulwark, as fast as the Bulwark is going and a little
+  // faster the further off its place it is (it catches up without overtaking), never faster than it can. (It never
+  // parks in its place: standing still till the Bulwark had drawn ahead, then catching up, was a stutter of its own.)
+  if (ds > 1e-3 && !moveDirect(u, at.x, at.y, dt, (lead.vel || 0) + 0.25 + ds * 0.6)) spreadOut(u, dt);
+  return true;
+}
+
+/**
+ * Warbot or Torch u's place in its Bulwark's formation, going toward (gx, gy): its rank among the squad (by id, so
+ * every place is taken once and the same on every device), worked out once a step for each Bulwark and job.
+ * A place it couldn't stand on (in a building, on water, another level) moves in straight behind the Bulwark.
+ */
+function formPlace(u, lead, gx, gy, dl, key) {
+  if (lead.formTick !== S.tick || lead.formFor !== lead.formJob) {
+    const torches = [], bots = [];
+    for (const v of S.bots) {
+      if (v.dead || v.inside || v.owner !== lead.owner || !v.task || BOTS[v.type].shield) continue;
+      if (key.attack ? !(v.task.type === 'attack' && v.task.target === key.attack) : !(v.task.type === 'hold' && v.task.rally === key.rally)) continue;
+      if (dist2(v.x, v.y, lead.x, lead.y) > FORM.near * FORM.near) continue;
+      (BOTS[v.type].flame ? torches : bots).push(v.id);
+    }
+    torches.sort((a, b) => a - b); bots.sort((a, b) => a - b);
+    lead.formRank = {};
+    torches.forEach((id, k) => { lead.formRank[id] = { torch: 1, k }; });
+    bots.forEach((id, k) => { lead.formRank[id] = { torch: 0, k }; });
+    lead.formTick = S.tick; lead.formFor = lead.formJob;
+  }
+  const r = lead.formRank[u.id] || { torch: 0, k: 0 };
+  const fx = (gx - lead.x) / dl, fy = (gy - lead.y) / dl, px = -fy, py = fx;
+  const row = Math.floor(r.k / FORM.row), n = FORM.row, col = (r.k % n) - (n - 1) / 2;
+  const back = r.torch ? FORM.torch : FORM.back + (r.torch ? 0 : row * FORM.rowBack);
+  const side = (col + (row % 2 ? 0.25 : -0.25) * (n % 2 ? 0 : 1)) * FORM.gap;
+  const lt = tIdx(Math.floor(lead.x), Math.floor(lead.y));
+  const ok = (x, y) => {
+    const i = Math.floor(x), j = Math.floor(y);
+    if (!inMap(i, j)) return false;
+    const t = tIdx(i, j);
+    return walkable(t) && !(S.bAt[t] && !passTile(t, u.owner)) && S.elev[t] === S.elev[lt];
+  };
+  let x = lead.x - fx * back + px * side, y = lead.y - fy * back + py * side;
+  if (!ok(x, y)) { x = lead.x - fx * back; y = lead.y - fy * back; }
+  if (!ok(x, y)) { x = lead.x; y = lead.y; }
+  return { x, y };
 }
 
 /** Is bot u up in the air (a plane in flight, a robot on its parachute), out of reach of anything on the ground? */
@@ -5867,7 +5930,7 @@ function warbotAct(u, dt) {
       return;
     }
     // In formation: behind the group's Bulwark until it gets there.
-    if (dist2(u.x, u.y, b.x + 0.5, b.y + 0.5) > 9 && escortWait(u, b.x + 0.5, b.y + 0.5, { attack: b.id })) { u.path = null; u.vel = 0; spreadOut(u, dt); return; }
+    if (dist2(u.x, u.y, b.x + 0.5, b.y + 0.5) > 9 && escortMove(u, b.x + 0.5, b.y + 0.5, { attack: b.id }, dt)) return;
     if (strikeBuilding(u, b, dt, power) === null) u.task = null;
   } else if (t.type === 'hold') {
     holdRally(u, t, rally, dt, power);
@@ -6602,7 +6665,7 @@ function holdRally(u, t, r, dt, power) {
     if (f) { u.resume = { type: 'hold', rally: t.rally, slot: t.slot }; u.task = { type: 'refill', bld: f.id }; u.path = null; return; }
   }
   // In formation: behind the group's Bulwark until it gets to the flag.
-  if (dist2(u.x, u.y, r.x, r.y) > 9 && escortWait(u, r.x, r.y, { rally: r.id })) { u.path = null; u.vel = 0; spreadOut(u, dt); return; }
+  if (dist2(u.x, u.y, r.x, r.y) > 9 && escortMove(u, r.x, r.y, { rally: r.id }, dt)) return;
   let tgt = t.target ? getE(t.target) : null;
   if (!botArmed(u) || (r.raid && raidRoadsLeft(r, u.owner))) tgt = null; // raiders cut the road first
   else if (!tgt || !foes(tgt.owner, u.owner) || (dist2(tgt.x + 0.5, tgt.y + 0.5, r.x, r.y) > 10 && tgt.id !== r.first)) {
