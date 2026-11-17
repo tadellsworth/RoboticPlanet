@@ -1278,10 +1278,11 @@ const MISSIONS = [
         hint: '<b>Make</b> (<kbd>2</kbd>) → <b>Missile Factory</b> (<kbd>N</kbd>), <b>Defend</b> (<kbd>4</kbd>) → <b>Missile Silo</b> (<kbd>I</kbd>) toward them. Silo → <b>Aim missile</b> (<kbd>F</kbd>).',
         ui: ".bcard[data-t='munitions'], .bcard[data-t='silo'], #sh-aim" },
       { kind: 'forts', n: [3, 4, 6], text: 'Take out {n} Walls or turrets',
-        // (Walls, Gates, guns and Keeps your robots shoot, burn or capture, counted as they fall: `forts`, see
-        // captureBuilding. One a missile or bomb finishes off doesn't count: this goal is the Torches' and Bulwark's.)
+        // (Their Walls, Gates, guns and Keeps taken out by any means, counted as they fall: `forts`, see fortTaken. Your
+        // robots shooting, burning or capturing one count, and so does a missile, bomb, nuke or Howitzer shell that wrecks
+        // one: "take out" reads as any means. The goals before this one see that the Torches and Bulwark get built and used.)
         count: (P) => P.stats.forts || 0,
-        hint: '<b>Army</b> (<kbd>Q</kbd>) → <b>Attack</b> (<kbd>Q</kbd>): tap a Wall or turret. Bulwark and Torches lead; a missile softens one up.',
+        hint: '<b>Army</b> (<kbd>Q</kbd>) → <b>Attack</b> (<kbd>Q</kbd>): tap a Wall or turret. Bulwark and Torches lead; one a missile or bomb finishes counts too.',
         ui: '#btn-attack, #ar-attack' },
     ],
   },

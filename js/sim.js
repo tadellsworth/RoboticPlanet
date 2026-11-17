@@ -4834,12 +4834,21 @@ function hitBuilding(b, dmg, by) {
   if (b.armor <= 0) captureBuilding(b, by);
 }
 
+/**
+ * A foe's defence (a Wall, Gate, gun or Keep: DEFENCE_TYPES but the Silos) that player `by` took out just now, by any
+ * means, counts for `by` as it falls: Siege Breakers' goal (stats.forts). Robots that shoot, burn or capture it come
+ * here through captureBuilding; a Missile, a nuclear one, a bomb (napalm too) or a Howitzer's shell that wrecks it, just
+ * before its destroyBuilding. Call it while b still has its owner.
+ */
+function fortTaken(b, by) {
+  const def = BDEFS[b.type];
+  if (b.built && by >= 0 && foes(by, b.owner) && DEFENCE_TYPES.has(b.type) && !def.missile && !def.nukeSilo) S.players[by].stats.forts = (S.players[by].stats.forts || 0) + 1;
+}
+
 function captureBuilding(b, by) {
   const def = BDEFS[b.type], old = b.owner;
   if (def.wild) { clearNest(b, by); return; }
-  // (A defence shot or burned down by robots, counted as it falls: Siege Breakers' goal. Missiles and bombs wreck
-  // theirs through destroyBuilding.)
-  if (b.built && by >= 0 && foes(by, old) && DEFENCE_TYPES.has(b.type) && !def.missile && !def.nukeSilo) S.players[by].stats.forts = (S.players[by].stats.forts || 0) + 1;
+  fortTaken(b, by); // (a defence shot, burned down or captured by robots, counted as it falls)
   if (def.bunker && b.built) {
     // There's no land to take: a fallen Bunker is wrecked, and the warbots inside walk out.
     dropLoot(b);
@@ -6711,6 +6720,7 @@ function rocketHit(b, dmg, by) {
   else if (b.armor <= 0) {
     postMsg(by, `Your artillery wrecked the enemy ${def.name}.`, b.x, b.y, 'good');
     postMsg(b.owner, `Enemy artillery wrecked your ${def.name}!`, b.x, b.y, 'lost');
+    fortTaken(b, by);
     destroyBuilding(b, true);
     return;
   }
@@ -7514,6 +7524,7 @@ function missileImpact(m) {
     if (b.armor <= 0 && !captureOnly(b)) {
       postMsg(m.owner, `Your missile wrecked the enemy ${name}.`, b.x, b.y, 'good');
       postMsg(b.owner, `A missile wrecked your ${name}!`, b.x, b.y, 'lost');
+      fortTaken(b, m.owner);
       destroyBuilding(b, true);
     } else {
       const floor = captureOnly(b) ? missileFloor(b) : 0;
@@ -7529,6 +7540,7 @@ function missileImpact(m) {
     hitByNow(e.owner, m.owner);
     if (e.armor <= 0 && !captureOnly(e)) {
       postMsg(e.owner, `The blast wrecked your ${BDEFS[e.type].name}!`, e.x, e.y, 'lost');
+      fortTaken(e, m.owner);
       destroyBuilding(e, true);
     } else if (captureOnly(e) && e.armor < missileFloor(e)) e.armor = Math.min(missileFloor(e), e.armor + md.splashDamage);
   }
@@ -7753,6 +7765,7 @@ function nukeImpact(m) {
         if (dist2(b.x + 0.5, b.y + 0.5, cx, cy) <= NUKE.direct * NUKE.direct && m.owner >= 0 && b.owner >= 0 && foes(m.owner, b.owner) && S.players[b.owner] && !S.players[b.owner].out) { direct.push(b); lost[b.owner]++; }
       } else {
         lost[b.owner]++;
+        fortTaken(b, m.owner);
         destroyBuilding(b, true);
       }
     }
@@ -12188,6 +12201,7 @@ function bombHit(b, dmg, by) {
   else if (b.armor <= 0) {
     postMsg(by, `Your bomber destroyed the enemy ${def.name}.`, b.x, b.y, 'good');
     postMsg(b.owner, `An enemy bomber destroyed your ${def.name}!`, b.x, b.y, 'lost');
+    fortTaken(b, by);
     destroyBuilding(b, true);
     return;
   }
