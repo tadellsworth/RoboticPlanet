@@ -71,6 +71,20 @@ and switches for the **Nuclear race** (on by default), **Planetary events** (off
 `UNLIMITED_STOCK` of every good and fills whatever your buildings are waiting for, once a second). Resources come in separate
 fields: your landing zone has a little of everything, and the rich fields beyond it are worth fighting for.
 
+**Challenge modifiers** (the setup's Challenge section, and the host's settings in multiplayer): switches mixed freely
+(`MODS`, `MOD_ORDER` in `js/defs.js`), remembered on the device with the other settings (`botfall.settings`, `mods`) and
+kept in the game's settings (`S.settings.mods`, cleaned by `modList`; newGame leaves out Rival head start in Colony), so
+every device plays them alike and saves keep them. **Half Fuel**: Refineries and energy crops make Fuel at
+`MODS.fuel.rate` speed (`modFuelRate`, in `produce` and `growStalks`). **Endless dust storm**: the planetary events run
+(`S.events`) with the first one a dust storm `MODS.dust.at` seconds in that never ends (`S.event.endless`, `t1` =
+`DUST_ENDLESS`), so no other event comes. **Rival head start**: each computer colony lands with `START_STOCK` again and
+4 Workers, 2 Haulers and 2 warbots more (`modsSetup`, from newGame). **Scarce Crystal**: Crystal clusters and every
+Command Base's Crystal halved at the landing. **Fragile robots**: `damageBot` multiplies by `MODS.fragile.takes` (1.5).
+**No turrets**: the `place` order refuses Pulse Turrets, Minigun Nests, Mortar Pits and Disruptor Towers to people
+(`modNoBuild`; the Build menu leaves them out), while the computer places its own. The ones on show on the setup's
+planet card (`syncPvMods`, ◆ on each with a badge), the summary under Start, one line of the briefing (`modsBriefing`,
+`MODS[k].brief`), the pause menu (`#p-mods`) and the lobby's summary.
+
 Terrafall is an original game in the colony-logistics genre. It contains no code, art, sound or data from
 any other game.
 
@@ -1356,7 +1370,10 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   missions (`metaCampaign`, from `loadCampaign`). Earned in a game they pop up as a message. **Records** on the main
   menu (`#screen-records`, `openRecords`, a pill beside Lore and Feedback) shows them all; an earned achievement with
   `lore` has a button that opens the Lore guide on that page (`openLore(id)`). **Forget records and achievements**
-  (two taps) clears both.
+  (two taps) clears both. Challenge modifiers don't stop a game counting: records keep the ones on (`mods`, `metaMods`)
+  and achievements too (`_mods` in `terrafall.achievements`), both marked ◆ on the Records screen; a win with some on
+  earns each one's **challenge badge** (`R0.mods[k]`: wins and the hardest rival, `metaModBadges`, its own row on the
+  Records screen and ◆ on the planet card), and a win with a `pace` modifier (Fragile robots) isn't a fastest win.
 - **Back and the screen** (`initBack`, `syncWakeLock`): in a game a phone's (or the browser's) Back button steps back
   like Esc instead of leaving the page: it closes the start-of-game card, a screen, a panel or a mode, clears the
   selection, and with nothing open brings up the pause menu (a history entry is added on entering a game and put back

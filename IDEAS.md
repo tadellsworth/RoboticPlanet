@@ -107,8 +107,10 @@ or drop.
 ### Reasons to come back
 - **Daily planet:** the same seed, map shape and rival doctrine for everyone each day, with a score (time to win,
   robots made) and a local best; the relay could keep a shared board later.
-- **Challenge modifiers** in Custom Game, mixed freely: no roads over water, half Fuel, a dust storm that never ends,
-  a rival with a head start. Each won gives a small badge on the planet card.
+- **More challenge modifiers** (Half Fuel, Endless dust storm, Rival head start, Scarce Crystal, Fragile robots and No
+  turrets are built, with badges): still open are no roads over water (no bridges: route planning, the Paths tool and
+  the rival's bridging all need to know) and no defences for every colony (the rival's defence planning would have to
+  skip them, not only the player's Build menu).
 
 ### Deeper play without new systems
 - **Truce and tribute in free-for-all:** pay a rival (say 20 Alloy) to leave you alone, or to hit the leader, for
