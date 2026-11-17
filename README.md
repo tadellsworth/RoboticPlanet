@@ -563,21 +563,24 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   filled in; `joinAll`). `S.hollow` keeps what the game needs: `breaches` ([{x, y, r, home}]: one over each Command
   Base, radius `HOLLOW.breach.home`, and `HOLLOW.contested` (4) in the flank caverns, two each, radius `open`), `masses`,
   the Murmur's nest sites (`nests`, twin pairs, `HOLLOW.nests` a side by size, 4 to 7; `deep`, the middle of the
-  cathedral), the Trade Posts' places (`posts`: the cathedral's west and east ends) and `pillars` (single rock tiles
-  with open floor all round, so they never close a way: a ring round the Deep's mound and more by the Terrain setting).
+  cathedral) and `pillars` (single rock tiles with open floor all round, so they never close a way: a ring round the
+  Deep's mound and more by the Terrain setting). **No Trade Posts or Uplinks** (LORE.md: the Pathfinder, which built
+  them, never mapped the Hollow): `placePosts` places none, `worldBan` greys the Trade Terminal out with a reason, the
+  rival plans no Terminal where there is no post (so it never waits on trade for Crystal), and `newGame` turns an
+  Uplinks game on this map into Capture (the menu greys the Uplinks choice out and says so; a Random pick that lands
+  here says so in a message).
   - **Breach shafts.** Drawn as a pool of pale gold daylight on the night-graded ground (`drawBreachLight`) and a column
     rising toward the top of the screen with motes drifting down it (`drawBreachShafts`), gold on the minimap.
     **Ringfall** falls only through them (`hollowRingfall`, from `meteorPlan`): `METEOR_HITS` strikes a side, a share
     `HOLLOW.ringfall.contested` (2 in 3) through the contested breaches on that side, each with its twin; each leaves up
-    to `HOLLOW.ringfall.tiles` (4) deposits `HOLLOW.ringfall.rich` (1.5) times a Ringfall deposit's amount. **Uplinks**
-    stand under the contested breaches (`placeUplinks`), the **Trade Posts** at `S.hollow.posts` (`placePosts`).
+    to `HOLLOW.ringfall.tiles` (4) deposits `HOLLOW.ringfall.rich` (1.5) times a Ringfall deposit's amount.
   - **Bloom veins** (`R_VEIN`, `RES[R_VEIN]`: 4 Fiber, 3 s to cut): on the cavern floors in fields and along the walls
     (16% of floor tiles beside rock, away from home). A Harvester gathers them there (`gatherRes`: R_VEIN for a Harvester
     in the Hollow, so `gatherTypes`, `canPlace`, the AI and the panels all go by it). A vein cut to nothing stays a vein
     with `S.grow` 0 and grows back over `VEIN.regrow` (150 s, `growStalks`; `findNode` skips it meanwhile; `veinFull`).
     Cutting one stamps the Harvester (`b.veinT`) where the Murmur are in the game (`wildOn`), and `veinLure` makes it a
     raid target: `wildTarget` counts it `VEIN.pull` (2) times nearer, from up to `VEIN.reach` (8) tiles further out, for
-    `VEIN.lure` (120 s). No stalks or fertile soil: `worldBan` bars Grove Planters and Bio Farms (and Airfields) with a
+    `VEIN.lure` (120 s). No stalks or fertile soil: `worldBan` bars Grove Planters and Bio Farms (and Airfields and Trade Terminals) with a
     reason for `canPlace`, and the build menu greys them out (`ownedText`). Fuel comes from the oil seep in every home
     cavern. A Worker lands in the Agribot's place.
   - **Floating Crystal**: a platform two levels up (level 3) in a pocket of chasm, worn back until only chasm touches it,

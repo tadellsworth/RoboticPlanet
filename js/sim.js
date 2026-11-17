@@ -9081,11 +9081,7 @@ function placeHollowNests(rng) {
  */
 function placePosts(seed) {
   S.posts = [];
-  // The Hollow: a pair, at the cathedral's west and east ends (hollowMap), the same for both sides.
-  if (S.hollow) {
-    for (const p of S.hollow.posts) { const t = tIdx(p.x, p.y); if (S.terrain[t] === T_GROUND && !S.bAt[t]) { S.res[t] = R_NONE; S.amt[t] = 0; S.posts.push({ id: S.posts.length + 1, x: p.x, y: p.y }); } }
-    return;
-  }
+  if (S.hollow) return; // (none in the Hollow: the Pathfinder, which built them, never mapped it)
   const Ls = S.players.filter((P) => !P.absent && !(S.wildlife && P.id === WILD_OWNER)).map((P) => getE(P.lander)).filter((L) => L && !L.dead);
   if (!Ls.length) return;
   const want = Ls.length === 1 ? TRADE_POST.colony : Ls.length + 1;
@@ -9196,12 +9192,6 @@ function uplinkOrbit(t) {
  * middle is a mountain: two pairs).
  */
 function placeUplinks(seed) {
-  // The Hollow: under the contested breaches, the only places with a line to the sky (each with its twin).
-  if (S.hollow) {
-    S.uplinks = S.hollow.breaches.filter((b) => !b.home).map((b, k) => ({ id: k + 1, x: b.x, y: b.y, owner: -1, jam: 0 }));
-    for (const u of S.uplinks) { const t = tIdx(u.x, u.y); S.res[t] = R_NONE; S.amt[t] = 0; S.fert[t] = 0; }
-    return S.uplinks;
-  }
   const Ls = S.players.filter((P) => !P.absent).map((P) => getE(P.lander)).filter(Boolean), n = Ls.length;
   const costs = Ls.map((L) => travelCost(tIdx(L.x, L.y)));
   const W = S.W, H = S.H, SH = SHAPE_PRESETS[S.settings.shape || 0], quad = (!!(SH.cross || SH.quad4) && S.players.length >= 3) || haul4Map(S.settings);

@@ -344,7 +344,8 @@ These wait for a later expansion:
   bridge) and **ceiling tremors** (the Hollow's weather: dust and falling rock). **No aircraft underground** (no
   Airfields). No solar flares. It's always night there, so the Murmur's night rhythm (below) becomes surges on the
   same 12-minute clock, and the hum goes silent just before each one.
-  **Built:** the map (two players, Versus and Colony; README, The Hollow), breaches, Bloom veins (they grow back), floating
+  **Built:** the map (two players, Versus and Colony; README, The Hollow; no Trade Posts or Uplinks, keeping to the
+  lore), breaches, Bloom veins (they grow back), floating
   Crystal (the rival AI ropeways out to it), side chambers of robot parts (crates of Alloy and Chips), stone pillars,
   tremors with falling rock, the Deep's mound (wrecking it spills its hoard and knocks every nest back to level 1), no
   Airfields, Grove Planters, Bio Farms or Ports, no dust storms or solar flares, the mission *Into the Hollow*.
@@ -354,12 +355,12 @@ These wait for a later expansion:
   raid-target weight (`veinLure`) for whatever picks a pack's target. **Waiting for the art:** the Hollow is drawn with
   the Bloom's art through one line (`BIOME_ART`); its pillars, veins, the Deep's mound and the shafts are drawn in code.
   **For the owner:**
-  - The Trade Posts stand at the cathedral's two ends, though the lore says the Pathfinder never mapped the Hollow (and
-    built the posts). Keep them there, move them, or leave the Hollow without trade?
+  - Trade Posts and Uplinks in the Hollow? The lore says the Pathfinder never mapped it. If you want them, the canon
+    would need a line saying how they got there. (For now there are none: no Trade Terminals, and the Uplinks victory
+    isn't offered on this map.)
   - Wrecking the Deep's mound knocks every nest back to level 1 and spills a big hoard (30 Crystal, 20 Alloy, 10 Chips).
     Enough, or should it do more (nests stop growing a while, the hum dies down), or less?
-  - The flank caverns hold four contested breaches (four Uplinks). Two (and a third Uplink in the cathedral) would make
-    the middle matter more.
+  - The flank caverns hold four contested breaches. Two would make the middle matter more.
   - Rock from the roof falls every other tremor (about every four to five minutes), near each colony's home, after an
     8-second trickle. Often enough to matter, rare enough not to nag?
   - Colony with today's raids (until the night system replaces them): with five nests a side and cutting veins drawing

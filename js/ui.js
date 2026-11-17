@@ -670,14 +670,21 @@ function syncMenu() {
   $('m-l-diff').textContent = mps ? 'Computer rivals' : 'Rival';
   for (const btn of $('m-diff').children) mark(btn, btn.dataset.v === m.diff);
   $('m-diff-field').hidden = colony;
-  for (const btn of $('m-victory').children) mark(btn, btn.dataset.v === (m.victory || 'capture'));
+  // (The Hollow has no Uplinks, the Pathfinder never having mapped it: that choice is greyed out, and the game is Capture.)
+  const noUplinks = !m.shapeRnd && !!(SHAPE_PRESETS[m.shape || 0] || {}).hollow, vic = noUplinks && m.victory === 'uplinks' ? 'capture' : m.victory || 'capture';
+  for (const btn of $('m-victory').children) {
+    mark(btn, btn.dataset.v === vic);
+    const off = noUplinks && btn.dataset.v === 'uplinks';
+    btn.disabled = off;
+    btn.title = off ? 'No Uplinks in the Hollow: the Pathfinder never mapped it.' : '';
+  }
   // Teams (four colonies, two against two, Capture only): the Victory choice gives way to it.
   const teams = menuTeams();
   $('m-teams-field').hidden = colony || menuPlayers() !== 4;
   for (const btn of $('m-teams').children) { mark(btn, +btn.dataset.v === (teams ? 1 : 0)); btn.dataset.info = +btn.dataset.v ? '2 vs 2: you and the colony beside you against the other two. Take both of their Command Bases to win.' : 'Every colony for itself: the last one standing wins.'; }
   $('m-victory-field').hidden = colony || teams;
   $('m-victory-note').hidden = colony || teams;
-  $('m-victory-note').textContent = (VICTORY[m.victory] || VICTORY.capture).note;
+  $('m-victory-note').textContent = noUplinks && m.victory === 'uplinks' ? 'No Uplinks in the Hollow (the Pathfinder never mapped it): this game is won by Capture.' : (VICTORY[vic] || VICTORY.capture).note;
   // Free-for-all: you and two rivals on the map types with room for three, or three rivals on
   // Crossroads (Random picks a map type with room for them all).
   const shape = m.shape || 0, SH = SHAPE_PRESETS[shape], room = m.shapeRnd ? 4 : maxPlayers(shape), want = clamp(Math.round(m.players) || 2, 2, 4);
@@ -2663,6 +2670,7 @@ function startNewGame() {
     const L = getE(S.players[ME].lander), near = L ? S.posts.reduce((a, p) => (dist2(p.x, p.y, L.x, L.y) < dist2(a.x, a.y, L.x, L.y) ? p : a)) : null;
     postMsg(ME, `${S.posts.length} neutral Trade Posts (gold on the minimap${near ? ', nearest ' + dirText(L, near) : ''}): lay a road out and dock a Trade Terminal to trade.` + (S.mode !== 'colony' ? ` Hold the land round one to shut ${S.players.length > 2 ? 'the rivals' : 'your rival'} out.` : ''), near ? near.x : 0, near ? near.y : 0, 'info');
   }
+  if (UI.menu.victory === 'uplinks' && S.mode !== 'colony' && !S.teams && S.hollow) postMsg(ME, 'No Uplinks in the Hollow: the Pathfinder never mapped it. This game is won by Capture.', 0, 0, 'info');
   if (S.victory === 'uplinks' && S.uplinks) {
     const L = getE(S.players[ME].lander), near = L ? S.uplinks.reduce((a, u) => (dist2(u.x, u.y, L.x, L.y) < dist2(a.x, a.y, L.x, L.y) ? u : a)) : null;
     postMsg(ME, `Uplinks: ${S.uplinks.length} neutral Uplink towers stand across the planet (ringed dots on the minimap${near ? ', nearest ' + dirText(L, near) : ''}). One is yours while it stands in your land: build an Outpost or a Keep near it. They come online ${UPLINK.online / 60} minutes in: from then on, hold ${uplinkGoal()} and your clock runs, and a total of ${UPLINK.hold / 60} minutes wins. Enemy warbots right beside an Uplink jam it.`, near ? near.x : 0, near ? near.y : 0, 'info');
@@ -5684,7 +5692,7 @@ function garrisonMix(b) {
 }
 
 function ownedText(type) {
-  if (worldBan(type)) return BDEFS[type].airfield ? 'No aircraft underground' : 'Nothing grows down here'; // (the Hollow: see worldBan)
+  if (worldBan(type)) return BDEFS[type].airfield ? 'No aircraft underground' : BDEFS[type].terminal ? 'No Trade Posts down here' : 'Nothing grows down here'; // (the Hollow: see worldBan)
   const { built, sites } = ownedCount(type);
   if (type === 'ramp') return sites ? `${sites} being built` : '';
   if (!built && !sites) return 'None yet';

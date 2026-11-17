@@ -1819,13 +1819,13 @@ function generateMap(seed, W, H, cfg) {
  *     from Medium up, another mass of floating Crystal. Each leads on to a flank cavern on the middle line, which holds
  *     two contested breaches (one nearer each colony).
  *   - The cathedral in the middle, where the Deep's mound stands in a ring of stone pillars, with Bloom veins and
- *     Crystal round it, and the Trade Posts at its west and east ends.
+ *     Crystal round it.
  *   - A side chamber off each side cavern, where robot parts (crates of Alloy and Chips) lie laid out in rows.
  *   - Smooth stone pillars (rock) standing in the caverns, Bloom veins on the floors and along the walls, oil seeps.
  * No stalk groves or fertile soil: nothing grows without light. Every cavern floor is one level; the Crystal masses
- * stand two levels up; the chasms drop away below. Returns what generateMap does, plus `hollow`: { breaches: [{x, y, r,
- * home}], masses: [{x, y}], nests: [{x, y}] (sites in twin pairs), deep: {x, y}, posts: [{x, y}], relics: [{x, y,
- * goods}], pillars: [tile] }.
+ * stand two levels up; the chasms drop away below. No Trade Posts or Uplinks: the Pathfinder never mapped the Hollow
+ * (LORE.md). Returns what generateMap does, plus `hollow`: { breaches: [{x, y, r, home}], masses: [{x, y}], nests:
+ * [{x, y}] (sites in twin pairs), deep: {x, y}, relics: [{x, y, goods}], pillars: [tile] }.
  */
 function hollowMap(seed, W, H, cfg) {
   const RPR = RESOURCE_PRESETS[cfg.rich ?? DEFAULT_RICH];
@@ -2001,10 +2001,6 @@ function hollowMap(seed, W, H, cfg) {
   }
   const inBreach = (i, j, pad) => breaches.some((b) => dist2(i, j, b.x, b.y) <= sq(b.r + pad));
   const deep = { x: bx, y: half };
-  // The Trade Posts: at the cathedral's west and east ends.
-  const posts = [{ x: Math.round(ccx - rC * 0.74), y: half }];
-  posts.push({ x: W - 1 - posts[0].x, y: H - 1 - posts[0].y });
-  for (const p of posts) for (let j = p.y - 2; j <= p.y + 2; j++) for (let i = p.x - 2; i <= p.x + 2; i++) open(i, j, 5);
   joinAll(); // (what that opened is joined up too)
 
   // 7) Stone pillars, worn smooth: a ring of them round the Deep's mound, and some in the caverns (more on rougher
@@ -2019,7 +2015,7 @@ function hollowMap(seed, W, H, cfg) {
   };
   const addPillar = (i, j) => {
     const t = id(i, j);
-    if (!inner(i, j) || !freeRound(t) || dist(i, j, ccx, ccy) < 2.5 || inBreach(i, j, 1.5) || posts.some((p) => Math.abs(p.x - i) <= 3 && Math.abs(p.y - j) <= 3)) return false;
+    if (!inner(i, j) || !freeRound(t) || dist(i, j, ccx, ccy) < 2.5 || inBreach(i, j, 1.5)) return false;
     for (let dj = -2; dj <= 2; dj++) for (let di = -2; di <= 2; di++) if (inner(i + di, j + dj) && pillar[id(i + di, j + dj)]) return false;
     put(t, T_ROCK, FLOOR, 0);
     pillar[t] = pillar[mir(t)] = 1;
@@ -2131,7 +2127,6 @@ function hollowMap(seed, W, H, cfg) {
       const i = t % W, j = (t / W) | 0;
       if (!free(t) || ![2, 3, 4, 5, 7].includes(kind[t])) continue;
       if (dist(i, j, bx, by) < Math.min(16, Dy * 0.72) || dist(i, j, W - 1 - bx, H - 1 - by) < 12 || dist(i, j, deep.x, deep.y) < 5 || inBreach(i, j, 1.5)) continue;
-      if (posts.some((p) => dist(p.x, p.y, i, j) < 5)) continue;
       // (Not by a floating Crystal mass: its guards would keep every colony's gatherers off it for good.)
       if (masses.some((m) => dist(m.x, m.y, i, j) < 9 || dist(W - 1 - m.x, H - 1 - m.y, i, j) < 9)) continue;
       let room = 0;
@@ -2168,7 +2163,7 @@ function hollowMap(seed, W, H, cfg) {
   return {
     terrain, res, amt, grow, elev, ramp, fert, bases: [{ x: bx, y: by }, { x: W - 1 - bx, y: H - 1 - by }],
     spare: null, choke: null, lava: null, ford: null, tidal: null, fault: null, volcano: null,
-    hollow: { breaches, masses: masses.flatMap((m) => [{ x: Math.round(m.x), y: Math.round(m.y) }, { x: W - 1 - Math.round(m.x), y: H - 1 - Math.round(m.y) }]), nests, deep, posts, relics, pillars },
+    hollow: { breaches, masses: masses.flatMap((m) => [{ x: Math.round(m.x), y: Math.round(m.y) }, { x: W - 1 - Math.round(m.x), y: H - 1 - Math.round(m.y) }]), nests, deep, relics, pillars },
   };
 }
 
@@ -2339,8 +2334,8 @@ function newGame(opts) {
   // A team game is won by taking the other team's Command Bases (no Domination or Uplinks).
   if (opts.teams && mode === 'versus' && S.players.length === 4) { S.teams = [0, 0, 1, 1]; S.victory = 'capture'; }
   if (m.spare) S.spare = { x: m.spare.x, y: m.spare.y }; // Crossroads for three: the free quarter's corner
-  // The Hollow: its breaches, floating Crystal masses, the Murmur's nest sites, the Trade Posts' places and the pillars (see hollowMap).
-  if (m.hollow) S.hollow = { breaches: m.hollow.breaches, masses: m.hollow.masses, nests: m.hollow.nests, deep: m.hollow.deep, posts: m.hollow.posts, pillars: m.hollow.pillars };
+  // The Hollow: its breaches, floating Crystal masses, the Murmur's nest sites and the pillars (see hollowMap).
+  if (m.hollow) S.hollow = { breaches: m.hollow.breaches, masses: m.hollow.masses, nests: m.hollow.nests, deep: m.hollow.deep, pillars: m.hollow.pillars };
   mapEventsStart(m);
   // Planetary events (see EVENTS): the first one comes after EVENT_FIRST seconds.
   if (opts.events) { S.events = true; S.event = null; S.nextEvent = EVENT_FIRST; }
@@ -2348,6 +2343,7 @@ function newGame(opts) {
   if (opts.unlimited && !opts.mission) S.unlimited = true;
   // How the game is won (Versus): see VICTORY. Capture unless another way was picked.
   if (mode === 'versus' && !opts.mission && !opts.layout && !S.teams && VICTORY[opts.victory] && opts.victory !== 'capture') S.victory = opts.victory;
+  if (S.victory === 'uplinks' && m.hollow) delete S.victory; // (no Uplinks in the Hollow, which the Pathfinder never mapped: Capture)
   // The Murmur (wildlife, see WILD): Colony free play only, and never on a silent biome (Lunar: see murmurGround); the
   // nests go down once the landing site is in.
   if (mode === 'colony' && opts.wildlife && !opts.layout && !opts.setup && murmurGround(settings.biome)) S.wildlife = true;
@@ -2416,11 +2412,12 @@ function hollowOn() { return !!(S && S.hollow); }
 
 /**
  * Why a `type` can't be built in this game's world at all ('' if it can): in the Hollow, no aircraft fly underground
- * (no Airfields) and nothing grows without light (no Grove Planters or Bio Farms). canPlace says so, and the build
- * menu greys them out.
+ * (no Airfields), nothing grows without light (no Grove Planters or Bio Farms), and there are no Trade Posts to dock
+ * at (no Trade Terminals: the Pathfinder never mapped it). canPlace says so, and the build menu greys them out.
  */
 function worldBan(type) {
   if (!hollowOn()) return '';
+  if (BDEFS[type] && BDEFS[type].terminal) return 'No Trade Posts in the Hollow: the Pathfinder never mapped it, so there is nowhere to dock a Trade Terminal.';
   if (BDEFS[type] && BDEFS[type].airfield) return 'No aircraft fly in the Hollow: there is no sky down here, only the breach shafts.';
   if (type === 'grower' || (BDEFS[type] && BDEFS[type].farm)) return 'Nothing grows in the Hollow: no light reaches the cavern floor. Harvesters cut Fiber from Bloom veins; Fuel comes from oil seeps.';
   return '';
@@ -4659,7 +4656,7 @@ function checkSave(o) {
   if (o.hollow != null) {
     const H0 = o.hollow, at = (p) => obj(p) && Number.isFinite(p.x) && Number.isFinite(p.y) && p.x >= 0 && p.y >= 0 && p.x < o.W && p.y < o.H;
     if (!obj(H0) || !at(H0.deep)) bad();
-    for (const k of ['breaches', 'masses', 'nests', 'posts']) if (!Array.isArray(H0[k]) || !H0[k].every(at)) bad();
+    for (const k of ['breaches', 'masses', 'nests']) if (!Array.isArray(H0[k]) || !H0[k].every(at)) bad();
     if (!H0.breaches.every((b) => Number.isFinite(b.r))) bad();
     if (!Array.isArray(H0.pillars) || !H0.pillars.every((t) => Number.isInteger(t) && t >= 0 && t < o.W * o.H)) bad();
   }

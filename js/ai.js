@@ -334,7 +334,8 @@ function aiThink(p) {
   const fuelTrade = !!P.fuelDry && S.time - P.fuelLow > AI_FUEL_TRADE;
   const tradeAt = st.missiles ? AI_TRADE_AT - 60 : AI_TRADE_AT;
   let tradeFirst = false;
-  if (S.mode !== 'colony' && S.time >= tradeAt && !counts.terminal && counts.foundry && S.time - (P.termFail ?? -999) > 240) {
+  // (Not where there are no Trade Posts: the Hollow, which the Pathfinder never mapped.)
+  if (S.mode !== 'colony' && S.time >= tradeAt && !counts.terminal && counts.foundry && S.time - (P.termFail ?? -999) > 240 && S.posts && S.posts.length && !worldBan('terminal')) {
     plan = [['terminal', 1]].concat(plan);
     tradeFirst = crShort || fuelTrade;
   }

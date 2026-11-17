@@ -589,7 +589,7 @@ const QUAKE = { at: 900, jitter: 90, warn: [120, 30] };
 /**
  * The Hollow (SHAPE_PRESETS hollow; laid out by hollowMap in world.js).
  *   breach    the radius (tiles) of a breach shaft over a Command Base (`home`) and of the contested ones (`open`):
- *             `contested` of them, two in each flank cavern, where the Uplinks stand
+ *             `contested` of them, two in each flank cavern
  *   ringfall  Ringfall falls only through the breaches: METEOR_HITS strikes on each colony's share as usual, the
  *             share `contested` of them through the contested breaches, each leaving up to `tiles` deposits `rich`
  *             times as rich as a Ringfall deposit elsewhere
