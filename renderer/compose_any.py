@@ -24,7 +24,7 @@ for n in names:
     prem = np.clip(prem + add, 0, 1)
     a2 = np.clip(a + add.max(axis=2, keepdims=True) * 0.95, 0, 1)
     out = np.concatenate([prem, a2], axis=2)
-    H2 = out.shape[0] // 2; out = out.reshape(H2, 2, H2, 2, 4).mean(axis=(1, 3))
+    H2, W2 = out.shape[0] // 2, out.shape[1] // 2; out = out[:H2 * 2, :W2 * 2].reshape(H2, 2, W2, 2, 4).mean(axis=(1, 3))  # (any aspect)
     rgb = np.where(out[..., 3:4] > 1e-4, out[..., :3] / np.maximum(out[..., 3:4], 1e-4), 0)
     final = np.concatenate([np.clip(rgb, 0, 1), out[..., 3:4]], axis=2)
     Image.fromarray((final * 255 + 0.5).astype(np.uint8), 'RGBA').save(f'{d}/{n}.png')

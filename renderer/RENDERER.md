@@ -36,6 +36,7 @@ This folder is the complete setup behind the Terrafall art. It covers every 3D s
 | The Murmur (Colony wildlife) | murmur_moles: every Murmur class, the Burrow (the nest) at its three levels, and their 3/4 hero shots (the shared `murmur_moleskit.js`). `creature` (the old beetle Scuttler and Brute) and `nest` (the old resin mound) are kept for reference and no longer shipped; `murmur_swarm`, `murmur_burrowers` and `murmur_mycelial` are earlier design directions, not shipped. |
 | The Hollow (installed) | hollow: the tunnel exit (`c=exit`, `state=collapsed`), the Bloom-vein node (`c=veins`), the floating Crystal (`c=floater`), the stone pillars (`c=pillar&v=1\|2`) and the side chamber (`c=chamber`); murmur_moles `c=burrow&s=4` is the Deep's mound. See [The Hollow set](#the-hollow-set). |
 | Resources (Reedcane and the survey stake installed) | resources: three Fiber directions (`c=fiber&v=1\|2\|3&g=` growth stage) and three Oil pump spots (`c=vent&v=1\|2\|3`). See [Fiber and Oil directions](#fiber-and-oil-directions). |
+| Airship and Mooring Mast (design study, not installed) | airship (`v=a\|b\|c`: three directions, top-down like the Cargo Plane), mast (`v=a\|b\|c`; `dock=1` the moored presentation view). See [The Airship and the Mooring Mast](#the-airship-and-the-mooring-mast). |
 | Other | icon (the app-icon hero render); lore_planet (the Lore guide's Ithaca I from orbit: a 16:9 illustration with its own camera and shaders, finished by `post/lore_planet.py`) |
 | Walls (in `walls/b/`) | wall, gate |
 
@@ -195,7 +196,7 @@ The scripts differ in their options:
 | Script | Use | Options |
 |---|---|---|
 | `compose.py` | 1024 → 512 buildings | `--glow k` scales the bloom (the Disruptor uses `0.4`, so its coils stay ice blue). The blur radii are fixed at 7 and 22. |
-| `compose_any.py` | Any size | `--b1`, `--b2` set the blur radii, `--glow` the strength. |
+| `compose_any.py` | Any size and aspect | `--b1`, `--b2` set the blur radii, `--glow` the strength. |
 | `compose2.py` | Bridges | `--b1`, `--b2`, plus `--haze`, which fades the bottom of sky and rail piers into the chasm. |
 | `walls/compose_walls.py` | Walls and gates | It also:<br>• corrects the arm shadows using the post (`--post wall-post@T`);<br>• turns the spark passes into white-hot frames with a team-coloured halo (`--team`, `--frames`). |
 
@@ -475,3 +476,32 @@ The Lore guide's Spitter (brighter pouches) is the catalogue's `murmur-spitter-h
 `tools/install_art.py [<game>/art]` writes it into the game's art folder as WebP (the Hollow's pieces drawn with the
 ground get a day render for the sprite and a night render's glow pass for their `-glow` image). ART_GUIDE.md, Batch 16,
 says how the game draws each piece.
+
+## The Airship and the Mooring Mast
+
+A design sheet for the Airship (a slow freight airship on a line between two Mooring Masts) and its mast, in three
+directions for the owner to choose from; not installed. `v=a` is the rigid freighter (a classic hull, containers in
+pannier racks on its flanks, engine cars on outriggers) with the lattice mast; `v=b` the twin-hull lifter (eight
+containers on a truss deck between two hulls) with the gantry (container crane) mast; `v=c` the armoured blimp (the Cargo
+Plane's armour, four ducted lift fans) with the armoured pylon. Run from this folder:
+
+```
+for t in 0 1; do T=$([ $t = 0 ] && echo '#38d4ff' || echo '#ff5a6e'); for v in a b c; do
+  node run.js out/set "airship::$T:$v$t:v=$v" "airship::$T:$v$t-n:v=$v&tod=night" "mast::$T:m$v$t:v=$v" "mast::$T:m$v$t-n:v=$v&tod=night"
+done; done
+for v in a b c; do node run.js out/set "mast::#38d4ff:dock-$v:v=$v&dock=1" "mast::#38d4ff:dock-$v-n:v=$v&dock=1&tod=night"; done
+python3 compose_any.py out/set a0 a0-n a1 a1-n b0 b0-n b1 b1-n c0 c0-n c1 c1-n --b1 5 --b2 15
+python3 compose.py out/set ma0 ma0-n ma1 ma1-n mb0 mb0-n mb1 mb1-n mc0 mc0-n mc1 mc1-n
+python3 compose_any.py out/set dock-a dock-a-n dock-b dock-b-n dock-c dock-c-n
+python3 preview/airship_mock.py out/set out/airmock            # the game-style pictures: cards, moored, colony, line-ups
+python3 preview/airship_sheet.py out/set out/airmock <sheet folder>
+```
+
+- The airship is seen straight down, facing east, 30 world units across a 512 frame (building units: the pad's 10 are one
+  tile), so the sheet draws it 3 tiles across and its hull runs about 2.5; its `dock` mark is the mooring cone's tip.
+  Its shadow is its day render's alpha, softened (`airship_mock.py`), drawn down-sun like a plane's.
+- The mast is a one-tile building (`B3D`, scale 1.4); its `head` mark is the mooring cup's rim, solved to 8 % from the
+  image's top like the Ropeway's bull wheel. A moored ship is drawn with its `dock` mark on the mast's `head`.
+- `dock=1` renders the mast and its airship together on open ground at the buildings' angle (1600 x 1000), to show what
+  can't be seen from above; it is not a game sprite.
+
