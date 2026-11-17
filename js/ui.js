@@ -3956,6 +3956,10 @@ function airfieldSection(b) {
       <p class="hint">Then tap the spot. A Drop Outpost lands on any open ground nobody else holds (paid from storage now): it claims a little land, holds 2 warbots, stores goods, charges 2 bots and is supplied by air until a road from home reaches it. Robots board here first (Warbots from your garrisons, idle Workers) and can be dropped anywhere, the enemy's land too. A full tank reaches ${planeReach(f)} tiles out and back.</p>`;
   } else html += `<p class="hint">${planes.some((u) => !BOTS[u.type].bomber) ? 'Its Cargo Plane is out on a flight.' : 'No Cargo Plane is based here yet: order one in the hangar below.'}</p>`;
   html += '<div class="section-label">Supplied by air</div><p class="hint" id="sh-air-places"></p>';
+  // Airships built here wait in the hangar (in no spot of it) until there's a line for them.
+  const waiting = S.bots.filter((u) => !u.dead && u.owner === b.owner && BOTS[u.type].airship && u.inside === b.id);
+  if (waiting.length) html += `<div class="section-label">Airships</div><p class="hint">${waiting.length === 1 ? 'An Airship waits' : `${waiting.length} Airships wait`} here for a line: link two Mooring Masts (a Mast's panel: <b>Link to another Mast</b>), and with just one line ${waiting.length === 1 ? 'it goes' : 'they go'} there by ${waiting.length === 1 ? 'itself' : 'themselves'}; or pick a line on its panel.</p>` +
+    `<div class="actions">${waiting.map((u) => `<button class="btn small" data-bot="${u.id}" id="sh-air-ship-${u.id}">Airship ›</button>`).join('')}</div>`;
   return html;
 }
 
@@ -6199,6 +6203,7 @@ function openBuildingSheet(b) {
         toast(`Pipe laid from the Oil Pump to the Refinery (${n} tile${n === 1 ? '' : 's'}).` + (owed ? ` ${owed} tile${owed === 1 ? '' : 's'} wait for goods, paid from storage as they come in.` : ''), 'good');
       });
     };
+    for (const btn of document.querySelectorAll('[id^="sh-air-ship-"]')) btn.onclick = () => { const u = getE(+btn.dataset.bot); if (u && !u.dead) { sfx('click'); openBotSheet(u); } };
     if ($('sh-pipefuel')) $('sh-pipefuel').onclick = () => {
       $('sh-pipefuel').hidden = true;
       act('pipeToFuel', [b.id], (r) => {
