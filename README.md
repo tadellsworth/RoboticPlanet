@@ -856,6 +856,15 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   way). One that fails is refused and changes nothing; if
   Continue can't load this device's save, the menu says so. A loaded file becomes this device's save only once its game
   is running (`enterLoaded`), and the save it replaced is kept as a backup (`SAVE_BACKUP_KEY`, `botfall.save.bak`).
+- **Cloud saves** (`js/cloud.js`, `#screen-cloud`): **Save to the cloud** (pause menu, `cloudSave`; hidden in multiplayer
+  and Observer mode) gzips `saveFileText()` in the browser (`CompressionStream`) and sends it to the relay's `POST /save`,
+  or `PUT /save/<code>` with the key when this device already has a code for this game (`terrafall.cloud` in
+  localStorage: `{ code, key, at, game }`; **New code** posts a fresh one and deletes the old). The dialog shows the code
+  (`XXXXX-XXXXX`), the link `https://terrafall.app/#save=<code>` (`cloudLink`) with a QR code of it made offline by
+  `qrSvg` (`js/qr.js`), Copy link, Share and the expiry. **Load from a code** (main menu, `cloudLoad`) and opening a
+  `#save=` link (`cloudFromLink`: at start, on `hashchange` and from `launchQueue`, so an open installed app takes it
+  too; it asks first, then clears the address) fetch `GET /save/<code>` and load it as Load a save file does
+  (`loadSaveText`, shared with `importSaveFile`).
 - **Send feedback** (`js/feedback.js`, `#screen-feedback`): the small **Feedback** pill beside **Lore** at the foot of the
   main menu, and **Send feedback** in the pause menu, open a short form: the kind (**Bug**, **Idea**, **Balance** or
   **Other**), the message (3 to 5,000 characters, with a counter), an optional email or name (up to 200), a hidden
@@ -1717,6 +1726,17 @@ it is thanked and dropped. Setting it up: add two more Actions secrets, `FEEDBAC
 and write), then run **Deploy multiplayer relay** again: its summary says whether player feedback is on. Until then the
 form says feedback isn't switched on yet, and keeps what the player wrote.
 
+**Cloud saves.** The relay also keeps the games players save to the cloud (`relay/src/saves.js`, whose header has the
+exact contract): `POST /save` (a gzipped save file, at most 256 KB, that gunzips to JSON with `terrafall: 1` and a
+`game`) answers 201 `{ code, key, expires }`; `GET /save/<code>` (10 characters of the room-code alphabet, with or
+without the dash, any case) the save file as `application/json` with `nosniff`; `PUT` and `DELETE /save/<code>` need
+`Authorization: Bearer <key>`. Entries live in one SQLite-backed Durable Object (`Saves`, binding `SAVES`, migration `v3`
+in `relay/wrangler.toml`): the gzipped body, a hash of the key, when it was written and its size. An entry expires 30
+days after it was last written (dropped when asked for, and swept by a daily alarm). At most 20 writes and 200 reads a
+day from one address (by a hash of it), and CORS for terrafall.app and www.terrafall.app (and `http://localhost` for
+testing): another site gets 403. Nothing to set up beyond a run of **Deploy multiplayer relay**. Tests:
+`node relay/test/saves.test.mjs` (Node 22.13 or later: the Durable Object's storage is played by `node:sqlite`).
+
 **How it works.** Multiplayer is lockstep: every device runs the whole game, and only the players' orders go between
 them.
 
@@ -1759,8 +1779,13 @@ node tools/headless-sim.js 99 normal 40 colony
 node tools/smoke-test.js http://localhost:8000/ .
 ```
 
+```bash
+node relay/test/saves.test.mjs
+```
+
 The first two play complete AI-vs-AI games (or an AI colony) in a few seconds and print the economy
-each minute. The smoke test needs Playwright and a running local server.
+each minute. The smoke test needs Playwright and a running local server. The last tests the relay's cloud saves (see
+Multiplayer, Cloud saves).
 
 ## Ideas for next steps
 
