@@ -814,7 +814,7 @@ const MISSIONS = [
       'A <b>Port</b> on the shore is storage, and its shipyard builds ships. Ships burn Fuel.',
       'A <b>Ferry</b> carries robots and trucks between your Ports, and can found a Port on an empty shore.',
       '<b>Container Ships</b> keep far Ports stocked; Tanker Ships carry Crude and Fuel.',
-      'In Versus, a Ferry also lands warbots on an enemy beach.',
+      'In Versus, a Ferry also lands warbots on an enemy beach. A rival well ahead lands load after load out of your guns\' reach: drive them off before the band grows.',
     ],
     mode: 'colony', seed: 9101, size: 0, rough: 1, rich: 3, biome: 'jungle', shape: 3, limit: [0, 0, 25],
     setup(S) {
@@ -1087,8 +1087,9 @@ const MISSIONS = [
       // Four more warbots at home (8 in all): enough to man a Bunker and still face the Herald.
       for (let k = 0; k < 4; k++) enterBuilding(addBot(0, 'warbot', L.x, L.y), L);
       S.players[0].stats.startBots = S.players[0].stats.bots;
-      // The Herald starts with more warbots, and holds its first assault until you've had time to dig in (it comes at
-      // about 7 / 5½ / 4 minutes).
+      // The Herald starts with more warbots, and holds its first assault until you've had time to dig in (not before
+      // 7 / 5½ / 4 minutes; played headless against a colony that follows the hints, its first assault hit at about
+      // 8½ / 7½ / 4½ minutes, and 1 to 2½ minutes later on Easy and Normal before mission rivals had the rival's opening).
       for (let k = 0; k < [2, 4, 6][diff]; k++) enterBuilding(addBot(1, 'warbot', R.x, R.y), R);
       P1.stats.startBots = P1.stats.bots;
       P1.nextAttack = [420, 330, 240][diff];
