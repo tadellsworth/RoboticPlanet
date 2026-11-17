@@ -605,9 +605,9 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
     (16% of floor tiles beside rock, away from home). A Harvester gathers them there (`gatherRes`: R_VEIN for a Harvester
     in the Hollow, so `gatherTypes`, `canPlace`, the AI and the panels all go by it). A vein cut to nothing stays a vein
     with `S.grow` 0 and grows back over `VEIN.regrow` (150 s, `growStalks`; `findNode` skips it meanwhile; `veinFull`).
-    Cutting one stamps the Harvester (`b.veinT`) where the Murmur are in the game (`wildOn`), and `veinLure` makes it a
-    raid target: `wildTarget` counts it `VEIN.pull` (2) times nearer, from up to `VEIN.reach` (8) tiles further out, for
-    `VEIN.lure` (120 s). No stalks or fertile soil: `worldBan` bars Grove Planters and Bio Farms (and Airfields and Trade Terminals) with a
+    Cutting one stamps the Harvester (`b.veinT`) where the Murmur are in the game (`wildOn`), and for `VEIN.lure` (120 s)
+    `veinLure` draws them to it: a night pack's `murmurPrey` scores it 6 higher, from up to `VEIN.reach` (8) tiles further
+    out, and the tunnels' `murmurGoals` count it 2 more charge. No stalks or fertile soil: `worldBan` bars Grove Planters and Bio Farms (and Airfields and Trade Terminals) with a
     reason for `canPlace`, and the build menu greys them out (`ownedText`). Fuel comes from the oil seep in every home
     cavern (on Small maps, two: the side caverns there are too cramped for more oil within reach). A Worker lands in the Agribot's place.
   - **Floating Crystal**: a platform two levels up (level 3) in a pocket of chasm, worn back until only chasm touches it,
@@ -632,8 +632,11 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
     'active'`; `murmurStart` calls `placeHollowNests` instead of `placeNests`/`placeNestsVersus`), owned by the Murmur's
     slot (`wildOwner`) in Versus as in Colony; Quiet keeps half the pairs (rounded up) and the mound, Off none (the
     menu warns that the Hollow is their lair). They dig tunnels and open exits like any nest (`isNestB` counts the
-    mound as a nest everywhere), the night windows are surges, and `veinLure` still pulls packs toward a lured
-    colony's veins (`wildTarget`, `murmurPrey`, `murmurGoals`).
+    mound as a nest everywhere), the night windows are surges (the only time packs come, as everywhere), and
+    `veinLure` still pulls packs and tunnels toward a lured colony's veins (`murmurPrey`, `murmurGoals`). In Colony,
+    `murmurExitCap` keeps the exits open at once to what a Standard Colony map of the same size could have by that
+    night: `colonyNests()` (its nest count) times the exits a nest has opened by night n, up to `maxExits` (Huge,
+    Active: 12 the first night, 18 after); an exit due past the cap waits for one to be collapsed. Versus has no cap.
   - **No aircraft** (`worldBan`; the AI never plans an Airfield) and **no Ports** (`canPlace` says the lakes are too small).
   - The rival AI: its build plan swaps Bio Farms for Oil Pumps and Grove Planters for more Harvesters, fuel trouble
     brings an Oil Pump and Refinery, its roads bridge the chasms (Sky bridges) where that's shorter, and `aiRopeway`
@@ -1444,7 +1447,7 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   save that has nests keeps them. Internally the creatures are `wildlife`, the nests type `'nest'`, tunnel exits type
   `'burrow'`; players see "the Murmur", "Murmur Nest", "Tunnel Exit", Scuttler and Brute. **Nobody's side**: the slot is
   `absent`, so it never counts for capture, surrender, Domination, the Uplinks or teams (`foes` with every colony; `isWild`).
-  - **Nests.** Colony: one per `WILD.perTiles` tiles (3–8, `placeNests`), at least 16 tiles from the landing site.
+  - **Nests.** Colony: one per `WILD.perTiles` tiles (3–8, `colonyNests`, `placeNests`), at least 16 tiles from the landing site.
     Versus (`placeNestsVersus`): sets of nests following the map's own symmetry (`uplinkOrbit`, each set one nest a
     colony), up to `MURMUR[level].orbits` (Active 2, Quiet 1), one set a `perTiles` of map for two colonies; on open ground a
     colony can walk to, at least `max(MURMUR.minBase, a fifth of the map across)` from every Command Base, at least
@@ -1455,9 +1458,9 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
     (3) in Versus, and robots keep that far clear of them: `foeReach`; a nest beside a colony's way to its fields stopped
     a rival's economy dead) and grows a level every `WILD.grow` s (to 3). The rival builds no nearer a nest than
     `aiNestClear()` tiles (`aiSearchSpot`): `AI_NEST_CLEAR` (8) in Colony, `AI_NEST_CLEAR_VS` (6) in Versus, where the
-    guards only reach 3 (on the Hollow the Ore off a colony's home ground can all lie that near nests). **Colony** nests also raid by day:
-    from `WILD.first` (7 min) a pack every 260–400 s (× `raidGap` on Quiet, a creature smaller) at the nearest building
-    or road any colony has within `WILD.reach` (24) tiles, growing with that colony. **Versus** nests send nothing by day.
+    guards only reach 3 (on the Hollow the Ore off a colony's home ground can all lie that near nests). Nests send
+    nothing by day (`updateNest` keeps the guards up and grows the nest), **in Colony as in Versus** (the owner's call,
+    Nov 2026: Colony's daytime raids are gone; packs come only at night, through the exits).
   - **Nights** (`murmurNight(t)`: `todNameAt` of the game clock, `TOD_CYCLE` in `js/defs.js`, never the display setting,
     so every device agrees; on a map type with `alwaysNight`, the Hollow, the same windows are **surges**, with a silent
     lull, `murmurLull`, `SURGE_LULL` (60 s) before each). `murmurTick`, once a second: `MURMUR.warn` (40 s) before
@@ -1812,7 +1815,9 @@ pause menu (Day and night; a display setting kept on the device, `todStored`), e
 live by the night, so `todMode()` shows the cycle for Always day there (`todForced` 'murmur', `TOD.force` set by
 `js/ui.js`) and the pause menu says why under the button. A map type with `alwaysNight` (the Hollow) is night whatever
 the setting (`todForced` 'night'), photo mode's slider included. Nothing in the game itself ever asks what the light is:
-the Murmur's nights (and the Hollow's surges) come from the game clock (`murmurNight`).
+the Murmur's nights (and the Hollow's surges) come from the game clock (`murmurNight`). Always night stays a choice
+with the Murmur on, for its looks only: they still come out at the game clock's nightfall, after the dusk warning (the
+pause menu's line under the button says so, as does the new-game Rules' Always night).
 
 - **Re-lit art.** Every 3D sprite (buildings, robots and vehicles, track and bridge pieces: the 207 keys in
   `art/tod/tod-keys.js`) has a morning, evening and night version from the Claude Design day/night kit, at

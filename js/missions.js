@@ -952,15 +952,17 @@ const MISSIONS = [
   // Chapter 6, First Contact. The Murmur's nests (type 'nest'), a rival to practise on, a border war and a chokepoint to hold.
   {
     id: 'bughunt', name: 'The Murmur', chapter: 'First Contact', // (id kept: saved progress goes by it)
-    brief: 'The Murmur breed in nests under the swamp and raid your colony. Arm up and clear the nests before the packs grow.',
+    brief: 'The Murmur breed in nests under the swamp, and by night they come up to raid your colony. Arm up, hold the night and clear the nests.',
     intro: [
-      'The <b>Murmur</b> live here: packs from their nests from 4 minutes in. <b>Scuttlers</b> bite, <b>Brutes</b> smash.',
-      'By night they tunnel toward your power and come up through <b>tunnel exits</b>: collapse those with warbots.',
+      'The <b>Murmur</b> keep to their nests by day. At nightfall, 8 minutes in, their packs come up to raid.',
+      'They tunnel toward your power and come up through <b>tunnel exits</b>: collapse those with warbots.',
       'You have 4 <b>warbots</b> and 30 Ammo; an Ammo Plant (Make, <kbd>I</kbd>) makes more. Turrets fire Crystal.',
       'Defend also has Minigun Nests (<kbd>G</kbd>), which spray Ammo. Tap a dented building → <b>Repair</b> (<kbd>E</kbd>).',
       'Workers and Haulers keep clear of danger by themselves. <kbd>J</kbd> jumps to the latest alert.',
     ],
-    // (Quiet: their nights teach the tunnels and exits without swamping a first fight with them)
+    // (Quiet: their nights teach the tunnels and exits without swamping a first fight with them. The packs come only at
+    // night, as in every game: the day is for a turret, warbots and the exit already open; the first night brings a
+    // pack and new exits to collapse, and the nests can be struck by day or night.)
     mode: 'colony', seed: 6107, size: 1, rough: 1, rich: 3, biome: 'swamp', war: true, wildlife: true, murmur: 'quiet', limit: [0, 0, 20],
     setup(S) {
       kit(S, KIT8, 4);
@@ -969,8 +971,6 @@ const MISSIONS = [
       for (let k = 0; k < 4; k++) enterBuilding(addBot(0, 'warbot', L.x, L.y), L);
       P.stats.startBots = P.stats.bots;
       L.stock.ammo = 30; L.stock.crystal += 6; L.stock.alloy += 6; L.stock.chip += 4;
-      // The first packs come out at 4-5 minutes (free play: 7-9), so the Pulse Turret gets to show what it does.
-      for (const b of S.buildings) if (b.type === 'nest') b.raidAt = 240 + (b.raidAt - WILD.first) / 2;
       // The tunnels dug the night before: the nest nearest the colony has dug toward it, and an exit is open out there
       // (night falls at 8 minutes: collapse it before then).
       const near = S.buildings.filter((b) => b.type === 'nest').sort((a, b) => dist2(a.x, a.y, L.x, L.y) - dist2(b.x, b.y, L.x, L.y))[0];
@@ -978,14 +978,15 @@ const MISSIONS = [
     },
     goals: [
       { kind: 'built', type: 'turret', n: [1, 1, 2],
-        hint: '<b>Build</b> (<kbd>B</kbd>) → <b>Defend</b> (<kbd>4</kbd>) → <b>Pulse Turret</b> (<kbd>T</kbd>) by the colony. Then tap its site → <b>Lay road</b> (<kbd>R</kbd>).',
+        hint: '<b>Build</b> (<kbd>B</kbd>) → <b>Defend</b> (<kbd>4</kbd>) → <b>Pulse Turret</b> (<kbd>T</kbd>) by the colony, before nightfall. Then <b>Lay road</b> (<kbd>R</kbd>).',
         ui: "#btn-build, #build-tabs [data-g='defend'], .bcard[data-t='turret'], #sh-layroad" },
       { kind: 'bots', type: 'warbot', n: [2, 3, 4], at: 'foundry',
         hint: 'Tap the Bot Foundry → <b>Order bots</b>: Warbots <b>+1</b>. They wait in the Command Base and reload there.',
         ui: "#sh-orders .order-row[data-k='warbot'] [data-d='1']" },
-      // The tunnels of the Murmur: an exit (a violet ring on the minimap) opened along them overnight. Collapsed, it stays shut.
-      { kind: 'exits', n: 1, text: 'Collapse a tunnel exit', count: (P) => P.stats.collapsed || 0,
-        hint: '<b>Army</b> (<kbd>Q</kbd>) → <b>Attack</b> (<kbd>Q</kbd>), then tap the tunnel exit (a violet ring on the minimap).',
+      // The tunnels of the Murmur: an exit (a violet ring on the minimap) opened along them overnight, and more open at
+      // nightfall (so the goal sees the player through the first night). Collapsed, one stays shut.
+      { kind: 'exits', n: 2, text: 'Collapse {n} tunnel exits', count: (P) => P.stats.collapsed || 0,
+        hint: '<b>Army</b> (<kbd>Q</kbd>) → <b>Attack</b>, then tap a tunnel exit (a violet ring on the minimap). More open at nightfall.',
         ui: '#btn-attack, #ar-attack' },
       { kind: 'nests', n: [1, 1, 2], text: ['Clear a Murmur nest', 'Clear {n} Murmur nests'], count: (P) => P.stats.captured || 0,
         hint: '<b>Army</b> (<kbd>Q</kbd>) → <b>Attack</b>, then tap a nest: its hoard spills out, and its tunnels die back.',
