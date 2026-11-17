@@ -375,5 +375,5 @@ Sapper (tunnels under Walls and surfaces behind them: counters turtling). Mechan
   computer rivals have to handle them too).
 - Glimpsed, not seen: road lights going dark one by one at night as they come; sensor blips before contact.
 - Counters: Torches (built to burn back the Bloom) do extra damage to them and clear burrows; the Research Lab studies
-  them (earlier warnings, better counters). Regional variants: armoured in the Rust, pale and slow in the White,
+  them (earlier warnings, better counters). Regional variants: armoured in the Rust, pale and slow in Hoarfell,
   violet-glowing in the Bloom.

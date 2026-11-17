@@ -129,7 +129,7 @@ Parameters the scenes read:
 | `c=scuttler\|brute` | creature (old, unshipped) | Which creature. |
 | `s=1..3` | nest (old, unshipped), murmur_moles (`c=burrow`) | Nest level. |
 | `c=` | murmur_moles | Which Murmur: `swarmer` (the game's Scuttler), `brute`, `drainer` (the Leech), `spitter`, `sapper`, `spit-glob` (the Spitter's clot alone, flying right) or `burrow` (the nest, with `s=`). |
-| `v=base\|rust\|white\|bloom` | murmur_moles | The regional variant (Scuttler, Spitter, Sapper): Rust armoured in ironstone plates, White pale, shaggy and slow, Bloom with the Bloom's glowing violet veins. |
+| `v=base\|rust\|white\|bloom` | murmur_moles | The regional variant (Scuttler, Spitter, Sapper): Rust armoured in ironstone plates, Hoarfell pale, shaggy and slow, Bloom with the Bloom's glowing violet veins. |
 | `pose=feed\|sense\|spit\|surface` | murmur_moles | `feed` the Leech latched on (star flared, pressed to the power, threads of charge; `feed=1` works too); `sense` any class standing still with its star flared and lit; `spit` the Spitter spitting; `surface` the Sapper breaking the surface. |
 | `charge=0..1` | murmur_moles | How full of charge (default 0.75, a well-fed raider): the crystal glows with it and goes dull and lightless when hungry. |
 | `hero=1`, `hi=1\|2`, `ground=0` | murmur_moles | A 3/4 perspective presentation shot on a patch of ground (the Leech feeding gets its power line), rendered 2× or 4× bigger with `hi`; `ground=0` leaves the ground out (to measure where the animal sits). |

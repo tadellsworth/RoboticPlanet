@@ -129,7 +129,7 @@ export default function (L) {
       K.glowThread(cv, 0.0, 1, 0.012, 0.02, { parent: G, from: 0.05, to: 1.0, k: 1.6 });
     }
 
-    // ---- semi-mineral: a crest of smoky quartz grown through the back (icy in the White, Ring Crystal in the Bloom)
+    // ---- semi-mineral: a crest of smoky quartz grown through the back (icy in Hoarfell, Ring Crystal in the Bloom)
     for (const [dx, dz, sz, n] of [[-0.3, 0, 0.5, 3], [0.05, 0.05, 0.32, 2], [-0.62, -0.1, 0.34, 2], [-0.12, -0.36, 0.22, 1], [-0.2, 0.38, 0.24, 1]]) {
       const dy = Math.sqrt(Math.max(0, 1 - dx * dx - dz * dz)), q = bodyFn(dx, dy, dz);
       K.crystalCluster([q[0], q[1] - 0.08, q[2]], [-0.8 + dz * 0.2, 1, dz * 1.4], n, sz * 1.2 * (rust ? 0.75 : 1), 0.45, G);
