@@ -4971,6 +4971,7 @@ const DANGER_PAD = 1;    // robots keep this many tiles further off than a gun c
 const DANGER_COST = 24;  // what crossing a tile in a gun's reach (or near enemy warbots) adds to a route (they go round if they can)
 const FOE_SHY = 4.5;     // robots that don't fight keep this far from an armed enemy warbot (it picks targets within 2.8 tiles, 3.5 at a rally flag)
 const FOE_SHY_WILD = 6;  // ...and from a creature (it hunts within 4.5)
+const GUARD_VERSUS = 3;  // a nest's guards in Versus go for what comes within this many tiles of the nest (Colony: 7)
 const SHY_LOOK = 6;      // how far ahead along its way a robot looks out for them (tiles)
 const SHY_WAIT = 5;      // seconds a robot that turned back waits before it's given work again
 const FOE_LEAD = 2;      // seconds ahead along its way that a moving one counts too
@@ -5073,7 +5074,7 @@ function foeReach(v) {
   if (v.dead || v.dropping || v.owner < 0) return 0;
   if (v.armored) return TRAIN_ARMOR.pulse.range + 1; // an armored train's pulse cannon (it fires from a station too)
   if (v.inside) return 0;
-  if (BOTS[v.type].wild) return FOE_SHY_WILD;
+  if (BOTS[v.type].wild) return v.task && v.task.type === 'guard' ? (S.mode === 'colony' ? FOE_SHY : GUARD_VERSUS) : FOE_SHY_WILD; // (a nest's guards only go for what comes near it)
   return isArmy(v) && botArmed(v) ? FOE_SHY : 0;
 }
 
@@ -9542,14 +9543,17 @@ function updateCritter(u, dt) {
   const t = u.task || (u.task = { type: 'guard' });
   // Something to bite: guards only near the nest, raiders anywhere near them.
   let foe = u.fight ? getE(u.fight) : null;
-  if (foe && (foe.dead || foe.inside || dist2(foe.x, foe.y, u.x, u.y) > 36 || (t.type === 'guard' && dist2(foe.x, foe.y, nest.x, nest.y) > 64))) foe = null;
+  // (A guard keeps to its nest: in Colony it goes for what comes within 7 tiles of it; in Versus, where the colonies'
+  // roads and fields lie closer, within GUARD_VERSUS: the nests' danger is at night, when their Murmur come up.)
+  const keep = t.type === 'guard' ? (S.mode === 'colony' ? 7 : GUARD_VERSUS) : 0;
+  if (foe && (foe.dead || foe.inside || dist2(foe.x, foe.y, u.x, u.y) > 36 || (t.type === 'guard' && dist2(foe.x, foe.y, nest.x, nest.y) > (keep + 1) * (keep + 1)))) foe = null;
   if (!foe) {
     u.fight = 0;
     u.scanT -= dt;
     if (u.scanT <= 0 && t.type !== 'home' && t.type !== 'down' && t.type !== 'dig') {
       u.scanT = 0.4;
       foe = wildPrey(u.x, u.y, t.type === 'guard' ? 4 : 4.5);
-      if (foe && t.type === 'guard' && dist2(foe.x, foe.y, nest.x, nest.y) > 49) foe = null;
+      if (foe && t.type === 'guard' && dist2(foe.x, foe.y, nest.x, nest.y) > keep * keep) foe = null;
       if (foe && foe.id === u.ignoreFoe && S.time < u.ignoreUntil) foe = null;
       if (foe) u.fight = foe.id;
     }

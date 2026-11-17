@@ -1312,7 +1312,10 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
     `MURMUR.offRoute` (6) tiles off the shortest walks between the Command Bases (and their twins: the wars between the
     colonies aren't decided by which side of the way a nest landed), 12 tiles apart, by Crystal and rich deposits
     ("strike sites"); crowded out, a little closer, but only to have one set. Each keeps
-    `guards + level` Scuttlers on guard and grows a level every `WILD.grow` s (to 3). **Colony** nests also raid by day:
+    `guards + level` Scuttlers on guard (they go for what comes within 7 tiles of the nest in Colony, within `GUARD_VERSUS`
+    (3) in Versus, and robots keep that far clear of them: `foeReach`; a nest beside a colony's way to its fields stopped
+    a rival's economy dead) and grows a level every `WILD.grow` s (to 3). The rival builds no nearer a nest than
+    `AI_NEST_CLEAR` (8) tiles (`aiSearchSpot`). **Colony** nests also raid by day:
     from `WILD.first` (7 min) a pack every 260–400 s (× `raidGap` on Quiet, a creature smaller) at the nearest building
     or road any colony has within `WILD.reach` (24) tiles, growing with that colony. **Versus** nests send nothing by day.
   - **Nights** (`murmurNight(t)`: `todNameAt` of the game clock, `TOD_CYCLE` in `js/defs.js`, never the display setting,
@@ -1324,16 +1327,17 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
     other colony building 1), digging `tiles` that night (up to `cap` in all) over its first two minutes (`murmurGrow`,
     `murmurDig`: a tile at a time toward the goal, wandering a little, under any ground, roads, buildings and Walls, not
     water, chasms, rock, lava or the tide); `exits` new exits open along it (`murmurOpenExit`: on open ground over a
-    tunnel, not a road, building, resource, ramp or a Trade Post's ground, 4 tiles from another exit, clear of collapsed
-    ones still shut, at least `exitFromBase` (9) from a Command Base and `exitFromBld` (3) from any colony building, about
-    six from the nearest, up to `maxExits` a nest), and `waves` packs come up (`murmurWave`, a minute in and again later):
+    tunnel, not a road, building, resource, ramp or a Trade Post's ground, on level open ground all round (`exitRoom`: never
+    in a pass it would plug) that a colony's robots can walk to (`murmurReach`), 4 tiles from another exit, clear of
+    collapsed ones still shut, at least `exitFromBase` (12) from a Command Base and `exitFromBld` (5) from any colony
+    building, about six from the nearest, up to `maxExits` a nest), and `waves` packs come up (`murmurWave`, a minute in and again later):
     one through every exit with something of a colony's within `MURMUR.prey` tiles (`murmurPrey`: charge first, then bots,
-    then roads), `pack` strong, Brutes from night `brutes`, at most `room` up at once. Night raiders (`task.night`) move on
+    then roads), `pack` strong, Brutes from night `brutes`, at most `room` up at once (12, and 6 a colony). Night raiders (`task.night`) move on
     to the next thing near them when there's nothing left where they went (`murmurOnward`). At dawn (`murmurDawn`) they
     go back down: into the nearest exit of their nest within `MURMUR.retreat` (16) tiles (task `down`), or dig down where
     they stand (task `dig`). Each [base, per night after the first, most] (`murmurBy`), Quiet then Active: tiles [14, 4,
-    28] / [24, 8, 56], branches [1, 0.34, 2] / [1, 0.5, 4], cap [36, 18, 120] / [60, 36, 260], exits [1, 0.25, 1] /
-    [1, 0.5, 2] (at most 2 / 4 a nest), packs [2, 0.25, 3] / [2, 0.5, 5], Brutes from night 4 / 2, waves 1 / 2.
+    28] / [28, 8, 56], branches [1, 0.34, 2] / [2, 0.5, 4], cap [36, 18, 120] / [60, 36, 260], exits [1, 0.25, 1] /
+    [2, 0, 2] (at most 2 / 3 a nest), packs [2, 0.25, 3] / [2, 0.5, 5], Brutes from night 4 / 2, waves 1 / 2.
   - **Tunnels** (`S.tun`, a tile layer: a nest's slot in `S.mur.nests` + 1; saved, `TYPED_FIELDS`, and in `hashState`
     with `S.mur` and each nest's branches `b.br`) are drawn as raised ridges of heaved earth with violet root-veins
     (`paintTunnelTile`, `paintTunnelVeins`, baked at `TUN_PX` a tile when `S.mur.ver` changes: `tunnelLayers`), faint by day

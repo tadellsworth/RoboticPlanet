@@ -1070,7 +1070,7 @@ function aiThink(p) {
  *   aren't counted as an enemy army anywhere.
  * One order every AI_MURMUR_EVERY seconds at most.
  */
-const AI_EXIT_NEAR = 12, AI_NEST_REACH = 26, AI_NEST_SPARE = 4, AI_MURMUR_EVERY = 8;
+const AI_EXIT_NEAR = 12, AI_NEST_REACH = 26, AI_NEST_SPARE = 4, AI_MURMUR_EVERY = 8, AI_NEST_CLEAR = 8;
 function aiMurmur(p, lvl, lander, smart) {
   const P = S.players[p];
   const night = murmurNight(S.time);
@@ -1083,16 +1083,14 @@ function aiMurmur(p, lvl, lander, smart) {
   for (const u of S.bots) if (!u.dead && u.owner === p && u.task && u.task.type === 'attack') going.set(u.task.target, (going.get(u.task.target) || 0) + 1);
   for (const r of S.rallies) if (r.owner === p && r.target) going.set(r.target, (going.get(r.target) || 0) + 1);
   const around = (e, r) => { let n = 0; for (const u of S.bots) if (!u.dead && !u.inside && isWild(u.owner) && dist2(u.x, u.y, e.x + 0.5, e.y + 0.5) <= r * r) n++; return n; };
-  // 1) Exits near its land, nearest first.
-  let ex = null, ed = Infinity;
-  for (const e of S.buildings) {
-    if (e.dead || e.type !== 'burrow' || going.get(e.id)) continue;
-    const d = near(e, AI_EXIT_NEAR);
-    if (d <= AI_EXIT_NEAR && d < ed) { ed = d; ex = e; }
-  }
-  if (ex) {
-    const need = 3 + Math.ceil(around(ex, 6) * 0.7);
-    if (aiMurmurStrike(p, ex, need, need + 1)) return;
+  // 1) Exits near its land, nearest first (the first three it might reach). By day, with nothing up round it, the
+  //    garrisons send even the warbots they keep at home (all: only the Command Base keeps its own): a quiet exit is
+  //    a short walk and a few shots, and every night it stays open it brings a pack.
+  const exits = S.buildings.filter((e) => !e.dead && e.type === 'burrow' && !going.get(e.id)).map((e) => ({ e, d: near(e, AI_EXIT_NEAR) }))
+    .filter((o) => o.d <= AI_EXIT_NEAR).sort((a, b) => a.d - b.d || a.e.id - b.e.id).slice(0, 3);
+  for (const { e } of exits) {
+    const up = around(e, 6), need = 3 + Math.ceil(up * 0.7);
+    if (aiMurmurStrike(p, e, need, need + 1, !night && !up)) return;
   }
   // 2) By day, a nest, with the army to spare.
   if (night || murmurNight(S.time + 100) || P.passive) return;
@@ -1111,11 +1109,11 @@ function aiMurmur(p, lvl, lander, smart) {
 
 /**
  * Send `send` warbots at Murmur building e if at least `need` can go: straight at it from the garrisons in reach
- * (sendAttack), or, from further off, to a rally flag beside it that comes down with it (as the Army's Attack does:
+ * (sendAttack; with `all`, those they keep at home too, but the Command Base's), or, from further off, to a rally flag beside it that comes down with it (as the Army's Attack does:
  * the 'assault' order). True if any went.
  */
-function aiMurmurStrike(p, e, need, send) {
-  if (attackAvailable(p, e) >= need) return sendAttack(p, e, send, false, false, true) > 0;
+function aiMurmurStrike(p, e, need, send, all) {
+  if (attackAvailable(p, e, all) >= need) return sendAttack(p, e, send, all, false, true) > 0;
   for (const [di, dj] of [[1, 1], [-1, 1], [1, -1], [-1, -1], [2, 0], [-2, 0], [0, 2], [0, -2]]) {
     const i = e.x + di, j = e.y + dj;
     if (!inMap(i, j) || !walkable(tIdx(i, j)) || S.bAt[tIdx(i, j)] || S.zone[tIdx(i, j)] !== homeZone(p)) continue;
@@ -2766,6 +2764,8 @@ function aiSearchSpot(p, type, lander) {
   const far = type === 'outpost' || type === 'silo';
   const avoid = (S.players[p].avoid || []).filter((a) => a.until > S.time);
   S.players[p].avoid = avoid;
+  // (and nowhere near a Murmur nest, AI_NEST_CLEAR tiles: its guards keep the workers off, and the site never rises)
+  const nests = S.wildlife ? S.buildings.filter((b) => !b.dead && b.type === 'nest') : [];
   const defence = DEFENCE_TYPES.has(type);
   const foeB = type === 'silo' && aiStyle(p).missiles ? S.buildings.filter((b) => !b.dead && b.built && b.owner === rivalOf(p)) : null;
   // An Ore Mine counts only the Ore none of our Mines already works (two side by side on a small patch both ran dry
@@ -2809,6 +2809,7 @@ function aiSearchSpot(p, type, lander) {
       if (S.fert[j * S.W + i] && type !== 'farm') continue; // keep fertile soil for farming
       if (gunCovers(p, j * S.W + i) || dangerAt(p, i, j)) continue; // not where an enemy gun reaches: nobody could build it (nor where its robots were just shot down: noteDanger)
       if (avoid.some((a) => dist2(a.x, a.y, i, j) < (a.r2 || 12))) continue;
+      if (nests.length && nests.some((n) => dist2(n.x, n.y, i, j) < AI_NEST_CLEAR * AI_NEST_CLEAR)) continue;
       if (!canPlace(p, type, i, j, true).ok) continue;
       let rc = Infinity;
       for (const u of roadSides(p, i, j)) rc = Math.min(rc, reach[u]);
