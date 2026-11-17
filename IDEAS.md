@@ -81,6 +81,16 @@ Still open: a neutral, shared exchange the rivals compete over; contracts for Ch
   incoming aircraft and lets AA guns fire further). A recon plane only matters if the map ever gets fog of war.
 - **Graphics.** A first pass is done (rounded shorelines on ponds, lakes and seas, by day and in the night glow). Worth
   another look when new art comes in.
+- **Bigger graphics upgrades** (owner: for later, after the Graphics quality setting). Installing the game as a
+  desktop app gives it no more GPU than a tab does; Chrome already draws its canvas on the graphics card. For a bigger
+  step up:
+  - **More detailed art for buildings and robots at close zoom.** Today's sprites are drawn for the usual zoom and
+    soften when you zoom right in. Higher-resolution versions would serve High and Ultra. A medium job; see Custom
+    art in README.
+  - **A WebGL renderer** in place of the 2D canvas. It would bring real lighting and shadows, glow, water
+    reflections and thousands of particles. But it means rewriting the drawing side (`render.js`, `daynight.js`,
+    `fx.js`), a big project, with the 2D renderer kept as the fallback for phones that can't run it. WebGPU, newer
+    still, isn't needed.
 
 ## Suggestions from the November review (not decided)
 
