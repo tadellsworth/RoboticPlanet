@@ -204,7 +204,7 @@ function mpReceive(msg) {
     }
     case 'snap': {
       if (msg.from === MP.me || (msg.to && !msg.to.includes(MP.me))) return;
-      const groups = S && S.groups;
+      const groups = S && S.groups, bgroups = S && S.bgroups;
       // (the narrator's first nightfall is said on each device by its interface, not the simulation: the sender's game
       // doesn't know we've had it, so it's kept, or it would be said again: see nightfallLine)
       const night = S && S.lore ? S.lore['n.night.' + MP.me] : undefined;
@@ -212,6 +212,7 @@ function mpReceive(msg) {
       S.msgs = []; // (the sender's messages were for the sender)
       if (night !== undefined) (S.lore || (S.lore = {}))['n.night.' + MP.me] = night;
       if (groups) S.groups = groups; else delete S.groups; // (my own control groups stay mine)
+      if (bgroups) S.bgroups = bgroups; else delete S.bgroups; // (and the buildings on my number keys)
       MP.snapTurn = msg.turn;
       MP.turn = msg.turn; MP.begun = -1; MP.acc = 0; MP.snaps++;
       if (msg.full) for (const [T, list] of msg.packets) { if (!MP.packets.has(T)) MP.packets.set(T, new Map()); for (const [p, o] of list) MP.packets.get(T).set(p, o); }

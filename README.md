@@ -1864,6 +1864,10 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   **Undo** for 4 seconds (`ORDER_UNDO`; the `undoCommand` order sends each back to what it was doing). A drag or a
   pinch is never an order. **Box** (or a finger held still 350 ms, `LONG_PRESS` in js/input.js, then dragged, where
   you have warbots out) draws a selection box. With a panel open the bar steps aside and taps inspect.
+- **Buildings on number keys** (`bldGroups`, `S.bgroups` { key: building id }, beside the robots' `S.groups`): with no
+  robots selected and a building of yours open, Ctrl/⌘/Alt/Shift + 1–9 (`saveGroup`) puts it on that key; the key
+  (`recallGroup`) opens its panel, twice to jump to it, and the group bar shows it as a chip. A key holds a group of
+  robots or one building, and a building one key; both are kept through a multiplayer catch-up (`snap` in js/lockstep.js).
 - **Vibration** (`haptic` in js/input.js): under a finger, on a device that can vibrate (`navigator.vibrate`), a short
   buzz says an order went through (a tap-to-order with warbots selected or in the Army banner, a building, Viaduct or
   Ropeway placed, a Paths plan built, Lay road) and marks a warning or alarm from the game (at most one every 2.5 s).

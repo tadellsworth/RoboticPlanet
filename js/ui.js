@@ -2423,6 +2423,10 @@ function onMapCommand(i, j, wx, wy, done) {
 /** Control groups: Ctrl/Shift + digit saves the selection; the digit selects it again, twice to jump there. */
 /** Control groups (kept with the game, so they're there after Continue): group number → robot ids. */
 function ctrlGroups() { if (!S.groups) S.groups = {}; return S.groups; }
+/** Buildings kept on a number key (S.bgroups: { k: building id }): one building a key, a key a group of robots or a building. */
+function bldGroups() { if (!S.bgroups) S.bgroups = {}; return S.bgroups; }
+/** The building on key k, if it's still yours, or null. */
+function bldGroup(k) { const b = getE(bldGroups()[k]); return b && !b.dead && b.owner === ME && BDEFS[b.type] ? b : null; }
 
 /** What a list of selected robots is, in words ("2 Howitzers", "5 warbots and 1 Howitzer"). */
 function groupWords(ids) {
@@ -2434,17 +2438,40 @@ function groupWords(ids) {
 
 function saveGroup(k) {
   const mac = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent || '');
+  // No robots selected but a building of yours open: that building goes on the key.
+  const open = !UI.sel.length && UI.sheetKind === 'bld' ? getE(UI.sheetFor) : null;
+  if (open && !open.dead && open.owner === ME && !S.watch) {
+    const B = bldGroups();
+    for (const g in B) if (B[g] === open.id) delete B[g]; // (a building is on one key at a time)
+    B[k] = open.id;
+    delete ctrlGroups()[k];
+    sfx('click');
+    toast(`Key ${k}: your ${BDEFS[open.type].name}. Press ${k} to open it (twice to go to it).`, 'info');
+    refreshGroupBar();
+    return;
+  }
   if (!UI.sel.length) { toast(onTouch() ? `Select ${BOTS_OFF.has('rocket') ? 'warbots' : 'warbots or Howitzers'} first (tap one), then Save as group.` : `Select ${BOTS_OFF.has('rocket') ? 'warbots' : 'warbots or Howitzers'} first (drag a box round them), then ${mac ? '⌘ or ⌥' : 'Ctrl'}+${k} saves them as group ${k}.`, 'info'); return; }
   const G = ctrlGroups();
   // A robot is in one group at a time: putting it in this one takes it out of any other.
   for (const g in G) G[g] = G[g].filter((id) => !UI.sel.includes(id));
   G[k] = UI.sel.slice();
+  delete bldGroups()[k]; // (a key holds robots or a building, not both)
   sfx('click');
   toast(`Group ${k}: ${groupWords(G[k])}. ${onTouch() ? `Tap its chip ${k}` : `Press ${k}`} to select them again (twice to go to them).`, 'info');
   refreshGroupBar();
 }
 
 function recallGroup(k) {
+  const bk = bldGroup(k);
+  if (bk) {
+    const twice = UI.lastGroup.k === k && performance.now() - UI.lastGroup.at < 450;
+    UI.lastGroup = { k, at: performance.now() };
+    sfx('click');
+    if (UI.sel.length) selectBots([], false);
+    openBuildingSheet(bk);
+    if (twice) centerOn(bk.x + 0.5, bk.y + 0.5);
+    return;
+  }
   const ids = selectable(ME, ctrlGroups()[k] || []).map((u) => u.id);
   if (!ids.length) return;
   const twice = UI.lastGroup.k === k && performance.now() - UI.lastGroup.at < 450;
@@ -2477,6 +2504,8 @@ function refreshGroupBar() {
   const G = UI.inGame && S ? ctrlGroups() : {};
   const chips = [];
   for (let k = 1; k <= 9; k++) {
+    const bk = bldGroup(k);
+    if (bk) { const nm = BDEFS[bk.type].short || BDEFS[bk.type].name; chips.push(`<button class="gchip${UI.sheetKind === 'bld' && UI.sheetFor === bk.id ? ' on' : ''}" data-g="${k}" title="Key ${k}: your ${BDEFS[bk.type].name} (press ${k} to open it; twice to go to it)"><kbd>${k}</kbd>${nm}</button>`); continue; }
     const ids = G[k] ? selectable(ME, G[k]).map((u) => u.id) : [];
     if (G[k] && ids.length !== G[k].length) G[k] = ids; // the lost are dropped
     if (!ids.length) continue;
