@@ -471,6 +471,24 @@ These wait for a later expansion:
   symmetry, one a colony in each set (Active two sets on a Medium map for two, Quiet one), off the ways between the
   colonies; exits open no nearer than 12 tiles to a Command Base or 4 to a building; a collapsed exit stays shut 15
   minutes; the Hollow's `alwaysNight` turns the nights into surges with a silent lull.
+  **Their craft (the owner's decision, Nov 17; built, Active only, Quiet keeps the plain packs):** at dusk a watcher
+  stands at the edge of each colony's land facing it (the strike falls there); the packs gather out of the guns' reach
+  and off the colony's land, out of sight of its roads, and come in together; a few go first for the Fuel Stations,
+  Generators or streetlamps near the target (dark and dead till dawn: the lights go out one by one); targets and routes
+  keep out of gun cover; Brutes lead, Scuttlers spread round the target and scatter from warbots; half lost, the rest
+  go back down and come again; their dead are dragged off (no blast or fire, nothing left by morning); they remember
+  where they were killed (exits and strikes keep away) and where they fed (strikes come back), fading each night; from
+  night 3, with warbots about, a feint on the far side first. The rival builds a Pulse Turret where its power was cut.
+  To keep it fair the packs are smaller (Active [2, 0.34, 4], was [2, 0.5, 5]), only the exits with something near
+  them send a pack (as before), and a plan draws the packs of its three exits nearest the rally point.
+  Measured (35-minute computer-run Colony games, Active, seeds 7 and 8, before → after): robots lost to the Murmur,
+  Standard Small 28, 32 → 5, 15; Standard Huge 11, 9 → 10, 8; the Hollow Small 1, 5 → 15, 13; the Hollow Huge 8, 8 →
+  8, 10; buildings at 15 minutes, all eight, 221 → 231, at 30 minutes 260 → 287 (construction sites wrecked 3 → 10).
+  Versus, nine computer-only games: seven on Standard, shape 2 and shape 4 end in 13.9 to 40.5 minutes (mean 23.9, was
+  22.1), the first seat winning 5 to 2 (was 3 to 4), about 3 robots a colony lost to the Murmur (was 3.5); on the
+  Hollow, Medium seed 11 ends at 34.8 (before: still going at 75) and Small seed 21 at 17.7 (was 29.4).
+  For the owner: the Hollow in Colony is now harder for a computer-run colony (its robots lost go from a handful to a
+  dozen or so in 35 minutes; its size is the same): the lair, or soften it there?
   Open: art for the tunnels and exits (procedural for now: `paintTunnelTile`, `paintTunnelVeins`, `drawBurrow`,
   `drawExitScar` in js/render.js); the Leech, Spitter and Sapper as raiders; whether Torches should burn tunnels out.
 - **A campaign mode built around the Murmur** (the owner's long-term wish): the owner's outline is in CAMPAIGN.md, 15

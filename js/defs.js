@@ -1378,7 +1378,11 @@ const WILD_COLOR = '#a46cff';
  * - The nests send no packs by day, in Colony as in Versus (days are for striking them, nights for holding the line).
  * - Colony on the Hollow only (the lair's many nests would open twice the exits a Standard map does): no more exits
  *   open at once than a Standard Colony map of the same size could have open by that night (murmurExitCap).
- * - Quiet: fewer nests, fewer and slower tunnels, fewer exits and smaller packs.
+ * - Quiet: fewer nests, fewer and slower tunnels, fewer exits and smaller packs, and none of their craft (`craft`, on
+ *   Active only: a watcher at dusk, packs that gather out of the guns' reach and strike together, the power cut
+ *   first, the weak spot found, a pack that loses half its number going back down to come again, their dead
+ *   dragged away, a memory of where they were killed and where they fed, and from the third night a feint).
+
  * - `warn`: seconds before nightfall the dusk warning comes. Exits open no nearer than `exitFromBase` tiles to a
  *   Command Base or `exitFromBld` to any colony building; a branch makes for power within `reach` tiles of its nest;
  *   at dawn a creature within `retreat` tiles of an open exit goes down it (the rest dig down where they stand).
@@ -1392,9 +1396,28 @@ const MURMUR = {
   },
   active: {
     orbits: 2, perTiles: 1100, tiles: [28, 8, 56], branches: [2, 0.5, 4], cap: [60, 36, 260],
-    exits: [2, 0, 2], maxExits: 3, pack: [2, 0.5, 5], brutes: 2, waves: 2,
+    exits: [2, 0, 2], maxExits: 3, pack: [2, 0.34, 4], brutes: 2, waves: 2, // (smaller than before their craft, which hits harder)
   },
   shut: 900, warn: 40, exitArmor: 30, minBase: 18, offRoute: 6, exitFromBase: 12, exitFromBld: 4, reach: 44, retreat: 16, room: [12, 6], prey: 26,
+  // Their craft, on Active only (Quiet keeps the plain packs: the owner's call). See murmurPlan and the functions after it.
+  // watch: how far out from the night's target the watcher stands (tiles, at most); rally: how far from it the packs
+  // gather; wait: seconds the gathered wait for the rest after the first comes, waitMax in all; join: how far (tiles)
+  // from an exit the rally may be for its pack to go there (the joinMost nearest come; the rest stay down); cutR: what lights and charges the colony within that many
+  // tiles of the target is cut first; cutTime: seconds at it; cutWait: the most the rest wait for the first cut; dark:
+  // tiles round a cut building that go dark (a lamp: lampDark); leadGap: seconds the Brutes go ahead of the Scuttlers;
+  // spread: how far round the target the Scuttlers spread; half: the share of a pack whose loss sends it back down;
+  // again: seconds before a pack that went back comes up again (only with againLeft seconds of night still to come);
+  // scatter: armed warbots within that many tiles (scatterN of them) scatter the Scuttlers for scatterFor seconds
+  // (again no sooner than scatterCd); dragR: how far a creature goes to drag one of its dead; dragSlow: its pace then;
+  // bodyLast: seconds a body nobody comes for lies there before it sinks; memR: tiles a memory reaches; memDecay: what
+  // it keeps of it each night; memMost: how many places each memory holds; feintFrom: the first night a feint can come,
+  // with feintArmy armed warbots in the colony; feintN: how many in it; feintFar: tiles at least from the target;
+  // feintWait: the most the main pack waits for it to draw the warbots off.
+  craft: {
+    watch: 12, rally: 9, wait: 14, waitMax: 50, join: 46, cutR: 10, cutTime: 3, cutWait: 30, dark: 5, lampDark: 2, leadGap: 3,
+    joinMost: 3, spread: 1.6, half: 0.5, again: 45, againLeft: 70, scatter: 4.5, scatterN: 2, scatterFor: 4, scatterCd: 12, dragR: 8,
+    dragSlow: 0.7, bodyLast: 30, memR: 9, memDecay: 0.6, memMost: 24, feintFrom: 3, feintArmy: 4, feintN: 2, feintFar: 14, feintWait: 40,
+  },
 };
 
 /*
