@@ -1302,7 +1302,8 @@ const START_WARBOTS = 4;
  * game's settings (S.settings.mods, a list of keys) so every device plays them alike, and remembered on the device
  * with the other new-game choices. modsSetup (js/sim.js) applies the ones that change the landing; the rest are
  * looked up as the game runs (modOn). `versus`: only with a rival (left out of a Colony game). `pace`: it changes how
- * fast a game goes rather than only making it harder, so a win with it isn't a fastest win (js/goals.js).
+ * fast a game goes rather than only making it harder, so a win with it isn't a fastest win (js/goals.js). `desc` for
+ * the new-game screen, `brief` for the briefing.
  *   fuel      Refineries refine and energy crops ripen at `rate` speed.
  *   dust      A dust storm (EVENTS.dust) blows in `at` seconds in and never blows over.
  *   head      Each computer colony lands with `stock` more times START_STOCK and the robots in `bots`.
@@ -1311,17 +1312,17 @@ const START_WARBOTS = 4;
  *   noturret  People can't build the `types` (the computer can).
  */
 const MODS = {
-  fuel: { name: 'Half Fuel', rate: 0.5,
+  fuel: { name: 'Half Fuel', rate: 0.5, brief: 'Refineries and energy crops make Fuel at half speed',
     desc: 'Half Fuel: Refineries refine and energy crops ripen at half speed, for every colony. Fuel Stations, trucks and Generators run short.' },
-  dust: { name: 'Endless dust storm', at: 300,
+  dust: { name: 'Endless dust storm', at: 300, brief: 'from 5 minutes in, for good: bots slowed, Missiles grounded',
     desc: 'Endless dust storm: 5 minutes in a dust storm blows in, and it never blows over. Bots move at two-thirds speed and Missiles stay grounded; no other planetary event comes.' },
-  head: { name: 'Rival head start', versus: true, stock: 1, bots: { worker: 4, hauler: 2, warbot: 2 },
-    desc: 'Rival head start (Versus): every computer colony lands with twice the goods, 4 more Workers, 2 more Haulers and 2 more warbots.' },
-  crystal: { name: 'Scarce Crystal', keep: 0.5,
+  head: { name: 'Rival head start', versus: true, stock: 1, bots: { worker: 4, hauler: 2, warbot: 2 }, brief: 'the computer landed with twice the goods and 8 more robots',
+    desc: 'Rival head start: every computer colony lands with twice the goods, 4 more Workers, 2 more Haulers and 2 more warbots.' },
+  crystal: { name: 'Scarce Crystal', keep: 0.5, brief: 'half as much in every cluster and at every Command Base',
     desc: 'Scarce Crystal: Crystal clusters hold half as much, and every colony lands with half its Crystal. Chips and turret ammo come dear.' },
-  fragile: { name: 'Fragile robots', takes: 1.5, pace: true,
+  fragile: { name: 'Fragile robots', takes: 1.5, pace: true, brief: 'every robot takes half again the damage',
     desc: 'Fragile robots: every robot and vehicle takes half again as much damage, so fights are over sooner (a win with it is not a fastest win).' },
-  noturret: { name: 'No turrets', types: ['turret', 'minigun', 'mortar', 'disruptor'],
+  noturret: { name: 'No turrets', types: ['turret', 'minigun', 'mortar', 'disruptor'], brief: 'no Pulse Turrets, Minigun Nests, Mortar Pits or Disruptor Towers for you',
     desc: 'No turrets: you can\'t build Pulse Turrets, Minigun Nests, Mortar Pits or Disruptor Towers (the computer still can). Warbots, Bunkers, Keeps, Walls and Flak Guns defend you.' },
 };
 const MOD_ORDER = ['fuel', 'dust', 'head', 'crystal', 'fragile', 'noturret'];

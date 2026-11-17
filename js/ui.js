@@ -8,7 +8,7 @@ const SETTINGS_V = 3;
 
 const UI = {
   inGame: false, paused: false, speed: 1, overShown: false,
-  menu: { mode: 'versus', diff: 'normal', seed: randomSeed(), size: { ...DEFAULT_SIZE }, rough: DEFAULT_ROUGH, rich: DEFAULT_RICH, shape: 0, style: 1, styles: [null, null, null, null], nuke: 1, events: 0, wild: 1, unlimited: 0, victory: 'capture' },
+  menu: { mode: 'versus', diff: 'normal', seed: randomSeed(), size: { ...DEFAULT_SIZE }, rough: DEFAULT_ROUGH, rich: DEFAULT_RICH, shape: 0, style: 1, styles: [null, null, null, null], nuke: 1, events: 0, wild: 1, unlimited: 0, victory: 'capture', mods: [] },
   sheetKind: null, sheetFor: 0, sheetT: 0, hudT: 0,
   icons: {}, attackN: 0, demolishArm: 0, lastPaint: null, placeType: null,
   goodEls: {}, lastGoods: {}, objCollapsed: false, selBot: 0,
@@ -75,7 +75,7 @@ function initUI() {
     if ((saved.v || 0) < 2) { delete saved.style; delete saved.nuke; delete saved.events; }
     if ((saved.v || 0) < 3 && Number.isInteger(saved.rich)) saved.rich = [1, 2, 2, 4, 4][saved.rich] ?? DEFAULT_RICH;
     // (only what saveSettings writes: a stored mode or seed isn't a remembered setting)
-    for (const k of ['size', 'rough', 'rich', 'shape', 'nuke', 'biome', 'players', 'diff', 'style', 'styles', 'events', 'wild', 'unlimited', 'victory', 'shapeRnd', 'biomeRnd']) if (saved[k] !== undefined) UI.menu[k] = saved[k];
+    for (const k of ['size', 'rough', 'rich', 'shape', 'nuke', 'biome', 'players', 'diff', 'style', 'styles', 'events', 'wild', 'unlimited', 'victory', 'shapeRnd', 'biomeRnd', 'mods']) if (saved[k] !== undefined) UI.menu[k] = saved[k];
   } catch (e) { /* defaults */ }
   checkMenuSettings();
   initMenu();
@@ -303,6 +303,7 @@ function checkMenuSettings() {
   const st = Array.isArray(m.styles) ? (m.styles.length === 3 ? [null, ...m.styles] : m.styles) : [];
   m.styles = [0, 1, 2, 3].map((p) => (ok(st[p], PERSONALITY_ORDER.length + 1) ? st[p] : null));
   for (const k of ['nuke', 'events', 'wild', 'unlimited', 'shapeRnd', 'biomeRnd']) m[k] = m[k] ? 1 : 0;
+  m.mods = modList(m.mods); // the challenge modifiers picked (MODS), Rival head start kept for Versus in Colony too
   // (Teams isn't remembered: on a map made for 2 vs 2 it starts on.)
   if (m.teams === undefined && !m.shapeRnd && SHAPE_PRESETS[m.shape].teamDefault) m.teams = 1;
 }
@@ -312,7 +313,7 @@ function saveSettings() {
   const m = UI.menu;
   try {
     localStorage.setItem('botfall.settings', JSON.stringify({ v: SETTINGS_V, size: m.size, rough: m.rough, rich: m.rich, shape: m.shape, nuke: m.nuke, biome: m.biome, players: m.players,
-      diff: m.diff, style: m.style, styles: m.styles, events: m.events, wild: m.wild, unlimited: m.unlimited, victory: m.victory, shapeRnd: m.shapeRnd ? 1 : 0, biomeRnd: m.biomeRnd ? 1 : 0 }));
+      diff: m.diff, style: m.style, styles: m.styles, events: m.events, wild: m.wild, unlimited: m.unlimited, victory: m.victory, shapeRnd: m.shapeRnd ? 1 : 0, biomeRnd: m.biomeRnd ? 1 : 0, mods: m.mods }));
   } catch (e) { /* storage unavailable */ }
 }
 
@@ -410,6 +411,9 @@ function resourceInfo(v) {
   return v === DEFAULT_RICH ? `${P.name} resources: enough stone, ore, crystal and stalks near home to get going; spread out for more.` : `${P.name} resources: ${pct(P.density / N.density)} as many fields as Normal, each holding ${pct(P.amount / N.amount)} as much.`;
 }
 
+/** The challenge modifiers the menu has on, as a new game takes them (none that need a rival in Colony). */
+function menuMods() { return modList(UI.menu.mods, UI.menu.mode); }
+
 /** The setup in a line (and what isn't the default in a second one), under Play and in Start's bar. */
 function menuSummary() {
   const m = UI.menu, colony = m.mode === 'colony', three = menuThree();
@@ -433,6 +437,8 @@ function menuSummary() {
   if (todMode() !== 'cycle') extra.push(todMode() === 'day' ? 'always day' : 'always night');
   if (!weatherOn()) extra.push('no weather');
   if (m.unlimited) extra.push('Unlimited resources');
+  const mods = menuMods();
+  if (mods.length) extra.push('Challenge: ' + mods.map((k) => MODS[k].name).join(', '));
   return { main: main.join(' · '), extra: extra.join(' · ') };
 }
 
@@ -505,6 +511,11 @@ function initMenu() {
   for (const [id, k] of [['m-nuke', 'nuke'], ['m-wild', 'wild'], ['m-events', 'events'], ['m-unlimited', 'unlimited']]) {
     $(id).onchange = () => { UI.menu[k] = $(id).checked ? 1 : 0; syncMenu(); saveSettings(); sfx('click'); };
   }
+  // Challenge modifiers (MODS): a switch each, mixed freely.
+  $('m-mods').innerHTML = MOD_ORDER.map((k) => `<label class="tchip" id="m-mod-${k}-row" data-info="${esc(MODS[k].desc)}"><input type="checkbox" id="m-mod-${k}" role="switch"><span>${MODS[k].name}</span></label>`).join('');
+  for (const k of MOD_ORDER) {
+    $('m-mod-' + k).onchange = () => { const l = UI.menu.mods.filter((x) => x !== k); UI.menu.mods = modList($('m-mod-' + k).checked ? l.concat(k) : l); syncMenu(); saveSettings(); sfx('click'); };
+  }
   for (const btn of $('m-daynight').children) { btn.dataset.info = TOD_INFO[btn.dataset.v]; btn.onclick = () => { setTodMode(btn.dataset.v); syncMenu(); sfx('click'); }; }
   $('m-weather').onchange = () => { setWeatherOn($('m-weather').checked); syncMenu(); sfx('click'); };
   $('m-reroll').onclick = () => { UI.menu.seed = randomSeed(); syncMenu(); sfx('click'); };
@@ -535,7 +546,7 @@ function initMenu() {
     if (!over && UI.menuView === 'setup') { e.preventDefault(); showMenuView('home', true); }
   });
   // One line per section about the option under the mouse, or focused, or else what's chosen.
-  for (const sec of ['m-sec-match', 'm-sec-planet', 'm-sec-rules']) {
+  for (const sec of ['m-sec-match', 'm-sec-planet', 'm-sec-rules', 'm-sec-challenge']) {
     const el = $(sec), show = (t) => { const k = t && t.closest && t.closest('[data-info]'); UI.menuHover[sec] = k && el.contains(k) ? k : null; syncInfo(); };
     el.addEventListener('pointerover', (e) => { if (e.pointerType === 'mouse') show(e.target); });
     el.addEventListener('pointerleave', (e) => { if (e.pointerType === 'mouse') show(el.contains(document.activeElement) && document.activeElement.matches(':focus-visible') ? document.activeElement : null); });
@@ -565,6 +576,10 @@ function syncInfo() {
   $('m-planet-info').textContent = line('m-sec-planet', m.shapeRnd ? $('m-shape').dataset.info : `${P.name}: ${P.blurb || ''}`);
   // (Colony on Lunar: the Rules line says why the Murmur's switch is off, a touch screen having no hover to ask with)
   $('m-rules-info').textContent = line('m-sec-rules', m.mode === 'colony' && !menuMurmur() ? $('m-wild-row').dataset.info : TOD_INFO[todMode()]);
+  const mods = menuMods(), names = mods.map((k) => MODS[k].name);
+  $('m-challenge-info').textContent = line('m-sec-challenge', mods.length === 1 ? MODS[mods[0]].desc
+    : mods.length ? `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}. Win a Versus game with them on to earn their badges (Records).`
+      : 'Challenge modifiers make a game harder: mix them as you like. Win a Versus game with one on and it earns a badge (Records).');
   sizeInfoLines();
 }
 
@@ -593,7 +608,7 @@ function docNoteDefault() {
  * width change. (The doctrine line likewise: every doctrine's description, and the one it shows now.)
  */
 function sizeInfoLines() {
-  const lines = [['m-sec-match', 'm-mode-desc'], ['m-sec-planet', 'm-planet-info'], ['m-sec-rules', 'm-rules-info'], [null, 'm-style-note']];
+  const lines = [['m-sec-match', 'm-mode-desc'], ['m-sec-planet', 'm-planet-info'], ['m-sec-rules', 'm-rules-info'], ['m-sec-challenge', 'm-challenge-info'], [null, 'm-style-note']];
   for (const [sec, id] of lines) {
     const el = $(id), box = sec && $(sec);
     if (!el || (sec && !box) || !el.offsetWidth) continue;
@@ -702,6 +717,13 @@ function syncMenu() {
     $(id + '-row').classList.toggle('on', !!on);
   }
   for (const btn of $('m-daynight').children) mark(btn, btn.dataset.v === todMode());
+  for (const k of MOD_ORDER) {
+    const on = m.mods.includes(k);
+    $('m-mod-' + k).checked = on;
+    $('m-mod-' + k + '-row').classList.toggle('on', on);
+    $('m-mod-' + k + '-row').hidden = colony && MODS[k].versus; // (Rival head start: Versus only)
+  }
+  syncPvMods();
   syncPickRows();
   // Random can't be saved as a planet: pick a map type and biome first.
   const rnd = !!(m.shapeRnd || m.biomeRnd);
@@ -712,6 +734,17 @@ function syncMenu() {
   $('m-continue').hidden = !hasSave();
   syncInfo();
   schedulePreview();
+}
+
+/**
+ * The planet card's challenge modifiers (under its number): the ones on, each with a badge (◆) once you've won a game
+ * with it (see metaModBadges in js/goals.js).
+ */
+function syncPvMods() {
+  const el = $('m-pv-mods'), mods = menuMods(), won = typeof metaModBadges === 'function' ? metaModBadges() : {};
+  const html = mods.length ? '<span class="pvm-title">Challenge</span>' + mods.map((k) => `<span class="pvm${won[k] ? ' won' : ''}" title="${esc(MODS[k].desc + (won[k] ? ' You have won with it: its badge is in Records.' : ''))}">${won[k] ? '<i aria-hidden="true">◆</i>' : ''}${MODS[k].name}</span>`).join('') : '';
+  el.hidden = !mods.length;
+  if (el.innerHTML !== html) el.innerHTML = html;
 }
 
 /** The Map type and Biome rows: the choice, with a thumbnail (redrawn as art arrives). */
@@ -1369,6 +1402,7 @@ function initDialogs() {
 }
 
 function syncSaved() {
+  syncPauseMods();
   const el = $('p-saved');
   if (!el) return;
   if (UI.watch) { el.textContent = 'Observer mode: nothing here is saved, and your own game stays as it was.'; $('p-quit').textContent = 'Back to the menu'; return; }
@@ -1376,6 +1410,14 @@ function syncSaved() {
   el.textContent = UI.saveHold ? 'Saving is paused: something in the game keeps going wrong. Reload the page to carry on from your last save.'
     : UI.saveFailed ? 'Saving isn\'t working in this browser right now: keep this tab open.'
     : `Your game saves itself every ${AUTOSAVE_EVERY} seconds` + (s >= 0 ? ` (last saved ${s < 5 ? 'just now' : s < 60 ? s + ' s ago' : Math.round(s / 60) + ' min ago'})` : '') + '. If it closes, tap Continue on the main menu.';
+}
+
+/** The pause menu's line of this game's challenge modifiers (each named in full when pointed at). */
+function syncPauseMods() {
+  const el = $('p-mods'), mods = S ? gameMods() : [];
+  if (!el) return;
+  el.hidden = !mods.length;
+  el.innerHTML = mods.length ? '<b>Challenge:</b> ' + mods.map((k) => `<span title="${esc(MODS[k].desc)}">${MODS[k].name}</span>`).join(' · ') : '';
 }
 
 /* ------------------------------------------------------------------ boosts (hidden) */
@@ -2462,6 +2504,12 @@ function doctrineLines() {
   }
 }
 
+/** The briefing's word on the challenge modifiers on in this game (MODS), in one line. */
+function modsBriefing() {
+  const l = gameMods().map((k) => `${MODS[k].name} (${MODS[k].brief})`);
+  if (l.length) postMsg(ME, `Challenge: ${l.length > 1 ? l.slice(0, -1).join(', ') + ' and ' + l[l.length - 1] : l[0]}. The pause menu lists them.`, 0, 0, 'warn');
+}
+
 function startNewGame() {
   clearSave();
   closePicker(false);
@@ -2472,7 +2520,7 @@ function startNewGame() {
     size: UI.menu.size[UI.menu.mode] ?? DEFAULT_SIZE[UI.menu.mode], rough: UI.menu.rough, rich: UI.menu.rich, shape: pick.shape,
     nuke: !!UI.menu.nuke, biome: BIOME_ORDER[pick.biome], players: clamp(Math.round(UI.menu.players) || 2, 2, 4),
     style: docKeyOf(menuStyle()), styles: menuStyleKeys(), events: !!UI.menu.events, wildlife: !!UI.menu.wild, unlimited: !!UI.menu.unlimited,
-    victory: UI.menu.victory, teams: menuTeams(),
+    victory: UI.menu.victory, teams: menuTeams(), mods: menuMods(),
   });
   enterGame();
   updateHUD();
@@ -2484,6 +2532,7 @@ function startNewGame() {
       : `Your bots have landed. A rival colony, ${callsign(1, true)}, landed to the north. Build up fast!`, 0, 0, 'info');
   if (UI.menu.shapeRnd || UI.menu.biomeRnd) postMsg(ME, `Random pick: ${[UI.menu.shapeRnd ? SHAPE_PRESETS[pick.shape].name : '', UI.menu.biomeRnd ? biomeName(pick.biome) : ''].filter(Boolean).join(', ')}.`, 0, 0, 'info');
   doctrineLines();
+  modsBriefing();
   if (S.wildlife) {
     // Pointed at the nest nearest home (J jumps there), the rest are red on the minimap.
     const L = getE(S.players[ME].lander), nests = S.buildings.filter((b) => !b.dead && BDEFS[b.type].wild);
@@ -5276,7 +5325,7 @@ function costInline(cost, have) {
 function openBuildMenu() {
   const have = playerGoods(ME);
   const sites = siteCount(ME);
-  const list = BUILD_MENU.filter((t) => !(BDEFS[t].war && !warOn()) && !(BDEFS[t].nuke && !nukeOn()) && !(BDEFS[t].colony && !labOn()) && !(BDEFS[t].naval && !navalMap()));
+  const list = BUILD_MENU.filter((t) => !(BDEFS[t].war && !warOn()) && !(BDEFS[t].nuke && !nukeOn()) && !(BDEFS[t].colony && !labOn()) && !(BDEFS[t].naval && !navalMap()) && !modNoBuild(t));
   const groupOf = (t) => (BUILD_GROUPS.find((g) => g.types.includes(t)) || BUILD_GROUPS[0]).key;
   const ordered = BUILD_GROUPS.flatMap((g) => g.types).filter((t) => list.includes(t));
   if (!UI.buildTab) { try { UI.buildTab = localStorage.getItem('botfall.buildTab') || 'all'; } catch (e) { UI.buildTab = 'all'; } }
@@ -7200,7 +7249,7 @@ function updateEventCard() {
     el.className = 'event-card' + (E.type === 'trader' ? ' trader' : '');
     const name = def.html || def.name; // (the Wren in italics)
     let html = `<div class="ev-head"><span class="ev-dot" style="background:${def.color};color:${def.color}"></span><b>${soon ? name + ' coming' : name}</b><span class="ev-time"></span></div>`;
-    if (E.type !== 'trader') html += `<div class="ev-desc">${def.desc}</div>`;
+    if (E.type !== 'trader') html += `<div class="ev-desc">${E.endless ? 'Bots move at two-thirds speed and Missiles are grounded for the rest of the game: this storm never blows over.' : def.desc}</div>`;
     else if (!E.started) html += '';
     else if (!o) html += '<div class="ev-desc">It wants nothing you have spare.</div>';
     else if (o.done) html += `<div class="ev-desc">Deal done: ${o.m} ${goodN(o.get, o.m)} delivered to your Command Base.</div>`;
@@ -7218,7 +7267,7 @@ function updateEventCard() {
     });
   }
   const left = Math.max(0, Math.ceil((soon ? E.t0 : E.t1) - S.time));
-  el.querySelector('.ev-time').textContent = soon ? `in ${left}s` : `${left}s`;
+  el.querySelector('.ev-time').textContent = soon ? `in ${left}s` : E.endless ? 'for good' : `${left}s`;
   el.hidden = false;
 }
 

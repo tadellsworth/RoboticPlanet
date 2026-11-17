@@ -183,7 +183,7 @@ function mpMenuSettings(final, people) {
     seed: m.seed, diff: m.diff, size: m.size.versus ?? DEFAULT_SIZE.versus, rough: m.rough, rich: m.rich,
     shape: pick.shape, shapeRnd: !final && !!m.shapeRnd, biome: BIOME_ORDER[pick.biome], biomeRnd: !final && !!m.biomeRnd,
     players: clamp(Math.max(Math.round(m.players) || 2, least), 2, 4), style: m.style, styles: [0, 1, 2, 3].map((p) => menuSlotStyle(p)), nuke: !!m.nuke, events: !!m.events, victory: m.victory || 'capture',
-    teams: !!m.teams && total === 4, teamOf: m.teams && total === 4 ? mpTeamSeats() : null,
+    teams: !!m.teams && total === 4, teamOf: m.teams && total === 4 ? mpTeamSeats() : null, mods: modList(m.mods, 'versus'),
     sum: mpSummary(),
   };
 }
@@ -209,6 +209,8 @@ function mpSummary() {
   if (m.victory && m.victory !== 'capture') bits.push(VICTORY[m.victory].name);
   if (m.nuke) bits.push('Nuclear race');
   if (m.events) bits.push('Planetary events');
+  const mods = modList(m.mods, 'versus');
+  if (mods.length) bits.push('Challenge: ' + mods.map((k) => MODS[k].name).join(', '));
   return bits.join(' · ');
 }
 
@@ -404,7 +406,7 @@ function mpGameOpts(s, humans) {
     seed: s.seed, difficulty: s.diff, mode: 'versus', size: s.size, rough: s.rough, rich: s.rich, shape: s.shape, nuke: !!s.nuke,
     biome: s.biome, players: total, style: docKeyOf(s.style),
     styles: Array.isArray(s.styles) ? cpus.map((p) => (Number.isInteger(s.styles[p]) ? docKeyOf(s.styles[p]) : undefined)) : undefined,
-    events: !!s.events, wildlife: false, victory: s.victory, humans, teams: !!s.teams,
+    events: !!s.events, wildlife: false, victory: s.victory, humans, teams: !!s.teams, mods: s.mods,
   };
 }
 
@@ -442,6 +444,7 @@ function mpOnStart(m) {
   const ally = S.teams ? S.players.find((P) => allies(P.id, me)) : null;
   postMsg(ME, `Multiplayer: you against ${[...others, ai ? `${ai} computer rival${ai > 1 ? 's' : ''}` : ''].filter(Boolean).join(' and ')}${ally ? `, with ${ally.name || 'a computer ally, ' + callsign(ally.id, true) + ','} on your side` : ''}. Your bots have landed: build up fast!`, 0, 0, 'info');
   doctrineLines();
+  modsBriefing();
   $('br-title').textContent = 'Before you start';
   showBriefing(landingLog());
 }
