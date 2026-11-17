@@ -5250,6 +5250,7 @@ function render(dtReal) {
   drawScorch(ctx, ox, oy, z);
   drawDecals(ctx, ox, oy, z, inView);
   drawCalmGround(ctx, ox, oy, z, inView);
+  if (typeof faunaGround === 'function') faunaGround(ctx, ox, oy, z, v0, v1); // the wildlife on the ground and in the trees (looks only: js/wildlife.js)
   drawPlans(ctx, ox, oy, z, inView);
   if (typeof UI !== 'undefined') {
     const selB = getE(R.selected);
@@ -5428,6 +5429,7 @@ function render(dtReal) {
   drawBreachShafts(ctx, ox, oy, z); // (the Hollow: the shafts of daylight, over everything standing in them)
   drawFeeds(ctx, ox, oy, z, inView);
   drawSmoke(ctx, ox, oy, z, inView);
+  if (typeof faunaAir === 'function') faunaAir(ctx, ox, oy, z); // birds in flight, and the night's glows (js/wildlife.js)
   drawAirLayer(ctx, ox, oy, z, inView);
   if (z >= 14 && R.clean < 2) for (const t of hangarTags) drawHangarTag(ctx, ox + (t.b.x + 0.5) * z, oy + (t.b.y + 0.08) * z, z, t.n);
 
