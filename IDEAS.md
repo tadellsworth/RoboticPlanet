@@ -49,6 +49,15 @@ Still open: a neutral, shared exchange the rivals compete over; contracts for Ch
     the beam lights the map for a moment and the cut glows red, then cools. (The game has no power lines: Generators
     power what's within 4 tiles of them. Power lines that carry a Generator's power further, and that the Murmur's
     Leeches drain, would be an idea of their own; the lore already speaks of them.)
+  - **Power for the megastructures: power lines and nuclear power** (the owner: a use for Uranium beyond the bomb).
+    Today Uranium is only in a Nuclear race, enriched at the Reactor for the bomb, and Generators only speed up what is
+    within 4 tiles. Instead: a **Nuclear Power Plant** burns Enriched Uranium for far more power than Generators, and
+    **power lines** (pylons, laid like roads or track) carry it across the colony. The big structures (the Lance, the
+    Shield Dome, the Mass driver, the Maglev, the Great Uplink) run on that grid and stop when it's cut; factories on it
+    work faster. Uranium deposits would then appear in more games, not just a Nuclear race, so it is a choice: power or
+    the bomb. Risks: a Plant hit hard enough melts down (a small fallout zone where nothing works for a while); the
+    Murmur's Leeches drain power lines at night, the lights going out pylon by pylon (as LORE.md already has it); a
+    rival cuts a line to stop a charging Lance.
   - **Shield Dome.** A great energy dome over the base, stopping Missiles, bombs, Ringfall and Howitzer shells while
     powered; it drains Crystal all the time, and warbots can still walk in, so a war on it turns from bombardment to
     ground assault.
