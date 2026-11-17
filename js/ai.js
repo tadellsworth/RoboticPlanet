@@ -48,7 +48,7 @@ const AI_ARMY_ROOM = 0.4, AI_WORKER_ROOM = 6;
  * scraps them:
  * - too many: with less room under the bot limit than the army it wants (vehicles and crews idle `idle` seconds);
  * - in a crisis: no Alloy or no Chips for `crisis` seconds (P.dry) with next to none being made, the ones that give back
- *   what it lacks (only vehicles give Chips back; vehicles and crews idle `crisisIdle` seconds);
+ *   what it lacks (only vehicles give Chips back; vehicles and crews idle `crisisIdle` seconds; in triage no Workers);
  * - when it makes economic sense (not Easy): its Bot Foundry waits for parts that a vehicle, crew or Hauler idle for
  *   `eco` seconds gives back, one at a time, at most one every `ecoGap` seconds.
  * A kind scrapped isn't ordered again for `hold` seconds (P.scrapT), nor Haulers in place of scrapped Freight Trucks.
