@@ -1413,23 +1413,37 @@ function musicMood() {
   if (typeof UI === 'undefined' || !UI.inGame || !S) return 'menu';
   if (S.winner >= 0) return 'end';
   if (S.missiles.some((m) => m.nuke)) return 'nuke';
-  if (MUSIC.of !== S) { MUSIC.of = S; MUSIC.warUntil = 0; }
-  // Under attack, raiders in your land, or your warbots in a fight: war, for at least 40 s after.
-  let threat = 0;
+  if (MUSIC.of !== S) { MUSIC.of = S; MUSIC.warUntil = 0; MUSIC.murmurUntil = 0; }
+  // Under attack, raiders in your land, or your warbots in a fight: war, for at least 40 s after. The Murmur close to
+  // your colony (MUSIC_MURMUR of them, in your land or near your buildings) bring in Night Murmurs instead, for at least
+  // 35 s after: the war music comes in for them only when enemy robots are in your land too.
+  let threat = 0, robots = 0, wild = 0, mine = null;
   for (const b of S.buildings) if (!b.dead && b.owner === ME && S.time - (b.lastHit ?? -99) < 8) threat += 2;
   for (const u of S.bots) {
-    if (u.dead || u.inside || !isArmy(u)) continue;
-    if (u.owner !== ME && S.owner[Math.floor(u.y) * S.W + Math.floor(u.x)] === ME) threat++;
+    if (u.dead || u.inside) continue;
+    if (BOTS[u.type] && BOTS[u.type].wild) {
+      if (S.owner[Math.floor(u.y) * S.W + Math.floor(u.x)] === ME) { wild++; continue; }
+      mine = mine || S.buildings.filter((b) => !b.dead && b.owner === ME);
+      if (mine.some((b) => dist2(b.x + 0.5, b.y + 0.5, u.x, u.y) < MUSIC_MURMUR_NEAR * MUSIC_MURMUR_NEAR)) wild++;
+      continue;
+    }
+    if (!isArmy(u)) continue;
+    if (u.owner !== ME && S.owner[Math.floor(u.y) * S.W + Math.floor(u.x)] === ME) { threat++; robots++; }
     else if (u.owner === ME && u.fight) threat++;
   }
-  if (threat >= 3) MUSIC.warUntil = S.time + 40;
-  return S.time < MUSIC.warUntil ? 'war' : BUILD_THEMES[Math.floor(S.time / MUSIC_ROTATE) % BUILD_THEMES.length];
+  const murmur = wild >= MUSIC_MURMUR;
+  if (murmur) MUSIC.murmurUntil = S.time + 35;
+  if (threat >= 3 && (robots > 0 || !murmur)) MUSIC.warUntil = S.time + 40;
+  return S.time < MUSIC.warUntil ? 'war' : S.time < (MUSIC.murmurUntil || 0) ? 'murmur' : BUILD_THEMES[Math.floor(S.time / MUSIC_ROTATE) % BUILD_THEMES.length];
 }
+
+/** Night Murmurs comes in with this many of the Murmur in your land or within MUSIC_MURMUR_NEAR tiles of your buildings. */
+const MUSIC_MURMUR = 2, MUSIC_MURMUR_NEAR = 9;
 
 /** The build music's themes, taking turns every MUSIC_ROTATE seconds of play (a game starts on the first). */
 const BUILD_THEMES = ['build', 'build2', 'build3'], MUSIC_ROTATE = 600;
 /** Each theme's title, for the Now playing card (nowPlayingTick in ui.js); the menu plays a slow take on the main theme. */
-const MUSIC_TITLES = { menu: 'Lost in a Dream', build: 'Lost in a Dream', build2: 'Night Drive', build3: 'Horizon', war: 'Overdrive', nuke: 'Zero Hour' };
+const MUSIC_TITLES = { menu: 'Lost in a Dream', build: 'Lost in a Dream', build2: 'Night Drive', build3: 'Horizon', war: 'Overdrive', nuke: 'Zero Hour', murmur: 'Night Murmurs' };
 
 const MINOR = [0, 2, 3, 5, 7, 8, 10], PHRYGIAN = [0, 1, 3, 5, 7, 8, 10], DORIAN = [0, 2, 3, 5, 7, 9, 10];
 const CHORD = { m: [0, 3, 7], M: [0, 4, 7], m7: [0, 3, 7, 10], M7: [0, 4, 7, 11], dim: [0, 3, 6] };
@@ -1488,6 +1502,21 @@ const MOODS = {
       ['pad', 'bass16', 'kick4', 'hat16', 'snare', 'stab'],
       ['pad', 'bass16', 'kick4', 'hat16', 'snare', 'lead', 'arp'],
       ['bass16', 'kick4', 'tom', 'hat16', 'stab'],
+    ],
+  },
+  // Night Murmurs: the Murmur close by. Slow and low (Phrygian, a chord every two bars): a choir of whispers pitched on
+  // the chord (filtered noise, the murmur itself), a slow heartbeat, a bass creeping a semitone up and back, and pale
+  // crystal glints far off in the echo, like the geodes on their backs catching the light.
+  murmur: {
+    bpm: 70, keys: [50, 49, 52], scale: PHRYGIAN, chordBars: 2, gain: 0.7,
+    progs: [[[0, 'm'], [1, 'M'], [0, 'm'], [8, 'M']], [[0, 'm'], [10, 'M'], [1, 'M'], [0, 'm']], [[0, 'm7'], [8, 'M'], [5, 'm'], [1, 'M']]],
+    arrange: [
+      ['whisper', 'drone'],
+      ['whisper', 'drone', 'heart', 'glint'],
+      ['whisper', 'pad', 'heart', 'glint', 'bassW'],
+      ['whisper', 'pad', 'creep', 'heart', 'glint', 'tick3'],
+      ['whisper', 'drone', 'creep', 'glint', 'lead'],
+      ['pad', 'whisper', 'heart', 'creep', 'tick3'],
     ],
   },
   nuke: {
@@ -1601,6 +1630,10 @@ function musicStep(t) {
   // Shimmer: a slow, high bell arpeggio drifting through the chord.
   if (L.has('shimmer') && s % 4 === 0) { const hi = chord.map((n) => n + 24); mLead(t, MUSIC.key + hi[(s / 4 + MUSIC.bar) % hi.length], sd * 6, 0.6); }
   if (L.has('alarm') && s % 4 === 0) mAlarm(t, MUSIC.key + 12 + (s % 8 === 0 ? 0 : 6));
+  // Night Murmurs: the creeping bass (root, then a semitone up and back), a tick in threes, far-off crystal glints.
+  if (L.has('creep') && (s === 0 || s === 8)) mBass(t, root - 12 + (s === 8 && MUSIC.bar % 2 === 1 ? 1 : 0), sd * 7, true);
+  if (L.has('tick3') && s % 3 === 0) mHat(t, 0.018, s === 0 ? 0.5 : 0.3);
+  if (L.has('glint') && (s === 6 || s === 13) && Math.random() < 0.45) mLead(t, MUSIC.key + 36 + chord[rnd(chord.length)], sd * 4, 0.3);
   // Melody
   if (L.has('lead') && MUSIC.melody) {
     const n = MUSIC.melody[s];
@@ -1630,6 +1663,7 @@ function musicBar(t) {
   const barDur = MUSIC.stepDur * 16;
   if (L.has('pad') && MUSIC.bar % d.chordBars === 0) mPad(t, MUSIC.chord.map((n) => MUSIC.key + n), barDur * d.chordBars);
   if (L.has('drone')) mDrone(t, MUSIC.key - 12 + c[0], barDur, MUSIC.bar);
+  if (L.has('whisper') && MUSIC.bar % d.chordBars === 0) mWhisper(t, MUSIC.chord.map((n) => MUSIC.key + n), barDur * d.chordBars);
   MUSIC.melody = L.has('lead') ? realizeMotif(MUSIC.motif, MUSIC.chord) : null;
 }
 
@@ -1811,6 +1845,25 @@ function mDrone(t, n, dur, bar) {
   env(g, t, 0.05, 0.08, dur - 0.05, 0.2);
   for (const m of [n, n + 7, n + 12]) { const o = mOsc('sawtooth', midiHz(m), t); o.connect(lp); o.start(t); o.stop(t + dur + 0.3); }
   lp.connect(g); sends(g, 1, 0.3, 0);
+}
+
+/**
+ * Night Murmurs' choir: noise through a narrow band-pass on each chord note (an octave down and as written), swelling
+ * in and out over the chord like many low voices under the ground, the filters wandering a little sharp and flat.
+ */
+function mWhisper(t, notes, dur) {
+  const ac = AUDIO.ctx, g = ac.createGain();
+  env(g, t, dur * 0.45, 1, dur * 0.55, dur * 0.5);
+  for (const n of notes) for (const oct of [-12, 0]) {
+    const src = ac.createBufferSource(), bp = ac.createBiquadFilter(), vg = ac.createGain(), f = midiHz(n + oct);
+    src.buffer = AUDIO.noise; src.loop = true;
+    bp.type = 'bandpass'; bp.Q.value = 28;
+    bp.frequency.setValueAtTime(f * 0.985, t); bp.frequency.linearRampToValueAtTime(f * 1.015, t + dur * 0.5); bp.frequency.linearRampToValueAtTime(f, t + dur);
+    vg.gain.value = oct ? 0.55 : 0.32;
+    src.connect(bp).connect(vg).connect(g);
+    src.start(t, Math.random() * 1.5); src.stop(t + dur * 1.6);
+  }
+  sends(g, 0.9, 0.8, 0.15);
 }
 
 function mAlarm(t, n) {
