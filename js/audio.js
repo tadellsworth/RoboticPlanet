@@ -23,28 +23,31 @@
  * bass lines, drum patterns and short melodies, arranged in 8-bar sections that bring parts in and
  * out, so it never loops exactly. On a computer a small card names each theme as it starts (MUSIC_TITLES).
  *
- * Volumes (Music and Effects, 0..1) are set in the pause menu and remembered on this device.
+ * Volumes (Music, Effects and Ambience, 0..1) are set in the pause menu and remembered on this device. Ambience is the
+ * land's own sounds (AUDIO.natureBus: each biome's wind, bed and calls, water, crickets, the sea), apart from the effects.
  */
 
-const AUDIO = { ctx: null, on: true, last: {}, music: 0.55, fx: 0.8, suppress: false };
+const AUDIO = { ctx: null, on: true, last: {}, music: 0.55, fx: 0.8, amb: 0.5, suppress: false };
 try {
   const saved = JSON.parse(localStorage.getItem('botfall.audio') || '{}');
   // (held to 0..1: a value from storage is used as a gain, and a large one would be deafening)
   if (typeof saved.music === 'number' && saved.music >= 0) AUDIO.music = Math.min(1, saved.music);
   if (typeof saved.fx === 'number' && saved.fx >= 0) AUDIO.fx = Math.min(1, saved.fx);
+  if (typeof saved.amb === 'number' && saved.amb >= 0) AUDIO.amb = Math.min(1, saved.amb);
 } catch (e) { /* defaults */ }
 
 function saveAudio() {
-  try { localStorage.setItem('botfall.audio', JSON.stringify({ music: AUDIO.music, fx: AUDIO.fx })); } catch (e) { /* storage unavailable */ }
+  try { localStorage.setItem('botfall.audio', JSON.stringify({ music: AUDIO.music, fx: AUDIO.fx, amb: AUDIO.amb })); } catch (e) { /* storage unavailable */ }
 }
 
-/** Set the Music or Effects volume (0..1). */
+/** Set the Music, Effects or Ambience volume (kind 'music', 'fx' or 'amb'; 0..1). */
 function setVolume(kind, v) {
   AUDIO[kind] = clampV(v);
   saveAudio();
   const ac = AUDIO.ctx;
   if (!ac) return;
   if (kind === 'fx' && AUDIO.fxBus) AUDIO.fxBus.gain.setTargetAtTime(AUDIO.fx, ac.currentTime, 0.05);
+  if (kind === 'amb' && AUDIO.natureBus) AUDIO.natureBus.gain.setTargetAtTime(AUDIO.amb * NATURE_LEVEL, ac.currentTime, 0.05);
   if (kind === 'music' && AUDIO.musicBus) AUDIO.musicBus.gain.setTargetAtTime(musicLevel(), ac.currentTime, 0.05);
 }
 function clampV(v) { return Math.max(0, Math.min(1, +v || 0)); }
@@ -93,11 +96,11 @@ function buildAudioGraph(ac) {
   A.fxBus = ac.createGain();
   A.fxBus.gain.value = A.fx;
   A.fxBus.connect(A.master);
-  // The land's own sounds (each biome's wind, bed and calls, water, crickets, the sea) go through a bus of their own
-  // under the effects (NATURE_LEVEL), so they sit below the colony and the fighting.
+  // The land's own sounds (each biome's wind, bed and calls, water, crickets, the sea) go through a bus of their own,
+  // set by the Ambience volume (NATURE_LEVEL at full), apart from the effects.
   A.natureBus = ac.createGain();
-  A.natureBus.gain.value = NATURE_LEVEL;
-  A.natureBus.connect(A.fxBus);
+  A.natureBus.gain.value = A.amb * NATURE_LEVEL;
+  A.natureBus.connect(A.master);
   // The effects' own space, for explosions: a dark outdoor reverb (the blast rolling round the hills) and a
   // slapback echo off a far ridge. Explosions send to both (more of it the further off they are).
   A.fxVerbIn = ac.createGain();
@@ -477,6 +480,8 @@ function incoming(D, kind, dur) {
 }
 
 function sfxReady() { return AUDIO.on && !AUDIO.suppress && AUDIO.ctx && AUDIO.ctx.state === 'running' && AUDIO.fx > 0; }
+/** As sfxReady, for the land's own sounds: the Ambience volume, not the Effects one. */
+function natureReady() { return AUDIO.on && !AUDIO.suppress && AUDIO.ctx && AUDIO.ctx.state === 'running' && AUDIO.amb > 0; }
 
 /**
  * Play a sound effect. dest: an optional node (a panner for a sound on the map), or the map position (dest = x,
@@ -1022,7 +1027,7 @@ function audioTick(dt) {
   }
   if (WORLD.lava > 0.02 && Math.random() < Math.min(0.5, WORLD.lava * 3)) { // lava bubbling and popping somewhere on screen
     const ac = AUDIO.ctx, g = ac.createGain();
-    g.gain.value = 0.6 * zoomLoud(); g.connect(AUDIO.fxBus);
+    g.gain.value = 0.6 * zoomLoud(); g.connect(AUDIO.natureBus || AUDIO.fxBus);
     sfx('bubble', g);
     setTimeout(() => { try { g.disconnect(); } catch (e) { /* gone */ } }, 2000);
   }
@@ -1146,7 +1151,7 @@ function ambienceBeds(live, dt, zl) {
     const sea = noiseVoice('lowpass', 520, 0.5); sea.g.connect(A.natureBus);
     WORLD.amb = { city, chatter, ind, ilp, indOsc, rail, air, airPan, abg, sea, clack: 0, cricket: 4 };
   }
-  const M = WORLD.amb, on = live && AUDIO.fx > 0;
+  const M = WORLD.amb, on = live && AUDIO.fx > 0, natOn = live && AUDIO.amb > 0;
   const night = typeof todNow === 'function' && S ? todNow().lights || 0 : 0;
   // The city: the buildings on screen, and the size of the whole colony a little.
   let total = 0;
@@ -1180,17 +1185,17 @@ function ambienceBeds(live, dt, zl) {
   const swell = 0.55 + 0.45 * Math.sin(t * 0.75) * Math.sin(t * 0.31 + 2);
   // (The open sea's: lakes and rivers only murmur, and lap at their banks: see natureBeds.)
   const openSea = !!(S && (SHAPE_PRESETS[S.settings.shape || 0] || {}).islands);
-  M.sea.g.gain.setTargetAtTime(on ? Math.min(0.05, 0.06 * Math.sqrt(WORLD.sea || 0)) * swell * (0.5 + 0.5 * zl) * (openSea ? 1 : 0.35) : 0, t, 0.6);
+  M.sea.g.gain.setTargetAtTime(natOn ? Math.min(0.05, 0.06 * Math.sqrt(WORLD.sea || 0)) * swell * (0.5 + 0.5 * zl) * (openSea ? 1 : 0.35) : 0, t, 0.6);
   // Crickets on warm nights, out in the wilds (fewer at a town's edge, none in its streets).
   const b = typeof biome === 'function' && S ? biome() : 'desert', W = WORLD.wild || 0;
-  if (on && night > 0.5 && W > 0.12 && ['jungle', 'autumn', 'savanna', 'swamp', 'desert'].includes(b)) {
+  if (natOn && natureReady() && night > 0.5 && W > 0.12 && ['jungle', 'autumn', 'savanna', 'swamp', 'desert'].includes(b)) {
     M.cricket -= dt;
     if (M.cricket <= 0) {
       M.cricket = (0.6 + Math.random() * 2.2) / Math.max(0.3, W);
       const g = ac.createGain(), pan = ac.createStereoPanner ? ac.createStereoPanner() : null;
       g.gain.value = 0.5 * night * (0.3 + 0.7 * W);
       if (pan) { pan.pan.value = Math.random() * 1.6 - 0.8; g.connect(pan).connect(A.natureBus); } else g.connect(A.natureBus);
-      sfx('cricket', g);
+      { const f = 4300 + Math.random() * 500; for (let k = 0; k < 3; k++) _tone(f, 0.035, 'triangle', 0.008, null, k * 0.06, g); } // (as sfx 'cricket', on the Ambience volume)
       setTimeout(() => { try { g.disconnect(); } catch (e) { /* gone */ } }, 2000);
     }
   }
@@ -1282,7 +1287,7 @@ function natureBeds(live, dt, zl, b, sway, wx) {
     glp.connect(gAm).connect(glow.g).connect(A.natureBus);
     WORLD.nat = { leaves, hiss, rain, rumble, drone, lap, glow, glowOsc, surf: 4, lapping: 1, ember: 1, bolt: -1, thunderAt: 0, murmur: 20 };
   }
-  const M = WORLD.nat, on = live && AUDIO.fx > 0 && !!S, N = NATURE[b] || {};
+  const M = WORLD.nat, on = live && AUDIO.amb > 0 && !!S, N = NATURE[b] || {};
   const W = on ? WORLD.wild || 0 : 0, zq = 0.55 + 0.45 * zl;
   const night = on && typeof todNow === 'function' ? todNow().lights || 0 : 0;
   const wk = on && wx ? wx.k : 0, kind = on && wx ? wx.kind : '';
@@ -1371,8 +1376,11 @@ function groundMurmur(v) {
 }
 
 // The life (and the land) heard now and then out in each biome: see biomeCall. (None on Argos: it's silent.)
-/** How loud the land's own sounds are under the effects (AUDIO.natureBus): turned down by about 5 dB on the owner's word, Nov 2026. */
-const NATURE_LEVEL = 0.55;
+/**
+ * The land's own sounds' bus (AUDIO.natureBus) at full Ambience volume. At the default (AUDIO.amb 0.5) they sit where
+ * the owner turned them down to in Nov 2026, about 5 dB under where they were with the effects.
+ */
+const NATURE_LEVEL = 0.9;
 const BIOME_CALLS = { jungle: 1, autumn: 1, savanna: 1, swamp: 1, alien: 1, volcanic: 1, desert: 1, polar: 1 };
 
 /**
@@ -1383,7 +1391,7 @@ const BIOME_CALLS = { jungle: 1, autumn: 1, savanna: 1, swamp: 1, alien: 1, volc
  * night), ice cracking and groaning and snow sliding at the poles.
  */
 function biomeCall(b, w, night) {
-  if (!sfxReady()) return;
+  if (!natureReady()) return;
   w = w === undefined ? 1 : w;
   const g = aroundVoice(0.8, 0.5 * (0.3 + 0.7 * w), AUDIO.natureBus), r = Math.random(), dark = Math.random() < (night || 0);
   if (b === 'jungle' || b === 'autumn') {

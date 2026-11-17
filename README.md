@@ -1717,7 +1717,7 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   roll, the approach whine and the touchdown chirp, a ship's horn leaving port, the sea's wash (full on the sea maps,
   Islands, Tidal flats and Four Isles; softer on lakes and rivers), bubbling lava and crickets on warm nights. Under it
   all, **the land's own sounds** (`natureBeds`, `biomeCall`; with the wind, crickets and the sea they go through a bus of
-  their own, `AUDIO.natureBus` at `NATURE_LEVEL` 0.55, about 5 dB under the effects, turned down on the owner's word): each biome's bed (`NATURE`: leaves rustling as the wind
+  their own, `AUDIO.natureBus`, set by the Ambience volume apart from the effects, `NATURE_LEVEL` at full): each biome's bed (`NATURE`: leaves rustling as the wind
   gusts in the forests, grass on the savanna, sand or snow hissing in the desert and at the poles, cicadas in the
   savanna's heat and insects in the forest by day, the swamp's frogs and insects by night, the Bloom's shimmer, brighter
   by night, the ashlands' ground rumbling) and calls now and then (forest birds by day and a night bird's hoot, cicadas
@@ -1740,7 +1740,8 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   on these voices): a calm wild scene sits about 18 to 22 dB under the music, a storm about 11 to 14 dB under, an
   eruption about 16 dB under, and a town about 25 dB under (the land fades there); thunder and surf peak at least 8 dB
   under the music's peaks. (A drone is a narrow band of noise, so its level number is far higher than a rustle's for
-  the same loudness.) Music and Effects volumes are in the pause menu.
+  the same loudness.) Music, Effects and Ambience volumes are in the pause menu (Ambience: the land's own sounds, `AUDIO.amb` on
+  `AUDIO.natureBus`, apart from the effects; default 50%, where the owner turned them down to).
 - **Briefing at the start:** the messages a new game opens with (where you landed, your goal, the map's notes) come
   together on one card while the game waits paused behind it; it closes by itself after a few seconds (longer for
   more text), or at a tap or key. In multiplayer the game doesn't pause for it.

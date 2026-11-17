@@ -122,9 +122,9 @@ function initUI() {
     if (UI.clockTaps.length >= 3) { UI.clockTaps = []; openBoost(); }
   });
   $('bo-close').onclick = () => closeBoost();
-  // Music and Effects volume (remembered on this device).
+  // Music, Effects and Ambience volume (remembered on this device).
   const syncVol = () => {
-    for (const [id, k] of [['p-music', 'music'], ['p-fx', 'fx']]) {
+    for (const [id, k] of [['p-music', 'music'], ['p-fx', 'fx'], ['p-amb', 'amb']]) {
       $(id).value = Math.round(AUDIO[k] * 100);
       $(id + '-v').textContent = AUDIO[k] > 0 ? Math.round(AUDIO[k] * 100) + '%' : 'Off';
     }
@@ -132,6 +132,7 @@ function initUI() {
   $('p-music').oninput = () => { setVolume('music', $('p-music').value / 100); syncVol(); };
   $('p-fx').oninput = () => { setVolume('fx', $('p-fx').value / 100); syncVol(); };
   $('p-fx').onchange = () => sfx('place');
+  $('p-amb').oninput = () => { setVolume('amb', $('p-amb').value / 100); syncVol(); };
   // Graphics (render.js setGfxStep): Saver, Auto, High or Ultra, at once.
   for (const btn of $('p-gfx').children) btn.onclick = () => { setGfxStep(btn.dataset.v); syncGfx(); sfx('click'); };
   syncGfx();
