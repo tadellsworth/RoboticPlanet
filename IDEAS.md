@@ -351,20 +351,25 @@ These wait for a later expansion:
   about 18 robots; on Standard, about 3). With them Off the same seeds end at 20 to 34 minutes.
   **Waiting for the art:** the Hollow is drawn with the Bloom's art through one line (`BIOME_ART`); its pillars, veins, the Deep's mound and the shafts are drawn in code.
   **For the owner:**
-  - Trade Posts and Uplinks in the Hollow? The lore says the Pathfinder never mapped it. If you want them, the canon
-    would need a line saying how they got there. (For now there are none: no Trade Terminals, and the Uplinks victory
-    isn't offered on this map.)
-  - Wrecking the Deep's mound knocks every nest back to level 1 and spills a big hoard (30 Crystal, 20 Alloy, 10 Chips).
-    Enough, or should it do more (nests stop growing a while, the hum dies down), or less?
-  - The flank caverns hold four contested breaches. Two would make the middle matter more.
-  - Rock from the roof falls every other tremor (about every four to five minutes), near each colony's home, after an
-    8-second trickle. Often enough to matter, rare enough not to nag?
+  - **Decided (owner, Nov 17; the owner left these to us):** no Trade Posts or Uplinks (the Pathfinder never mapped
+    it); the Deep's mound stays as it is (every nest back to level 1, a hoard of 30 Crystal, 20 Alloy and 10 Chips);
+    four contested breaches in the flank caverns; roof rock every other tremor (about every four to five minutes) after
+    an 8-second trickle.
   - Colony with its nests' raids by day (the nights add tunnels and packs on top): with five nests a side and cutting
     veins drawing the packs, a computer-run colony stalls at about 22 buildings by 15 minutes (on Standard, with 3 nests, it reaches
     about 31). Hard by design, or soften the lure (`VEIN`) or the nests nearest home?
   - Computer-only games end in 15 to 40 minutes, neither seat favoured (11 wins to 14 over 26 games, one still going
-    at 45). On Small maps both computer colonies are slow to get Fuel (one oil seep each, a few tiles from home):
-    a second seep near home, or leave it lean?
+    at 45). **Small maps get a second oil seep by home (decided Nov 17):** with one 3-tile seep each (39 Crude
+    within 12 tiles of home; Medium has 4 to 6 tiles) both computer colonies were slow to get Fuel. The second, also
+    three tiles, lies on the other side of home (`hollowMap`, last of the resources so nothing else on the map moves):
+    now 6 tiles, 78 Crude, the same as a Medium home at its richest.
+    Six computer-only Small games each way (seeds 21-26, the Murmur Active): all six ended with it (11.7 to 36 minutes
+    before, one still going at 45; 14.5 to 36 after), but the computer's Fuel came no sooner, because what holds it
+    up is its Refinery, not the oil: it builds one only after a Foundry (oil costs Alloy), at 3 to 42 minutes or
+    never, while its first Oil Pump goes up at about 3 minutes either way. If the rival's Fuel on the Hollow is to come
+    sooner, that's the place (`aiThink`'s Fuel-low plan). Winners by seat: 2 to 3 before, 5 to 1 after; with the
+    helper's six Medium/Small games (4 to 2) worth watching for a first-seat lean, though the 26 games with the
+    Murmur Off split 11 to 14.
   - Three or four players: not built (the layout is made for two, turned half round).
   - The Murmur set to Off on the Hollow: allowed for now (the setting decides; the menu says the Hollow is their lair
     and plays best with them). Should Off be offered there at all?

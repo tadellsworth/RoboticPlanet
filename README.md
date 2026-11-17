@@ -602,7 +602,7 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
     raid target: `wildTarget` counts it `VEIN.pull` (2) times nearer, from up to `VEIN.reach` (8) tiles further out, for
     `VEIN.lure` (120 s). No stalks or fertile soil: `worldBan` bars Grove Planters and Bio Farms (and Airfields and Trade Terminals) with a
     reason for `canPlace`, and the build menu greys them out (`ownedText`). Fuel comes from the oil seep in every home
-    cavern. A Worker lands in the Agribot's place.
+    cavern (on Small maps, two: the side caverns there are too cramped for more oil within reach). A Worker lands in the Agribot's place.
   - **Floating Crystal**: a platform two levels up (level 3) in a pocket of chasm, worn back until only chasm touches it,
     one in each chasm hall and from Medium up one in each east cavern; its Crystal holds `HOLLOW.crystal` (2.5) times a
     cluster's (frontier richness on top). Reached by Ropeway, a Sky bridge or a Viaduct (level 1 to 3 is within

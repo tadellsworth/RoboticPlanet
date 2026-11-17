@@ -2109,6 +2109,9 @@ function hollowMap(seed, W, H, cfg) {
       placed++;
     }
   }
+  // Small maps: a second seep on the other side of home. Their side caverns are too cramped for more oil within reach,
+  // so with the one seep by home each colony was slow to get its Fuel going. (Last, so nothing above moves.)
+  if (sz === 0) stamp(bx + 4, by - 4, 0.5, R_OIL, 1, null, 3); // (three tiles, as the first: one here and the two free tiles nearest)
   // How much each holds: richer out toward the middle (as on every map), the masses' Crystal HOLLOW.crystal times more.
   const reach = Math.max(1, dist(bx, by, W - 1 - bx, H - 1 - by) / 2 - RICH_FROM);
   for (let t = 0; t < N; t++) {
