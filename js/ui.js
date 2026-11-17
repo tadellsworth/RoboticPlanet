@@ -6547,7 +6547,7 @@ function openPostSheet(post) {
   const t = tIdx(post.x, post.y);
   R.selected = 0; R.selTile = t; UI.selBot = 0;
   const html = `<div class="sheet-title"><div><h3>Trade Post</h3><div class="sub">Neutral: nobody owns it</div></div></div>
-    <p class="desc">An off-world exchange. Any colony can trade here: dock a <b>Trade Terminal</b> beside it (Build, Move, within ${TRADE_POST.dock} tiles of the pad) and lay a road or track out to the Terminal. Only Road Trains and Freight Trains serve it. A rival's land round the post keeps you out (no Terminal and no road on their ground), so an Outpost of yours beside it keeps them out. Further from your Command Base pays more.</p>
+    <p class="desc">An off-world exchange. Any colony can trade here: dock a <b>Trade Terminal</b> beside it (Build, Move, within ${TRADE_POST.dock} tiles of the pad) and lay a road or track out to the Terminal. A small neutral AI keeps the Accord's ledger here: your Terminal runs one standing trade route, a Road Train or Freight Train convoy every 2 minutes. A rival's land round the post keeps you out (no Terminal and no road on their ground), so an Outpost of yours beside it keeps them out. Further from your Command Base pays more. <b>Nothing shoots on its ground</b> (the gold dashed square): convoys are hit out on the road.</p>
     <div id="sh-dyn"></div>
     <div class="btn-row"><button class="btn primary" id="sh-dock">Dock a Trade Terminal here</button></div>${flavorLine('post')}`;
   openSheet('post', t, html);
