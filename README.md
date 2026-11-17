@@ -1070,7 +1070,7 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   (`quiet` while it isn't you). Fair: bands are counted as the map shows them (warbots out in the open, `watchBand`),
   an army's size is "about" (`scoutAbout`, from the warbot count Statistics shows), and the number a rival waits for
   (`P.massFor.need`) is never told. It's a `toast` (Go to the place, kept in the message list) starting "Scouts:".
-  **Scout reports: On/Off** in the pause menu, kept on the device (`terrafall.scouts`). Display only.
+  **Scout reports** (a switch in the pause menu's Settings), kept on the device (`terrafall.scouts`). Display only.
 - **Blueprints** (`js/blueprint.js`): kept on the device (`terrafall.blueprints`, up to `BP_MAX` = 8, newest first,
   each `{ name, b: [[type, dx, dy]...], r: [[dx, dy]...] }` round its middle; `bpList` drops anything damaged). Saving:
   **Build → Blueprints** (`openBlueprints`, the `#build-bp` card shown on every tab) → **New blueprint** enters mode
@@ -1690,6 +1690,18 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   Ropeway placed, a Paths plan built, Lay road) and marks a warning or alarm from the game (at most one every 2.5 s).
   **Vibration** in the pause menu (shown only on a touch screen that can vibrate) switches it off; it is kept on this
   device (`botfall.haptics`), on by default.
+- **The pause menu** (`#screen-pause`; Space, Esc or the button top right): two views in one card (`pauseView` in
+  js/ui.js), and it opens on the first each time. The main view: **Resume** (in multiplayer **Back to the game**, and
+  **Pause the game for everyone** beside it), a grid of **Settings**, **Statistics**, **Photo mode** and **How to play**,
+  the saves under a **Save** label (**This planet**, **File** and **Cloud**: Save this planet, Download save file and
+  Save to the cloud, their full names in `aria-label` and `title`), the line on when the game last saved, then
+  **Feedback** and **Save & quit**. **Settings** (`#p-setview`; **Back** or Esc returns, and the focus goes to Back on
+  the way in and to Settings on the way out): the Music, Effects and Ambience sliders, **Graphics**, a switch each
+  (`role="switch"`, `pauseSwitch`) for Full screen, Weather, Scout reports and Vibration where they apply on the device,
+  and **Time of day** as a Cycle / Day / Night radio group (Day locked with the Murmur, Cycle and Day on an
+  always-night map, with the line under it saying why). A goal's `ui` selector for a pause-menu button lights the
+  pause button while the menu is shut, and Settings or Back for a button in the other view (`COACH_OPENERS`). It fits
+  without scrolling at 390×664, 844×390 (laid out wider there, Settings in two columns) and on a computer.
 - **Game speed:** the speed chip in the top bar opens 0.75×, 0.875×, 1×, 2× and 3×.
 - **Sound** (`js/audio.js`, all Web Audio, no audio files): a generative synthwave score that follows the game (menu,
   building, war when you're attacked or fighting, **Night Murmurs** when the Murmur come close (`MUSIC_MURMUR` (2) of them
