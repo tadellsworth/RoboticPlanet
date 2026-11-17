@@ -1919,6 +1919,7 @@ function dispatch(p) {
     for (const [g, n0, keep, autoOnly] of needsOf(b)) {
       const h = fed && fed.length && !keep ? feedHaul(b, g, fed) : null, n = h === null ? n0 : Math.min(n0, h);
       if (n <= 0 || (g === 'fuel' && b.fuelByPipe) || (b.built && P.salvaging && P.salvaging[g])) continue; // (salvage is for sites: see landerSalvage)
+      if (keep && b.airSupply && airBaseNear(p, b.x, b.y)) continue; // (a place switched to Supply by air gets its supply orders by plane, once one is based)
       // Full loads: a factory that is less than a Hauler's load short of an input, with more than its next batch
       // still in hand or on the way, waits to be topped up. (Asked after every batch, a third of all Hauler trips
       // carried a single unit to a factory that wasn't short.) Liquids go as they come.
@@ -2952,6 +2953,7 @@ function doHaul(u, t, dt) {
   if (!moveAlong(u, dt)) return;
   bump(dst.inc, t.good, -(t.n || 1));
   bump(dst.stock, t.good, t.n || 1);
+  if (BOTS[u.type].sea) dst.shipIn = (dst.shipIn || 0) + cargoCount(u); // (goods landed here by ship, all told: Harbour's goal)
   if (u.mix) { for (const k in u.mix) { bump(dst.inc, k, -u.mix[k]); bump(dst.stock, k, u.mix[k]); } delete u.mix; }
   u.carry = null;
   u.carryN = 0;
@@ -4694,6 +4696,9 @@ function hitBuilding(b, dmg, by) {
 function captureBuilding(b, by) {
   const def = BDEFS[b.type], old = b.owner;
   if (def.wild) { clearNest(b, by); return; }
+  // (A defence shot or burned down by robots, counted as it falls: Siege Breakers' goal. Missiles and bombs wreck
+  // theirs through destroyBuilding.)
+  if (b.built && by >= 0 && foes(by, old) && DEFENCE_TYPES.has(b.type) && !def.missile && !def.nukeSilo) S.players[by].stats.forts = (S.players[by].stats.forts || 0) + 1;
   if (def.bunker && b.built) {
     // There's no land to take: a fallen Bunker is wrecked, and the warbots inside walk out.
     dropLoot(b);
@@ -11630,6 +11635,7 @@ function landDrop(d) {
     const c = getE(d.to);
     let n = 0;
     for (const g in d.goods) { n += d.goods[g]; if (c && !c.dead && c.owner === d.owner) { bump(c.inc, g, -d.goods[g]); bump(c.stock, g, d.goods[g]); } }
+    if (c && !c.dead && c.owner === d.owner) c.airIn = S.time; // (when crates last landed there; `airAt` is when a plane loaded for it)
     // The crates sit a moment where they came down, their parachutes collapsing beside them, then they're taken in.
     addFx('crateland', d.i + 0.5, d.j + 0.5, { life: 2.8, owner: d.owner, crates: d.crates || [{ dx: 0, dy: 0.62, lag: 0 }], seed: d.id % 97 });
     if (isMe(d.owner)) sfx('thump');

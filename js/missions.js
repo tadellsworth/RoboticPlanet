@@ -134,6 +134,22 @@ function ownTiles(test) {
   return n;
 }
 
+/**
+ * For goals: player P's Ports a Ferry founded (they claim land) on another island, which no dry land joins to its
+ * Command Base.
+ */
+function overseasPorts(P, S) {
+  const L = getE(P.lander), ports = S.buildings.filter((b) => !b.dead && b.owner === P.id && b.built && b.type === 'port' && b.claim > 0);
+  if (!ports.length || !L) return [];
+  const N = S.W * S.H, land = new Uint8Array(N), q = [tIdx(L.x, L.y)];
+  land[q[0]] = 1;
+  while (q.length) {
+    const a = q.pop(), i = a % S.W;
+    for (const b of [i > 0 ? a - 1 : -1, i < S.W - 1 ? a + 1 : -1, a - S.W, a + S.W]) if (b >= 0 && b < N && !land[b] && S.terrain[b] !== T_WATER) { land[b] = 1; q.push(b); }
+  }
+  return ports.filter((b) => !land[tIdx(b.x, b.y)]);
+}
+
 /* --- the campaign --- */
 
 // (Every mission is on Rich resources: the amount it was made and balanced with, before resources were lowered a notch.)
@@ -782,23 +798,25 @@ const MISSIONS = [
         hint: 'Tap the Port → <b>Shipyard</b>: Ferries <b>+1</b>. Haulers bring it the Alloy and Chips.',
         ui: "#sh-yard .order-row[data-k='ferry'] [data-d='1']" },
       { kind: 'foundedPort', n: 1, text: 'Found a Port on another island', at: 'port',
-        count: (P, S) => {
-          // (A Port a Ferry founded (it claims land) on another island: no dry land joins it to the Command Base.)
-          const L = getE(P.lander), ports = S.buildings.filter((b) => !b.dead && b.owner === 0 && b.built && b.type === 'port' && b.claim > 0);
-          if (!ports.length || !L) return 0;
-          const N = S.W * S.H, land = new Uint8Array(N), q = [tIdx(L.x, L.y)];
-          land[q[0]] = 1;
-          while (q.length) {
-            const a = q.pop(), i = a % S.W;
-            for (const b of [i > 0 ? a - 1 : -1, i < S.W - 1 ? a + 1 : -1, a - S.W, a + S.W]) if (b >= 0 && b < N && !land[b] && S.terrain[b] !== T_WATER) { land[b] = 1; q.push(b); }
-          }
-          return ports.filter((b) => !land[tIdx(b.x, b.y)]).length;
-        },
+        count: (P, S) => overseasPorts(P, S).length,
         hint: 'Tap the Port → <b>Found a Port on another shore</b> (<kbd>P</kbd>), then tap a beach across the sea.',
         ui: '#sh-found' },
-      { kind: 'bots', type: 'cargoship', n: 1, at: 'port',
-        hint: 'Tap the Port → <b>Shipyard</b>: Container Ships <b>+1</b>. Ships fill the new Port\'s <b>Supply orders</b> from home.',
-        ui: "#sh-yard .order-row[data-k='cargoship'] [data-d='1']" },
+      // (Goods a Container Ship landed at the new Port. A ship sails with 8 or more, out of what the home Port holds, so
+      // that Port wants a supply order first (Alloy: the new Port lands with Cement). Ordered at the new Port first, the
+      // Haulers riding the Ferry line take it. The ring goes to each step in turn.)
+      { kind: 'shipped', n: 8, text: 'Ship {n} goods to the new Port',
+        count: (P, S) => overseasPorts(P, S).reduce((n, b) => n + (b.shipIn || 0), 0),
+        at: (S) => {
+          const P = S.players[0], far = overseasPorts(P, S)[0], kept = (b) => (b && b.keep && b.keep.alloy) || 0;
+          const home = S.buildings.find((b) => !b.dead && b.owner === 0 && b.built && b.type === 'port' && b !== far);
+          const more = { ui: "#sh-keep .keep-cell[data-g='alloy'] [data-d='5']" };
+          if (!home) return null;
+          if (!(P.madeBots && P.madeBots.cargoship) && !S.bots.some((u) => !u.dead && u.owner === 0 && u.type === 'cargoship')) return { e: home, ui: "#sh-yard .order-row[data-k='cargoship'] [data-d='1']" };
+          if (kept(home) < 10 || !far || (home.stock.alloy || 0) < 8) return { e: home, ...more };
+          return { e: far, ...more };
+        },
+        hint: 'Your first Port → Shipyard: Container Ships <b>+1</b>, and Supply orders: Alloy <b>+5</b> twice. Once it holds 8, the same order at the new Port.',
+        ui: "#sh-yard .order-row[data-k='cargoship'] [data-d='1'], #sh-keep .keep-cell[data-g='alloy'] [data-d='5']" },
     ],
   },
   {
@@ -867,7 +885,9 @@ const MISSIONS = [
       L.stock.cement += 20; L.stock.alloy += 14; L.stock.chip += 12;
     },
     goals: [
-      { kind: 'crawlerOut', n: 1, text: 'Deploy a Crawler off the plateau', at: 'foundry',
+      { kind: 'crawlerOut', n: 1, text: 'Deploy a Crawler off the plateau',
+        // (The ring: on the Bot Foundry to order it, then on the Crawler itself once it rolls out.)
+        at: (S) => S.bots.find((u) => !u.dead && u.owner === 0 && BOTS[u.type].crawler) || S.buildings.find((b) => !b.dead && b.owner === 0 && b.built && b.type === 'foundry') || null,
         count: (P, S) => {
           // (Deployed off the level top the Command Base stands on: down a slope, past the cliffs.)
           const L = getE(P.lander), cs = S.buildings.filter((b) => !b.dead && b.owner === 0 && b.type === 'crawlerbase');
@@ -889,9 +909,11 @@ const MISSIONS = [
         hint: 'Tap the Airfield → <b>Hangar</b>: Cargo Planes <b>+1</b>. Then <b>Drop Outpost</b>, and tap open ground.',
         ui: "#sh-yard .order-row[data-k='cargoplane'] [data-d='1'], #sh-air [data-k='outpost']" },
       { kind: 'airSupplied', n: 1, text: 'Supply a building by air', at: 'crawlerbase',
-        count: (P, S) => S.buildings.filter((b) => !b.dead && b.owner === 0 && b.type !== 'dropost' && b.airSupply && b.airAt !== undefined).length,
-        hint: 'Tap the deployed Crawler → <b>Supply orders</b>: <b>+5</b> Cement. Then <b>Supply by air</b>: <b>On</b>.',
-        ui: "#sh-keep .keep-cell[data-g='cement'] [data-d='5'], #sh-airsup" },
+        // (Once its crates have landed, `airIn`: a plane loads up for it, `airAt`, about a minute before.)
+        count: (P, S) => S.buildings.filter((b) => !b.dead && b.owner === 0 && b.type !== 'dropost' && b.airSupply && b.airIn !== undefined).length,
+        // (Supply by air first: from then on its supply orders come by plane only, where a road would let Haulers fill them.)
+        hint: 'Tap the deployed Crawler → <b>Supply by air</b>: <b>On</b>. Then its Supply orders: <b>+5</b> Cement, and a plane flies it in.',
+        ui: "#sh-airsup [data-v='1'], #sh-keep .keep-cell[data-g='cement'] [data-d='5']" },
     ],
   },
 
@@ -1131,17 +1153,10 @@ const MISSIONS = [
         hint: '<b>Make</b> (<kbd>2</kbd>) → <b>Missile Factory</b> (<kbd>N</kbd>), <b>Defend</b> (<kbd>4</kbd>) → <b>Missile Silo</b> (<kbd>I</kbd>) toward them. Silo → <b>Aim missile</b> (<kbd>F</kbd>).',
         ui: ".bcard[data-t='munitions'], .bcard[data-t='silo'], #sh-aim" },
       { kind: 'forts', n: [3, 4, 6], text: 'Take out {n} Walls or turrets',
-        count: (P, S) => {
-          // (Every rival Wall, Gate, gun and Keep seen standing is remembered: one gone since, or yours now, counts.)
-          const M = S.mission || {}, seen = M.forts || (M.forts = {});
-          for (const b of S.buildings) {
-            if (!b.dead && b.built && b.owner > 0 && ['wall', 'gate', 'turret', 'minigun', 'bunker', 'mortar', 'disruptor', 'flak', 'keep'].includes(b.type)) seen[b.id] = 1;
-          }
-          let n = 0;
-          for (const id in seen) { const b = getE(+id); if (!b || b.dead || b.owner === 0) n++; }
-          return n;
-        },
-        hint: '<b>Army</b> (<kbd>Q</kbd>) → <b>Attack</b> (<kbd>Q</kbd>): tap a Wall or turret. Bulwark and Torches lead; missiles count too.',
+        // (Walls, Gates, guns and Keeps your robots shoot, burn or capture, counted as they fall: `forts`, see
+        // captureBuilding. One a missile or bomb finishes off doesn't count: this goal is the Torches' and Bulwark's.)
+        count: (P) => P.stats.forts || 0,
+        hint: '<b>Army</b> (<kbd>Q</kbd>) → <b>Attack</b> (<kbd>Q</kbd>): tap a Wall or turret. Bulwark and Torches lead; a missile softens one up.',
         ui: '#btn-attack, #ar-attack' },
     ],
   },

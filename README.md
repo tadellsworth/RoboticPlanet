@@ -40,7 +40,8 @@ how goods move.
   any other goal counts itself with `count(P, S)` and its own `text` (bridge tiles, a Ramp up a ledge, research done,
   trades, nests cleared, minutes held, a nuclear launch). Each goal's `hint` names the real buttons and keys and its
   `ui` selector lights up the button it needs (`missionCoach` in `js/ui.js`; with `at`, a ring pulses on the building
-  whose panel holds it). Steps already taken stay dark (Build while its menu is open, the card while placing that
+  whose panel holds it: a type, or a function naming the very building or robot, or `{ e, ui }` with the buttons for
+  that step, as Airlift's Crawler and Harbour's two Ports; a hint that says "Trade Post" rings the nearest post). Steps already taken stay dark (Build while its menu is open, the card while placing that
   building: then **Build here** lights, as Paths' **Build** does once a sketch is drawn), a lit button below the fold of
   a panel is scrolled into view once, and a `built` goal whose site is already going up (`goalSites`) says to wait for
   it, or to **Lay road** to a site with none (`siteNeedsRoad`), instead of asking for another (its own `wait` text if
@@ -342,7 +343,9 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   two robots (Warbots from garrisons as for a march, or idle Workers, who board at the Airfield: the `board` task and
   `ferryWait`, as for a Ferry) anywhere, the enemy's land too, or up to 8 goods (`u.cargo`) for a place **supplied by
   air** (`b.airSupply`: any building with needs, construction sites too; a Drop Outpost and sites in its land have it
-  on). The places take turns (`airSupplyRun`: the one served longest ago, `c.airAt`, or run dry of something, first). A
+  on). Its supply orders then come by plane only, once one is based at an Airfield, not by Hauler (`dispatch`). The
+  places take turns (`airSupplyRun`: the one served longest ago, `c.airAt`, or run dry of something, first; `c.airIn`
+  is when crates last landed there). A
   supply drop comes down as a crate for every few goods (`d.crates`), swaying under team parachutes, and lands in front of
   the building with a puff of dust, its parachute collapsing out flat beside it, before it's taken in (`crateland`;
   art from `renderer/b/airdrop.js`: chute-fall, chute, crate-drop, chute-flat). Each place is served from its nearest

@@ -169,14 +169,6 @@ built and played through headless:
   shows a three-player Uplinks race can be won; Final Descent only mentions Uplinks and free-for-alls.
 - **A rail-only line.** A far Rail Station needs a road to be built at all (its builders and materials come by road),
   so Iron Road asks for one. Trains bringing a station site its materials would make a track-only line possible.
-- **Coach rings.** The tutorial's ring can only mark buildings: not a Trade Post (it isn't in `S.buildings`), and not
-  the Crawler once it rolls out of the Foundry (the hint says to tap it). For a Container Ship order the ring is on the
-  home Port while the supply orders that matter are on the new one.
-- **Small counting quirks.** Airlift's "Supply a building by air" ticks when the Cargo Plane loads up (`airAt` is
-  stamped in `airSupplyRun`), about a minute before the crates land; and a road to the deployed Crawler can fill its
-  supply order by Hauler before a plane is needed. Harbour counts the Container Ship built, not a delivery. Siege
-  Breakers remembers the rival forts it has seen in `S.mission.forts`, once a second, so one built and wrecked within
-  a second is missed; missiles can do most of that goal on their own.
 - **Bombs on a Command Base** didn't visibly dent it in the Final Descent solver runs (armor 30/30 at each minute
   mark). Not needed for the goal, but worth a look with the bombers.
 - **Kits and Fiber.** On some seeds the kit's one Harvester has little Fiber in reach and the Smelter burns it as fast
