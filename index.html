@@ -190,6 +190,7 @@
               <span class="seed-txt"><span id="m-seed" class="seed"></span><small id="m-pv-dims"></small></span>
               <span class="seed-btns"><button type="button" id="m-saveplanet" class="btn small ghost" title="Keep this planet (with its map settings) to play again">Save</button><button type="button" id="m-reroll" class="btn small" title="Roll a new planet with these settings">New planet</button></span>
             </div>
+            <div id="m-pv-mods" class="pv-mods" hidden></div>
             <div id="m-planets" class="planets" hidden></div>
           </div>
         </section>
@@ -279,6 +280,12 @@
             </div>
             <p class="m-info" id="m-rules-info" aria-live="polite"></p>
           </section>
+          <!-- Challenge modifiers (MODS in js/defs.js): a switch each, built by initMenu. -->
+          <section class="m-sec m-rules m-challenge" id="m-sec-challenge" aria-labelledby="m-h-challenge">
+            <h3 id="m-h-challenge">Challenge</h3>
+            <div class="tchips" id="m-mods" role="group" aria-labelledby="m-h-challenge"></div>
+            <p class="m-info" id="m-challenge-info" aria-live="polite"></p>
+          </section>
         </div>
       </div>
     </div>
@@ -366,6 +373,7 @@
 <div id="screen-pause" class="screen" role="dialog" aria-modal="true" aria-labelledby="p-title" tabindex="-1" hidden>
   <div class="card">
     <h2 id="p-title">Paused</h2>
+    <p class="p-mods" id="p-mods" hidden></p>
     <button id="p-resume" class="btn primary big">Resume</button>
     <button id="p-mppause" class="btn big" hidden>Pause the game for everyone</button>
     <div class="sound-sliders">
@@ -923,6 +931,15 @@
         <p><b>High ground.</b> The planet has levels, and lighter ground is higher, on the map and the minimap. Bots can't climb cliffs: they use the natural slopes (slower, unless paved) or the Ramps you cut (see Roads and traffic). Warbots on a clifftop can shoot across a narrow canyon (up to about 3½ tiles) at enemies on the far side.</p>
         <p><b>Biomes</b> are the regions of Ithaca I, each with its kind of ground under its name: <b>the Rust</b> (red desert), <b>Greenreach</b> (forest), <b>the White</b> (polar snow), <b>Emberwood</b> (autumn forest), <b>the Long Grass</b> (savanna), <b>the Sump</b> (swamp), <b>Cinderlands</b> (volcanic ashlands, where the water glows like lava), <b>the Bloom</b> (alien bloom) and <b>Argos</b>, Ithaca I's moon. They change the scenery, weather and sounds only (plants never get in the way, and a road or building clears the plants on its tile), with one exception: no Murmur live on Argos.</p>
         <p><b>Rules</b> on the new-game screen: <b>Nuclear race</b> (on by default), <b>The Murmur</b> (Colony; never on Argos, the moon), <b>Planetary events</b> (off by default), <b>Weather</b>, <b>Time of day</b> and <b>Unlimited resources</b>, for trying things out: it keeps your Command Base stocked with 500 of every good and gives your sites, factories, chargers and garrisons whatever they're waiting for, while rivals play as usual.</p>
+        <p><b>Challenge</b> on the new-game screen: modifiers that make a game harder, mixed as you like (in multiplayer too, set by the host). The ones on show on the planet card, the summary under Start, the briefing card and the pause menu.</p>
+        <ul class="chain">
+          <li><b>Half Fuel</b>: Refineries refine and energy crops ripen at half speed, for every colony.</li>
+          <li><b>Endless dust storm</b>: 5 minutes in a dust storm blows in and never blows over: bots move at two-thirds speed and Missiles stay grounded for the rest of the game. No other planetary event comes.</li>
+          <li><b>Rival head start</b> (Versus): every computer colony lands with twice the goods, 4 more Workers, 2 more Haulers and 2 more warbots.</li>
+          <li><b>Scarce Crystal</b>: Crystal clusters hold half as much, and every colony lands with half its Crystal.</li>
+          <li><b>Fragile robots</b>: every robot and vehicle takes half again as much damage.</li>
+          <li><b>No turrets</b>: you can't build Pulse Turrets, Minigun Nests, Mortar Pits or Disruptor Towers (they leave the Build menu); the computer still can. Bunkers, Keeps, Walls and Flak Guns are still yours.</li>
+        </ul>
         <a class="help-top" href="#hs-top" data-jump="hs-top">Back to top</a>
       </section>
 
@@ -976,6 +993,7 @@
         <ul class="chain">
           <li>Records and wins count single-player Versus and Colony games. Missions and multiplayer don't, and nor does a game where you used <b>Boosts</b>, stopped the rivals building something, or played with <b>Unlimited resources</b>.</li>
           <li><b>Achievements</b> (22 of them) are listed on the same screen: winning on Hard, on every map type, by Domination or on the Uplinks, beating each rival doctrine (Medium or harder), capturing a Command Base with 20 or more of your warbots round it, winning without a Pulse Turret, your first Ropeway and Freight Train, clearing a Murmur nest, every Colony goal, your missions. They pop up as you earn them, and the end screen lists those a game earned. A few, once earned, open a page of the <b>Lore</b> guide.</li>
+          <li><b>Challenge modifiers</b> (Custom Game) don't stop a game counting: a record or achievement set with some on notes them (◆). A win with one on earns its <b>challenge badge</b>, listed on the Records screen with how many wins and the hardest rival beaten, and marked ◆ on the planet card when you pick it again. A win with <b>Fragile robots</b> on isn't a fastest win (fights end sooner).</li>
           <li><b>Forget records and achievements</b>, at the foot of the screen (tap twice), clears them from this device.</li>
         </ul>
         <a class="help-top" href="#hs-top" data-jump="hs-top">Back to top</a>

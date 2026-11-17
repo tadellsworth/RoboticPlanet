@@ -134,6 +134,7 @@ const ORDERS = {
   /* ---------------------------------------------------------------- building and paths */
   place(p, type, i, j) {
     if (!BDEFS[type]) return { ok: false, reason: 'Unknown building.' };
+    if (modNoBuild(type)) return { ok: false, reason: modNoBuild(type) }; // (No turrets, a challenge modifier)
     const r = placeSite(p, type, i, j);
     if (r.ok) r.building.placedAt = S.time; // (when: it can be taken back for SITE_UNDO s, see undoSite)
     return { ok: r.ok, reason: r.reason, id: r.building ? r.building.id : 0 };
