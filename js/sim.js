@@ -6660,8 +6660,16 @@ function rearGarrison(b) {
   }
   return true;
 }
-/** Warbots garrison b can send out: every armed one from the rear (with `rear`), else all but one. */
-function spareFrom(b, rear, posted) { return BDEFS[b.type].bunker ? 0 : rear && !usesPosts(b.owner) && rearGarrison(b) && !homeGuarded(b) ? armedIn(b) : spareArmed(b, posted); }
+/**
+ * Warbots garrison b can send out: every armed one from the rear (with `rear`), else all but one (the home guards stay).
+ * With rear 'all' (the rival's storm in the last fight of a free-for-all: see aiMarch), every armed one from every
+ * garrison but its own Command Base, which keeps its home guard.
+ */
+function spareFrom(b, rear, posted) {
+  if (BDEFS[b.type].bunker) return 0;
+  if (rear === 'all' && !usesPosts(b.owner)) return b.id === S.players[b.owner].lander ? spareArmed(b, posted) : armedIn(b);
+  return rear && !usesPosts(b.owner) && rearGarrison(b) && !homeGuarded(b) ? armedIn(b) : spareArmed(b, posted);
+}
 /** Does garrison b hold a rival AI's home guard (its Command Base or a Keep: see keepAt), which never goes, even from the rear? */
 function homeGuarded(b) { const P = S.players[b.owner]; return !!(P && P.ai && P.homeGuard && (b.type === 'lander' || BDEFS[b.type].keep)); }
 

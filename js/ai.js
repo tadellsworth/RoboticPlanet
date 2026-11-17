@@ -2028,15 +2028,16 @@ function guardsNear(b, shields) {
 
 /**
  * The army units of p's garrisons that an attack on `target` (sendAttack with `all`) or a flag at tile `target`
- * (sendToRally with `rear`, for all = 'flag') could send: { n, shields, by }, how many, how many of them Bulwarks
+ * (sendToRally with `rear`, for all = 'flag'; with rear 'all', every garrison's, for all = 'storm') could send: { n, shields, by }, how many, how many of them Bulwarks
  * (they go first, sent with `lead`: a spare place in a garrison that has one goes to it), and per garrison, nearest
  * first, as they are drawn on ([spare, Bulwarks]).
  */
 function aiSpare(p, target, all) {
   const out = { n: 0, shields: 0, by: [] };
-  const flag = all === 'flag', srcs = flag ? rallySources(p, target.x, target.y, true, false) : attackSources(p, target, false, all);
+  const flag = all === 'flag' || all === 'storm', rear = all === 'storm' ? 'all' : true;
+  const srcs = flag ? rallySources(p, target.x, target.y, rear, false) : attackSources(p, target, false, all);
   for (const b of srcs) {
-    const n = flag ? spareFrom(b, true, false) : spareArmed(b, false, all);
+    const n = flag ? spareFrom(b, rear, false) : spareArmed(b, false, all);
     let sh = 0;
     for (const id of b.garrison) { const u = getE(id); if (u && botArmed(u) && BOTS[u.type].shield) sh++; }
     sh = Math.min(sh, n);
@@ -2535,9 +2536,15 @@ function aiMarch(p, lvl, enemy, army, enemyArmy, crushing) {
   const needAt = (b, at, sp) => Math.max(aiTakeNeed(b, lvl, sp.shields), floor + Math.ceil(aiFire(aiGuards(b.owner, at.i, at.j, 2, null).filter((e) => aiDefReach(e.b)), sp.shields) - 1e-9));
   let tgt = null, spot = null, size = 0, bs = Infinity, hard = null, hs = Infinity, storm = false;
   const strong = S.victory !== 'uplinks' && army >= enemyArmy * 1.5 + 4;
+  // The last fight of a free-for-all (three or four colonies, one rival left): a storm of a crushed rival draws on every
+  // garrison, front forts, Keeps and the Command Bases it took too (its own keeps its home guard). The colony that won
+  // the earlier fights holds two or three colonies' forts, nearly all of them in reach of the last rival and each
+  // keeping warbots back, so it could never gather the storm (Crossroads on a small planet: the last two sat out the
+  // clock).
+  const last = crushing && nColonies() >= 3 && S.players.every((Q) => Q.absent || Q.out || Q.id === enemy || !foes(p, Q.id));
   const eb = getE(S.players[enemy].lander), by = strong && eb && !eb.dead && eb.owner === enemy && !aiBeaten(P, eb, 30) ? aiStage(p, eb) || spotBy(eb) : null;
   if (by) {
-    const sp = aiSpare(p, { x: by.i, y: by.j }, 'flag'), n = Math.min(30, sp.n), g = aiTakeNeed(eb, lvl, aiShieldsIn(sp, n));
+    const sp = aiSpare(p, { x: by.i, y: by.j }, last ? 'storm' : 'flag'), n = Math.min(30, sp.n), g = aiTakeNeed(eb, lvl, aiShieldsIn(sp, n));
     let whole = 0; // (its armed army outside Bunkers)
     if (crushing) for (const u of S.bots) if (!u.dead && u.owner === p && isArmy(u) && botArmed(u) && !(u.inside && BDEFS[getE(u.inside).type].bunker)) whole++;
     const go = crushing ? Math.max(8, enemyArmy * 2 + 2, Math.min(g, Math.ceil(whole * 0.6))) : Infinity;
@@ -2560,7 +2567,7 @@ function aiMarch(p, lvl, enemy, army, enemyArmy, crushing) {
     else if (sc < hs && g <= 28) { hs = sc; hard = { b, need: g }; }
   }
   if (tgt) {
-    const { sent, rally, breach } = sendToRally(p, spot.i, spot.j, size, true, false, true);
+    const { sent, rally, breach } = sendToRally(p, spot.i, spot.j, size, storm && last ? 'all' : true, false, true);
     if (sent && breach && breach.need > breach.shots) { recallRally(rally.id); aiWalled(P, tgt); } // (walls in the way it can't shoot through)
     else if (sent) {
       P.march = rally.id; P.lastMarch = S.time; P.massFor = null;
