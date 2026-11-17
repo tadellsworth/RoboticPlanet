@@ -1279,7 +1279,7 @@ function aiRopeway(p, maxSites) {
   // (It goes up past the usual limit on sites: the Crystal out there is what keeps the Chip Fabs going.)
   if (siteCount(p) > maxSites || !S.buildings.some((b) => !b.dead && b.owner === p && b.type === 'foundry' && b.built)) return;
   if (S.buildings.some((b) => !b.dead && b.owner === p && b.type === 'ropeway' && (!b.built || S.time - b.born < 120))) return;
-  const home = homeZone(p), W = S.W;
+  const home = homeZone(p), W = S.W, reach = roadReach(p);
   let best = null, bs = Infinity;
   for (const m of S.hollow.masses) {
     const ends = [];
@@ -1294,7 +1294,11 @@ function aiRopeway(p, maxSites) {
       if (!inMap(i, j)) continue;
       const t = tIdx(i, j);
       if (S.zone[t] !== home || S.elev[t] >= 3 || S.res[t] || S.bAt[t] || gunCovers(p, t)) continue;
-      const sc0 = dist(i, j, L.x, L.y) * 0.3 + (S.owner[t] === p ? 0 : 4);
+      // (Close by our roads already: out on a chasm's rim a long road to it is easily cut off by the next building.)
+      let rc = Infinity;
+      for (const u of roadSides(p, i, j)) rc = Math.min(rc, reach[u]);
+      if (rc > 4) continue;
+      const sc0 = dist(i, j, L.x, L.y) * 0.3 + (S.owner[t] === p ? 0 : 4) + rc * 2;
       if (sc0 >= bs) continue;
       for (const e of ends) {
         const ei = e % W, ej = (e / W) | 0, d = dist(i, j, ei, ej), sc = sc0 + d;
