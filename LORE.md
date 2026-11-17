@@ -394,7 +394,7 @@ daylight in the cavern roof; Ringfall falls only through them), Harvesters cut
 **Bloom veins** for Fiber (which draws the Murmur), the richest Crystal hangs over the chasms as **floating Crystal**,
 **tremors** shake dust and rock from the roof, smooth **stone pillars** stand in the caverns, robot parts lie in rows in
 **side chambers**, and **the Deep's mound** stands in the cathedral at the centre (its tendril star stirs over it; the
-Deep itself is never shown). No aircraft fly there, and there are no Trade Posts or Uplinks (the Pathfinder never mapped it). The mission *Into the Hollow* teaches it. Planned: a campaign
+Deep itself is never shown). No aircraft or missiles fly there, and there are no Trade Posts or Uplinks (the Pathfinder never mapped it). The mission *Into the Hollow* teaches it. Planned: a campaign
 mode built around the Murmur.
 
 The living world (the owner's decision, Nov 17 2026; built): the Pathfinder's garden is on every map but Argos, as

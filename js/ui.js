@@ -5851,7 +5851,7 @@ function garrisonMix(b) {
 }
 
 function ownedText(type) {
-  if (worldBan(type)) return BDEFS[type].airfield ? 'No aircraft underground' : BDEFS[type].terminal ? 'No Trade Posts down here' : 'Nothing grows down here'; // (the Hollow: see worldBan)
+  if (worldBan(type)) return BDEFS[type].airfield ? 'No aircraft underground' : BDEFS[type].terminal ? 'No Trade Posts down here' : (type === 'munitions' || BDEFS[type].missile || BDEFS[type].nukeSilo) ? 'No missiles underground' : 'Nothing grows down here'; // (the Hollow: see worldBan)
   const { built, sites } = ownedCount(type);
   if (type === 'ramp') return sites ? `${sites} being built` : '';
   if (!built && !sites) return 'None yet';

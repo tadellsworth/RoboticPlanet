@@ -669,7 +669,8 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
     `murmurExitCap` keeps the exits open at once to what a Standard Colony map of the same size could have by that
     night: `colonyNests()` (its nest count) times the exits a nest has opened by night n, up to `maxExits` (Huge,
     Active: 12 the first night, 18 after); an exit due past the cap waits for one to be collapsed. Versus has no cap.
-  - **No aircraft** (`worldBan`; the AI never plans an Airfield) and **no Ports** (`canPlace` says the lakes are too small).
+  - **No aircraft or missiles** (`worldBan`: no Airfield, Missile Factory, Missile Silo or Nuclear Silo; `nukeOn` is off
+    there, so no Nuclear race; the AI plans none of them, `aiMissilePlan`) and **no Ports** (`canPlace` says the lakes are too small).
   - The rival AI: its build plan swaps Bio Farms for Oil Pumps and Grove Planters for more Harvesters, fuel trouble
     brings an Oil Pump and Refinery, its roads bridge the chasms (Sky bridges) where that's shorter, and `aiRopeway`
     (in the Hollow `roadSearch` carries road reach across a colony's own Ropeways, so a Tap on the mass counts as

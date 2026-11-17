@@ -2207,7 +2207,7 @@ function mapDims(st) {
 }
 
 /** Is this a Nuclear race (the optional Versus setting with uranium and nuclear missiles)? Not in a mission, unless it teaches it. */
-function nukeOn() { return !!(S && S.settings && S.settings.nuke) && (!S.mission || !!S.mission.nuke); }
+function nukeOn() { return !!(S && S.settings && S.settings.nuke) && (!S.mission || !!S.mission.nuke) && !S.hollow; } // (no missiles under the Hollow's roof)
 
 /**
  * Are military buildings, warbots and missiles available? Always in Versus; in Colony free play too
@@ -2421,13 +2421,15 @@ function hollowOn() { return !!(S && S.hollow); }
 
 /**
  * Why a `type` can't be built in this game's world at all ('' if it can): in the Hollow, no aircraft fly underground
- * (no Airfields), nothing grows without light (no Grove Planters or Bio Farms), and there are no Trade Posts to dock
+ * (no Airfields, and no missiles: no Missile Factory, Silo or Nuclear race), nothing grows without light (no Grove Planters or Bio Farms), and there are no Trade Posts to dock
  * at (no Trade Terminals: the Pathfinder never mapped it). canPlace says so, and the build menu greys them out.
  */
 function worldBan(type) {
   if (!hollowOn()) return '';
   if (BDEFS[type] && BDEFS[type].terminal) return 'No Trade Posts in the Hollow: the Pathfinder never mapped it, so there is nowhere to dock a Trade Terminal.';
   if (BDEFS[type] && BDEFS[type].airfield) return 'No aircraft fly in the Hollow: there is no sky down here, only the breach shafts.';
+  // (Nor missiles: nothing flies under the cavern roof. No Missile Factory or Silo, and no Nuclear race: see nukeOn.)
+  if (type === 'munitions' || (BDEFS[type] && (BDEFS[type].missile || BDEFS[type].nukeSilo))) return 'No missiles fly in the Hollow: there is no sky down here, only the cavern roof.';
   if (type === 'grower' || (BDEFS[type] && BDEFS[type].farm)) return 'Nothing grows in the Hollow: no light reaches the cavern floor. Harvesters cut Fiber from Bloom veins; Fuel comes from oil seeps.';
   return '';
 }

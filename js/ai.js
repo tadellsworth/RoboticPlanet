@@ -2854,6 +2854,7 @@ function aiMissilePlan(p, me, counts, kinds, workers, staffed) {
     : S.time >= base.grace * 0.7 * Math.max(1, st.grace || 1) && (kinds.warbot || 0) >= Math.max(base.threshold, lvl.threshold)) &&
     (counts.outpost || 0) >= 2 && workers >= staffed + (st.missiles ? 2 : 4);
   if (!ready || S.time < (P.saveCooldown || 0)) { P.saveStart = 0; return null; }
+  if (worldBan('silo')) { P.saveStart = 0; return null; } // (the Hollow: no missiles)
   let want = null;
   if (!counts.munitions) want = 'munitions';
   // (An Architect's next Silo, up to three, once the ones it has hold a Missile each.)
