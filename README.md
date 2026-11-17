@@ -450,7 +450,8 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   the same ground, `footNear`; Fuel too, for a far side's chargers), the home Mast keeps that for it, and a far Mast's keep
   comes by Airship only (Haulers and trucks leave it, `dispatch`; nor do trunk runs truck its spare goods home). A trip's
   mixed load (`shipLoad`): what the other Mast keeps and is short of, from what this one can spare (all it holds when it
-  is the nearer to the Command Base), and from a far Mast its spare goods for home (`spareForHome`, the backhaul). It
+  is the nearer to the Command Base), and from a far Mast its spare goods for home (`spareForHome`, the backhaul: dry
+  goods first, then Crude and Fuel; Fuel and Crude both fly, the owner's call, but never the Fuel a Mast keeps). It
   sets out once that fills `fill` (half) of the hold, with anything once the other side is down to a third of something
   it keeps, with `least` (4) after `wait` (75) s, or with riders aboard; otherwise it crosses empty to fetch a load or
   riders waiting at the other Mast, unless another of the line's Airships is there or on its way. Goods in the air count

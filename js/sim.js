@@ -14114,17 +14114,20 @@ function shipLoad(u, A, B) {
   const k = keepOf(B) || {};
   let total = 0, low = false;
   for (const [g, n, keep] of needsOf(B)) {
-    if (!keep || g === 'crude' || n < 1 || goods[g] || total >= cap) continue; // (Fuel flies, as a Cargo Plane's does; Crude doesn't)
+    if (!keep || n < 1 || goods[g] || total >= cap) continue; // (Fuel and Crude fly too, the owner's call: a far oil field can ship its Crude home)
     const m = Math.min(Math.floor(n), has(g), cap - total);
     if (m < 1) continue;
     goods[g] = m; total += m;
     if (supplyOf(B, g) + (B.inc[g] || 0) < (k[g] || 0) / 3) low = true;
   }
   if (farStation(A) && A.home === B.id && total < cap) {
-    const back = spareForHome(A, B, cap - total, false, false);
-    for (const g in back) {
-      const m = Math.min(back[g], Math.floor(keepSupply(A, g)) - EXPORT_RESERVE - (goods[g] || 0), cap - total);
-      if (m >= 1) { goods[g] = (goods[g] || 0) + m; total += m; }
+    for (const liquid of [false, true]) { // (dry goods first, then Crude and Fuel nothing round A uses)
+      const back = total < cap ? spareForHome(A, B, cap - total, liquid, false) : {};
+      for (const g in back) {
+        if (g === 'fuel') continue; // (never the Fuel A keeps for its own Airships)
+        const m = Math.min(back[g], Math.floor(keepSupply(A, g)) - EXPORT_RESERVE - (goods[g] || 0), cap - total);
+        if (m >= 1) { goods[g] = (goods[g] || 0) + m; total += m; }
+      }
     }
   }
   return { goods, total, low };
