@@ -88,11 +88,12 @@ Still open: a neutral, shared exchange the rivals compete over; contracts for Ch
 - **Graphics.** A first pass is done (rounded shorelines on ponds, lakes and seas, by day and in the night glow). Rock
   outcrops (crags) stay square: rounded crags were tried in November and the owner preferred the square look. Worth
   another look when new art comes in.
-- **Redesign the Fiber and Oil resources on the map (the owner, Nov 17; for later).** The owner doesn't love either
-  look: Fiber's Stalks (the cluster of teal fungal stalks with glowing mint caps, `stalk`) and the oil seep (the dark
-  glossy pool with a rainbow sheen, `oil`). New designs for both, every time of day and every biome they appear in, as
-  a design sheet for the owner to approve first (as with the Murmur), then installed in place. The Hollow's Bloom veins
-  (also Fiber) are being designed separately.
+- **Redesign the Fiber and Oil resources on the map (the owner, Nov 17; installed Nov 2026).** The owner didn't love
+  either look: Fiber's Stalks (teal fungal stalks with glowing mint caps) and the oil seep (a dark glossy pool with a
+  rainbow sheen). From a design sheet of three directions each, the owner picked **Reedcane** for Fiber (jointed
+  sage-teal canes with mint plumes, an image for each growth stage, the plumes glowing at night) and the **Pathfinder
+  survey stake** for Oil (the seep drawn as soaked dark ground across all its tiles, an old survey stake on each pump
+  spot, its lamp lit at night). ART_GUIDE Batch 16.
 - **Bigger graphics upgrades** (owner: for later, after the Graphics quality setting). Installing the game as a
   desktop app gives it no more GPU than a tab does; Chrome already draws its canvas on the graphics card. For a bigger
   step up:
@@ -349,7 +350,9 @@ These wait for a later expansion:
   in. Now it keeps 6 off in Versus (`AI_NEST_CLEAR_VS`; the guards reach 3), and six games (Medium and Small) ended
   at 19, 24, 24, 26 and 28 minutes and one Small at 66, won 4 to 2 by the first seat (the Murmur cost each colony
   about 18 robots; on Standard, about 3). With them Off the same seeds end at 20 to 34 minutes.
-  **Waiting for the art:** the Hollow is drawn with the Bloom's art through one line (`BIOME_ART`); its pillars, veins, the Deep's mound and the shafts are drawn in code.
+  **Its art is installed** (Nov 2026, from the design sheet the owner approved: ART_GUIDE Batch 16): terrain, chasm,
+  plants, Bloom veins, floating Crystal, pillars, side chambers, the Deep's mound, the breach shafts' light, and the
+  Murmur's tunnels as curved ridges with art for their exits on every map. It loads only when the Hollow is played.
   **For the owner:**
   - Trade Posts and Uplinks in the Hollow? The lore says the Pathfinder never mapped it. If you want them, the canon
     would need a line saying how they got there. (For now there are none: no Trade Terminals, and the Uplinks victory

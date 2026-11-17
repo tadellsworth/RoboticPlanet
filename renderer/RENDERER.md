@@ -34,8 +34,8 @@ This folder is the complete setup behind the Terrafall art. It covers every 3D s
 | Vehicles | truck, tanker, roadtrain, freight (loco and wagons), crawler, trader |
 | Robots | rob_worker, rob_hauler, rob_agribot, rob_paver, rob_warbot (the shared `robkit.js`) |
 | The Murmur (Colony wildlife) | murmur_moles: every Murmur class, the Burrow (the nest) at its three levels, and their 3/4 hero shots (the shared `murmur_moleskit.js`). `creature` (the old beetle Scuttler and Brute) and `nest` (the old resin mound) are kept for reference and no longer shipped; `murmur_swarm`, `murmur_burrowers` and `murmur_mycelial` are earlier design directions, not shipped. |
-| The Hollow (proposed, not shipped) | hollow: the tunnel exit (`c=exit`, `state=collapsed`), the Bloom-vein node (`c=veins`), the floating Crystal (`c=floater`), the stone pillars (`c=pillar&v=1\|2`) and the side chamber (`c=chamber`); murmur_moles `c=burrow&s=4` is the Deep's mound. See [The Hollow set](#the-hollow-set). |
-| Resources (proposed, not shipped) | resources: three Fiber directions (`c=fiber&v=1\|2\|3&g=` growth stage) and three Oil pump spots (`c=vent&v=1\|2\|3`). See [Fiber and Oil directions](#fiber-and-oil-directions). |
+| The Hollow (installed) | hollow: the tunnel exit (`c=exit`, `state=collapsed`), the Bloom-vein node (`c=veins`), the floating Crystal (`c=floater`), the stone pillars (`c=pillar&v=1\|2`) and the side chamber (`c=chamber`); murmur_moles `c=burrow&s=4` is the Deep's mound. See [The Hollow set](#the-hollow-set). |
+| Resources (Reedcane and the survey stake installed) | resources: three Fiber directions (`c=fiber&v=1\|2\|3&g=` growth stage) and three Oil pump spots (`c=vent&v=1\|2\|3`). See [Fiber and Oil directions](#fiber-and-oil-directions). |
 | Other | icon (the app-icon hero render); lore_planet (the Lore guide's Ithaca I from orbit: a 16:9 illustration with its own camera and shaders, finished by `post/lore_planet.py`) |
 | Walls (in `walls/b/`) | wall, gate |
 
@@ -435,3 +435,10 @@ python3 preview/resource_sheet.py <sheet folder>  # the design sheet and the ren
 ```
 
 Resources are graded for the time of day in code, so each is one day render; its glow pass becomes a night glow image.
+
+## Installing the Hollow set, the tunnel exits, Reedcane and the survey stake
+
+`tools/render_install.sh` renders everything the game uses from the two sets above (one job at a time), and
+`tools/install_art.py [<game>/art]` writes it into the game's art folder as WebP (the Hollow's pieces drawn with the
+ground get a day render for the sprite and a night render's glow pass for their `-glow` image). ART_GUIDE.md, Batch 16,
+says how the game draws each piece.

@@ -28,7 +28,9 @@
  *              any bot can have driving frames '<type>@<team>-f0' … '-f3' and overlays '<type>-brake' and
  *              '<type>-boost'; give a bot without a baked-in shadow `shadow: true`;
  *              without their own art, specialists use the worker's art with a small badge)
- *   Resources: stalk boulder ore crystal crop oil uranium   (crop is drawn smaller while it ripens)
+ *   Resources: stalk boulder ore crystal crop oil uranium   (crop is drawn smaller while it ripens; stalk has an image
+ *              for each growth stage, stalk-1 … stalk-3, and oil a seep texture, oil-seep, drawn across a seep's tiles;
+ *              stalk-glow, stalk-3-glow and oil-glow are their light at night)
  *   Ground:    ground water rock fertile  (square seamless tiles; one image spans 4×4 map tiles;
  *              512x512 keeps them sharp when zoomed in)
  *   Biomes:    ground-jungle water-jungle rock-jungle cliff-jungle, and the same with -polar
@@ -63,7 +65,8 @@
 function B3D(src, scale) { return { src, scale: scale || 1.4, anchor: [0.5, 0.615] }; }
 
 // Biomes whose ground, water or plants glow at night: which pieces have glow art (see bakeGlow).
-const BIOME_GLOWS = { volcanic: { plants: [1, 2, 3], ground: true, water: true }, alien: { plants: [1, 2, 3, 4, 5, 6], ground: true, water: true } };
+const BIOME_GLOWS = { volcanic: { plants: [1, 2, 3], ground: true, water: true }, alien: { plants: [1, 2, 3, 4, 5, 6], ground: true, water: true },
+  hollow: { plants: [1, 2, 3, 4, 5, 6], ground: true, water: true } };
 
 /** A biome's six decorative plants (shadows baked in, centred) and, except the desert, its ground, water, rock and cliff, plus any glow art. */
 function biomeSet(b) {
@@ -123,7 +126,11 @@ const ART_MANIFEST = {
   ...driveSet('worker'), ...driveSet('warbot'), ...driveSet('hauler'), ...driveSet('agribot'), ...driveSet('paver'),
   ...driveSet('bulwark'), ...driveSet('torch'),
   ground: 'tiles/ground.webp',
-  stalk: 'resources/stalk.webp',
+  // Fiber's Stalks (Reedcane, renderer/b/resources.js): full grown, then a quarter, half and three-quarters grown as
+  // it comes back; the plumes' light at night. Oil: the Pathfinder's survey stake on each seep tile, and the seep itself.
+  stalk: 'resources/stalk.webp', 'stalk-1': 'resources/stalk-1.webp', 'stalk-2': 'resources/stalk-2.webp', 'stalk-3': 'resources/stalk-3.webp',
+  'stalk-glow': 'resources/stalk-glow.webp', 'stalk-3-glow': 'resources/stalk-3-glow.webp',
+  oil: 'resources/oil.webp', 'oil-glow': 'resources/oil-glow.webp', 'oil-seep': 'resources/oil-seep.webp',
   boulder: 'resources/boulder.webp',
   ore: 'resources/ore.webp',
   crystal: 'resources/crystal.webp',
@@ -239,11 +246,31 @@ const ART_MANIFEST = {
   // (512x512 seamless textures, one image per 4x4 tiles; cliffs 128x48). The desert tiles above are 512 too.
   ...biomeSet('desert'), ...biomeSet('jungle'), ...biomeSet('polar'),
   ...biomeSet('autumn'), ...biomeSet('savanna'), ...biomeSet('swamp'), ...biomeSet('volcanic'), ...biomeSet('lunar'), ...biomeSet('alien'),
+  // The Hollow (renderer/b/hollow.js, murmur_moles.js and terrain/*_hollow.py): its own terrain and plants above, and
+  // its pieces. Every key ends -hollow, so it all loads only when the Hollow is played (LAZY_BIOMES). The standing
+  // pieces (pillars, the Deep's mound) are night renders, drawn as they are; the rest are lit like the ground and
+  // graded with it, their light in -glow images.
+  ...biomeSet('hollow'),
+  'wall-hollow': 'biomes/hollow/wall.webp', // the cave wall's face over a floor tile under rock (128 x 64, four tiles across)
+  'vein-hollow': { src: 'biomes/hollow/vein.webp', scale: 1.4, anchor: [0.5, 0.6145] }, // a Bloom vein (the Hollow's Fiber)
+  'vein-glow-hollow': { src: 'biomes/hollow/vein-glow.webp', scale: 1.4, anchor: [0.5, 0.6145] },
+  'floater-hollow': { src: 'biomes/hollow/floater.webp', scale: 8.3, anchor: [0.5, 0.4] }, // a floating Crystal mass: over its platform and the chasm
+  'floater-glow-hollow': { src: 'biomes/hollow/floater-glow.webp', scale: 8.3, anchor: [0.5, 0.4] },
+  'chamber-hollow': { src: 'biomes/hollow/chamber.webp', scale: 3.35, anchor: [0.5, 0.52] }, // a side chamber's floor: robot parts in rows
+  'chamber-glow-hollow': { src: 'biomes/hollow/chamber-glow.webp', scale: 3.35, anchor: [0.5, 0.52] },
+  'pillar-1-hollow': { src: 'biomes/hollow/pillar-1.webp', scale: 3.3, anchor: [0.5, 0.8] }, // stone pillars rising into the dark
+  'pillar-2-hollow': { src: 'biomes/hollow/pillar-2.webp', scale: 3.3, anchor: [0.5, 0.8] },
+  'deep-mound-hollow': { src: 'biomes/hollow/deep-mound.webp', scale: 5.6, anchor: [0.5, 0.6145] }, // the Burrow's level 4
+  'breach-light-hollow': 'biomes/hollow/breach-light.webp', // the pool of daylight under a breach (a mask)
+  'breach-beam-hollow': 'biomes/hollow/breach-beam.webp', // the shaft of daylight itself, added over everything
   lava: 'biomes/volcanic/water.webp', // lava (Volcano maps, whatever the biome)
 
   // Batches 11–13 (Claude Design): the Lab, creature nests, Ropeway and Rail Station, on the shared pad.
   'lab@0': B3D('buildings/lab@0.webp'), 'lab@1': B3D('buildings/lab@1.webp'),
   'nest-1': B3D('buildings/nest-1.webp'), 'nest-2': B3D('buildings/nest-2.webp'), 'nest-3': B3D('buildings/nest-3.webp'),
+  // A Murmur tunnel exit, open (with morning, evening and night versions) and caved in (drawn with the ground).
+  'tunnel-exit': { src: 'buildings/tunnel-exit.webp', scale: 1.05, anchor: [0.5, 0.6145] },
+  'tunnel-exit-collapsed': { src: 'buildings/tunnel-exit-collapsed.webp', scale: 1.05, anchor: [0.5, 0.6145] },
   // The Ropeway's pad is ~1.1 tiles (scale 1.47); its bull wheel, where the cable leaves, is at (0.5, 0.10).
   'ropeway@0': { src: 'buildings/ropeway@0.webp', scale: 1.47, anchor: [0.5, 0.615] },
   'ropeway@1': { src: 'buildings/ropeway@1.webp', scale: 1.47, anchor: [0.5, 0.615] },
@@ -274,7 +301,7 @@ const ART_MANIFEST = {
   ...files('bridges', ['bridge', 'skybridge', 'railbridge'].flatMap((k) => ['ew', 'ns', 'end-w', 'end-e', 'end-n', 'end-s', 'ramp-w', 'ramp-e', 'ramp-n', 'ramp-s', 'pier'].map((p) => `${k}-${p}`)).concat(['skybridge-tower', 'skybridge-tower-lamp', 'skybridge-cable'])),
   // A Viaduct's abutment tile (renderer/b/bridge.js piece abut-*): viaduct-abut-e when its span leaves eastward.
   ...files('bridges', ['viaduct-abut-w', 'viaduct-abut-e', 'viaduct-abut-n', 'viaduct-abut-s']),
-  ...files('canyon', ['', '-jungle', '-polar', '-autumn', '-savanna', '-swamp', '-volcanic', '-lunar', '-alien'].flatMap((b) => ['chasm', 'chasm-wall', 'chasm-wall-2', 'chasm-lip-n', 'chasm-lip-w', 'chasm-lip-e'].map((k) => k + b))),
+  ...files('canyon', ['', '-jungle', '-polar', '-autumn', '-savanna', '-swamp', '-volcanic', '-lunar', '-alien', '-hollow'].flatMap((b) => ['chasm', 'chasm-wall', 'chasm-wall-2', 'chasm-lip-n', 'chasm-lip-w', 'chasm-lip-e'].map((k) => k + b))),
 
   // Bunker, Disruptor Tower and Mortar Pit (ART_GUIDE Batch 14), drawn at their size classes (1.2,
   // 1.3 and 1.3 tiles). The overlays (flashed as they fire) and the Mortar's tube in 16 directions
