@@ -32,7 +32,7 @@ how goods move.
   Traffic**, **Industry and Trade**, **Sea and Sky** (all Colony games, so the economy is learned in peace), then
   **First Contact** (the Murmur's nests, their cavern lair the Hollow, a passive rival, a border war, a chokepoint against a Herald) and **War** (Ammo and
   repairs, trade convoys, escorts and convoy raids against a Salvager, Torches, Bulwarks and missiles against a Warden, the Nuclear race, Keeps and bombers), then a **Bonus**:
-  **King of the Hill**, an Uplinks race for three on The Wheel against two rivals of random doctrine (Hard ones on Hard; `victory:
+  **King of the Hill**, an Uplinks race for three on The Wheel against two rivals of random doctrine (`victory:
   'uplinks'`: missionOptions sets `S.victory` and calls `placeUplinks`; goals: hold an Uplink, hold two at once, win
   the race; a rival winning it loses the mission with `M.why = 'uplinks'`). All of them are open
   from the start; finishing one ticks it off at that difficulty (saved by its `id`, so a reworked mission keeps its
