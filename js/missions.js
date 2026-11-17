@@ -121,6 +121,37 @@ function siegeWorks(S, diff) {
   computeTerritory();
 }
 
+/**
+ * Mooring Lines: a foothold on the nearest mesa with Crystal, 14 to 30 tiles from the Command Base L across the canyon
+ * (another area, with room round it): a Drop Outpost as a Cargo Plane drops one (supplied by air, holding the Cement and
+ * Alloy for a Mooring Mast, Fuel for its chargers), with two Workers who build there by hand.
+ */
+function mooringFoothold(S, L) {
+  const home = S.zone[tIdx(L.x, L.y)];
+  let best = null, bd = Infinity;
+  for (let j = 2; j < S.H - 2; j++) for (let i = 2; i < S.W - 2; i++) {
+    const t = tIdx(i, j), d = dist(i, j, L.x, L.y), z = S.zone[t];
+    if (z === home || z < 0 || S.terrain[t] !== T_GROUND || S.res[t] || S.bAt[t] || S.ramp[t] || d < 14 || d > 30 || d >= bd) continue;
+    let cr = 0, room = 0;
+    for (let dj = -5; dj <= 5; dj++) for (let di = -5; di <= 5; di++) {
+      if (!inMap(i + di, j + dj)) continue;
+      const u = tIdx(i + di, j + dj);
+      if (S.zone[u] !== z) continue;
+      if (S.res[u] === R_CRYSTAL) cr++;
+      if (Math.abs(di) <= 3 && Math.abs(dj) <= 3 && S.terrain[u] === T_GROUND && !S.res[u]) room++;
+    }
+    if (cr >= 3 && room >= 25) { bd = d; best = t; }
+  }
+  if (best === null) return null;
+  const b = addBuilding(0, 'dropost', best % S.W, (best / S.W) | 0, true);
+  b.airSupply = true; b.keep = { fuel: 3 }; b.deployedAt = S.time;
+  b.stock.cement = 10; b.stock.alloy = 6; b.stock.fuel = 6;
+  computeTerritory(); computeZones();
+  for (let k = 0; k < 2; k++) { const w = addBot(0, 'worker', b.x, b.y); enterBuilding(w, b); }
+  S.players[0].stats.startBots = S.players[0].stats.bots;
+  return b;
+}
+
 /** The same feature at (x, y) and at its mirror image, so both sides stay fair in Versus. */
 function mirrored(W, H, x, y, fn) { fn(x, y); fn(W - 1 - x, H - 1 - y); }
 
@@ -952,6 +983,49 @@ const MISSIONS = [
         // up and drive it on past the roads, hence "out past your roads".)
         hint: 'Tap the deployed Crawler, out past your roads → <b>Supply by air</b>: <b>On</b>. Then its Supply orders: <b>+5</b> Cement, and a plane flies it in.',
         ui: "#sh-airsup [data-v='1'], #sh-keep .keep-cell[data-g='cement'] [data-d='5']" },
+    ],
+  },
+
+  {
+    id: 'mooring', name: 'Mooring Lines', chapter: 'Sea and Sky',
+    brief: 'Your mesa has no Crystal, and a Drop Outpost holds the mesa across the canyon. Join them with an Airship line.',
+    intro: [
+      'A <b>Mooring Mast</b> is a one-tile store with a loading bay. Link two and an Airship line runs between them.',
+      'An <b>Airship</b>, built in an Airfield\'s hangar, flies its line over anything, both ways, 24 goods a trip.',
+      'The far Mast stocks what the buildings round it need, and sends their spare goods home on the way back.',
+      'Workers and Warbots ride it too. It burns Fuel and fills up at either Mast: Tankers or a pipe bring it.',
+      'It is unarmed: in Versus, keep its line clear of enemy Flak Guns.',
+    ],
+    mode: 'colony', seed: 4141, size: 1, rough: 2, rich: 3, biome: 'autumn', shape: 6, limit: [0, 0, 25],
+    layout(m, W) {
+      // (As Sky Bridges: the Crystal has to come from another mesa.)
+      const b = m.bases[0];
+      mapTiles(m, W, b.x, b.y, 14, (t) => { if (m.res[t] === R_CRYSTAL && m.elev[t] >= 3) { m.res[t] = 0; m.amt[t] = 0; } });
+    },
+    setup(S) {
+      kit(S, KIT8, 4);
+      const L = getE(S.players[0].lander);
+      L.stock.cement += 24; L.stock.alloy += 10; L.stock.chip += 4; L.stock.fuel += 10;
+      // Airlift's Airfield, built, its hangar stocked for an Airship; a Drop Outpost on the nearest mesa with Crystal (as a
+      // Cargo Plane drops one), with two Workers and the goods for a Mast.
+      preBuild(0, 'airfield', L.x, L.y, { road: true, stock: { alloy: 9, chip: 9, fuel: 12 } });
+      mooringFoothold(S, L);
+    },
+    goals: [
+      { kind: 'built', type: 'mast', n: 2, text: 'Raise two Mooring Masts',
+        hint: '<b>Build</b> (<kbd>B</kbd>) → <b>Move</b> (<kbd>3</kbd>) → <b>Mooring Mast</b> (<kbd>T</kbd>): one at home, one by the outpost.',
+        ui: "#btn-build, #build-tabs [data-g='move'], .bcard[data-t='mast'], #sh-layroad" },
+      { kind: 'mastLine', n: 1, text: 'Link them into an Airship line', at: 'mast',
+        count: () => mastLines(0).length,
+        hint: 'Tap a Mooring Mast → <b>Link to another Mast</b> (<kbd>L</kbd>), then tap the other Mast.',
+        ui: '#sh-mlink' },
+      { kind: 'bots', type: 'airship', n: 1, at: 'airfield',
+        hint: 'Tap the Airfield → <b>Hangar</b>: Airships <b>+1</b>. With one line, it flies to it by itself.',
+        ui: "#sh-yard .order-row[data-k='airship'] [data-d='1']" },
+      { kind: 'airFreight', n: [16, 24, 40], text: 'Fly {n} goods along the line', at: 'mast',
+        count: (P, S) => S.buildings.reduce((n, b) => n + (!b.dead && b.owner === 0 && b.type === 'mast' ? b.shipGot || 0 : 0), 0),
+        hint: 'Build a <b>Crystal Tap</b> by the far Mast: its site\'s goods fly out, its Crystal flies home.',
+        ui: "#btn-build, #build-tabs [data-g='gather'], .bcard[data-t='tap']" },
     ],
   },
 

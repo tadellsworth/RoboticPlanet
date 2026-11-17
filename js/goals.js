@@ -179,6 +179,9 @@ const COLONY_GOALS = [
       const flying = new Set(S.bots.filter((u) => !u.dead && u.owner === ME && u.mission && u.mission.kind === 'supply').map((u) => u.mission.to));
       return S.buildings.some((b) => !b.dead && b.owner === ME && b.airAt !== undefined && !flying.has(b.id)) ? 1 : 0;
     } },
+  { id: 'airship', tier: 2, name: 'Mooring lines', text: 'Fly goods along an Airship line.', n: 1, when: () => !worldBan('mast'), // (none in the Hollow)
+    hint: 'Build → Move → Mooring Mast, twice; tap one → Link, then the other; an Airfield\'s Hangar: Airships +1.', at: ['mast'], build: 'mast',
+    count: () => (S.buildings.some((b) => !b.dead && b.owner === ME && b.type === 'mast' && b.shipGot > 0) ? 1 : 0) },
 
   { id: 'trains3', tier: 3, name: 'Rolling stock', text: 'Have 3 Freight Trains running at once.', n: 3,
     hint: 'More stations along your lines; each Rail yard builds Freight Trains (5 rounds of parts each).', at: ['station'], build: 'station',
