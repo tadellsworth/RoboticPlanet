@@ -1050,7 +1050,10 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   to the pause menu if it was opened from there; everything set aside comes back as it was.
 - **Observer mode** (`js/watch.js`, `#screen-watch`, `#watch-card`): the **Observer** pill on the main menu opens a setup card
   (`openWatch`): the map type (grouped as in the Custom Game picker), how many colonies (2, or up to the map type's
-  `maxPlayers`) and each one's doctrine (or Random: one no other colony has), kept on this device in `terrafall.watch`.
+  `maxPlayers`), each one's doctrine (or Random: one no other colony has) and the Murmur (`w-murmur`: Off, Quiet or
+  Active, Active by default, `setup.murmur`; with them on the random biome is never Argos, `watchBiome`; the scout report
+  has nightfall, dawn and a nest or the Deep's mound wrecked as news, whoever has the most warbots round it named as the
+  wrecker, `watchEvents`), kept on this device in `terrafall.watch`. (It used to take the Murmur from the new-game screen.)
   **Start observing** (`watchStart`) is a normal game in which the computer plays every colony: `newGame` with
   `humans: []` (each gets the rival's difficulty settings and doctrine; COBALT's doctrine is set straight after, since
   `newGame` gives player 0 the Steward), Normal difficulty, Nuclear race on, no planetary events, a random biome. `ME`

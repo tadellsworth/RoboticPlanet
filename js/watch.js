@@ -35,7 +35,7 @@ const WATCH = { setup: null };
 
 /* ------------------------------------------------------------------ the setup screen */
 
-/** The last setup, kept on this device: { shape, n, docs: four doctrine keys or 'random' }. */
+/** The last setup, kept on this device: { shape, n, docs: four doctrine keys or 'random', murmur: 'off', 'quiet' or 'active' }. */
 function watchSetup() {
   let w = null;
   try { w = JSON.parse(localStorage.getItem(WATCH_KEY) || 'null'); } catch (e) { w = null; }
@@ -44,6 +44,7 @@ function watchSetup() {
   const shape = w && Number.isInteger(w.shape) && w.shape >= 0 && w.shape < SHAPE_PRESETS.length ? w.shape : 0;
   return {
     shape, n: w && Number.isInteger(w.n) ? clamp(w.n, 2, 4) : 2,
+    murmur: w && murmurLevelOk(w.murmur) ? w.murmur : 'active', // (Active, as in a new game, unless picked otherwise)
     docs: [0, 1, 2, 3].map((p) => (ok(docs[p]) ? docs[p] : ['turtle', 'rusher', 'raider', 'tycoon'][p])),
   };
 }
@@ -85,6 +86,7 @@ function syncWatch() {
     b.setAttribute('aria-checked', v === n ? 'true' : 'false');
   }
   $('w-n-row').hidden = maxPlayers(w.shape) <= 2;
+  for (const b of $('w-murmur').children) { const on = b.dataset.v === w.murmur; b.classList.toggle('on', on); b.setAttribute('aria-checked', on ? 'true' : 'false'); }
   const names = [['random', 'Random'], ...PERSONALITY_ORDER.map((k) => [k, PERSONALITIES[k].name])];
   $('w-seats').innerHTML = Array.from({ length: n }, (_, p) => `<label class="m-seat" title="${callsign(p, true)}"><i class="dot" style="background:${PLAYER_COLORS[p]}"></i>` +
     `<select data-p="${p}" aria-label="${callsign(p, true)}'s doctrine">${names.map(([k, name]) => `<option value="${k}"${w.docs[p] === k ? ' selected' : ''}>${name}</option>`).join('')}</select></label>`).join('');
@@ -96,6 +98,12 @@ function syncWatch() {
 }
 
 /* ------------------------------------------------------------------ starting and leaving */
+
+/** A biome at random for a game to observe: with the Murmur on, one they live on (not Argos, the silent moon). */
+function watchBiome(setup) {
+  const list = setup.murmur && setup.murmur !== 'off' ? BIOME_ORDER.filter(murmurGround) : BIOME_ORDER;
+  return list[Math.floor(Math.random() * list.length)];
+}
 
 /** Start a game to observe (from the setup screen, or Observe another at the end of one). */
 function watchStart(setup) {
@@ -120,8 +128,8 @@ function watchStart(setup) {
   newGame({
     seed: randomSeed(), difficulty: 'normal', mode: 'versus', size: DEFAULT_SIZE.versus, rough: DEFAULT_ROUGH, rich: DEFAULT_RICH,
     shape: setup.shape, players: n, humans: [], styles: docs, style: 'balanced', nuke: true, events: false, victory: 'capture',
-    murmur: typeof UI !== 'undefined' && murmurLevelOk(UI.menu.murmur) ? UI.menu.murmur : 'off', // (the Murmur as the new-game screen has them)
-    biome: BIOME_ORDER[Math.floor(Math.random() * BIOME_ORDER.length)],
+    murmur: murmurLevelOk(setup.murmur) ? setup.murmur : 'active', // (the setup screen's The Murmur)
+    biome: watchBiome(setup),
   });
   // (newGame gives the first colony the plain Steward when nobody plays it: it gets its doctrine here, before the
   // game's first step, as newGame would have given it; and the game plays on to the last colony standing.)
@@ -131,7 +139,7 @@ function watchStart(setup) {
   S.watch = true;
   ME = 0;
   enterGame(true);
-  UI.watch = { setup, follow: true, cam: null, spot: null, spotT: 0, tour: 0, tourT: 0, reportAt: 0, out: {}, seen: new WeakSet(), events: [], input: again ? again.input : inputSwap(WATCH_INPUT) };
+  UI.watch = { setup, follow: true, cam: null, spot: null, spotT: 0, tour: 0, tourT: 0, reportAt: 0, out: {}, seen: new WeakSet(), events: [], night: null, nests: null, input: again ? again.input : inputSwap(WATCH_INPUT) };
   R.clean = 1;
   document.body.classList.add('watching');
   setSpeed(2, true);
@@ -305,6 +313,24 @@ function watchEvents(w) {
     else if (by >= 0) watchEvent(w, `${watchThe(by, true)} has taken ${watchThes(P.id)} Command Base! ${watchThe(P.id, true)} is out.`, L.x, L.y);
     else watchEvent(w, `${watchThes(P.id, true)} Command Base is gone: ${watchThe(P.id)} is out.`);
   }
+  // The Murmur (with them on): nightfall and dawn, and a nest wrecked, and by whom.
+  if (S.wildlife) {
+    const night = murmurNight(S.time);
+    if (w.night !== null && night !== w.night) watchEvent(w, night ? (alwaysNightMap() ? 'A surge: the Murmur are coming up out of the deep.' : 'Night falls, and the Murmur are coming up out of their nests.') : (alwaysNightMap() ? 'The surge ebbs: the Murmur go back down.' : 'Dawn: the Murmur go back down.'));
+    w.night = night;
+    // (A nest gone since the last frame: whoever has the most warbots round it wrecked it. The Deep's mound too.)
+    const live = new Map();
+    for (const b of S.buildings) if (!b.dead && BDEFS[b.type].wild && !BDEFS[b.type].burrow) live.set(b.id, { x: b.x + 0.5, y: b.y + 0.5, mound: b.type === 'mound' });
+    if (w.nests) for (const [id, n] of w.nests) {
+      if (live.has(id)) continue;
+      const near = {};
+      for (const u of S.bots) if (!u.dead && u.owner >= 0 && isArmy(u) && dist2(u.x, u.y, n.x, n.y) < 49) near[u.owner] = (near[u.owner] || 0) + 1;
+      const by = Object.keys(near).sort((a, c) => near[c] - near[a])[0];
+      const what = n.mound ? 'the Deep\'s mound' : 'a Murmur nest';
+      watchEvent(w, by !== undefined ? `${watchThe(+by, true)} has wrecked ${what}.` : `${what.charAt(0).toUpperCase() + what.slice(1)} has been wrecked.`, n.x, n.y);
+    }
+    w.nests = live;
+  }
   for (const m of S.missiles) {
     if (!m.nuke || w.seen.has(m)) continue;
     w.seen.add(m);
@@ -419,6 +445,7 @@ function initWatch() {
   $('w-start').onclick = () => { audioUnlock(); watchKeepSetup(); watchStart(WATCH.setup); };
   $('w-shape').onchange = () => { const w = WATCH.setup; w.shape = +$('w-shape').value; w.n = clamp(w.n, minPlayers(w.shape), maxPlayers(w.shape)); watchKeepSetup(); syncWatch(); sfx('click'); };
   for (const b of $('w-n').children) b.onclick = () => { WATCH.setup.n = +b.dataset.v; watchKeepSetup(); syncWatch(); sfx('click'); };
+  for (const b of $('w-murmur').children) b.onclick = () => { WATCH.setup.murmur = b.dataset.v; watchKeepSetup(); syncWatch(); sfx('click'); };
   $('wc-follow').onclick = () => { sfx('click'); if (UI.watch) watchFollow(!UI.watch.follow, true); };
   // The report folds away to the colonies' line (on a phone it takes a fair part of the screen), and opens again.
   $('wc-fold').onclick = () => {
