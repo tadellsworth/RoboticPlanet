@@ -648,14 +648,7 @@ function flushDirtyTiles() {
  * drawn again, clipped to those 9 tiles: no crown is cut off, and a cleared plant leaves nothing behind.
  */
 function redrawAround(ctx, i, j) {
-  if (!(R.look && R.look.plantScale)) { // plants keep to their tile
-    // (next to a crag, the 8 round it too: a rounded crag corner, and the crag's edges, go by what's on its neighbours)
-    let crag = false;
-    for (let b = j - 1; b <= j + 1 && !crag; b++) for (let a = i - 1; a <= i + 1; a++) if (inMap(a, b) && S.terrain[tIdx(a, b)] === T_ROCK) { crag = true; break; }
-    if (!crag) { drawTile(i, j, ctx); drawPlants(ctx, i, j, i, j); return; }
-    for (let b = j - 1; b <= j + 1; b++) for (let a = i - 1; a <= i + 1; a++) if (inMap(a, b)) { drawTile(a, b, ctx); drawPlants(ctx, a, b, a, b); }
-    return;
-  }
+  if (!(R.look && R.look.plantScale)) { drawTile(i, j, ctx); drawPlants(ctx, i, j, i, j); return; } // plants keep to their tile
   for (let b = j - 1; b <= j + 1; b++) for (let a = i - 1; a <= i + 1; a++) if (inMap(a, b)) drawTile(a, b, ctx);
   ctx.save();
   ctx.beginPath();
@@ -699,11 +692,11 @@ function glowTiles(i0, j0, i1, j1) {
     const t = tIdx(i, j);
     if (S.terrain[t] === T_GROUND && gArt && !S.road[t] && !S.bAt[t]) drawTexture(ctx, gArt, i, j, i * TP, j * TP);
     else if (S.terrain[t] === T_WATER && wArt && !S.road[t]) drawTexture(ctx, wArt, i, j, i * TP, j * TP);
-    // (rounded shores and crags: each corner glows as what it now shows; rock doesn't)
-    for (const { fill, dx, dy } of [...shoreRounds(i, j), ...rockRounds(i, j)]) {
+    // (rounded shores: each corner glows as what it now shows)
+    for (const { fill, dx, dy } of shoreRounds(i, j)) {
       ctx.save(); shoreCornerPath(ctx, i * TP, j * TP, dx, dy); ctx.clip();
       ctx.clearRect(i * TP, j * TP, TP, TP);
-      const art = fill === 'land' ? gArt : fill === 'water' ? wArt : null;
+      const art = fill === 'land' ? gArt : wArt;
       if (art) drawTexture(ctx, art, i, j, i * TP, j * TP);
       ctx.restore();
     }
@@ -952,7 +945,12 @@ function paintTile(ctx, i, j) {
   } else if (terr === T_ROCK) {
     if (tex.rock) {
       drawTexture(ctx, tex.rock, i, j, x, y);
-      rockEdges(ctx, i, j, x, y);
+      ctx.fillStyle = 'rgba(255,225,190,0.22)';
+      if (terrAt(i, j - 1) !== T_ROCK) ctx.fillRect(x, y, TP, 2);
+      if (terrAt(i - 1, j) !== T_ROCK) ctx.fillRect(x, y, 2, TP);
+      ctx.fillStyle = 'rgba(15,8,4,0.45)';
+      if (terrAt(i, j + 1) !== T_ROCK) ctx.fillRect(x, y + TP - 4, TP, 4);
+      if (terrAt(i + 1, j) !== T_ROCK) ctx.fillRect(x + TP - 3, y, 3, TP);
     } else {
       const up = terrAt(i, j - 1) === T_ROCK, dn = terrAt(i, j + 1) === T_ROCK;
       const lf = terrAt(i - 1, j) === T_ROCK, rt = terrAt(i + 1, j) === T_ROCK;
@@ -979,7 +977,6 @@ function paintTile(ctx, i, j) {
   if (terr === T_GROUND) drawElevation(ctx, i, j, x, y, t, n);
   else if (terr === T_WATER) drawCliffFace(ctx, i, j, x, y, t, true);
   shoreCorners(ctx, i, j, x, y);
-  rockCorners(ctx, i, j, x, y);
   if (S.ford && S.ford[t] && terr === T_WATER) drawFord(ctx, i, j, x, y);
   if (S.tidal && S.tidal[t]) drawFlat(ctx, i, j, x, y, terr === T_WATER);
   if (S.fault && S.fault[t] && terr !== T_CHASM) drawFaultScar(ctx, i, j, x, y);
@@ -1259,77 +1256,6 @@ function shoreCorners(ctx, i, j, x, y) {
     ctx.strokeStyle = dy < 0 ? 'rgba(159,217,208,0.5)' : 'rgba(10,30,40,0.35)'; ctx.lineWidth = 2; ctx.stroke();
   }
 }
-/**
- * Rounded crags: like the shores, rock outcrops (T_ROCK) would otherwise be stacks of squares. A corner of a crag tile
- * with plain ground on both sides and beyond (all at one level) is filled with that ground in a quarter circle, and a
- * corner of plain ground with crags on both sides and beyond with rock; the crag's rim follows the curve (lit along
- * its top and left, in shadow along its bottom and right, as its straight edges are). Not a crag a road or track
- * tunnels through, nor ground with anything on it.
- */
-function rockRounds(i, j) {
-  const t = tIdx(i, j), terr = S.terrain[t], out = [];
-  if ((terr !== T_ROCK && terr !== T_GROUND) || !(R.tex && R.tex.rock)) return out;
-  const crag = (a, b) => { if (!inMap(a, b)) return false; const u = tIdx(a, b); return S.terrain[u] === T_ROCK && !S.road[u] && !(S.rail && S.rail[u]) && !S.bAt[u]; };
-  if (terr === T_ROCK) {
-    if (!crag(i, j)) return out;
-    const ground = (a, b) => inMap(a, b) && S.terrain[tIdx(a, b)] === T_GROUND;
-    for (const [dx, dy] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) {
-      if (!ground(i + dx, j) || !ground(i, j + dy) || !ground(i + dx, j + dy)) continue;
-      const e = S.elev[tIdx(i + dx, j)];
-      if (S.elev[tIdx(i, j + dy)] === e && S.elev[tIdx(i + dx, j + dy)] === e) out.push({ fill: 'land', dx, dy, e });
-    }
-  } else {
-    if (S.road[t] || S.bAt[t] || S.res[t] || S.ramp[t] || (S.rail && S.rail[t]) || (S.fert && S.fert[t]) || (S.burnt && S.burnt[t]) || (S.tidal && S.tidal[t])) return out;
-    for (const [dx, dy] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) if (crag(i + dx, j) && crag(i, j + dy) && crag(i + dx, j + dy)) out.push({ fill: 'rock', dx, dy });
-  }
-  return out;
-}
-/**
- * A crag tile's edges: lit along the top and left, in shadow along the bottom and right where it meets other ground.
- * Each stops short of a rounded corner (rockRounds): this tile's own, where the rim follows the curve instead, or the
- * ground beside it filled with rock, where there's rock on both sides of it now.
- */
-function rockEdges(ctx, i, j, x, y) {
-  const rr = TP * SHORE_R, mine = rockRounds(i, j);
-  const own = (dx, dy) => (mine.some((r) => r.dx === dx && r.dy === dy) ? rr : 0);
-  const near = (a, b, dx, dy) => (terrAt(a, b) === T_GROUND && rockRounds(a, b).some((r) => r.dx === dx && r.dy === dy) ? rr : 0);
-  ctx.fillStyle = 'rgba(255,225,190,0.22)';
-  if (terrAt(i, j - 1) !== T_ROCK) { const a = own(-1, -1) || near(i, j - 1, -1, 1), b = own(1, -1) || near(i, j - 1, 1, 1); ctx.fillRect(x + a, y, TP - a - b, 2); }
-  if (terrAt(i - 1, j) !== T_ROCK) { const a = own(-1, -1) || near(i - 1, j, 1, -1), b = own(-1, 1) || near(i - 1, j, 1, 1); ctx.fillRect(x, y + a, 2, TP - a - b); }
-  ctx.fillStyle = 'rgba(15,8,4,0.45)';
-  if (terrAt(i, j + 1) !== T_ROCK) { const a = own(-1, 1) || near(i, j + 1, -1, -1), b = own(1, 1) || near(i, j + 1, 1, -1); ctx.fillRect(x + a, y + TP - 4, TP - a - b, 4); }
-  if (terrAt(i + 1, j) !== T_ROCK) { const a = own(1, -1) || near(i + 1, j, -1, -1), b = own(1, 1) || near(i + 1, j, -1, 1); ctx.fillRect(x + TP - 3, y + a, 3, TP - a - b); }
-}
-/** Tile (i, j)'s rounded crag corners (rockRounds), with the rim in the rock's edge colours, kept inside the tile. */
-function rockCorners(ctx, i, j, x, y) {
-  const list = rockRounds(i, j);
-  if (!list.length) return;
-  const tex = R.tex || {}, LIT = ['rgba(255,225,190,0.22)', 2], SHADE_B = ['rgba(15,8,4,0.45)', 4], SHADE_R = ['rgba(15,8,4,0.45)', 3];
-  ctx.save();
-  ctx.beginPath(); ctx.rect(x, y, TP, TP); ctx.clip();
-  for (const { fill, dx, dy, e } of list) {
-    ctx.save();
-    const { cx, cy, rr, a1, ccw } = shoreCornerPath(ctx, x, y, dx, dy);
-    ctx.clip();
-    if (fill === 'land') groundPatch(ctx, i, j, x, y, e);
-    else drawTexture(ctx, tex.rock, i, j, x, y);
-    const se = fill === 'land' ? e : S.elev[tIdx(i + dx, j)]; // (Sky islands: the canyon floor's shade, as on the tiles it comes from)
-    if (se <= 1 && R.skyFloor) { ctx.fillStyle = se ? 'rgba(20,10,6,0.2)' : 'rgba(20,10,6,0.32)'; ctx.fillRect(x, y, TP, TP); }
-    ctx.restore();
-    // The rim in two halves, each as the straight edge it runs into: a rock tile's own edges (inside the curve) on a
-    // rounded crag corner; the neighbouring crags' edges facing this tile (outside it) on a filled ground corner.
-    const mid = a1 + (ccw ? -Math.PI / 4 : Math.PI / 4), a2 = a1 + (ccw ? -Math.PI / 2 : Math.PI / 2);
-    const own = fill === 'land';
-    const horiz = own ? (dy < 0 ? LIT : SHADE_B) : (dy < 0 ? SHADE_B : LIT);
-    const vert = own ? (dx < 0 ? LIT : SHADE_R) : (dx < 0 ? SHADE_R : LIT);
-    for (const [[col, w], from, to] of [[horiz, a1, mid], [vert, mid, a2]]) {
-      ctx.beginPath(); ctx.arc(cx, cy, own ? rr - w / 2 : rr + w / 2, from, to, ccw);
-      ctx.strokeStyle = col; ctx.lineWidth = w; ctx.stroke();
-    }
-  }
-  ctx.restore();
-}
-
 /** Plain ground at elevation e over tile (i, j) (clipped by the caller): its level's colour, the texture and the level's tint. */
 function groundPatch(ctx, i, j, x, y, e) {
   const tex = R.tex || {}, look = R.look || BIOME_LOOK.desert;
