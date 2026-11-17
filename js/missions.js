@@ -1222,7 +1222,7 @@ const MISSIONS = [
     // (Hard's clock: with the old kit (KIT7) the AI on your side, playing the hints' steps, won at 8:53 to 12:24, so 13
     // minutes left little to spare; five runs of a route every 2 minutes can't be done much before 9. With the Grove
     // Planter it's a harder war: see IDEAS, Convoy.)
-    rival: ['easy', 'medium', 'normal'], limit: [0, 0, 13],
+    rival: ['easy', 'medium', 'medium'], limit: [0, 0, 13], // (Hard: a Medium rival against the 13-minute clock; see IDEAS, Convoy)
     // (The Salvager's convoys press on, convoysPress: out of a besieged Command Base, and past warbots in their way even
     // unescorted. Without it, besieging the rival before wrecking a convoy left the goal with nothing to wreck, and the
     // Easy rival's unescorted convoys turned back from every band on their lane.)

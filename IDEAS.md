@@ -218,8 +218,8 @@ built and played through headless:
   (its hints' steps, the AI off) is won at 6:41, 7:18 and 8:05 on Easy, Normal and Hard (7:05, 7:20 and 7:53 before).
 - **Mostly waiting.** Breakthrough is mostly research timers, and Assembly Line and Pipe Dreams take a scripted player
   4-7 minutes; their Hard clocks are generous on purpose.
-- **Convoy: Hard is lost more often with the Grove Planter** (the owner's call on a retune). Mission rivals have the
-  rival's opening, so Convoy's Salvager (Medium on Normal, Normal on Hard) keeps an army; the note that Hard was lost at
+- **Convoy: Hard with the Grove Planter** (retuned Nov 17: a Medium rival on Hard). Mission rivals have the
+  rival's opening, so Convoy's Salvager (Medium on Normal, Normal on Hard until this retune) keeps an army; the note that Hard was lost at
   21 minutes (the AI alone) didn't hold on later code, where it was won at 9 to 12 minutes. As the owner then decided:
   Hard's clock is 13 minutes (40 before); the raid goal comes first, so its hint shows from the start (it says to start
   the route first); the Salvager's convoys press on (`pressOn`, `convoysPress`: out of a besieged Command Base, and
@@ -236,8 +236,9 @@ built and played through headless:
     10:17), with `KIT8` and no pressing on 1 of 4. The layouts differ only by the Grove Planter and its Agribot, so it's
     most likely the war tipping the other way. With no clock, `KIT8` and pressing on, Hard went 10:12 to 24:42 and the
     Command Base was captured at 15:02 and 17:38 in 2 of 7: a longer clock alone doesn't fix it.
-  - Retunes measured (not made): a Medium rival on Hard (as on Normal) with the 13-minute clock won 4 of 4 with the
-    steps (9:09 to 11:14) and 1 of 2 alone (9:12; the other lost on the clock); or Convoy's kit back to `KIT7`.
+  - Retunes measured: a Medium rival on Hard (as on Normal) with the 13-minute clock won 4 of 4 with the steps (9:09
+    to 11:14) and 1 of 2 alone (9:12; the other lost on the clock); or Convoy's kit back to `KIT7`. **Made: the Medium
+    rival on Hard** (the kit the owner chose stays), tight against 13 minutes, close to the 6 of 7 before the kit change.
 - **Final Descent is a real war now.** With the opening its rival keeps an army (the old one's was gone by minute 10).
   A scripted player (the AI on your side plus the hints' steps) won six of seven runs on Normal and on Hard; one lost
   its Command Base at 22 minutes on Hard, and one on Normal was still open at 41 minutes, its army shrinking. If
