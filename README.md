@@ -1856,6 +1856,42 @@ pause menu's line under the button says so, as does the new-game Rules' Always n
   moving parts of the Generator's and Oil Pump's working loops. Light loops (the Smelter's furnace, the Refinery's
   column lights, the turret's charge-up, the walls' sparks) are never graded.
 
+### Cloud shadows, remains and beacons
+
+Three touches that keep the world going on without its people, all in `js/ambient.js` and for looks only: nothing there
+changes the game, `S`, saves or orders. What they keep is display-only (`R.amb`, made afresh for each game and each
+load); they read the game's clock, seed, buildings and effects. Hooks: `drawRemains` after the game's ground marks
+(`drawDecals`) and `drawAmbientSky` after the aircraft (`drawAirLayer`) in `render`, and the `beacon` sound in `sfx`.
+
+- **Cloud shadows** (`drawCloudShadows`). By day soft shadows of clouds drift over everything on the ground. The sky is
+  a field of cells (`AMB.cloud.cell` tiles), each with a cloud if its hash from the seed is under the cover, each cloud
+  a cluster of soft puffs; the wind carries the field (`ambDrift`), each stretch of the weather's clock (`WEATHER.slot`)
+  blowing the way a spell in it would (`weatherAt`'s `dir`), faster in a stretch with a spell, veering smoothly between
+  stretches. So, like the weather, it comes from the seed and the game clock alone and every device sees the same sky.
+  A spell of weather (or a dust storm event) thickens and darkens it (`AMB.thick` by kind); the light fades it out toward
+  night (`AMB.sun`). Made in a buffer at an eighth of the screen (a quarter on Ultra) and laid over the view in one draw.
+  None on Argos or in the Hollow, none with Weather off, none on Graphics Saver.
+- **Remains** (`drawRemains`). The game's own marks of a fight fade in a minute or two (`S.decals`: rubble, scorch; a
+  wreck's fire in `S.fx`) and aren't saved. `ambScan` looks through the effects added since the last frame: a building's
+  `collapse` with its fire on the same step (destroyed by force; one taken down on purpose only drops its rubble), a
+  robot's or vehicle's wreck fire (`killBot`: the robot is found by where it fell and its id), a plane's crash fire
+  (`landDrop`). Murmur nests and creatures leave nothing (they take their dead with them), nor do ships. Each becomes a
+  remains record in `R.amb.ruins` (at most `AMB.ruin.max`, one wreck pile to a tile, only on open ground) that carries the
+  rubble on as the game's mark fades (the same pieces from the same seed) and, from its age in game time, grows over by
+  biome (`AMB_GROW`): grass, moss and vines in the green biomes, drifting snow in Hoarfell, sand in the Rust, ash in the
+  Cinderlands, violet Bloom veins and nodules (glowing after dark) in the Bloom and the Hollow, only dust on Argos (slower).
+  After `AMB.ruin` seconds they go back into the ground; a building or site, road or track on the tile clears them at
+  once. Each is drawn from a small picture (`ambSprite`, one per time of day in use, blended across the change as
+  `drawArt` blends the re-lit art), made again only when its growth steps on, the zoom needs another size or the wind
+  turns, a few a frame; out of view for 20 seconds, its pictures are let go. Kept in `R`, not `S`, so the simulation is
+  untouched and nothing new is saved: remains don't outlive a save and load.
+- **Beacons** (`drawBeacons`). From evening until dawn (`AMB.beam`, faded in over the evening crossfade and out at dawn,
+  so never in Always day and always in Always night or the Hollow) every standing, finished Command Base, whoever holds
+  it, shines a pale beam straight up from the top of its mast, a hint of its owner's colour in it, with a soft halo, light
+  on its pad, and a slow pulse every beacon keeps in time (`AMB.pulse`). In the Hollow it goes up its breach (`breachAt`);
+  a base under rock would only light the roof. When your own base's beacon comes on in view, a soft low hum
+  (`ambHum`, through `sfx('beacon')` and `mapVoice`).
+
 ## Project layout
 
 ```
@@ -1880,6 +1916,7 @@ js/blueprint.js           blueprints: a block of buildings and its roads kept on
 js/charts.js              line and bar charts for the statistics screen
 js/render.js              canvas renderer and placeholder art
 js/daynight.js            day and night: the clock, re-lit art sets, grading, headlights, light pools
+js/ambient.js             cloud shadows by day, remains that overgrow, the Command Bases' beacons by night (looks only)
 js/input.js               touch and mouse controls
 js/ui.js                  HUD, build menu, info panels, objectives
 js/audio.js               synthesized sound effects

@@ -257,8 +257,8 @@ function ambDeadBot(A, f) {
 }
 
 /*
- * The painter: everything of the remains in view is gathered into one path per layer and strength (eight steps of
- * opacity), and each is filled or stroked once, layer by layer, so a battlefield's worth costs a few dozen draws.
+ * The painter: the pieces of a picture of remains (and the specks and glows drawn over the view) are gathered into one
+ * path per layer and strength (eight steps of opacity), and each is filled or stroked once, layer by layer.
  */
 function ambPainter(defs) {
   const P = { list: [], by: {} };
@@ -729,8 +729,8 @@ function ambHum(D) {
   lp.type = 'lowpass'; lp.frequency.value = 520;
   env.gain.value = 0.0001;
   env.gain.setValueAtTime(0.0001, t0);
-  env.gain.exponentialRampToValueAtTime(0.06, t0 + 1.3);
-  env.gain.setValueAtTime(0.06, t0 + 2.2);
+  env.gain.exponentialRampToValueAtTime(0.045, t0 + 1.3);
+  env.gain.setValueAtTime(0.045, t0 + 2.2);
   env.gain.exponentialRampToValueAtTime(0.0001, t0 + 5);
   lp.connect(env).connect(D || AUDIO.fxBus);
   for (const [f, v, type] of [[55, 0.9, 'sine'], [82.4, 0.35, 'sine'], [110, 0.3, 'triangle'], [220, 0.06, 'sine']]) {
