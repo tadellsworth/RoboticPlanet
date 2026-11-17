@@ -583,8 +583,8 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
 - **The Hollow** (`hollow: true`; LORE.md, The Hollow) is the Murmur's cavern lair, a two-player map with its own
   generator (`hollowMap`, called first thing by `generateMap`) and its own look: `newGame` sets the biome to `hollow`
   whatever the Biome setting (`BIOMES.hollow`, not in `BIOME_ORDER`, so the picker never offers it; the Biome row says the
-  map sets it), drawn for now with the Bloom's art through one mapping (`BIOME_ART`, `artBiome`: one line to drop when
-  its own art arrives), and it is always night there (`alwaysNight` on the map type: `todForced` in `js/daynight.js`,
+  map sets it), drawn with its own art (`art/biomes/hollow`, keys ending `-hollow`, loaded only when it's played:
+  `LAZY_BIOMES`, `dist/biome-hollow.js` in the single file; ART_GUIDE Batch 16), and it is always night there (`alwaysNight` on the map type: `todForced` in `js/daynight.js`,
   looks only). `murmur: 'active'` is for the Murmur's night system. The map starts as solid rock (`T_ROCK`, level 1) and
   every change is made to a tile and its half-turn twin together (`put`), so both sides are exactly the same: a home
   cavern round each base (its landing ground kept round), a **chasm hall** between home and the middle split across by
@@ -601,8 +601,15 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   rival plans no Terminal where there is no post (so it never waits on trade for Crystal), and `newGame` turns an
   Uplinks game on this map into Capture (the menu greys the Uplinks choice out and says so; a Random pick that lands
   here says so in a message).
-  - **Breach shafts.** Drawn as a pool of pale gold daylight on the night-graded ground (`drawBreachLight`) and a column
-    rising toward the top of the screen with motes drifting down it (`drawBreachShafts`), gold on the minimap.
+  - **Breach shafts.** Drawn as a pool of daylight on the night-graded ground: under its soft mask (`breach-light-hollow`)
+    the baked ground shows as by day, warmed (`drawBreachLight`, `drawDayGround`), with a little pale gold on top; and a
+    column of pale gold (`breach-beam-hollow`) rising toward the top of the screen with motes drifting down it
+    (`drawBreachShafts`), gold on the minimap.
+  - **Its look** (ART_GUIDE Batch 16): the cave wall's face along every floor tile under rock (`hollowWall`), rock
+    darker toward the middle of a mass (`hollowRockDark`), each floating Crystal mass and side chamber
+    (`S.hollow.chambers`, from `hollowMap`) laid over the tiles under it and drawn with each of them (`hollowDecorTile`),
+    the pillars (`drawPillar`) and the Deep's mound (`drawMound`) as night renders, and a faint light along the lakes'
+    shores, the chasms' lips and the walls' feet in the night glow map (`hollowTileGlow`).
     **Ringfall** falls only through them (`hollowRingfall`, from `meteorPlan`): `METEOR_HITS` strikes a side, a share
     `HOLLOW.ringfall.contested` (2 in 3) through the contested breaches on that side, each with its twin; each leaves up
     to `HOLLOW.ringfall.tiles` (4) deposits `HOLLOW.ringfall.rich` (1.5) times a Ringfall deposit's amount.
@@ -614,7 +621,7 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
     raid target: `wildTarget` counts it `VEIN.pull` (2) times nearer, from up to `VEIN.reach` (8) tiles further out, for
     `VEIN.lure` (120 s). No stalks or fertile soil: `worldBan` bars Grove Planters and Bio Farms (and Airfields and Trade Terminals) with a
     reason for `canPlace`, and the build menu greys them out (`ownedText`). Fuel comes from the oil seep in every home
-    cavern. A Worker lands in the Agribot's place.
+    cavern (on Small maps, two: the side caverns there are too cramped for more oil within reach). A Worker lands in the Agribot's place.
   - **Floating Crystal**: a platform two levels up (level 3) in a pocket of chasm, worn back until only chasm touches it,
     one in each chasm hall and from Medium up one in each east cavern; its Crystal holds `HOLLOW.crystal` (2.5) times a
     cluster's (frontier richness on top). Reached by Ropeway, a Sky bridge or a Viaduct (level 1 to 3 is within
@@ -632,7 +639,7 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
     solar flares (`updateEvents` leaves them out; Ringfall and the *Wren* take turns).
   - **The Murmur**: the most nests of any map, and at the centre the Deep's mound (`BDEFS.mound`: 160 armor, level
     `HOLLOW.deep.level` (3) from the start, `HOLLOW.deep.guards` more guards, `HOLLOW.deep.loot`; `placeHollowNests`,
-    drawn by `drawMound`). Wrecking it (`clearNest`) spills its hoard and puts every other nest back to level 1 (its
+    drawn by `drawMound`: the Burrow's level 4 art). Wrecking it (`clearNest`) spills its hoard and puts every other nest back to level 1 (its
     growth clock too). The nests come with the Murmur setting like everywhere else (the map's own default is `murmur:
     'active'`; `murmurStart` calls `placeHollowNests` instead of `placeNests`/`placeNestsVersus`), owned by the Murmur's
     slot (`wildOwner`) in Versus as in Colony; Quiet keeps half the pairs (rounded up) and the mound, Off none (the
@@ -646,6 +653,10 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
     joined up). Nest sites keep 9 tiles from the masses: guards there would keep the gatherers off the Crystal for
     good. The rival lives with the Murmur here as anywhere (`aiMurmur`: exits collapsed, nests struck between surges),
     and builds as near the nests as `aiNestClear()` lets it, or it runs out of Ore.
+    **Oil first** (oil is the only Fuel here): with an Oil Pump at work, or `AI_OIL_CRUDE` (5) Crude in storage, and no
+    Refinery, the Refinery comes first after the opening and is started as soon as the Cement is there, its Alloy
+    delivered first (as a turret's is: `oilFirst` in `aiThink`). Its Oil Pumps go to the seeps nearest home: a tile
+    further off costs a spot `AI_HOLLOW_PUMP_FAR` (0.8) of its score (0.3 elsewhere).
 - **Maps for three or four only** (`minPlayers` in `SHAPE_PRESETS`: the player choice can't go below it, Random only
   picks them for three or four, and Colony games on them leave the other colonies empty). **The Wheel** (`wheel`, three):
   rock spokes run out along the lines between the thirds from a raised hub (the only ground on the top level, the
@@ -1483,10 +1494,15 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
     4], cap [36, 18, 120] / [60, 36, 260], exits [1, 0.25, 1] / [2, 0, 2] (at most 2 / 3 a nest), packs [2, 0.25, 3] /
     [2, 0.5, 5], Brutes from night 4 / 2, waves 1 / 2.
   - **Tunnels** (`S.tun`, a tile layer: a nest's slot in `S.mur.nests` + 1; saved, `TYPED_FIELDS`, and in `hashState`
-    with `S.mur` and each nest's branches `b.br`) are drawn as raised ridges of heaved earth with violet root-veins
-    (`paintTunnelTile`, `paintTunnelVeins`, baked at `TUN_PX` a tile when `S.mur.ver` changes: `tunnelLayers`), faint by day
-    and glowing at night with pulses running back to the nest (`drawTunnelGlow`), violet threads on the minimap
-    (`minimapTunnels`); exits (`drawBurrow`) are violet rings there, collapsed ones a caved-in pit (`drawExitScar`).
+    with `S.mur` and each nest's branches `b.br`) are drawn as raised ridges of heaved earth with violet root-veins, as
+    smooth curves: each run of a network between its forks and ends is one curve through its tiles, each tile's point
+    nudged off its middle so the ridges wander (`tunnelRuns`, `tunnelPoint`), the earth in the ground's own colour,
+    tapering where it's still digging (`paintRidges`, `paintRidgeVeins`; baked at `TUN_PX` a tile into two layers,
+    only the `TUN_BLOCK` blocks round tiles that changed when `S.mur.ver` changes: `tunnelLayers`, `bakeTunnels`), faint
+    by day and glowing at night with pulses running back to the nest along the curves (`drawTunnelGlow`), violet threads
+    on the minimap (`minimapTunnels`); exits are art (`drawBurrow`: `tunnel-exit`, re-lit for the time of day), violet
+    rings on the minimap, and collapsed ones a caved-in mound fading as it settles (`drawExitScar`:
+    `tunnel-exit-collapsed`).
   - **Counterplay.** Turrets, garrisons and warbots treat creatures as enemies; a creature battering a building marks it
     raided (`P.raided`), so forts round it answer (`garrisonDefense`). Warbots **collapse an exit** (`MURMUR.exitArmor`, 30;
     `collapseExit`: gone, nothing opens within 3 tiles for `MURMUR.shut`, 15 min, `S.mur.shut`; `stats.collapsed`) and
@@ -1764,7 +1780,11 @@ light pools at dusk and night) and the Pulse Turret's twin violet laser and hit 
 posts along the top with live arcs crackling over it now and then, and steel blast-door Gates that slide open into
 the towers, layered per tile), the
 Viaduct's abutment tiles (`viaduct-abut-*`) and the working loops of the Oil Pump (its beam nodding over `pump-base`),
-Refinery and Smelter. Still to make: goods icons and a few terrain pieces. The biome art is in `art/biomes/` (six plants per biome with their
+Refinery and Smelter, the Hollow's own set, the Murmur's tunnel exits, and Fiber's Reedcane Stalks (an image for each
+growth stage, `stalkKey`) and the oil seep (its texture drawn across all its tiles as one shape, `drawSeep`, with the
+Pathfinder's survey stake on each, none in the Hollow, which it never mapped; their light at night in the night glow map,
+`resourceGlow`) (ART_GUIDE Batch 16).
+Still to make: goods icons and a few terrain pieces. The biome art is in `art/biomes/` (six plants per biome with their
 shadows baked in, and the Jungle and Polar ground, water, rock and cliff), and the Red desert ground, water and rock
 are 512×512 (one image per 4×4 tiles, sharp on the zoomed-in map); all WebP to keep the single-file build small. The app icon is in `icons/` (its source: `icons/icon.svg`). Anything without an image falls back to placeholder art drawn in code, so new art can be
 added one piece at a time. See **[ART_GUIDE.md](ART_GUIDE.md)** for specs, the style brief and prompts,

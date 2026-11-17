@@ -28,7 +28,7 @@ const TOD_TIMES = {
 /** (The cycle, TOD_CYCLE, is in defs.js: the Murmur's nights are game logic and read it too, through todPhase.) */
 const TOD_NAMES = { morning: 'Morning', day: 'Day', evening: 'Evening', night: 'Night' };
 /** Sprites that are light (or UI) and are never re-lit or graded. */
-const TOD_NEVER = /(-brake|-boost|-lights|-headlights|-spark|-lamp|^rail-lights-on|^light-pool|^icon-|^nuke-blast|^rally|^oneway|^bunker-fire|^disruptor-pulse|^mortar-flash|^streetlamp-.*-(lit|pool)|^fx-|^(smelter|refinery)-work-|^turret-charge-)/;
+const TOD_NEVER = /(-brake|-boost|-lights|-headlights|-spark|-lamp|^rail-lights-on|^light-pool|^icon-|^nuke-blast|^rally|^oneway|^bunker-fire|^disruptor-pulse|^mortar-flash|^streetlamp-.*-(lit|pool)|^fx-|^(smelter|refinery)-work-|^turret-charge-|-hollow$)/; // (the Hollow's standing pieces are night renders: it is always night there)
 const TOD_VEHICLES = ['truck', 'tanker', 'roadtrain', 'freight-loco', 'crawler', 'worker', 'hauler', 'agribot', 'paver', 'warbot'];
 
 const TOD = { on: true, state: null, active: false, sets: {}, shared: {}, keys: null, poolTint: {}, over: null };

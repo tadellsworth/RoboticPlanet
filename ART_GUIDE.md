@@ -8,7 +8,8 @@ industrial look, see [Batch 6](#batch-6-realistic-3d-industrial-buildings-a-full
 and empty Silos, see [Batch 11](#batch-11-colony-wildlife-the-research-lab-and-empty-silos); for the Ropeway and Road Train,
 [Batch 12](#batch-12-ropeway-and-road-train). The new defences are in [Batch 14](#batch-14-bunker-disruptor-tower-and-mortar-pit), and
 weapon effects, explosions and building collapses (muzzle flashes, tracers, smoke, bullet pockmarks, rubble) in
-[Batch 15](#batch-15-weapon-effects-explosions-and-building-collapses).
+[Batch 15](#batch-15-weapon-effects-explosions-and-building-collapses). The Hollow's art, the Murmur's tunnels and the new Fiber
+and Oil are in [Batch 16](#batch-16-the-hollow-the-murmurs-tunnels-and-new-fiber-and-oil-installed).
 
 This guide has three parts:
 
@@ -1446,17 +1447,48 @@ same size, or point the tag at a new one. Keep them small (WebP; the whole set i
 The guide also shows the game's own `buildings/lander@0`, `lander@1`, the night Trade Post, Uplink, Command Base and
 *Wren* (`tod/night/...`); the Ithaca I page's catalog plate and the four callsign emblems are inline SVG in the page.
 
-### The Hollow (being designed)
+### Batch 16: the Hollow, the Murmur's tunnels, and new Fiber and Oil (installed)
 
-The Hollow is a map with its own look (the biome key `hollow`). Until its art is installed it is drawn with the
-Bloom's (`alien`) through one line in `js/defs.js` (`BIOME_ART = { hollow: 'alien' }`): drop that line once
-`ground-hollow`, `water-hollow`, `rock-hollow`, `cliff-hollow`, the `chasm-*-hollow` canyon pieces, the night glow
-(`ground-glow-hollow`) and `plant-hollow-1…6` are in `art/art-manifest.js` (and add `hollow` to `LAZY_BIOMES` in
-`js/render.js` if they should load only when it's played). It is always night there, so only the night look matters
-for the ground. Drawn in code for now, each with a key art could take over: Bloom veins (the resource `vein`, like
-`stalk`; it also glows in the night glow map), the stone pillars (`drawPillar`, standing on a rock tile), the breach
-shafts (`drawBreachLight` and `drawBreachShafts`), the Deep's mound (`drawMound`, over the nest art at 1.6×), the dust
-of the tremors and the trickle before a rockfall (`drawTremors` in `js/weather.js`).
+Rendered with the renderer in this repository (`renderer/tools/render_install.sh`, then `renderer/tools/install_art.py`
+writes the WebP files; the design sheets came from `renderer/preview/hollow_sheet.py` and `resource_sheet.py`).
+
+**The Hollow** (biome key `hollow`, `art/biomes/hollow/`, the chasm pieces in `art/canyon/*-hollow`). Every key ends
+`-hollow`, so it all loads only when the Hollow is played (`LAZY_BIOMES`; in the single file, `dist/biome-hollow.js`
+beside the page). It is always night there: the ground and anything drawn with it are lit like the other biomes' and
+graded by the night light, with `-glow` images for what gives its own light; the standing pieces are night renders,
+drawn as they are (`TOD_NEVER` takes in keys ending `-hollow`).
+
+| Key | What | How it's drawn |
+|---|---|---|
+| `ground-hollow`, `water-hollow`, `rock-hollow` (+ `ground-glow`, `water-glow`) | Cave floor of grey-violet silt and worn stone flags under the Bloom's moss and root-veins; black lakes with the roof's Bloom reflected; the black cave wall | 512 seamless, as every biome; the rock darkens toward the middle of a mass (`hollowRockDark`) |
+| `cliff-hollow`, `wall-hollow` | A ledge face (128×48); the cave wall's face where rock meets floor (128×64, new) | `wall-hollow` on a floor tile under a rock tile, 0.7 of a tile tall (`hollowWall`) |
+| `chasm-*-hollow` | The canyon set, its void deeper than any surface canyon's | as the canyon set |
+| `plant-hollow-1…6` (+ `-glow`) | Bracket fungus, geode puffballs, a tendril star, gypsum cave flowers, a dripstone, a spore cushion | as every biome's plants |
+| `vein-hollow` (+ `vein-glow-hollow`) | The Bloom-vein node, the Hollow's Fiber: root-veins heaving out of the floor round three glowing bulbs | the resource `vein`'s art, 1.4 tiles, anchor [0.5, 0.6145] |
+| `floater-hollow` (+ glow) | A floating Crystal mass: a raft with a crust of lilac crystal on top, a crystal beard and roots below | 8.3 tiles, over each mass in `S.hollow.masses`, drawn with each tile under it but only on the platform and the chasm round it (`hollowDecorTile`) |
+| `chamber-hollow` (+ glow) | A side chamber's floor: robot parts laid out in rows | 3.35 tiles, over each of `S.hollow.chambers`, on open floor only |
+| `pillar-1-hollow`, `pillar-2-hollow` | Stone pillars with spiral grooves the Bloom climbs, fading up into the dark | 3.3 tiles, anchor [0.5, 0.8], on each of `S.hollow.pillars` (`drawPillar`) |
+| `deep-mound-hollow` | The Deep's mound: the Burrow's level 4, its tendril star risen | 5.6 tiles at the nests' size (`drawMound`) |
+| `breach-light-hollow`, `breach-beam-hollow` | The pool of daylight under a breach (a soft mask) and the column of pale gold with dust | under the mask the baked ground shows as by day, warmed (`drawBreachLight`, `drawDayGround`); the column is added over everything (`drawBreachShafts`), 2 × (radius + 0.6) tiles wide, twice as tall, its foot at 0.86 |
+
+The night glow map also carries a faint light along a black lake's shore, a chasm's lip and the foot of a cave wall
+(`hollowTileGlow`).
+
+**The Murmur's tunnels, on every map.** The ridges are drawn in code as smooth curves (`tunnelRuns`, `paintRidges`,
+`paintRidgeVeins` in `js/render.js`; `renderer/tunnels/ridges.js` is the reference): each run of a network between forks
+and ends is one curve through its tiles, each tile's point nudged off its middle, the earth in the ground's own colour,
+tapering where it's still digging, the veins glowing at night with pulses running back to the nest. Only the blocks
+round the tiles that changed are drawn again. Exits are art: `tunnel-exit` (1.05 tiles, anchor [0.5, 0.6145], with
+morning, evening and night versions) and `tunnel-exit-collapsed` (drawn with the ground while it stays shut).
+
+**Fiber and Oil, on every map** (`art/resources/`). Fiber's Stalks are now **Reedcane**: a clump of jointed sage-teal
+canes with mint plumes. `stalk` is full grown and `stalk-1`, `stalk-2`, `stalk-3` show it a quarter, half and three
+quarters grown back, drawn full size (`stalkKey`); `stalk-glow` and `stalk-3-glow` are the plumes' light at night. An
+oil seep is now soaked dark ground (`oil-seep`, 256 px, one image every 2 × 2 tiles) drawn across all its tiles as one
+shape (`drawSeep`: a disc on each tile, shrinking as it's pumped, bridged to its oil neighbours), with the Pathfinder's
+old survey stake on each tile (`oil`, the pump spot, its lamp's light in `oil-glow`). Under a road or track only a
+stain shows. No stakes in the Hollow (the Pathfinder never mapped it: LORE.md): its seeps are the soaked ground alone. All 192 px (glows 128) to keep the page small. Resources are graded with the ground at night, so they
+have no time-of-day versions; their light is in the night glow map (`resourceGlow`).
 
 ### Not swappable yet (ask Claude Code if you want these)
 

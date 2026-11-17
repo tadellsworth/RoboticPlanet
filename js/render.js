@@ -134,6 +134,16 @@ const BIOME_LOOK = {
     mm: { ground: [97, 73, 130], water: [133, 47, 112], rock: [38, 37, 58], ramp: [138, 114, 176] },
     plantScale: [1.32, 1.12, 1.12, 1.15, 1.1, 1.1],
   },
+  // The Hollow (always night): grey-violet silt and stone under the Bloom's moss; black lakes; black rock walls.
+  hollow: {
+    level: [['#3a3644', '#433e4e'], ['#46404f', '#4f485a'], ['#524a5c', '#5b5266'], ['#5c5466', '#655c70'], ['#665d70', '#70667a']],
+    theme: { cliffTop: '#3a3544', cliffBottom: '#14111a', slope: '#6a5e7c', water: '#0c0d16', waterEdge: '#3a3058',
+      rock: '#1c1a22', rockTop: '#28252f', rockHi: '#4a4458', rockShadow: '#0a090e' },
+    hi: '220,210,240', lo: 'rgba(10,6,20,0.25)',
+    grain: ['rgba(20,14,30,0.24)', 'rgba(220,200,255,0.12)', 'rgba(170,140,210,0.4)', 'rgba(12,8,20,0.3)'],
+    mm: { ground: [70, 64, 84], water: [14, 15, 26], rock: [28, 26, 34], ramp: [106, 94, 124] },
+    tex: { ground: ['#2a2632', '#4e4858', '#7a7286'], water: ['#05060a', '#10121e', '#2a2840'], rock: ['#0e0d12', '#22202a', '#46424e'] },
+  },
   polar: {
     level: [['#9fb0c2', '#aebfd0'], ['#c3d0dd', '#d3dee9'], ['#d6e0ea', '#e4ecf3'], ['#e2eaf2', '#eef3f8'], ['#ecf2f7', '#f8fbfd']],
     theme: { cliffTop: '#7d8b99', cliffBottom: '#4c5866', slope: '#e3eaf1', water: '#132a3f', waterEdge: '#2c5878',
@@ -149,7 +159,7 @@ const MM_DESERT = {};
 
 /** Switch the palette, textures and minimap colours to the current game's biome (at every bake). */
 function applyBiome() {
-  const b = artBiome(typeof biome === 'function' && S ? biome() : 'desert'); // (the Hollow wears the Bloom's art for now: BIOME_ART)
+  const b = artBiome(typeof biome === 'function' && S ? biome() : 'desert'); // (a biome without art of its own wears another's: BIOME_ART)
   ensureBiomeArt(b); // (the map is baked again as it arrives)
   const look = BIOME_LOOK[b] || BIOME_LOOK.desert;
   if (!THEME_DESERT.cliffTop) { Object.assign(THEME_DESERT, THEME); Object.assign(MM_DESERT, { ground: MM_COLORS.ground, water: MM_COLORS.water, rock: MM_COLORS.rock, ramp: MM_COLORS.ramp }); }
@@ -251,7 +261,7 @@ function bakedArt(key) {
  * wanted: that biome is being played, or shown on the new-game screen (ensureBiomeArt). In a single-file
  * copy of the game each of these biomes' art is a bundle beside the page (biome-<b>.js).
  */
-const LAZY_BIOMES = ['autumn', 'savanna', 'swamp', 'volcanic', 'lunar', 'alien'];
+const LAZY_BIOMES = ['autumn', 'savanna', 'swamp', 'volcanic', 'lunar', 'alien', 'hollow'];
 function lazyBiomeOf(key) {
   for (const b of LAZY_BIOMES) if (key.endsWith('-' + b) || key.startsWith('plant-' + b + '-')) return b;
   return null;
@@ -710,7 +720,7 @@ function bakeGlow() {
   const old = R.glowMap && R.glowMap.c;
   R.glowMap = null;
   const b = R.biome;
-  let any = !!(ART['ground-glow-' + b] || ART['water-glow-' + b] || S.hollow); // (the Hollow: its Bloom veins glow)
+  let any = !!(ART['ground-glow-' + b] || ART['water-glow-' + b] || S.hollow || ART['stalk-glow'] || ART['oil-glow']); // (the Hollow: its Bloom veins glow; Stalks' plumes and the survey stakes' lamps everywhere)
   for (let k = 1; k <= PLANT_KINDS && !any; k++) if (ART[`plant-${b}-${k}-glow`]) any = true;
   if (!any) { if (old) old.width = old.height = 0; return; }
   const c = old || document.createElement('canvas'); // (used again, as bakeMap's are)
@@ -734,7 +744,8 @@ function glowTiles(i0, j0, i1, j1) {
     const t = tIdx(i, j);
     if (S.terrain[t] === T_GROUND && gArt && !S.road[t] && !S.bAt[t]) drawTexture(ctx, gArt, i, j, i * TP, j * TP);
     else if (S.terrain[t] === T_WATER && wArt && !S.road[t]) drawTexture(ctx, wArt, i, j, i * TP, j * TP);
-    if (S.res[t] === R_VEIN && !S.road[t]) veinGlow(ctx, i, j, S.grow[t]); // (the Bloom's veins pulse violet in the dark)
+    if (S.res[t] && !S.road[t] && !(S.rail && S.rail[t])) resourceGlow(ctx, S.res[t], S.amt[t], S.grow[t], i, j); // (Stalks' plumes, survey stakes' lamps, the Bloom's veins)
+    if (S.hollow) hollowTileGlow(ctx, i, j, t);
     // (rounded shores: each corner glows as what it now shows)
     for (const { fill, dx, dy } of shoreRounds(i, j)) {
       ctx.save(); shoreCornerPath(ctx, i * TP, j * TP, dx, dy); ctx.clip();
@@ -748,6 +759,67 @@ function glowTiles(i0, j0, i1, j1) {
   ctx.save();
   ctx.beginPath(); ctx.rect(i0 * TP, j0 * TP, (i1 - i0 + 1) * TP, (j1 - j0 + 1) * TP); ctx.clip();
   drawPlants(ctx, i0 - 1, j0 - 1, i1 + 1, j1 + 1, true);
+  ctx.restore();
+}
+
+/**
+ * A resource's light in the night glow map, from its art's glow image where it has one (drawn just as drawResource draws
+ * the resource): a Stalk's plumes once grown, a survey stake's lamp, a Bloom vein (or, without art, a violet glow).
+ */
+function resourceGlow(ctx, type, amt, grow, i, j) {
+  const cx = i * TP + TP / 2, cy = j * TP + TP / 2;
+  if (type === R_STALK) {
+    const art = ART[stalkKey(grow) + '-glow'];
+    if (art) drawArt(ctx, art, cx, cy, TP);
+  } else if (type === R_OIL) {
+    if (ART['oil-glow'] && !S.hollow) drawArt(ctx, ART['oil-glow'], cx, cy, TP * (0.6 + 0.4 * Math.min(1, amt / RES[R_OIL].amount))); // (a stake's lamp: none in the Hollow)
+  } else if (type === R_VEIN) {
+    if (ART['vein-glow-hollow']) drawArt(ctx, ART['vein-glow-hollow'], cx, cy, TP * (0.5 + 0.5 * grow));
+    else veinGlow(ctx, i, j, grow);
+  }
+}
+
+/** Which of a Stalk's images shows it at growth `grow` (0..1): a quarter, half or three-quarters grown, or full. */
+function stalkKey(grow) {
+  return grow >= 0.875 || !ART['stalk-1'] ? 'stalk' : grow < 0.375 ? 'stalk-1' : grow < 0.625 ? 'stalk-2' : 'stalk-3';
+}
+
+/**
+ * An oil seep's ground on tile (i, j): the seep's texture (oil-seep, one image every 2 × 2 tiles, laid the same way
+ * across the map so neighbouring tiles join) over a disc that shrinks as the tile is pumped dry, bridged to every
+ * neighbouring oil tile, so a seep reads as one place across all its tiles. A soaked dark edge first. The pump spot (the
+ * resource's own art, the survey stake) is drawn on it.
+ */
+function drawSeep(ctx, i, j, x, y) {
+  const art = ART['oil-seep'], t = tIdx(i, j);
+  const oil = (a, b) => inMap(a, b) && S.res[tIdx(a, b)] === R_OIL && !S.road[tIdx(a, b)] && !(S.rail && S.rail[tIdx(a, b)]);
+  const f = Math.min(1, S.amt[t] / RES[R_OIL].amount), r = TP * (0.3 + 0.17 * f), cx = x + TP / 2, cy = y + TP / 2;
+  if (!R.seepPat || R.seepPat.img !== art.img) {
+    const pat = ctx.createPattern(art.img, 'repeat');
+    if (!pat) return;
+    pat.setTransform(new DOMMatrix().scale((2 * TP) / art.img.width));
+    R.seepPat = { img: art.img, pat };
+  }
+  const shape = (k) => { // the disc, ragged a little, and a bridge toward each oil neighbour
+    ctx.beginPath();
+    for (let n = 0; n <= 18; n++) {
+      const a = (n / 18) * Math.PI * 2, rr = r * k * (1 + 0.1 * Math.sin(a * 3 + hash2(i, j, 811) * 6) + 0.05 * Math.sin(a * 7 + hash2(j, i, 813) * 6));
+      if (n) ctx.lineTo(cx + Math.cos(a) * rr, cy + Math.sin(a) * rr * 0.92); else ctx.moveTo(cx + Math.cos(a) * rr, cy + Math.sin(a) * rr * 0.92);
+    }
+    ctx.fill();
+    for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [-1, 1], [1, -1], [-1, -1]]) {
+      if (!oil(i + di, j + dj)) continue;
+      ctx.lineWidth = r * k * (di && dj ? 1.2 : 1.7);
+      ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(cx + di * TP * 0.5, cy + dj * TP * 0.5); ctx.stroke();
+    }
+  };
+  ctx.save();
+  ctx.beginPath(); ctx.rect(x, y, TP, TP); ctx.clip();
+  ctx.lineCap = 'round';
+  ctx.fillStyle = ctx.strokeStyle = 'rgba(22,14,8,0.22)';
+  shape(1.22);
+  ctx.fillStyle = ctx.strokeStyle = R.seepPat.pat;
+  shape(1);
   ctx.restore();
 }
 
@@ -1024,6 +1096,7 @@ function paintTile(ctx, i, j) {
       const cx = x + 6 + hash2(i, j, 21) * 18, cy = y + 6 + hash2(i, j, 22) * 14;
       ctx.fillRect(cx, cy, 6, 2);
     }
+    if (S.hollow) hollowRockDark(ctx, i, j, x, y);
   }
 
   // Fine grain stands in for detail the ground texture lacks (none needed with 512 px art).
@@ -1032,6 +1105,7 @@ function paintTile(ctx, i, j) {
   if (terr !== T_WATER && S.elev[t] <= 1 && R.skyFloor) { ctx.fillStyle = S.elev[t] ? 'rgba(20,10,6,0.2)' : 'rgba(20,10,6,0.32)'; ctx.fillRect(x, y, TP, TP); }
   if (terr === T_GROUND) drawElevation(ctx, i, j, x, y, t, n);
   else if (terr === T_WATER) drawCliffFace(ctx, i, j, x, y, t, true);
+  if (S.hollow) { if (terr === T_GROUND) hollowWall(ctx, i, j, x, y); hollowDecorTile(ctx, i, j, x, y, t, false); }
   shoreCorners(ctx, i, j, x, y);
   if (S.ford && S.ford[t] && terr === T_WATER) drawFord(ctx, i, j, x, y);
   if (S.tidal && S.tidal[t]) drawFlat(ctx, i, j, x, y, terr === T_WATER);
@@ -1048,8 +1122,15 @@ function paintTile(ctx, i, j) {
   if (S.res[t]) {
     // An oil seep under a road or track stays underground: it shows through faintly, a stain on the surface.
     const under = S.road[t] || (S.rail && S.rail[t]);
+    if (under && S.res[t] === R_OIL && ART.oil) { // (with the art: just the stain; the survey stake was taken up for the road)
+      ctx.fillStyle = 'rgba(20,14,10,0.3)';
+      ctx.beginPath(); ctx.ellipse(x + TP / 2, y + TP / 2, TP * 0.38, TP * 0.3, 0.3, 0, Math.PI * 2); ctx.fill();
+      return;
+    }
     if (under) { ctx.save(); ctx.globalAlpha = 0.4; }
-    drawResource(ctx, S.res[t], S.amt[t], S.grow[t], x + TP / 2, y + TP / 2, TP, i, j);
+    else if (S.res[t] === R_OIL && ART['oil-seep']) drawSeep(ctx, i, j, x, y);
+    // (No survey stakes in the Hollow: the Pathfinder never mapped it, LORE.md. Its seeps are the soaked ground alone.)
+    if (!(S.res[t] === R_OIL && S.hollow && ART['oil-seep'] && !under)) drawResource(ctx, S.res[t], S.amt[t], S.grow[t], x + TP / 2, y + TP / 2, TP, i, j);
     if (under) ctx.restore();
     else if (richRes(t)) drawGlint(ctx, x, y, i, j);
   }
@@ -2451,7 +2532,9 @@ function drawBurnt(ctx, i, j, x, y) {
 }
 
 function drawResource(ctx, type, amt, grow, cx, cy, s, i, j) {
-  const art = ART[RES[type].key];
+  // A Stalk has an image for each stage as it grows back (stalk-1 … stalk-3, then stalk: see stalkKey), drawn full size.
+  if (type === R_STALK && ART['stalk-1']) { const a = ART[stalkKey(grow)]; if (a) { drawArt(ctx, a, cx, cy, s); return; } }
+  const art = ART[RES[type].key] || (type === R_VEIN ? ART['vein-hollow'] : null); // (the Bloom veins' art comes with the Hollow's)
   if (art) {
     const sc = type === R_STALK || type === R_VEIN ? 0.5 + 0.5 * grow : type === R_CROP ? 0.35 + 0.65 * grow : 0.6 + 0.4 * Math.min(1, amt / RES[type].amount);
     ctx.globalAlpha = (type === R_STALK || type === R_CROP || type === R_VEIN) && grow < 1 ? 0.85 : 1;
@@ -3999,117 +4082,229 @@ function drawNest(ctx, cx, cy, s, b) {
 
 /*
  * The Murmur's tunnels (S.tun, see murmurTick): raised ridges of heaved earth with violet root-veins breaking through
- * them, as moles leave (LORE.md's art brief: the Bloom follows the ridges). Subtle by day; at night the veins glow and
- * pulses of light run along them back to the nest. Baked into two layers of their own, TUN_PX a tile (ridges, drawn with
- * the ground and graded with it; veins, added on in light), again when the network changes (S.mur.ver). Procedural for
- * now: paintTunnelTile, paintTunnelVeins, drawBurrow and drawExitScar are each one function, so art can stand in later.
+ * them, as moles leave (LORE.md's art brief: the Bloom follows the ridges). Drawn as smooth curves, not tile by tile
+ * (renderer/tunnels/ridges.js is the reference): each run of a network between its forks and ends is one curve through
+ * its tiles, every tile's point nudged off its middle by its own amount, so the ridges wander as a mole's do and taper
+ * out where it is still digging. The earth is the ground's own colour heaved up (the colour the minimap takes from the
+ * texture): lit on the side toward the light, shaded on the far side, clods along both flanks and a crack down the
+ * crest where the veins break through. Subtle by day; at night the veins glow and pulses of light run along them back
+ * to the nest. Baked into two layers of their own, TUN_PX a tile (ridges, drawn with the ground and graded with it;
+ * veins, added on in light). When the network changes (S.mur.ver) only the blocks of the map round the tiles that
+ * changed are drawn again (TUN_BLOCK tiles a side).
  */
-const TUN_PX = 16;
+const TUN_PX = 24, TUN_BLOCK = 8;
 
-/** The baked tunnel layers, made again when the network has changed (at most once a second). */
+/** The baked tunnel layers, brought up to date when the network has changed (at most once a second). */
 function tunnelLayers() {
   if (!S || !S.tun || !S.mur) return null;
   let T = R.tunL;
   if (!T || T.of !== S || T.c.width !== S.W * TUN_PX || T.c.height !== S.H * TUN_PX) {
     const c = T && T.c || document.createElement('canvas'), g = T && T.g || document.createElement('canvas');
     c.width = g.width = S.W * TUN_PX; c.height = g.height = S.H * TUN_PX;
-    T = R.tunL = { of: S, c, g, ver: -1, at: -9, dist: null, n: 0 };
+    T = R.tunL = { of: S, c, g, ver: -1, at: -9, dist: null, n: 0, was: null, col: '' };
   }
   if (T.ver !== S.mur.ver && (R.time - T.at > 1 || T.ver < 0)) bakeTunnels(T);
   return T;
 }
 
-/** Bake the ridges and veins of every tunnel tile, and how far each is from its nest along the network (for the pulses). */
+/** A tunnel tile's point on its ridge (in tiles): its middle, nudged by its own amount so the curve wanders. */
+function tunnelPoint(t) {
+  const i = t % S.W, j = (t / S.W) | 0;
+  return [i + 0.5 + (hash2(i, j, 4111) - 0.5) * 0.38, j + 0.5 + (hash2(j, i, 4127) - 0.5) * 0.38];
+}
+
+/**
+ * The networks as runs of tiles: every stretch between two forks or ends (a tile with other than two neighbours in its
+ * own network), and any loop. Each run: { tiles, pts (a smooth curve through them, sampled), x0, y0, x1, y1 (its box),
+ * tail0, tail1 (whether each end is a dead end, where it tapers) }.
+ */
+function tunnelRuns() {
+  const W = S.W, H = S.H, N = W * H, tun = S.tun, runs = [], seen = new Set();
+  const nbs = (t) => {
+    const i = t % W, k = tun[t], out = [];
+    if (t >= W && tun[t - W] === k) out.push(t - W);
+    if (i < W - 1 && tun[t + 1] === k) out.push(t + 1);
+    if (t + W < N && tun[t + W] === k) out.push(t + W);
+    if (i > 0 && tun[t - 1] === k) out.push(t - 1);
+    return out;
+  };
+  const deg = new Uint8Array(N);
+  for (let t = 0; t < N; t++) if (tun[t]) deg[t] = nbs(t).length;
+  const edge = (a, b) => (a < b ? a * N + b : b * N + a);
+  const walk = (a, b) => {
+    const tiles = [a];
+    let prev = a, cur = b;
+    seen.add(edge(a, b));
+    for (;;) {
+      tiles.push(cur);
+      if (deg[cur] !== 2) break;
+      const next = nbs(cur).find((u) => u !== prev);
+      if (next === undefined || seen.has(edge(cur, next))) break;
+      seen.add(edge(cur, next));
+      prev = cur; cur = next;
+      if (cur === a) { tiles.push(cur); break; }
+    }
+    runs.push(tunnelRun(tiles, deg[tiles[0]] === 1, deg[tiles[tiles.length - 1]] === 1));
+  };
+  for (let t = 0; t < N; t++) if (tun[t] && deg[t] !== 2) {
+    if (!deg[t]) { runs.push(tunnelRun([t], true, true)); continue; }
+    for (const u of nbs(t)) if (!seen.has(edge(t, u))) walk(t, u);
+  }
+  for (let t = 0; t < N; t++) if (tun[t] && deg[t] === 2) for (const u of nbs(t)) if (!seen.has(edge(t, u))) walk(t, u); // (loops)
+  return runs;
+}
+
+/** A run's curve: Catmull-Rom through its tiles' points, eight samples a tile, with the length along it. */
+function tunnelRun(tiles, tail0, tail1) {
+  const P = tiles.map(tunnelPoint), pts = [];
+  if (P.length === 1) pts.push([P[0][0] - 0.2, P[0][1] + 0.05], [P[0][0] + 0.2, P[0][1] - 0.05]);
+  for (let k = 0; k < P.length - 1; k++) {
+    const p0 = P[Math.max(0, k - 1)], p1 = P[k], p2 = P[k + 1], p3 = P[Math.min(P.length - 1, k + 2)];
+    for (let n = 0; n < 8; n++) {
+      const u = n / 8, u2 = u * u, u3 = u2 * u, f = (a, b, c, d) => 0.5 * (2 * b + (-a + c) * u + (2 * a - 5 * b + 4 * c - d) * u2 + (-a + 3 * b - 3 * c + d) * u3);
+      pts.push([f(p0[0], p1[0], p2[0], p3[0]), f(p0[1], p1[1], p2[1], p3[1])]);
+    }
+  }
+  if (P.length > 1) pts.push(P[P.length - 1].slice());
+  let L = 0, x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
+  pts[0].s = 0;
+  for (let k = 0; k < pts.length; k++) {
+    if (k) { L += Math.hypot(pts[k][0] - pts[k - 1][0], pts[k][1] - pts[k - 1][1]); pts[k].s = L; }
+    x0 = Math.min(x0, pts[k][0]); y0 = Math.min(y0, pts[k][1]); x1 = Math.max(x1, pts[k][0]); y1 = Math.max(y1, pts[k][1]);
+  }
+  return { tiles, pts, L, x0, y0, x1, y1, tail0, tail1, h: hash2(tiles[0], tiles.length, 4133) };
+}
+
+/** Bring the baked layers up to date: every block round a tile that has joined or left a network is drawn again. */
 function bakeTunnels(T) {
   const W = S.W, H = S.H, N = W * H, p = TUN_PX, cx = T.c.getContext('2d'), gx = T.g.getContext('2d');
-  cx.clearRect(0, 0, T.c.width, T.c.height); gx.clearRect(0, 0, T.g.width, T.g.height);
-  T.ver = S.mur.ver; T.at = R.time; T.n = 0;
+  T.ver = S.mur.ver; T.at = R.time;
   const dist = T.dist && T.dist.length === N ? T.dist : (T.dist = new Uint16Array(N));
   dist.fill(65535);
-  // How far along the network each tile is from its nest (a walk out from every nest's tile).
+  // How far along the network each tile is from its nest (a walk out from every nest's tile), for the pulses.
   const q = [];
   for (const id of S.mur.nests) { const b = getE(id); if (b && !b.dead) { const t = tIdx(b.x, b.y); if (S.tun[t]) { dist[t] = 0; q.push(t); } } }
   for (let h = 0; h < q.length; h++) {
     const t = q[h], i = t % W;
     for (const u of [i > 0 ? t - 1 : -1, i < W - 1 ? t + 1 : -1, t - W, t + W]) if (u >= 0 && u < N && S.tun[u] && dist[u] === 65535) { dist[u] = dist[t] + 1; q.push(u); }
   }
-  for (let t = 0; t < N; t++) {
-    if (!S.tun[t]) continue;
+  T.n = 0;
+  for (let t = 0; t < N; t++) if (S.tun[t]) T.n++;
+  // Which blocks need drawing: all of them the first time (or when the ground's colour has come in), otherwise those
+  // within two tiles of a tile that changed.
+  const G = MM_COLORS.ground || [140, 100, 70], col = G.join(',');
+  const BW = Math.ceil(W / TUN_BLOCK), BH = Math.ceil(H / TUN_BLOCK), dirty = new Uint8Array(BW * BH);
+  if (!T.was || T.was.length !== N || T.col !== col) dirty.fill(1);
+  else for (let t = 0; t < N; t++) {
+    if ((S.tun[t] ? 1 : 0) === T.was[t]) continue;
     const i = t % W, j = (t / W) | 0;
-    const m = (j > 0 && S.tun[t - W] ? 1 : 0) | (i < W - 1 && S.tun[t + 1] ? 2 : 0) | (j < H - 1 && S.tun[t + W] ? 4 : 0) | (i > 0 && S.tun[t - 1] ? 8 : 0);
-    T.n++;
-    if (S.road[t] || (S.rail && S.rail[t]) || S.terrain[t] !== T_GROUND) continue; // (under a road or track it runs out of sight)
-    paintTunnelTile(cx, i * p, j * p, p, m, hash2(i, j, 4111));
-    paintTunnelVeins(gx, i * p, j * p, p, m, hash2(i, j, 4127));
+    for (let b = Math.max(0, Math.floor((j - 2) / TUN_BLOCK)); b <= Math.min(BH - 1, Math.floor((j + 2) / TUN_BLOCK)); b++)
+      for (let a = Math.max(0, Math.floor((i - 2) / TUN_BLOCK)); a <= Math.min(BW - 1, Math.floor((i + 2) / TUN_BLOCK)); a++) dirty[b * BW + a] = 1;
+  }
+  T.col = col;
+  T.was = T.was && T.was.length === N ? T.was : new Uint8Array(N);
+  for (let t = 0; t < N; t++) T.was[t] = S.tun[t] ? 1 : 0;
+  if (!dirty.some((d) => d)) return;
+  const runs = tunnelRuns(), look = tunnelLook(G);
+  for (let b = 0; b < BH; b++) for (let a = 0; a < BW; a++) {
+    if (!dirty[b * BW + a]) continue;
+    const i0 = a * TUN_BLOCK, j0 = b * TUN_BLOCK, i1 = Math.min(W, i0 + TUN_BLOCK), j1 = Math.min(H, j0 + TUN_BLOCK);
+    for (const g of [cx, gx]) { g.save(); g.clearRect(i0 * p, j0 * p, (i1 - i0) * p, (j1 - j0) * p); g.beginPath(); g.rect(i0 * p, j0 * p, (i1 - i0) * p, (j1 - j0) * p); g.clip(); }
+    const near = runs.filter((r) => r.x1 > i0 - 1 && r.x0 < i1 + 1 && r.y1 > j0 - 1 && r.y0 < j1 + 1);
+    paintRidges(cx, near, p, look);
+    paintRidgeVeins(gx, near, p);
+    // (under a road or track, or off the open ground, a tunnel runs out of sight)
+    for (let j = j0; j < j1; j++) for (let i = i0; i < i1; i++) {
+      const t = j * W + i;
+      if (S.road[t] || (S.rail && S.rail[t]) || S.terrain[t] !== T_GROUND || pillarAt(t)) { cx.clearRect(i * p, j * p, p, p); gx.clearRect(i * p, j * p, p, p); }
+    }
+    cx.restore(); gx.restore();
   }
 }
 
-/**
- * One tunnel tile's ridge (top-left corner x, y; p px a tile; m: which neighbours it joins, 1 north, 2 east, 4 south,
- * 8 west; h 0..1 for its own look): a hump of heaved earth along the tunnel, a shadow on its lower side, a lit crest,
- * clods turned up beside it.
- */
-function paintTunnelTile(ctx, x, y, p, m, h) {
-  const c = p / 2, arms = [[1, 0, -1], [2, 1, 0], [4, 0, 1], [8, -1, 0]].filter((a) => m & a[0]);
-  // Points along the ridge: from the middle out along each arm (to the tile's edge, where the next tile's ridge takes
-  // over), a little off the line by the tile's own look, so the hump wanders and its edges come out lumpy.
-  const pts = [[x + c, y + c, 0.26]];
-  if (!arms.length) pts.push([x + c - p * 0.18, y + c + p * 0.04, 0.2], [x + c + p * 0.18, y + c - p * 0.03, 0.2]);
-  for (const [, ax, ay] of arms) for (let k = 1; k <= 3; k++) {
-    const f = k / 3, w = Math.sin((h * 9 + k * 2.3) * 3.1) * p * 0.05;
-    pts.push([x + c + ax * c * f - ay * w, y + c + ay * c * f + ax * w, 0.22 + 0.06 * Math.sin(h * 17 + k * 1.7)]);
-  }
-  ctx.save();
-  // The shadow on its lower side, the heaved earth, then the light on its crest.
-  ctx.fillStyle = 'rgba(16,9,12,0.34)';
-  for (const [px, py, r] of pts) { ctx.beginPath(); ctx.arc(px + p * 0.05, py + p * 0.09, r * p * 1.12, 0, Math.PI * 2); ctx.fill(); }
-  ctx.fillStyle = 'rgba(86,60,46,0.8)';
-  for (const [px, py, r] of pts) { ctx.beginPath(); ctx.arc(px, py, r * p, 0, Math.PI * 2); ctx.fill(); }
-  ctx.fillStyle = 'rgba(138,106,82,0.45)';
-  for (const [px, py, r] of pts) { ctx.beginPath(); ctx.arc(px - p * 0.05, py - p * 0.07, r * p * 0.48, 0, Math.PI * 2); ctx.fill(); }
-  // A crack along the crest, where the ground split as it rose.
-  ctx.strokeStyle = 'rgba(30,17,15,0.55)'; ctx.lineWidth = Math.max(0.8, p * 0.045); ctx.lineCap = 'round';
-  ctx.beginPath();
-  for (const [, ax, ay] of arms) {
-    ctx.moveTo(x + c, y + c);
-    ctx.lineTo(x + c + ax * c * 0.5 + ay * p * 0.04 * (h - 0.5), y + c + ay * c * 0.5 + ax * p * 0.04 * (h - 0.5));
-    ctx.lineTo(x + c + ax * c, y + c + ay * c);
-  }
-  ctx.stroke();
-  // Clods turned up beside it.
-  ctx.fillStyle = 'rgba(58,40,34,0.75)';
-  for (let k = 0; k < 3; k++) {
-    const a = h * 40 + k * 2.1, r = p * (0.34 + 0.1 * ((h * 7 + k) % 1));
-    ctx.beginPath(); ctx.arc(x + c + Math.cos(a) * r, y + c + Math.sin(a) * r, p * (0.04 + 0.03 * ((h * 13 + k) % 1)), 0, Math.PI * 2); ctx.fill();
-  }
-  ctx.restore();
+/** The ridge's colours from the ground's own: heaved soil a little darker and warmer, its lit side, its shade. */
+function tunnelLook(G) {
+  const mix = (a, b, t) => a.map((v, k) => Math.round(v + (b[k] - v) * t));
+  const rgb = (c, a = 1) => `rgba(${c[0]},${c[1]},${c[2]},${a})`;
+  const soil = mix(G, [86, 64, 50], 0.2), lit = mix(G, [255, 246, 230], 0.2), shade = mix(G, [20, 14, 20], 0.5);
+  return { soil: rgb(soil), flank: rgb(mix(soil, shade, 0.35)), lit: rgb(lit, 0.4), shade, shadow: rgb(shade, 0.16), crack: rgb(mix(shade, [0, 0, 0], 0.4), 0.75), clod: rgb(shade, 0.55), clodLit: rgb(mix(soil, lit, 0.4)) };
 }
 
-/**
- * One tunnel tile's root-veins (same arguments as paintTunnelTile), in light: thin violet veins breaking through the
- * ridge, with a twig or two off them. Added faintly by day and glowing at night (drawTunnelGlow).
- */
-function paintTunnelVeins(ctx, x, y, p, m, h) {
-  const c = p / 2, arms = [[1, 0, -1], [2, 1, 0], [4, 0, 1], [8, -1, 0]].filter((a) => m & a[0]);
-  ctx.save();
-  ctx.lineCap = 'round';
-  ctx.strokeStyle = 'rgba(190,130,255,0.95)'; ctx.lineWidth = Math.max(1, p * 0.07);
-  const off = (h - 0.5) * p * 0.16;
-  ctx.beginPath();
-  for (const [, ax, ay] of arms) {
-    // (a vein wanders a little off the ridge's line: across it by `off`, back at the tile's edge)
-    ctx.moveTo(x + c + ay * off, y + c + ax * off);
-    ctx.quadraticCurveTo(x + c + ax * c * 0.5 - ay * off, y + c + ay * c * 0.5 - ax * off, x + c + ax * c, y + c + ay * c);
+/** A run's width along it (tiles): full, tapering to nothing over its last tile at a dead end, where it's still digging. */
+function ridgeWidth(r, s) {
+  let w = 0.32 * (0.92 + 0.08 * Math.sin(s * 9 + r.h * 20));
+  if (r.tail1) w *= Math.pow(Math.max(0, Math.min(1, (r.L - s) / 0.9)), 0.6);
+  if (r.tail0) w *= Math.pow(Math.max(0, Math.min(1, s / 0.9)), 0.6);
+  return w;
+}
+
+/** Stroke a run's curve, offset by (dx, dy) tiles, `wk` times its width, in pieces so the width can taper. */
+function strokeRun(g, r, p, wk, dx, dy) {
+  const P = r.pts, step = 3;
+  for (let k = 0; k < P.length - 1; k += step) {
+    const e = Math.min(P.length - 1, k + step), w = ridgeWidth(r, (P[k].s + P[e].s) / 2) * wk;
+    if (w < 0.01) continue;
+    g.lineWidth = w * p;
+    g.beginPath(); g.moveTo((P[k][0] + dx) * p, (P[k][1] + dy) * p);
+    for (let n = k + 1; n <= e; n++) g.lineTo((P[n][0] + dx) * p, (P[n][1] + dy) * p);
+    g.stroke();
   }
-  if (!arms.length) { ctx.moveTo(x + c - p * 0.15, y + c); ctx.lineTo(x + c + p * 0.15, y + c); }
-  ctx.stroke();
-  // A twig breaking out of the ridge.
-  ctx.lineWidth = Math.max(0.8, p * 0.04); ctx.strokeStyle = 'rgba(214,170,255,0.8)';
-  const a = h * 6.28, r = p * 0.28;
-  ctx.beginPath(); ctx.moveTo(x + c, y + c); ctx.lineTo(x + c + Math.cos(a) * r, y + c + Math.sin(a) * r); ctx.stroke();
-  ctx.fillStyle = 'rgba(230,200,255,0.9)';
-  ctx.beginPath(); ctx.arc(x + c + Math.cos(a) * r, y + c + Math.sin(a) * r, Math.max(0.8, p * 0.045), 0, Math.PI * 2); ctx.fill();
-  ctx.restore();
+}
+
+/** The crest line of a run (the crack the veins break through), wandering a little across the ridge. */
+function crestPath(g, r, p, s0, s1) {
+  const P = r.pts;
+  g.beginPath();
+  let on = false;
+  for (let k = 0; k < P.length; k++) {
+    if (P[k].s < s0 || P[k].s > s1) continue;
+    const a = P[Math.max(0, k - 1)], b = P[Math.min(P.length - 1, k + 1)], dx = b[0] - a[0], dy = b[1] - a[1], l = Math.hypot(dx, dy) || 1;
+    const o = 0.025 * Math.sin(P[k].s * 13 + r.h * 7) + 0.012 * Math.sin(P[k].s * 31);
+    const x = (P[k][0] - (dy / l) * o) * p, y = (P[k][1] + (dx / l) * o) * p;
+    if (on) g.lineTo(x, y); else { g.moveTo(x, y); on = true; }
+  }
+}
+
+/** The ridges: the soft shadow they cast, the heaved earth (its shaded and lit sides), clods, the crack, the dark veins. */
+function paintRidges(g, runs, p, L) {
+  g.lineCap = 'round'; g.lineJoin = 'round';
+  g.strokeStyle = L.shadow;
+  for (const r of runs) { strokeRun(g, r, p, 1.25, 0.05, 0.06); strokeRun(g, r, p, 1.0, 0.04, 0.05); }
+  g.strokeStyle = L.flank;
+  for (const r of runs) strokeRun(g, r, p, 0.95, 0.012, 0.015);
+  g.strokeStyle = L.soil;
+  for (const r of runs) strokeRun(g, r, p, 0.8, -0.012, -0.014);
+  g.strokeStyle = L.lit;
+  for (const r of runs) strokeRun(g, r, p, 0.42, -0.04, -0.045);
+  // clods of the broken crust along both flanks
+  for (const r of runs) {
+    const P = r.pts;
+    for (let k = 0; k < P.length; k++) {
+      const w = ridgeWidth(r, P[k].s);
+      if (w < 0.05) continue;
+      const a = P[Math.max(0, k - 1)], b = P[Math.min(P.length - 1, k + 1)], dx = b[0] - a[0], dy = b[1] - a[1], l = Math.hypot(dx, dy) || 1;
+      for (const sd of [-1, 1]) {
+        const h = hash2(r.tiles[0] + k * 7, sd + 2, 4151);
+        if (h < 0.55) continue;
+        const off = sd * w * (0.5 + 0.35 * h), x = (P[k][0] - (dy / l) * off) * p, y = (P[k][1] + (dx / l) * off) * p, rr = Math.max(0.6, (0.016 + 0.024 * h) * p);
+        g.fillStyle = L.clod; g.beginPath(); g.ellipse(x + rr * 0.35, y + rr * 0.4, rr, rr * 0.8, h * 3, 0, Math.PI * 2); g.fill();
+        g.fillStyle = L.clodLit; g.beginPath(); g.ellipse(x, y, rr * 0.85, rr * 0.7, h * 3, 0, Math.PI * 2); g.fill();
+      }
+    }
+  }
+  g.strokeStyle = L.crack; g.lineWidth = Math.max(0.7, p * 0.026);
+  for (const r of runs) { crestPath(g, r, p, 0.05, r.L - 0.25); g.stroke(); }
+  g.strokeStyle = 'rgba(96,52,130,0.75)'; g.lineWidth = Math.max(0.7, p * 0.022);
+  for (const r of runs) for (let s = 0.1 + r.h * 0.3; s < r.L - 0.3; s += 0.45 + 0.4 * hash2(r.tiles[0], Math.round(s * 10), 4157)) { crestPath(g, r, p, s, s + 0.2 + 0.5 * hash2(Math.round(s * 10), r.tiles[0], 4159)); g.stroke(); }
+}
+
+/** The veins' own light along each crest (soft, then a bright thread): added faintly by day and glowing at night. */
+function paintRidgeVeins(g, runs, p) {
+  g.lineCap = 'round'; g.lineJoin = 'round';
+  for (const [w, c] of [[0.16, 'rgba(150,70,255,0.14)'], [0.09, 'rgba(160,80,255,0.3)'], [0.03, 'rgba(190,130,255,0.95)']]) {
+    g.strokeStyle = c; g.lineWidth = Math.max(1, p * w);
+    for (const r of runs) { crestPath(g, r, p, 0.05, r.L - 0.25); g.stroke(); }
+  }
 }
 
 /** The tunnels' ridges (with the ground: graded with it at dusk and night), and the faint veins by day; collapsed exits' scars. */
@@ -4119,7 +4314,7 @@ function drawTunnels(ctx, ox, oy, z) {
   ctx.save();
   ctx.imageSmoothingEnabled = true;
   ctx.drawImage(T.c, ox, oy, S.W * z, S.H * z);
-  ctx.globalAlpha = 0.22; // (by day the veins only show through the earth)
+  ctx.globalAlpha = 0.15; // (by day the veins only show through the earth)
   ctx.drawImage(T.g, ox, oy, S.W * z, S.H * z);
   ctx.restore();
   for (const s of S.mur.shut || []) if (s.until > S.time) drawExitScar(ctx, ox + (s.x + 0.5) * z, oy + (s.y + 0.5) * z, z, (s.until - S.time) / MURMUR.shut);
@@ -4127,7 +4322,7 @@ function drawTunnels(ctx, ox, oy, z) {
 
 /**
  * At night (after the ground is graded): the veins glow, and pulses of light run along them back to the nest (each
- * tile in view lit as a band, by how far it is from its nest along the network, moves past it).
+ * tile in view lit as a band, by how far it is from its nest along the network, moves past it), on the ridge's curve.
  */
 function drawTunnelGlow(ctx, ox, oy, z, v0, v1) {
   const n = fxNight(), T = n > 0.02 ? tunnelLayers() : null;
@@ -4135,7 +4330,7 @@ function drawTunnelGlow(ctx, ox, oy, z, v0, v1) {
   ctx.save();
   ctx.globalCompositeOperation = 'lighter';
   ctx.imageSmoothingEnabled = true;
-  ctx.globalAlpha = n * (0.55 + 0.15 * Math.sin(R.time * 1.3));
+  ctx.globalAlpha = n * (0.6 + 0.15 * Math.sin(R.time * 1.3));
   ctx.drawImage(T.g, ox, oy, S.W * z, S.H * z);
   const i0 = Math.max(0, Math.floor(v0.x) - 1), i1 = Math.min(S.W - 1, Math.ceil(v1.x) + 1), j0 = Math.max(0, Math.floor(v0.y) - 1), j1 = Math.min(S.H - 1, Math.ceil(v1.y) + 1);
   let drawn = z < 8 ? 300 : 0; // (zoomed right out, the glowing veins alone: the pulses would be specks)
@@ -4145,7 +4340,8 @@ function drawTunnelGlow(ctx, ox, oy, z, v0, v1) {
     const ph = (((d * 0.5 + R.time * 1.4) % 4) + 4) % 4, k = ph < 1 ? 1 - ph : 0; // (bands every 8 tiles, flowing toward the nest)
     if (k <= 0.05) continue;
     drawn++;
-    fxGlow(ctx, ox + (i + 0.5) * z, oy + (j + 0.5) * z, z * 0.45, '#c08cff', n * k * 0.7);
+    const [px, py] = tunnelPoint(t);
+    fxGlow(ctx, ox + px * z, oy + py * z, z * 0.4, '#c08cff', n * k * 0.75);
   }
   ctx.restore();
 }
@@ -4156,6 +4352,19 @@ function drawTunnelGlow(ctx, ox, oy, z, v0, v1) {
  */
 function drawMound(ctx, cx, cy, s, b) {
   const t = R.time, S2 = s * 1.6;
+  // The art (renderer/b/murmur_moles.js, the Burrow's level 4: a night render, drawn as it is since it's always night in
+  // the Hollow): drawn at the nests' size (see drawNest), with their danger ring.
+  const art = ART['deep-mound-hollow'];
+  if (art) {
+    const pulse = 0.5 + 0.5 * Math.sin(t * 2.2 + (b ? b.id : 0)), r = s * 2.4;
+    ctx.save();
+    ctx.strokeStyle = `rgba(255,70,90,${0.25 + 0.35 * pulse})`; ctx.lineWidth = Math.max(1.5, s * 0.06);
+    ctx.setLineDash([s * 0.24, s * 0.16]);
+    ctx.beginPath(); ctx.ellipse(cx, cy + s * 0.1, r * (0.92 + 0.05 * pulse), r * 0.72 * (0.92 + 0.05 * pulse), 0, 0, Math.PI * 2); ctx.stroke();
+    ctx.restore();
+    drawArt(ctx, art, cx, cy, s * 1.5);
+    return;
+  }
   ctx.save();
   ctx.lineCap = 'round';
   for (let k = 0; k < 7; k++) { // the crystal spires round it
@@ -4185,6 +4394,13 @@ function drawMound(ctx, cx, cy, s, b) {
  */
 function drawBurrow(ctx, cx, cy, s, b) {
   const t = R.time, n = typeof fxNight === 'function' ? fxNight() : 0, h = b ? hash2(b.id, 3, 7) : 0.5;
+  const art = ART['tunnel-exit'];
+  if (art) { // (renderer/b/hollow.js c=exit: one for every biome, the soil thrown up from below; re-lit for the time of day)
+    drawArt(ctx, art, cx, cy, s);
+    const up = S && S.mur && S.mur.night ? 1 : 0, br = 0.5 + 0.5 * Math.sin(t * 1.7 + h * 6);
+    if (typeof fxGlow === 'function') fxGlow(ctx, cx, cy - s * 0.02, s * (0.22 + 0.1 * br), '#b07aff', (0.06 + 0.25 * n + 0.25 * up) * (0.6 + 0.4 * br));
+    return;
+  }
   ctx.save();
   // The heaved mound, its shadow first.
   ctx.fillStyle = 'rgba(16,8,14,0.4)';
@@ -4222,6 +4438,14 @@ function drawBurrow(ctx, cx, cy, s, b) {
 
 /** Where an exit was collapsed (frac: how much of its time shut is left, 1 to 0): a caved-in pit of loose earth, fading as it settles. */
 function drawExitScar(ctx, x, y, s, frac) {
+  const art = ART['tunnel-exit-collapsed'];
+  if (art) { // (caved in: fading as it settles; drawn with the ground, so graded with it)
+    const ga = ctx.globalAlpha;
+    ctx.globalAlpha = ga * (0.45 + 0.55 * Math.max(0, Math.min(1, frac)));
+    drawArtRaw(ctx, art, x, y, s);
+    ctx.globalAlpha = ga;
+    return;
+  }
   ctx.save();
   ctx.globalAlpha = 0.35 + 0.45 * Math.max(0, Math.min(1, frac));
   ctx.fillStyle = 'rgba(40,26,22,0.8)';
@@ -5306,23 +5530,133 @@ function pillarAt(t) {
   return R.pillarSet.has(t);
 }
 
+/** The Hollow's rock is the cave wall rising into the dark: the deeper into a mass of it, the darker. */
+function hollowRockDark(ctx, i, j, x, y) {
+  const rk = (a, b) => terrAt(a, b) === T_ROCK && !(inMap(a, b) && pillarAt(tIdx(a, b)));
+  let k = 0;
+  for (const [a, b] of [[0, -1], [1, 0], [0, 1], [-1, 0]]) if (rk(i + a, j + b)) k++;
+  if (k < 4) return;
+  let d = 0;
+  for (const [a, b] of [[1, 1], [-1, 1], [1, -1], [-1, -1], [0, -2], [2, 0], [0, 2], [-2, 0]]) if (rk(i + a, j + b)) d++;
+  ctx.fillStyle = `rgba(4,3,8,${0.3 + 0.04 * d})`;
+  ctx.fillRect(x, y, TP, TP);
+}
+
+/** Where the cave wall meets the floor (a floor tile under a rock tile): the wall's face, wet stone rising into the dark (wall-hollow). */
+function hollowWall(ctx, i, j, x, y) {
+  const art = ART['wall-hollow'];
+  if (!art || terrAt(i, j - 1) !== T_ROCK || (inMap(i, j - 1) && pillarAt(tIdx(i, j - 1)))) return;
+  const img = art.img, sw = img.width / 4;
+  ctx.drawImage(img, (i % 4) * sw, 0, sw, img.height, x, y, TP, TP * 0.7);
+}
+
+/** The Hollow's big pieces of art laid on the ground: a floating Crystal mass's (over its platform and the chasm round it) and each side chamber's floor. */
+function hollowDecor() {
+  if (!S || !S.hollow) return null;
+  if (R.decorOf !== S.hollow) {
+    R.decorOf = S.hollow;
+    R.decor = S.hollow.masses.map((m) => ({ kind: 'floater', x: m.x + 0.5, y: m.y + 0.5, r: 5 }))
+      .concat((S.hollow.chambers || []).map((c) => ({ kind: 'chamber', x: c.x + 0.5, y: c.y + 0.5, r: 2.4 })));
+  }
+  return R.decor;
+}
+
 /**
- * Daylight on the cavern floor under each breach (S.hollow.breaches), the only daylight in the Hollow: a pool of pale
- * gold, added over the ground once it's graded for the night.
+ * Tile (i, j)'s share of the Hollow's big pieces (or of their night glow), drawn with the tile and clipped to it, so
+ * a tile baked again redraws just its own part: a Crystal mass only over its platform and the chasm (anything nearer
+ * than the chasm hides what hangs below it), a chamber's floor only on open ground.
+ */
+function hollowDecorTile(ctx, i, j, x, y, t, glow) {
+  const D = hollowDecor();
+  if (!D) return;
+  for (const d of D) {
+    if (Math.abs(i + 0.5 - d.x) > d.r + 0.5 || Math.abs(j + 0.5 - d.y) > d.r + 0.5) continue;
+    const terr = S.terrain[t];
+    if (d.kind === 'floater' ? !(terr === T_CHASM || (terr === T_GROUND && S.elev[t] >= 3)) : terr !== T_GROUND || pillarAt(t)) continue;
+    const art = ART[d.kind + (glow ? '-glow' : '') + '-hollow'];
+    if (!art) continue;
+    ctx.save();
+    ctx.beginPath(); ctx.rect(x, y, TP, TP); ctx.clip();
+    drawArt(ctx, art, d.x * TP, d.y * TP, TP);
+    // (a chamber's rows catch a little of the Bloom's light creeping in, so they show in the dark)
+    if (glow && d.kind === 'chamber' && ART['chamber-hollow']) { ctx.globalAlpha = 0.22; drawArt(ctx, ART['chamber-hollow'], d.x * TP, d.y * TP, TP); }
+    ctx.restore();
+  }
+}
+
+/**
+ * Tile (i, j)'s light in the Hollow's night glow map: its share of the big pieces' glow, and a faint light along the
+ * edges the Bloom lights: a black lake's shore (on the water), a chasm's lip and the foot of a cave wall (on the floor).
+ */
+function hollowTileGlow(ctx, i, j, t) {
+  const x = i * TP, y = j * TP, terr = S.terrain[t];
+  hollowDecorTile(ctx, i, j, x, y, t, true);
+  const band = (di, dj, rgb, a, w) => {
+    const W = TP * w, g = di ? ctx.createLinearGradient(di > 0 ? x + TP : x, 0, di > 0 ? x + TP - W : x + W, 0) : ctx.createLinearGradient(0, dj > 0 ? y + TP : y, 0, dj > 0 ? y + TP - W : y + W);
+    g.addColorStop(0, `rgba(${rgb},${a})`); g.addColorStop(1, `rgba(${rgb},0)`);
+    ctx.fillStyle = g;
+    ctx.fillRect(di > 0 ? x + TP - W : x, dj > 0 ? y + TP - W : y, di ? W : TP, dj ? W : TP);
+  };
+  for (const [di, dj] of [[0, -1], [1, 0], [0, 1], [-1, 0]]) {
+    const u = terrAt(i + di, j + dj);
+    if (terr === T_WATER && u === T_GROUND) band(di, dj, '140,110,240', 0.45, 0.22);
+    else if (terr === T_GROUND && !pillarAt(t)) {
+      if (u === T_CHASM) band(di, dj, '150,100,240', 0.35, 0.18);
+      else if (u === T_ROCK && dj === -1) band(di, dj, '120,80,200', 0.22, 0.25);
+    }
+  }
+}
+
+/**
+ * Daylight on the cavern floor under each breach (S.hollow.breaches), the only daylight in the Hollow. Over the ground
+ * once it's graded for the night: under the pool (its art, breach-light-hollow, a soft ragged mask) the ground shows as
+ * it is by day, warmed, and a little pale gold is added on top.
  */
 function drawBreachLight(ctx, ox, oy, z) {
   if (!S.hollow) return;
+  const mask = ART['breach-light-hollow'];
+  if (mask) for (const b of S.hollow.breaches) {
+    const x = ox + (b.x + 0.5) * z, y = oy + (b.y + 0.5) * z, r = (b.r + 0.8) * z;
+    if (x + r < 0 || x - r > R.w || y + r < 0 || y - r > R.h) continue;
+    const d = R.dpr, n = Math.ceil(2 * r * d), c = R.breachBuf || (R.breachBuf = document.createElement('canvas'));
+    if (c.width < n || c.height < n) { c.width = c.height = n; }
+    const g = c.getContext('2d');
+    g.setTransform(1, 0, 0, 1, 0, 0); g.globalCompositeOperation = 'source-over'; g.clearRect(0, 0, c.width, c.height);
+    g.setTransform(d, 0, 0, d, -(x - r) * d, -(y - r) * d);
+    drawDayGround(g, ox, oy, z, x - r, y - r, x + r, y + r);
+    g.setTransform(1, 0, 0, 1, 0, 0);
+    g.globalCompositeOperation = 'multiply'; g.fillStyle = '#ffe2b4'; g.fillRect(0, 0, n, n); // (warmed: late-afternoon daylight down the shaft)
+    g.globalCompositeOperation = 'destination-in'; g.drawImage(mask.img, 0, 0, n, n);
+    ctx.drawImage(c, 0, 0, n, n, x - r, y - r, 2 * r, 2 * r);
+  }
   ctx.save();
   ctx.globalCompositeOperation = 'lighter';
   for (const b of S.hollow.breaches) {
     const x = ox + (b.x + 0.5) * z, y = oy + (b.y + 0.5) * z, r = (b.r + 0.8) * z;
     if (x + r < 0 || x - r > R.w || y + r < 0 || y - r > R.h) continue;
-    const g = ctx.createRadialGradient(x, y, r * 0.05, x, y, r);
-    g.addColorStop(0, 'rgba(255,224,150,0.55)'); g.addColorStop(0.5, 'rgba(255,210,128,0.32)'); g.addColorStop(0.8, 'rgba(255,196,110,0.1)'); g.addColorStop(1, 'rgba(255,190,100,0)');
+    const g = ctx.createRadialGradient(x, y, r * 0.05, x, y, r), k = mask ? 0.4 : 1;
+    g.addColorStop(0, `rgba(255,224,150,${0.55 * k})`); g.addColorStop(0.5, `rgba(255,210,128,${0.32 * k})`); g.addColorStop(0.8, `rgba(255,196,110,${0.1 * k})`); g.addColorStop(1, 'rgba(255,190,100,0)');
     ctx.fillStyle = g;
     ctx.beginPath(); ctx.ellipse(x, y, r, r * 0.88, 0, 0, Math.PI * 2); ctx.fill();
   }
   ctx.restore();
+}
+
+/**
+ * The ground as it is baked (day art, before the night grade) over the screen rectangle x0..x1, y0..y1: the whole-map
+ * bake, then any sharp chunks already made there (drawMapLayer's, none made here), then the tunnels' ridges.
+ */
+function drawDayGround(g, ox, oy, z, x0, y0, x1, y1) {
+  g.imageSmoothingEnabled = true;
+  g.drawImage(R.map, ox, oy, S.W * z, S.H * z);
+  const level = hdLevel(z), C = HD_CHUNK;
+  if (level && R.hd) {
+    for (let cy = Math.floor((y0 - oy) / z / C); cy <= Math.floor((y1 - oy) / z / C); cy++) for (let cx = Math.floor((x0 - ox) / z / C); cx <= Math.floor((x1 - ox) / z / C); cx++) {
+      const ch = R.hd.chunks.get((level * 4096 + cy) * 4096 + cx);
+      if (ch) g.drawImage(ch.c, ox + ch.i0 * z, oy + ch.j0 * z, C * z, C * z);
+    }
+  }
+  if (R.tunL && R.tunL.of === S && R.tunL.n) g.drawImage(R.tunL.c, ox, oy, S.W * z, S.H * z);
 }
 
 /**
@@ -5336,7 +5670,13 @@ function drawBreachShafts(ctx, ox, oy, z) {
   for (const b of S.hollow.breaches) {
     const x = ox + (b.x + 0.5) * z, y = oy + (b.y + 0.5) * z, r = b.r * z, top = y - r * 2.8;
     if (x + r < 0 || x - r > R.w || y + r < 0 || top > R.h) continue;
-    const sway = Math.sin(R.time * 0.25 + b.x) * r * 0.04;
+    const sway = Math.sin(R.time * 0.25 + b.x) * r * 0.04, beam = ART['breach-beam-hollow'];
+    if (beam) { // (the art: the column with its rays and dust, its foot on the pool, added over everything)
+      const w = (b.r + 0.6) * 2 * z, h = w * 2, ga = ctx.globalAlpha;
+      ctx.globalAlpha = ga * 0.75;
+      ctx.drawImage(beam.img, x - w / 2 + sway, y - 0.86 * h, w, h);
+      ctx.globalAlpha = ga;
+    } else {
     const g = ctx.createLinearGradient(0, top, 0, y + r * 0.5);
     g.addColorStop(0, 'rgba(255,222,150,0)'); g.addColorStop(0.55, 'rgba(255,222,150,0.07)'); g.addColorStop(0.9, 'rgba(255,230,170,0.16)'); g.addColorStop(1, 'rgba(255,230,170,0)');
     ctx.fillStyle = g;
@@ -5349,6 +5689,7 @@ function drawBreachShafts(ctx, ox, oy, z) {
     c.addColorStop(0, 'rgba(255,240,200,0)'); c.addColorStop(1, 'rgba(255,240,200,0.12)');
     ctx.fillStyle = c;
     ctx.beginPath(); ctx.moveTo(x - r * 0.35, y); ctx.lineTo(x - r * 0.25 + sway, top); ctx.lineTo(x + r * 0.25 + sway, top); ctx.lineTo(x + r * 0.35, y); ctx.closePath(); ctx.fill();
+    }
     // Dust motes drifting down through the light.
     const m = Math.max(1, z * 0.05);
     for (let k = 0; k < 18; k++) {
@@ -5363,6 +5704,9 @@ function drawBreachShafts(ctx, ox, oy, z) {
 
 /** One of the Hollow's stone pillars: a tall, smooth column worn in a spiral, standing on its tile (cx, cy: its foot). */
 function drawPillar(ctx, cx, cy, z, i, j) {
+  // The art (renderer/b/hollow.js c=pillar: night renders, drawn as they are), two kinds, rising into the dark.
+  const art = ART['pillar-' + (hash2(i, j, 403) < 0.5 ? 1 : 2) + '-hollow'];
+  if (art) { drawArt(ctx, art, cx, cy + z * 0.05, z); return; }
   const r = z * 0.34, hgt = z * (1.45 + 0.25 * hash2(i, j, 401)), base = cy + z * 0.3, top = base - hgt;
   ctx.save();
   ctx.fillStyle = 'rgba(0,0,0,0.35)';

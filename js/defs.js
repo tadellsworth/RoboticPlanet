@@ -45,14 +45,14 @@ const BIOMES = {
   lunar: { name: 'Argos', kind: 'Lunar: the moon', region: 'Argos, the moon', plants: 0.12, weights: [1, 1, 1, 1, 1, 0.12], silent: true, desc: 'Grey regolith pocked with craters, frozen cryo-ice pools and the odd wreck of an old probe; now and then ring dust streaks overhead. No Murmur live here.' },
   alien: { name: 'The Bloom', kind: 'Alien bloom', region: 'the Bloom', plants: 0.3, desc: 'Violet moss and strange growths that glow after dark, beside pink lakes; now and then an aurora.' },
   // The Hollow's own underground look: forced by its map type (SHAPE_PRESETS hollow), never offered by the biome picker
-  // (it isn't in BIOME_ORDER). Drawn with another biome's art until its own is installed: see BIOME_ART.
+  // (it isn't in BIOME_ORDER). Its own art (art/biomes/hollow) loads only when it is played (LAZY_BIOMES in render.js).
   hollow: { name: 'The Hollow', kind: 'Underground caverns', region: 'the Hollow', plants: 0.1, desc: 'Caverns under the Bloom, always night: violet Bloom on the walls, black lakes, chasms, and daylight only down the breach shafts; now and then the ceiling trembles.' },
 };
 /**
- * Biomes drawn with another biome's art (ground, water, rock, plants, cliffs, glow): the Hollow wears the Bloom's at
- * night until its own art is installed. One line per biome: drop it when the biome's art arrives.
+ * Biomes drawn with another biome's art (ground, water, rock, plants, cliffs, glow) until their own is installed: one
+ * line per biome, e.g. { hollow: 'alien' } while the Hollow wore the Bloom's. None now.
  */
-const BIOME_ART = { hollow: 'alien' };
+const BIOME_ART = {};
 /** The biome whose art draws biome b. */
 function artBiome(b) { return BIOME_ART[b] || b; }
 // (New biomes go on the end: the new-game screen saves the choice as its place in this list.)

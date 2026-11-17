@@ -8,6 +8,11 @@
 /** [good, pause at, resume below]: producers the AI rests when it has plenty. */
 const AI_CAPS = { fab: ['chip', 8, 3], armory: ['ammo', 18, 6], refinery: ['fuel', 30, 10] };
 const AI_FUEL_TANK_PUMPS = 1; // Oil Pumps at work (and a Refinery built) before the rival puts up a Fuel Tank by them
+// The Hollow: what each tile further from home takes off an Oil Pump spot's score (0.3 elsewhere). The richer seeps out
+// toward the middle won at 0.3: a pump 18 tiles out among the nests, unstaffed and dry for minutes, while a seep 6
+// tiles from home went unused.
+const AI_HOLLOW_PUMP_FAR = 0.8;
+const AI_OIL_CRUDE = 5; // Crude in storage that wants a Refinery even with no Oil Pump at work (the Hollow: see oilFirst in aiThink)
 /**
  * [building type, how many the AI wants]. Entries are tried in order. (No Missile Factory or Silo here: those
  * come only through aiMissilePlan, which waits for an economy and an army and saves up for them. As ordinary
@@ -579,7 +584,8 @@ function aiThink(p) {
     const farmWaiting = me.some((b) => b.built && b.type === 'farm' && !b.paused && !b.staff);
     const robots = S.bots.reduce((n, u) => n + (!u.dead && u.owner === p && !isArmy(u) ? 1 : 0), 0);
     const foundry = me.some((b) => b.built && b.type === 'foundry'); // (oil costs Alloy: the Foundry's comes first)
-    const add = pumped && !counts.refinery && foundry ? [['refinery', 1]] : [];
+    // (In the Hollow oil is the only Fuel: Crude waiting for a Refinery gets one, Foundry or not; see oilFirst.)
+    const add = (pumped || (hollowOn() && (playerGoods(p).crude || 0) >= AI_OIL_CRUDE)) && !counts.refinery && (foundry || hollowOn()) ? [['refinery', 1]] : [];
     if (hollowOn()) { if (!add.length && foundry && (counts.pump || 0) < 3) add.push(['pump', (counts.pump || 0) + 1]); } // (no farms underground: oil it is)
     else {
       if (!add.length && !farmWaiting && (counts.farm || 0) < 2 + Math.ceil(robots / 15)) add.push(['farm', (counts.farm || 0) + 1]);
@@ -643,6 +649,13 @@ function aiThink(p) {
   // first, the Outposts then waited minutes for their roads, and most Easy rivals never built a Smelter or a robot.
   // (Its first minutes go as they always have: with the opening first from the start it had its Foundry as soon as a
   // Normal rival and beat one in half its games.)
+  // Oil first (the Hollow, where oil is the only Fuel): with an Oil Pump at work, or Crude in storage, and no Refinery,
+  // the Refinery comes before anything else after the opening, and is started as soon as the Cement is there, its
+  // Alloy delivered first (defenceNow below). Waiting for its whole price in storage, it waited for good: the Bot
+  // Foundry turned every bit of Alloy into robots, and colonies ran on no Fuel from minute 4 to minute 19.
+  const oilFirst = hollowOn() && !counts.refinery &&
+    (me.some((b) => b.built && b.type === 'pump' && !pumpDry(b)) || (playerGoods(p).crude || 0) >= AI_OIL_CRUDE);
+  if (oilFirst) plan = [['refinery', 1]].concat(plan);
   if (maxSites === 1 && !counts.foundry && S.mode !== 'colony' && S.time >= AI_EASY_OPENING) plan = AI_OPENING.concat(plan);
   // The opening (Medium and up): until each of its buildings has stood once (P.opened), AI_OPEN_FIRST comes before every
   // other ask, the Bot Foundry straight after the first Fuel Station: the colony lands with what it costs, and every
@@ -671,7 +684,7 @@ function aiThink(p) {
       // Only Fuel Stations charge, so Fuel scales with the colony: a Bio Farm for every 18 robots.
       const nBots = S.bots.reduce((n, u) => n + (!u.dead && u.owner === p && !isArmy(u) ? 1 : 0), 0);
       const want = type === 'charger' ? Math.max(want0, nCh) : type === 'farm' && counts.charger ? Math.max(want0, Math.ceil((counts.charger || 0) / 2), Math.ceil(nBots / 18)) : want0;
-      if (type === 'refinery' && !counts.pump) continue;
+      if (type === 'refinery' && !counts.pump && !oilFirst) continue;
       // A Generator only once there's Fuel to spare for it (and a refinery or farm to keep it coming).
       if (type === 'generator' && ((playerGoods(p).fuel || 0) < 15 || !(counts.refinery || (counts.farm || 0) >= 2))) continue;
       // Plenty of Fuel in stock: no need for more farms or oil yet.
@@ -694,7 +707,8 @@ function aiThink(p) {
       // So is an Architect's Missile Factory or Silo: waiting for the whole price to lie in storage while the Foundry and
       // the Chip Fab drew on it, it saved for a Silo for minutes at a time and seldom built one.
       const defenceNow = (defence(type) && counts.smelter && aiAffordable(p, type, ['alloy', 'chip'])) || ((type === 'terminal' || type === 'airfield') && aiAffordable(p, type, ['alloy'])) ||
-        (st.missiles && type === saving && counts.smelter && counts.fab && aiAffordable(p, type, ['alloy', 'chip']));
+        (st.missiles && type === saving && counts.smelter && counts.fab && aiAffordable(p, type, ['alloy', 'chip'])) ||
+        (type === 'refinery' && oilFirst && aiAffordable(p, type, ['alloy'])); // (the Hollow's first Refinery: see oilFirst)
       if (!aiAffordable(p, type) && !defenceNow) {
         if ((BDEFS[type].cost.fiber || 0) > playerGoods(p).fiber) P.fiberWait = S.time; // (the Smelters rest for it: see above)
         if (key(type) && (!counts[type] || type === 'outpost' || type === 'tap')) {
@@ -3201,7 +3215,7 @@ function aiSearchSpot(p, type, lander) {
         for (let dj = -1; dj <= 1; dj++) for (let di = -1; di <= 1; di++) {
           if (inMap(i + di, j + dj) && S.res[tIdx(i + di, j + dj)] === R_OIL) oil += S.amt[tIdx(i + di, j + dj)];
         }
-        s = oil * 0.2 - dHome * 0.3;
+        s = oil * 0.2 - dHome * (hollowOn() ? AI_HOLLOW_PUMP_FAR : 0.3);
       } else if (type === 'generator') {
         // Among the factories: the most buildings it can power, not beside another Generator.
         let n = 0, dg = 99;
