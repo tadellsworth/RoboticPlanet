@@ -11084,7 +11084,7 @@ function murmurSpitHit(b) {
   }
 }
 /** Is gun b shorted out by a Spitter just now (it doesn't fire)? */
-function shorted(b) { return !!(b.shortT && b.shortT > S.time); }
+function shorted(b) { return !!(b && b.shortT && b.shortT > S.time); } // (render.js asks too: one copy, here)
 
 /** A Sapper's strike (role 'sap'): dig in, go under to (t.x, t.y) as its nest's tunnel, come up, then fight. */
 function murmurSapStep(u, t, dt) {

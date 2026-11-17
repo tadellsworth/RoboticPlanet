@@ -4766,7 +4766,7 @@ function drawSpitHitFx(ctx, f, ox, oy, z, k) {
  * A building the Spitter's shards have shorted (b.shortT, until then): its gun dark, and the charge crawling over it in
  * short violet-white arcs that jump about.
  */
-function shorted(b) { return !!(b && b.shortT > S.time); }
+// (shorted(b), whether a Spitter has shorted building b out: in js/sim.js.)
 function drawShortArcs(ctx, b, cx, cy, s) {
   const left = b.shortT - S.time, k = Math.min(1, left / 0.4), seed = Math.floor(R.time * 14) + (b.id || 0) * 13;
   ctx.save();
