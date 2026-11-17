@@ -36,7 +36,8 @@ Still open: a neutral, shared exchange the rivals compete over; contracts for Ch
   (start each tick's robots and AIs from a different player, or run them forward one tick and backward the next); it
   changes every game's course, so seed-pinned tests would need new seeds.
 
-- **Co-op scenarios** (the owner's idea, Nov 17; to brainstorm). Two players together against the computer, as
+- **Co-op scenarios** (the owner's idea, Nov 17; decided: the single-player campaign is built first, then these; to
+  brainstorm then). Two players together against the computer, as
   a multiplayer mode of its own, not the main campaign played by two: a set of 2-player scenarios on the campaign's
   maps and rivals, with goals made for two. One builds while the other fights; two fronts at once; one runs the home
   economy while the other pushes Depots to the front; escorting each other's trade convoys; a Holdout held together.
