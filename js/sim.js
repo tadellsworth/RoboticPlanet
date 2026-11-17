@@ -13563,6 +13563,22 @@ function orderNapalm(owner, u, i, j) {
   return '';
 }
 
+/**
+ * Call off owner's bomber u's strike (a bomb or napalm) while it's still on the ground at its Airfield: rearming, loading,
+ * or waiting there for Ammo or Fuel. The bomb's Ammo it loaded goes back into its Airfield (its Fuel isn't taken until it
+ * takes off). Once it's in the air it's too late. '' or why not.
+ */
+function cancelStrike(owner, u) {
+  if (!u || u.dead || u.owner !== owner || !BOTS[u.type].bomber) return 'Pick one of your Vulcan Bombers.';
+  const M = u.mission;
+  if (!M || M.kind !== 'strike') return 'That bomber has no strike to call off.';
+  if (M.phase !== 'load' || u.flight) return 'Too late: it has taken off.';
+  const base = planeBase(u);
+  if (base && u.bombLoad) { bump(base.stock, 'ammo', u.bombLoad); usedGood(owner, 'ammo', -u.bombLoad); u.bombLoad = 0; }
+  u.mission = null;
+  return '';
+}
+
 /** The tiles napalm landing on tile (ci, cj) sets on fire: every one within NAPALM.radius (that tile and the eight round it). */
 function napalmTiles(ci, cj) {
   const out = [], r = Math.ceil(NAPALM.radius), r2 = NAPALM.radius * NAPALM.radius + 1e-6;

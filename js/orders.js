@@ -351,6 +351,9 @@ const ORDERS = {
   tradeRoute(p, id, give, get) { const b = ownB(p, id); if (!b || !BDEFS[b.type].terminal) return 'That Trade Terminal is gone.'; return setTradeRoute(b, give ? String(give) : null, get ? String(get) : null); },
   /** Escort on or off at Trade Terminal `id`: two warbots ride along with each convoy. */
   tradeEscort(p, id, on) { const b = ownB(p, id); if (b && BDEFS[b.type].terminal) b.escort = !!on; },
+  /* ---------------------------------------------------------------- Vulcan Bombers */
+  /** Call off bomber `uid`'s strike while it's still on the ground (waiting for Ammo or Fuel, say). '' or why not. */
+  strikeCancel(p, uid) { const u = ownU(p, uid, 'bomber'); return u ? cancelStrike(p, u) : 'That bomber is gone.'; },
 };
 
 /** Run order `name` for player p (args: a list). What it gives back, or undefined if there's no such order. */

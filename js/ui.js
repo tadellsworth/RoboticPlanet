@@ -3887,6 +3887,18 @@ function refreshScorchButton(u) {
 /** A Cargo Plane parked at Airfield b with nothing to do, or null. */
 function freePlane(b) { return basePlanes(b).find((u) => !BOTS[u.type].bomber && u.inside === b.id && !u.mission && !u.flight) || null; }
 
+/** Is bomber u's strike still on the ground (rearming, loading, waiting for Ammo or Fuel), so it can be called off? */
+function strikeWaiting(u) { return !!(u && BOTS[u.type].bomber && u.owner === ME && u.mission && u.mission.kind === 'strike' && u.mission.phase === 'load' && !u.flight); }
+
+/** Call off bomber `id`'s strike (its Cancel strike button). */
+function callOffStrike(id) {
+  act('strikeCancel', [id], (why) => {
+    if (why) { sfx('error'); toast(why, 'warn'); return; }
+    sfx('click'); toast('Strike called off: the bomber stays on the ground, and any Ammo it loaded is back in its Airfield.', 'info');
+    const el = $('sh-air-bombers'); if (el) el.dataset.sig = '';
+  });
+}
+
 /** What a plane is doing, in a few words. */
 function planeStatus(u) {
   if (BOTS[u.type].bomber) {
@@ -6477,10 +6489,11 @@ function refreshBuildingSheet(b) {
     const sig = bs.map((u) => u.id + ':' + planeStatus(u) + ':' + Math.round(u.bat ?? 100)).join('|');
     if (el.dataset.sig !== sig) {
       el.dataset.sig = sig;
-      el.innerHTML = bs.length ? bs.map((u, k) => `<div class="kv trade-row"><span>Bomber ${k + 1}<small>${planeStatus(u)} · Fuel tank ${Math.round(u.bat ?? 100)}%</small>${fuelGauge(u)}</span><button class="btn small primary" data-b="${u.id}" ${u.mission || u.flight ? 'disabled' : ''}>Strike</button></div>`).join('') +
-        `<p class="hint">A sortie takes ${BOMBER.ammo} Ammo (this Airfield keeps some for them; haulers bring it) and ${BOMBER.fuel} Fuel on top of what its tank needs (Tankers bring it): it can't take off without both. Back on the ground a bomber needs ${BOMBER.rearm} s to rearm. <b>Strike</b> lets you pick its payload: a bomb, or <b>Napalm</b> (${NAPALM.fuel} more Fuel, no Ammo) for any ground, which burns fertile soil for good. Or open a rival building and tap <b>Bomb it</b> or <b>Napalm</b>.</p>`
+      el.innerHTML = bs.length ? bs.map((u, k) => `<div class="kv trade-row"><span>Bomber ${k + 1}<small>${planeStatus(u)} · Fuel tank ${Math.round(u.bat ?? 100)}%</small>${fuelGauge(u)}</span>${strikeWaiting(u) ? `<button class="btn small" data-cancel="${u.id}" title="Call the strike off: the bomb's Ammo goes back into the Airfield">Cancel strike</button>` : `<button class="btn small primary" data-b="${u.id}" ${u.mission || u.flight ? 'disabled' : ''}>Strike</button>`}</div>`).join('') +
+        `<p class="hint">A sortie takes ${BOMBER.ammo} Ammo (this Airfield keeps some for them; haulers bring it) and ${BOMBER.fuel} Fuel on top of what its tank needs (Tankers bring it): it can't take off without both. Back on the ground a bomber needs ${BOMBER.rearm} s to rearm. Until it takes off, <b>Cancel strike</b> calls a sortie off (any Ammo it loaded comes back). <b>Strike</b> lets you pick its payload: a bomb, or <b>Napalm</b> (${NAPALM.fuel} more Fuel, no Ammo) for any ground, which burns fertile soil for good. Or open a rival building and tap <b>Bomb it</b> or <b>Napalm</b>.</p>`
         : '<p class="hint">None based here: order Vulcan Bombers in the hangar below (two fit).</p>';
       for (const btn of el.querySelectorAll('button[data-b]')) btn.onclick = () => { const u = getE(+btn.dataset.b); if (u) { sfx('click'); startStrike(u); } };
+      for (const btn of el.querySelectorAll('button[data-cancel]')) btn.onclick = () => callOffStrike(+btn.dataset.cancel);
     }
   }
   if ($('sh-air-places')) $('sh-air-places').textContent = airPlacesText(b);
@@ -6776,7 +6789,7 @@ function openBotSheet(u) {
       sfx('order'); toast(`Strike ordered on the ${BOTS[u.type].name}: a bomber loads up, takes off and hunts it down.`, 'good'); refreshSheet();
     });
   };
-  if ($('sh-strike')) $('sh-strike').onclick = () => { const why = u.mission || u.flight ? 'It\'s already out on a sortie.' : ''; if (why) { sfx('error'); toast(why, 'warn'); return; } sfx('click'); startStrike(u); };
+  if ($('sh-strike')) $('sh-strike').onclick = () => { if (strikeWaiting(u)) { callOffStrike(u.id); return; } const why = u.mission || u.flight ? 'It\'s already out on a sortie.' : ''; if (why) { sfx('error'); toast(why, 'warn'); return; } sfx('click'); startStrike(u); };
   if ($('sh-scorch')) $('sh-scorch').onclick = () => {
     const us = scorchGroup(u).filter(scorchReady);
     if (!us.length) { sfx('error'); toast(`It takes a nearly full tank (${Math.round(TORCH.scorchMin * 100)}%): let it refill with Fuel first.`, 'warn'); return; }
@@ -7178,7 +7191,7 @@ function refreshAirTab() {
   }
   if (warOn()) {
     h += '<div class="section-label">Vulcan Bombers</div>';
-    h += bombers.length ? bombers.map((u) => `<div class="kv army-row"><span>${planeStatus(u)}</span><span><button class="btn small" data-act="strike" data-id="${u.id}"${!u.mission && !u.flight && planeBase(u) && u.inside === planeBase(u).id ? '' : ' disabled'}>Strike</button><button class="btn small ghost" data-act="showbot" data-id="${u.id}">Show</button></span></div>`).join('')
+    h += bombers.length ? bombers.map((u) => `<div class="kv army-row"><span>${planeStatus(u)}</span><span>${strikeWaiting(u) ? `<button class="btn small" data-act="unstrike" data-id="${u.id}" title="Call the strike off: the bomb's Ammo goes back into the Airfield">Cancel strike</button>` : `<button class="btn small" data-act="strike" data-id="${u.id}"${!u.mission && !u.flight && planeBase(u) && u.inside === planeBase(u).id ? '' : ' disabled'}>Strike</button>`}<button class="btn small ghost" data-act="showbot" data-id="${u.id}">Show</button></span></div>`).join('')
       : '<p class="hint">None yet: order one in an Airfield\'s hangar (+ Vulcan Bomber above). It bombs any enemy building but a Keep or Command Base, or a vehicle or robot out in the open.</p>';
   }
   h += '<div class="section-label">Cargo Planes <span class="label-note">air drops by parachute</span></div>';
@@ -7211,6 +7224,7 @@ function armyButton(btn) {
     case 'rgo': if (e) { closeSheet(); setMode('rgo'); UI.rocket = id; showBanner('Tap where the <b>Howitzer</b> should wait: it stays there, and (unless it holds fire) shells any enemy building in reach of it.', null, 'Cancel'); } return;
     case 'strikeany': { const u = readyBomber(); if (u) startStrike(u); else { sfx('error'); toast('No Vulcan Bomber is ready on the ground.', 'warn'); } return; }
     case 'strike': if (e) startStrike(e); return;
+    case 'unstrike': callOffStrike(id); UI.armySig = ''; return;
     case 'drop': if (e) { closeSheet(); startAirdrop(e, btn.dataset.k); } return;
     case 'yard': if (e) {
       const k = btn.dataset.k, h = hangarCount(e, k), full = h.have + h.making >= h.cap;

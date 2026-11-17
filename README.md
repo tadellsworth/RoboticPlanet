@@ -425,7 +425,8 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
 - **Vulcan Bombers** (Versus; `BOTS.bomber`, `BOMBER`): built in an Airfield's hangar, two to a hangar. A sortie
   (`orderStrike`, `strikeBlocked`: parked, in reach of a full tank) loads `BOMBER.ammo` (6) Ammo at its Airfield (which
   keeps that much a bomber, `airKeep`) and `BOMBER.fuel` (3) Fuel on top of what its tank needs (`tankFuel`; it takes
-  off only with all of it there, none taken till then, and says what it waits for), flies out like a Cargo Plane and over the target drops one bomb
+  off only with all of it there, none taken till then, and says what it waits for; till it takes off the `strikeCancel` order,
+  `cancelStrike`, calls the strike off from the Airfield's or the Army panel, the Ammo it loaded going back), flies out like a Cargo Plane and over the target drops one bomb
   (`bombDrop`; a vehicle on the move is led, and a target that's gone sends it home): `damage` 14 to the building aimed at
   (a Command Base or Keep held at `missileFloor`, see `captureOnly`), `splashBld` 4 to others and `botDamage` 8 to robots within `splash` 1.3, double on a
   vehicle hit squarely (a Tanker explodes). Home again it rearms for `rearm` 25 s (`bomberOnGround`); a bomb it didn't
