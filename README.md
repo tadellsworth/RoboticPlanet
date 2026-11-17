@@ -838,7 +838,11 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   plants a flag beside it that targets it (`assault` sets `rally.target`): the warbots there shoot it first
   (`holdRally`), and once it falls or changes hands the flag comes down (`followRallies`), so they carry off the crates
   that spilled out and come home, as after any attack. Tap the flag to call them back, or press
-  **Recall all** in the Army banner (**C** on a computer) to end every attack and rally flag at once. Under a finger
+  **Recall all** in the Army banner (**C** on a computer) to end every attack and rally flag at once, and call in
+  warbots out picking up crates (`FIELD_TASKS`: attack, defend, hold, loot; `warbotsOut` counts the same). Each is
+  sent home at once (`callBack`: repair first if it badly needs it, else `goGarrison`), marching (`u.march`), and
+  leaves crates be for `RECALL_NO_LOOT` (60) s (`u.noLoot`, see `lootNear`); one already carrying a crate brings it
+  in, marching. (A rival's recalled warbots just drop what they were doing, as before.) Under a finger
   Recall all asks for a second tap within 3 seconds (`recallAllTap`: the button says how many come home).
 - **Saving:** the game saves itself every `AUTOSAVE_EVERY` (20) seconds while you play, and when you switch away or
   close it (`autoSave`); Continue on the main menu picks it up. The pause menu says when it last saved, and a failed
