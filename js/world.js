@@ -2716,7 +2716,7 @@ function reachZone(owner, t) { return buildZones(owner).has(S.zone[t]); }
 
 /**
  * How far (in 8-way steps) each tile is from something of `owner`'s that reaches out: a finished building
- * that holds land, or road or track of theirs. Kept until land, roads or track change.
+ * that holds land (or a Trade Terminal, which holds none), or road or track of theirs. Kept until land, roads or track change.
  */
 let _reach = { S: null, key: '', maps: [] };
 function reachMap(owner) {
@@ -2725,7 +2725,7 @@ function reachMap(owner) {
   if (_reach.maps[owner]) return _reach.maps[owner];
   const W = S.W, H = S.H, N = W * H, dist = new Uint8Array(N).fill(255), q = [];
   const seed = (t) => { if (dist[t]) { dist[t] = 0; q.push(t); } };
-  for (const b of S.buildings) if (!b.dead && b.owner === owner && b.built && (BDEFS[b.type].mil || civClaims(b))) seed(tIdx(b.x, b.y));
+  for (const b of S.buildings) if (!b.dead && b.owner === owner && b.built && (BDEFS[b.type].mil || civClaims(b) || BDEFS[b.type].terminal)) seed(tIdx(b.x, b.y)); // (a Trade Terminal reaches out though it holds no land)
   for (let t = 0; t < N; t++) if ((S.road[t] || (S.rail && S.rail[t])) && wayOwner(t) === owner) seed(t);
   for (let h = 0; h < q.length; h++) {
     const t = q[h], d = dist[t];
@@ -2884,7 +2884,9 @@ function playerBots(p) { return S.bots.filter((u) => u.owner === p && !u.dead); 
  */
 function civClaims(b) {
   const def = BDEFS[b.type];
-  return b.built && !def.mil && !def.wild && !def.barrier && !def.gate && !def.ramp && b.type !== 'wall';
+  // (Nor a Trade Terminal: docked on a Trade Post's neutral ground, where nothing can be attacked, a ring of its own land
+  // would shut everyone else's roads out of there for good. The owner's call, Nov 2026.)
+  return b.built && !def.mil && !def.wild && !def.barrier && !def.gate && !def.ramp && !def.terminal && b.type !== 'wall';
 }
 
 /**
