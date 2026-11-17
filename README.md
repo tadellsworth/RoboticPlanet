@@ -450,7 +450,8 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   the same ground, `footNear`; Fuel too, for a far side's chargers), the home Mast keeps that for it, and a far Mast's keep
   comes by Airship only (Haulers and trucks leave it, `dispatch`; nor do trunk runs truck its spare goods home). A trip's
   mixed load (`shipLoad`): what the other Mast keeps and is short of, from what this one can spare (all it holds when it
-  is the nearer to the Command Base), and from a far Mast its spare goods for home (`spareForHome`, the backhaul). It
+  is the nearer to the Command Base), and from a far Mast its spare goods for home (`spareForHome`, the backhaul: dry
+  goods first, then Crude and Fuel; Fuel and Crude both fly, the owner's call, but never the Fuel a Mast keeps). It
   sets out once that fills `fill` (half) of the hold, with anything once the other side is down to a third of something
   it keeps, with `least` (4) after `wait` (75) s, or with riders aboard; otherwise it crosses empty to fetch a load or
   riders waiting at the other Mast, unless another of the line's Airships is there or on its way. Goods in the air count
@@ -2234,7 +2235,10 @@ load); they read the game's clock, seed, buildings and effects. Hooks: `drawRema
   five on the Airship's; a drift of snow, sand, ash or dust in two or three and laid a little thinner so the wreck
   still shows), never going back into the ground (`AMB.ruin.p`: growth from 60 s, full at 20 minutes, slower on
   Argos). A fresh one smoulders (`ambSmoulder`: thin smoke off the hull for `AMB.ruin.smoulder` s, its embers glowing
-  after dark for `AMB.ruin.embers` s). Its crash fires bring the carrion birds (`faunaCarrion`), as any wreck's do.
+  after dark for `AMB.ruin.embers` s). After dark every wreck is lit faintly so it shows (`ambWreckNight`, the owner's
+  call): a few small flames along the hull, coming in as the embers die and dwindling to one as it overgrows, firelight
+  on the ground and the hull, and a red light at one end blinking every 2.4 s. Its crash fires bring the carrion birds
+  (`faunaCarrion`), as any wreck's do.
 - **Beacons** (`drawBeacons`). From evening until dawn (`AMB.beam`, faded in over the evening crossfade and out at dawn,
   so never in Always day and always in Always night or the Hollow) every standing, finished Command Base, whoever holds
   it, shines a pale beam straight up from the top of its mast, a hint of its owner's colour in it, with a soft halo, light

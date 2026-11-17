@@ -425,3 +425,8 @@ them on Active too (the owner's decision, Nov 17 2026; built), under the art bri
 colony's power (Fuel Stations, Generators, streetlamps, the robots charging) and takes it home to its nest; the
 **Spitter** spits conductive slurry that shorts the guns out for a moment; the **Sapper** tunnels under Walls and
 comes up inside, and its tunnel stays. The mission *What Comes Up* meets them.
+
+The Airship (the owner's decision, Nov 17 2026; built): an armoured freight airship, built in an Airfield's hangar,
+that shuttles goods and robots back and forth between two Mooring Masts, over water, cliffs and rock alike. Plain
+lifting gas in its envelope keeps it up: nothing of the planet's own. Shot down, it settles burning and its wreck
+stays where it fell, as every downed aircraft's does.
