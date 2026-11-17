@@ -34,7 +34,7 @@ const AMB = {
   beam: { morning: 0, day: 0, evening: 0.85, night: 1 },
   // Remains: seconds after it was left when the growth starts and when it's full, how long it then stays and when it
   // has gone back into the ground. b: a building, u: a robot or vehicle, p: a plane come down. (max: kept at once.)
-  ruin: { max: 500, b: [60, 480, 1200, 1500], u: [30, 300, 720, 900], p: [40, 360, 900, 1100] },
+  ruin: { max: 400, b: [60, 480, 1200, 1500], u: [30, 300, 720, 900], p: [40, 360, 900, 1100] },
   pulse: 5.5, // seconds a beacon takes to swell and ease back
 };
 
@@ -58,7 +58,8 @@ const AMB_GROW = {
 function ambState() {
   let A = R.amb;
   if (!A || A.of !== S) {
-    A = R.amb = { of: S, ruins: [], tick: S ? S.tick : 0, seen: new WeakSet(), prevBots: null, beacons: new Map(), humAt: -99, buf: A && A.buf };
+    if (A) for (const e of A.ruins) ambDrop(A, e); // (the last game's pictures)
+    A = R.amb = { of: S, ruins: [], tick: S ? S.tick : 0, seen: new WeakSet(), prevBots: null, beacons: new Map(), humAt: -99, px: 0, buf: A && A.buf };
   }
   return A;
 }
@@ -208,8 +209,10 @@ function ambAdd(A, e) {
   if (!inMap(i, j)) return;
   e.t = tIdx(i, j);
   if (!ambGround(e.t)) return;
+  // One wreck to a tile: where robots fall on top of each other, the first pile stands for them all.
+  if (e.k !== 'b') for (const o of A.ruins) if (o.t === e.t && o.k !== 'b') return;
   A.ruins.push(e);
-  if (A.ruins.length > AMB.ruin.max) A.ruins.splice(0, A.ruins.length - AMB.ruin.max);
+  if (A.ruins.length > AMB.ruin.max) for (const o of A.ruins.splice(0, A.ruins.length - AMB.ruin.max)) ambDrop(A, o);
 }
 
 /** A building's collapse (collapseFx): if it burned, its rubble stays (the game's own rubble mark, carried on). */
@@ -292,7 +295,10 @@ function ambChunk(L, al, x, y, cs, a) {
 
 /**
  * The remains on the ground, after the game's own marks (drawDecals). Each frame: anything new is picked up, anything
- * built over, paved over or gone back into the ground is let go, and what's in view is drawn.
+ * built over, paved over or gone back into the ground is let go, and what's in view is drawn: its burn (a shared soft
+ * smudge), then the remains themselves from a small picture of each (ambSprite), made again only when its growth moves on
+ * a step, the zoom needs another size, the wind turns, or the light passes to another time of day (two are blended
+ * across the change, as the game's own art is: drawArt). A few are made each frame at most; until then the last one stands in.
  */
 function drawRemains(ctx, ox, oy, z, inView) {
   if (!S || !S.fx || !S.terrain) return;
@@ -302,64 +308,165 @@ function drawRemains(ctx, ox, oy, z, inView) {
   const now = S.time, G = AMB_GROW[biome()] || AMB_GROW.desert, slow = G.slow || 1;
   // Built, paved or laid over (a site, a road, track), or gone back into the ground: let go.
   let w = 0;
-  for (const e of A.ruins) if (now - e.t0 < AMB.ruin[e.k][3] * slow && ambGround(e.t)) A.ruins[w++] = e;
+  for (const e of A.ruins) { if (now - e.t0 < AMB.ruin[e.k][3] * slow && ambGround(e.t)) A.ruins[w++] = e; else ambDrop(A, e); }
   A.ruins.length = w;
-  const shown = A.ruins.filter((e) => inView(e.x, e.y, 2));
+  const shown = [];
+  for (const e of A.ruins) { if (inView(e.x, e.y, 2)) shown.push(e); else if (e.spr && R.time - e.seen > 20) ambDrop(A, e); }
   if (!shown.length) return;
   // The game's rubble marks still being drawn (the remains take over as each fades).
   let alive = null;
   if (shown.some((e) => e.decal && now - e.t0 < e.life)) alive = new Set(S.decals || []);
-  const col = (h) => todColor(h), night = TOD.active ? TOD.state.lights : 0;
-  const lod = { n: { saver: 0.5, auto: 1, high: 1, ultra: 1.4 }[gfxStep()] || 1, fine: z >= 14, w: Math.max(1, z * 0.025) };
-  const defs = [
-    ['burn', 'rgb(22,15,10)'], ['heap', 'rgba(40,32,26,0.45)'],
-    ['c0', col('#5d5e60')], ['c1', col('#8a847a')], ['c2', col('#6b5646')], ['beam', 'rgba(40,40,44,0.8)', lod.w],
-    ['f0', col('#34363b')], ['f1', col('#4d5157')], ['f2', col('#26272a')],
-  ];
-  for (let p = 0; p < PLAYER_COLORS.length; p++) defs.push(['chip' + p, col(PLAYER_COLORS[p])]);
-  if (G.kind === 'green') {
-    defs.push(['dark', col(G.dark)], ['moss', col(G.moss)], ['vine', col(G.vine), Math.max(1, z * 0.024)], ['grass', col(G.grass), Math.max(0.8, z * 0.016)], ['blade', col(G.dark), Math.max(0.8, z * 0.016)]);
-    if (G.leaves) G.leaves.forEach((h, n) => defs.push(['leaf' + n, col(h)]));
-  } else if (G.kind === 'bloom') {
-    if (G.dust) defs.push(['dust', col(G.dust)]);
-    defs.push(['ground', col(G.ground)], ['vein', col(G.vein), Math.max(1, z * 0.03)], ['node', col(G.node)], ['crystal', col(G.crystal)], ['glow', G.glow, 0, true]);
-  } else {
-    defs.push(['shade', col(G.shade)], ['fill', col(G.fill)], ['fill1', col(G.fill)], ['fill2', col(G.fill)]);
-    if (G.hi) defs.push(['hi', col(G.hi)]);
-    if (G.kind === 'sand') defs.push(['ripple', col(G.shade), Math.max(1, z * 0.02)]);
-  }
-  const P = ambPainter(defs), wind = ambWind(Math.floor(now / WEATHER.slot)).x > 0 ? 1 : -1;
+  const st = TOD.active ? TOD.state : null, ka = st ? st.a : 'day', kb = st && st.f > 0.002 && st.b !== st.a ? st.b : null;
+  const late = !!st && st.f >= 0.5, over = st ? (late ? 1 - st.f : st.f) : 0;
+  const wind = ambWind(Math.floor(now / WEATHER.slot)).x > 0 ? 1 : -1;
+  // The pictures' size: the zoom's (a step up), smaller when the view is crowded with them or they take a lot of memory.
+  const most = shown.length > 120 || A.px > 12e6 ? 24 : shown.length > 50 ? 48 : 128;
+  const res0 = [12, 24, 36, 48, 64, 96, 128].find((v) => v >= z * R.dpr * 0.9) || 128;
+  const t0 = performance.now(), budget = gfxStep() === 'saver' ? 2 : 4, smudge = ambSmudges();
+  const dots = [], glows = [];
+  ctx.save();
   for (const e of shown) {
     const age = now - e.t0, T = AMB.ruin[e.k];
     const fade = 1 - clamp((age - T[2] * slow) / ((T[3] - T[2]) * slow), 0, 1);
     const g = ambStep(clamp((age - T[0] * slow) / ((T[1] - T[0]) * slow), 0, 1), 0, 1);
-    const x = ox + e.x * z, y = oy + e.y * z, r = e.r * z;
+    const x = ox + e.x * z, y = oy + e.y * z;
+    // The burn, softened, coming in as the game's scorch fades and going as things grow over it (once the game's own
+    // marks have all gone, it's part of the picture).
+    const burnt = age >= Math.max(e.life, e.burn), burn = burnt ? 0 : clamp((age - (e.burn - 10)) / 10, 0, 1) * (1 - 0.8 * g) * fade;
+    if (burn > 0.01) {
+      const bw = e.r * z * (e.k === 'b' ? 3 : 3.4);
+      ctx.globalAlpha = burn * 0.55;
+      ctx.drawImage(smudge[e.s % smudge.length], x - bw / 2, y - bw * 0.36, bw, bw * 0.72);
+    }
     // The game's own mark fades out over its last ten seconds; these come in as it goes (at once if it's gone early).
     const own = e.decal && alive && alive.has(e.decal) ? clamp((age - (e.life - 10)) / 10, 0, 1) : e.k === 'b' ? 1 : clamp(age / 0.6, 0, 1);
-    const burnIn = clamp((age - (e.burn - 10)) / 10, 0, 1); // (likewise the burn, as the game's scorch fades)
-    ambBase(P, e, x, y, r, fade, own, burnIn * (1 - 0.8 * g), z, lod);
-    if (g > 0.001) ambGrowth(P, G, e, x, y, r, g * (G.kind === 'dust' ? 0.7 : 1), fade, lod, wind, night);
+    const al = own * fade;
+    if (al < 0.01) continue;
+    if (e.r * z < 3.5) { dots.push(e, al, g); continue; } // (too small to show more than a speck)
+    e.seen = R.time;
+    const gq = Math.round(g * 12), res = Math.min(most, res0, e.k === 'u' ? 64 : 128), fresh = age < 2;
+    const pick = (name) => {
+      const sp = e.spr && e.spr[name];
+      if (sp && sp.gq === gq && sp.res === res && sp.wind === wind && sp.burnt === burnt) return sp;
+      if (sp && !fresh && performance.now() - t0 > budget) return sp; // (out of time this frame: the last one stands in)
+      return ambSprite(A, e, name, res, gq, G, wind, burnt);
+    };
+    const a = pick(ka), b = kb ? pick(kb) : null;
+    if (e.spr) for (const name in e.spr) if (name !== ka && name !== kb) ambFree(A, e.spr[name]), delete e.spr[name];
+    const put = (sp, k) => { const q = z / sp.res; ctx.globalAlpha = k; ctx.drawImage(sp.c, x - sp.cx * q, y - sp.cy * q, sp.c.width * q, sp.c.height * q); };
+    if (b) { put(late ? b : a, al); if (over > 0.002) put(late ? a : b, al * over); } else put(a, al);
+    if (a.nodes) glows.push(x, y, z / a.res, al, a.nodes);
+  }
+  ctx.restore();
+  if (!dots.length && !(glows.length && TOD.active && TOD.state.lights > 0.05)) return;
+  // The specks (zoomed far out), and after dark the Bloom's nodules glowing.
+  const tint = G.kind === 'green' ? G.dark : G.kind === 'bloom' ? G.ground : G.fill;
+  const P = ambPainter([['f2', todColor('#26272a')], ['tint', todColor(tint)], ['glow', G.glow || '#b070ff', 0, true]]);
+  for (let n = 0; n < dots.length; n += 3) {
+    const e = dots[n], al = dots[n + 1], g = dots[n + 2], x = ox + e.x * z, y = oy + e.y * z, r = Math.max(1.2, e.r * z);
+    ambEll(P.by.f2, al * (1 - 0.6 * g), x, y, r * 0.8, r * 0.5);
+    if (g > 0.05) ambEll(P.by.tint, al * 0.8 * g, x, y, r * 1.1 * g, r * 0.7 * g);
+  }
+  const night = TOD.active ? TOD.state.lights : 0;
+  if (night > 0.05) for (let n = 0; n < glows.length; n += 5) {
+    const x = glows[n], y = glows[n + 1], q = glows[n + 2], al = glows[n + 3], nodes = glows[n + 4];
+    for (let k = 0; k < nodes.length; k += 3) {
+      const nr = nodes[k + 2] * q * 3;
+      ambEll(P.by.glow, al * night * (0.55 + 0.25 * Math.sin(R.time * 1.3 + k)), x + nodes[k] * q, y + nodes[k + 1] * q, nr, nr * 0.8);
+    }
   }
   ambPaint(ctx, P);
 }
 
-/** What was left: a building's heap of rubble (the game's rubble mark, drawn on), or a robot's scattered wreckage; and the burn under it. */
-function ambBase(P, e, x, y, r, fade, own, burn, z, lod) {
-  const by = P.by, s = e.s;
-  if (burn > 0.01) { // the burn, softened: an outer and an inner patch, fading as things grow over it
-    const R0 = r * (e.k === 'b' ? 1.4 : 1.5);
-    for (const [k, a] of [[1, 0.22], [0.62, 0.3]]) {
-      const pts = [];
-      for (let n = 0; n < 10; n++) { const an = (n / 10) * Math.PI * 2, w = 0.75 + ((s * (n + 3)) % 7) / 20; pts.push(x + Math.cos(an) * R0 * k * w, y + Math.sin(an) * R0 * k * w * 0.7); }
-      ambPoly(by.burn, a * burn * fade, pts);
+/** The burns: three soft, ragged dark smudges, shared by all the remains (made once). */
+function ambSmudges() {
+  if (R.ambSmudge) return R.ambSmudge;
+  R.ambSmudge = [0, 1, 2].map((v) => {
+    const n = 96, c = document.createElement('canvas');
+    c.width = c.height = n;
+    const g = c.getContext('2d');
+    for (let k = 0; k < 5; k++) {
+      const x = n / 2 + (hash2(v, k, 771) - 0.5) * n * 0.35, y = n / 2 + (hash2(k, v, 772) - 0.5) * n * 0.3, r = n * (0.22 + 0.14 * hash2(v, k, 773));
+      const gr = g.createRadialGradient(x, y, 0, x, y, r);
+      gr.addColorStop(0, 'rgba(22,15,10,0.55)'); gr.addColorStop(0.6, 'rgba(26,18,12,0.3)'); gr.addColorStop(1, 'rgba(30,20,12,0)');
+      g.fillStyle = gr; g.fillRect(0, 0, n, n);
     }
+    return c;
+  });
+  return R.ambSmudge;
+}
+
+/** A colour as it looks at time of day `name` (TOD_TIMES' grade, as todColor does for the light now), as 'rgb(...)'. */
+function ambGrade(hex, name) {
+  const T = TOD_TIMES[name] || TOD_TIMES.day, k = hex + name, C = R.ambGrades || (R.ambGrades = new Map());
+  let c = C.get(k);
+  if (!c) {
+    const v = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255);
+    c = `rgb(${v.map((x, i) => Math.round(clamp(x * T.mul[i] + T.add[i], 0, 1) * 255)).join(',')})`;
+    C.set(k, c);
   }
-  const al = own * fade;
-  if (al < 0.01) return;
+  return c;
+}
+
+/**
+ * The picture of remains `e` at time of day `name`, `res` device pixels a tile and growth step gq (of 12): the heap or
+ * wreckage and what has grown over it, in that time's light, kept on the remains (e.spr[name]) until it's needed otherwise.
+ */
+function ambSprite(A, e, name, res, gq, G, wind, burnt) {
+  const old = e.spr && e.spr[name];
+  // (as big as what's drawn can reach: wide for a drift's tail, less tall, as everything on the ground is seen at a slant)
+  const R0 = e.r * (e.k === 'b' ? 1 : 1.6), nw = Math.max(4, Math.ceil(2 * R0 * (e.k === 'u' ? 1.75 : 2.05) * res)), nh = Math.max(4, Math.ceil(2 * R0 * (e.k === 'u' ? 1.2 : 1.35) * res));
+  const c = old ? old.c : document.createElement('canvas');
+  if (old) A.px -= c.width * c.height;
+  if (c.width !== nw || c.height !== nh) { c.width = nw; c.height = nh; } else c.getContext('2d').clearRect(0, 0, nw, nh);
+  A.px += nw * nh;
+  const col = (h) => ambGrade(h, name), u = R.dpr || 1, cx = nw / 2, cy = nh * 0.55, r = e.r * res;
+  const lod = { n: { saver: 0.5, auto: 1, high: 1, ultra: 1.4 }[gfxStep()] || 1, fine: res / u >= 14 };
+  const lw = (k, least) => Math.max(least * u, res * k);
+  const defs = [
+    ['heap', 'rgba(40,32,26,0.45)'], ['c0', col('#5d5e60')], ['c1', col('#8a847a')], ['c2', col('#6b5646')], ['beam', 'rgba(40,40,44,0.8)', lw(0.025, 1)],
+    ['f0', col('#34363b')], ['f1', col('#4d5157')], ['f2', col('#26272a')],
+  ];
+  if (e.owner >= 0 && PLAYER_COLORS[e.owner]) defs.push(['chip' + e.owner, col(PLAYER_COLORS[e.owner])]);
+  if (G.kind === 'green') {
+    defs.push(['dark', col(G.dark)], ['moss', col(G.moss)], ['vine', col(G.vine), lw(0.024, 1)], ['grass', col(G.grass), lw(0.016, 0.8)], ['blade', col(G.dark), lw(0.016, 0.8)]);
+    if (G.leaves) G.leaves.forEach((h, k) => defs.push(['leaf' + k, col(h)]));
+  } else if (G.kind === 'bloom') {
+    if (G.dust) defs.push(['dust', col(G.dust)]);
+    defs.push(['ground', col(G.ground)], ['vein', col(G.vein), lw(0.03, 1)], ['node', col(G.node)], ['crystal', col(G.crystal)]);
+  } else {
+    defs.push(['shade', col(G.shade)], ['fill', col(G.fill)], ['fill1', col(G.fill)], ['fill2', col(G.fill)]);
+    if (G.hi) defs.push(['hi', col(G.hi)]);
+    if (G.kind === 'sand') defs.push(['ripple', col(G.shade), lw(0.02, 1)]);
+  }
+  const P = ambPainter(defs), g = gq / 12, x = c.getContext('2d');
+  if (burnt && g < 1) { // (the burn under it all, as drawRemains draws it while the game's own marks are still there)
+    const bw = r * (e.k === 'b' ? 3 : 3.4);
+    x.globalAlpha = 0.55 * (1 - 0.8 * g);
+    x.drawImage(ambSmudges()[e.s % 3], cx - bw / 2, cy - bw * 0.36, bw, bw * 0.72);
+    x.globalAlpha = 1;
+  }
+  ambBase(P, e, cx, cy, r, lod);
+  const nodes = g > 0 ? ambGrowth(P, G, e, cx, cy, r, g * (G.kind === 'dust' ? 0.7 : 1), lod, wind) : null;
+  ambPaint(x, P);
+  // (the Bloom's nodules, for their glow after dark: where they are from the middle, and how big, in sprite pixels)
+  const sp = { c, cx, cy, res, gq, wind, burnt, nodes: nodes && nodes.length ? nodes.map((v, k) => (k % 3 === 2 ? v : v - (k % 3 ? cy : cx))) : null };
+  (e.spr || (e.spr = {}))[name] = sp;
+  return sp;
+}
+
+/** Let a picture go at once (a phone has only so much canvas memory). */
+function ambFree(A, sp) { if (sp && sp.c) { A.px -= sp.c.width * sp.c.height; sp.c.width = sp.c.height = 0; } }
+/** Let all of remains e's pictures go. */
+function ambDrop(A, e) { if (e.spr) { for (const k in e.spr) ambFree(A, e.spr[k]); e.spr = null; } }
+
+/** What was left: a building's heap of rubble (the game's rubble mark, drawn on), or a robot's scattered wreckage. */
+function ambBase(P, e, x, y, r, lod) {
+  const by = P.by, s = e.s, al = 1;
   if (e.k === 'b') {
     // (as drawDecals draws the game's rubble: the same pieces from the same seed)
     ambEll(by.heap, al, x, y, r * 1.05, r * 0.6);
-    const n = lod.fine ? 9 : 4;
+    const n = lod.fine ? 9 : 5;
     for (let k = 0; k < n; k++) {
       const a = (s + k * 61) * 0.71, rr = r * (0.15 + ((s + k * 13) % 9) / 11), cs = r * (0.16 + ((s + k) % 4) * 0.05);
       ambChunk(by['c' + (k % 3)], al, x + Math.cos(a) * rr, y + Math.sin(a) * rr * 0.55, cs, a);
@@ -369,12 +476,11 @@ function ambBase(P, e, x, y, r, fade, own, burn, z, lod) {
   }
   // A robot's, a vehicle's or a plane's wreckage: dark pieces scattered where it fell, one with a fleck of its colony's paint.
   const n = e.k === 'p' ? 7 : e.size > 1.2 ? 5 : 4;
-  if (r < 2.5) { ambEll(by.f2, al, x, y, Math.max(1, r * 0.9), Math.max(0.7, r * 0.55)); return; }
   for (let k = 0; k < n; k++) {
     const an = hash2(s, k, 711) * Math.PI * 2, d = r * (0.05 + 0.85 * hash2(s, k, 712)) * (k ? 1 : 0.3), cs = r * (0.22 + 0.22 * hash2(s, k, 713)) * (e.k === 'p' && k < 2 ? 1.6 : 1);
     const px = x + Math.cos(an) * d, py = y + Math.sin(an) * d * 0.6, rot = hash2(k, s, 714) * Math.PI * 2;
     ambChunk(by['f' + (k % 3)], al, px, py, cs, rot);
-    if (k === 0 && e.owner >= 0 && by['chip' + e.owner]) ambChunk(by['chip' + e.owner], al * 0.85, px, py - cs * 0.1, cs * 0.45, rot + 0.6);
+    if (k === 0 && by['chip' + e.owner]) ambChunk(by['chip' + e.owner], al * 0.85, px, py - cs * 0.1, cs * 0.45, rot + 0.6);
   }
 }
 
@@ -382,8 +488,8 @@ function ambBase(P, e, x, y, r, fade, own, burn, z, lod) {
  * The growth over remains `e` (screen x, y and radius r) at g (0..1), by biome. Each piece comes in at its own point of
  * g and grows from nothing, so the whole creeps over rather than appearing.
  */
-function ambGrowth(P, G, e, x, y, r, g, fade, lod, wind, night) {
-  const by = P.by, s = e.s, big = e.k === 'b' ? 1 : e.k === 'p' ? 0.8 : 0.5, h = (k, salt) => hash2(s, k, salt);
+function ambGrowth(P, G, e, x, y, r, g, lod, wind) {
+  const fade = 1, by = P.by, s = e.s, big = e.k === 'b' ? 1 : e.k === 'p' ? 0.8 : 0.5, h = (k, salt) => hash2(s, k, salt);
   const R0 = r * (e.k === 'b' ? 1 : 1.6); // (a robot's wreck is small: its growth spreads round it a little)
   if (G.kind === 'green') {
     // Moss first, in small clumps at the foot of the rubble and on the ground round it (a darker underside, a lighter
@@ -458,16 +564,13 @@ function ambGrowth(P, G, e, x, y, r, g, fade, lod, wind, night) {
         if (f >= 1) nodes.push(px, py);
       }
     }
-    const nr = Math.max(0.9, R0 * 0.07);
-    for (let n = 0; n < nodes.length; n += 2) {
-      ambEll(by.node, fade, nodes[n], nodes[n + 1], nr, nr * 0.8);
-      if (night > 0.05) ambEll(by.glow, fade * night * (0.55 + 0.25 * Math.sin(R.time * 1.3 + n + s)), nodes[n], nodes[n + 1], nr * 3, nr * 2.4);
-    }
+    const nr = Math.max(0.9, R0 * 0.07), out = [];
+    for (let n = 0; n < nodes.length; n += 2) { ambEll(by.node, fade, nodes[n], nodes[n + 1], nr, nr * 0.8); out.push(nodes[n], nodes[n + 1], nr); }
     if (g > 0.6 && lod.fine) for (let k = 0; k < 2 + (e.k === 'b' ? 1 : 0); k++) {
       const q = ambStep(g, 0.6 + k * 0.1, 0.25), an = h(k, 727) * Math.PI * 2, d = R0 * 0.6 * h(k, 728), cx = x + Math.cos(an) * d, cy = y + Math.sin(an) * d * 0.6, cs = R0 * 0.09 * q;
       if (cs > 0.4) ambPoly(by.crystal, fade, [cx, cy - cs * 1.8, cx + cs, cy, cx, cy + cs * 0.6, cx - cs, cy]);
     }
-    return;
+    return out;
   }
   if (G.kind === 'ash' || G.kind === 'dust') {
     // Settling evenly: a soft layer that thickens and spreads over the heap (thickest in the middle), grit in it.
