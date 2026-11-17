@@ -146,13 +146,12 @@ function drawCloudShadows(ctx, ox, oy, z) {
   const off = ambDrift(S.time), cell = C.cell, puff = ambPuff(), more = gfxStep() === 'ultra' ? 2 : 1;
   // The cells in view, in the sky's own frame (the ground's, less how far the wind has carried it).
   const x0 = -ox / z - off.x, x1 = (R.w - ox) / z - off.x, y0 = -oy / z - off.y, y1 = (R.h - oy) / z - off.y;
-  let any = false;
+  let bx0 = bw, by0 = bh, bx1 = 0, by1 = 0; // (what the puffs cover: only that part is laid over the view)
   for (let cj = Math.floor(y0 / cell) - 1; cj <= Math.floor(y1 / cell) + 1; cj++) {
     for (let ci = Math.floor(x0 / cell) - 1; ci <= Math.floor(x1 / cell) + 1; ci++) {
       // Each cell's rank against the cover: more weather, more of them in, each fading in rather than popping.
       const a = clamp((cover - hash2(ci, cj, seed + 601)) / 0.12, 0, 1);
       if (a <= 0) continue;
-      any = true;
       g.globalAlpha = a;
       const cx = (ci + 0.25 + 0.5 * hash2(ci, cj, seed + 602)) * cell + off.x, cy = (cj + 0.25 + 0.5 * hash2(ci, cj, seed + 603)) * cell + off.y;
       const n = 3 + Math.floor(hash2(ci, cj, seed + 604) * 3) + more;
@@ -163,18 +162,20 @@ function drawCloudShadows(ctx, ox, oy, z) {
         const sx = (ox + px * z) * k, sy = (oy + py * z) * k, rw = r * z * k * 1.35, rh = r * z * k;
         if (sx + rw < 0 || sx - rw > bw || sy + rh < 0 || sy - rh > bh) continue;
         g.drawImage(puff, sx - rw, sy - rh, rw * 2, rh * 2);
+        bx0 = Math.min(bx0, sx - rw); by0 = Math.min(by0, sy - rh); bx1 = Math.max(bx1, sx + rw); by1 = Math.max(by1, sy + rh);
       }
     }
   }
-  if (!any) return;
+  bx0 = Math.max(0, Math.floor(bx0) - 1); by0 = Math.max(0, Math.floor(by0) - 1); bx1 = Math.min(bw, Math.ceil(bx1) + 1); by1 = Math.min(bh, Math.ceil(by1) + 1);
+  if (bx1 <= bx0 || by1 <= by0) return;
   g.globalAlpha = 1;
   g.globalCompositeOperation = 'source-in';
   g.fillStyle = `rgb(${C.tint})`;
-  g.fillRect(0, 0, bw, bh);
+  g.fillRect(bx0, by0, bx1 - bx0, by1 - by0);
   ctx.save();
   ctx.globalAlpha = (C.alpha + C.alphaWx * wx) * sun;
   ctx.imageSmoothingEnabled = true;
-  ctx.drawImage(buf, 0, 0, bw / k, bh / k);
+  ctx.drawImage(buf, bx0, by0, bx1 - bx0, by1 - by0, bx0 / k, by0 / k, (bx1 - bx0) / k, (by1 - by0) / k);
   ctx.restore();
 }
 
