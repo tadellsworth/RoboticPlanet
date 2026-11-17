@@ -1344,7 +1344,11 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   Against a crushed rival (twice its army and two more) it storms however the base's guns count, once it can gather
   twice the enemy's whole army and two more, 8 at least, and three in five of its own armed army outside Bunkers (or
   the full count, if that is less); with three times the enemy's army and four more it masses for that and marches on
-  nothing else meanwhile. An Easy rival marches as the plain rule says, and in an Uplinks game the forts holding the
+  nothing else meanwhile. In the last fight of a free-for-all (three or four colonies, one rival left) that storm
+  draws on every garrison, front forts, Keeps and the Command Bases it took too (`aiSpare` with 'storm',
+  `sendToRally` with rear 'all'; its own Command Base keeps its home guard): the colony that won the earlier fights
+  holds two or three colonies' forts, nearly all in reach of the last rival and each keeping warbots back, and on a
+  small Crossroads the last two sat out the clock. An Easy rival marches as the plain rule says, and in an Uplinks game the forts holding the
   enemy's Uplinks still come first. The home guard (`P.homeGuard`, through `keepAt` and `homeGuarded`): while four or
   more enemy warbots stand within 12 tiles of its base, or the base was hit in the last half minute (`P.homeCall`),
   about a third of its army (2 to 8) stays in its Command Base and up to 3 in each Keep, out of every attack, raid and

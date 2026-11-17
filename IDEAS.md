@@ -160,6 +160,9 @@ or drop.
   island it takes first, which isn't tried.
 - **Free-for-alls run to the cap.** In 3- and 4-player games the rivals don't gang up on the leader or finish off a
   weakened third; most test games on The Wheel, Three Mesas, Pinwheel, Four Isles and Twin Valleys end undecided.
+  (One cause fixed, Nov 17: in the last fight the winner of the earlier ones couldn't gather a storm, every fort,
+  Keep and Command Base it held keeping warbots back; that storm now draws on them all. Small Crossroads games that
+  sat out the clock with two colonies left now finish, in about an hour.)
 - **Doctrine balance and text.** The Herald wins 10 of 12 against the Steward. The Architect's text promises a nuke it
   never builds (no Reactor in 10 Nuclear-race games); the Warden's says it "covers its land with turrets" but it
   builds about 2, all within 5 tiles of its base.
