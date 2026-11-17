@@ -809,8 +809,9 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   Refinery's own Crude stays). Tankers and trucks fill up there like at any storage. Destroyed with Crude and Fuel in it,
   it goes up in `BLAST.fueltank` (1 tile, up to 3.8 when full; 8 damage to robots, 7 to buildings), setting off
   Refineries, other Fuel Tanks and loaded Tankers in it; its panel shows how full it is and how big the blast would be
-  now. The rival puts one up by its pumps once it has `AI_FUEL_TANK_PUMPS` (3) Oil Pumps at work and a Foundry
-  (`aiSearchSpot` places it like a Refinery), and its bombers rate it highly (`AI_BOMB_VALUE`).
+  now. The rival puts one up by its pumps once it has `AI_FUEL_TANK_PUMPS` (1) Oil Pump at work, a Refinery and a Foundry
+  (`aiSearchSpot` places it like a Refinery, near its pumps, and touching a Refinery where it can: `AI_FEED`), and its
+  bombers rate it highly (`AI_BOMB_VALUE`).
   **Trucks burn Fuel** (`TRUCK_BURN`): Freight Trucks, Road Trains and Tankers have a fuel tank instead of a battery,
   draining as they drive (a full tank lasts about 4 minutes of driving, a Road Train's under 3); low, they fill up at the
   nearest storage or Fuel Station holding Fuel (one Fuel fills the tank). With no Fuel anywhere they crawl at half

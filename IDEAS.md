@@ -113,7 +113,7 @@ Still open: a neutral, shared exchange the rivals compete over; contracts for Ch
   at any storage (ships and planes still fill up at their Port and Airfield). Destroyed full, it goes up in the biggest fuel blast in the game (1 tile empty, up to 3.8 full; 8
   damage to robots, 7 to buildings; a Refinery's is 2.4, 6 and 5), setting off Refineries, Fuel Tanks and loaded
   Tankers in it; its panel shows how full it is and how big the blast would be now. The rival builds one by its pumps
-  once it has 3 working Oil Pumps and a Foundry, and its bombers rate one highly. Taught in Pipe Dreams (its last goal:
+  once it has a working Oil Pump, a Refinery and a Foundry, touching the Refinery where it can, and its bombers rate one highly. Taught in Pipe Dreams (its last goal:
   store Fuel in a Fuel Tank touching the Refinery). **For the owner to check:** the cap (120), the cost, the blast
   size, the 4 feed links and the doubled pipeline rate are first guesses.
 

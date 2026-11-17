@@ -7,7 +7,7 @@
 
 /** [good, pause at, resume below]: producers the AI rests when it has plenty. */
 const AI_CAPS = { fab: ['chip', 8, 3], armory: ['ammo', 18, 6], refinery: ['fuel', 30, 10] };
-const AI_FUEL_TANK_PUMPS = 3; // Oil Pumps at work before the rival puts up a Fuel Tank by them
+const AI_FUEL_TANK_PUMPS = 1; // Oil Pumps at work (and a Refinery built) before the rival puts up a Fuel Tank by them
 /**
  * [building type, how many the AI wants]. Entries are tried in order. (No Missile Factory or Silo here: those
  * come only through aiMissilePlan, which waits for an economy and an army and saves up for them. As ordinary
@@ -486,9 +486,10 @@ function aiThink(p) {
     plan = add.concat(plan);
     if (fuelNow < 3) siteCap = Math.max(siteCap, maxSites + 1);
   }
-  // An oil bloc: with AI_FUEL_TANK_PUMPS Oil Pumps at work, a Fuel Tank beside them (its pumps' Crude is piped to it,
-  // see 2b, and Tankers fill up there).
-  if (!counts.fueltank && me.filter((b) => b.built && b.type === 'pump' && !pumpDry(b)).length >= AI_FUEL_TANK_PUMPS && me.some((b) => b.built && b.type === 'foundry')) plan = plan.concat([['fueltank', 1]]);
+  // An oil bloc: with AI_FUEL_TANK_PUMPS Oil Pumps at work and a Refinery built, a Fuel Tank by them, touching the
+  // Refinery where it can (AI_FEED): it feeds the Refinery Crude and stores its Fuel, and Tankers fill up there. First in
+  // the plan (it's cheap): a pump runs dry in a few minutes, so a tank left for later comes too late.
+  if (!counts.fueltank && me.filter((b) => b.built && b.type === 'pump' && !pumpDry(b)).length >= AI_FUEL_TANK_PUMPS && me.some((b) => b.built && b.type === 'refinery') && me.some((b) => b.built && b.type === 'foundry')) plan = [['fueltank', 1]].concat(plan);
   // With Fiber nearly gone (no Harvester at work, or construction waiting for it), the Smelters
   // stop burning it until there's some to spare. Construction waits for it at a site that is short of it, and
   // before there is a site at all: none is started without the Fiber in storage (P.fiberWait, set below), and a
@@ -2776,7 +2777,7 @@ function resourceSums(type) {
 }
 
 /** Buildings the AI likes to put beside their suppliers or customers, for feed links. */
-const AI_FEED = new Set(['smelter', 'fab', 'foundry', 'armory', 'munitions', 'tarworks', 'roadworks', 'refinery', 'kiln', 'charger', 'generator', 'repair']);
+const AI_FEED = new Set(['smelter', 'fab', 'foundry', 'armory', 'munitions', 'tarworks', 'roadworks', 'refinery', 'kiln', 'charger', 'generator', 'repair', 'fueltank']);
 
 function aiFindSpot(p, type, lander) {
   // A search that found nothing isn't repeated until the territory changes or 20 s pass.
