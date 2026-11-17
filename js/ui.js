@@ -2867,11 +2867,11 @@ function missionMeta(def, diff) {
   const size = SIZE_PRESETS[def.size].name, terr = TERRAIN_PRESETS[def.rough].name, shape = (SHAPE_PRESETS[def.shape || 0] || SHAPE_PRESETS[0]).name;
   const limit = def.limit[diff] ? ` · ${def.limit[diff]} min limit` : '';
   // What the mission switches on that missions otherwise leave out.
-  const extras = [def.mode === 'colony' && def.war && 'Warbots', def.wildlife && 'The Murmur', def.events && 'Planet events', def.nuke && 'Nuclear race', def.lab && 'Research Lab'].filter(Boolean);
+  const extras = [def.victory && VICTORY[def.victory] && VICTORY[def.victory].name, def.mode === 'colony' && def.war && 'Warbots', def.wildlife && 'The Murmur', def.events && 'Planet events', def.nuke && 'Nuclear race', def.lab && 'Research Lab'].filter(Boolean);
   const more = extras.length ? ` · ${extras.join(', ')}` : '';
   if (def.mode === 'colony') return `Colony · ${shape} · ${size} · ${terr}${more}${limit}`;
   const n = playerCount('versus', def.shape || 0, def.players) - 1, style = isDoctrine(def.style) ? ` ${PERSONALITIES[def.style].name}` : '';
-  const rival = `${n > 1 ? n + ' ' : ''}${DIFFICULTY[def.rival[diff]].label}${style} rival${n > 1 ? 's' : ''}${def.passive && def.passive[diff] ? ' (passive)' : ''}`;
+  const rival = `${n > 1 ? n + ' ' : ''}${DIFFICULTY[def.rival[diff]].label}${style} rival${n > 1 ? 's' : ''}${def.style === 'random' ? ` (random doctrine${n > 1 ? 's' : ''})` : ''}${def.passive && def.passive[diff] ? ' (passive)' : ''}`;
   return `Versus · ${shape} · ${size} · ${terr} · ${rival}${more}${limit}`;
 }
 
@@ -2927,6 +2927,11 @@ function startMission(k, diff) {
   // (The card shows plain text: a <b> in the brief or an intro line would show as typed.)
   postMsg(ME, plainHint(def.brief), 0, 0, 'info');
   for (const line of def.intro || []) postMsg(ME, plainHint(line), 0, 0, 'info');
+  // (Rivals dealt a doctrine at random: which they got.)
+  if (def.style === 'random') {
+    const dealt = S.players.filter((P) => P.id !== ME && !P.absent && isDoctrine(P.style)).map((P) => `${callsign(P.id, true)} is ${PERSONALITIES[P.style].noun} (${PERSONALITIES[P.style].plain})`);
+    if (dealt.length) postMsg(ME, `Dealt: ${dealt.join('; ')}.`, 0, 0, 'info');
+  }
   const g0 = def.goals[0];
   if (g0 && g0.hint) postMsg(ME, `First: ${goalText(g0, diff)}. ${plainHint(g0.hint)}`, 0, 0, 'good');
   showBriefing();
@@ -3135,7 +3140,8 @@ function showMissionOver() {
   $('o-text').textContent = won
     ? `${def.name} (${MISSION_DIFF_NAMES[M.diff]}) done in ${fmtTime(S.time)}.`
     : M.why === 'time' ? `${def.name}: time ran out before every goal was met.`
-      : M.why === 'lander' ? `${def.name}: the rival captured your Command Base.` : `${def.name}: the game ended before every goal was met.`;
+      : M.why === 'lander' ? `${def.name}: ${S.players.length > 2 && S.players[S.winner] ? playerName(S.winner) : 'the rival'} captured your Command Base.`
+        : M.why === 'uplinks' ? `${def.name}: ${playerName(S.winner)} held the Uplinks for ${UPLINK.hold / 60} minutes.` : `${def.name}: the game ended before every goal was met.`;
   $('o-stats').innerHTML = states.map((s) => { return `<span>${s.done ? '✓' : '✗'} ${s.text}</span><span>${s.need > 1 ? `${s.have}/${s.need}` : s.done ? 'Done' : '–'}</span>`; }).join('');
   $('o-report').innerHTML = gameReport(won); // (the moments that mattered, where goods went, a tip: js/insight.js)
   $('o-report').hidden = !$('o-report').innerHTML;

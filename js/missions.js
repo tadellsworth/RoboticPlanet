@@ -9,12 +9,14 @@
  * The campaign is in seven chapters, played in this order: First Steps (one idea at a time: a building and its road,
  * Stone and Cement, batteries, the first Alloy), Growing the Colony (bots, farmed Fuel, regrowing groves, Outposts),
  * Roads and Traffic, Industry and Trade, Sea and Sky (all in Colony games, so the economy is learned in peace), then
- * First Contact (the Murmur's nests, a rival to practise on, a border war, a chokepoint to hold) and War. From the second
- * mission on, setup puts down the colony the earlier missions taught (`kit`), so each one is spent on its new idea.
+ * First Contact (the Murmur's nests, a rival to practise on, a border war, a chokepoint to hold) and War; after them a
+ * Bonus (King of the Hill: an Uplinks race for three). From the second mission on, setup puts down the colony the earlier
+ * missions taught (`kit`), so each one is spent on its new idea.
  *
  * A mission: { id (progress is saved by it: keep it when a mission is reworked), name, chapter (the list's heading:
  * a chapter's missions sit together, in order), brief (two sentences at most), intro: [up to 5 lines for the briefing
- * card], mode, seed, size, rough, rich, biome, shape, players, style (the rival's doctrine, a PERSONALITIES key), rival: [easy, normal,
+ * card], mode, seed, size, rough, rich, biome, shape, players, style (the rival's doctrine, a PERSONALITIES key, or 'random'),
+ * victory (a way to win other than capture, a VICTORY key: 'uplinks' places the Uplinks), rival: [easy, normal,
  * hard] (its level), rivalBonus (extra of every good in its Command Base), passive: [easy, normal, hard] (a rival that
  * never attacks), limit (minutes per difficulty, 0 none), nuke/war/lab/events/wildlife (switch on what missions
  * otherwise leave out: a Nuclear race, warbots and defences in Colony, the Research Lab, planet events, creature
@@ -1234,7 +1236,37 @@ const MISSIONS = [
         ui: '#sh-bomb, #btn-attack, #ar-nall, #ar-hold' },
     ],
   },
+
+  // Bonus: the free-play ways to win the campaign only mentions. An Uplinks race for three.
+  {
+    id: 'hill', name: 'King of the Hill', chapter: 'Bonus',
+    brief: 'Three vanguards, three Uplinks: whoever holds them speaks for Ithaca I. Hold two of the three for longer than both rivals.',
+    intro: [
+      'The Pathfinder raised the <b>Uplinks</b> to talk to home. Under the Accord, whoever holds them speaks for Ithaca I.',
+      'An Uplink is yours while it stands in your land: put an Outpost or a Keep beside it. Tap the Uplinks card at the top to look at each.',
+      'They come online 8 minutes in. Then hold 2 of the 3, more than either rival, and your clock runs: 5 minutes in all wins.',
+      'Armed warbots right beside an Uplink jam it: it counts for no one. Theirs can jam yours; yours can jam theirs.',
+      'Two rivals, their doctrines dealt at random. Every vanguard wants to be holding the Uplinks if home ever answers.',
+    ],
+    mode: 'versus', seed: 30117, size: 2, rough: 1, rich: 3, biome: 'desert', shape: 17, players: 3, style: 'random',
+    victory: 'uplinks', rival: ['easy', 'medium', 'medium'], limit: [0, 0, 35],
+    setup(S) { kit(S, [...KIT8, 'armory'], 4); }, // (the colony so far, with the Ammo Plant)
+    goals: [
+      { kind: 'uplink', n: 1, text: 'Hold an Uplink', count: (P, S) => uplinksHeld(S),
+        hint: '<b>Build</b> (<kbd>B</kbd>) → <b>Defend</b> (<kbd>4</kbd>) → <b>Outpost</b> (<kbd>O</kbd>) toward the nearest Uplink, and <b>Lay road</b>: its land takes it.',
+        ui: "#btn-build, #build-tabs [data-g='defend'], .bcard[data-t='outpost'], #win-card" },
+      { kind: 'uplinks', n: 2, text: 'Hold 2 Uplinks at once', count: (P, S) => uplinksHeld(S),
+        hint: 'An <b>Outpost</b> (<kbd>B</kbd> <kbd>4</kbd> <kbd>O</kbd>) by a second Uplink, and a <b>Bunker</b> (<kbd>U</kbd>) beside each one you hold: rivals send warbots to jam them.',
+        ui: "#btn-build, #build-tabs [data-g='defend'], .bcard[data-t='outpost'], .bcard[data-t='bunker']" },
+      { kind: 'race', n: 1, text: 'Win the Uplinks race', count: (P, S) => (S.winner === 0 && S.endHow === 'uplinks' ? 1 : 0),
+        hint: 'Hold 2 of the 3 for 5 minutes in all: the card shows the clocks. A rival\'s running? <b>Army</b> (<kbd>Q</kbd>) → <b>Hold ground</b> (<kbd>G</kbd>) beside its Uplink: that jams it.',
+        ui: '#btn-attack, #ar-hold, #win-card' },
+    ],
+  },
 ];
+
+/** For the Uplinks goals: how many Uplinks player 0 holds right now (its land covers them, and none is jammed). */
+function uplinksHeld(S) { return (S.uplinks || []).filter((u) => u.owner === 0 && !u.jam).length; }
 
 function goalNeed(g, diff) { return Array.isArray(g.n) ? g.n[diff] : g.n || 1; }
 
@@ -1358,7 +1390,7 @@ function finishMission() {
   const M = S.mission;
   if (!M || M.result) return;
   if (S.winner === 0 && missionStates(M).every((s) => s.done)) M.result = 'won';
-  else { M.result = 'lost'; M.why = S.winner === 1 ? 'lander' : 'goals'; }
+  else { M.result = 'lost'; M.why = S.endHow === 'uplinks' && S.winner > 0 ? 'uplinks' : S.winner === 1 || S.players[0].out ? 'lander' : 'goals'; }
 }
 
 /** newGame options for mission k at difficulty diff (0 easy, 1 normal, 2 hard). */
@@ -1382,6 +1414,8 @@ function missionOptions(k, diff) {
       // What this mission switches on that missions otherwise leave out (see nukeOn, warOn, labOn, updateEvents).
       S.mission = { k, id: def.id, diff, limit: (def.limit[diff] || 0) * 60, nuke: !!def.nuke, war: !!def.war, lab: !!def.lab, events: !!def.events };
       if (def.wildlife && S.mode === 'colony' && murmurGround(S.settings.biome)) { S.wildlife = true; placeNests(S.seed); } // (none on the moon)
+      // (A way to win other than capture: newGame sets one only outside missions. The Uplinks go where free play puts them.)
+      if (def.victory && S.mode === 'versus') { S.victory = def.victory; if (def.victory === 'uplinks') placeUplinks(S.seed); }
       // (A rival that never attacks, at the difficulties the mission says: passive [easy, normal, hard].)
       if (def.passive && def.passive[diff]) for (const P of S.players) if (P.id !== 0) P.passive = true;
       if (def.setup) def.setup(S, diff);
