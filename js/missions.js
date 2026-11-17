@@ -1215,9 +1215,12 @@ const MISSIONS = [
       'Nothing shoots on a Trade Post\'s ground, so raids come out on the road. <b>Escort</b> sends two warbots along.',
       'The rival runs convoys too, dashed on the minimap. Warbots on a flag by it, out past its land, go for them.',
       'A wrecked convoy spills its cargo as crates. Your warbots carry them home.',
+      'Their Command Base can\'t be taken here, and one under siege sends no convoys out: raid the road, not the base.',
     ],
     mode: 'versus', seed: 7711, size: 1, rough: 1, rich: 3, biome: 'desert', shape: 0, style: 'raider',
-    rival: ['easy', 'medium', 'normal'], limit: [0, 0, 40],
+    // (Hard's clock: played with the hints' steps, the AI on your side won at 8:53 to 12:24, nearly always by 10:30, so 13
+    // minutes leaves little to spare. Five runs on a route that runs every 2 minutes can't be done much before 9.)
+    rival: ['easy', 'medium', 'normal'], limit: [0, 0, 13],
     setup(S) {
       kit(S, [...KIT7, 'armory'], 4); // (the colony so far, with Supply Lines' Ammo Plant)
       const L = getE(S.players[0].lander), E = getE(S.players[1].lander);

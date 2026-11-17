@@ -1373,8 +1373,9 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   about 30 minutes instead of 22 (its 45-minute clock stands); Final Descent on Normal and Hard is a real war now,
   where the old rival's army was gone by minute 10 (six wins in seven on each: one lost on Hard, one still open at 41
   minutes on Normal); Hold the Line's Herald hits a colony that only follows the hints a minute or two sooner on Easy
-  and Normal (about 8½ and 7½ minutes in). Easy rivals are as they were. Convoy, left to the trade work, was played
-  only by the AI (see IDEAS). No mission's rival is across the water, so none makes beach landings (`aiBeach`) yet;
+  and Normal (about 8½ and 7½ minutes in). Easy rivals are as they were. Convoy, played the same way, is won on Hard at
+  about 9 to 12 minutes, the Salvager's army down to a handful by then, so its Hard clock went from 40 minutes to 13
+  (see IDEAS). No mission's rival is across the water, so none makes beach landings (`aiBeach`) yet;
   Harbour's briefing tells of them.
 - **The story** (LORE.md is canon; text and presentation only, nothing in it changes a rule). **Callsigns**
   (`CALLSIGNS`, `callsign(p, colour)`): players are named COBALT (player 0, blue), VERMILION (red), VIRIDIAN (green) and
