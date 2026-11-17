@@ -32,7 +32,7 @@ how goods move.
   Traffic**, **Industry and Trade**, **Sea and Sky** (all Colony games, so the economy is learned in peace), then
   **First Contact** (the Murmur's nests, their cavern lair the Hollow, a passive rival, a border war, a chokepoint against a Herald) and **War** (Ammo and
   repairs, trade convoys, escorts and convoy raids against a Salvager, Torches, Bulwarks and missiles against a Warden, the Nuclear race, Keeps and bombers), then a **Bonus**:
-  **King of the Hill**, an Uplinks race for three on The Wheel against two rivals of random doctrine (`victory:
+  **King of the Hill**, an Uplinks race for three on The Wheel against two rivals of random doctrine (Normal ones on Hard; `victory:
   'uplinks'`: missionOptions sets `S.victory` and calls `placeUplinks`; goals: hold an Uplink, hold two at once, win
   the race; a rival winning it loses the mission with `M.why = 'uplinks'`). All of them are open
   from the start; finishing one ticks it off at that difficulty (saved by its `id`, so a reworked mission keeps its
@@ -377,7 +377,8 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   road from home reaches the place (`onHomeNet`: a road, not a ferry line, the sea or a Rail Station's conveyor): then
   it switches itself off in `dispatch`, Drop Outposts and sites in their land too, and Haulers supply it (a finished
   building's owner is told; a site goes over quietly). Where a road from home already reaches, the `airSupply` order
-  can't switch it on (its On button is greyed out, `airSupplyRoad`). Only the places switched to it are looked at. The
+  can't switch it on (its On button is greyed out, `airSupplyRoad`). A building that changes hands loses it (it was its
+  old owner's choice), a Drop Outpost apart. Only the places switched to it are looked at. The
   places take turns (`airSupplyRun`: the one served longest ago, `c.airAt`, or run dry of something, first; `c.airIn`
   is when crates last landed there). A
   supply drop comes down as a crate for every few goods (`d.crates`), swaying under team parachutes, and lands in front of

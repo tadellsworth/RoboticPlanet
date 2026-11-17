@@ -1376,7 +1376,7 @@ const MISSIONS = [
       'Two rivals, their doctrines dealt at random. Every vanguard wants to be holding the Uplinks if home ever answers.',
     ],
     mode: 'versus', seed: 30117, size: 2, rough: 1, rich: 3, biome: 'desert', shape: 17, players: 3, style: 'random',
-    victory: 'uplinks', rival: ['easy', 'medium', 'medium'], limit: [0, 0, 35],
+    victory: 'uplinks', rival: ['easy', 'medium', 'normal'], limit: [0, 0, 35], // (Hard ones on Hard: a scripted player won none of five; Normal, one in three)
     setup(S) { kit(S, [...KIT8, 'armory'], 4); }, // (the colony so far, with the Ammo Plant)
     goals: [
       { kind: 'uplink', n: 1, text: 'Hold an Uplink', count: (P, S) => uplinksHeld(S),

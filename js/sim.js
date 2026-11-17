@@ -4870,6 +4870,7 @@ function captureBuilding(b, by) {
   }
   releaseBotsFrom(b, false); // whoever was inside (out of Ammo, or the crew) flees: they aren't killed
   delete b.prio; delete b.smode; delete b.reject; b.paused = false;
+  if (!BDEFS[b.type].airdrop) delete b.airSupply; // (Supply by air was its old owner's choice; a Drop Outpost keeps it)
   b.fixLeft = 0; b.fixer = 0;
   // Only a fort changes hands. Anything else is wrecked (below) as its old owner's: the attackers keep
   // their orders (releaseBotsFrom calls off only the owner's), and a Gate's road stays the defender's.
@@ -5606,6 +5607,7 @@ function eliminate(old, by, how) {
     if (!e.built) { destroyBuilding(e, true); continue; }
     releaseBotsFrom(e, true);
     delete e.prio; delete e.smode; delete e.reject; e.paused = false;
+    if (!BDEFS[e.type].airdrop) delete e.airSupply; // (as in captureBuilding)
     e.fixLeft = 0; e.fixer = 0; e.timer = 0; e.garrison = []; e.garInc = 0;
     e.owner = by; e.tgt = 0;
     e.armor = Math.max(4, Math.min(e.armor, BDEFS[e.type].armor * 0.4));
