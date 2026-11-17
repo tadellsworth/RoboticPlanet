@@ -126,7 +126,7 @@ const COLONY_GOALS = [
     hint: 'Paths → Junctions, then tap a crossing where three or four roads meet.', paths: 'lights',
     count: () => (Object.values(S.lights || {}).some((l) => l.owner === ME) || Object.values(S.over || {}).some((o) => o.owner === ME) ? 1 : 0) },
   { id: 'pipe', tier: 0, name: 'Line pressure', text: 'Pipe Crude or Fuel between two buildings.', n: 1,
-    hint: 'Tap an Oil Pump → Pipe it to the Refinery, or a Generator → Pipe Fuel to it. Or Paths → Pipes.', at: ['pump', 'generator', 'charger'], paths: 'pipe',
+    hint: 'Tap an Oil Pump → Pipe it in, or a Generator → Pipe Fuel to it. Or Paths → Pipes.', at: ['pump', 'generator', 'charger'], paths: 'pipe',
     count: () => {
       const net = pipeNet(), on = new Map();
       for (const b of S.buildings) {
@@ -170,7 +170,7 @@ const COLONY_GOALS = [
   { id: 'port', tier: 2, name: 'Sea lanes', text: 'Build a Port and a Container Ship.', n: 2, when: () => navalMap(),
     hint: 'Build → Move → Port on a shore, then tap it → Shipyard: Container Ships +1.', at: ['port'], build: 'port',
     count: (P) => (metaOwn('port').length ? 1 : 0) + (Math.max(metaMade(P, 'cargoship'), metaBots('cargoship')) ? 1 : 0) },
-  { id: 'airdrop', tier: 2, name: 'Airlift', text: 'Make a Cargo Plane delivery.', n: 1,
+  { id: 'airdrop', tier: 2, name: 'Airlift', text: 'Make a Cargo Plane delivery.', n: 1, when: () => !worldBan('airfield'), // (none in the Hollow)
     hint: 'Build → Move → Airfield; its Hangar: Cargo Planes +1. Then Drop Outpost, or switch a building to Supply by air.', at: ['airfield'], build: 'airfield',
     count: () => {
       if (metaOwn('dropost').length) return 1;
@@ -273,7 +273,7 @@ function goalAction(g) {
   if (b) return ['Show', show(b)];
   if (g.nest || g.post) {
     const L = getE(S.players[ME].lander);
-    const pool = g.nest ? S.buildings.filter((e) => !e.dead && e.type === 'nest') : (S.posts || []);
+    const pool = g.nest ? S.buildings.filter((e) => !e.dead && isNestB(e)) : (S.posts || []);
     const near = L && pool.length ? pool.reduce((a, e) => (dist2(e.x, e.y, L.x, L.y) < dist2(a.x, a.y, L.x, L.y) ? e : a)) : null;
     if (near && g.nest) return ['Show', show(near)];
     if (near) return ['Show', () => { closeSheet(); setMode('normal'); centerOn(near.x + 0.5, near.y + 0.5); openPostSheet(near); }];

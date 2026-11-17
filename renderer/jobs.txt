@@ -2096,3 +2096,11 @@ art/buildings/uplink.png	main	uplink:#eef6ff::uplink	compose.py
 art/tod/morning/buildings/uplink.png	main	uplink:#eef6ff::uplink:tod=morning	compose.py
 art/tod/evening/buildings/uplink.png	main	uplink:#eef6ff::uplink:tod=evening	compose.py
 art/tod/night/buildings/uplink.png	main	uplink:#eef6ff::uplink:tod=night	compose.py
+art/buildings/fueltank@0.png	main	fueltank:#ff9a3c:#38d4ff:fueltank@0	compose.py
+art/buildings/fueltank@1.png	main	fueltank:#ff9a3c:#ff5a6e:fueltank@1	compose.py
+art/tod/morning/buildings/fueltank@0.png	main	fueltank:#ff9a3c:#38d4ff:fueltank@0:tod=morning	compose.py
+art/tod/morning/buildings/fueltank@1.png	main	fueltank:#ff9a3c:#ff5a6e:fueltank@1:tod=morning	compose.py
+art/tod/evening/buildings/fueltank@0.png	main	fueltank:#ff9a3c:#38d4ff:fueltank@0:tod=evening	compose.py
+art/tod/evening/buildings/fueltank@1.png	main	fueltank:#ff9a3c:#ff5a6e:fueltank@1:tod=evening	compose.py
+art/tod/night/buildings/fueltank@0.png	main	fueltank:#ff9a3c:#38d4ff:fueltank@0:tod=night	compose.py
+art/tod/night/buildings/fueltank@1.png	main	fueltank:#ff9a3c:#ff5a6e:fueltank@1:tod=night	compose.py

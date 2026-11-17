@@ -47,14 +47,22 @@ const TOD_MODE_NAMES = { cycle: 'Cycle', day: 'Always day', night: 'Always night
 function todMode() { const f = todForced(); return f === 'night' ? 'night' : f === 'murmur' && TOD.mode === 'day' ? 'cycle' : TOD.mode; }
 /** The setting as kept on this device, whatever the game overrules. */
 function todStored() { return TOD.mode; }
-/** Does the game overrule the setting: 'murmur' (no always day), 'night' (always night) or '' (TOD.force, set by ui.js)? */
-function todForced() { try { return typeof TOD.force === 'function' ? TOD.force() || '' : ''; } catch (e) { return ''; } }
+/**
+ * Does the game overrule the setting? 'night': a map where it's always night (the Hollow: no daylight underground but
+ * down the breach shafts; SHAPE_PRESETS alwaysNight), whatever the setting and photo mode's slider; 'murmur': the
+ * Murmur are in the game, so no always day (TOD.force, set by ui.js); else ''. Looks only: the game itself never asks
+ * what the light is (the Murmur's nights and surges come from its clock: murmurNight).
+ */
+function todForced() {
+  if (typeof S !== 'undefined' && S && S.settings && typeof SHAPE_PRESETS !== 'undefined' && (SHAPE_PRESETS[S.settings.shape || 0] || {}).alwaysNight && !todHeld()) return 'night';
+  try { return typeof TOD.force === 'function' ? TOD.force() || '' : ''; } catch (e) { return ''; }
+}
 function setTodMode(m) {
   TOD.mode = TOD_MODES.includes(m) ? m : 'cycle';
   TOD.on = TOD.mode !== 'day';
   try { localStorage.setItem('botfall.daynight', TOD.mode === 'day' ? '0' : TOD.mode === 'night' ? 'night' : '1'); } catch (e) { /* storage unavailable */ }
 }
-/** Is the light changing at all (the cycle, or always night)? */
+/** Is the light changing at all (the cycle, or always night: by the setting, or on a planet where it's always night)? */
 function todEnabled() { return todMode() !== 'day'; }
 function setTodEnabled(on) { setTodMode(on ? 'cycle' : 'day'); }
 TOD.mode = 'cycle';
@@ -82,7 +90,8 @@ function todMix(a, b, f) {
  * the game's clock goes on as it was (see js/photo.js).
  */
 function todNow() {
-  if (TOD.over != null) return todAt(TOD.over);
+  // (Photo mode's slider shows another time of day, but not where it's always night: the Hollow has no daylight.)
+  if (TOD.over != null && todForced() !== 'night') return todAt(TOD.over);
   const m = todMode();
   return m === 'night' ? todMix('night', 'night', 0) : m !== 'day' && S && !todHeld() ? todAt(S.time) : todMix('day', 'day', 0);
 }
@@ -96,7 +105,7 @@ function todFrame() {
   const st = todNow();
   TOD.state = st;
   TOD.active = st.a !== 'day' || st.b !== 'day';
-  const over = TOD.over != null; // (photo mode's time of day: its sets load whatever the setting)
+  const over = TOD.over != null && todForced() !== 'night'; // (photo mode's time of day: its sets load whatever the setting)
   const m = todMode();
   if (!S || (!over && (m === 'day' || (todHeld() && m !== 'night')))) { for (const name in TOD.sets) todDropSet(name); return; } // (switched off, or held at day: nothing is kept)
   // The sets in use now and the next one coming (looked up a little ahead), and no others.

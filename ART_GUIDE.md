@@ -193,6 +193,7 @@ Fuel Stations now burn Fuel, grown at a Bio Farm or refined from oil. Same brief
 | `farm` | 256×256, transparent | Bio Farm: a worker plants and harvests energy crops | A compact agri-bot station seen from above: a seed hopper and a small greenhouse dome with grow lights, a pink fuel tank with hoses, and a robotic arm folded at the side. Accent light: magenta #ff5c8a. |
 | `pump` | 256×256, transparent | Oil Pump, built on top of an oil seep | An industrial pumpjack seen from above at a slight angle: a nodding beam on an A-frame over a wellhead, black oil stains on the pad, yellow hazard paint on the beam. |
 | `refinery` | 256×256, transparent | Refinery: Crude → Fuel | A small refinery: two round storage tanks (one rust-brown for crude, one magenta for fuel) joined by pipes, a short distillation column and a flare stack with a small flame. |
+| `fueltank` | 512×512, transparent (3D, rendered here) | Fuel Tank: storage for Crude and Fuel, an oil bloc's hub | Three white domed storage tanks with crude-stained feet in a low concrete containment bund, a pipe manifold and a small pump house, team bands and roof beacons. |
 | `crop` | 128×128, transparent | Energy crop on fertile soil (drawn smaller while it ripens) | A small row of alien crop plants seen from above: green leafy stems topped with glowing pink energy pods. |
 | `oil` | 128×128, transparent | Oil seep | A dark, glossy pool of crude oil seeping out of cracked sand, with an oily rainbow sheen and a few bubbles. |
 | `fertile` | 256×256, seamless | Fertile soil (one image spans 4×4 map tiles) | Dark, rich tilled soil seen from directly above, with straight furrows running left to right and a hint of green moss. Must tile seamlessly. |
@@ -1445,6 +1446,18 @@ same size, or point the tag at a new one. Keep them small (WebP; the whole set i
 The guide also shows the game's own `buildings/lander@0`, `lander@1`, the night Trade Post, Uplink, Command Base and
 *Wren* (`tod/night/...`); the Ithaca I page's catalog plate and the four callsign emblems are inline SVG in the page.
 
+### The Hollow (being designed)
+
+The Hollow is a map with its own look (the biome key `hollow`). Until its art is installed it is drawn with the
+Bloom's (`alien`) through one line in `js/defs.js` (`BIOME_ART = { hollow: 'alien' }`): drop that line once
+`ground-hollow`, `water-hollow`, `rock-hollow`, `cliff-hollow`, the `chasm-*-hollow` canyon pieces, the night glow
+(`ground-glow-hollow`) and `plant-hollow-1…6` are in `art/art-manifest.js` (and add `hollow` to `LAZY_BIOMES` in
+`js/render.js` if they should load only when it's played). It is always night there, so only the night look matters
+for the ground. Drawn in code for now, each with a key art could take over: Bloom veins (the resource `vein`, like
+`stalk`; it also glows in the night glow map), the stone pillars (`drawPillar`, standing on a rock tile), the breach
+shafts (`drawBreachLight` and `drawBreachShafts`), the Deep's mound (`drawMound`, over the nest art at 1.6×), the dust
+of the tremors and the trickle before a rockfall (`drawTremors` in `js/weather.js`).
+
 ### Not swappable yet (ask Claude Code if you want these)
 
 - Menu background and logo
@@ -1482,6 +1495,11 @@ The guide also shows the game's own `buildings/lander@0`, `lander@1`, the night 
   the pipe's neighbours, and uses the raised one on a gantry where the pipe crosses a road, track or water) and the
   **fuel blast** (`fx-fuel-blast`, 16 frames in a 4 x 4 grid from `renderer/fx/fuelblast.py`, played over 1.15 s
   and scaled to the blast). Still to make: `oil-scorch` (the blast leaves the ordinary scorch mark for now).
+  Rendered here for the oil blocs: the **Fuel Tank** (`fueltank@0/@1`, every time of day, from `renderer/b/fueltank.js`
+  with eight lines in `renderer/jobs.txt`, accent `#ff9a3c`): three domed tanks with crude-stained feet in a concrete
+  bund with hazard stripes, a catwalk between the two big roofs, a pipe manifold along the front into a small pump
+  house, and the powered-realism layer (team bands round each tank, roof beacons, a bund strip, a floodlight, a
+  junction box and conduit). `B3D(...)` like the other buildings; re-render with `python3 tools/rerender.py 'fueltank'`.
   **Renderer:** the three.js renderer that made all the 3D art is in `renderer/` (see `renderer/RENDERER.md`), so new
   sprites can be rendered in the same style right here.
   **Design system:** the Terrafall design system for making new art lives at

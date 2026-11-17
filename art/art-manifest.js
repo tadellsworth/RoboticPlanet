@@ -155,6 +155,7 @@ const ART_MANIFEST = {
   'farm@0': B3D('buildings/farm@0.webp'), 'farm@1': B3D('buildings/farm@1.webp'),
   'pump@0': B3D('buildings/pump@0.webp'), 'pump@1': B3D('buildings/pump@1.webp'),
   'refinery@0': B3D('buildings/refinery@0.webp'), 'refinery@1': B3D('buildings/refinery@1.webp'),
+  'fueltank@0': B3D('buildings/fueltank@0.webp'), 'fueltank@1': B3D('buildings/fueltank@1.webp'),
   'kiln@0': B3D('buildings/kiln@0.webp'), 'kiln@1': B3D('buildings/kiln@1.webp'),
   'tarworks@0': B3D('buildings/tarworks@0.webp'), 'tarworks@1': B3D('buildings/tarworks@1.webp'),
   'roadworks@0': B3D('buildings/roadworks@0.webp'), 'roadworks@1': B3D('buildings/roadworks@1.webp'),

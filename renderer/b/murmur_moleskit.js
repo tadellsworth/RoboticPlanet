@@ -193,7 +193,7 @@ export function molekit(L) {
     return (mats[key] = { shell, core });
   }
   // the crystal palettes: pale lilac crystal with a violet glow (the brief's palette: near-black fur, violet glow and pale
-  // lilac crystal against the robots' clean lights); the White's frosted and dim; the Bloom's deep violet and bright.
+  // lilac crystal against the robots' clean lights); Hoarfell's frosted and dim; the Bloom's deep violet and bright.
   const XTAL = { shell: '#c6b0f2', core: '#a06cff', glow: '#9658ff', opacity: 0.86, dayCore: 0.55 };
   const XTAL_WHITE = { shell: '#eceff5', core: '#c6bdec', glow: '#b3a8e2', opacity: 0.78, k: 0.5, dayCore: 0.35 };
   const XTAL_BLOOM = { shell: '#a982f2', core: '#c06aff', glow: '#b048ff', opacity: 0.68, k: 1.3, dayCore: 0.65 };

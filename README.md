@@ -30,8 +30,11 @@ how goods move.
   and Easy, Normal and Hard levels, that teach the game one idea at a time in seven chapters, in order: **First Steps**
   (a building and its road, Stone and Cement, batteries, the first Alloy), **Growing the Colony**, **Roads and
   Traffic**, **Industry and Trade**, **Sea and Sky** (all Colony games, so the economy is learned in peace), then
-  **First Contact** (the Murmur's nests, a passive rival, a border war, a chokepoint against a Herald) and **War** (Ammo and
-  repairs, trade convoys, escorts and convoy raids against a Salvager, Torches, Bulwarks and missiles against a Warden, the Nuclear race, Keeps and bombers). All of them are open
+  **First Contact** (the Murmur's nests, their cavern lair the Hollow, a passive rival, a border war, a chokepoint against a Herald) and **War** (Ammo and
+  repairs, trade convoys, escorts and convoy raids against a Salvager, Torches, Bulwarks and missiles against a Warden, the Nuclear race, Keeps and bombers), then a **Bonus**:
+  **King of the Hill**, an Uplinks race for three on The Wheel against two rivals of random doctrine (`victory:
+  'uplinks'`: missionOptions sets `S.victory` and calls `placeUplinks`; goals: hold an Uplink, hold two at once, win
+  the race; a rival winning it loses the mission with `M.why = 'uplinks'`). All of them are open
   from the start; finishing one ticks it off at that difficulty (saved by its `id`, so a reworked mission keeps its
   ticks), and the list marks the first unfinished one **Next up**. A mission is plain data: `chapter`, `brief`, `intro`
   lines for the briefing card, the planet (`seed`, `size`, `rough`, `biome`, `shape`, `players`), the rival (`rival`
@@ -42,14 +45,16 @@ how goods move.
   any other goal counts itself with `count(P, S)` and its own `text` (bridge tiles, a Ramp up a ledge, research done,
   trades, nests cleared, minutes held, a nuclear launch). Each goal's `hint` names the real buttons and keys and its
   `ui` selector lights up the button it needs (`missionCoach` in `js/ui.js`; with `at`, a ring pulses on the building
-  whose panel holds it). Steps already taken stay dark (Build while its menu is open, the card while placing that
+  whose panel holds it: a type, or a function naming the very building or robot, or `{ e, ui }` with the buttons for
+  that step, as Airlift's Crawler and Harbour's two Ports; a hint that says "Trade Post" rings the nearest post). Steps already taken stay dark (Build while its menu is open, the card while placing that
   building: then **Build here** lights, as Paths' **Build** does once a sketch is drawn), a lit button below the fold of
   a panel is scrolled into view once, and a `built` goal whose site is already going up (`goalSites`) says to wait for
   it, or to **Lay road** to a site with none (`siteNeedsRoad`), instead of asking for another (its own `wait` text if
   it has one). From the second mission on, setup puts down the colony the earlier missions taught:
   `kit(S, types, workers)` builds each type where the rival AI would (`aiFindSpot`), finished and road-joined (`KIT6`:
   Harvester, Quarry, Cement Works, Fuel Station, Ore Mine, Crystal Tap, Smelter, Chip Fab, Bot Foundry; `KIT7` adds a
-  Bio Farm), and `preBuild` puts down one building where the mission wants it; custom goals count tiles with
+  Bio Farm, `KIT8` a Grove Planter, from Pipe Dreams on, so the Smelter doesn't burn the Harvester's groves dry; an
+  Agribot comes for each Bio Farm and Grove Planter past the one you land with), and `preBuild` puts down one building where the mission wants it; custom goals count tiles with
   `ownTiles(test)`. Goals once met stay met (`M.got`) unless they say `hold`. **Capture lock:** while any goal other
   than capturing the rival Command Base is open, that base holds at 1 armor against you (`captureLocked`, applied in
   `hitBuilding`; its panel says to finish the other goals first), so winning too soon can't lose a mission.
@@ -63,11 +68,11 @@ how goods move.
 
 Before each game, the new-game screen picks the mode, players and rival, the **map shape** (Standard, Long haul,
 Chokepoint, Islands, Crater, Plateaus, Sky islands, Rift, Ring valley, Oases, Crossroads, Lakes, Tidal flats, River delta,
-Volcano, Fault line or Canyon maze, and for three or four players only The Wheel, Three Mesas, Pinwheel, Four Isles, Twin
+Volcano, Fault line, Canyon maze or The Hollow, and for three or four players only The Wheel, Three Mesas, Pinwheel, Four Isles, Twin
 Valleys and Long Haul 2v2: cards in groups, each with a sketch and a line on it) and the **map size** (Small to
 Huge). **More settings** (a collapsible section, its summary listing whatever isn't the default) holds the planet
 number, the **biome** (named for its region of Ithaca I, `BIOMES[k].name`, with its kind of ground under it, `kind`: the
-Rust (red desert), Greenreach (forest), the White (polar snow), Emberwood, the Long Grass, the Sump, Cinderlands, the
+Rust (red desert), Greenreach (forest), Hoarfell (polar snow), Emberwood, the Long Grass, Blackwater, Cinderlands, the
 Bloom and Argos, the moon; scenery only, with plants that roads and buildings clear), the
 **terrain** (Flat, Gentle, Rolling, Rugged, Mountainous), the **resources** (Scarce to Abundant; Normal is
 `RESOURCE_PRESETS` density 0.78, amount 0.8, which was Sparse until everything was lowered a notch: older saves,
@@ -150,6 +155,7 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
 | Bio Farm | A worker plants energy crops on fertile soil and harvests them into **Fuel** |
 | Oil Pump | Built on an oil seep; a worker pumps **Crude** until it runs dry (no stock limit unless you set one) |
 | Refinery | Crude → **Fuel**, one for one (stops at 30 unless you change its stock limit); explodes when destroyed |
+| Fuel Tank | Gather tab (T), 5 Cement + 2 Alloy: storage for **Crude and Fuel only**, up to 120 together (`tank`); the hub of an oil bloc: feeds up to 4 neighbours, a pipeline with one on it moves twice as much; a far bigger blast when destroyed full |
 | Generator | Burns a Fuel every 40 s to make factories, Refineries, Oil Pumps and the Foundry within 4 tiles work a third faster |
 | Cement Works | 1 Stone → 2 **Cement**, the main building material (stops at 40 unless you change its stock limit) |
 | Asphalt Plant | Crude + Cement → 2 **Asphalt** |
@@ -367,7 +373,9 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   two robots (Warbots from garrisons as for a march, or idle Workers, who board at the Airfield: the `board` task and
   `ferryWait`, as for a Ferry) anywhere, the enemy's land too, or up to 8 goods (`u.cargo`) for a place **supplied by
   air** (`b.airSupply`: any building with needs, construction sites too; a Drop Outpost and sites in its land have it
-  on). The places take turns (`airSupplyRun`: the one served longest ago, `c.airAt`, or run dry of something, first). A
+  on). Its supply orders then come by plane only, once one is based at an Airfield, not by Hauler (`dispatch`). The
+  places take turns (`airSupplyRun`: the one served longest ago, `c.airAt`, or run dry of something, first; `c.airIn`
+  is when crates last landed there). A
   supply drop comes down as a crate for every few goods (`d.crates`), swaying under team parachutes, and lands in front of
   the building with a puff of dust, its parachute collapsing out flat beside it, before it's taken in (`crateland`;
   art from `renderer/b/airdrop.js`: chute-fall, chute, crate-drop, chute-flat). Each place is served from its nearest
@@ -468,8 +476,17 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   flag; `LANDING_GATHER` s after the order it sails with whoever is aboard. A Ferry sunk with bots aboard takes them
   down. Turrets, Bunkers, Mortar Pits and Missiles hit ships; warbots don't chase them (`nearestEnemyBot` with `land`).
   The rival builds a Port once its Foundry runs, a Ferry with a fair army, and every few minutes lands six warbots
-  beside whichever enemy building it can reach that's least guarded (`aiNaval`). Later (after 15 minutes) it builds a
-  second Port out toward the enemy, gives it supply orders (Cement and Ammo) and orders a Container Ship to keep it stocked. The art is top-down like the trucks
+  beside whichever enemy building it can reach that's least guarded (`aiNaval`). Against a rival across the water
+  (Medium and up, in missions too), once it has a decisive lead (half as many warbots again and four more) or a landing
+  is held back by the guns over the beach, it lands a band instead (`aiBeach`, `P.beach`, `AI_BEACH`): it picks the
+  rival's Command Base if it has the warbots to take it, or else the fort it takes fewest to take, and a beach out of
+  the guns' reach near it (off the rival's land where it can be: warbots standing about there run their batteries
+  down), orders a second Ferry, and brings load after load until the band is strong enough, then goes in at the gun
+  covering the target first; it goes with seven tenths of that after four minutes or when its batteries run low, and
+  calls the band off after seven minutes, or once it has lost two in five of what it sent. Later (after 15 minutes) it builds a
+  second Port out toward the enemy, gives it supply orders (Cement and Ammo) and orders a Container Ship to keep it stocked
+  (not while its Ferry is on order: a yard builds a Container Ship first, and short of Alloy the Ferry waited half an
+  hour). The art is top-down like the trucks
   (`renderer/b/ship.js`, `renderer/b/port.js`), drawn two tiles wide with a wake under way (`drawShip`); a ship tied
   up is drawn at its Port's dock. On naval maps a bridge tile costs more the further it is from shore (`bridgeMul`:
   `BRIDGE_NEAR` 2 tiles at the usual price, then `BRIDGE_STEP` 1.5 times more for each tile further).
@@ -551,6 +568,71 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   cross between the clifftops; the AI finds one with `aiViaductSpot` (only spans that bring it closer to its rival),
   puts an Outpost on each mesa it lands on, and rests its Ammo Plant and Chip Fab (and, with a fair army, its Foundry)
   while it saves the Alloy for the next span. (`T_CHASM`, the old bottomless canyon, is kept for old saves and is the Rift's chasm.)
+- **The Hollow** (`hollow: true`; LORE.md, The Hollow) is the Murmur's cavern lair, a two-player map with its own
+  generator (`hollowMap`, called first thing by `generateMap`) and its own look: `newGame` sets the biome to `hollow`
+  whatever the Biome setting (`BIOMES.hollow`, not in `BIOME_ORDER`, so the picker never offers it; the Biome row says the
+  map sets it), drawn for now with the Bloom's art through one mapping (`BIOME_ART`, `artBiome`: one line to drop when
+  its own art arrives), and it is always night there (`alwaysNight` on the map type: `todForced` in `js/daynight.js`,
+  looks only). `murmur: 'active'` is for the Murmur's night system. The map starts as solid rock (`T_ROCK`, level 1) and
+  every change is made to a tile and its half-turn twin together (`put`), so both sides are exactly the same: a home
+  cavern round each base (its landing ground kept round), a **chasm hall** between home and the middle split across by
+  a two-row chasm (`T_CHASM`) with one natural rock arch, a west and an east cavern (a black lake fed by a slow river,
+  far under `SEA_MIN`, in the west one), a **flank cavern** on the middle line at each side (each the twin of the other),
+  the **cathedral** in the middle, two side chambers, and winding passages between them (2 tiles wide, 3 from Medium
+  up). Anything the base can't walk to afterwards is joined by the cheapest way through rock or water (a sliver is
+  filled in; `joinAll`). `S.hollow` keeps what the game needs: `breaches` ([{x, y, r, home}]: one over each Command
+  Base, radius `HOLLOW.breach.home`, and `HOLLOW.contested` (4) in the flank caverns, two each, radius `open`), `masses`,
+  the Murmur's nest sites (`nests`, twin pairs, `HOLLOW.nests` a side by size, 4 to 7; `deep`, the middle of the
+  cathedral) and `pillars` (single rock tiles with open floor all round, so they never close a way: a ring round the
+  Deep's mound and more by the Terrain setting). **No Trade Posts or Uplinks** (LORE.md: the Pathfinder, which built
+  them, never mapped the Hollow): `placePosts` places none, `worldBan` greys the Trade Terminal out with a reason, the
+  rival plans no Terminal where there is no post (so it never waits on trade for Crystal), and `newGame` turns an
+  Uplinks game on this map into Capture (the menu greys the Uplinks choice out and says so; a Random pick that lands
+  here says so in a message).
+  - **Breach shafts.** Drawn as a pool of pale gold daylight on the night-graded ground (`drawBreachLight`) and a column
+    rising toward the top of the screen with motes drifting down it (`drawBreachShafts`), gold on the minimap.
+    **Ringfall** falls only through them (`hollowRingfall`, from `meteorPlan`): `METEOR_HITS` strikes a side, a share
+    `HOLLOW.ringfall.contested` (2 in 3) through the contested breaches on that side, each with its twin; each leaves up
+    to `HOLLOW.ringfall.tiles` (4) deposits `HOLLOW.ringfall.rich` (1.5) times a Ringfall deposit's amount.
+  - **Bloom veins** (`R_VEIN`, `RES[R_VEIN]`: 4 Fiber, 3 s to cut): on the cavern floors in fields and along the walls
+    (16% of floor tiles beside rock, away from home). A Harvester gathers them there (`gatherRes`: R_VEIN for a Harvester
+    in the Hollow, so `gatherTypes`, `canPlace`, the AI and the panels all go by it). A vein cut to nothing stays a vein
+    with `S.grow` 0 and grows back over `VEIN.regrow` (150 s, `growStalks`; `findNode` skips it meanwhile; `veinFull`).
+    Cutting one stamps the Harvester (`b.veinT`) where the Murmur are in the game (`wildOn`), and `veinLure` makes it a
+    raid target: `wildTarget` counts it `VEIN.pull` (2) times nearer, from up to `VEIN.reach` (8) tiles further out, for
+    `VEIN.lure` (120 s). No stalks or fertile soil: `worldBan` bars Grove Planters and Bio Farms (and Airfields and Trade Terminals) with a
+    reason for `canPlace`, and the build menu greys them out (`ownedText`). Fuel comes from the oil seep in every home
+    cavern. A Worker lands in the Agribot's place.
+  - **Floating Crystal**: a platform two levels up (level 3) in a pocket of chasm, worn back until only chasm touches it,
+    one in each chasm hall and from Medium up one in each east cavern; its Crystal holds `HOLLOW.crystal` (2.5) times a
+    cluster's (frontier richness on top). Reached by Ropeway, a Sky bridge or a Viaduct (level 1 to 3 is within
+    `VIA_RISE`). The rival AI runs a Ropeway out to an unreached one (`aiRopeway`: from 5 minutes in, once it has a Bot
+    Foundry, saving for it like a bridge (`P.bridgeNeed`) when its land's Crystal runs low or from 8 minutes), and puts a
+    Crystal Tap there as anywhere.
+  - **Side chambers**: two rows of three crates of Alloy (3–5) or Chips (1–2) each (`HOLLOW.relics`), laid with
+    `addLoot(..., keep)` so they never rot (`LOOT_KEEP`).
+  - **Ceiling tremors** (`TREMOR`, `S.tremor`, `updateTremor`, a map event like the Volcano's): the first at 210 s, then
+    every 100–150 s, dust for 10 s (`drawTremors` in `js/weather.js`, and a rumble). Every second tremor drops rock
+    (`rockSpot`: open ground 3–18 tiles from player 0's base on its own side, clear of the breaches, and its twin; a
+    mission can aim one with `S.tremor.aim`): dust trickles there for `TREMOR.warn` (8 s) with a ring on the ground,
+    then `rockfall` takes `TREMOR.damage` (4) armor off every building within `TREMOR.r` (1.6) tiles (never below 1;
+    `b.rocked`), `TREMOR.botDamage` (3) off robots, and leaves a boulder where the ground is clear. No dust storms or
+    solar flares (`updateEvents` leaves them out; Ringfall and the *Wren* take turns).
+  - **The Murmur**: the most nests of any map, and at the centre the Deep's mound (`BDEFS.mound`: 160 armor, level
+    `HOLLOW.deep.level` (3) from the start, `HOLLOW.deep.guards` more guards, `HOLLOW.deep.loot`; `placeHollowNests`,
+    drawn by `drawMound`). Wrecking it (`clearNest`) spills its hoard and puts every other nest back to level 1 (its
+    growth clock too). The nests come with the Murmur setting like everywhere else (the map's own default is `murmur:
+    'active'`; `murmurStart` calls `placeHollowNests` instead of `placeNests`/`placeNestsVersus`), owned by the Murmur's
+    slot (`wildOwner`) in Versus as in Colony; Quiet keeps half the pairs (rounded up) and the mound, Off none (the
+    menu warns that the Hollow is their lair). They dig tunnels and open exits like any nest (`isNestB` counts the
+    mound as a nest everywhere), the night windows are surges, and `veinLure` still pulls packs toward a lured
+    colony's veins (`wildTarget`, `murmurPrey`, `murmurGoals`).
+  - **No aircraft** (`worldBan`; the AI never plans an Airfield) and **no Ports** (`canPlace` says the lakes are too small).
+  - The rival AI: its build plan swaps Bio Farms for Oil Pumps and Grove Planters for more Harvesters, fuel trouble
+    brings an Oil Pump and Refinery, its roads bridge the chasms (Sky bridges) where that's shorter, and `aiRopeway`
+    (in the Hollow `roadSearch` carries road reach across a colony's own Ropeways, so a Tap on the mass counts as
+    joined up). Nest sites keep 9 tiles from the masses: the AI never clears nests, and guards there would keep its
+    gatherers off the Crystal for good.
 - **Maps for three or four only** (`minPlayers` in `SHAPE_PRESETS`: the player choice can't go below it, Random only
   picks them for three or four, and Colony games on them leave the other colonies empty). **The Wheel** (`wheel`, three):
   rock spokes run out along the lines between the thirds from a raised hub (the only ground on the top level, the
@@ -779,7 +861,7 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   and bored through rock at `PIPE_CROSS_COST` (1.2 Cement) a tile, weighed by price so it goes round only when that's
   cheaper, with few bends); tap a
   pump to pipe it to the nearest Refinery, or **Pipe every Oil Pump** in the banner; an Oil Pump's panel has a one-tap
-  **Pipe it to the Refinery** too. Pipe costs 0.3 Cement a tile (`PIPE_COST`), laid at once when you tap Build (or as
+  **Pipe it in** too (to the nearest Refinery or Fuel Tank). Pipe costs 0.3 Cement a tile (`PIPE_COST`), laid at once when you tap Build (or as
   the Cement comes in). A pipe joins every building it runs under or beside; each second each line moves up to 4 Crude
   (`updatePipes`) from its pumps to its Refineries (which keep up to 6) and Asphalt Plants, then into storage on it, and
   from storage on it to its Refineries. A piped pump never waits for a Tanker. **Fuel** moves the same way, up to 4 a
@@ -792,6 +874,19 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   **Pipe Fuel to it** on its panel, to pipe it to the nearest storage, Refinery or Bio Farm (`pipeToFuel`); the rival
   pipes its own Fuel Stations and Generators that are within 10 tiles. Raiders cut pipe (it counts like a road
   for them), missiles and fuel blasts break it; broken pipe is planned again at once and relaid when it's paid for.
+  **Fuel Tank** (`fueltank`: `tank: 120`, `store`, `explodes`; Gather tab, T; 5 Cement, 2 Alloy): the hub of an **oil
+  bloc**. Storage for Crude and Fuel only (`storeTakes`: liquids, never past its cap, counting what's on the way:
+  `tankRoom`; `storeAccepts` leaves it out, so no other good is ever sent there, and it takes no supply orders). A pump's
+  **Pipe it in** (`pipeToRefinery`) runs to the nearest Refinery or Fuel Tank (both `explodes`). A line with a Fuel Tank
+  on it moves `PIPE_RATE_TANK` (8) Crude and 8 Fuel a second instead of 4, and fills its Fuel Tanks before other storage
+  (`updatePipes`). It takes part in feed links (below): it feeds Crude, and Fuel, to up to `FEED_MAX_TANK` (4) neighbours
+  that use them, and takes in by conveyor only what a neighbour makes (an Oil Pump's Crude, a Refinery's Fuel; a
+  Refinery's own Crude stays). Tankers and trucks fill up there like at any storage. Destroyed with Crude and Fuel in it,
+  it goes up in `BLAST.fueltank` (1 tile, up to 3.8 when full; 8 damage to robots, 7 to buildings), setting off
+  Refineries, other Fuel Tanks and loaded Tankers in it; its panel shows how full it is and how big the blast would be
+  now. The rival puts one up by its pumps once it has `AI_FUEL_TANK_PUMPS` (1) Oil Pump at work, a Refinery and a Foundry
+  (`aiSearchSpot` places it like a Refinery, near its pumps, and touching a Refinery where it can: `AI_FEED`), and its
+  bombers rate it highly (`AI_BOMB_VALUE`).
   **Trucks burn Fuel** (`TRUCK_BURN`): Freight Trucks, Road Trains and Tankers have a fuel tank instead of a battery,
   draining as they drive (a full tank lasts about 4 minutes of driving, a Road Train's under 3); low, they fill up at the
   nearest storage or Fuel Station holding Fuel (one Fuel fills the tank). With no Fuel anywhere they crawl at half
@@ -802,7 +897,8 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
 - **Feed links** (`FEED_TIME`, `FEED_MAX`, `FEED_BOOST`; `feedTargets`, `feedStep`): a production building passes
   what it makes straight to a neighbour (any of the 8 tiles round it) that uses it, one good every 2 s a link, by a
   short raised conveyor (a pipe for Crude and Fuel), with no Hauler, and a building being fed works a tenth faster.
-  Each producer feeds at most two neighbours (side by side before corners); storage and walls never take part, and a
+  Each producer feeds at most two neighbours (side by side before corners); storage and walls never take part (but a
+  Fuel Tank does: see Fuel, Tankers and pipelines), and a
   Refinery also passes Crude on from its intake. So Mine → Smelter → Chip Fab → Foundry, Quarry → Cement Works,
   Smelter + Cement Works → Ammo Plant, Refinery → Asphalt Plant → Roadworks, Missile Factory → Silo work as blocks.
   Haulers leave a fed factory's input to the conveyor: they bring only its next round's worth of that good
@@ -990,7 +1086,11 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   bots' tasks every second (`updateLoot`), so a run called off never leaves a pile looking taken.
 - **Walls and Gates (Versus):** in Paths, **Walls** (**X**) sketches a wall line: a Wall on each tile (5 Cement, 40
   armor) and a Gate where it crosses a road (6 Cement + 2 Alloy, 32 armor; tap a planned Wall to make it a Gate).
-  They're `prepaid` (paid from storage on Build, no Hauler or road, outside the site limit). Walls block every bot;
+  They're `prepaid` (paid from storage on Build, no Hauler or road, outside the site limit). A Worker builds a Wall
+  from beside it on the home side (`wallStands`: the free neighbour nearest the Command Base by walking, or a Wall
+  site there, the inner row of a double wall, which then waits for the outer row), so nobody is left on top of it,
+  walled out; a site with neither is built from its own tile. (Not the rival's: its lines always keep a Gate,
+  `aiWallGate`, `aiTurtleWalls`, so its builders build on the tile as before.) Walls block every bot;
   Gates let their owner's bots and road through (`passTile(t, who)`). Armed enemy warbots plan through a Wall or
   Gate as if it were `BREACH_COST + armor` tiles long, so they go round a short way or stop and shoot through
   (`breachHit`); a bot whose route gets walled off re-plans (`blockedStep`). An order whose squad can't shoot
@@ -1082,9 +1182,16 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   ordered (but a first Tanker); warbots past what it wants leave `AI_WORKER_ROOM` (6) places for workers. Without it a
   colony that had taken a lot of buildings made workers to staff them all until the limit was full, and never fielded
   an army again (a 2 v 2 game ran past an hour). With less room than that army wants (and outside Colony), it scraps
-  its extras (`AI_SCRAP`): Workers past the ones its buildings call for and 4 more, then Haulers past the ones it wants
-  and 2 more (4 at least), go to its Foundry to be recycled (`recycleSpare`), at most 4 on their way at once, until the
-  room is there; its Foundry fills it with warbots. **Crystal** (every robot takes a Chip, every Chip a Crystal) runs short
+  its extras (`AI_SCRAP`, `aiScrap`): Freight Trucks, Tankers, Road Trains and Agribots past the ones it uses (trucks
+  for its far Depots, Tankers for its Fuel runs and one more, a Road Train for a Terminal or a far Depot, Agribots for
+  its farms and Grove Planters, sites too, and one more) that have stood idle two minutes (or any with nothing to do
+  while it has three or more past those), then Workers past the ones its buildings call for and 4 more, then Haulers
+  past the ones it wants and 2 more (4 at least), go to its Foundry to be recycled, at most 4 on their way at once and
+  never one at work or carrying goods, until the room is there; its Foundry fills it with warbots. It scraps the same
+  spares when it's starved (no Alloy or no Chips for a minute and a half, `P.dry`, with under one a minute being made;
+  short of Chips, only vehicles, which give Chips back), and on Medium and up one vehicle, Agribot or Hauler idle five
+  minutes at a time while its Foundry waits for the parts it would give back. A kind it has scrapped isn't ordered
+  again for five minutes (`P.scrapT`). **Crystal** (every robot takes a Chip, every Chip a Crystal) runs short
   by how long what's left would last, in stock and in the ground on its land, at the rate its Chip Fabs burn it
   (`goodRates`; under `AI_CRYSTAL_MINS`, 10 minutes, counting at least `AI_CRYSTAL_BURN`, 4 a minute, once it has a
   Foundry), not only by the clusters left (`P.short`, by tiles, came only once the last three were all there was,
@@ -1248,6 +1355,26 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   shorter. The site's road waits for the Ramps (`P.rampWait`, 3 minutes at most) and then takes the short way. It
   cuts none for a Ramp, and none onto its own plateau or mesa home (`fortressHome`). It used to run a road forty
   tiles round a low cliff to a site eight tiles away, and gave up sites no slope led to.
+- **The rival's opening** (Medium, Normal and Hard, a mission's rival too: `AI_OPEN_FIRST`, `P.opened` in `js/ai.js`):
+  its Bot Foundry goes up straight after its first Fuel Station (it lands with what the Foundry costs), and the rest of
+  the plan's opening (two Harvesters, a Quarry, a Cement Works, a Mine, a Crystal Tap, a Smelter, a Chip Fab) comes
+  before every other ask until each of them has stood once (what it can't place yet, a Mine with no Ore on its land, is
+  passed over for the rest). Meanwhile its Foundry counts the opening's buildings as wanting a Worker each, so it makes
+  Workers for them, not warbots, and doesn't rest for the Ammo Plant. Tenth in the plan, the Foundry used to wait
+  behind Outposts toward what was short and their long roads, spare gatherers, Bio Farms and the Ammo Plant, then for a
+  Worker of its own once the buildings before it had taken every one: on Long haul both rivals sat at their ten landing
+  Workers until minute 10 to 15. Now the first robot comes about half a minute in. In missions it reaches every rival
+  of Medium and up (a mission's `rival` level for the difficulty): Hold the Line's on every level; Supply Lines',
+  Convoy's, Siege Breakers', Final Descent's and King of the Hill's on Normal and Hard; Live Fire's, Border Dispute's
+  and Chain Reaction's on Hard. Played headless before and after (the AI on your side plus the hints' steps, three
+  times or more for each mission and level it reaches), each is still won: a passive rival is weaker early, since its
+  Foundry makes Workers first (Live Fire on Hard went from one win in three to three); Siege Breakers on Hard takes
+  about 30 minutes instead of 22 (its 45-minute clock stands); Final Descent on Normal and Hard is a real war now,
+  where the old rival's army was gone by minute 10 (six wins in seven on each: one lost on Hard, one still open at 41
+  minutes on Normal); Hold the Line's Herald hits a colony that only follows the hints a minute or two sooner on Easy
+  and Normal (about 8½ and 7½ minutes in). Easy rivals are as they were. Convoy, left to the trade work, was played
+  only by the AI (see IDEAS). No mission's rival is across the water, so none makes beach landings (`aiBeach`) yet;
+  Harbour's briefing tells of them.
 - **The story** (LORE.md is canon; text and presentation only, nothing in it changes a rule). **Callsigns**
   (`CALLSIGNS`, `callsign(p, colour)`): players are named COBALT (player 0, blue), VERMILION (red), VIRIDIAN (green) and
   TYRIAN (purple) wherever the game used to say "the Red rival" (`playerName`: 'You', a person's name in multiplayer,
@@ -1269,7 +1396,7 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   (the *Wren*'s arrival line included). A story toast never counts towards the toast limit or pushes a warning out: it
   goes in under a newer warning (a phone on its side shows only the newest) and gives way only to a newer story line,
   the lines of one moment (a surrender's last words and the narrator's line after them) staying together.
-  **Regions** (`BIOMES[k].region`, `regionName`): the Rust, Greenreach, the White, Emberwood, the Long Grass, the Sump,
+  **Regions** (`BIOMES[k].region`, `regionName`): the Rust, Greenreach, Hoarfell, Emberwood, the Long Grass, Blackwater,
   Cinderlands and the Bloom, regions of Ithaca I, and Argos, its moon (Lunar), as flavour only (briefing, landing message, loading lines): the
   setup keeps the plain biome names. **Panel flavour** (`FLAVOR`, `flavorLine`): one quiet italic line at the foot of
   every building's and robot's panel (and the Trade Post's and Uplink's), below every button; the Command Base's is its
@@ -1362,7 +1489,8 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   `shotsPer`), Turbo Motors (`speedMul`), Power Tools (`mult` × 1.15), Nanite Repair (`naniteRepair`).
 - **Planetary events** (`EVENTS` in `js/defs.js`, `updateEvents` in `js/sim.js`; new-game option; in missions only with
   `events: true`, as in Trade Winds, whose setup brings the first one forward with `S.nextEvent`): the
-  first after 8 minutes, then one every 5–8 minutes, never one of the last two again, most with a 20 s warning. **Dust
+  first after 8 minutes, then one every 5–8 minutes (2–3 in a mission, `MISSION_EVENT_GAP`), never one of the last two
+  again, most with a 20 s warning. **Dust
   storm**: bots at `DUST_SPEED` (⅔) and every missile grounded (`missileBlocked`, `nukeBlocked`). **Ringfall** (a meteor
   shower, pieces of the planet's Ring; type `'meteor'`):
   `METEOR_HITS` strikes on each colony's share (mirrored with two players, turned with three: `meteorPlan`), each
@@ -1422,7 +1550,10 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   building can't go where its ring would cover a rival's ordinary building (`ringOverRival`; a Drop Outpost dropped, a
   Port a Ferry founds and a Crawler deploying too): cut-offs come from capture or a fort falling. The AI builds on its own land first and on open ground only when it has no spot at home.
 - **Salvage:** a colony out of Stone or Fiber with no Quarry or Harvester that can still work salvages 1 every 20 s from
-  its Command Base (up to 6), so it can always rebuild. Capturing an enemy Outpost takes its land,
+  its Command Base (up to 6), so it can always rebuild. Meanwhile, in a person's colony with a Quarry or Harvester
+  site waiting that a road joins to storage (`P.salvaging`), that good goes only to sites, not to finished buildings (a
+  running Smelter would burn the Fiber meant for the Harvester site). Not for a rival, which has its own Fiber rules:
+  behind a Harvester site that never got built its Smelters went without for good. Capturing an enemy Outpost takes its land,
   and enemy buildings its ring now covers are cut off (see above).
 - **Controls:** drag to pan, pinch or scroll to zoom, tap anything to inspect it. Wheel deltas are normalised and capped
   per event (smooth on a Magic Mouse or trackpad); a Ctrl + wheel pinch zooms faster, a sideways swipe or Shift + wheel
@@ -1480,7 +1611,7 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   upgrade; 30 tiles of asphalt, a Road Train, a Freight Train, a run on a Trade Terminal's route, a Murmur nest; a Ropeway, a
   Viaduct, a Port and a Container Ship, a Cargo Plane delivery; three Freight Trains at once, 100 Alloy a minute
   (`goodRates`), 100 robots, every upgrade), with `when` leaving out the ones the planet can't offer (`navalMap`, no
-  cliffs, no Murmur, no Trade Posts). A goal met stays met: its flag goes in this game's entry in `terrafall.games`
+  cliffs, a Cargo Plane in the Hollow, no Murmur, no Trade Posts). A goal met stays met: its flag goes in this game's entry in `terrafall.games`
   (localStorage, `metaStart`: a new game gets an entry keyed by its seed and the time it started on this device; a
   loaded save finds the newest entry for its seed and mode that isn't further on than the save, so goals met before a
   save stay met, and those met before a load bring no second message). The goals button beside the Goal card
@@ -1525,13 +1656,16 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   device (`botfall.haptics`), on by default.
 - **Game speed:** the speed chip in the top bar opens 0.75×, 0.875×, 1×, 2× and 3×.
 - **Sound** (`js/audio.js`, all Web Audio, no audio files): a generative synthwave score that follows the game (menu,
-  building, war when you're attacked or fighting, and an alarm while a nuke flies; the building music takes turns between
+  building, war when you're attacked or fighting, **Night Murmurs** when the Murmur come close (`MUSIC_MURMUR` (2) of them
+  in your land or within `MUSIC_MURMUR_NEAR` (9) tiles of your buildings, lingering 35 s; enemy robots in your land too
+  still bring the war music: 70 bpm Phrygian, a whispering choir of filtered noise pitched on the chord (`mWhisper`), a
+  slow heartbeat, a bass creeping a semitone, far-off crystal glints), and an alarm while a nuke flies; the building music takes turns between
   three themes, `BUILD_THEMES`, every `MUSIC_ROTATE` seconds of play: Lost in a Dream, the main theme (the menu music is a
   slow take on its chords), Night Drive (Dorian, octave bass,
   claps, a plucked lead) and Horizon (half-time, a chord every two bars, an arpeggio in threes)), written a bar at a time from chord
   progressions, arpeggios, bass, drums and short melodies in 8-bar sections. **Now playing** (`nowPlayingTick` in js/ui.js,
   display only): on a computer (a mouse, the wide layout) a card in the bottom left corner names each theme as it starts
-  (`MUSIC_TITLES`: the menu's slow take is Lost in a Dream too, the war theme Overdrive, the nuke alarm Zero Hour, `end`
+  (`MUSIC_TITLES`: the menu's slow take is Lost in a Dream too, the war theme Overdrive, the Murmur's Night Murmurs, the nuke alarm Zero Hour, `end`
   none) for `NP_SHOW` ms, then fades away (nothing stays in the corner between themes); a title shown in the last `NP_AGAIN` ms (a minute) isn't
   shown again, and nothing shows with the Music at 0, in photo mode, under a full screen (the main menu is fine) or where
   it would run into the tools or the menu's card (a new theme's card waits for room). Effects include radio blips for orders, a
@@ -1653,9 +1787,10 @@ The planet turns: morning, day, evening and night, 12 minutes of game time round
 through `todPhase`), starting at dawn, with half-minute crossfades. It runs on game time, so it pauses with the game and
 is saved with it; the clock in the top bar shows a sun (coloured for dawn, day and dusk) or a moon. Turn it off in the
 pause menu (Day and night; a display setting kept on the device, `todStored`), except in a game with the Murmur: they
-live by the night, so `todMode()` shows the cycle for Always day there (`todForced`, `TOD.force` set by `js/ui.js`) and the
-pause menu says why under the button; a map type with `alwaysNight` (the Hollow) is always night. The game's own logic
-never reads the display setting: the Murmur's nights come from the game clock (`murmurNight`).
+live by the night, so `todMode()` shows the cycle for Always day there (`todForced` 'murmur', `TOD.force` set by
+`js/ui.js`) and the pause menu says why under the button. A map type with `alwaysNight` (the Hollow) is night whatever
+the setting (`todForced` 'night'), photo mode's slider included. Nothing in the game itself ever asks what the light is:
+the Murmur's nights (and the Hollow's surges) come from the game clock (`murmurNight`).
 
 - **Re-lit art.** Every 3D sprite (buildings, robots and vehicles, track and bridge pieces: the 207 keys in
   `art/tod/tod-keys.js`) has a morning, evening and night version from the Claude Design day/night kit, at

@@ -9,12 +9,14 @@
  * The campaign is in seven chapters, played in this order: First Steps (one idea at a time: a building and its road,
  * Stone and Cement, batteries, the first Alloy), Growing the Colony (bots, farmed Fuel, regrowing groves, Outposts),
  * Roads and Traffic, Industry and Trade, Sea and Sky (all in Colony games, so the economy is learned in peace), then
- * First Contact (the Murmur's nests, a rival to practise on, a border war, a chokepoint to hold) and War. From the second
- * mission on, setup puts down the colony the earlier missions taught (`kit`), so each one is spent on its new idea.
+ * First Contact (the Murmur's nests, their cavern lair the Hollow, a rival to practise on, a border war, a chokepoint to hold) and War; after them a
+ * Bonus (King of the Hill: an Uplinks race for three). From the second mission on, setup puts down the colony the earlier
+ * missions taught (`kit`), so each one is spent on its new idea.
  *
  * A mission: { id (progress is saved by it: keep it when a mission is reworked), name, chapter (the list's heading:
  * a chapter's missions sit together, in order), brief (two sentences at most), intro: [up to 5 lines for the briefing
- * card], mode, seed, size, rough, rich, biome, shape, players, style (the rival's doctrine, a PERSONALITIES key), rival: [easy, normal,
+ * card], mode, seed, size, rough, rich, biome, shape, players, style (the rival's doctrine, a PERSONALITIES key, or 'random'),
+ * victory (a way to win other than capture, a VICTORY key: 'uplinks' places the Uplinks), rival: [easy, normal,
  * hard] (its level), rivalBonus (extra of every good in its Command Base), passive: [easy, normal, hard] (a rival that
  * never attacks), limit (minutes per difficulty, 0 none), nuke/war/lab/events (switch on what missions otherwise
  * leave out: a Nuclear race, warbots and defences in Colony, the Research Lab, planet events), murmur ('quiet' or
@@ -42,7 +44,8 @@
  *
  * Helpers: for layout, mapTiles, placeField, placeFertile and mirrored (both sides alike in Versus); for setup,
  * preBuild (one finished building, road-joined if asked) and kit(S, types, workers) (the colony so far: KIT6 is
- * gathering, Cement, a Fuel Station, Alloy, Chips and the Bot Foundry, KIT7 adds a Bio Farm); for counts, ownTiles.
+ * gathering, Cement, a Fuel Station, Alloy, Chips and the Bot Foundry, KIT7 adds a Bio Farm, KIT8 a Grove Planter); for
+ * counts, ownTiles.
  * The capture lock (captureLocked): while any other goal is open, the last rival's Command Base can't be taken, so a
  * mission is never lost by winning too soon.
  */
@@ -120,15 +123,21 @@ function siegeWorks(S, diff) {
 /** The same feature at (x, y) and at its mirror image, so both sides stay fair in Versus. */
 function mirrored(W, H, x, y, fn) { fn(x, y); fn(W - 1 - x, H - 1 - y); }
 
-/** The colony the first chapters have taught (kit's usual lists): gathering, Cement, a Fuel Station, Alloy, Chips, bots; KIT7 adds a Bio Farm. */
+/**
+ * The colony the first chapters have taught (kit's usual lists): gathering, Cement, a Fuel Station, Alloy, Chips, bots;
+ * KIT7 adds a Bio Farm, KIT8 a Grove Planter too. (Without one the Harvester's groves, some 30 to 45 Fiber, are gone
+ * in 5 to 8 minutes into the Smelter, and a slow player is down to the Command Base's salvage: so from Pipe Dreams on.)
+ */
 const KIT6 = ['harvester', 'quarry', 'kiln', 'charger', 'mine', 'tap', 'smelter', 'fab', 'foundry'];
 const KIT7 = [...KIT6, 'farm'];
+const KIT8 = [...KIT7, 'grower'];
 
 /**
  * For a mission's setup: the colony the player has built so far. Each building of `types`, finished, where the rival
  * AI would put it (aiFindSpot), joined to the roads (a Fuel Station with 4 Fuel in it); a type with no spot is
- * skipped. Then `workers` more Workers in the Command Base (they count as the colony's start, not as bots made).
- * Returns the buildings it put down, by type.
+ * skipped. Then an Agribot for each Bio Farm and Grove Planter beyond the one the colony lands with, and `workers`
+ * more Workers, in the Command Base (they count as the colony's start, not as bots made). Returns the buildings it put
+ * down, by type.
  */
 function kit(S, types, workers) {
   const P = S.players[0], L = getE(P.lander), out = {};
@@ -139,6 +148,8 @@ function kit(S, types, workers) {
     if (b) out[type] = b;
     computeTerritory();
   }
+  const crews = Object.keys(out).filter((t) => BDEFS[t].crew === 'agribot').length;
+  for (let k = S.bots.filter((u) => !u.dead && u.owner === 0 && u.type === 'agribot').length; k < crews; k++) enterBuilding(addBot(0, 'agribot', L.x, L.y), L);
   for (let k = 0; k < (workers || 0); k++) enterBuilding(addBot(0, 'worker', L.x, L.y), L);
   P.stats.startBots = P.stats.bots;
   return out;
@@ -153,6 +164,22 @@ function ownTiles(test) {
   let n = 0;
   for (let t = 0, N = S.W * S.H; t < N; t++) if (test(t) && (S.road[t] || S.rail[t] ? wayOwner(t) === 0 : true)) n++;
   return n;
+}
+
+/**
+ * For goals: player P's Ports a Ferry founded (they claim land) on another island, which no dry land joins to its
+ * Command Base.
+ */
+function overseasPorts(P, S) {
+  const L = getE(P.lander), ports = S.buildings.filter((b) => !b.dead && b.owner === P.id && b.built && b.type === 'port' && b.claim > 0);
+  if (!ports.length || !L) return [];
+  const N = S.W * S.H, land = new Uint8Array(N), q = [tIdx(L.x, L.y)];
+  land[q[0]] = 1;
+  while (q.length) {
+    const a = q.pop(), i = a % S.W;
+    for (const b of [i > 0 ? a - 1 : -1, i < S.W - 1 ? a + 1 : -1, a - S.W, a + S.W]) if (b >= 0 && b < N && !land[b] && S.terrain[b] !== T_WATER) { land[b] = 1; q.push(b); }
+  }
+  return ports.filter((b) => !land[tIdx(b.x, b.y)]);
 }
 
 /* --- the campaign --- */
@@ -433,7 +460,7 @@ const MISSIONS = [
       // A Bio Farm on the fertile flats to the south-west (kit() would put it north, on the way to the far Depot).
       preBuild(0, 'farm', L.x - 14, L.y + 3, { road: true, reach: 4 });
       computeTerritory();
-      enterBuilding(addBot(0, 'agribot', L.x, L.y), L); // (the Grove Planter's crew: the Bio Farm has the first)
+      enterBuilding(addBot(0, 'agribot', L.x, L.y), L); // (its crew: the one you land with runs the Grove Planter)
       P.stats.startBots = P.stats.bots;
       L.stock.cement += 6;
       // The far Depot, with no road: as far out as a Depot may stand (11 tiles), north, east or west.
@@ -497,9 +524,8 @@ const MISSIONS = [
     setup(S) {
       // (The colony so far, with Green Fuel's Bio Farm and Grove Planter: without them a slow player runs out of Fuel
       // (bots at half speed) and Fiber (the kit's Harvester has ~36 in reach) before the mission is done.)
-      kit(S, [...KIT7, 'grower'], 4);
+      kit(S, KIT8, 4);
       const L = getE(S.players[0].lander), P = S.players[0];
-      enterBuilding(addBot(0, 'agribot', L.x, L.y), L); // (the Grove Planter's crew: the Bio Farm has the first)
       P.stats.startBots = P.stats.bots;
       L.stock.cement += 10; L.stock.alloy += 6;
       S.mission.ledge = { x: L.x + 10, y: L.y - 4 }; // (the layout's ledge: its top is 2.5 tiles across)
@@ -547,9 +573,8 @@ const MISSIONS = [
     setup(S) {
       // (The colony so far, with Green Fuel's Bio Farm and Grove Planter: without them a slow player runs out of Fuel
       // (bots at half speed) and Fiber (the kit's Harvester has ~36 in reach) before the mission is done.)
-      kit(S, [...KIT7, 'grower'], 4);
+      kit(S, KIT8, 4);
       const L = getE(S.players[0].lander), P = S.players[0];
-      enterBuilding(addBot(0, 'agribot', L.x, L.y), L); // (the Grove Planter's crew: the Bio Farm has the first)
       P.stats.startBots = P.stats.bots;
       L.stock.cement += 10;
     },
@@ -574,17 +599,18 @@ const MISSIONS = [
   // Chapter 4, Industry and Trade. Pipelines and power, research, far Depots and trucks, railways, Road Trains, trade and planet events.
   {
     id: 'pipeline', name: 'Pipe Dreams', chapter: 'Industry and Trade',
-    brief: 'Refine Crude into Fuel, pipe it where it is needed and speed your factories up with a Generator.',
+    brief: 'Refine Crude into Fuel, pipe it where it is needed, speed your factories up with a Generator and store Fuel in a Fuel Tank.',
     intro: [
       'A <b>Refinery</b> turns Crude into Fuel, one for one. A full one explodes if it is destroyed.',
       '<b>Pipes</b> carry Crude and Fuel with no Tanker at all, for 0.3 Cement a tile.',
       'A <b>Generator</b> burns Fuel so factories within 4 tiles work a third faster. <b>Turn off</b> (P) saves Fuel.',
+      'A <b>Fuel Tank</b> holds 120 Crude and Fuel. Touching a Refinery, it feeds it Crude and takes in its Fuel.',
       'A Refinery stops once you have 30 Fuel, its stock limit: raise it with + on its panel.',
     ],
     mode: 'colony', seed: 6101, size: 1, rough: 1, rich: 3, biome: 'swamp', shape: 0, limit: [0, 0, 20],
     layout(m, W) { const b = m.bases[0]; placeField(m, W, b.x - 7, b.y - 7, 1.4, R_OIL, 0.95, 31); },
     setup(S) {
-      kit(S, KIT6, 4);
+      kit(S, [...KIT6, 'grower'], 4); // (Green Fuel's Grove Planter: its groves keep the Smelter in Fiber)
       const L = getE(S.players[0].lander);
       preBuild(0, 'pump', L.x - 7, L.y - 7, { road: true, reach: 3 });
       L.stock.cement += 10;
@@ -600,7 +626,7 @@ const MISSIONS = [
           for (const r of S.buildings) if (!r.dead && r.owner === 0 && r.built && r.type === 'refinery') for (const c of buildingPipes(r, net)) refs.add(c);
           return S.buildings.filter((b) => !b.dead && b.owner === 0 && b.type === 'pump' && buildingPipes(b, net).some((c) => refs.has(c))).length;
         },
-        hint: 'Tap the Oil Pump → <b>Pipe it to the Refinery</b> (<kbd>K</kbd>), or lay your own: <b>Paths</b> → <b>Pipes</b>.',
+        hint: 'Tap the Oil Pump → <b>Pipe it in</b>, or lay your own: <b>Paths</b> → <b>Pipes</b> (<kbd>K</kbd>).',
         ui: '#sh-pipe' },
       { kind: 'fuelPipe', n: 1, text: 'Pipe Fuel to a Generator', at: 'generator',
         count: (P, S) => S.buildings.filter((b) => !b.dead && b.owner === 0 && b.type === 'generator' && b.fuelByPipe).length,
@@ -608,9 +634,11 @@ const MISSIONS = [
         // (No #btn-build here: it is always on screen, so it would always be what lights up and the Generator would
         // never get its ring. The coach lights Build by itself while the Make tab and card aren't showing.)
         ui: "#build-tabs [data-g='make'], .bcard[data-t='generator'], #sh-pipefuel" },
-      { kind: 'made', good: 'fuel', n: [25, 40, 50], at: 'refinery',
-        hint: 'Refinery stopped at 30 Fuel? Tap it → Stock limit <b>+</b>. Fuel Stations and Generators burn it.',
-        ui: '#sh-lim-plus' },
+      // An oil bloc: a Fuel Tank touching the Refinery (a feed link each way), with Fuel in it.
+      { kind: 'oilBloc', n: [10, 15, 20], text: 'Store Fuel in a Fuel Tank', at: 'refinery',
+        count: (P, S) => Math.max(0, ...S.buildings.filter((b) => !b.dead && b.owner === 0 && b.built && b.type === 'fueltank' && feedTargets(b).some((l) => l.c.type === 'refinery')).map((b) => b.stock.fuel || 0)),
+        hint: '<b>Build</b> → <b>Gather</b> → <b>Fuel Tank</b> (<kbd>T</kbd>) touching the Refinery. Refinery stopped? Stock limit <b>+</b>.',
+        ui: "#build-tabs [data-g='gather'], .bcard[data-t='fueltank'], #sh-lim-plus" },
     ],
   },
   {
@@ -623,7 +651,7 @@ const MISSIONS = [
     ],
     mode: 'colony', seed: 1515, size: 0, rough: 1, rich: 3, biome: 'alien', shape: 0, lab: true, limit: [0, 0, 20],
     setup(S) {
-      kit(S, KIT7, 4);
+      kit(S, KIT8, 4);
       const L = getE(S.players[0].lander);
       L.stock.crystal += 10;
       L.stock.chip += 4;
@@ -708,7 +736,6 @@ const MISSIONS = [
       // (No Crystal near home: it comes by train. A Grove Planter keeps the Fiber coming: the groves here are few.)
       kit(S, KIT7.filter((t) => t !== 'tap').concat('grower'), 4);
       const L = getE(S.players[0].lander), P = S.players[0];
-      enterBuilding(addBot(0, 'agribot', L.x, L.y), L); // (the Grove Planter's crew)
       P.stats.startBots = P.stats.bots;
       L.stock.cement += 20;
       L.stock.alloy += 10;
@@ -787,11 +814,11 @@ const MISSIONS = [
       'A <b>Port</b> on the shore is storage, and its shipyard builds ships. Ships burn Fuel.',
       'A <b>Ferry</b> carries robots and trucks between your Ports, and can found a Port on an empty shore.',
       '<b>Container Ships</b> keep far Ports stocked; Tanker Ships carry Crude and Fuel.',
-      'In Versus, a Ferry also lands warbots on an enemy beach.',
+      'In Versus, a Ferry also lands warbots on an enemy beach. A rival well ahead lands load after load out of your guns\' reach: drive them off before the band grows.',
     ],
     mode: 'colony', seed: 9101, size: 0, rough: 1, rich: 3, biome: 'jungle', shape: 3, limit: [0, 0, 25],
     setup(S) {
-      kit(S, KIT7, 4);
+      kit(S, KIT8, 4);
       const L = getE(S.players[0].lander);
       L.stock.alloy += 8; L.stock.chip += 4; L.stock.cement += 10;
     },
@@ -803,23 +830,25 @@ const MISSIONS = [
         hint: 'Tap the Port → <b>Shipyard</b>: Ferries <b>+1</b>. Haulers bring it the Alloy and Chips.',
         ui: "#sh-yard .order-row[data-k='ferry'] [data-d='1']" },
       { kind: 'foundedPort', n: 1, text: 'Found a Port on another island', at: 'port',
-        count: (P, S) => {
-          // (A Port a Ferry founded (it claims land) on another island: no dry land joins it to the Command Base.)
-          const L = getE(P.lander), ports = S.buildings.filter((b) => !b.dead && b.owner === 0 && b.built && b.type === 'port' && b.claim > 0);
-          if (!ports.length || !L) return 0;
-          const N = S.W * S.H, land = new Uint8Array(N), q = [tIdx(L.x, L.y)];
-          land[q[0]] = 1;
-          while (q.length) {
-            const a = q.pop(), i = a % S.W;
-            for (const b of [i > 0 ? a - 1 : -1, i < S.W - 1 ? a + 1 : -1, a - S.W, a + S.W]) if (b >= 0 && b < N && !land[b] && S.terrain[b] !== T_WATER) { land[b] = 1; q.push(b); }
-          }
-          return ports.filter((b) => !land[tIdx(b.x, b.y)]).length;
-        },
+        count: (P, S) => overseasPorts(P, S).length,
         hint: 'Tap the Port → <b>Found a Port on another shore</b> (<kbd>P</kbd>), then tap a beach across the sea.',
         ui: '#sh-found' },
-      { kind: 'bots', type: 'cargoship', n: 1, at: 'port',
-        hint: 'Tap the Port → <b>Shipyard</b>: Container Ships <b>+1</b>. Ships fill the new Port\'s <b>Supply orders</b> from home.',
-        ui: "#sh-yard .order-row[data-k='cargoship'] [data-d='1']" },
+      // (Goods a Container Ship landed at the new Port. A ship sails with 8 or more, out of what the home Port holds, so
+      // that Port wants a supply order first (Alloy: the new Port lands with Cement). Ordered at the new Port first, the
+      // Haulers riding the Ferry line take it. The ring goes to each step in turn.)
+      { kind: 'shipped', n: 8, text: 'Ship {n} goods to the new Port',
+        count: (P, S) => overseasPorts(P, S).reduce((n, b) => n + (b.shipIn || 0), 0),
+        at: (S) => {
+          const P = S.players[0], far = overseasPorts(P, S)[0], kept = (b) => (b && b.keep && b.keep.alloy) || 0;
+          const home = S.buildings.find((b) => !b.dead && b.owner === 0 && b.built && b.type === 'port' && b !== far);
+          const more = { ui: "#sh-keep .keep-cell[data-g='alloy'] [data-d='5']" };
+          if (!home) return null;
+          if (!(P.madeBots && P.madeBots.cargoship) && !S.bots.some((u) => !u.dead && u.owner === 0 && u.type === 'cargoship')) return { e: home, ui: "#sh-yard .order-row[data-k='cargoship'] [data-d='1']" };
+          if (kept(home) < 10 || !far || (home.stock.alloy || 0) < 8) return { e: home, ...more };
+          return { e: far, ...more };
+        },
+        hint: 'Your first Port → Shipyard: Container Ships <b>+1</b>, and Supply orders: Alloy <b>+5</b> twice. Once it holds 8, the same order at the new Port.',
+        ui: "#sh-yard .order-row[data-k='cargoship'] [data-d='1'], #sh-keep .keep-cell[data-g='alloy'] [data-d='5']" },
     ],
   },
   {
@@ -840,7 +869,7 @@ const MISSIONS = [
     },
     setup(S) {
       // (Two Harvesters: the desert mesa's Smelter burns more Fiber than one cuts, and the Crystal Taps need some.)
-      kit(S, [...KIT7, 'harvester'], 4);
+      kit(S, [...KIT8, 'harvester'], 4);
       const L = getE(S.players[0].lander);
       L.stock.cement += 30; L.stock.alloy += 10;
     },
@@ -883,12 +912,14 @@ const MISSIONS = [
     ],
     mode: 'colony', seed: 1818, size: 1, rough: 2, rich: 3, biome: 'polar', shape: 5, limit: [0, 0, 20],
     setup(S) {
-      kit(S, KIT7, 4);
+      kit(S, KIT8, 4);
       const L = getE(S.players[0].lander);
       L.stock.cement += 20; L.stock.alloy += 14; L.stock.chip += 12;
     },
     goals: [
-      { kind: 'crawlerOut', n: 1, text: 'Deploy a Crawler off the plateau', at: 'foundry',
+      { kind: 'crawlerOut', n: 1, text: 'Deploy a Crawler off the plateau',
+        // (The ring: on the Bot Foundry to order it, then on the Crawler itself once it rolls out.)
+        at: (S) => S.bots.find((u) => !u.dead && u.owner === 0 && BOTS[u.type].crawler) || S.buildings.find((b) => !b.dead && b.owner === 0 && b.built && b.type === 'foundry') || null,
         count: (P, S) => {
           // (Deployed off the level top the Command Base stands on: down a slope, past the cliffs.)
           const L = getE(P.lander), cs = S.buildings.filter((b) => !b.dead && b.owner === 0 && b.type === 'crawlerbase');
@@ -910,9 +941,11 @@ const MISSIONS = [
         hint: 'Tap the Airfield → <b>Hangar</b>: Cargo Planes <b>+1</b>. Then <b>Drop Outpost</b>, and tap open ground.',
         ui: "#sh-yard .order-row[data-k='cargoplane'] [data-d='1'], #sh-air [data-k='outpost']" },
       { kind: 'airSupplied', n: 1, text: 'Supply a building by air', at: 'crawlerbase',
-        count: (P, S) => S.buildings.filter((b) => !b.dead && b.owner === 0 && b.type !== 'dropost' && b.airSupply && b.airAt !== undefined).length,
-        hint: 'Tap the deployed Crawler → <b>Supply orders</b>: <b>+5</b> Cement. Then <b>Supply by air</b>: <b>On</b>.',
-        ui: "#sh-keep .keep-cell[data-g='cement'] [data-d='5'], #sh-airsup" },
+        // (Once its crates have landed, `airIn`: a plane loads up for it, `airAt`, about a minute before.)
+        count: (P, S) => S.buildings.filter((b) => !b.dead && b.owner === 0 && b.type !== 'dropost' && b.airSupply && b.airIn !== undefined).length,
+        // (Supply by air first: from then on its supply orders come by plane only, where a road would let Haulers fill them.)
+        hint: 'Tap the deployed Crawler → <b>Supply by air</b>: <b>On</b>. Then its Supply orders: <b>+5</b> Cement, and a plane flies it in.',
+        ui: "#sh-airsup [data-v='1'], #sh-keep .keep-cell[data-g='cement'] [data-d='5']" },
     ],
   },
 
@@ -930,7 +963,7 @@ const MISSIONS = [
     // (Quiet: their nights teach the tunnels and exits without swamping a first fight with them)
     mode: 'colony', seed: 6107, size: 1, rough: 1, rich: 3, biome: 'swamp', war: true, wildlife: true, murmur: 'quiet', limit: [0, 0, 20],
     setup(S) {
-      kit(S, KIT7, 4);
+      kit(S, KIT8, 4);
       const P = S.players[0], L = getE(P.lander);
       // Colony games start with no warbots: four, waiting in the Command Base.
       for (let k = 0; k < 4; k++) enterBuilding(addBot(0, 'warbot', L.x, L.y), L);
@@ -959,6 +992,49 @@ const MISSIONS = [
         ui: '#btn-attack, #ar-attack' },
     ],
   },
+  // The Hollow (the Murmur's cavern lair: its own map). No raids yet: the Murmur's night system will bring them.
+  {
+    id: 'hollow', name: 'Into the Hollow', chapter: 'First Contact',
+    brief: 'Your colony has landed in the Hollow, the Murmur\'s cavern lair, under a breach in its roof. Cut Fiber from the Bloom, reach the floating Crystal and ride out the tremors.',
+    intro: [
+      'You came down through a <b>breach</b>, the only daylight in the Hollow. Ringfall falls only through the breaches.',
+      'Nothing grows down here. A <b>Harvester</b> cuts Fiber from the violet <b>Bloom veins</b>, which grow back.',
+      'The richest Crystal hangs over the chasm on floating masses: a <b>Ropeway</b> (Paths) reaches one, or a bridge.',
+      'Now and then the roof shakes. Where dust trickles down, rock falls: then tap what it hit → <b>Repair</b>.',
+      'No aircraft fly underground, and Fuel comes from oil seeps (an Oil Pump and a Refinery). Cutting veins draws the Murmur.',
+    ],
+    mode: 'colony', seed: 3307, size: 1, rough: 2, rich: 3, biome: 'hollow', shape: SHAPE_PRESETS.findIndex((p) => p.hollow), limit: [0, 0, 20],
+    layout(m, W) {
+      // No Crystal in the home cavern (nor its own tap): it has to come from the floating mass over the chasm.
+      const b = m.bases[0];
+      mapTiles(m, W, b.x, b.y, 20, (t) => { if (m.res[t] === R_CRYSTAL && m.elev[t] < 3) { m.res[t] = 0; m.amt[t] = 0; } });
+    },
+    setup(S) {
+      // The colony so far, but a Harvester: that's the first thing to build here. A Depot by the base, where the roof
+      // gives way first: the rock comes down on it a couple of minutes in (S.tremor.aim).
+      kit(S, KIT6.filter((t) => t !== 'harvester' && t !== 'tap'), 4);
+      const L = getE(S.players[0].lander);
+      L.stock.cement += 30; L.stock.alloy += 12; L.stock.fiber += 10;
+      const d = preBuild(0, 'depot', L.x + 4, L.y - 2, { road: true, reach: 6 });
+      if (d) { S.tremor.next = 150; S.tremor.n = 1; S.tremor.aim = { x: d.x, y: d.y }; }
+    },
+    goals: [
+      { kind: 'made', good: 'fiber', n: [20, 30, 40],
+        hint: '<b>Build</b> (<kbd>B</kbd>) → <b>Gather</b> (<kbd>1</kbd>) → <b>Harvester</b> (<kbd>H</kbd>) by the violet Bloom veins. Then <b>Lay road</b> (<kbd>R</kbd>).',
+        ui: "#btn-build, #build-tabs [data-g='gather'], .bcard[data-t='harvester'], #sh-layroad" },
+      { kind: 'ropeway', n: 1, text: 'Run a Ropeway to the floating Crystal',
+        count: (P, S) => S.buildings.filter((b) => !b.dead && b.owner === 0 && b.type === 'ropeway' && b.far && S.elev[tIdx(b.x, b.y)] >= 3).length,
+        hint: '<b>Paths</b> (<kbd>R</kbd>) → <b>Ropeways</b> (<kbd>Shift</kbd>+<kbd>Y</kbd>): a station by your roads, then its far end on the mass.',
+        ui: "#btn-road, #banner-seg [data-v='ropeway'], #sh-layroad" },
+      { kind: 'made', good: 'crystal', n: [15, 25, 35],
+        hint: '<b>Build</b> (<kbd>B</kbd>) → <b>Gather</b> (<kbd>1</kbd>) → <b>Crystal Tap</b> (<kbd>C</kbd>) on the floating mass. Then <b>Lay road</b> (<kbd>R</kbd>).',
+        ui: "#btn-build, #build-tabs [data-g='gather'], .bcard[data-t='tap'], #sh-layroad" },
+      { kind: 'rockfix', n: 1, text: 'Repair what the falling rock hit', at: 'depot',
+        count: (P, S) => S.buildings.filter((b) => !b.dead && b.owner === 0 && b.rocked && b.armor >= BDEFS[b.type].armor - 0.01).length,
+        hint: 'When rock falls on your Depot (dust trickles down first), tap it → <b>Repair</b> (<kbd>E</kbd>).',
+        ui: '#sh-fixbtn' },
+    ],
+  },
   {
     id: 'livefire', name: 'Live Fire', chapter: 'First Contact',
     brief: 'Your first rival: a quiet colony with two empty Outposts. Learn to command warbots, then take its Command Base.',
@@ -981,7 +1057,7 @@ const MISSIONS = [
       preBuild(1, 'outpost', Math.floor(W / 2) + 5, Math.floor(H / 2) - 5, { reach: 8 });
       computeTerritory();
       // The colony so far, and an Ammo Plant; and more Workers than it has work for (spare ones to recycle).
-      kit(S, KIT7, 10);
+      kit(S, KIT8, 10);
       preBuild(0, 'armory', L.x - 3, L.y - 3, { road: true });
       computeTerritory();
     },
@@ -1019,7 +1095,7 @@ const MISSIONS = [
       mirrored(W, H, Math.floor(W / 2) + 6, Math.floor(H / 2) + 3, (x, y) => placeField(m, W, x, y, 1.6, R_CRYSTAL, 0.75, 4));
     },
     setup(S, diff) {
-      kit(S, [...KIT7, 'armory'], 4); // (the colony so far, with Live Fire's Ammo Plant)
+      kit(S, [...KIT8, 'armory'], 4); // (the colony so far, with Live Fire's Ammo Plant)
       const W = S.W, H = S.H, P1 = S.players[1];
       // Two rival Outposts on the rival's side of the contested fields, each with a few warbots on guard.
       for (const [x, y] of [[Math.floor(W / 2) - 5, Math.floor(H / 2) + 2], [Math.floor(W / 2) + 6, Math.floor(H / 2) + 3]]) {
@@ -1054,7 +1130,7 @@ const MISSIONS = [
     mode: 'versus', seed: 2121, size: 1, rough: 2, rich: 3, biome: 'polar', shape: 2, players: 2, style: 'rusher',
     rival: ['medium', 'medium', 'normal'], limit: [0, 0, 0],
     setup(S, diff) {
-      kit(S, [...KIT7, 'armory'], 4); // (the colony so far, with Live Fire's Ammo Plant)
+      kit(S, [...KIT8, 'armory'], 4); // (the colony so far, with Live Fire's Ammo Plant)
       const L = getE(S.players[0].lander), P1 = S.players[1], R = getE(P1.lander);
       // An Outpost up by the crags, joined to the roads: its land reaches the east channel, so guns can cover it.
       preBuild(0, 'outpost', 23, 36, { road: true, reach: 2 });
@@ -1063,8 +1139,9 @@ const MISSIONS = [
       // Four more warbots at home (8 in all): enough to man a Bunker and still face the Herald.
       for (let k = 0; k < 4; k++) enterBuilding(addBot(0, 'warbot', L.x, L.y), L);
       S.players[0].stats.startBots = S.players[0].stats.bots;
-      // The Herald starts with more warbots, and holds its first assault until you've had time to dig in (it comes at
-      // about 7 / 5½ / 4 minutes).
+      // The Herald starts with more warbots, and holds its first assault until you've had time to dig in (not before
+      // 7 / 5½ / 4 minutes; played headless against a colony that follows the hints, its first assault hit at about
+      // 8½ / 7½ / 4½ minutes, and 1 to 2½ minutes later on Easy and Normal before mission rivals had the rival's opening).
       for (let k = 0; k < [2, 4, 6][diff]; k++) enterBuilding(addBot(1, 'warbot', R.x, R.y), R);
       P1.stats.startBots = P1.stats.bots;
       P1.nextAttack = [420, 330, 240][diff];
@@ -1079,7 +1156,7 @@ const MISSIONS = [
       // (A Gate counts: it's what a wall line gets where it crosses a road.)
       { kind: 'walls', n: [4, 6, 8], text: 'Build {n} Walls',
         count: (P, S) => S.buildings.filter((b) => !b.dead && b.owner === 0 && b.built && (b.type === 'wall' || b.type === 'gate')).length,
-        hint: '<b>Walls</b> (<kbd>X</kbd>): drag a line across each channel, then <b>Build</b>. Once it\'s up, add a second row behind it.',
+        hint: '<b>Walls</b> (<kbd>X</kbd>): drag a line across each channel and a second row behind it, then <b>Build</b>. The outer row goes up first.',
         ui: "#btn-road, #banner-seg [data-v='wall'], #build-walls, #banner-ok" },
       { kind: 'mannedBunker', n: 1, text: 'Man a Bunker with 2 warbots', at: 'bunker',
         count: (P, S) => S.buildings.filter((b) => !b.dead && b.owner === 0 && b.built && b.type === 'bunker' && b.garrison.length >= 2).length,
@@ -1105,7 +1182,7 @@ const MISSIONS = [
     mode: 'versus', seed: 7707, size: 1, rough: 2, rich: 3, biome: 'jungle', shape: 0, style: 'balanced',
     rival: ['easy', 'medium', 'normal'], limit: [0, 0, 40],
     setup(S) {
-      kit(S, KIT7, 4); // (the colony so far: with the Bio Farm for Fuel, as in First Contact)
+      kit(S, KIT8, 4); // (the colony so far: with the Bio Farm for Fuel, as in First Contact)
       // An Outpost out towards the rival, joined by road (the rally point's first home).
       const L = getE(S.players[0].lander), s = aiFindSpot(0, 'outpost', L);
       if (s) preBuild(0, 'outpost', s.x, s.y, { road: true });
@@ -1186,7 +1263,7 @@ const MISSIONS = [
     mode: 'versus', seed: 2323, size: 1, rough: 1, rich: 3, biome: 'volcanic', shape: 0, style: 'turtle',
     rival: ['easy', 'medium', 'normal'], limit: [0, 0, 45],
     setup(S, diff) {
-      kit(S, [...KIT7, 'armory'], 4); // (the colony so far, with Supply Lines' Ammo Plant; the Bio Farm grows the Fuel that Torches and Missiles burn)
+      kit(S, [...KIT8, 'armory'], 4); // (the colony so far, with Supply Lines' Ammo Plant; the Bio Farm grows the Fuel that Torches and Missiles burn)
       const L = getE(S.players[0].lander);
       L.stock.alloy += 10; L.stock.chip += 4; L.stock.fuel += 10;
       siegeWorks(S, diff);
@@ -1206,17 +1283,10 @@ const MISSIONS = [
         hint: '<b>Make</b> (<kbd>2</kbd>) → <b>Missile Factory</b> (<kbd>N</kbd>), <b>Defend</b> (<kbd>4</kbd>) → <b>Missile Silo</b> (<kbd>I</kbd>) toward them. Silo → <b>Aim missile</b> (<kbd>F</kbd>).',
         ui: ".bcard[data-t='munitions'], .bcard[data-t='silo'], #sh-aim" },
       { kind: 'forts', n: [3, 4, 6], text: 'Take out {n} Walls or turrets',
-        count: (P, S) => {
-          // (Every rival Wall, Gate, gun and Keep seen standing is remembered: one gone since, or yours now, counts.)
-          const M = S.mission || {}, seen = M.forts || (M.forts = {});
-          for (const b of S.buildings) {
-            if (!b.dead && b.built && b.owner > 0 && ['wall', 'gate', 'turret', 'minigun', 'bunker', 'mortar', 'disruptor', 'flak', 'keep'].includes(b.type)) seen[b.id] = 1;
-          }
-          let n = 0;
-          for (const id in seen) { const b = getE(+id); if (!b || b.dead || b.owner === 0) n++; }
-          return n;
-        },
-        hint: '<b>Army</b> (<kbd>Q</kbd>) → <b>Attack</b> (<kbd>Q</kbd>): tap a Wall or turret. Bulwark and Torches lead; missiles count too.',
+        // (Walls, Gates, guns and Keeps your robots shoot, burn or capture, counted as they fall: `forts`, see
+        // captureBuilding. One a missile or bomb finishes off doesn't count: this goal is the Torches' and Bulwark's.)
+        count: (P) => P.stats.forts || 0,
+        hint: '<b>Army</b> (<kbd>Q</kbd>) → <b>Attack</b> (<kbd>Q</kbd>): tap a Wall or turret. Bulwark and Torches lead; a missile softens one up.',
         ui: '#btn-attack, #ar-attack' },
     ],
   },
@@ -1239,7 +1309,7 @@ const MISSIONS = [
     setup(S) {
       // (The colony's Ore Mine goes on Ore: the one by the Uranium is the player's to build.)
       S.mission.nuke = false;
-      kit(S, KIT7, 4); // (with the Bio Farm: Fuel for the Fuel Station and a Generator)
+      kit(S, KIT8, 4); // (with the Bio Farm: Fuel for the Fuel Station and a Generator)
       S.mission.nuke = true;
       const L = getE(S.players[0].lander);
       L.stock.alloy += 10; L.stock.chip += 6;
@@ -1272,7 +1342,7 @@ const MISSIONS = [
     ],
     mode: 'versus', seed: 8803, size: 1, rough: 2, rich: 3, biome: 'polar', shape: 16, style: 'balanced',
     rival: ['easy', 'normal', 'normal'], rivalBonus: [0, 0, 4], limit: [0, 0, 60],
-    setup(S) { kit(S, [...KIT7, 'armory'], 4); }, // (the colony so far, with Supply Lines' Ammo Plant: warbots and bombers run on Ammo)
+    setup(S) { kit(S, [...KIT8, 'armory'], 4); }, // (the colony so far, with Supply Lines' Ammo Plant: warbots and bombers run on Ammo)
     goals: [
       { kind: 'built', type: 'keep', n: 1,
         hint: '<b>Build</b> → <b>Defend</b> (<kbd>4</kbd>) → <b>Keep</b> (<kbd>K</kbd>): 6 warbots fire from it, and Walls near it get tougher.',
@@ -1288,7 +1358,37 @@ const MISSIONS = [
         ui: '#sh-bomb, #btn-attack, #ar-nall, #ar-hold' },
     ],
   },
+
+  // Bonus: the free-play ways to win the campaign only mentions. An Uplinks race for three.
+  {
+    id: 'hill', name: 'King of the Hill', chapter: 'Bonus',
+    brief: 'Three vanguards, three Uplinks: whoever holds them speaks for Ithaca I. Hold two of the three for longer than both rivals.',
+    intro: [
+      'The Pathfinder raised the <b>Uplinks</b> to talk to home. Under the Accord, whoever holds them speaks for Ithaca I.',
+      'An Uplink is yours while it stands in your land: put an Outpost or a Keep beside it. Tap the Uplinks card at the top to look at each.',
+      'They come online 8 minutes in. Then hold 2 of the 3, more than either rival, and your clock runs: 5 minutes in all wins.',
+      'Armed warbots right beside an Uplink jam it: it counts for no one. Theirs can jam yours; yours can jam theirs.',
+      'Two rivals, their doctrines dealt at random. Every vanguard wants to be holding the Uplinks if home ever answers.',
+    ],
+    mode: 'versus', seed: 30117, size: 2, rough: 1, rich: 3, biome: 'desert', shape: 17, players: 3, style: 'random',
+    victory: 'uplinks', rival: ['easy', 'medium', 'medium'], limit: [0, 0, 35],
+    setup(S) { kit(S, [...KIT8, 'armory'], 4); }, // (the colony so far, with the Ammo Plant)
+    goals: [
+      { kind: 'uplink', n: 1, text: 'Hold an Uplink', count: (P, S) => uplinksHeld(S),
+        hint: '<b>Build</b> (<kbd>B</kbd>) → <b>Defend</b> (<kbd>4</kbd>) → <b>Outpost</b> (<kbd>O</kbd>) toward the nearest Uplink, and <b>Lay road</b>: its land takes it.',
+        ui: "#btn-build, #build-tabs [data-g='defend'], .bcard[data-t='outpost'], #win-card" },
+      { kind: 'uplinks', n: 2, text: 'Hold 2 Uplinks at once', count: (P, S) => uplinksHeld(S),
+        hint: 'An <b>Outpost</b> (<kbd>B</kbd> <kbd>4</kbd> <kbd>O</kbd>) by a second Uplink, and a <b>Bunker</b> (<kbd>U</kbd>) beside each one you hold: rivals send warbots to jam them.',
+        ui: "#btn-build, #build-tabs [data-g='defend'], .bcard[data-t='outpost'], .bcard[data-t='bunker']" },
+      { kind: 'race', n: 1, text: 'Win the Uplinks race', count: (P, S) => (S.winner === 0 && S.endHow === 'uplinks' ? 1 : 0),
+        hint: 'Hold 2 of the 3 for 5 minutes in all: the card shows the clocks. A rival\'s running? <b>Army</b> (<kbd>Q</kbd>) → <b>Hold ground</b> (<kbd>G</kbd>) beside its Uplink: that jams it.',
+        ui: '#btn-attack, #ar-hold, #win-card' },
+    ],
+  },
 ];
+
+/** For the Uplinks goals: how many Uplinks player 0 holds right now (its land covers them, and none is jammed). */
+function uplinksHeld(S) { return (S.uplinks || []).filter((u) => u.owner === 0 && !u.jam).length; }
 
 function goalNeed(g, diff) { return Array.isArray(g.n) ? g.n[diff] : g.n || 1; }
 
@@ -1412,7 +1512,7 @@ function finishMission() {
   const M = S.mission;
   if (!M || M.result) return;
   if (S.winner === 0 && missionStates(M).every((s) => s.done)) M.result = 'won';
-  else { M.result = 'lost'; M.why = S.winner === 1 ? 'lander' : 'goals'; }
+  else { M.result = 'lost'; M.why = S.endHow === 'uplinks' && S.winner > 0 ? 'uplinks' : S.winner === 1 || S.players[0].out ? 'lander' : 'goals'; }
 }
 
 /** newGame options for mission k at difficulty diff (0 easy, 1 normal, 2 hard). */
@@ -1437,6 +1537,8 @@ function missionOptions(k, diff) {
       S.mission = { k, id: def.id, diff, limit: (def.limit[diff] || 0) * 60, nuke: !!def.nuke, war: !!def.war, lab: !!def.lab, events: !!def.events };
       // The Murmur, only where the mission asks (its murmur: 'quiet' or 'active'; the older wildlife flag is Active). None on the moon.
       if (def.murmur || def.wildlife) murmurStart(def.murmur || 'active');
+      // (A way to win other than capture: newGame sets one only outside missions. The Uplinks go where free play puts them.)
+      if (def.victory && S.mode === 'versus') { S.victory = def.victory; if (def.victory === 'uplinks') placeUplinks(S.seed); }
       // (A rival that never attacks, at the difficulties the mission says: passive [easy, normal, hard].)
       if (def.passive && def.passive[diff]) for (const P of S.players) if (P.id !== 0) P.passive = true;
       if (def.setup) def.setup(S, diff);

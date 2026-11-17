@@ -44,7 +44,7 @@ function simStep(dt) {
   if (S.tick % 10 === 4 && S.rallies.length) followRallies();
   if (S.tick % 30 === 20) updateLoot();
   if (S.events) updateEvents();
-  if (S.tide || S.volcano || (S.quake && !S.quake.done)) updateMapEvents(dt);
+  if (S.tide || S.volcano || S.tremor || (S.quake && !S.quake.done)) updateMapEvents(dt);
   if (S.tick % 30 === 25) naniteRepair();
   if (S.wildlife && S.tick % 30 === 17) murmurTick();
   // (Played on past a victory, S.endless: nothing wins any more; see keepPlaying.)
@@ -86,21 +86,21 @@ function checkMilestones() {
   }
 }
 
-/** Planted stalk groves and energy crops grow until they are ripe (grow = 1). */
+/** Planted stalk groves and energy crops grow until they are ripe (grow = 1); Bloom veins cut down grow back (VEIN). */
 function growStalks(dt) {
   const N = S.W * S.H, crop = CROP_GROW_TIME / modFuelRate(); // (Half Fuel: crops ripen slower)
   for (let t = 0; t < N; t++) {
     const r = S.res[t];
-    if ((r !== R_STALK && r !== R_CROP) || S.grow[t] >= 1) continue;
+    if ((r !== R_STALK && r !== R_CROP && r !== R_VEIN) || S.grow[t] >= 1) continue;
     const before = Math.floor(S.grow[t] * 4);
-    S.grow[t] = Math.min(1, S.grow[t] + dt / (r === R_CROP ? crop : STALK_GROW_TIME));
+    S.grow[t] = Math.min(1, S.grow[t] + dt / (r === R_CROP ? crop : r === R_VEIN ? VEIN.regrow : STALK_GROW_TIME));
     if (Math.floor(S.grow[t] * 4) !== before) S.dirtyTiles.push(t);
   }
 }
 
 /* ------------------------------------------------------------------ queries */
 
-function storeAccepts(b) { return b.built && !b.dead && BDEFS[b.type].store && !BDEFS[b.type].terminal; } // a Trade Terminal holds only its trades
+function storeAccepts(b) { return b.built && !b.dead && BDEFS[b.type].store && !BDEFS[b.type].terminal && !BDEFS[b.type].tank; } // a Trade Terminal holds only its trades, a Fuel Tank only Crude and Fuel (storeTakes)
 
 function nearestStoreTo(owner, x, y, except) {
   let best = null, bd = Infinity;
@@ -117,7 +117,14 @@ function prioRank(b) { return b.prio === 'high' ? 0 : b.prio === 'low' ? 2 : 1; 
 
 /** Does storage building b take in good g? (Players can switch goods off or set it to empty out.) */
 function storeTakes(b, g) {
+  if (BDEFS[b.type].tank) return b.built && !b.dead && isLiquid(g) && b.smode !== 'empty' && !(b.reject && b.reject[g]) && tankRoom(b) >= 1;
   return storeAccepts(b) && b.smode !== 'empty' && !(b.reject && b.reject[g]);
+}
+
+/** Room left in Fuel Tank b for Crude and Fuel (its `tank` cap, less what it holds and has on the way); Infinity for other buildings. */
+function tankRoom(b) {
+  const cap = BDEFS[b.type].tank;
+  return cap ? cap - liquidIn(b) - ((b.inc && ((b.inc.crude || 0) + (b.inc.fuel || 0))) || 0) : Infinity;
 }
 
 /**
@@ -289,28 +296,33 @@ function usesGood(b, g) {
 /** What building b can pass to a neighbour by feed link: what it makes (and a Refinery's Crude). */
 function feedGoods(b) {
   const def = BDEFS[b.type];
-  if (!b || b.dead || !b.built || def.store || !def.out) return [];
+  if (!b || b.dead || !b.built) return [];
+  if (def.tank) return ['crude', 'fuel']; // a Fuel Tank: the hub of an oil bloc
+  if (def.store || !def.out) return [];
   const gs = Object.keys(def.out).filter((g) => !NUKE_GOODS.includes(g) || nukeOn());
   if (def.explodes && def.inp && def.inp.crude) gs.push('crude'); // a Refinery passes Crude on from its intake
   return gs;
 }
 /** How much of g building b can feed on right now (a Refinery keeps one Crude for itself). */
-function feedSupply(b, g) { return BDEFS[b.type].out[g] ? supplyOf(b, g) : Math.max(0, (b.stock[g] || 0) - 1); }
+function feedSupply(b, g) { const d = BDEFS[b.type]; return d.tank || d.out[g] ? supplyOf(b, g) : Math.max(0, (b.stock[g] || 0) - 1); }
 
 /** The neighbours building b feeds (at most FEED_MAX, sides before corners): [{c, goods}]. */
 function feedTargets(b) {
   const gs = feedGoods(b);
   if (!gs.length) return [];
-  const out = [];
+  const out = [], tank = !!BDEFS[b.type].tank, max = tank ? FEED_MAX_TANK : FEED_MAX;
   for (const [di, dj] of FEED_NB) {
     const i = b.x + di, j = b.y + dj;
     if (!inMap(i, j) || !S.bAt[tIdx(i, j)]) continue;
     const c = getE(S.bAt[tIdx(i, j)]);
-    if (!c || c === b || c.dead || !c.built || c.owner !== b.owner || BDEFS[c.type].store || BDEFS[c.type].barrier) continue;
-    const goods = gs.filter((g) => usesGood(c, g));
+    if (!c || c === b || c.dead || !c.built || c.owner !== b.owner || BDEFS[c.type].barrier) continue;
+    // Into a Fuel Tank: the Crude a pump beside it pumps, the Fuel a Refinery beside it makes (only what it makes: a
+    // Refinery's own Crude stays). Otherwise storage takes no part.
+    const goods = BDEFS[c.type].tank ? (tank ? [] : gs.filter((g) => isLiquid(g) && BDEFS[b.type].out && BDEFS[b.type].out[g]))
+      : BDEFS[c.type].store ? [] : gs.filter((g) => usesGood(c, g));
     if (!goods.length) continue;
     out.push({ c, goods });
-    if (out.length >= FEED_MAX) break;
+    if (out.length >= max) break;
   }
   return out;
 }
@@ -321,7 +333,7 @@ function feedStep(b, dt) {
   if (b.feedT > 0) return;
   b.feedT = FEED_TIME;
   for (const { c, goods } of feedTargets(b)) {
-    const need = needsOf(c);
+    const need = BDEFS[c.type].tank ? goods.map((g) => [g, tankRoom(c)]) : needsOf(c);
     for (const g of goods) {
       const n = need.find((x) => x[0] === g);
       if (!n || n[1] < 1 || feedSupply(b, g) < 1) continue;
@@ -392,16 +404,21 @@ function feedPreview(owner, type, x, y) {
     if (def.station && !def.terminal && (c.type === 'lander' || c.type === 'depot' || convFor(cd))) out.push({ a: [x, y], b: [i, j], goods: [] });
     else if (cd.station && !cd.terminal && convFor(def)) out.push({ a: [i, j], b: [x, y], goods: [] });
   }
-  if (def.store || def.barrier) return out;
-  const makes = def.out ? Object.keys(def.out).concat(def.explodes && def.inp && def.inp.crude ? ['crude'] : []) : [];
+  if ((def.store && !def.tank) || def.barrier) return out;
+  // (Storage takes no part, but a Fuel Tank does: it feeds Crude and Fuel to what uses them, and takes in the liquids
+  // a neighbour makes; see feedTargets.)
+  const madeLiquids = (d, gs) => gs.filter((g) => isLiquid(g) && d.out && d.out[g]);
+  const makes = def.tank ? ['crude', 'fuel'] : def.out ? Object.keys(def.out).concat(def.explodes && def.inp && def.inp.crude ? ['crude'] : []) : [];
   for (const [di, dj] of FEED_NB) {
     const i = x + di, j = y + dj;
     if (!inMap(i, j) || !S.bAt[tIdx(i, j)]) continue;
     const c = getE(S.bAt[tIdx(i, j)]);
-    if (!c || c.dead || c.owner !== owner || BDEFS[c.type].store || BDEFS[c.type].barrier) continue;
-    const toC = makes.filter((g) => typeUses(BDEFS[c.type], g));
+    if (!c || c.dead || c.owner !== owner) continue;
+    const cd = BDEFS[c.type];
+    if (cd.barrier || (cd.store && !cd.tank) || (cd.tank && def.tank)) continue;
+    const toC = cd.tank ? madeLiquids(def, makes) : makes.filter((g) => typeUses(cd, g));
     if (toC.length) out.push({ a: [x, y], b: [i, j], goods: toC });
-    const fromC = feedGoods(c).filter((g) => typeUses(def, g));
+    const fromC = def.tank ? madeLiquids(cd, feedGoods(c)) : feedGoods(c).filter((g) => typeUses(def, g));
     if (fromC.length) out.push({ a: [i, j], b: [x, y], goods: fromC });
   }
   return out;
@@ -1867,13 +1884,16 @@ function dispatch(p) {
   if (!idle.length) return;
 
   // 1) A builder for every construction site that has materials waiting to be built with (not from far off
-  //    while a worker close by will soon be free: see nearSoon).
+  //    while a worker close by will soon be free: see nearSoon). A Wall from beside it, the outer row first (wallStands).
+  let stands = null;
   for (const b of blds) {
     if (!idle.length) return;
     if (!b.built && !b.builder && siteFrac(b) > b.progress + 0.01 && !(P.danger && dangerAt(p, b.x, b.y))) { // (a rival AI's: see noteDanger)
+      // (Not the rival's: its wall lines always keep a Gate, aiWallGate and aiTurtleWalls, so its builders have a way home.)
+      if (b.type === 'wall' && !P.ai && (stands = stands || wallStands(p)).wait.has(b.id)) continue;
       const u = take(b.x, b.y, 'build');
       if (u && nearSoon(u, b)) { idle.push(u); continue; }
-      assignBuild(u, b);
+      assignBuild(u, b, stands);
     }
   }
   // 1b) A worker for every building you've paid to repair.
@@ -1919,7 +1939,8 @@ function dispatch(p) {
     const inp = b.built && BDEFS[b.type].inp;
     for (const [g, n0, keep, autoOnly] of needsOf(b)) {
       const h = fed && fed.length && !keep ? feedHaul(b, g, fed) : null, n = h === null ? n0 : Math.min(n0, h);
-      if (n <= 0 || (g === 'fuel' && b.fuelByPipe)) continue;
+      if (n <= 0 || (g === 'fuel' && b.fuelByPipe) || (b.built && P.salvaging && P.salvaging[g])) continue; // (salvage is for sites: see landerSalvage)
+      if (keep && b.airSupply && airBaseNear(p, b.x, b.y)) continue; // (a place switched to Supply by air gets its supply orders by plane, once one is based)
       // Full loads: a factory that is less than a Hauler's load short of an input, with more than its next batch
       // still in hand or on the way, waits to be topped up. (Asked after every batch, a third of all Hauler trips
       // carried a single unit to a factory that wasn't short.) Liquids go as they come.
@@ -2407,7 +2428,8 @@ function repairHint(b) {
 
 /**
  * A colony that has run out of Stone or Fiber with no Quarry or Harvester that can still work
- * (so it couldn't build one) slowly salvages it from its Command Base, enough to get going again.
+ * (so it couldn't build one) slowly salvages it from its Command Base, enough to get going again. Meanwhile, with a
+ * Quarry or Harvester site waiting, that good goes only to sites (P.salvaging, see dispatch), so the site gets it.
  */
 function landerSalvage(p, dt) {
   const P = S.players[p];
@@ -2421,6 +2443,12 @@ function landerSalvage(p, dt) {
       (b.built ? BDEFS[type].bedrock || reachableRes(b.x, b.y, BDEFS[type].radius, res) > 0 : sumValues(b.stock) >= sumValues(BDEFS[type].cost))); // a Quarry can always cut or dig
     // Cement is Stone already baked (2 per Stone), so it counts towards having enough.
     const amount = (have[g] || 0) + (g === 'stone' ? (have.cement || 0) / 2 : 0);
+    // (While it salvages a good for a Quarry or Harvester site, only sites get it: a running factory that burns it, a
+    // Smelter say, took every one before the site did. See dispatch. A person's colony only, and only for a site a road
+    // joins to storage: a rival keeps its own Fiber rules (P.fiberWait), and its Smelters went without for good behind a
+    // Harvester site that never got built, its army stuck at a handful for 45 minutes.)
+    if (!working && amount < SALVAGE_BELOW && !P.ai && S.buildings.some((b) => !b.dead && b.owner === p && b.type === type && !b.built && !b.unlinked)) (P.salvaging = P.salvaging || {})[g] = true;
+    else if (P.salvaging) delete P.salvaging[g];
     if (working || amount >= SALVAGE_BELOW) { P.salvageT[g] = 0; continue; }
     P.salvageT[g] = (P.salvageT[g] || 0) + dt;
     if (P.salvageT[g] < SALVAGE_EVERY) continue;
@@ -2639,13 +2667,49 @@ function nearSoon(u, b) {
   return false;
 }
 
-function assignBuild(u, site) {
+function assignBuild(u, site, stands) {
   if (!u) return;
   cancelTask(u);
   u.task = { type: 'build', site: site.id, phase: 'go' };
   site.builder = u.id;
-  const at = BDEFS[site.type].ramp ? rampStand(u, site) : tIdx(site.x, site.y);
+  const at = BDEFS[site.type].ramp ? rampStand(u, site) : stands && stands.at.has(site.id) ? stands.at.get(site.id) : tIdx(site.x, site.y);
   if (at < 0 || !goTo(u, at % S.W, (at / S.W) | 0)) cancelTask(u);
+}
+
+/**
+ * A Wall is built from beside it, on the home side, so its builder is never left standing on it (in a narrow channel,
+ * walled out for good). For player p, from the ground its bots can walk to from its Command Bases (its Walls in the
+ * way): `at`, each unbuilt Wall site's tile to build it from (the free neighbour nearest home, or the Wall site next to
+ * it on the home side: the inner row of a double wall); and `wait`, the sites another is built from (the inner row
+ * goes up after the outer, which it would otherwise shut off from every builder). A site with neither is built from
+ * its own tile. { at: Map(site id → tile), wait: Set(site id) }
+ */
+function wallStands(p) {
+  const W = S.W, N = W * S.H, d = new Int32Array(N).fill(-1), q = [];
+  const site = (t) => { const b = S.bAt[t] && getE(S.bAt[t]); return !!b && b.owner === p && b.type === 'wall' && !b.built; };
+  for (const b of S.buildings) if (!b.dead && b.owner === p && b.type === 'lander') { const t = tIdx(b.x, b.y); d[t] = 0; q.push(t); }
+  // Walking from home (through its own Gates and Outposts), and one step onto a Wall site: no further.
+  for (let h = 0; h < q.length; h++) {
+    const a = q[h], i = a % W;
+    if (site(a)) continue;
+    for (const c of [i > 0 ? a - 1 : -1, i < W - 1 ? a + 1 : -1, a - W, a + W]) {
+      if (c < 0 || c >= N || d[c] >= 0 || !walkable(c) || !canStep(a, c) || (S.bAt[c] && !site(c) && !passTile(c, p))) continue;
+      d[c] = d[a] + 1; q.push(c);
+    }
+  }
+  const at = new Map(), wait = new Set();
+  for (const b of S.buildings) {
+    if (b.dead || b.owner !== p || b.type !== 'wall' || b.built) continue;
+    const t = tIdx(b.x, b.y), i = b.x;
+    let best = -1;
+    for (const c of [i > 0 ? t - 1 : -1, i < W - 1 ? t + 1 : -1, t - W, t + W]) {
+      if (c >= 0 && c < N && d[c] >= 0 && (!S.bAt[c] || site(c)) && canStep(t, c) && (best < 0 || d[c] < d[best])) best = c;
+    }
+    if (best < 0) continue;
+    at.set(b.id, best);
+    if (S.bAt[best]) wait.add(S.bAt[best]);
+  }
+  return { at, wait };
 }
 
 /**
@@ -2926,6 +2990,7 @@ function doHaul(u, t, dt) {
   if (!moveAlong(u, dt)) return;
   bump(dst.inc, t.good, -(t.n || 1));
   bump(dst.stock, t.good, t.n || 1);
+  if (BOTS[u.type].sea) dst.shipIn = (dst.shipIn || 0) + cargoCount(u); // (goods landed here by ship, all told: Harbour's goal)
   if (u.mix) { for (const k in u.mix) { bump(dst.inc, k, -u.mix[k]); bump(dst.stock, k, u.mix[k]); } delete u.mix; }
   u.carry = null;
   u.carryN = 0;
@@ -3068,7 +3133,7 @@ function findNode(b, type, radius) {
       if (S.res[t] !== type || !S.amt[t] || S.resRes[t] || S.zone[t] !== zone) continue;
       if (S.owner[t] >= 0 && S.owner[t] !== b.owner) continue; // don't harvest on enemy land
       if (hotFor(b.owner, t)) continue; // nor where an enemy gun reaches (or enemy warbots are about)
-      if ((type === R_STALK || type === R_CROP) && S.grow[t] < 1) continue;
+      if ((type === R_STALK || type === R_CROP || type === R_VEIN) && S.grow[t] < 1) continue;
       const d = dist2(i, j, b.x, b.y);
       if (d > r2 || (near.length === 4 && d >= near[3][0])) continue;
       let k = near.length;
@@ -3253,7 +3318,7 @@ function doStaff(u, t, dt) {
           if (node < 0) { b.status = 'Digging Stone out of the ground (slow; it never runs out)'; t.phase = 'dig'; t.timer = def.bedrock.dig; return; }
           t.face = true;
           b.status = 'Cutting Stone from the rock face (it never runs out)';
-        } else if (node < 0) { b.status = `No ${RES[def.gather].name.toLowerCase()}s left in reach`; t.wait = 3; return; }
+        } else if (node < 0) { b.status = gatherRes(b.type) === R_VEIN && countResIn(b.x, b.y, def.radius, R_VEIN) ? 'The Bloom veins in reach are growing back' : `No ${RES[gatherRes(b.type)].name.toLowerCase()}s left in reach`; t.wait = 3; return; }
         else b.status = 'Gathering ' + GOOD[RES[t.gtype].good].name;
       } else if (def.farm) {
         // Harvest ripe crops first, then plant any empty fertile soil.
@@ -3337,7 +3402,10 @@ function doStaff(u, t, dt) {
           // An Ore Mine's worker digs two before the walk back (def.dig): the walk is most of the trip.
           const n = Math.min(def.dig || 1, S.amt[node]);
           S.amt[node] -= n;
-          if (S.amt[node] === 0) S.res[node] = R_NONE;
+          // A Bloom vein cut down to nothing grows back (VEIN.regrow); anything else is gone.
+          if (S.amt[node] === 0 && ty === R_VEIN) { S.amt[node] = veinFull(); S.grow[node] = 0; } else if (S.amt[node] === 0) S.res[node] = R_NONE;
+          // (Cutting the Bloom draws the Murmur: see veinLure. Only where they're in the game.)
+          if (ty === R_VEIN && wildOn()) b.veinT = S.time;
           markDirty(ni, nj);
           u.carry = RES[ty].good;
           u.carryN = n;
@@ -3433,7 +3501,7 @@ function updateBuilding(b, dt) {
       : b.type === 'turret' ? 'Off: not firing, and saving its Crystal' : 'Paused — its worker is free for other jobs';
     return;
   }
-  if (def.out && !def.store) feedStep(b, dt * S.players[b.owner].mult);
+  if ((def.out && !def.store) || def.tank) feedStep(b, dt * S.players[b.owner].mult);
   if (def.station && !def.terminal) stationStep(b, dt * S.players[b.owner].mult);
   if (def.mil) b.status = `Garrison: ${b.garrison.length} of ${def.garrison} warbots` + (b.hold ? ', holding inside' : '');
   else if (def.store) b.status = def.station && !def.terminal && !railPlatforms(b.x, b.y).length ? 'No track beside it yet: drag rail out to it in Paths (Rail), to another station' : 'Storing goods';
@@ -4764,6 +4832,9 @@ function captureBuilding(b, by) {
   const def = BDEFS[b.type], old = b.owner;
   if (def.burrow) { collapseExit(b, by); return; }
   if (def.wild) { clearNest(b, by); return; }
+  // (A defence shot or burned down by robots, counted as it falls: Siege Breakers' goal. Missiles and bombs wreck
+  // theirs through destroyBuilding.)
+  if (b.built && by >= 0 && foes(by, old) && DEFENCE_TYPES.has(b.type) && !def.missile && !def.nukeSilo) S.players[by].stats.forts = (S.players[by].stats.forts || 0) + 1;
   if (def.bunker && b.built) {
     // There's no land to take: a fallen Bunker is wrecked, and the warbots inside walk out.
     dropLoot(b);
@@ -4869,7 +4940,7 @@ function liquidIn(b) { return (b.stock && ((b.stock.crude || 0) + (b.stock.fuel 
  */
 function burnLiquids(b) {
   if (b.boomFull !== undefined) return b.boomFull;
-  const def = BDEFS[b.type], cap = INPUT_CAP + ((def.out && def.out.fuel) || 0) + ((def.out && def.out.crude) || 0);
+  const def = BDEFS[b.type], cap = def.tank || INPUT_CAP + ((def.out && def.out.fuel) || 0) + ((def.out && def.out.crude) || 0);
   b.boomFull = Math.min(1, liquidIn(b) / Math.max(1, cap));
   delete b.stock.crude; delete b.stock.fuel;
   return b.boomFull;
@@ -5395,11 +5466,12 @@ function doCrate(u, t, dt) {
   if (BDEFS[dst.type].store) enterBuilding(u, dst);
 }
 
-function addLoot(x, y, goods) {
+/** Crates of `goods` on tile (x, y). `keep`: they never rot (the Hollow's side chambers: robot parts laid out in rows). */
+function addLoot(x, y, goods, keep) {
   S.loot = S.loot || [];
   const pile = S.loot.find((l) => l.x === x && l.y === y);
-  if (pile) { for (const g in goods) bump(pile.goods, g, goods[g]); pile.until = S.time + LOOT_TIME; return; }
-  S.loot.push({ id: S.nextId++, x, y, goods: { ...goods }, until: S.time + LOOT_TIME });
+  if (pile) { for (const g in goods) bump(pile.goods, g, goods[g]); pile.until = Math.max(pile.until, S.time + LOOT_TIME); return; }
+  S.loot.push({ id: S.nextId++, x, y, goods: { ...goods }, until: keep ? LOOT_KEEP : S.time + LOOT_TIME });
 }
 
 function lootLeft(pile) { let n = 0; for (const g in pile.goods) n += pile.goods[g]; return n; }
@@ -8408,8 +8480,9 @@ function usageByType(p) {
 
 /* ------------------------------------------------------------------ map events */
 
-/** A new game's map events: the tide (Tidal flats), the volcano (Volcano), the fault (Fault line). */
+/** A new game's map events: the tide (Tidal flats), the volcano (Volcano), the fault (Fault line), the tremors (the Hollow). */
 function mapEventsStart(m) {
+  if (S.hollow) S.tremor = { next: TREMOR.first, n: 0, dust: 0, rock: [] };
   if (S.tidal) { S.tide = { high: false, next: TIDE.firstLow, warned: false }; setTide(false, true); }
   if (m.volcano) S.volcano = { ...m.volcano, next: ERUPTION.first, n: 0, warned: false, erupting: false, bombs: [] };
   if (S.fault) {
@@ -8419,9 +8492,85 @@ function mapEventsStart(m) {
 }
 
 function updateMapEvents(dt) {
+  if (S.tremor) updateTremor();
   if (S.tide) updateTide();
   if (S.volcano) updateVolcano(dt);
   if (S.quake && !S.quake.done) updateQuake();
+}
+
+/*
+ * Ceiling tremors, the Hollow's weather (TREMOR). Now and then the roof shakes and dust sifts down everywhere (S.tremor.dust:
+ * until when; for looks and sound only). Every TREMOR.rockEvery-th tremor also brings rock down on a spot away from the
+ * breaches, somewhere round a colony's home (with its twin round the other's, so both get the same): dust trickles there
+ * for TREMOR.warn seconds first (S.tremor.rock: [{x, y, at}]), then it falls (rockfall).
+ */
+function updateTremor() {
+  const T = S.tremor;
+  for (const r of T.rock) if (!r.done && S.time >= r.at) { r.done = 1; rockfall(r); }
+  if (T.rock.length && T.rock.every((r) => r.done)) T.rock = [];
+  if (S.time < T.next) return;
+  T.n++;
+  const rng = makeRng(((S.seed ^ 0x7e31) + T.n * 7919) >>> 0);
+  T.next = S.time + TREMOR.gap[0] + rng() * (TREMOR.gap[1] - TREMOR.gap[0]);
+  T.dust = S.time + TREMOR.dust;
+  addFx('quake', S.W / 2, S.H / 2, { life: TREMOR.dust * 0.5, amp: 0.7 });
+  sfx('rumble');
+  if (T.n % TREMOR.rockEvery) return;
+  const spot = rockSpot(rng);
+  if (!spot) return;
+  const at = S.time + TREMOR.warn, spots = [spot];
+  if (S.mode !== 'colony') spots.push({ x: S.W - 1 - spot.x, y: S.H - 1 - spot.y });
+  for (const p of spots) {
+    T.rock.push({ x: p.x, y: p.y, at });
+    const o = S.owner[tIdx(p.x, p.y)];
+    if (o >= 0 && !S.players[o].ai) postMsg(o, `Rock is shaking loose from the roof: dust is trickling down here, and it falls in ${TREMOR.warn}s. Get your robots clear!`, p.x, p.y, 'warn');
+  }
+  if (spots.some((p) => S.owner[tIdx(p.x, p.y)] === ME)) sfx('alert');
+}
+
+/**
+ * Where a tremor's rock comes down: open ground (or a building, a road) within 18 tiles of player 0's Command Base, on
+ * its own side of the Hollow (in Colony anywhere round it), clear of the breaches. null if there's nowhere. (A mission
+ * can aim the next one: S.tremor.aim.)
+ */
+function rockSpot(rng) {
+  const T = S.tremor;
+  if (T.aim) { const a = T.aim; delete T.aim; return { x: a.x, y: a.y }; }
+  const L = getE(S.players[0].lander) || { x: S.hollow.breaches[0].x, y: S.hollow.breaches[0].y };
+  for (let k = 0; k < 60; k++) {
+    const a = rng() * Math.PI * 2, r = 3 + rng() * 15, x = Math.round(L.x + dcos(a) * r), y = Math.round(L.y + dsin(a) * r);
+    if (!inMap(x, y) || S.terrain[tIdx(x, y)] !== T_GROUND || breachAt(x + 0.5, y + 0.5, 2)) continue;
+    if (S.mode !== 'colony' && y < S.H / 2) continue;
+    return { x, y };
+  }
+  return null;
+}
+
+/** Rock from the Hollow's roof lands on (r.x, r.y): buildings dented (never wrecked), robots hurt, Stone left lying. */
+function rockfall(r) {
+  const cx = r.x + 0.5, cy = r.y + 0.5, R2 = TREMOR.r * TREMOR.r;
+  addFx('boom', cx, cy, { r: 1 });
+  addFx('dustcloud', cx, cy, { r: 1.5 });
+  addFx('crater', cx, cy, { life: 5 });
+  const hit = new Set();
+  for (const b of S.buildings) {
+    if (b.dead || BDEFS[b.type].wild || dist2(b.x + 0.5, b.y + 0.5, cx, cy) > R2) continue;
+    b.armor = Math.max(1, b.armor - TREMOR.damage);
+    b.lastHit = S.time;
+    b.rocked = 1; // (struck by falling rock: a mission counts the ones mended since)
+    if (b.owner >= 0) hit.add(b.owner);
+  }
+  for (const u of S.bots) if (!u.dead && !u.inside && !BOTS[u.type].air && dist2(u.x, u.y, cx, cy) <= R2) { damageBot(u, TREMOR.botDamage, undefined, undefined, true); if (u.owner >= 0) hit.add(u.owner); }
+  for (const p of hit) postMsg(p, 'Rock fell from the roof onto your colony!', r.x, r.y, 'bad');
+  if (hit.has(ME) || S.owner[tIdx(r.x, r.y)] === ME) sfx('boom', cx, cy);
+  // What came down lies there: a boulder (Stone for a Quarry), where the ground is clear.
+  const t = tIdx(r.x, r.y);
+  if (S.terrain[t] === T_GROUND && !S.res[t] && !S.bAt[t] && !S.road[t] && !S.plan[t] && !S.ramp[t] && !(S.rail && S.rail[t]) && !postAt(t) && !uplinkAt(t)) {
+    const pr = RESOURCE_PRESETS[(S.settings && S.settings.rich) ?? DEFAULT_RICH] || RESOURCE_PRESETS[DEFAULT_RICH];
+    S.res[t] = R_BOULDER; S.amt[t] = clamp(Math.round(RES[R_BOULDER].amount * pr.amount), 1, 255); S.grow[t] = 1;
+    clearDecor(t);
+    markDirty(r.x, r.y);
+  }
 }
 
 /** Tidal flats about to flood: routes keep off them (see tileCost). */
@@ -8652,7 +8801,10 @@ function updateEvents() {
   S.evN = (S.evN || 0) + 1;
   const rng = makeRng(((S.seed ^ 0x51ed27) + S.evN * 7919) >>> 0);
   const recent = S.recentEvents || [];
-  const pool = EVENT_ORDER.filter((k) => !recent.includes(k)); // never one of the last two again
+  // (The Hollow: no dust storm or solar flare reaches underground, so Ringfall and the Wren take turns.)
+  const all = S.hollow ? EVENT_ORDER.filter((k) => k !== 'dust' && k !== 'flare') : EVENT_ORDER;
+  let pool = all.filter((k) => !recent.includes(k)); // never one of the last two again
+  if (!pool.length) pool = all.filter((k) => k !== recent[recent.length - 1]);
   // (Endless dust storm, a challenge modifier: a dust storm, and it never ends, so no other event comes)
   const endless = modOn('dust'), type = endless ? 'dust' : pool[Math.floor(rng() * pool.length)], def = EVENTS[type];
   const t0 = S.time + (def.warn ? EVENT_WARN : 0), dur = def.dur[0] + rng() * (def.dur[1] - def.dur[0]);
@@ -8662,7 +8814,8 @@ function updateEvents() {
   if (def.warn) {
     postMsg(ME, endless ? `A dust storm is blowing in (${EVENT_WARN}s), and this one will not blow over: bots will slow down and Missiles will be grounded for the rest of the game.`
       : type === 'dust' ? `A dust storm is blowing in (${EVENT_WARN}s): bots will slow down and Missiles will be grounded.`
-      : type === 'meteor' ? `Ringfall in ${EVENT_WARN}s! Pieces of the Ring will crater roads, but leave rich Ore and Crystal where they land.`
+      : type === 'meteor' ? (S.hollow ? `Ringfall in ${EVENT_WARN}s! It falls through the breaches: pieces of the Ring will crater roads under the shafts of daylight, and leave rich Ore and Crystal there.`
+        : `Ringfall in ${EVENT_WARN}s! Pieces of the Ring will crater roads, but leave rich Ore and Crystal where they land.`)
         : `Solar flare in ${EVENT_WARN}s: bot batteries will drain twice as fast. Keep your Fuel Stations fuelled.`, undefined, undefined, 'warn');
     sfx('alert');
   }
@@ -8692,8 +8845,8 @@ function startEvent(E) {
 function endEvent(E) {
   S.recentEvents = (S.recentEvents || []).concat(E.type).slice(-2);
   S.event = null;
-  const rng = makeRng(((S.seed ^ 0x3c1f) + E.n * 104729) >>> 0);
-  S.nextEvent = S.time + EVENT_GAP[0] + rng() * (EVENT_GAP[1] - EVENT_GAP[0]);
+  const rng = makeRng(((S.seed ^ 0x3c1f) + E.n * 104729) >>> 0), gap = S.mission ? MISSION_EVENT_GAP : EVENT_GAP;
+  S.nextEvent = S.time + gap[0] + rng() * (gap[1] - gap[0]);
   if (E.type === 'dust') postMsg(ME, 'The dust storm has blown over.', undefined, undefined, 'info');
   else if (E.type === 'flare') postMsg(ME, 'The solar flare has passed.', undefined, undefined, 'info');
   else if (E.type === 'trader') postMsg(ME, 'The Wren has left orbit, on schedule.', undefined, undefined, 'info');
@@ -8714,6 +8867,7 @@ function endEvent(E) {
  * so the shower is fair.
  */
 function meteorPlan(rng, t0, dur) {
+  if (S.hollow) return hollowRingfall(rng, t0, dur);
   const W = S.W, H = S.H, np = S.players.length, alone = S.mode === 'colony';
   const ccx = (W - 1) / 2, ccy = (H - 1) / 2, SEC = (2 * Math.PI) / 3;
   const sector = (x, y) => { let a = datan2(y - ccy, x - ccx) - Math.PI / 6; a = ((a % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI); return Math.floor(a / SEC) % 3; };
@@ -8739,6 +8893,26 @@ function meteorPlan(rng, t0, dur) {
       spots.push([Math.round(ccx + dx * c - dy * s), Math.round(ccy + dx * s + dy * c)]);
     }
     for (const [i, j] of spots) if (inMap(i, j)) hits.push({ x: i, y: j, at, roll, done: 0 });
+  }
+  return hits;
+}
+
+/**
+ * Ringfall in the Hollow falls only through the breaches, concentrated and rich: METEOR_HITS strikes on each colony's
+ * share as anywhere, HOLLOW.ringfall.contested of them through the contested breaches on its side and the rest through
+ * its own (each strike with its twin, through the twin breach, on the other colony's side); in Colony twice as many,
+ * over every breach. Richer where they land: see meteorImpact.
+ */
+function hollowRingfall(rng, t0, dur) {
+  const alone = S.mode === 'colony', B = S.hollow.breaches, W = S.W, H = S.H, hits = [], n = METEOR_HITS * (alone ? 2 : 1);
+  const own = alone ? B : B.filter((b, k) => k % 2 === 0); // (player 0's: its own and the contested ones on its side; each one's twin follows it)
+  const home = own.filter((b) => b.home), open = own.filter((b) => !b.home);
+  for (let k = 0; k < n; k++) {
+    const list = open.length && (!home.length || rng() < HOLLOW.ringfall.contested) ? open : home;
+    const b = list[Math.floor(rng() * list.length)], a = rng() * Math.PI * 2, r = Math.sqrt(rng()) * (b.r - 0.4);
+    const x = Math.round(b.x + dcos(a) * r), y = Math.round(b.y + dsin(a) * r);
+    const at = t0 + 1.5 + ((k + rng() * 0.8) * (dur - 4)) / n, roll = rng();
+    for (const [i, j] of alone ? [[x, y]] : [[x, y], [W - 1 - x, H - 1 - y]]) if (inMap(i, j)) hits.push({ x: i, y: j, at, roll, done: 0 });
   }
   return hits;
 }
@@ -8773,13 +8947,13 @@ function meteorImpact(E, h) {
   // A rich deposit where it fell: Ore or Crystal (sometimes Uranium, in a Nuclear race).
   const r = nukeOn() && h.roll < 0.2 ? R_URANIUM : h.roll < 0.6 ? R_ORE : R_CRYSTAL;
   const pr = RESOURCE_PRESETS[(S.settings && S.settings.rich) ?? DEFAULT_RICH] || RESOURCE_PRESETS[DEFAULT_RICH];
-  const amt = Math.min(255, Math.round(RES[r].amount * (r === R_URANIUM ? 1 : pr.amount * METEOR_RICH)));
+  const amt = Math.min(255, Math.round(RES[r].amount * (r === R_URANIUM ? 1 : pr.amount * METEOR_RICH * (S.hollow ? HOLLOW.ringfall.rich : 1))));
   const spots = [];
   for (let dj = -1; dj <= 1; dj++) for (let di = -1; di <= 1; di++) spots.push([di * di + dj * dj, h.x + di, h.y + dj]);
   spots.sort((a, b) => a[0] - b[0]);
   let placed = 0;
   for (const [, i, j] of spots) {
-    if (placed >= (r === R_URANIUM ? 1 : 3) || !inMap(i, j)) continue;
+    if (placed >= (r === R_URANIUM ? 1 : S.hollow ? HOLLOW.ringfall.tiles : 3) || !inMap(i, j)) continue;
     const t = tIdx(i, j);
     if (S.terrain[t] !== T_GROUND || S.res[t] || S.bAt[t] || S.road[t] || S.plan[t] || S.ramp[t] || S.fert[t]) continue;
     if (wrecked.some(([, wi, wj]) => wi === i && wj === j)) continue;
@@ -8970,8 +9144,9 @@ function murmurStart(level) {
     }
   } else S.wildOwner = WILD_OWNER;
   murmurLayer();
-  if (S.mode === 'colony') placeNests(S.seed); else placeNestsVersus(S.seed);
-  for (const b of S.buildings) if (!b.dead && b.type === 'nest') murmurAdopt(b);
+  // (The Hollow, their lair, has its own sites, laid out with its map in twin pairs, the Deep's mound in the middle.)
+  if (S.hollow) placeHollowNests(makeRng((S.seed ^ 0x6e357) >>> 0)); else if (S.mode === 'colony') placeNests(S.seed); else placeNestsVersus(S.seed);
+  for (const b of S.buildings) if (!b.dead && isNestB(b)) murmurAdopt(b);
 }
 
 /** The tunnel layer and the Murmur's state (S.tun, S.mur), made if missing (a save from before them). */
@@ -8981,7 +9156,7 @@ function murmurLayer() {
   const M = S.mur;
   M.nests = M.nests || []; M.shut = M.shut || []; M.ver = M.ver || 0;
   if (M.night === undefined) { M.night = murmurNight(S.time) ? 1 : 0; M.warned = murmurNights(S.time); } // (warned: the night whose dusk warning was given)
-  for (const b of S.buildings) if (!b.dead && b.type === 'nest' && !M.nests.includes(b.id)) murmurAdopt(b);
+  for (const b of S.buildings) if (!b.dead && isNestB(b) && !M.nests.includes(b.id)) murmurAdopt(b);
 }
 
 /** Nest b's place in the tunnel layer (its slot + 1 marks its tiles), taken now if it has none; its own tile is the root. */
@@ -9090,6 +9265,7 @@ function placeNests(seed) {
   const L = getE(S.players[0].lander);
   if (!L || !murmurGround(S.settings && S.settings.biome)) return; // (no Murmur on the moon)
   const rng = makeRng((seed ^ 0x6e357) >>> 0), zone = S.zone[tIdx(L.x, L.y)];
+  if (S.hollow) { placeHollowNests(rng); return; }
   const want = clamp(Math.round((S.W * S.H) / WILD.perTiles), 3, 8), nests = [];
   for (let tries = 0; tries < 4000 && nests.length < want; tries++) {
     const i = 1 + Math.floor(rng() * (S.W - 2)), j = 1 + Math.floor(rng() * (S.H - 2)), t = tIdx(i, j);
@@ -9108,6 +9284,27 @@ function placeNests(seed) {
 }
 
 /**
+ * The Hollow's nests, more than on any other planet: the Deep's mound (BDEFS mound) in the middle of the cathedral, and a
+ * nest on each of the sites hollowMap laid out (in twin pairs, the same on both sides). With the Murmur Quiet, half the
+ * pairs (rounded up). Owned by the Murmur's slot (wildOwner), in Versus as in Colony.
+ */
+function placeHollowNests(rng) {
+  const pairs = S.hollow.nests, keep = murmurLevel() === 'quiet' ? Math.ceil(pairs.length / 4) * 2 : pairs.length;
+  const sites = [S.hollow.deep, ...pairs.slice(0, keep)];
+  sites.forEach((n, k) => {
+    const t = tIdx(n.x, n.y);
+    if (S.terrain[t] !== T_GROUND || S.bAt[t] || S.road[t]) return;
+    S.res[t] = R_NONE; S.amt[t] = 0;
+    const deep = k === 0, b = addBuilding(wildOwner(), deep ? 'mound' : 'nest', n.x, n.y, true);
+    b.level = deep ? HOLLOW.deep.level : 1;
+    b.raidAt = WILD.first + rng() * 120;
+    const loot = deep ? HOLLOW.deep.loot : WILD.loot;
+    for (const g in loot) b.stock[g] = loot[g];
+    for (let m = 0; m < nestGuards(b); m++) spawnCritter(b, 'scuttler');
+  });
+}
+
+/**
  * The neutral Trade Posts (TRADE_POST), placed fairly: the first as near the middle of the colonies as it
  * can be (as far from each Command Base), each of the rest fair between the two nearest colonies and spread
  * out from the others; in Colony mode, about colonyDist tiles out. On open, level ground with room round it
@@ -9116,6 +9313,7 @@ function placeNests(seed) {
  */
 function placePosts(seed) {
   S.posts = [];
+  if (S.hollow) return; // (none in the Hollow: the Pathfinder, which built them, never mapped it)
   const Ls = S.players.filter((P) => !P.absent && !isWild(P.id)).map((P) => getE(P.lander)).filter((L) => L && !L.dead);
   if (!Ls.length) return;
   const want = Ls.length === 1 ? TRADE_POST.colony : Ls.length + 1;
@@ -9412,13 +9610,18 @@ function despawnCritter(u) {
   S.byId.delete(u.id);
 }
 
-/** What a nest's next pack goes for: the nearest building or road a colony (any colony) has within reach, and whose. */
+/**
+ * What a nest's next pack goes for: the nearest building or road a colony (any colony) has within reach, and whose. A
+ * Harvester that has been cutting Bloom veins lately draws them (veinLure): it counts as nearer, and from further out.
+ */
 function wildTarget(b) {
   let best = null, bd = WILD.reach * WILD.reach;
   for (const e of S.buildings) {
     if (e.dead || e.owner === wildOwner() || e.owner < 0) continue;
-    const d = dist2(e.x, e.y, b.x, b.y);
-    if (d < bd) { bd = d; best = { x: e.x, y: e.y, owner: e.owner }; }
+    const d = dist2(e.x, e.y, b.x, b.y), lure = veinLure(e);
+    if (lure && d > sq(WILD.reach + VEIN.reach)) continue;
+    const near = lure ? d / sq(VEIN.pull) : d; // (a Harvester at work on the veins looks VEIN.pull times nearer)
+    if (near < bd) { bd = near; best = { x: e.x, y: e.y, owner: e.owner }; }
   }
   const R0 = WILD.reach;
   for (let j = Math.max(0, b.y - R0); j <= Math.min(S.H - 1, b.y + R0); j++) {
@@ -9432,6 +9635,22 @@ function wildTarget(b) {
   return best;
 }
 
+/** How many Scuttlers nest b keeps on guard: more as it grows, and more again round the Deep's mound. */
+function nestGuards(b) { return WILD.guards + b.level + (b.type === 'mound' ? HOLLOW.deep.guards : 0); }
+
+/**
+ * Has building e been cutting Bloom veins lately (in the last VEIN.lure seconds: see the gathering in updateWorker)?
+ * The Murmur's raids are drawn to it. Never where the Murmur aren't in the game. (A raid-target weight for whatever
+ * picks a pack's target: wildTarget, and the Murmur's night raids.)
+ */
+function veinLure(e) { return wildOn() && e.veinT !== undefined && S.time - e.veinT < VEIN.lure; }
+
+/** A Bloom vein's Fiber when it has grown back in full (RES[R_VEIN], by the Resources setting). */
+function veinFull() {
+  const pr = RESOURCE_PRESETS[(S.settings && S.settings.rich) ?? DEFAULT_RICH] || RESOURCE_PRESETS[DEFAULT_RICH];
+  return clamp(Math.round(RES[R_VEIN].amount * pr.amount), 1, 255);
+}
+
 /** A nest: keeps its guards up, grows, and sends packs out at the colony. Runs once a second. */
 function updateNest(b) {
   if (S.tick % 30 !== b.id % 30) return;
@@ -9441,7 +9660,7 @@ function updateNest(b) {
   }
   let guards = 0;
   for (const u of S.bots) if (!u.dead && u.nest === b.id && u.task && u.task.type === 'guard') guards++;
-  if (guards < WILD.guards + b.level && S.time >= (b.guardT || 0)) {
+  if (guards < nestGuards(b) && S.time >= (b.guardT || 0)) {
     spawnCritter(b, 'scuttler');
     b.guardT = S.time + WILD.guardEvery;
   }
@@ -9617,7 +9836,7 @@ function updateCritter(u, dt) {
     if (r || r === null || dist2(u.x, u.y, nest.x + 0.5, nest.y + 0.5) < 2.2) {
       let guards = 0;
       for (const v of S.bots) if (!v.dead && v.nest === nest.id && v.task && v.task.type === 'guard') guards++;
-      if (guards < WILD.guards + nest.level && u.type === 'scuttler') { u.task = { type: 'guard' }; u.path = null; } else despawnCritter(u);
+      if (guards < nestGuards(nest) && u.type === 'scuttler') { u.task = { type: 'guard' }; u.path = null; } else despawnCritter(u);
     }
     return;
   }
@@ -9644,8 +9863,13 @@ function murmurOnward(u, t) {
 function clearNest(b, by) {
   const n = dropLoot(b);
   const exits = S.buildings.filter((e) => !e.dead && e.type === 'burrow' && e.nest === b.id);
-  postMsg(by, `Nest cleared!${n ? ` ${n} goods spilled out: your warbots carry them home, one each.` : ''} The land around it is free to build on.` +
-    (exits.length ? ` Its tunnels die back and its ${exits.length} exit${exits.length > 1 ? 's close' : ' closes'}.` : ''), b.x, b.y, 'good');
+  const back = exits.length ? ` Its tunnels die back and its ${exits.length} exit${exits.length > 1 ? 's close' : ' closes'}.` : '';
+  if (b.type === 'mound') {
+    // The Deep's mound: every other nest in the Hollow falls back to its first level (and starts growing again).
+    for (const e of S.buildings) if (!e.dead && e !== b && BDEFS[e.type].wild && !BDEFS[e.type].burrow) { e.level = 1; e.born = S.time; }
+    for (const P of S.players) if (!P.absent) postMsg(P.id, P.id === by ? `The Deep's mound is wrecked!${n ? ` Its hoard of ${n} goods spilled out for your warbots.` : ''} Every nest in the Hollow falls back to its first level.${back}`
+      : 'The Deep\'s mound has been wrecked: every nest in the Hollow falls back to its first level.', b.x, b.y, P.id === by ? 'good' : 'info');
+  } else postMsg(by, `Nest cleared!${n ? ` ${n} goods spilled out: your warbots carry them home, one each.` : ''} The land around it is free to build on.${back}`, b.x, b.y, 'good');
   addFx('ring', b.x + 0.5, b.y + 0.5, { color: '#c77dff', r: 2.4 });
   if (isMe(by)) sfx('capture');
   if (S.players[by]) S.players[by].stats.captured++;
@@ -9729,7 +9953,7 @@ function murmurGoals(b, want) {
   for (const e of S.buildings) {
     if (e.dead || isWild(e.owner) || e.owner < 0) continue;
     const d = dist(e.x, e.y, b.x, b.y);
-    const w = chargeWorth(e);
+    const w = chargeWorth(e) + (veinLure(e) ? 2 : 0); // (a Harvester on the Bloom veins draws the tunnels too)
     list.push({ t: tIdx(e.x, e.y), x: e.x, y: e.y, s: (d <= MURMUR.reach ? 4 : 0) + w * 3 - d * 0.12 + hash2(e.id, b.id, Math.floor(S.time / TOD_LEN)) * 1.5 });
   }
   list.sort((a, c) => c.s - a.s || a.t - c.t);
@@ -9921,16 +10145,18 @@ function nColoniesIn() { return S.players.filter((P) => !P.absent && !P.out).len
 
 /**
  * What a pack at (x, y) goes for: within r tiles, the colony's bot, building full of charge or road that draws it most
- * (charge first, then whatever's nearest). { x, y, owner } or null.
+ * (a Harvester cutting Bloom veins first, from further out: veinLure; then charge; then whatever's nearest). { x, y,
+ * owner } or null.
  */
 function murmurPrey(x, y, r) {
   let best = null, bs = -Infinity;
   const r2 = r * r, wo = wildOwner();
   for (const e of S.buildings) {
     if (e.dead || e.owner < 0 || e.owner === wo || calmB(e)) continue;
-    const d2 = dist2(e.x + 0.5, e.y + 0.5, x, y);
-    if (d2 > r2) continue;
-    const s = chargeWorth(e) * 3 - Math.sqrt(d2) * 0.4;
+    // (A Harvester cutting Bloom veins draws them most, from VEIN.reach further out: veinLure.)
+    const d2 = dist2(e.x + 0.5, e.y + 0.5, x, y), lure = veinLure(e);
+    if (d2 > (lure ? sq(r + VEIN.reach) : r2)) continue;
+    const s = chargeWorth(e) * 3 + (lure ? 6 : 0) - Math.sqrt(d2) * 0.4;
     if (s > bs) { bs = s; best = { x: e.x, y: e.y, owner: e.owner }; }
   }
   for (const v of S.bots) {
@@ -10684,7 +10910,7 @@ function deploySpot(owner, i, j, zone, terr) {
     if (S.terrain[t] !== T_GROUND || S.bAt[t] || S.road[t] || S.plan[t] || S.res[t] || S.ramp[t] || scorched(t) || runwayAt(t)) continue;
     if (S.owner[t] >= 0 && S.owner[t] !== owner) continue;
     if (zone !== undefined && S.zone[t] !== zone) continue;
-    if (S.wildlife && S.buildings.some((e) => !e.dead && e.type === 'nest' && Math.max(Math.abs(e.x - x), Math.abs(e.y - y)) <= WILD.clear)) continue;
+    if (S.wildlife && S.buildings.some((e) => !e.dead && isNestB(e) && Math.max(Math.abs(e.x - x), Math.abs(e.y - y)) <= WILD.clear)) continue;
     if (ringOverRival(owner, x, y, terr || BDEFS.dropost.terr)) continue; // (its ring mustn't cut a rival's buildings off)
     const d = di * di + dj * dj;
     if (d < bd) { bd = d; best = t; }
@@ -10861,14 +11087,18 @@ function updatePipes() {
       if (fuelUser(def)) N.burners.push(b);
     }
   }
+  // (A Fuel Tank on a line: it moves PIPE_RATE_TANK a second, and the Fuel Tank fills before other storage, up to its cap.)
+  const tankOn = (N) => N.stores.some((s) => BDEFS[s.type].tank);
+  const tanksFirst = (a, b) => (BDEFS[b.type].tank ? 1 : 0) - (BDEFS[a.type].tank ? 1 : 0);
+  const roomIn = (s) => (BDEFS[s.type].tank ? Math.floor(tankRoom(s)) : Infinity);
   for (const [c, N] of nets) {
-    let left = PIPE_RATE, moved = 0;
+    let left = tankOn(N) ? PIPE_RATE_TANK : PIPE_RATE, moved = 0;
     const give = (from, to, n) => { bump(from.stock, 'crude', -n); bump(to.stock, 'crude', n); left -= n; moved += n; };
-    const stores = N.stores.filter((s) => storeTakes(s, 'crude'));
+    const stores = N.stores.filter((s) => storeTakes(s, 'crude')).sort(tanksFirst);
     for (const p of N.pumps) {
       if (N.users.length || stores.length) p.piped = true; // its Crude goes by pipe: no Tanker needed
       for (const u of N.users) { const n = Math.min(Math.floor(supplyOf(p, 'crude')), Math.floor(pipeRoom(u)), left); if (n > 0) give(p, u, n); }
-      for (const s of stores) { const n = Math.min(Math.floor(supplyOf(p, 'crude')), left); if (n > 0) give(p, s, n); }
+      for (const s of stores) { const n = Math.min(Math.floor(supplyOf(p, 'crude')), left, roomIn(s)); if (n > 0) give(p, s, n); }
     }
     for (const u of N.users) for (const s of N.stores) { const n = Math.min(Math.floor(supplyOf(s, 'crude')), Math.floor(pipeRoom(u)), left); if (n > 0) give(s, u, n); }
     if (moved) net.flow[c] = S.time; // (drawn: Crude pulsing along the pipe)
@@ -10892,17 +11122,17 @@ function updatePipes() {
   for (const [, N] of lines) {
     // From where it's made to what burns it, then into storage; and from storage to what burns it.
     if (!N.burners.length && !N.makers.length) continue;
-    let fleft = PIPE_RATE, fmoved = 0;
+    let fleft = tankOn(N) ? PIPE_RATE_TANK : PIPE_RATE, fmoved = 0;
     const room = new Map(N.burners.map((u) => [u, Math.floor(pipeRoom(u, 'fuel'))]));
     const fgive = (from, to, n) => { bump(from.stock, 'fuel', -n); bump(to.stock, 'fuel', n); fleft -= n; fmoved += n; if (room.has(to)) room.set(to, room.get(to) - n); };
-    const fstores = N.stores.filter((s) => storeTakes(s, 'fuel'));
+    const fstores = N.stores.filter((s) => storeTakes(s, 'fuel')).sort(tanksFirst);
     // (A Trade Terminal gives what its Fuel contract paid: terminalSpare, as its goods are never anyone's supply.)
     const msup = (m) => Math.floor(BDEFS[m.type].terminal ? terminalSpare(m, 'fuel') : supplyOf(m, 'fuel'));
     for (const m of N.makers) {
       if (fstores.length) m.pipedFuel = true; // its Fuel goes by pipe: no Tanker needed
       else if (N.burners.some((u) => u !== m)) m.fuelLine = true; // (what burns it on the line comes first: a Tanker takes only the surplus)
       for (const u of N.burners) { if (u === m) continue; const n = Math.min(msup(m), room.get(u), fleft); if (n > 0) fgive(m, u, n); }
-      for (const s of fstores) { const n = Math.min(msup(m), fleft); if (n > 0) fgive(m, s, n); }
+      for (const s of fstores) { const n = Math.min(msup(m), fleft, roomIn(s)); if (n > 0) fgive(m, s, n); }
     }
     for (const u of N.burners) for (const s of N.stores) { const n = Math.min(Math.floor(supplyOf(s, 'fuel')), room.get(u), fleft); if (n > 0) fgive(s, u, n); }
     // What burns Fuel on a line with somewhere it's made, or storage with some, gets it by pipe: no Tanker brings
@@ -11006,8 +11236,8 @@ function refineryPipes(owner) {
  */
 function pipeToRefinery(owner, b) {
   const refs = S.buildings.filter((r) => !r.dead && r.owner === owner && BDEFS[r.type].explodes);
-  if (!refs.length) return { why: 'Build a Refinery first: the pipe runs from the pump to it.' };
-  return pipeToward(owner, b, refs, refineryPipes(owner), 'This pump is already piped to a Refinery.', 'No way to run pipe from here to a Refinery (water, rock or a rival\'s land in the way?).');
+  if (!refs.length) return { why: 'Build a Refinery or a Fuel Tank first: the pipe runs from the pump to it.' };
+  return pipeToward(owner, b, refs, refineryPipes(owner), 'This pump is already piped to a Refinery or Fuel Tank.', 'No way to run pipe from here to a Refinery or Fuel Tank (water, rock or a rival\'s land in the way?).');
 }
 
 /** Where `owner` has Fuel to give by pipe: Refineries, Bio Farms and storage (not a Trade Terminal or a Crawler, which moves). */
@@ -11554,7 +11784,7 @@ function foundPortBlocked(owner, f, i, j) {
   if (S.terrain[t] !== T_GROUND || S.bAt[t] || S.res[t] || S.road[t] || S.plan[t] || S.ramp[t] || (S.rail && S.rail[t]) || scorched(t) || runwayAt(t)) return 'Pick open, empty ground on the shore (no road, deposit or building).';
   if (S.owner[t] >= 0 && S.owner[t] !== owner) return 'Not on land someone else holds.';
   if (ringOverRival(owner, i, j, PORT_FOUND.claim)) return `Too close to a rival's buildings: the Port's land (${PORT_FOUND.claim} tiles round it) would cut them off.`;
-  if (S.wildlife && S.buildings.some((e) => !e.dead && e.type === 'nest' && Math.max(Math.abs(e.x - i), Math.abs(e.y - j)) <= WILD.clear)) return 'Too close to a Murmur nest.';
+  if (S.wildlife && S.buildings.some((e) => !e.dead && isNestB(e) && Math.max(Math.abs(e.x - i), Math.abs(e.y - j)) <= WILD.clear)) return 'Too close to a Murmur nest.';
   const docks = portDocks(i, j), comps = shipComps(f), comp = seaNet().comp;
   if (!docks.length) return 'A Port goes right at the water\'s edge, beside open water wide enough for ships.';
   if (!docks.some((d) => comps.includes(comp[d]))) return 'The Ferry can\'t sail there from this Port.';
@@ -12054,7 +12284,7 @@ function airdropBlocked(owner, u, kind, i, j) {
     if (S.terrain[t] !== T_GROUND || S.bAt[t] || S.road[t] || S.plan[t] || S.res[t] || S.ramp[t] || (S.rail && S.rail[t]) || scorched(t) || runwayAt(t)) return 'Drop it on open, empty ground (no road, track, runway or deposit).';
     if (S.owner[t] >= 0 && S.owner[t] !== owner) return 'Not on land someone else holds.';
     if (ringOverRival(owner, i, j, BDEFS.dropost.terr)) return `Too close to a rival's buildings: its ring (${BDEFS.dropost.terr} tiles) would cut them off.`;
-    if (S.wildlife && S.buildings.some((e) => !e.dead && e.type === 'nest' && Math.max(Math.abs(e.x - i), Math.abs(e.y - j)) <= WILD.clear)) return 'Too close to a Murmur nest.';
+    if (S.wildlife && S.buildings.some((e) => !e.dead && isNestB(e) && Math.max(Math.abs(e.x - i), Math.abs(e.y - j)) <= WILD.clear)) return 'Too close to a Murmur nest.';
     if (!canAffordRoad(owner, BDEFS.dropost.cost)) return `A Drop Outpost costs ${costText(BDEFS.dropost.cost)}: not enough ${missingGoods(owner, BDEFS.dropost.cost)} in storage.`;
   } else {
     const b = S.bAt[t] ? getE(S.bAt[t]) : null;
@@ -12267,7 +12497,7 @@ function landed(u, b) {
 /** Can bomber u strike `t`: an enemy building, or an enemy vehicle, ship or robot out in the open (not in the air)? */
 function strikeTarget(u, t) {
   if (!t || t.dead || !foes(t.owner, u.owner) || t.owner < 0) return false;
-  if (BDEFS[t.type]) return !BDEFS[t.type].wild && t.type !== 'nest';
+  if (BDEFS[t.type]) return !BDEFS[t.type].wild;
   const bt = BOTS[t.type];
   return !!bt && !bt.air && !bt.wild && !t.inside && !t.dropping;
 }
@@ -12569,6 +12799,7 @@ function landDrop(d) {
     const c = getE(d.to);
     let n = 0;
     for (const g in d.goods) { n += d.goods[g]; if (c && !c.dead && c.owner === d.owner) { bump(c.inc, g, -d.goods[g]); bump(c.stock, g, d.goods[g]); } }
+    if (c && !c.dead && c.owner === d.owner) c.airIn = S.time; // (when crates last landed there; `airAt` is when a plane loaded for it)
     // The crates sit a moment where they came down, their parachutes collapsing beside them, then they're taken in.
     addFx('crateland', d.i + 0.5, d.j + 0.5, { life: 2.8, owner: d.owner, crates: d.crates || [{ dx: 0, dy: 0.62, lag: 0 }], seed: d.id % 97 });
     if (isMe(d.owner)) sfx('thump');
@@ -12812,5 +13043,7 @@ function hashState() {
   if (S.tun) for (let t = 0; t < S.tun.length; t++) if (S.tun[t]) { int(t); int(S.tun[t]); }
   if (S.mur) { int(S.mur.night || 0); int(S.mur.wave || 0); int(S.mur.warned || 0); for (const e of S.mur.shut || []) { int(e.x); int(e.y); num(e.until); } }
   for (const b of S.buildings) if (b.br) for (const r of b.br) { int(r.h); int(r.g); num(r.k); }
+  if (S.tremor) { num(S.tremor.next); int(S.tremor.n); for (const r of S.tremor.rock) { int(r.x); int(r.y); } } // (the Hollow's tremors)
+  for (const b of S.buildings) if (b.veinT !== undefined) { int(b.id); num(b.veinT); } // (Harvesters cutting Bloom veins, which draws the Murmur)
   return h >>> 0;
 }

@@ -57,12 +57,12 @@ Still open: a neutral, shared exchange the rivals compete over; contracts for Ch
   there (turning traffic goes round by another junction). Still open: an interchange, an overpass with slip roads (a
   bigger footprint, dearer) that lets traffic turn without stopping; and whether the rival should put overpasses on its
   busiest crossings (it builds neither lights nor overpasses today).
-- **Recycling: open questions.** (Settled: a robot is taken apart standing at the Foundry, 2 s a round of parts, while
-  the Foundry carries on; a damaged one gives back as much as a sound one, since most give back a single Alloy.) Still
-  open: planes, ships and trains can't reach a Foundry, so they can't be recycled: should their own yards (Airfield,
-  Port, Rail Station) take them apart instead? Recycle spare Workers has no Hauler counterpart for players (the rival
-  scraps both): wanted? Should the rival also scrap other spares (Freight Trucks with no Depot to run, an Agribot with
-  no farm)?
+- **Recycling.** (Settled: a robot is taken apart standing at the Foundry, 2 s a round of parts, while the Foundry
+  carries on; a damaged one gives back as much as a sound one, since most give back a single Alloy.) The owner's
+  answers to the open questions: planes, ships and trains are not recycled at their own yards (Airfield, Port, Rail
+  Station), not for now; no Recycle spare Haulers button for players; the rival scraps its other spares too (Freight
+  Trucks, Tankers, Road Trains, Agribots) when it has too many, is starved of Alloy or Chips, or they stand idle while
+  its Foundry waits for parts (done: `AI_SCRAP` in the README).
 - **Fuel.** Built: Tankers, explosions with chain reactions, Crude and Fuel pipelines, the Generator and trucks burning
   Fuel, and the rival keeping its Fuel up (Bio Farms first when it runs low, an Oil Pump and Refinery once its Foundry
   is up). Still open: a Generator that explodes too.
@@ -88,6 +88,11 @@ Still open: a neutral, shared exchange the rivals compete over; contracts for Ch
 - **Graphics.** A first pass is done (rounded shorelines on ponds, lakes and seas, by day and in the night glow). Rock
   outcrops (crags) stay square: rounded crags were tried in November and the owner preferred the square look. Worth
   another look when new art comes in.
+- **Redesign the Fiber and Oil resources on the map (the owner, Nov 17; for later).** The owner doesn't love either
+  look: Fiber's Stalks (the cluster of teal fungal stalks with glowing mint caps, `stalk`) and the oil seep (the dark
+  glossy pool with a rainbow sheen, `oil`). New designs for both, every time of day and every biome they appear in, as
+  a design sheet for the owner to approve first (as with the Murmur), then installed in place. The Hollow's Bloom veins
+  (also Fiber) are being designed separately.
 - **Bigger graphics upgrades** (owner: for later, after the Graphics quality setting). Installing the game as a
   desktop app gives it no more GPU than a tab does; Chrome already draws its canvas on the graphics card. For a bigger
   step up:
@@ -99,23 +104,18 @@ Still open: a neutral, shared exchange the rivals compete over; contracts for Ch
     `fx.js`), a big project, with the 2D renderer kept as the fallback for phones that can't run it. WebGPU, newer
     still, isn't needed.
 
-- **A Tank Farm: big storage for Crude and Fuel (the owner's idea).** Put up beside a cluster of Oil Pumps (five, say),
-  it holds a lot of Crude or Fuel, like a small Depot for liquids only. Today each Pump holds just 6 Crude and a
-  Refinery 8 Fuel, so Tankers make many small runs. With a Tank Farm the pumps nearby fill it (by pipe or feed link),
-  Tankers and pipelines draw full loads from one place, and a stock of Fuel builds up for trucks, ships and aircraft.
-  It is the most dangerous thing in a colony: destroyed (not dismantled), it goes up in a huge fuel blast that grows
-  with how full it is, setting off loaded Tankers and Refineries nearby in a chain. That makes it a prize target for
-  bombers, missiles and raids, so it needs guarding and room around it. To settle: how much it holds and costs,
-  whether it holds one liquid or both, if Fuel Stations and the Airfield draw from it, how big the blast is next to
-  the existing ones (Tanker, Refinery), and how the rival builds, guards and hunts it.
-  **Oil blocs** (the owner, too): the Tank Farm is the hub of an oil district: the Oil Pumps, the Tank Farm, the
-  Refineries and an Asphalt Plant built together as one block. **Oil Pumps pipe into the Tank Farm**: the pipelines
-  we have (Paths → Pipes) join it like storage, so a pump's **Pipe it to the Refinery** and the banner's **Pipe
-  every Oil Pump** would send Crude to the nearest Tank Farm when there is one; from there it goes on by pipe to the
-  Refineries and the Asphalt Plant, and their Fuel comes back into it (feed links where they touch). One choice to
-  weigh: packing a bloc tight saves pipe and Tanker runs, but one blast can then take out the whole block.
-  To be built here after the work in hand (trade routes, the Murmur), not handed to the other chat: it runs through
-  the pipelines, fuel blasts, storage and the rival's oil play.
+- **Built: the Fuel Tank and oil blocs (the owner's idea; first called the Tank Farm).** Gather tab (T), 5 Cement and
+  2 Alloy: storage for Crude and Fuel only, up to 120 together. An Oil Pump's **Pipe it in** (renamed from Pipe it to
+  the Refinery) and **Pipe every Oil Pump** run to the nearest Refinery or Fuel Tank; a pipeline with a Fuel Tank on it
+  moves 8 a second instead of 4, filling the Fuel Tank before other storage. By feed link it gives Crude (and Fuel) to
+  up to 4 neighbours and takes in the Crude a pump beside it pumps and the Fuel a Refinery beside it makes, so pumps,
+  a Fuel Tank, Refineries and an Asphalt Plant make one oil bloc. Tankers and trucks fill up there like
+  at any storage (ships and planes still fill up at their Port and Airfield). Destroyed full, it goes up in the biggest fuel blast in the game (1 tile empty, up to 3.8 full; 8
+  damage to robots, 7 to buildings; a Refinery's is 2.4, 6 and 5), setting off Refineries, Fuel Tanks and loaded
+  Tankers in it; its panel shows how full it is and how big the blast would be now. The rival builds one by its pumps
+  once it has a working Oil Pump, a Refinery and a Foundry, touching the Refinery where it can, and its bombers rate one highly. Taught in Pipe Dreams (its last goal:
+  store Fuel in a Fuel Tank touching the Refinery). **For the owner to check:** the cap (120), the cost, the blast
+  size, the 4 feed links and the doubled pipeline rate are first guesses.
 
 ## Suggestions from the November review (not decided)
 
@@ -123,12 +123,14 @@ From a full review of the game after the audit work was merged. None is planned 
 or drop.
 
 ### Rough edges in what's there
-- **Island maps stall.** The leading rival lands six warbots at a time (one Ferry load) and can't break a healthy
-  base. Options: back-to-back landings that wait on the beach for the next load, or a staging island it takes first.
+- **Island maps still stall now and then.** With a decisive lead (or a landing held back by guns) the rival now gathers
+  a band on a beach out of the guns, with a second Ferry, and goes in when it's strong enough (`aiBeach`); in 12
+  Islands test games 4 still ran to 50 minutes (6 before). Left: a rival dug in behind several Mortar Pits, turrets and
+  a Keep, where the leader's bands keep taking Outposts that are lost again (seeds 2, 5, 17); a colony whose home
+  island has no Ore left makes no Alloy, so no army and no Ferry, and nobody lands at all (seed 21); and a staging
+  island it takes first, which isn't tried.
 - **Free-for-alls run to the cap.** In 3- and 4-player games the rivals don't gang up on the leader or finish off a
   weakened third; most test games on The Wheel, Three Mesas, Pinwheel, Four Isles and Twin Valleys end undecided.
-- **Long Haul starts slowly:** both rivals sit at 10 workers until minute 12-15 (a Foundry site waits behind a long
-  Outpost road being paved).
 - **Doctrine balance and text.** The Herald wins 10 of 12 against the Steward. The Architect's text promises a nuke it
   never builds (no Reactor in 10 Nuclear-race games); the Warden's says it "covers its land with turrets" but it
   builds about 2, all within 5 tiles of its base.
@@ -199,39 +201,26 @@ Still open:
 The campaign is now the tutorial, in seven chapters (see the README). Held back, or noticed while each mission was
 built and played through headless:
 
-- **King of the Hill, a bonus mission for Uplinks and free-for-all.** The Wheel, 3 players, rival doctrine Random. Setup
-  would set `S.victory = 'uplinks'` and call `placeUplinks(S.seed)` (newGame only sets the victory type outside
-  missions); goals: hold an Uplink (counted from `S.uplinks`, owner 0 and not jammed), then win the race.
-  `finishMission` would also need `M.why = 'uplinks'` for a rival winning it. Kept out of the campaign until a solver
-  shows a three-player Uplinks race can be won; Final Descent only mentions Uplinks and free-for-alls.
-- **Walled-in workers.** A Worker who builds a Wall in a narrow channel can end up standing on it, walled in for good
-  (Hold the Line). Builders and pavers now skip a worker whose last route failed, so the rest of the work goes on, but
-  the worker stays stuck, and planning both rows of a double wall at once can shut the outer row off from every
-  builder. Ideas: step the builder off to the home side when a Wall or Gate is finished; build a Wall from its
-  home-side neighbour, outer row before inner; or let our own bots pass our own unbuilt Wall sites. A design decision.
-- **Salvage that doesn't reach its site.** The Command Base's Fiber/Stone salvage (`landerSalvage`, "so it can always
-  rebuild") can go to a running factory that burns the same good before the gatherer site it was meant for (Border
-  Dispute on Hard stalled on Fiber until the hook set the Harvester site to High priority). A fix in dispatch: while a
-  player is salvaging a good, only sites get it, not built factories. It touches the AI's economy too.
 - **A rail-only line.** A far Rail Station needs a road to be built at all (its builders and materials come by road),
   so Iron Road asks for one. Trains bringing a station site its materials would make a track-only line possible.
-- **Trade Winds waits for its second event.** Events come 300-480 s apart (`EVENT_GAP`), so a quick player can wait a
-  few minutes after the trades. A shorter gap in missions would fix it.
-- **Coach rings.** The tutorial's ring can only mark buildings: not a Trade Post (it isn't in `S.buildings`), and not
-  the Crawler once it rolls out of the Foundry (the hint says to tap it). For a Container Ship order the ring is on the
-  home Port while the supply orders that matter are on the new one.
-- **Small counting quirks.** Airlift's "Supply a building by air" ticks when the Cargo Plane loads up (`airAt` is
-  stamped in `airSupplyRun`), about a minute before the crates land; and a road to the deployed Crawler can fill its
-  supply order by Hauler before a plane is needed. Harbour counts the Container Ship built, not a delivery. Siege
-  Breakers remembers the rival forts it has seen in `S.mission.forts`, once a second, so one built and wrecked within
-  a second is missed; missiles can do most of that goal on their own.
 - **Bombs on a Command Base** didn't visibly dent it in the Final Descent solver runs (armor 30/30 at each minute
   mark). Not needed for the goal, but worth a look with the bombers.
-- **Kits and Fiber.** On some seeds the kit's one Harvester has little Fiber in reach and the Smelter burns it as fast
-  as it comes; the chapter 3 missions add a Grove Planter (and a second Agribot) for that. Other kits may want the same
-  if a slow player runs dry.
+- **Kits and Fiber, Trade Winds.** From Pipe Dreams on the kits bring a Grove Planter (`KIT8`): without one the
+  Harvester's 30-45 Fiber were gone into the Smelter in 5-8 minutes and an idle player lived on salvage. Trade Winds'
+  kit is still `KIT7` (it was left alone while the trade missions were reworked): an idle player there runs low on
+  Fiber at about 6 minutes. Its comment on seed 1445's events (a flare over by 9:36) predates the shorter gap between
+  events in missions (`MISSION_EVENT_GAP`): the flare is now over by 6:33.
 - **Mostly waiting.** Breakthrough is mostly research timers, and Assembly Line and Pipe Dreams take a scripted player
   4-7 minutes; their Hard clocks are generous on purpose.
+- **Convoy against a rival with the opening** (for the trade work). Mission rivals now have the rival's opening, so
+  Convoy's Salvager (Medium on Normal, Normal on Hard) keeps an army: the old one's was gone by minute 10 to 15. Played
+  by the AI alone (no hint steps), Normal went from still open at 41 minutes to won at 19, and Hard from lost on the
+  clock to the Command Base lost at 21 minutes (23 warbots to the AI's 2). Left as it is, being a trade mission: its
+  Hard level, clock or setup want a look with the convoy goals played.
+- **Final Descent is a real war now.** With the opening its rival keeps an army (the old one's was gone by minute 10).
+  A scripted player (the AI on your side plus the hints' steps) won six of seven runs on Normal and on Hard; one lost
+  its Command Base at 22 minutes on Hard, and one on Normal was still open at 41 minutes, its army shrinking. If
+  players find the last mission too hard on Normal, its rival could go to Medium there.
 
 ## AI stalemates
 
@@ -268,8 +257,8 @@ its buildings called for, and some 25 warbots, Alloy piling up for want of room,
 `AI_ARMY_ROOM` kept room only from new Workers, it never thinned the ones it had. Crossroads seeds 1 and 14 ran past
 90 minutes that way. Now it recycles its spare Workers and Haulers at its Foundry (`AI_SCRAP`) and fills the room with
 warbots: those games end at 44 and 37 minutes, won by the same side. The other long ones, seeds 8, 11 and 13 at an hour or more, are close wars, not full
-colonies.) Still open: a colony left with no Chips and no Road Train can't trade at all; and on Islands (seed 5, two players) a rival with 35 warbots lands only
-four to six at a time (most sit in far garrisons) and hadn't taken a beaten rival with one warbot after an hour.
+colonies.) Still open: a colony left with no Chips and no Road Train can't trade at all; and on Islands a well dug-in rival can
+still hold out to the clock against a leader landing band after band (see Island maps, above).
 
 ## Balance decisions
 
@@ -335,7 +324,7 @@ These wait for a later expansion:
   analysis complete. No further instructions will follow."
 - **The Pathfinder wreck.** A neutral landmark on some maps (the joint lander that built the Trade Posts and Uplinks),
   holding archive logs.
-- **The Hollow (decided by the owner, Nov 17; being built).** The Murmur's cavern lair under the Bloom (LORE.md, The
+- **The Hollow (decided by the owner, Nov 17; built Nov 2026).** The Murmur's cavern lair under the Bloom (LORE.md, The
   Hollow), as **its own map type with its own underground look** (not a biome for other maps). Always night; chasms,
   black lakes and the most nests of any map, with the Deep's mound at the centre. All four lore features in the first
   version: **breach shafts** (bases land under shafts of daylight; Ringfall falls only through them, in concentrated
@@ -344,6 +333,36 @@ These wait for a later expansion:
   bridge) and **ceiling tremors** (the Hollow's weather: dust and falling rock). **No aircraft underground** (no
   Airfields). No solar flares. It's always night there, so the Murmur's night rhythm (below) becomes surges on the
   same 12-minute clock, and the hum goes silent just before each one.
+  **Built:** the map (two players, Versus and Colony; README, The Hollow; no Trade Posts or Uplinks, keeping to the
+  lore), breaches, Bloom veins (they grow back), floating
+  Crystal (the rival AI ropeways out to it), side chambers of robot parts (crates of Alloy and Chips), stone pillars,
+  tremors with falling rock, the Deep's mound (wrecking it spills its hoard and knocks every nest back to level 1), no
+  Airfields, Grove Planters, Bio Farms or Ports, no dust storms or solar flares, the mission *Into the Hollow*.
+  **Joined with the Murmur's night system (Nov 17):** the Murmur setting decides here as anywhere (the Hollow's
+  default is Active; the `TEMP(hollow)` line is gone); nests in Versus as in Colony on the sites laid out with the map
+  (`S.hollow.nests`, twin pairs, and the Deep's mound, `S.hollow.deep`; Quiet keeps half the pairs), owned by the
+  Murmur's slot; tunnels and exits as everywhere; always night with the nights as surges on the 12-minute clock, the
+  hum going dead silent for a minute first; cutting veins draws the packs (`veinLure`, in `wildTarget` and the night
+  packs' `murmurPrey`). The mission *Into the Hollow* still has no Murmur.
+  **Waiting for the art:** the Hollow is drawn with the Bloom's art through one line (`BIOME_ART`); its pillars, veins, the Deep's mound and the shafts are drawn in code.
+  **For the owner:**
+  - Trade Posts and Uplinks in the Hollow? The lore says the Pathfinder never mapped it. If you want them, the canon
+    would need a line saying how they got there. (For now there are none: no Trade Terminals, and the Uplinks victory
+    isn't offered on this map.)
+  - Wrecking the Deep's mound knocks every nest back to level 1 and spills a big hoard (30 Crystal, 20 Alloy, 10 Chips).
+    Enough, or should it do more (nests stop growing a while, the hum dies down), or less?
+  - The flank caverns hold four contested breaches. Two would make the middle matter more.
+  - Rock from the roof falls every other tremor (about every four to five minutes), near each colony's home, after an
+    8-second trickle. Often enough to matter, rare enough not to nag?
+  - Colony with its nests' raids by day (the nights add tunnels and packs on top): with five nests a side and cutting
+    veins drawing the packs, a computer-run colony stalls at about 22 buildings by 15 minutes (on Standard, with 3 nests, it reaches
+    about 31). Hard by design, or soften the lure (`VEIN`) or the nests nearest home?
+  - Computer-only games end in 15 to 40 minutes, neither seat favoured (11 wins to 14 over 26 games, one still going
+    at 45). On Small maps both computer colonies are slow to get Fuel (one oil seep each, a few tiles from home):
+    a second seep near home, or leave it lean?
+  - Three or four players: not built (the layout is made for two, turned half round).
+  - The Murmur set to Off on the Hollow: allowed for now (the setting decides; the menu says the Hollow is their lair
+    and plays best with them). Should Off be offered there at all?
 - **The Murmur in regular games (decided by the owner, Nov 17; built Nov 17: see README, The Murmur).** A Custom Game setting for every map,
   **Off / Quiet / Active, Active by default** (never on Argos, the moon). It **forces the day/night cycle on**: the
   Murmur live by it. **By night they tunnel**: every night each nest's tunnel network spreads further (toward power),
@@ -382,5 +401,5 @@ Sapper (tunnels under Walls and surfaces behind them: counters turtling). Mechan
   computer rivals have to handle them too).
 - Glimpsed, not seen: road lights going dark one by one at night as they come; sensor blips before contact.
 - Counters: Torches (built to burn back the Bloom) do extra damage to them and clear burrows; the Research Lab studies
-  them (earlier warnings, better counters). Regional variants: armoured in the Rust, pale and slow in the White,
+  them (earlier warnings, better counters). Regional variants: armoured in the Rust, pale and slow in Hoarfell,
   violet-glowing in the Bloom.

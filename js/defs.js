@@ -37,14 +37,24 @@ const PAVE = [null,
 const BIOMES = {
   desert: { name: 'The Rust', kind: 'Red desert', region: 'the Rust', plants: 0.07, desc: 'Rust-red sand and dust under a hard sun; now and then a sandstorm.' },
   jungle: { name: 'Greenreach', kind: 'Forest', region: 'Greenreach', plants: 0.44, groves: true, desc: 'Stands of spruce and leafy trees, ferns and clear lakes; now and then a rainstorm with fog.' },
-  polar: { name: 'The White', kind: 'Polar snow', region: 'the White', plants: 0.1, desc: 'Snow, ice and frosted shrubs; now and then a blizzard.' },
+  polar: { name: 'Hoarfell', kind: 'Polar snow', region: 'Hoarfell', plants: 0.1, desc: 'Snow, ice and frosted shrubs; now and then a blizzard.' },
   autumn: { name: 'Emberwood', kind: 'Autumn forest', region: 'Emberwood', plants: 0.44, groves: true, desc: 'The forest in its fall colours: maples, birches and oaks in red and gold over a carpet of leaves; now and then a gale.' },
   savanna: { name: 'The Long Grass', kind: 'Savanna', region: 'the Long Grass', plants: 0.12, desc: 'Golden grassland with umbrella acacias, baobabs and termite mounds; now and then dust devils.' },
-  swamp: { name: 'The Sump', kind: 'Swamp', region: 'the Sump', plants: 0.38, groves: true, desc: 'Dark mud, stands of cypress and mangrove, reeds and duckweed; now and then a thick fog, with fireflies at night.' },
+  swamp: { name: 'Blackwater', kind: 'Swamp', region: 'Blackwater', plants: 0.38, groves: true, desc: 'Dark mud, stands of cypress and mangrove, reeds and duckweed; now and then a thick fog, with fireflies at night.' },
   volcanic: { name: 'Cinderlands', kind: 'Volcanic ashlands', region: 'Cinderlands', plants: 0.1, desc: 'Black basalt and ash, charred trees and fumaroles, lakes of lava that glow at night; now and then ash and embers fall.' },
   lunar: { name: 'Argos', kind: 'Lunar: the moon', region: 'Argos, the moon', plants: 0.12, weights: [1, 1, 1, 1, 1, 0.12], silent: true, desc: 'Grey regolith pocked with craters, frozen cryo-ice pools and the odd wreck of an old probe; now and then ring dust streaks overhead. No Murmur live here.' },
   alien: { name: 'The Bloom', kind: 'Alien bloom', region: 'the Bloom', plants: 0.3, desc: 'Violet moss and strange growths that glow after dark, beside pink lakes; now and then an aurora.' },
+  // The Hollow's own underground look: forced by its map type (SHAPE_PRESETS hollow), never offered by the biome picker
+  // (it isn't in BIOME_ORDER). Drawn with another biome's art until its own is installed: see BIOME_ART.
+  hollow: { name: 'The Hollow', kind: 'Underground caverns', region: 'the Hollow', plants: 0.1, desc: 'Caverns under the Bloom, always night: violet Bloom on the walls, black lakes, chasms, and daylight only down the breach shafts; now and then the ceiling trembles.' },
 };
+/**
+ * Biomes drawn with another biome's art (ground, water, rock, plants, cliffs, glow): the Hollow wears the Bloom's at
+ * night until its own art is installed. One line per biome: drop it when the biome's art arrives.
+ */
+const BIOME_ART = { hollow: 'alien' };
+/** The biome whose art draws biome b. */
+function artBiome(b) { return BIOME_ART[b] || b; }
 // (New biomes go on the end: the new-game screen saves the choice as its place in this list.)
 const BIOME_ORDER = ['desert', 'jungle', 'polar', 'autumn', 'savanna', 'swamp', 'volcanic', 'lunar', 'alien'];
 const PLANT_KINDS = 6; // decorative plant varieties per biome
@@ -234,6 +244,7 @@ const BLAST = {
   tanker: { r0: 0.7, r1: 0.6, bot: 4.5, bld: 3 },
   torch: { r0: 0.55, r1: 0.55, bot: 4, bld: 2 }, // a Torch going up with fuel aboard
   refinery: { r0: 1.5, r1: 0.9, bot: 6, bld: 5 },
+  fueltank: { r0: 1, r1: 2.8, bot: 8, bld: 7 }, // a Fuel Tank: far bigger, full (empty, little more than its shell)
   chain: [0.25, 0.7],
 };
 /*
@@ -243,7 +254,7 @@ const BLAST = {
  * neighbours (side by side before corners). A Refinery also passes Crude on from its intake (to an Asphalt
  * Plant beside it, say). Storage never takes part: a link moves goods between factories, it makes none.
  */
-const FEED_TIME = 2, FEED_BOOST = 0.1, FEED_MAX = 2;
+const FEED_TIME = 2, FEED_BOOST = 0.1, FEED_MAX = 2, FEED_MAX_TANK = 4; // (a Fuel Tank, an oil bloc's hub, feeds up to four)
 const FEED_NB = [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [-1, 1], [1, -1], [-1, -1]];
 const TRUCK_MIN_DIST = 12;
 const HAUL_FAR = 12, HAUL_NEAR = 6; // a short Hauler run waits for a Hauler finishing within HAUL_NEAR of the pickup rather than send one from over HAUL_FAR away
@@ -325,6 +336,7 @@ const PIPE_CROSS_WEIGHT = 4;
 /** What a tile of pipe on tile t costs. */
 function pipeCost(t) { return S.terrain[t] === T_GROUND || S.road[t] || (S.rail && S.rail[t]) ? PIPE_COST : PIPE_CROSS_COST; }
 const PIPE_RATE = 4;
+const PIPE_RATE_TANK = 8; // a pipeline with a Fuel Tank on it moves twice as much (its pumping station)
 const PIPE_DRY = 20; // something on a Fuel line that has sat empty this long gets Fuel by Tanker again
 const PIPE_FILL = 6;
 const RAIL_CROSS_HOLD = 2.4;
@@ -561,6 +573,10 @@ const SHAPE_PRESETS = [
   // at each end, all four the same (mirrored left to right and end to end: see haul4Map). `teamDefault`: picking it turns
   // Teams: 2 vs 2 on.
   { name: 'Long Haul 2v2', group: 'open', blurb: 'For four, made for 2 vs 2: the long, narrow planet of Long haul made wider, two colonies side by side at each end and the richest fields strung along the long middle: a war of supply lines.', w: 1.2, h: 1.7, haul4: true, players: 4, minPlayers: 4, teamDefault: true, tip: 'Long Haul 2v2: two colonies side by side at each end of a long planet (in 2 vs 2 your ally lands beside you, the other team at the far end). The richest fields lie along the long middle, richer the further out you go, with a neutral Trade Post at the very centre and more down the middle line. Push Depots, Freight Trucks, Road Trains and rail up the map, and guard the line.' },
+  // The Hollow (LORE.md): the Murmur's cavern lair under the Bloom, its own map with its own look (the biome 'hollow',
+  // whatever the Biome setting) and always night. `murmur` and `alwaysNight` are read by the Murmur's night system.
+  { name: 'The Hollow', group: 'heights', blurb: 'The Murmur\'s cavern lair, always night: caverns joined by passages and chasms, black lakes, the most Murmur nests of any planet, and daylight only down the breach shafts.', w: 1.15, h: 1.25, hollow: true, murmur: 'active', alwaysNight: true,
+    tip: 'The Hollow: your base landed under a breach, a shaft of daylight down through the cavern roof; Ringfall only falls through the breaches, in rich drops. Nothing grows down here: Harvesters cut Fiber from the violet Bloom veins (which draws the Murmur), and Fuel comes from oil seeps. The richest Crystal hangs over the chasms: reach it by Ropeway or a bridge (Paths). No aircraft underground, and now and then the ceiling drops rock where dust trickles down.' },
 ];
 // Map events: what happens on the map types that change as you play (seconds unless noted).
 // Tidal flats: the first low tide lasts `firstLow`, then high and low take turns, with a warning first;
@@ -572,6 +588,42 @@ const TIDE = { firstLow: 300, low: 210, high: 140, warn: 30, closing: 20 };
 const ERUPTION = { first: 420, gap: [300, 420], warn: 20, dur: 14, bombs: 34, damage: 3, botDamage: 3, reach: 1.15, flight: [1.4, 2.4] };
 // Fault line: when the earthquake comes (give or take `jitter`), and the warnings before it.
 const QUAKE = { at: 900, jitter: 90, warn: [120, 30] };
+/**
+ * The Hollow (SHAPE_PRESETS hollow; laid out by hollowMap in world.js).
+ *   breach    the radius (tiles) of a breach shaft over a Command Base (`home`) and of the contested ones (`open`):
+ *             `contested` of them, two in each flank cavern
+ *   ringfall  Ringfall falls only through the breaches: METEOR_HITS strikes on each colony's share as usual, the
+ *             share `contested` of them through the contested breaches, each leaving up to `tiles` deposits `rich`
+ *             times as rich as a Ringfall deposit elsewhere
+ *   crystal   Floating Crystal: a mass's Crystal holds this many times a cluster's usual amount
+ *   nests     Murmur nest sites on each colony's side, Small to Huge, besides the Deep's mound at the centre
+ *   deep      the Deep's mound (BDEFS mound): the level it starts at, guards on top of a nest's, and the hoard that
+ *             spills out when it's wrecked; wrecking it knocks every other nest back to level 1 (see clearNest)
+ *   relics    each crate in a side chamber's rows of robot parts: Alloy or Chips, between the two numbers
+ */
+const HOLLOW = {
+  breach: { home: 3.2, open: 2.6 }, contested: 4,
+  ringfall: { contested: 0.67, tiles: 4, rich: 1.5 },
+  crystal: 2.5,
+  nests: [4, 5, 6, 7],
+  deep: { level: 3, guards: 3, loot: { crystal: 30, alloy: 20, chip: 10 } },
+  relics: { alloy: [3, 5], chip: [1, 2] },
+};
+/**
+ * Bloom veins (R_VEIN, the Hollow): cut down to nothing, a vein grows back in `regrow` seconds (the Bloom spreads back
+ * along its ridge). Cutting veins draws the Murmur: a Harvester that cut one in the last `lure` seconds looks `pull`
+ * times nearer to a nest choosing what its next pack goes for, from up to `reach` tiles further out than usual.
+ * Only where the Murmur are in the game (wildOn).
+ */
+const VEIN = { regrow: 150, lure: 120, pull: 2, reach: 8 };
+/**
+ * Ceiling tremors, the Hollow's weather (a map event, like the Volcano's eruptions): the first comes `first` seconds
+ * in, then one every `gap` seconds. Dust sifts down for `dust` seconds (looks and sound only). Every `rockEvery`th
+ * tremor also brings rock down on a spot away from the breaches (with its twin on the other colony's side): dust
+ * trickles there for `warn` seconds first, then everything within `r` tiles is hit (`damage` armor off a building,
+ * never below 1; `botDamage` to a robot out in the open) and a boulder or two of Stone lies where it fell.
+ */
+const TREMOR = { first: 210, gap: [100, 150], dust: 10, rockEvery: 2, warn: 8, r: 1.6, damage: 4, botDamage: 3 };
 // River delta: fords are slow to wade (speed ×) and dearer to plan a route through (cost ×).
 const FORD_SLOW = 0.45, FORD_COST = 2.5;
 // Warbots you order somewhere (move, station, call back) march there without stopping to fight, for at most this long (s).
@@ -585,6 +637,7 @@ const SKY_RES_MUL = 1.8;  // Sky islands: Ore, Crystal, Stalk and Stone hold thi
 const HOME_STONE = 300;   // Islands and Sky islands: Stone each home island or mesa holds at the start (topped up near the base)
 const LOOT_MAX = 500;     // most crates a wrecked or dismantled building spills of what was inside it
 const LOOT_TIME = 300;    // seconds a pile of crates on no-one's land lies before it rots away (on claimed land it stays)
+const LOOT_KEEP = 1e9;    // ...or never, for crates that were always there (the Hollow's side chambers): its `until`
 const CRATE_SAFE = 6;     // haulers collect crates on their own land only with no enemy robot (or gun) within this many tiles
 // Walls and Gates: an enemy warbot plans a route through one as if it were this many extra tiles
 // long, plus one per point of armor left, so it walks round a short way and breaks through a long one.
@@ -650,7 +703,7 @@ const DEFAULT_RICH = 2;
 
 // Resource nodes that sit on ground tiles. Energy crops are planted by a Bio Farm on fertile soil;
 // oil seeps are pumped by an Oil Pump built on top of one.
-const R_NONE = 0, R_STALK = 1, R_BOULDER = 2, R_ORE = 3, R_CRYSTAL = 4, R_CROP = 5, R_OIL = 6, R_URANIUM = 7;
+const R_NONE = 0, R_STALK = 1, R_BOULDER = 2, R_ORE = 3, R_CRYSTAL = 4, R_CROP = 5, R_OIL = 6, R_URANIUM = 7, R_VEIN = 8;
 const SKY_RICH = [R_ORE, R_CRYSTAL, R_STALK, R_BOULDER]; // the deposits SKY_RES_MUL makes richer on Sky islands' mesas
 const RES = {
   [R_STALK]:   { key: 'stalk',   name: 'Stalk grove',     good: 'fiber',   amount: 3, harvest: 2.5 },
@@ -660,6 +713,8 @@ const RES = {
   [R_CROP]:    { key: 'crop',    name: 'Energy crop',     good: 'fuel',    amount: 1, harvest: 2.5 },
   [R_OIL]:     { key: 'oil',     name: 'Oil seep',        good: 'crude',   amount: 16, harvest: 0 },
   [R_URANIUM]: { key: 'uranium', name: 'Uranium deposit', good: 'uranium', amount: 4, harvest: 5 },
+  // (The Hollow only: the Bloom's veins on the cavern floors, cut for Fiber by a Harvester. See VEIN.)
+  [R_VEIN]:    { key: 'vein',    name: 'Bloom vein',      good: 'fiber',   amount: 4, harvest: 3 },
 };
 
 /**
@@ -932,6 +987,10 @@ const BDEFS = {
     cost: { cement: 4, alloy: 3 }, staff: true, inp: { crude: 1 }, make: { fuel: 1 }, out: { fuel: 8 }, explodes: true,
     work: 6, armor: 10, buildTime: 12, limit: 30,
   },
+  fueltank: {
+    name: 'Fuel Tank', desc: 'Big storage for Crude and Fuel only: up to 120 of them together. The hub of an oil bloc: your Oil Pumps\' Pipe it in buttons send their Crude here (or to the nearest Refinery, if closer), a pipeline with a Fuel Tank on it moves twice as much, and it feeds the Refineries, Asphalt Plants and Fuel users right beside it by conveyor and takes in the Fuel a Refinery beside it makes. Tankers fill up here. Keep it well away from harm: destroyed, it goes up in a huge blast, the fuller the bigger, setting off Refineries, Fuel Tanks and loaded Tankers nearby.',
+    cost: { cement: 5, alloy: 2 }, store: true, tank: 120, explodes: true, armor: 12, buildTime: 12,
+  },
   ramp: {
     name: 'Ramp', desc: 'Workers cut a sloped road into a low cliff so bots can climb between levels. Plan it in Paths, on the top or at the foot of a cliff. A worker builds it from whichever side is the shorter trip, so a Ramp down off high ground is built from the top: nobody drives all the way round.',
     cost: { cement: 3, fiber: 1 }, ramp: true, armor: 4, buildTime: 10,
@@ -996,6 +1055,11 @@ const BDEFS = {
     name: 'Tunnel Exit', desc: 'A Murmur tunnel exit: heaved earth over a hole into the network the nest has dug. At night packs come up through it to raid every colony near it (bots, buildings full of charge, roads), and at dawn they go back down. Send warbots to collapse it: it stays shut for a while (15 minutes). Wreck the nest it belongs to and its whole network dies back.',
     cost: {}, wild: true, burrow: true, armor: 30, buildTime: 1,
   },
+  // The Hollow: the Deep's mound at the middle of the cathedral (HOLLOW.deep), the biggest nest of all.
+  mound: {
+    name: 'The Deep\'s Mound', desc: 'The largest Murmur nest of all, in the middle of the Hollow: somewhere inside it is the Deep, the heart of every nest down here. Heavily armored, it sends the biggest packs from the start. Wreck it with warbots and its hoard spills out, and every other nest in the Hollow falls back to its first level.',
+    cost: {}, wild: true, armor: 160, buildTime: 1,
+  },
   depot: {
     name: 'Depot', desc: 'Extra storage. Haulers drop goods at the nearest storage they can reach by road, so depots along your highways shorten trips. Give it supply orders to stock it from home: a forward base for building at the front. Far from your Command Base, with a Road Train that can drive to it, it stocks itself with what the buildings round it need, and the Road Train keeps it supplied.',
     cost: { fiber: 3, cement: 2 }, store: true, armor: 10, buildTime: 8,
@@ -1003,11 +1067,11 @@ const BDEFS = {
 };
 
 /** Order of the build menu. (Viaducts and Ropeways aren't in it: they're placed from Paths, like Ramps and Walls.) */
-const BUILD_MENU = ['harvester', 'quarry', 'mine', 'tap', 'smelter', 'fab', 'foundry', 'charger', 'farm', 'pump', 'refinery', 'generator',
+const BUILD_MENU = ['harvester', 'quarry', 'mine', 'tap', 'smelter', 'fab', 'foundry', 'charger', 'farm', 'pump', 'fueltank', 'refinery', 'generator',
   'kiln', 'tarworks', 'roadworks', 'station', 'port', 'airfield', 'outpost', 'turret', 'minigun', 'bunker', 'keep', 'disruptor', 'mortar', 'flak', 'repair', 'armory', 'munitions', 'silo', 'reactor', 'nukesilo', 'depot', 'grower', 'lab', 'terminal'];
 /** Build-menu tabs: what each building is for. */
 const BUILD_GROUPS = [
-  { key: 'gather', name: 'Gather', types: ['harvester', 'quarry', 'mine', 'tap', 'grower', 'farm', 'pump'] },
+  { key: 'gather', name: 'Gather', types: ['harvester', 'quarry', 'mine', 'tap', 'grower', 'farm', 'pump', 'fueltank'] },
   { key: 'make', name: 'Make', types: ['kiln', 'smelter', 'fab', 'refinery', 'tarworks', 'foundry', 'armory', 'munitions', 'reactor', 'lab', 'generator'] },
   { key: 'move', name: 'Move', types: ['charger', 'depot', 'roadworks', 'station', 'port', 'airfield', 'terminal'], roads: true },
   { key: 'defend', name: 'Defend', types: ['outpost', 'turret', 'minigun', 'bunker', 'keep', 'disruptor', 'mortar', 'flak', 'repair', 'silo', 'nukesilo'], walls: true },
@@ -1210,6 +1274,8 @@ const EVENTS = {
 };
 const EVENT_ORDER = ['dust', 'meteor', 'flare', 'trader'];
 const EVENT_FIRST = 480, EVENT_GAP = [300, 480], EVENT_WARN = 20;
+/** Seconds between planet events in a mission that has them: it asks the player to ride a few out, so they come sooner. */
+const MISSION_EVENT_GAP = [120, 180];
 const DUST_SPEED = 0.65, FLARE_DRAIN = 2;
 const DUST_ENDLESS = 1e9; // the end (s) of an Endless dust storm's storm (a challenge modifier, MODS.dust): never
 const METEOR_HITS = 6, METEOR_DAMAGE = 4, METEOR_BOT_DAMAGE = 1.5, METEOR_RICH = 2;
@@ -1496,6 +1562,7 @@ const FLAVOR = {
   farm: 'A VIRIDIAN design. Fuel crops now; orchards were phase two.',
   pump: 'The older drilling kit. It predates the Accord and expects to outlast it.',
   refinery: 'Refines enough Fuel for a colony fleet. The fleet is robots.',
+  fueltank: 'Three tanks to the Accord storage code, and a sign that says NO SMOKING. Nobody here smokes.',
   ramp: 'Gradient: Accord passenger standard, one in twelve.',
   repair: 'Fitted out as a clinic. The beds were taken out to make room.',
   wall: 'Rated against dust storms. Tested against neighbours.',
@@ -1511,6 +1578,7 @@ const FLAVOR = {
   crawlerbase: 'A depot on tracks, parked where the road ends.',
   nest: 'Logged as an acoustic anomaly. The log was never closed.',
   burrow: 'Ground survey for this tile: level, compacted, stable. Survey date: yesterday.',
+  mound: 'Unsurveyed. Every robot sent to map it is still listed as mapping.',
   depot: 'Shelf labels from the colony manifest: seed stock, school desks, blankets. Mostly Cement.',
   // Robots
   worker: 'Accord-standard construction unit. Tireless, literal, never asks why.',
@@ -1550,8 +1618,8 @@ const SPLASH_LINES = [
   'Greenreach was the survey’s favourite.',
   'In Emberwood the leaves stay red-gold all year.',
   'The Long Grass: easy roads, nowhere to hide.',
-  'Pavers hate the Sump.',
-  'The White: Ore locked in ice. The coldest posting on Ithaca I.',
+  'Pavers hate Blackwater.',
+  'Hoarfell: Ore locked in ice. The coldest posting on Ithaca I.',
   'Argos, the moon, is the only silent ground the robots have.',
   'Ringfall keeps the planet stocked. The Sponsors called it a self-refilling quarry.',
   'The Wren arrives on schedule, as always.',
