@@ -2496,9 +2496,10 @@ function landerSalvage(p, dt) {
  * side. A tile being paved counts as down already, so a second Worker takes the next tile just past it (still
  * growing outward) or another road, and a crew paves one road side by side. A stretch of plan that joins nothing
  * (laid down on its own, out in the open; or the rival's bridge out from its bare shore) is still built: from its end
- * nearest home (an end of the stretch, or a tile beside road or a building), inward, and after a joined tile as near.
+ * nearest home (an end of the stretch, or a tile beside road or a building), inward, and after a joined tile as near
+ * (a bridge or tunnel as soon as one: from the shore nearest home).
  */
-const PAVE_ALONE = 12;  // tiles: how much further off a joined tile can be and still come before a stretch that joins nothing
+const PAVE_ALONE = 12;  // tiles: how much further off a joined tile can be and still come before a stretch that joins nothing (not a bridge's)
 const PAVE_SPARE = 2;   // charge kept in hand on top of BATTERY.critical when a Worker reckons up a trip (see paveShort)
 const PAVE_FULL = 95;   // a Worker charged this far goes whatever the trip (charging can't give it more)
 const PAVE_TAKE = 8;    // a Worker this many tiles nearer a tile than the one still walking out to it takes it over
@@ -2642,7 +2643,7 @@ function nextPaveTile(u, p, maxD) {
     if (paveBusy(t)) { const v = getE(S.paveRes[t]); if (v === u || v.task.phase !== 'go' || Math.abs(i + 0.5 - v.x) + Math.abs(j + 0.5 - v.y) <= d + PAVE_TAKE) continue; }
     let s;
     if (M.join[k] || next[k]) s = d;
-    else if (M.grow[k] && M.home[k] <= start.get(M.comp[k])) s = d + PAVE_ALONE;
+    else if (M.grow[k] && M.home[k] <= start.get(M.comp[k])) s = d + (crossTile(t) ? 0 : PAVE_ALONE); // (a bridge out from a bare shore as soon as any)
     else continue;
     if (s < bs) { bs = s; best = t; }
   }

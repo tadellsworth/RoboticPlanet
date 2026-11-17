@@ -263,7 +263,8 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   (+2), it charges first (unless it's charged to 95% already, or there's nowhere to charge). A stretch of plan that
   joins nothing (laid out on its own, or the rival's bridge out from its bare shore) is still built: from its end
   nearest home (an end of the stretch, or a tile beside road or a building), inward, and after a joined tile up to
-  `PAVE_ALONE` (12) tiles further off. Measured on a 30-tile road from home to a far
+  `PAVE_ALONE` (12) tiles further off (a bridge or tunnel out from bare ground, as the rival's bridges are, as soon as
+  a joined tile would be: from the shore nearest home). Measured on a 30-tile road from home to a far
   site (one to three workers, with and without a bridge): no worker runs flat any more (51 times before), the first 10
   tiles are down sooner, and the whole road usually sooner too; workers that start out by the far end walk back to the
   home end first, so those finish later than when they paved inward from the far end. A worker that just found no way somewhere (walled in on the Wall it built,
