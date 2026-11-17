@@ -1037,7 +1037,7 @@ const MISSIONS = [
     brief: 'A Herald (a rusher) will attack early. Wall the channels through the crags, man the guns and hold out.',
     intro: [
       'This rival is a <b>Herald</b> (a rusher): its clock stopped a day before Arrival, so it attacks early. Others are Wardens, Salvagers, Architects and Stewards.',
-      'A belt of crags with a few narrow channels: wall them and cover them with guns.',
+      'A belt of crags with a few narrow channels: wall them and cover them with guns. Messages from your <b>Scouts</b> say when it masses or marches (Go shows where).',
       'Walls stop everyone, your robots too: where a wall line crosses a road, a Gate goes in.',
       'An Outpost can Hold inside or Go out and fight. Mortar Pits, Disruptors and the Keep are in Defend too.',
       'Its warbots come behind a <b>Bulwark</b>, a shield robot: fire from in front can\'t reach them, so cover the channels from the side.',

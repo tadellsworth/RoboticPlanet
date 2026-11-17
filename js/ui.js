@@ -136,6 +136,10 @@ function initUI() {
   const syncWx = () => { $('p-weather').textContent = `Weather: ${weatherOn() ? 'On' : 'Off'}`; };
   syncWx();
   $('p-weather').onclick = () => { setWeatherOn(!weatherOn()); syncWx(); sfx('click'); };
+  // Scout reports on the rivals (js/scout.js), on or off (remembered on this device).
+  const syncScouts = () => { $('p-scouts').textContent = `Scout reports: ${SCOUT.on ? 'On' : 'Off'}`; };
+  syncScouts();
+  $('p-scouts').onclick = () => { setScoutsOn(!SCOUT.on); syncScouts(); sfx('click'); };
   // Vibration (input.js haptic): on a touch screen that can vibrate; on, a buzz says so.
   const syncHaptics = () => { $('p-haptics').textContent = `Vibration: ${HAPTIC.on ? 'On' : 'Off'}`; };
   const touchScreen = (typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches) || navigator.maxTouchPoints > 0;
@@ -1749,6 +1753,8 @@ function initKeyboard() {
         return;
       }
     }
+    // Placing a blueprint: R turns it.
+    if (R.mode === 'bpplace' && k === 'r') { e.preventDefault(); bpRotate(); return; }
     // WASD and the arrow keys pan the map while held.
     if (PAN_KEYS[k]) { e.preventDefault(); R.keys.add(k); return; }
     switch (k) {
@@ -2049,6 +2055,7 @@ function refreshSelection() {
  * changes nothing (it was most likely meant to move the map).
  */
 function onSelectBox(box, add, armed) {
+  if (R.mode === 'bppick') { bpPickBox(box); return; } // (picking buildings for a blueprint: js/blueprint.js)
   const x0 = Math.min(box.x0, box.x1), x1 = Math.max(box.x0, box.x1), y0 = Math.min(box.y0, box.y1), y1 = Math.max(box.y0, box.y1);
   const ids = [];
   for (const u of S.bots) {
@@ -2063,6 +2070,8 @@ function onSelectBox(box, add, armed) {
     if (p.x >= x0 && p.x <= x1 && p.y >= y0 && p.y <= y1) ids.push(...b.garrison.slice(1));
   }
   INPUT.boxArmed = false; // (Box on the selection bar is for one drag)
+  // No warbots, but buildings of yours: the chip at the foot of the map offers to keep them as a blueprint.
+  if (!ids.length && (armed || !onTouch()) && bpBoxOffer(box)) { if (!add) selectBots([], false); return; }
   if (!ids.length && !armed && onTouch()) { refreshSelection(); return; }
   selectBots(ids, add);
   if (ids.length) sfx('click'); else if (onTouch()) toast('No warbots of yours in that box.', 'info');
@@ -3263,6 +3272,9 @@ function setMode(mode, keepPlan) {
   if (UI.pick) { UI.pick = 0; UI.pickDeck = null; R.selected = 0; UI.selBot = 0; } // (a strike or shelling target picked by a finger and not confirmed)
   UI.placeType = null;
   UI.moveFrom = 0;
+  if (mode !== 'bppick') UI.bpPick = null; // (blueprints: picking buildings, placing one: js/blueprint.js)
+  if (mode !== 'bpplace') UI.bpPlace = null;
+  if (UI.bpOffer && mode !== 'normal') { UI.bpOffer = null; bpOfferShow(); }
   $('btn-road').classList.toggle('on', mode === 'road');
   $('btn-attack').classList.toggle('on', mode === 'attack');
   if (mode === 'normal') { $('banner').hidden = true; return; }
@@ -3896,6 +3908,8 @@ function recallAllWarbots() {
 
 function confirmBanner() {
   if (R.mode === 'aim') { fireAimed(); return; }
+  if (R.mode === 'bppick') { if (UI.bpPick && UI.bpPick.size) bpSave([...UI.bpPick]); return; }
+  if (R.mode === 'bpplace') { bpPlaceNow(); return; }
   if (R.mode === 'strike' && UI.strikeKind === 'napalm' && R.napalmAt) { sendNapalm(R.napalmAt.i, R.napalmAt.j); return; }
   if (R.mode === 'strike' && UI.pick) { strikePicked(getE(UI.pick), UI.pickDeck); return; }
   if (R.mode === 'scorch' && R.scorchAt) { sendScorch(R.scorchAt.i, R.scorchAt.j); return; }
@@ -4019,6 +4033,9 @@ function onMapTap(i, j, wx, wy) {
   // The first tap on the map folds the goal card away on a small screen (it has been read; the map is wanted now).
   if (!UI.objCollapsed && !UI.objManual && !S.mission && !isWide()) { UI.objCollapsed = true; UI.objAuto = true; UI.hudT = 0; }
   if (R.mode === 'scorch') { scorchTap(i, j); return; }
+  if (R.mode === 'bppick') { bpPickTap(i, j, wx, wy); return; } // (blueprints: js/blueprint.js)
+  if (R.mode === 'bpplace') { bpPlaceTap(i, j); return; }
+  if (UI.bpOffer) { UI.bpOffer = null; bpOfferShow(); }
   if (R.mode === 'strike') {
     const u = getE(UI.bomber);
     if (!u || u.dead) { setMode('normal'); return; }
@@ -4314,6 +4331,7 @@ function onMapTap(i, j, wx, wy) {
 function onMapHover(i, j) {
   UI.hoverTile = inMap(i, j) ? tIdx(i, j) : -1;
   if (R.mode === 'road' && routeOn()) { routeHover(i, j); return; }
+  if (R.mode === 'bpplace') { bpHover(i, j); return; }
   if (R.mode === 'aim' || R.mode === 'land' || R.mode === 'airdrop' || R.mode === 'strike' || R.mode === 'scorch') { R.aimHover = inMap(i, j) ? { i, j } : null; return; }
   if (R.mode !== 'place' || !R.overlay || !UI.placeType || !inMap(i, j)) return;
   R.ghost = { type: UI.placeType, x: i, y: j, ok: !!R.overlay.valid[tIdx(i, j)], hover: true };
@@ -5290,7 +5308,8 @@ function openBuildMenu() {
     <div class="build-grid">${nextBuilds().filter((t) => list.includes(t)).map((t) => `<button class="bcard next" data-t="${t}" data-g="next" ${sites >= MAX_SITES ? 'disabled' : ''}>
       <img src="${iconFor(t)}" alt=""><div class="bname">${BDEFS[t].name}</div><div class="bcost">${costHTML(BDEFS[t].cost, have)}</div>
       <div class="bhave">${ownedText(t)}</div></button>`).join('')}<button class="bcard roads" id="build-roads" data-g="move"><kbd data-key="R">R</kbd><svg viewBox="0 0 24 24"><path d="M8 3L5 21M16 3l3 18M12 4v3M12 10.5v3M12 17v3" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
-      <div class="bname">Roads</div><div class="bhave">Roads, bridges, ramps, Viaducts and Ropeways</div></button>${warOn() ? `<button class="bcard walls" id="build-walls" data-g="defend"><kbd data-tab="${BUILD_TAB_KEYS.defend}" data-key="X">X</kbd><img src="${iconFor('wall')}" alt=""><div class="bname">Walls</div><div class="bcost">${costHTML(BDEFS.wall.cost, have)}</div>
+      <div class="bname">Roads</div><div class="bhave">Roads, bridges, ramps, Viaducts and Ropeways</div></button><button class="bcard roads bp-card" id="build-bp" data-g="any"><svg viewBox="0 0 24 24"><path d="M4 4h7v7H4zM13 13h7v7h-7zM11 7.5h4.5V13M4 15h5v5H4z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>
+      <div class="bname">Blueprints</div><div class="bhave">${bpCardText()}</div></button>${warOn() ? `<button class="bcard walls" id="build-walls" data-g="defend"><kbd data-tab="${BUILD_TAB_KEYS.defend}" data-key="X">X</kbd><img src="${iconFor('wall')}" alt=""><div class="bname">Walls</div><div class="bcost">${costHTML(BDEFS.wall.cost, have)}</div>
       <div class="bhave">${wallCountText()}</div></button>` : ''}${ordered.map((t) => `<button class="bcard" data-t="${t}" data-g="${groupOf(t)}" ${sites >= MAX_SITES ? 'disabled' : ''}>
       ${kbd(t)}<img src="${iconFor(t)}" alt=""><div class="bname">${BDEFS[t].name}</div><div class="bcost">${costHTML(BDEFS[t].cost, have)}</div>
       <div class="bhave">${ownedText(t)}</div></button>`).join('')}</div>`;
@@ -5299,12 +5318,13 @@ function openBuildMenu() {
     el.onclick = () => { sfx('click'); enterPlaceMode(el.dataset.t); };
   }
   $('build-roads').onclick = () => openRoadDraw();
+  $('build-bp').onclick = () => { sfx('click'); openBlueprints(); };
   if ($('build-walls')) $('build-walls').onclick = () => openPaths('wall');
   const show = (g) => {
     UI.buildTab = g;
     try { localStorage.setItem('botfall.buildTab', g); } catch (e) { /* private mode: not remembered */ }
     for (const btn of $('build-tabs').children) btn.classList.toggle('on', btn.dataset.g === g);
-    for (const el of $('sheet-body').querySelectorAll('.build-grid .bcard')) el.hidden = g !== 'all' && el.dataset.g !== g && el.dataset.g !== 'next';
+    for (const el of $('sheet-body').querySelectorAll('.build-grid .bcard')) el.hidden = g !== 'all' && el.dataset.g !== g && el.dataset.g !== 'next' && el.dataset.g !== 'any';
     // On All, a card's key reads "2 K": its tab's number, then its letter.
     for (const el of $('sheet-body').querySelectorAll('.build-grid kbd[data-tab]')) el.textContent = g === 'all' ? `${el.dataset.tab} ${el.dataset.key}` : el.dataset.key;
   };
@@ -7455,6 +7475,7 @@ function uiTick(dt) {
   siteUndoTick(); // (hides itself out of a game)
   if (!UI.inGame || !S) return;
   if (UI.watch) watchTick(dt); // (Observer mode: the scout report and the camera, js/watch.js)
+  else scoutTick(); // (scout reports on the rivals, js/scout.js)
   if (S.msgs.length) UI.toastBatch = (UI.toastBatch || 0) + 1; // (the messages of one moment: see toast)
   while (S.msgs.length) {
     const m = S.msgs.shift();

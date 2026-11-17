@@ -726,6 +726,21 @@ body.mode-aim .objrow, body.mode-land .objrow, body.mode-airdrop .objrow { displ
   body.sheet-open .undo-site { left: calc((100% - 444px) / 2); }
 }
 @media (min-width: 1600px) and (min-height: 520px) { body.sheet-build .undo-site { left: calc((100% - 644px) / 2); } }
+/* Blueprints (js/blueprint.js): the Save as blueprint chip after a box round buildings (above the Undo chip when both
+   show), and the list of them in Build → Blueprints: a picture, the name (edit it in place), Place and Delete. */
+#undo-site:not([hidden]) + .bp-offer { transform: translate(-50%, -52px); }
+.bp-new { width: 100%; margin-top: 2px; }
+.bp-list { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
+.bp-row { display: grid; grid-template-columns: 68px minmax(0, 1fr) auto auto; gap: 8px; align-items: center; padding: 8px;
+  border: 1px solid var(--line); border-radius: 12px; background: rgba(255, 255, 255, 0.04); }
+.bp-thumb { width: 68px; height: 52px; padding: 3px; background: rgba(0, 0, 0, 0.28); border-radius: 8px; }
+.bp-mid { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.bp-name { font: inherit; font-weight: 700; font-size: 14px; color: var(--text); background: transparent; border: 1px solid transparent;
+  border-radius: 8px; padding: 4px 6px; width: 100%; min-width: 0; }
+.bp-name:hover, .bp-name:focus { border-color: var(--line); background: rgba(255, 255, 255, 0.06); outline: none; }
+.bp-mid small { color: var(--muted); font-size: 12px; padding-left: 7px; }
+.bp-row .bp-del { min-width: 44px; }
+@media (pointer: coarse) { .bp-name { min-height: 44px; font-size: 16px; } }
 
 /* Paths: the banner sits at the top so it never covers where you're drawing, and the plan buttons
    sit three to a row (Undo, Clear, Build), then Traffic map and Done. */
@@ -1655,7 +1670,7 @@ body.photo #minimap .mm-hide { display: none; }
    the selection go (nobody here plays a colony), and the Scout report card sits under the top bar, clear of the
    minimap. The setup screen (main menu, Watch a game) is a card like Missions'. */
 body.watching #goods, body.watching #pop, body.watching .objrow, body.watching #bottombar, body.watching #selbar, body.watching #groupbar,
-body.watching #nuke-card, body.watching #win-card, body.watching #event-card, body.watching #p-export { display: none !important; }
+body.watching #nuke-card, body.watching #win-card, body.watching #event-card, body.watching #p-export, body.watching #p-scouts { display: none !important; }
 body.watching .toprow { justify-content: flex-end; }
 /* (Statistics: the totals and "how busy your buildings were" are one colony's; the graphs, every colony's, stay.) */
 body.watching #st-body .stat-tiles, body.watching #st-body .chart-block:has(#st-bars) { display: none; }

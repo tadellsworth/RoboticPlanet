@@ -86,7 +86,7 @@ function onPointerDown(e) {
     // With a mouse, a left drag on the map in the normal view draws a selection box, RTS-style. Under a finger
     // the same once Box is armed (`armed`: a tap then does nothing, the box is still waiting to be drawn).
     const mouse = e.pointerType === 'mouse', armed = !mouse && INPUT.boxArmed && R.mode === 'normal' && !!INPUT.onBox;
-    const box = armed || (mouse && e.button === 0 && R.mode === 'normal' && !!INPUT.onBox);
+    const box = armed || (mouse && e.button === 0 && (R.mode === 'normal' || R.mode === 'bppick') && !!INPUT.onBox); // (bppick: buildings for a blueprint)
     // (grab: something on the map this finger has taken hold of, the aiming crosshair say; its drag moves that, not the map)
     const grab = !mouse && INPUT.onGrab ? INPUT.onGrab(e.clientX, e.clientY) : null;
     const g = INPUT.gesture = { type: 'single', sx: e.clientX, sy: e.clientY, lx: e.clientX, ly: e.clientY, moved: false, painting: false, panOnly, box, armed, grab, button: e.button, hold: 0 };

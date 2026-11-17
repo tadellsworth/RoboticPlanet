@@ -4974,6 +4974,7 @@ function render(dtReal) {
     ctx.lineWidth = 2.5;
     ctx.strokeRect(ox + R.ghost.x * z + 1, oy + R.ghost.y * z + 1, z - 2, z - 2);
   }
+  if (typeof drawBlueprint === 'function') drawBlueprint(ctx, ox, oy, z); // (blueprints being picked or placed: js/blueprint.js)
   if (sel && BDEFS[sel.type] && BDEFS[sel.type].burner) drawBoosted(ctx, sel.type, sel.x, sel.y, sel.owner, ox, oy, z);
   if (sel && BDEFS[sel.type] && BDEFS[sel.type].keep) drawKeepAura(ctx, sel.x, sel.y, sel.owner, ox, oy, z);
   if (R.ghost && BDEFS[R.ghost.type] && BDEFS[R.ghost.type].keep && inMap(R.ghost.x, R.ghost.y)) drawKeepAura(ctx, R.ghost.x, R.ghost.y, 0, ox, oy, z);

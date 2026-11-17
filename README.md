@@ -54,6 +54,10 @@ how goods move.
 - **Observer mode:** the computer plays every colony (two to four, on any map type, each with the doctrine you pick) while you
   look on at up to 8×, with a scout report on what each is doing and a camera that follows the fighting; nothing is
   saved (see Observer mode below).
+- **Scout reports:** in your own games, a message now and then on what a computer rival is up to (massing for a push on
+  your east Outpost, a band heading for your north road, a storm forming), once as it starts, with Go to the place.
+- **Blueprints:** keep a block of your buildings and the roads between them on the device, and place it again elsewhere
+  with a ghost that turns; every site and road is planned at once.
 
 Before each game, the new-game screen picks the mode, players and rival, the **map shape** (Standard, Long haul,
 Chokepoint, Islands, Crater, Plateaus, Sky islands, Rift, Ring valley, Oases, Crossroads, Lakes, Tidal flats, River delta,
@@ -892,7 +896,7 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   (`watchReport`, once a second by the clock; its title folds it away to the colonies' line) lists each colony by doctrine ("the Warden", or "the blue Warden" when
   two share one) with its warbots, then up to two lines: news first for 15 s (a Command Base taken, a surrender, a
   nuclear launch: `watchEvents`), then the busiest colonies, read from the computer's own plans in `js/ai.js` without
-  touching them (`watchDoing`: `P.stormOn` storming or forming up to storm a Command Base, `P.march` and `P.siegeAt` a
+  touching them (`rivalPlans`, which the scout reports of your own games read too, put in words by `watchDoing`: `P.stormOn` storming or forming up to storm a Command Base, `P.march` and `P.siegeAt` a
   march and its target, `P.homeCall` under attack at home, Missiles and bombers in flight, `P.raid` a band raiding a
   colony's road, named by its compass point from that colony's Command Base, `P.pushOn` a Warden's big push,
   `P.massFor` massing for a push; when quiet, an opening line for its doctrine or what it has built). The game's own
@@ -902,6 +906,34 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   Command Base in turn; once the map is moved by hand it stays (**Follow the action**, or F, takes it back). The end
   (`watchOver`, from `showGameOver`) says who won and when each colony fell, with **Observe another** (the same setup on a
   new planet) and **Main menu**; `toMenu` ends Observer mode (`watchEnd`).
+- **Scout reports** (`js/scout.js`): in your own games (not Colony, not Observer), `scoutTick` (from `uiTick`, once a
+  second by the clock) reads each enemy computer rival's plans with `rivalPlans` (the Observer's reading, above) and
+  `scoutNews` turns them into news, each with a key: a storm of your (or your ally's) Command Base forming up (and
+  `stormgo` as it goes in), a march on one of your forts (`P.siegeAt`'s building), a band raiding your road (named by
+  its compass point from your Command Base), massing for a push on one of your forts, a Warden's big push, and a
+  rival pulling back to hold its base while 3 of your warbots are within 12 tiles of it; of the other rivals of a
+  free-for-all only their storms and marches. A piece of news is told once while it lasts (`SCOUT.news`: it's over
+  once it hasn't been seen for `SCOUT_OVER` s), once it has lasted `SCOUT_DELAY` (6 game seconds; a storm going in, 2),
+  at least `SCOUT_GAP` (15 s) after the last report, the most important first; massing and pulling back are told again
+  after `SCOUT_AGAIN` (300 s) if they go on, and massing is one piece of news however its aim moves between colonies
+  (`quiet` while it isn't you). Fair: bands are counted as the map shows them (warbots out in the open, `watchBand`),
+  an army's size is "about" (`scoutAbout`, from the warbot count Statistics shows), and the number a rival waits for
+  (`P.massFor.need`) is never told. It's a `toast` (Go to the place, kept in the message list) starting "Scouts:".
+  **Scout reports: On/Off** in the pause menu, kept on the device (`terrafall.scouts`). Display only.
+- **Blueprints** (`js/blueprint.js`): kept on the device (`terrafall.blueprints`, up to `BP_MAX` = 8, newest first,
+  each `{ name, b: [[type, dx, dy]...], r: [[dx, dy]...] }` round its middle; `bpList` drops anything damaged). Saving:
+  **Build → Blueprints** (`openBlueprints`, the `#build-bp` card shown on every tab) → **New blueprint** enters mode
+  `bppick` (`UI.bpPick`: tap your buildings to pick or drop them, a mouse drag boxes several, `onSelectBox`), or with a
+  mouse a selection box that catches no warbots but buildings of yours offers the `#bp-offer` chip for 8 s
+  (`bpBoxOffer`); `bpFrom` keeps the buildings the Build menu places (and Walls and Gates, up to `BP_PIECES` = 30) and
+  your roads, laid or planned, within a tile of them. Named after its commonest building ("Smelter block"); the name
+  is edited in the list, and ✕ twice deletes. Placing: mode `bpplace` (`UI.bpPlace`: the ghost starts mid-screen,
+  follows the mouse, `bpHover`, or goes where a finger taps; R or **Rotate** turns it, `bpTurn`). `bpEval` checks each
+  piece with `canPlace` (and `canRoad` for roads) twice a second or when it moves: red can't go, red and dashed past
+  `MAX_SITES` (Walls and Gates don't count), drawn by `drawBlueprint` (called from render.js). **Place here** (or a
+  click, or a second tap on the spot: `bpPlaceNow`) sends a `place` order for every building that fits and one
+  `paths` order with the new road tiles, then a message says how many went down, how many the site limit held back and
+  why the rest couldn't go. No new order.
 - **A failed frame never stops the game:** `frame` books the next frame before running this one and catches its errors
   (reported once each to the console), and each stage of a frame (simulation, camera, drawing, interface, sound) runs
   on its own (`stage` in `js/main.js`): one that keeps failing during a game says so once and pauses saving
@@ -1563,6 +1595,8 @@ js/feedback.js            Send feedback: the form (main menu and pause menu) tha
 js/goals.js               Colony goals, Records and achievements: read from the game, kept on the device (display only)
 js/photo.js               photo mode: the interface hidden, a time-of-day slider and Save picture (a PNG of the map)
 js/watch.js               Observer mode: computer colonies play while you watch, with a scout report and a camera that follows the fighting
+js/scout.js               scout reports in your own games: what a computer rival starts doing, as a message with Go
+js/blueprint.js           blueprints: a block of buildings and its roads kept on the device, placed again through orders
 js/charts.js              line and bar charts for the statistics screen
 js/render.js              canvas renderer and placeholder art
 js/daynight.js            day and night: the clock, re-lit art sets, grading, headlights, light pools
