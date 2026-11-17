@@ -23,7 +23,7 @@
  * Keys
  *   Buildings: lander harvester quarry mine tap grower smelter fab foundry outpost turret depot
  *              charger munitions silo farm pump refinery kiln tarworks roadworks armory repair
- *              reactor nukesilo  site (a construction site)
+ *              reactor nukesilo mast  site (a construction site)
  *   Bots:      worker warbot hauler agribot paver truck  (drawn facing right; the game rotates them;
  *              any bot can have driving frames '<type>@<team>-f0' … '-f3' and overlays '<type>-brake' and
  *              '<type>-boost'; give a bot without a baked-in shadow `shadow: true`;
@@ -212,6 +212,11 @@ const ART_MANIFEST = {
   ...Object.fromEntries(['chute-fall', 'chute', 'crate-drop', 'chute-flat'].flatMap((k) => [0, 1].map((t) => [`${k}@${t}`, `bots/${k}@${t}.webp`]))),
   'cargoplane@0': 'bots/cargoplane@0.webp',
   'cargoplane@1': 'bots/cargoplane@1.webp',
+  // The Airship (renderer/b/airship.js v=c, the armoured blimp: top-down, facing +x, 30 world units across, drawn about 3
+  // tiles wide; drawAirship spins its lift fans in code) and its ground shadow (its silhouette, softened); the Mooring
+  // Mast (renderer/b/mast.js v=c, the armoured pylon: one tile, its mooring cup at [0.5, 0.08]).
+  'airship@0': 'bots/airship@0.webp', 'airship@1': 'bots/airship@1.webp', 'airship-shadow': 'bots/airship-shadow.webp',
+  'mast@0': B3D('buildings/mast@0.webp'), 'mast@1': B3D('buildings/mast@1.webp'),
   'bomber@0': 'bots/bomber@0.webp',
   'bomber@1': 'bots/bomber@1.webp',
   // Generator (one version for both teams, like the factories), and its working loop: fans and power bus.

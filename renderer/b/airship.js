@@ -383,7 +383,8 @@ function armoured(L, K) {
   K.facet([[5.4, 0.3, 0.3], [4.6, 2.0, 1.0], [-4.4, 2.0, 1.0], [-5.0, 1.4, 0.7]].map(([x, w, h]) => ({ x, w, h, b: h, t: w * 0.7, m: 0.5, bt: w * 0.7, y: -3.3 })), [top, armor, armor]);
   for (const x of [3.2, -2.8]) for (const s of [-1, 1]) K.beam([x, -2.2, s * 1.5], [x, -1.6, s * 2.0], 0.25, 0.25, C.gunD);
   for (const s of [-1, 1]) L.box(8.4, 0.05, 0.05, C.glow, -0.1, -2.85, s * 2.02, K.O({ dirt: 0, cast: false }));
-  return { len: 22, dock: DOCK.c, shadowR: 4.8 };
+  // (the four fans' hubs, for the game's spinning-blade overlay: front port, front starboard, rear port, rear starboard)
+  return { len: 22, dock: DOCK.c, shadowR: 4.8, fans: [[5.2, -0.25, -7.2], [5.2, -0.25, 7.2], [-5.4, -0.25, -7.2], [-5.4, -0.25, 7.2]], fanR: 1.55 };
 }
 
 // --------------------------------------------------------------------------------------- the top-down sprite scene
@@ -398,11 +399,12 @@ export default function (L) {
   // the ship is longer than the shared sun's shadow box: widen it
   L.getScene().traverse((o) => { if (o.isDirectionalLight && o.castShadow) { const c = o.shadow.camera; c.left = c.bottom = -18; c.right = c.top = 18; c.updateProjectionMatrix(); } });
   const G = L.group();
-  buildAirship(L, v, G);
+  const ship = buildAirship(L, v, G);
   // centre the ship in the frame (the game draws the sprite centred on the unit), and mark its mooring cone's tip
   const bb = new THREE.Box3().setFromObject(G), cx = (bb.min.x + bb.max.x) / 2;
   G.position.x = -cx;
   L.mark('dock', DOCK[v][0] - cx, DOCK[v][1], DOCK[v][2]);
+  (ship.fans || []).forEach(([x, y, z], k) => { L.mark('fan' + k, x - cx, y, z); L.mark('fanrim' + k, x - cx + ship.fanR, y, z); });
   // looking straight down the studio environment reflects off every top: keep reflections low (as plane.js)
   const seen = new Set();
   L.getRoot().traverse((o) => { if (!o.isMesh) return; for (const m of [].concat(o.material)) if (!seen.has(m) && m.envMapIntensity !== undefined) { seen.add(m); m.envMapIntensity *= m.emissiveIntensity > 0 ? 1 : 0.35; } });
