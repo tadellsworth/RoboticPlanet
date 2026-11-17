@@ -1926,6 +1926,7 @@ function newGame(opts) {
   settings.players = playerCount(mode, settings.shape, opts.players);
   settings.nuke = !!opts.nuke;
   settings.biome = BIOMES[opts.biome] ? opts.biome : 'desert';
+  if (modList(opts.mods, mode).length) settings.mods = modList(opts.mods, mode); // challenge modifiers (MODS; see modsSetup)
   const { W, H } = mapDims(settings);
   // The players people play: you (player 0), or in multiplayer everyone in opts.humans. The rest are the computer's,
   // with the difficulty's head start.
@@ -2009,6 +2010,7 @@ function newGame(opts) {
     }
     S.players[p].stats.startBots = S.players[p].stats.bots;
   }
+  modsSetup(humans);
   computeZones();
   computeTerritory();
   for (const P of S.players) { const L = getE(P.lander); if (L) starterRoads(L); }

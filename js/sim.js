@@ -87,12 +87,12 @@ function checkMilestones() {
 
 /** Planted stalk groves and energy crops grow until they are ripe (grow = 1). */
 function growStalks(dt) {
-  const N = S.W * S.H;
+  const N = S.W * S.H, crop = CROP_GROW_TIME / modFuelRate(); // (Half Fuel: crops ripen slower)
   for (let t = 0; t < N; t++) {
     const r = S.res[t];
     if ((r !== R_STALK && r !== R_CROP) || S.grow[t] >= 1) continue;
     const before = Math.floor(S.grow[t] * 4);
-    S.grow[t] = Math.min(1, S.grow[t] + dt / (r === R_CROP ? CROP_GROW_TIME : STALK_GROW_TIME));
+    S.grow[t] = Math.min(1, S.grow[t] + dt / (r === R_CROP ? crop : STALK_GROW_TIME));
     if (Math.floor(S.grow[t] * 4) !== before) S.dirtyTiles.push(t);
   }
 }
@@ -3570,7 +3570,7 @@ function produce(b, def, dt) {
   if (def.bots && botCount(b.owner) >= (S.mode === 'colony' ? MAX_BOTS_COLONY : MAX_BOTS)) { b.status = 'Bot limit reached'; return; }
   b.status = (b.boostUntil > S.time ? 'Working (powered by a Generator)' : 'Working') + (beingFed(b) ? ', fed by conveyor' : '');
   b.working = true;
-  b.timer += dt * (b.boostUntil > S.time ? 1 + BDEFS.generator.burner.boost : 1) * (beingFed(b) ? 1 + FEED_BOOST : 1);
+  b.timer += dt * (b.boostUntil > S.time ? 1 + BDEFS.generator.burner.boost : 1) * (beingFed(b) ? 1 + FEED_BOOST : 1) * (def.make && def.make.fuel ? modFuelRate() : 1);
   if (b.timer < def.work) return;
   b.timer = 0;
   for (const g in def.inp) { bump(b.stock, g, -def.inp[g]); usedGood(b.owner, g, def.inp[g]); }
@@ -4619,6 +4619,7 @@ function damageBot(u, dmg, sx, sy) {
   if (aloft(u)) return; // up in the air: out of reach
   if (sx !== undefined && SHIELDS.length) { dmg = shieldBlock(u, sx, sy, dmg); if (dmg <= 0) return; }
   if (u.armored) dmg *= TRAIN_ARMOR.takes; // an armored train's plating
+  if (modOn('fragile')) dmg *= MODS.fragile.takes; // (a challenge modifier)
   u.hp -= dmg;
   u.hurtT = S.time;
   if (u.hp <= 0) { noteDanger(u); killBot(u); }
@@ -7177,7 +7178,7 @@ function missileBlocked(silo, i, j) {
   if (!silo || silo.dead || !silo.built) return 'That Silo is gone.';
   if (!(silo.stock.warhead > 0)) return 'This Silo has no Missiles: haulers bring them from a Missile Factory.';
   if (silo.reload > 0) return `Reloading: ready in ${Math.ceil(silo.reload)}s.`;
-  if (eventNow('dust')) return `A dust storm grounds every Missile: ${Math.ceil(S.event.t1 - S.time)}s until it blows over.`;
+  if (eventNow('dust')) return S.event.endless ? 'A dust storm grounds every Missile, and this one never blows over.' : `A dust storm grounds every Missile: ${Math.ceil(S.event.t1 - S.time)}s until it blows over.`;
   if (dist(silo.x, silo.y, i, j) > BDEFS[silo.type].missile.range) return `Out of range: Missiles reach ${BDEFS[silo.type].missile.range} tiles.`;
   return '';
 }
@@ -7343,7 +7344,7 @@ function nukeBlocked(silo, i, j) {
   if (!silo.armed) return 'No nuclear missile yet: it needs 6 Enriched Uranium, 4 Alloy and 2 Chips, then a minute to assemble.';
   if (!inMap(i, j)) return 'Off the map.';
   if (dist(silo.x, silo.y, i, j) > NUKE.range) return `Out of range: nuclear missiles reach ${NUKE.range} tiles.`;
-  if (eventNow('dust')) return `A dust storm grounds every missile: ${Math.ceil(S.event.t1 - S.time)}s until it blows over.`;
+  if (eventNow('dust')) return S.event.endless ? 'A dust storm grounds every missile, and this one never blows over.' : `A dust storm grounds every missile: ${Math.ceil(S.event.t1 - S.time)}s until it blows over.`;
   return '';
 }
 
@@ -8494,12 +8495,15 @@ function updateEvents() {
   const rng = makeRng(((S.seed ^ 0x51ed27) + S.evN * 7919) >>> 0);
   const recent = S.recentEvents || [];
   const pool = EVENT_ORDER.filter((k) => !recent.includes(k)); // never one of the last two again
-  const type = pool[Math.floor(rng() * pool.length)], def = EVENTS[type];
+  // (Endless dust storm, a challenge modifier: a dust storm, and it never ends, so no other event comes)
+  const endless = modOn('dust'), type = endless ? 'dust' : pool[Math.floor(rng() * pool.length)], def = EVENTS[type];
   const t0 = S.time + (def.warn ? EVENT_WARN : 0), dur = def.dur[0] + rng() * (def.dur[1] - def.dur[0]);
-  S.event = { type, t0, t1: t0 + dur, n: S.evN };
+  S.event = { type, t0, t1: endless ? DUST_ENDLESS : t0 + dur, n: S.evN };
+  if (endless) S.event.endless = 1;
   if (type === 'meteor') { S.event.hits = meteorPlan(rng, t0, dur); S.event.dir = rng() < 0.5 ? -1 : 1; S.event.cratered = {}; S.event.relaid = {}; }
   if (def.warn) {
-    postMsg(ME, type === 'dust' ? `A dust storm is blowing in (${EVENT_WARN}s): bots will slow down and Missiles will be grounded.`
+    postMsg(ME, endless ? `A dust storm is blowing in (${EVENT_WARN}s), and this one will not blow over: bots will slow down and Missiles will be grounded for the rest of the game.`
+      : type === 'dust' ? `A dust storm is blowing in (${EVENT_WARN}s): bots will slow down and Missiles will be grounded.`
       : type === 'meteor' ? `Ringfall in ${EVENT_WARN}s! Pieces of the Ring will crater roads, but leave rich Ore and Crystal where they land.`
         : `Solar flare in ${EVENT_WARN}s: bot batteries will drain twice as fast. Keep your Fuel Stations fuelled.`, undefined, undefined, 'warn');
     sfx('alert');
@@ -8523,7 +8527,7 @@ function startEvent(E) {
     postMsg(ME, o ? `The Wren is in orbit for ${Math.round(E.t1 - E.t0)}s: it offers ${o.m} ${goodN(o.get, o.m)} (your land is running lowest on it) for ${o.n} of your ${goodN(o.give, o.n)}. Tap Trade to take it.`
       : 'The Wren is in orbit, but it wants nothing you have spare.', undefined, undefined, 'info');
     sfx('order');
-  } else if (E.type === 'dust') postMsg(ME, 'The dust storm is here: bots crawl and Missiles are grounded until it blows over.', undefined, undefined, 'warn');
+  } else if (E.type === 'dust') postMsg(ME, E.endless ? 'The dust storm is here, for good: bots crawl and Missiles are grounded.' : 'The dust storm is here: bots crawl and Missiles are grounded until it blows over.', undefined, undefined, 'warn');
   else if (E.type === 'flare') postMsg(ME, 'Solar flare! Bot batteries are draining twice as fast.', undefined, undefined, 'warn');
 }
 
@@ -9339,6 +9343,42 @@ function ropewayAcross(b) {
   computeZones();
   computeTerritory(); // the far station holds a little ground round it (it may go up long after the near one)
   postMsg(b.owner, 'The Ropeway is running: Haulers and Workers ride it across.', b.x, b.y, 'good');
+}
+
+/* ------------------------------------------------------------------ challenge modifiers */
+
+/**
+ * The challenge modifiers (MODS) that change the landing, from newGame once the Command Bases are down (`humans`: the
+ * players people play). Only from the game's settings, so every device in a multiplayer game lands alike. The others
+ * act as the game runs: Half Fuel (modFuelRate), the endless dust storm (updateEvents), Fragile robots (damageBot) and
+ * No turrets (modNoBuild).
+ */
+function modsSetup(humans) {
+  const on = gameMods();
+  if (!on.length) return;
+  if (on.includes('head') && S.mode !== 'colony') {
+    const M = MODS.head;
+    for (const P of S.players) {
+      const L = getE(P.lander);
+      if (P.absent || humans.includes(P.id) || !L) continue;
+      for (const g in START_STOCK) L.stock[g] = (L.stock[g] || 0) + START_STOCK[g] * M.stock;
+      for (const type in M.bots) for (let k = 0; k < M.bots[type]; k++) enterBuilding(addBot(P.id, type, L.x, L.y), L);
+      P.stats.startBots = P.stats.bots;
+    }
+  }
+  if (on.includes('crystal')) {
+    const keep = MODS.crystal.keep;
+    for (let t = 0; t < S.W * S.H; t++) if (S.res[t] === R_CRYSTAL) S.amt[t] = Math.max(1, Math.round(S.amt[t] * keep));
+    for (const P of S.players) { const L = getE(P.lander); if (L) L.stock.crystal = Math.floor((L.stock.crystal || 0) * keep); }
+  }
+  // The storm is a planetary event that never ends (see updateEvents): its warning comes EVENT_WARN s before it.
+  if (on.includes('dust')) { S.events = true; S.event = null; S.nextEvent = Math.max(0, MODS.dust.at - EVENT_WARN); }
+}
+/** How fast Fuel is made (Refineries, energy crops): MODS.fuel.rate with Half Fuel on. */
+function modFuelRate() { return modOn('fuel') ? MODS.fuel.rate : 1; }
+/** Why people can't build `type` in this game, or '' (from the place order: the computer places its own buildings). */
+function modNoBuild(type) {
+  return modOn('noturret') && MODS.noturret.types.includes(type) ? `No turrets in this game (a challenge): no ${BDEFS[type].name}s.` : '';
 }
 
 /* ------------------------------------------------------------------ unlimited resources */
