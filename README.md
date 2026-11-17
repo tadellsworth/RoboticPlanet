@@ -261,13 +261,13 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   road. Before it sets off, a worker reckons up the walk there (its route, by road and off-road speeds), the paving and
   the walk back to the nearest charger it can reach (`paveShort`); if that would take it below `BATTERY.critical`
   (+2), it charges first (unless it's charged to 95% already, or there's nowhere to charge). A stretch of plan that
-  joins nothing (laid out on its own, or the rival's bridge out from its bare shore) is still built: from its end
-  nearest home (an end of the stretch, or a tile beside road or a building), inward, and after a joined tile up to
-  `PAVE_ALONE` (12) tiles further off (a bridge or tunnel out from bare ground, as the rival's bridges are, as soon as
-  a joined tile would be: from the shore nearest home). Measured on a 30-tile road from home to a far
-  site (one to three workers, with and without a bridge): no worker runs flat any more (51 times before), the first 10
-  tiles are down sooner, and the whole road usually sooner too; workers that start out by the far end walk back to the
-  home end first, so those finish later than when they paved inward from the far end. A worker that just found no way somewhere (walled in on the Wall it built,
+  joins nothing (laid out on its own) is still built: from its end nearest home (an end of the stretch, or a tile
+  beside road or a building), inward, after a joined tile up to `PAVE_ALONE` (12) tiles further off; a bridge or tunnel
+  out from bare ground (the rival's bridges) as soon as a joined tile would be. Measured on roads of 30 to 34 tiles
+  from home to a far site on four maps (two with a bridge), one to three workers starting at home, by the far end or
+  spread along it (36 runs): workers ran flat 58 times before and never since; the first 10 tiles from home were down
+  in 57 s on average (98 s before) and the whole road in 141 s (193 s; sooner in 25 of the 36). Slower: three workers
+  spread from home to the far end (112 s against 92), who used to pave from both ends at once. A worker that just found no way somewhere (walled in on the Wall it built,
   say: `u.failUntil`) sits out the next building and paving rounds, and isn't counted as soon free (`nearSoon`), so
   the others still come; a tile nobody can reach is skipped for a while (`paveSkip`). Calling off a planned tile refunds it. Roads double a bot's speed. Dragging
   plans roads round resources; tap a boulder, grove, ore or crystal tile to clear it for a road at 3× the Cement. A Roadworks' Paver
