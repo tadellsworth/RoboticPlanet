@@ -206,18 +206,41 @@ built and played through headless:
   so Iron Road asks for one. Trains bringing a station site its materials would make a track-only line possible.
 - **Bombs on a Command Base** didn't visibly dent it in the Final Descent solver runs (armor 30/30 at each minute
   mark). Not needed for the goal, but worth a look with the bombers.
-- **Kits and Fiber, Trade Winds.** From Pipe Dreams on the kits bring a Grove Planter (`KIT8`): without one the
-  Harvester's 30-45 Fiber were gone into the Smelter in 5-8 minutes and an idle player lived on salvage. Trade Winds'
-  kit is still `KIT7` (it was left alone while the trade missions were reworked): an idle player there runs low on
-  Fiber at about 6 minutes. Its comment on seed 1445's events (a flare over by 9:36) predates the shorter gap between
-  events in missions (`MISSION_EVENT_GAP`): the flare is now over by 6:33.
+- **Kits and Fiber, Trade Winds** (done). From Pipe Dreams on the kits bring a Grove Planter (`KIT8`): without one the
+  Harvester's 30-45 Fiber were gone into the Smelter in 5-8 minutes and an idle player lived on salvage. Trade Winds
+  was still on `KIT7` (it was left alone while the trade missions were reworked) and now has `KIT8` too: left idle on
+  Normal, its colony had made 30 Fiber and no more by 6 minutes, with none in store from 8; with the Grove Planter it
+  makes about 7 a minute (110 by 16 minutes) and keeps 9-12 in store. Its comment on seed 1445's events now says what
+  they are since the shorter gap between events in missions (`MISSION_EVENT_GAP`): Ringfall 2:30-3:21 and a solar flare
+  5:22-6:33 (not over by 9:36). Played with its hints' steps (Road Trains +1, dock at the nearer post and Lay road, then
+  Send Stone and Bring back Alloy), it is won at 6:33 on Easy and Normal (the second event is the last goal met) and at
+  8:06 on Hard (the third run), as with `KIT7`: no hint or line of the briefing needed changing. Long Haul (`KIT7`
+  without the Mine: its Ore is far up the valley, so the Smelter starts late) still has no Grove Planter.
 - **Mostly waiting.** Breakthrough is mostly research timers, and Assembly Line and Pipe Dreams take a scripted player
   4-7 minutes; their Hard clocks are generous on purpose.
-- **Convoy against a rival with the opening** (for the trade work). Mission rivals now have the rival's opening, so
-  Convoy's Salvager (Medium on Normal, Normal on Hard) keeps an army: the old one's was gone by minute 10 to 15. Played
-  by the AI alone (no hint steps), Normal went from still open at 41 minutes to won at 19, and Hard from lost on the
-  clock to the Command Base lost at 21 minutes (23 warbots to the AI's 2). Left as it is, being a trade mission: its
-  Hard level, clock or setup want a look with the convoy goals played.
+- **Convoy against a rival with the opening** (retuned: Hard's clock). Mission rivals have the rival's opening, so
+  Convoy's Salvager (Medium on Normal, Normal on Hard) keeps an army. The note that Hard was lost at 21 minutes when the
+  AI played alone doesn't hold on today's code (nor at the commit that wrote it): `missions-win-run` wins it at 8:53.
+  Played with the hints' steps (Start route, Escort, Hold ground on their lane every 3 minutes from 3:00, then by a
+  wreck) and the AI on your side at work speeds 1 to 1.3, Hard was won in 6 of 7 runs at 9:21 to 12:24 (most by
+  10:30), and by the AI alone in 3 of 3 at 8:53 to 9:13; Normal at 6:47, 7:17 and 12:53. At each Hard win the Salvager
+  had 0 to 9 warbots to your 14 to 22. With 40 minutes on the clock Hard wasn't hard: it now has 13 (five runs of a
+  route that runs every 2 minutes can't be done much before 9). Still open:
+  - **A soft lock.** Besiege the rival before one of its convoys is wrecked and the goal can't be met: its Road Train
+    stays in a Command Base with enemies at it, and that base can't be taken. One Hard run in 7 (now lost on the clock
+    at 13), and on Easy one in 3 was still open at 40 minutes and one won only at 21:59: the Easy rival is down to one
+    warbot by 5 minutes, so its convoys run without escort, and an unescorted convoy turns back from warbots in its
+    way instead of holding (a band on its lane is a road block, not an ambush). The briefing now says a besieged base
+    sends no convoys. A goal that also counts a convoy turned back, or convoys that leave a besieged base, would end it.
+  - **The raid's hint comes late.** The coach shows the first open goal, so the hint to raid shows once the trade runs
+    are done: about 9 minutes on Hard. In 5 Hard runs that waited for it the AI on your side had wrecked a convoy by
+    then on its own, but a person who waits for it and besieges the rival meanwhile meets the soft lock. Putting the
+    raid before the runs would show it at once (the route still needs starting first: the briefing says so).
+  - **Tried and dropped** (Hard, same steps): a tougher rival (the Hard level, or 6, 10 or 20 more of every good) had
+    your Command Base captured at 5 to 24 minutes in 10 of 12 runs (+6: won 11:06 and 12:39, lost 15:55); four more
+    warbots at the start won 7 of 7 at 8:43 to 13:04 (the first band wrecks a convoy at about 4:05) but no better when
+    the raid waits for its hint (2 of 3); a Grove Planter and a forward Outpost did worse (none of 3 won). Convoy's kit
+    is still `KIT7`, without the Grove Planter the other War missions have.
 - **Final Descent is a real war now.** With the opening its rival keeps an army (the old one's was gone by minute 10).
   A scripted player (the AI on your side plus the hints' steps) won six of seven runs on Normal and on Hard; one lost
   its Command Base at 22 minutes on Hard, and one on Normal was still open at 41 minutes, its army shrinking. If
