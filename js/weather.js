@@ -20,6 +20,9 @@ try { WX_ON = localStorage.getItem('botfall.weather') !== '0'; } catch (e) { /* 
 function weatherOn() { return WX_ON; }
 function setWeatherOn(on) { WX_ON = !!on; try { localStorage.setItem('botfall.weather', on ? '1' : '0'); } catch (e) { /* storage unavailable */ } }
 
+/** How many of n weather specks (grains, flakes, drops, embers, leaves, motes) to draw at the Graphics step now (gfx().wx). */
+function wxCount(n) { return Math.max(1, Math.round(n * gfx().wx)); }
+
 /** The weather at game time t: null, or { kind, k (0..1 how heavy now), front (0..1 how far the front has blown across), dir, slot }. */
 function weatherAt(t) {
   if (!S || !S.settings) return null;
@@ -82,8 +85,9 @@ function wxStorm(ctx, W, C, camX, camY) {
   // driven streaks: long and fast, plus a finer, faster layer of grains or flakes
   ctx.strokeStyle = `rgba(${C.streak},${0.6 * k})`;
   ctx.lineWidth = 1.6;
+  const specks = wxCount(C.n);
   ctx.beginPath();
-  for (let n = 0; n < C.n; n++) {
+  for (let n = 0; n < specks; n++) {
     const h1 = hash2(n, 7, 31), h2 = hash2(n, 13, 77), sp = (420 + 420 * h2) * dir;
     const x = wxWrap(h1 * cw + t * sp - camX * 1.1, cw, 60), y = wxWrap(h2 * ch + t * (24 + C.drop * h1) - camY * 1.1, ch, 10);
     if (ahead(x)) continue;
@@ -92,7 +96,7 @@ function wxStorm(ctx, W, C, camX, camY) {
   ctx.stroke();
   ctx.fillStyle = `rgba(${C.streak},${0.75 * k})`;
   ctx.beginPath();
-  for (let n = 0; n < C.n; n++) {
+  for (let n = 0; n < specks; n++) {
     const h1 = hash2(n, 37, 61), h2 = hash2(n, 41, 63), sp = (600 + 500 * h1) * dir, r = C.dot * (0.6 + h2);
     const x = wxWrap(h1 * cw + t * sp - camX * 1.2, cw, 20), y = wxWrap(h2 * ch + t * (40 + C.drop * h2) + Math.sin(t * 3 + n) * 6 - camY * 1.2, ch, 10);
     if (ahead(x)) continue;
@@ -143,7 +147,7 @@ function drawWeather(ctx, ox, oy, z) {
     ctx.strokeStyle = night ? `rgba(170,190,215,${0.42 * k})` : `rgba(220,232,248,${0.5 * k})`;
     ctx.lineWidth = 1.3;
     ctx.beginPath();
-    for (let n = 0; n < 380; n++) {
+    for (let n = 0, N = wxCount(380); n < N; n++) {
       const h1 = hash2(n, 17, 41), h2 = hash2(n, 19, 43), fall = 900 + 600 * h2;
       const x = wxWrap(h1 * cw + t * fall * 0.3 * dir - camX, cw, 40), y = wxWrap(h2 * ch + t * fall - camY, ch, 40);
       ctx.moveTo(x, y); ctx.lineTo(x - dir * 8, y - 24 - 14 * h1);
@@ -153,7 +157,7 @@ function drawWeather(ctx, ox, oy, z) {
     ctx.strokeStyle = night ? `rgba(160,180,205,${0.4 * k})` : `rgba(225,235,250,${0.45 * k})`;
     ctx.lineWidth = 1;
     ctx.beginPath();
-    for (let n = 0; n < 70; n++) {
+    for (let n = 0, N = wxCount(70); n < N; n++) {
       const ph = (t * 2.2 + hash2(n, 59, 19)) % 1, cyc = Math.floor(t * 2.2 + hash2(n, 59, 19));
       const x = wxWrap(hash2(n, cyc, 61) * cw - camX, cw, 10), y = wxWrap(hash2(cyc, n, 67) * ch - camY, ch, 10), r = 2 + ph * 5;
       ctx.moveTo(x + r, y); ctx.ellipse(x, y, r, r * 0.45, 0, 0, Math.PI * 2);
@@ -182,14 +186,14 @@ function wxAsh(ctx, W, night, camX, camY) {
   ctx.globalAlpha = 1;
   ctx.fillStyle = `rgba(${night ? '130,122,118' : '226,222,216'},${0.85 * k})`;
   ctx.beginPath();
-  for (let n = 0; n < 420; n++) {
+  for (let n = 0, N = wxCount(420); n < N; n++) {
     const h1 = hash2(n, 11, 21), h2 = hash2(n, 13, 23), r = 1.1 + 1.8 * h2;
     const x = wxWrap(h1 * cw + Math.sin(t * (0.6 + h2) + n) * 18 + t * 14 * dir - camX, cw, 20), y = wxWrap(h2 * ch + t * (22 + 30 * h1) - camY, ch, 20);
     ctx.moveTo(x + r, y); ctx.arc(x, y, r, 0, Math.PI * 2);
   }
   ctx.fill();
   ctx.globalCompositeOperation = 'lighter';
-  for (let n = 0; n < 70; n++) {
+  for (let n = 0, N = wxCount(70); n < N; n++) {
     const h1 = hash2(n, 17, 31), h2 = hash2(n, 19, 33), life = 3 + 3 * h2, ph = ((t + h1 * life) % life) / life;
     const x = wxWrap(h1 * cw + Math.sin(t * 1.3 + n) * 26 + ph * 60 * dir - camX, cw, 20), y = wxWrap(h2 * ch - ph * 90 - camY, ch, 20);
     const a = Math.sin(ph * Math.PI) * k * (night ? 0.95 : 0.6), r = 1.2 + 1.6 * h1;
@@ -206,7 +210,7 @@ function wxMeteors(ctx, W, night, camX, camY) {
   if (night) { ctx.fillStyle = `rgba(6,8,20,${0.18 * k})`; ctx.fillRect(0, 0, cw, ch); }
   ctx.globalCompositeOperation = 'lighter';
   ctx.lineCap = 'round';
-  for (let n = 0; n < 36; n++) {
+  for (let n = 0, N = wxCount(36); n < N; n++) {
     const per = 1.8 + 2.6 * hash2(n, 3, 41), cyc = Math.floor((t + hash2(n, 5, 43) * per) / per), ph = ((t + hash2(n, 5, 43) * per) % per) / 0.9;
     if (ph > 1 || hash2(n, cyc, 45) > 0.35 + 0.6 * k) continue;
     const x0 = wxWrap(hash2(cyc, n, 47) * cw * 1.2 - camX * 0.2, cw, 60), y0 = wxWrap(hash2(n, cyc, 49) * ch * 0.6 - camY * 0.2, ch, 60);
@@ -229,7 +233,7 @@ function wxLeaves(ctx, W, night, camX, camY) {
   const k = W.k, t = R.time, cw = R.w, ch = R.h, dir = W.dir;
   ctx.fillStyle = `rgba(${night ? '30,24,20' : '200,170,120'},${0.08 * k})`; ctx.fillRect(0, 0, cw, ch);
   const cols = night ? ['120,64,30', '110,40,24', '130,100,40', '80,56,34'] : ['226,120,40', '200,60,32', '236,184,60', '150,96,52', '214,148,48'];
-  for (let n = 0; n < 190; n++) {
+  for (let n = 0, N = wxCount(190); n < N; n++) {
     const h1 = hash2(n, 23, 61), h2 = hash2(n, 29, 63), sp = (180 + 260 * h2) * dir * (0.6 + 0.4 * k);
     const x = wxWrap(h1 * cw + t * sp - camX * 1.05, cw, 30), y = wxWrap(h2 * ch + Math.sin(t * (1.5 + h1 * 2) + n) * 24 + t * (20 + 30 * h1) - camY * 1.05, ch, 30);
     const r = 3 + 3.5 * hash2(n, 31, 65), spin = t * (3 + 5 * h2) + n;
@@ -239,7 +243,7 @@ function wxLeaves(ctx, W, night, camX, camY) {
   ctx.strokeStyle = `rgba(${night ? '150,150,160' : '255,250,235'},${0.18 * k})`;
   ctx.lineWidth = 1.2;
   ctx.beginPath();
-  for (let n = 0; n < 60; n++) {
+  for (let n = 0, N = wxCount(60); n < N; n++) {
     const h1 = hash2(n, 37, 67), h2 = hash2(n, 41, 69), x = wxWrap(h1 * cw + t * 520 * dir - camX, cw, 80), y = wxWrap(h2 * ch - camY, ch, 10);
     ctx.moveTo(x, y); ctx.quadraticCurveTo(x - dir * 30, y - 4, x - dir * 70, y + 2);
   }
@@ -264,7 +268,7 @@ function wxDust(ctx, W, night, camX, camY) {
     ctx.globalAlpha = 1;
     ctx.fillStyle = `rgba(${night ? '110,96,80' : '120,96,64'},${0.7 * k})`;
     ctx.beginPath();
-    for (let m = 0; m < 26; m++) {
+    for (let m = 0, M = wxCount(26); m < M; m++) {
       const q = hash2(n, m, 77), a = t * (6 + n) + m, r = 8 + q * 60;
       const x = bx + Math.cos(a) * r * 0.6, y = by - q * hgt + Math.sin(a) * r * 0.15;
       ctx.moveTo(x + 1.4, y); ctx.arc(x, y, 1.4, 0, Math.PI * 2);
@@ -278,17 +282,18 @@ function wxAurora(ctx, W, night, camX, camY) {
   const k = W.k * (night ? 1 : 0.35), t = R.time, cw = R.w, ch = R.h;
   ctx.globalCompositeOperation = 'lighter';
   const bands = [['80,255,170', '160,90,255'], ['255,90,200', '120,80,255'], ['90,220,255', '200,255,140']];
+  const col = Math.round(6 / Math.sqrt(gfx().wx)); // (the curtains' columns: finer with more weather, coarser on Saver)
   bands.forEach(([c1, c2], b) => {
     const base = ch * (0.12 + 0.16 * b) - camY * 0.05, amp = 26 + 14 * b, depth = ch * (0.22 + 0.06 * b);
-    for (let x = -40; x < cw + 40; x += 6) {
+    for (let x = -40; x < cw + 40; x += col) {
       const wx = x + camX * 0.05, y = base + Math.sin(wx * 0.006 + t * 0.35 + b) * amp + Math.sin(wx * 0.017 - t * 0.6 + b * 2) * amp * 0.4;
       const a = (0.075 + 0.05 * Math.sin(wx * 0.012 + t * 1.3 + b)) * k;
       const g = ctx.createLinearGradient(0, y, 0, y + depth);
       g.addColorStop(0, `rgba(${c1},0)`); g.addColorStop(0.15, `rgba(${c1},${a})`); g.addColorStop(0.6, `rgba(${c2},${a * 0.5})`); g.addColorStop(1, `rgba(${c2},0)`);
-      ctx.fillStyle = g; ctx.fillRect(x, y, 6.5, depth);
+      ctx.fillStyle = g; ctx.fillRect(x, y, col + 0.5, depth);
     }
   });
-  for (let n = 0; n < 90; n++) {
+  for (let n = 0, N = wxCount(90); n < N; n++) {
     const h1 = hash2(n, 3, 81), h2 = hash2(n, 5, 83), life = 5 + 4 * h2, ph = ((t + h1 * life) % life) / life;
     const x = wxWrap(h1 * cw + Math.sin(t * 0.8 + n) * 20 - camX, cw, 20), y = wxWrap(h2 * ch - ph * 120 - camY, ch, 20);
     const a = Math.sin(ph * Math.PI) * W.k * (night ? 0.9 : 0.4), r = 1.5 + 2 * h1;
@@ -313,7 +318,7 @@ function wxFog(ctx, W, night, camX, camY) {
   ctx.globalAlpha = 1;
   if (!night) return;
   ctx.globalCompositeOperation = 'lighter';
-  for (let n = 0; n < 110; n++) {
+  for (let n = 0, N = wxCount(110); n < N; n++) {
     const h1 = hash2(n, 73, 91), h2 = hash2(n, 79, 93), blink = Math.max(0, Math.sin(t * (1.6 + h2 * 2) + n * 1.7));
     if (blink < 0.2) continue;
     const x = wxWrap(h1 * cw + Math.sin(t * 0.5 + n) * 30 - camX, cw, 20), y = wxWrap(h2 * ch + Math.cos(t * 0.4 + n * 2) * 20 - camY, ch, 20);

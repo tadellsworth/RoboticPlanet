@@ -1349,6 +1349,18 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   room; the minimap is laid out again whenever it changes. Nothing is drawn under a full screen (the pause menu, Help,
   Statistics, Send feedback, game over) while the game behind it stands still, unless the view, the canvas or the art changes
   (`drawNeeded` in js/main.js), and the demo behind the main menu is drawn 30 times a second (`DEMO_FRAME`).
+- **Graphics** (a device setting: `setGfxStep` and the `GFX_LEVELS` table in js/render.js; the pause menu and Custom
+  Game's Rules; kept in `localStorage` as `terrafall.graphics`, read once before the first resize, never in the game or
+  an order). **Auto**, the default, is all of the above unchanged. **Saver** draws at 1×, runs at most 30 frames a
+  second (`frame` in js/main.js), halves sparks, embers, smoke puffs and weather specks (`fxCount`, `wxCount`), and
+  drops the city haze and the roads' wide glow at night (the pools under buildings and the road lines stay). **High**
+  lifts the pixel budget to 21 million (a 6K screen at 2×), switches to the sharper ground chunks as soon as the coarser
+  ones would be stretched (`hdLevel`), keeps twice the chunk memory, and draws 1.5× the sparks and smoke. **Ultra**
+  draws at the screen's full `devicePixelRatio` (budget 36 million), with twice the effects and weather, a finer city
+  haze and robots carrying a light in their colour at night (`drawUnitLights`). On High and Ultra `watchFrameRate` steps
+  down once most frames of 1.5 s have been slow (instead of after 120 frames), two steps at once under 25 frames a
+  second, and counts frames of up to a second (Auto takes one over 250 ms for a hitch, so a picture too big to draw four
+  times a second was never brought down); it climbs back no higher than the step allows.
 - **Phones and tablets (touch):** a touch on the map is only ever a touch there: the click a browser makes after it
   is cancelled (`initInput`), so the tap that opens a panel can't also press a button that appears under the finger,
   and a tap on a tile beside a button doesn't press the button. Where panels open across the bottom of the screen

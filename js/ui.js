@@ -109,7 +109,7 @@ function initUI() {
   $('briefing').addEventListener('pointerdown', (e) => e.stopPropagation());
   $('briefing').addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); closeBriefing(); });
   window.addEventListener('keydown', (e) => { if (UI.briefing && !e.repeat) { e.preventDefault(); e.stopPropagation(); closeBriefing(); } }, true);
-  $('btn-pause').onclick = () => { UI.paused = !MP.on; UI.mpQuitArm = false; mpSyncPauseMenu(); $('screen-pause').hidden = false; syncSaved(); sfx('click'); };
+  $('btn-pause').onclick = () => { UI.paused = !MP.on; UI.mpQuitArm = false; mpSyncPauseMenu(); $('screen-pause').hidden = false; syncSaved(); syncGfx(); sfx('click'); };
   $('p-resume').onclick = () => { UI.paused = false; $('screen-pause').hidden = true; };
   // The hidden rival boost: tap the clock three times quickly (or press ` on a keyboard).
   $('clock').addEventListener('click', () => {
@@ -129,6 +129,9 @@ function initUI() {
   $('p-music').oninput = () => { setVolume('music', $('p-music').value / 100); syncVol(); };
   $('p-fx').oninput = () => { setVolume('fx', $('p-fx').value / 100); syncVol(); };
   $('p-fx').onchange = () => sfx('place');
+  // Graphics (render.js setGfxStep): Saver, Auto, High or Ultra, at once.
+  for (const btn of $('p-gfx').children) btn.onclick = () => { setGfxStep(btn.dataset.v); syncGfx(); sfx('click'); };
+  syncGfx();
   const syncTod = () => { $('p-daynight').textContent = `Time of day: ${TOD_MODE_NAMES[todMode()]}`; };
   syncTod();
   // Cycle → Always day → Always night → Cycle.
@@ -285,7 +288,22 @@ const DIFF_INFO = {
   normal: 'Normal: a fair fight. The rival expands, raids your roads and attacks in force.',
   hard: 'Hard: a fast rival that lands with extra goods and attacks early and often.',
 };
+/** What each Graphics step does (the line under it in the pause menu, and the new-game Rules line). */
+const GFX_INFO = {
+  saver: 'Saver: for older phones and long sessions. Drawn at 1×, 30 frames a second, with fewer effects and plainer night lights (kept on this device).',
+  auto: 'Auto: as sharp as the screen allows up to 2× (4K’s worth of pixels), less while frames come slowly (kept on this device).',
+  high: 'High: for a strong computer. A big screen at its full 2×, sharper ground up close, more smoke and sparks (kept on this device).',
+  ultra: 'Ultra: the most there is. The screen’s full sharpness, the densest effects and weather, the richest night light (kept on this device).',
+};
 const TOD_INFO = { cycle: 'Time of day: morning to night, 12 minutes round (looks only; kept on this device).', day: 'Time of day: always day (looks only; kept on this device).', night: 'Time of day: always night, every colony lit up (looks only; kept on this device).' };
+
+/** The Graphics choice as it is now, in the pause menu and the new-game Rules (and the pause menu's lines: how sharp the map is drawn now, and what the step does). */
+function syncGfx() {
+  const v = gfxStep();
+  for (const id of ['p-gfx', 'm-gfx']) for (const b of $(id).children) { b.classList.toggle('on', b.dataset.v === v); b.setAttribute('aria-checked', b.dataset.v === v ? 'true' : 'false'); }
+  $('p-gfx-v').textContent = `drawn at ${+R.dpr.toFixed(2)}×`;
+  $('p-gfx-note').textContent = GFX_INFO[v];
+}
 
 /** Keep remembered settings inside what the data offers now (a map type or biome may have gone). */
 function checkMenuSettings() {
@@ -511,6 +529,7 @@ function initMenu() {
   }
   for (const btn of $('m-daynight').children) { btn.dataset.info = TOD_INFO[btn.dataset.v]; btn.onclick = () => { setTodMode(btn.dataset.v); syncMenu(); sfx('click'); }; }
   $('m-weather').onchange = () => { setWeatherOn($('m-weather').checked); syncMenu(); sfx('click'); };
+  for (const btn of $('m-gfx').children) { btn.dataset.info = GFX_INFO[btn.dataset.v]; btn.onclick = () => { setGfxStep(btn.dataset.v); syncMenu(); sfx('click'); }; }
   $('m-reroll').onclick = () => { UI.menu.seed = randomSeed(); syncMenu(); sfx('click'); };
   $('m-saveplanet').onclick = () => {
     savePlanet(menuPlanet()); sfx('place'); toast(`Saved Planet #${UI.menu.seed}: pick it from Saved planets any time.`, 'good'); syncMenu();
@@ -706,6 +725,7 @@ function syncMenu() {
     $(id + '-row').classList.toggle('on', !!on);
   }
   for (const btn of $('m-daynight').children) mark(btn, btn.dataset.v === todMode());
+  syncGfx();
   syncPickRows();
   // Random can't be saved as a planet: pick a map type and biome first.
   const rnd = !!(m.shapeRnd || m.biomeRnd);
