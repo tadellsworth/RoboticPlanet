@@ -5725,6 +5725,38 @@ function lootNear(u, range) {
   return best;
 }
 
+/** The pile of crates nearest flag r, within FLAG_LOOT of it, that warbot u could walk to and nobody has claimed all of, or null. */
+function flagPile(u, r) {
+  if (!S.loot || !S.loot.length) return null;
+  const zone = S.zone[tIdx(Math.floor(u.x), Math.floor(u.y))];
+  let best = null, bd = FLAG_LOOT * FLAG_LOOT;
+  for (const l of S.loot) {
+    const d = dist2(l.x + 0.5, l.y + 0.5, r.x, r.y);
+    if (d > bd || lootLeft(l) <= (l.claimed || 0) || S.zone[tIdx(l.x, l.y)] !== zone) continue;
+    bd = d; best = l;
+  }
+  return best;
+}
+
+/**
+ * Warbot u holding flag r, with nothing to fight: crates lying near the flag (a nest's hoard, a wreck's goods) and no
+ * enemy robot (the Murmur too) or gun as near, it carries them home a crate at a time, then comes back to the flag
+ * (u.resume). Up to half the squad goes; the rest stand guard. True if it set off. (The owner's call, Nov 2026:
+ * warbots on a flag used to stand beside crates and leave them to rot.)
+ */
+function flagLoot(u, r) {
+  if (u.noLoot > S.time || u.loot || foesNear(u.owner, r.x, r.y, FLAG_LOOT)) return false;
+  const l = flagPile(u, r);
+  if (!l) return false;
+  let out = 0;
+  for (const v of S.bots) if (!v.dead && v.owner === u.owner && v.task && v.task.type === 'loot' && v.resume && v.resume.rally === r.id) out++;
+  if (out >= Math.max(1, Math.floor((rallyMembers(r.id).length + out) / 2))) return false;
+  const back = { type: 'hold', rally: r.id, slot: u.task.slot };
+  goLoot(u, l);
+  u.resume = back;
+  return true;
+}
+
 /** Send warbot u to pick up a crate from pile l. */
 function goLoot(u, l) {
   cancelTask(u);
@@ -5783,6 +5815,16 @@ function doLoot(u, t, dt) {
   madeGood(u.owner, g, 1);
   S.players[u.owner].stats.looted = (S.players[u.owner].stats.looted || 0) + 1;
   u.task = null;
+  // From a flag (flagLoot): the flag's next crate, or back to the flag.
+  if (u.resume && u.resume.type === 'hold') {
+    const back = u.resume, r = rallyById(back.rally);
+    u.resume = null;
+    if (r && !wantsRepair(u)) {
+      const next = botArmed(u) && !foesNear(u.owner, r.x, r.y, FLAG_LOOT) && flagPile(u, r);
+      if (next) { goLoot(u, next); u.resume = back; return; }
+      u.task = back; u.path = null; return;
+    }
+  }
   // More crates still lying there: back for another (a warbot only carries one at a time).
   const more = botArmed(u) && !wantsRepair(u) && lootNear(u, 50);
   if (more) { goLoot(u, more); return; }
@@ -6208,6 +6250,8 @@ function warbotAct(u, dt) {
     else { u.path = null; u.vel = 0; return; }
   }
   if (!t) {
+    // (A loot run from a flag that fell through: back to the flag.)
+    if (u.resume && u.resume.type === 'hold') { const back = u.resume; u.resume = null; if (rallyById(back.rally)) { u.task = back; u.path = null; return; } }
     const l = lootNear(u, 6);
     if (l) { goLoot(u, l); return; }
     if (!((wantsRepair(u) || (S.tick % 30 === u.id % 30 && idleRepair(u))) && goRepair(u))) goGarrison(u);
@@ -7052,6 +7096,8 @@ function holdRally(u, t, r, dt, power) {
     if (strikeBuilding(u, tgt, dt, power) === null) t.target = 0;
     return;
   }
+  // Nothing to fight: crates near the flag go home, a crate at a time (flagLoot).
+  if (botArmed(u) && !u.fight && S.tick % 30 === u.id % 30 && flagLoot(u, r)) return;
   // Stand guard on a spot around the flag.
   const spot = RALLY_SPOTS[t.slot % RALLY_SPOTS.length];
   let gx = Math.floor(r.x) + spot[0], gy = Math.floor(r.y) + spot[1];

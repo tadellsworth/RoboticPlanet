@@ -6264,6 +6264,12 @@ function refreshBuildingSheet(b) {
     if (def.ammoStock && mine && warOn()) {
       parts.push(`<div class="kv"><span>Ammo for warbots</span><span>${goodTag('ammo', `${b.stock.ammo || 0}/${def.ammoStock}`, !(b.stock.ammo > 0))}</span></div>`);
     }
+    // Salvage warbots carried here (doLoot: b.loot), waiting for haulers to take it on to storage.
+    if (mine && b.loot && !def.store) {
+      const sal = Object.keys(b.loot).map((g) => [g, Math.floor(Math.min(b.loot[g], b.stock[g] || 0))]).filter(([g, n]) => n >= 1 && GOOD[g]);
+      if (sal.length) parts.push(`<div class="kv"><span>Salvage</span><span>${sal.map(([g, n]) => goodTag(g, `${n} ${goodN(g, n)}`)).join(' ')}</span></div>` +
+        `<p class="hint">Crates your warbots carried here. ${b.unlinked ? '<span class="err">No road joins it to storage:</span> lay one and haulers take them on.' : 'Haulers take them on to storage.'}</p>`);
+    }
     if (b.upT > 30 && tracksUse(def)) {
       const pct = Math.round(((b.useT || 0) / b.upT) * 100);
       parts.push(`<div class="kv"><span>Busy</span><span>${pct}% of the time</span></div>${sparkline(b.useHist)}`);
