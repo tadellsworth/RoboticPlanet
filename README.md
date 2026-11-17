@@ -1769,7 +1769,8 @@ the towers, layered per tile), the
 Viaduct's abutment tiles (`viaduct-abut-*`) and the working loops of the Oil Pump (its beam nodding over `pump-base`),
 Refinery and Smelter, the Hollow's own set, the Murmur's tunnel exits, and Fiber's Reedcane Stalks (an image for each
 growth stage, `stalkKey`) and the oil seep (its texture drawn across all its tiles as one shape, `drawSeep`, with the
-Pathfinder's survey stake on each; their light at night in the night glow map, `resourceGlow`) (ART_GUIDE Batch 16).
+Pathfinder's survey stake on each, none in the Hollow, which it never mapped; their light at night in the night glow map,
+`resourceGlow`) (ART_GUIDE Batch 16).
 Still to make: goods icons and a few terrain pieces. The biome art is in `art/biomes/` (six plants per biome with their
 shadows baked in, and the Jungle and Polar ground, water, rock and cliff), and the Red desert ground, water and rock
 are 512×512 (one image per 4×4 tiles, sharp on the zoomed-in map); all WebP to keep the single-file build small. The app icon is in `icons/` (its source: `icons/icon.svg`). Anything without an image falls back to placeholder art drawn in code, so new art can be

@@ -772,7 +772,7 @@ function resourceGlow(ctx, type, amt, grow, i, j) {
     const art = ART[stalkKey(grow) + '-glow'];
     if (art) drawArt(ctx, art, cx, cy, TP);
   } else if (type === R_OIL) {
-    if (ART['oil-glow']) drawArt(ctx, ART['oil-glow'], cx, cy, TP * (0.6 + 0.4 * Math.min(1, amt / RES[R_OIL].amount)));
+    if (ART['oil-glow'] && !S.hollow) drawArt(ctx, ART['oil-glow'], cx, cy, TP * (0.6 + 0.4 * Math.min(1, amt / RES[R_OIL].amount))); // (a stake's lamp: none in the Hollow)
   } else if (type === R_VEIN) {
     if (ART['vein-glow-hollow']) drawArt(ctx, ART['vein-glow-hollow'], cx, cy, TP * (0.5 + 0.5 * grow));
     else veinGlow(ctx, i, j, grow);
@@ -1129,7 +1129,8 @@ function paintTile(ctx, i, j) {
     }
     if (under) { ctx.save(); ctx.globalAlpha = 0.4; }
     else if (S.res[t] === R_OIL && ART['oil-seep']) drawSeep(ctx, i, j, x, y);
-    drawResource(ctx, S.res[t], S.amt[t], S.grow[t], x + TP / 2, y + TP / 2, TP, i, j);
+    // (No survey stakes in the Hollow: the Pathfinder never mapped it, LORE.md. Its seeps are the soaked ground alone.)
+    if (!(S.res[t] === R_OIL && S.hollow && ART['oil-seep'] && !under)) drawResource(ctx, S.res[t], S.amt[t], S.grow[t], x + TP / 2, y + TP / 2, TP, i, j);
     if (under) ctx.restore();
     else if (richRes(t)) drawGlint(ctx, x, y, i, j);
   }

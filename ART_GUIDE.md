@@ -1487,7 +1487,7 @@ quarters grown back, drawn full size (`stalkKey`); `stalk-glow` and `stalk-3-glo
 oil seep is now soaked dark ground (`oil-seep`, 256 px, one image every 2 × 2 tiles) drawn across all its tiles as one
 shape (`drawSeep`: a disc on each tile, shrinking as it's pumped, bridged to its oil neighbours), with the Pathfinder's
 old survey stake on each tile (`oil`, the pump spot, its lamp's light in `oil-glow`). Under a road or track only a
-stain shows. All 192 px (glows 128) to keep the page small. Resources are graded with the ground at night, so they
+stain shows. No stakes in the Hollow (the Pathfinder never mapped it: LORE.md): its seeps are the soaked ground alone. All 192 px (glows 128) to keep the page small. Resources are graded with the ground at night, so they
 have no time-of-day versions; their light is in the night glow map (`resourceGlow`).
 
 ### Not swappable yet (ask Claude Code if you want these)
