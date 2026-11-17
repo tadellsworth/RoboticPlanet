@@ -925,7 +925,8 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   They're `prepaid` (paid from storage on Build, no Hauler or road, outside the site limit). A Worker builds a Wall
   from beside it on the home side (`wallStands`: the free neighbour nearest the Command Base by walking, or a Wall
   site there, the inner row of a double wall, which then waits for the outer row), so nobody is left on top of it,
-  walled out; a site with neither is built from its own tile. Walls block every bot;
+  walled out; a site with neither is built from its own tile. (Not the rival's: its lines always keep a Gate,
+  `aiWallGate`, `aiTurtleWalls`, so its builders build on the tile as before.) Walls block every bot;
   Gates let their owner's bots and road through (`passTile(t, who)`). Armed enemy warbots plan through a Wall or
   Gate as if it were `BREACH_COST + armor` tiles long, so they go round a short way or stop and shoot through
   (`breachHit`); a bot whose route gets walled off re-plans (`blockedStep`). An order whose squad can't shoot
@@ -1300,8 +1301,9 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   building can't go where its ring would cover a rival's ordinary building (`ringOverRival`; a Drop Outpost dropped, a
   Port a Ferry founds and a Crawler deploying too): cut-offs come from capture or a fort falling. The AI builds on its own land first and on open ground only when it has no spot at home.
 - **Salvage:** a colony out of Stone or Fiber with no Quarry or Harvester that can still work salvages 1 every 20 s from
-  its Command Base (up to 6), so it can always rebuild. Meanwhile (`P.salvaging`) that good goes only to sites, not to
-  finished buildings (a running Smelter would burn the Fiber meant for the Harvester site). Capturing an enemy Outpost takes its land,
+  its Command Base (up to 6), so it can always rebuild. Meanwhile, with a Quarry or Harvester site waiting
+  (`P.salvaging`), that good goes only to sites, not to finished buildings (a running Smelter would burn the Fiber
+  meant for the Harvester site). Capturing an enemy Outpost takes its land,
   and enemy buildings its ring now covers are cut off (see above).
 - **Controls:** drag to pan, pinch or scroll to zoom, tap anything to inspect it. Wheel deltas are normalised and capped
   per event (smooth on a Magic Mouse or trackpad); a Ctrl + wheel pinch zooms faster, a sideways swipe or Shift + wheel

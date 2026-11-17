@@ -1869,7 +1869,8 @@ function dispatch(p) {
   for (const b of blds) {
     if (!idle.length) return;
     if (!b.built && !b.builder && siteFrac(b) > b.progress + 0.01 && !(P.danger && dangerAt(p, b.x, b.y))) { // (a rival AI's: see noteDanger)
-      if (b.type === 'wall' && (stands = stands || wallStands(p)).wait.has(b.id)) continue;
+      // (Not the rival's: its wall lines always keep a Gate, aiWallGate and aiTurtleWalls, so its builders have a way home.)
+      if (b.type === 'wall' && !P.ai && (stands = stands || wallStands(p)).wait.has(b.id)) continue;
       const u = take(b.x, b.y, 'build');
       if (u && nearSoon(u, b)) { idle.push(u); continue; }
       assignBuild(u, b, stands);
@@ -2407,8 +2408,8 @@ function repairHint(b) {
 
 /**
  * A colony that has run out of Stone or Fiber with no Quarry or Harvester that can still work
- * (so it couldn't build one) slowly salvages it from its Command Base, enough to get going again. Meanwhile that
- * good goes only to sites (P.salvaging, see dispatch), so the Quarry or Harvester site it's for gets it.
+ * (so it couldn't build one) slowly salvages it from its Command Base, enough to get going again. Meanwhile, with a
+ * Quarry or Harvester site waiting, that good goes only to sites (P.salvaging, see dispatch), so the site gets it.
  */
 function landerSalvage(p, dt) {
   const P = S.players[p];
@@ -2422,9 +2423,9 @@ function landerSalvage(p, dt) {
       (b.built ? BDEFS[type].bedrock || reachableRes(b.x, b.y, BDEFS[type].radius, res) > 0 : sumValues(b.stock) >= sumValues(BDEFS[type].cost))); // a Quarry can always cut or dig
     // Cement is Stone already baked (2 per Stone), so it counts towards having enough.
     const amount = (have[g] || 0) + (g === 'stone' ? (have.cement || 0) / 2 : 0);
-    // (While it salvages a good, only sites get it, the gatherer's above all: a running factory that burns it, a
-    // Smelter say, took every one before. See dispatch.)
-    if (!working && amount < SALVAGE_BELOW) (P.salvaging = P.salvaging || {})[g] = true;
+    // (While it salvages a good for a Quarry or Harvester site, only sites get it: a running factory that burns it, a
+    // Smelter say, took every one before the site did. See dispatch.)
+    if (!working && amount < SALVAGE_BELOW && S.buildings.some((b) => !b.dead && b.owner === p && b.type === type && !b.built)) (P.salvaging = P.salvaging || {})[g] = true;
     else if (P.salvaging) delete P.salvaging[g];
     if (working || amount >= SALVAGE_BELOW) { P.salvageT[g] = 0; continue; }
     P.salvageT[g] = (P.salvageT[g] || 0) + dt;
