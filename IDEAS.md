@@ -14,6 +14,69 @@ Still open: a neutral, shared exchange the rivals compete over; contracts for Ch
 
 ## Held for later
 
+- **Upgrades for long games** (the owner, Nov 17 2026: saved for later; the aim is economies that keep growing on large
+  maps, enough to feed the megastructures). Today the only upgrades are the Research Lab's (`TECHS`: Cargo Racks,
+  Long-life Cells, Rapid Paving, Sentry Optics, Turbo Motors, Power Tools, Nanite Repair), colony-wide and Colony only.
+  The picks, if built: building tiers and deep extraction.
+  - **Building tiers (Mk II, Mk III).** An Upgrade button on a gatherer's panel, paid in Alloy and Chips (Crystal too
+    for Mk III), with a short refit while it pauses. Harvester Mk II: 50% faster and its reach 5 tiles to 7; Mk III:
+    twice as fast and a second Worker. The same for the Quarry, Mine, Crystal Tap and Oil Pump, and the factories could
+    follow (Smelter, Chip Fab, Cement Works: Mk II makes 2 a batch). Upgraded buildings look it (a bigger rig, a second
+    arm, brighter lights). The rival upgrades its own once it's established, so long games scale for everyone.
+  - **Deep extraction.** On big maps the fields of Ore, Stone and Crystal run dry and late games starve. A Deep Bore
+    upgrade lets a Mine, Quarry or Crystal Tap keep drawing a trickle from a spent field for good. (Harvesters already
+    have the Grove Planter to regrow their groves.)
+  - **The Research Lab in Versus too,** with economy research beside today's: Diamond Blades (every gatherer 25%
+    faster), Seam Survey (fields hold 30% more), Automation (factories need no Worker inside, freeing Workers to build).
+  - **Automated Harvesters.** A Mk III (or a research) where a Harvester runs on its own, a small drone cutting in place
+    of a Worker: Workers saved in a big late colony.
+- **Megastructures** (the owner, Nov 17 2026: saved for later). Late-game, one per colony, slow to build and seen by
+  everyone, so rivals can race or raid them. The picks, if built: the Great Uplink, the Ring Breaker and Arrival City.
+  - **Ring Breaker** (weapon). A tether-and-thruster station that pulls fragments out of the Ring and drops them where
+    you choose: Ringfall on demand. Every few minutes a strike craters the area and leaves rich Ore or Crystal behind,
+    so it is a weapon and a mine at once; slow to aim, so the target gets warning. Lore: the colony doing to Ithaca what
+    the Sponsors did to Earth.
+  - **Sunlance** (weapon). A field of mirrors focuses Corvane's light into a beam that sweeps a target, burning
+    buildings in a line. By day only; useless in a dust storm, and a solar flare overloads and damages it. Night leaves
+    you open, in step with the Murmur.
+  - **Seismic Lance** (weapon). A deep drill hammering shockwaves into the ground: aimed at the Murmur it collapses
+    tunnel networks map-wide and shakes nests; aimed at a rival it cracks roads and foundations in a radius. The Murmur
+    hear it, and come for it.
+  - **Great Uplink.** A giant dish array to talk to home, and a new way to win: power it and hold it through a long
+    transmission window to "make contact", while rivals try to wreck or jam it. Ties into the campaign's last mission
+    ("No further instructions"); in free play a last-stage victory, with a lore twist on what answers.
+  - **Arrival City.** An arcology built for the colonists: homes, parks, a school, all lit and empty. Production round
+    it goes up (the robots work harder for Arrival), and its land counts double for Domination. At night, a whole lit
+    city for no one.
+  - **Orbital Lift.** A space elevator to the colony's Carrier: bring down its last reserves on demand (robots, Alloy,
+    Chips) and send goods up. Vastly dear; if it falls, the cable comes down across the map in a long line of wreckage.
+  - **Atmosphere Engine.** A terraforming tower that slowly changes the land round it: no more dust storms in its
+    region, barren ground turned fertile (Bio Farms anywhere near), the Bloom pushed back. Finishing the Pathfinder's
+    work; the Murmur hate it and go for it.
+  - **The Lance of Corvane** (the owner: "a giant laser gun"; weapon). A planet-scale laser cannon on the colony's own
+    power, by day or night (unlike the Sunlance): it needs Generators or a Nuclear Reactor beside it, and much Alloy,
+    Chips and Crystal (a Ring Crystal lens). It charges for a minute or two before each shot: the colony's lights dim
+    and its factories slow while it does, and a glow climbs the barrel for everyone to see. The beam crosses the whole
+    map in a straight line, cutting through every building in its path, carving a scorched trench, boiling water to
+    steam and breaching Walls; a Command Base holds at a floor, as with Missiles. Counterplay: a Shield Dome takes a
+    shot, buildings spread off the line, wrecking the Generators that feed it stops the charge, and a dust storm
+    scatters the beam. The charging draws the Murmur within reach, so firing by night is a gamble. Lore: an orbital
+    defence design from Earth's last years, found in the archives and built again here, aimed at each other. At night
+    the beam lights the map for a moment and the cut glows red, then cools. (The game has no power lines: Generators
+    power what's within 4 tiles of them. Power lines that carry a Generator's power further, and that the Murmur's
+    Leeches drain, would be an idea of their own; the lore already speaks of them.)
+  - **Power for the megastructures: power lines and nuclear power** (the owner: a use for Uranium beyond the bomb).
+    Today Uranium is only in a Nuclear race, enriched at the Reactor for the bomb, and Generators only speed up what is
+    within 4 tiles. Instead: a **Nuclear Power Plant** burns Enriched Uranium for far more power than Generators, and
+    **power lines** (pylons, laid like roads or track) carry it across the colony. The big structures (the Lance, the
+    Shield Dome, the Mass driver, the Maglev, the Great Uplink) run on that grid and stop when it's cut; factories on it
+    work faster. Uranium deposits would then appear in more games, not just a Nuclear race, so it is a choice: power or
+    the bomb. Risks: a Plant hit hard enough melts down (a small fallout zone where nothing works for a while); the
+    Murmur's Leeches drain power lines at night, the lights going out pylon by pylon (as LORE.md already has it); a
+    rival cuts a line to stop a charging Lance.
+  - **Shield Dome.** A great energy dome over the base, stopping Missiles, bombs, Ringfall and Howitzer shells while
+    powered; it drains Crystal all the time, and warbots can still walk in, so a war on it turns from bombardment to
+    ground assault.
 - **High-speed transit** (the owner, Nov 17 2026: saved for later). Late-game, high-capacity links for a big colony,
   beyond roads, Freight Trains, Ropeways and Cargo Planes.
   - **Maglev line.** Elevated track on pylons, run straight over terrain, water and cliffs, between Maglev Terminals;
