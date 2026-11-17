@@ -1047,7 +1047,7 @@ const BDEFS = {
     cost: {}, store: true, mil: true, terr: 6, garrison: 4, ammoStock: 4, charger: { slots: 4, rate: 25, fuel: true }, armor: 24, mobile: true,
   },
   nest: {
-    name: 'Murmur Nest', desc: 'The Murmur breed down here and raid whatever a colony builds within reach. It grows as time goes on, sending bigger packs. Send warbots to clear it: the goods it has hoarded spill out for them to carry home, and the land around it is free to build on.',
+    name: 'Murmur Nest', desc: 'The Murmur breed down here. By day they keep to it, with a few on guard; at night they tunnel out toward the colonies\' power and come up through tunnel exits to raid. It grows as time goes on, with more on guard. Send warbots to clear it: the goods it has hoarded spill out for them to carry home, and the land around it is free to build on.',
     cost: {}, wild: true, armor: 45, buildTime: 1,
   },
   // A Murmur tunnel exit (see MURMUR): opens along a nest's tunnels at night; warbots collapse it.
@@ -1057,7 +1057,7 @@ const BDEFS = {
   },
   // The Hollow: the Deep's mound at the middle of the cathedral (HOLLOW.deep), the biggest nest of all.
   mound: {
-    name: 'The Deep\'s Mound', desc: 'The largest Murmur nest of all, in the middle of the Hollow: somewhere inside it is the Deep, the heart of every nest down here. Heavily armored, it sends the biggest packs from the start. Wreck it with warbots and its hoard spills out, and every other nest in the Hollow falls back to its first level.',
+    name: 'The Deep\'s Mound', desc: 'The largest Murmur nest of all, in the middle of the Hollow: somewhere inside it is the Deep, the heart of every nest down here. Heavily armored and full grown from the start, with the most on guard; its tunnels spread like any nest\'s. Wreck it with warbots and its hoard spills out, and every other nest in the Hollow falls back to its first level.',
     cost: {}, wild: true, armor: 160, buildTime: 1,
   },
   depot: {
@@ -1341,17 +1341,15 @@ const TRADE_SHORT = ['ore', 'crystal', 'stone', 'fiber', 'alloy', 'chip', 'ammo'
  * type 'burrow'): the setting MURMUR below, in every kind of game; never in missions unless one asks, and never on a
  * silent biome (Lunar: see murmurGround). Creature nests sit out in the wilds, owned by wildOwner() (in Colony
  * WILD_OWNER, the empty second player slot; in Versus a slot of their own). Each keeps a few Scuttlers on
- * guard (guards + its level) and, in Colony, from `first` seconds on, sends a pack every `gap` seconds at the
- * nearest thing a colony has built within `reach` tiles of it. The pack goes for bots in the open;
- * Brutes (from level 2) tear up roads and batter buildings (never below 1 armor; construction sites
- * are wrecked), and break through Walls and Gates, slowly (`wallBite` of a bite each). After `raidTime` the pack heads home. A nest grows a level every `grow` seconds (up
- * to 3): bigger packs and more hoarded goods. Packs also grow with the colony (one more creature for
- * every `perBuildings` buildings). Nothing can be built within `clear` tiles of a nest.
+ * guard (guards + its level, a new one every `guardEvery` seconds) and sends no packs of its own: the Murmur come up
+ * through their tunnels at night (MURMUR below), in Colony as in Versus. A pack goes for bots in the open; Brutes tear
+ * up roads and batter buildings (never below 1 armor; construction sites are wrecked), and break through Walls and
+ * Gates, slowly (`wallBite` of a bite each). A nest grows a level every `grow` seconds (up to 3): more guards and more
+ * hoarded goods. Nothing can be built within `clear` tiles of a nest.
  */
 const WILD_OWNER = 1; // (a Colony game's: in Versus the Murmur have a slot of their own after the colonies, see wildOwner)
 const WILD = {
-  first: 420, gap: [260, 400], reach: 24, raidTime: 70, grow: 600, guards: 2, guardEvery: 45, perTiles: 800,
-  perBuildings: 14, maxPack: 9, bite: 1.1, wallBite: 0.35, roadEvery: 4, clear: 2, loot: { crystal: 8, ore: 8, alloy: 4 },
+  grow: 600, guards: 2, guardEvery: 45, perTiles: 800, bite: 1.1, wallBite: 0.35, roadEvery: 4, clear: 2, loot: { crystal: 8, ore: 8, alloy: 4 },
   hunt: 6, // tiles an arrived Scuttler will walk to reach a bot (12 makes raids far deadlier: an AI colony was wiped out by minute 15)
 };
 /** The Murmur's colour where a colour stands for them (the minimap, a panel's owner dot, their tunnels' glow). */
@@ -1377,9 +1375,9 @@ const WILD_COLOR = '#a46cff';
  *   nest's network dies back and its exits close.
  * - At most room[0] + room[1] a colony of the Murmur are up at night at once; a pack comes up only where a colony has
  *   something within `prey` tiles of the exit.
- * - Versus: the nests send no packs by day (days are for striking them, nights for holding the line). Colony keeps the
- *   nests' raids by day too (WILD); Quiet's come further apart (`raidGap` times the usual gap), a creature smaller
- *   (`raidLess`).
+ * - The nests send no packs by day, in Colony as in Versus (days are for striking them, nights for holding the line).
+ * - Colony on the Hollow only (the lair's many nests would open twice the exits a Standard map does): no more exits
+ *   open at once than a Standard Colony map of the same size could have open by that night (murmurExitCap).
  * - Quiet: fewer nests, fewer and slower tunnels, fewer exits and smaller packs.
  * - `warn`: seconds before nightfall the dusk warning comes. Exits open no nearer than `exitFromBase` tiles to a
  *   Command Base or `exitFromBld` to any colony building; a branch makes for power within `reach` tiles of its nest;
@@ -1390,11 +1388,11 @@ const MURMUR_NAMES = { off: 'Off', quiet: 'Quiet', active: 'Active' };
 const MURMUR = {
   quiet: {
     orbits: 1, perTiles: 2200, tiles: [14, 4, 28], branches: [1, 0.34, 2], cap: [36, 18, 120],
-    exits: [1, 0.25, 1], maxExits: 2, pack: [2, 0.25, 3], brutes: 4, waves: 1, raidGap: 1.6, raidLess: 1,
+    exits: [1, 0.25, 1], maxExits: 2, pack: [2, 0.25, 3], brutes: 4, waves: 1,
   },
   active: {
     orbits: 2, perTiles: 1100, tiles: [28, 8, 56], branches: [2, 0.5, 4], cap: [60, 36, 260],
-    exits: [2, 0, 2], maxExits: 3, pack: [2, 0.5, 5], brutes: 2, waves: 2, raidGap: 1, raidLess: 0,
+    exits: [2, 0, 2], maxExits: 3, pack: [2, 0.5, 5], brutes: 2, waves: 2,
   },
   shut: 900, warn: 40, exitArmor: 30, minBase: 18, offRoute: 6, exitFromBase: 12, exitFromBld: 4, reach: 44, retreat: 16, room: [12, 6], prey: 26,
 };

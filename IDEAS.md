@@ -359,18 +359,22 @@ These wait for a later expansion:
   - The flank caverns hold four contested breaches. Two would make the middle matter more.
   - Rock from the roof falls every other tremor (about every four to five minutes), near each colony's home, after an
     8-second trickle. Often enough to matter, rare enough not to nag?
-  - Colony with its nests' raids by day (the nights add tunnels and packs on top): with five nests a side and cutting
-    veins drawing the packs, a computer-run colony stalls at about 22 buildings by 15 minutes (on Standard, with 3 nests, it reaches
-    about 31). Hard by design, or soften the lure (`VEIN`) or the nests nearest home?
+  - Decided (owner, Nov 17): Colony's daytime raids are gone; with the Murmur on, packs come only at night (in the
+    Hollow, in the surges), as in Versus. Computer-run colonies, first 35 minutes, before → after: the Hollow, Small:
+    23 robots lost → 5, 30 buildings by 15 minutes → 34; Huge: 32 → 15 (with the exit cap), 25 → 27; Standard, Small:
+    33 → 30, 21 → 27; Huge: 20 → 10, 21 → 27. (The day packs had been 80 to 260 creatures a game.) The mission The
+    Murmur (`bughunt`), whose packs came by day at 4 minutes, now meets them at its first night: a turret and warbots
+    by nightfall, two exits to collapse (the one dug the night before, then one that opens at nightfall), then nests.
   - Computer-only games end in 15 to 40 minutes, neither seat favoured (11 wins to 14 over 26 games, one still going
     at 45). On Small maps both computer colonies are slow to get Fuel (one oil seep each, a few tiles from home):
     a second seep near home, or leave it lean?
   - Three or four players: not built (the layout is made for two, turned half round).
-  - The Murmur set to Off on the Hollow: allowed for now (the setting decides; the menu says the Hollow is their lair
-    and plays best with them). Should Off be offered there at all?
-  - Colony on the Hollow (Huge) with the Murmur Active is heavy: its 14 nests and the mound open about 19 tunnel exits
-    by the end of the first surge (a Standard Colony map of that size, 6 nests: 8 to 10; Versus on a Medium Hollow,
-    10 nests: about 6). Their lair, so leave it, or cap the exits there (or make the Hollow's default Quiet in Colony)?
+  - Decided (owner, Nov 17): Off stays allowed on the Hollow, with the menu's warning.
+  - Decided (Nov 17): Colony on the Hollow caps the exits open at once (`murmurExitCap`) at what a Standard Colony map
+    of the same Size could have by that night (its nests, 3 to 8, times the exits a nest has opened by then: Huge,
+    Active, 12 after the first surge and 18 later). Its 14 nests and the mound had opened 18 to 19 by the first dawn
+    and 25 to 30 by the second; now 12 and 18 (Standard Huge: 8 to 10, then 11 to 15). Nests and mound unchanged, Versus
+    uncapped.
 - **The Murmur in regular games (decided by the owner, Nov 17; built Nov 17: see README, The Murmur).** A Custom Game setting for every map,
   **Off / Quiet / Active, Active by default** (never on Argos, the moon). It **forces the day/night cycle on**: the
   Murmur live by it. **By night they tunnel**: every night each nest's tunnel network spreads further (toward power),
@@ -380,8 +384,10 @@ These wait for a later expansion:
   warbots collapse a tunnel exit (it stays shut a while), and wrecking a nest makes its whole network die back.
   Tunnels pass under roads, buildings and Walls. Quiet: fewer, slower tunnels and smaller packs. The rival AI learns to
   live with them.
-  As built: Versus nests send nothing by day (only Colony's do), and their guards only go for what comes right up to
-  the nest (a nest by a colony's road to its fields stopped a rival's economy dead); nests are placed by the map's
+  As built: nests send nothing by day, in Colony as in Versus (the owner's call, Nov 17: Colony's daytime raids are
+  gone), and Versus guards only go for what comes right up to the nest (a nest by a colony's road to its fields
+  stopped a rival's economy dead; the rival keeps 6 tiles off: owner OK, Nov 17); Quiet stays light (owner OK);
+  Always night stays a choice with them on, for its looks only (they still come out at the game clock's nightfall); nests are placed by the map's
   symmetry, one a colony in each set (Active two sets on a Medium map for two, Quiet one), off the ways between the
   colonies; exits open no nearer than 12 tiles to a Command Base or 4 to a building; a collapsed exit stays shut 15
   minutes; the Hollow's `alwaysNight` turns the nights into surges with a silent lull.

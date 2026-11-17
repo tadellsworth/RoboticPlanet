@@ -9243,11 +9243,9 @@ function placeNestsVersus(seed) {
         bs = score[t]; best = o;
       }
       if (!best) break;
-      const raidAt = WILD.first + hash2(best[0], nests.length, seed) * 120; // (the same for every nest of a set: fair)
       for (const u of best) {
         const b = addBuilding(wildOwner(), 'nest', u % W, (u / W) | 0, true);
         b.level = 1;
-        b.raidAt = raidAt;
         for (const g in WILD.loot) b.stock[g] = WILD.loot[g];
         nests.push(b);
         for (let k = 0; k < WILD.guards + 1; k++) spawnCritter(b, 'scuttler');
@@ -9266,7 +9264,7 @@ function placeNests(seed) {
   if (!L || !murmurGround(S.settings && S.settings.biome)) return; // (no Murmur on the moon)
   const rng = makeRng((seed ^ 0x6e357) >>> 0), zone = S.zone[tIdx(L.x, L.y)];
   if (S.hollow) { placeHollowNests(rng); return; }
-  const want = clamp(Math.round((S.W * S.H) / WILD.perTiles), 3, 8), nests = [];
+  const want = colonyNests(), nests = [];
   for (let tries = 0; tries < 4000 && nests.length < want; tries++) {
     const i = 1 + Math.floor(rng() * (S.W - 2)), j = 1 + Math.floor(rng() * (S.H - 2)), t = tIdx(i, j);
     if (S.terrain[t] !== T_GROUND || S.res[t] || S.fert[t] || S.ramp[t] || S.road[t] || S.bAt[t] || S.owner[t] >= 0 || S.zone[t] !== zone) continue;
@@ -9276,12 +9274,15 @@ function placeNests(seed) {
     if (open < 3) continue;
     const b = addBuilding(wildOwner(), 'nest', i, j, true);
     b.level = 1;
-    b.raidAt = WILD.first + rng() * 120;
+    rng(); // (once the nest's first daytime raid: still drawn, so a seed lays its nests where it always did)
     for (const g in WILD.loot) b.stock[g] = WILD.loot[g];
     nests.push(b);
     for (let k = 0; k < WILD.guards + 1; k++) spawnCritter(b, 'scuttler');
   }
 }
+
+/** How many nests a Colony game's map w × h tiles gets (one for every WILD.perTiles tiles, 3 to 8; not the Hollow's). */
+function colonyNests(w = S.W, h = S.H) { return clamp(Math.round((w * h) / WILD.perTiles), 3, 8); }
 
 /**
  * The Hollow's nests, more than on any other planet: the Deep's mound (BDEFS mound) in the middle of the cathedral, and a
@@ -9297,7 +9298,6 @@ function placeHollowNests(rng) {
     S.res[t] = R_NONE; S.amt[t] = 0;
     const deep = k === 0, b = addBuilding(wildOwner(), deep ? 'mound' : 'nest', n.x, n.y, true);
     b.level = deep ? HOLLOW.deep.level : 1;
-    b.raidAt = WILD.first + rng() * 120;
     const loot = deep ? HOLLOW.deep.loot : WILD.loot;
     for (const g in loot) b.stock[g] = loot[g];
     for (let m = 0; m < nestGuards(b); m++) spawnCritter(b, 'scuttler');
@@ -9610,38 +9610,13 @@ function despawnCritter(u) {
   S.byId.delete(u.id);
 }
 
-/**
- * What a nest's next pack goes for: the nearest building or road a colony (any colony) has within reach, and whose. A
- * Harvester that has been cutting Bloom veins lately draws them (veinLure): it counts as nearer, and from further out.
- */
-function wildTarget(b) {
-  let best = null, bd = WILD.reach * WILD.reach;
-  for (const e of S.buildings) {
-    if (e.dead || e.owner === wildOwner() || e.owner < 0) continue;
-    const d = dist2(e.x, e.y, b.x, b.y), lure = veinLure(e);
-    if (lure && d > sq(WILD.reach + VEIN.reach)) continue;
-    const near = lure ? d / sq(VEIN.pull) : d; // (a Harvester at work on the veins looks VEIN.pull times nearer)
-    if (near < bd) { bd = near; best = { x: e.x, y: e.y, owner: e.owner }; }
-  }
-  const R0 = WILD.reach;
-  for (let j = Math.max(0, b.y - R0); j <= Math.min(S.H - 1, b.y + R0); j++) {
-    for (let i = Math.max(0, b.x - R0); i <= Math.min(S.W - 1, b.x + R0); i++) {
-      const t = j * S.W + i;
-      if (!S.road[t] || wayOwner(t) < 0 || wayOwner(t) === wildOwner() || crossTile(t)) continue;
-      const d = dist2(i, j, b.x, b.y);
-      if (d < bd) { bd = d; best = { x: i, y: j, owner: wayOwner(t) }; }
-    }
-  }
-  return best;
-}
-
 /** How many Scuttlers nest b keeps on guard: more as it grows, and more again round the Deep's mound. */
 function nestGuards(b) { return WILD.guards + b.level + (b.type === 'mound' ? HOLLOW.deep.guards : 0); }
 
 /**
  * Has building e been cutting Bloom veins lately (in the last VEIN.lure seconds: see the gathering in updateWorker)?
- * The Murmur's raids are drawn to it. Never where the Murmur aren't in the game. (A raid-target weight for whatever
- * picks a pack's target: wildTarget, and the Murmur's night raids.)
+ * The Murmur are drawn to it: their night packs (murmurPrey) and their tunnels (murmurGoals). Never where the Murmur
+ * aren't in the game.
  */
 function veinLure(e) { return wildOn() && e.veinT !== undefined && S.time - e.veinT < VEIN.lure; }
 
@@ -9651,7 +9626,11 @@ function veinFull() {
   return clamp(Math.round(RES[R_VEIN].amount * pr.amount), 1, 255);
 }
 
-/** A nest: keeps its guards up, grows, and sends packs out at the colony. Runs once a second. */
+/**
+ * A nest: keeps its guards up and grows. Runs once a second. It sends no packs of its own, in Colony as in Versus (the
+ * owner's decision): its Murmur come up through the tunnels at night (murmurTick). Days are for striking the nests,
+ * nights for holding the line.
+ */
 function updateNest(b) {
   if (S.tick % 30 !== b.id % 30) return;
   if (b.level < 3 && S.time - b.born >= b.level * WILD.grow) {
@@ -9664,26 +9643,7 @@ function updateNest(b) {
     spawnCritter(b, 'scuttler');
     b.guardT = S.time + WILD.guardEvery;
   }
-  // (Versus: a nest sends no packs of its own by day; its Murmur come up through the tunnels at night, see murmurTick.
-  // Days are for striking the nests, nights for holding the line. Colony keeps its raids by day as well.)
-  b.status = `Level ${b.level} nest · ${guards} on guard` + (S.mode !== 'colony' ? '' : b.raidAt > S.time ? '' : ' · ready to raid');
-  if (S.time < b.raidAt || S.mode !== 'colony') return;
-  b.raidAt = S.time + 30; // nothing in reach: look again soon
-  const tgt = wildTarget(b);
-  if (!tgt) return;
-  // (The pack grows with the colony it goes for: one more for every WILD.perBuildings of its buildings. Quiet: a
-  // creature fewer, and further apart: MURMUR raidLess and raidGap.)
-  const C = murmurCfg() || MURMUR.active;
-  let built = 0;
-  for (const e of S.buildings) if (!e.dead && e.owner === tgt.owner && e.built) built++;
-  const size = Math.max(1, Math.min(WILD.maxPack, 1 + b.level + Math.floor(built / WILD.perBuildings) + Math.floor(S.time / 1200)) - C.raidLess);
-  const brutes = b.level >= 2 ? Math.max(1, Math.floor(size / 4)) : 0;
-  const until = S.time + dist(b.x, b.y, tgt.x, tgt.y) / 1.1 + WILD.raidTime;
-  for (let k = 0; k < size; k++) spawnCritter(b, k < brutes ? 'brute' : 'scuttler', { type: 'raid', x: tgt.x, y: tgt.y, until });
-  const gap = (WILD.gap[0] + hash2(b.id, Math.floor(S.time), 41) * (WILD.gap[1] - WILD.gap[0])) * C.raidGap;
-  b.raidAt = S.time + gap;
-  postMsg(tgt.owner, `A pack of ${size} Murmur${brutes ? ` (${brutes} Brute${brutes === 1 ? '' : 's'})` : ''} is coming out of a nest!`, b.x, b.y, 'warn');
-  if (!S.wildWarned && isMe(tgt.owner)) { S.wildWarned = true; sfx('alert'); }
+  b.status = `Level ${b.level} nest · ${guards} on guard`;
 }
 
 /** The nearest colony bot out in the open within r tiles of (x, y) (with `zone`: only one standing in that walkable area). */
@@ -9910,7 +9870,11 @@ function murmurTick() {
     if (!b || b.dead) continue;
     murmurGrow(b, C);
     // (an exit a while apart, once the night's tunnels are under way; none yet where to: tried again in a while)
-    if (b.exitsDue > 0 && S.time >= (b.exitAt || 0)) { if (murmurOpenExit(b)) { b.exitsDue--; b.exitAt = S.time + 25; } else b.exitAt = S.time + 10; }
+    if (b.exitsDue > 0 && S.time >= (b.exitAt || 0)) {
+      // (Up to the cap, where there is one: past it, the exit waits for one to be collapsed.)
+      const room = murmurExitCap() > S.buildings.filter((e) => !e.dead && e.type === 'burrow').length;
+      if (room && murmurOpenExit(b)) { b.exitsDue--; b.exitAt = S.time + 25; } else b.exitAt = S.time + 10;
+    }
   }
   // The packs: `waves` a night, the first a minute after nightfall (the night's first exits are open by then), the
   // second well into the night.
@@ -9941,6 +9905,21 @@ function murmurNightfall(n) {
     b.exitAt = S.time + 35 + hash2(b.id, n, 23) * 10;
   }
   if (alwaysNightMap()) for (const P of S.players) if (!P.absent && !P.out) postMsg(P.id, 'A surge: the Murmur are coming up through their tunnels.', undefined, undefined, 'warn');
+}
+
+/**
+ * At most how many tunnel exits may be open at once. No cap, but in Colony on the Hollow, whose nests (with the
+ * mound, over twice a Standard map's) opened about twice the exits: there, as many as a Standard Colony map of the
+ * same Size setting could have open by tonight (its colonyNests, each with the exits it opens night by night, up to
+ * maxExits; by the Size preset, as the Hollow's rock makes its maps bigger than their size says), so the lair is the
+ * heaviest map but not double. (The owner's call, Nov 2026; Versus has no cap.)
+ */
+function murmurExitCap() {
+  if (S.mode !== 'colony' || !S.hollow) return Infinity;
+  const C = murmurCfg(), n = Math.max(1, murmurNights(S.time)), sz = SIZE_PRESETS[S.settings.size] || { w: S.W, h: S.H };
+  let each = 0;
+  for (let k = 1; k <= n && each < C.maxExits; k++) each = Math.min(C.maxExits, each + murmurBy(C.exits, k));
+  return colonyNests(sz.w, sz.h) * each;
 }
 
 /**

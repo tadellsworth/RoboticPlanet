@@ -142,7 +142,7 @@ function initUI() {
     const f = UI.inGame ? todForced() : '';
     $('p-daynight').textContent = `Time of day: ${TOD_MODE_NAMES[todMode()]}`;
     $('p-daynight-note').hidden = !f;
-    $('p-daynight-note').textContent = f === 'night' ? 'Always night here: this map lies underground.' : f === 'murmur' ? 'No always day in this game: the Murmur live by the night, so the cycle stays on (cycle or always night).' : '';
+    $('p-daynight-note').textContent = f === 'night' ? 'Always night here: this map lies underground.' : f === 'murmur' ? 'No Always day in this game: the Murmur live by the night. Always night only changes the look: they still come out at the game clock\'s nightfall, after the dusk warning.' : '';
   };
   UI.syncTod();
   $('p-daynight').onclick = () => {
@@ -794,7 +794,8 @@ function syncMenu() {
     const locked = btn.dataset.v === 'day' && mur !== 'off';
     btn.classList.toggle('na', locked);
     btn.setAttribute('aria-disabled', locked ? 'true' : 'false');
-    btn.dataset.info = locked ? 'Always day is off while the Murmur are in the game: they live by the night, so the day-and-night cycle stays on. Set The Murmur to Off to have it.' : TOD_INFO[btn.dataset.v];
+    btn.dataset.info = locked ? 'Always day is off while the Murmur are in the game: they live by the night, so the day-and-night cycle stays on. Set The Murmur to Off to have it.'
+      : btn.dataset.v === 'night' && mur !== 'off' ? 'Time of day: always night (looks only: the Murmur still come out at the game clock\'s nightfall, after the dusk warning; kept on this device).' : TOD_INFO[btn.dataset.v];
   }
   syncGfx();
   for (const k of MOD_ORDER) {
@@ -2718,9 +2719,10 @@ function startNewGame() {
     const L = getE(S.players[ME].lander), nests = S.buildings.filter((b) => !b.dead && isNestB(b));
     const near = L && nests.length ? nests.reduce((a, b) => (dist2(b.x, b.y, L.x, L.y) < dist2(a.x, a.y, L.x, L.y) ? b : a)) : null;
     const where = `(violet on the minimap; the nearest is ${near ? dirText(L, near) : 'out there'}${near ? ': press J or tap here to look' : ''})`;
+    const every = alwaysNightMap() ? 'every surge' : 'every night';
     postMsg(ME, S.mode === 'colony'
-      ? `The Murmur live here (${MURMUR_NAMES[murmurLevel()]}): ${nests.length} nests sit out in the wilds ${where}. From about 7 minutes in they raid whatever you build near their nests, and every night their tunnels spread and packs come up through the exits. Pulse Turrets (with Crystal) and warbots keep them off; collapse an exit with warbots; clear a nest to win the goods it hoards.`
-      : `The Murmur (${MURMUR_NAMES[murmurLevel()]}): ${nests.length} nests sit out in the wilds ${where}. They are nobody's side: every night their tunnels spread toward the colonies' power, and packs come up through the exits to raid all of you. Collapse an exit with warbots; wreck a nest by day and its tunnels die back.`, near ? near.x : 0, near ? near.y : 0, 'warn');
+      ? `The Murmur live here (${MURMUR_NAMES[murmurLevel()]}): ${nests.length} nests sit out in the wilds ${where}. By day they keep to their nests; ${every} their tunnels spread toward your power and packs come up through the exits. Pulse Turrets (with Crystal) and warbots keep them off; collapse an exit with warbots; clear a nest to win the goods it hoards.`
+      : `The Murmur (${MURMUR_NAMES[murmurLevel()]}): ${nests.length} nests sit out in the wilds ${where}. They are nobody's side: ${every} their tunnels spread toward the colonies' power, and packs come up through the exits to raid all of you. Collapse an exit with warbots; wreck a nest by day and its tunnels die back.`, near ? near.x : 0, near ? near.y : 0, 'warn');
   } else if (UI.menu.murmur !== 'off' && !murmurGround(S.settings.biome)) postMsg(ME, 'Argos is silent ground: no Murmur live on the moon.', 0, 0, 'info');
   if (S.posts && S.posts.length) {
     // Pointed at the post nearest home (J or a tap jumps there); the rest are gold on the minimap.
