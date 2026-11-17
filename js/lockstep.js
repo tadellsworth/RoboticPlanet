@@ -68,7 +68,7 @@ function mpStart(opts) {
   });
   MP.t0 = MP.turn;
   ME = opts.me;
-  for (const P of S.players) P.ai = !MP.humans.includes(P.id);
+  for (const P of S.players) P.ai = !P.absent && !MP.humans.includes(P.id); // (the Murmur's slot is nobody's: see murmurStart)
   // The first LS.DELAY turns have no orders: nobody could have given any yet.
   MP.sentTo = MP.turn + LS.DELAY - 1;
 }

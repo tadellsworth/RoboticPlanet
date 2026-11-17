@@ -443,7 +443,7 @@ function mpOnStart(m) {
   updateHUD();
   placeMinimap();
   const others = m.players.filter((P, k) => P && k !== me && foes(k, me)).map((P) => P.name);
-  const ai = S.players.filter((P) => P.ai && foes(P.id, me)).length;
+  const ai = S.players.filter((P) => P.ai && !P.absent && foes(P.id, me)).length;
   const ally = S.teams ? S.players.find((P) => allies(P.id, me)) : null;
   postMsg(ME, `Multiplayer: you against ${[...others, ai ? `${ai} computer rival${ai > 1 ? 's' : ''}` : ''].filter(Boolean).join(' and ')}${ally ? `, with ${ally.name || 'a computer ally, ' + callsign(ally.id, true) + ','} on your side` : ''}. Your bots have landed: build up fast!`, 0, 0, 'info');
   doctrineLines();
