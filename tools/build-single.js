@@ -76,6 +76,13 @@ for (const m of html.matchAll(/data-src="(art\/[^"]+)"/g)) {
 }
 fs.writeFileSync(path.join(root, 'dist', 'lore.js'), `window.LORE_DATA = ${JSON.stringify(loreData)};\n`);
 
+// The build number (index.html's terrafall-build tag, "dev" in the repository): this commit's short hash and the date,
+// as the publishing workflow writes it, marked as the one-file build (Send feedback names it).
+let build = '';
+try { build = require('child_process').execSync('git rev-parse --short=7 HEAD', { cwd: root, stdio: ['ignore', 'pipe', 'ignore'] }).toString().trim(); } catch (e) { build = ''; }
+build = `${build || 'dev'} ${new Date().toISOString().slice(0, 10)} one-file`;
+html = html.replace('<meta name="terrafall-build" content="dev">', `<meta name="terrafall-build" content="${build}">`);
+
 const icon = `data:image/png;base64,${fs.readFileSync(path.join(root, 'icons/favicon-32.png')).toString('base64')}`;
 html = html
   .replace(/<link rel="manifest"[^>]*>\n/, '')

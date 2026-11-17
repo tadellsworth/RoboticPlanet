@@ -828,14 +828,18 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
 - **Send feedback** (`js/feedback.js`, `#screen-feedback`): the small **Feedback** pill beside **Lore** at the foot of the
   main menu, and **Send feedback** in the pause menu, open a short form: the kind (**Bug**, **Idea**, **Balance** or
   **Other**), the message (3 to 5,000 characters, with a counter), an optional email or name (up to 200), a hidden
-  honeypot field (`website`) and, only while a game is running, **Attach my current game** (ticked for a Bug, unticked
-  for the others until the player sets it). It posts JSON to the relay's `/feedback` (`feedbackUrl`: `relayUrl()` with
-  `wss:` as `https:`, see Multiplayer, The relay): `{ type, text, contact?, meta, save?, website }`. `meta`
-  (`feedbackMeta`, kept under 4,000 characters of JSON) is the game's version (`gameVersion`, the fingerprint the lobby
-  compares), the browser's user agent, the window's size, pixel ratio and touch or mouse and, from a game: mode (or
+  honeypot field (`website`) and, only while a game is running, **Attach my current game** and **Attach a picture of the
+  map** (each ticked for a Bug, unticked for the others until the player sets it). It posts JSON to the relay's
+  `/feedback` (`feedbackUrl`: `relayUrl()` with `wss:` as `https:`, see Multiplayer, The relay): `{ type, text,
+  contact?, meta, save?, shot?, website }`. `meta` (`feedbackMeta`, kept under 4,000 characters of JSON) is the build
+  (`feedbackBuild`: index.html's `terrafall-build` tag, `dev` in the repository, which the publishing workflow stamps
+  with the commit's short hash and the date, e.g. `1902487 2026-11-17`, and `tools/build-single.js` the same with
+  `one-file`), the game's version (`gameVersion`, the fingerprint the lobby compares), the browser's user agent, the window's size, pixel ratio and touch or mouse and, from a game: mode (or
   mission and its difficulty), map type, biome, size, seed, players, the rival difficulty (Versus), game time and the
   last five messages (`UI.msgLog`). `save` is `saveFileText()`, the file Download save file writes, left out (and the
-  thanks say so) if it is over 8 MB. The form says in one line what is sent. **Sending…** holds the button; on 200 it
+  thanks say so) if it is over 8 MB. `shot` (`feedbackShot`) is the map's canvas (`R.canvas`: no panels or menus) at
+  most 1,600 px on its long side as a JPEG data URL under 1 MB (a lower quality if need be). The form says in one line
+  what is sent. **Sending…** holds the button; on 200 it
   thanks the player with the report's number ("Report #n is filed.") and empties the text; 503 `off` (feedback not set up
   on the relay yet), 429 (too many reports), no connection and any other error each get their own words, and the text is
   never lost (it stays through closing the form too). It is only interface: it sends no order, doesn't change
@@ -1485,6 +1489,8 @@ Ground marks fade over a minute or so (at most 350 at once). Each effect can be 
    `claude/elegant-cori-a8yj96` no longer deploys: work reaches the site once it's on `main`). The `github-pages`
    environment must allow `main`: **Settings → Environments → github-pages → Deployment branches and tags**, a Branch
    rule for `main`. To publish right away without a push, open **Actions → Deploy to GitHub Pages → Run workflow**.
+   Before uploading it writes the build (the commit's short hash and the date) into `index.html`'s `terrafall-build`
+   tag, which feedback reports name (see Send feedback).
 3. Installed copies (Add to Home Screen) check for a newer version each time they open with internet, so they update
    by themselves.
 
@@ -1610,11 +1616,12 @@ The relay runs locally too: `cd relay && npx wrangler dev`, then open the game w
 
 **Player feedback.** The relay also takes the game's **Send feedback** form (`js/feedback.js`; see Send feedback above):
 `POST /feedback` (`relay/src/feedback.js`, whose header has the exact contract) with JSON `{ type, text, contact?, meta?,
-save?, website? }` answers 200 `{ ok: true, n }`, and each report becomes issue #n in a private GitHub repository,
+save?, shot?, website? }` answers 200 `{ ok: true, n }`, and each report becomes issue #n in a private GitHub repository,
 labelled by type and `from-game`; an attached save is committed to `saves/` there and linked from the issue (load it
-with Load a save file to play the bug back). CORS is open (`*`). Other answers: 503 `{ why: 'off' }` until it is set up,
+with Load a save file to play the bug back), and a picture of the map (a JPEG, PNG or WebP data URL up to 1 MB) to
+`shots/`, shown in the issue. CORS is open (`*`). Other answers: 503 `{ why: 'off' }` until it is set up,
 429 past 5 reports an hour or 20 a day from one address (counted by a hash of it, never stored), 400 for a text under
-3 characters, 413 for a request over 8 MB, 502 if GitHub refuses it. Anything in the hidden `website` field marks a bot:
+3 characters, 413 for a request over 9 MB, 502 if GitHub refuses it. Anything in the hidden `website` field marks a bot:
 it is thanked and dropped. Setting it up: add two more Actions secrets, `FEEDBACK_REPO` (the private repository, as
 `owner/name`) and `FEEDBACK_TOKEN` (a fine-grained GitHub token for that repository only, with Issues and Contents read
 and write), then run **Deploy multiplayer relay** again: its summary says whether player feedback is on. Until then the
