@@ -181,7 +181,7 @@ function aiGathers(b, n = 1) {
   for (let j = Math.max(0, b.y - r); j <= Math.min(S.H - 1, b.y + r); j++) {
     for (let i = Math.max(0, b.x - r); i <= Math.min(S.W - 1, b.x + r); i++) {
       const t = j * S.W + i;
-      if (!types.includes(S.res[t]) || !S.amt[t] || S.zone[t] !== zone || dist2(i, j, b.x, b.y) > r2 || (S.res[t] === R_STALK && S.grow[t] < 1)) continue;
+      if (!types.includes(S.res[t]) || !S.amt[t] || S.zone[t] !== zone || dist2(i, j, b.x, b.y) > r2 || ((S.res[t] === R_STALK || S.res[t] === R_VEIN) && S.grow[t] < 1)) continue;
       if ((S.owner[t] < 0 || S.owner[t] === b.owner) && !hotFor(b.owner, t) && --n <= 0) return true;
     }
   }
@@ -202,7 +202,7 @@ function aiUsableRes(p, i0, j0, radius, type) {
       const t = j * S.W + i;
       if (S.res[t] !== type || S.zone[t] !== zone || dist2(i, j, i0, j0) > r2) continue;
       if ((S.owner[t] >= 0 && S.owner[t] !== p) || hotFor(p, t)) continue;
-      n += type === R_STALK && S.grow[t] < 1 ? 0.5 : 1;
+      n += (type === R_STALK || type === R_VEIN) && S.grow[t] < 1 ? 0.5 : 1;
     }
   }
   return n;
@@ -241,6 +241,7 @@ function aiThink(p) {
     aiTurtleWalls(p);
     aiFortWalls(p);
     aiBridge(p, maxSites);
+    aiRopeway(p, maxSites);
   }
   // Warbots can't fight without Ammo: in a war, once the opening is done, an Ammo Plant comes
   // first, its site is never given up, and the Foundry rests so the Alloy reaches it.
@@ -279,7 +280,7 @@ function aiThink(p) {
     }
   }
   // Stone goes into nearly everything (and Cement for roads), so boulders count as running short sooner.
-  P.short = [R_STALK, R_BOULDER, R_ORE, R_CRYSTAL].filter((r) => (inLand[r] || 0) < (r === R_BOULDER ? 6 : 4) || (r === R_CRYSTAL && crShort && crNear));
+  P.short = [gatherRes('harvester'), R_BOULDER, R_ORE, R_CRYSTAL].filter((r) => (inLand[r] || 0) < (r === R_BOULDER ? 6 : 4) || (r === R_CRYSTAL && crShort && crNear));
   const stoneLow = (inLand[R_BOULDER] || 0) < 10;
   const quarrying = me.some((b) => b.type === 'quarry'); // a Quarry always has Stone to cut or dig (see BDEFS.quarry.bedrock)
   // While boulders run low, keep enough Cement for the Outpost that reaches new ones.
@@ -298,6 +299,9 @@ function aiThink(p) {
     }
   }
   let plan = S.mode === 'colony' ? AI_PLAN.concat([['outpost', 40]]) : AI_PLAN;
+  // The Hollow: nothing grows (no Bio Farms or Grove Planters), so Oil Pumps for Fuel and more Harvesters on the Bloom
+  // veins, and nothing that flies (see worldBan).
+  if (hollowOn()) plan = plan.flatMap(([t, n]) => (t === 'farm' ? [['pump', n]] : t === 'grower' ? [['harvester', n + 3]] : worldBan(t) ? [] : [[t, n]]));
   // A Turtle wants twice the turrets (and its first one early); a Tycoon a bigger industry and a
   // second Silo straight after the first Ammo Plant.
   if (st.turrets) plan = plan.map(([t, n]) => (t === 'turret' ? [t, n * 2] : [t, n]));
@@ -310,7 +314,7 @@ function aiThink(p) {
   if ((counts.keep || 0) < wantKeeps) plan = [['keep', wantKeeps]].concat(plan);
   // Bombers, now and then: every rival but a Turtle puts up an Airfield late in a war (from 22 minutes, with its
   // Ammo Plant running) for a single Vulcan Bomber (see aiBomber).
-  if (S.mode !== 'colony' && !st.walls && S.time >= 1320 && !counts.airfield && !botBanned(p, 'bomber') && me.some((b) => b.type === 'armory' && b.built)) plan = [['airfield', 1]].concat(plan); // (only for a bomber)
+  if (S.mode !== 'colony' && !st.walls && S.time >= 1320 && !counts.airfield && !worldBan('airfield') && !botBanned(p, 'bomber') && me.some((b) => b.type === 'armory' && b.built)) plan = [['airfield', 1]].concat(plan); // (only for a bomber)
   // Its planes burn Fuel (a bomber sortie BOMBER.fuel on top of its tank): with an Airfield going up, one more Fuel
   // maker, whichever fits its land (decided once, P.airFuel): a Refinery while it pumps more Crude than its Refineries
   // take, or else a Bio Farm where there's soil none of its farms works, or else a Refinery (and Oil Pump) on oil.
@@ -476,8 +480,11 @@ function aiThink(p) {
     const robots = S.bots.reduce((n, u) => n + (!u.dead && u.owner === p && !isArmy(u) ? 1 : 0), 0);
     const foundry = me.some((b) => b.built && b.type === 'foundry'); // (oil costs Alloy: the Foundry's comes first)
     const add = pumped && !counts.refinery && foundry ? [['refinery', 1]] : [];
-    if (!add.length && !farmWaiting && (counts.farm || 0) < 2 + Math.ceil(robots / 15)) add.push(['farm', (counts.farm || 0) + 1]);
-    if ((!add.length || add[0][0] === 'farm') && !counts.pump && foundry) add.push(['pump', 1]); // (one Oil Pump, where there's oil)
+    if (hollowOn()) { if (!add.length && foundry && (counts.pump || 0) < 3) add.push(['pump', (counts.pump || 0) + 1]); } // (no farms underground: oil it is)
+    else {
+      if (!add.length && !farmWaiting && (counts.farm || 0) < 2 + Math.ceil(robots / 15)) add.push(['farm', (counts.farm || 0) + 1]);
+      if ((!add.length || add[0][0] === 'farm') && !counts.pump && foundry) add.push(['pump', 1]); // (one Oil Pump, where there's oil)
+    }
     plan = add.concat(plan);
     if (fuelNow < 3) siteCap = Math.max(siteCap, maxSites + 1);
   }
@@ -1257,6 +1264,55 @@ function aiBridge(p, maxSites) {
     const t = cands[k][1], i = t % W, j = (t / W) | 0;
     if (canPlace(p, 'outpost', i, j, true).ok && !wouldBlock(t)) { placeSite(p, 'outpost', i, j); return; }
   }
+}
+
+/**
+ * The Hollow: a Ropeway out to a floating Crystal mass (S.hollow.masses) that no colony has reached yet, once ours has a
+ * Bot Foundry and the goods: from ground we can build on as near the mass as can be (and near home), to a free tile of
+ * its platform. One at a time, every half minute at most. Once it runs, the mass is ground our bots can reach, and a
+ * Crystal Tap goes up there like anywhere else (aiFindSpot).
+ */
+function aiRopeway(p, maxSites) {
+  const P = S.players[p], L = getE(P.lander);
+  if (!S.hollow || !L || S.time < 300 || S.time - (P.lastRope || -999) < 30) return;
+  P.lastRope = S.time;
+  // (It goes up past the usual limit on sites: the Crystal out there is what keeps the Chip Fabs going.)
+  if (siteCount(p) > maxSites || !S.buildings.some((b) => !b.dead && b.owner === p && b.type === 'foundry' && b.built)) return;
+  if (S.buildings.some((b) => !b.dead && b.owner === p && b.type === 'ropeway' && (!b.built || S.time - b.born < 120))) return;
+  const home = homeZone(p), W = S.W;
+  let best = null, bs = Infinity;
+  for (const m of S.hollow.masses) {
+    const ends = [];
+    for (let j = m.y - 4; j <= m.y + 4; j++) for (let i = m.x - 4; i <= m.x + 4; i++) {
+      if (!inMap(i, j)) continue;
+      const t = tIdx(i, j);
+      if (S.terrain[t] === T_GROUND && S.elev[t] >= 3 && !S.res[t] && !S.bAt[t] && S.zone[t] !== home && (S.owner[t] < 0 || S.owner[t] === p)) ends.push(t);
+    }
+    // (Reached already by anyone: a station of theirs or ours stands on it.)
+    if (!ends.length || S.buildings.some((b) => !b.dead && b.type === 'ropeway' && dist2(b.x, b.y, m.x, m.y) <= 16 && S.elev[tIdx(b.x, b.y)] >= 3)) continue;
+    for (let j = m.y - ROPE_MAX; j <= m.y + ROPE_MAX; j++) for (let i = m.x - ROPE_MAX; i <= m.x + ROPE_MAX; i++) {
+      if (!inMap(i, j)) continue;
+      const t = tIdx(i, j);
+      if (S.zone[t] !== home || S.elev[t] >= 3 || S.res[t] || S.bAt[t] || gunCovers(p, t)) continue;
+      const sc0 = dist(i, j, L.x, L.y) * 0.3 + (S.owner[t] === p ? 0 : 4);
+      if (sc0 >= bs) continue;
+      for (const e of ends) {
+        const ei = e % W, ej = (e / W) | 0, d = dist(i, j, ei, ej), sc = sc0 + d;
+        if (sc >= bs || d < ROPE_MIN || d > ROPE_MAX || ropeEndBlocked(p, i, j, ei, ej)) continue;
+        if (!canPlace(p, 'ropeway', i, j, true).ok || wouldBlock(t)) break;
+        bs = sc; best = { i, j, ei, ej };
+      }
+    }
+  }
+  if (!best) return;
+  // Saving up for it (the Foundry rests meanwhile, as for a bridge: see P.bridgeNeed) once its land runs short of Crystal,
+  // or from eight minutes in.
+  const cost = BDEFS.ropeway.cost;
+  let cry = 0;
+  for (let t = 0; t < S.W * S.H; t++) if (S.res[t] === R_CRYSTAL && S.owner[t] === p) cry += S.amt[t];
+  if (!canPay(p, cost)) { if (P.crLow || cry < 60 || S.time > 480) { P.bridgeWant = S.time; P.bridgeNeed = cost; } return; }
+  if (P.bridgeNeed === cost) { P.bridgeWant = 0; P.bridgeNeed = null; }
+  placeRopeway(p, best.i, best.j, best.ei, best.ej);
 }
 
 /** Uplinks: the nearest free Uplink player p can't walk to (across water or a canyon), to cross toward; or null. */
@@ -2679,7 +2735,7 @@ function aiFarmSoil(p, cx, cy, claimed) {
 
 function aiSearchSpot(p, type, lander) {
   const def = BDEFS[type], P = S.players[p];
-  const sums = type === 'outpost' ? [R_ORE, R_CRYSTAL, R_STALK, R_BOULDER, R_OIL, R_URANIUM].map(resourceSums) : null;
+  const fib = gatherRes('harvester'), sums = type === 'outpost' ? [R_ORE, R_CRYSTAL, fib, R_BOULDER, R_OIL, R_URANIUM].map(resourceSums) : null;
   // Short of Crystal: the Crystal no-one holds, for an Outpost to head toward (see below).
   const freeCr = type === 'outpost' && (P.short || []).includes(R_CRYSTAL) ? [] : null;
   if (freeCr) for (let t = 0; t < S.W * S.H; t++) if (S.res[t] === R_CRYSTAL && S.owner[t] < 0) freeCr.push(t);
@@ -2714,7 +2770,7 @@ function aiSearchSpot(p, type, lander) {
     let n = 0;
     for (let j = Math.max(0, cy - r); j <= Math.min(S.H - 1, cy + r); j++) for (let i = Math.max(0, cx - r); i <= Math.min(S.W - 1, cx + r); i++) {
       const t = j * S.W + i;
-      if (S.res[t] === def.gather && !covered[t] && S.zone[t] === zone && dist2(i, j, cx, cy) <= r2) n++;
+      if (S.res[t] === gatherRes(type) && !covered[t] && S.zone[t] === zone && dist2(i, j, cx, cy) <= r2) n++;
     }
     return n;
   };
@@ -2743,7 +2799,7 @@ function aiSearchSpot(p, type, lander) {
       const jitter = hash2(i, j, S.seed + p) * 0.8;
       let s, gn = -1;
       if (def.gather) {
-        const n = type === 'mine' ? freeRes(i, j) : aiUsableRes(p, i, j, def.radius, def.gather); // (only what it could work: see aiUsableRes)
+        const n = type === 'mine' ? freeRes(i, j) : aiUsableRes(p, i, j, def.radius, gatherRes(type)); // (only what it could work: see aiUsableRes)
         gn = n;
         const u = type === 'mine' && nukeOn() ? reachableRes(i, j, def.radius, R_URANIUM) : 0;
         if (n < 2 && !u) {
@@ -2776,7 +2832,7 @@ function aiSearchSpot(p, type, lander) {
         // Crossroads for three: the rich quarter no one landed in draws expansion too.
         if (S.spare) s += Math.max(0, 34 - dist(i, j, S.spare.x, S.spare.y)) * 0.3;
         // Head for whatever we're running out of.
-        for (const r of P.short || []) s += Math.min(sums[[R_ORE, R_CRYSTAL, R_STALK, R_BOULDER].indexOf(r)](i, j, 5), 6) * 1.5;
+        for (const r of P.short || []) s += Math.min(sums[[R_ORE, R_CRYSTAL, fib, R_BOULDER].indexOf(r)](i, j, 5), 6) * 1.5;
         // ...and short of Crystal, the way to the nearest no-one holds on this ground too, when none is in reach yet (a
         // chain of Outposts).
         if (freeCr && freeCr.length) {
@@ -2897,7 +2953,7 @@ function aiSearchSpot(p, type, lander) {
       const c = cands[k];
       let s = c.s;
       if (c.gn >= 2) {
-        const w = Math.min(c.gn, walkRes(c.x, c.y, def.radius, def.gather)); // (a Mine counts only the Ore no Mine of ours works: never more)
+        const w = Math.min(c.gn, walkRes(c.x, c.y, def.radius, gatherRes(type))); // (a Mine counts only the Ore no Mine of ours works: never more)
         if (w < 2 && !(type === 'mine' && nukeOn() && reachableRes(c.x, c.y, def.radius, R_URANIUM))) continue;
         s += (Math.min(w, 10) - Math.min(c.gn, 10)) * 2;
       }

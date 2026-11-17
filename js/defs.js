@@ -44,7 +44,17 @@ const BIOMES = {
   volcanic: { name: 'Cinderlands', kind: 'Volcanic ashlands', region: 'Cinderlands', plants: 0.1, desc: 'Black basalt and ash, charred trees and fumaroles, lakes of lava that glow at night; now and then ash and embers fall.' },
   lunar: { name: 'Argos', kind: 'Lunar: the moon', region: 'Argos, the moon', plants: 0.12, weights: [1, 1, 1, 1, 1, 0.12], silent: true, desc: 'Grey regolith pocked with craters, frozen cryo-ice pools and the odd wreck of an old probe; now and then ring dust streaks overhead. No Murmur live here.' },
   alien: { name: 'The Bloom', kind: 'Alien bloom', region: 'the Bloom', plants: 0.3, desc: 'Violet moss and strange growths that glow after dark, beside pink lakes; now and then an aurora.' },
+  // The Hollow's own underground look: forced by its map type (SHAPE_PRESETS hollow), never offered by the biome picker
+  // (it isn't in BIOME_ORDER). Drawn with another biome's art until its own is installed: see BIOME_ART.
+  hollow: { name: 'The Hollow', kind: 'Underground caverns', region: 'the Hollow', plants: 0.1, desc: 'Caverns under the Bloom, always night: violet Bloom on the walls, black lakes, chasms, and daylight only down the breach shafts; now and then the ceiling trembles.' },
 };
+/**
+ * Biomes drawn with another biome's art (ground, water, rock, plants, cliffs, glow): the Hollow wears the Bloom's at
+ * night until its own art is installed. One line per biome: drop it when the biome's art arrives.
+ */
+const BIOME_ART = { hollow: 'alien' };
+/** The biome whose art draws biome b. */
+function artBiome(b) { return BIOME_ART[b] || b; }
 // (New biomes go on the end: the new-game screen saves the choice as its place in this list.)
 const BIOME_ORDER = ['desert', 'jungle', 'polar', 'autumn', 'savanna', 'swamp', 'volcanic', 'lunar', 'alien'];
 const PLANT_KINDS = 6; // decorative plant varieties per biome
@@ -561,6 +571,10 @@ const SHAPE_PRESETS = [
   // at each end, all four the same (mirrored left to right and end to end: see haul4Map). `teamDefault`: picking it turns
   // Teams: 2 vs 2 on.
   { name: 'Long Haul 2v2', group: 'open', blurb: 'For four, made for 2 vs 2: the long, narrow planet of Long haul made wider, two colonies side by side at each end and the richest fields strung along the long middle: a war of supply lines.', w: 1.2, h: 1.7, haul4: true, players: 4, minPlayers: 4, teamDefault: true, tip: 'Long Haul 2v2: two colonies side by side at each end of a long planet (in 2 vs 2 your ally lands beside you, the other team at the far end). The richest fields lie along the long middle, richer the further out you go, with a neutral Trade Post at the very centre and more down the middle line. Push Depots, Freight Trucks, Road Trains and rail up the map, and guard the line.' },
+  // The Hollow (LORE.md): the Murmur's cavern lair under the Bloom, its own map with its own look (the biome 'hollow',
+  // whatever the Biome setting) and always night. `murmur` and `alwaysNight` are read by the Murmur's night system.
+  { name: 'The Hollow', group: 'heights', blurb: 'The Murmur\'s cavern lair, always night: caverns joined by passages and chasms, black lakes, the most Murmur nests of any planet, and daylight only down the breach shafts.', w: 1.15, h: 1.25, hollow: true, murmur: 'active', alwaysNight: true,
+    tip: 'The Hollow: your base landed under a breach, a shaft of daylight down through the cavern roof; Ringfall only falls through the breaches, in rich drops. Nothing grows down here: Harvesters cut Fiber from the violet Bloom veins (which draws the Murmur), and Fuel comes from oil seeps. The richest Crystal hangs over the chasms: reach it by Ropeway or a bridge (Paths). No aircraft underground, and now and then the ceiling drops rock where dust trickles down.' },
 ];
 // Map events: what happens on the map types that change as you play (seconds unless noted).
 // Tidal flats: the first low tide lasts `firstLow`, then high and low take turns, with a warning first;
@@ -572,6 +586,42 @@ const TIDE = { firstLow: 300, low: 210, high: 140, warn: 30, closing: 20 };
 const ERUPTION = { first: 420, gap: [300, 420], warn: 20, dur: 14, bombs: 34, damage: 3, botDamage: 3, reach: 1.15, flight: [1.4, 2.4] };
 // Fault line: when the earthquake comes (give or take `jitter`), and the warnings before it.
 const QUAKE = { at: 900, jitter: 90, warn: [120, 30] };
+/**
+ * The Hollow (SHAPE_PRESETS hollow; laid out by hollowMap in world.js).
+ *   breach    the radius (tiles) of a breach shaft over a Command Base (`home`) and of the contested ones (`open`):
+ *             `contested` of them, two in each flank cavern, where the Uplinks stand
+ *   ringfall  Ringfall falls only through the breaches: METEOR_HITS strikes on each colony's share as usual, the
+ *             share `contested` of them through the contested breaches, each leaving up to `tiles` deposits `rich`
+ *             times as rich as a Ringfall deposit elsewhere
+ *   crystal   Floating Crystal: a mass's Crystal holds this many times a cluster's usual amount
+ *   nests     Murmur nest sites on each colony's side, Small to Huge, besides the Deep's mound at the centre
+ *   deep      the Deep's mound (BDEFS mound): the level it starts at, guards on top of a nest's, and the hoard that
+ *             spills out when it's wrecked; wrecking it knocks every other nest back to level 1 (see clearNest)
+ *   relics    each crate in a side chamber's rows of robot parts: Alloy or Chips, between the two numbers
+ */
+const HOLLOW = {
+  breach: { home: 3.2, open: 2.6 }, contested: 4,
+  ringfall: { contested: 0.67, tiles: 4, rich: 1.5 },
+  crystal: 2.5,
+  nests: [4, 5, 6, 7],
+  deep: { level: 3, guards: 3, loot: { crystal: 30, alloy: 20, chip: 10 } },
+  relics: { alloy: [3, 5], chip: [1, 2] },
+};
+/**
+ * Bloom veins (R_VEIN, the Hollow): cut down to nothing, a vein grows back in `regrow` seconds (the Bloom spreads back
+ * along its ridge). Cutting veins draws the Murmur: a Harvester that cut one in the last `lure` seconds looks `pull`
+ * times nearer to a nest choosing what its next pack goes for, from up to `reach` tiles further out than usual.
+ * Only where the Murmur are in the game (wildOn).
+ */
+const VEIN = { regrow: 150, lure: 120, pull: 2, reach: 8 };
+/**
+ * Ceiling tremors, the Hollow's weather (a map event, like the Volcano's eruptions): the first comes `first` seconds
+ * in, then one every `gap` seconds. Dust sifts down for `dust` seconds (looks and sound only). Every `rockEvery`th
+ * tremor also brings rock down on a spot away from the breaches (with its twin on the other colony's side): dust
+ * trickles there for `warn` seconds first, then everything within `r` tiles is hit (`damage` armor off a building,
+ * never below 1; `botDamage` to a robot out in the open) and a boulder or two of Stone lies where it fell.
+ */
+const TREMOR = { first: 210, gap: [100, 150], dust: 10, rockEvery: 2, warn: 8, r: 1.6, damage: 4, botDamage: 3 };
 // River delta: fords are slow to wade (speed ×) and dearer to plan a route through (cost ×).
 const FORD_SLOW = 0.45, FORD_COST = 2.5;
 // Warbots you order somewhere (move, station, call back) march there without stopping to fight, for at most this long (s).
@@ -585,6 +635,7 @@ const SKY_RES_MUL = 1.8;  // Sky islands: Ore, Crystal, Stalk and Stone hold thi
 const HOME_STONE = 300;   // Islands and Sky islands: Stone each home island or mesa holds at the start (topped up near the base)
 const LOOT_MAX = 500;     // most crates a wrecked or dismantled building spills of what was inside it
 const LOOT_TIME = 300;    // seconds a pile of crates on no-one's land lies before it rots away (on claimed land it stays)
+const LOOT_KEEP = 1e9;    // ...or never, for crates that were always there (the Hollow's side chambers): its `until`
 const CRATE_SAFE = 6;     // haulers collect crates on their own land only with no enemy robot (or gun) within this many tiles
 // Walls and Gates: an enemy warbot plans a route through one as if it were this many extra tiles
 // long, plus one per point of armor left, so it walks round a short way and breaks through a long one.
@@ -650,7 +701,7 @@ const DEFAULT_RICH = 2;
 
 // Resource nodes that sit on ground tiles. Energy crops are planted by a Bio Farm on fertile soil;
 // oil seeps are pumped by an Oil Pump built on top of one.
-const R_NONE = 0, R_STALK = 1, R_BOULDER = 2, R_ORE = 3, R_CRYSTAL = 4, R_CROP = 5, R_OIL = 6, R_URANIUM = 7;
+const R_NONE = 0, R_STALK = 1, R_BOULDER = 2, R_ORE = 3, R_CRYSTAL = 4, R_CROP = 5, R_OIL = 6, R_URANIUM = 7, R_VEIN = 8;
 const SKY_RICH = [R_ORE, R_CRYSTAL, R_STALK, R_BOULDER]; // the deposits SKY_RES_MUL makes richer on Sky islands' mesas
 const RES = {
   [R_STALK]:   { key: 'stalk',   name: 'Stalk grove',     good: 'fiber',   amount: 3, harvest: 2.5 },
@@ -660,6 +711,8 @@ const RES = {
   [R_CROP]:    { key: 'crop',    name: 'Energy crop',     good: 'fuel',    amount: 1, harvest: 2.5 },
   [R_OIL]:     { key: 'oil',     name: 'Oil seep',        good: 'crude',   amount: 16, harvest: 0 },
   [R_URANIUM]: { key: 'uranium', name: 'Uranium deposit', good: 'uranium', amount: 4, harvest: 5 },
+  // (The Hollow only: the Bloom's veins on the cavern floors, cut for Fiber by a Harvester. See VEIN.)
+  [R_VEIN]:    { key: 'vein',    name: 'Bloom vein',      good: 'fiber',   amount: 4, harvest: 3 },
 };
 
 /**
@@ -990,6 +1043,11 @@ const BDEFS = {
   nest: {
     name: 'Murmur Nest', desc: 'The Murmur breed down here and raid whatever a colony builds within reach. It grows as time goes on, sending bigger packs. Send warbots to clear it: the goods it has hoarded spill out for them to carry home, and the land around it is free to build on.',
     cost: {}, wild: true, armor: 45, buildTime: 1,
+  },
+  // The Hollow: the Deep's mound at the middle of the cathedral (HOLLOW.deep), the biggest nest of all.
+  mound: {
+    name: 'The Deep\'s Mound', desc: 'The largest Murmur nest of all, in the middle of the Hollow: somewhere inside it is the Deep, the heart of every nest down here. Heavily armored, it sends the biggest packs from the start. Wreck it with warbots and its hoard spills out, and every other nest in the Hollow falls back to its first level.',
+    cost: {}, wild: true, armor: 160, buildTime: 1,
   },
   depot: {
     name: 'Depot', desc: 'Extra storage. Haulers drop goods at the nearest storage they can reach by road, so depots along your highways shorten trips. Give it supply orders to stock it from home: a forward base for building at the front. Far from your Command Base, with a Road Train that can drive to it, it stocks itself with what the buildings round it need, and the Road Train keeps it supplied.',

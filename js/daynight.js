@@ -44,8 +44,13 @@ function setTodMode(m) {
   TOD.on = TOD.mode !== 'day';
   try { localStorage.setItem('botfall.daynight', TOD.mode === 'day' ? '0' : TOD.mode === 'night' ? 'night' : '1'); } catch (e) { /* storage unavailable */ }
 }
-/** Is the light changing at all (the cycle, or always night)? */
-function todEnabled() { return TOD.on; }
+/** Is the light changing at all (the cycle, or always night, or a planet where it's always night)? */
+function todEnabled() { return TOD.on || todForced(); }
+/**
+ * Is it always night on this map whatever the setting (the Hollow: no daylight underground but down the breach shafts:
+ * SHAPE_PRESETS alwaysNight)? Looks only: the game itself never asks what the light is.
+ */
+function todForced() { return !!(typeof S !== 'undefined' && S && S.settings && typeof SHAPE_PRESETS !== 'undefined' && (SHAPE_PRESETS[S.settings.shape || 0] || {}).alwaysNight) && !todHeld(); }
 function setTodEnabled(on) { setTodMode(on ? 'cycle' : 'day'); }
 TOD.mode = 'cycle';
 try { const v = localStorage.getItem('botfall.daynight'); if (v === '0') { TOD.mode = 'day'; TOD.on = false; } else if (v === 'night') TOD.mode = 'night'; } catch (e) { /* storage unavailable */ }
@@ -83,8 +88,8 @@ function todMix(a, b, f) {
  * the game's clock goes on as it was (see js/photo.js).
  */
 function todNow() {
-  if (TOD.over != null) return todAt(TOD.over);
-  return TOD.mode === 'night' ? todMix('night', 'night', 0) : TOD.on && S && !todHeld() ? todAt(S.time) : todMix('day', 'day', 0);
+  if (TOD.over != null && !todForced()) return todAt(TOD.over);
+  return TOD.mode === 'night' || todForced() ? todMix('night', 'night', 0) : TOD.on && S && !todHeld() ? todAt(S.time) : todMix('day', 'day', 0);
 }
 /** Is the menu's demo held at daylight while it fast-forwards (TOD.dayHold, set in main.js; never in a game)? */
 function todHeld() { return !!TOD.dayHold && !(typeof UI !== 'undefined' && UI.inGame); }
@@ -96,11 +101,11 @@ function todFrame() {
   const st = todNow();
   TOD.state = st;
   TOD.active = st.a !== 'day' || st.b !== 'day';
-  const over = TOD.over != null; // (photo mode's time of day: its sets load whatever the setting)
-  if (!S || (!over && (!TOD.on || (todHeld() && TOD.mode !== 'night')))) { for (const name in TOD.sets) todDropSet(name); return; } // (switched off, or held at day: nothing is kept)
+  const forced = todForced(), over = TOD.over != null && !forced; // (photo mode's time of day: its sets load whatever the setting)
+  if (!S || (!over && !forced && (!TOD.on || (todHeld() && TOD.mode !== 'night')))) { for (const name in TOD.sets) todDropSet(name); return; } // (switched off, or held at day: nothing is kept)
   // The sets in use now and the next one coming (looked up a little ahead), and no others.
   const at = over ? TOD.over : S.time;
-  const want = TOD.mode === 'night' && !over ? new Set(['night']) : new Set([st.a, st.b, todAt(at + 45).a, todAt(at + 45).b]);
+  const want = (TOD.mode === 'night' || forced) && !over ? new Set(['night']) : new Set([st.a, st.b, todAt(at + 45).a, todAt(at + 45).b]);
   want.delete('day');
   for (const name of want) todLoadSet(name);
   for (const name in TOD.sets) if (!want.has(name)) todDropSet(name);

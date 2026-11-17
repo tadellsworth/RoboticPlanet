@@ -328,3 +328,47 @@ function wxFog(ctx, W, night, camX, camY) {
   }
   ctx.globalCompositeOperation = 'source-over';
 }
+
+/**
+ * The Hollow's ceiling tremors (S.tremor: see updateTremor in sim.js), its weather. While the roof shakes, dust sifts
+ * down over the whole view, thickest at first. Where rock is about to come down (S.tremor.rock), a stream of dust and
+ * grit trickles onto the spot, thicker as it nears, with a ring on the ground round what it will hit. Drawn whatever the
+ * weather setting: the trickle is the warning.
+ */
+function drawTremors(ctx, ox, oy, z) {
+  const T = S && S.tremor;
+  if (!T) return;
+  const t = R.time, cw = R.w, ch = R.h, camX = R.cam.x * z, camY = R.cam.y * z, left = T.dust - S.time;
+  ctx.save();
+  if (left > 0 && left <= TREMOR.dust) {
+    const k = clamp(Math.min(left / 4, (TREMOR.dust - left) / 1.2), 0, 1);
+    ctx.fillStyle = `rgba(120,104,98,${0.1 * k})`;
+    ctx.fillRect(0, 0, cw, ch);
+    const n = wxCount(180);
+    for (let m = 0; m < n; m++) {
+      const h1 = hash2(m, 11, 501), h2 = hash2(m, 13, 503), h3 = hash2(m, 17, 507);
+      const x = wxWrap(h1 * cw - camX + Math.sin(t * 0.8 + m) * 6, cw, 10), y = wxWrap(h2 * ch + t * (30 + 70 * h3) - camY, ch, 10);
+      ctx.fillStyle = `rgba(206,190,176,${(0.25 + 0.35 * h3) * k})`;
+      ctx.fillRect(x, y, 1 + h3, 1.6 + 2 * h3);
+    }
+  }
+  for (const r of T.rock || []) {
+    if (r.done) continue;
+    const f = clamp(1 - (r.at - S.time) / TREMOR.warn, 0, 1), x = ox + (r.x + 0.5) * z, y = oy + (r.y + 0.5) * z;
+    if (x < -z * 3 || x > cw + z * 3 || y < -z * 3 || y > ch + z * 4) continue;
+    ctx.strokeStyle = `rgba(255,186,120,${0.3 + 0.3 * f + 0.2 * Math.sin(t * (6 + 10 * f))})`;
+    ctx.lineWidth = Math.max(1.5, z * 0.05);
+    ctx.setLineDash([z * 0.16, z * 0.12]);
+    ctx.beginPath(); ctx.ellipse(x, y, TREMOR.r * z, TREMOR.r * z * 0.8, 0, 0, Math.PI * 2); ctx.stroke();
+    ctx.setLineDash([]);
+    const n = Math.round(12 + 30 * f), w = z * (0.25 + 0.5 * f);
+    for (let m = 0; m < n; m++) {
+      const h1 = hash2(r.x * 31 + m, r.y, 511), h2 = hash2(m, r.x + r.y, 513), fall = (t * (0.9 + 1.2 * h2) + h1) % 1;
+      ctx.fillStyle = `rgba(214,198,180,${0.35 + 0.45 * fall})`;
+      ctx.fillRect(x + (h2 - 0.5) * w, y - (1 - fall) * z * 3.2, Math.max(1, z * 0.04), Math.max(1.5, z * 0.08));
+    }
+    ctx.fillStyle = `rgba(190,170,150,${0.15 + 0.25 * f})`;
+    ctx.beginPath(); ctx.ellipse(x, y, w * 0.9, w * 0.4, 0, 0, Math.PI * 2); ctx.fill();
+  }
+  ctx.restore();
+}
