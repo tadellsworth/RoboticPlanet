@@ -1877,12 +1877,46 @@ function bassNote(root) { return 36 + ((((root - 36) % 12) + 12) % 12); }
 
 function pingPong(k, n) { const p = 2 * n - 2; const m = k % p; return m < n ? m : p - m; }
 
+/**
+ * Into Night Murmurs, and out of it at dawn (but not into war): the theme playing fades away over MUSIC_FADE_OUT s, then
+ * the new one swells in from silence over MUSIC_FADE_IN s, rather than cutting over at the bar (the owner's call, Nov
+ * 2026). War, a nuclear alarm and the end of the game still cut in at once.
+ */
+const MUSIC_FADE_OUT = 3, MUSIC_FADE_IN = 9;
+function musicFades(from, to) {
+  if (!from || WAR_THEMES.includes(to) || to === 'nuke' || to === 'end') return false;
+  return (to === 'murmur') !== (from === 'murmur');
+}
+
+/** The music bus from where it is now to `v` in a straight line by time t1 (scheduled from t). */
+function musicRamp(t, v, t1) {
+  if (!AUDIO.musicBus) return;
+  const g = AUDIO.musicBus.gain;
+  g.cancelScheduledValues(t);
+  g.setValueAtTime(Math.max(0.0001, g.value), t);
+  g.linearRampToValueAtTime(v, t1);
+}
+
 /** At the top of each bar: mood changes, sections, the chord, pads and the melody for the bar. */
 function musicBar(t) {
   // (one build theme gives way to the next only at the end of an 8-bar section)
   const turn = BUILD_THEMES.includes(MUSIC.want) && BUILD_THEMES.includes(MUSIC.mood) && MUSIC.bar % 8 !== 7;
-  if (MUSIC.want !== MUSIC.mood && !turn) musicSetMood(MUSIC.want, t);
-  else {
+  let change = MUSIC.want !== MUSIC.mood && !turn;
+  const fade = change && musicFades(MUSIC.mood, MUSIC.want);
+  if (fade) {
+    // The theme playing fades out first, and plays on meanwhile (see musicFades).
+    if (MUSIC.fadeTo !== MUSIC.want) { MUSIC.fadeTo = MUSIC.want; MUSIC.fadeEnd = t + MUSIC_FADE_OUT; musicRamp(t, 0.0001, MUSIC.fadeEnd); }
+    if (t < MUSIC.fadeEnd) change = false;
+  } else if (MUSIC.fadeTo) {
+    // Called off (the theme playing is wanted again) or overtaken (war cut in): back up to its level, or on at once.
+    MUSIC.fadeTo = null;
+    if (AUDIO.musicBus) { const g = AUDIO.musicBus.gain; g.cancelScheduledValues(t); g.setValueAtTime(Math.max(0.0001, g.value), t); if (!change) g.setTargetAtTime(musicLevel(), t, 0.5); }
+  }
+  if (change) {
+    MUSIC.fadeTo = null;
+    musicSetMood(MUSIC.want, t);
+    if (fade) musicRamp(t, musicLevel(), t + MUSIC_FADE_IN); // (from silence)
+  } else {
     MUSIC.bar++;
     if (MUSIC.bar % 8 === 0) musicSection(t);
   }

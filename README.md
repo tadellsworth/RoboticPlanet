@@ -1824,7 +1824,9 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   building, war when you're attacked or fighting, **Night Murmurs** when the Murmur come close (`MUSIC_MURMUR` (2) of them
   in your land or within `MUSIC_MURMUR_NEAR` (9) tiles of your buildings, lingering 35 s; enemy robots in your land too
   still bring the war music: 70 bpm Phrygian, a whispering choir of filtered noise pitched on the chord (`mWhisper`), a
-  slow heartbeat, a bass creeping a semitone, far-off crystal glints), and an alarm while a nuke flies; the building music takes turns between
+  slow heartbeat, a bass creeping a semitone, far-off crystal glints; it never cuts in: the theme playing fades out over
+  `MUSIC_FADE_OUT` 3 s and Night Murmurs swells in from silence over `MUSIC_FADE_IN` 9 s, and the same back at dawn,
+  `musicFades`, `musicRamp`; war, the nuke alarm and the end still cut in at once), and an alarm while a nuke flies; the building music takes turns between
   three themes, `BUILD_THEMES`, every `MUSIC_ROTATE` seconds of play: Lost in a Dream, the main theme (the menu music is a
   slow take on its chords), Night Drive (Dorian, octave bass,
   claps, a plucked lead) and Horizon (half-time, a chord every two bars, an arpeggio in threes)), written a bar at a time from chord
