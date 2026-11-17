@@ -3684,9 +3684,12 @@ function spawnFromFoundry(b) {
 
 /*
  * A robot can be sent back to a Bot Foundry to be taken apart (see RECYCLE_SHARE): it drops what it was doing, walks or
- * drives there (task 'recycle', bld: the Foundry) and is taken apart on arrival; part of its Alloy and Chips go into
- * that Foundry's stock and its place under the robot limit is free again. Any other order on the way calls it off (so
- * does Keep this unit on its panel); a Foundry wrecked, captured or dismantled meanwhile leaves it standing where it is.
+ * drives there (task 'recycle', bld: the Foundry) and, standing at the Foundry, is taken apart over recycleTime seconds
+ * (task.t counts them; the Foundry carries on with its own work meanwhile, and takes apart any number at once); part
+ * of its Alloy and Chips go into that Foundry's stock and its place under the robot limit is free again. Any other
+ * order on the way or at the Foundry calls it off (so does Keep this unit on its panel), and it can be shot meanwhile;
+ * a Foundry wrecked, captured or dismantled meanwhile leaves it standing where it is. A damaged robot gives back as
+ * much as a sound one (most give back a single Alloy: a share by health would round to all or nothing).
  * A Worker or Hauler that has to take cover from enemy warbots on the way sets off again once they've gone (recycleTo).
  */
 
@@ -3708,6 +3711,12 @@ function recycleYield(kind) {
   while (n > 0) for (const g in cost) if (n > 0 && (out[g] || 0) < cost[g]) { out[g] = (out[g] || 0) + 1; n--; }
   return out;
 }
+
+/** How long a robot of `kind` takes to be taken apart at the Foundry: RECYCLE_TIME seconds a round of parts. */
+function recycleTime(kind) { return RECYCLE_TIME * ((BOTS[kind] && BOTS[kind].parts) || 1); }
+
+/** Is robot u being taken apart at its Foundry now (there, its clock running)? */
+function recyclingNow(u) { return !!(u.task && u.task.type === 'recycle' && u.task.t !== undefined); }
 
 /** A count of good g in words: "1 Alloy", "2 Chips". */
 function goodCount(g, n) { return `${n} ${GOOD[g].name}${n !== 1 && g === 'chip' ? 's' : ''}`; }
@@ -3781,15 +3790,26 @@ function stopRecycle(u) {
   u.recycleTo = 0;
 }
 
-/** A robot on its way to be recycled: on to its Foundry (gone, or no longer its owner's: it stops), and taken apart there. */
+/**
+ * A robot on its way to be recycled: on to its Foundry (gone, or no longer its owner's: it stops), and taken apart there
+ * over recycleTime seconds (t.t), sparks flying, before recycleBot.
+ */
 function doRecycle(u, t, dt) {
   const f = getE(t.bld);
   if (!f || f.dead || f.owner !== u.owner || !f.built) { stopRecycle(u); return; }
+  if (t.t !== undefined) {
+    u.vel = 0;
+    const was = t.t;
+    t.t += dt;
+    if (Math.floor(t.t / 0.6) !== Math.floor(was / 0.6)) addFx('spark', u.x - 0.25 + 0.5 * hash2(u.id, S.tick, 41), u.y - 0.3 + 0.4 * hash2(u.id, S.tick, 43), { color: '#ffd98a' });
+    if (t.t >= recycleTime(u.type)) recycleBot(u, f);
+    return;
+  }
   const r = travel(u, f.x, f.y, dt);
   if (r === null) {
     stopRecycle(u);
     postMsg(u.owner, `${aOrAn(BOTS[u.type].name)} on its way to be recycled can't get to the Bot Foundry: it has stopped.`, Math.floor(u.x), Math.floor(u.y), 'warn');
-  } else if (r) recycleBot(u, f);
+  } else if (r) { t.t = 0; u.path = null; u.vel = 0; }
 }
 
 /**

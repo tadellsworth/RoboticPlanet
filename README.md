@@ -201,11 +201,15 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   panel has **Recycle this unit** (**Delete**), a selection of warbots **Recycle these N units** on the selection bar
   (a second tap to confirm; Undo), and Your robots **Recycle spare Workers** (orders `recycle`, `unrecycle`,
   `recycleSpare`). The robot drops what it was doing (a load goes down in crates), heads for the nearest finished Bot
-  Foundry it can reach (on its ground; a road vehicle by road: `recycleFoundry`) with task `recycle`, and on arrival is
-  taken apart (`recycleBot`): `RECYCLE_SHARE` (half) of its parts, 1 Alloy and 1 Chip a round, rounded down, Alloy
+  Foundry it can reach (on its ground; a road vehicle by road: `recycleFoundry`) with task `recycle`, and there stands
+  at the Foundry while it is taken apart: `RECYCLE_TIME` (2 s) for each round of parts (`recycleTime`; `task.t` counts
+  them, `recyclingNow`; a Worker or Warbot 2 s, a Crawler 12 s), sparks flying and the robot fading as it goes, the
+  Foundry carrying on with its own work and taking apart any number at once. It can be shot meanwhile, and a damaged
+  robot gives back as much as a sound one. Then `recycleBot`: `RECYCLE_SHARE` (half) of its parts, 1 Alloy and 1 Chip a round, rounded down, Alloy
   first (`recycleYield`: a Worker or Warbot 1 Alloy, a Freight Truck, Tanker or Torch 1 Alloy and 1 Chip, a Crawler 3
   and 3, its goods left in crates), goes into that Foundry's stock, and its place under the robot limit is free; a
-  ring, sparks, the goods floating up and a clank. Its status reads *Going to be recycled*; **Keep this unit**
+  ring, sparks, the goods floating up and a clank. Its status reads *Going to be recycled*, then *Being taken apart at
+  the Bot Foundry (n s)*; **Keep this unit**
   (`stopRecycle`) or any other order calls it off; its Foundry wrecked, captured or dismantled on the way, it stops
   where it is (`releaseBotsFrom`). A Worker or Hauler that takes cover from enemy warbots on the way (`takeCover`) sets
   off again once they've gone (`u.recycleTo`), and isn't given other work meanwhile. Robots on their way don't count in

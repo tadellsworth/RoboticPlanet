@@ -48,11 +48,12 @@ Still open: a neutral, shared exchange the rivals compete over; contracts for Ch
   busiest crossings (it builds neither lights nor overpasses today).
 - **Cloud saves.** Saves move between devices by exporting and importing a file today; a cloud save (perhaps kept by
   the multiplayer relay on Cloudflare) would do it without the file.
-- **Recycling: open questions.** A robot is taken apart the moment it reaches the Foundry: should it take a few
-  seconds inside (the Foundry busy meanwhile), and should a damaged one give back less? Planes, ships and trains
-  can't reach a Foundry, so they can't be recycled: should their own yards (Airfield, Port, Rail Station) take them
-  apart instead? Recycle spare Workers has no Hauler counterpart for players (the rival scraps both): wanted? Should
-  the rival also scrap other spares (Freight Trucks with no Depot to run, an Agribot with no farm)?
+- **Recycling: open questions.** (Settled: a robot is taken apart standing at the Foundry, 2 s a round of parts, while
+  the Foundry carries on; a damaged one gives back as much as a sound one, since most give back a single Alloy.) Still
+  open: planes, ships and trains can't reach a Foundry, so they can't be recycled: should their own yards (Airfield,
+  Port, Rail Station) take them apart instead? Recycle spare Workers has no Hauler counterpart for players (the rival
+  scraps both): wanted? Should the rival also scrap other spares (Freight Trucks with no Depot to run, an Agribot with
+  no farm)?
 - **Fuel.** Built: Tankers, explosions with chain reactions, Crude and Fuel pipelines, the Generator and trucks burning
   Fuel, and the rival keeping its Fuel up (Bio Farms first when it runs low, an Oil Pump and Refinery once its Foundry
   is up). Still open: a Generator that explodes too.
