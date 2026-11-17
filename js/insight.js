@@ -139,7 +139,7 @@ function insLeft(b) {
       out.own++;
       if (guns && hotFor(b.owner, t)) continue;
       out.safe++;
-      if (S.res[t] !== R_STALK || S.grow[t] >= 1) out.ripe++;
+      if ((S.res[t] !== R_STALK && S.res[t] !== R_VEIN) || S.grow[t] >= 1) out.ripe++;
     }
   }
   return out;
@@ -164,7 +164,7 @@ function makerWhy(p, depth, seen) {
   if (insGuns() && underGuns(p)) { const gun = gunOver(ME, p.x, p.y); return { text: `an enemy ${gun ? BDEFS[gun.type].name : 'gun'} covers ${name}, so your robots keep clear`, at: gun ? gun.id : p.id }; }
   if ((insGuns() && foesAt(p)) || /about: its worker waits/.test(st)) return { text: `enemy robots are about ${name}, so its worker stays inside`, at: p.id };
   if (def.gather && !def.bedrock && (p.depleted || /left in reach/.test(st))) {
-    const L = insLeft(p), res = RES[def.gather].name.toLowerCase() + 's';
+    const L = insLeft(p), res = RES[gatherRes(p.type)].name.toLowerCase() + 's';
     if (L.safe && !L.ripe) return { text: `the new ${res} in reach of ${name} are still growing`, at: p.id, ok: true };
     return { at: p.id, dry: true, text: !L.all ? `${name} ran dry${insAgo(p.dryAt)}` : !L.own ? `the last ${res} in reach of ${name} lie on a rival's land`
       : `enemy guns cover the ${res} in reach of ${name}` };

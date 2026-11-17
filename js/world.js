@@ -25,6 +25,7 @@ function getE(id) { return id ? S.byId.get(id) || null : null; }
  */
 function generateMap(seed, W, H, cfg) {
   cfg = cfg || {};
+  if ((SHAPE_PRESETS[cfg.shape || 0] || {}).hollow) return hollowMap(seed, W, H, cfg); // (its own layout: see hollowMap)
   const TPR = TERRAIN_PRESETS[cfg.rough ?? DEFAULT_ROUGH];
   const RPR = RESOURCE_PRESETS[cfg.rich ?? DEFAULT_RICH];
   const N = W * H;
@@ -1805,6 +1806,367 @@ function generateMap(seed, W, H, cfg) {
   };
 }
 
+/* ------------------------------------------------------------------ the Hollow */
+
+/**
+ * The Hollow (SHAPE_PRESETS hollow; two colonies): the Murmur's cavern lair (LORE.md). Solid rock carved into caverns
+ * joined by winding passages, laid out for player 0 (the bottom half) and turned half round onto player 1's: every
+ * change is made to a tile and its twin together (put), so both sides are exactly the same.
+ *   - A home cavern round each Command Base, under a breach (a shaft of daylight down through the cavern roof).
+ *   - A chasm hall between home and the middle, split across by a chasm with one natural rock arch, and a mass of
+ *     floating Crystal hanging in the chasm on a raised platform (reached by Ropeway, a sky bridge or a Viaduct).
+ *   - A west and an east cavern off the home cavern: a black lake and a slow river in the west one; in the east one,
+ *     from Medium up, another mass of floating Crystal. Each leads on to a flank cavern on the middle line, which holds
+ *     two contested breaches (one nearer each colony).
+ *   - The cathedral in the middle, where the Deep's mound stands in a ring of stone pillars, with Bloom veins and
+ *     Crystal round it.
+ *   - A side chamber off each side cavern, where robot parts (crates of Alloy and Chips) lie laid out in rows.
+ *   - Smooth stone pillars (rock) standing in the caverns, Bloom veins on the floors and along the walls, oil seeps.
+ * No stalk groves or fertile soil: nothing grows without light. Every cavern floor is one level; the Crystal masses
+ * stand two levels up; the chasms drop away below. No Trade Posts or Uplinks: the Pathfinder never mapped the Hollow
+ * (LORE.md). Returns what generateMap does, plus `hollow`: { breaches: [{x, y, r, home}], masses: [{x, y}], nests:
+ * [{x, y}] (sites in twin pairs), deep: {x, y}, relics: [{x, y, goods}], pillars: [tile] }.
+ */
+function hollowMap(seed, W, H, cfg) {
+  const RPR = RESOURCE_PRESETS[cfg.rich ?? DEFAULT_RICH];
+  const N = W * H, half = Math.floor(H / 2), FLOOR = 1, MASS = 3;
+  const terrain = new Uint8Array(N).fill(T_ROCK), res = new Uint8Array(N), amt = new Uint8Array(N), elev = new Uint8Array(N).fill(FLOOR);
+  const ramp = new Uint8Array(N), fert = new Uint8Array(N), grow = new Float32Array(N).fill(1);
+  // What each open tile belongs to (for placing things): 1 home, 2 the chasm hall, 3 a side cavern, 4 a flank cavern,
+  // 5 the cathedral, 6 a passage, 7 a side chamber, 8 a floating Crystal mass.
+  const kind = new Uint8Array(N), mass = new Uint8Array(N), pillar = new Uint8Array(N);
+  const id = (i, j) => j * W + i, mir = (t) => N - 1 - t, inner = (i, j) => i >= 1 && j >= 1 && i < W - 1 && j < H - 1;
+  const orth = (t, fn) => { const i = t % W; if (i > 0) fn(t - 1); if (i < W - 1) fn(t + 1); if (t >= W) fn(t - W); if (t + W < N) fn(t + W); };
+  const cr = makeRng((seed ^ 0x4011a3) >>> 0), sW = seed * 67 + 5, sV = seed * 71 + 13;
+  const ccx = (W - 1) / 2, ccy = (H - 1) / 2, bx = Math.floor(W / 2), by = H - 8, Dy = by - ccy;
+  const sz = clamp(cfg.size ?? 1, 0, 3);
+  const P = (u, v) => [u * (W - 1), ccy + v * Dy]; // a place on player 0's side: u across (0 west, 1 east), v from the middle line (0) to the base (1)
+  // Every change to a tile is made to its twin too (the same spot turned half round, on player 1's side).
+  const put = (t, terr, lv, k) => {
+    for (const u of [t, mir(t)]) {
+      terrain[u] = terr; res[u] = R_NONE; amt[u] = 0;
+      if (lv !== undefined) elev[u] = lv;
+      if (k !== undefined) kind[u] = k;
+    }
+  };
+  const open = (i, j, k) => {
+    if (!inner(i, j)) return;
+    const t = id(i, j);
+    if (terrain[t] === T_ROCK && !pillar[t]) put(t, T_GROUND, FLOOR, kind[t] || k);
+  };
+  const wob = (i, j) => fbm(i / 3.2, j / 3.2, sW, 2) - 0.5;
+  // A cavern: an ellipse with a ragged edge (`w`: how ragged).
+  const blob = (cx, cy, rx, ry, k, w = 0.45) => {
+    for (let j = Math.floor(cy - ry - 2); j <= Math.ceil(cy + ry + 2); j++) for (let i = Math.floor(cx - rx - 2); i <= Math.ceil(cx + rx + 2); i++) {
+      if (inner(i, j) && Math.sqrt(sq((i - cx) / rx) + sq((j - cy) / ry)) + wob(i, j) * w <= 1) open(i, j, k);
+    }
+  };
+  // A passage: a winding tunnel `w` tiles wide from (x0, y0) to (x1, y1), through rock only.
+  const passage = (x0, y0, x1, y1, w) => {
+    let x = x0, y = y0;
+    const r = w / 2 - 0.01;
+    for (let n = 0; n < 400; n++) {
+      for (let j = Math.floor(y - r); j <= Math.ceil(y + r); j++) for (let i = Math.floor(x - r); i <= Math.ceil(x + r); i++) if (dist2(i, j, x, y) <= r * r + 0.3) open(i, j, 6);
+      const d = dist(x, y, x1, y1);
+      if (d < 0.6) break;
+      const a = datan2(y1 - y, x1 - x) + (cr() - 0.5) * 0.9 * Math.min(1, d / 4);
+      x += dcos(a) * 0.6; y += dsin(a) * 0.6;
+    }
+  };
+
+  // 1) The caverns.
+  const homeR = { rx: clamp(W * 0.24, 7.5, 13), ry: clamp(Dy * 0.27, 6, 9) };
+  blob(bx, by - 1.5, homeR.rx, homeR.ry, 1);
+  for (let j = by - 5; j <= by + 5; j++) for (let i = bx - 5; i <= bx + 5; i++) if (dist2(i, j, bx, by) <= 4.6 * 4.6) open(i, j, 1); // the landing ground
+  const rC = clamp(Math.min(W, H) * 0.16, 5.5, 10);
+  blob(ccx, ccy, rC, rC, 5, 0.25);
+  const hall = { x: P(0.52, 0)[0], y: P(0, 0.47)[1], rx: W * 0.17, ry: clamp(Dy * 0.15, 3.5, 6) };
+  blob(hall.x, hall.y, hall.rx, hall.ry, 2, 0.3);
+  const west = { x: P(0.17, 0)[0], y: P(0, 0.68)[1], rx: clamp(W * 0.12, 4.2, 8), ry: clamp(Dy * 0.15, 3.6, 6.5) };
+  const east = { x: P(0.84, 0)[0], y: P(0, 0.6)[1], rx: clamp(W * 0.11, 4.2, 7.5), ry: clamp(Dy * 0.15, 3.6, 6) };
+  blob(west.x, west.y, west.rx, west.ry, 3);
+  blob(east.x, east.y, east.rx, east.ry, 3);
+  const flank = { x: P(0.15, 0)[0], y: ccy, rx: clamp(W * 0.12, 4.5, 8), ry: Math.max(Dy * 0.26, 6.6) };
+  blob(flank.x, flank.y, flank.rx, flank.ry, 4, 0.35); // (and its twin: the east flank)
+  const chamberR = 2.3, chambers = [{ x: P(0.08, 0)[0] + 1, y: P(0, 1.02)[1] }, { x: P(0.93, 0)[0] - 1, y: P(0, 0.92)[1] }];
+  for (const c of chambers) blob(c.x, c.y, chamberR, chamberR * 0.85, 7, 0.15);
+
+  // 2) The passages between them.
+  const pw = W >= 44 ? 3 : 2;
+  passage(...P(0.5, 0.72), ...P(0.52, 0.58), pw); // home to the chasm hall
+  passage(...P(0.52, 0.36), ...P(0.5, 0.18), pw); // the hall to the cathedral
+  passage(...P(0.36, 0.95), west.x + west.rx * 0.5, west.y + west.ry * 0.4, pw); // home to the west cavern
+  passage(...P(0.66, 0.9), east.x - east.rx * 0.5, east.y + east.ry * 0.5, pw); // home to the east cavern
+  passage(west.x, west.y - west.ry * 0.7, flank.x + 0.5, flank.y + flank.ry * 0.75, 2); // the west cavern to the west flank
+  passage(east.x, east.y - east.ry * 0.7, W - 1 - flank.x - 0.5, flank.y + flank.ry * 0.75, 2); // the east cavern to the east flank
+  passage(flank.x + flank.rx * 0.6, ccy + 1.5, ccx - rC * 0.7, ccy + 1.5, 2); // the west flank to the cathedral (its twin: the east flank)
+  passage(west.x - west.rx * 0.4, west.y + west.ry * 0.6, chambers[0].x, chambers[0].y - 1.5, 2); // to the side chambers
+  passage(east.x + east.rx * 0.3, east.y + east.ry * 0.6, chambers[1].x, chambers[1].y - 1.5, 2);
+
+  // 3) The chasm across the hall, with one natural rock arch, and a floating Crystal mass in a wider pocket of it.
+  const yc = Math.round(hall.y) - 1, side = cr() < 0.5 ? -1 : 1;
+  const archX = Math.round(hall.x + side * hall.rx * (0.35 + cr() * 0.15)), masses = [];
+  for (let j = yc; j <= yc + 1; j++) for (let i = 1; i < W - 1; i++) {
+    const t = id(i, j);
+    if (terrain[t] !== T_GROUND || Math.abs(i - hall.x) > hall.rx + 1.5) continue;
+    if (i === archX || i === archX + 1) put(t, T_GROUND, FLOOR, 6); // (the arch: kept clear, like a passage)
+    else put(t, T_CHASM, 0, 0);
+  }
+  // A Crystal mass: a raised platform two levels up, ringed by chasm (a tile of it at least all round).
+  const pocket = (mx, my, rx, ry, crx, cry) => {
+    for (let j = Math.floor(my - ry - 1); j <= Math.ceil(my + ry + 1); j++) for (let i = Math.floor(mx - rx - 1); i <= Math.ceil(mx + rx + 1); i++) {
+      if (!inner(i, j) || pillar[id(i, j)]) continue;
+      const t = id(i, j), dp = Math.sqrt(sq((i - mx) / rx) + sq((j - my) / ry)) + wob(i, j) * 0.2;
+      if (dp > 1) continue;
+      if (sq((i - mx) / crx) + sq((j - my) / cry) <= 1) { put(t, T_GROUND, MASS, 8); mass[t] = mass[mir(t)] = 1; } else put(t, T_CHASM, 0, 0);
+    }
+    // Wear the platform back from anything it touches but chasm, so it stands clear.
+    for (let pass = 0; pass < 2; pass++) for (let t = 0; t < N; t++) {
+      if (!mass[t]) continue;
+      let clear = true;
+      orth(t, (u) => { if (!mass[u] && terrain[u] !== T_CHASM) clear = false; });
+      if (!clear) { put(t, T_CHASM, 0, 0); mass[t] = mass[mir(t)] = 0; }
+    }
+    masses.push({ x: mx, y: my });
+  };
+  pocket(Math.round(hall.x - side * hall.rx * 0.45), yc + 0.5, 4.3, 3.3, 2.7, 2.0);
+  if (sz >= 1) pocket(Math.round(east.x + east.rx * 0.25), Math.round(east.y - 0.5), 3.9, 3.1, 2.4, 1.8);
+
+  // 4) A black lake in the west cavern, fed by a slow river from the wall.
+  const lake = { x: west.x - west.rx * 0.35, y: west.y - 0.3, r: clamp(west.rx * 0.38, 1.8, 3) };
+  const lakeTiles = [];
+  for (let j = Math.floor(lake.y - lake.r - 1); j <= Math.ceil(lake.y + lake.r + 1); j++) for (let i = Math.floor(lake.x - lake.r - 1); i <= Math.ceil(lake.x + lake.r + 1); i++) {
+    const t = id(i, j);
+    if (inner(i, j) && terrain[t] === T_GROUND && kind[t] === 3 && dist(i, j, lake.x, lake.y) + wob(i, j) * 0.8 <= lake.r) lakeTiles.push(t);
+  }
+  lakeTiles.sort((a, b) => dist2(a % W, (a / W) | 0, lake.x, lake.y) - dist2(b % W, (b / W) | 0, lake.x, lake.y) || a - b);
+  lakeTiles.splice(SEA_MIN - 10); // (the lake's middle, and room left for its river)
+  {
+    let x = lake.x, y = lake.y - lake.r, a = -Math.PI / 2 - 0.5 - cr() * 0.4;
+    for (let n = 0; n < 40; n++) {
+      a += (cr() - 0.5) * 0.5;
+      x += dcos(a) * 0.5; y += dsin(a) * 0.5;
+      const i = Math.round(x), j = Math.round(y), t = id(i, j);
+      if (!inner(i, j) || terrain[t] !== T_GROUND || kind[t] === 6) break;
+      if (!lakeTiles.includes(t)) lakeTiles.push(t);
+    }
+  }
+  // (Far too small for ships: the lake and its river together stay well under SEA_MIN.)
+  lakeTiles.splice(SEA_MIN - 6);
+  for (const t of lakeTiles) put(t, T_WATER, FLOOR, 0);
+
+  // 5) Make sure every floor is joined to every other (a passage can miss its cavern, a pocket or the lake can cut a
+  //    sliver off): a sliver is filled in, and any bigger area the base can't walk to gets the cheapest way through
+  //    from the ground it can (through rock or water, over a chasm only if nothing else will do, never a mass).
+  const floorOk = (t) => terrain[t] === T_GROUND && !mass[t];
+  const flood = () => {
+    const seen = new Uint8Array(N), q = [id(bx, by)];
+    seen[q[0]] = 1;
+    for (let h = 0; h < q.length; h++) orth(q[h], (u) => { if (!seen[u] && floorOk(u)) { seen[u] = 1; q.push(u); } });
+    return seen;
+  };
+  const joinAll = () => {
+    for (let pass = 0; pass < 24; pass++) {
+      const seen = flood();
+      let lost = -1;
+      for (let t = 0; t < N && lost < 0; t++) if (floorOk(t) && !seen[t]) lost = t;
+      if (lost < 0) break;
+      const area = [lost], inA = new Uint8Array(N);
+      inA[lost] = 1;
+      for (let h = 0; h < area.length; h++) orth(area[h], (u) => { if (!inA[u] && floorOk(u)) { inA[u] = 1; area.push(u); } });
+      if (area.length < 10) { for (const t of area) put(t, T_ROCK, FLOOR, 0); continue; }
+      const cost = new Float64Array(N).fill(Infinity), from = new Int32Array(N).fill(-1), heap = new MinHeap();
+      for (let t = 0; t < N; t++) if (seen[t]) { cost[t] = 0; heap.push(t, 0); }
+      while (heap.size) {
+        const t = heap.pop();
+        if (inA[t]) { for (let u = t; u >= 0 && !seen[u]; u = from[u]) if (!floorOk(u)) put(u, T_GROUND, FLOOR, terrain[u] === T_WATER ? 3 : 6); break; }
+        orth(t, (u) => {
+          if (mass[u] || pillar[u] || !inner(u % W, (u / W) | 0)) return;
+          const c = cost[t] + (floorOk(u) ? 0.1 : terrain[u] === T_CHASM ? 40 : terrain[u] === T_WATER ? 5 : 3);
+          if (c < cost[u]) { cost[u] = c; from[u] = t; heap.push(u, c); }
+        });
+      }
+    }
+  };
+  joinAll();
+
+  // 6) The breaches: one over each Command Base, and two in each flank cavern (the lower one in each laid on player 0's
+  //    side, with its twin, the upper one in the other flank).
+  const breaches = [], off = Math.max(3.2, flank.ry * 0.45);
+  breaches.push({ x: bx, y: by, r: HOLLOW.breach.home, home: true }, { x: W - 1 - bx, y: H - 1 - by, r: HOLLOW.breach.home, home: true });
+  for (const fx of [flank.x, W - 1 - flank.x]) {
+    const x = Math.round(fx + (fx < ccx ? 0.5 : -0.5)), y = Math.round(ccy + off);
+    for (let j = y - 1; j <= y + 1; j++) for (let i = x - 1; i <= x + 1; i++) open(i, j, 4);
+    breaches.push({ x, y, r: HOLLOW.breach.open }, { x: W - 1 - x, y: H - 1 - y, r: HOLLOW.breach.open });
+  }
+  const inBreach = (i, j, pad) => breaches.some((b) => dist2(i, j, b.x, b.y) <= sq(b.r + pad));
+  const deep = { x: bx, y: half };
+  joinAll(); // (what that opened is joined up too)
+
+  // 7) Stone pillars, worn smooth: a ring of them round the Deep's mound, and some in the caverns (more on rougher
+  //    Terrain). A pillar stands alone, with open floor all round it, so it never closes a way.
+  const freeRound = (t) => {
+    const i = t % W, j = (t / W) | 0;
+    for (let dj = -1; dj <= 1; dj++) for (let di = -1; di <= 1; di++) {
+      const u = id(i + di, j + dj);
+      if (!inner(i + di, j + dj) || terrain[u] !== T_GROUND || mass[u] || pillar[u] || kind[u] === 6) return false;
+    }
+    return true;
+  };
+  const addPillar = (i, j) => {
+    const t = id(i, j);
+    if (!inner(i, j) || !freeRound(t) || dist(i, j, ccx, ccy) < 2.5 || inBreach(i, j, 1.5)) return false;
+    for (let dj = -2; dj <= 2; dj++) for (let di = -2; di <= 2; di++) if (inner(i + di, j + dj) && pillar[id(i + di, j + dj)]) return false;
+    put(t, T_ROCK, FLOOR, 0);
+    pillar[t] = pillar[mir(t)] = 1;
+    return true;
+  };
+  for (let k = 0; k < 4; k++) { const a = (k + 0.5) * (Math.PI / 4); addPillar(Math.round(ccx + dcos(a) * rC * 0.62), Math.round(ccy + dsin(a) * rC * 0.62)); }
+  const per = [0.4, 0.7, 1, 1.4, 1.8][cfg.rough ?? DEFAULT_ROUGH] * (W * H) / (46 * 70);
+  for (let k = 0, made = 0, want = Math.round(9 * per); k < 600 && made < want; k++) {
+    const i = 2 + Math.floor(cr() * (W - 4)), j = half + Math.floor(cr() * (H - half - 2)), t = id(i, j);
+    if (kind[t] === 6 || kind[t] === 7 || dist(i, j, bx, by) < 6) continue;
+    if (addPillar(i, j)) made++;
+  }
+
+  // 8) Resources: no stalk groves or fertile soil, nothing grows down here. Bloom veins (Fiber) on the cavern floors
+  //    and along the walls; Ore, Crystal, boulders and oil seeps (the only Fuel) in fields; the richest Crystal on the
+  //    floating masses.
+  const free = (t) => terrain[t] === T_GROUND && !res[t] && !mass[t] && kind[t] !== 6;
+  // A field of `type` round (x, y); with `min`, at least that many tiles of it (topped up on the free floor nearest it,
+  // where the cavern's edge cut the field short).
+  const stamp = (x, y, rad, type, fill, ok, min = 0) => {
+    let n = 0;
+    const can = (t) => (ok ? ok(t) : free(t)) && dist2(t % W, (t / W) | 0, bx, by) >= 6.5;
+    for (let j = Math.floor(y - rad); j <= Math.ceil(y + rad); j++) for (let i = Math.floor(x - rad); i <= Math.ceil(x + rad); i++) {
+      if (!inner(i, j) || dist2(i, j, x, y) > rad * rad) continue;
+      const t = id(i, j);
+      if (cr() >= fill || !can(t)) continue;
+      for (const u of [t, mir(t)]) res[u] = type;
+      n++;
+    }
+    if (n >= min) return;
+    const near = [];
+    for (let j = Math.floor(y - 6); j <= Math.ceil(y + 6); j++) for (let i = Math.floor(x - 6); i <= Math.ceil(x + 6); i++) if (inner(i, j) && j >= half && can(id(i, j))) near.push(id(i, j));
+    near.sort((a, b) => dist2(a % W, (a / W) | 0, x, y) - dist2(b % W, (b / W) | 0, x, y) || a - b);
+    for (const t of near) { if (n >= min) break; for (const u of [t, mir(t)]) res[u] = type; n++; }
+  };
+  // Home: two vein patches, Ore, Crystal, two boulder fields and an oil seep.
+  stamp(bx - 6, by - 2, 1.8, R_VEIN, 0.85, null, 5);
+  stamp(bx + 5.5, by + 2.5, 1.5, R_VEIN, 0.85, null, 3);
+  stamp(bx - 4, by - 5.5, 1.35, R_ORE, 0.9, null, 3);
+  stamp(bx + 4, by - 5.5, 1.3, R_CRYSTAL, 0.9, null, 3);
+  stamp(bx + 6.5, by - 1.5, 1.6, R_BOULDER, 0.8, null, 3);
+  stamp(bx - 2.5, by + 4.2, 1.1, R_BOULDER, 0.8);
+  stamp(bx - 7, by + 2.5, 1.3, R_OIL, 0.95, null, 3); // (the only Fuel down here: a good seep by every base)
+  // The chasm hall: boulders and veins on the near side, Ore and Crystal across the chasm.
+  stamp(hall.x - side * hall.rx * 0.1, hall.y + hall.ry * 0.55, 1.5, R_BOULDER, 0.8);
+  stamp(hall.x + side * hall.rx * 0.7, hall.y + hall.ry * 0.45, 1.3, R_VEIN, 0.85);
+  stamp(hall.x + side * hall.rx * 0.65, hall.y - hall.ry * 0.6, 1.4, R_ORE, 0.85);
+  stamp(hall.x - side * hall.rx * 0.2, hall.y - hall.ry * 0.65, 1.2, R_CRYSTAL, 0.85);
+  // The side caverns.
+  stamp(west.x + west.rx * 0.3, west.y + west.ry * 0.25, 1.9, R_VEIN, 0.85);
+  stamp(west.x + west.rx * 0.35, west.y - west.ry * 0.45, 1.4, R_BOULDER, 0.8);
+  stamp(west.x - west.rx * 0.2, west.y + west.ry * 0.6, 1.2, R_ORE, 0.85);
+  stamp(east.x - east.rx * 0.45, east.y - east.ry * 0.2, 1.3, R_OIL, 0.9);
+  stamp(east.x - east.rx * 0.2, east.y + east.ry * 0.55, 1.6, R_VEIN, 0.85);
+  stamp(east.x + east.rx * 0.45, east.y + east.ry * 0.45, 1.2, R_ORE, 0.85);
+  // The flank caverns (each lower half, and so by the turn each upper one): rich fields, contested.
+  for (const s of [-1, 1]) {
+    const fx = s < 0 ? flank.x : W - 1 - flank.x, inw = s < 0 ? 1 : -1;
+    stamp(fx - inw * flank.rx * 0.45, ccy + flank.ry * 0.75, 1.3, s < 0 ? R_ORE : R_CRYSTAL, 0.85);
+    stamp(fx + inw * flank.rx * 0.55, ccy + off + 0.5, 1.2, s < 0 ? R_OIL : R_VEIN, 0.9);
+    stamp(fx + inw * flank.rx * 0.5, ccy + 0.6, 1.25, s < 0 ? R_VEIN : R_ORE, 0.85);
+  }
+  // The cathedral: the Deep's hoard of Crystal spires and Bloom round its mound.
+  for (let k = 0; k < 3; k++) {
+    const a = 0.35 + k * 1.2;
+    stamp(ccx + dcos(a) * rC * 0.4, ccy + dsin(a) * rC * 0.4, 1.0, k === 1 ? R_VEIN : R_CRYSTAL, 0.8, (t) => free(t) && dist(t % W, (t / W) | 0, deep.x, deep.y) >= 2.2);
+  }
+  // Bloom on the walls: veins along the cavern edges, away from home.
+  for (let t = half * W; t < N; t++) {
+    const i = t % W, j = (t / W) | 0;
+    if (!free(t) || kind[t] === 1 || kind[t] === 7 || inBreach(i, j, 0.5) || dist(i, j, bx, by) < 9) continue;
+    let wall = false;
+    orth(t, (u) => { if (terrain[u] === T_ROCK && !pillar[u]) wall = true; });
+    if (wall && hash2(i, j, sV) < 0.16) for (const u of [t, mir(t)]) res[u] = R_VEIN;
+  }
+  // The floating masses: the richest Crystal, on the far half of each platform (the near half, toward the middle of
+  // the map, is left clear for a Ropeway's far station and a Crystal Tap).
+  for (const m of masses) {
+    const tiles = [];
+    for (let t = half * W; t < N; t++) if (mass[t] && Math.abs((t % W) - m.x) + Math.abs(((t / W) | 0) - m.y) <= 6) tiles.push(t);
+    const far = (t) => { const i = t % W, j = (t / W) | 0; return (i - m.x) * (m.x - ccx) + (j - m.y) * (m.y - ccy) * 0.6 + hash2(i, j, sV + 3) * 0.5; };
+    tiles.sort((a, b) => far(b) - far(a) || a - b);
+    for (const t of tiles.slice(0, Math.min(tiles.length - 3, Math.max(5, Math.round(tiles.length * 0.6))))) for (const u of [t, mir(t)]) res[u] = R_CRYSTAL;
+  }
+  if (cfg.nuke) {
+    let placed = 0;
+    for (let k = 0; k < 400 && placed < Math.ceil(URANIUM_DEPOSITS / 2); k++) {
+      const i = 2 + Math.floor(cr() * (W - 4)), j = half + 1 + Math.floor(cr() * (H - half - 3)), t = id(i, j);
+      if (!free(t) || kind[t] === 1 || dist(i, j, bx, by) < 12 || inBreach(i, j, 0.5)) continue;
+      for (const u of [t, mir(t)]) res[u] = R_URANIUM;
+      placed++;
+    }
+  }
+  // How much each holds: richer out toward the middle (as on every map), the masses' Crystal HOLLOW.crystal times more.
+  const reach = Math.max(1, dist(bx, by, W - 1 - bx, H - 1 - by) / 2 - RICH_FROM);
+  for (let t = 0; t < N; t++) {
+    if (!res[t]) continue;
+    const i = t % W, j = (t / W) | 0, d = Math.min(dist(i, j, bx, by), dist(i, j, W - 1 - bx, H - 1 - by));
+    const rich = RICH_TYPES.includes(res[t]) ? 1 + FRONTIER_RICH * clamp((d - RICH_FROM) / reach, 0, 1) : 1;
+    amt[t] = clamp(Math.round(RES[res[t]].amount * (res[t] === R_URANIUM ? 1 : RPR.amount) * rich * (mass[t] ? HOLLOW.crystal : 1)), 1, 255);
+  }
+
+  // 9) The Murmur's nest sites (the nests themselves go down with the Murmur: see placeNests): the Deep's mound in the
+  //    middle of the cathedral, and HOLLOW.nests on each side, out in the caverns, each with its twin.
+  const nests = [];
+  {
+    const want = HOLLOW.nests[sz], cands = [];
+    for (let t = half * W; t < N; t++) {
+      const i = t % W, j = (t / W) | 0;
+      if (!free(t) || ![2, 3, 4, 5, 7].includes(kind[t])) continue;
+      if (dist(i, j, bx, by) < Math.min(16, Dy * 0.72) || dist(i, j, W - 1 - bx, H - 1 - by) < 12 || dist(i, j, deep.x, deep.y) < 5 || inBreach(i, j, 1.5)) continue;
+      // (Not by a floating Crystal mass: its guards would keep every colony's gatherers off it for good.)
+      if (masses.some((m) => dist(m.x, m.y, i, j) < 9 || dist(W - 1 - m.x, H - 1 - m.y, i, j) < 9)) continue;
+      let room = 0;
+      orth(t, (u) => { if (terrain[u] === T_GROUND && !res[u]) room++; });
+      if (room < 3) continue;
+      cands.push({ i, j, h: hash2(i, j, (seed ^ 0x6e35) >>> 0) });
+    }
+    cands.sort((a, b) => a.h - b.h);
+    for (const apart of [8, 7, 6, 5]) {
+      for (const c of cands) {
+        if (nests.length >= want * 2) break;
+        const tw = { x: W - 1 - c.i, y: H - 1 - c.j };
+        if (dist(c.i, c.j, tw.x, tw.y) < apart || nests.some((n) => dist(n.x, n.y, c.i, c.j) < apart || dist(n.x, n.y, tw.x, tw.y) < apart)) continue;
+        nests.push({ x: c.i, y: c.j }, tw);
+      }
+      if (nests.length >= want * 2) break;
+    }
+  }
+
+  // 10) The side chambers' rows of robot parts: crates of Alloy (and some Chips) in two rows of three.
+  const relics = [];
+  for (const c of chambers) {
+    const ci = Math.round(c.x), cj = Math.round(c.y);
+    for (let r = 0; r < 2; r++) for (let k = -1; k <= 1; k++) {
+      const i = ci + k, j = cj - 1 + r * 2, t = id(i, j);
+      if (!inner(i, j) || terrain[t] !== T_GROUND || res[t]) continue;
+      const chip = (k + r) % 3 === 0, R0 = chip ? HOLLOW.relics.chip : HOLLOW.relics.alloy;
+      const n = R0[0] + Math.floor(hash2(i, j, seed + 17) * (R0[1] - R0[0] + 1)), g = chip ? 'chip' : 'alloy';
+      relics.push({ x: i, y: j, goods: { [g]: n } }, { x: W - 1 - i, y: H - 1 - j, goods: { [g]: n } });
+    }
+  }
+  const pillars = [];
+  for (let t = 0; t < N; t++) if (pillar[t]) pillars.push(t);
+  return {
+    terrain, res, amt, grow, elev, ramp, fert, bases: [{ x: bx, y: by }, { x: W - 1 - bx, y: H - 1 - by }],
+    spare: null, choke: null, lava: null, ford: null, tidal: null, fault: null, volcano: null,
+    hollow: { breaches, masses: masses.flatMap((m) => [{ x: Math.round(m.x), y: Math.round(m.y) }, { x: W - 1 - Math.round(m.x), y: H - 1 - Math.round(m.y) }]), nests, deep, relics, pillars },
+  };
+}
+
 /* ------------------------------------------------------------------ new game */
 
 /** The most players map type `shape` has room for: 4 (Crossroads), 3 (the free-for-all maps) or 2. */
@@ -1853,9 +2215,15 @@ function labOn() { return !!S && S.mode === 'colony' && (!S.mission || !!S.missi
 
 /** The resources a building of `type` gathers: its own, plus uranium for Ore Mines in a Nuclear race (uranium first). */
 function gatherTypes(type) {
-  const g = BDEFS[type].gather;
+  const g = gatherRes(type);
   if (!g) return [];
   return type === 'mine' && nukeOn() ? [R_URANIUM, g] : [g];
+}
+
+/** The resource a `type` gathers in this world (its BDEFS gather): in the Hollow a Harvester cuts Bloom veins, not stalks. */
+function gatherRes(type) {
+  const g = BDEFS[type] && BDEFS[type].gather;
+  return g === R_STALK && hollowOn() ? R_VEIN : g;
 }
 
 /**
@@ -1926,6 +2294,7 @@ function newGame(opts) {
   settings.players = playerCount(mode, settings.shape, opts.players);
   settings.nuke = !!opts.nuke;
   settings.biome = BIOMES[opts.biome] ? opts.biome : 'desert';
+  if (SHAPE_PRESETS[settings.shape].hollow) settings.biome = 'hollow'; // (the Hollow has its own look, whatever the Biome setting)
   if (modList(opts.mods, mode).length) settings.mods = modList(opts.mods, mode); // challenge modifiers (MODS; see modsSetup)
   const { W, H } = mapDims(settings);
   // The players people play: you (player 0), or in multiplayer everyone in opts.humans. The rest are the computer's,
@@ -1965,6 +2334,8 @@ function newGame(opts) {
   // A team game is won by taking the other team's Command Bases (no Domination or Uplinks).
   if (opts.teams && mode === 'versus' && S.players.length === 4) { S.teams = [0, 0, 1, 1]; S.victory = 'capture'; }
   if (m.spare) S.spare = { x: m.spare.x, y: m.spare.y }; // Crossroads for three: the free quarter's corner
+  // The Hollow: its breaches, floating Crystal masses, the Murmur's nest sites and the pillars (see hollowMap).
+  if (m.hollow) S.hollow = { breaches: m.hollow.breaches, masses: m.hollow.masses, nests: m.hollow.nests, deep: m.hollow.deep, pillars: m.hollow.pillars };
   mapEventsStart(m);
   // Planetary events (see EVENTS): the first one comes after EVENT_FIRST seconds.
   if (opts.events) { S.events = true; S.event = null; S.nextEvent = EVENT_FIRST; }
@@ -1972,9 +2343,11 @@ function newGame(opts) {
   if (opts.unlimited && !opts.mission) S.unlimited = true;
   // How the game is won (Versus): see VICTORY. Capture unless another way was picked.
   if (mode === 'versus' && !opts.mission && !opts.layout && !S.teams && VICTORY[opts.victory] && opts.victory !== 'capture') S.victory = opts.victory;
+  if (S.victory === 'uplinks' && m.hollow) delete S.victory; // (no Uplinks in the Hollow, which the Pathfinder never mapped: Capture)
   // The Murmur (wildlife, see WILD): Colony free play only, and never on a silent biome (Lunar: see murmurGround); the
   // nests go down once the landing site is in.
   if (mode === 'colony' && opts.wildlife && !opts.layout && !opts.setup && murmurGround(settings.biome)) S.wildlife = true;
+  if (mode === 'colony' && m.hollow && !opts.layout && !opts.setup) S.wildlife = true; // TEMP(hollow): the Hollow's nests in Colony, until the Murmur's night system decides (drop this line then)
   // Each computer player's doctrine (PERSONALITIES): opts.styles names one for each computer player in turn (the
   // computer's colonies in player order: in Custom Game players 1, 2, 3; in multiplayer the ones nobody took), else
   // opts.style names one for them all. 'random' deals one at random, picked from the planet's seed, that no other
@@ -2003,7 +2376,8 @@ function newGame(opts) {
     const L = addBuilding(p, 'lander', base.x, base.y, true);
     S.players[p].lander = L.id;
     for (const g in START_STOCK) L.stock[g] = START_STOCK[g] + (rival(p) ? DIFFICULTY[diff].bonus : 0);
-    for (const type in START_BOTS) for (let k = 0; k < START_BOTS[type]; k++) enterBuilding(addBot(p, type, base.x, base.y), L);
+    // (The Hollow: nothing grows, so a Worker comes down in the Agribot's place.)
+    for (const type in START_BOTS) for (let k = 0; k < START_BOTS[type]; k++) enterBuilding(addBot(p, m.hollow && type === 'agribot' ? 'worker' : type, base.x, base.y), L);
     for (let k = 0; k < (mode === 'colony' ? 0 : START_WARBOTS); k++) {
       const w = addBot(p, 'warbot', base.x, base.y);
       enterBuilding(w, L);
@@ -2015,6 +2389,8 @@ function newGame(opts) {
   computeTerritory();
   for (const P of S.players) { const L = getE(P.lander); if (L) starterRoads(L); }
   if (S.wildlife) placeNests(seed);
+  // The Hollow's side chambers: robot parts laid out in rows, crates for warbots to carry home (they never rot).
+  if (m.hollow) for (const r of m.hollow.relics) if (!S.bAt[tIdx(r.x, r.y)]) addLoot(r.x, r.y, r.goods, true);
   placePosts(seed);
   if (S.victory === 'uplinks') placeUplinks(seed);
   if (opts.setup) opts.setup(S);
@@ -2023,13 +2399,36 @@ function newGame(opts) {
   for (const u of S.uplinks || []) S.decor[tIdx(u.x, u.y)] = 0;
   // A word on how this kind of planet plays.
   const SH = SHAPE_PRESETS[settings.shape], quadTip = quadMap(settings) && (settings.players === 3 ? SH.spareTip : SH.quadTip);
-  const L0 = getE(S.players[ME] ? S.players[ME].lander : 0), tip = !S.mission && mode === 'versus' && (quadTip || SH.tip);
+  const L0 = getE(S.players[ME] ? S.players[ME].lander : 0), tip = !S.mission && (mode === 'versus' || SH.hollow) && (quadTip || SH.tip);
   if (tip && L0) postMsg(ME, tip, L0.x, L0.y, 'info');
   return S;
 }
 
 /** The biome of the current game. */
 function biome() { return (S && S.settings && S.settings.biome) || 'desert'; }
+
+/** Is this game in the Hollow (the Murmur's cavern lair: see hollowMap)? */
+function hollowOn() { return !!(S && S.hollow); }
+
+/**
+ * Why a `type` can't be built in this game's world at all ('' if it can): in the Hollow, no aircraft fly underground
+ * (no Airfields), nothing grows without light (no Grove Planters or Bio Farms), and there are no Trade Posts to dock
+ * at (no Trade Terminals: the Pathfinder never mapped it). canPlace says so, and the build menu greys them out.
+ */
+function worldBan(type) {
+  if (!hollowOn()) return '';
+  if (BDEFS[type] && BDEFS[type].terminal) return 'No Trade Posts in the Hollow: the Pathfinder never mapped it, so there is nowhere to dock a Trade Terminal.';
+  if (BDEFS[type] && BDEFS[type].airfield) return 'No aircraft fly in the Hollow: there is no sky down here, only the breach shafts.';
+  if (type === 'grower' || (BDEFS[type] && BDEFS[type].farm)) return 'Nothing grows in the Hollow: no light reaches the cavern floor. Harvesters cut Fiber from Bloom veins; Fuel comes from oil seeps.';
+  return '';
+}
+
+/** The breach (a shaft of daylight down through the Hollow's roof: S.hollow.breaches) over (x, y), or null. */
+function breachAt(x, y, pad) {
+  if (!S || !S.hollow) return null;
+  for (const b of S.hollow.breaches) if (dist2(x, y, b.x + 0.5, b.y + 0.5) <= sq(b.r + (pad || 0))) return b;
+  return null;
+}
 
 /**
  * Decorative plants (scenery only): a plant variety 1..PLANT_KINDS on some open ground tiles, in
@@ -2796,6 +3195,8 @@ function canPlace(owner, type, i, j, skipBlockCheck) {
   if (S.tidal && S.tidal[t]) return { ok: false, reason: 'Tidal flats: the sea covers this at high tide.' };
   if (scorched(t)) return { ok: false, reason: 'This ground is still scorched from a nuclear blast.' };
   if (def.nuke && !nukeOn()) return { ok: false, reason: 'Only in a Nuclear race.' };
+  const ban = worldBan(type);
+  if (ban) return { ok: false, reason: ban };
   if (def.pump) {
     if (S.res[t] !== R_OIL) return { ok: false, reason: 'Build an Oil Pump right on top of an oil seep.' };
   } else if (S.res[t] && !(S.res[t] === R_OIL && (S.road[t] || S.plan[t]))) return { ok: false, reason: 'Clear the resources here first.' }; // (oil under a road stays underground: the road rules below decide)
@@ -2804,7 +3205,7 @@ function canPlace(owner, type, i, j, skipBlockCheck) {
   if (def.colony && !labOn()) return { ok: false, reason: 'Only in Colony free play.' };
   // A Ramp can go under track (to carry it up a level), and a Gate across it (your trains run through, as on a road).
   if (S.rail && (S.rail[t] || (S.railPlan && S.railPlan[t])) && !def.ramp && !def.gate) return { ok: false, reason: S.rail[t] ? 'There is railway track here.' : 'Track is planned here.' };
-  if (def.port && !navalMap()) return { ok: false, reason: 'Ports are for naval maps (Islands and Lakes).' };
+  if (def.port && !navalMap()) return { ok: false, reason: hollowOn() ? 'No ships in the Hollow: its black lakes are far too small for a Port.' : 'Ports are for naval maps (Islands and Lakes).' };
   if (def.port && !portDocks(i, j).length) return { ok: false, reason: 'A Port goes on the shore, right beside open water wide enough for ships.' };
   if (S.wildlife) for (const e of S.buildings) {
     if (!e.dead && BDEFS[e.type].wild && Math.max(Math.abs(e.x - i), Math.abs(e.y - j)) <= WILD.clear) return { ok: false, reason: 'Too close to a Murmur nest: clear it with warbots first.' };
@@ -2878,7 +3279,7 @@ function canPlace(owner, type, i, j, skipBlockCheck) {
     }
   }
   if (def.gather && gatherReach(i, j, type) === 0) {
-    return { ok: false, reason: `No ${RES[def.gather].name.toLowerCase()}s within reach.` };
+    return { ok: false, reason: `No ${RES[gatherRes(type)].name.toLowerCase()}s within reach.` };
   }
   if (def.farm && fertileIn(i, j, def.radius) === 0) return { ok: false, reason: 'No fertile soil within reach.' };
   // The most expensive check goes last. (Bots walk through Outposts and Viaducts' ends, so those never block.)
@@ -3599,7 +4000,7 @@ function roadSearch(owner, seeds, done) {
   // (Through our own Outposts and Gates, never a rival's: its bots can't pass one, so a road through it links nothing.)
   const like = (t) => roadLikeFor(t, owner);
   const open = (t) => S.bAt[t] > 0 ? passTile(t, owner) : S.road[t] || canRoad(owner, t % W, (t / W) | 0);
-  const turn = done ? ROAD_TURN : 0, ov = anyOverpass();
+  const turn = done ? ROAD_TURN : 0, ov = anyOverpass(), rope = hollowOn();
   const step = (a, b) => (like(a) && like(b) ? canStep(a, b) : stepPlan(a, b));
   // The way the route came into tile t: from prev[t], or straight over the overpass(es) just behind it.
   const way = (t) => {
@@ -3628,6 +4029,9 @@ function roadSearch(owner, seeds, done) {
     // Across a Viaduct: its deck carries the road from one end to the other.
     const v = viaLink(t);
     if (v >= 0) { const nc = c + roadWeight(v); if (nc < cost[v]) { cost[v] = nc; prev[v] = t; heap.push(v, nc); } }
+    // (The Hollow: across one of our Ropeways too, out to a floating Crystal mass, which only a Ropeway or a bridge reaches.)
+    const r = rope ? ropeLink(t) : -1;
+    if (r >= 0 && getE(S.bAt[t]).owner === owner) { const nc = c + roadWeight(r); if (nc < cost[r]) { cost[r] = nc; prev[r] = t; heap.push(r, nc); } }
   }
   return { cost, prev, end: -1 };
 }
@@ -4248,6 +4652,15 @@ function checkSave(o) {
     if (!obj(M) || ![0, 1, 2].includes(M.diff)) bad();
     if (typeof MISSIONS !== 'undefined' && !(MISSIONS.some((m) => m.id === M.id) || (Number.isInteger(M.k) && MISSIONS[M.k]))) bad();
   }
+  // The Hollow's places (S.hollow) and its tremors (S.tremor): plain numbers, every place on the map.
+  if (o.hollow != null) {
+    const H0 = o.hollow, at = (p) => obj(p) && Number.isFinite(p.x) && Number.isFinite(p.y) && p.x >= 0 && p.y >= 0 && p.x < o.W && p.y < o.H;
+    if (!obj(H0) || !at(H0.deep)) bad();
+    for (const k of ['breaches', 'masses', 'nests']) if (!Array.isArray(H0[k]) || !H0[k].every(at)) bad();
+    if (!H0.breaches.every((b) => Number.isFinite(b.r))) bad();
+    if (!Array.isArray(H0.pillars) || !H0.pillars.every((t) => Number.isInteger(t) && t >= 0 && t < o.W * o.H)) bad();
+  }
+  if (o.tremor != null && !(obj(o.tremor) && Number.isFinite(o.tremor.next) && (o.tremor.rock == null || Array.isArray(o.tremor.rock)))) bad();
   if (o.event) {
     const E = o.event;
     if (!obj(E) || !ownKey(EVENTS, E.type) || (E.offers != null && !obj(E.offers))) bad();

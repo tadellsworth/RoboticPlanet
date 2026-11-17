@@ -28,7 +28,7 @@ how goods move.
   and Easy, Normal and Hard levels, that teach the game one idea at a time in seven chapters, in order: **First Steps**
   (a building and its road, Stone and Cement, batteries, the first Alloy), **Growing the Colony**, **Roads and
   Traffic**, **Industry and Trade**, **Sea and Sky** (all Colony games, so the economy is learned in peace), then
-  **First Contact** (the Murmur's nests, a passive rival, a border war, a chokepoint against a Herald) and **War** (Ammo and
+  **First Contact** (the Murmur's nests, their cavern lair the Hollow, a passive rival, a border war, a chokepoint against a Herald) and **War** (Ammo and
   repairs, trade convoys, escorts and convoy raids against a Salvager, Torches, Bulwarks and missiles against a Warden, the Nuclear race, Keeps and bombers), then a **Bonus**:
   **King of the Hill**, an Uplinks race for three on The Wheel against two rivals of random doctrine (`victory:
   'uplinks'`: missionOptions sets `S.victory` and calls `placeUplinks`; goals: hold an Uplink, hold two at once, win
@@ -66,7 +66,7 @@ how goods move.
 
 Before each game, the new-game screen picks the mode, players and rival, the **map shape** (Standard, Long haul,
 Chokepoint, Islands, Crater, Plateaus, Sky islands, Rift, Ring valley, Oases, Crossroads, Lakes, Tidal flats, River delta,
-Volcano, Fault line or Canyon maze, and for three or four players only The Wheel, Three Mesas, Pinwheel, Four Isles, Twin
+Volcano, Fault line, Canyon maze or The Hollow, and for three or four players only The Wheel, Three Mesas, Pinwheel, Four Isles, Twin
 Valleys and Long Haul 2v2: cards in groups, each with a sketch and a line on it) and the **map size** (Small to
 Huge). **More settings** (a collapsible section, its summary listing whatever isn't the default) holds the planet
 number, the **biome** (named for its region of Ithaca I, `BIOMES[k].name`, with its kind of ground under it, `kind`: the
@@ -565,6 +565,67 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   cross between the clifftops; the AI finds one with `aiViaductSpot` (only spans that bring it closer to its rival),
   puts an Outpost on each mesa it lands on, and rests its Ammo Plant and Chip Fab (and, with a fair army, its Foundry)
   while it saves the Alloy for the next span. (`T_CHASM`, the old bottomless canyon, is kept for old saves and is the Rift's chasm.)
+- **The Hollow** (`hollow: true`; LORE.md, The Hollow) is the Murmur's cavern lair, a two-player map with its own
+  generator (`hollowMap`, called first thing by `generateMap`) and its own look: `newGame` sets the biome to `hollow`
+  whatever the Biome setting (`BIOMES.hollow`, not in `BIOME_ORDER`, so the picker never offers it; the Biome row says the
+  map sets it), drawn for now with the Bloom's art through one mapping (`BIOME_ART`, `artBiome`: one line to drop when
+  its own art arrives), and it is always night there (`alwaysNight` on the map type: `todForced` in `js/daynight.js`,
+  looks only). `murmur: 'active'` is for the Murmur's night system. The map starts as solid rock (`T_ROCK`, level 1) and
+  every change is made to a tile and its half-turn twin together (`put`), so both sides are exactly the same: a home
+  cavern round each base (its landing ground kept round), a **chasm hall** between home and the middle split across by
+  a two-row chasm (`T_CHASM`) with one natural rock arch, a west and an east cavern (a black lake fed by a slow river,
+  far under `SEA_MIN`, in the west one), a **flank cavern** on the middle line at each side (each the twin of the other),
+  the **cathedral** in the middle, two side chambers, and winding passages between them (2 tiles wide, 3 from Medium
+  up). Anything the base can't walk to afterwards is joined by the cheapest way through rock or water (a sliver is
+  filled in; `joinAll`). `S.hollow` keeps what the game needs: `breaches` ([{x, y, r, home}]: one over each Command
+  Base, radius `HOLLOW.breach.home`, and `HOLLOW.contested` (4) in the flank caverns, two each, radius `open`), `masses`,
+  the Murmur's nest sites (`nests`, twin pairs, `HOLLOW.nests` a side by size, 4 to 7; `deep`, the middle of the
+  cathedral) and `pillars` (single rock tiles with open floor all round, so they never close a way: a ring round the
+  Deep's mound and more by the Terrain setting). **No Trade Posts or Uplinks** (LORE.md: the Pathfinder, which built
+  them, never mapped the Hollow): `placePosts` places none, `worldBan` greys the Trade Terminal out with a reason, the
+  rival plans no Terminal where there is no post (so it never waits on trade for Crystal), and `newGame` turns an
+  Uplinks game on this map into Capture (the menu greys the Uplinks choice out and says so; a Random pick that lands
+  here says so in a message).
+  - **Breach shafts.** Drawn as a pool of pale gold daylight on the night-graded ground (`drawBreachLight`) and a column
+    rising toward the top of the screen with motes drifting down it (`drawBreachShafts`), gold on the minimap.
+    **Ringfall** falls only through them (`hollowRingfall`, from `meteorPlan`): `METEOR_HITS` strikes a side, a share
+    `HOLLOW.ringfall.contested` (2 in 3) through the contested breaches on that side, each with its twin; each leaves up
+    to `HOLLOW.ringfall.tiles` (4) deposits `HOLLOW.ringfall.rich` (1.5) times a Ringfall deposit's amount.
+  - **Bloom veins** (`R_VEIN`, `RES[R_VEIN]`: 4 Fiber, 3 s to cut): on the cavern floors in fields and along the walls
+    (16% of floor tiles beside rock, away from home). A Harvester gathers them there (`gatherRes`: R_VEIN for a Harvester
+    in the Hollow, so `gatherTypes`, `canPlace`, the AI and the panels all go by it). A vein cut to nothing stays a vein
+    with `S.grow` 0 and grows back over `VEIN.regrow` (150 s, `growStalks`; `findNode` skips it meanwhile; `veinFull`).
+    Cutting one stamps the Harvester (`b.veinT`) where the Murmur are in the game (`wildOn`), and `veinLure` makes it a
+    raid target: `wildTarget` counts it `VEIN.pull` (2) times nearer, from up to `VEIN.reach` (8) tiles further out, for
+    `VEIN.lure` (120 s). No stalks or fertile soil: `worldBan` bars Grove Planters and Bio Farms (and Airfields and Trade Terminals) with a
+    reason for `canPlace`, and the build menu greys them out (`ownedText`). Fuel comes from the oil seep in every home
+    cavern. A Worker lands in the Agribot's place.
+  - **Floating Crystal**: a platform two levels up (level 3) in a pocket of chasm, worn back until only chasm touches it,
+    one in each chasm hall and from Medium up one in each east cavern; its Crystal holds `HOLLOW.crystal` (2.5) times a
+    cluster's (frontier richness on top). Reached by Ropeway, a Sky bridge or a Viaduct (level 1 to 3 is within
+    `VIA_RISE`). The rival AI runs a Ropeway out to an unreached one (`aiRopeway`: from 5 minutes in, once it has a Bot
+    Foundry, saving for it like a bridge (`P.bridgeNeed`) when its land's Crystal runs low or from 8 minutes), and puts a
+    Crystal Tap there as anywhere.
+  - **Side chambers**: two rows of three crates of Alloy (3–5) or Chips (1–2) each (`HOLLOW.relics`), laid with
+    `addLoot(..., keep)` so they never rot (`LOOT_KEEP`).
+  - **Ceiling tremors** (`TREMOR`, `S.tremor`, `updateTremor`, a map event like the Volcano's): the first at 210 s, then
+    every 100–150 s, dust for 10 s (`drawTremors` in `js/weather.js`, and a rumble). Every second tremor drops rock
+    (`rockSpot`: open ground 3–18 tiles from player 0's base on its own side, clear of the breaches, and its twin; a
+    mission can aim one with `S.tremor.aim`): dust trickles there for `TREMOR.warn` (8 s) with a ring on the ground,
+    then `rockfall` takes `TREMOR.damage` (4) armor off every building within `TREMOR.r` (1.6) tiles (never below 1;
+    `b.rocked`), `TREMOR.botDamage` (3) off robots, and leaves a boulder where the ground is clear. No dust storms or
+    solar flares (`updateEvents` leaves them out; Ringfall and the *Wren* take turns).
+  - **The Murmur**: the most nests of any map, and at the centre the Deep's mound (`BDEFS.mound`: 160 armor, level
+    `HOLLOW.deep.level` (3) from the start, `HOLLOW.deep.guards` more guards, `HOLLOW.deep.loot`; `placeHollowNests`,
+    drawn by `drawMound`). Wrecking it (`clearNest`) spills its hoard and puts every other nest back to level 1 (its
+    growth clock too). For now the nests come only in Colony (one line in `newGame` marked `TEMP(hollow)` forces them
+    on there, until the night system decides).
+  - **No aircraft** (`worldBan`; the AI never plans an Airfield) and **no Ports** (`canPlace` says the lakes are too small).
+  - The rival AI: its build plan swaps Bio Farms for Oil Pumps and Grove Planters for more Harvesters, fuel trouble
+    brings an Oil Pump and Refinery, its roads bridge the chasms (Sky bridges) where that's shorter, and `aiRopeway`
+    (in the Hollow `roadSearch` carries road reach across a colony's own Ropeways, so a Tap on the mass counts as
+    joined up). Nest sites keep 9 tiles from the masses: the AI never clears nests, and guards there would keep its
+    gatherers off the Crystal for good.
 - **Maps for three or four only** (`minPlayers` in `SHAPE_PRESETS`: the player choice can't go below it, Random only
   picks them for three or four, and Colony games on them leave the other colonies empty). **The Wheel** (`wheel`, three):
   rock spokes run out along the lines between the thirds from a raised hub (the only ground on the top level, the
@@ -1483,7 +1544,7 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   upgrade; 30 tiles of asphalt, a Road Train, a Freight Train, a run on a Trade Terminal's route, a Murmur nest; a Ropeway, a
   Viaduct, a Port and a Container Ship, a Cargo Plane delivery; three Freight Trains at once, 100 Alloy a minute
   (`goodRates`), 100 robots, every upgrade), with `when` leaving out the ones the planet can't offer (`navalMap`, no
-  cliffs, no Murmur, no Trade Posts). A goal met stays met: its flag goes in this game's entry in `terrafall.games`
+  cliffs, a Cargo Plane in the Hollow, no Murmur, no Trade Posts). A goal met stays met: its flag goes in this game's entry in `terrafall.games`
   (localStorage, `metaStart`: a new game gets an entry keyed by its seed and the time it started on this device; a
   loaded save finds the newest entry for its seed and mode that isn't further on than the save, so goals met before a
   save stay met, and those met before a load bring no second message). The goals button beside the Goal card
@@ -1656,7 +1717,8 @@ Ground marks fade over a minute or so (at most 350 at once). Each effect can be 
 The planet turns: morning, day, evening and night, 12 minutes of game time round (`TOD_CYCLE` in `js/daynight.js`),
 starting at dawn, with half-minute crossfades. It runs on game time, so it pauses with the game and is saved with it;
 the clock in the top bar shows a sun (coloured for dawn, day and dusk) or a moon. Turn it off in the pause menu (Day and
-night; a display setting kept on the device).
+night; a display setting kept on the device). A map type with `alwaysNight` (the Hollow) is night whatever the setting
+(`todForced`), photo mode's slider included; nothing in the game itself ever asks what the light is.
 
 - **Re-lit art.** Every 3D sprite (buildings, robots and vehicles, track and bridge pieces: the 207 keys in
   `art/tod/tod-keys.js`) has a morning, evening and night version from the Claude Design day/night kit, at

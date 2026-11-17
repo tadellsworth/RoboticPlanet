@@ -670,14 +670,21 @@ function syncMenu() {
   $('m-l-diff').textContent = mps ? 'Computer rivals' : 'Rival';
   for (const btn of $('m-diff').children) mark(btn, btn.dataset.v === m.diff);
   $('m-diff-field').hidden = colony;
-  for (const btn of $('m-victory').children) mark(btn, btn.dataset.v === (m.victory || 'capture'));
+  // (The Hollow has no Uplinks, the Pathfinder never having mapped it: that choice is greyed out, and the game is Capture.)
+  const noUplinks = !m.shapeRnd && !!(SHAPE_PRESETS[m.shape || 0] || {}).hollow, vic = noUplinks && m.victory === 'uplinks' ? 'capture' : m.victory || 'capture';
+  for (const btn of $('m-victory').children) {
+    mark(btn, btn.dataset.v === vic);
+    const off = noUplinks && btn.dataset.v === 'uplinks';
+    btn.disabled = off;
+    btn.title = off ? 'No Uplinks in the Hollow: the Pathfinder never mapped it.' : '';
+  }
   // Teams (four colonies, two against two, Capture only): the Victory choice gives way to it.
   const teams = menuTeams();
   $('m-teams-field').hidden = colony || menuPlayers() !== 4;
   for (const btn of $('m-teams').children) { mark(btn, +btn.dataset.v === (teams ? 1 : 0)); btn.dataset.info = +btn.dataset.v ? '2 vs 2: you and the colony beside you against the other two. Take both of their Command Bases to win.' : 'Every colony for itself: the last one standing wins.'; }
   $('m-victory-field').hidden = colony || teams;
   $('m-victory-note').hidden = colony || teams;
-  $('m-victory-note').textContent = (VICTORY[m.victory] || VICTORY.capture).note;
+  $('m-victory-note').textContent = noUplinks && m.victory === 'uplinks' ? 'No Uplinks in the Hollow (the Pathfinder never mapped it): this game is won by Capture.' : (VICTORY[vic] || VICTORY.capture).note;
   // Free-for-all: you and two rivals on the map types with room for three, or three rivals on
   // Crossroads (Random picks a map type with room for them all).
   const shape = m.shape || 0, SH = SHAPE_PRESETS[shape], room = m.shapeRnd ? 4 : maxPlayers(shape), want = clamp(Math.round(m.players) || 2, 2, 4);
@@ -786,6 +793,11 @@ function syncPickRows() {
   bRow.querySelector('.m-pick-name').textContent = m.biomeRnd ? 'Random' : biomeName(m.biome || 0);
   bRow.querySelector('.m-pick-meta').textContent = m.biomeRnd ? 'any biome' : (BIOMES[bk] && BIOMES[bk].kind) || '';
   bRow.dataset.info = m.biomeRnd ? 'Random biome: any of them, picked when you land.' : `${biomeName(m.biome || 0)} (${((BIOMES[bk] && BIOMES[bk].kind) || '').toLowerCase()}): ${(BIOMES[bk] && BIOMES[bk].desc) || ''}`;
+  // (The Hollow has its own underground look: the Biome setting waits for another map.)
+  if (!m.shapeRnd && SH.hollow) {
+    bRow.querySelector('.m-pick-meta').textContent = 'set by the map: The Hollow';
+    bRow.dataset.info = `The Hollow has its own look, whatever the biome: ${BIOMES.hollow.desc} (The biome you pick here is for other maps.)`;
+  }
   bRow.setAttribute('aria-label', `Biome: ${m.biomeRnd ? 'Random' : biomeName(m.biome || 0)}. Change`);
   drawThumbOnce(bRow.querySelector('canvas'), 'biome:' + (m.biomeRnd ? 'rnd' : bk) + ':' + artCount(), (cv) => drawBiomeSwatch(cv, m.biomeRnd ? null : bk));
 }
@@ -993,6 +1005,30 @@ function drawShapeThumb(cv, P) {
     mesa(0.5, 0.86, 0.3, 0.1);
     for (let k = 0; k < 4; k++) mesa(0.15 + rnd() * 0.7, 0.52 + k * 0.08, 0.07 + rnd() * 0.05, 0.04 + rnd() * 0.02);
     crags = 0;
+  } else if (P.hollow) {
+    // The Hollow: solid rock, caverns joined by passages, a chasm with its floating Crystal on each side, the Deep's
+    // mound in the middle and the breaches' daylight (gold) over the bases and the flank caverns.
+    ctx.fillStyle = '#16121a'; ctx.fillRect(x0, y0, mw, mh);
+    const lw = Math.max(1.5, U * 0.05), cave = '#3a2d44', pair = (pts) => { line(pts, cave, lw); line(pts.map(([u, v]) => [1 - u, 1 - v]), cave, lw); };
+    pair([[0.5, 0.86], [0.52, 0.66]]); pair([[0.52, 0.62], [0.5, 0.5]]); pair([[0.38, 0.88], [0.18, 0.72]]); pair([[0.66, 0.86], [0.84, 0.66]]);
+    pair([[0.18, 0.68], [0.15, 0.55]]); pair([[0.84, 0.62], [0.85, 0.55]]); pair([[0.15, 0.52], [0.4, 0.52]]);
+    for (const [u, v, rx, ry] of [[0.5, 0.86, 0.24, 0.1], [0.52, 0.64, 0.17, 0.06], [0.17, 0.72, 0.12, 0.06], [0.84, 0.66, 0.11, 0.06]]) blob(u, v, rx, ry, cave, null, true);
+    blob(0.15, 0.5, 0.11, 0.13, cave, null, true);
+    ctx.beginPath(); ctx.arc(X(0.5), Y(0.5), U * 0.16, 0, 7); ctx.fillStyle = cave; ctx.fill();
+    for (const k of [1, -1]) { // the chasm, its arch and the floating mass
+      const v = 0.5 + k * 0.14;
+      line([[0.36, v], [0.68, v]], '#050307', Math.max(2, U * 0.05));
+      line([[0.6, v - 0.025], [0.6, v + 0.025]], cave, Math.max(1.5, U * 0.05));
+      ctx.beginPath(); ctx.arc(X(k > 0 ? 0.43 : 0.57), Y(v), U * 0.035, 0, 7); ctx.fillStyle = '#b98cff'; ctx.fill();
+    }
+    ctx.beginPath(); ctx.arc(X(0.5), Y(0.5), U * 0.045, 0, 7); ctx.fillStyle = '#7a2e6e'; ctx.fill();
+    ctx.shadowColor = '#ffd98a'; ctx.shadowBlur = U * 0.12;
+    for (const [u, v, r] of [[0.5, 0.88, 0.07], [0.5, 0.12, 0.07], [0.15, 0.44, 0.045], [0.15, 0.56, 0.045], [0.85, 0.44, 0.045], [0.85, 0.56, 0.045]]) {
+      ctx.beginPath(); ctx.arc(X(u), Y(v), U * r, 0, 7); ctx.fillStyle = 'rgba(255,217,138,0.5)'; ctx.fill();
+      ctx.beginPath(); ctx.arc(X(u), Y(v), Math.max(1, U * r * 0.45), 0, 7); ctx.fillStyle = '#ffe2a0'; ctx.fill();
+    }
+    ctx.shadowBlur = 0;
+    crags = 0;
   } else if (P.islands || P.tidal) {
     ctx.fillStyle = THUMB.water; ctx.fillRect(x0, y0, mw, mh);
     const isle = (u, v, rx, ry) => { blob(u, v, rx * 1.12, ry * 1.18, THUMB.waterHi, null, true); s -= 2; blob(u, v, rx, ry, THUMB.ground, null, true); };
@@ -1148,7 +1184,7 @@ function drawShapeThumb(cv, P) {
   }
   for (let k = 0; k < crags; k++) blob(0.15 + rnd() * 0.7, 0.55 + rnd() * 0.2, 0.06, 0.035, THUMB.rock, THUMB.rockHi, true);
   // A few resource fields, and the bases.
-  if (!P.maze && !P.sky && !marks) for (let k = 0; k < 3; k++) { const u = 0.15 + rnd() * 0.7, v = 0.6 + rnd() * 0.12; ctx.fillStyle = THUMB.res[k % 4]; for (const [uu, vv] of [[u, v], [1 - u, 1 - v]]) { ctx.beginPath(); ctx.arc(X(uu), Y(vv), Math.max(1, U * 0.03), 0, 7); ctx.fill(); } }
+  if (!P.maze && !P.sky && !P.hollow && !marks) for (let k = 0; k < 3; k++) { const u = 0.15 + rnd() * 0.7, v = 0.6 + rnd() * 0.12; ctx.fillStyle = THUMB.res[k % 4]; for (const [uu, vv] of [[u, v], [1 - u, 1 - v]]) { ctx.beginPath(); ctx.arc(X(uu), Y(vv), Math.max(1, U * 0.03), 0, 7); ctx.fill(); } }
   const bs = Math.max(3, U * (marks ? 0.085 : 0.1));
   for (const [k, [u, v]] of (marks || [[0.5, 0.88], [0.5, 0.12]]).entries()) {
     ctx.fillStyle = marks ? PLAYER_COLORS[k] : k ? PLAYER_COLORS[1] : PLAYER_COLORS[ME]; ctx.strokeStyle = '#fff'; ctx.lineWidth = Math.max(1, bs * 0.18);
@@ -1167,11 +1203,12 @@ function roundRect(ctx, x, y, w, h, r) {
 
 /** The biome's ground texture: its own art, or the desert's recoloured to its palette (render.js), or null. */
 function biomeGround(b) {
+  b = artBiome(b); // (a biome drawn with another's art: the Hollow)
   const own = b === 'desert' ? ART.ground : ART['ground-' + b];
   if (own || !biomeLook(b) || typeof biomeTexture !== 'function') return own || null;
   try { return biomeTexture(b, 'ground'); } catch (e) { return null; }
 }
-function biomeLook(b) { return typeof BIOME_LOOK === 'object' && BIOME_LOOK[b] ? BIOME_LOOK[b] : null; }
+function biomeLook(b) { b = artBiome(b); return typeof BIOME_LOOK === 'object' && BIOME_LOOK[b] ? BIOME_LOOK[b] : null; }
 
 /**
  * A swatch of a biome: its ground texture with a few of its plants standing on it. Biomes whose art
@@ -1296,10 +1333,11 @@ function renderPreview(cv, m, p) {
   const W = m.W, H = m.H, pad = 8, k = Math.min((w - pad * 2) / W, (h - pad * 2) / H);
   const mw = W * k, mh = H * k, x0 = Math.round((w - mw) / 2), y0 = Math.round((h - mh) / 2);
   // Colours: the biome's minimap palette (render.js), the resources' as on the minimap.
-  const look = biomeLook(p.st.biome) || biomeLook('desert'), mm = (look && look.mm) || {};
+  const bio = (SHAPE_PRESETS[p.st.shape || 0] || {}).hollow ? 'hollow' : p.st.biome; // (the Hollow has its own look)
+  const look = biomeLook(bio) || biomeLook('desert'), mm = (look && look.mm) || {};
   const C = { ground: mm.ground || [169, 113, 74], water: mm.water || [28, 75, 93], rock: mm.rock || [74, 51, 41], ramp: mm.ramp || [235, 205, 150],
     chasm: [18, 12, 10], fertile: [92, 98, 40] };
-  if (!look || !look.mm) { const G = biomeGround(p.st.biome); const c = G && typeof avgColor === 'function' ? avgColor(G) : null; if (c) C.ground = c; }
+  if (!look || !look.mm) { const G = biomeGround(bio); const c = G && typeof avgColor === 'function' ? avgColor(G) : null; if (c) C.ground = c; }
   const resCol = (r) => (typeof MM_COLORS === 'object' && MM_COLORS[r]) || [220, 220, 220];
   // Paint the tiles at about one image pixel per screen pixel, s by s each.
   const s = clamp(Math.round(k * dpr), 2, 8), IW = W * s, IH = H * s;
@@ -2632,6 +2670,7 @@ function startNewGame() {
     const L = getE(S.players[ME].lander), near = L ? S.posts.reduce((a, p) => (dist2(p.x, p.y, L.x, L.y) < dist2(a.x, a.y, L.x, L.y) ? p : a)) : null;
     postMsg(ME, `${S.posts.length} neutral Trade Posts (gold on the minimap${near ? ', nearest ' + dirText(L, near) : ''}): lay a road out and dock a Trade Terminal to trade.` + (S.mode !== 'colony' ? ` Hold the land round one to shut ${S.players.length > 2 ? 'the rivals' : 'your rival'} out.` : ''), near ? near.x : 0, near ? near.y : 0, 'info');
   }
+  if (UI.menu.victory === 'uplinks' && S.mode !== 'colony' && !S.teams && S.hollow) postMsg(ME, 'No Uplinks in the Hollow: the Pathfinder never mapped it. This game is won by Capture.', 0, 0, 'info');
   if (S.victory === 'uplinks' && S.uplinks) {
     const L = getE(S.players[ME].lander), near = L ? S.uplinks.reduce((a, u) => (dist2(u.x, u.y, L.x, L.y) < dist2(a.x, a.y, L.x, L.y) ? u : a)) : null;
     postMsg(ME, `Uplinks: ${S.uplinks.length} neutral Uplink towers stand across the planet (ringed dots on the minimap${near ? ', nearest ' + dirText(L, near) : ''}). One is yours while it stands in your land: build an Outpost or a Keep near it. They come online ${UPLINK.online / 60} minutes in: from then on, hold ${uplinkGoal()} and your clock runs, and a total of ${UPLINK.hold / 60} minutes wins. Enemy warbots right beside an Uplink jam it.`, near ? near.x : 0, near ? near.y : 0, 'info');
@@ -4292,7 +4331,7 @@ function onMapTap(i, j, wx, wy) {
       const def = BDEFS[type];
       if (def.gather) {
         const un = type === 'mine' && nukeOn() ? reachableRes(i, j, def.radius, R_URANIUM) : 0;
-        extra = ` <span class="ok">${reachableRes(i, j, def.radius, def.gather)} ${RES[def.gather].name.toLowerCase()}s${un ? ` and <b>${un} uranium deposit${un > 1 ? 's' : ''}</b>` : ''} in reach.</span>`;
+        extra = ` <span class="ok">${reachableRes(i, j, def.radius, gatherRes(type))} ${RES[gatherRes(type)].name.toLowerCase()}s${un ? ` and <b>${un} uranium deposit${un > 1 ? 's' : ''}</b>` : ''} in reach.</span>`;
         if (def.bedrock) { const f = rockFacesIn(i, j, def.radius); extra += f ? ` <span class="ok">${f} rock face${f > 1 ? 's' : ''} to cut Stone from when they're gone.</span>` : ' With none left it digs Stone out of the ground, slowly.'; }
       }
       if (def.farm) extra = ` <span class="ok">${fertileIn(i, j, def.radius)} fertile tiles in reach.</span>`;
@@ -5485,14 +5524,14 @@ function openBuildMenu() {
   const html = `<div class="sheet-title"><h3>Build</h3></div>
     <p class="desc">Placing a site is free; haulers bring the materials by road, so lay a road to it. <span id="build-sites">${sites}/${MAX_SITES}</span> sites in progress.</p>
     ${tabs}
-    <div class="build-grid">${nextBuilds().filter((t) => list.includes(t)).map((t) => `<button class="bcard next" data-t="${t}" data-g="next" ${sites >= MAX_SITES ? 'disabled' : ''}>
+    <div class="build-grid">${nextBuilds().filter((t) => list.includes(t) && !worldBan(t)).map((t) => `<button class="bcard next" data-t="${t}" data-g="next" ${sites >= MAX_SITES ? 'disabled' : ''}>
       <img src="${iconFor(t)}" alt=""><div class="bname">${BDEFS[t].name}</div><div class="bcost">${costHTML(BDEFS[t].cost, have)}</div>
       <div class="bhave">${ownedText(t)}</div></button>`).join('')}<button class="bcard roads" id="build-roads" data-g="move"><kbd data-key="R">R</kbd><svg viewBox="0 0 24 24"><path d="M8 3L5 21M16 3l3 18M12 4v3M12 10.5v3M12 17v3" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
       <div class="bname">Roads</div><div class="bhave">Roads, bridges, ramps, Viaducts and Ropeways</div></button><button class="bcard roads bp-card" id="build-bp" data-g="any"><svg viewBox="0 0 24 24"><path d="M4 4h7v7H4zM13 13h7v7h-7zM11 7.5h4.5V13M4 15h5v5H4z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>
       <div class="bname">Blueprints</div><div class="bhave">${bpCardText()}</div></button>${warOn() ? `<button class="bcard walls" id="build-walls" data-g="defend"><kbd data-tab="${BUILD_TAB_KEYS.defend}" data-key="X">X</kbd><img src="${iconFor('wall')}" alt=""><div class="bname">Walls</div><div class="bcost">${costHTML(BDEFS.wall.cost, have)}</div>
-      <div class="bhave">${wallCountText()}</div></button>` : ''}${ordered.map((t) => `<button class="bcard" data-t="${t}" data-g="${groupOf(t)}" ${sites >= MAX_SITES ? 'disabled' : ''}>
+      <div class="bhave">${wallCountText()}</div></button>` : ''}${ordered.map((t) => { const ban = worldBan(t); return `<button class="bcard${ban ? ' banned' : ''}" data-t="${t}" data-g="${groupOf(t)}" ${sites >= MAX_SITES || ban ? 'disabled' : ''}${ban ? ` title="${ban}"` : ''}>
       ${kbd(t)}<img src="${iconFor(t)}" alt=""><div class="bname">${BDEFS[t].name}</div><div class="bcost">${costHTML(BDEFS[t].cost, have)}</div>
-      <div class="bhave">${ownedText(t)}</div></button>`).join('')}</div>`;
+      <div class="bhave">${ownedText(t)}</div></button>`; }).join('')}</div>`;
   openSheet('build', 0, html);
   for (const el of $('sheet-body').querySelectorAll('.bcard[data-t]')) {
     el.onclick = () => { sfx('click'); enterPlaceMode(el.dataset.t); };
@@ -5651,8 +5690,8 @@ function refreshBuildMenu() {
   const sites = siteCount(ME), full = sites >= MAX_SITES, have = playerGoods(ME);
   if ($('build-sites')) $('build-sites').textContent = `${sites}/${MAX_SITES}`;
   for (const el of body.querySelectorAll('.build-grid .bcard[data-t]')) {
-    const t = el.dataset.t, cost = BDEFS[t].cost;
-    if (el.disabled !== full) el.disabled = full;
+    const t = el.dataset.t, cost = BDEFS[t].cost, off = full || !!worldBan(t);
+    if (el.disabled !== off) el.disabled = off;
     const spans = el.querySelectorAll('.bcost > span');
     Object.keys(cost).forEach((g, i) => { if (spans[i]) spans[i].classList.toggle('short', have[g] < cost[g]); });
     const h = el.querySelector('.bhave'), txt = ownedText(t);
@@ -5669,6 +5708,7 @@ function garrisonMix(b) {
 }
 
 function ownedText(type) {
+  if (worldBan(type)) return BDEFS[type].airfield ? 'No aircraft underground' : BDEFS[type].terminal ? 'No Trade Posts down here' : 'Nothing grows down here'; // (the Hollow: see worldBan)
   const { built, sites } = ownedCount(type);
   if (type === 'ramp') return sites ? `${sites} being built` : '';
   if (!built && !sites) return 'None yet';
@@ -6088,11 +6128,11 @@ function refreshBuildingSheet(b) {
       parts.push(`<div class="kv"><span>Busy</span><span>${pct}% of the time</span></div>${sparkline(b.useHist)}`);
     }
     if ((def.gather || def.farm) && mine && b.depleted) {
-      parts.push(`<p class="desc err"><b>Nothing left to ${def.farm ? 'farm' : 'gather'} in reach.</b> Dismantle it (below): its materials and anything still in it are left in crates for your haulers to bring back. Then build a new ${def.name} ${def.farm ? 'beside open fertile soil' : `by a fresh field of ${RES[def.gather].name.toLowerCase()}s`}.</p>`);
+      parts.push(`<p class="desc err"><b>Nothing left to ${def.farm ? 'farm' : 'gather'} in reach.</b> Dismantle it (below): its materials and anything still in it are left in crates for your haulers to bring back. Then build a new ${def.name} ${def.farm ? 'beside open fertile soil' : `by a fresh field of ${RES[gatherRes(b.type)].name.toLowerCase()}s`}.</p>`);
     }
     if (def.gather) {
-      const g = RES[def.gather].good;
-      parts.push(`<div class="kv"><span>${RES[def.gather].name}s in reach</span><span>${reachableRes(b.x, b.y, def.radius, def.gather)}</span></div>`);
+      const gr = gatherRes(b.type), g = RES[gr].good;
+      parts.push(`<div class="kv"><span>${RES[gr].name}s in reach</span><span>${reachableRes(b.x, b.y, def.radius, gr)}</span></div>`);
       if (b.type === 'mine' && nukeOn()) parts.push(`<div class="kv"><span>Uranium deposits in reach</span><span>${reachableRes(b.x, b.y, def.radius, R_URANIUM)}</span></div>`);
       if (def.bedrock) parts.push(`<div class="kv"><span>Rock faces in reach</span><span>${rockFacesIn(b.x, b.y, def.radius)}</span></div>`);
       if (mine) parts.push(`<div class="kv"><span>Waiting for pickup</span><span>${goodTag(g, `${b.stock[g] || 0}/${def.out[g]}`)}</span></div>`);
@@ -6696,10 +6736,11 @@ function refreshMoveStepper(i, j) {
 function openResourceSheet(t) {
   R.selected = 0; R.selTile = t; UI.selBot = 0;
   const type = S.res[t], info = RES[type];
-  const by = Object.keys(BDEFS).find((k) => BDEFS[k].gather === type);
+  const by = Object.keys(BDEFS).find((k) => gatherRes(k) === type);
   const desc = type === R_URANIUM ? 'Scarce and radioactive. An Ore Mine within 4 tiles digs it (before any ore); a Nuclear Reactor enriches it, and 12 Uranium make one nuclear missile. There are only a few deposits on the planet: whoever holds them wins the race.'
     : type === R_CROP ? 'Planted by a Bio Farm on fertile soil. Once ripe, its worker harvests it into Fuel and plants a new one.'
     : type === R_OIL ? 'Build an Oil Pump right on top of the seep to pump Crude (it also draws from seep tiles next to it). A Refinery turns Crude into Fuel.'
+    : type === R_VEIN ? `The Bloom's violet veins, breaking through the cavern floor. A Harvester within ${BDEFS.harvester.radius} tiles cuts them into Fiber; cut down, a vein grows back in about ${Math.round(VEIN.regrow / 60 * 2) / 2} minutes. Cutting them draws the Murmur.`
     : `Gives ${GOOD[info.good].name}. Gathered by a ${BDEFS[by].name} within ${BDEFS[by].radius} tiles.${type === R_STALK ? ' A Grove Planter can grow more.' : ' It runs out eventually, so expand to find more.'}`;
   const rich = richRes(t) ? '<p class="desc"><b>Rich deposit:</b> it holds far more than the ones near your base. The frontier pays.</p>' : '';
   const html = `<div class="sheet-title"><div><h3>${richRes(t) ? 'Rich ' + info.name.toLowerCase() : info.name}</h3></div></div>
@@ -7326,7 +7367,7 @@ function refreshSheet() {
     const t = UI.sheetFor;
     if (!S.res[t]) { closeSheet(); return; }
     const r = S.res[t];
-    const grow = (r === R_STALK || r === R_CROP) && S.grow[t] < 1 ? `<div class="kv"><span>${r === R_CROP ? 'Ripening' : 'Growing'}</span><span>${Math.round(S.grow[t] * 100)}%</span></div>` : '';
+    const grow = (r === R_STALK || r === R_CROP || r === R_VEIN) && S.grow[t] < 1 ? `<div class="kv"><span>${r === R_CROP ? 'Ripening' : r === R_VEIN ? 'Growing back' : 'Growing'}</span><span>${Math.round(S.grow[t] * 100)}%</span></div>` : '';
     $('sh-dyn').innerHTML = r === R_CROP ? (grow || '<div class="kv"><span>Ripe</span><span>Ready to harvest</span></div>')
       : `<div class="kv"><span>${r === R_OIL ? 'Crude left' : 'Harvests left'}</span><span>${S.amt[t]}</span></div>${grow}`;
     refreshNapalmSection(t);
@@ -7337,7 +7378,8 @@ function refreshSheet() {
 
 const OBJECTIVES = [
   { text: 'Robots run on batteries, and your Command Base can\'t charge them. Tap <b>Build</b> and place a <b>Fuel Station</b> beside the road ring round your base: it runs on the Fuel you landed with.', build: ['charger'], done: () => hasBuilt('charger') || hasAny('charger') },
-  { text: 'Tap <b>Build</b> and place a <b>Harvester</b> beside the teal stalk groves.', build: ['harvester'], done: () => hasBuilt('harvester') || hasAny('harvester') },
+  { get text() { return hollowOn() ? 'Nothing grows in the Hollow. Tap <b>Build</b> and place a <b>Harvester</b> beside the violet <b>Bloom veins</b>: it cuts Fiber from them.' : 'Tap <b>Build</b> and place a <b>Harvester</b> beside the teal stalk groves.'; },
+    build: ['harvester'], done: () => hasBuilt('harvester') || hasAny('harvester') },
   { text: '<b>Haulers only drive on roads.</b> Tap <b>Paths</b>, sketch a road from the ring round your Command Base to the Harvester site and tap <b>Build</b> (or tap the site and choose <b>Lay road</b>). Free workers pave it.', done: () => hasBuilt('harvester') || S.buildings.some((b) => !b.dead && b.owner === ME && b.type === 'harvester' && !b.unlinked) },
   { text: 'Build a <b>Quarry</b> near the grey boulders to get Stone.', build: ['quarry'], done: () => hasBuilt('quarry') },
   { text: 'Build a <b>Cement Works</b> near your Command Base: it bakes Stone into <b>Cement</b>, which nearly every building and every road is made of.', build: ['kiln'], done: () => hasBuilt('kiln') },
@@ -7347,7 +7389,9 @@ const OBJECTIVES = [
   { text: 'Build a <b>Bot Foundry</b> so you can make more workers.', build: ['foundry'], done: () => hasBuilt('foundry') },
   { text: 'Tap your <b>Bot Foundry</b> and order some <b>Workers</b>: it only builds the bots you ask for.', done: () => S.players[ME].stats.bots > S.players[ME].stats.startBots || S.buildings.some((b) => !b.dead && b.owner === ME && hasOrders(b)) },
   { text: 'Build an <b>Outpost</b> near your border to claim more land.', build: ['outpost'], done: () => hasBuilt('outpost') },
-  { text: 'Fuel Stations burn <b>Fuel</b>. Build a <b>Bio Farm</b> beside the dark fertile soil to grow it (your Agribot runs it).', build: ['farm'], done: () => hasBuilt('farm') || hasBuilt('refinery') || playerGoods(ME).fuel >= 20 },
+  // (The Hollow: no farms underground; Fuel is refined from the oil seep by the base.)
+  { get text() { return hollowOn() ? 'Fuel Stations burn <b>Fuel</b>, and nothing grows down here. Build an <b>Oil Pump</b> on the dark oil seep and a <b>Refinery</b> to turn its Crude into Fuel.' : 'Fuel Stations burn <b>Fuel</b>. Build a <b>Bio Farm</b> beside the dark fertile soil to grow it (your Agribot runs it).'; },
+    get build() { return hollowOn() ? ['pump', 'refinery'] : ['farm']; }, done: () => hasBuilt('farm') || hasBuilt('refinery') || playerGoods(ME).fuel >= 20 },
   { text: 'Busy crossings jam up. In <b>Paths</b>, choose <b>Junctions</b> and put a traffic light on a junction where three or four roads meet.', done: () => Object.keys(S.lights).some((k) => S.lights[k].owner === ME) || !ownJunction() },
   { text: 'Warbots need <b>Ammo</b>. Build an <b>Ammo Plant</b>: haulers stock your Command Base and Outposts and warbots reload there.', build: ['armory'], done: () => S.mode === 'colony' || hasBuilt('armory') },
 ];

@@ -374,5 +374,11 @@ classes: the Scuttler, the Brute, the Leech (drains charge), the Spitter and the
 above; the Lunar biome is Argos, the moon (renamed from Argos by the owner, Nov 2026), where no Murmur live. The polar region is Hoarfell and the swamp is Blackwater (renamed from the White and the Sump
 by the owner, Nov 2026). The biomes take their region names everywhere, the new-game
 setup included (the owner's decision, Nov 2026), with the kind of ground shown under each (the Rust: red desert). On the setup screen each rival doctrine has a tooltip saying in
-depth how it plays. Planned: the Hollow as a new biome and map once the Murmur design is settled, and later a campaign
+depth how it plays. The Hollow is in the game as a map
+of its own (Nov 2026), always night, under its own name in every text: Command Bases come down through **breaches** (shafts of
+daylight in the cavern roof; Ringfall falls only through them), Harvesters cut
+**Bloom veins** for Fiber (which draws the Murmur), the richest Crystal hangs over the chasms as **floating Crystal**,
+**tremors** shake dust and rock from the roof, smooth **stone pillars** stand in the caverns, robot parts lie in rows in
+**side chambers**, and **the Deep's mound** stands in the cathedral at the centre (its tendril star stirs over it; the
+Deep itself is never shown). No aircraft fly there, and there are no Trade Posts or Uplinks (the Pathfinder never mapped it). The mission *Into the Hollow* teaches it. Planned: a campaign
 mode built around the Murmur.

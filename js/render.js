@@ -149,7 +149,7 @@ const MM_DESERT = {};
 
 /** Switch the palette, textures and minimap colours to the current game's biome (at every bake). */
 function applyBiome() {
-  const b = typeof biome === 'function' && S ? biome() : 'desert';
+  const b = artBiome(typeof biome === 'function' && S ? biome() : 'desert'); // (the Hollow wears the Bloom's art for now: BIOME_ART)
   ensureBiomeArt(b); // (the map is baked again as it arrives)
   const look = BIOME_LOOK[b] || BIOME_LOOK.desert;
   if (!THEME_DESERT.cliffTop) { Object.assign(THEME_DESERT, THEME); Object.assign(MM_DESERT, { ground: MM_COLORS.ground, water: MM_COLORS.water, rock: MM_COLORS.rock, ramp: MM_COLORS.ramp }); }
@@ -710,7 +710,7 @@ function bakeGlow() {
   const old = R.glowMap && R.glowMap.c;
   R.glowMap = null;
   const b = R.biome;
-  let any = !!(ART['ground-glow-' + b] || ART['water-glow-' + b]);
+  let any = !!(ART['ground-glow-' + b] || ART['water-glow-' + b] || S.hollow); // (the Hollow: its Bloom veins glow)
   for (let k = 1; k <= PLANT_KINDS && !any; k++) if (ART[`plant-${b}-${k}-glow`]) any = true;
   if (!any) { if (old) old.width = old.height = 0; return; }
   const c = old || document.createElement('canvas'); // (used again, as bakeMap's are)
@@ -734,6 +734,7 @@ function glowTiles(i0, j0, i1, j1) {
     const t = tIdx(i, j);
     if (S.terrain[t] === T_GROUND && gArt && !S.road[t] && !S.bAt[t]) drawTexture(ctx, gArt, i, j, i * TP, j * TP);
     else if (S.terrain[t] === T_WATER && wArt && !S.road[t]) drawTexture(ctx, wArt, i, j, i * TP, j * TP);
+    if (S.res[t] === R_VEIN && !S.road[t]) veinGlow(ctx, i, j, S.grow[t]); // (the Bloom's veins pulse violet in the dark)
     // (rounded shores: each corner glows as what it now shows)
     for (const { fill, dx, dy } of shoreRounds(i, j)) {
       ctx.save(); shoreCornerPath(ctx, i * TP, j * TP, dx, dy); ctx.clip();
@@ -748,6 +749,14 @@ function glowTiles(i0, j0, i1, j1) {
   ctx.beginPath(); ctx.rect(i0 * TP, j0 * TP, (i1 - i0 + 1) * TP, (j1 - j0 + 1) * TP); ctx.clip();
   drawPlants(ctx, i0 - 1, j0 - 1, i1 + 1, j1 + 1, true);
   ctx.restore();
+}
+
+/** A Bloom vein's glow in the night glow map (dimmer while it grows back): violet light along it. */
+function veinGlow(ctx, i, j, grow) {
+  const x = i * TP + TP / 2, y = j * TP + TP / 2, g = ctx.createRadialGradient(x, y, 1, x, y, TP * 0.6);
+  g.addColorStop(0, `rgba(205,130,255,${0.55 * (0.3 + 0.7 * grow)})`); g.addColorStop(1, 'rgba(160,80,240,0)');
+  ctx.fillStyle = g;
+  ctx.fillRect(i * TP - TP * 0.1, j * TP - TP * 0.1, TP * 1.2, TP * 1.2);
 }
 
 /** Add the biome's night glow over the ground (after it's graded for the time of day), stronger the darker it is. */
@@ -939,7 +948,7 @@ function drawTile(i, j, ctx = R.mapCtx) {
 
 function paintTile(ctx, i, j) {
   const x = i * TP, y = j * TP, t = tIdx(i, j);
-  const terr = S.terrain[t];
+  const terr = pillarAt(t) ? T_GROUND : S.terrain[t]; // (a pillar of the Hollow stands on the cavern floor: see drawPillar)
   const n = fbm(i / 6, j / 6, 991, 3);
   ctx.fillStyle = levelColor(S.elev[t], n);
   ctx.fillRect(x, y, TP, TP);
@@ -1402,7 +1411,7 @@ function tallFace(ctx, i, j, x, y, h, d, foot) {
  */
 /** A canyon art image for this planet's biome (the desert's when there's no biome version). */
 function canyonArt(key) {
-  const b = biome();
+  const b = R.biome || artBiome(biome());
   return (b !== 'desert' && ART[key + '-' + b]) || ART[key] || null;
 }
 
@@ -2444,8 +2453,8 @@ function drawBurnt(ctx, i, j, x, y) {
 function drawResource(ctx, type, amt, grow, cx, cy, s, i, j) {
   const art = ART[RES[type].key];
   if (art) {
-    const sc = type === R_STALK ? 0.5 + 0.5 * grow : type === R_CROP ? 0.35 + 0.65 * grow : 0.6 + 0.4 * Math.min(1, amt / RES[type].amount);
-    ctx.globalAlpha = (type === R_STALK || type === R_CROP) && grow < 1 ? 0.85 : 1;
+    const sc = type === R_STALK || type === R_VEIN ? 0.5 + 0.5 * grow : type === R_CROP ? 0.35 + 0.65 * grow : 0.6 + 0.4 * Math.min(1, amt / RES[type].amount);
+    ctx.globalAlpha = (type === R_STALK || type === R_CROP || type === R_VEIN) && grow < 1 ? 0.85 : 1;
     drawArt(ctx, art, cx, cy, s * sc);
     ctx.globalAlpha = 1;
     return;
@@ -2500,6 +2509,25 @@ function drawResource(ctx, type, amt, grow, cx, cy, s, i, j) {
       ctx.fillStyle = '#ffd08a';
       ctx.fillRect(bx - r * 0.2, by - r * 0.3, 1.6 * u, 1.6 * u);
     }
+  } else if (type === R_VEIN) {
+    // Bloom veins (the Hollow): violet root-veins breaking through a heaved ridge of earth, lit at their tips. Cut
+    // down, they grow back thin and dim.
+    const g = 0.35 + 0.65 * grow, a0 = h(3) * Math.PI;
+    ctx.fillStyle = 'rgba(30,14,40,0.3)';
+    ctx.beginPath(); ctx.ellipse(cx, cy + 2 * u, 12 * u, 5.5 * u, a0 * 0.3 - 0.4, 0, Math.PI * 2); ctx.fill();
+    ctx.lineCap = 'round';
+    for (let k = 0; k < 3; k++) {
+      const a = a0 + k * 2.1 + (h(k) - 0.5) * 0.8, len = (8 + h(k + 3) * 6) * u * g;
+      const x0 = cx + (h(k + 6) - 0.5) * 5 * u, y0 = cy + (h(k + 9) - 0.5) * 4 * u;
+      const x1 = x0 + Math.cos(a) * len, y1 = y0 + Math.sin(a) * len * 0.7, mx = (x0 + x1) / 2 + (h(k + 12) - 0.5) * 6 * u, my = (y0 + y1) / 2 + (h(k + 15) - 0.5) * 5 * u;
+      ctx.strokeStyle = '#3d1a5c'; ctx.lineWidth = 3.4 * u * g;
+      ctx.beginPath(); ctx.moveTo(x0, y0); ctx.quadraticCurveTo(mx, my, x1, y1); ctx.stroke();
+      ctx.strokeStyle = grow < 1 ? '#7d5f9a' : '#b46cf0'; ctx.lineWidth = 1.5 * u * g;
+      ctx.beginPath(); ctx.moveTo(x0, y0); ctx.quadraticCurveTo(mx, my, x1, y1); ctx.stroke();
+      ctx.fillStyle = grow < 1 ? 'rgba(190,160,230,0.55)' : '#f1dcff';
+      ctx.beginPath(); ctx.arc(x1, y1, 1.5 * u * g, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.lineCap = 'butt';
   } else if (type === R_CROP) {
     // Rows of leafy stems topped with glowing pink energy pods once ripe.
     const g = 0.3 + 0.7 * grow, ripe = grow >= 1;
@@ -2820,6 +2848,7 @@ function drawBuilding(ctx, type, cx, cy, s, owner, b) {
       break;
     }
     case 'nest': { drawNest(ctx, cx, cy, s, b); break; }
+    case 'mound': { drawMound(ctx, cx, cy, s, b); break; }
     case 'station': {
       // A platform with a canopy beside the track, crates stacked under it and the team colour on the roof.
       hullBase(ctx, cx, cy, s, color);
@@ -3965,6 +3994,35 @@ function drawNest(ctx, cx, cy, s, b) {
   }
 }
 
+/**
+ * The Deep's mound (the Hollow): a nest half again as big, ringed by crystal spires, with the Deep's tendril star
+ * (wider than a Hauler, LORE.md) rising out of its top and stirring.
+ */
+function drawMound(ctx, cx, cy, s, b) {
+  const t = R.time, S2 = s * 1.6;
+  ctx.save();
+  ctx.lineCap = 'round';
+  for (let k = 0; k < 7; k++) { // the crystal spires round it
+    const a = (k / 7) * Math.PI * 2 + 0.4, x = cx + Math.cos(a) * S2 * 0.62, y = cy + Math.sin(a) * S2 * 0.44, hgt = S2 * (0.28 + 0.12 * ((k * 37) % 5) / 5);
+    ctx.fillStyle = 'rgba(20,8,24,0.35)'; ctx.beginPath(); ctx.ellipse(x + s * 0.05, y + s * 0.04, s * 0.1, s * 0.05, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#c9b0ff'; ctx.beginPath(); ctx.moveTo(x - s * 0.07, y); ctx.lineTo(x, y - hgt); ctx.lineTo(x + s * 0.07, y); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = '#8758f0'; ctx.beginPath(); ctx.moveTo(x, y - hgt); ctx.lineTo(x + s * 0.07, y); ctx.lineTo(x, y); ctx.closePath(); ctx.fill();
+  }
+  ctx.restore();
+  drawNest(ctx, cx, cy, S2, b);
+  ctx.save();
+  ctx.lineCap = 'round';
+  for (let k = 0; k < 5; k++) { // the tendril star, never seen whole
+    const a = (k / 5) * Math.PI * 2 - Math.PI / 2 + Math.sin(t * 0.6 + k) * 0.15, len = s * (0.55 + 0.12 * Math.sin(t * 0.9 + k * 1.7));
+    const x1 = cx + Math.cos(a) * len, y1 = cy - s * 0.35 + Math.sin(a) * len * 0.55;
+    ctx.strokeStyle = '#2a1030'; ctx.lineWidth = s * 0.11;
+    ctx.beginPath(); ctx.moveTo(cx, cy - s * 0.35); ctx.quadraticCurveTo((cx + x1) / 2 + Math.sin(t + k) * s * 0.08, (cy - s * 0.35 + y1) / 2 - s * 0.15, x1, y1); ctx.stroke();
+    ctx.strokeStyle = `rgba(199,125,255,${0.55 + 0.3 * Math.sin(t * 1.4 + k)})`; ctx.lineWidth = s * 0.03;
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
 /** A creature (see WILD): a Scuttler is small and quick, a Brute big and armoured; legs scurry as it moves. */
 function drawCritter(ctx, u, x, y, s) {
   const brute = u.type === 'brute', k = brute ? 1.7 : 1, face = u.face || 0;
@@ -4639,6 +4697,7 @@ function render(dtReal) {
   if (!R.terrOff) ctx.drawImage(R.terr, ox, oy, S.W * z, S.H * z);
   drawPipes(ctx, ox, oy, z, inView); // (graded with the ground at dusk and night)
   todGradeGround(ctx); // morning, evening and night light on the ground and its territory tint (buildings and bots have their own re-lit art)
+  drawBreachLight(ctx, ox, oy, z); // (the Hollow: daylight down the breach shafts, on the ground graded for the night)
   drawLavaGlow(ctx, ox, oy, z);
   drawBiomeGlow(ctx, ox, oy, z);
   drawRoadGlow(ctx, ox, oy, z, v0, v1);
@@ -4811,6 +4870,7 @@ function render(dtReal) {
   if (artFor('streetlamp-road', 0)) for (const l of streetLamps(v0, v1)) items.push(l); // posts stand among buildings and bots
   if (S.posts) for (const p of S.posts) if (inView(p.x, p.y, 2)) items.push({ ent: 'post', x: p.x, y: p.y + 0.5, post: p });
   if (S.uplinks) for (const u of S.uplinks) if (inView(u.x, u.y, 3)) items.push({ ent: 'uplink', x: u.x, y: u.y + 0.5, up: u });
+  if (S.hollow) for (const t of S.hollow.pillars) { const i = t % S.W, j = (t / S.W) | 0; if (inView(i, j, 3)) items.push({ ent: 'pillar', x: i, y: j + 0.5 }); }
   // Overpass decks stand among the bots: the east-west road is up on the deck, so a bot driving along it is drawn on
   // top, and one driving north or south under it (in the deck's tile) goes below.
   let under = null;
@@ -4847,6 +4907,7 @@ function render(dtReal) {
   }
   for (const e of items) {
     if (e.ent === 'lamp') { drawStreetLamp(ctx, e, ox, oy, z); continue; }
+    if (e.ent === 'pillar') { drawPillar(ctx, ox + (e.x + 0.5) * z, oy + e.y * z, z, e.x, e.y); continue; }
     if (e.ent === 'deck') { drawOverpassDeck(ctx, ox, oy, z, e.t); continue; }
     if (e.ent === 'post') { drawTradePost(ctx, ox + (e.post.x + 0.5) * z, oy + (e.post.y + 0.5) * z, z, e.post); continue; }
     if (e.ent === 'uplink') { drawUplink(ctx, ox + (e.up.x + 0.5) * z, oy + (e.up.y + 0.5) * z, z, e.up); continue; }
@@ -4913,6 +4974,7 @@ function render(dtReal) {
     }
   }
 
+  drawBreachShafts(ctx, ox, oy, z); // (the Hollow: the shafts of daylight, over everything standing in them)
   drawFeeds(ctx, ox, oy, z, inView);
   drawSmoke(ctx, ox, oy, z, inView);
   drawAirLayer(ctx, ox, oy, z, inView);
@@ -4995,6 +5057,7 @@ function render(dtReal) {
   drawEffects(ctx, ox, oy, z);
   if (S.event) drawEvent(ctx, ox, oy, z);
   drawWeather(ctx, ox, oy, z); // sandstorms, rain, snow (looks only; js/weather.js)
+  drawTremors(ctx, ox, oy, z); // (the Hollow: dust from the roof, and where rock is about to fall)
   if (R.box) {
     // The selection box being dragged (desktop).
     const b = R.box, x = Math.min(b.x0, b.x1), y = Math.min(b.y0, b.y1), w = Math.abs(b.x1 - b.x0), h = Math.abs(b.y1 - b.y0);
@@ -5006,6 +5069,94 @@ function render(dtReal) {
   }
   if (typeof UI !== 'undefined' && UI.inGame) renderMinimap();
   if (fw) fw.draw += performance.now() - began;
+}
+
+/* ------------------------------------------------------------------ the Hollow */
+
+/** Is tile t one of the Hollow's stone pillars (rock, drawn as a column on the cavern floor)? */
+function pillarAt(t) {
+  if (!S || !S.hollow) return false;
+  if (R.pillarOf !== S.hollow) { R.pillarOf = S.hollow; R.pillarSet = new Set(S.hollow.pillars); }
+  return R.pillarSet.has(t);
+}
+
+/**
+ * Daylight on the cavern floor under each breach (S.hollow.breaches), the only daylight in the Hollow: a pool of pale
+ * gold, added over the ground once it's graded for the night.
+ */
+function drawBreachLight(ctx, ox, oy, z) {
+  if (!S.hollow) return;
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  for (const b of S.hollow.breaches) {
+    const x = ox + (b.x + 0.5) * z, y = oy + (b.y + 0.5) * z, r = (b.r + 0.8) * z;
+    if (x + r < 0 || x - r > R.w || y + r < 0 || y - r > R.h) continue;
+    const g = ctx.createRadialGradient(x, y, r * 0.05, x, y, r);
+    g.addColorStop(0, 'rgba(255,224,150,0.55)'); g.addColorStop(0.5, 'rgba(255,210,128,0.32)'); g.addColorStop(0.8, 'rgba(255,196,110,0.1)'); g.addColorStop(1, 'rgba(255,190,100,0)');
+    ctx.fillStyle = g;
+    ctx.beginPath(); ctx.ellipse(x, y, r, r * 0.88, 0, 0, Math.PI * 2); ctx.fill();
+  }
+  ctx.restore();
+}
+
+/**
+ * The breach shafts: columns of pale gold daylight falling through the cavern roof, seen from above (rising toward the
+ * top of the screen and fading into the dark), with dust motes drifting down through them.
+ */
+function drawBreachShafts(ctx, ox, oy, z) {
+  if (!S.hollow) return;
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  for (const b of S.hollow.breaches) {
+    const x = ox + (b.x + 0.5) * z, y = oy + (b.y + 0.5) * z, r = b.r * z, top = y - r * 2.8;
+    if (x + r < 0 || x - r > R.w || y + r < 0 || top > R.h) continue;
+    const sway = Math.sin(R.time * 0.25 + b.x) * r * 0.04;
+    const g = ctx.createLinearGradient(0, top, 0, y + r * 0.5);
+    g.addColorStop(0, 'rgba(255,222,150,0)'); g.addColorStop(0.55, 'rgba(255,222,150,0.07)'); g.addColorStop(0.9, 'rgba(255,230,170,0.16)'); g.addColorStop(1, 'rgba(255,230,170,0)');
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.moveTo(x - r * 0.95, y); ctx.lineTo(x - r * 0.7 + sway, top); ctx.lineTo(x + r * 0.7 + sway, top); ctx.lineTo(x + r * 0.95, y);
+    ctx.ellipse(x, y, r * 0.95, r * 0.5, 0, 0, Math.PI);
+    ctx.closePath(); ctx.fill();
+    // A brighter core down the middle.
+    const c = ctx.createLinearGradient(0, top, 0, y);
+    c.addColorStop(0, 'rgba(255,240,200,0)'); c.addColorStop(1, 'rgba(255,240,200,0.12)');
+    ctx.fillStyle = c;
+    ctx.beginPath(); ctx.moveTo(x - r * 0.35, y); ctx.lineTo(x - r * 0.25 + sway, top); ctx.lineTo(x + r * 0.25 + sway, top); ctx.lineTo(x + r * 0.35, y); ctx.closePath(); ctx.fill();
+    // Dust motes drifting down through the light.
+    const m = Math.max(1, z * 0.05);
+    for (let k = 0; k < 18; k++) {
+      const h1 = hash2(b.x * 7 + k, b.y, 31), h2 = hash2(k, b.x + b.y * 3, 37), f = (R.time * (0.04 + 0.08 * h2) + h1) % 1;
+      const mx = x + (h2 - 0.5) * r * (1.8 - 0.4 * f) + Math.sin(R.time * 0.7 + k) * r * 0.05 + sway * (1 - f), my = top + f * (y - top);
+      ctx.fillStyle = `rgba(255,238,196,${0.55 * Math.sin(f * Math.PI)})`;
+      ctx.fillRect(mx, my, m, m);
+    }
+  }
+  ctx.restore();
+}
+
+/** One of the Hollow's stone pillars: a tall, smooth column worn in a spiral, standing on its tile (cx, cy: its foot). */
+function drawPillar(ctx, cx, cy, z, i, j) {
+  const r = z * 0.34, hgt = z * (1.45 + 0.25 * hash2(i, j, 401)), base = cy + z * 0.3, top = base - hgt;
+  ctx.save();
+  ctx.fillStyle = 'rgba(0,0,0,0.35)';
+  ctx.beginPath(); ctx.ellipse(cx + z * 0.12, base + z * 0.05, r * 1.25, r * 0.45, 0, 0, Math.PI * 2); ctx.fill();
+  const g = ctx.createLinearGradient(cx - r, 0, cx + r, 0);
+  g.addColorStop(0, todColor('#2e2836')); g.addColorStop(0.35, todColor('#7a6f86')); g.addColorStop(0.6, todColor('#544a5e')); g.addColorStop(1, todColor('#1e1a24'));
+  ctx.fillStyle = g;
+  ctx.beginPath(); ctx.moveTo(cx - r, top); ctx.lineTo(cx - r, base); ctx.ellipse(cx, base, r, r * 0.36, 0, Math.PI, 0, true); ctx.lineTo(cx + r, top); ctx.closePath(); ctx.fill();
+  // The spiral, worn into it: grooves winding round the column.
+  ctx.strokeStyle = 'rgba(12,8,18,0.5)'; ctx.lineWidth = Math.max(1, z * 0.035);
+  const turn = hash2(i, j, 402) < 0.5 ? 1 : -1;
+  for (let k = 0; k < 5; k++) {
+    const y = top + ((k + 0.6) * hgt) / 5.4;
+    ctx.beginPath(); ctx.moveTo(cx - r, y + turn * z * 0.13); ctx.quadraticCurveTo(cx, y + turn * z * 0.02, cx + r, y - turn * z * 0.13); ctx.stroke();
+  }
+  ctx.fillStyle = todColor('#8a7f96');
+  ctx.beginPath(); ctx.ellipse(cx, top, r, r * 0.36, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = todColor('#5b5166');
+  ctx.beginPath(); ctx.ellipse(cx, top + r * 0.04, r * 0.7, r * 0.22, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.restore();
 }
 
 /**
@@ -5741,7 +5892,7 @@ function tradePostLabel(ctx, cx, cy, z, r) {
 
 function drawDryOil(ctx, x, y, z, b) {
   const def = b ? BDEFS[b.type] : null;
-  const res = def && (def.gather || (def.farm ? R_CROP : 0));
+  const res = def && (gatherRes(b.type) || (def.farm ? R_CROP : 0));
   if (res) { drawDepletedRes(ctx, x, y, z, res); return; }
   const r = Math.max(8, z * 0.24), bob = Math.sin(R.time * 3) * r * 0.08;
   y += bob;
@@ -5904,7 +6055,7 @@ function drawRanges(ctx, type, x, y, ox, oy, z, owner) {
     const rad = def.radius, r2 = rad * rad + 0.3;
     for (let j = Math.max(0, y - rad); j <= Math.min(S.H - 1, y + rad); j++) {
       for (let i = Math.max(0, x - rad); i <= Math.min(S.W - 1, x + rad); i++) {
-        if (S.res[j * S.W + i] === def.gather && dist2(i, j, x, y) <= r2) {
+        if (S.res[j * S.W + i] === gatherRes(type) && dist2(i, j, x, y) <= r2) {
           ctx.beginPath(); ctx.arc(ox + (i + 0.5) * z, oy + (j + 0.5) * z, z * 0.42, 0, Math.PI * 2); ctx.stroke();
         }
       }
@@ -6659,7 +6810,7 @@ const MM_WARBOT = ['#bff2ff', '#ffc2ca', '#c6f4cc', '#e4cbff'];
 const MM_COLORS = {
   ground: [169, 113, 74], water: [28, 75, 93], rock: [74, 51, 41], ramp: [235, 205, 150], chasm: [18, 12, 10],
   [R_STALK]: [47, 174, 134], [R_BOULDER]: [160, 154, 145], [R_ORE]: [235, 120, 50], [R_CRYSTAL]: [150, 105, 245],
-  [R_CROP]: [255, 92, 138], [R_OIL]: [22, 18, 15], [R_URANIUM]: [157, 255, 58], fertile: [92, 98, 40], burnt: [38, 32, 29],
+  [R_CROP]: [255, 92, 138], [R_OIL]: [22, 18, 15], [R_URANIUM]: [157, 255, 58], [R_VEIN]: [176, 96, 236], fertile: [92, 98, 40], burnt: [38, 32, 29],
 };
 
 function initMinimap(canvas) {
@@ -6780,6 +6931,11 @@ function renderMinimap() {
     const b = getE(u.trade), hit = b && b.convoyHit !== undefined && S.time - b.convoyHit < 6 && (R.time * 4) % 2 < 1;
     ctx.fillStyle = hit ? '#ff5a6e' : '#ffcf4a'; ctx.strokeStyle = '#0b1420'; ctx.lineWidth = 1;
     ctx.beginPath(); ctx.arc(u.x * sx, u.y * sy, 2.4, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+  }
+  // The Hollow's breaches: soft pools of pale gold, the only daylight down there.
+  if (S.hollow) for (const b of S.hollow.breaches) {
+    ctx.fillStyle = 'rgba(255,214,140,0.4)';
+    ctx.beginPath(); ctx.arc((b.x + 0.5) * sx, (b.y + 0.5) * sy, Math.max(2.5, b.r * sx), 0, Math.PI * 2); ctx.fill();
   }
   // Trade Posts: gold diamonds.
   if (S.posts) for (const p of S.posts) {

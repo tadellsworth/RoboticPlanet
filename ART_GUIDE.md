@@ -1446,6 +1446,18 @@ same size, or point the tag at a new one. Keep them small (WebP; the whole set i
 The guide also shows the game's own `buildings/lander@0`, `lander@1`, the night Trade Post, Uplink, Command Base and
 *Wren* (`tod/night/...`); the Ithaca I page's catalog plate and the four callsign emblems are inline SVG in the page.
 
+### The Hollow (being designed)
+
+The Hollow is a map with its own look (the biome key `hollow`). Until its art is installed it is drawn with the
+Bloom's (`alien`) through one line in `js/defs.js` (`BIOME_ART = { hollow: 'alien' }`): drop that line once
+`ground-hollow`, `water-hollow`, `rock-hollow`, `cliff-hollow`, the `chasm-*-hollow` canyon pieces, the night glow
+(`ground-glow-hollow`) and `plant-hollow-1…6` are in `art/art-manifest.js` (and add `hollow` to `LAZY_BIOMES` in
+`js/render.js` if they should load only when it's played). It is always night there, so only the night look matters
+for the ground. Drawn in code for now, each with a key art could take over: Bloom veins (the resource `vein`, like
+`stalk`; it also glows in the night glow map), the stone pillars (`drawPillar`, standing on a rock tile), the breach
+shafts (`drawBreachLight` and `drawBreachShafts`), the Deep's mound (`drawMound`, over the nest art at 1.6×), the dust
+of the tremors and the trickle before a rockfall (`drawTremors` in `js/weather.js`).
+
 ### Not swappable yet (ask Claude Code if you want these)
 
 - Menu background and logo
