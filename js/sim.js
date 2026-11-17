@@ -10214,7 +10214,8 @@ function murmurTick() {
   murmurLayer();
   const M = S.mur, night = murmurNight(S.time), n = murmurNights(S.time), x = dayClock(S.time), surge = alwaysNightMap();
   // The dusk warning (on an always-night map, the lull: the ground goes dead silent before a surge).
-  if (!night && x >= NIGHT_FROM - MURMUR.warn && x < NIGHT_FROM && M.warned !== n + 1) {
+  // (No nest left standing, or none ever found ground: nothing comes up, so no warning that something will.)
+  if (!night && x >= NIGHT_FROM - MURMUR.warn && x < NIGHT_FROM && M.warned !== n + 1 && (M.nests || []).some((id) => { const b = getE(id); return b && !b.dead; })) {
     M.warned = n + 1;
     for (const P of S.players) if (!P.absent && !P.out) postMsg(P.id, surge ? 'The ground has gone silent. A surge is coming: the Murmur will be up through their tunnels in a minute.'
       : 'The Murmur are stirring: night falls soon, and they come up through their tunnels. Bring your bots in close and man the guns.', undefined, undefined, 'warn');

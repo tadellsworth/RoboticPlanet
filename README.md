@@ -1570,7 +1570,9 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   colonies, `S.wildSlot`, `absent` and `wild`, so `nColonies()` counts colonies without it), the tunnel layer and the
   nests. **None on a silent biome** (`BIOMES.lunar.silent`, `murmurGround`): on Lunar, Argos the moon, there are no nests
   and no raids in any mode; the setup shows Off, greyed (the saved setting is kept for other biomes), and an old Lunar
-  save that has nests keeps them. Internally the creatures are `wildlife`, the nests type `'nest'`, tunnel exits type
+  save that has nests keeps them. **Nor on Sky islands or Four Isles** (`noMurmur` on their `SHAPE_PRESETS`, `murmurShape`):
+  no nest ever found ground there, and the dusk warning came every night with nothing after it; the setup greys it the
+  same way. Wherever no nest stands (none placed, or all wrecked) there is no dusk warning (`murmurTick`). Internally the creatures are `wildlife`, the nests type `'nest'`, tunnel exits type
   `'burrow'`; players see "the Murmur", "Murmur Nest", "Tunnel Exit", Scuttler and Brute. **Nobody's side**: the slot is
   `absent`, so it never counts for capture, surrender, Domination, the Uplinks or teams (`foes` with every colony; `isWild`).
   - **Nests.** Colony: one per `WILD.perTiles` tiles (3–8, `colonyNests`, `placeNests`), at least 16 tiles from the landing site.
