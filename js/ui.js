@@ -1778,7 +1778,7 @@ const PAN_KEYS = { arrowleft: [-1, 0], arrowright: [1, 0], arrowup: [0, -1], arr
 const BUILD_KEYS = {
   gather: { harvester: 'h', quarry: 'q', mine: 'm', tap: 'c', grower: 'g', farm: 'f', pump: 'p', fueltank: 't' },
   make: { kiln: 'k', smelter: 'm', fab: 'f', refinery: 'v', tarworks: 't', foundry: 'u', armory: 'i', munitions: 'n', reactor: 'y', lab: 'l', generator: 'g' },
-  move: { charger: 'f', depot: 'e', roadworks: 'o', station: 'n', port: 'p', airfield: 'i', terminal: 'm' },
+  move: { charger: 'f', depot: 'e', roadworks: 'o', station: 'n', port: 'p', airfield: 'i', mast: 't', terminal: 'm' },
   defend: { outpost: 'o', turret: 't', minigun: 'g', bunker: 'u', keep: 'k', disruptor: 'z', mortar: 'm', flak: 'f', repair: 'e', silo: 'i', nukesilo: 'n' },
 };
 const BUILD_TAB_KEYS = { gather: '1', make: '2', move: '3', defend: '4', all: '5' };
@@ -1805,6 +1805,8 @@ const SHEET_KEYS = {
   'ar-tab-army': 'z', 'ar-tab-air': 'x', 'ar-strike': 'e',
   // A Trade Terminal's route: Start (or Change) it, Stop it, Escort on or off.
   'sh-tgo': 'g', 'sh-tstop': 'x', 'sh-escort': 'e',
+  // A Mooring Mast's Link (or Unlink).
+  'sh-mlink': 'l', 'sh-munlink': 'l',
 };
 /** Mark the open panel's buttons with their keys (SHEET_KEYS), for the hints shown on a computer. */
 function markSheetKeys() {
@@ -3572,7 +3574,8 @@ function setMode(mode, keepPlan) {
   for (const m of ['road', 'place', 'attack', 'aim', 'land', 'airdrop']) document.body.classList.toggle('mode-' + m, mode === m);
   document.body.classList.toggle('mode-on', mode !== 'normal'); // (any mode: on an upright phone its banner takes the bottom bar's place)
   if (mode !== 'aim') { R.aim = null; UI.aimSilo = 0; }
-  if (mode !== 'aim' && mode !== 'land' && mode !== 'airdrop' && mode !== 'strike' && mode !== 'scorch') R.aimHover = null;
+  if (mode !== 'aim' && mode !== 'land' && mode !== 'airdrop' && mode !== 'strike' && mode !== 'scorch' && mode !== 'mastlink') R.aimHover = null;
+  if (mode !== 'mastlink') UI.linkMast = 0;
   if (mode !== 'strike') R.napalmAt = null;
   if (mode !== 'scorch') { R.scorchAt = null; UI.scorchIds = null; }
   if (mode !== 'land') { R.landAt = null; UI.landFerry = 0; }
@@ -3961,6 +3964,134 @@ function airPlacesText(b) {
   const keep = airKeep(b), short = Object.keys(keep).filter((g) => keep[g] > 0).map((g) => `${keep[g]} ${GOOD[g].name}`);
   return (list.length ? `From here: ${list.map((c) => `the ${BDEFS[c.type].short || BDEFS[c.type].name} ${dirText(b, c)}`).join(', ')}. ` : 'Nothing yet: switch on Supply by air in a Depot\'s or Outpost\'s panel (a Drop Outpost has it on). ') +
     `A plane flies them what they're short of (their supply orders, Ammo for their warbots, a site's materials), ${BOTS.cargoplane.carry} goods a flight, taking them in turn (one that has run out of something first).` + (short.length ? ` This Airfield keeps ${short.join(', ')} for its planes and those places: haulers bring it.` : '');
+}
+
+/* ------------------------------------------------------------------ Mooring Masts and Airships */
+
+/** "the Mast 14 tiles east of the Command Base" (or "the Mast" with no Command Base). */
+function mastWhere(m) {
+  const L = getE(S.players[m.owner] && S.players[m.owner].lander);
+  return L && !L.dead ? `the Mast ${dirText(L, m)} of the Command Base` : 'the Mast';
+}
+
+/** What Airship u is doing, in a few words (its panel, the Mast's, the Army panel's Air tab). */
+function shipStatus(u) {
+  const here = u.inside ? getE(u.inside) : null, line = shipLine(u);
+  const goods = u.cargo ? sumValues(u.cargo) : 0, riders = ferryAboard(u).length;
+  const load = [goods ? `${goods} goods` : '', riders ? `${riders} rider${riders === 1 ? '' : 's'}` : ''].filter(Boolean).join(' and ');
+  if (u.flight) {
+    const to = getE(u.flight.to);
+    return `flying to ${to && !to.dead ? (BDEFS[to.type].mast ? mastWhere(to) : 'the Airfield') : 'a Mast'}` + (load ? ` with ${load}` : line ? ', empty' : '');
+  }
+  if (here && BDEFS[here.type].airfield) return 'in the Airfield\'s hangar, waiting for a line: link two Mooring Masts';
+  if (here && BDEFS[here.type].mast) {
+    if (!line) return `moored at ${mastWhere(here)}, waiting for a line`;
+    if (line[0] !== here && line[1] !== here) return `moored at ${mastWhere(here)}, off to its line`;
+    if (u.noFuel) return `moored at ${mastWhere(here)}, waiting for ${u.noFuel} more Fuel to cross`;
+    if (riders) return `moored at ${mastWhere(here)}, boarding riders (${riders} of ${BOTS[u.type].seats})`;
+    return `moored at ${mastWhere(here)}, loading when there's a trip worth making`;
+  }
+  return 'waiting for a Mooring Mast';
+}
+
+/** An Airship's panel rows: its load (goods and riders), its line, its Fuel. */
+function airshipRows(u) {
+  const riders = ferryAboard(u), kinds = {};
+  for (const v of riders) kinds[v.type] = (kinds[v.type] || 0) + 1;
+  const line = shipLine(u), legs = line ? Math.ceil(shipLegFuel(line[0], line[1]) / planeFill(u)) : 0;
+  return `<div class="kv"><span>Riders</span><span>${riders.length ? Object.keys(kinds).map((k) => `${kinds[k]} ${kinds[k] === 1 ? BOTS[k].name : BOTS[k].plural}`).join(', ') : 'none'} (${BOTS[u.type].seats} seats)</span></div>` +
+    `<div class="kv"><span>Hold</span><span>${u.cargo ? sumValues(u.cargo) : 0} of ${BOTS[u.type].carry} goods${u.cargo && u.cargo !== null && getE(u.cargoTo) ? `, for ${mastWhere(getE(u.cargoTo))}` : ''}</span></div>` +
+    `<div class="kv"><span>Fuel</span><span>fills up at either Mast of its line, one Fuel ${planeFill(u)}% of the tank${legs ? `; a crossing of its line takes about ${legs}` : ''}</span></div>`;
+}
+
+/** An Airship's panel: which line it serves (buttons for each of your lines), or none. */
+function renderShipLine(u) {
+  const el = $('sh-sline');
+  if (!el) return;
+  const lines = mastLines(ME), cur = shipLine(u);
+  const sig = JSON.stringify([lines.map(([a, b]) => [a.id, b.id, lineShips(a).length]), cur && cur[0].id]);
+  if (el.dataset.sig === sig) return;
+  el.dataset.sig = sig;
+  el.innerHTML = (lines.length ? lines.map((ln) => {
+    const on = !!cur && (cur[0] === ln[0] || cur[0] === ln[1]), n = lineShips(ln[0]).length;
+    const L = getE(S.players[ME].lander), at = L && !L.dead ? `Masts ${dirText(L, ln[0])} and ${dirText(L, ln[1])} of the Command Base` : 'two Masts';
+    return `<button class="btn${on ? ' primary' : ''}" data-m="${ln[0].id}"${!on && n >= AIRSHIP.perLine ? ' disabled' : ''}>${on ? 'On the line' : 'Serve the line'}: ${at} (${n} of ${AIRSHIP.perLine})</button>`;
+  }).join('') : '<p class="hint">No Airship line yet: build two Mooring Masts and link them (a Mast\'s panel: Link).</p>') +
+    (cur ? '<button class="btn ghost" data-m="0">Off the line: wait at its Mast</button>' : '') +
+    `<p class="hint">An Airship serves one line, ${AIRSHIP.perLine} to a line at most. With exactly one line, a new Airship goes to it by itself.</p>`;
+  for (const btn of el.querySelectorAll('button[data-m]')) btn.onclick = () => act('shipLine', [u.id, +btn.dataset.m], (why) => {
+    if (why) { sfx('error'); toast(why, 'warn'); } else sfx('order');
+    el.dataset.sig = ''; refreshSheet();
+  });
+}
+
+/** The Mooring Mast panel's section (filled in by renderMastSection), with the Auto supply switch. */
+function mastSection() {
+  return `<div class="section-label">Airship line</div><div id="sh-mast"></div>
+    <div class="seg" id="sh-auto"><button data-v="1">Auto supply</button><button data-v="0">Off</button></div>
+    <p class="hint">Auto supply: the far Mast (the one further from your Command Base) stocks what the buildings round it need, the Mast nearer home keeps that ready for the line, and the far Mast's spare goods come home: ${BOTS.airship.carry} goods a trip, several kinds at once. Haulers bring the goods to a Mast and take away what arrives. Supply orders you set below come on top.</p>`;
+}
+
+/** Mast b's line, its Airships, its Fuel and its automatic stock (rebuilt only when something changes). */
+function renderMastSection(b) {
+  const el = $('sh-mast');
+  if (!el) return;
+  const o = mastPartner(b), ships = o ? lineShips(b) : [], keep = mastFuelKeep(b), fuel = Math.floor((b.stock.fuel || 0) - (b.res.fuel || 0));
+  const idle = S.bots.filter((u) => !u.dead && u.owner === b.owner && BOTS[u.type].airship && u.inside === b.id && !ships.includes(u));
+  const sig = JSON.stringify([o && o.id, b.home, ships.map((u) => [u.id, shipStatus(u)]), idle.map((u) => u.id), keep, fuel, !!b.fuelByPipe, b.auto, b.autoOff, sumValues(b.inc)]);
+  if (el.dataset.sig === sig) return;
+  el.dataset.sig = sig;
+  let h = '';
+  if (o) {
+    h += `<div class="status">Linked to ${mastWhere(o)} (${dirText(b, o)} from here).</div><p class="hint">${farStation(b) ? 'This is the far Mast: it stocks what the buildings round it need, and sends their spare goods home.' : 'This is the home Mast (nearer your Command Base): it keeps what the far Mast wants, ready to load.'} Your Workers and Warbots ride the line whenever it's the shorter way.</p>`;
+    h += ships.length ? `<div class="kv"><span>Airships on the line</span><span>${ships.length} of ${AIRSHIP.perLine}</span></div>` + ships.map((u) => `<div class="kv army-row"><span>${shipStatus(u)}</span><span><button class="btn small ghost" data-ship="${u.id}">Airship ›</button></span></div>`).join('')
+      : `<p class="hint"><b>No Airship serves it yet:</b> order one in an Airfield's hangar. With just this line, it comes here by itself.</p>`;
+    h += '<button class="btn" id="sh-munlink">Unlink</button>';
+  } else {
+    h += `<div class="status">Not on a line.</div><p class="hint">Tap <b>Link</b>, then another of your Mooring Masts at least ${AIRSHIP.minDist} tiles away: an Airship line runs straight between them, over water, cliffs and rock. A Mast is on one line at most.</p><button class="btn primary" id="sh-mlink">Link to another Mast</button>`;
+  }
+  if (idle.length) h += idle.map((u) => `<div class="kv army-row"><span>${shipStatus(u)}</span><span><button class="btn small ghost" data-ship="${u.id}">Airship ›</button></span></div>`).join('');
+  h += `<div class="kv"><span>Fuel for its Airships</span><span>${fuel}${keep ? ` (it keeps ${keep})` : ' (it keeps some once an Airship serves its line)'}</span></div>`;
+  const auto = b.auto && !b.autoOff ? Object.entries(b.auto).map(([g, n]) => goodTag(g, `${Math.min(b.stock[g] || 0, n)}/${n} ${GOOD[g].name}`, (b.stock[g] || 0) < n / 3)).join(' ') : '';
+  const coming = Object.keys(b.inc).filter((g) => b.inc[g] > 0 && S.bots.some((u) => !u.dead && u.cargoTo === b.id && u.cargo && u.cargo[g]));
+  const served = S.buildings.filter((c) => !c.dead && c.railBy === b.id).length;
+  if (served) h += `<p class="hint">It serves ${served} building${served > 1 ? 's' : ''} round it.</p>`;
+  if (auto) h += `<div class="goodlist">${auto}</div>`;
+  if (coming.length) h += `<p class="hint">On their way by Airship: ${coming.map((g) => `${b.inc[g]} ${GOOD[g].name}`).join(', ')}.</p>`;
+  el.innerHTML = h;
+  if ($('sh-mlink')) $('sh-mlink').onclick = () => { sfx('click'); startMastLink(b); };
+  if ($('sh-munlink')) $('sh-munlink').onclick = () => act('mastLine', [b.id, 0], (why) => {
+    if (why) { sfx('error'); toast(why, 'warn'); return; }
+    sfx('click'); toast('Unlinked: its Airships wait at their Masts for a line.', 'info'); el.dataset.sig = ''; refreshSheet();
+  });
+  for (const btn of el.querySelectorAll('button[data-ship]')) btn.onclick = () => { const u = getE(+btn.dataset.ship); if (u && !u.dead) { sfx('click'); openBotSheet(u); } };
+}
+
+/** Link: pick the other Mast on the map (a tap on it links them). */
+function startMastLink(b) {
+  closeSheet();
+  setMode('mastlink');
+  UI.linkMast = b.id;
+  showMastLinkBanner();
+}
+
+function showMastLinkBanner(problem) {
+  showBanner((problem ? `<span class="err">${problem}</span> ` : '') + `Tap another of your <b>Mooring Masts</b> (at least ${AIRSHIP.minDist} tiles away) to link this one to it: an Airship line runs straight between them, over anything.`, null, 'Cancel');
+}
+
+function mastLinkTap(i, j, wx, wy) {
+  const a = getE(UI.linkMast);
+  if (!a || a.dead) { setMode('normal'); return; }
+  const b = inMap(i, j) ? buildingAtTap(i, j, wx, wy) : null;
+  const why = mastLineWhy(ME, a, b && BDEFS[b.type].mast ? b : null);
+  if (why) { sfx('error'); showMastLinkBanner(why); return; }
+  act('mastLine', [a.id, b.id], (r) => {
+    if (r) { sfx('error'); showMastLinkBanner(r); return; }
+    sfx('order');
+    toast(lineShips(a).length ? 'Linked: the Airship line is open.' : 'Linked. Order an Airship in an Airfield\'s hangar to fly the line (with just this line, it goes there by itself).', 'good');
+    setMode('normal');
+    openBuildingSheet(a);
+  });
 }
 
 /** The "Supply by air" switch for one of your Depots, Outposts and the like, once you have an Airfield. */
@@ -4625,6 +4756,7 @@ function onMapTap(i, j, wx, wy) {
   if (R.mode === 'aim') { aimTap(i, j); return; }
   if (R.mode === 'land') { landTap(i, j); return; }
   if (R.mode === 'airdrop') { airdropTap(i, j); return; }
+  if (R.mode === 'mastlink') { mastLinkTap(i, j, wx, wy); return; }
   const rally = rallyAtTap(wx, wy);
   const b = buildingAtTap(i, j, wx, wy);
   if (R.mode === 'attack' && UI.armyCmd) { armyTap(UI.armyCmd, i, j, b); return; }
@@ -4687,7 +4819,7 @@ function onMapHover(i, j) {
   UI.hoverTile = inMap(i, j) ? tIdx(i, j) : -1;
   if (R.mode === 'road' && routeOn()) { routeHover(i, j); return; }
   if (R.mode === 'bpplace') { bpHover(i, j); return; }
-  if (R.mode === 'aim' || R.mode === 'land' || R.mode === 'airdrop' || R.mode === 'strike' || R.mode === 'scorch') { R.aimHover = inMap(i, j) ? { i, j } : null; return; }
+  if (R.mode === 'aim' || R.mode === 'land' || R.mode === 'airdrop' || R.mode === 'strike' || R.mode === 'scorch' || R.mode === 'mastlink') { R.aimHover = inMap(i, j) ? { i, j } : null; return; }
   if (R.mode !== 'place' || !R.overlay || !UI.placeType || !inMap(i, j)) return;
   R.ghost = { type: UI.placeType, x: i, y: j, ok: !!R.overlay.valid[tIdx(i, j)], hover: true };
 }
@@ -4703,7 +4835,7 @@ function tapStack(rally, b, wx, wy) {
   const bots = [];
   for (const u of S.bots) {
     if (u.dead || u.inside || (u.under && !murmurInSight(u))) continue; // (nor a Sapper underground out of the colony's sight)
-    const bt = BOTS[u.type], r2 = bt.crawler || bt.siege || bt.truck || bt.rail ? 0.6 : 0.3;
+    const bt = BOTS[u.type], r2 = bt.airship ? 1.1 : bt.crawler || bt.siege || bt.truck || bt.rail ? 0.6 : 0.3; // (an Airship is big)
     const d = dist2(u.x, u.y, wx, wy);
     if (d < r2) bots.push([d, u]);
   }
@@ -5784,7 +5916,8 @@ function renderYard(b) {
   }
   for (const k of kinds) {
     const n = (b.yard && b.yard[k]) || 0, parts = (b.yardParts && b.yardParts[k]) || 0, partsIn = parts ? ` · ${parts} of ${BOTS[k].parts} parts in` : '';
-    if (BDEFS[b.type].airfield) {
+    if (BDEFS[b.type].airfield && BOTS[k].airship) $('sh-y-' + k).textContent = (n ? `${n} ordered${partsIn}` : 'none ordered') + ' · no hangar spot: each flies off to its line';
+    else if (BDEFS[b.type].airfield) {
       // Its spots in the hangar, and orders past them as spares (built when one is lost).
       const h = hangarCount(b, k);
       $('sh-y-' + k).textContent = `${h.have} of ${h.cap} in the hangar` + (h.making ? ` · ${h.making} ordered${partsIn}` : '') + (h.spare ? ` · ${h.spare} spare${h.spare === 1 ? '' : 's'}, built if one is lost` : '');
@@ -5883,7 +6016,7 @@ function openBuildingSheet(b) {
   if (mine) {
     if (def.airfield && b.built && b.owner === ME) html += airfieldSection(b); // its planes and air drops first
     if (def.yard && b.built && mine) html += `<div class="section-label">${def.port ? 'Shipyard' : def.airfield ? 'Hangar' : 'Rail yard'}</div><div class="status" id="sh-yard-status"></div><div class="bar" id="sh-yard-bar"><div></div></div><div id="sh-yard"></div>${def.station ? '<div class="actions" id="sh-yard-here"></div>' : ''}
-      <p class="hint">${def.port ? 'Ships are built here' : def.airfield ? 'Planes are built here' : 'Freight Trains are built here'}, a round of parts (1 Alloy, 1 Chip) every ${YARD.work} s: ${def.yard.map((k) => `${BOTS[k].plural.toLowerCase().replace(/^./, (c) => c.toUpperCase())} ${BOTS[k].parts}`).join(', ')} rounds. Haulers bring the parts. ${def.port ? 'Each one puts to sea from this Port.' : def.airfield ? `The hangar holds ${Object.entries(AIRFIELD_HOLDS).map(([k, n]) => `${n} ${n === 1 ? BOTS[k].name : BOTS[k].plural}`).join(' and ')}; orders past that wait as spares, built when one is lost.` : 'Each one rolls out onto this station\'s track, so the Bot Foundry never needs a railway.'}</p>`;
+      <p class="hint">${def.port ? 'Ships are built here' : def.airfield ? 'Planes are built here' : 'Freight Trains are built here'}, a round of parts (1 Alloy, 1 Chip) every ${YARD.work} s: ${def.yard.map((k) => `${BOTS[k].plural.toLowerCase().replace(/^./, (c) => c.toUpperCase())} ${BOTS[k].parts}`).join(', ')} rounds. Haulers bring the parts. ${def.port ? 'Each one puts to sea from this Port.' : def.airfield ? `The hangar holds ${Object.entries(AIRFIELD_HOLDS).map(([k, n]) => `${n} ${n === 1 ? BOTS[k].name : BOTS[k].plural}`).join(' and ')}; orders past that wait as spares, built when one is lost. An Airship takes no spot: it flies off to a line between two Mooring Masts.` : 'Each one rolls out onto this station\'s track, so the Bot Foundry never needs a railway.'}</p>`;
     if (def.terminal && b.built) html += '<div class="section-label">Trade route <span class="label-note" id="sh-trade-next"></span></div><div id="sh-trade"></div>' +
       '<div class="section-label">Market board <span class="label-note">the Post\'s ledger: what each good sells for and costs</span></div><div class="board" id="sh-board"></div><p class="hint" id="sh-trade-hint"></p>';
     // A Rail Station: its line, what it stocks automatically, and its conveyors.
@@ -5892,6 +6025,8 @@ function openBuildingSheet(b) {
         <div class="seg" id="sh-auto"><button data-v="1">Auto supply</button><button data-v="0">Off</button></div>
         <p class="hint" id="sh-rail-hint"></p>`;
     }
+    // A Mooring Mast: its Airship line, its Airships, its Fuel, and what it stocks automatically.
+    if (def.mast && b.built && mine) html += mastSection();
     // A Depot: what it stocks automatically for a Road Train to bring.
     if (b.type === 'depot' && b.built && mine) {
       html += `<div class="section-label">Road Train supply</div><div class="status" id="sh-dauto-status"></div>
@@ -6507,6 +6642,10 @@ function refreshBuildingSheet(b) {
     $('sh-dauto-status').innerHTML = depotAutoText(b);
     $('sh-dauto-hint').textContent = `Auto supply: a Depot ${TRUCK_MIN_DIST} or more tiles from your Command Base keeps what the factories, garrisons and building sites round it need (twice what a factory holds, what a site still lacks, never what they make), and a Road Train brings it from home once that makes a load (${TRAIN_MIN_LOAD} or more), several goods a trip, taking the Depot's spare goods home. Haulers do the short hop to each building. Supply orders you set below come on top.`;
   }
+  if ($('sh-mast')) {
+    for (const btn of $('sh-auto').children) btn.classList.toggle('on', (btn.dataset.v === '1') === !b.autoOff);
+    renderMastSection(b);
+  }
   if ($('sh-rail-status')) {
     for (const btn of $('sh-auto').children) btn.classList.toggle('on', (btn.dataset.v === '1') === !b.autoOff);
     $('sh-rail-status').innerHTML = railStatusText(b);
@@ -6621,6 +6760,7 @@ function renderFoundryOrders(b) {
 
 function botActivity(u) {
   const t = u.task;
+  if (BOTS[u.type].airship) { const st = shipStatus(u); return st[0].toUpperCase() + st.slice(1); }
   if (BOTS[u.type].air) { const b = getE(u.home); return `${planeStatus(u)[0].toUpperCase()}${planeStatus(u).slice(1)}` + (b && !b.dead ? ` (based at the Airfield ${dirText(getE(S.players[u.owner].lander) || b, b)} from the Command Base)` : ' (no Airfield yet)'); }
   const nm = (id) => { const b = getE(id); return b ? BDEFS[b.type].name : 'a building'; };
   if (recyclingNow(u)) return `Being taken apart at the Bot Foundry (${Math.max(1, Math.ceil(recycleTime(u.type) - t.t))} s)`;
@@ -6770,6 +6910,7 @@ function openBotSheet(u) {
       <div class="actions"><button class="btn" id="sh-fembark">Take warbots aboard</button><button class="btn" id="sh-fland">Put them ashore</button></div>
       <button class="btn" id="sh-found">Found a Port on another shore</button>
       <p class="hint"><b>Sail out of the Port</b>: tied up, it sails out to wait just off the Port, where you can tap it on the map. <b>Sail somewhere</b>: it sails to the spot you tap (open water, or right up to a shore) and waits there for your orders; with a mouse, right-click the water while its panel is open. <b>Take warbots aboard</b> loads your warbots standing within ${Math.floor(FERRY_REACH)} tiles of it (with a mouse, select warbots and right-click the Ferry: they walk to the shore beside it and board). <b>Put them ashore</b> lands them on the shore beside it, and it heads home. <b>Found a Port</b>: it loads ${costText(PORT_FOUND.cost)} at its Port and up to ${PORT_FOUND.workers} Workers, and puts up a Port on an empty shore that claims the land round it.</p>` : ''}
+    ${u.owner === ME && BOTS[u.type].airship ? '<div class="section-label">Line</div><div id="sh-sline"></div>' : ''}
     ${u.owner === ME && BOTS[u.type].rail ? '<div class="section-label">Armor</div><p class="hint" id="sh-tarmor-hint"></p><button class="btn big" id="sh-tarmor">Armor this train</button>' : ''}
     ${u.owner === ME && BOTS[u.type].crawler ? '<div class="actions"><button class="btn primary" id="sh-crawl">Drive somewhere</button><button class="btn" id="sh-deploy">Deploy here</button></div>' : ''}
     ${u.owner === ME && recycleOffered(u) ? '<div class="section-label">Recycle</div><p class="hint" id="sh-recycle-hint"></p><button class="btn big" id="sh-recycle">Recycle this unit</button>' : ''}
@@ -7173,7 +7314,7 @@ function refreshArmyTab() {
 
 function refreshAirTab() {
   const fields = myAirfields(), planes = S.bots.filter((u) => !u.dead && u.owner === ME && BOTS[u.type].air);
-  const bombers = planes.filter((u) => BOTS[u.type].bomber), cargo = planes.filter((u) => !BOTS[u.type].bomber);
+  const bombers = planes.filter((u) => BOTS[u.type].bomber), cargo = planes.filter((u) => !BOTS[u.type].bomber && !BOTS[u.type].airship), ships = planes.filter((u) => BOTS[u.type].airship);
   const kinds = BDEFS.airfield.yard.filter((kk) => warOn() || !BOTS[kk].war);
   const sig = JSON.stringify([fields.map((b) => [b.id, b.yard]), planes.map((u) => [u.id, planeStatus(u), !!(u.inside && !u.mission && !u.flight)]), !!readyBomber()]);
   if (sig === UI.armySig) return;
@@ -7199,6 +7340,9 @@ function refreshAirTab() {
     const free = u.inside && !u.mission && !u.flight && planeBase(u) && u.inside === planeBase(u).id;
     return `<div class="kv army-row"><span>${planeStatus(u)}</span><span>${free ? `<button class="btn small" data-act="drop" data-id="${u.id}" data-k="outpost">Drop Outpost</button>${warOn() ? `<button class="btn small" data-act="drop" data-id="${u.id}" data-k="warbot">2 Warbots</button>` : ''}<button class="btn small" data-act="drop" data-id="${u.id}" data-k="worker">2 Workers</button>` : ''}<button class="btn small ghost" data-act="showbot" data-id="${u.id}">Show</button></span></div>`;
   }).join('') : '<p class="hint">None yet: order one in an Airfield\'s hangar (+ Cargo Plane above). It flies goods to places you switch to Supply by air, and drops an Outpost, Warbots or Workers anywhere it can reach.</p>';
+  h += '<div class="section-label">Airships <span class="label-note">on lines between Mooring Masts</span></div>';
+  h += ships.length ? ships.map((u) => `<div class="kv army-row"><span>${shipStatus(u)}</span><span><button class="btn small ghost" data-act="showbot" data-id="${u.id}">Show</button></span></div>`).join('')
+    : `<p class="hint">None yet: order one in an Airfield's hangar (+ Airship above). It carries ${BOTS.airship.carry} goods and ${BOTS.airship.seats} Workers or Warbots a trip, both ways, between two Mooring Masts you link (a Mast's panel: Link).</p>`;
   $('ar-body').innerHTML = h;
 }
 
@@ -7457,14 +7601,14 @@ function refreshSheet() {
     refreshBuildingSheet(b);
   } else if (UI.sheetKind === 'bot') {
     const u = getE(UI.sheetFor);
-    if (!u || (u.inside && !BOTS[u.type].sea && !BOTS[u.type].rail)) { closeSheet(); return; } // (a ship tied up at a Port, or a train at a station, keeps its panel)
+    if (!u || (u.inside && !BOTS[u.type].sea && !BOTS[u.type].rail && !BOTS[u.type].airship)) { closeSheet(); return; } // (a ship tied up at a Port, a train at a station or an Airship at its Mast keeps its panel)
     $('sh-status').textContent = botActivity(u);
     refreshBombButton(u);
     const bat = Math.round(u.bat ?? 100);
     $('sh-dyn').innerHTML = `<div class="kv"><span>Health</span><span>${Math.ceil(u.hp)} / ${u.maxHp}</span></div>` +
       `<div class="kv"><span>${tankOf(u) ? 'Fuel tank' : 'Battery'}</span><span>${bat}%${bat < BATTERY.critical ? (tankOf(u) ? ' (empty: crawling)' : ' (flat: slow and weak)') : bat < BATTERY.low ? ' (low)' : ''}</span></div>` +
       `<div class="bar battery"><div style="width:${bat}%;background:${bat < BATTERY.critical ? '#ff4d4d' : bat < BATTERY.low ? '#ffb347' : '#7ee08a'}"></div></div>` +
-      (BOTS[u.type].air ? `<div class="kv"><span>Fuel</span><span>fills up at its Airfield, one Fuel ${planeFill(u)}% of the tank (${tankFuel(u, 100)} to fill it now)${BOTS[u.type].bomber ? `; each sortie takes ${BOMBER.fuel} Fuel on top (${NAPALM.fuel} more with napalm)` : ''}; a full tank reaches ${planeReach(u)} tiles out and back</span></div>` : '') +
+      (BOTS[u.type].airship ? airshipRows(u) : BOTS[u.type].air ? `<div class="kv"><span>Fuel</span><span>fills up at its Airfield, one Fuel ${planeFill(u)}% of the tank (${tankFuel(u, 100)} to fill it now)${BOTS[u.type].bomber ? `; each sortie takes ${BOMBER.fuel} Fuel on top (${NAPALM.fuel} more with napalm)` : ''}; a full tank reaches ${planeReach(u)} tiles out and back</span></div>` : '') +
       (BOTS[u.type].shield ? shieldRows(u) : '') +
       (BOTS[u.type].flame ? `<div class="kv"><span>Flame tank</span><span>${Math.round(u.gel ?? TORCH.tank)} / ${TORCH.tank} seconds of fire${(u.gel ?? TORCH.tank) <= 0.05 ? ' (empty: going to refill with Fuel)' : ''}</span></div>` +
         `<div class="bar battery"><div style="width:${Math.round(100 * (u.gel ?? TORCH.tank) / TORCH.tank)}%;background:#ff8a2a"></div></div>` : '') +
@@ -7473,6 +7617,7 @@ function refreshSheet() {
       (u.carry ? `<div class="kv"><span>Carrying</span><span>${cargoList(u).map(([g, n]) => goodTag(g, (n > 1 ? n + ' × ' : '') + GOOD[g].name)).join(' ')}</span></div>` : '') +
       (u.cargo && Object.keys(u.cargo).length ? `<div class="section-label">On board</div><div class="goodlist">${Object.keys(u.cargo).map((g) => goodTag(g, `${u.cargo[g]} ${GOOD[g].name}`)).join('')}</div>` : '');
     if ($('sh-recall')) $('sh-recall').hidden = !(u.task && u.task.type === 'hold');
+    if ($('sh-sline')) renderShipLine(u);
     if ($('sh-fout')) $('sh-fout').hidden = !u.inside || !!u.landing;
     if ($('sh-tarmor')) refreshTrainArmor(u);
     if ($('sh-scorch')) refreshScorchButton(u);

@@ -2647,8 +2647,8 @@ function computeZones() {
         z[b] = next;
         q.push(b);
       }
-      // A Ropeway, a Viaduct or a ferry line joins the areas at its two ends, whatever lies between.
-      if (S.bAt[a]) for (const r of [ropeLink(a), viaLink(a), ferryLink(a)]) if (r >= 0 && z[r] < 0) { z[r] = next; q.push(r); }
+      // A Ropeway, a Viaduct, a ferry line or an Airship line joins the areas at its two ends, whatever lies between.
+      if (S.bAt[a]) for (const r of [ropeLink(a), viaLink(a), ferryLink(a), airLink(a)]) if (r >= 0 && z[r] < 0) { z[r] = next; q.push(r); }
     }
     next++;
   }
@@ -3532,6 +3532,45 @@ function ferryLink(t) {
   return v === undefined ? -1 : v;
 }
 
+/** The other Mooring Mast of Mast b's Airship line (b.line on both, both built, both its owner's), or null. */
+function mastPartner(b) {
+  if (!b || b.dead || !b.built || !b.line || !BDEFS[b.type].mast) return null;
+  const o = getE(b.line);
+  return o && !o.dead && o.built && o.owner === b.owner && o.line === b.id && BDEFS[o.type].mast ? o : null;
+}
+
+/**
+ * Airship lines: two Mooring Masts linked (see mastPartner) with an Airship of their owner serving the line (its home
+ * is either Mast) carry their owner's Workers and Warbots across, as a link in their routes (like a ferry line). Map of
+ * mast id -> the far Mast's tile, worked out once a tick (airChanged: at once).
+ */
+let _airTick = -1, _airFor = null, _airMap = null;
+function airLines() {
+  if (_airFor === S && _airTick === S.tick && _airMap) return _airMap;
+  const m = new Map();
+  if (S.buildings && S.bots && S.buildings.some((b) => b.line && !b.dead)) {
+    const served = new Set();
+    for (const u of S.bots) if (!u.dead && u.home && BOTS[u.type].airship) served.add(u.home);
+    for (const b of S.buildings) {
+      const o = b.line ? mastPartner(b) : null;
+      if (o && (served.has(b.id) || served.has(o.id))) m.set(b.id, o.y * S.W + o.x);
+    }
+  }
+  _airFor = S; _airTick = S.tick; _airMap = m;
+  return m;
+}
+
+/** The tile of the far Mast of the Airship line from the Mast on tile t, or -1. */
+function airLink(t) {
+  const id = S.bAt[t];
+  if (!id) return -1;
+  const v = airLines().get(id);
+  return v === undefined ? -1 : v;
+}
+
+/** An Airship line or an Airship came or went: routes and reachable areas change. */
+function airChanged() { _airTick = -1; computeZones(); }
+
 /** What a bridge, tunnel or sky-bridge tile on t costs (null if t is open ground). */
 function crossCost(t) {
   const c = CROSS[S.terrain[t]];
@@ -4321,6 +4360,7 @@ function killBot(bot, quiet) {
   S.byId.delete(bot.id);
   S.players[bot.owner].stats.lost++;
   if (wasFerry && typeof ferryChanged === 'function') ferryChanged(); // its line stops
+  if (BOTS[bot.type].airship && typeof airChanged === 'function') airChanged(); // (its line may have no Airship left)
   // One of the Murmur on Active: no blast, no fire; the body lies where it fell until they drag it off (murmurBody).
   if (BOTS[bot.type].wild && !quiet && typeof murmurBody === 'function' && murmurBody(bot)) return;
   if (boom >= 0) {
@@ -4433,6 +4473,13 @@ function destroyBuilding(b, burn, quiet) {
     const o = getE(b.ferryTo);
     if (o && o.ferryTo === b.id) o.ferryTo = 0;
     if (typeof ferryChanged === 'function') ferryChanged();
+  }
+  // So does a Mooring Mast at one end of an Airship line (its Airships wait at the other Mast for a new one).
+  if (BDEFS[b.type].mast && b.line) {
+    const o = getE(b.line);
+    if (o && o.line === b.id) o.line = 0;
+    b.line = 0;
+    airChanged();
   }
   // (blown up: an explosion; taken down on purpose, dismantled or moved: no wreck, the rubble just comes down)
   if (!quiet) { collapseFx(b, burn); sfx(burn ? 'boom' : 'collapse', b.x + 0.5, b.y + 0.5); }

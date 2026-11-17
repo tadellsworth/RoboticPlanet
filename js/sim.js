@@ -169,6 +169,7 @@ function goodTotal(p, g) {
     const dst = getE(u.task.dst);
     if (dst && BDEFS[dst.type].store) n += u.carry === g ? u.carryN || 1 : u.mix[g];
   }
+  for (const u of S.bots) if (!u.dead && u.owner === p && u.cargo && u.cargo[g] && BOTS[u.type].airship) n += u.cargo[g]; // (on its way from Mast to Mast)
   return n;
 }
 
@@ -219,7 +220,7 @@ function needsOf(b) {
     // A Depot's supply orders (a Rail Station's own stock too): keep this much of each good here (goods
     // already promised to someone don't count). What a far station stocks automatically comes by train
     // only, and what a far Depot does by Road Train only (the bulk carrier it's planned for, see railPlan).
-    const k = keepOf(b), bulk = (def.station && farStation(b)) || b.type === 'depot';
+    const k = keepOf(b), bulk = ((def.station || def.mast) && farStation(b)) || b.type === 'depot';
     for (const g in k) out.push([g, k[g] - ((b.stock[g] || 0) - (b.res[g] || 0)) - (b.inc[g] || 0), true, bulk && ((b.auto && b.auto[g]) || 0) > ((b.keep && b.keep[g]) || 0)]);
   }
   // A Port where a Ferry is loading a kit to found a Port asks for it.
@@ -231,6 +232,11 @@ function needsOf(b) {
   }
   // A Port keeps a little Fuel for its owner's ships to fill up from (once there are ships).
   if (def.port && b.built && S.bots.some((u) => !u.dead && u.owner === b.owner && BOTS[u.type].sea)) out.push(['fuel', PORT_FUEL - (b.stock.fuel || 0) - (b.inc.fuel || 0), true]);
+  // A Mooring Mast keeps Fuel for the Airships on its line (Tankers or a pipeline bring it).
+  if (def.mast && b.built && mastFuelKeep(b)) {
+    const n = mastFuelKeep(b) - ((b.stock.fuel || 0) - (b.res.fuel || 0)) - (b.inc.fuel || 0), e = out.find((o) => o[0] === 'fuel');
+    if (e) e[1] = Math.max(e[1], n); else out.push(['fuel', n, true]);
+  }
   // An Airfield keeps Fuel for its planes, and what the places it supplies by air are short of.
   if (def.airfield && b.built) {
     for (const [g, k] of Object.entries(airKeep(b))) {
@@ -260,7 +266,7 @@ function supplyOf(b, g) {
 function keepSupply(b, g) {
   const yard = BDEFS[b.type].yard && (g === 'alloy' || g === 'chip') && hasYardOrders(b) ? YARD.hopper : 0;
   const k = keepOf(b);
-  return Math.max(0, supplyOf(b, g) - Math.max((k && k[g]) || 0, BDEFS[b.type].airfield ? airKeep(b)[g] || 0 : 0, yard, ammoHeld(b, g)));
+  return Math.max(0, supplyOf(b, g) - Math.max((k && k[g]) || 0, BDEFS[b.type].airfield ? airKeep(b)[g] || 0 : 0, g === 'fuel' && BDEFS[b.type].mast ? mastFuelKeep(b) : 0, yard, ammoHeld(b, g)));
 }
 
 /**
@@ -517,8 +523,10 @@ function trunkRuns(p, blds, take, canCarry, vans, trains, ships) {
         const tu = take(R.x, R.y, 'rail', R);
         if (tu) { const extra = spareForHome(R, home, botCarry(tu), false, false); delete extra[g]; assignHaul(tu, R, home, g, canCarry(tu, spare), extra); continue; }
       }
-      // A far station a train serves: the train takes it home on its next trip (see trainBackhaul), not a truck.
+      // A far station a train serves: the train takes it home on its next trip (see trainBackhaul), not a truck. So does
+      // a far Mooring Mast an Airship serves (see shipLoad).
       if (home && !liq && farStation(R) && S.time - ((S.players[p].railSeen || {})[R.home] ?? -999) < 30) continue;
+      if (!liq && BDEFS[R.type].mast && farStation(R) && airLines().has(R.id)) continue;
       if (!byRoad) continue;
       let u = !liq && spare >= TRAIN_MIN_LOAD ? take(R.x, R.y, 'train', R) : null;
       // A Road Train that can get here takes the trunk runs: Freight Trucks leave the load to build up
@@ -604,14 +612,14 @@ function railPlan(p) {
   for (const b of S.buildings) {
     if (b.dead || b.owner !== p) continue;
     if (b.railBy) b.railBy = 0;
-    if (BDEFS[b.type].station && !BDEFS[b.type].terminal) { b.auto = null; b.home = 0; if (b.built) sts.push(b); }
+    if ((BDEFS[b.type].station && !BDEFS[b.type].terminal) || BDEFS[b.type].mast) { b.auto = null; b.home = 0; if (b.built) sts.push(b); } // (a Mooring Mast: its line's two Masts, see bulkLinked)
     else if (b.type === 'depot') { b.auto = null; if (b.built) deps.push(b); }
   }
   if (!hub || hub.dead || hub.owner !== p || (!sts.length && !deps.length)) return;
   const dh = (b) => dist2(b.x, b.y, hub.x, hub.y);
   for (const s of sts) {
     let h = s;
-    for (const o of sts) if (o !== s && dh(o) < dh(h) && railLinked(s, o)) h = o;
+    for (const o of sts) if (o !== s && dh(o) < dh(h) && bulkLinked(s, o)) h = o;
     s.home = h.id;
   }
   // Lines with a train on them (inside a station, on the track, or on a run between stations), remembered
@@ -622,6 +630,8 @@ function railPlan(p) {
     const ends = u.task ? [getE(u.task.src), getE(u.task.dst)].filter((b) => b && !b.dead && BDEFS[b.type].station) : [];
     for (const s of sts) if (trainAt(u, s) || ends.some((e) => e === s || railLinked(e, s))) P.railSeen[s.home] = S.time;
   }
+  // (An Airship line counts while an Airship serves it.)
+  if (sts.length) for (const s of sts) if (BDEFS[s.type].mast && airLines().has(s.id)) P.railSeen[s.home] = S.time;
   const served = new Set();
   for (const s of sts) if (S.time - (P.railSeen[s.home] ?? -999) < 30) served.add(s.home);
   // The far stores that stock themselves.
@@ -637,7 +647,7 @@ function railPlan(p) {
       for (const s of fars) {
         const d = dist(c.x, c.y, s.x, s.y);
         if (d > STATION_REACH || d > toHub - STATION_NEARER || d >= bd) continue;
-        if (!touching(c).includes(s) && !roadLinked(c, s)) continue;
+        if (!touching(c).includes(s) && !roadLinked(c, s) && !(BDEFS[s.type].mast && footNear(c, s))) continue;
         best = s; bd = d;
       }
       if (best) c.railBy = best.id;
@@ -679,8 +689,32 @@ function railPlan(p) {
   }
 }
 
-/** Is Rail Station b a far station (not the one nearest the Command Base on its track)? */
+/** Is Rail Station b a far station (not the one nearest the Command Base on its track)? (A Mooring Mast: the far end of its line.) */
 function farStation(b) { return !!(b.home && b.home !== b.id); }
+
+/** Are a and b stations of one bulk line: Rail Stations on the same track, or the two Mooring Masts of an Airship line? */
+function bulkLinked(a, b) {
+  const ma = !!BDEFS[a.type].mast, mb = !!BDEFS[b.type].mast;
+  if (ma || mb) return ma && mb && mastPartner(a) === b;
+  return railLinked(a, b);
+}
+
+/**
+ * Off the road network, is building c within reach of storage s on foot (FOOT_CARRY, the same ground, neither on a
+ * road from home)? Workers carry goods by hand between them, as round a Drop Outpost: a far Mooring Mast on an island
+ * serves the buildings round it so.
+ */
+function footNear(c, s) {
+  return dist2(c.x, c.y, s.x, s.y) <= FOOT_CARRY * FOOT_CARRY && S.zone[tIdx(c.x, c.y)] === S.zone[tIdx(s.x, s.y)] && !onHomeNet(c) && !onHomeNet(s);
+}
+
+/** The Fuel Mooring Mast b keeps for its line's Airships (AIRSHIP.mastFuel, once one serves it; none otherwise). */
+function mastFuelKeep(b) {
+  if (!b.built || !BDEFS[b.type].mast) return 0;
+  const o = mastPartner(b);
+  for (const u of S.bots) if (!u.dead && u.owner === b.owner && BOTS[u.type].airship && (u.home === b.id || (o && u.home === o.id))) return AIRSHIP.mastFuel;
+  return 0;
+}
 
 /**
  * A Rail Station's conveyors at work (see STATION_FEED): goods to the factories touching it and their
@@ -1045,7 +1079,7 @@ function haulerStranded(u) {
  */
 function routeOpts(u) {
   const bt = BOTS[u.type];
-  const o = { who: u.owner, breach: isArmy(u) && botArmed(u), noRope: !!(bt.truck || bt.wild || bt.crawler), noFerry: !!(bt.wild || bt.crawler || bt.rail || bt.sea) };
+  const o = { who: u.owner, breach: isArmy(u) && botArmed(u), noRope: !!(bt.truck || bt.wild || bt.crawler), noFerry: !!(bt.wild || bt.crawler || bt.rail || bt.sea), noAir: !(u.type === 'worker' || isArmy(u)) }; // (Airships carry Workers and Warbots, no vehicles)
   if (bt.roadOnly && !haulerStranded(u)) o.roadOnly = true;
   else if ((bt.offroad || bt.roadOnly) && !harvestTrip(u)) o.offMul = 1 / OFFROAD_SLOW;
   else if (isArmy(u) && !u.fight) o.offMul = WARBOT_OFFROAD; // on the march: keep to the roads
@@ -1059,7 +1093,7 @@ function routeOpts(u) {
  * an enemy Wall it means to break through)? The route's last tile, where it is going, never is.
  */
 function blockedStep(u, t) {
-  return S.bAt[t] > 0 && t !== u.path[u.path.length - 1] && !passTile(t, u.owner) && !(ferryLink(t) >= 0 && getE(S.bAt[t]).owner === u.owner);
+  return S.bAt[t] > 0 && t !== u.path[u.path.length - 1] && !passTile(t, u.owner) && !((ferryLink(t) >= 0 || airLink(t) >= 0) && getE(S.bAt[t]).owner === u.owner);
 }
 
 /**
@@ -1432,7 +1466,7 @@ function routeCheck(u) {
     if (!walkable(t)) { bad = 2; break; }
     if (ov && k < last && S.over[t] && q !== t && p[k + 1] - t !== t - q) turn = true; // turning on an overpass built since: not any more
     if (!civ || k === last) continue;
-    if (S.bAt[t]) { if (!passTile(t, u.owner) && !(ferryLink(t) >= 0 && getE(S.bAt[t]).owner === u.owner)) bad = 1; }
+    if (S.bAt[t]) { if (!passTile(t, u.owner) && !((ferryLink(t) >= 0 || airLink(t) >= 0) && getE(S.bAt[t]).owner === u.owner)) bad = 1; }
     else if (onRoad && !S.road[t]) gap++;
   }
   if (turn && !bad) bad = 1;
@@ -1464,7 +1498,7 @@ function moveAlong(u, dt) {
   {
     const nx = u.path[u.pi], pv = u.path[u.pi - 1], W = S.W;
     if (u.pi > 0 && nx !== undefined && Math.max(Math.abs((nx % W) - (pv % W)), Math.abs(((nx / W) | 0) - ((pv / W) | 0))) > 1 &&
-      viaLink(pv) !== nx && ropeLink(pv) !== nx && ferryLink(pv) !== nx && !(u.ride >= 0)) {
+      viaLink(pv) !== nx && ropeLink(pv) !== nx && ferryLink(pv) !== nx && airLink(pv) !== nx && !(u.ride >= 0)) {
       u.x = (pv % W) + 0.5; u.y = ((pv / W) | 0) + 0.5;
       u.path = null; u.deck = null; u.vel = 0;
       cancelTask(u); u.task = null;
@@ -1503,6 +1537,15 @@ function moveAlong(u, dt) {
     const at = getE(S.bAt[here]), to = getE(S.bAt[nxt]);
     if (at && to && at.owner === u.owner) {
       u.ferryWait = { at: at.id, to: to.id, since: S.time, ferry: 0 };
+      u.inside = at.id; u.x = at.x + 0.5; u.y = at.y + 0.5; u.vel = 0; u.drive = 0;
+      return false;
+    }
+  }
+  // At a Mooring Mast whose Airship line is the next leg: wait there for an Airship (the same, see shipAtMast).
+  if (nxt !== undefined && nxt !== here && S.bAt[here] && airLink(here) === nxt) {
+    const at = getE(S.bAt[here]), to = getE(S.bAt[nxt]);
+    if (at && to && at.owner === u.owner) {
+      u.ferryWait = { at: at.id, to: to.id, since: S.time, ferry: 0, air: 1 };
       u.inside = at.id; u.x = at.x + 0.5; u.y = at.y + 0.5; u.vel = 0; u.drive = 0;
       return false;
     }
@@ -1771,7 +1814,7 @@ function dispatch(p) {
   const mine = S.buildings.filter((s) => !s.dead && s.owner === p); // (those in a rival gun's reach too: no flicker)
   const homePorts = cargoShips ? mine.filter((s) => s.built && BDEFS[s.type].port && onHomeG(s)) : [];
   const bySea = (b) => b.built && BDEFS[b.type].port && homePorts.some((h) => h !== b && seaLinked(h, b));
-  const hubs = mine.filter((s) => s.built && storeAccepts(s) && !onHomeNet(s) && (s.airSupply || onHomeG(s) || bySea(s)));
+  const hubs = mine.filter((s) => s.built && storeAccepts(s) && !onHomeNet(s) && (s.airSupply || onHomeG(s) || bySea(s) || (BDEFS[s.type].mast && airLines().has(s.id))));
   for (const b of blds) {
     b.unlinked = !P.noHaulers && needsRoad(b) && !onHomeG(b) && !b.airSupply && !convLinked(b) && !bySea(b) &&
       !hubs.some((s) => s !== b && footLinked(s, b));
@@ -2017,6 +2060,9 @@ function dispatch(p) {
         }
         if (r.autoOnly) { r.n = 0; continue; }
       }
+      // What a far Mooring Mast keeps (its supply orders, what it stocks automatically) comes by Airship (see shipLoad):
+      // Haulers and trucks leave it (and Workers don't ride across with a good each by hand).
+      if (r.keep && !isLiquid(r.g) && BDEFS[r.b.type].mast && farStation(r.b) && airLines().has(r.b.id)) { r.n = 0; continue; }
       // A building a far Rail Station serves: the train brings its goods, so trucks leave it alone while the
       // station is out of something that's on its way (or waiting at the home station), unless the
       // building has run dry with nothing coming. One a far Depot serves waits the same way for the Road
@@ -2981,6 +3027,7 @@ function callWorker(owner, b) {
 function updateWorker(u, dt) {
   u.busy = 0;
   u.moved = 0;
+  if (BOTS[u.type].airship) { updateAirship(u, dt); return; }
   if (BOTS[u.type].air) { updatePlane(u, dt); return; }
   if (u.task && u.task.type === 'flee') { doFlee(u, dt); return; }
   if (BOTS[u.type].rail) { if (u.armorOrder) fitTrainArmor(u, dt); if (u.armored) trainGuns(u, dt); }
@@ -11514,9 +11561,11 @@ function launchFromYard(b, kind) {
   const u = addBot(b.owner, kind, b.x + 0.5, b.y + 0.5);
   enterBuilding(u, b);
   if (BOTS[kind].ferry) { u.home = b.id; ferryChanged(); } // (it may be the Ferry a line here was waiting for)
-  if (BOTS[kind].air) { u.home = b.id; u.bat = 100; }
+  if (BOTS[kind].air) { u.home = BOTS[kind].airship ? 0 : b.id; u.bat = 100; } // (an Airship's home is a Mast of its line: see shipFindLine)
+  if (BOTS[kind].airship) { airChanged(); shipFindLine(u); }
   addFx('ring', b.x + 0.5, b.y + 0.5, { color: PLAYER_COLORS[b.owner], r: 1.8 });
-  postMsg(b.owner, BOTS[kind].sea ? `A ${BOTS[kind].name} was launched at the Port.` : BOTS[kind].air ? `A ${BOTS[kind].name} rolled out of the hangar.` : `A ${BOTS[kind].name} rolled out of the rail yard.`, b.x, b.y, 'good');
+  if (BOTS[kind].airship) postMsg(b.owner, shipLine(u) ? 'An Airship rolled out of the hangar: it flies to its line.' : 'An Airship rolled out of the hangar. Link two Mooring Masts (a Mast\'s panel: Link) and it flies to the line.', b.x, b.y, 'good');
+  else postMsg(b.owner, BOTS[kind].sea ? `A ${BOTS[kind].name} was launched at the Port.` : BOTS[kind].air ? `A ${BOTS[kind].name} rolled out of the hangar.` : `A ${BOTS[kind].name} rolled out of the rail yard.`, b.x, b.y, 'good');
   if (isMe(b.owner)) sfx('complete');
 }
 
@@ -12054,8 +12103,12 @@ function buildingPipes(b, net) {
 
 /** Does a building of this kind make Fuel for pickup (a Refinery, a Bio Farm)? */
 function fuelMaker(def) { return !!(def.out && def.out.fuel); }
-/** Does a building of this kind burn Fuel (a Fuel Station, a Generator, a Flame Tower, the Missile Factory)? Storage doesn't count. */
-function fuelUser(def) { return !def.store && typeUses(def, 'fuel'); }
+/**
+ * Does a building of this kind burn Fuel (a Fuel Station, a Generator, a Flame Tower, the Missile Factory)? Storage
+ * doesn't count, but a Mooring Mast does: it is storage for its line's goods, and on a pipeline it only takes Fuel for
+ * its Airships (up to what it keeps for them, never giving its own out), passing the rest on like any Fuel user.
+ */
+function fuelUser(def) { return (!def.store && typeUses(def, 'fuel')) || !!def.mast; }
 
 /** Can pipe carry Crude or Fuel to or from b? Oil Pumps, what uses Crude, what makes or burns Fuel, and storage. */
 function pipeEnd(b) { const d = BDEFS[b.type]; return !!(d.pump || (d.inp && d.inp.crude) || d.store || fuelMaker(d) || fuelUser(d)); }
@@ -12082,6 +12135,7 @@ function updatePipes() {
       let N = nets.get(c);
       if (!N) nets.set(c, (N = { pumps: [], users: [], stores: [], makers: [], burners: [] }));
       if (def.terminal) { N.makers.push(b); continue; } // (the Fuel a contract paid: it gives, like a Bio Farm, and takes nothing)
+      if (def.mast) { N.burners.push(b); continue; } // (a Mooring Mast takes Fuel for its Airships and gives none: see fuelUser)
       if (def.store) { N.stores.push(b); continue; }
       if (def.pump) N.pumps.push(b);
       if (def.inp && def.inp.crude) N.users.push(b);
@@ -12244,7 +12298,7 @@ function pipeToRefinery(owner, b) {
 
 /** Where `owner` has Fuel to give by pipe: Refineries, Bio Farms and storage (not a Trade Terminal or a Crawler, which moves). */
 function fuelSources(owner) {
-  return S.buildings.filter((r) => { const d = BDEFS[r.type]; return !r.dead && r.owner === owner && (fuelMaker(d) || (d.store && !d.terminal && !d.mobile)); });
+  return S.buildings.filter((r) => { const d = BDEFS[r.type]; return !r.dead && r.owner === owner && (fuelMaker(d) || (d.store && !d.terminal && !d.mobile && !d.mast)); }); // (a Mooring Mast keeps its Fuel for its Airships)
 }
 /** The pipe networks (of `owner`) joined to a place with Fuel to give (and on through anything that burns Fuel: it passes Fuel on). */
 function fuelPipes(owner) {
@@ -12491,7 +12545,7 @@ function ferryPassenger(u) {
   }
   const at = getE(w.at);
   if (w.landing) { const f = getE(w.landing); if (!at || at.dead || !f || f.dead || !(f.landing || f.mission)) leaveFerryQueue(u); return; }
-  if (!at || at.dead || S.time - w.since > FERRY_GIVEUP || ferryLines().get(w.at) === undefined) leaveFerryQueue(u);
+  if (!at || at.dead || S.time - w.since > FERRY_GIVEUP || (w.air ? airLines() : ferryLines()).get(w.at) === undefined) leaveFerryQueue(u);
 }
 
 /** Set ship u sailing to Port (or shore tile) dest. */
@@ -13094,12 +13148,13 @@ function airSuppliable(b) {
 function hangarCount(b, kind) {
   let have = 0;
   for (const v of S.bots) if (!v.dead && v.home === b.id && v.type === kind) have++;
-  const cap = AIRFIELD_HOLDS[kind] || 1, n = (b.yard && b.yard[kind]) || 0, making = Math.min(n, Math.max(0, cap - have));
+  const cap = BOTS[kind].airship ? Infinity : AIRFIELD_HOLDS[kind] || 1, n = (b.yard && b.yard[kind]) || 0, making = Math.min(n, Math.max(0, cap - have)); // (an Airship takes no spot: it lives at its Masts)
   return { have, cap, making, spare: n - making };
 }
 
 /** Does Airfield b have room for plane u (each holds AIRFIELD_HOLDS of a type)? */
 function airfieldRoom(b, u) {
+  if (BOTS[u.type].airship) return true; // (no spot in the hangar: it flies off to its line)
   let n = 0;
   for (const v of S.bots) if (v !== u && !v.dead && v.home === b.id && v.type === u.type) n++;
   return n < (AIRFIELD_HOLDS[u.type] || 1);
@@ -13775,6 +13830,7 @@ function bombHit(b, dmg, by) {
 
 /** Plane u lost its flight (shot down, or its base went): reserved goods are let go, a kit is refunded, passengers get off. */
 function planeLost(u, keep) {
+  if (BOTS[u.type].airship) { shipLost(u); return; }
   const M = u.mission;
   if (M) {
     // What it was bringing is no longer on its way (and is lost with the plane: killBot spills only a Crawler's
@@ -13877,6 +13933,324 @@ function landDrop(d) {
   }
 }
 
+
+/* ------------------------------------------------------------------ Airships and Mooring Masts */
+
+/*
+ * An Airship (BOTS.airship, see AIRSHIP) serves the line its home Mast (u.home) is on. Moored, it is inside its Mast
+ * (u.inside), its nose at the mooring cup and its body lying back along the line (shipMooring); flying, u.flight is
+ * { to, from } (Mast ids) and u.alt its height (0 moored, 1 cruising), so flak finds it like any aircraft. Its load is
+ * u.cargo (goods promised to Mast u.cargoTo: they count in its inc until they land) and u.aboard (riders, as a Ferry's:
+ * they wait at a Mast with a ferryWait marked `air`).
+ */
+
+/** The Airships serving the line Mast b is on (their home is b or the other Mast), or based at b. */
+function lineShips(b) {
+  const o = mastPartner(b);
+  return S.bots.filter((u) => !u.dead && u.owner === b.owner && BOTS[u.type].airship && (u.home === b.id || (o && u.home === o.id)));
+}
+
+/** The line Airship u serves: [its home Mast, the other], or null. */
+function shipLine(u) {
+  const h = u.home ? getE(u.home) : null;
+  const o = h && h.owner === u.owner && BDEFS[h.type] && BDEFS[h.type].mast ? mastPartner(h) : null;
+  return o ? [h, o] : null;
+}
+
+/** Every line of owner's, once: [a, b] (a the Mast with the lower id). */
+function mastLines(owner) {
+  const out = [];
+  for (const b of S.buildings) {
+    if (b.dead || b.owner !== owner || !b.line) continue;
+    const o = mastPartner(b);
+    if (o && b.id < o.id) out.push([b, o]);
+  }
+  return out;
+}
+
+/** Where an Airship moors at Mast m: its nose at the mooring cup, its body lying back toward (fx, fy) ({ x, y, face }). */
+function mooredAt(m, fx, fy, face) {
+  const cx = m.x + 0.5, cy = m.y + 0.5;
+  let dx = fx - cx, dy = fy - cy;
+  const d = dhypot(dx, dy);
+  if (d < 1e-6) { dx = -dcos(face || 0); dy = -dsin(face || 0); } else { dx /= d; dy /= d; }
+  return { x: cx + dx * AIRSHIP.nose, y: cy + dy * AIRSHIP.nose, face: datan2(-dy, -dx) };
+}
+
+/** Where airship u moors at Mast m: its body toward the other Mast of m's line (a Mast on no line: toward where u is). */
+function shipMooring(u, m) {
+  const o = mastPartner(m);
+  return o ? mooredAt(m, o.x + 0.5, o.y + 0.5) : mooredAt(m, u.x, u.y, u.face);
+}
+
+/** Of its tank (0-100), what an Airship burns flying from a to b (Masts, or any place), with a little over. */
+function shipLegFuel(a, b) { return (dist(a.x, a.y, b.x, b.y) / BOTS.airship.speed + AIRSHIP.climb + 4) * AIRSHIP.burn; }
+
+/** Why owner can't link Mooring Mast a to Mast b ('' if it can). */
+function mastLineWhy(owner, a, b) {
+  if (!a || a.dead || a.owner !== owner || !BDEFS[a.type].mast) return 'Pick one of your Mooring Masts.';
+  if (!b || b.dead || b.owner !== owner || !BDEFS[b.type].mast) return 'Tap another of your Mooring Masts.';
+  if (a === b) return 'Tap another Mooring Mast: a line runs between two.';
+  if (!a.built || !b.built) return 'Both Masts must be finished first.';
+  if (mastPartner(b)) return 'That Mast is on a line already: a Mast is on one line at most (Unlink it on its panel).';
+  if (dist(a.x, a.y, b.x, b.y) < AIRSHIP.minDist) return `Too close: the two Masts of a line stand at least ${AIRSHIP.minDist} tiles apart.`;
+  if (shipLegFuel(a, b) > 90) return 'Too far: an Airship\'s full tank wouldn\'t get it across.';
+  return '';
+}
+
+/**
+ * Link Mooring Mast b to Mast `to` (to null: unlink b). The Airships of either Mast serve the new line (past
+ * AIRSHIP.perLine the newest are let go to wait at their Mast), and those with no line go to it if it's the only one.
+ * Returns '' or why not.
+ */
+function setMastLine(owner, b, to) {
+  if (!b || b.dead || b.owner !== owner || !BDEFS[b.type].mast) return 'Pick one of your Mooring Masts.';
+  if (to) { const why = mastLineWhy(owner, b, to); if (why) return why; }
+  const old = b.line ? getE(b.line) : null;
+  if (old && old.line === b.id) old.line = 0;
+  b.line = 0;
+  if (to) {
+    b.line = to.id; to.line = b.id;
+    const ships = lineShips(b).sort((p, q) => p.id - q.id);
+    for (const u of ships.slice(AIRSHIP.perLine)) u.home = 0;
+  }
+  for (const u of S.bots) if (!u.dead && u.owner === owner && BOTS[u.type].airship && !shipLine(u)) shipFindLine(u);
+  S.players[owner].railT = undefined; // (plan the lines' stock again now)
+  airChanged();
+  return '';
+}
+
+/** Airship u with no line: if its owner has exactly one line, with room on it, u goes to serve it. */
+function shipFindLine(u) {
+  if (shipLine(u)) return;
+  const ls = mastLines(u.owner);
+  if (ls.length !== 1 || lineShips(ls[0][0]).length >= AIRSHIP.perLine) return;
+  const [a, b] = ls[0];
+  u.home = dist2(u.x, u.y, a.x + 0.5, a.y + 0.5) <= dist2(u.x, u.y, b.x + 0.5, b.y + 0.5) ? a.id : b.id;
+  airChanged();
+}
+
+/** Put airship u on the line Mast b is on (b null: on no line, it waits at the Mast where it is). '' or why not. */
+function setShipLine(owner, u, b) {
+  if (!u || u.dead || u.owner !== owner || !BOTS[u.type].airship) return 'Pick one of your Airships.';
+  if (!b) { if (u.home) { u.home = 0; airChanged(); } return ''; }
+  const o = mastPartner(b);
+  if (!o || b.owner !== owner) return 'That Mast isn\'t on a line: link it to another Mast first.';
+  const L = shipLine(u);
+  if (L && (L[0] === b || L[1] === b)) return '';
+  if (lineShips(b).length >= AIRSHIP.perLine) return `That line has its ${AIRSHIP.perLine} Airships already.`;
+  u.home = dist2(u.x, u.y, b.x + 0.5, b.y + 0.5) <= dist2(u.x, u.y, o.x + 0.5, o.y + 0.5) ? b.id : o.id;
+  airChanged();
+  return '';
+}
+
+/**
+ * What airship u would carry from Mast A to Mast B: the rail plan's stock, as a Freight Train carries it (railPlan, and
+ * the Freight Train in dispatch). What B keeps and is short of (its supply orders, and what it stocks automatically:
+ * the far Mast what the buildings round it need, the home Mast that again for the line), from what A can spare (all A
+ * holds when A is nearer the Command Base: it keeps those goods for the line); and from a far Mast to its home Mast,
+ * a mixed load of A's spare goods that nothing round A uses (spareForHome), a backhaul. { goods, total, low } (low: B
+ * is down to a third of something it keeps).
+ */
+function shipLoad(u, A, B) {
+  const cap = BOTS[u.type].carry, goods = {}, L = getE(S.players[u.owner].lander);
+  const dh = (s) => (L ? dist2(s.x, s.y, L.x, L.y) : 0), lend = dh(A) < dh(B);
+  const has = (g) => Math.floor(lend ? supplyOf(A, g) : keepSupply(A, g)) - (goods[g] || 0);
+  const k = keepOf(B) || {};
+  let total = 0, low = false;
+  for (const [g, n, keep] of needsOf(B)) {
+    if (!keep || isLiquid(g) || n < 1 || goods[g] || total >= cap) continue;
+    const m = Math.min(Math.floor(n), has(g), cap - total);
+    if (m < 1) continue;
+    goods[g] = m; total += m;
+    if (supplyOf(B, g) + (B.inc[g] || 0) < (k[g] || 0) / 3) low = true;
+  }
+  if (farStation(A) && A.home === B.id && total < cap) {
+    const back = spareForHome(A, B, cap - total, false, false);
+    for (const g in back) {
+      const m = Math.min(back[g], Math.floor(keepSupply(A, g)) - EXPORT_RESERVE - (goods[g] || 0), cap - total);
+      if (m >= 1) { goods[g] = (goods[g] || 0) + m; total += m; }
+    }
+  }
+  return { goods, total, low };
+}
+
+/** The nearest built Mooring Mast or Airfield of u's owner (somewhere to wait), or null. */
+function shipHaven(u) {
+  let best = null, bd = Infinity;
+  for (const b of S.buildings) {
+    if (b.dead || !b.built || b.owner !== u.owner || !(BDEFS[b.type].mast || BDEFS[b.type].airfield)) continue;
+    const d = dist2(b.x + 0.5, b.y + 0.5, u.x, u.y);
+    if (d < bd) { bd = d; best = b; }
+  }
+  return best;
+}
+
+function updateAirship(u, dt) {
+  if (u.bat === undefined) u.bat = 100;
+  if (u.flight) { flyShip(u, dt); return; }
+  const at = u.inside ? getE(u.inside) : null;
+  if (at && !at.dead && at.built && at.owner === u.owner && BDEFS[at.type].mast) { shipAtMast(u, at, dt); return; }
+  // In an Airfield's hangar (built there), or down in the open (its Mast was taken down under it): off to its line, or
+  // else to the nearest Mast (or Airfield) of its owner's to wait there.
+  if (at && u.hp < u.maxHp) u.hp = Math.min(u.maxHp, u.hp + PLANE_MEND * dt);
+  if (S.tick % 15 !== u.id % 15) return;
+  if (!shipLine(u)) shipFindLine(u);
+  const L = shipLine(u), field = at && !at.dead && at.built && at.owner === u.owner && BDEFS[at.type].airfield ? at : null;
+  if (L) {
+    const to = dist2(u.x, u.y, L[0].x + 0.5, L[0].y + 0.5) <= dist2(u.x, u.y, L[1].x + 0.5, L[1].y + 0.5) ? L[0] : L[1];
+    if (field) fuelPlane(u, field, 100 - planeFill(u) + 1);
+    shipDepart(u, to, null);
+    return;
+  }
+  if (field) return; // (waiting in the hangar for a line: the Airfield's panel says so)
+  const h = shipHaven(u);
+  if (h) shipDepart(u, h, null);
+}
+
+/** Airship u casts off and sets out for Mast (or Airfield) `to`, from Mast `from` (or wherever it is). */
+function shipDepart(u, to, from) {
+  exitBuilding(u); // (its riders stay "inside" the Mast they boarded at, out of sight, as a Ferry's)
+  u.flight = { to: to.id, from: from ? from.id : 0 };
+  u.vel = 0; u.alt = u.alt || 0; u.boardT = 0; u.noFuel = 0;
+}
+
+/**
+ * One step of airship u's flight: it rises off its Mast over AIRSHIP.climb s, turning about at AIRSHIP.turn (slowly
+ * under way while still low), flies straight for its mooring at the other Mast over anything, slowing to a stop there
+ * and settling onto it over the last AIRSHIP.settle tiles, then swings round to lie along the line and moors.
+ */
+function flyShip(u, dt) {
+  const F = u.flight, bt = BOTS[u.type];
+  let to = getE(F.to);
+  if (!to || to.dead || !to.built || to.owner !== u.owner) {
+    // Its Mast went: on to its line (the other end), or the nearest Mast or Airfield of its owner's.
+    const L = shipLine(u);
+    to = L ? L[0] : shipHaven(u);
+    if (!to) { // nowhere at all: it comes down where it is, to wait
+      u.vel = Math.max(0, (u.vel || 0) - bt.brake * dt); u.alt = Math.max(0, (u.alt || 0) - dt / AIRSHIP.climb);
+      if (!u.alt && !u.vel) u.flight = null;
+      return;
+    }
+    F.to = to.id;
+  }
+  u.bat = Math.max(0, u.bat - AIRSHIP.burn * dt * drainMul(u));
+  const P = BDEFS[to.type].mast ? shipMooring(u, to) : { x: to.x + 0.5, y: to.y + 0.5, face: u.face || 0 };
+  const vmax = bt.speed * evSpeed() * (u.bat > 0.5 ? 1 : BATTERY.slow);
+  const dx = P.x - u.x, dy = P.y - u.y, d = dhypot(dx, dy);
+  u.alt = Math.min(1, (u.alt || 0) + dt / AIRSHIP.climb, d / AIRSHIP.settle);
+  if (d > 0.02) {
+    const err = wrapAngle(datan2(dy, dx) - (u.face || 0));
+    u.face = wrapAngle((u.face || 0) + clamp(err, -AIRSHIP.turn * dt, AIRSHIP.turn * dt));
+    const want = Math.abs(err) > 0.5 ? 0 : Math.min(vmax * (0.3 + 0.7 * u.alt), Math.sqrt(2 * bt.brake * d) + 0.05);
+    u.vel = want > (u.vel || 0) ? Math.min(want, (u.vel || 0) + bt.accel * dt) : Math.max(want, (u.vel || 0) - bt.brake * dt);
+    const step = u.vel * dt;
+    if (step >= d) { u.x = P.x; u.y = P.y; } else { u.x += dcos(u.face) * step; u.y += dsin(u.face) * step; }
+    u.moved = step > 0 ? 1 : 0;
+    u.odo = ((u.odo || 0) + step) % 1000;
+    return;
+  }
+  u.vel = 0; u.x = P.x; u.y = P.y;
+  const err = wrapAngle(P.face - (u.face || 0));
+  if (Math.abs(err) > 0.02) { u.face = wrapAngle((u.face || 0) + clamp(err, -AIRSHIP.turn * dt, AIRSHIP.turn * dt)); return; }
+  u.face = P.face;
+  shipArrive(u, to);
+}
+
+/** Airship u moors at Mast (or Airfield) m: its goods go into m's stock and its riders get off and carry on. */
+function shipArrive(u, m) {
+  u.flight = null; u.vel = 0; u.alt = 0;
+  const x = u.x, y = u.y;
+  enterBuilding(u, m);
+  if (BDEFS[m.type].mast) { u.x = x; u.y = y; } // (moored beside it, its nose at the cup: see shipMooring)
+  u.atT = S.time;
+  if (u.cargo) {
+    const c = getE(u.cargoTo);
+    for (const g in u.cargo) { if (c && !c.dead) bump(c.inc, g, -u.cargo[g]); bump(m.stock, g, u.cargo[g]); }
+    u.cargo = null; u.cargoTo = 0;
+    m.airIn = S.time;
+  }
+  if (u.aboard && u.aboard.length) unloadFerry(u, m);
+}
+
+/**
+ * Airship u moored at Mast m: it swings round to lie along m's line (if it was linked since), tops up its tank from m's
+ * Fuel, takes on riders waiting at m for the other end, and casts off when there's a trip worth making (see shipLoad
+ * and AIRSHIP), or crosses empty to fetch riders or a load waiting at the other Mast (unless another of the line's
+ * Airships is there or on its way).
+ */
+function shipAtMast(u, m, dt) {
+  if (u.hp < u.maxHp) u.hp = Math.min(u.maxHp, u.hp + PLANE_MEND * dt);
+  const P = shipMooring(u, m), turn = wrapAngle(P.face - (u.face || 0));
+  if (Math.abs(turn) > 0.01) {
+    u.face = wrapAngle((u.face || 0) + clamp(turn, -AIRSHIP.turn * 0.5 * dt, AIRSHIP.turn * 0.5 * dt));
+    u.x = m.x + 0.5 - dcos(u.face) * AIRSHIP.nose; u.y = m.y + 0.5 - dsin(u.face) * AIRSHIP.nose; // (its nose stays at the cup)
+  }
+  if (S.tick % 15 === u.id % 15 && u.bat < 100 - planeFill(u) + 1) fuelPlane(u, m, 100 - planeFill(u) + 1);
+  if (S.tick % 6 !== u.id % 6) return;
+  const L = shipLine(u), other = L ? (m === L[0] ? L[1] : m === L[1] ? L[0] : null) : null;
+  if (!other) {
+    // No line, or this Mast isn't on it: whoever came aboard gets off; with a line elsewhere, it flies there.
+    if (u.aboard && u.aboard.length) unloadFerry(u, m, true);
+    if (S.tick % 30 !== u.id % 30) return;
+    if (!L) shipFindLine(u);
+    const L2 = shipLine(u);
+    if (L2) {
+      const to = dist2(m.x, m.y, L2[0].x, L2[0].y) <= dist2(m.x, m.y, L2[1].x, L2[1].y) ? L2[0] : L2[1];
+      if (u.bat >= Math.min(100, shipLegFuel(m, to) + 6)) shipDepart(u, to, m);
+    }
+    return;
+  }
+  // Riders waiting here for the other end come aboard.
+  let seats = BOTS[u.type].seats - ferryAboard(u).length;
+  for (const v of S.bots) {
+    if (seats <= 0) break;
+    const w = v.ferryWait;
+    if (v.dead || !w || !w.air || w.ferry || w.at !== m.id || w.to !== other.id) continue;
+    w.ferry = u.id;
+    (u.aboard = u.aboard || []).push(v.id);
+    seats--;
+    if (!u.boardT) u.boardT = S.time;
+  }
+  if (S.time - (u.atT ?? -99) < AIRSHIP.dwell) return; // (unloading and loading)
+  const n = ferryAboard(u).length;
+  let go = false, empty = false;
+  if (n) { if (seats > 0 && S.time - (u.boardT || S.time) < AIRSHIP.boardWait) return; go = true; } // (a moment for more to come aboard)
+  if (!go && S.tick % 30 !== u.id % 30) return;
+  const cap = BOTS[u.type].carry, waited = S.time - (u.atT ?? 0);
+  const worth = (ld) => ld.total >= cap * AIRSHIP.fill || (ld.low && ld.total >= 1) || (ld.total >= AIRSHIP.least && waited >= AIRSHIP.wait);
+  const load = shipLoad(u, m, other);
+  if (!go) go = worth(load);
+  if (!go) {
+    const mate = S.bots.some((v) => v !== u && !v.dead && v.owner === u.owner && BOTS[v.type].airship && (v.flight ? v.flight.to === other.id : v.inside === other.id));
+    if (!mate && (S.bots.some((v) => !v.dead && v.ferryWait && v.ferryWait.air && !v.ferryWait.ferry && v.ferryWait.at === other.id) || worth(shipLoad(u, other, m)))) go = empty = true;
+  }
+  if (!go) return;
+  // Fuel for the trip (it fills up first; with too little here, it waits for some to be brought).
+  const need = Math.min(100, shipLegFuel(m, other) + 6);
+  fuelPlane(u, m, 100 - planeFill(u) + 1);
+  if (u.bat < need) {
+    u.noFuel = Math.ceil((need - u.bat) / planeFill(u));
+    const PL = S.players[u.owner];
+    if (S.time - (PL.shipFuelMsg || -999) > 90) { PL.shipFuelMsg = S.time; postMsg(u.owner, `An Airship is waiting for Fuel at its Mooring Mast: it needs ${u.noFuel} more to cross (Tankers or a pipeline bring it).`, m.x, m.y, 'warn'); }
+    return;
+  }
+  if (!empty && load.total) {
+    for (const g in load.goods) { bump(m.stock, g, -load.goods[g]); bump(other.inc, g, load.goods[g]); }
+    u.cargo = load.goods; u.cargoTo = other.id;
+  }
+  shipDepart(u, other, m);
+}
+
+/** Airship u is lost (shot down, or with its Mast): the goods it was bringing aren't on their way any more. */
+function shipLost(u) {
+  if (u.cargo) {
+    const c = getE(u.cargoTo);
+    if (c && !c.dead) for (const g in u.cargo) bump(c.inc, g, -u.cargo[g]);
+    noteAboard(u, u.cargo);
+  }
+  u.cargo = null; u.cargoTo = 0;
+}
 
 /* ------------------------------------------------------------------ flak */
 
@@ -14073,5 +14447,7 @@ function hashState() {
   for (const b of S.buildings) if (b.br) for (const r of b.br) { int(r.h); int(r.g); num(r.k); }
   if (S.tremor) { num(S.tremor.next); int(S.tremor.n); for (const r of S.tremor.rock) { int(r.x); int(r.y); } } // (the Hollow's tremors)
   for (const b of S.buildings) if (b.veinT !== undefined) { int(b.id); num(b.veinT); } // (Harvesters cutting Bloom veins, which draws the Murmur)
+  for (const b of S.buildings) if (b.line) { int(b.id); int(b.line); } // (Airship lines)
+  for (const u of S.bots) if (BOTS[u.type].airship) { int(u.id); int(u.home || 0); num(u.alt || 0); int(u.flight ? u.flight.to : 0); obj(u.cargo); int((u.aboard || []).length); }
   return h >>> 0;
 }

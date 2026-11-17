@@ -176,6 +176,9 @@ const BOTS = {
     desc: 'A fast twin-engined strike jet, based at an Airfield (two to a hangar; built there). Pick a target, an enemy building, or a truck, Tanker, ship or robot out in the open, and it flies out, drops one heavy bomb and flies home: it knocks 14 off a building (forts no lower than a third of their armor) and hurts what\'s round it, and a Tanker it hits explodes. Each sortie takes 6 Ammo and 3 Fuel from its Airfield, on top of the Fuel in its tank (it can\'t take off without them), and it needs a while on the ground to rearm. Flak Guns are the answer to it.' },
   cargoplane: { name: 'Cargo Plane', plural: 'Cargo Planes', speed: WORKER_SPEED * 3.75, hp: 24, air: true, carry: 8, seats: 2, parts: 6, accel: 0.9, brake: 1.3,
     desc: 'A big four-engined transport, based at an Airfield. It flies straight over anything and drops what it carries by parachute, one load a flight: a Drop Outpost anywhere on open ground nobody else holds, two robots (Warbots or Workers) wherever you like, the enemy\'s land too, or up to 8 goods for a place you supply by air. It burns Fuel in the air and fills up at its Airfield: a full tank takes 5 Fuel, a long round trip 4 to 6. It flies to the nearest Airfield when the Foundry finishes it.' },
+  // The Airship (see AIRSHIP): built in an Airfield's hangar, it lives on a line between two Mooring Masts, not at the Airfield.
+  airship: { name: 'Airship', plural: 'Airships', speed: WORKER_SPEED * 1.875, hp: 40, air: true, airship: true, carry: 24, seats: 6, parts: 9, accel: 0.35, brake: 0.45,
+    desc: 'An armoured freight airship that shuttles between two Mooring Masts, both ways, over anything (water, cliffs, rock), at half a Cargo Plane\'s speed. It carries up to 24 goods a trip, several kinds at once (each side sends what the buildings round the other side need, and the far side\'s spare goods come home), and six Workers or Warbots who ride it like a ferry. Built in an Airfield\'s hangar, it flies to its line and lives at its Masts. It burns Fuel in the air and fills up at either Mast. Unarmed, and Flak brings it down.' },
   crawler: { name: 'Crawler', plural: 'Crawlers', speed: WORKER_SPEED * 0.45, hp: 80, crawler: true, parts: 6,
     desc: 'A colossal tracked base on the move. Drive it anywhere it can roll (no road needed) and it deploys where it stops: a Depot, a Fuel Station and an Outpost in one, claiming the land around it. Pack it up to move on: it takes everything stored in it along.' },
   truck:   { name: 'Freight Truck', plural: 'Freight Trucks', speed: WORKER_SPEED * 1.35, hp: 8, haul: true, truck: true, carry: 8, roadOnly: true, parts: 2, accel: 1.5, brake: 3.5,
@@ -204,7 +207,7 @@ const BOTS = {
   sapper:   { name: 'Sapper', plural: 'Sappers', speed: WORKER_SPEED * 0.85, hp: 16, wild: true, bite: 2, smash: true, sap: true,
     desc: 'A Murmur that digs. It goes down outside your Walls and guns, tunnels under them and heaves up inside, by what they were guarding. Nothing reaches it underground; catch it as it comes up. Its tunnel stays, for the others.' },
 };
-const BOT_ORDER = ['worker', 'hauler', 'truck', 'tanker', 'roadtrain', 'freight', 'cargoship', 'tankship', 'ferry', 'cargoplane', 'bomber', 'crawler', 'agribot', 'paver', 'warbot', 'bulwark', 'torch', 'rocket'];
+const BOT_ORDER = ['worker', 'hauler', 'truck', 'tanker', 'roadtrain', 'freight', 'cargoship', 'tankship', 'ferry', 'cargoplane', 'bomber', 'airship', 'crawler', 'agribot', 'paver', 'warbot', 'bulwark', 'torch', 'rocket'];
 /**
  * Unit types switched off for now, for everyone: no Bot Foundry (yours or a rival's) makes them, the menus leave them
  * out, and any in a saved game are taken out when it loads (see botBanned, dropOffBots). Take a type out of this set
@@ -459,7 +462,7 @@ const TRAIN_ARMOR = {
   pulse: { range: 4.5, damage: 4, reload: 1.6 }, // (a Pulse Turret: 5 tiles, 4 a shot, every 1.3 s)
   flak: { range: 6, reload: 1.5 },               // one shell a time (a Flak Gun: 7 tiles, two every second)
 };
-const PLANE_BURN = 2.2, PLANE_FILL = { cargoplane: 20, bomber: 40 }, AIRFIELD_FUEL = 12, AIR_TYPICAL = 30;
+const PLANE_BURN = 2.2, PLANE_FILL = { cargoplane: 20, bomber: 40, airship: 20 }, AIRFIELD_FUEL = 12, AIR_TYPICAL = 30;
 const PLANE_LOAD = 3, PLANE_GATHER = 45, AIR_DROP_FALL = 2.2;
 /** How much of plane u's tank (0–100) one Fuel fills. */
 function planeFill(u) { return PLANE_FILL[u.type] || 40; }
@@ -467,7 +470,25 @@ const PLANE_MEND = 0.6;    // hit points a second a plane parked at its Airfield
 // Airfields: a runway RUNWAY_LEN tiles long runs straight out from the hangar. A plane rolls down it from the
 // head, gathering speed (ROLL_ACCEL tiles/s²), and lifts off at the far end; in the air it turns at up to
 // PLANE_TURN radians a second; it lands at the far end and brakes (ROLL_BRAKE) back to the head.
-const AIRFIELD_HOLDS = { cargoplane: 1, bomber: 2 }; // planes of each type an Airfield has room for
+const AIRFIELD_HOLDS = { cargoplane: 1, bomber: 2 }; // planes of each type an Airfield has room for (an Airship takes no spot: it lives at its Masts)
+/**
+ * The Airship (BOTS.airship) and its Mooring Masts (BDEFS.mast). Two Masts make a line (b.line on both: a Mast is on
+ * one line at most) and up to `perLine` Airships serve it (an Airship's line is the one its home Mast u.home is on). It
+ * flies straight from Mast to Mast at its own speed, rising off one over `climb` s (and turning about, `turn` radians a
+ * second) and settling onto the other over the last `settle` tiles, its nose at the Mast's mooring cup. Goods: the
+ * Masts take part in the rail plan (railPlan), as a line's two stations: the far Mast (further from the Command Base)
+ * stocks what the buildings round it need, the home Mast keeps that for it, and the far Mast's spare goods go home; a
+ * trip sets out once its mixed load fills `fill` of the hold, or with anything at all once the far side is running low
+ * (a third of what it keeps) or riders are aboard, or after `wait` s with at least `least`. It flies across empty to
+ * fetch a load waiting at the other Mast. Riders: Workers and Warbots take the line in their routes (like a ferry
+ * line: a crossing costs `routeCost` times the straight distance, plus `routeBoard` tiles for the wait); once one is
+ * aboard it waits `boardWait` s for more; moored, it stays at least `dwell` s (unloading, loading). Fuel: its tank
+ * (0-100) drains `burn` a second in the air; one Fuel puts back PLANE_FILL.airship of it; each Mast of a line with an
+ * Airship keeps `mastFuel` Fuel, which Tankers or a pipeline bring. Masts stand at least `minDist` tiles apart.
+ */
+const AIRSHIP = { perLine: 2, climb: 5, turn: 0.55, settle: 3.5, fill: 0.5, wait: 75, least: 4, dwell: 4, boardWait: 6, routeCost: 1.3, routeBoard: 10,
+  burn: 0.9, mastFuel: 8, minDist: 8,
+  nose: 1.09 }; // (tiles from a moored Airship's middle to the tip of its mooring cone: where the game draws it, see drawAirship)
 /**
  * The Vulcan Bomber (BOTS.bomber): a sortie loads `ammo` Ammo and `fuel` Fuel at its Airfield (and Fuel in its tank for
  * the trip; it can't take off without both), flies to
@@ -1032,13 +1053,18 @@ const BDEFS = {
     cost: { cement: 8, alloy: 3 }, store: true, port: true, naval: true, armor: 14, buildTime: 14, yard: ['cargoship', 'tankship', 'ferry'],
   },
   airfield: {
-    name: 'Airfield', desc: 'A runway and hangar for a Cargo Plane and two Vulcan Bombers (order them on its panel: the hangar builds them from Alloy and Chips). A plane drops a Drop Outpost anywhere on open ground nobody else holds, two Warbots or Workers wherever you like, or keeps a place you supply by air stocked, 8 goods a flight. Haulers bring the Airfield what those places are short of, and Tankers its planes\' Fuel: it keeps 12, and every flight burns some (a Cargo Plane\'s long round trip 4 to 6, a bomber sortie 3 on top of its tank). It is storage too, like a Depot.',
-    cost: { cement: 10, alloy: 4 }, store: true, airfield: true, armor: 16, buildTime: 16, yard: ['cargoplane', 'bomber'],
+    name: 'Airfield', desc: 'A runway and hangar for a Cargo Plane and two Vulcan Bombers (order them on its panel: the hangar builds them from Alloy and Chips). A plane drops a Drop Outpost anywhere on open ground nobody else holds, two Warbots or Workers wherever you like, or keeps a place you supply by air stocked, 8 goods a flight. Haulers bring the Airfield what those places are short of, and Tankers its planes\' Fuel: it keeps 12, and every flight burns some (a Cargo Plane\'s long round trip 4 to 6, a bomber sortie 3 on top of its tank). Its hangar builds Airships too: they take no spot in it, and fly off to a line between two Mooring Masts. It is storage too, like a Depot.',
+    cost: { cement: 10, alloy: 4 }, store: true, airfield: true, armor: 16, buildTime: 16, yard: ['cargoplane', 'bomber', 'airship'],
   },
   dropost: {
     name: 'Drop Outpost', short: 'Drop Outpost',
     desc: 'A small outpost a Cargo Plane drops by parachute, anywhere: a foothold over rough ground or far from home. It claims a little land, holds two warbots, stores goods and charges two bots from the Fuel stored in it. It is supplied by air from your Airfield (supply orders and Ammo for its warbots) until a road reaches it.',
     cost: { cement: 6, alloy: 3 }, store: true, mil: true, terr: 4, garrison: 2, ammoStock: 4, charger: { slots: 2, rate: 25, fuel: true }, armor: 14, airdrop: true,
+  },
+  mast: {
+    name: 'Mooring Mast', short: 'Mast',
+    desc: 'An armoured mooring mast for Airships, with a loading bay at its foot. Build two and link them (its panel: Link, then tap the other) to make an Airship line straight across anything: water, cliffs, rock. The far Mast stocks itself with what the buildings round it need and sends their spare goods home; the Mast nearer your Command Base keeps the line fed. Haulers bring the goods and take away what arrives, like at a Rail Station, and Tankers bring the Fuel it keeps for its Airships. Order Airships in an Airfield\'s hangar: with one line they go to it by themselves. Workers and Warbots ride the line too.',
+    cost: { cement: 6, alloy: 3 }, store: true, mast: true, armor: 12, buildTime: 12,
   },
   station: {
     name: 'Rail Station', desc: 'Storage beside the railway: Freight Trains load and unload here. Build one at each end of a line (before the track if you like: drag rail from one station to the other and it ends beside each). Once a train runs on it, the far station stocks itself with what the buildings round it need and sends their output home, the station nearest your Command Base keeps the line fed, and trains carry several goods a trip. Buildings, a Command Base or a Depot touching a station are joined to it by conveyor, no Hauler needed: put your far factories round it. Supply orders you set come on top. Its rail yard builds Freight Trains: order them on its panel.',
@@ -1075,12 +1101,12 @@ const BDEFS = {
 
 /** Order of the build menu. (Viaducts and Ropeways aren't in it: they're placed from Paths, like Ramps and Walls.) */
 const BUILD_MENU = ['harvester', 'quarry', 'mine', 'tap', 'smelter', 'fab', 'foundry', 'charger', 'farm', 'pump', 'fueltank', 'refinery', 'generator',
-  'kiln', 'tarworks', 'roadworks', 'station', 'port', 'airfield', 'outpost', 'turret', 'minigun', 'bunker', 'keep', 'disruptor', 'mortar', 'flak', 'repair', 'armory', 'munitions', 'silo', 'reactor', 'nukesilo', 'depot', 'grower', 'lab', 'terminal'];
+  'kiln', 'tarworks', 'roadworks', 'station', 'port', 'airfield', 'mast', 'outpost', 'turret', 'minigun', 'bunker', 'keep', 'disruptor', 'mortar', 'flak', 'repair', 'armory', 'munitions', 'silo', 'reactor', 'nukesilo', 'depot', 'grower', 'lab', 'terminal'];
 /** Build-menu tabs: what each building is for. */
 const BUILD_GROUPS = [
   { key: 'gather', name: 'Gather', types: ['harvester', 'quarry', 'mine', 'tap', 'grower', 'farm', 'pump', 'fueltank'] },
   { key: 'make', name: 'Make', types: ['kiln', 'smelter', 'fab', 'refinery', 'tarworks', 'foundry', 'armory', 'munitions', 'reactor', 'lab', 'generator'] },
-  { key: 'move', name: 'Move', types: ['charger', 'depot', 'roadworks', 'station', 'port', 'airfield', 'terminal'], roads: true },
+  { key: 'move', name: 'Move', types: ['charger', 'depot', 'roadworks', 'station', 'port', 'airfield', 'mast', 'terminal'], roads: true },
   { key: 'defend', name: 'Defend', types: ['outpost', 'turret', 'minigun', 'bunker', 'keep', 'disruptor', 'mortar', 'flak', 'repair', 'silo', 'nukesilo'], walls: true },
 ];
 const BUNKER_FIRE = 0.9; // seconds between shots for each warbot in a Bunker (or a Keep)
@@ -1612,6 +1638,7 @@ const FLAVOR = {
   lab: 'Open questions: 1. The Murmur. 2. Everything else.',
   port: 'The passenger terminal’s departure board still reads ON TIME.',
   airfield: 'Control tower on duty. Inbound traffic: none listed.',
+  mast: 'The waiting room at its foot has benches and a departure board. Nobody waits in it.',
   dropost: 'Survey stake, by air.',
   station: 'Platform signs in four languages. Every train is freight.',
   terminal: 'Docked at a Trade Post. The ledger insists on Accord rates.',
@@ -1632,6 +1659,7 @@ const FLAVOR = {
   ferry: 'Rated for 200 passengers and their luggage. Carries warbots.',
   bomber: 'Cargo plane. Different cargo.',
   cargoplane: 'Rigged for relief drops. It still drops them by parachute.',
+  airship: 'Cabin certified for forty colonists. Seats removed; the certificate is still on the bulkhead.',
   crawler: 'A depot on tracks, for roads that don’t exist yet.',
   truck: 'Twelve tonnes, one destination, no opinions.',
   tanker: 'Explosive when full. Labelled accordingly, in four languages.',
