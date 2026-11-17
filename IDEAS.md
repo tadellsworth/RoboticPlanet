@@ -88,6 +88,11 @@ Still open: a neutral, shared exchange the rivals compete over; contracts for Ch
 - **Graphics.** A first pass is done (rounded shorelines on ponds, lakes and seas, by day and in the night glow). Rock
   outcrops (crags) stay square: rounded crags were tried in November and the owner preferred the square look. Worth
   another look when new art comes in.
+- **Redesign the Fiber and Oil resources on the map (the owner, Nov 17; for later).** The owner doesn't love either
+  look: Fiber's Stalks (the cluster of teal fungal stalks with glowing mint caps, `stalk`) and the oil seep (the dark
+  glossy pool with a rainbow sheen, `oil`). New designs for both, every time of day and every biome they appear in, as
+  a design sheet for the owner to approve first (as with the Murmur), then installed in place. The Hollow's Bloom veins
+  (also Fiber) are being designed separately.
 - **Bigger graphics upgrades** (owner: for later, after the Graphics quality setting). Installing the game as a
   desktop app gives it no more GPU than a tab does; Chrome already draws its canvas on the graphics card. For a bigger
   step up:
