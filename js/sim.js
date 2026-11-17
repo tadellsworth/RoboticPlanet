@@ -5017,7 +5017,12 @@ function gunOver(p, x, y) {
 }
 
 /** Does robot u stay clear of enemy guns (anything but a fighter: warbots, Howitzers and aircraft go in)? */
-function gunShy(u) { const bt = BOTS[u.type]; return !isArmy(u) && !bt.siege && !bt.air && !bt.wild && !bt.sea && !bt.rail; }
+function gunShy(u) { const bt = BOTS[u.type]; return !isArmy(u) && !bt.siege && !bt.air && !bt.wild && !bt.sea && !bt.rail && !(u.trade && escorted(u)); }
+/** Has trade convoy u its escort with it (within 6 tiles)? Then it doesn't give way to enemy warbots: it holds while they fight (convoyHolds). */
+function escorted(u) {
+  for (const v of S.bots) if (!v.dead && v.owner === u.owner && v.task && v.task.type === 'escort' && v.task.bot === u.id && dist2(v.x, v.y, u.x, u.y) < 36) return true;
+  return false;
+}
 
 /**
  * Once a second: every player's robots pull out of jobs at buildings an enemy gun now covers (a worker
@@ -5754,6 +5759,8 @@ function warbotAct(u, dt) {
         if (!foe && t.ax !== undefined) foe = nearestEnemyBot(u.owner, t.ax, t.ay, SORTIE_REACH, true, true, true);
       }
       if (!foe && guardFlag && !rally.follow) foe = nearestEnemyBot(u.owner, rally.x, rally.y, SORTIE_REACH, true, true, true);
+      // (On a flag: an enemy trade convoy passing within TERMINAL.hunt tiles of it, wherever it is: what raids are for.)
+      if (!foe && rally && !rally.follow) foe = convoyNear(u.owner, rally.x, rally.y, TERMINAL.hunt);
       // A foe it gave up chasing is left alone, unless it comes close enough to shoot.
       if (foe && foe.id === u.ignoreFoe && S.time < u.ignoreUntil && dist2(foe.x, foe.y, u.x, u.y) > WARBOT_RANGE_BLOCKED * WARBOT_RANGE_BLOCKED) foe = null;
       if (foe) u.fight = foe.id;
@@ -6683,12 +6690,12 @@ function raidRoadsLeft(r, owner) {
   if (S.time - (r.roadsT || -9) < 1) return r.roadsLeft;
   r.roadsT = S.time;
   r.roadsLeft = false;
-  const ri = Math.floor(r.x), rj = Math.floor(r.y), R0 = Math.ceil(SABOTAGE_RANGE);
+  const ri = Math.floor(r.x), rj = Math.floor(r.y), R0 = Math.ceil(SABOTAGE_RANGE), lanes = convoyLanes(owner);
   for (let dj = -R0; dj <= R0 && !r.roadsLeft; dj++) for (let di = -R0; di <= R0; di++) {
     const i = ri + di, j = rj + dj;
     if (!inMap(i, j) || di * di + dj * dj > SABOTAGE_RANGE * SABOTAGE_RANGE + 0.01) continue;
     const t = tIdx(i, j);
-    if (S.road[t] && !crossTile(t) && wayOwner(t) >= 0 && foes(wayOwner(t), owner)) { r.roadsLeft = true; break; }
+    if (S.road[t] && !crossTile(t) && wayOwner(t) >= 0 && foes(wayOwner(t), owner) && !lanes.has(t)) { r.roadsLeft = true; break; }
     if (S.pipe[t] && foes(S.pipe[t] - 1, owner)) { r.roadsLeft = true; break; }
   }
   return r.roadsLeft;
@@ -6702,13 +6709,14 @@ function sabotageRoads(u, r, dt) {
   if (r.sab < SABOTAGE_WORK) return;
   const foe = (o) => o >= 0 && foes(o, u.owner);
   let best = -1, bd = SABOTAGE_RANGE * SABOTAGE_RANGE + 0.01;
-  const R0 = Math.ceil(SABOTAGE_RANGE);
+  const R0 = Math.ceil(SABOTAGE_RANGE), lanes = convoyLanes(u.owner);
   for (let dj = -R0; dj <= R0; dj++) for (let di = -R0; di <= R0; di++) {
     const i = ri + di, j = rj + dj;
     if (!inMap(i, j)) continue;
     const t = tIdx(i, j);
     const pipe = S.pipe[t] && foe(S.pipe[t] - 1); // a pipeline is worth cutting too
     if (!pipe && (!S.road[t] || !foe(wayOwner(t)) || crossTile(t))) continue; // bridges and tunnels are too solid to tear up (a Missile can crater them)
+    if (!pipe && lanes.has(t)) continue; // (a trade convoy's road: they lie in wait for the convoys instead)
     const d = di * di + dj * dj - (pipe ? 1 : S.road[t] && isJunction(t) ? 1.5 : 0); // junctions first: they cut the most routes
     if (d < bd) { bd = d; best = t; }
   }
@@ -9831,9 +9839,31 @@ function convoyHit(u) {
 
 /** Convoy u was destroyed (its cargo spills as crates: see dropCarried). */
 function convoyLost(u) {
-  const n = cargoCount(u), b = convoyOf(u);
+  const n = cargoCount(u), b = convoyOf(u), st = S.players[u.owner].stats;
+  st.convoysLost = (st.convoysLost || 0) + 1;
   if (b) b.convoyHit = S.time;
   postMsg(u.owner, `Your trade convoy was destroyed${n ? `: its ${n} goods lie in crates on the road for whoever gets there first` : ''}.`, Math.floor(u.x), Math.floor(u.y), 'lost');
+}
+
+/** The nearest trade convoy of `owner`'s enemies out in the open within r tiles of (x, y) (not on a Trade Post's ground), or null. */
+function convoyNear(owner, x, y, r) {
+  let best = null, bd = r * r;
+  for (const v of S.bots) {
+    if (v.dead || !v.trade || v.inside || !foes(v.owner, owner)) continue;
+    const d = dist2(v.x, v.y, x, y);
+    if (d <= bd && !calmAt(v.x, v.y)) { bd = d; best = v; }
+  }
+  return best;
+}
+
+/**
+ * The road tiles the trade convoys of `owner`'s enemies drive (their Terminals' lanes, while a route runs). Raiders leave
+ * these be and lie in wait for the convoys (see raidRoadsLeft, sabotageRoads): cut, no convoy would come.
+ */
+function convoyLanes(owner) {
+  const out = new Set();
+  for (const b of S.buildings) if (!b.dead && b.route && b.lane && BDEFS[b.type].terminal && foes(b.owner, owner)) for (const t of b.lane) out.add(t);
+  return out;
 }
 
 /** The warbots riding along with convoy u (task 'escort'). */

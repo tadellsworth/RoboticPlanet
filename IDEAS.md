@@ -138,7 +138,8 @@ market board (raw goods sell at 35% of their worth and cost 75%, made goods sell
 half as much again; no raw-for-raw), prices easing a tenth a run and coming back about halfway in four minutes, a
 cheaper Terminal (8 Cement, 3 Alloy), the Trade Post's no-fire zone (3 tiles round the pad), convoys with a pennant,
 lanes on the minimap, alerts and crates when one is lost, the Escort switch (two warbots), and the rivals docking
-from about 8 minutes with Escort on and the Salvager raiding convoy lanes. The *Wren* is unchanged.
+from about 8 minutes with Escort on and the Salvager raiding convoy lanes. The *Wren* is unchanged. A new War mission,
+*Convoy* (against a Salvager), teaches the route, Escort, wrecking a rival convoy and carrying its crates home.
 
 Open questions for the owner:
 
@@ -152,6 +153,10 @@ Open questions for the owner:
   colony. Fine, or should a Terminal be fair game when its colony loses the land round the post?
 - **The rivals' escort:** two warbots, as for a person; the plan's "an Outpost on the way" isn't built. Rivals mostly
   run Cement for Chips (one Chip a run), and a Crystal-short one Alloy for Crystal.
+- **Raids against convoys** (decided while building, worth the owner's look): raiders on a flag go after an enemy
+  convoy within 6 tiles of it, and leave a convoy lane's road be (lying in wait) instead of tearing it up, since a cut
+  road meant no convoy ever came to fight over; an escorted convoy no longer turns back from raiders (it holds while
+  its escort fights), an unescorted one still does, like any hauler. In computer-only games convoys were rarely hit.
 - **Ports and ships:** a Terminal is served by road and rail only; a Port-side Terminal (Container Ship convoys) would
   suit the island maps.
 

@@ -1234,12 +1234,13 @@ const TRADE_BONUS = 1.3;
  * Every run sold of a good knocks `sat` off what that good fetches (down to `satMin`), and each second it gets back
  * `recover` of the way to full (about half in four minutes): one route on a good settles a little under full price,
  * two drive it down to the floor. With Escort on, `escort` warbots from the nearest garrison within `escortReach`
- * tiles ride along with each convoy and go back once it's home. 15 Stone buys about 2.4 Alloy a run, 15 Alloy about
+ * tiles ride along with each convoy and go back once it's home. Warbots holding a rally flag go after an enemy trade
+ * convoy that passes within `hunt` tiles of the flag. 15 Stone buys about 2.4 Alloy a run, 15 Alloy about
  * 16 Crystal, 15 Cement about 2 Alloy (more from a Terminal far out).
  */
 const TERMINAL = { lot: 15, every: 120, lead: 60, carryBack: 30, minDist: 16, perTile: 0.015, maxBonus: 0.25,
   sell: { raw: 0.35, made: 0.575 }, buy: { raw: 0.75, made: 1 }, fuelMarkup: 1.5, sat: 0.1, satMin: 0.5, recover: 0.003,
-  escort: 2, escortReach: 24 };
+  escort: 2, escortReach: 24, hunt: 6 };
 /** Raw goods (dug, cut, tapped or pumped) on the market board; the rest of TRADE_BOARD is made in factories. */
 const TRADE_RAW = ['stone', 'fiber', 'ore', 'crystal', 'crude'];
 /** The market board, in the order it's shown: every good a route can send or bring back. */
