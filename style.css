@@ -1158,6 +1158,18 @@ canvas.chart.small { height: 110px; }
   .m-row { grid-template-columns: 80px minmax(0, 1fr); gap: 8px; }
   .m-sec .m-info { margin-top: auto; }
 }
+/* An upright phone of ordinary height (an iPhone SE to a 6.1-inch phone with the browser's bars showing): a smaller
+   icon and title and closer spacing, so the main menu fits without scrolling (it ran 11-14 px past the screen). */
+@media (max-height: 760px) and (min-height: 501px) and (max-width: 520px) {
+  .menu-card:not(.is-setup) { padding: 18px 20px 14px; }
+  #screen-menu .m-icon { width: 64px; height: 64px; margin: -4px auto 6px; border-radius: 16px; }
+  #screen-menu .logo { font-size: clamp(30px, 9.6vw, 40px); }
+  .menu-card .tagline { margin: 0 0 14px; }
+  .m-cust { margin-top: 10px; }
+  .m-links { margin-top: 8px; }
+  /* With Continue (or Rejoin) showing, the title alone heads the card: the icon makes room for it. */
+  #screen-menu .m-home:has(> .m-cont:not([hidden])) .m-icon { display: none; }
+}
 /* A phone on its side: a slimmer header and planet strip. */
 @media (max-height: 500px) {
   .m-head { padding: 6px 12px 5px 8px; }
