@@ -35,7 +35,7 @@ The robots keep time by the Arrival clock. Zero was the day the colony ships wer
 | 2079 | T−55 | The Pathfinder, the last mission the great powers build together, launches for Ithaca I. |
 | 2084 | T−50 | War breaks out between the powers on Earth. |
 | 2089 | T−45 | With Earth failing, four warring Sponsors sign the Ithaca Accord, a truce for the stars only. Each launches vanguards to the top Catalog worlds, and all four send one to Ithaca I. |
-| 2094 | T−40 | The Pathfinder arrives, builds the Trade Posts and Uplinks, then goes dormant. |
+| 2094 | T−40 | The Pathfinder arrives, builds the Trade Posts and Uplinks, sows Earth life from its seed vaults, then goes dormant. |
 | 2099 | T−35 | The four vanguard Carriers reach orbit and land the first Command Bases. The Accord years begin: a race of roads, not guns. |
 | 2125 | T−9 | The Sponsors report the colony arks are "on schedule." The shipyards are already gone. |
 | 2132 | T−2 | The last transmission from home: "Hold position. Further instructions to follow." |
@@ -96,14 +96,26 @@ The robots are fighting their makers' war, long after it ended their makers. The
 
 Everything neutral on Ithaca I predates the war here. It all comes from the Pathfinder, the last mission the great powers built together.
 
-- **The Pathfinder.** A joint lander that arrived five years before the vanguards to lay neutral infrastructure, then went dormant. Its hull could appear as a landmark on a map.
+- **The Pathfinder.** A joint lander that arrived five years before the vanguards to lay neutral infrastructure and sow the garden (see The Pathfinder's garden), then went dormant. Its hull could appear as a landmark on a map.
 - **Trade Posts.** Neutral exchange depots run by a small AI that still keeps the Accord's ledger and trades at Accord rates. Every vanguard's code still treats them as neutral ground. They are the last part of the Accord anyone obeys.
 - **Uplinks.** The relay towers that talked to home and carried Accord arbitration. Under Accord rules, whoever holds the Uplinks speaks for Ithaca I. Every vanguard wants to be holding them if home ever answers.
 - **The trader ship, the *Wren*.** An automated Accord supply freighter on a fixed loop from a waystation at the edge of the system. Nobody knows if the station is still staffed, or still there. The *Wren* arrives on schedule and trades because its contract says to. Its cargo lists are 31 years out of date: seed stock, school tablets, 4,000 pairs of children's shoes.
 
+## The Pathfinder's garden
+
+The Pathfinder carried more than relays. Its seed vaults held Earth: grasses, trees, bees, birds, deer, fish, frozen and catalogued for a world that would need them before its people came. It sowed them in the five years before the vanguards landed, and the garden took.
+
+Sixty years on, Earth's animals thrive on a world made ready for people who never came. They are the only colonists that arrived.
+
+- **Where it took.** The green and temperate regions are mostly Earth's now: deer and songbirds in Greenreach, geese and foxes in Emberwood, herds on the Long Grass, herons in Blackwater, hares and owls in Hoarfell. Only the hardiest Earth life holds on in the Rust: lizards, a hawk.
+- **Where it didn't.** The land the ringfall made strange keeps small native creatures of its own: ash beetles and ember moths in the Cinderlands, jellyfish-like floaters over the Bloom, blind crawlers and glow-worms in the Hollow. Argos has nothing.
+- **What the robots make of it.** Their orders file the animals as colony stock, held for the colonists, so no vanguard harms them on purpose. The war harms them anyway. Flocks lift at the first shot and herds scatter from convoys. Carrion birds circle every new wreck.
+- **The animals know first.** Before the Murmur come up, the birds stop singing and the herds move off. A colony that listens learns to read the quiet. At dawn they come back.
+- **Tone.** The garden is the planet's beauty and its sharpest sadness. Show it, never explain it: deer grazing the lawns of an empty town, birds nesting in a passenger shelter, a herd crossing a road lit for traffic that never comes.
+
 ## Native life: the Murmur
 
-The orbital survey missed the planet's native life because it lives underground and surfaces mostly after ringfall, to feed on fresh Crystal. The robots heard it before they ever saw it: a low sound in the ground, logged as an acoustic anomaly. The log called it a murmur, and the name stuck.
+The orbital survey missed the planet's native life because it lives underground and surfaces mostly after ringfall, to feed on fresh Crystal. (The animals on the surface are mostly Earth's: see The Pathfinder's garden.) The robots heard it before they ever saw it: a low sound in the ground, logged as an acoustic anomaly. The log called it a murmur, and the name stuck.
 
 No robot has ever logged one alone. The Murmur is always plural, and it is the threat that outlasts every war.
 
@@ -359,6 +371,8 @@ How the game hints at it:
 - [x] Length of the Silence: 31 years (decided). The present stays 2165.
 - [x] Name the four Sponsors? No: they stay faceless (decided).
 - [x] Are the Murmur only animals? Never answered: it stays ambiguous (decided).
+- [x] Where do the surface animals come from? The Pathfinder's garden: Earth life sown from its seed vaults where it
+  could take, small native creatures where the land is strange, nothing on Argos (decided by the owner, Nov 17 2026).
 - [ ] Should the Pathfinder wreck appear as a map landmark? (Held for a later expansion; see IDEAS.md.)
 - [x] Murmur names in the game: the classes adopted so far stay, for now (decided): the Scuttler, the Brute, the
   Leech, the Spitter and the Sapper (named the Delver until Nov 2026: renamed by the owner, after the siege word for

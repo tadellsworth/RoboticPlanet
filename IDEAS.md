@@ -361,8 +361,16 @@ These wait for a later expansion:
   tutorial clear.
 - **Research Lab story.** Results written as findings about the Murmur and the Silence, the last one "Home signal
   analysis complete. No further instructions will follow."
-- **The Pathfinder wreck.** A neutral landmark on some maps (the joint lander that built the Trade Posts and Uplinks),
-  holding archive logs.
+- **The Pathfinder wreck.** A neutral landmark on some maps (the joint lander that built the Trade Posts and Uplinks
+  and sowed the garden: LORE.md, The Pathfinder's garden), holding archive logs. The campaign's last mission is played
+  around it (CAMPAIGN.md).
+- **Landmarks and named places for every map** (the owner: second batch, after the living-world layer). Each map gets a
+  name and a few named landmarks (a waterfall off a cliff, a fallen ring shard with a crystal spire, a stone forest, a
+  frozen lake), labelled in faded atlas lettering when zoomed out, each with a line of flavour on tap. Also: the
+  Pathfinder's arrival camps (empty shelters, a lit "Welcome to Ithaca" sign, a landing field whose lights still blink
+  at night) and the half-buried wrecks of earlier landings that failed, each with a log for the Archives. A
+  once-a-game moment for each biome: a herd crossing the Long Grass, geese over Emberwood, a lava flow in the
+  Cinderlands. Needs new art. The campaign's set pieces are listed in CAMPAIGN.md.
 - **The Hollow (decided by the owner, Nov 17; built Nov 2026).** The Murmur's cavern lair under the Bloom (LORE.md, The
   Hollow), as **its own map type with its own underground look** (not a biome for other maps). Always night; chasms,
   black lakes and the most nests of any map, with the Deep's mound at the centre. All four lore features in the first
