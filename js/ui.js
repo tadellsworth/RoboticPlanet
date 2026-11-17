@@ -5552,8 +5552,12 @@ function renderYard(b) {
     for (const btn of el.querySelectorAll('button')) btn.onclick = () => { act('yard', [b.id, btn.dataset.k, +btn.dataset.d], () => renderYard(b)); sfx('click'); };
   }
   for (const k of kinds) {
-    const n = (b.yard && b.yard[k]) || 0, parts = (b.yardParts && b.yardParts[k]) || 0;
-    $('sh-y-' + k).textContent = n ? `${n} ordered` + (parts ? ` · ${parts} of ${BOTS[k].parts} parts in` : '') : 'none ordered';
+    const n = (b.yard && b.yard[k]) || 0, parts = (b.yardParts && b.yardParts[k]) || 0, partsIn = parts ? ` · ${parts} of ${BOTS[k].parts} parts in` : '';
+    if (BDEFS[b.type].airfield) {
+      // Its spots in the hangar, and orders past them as spares (built when one is lost).
+      const h = hangarCount(b, k);
+      $('sh-y-' + k).textContent = `${h.have} of ${h.cap} in the hangar` + (h.making ? ` · ${h.making} ordered${partsIn}` : '') + (h.spare ? ` · ${h.spare} spare${h.spare === 1 ? '' : 's'}, built if one is lost` : '');
+    } else $('sh-y-' + k).textContent = n ? `${n} ordered${partsIn}` : 'none ordered';
     el.querySelector(`.order-row[data-k="${k}"]`).classList.toggle('next', k === now);
   }
   $('sh-yard-status').textContent = b.yardStatus || (now ? '' : 'Nothing ordered');
@@ -5642,7 +5646,7 @@ function openBuildingSheet(b) {
   if (mine) {
     if (def.airfield && b.built && b.owner === ME) html += airfieldSection(b); // its planes and air drops first
     if (def.yard && b.built && mine) html += `<div class="section-label">${def.port ? 'Shipyard' : def.airfield ? 'Hangar' : 'Rail yard'}</div><div class="status" id="sh-yard-status"></div><div class="bar" id="sh-yard-bar"><div></div></div><div id="sh-yard"></div>${def.station ? '<div class="actions" id="sh-yard-here"></div>' : ''}
-      <p class="hint">${def.port ? 'Ships are built here' : def.airfield ? 'Planes are built here' : 'Freight Trains are built here'}, a round of parts (1 Alloy, 1 Chip) every ${YARD.work} s: ${def.yard.map((k) => `${BOTS[k].plural.toLowerCase().replace(/^./, (c) => c.toUpperCase())} ${BOTS[k].parts}`).join(', ')} rounds. Haulers bring the parts. ${def.port ? 'Each one puts to sea from this Port.' : def.airfield ? `The hangar holds ${Object.entries(AIRFIELD_HOLDS).map(([k, n]) => `${n} ${n === 1 ? BOTS[k].name : BOTS[k].plural}`).join(' and ')}.` : 'Each one rolls out onto this station\'s track, so the Bot Foundry never needs a railway.'}</p>`;
+      <p class="hint">${def.port ? 'Ships are built here' : def.airfield ? 'Planes are built here' : 'Freight Trains are built here'}, a round of parts (1 Alloy, 1 Chip) every ${YARD.work} s: ${def.yard.map((k) => `${BOTS[k].plural.toLowerCase().replace(/^./, (c) => c.toUpperCase())} ${BOTS[k].parts}`).join(', ')} rounds. Haulers bring the parts. ${def.port ? 'Each one puts to sea from this Port.' : def.airfield ? `The hangar holds ${Object.entries(AIRFIELD_HOLDS).map(([k, n]) => `${n} ${n === 1 ? BOTS[k].name : BOTS[k].plural}`).join(' and ')}; orders past that wait as spares, built when one is lost.` : 'Each one rolls out onto this station\'s track, so the Bot Foundry never needs a railway.'}</p>`;
     if (def.terminal && b.built) html += '<div class="section-label">Trade route <span class="label-note" id="sh-trade-next"></span></div><div id="sh-trade"></div>' +
       '<div class="section-label">Market board <span class="label-note">the Post\'s ledger: what each good sells for and costs</span></div><div class="board" id="sh-board"></div><p class="hint" id="sh-trade-hint"></p>';
     // A Rail Station: its line, what it stocks automatically, and its conveyors.
@@ -6929,7 +6933,10 @@ function refreshAirTab() {
   if (warOn() && bombers.length) h += `<button class="btn primary big" id="ar-strike" data-act="strikeany"${readyBomber() ? '' : ' disabled'}>Strike: tap a target</button>`;
   h += '<div class="section-label">Airfields</div>';
   for (const b of fields) {
-    const n = basePlanes(b).length, ord = kinds.filter((kk) => b.yard && b.yard[kk] > 0).map((kk) => `${b.yard[kk]} ${b.yard[kk] === 1 ? BOTS[kk].name : BOTS[kk].plural}`);
+    const n = basePlanes(b).length, ord = kinds.filter((kk) => b.yard && b.yard[kk] > 0).map((kk) => {
+      const h = hangarCount(b, kk), m = h.making || h.spare;
+      return `${m} ${m === 1 ? BOTS[kk].name : BOTS[kk].plural}` + (h.making && h.spare ? ` (+${h.spare} spare)` : h.making ? '' : ` as spare${h.spare === 1 ? '' : 's'}`);
+    });
     h += `<div class="kv army-row"><span>${L ? `${dirText(L, b)} from the Command Base` : 'Airfield'}: ${n} plane${n === 1 ? '' : 's'}${ord.length ? `; ordered ${ord.join(', ')}` : ''}</span><span>${kinds.map((kk) => `<button class="btn small" data-act="yard" data-id="${b.id}" data-k="${kk}">+ ${BOTS[kk].name}</button>`).join('')}<button class="btn small ghost" data-act="showbld" data-id="${b.id}">Open</button></span></div>`;
   }
   if (warOn()) {
@@ -6968,7 +6975,12 @@ function armyButton(btn) {
     case 'strikeany': { const u = readyBomber(); if (u) startStrike(u); else { sfx('error'); toast('No Vulcan Bomber is ready on the ground.', 'warn'); } return; }
     case 'strike': if (e) startStrike(e); return;
     case 'drop': if (e) { closeSheet(); startAirdrop(e, btn.dataset.k); } return;
-    case 'yard': if (e) { act('yard', [e.id, btn.dataset.k, 1]); toast(`${BOTS[btn.dataset.k].name} ordered: the Airfield's hangar builds it from Alloy and Chips.`, 'info'); UI.armySig = ''; refreshArmySheet(); } return;
+    case 'yard': if (e) {
+      const k = btn.dataset.k, h = hangarCount(e, k), full = h.have + h.making >= h.cap;
+      act('yard', [e.id, k, 1]);
+      toast(full ? `${BOTS[k].name} ordered as a spare: this Airfield has room for ${h.cap}, so it's built if one is lost.` : `${BOTS[k].name} ordered: the Airfield's hangar builds it from Alloy and Chips.`, 'info');
+      UI.armySig = ''; refreshArmySheet();
+    } return;
   }
 }
 

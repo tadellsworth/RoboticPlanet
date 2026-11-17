@@ -9646,8 +9646,16 @@ function hasYardOrders(b) {
 
 /** What yard b builds next: the first kind on its list with an order (YARD; BDEFS[type].yard). */
 function nextYardKind(b) {
-  for (const k of BDEFS[b.type].yard) if (b.yard && b.yard[k] > 0 && !botBanned(b.owner, k)) return k;
-  return null;
+  // An Airfield passes over a plane whose hangar spots are full and builds the next one ordered: Cargo Planes come
+  // first, and spare ones waiting for a spot used to hold up every bomber ordered there. With all of them full, the first
+  // (its status says the hangar is full).
+  let full = null;
+  for (const k of BDEFS[b.type].yard) {
+    if (!(b.yard && b.yard[k] > 0) || botBanned(b.owner, k)) continue;
+    if (!BDEFS[b.type].airfield || airfieldRoom(b, { type: k, owner: b.owner })) return k;
+    full = full || k;
+  }
+  return full;
 }
 
 /** Order n more (n = 0: none) of `kind` at yard b. */
@@ -11261,6 +11269,17 @@ function airSuppliable(b) {
   return !!(def.store || def.ammoStock || def.inp || def.ammo || def.fuelCap || def.repair || def.nukeSilo || def.roadworks || def.charger || def.bots);
 }
 
+/**
+ * Airfield b's planes of `kind` against its spots for them (AIRFIELD_HOLDS), and its orders split into those it will
+ * build now and spares, built when one is lost: { have, cap, making, spare }. (For the panels.)
+ */
+function hangarCount(b, kind) {
+  let have = 0;
+  for (const v of S.bots) if (!v.dead && v.home === b.id && v.type === kind) have++;
+  const cap = AIRFIELD_HOLDS[kind] || 1, n = (b.yard && b.yard[kind]) || 0, making = Math.min(n, Math.max(0, cap - have));
+  return { have, cap, making, spare: n - making };
+}
+
 /** Does Airfield b have room for plane u (each holds AIRFIELD_HOLDS of a type)? */
 function airfieldRoom(b, u) {
   let n = 0;
@@ -11284,7 +11303,7 @@ function deliverPlane(u) {
   const st = freeAirfield(u);
   if (!st) {
     const P = S.players[u.owner];
-    if (S.time - (P.planeMsg || -999) > 90) { P.planeMsg = S.time; postMsg(u.owner, `A ${BOTS[u.type].name} is waiting at the Foundry: each Airfield holds one, so build another Airfield and it goes there.`, Math.floor(u.x), Math.floor(u.y), 'warn'); }
+    if (S.time - (P.planeMsg || -999) > 90) { P.planeMsg = S.time; postMsg(u.owner, `A ${BOTS[u.type].name} is waiting at the Foundry: each Airfield has room for ${AIRFIELD_HOLDS[u.type] || 1}, so build another Airfield and it goes there.`, Math.floor(u.x), Math.floor(u.y), 'warn'); }
     return;
   }
   if (u.flown) { headHome(u); return; } // put down in the field when its own Airfield went: it flies to this one

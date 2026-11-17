@@ -358,7 +358,7 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
 - **Air: Airfields, the Cargo Plane and air drops** (every map). An **Airfield** (10 Cement, 4 Alloy; Build → Move) is
   a hangar with a runway `RUNWAY_LEN` (5) tiles long running straight out from it (`runwayDir`: the first of east, west,
   south, north with open, level ground of yours; kept in `b.rwy`, and nothing else goes on it: `runwayAt`). It is storage
-  like a Depot. A **Cargo Plane** (6 rounds, built in the Airfield's hangar: `BDEFS.airfield.yard`, `updateYard`; `AIRFIELD_HOLDS`: one per Airfield) is based there (`u.home`, parked at the runway head). One load a flight (`u.mission`), dropped by parachute
+  like a Depot. A **Cargo Plane** (6 rounds, built in the Airfield's hangar: `BDEFS.airfield.yard`, `updateYard`; `AIRFIELD_HOLDS`: one per Airfield, two Vulcan Bombers; orders past that wait as spares, built when one is lost, and the hangar builds the next type ordered meanwhile (`nextYardKind`; spare Cargo Planes used to hold up every bomber ordered there); the panel shows `hangarCount`) is based there (`u.home`, parked at the runway head). One load a flight (`u.mission`), dropped by parachute
   (`S.drops`, `AIR_DROP_FALL` s to come down): a **Drop Outpost** kit (6 Cement, 3 Alloy, paid from storage: a small
   outpost on any open ground nobody else holds; `terr` 4, garrison 2, `ammoStock` 4, storage, a 2-slot Fuel charger),
   two robots (Warbots from garrisons as for a march, or idle Workers, who board at the Airfield: the `board` task and
