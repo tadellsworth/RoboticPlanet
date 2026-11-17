@@ -14,6 +14,20 @@ Still open: a neutral, shared exchange the rivals compete over; contracts for Ch
 
 ## Held for later
 
+- **High-speed transit** (the owner, Nov 17 2026: saved for later). Late-game, high-capacity links for a big colony,
+  beyond roads, Freight Trains, Ropeways and Cargo Planes.
+  - **Maglev line.** Elevated track on pylons, run straight over terrain, water and cliffs, between Maglev Terminals;
+    pods carry goods at 3 to 4 times a Freight Train's speed. Dear in Alloy and Chips a tile, and it draws power from
+    Generators: a solar flare or a blackout slows it to a crawl. Pylons can be shot down, cutting the line until it's
+    repaired. Lore: the Accord's road standards had a "Phase 2" transit plan for the colonists, never built; the robots
+    finally build it, for freight only. Lit up at night, it would look the part.
+  - **Express highways.** A road tier above Asphalt: wide, banked, one-way lanes with on-ramps, where Freight Trucks and
+    Road Trains run twice as fast; Haulers aren't allowed on them. Dear Asphalt, kept up by a Roadworks; it builds on
+    the one-way roads and junctions already in the game.
+  - **Mass driver.** A long electromagnetic rail that fires sealed cargo canisters in an arc to a Catcher building far
+    across the map (up to about 30 tiles), one every 10 seconds or so. A big build, and power for every shot. Canisters
+    fly over everything, but a rival's Flak can shoot them down, and a missed catch spills the cargo as crates. The
+    Missile Silo's peaceful twin; none in the Hollow (nothing flies under the cavern roof).
 - **Sounds for the Hollow, and for the Murmur up close** (the owner, Nov 17 2026: for later). Today the Hollow has a
   faint draught (its wind in `updateBeds`) and the low sound in the ground near nests, exits and the Deep's mound
   (`groundMurmur`: louder toward the mound, dead silent in the lull before a surge); the creatures themselves make no
