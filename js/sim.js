@@ -8980,7 +8980,7 @@ function murmurLayer() {
   if (!S.mur || typeof S.mur !== 'object') S.mur = {};
   const M = S.mur;
   M.nests = M.nests || []; M.shut = M.shut || []; M.ver = M.ver || 0;
-  if (M.night === undefined) { M.night = murmurNight(S.time) ? 1 : 0; M.warned = murmurNights(S.time) + (M.night ? 0 : 0); }
+  if (M.night === undefined) { M.night = murmurNight(S.time) ? 1 : 0; M.warned = murmurNights(S.time); } // (warned: the night whose dusk warning was given)
   for (const b of S.buildings) if (!b.dead && b.type === 'nest' && !M.nests.includes(b.id)) murmurAdopt(b);
 }
 

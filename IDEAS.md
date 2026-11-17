@@ -353,9 +353,11 @@ These wait for a later expansion:
   warbots collapse a tunnel exit (it stays shut a while), and wrecking a nest makes its whole network die back.
   Tunnels pass under roads, buildings and Walls. Quiet: fewer, slower tunnels and smaller packs. The rival AI learns to
   live with them.
-  As built: Versus nests send nothing by day (only Colony's do); nests are placed by the map's symmetry, one a colony
-  in each set (Active two sets on a Medium map for two, Quiet one); exits open no nearer than 9 tiles to a Command Base;
-  a collapsed exit stays shut 15 minutes; the Hollow's `alwaysNight` turns the nights into surges with a silent lull.
+  As built: Versus nests send nothing by day (only Colony's do), and their guards only go for what comes right up to
+  the nest (a nest by a colony's road to its fields stopped a rival's economy dead); nests are placed by the map's
+  symmetry, one a colony in each set (Active two sets on a Medium map for two, Quiet one), off the ways between the
+  colonies; exits open no nearer than 12 tiles to a Command Base or 4 to a building; a collapsed exit stays shut 15
+  minutes; the Hollow's `alwaysNight` turns the nights into surges with a silent lull.
   Open: art for the tunnels and exits (procedural for now: `paintTunnelTile`, `paintTunnelVeins`, `drawBurrow`,
   `drawExitScar` in js/render.js); the Leech, Spitter and Sapper as raiders; whether Torches should burn tunnels out.
 - **A campaign mode built around the Murmur** (the owner's long-term wish): the owner's outline is in CAMPAIGN.md, 15
