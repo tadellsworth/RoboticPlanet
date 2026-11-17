@@ -14,6 +14,32 @@ Still open: a neutral, shared exchange the rivals compete over; contracts for Ch
 
 ## Held for later
 
+- **Megastructures** (the owner, Nov 17 2026: saved for later). Late-game, one per colony, slow to build and seen by
+  everyone, so rivals can race or raid them. The picks, if built: the Great Uplink, the Ring Breaker and Arrival City.
+  - **Ring Breaker** (weapon). A tether-and-thruster station that pulls fragments out of the Ring and drops them where
+    you choose: Ringfall on demand. Every few minutes a strike craters the area and leaves rich Ore or Crystal behind,
+    so it is a weapon and a mine at once; slow to aim, so the target gets warning. Lore: the colony doing to Ithaca what
+    the Sponsors did to Earth.
+  - **Sunlance** (weapon). A field of mirrors focuses Corvane's light into a beam that sweeps a target, burning
+    buildings in a line. By day only; useless in a dust storm, and a solar flare overloads and damages it. Night leaves
+    you open, in step with the Murmur.
+  - **Seismic Lance** (weapon). A deep drill hammering shockwaves into the ground: aimed at the Murmur it collapses
+    tunnel networks map-wide and shakes nests; aimed at a rival it cracks roads and foundations in a radius. The Murmur
+    hear it, and come for it.
+  - **Great Uplink.** A giant dish array to talk to home, and a new way to win: power it and hold it through a long
+    transmission window to "make contact", while rivals try to wreck or jam it. Ties into the campaign's last mission
+    ("No further instructions"); in free play a last-stage victory, with a lore twist on what answers.
+  - **Arrival City.** An arcology built for the colonists: homes, parks, a school, all lit and empty. Production round
+    it goes up (the robots work harder for Arrival), and its land counts double for Domination. At night, a whole lit
+    city for no one.
+  - **Orbital Lift.** A space elevator to the colony's Carrier: bring down its last reserves on demand (robots, Alloy,
+    Chips) and send goods up. Vastly dear; if it falls, the cable comes down across the map in a long line of wreckage.
+  - **Atmosphere Engine.** A terraforming tower that slowly changes the land round it: no more dust storms in its
+    region, barren ground turned fertile (Bio Farms anywhere near), the Bloom pushed back. Finishing the Pathfinder's
+    work; the Murmur hate it and go for it.
+  - **Shield Dome.** A great energy dome over the base, stopping Missiles, bombs, Ringfall and Howitzer shells while
+    powered; it drains Crystal all the time, and warbots can still walk in, so a war on it turns from bombardment to
+    ground assault.
 - **High-speed transit** (the owner, Nov 17 2026: saved for later). Late-game, high-capacity links for a big colony,
   beyond roads, Freight Trains, Ropeways and Cargo Planes.
   - **Maglev line.** Elevated track on pylons, run straight over terrain, water and cliffs, between Maglev Terminals;
