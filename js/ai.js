@@ -24,6 +24,10 @@ const AI_PLAN = [
 
 /** The build plan's opening, up to the first Bot Foundry: what a colony with one site at a time builds first (see aiThink). */
 const AI_OPENING = AI_PLAN.slice(0, AI_PLAN.findIndex(([t]) => t === 'foundry') + 1), AI_EASY_OPENING = 360;
+/** A Medium, Normal or Hard rival's opening: the same buildings with the Bot Foundry straight after the first Fuel Station. */
+const AI_OPEN_FIRST = [AI_OPENING[0], ['foundry', 1]].concat(AI_OPENING.slice(1, -1));
+/** ...and how many Workers its buildings take between them. */
+const AI_OPEN_STAFF = Object.entries(Object.fromEntries(AI_OPEN_FIRST)).reduce((n, [t, k]) => n + (BDEFS[t].staff && !BDEFS[t].crew ? k : 0), 0);
 
 /** The buildings that make new bots between them (and what they run on), and the ones a colony down to a handful of
  * workers keeps running come what may (see the triage in aiThink). */
@@ -534,6 +538,18 @@ function aiThink(p) {
   // (Its first minutes go as they always have: with the opening first from the start it had its Foundry as soon as a
   // Normal rival and beat one in half its games.)
   if (maxSites === 1 && !counts.foundry && S.mode !== 'colony' && S.time >= AI_EASY_OPENING) plan = AI_OPENING.concat(plan);
+  // The opening (Medium and up): until each of its buildings has stood once (P.opened), AI_OPEN_FIRST comes before every
+  // other ask, the Bot Foundry straight after the first Fuel Station: the colony lands with what it costs, and every
+  // Worker it makes speeds up the rest. Tenth in the plan, its site waited behind Outposts toward what was short and
+  // their long roads, spare gatherers, Bio Farms and the Ammo Plant, then for a Worker of its own once the buildings
+  // before it had taken every one, and both rivals sat at their ten landing Workers for 10 to 15 minutes (on Long haul
+  // most of all). (What it can't place yet, a Mine with no Ore on its land say, is passed over for the rest.)
+  if (smart && !P.opened) {
+    const built = {};
+    for (const b of me) if (b.built) built[b.type] = (built[b.type] || 0) + 1;
+    if (AI_OPEN_FIRST.every(([t, n]) => (built[t] || 0) >= n)) P.opened = S.time;
+    else plan = AI_OPEN_FIRST.filter(([t, n]) => (counts[t] || 0) < n).concat(plan);
+  }
   if (sites < siteCap) {
     for (const [type, want0] of plan) {
       if (few && (!AI_CHAIN.includes(type) || counts[type])) continue; // triage: only a missing link of the chain
@@ -692,7 +708,10 @@ function aiThink(p) {
 
   // 3) Foundry: keep enough workers, then grow the army. Order specialists when a building needs
   //    one, and enough Haulers (a Freight Truck counts as one and a half) to carry every good in the colony.
-  let wantWorkers = staffed + 3 + Math.min(3, sites);
+  // (In the opening it counts the buildings of the opening too, built or not: each will want a Worker, so the Foundry
+  // it puts up first makes Workers, not warbots with the Alloy and Chips the colony landed with.)
+  const opening = smart && !P.opened, staffSoon = opening ? Math.max(staffed, AI_OPEN_STAFF) : staffed;
+  let wantWorkers = staffSoon + 3 + Math.min(3, sites);
   const needWorkers = wantWorkers; // (what its buildings call for, before the bot limit has its say)
   // A Freight Truck takes the long runs off the Haulers, but sits idle much of the time: it counts as one and a half.
   const wantHaulers = clamp(Math.ceil(me.length * 0.35), 4, 16) - Math.floor(1.5 * (kinds.truck || 0));
@@ -755,7 +774,7 @@ function aiThink(p) {
     // workers already: until then a worker has to stay free to carry).
     if (few) { b.mode = 'worker'; b.orders = !kinds.hauler && workers >= 3 ? { hauler: 1 } : {}; continue; }
     // Workers first while buildings stand empty; then the army gets its share as the game goes on.
-    b.mode = S.mode === 'colony' ? 'worker' : workers < Math.min(staffed + MIN_FREE_WORKERS, wantWorkers) ? 'worker'
+    b.mode = S.mode === 'colony' ? 'worker' : workers < Math.min(staffSoon + MIN_FREE_WORKERS, wantWorkers) ? 'worker'
       : army < wantArmy ? (workers < wantWorkers ? 'alt' : 'warbot')
         : workers < wantWorkers ? 'worker' : spare <= AI_WORKER_ROOM ? 'off' : workers > wantWorkers + 4 ? 'warbot' : 'alt';
     // A third of the army with no Ammo: no more warbots until it's armed (the Alloy goes to Ammo).
@@ -779,7 +798,7 @@ function aiThink(p) {
     const forMissiles = (saving || P.feedMissiles) && (st.missiles ? army >= Math.max(START_WARBOTS + 2, aiArmyOf(rivalOf(p)) + 3)
       : !armyBehind && (!smart || (workers >= wantWorkers && (kinds.hauler || 0) >= wantHaulers)));
     // (Saving for a crossing with a fair army already: the Foundry rests even if workers are short.)
-    if (((forMissiles || needArmory || bridging) && workers >= staffed + 3) || (bridging && P.bridgeNeed && army >= Math.min(wantArmy, 8))) { b.mode = 'off'; delete b.orders.hauler; delete b.orders.truck; }
+    if (((forMissiles || (needArmory && !opening) || bridging) && workers >= staffed + 3) || (bridging && P.bridgeNeed && army >= Math.min(wantArmy, 8))) { b.mode = 'off'; delete b.orders.hauler; delete b.orders.truck; }
     // Haulers when short; while the army is well behind, only when badly short.
     else if ((kinds.hauler || 0) < (armyBehind ? Math.min(wantHaulers, 6) : wantHaulers) && !(b.orders.hauler > 0)) b.orders.hauler = 1;
     else if ((kinds.tanker || 0) < wantTankers && !(b.orders.tanker > 0)) b.orders.tanker = 1;
