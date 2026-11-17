@@ -2029,6 +2029,52 @@ pause menu's line under the button says so, as does the new-game Rules' Always n
   moving parts of the Generator's and Oil Pump's working loops. Light loops (the Smelter's furnace, the Refinery's
   column lights, the turret's charge-up, the walls' sparks) are never graded.
 
+### Wildlife
+
+Animals on the map, for looks only (`js/wildlife.js`): the Pathfinder's garden (LORE.md), Earth's animals in the green
+regions and, the hardiest, at their edges; small native creatures where the land is strange; nothing on Argos. Nothing in
+the game reads them: they live in `FAUNA` (never in `S`, a save or an order), move by the frame's clock with
+`Math.random`, and two players needn't see the same ones. They can't be selected or tapped and carry no team colours.
+
+- **Who** (`FAUNA_LIFE`, `FAUNA_KINDS`): Greenreach, songbird flocks in the trees (feeding at the forest edge) and deer by
+  the lakes (or the forest edges), owls and fireflies at night; Emberwood, foxes and geese on the lakes, a V of geese
+  crossing over now and then (`faunaMigrants`), bats at night; the Long Grass, wildebeest herds drifting over the open
+  grass and vultures circling, eyes in the grass at night; Blackwater, herons in the shallows and frogs at the water's
+  edge, fireflies every night; Hoarfell, white hares and snow buntings, snowy owls and an arctic fox leaving tracks in
+  the snow at night; the Rust, lizards on the rocks and a hawk, bats at dusk; the Cinderlands, ash beetles and a crow on
+  a dead tree, ember moths at night; the Bloom, floaters drifting like jellyfish, glowing after dark and under an aurora;
+  the Hollow, blind crawlers and glow-worms on the cavern walls.
+- **Where** (`faunaHab`, `faunaRoster`): the map is read in cells of `FAUNA_CELL` (8) tiles: trees (each biome's tree
+  plants in `S.decor`), open ground, lake shores and shallows, rock faces. A cell's roster comes from the planet's seed
+  (`hash2`), so panning back finds the same animals; only the cells round the view are kept, moved and drawn, and each
+  kind only from its own zoom up (`z`). Nothing rests on a road, building, deposit, plan, rail, pipe or water it can't
+  stand in; walkers cross a road but never stop on one, and don't climb cliffs but by a ramp (`faunaPath`).
+- **When**: by the light on screen (`TOD.state.lights`, so the Time of day setting and photo mode's slider): the day
+  animals bed down a few at a time through the evening (each roster entry has its own threshold: `faunaActive`) and the
+  night ones come out. Storms keep the birds down; rain puts the fireflies out.
+- **The war** (`faunaHear`): new effects in `S.fx` (read only) are heard within `FAUNA_FEAR` tiles: flocks lift and fly
+  off the view (with a soft flutter near the camera, `faunaFlutter`), herds bolt, small things hide. The cells round
+  the noise stay empty until it has been quiet `FAUNA_QUIET` (40) game seconds; then the animals come back in from off
+  the view. They step aside from robots and convoys, and a warbot on the move puts a herd to flight. A burning wreck
+  (a `fire` effect of 5 s or more) brings carrion birds (crows, ravens or vultures; over the Bloom, floaters) to circle
+  over it for a minute or two (`faunaCarrion`).
+- **The Murmur** (read only: `murmurNight`, `dayClock` and `NIGHT_FROM`, the nests, mounds and tunnel exits, the
+  packs; `faunaMurmur`): `FAUNA_DREAD` (75) seconds before a Murmur night the day animals within 18 tiles of a nest or
+  exit flee from it and the rest bed down early, and `faunaHush` hushes the day calls and the insects' daytime drone in
+  `js/audio.js` (`biomeCall`, `natureBeds`). At night the animals and fireflies keep away from the packs, and the moths
+  scatter from lights a pack comes near. At dawn the birds fly back in, and `faunaChorus` brings the calls on fast for
+  about fifty seconds (Greenreach, Emberwood, the Long Grass, Blackwater: `FAUNA_SONG`). In the Hollow the glow-worms
+  go out one by one in the lull before a surge, stay dark near the Murmur through it, and the crawlers hide.
+- **Night lights** (`faunaLights`, `faunaGlows`): moths (ember moths on the ashlands, glowing motes over the Bloom)
+  circle streetlamps, buildings' lights and the Command Bases.
+- **Drawn** from two hooks in `render`: `faunaGround`, before the buildings and robots (walkers and waders seen side on,
+  as the three-quarter view shows them, birds perched, tracks in the snow), and `faunaAir`, after the smoke and under
+  the aircraft (fliers seen from above with their shadows, and the glows). Colours follow the light (`faunaCol`, from
+  `TOD.state`), night animals lifted a little so they still read. Sounds go through `AUDIO.natureBus`, under the
+  ambience.
+- **Cost**: none on the Saver Graphics step; at most `FAUNA_CAP` (150) animals at Auto, 1.25× on High and 1.5× on Ultra
+  (`FAUNA_STEP`), and down to about half that zoomed right out (`faunaCap`), where small ones are drawn plainer.
+
 ### Cloud shadows, remains and beacons
 
 Three touches that keep the world going on without its people, all in `js/ambient.js` and for looks only: nothing there
@@ -2089,6 +2135,7 @@ js/blueprint.js           blueprints: a block of buildings and its roads kept on
 js/charts.js              line and bar charts for the statistics screen
 js/render.js              canvas renderer and placeholder art
 js/daynight.js            day and night: the clock, re-lit art sets, grading, headlights, light pools
+js/wildlife.js            the wildlife: animals on the map by biome and time of day, scattered by the fighting (looks only)
 js/ambient.js             cloud shadows by day, remains that overgrow, the Command Bases' beacons by night (looks only)
 js/input.js               touch and mouse controls
 js/ui.js                  HUD, build menu, info panels, objectives

@@ -397,6 +397,15 @@ daylight in the cavern roof; Ringfall falls only through them), Harvesters cut
 Deep itself is never shown). No aircraft fly there, and there are no Trade Posts or Uplinks (the Pathfinder never mapped it). The mission *Into the Hollow* teaches it. Planned: a campaign
 mode built around the Murmur.
 
+The living world (the owner's decision, Nov 17 2026; built): the Pathfinder's garden is on every map but Argos, as
+scenery only. Earth's animals live in the green regions (deer, songbirds, geese, foxes, herds, herons, hares, owls),
+the hardiest at the Rust's edges (lizards, a hawk), and native creatures where the land is strange (ash beetles and
+ember moths in the Cinderlands, floaters over the Bloom, blind crawlers and glow-worms in the Hollow). They scatter
+from the fighting, carrion birds circle new wrecks, moths circle the colony lights, and before a Murmur night the
+birds fall silent and the animals near the nests move off; at dawn they come back. Wrecks slowly overgrow, cloud
+shadows drift by day, and from dusk to dawn every Command Base shines a beam straight up into the sky, with nothing
+to say what it is for.
+
 The Murmur in every game (the owner's decision, Nov 17 2026; built): a setting for every map, Off, Quiet or Active,
 Active by default, never on Argos. They live by the night, so with them on the day-and-night cycle stays on. By night
 each nest's tunnels spread toward power, new exits open along them and packs come up through the exits to raid every
