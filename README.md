@@ -48,7 +48,8 @@ how goods move.
   it has one). From the second mission on, setup puts down the colony the earlier missions taught:
   `kit(S, types, workers)` builds each type where the rival AI would (`aiFindSpot`), finished and road-joined (`KIT6`:
   Harvester, Quarry, Cement Works, Fuel Station, Ore Mine, Crystal Tap, Smelter, Chip Fab, Bot Foundry; `KIT7` adds a
-  Bio Farm), and `preBuild` puts down one building where the mission wants it; custom goals count tiles with
+  Bio Farm, `KIT8` a Grove Planter, from Pipe Dreams on, so the Smelter doesn't burn the Harvester's groves dry; an
+  Agribot comes for each Bio Farm and Grove Planter past the one you land with), and `preBuild` puts down one building where the mission wants it; custom goals count tiles with
   `ownTiles(test)`. Goals once met stay met (`M.got`) unless they say `hold`. **Capture lock:** while any goal other
   than capturing the rival Command Base is open, that base holds at 1 armor against you (`captureLocked`, applied in
   `hitBuilding`; its panel says to finish the other goals first), so winning too soon can't lose a mission.

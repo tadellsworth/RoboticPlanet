@@ -171,9 +171,10 @@ built and played through headless:
   so Iron Road asks for one. Trains bringing a station site its materials would make a track-only line possible.
 - **Bombs on a Command Base** didn't visibly dent it in the Final Descent solver runs (armor 30/30 at each minute
   mark). Not needed for the goal, but worth a look with the bombers.
-- **Kits and Fiber.** On some seeds the kit's one Harvester has little Fiber in reach and the Smelter burns it as fast
-  as it comes; the chapter 3 missions add a Grove Planter (and a second Agribot) for that. Other kits may want the same
-  if a slow player runs dry.
+- **Kits and Fiber, Trade Winds.** From Pipe Dreams on the kits bring a Grove Planter (`KIT8`): without one the
+  Harvester's 30-45 Fiber were gone into the Smelter in 5-8 minutes and an idle player lived on salvage. Trade Winds'
+  kit is still `KIT7` (it was left alone while the trade missions were reworked): an idle player there runs low on
+  Fiber at about 6 minutes.
 - **Mostly waiting.** Breakthrough is mostly research timers, and Assembly Line and Pipe Dreams take a scripted player
   4-7 minutes; their Hard clocks are generous on purpose.
 

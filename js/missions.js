@@ -42,7 +42,8 @@
  *
  * Helpers: for layout, mapTiles, placeField, placeFertile and mirrored (both sides alike in Versus); for setup,
  * preBuild (one finished building, road-joined if asked) and kit(S, types, workers) (the colony so far: KIT6 is
- * gathering, Cement, a Fuel Station, Alloy, Chips and the Bot Foundry, KIT7 adds a Bio Farm); for counts, ownTiles.
+ * gathering, Cement, a Fuel Station, Alloy, Chips and the Bot Foundry, KIT7 adds a Bio Farm, KIT8 a Grove Planter); for
+ * counts, ownTiles.
  * The capture lock (captureLocked): while any other goal is open, the last rival's Command Base can't be taken, so a
  * mission is never lost by winning too soon.
  */
@@ -99,15 +100,21 @@ function preBuild(owner, type, x, y, opts) {
 /** The same feature at (x, y) and at its mirror image, so both sides stay fair in Versus. */
 function mirrored(W, H, x, y, fn) { fn(x, y); fn(W - 1 - x, H - 1 - y); }
 
-/** The colony the first chapters have taught (kit's usual lists): gathering, Cement, a Fuel Station, Alloy, Chips, bots; KIT7 adds a Bio Farm. */
+/**
+ * The colony the first chapters have taught (kit's usual lists): gathering, Cement, a Fuel Station, Alloy, Chips, bots;
+ * KIT7 adds a Bio Farm, KIT8 a Grove Planter too. (Without one the Harvester's groves, some 30 to 45 Fiber, are gone
+ * in 5 to 8 minutes into the Smelter, and a slow player is down to the Command Base's salvage: so from Pipe Dreams on.)
+ */
 const KIT6 = ['harvester', 'quarry', 'kiln', 'charger', 'mine', 'tap', 'smelter', 'fab', 'foundry'];
 const KIT7 = [...KIT6, 'farm'];
+const KIT8 = [...KIT7, 'grower'];
 
 /**
  * For a mission's setup: the colony the player has built so far. Each building of `types`, finished, where the rival
  * AI would put it (aiFindSpot), joined to the roads (a Fuel Station with 4 Fuel in it); a type with no spot is
- * skipped. Then `workers` more Workers in the Command Base (they count as the colony's start, not as bots made).
- * Returns the buildings it put down, by type.
+ * skipped. Then an Agribot for each Bio Farm and Grove Planter beyond the one the colony lands with, and `workers`
+ * more Workers, in the Command Base (they count as the colony's start, not as bots made). Returns the buildings it put
+ * down, by type.
  */
 function kit(S, types, workers) {
   const P = S.players[0], L = getE(P.lander), out = {};
@@ -118,6 +125,8 @@ function kit(S, types, workers) {
     if (b) out[type] = b;
     computeTerritory();
   }
+  const crews = Object.keys(out).filter((t) => BDEFS[t].crew === 'agribot').length;
+  for (let k = S.bots.filter((u) => !u.dead && u.owner === 0 && u.type === 'agribot').length; k < crews; k++) enterBuilding(addBot(0, 'agribot', L.x, L.y), L);
   for (let k = 0; k < (workers || 0); k++) enterBuilding(addBot(0, 'worker', L.x, L.y), L);
   P.stats.startBots = P.stats.bots;
   return out;
@@ -428,7 +437,7 @@ const MISSIONS = [
       // A Bio Farm on the fertile flats to the south-west (kit() would put it north, on the way to the far Depot).
       preBuild(0, 'farm', L.x - 14, L.y + 3, { road: true, reach: 4 });
       computeTerritory();
-      enterBuilding(addBot(0, 'agribot', L.x, L.y), L); // (the Grove Planter's crew: the Bio Farm has the first)
+      enterBuilding(addBot(0, 'agribot', L.x, L.y), L); // (its crew: the one you land with runs the Grove Planter)
       P.stats.startBots = P.stats.bots;
       L.stock.cement += 6;
       // The far Depot, with no road: as far out as a Depot may stand (11 tiles), north, east or west.
@@ -492,9 +501,8 @@ const MISSIONS = [
     setup(S) {
       // (The colony so far, with Green Fuel's Bio Farm and Grove Planter: without them a slow player runs out of Fuel
       // (bots at half speed) and Fiber (the kit's Harvester has ~36 in reach) before the mission is done.)
-      kit(S, [...KIT7, 'grower'], 4);
+      kit(S, KIT8, 4);
       const L = getE(S.players[0].lander), P = S.players[0];
-      enterBuilding(addBot(0, 'agribot', L.x, L.y), L); // (the Grove Planter's crew: the Bio Farm has the first)
       P.stats.startBots = P.stats.bots;
       L.stock.cement += 10; L.stock.alloy += 6;
       S.mission.ledge = { x: L.x + 10, y: L.y - 4 }; // (the layout's ledge: its top is 2.5 tiles across)
@@ -542,9 +550,8 @@ const MISSIONS = [
     setup(S) {
       // (The colony so far, with Green Fuel's Bio Farm and Grove Planter: without them a slow player runs out of Fuel
       // (bots at half speed) and Fiber (the kit's Harvester has ~36 in reach) before the mission is done.)
-      kit(S, [...KIT7, 'grower'], 4);
+      kit(S, KIT8, 4);
       const L = getE(S.players[0].lander), P = S.players[0];
-      enterBuilding(addBot(0, 'agribot', L.x, L.y), L); // (the Grove Planter's crew: the Bio Farm has the first)
       P.stats.startBots = P.stats.bots;
       L.stock.cement += 10;
     },
@@ -579,7 +586,7 @@ const MISSIONS = [
     mode: 'colony', seed: 6101, size: 1, rough: 1, rich: 3, biome: 'swamp', shape: 0, limit: [0, 0, 20],
     layout(m, W) { const b = m.bases[0]; placeField(m, W, b.x - 7, b.y - 7, 1.4, R_OIL, 0.95, 31); },
     setup(S) {
-      kit(S, KIT6, 4);
+      kit(S, [...KIT6, 'grower'], 4); // (Green Fuel's Grove Planter: its groves keep the Smelter in Fiber)
       const L = getE(S.players[0].lander);
       preBuild(0, 'pump', L.x - 7, L.y - 7, { road: true, reach: 3 });
       L.stock.cement += 10;
@@ -618,7 +625,7 @@ const MISSIONS = [
     ],
     mode: 'colony', seed: 1515, size: 0, rough: 1, rich: 3, biome: 'alien', shape: 0, lab: true, limit: [0, 0, 20],
     setup(S) {
-      kit(S, KIT7, 4);
+      kit(S, KIT8, 4);
       const L = getE(S.players[0].lander);
       L.stock.crystal += 10;
       L.stock.chip += 4;
@@ -703,7 +710,6 @@ const MISSIONS = [
       // (No Crystal near home: it comes by train. A Grove Planter keeps the Fiber coming: the groves here are few.)
       kit(S, KIT7.filter((t) => t !== 'tap').concat('grower'), 4);
       const L = getE(S.players[0].lander), P = S.players[0];
-      enterBuilding(addBot(0, 'agribot', L.x, L.y), L); // (the Grove Planter's crew)
       P.stats.startBots = P.stats.bots;
       L.stock.cement += 20;
       L.stock.alloy += 10;
@@ -786,7 +792,7 @@ const MISSIONS = [
     ],
     mode: 'colony', seed: 9101, size: 0, rough: 1, rich: 3, biome: 'jungle', shape: 3, limit: [0, 0, 25],
     setup(S) {
-      kit(S, KIT7, 4);
+      kit(S, KIT8, 4);
       const L = getE(S.players[0].lander);
       L.stock.alloy += 8; L.stock.chip += 4; L.stock.cement += 10;
     },
@@ -837,7 +843,7 @@ const MISSIONS = [
     },
     setup(S) {
       // (Two Harvesters: the desert mesa's Smelter burns more Fiber than one cuts, and the Crystal Taps need some.)
-      kit(S, [...KIT7, 'harvester'], 4);
+      kit(S, [...KIT8, 'harvester'], 4);
       const L = getE(S.players[0].lander);
       L.stock.cement += 30; L.stock.alloy += 10;
     },
@@ -880,7 +886,7 @@ const MISSIONS = [
     ],
     mode: 'colony', seed: 1818, size: 1, rough: 2, rich: 3, biome: 'polar', shape: 5, limit: [0, 0, 20],
     setup(S) {
-      kit(S, KIT7, 4);
+      kit(S, KIT8, 4);
       const L = getE(S.players[0].lander);
       L.stock.cement += 20; L.stock.alloy += 14; L.stock.chip += 12;
     },
@@ -930,7 +936,7 @@ const MISSIONS = [
     ],
     mode: 'colony', seed: 6107, size: 1, rough: 1, rich: 3, biome: 'swamp', war: true, wildlife: true, limit: [0, 0, 20],
     setup(S) {
-      kit(S, KIT7, 4);
+      kit(S, KIT8, 4);
       const P = S.players[0], L = getE(P.lander);
       // Colony games start with no warbots: four, waiting in the Command Base.
       for (let k = 0; k < 4; k++) enterBuilding(addBot(0, 'warbot', L.x, L.y), L);
@@ -973,7 +979,7 @@ const MISSIONS = [
       preBuild(1, 'outpost', Math.floor(W / 2) + 5, Math.floor(H / 2) - 5, { reach: 8 });
       computeTerritory();
       // The colony so far, and an Ammo Plant; and more Workers than it has work for (spare ones to recycle).
-      kit(S, KIT7, 10);
+      kit(S, KIT8, 10);
       preBuild(0, 'armory', L.x - 3, L.y - 3, { road: true });
       computeTerritory();
     },
@@ -1011,7 +1017,7 @@ const MISSIONS = [
       mirrored(W, H, Math.floor(W / 2) + 6, Math.floor(H / 2) + 3, (x, y) => placeField(m, W, x, y, 1.6, R_CRYSTAL, 0.75, 4));
     },
     setup(S, diff) {
-      kit(S, [...KIT7, 'armory'], 4); // (the colony so far, with Live Fire's Ammo Plant)
+      kit(S, [...KIT8, 'armory'], 4); // (the colony so far, with Live Fire's Ammo Plant)
       const W = S.W, H = S.H, P1 = S.players[1];
       // Two rival Outposts on the rival's side of the contested fields, each with a few warbots on guard.
       for (const [x, y] of [[Math.floor(W / 2) - 5, Math.floor(H / 2) + 2], [Math.floor(W / 2) + 6, Math.floor(H / 2) + 3]]) {
@@ -1046,7 +1052,7 @@ const MISSIONS = [
     mode: 'versus', seed: 2121, size: 1, rough: 2, rich: 3, biome: 'polar', shape: 2, players: 2, style: 'rusher',
     rival: ['medium', 'medium', 'normal'], limit: [0, 0, 0],
     setup(S, diff) {
-      kit(S, [...KIT7, 'armory'], 4); // (the colony so far, with Live Fire's Ammo Plant)
+      kit(S, [...KIT8, 'armory'], 4); // (the colony so far, with Live Fire's Ammo Plant)
       const L = getE(S.players[0].lander), P1 = S.players[1], R = getE(P1.lander);
       // An Outpost up by the crags, joined to the roads: its land reaches the east channel, so guns can cover it.
       preBuild(0, 'outpost', 23, 36, { road: true, reach: 2 });
@@ -1097,7 +1103,7 @@ const MISSIONS = [
     mode: 'versus', seed: 7707, size: 1, rough: 2, rich: 3, biome: 'jungle', shape: 0, style: 'balanced',
     rival: ['easy', 'medium', 'normal'], limit: [0, 0, 40],
     setup(S) {
-      kit(S, KIT7, 4); // (the colony so far: with the Bio Farm for Fuel, as in First Contact)
+      kit(S, KIT8, 4); // (the colony so far: with the Bio Farm for Fuel, as in First Contact)
       // An Outpost out towards the rival, joined by road (the rally point's first home).
       const L = getE(S.players[0].lander), s = aiFindSpot(0, 'outpost', L);
       if (s) preBuild(0, 'outpost', s.x, s.y, { road: true });
@@ -1134,7 +1140,7 @@ const MISSIONS = [
     mode: 'versus', seed: 2323, size: 1, rough: 1, rich: 3, biome: 'volcanic', shape: 0, style: 'turtle',
     rival: ['easy', 'medium', 'normal'], limit: [0, 0, 45],
     setup(S) {
-      kit(S, [...KIT7, 'armory'], 4); // (the colony so far, with Supply Lines' Ammo Plant; the Bio Farm grows the Fuel that Torches and Missiles burn)
+      kit(S, [...KIT8, 'armory'], 4); // (the colony so far, with Supply Lines' Ammo Plant; the Bio Farm grows the Fuel that Torches and Missiles burn)
       const L = getE(S.players[0].lander);
       L.stock.alloy += 10; L.stock.chip += 4; L.stock.fuel += 10;
     },
@@ -1179,7 +1185,7 @@ const MISSIONS = [
     setup(S) {
       // (The colony's Ore Mine goes on Ore: the one by the Uranium is the player's to build.)
       S.mission.nuke = false;
-      kit(S, KIT7, 4); // (with the Bio Farm: Fuel for the Fuel Station and a Generator)
+      kit(S, KIT8, 4); // (with the Bio Farm: Fuel for the Fuel Station and a Generator)
       S.mission.nuke = true;
       const L = getE(S.players[0].lander);
       L.stock.alloy += 10; L.stock.chip += 6;
@@ -1212,7 +1218,7 @@ const MISSIONS = [
     ],
     mode: 'versus', seed: 8803, size: 1, rough: 2, rich: 3, biome: 'polar', shape: 16, style: 'balanced',
     rival: ['easy', 'normal', 'normal'], rivalBonus: [0, 0, 4], limit: [0, 0, 60],
-    setup(S) { kit(S, [...KIT7, 'armory'], 4); }, // (the colony so far, with Supply Lines' Ammo Plant: warbots and bombers run on Ammo)
+    setup(S) { kit(S, [...KIT8, 'armory'], 4); }, // (the colony so far, with Supply Lines' Ammo Plant: warbots and bombers run on Ammo)
     goals: [
       { kind: 'built', type: 'keep', n: 1,
         hint: '<b>Build</b> → <b>Defend</b> (<kbd>4</kbd>) → <b>Keep</b> (<kbd>K</kbd>): 6 warbots fire from it, and Walls near it get tougher.',
