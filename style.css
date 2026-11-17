@@ -936,6 +936,13 @@ canvas.chart.small { height: 110px; }
 .ban-row .hint { margin: 6px 0 0; }
 .boost-btns .btn { padding-left: 4px; padding-right: 4px; }
 .sound-sliders { display: grid; gap: 6px; margin-top: 8px; padding: 8px 12px; border: 1px solid var(--line); border-radius: 12px; background: rgba(255,255,255,0.03); text-align: left; }
+/* Graphics (pause menu): its name and how sharp the map is drawn now, the four steps under them, and what the step does. */
+.gfx-row { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 4px 10px; margin-top: 2px; font-size: 14px; }
+.gfx-row output { font-weight: 700; font-size: 13px; font-variant-numeric: tabular-nums; color: var(--accent); }
+.gfx-row .seg, .gfx-note { grid-column: 1 / -1; }
+.gfx-seg button { padding: 8px 4px; font-size: 14px; }
+.gfx-note { color: var(--muted); font-size: 12px; line-height: 1.35; }
+@media (pointer: coarse) { #screen-pause .gfx-seg button, #m-gfx button { min-height: 44px; } }
 /* The Army panel (Q): order buttons in a grid, and list rows with their buttons on the right. */
 .army-cmds { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin: 8px 0 4px; }
 .army-cmds .btn { padding: 10px 6px; }
