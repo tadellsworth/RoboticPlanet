@@ -705,6 +705,11 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   to keep the lot under `HD_TOTAL` pixels and four screens' worth; the whole-map bake isn't drawn under chunks that
   cover it), `bakeMap` reuses its canvases and runs again only when art the map is drawn from arrives (`bakedArt`; at most
   every 2 s while more is coming, and at launch once that art is in or after `BAKE_WAIT`), and big art images keep half-size copies so they shrink cleanly (`drawMapLayer`, `artMip` in `js/render.js`).
+- **Rounded shores and crags** (looks only; the tiles block and carry as before): a corner of a pond, lake or sea tile
+  with land on both sides and beyond is filled with that land in a quarter circle (`SHORE_R`, 0.42 of a tile), and a
+  corner of land with water round it with water (`shoreRounds`, `shoreCorners`); crags the same with plain ground at
+  one level (`rockRounds`, `rockCorners`), their lit and shaded edges following the curve (`rockEdges`). Not lava,
+  fords, tidal flats, a crag a road or track tunnels through, or ground with anything on it; the night glow follows.
 - **Batteries:** bots drain their battery walking, working and fighting, and recharge only at a Fuel Station (or,
   for warbots, inside an Outpost). The Command Base doesn't charge anyone and you land without a Fuel Station, so
   build the first one straight away (it runs on the 10 Fuel you land with). A flat battery means half speed and half power.

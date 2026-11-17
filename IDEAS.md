@@ -76,8 +76,10 @@ Still open: a neutral, shared exchange the rivals compete over; contracts for Ch
   Fuel, for a cut-off island or an Outpost under siege), a **gunship / attack drone** (circles a spot and
   shoots warbots there for a while; close support rather than one strike), and a **radar station** (warns of
   incoming aircraft and lets AA guns fire further). A recon plane only matters if the map ever gets fog of war.
-- **Graphics.** A first pass is done (rounded shorelines on ponds, lakes and seas, by day and in the night glow). Worth
-  another look when new art comes in.
+- **Graphics.** Rounded shorelines (ponds, lakes and seas) and rounded crags are done, by day and in the night glow.
+  Still square: the edges of raised ground (plateaus, mesas, the Rift's walls), whose cliff faces are one-tile strips of
+  art; rounding them wants a corner piece of cliff art (or a face drawn along a curve). Worth another look when new art
+  comes in.
 
 ## Suggestions from the November review (not decided)
 
