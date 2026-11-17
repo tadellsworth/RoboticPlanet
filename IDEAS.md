@@ -212,6 +212,15 @@ built and played through headless:
   events in missions (`MISSION_EVENT_GAP`): the flare is now over by 6:33.
 - **Mostly waiting.** Breakthrough is mostly research timers, and Assembly Line and Pipe Dreams take a scripted player
   4-7 minutes; their Hard clocks are generous on purpose.
+- **Convoy against a rival with the opening** (for the trade work). Mission rivals now have the rival's opening, so
+  Convoy's Salvager (Medium on Normal, Normal on Hard) keeps an army: the old one's was gone by minute 10 to 15. Played
+  by the AI alone (no hint steps), Normal went from still open at 41 minutes to won at 19, and Hard from lost on the
+  clock to the Command Base lost at 21 minutes (23 warbots to the AI's 2). Left as it is, being a trade mission: its
+  Hard level, clock or setup want a look with the convoy goals played.
+- **Final Descent is a real war now.** With the opening its rival keeps an army (the old one's was gone by minute 10).
+  A scripted player (the AI on your side plus the hints' steps) won six of seven runs on Normal and on Hard; one lost
+  its Command Base at 22 minutes on Hard, and one on Normal was still open at 41 minutes, its army shrinking. If
+  players find the last mission too hard on Normal, its rival could go to Medium there.
 
 ## AI stalemates
 
