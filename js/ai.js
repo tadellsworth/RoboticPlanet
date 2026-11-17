@@ -1205,6 +1205,11 @@ function aiThink(p) {
  * One order every AI_MURMUR_EVERY seconds at most.
  */
 const AI_EXIT_NEAR = 12, AI_NEST_REACH = 26, AI_NEST_SPARE = 4, AI_MURMUR_EVERY = 8, AI_NEST_CLEAR = 8;
+// (In Versus a nest's guards only go for what comes within GUARD_VERSUS (3) tiles, so the rival builds as near as
+// AI_NEST_CLEAR_VS: on the Hollow the Ore off its home ground can all lie 3 to 7 tiles from nests, and kept 8 off them
+// it ran out of Ore a quarter of an hour in, for good.)
+const AI_NEST_CLEAR_VS = 6;
+function aiNestClear() { return S.mode === 'colony' ? AI_NEST_CLEAR : AI_NEST_CLEAR_VS; }
 function aiMurmur(p, lvl, lander, smart) {
   const P = S.players[p];
   const night = murmurNight(S.time);
@@ -3090,8 +3095,8 @@ function aiSearchSpot(p, type, lander) {
   const far = type === 'outpost' || type === 'silo';
   const avoid = (S.players[p].avoid || []).filter((a) => a.until > S.time);
   S.players[p].avoid = avoid;
-  // (and nowhere near a Murmur nest, AI_NEST_CLEAR tiles: its guards keep the workers off, and the site never rises)
-  const nests = S.wildlife ? S.buildings.filter((b) => !b.dead && isNestB(b)) : [];
+  // (and nowhere near a Murmur nest, aiNestClear tiles: its guards keep the workers off, and the site never rises)
+  const nests = S.wildlife ? S.buildings.filter((b) => !b.dead && isNestB(b)) : [], nestClear2 = aiNestClear() ** 2;
   const defence = DEFENCE_TYPES.has(type);
   const foeB = type === 'silo' && aiStyle(p).missiles ? S.buildings.filter((b) => !b.dead && b.built && b.owner === rivalOf(p)) : null;
   // An Ore Mine counts only the Ore none of our Mines already works (two side by side on a small patch both ran dry
@@ -3135,7 +3140,7 @@ function aiSearchSpot(p, type, lander) {
       if (S.fert[j * S.W + i] && type !== 'farm') continue; // keep fertile soil for farming
       if (gunCovers(p, j * S.W + i) || dangerAt(p, i, j)) continue; // not where an enemy gun reaches: nobody could build it (nor where its robots were just shot down: noteDanger)
       if (avoid.some((a) => dist2(a.x, a.y, i, j) < (a.r2 || 12))) continue;
-      if (nests.length && nests.some((n) => dist2(n.x, n.y, i, j) < AI_NEST_CLEAR * AI_NEST_CLEAR)) continue;
+      if (nests.length && nests.some((n) => dist2(n.x, n.y, i, j) < nestClear2)) continue;
       if (!canPlace(p, type, i, j, true).ok) continue;
       let rc = Infinity;
       for (const u of roadSides(p, i, j)) rc = Math.min(rc, reach[u]);

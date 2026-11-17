@@ -631,8 +631,9 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   - The rival AI: its build plan swaps Bio Farms for Oil Pumps and Grove Planters for more Harvesters, fuel trouble
     brings an Oil Pump and Refinery, its roads bridge the chasms (Sky bridges) where that's shorter, and `aiRopeway`
     (in the Hollow `roadSearch` carries road reach across a colony's own Ropeways, so a Tap on the mass counts as
-    joined up). Nest sites keep 9 tiles from the masses: the AI never clears nests, and guards there would keep its
-    gatherers off the Crystal for good.
+    joined up). Nest sites keep 9 tiles from the masses: guards there would keep the gatherers off the Crystal for
+    good. The rival lives with the Murmur here as anywhere (`aiMurmur`: exits collapsed, nests struck between surges),
+    and builds as near the nests as `aiNestClear()` lets it, or it runs out of Ore.
 - **Maps for three or four only** (`minPlayers` in `SHAPE_PRESETS`: the player choice can't go below it, Random only
   picks them for three or four, and Colony games on them leave the other colonies empty). **The Wheel** (`wheel`, three):
   rock spokes run out along the lines between the thirds from a raised hub (the only ground on the top level, the
@@ -1442,7 +1443,8 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
     `guards + level` Scuttlers on guard (they go for what comes within 7 tiles of the nest in Colony, within `GUARD_VERSUS`
     (3) in Versus, and robots keep that far clear of them: `foeReach`; a nest beside a colony's way to its fields stopped
     a rival's economy dead) and grows a level every `WILD.grow` s (to 3). The rival builds no nearer a nest than
-    `AI_NEST_CLEAR` (8) tiles (`aiSearchSpot`). **Colony** nests also raid by day:
+    `aiNestClear()` tiles (`aiSearchSpot`): `AI_NEST_CLEAR` (8) in Colony, `AI_NEST_CLEAR_VS` (6) in Versus, where the
+    guards only reach 3 (on the Hollow the Ore off a colony's home ground can all lie that near nests). **Colony** nests also raid by day:
     from `WILD.first` (7 min) a pack every 260–400 s (× `raidGap` on Quiet, a creature smaller) at the nearest building
     or road any colony has within `WILD.reach` (24) tiles, growing with that colony. **Versus** nests send nothing by day.
   - **Nights** (`murmurNight(t)`: `todNameAt` of the game clock, `TOD_CYCLE` in `js/defs.js`, never the display setting,

@@ -343,7 +343,12 @@ These wait for a later expansion:
   (`S.hollow.nests`, twin pairs, and the Deep's mound, `S.hollow.deep`; Quiet keeps half the pairs), owned by the
   Murmur's slot; tunnels and exits as everywhere; always night with the nights as surges on the 12-minute clock, the
   hum going dead silent for a minute first; cutting veins draws the packs (`veinLure`, in `wildTarget` and the night
-  packs' `murmurPrey`). The mission *Into the Hollow* still has no Murmur.
+  packs' `murmurPrey`). The mission *Into the Hollow* still has no Murmur. Computer-only Versus games here with the
+  Murmur Active at first never ended (three Medium games still going at 75 minutes): the rival built no nearer a nest
+  than 8 tiles, and every Ore deposit off its home ground lay 3 to 7 tiles from one, so it ran out of Ore 13 minutes
+  in. Now it keeps 6 off in Versus (`AI_NEST_CLEAR_VS`; the guards reach 3), and six games (Medium and Small) ended
+  at 19, 24, 24, 26 and 28 minutes and one Small at 66, won 4 to 2 by the first seat (the Murmur cost each colony
+  about 18 robots; on Standard, about 3). With them Off the same seeds end at 20 to 34 minutes.
   **Waiting for the art:** the Hollow is drawn with the Bloom's art through one line (`BIOME_ART`); its pillars, veins, the Deep's mound and the shafts are drawn in code.
   **For the owner:**
   - Trade Posts and Uplinks in the Hollow? The lore says the Pathfinder never mapped it. If you want them, the canon
@@ -363,6 +368,9 @@ These wait for a later expansion:
   - Three or four players: not built (the layout is made for two, turned half round).
   - The Murmur set to Off on the Hollow: allowed for now (the setting decides; the menu says the Hollow is their lair
     and plays best with them). Should Off be offered there at all?
+  - Colony on the Hollow (Huge) with the Murmur Active is heavy: its 14 nests and the mound open about 19 tunnel exits
+    by the end of the first surge (a Standard Colony map of that size, 6 nests: 8 to 10; Versus on a Medium Hollow,
+    10 nests: about 6). Their lair, so leave it, or cap the exits there (or make the Hollow's default Quiet in Colony)?
 - **The Murmur in regular games (decided by the owner, Nov 17; built Nov 17: see README, The Murmur).** A Custom Game setting for every map,
   **Off / Quiet / Active, Active by default** (never on Argos, the moon). It **forces the day/night cycle on**: the
   Murmur live by it. **By night they tunnel**: every night each nest's tunnel network spreads further (toward power),
