@@ -156,7 +156,8 @@ Open questions for the owner:
 - **Raids against convoys** (decided while building, worth the owner's look): raiders on a flag go after an enemy
   convoy within 6 tiles of it, and leave a convoy lane's road be (lying in wait) instead of tearing it up, since a cut
   road meant no convoy ever came to fight over; an escorted convoy no longer turns back from raiders (it holds while
-  its escort fights), an unescorted one still does, like any hauler. In computer-only games convoys were rarely hit.
+  its escort fights), an unescorted one still does, like any hauler. In nine computer-only games (Nov 17) convoys were
+  hit in five and one or two lost in four; the games ran about two minutes longer on average and all ended.
 - **Ports and ships:** a Terminal is served by road and rail only; a Port-side Terminal (Container Ship convoys) would
   suit the island maps.
 
