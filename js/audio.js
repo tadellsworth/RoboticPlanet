@@ -1090,7 +1090,7 @@ function updateBeds(live, dt) {
       // at dawn, fewer in rain or fog; and on the ashlands the ground hisses and grumbles more near the volcano.
       const w = Math.max(WORLD.wild || 0, b === 'volcanic' ? WORLD.volc || 0 : 0), tod = typeof todNow === 'function' ? todNow() : null;
       const dawn = tod && (tod.a === 'morning' || tod.b === 'morning') ? 0.5 : 1, damp = wx && (wx.kind === 'rain' || wx.kind === 'fog') ? 1 + wk : 1;
-      B.chirp = ((2 + Math.random() * 6) * dawn * damp) / Math.max(0.2, w);
+      B.chirp = ((2 + Math.random() * 6) * dawn * damp) / Math.max(0.2, w) / (1 + 3 * (typeof faunaChorus === 'function' ? faunaChorus() : 0)); // (the dawn chorus after a Murmur night: js/wildlife.js)
       if (w > 0.12) biomeCall(b, w, tod ? tod.lights || 0 : 0);
     }
   }
@@ -1296,7 +1296,8 @@ function natureBeds(live, dt, zl, b, sway, wx) {
   // Insects and frogs (hushed by rain).
   const D = N.drone;
   if (D) { M.drone.f.frequency.setTargetAtTime(D[0], t, 1); M.drone.f.Q.value = D[1]; M.drone.lfo.frequency.setTargetAtTime(D[2], t, 1); }
-  set(M.drone, D ? (D[3] * (1 - night) + D[4] * night) * W * zq * (kind === 'rain' ? 1 - 0.7 * wk : 1) : 0);
+  const hush = typeof faunaHush === 'function' ? faunaHush() : 0; // (the day's insects and birds fall silent before a Murmur night: js/wildlife.js)
+  set(M.drone, D ? (D[3] * (1 - night) * (1 - 0.8 * hush) + D[4] * night) * W * zq * (kind === 'rain' ? 1 - 0.7 * wk : 1) : 0);
   // The Bloom's shimmer, brighter by night and under an aurora.
   const G = N.glow;
   if (on && G) M.glowOsc.forEach((v, k) => v.o.frequency.setTargetAtTime(v.f * (1 + 0.02 * Math.sin(t * (0.05 + 0.02 * k) + k)), t, 2));
@@ -1385,7 +1386,9 @@ const BIOME_CALLS = { jungle: 1, autumn: 1, savanna: 1, swamp: 1, alien: 1, volc
 function biomeCall(b, w, night) {
   if (!sfxReady()) return;
   w = w === undefined ? 1 : w;
-  const g = aroundVoice(0.8, 0.5 * (0.3 + 0.7 * w), AUDIO.natureBus), r = Math.random(), dark = Math.random() < (night || 0);
+  const dark = Math.random() < (night || 0);
+  if (!dark && typeof faunaHush === 'function' && Math.random() < faunaHush()) return; // (the birds fall silent before the Murmur come: js/wildlife.js)
+  const g = aroundVoice(0.8, 0.5 * (0.3 + 0.7 * w), AUDIO.natureBus), r = Math.random();
   if (b === 'jungle' || b === 'autumn') {
     if (dark && r < 0.45) { const f = 380 + Math.random() * 80; _tone(f, 0.3, 'sine', 0.02, f * 0.95, 0, g); _tone(f * 0.86, 0.45, 'sine', 0.018, f * 0.8, 0.42, g); } // a night bird
     else jungleCall(g, dark);
