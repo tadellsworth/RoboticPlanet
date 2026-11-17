@@ -370,9 +370,17 @@ These wait for a later expansion:
     before, one still going at 45; 14.5 to 36 after), but the computer's Fuel came no sooner, because what holds it
     up is its Refinery, not the oil: it builds one only after a Foundry (oil costs Alloy), at 3 to 42 minutes or
     never, while its first Oil Pump goes up at about 3 minutes either way. If the rival's Fuel on the Hollow is to come
-    sooner, that's the place (`aiThink`'s Fuel-low plan). Winners by seat: 2 to 3 before, 5 to 1 after; with the
-    helper's six Medium/Small games (4 to 2) worth watching for a first-seat lean, though the 26 games with the
-    Murmur Off split 11 to 14.
+    sooner, that's the place (`aiThink`'s Fuel-low plan). Winners by seat: 2 to 3 before, 5 to 1 after.
+  - **The rival's Refinery in the Hollow (fixed Nov 17, the owner's go-ahead).** Traced: its Bot Foundry turned every
+    bit of Alloy into robots, so a Refinery (4 Cement, 3 Alloy) waited for its whole price in storage that never came,
+    and a colony ran on no Fuel from minute 4 to minute 19; and once the home seep ran dry its next Oil Pump went out
+    to a richer seep 18 tiles off among the nests (unstaffed, dry for minutes) while the new seep 6 tiles from home
+    went unused. Now oil comes first there (`oilFirst`: the Refinery first after the opening, started on its Cement,
+    its Alloy delivered first) and pumps go near home (`AI_HOLLOW_PUMP_FAR`). The same six Small games: every colony
+    had its Refinery by 3 to 9 minutes (before, 5 of 12 waited 14 to 17 minutes or never got one) and Fuel in stock at
+    10 minutes (before, 6 of 12 had none); all six ended, in 14 to 35 minutes; winners by seat 2 to 4, so the lean
+    above was most likely one colony starved of Fuel. Still open: with Fuel low later on, a pump can wait behind other
+    sites (a Missile Silo, say) for a slot.
   - Three or four players: not built (the layout is made for two, turned half round).
   - The Murmur set to Off on the Hollow: allowed for now (the setting decides; the menu says the Hollow is their lair
     and plays best with them). Should Off be offered there at all?
