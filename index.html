@@ -83,6 +83,7 @@
   <div id="speed-menu" class="speed-menu" role="menu" hidden></div>
   <div id="selbar" class="selbar" hidden></div>
   <button type="button" id="undo-site" class="undo-site" hidden></button>
+  <button type="button" id="bp-offer" class="undo-site bp-offer" hidden></button>
   <div id="map-tip" class="map-tip" hidden></div>
   <div id="toasts" aria-live="polite"></div>
   <!-- The start of a game: what it has to tell you in one card, the game paused until you tap (see showBriefing). -->
@@ -569,6 +570,7 @@
         </ul>
         <p><b>Six sites at a time.</b> Walls, Gates, Viaducts and Ramps don't count (they're paid straight from storage); moving a building does.</p>
         <p><b>Placed it in the wrong spot?</b> For 10 seconds after you place a building an <b>Undo</b> chip shows at the foot of the map (on a computer <kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>Z</kbd> does the same, outside Paths, whose <kbd>Ctrl</kbd>+<kbd>Z</kbd> is its own). It takes the site back with <b>everything refunded in full</b>: whatever was delivered or paid into it, and a Hauler's load on the way to it, goes straight back into your storage, with no crates left behind. Tap it again for the site you placed before that, while its 10 seconds last. After that, or once it's finished, Dismantle it instead.</p>
+        <p><b>Blueprints.</b> Built a block you like (a Smelter with its Mine and Depot, say)? Keep it as a blueprint and put it down again elsewhere in one go. <b>Build</b> → <b>Blueprints</b> → <b>New blueprint</b>, then tap your buildings (tap one again to drop it) and <b>Save blueprint</b>; on a computer you can also drag a box round them on the map and click <b>Save as blueprint</b> on the chip that comes up. Your roads within a tile of them come too, laid or planned. Up to 8 are kept on this device, newest first, each named after what it's mostly made of: tap the name in the list to change it, and ✕ (twice) deletes one. <b>Place</b> shows it as a ghost: it follows the mouse, or goes where you tap; <b>Rotate</b> (<kbd>R</kbd>) turns it a quarter turn. A piece that can't go there is red (the banner says why) and a building past the six-site limit is red and dashed. <b>Place here</b> (or a click, or a second tap on the same spot) puts down every building site that fits and plans every road; a message says how many went down and why the rest didn't. Place it again on the same spot once some are built to put down the ones the site limit held back.</p>
         <p><b>Priority.</b> Tap a building to set it <b>Low</b>, <b>Normal</b> or <b>High</b> (any building but the Command Base and finished Walls and Gates). High buildings and sites get workers and goods first, Low ones last, and Low ones are the first to lose their worker when you're short. A site's priority is just for building it: the finished building goes back to Normal.</p>
         <p><b>Panel buttons</b> (on a computer they show their keys):</p>
         <ul class="chain">
@@ -984,7 +986,7 @@
         <p><b>Vibration.</b> On a phone that can vibrate, a short buzz says an order went through (warbots sent, a building placed, a road built) and marks a warning. Switch it off with <b>Vibration</b> in the pause menu.</p>
         <p class="keys"><b>Mouse.</b> Scroll to zoom (on a Mac, pinch the trackpad; swipe sideways or Shift + scroll to pan). Pan with <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> or the arrow keys, by resting the mouse at the edge of the window, or by right- or middle-dragging. Click to select, and rest the mouse on anything for a tip.</p>
         <ul class="chain keys">
-          <li><b>Drag a box</b> round your warbots, Bulwarks and Torches to select them (a box round a garrison takes all but one inside; Shift adds to the selection).</li>
+          <li><b>Drag a box</b> round your warbots, Bulwarks and Torches to select them (a box round a garrison takes all but one inside; Shift adds to the selection). A box round buildings of yours and no warbots offers <b>Save as blueprint</b> (see Buildings and sites).</li>
           <li>Then <b>right-click</b>: open ground to hold it, a rival robot to hunt it, a rival building to attack it, your Outpost, Keep, Bunker, Drop Outpost or Command Base to station them, your Repair Station to get the damaged ones fixed, or your Ferry to walk over and board.</li>
           <li><kbd>Ctrl</kbd>/<kbd>⌘</kbd> (or <kbd>Alt</kbd>/<kbd>⌥</kbd>, or <kbd>Shift</kbd>) + <kbd>1</kbd>–<kbd>9</kbd> saves the selection as a group (in a Mac browser tab ⌘ + a number may switch tabs: use ⌥, or <b>Save as group</b>). <kbd>1</kbd>–<kbd>9</kbd> selects it again, twice to jump to it. Groups show as chips above the selection bar and are kept with the saved game.</li>
         </ul>
@@ -999,6 +1001,7 @@
           <li><kbd>H</kbd> or <kbd>Home</kbd> your base; <kbd>J</kbd> latest alert; <kbd>M</kbd> minimap; <kbd>+</kbd>/<kbd>−</kbd> zoom.</li>
           <li><kbd>I</kbd> Statistics; <kbd>U</kbd> Your robots; <kbd>Y</kbd> Goods; <kbd>?</kbd> How to play; <kbd>`</kbd> Boosts.</li>
           <li><kbd>[</kbd> <kbd>]</kbd> game speed; <kbd>Space</kbd> pause; <kbd>Alt</kbd>+<kbd>Enter</kbd> full screen.</li>
+          <li>Placing a blueprint, <kbd>R</kbd> turns it a quarter turn.</li>
           <li><kbd>Enter</kbd> presses the banner's main button (Build here, Fire...). During an Army order it's <b>Army</b>, back to the panel.</li>
           <li><kbd>Esc</kbd> steps back: it closes a menu or panel, takes back the last stroke of a Paths sketch (<kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>Z</kbd> is Undo there too; on the map, for 10 seconds after you place a building, it takes the site back), leaves the mode you're in, then clears the selection; with nothing open it opens the pause menu.</li>
           <li>A panel's buttons show their keys (<kbd>Delete</kbd> twice dismantles, and on a robot's panel recycles it; <kbd>M</kbd> moves, <kbd>G</kbd> makes a Wall a Gate...). While a panel is open, its keys come first.</li>
@@ -1418,6 +1421,7 @@
 <script src="js/photo.js"></script>
 <script src="js/watch.js"></script>
 <script src="js/scout.js"></script>
+<script src="js/blueprint.js"></script>
 <script src="js/main.js"></script>
 </body>
 </html>
