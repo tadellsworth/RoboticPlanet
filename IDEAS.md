@@ -335,7 +335,7 @@ These wait for a later expansion:
   analysis complete. No further instructions will follow."
 - **The Pathfinder wreck.** A neutral landmark on some maps (the joint lander that built the Trade Posts and Uplinks),
   holding archive logs.
-- **The Hollow (decided by the owner, Nov 17; being built).** The Murmur's cavern lair under the Bloom (LORE.md, The
+- **The Hollow (decided by the owner, Nov 17; built Nov 2026).** The Murmur's cavern lair under the Bloom (LORE.md, The
   Hollow), as **its own map type with its own underground look** (not a biome for other maps). Always night; chasms,
   black lakes and the most nests of any map, with the Deep's mound at the centre. All four lore features in the first
   version: **breach shafts** (bases land under shafts of daylight; Ringfall falls only through them, in concentrated
@@ -344,6 +344,25 @@ These wait for a later expansion:
   bridge) and **ceiling tremors** (the Hollow's weather: dust and falling rock). **No aircraft underground** (no
   Airfields). No solar flares. It's always night there, so the Murmur's night rhythm (below) becomes surges on the
   same 12-minute clock, and the hum goes silent just before each one.
+  **Built:** the map (two players, Versus and Colony; README, The Hollow), breaches, Bloom veins (they grow back), floating
+  Crystal (the rival AI ropeways out to it), side chambers of robot parts (crates of Alloy and Chips), stone pillars,
+  tremors with falling rock, the Deep's mound (wrecking it spills its hoard and knocks every nest back to level 1), no
+  Airfields, Grove Planters, Bio Farms or Ports, no dust storms or solar flares, the mission *Into the Hollow*.
+  **Waiting for the Murmur's night system:** nests in Versus (the sites are laid out already, `S.hollow.nests`, in twin
+  pairs, with the Deep's mound at `S.hollow.deep`; in Colony a line marked `TEMP(hollow)` turns them on for now), the
+  surges on the 12-minute clock with the hum going silent first, and raids in the mission. Cutting veins is already a
+  raid-target weight (`veinLure`) for whatever picks a pack's target. **Waiting for the art:** the Hollow is drawn with
+  the Bloom's art through one line (`BIOME_ART`); its pillars, veins, the Deep's mound and the shafts are drawn in code.
+  **For the owner:**
+  - The Trade Posts stand at the cathedral's two ends, though the lore says the Pathfinder never mapped the Hollow (and
+    built the posts). Keep them there, move them, or leave the Hollow without trade?
+  - Wrecking the Deep's mound knocks every nest back to level 1 and spills a big hoard (30 Crystal, 20 Alloy, 10 Chips).
+    Enough, or should it do more (nests stop growing a while, the hum dies down), or less?
+  - The flank caverns hold four contested breaches (four Uplinks). Two (and a third Uplink in the cathedral) would make
+    the middle matter more.
+  - Rock from the roof falls every other tremor (about every four to five minutes), near each colony's home, after an
+    8-second trickle. Often enough to matter, rare enough not to nag?
+  - Three or four players: not built (the layout is made for two, turned half round).
 - **The Murmur in regular games (decided by the owner, Nov 17; being built).** A Custom Game setting for every map,
   **Off / Quiet / Active, Active by default** (never on Argos, the moon). It **forces the day/night cycle on**: the
   Murmur live by it. **By night they tunnel**: every night each nest's tunnel network spreads further (toward power),

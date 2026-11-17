@@ -170,7 +170,7 @@ const COLONY_GOALS = [
   { id: 'port', tier: 2, name: 'Sea lanes', text: 'Build a Port and a Container Ship.', n: 2, when: () => navalMap(),
     hint: 'Build → Move → Port on a shore, then tap it → Shipyard: Container Ships +1.', at: ['port'], build: 'port',
     count: (P) => (metaOwn('port').length ? 1 : 0) + (Math.max(metaMade(P, 'cargoship'), metaBots('cargoship')) ? 1 : 0) },
-  { id: 'airdrop', tier: 2, name: 'Airlift', text: 'Make a Cargo Plane delivery.', n: 1,
+  { id: 'airdrop', tier: 2, name: 'Airlift', text: 'Make a Cargo Plane delivery.', n: 1, when: () => !worldBan('airfield'), // (none in the Hollow)
     hint: 'Build → Move → Airfield; its Hangar: Cargo Planes +1. Then Drop Outpost, or switch a building to Supply by air.', at: ['airfield'], build: 'airfield',
     count: () => {
       if (metaOwn('dropost').length) return 1;

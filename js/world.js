@@ -1939,6 +1939,8 @@ function hollowMap(seed, W, H, cfg) {
     const t = id(i, j);
     if (inner(i, j) && terrain[t] === T_GROUND && kind[t] === 3 && dist(i, j, lake.x, lake.y) + wob(i, j) * 0.8 <= lake.r) lakeTiles.push(t);
   }
+  lakeTiles.sort((a, b) => dist2(a % W, (a / W) | 0, lake.x, lake.y) - dist2(b % W, (b / W) | 0, lake.x, lake.y) || a - b);
+  lakeTiles.splice(SEA_MIN - 10); // (the lake's middle, and room left for its river)
   {
     let x = lake.x, y = lake.y - lake.r, a = -Math.PI / 2 - 0.5 - cr() * 0.4;
     for (let n = 0; n < 40; n++) {
@@ -1946,9 +1948,11 @@ function hollowMap(seed, W, H, cfg) {
       x += dcos(a) * 0.5; y += dsin(a) * 0.5;
       const i = Math.round(x), j = Math.round(y), t = id(i, j);
       if (!inner(i, j) || terrain[t] !== T_GROUND || kind[t] === 6) break;
-      lakeTiles.push(t);
+      if (!lakeTiles.includes(t)) lakeTiles.push(t);
     }
   }
+  // (Far too small for ships: the lake and its river together stay well under SEA_MIN.)
+  lakeTiles.splice(SEA_MIN - 6);
   for (const t of lakeTiles) put(t, T_WATER, FLOOR, 0);
 
   // 5) Make sure every floor is joined to every other (a passage can miss its cavern, a pocket or the lake can cut a
@@ -2033,22 +2037,32 @@ function hollowMap(seed, W, H, cfg) {
   //    and along the walls; Ore, Crystal, boulders and oil seeps (the only Fuel) in fields; the richest Crystal on the
   //    floating masses.
   const free = (t) => terrain[t] === T_GROUND && !res[t] && !mass[t] && kind[t] !== 6;
-  const stamp = (x, y, rad, type, fill, ok) => {
+  // A field of `type` round (x, y); with `min`, at least that many tiles of it (topped up on the free floor nearest it,
+  // where the cavern's edge cut the field short).
+  const stamp = (x, y, rad, type, fill, ok, min = 0) => {
+    let n = 0;
+    const can = (t) => (ok ? ok(t) : free(t)) && dist2(t % W, (t / W) | 0, bx, by) >= 6.5;
     for (let j = Math.floor(y - rad); j <= Math.ceil(y + rad); j++) for (let i = Math.floor(x - rad); i <= Math.ceil(x + rad); i++) {
       if (!inner(i, j) || dist2(i, j, x, y) > rad * rad) continue;
       const t = id(i, j);
-      if (cr() >= fill || !(ok ? ok(t) : free(t)) || dist2(i, j, bx, by) < 6.5) continue;
+      if (cr() >= fill || !can(t)) continue;
       for (const u of [t, mir(t)]) res[u] = type;
+      n++;
     }
+    if (n >= min) return;
+    const near = [];
+    for (let j = Math.floor(y - 6); j <= Math.ceil(y + 6); j++) for (let i = Math.floor(x - 6); i <= Math.ceil(x + 6); i++) if (inner(i, j) && j >= half && can(id(i, j))) near.push(id(i, j));
+    near.sort((a, b) => dist2(a % W, (a / W) | 0, x, y) - dist2(b % W, (b / W) | 0, x, y) || a - b);
+    for (const t of near) { if (n >= min) break; for (const u of [t, mir(t)]) res[u] = type; n++; }
   };
   // Home: two vein patches, Ore, Crystal, two boulder fields and an oil seep.
-  stamp(bx - 6, by - 2, 1.8, R_VEIN, 0.85);
-  stamp(bx + 5.5, by + 2.5, 1.5, R_VEIN, 0.85);
-  stamp(bx - 4, by - 5.5, 1.35, R_ORE, 0.9);
-  stamp(bx + 4, by - 5.5, 1.25, R_CRYSTAL, 0.9);
-  stamp(bx + 6.5, by - 1.5, 1.6, R_BOULDER, 0.8);
+  stamp(bx - 6, by - 2, 1.8, R_VEIN, 0.85, null, 5);
+  stamp(bx + 5.5, by + 2.5, 1.5, R_VEIN, 0.85, null, 3);
+  stamp(bx - 4, by - 5.5, 1.35, R_ORE, 0.9, null, 3);
+  stamp(bx + 4, by - 5.5, 1.3, R_CRYSTAL, 0.9, null, 3);
+  stamp(bx + 6.5, by - 1.5, 1.6, R_BOULDER, 0.8, null, 3);
   stamp(bx - 2.5, by + 4.2, 1.1, R_BOULDER, 0.8);
-  stamp(bx - 7.5, by + 2.5, 1.05, R_OIL, 0.95);
+  stamp(bx - 7, by + 2.5, 1.05, R_OIL, 0.95, null, 2);
   // The chasm hall: boulders and veins on the near side, Ore and Crystal across the chasm.
   stamp(hall.x - side * hall.rx * 0.1, hall.y + hall.ry * 0.55, 1.5, R_BOULDER, 0.8);
   stamp(hall.x + side * hall.rx * 0.7, hall.y + hall.ry * 0.45, 1.3, R_VEIN, 0.85);
@@ -2084,12 +2098,11 @@ function hollowMap(seed, W, H, cfg) {
   // The floating masses: the richest Crystal, on the far half of each platform (the near half, toward the middle of
   // the map, is left clear for a Ropeway's far station and a Crystal Tap).
   for (const m of masses) {
-    for (let t = 0; t < N; t++) {
-      if (!mass[t] || ((t / W) | 0) < half - 1) continue;
-      const i = t % W, j = (t / W) | 0;
-      if (Math.abs(i - m.x) + Math.abs(j - m.y) > 5) continue;
-      if ((i - m.x) * (m.x - ccx) + (j - m.y) * (m.y - ccy) * 0.6 >= -0.3 && hash2(i, j, sV + 3) < 0.8) for (const u of [t, mir(t)]) res[u] = R_CRYSTAL;
-    }
+    const tiles = [];
+    for (let t = half * W; t < N; t++) if (mass[t] && Math.abs((t % W) - m.x) + Math.abs(((t / W) | 0) - m.y) <= 6) tiles.push(t);
+    const far = (t) => { const i = t % W, j = (t / W) | 0; return (i - m.x) * (m.x - ccx) + (j - m.y) * (m.y - ccy) * 0.6 + hash2(i, j, sV + 3) * 0.5; };
+    tiles.sort((a, b) => far(b) - far(a) || a - b);
+    for (const t of tiles.slice(0, Math.min(tiles.length - 3, Math.max(5, Math.round(tiles.length * 0.6))))) for (const u of [t, mir(t)]) res[u] = R_CRYSTAL;
   }
   if (cfg.nuke) {
     let placed = 0;
@@ -2365,7 +2378,8 @@ function newGame(opts) {
     const L = addBuilding(p, 'lander', base.x, base.y, true);
     S.players[p].lander = L.id;
     for (const g in START_STOCK) L.stock[g] = START_STOCK[g] + (rival(p) ? DIFFICULTY[diff].bonus : 0);
-    for (const type in START_BOTS) for (let k = 0; k < START_BOTS[type]; k++) enterBuilding(addBot(p, type, base.x, base.y), L);
+    // (The Hollow: nothing grows, so a Worker comes down in the Agribot's place.)
+    for (const type in START_BOTS) for (let k = 0; k < START_BOTS[type]; k++) enterBuilding(addBot(p, m.hollow && type === 'agribot' ? 'worker' : type, base.x, base.y), L);
     for (let k = 0; k < (mode === 'colony' ? 0 : START_WARBOTS); k++) {
       const w = addBot(p, 'warbot', base.x, base.y);
       enterBuilding(w, L);

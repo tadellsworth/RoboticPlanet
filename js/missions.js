@@ -9,7 +9,8 @@
  * The campaign is in seven chapters, played in this order: First Steps (one idea at a time: a building and its road,
  * Stone and Cement, batteries, the first Alloy), Growing the Colony (bots, farmed Fuel, regrowing groves, Outposts),
  * Roads and Traffic, Industry and Trade, Sea and Sky (all in Colony games, so the economy is learned in peace), then
- * First Contact (the Murmur's nests, a rival to practise on, a border war, a chokepoint to hold) and War. From the second
+ * First Contact (the Murmur's nests, their cavern lair the Hollow, a rival to practise on, a border war, a chokepoint
+ * to hold) and War. From the second
  * mission on, setup puts down the colony the earlier missions taught (`kit`), so each one is spent on its new idea.
  *
  * A mission: { id (progress is saved by it: keep it when a mission is reworked), name, chapter (the list's heading:
@@ -948,6 +949,49 @@ const MISSIONS = [
       { kind: 'nests', n: [1, 2, 2], text: ['Clear a Murmur nest', 'Clear {n} Murmur nests'], count: (P) => P.stats.captured || 0,
         hint: '<b>Army</b> (<kbd>Q</kbd>) → <b>Attack</b> (<kbd>Q</kbd>), then tap a nest. Its hoard spills out for your warbots.',
         ui: '#btn-attack, #ar-attack' },
+    ],
+  },
+  // The Hollow (the Murmur's cavern lair: its own map). No raids yet: the Murmur's night system will bring them.
+  {
+    id: 'hollow', name: 'Into the Hollow', chapter: 'First Contact',
+    brief: 'Your colony has landed in the Hollow, the Murmur\'s cavern lair, under a breach in its roof. Cut Fiber from the Bloom, reach the floating Crystal and ride out the tremors.',
+    intro: [
+      'You came down through a <b>breach</b>, the only daylight in the Hollow. Ringfall falls only through the breaches.',
+      'Nothing grows down here. A <b>Harvester</b> cuts Fiber from the violet <b>Bloom veins</b>, which grow back.',
+      'The richest Crystal hangs over the chasm on floating masses: a <b>Ropeway</b> (Paths) reaches one, or a bridge.',
+      'Now and then the roof shakes. Where dust trickles down, rock falls: then tap what it hit → <b>Repair</b>.',
+      'No aircraft fly underground, and Fuel comes from oil seeps (an Oil Pump and a Refinery). Cutting veins draws the Murmur.',
+    ],
+    mode: 'colony', seed: 3307, size: 1, rough: 2, rich: 3, biome: 'hollow', shape: SHAPE_PRESETS.findIndex((p) => p.hollow), limit: [0, 0, 20],
+    layout(m, W) {
+      // No Crystal in the home cavern (nor its own tap): it has to come from the floating mass over the chasm.
+      const b = m.bases[0];
+      mapTiles(m, W, b.x, b.y, 20, (t) => { if (m.res[t] === R_CRYSTAL && m.elev[t] < 3) { m.res[t] = 0; m.amt[t] = 0; } });
+    },
+    setup(S) {
+      // The colony so far, but a Harvester: that's the first thing to build here. A Depot by the base, where the roof
+      // gives way first: the rock comes down on it a couple of minutes in (S.tremor.aim).
+      kit(S, KIT6.filter((t) => t !== 'harvester' && t !== 'tap'), 4);
+      const L = getE(S.players[0].lander);
+      L.stock.cement += 30; L.stock.alloy += 12; L.stock.fiber += 10;
+      const d = preBuild(0, 'depot', L.x + 4, L.y - 2, { road: true, reach: 6 });
+      if (d) { S.tremor.next = 150; S.tremor.n = 1; S.tremor.aim = { x: d.x, y: d.y }; }
+    },
+    goals: [
+      { kind: 'made', good: 'fiber', n: [20, 30, 40],
+        hint: '<b>Build</b> (<kbd>B</kbd>) → <b>Gather</b> (<kbd>1</kbd>) → <b>Harvester</b> (<kbd>H</kbd>) by the violet Bloom veins. Then <b>Lay road</b> (<kbd>R</kbd>).',
+        ui: "#btn-build, #build-tabs [data-g='gather'], .bcard[data-t='harvester'], #sh-layroad" },
+      { kind: 'ropeway', n: 1, text: 'Run a Ropeway to the floating Crystal',
+        count: (P, S) => S.buildings.filter((b) => !b.dead && b.owner === 0 && b.type === 'ropeway' && b.far && S.elev[tIdx(b.x, b.y)] >= 3).length,
+        hint: '<b>Paths</b> (<kbd>R</kbd>) → <b>Ropeways</b> (<kbd>Shift</kbd>+<kbd>Y</kbd>): a station by your roads, then its far end on the mass.',
+        ui: "#btn-road, #banner-seg [data-v='ropeway'], #sh-layroad" },
+      { kind: 'made', good: 'crystal', n: [15, 25, 35],
+        hint: '<b>Build</b> (<kbd>B</kbd>) → <b>Gather</b> (<kbd>1</kbd>) → <b>Crystal Tap</b> (<kbd>C</kbd>) on the floating mass. Then <b>Lay road</b> (<kbd>R</kbd>).',
+        ui: "#btn-build, #build-tabs [data-g='gather'], .bcard[data-t='tap'], #sh-layroad" },
+      { kind: 'rockfix', n: 1, text: 'Repair what the falling rock hit', at: 'depot',
+        count: (P, S) => S.buildings.filter((b) => !b.dead && b.owner === 0 && b.rocked && b.armor >= BDEFS[b.type].armor - 0.01).length,
+        hint: 'When rock falls on your Depot (dust trickles down first), tap it → <b>Repair</b> (<kbd>E</kbd>).',
+        ui: '#sh-fixbtn' },
     ],
   },
   {

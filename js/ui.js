@@ -1196,11 +1196,12 @@ function roundRect(ctx, x, y, w, h, r) {
 
 /** The biome's ground texture: its own art, or the desert's recoloured to its palette (render.js), or null. */
 function biomeGround(b) {
+  b = artBiome(b); // (a biome drawn with another's art: the Hollow)
   const own = b === 'desert' ? ART.ground : ART['ground-' + b];
   if (own || !biomeLook(b) || typeof biomeTexture !== 'function') return own || null;
   try { return biomeTexture(b, 'ground'); } catch (e) { return null; }
 }
-function biomeLook(b) { return typeof BIOME_LOOK === 'object' && BIOME_LOOK[b] ? BIOME_LOOK[b] : null; }
+function biomeLook(b) { b = artBiome(b); return typeof BIOME_LOOK === 'object' && BIOME_LOOK[b] ? BIOME_LOOK[b] : null; }
 
 /**
  * A swatch of a biome: its ground texture with a few of its plants standing on it. Biomes whose art
@@ -1325,10 +1326,11 @@ function renderPreview(cv, m, p) {
   const W = m.W, H = m.H, pad = 8, k = Math.min((w - pad * 2) / W, (h - pad * 2) / H);
   const mw = W * k, mh = H * k, x0 = Math.round((w - mw) / 2), y0 = Math.round((h - mh) / 2);
   // Colours: the biome's minimap palette (render.js), the resources' as on the minimap.
-  const look = biomeLook(p.st.biome) || biomeLook('desert'), mm = (look && look.mm) || {};
+  const bio = (SHAPE_PRESETS[p.st.shape || 0] || {}).hollow ? 'hollow' : p.st.biome; // (the Hollow has its own look)
+  const look = biomeLook(bio) || biomeLook('desert'), mm = (look && look.mm) || {};
   const C = { ground: mm.ground || [169, 113, 74], water: mm.water || [28, 75, 93], rock: mm.rock || [74, 51, 41], ramp: mm.ramp || [235, 205, 150],
     chasm: [18, 12, 10], fertile: [92, 98, 40] };
-  if (!look || !look.mm) { const G = biomeGround(p.st.biome); const c = G && typeof avgColor === 'function' ? avgColor(G) : null; if (c) C.ground = c; }
+  if (!look || !look.mm) { const G = biomeGround(bio); const c = G && typeof avgColor === 'function' ? avgColor(G) : null; if (c) C.ground = c; }
   const resCol = (r) => (typeof MM_COLORS === 'object' && MM_COLORS[r]) || [220, 220, 220];
   // Paint the tiles at about one image pixel per screen pixel, s by s each.
   const s = clamp(Math.round(k * dpr), 2, 8), IW = W * s, IH = H * s;

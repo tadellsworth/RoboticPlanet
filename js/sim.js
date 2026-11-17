@@ -8457,9 +8457,12 @@ function updateTremor() {
 
 /**
  * Where a tremor's rock comes down: open ground (or a building, a road) within 18 tiles of player 0's Command Base, on
- * its own side of the Hollow (in Colony anywhere round it), clear of the breaches. null if there's nowhere.
+ * its own side of the Hollow (in Colony anywhere round it), clear of the breaches. null if there's nowhere. (A mission
+ * can aim the next one: S.tremor.aim.)
  */
 function rockSpot(rng) {
+  const T = S.tremor;
+  if (T.aim) { const a = T.aim; delete T.aim; return { x: a.x, y: a.y }; }
   const L = getE(S.players[0].lander) || { x: S.hollow.breaches[0].x, y: S.hollow.breaches[0].y };
   for (let k = 0; k < 60; k++) {
     const a = rng() * Math.PI * 2, r = 3 + rng() * 15, x = Math.round(L.x + dcos(a) * r), y = Math.round(L.y + dsin(a) * r);
@@ -8481,6 +8484,7 @@ function rockfall(r) {
     if (b.dead || BDEFS[b.type].wild || dist2(b.x + 0.5, b.y + 0.5, cx, cy) > R2) continue;
     b.armor = Math.max(1, b.armor - TREMOR.damage);
     b.lastHit = S.time;
+    b.rocked = 1; // (struck by falling rock: a mission counts the ones mended since)
     if (b.owner >= 0) hit.add(b.owner);
   }
   for (const u of S.bots) if (!u.dead && !u.inside && !BOTS[u.type].air && dist2(u.x, u.y, cx, cy) <= R2) { damageBot(u, TREMOR.botDamage, undefined, undefined, true); if (u.owner >= 0) hit.add(u.owner); }
@@ -9064,7 +9068,7 @@ function placeHollowNests(rng) {
     b.raidAt = WILD.first + rng() * 120;
     const loot = deep ? HOLLOW.deep.loot : WILD.loot;
     for (const g in loot) b.stock[g] = loot[g];
-    for (let m = 0; m < WILD.guards + b.level; m++) spawnCritter(b, 'scuttler');
+    for (let m = 0; m < nestGuards(b); m++) spawnCritter(b, 'scuttler');
   });
 }
 
