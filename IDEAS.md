@@ -476,10 +476,25 @@ These wait for a later expansion:
   Versus, nine computer-only games: seven on Standard, shape 2 and shape 4 end in 13.9 to 40.5 minutes (mean 23.9, was
   22.1), the first seat winning 5 to 2 (was 3 to 4), about 3 robots a colony lost to the Murmur (was 3.5); on the
   Hollow, Medium seed 11 ends at 34.8 (before: still going at 75) and Small seed 21 at 17.7 (was 29.4).
+  **Their other forms (the owner's decision, Nov 17; built, Active only):** the Leech, the Spitter and the Sapper (BOTS
+  `leech`, `spitter`, `sapper`), at most one of each with a strike from their nights (2, 2, 3), each with its part:
+  the Leech takes the power cut (it feeds, dark and draining, and takes the charge home: its nest grows sooner), the
+  Spitter shorts out the guns and eats at Walls from a few tiles off, the Sapper goes under the Walls and guns (out
+  of reach; its route stays a tunnel) and comes up by the target. Repair brings a cut building's power back. Under
+  ground a Sapper can't be hit at all: the chosen answer is to meet it where it comes up (warbots there; the rival
+  does it too), with a moment as it heaves up when it can't fight back. Their art reads u.pose, u.poseT, u.charge,
+  u.fx/u.fy, b.shortT and the fx 'spit' and 'spitHit' (installed Nov 17). Taught in *What Comes
+  Up* (First Contact), which also teaches the craft: a Fuel Station a Leech drank dry to repair, a Pulse Turret by a
+  Fuel Station, warbots where the watcher stood, and a Leech, a Spitter and a Sapper to kill.
+  Measured with the forms (the same games as for the craft, before → after the forms): Colony, robots lost to the
+  Murmur in all eight 84 → 70, buildings at 15 minutes 231 → 231, at 30 minutes 287 → 293 (the Leech takes the power
+  cut, so the Brutes go in with the rest); Versus, the same nine all end, mean 21.6 minutes (was 23.9, with one still
+  going on the Hollow before the craft), the first seat 7 to 2 (was 6 to 3), 2.9 robots a colony lost to the Murmur
+  (was 3.1). Most Versus games end by the second or third night, so the forms show up in few of them.
   The Hollow in Colony is now harder for a computer-run colony (its robots lost go from a handful to a dozen or so in
   35 minutes; its size is the same). The owner (Nov 17): keep it hard there, it's their lair.
   Open: art for the tunnels and exits (procedural for now: `paintTunnelTile`, `paintTunnelVeins`, `drawBurrow`,
-  `drawExitScar` in js/render.js); the Leech, Spitter and Sapper as raiders; whether Torches should burn tunnels out.
+  `drawExitScar` in js/render.js); whether Torches should burn tunnels out.
 - **A campaign mode built around the Murmur** (the owner's long-term wish): the owner's outline is in CAMPAIGN.md, 15
   missions in three acts, from the landing in the Rust to "No further instructions" at the Pathfinder.
   Its music is ready (Nov 17): **The Long Silence**, the campaign theme (`MOODS.campaign` in js/audio.js; see the README's

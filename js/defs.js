@@ -196,6 +196,13 @@ const BOTS = {
     desc: 'The smallest of the Murmur, quick and never alone. Scuttlers run in packs and go for any bot they catch out in the open.' },
   brute:    { name: 'Brute', plural: 'Brutes', speed: WORKER_SPEED * 0.8, hp: 24, wild: true, bite: 3, smash: true,
     desc: 'A big, slow, armoured creature of the Murmur. Brutes tear up roads, batter buildings and smash bots.' },
+  // Their other forms (the Murmur on Active only, in the night packs from MURMUR.forms' nights: see murmurForms).
+  leech:    { name: 'Leech', plural: 'Leeches', speed: WORKER_SPEED * 1.05, hp: 8, wild: true, bite: 0.5, drain: true,
+    desc: 'A Murmur that feeds on charge. It latches onto a Fuel Station, a Generator or a streetlamp and drinks: the lights go out round it, bots charging there run down, and what it drinks goes back to its nest, which grows faster. Kill it and the power comes back once the building is repaired.' },
+  spitter:  { name: 'Spitter', plural: 'Spitters', speed: WORKER_SPEED * 0.9, hp: 10, wild: true, bite: 1, spit: true,
+    desc: 'A Murmur that hangs back behind the Brutes and spits conductive slurry at a gun or a Wall from a few tiles off: it eats at it, and a gun it hits shorts out for a few seconds and fires at nothing.' },
+  sapper:   { name: 'Sapper', plural: 'Sappers', speed: WORKER_SPEED * 0.85, hp: 16, wild: true, bite: 2, smash: true, sap: true,
+    desc: 'A Murmur that digs. It goes down outside your Walls and guns, tunnels under them and heaves up inside, by what they were guarding. Nothing reaches it underground; catch it as it comes up. Its tunnel stays, for the others.' },
 };
 const BOT_ORDER = ['worker', 'hauler', 'truck', 'tanker', 'roadtrain', 'freight', 'cargoship', 'tankship', 'ferry', 'cargoplane', 'bomber', 'crawler', 'agribot', 'paver', 'warbot', 'bulwark', 'torch', 'rocket'];
 /**
@@ -1413,6 +1420,18 @@ const MURMUR = {
   // it keeps of it each night; memMost: how many places each memory holds; feintFrom: the first night a feint can come,
   // with feintArmy armed warbots in the colony; feintN: how many in it; feintFar: tiles at least from the target;
   // feintWait: the most the main pack waits for it to draw the warbots off.
+  // Their other forms on Active: from night `from` a plan's packs bring at most one of each (the Leech goes first for the
+  // power, the Spitter for the guns and Walls round the target, the Sapper under them). Leech: `rate` charge a second
+  // while it feeds, a Fuel Station's Fuel gone every `fuelEvery` s and `bat` a second off each bot charging there;
+  // full, it goes home and its nest grows `grow` s sooner. Spitter: stops `range` tiles off and spits every `every` s
+  // (`cost` of its charge, which comes back at `regen` a second): `damage` armor off and a gun shorted for `short` s.
+  // Sapper: digs in for `dig` s, goes `speed` tiles a second underground (nothing reaches it there), comes up for `up` s
+  // before it can fight, and what it dug stays its nest's tunnel.
+  forms: {
+    leech: { from: 2, rate: 0.08, fuelEvery: 5, bat: 6, grow: 120 },
+    spitter: { from: 2, range: 4.5, every: 3, cost: 0.25, regen: 0.05, damage: 2, short: 4 },
+    sapper: { from: 3, dig: 2.5, speed: 0.9, up: 1.5 },
+  },
   craft: {
     watch: 12, rally: 9, wait: 14, waitMax: 50, join: 46, cutR: 10, cutTime: 3, cutWait: 30, dark: 5, lampDark: 2, leadGap: 3,
     joinMost: 3, spread: 1.6, half: 0.5, again: 45, againLeft: 70, scatter: 4.5, scatterN: 2, scatterFor: 4, scatterCd: 12, dragR: 8,
@@ -1622,6 +1641,9 @@ const FLAVOR = {
   torch: 'Built to clear the Bloom. The Bloom grows back. So do enemies.',
   scuttler: 'No robot has ever logged one alone.',
   brute: 'Drawn to charge. Batteries, power lines and Crystal all read as food.',
+  leech: 'The lights dim as it drinks. Logged as a fault, three times, before anyone looked.',
+  spitter: 'The residue is conductive. The Lab would like a sample that is not still moving.',
+  sapper: 'The Walls were rated for anything that comes over them.',
   // Neutral ground (not buildings anyone owns)
   post: 'Accord rates honoured. The ledger is still open.',
   uplink: 'Transmitting. No response. Transmitting.',
