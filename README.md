@@ -1391,8 +1391,8 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   display only): on a computer (a mouse, the wide layout) a ♪ in the bottom left corner opens into a card naming each theme
   as it starts (`MUSIC_TITLES`: the menu's slow take is Lost in a Dream too, the war theme Overdrive, the nuke alarm Zero
   Hour, `end` none) for `NP_SHOW` ms, and on hover or click; a title shown in the last `NP_AGAIN` ms (a minute) isn't
-  shown again, and nothing shows with the Music at 0, in photo mode, under a full screen (the main menu is fine) or while
-  the tools leave no room beside it. Effects include radio blips for orders, a
+  shown again, and nothing shows with the Music at 0, in photo mode, under a full screen (the main menu is fine) or where
+  it would run into the tools or the menu's card (a new theme's card waits for room). Effects include radio blips for orders, a
   Pulse Turret's tesla-coil discharge (a short charge whine, then a buzzing arc crackling with sparks: `pulse`), a
   nuke siren and blast, and sounds from the map when on screen (traffic hum, louder where the moving bots bunch up in 5-tile squares, with engines
   going by, warning beeps, toots and robot chirps from the busiest squares; welding, concrete, asphalt, truck air
