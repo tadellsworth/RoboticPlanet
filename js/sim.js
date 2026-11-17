@@ -13872,76 +13872,6 @@ function landDrop(d) {
 }
 
 
-/* ------------------------------------------------------------------ air crashes */
-
-/**
- * Where falling wreck d (S.drops kind 'wreck', from hitAircraft) is at fraction s (0..1) of its fall: { x, y, a (its
- * heading) }. It goes on the way it was flying, turning d.spin's way through AIR_CRASH `turn` radians (the turn
- * tightening as it drops) and slowing (`glide` tiles of ground in all: it starts at 1.6 times its average speed and ends
- * at 0.4 of it), kept inside the map. Worked out in CRASH_STEPS even steps of the fall (and a part step) with the
- * game's own trig, so every device brings it down on the same spot. (A wreck from an older save has no spin: it drops
- * onto its tile as wrecks used to.)
- */
-function crashPath(d, s) {
-  if (d.spin === undefined) { const tx = d.i + 0.5, ty = d.j + 0.5; return { x: d.x + (tx - d.x) * s, y: d.y + (ty - d.y) * s, a: d.face || 0 }; }
-  const C = airCrash(d.type), n = CRASH_STEPS, f0 = d.face || 0;
-  const head = (q) => f0 + d.spin * C.turn * (0.35 * q + 0.65 * q * q), far = (q) => C.glide * (1.6 * q - 0.6 * q * q);
-  let x = d.x, y = d.y;
-  for (let k = 0; k < n && k / n < s; k++) {
-    const q0 = k / n, q1 = Math.min(s, (k + 1) / n), a = head((q0 + q1) / 2), L = far(q1) - far(q0);
-    x = clamp(x + dcos(a) * L, 0.5, S.W - 0.5); y = clamp(y + dsin(a) * L, 0.5, S.H - 0.5);
-  }
-  return { x, y, a: head(s) };
-}
-
-/** Can a wreck lie on tile t? Open ground: no building or site, road, track or pipe on it, no Trade Post or Uplink, not lava, not under water. */
-function wreckGround(t) {
-  return S.terrain[t] === T_GROUND && !S.bAt[t] && !S.road[t] && !(S.rail && S.rail[t]) && !(S.pipe && S.pipe[t]) && !(S.lava && S.lava[t]) && !postAt(t) && !uplinkAt(t);
-}
-
-/**
- * Falling wreck d comes down at the end of its crashPath: a fireball where it hits and two more as its tanks go up, the
- * wreck skidding on AIR_CRASH `skid` tiles and slewing round, gouging a long burn, and burning `fire` s (fires fore and
- * aft too), smoke pouring off it. On open ground (wreckGround) it stays for the rest of the game, in S.wrecks: its id,
- * type, owner, where it lies (x, y) and its heading (a), when it came down (t) and the tiles its hull lies across
- * (`tiles`, the middle one first: see clearWrecks). Into water, lava or a chasm it's gone. It hurts no one.
- */
-function crashLand(d) {
-  const C = airCrash(d.type), end = crashPath(d, 1), a = end.a + (d.spin || 0) * C.slew;
-  const x = clamp(end.x + dcos(end.a) * C.skid, 0.5, S.W - 0.5), y = clamp(end.y + dsin(end.a) * C.skid, 0.5, S.H - 0.5);
-  const t = tIdx(Math.floor(x), Math.floor(y)), seed = d.id % 97, L = C.len, ca = dcos(a), sa = dsin(a);
-  blastFx(end.x, end.y, C.blast);
-  blastFx(x - ca * 0.3 * L, y - sa * 0.3 * L, C.blast * 0.6, { small: true, delay: 0.3 });
-  blastFx(x + ca * 0.25 * L, y + sa * 0.25 * L, C.blast * 0.55, { small: true, delay: 0.75 });
-  addFx('smoke', x, y, { r: 0.7 * C.blast, life: 4.5, t: -0.2 });
-  sfx(isMe(d.owner) || isMe(d.by) || isMe(S.owner[t]) ? 'aircrash' : 'aircrashnear', x, y); // (heard far off by those it concerns, by the rest on screen)
-  if (!wreckGround(t)) return;
-  // It burns a good while: the main fire where it came to rest, smaller ones along the hull; a long burn where it skidded.
-  addFx('fire', x, y, { r: 0.45 + 0.12 * L, life: C.fire, t: -0.4, seed });
-  addFx('fire', x - ca * 0.35 * L, y - sa * 0.35 * L, { r: 0.28, life: C.fire * 0.6, t: -0.9, seed: (seed + 31) % 97 });
-  if (C.heavy) addFx('fire', x + ca * 0.35 * L, y + sa * 0.35 * L, { r: 0.32, life: C.fire * 0.8, t: -1.4, seed: (seed + 57) % 97 });
-  addDecal('scorch', x, y, 0.5 + 0.3 * L, 150);
-  addDecal('scorch', (x + end.x) / 2, (y + end.y) / 2, 0.45 + 0.15 * L, 120);
-  // The tiles its hull lies across (the middle one first, then out along it, a point every 0.4 of a tile or less to
-  // within 0.15 of its ends), on open ground.
-  const tiles = [t], half = L / 2 - 0.15, m = Math.max(1, Math.ceil(half / 0.4));
-  for (let k = 1; k <= m; k++) for (const sg of [-1, 1]) {
-    const pi = Math.floor(x + ca * (half * k / m) * sg), pj = Math.floor(y + sa * (half * k / m) * sg);
-    if (!inMap(pi, pj)) continue;
-    const u = tIdx(pi, pj);
-    if (!tiles.includes(u) && wreckGround(u)) tiles.push(u);
-  }
-  S.wrecks = S.wrecks || [];
-  S.wrecks.push({ id: d.id, type: d.type, owner: d.owner, x, y, a, t: S.time, tiles });
-  if (S.wrecks.length > WRECK_MAX) S.wrecks.splice(0, S.wrecks.length - WRECK_MAX);
-}
-
-/** Is wreck w still there? Not once anything is built over a tile it lies on, or the ground there changes. */
-function wreckStands(w) { return w.tiles.every((t) => wreckGround(t)); }
-
-/** A wreck something has been built over (a building or site, a road, track or pipe), or whose ground changed (the tide came in), is gone. */
-function clearWrecks() { S.wrecks = S.wrecks.filter(wreckStands); }
-
 /* ------------------------------------------------------------------ flak */
 
 /** Enemy aircraft up in the air within `range` of (x, y), nearest first. */
@@ -14099,6 +14029,76 @@ function hitAircraft(u, dmg, by) {
   if (isMe(u.owner)) sfx('alert');
   killBot(u, true);
 }
+
+/* ------------------------------------------------------------------ air crashes */
+
+/**
+ * Where falling wreck d (S.drops kind 'wreck', from hitAircraft) is at fraction s (0..1) of its fall: { x, y, a (its
+ * heading) }. It goes on the way it was flying, turning d.spin's way through AIR_CRASH `turn` radians (the turn
+ * tightening as it drops) and slowing (`glide` tiles of ground in all: it starts at 1.6 times its average speed and ends
+ * at 0.4 of it), kept inside the map. Worked out in CRASH_STEPS even steps of the fall (and a part step) with the
+ * game's own trig, so every device brings it down on the same spot. (A wreck from an older save has no spin: it drops
+ * onto its tile as wrecks used to.)
+ */
+function crashPath(d, s) {
+  if (d.spin === undefined) { const tx = d.i + 0.5, ty = d.j + 0.5; return { x: d.x + (tx - d.x) * s, y: d.y + (ty - d.y) * s, a: d.face || 0 }; }
+  const C = airCrash(d.type), n = CRASH_STEPS, f0 = d.face || 0;
+  const head = (q) => f0 + d.spin * C.turn * (0.35 * q + 0.65 * q * q), far = (q) => C.glide * (1.6 * q - 0.6 * q * q);
+  let x = d.x, y = d.y;
+  for (let k = 0; k < n && k / n < s; k++) {
+    const q0 = k / n, q1 = Math.min(s, (k + 1) / n), a = head((q0 + q1) / 2), L = far(q1) - far(q0);
+    x = clamp(x + dcos(a) * L, 0.5, S.W - 0.5); y = clamp(y + dsin(a) * L, 0.5, S.H - 0.5);
+  }
+  return { x, y, a: head(s) };
+}
+
+/** Can a wreck lie on tile t? Open ground: no building or site, road, track or pipe on it, no Trade Post or Uplink, not lava, not under water. */
+function wreckGround(t) {
+  return S.terrain[t] === T_GROUND && !S.bAt[t] && !S.road[t] && !(S.rail && S.rail[t]) && !(S.pipe && S.pipe[t]) && !(S.lava && S.lava[t]) && !postAt(t) && !uplinkAt(t);
+}
+
+/**
+ * Falling wreck d comes down at the end of its crashPath: a fireball where it hits and two more as its tanks go up, the
+ * wreck skidding on AIR_CRASH `skid` tiles and slewing round, gouging a long burn, and burning `fire` s (fires fore and
+ * aft too), smoke pouring off it. On open ground (wreckGround) it stays for the rest of the game, in S.wrecks: its id,
+ * type, owner, where it lies (x, y) and its heading (a), when it came down (t) and the tiles its hull lies across
+ * (`tiles`, the middle one first: see clearWrecks). Into water, lava or a chasm it's gone. It hurts no one.
+ */
+function crashLand(d) {
+  const C = airCrash(d.type), end = crashPath(d, 1), a = end.a + (d.spin || 0) * C.slew;
+  const x = clamp(end.x + dcos(end.a) * C.skid, 0.5, S.W - 0.5), y = clamp(end.y + dsin(end.a) * C.skid, 0.5, S.H - 0.5);
+  const t = tIdx(Math.floor(x), Math.floor(y)), seed = d.id % 97, L = C.len, ca = dcos(a), sa = dsin(a);
+  blastFx(end.x, end.y, C.blast);
+  blastFx(x - ca * 0.3 * L, y - sa * 0.3 * L, C.blast * 0.6, { small: true, delay: 0.3 });
+  blastFx(x + ca * 0.25 * L, y + sa * 0.25 * L, C.blast * 0.55, { small: true, delay: 0.75 });
+  addFx('smoke', x, y, { r: 0.7 * C.blast, life: 4.5, t: -0.2 });
+  sfx(isMe(d.owner) || isMe(d.by) || isMe(S.owner[t]) ? 'aircrash' : 'aircrashnear', x, y); // (heard far off by those it concerns, by the rest on screen)
+  if (!wreckGround(t)) return;
+  // It burns a good while: the main fire where it came to rest, smaller ones along the hull; a long burn where it skidded.
+  addFx('fire', x, y, { r: 0.45 + 0.12 * L, life: C.fire, t: -0.4, seed });
+  addFx('fire', x - ca * 0.35 * L, y - sa * 0.35 * L, { r: 0.28, life: C.fire * 0.6, t: -0.9, seed: (seed + 31) % 97 });
+  if (C.heavy) addFx('fire', x + ca * 0.35 * L, y + sa * 0.35 * L, { r: 0.32, life: C.fire * 0.8, t: -1.4, seed: (seed + 57) % 97 });
+  addDecal('scorch', x, y, 0.5 + 0.3 * L, 150);
+  addDecal('scorch', (x + end.x) / 2, (y + end.y) / 2, 0.45 + 0.15 * L, 120);
+  // The tiles its hull lies across (the middle one first, then out along it, a point every 0.4 of a tile or less to
+  // within 0.15 of its ends), on open ground.
+  const tiles = [t], half = L / 2 - 0.15, m = Math.max(1, Math.ceil(half / 0.4));
+  for (let k = 1; k <= m; k++) for (const sg of [-1, 1]) {
+    const pi = Math.floor(x + ca * (half * k / m) * sg), pj = Math.floor(y + sa * (half * k / m) * sg);
+    if (!inMap(pi, pj)) continue;
+    const u = tIdx(pi, pj);
+    if (!tiles.includes(u) && wreckGround(u)) tiles.push(u);
+  }
+  S.wrecks = S.wrecks || [];
+  S.wrecks.push({ id: d.id, type: d.type, owner: d.owner, x, y, a, t: S.time, tiles });
+  if (S.wrecks.length > WRECK_MAX) S.wrecks.splice(0, S.wrecks.length - WRECK_MAX);
+}
+
+/** Is wreck w still there? Not once anything is built over a tile it lies on, or the ground there changes. */
+function wreckStands(w) { return w.tiles.every((t) => wreckGround(t)); }
+
+/** A wreck something has been built over (a building or site, a road, track or pipe), or whose ground changed (the tide came in), is gone. */
+function clearWrecks() { S.wrecks = S.wrecks.filter(wreckStands); }
 
 /*
  * A fingerprint of the game: in multiplayer every device runs the same game, and they compare this now and then to

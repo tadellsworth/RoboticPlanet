@@ -9,8 +9,7 @@ and empty Silos, see [Batch 11](#batch-11-colony-wildlife-the-research-lab-and-e
 [Batch 12](#batch-12-ropeway-and-road-train). The new defences are in [Batch 14](#batch-14-bunker-disruptor-tower-and-mortar-pit), and
 weapon effects, explosions and building collapses (muzzle flashes, tracers, smoke, bullet pockmarks, rubble) in
 [Batch 15](#batch-15-weapon-effects-explosions-and-building-collapses). The Hollow's art, the Murmur's tunnels and the new Fiber
-and Oil are in [Batch 16](#batch-16-the-hollow-the-murmurs-tunnels-and-new-fiber-and-oil-installed); the wrecks aircraft leave
-when they're shot down are in [Batch 18](#batch-18-crash-sites-the-wrecks-aircraft-leave-installed).
+and Oil are in [Batch 16](#batch-16-the-hollow-the-murmurs-tunnels-and-new-fiber-and-oil-installed).
 
 This guide has three parts:
 
@@ -1519,7 +1518,7 @@ one burns. Everything else is drawn in code: the violet light on the ground roun
 shorted building's dark gun and the arcs crawling over it, and the Sapper's fresh ridge. The Lore guide's Spitter
 (`art/lore/murmur-spitter.webp`) was rendered again for its brighter pouches.
 
-### Batch 18: crash sites, the wrecks aircraft leave (installed)
+### Batch 19: crash sites, the wrecks aircraft leave (installed)
 
 An aircraft Flak brings down falls burning and crashes, and its wreck lies where it came down for the rest of the game
 (`S.wrecks`; README, "Aircraft shot down"), overgrowing slowly by biome. Each aircraft has its own crash site: its
