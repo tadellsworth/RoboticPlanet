@@ -742,6 +742,24 @@ body.mode-aim .objrow, body.mode-land .objrow, body.mode-airdrop .objrow { displ
 .bp-row .bp-del { min-width: 44px; }
 @media (pointer: coarse) { .bp-name { min-height: 44px; font-size: 16px; } }
 
+/* Now playing (nowPlayingTick), on a computer only: a quiet ♪ in the bottom left corner, level with the tools. It opens
+   into a card with the music's title when a new theme starts (and on hover), then closes again. Only the ♪ takes the
+   pointer: the open card lets clicks through to the map. */
+.now-playing { position: fixed; z-index: 21; left: calc(var(--safe-l) + 16px); bottom: calc(var(--safe-b) + 14px);
+  display: flex; align-items: center; height: 42px; pointer-events: none; background: var(--panel); border: 1px solid var(--line);
+  border-radius: 12px; box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35); opacity: 0.55; transition: opacity 0.5s, border-color 0.5s; animation: npIn 0.5s; }
+.now-playing[hidden] { display: none; }
+.now-playing.open { opacity: 1; border-color: rgba(56, 212, 255, 0.4); }
+@keyframes npIn { from { opacity: 0; } }
+.np-note { pointer-events: auto; flex: none; display: grid; place-items: center; width: 40px; height: 40px; padding: 0; border: 0; border-radius: 11px;
+  background: none; color: var(--accent); }
+.np-text { display: flex; flex-direction: column; justify-content: center; max-width: 0; opacity: 0; overflow: hidden; white-space: nowrap;
+  transition: max-width 0.5s ease, opacity 0.4s ease, padding 0.5s ease; }
+.now-playing.open .np-text { max-width: 300px; opacity: 1; padding-right: 14px; }
+.np-text small { font-size: 12px; line-height: 14px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; }
+.np-text b { font-size: 14px; line-height: 18px; color: var(--text); }
+@media (prefers-reduced-motion: reduce) { .now-playing, .np-text { transition: none; animation: none; } }
+
 /* Paths: the banner sits at the top so it never covers where you're drawing, and the plan buttons
    sit three to a row (Undo, Clear, Build), then Traffic map and Done. */
 body.mode-road #banner { top: calc(var(--hud-top, 64px) + 6px); bottom: auto; }

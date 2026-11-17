@@ -2010,6 +2010,70 @@ function undoLastSite() {
   return true;
 }
 
+/* ------------------------------------------------------------------ now playing */
+
+/*
+ * Now playing (#now-playing), on a computer only: a ♪ in the bottom left corner, level with the tools. When the music
+ * turns to a new theme it opens into a card with the theme's title (MUSIC_TITLES in audio.js) for NP_SHOW ms; hovering
+ * over the ♪, or a click, opens it too. A title shown in the last NP_AGAIN ms isn't shown again (the war theme comes and
+ * goes with the fighting). Nothing shows with the Music off, in photo mode or under a full screen (the main menu is
+ * fine: it has music too). Nor where it would run into the tools (they move left for a panel on a smaller screen) or
+ * the main menu's card (Custom Game fills the screen): a new theme's card waits until it can be seen. Display only: it
+ * reads MUSIC and changes nothing in the game.
+ */
+const NP_SHOW = 6000, NP_AGAIN = 60000;
+const NP = { mood: '', due: false, until: 0, hover: false, shown: {}, mq: null, covers: null, wired: false };
+
+/** A computer: a mouse, not a finger, and the wide layout (the tools along the bottom, not down the side). */
+function nowPlayingDesk() {
+  if (typeof matchMedia !== 'function') return false;
+  NP.mq = NP.mq || matchMedia('(pointer: fine) and (min-width: 1000px) and (min-height: 520px)');
+  return NP.mq.matches && !onTouch();
+}
+
+/** A full screen or dialog over the game (not the main menu itself). */
+function nowPlayingCovered() {
+  NP.covers = NP.covers || [...document.querySelectorAll('.screen:not(#screen-menu), #briefing, #m-picker')];
+  return NP.covers.some((el) => !el.hidden);
+}
+
+function nowPlayingTick() {
+  const el = $('now-playing');
+  if (!el) return;
+  if (!NP.wired) {
+    NP.wired = true;
+    const note = $('np-note');
+    note.addEventListener('pointerenter', (e) => { if (e.pointerType === 'mouse') NP.hover = true; });
+    note.addEventListener('pointerleave', () => { NP.hover = false; });
+    note.addEventListener('click', () => { NP.until = performance.now() + NP_SHOW; note.blur(); });
+  }
+  const title = MUSIC_TITLES[MUSIC.mood] || '';
+  if (MUSIC.mood !== NP.mood) { NP.mood = MUSIC.mood; NP.due = !!title; }
+  const ac = AUDIO.ctx;
+  let on = !!title && AUDIO.on && AUDIO.music > 0 && !!ac && ac.state === 'running' && !UI.photo && nowPlayingDesk() && !nowPlayingCovered();
+  let room = false;
+  if (on) {
+    // Clear of the tools (in a game) and the menu's card (on the menu): the ♪ needs its corner, the card the title too.
+    const H = innerHeight, obs = [$('bottombar').getBoundingClientRect(), $('menu-card').getBoundingClientRect()];
+    const clear = (w) => obs.every((r) => !r.width || r.left >= 24 + w || r.bottom <= H - 64);
+    on = clear(42);
+    room = clear(56 + el.lastElementChild.scrollWidth);
+  }
+  const shown = !el.hidden;
+  if (el.hidden !== !on) el.hidden = !on;
+  if (!on) { NP.hover = false; el.classList.remove('open'); return; }
+  if ($('np-title').textContent !== title) { $('np-title').textContent = title; $('np-note').setAttribute('aria-label', 'Now playing: ' + title); }
+  const tip = room ? '' : 'Now playing: ' + title; // (no room for the card: a hover shows the browser's tip instead)
+  if ($('np-note').title !== tip) $('np-note').title = tip;
+  const now = performance.now();
+  if (NP.due && room && shown) {
+    NP.due = false;
+    if (now - (NP.shown[title] ?? -Infinity) >= NP_AGAIN) { NP.shown[title] = now; NP.until = now + NP_SHOW; }
+  }
+  // (opened a frame after it appears, so the card fades in)
+  el.classList.toggle('open', room && shown && (NP.hover || now < NP.until));
+}
+
 /** The group number a Save as group button would use: the selection's own group if it's one already, else the first free one. */
 function nextGroupNo() {
   const G = S && S.groups ? S.groups : {};
@@ -7473,6 +7537,7 @@ function uiTick(dt) {
   AUDIO.suppress = !UI.inGame;
   if (!UI.inGame) menuArtTick();
   siteUndoTick(); // (hides itself out of a game)
+  nowPlayingTick(); // (desktop only: the music's title, in the menu and in a game)
   if (!UI.inGame || !S) return;
   if (UI.watch) watchTick(dt); // (Observer mode: the scout report and the camera, js/watch.js)
   else scoutTick(); // (scout reports on the rivals, js/scout.js)

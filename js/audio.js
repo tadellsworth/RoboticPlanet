@@ -20,7 +20,7 @@
  * Night Drive and Horizon), a driving track when you're under attack or at war, and an alarm while a
  * nuclear missile is in the air. It's written a bar at a time from chord progressions, arpeggios,
  * bass lines, drum patterns and short melodies, arranged in 8-bar sections that bring parts in and
- * out, so it never loops exactly.
+ * out, so it never loops exactly. On a computer a small card names each theme as it starts (MUSIC_TITLES).
  *
  * Volumes (Music and Effects, 0..1) are set in the pause menu and remembered on this device.
  */
@@ -1428,6 +1428,8 @@ function musicMood() {
 
 /** The build music's themes, taking turns every MUSIC_ROTATE seconds of play (a game starts on the first). */
 const BUILD_THEMES = ['build', 'build2', 'build3'], MUSIC_ROTATE = 600;
+/** Each theme's title, for the Now playing card (nowPlayingTick in ui.js); the menu plays a slow take on the main theme. */
+const MUSIC_TITLES = { menu: 'Lost in a Dream', build: 'Lost in a Dream', build2: 'Night Drive', build3: 'Horizon', war: 'Overdrive', nuke: 'Zero Hour' };
 
 const MINOR = [0, 2, 3, 5, 7, 8, 10], PHRYGIAN = [0, 1, 3, 5, 7, 8, 10], DORIAN = [0, 2, 3, 5, 7, 9, 10];
 const CHORD = { m: [0, 3, 7], M: [0, 4, 7], m7: [0, 3, 7, 10], M7: [0, 4, 7, 11], dim: [0, 3, 6] };
