@@ -2786,6 +2786,9 @@ function canPlace(owner, type, i, j, skipBlockCheck) {
   if (!inMap(i, j)) return { ok: false, reason: 'Outside the map.' };
   const t = tIdx(i, j);
   if (postAt(t)) return { ok: false, reason: 'A neutral Trade Post stands here: dock a Trade Terminal beside it.' };
+  // (Nothing can be attacked on a Trade Post's ground, so only the Terminal that docks there may stand on it: an Outpost
+  // or Wall there would be a door no enemy could ever break.)
+  if (!def.terminal && !def.ramp && calmAt(i + 0.5, j + 0.5)) return { ok: false, reason: 'Only a Trade Terminal goes on a Trade Post\'s ground (the gold dashed square): nothing can be attacked there, so nothing else is built there.' };
   if (uplinkAt(t)) return { ok: false, reason: 'A neutral Uplink stands here: build an Outpost near it, and it\'s yours while it stands in your land.' };
   const land = landRule(owner, type, t);
   if (land) return { ok: false, reason: land };
