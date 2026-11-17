@@ -99,8 +99,6 @@ or drop.
   builds about 2, all within 5 tiles of its base.
 
 ### Helping players see what's going on
-- **Scout reports on the rival:** a line on what its doctrine is doing now ("massing for a push", "raiding your east
-  road"), read from its real state (`P.massFor`, `P.raid`, `P.stormOn`). Drama for little cost.
 - **Replays:** lockstep already makes a game its seed plus its orders. Keep the order list, replay at up to 4x with a
   scrubber: "watch how I lost", sharing, and bug reports that can be played back exactly.
 
@@ -115,8 +113,6 @@ or drop.
   five minutes. It also gives stalled three- and four-player games a way to end.
 - **Veteran warbots:** a warbot that survives fights earns a pip (a little more armor or accuracy), so pulling a hurt
   one back for repairs matters.
-- **Blueprints:** save a stamped layout (a Smelter block and its roads) and paste it elsewhere. Far fewer taps on a
-  phone.
 
 ### Ten more
 - **Holdout:** a survival mode where rival drop pods land every few minutes in growing waves; score is minutes held.
