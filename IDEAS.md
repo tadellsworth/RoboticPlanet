@@ -14,6 +14,13 @@ Still open: a neutral, shared exchange the rivals compete over; contracts for Ch
 
 ## Held for later
 
+- **The Murmur undermine a colony** (the owner, Nov 17 2026: for later). Left alone long enough, a nest's tunnels grow
+  so thick under a colony that the ground gives way: buildings over the densest tunnels sag, crack and at last collapse
+  into a sinkhole, roads over them cave in, and robots on the spot fall in. Warning signs first, so it can be stopped:
+  cracks in the ground and dust puffing up at night, tremors felt under the base, a building's panel saying
+  "the ground under it is hollow". Collapsing the exits, wrecking the nest (its network dies back) or a Seismic Lance (see
+  Megastructures) shores it up; the Sapper (the Murmur form that digs) would lead it. It makes ignoring the Murmur
+  costly in long games, as the tunnel network keeps spreading under the old battlefields (LORE.md).
 - **Upgrades for long games** (the owner, Nov 17 2026: saved for later; the aim is economies that keep growing on large
   maps, enough to feed the megastructures). Today the only upgrades are the Research Lab's (`TECHS`: Cargo Racks,
   Long-life Cells, Rapid Paving, Sentry Optics, Turbo Motors, Power Tools, Nanite Repair), colony-wide and Colony only.
