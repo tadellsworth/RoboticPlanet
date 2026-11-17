@@ -14,6 +14,23 @@ Still open: a neutral, shared exchange the rivals compete over; contracts for Ch
 
 ## Held for later
 
+- **Sounds for the Hollow, and for the Murmur up close** (the owner, Nov 17 2026: for later). Today the Hollow has a
+  faint draught (its wind in `updateBeds`) and the low sound in the ground near nests, exits and the Deep's mound
+  (`groundMurmur`: louder toward the mound, dead silent in the lull before a surge); the creatures themselves make no
+  sound of their own. Ideas:
+  - **The Hollow's own ambience:** water dripping and echoing off the cavern walls (a long reverb), stone settling far
+    off and pebbles skittering down a chasm, the black lakes lapping, wind moaning down the breaches where daylight
+    falls in, the Bloom veins crackling faintly with drained charge, and a deep cave hum that swells toward the Deep's
+    mound. The tremors: a deep rumble and rock falling.
+  - **The Murmur up close** (zoomed in, near the middle of the view; louder at night), a voice for each form:
+    the Scuttler chittering and clicking, its legs skittering over rock; the Leech a wet suck with an electric whine
+    that rises as it drains charge; the Spitter a throaty gurgle before it spits, and the crackle of its shards; the
+    Brute low growls, heavy footfalls and a guttural huff as it smashes; the Sapper grinding and scraping under the
+    ground before it surfaces. A pack on screen at night chitters together, and a shriek goes up when it finds prey.
+  - **A warning by ear:** a pack's chittering heard from off screen, panned to the side it's coming from.
+  - **Tone** (LORE.md: glimpsed, not seen): uncanny rather than monstrous roars, organic sounds with a faint electrical
+    buzz in them (they feed on charge). None on Argos. The cave ambience on the Ambience volume (`AUDIO.natureBus`), the
+    creatures on Effects.
 - **More planetary events** (the owner, Nov 17 2026: saved for later). Today's four (`EVENTS` in `js/defs.js`): the dust
   storm, Ringfall, the solar flare and the *Wren*. Each new one hits every colony alike, comes from the seed and the
   clock (lockstep), and is mirrored for fairness where it touches the land. The owner's pick, if built: the eclipse
