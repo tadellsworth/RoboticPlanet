@@ -125,7 +125,6 @@ const ORDERS = {
     const list = Array.isArray(shown) ? shown : null;
     moveFoundryOrder(b, k, d < 0 ? -1 : 1, list ? (kk) => list.includes(kk) : null);
   },
-  contract(p, k) { pickContract(p, k); },
   trade(p) { return acceptTrade(p); },
   research(p, k) { return TECHS[k] ? startResearch(p, k) : 'Unknown research.'; },
   cancelResearch(p) { cancelResearch(p); },
@@ -347,6 +346,11 @@ const ORDERS = {
     if (typeof b.placedAt !== 'number' || b.moveFrom || S.time - b.placedAt > SITE_UNDO) return { why: `Too late to take the ${BDEFS[b.type].name} back: Dismantle it from its panel instead.` };
     return { back: undoSite(b), type: b.type };
   },
+  /* ---------------------------------------------------------------- trade routes (a Trade Terminal's panel) */
+  /** Set Trade Terminal `id`'s standing route: send `give`, bring back `get` (give null: stop it). '' or why not. */
+  tradeRoute(p, id, give, get) { const b = ownB(p, id); if (!b || !BDEFS[b.type].terminal) return 'That Trade Terminal is gone.'; return setTradeRoute(b, give ? String(give) : null, get ? String(get) : null); },
+  /** Escort on or off at Trade Terminal `id`: two warbots ride along with each convoy. */
+  tradeEscort(p, id, on) { const b = ownB(p, id); if (b && BDEFS[b.type].terminal) b.escort = !!on; },
 };
 
 /** Run order `name` for player p (args: a list). What it gives back, or undefined if there's no such order. */

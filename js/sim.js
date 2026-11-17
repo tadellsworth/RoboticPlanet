@@ -1000,6 +1000,8 @@ function nearestEnemyBot(owner, x, y, range, preferWar, ownLand, land) {
     if (land && BOTS[u.type].sea) continue; // warbots can't go after ships (guns on the shore can)
     if (ownLand && !isArmy(u) && foes(S.owner[tIdx(Math.floor(u.x), Math.floor(u.y))], owner)) continue;
     const d = dist2(u.x, u.y, x, y);
+    if (d > bd && !(preferWar && d <= bwd)) continue;
+    if (calmAt(u.x, u.y)) continue; // nothing shoots on a Trade Post's ground
     if (d <= bd) { bd = d; best = u; }
     if (preferWar && (isArmy(u) || BOTS[u.type].wild) && d <= bwd) { bwd = d; bestWar = u; }
   }
@@ -2009,10 +2011,10 @@ function dispatch(p) {
         const su = ps && take(ps.x, ps.y, 'sea', ps, r.g);
         if (su) { const n = canCarry(su, Math.min(r.n, portHas(ps)), r.g); assignHaul(su, ps, r.b, r.g, n); r.n -= n; any = true; continue; }
       }
-      // A Trade Terminal's lot comes by Road Train from storage that holds a worthwhile load of it (see below): picked
-      // as the nearest with any at all, a Harvester's few Fiber or a Depot's last Stone, no train was ever sent and the
-      // lot waited for good while the Command Base had plenty.
-      const termMin = BDEFS[r.b.type].terminal && r.b.built ? Math.min(TERMINAL.minLoad, r.n) : 0;
+      // A Trade Terminal's run comes by Road Train, all of it in one convoy, from storage that holds that much (see
+      // below): picked as the nearest with any at all, a Harvester's few Fiber or a Depot's last Stone, no train was
+      // ever sent and the run waited for good while the Command Base had plenty.
+      const termMin = BDEFS[r.b.type].terminal && r.b.built ? r.n : 0;
       for (const s of blds) {
         if (s === r.b || sup(s, r.g) <= 0 || !reachable(s) || !linked(s, r.b)) continue;
         if (termMin && (sup(s, r.g) < termMin || !truckLinked(s, r.b))) continue;
@@ -2039,8 +2041,8 @@ function dispatch(p) {
       // Depot is down to a third. Smaller orders go by truck as before.
       const term = !!BDEFS[r.b.type].terminal && r.b.built; // (its construction site is built like any other)
       if (term) {
-        // A Trade Terminal: only a Road Train brings its lot, a worthwhile load at a time (or what's left of the lot).
-        if (byRoad && bulk >= Math.min(TERMINAL.minLoad, r.n)) u = take(src.x, src.y, 'train', src, r.g);
+        // A Trade Terminal: only a Road Train brings its run, the whole of it in one convoy.
+        if (byRoad && bulk >= r.n) u = take(src.x, src.y, 'train', src, r.g);
         if (!u) { r.n = 0; continue; }
         const n = canCarry(u, bulk, r.g);
         assignHaul(u, src, r.b, r.g, n);
@@ -2565,7 +2567,15 @@ function assignHaul(u, src, dst, g, n, extra) {
     }
     if (Object.keys(mix).length) u.task.mix = mix;
   }
-  if (!goTo(u, src.x, src.y)) { cancelTask(u); src.unreachUntil = S.time + 5; }
+  // A run out to a Trade Terminal, or home from one: the vehicle is a trade convoy for the trip (flagged: see convoyOf),
+  // and with the Terminal's Escort on, warbots ride along.
+  const tb = dst.built && BDEFS[dst.type].terminal ? dst : src.built && BDEFS[src.type].terminal ? src : null;
+  if (tb && (BOTS[u.type].truck || BOTS[u.type].rail)) {
+    u.trade = tb.id;
+    if (tb === dst) u.tradeT0 = S.time; else delete u.tradeT0;
+  } else if (u.trade) { delete u.trade; delete u.tradeT0; }
+  if (!goTo(u, src.x, src.y)) { cancelTask(u); src.unreachUntil = S.time + 5; return; }
+  if (u.trade && tb.route && tb.escort) convoyEscort(u, tb);
 }
 
 /** Everything bot u has aboard: [[good, n], ...] (its main load first, then a mixed load's other goods). */
@@ -2712,6 +2722,7 @@ function updateWorker(u, dt) {
   // So does a ship left at a Foundry, at the nearest Port (new ones are launched from shipyards).
   if (BOTS[u.type].sea && !afloat(u)) { if (S.tick % 30 === u.id % 30) deliverShip(u); return; }
   if (BOTS[u.type].ferry) { updateFerry(u, dt); workerBattery(u, dt); return; }
+  if (u.trade && !u.carry && !(u.task && (u.task.type === 'haul' || u.task.type === 'dock'))) { delete u.trade; delete u.tradeT0; } // (a convoy no more)
   const t = u.task;
   // On its way to be recycled when it took cover (see takeCover): once they've gone, it sets off again.
   if (!t && u.recycleTo && !(u.shyUntil > S.time)) {
@@ -2756,6 +2767,7 @@ function updateWorker(u, dt) {
       if (u.bat >= 99.5 || (chargerDry(c) && !((c.inc.fuel || 0) > 0))) { u.task = null; if (!BDEFS[c.type].store) exitBuilding(u); }
     } else if (moveAlong(u, dt)) enterBuilding(u, c);
   } else if (t.type === 'haul') doHaul(u, t, dt);
+  else if (t.type === 'dock') doDock(u, t);
   else if (t.type === 'arty') doArtySupply(u, t, dt);
   else if (t.type === 'board') doBoard(u, t, dt);
   else if (t.type === 'crate') doCrate(u, t, dt);
@@ -2901,11 +2913,15 @@ function doHaul(u, t, dt) {
     u.carryN = got;
     if (!u.carry && u.mix) { const k = Object.keys(u.mix)[0]; u.carry = k; u.carryN = u.mix[k]; t.good = k; t.n = u.mix[k]; delete u.mix[k]; delete t.mix[k]; if (!Object.keys(u.mix).length) { delete u.mix; delete t.mix; } }
     t.phase = 'toDst';
-    if (!goTo(u, dst.x, dst.y)) { for (const [k, m] of cargoList(u)) bump(dst.inc, k, -m); u.task = null; dst.unreachUntil = S.time + 5; }
+    if (!goTo(u, dst.x, dst.y)) { for (const [k, m] of cargoList(u)) bump(dst.inc, k, -m); u.task = null; dst.unreachUntil = S.time + 5; return; }
+    // (The way a convoy drives out to its Terminal: drawn on the minimap, and where raiders lie in wait.)
+    if (u.trade === dst.id && u.path) dst.lane = u.path.slice(0, 400);
     return;
   }
   const dst = getE(t.dst);
   if (!dst || dst.owner !== u.owner) { cancelTask(u); return; }
+  // A convoy waits for its escort to get on (a while at most), and holds back while the escort fights.
+  if (u.trade && convoyHolds(u, t)) { u.vel = 0; return; }
   if (!moveAlong(u, dt)) return;
   bump(dst.inc, t.good, -(t.n || 1));
   bump(dst.stock, t.good, t.n || 1);
@@ -2914,6 +2930,10 @@ function doHaul(u, t, dt) {
   u.carryN = 0;
   u.task = null;
   u.idleT = 0;
+  // A convoy at its Trade Terminal: the run, then home with what it bought (or it waits at the dock for the ledger's
+  // window). One home again is a convoy no more.
+  if (BDEFS[dst.type].terminal) { if (convoyAtDock(u, dst)) return; }
+  else if (u.trade) { delete u.trade; delete u.tradeT0; }
   // A truck at far storage (or by the building it served) takes home what's waiting there instead of
   // driving back empty; a train at a far station takes its spare goods home along the line.
   if (BOTS[u.type].truck && backhaul(u, BDEFS[dst.type].store ? dst : storeBeside(dst, u))) return;
@@ -3422,6 +3442,7 @@ function updateBuilding(b, dt) {
   if (def.inp) produce(b, def, dt * S.players[b.owner].mult);
   else if (def.missile) updateSilo(b, def);
   else if (def.nukeSilo) updateNukeSilo(b, dt * S.players[b.owner].mult);
+  else if ((def.disrupt || def.mortar || def.flak || def.minigun || def.ammo || def.bunker || def.keep) && calmB(b)) b.status = 'Holding fire: nothing shoots on a Trade Post\'s ground';
   else if (def.disrupt) updateDisruptor(b, def, dt);
   else if (def.mortar) updateMortar(b, def, dt);
   else if (def.flak) updateFlak(b, def, dt);
@@ -3442,7 +3463,8 @@ function updateBuilding(b, dt) {
     }
   }
   if (def.burner) updateGenerator(b, def);
-  if (def.bunker) bunkerFire(b, def, dt);
+  if ((def.bunker || def.keep) && calmB(b)) { /* (holding fire on a Trade Post's ground) */ }
+  else if (def.bunker) bunkerFire(b, def, dt);
   else if (def.keep) updateKeep(b, def, dt);
   else if (def.mil) garrisonDefense(b, dt);
   if (def.terminal) updateTerminal(b, def, dt);
@@ -4018,7 +4040,7 @@ function updateTurret(b, def, dt) {
   const cx = b.x + 0.5, cy = b.y + 0.5, range = turretRange(b), r2 = range * range;
   let target = b.tgt ? getE(b.tgt) : null;
   // (A Keep taken, or a turret handed over with its colony, drops the target it was tracking: it's on its side now.)
-  if (target && (target.dead || target.inside || !foes(target.owner, b.owner) || dist2(target.x, target.y, cx, cy) > r2)) target = null;
+  if (target && (target.dead || target.inside || !foes(target.owner, b.owner) || dist2(target.x, target.y, cx, cy) > r2 || calmAt(target.x, target.y))) target = null;
   if (!target && b.scanT <= 0) { b.scanT = 0.3; target = nearestEnemyBot(b.owner, cx, cy, range, true); }
   b.tgt = target ? target.id : 0;
   const ammo = b.shots + (b.stock.crystal || 0) * shotsPer(b);
@@ -4096,7 +4118,7 @@ function updateDisruptor(b, def, dt) {
   b.cd = (b.cd || 0) - dt;
   if (b.cd > 0) return;
   const cx = b.x + 0.5, cy = b.y + 0.5, rr = def.range + auraRange(b), r2 = rr * rr;
-  const hit = S.bots.filter((u) => !u.dead && !u.inside && foes(u.owner, b.owner) && !BOTS[u.type].wild && !BOTS[u.type].rail && !aloft(u) && dist2(u.x, u.y, cx, cy) <= r2); // (what's up in the air is out of its reach, as of a turret's)
+  const hit = S.bots.filter((u) => !u.dead && !u.inside && foes(u.owner, b.owner) && !BOTS[u.type].wild && !BOTS[u.type].rail && !aloft(u) && dist2(u.x, u.y, cx, cy) <= r2 && !calmAt(u.x, u.y)); // (what's up in the air is out of its reach, as of a turret's)
   if (!hit.length) { b.status = (b.pulses || 0) + (b.stock.fuel || 0) > 0 ? 'Watching for enemy robots' : 'No Fuel: a Tanker brings it from storage'; b.cd = 0.5; return; }
   if (!(b.pulses > 0)) {
     if (!((b.stock.fuel || 0) > 0)) { b.status = 'No Fuel to pulse with: a Tanker brings it from storage'; b.cd = 1; return; }
@@ -4130,7 +4152,7 @@ function updateMortar(b, def, dt) {
   b.cd = (b.cd || 0) - dt;
   if (b.cd > 0) return;
   const cx = b.x + 0.5, cy = b.y + 0.5, rr = def.range + auraRange(b), r2 = rr * rr, min2 = def.minRange * def.minRange, s2 = m.splash * m.splash;
-  const near = S.bots.filter((u) => !u.dead && !u.inside && foes(u.owner, b.owner) && !BOTS[u.type].rail && !aloft(u)); // (no shells for what's up in the air: see damageBot)
+  const near = S.bots.filter((u) => !u.dead && !u.inside && foes(u.owner, b.owner) && !BOTS[u.type].rail && !aloft(u) && !calmAt(u.x, u.y)); // (no shells for what's up in the air: see damageBot; nor on a Trade Post's ground)
   let best = null, bs = 0;
   for (const u of near) {
     const d = dist2(u.x, u.y, cx, cy);
@@ -4698,17 +4720,21 @@ function formPlace(u, lead, gx, gy, dl, key) {
 /** Is bot u up in the air (a plane in flight, a robot on its parachute), out of reach of anything on the ground? */
 function aloft(u) { return !!(u.dropping || (BOTS[u.type].air && u.flight && planeAlt(u) > 0.3)); }
 
-function damageBot(u, dmg, sx, sy) {
+/** Bot u takes `dmg` (from (sx, sy), for a Bulwark's shield). Nothing hurts it on a Trade Post's ground (calmAt) but the planet itself (`nat`: Ringfall, the ground giving way). */
+function damageBot(u, dmg, sx, sy, nat) {
   if (aloft(u)) return; // up in the air: out of reach
+  if (!nat && calmAt(u.x, u.y)) return;
   if (sx !== undefined && SHIELDS.length) { dmg = shieldBlock(u, sx, sy, dmg); if (dmg <= 0) return; }
   if (u.armored) dmg *= TRAIN_ARMOR.takes; // an armored train's plating
   if (modOn('fragile')) dmg *= MODS.fragile.takes; // (a challenge modifier)
   u.hp -= dmg;
   u.hurtT = S.time;
-  if (u.hp <= 0) { noteDanger(u); killBot(u); }
+  if (u.trade && dmg > 0 && !nat) convoyHit(u); // a trade convoy: its owner hears of it
+  if (u.hp <= 0) { if (u.trade) convoyLost(u); noteDanger(u); killBot(u); }
 }
 
 function hitBuilding(b, dmg, by) {
+  if (calmB(b)) return; // nothing shoots on a Trade Post's ground
   dmg = keepShield(b, dmg);
   b.armor -= dmg;
   b.lastHit = S.time;
@@ -4820,6 +4846,7 @@ function fuelBlast(x, y, kind, full, owner) {
     const d2 = dist2(b.x + 0.5, b.y + 0.5, x, y);
     if (d2 > rb * rb) continue;
     if (BDEFS[b.type].explodes && b.built && liquidIn(b) > 0) { b.blowAt = later(b.id); S.blowing = (S.blowing || 0) + 1; continue; }
+    if (calmB(b)) continue; // (a Trade Post's ground: nothing there is hurt)
     b.armor -= B.bld * (1 - (0.5 * Math.sqrt(d2)) / rb);
     b.lastHit = S.time;
     if (b.armor > 0) continue;
@@ -5074,7 +5101,12 @@ function gunOver(p, x, y) {
 }
 
 /** Does robot u stay clear of enemy guns (anything but a fighter: warbots, Howitzers and aircraft go in)? */
-function gunShy(u) { const bt = BOTS[u.type]; return !isArmy(u) && !bt.siege && !bt.air && !bt.wild && !bt.sea && !bt.rail; }
+function gunShy(u) { const bt = BOTS[u.type]; return !isArmy(u) && !bt.siege && !bt.air && !bt.wild && !bt.sea && !bt.rail && !(u.trade && escorted(u)); }
+/** Has trade convoy u its escort with it (within 6 tiles)? Then it doesn't give way to enemy warbots: it holds while they fight (convoyHolds). */
+function escorted(u) {
+  for (const v of S.bots) if (!v.dead && v.owner === u.owner && v.task && v.task.type === 'escort' && v.task.bot === u.id && dist2(v.x, v.y, u.x, u.y) < 36) return true;
+  return false;
+}
 
 /**
  * Once a second: every player's robots pull out of jobs at buildings an enemy gun now covers (a worker
@@ -5739,7 +5771,9 @@ function warbotAct(u, dt) {
   // Ordered somewhere (move, station, call back): it marches there without stopping to fight, until it
   // arrives (or MARCH_MAX runs out).
   if (u.march && (!t || S.time > u.march || (rally && dist2(u.x, u.y, rally.x, rally.y) <= 6.25) || t.type === 'attack')) u.march = 0;
-  const calm = !!u.retreat || u.march > S.time;
+  // (On a Trade Post's ground nothing fights: see calmAt.)
+  const calm = !!u.retreat || u.march > S.time || calmAt(u.x, u.y);
+  const escort = !!t && t.type === 'escort';
   const power = (u.bat ?? 100) < BATTERY.critical ? 0.5 : 1; // emergency mode hits half as hard
   // Out of Ammo: it can't fight at all. It drops any fight and an attack or sortie, and goes back
   // to a garrison to reload (one holding a rally flag reloads and comes back, see holdRally).
@@ -5781,8 +5815,8 @@ function warbotAct(u, dt) {
   // A squad on a flag that isn't in a rival's land guards the ground round it, as a garrison does round its fort.
   const flagO = rally ? S.owner[tIdx(Math.floor(rally.x), Math.floor(rally.y))] : -1;
   const guardFlag = !!rally && !(flagO >= 0 && flagO !== u.owner);
-  const leash = defending || guardFlag ? 9 : rally ? 6 : 4;
-  if (foe && (foe.dead || foe.inside || dist2(foe.x, foe.y, u.x, u.y) > leash * leash ||
+  const leash = defending || guardFlag ? 9 : rally || escort ? 6 : 4;
+  if (foe && (foe.dead || foe.inside || dist2(foe.x, foe.y, u.x, u.y) > leash * leash || calmAt(foe.x, foe.y) ||
       (rally && dist2(foe.x, foe.y, rally.x, rally.y) > 49))) foe = null;
   // A guard's leash is measured from its fort as well: a foe that walks away is let go (and left alone a while)
   // once it's SORTIE_LEASH from there, unless it's still close enough to shoot. It used to lead the guards off for good.
@@ -5800,13 +5834,17 @@ function warbotAct(u, dt) {
     if (armed && u.scanT <= 0 && !calm) {
       u.scanT = 0.3;
       // Guards (defending their garrison) only chase civilians inside their own land.
-      foe = nearestEnemyBot(u.owner, u.x, u.y, rally ? 3.5 : 2.8, true, defending, true);
+      foe = nearestEnemyBot(u.owner, u.x, u.y, rally || escort ? 3.5 : 2.8, true, defending, true);
+      // (An escort fights what comes at its convoy, not every hauler it passes: it would hold the convoy up for nothing.)
+      if (foe && escort && !isArmy(foe) && !BOTS[foe.type].wild && !BOTS[foe.type].siege) foe = null;
       if (!foe && defending) {
         const h = getE(t.home);
         if (h) foe = nearestEnemyBot(u.owner, h.x + 0.5, h.y + 0.5, SORTIE_REACH, true, true, true);
         if (!foe && t.ax !== undefined) foe = nearestEnemyBot(u.owner, t.ax, t.ay, SORTIE_REACH, true, true, true);
       }
       if (!foe && guardFlag && !rally.follow) foe = nearestEnemyBot(u.owner, rally.x, rally.y, SORTIE_REACH, true, true, true);
+      // (On a flag: an enemy trade convoy passing within TERMINAL.hunt tiles of it, wherever it is: what raids are for.)
+      if (!foe && rally && !rally.follow) foe = convoyNear(u.owner, rally.x, rally.y, TERMINAL.hunt);
       // A foe it gave up chasing is left alone, unless it comes close enough to shoot.
       if (foe && foe.id === u.ignoreFoe && S.time < u.ignoreUntil && dist2(foe.x, foe.y, u.x, u.y) > WARBOT_RANGE_BLOCKED * WARBOT_RANGE_BLOCKED) foe = null;
       if (foe) u.fight = foe.id;
@@ -5878,6 +5916,7 @@ function warbotAct(u, dt) {
     return;
   }
   if (t.type === 'loot') { doLoot(u, t, dt); return; }
+  if (t.type === 'escort') { doEscort(u, t, dt); return; }
   if (t.type === 'refill') {
     // A Torch going to fill its tank where Fuel is kept, then back to what it was doing (or a garrison).
     const c = getE(t.bld);
@@ -6268,7 +6307,7 @@ function ammoNear(u) {
 /* ------------------------------------------------------------------ the Howitzer */
 
 /** Can Howitzer u fire at building b (a rival's, standing)? */
-function rocketTarget(u, b) { return b && !b.dead && b.owner >= 0 && foes(b.owner, u.owner) && !BDEFS[b.type].wild && S.players[b.owner] && !S.players[b.owner].out; }
+function rocketTarget(u, b) { return b && !b.dead && b.owner >= 0 && foes(b.owner, u.owner) && !BDEFS[b.type].wild && S.players[b.owner] && !S.players[b.owner].out && !calmB(b); }
 
 /** An enemy building in reach of a parked, loaded Howitzer: forts and guns first, then the nearest. */
 function rocketTargetNear(u) {
@@ -6584,6 +6623,7 @@ function rocketImpact(m) {
 
 function rocketHit(b, dmg, by) {
   const def = BDEFS[b.type];
+  if (calmB(b)) return; // nothing shoots on a Trade Post's ground
   b.armor -= keepShield(b, dmg);
   b.lastHit = S.time;
   if (by >= 0) (S.players[b.owner].hitBy = S.players[b.owner].hitBy || {})[by] = S.time;
@@ -6734,12 +6774,12 @@ function raidRoadsLeft(r, owner) {
   if (S.time - (r.roadsT || -9) < 1) return r.roadsLeft;
   r.roadsT = S.time;
   r.roadsLeft = false;
-  const ri = Math.floor(r.x), rj = Math.floor(r.y), R0 = Math.ceil(SABOTAGE_RANGE);
+  const ri = Math.floor(r.x), rj = Math.floor(r.y), R0 = Math.ceil(SABOTAGE_RANGE), lanes = convoyLanes(owner);
   for (let dj = -R0; dj <= R0 && !r.roadsLeft; dj++) for (let di = -R0; di <= R0; di++) {
     const i = ri + di, j = rj + dj;
     if (!inMap(i, j) || di * di + dj * dj > SABOTAGE_RANGE * SABOTAGE_RANGE + 0.01) continue;
     const t = tIdx(i, j);
-    if (S.road[t] && !crossTile(t) && wayOwner(t) >= 0 && foes(wayOwner(t), owner)) { r.roadsLeft = true; break; }
+    if (S.road[t] && !crossTile(t) && wayOwner(t) >= 0 && foes(wayOwner(t), owner) && !lanes.has(t)) { r.roadsLeft = true; break; }
     if (S.pipe[t] && foes(S.pipe[t] - 1, owner)) { r.roadsLeft = true; break; }
   }
   return r.roadsLeft;
@@ -6753,13 +6793,14 @@ function sabotageRoads(u, r, dt) {
   if (r.sab < SABOTAGE_WORK) return;
   const foe = (o) => o >= 0 && foes(o, u.owner);
   let best = -1, bd = SABOTAGE_RANGE * SABOTAGE_RANGE + 0.01;
-  const R0 = Math.ceil(SABOTAGE_RANGE);
+  const R0 = Math.ceil(SABOTAGE_RANGE), lanes = convoyLanes(u.owner);
   for (let dj = -R0; dj <= R0; dj++) for (let di = -R0; di <= R0; di++) {
     const i = ri + di, j = rj + dj;
     if (!inMap(i, j)) continue;
     const t = tIdx(i, j);
     const pipe = S.pipe[t] && foe(S.pipe[t] - 1); // a pipeline is worth cutting too
     if (!pipe && (!S.road[t] || !foe(wayOwner(t)) || crossTile(t))) continue; // bridges and tunnels are too solid to tear up (a Missile can crater them)
+    if (!pipe && lanes.has(t)) continue; // (a trade convoy's road: they lie in wait for the convoys instead)
     const d = di * di + dj * dj - (pipe ? 1 : S.road[t] && isJunction(t) ? 1.5 : 0); // junctions first: they cut the most routes
     if (d < bd) { bd = d; best = t; }
   }
@@ -7075,7 +7116,7 @@ function orderRepair(owner, ids, b) {
 
 /** Send selected warbots to attack an enemy building. Only armed ones go. */
 function orderAttack(owner, ids, target) {
-  if (!target || target.dead || !foes(target.owner, owner)) return 0;
+  if (!target || target.dead || !foes(target.owner, owner) || calmB(target)) return 0; // (nothing is attacked on a Trade Post's ground)
   const bots = orderable(owner, ids).filter((u) => botArmed(u));
   for (const u of bots) { readyForOrder(u); u.task = { type: 'attack', target: target.id }; }
   if (bots.length) breachCheck(owner, bots, target.x, target.y, true);
@@ -7263,6 +7304,7 @@ function missileBlocked(silo, i, j) {
   if (silo.reload > 0) return `Reloading: ready in ${Math.ceil(silo.reload)}s.`;
   if (eventNow('dust')) return S.event.endless ? 'A dust storm grounds every Missile, and this one never blows over.' : `A dust storm grounds every Missile: ${Math.ceil(S.event.t1 - S.time)}s until it blows over.`;
   if (dist(silo.x, silo.y, i, j) > BDEFS[silo.type].missile.range) return `Out of range: Missiles reach ${BDEFS[silo.type].missile.range} tiles.`;
+  if (calmAt(i + 0.5, j + 0.5)) return 'Not there: the Trade Post\'s ground is a no-fire zone.';
   return '';
 }
 
@@ -7358,7 +7400,7 @@ function missileImpact(m) {
   blastFx(m.x1, m.y1, 2.2);
   sfx('missilehit', m.x1, m.y1);
   const b = getE(m.target);
-  if (b && !b.dead && foes(b.owner, m.owner)) {
+  if (b && !b.dead && foes(b.owner, m.owner) && !calmB(b)) {
     const name = BDEFS[b.type].name;
     b.armor -= keepShield(b, md.damage);
     b.lastHit = S.time;
@@ -7375,7 +7417,7 @@ function missileImpact(m) {
     }
   }
   for (const e of S.buildings.slice()) {
-    if (e === b || e.dead || !foes(e.owner, m.owner) || dist2(e.x + 0.5, e.y + 0.5, m.x1, m.y1) > md.splash * md.splash) continue;
+    if (e === b || e.dead || !foes(e.owner, m.owner) || dist2(e.x + 0.5, e.y + 0.5, m.x1, m.y1) > md.splash * md.splash || calmB(e)) continue;
     e.armor -= keepShield(e, md.splashDamage);
     e.lastHit = S.time;
     hitByNow(e.owner, m.owner);
@@ -7427,6 +7469,7 @@ function nukeBlocked(silo, i, j) {
   if (!silo.armed) return 'No nuclear missile yet: it needs 6 Enriched Uranium, 4 Alloy and 2 Chips, then a minute to assemble.';
   if (!inMap(i, j)) return 'Off the map.';
   if (dist(silo.x, silo.y, i, j) > NUKE.range) return `Out of range: nuclear missiles reach ${NUKE.range} tiles.`;
+  if (calmAt(i + 0.5, j + 0.5)) return 'Not there: the Trade Post\'s ground is a no-fire zone.';
   if (eventNow('dust')) return S.event.endless ? 'A dust storm grounds every missile, and this one never blows over.' : `A dust storm grounds every missile: ${Math.ceil(S.event.t1 - S.time)}s until it blows over.`;
   return '';
 }
@@ -7592,7 +7635,7 @@ function nukeImpact(m) {
   LAND_HOLD = 1;
   try {
     for (const b of S.buildings.slice()) {
-      if (b.dead || dist2(b.x + 0.5, b.y + 0.5, cx, cy) > R2) continue;
+      if (b.dead || dist2(b.x + 0.5, b.y + 0.5, cx, cy) > R2 || calmB(b)) continue; // (a Trade Post's ground is spared)
       hitByNow(b.owner, m.owner);
       if (b.type === 'lander') {
         for (const id of b.garrison.slice()) { const u = getE(id); if (u) killBot(u); }
@@ -7607,7 +7650,7 @@ function nukeImpact(m) {
         destroyBuilding(b, true);
       }
     }
-    for (const u of S.bots) if (!u.dead && !u.inside && dist2(u.x, u.y, cx, cy) <= R2) killBot(u);
+    for (const u of S.bots) if (!u.dead && !u.inside && dist2(u.x, u.y, cx, cy) <= R2 && !calmAt(u.x, u.y)) killBot(u);
     for (let dj = -R0; dj <= R0; dj++) for (let di = -R0; di <= R0; di++) {
       const i = ci + di, j = cj + dj;
       if (!inMap(i, j) || di * di + dj * dj > R2) continue;
@@ -7676,6 +7719,7 @@ function attackAvailable(owner, target, all) {
  */
 function sendAttack(owner, target, count, all, hurry, lead) {
   let sent = 0;
+  if (calmB(target)) return 0; // (nothing is attacked on a Trade Post's ground)
   const squad = [];
   for (const posted of usesPosts(owner) ? [false, true] : [false]) {
     for (const b of attackSources(owner, target, posted, all)) {
@@ -8405,7 +8449,7 @@ function moveOff(u, to, dmg) {
   addFx('smoke', u.x, u.y, { r: 0.5 });
   u.x = (to % S.W) + 0.5; u.y = ((to / S.W) | 0) + 0.5;
   dropPath(u);
-  if (dmg) damageBot(u, dmg);
+  if (dmg) damageBot(u, dmg, undefined, undefined, true);
 }
 
 /** Drop bot u's route (it crosses ground that has changed): a soldier keeps its orders and finds a new way; anyone else is given new work. */
@@ -8490,7 +8534,7 @@ function lavaImpact(V, b) {
     e.armor = Math.max(1, e.armor - ERUPTION.damage);
     if (isMe(e.owner) && !V.hitMsg) { V.hitMsg = true; postMsg(ME, 'Lava bombs are hitting your buildings on the slopes!', e.x, e.y, 'bad'); }
   }
-  for (const u of S.bots) if (!u.dead && !u.inside && dist2(u.x, u.y, b.x1, b.y1) <= 1.4) damageBot(u, ERUPTION.botDamage);
+  for (const u of S.bots) if (!u.dead && !u.inside && dist2(u.x, u.y, b.x1, b.y1) <= 1.4) damageBot(u, ERUPTION.botDamage, undefined, undefined, true);
   if (isMe(S.owner[t])) sfx('boom', b.x1, b.y1);
 }
 
@@ -8694,7 +8738,7 @@ function meteorImpact(E, h) {
     if (b.dead || dist2(b.x + 0.5, b.y + 0.5, cx, cy) > 2.6) continue;
     b.armor = Math.max(1, b.armor - METEOR_DAMAGE);
   }
-  for (const u of S.bots) if (!u.dead && !u.inside && dist2(u.x, u.y, cx, cy) <= 2.6) damageBot(u, METEOR_BOT_DAMAGE);
+  for (const u of S.bots) if (!u.dead && !u.inside && dist2(u.x, u.y, cx, cy) <= 2.6) damageBot(u, METEOR_BOT_DAMAGE, undefined, undefined, true);
   // A rich deposit where it fell: Ore or Crystal (sometimes Uranium, in a Nuclear race).
   const r = nukeOn() && h.roll < 0.2 ? R_URANIUM : h.roll < 0.6 ? R_ORE : R_CRYSTAL;
   const pr = RESOURCE_PRESETS[(S.settings && S.settings.rich) ?? DEFAULT_RICH] || RESOURCE_PRESETS[DEFAULT_RICH];
@@ -9246,6 +9290,7 @@ function wildPrey(x, y, r, zone) {
 /** A creature bites (a bot) or batters (a building) whatever it's next to. */
 function critterBite(u, foe) {
   const bt = BOTS[u.type];
+  if (calmAt(foe.x + (foe.ent === 'b' ? 0.5 : 0), foe.y + (foe.ent === 'b' ? 0.5 : 0))) { u.fight = 0; u.ignoreFoe = foe.id; u.ignoreUntil = S.time + 10; u.cd = WILD.bite; return; } // (not on a Trade Post's ground)
   u.cd = WILD.bite;
   u.face = datan2(foe.y + (foe.ent === 'b' ? 0.5 : 0) - u.y, foe.x + (foe.ent === 'b' ? 0.5 : 0) - u.x);
   u.fought = 1;
@@ -9670,17 +9715,19 @@ function launchFromYard(b, kind) {
 
 /* ------------------------------------------------------------------ bulk trade (the Trade Terminal) */
 
-/** Player p's trade with the Terminals (see TERMINAL): its contracts on offer, the one picked, how much each good fetches. */
+/** Player p's dealings with the Trade Posts (see TERMINAL): how much each good it sells fetches for now (`sat`), and the runs made in all (`sold`). */
 function tradeState(p) {
   const P = S.players[p];
-  if (!P.trade) P.trade = { offers: [], next: 0, pick: -1, sat: {}, round: 0, sold: 0 };
+  if (!P.trade) P.trade = { sat: {}, sold: 0 };
+  if (!P.trade.sat) P.trade.sat = {};
   return P.trade;
 }
 
-/** The raw goods player p is closest to running out of, most urgent first (in stock and in the ground on its land, against TRADE_LEFT). */
+/** The goods the rival AI weighs (TRADE_SHORT) that player p is closest to running out of, most urgent first (in stock and in the ground on its land, against TRADE_LEFT). */
 function tradeShortest(p) {
   const have = spendable(p), left = {}, RES = Object.assign({ fiber: R_STALK }, TRADE_GET);
-  for (const g of tradeGets()) left[g] = have[g] || 0;
+  const goods = TRADE_SHORT.filter((g) => g !== 'ammo' || warOn());
+  for (const g of goods) left[g] = have[g] || 0;
   for (let t = 0; t < S.W * S.H; t++) {
     if (S.owner[t] !== p || !S.res[t]) continue;
     for (const g in RES) if (left[g] !== undefined && S.res[t] === RES[g]) left[g] += S.amt[t];
@@ -9688,52 +9735,43 @@ function tradeShortest(p) {
   // (Fiber grows back, at Groves and Bio Farms too: it only counts as short when there's little standing.
   // Alloy is never in the ground: it's short when there's little in stock.)
   const need = (g) => left[g] / (TRADE_LEFT[g] || 60) + (g === 'fiber' && S.buildings.some((b) => !b.dead && b.owner === p && (b.type === 'farm' || b.type === 'grower') && b.built) ? 1 : 0);
-  const out = tradeGets().sort((a, b) => need(a) - need(b));
+  const out = goods.sort((a, b) => need(a) - need(b));
   // A rival AI running low on Crystal by its own reckoning (P.crLow: what it has against what its Chip Fabs burn, see
   // aiThink) is shortest of Crystal, then Chips, whatever lies in the ground on its land: that can be land it can't
-  // work, out by the enemy's guns, and a set of contracts with neither left one starving for ten minutes.
+  // work, out by the enemy's guns, and a route bringing neither left one starving for ten minutes.
   const P = S.players[p];
   if (P && P.ai && P.crLow) for (const g of ['chip', 'crystal']) { const k = out.indexOf(g); if (k > 0) { out.splice(k, 1); out.unshift(g); } }
   out.left = left; // what's left of each, for the AI
   return out;
 }
 
-/**
- * A fresh set of contracts for player p: the first gets what it's shortest of for what it has most to spare, the rest
- * mix it up, and the steep Fuel contract (fuelContract) comes last, always. The one taken stays, in its place.
- */
-function newTradeOffers(p) {
-  const T = tradeState(p), have = spendable(p);
-  T.round++;
-  const keep = T.pick >= 0 && T.offers[T.pick] && T.offers[T.pick].left > 0 ? T.offers[T.pick] : null;
-  const short = tradeShortest(p);
-  const spare = TERMINAL_GIVE.slice().sort((a, b) => (have[b] || 0) / TRADE_KEEP[b] - (have[a] || 0) / TRADE_KEEP[a]);
-  const out = keep && !keep.steep ? [keep] : [];
-  const seen = new Set(out.map((o) => o.give + '>' + o.get));
-  for (let k = 0; out.length < TERMINAL.offers && k < 24; k++) {
-    const r1 = hash2(T.round * 31 + k, p * 7 + 3, S.seed || 1), r2 = hash2(T.round * 17 + k, p * 11 + 5, S.seed || 1);
-    const get = k < 2 ? short[k] : short[Math.floor(r1 * short.length)];
-    const pool = spare.filter((g) => g !== get);
-    const give = k < 2 ? pool[k] : pool[Math.floor(r2 * Math.min(4, pool.length))];
-    if (!give || !get || seen.has(give + '>' + get) || !tradePairOk(give, get)) continue;
-    seen.add(give + '>' + get);
-    out.push({ give, get, lot: tradeLot(give), left: TERMINAL.lots });
-  }
-  out.push(keep && keep.steep ? keep : fuelContract(have));
-  T.pick = keep ? out.indexOf(keep) : -1;
-  T.offers = out;
-  T.next = S.time + TERMINAL.every;
-  syncTerminalOrders(p);
-}
+/** Is good g raw (dug, cut, tapped or pumped: TRADE_RAW) rather than made? */
+function tradeRaw(g) { return TRADE_RAW.includes(g); }
+/** The goods a route can send: the market board's, but no liquid (a convoy carries none), and Ammo only when war is on. */
+function tradeSends() { return TRADE_BOARD.filter((g) => !isLiquid(g) && (g !== 'ammo' || warOn())); }
+/** The goods a route can bring back (Ammo only when war is on). */
+function tradeGets() { return TRADE_BOARD.filter((g) => g !== 'ammo' || warOn()); }
+
+/** What one of good g sells for at player p's Terminals today, in the ledger's measure (its worth: TRADE_VALUE), eased by what p sold of it lately. */
+function sellPrice(p, g) { return TRADE_VALUE[g] * TERMINAL.sell[tradeRaw(g) ? 'raw' : 'made'] * (p >= 0 ? tradeState(p).sat[g] ?? 1 : 1); }
+/** What one of good g costs at a Terminal, in the same measure (Fuel at its markup). */
+function buyPrice(g) { return TRADE_VALUE[g] * TERMINAL.buy[tradeRaw(g) ? 'raw' : 'made'] * (g === 'fuel' ? TERMINAL.fuelMarkup : 1); }
 
 /**
- * The contract that always brings Fuel, at the steep TERMINAL.fuelRate: a lot of whichever of TERMINAL.fuelGive (Stone,
- * Fiber) the colony has most to spare (`have`: spendable), for Fuel. For a colony with no oil and poor soil.
+ * Why a route sending `give` and bringing back `get` can't run ('' if it can): not a raw good for a raw good, nor a
+ * made good for one of its own ingredients, nor Cement for anything but a made good; nothing the board doesn't deal in.
  */
-function fuelContract(have) {
-  const give = TERMINAL.fuelGive.slice().sort((a, b) => (have[b] || 0) / TRADE_KEEP[b] - (have[a] || 0) / TRADE_KEEP[a])[0];
-  return { give, get: 'fuel', lot: tradeLot(give), left: TERMINAL.lots, steep: true };
+function tradePairWhy(give, get) {
+  if (!give || !get || !TRADE_VALUE[give] || !TRADE_VALUE[get]) return 'Pick a good to send and one to bring back.';
+  if (give === get) return 'Pick two different goods.';
+  if (!tradeSends().includes(give)) return isLiquid(give) ? `Convoys don't carry ${GOOD[give].name}: it can only be bought.` : `The ledger isn't buying ${GOOD[give].name} now.`;
+  if (!tradeGets().includes(get)) return `The ledger isn't selling ${GOOD[get].name} now.`;
+  if (tradeRaw(give) && tradeRaw(get)) return 'No raw good for another raw good: the ledger only swaps raw goods for made ones.';
+  if ((TRADE_MADE_FROM[give] || []).includes(get)) return `${GOOD[give].name} is made from ${GOOD[get].name}: the ledger won't trade it back for it.`;
+  if (give === 'cement' && !TRADE_MADE.includes(get)) return 'Cement only buys made goods: Alloy, Chips, Ammo or Fuel.';
+  return '';
 }
+function tradePairOk(give, get) { return !tradePairWhy(give, get); }
 
 /** How much more Terminal b pays for standing further out than TERMINAL.minDist from its owner's Command Base (1 to 1 + maxBonus). */
 function terminalBonus(b) {
@@ -9742,86 +9780,299 @@ function terminalBonus(b) {
   return 1 + clamp((d - TERMINAL.minDist) * TERMINAL.perTile, 0, TERMINAL.maxBonus);
 }
 
-/** The goods a Terminal can pay in (Ammo only when war is on). */
-function tradeGets() { return TERMINAL_GET.filter((g) => g !== 'ammo' || warOn()); }
+/** A run's size on route r: TERMINAL.lot of the good sent, or fewer of a rich good so what it brings back (at full price, far out) stays within carryBack. */
+function routeLot(r) {
+  const per = (sellPrice(-1, r.give) * (1 + TERMINAL.maxBonus)) / buyPrice(r.get);
+  return clamp(Math.floor(TERMINAL.carryBack / per), 1, TERMINAL.lot);
+}
 
-/** A contract's lot of `give`: TERMINAL.lotWorth worth of it, in fives (60 Cement, 30 Stone, 25 Ore, 20 Crystal). */
-function tradeLot(give) { return clamp(Math.round(TERMINAL.lotWorth / TRADE_VALUE[give] / 5) * 5, 20, 60); }
+/** One run of route r for player p at Terminal b (or none: no distance bonus) at today's prices: { lot, pay }, pay a fraction (see terminalRun). */
+function tradeRun(p, r, b) {
+  const lot = routeLot(r);
+  return { lot, pay: (lot * sellPrice(p, r.give) * (b ? terminalBonus(b) : 1)) / buyPrice(r.get) };
+}
 
 /**
- * Is giving `give` for `get` a sensible contract: not a good traded down for a much cheaper one, nor a made
- * good for one of its own ingredients (no Cement for Stone), Cement only for made goods, and paying back
- * enough to matter?
+ * Set Terminal b's route: send `give`, bring back `get` (none: no route). A new route starts at once if the ledger's
+ * window is open; changing it keeps the window. '' if done, or why not.
  */
-function tradePairOk(give, get) {
-  if ((TRADE_MADE_FROM[give] || []).includes(get)) return false;
-  if (give === 'cement' && !TRADE_MADE.includes(get)) return false;
-  return TRADE_VALUE[give] <= TRADE_VALUE[get] * TERMINAL.downMax && (tradeLot(give) * TRADE_VALUE[give] * TERMINAL.rate) / TRADE_VALUE[get] >= TERMINAL.minPay;
+function setTradeRoute(b, give, get) {
+  if (!b || b.dead || !BDEFS[b.type].terminal) return 'That Trade Terminal is gone.';
+  if (!give) { b.route = null; syncTerminalOrders(b); return ''; }
+  const why = tradePairWhy(give, get);
+  if (why) return why;
+  if (b.route && b.route.give === give && b.route.get === get) return '';
+  b.route = { give, get };
+  b.runs = 0;
+  syncTerminalOrders(b);
+  return '';
 }
 
-/** What contract o pays player p for a lot at Terminal b (or its first Terminal), at today's rate. */
-function tradePay(p, o, b) {
-  const T = tradeState(p);
-  b = b || S.buildings.find((e) => !e.dead && e.owner === p && BDEFS[e.type].terminal);
-  const mul = (o.steep ? TERMINAL.fuelRate : TERMINAL.rate) * (b ? terminalBonus(b) : 1) * (T.sat[o.give] ?? 1);
-  return Math.max(1, Math.round((o.lot * TRADE_VALUE[o.give] * mul) / TRADE_VALUE[o.get]));
+/** The Trade Post's ledger takes Terminal b's next run from then (its window: one every TERMINAL.every seconds). */
+function terminalWindow(b) { return b.tnext || 0; }
+/** How long before its window Terminal b asks for its run: about a trip (the last one's time and a bit), TERMINAL.lead at first. */
+function terminalLead(b) { return clamp(b.lead ?? TERMINAL.lead, 20, TERMINAL.every - 10); }
+
+/** Terminal b asks for its route's run (a supply order) once its window is a trip away, and nothing else. */
+function syncTerminalOrders(b) {
+  const r = b.route;
+  b.keep = r && S.time >= terminalWindow(b) - terminalLead(b) ? { [r.give]: routeLot(r) } : {};
 }
 
-/** Pick contract k for player p (-1: none): its Terminals gather a lot of what it takes. */
-function pickContract(p, k) {
-  const T = tradeState(p);
-  T.pick = k >= 0 && T.offers[k] && T.offers[k].left > 0 ? k : -1;
-  syncTerminalOrders(p);
-}
-
-/** Player p's Terminals ask for the lot of the contract picked (a supply order), and nothing else. */
-function syncTerminalOrders(p) {
-  const T = tradeState(p), o = T.pick >= 0 ? T.offers[T.pick] : null;
-  for (const b of S.buildings) {
-    if (b.dead || b.owner !== p || !BDEFS[b.type].terminal) continue;
-    b.keep = o ? { [o.give]: o.lot } : {};
-  }
-}
-
-/** What Terminal b has of g to send home: everything but the lot it's gathering (and what's already promised to a train). */
+/** What Terminal b has of g to send home: everything but its route's run (and what's already promised to a train). */
 function terminalSpare(b, g) {
-  const lot = (b.keep && b.keep[g]) || 0;
+  const lot = b.route && b.route.give === g ? routeLot(b.route) : 0;
   const have = (b.stock[g] || 0) - (b.res[g] || 0);
-  return lot ? Math.max(0, have - lot) : Math.max(0, have);
+  return Math.max(0, have - lot);
 }
 
-/** A Trade Terminal: rolls its owner's contracts over, and once the lot is in, makes the trade. */
+/** Is Terminal b's run in, and the ledger's window open? */
+function terminalReady(b) {
+  const r = b.route;
+  return !!r && S.time >= terminalWindow(b) && (b.stock[r.give] || 0) - (b.res[r.give] || 0) >= routeLot(r);
+}
+
+/**
+ * The ledger takes Terminal b's run: the goods sent go, what they bought comes in (its fraction carried to the next
+ * run, so nothing is lost to rounding), the good sold eases, and the next window opens TERMINAL.every from now. The
+ * convoy waiting at the dock (u, or one docked there) takes what was bought home.
+ */
+function terminalRun(b, u) {
+  const p = b.owner, r = b.route, T = tradeState(p), run = tradeRun(p, r, b);
+  const x = run.pay + (b.tfrac || 0), pay = Math.floor(x + 1e-9);
+  b.tfrac = Math.max(0, x - pay);
+  bump(b.stock, r.give, -run.lot);
+  usedGood(p, r.give, run.lot);
+  if (pay > 0) { bump(b.stock, r.get, pay); madeGood(p, r.get, pay); }
+  T.sat[r.give] = Math.max(TERMINAL.satMin, (T.sat[r.give] ?? 1) - TERMINAL.sat);
+  T.sold++;
+  b.runs = (b.runs || 0) + 1;
+  b.last = { give: r.give, n: run.lot, get: r.get, pay, t: S.time };
+  b.tnext = S.time + TERMINAL.every;
+  b.working = true;
+  b.status = `Run made: ${run.lot} ${goodN(r.give, run.lot)} for ${pay} ${goodN(r.get, pay)}`;
+  syncTerminalOrders(b);
+  addFx('ring', b.x + 0.5, b.y + 0.5, { color: '#7fe3ff', r: 1.6 });
+  // (Said once a route, at its first run: a run every two minutes is the route working, not news.)
+  if (b.runs === 1) postMsg(p, `Trade route running: ${run.lot} ${goodN(r.give, run.lot)} for ${pay} ${goodN(r.get, pay)} this run, one every ${Math.round(TERMINAL.every / 60)} minutes. ${isLiquid(r.get) ? 'A Tanker takes the ' + GOOD[r.get].name + ' home (or a pipeline to storage).' : 'The convoy brings it home.'}`, b.x, b.y, 'good');
+  if (isMe(p)) sfx('complete');
+  const v = u && !u.dead ? u : S.bots.find((w) => !w.dead && w.owner === p && w.task && w.task.type === 'dock' && w.task.bld === b.id);
+  if (v) convoyHome(v, b);
+}
+
+/**
+ * Convoy u (a Road Train or Freight Train) takes home what Terminal b has bought (and anything else spare there, in a
+ * mixed load): a Freight Train to the station on its track nearest the Command Base, a Road Train to storage. Liquids
+ * wait for a Tanker. True if it set off.
+ */
+function convoyHome(u, b) {
+  const p = u.owner, rail = !!BOTS[u.type].rail, load = {};
+  let first = null, room = botCarry(u);
+  const order = b.route ? [b.route.get].concat(GOODS) : GOODS;
+  for (const g of order) {
+    if (load[g] || isLiquid(g) || room < 1) continue;
+    const n = Math.min(room, Math.floor(terminalSpare(b, g)));
+    if (n < 1) continue;
+    load[g] = n; room -= n;
+    if (!first) first = g;
+  }
+  if (u.task && u.task.type === 'dock') u.task = null;
+  if (!first) return false;
+  let dst = null;
+  if (rail) {
+    const hub = getE(S.players[p].lander);
+    let hd = Infinity;
+    if (hub) for (const s of S.buildings) if (s !== b && !s.dead && s.owner === p && s.built && BDEFS[s.type].station && !BDEFS[s.type].terminal && trainAt(u, s)) { const d = dist2(s.x, s.y, hub.x, hub.y); if (d < hd) { hd = d; dst = s; } }
+  } else dst = storeFor(p, first, b.x + 0.5, b.y + 0.5, b, b);
+  if (!dst) return false;
+  const extra = Object.assign({}, load);
+  delete extra[first];
+  assignHaul(u, b, dst, first, load[first], extra);
+  return !!u.task;
+}
+
+/**
+ * Convoy u has just unloaded at Terminal b. If the run is in and the ledger's window is open the run is made now and
+ * the convoy takes what it bought home; if it's early it waits at the dock for the window (enterBuilding: out of
+ * sight, and nothing shoots on a Trade Post's ground anyway). True if it has something to do.
+ */
+function convoyAtDock(u, b) {
+  if (!b.route || !(BOTS[u.type].train || BOTS[u.type].rail)) return false;
+  if (u.tradeT0 !== undefined) { b.lead = clamp(Math.round(S.time - u.tradeT0) + 15, 20, TERMINAL.every - 10); delete u.tradeT0; }
+  if (terminalReady(b)) { terminalRun(b, u); if (u.task) return true; }
+  const r = b.route, here = (b.stock[r.give] || 0) - (b.res[r.give] || 0);
+  if (here >= routeLot(r) && S.time < terminalWindow(b) && !isLiquid(r.get)) { // (a liquid bought goes by Tanker: nothing to wait for)
+    // (Nothing to wait for if another convoy is already waiting: this one takes the bought goods of the last run, if any.)
+    if (S.bots.some((w) => w !== u && !w.dead && w.task && w.task.type === 'dock' && w.task.bld === b.id)) return convoyHome(u, b);
+    u.task = { type: 'dock', bld: b.id };
+    enterBuilding(u, b);
+    return true;
+  }
+  return convoyHome(u, b);
+}
+
+/** A convoy waiting at its Terminal's dock (task 'dock') for the ledger's window: it gives up once the window has passed with no run made. */
+function doDock(u, t) {
+  const b = getE(t.bld);
+  u.vel = 0;
+  if (!b || b.dead || b.owner !== u.owner || !b.route || S.time > terminalWindow(b) + 10) { u.task = null; if (b && !b.dead && b.owner === u.owner && convoyHome(u, b)) return; delete u.trade; }
+}
+
+/** A second of a colony's prices (T: tradeState) coming back: TERMINAL.recover of the way to full for each good it sold. */
+function tradeRecover(T) {
+  for (const g in T.sat) { T.sat[g] = 1 - (1 - T.sat[g]) * (1 - TERMINAL.recover); if (T.sat[g] > 0.999) delete T.sat[g]; }
+}
+
+/** A Trade Terminal: eases its owner's prices back, asks for its route's run a trip ahead of the ledger's window, and makes the run once it's in. */
 function updateTerminal(b, def, dt) {
   if (!b.built) return;
   const p = b.owner, T = tradeState(p);
   if (S.tick % 30 === b.id % 30) {
-    // Once a second for the colony, however many Terminals it has: `recover` a minute.
-    if (S.tick - (T.satTick ?? -30) >= 30) { T.satTick = S.tick; for (const g in T.sat) T.sat[g] = Math.min(1, T.sat[g] + TERMINAL.recover / 60); }
-    if (S.time >= T.next || !T.offers.length) newTradeOffers(p);
-    if (!b.keep) syncTerminalOrders(p);
+    // Once a second for the colony, however many Terminals it has.
+    if (S.tick - (T.satTick ?? -30) >= 30) { T.satTick = S.tick; tradeRecover(T); }
+    syncTerminalOrders(b);
   }
-  const o = T.pick >= 0 ? T.offers[T.pick] : null;
-  if (!o) { b.status = 'Pick a contract: its lot comes by Road Train or Freight Train'; return; }
-  const here = (b.stock[o.give] || 0) - (b.res[o.give] || 0);
-  if (here >= o.lot) {
-    const pay = tradePay(p, o, b);
-    bump(b.stock, o.give, -o.lot);
-    usedGood(p, o.give, o.lot);
-    bump(b.stock, o.get, pay);
-    madeGood(p, o.get, pay);
-    T.sat[o.give] = Math.max(TERMINAL.satMin, (T.sat[o.give] ?? 1) - TERMINAL.sat);
-    T.sold++;
-    o.left--;
-    b.working = true;
-    addFx('ring', b.x + 0.5, b.y + 0.5, { color: '#7fe3ff', r: 1.6 });
-    postMsg(p, `Trade done: ${o.lot} ${goodN(o.give, o.lot)} for ${pay} ${goodN(o.get, pay)}, waiting at the Trade Terminal to go home ${isLiquid(o.get) ? 'by Tanker (or by pipeline to storage)' : 'by train'}.` + (o.left ? ` ${o.left} more lot${o.left > 1 ? 's' : ''} on this contract.` : ' That contract is filled.'), b.x, b.y, 'good');
-    if (isMe(p)) sfx('complete');
-    if (!o.left) { T.pick = -1; syncTerminalOrders(p); }
+  const r = b.route;
+  if (!r) { b.status = 'No trade route: pick a good to send and one to bring back'; return; }
+  if (terminalReady(b)) { terminalRun(b); return; }
+  const lot = routeLot(r), here = Math.floor((b.stock[r.give] || 0) - (b.res[r.give] || 0)), inc = b.inc[r.give] || 0, wait = terminalWindow(b) - S.time;
+  b.status = here >= lot ? `Run in: the ledger takes it in ${fmtSecs(wait)}`
+    : inc > 0 ? `Convoy on its way with ${inc} ${goodN(r.give, inc)}` + (wait > 0 ? `; next run in ${fmtSecs(wait)}` : '')
+    : wait > terminalLead(b) ? `Next run in ${fmtSecs(wait)} (${lot} ${goodN(r.give, lot)} for ${GOOD[r.get].name})`
+    : `Waiting for a convoy: ${lot} ${goodN(r.give, lot)} in one store a Road Train reaches (or a station on its track)`;
+}
+
+/** Seconds as "1:05" (or "40 s"). */
+function fmtSecs(s) { s = Math.max(0, Math.ceil(s)); return s < 60 ? `${s} s` : `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; }
+
+/* ------------------------------------------------------------------ trade convoys */
+
+/** The Terminal convoy u is running for (a Road Train, Freight Train or Tanker to or from one), or null. */
+function convoyOf(u) { const b = u.trade ? getE(u.trade) : null; return b && !b.dead && BDEFS[b.type].terminal ? b : null; }
+
+/** Convoy u was hit: its owner hears of it (once in a while), and its Terminal remembers when (the panel and minimap say so). */
+function convoyHit(u) {
+  const P = S.players[u.owner], b = convoyOf(u);
+  if (b) b.convoyHit = S.time;
+  if (S.time - (P.convoyHitAt ?? -999) < 20) return;
+  P.convoyHitAt = S.time;
+  postMsg(u.owner, 'Your trade convoy is under attack!' + (b && !b.escort && warOn() ? ' Turn on Escort at the Terminal to send warbots along.' : ''), Math.floor(u.x), Math.floor(u.y), 'bad');
+  if (isMe(u.owner)) sfx('alert');
+}
+
+/** Convoy u was destroyed (its cargo spills as crates: see dropCarried). */
+function convoyLost(u) {
+  const n = cargoCount(u), b = convoyOf(u), st = S.players[u.owner].stats;
+  st.convoysLost = (st.convoysLost || 0) + 1;
+  if (b) b.convoyHit = S.time;
+  postMsg(u.owner, `Your trade convoy was destroyed${n ? `: its ${n} goods lie in crates on the road for whoever gets there first` : ''}.`, Math.floor(u.x), Math.floor(u.y), 'lost');
+}
+
+/** The nearest trade convoy of `owner`'s enemies out in the open within r tiles of (x, y) (not on a Trade Post's ground), or null. */
+function convoyNear(owner, x, y, r) {
+  let best = null, bd = r * r;
+  for (const v of S.bots) {
+    if (v.dead || !v.trade || v.inside || !foes(v.owner, owner)) continue;
+    const d = dist2(v.x, v.y, x, y);
+    if (d <= bd && !calmAt(v.x, v.y)) { bd = d; best = v; }
+  }
+  return best;
+}
+
+/**
+ * The road tiles the trade convoys of `owner`'s enemies drive (their Terminals' lanes, while a route runs). Raiders leave
+ * these be and lie in wait for the convoys (see raidRoadsLeft, sabotageRoads): cut, no convoy would come.
+ */
+function convoyLanes(owner) {
+  const out = new Set();
+  for (const b of S.buildings) if (!b.dead && b.route && b.lane && BDEFS[b.type].terminal && foes(b.owner, owner)) for (const t of b.lane) out.add(t);
+  return out;
+}
+
+/** The warbots riding along with convoy u (task 'escort'). */
+function escortsOf(u) { return S.bots.filter((v) => !v.dead && v.owner === u.owner && v.task && v.task.type === 'escort' && v.task.bot === u.id); }
+
+/**
+ * Terminal b's Escort: up to TERMINAL.escort armed warbots from the nearest garrisons of its owner's within
+ * TERMINAL.escortReach tiles of convoy u (on the same ground) ride along with it, and go back once it's home.
+ * The Command Base keeps its last warbot. How many were sent.
+ */
+function convoyEscort(u, b) {
+  if (!b || !b.escort || u.dead) return 0;
+  let need = TERMINAL.escort - escortsOf(u).length;
+  if (need <= 0) return 0;
+  const x = u.x, y = u.y, zone = S.zone[tIdx(Math.floor(x), Math.floor(y))], R2 = TERMINAL.escortReach * TERMINAL.escortReach;
+  const forts = S.buildings.filter((g) => !g.dead && g.owner === u.owner && g.built && BDEFS[g.type].mil && g.garrison && g.garrison.length && dist2(g.x + 0.5, g.y + 0.5, x, y) <= R2 && S.zone[tIdx(g.x, g.y)] === zone);
+  forts.sort((a, c) => dist2(a.x, a.y, x, y) - dist2(c.x, c.y, x, y) || a.id - c.id);
+  let sent = 0;
+  for (const g of forts) {
+    for (let k = 0; k < g.garrison.length && need > 0;) {
+      const v = getE(g.garrison[k]);
+      const last = g.type === 'lander' && g.garrison.length <= 1;
+      if (!v || v.dead || v.type !== 'warbot' || !botArmed(v) || last || !freeToGo(v, g) || wantsRepair(v)) { k++; continue; }
+      g.garrison.splice(k, 1);
+      v.inside = 0; v.path = null; v.fight = 0;
+      v.task = { type: 'escort', bot: u.id, home: g.id };
+      need--; sent++;
+    }
+    if (need <= 0) break;
+  }
+  return sent;
+}
+
+/**
+ * Does convoy u hold back for its escort: while one fights off an attack near it, or at the start of a trip (for half a
+ * minute at most: t.board) while one is still on its way to get on?
+ */
+function convoyHolds(u, t) {
+  let wait = false;
+  for (const v of S.bots) {
+    if (v.dead || v.owner !== u.owner || !v.task || v.task.type !== 'escort' || v.task.bot !== u.id) continue;
+    const d2 = dist2(v.x, v.y, u.x, u.y);
+    if (v.fight && d2 < 64) return true;
+    if (!v.fight && d2 > 1.6 * 1.6) wait = true;
+  }
+  if (!wait) return false;
+  if (t.board === undefined) t.board = S.time + 30;
+  return S.time < t.board;
+}
+
+/**
+ * An escort warbot (task 'escort'): it rides on its convoy (kept beside it as it drives), waits beside the Terminal while
+ * the convoy is at the dock, gets off to fight anything that comes at it (see warbotAct), and walks back to a garrison
+ * once the convoy is home or gone.
+ */
+function doEscort(u, t, dt) {
+  const c = getE(t.bot);
+  if (!c || c.dead || c.owner !== u.owner || !c.trade) { u.task = null; u.path = null; goGarrison(u); return; }
+  const at = c.inside ? getE(c.inside) : null, cx = at ? at.x + 0.5 : c.x, cy = at ? at.y + 0.5 : c.y;
+  const d2 = dist2(u.x, u.y, cx, cy);
+  if (at) {
+    if (d2 <= 2.5 * 2.5) { u.path = null; u.vel = 0; return; }
+    if (travel(u, at.x, at.y, dt) === null) { u.task = null; goGarrison(u); }
     return;
   }
-  const inc = b.inc[o.give] || 0;
-  b.status = `Gathering a lot: ${Math.floor(here)} of ${o.lot} ${goodN(o.give, o.lot)}` + (inc ? ` (${inc} on the way)` : '') + ` for ${tradePay(p, o, b)} ${goodN(o.get, tradePay(p, o, b))}`;
+  if (d2 <= 1.6 * 1.6) {
+    // Riding: on the trailer, a little behind the cab (one each side).
+    const f = c.face || 0, side = (u.id % 2 ? 1 : -1) * 0.18;
+    u.x = c.x - dcos(f) * 0.55 - dsin(f) * side; u.y = c.y - dsin(f) * 0.55 + dcos(f) * side;
+    u.face = f; u.path = null; u.vel = 0;
+    return;
+  }
+  if (travel(u, Math.floor(c.x), Math.floor(c.y), dt) === null) { u.task = null; goGarrison(u); }
 }
+
+/* ------------------------------------------------------------------ the Trade Posts' no-fire zone */
+
+/** Is (x, y) on a Trade Post's ground (TRADE_POST.calm tiles round its pad), where nothing shoots? */
+function calmAt(x, y) {
+  if (!S.posts || !S.posts.length) return false;
+  const i = Math.floor(x), j = Math.floor(y), R = TRADE_POST.calm;
+  for (const p of S.posts) if (Math.abs(p.x - i) <= R && Math.abs(p.y - j) <= R) return true;
+  return false;
+}
+/** Is building b on a Trade Post's ground? */
+function calmB(b) { return calmAt(b.x + 0.5, b.y + 0.5); }
 
 /* ------------------------------------------------------------------ crawlers */
 
@@ -11424,6 +11675,7 @@ function strikeBlocked(owner, u, t, deck) {
   if (u.mission) return 'That bomber already has a target.';
   if (!strikeTarget(u, t)) return 'Pick an enemy building, or an enemy vehicle or robot out in the open.';
   const [tx, ty] = strikeAim(t, deck);
+  if (calmAt(tx, ty)) return 'Not there: nothing is bombed on a Trade Post\'s ground.';
   if (sortieFuel(u, base, tx, ty) > 99.5) return `Too far: a full tank takes the bomber ${planeReach(u)} tiles out and back.`;
   return '';
 }
@@ -11461,6 +11713,7 @@ function napalmBlocked(owner, u, i, j) {
   if (u.mission) return 'That bomber already has a target.';
   if (!Number.isInteger(i) || !Number.isInteger(j) || !inMap(i, j)) return 'Outside the map.';
   if (S.terrain[tIdx(i, j)] !== T_GROUND) return 'Aim napalm at the ground, not water, rock or a chasm.';
+  if (calmAt(i + 0.5, j + 0.5)) return 'Not there: nothing is bombed on a Trade Post\'s ground.';
   if (sortieFuel(u, base, i + 0.5, j + 0.5) > 99.5) return `Too far: a full tank takes the bomber ${planeReach(u)} tiles out and back.`;
   return '';
 }
@@ -11649,6 +11902,7 @@ function bombImpact(m) {
 
 function bombHit(b, dmg, by) {
   const def = BDEFS[b.type];
+  if (calmB(b)) return; // nothing is bombed on a Trade Post's ground
   b.armor -= keepShield(b, dmg);
   b.lastHit = S.time;
   if (by >= 0) (S.players[b.owner].hitBy = S.players[b.owner].hitBy || {})[by] = S.time;
@@ -11777,7 +12031,7 @@ function aircraftNear(owner, x, y, range) {
   for (const u of S.bots) {
     if (u.dead || u.owner === owner || !BOTS[u.type].air || !u.flight || planeAlt(u) < 0.15) continue;
     const d = dist2(u.x, u.y, x, y);
-    if (d <= range * range) out.push([d, u]);
+    if (d <= range * range && !calmAt(u.x, u.y)) out.push([d, u]); // (not over a Trade Post's ground)
   }
   out.sort((a, c) => a[0] - c[0]);
   return out.map((o) => o[1]);
@@ -11793,7 +12047,7 @@ function updateMinigun(b, def, dt) {
   const g = def.minigun, cx = b.x + 0.5, cy = b.y + 0.5, range = def.range + auraRange(b), r2 = range * range;
   b.scanT = (b.scanT || 0) - dt;
   let target = b.tgt ? getE(b.tgt) : null;
-  if (target && (target.dead || target.inside || dist2(target.x, target.y, cx, cy) > r2)) target = null;
+  if (target && (target.dead || target.inside || dist2(target.x, target.y, cx, cy) > r2 || calmAt(target.x, target.y))) target = null;
   if (!target && b.scanT <= 0) { b.scanT = 0.25; target = nearestEnemyBot(b.owner, cx, cy, range, true); }
   b.tgt = target ? target.id : 0;
   const ammo = (b.rounds || 0) + (b.stock.ammo || 0) * g.rounds;
@@ -11939,13 +12193,14 @@ function hashState() {
   for (const u of S.bots) {
     int(u.id); str(u.type); int(u.owner); int(u.dead ? 1 : 0); num(u.x); num(u.y); num(u.hp); num(u.bat); num(u.face);
     str(u.task && u.task.type); int((u.task && (u.task.target || u.task.bld || u.task.rally || u.task.tile)) || 0); str(u.carry); num(u.carryN); int(u.inside || 0);
-    num(u.ammo); num(u.sh); num(u.gel); int(u.fight || 0);
+    num(u.ammo); num(u.sh); num(u.gel); int(u.fight || 0); int(u.trade || 0);
   }
   for (const b of S.buildings) {
     int(b.id); str(b.type); int(b.owner); int(b.dead ? 1 : 0); int(b.built ? 1 : 0); int(b.x); int(b.y); num(b.armor); num(b.progress);
     obj(b.stock); obj(b.inc); int(b.staff || 0); int(b.paused ? 1 : 0); str(b.mode); obj(b.orders);
+    if (BDEFS[b.type].terminal) { str(b.route && b.route.give); str(b.route && b.route.get); int(b.escort ? 1 : 0); num(b.tnext); num(b.tfrac); int(b.runs || 0); } // (a Trade Terminal's route)
   }
-  for (const P of S.players) { int(P.id); int(P.ai ? 1 : 0); int(P.out ? 1 : 0); obj(P.made); obj(P.used); obj(P.tech); }
+  for (const P of S.players) { int(P.id); int(P.ai ? 1 : 0); int(P.out ? 1 : 0); obj(P.made); obj(P.used); obj(P.tech); obj(P.trade && P.trade.sat); }
   for (const arr of [S.road, S.rail, S.plan, S.owner, S.res, S.amt, S.fert]) if (arr) for (let t = 0; t < arr.length; t++) if (arr[t]) { int(t); num(arr[t]); }
   int(S.loot ? S.loot.length : 0); int(S.fires ? S.fires.length : 0);
   return h >>> 0;

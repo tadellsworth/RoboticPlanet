@@ -740,12 +740,12 @@ const MISSIONS = [
   },
   {
     id: 'trade', name: 'Trade Winds', chapter: 'Industry and Trade',
-    brief: 'Dock a Trade Terminal at a neutral Trade Post and fill a contract by Road Train, through the planet\'s storms.',
+    brief: 'Dock a Trade Terminal at a neutral Trade Post and run a trade route by Road Train, through the planet\'s storms.',
     intro: [
-      'The gold pads on the minimap are neutral <b>Trade Posts</b>. A Trade Terminal there swaps a big surplus.',
-      'Only Road Trains (or Freight Trains) carry the lots. Posts further out pay better.',
-      'A far Depot on a Road Train\'s road stocks itself with what the buildings round it need.',
-      'One contract always brings <b>Fuel</b>, at a steep price: a <b>Tanker</b> takes it home.',
+      'The gold pads on the minimap are neutral <b>Trade Posts</b>. A Trade Terminal there runs a standing trade route.',
+      'Pick a good to send and one to bring back: a <b>Road Train</b> convoy runs it every 2 minutes.',
+      'Raw goods sell cheap and made goods dearer (the market board). Posts further out pay better.',
+      'A route can buy <b>Fuel</b>, at a markup: a <b>Tanker</b> takes it home.',
       '<b>Planet events</b> are on: dust storms, Ringfall, solar flares, and now and then the <i>Wren</i>, a trader ship.',
     ],
     // (Seed 1445: Ringfall (a meteor shower) at 2:30 and a solar flare over by 9:36. Events are seeded, and on the designed
@@ -767,10 +767,10 @@ const MISSIONS = [
         hint: 'Tap a gold Trade Post → <b>Dock a Trade Terminal here</b>. Then tap its site → <b>Lay road</b> (<kbd>R</kbd>).',
         // (No #btn-build: always on screen, it would always be what lit up and the Terminal site would get no ring.)
         ui: "#sh-dock, #sh-layroad, #build-tabs [data-g='move'], .bcard[data-t='terminal']" },
-      { kind: 'trades', n: [1, 2, 3], text: ['Make a trade at the Terminal', 'Make {n} trades at the Terminal'], at: 'terminal',
+      { kind: 'trades', n: [1, 2, 3], text: ['Make a trade run at the Terminal', 'Make {n} trade runs at the Terminal'], at: 'terminal',
         count: (P) => (P.trade && P.trade.sold) || 0,
-        hint: 'Tap the Terminal → <b>Take</b> a contract, like 30 Stone (a Road Train hauls it). The last always buys Fuel.',
-        ui: '#sh-trade button' },
+        hint: 'Tap the Terminal → a <b>Send</b> good, a <b>Bring back</b> one → <b>Start route</b> (<kbd>G</kbd>). A run every 2 min.',
+        ui: '#sh-tgive, #sh-tget, #sh-tgo' },
       { kind: 'events', n: 2, text: 'Ride out 2 planet events',
         count: (P, S) => (S.evN || 0) - (S.event ? 1 : 0),
         hint: 'Ringfall craters roads, flares drain batteries, dust slows robots. Waiting? Speed up: <b>1×</b> (<kbd>]</kbd>).',
@@ -1118,6 +1118,50 @@ const MISSIONS = [
       { kind: 'capture',
         hint: '<b>Army</b> (<kbd>Q</kbd>) → <b>Hold ground</b> (<kbd>G</kbd>) by their roads to raid. To take their base: <b>All</b> (<kbd>4</kbd>) → <b>Hold ground</b> right beside it.',
         ui: '#btn-attack, #ar-nall, #ar-hold' },
+    ],
+  },
+  {
+    id: 'convoy', name: 'Convoy', chapter: 'War',
+    brief: 'A Salvager raids every road it can reach. Keep your trade route running through it, and raid its convoys in turn.',
+    intro: [
+      'Your <b>Trade Terminal</b> is docked at a Trade Post. Set its route: a Road Train convoy every 2 minutes.',
+      'Nothing shoots on a Trade Post\'s ground, so raids come out on the road. <b>Escort</b> sends two warbots along.',
+      'The rival runs convoys too, dashed on the minimap. Warbots on a flag by it, out past its land, go for them.',
+      'A wrecked convoy spills its cargo as crates. Your warbots carry them home.',
+    ],
+    mode: 'versus', seed: 7711, size: 1, rough: 1, rich: 3, biome: 'desert', shape: 0, style: 'raider',
+    rival: ['easy', 'medium', 'normal'], limit: [0, 0, 40],
+    setup(S) {
+      kit(S, [...KIT7, 'armory'], 4); // (the colony so far, with Supply Lines' Ammo Plant)
+      const L = getE(S.players[0].lander), E = getE(S.players[1].lander);
+      L.stock.stone += 60; L.stock.cement += 40; L.stock.alloy += 6;
+      // Each side's Terminal docked at the Trade Post nearest it, a road out to it and a Road Train to serve it: the rival's
+      // convoys run from the start, so there's something to raid.
+      for (const [p, B] of [[0, L], [1, E]]) {
+        const post = S.posts.slice().sort((a, c) => dist2(a.x, a.y, B.x, B.y) - dist2(c.x, c.y, B.x, B.y))[0];
+        preBuild(p, 'terminal', post.x, post.y, { reach: 2, road: true });
+        enterBuilding(addBot(p, 'roadtrain', B.x, B.y), B);
+      }
+      computeTerritory();
+      E.stock.cement += 60;
+    },
+    goals: [
+      { kind: 'trades', n: [3, 4, 5], text: ['Make a trade run', 'Make {n} trade runs'], at: 'terminal',
+        count: (P) => (P.trade && P.trade.sold) || 0,
+        hint: 'Tap the Terminal → a <b>Send</b> good, a <b>Bring back</b> one → <b>Start route</b> (<kbd>G</kbd>).',
+        ui: '#sh-tgive, #sh-tget, #sh-tgo' },
+      { kind: 'escort', n: 1, text: 'Turn on Escort at the Terminal', at: 'terminal',
+        count: (P, S) => (S.buildings.some((b) => !b.dead && b.owner === 0 && BDEFS[b.type].terminal && b.escort) ? 1 : 0),
+        hint: 'Tap the Terminal → <b>Escort</b> (<kbd>E</kbd>): two warbots from the nearest garrison ride with each convoy.',
+        ui: '#sh-escort' },
+      { kind: 'convoys', n: 1, text: 'Wreck a rival trade convoy',
+        count: (P, S) => S.players.reduce((n, Q) => n + (Q.id !== 0 && Q.stats.convoysLost ? Q.stats.convoysLost : 0), 0),
+        hint: '<b>Army</b> (<kbd>Q</kbd>) → <b>Hold ground</b> (<kbd>G</kbd>) by their route (dashed on the minimap), past their land.',
+        ui: '#btn-attack, #ar-hold' },
+      { kind: 'looted', n: [3, 5, 6], text: 'Carry home {n} crates of loot',
+        count: (P) => P.stats.looted || 0,
+        hint: 'Warbots near crates carry them to a garrison. <b>Hold ground</b> (<kbd>G</kbd>) by a wreck to fetch them.',
+        ui: '#btn-attack, #ar-hold' },
     ],
   },
   {

@@ -47,18 +47,19 @@ const AI_SCRAP = { workers: 4, haulers: 2, minHaulers: 4, batch: 4 };
 /**
  * Crystal: every robot takes a Chip, and every Chip a Crystal. It counts as running short once what's left (in stock and
  * in the ground on its land) would last under AI_CRYSTAL_MINS minutes at the rate it's used (AI_CRYSTAL_BURN a minute at
- * least, once there's a Foundry); a colony short of it docks a Trade Terminal from AI_CRYSTAL_TRADE_AT seconds, and one
- * whose Crystal runs low puts up Crystal Taps first, up to AI_CRYSTAL_TAPS. Short of it, its Outposts head for Crystal
+ * least, once there's a Foundry); a colony short of it docks its Trade Terminal (AI_TRADE_AT) before anything else, and
+ * one whose Crystal runs low puts up Crystal Taps first, up to AI_CRYSTAL_TAPS. Short of it, its Outposts head for Crystal
  * no-one holds within AI_CRYSTAL_REACH tiles of its forts. Its Smelters rest while its Crystal runs low with
- * AI_ALLOY_PILE Alloy in stock (until it's down to half that). A contract that has sold no lot for AI_TRADE_STALL
- * seconds is dropped for another.
+ * AI_ALLOY_PILE Alloy in stock (until it's down to half that). A trade route that has made no run for AI_TRADE_STALL
+ * seconds is dropped for another. Every rival docks a Trade Terminal from AI_TRADE_AT seconds (an Architect a minute
+ * sooner), so its route runs from about ten minutes in.
  */
-const AI_CRYSTAL_MINS = 10, AI_CRYSTAL_BURN = 4, AI_CRYSTAL_TRADE_AT = 600, AI_CRYSTAL_TAPS = 4, AI_CRYSTAL_REACH = 20;
-const AI_ALLOY_PILE = 40, AI_TRADE_STALL = 300;
+const AI_CRYSTAL_MINS = 10, AI_CRYSTAL_BURN = 4, AI_CRYSTAL_TAPS = 4, AI_CRYSTAL_REACH = 20;
+const AI_ALLOY_PILE = 40, AI_TRADE_STALL = 300, AI_TRADE_AT = 480;
 /**
  * Fuel with no source: low (P.fuelLow) for AI_FUEL_DRY s with no Bio Farm that has soil and no Refinery with oil
- * (aiFuelSource), it's dry (P.fuelDry): at its Trade Terminal it takes the steep Fuel contract, and dry for
- * AI_FUEL_TRADE s (from AI_CRYSTAL_TRADE_AT on) it docks one for it.
+ * (aiFuelSource), it's dry (P.fuelDry): its Trade Terminal's route brings Fuel (dear on the market board), and dry for
+ * AI_FUEL_TRADE s it docks its Terminal before anything else.
  */
 const AI_FUEL_DRY = 60, AI_FUEL_TRADE = 180;
 /**
@@ -323,17 +324,15 @@ function aiThink(p) {
     plan = [[airFuel.type, airFuel.n]].concat(plan);
     if (airFuel.type === 'refinery' && !counts.pump) plan = [['pump', 1]].concat(plan); // (a Refinery waits for a pump)
   }
-  // Bulk trade: a Trade Terminal once the colony is running short of Ore, Crystal or Stone (a Tycoon from 14
-  // minutes, the rest from 20, any rival from 10 once its Crystal runs short, and then past the usual limit on sites),
-  // with a Road Train to serve it (see the Foundry, and aiTrade).
-  // (Dry of Fuel with no way to make any, from 10 minutes too: the Terminal's Fuel contract is the way.)
+  // Trade: a Trade Terminal docked at a post from AI_TRADE_AT (an Architect a minute sooner), so its route runs from
+  // about ten minutes in, with a Road Train to serve it (see the Foundry, and aiTrade). It goes first; running short of
+  // Crystal, or dry of Fuel with no way to make any, past the usual limit on sites too.
   const fuelTrade = !!P.fuelDry && S.time - P.fuelLow > AI_FUEL_TRADE;
-  const tradeAt = st.missiles ? 840 : crShort || fuelTrade ? AI_CRYSTAL_TRADE_AT : 1200;
+  const tradeAt = st.missiles ? AI_TRADE_AT - 60 : AI_TRADE_AT;
   let tradeFirst = false;
   if (S.mode !== 'colony' && S.time >= tradeAt && !counts.terminal && counts.foundry && S.time - (P.termFail ?? -999) > 240) {
-    const sh = tradeShortest(p), g = sh.find((x) => x !== 'alloy'); // short of something in the ground
-    if (sh.left[g] < (TRADE_LEFT[g] || 60) * 1.5 || st.missiles || crShort || fuelTrade) plan = [['terminal', 1]].concat(plan); // only when short: it goes first
-    tradeFirst = crShort;
+    plan = [['terminal', 1]].concat(plan);
+    tradeFirst = crShort || fuelTrade;
   }
   // (An Architect's second Crystal Tap with them: Chips are what its Missiles and its warbots both wait for.)
   if (st.missiles) { const k = plan.findIndex(([t]) => t === 'armory') + 1; plan = plan.slice(0, k).concat([['smelter', 2], ['tap', 2], ['fab', 2]], plan.slice(k)); } // (its Missile Factory and Silos come through aiMissilePlan)
@@ -489,8 +488,8 @@ function aiThink(p) {
   // Harvester, a Mine or an Outpost.
   const fiberNow = playerGoods(p).fiber;
   // ...and while Crystal runs low with Alloy piling up (no Chips to make robots with, so nothing to spend it on), they
-  // rest too, until it's down to half: the Ore and Fiber they'd burn can buy Crystal at the Trade Terminal (Alloy can't
-  // be sold), and their workers go to the Taps. Crystal-starved colonies sat on 60 to 90 Alloy with nothing to trade.
+  // rest too, until it's down to half: the Alloy in hand buys Crystal at the Trade Terminal (a made good for a raw one,
+  // at three-quarters of its worth), and their workers go to the Taps. (Crystal-starved colonies used to sit on 60 to 90 Alloy.)
   const alloyNow = playerGoods(p).alloy || 0, resting = me.some((b) => b.alloyRest);
   const alloyPile = !few && crLow && alloyNow >= (resting ? AI_ALLOY_PILE / 2 : AI_ALLOY_PILE);
   const sitesWantFiber = S.time - (P.fiberWait ?? -99) < 8 || me.some((b) => !b.built && !b.unlinked && (siteCost(b).fiber || 0) > (b.stock.fiber || 0) + (b.inc.fiber || 0)); // (a site no road reaches yet can't take any)
@@ -937,7 +936,7 @@ function aiThink(p) {
   aiBattles(P);
   let best = null, bestScore = -Infinity, bestAvail = 0, bestNeed = 0, heldB = null, heldScore = -Infinity;
   for (const b of S.buildings) {
-    if (b.dead || !rival(b.owner)) continue; // whichever rival's building is in reach
+    if (b.dead || !rival(b.owner) || calmB(b)) continue; // whichever rival's building is in reach (not on a Trade Post's ground: nothing's attacked there)
     const sp = aiSpare(p, b, false), avail = sp.n;
     if (avail < 2) continue;
     // Enough for the garrison, the defences that cover it (aiGuards: Pulse Turrets, Minigun Nests, Bunkers, Mortar
@@ -1648,7 +1647,7 @@ function aiRaid(p, lvl) {
     // The raid's clock starts when the first raider reaches the flag (P.raid.at; it used to start as they set off, and
     // bands were called home before they got there), and the band comes home early when the enemy warbots within 5
     // tiles of it outnumber it.
-    if (r && P.raid.at === 0 && P.raid.to === undefined && band.some((u) => dist2(u.x, u.y, r.x, r.y) <= 9)) { P.raid.at = S.time; P.raid.until = S.time + RAID_TIME; }
+    if (r && P.raid.at === 0 && P.raid.to === undefined && band.some((u) => dist2(u.x, u.y, r.x, r.y) <= 9)) { P.raid.at = S.time; P.raid.until = S.time + RAID_TIME + (P.raid.convoy ? 60 : 0); } // (waiting for a convoy: a minute more)
     let them = 0;
     if (band.length) {
       let cx = 0, cy = 0;
@@ -1682,14 +1681,20 @@ function aiRaid(p, lvl) {
   // (A Salvager counts what its band can wreck once the road is cut, too: half as much again for each of the enemy's
   // working buildings, Fuel Stations and Depots within 3 tiles.)
   const econ = H ? S.buildings.filter((b) => !b.dead && b.owner === enemy && b.built && !BDEFS[b.type].mil && (BDEFS[b.type].staff || BDEFS[b.type].charger || BDEFS[b.type].store)) : null;
+  // (A Salvager's favourite of all: the road the enemy's trade convoys run, its Terminals' lanes (see doHaul), out of
+  // the guns' reach and off the Trade Post's ground, where nothing shoots. It waits a minute longer there for one.)
+  const lanes = H ? aiConvoyLanes(enemy) : null;
   const spots = [];
   for (let t = 0; t < S.W * S.H; t++) {
-    if (!S.road[t] || wayOwner(t) !== enemy || HEAT.flow[t] < 1) continue;
+    if (!S.road[t] || wayOwner(t) !== enemy) continue;
+    const lane = !!lanes && lanes.has(t);
+    if (HEAT.flow[t] < 1 && !lane) continue;
     const i = t % S.W, j = (t / S.W) | 0;
-    if (guards.some((g) => dist2(g.x, g.y, i, j) < g.r2)) continue;
+    if (guards.some((g) => dist2(g.x, g.y, i, j) < g.r2) || calmAt(i + 0.5, j + 0.5)) continue;
     let sc = HEAT.flow[t] - dist(i, j, S.W / 2, S.H / 2) * 0.05;
     if (H && sc > 0) { let n = 0; for (const b of econ) if (dist2(b.x, b.y, i, j) <= 9) n++; sc *= 1 + 0.5 * Math.min(n, 4); }
-    spots.push({ t, s: sc });
+    if (lane) sc = (Math.max(sc, 1) + 4) * 3;
+    spots.push({ t, s: sc, lane });
   }
   if (!spots.length) return;
   spots.sort((a, c) => c.s - a.s || a.t - c.t);
@@ -1703,7 +1708,7 @@ function aiRaid(p, lvl) {
   }
   // The busiest stretch whose way in doesn't run through the reach of a gun (the army goes round where it can: if the
   // way there still crosses one, there's no way round it); a few tried, from the best down.
-  for (const { t } of pick.slice(0, 4)) {
+  for (const { t, lane } of pick.slice(0, 4)) {
     const i = t % S.W, j = (t / S.W) | 0;
     // (A Salvager's band may take the last warbot of a fort behind the lines: rear, see rallySources.)
     if (rallyAvailable(p, i, j, H) < size + (st.raidKeep ?? 2)) return; // keep enough warbots at home (a Raider sends all it can spare)
@@ -1718,11 +1723,20 @@ function aiRaid(p, lvl) {
       rally.raid = stage < 0;
       P.raid = { id: rally.id, at: 0, until: S.time + RAID_TIME + 30 + 2 * (L ? dist(ai, aj, L.x, L.y) : 30) };
       if (stage >= 0) P.raid.to = t;
+      if (lane) P.raid.convoy = true;
       P.raidN = (P.raidN || 0) + 1;
       if (farmRaid) aiRaidTorch(p, rally, ai, aj);
     }
     return;
   }
+}
+
+/** The road tiles player q's trade convoys drive (the lanes of its Trade Terminals that run a route). */
+function aiConvoyLanes(q) {
+  const out = new Set();
+  if (q < 0) return out;
+  for (const b of S.buildings) if (!b.dead && b.built && b.owner === q && BDEFS[b.type].terminal && b.route && b.lane) for (const t of b.lane) out.add(t);
+  return out;
 }
 
 /** Built Bio Farms of p's enemies that still have soil to work. */
@@ -1815,36 +1829,57 @@ function aiRouteHot(p, i, j) {
  * it (they fight whatever is at the flag; a truck can't fight back).
  */
 /**
- * The Trade Terminal's contract: the one that brings what we're shortest of, paid with a good we have a lot
- * to spare of (a lot and TRADE_KEEP besides). None if nothing's worth it. While its Crystal runs low (P.crLow, see
- * aiThink) one that brings Crystal comes first, then Chips (every robot takes one), and it never gives Crystal away;
- * a contract under way is dropped for one of those, and any contract that has sold no lot for AI_TRADE_STALL seconds
- * (its good spread too thin to make a train load, say) for another. Before, it took Alloy for Stone while its Foundry
- * stood idle for want of Chips, with Alloy piling up.
+ * Each Trade Terminal's route: bring back what we're shortest of (tradeShortest), sending a good we have plenty to
+ * spare of (TRADE_KEEP and a couple of runs besides), the better the rate the better. While its Crystal runs low
+ * (P.crLow, see aiThink) a route that brings Crystal comes first, then Chips (every robot takes one), and it never sends
+ * Crystal; dry of Fuel with no way to make any (P.fuelDry), one that brings Fuel, after Crystal and before Chips. A route
+ * is changed for one of those, when it has made no run for AI_TRADE_STALL seconds (its good spread too thin to make a
+ * load, say), or, every AI_TRADE_REVIEW seconds, for one clearly better. Escort goes on in a war, and two Terminals run
+ * different routes. (Before, it took Alloy for Stone while its Foundry stood idle for want of Chips.)
  */
+const AI_TRADE_REVIEW = 300;
 function aiTrade(p, me) {
-  if (!me.some((b) => BDEFS[b.type].terminal && b.built)) return;
-  const T = tradeState(p), P = S.players[p];
-  if (!T.offers.length) return;
-  const cur = T.pick >= 0 && T.offers[T.pick] && T.offers[T.pick].left > 0 ? T.offers[T.pick] : null;
-  if (cur && P.tradeSold !== T.sold) { P.tradeSold = T.sold; P.tradeAt = S.time; } // (a lot sold: it's moving)
-  // Dry of Fuel with no way to make any (P.fuelDry): the steep Fuel contract, after Crystal (every robot takes one),
-  // before Chips. Never otherwise: it pays half the usual rate.
+  const terms = me.filter((b) => BDEFS[b.type].terminal && b.built);
+  if (!terms.length) return;
+  const P = S.players[p];
   const want = (g) => (P.crLow ? (g === 'crystal' ? 2 : g === 'chip' ? 1 : 0) : 0) + (P.fuelDry && g === 'fuel' ? 1.5 : 0);
-  const stalled = !!cur && S.time - (P.tradeAt ?? S.time) > AI_TRADE_STALL;
-  if (cur && !stalled && !((P.crLow || P.fuelDry) && !want(cur.get))) return;
-  const have = spendable(p), short = tradeShortest(p);
-  let best = -1, bs = -Infinity;
-  T.offers.forEach((o, k) => {
-    const spare = (have[o.give] || 0) - TRADE_KEEP[o.give] - o.lot;
-    if (o.left <= 0 || spare < 0 || (P.crLow && o.give === 'crystal') || (stalled && o === cur) || (o.steep && !P.fuelDry)) return;
-    const sc = want(o.get) * 100 + (o.steep ? 0 : (short.length - short.indexOf(o.get)) * 10) + Math.min(spare, 60) * 0.1;
-    if (sc > bs) { bs = sc; best = k; }
-  });
-  // (One under way is only given up for something better: a stalled one for any other, the rest for Crystal or Chips.)
-  if (best < 0 || (cur && !stalled && want(T.offers[best].get) <= want(cur.get))) return;
-  pickContract(p, best);
-  P.tradeAt = S.time; P.tradeSold = T.sold;
+  let have = null, short = null;
+  for (const b of terms) {
+    if (S.mode !== 'colony' && !b.escort) b.escort = true;
+    const cur = b.route;
+    if (cur && (b.runs || 0) !== b.aiRuns) { b.aiRuns = b.runs || 0; b.aiAt = S.time; } // (a run made: it's moving)
+    const stalled = !!cur && S.time - (b.aiAt ?? S.time) > AI_TRADE_STALL;
+    const urgent = !!cur && (((P.crLow || P.fuelDry) && !want(cur.get)) || (P.crLow && cur.give === 'crystal'));
+    if (cur && !stalled && !urgent && S.time - (b.aiPick ?? -999) < AI_TRADE_REVIEW) continue;
+    if (!have) { have = spendable(p); short = tradeShortest(p); }
+    const taken = new Set(terms.filter((t) => t !== b && t.route).map((t) => t.route.give + '>' + t.route.get));
+    const score = (give, get) => {
+      if (!tradePairOk(give, get) || taken.has(give + '>' + get) || (P.crLow && give === 'crystal') || give === 'chip') return -Infinity;
+      const lot = routeLot({ give, get }), spare = (have[give] || 0) - (TRADE_KEEP[give] || 10) - lot;
+      if (spare < 0) return -Infinity;
+      const k = short.indexOf(get);
+      if (k < 0 && !want(get)) return -Infinity; // (only for what it's short of, or wants)
+      // (How much of what it sends comes back in worth: a little over a third for a raw good, three-quarters for a made one buying a raw one.)
+      const worth = ((sellPrice(p, give) / buyPrice(get)) * TRADE_VALUE[get]) / TRADE_VALUE[give];
+      return want(get) * 100 + (k >= 0 ? (short.length - k) * 10 : 0) + Math.min(spare, 60) * 0.1 + worth * 20;
+    };
+    let best = null, bs = -Infinity;
+    for (const get of tradeGets()) for (const give of tradeSends()) {
+      const sc = score(give, get);
+      if (sc > bs) { bs = sc; best = { give, get }; }
+    }
+    b.aiPick = S.time;
+    if (!best) continue;
+    // (One under way is only given up for something better: a stalled one for any other, the rest for what's wanted
+    // more, or for a clearly better route at a review.)
+    if (cur && !stalled && (best.give !== cur.give || best.get !== cur.get)) {
+      const now = score(cur.give, cur.get);
+      if (urgent ? want(best.get) <= want(cur.get) && now > -Infinity : now > -Infinity && bs < now + 25) continue;
+    }
+    if (cur && best.give === cur.give && best.get === cur.get) continue;
+    setTradeRoute(b, best.give, best.get);
+    b.aiAt = S.time; b.aiRuns = b.runs || 0;
+  }
 }
 
 /** Has rival p a Fuel source at work: a Bio Farm with soil left in reach, or a Refinery with an Oil Pump that isn't dry? */
@@ -1864,7 +1899,7 @@ function crystalHeld(b, r) {
 }
 
 /** What a bomb is worth dropping on, for the AI: its most valuable buildings, and a loaded Tanker. */
-const AI_BOMB_VALUE = { nukesilo: 14, silo: 12, munitions: 10, reactor: 9, keep: 7, refinery: 7, foundry: 6, armory: 6, airfield: 6, fab: 5, generator: 4, smelter: 4, terminal: 4 };
+const AI_BOMB_VALUE = { nukesilo: 14, silo: 12, munitions: 10, reactor: 9, keep: 7, refinery: 7, foundry: 6, armory: 6, airfield: 6, fab: 5, generator: 4, smelter: 4 }; // (no Trade Terminal: nothing is bombed on a Trade Post's ground)
 
 /**
  * The AI's Vulcan Bomber: one, built at its Airfield's hangar, and a sortie at most every AI_BOMB_GAP s, at the

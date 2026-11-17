@@ -4224,10 +4224,16 @@ function checkSave(o) {
   const owner = (p) => p === -1 || (Number.isInteger(p) && !!o.players[p]);
   for (const P of o.players) if (!obj(P) || !obj(P.stats) || (P.research && !(obj(P.research) && ownKey(TECHS, P.research.key)))) bad();
   const deal = (f) => { if (!obj(f) || !ownKey(GOOD, f.give) || !ownKey(GOOD, f.get)) bad(); };
-  for (const P of o.players) if (P.trade != null) { if (!obj(P.trade) || !Array.isArray(P.trade.offers)) bad(); P.trade.offers.forEach(deal); }
+  for (const P of o.players) if (P.trade != null) {
+    if (!obj(P.trade) || (P.trade.sat != null && !obj(P.trade.sat)) || (P.trade.offers != null && !Array.isArray(P.trade.offers))) bad();
+    (P.trade.offers || []).forEach(deal); // (a save from before trade routes: its contracts)
+    for (const g in P.trade.sat || {}) if (!ownKey(GOOD, g)) bad();
+  }
   for (const b of o.buildings) {
     if (!obj(b) || !ownKey(BDEFS, b.type) || !owner(b.owner) || !Number.isInteger(b.x) || !Number.isInteger(b.y) || b.x < 0 || b.y < 0 || b.x >= o.W || b.y >= o.H) bad();
     for (const c of ['stock', 'inc']) if (b[c] != null) { if (!obj(b[c])) bad(); for (const g in b[c]) if (!ownKey(GOOD, g)) bad(); }
+    if (b.route != null) deal(b.route); // a Trade Terminal's route
+    if (b.lane != null && (!Array.isArray(b.lane) || !b.lane.every((t) => Number.isInteger(t) && t >= 0 && t < o.W * o.H))) bad();
   }
   for (const u of o.bots) if (!obj(u) || !ownKey(BOTS, u.type) || !owner(u.owner) || !Number.isFinite(u.x) || !Number.isFinite(u.y) || (u.carry != null && !ownKey(GOOD, u.carry))) bad();
   if (o.settings != null) {
@@ -4352,6 +4358,7 @@ function deserializeGame(json) {
     }
     computeZones();
     if (oldWays) wayOwnersFromLand();
+    tradeFromContracts(); // (a save from before trade routes)
     if (!S.posts) { placePosts(S.seed); for (const p of S.posts) if (S.decor) S.decor[tIdx(p.x, p.y)] = 0; } // saves from before Trade Posts
     computeTerritory(); // land as it's worked out now (every building holds a little round it)
   } catch (e) { S = prev; throw e; }
@@ -4359,6 +4366,20 @@ function deserializeGame(json) {
   const off = dropOffBots();
   if (off) postMsg(ME, `${[...BOTS_OFF].map((k) => BOTS[k].plural).join(' and ')} are switched off for now: ${off} left this game.`, undefined, undefined, 'info');
   return S;
+}
+
+/**
+ * A save from before trade routes: each colony's contract under way (if it would make a route) becomes the route of its
+ * Trade Terminals, and the rest of the contracts go.
+ */
+function tradeFromContracts() {
+  for (const P of S.players) {
+    const T = P.trade;
+    if (!T || !T.offers) continue;
+    const o = T.pick >= 0 ? T.offers[T.pick] : null;
+    for (const b of S.buildings) if (!b.dead && b.owner === P.id && BDEFS[b.type].terminal && !b.route && o && tradePairOk(o.give, o.get)) b.route = { give: o.give, get: o.get };
+    P.trade = { sat: T.sat || {}, sold: T.sold || 0 };
+  }
 }
 
 /** An older save's roads and track: each is owned by whoever holds its land, a bridge out past the border by the land it runs from. */
