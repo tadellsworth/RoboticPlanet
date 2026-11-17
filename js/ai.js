@@ -1215,6 +1215,13 @@ function aiThink(p) {
  *   band of warbots, more where creatures stand round it.
  * - By day, with no night coming soon and an army to spare (its attack threshold and AI_NEST_SPARE more), it strikes
  *   the nearest nest within AI_NEST_REACH tiles of its buildings: enough for the nest, its guards and its level.
+ *   First, though, a nest that sits on what it's running out of (aiNestRiches: Ore, and oil where that's its Fuel),
+ *   within AI_NEST_RICH_REACH tiles: for that one its rear garrisons send every warbot they hold, and while it hasn't
+ *   the warbots it masses for it (P.massFor: the army target rises and its Outposts give up their keepers).
+ *   (The Hollow, Medium seed 11: once the home Ore and seeps were worked out, all the Ore and oil left lay 2 to 5 tiles
+ *   from the flank caverns' nests. The rival builds nothing within aiNestClear() tiles of a nest, and it struck the
+ *   nests nearest its buildings, which guarded nothing, so both colonies ran dry of Alloy and Fuel at half an hour with
+ *   ten warbots each and no way to make more, and the game never ended.)
  * - The Murmur never stall its own attacks: their bites don't call the army home (homeCall: wildHit), and they
  *   aren't counted as an enemy army anywhere.
  * One order every AI_MURMUR_EVERY seconds at most.
@@ -1225,6 +1232,32 @@ const AI_EXIT_NEAR = 12, AI_NEST_REACH = 26, AI_NEST_SPARE = 4, AI_MURMUR_EVERY 
 // it ran out of Ore a quarter of an hour in, for good.)
 const AI_NEST_CLEAR_VS = 6;
 function aiNestClear() { return S.mode === 'colony' ? AI_NEST_CLEAR : AI_NEST_CLEAR_VS; }
+/** Ore and oil it can still get at with every nest standing, under which a nest holding more is worth a strike (see aiNestRiches). */
+const AI_NEST_ORE = 150, AI_NEST_OIL = 60, AI_NEST_RICH_REACH = 34;
+/**
+ * What clearing each nest would give rival p: the Ore and oil within aiNestClear() tiles of it (the ground it keeps
+ * off while the nest stands, and where the guards keep its workers off), on ground its robots can walk to and no rival
+ * holds, and by no other nest (clearing this one wouldn't free that). It counts only what p is running out of: Ore once
+ * the Ore it can still get at elsewhere is under AI_NEST_ORE, and oil once that's under AI_NEST_OIL, where oil is its
+ * Fuel (no Bio Farm at work: in the Hollow, always). A Map of nest id to how much.
+ */
+function aiNestRiches(p, nests) {
+  const out = new Map(), zone = homeZone(p), c2 = aiNestClear() ** 2, held = [];
+  const farm = S.buildings.some((b) => !b.dead && b.owner === p && b.built && b.type === 'farm' && !b.depleted);
+  let ore = 0, oil = 0;
+  for (let t = 0; t < S.W * S.H; t++) {
+    const r = S.res[t];
+    if ((r !== R_ORE && (r !== R_OIL || farm)) || !S.amt[t] || S.zone[t] !== zone) continue;
+    if (S.owner[t] >= 0 && S.owner[t] !== p && !isWild(S.owner[t])) continue; // (a rival's)
+    const i = t % S.W, j = (t / S.W) | 0;
+    let by = null, n = 0;
+    for (const b of nests) if (dist2(b.x, b.y, i, j) < c2) { by = b; n++; }
+    if (!n) { if (r === R_ORE) ore += S.amt[t]; else oil += S.amt[t]; }
+    else if (n === 1) held.push([by.id, r, S.amt[t]]);
+  }
+  for (const [id, r, a] of held) if (r === R_ORE ? ore < AI_NEST_ORE : oil < AI_NEST_OIL) out.set(id, (out.get(id) || 0) + a);
+  return out;
+}
 /**
  * Where the Murmur cut the power at one of p's buildings in the last two nights with no gun of p's over it now (see
  * murmurCut), or null: a Pulse Turret goes there (the rival's answer to their craft on Active).
@@ -1270,29 +1303,33 @@ function aiMurmur(p, lvl, lander, smart) {
   if (night || murmurNight(S.time + 100) || P.passive) return;
   const army = aiArmyOf(p);
   if (army < lvl.threshold + AI_NEST_SPARE) return;
-  let nest = null, nd = Infinity;
-  for (const b of S.buildings) {
-    if (b.dead || !isNestB(b) || going.get(b.id)) continue;
-    const d = near(b, AI_NEST_REACH);
-    if (d <= AI_NEST_REACH && d < nd) { nd = d; nest = b; }
+  // (A nest on what it's running out of first, the one holding most, further off too: see aiNestRiches.)
+  const nests = S.buildings.filter((b) => !b.dead && isNestB(b)), riches = aiNestRiches(p, nests);
+  let nest = null, ns = Infinity;
+  for (const b of nests) {
+    if (going.get(b.id)) continue;
+    const rich = riches.get(b.id) || 0, reach = rich ? AI_NEST_RICH_REACH : AI_NEST_REACH, d = near(b, reach);
+    const s = d - (rich ? 100 + Math.min(rich, 200) * 0.1 : 0);
+    if (d <= reach && s < ns) { ns = s; nest = b; }
   }
   if (!nest) return;
-  const need = 4 + (nest.level || 1) + Math.ceil(around(nest, 6) * 0.6);
-  aiMurmurStrike(p, nest, need + 2, need + 2);
+  const rich = riches.has(nest.id), need = 4 + (nest.level || 1) + Math.ceil(around(nest, 6) * 0.6);
+  if (aiMurmurStrike(p, nest, need + 2, need + 2, false, rich) || !rich) return;
+  if (!(P.massFor && S.time <= P.massFor.until && P.massFor.need >= need + 2)) P.massFor = { need: need + 2, until: S.time + 120 };
 }
 
 /**
  * Send `send` warbots at Murmur building e if at least `need` can go: straight at it from the garrisons in reach
  * (sendAttack; with `all`, those they keep at home too, but the Command Base's), or, from further off, to a rally flag beside it that comes down with it (as the Army's Attack does:
- * the 'assault' order). True if any went.
+ * the 'assault' order; with `rear`, garrisons far from the rival send every warbot they hold, as for a march). True if any went.
  */
-function aiMurmurStrike(p, e, need, send, all) {
+function aiMurmurStrike(p, e, need, send, all, rear) {
   if (attackAvailable(p, e, all) >= need) return sendAttack(p, e, send, all, false, true) > 0;
   for (const [di, dj] of [[1, 1], [-1, 1], [1, -1], [-1, -1], [2, 0], [-2, 0], [0, 2], [0, -2]]) {
     const i = e.x + di, j = e.y + dj;
     if (!inMap(i, j) || !walkable(tIdx(i, j)) || S.bAt[tIdx(i, j)] || S.zone[tIdx(i, j)] !== homeZone(p)) continue;
-    if (rallyAvailable(p, i, j) < need) return false;
-    const res = sendToRally(p, i, j, send, false, false, true);
+    if (rallyAvailable(p, i, j, !!rear) < need) return false;
+    const res = sendToRally(p, i, j, send, !!rear, false, true);
     if (res.sent) res.rally.target = e.id; // (it comes down with the target: followRallies)
     return res.sent > 0;
   }

@@ -558,6 +558,31 @@ These wait for a later expansion:
     10 minutes (before, 6 of 12 had none); all six ended, in 14 to 35 minutes; winners by seat 2 to 4, so the lean
     above was most likely one colony starved of Fuel. Still open: with Fuel low later on, a pump can wait behind other
     sites (a Missile Silo, say) for a slot.
+  - **The rival clears the nests on the Ore and oil it needs (fixed Nov 17).** Medium seed 11 (computer only, the
+    Murmur Active) ended at 27.5 minutes, ran to 75 with no winner from the rival's oil first (f3405c7) on, ended at
+    34.8 after the Murmur's craft and at 32.5 on today's main. Traced on 5b04c5e: by about half an hour each colony has
+    worked out the Ore and seeps it can get at, and all that's left lies 2 to 5 tiles from four nests in the flank
+    caverns (336 Ore, and 222 of the 229 Crude). The rival builds nothing within 6 tiles of a nest (`aiNestClear`), and
+    its day strikes went for the nests nearest its buildings, which guarded nothing, mostly without the warbots to
+    spare (every garrison keeps one). So both colonies ran dry of Alloy (no warbots, Ammo or Chips) and Fuel at about
+    35 minutes with ten warbots each, Crystal piling up past 300, and nothing happened for the last 40 minutes. Oil
+    first didn't cause it: before it one colony ran on no Fuel all game and lost at 27.5; evenly matched, both ran dry
+    together. Still there on today's main: seed 11 got to the same place by 25 minutes (one colony dry of Ore, Alloy
+    and Fuel), and ended only because the other happened to wreck the Deep's mound and then an Ore nest; Medium seed 12
+    ran to 75 with no winner. It isn't one map: a fifth to four fifths of a Hollow map's Ore, and up to half its oil,
+    lies within 6 tiles of a nest (most on Small maps).
+    Now a nest on what the colony is running out of comes first (`aiNestRiches`): Ore once the Ore it can get at away
+    from every nest is under 150, oil (where oil is its Fuel) under 60; the one holding most, within 34 tiles; its rear
+    garrisons send every warbot they hold to the flag, and it masses for it while it's short. Measured, today's main →
+    with it (75 minutes at most): the Hollow, Medium seeds 11 to 16, 32.5, none, 20.8, 15.9, 17.1, 21.3 → 28.2, 48.6,
+    20.8, 17.4, 17.1, 21.5; Small 21 to 23, none, 20.1, 18.2 → the same; Large 31 and 32, 46.3, 51.8 → the same; the
+    same winners wherever there was one. On 5b04c5e with it, seed 11 ends at 39.5. Standard (map types 0, 2 and 4,
+    seeds 21 to 23, seven games): the same, 14.8 to 45.4 minutes, the same winners (one game lost one robot fewer).
+    Still open: Small seed 21 runs to 75 before and after, for another reason: from 19 minutes the second seat has two
+    to three times the first's army but storms its walled base with 12 to 21 of its 35 (the rest kept in its 20 and
+    more forts; taking the base needs 20, later 34) and is beaten every time. And seed 12 showed a colony with no Oil
+    Pump for ten minutes while 111 Crude lay on its own land (its pumps out in the middle wrecked, its sites full: the
+    open item above).
   - Three or four players: not built (the layout is made for two, turned half round).
   - Decided (owner, Nov 17): Off stays allowed on the Hollow, with the menu's warning.
   - Decided (Nov 17): Colony on the Hollow caps the exits open at once (`murmurExitCap`) at what a Standard Colony map

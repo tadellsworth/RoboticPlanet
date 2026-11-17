@@ -758,7 +758,9 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
     (in the Hollow `roadSearch` carries road reach across a colony's own Ropeways, so a Tap on the mass counts as
     joined up). Nest sites keep 9 tiles from the masses: guards there would keep the gatherers off the Crystal for
     good. The rival lives with the Murmur here as anywhere (`aiMurmur`: exits collapsed, nests struck between surges),
-    and builds as near the nests as `aiNestClear()` lets it, or it runs out of Ore.
+    and builds as near the nests as `aiNestClear()` lets it, or it runs out of Ore. A fifth to four fifths of a map's
+    Ore, and up to half its oil, lies within that many tiles of a nest (more on Small maps), so once its own run low it
+    clears the nests sitting on them first (`aiNestRiches`, see The Murmur).
     **Oil first** (oil is the only Fuel here): with an Oil Pump at work, or `AI_OIL_CRUDE` (5) Crude in storage, and no
     Refinery, the Refinery comes first after the opening and is started as soon as the Cement is there, its Alloy
     delivered first (as a turret's is: `oilFirst` in `aiThink`). Its Oil Pumps go to the seeps nearest home: a tile
@@ -1676,7 +1678,16 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
     `AI_EXIT_NEAR` (12) tiles of its buildings (3 warbots and more for the creatures round it), and by day, with no night
     due and its attack threshold and `AI_NEST_SPARE` (4) more warbots, strikes the nearest nest within `AI_NEST_REACH`
     (26) tiles (`aiMurmurStrike`: from the garrisons in reach, or from further off to a rally flag beside it that comes
-    down with it, as the Army's Attack does). The Murmur never call its army home (`wildHit`) or count as an enemy army.
+    down with it, as the Army's Attack does). **A nest on what it's running out of comes first** (`aiNestRiches`): the
+    Ore and oil within `aiNestClear()` tiles of a nest (and of no other), on its own ground or no-one's, count once the
+    Ore it can still get at away from every nest is under `AI_NEST_ORE` (150), and the oil under `AI_NEST_OIL` (60)
+    where oil is its Fuel (no Bio Farm at work: in the Hollow, always); the nest holding most of what it lacks, within
+    `AI_NEST_RICH_REACH` (34) tiles, goes before the nearest, its rear garrisons send every warbot they hold to the flag
+    (`rear`, as for a march), and while it hasn't enough it masses for it (`P.massFor`: the army target rises and its
+    Outposts give up their keepers). (On the Hollow, once the home Ore and seeps were worked out, everything left lay
+    2 to 5 tiles from the flank caverns' nests; striking only the nearest nests, which guarded nothing, both computer
+    colonies ran dry of Alloy and Fuel at half an hour with ten warbots each, and Medium seed 11 never ended.)
+    The Murmur never call its army home (`wildHit`) or count as an enemy army.
     Where the Murmur cut its power (`P.murCut`, see below) with no gun over it, it wants one Pulse Turret more and
     sites it a couple of tiles from what they cut (`aiMurCut`).
   - **Their craft (Active only; Quiet keeps the plain packs: the owner's call).** `MURMUR.craft` in `js/defs.js`, the
