@@ -1079,6 +1079,10 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   Command Base in turn; once the map is moved by hand it stays (**Follow the action**, or F, takes it back). The end
   (`watchOver`, from `showGameOver`) says who won and when each colony fell, with **Observe another** (the same setup on a
   new planet) and **Main menu**; `toMenu` ends Observer mode (`watchEnd`).
+  Taps open the panel of the building or robot there (`watchTap`, `WATCH_INPUT.onTap`; tapping the same spot again steps
+  to the next, as in a game), to look at only: while watching, style.css hides every button, field and switch in a
+  panel (`body.watching #sheet-body`), no key presses one (`sheetKeyButton` finds none showing), and the owner line names
+  the colony and its doctrine (`ownerLabel`); a tap turns Follow off, so what was tapped stays in view.
 - **Scout reports** (`js/scout.js`): in your own games (not Colony, not Observer), `scoutTick` (from `uiTick`, once a
   second by the clock) reads each enemy computer rival's plans with `rivalPlans` (the Observer's reading, above) and
   `scoutNews` turns them into news, each with a key: a storm of your (or your ally's) Command Base forming up (and

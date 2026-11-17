@@ -1865,6 +1865,8 @@ body.photo #minimap .mm-hide { display: none; }
 body.watching #goods, body.watching #pop, body.watching .objrow, body.watching #bottombar, body.watching #selbar, body.watching #groupbar,
 body.watching #nuke-card, body.watching #win-card, body.watching #event-card, body.watching #p-export, body.watching #p-scouts { display: none !important; }
 body.watching .toprow { justify-content: flex-end; }
+/* Observer mode: a building's or robot's panel is to look at only (watchTap): no buttons, switches or fields in it. */
+body.watching #sheet-body button, body.watching #sheet-body input, body.watching #sheet-body select, body.watching #sheet-body .seg, body.watching #sheet-body .actions { display: none !important; }
 /* (Statistics: the totals and "how busy your buildings were" are one colony's; the graphs, every colony's, stay.) */
 body.watching #st-body .stat-tiles, body.watching #st-body .chart-block:has(#st-bars) { display: none; }
 .watch-card {

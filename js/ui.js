@@ -3884,6 +3884,13 @@ function refreshScorchButton(u) {
       : `It takes a nearly full tank (${Math.round(TORCH.scorchMin * 100)}%): it has ${Math.round(u.gel ?? TORCH.tank)} of ${TORCH.tank} seconds of fire. It refills with Fuel at storage or a Fuel Station.`;
 }
 
+/** Whose a building or robot is, on its panel: Yours, or a colony's name (in Observer mode, with its doctrine). */
+function ownerLabel(p) {
+  if (p === ME && !S.watch) return 'Yours';
+  const n = playerName(p), P = S.players[p];
+  return S.watch && n !== 'Murmur' && P && isDoctrine(P.style) ? `${n}, the ${PERSONALITIES[P.style].name}` : n;
+}
+
 /** A Cargo Plane parked at Airfield b with nothing to do, or null. */
 function freePlane(b) { return basePlanes(b).find((u) => !BOTS[u.type].bomber && u.inside === b.id && !u.mission && !u.flight) || null; }
 
@@ -5878,7 +5885,7 @@ function openBuildingSheet(b) {
   // With no road to storage yet, that warning and its Lay road button lead the panel: in view at half height.
   const roadFirst = mine && b.unlinked && needsRoad(b);
   let html = `<div class="sheet-title"><img src="${iconFor(b.type, b.owner)}" alt=""><div><h3>${def.name}</h3>
-    <div class="owner"><span class="dot" style="background:${ownerColor(b.owner)}"></span> ${mine ? 'Yours' : playerName(b.owner)}</div>${b.type === 'lander' ? `<div class="flavor clock">${ARRIVAL_CLOCK}</div>` : ''}</div></div>
+    <div class="owner"><span class="dot" style="background:${ownerColor(b.owner)}"></span> ${ownerLabel(b.owner)}</div>${b.type === 'lander' ? `<div class="flavor clock">${ARRIVAL_CLOCK}</div>` : ''}</div></div>
     ${roadFirst ? '<div id="sh-road"></div>' : ''}<p class="desc">${desc}</p><div class="status" id="sh-status"></div>${mine && def.inp && !def.pump ? '<div id="sh-why"></div>' : ''}<div id="sh-dyn"></div>${mine ? '<div id="sh-fix"></div>' : ''}`;
   if (mine) {
     if (def.airfield && b.built && b.owner === ME) html += airfieldSection(b); // its planes and air drops first
@@ -6764,7 +6771,7 @@ function refreshRecycle(u) {
 function openBotSheet(u) {
   R.selected = 0; R.selTile = -1; UI.selBot = u.id;
   const html = `<div class="sheet-title"><div><h3>${BOTS[u.type].name}</h3>
-    <div class="owner"><span class="dot" style="background:${PLAYER_COLORS[u.owner]}"></span> ${u.owner === ME ? 'Yours' : playerName(u.owner)}</div></div></div>
+    <div class="owner"><span class="dot" style="background:${PLAYER_COLORS[u.owner]}"></span> ${ownerLabel(u.owner)}</div></div></div>
     <p class="desc">${BOTS[u.type].desc}</p>
     <div class="status" id="sh-status"></div><div id="sh-dyn"></div>
     ${u.owner === ME && isArmy(u) ? '<button class="btn big" id="sh-recall" hidden>Call back this squad</button>' : ''}

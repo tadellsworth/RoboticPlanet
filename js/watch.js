@@ -22,7 +22,7 @@
 
 const WATCH_SPEEDS = [1, 2, 4, 8];
 const WATCH_KEY = 'terrafall.watch';
-const WATCH_INPUT = { onTap: null, onPaint: null, onBox: null, onCommand: null, onGrab: null, canBox: () => false, canPaint: () => false };
+const WATCH_INPUT = { onTap: (i, j, wx, wy) => watchTap(i, j, wx, wy), onPaint: null, onBox: null, onCommand: null, onGrab: null, canBox: () => false, canPaint: () => false };
 /** What a colony of each doctrine is about early on, before it has plans to report (the scout report's opening lines). */
 const WATCH_OPENING = {
   balanced: 'is building up steadily, an army beside it',
@@ -301,6 +301,29 @@ function watchEvent(w, t, x, y) {
   if (w.events.length > 4) w.events.shift();
   w.reportAt = 0;
   if (x !== undefined && w.follow) { w.spot = { x, y, v: 50 }; w.spotT = 4; }
+}
+
+/**
+ * A tap on the map while observing: the building or robot there opens its panel, to look at only (style.css hides
+ * every button and control in a panel while watching, and no key gives an order). Tapping the same spot again steps
+ * to the next thing there, as in a game. The camera stops following the fighting, so what you tapped stays in view
+ * (Follow, or F, takes it back).
+ */
+function watchTap(i, j, wx, wy) {
+  if (!UI.inGame || UI.paused || !UI.watch) return;
+  const stack = tapStack(null, buildingAtTap(i, j, wx, wy), wx, wy);
+  if (!stack.length) { UI.lastTap = null; closeSheet(); return; }
+  const L = UI.lastTap;
+  let k = 0;
+  if (L && Math.hypot(L.wx - wx, L.wy - wy) < 0.7) {
+    const cur = stack.findIndex((s) => UI.sheetKind === s.kind && UI.sheetFor === s.e.id);
+    if (cur >= 0) k = (cur + 1) % stack.length;
+  }
+  UI.lastTap = { wx, wy };
+  const s = stack[k];
+  sfx('click');
+  if (UI.watch.follow) watchFollow(false);
+  if (s.kind === 'bld') openBuildingSheet(s.e); else if (s.kind !== 'rally') openBotSheet(s.e);
 }
 
 /** Every frame: what has happened since the last one. */
