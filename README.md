@@ -1532,10 +1532,14 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   - **Tunnels** (`S.tun`, a tile layer: a nest's slot in `S.mur.nests` + 1; saved, `TYPED_FIELDS`, and in `hashState`
     with `S.mur` and each nest's branches `b.br`) are drawn as raised ridges of heaved earth with violet root-veins, as
     smooth curves: each run of a network between its forks and ends is one curve through its tiles, each tile's point
-    nudged off its middle so the ridges wander (`tunnelRuns`, `tunnelPoint`), the earth in the ground's own colour,
-    tapering where it's still digging (`paintRidges`, `paintRidgeVeins`; baked at `TUN_PX` a tile into two layers,
-    only the `TUN_BLOCK` blocks round tiles that changed when `S.mur.ver` changes: `tunnelLayers`, `bakeTunnels`), faint
-    by day and glowing at night with pulses running back to the nest along the curves (`drawTunnelGlow`), violet threads
+    nudged off its middle so the ridges wander and then smoothed so they sweep across the grid instead of stepping
+    along it (`tunnelRuns`, `tunnelPoint`, `tunnelRun`), the earth in the ground's own colour, tapering where it's still
+    digging. Each layer (shadow, flanks, lit side; the veins' haze, glow and bright thread) is the filled outline of
+    every run at once (`fillRuns`, `addRunOutline`), broken where a road, track or cliff lies over it (`runPieces`), so
+    nothing beads where pieces meet. Zoomed in they're drawn live at the screen's resolution (`tunnelsLive`: past
+    1.25 × `TUN_PX` device pixels a tile); zoomed out, and on the minimap, from layers baked at `TUN_PX` a tile (only
+    the `TUN_BLOCK` blocks round tiles that changed when `S.mur.ver` changes: `tunnelLayers`, `bakeTunnels`). Faint
+    by day and glowing at night with pulses flowing back to the nest along the curves (`drawTunnelGlow`), violet threads
     on the minimap (`minimapTunnels`); exits are art (`drawBurrow`: `tunnel-exit`, re-lit for the time of day), violet
     rings on the minimap, and collapsed ones a caved-in mound fading as it settles (`drawExitScar`:
     `tunnel-exit-collapsed`).
