@@ -1825,9 +1825,10 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   shimmer, the arpeggio in threes, the bell), the colony at work (0.1; Mixolydian, half-time drums), the first murmur
   (0.25; Dorian: the drums fall away, the choir comes in, a heartbeat, the Uplink's call, `mBeacon`, which the ground
   sometimes answers in its rhythm, `mThud`), Contingency (0.4; minor, the main theme's chords, drums back, the bass
-  creeping a half step), the Murmur rising (0.68; Phrygian, the climax: hard drums, `mKickHard` in a broken beat and an
-  80s gated snare, `mGate`; the growling bass, `mGrowl`, two saws through a resonant low-pass snapping down into a soft
-  clipper over a sine an octave down; a drone; the tune on a gliding saw lead, `mSaw`) and the Silence (0.96: everything stops; suspended chords, every progression ending away from home, two lights
+  creeping a half step), the Murmur rising (0.68; Phrygian, the climax, on Redline's machinery: its straight, pounding
+  drums, four on the floor or the half-time, with the dry snare and clank and tight hats, its low grind on the pedal,
+  `mGrind`, under the filter opening over each section, and an impact on each new one; a drone; the tune on a gliding
+  saw lead, `mSaw`) and the Silence (0.96: everything stops; suspended chords, every progression ending away from home, two lights
   left, the tune's first bar alone, the choir again, fainter and far off). Bar by bar the level also sets how much of
   the Murmur is heard: the choir grows 15 dB from 0.25 to 0.75 (an octave higher too from 0.6), glints come oftener,
   the heartbeat beats harder, the ground answers oftener, and the road lights (the `lights` arpeggio, eight a bar) go dark

@@ -118,10 +118,9 @@ function buildAudioGraph(ac) {
   A.fxEchoIn.connect(fe).connect(feLP).connect(feFb).connect(fe);
   feLP.connect(feOut).connect(A.fxBus);
   // A soft clipper the blasts are driven into: grit and weight (and harmonics a phone speaker can play); Redline's bass
-  // is driven into it too (mGrind). A gentler one gives the campaign theme's growling bass its bite (mGrowl).
+  // and its kick are driven into it too (mGrind, mKickHard).
   A.boomCurve = new Float32Array(2048);
-  A.driveCurve = new Float32Array(2048);
-  for (let i = 0; i < 2048; i++) { const x = (i / 2047) * 2 - 1; A.boomCurve[i] = Math.tanh(x * 2.8) / Math.tanh(2.8); A.driveCurve[i] = Math.tanh(x * 1.8) / Math.tanh(1.8); }
+  for (let i = 0; i < 2048; i++) { const x = (i / 2047) * 2 - 1; A.boomCurve[i] = Math.tanh(x * 2.8) / Math.tanh(2.8); }
 
   A.musicBus = ac.createGain();
   A.musicBus.gain.value = musicLevel();
@@ -1677,13 +1676,13 @@ const MOODS = {
         progs: [[[0, 'm'], [8, 'M'], [3, 'M'], [10, 'M']], [[0, 'm'], [10, 'M'], [8, 'M'], [7, 'm']], [[0, 'm7'], [5, 'm'], [8, 'M7'], [10, 'M']]],
         arrange: [['pad', 'choir', 'creep', 'kick', 'snare', 'hat', 'lights', 'glints'], ['pad', 'choir', 'bass', 'kick', 'snare', 'hat', 'lead', 'glints', 'signal'],
           ['pad', 'choir', 'creep', 'kick', 'snare', 'hat8', 'lights', 'lead', 'glints']] },
-      // The Murmur rise (0.68): D Phrygian, the climax. The choir is a wall, the lights are gone, glints swarm; hard drums
-      // (the driven kick, the gated snare) and the growling bass (eighths on a root that creeps by half steps), a drone,
-      // and the tune on the saw.
-      { at: 0.68, scale: PHRYGIAN, chordBars: 1, lead: 'saw', gain: 0.73,
+      // The Murmur rise (0.68): D Phrygian, the climax. The choir is a wall, the lights are gone, glints swarm; Redline's
+      // straight, pounding drums (four on the floor or the half-time, the dry snare and clank, tight hats), its low grind
+      // on the pedal under the slow filter, a drone, the tune on the saw, and an impact on each new section.
+      { at: 0.68, scale: PHRYGIAN, chordBars: 1, lead: 'saw', gain: 0.73, kick: 0.17, impact: true,
         progs: [[[0, 'm'], [1, 'M'], [0, 'm'], [1, 'M']], [[0, 'm'], [1, 'M'], [10, 'm'], [0, 'm']], [[0, 'm'], [8, 'M'], [1, 'M'], [0, 'm']]],
-        arrange: [['choir', 'drone', 'growl8', 'kickW', 'gate', 'hat8w', 'glints', 'riser'], ['choir', 'pad', 'growl8', 'kick4h', 'gate', 'hat16', 'lead', 'glints', 'tom', 'riser'],
-          ['choir', 'drone', 'growl8', 'kickW', 'gate', 'hat16', 'lead', 'glints', 'tom', 'riser']] },
+        arrange: [['choir', 'drone', 'grind', 'kick4h', 'clank', 'hatT', 'glints', 'riser'], ['choir', 'pad', 'grind', 'kickPound', 'clankHalf', 'hatT', 'lead', 'glints', 'tom', 'riser'],
+          ['choir', 'drone', 'grind', 'kick4h', 'clank', 'hatT', 'lead', 'glints', 'tom', 'riser']] },
       // The Silence (0.96, the last mission): it all stops. Suspended chords, neither major nor minor, and every
       // progression ends away from home; the halo and the shimmer again, the Uplink calling, two lights left, the tune's
       // first bar alone; then the choir again, fainter and further off.
@@ -1809,22 +1808,16 @@ function musicStep(t) {
   if (L.has('hat') && s % 4 === 2) mHat(t, s === 14 ? 0.12 : 0.04, 1);
   if (L.has('hat16')) mHat(t, 0.03, s % 2 ? 0.55 : 1);
   if (L.has('tom') && fill && s >= 8 && s % 2 === 0) mTom(t, 140 - (s - 8) * 9);
-  // The hard drums (the campaign theme's climax): the driven kick in a broken beat (or four to the bar), the gated
-  // snare, open hats between.
-  if (L.has('kickW') && (s === 0 || s === 8 || s === 10 || (MUSIC.bar % 2 === 1 && (s === 3 || s === 13)) || (fill && s === 14))) mKickHard(t, s === 0 || s === 8 ? 1 : 0.8);
+  // Redline's drums (and the campaign theme's climax's), all on the beat: four on the floor (kick4h) or a pounding
+  // half-time (kick, kick, the snare on three, kick), the dry snare and clank on two and four (on three in half-time; a
+  // straight roll into a new section), tight closed hats.
   if (L.has('kick4h') && s % 4 === 0) mKickHard(t, 1, d.kick);
-  if (L.has('gate') && (s === 4 || s === 12)) mGate(t, 1);
-  if (L.has('gate') && fill && s >= 13) mGate(t, 0.45 + (s - 13) * 0.2);
-  if (L.has('hat8w') && s % 2 === 0) mHat(t, s % 4 === 2 ? 0.13 : 0.03, s % 4 === 2 ? 1.1 : 0.7);
-  // Redline's drums, all on the beat: four on the floor (kick4h) or a pounding half-time (kick, kick, the snare on
-  // three, kick), the dry snare and clank on two and four (on three in half-time; a straight roll into a new section),
-  // tight closed hats.
   if (L.has('kickPound') && (s === 0 || s === 4 || s === 12)) mKickHard(t, s ? 0.9 : 1, d.kick);
   if (L.has('clank') && (s === 4 || s === 12)) mClank(t, 1);
   if (L.has('clankHalf') && s === 8) mClank(t, 1.1);
   if ((L.has('clank') || L.has('clankHalf')) && fill && s >= 13) mClank(t, 0.4 + (s - 13) * 0.2);
   if (L.has('hatT')) mHat(t, 0.014, s % 4 === 0 ? 0.9 : s % 2 === 0 ? 0.65 : 0.45);
-  // A riser into the next section, and a crash on its downbeat (and in Redline an impact).
+  // A riser into the next section, and a crash on its downbeat (and an impact in Redline and the campaign's climax).
   if (s === 0 && MUSIC.rose && MUSIC.bar % 8 === 0) { MUSIC.rose = false; mCrash(t); if (d.impact) mImpact(t); }
   if (L.has('riser') && fill && s === 0) { mRiser(t, sd * 16); MUSIC.rose = true; }
   // Bass
@@ -1833,16 +1826,11 @@ function musicStep(t) {
   if (L.has('bass16')) mBass(t, root - 12 + (s % 8 === 7 ? 12 : 0), sd * 0.8);
   if (L.has('bassOct') && s % 2 === 0) mBass(t, root - 12 + (s % 4 === 2 ? 12 : 0), sd * 1.5); // root and octave, eighth notes
   if (L.has('bassHalf') && (s === 0 || s === 6 || s === 10)) mBass(t, root - 12 + (s === 6 ? 7 : 0), sd * (s === 0 ? 5 : 3), true);
-  // Redline's grind: straight eighths on the pedal (GRIND), its filter opening slowly over the whole section, from
-  // 200 Hz to 1.8 kHz, and shut again on the next.
+  // Redline's grind (the campaign theme's climax's too): straight eighths on the pedal (GRIND), its filter opening
+  // slowly over the whole section, from 200 Hz to 1.8 kHz, and shut again on the next.
   if (L.has('grind') && s % 2 === 0) {
     const ph = ((MUSIC.bar % 8) * 16 + s) / 126;
     mGrind(t, MUSIC.key - 24 + GRIND[MUSIC.bar % 4][s / 2], sd * 1.85, 200 * Math.pow(9, ph), s % 4 === 0 ? 1 : 0.85);
-  }
-  // The campaign theme's climax: the growl, eighths on the root and an octave pickup, its filter opening over two bars.
-  if (L.has('growl8') && (s % 2 === 0 || s === 15)) {
-    const ph = ((MUSIC.bar % 2) * 16 + s) / 31;
-    mGrowl(t, bassNote(root) + (s === 15 ? 12 : 0), sd * (s === 15 ? 0.85 : 1.7), Math.min(1, ph * ph + (s % 4 === 0 ? 0.1 : 0)), s % 4 === 0 ? 1 : 0.8);
   }
   // Arpeggio: chord tones across two octaves.
   if (L.has('arp') || (L.has('arp8') && s % 2 === 0)) {
@@ -1892,9 +1880,6 @@ function musicStep(t) {
     if (n) (d.lead === 'pluck' ? mPluck : d.lead === 'saw' ? mSaw : mLead)(t, n[0], n[1] * sd, d.silence ? 0.75 : 1);
   }
 }
-
-/** A bass note for the chord's root, in the octave from C2 to B2 (the campaign theme's climax). */
-function bassNote(root) { return 36 + ((((root - 36) % 12) + 12) % 12); }
 
 function pingPong(k, n) { const p = 2 * n - 2; const m = k % p; return m < n ? m : p - m; }
 
@@ -2144,27 +2129,6 @@ function mWhisper(t, notes, dur, vol = 1, far = 0, high = false) {
   sends(g, 0.9 * vol * (1 - 0.75 * far), 0.8 * vol * (1 + 0.4 * far), 0.15 * vol * (1 + 2 * far));
 }
 
-/**
- * The campaign theme's growl (its climax): the buzzy bass (mBass) pushed harder. Two saws, the second a little sharp, through a more resonant
- * low-pass that snaps down within a quarter second, then into a soft clipper for bite; under them the sine an octave
- * down, clean. Played dry. `open` (0..1) moves the filter, the snap and where it settles: at 0 it's mBass's, about
- * 400 Hz down to 220 Hz; at 1, from 2.4 kHz down to 880 Hz, the bass wide open and snarling.
- */
-function mGrowl(t, n, dur, open, v) {
-  const ac = AUDIO.ctx, f = midiHz(n), lp = ac.createBiquadFilter(), pre = ac.createGain(), ws = ac.createWaveShaper(), g = ac.createGain(), sg = ac.createGain();
-  const a = mOsc('sawtooth', f, t), b = mOsc('sawtooth', f, t), sub = mOsc('sine', f / 2, t);
-  b.detune.value = 11;
-  lp.type = 'lowpass'; lp.Q.value = 6;
-  lp.frequency.setValueAtTime(400 + 2000 * open, t); lp.frequency.exponentialRampToValueAtTime(220 * (1 + 3 * open), t + Math.min(dur, 0.25));
-  pre.gain.value = 0.75;
-  ws.curve = AUDIO.driveCurve; ws.oversample = '2x';
-  a.connect(pre); b.connect(pre); pre.connect(lp).connect(ws).connect(g);
-  sg.gain.value = 0.85; sub.connect(sg).connect(g);
-  env(g, t, 0.004, 0.135 * v, dur * 0.65, dur * 0.35 + 0.04);
-  sends(g, 1, 0, 0);
-  for (const o of [a, b, sub]) { o.start(t); o.stop(t + dur + 0.1); }
-}
-
 /** The hard kick (Redline, the campaign theme's climax): a higher, quicker pitch drop than mKick's, driven into the soft clipper, with the beater's click; `lvl` is its level after the clipper (a mood's `kick`). It pumps the pads too. */
 function mKickHard(t, v, lvl = 0.22) {
   const ac = AUDIO.ctx, o = mOsc('sine', 210, t), g = ac.createGain(), ws = ac.createWaveShaper(), out = ac.createGain();
@@ -2180,22 +2144,6 @@ function mKickHard(t, v, lvl = 0.22) {
   src.start(t, Math.random()); src.stop(t + 0.05);
   const pg = AUDIO.mPad.gain;
   pg.cancelScheduledValues(t); pg.setValueAtTime(0.4, t); pg.linearRampToValueAtTime(1, t + MUSIC.stepDur * 3);
-}
-
-/** The campaign theme's climax's snare, an 80s gated one: a burst of noise held open a moment and then shut hard, over a short tone. */
-function mGate(t, v) {
-  const ac = AUDIO.ctx, src = ac.createBufferSource(), bp = ac.createBiquadFilter(), g = ac.createGain();
-  src.buffer = AUDIO.noise; bp.type = 'bandpass'; bp.frequency.value = 1600; bp.Q.value = 0.55;
-  g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.22 * v, t + 0.002);
-  g.gain.exponentialRampToValueAtTime(0.09 * v, t + 0.04); g.gain.linearRampToValueAtTime(0.075 * v, t + 0.13);
-  g.gain.exponentialRampToValueAtTime(0.0001, t + 0.16);
-  src.connect(bp).connect(g); sends(g, 1, 0.18, 0);
-  src.start(t, Math.random()); src.stop(t + 0.2);
-  const o = mOsc('triangle', 210, t), og = ac.createGain();
-  o.frequency.exponentialRampToValueAtTime(150, t + 0.07);
-  env(og, t, 0.002, 0.11 * v, 0.02, 0.09);
-  o.connect(og); sends(og, 1, 0.1, 0);
-  o.start(t); o.stop(t + 0.16);
 }
 
 /**
