@@ -460,7 +460,8 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   Haulers and vehicles off), wait at the Mast (`ferryWait` with `air`), board (six seats; it waits `boardWait` s for
   more) and get off at the other Mast to carry on (`unloadFerry`). Flak shoots it down through `hitAircraft`; its riders
   go down with it. Drawn by `drawAirship` (from `drawPlane`, from a falling wreck's stand-in too): `AIRSHIP_ART`, 3 tiles
-  across, a touch bigger as it climbs, hanging at the cup moored (`lift`), its fans spinning in code, its shadow
+  across, a touch bigger as it climbs, hanging at the cup moored (the sim moors it there, `AIRSHIP.lift` up the screen
+  from the Mast's tile, so it rises off and settles in place), its fans spinning in code, its shadow
   (`airship-shadow`) down-sun, a pool of team light under it at night. The rival AI builds no Masts or Airships (its flak
   shoots at them). The mission **Mooring Lines** (Sea and Sky) and the colony goal *Mooring lines* teach it.
 - **Vulcan Bombers** (Versus; `BOTS.bomber`, `BOMBER`): built in an Airfield's hangar, two to a hangar. A sortie

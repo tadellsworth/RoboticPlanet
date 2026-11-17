@@ -488,7 +488,8 @@ const AIRFIELD_HOLDS = { cargoplane: 1, bomber: 2 }; // planes of each type an A
  */
 const AIRSHIP = { perLine: 2, climb: 5, turn: 0.55, settle: 3.5, fill: 0.5, wait: 75, least: 4, dwell: 4, boardWait: 6, routeCost: 1.3, routeBoard: 10,
   burn: 0.9, mastFuel: 8, minDist: 8,
-  nose: 1.09 }; // (tiles from a moored Airship's middle to the tip of its mooring cone: where the game draws it, see drawAirship)
+  nose: 1.09, // (tiles from a moored Airship's middle to the tip of its mooring cone, as the game draws it: see drawAirship)
+  lift: 0.75 }; // (tiles up the screen from a Mast's tile to its mooring cup: [0.5, 0.08] of its B3D art. A moored Airship hangs there.)
 /**
  * The Vulcan Bomber (BOTS.bomber): a sortie loads `ammo` Ammo and `fuel` Fuel at its Airfield (and Fuel in its tank for
  * the trip; it can't take off without both), flies to

@@ -13969,19 +13969,23 @@ function mastLines(owner) {
   return out;
 }
 
-/** Where an Airship moors at Mast m: its nose at the mooring cup, its body lying back toward (fx, fy) ({ x, y, face }). */
+/**
+ * Where an Airship moors at Mast m: its nose at the mooring cup, its body lying back toward (fx, fy) ({ x, y, face }). The
+ * cup stands AIRSHIP.lift tiles up the screen from the Mast's tile, and a moored Airship is put where it hangs (as an
+ * aircraft is drawn over the spot it's at, its shadow down-sun): so it rises off the cup and settles onto it in place.
+ */
 function mooredAt(m, fx, fy, face) {
-  const cx = m.x + 0.5, cy = m.y + 0.5;
+  const cx = m.x + 0.5, cy = m.y + 0.5 - AIRSHIP.lift;
   let dx = fx - cx, dy = fy - cy;
   const d = dhypot(dx, dy);
   if (d < 1e-6) { dx = -dcos(face || 0); dy = -dsin(face || 0); } else { dx /= d; dy /= d; }
-  return { x: cx + dx * AIRSHIP.nose, y: cy + dy * AIRSHIP.nose, face: datan2(-dy, -dx) };
+  return { x: clamp(cx + dx * AIRSHIP.nose, 0.2, S.W - 0.2), y: clamp(cy + dy * AIRSHIP.nose, 0.2, S.H - 0.2), face: datan2(-dy, -dx) }; // (never off the map's edge)
 }
 
 /** Where airship u moors at Mast m: its body toward the other Mast of m's line (a Mast on no line: toward where u is). */
 function shipMooring(u, m) {
   const o = mastPartner(m);
-  return o ? mooredAt(m, o.x + 0.5, o.y + 0.5) : mooredAt(m, u.x, u.y, u.face);
+  return o ? mooredAt(m, o.x + 0.5, o.y + 0.5 - AIRSHIP.lift) : mooredAt(m, u.x, u.y, u.face);
 }
 
 /** Of its tank (0-100), what an Airship burns flying from a to b (Masts, or any place), with a little over. */
@@ -14185,7 +14189,7 @@ function shipAtMast(u, m, dt) {
   const P = shipMooring(u, m), turn = wrapAngle(P.face - (u.face || 0));
   if (Math.abs(turn) > 0.01) {
     u.face = wrapAngle((u.face || 0) + clamp(turn, -AIRSHIP.turn * 0.5 * dt, AIRSHIP.turn * 0.5 * dt));
-    u.x = m.x + 0.5 - dcos(u.face) * AIRSHIP.nose; u.y = m.y + 0.5 - dsin(u.face) * AIRSHIP.nose; // (its nose stays at the cup)
+    u.x = clamp(m.x + 0.5 - dcos(u.face) * AIRSHIP.nose, 0.2, S.W - 0.2); u.y = clamp(m.y + 0.5 - AIRSHIP.lift - dsin(u.face) * AIRSHIP.nose, 0.2, S.H - 0.2); // (its nose stays at the cup)
   }
   if (S.tick % 15 === u.id % 15 && u.bat < 100 - planeFill(u) + 1) fuelPlane(u, m, 100 - planeFill(u) + 1);
   if (S.tick % 6 !== u.id % 6) return;

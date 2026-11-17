@@ -8496,16 +8496,17 @@ function drawPlane(ctx, u, sx, sy, s, alt) {
  * The Airship (art: airship@T, renderer/b/airship.js v=c, the armoured blimp; straight down, facing right, 30 world
  * units across: AIRSHIP_ART.frame tiles). Drawn frame × (0.94 + 0.1 alt) tiles across, so it grows a touch as it climbs
  * off a Mast and shrinks as it comes down (like the Cargo Plane at takeoff). Moored (alt 0) it hangs at the Mast's
- * mooring cup, `lift` tiles up the screen (the cup's mark, [0.5, 0.08] of the Mast's B3D art), its shadow close below;
- * as it climbs it eases into the air's way of drawing (over the ground it's above, its shadow further down-sun). Its
+ * mooring cup (the sim puts it there: AIRSHIP.lift, shipMooring), its shadow close below; as it climbs its shadow
+ * falls further down-sun. Its
  * four lift fans (the marks fan0-3, as fractions of the frame from its middle, `fanR` their blades) spin in code over
  * the art, and at night a soft pool of team light lies on the ground under it.
  */
-const AIRSHIP_ART = { frame: 3, fans: [[0.1722, -0.24], [0.1722, 0.24], [-0.1811, -0.24], [-0.1811, 0.24]], fanR: 0.05, lift: (0.615 - 0.08) * 1.4 };
+const AIRSHIP_ART = { frame: 3, fans: [[0.1722, -0.24], [0.1722, 0.24], [-0.1811, -0.24], [-0.1811, 0.24]], fanR: 0.05 };
 
 /** Airship u at (sx, sy) on screen (the ground under it), tile size s, height alt (0 moored at a Mast, 1 cruising). */
 function drawAirship(ctx, u, sx, sy, s, alt) {
-  const f = u.rface ?? u.face ?? 0, F = s * AIRSHIP_ART.frame * (0.94 + 0.1 * alt), x = sx, y = sy - s * AIRSHIP_ART.lift * (1 - alt);
+  const f = u.rface ?? u.face ?? 0, F = s * AIRSHIP_ART.frame * (0.94 + 0.1 * alt), x = sx, y = sy;
+  const ext = F * (0.39 * Math.abs(Math.sin(f)) + 0.3 * Math.abs(Math.cos(f))); // (how far its hull and fans reach up and down the screen)
   const off = s * (0.8 + 0.25 * alt), shx = x + off * 0.7, shy = y + off; // its shadow, down-sun (as a plane's)
   if (TOD.active && TOD.state.pools > 0.05 && typeof drawLightPool === 'function' && !u.parked) drawLightPool(ctx, shx, shy, s * 1.35, PLAYER_COLORS[u.owner] || '#ffffff');
   const sh = ART['airship-shadow'];
@@ -8528,12 +8529,12 @@ function drawAirship(ctx, u, sx, sy, s, alt) {
   const bh = Math.max(2, s * 0.05);
   if (u.hp < u.maxHp && !u.parked && R.clean < 2) {
     const w = s * 0.9;
-    ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fillRect(x - w / 2, y - F * 0.3, w, bh);
-    ctx.fillStyle = '#ff5a5a'; ctx.fillRect(x - w / 2, y - F * 0.3, (w * Math.max(0, u.hp)) / u.maxHp, bh);
+    ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fillRect(x - w / 2, y - ext - bh - 2, w, bh);
+    ctx.fillStyle = '#ff5a5a'; ctx.fillRect(x - w / 2, y - ext - bh - 2, (w * Math.max(0, u.hp)) / u.maxHp, bh);
   }
   // Its fuel gauge (yours only), below it, as a plane's.
   if (u.owner === ME && !R.clean && u.bat !== undefined && !u.parked) {
-    const w = s * 0.9, gy = y + F * 0.3, k = clamp(u.bat, 0, 100) / 100;
+    const w = s * 0.9, gy = y + ext + 2, k = clamp(u.bat, 0, 100) / 100;
     ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fillRect(x - w / 2 - 1, gy - 1, w + 2, bh + 2);
     ctx.fillStyle = k < 0.25 ? '#ff8a3c' : GOOD.fuel.color; ctx.fillRect(x - w / 2, gy, w * k, bh);
   }
@@ -8572,7 +8573,7 @@ function drawAirshipFans(ctx, u, x, y, F, f, alt) {
 
 /** A Mooring Mast selected: its Airship line, dashed in its owner's colour to the other Mast; linking: to the pointer. */
 function drawMastLine(ctx, b, ox, oy, z) {
-  const o = mastPartner(b), col = PLAYER_COLORS[b.owner] || '#ffffff', head = AIRSHIP_ART.lift;
+  const o = mastPartner(b), col = PLAYER_COLORS[b.owner] || '#ffffff', head = AIRSHIP.lift;
   const line = (x0, y0, x1, y1, ok) => {
     ctx.save();
     ctx.lineCap = 'round';
