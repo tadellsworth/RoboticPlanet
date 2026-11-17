@@ -169,7 +169,8 @@ built and played through headless:
 - **Kits and Fiber, Trade Winds.** From Pipe Dreams on the kits bring a Grove Planter (`KIT8`): without one the
   Harvester's 30-45 Fiber were gone into the Smelter in 5-8 minutes and an idle player lived on salvage. Trade Winds'
   kit is still `KIT7` (it was left alone while the trade missions were reworked): an idle player there runs low on
-  Fiber at about 6 minutes.
+  Fiber at about 6 minutes. Its comment on seed 1445's events (a flare over by 9:36) predates the shorter gap between
+  events in missions (`MISSION_EVENT_GAP`): the flare is now over by 6:33.
 - **Mostly waiting.** Breakthrough is mostly research timers, and Assembly Line and Pipe Dreams take a scripted player
   4-7 minutes; their Hard clocks are generous on purpose.
 
