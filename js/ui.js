@@ -5862,7 +5862,8 @@ function refreshBuildingSheet(b) {
         const joined = refineryPipes(ME), ns = buildingPipes(b);
         parts.push(`<div class="kv"><span>Pipeline</span><span>${ns.some((c) => joined.has(c)) ? 'to a Refinery' : b.piped ? 'to storage' : ns.length ? 'goes nowhere yet' : 'none: a Tanker collects'}</span></div>`);
       }
-      if (mine && b.timer > 0 && /^Working/.test(b.status || '')) parts.push(`<div class="bar"><div style="width:${Math.round((b.timer / def.work) * 100)}%"></div></div>`);
+      // (the bar stays while it waits, empty: the panel doesn't jump each time it starts and stops)
+      if (mine) parts.push(`<div class="bar"><div style="width:${b.timer > 0 && /^Working/.test(b.status || '') ? Math.round((b.timer / def.work) * 100) : 0}%"></div></div>`);
     }
     if (mine && b.built && fuelUser(def)) {
       const fp = fuelPipes(ME), ns = buildingPipes(b);
@@ -5882,14 +5883,15 @@ function refreshBuildingSheet(b) {
         const need = (BOTS[k] && BOTS[k].parts) || 1;
         parts.push(`<div class="kv"><span>Next bot</span><span>${BOTS[k] ? BOTS[k].name + (need > 1 ? ` (part ${Math.min(need, foundryParts(b, k) + 1)} of ${need})` : '') : 'Nothing ordered'}</span></div>`);
       }
-      if (b.timer > 0 && /^Working/.test(b.status || '')) parts.push(`<div class="bar"><div style="width:${Math.round((b.timer / def.work) * 100)}%"></div></div>`);
+      // The bar stays while it waits, empty, so the buttons below don't jump each time it starts and stops.
+      parts.push(`<div class="bar"><div style="width:${b.timer > 0 && /^Working/.test(b.status || '') ? Math.round((b.timer / def.work) * 100) : 0}%"></div></div>`);
     }
     // Feed links: what it passes straight on to its neighbours, and what they pass to it.
     if (mine && b.built) {
       const linkText = (l, b2) => `${BDEFS[b2.type].name} (${l.goods.map((g) => GOOD[g].name).join(', ')})`;
       const feeds = feedTargets(b), by = feedersOf(b);
       if (feeds.length) parts.push(`<div class="kv"><span>Feeds by conveyor</span><span>${feeds.map((l) => linkText(l, l.c)).join('; ')}</span></div>`);
-      if (by.length) parts.push(`<div class="kv"><span>Fed by conveyor</span><span>${by.map(({ from, link }) => linkText(link, from)).join('; ')}${beingFed(b) ? ', working a tenth faster' : ''}</span></div>`);
+      if (by.length) parts.push(`<div class="kv"><span>Fed by conveyor</span><span>${by.map(({ from, link }) => linkText(link, from)).join('; ')}, a tenth faster while fed</span></div>`); // (always said, so the line doesn't wrap and unwrap: the status says when it's fed)
       const sb = !def.store && stationBeside(b);
       if (sb && stationLinks(sb).some((l) => l.c === b)) parts.push(`<div class="kv"><span>Rail Station</span><span>joined by conveyor: it hands this its goods${def.out ? ' and takes its output' : ''}</span></div>`);
       else if (b.railBy) {

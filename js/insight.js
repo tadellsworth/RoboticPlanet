@@ -309,15 +309,26 @@ function whyWire(el) {
 }
 
 /** The "Why idle?" box in production building b's panel (see whyIdle): rewritten only when it changes. */
+const WHY_DELAY = 3; // seconds of game time a building waits before its panel says why (refreshWhy)
 function refreshWhy(b) {
   const el = $('sh-why');
   if (!el) return;
-  const r = whyIdle(b);
+  let r = whyIdle(b);
+  // A steady panel: a building that stops for a moment (the next Hauler is pulling up) shows no box until it has waited
+  // WHY_DELAY seconds, and the room a box took stays while the panel is open, so the buttons below don't jump up and
+  // down each time it starts and stops (a Bot Foundry waiting on Chips did, by up to 120 px). A panel opened on a
+  // building that is already idle shows its box at once.
+  if (el._since === undefined) el._since = r ? -Infinity : null;
+  if (!r) el._since = null;
+  else if (el._since === null) el._since = S.time;
+  if (r && S.time - el._since < WHY_DELAY) r = null;
   const html = r ? `<div class="why-box${r.ok ? ' calm' : r.soft ? ' soft' : ''}"><b>${r.ok ? 'Idle for now:' : 'Why idle?'}</b> ${insEsc(r.text)}${r.ok ? '' : whyButtons(r, b.id)}</div>` : '';
   if (el.dataset.html === html) return;
   el.dataset.html = html;
   el.innerHTML = html;
   whyWire(el);
+  const h = el.offsetHeight;
+  if (h > (el._h || 0)) { el._h = h; el.style.minHeight = h + 'px'; }
 }
 
 /**

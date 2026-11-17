@@ -630,7 +630,10 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   (asked again, a link down), with no road, or for a gatherer out of deposits in reach (`insLeft`: none left, all on a
   rival's land, or all under guns; "ran dry N minutes ago" from `b.dryAt`, set in `updateDepleted`)? With none, is one
   going up (and why it isn't done), was one destroyed (from `S.log`), and are all `MAX_SITES` sites taken? A **Show**
-  button opens the culprit's panel, **Build** places the missing building. **The colony's shortage**
+  button opens the culprit's panel, **Build** places the missing building. The panel holds still: the box shows once the
+  building has waited `WHY_DELAY` (3) seconds (a panel opened on an idle building shows it at once), the room it took
+  stays while the panel is open, and a factory's progress bar stays, empty, while it waits. A Bot Foundry waiting on
+  Chips used to move its buttons up to 120 px several times a minute. **The colony's shortage**
   (`insightColony`, once a second): the good gone longest without while something waits for it (`P.dry`, below), the
   Foundry's first; its counter in the top bar is ringed red (`.res-chip.starved`) and the Goods panel leads with it
   and its cause (`goodsWhyHTML`). Display only: it never asks the danger map unless it is current (`insGuns`), so it
