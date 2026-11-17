@@ -1,10 +1,11 @@
 /*
- * The mouse cursor: Terrafall's own, on any device with a mouse (pointer: fine). Drawn here at start-up in the game's
- * colours, sharp at 1× and 2×: a gunmetal arrow edged in the accent cyan; the same arrow lit cyan over anything that
- * takes a click (a button, or a building or robot on the map); a cyan reticle for placing buildings and painting
- * roads; a red one over a rival when your army is picked (a right-click attacks it) and while an attack or a missile
- * is being aimed; amber for landings and air drops; four arrows while the map is dragged. Text fields keep the
- * system's I-beam. Settings → Custom cursor turns it off (kept on this device: botfall.cursor).
+ * The mouse cursor: Terrafall's own, on any device with a mouse (pointer: fine). Drawn here at start-up in the app
+ * icon's colours, sharp at 1× and 2× (the owner's pick, "Midnight"): a navy arrow with a cream rim and coral stripes on
+ * its tail; the arrow lit coral over anything that takes a click (a button, or a building or robot on the map); a cream
+ * frame for placing buildings and painting roads; a coral reticle over a rival when your army is picked (a right-click
+ * attacks it) and while an attack or a missile is being aimed; a cream one for landings and air drops; four cream
+ * arrows while the map is dragged. Text fields keep the system's I-beam. Settings → Custom cursor turns it off (kept on
+ * this device: botfall.cursor).
  *
  * How: every cursor the page's stylesheets ask for is asked again under html.tf-cur with ours in its place
  * (pointer → lit, crosshair → reticle, default → arrow; the rest, such as not-allowed, stay the system's), so new
@@ -18,74 +19,66 @@ const CURSOR_KINDS = {
   point: { hx: 2, hy: 2, fb: 'pointer' },
   cross: { hx: 16, hy: 16, fb: 'crosshair' },
   attack: { hx: 16, hy: 16, fb: 'crosshair' },
-  amber: { hx: 16, hy: 16, fb: 'crosshair' },
+  drop: { hx: 16, hy: 16, fb: 'crosshair' },
   pan: { hx: 16, hy: 16, fb: 'move' },
 };
 
-/** Draw one cursor on a 32×32 (× s) canvas. */
+// The app icon's colours (icons/icon.svg): midnight navy, the planet's coral and its shadow side, the ring's cream.
+const CUR_NAVY = '#14213d', CUR_CORAL = '#ff6b4a', CUR_CORAL2 = '#e04a2c', CUR_CREAM = '#f1e4d3', CUR_INK = 'rgba(8,12,24,0.85)';
+// The arrow: tip at (2, 2), a little smaller than the system's.
+const CUR_ARROW = [[2, 2], [2, 23.5], [7.2, 18.6], [11, 27], [14.6, 25.4], [10.9, 17.2], [18, 17.2]].map(([x, y]) => [2 + (x - 2) * 0.9, 2 + (y - 2) * 0.9]);
+
+/**
+ * Draw one cursor on a 32×32 (× s) canvas, flat (no glow), each shape with a thin dark edge so it reads on pale ground:
+ * the arrow navy with a cream rim and three thin coral stripes across its tail; lit (over a clickable) coral, lit and
+ * shaded like the planet, its stripes navy; the frame for placing and the drag arrows cream round a coral dot; the
+ * attack reticle coral round a cream dot; the reticle for landings and drops cream round a coral one.
+ */
 function drawCursorImage(kind, s) {
   const c = document.createElement('canvas');
   c.width = c.height = 32 * s;
   const ctx = c.getContext('2d');
   ctx.scale(s, s);
   ctx.lineJoin = 'round'; ctx.lineCap = 'round';
-  const glowLine = (col, glow, w, path) => {
-    // A dark edge first (so it shows on pale ground), then the colour with a soft glow.
-    ctx.shadowBlur = 0; ctx.strokeStyle = 'rgba(4,8,12,0.9)'; ctx.lineWidth = w + 2.2; path(); ctx.stroke();
-    ctx.shadowColor = glow; ctx.shadowBlur = 3; ctx.strokeStyle = col; ctx.lineWidth = w; path(); ctx.stroke();
-    ctx.shadowBlur = 0;
-  };
+  const TAU = Math.PI * 2;
+  const arrow = () => { ctx.beginPath(); CUR_ARROW.forEach(([x, y], k) => (k ? ctx.lineTo(x, y) : ctx.moveTo(x, y))); ctx.closePath(); };
+  const line2 = (path, col, w) => { ctx.strokeStyle = CUR_INK; ctx.lineWidth = w + 1.6; path(); ctx.stroke(); ctx.strokeStyle = col; ctx.lineWidth = w; path(); ctx.stroke(); };
+  const dot = (r, col) => { ctx.fillStyle = CUR_INK; ctx.beginPath(); ctx.arc(16, 16, r + 0.8, 0, TAU); ctx.fill(); ctx.fillStyle = col; ctx.beginPath(); ctx.arc(16, 16, r, 0, TAU); ctx.fill(); };
+  const reticle = () => { ctx.beginPath(); ctx.arc(16, 16, 7.5, 0, TAU); for (let k = 0; k < 4; k++) { const a = (k * Math.PI) / 2; ctx.moveTo(16 + Math.cos(a) * 11.5, 16 + Math.sin(a) * 11.5); ctx.lineTo(16 + Math.cos(a) * 5, 16 + Math.sin(a) * 5); } };
   if (kind === 'arrow' || kind === 'point') {
     const lit = kind === 'point';
-    const P = [[2, 2], [2, 23.5], [7.2, 18.6], [11, 27], [14.6, 25.4], [10.9, 17.2], [18, 17.2]];
-    const path = () => { ctx.beginPath(); P.forEach(([x, y], k) => (k ? ctx.lineTo(x, y) : ctx.moveTo(x, y))); ctx.closePath(); };
-    ctx.shadowColor = lit ? 'rgba(56,212,255,0.9)' : 'rgba(56,212,255,0.45)'; ctx.shadowBlur = lit ? 4 : 2.5;
-    path(); ctx.fillStyle = 'rgba(4,8,12,0.9)'; ctx.fill();
-    ctx.shadowBlur = 0;
-    ctx.strokeStyle = 'rgba(4,8,12,0.92)'; ctx.lineWidth = 2.6; path(); ctx.stroke();
-    const g = ctx.createLinearGradient(2, 2, 14, 26);
-    if (lit) { g.addColorStop(0, '#b8f6ff'); g.addColorStop(0.5, '#4fd8ff'); g.addColorStop(1, '#168fc0'); }
-    else { g.addColorStop(0, '#3a4652'); g.addColorStop(0.55, '#1f272f'); g.addColorStop(1, '#0f141a'); }
-    path(); ctx.fillStyle = g; ctx.fill();
-    ctx.strokeStyle = lit ? '#e9fcff' : '#38d4ff'; ctx.lineWidth = 1.15; path(); ctx.stroke();
-    // A bright edge down the spine, and a notch of light near the tail.
-    ctx.strokeStyle = lit ? 'rgba(255,255,255,0.9)' : 'rgba(150,235,255,0.65)'; ctx.lineWidth = 0.8;
-    ctx.beginPath(); ctx.moveTo(3.7, 6); ctx.lineTo(3.7, 19.5); ctx.stroke();
-    ctx.fillStyle = lit ? '#ffffff' : '#38d4ff';
-    ctx.beginPath(); ctx.arc(10.5, 21.6, 1.05, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = CUR_INK; ctx.lineWidth = 2.7; arrow(); ctx.stroke();
+    let fill = CUR_NAVY;
+    if (lit) { fill = ctx.createLinearGradient(4, 4, 14, 22); fill.addColorStop(0, CUR_CORAL); fill.addColorStop(0.62, CUR_CORAL); fill.addColorStop(0.63, CUR_CORAL2); fill.addColorStop(1, CUR_CORAL2); }
+    arrow(); ctx.fillStyle = fill; ctx.fill();
+    // Three thin stripes, angled across the tail.
+    ctx.save(); arrow(); ctx.clip();
+    ctx.strokeStyle = lit ? 'rgba(20,33,61,0.55)' : CUR_CORAL; ctx.lineWidth = 0.75; ctx.lineCap = 'butt';
+    for (let k = 0; k < 3; k++) {
+      const t = 0.32 + k * 0.22, cx = 8.3 + 3.3 * t, cy = 16.4 + 7.2 * t;
+      ctx.beginPath(); ctx.moveTo(cx - 6, cy + 3.6); ctx.lineTo(cx + 6, cy - 3.6); ctx.stroke();
+    }
+    ctx.restore();
+    ctx.strokeStyle = CUR_CREAM; ctx.lineWidth = 1.1; arrow(); ctx.stroke();
   } else if (kind === 'cross') {
-    // Placing: four corner brackets and a small cross in the middle.
-    const path = () => {
+    line2(() => {
       ctx.beginPath();
-      for (const [sx, sy] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) {
-        ctx.moveTo(16 + sx * 9, 16 + sy * 4.5); ctx.lineTo(16 + sx * 9, 16 + sy * 9); ctx.lineTo(16 + sx * 4.5, 16 + sy * 9);
-      }
-      ctx.moveTo(16, 13); ctx.lineTo(16, 19); ctx.moveTo(13, 16); ctx.lineTo(19, 16);
-    };
-    glowLine('#38d4ff', 'rgba(56,212,255,0.9)', 1.5, path);
-  } else if (kind === 'attack' || kind === 'amber') {
-    // A targeting reticle: a broken ring, ticks pointing in, a dot.
-    const col = kind === 'attack' ? '#ff4b4b' : '#ffb43c', glow = kind === 'attack' ? 'rgba(255,60,60,0.9)' : 'rgba(255,170,50,0.9)';
-    const path = () => {
-      ctx.beginPath();
-      for (let k = 0; k < 4; k++) { const a = (k * Math.PI) / 2 + Math.PI / 4; ctx.moveTo(16 + Math.cos(a - 0.55) * 9, 16 + Math.sin(a - 0.55) * 9); ctx.arc(16, 16, 9, a - 0.55, a + 0.55); }
-      for (let k = 0; k < 4; k++) { const a = (k * Math.PI) / 2; ctx.moveTo(16 + Math.cos(a) * 13.5, 16 + Math.sin(a) * 13.5); ctx.lineTo(16 + Math.cos(a) * 5.5, 16 + Math.sin(a) * 5.5); }
-    };
-    glowLine(col, glow, 1.6, path);
-    ctx.fillStyle = 'rgba(4,8,12,0.9)'; ctx.beginPath(); ctx.arc(16, 16, 2.4, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = col; ctx.beginPath(); ctx.arc(16, 16, 1.4, 0, Math.PI * 2); ctx.fill();
+      for (const [sx, sy] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) { ctx.moveTo(16 + sx * 8.5, 16 + sy * 5); ctx.lineTo(16 + sx * 8.5, 16 + sy * 8.5); ctx.lineTo(16 + sx * 5, 16 + sy * 8.5); }
+    }, CUR_CREAM, 1.2);
+    dot(1.5, CUR_CORAL);
+  } else if (kind === 'attack' || kind === 'drop') {
+    line2(reticle, kind === 'attack' ? CUR_CORAL : CUR_CREAM, 1.4);
+    dot(1.2, kind === 'attack' ? CUR_CREAM : CUR_CORAL);
   } else if (kind === 'pan') {
-    // Four arrowheads out from a dot.
-    const path = () => {
+    line2(() => {
       ctx.beginPath();
       for (let k = 0; k < 4; k++) {
         const a = (k * Math.PI) / 2, ux = Math.cos(a), uy = Math.sin(a), px = -uy, py = ux;
-        ctx.moveTo(16 + ux * 4.5, 16 + uy * 4.5); ctx.lineTo(16 + ux * 12.5, 16 + uy * 12.5);
-        ctx.moveTo(16 + ux * 8.5 + px * 3.5, 16 + uy * 8.5 + py * 3.5); ctx.lineTo(16 + ux * 12.5, 16 + uy * 12.5); ctx.lineTo(16 + ux * 8.5 - px * 3.5, 16 + uy * 8.5 - py * 3.5);
+        ctx.moveTo(16 + ux * 4.5, 16 + uy * 4.5); ctx.lineTo(16 + ux * 11.5, 16 + uy * 11.5);
+        ctx.moveTo(16 + ux * 7.5 + px * 3, 16 + uy * 7.5 + py * 3); ctx.lineTo(16 + ux * 11.5, 16 + uy * 11.5); ctx.lineTo(16 + ux * 7.5 - px * 3, 16 + uy * 7.5 - py * 3);
       }
-    };
-    glowLine('#38d4ff', 'rgba(56,212,255,0.9)', 1.6, path);
-    ctx.fillStyle = '#38d4ff'; ctx.beginPath(); ctx.arc(16, 16, 1.6, 0, Math.PI * 2); ctx.fill();
+    }, CUR_CREAM, 1.2);
+    dot(1.5, CUR_CORAL);
   }
   return c.toDataURL('image/png');
 }
@@ -140,7 +133,7 @@ ${out.join('\n')}
 html.tf-cur :is(textarea, [contenteditable=true], input:not([type]), input[type=text], input[type=search], input[type=email], input[type=number], input[type=url], input[type=password]) { cursor: text; }
 html.tf-cur :is(button, [role=button]):disabled { cursor: var(--tfc-arrow); }
 html.tf-cur body.mode-attack canvas#game, html.tf-cur body.mode-aim canvas#game { cursor: var(--tfc-attack); }
-html.tf-cur body.mode-land canvas#game, html.tf-cur body.mode-airdrop canvas#game { cursor: var(--tfc-amber); }
+html.tf-cur body.mode-land canvas#game, html.tf-cur body.mode-airdrop canvas#game { cursor: var(--tfc-drop); }
 html.tf-cur canvas#game[data-cur=point] { cursor: var(--tfc-point) !important; }
 html.tf-cur canvas#game[data-cur=attack] { cursor: var(--tfc-attack) !important; }
 html.tf-cur canvas#game[data-cur=pan] { cursor: var(--tfc-pan) !important; }
