@@ -14,6 +14,25 @@ Still open: a neutral, shared exchange the rivals compete over; contracts for Ch
 
 ## Held for later
 
+- **Electricity as a requirement** (the owner, Nov 17 2026: a design note, for later; builds on "Power for the
+  megastructures" under Megastructures). The owner's question: should factories and production buildings, maybe
+  turrets too, need power, made by Generators or power plants burning Fuel or Crystal, or a nuclear plant: more
+  critical infrastructure to defend, for rivals to raid and for the Murmur to eat?
+  - **For it:** LORE.md already has the Murmur feeding on charge (the Leech drawn at a power line; the Spitter already
+    shorts buildings out); plants and pylons become targets; Fuel, Crystal and Uranium get a steady use; it feeds the
+    megastructures; lights going dark pylon by pylon at night.
+  - **Against it:** one more layer on top of roads, Haulers, Fuel for charging, Ammo, Tankers and rail, hardest on the
+    early game and on phones; a dead plant silently stopping the economy feels bad; turrets that stop when it's cut
+    make one raid decisive.
+  - **Cost:** the grid is moderate work; the rival AI planning, building and guarding a grid (and riding out a
+    blackout) is the big part; every mission wants retuning or a grid in its kit; balance runs. Lockstep is no problem.
+  - **To keep it fun:** brownouts, not shutdowns (unpowered works at about half speed, powered at full); by tier (early
+    buildings need none; advanced ones do: Chip Fab, Missile Factory, Reactor, Pulse Turret, the megastructures);
+    coverage, not wiring (a plant and pylons cover an area, like today's Generator radius, pylons extending it); turrets
+    keep a small backup battery; a power overlay like the traffic map and messages that say why ("your Chip Fabs are
+    browned out: the Fuel plant ran dry").
+  - **Suggested path:** first, power plants (Fuel, Crystal, Uranium) and pylons as a boost, required by the
+    megastructures and a few advanced buildings; play it a while; then decide whether ordinary factories depend on it.
 - **The Murmur undermine a colony** (the owner, Nov 17 2026: for later). Left alone long enough, a nest's tunnels grow
   so thick under a colony that the ground gives way: buildings over the densest tunnels sag, crack and at last collapse
   into a sinkhole, roads over them cave in, and robots on the spot fall in. Warning signs first, so it can be stopped:
