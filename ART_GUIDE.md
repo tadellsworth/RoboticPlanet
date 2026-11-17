@@ -1494,6 +1494,11 @@ have no time-of-day versions; their light is in the night glow map (`resourceGlo
 
 - Menu background and logo
 - Laser beams, the white blast flash and the Pulse Turret's glow (the other effects are in Batch 15)
+- The work animations: a builder's weld, paving, and the gathering moves (scything Reedcane and Bloom veins, drilling
+  Ore and Uranium, hammering boulders and rock faces, the Crystal cutting beam, an Agribot picking and planting) are
+  drawn in code, with the tool on a drawn arm (`drawToolArm`, `drawHarvest` in `js/render.js`). Small tool sprites
+  (a blade, a drill bit, a hammer head, a gripper; seen from straight above, about 0.1 tile) could replace the drawn
+  heads later; the chips, dust, motes and glints would stay code-drawn
 - App icon: its source is `icons/icon.svg` (the planet, ring and T in flat colours). To change it, replace the PNGs in `icons/` (`icon-192.png`, `icon-512.png`, `icon-1024.png`,
   `apple-touch-icon.png` at 180×180 and `favicon-32.png`), all square and opaque
 - 3D buildings: the set from Claude Design is installed (harvester, quarry, mine, tap, smelter, fab, foundry, depot,
