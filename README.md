@@ -1520,6 +1520,27 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
     on the minimap (`minimapTunnels`); exits are art (`drawBurrow`: `tunnel-exit`, re-lit for the time of day), violet
     rings on the minimap, and collapsed ones a caved-in mound fading as it settles (`drawExitScar`:
     `tunnel-exit-collapsed`).
+  - **How they're drawn** (`drawCritter`; art from `renderer/b/murmur_moles.js`). Each form true to the others' size,
+    but the Brute shrunk to fit the map (`MURMUR_LOOK`, the sprite's width in tiles): Scuttler 0.62, Spitter 0.73,
+    Leech 0.81, Brute 0.82, Sapper 0.9, with a shadow turned with it. Four walking frames each, and the forms' actions
+    as loops timed by `u.poseT` (`MURMUR_POSES`, `murmurFrame`): the Leech feeding (`u.pose` `feed`: the star pulsing,
+    the sac swelling), the Spitter spitting (`spit`: wind-up, the spit, recoil, recovering), the Sapper digging in
+    (`dig`), under the ground (`under`: only the heave of soil shows) and coming up (`up`: the ground bursting, played
+    once). The sprites are rendered hungry; each has a glow image (`<key>-glow`) added over it as bright as it's charged
+    (`u.charge`, 0..1; none kept, as in an older save: 0.75), stronger as the light goes, breathing slowly (the Leech's
+    quick throb while it drinks, the Spitter's pouches flaring as it winds up, the heave's crystal chips glinting:
+    `murmurGlow`). At dusk and night each throws violet light on the ground round it, as bright as it's charged
+    (`drawMurmurLights`), and the lamps and the glow of a building a Leech drinks beside dim (`drunkLight`). A Sapper under
+    the ground shows only where the colony on this device can see it (`colonySees`: within `SIGHT_R`, 6 tiles, of any of its
+    or its allies' buildings, bots or streetlamps; watching with no colony of your own, everywhere), and so does the fresh
+    ridge it leaves behind it (`sapperTrails`, `drawFreshRidges`: kept as it goes, drawn like the tunnels; once it's
+    through, the sim's tunnel takes over). The Spitter's volley (`addFx('spit', x, y, { tx, ty })`: the shards flying to
+    the target, `drawSpitFx`) and its hit (`'spitHit'`: eight frames, turned the way the volley came, `drawSpitHitFx`)
+    are effects; a building it has shorted (`b.shortT` > `S.time`) has its gun dark and charge crawling over it
+    (`drawHeadDark`, `drawShortArcs`) and no searchlight. Their art loads only in a game with them (`ensureMurmurArt`,
+    from `applyBiome`, with their re-lit sets: `MURMUR_TOD_KEYS`, `todMurmurAdd`); in the single file it's a bundle beside
+    the page (`dist/murmur.js`). Fields the drawing reads and doesn't find (an older save, a Quiet game) fall back to
+    today's walk.
   - **Counterplay.** Turrets, garrisons and warbots treat creatures as enemies; a creature battering a building marks it
     raided (`P.raided`), so forts round it answer (`garrisonDefense`). Warbots **collapse an exit** (`MURMUR.exitArmor`, 30;
     `collapseExit`: gone, nothing opens within 3 tiles for `MURMUR.shut`, 15 min, `S.mur.shut`; `stats.collapsed`) and
@@ -1946,7 +1967,8 @@ pause menu's line under the button says so, as does the new-game Rules' Always n
   re-lit and graded copies of each sprite, the green and purple teams' too, are let go with it (`todDropSet`, `todFree`;
   a graded stand-in goes as soon as the re-lit image arrives), and the sprites drawn lately get the coming set's versions
   ready a couple a frame ahead of the change (`todWarm`, `artSeen`). The single-file
-  build puts each set in a bundle beside the page (`dist/tod-<time>.js`, loaded when needed).
+  build puts each set in a bundle beside the page (`dist/tod-<time>.js`, loaded when needed); the Murmur's re-lit
+  sprites (`MURMUR_TOD_KEYS`) join a set only in a game with them, from their own bundle (`dist/murmur.js`).
 - **Graded in code** (`out = in × multiply + add`, values from the kit's `art/tod/shared/time-of-day.json`): the baked
   ground, roads, track, pipes, plants, resources and territory tint (`todGradeGround`), and any sprite without a
   re-lit version or whose set hasn't loaded yet (`todGraded`). Tile art drawn over the graded ground (bridge piers,
@@ -2030,8 +2052,9 @@ art/art-manifest.js       register custom art here
 art/lore/                 the Lore guide's pictures (the planet, the regions, the Murmur)
 tools/headless-sim.js     AI-vs-AI balance test without a browser
 tools/smoke-test.js       browser test on a phone-sized screen (Playwright)
-tools/build-single.js     bundles everything into dist/terrafall.html (and dist/tod-<time>.js, lore.js and biome-<b>.js:
-                          every biome's art but the Desert's, so the page stays under its 16 MB: LAZY_BIOMES)
+tools/build-single.js     bundles everything into dist/terrafall.html (and dist/tod-<time>.js, lore.js, biome-<b>.js:
+                          every biome's art but the Desert's, so the page stays under its 16 MB: LAZY_BIOMES, and
+                          murmur.js: the Murmur's art, for a game with them)
 relay/                    the multiplayer relay and player feedback: a Cloudflare Worker (deployed by .github/workflows/relay.yml)
 ```
 

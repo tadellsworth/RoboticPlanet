@@ -522,3 +522,8 @@ Sapper (tunnels under Walls and surfaces behind them: counters turtling). Mechan
 - Counters: Torches (built to burn back the Bloom) do extra damage to them and clear burrows; the Research Lab studies
   them (earlier warnings, better counters). Regional variants: armoured in the Rust, pale and slow in Hoarfell,
   violet-glowing in the Bloom.
+- **The new forms' art is in** (Nov 2026, ART_GUIDE Batch 17): drawn true size with their action loops, glow and light
+  pools; the behaviour is the sim's. Open, for whoever builds it: a Sapper under the ground shows only within
+  `SIGHT_R` (6) tiles of the colony on this device (`colonySees` in js/render.js), so the tap and hover there (js/ui.js)
+  should skip one the player can't see; the regional variants (`v=rust|white|bloom` in murmur_moles.js) aren't rendered
+  for the game yet; and whether the Murmur's light should show on the minimap at night.
