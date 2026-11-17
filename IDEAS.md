@@ -27,6 +27,12 @@ Still open: a neutral, shared exchange the rivals compete over; contracts for Ch
   moving the Port and the trade above that line would let a passive rival on an island map, or short of Crystal, still
   grow. It changes the early missions' rivals, so their mission runs would want checking.
 
+- **King of the Hill on Hard with Hard rivals** (to decide). On the owner's word its two rivals on Hard are Hard now,
+  not Medium. Played headless with the AI on your side plus the hints' steps, five starts: no win (four lost on the
+  35-minute clock, one on the Uplinks at 21½ minutes), where Medium rivals won all five at 13 to 16 minutes. Normal
+  rivals, tried for comparison: one win in three (at 20 minutes; two lost on the Uplinks at 15 and 18). Kept at Hard
+  for now; Normal is the step between, if Hard proves too much.
+
 - **The first pair wins most 2 vs 2 games, on every map** (to decide). Computer-only 2 vs 2 games, every rival
   Balanced and none held back: players 0 and 1 won 10 of 12 (Long Haul 2v2 4 of 4, Twin Valleys 3 of 4, Crossroads 3
   of 4); by chance on fair maps, about a 2% outcome. The maps are fair (Long Haul 2v2 checked tile for tile against
