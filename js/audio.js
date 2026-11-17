@@ -562,6 +562,7 @@ function sfx(name, dest, y) {
     case 'fireball': blast(D, { size: 1.3, far, gain: 0.6, fire: true }); duckMusic(0.5, 1.2); break;
     case 'botboom': blast(D, { size: 0.6, far, gain: 0.4 }); break; // (a robot blowing up)
     case 'collapse': rubble(D, far); break;
+    case 'beacon': if (typeof ambHum === 'function') ambHum(D); break; // (a Command Base's beacon coming on at dusk: js/ambient.js)
     // Coming down on you: a bomb's whistle as it falls, a missile's roar as it dives in (each ending as it hits).
     case 'bombfall': incoming(D, 'bomb', BOMBER.fall / spd); break;
     case 'incoming': incoming(D, 'missile', MISSILE_WARN / spd); break;

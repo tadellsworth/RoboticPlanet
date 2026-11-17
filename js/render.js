@@ -5674,6 +5674,7 @@ function render(dtReal) {
   }
   drawScorch(ctx, ox, oy, z);
   drawDecals(ctx, ox, oy, z, inView);
+  if (typeof drawRemains === 'function') drawRemains(ctx, ox, oy, z, inView); // (what fights leave behind, overgrowing: js/ambient.js)
   drawCalmGround(ctx, ox, oy, z, inView);
   drawPlans(ctx, ox, oy, z, inView);
   if (typeof UI !== 'undefined') {
@@ -5858,6 +5859,7 @@ function render(dtReal) {
   drawFeeds(ctx, ox, oy, z, inView);
   drawSmoke(ctx, ox, oy, z, inView);
   drawAirLayer(ctx, ox, oy, z, inView);
+  if (typeof drawAmbientSky === 'function') drawAmbientSky(ctx, ox, oy, z); // (cloud shadows by day, the Command Bases' beacons by night: js/ambient.js)
   if (z >= 14 && R.clean < 2) for (const t of hangarTags) drawHangarTag(ctx, ox + (t.b.x + 0.5) * z, oy + (t.b.y + 0.08) * z, z, t.n);
 
   // Placing a Viaduct: the deck from the near end to the far end picked so far.
