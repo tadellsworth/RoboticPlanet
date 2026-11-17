@@ -1230,7 +1230,7 @@ function faunaGlows(ctx, ox, oy, z) {
           const x = ox + w.x * z, y = oy + w.y * z;
           if (x < -5 || y < -5 || x > R.w + 5 || y > R.h + 5) continue;
           if (M.night && (faunaNearest(M.danger, w.x, w.y, 8) || faunaNearest(M.packs, w.x, w.y, 6))) continue;
-          faunaDot(ctx, x, y, Math.max(1.4, z * 0.045), FAUNA_GLOW.glowworm, 0.85 * (0.55 + 0.45 * Math.sin(t * (0.6 + w.h) + w.h * 40)) * fade);
+          faunaDot(ctx, x, y, Math.max(3, z * 0.1), FAUNA_GLOW.glowworm, 0.95 * (0.55 + 0.45 * Math.sin(t * (0.6 + w.h) + w.h * 40)) * fade);
         }
         continue;
       }
@@ -1258,7 +1258,7 @@ function faunaGlows(ctx, ox, oy, z) {
           const on = Math.min(1, ph * 6, (1 - ph) * 4) * (Math.sin(t * 9 + k) > -0.85 ? 1 : 0);
           const ex = (tt % S.W) + 0.5 + (h - 0.5) * 0.6, ey = ((tt / S.W) | 0) + 0.5 + (hash2(tt, slot, 96) - 0.5) * 0.6;
           if (on <= 0 || hidden(ex, ey)) continue;
-          const x = ox + ex * z, y = oy + ey * z, gap = z * 0.035, r = Math.max(1.3, z * 0.035);
+          const x = ox + ex * z, y = oy + ey * z, gap = z * 0.045, r = Math.max(2.4, z * 0.075);
           faunaDot(ctx, x - gap, y, r, FAUNA_GLOW.eyes, 0.9 * on * night); faunaDot(ctx, x + gap, y, r, FAUNA_GLOW.eyes, 0.9 * on * night);
         }
       }
@@ -1271,7 +1271,7 @@ function faunaGlows(ctx, ox, oy, z) {
     if (K.eyes && L > 0.4) for (const m of a.m) {
       if (m.fly || Math.sin(F.t * 0.9 + m.ph * 7) < -0.95) continue; // (a blink now and then)
       // (in the face of FAUNA_DRAW.owl, turning as it looks round)
-      const sz = Math.max(2, K.size * z), hx = ox + m.x * z + Math.sin(m.look || 0) * sz * 0.08, hy = oy + m.y * z - sz * 0.53, r = Math.max(1.8, z * 0.04);
+      const sz = Math.max(2, K.size * z), hx = ox + m.x * z + Math.sin(m.look || 0) * sz * 0.08, hy = oy + m.y * z - sz * 0.53, r = Math.max(2.4, z * 0.065);
       faunaDot(ctx, hx - sz * 0.06, hy, r, K.eyes, 0.9 * a.vis); faunaDot(ctx, hx + sz * 0.06, hy, r, K.eyes, 0.9 * a.vis);
     }
     if (K.glow) {
@@ -1304,7 +1304,7 @@ function faunaGlows(ctx, ox, oy, z) {
         let x = lx + Math.cos(th) * r, y = ly + Math.sin(th) * r * 0.6 + Math.sin(t * 6 + k) * z * 0.03, a = on;
         if (gone >= 0 && gone <= 1) { x += Math.cos(th) * gone * z * 3; y += Math.sin(th) * gone * z * 2 - gone * z; a *= 1 - gone; }
         const flick = 0.6 + 0.4 * Math.abs(Math.sin(t * 30 + k * 3));
-        faunaDot(ctx, x, y, Math.max(1.2, z * (kind === 'moth' ? 0.035 : 0.05)), col, 0.75 * a * flick);
+        faunaDot(ctx, x, y, Math.max(2.2, z * (kind === 'moth' ? 0.07 : 0.09)), col, 0.85 * a * flick);
       }
     }
   }
