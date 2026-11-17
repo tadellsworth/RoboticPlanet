@@ -14,6 +14,12 @@ Still open: a neutral, shared exchange the rivals compete over; contracts for Ch
 
 ## Held for later
 
+- **Redesign the nuclear missile** (the owner's to-do, Nov 17: for later). Today's: the Nuclear race's missile, built at a
+  Nuclear Silo from 6 Enriched Uranium (`NUKE` in `js/defs.js`; the Silo and its launch, flight, warning and blast in
+  `js/sim.js` and `js/render.js`, the blast's `effects/nuke-blast-sheet.webp`). When it's picked up, first ask the owner
+  what the redesign covers (its look in the Silo, in flight and the blast; how it plays; or both), then show a design
+  sheet to pick from, as for the Airship. Mind the single file's room (see Room to grow below): its art may want a
+  bundle of its own beside the page.
 - **Upgrades for long games** (the owner, Nov 17 2026: saved for later; the aim is economies that keep growing on large
   maps, enough to feed the megastructures). Today the only upgrades are the Research Lab's (`TECHS`: Cargo Racks,
   Long-life Cells, Rapid Paving, Sentry Optics, Turbo Motors, Power Tools, Nanite Repair), colony-wide and Colony only.
