@@ -1211,6 +1211,8 @@ const EVENTS = {
 };
 const EVENT_ORDER = ['dust', 'meteor', 'flare', 'trader'];
 const EVENT_FIRST = 480, EVENT_GAP = [300, 480], EVENT_WARN = 20;
+/** Seconds between planet events in a mission that has them: it asks the player to ride a few out, so they come sooner. */
+const MISSION_EVENT_GAP = [120, 180];
 const DUST_SPEED = 0.65, FLARE_DRAIN = 2;
 const DUST_ENDLESS = 1e9; // the end (s) of an Endless dust storm's storm (a challenge modifier, MODS.dust): never
 const METEOR_HITS = 6, METEOR_DAMAGE = 4, METEOR_BOT_DAMAGE = 1.5, METEOR_RICH = 2;

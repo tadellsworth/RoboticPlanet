@@ -1883,13 +1883,16 @@ function dispatch(p) {
   if (!idle.length) return;
 
   // 1) A builder for every construction site that has materials waiting to be built with (not from far off
-  //    while a worker close by will soon be free: see nearSoon).
+  //    while a worker close by will soon be free: see nearSoon). A Wall from beside it, the outer row first (wallStands).
+  let stands = null;
   for (const b of blds) {
     if (!idle.length) return;
     if (!b.built && !b.builder && siteFrac(b) > b.progress + 0.01 && !(P.danger && dangerAt(p, b.x, b.y))) { // (a rival AI's: see noteDanger)
+      // (Not the rival's: its wall lines always keep a Gate, aiWallGate and aiTurtleWalls, so its builders have a way home.)
+      if (b.type === 'wall' && !P.ai && (stands = stands || wallStands(p)).wait.has(b.id)) continue;
       const u = take(b.x, b.y, 'build');
       if (u && nearSoon(u, b)) { idle.push(u); continue; }
-      assignBuild(u, b);
+      assignBuild(u, b, stands);
     }
   }
   // 1b) A worker for every building you've paid to repair.
@@ -1935,7 +1938,8 @@ function dispatch(p) {
     const inp = b.built && BDEFS[b.type].inp;
     for (const [g, n0, keep, autoOnly] of needsOf(b)) {
       const h = fed && fed.length && !keep ? feedHaul(b, g, fed) : null, n = h === null ? n0 : Math.min(n0, h);
-      if (n <= 0 || (g === 'fuel' && b.fuelByPipe)) continue;
+      if (n <= 0 || (g === 'fuel' && b.fuelByPipe) || (b.built && P.salvaging && P.salvaging[g])) continue; // (salvage is for sites: see landerSalvage)
+      if (keep && b.airSupply && airBaseNear(p, b.x, b.y)) continue; // (a place switched to Supply by air gets its supply orders by plane, once one is based)
       // Full loads: a factory that is less than a Hauler's load short of an input, with more than its next batch
       // still in hand or on the way, waits to be topped up. (Asked after every batch, a third of all Hauler trips
       // carried a single unit to a factory that wasn't short.) Liquids go as they come.
@@ -2423,7 +2427,8 @@ function repairHint(b) {
 
 /**
  * A colony that has run out of Stone or Fiber with no Quarry or Harvester that can still work
- * (so it couldn't build one) slowly salvages it from its Command Base, enough to get going again.
+ * (so it couldn't build one) slowly salvages it from its Command Base, enough to get going again. Meanwhile, with a
+ * Quarry or Harvester site waiting, that good goes only to sites (P.salvaging, see dispatch), so the site gets it.
  */
 function landerSalvage(p, dt) {
   const P = S.players[p];
@@ -2437,6 +2442,12 @@ function landerSalvage(p, dt) {
       (b.built ? BDEFS[type].bedrock || reachableRes(b.x, b.y, BDEFS[type].radius, res) > 0 : sumValues(b.stock) >= sumValues(BDEFS[type].cost))); // a Quarry can always cut or dig
     // Cement is Stone already baked (2 per Stone), so it counts towards having enough.
     const amount = (have[g] || 0) + (g === 'stone' ? (have.cement || 0) / 2 : 0);
+    // (While it salvages a good for a Quarry or Harvester site, only sites get it: a running factory that burns it, a
+    // Smelter say, took every one before the site did. See dispatch. A person's colony only, and only for a site a road
+    // joins to storage: a rival keeps its own Fiber rules (P.fiberWait), and its Smelters went without for good behind a
+    // Harvester site that never got built, its army stuck at a handful for 45 minutes.)
+    if (!working && amount < SALVAGE_BELOW && !P.ai && S.buildings.some((b) => !b.dead && b.owner === p && b.type === type && !b.built && !b.unlinked)) (P.salvaging = P.salvaging || {})[g] = true;
+    else if (P.salvaging) delete P.salvaging[g];
     if (working || amount >= SALVAGE_BELOW) { P.salvageT[g] = 0; continue; }
     P.salvageT[g] = (P.salvageT[g] || 0) + dt;
     if (P.salvageT[g] < SALVAGE_EVERY) continue;
@@ -2655,13 +2666,49 @@ function nearSoon(u, b) {
   return false;
 }
 
-function assignBuild(u, site) {
+function assignBuild(u, site, stands) {
   if (!u) return;
   cancelTask(u);
   u.task = { type: 'build', site: site.id, phase: 'go' };
   site.builder = u.id;
-  const at = BDEFS[site.type].ramp ? rampStand(u, site) : tIdx(site.x, site.y);
+  const at = BDEFS[site.type].ramp ? rampStand(u, site) : stands && stands.at.has(site.id) ? stands.at.get(site.id) : tIdx(site.x, site.y);
   if (at < 0 || !goTo(u, at % S.W, (at / S.W) | 0)) cancelTask(u);
+}
+
+/**
+ * A Wall is built from beside it, on the home side, so its builder is never left standing on it (in a narrow channel,
+ * walled out for good). For player p, from the ground its bots can walk to from its Command Bases (its Walls in the
+ * way): `at`, each unbuilt Wall site's tile to build it from (the free neighbour nearest home, or the Wall site next to
+ * it on the home side: the inner row of a double wall); and `wait`, the sites another is built from (the inner row
+ * goes up after the outer, which it would otherwise shut off from every builder). A site with neither is built from
+ * its own tile. { at: Map(site id → tile), wait: Set(site id) }
+ */
+function wallStands(p) {
+  const W = S.W, N = W * S.H, d = new Int32Array(N).fill(-1), q = [];
+  const site = (t) => { const b = S.bAt[t] && getE(S.bAt[t]); return !!b && b.owner === p && b.type === 'wall' && !b.built; };
+  for (const b of S.buildings) if (!b.dead && b.owner === p && b.type === 'lander') { const t = tIdx(b.x, b.y); d[t] = 0; q.push(t); }
+  // Walking from home (through its own Gates and Outposts), and one step onto a Wall site: no further.
+  for (let h = 0; h < q.length; h++) {
+    const a = q[h], i = a % W;
+    if (site(a)) continue;
+    for (const c of [i > 0 ? a - 1 : -1, i < W - 1 ? a + 1 : -1, a - W, a + W]) {
+      if (c < 0 || c >= N || d[c] >= 0 || !walkable(c) || !canStep(a, c) || (S.bAt[c] && !site(c) && !passTile(c, p))) continue;
+      d[c] = d[a] + 1; q.push(c);
+    }
+  }
+  const at = new Map(), wait = new Set();
+  for (const b of S.buildings) {
+    if (b.dead || b.owner !== p || b.type !== 'wall' || b.built) continue;
+    const t = tIdx(b.x, b.y), i = b.x;
+    let best = -1;
+    for (const c of [i > 0 ? t - 1 : -1, i < W - 1 ? t + 1 : -1, t - W, t + W]) {
+      if (c >= 0 && c < N && d[c] >= 0 && (!S.bAt[c] || site(c)) && canStep(t, c) && (best < 0 || d[c] < d[best])) best = c;
+    }
+    if (best < 0) continue;
+    at.set(b.id, best);
+    if (S.bAt[best]) wait.add(S.bAt[best]);
+  }
+  return { at, wait };
 }
 
 /**
@@ -2942,6 +2989,7 @@ function doHaul(u, t, dt) {
   if (!moveAlong(u, dt)) return;
   bump(dst.inc, t.good, -(t.n || 1));
   bump(dst.stock, t.good, t.n || 1);
+  if (BOTS[u.type].sea) dst.shipIn = (dst.shipIn || 0) + cargoCount(u); // (goods landed here by ship, all told: Harbour's goal)
   if (u.mix) { for (const k in u.mix) { bump(dst.inc, k, -u.mix[k]); bump(dst.stock, k, u.mix[k]); } delete u.mix; }
   u.carry = null;
   u.carryN = 0;
@@ -4778,6 +4826,9 @@ function hitBuilding(b, dmg, by) {
 function captureBuilding(b, by) {
   const def = BDEFS[b.type], old = b.owner;
   if (def.wild) { clearNest(b, by); return; }
+  // (A defence shot or burned down by robots, counted as it falls: Siege Breakers' goal. Missiles and bombs wreck
+  // theirs through destroyBuilding.)
+  if (b.built && by >= 0 && foes(by, old) && DEFENCE_TYPES.has(b.type) && !def.missile && !def.nukeSilo) S.players[by].stats.forts = (S.players[by].stats.forts || 0) + 1;
   if (def.bunker && b.built) {
     // There's no land to take: a fallen Bunker is wrecked, and the warbots inside walk out.
     dropLoot(b);
@@ -8704,8 +8755,8 @@ function startEvent(E) {
 function endEvent(E) {
   S.recentEvents = (S.recentEvents || []).concat(E.type).slice(-2);
   S.event = null;
-  const rng = makeRng(((S.seed ^ 0x3c1f) + E.n * 104729) >>> 0);
-  S.nextEvent = S.time + EVENT_GAP[0] + rng() * (EVENT_GAP[1] - EVENT_GAP[0]);
+  const rng = makeRng(((S.seed ^ 0x3c1f) + E.n * 104729) >>> 0), gap = S.mission ? MISSION_EVENT_GAP : EVENT_GAP;
+  S.nextEvent = S.time + gap[0] + rng() * (gap[1] - gap[0]);
   if (E.type === 'dust') postMsg(ME, 'The dust storm has blown over.', undefined, undefined, 'info');
   else if (E.type === 'flare') postMsg(ME, 'The solar flare has passed.', undefined, undefined, 'info');
   else if (E.type === 'trader') postMsg(ME, 'The Wren has left orbit, on schedule.', undefined, undefined, 'info');
@@ -12030,6 +12081,7 @@ function landDrop(d) {
     const c = getE(d.to);
     let n = 0;
     for (const g in d.goods) { n += d.goods[g]; if (c && !c.dead && c.owner === d.owner) { bump(c.inc, g, -d.goods[g]); bump(c.stock, g, d.goods[g]); } }
+    if (c && !c.dead && c.owner === d.owner) c.airIn = S.time; // (when crates last landed there; `airAt` is when a plane loaded for it)
     // The crates sit a moment where they came down, their parachutes collapsing beside them, then they're taken in.
     addFx('crateland', d.i + 0.5, d.j + 0.5, { life: 2.8, owner: d.owner, crates: d.crates || [{ dx: 0, dy: 0.62, lag: 0 }], seed: d.id % 97 });
     if (isMe(d.owner)) sfx('thump');

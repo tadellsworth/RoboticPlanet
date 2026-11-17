@@ -57,12 +57,12 @@ Still open: a neutral, shared exchange the rivals compete over; contracts for Ch
   there (turning traffic goes round by another junction). Still open: an interchange, an overpass with slip roads (a
   bigger footprint, dearer) that lets traffic turn without stopping; and whether the rival should put overpasses on its
   busiest crossings (it builds neither lights nor overpasses today).
-- **Recycling: open questions.** (Settled: a robot is taken apart standing at the Foundry, 2 s a round of parts, while
-  the Foundry carries on; a damaged one gives back as much as a sound one, since most give back a single Alloy.) Still
-  open: planes, ships and trains can't reach a Foundry, so they can't be recycled: should their own yards (Airfield,
-  Port, Rail Station) take them apart instead? Recycle spare Workers has no Hauler counterpart for players (the rival
-  scraps both): wanted? Should the rival also scrap other spares (Freight Trucks with no Depot to run, an Agribot with
-  no farm)?
+- **Recycling.** (Settled: a robot is taken apart standing at the Foundry, 2 s a round of parts, while the Foundry
+  carries on; a damaged one gives back as much as a sound one, since most give back a single Alloy.) The owner's
+  answers to the open questions: planes, ships and trains are not recycled at their own yards (Airfield, Port, Rail
+  Station), not for now; no Recycle spare Haulers button for players; the rival scraps its other spares too (Freight
+  Trucks, Tankers, Road Trains, Agribots) when it has too many, is starved of Alloy or Chips, or they stand idle while
+  its Foundry waits for parts (done: `AI_SCRAP` in the README).
 - **Fuel.** Built: Tankers, explosions with chain reactions, Crude and Fuel pipelines, the Generator and trucks burning
   Fuel, and the rival keeping its Fuel up (Bio Farms first when it runs low, an Oil Pump and Refinery once its Foundry
   is up). Still open: a Generator that explodes too.
@@ -201,37 +201,15 @@ Still open:
 The campaign is now the tutorial, in seven chapters (see the README). Held back, or noticed while each mission was
 built and played through headless:
 
-- **King of the Hill, a bonus mission for Uplinks and free-for-all.** The Wheel, 3 players, rival doctrine Random. Setup
-  would set `S.victory = 'uplinks'` and call `placeUplinks(S.seed)` (newGame only sets the victory type outside
-  missions); goals: hold an Uplink (counted from `S.uplinks`, owner 0 and not jammed), then win the race.
-  `finishMission` would also need `M.why = 'uplinks'` for a rival winning it. Kept out of the campaign until a solver
-  shows a three-player Uplinks race can be won; Final Descent only mentions Uplinks and free-for-alls.
-- **Walled-in workers.** A Worker who builds a Wall in a narrow channel can end up standing on it, walled in for good
-  (Hold the Line). Builders and pavers now skip a worker whose last route failed, so the rest of the work goes on, but
-  the worker stays stuck, and planning both rows of a double wall at once can shut the outer row off from every
-  builder. Ideas: step the builder off to the home side when a Wall or Gate is finished; build a Wall from its
-  home-side neighbour, outer row before inner; or let our own bots pass our own unbuilt Wall sites. A design decision.
-- **Salvage that doesn't reach its site.** The Command Base's Fiber/Stone salvage (`landerSalvage`, "so it can always
-  rebuild") can go to a running factory that burns the same good before the gatherer site it was meant for (Border
-  Dispute on Hard stalled on Fiber until the hook set the Harvester site to High priority). A fix in dispatch: while a
-  player is salvaging a good, only sites get it, not built factories. It touches the AI's economy too.
 - **A rail-only line.** A far Rail Station needs a road to be built at all (its builders and materials come by road),
   so Iron Road asks for one. Trains bringing a station site its materials would make a track-only line possible.
-- **Trade Winds waits for its second event.** Events come 300-480 s apart (`EVENT_GAP`), so a quick player can wait a
-  few minutes after the trades. A shorter gap in missions would fix it.
-- **Coach rings.** The tutorial's ring can only mark buildings: not a Trade Post (it isn't in `S.buildings`), and not
-  the Crawler once it rolls out of the Foundry (the hint says to tap it). For a Container Ship order the ring is on the
-  home Port while the supply orders that matter are on the new one.
-- **Small counting quirks.** Airlift's "Supply a building by air" ticks when the Cargo Plane loads up (`airAt` is
-  stamped in `airSupplyRun`), about a minute before the crates land; and a road to the deployed Crawler can fill its
-  supply order by Hauler before a plane is needed. Harbour counts the Container Ship built, not a delivery. Siege
-  Breakers remembers the rival forts it has seen in `S.mission.forts`, once a second, so one built and wrecked within
-  a second is missed; missiles can do most of that goal on their own.
 - **Bombs on a Command Base** didn't visibly dent it in the Final Descent solver runs (armor 30/30 at each minute
   mark). Not needed for the goal, but worth a look with the bombers.
-- **Kits and Fiber.** On some seeds the kit's one Harvester has little Fiber in reach and the Smelter burns it as fast
-  as it comes; the chapter 3 missions add a Grove Planter (and a second Agribot) for that. Other kits may want the same
-  if a slow player runs dry.
+- **Kits and Fiber, Trade Winds.** From Pipe Dreams on the kits bring a Grove Planter (`KIT8`): without one the
+  Harvester's 30-45 Fiber were gone into the Smelter in 5-8 minutes and an idle player lived on salvage. Trade Winds'
+  kit is still `KIT7` (it was left alone while the trade missions were reworked): an idle player there runs low on
+  Fiber at about 6 minutes. Its comment on seed 1445's events (a flare over by 9:36) predates the shorter gap between
+  events in missions (`MISSION_EVENT_GAP`): the flare is now over by 6:33.
 - **Mostly waiting.** Breakthrough is mostly research timers, and Assembly Line and Pipe Dreams take a scripted player
   4-7 minutes; their Hard clocks are generous on purpose.
 

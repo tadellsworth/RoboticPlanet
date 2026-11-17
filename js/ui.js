@@ -3014,11 +3014,11 @@ function missionMeta(def, diff) {
   const size = SIZE_PRESETS[def.size].name, terr = TERRAIN_PRESETS[def.rough].name, shape = (SHAPE_PRESETS[def.shape || 0] || SHAPE_PRESETS[0]).name;
   const limit = def.limit[diff] ? ` · ${def.limit[diff]} min limit` : '';
   // What the mission switches on that missions otherwise leave out.
-  const extras = [def.mode === 'colony' && def.war && 'Warbots', def.wildlife && 'The Murmur', def.events && 'Planet events', def.nuke && 'Nuclear race', def.lab && 'Research Lab'].filter(Boolean);
+  const extras = [def.victory && VICTORY[def.victory] && VICTORY[def.victory].name, def.mode === 'colony' && def.war && 'Warbots', def.wildlife && 'The Murmur', def.events && 'Planet events', def.nuke && 'Nuclear race', def.lab && 'Research Lab'].filter(Boolean);
   const more = extras.length ? ` · ${extras.join(', ')}` : '';
   if (def.mode === 'colony') return `Colony · ${shape} · ${size} · ${terr}${more}${limit}`;
   const n = playerCount('versus', def.shape || 0, def.players) - 1, style = isDoctrine(def.style) ? ` ${PERSONALITIES[def.style].name}` : '';
-  const rival = `${n > 1 ? n + ' ' : ''}${DIFFICULTY[def.rival[diff]].label}${style} rival${n > 1 ? 's' : ''}${def.passive && def.passive[diff] ? ' (passive)' : ''}`;
+  const rival = `${n > 1 ? n + ' ' : ''}${DIFFICULTY[def.rival[diff]].label}${style} rival${n > 1 ? 's' : ''}${def.style === 'random' ? ` (random doctrine${n > 1 ? 's' : ''})` : ''}${def.passive && def.passive[diff] ? ' (passive)' : ''}`;
   return `Versus · ${shape} · ${size} · ${terr} · ${rival}${more}${limit}`;
 }
 
@@ -3074,6 +3074,11 @@ function startMission(k, diff) {
   // (The card shows plain text: a <b> in the brief or an intro line would show as typed.)
   postMsg(ME, plainHint(def.brief), 0, 0, 'info');
   for (const line of def.intro || []) postMsg(ME, plainHint(line), 0, 0, 'info');
+  // (Rivals dealt a doctrine at random: which they got.)
+  if (def.style === 'random') {
+    const dealt = S.players.filter((P) => P.id !== ME && !P.absent && isDoctrine(P.style)).map((P) => `${callsign(P.id, true)} is ${PERSONALITIES[P.style].noun} (${PERSONALITIES[P.style].plain})`);
+    if (dealt.length) postMsg(ME, `Dealt: ${dealt.join('; ')}.`, 0, 0, 'info');
+  }
   const g0 = def.goals[0];
   if (g0 && g0.hint) postMsg(ME, `First: ${goalText(g0, diff)}. ${plainHint(g0.hint)}`, 0, 0, 'good');
   showBriefing();
@@ -3122,7 +3127,10 @@ function missionCoach() {
     if (now >= 0) {
       // (Its site already going up: nothing to press but the goal's own buttons on the site's panel, if any; with no
       // road to it, its Lay road. See missionHint.)
-      const g = def.goals[now], sites = goalSites(g, M.diff), lone = sites.find(siteNeedsRoad);
+      // (A goal whose `at` is a function names the very thing to tap, a building or a robot, or { e, ui }: its buttons too.)
+      const g0 = def.goals[now], pick = typeof g0.at === 'function' && g0.at(S);
+      const g = pick ? { ...g0, at: undefined, site: pick.e || pick, ui: pick.ui || g0.ui, one: true } : g0;
+      const sites = goalSites(g, M.diff), lone = sites.find(siteNeedsRoad);
       const onSite = (g.ui || '').split(',').filter((p) => /#sh-/.test(p) && !/#sh-layroad/.test(p)).join(',');
       const c = lone ? coachTarget({ ui: '#sh-layroad', site: lone }) : sites.length ? coachTarget({ ...g, ui: onSite, site: sites[0] }) : coachTarget(g);
       sel = c.sel;
@@ -3130,7 +3138,8 @@ function missionCoach() {
       // (A later time than now is from an earlier game this session: ring again at once.)
       if (c.ring && (S.time - (UI.coachRingT ?? -9) >= 1.5 || S.time < UI.coachRingT)) {
         UI.coachRingT = S.time;
-        addFx('ring', c.ring.x + 0.5, c.ring.y + 0.5, { color: '#38d4ff', r: 1.6, life: 1.1 });
+        const bot = !!BOTS[c.ring.type]; // (a robot stands at its own x, y; a building or Trade Post on its tile)
+        addFx('ring', c.ring.x + (bot ? 0 : 0.5), c.ring.y + (bot ? 0 : 0.5), { color: '#38d4ff', r: bot ? 1.1 : 1.6, life: 1.1 });
       }
     }
   }
@@ -3209,7 +3218,7 @@ function coachTargetAll(g, sel) {
   // (The panel open is another building's, say the Quarry's when the goal means the spent Ore Mine's Dismantle: its
   // buttons don't light. The rest of the selector does, and the building the goal means gets the ring.)
   const shown = UI.sheetKind === 'bld' && getE(UI.sheetFor), want = shown && /#sh-/.test(sel) ? coachBuilding(g) : null;
-  if (want && want.type !== shown.type) {
+  if (want && (g.one ? want !== shown : want.type !== shown.type)) { // (`one`: that very building, not any of its type)
     const rest = sel.split(',').filter((p) => !/#sh-/.test(p)).join(',');
     return { sel: rest ? coachTarget({ ...g, ui: rest }).sel : '', ring: want };
   }
@@ -3232,11 +3241,17 @@ function coachTargetAll(g, sel) {
  * first, then anyone's (a rival Command Base to bomb). The first of that type, or null.
  */
 function coachBuilding(g) {
-  if (g.site) return g.site.dead ? null : g.site; // (a given building: see missionCoach)
+  if (g.site) return g.site.dead ? null : g.site; // (a given building, robot or Trade Post: see missionCoach)
   const live = S.buildings.filter((b) => !b.dead && BDEFS[b.type]);
   if (g.at) return live.find((b) => b.owner === ME && b.type === g.at) || live.find((b) => b.type === g.at) || null;
   const hint = plainHint(g.hint);
   if (!hint) return null;
+  // ("Tap a gold Trade Post": the post nearest your Command Base where you have no Terminal yet. Posts aren't buildings.)
+  const pk = hint.indexOf('Trade Post'), L = S.players[ME] && getE(S.players[ME].lander);
+  if (pk >= 0 && L && S.posts && S.posts.length && !live.some((b) => { const k = hint.indexOf(BDEFS[b.type].name); return k >= 0 && k < pk; })) {
+    const free = S.posts.filter((p) => !live.some((b) => b.owner === ME && BDEFS[b.type].terminal && nearPost(b.x, b.y) === p));
+    if (free.length) return free.reduce((a, p) => (dist2(p.x, p.y, L.x, L.y) < dist2(a.x, a.y, L.x, L.y) ? p : a));
+  }
   // Full names first ("the Bot Foundry"), then short ones after "the" or "a" ("the Foundry": not the verb in "Tap the").
   for (const short of [false, true]) for (const mineOnly of [true, false]) {
     let best = null, at = Infinity;
@@ -3272,7 +3287,8 @@ function showMissionOver() {
   $('o-text').textContent = won
     ? `${def.name} (${MISSION_DIFF_NAMES[M.diff]}) done in ${fmtTime(S.time)}.`
     : M.why === 'time' ? `${def.name}: time ran out before every goal was met.`
-      : M.why === 'lander' ? `${def.name}: the rival captured your Command Base.` : `${def.name}: the game ended before every goal was met.`;
+      : M.why === 'lander' ? `${def.name}: ${S.players.length > 2 && S.players[S.winner] ? playerName(S.winner) : 'the rival'} captured your Command Base.`
+        : M.why === 'uplinks' ? `${def.name}: ${playerName(S.winner)} held the Uplinks for ${UPLINK.hold / 60} minutes.` : `${def.name}: the game ended before every goal was met.`;
   $('o-stats').innerHTML = states.map((s) => { return `<span>${s.done ? '✓' : '✗'} ${s.text}</span><span>${s.need > 1 ? `${s.have}/${s.need}` : s.done ? 'Done' : '–'}</span>`; }).join('');
   $('o-report').innerHTML = gameReport(won); // (the moments that mattered, where goods went, a tip: js/insight.js)
   $('o-report').hidden = !$('o-report').innerHTML;
