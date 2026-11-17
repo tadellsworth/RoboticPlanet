@@ -39,11 +39,22 @@ const AI_FEW = 8, AI_ENOUGH = 10, AI_PLENTY = 16;
 /** Room kept under the bot limit for the army it wants (a share of the limit at most), and for workers past that. */
 const AI_ARMY_ROOM = 0.4, AI_WORKER_ROOM = 6;
 /**
- * Scrapping extras (see step 3 of aiThink): with less room under the bot limit than the army it wants, Workers past the
- * ones its buildings call for and `workers` more, and Haulers past the ones it wants and `haulers` more (`minHaulers` at
- * least), go to its Bot Foundry to be recycled, at most `batch` on their way at once.
+ * Scrapping extras (see aiScrap): robots it has more of than it uses go to its Bot Foundry to be recycled, at most
+ * `batch` on their way at once, and only ones with nothing to do (none carrying goods, running a building or building).
+ * More than it uses: Workers past the ones its buildings call for and `workers` more, Haulers past the ones it wants and
+ * `haulers` more (`minHaulers` at least), Tankers past the ones it wants and one more, Freight Trucks and Road Trains
+ * past the ones it wants, Agribots and Pavers past the ones its buildings (sites too) take and one more; and of the
+ * vehicles and crews only ones idle for a while. It scraps them:
+ * - too many: with less room under the bot limit than the army it wants (vehicles and crews idle `idle` seconds);
+ * - in a crisis: no Alloy or no Chips for `crisis` seconds (P.dry) with next to none being made, the ones that give back
+ *   what it lacks (only vehicles give Chips back; vehicles and crews idle `crisisIdle` seconds);
+ * - when it makes economic sense (not Easy): its Bot Foundry waits for parts that a vehicle, crew or Hauler idle for
+ *   `eco` seconds gives back, one at a time, at most one every `ecoGap` seconds.
+ * A kind scrapped isn't ordered again for `hold` seconds (P.scrapT).
  */
-const AI_SCRAP = { workers: 4, haulers: 2, minHaulers: 4, batch: 4 };
+const AI_SCRAP = { workers: 4, haulers: 2, minHaulers: 4, batch: 4, idle: 120, crisis: 90, crisisIdle: 60, eco: 300, ecoGap: 60, hold: 300 };
+/** The robots it may scrap, vehicles first (they give Chips back too); never the army, planes, ships, trains or Crawlers. */
+const AI_SCRAP_KINDS = ['roadtrain', 'truck', 'tanker', 'agribot', 'paver', 'worker', 'hauler'];
 /**
  * Crystal: every robot takes a Chip, and every Chip a Crystal. It counts as running short once what's left (in stock and
  * in the ground on its land) would last under AI_CRYSTAL_MINS minutes at the rate it's used (AI_CRYSTAL_BURN a minute at
@@ -205,6 +216,83 @@ function aiUsableRes(p, i0, j0, radius, type) {
     }
   }
   return n;
+}
+
+/** Did rival P scrap robots of `kind` in the last AI_SCRAP.hold seconds? Then its Foundry doesn't order that kind yet. */
+function aiScrapHeld(P, kind) { return !!(P.scrapT && S.time - (P.scrapT[kind] ?? -1e9) < AI_SCRAP.hold); }
+
+/** Has robot u something to do (a job, a load aboard, taking cover)? Going home, charging, filling up or being mended isn't. */
+function aiBusy(u) {
+  const tt = u.task && u.task.type;
+  return !!(tt && tt !== 'home' && tt !== 'charge' && tt !== 'refuel' && tt !== 'repair') || !!u.carry || cargoCount(u) > 0;
+}
+
+/**
+ * Rival p sends robots it has more of than it uses to its Bot Foundry to be recycled (see AI_SCRAP). c: { me (its
+ * buildings), few (triage), smart (not Easy), room (the room under the bot limit it lacks for the army it wants), use
+ * (how many of each kind it uses: what its Foundry orders them for) }. It keeps u.idleSince on its robots of the kinds
+ * it may scrap: since when each has had nothing to do (gone when it's busy).
+ */
+function aiScrap(p, c) {
+  const P = S.players[p];
+  let away = 0;
+  for (const u of S.bots) {
+    if (u.dead || u.owner !== p) continue;
+    if (recycling(u)) { away++; continue; }
+    if (!AI_SCRAP_KINDS.includes(u.type)) continue;
+    if (aiBusy(u)) delete u.idleSince;
+    else if (u.idleSince === undefined) u.idleSince = S.time;
+  }
+  if (away >= AI_SCRAP.batch) return;
+  const foundries = c.me.filter((b) => b.built && BDEFS[b.type].bots);
+  if (!foundries.length) return;
+  const U = c.use, keep = {
+    worker: U.worker + AI_SCRAP.workers, hauler: Math.max(AI_SCRAP.minHaulers, U.hauler + AI_SCRAP.haulers), tanker: U.tanker + 1,
+    truck: U.truck, roadtrain: U.roadtrain, agribot: (U.agribot || 0) + 1, paver: (U.paver || 0) + 1,
+  };
+  let sent = 0;
+  // Up to `max` robots past `keep`, idle `idleFor` seconds at least (Workers and Haulers: `plainIdle`), of the kinds that
+  // give back `gives` (any: null), each to the nearest Foundry it can get to; the vehicles first, then the longest idle.
+  const send = (max, idleFor, plainIdle, gives, kinds) => {
+    if (max <= 0) return 0;
+    const have = {}, list = [];
+    for (const u of S.bots) {
+      if (u.dead || u.owner !== p || !(u.type in keep) || recycling(u)) continue;
+      have[u.type] = (have[u.type] || 0) + 1;
+      if ((kinds && !kinds.includes(u.type)) || (gives && !(recycleYield(u.type)[gives] > 0))) continue;
+      if (u.idleSince === undefined || aiBusy(u) || u.shyUntil > S.time || !recyclable(u)) continue;
+      if (S.time - u.idleSince < (u.type === 'worker' || u.type === 'hauler' ? plainIdle : idleFor)) continue;
+      list.push(u);
+    }
+    list.sort((a, b) => AI_SCRAP_KINDS.indexOf(a.type) - AI_SCRAP_KINDS.indexOf(b.type) || a.idleSince - b.idleSince || a.id - b.id);
+    let n = 0;
+    for (const u of list) {
+      if (n >= max) break;
+      if (have[u.type] <= keep[u.type]) continue;
+      const f = recycleFoundry(u);
+      if (!f) continue;
+      startRecycle(u, f);
+      have[u.type]--; n++;
+      (P.scrapT = P.scrapT || {})[u.type] = S.time;
+    }
+    sent += n;
+    return n;
+  };
+  // Crisis: no Alloy or no Chips for a while (P.dry: none on hand while the Foundry or a site waits for it), with next to
+  // none being made: the robots that give back what it lacks (only vehicles give Chips back).
+  const goods = playerGoods(p), rates = goodRates(p);
+  const dryFor = (g) => { const r = P.dry && P.dry[g]; return r && S.time - r[1] <= 4 ? S.time - r[0] : 0; };
+  const lacks = (g) => dryFor(g) >= AI_SCRAP.crisis && rates[g].made < 1 && (goods[g] || 0) < 1;
+  const lackChip = lacks('chip');
+  if (lackChip || lacks('alloy')) send(AI_SCRAP.batch - away, AI_SCRAP.crisisIdle, 0, lackChip ? 'chip' : null, c.few ? AI_SCRAP_KINDS.filter((k) => k !== 'worker') : null);
+  // Too many: no room under the bot limit for the army it wants.
+  if (!c.few && c.room > 0) send(Math.min(AI_SCRAP.batch - away, c.room - away) - sent, AI_SCRAP.idle, 0, null, null);
+  // Economic sense (not Easy): the Foundry waits for parts that a robot idle for minutes would give back. One at a time.
+  if (c.smart && !c.few && !away && !sent && S.time - (P.scrapEco ?? -1e9) >= AI_SCRAP.ecoGap) {
+    const waits = (g) => foundries.some((f) => f.status && f.status.startsWith('Waiting for ' + GOOD[g].name));
+    const gives = waits('chip') ? 'chip' : waits('alloy') ? 'alloy' : null;
+    if (gives && send(1, AI_SCRAP.eco, AI_SCRAP.eco, gives, AI_SCRAP_KINDS.filter((k) => k !== 'worker'))) P.scrapEco = S.time;
+  }
 }
 
 function aiThink(p) {
@@ -700,6 +788,8 @@ function aiThink(p) {
   const liquidBlds = me.filter((b) => b.built && (BDEFS[b.type].charger || BDEFS[b.type].pump || BDEFS[b.type].burner ||
     ['refinery', 'farm', 'munitions', 'tarworks', 'disruptor'].includes(b.type))).length;
   const wantTankers = Math.min(4, 1 + Math.floor(liquidBlds / 5));
+  // A forward Depot with supply orders gets a Freight Truck to keep it stocked (and one more for every 35 buildings).
+  const wantTrucks = me.some((d) => d.keep && d.built && !BDEFS[d.type].terminal) ? 1 + Math.floor(me.length / 35) : 0;
   const army = (kinds.warbot || 0) + (kinds.bulwark || 0) + (kinds.torch || 0); // (the whole army, specialists too)
   // (An enemy gun covering our buildings: at least enough warbots to knock it out, see aiClearGuns.)
   const wantArmy = S.mode === 'colony' || botBanned(p, 'warbot') ? 0 : Math.max(aiWantArmy(lvl, p), P.gunWant || 0); // (barred from making warbots: no army to build)
@@ -758,6 +848,8 @@ function aiThink(p) {
     b.mode = S.mode === 'colony' ? 'worker' : workers < Math.min(staffed + MIN_FREE_WORKERS, wantWorkers) ? 'worker'
       : army < wantArmy ? (workers < wantWorkers ? 'alt' : 'warbot')
         : workers < wantWorkers ? 'worker' : spare <= AI_WORKER_ROOM ? 'off' : workers > wantWorkers + 4 ? 'warbot' : 'alt';
+    // (Workers scrapped lately (see aiScrap): no spare ones made in their place, only the ones its buildings call for.)
+    if (b.mode === 'alt' && aiScrapHeld(P, 'worker')) b.mode = 'warbot';
     // A third of the army with no Ammo: no more warbots until it's armed (the Alloy goes to Ammo).
     if (unarmed >= Math.max(4, army / 3) && (b.mode === 'warbot' || b.mode === 'alt')) b.mode = workers < wantWorkers ? 'worker' : 'off';
     if (botBanned(p, 'warbot') && (b.mode === 'warbot' || b.mode === 'alt')) b.mode = workers < wantWorkers ? 'worker' : 'off';
@@ -784,7 +876,7 @@ function aiThink(p) {
     else if ((kinds.hauler || 0) < (armyBehind ? Math.min(wantHaulers, 6) : wantHaulers) && !(b.orders.hauler > 0)) b.orders.hauler = 1;
     else if ((kinds.tanker || 0) < wantTankers && !(b.orders.tanker > 0)) b.orders.tanker = 1;
     // A forward Depot with supply orders gets a Freight Truck to keep it stocked.
-    else if (me.some((d) => d.keep && d.built && !BDEFS[d.type].terminal) && (kinds.truck || 0) < 1 + Math.floor(me.length / 35) && !(b.orders.truck > 0)) b.orders.truck = 1;
+    else if ((kinds.truck || 0) < wantTrucks && !(b.orders.truck > 0)) b.orders.truck = 1;
     // Howitzers for siege once the army is up: one, and one more for every ten warbots (at most three).
     const wantRockets = S.mode === 'colony' ? 0 : Math.max(P.gunTarget ? 1 : 0, S.time < lvl.grace ? 0 : Math.min(3, Math.floor(army / 10) + (army >= lvl.threshold ? 1 : 0)));
     if ((kinds.rocket || 0) < wantRockets && !(b.orders.rocket > 0) && !armyBehind && !botBanned(p, 'rocket') && me.some((a) => a.type === 'armory' && a.built)) b.orders.rocket = 1;
@@ -806,17 +898,19 @@ function aiThink(p) {
     if ((tradeFirst || me.some((t) => BDEFS[t.type].terminal)) && !(kinds.roadtrain > 0) && !(b.orders.roadtrain > 0)) b.orders.roadtrain = 1;
     // No room under the bot limit but the army's: only the army's specialists (and a first Tanker) are made.
     if (!civilOk) for (const k in b.orders) if (!(BOTS[k] && BOTS[k].army) && !(k === 'tanker' && !(kinds.tanker > 0))) delete b.orders[k];
+    // A kind it scrapped lately isn't ordered again (but a Tanker when it has none: see aiScrap).
+    for (const k in b.orders) if (aiScrapHeld(P, k) && !(k === 'tanker' && !(kinds.tanker > 0))) delete b.orders[k];
     break;
   }
-  // Scrap the extras: no room under the bot limit for the army it wants (a colony that took a lot of buildings and lost
-  // them again, say, sits at the limit full of Workers it has no work for), so Workers and Haulers past what it needs
-  // (AI_SCRAP) go to its Foundry to be recycled, a few at a time, until there's room: its Foundry fills it with warbots.
-  if (S.mode !== 'colony' && !few && armyRoom > spare) {
-    let away = 0;
-    for (const u of S.bots) if (!u.dead && u.owner === p && recycling(u)) away++;
-    let n = Math.min(AI_SCRAP.batch - away, armyRoom - spare - away);
-    if (n > 0) n -= recycleSpare(p, 'worker', needWorkers + AI_SCRAP.workers, n);
-    if (n > 0) recycleSpare(p, 'hauler', Math.max(AI_SCRAP.minHaulers, wantHaulers + AI_SCRAP.haulers), n);
+  // Scrap the extras: robots it has more of than it uses go to its Foundry to be recycled, a few at a time, when it has
+  // no room under the bot limit for the army it wants (a colony that took a lot of buildings and lost them again, say,
+  // sits at the limit full of Workers, trucks and crews it has no work for), when it's starved of Alloy or Chips, or
+  // when they have stood idle for minutes while the Foundry waits for parts (see AI_SCRAP).
+  if (S.mode !== 'colony') {
+    const use = { worker: needWorkers, hauler: wantHaulers, tanker: wantTankers, truck: wantTrucks, agribot: 0, paver: 0,
+      roadtrain: tradeFirst || wantTrucks || me.some((t) => BDEFS[t.type].terminal) ? 1 : 0 }; // (a Terminal to serve, or a far Depot)
+    for (const b of me) { const crew = BDEFS[b.type].crew; if (crew) use[crew] = (use[crew] || 0) + 1; } // (sites too: they will take one)
+    aiScrap(p, { me, few, smart, room: armyRoom - spare, use });
   }
   // Depots out towards the front keep Cement for building there (and Ammo), and take in nothing that is dug or cut:
   // a Depot among the far Mines was the nearest storage for their Ore, which then lay there, a long run from the
