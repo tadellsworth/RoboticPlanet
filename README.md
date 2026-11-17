@@ -32,7 +32,7 @@ how goods move.
   Traffic**, **Industry and Trade**, **Sea and Sky** (all Colony games, so the economy is learned in peace), then
   **First Contact** (the Murmur's nests, their cavern lair the Hollow, a passive rival, a border war, a chokepoint against a Herald) and **War** (Ammo and
   repairs, trade convoys, escorts and convoy raids against a Salvager, Torches, Bulwarks and missiles against a Warden, the Nuclear race, Keeps and bombers), then a **Bonus**:
-  **King of the Hill**, an Uplinks race for three on The Wheel against two rivals of random doctrine (`victory:
+  **King of the Hill**, an Uplinks race for three on The Wheel against two rivals of random doctrine (Normal ones on Hard; `victory:
   'uplinks'`: missionOptions sets `S.victory` and calls `placeUplinks`; goals: hold an Uplink, hold two at once, win
   the race; a rival winning it loses the mission with `M.why = 'uplinks'`). All of them are open
   from the start; finishing one ticks it off at that difficulty (saved by its `id`, so a reworked mission keeps its
@@ -373,7 +373,12 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   two robots (Warbots from garrisons as for a march, or idle Workers, who board at the Airfield: the `board` task and
   `ferryWait`, as for a Ferry) anywhere, the enemy's land too, or up to 8 goods (`u.cargo`) for a place **supplied by
   air** (`b.airSupply`: any building with needs, construction sites too; a Drop Outpost and sites in its land have it
-  on). Its supply orders then come by plane only, once one is based at an Airfield, not by Hauler (`dispatch`). The
+  on). Its supply orders then come by plane only, once one is based at an Airfield, not by Hauler (`dispatch`), until a
+  road from home reaches the place (`onHomeNet`: a road, not a ferry line, the sea or a Rail Station's conveyor): then
+  it switches itself off in `dispatch`, Drop Outposts and sites in their land too, and Haulers supply it (a finished
+  building's owner is told; a site goes over quietly). Where a road from home already reaches, the `airSupply` order
+  can't switch it on (its On button is greyed out, `airSupplyRoad`). A building that changes hands loses it (it was its
+  old owner's choice), a Drop Outpost apart. Only the places switched to it are looked at. The
   places take turns (`airSupplyRun`: the one served longest ago, `c.airAt`, or run dry of something, first; `c.airIn`
   is when crates last landed there). A
   supply drop comes down as a crate for every few goods (`d.crates`), swaying under team parachutes, and lands in front of
@@ -439,6 +444,13 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   `stats.scorched`, and `stats.scorchedFoe` when the soil was a foe's (`soilHolder`: the owner of the nearest Bio Farm
   whose fields reach it, else the land's). A Bio Farm with no soil left says its fields were burned (`burntIn`).
   `hashState` covers `S.fert` and the fires.
+- **Forts taken out** (`fortTaken`, `stats.forts`: Siege Breakers' "Take out {n} Walls or turrets"): a foe's built
+  defence (`DEFENCE_TYPES` but the Silos) counts for whoever took it out, by any means: robots shooting, burning or
+  capturing it (`captureBuilding`), or a Missile (direct or its blast), a nuclear one, a bomb, napalm or a Howitzer's
+  shell wrecking it. Missiles and bombs used not to count. Played headless with the AI on your side plus the hints'
+  steps (three starts each), every game is still won, and the goal comes a little sooner where it came last: on
+  average 15:02 to 13:06 on Easy, 24:40 to 23:44 on Normal, 27:00 to 25:02 on Hard, the mission 20.8 to 18.9, 27.0 to
+  26.1 and 30.1 to 28.4 minutes. The hints alone (no AI) play the same as before.
 - **Flak Guns** (4 Cement, 3 Alloy; Build → Defend; Versus): a twin anti-aircraft gun (`def.flak`, `updateFlak`). It
   tracks the nearest enemy aircraft in the air within 7 tiles (`aircraftNear`; never one on the ground, never a robot)
   and every `reload` s fires a salvo of `salvo` shells, each led to where the plane will be when it gets there (shell
@@ -1204,7 +1216,8 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   past the ones it wants and 2 more (4 at least), go to its Foundry to be recycled, at most 4 on their way at once and
   never one at work or carrying goods, until the room is there; its Foundry fills it with warbots. It scraps the same
   spares when it's starved (no Alloy or no Chips for a minute and a half, `P.dry`, with under one a minute being made;
-  short of Chips, only vehicles, which give Chips back), and on Medium and up one vehicle, Agribot or Hauler idle five
+  short of Chips, only vehicles, which give Chips back), on every level, Easy too (the owner's call), and on
+  Medium and up one vehicle, Agribot or Hauler idle five
   minutes at a time while its Foundry waits for the parts it would give back. A kind it has scrapped isn't ordered
   again for five minutes (`P.scrapT`). **Crystal** (every robot takes a Chip, every Chip a Crystal) runs short
   by how long what's left would last, in stock and in the ground on its land, at the rate its Chip Fabs burn it

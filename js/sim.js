@@ -1742,6 +1742,14 @@ function dispatch(p) {
   for (const t of planAll(p).slice()) {
     if (S.bAt[t] || (S.owner[t] >= 0 && S.owner[t] !== p && !(bridgeable(t) && bridgeHead(p, t % S.W, (t / S.W) | 0)))) cancelPlan(t);
   }
+  // Supply by air switches itself off once a road from home reaches the place (onHomeNet: a road, not a ferry line,
+  // the sea or a conveyor): Haulers supply it from then on. Only places switched to it are looked at. A finished
+  // building's owner hears of it; a site goes over quietly.
+  for (const b of S.buildings) {
+    if (!b.airSupply || b.dead || b.owner !== p || !onHomeNet(b)) continue;
+    b.airSupply = false;
+    if (b.built) postMsg(p, `A road reaches the ${BDEFS[b.type].name} now: Haulers supply it, and Supply by air is off.`, b.x, b.y, 'info');
+  }
   // Out past the roads (a foothold dropped by air), Workers carry goods by hand between buildings no
   // Hauler's road reaches, over ground they can walk: a Drop Outpost's goods to a site beside it.
   const zoneAt = (x, y) => S.zone[tIdx(Math.floor(x), Math.floor(y))];
@@ -1940,7 +1948,7 @@ function dispatch(p) {
     for (const [g, n0, keep, autoOnly] of needsOf(b)) {
       const h = fed && fed.length && !keep ? feedHaul(b, g, fed) : null, n = h === null ? n0 : Math.min(n0, h);
       if (n <= 0 || (g === 'fuel' && b.fuelByPipe) || (b.built && P.salvaging && P.salvaging[g])) continue; // (salvage is for sites: see landerSalvage)
-      if (keep && b.airSupply && airBaseNear(p, b.x, b.y)) continue; // (a place switched to Supply by air gets its supply orders by plane, once one is based)
+      if (keep && b.airSupply && airBaseNear(p, b.x, b.y)) continue; // (a place switched to Supply by air gets its supply orders by plane, once one is based, until a road reaches it: see above)
       // Full loads: a factory that is less than a Hauler's load short of an input, with more than its next batch
       // still in hand or on the way, waits to be topped up. (Asked after every batch, a third of all Hauler trips
       // carried a single unit to a factory that wasn't short.) Liquids go as they come.
@@ -4828,13 +4836,22 @@ function hitBuilding(b, dmg, by) {
   if (b.armor <= 0) captureBuilding(b, by);
 }
 
+/**
+ * A foe's defence (a Wall, Gate, gun or Keep: DEFENCE_TYPES but the Silos) that player `by` took out just now, by any
+ * means, counts for `by` as it falls: Siege Breakers' goal (stats.forts). Robots that shoot, burn or capture it come
+ * here through captureBuilding; a Missile, a nuclear one, a bomb (napalm too) or a Howitzer's shell that wrecks it, just
+ * before its destroyBuilding. Call it while b still has its owner.
+ */
+function fortTaken(b, by) {
+  const def = BDEFS[b.type];
+  if (b.built && by >= 0 && foes(by, b.owner) && DEFENCE_TYPES.has(b.type) && !def.missile && !def.nukeSilo) S.players[by].stats.forts = (S.players[by].stats.forts || 0) + 1;
+}
+
 function captureBuilding(b, by) {
   const def = BDEFS[b.type], old = b.owner;
   if (def.burrow) { collapseExit(b, by); return; }
   if (def.wild) { clearNest(b, by); return; }
-  // (A defence shot or burned down by robots, counted as it falls: Siege Breakers' goal. Missiles and bombs wreck
-  // theirs through destroyBuilding.)
-  if (b.built && by >= 0 && foes(by, old) && DEFENCE_TYPES.has(b.type) && !def.missile && !def.nukeSilo) S.players[by].stats.forts = (S.players[by].stats.forts || 0) + 1;
+  fortTaken(b, by); // (a defence shot, burned down or captured by robots, counted as it falls)
   if (def.bunker && b.built) {
     // There's no land to take: a fallen Bunker is wrecked, and the warbots inside walk out.
     dropLoot(b);
@@ -4853,6 +4870,7 @@ function captureBuilding(b, by) {
   }
   releaseBotsFrom(b, false); // whoever was inside (out of Ammo, or the crew) flees: they aren't killed
   delete b.prio; delete b.smode; delete b.reject; b.paused = false;
+  if (!BDEFS[b.type].airdrop) delete b.airSupply; // (Supply by air was its old owner's choice; a Drop Outpost keeps it)
   b.fixLeft = 0; b.fixer = 0;
   // Only a fort changes hands. Anything else is wrecked (below) as its old owner's: the attackers keep
   // their orders (releaseBotsFrom calls off only the owner's), and a Gate's road stays the defender's.
@@ -5589,6 +5607,7 @@ function eliminate(old, by, how) {
     if (!e.built) { destroyBuilding(e, true); continue; }
     releaseBotsFrom(e, true);
     delete e.prio; delete e.smode; delete e.reject; e.paused = false;
+    if (!BDEFS[e.type].airdrop) delete e.airSupply; // (as in captureBuilding)
     e.fixLeft = 0; e.fixer = 0; e.timer = 0; e.garrison = []; e.garInc = 0;
     e.owner = by; e.tgt = 0;
     e.armor = Math.max(4, Math.min(e.armor, BDEFS[e.type].armor * 0.4));
@@ -6708,6 +6727,7 @@ function rocketHit(b, dmg, by) {
   else if (b.armor <= 0) {
     postMsg(by, `Your artillery wrecked the enemy ${def.name}.`, b.x, b.y, 'good');
     postMsg(b.owner, `Enemy artillery wrecked your ${def.name}!`, b.x, b.y, 'lost');
+    fortTaken(b, by);
     destroyBuilding(b, true);
     return;
   }
@@ -7511,6 +7531,7 @@ function missileImpact(m) {
     if (b.armor <= 0 && !captureOnly(b)) {
       postMsg(m.owner, `Your missile wrecked the enemy ${name}.`, b.x, b.y, 'good');
       postMsg(b.owner, `A missile wrecked your ${name}!`, b.x, b.y, 'lost');
+      fortTaken(b, m.owner);
       destroyBuilding(b, true);
     } else {
       const floor = captureOnly(b) ? missileFloor(b) : 0;
@@ -7526,6 +7547,7 @@ function missileImpact(m) {
     hitByNow(e.owner, m.owner);
     if (e.armor <= 0 && !captureOnly(e)) {
       postMsg(e.owner, `The blast wrecked your ${BDEFS[e.type].name}!`, e.x, e.y, 'lost');
+      fortTaken(e, m.owner);
       destroyBuilding(e, true);
     } else if (captureOnly(e) && e.armor < missileFloor(e)) e.armor = Math.min(missileFloor(e), e.armor + md.splashDamage);
   }
@@ -7750,6 +7772,7 @@ function nukeImpact(m) {
         if (dist2(b.x + 0.5, b.y + 0.5, cx, cy) <= NUKE.direct * NUKE.direct && m.owner >= 0 && b.owner >= 0 && foes(m.owner, b.owner) && S.players[b.owner] && !S.players[b.owner].out) { direct.push(b); lost[b.owner]++; }
       } else {
         lost[b.owner]++;
+        fortTaken(b, m.owner);
         destroyBuilding(b, true);
       }
     }
@@ -12724,6 +12747,7 @@ function bombHit(b, dmg, by) {
   else if (b.armor <= 0) {
     postMsg(by, `Your bomber destroyed the enemy ${def.name}.`, b.x, b.y, 'good');
     postMsg(b.owner, `An enemy bomber destroyed your ${def.name}!`, b.x, b.y, 'lost');
+    fortTaken(b, by);
     destroyBuilding(b, true);
     return;
   }
