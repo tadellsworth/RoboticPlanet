@@ -530,7 +530,7 @@ const RENDER_BUDGET = 8.3e6;
  */
 const GFX_STEPS = ['saver', 'auto', 'high', 'ultra'];
 const GFX_LEVELS = {
-  saver: { dpr: 1, budget: RENDER_BUDGET, fps: 30, fx: 0.5, wx: 0.5, hd: [TP * 1.2, Infinity], hdMem: 0.5, night: 0, quick: false },
+  saver: { dpr: 1, budget: RENDER_BUDGET, fps: 30, fx: 0.5, wx: 0.5, hd: [TP * 1.2, 64 * 1.25], hdMem: 1, night: 0, quick: false },
   auto: { dpr: 2, budget: RENDER_BUDGET, fps: 0, fx: 1, wx: 1, hd: [TP * 1.2, 64 * 1.25], hdMem: 1, night: 1, quick: false },
   high: { dpr: 2, budget: 21e6, fps: 0, fx: 1.5, wx: 1, hd: [TP, 64], hdMem: 2, night: 1, quick: true }, // (a 6K screen at 2×)
   ultra: { dpr: Infinity, budget: 36e6, fps: 0, fx: 2, wx: 2, hd: [TP, 64], hdMem: 2, night: 2, quick: true }, // (the screen's own: up to 8K at 2×)
@@ -580,22 +580,26 @@ function resizeRender() {
  * being held there by the screen or a power-saving mode (an iPhone in Low Power Mode draws 30 a second), and
  * a game at 3× speed is slow in its simulation: a smaller picture helps neither, so those are left alone.
  * A step back up that has to be undone straight away waits twice as long before it's tried again.
- * High and Ultra (gfx().quick) start higher, so they come down sooner: after a second and a half of slow frames rather
- * than 120 of them, and two steps at once when frames come under 25 a second.
+ * High and Ultra (gfx().quick) start higher, so they come down sooner and from further: once most frames of a second
+ * and a half have been slow (not one long one) rather than after 120 frames, two steps at once when frames come under
+ * 25 a second, and frames of up to a second count (a picture too big to draw four times a second is the very thing to
+ * fix: past 250 ms Auto takes a frame for a hitch and starts counting again).
  */
 function watchFrameRate(ms) {
-  const fw = R.fw || (R.fw = { n: 0, sum: 0, sq: 0, draw: 0, other: 0, t0: 0, good: 0, wait: 5, upAt: -9 });
-  if (ms > 250 || document.hidden) { fw.n = fw.sum = fw.sq = fw.draw = fw.other = fw.t0 = 0; return; }
+  const fw = R.fw || (R.fw = { n: 0, sum: 0, sq: 0, draw: 0, other: 0, t0: 0, good: 0, wait: 5, upAt: -9, late: 0 });
+  const q = gfx();
+  if (ms > (q.quick ? 1000 : 250) || document.hidden) { fw.n = fw.sum = fw.sq = fw.draw = fw.other = fw.t0 = fw.late = 0; return; }
   fw.t0 = performance.now();
   fw.n++; fw.sum += ms; fw.sq += ms * ms;
-  const q = gfx(), slow = q.quick && fw.sum > 1500 && fw.sum > fw.n * 22;
+  if (ms > 22) fw.late++;
+  const most = !q.quick || fw.late > fw.n / 2, slow = q.quick && most && fw.sum > 1500;
   if (fw.n < 120 && !slow) return;
   const avg = fw.sum / fw.n, dev = Math.sqrt(Math.max(0, fw.sq / fw.n - avg * avg)), draw = fw.draw / fw.n, other = fw.other / fw.n;
-  fw.n = fw.sum = fw.sq = fw.draw = fw.other = 0;
+  fw.n = fw.sum = fw.sq = fw.draw = fw.other = fw.late = 0;
   fw.win = (fw.win || 0) + 1;
   const held = dev < 1.5 && draw + other < avg * 0.5; // a steady beat the game isn't filling
   const simBound = other > avg * 0.5 && draw < avg * 0.25;
-  if (avg > 22 && !held && !simBound) {
+  if (avg > 22 && most && !held && !simBound) {
     fw.good = 0;
     if (R.dpr > 1.05) {
       if (fw.win - fw.upAt <= 3) fw.wait = Math.min(80, fw.wait * 2); // (the last step up was too much)
@@ -790,9 +794,9 @@ function hdReset() {
 }
 
 /**
- * Pixels a tile for the sharp map at this zoom (0: the whole-map bake is sharp enough). Auto stretches each a little
- * before the next takes over; High and Ultra take the sharper one as soon as the last would be stretched at all, and
- * Saver keeps to 64 (gfx().hd).
+ * Pixels a tile for the sharp map at this zoom (0: the whole-map bake is sharp enough). Auto (and Saver) stretch each a
+ * little before the next takes over; High and Ultra take the sharper one as soon as the last would be stretched at all
+ * (gfx().hd). (128 is the ground art's own: one 512 px texture spans 4 tiles.)
  */
 function hdLevel(z) {
   const px = z * R.dpr, hd = gfx().hd;
