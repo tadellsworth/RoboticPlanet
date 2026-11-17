@@ -1308,8 +1308,10 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   - **Nests.** Colony: one per `WILD.perTiles` tiles (3–8, `placeNests`), at least 16 tiles from the landing site.
     Versus (`placeNestsVersus`): sets of nests following the map's own symmetry (`uplinkOrbit`, each set one nest a
     colony), up to `MURMUR[level].orbits` (Active 2, Quiet 1), one set a `perTiles` of map for two colonies; on open ground a
-    colony can walk to, at least `max(MURMUR.minBase, a fifth of the map across)` from every Command Base, 12 tiles apart,
-    by Crystal and rich deposits ("strike sites"); crowded out, a little closer, but only to have one set. Each keeps
+    colony can walk to, at least `max(MURMUR.minBase, a fifth of the map across)` from every Command Base, at least
+    `MURMUR.offRoute` (6) tiles off the shortest walks between the Command Bases (and their twins: the wars between the
+    colonies aren't decided by which side of the way a nest landed), 12 tiles apart, by Crystal and rich deposits
+    ("strike sites"); crowded out, a little closer, but only to have one set. Each keeps
     `guards + level` Scuttlers on guard and grows a level every `WILD.grow` s (to 3). **Colony** nests also raid by day:
     from `WILD.first` (7 min) a pack every 260–400 s (× `raidGap` on Quiet, a creature smaller) at the nearest building
     or road any colony has within `WILD.reach` (24) tiles, growing with that colony. **Versus** nests send nothing by day.
@@ -1346,7 +1348,8 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   - **The rival AI** (`aiMurmur`): by night its Command Base keeps two warbots home; it collapses exits within
     `AI_EXIT_NEAR` (12) tiles of its buildings (3 warbots and more for the creatures round it), and by day, with no night
     due and its attack threshold and `AI_NEST_SPARE` (4) more warbots, strikes the nearest nest within `AI_NEST_REACH`
-    (26) tiles. The Murmur never call its army home (`wildHit`) or count as an enemy army.
+    (26) tiles (`aiMurmurStrike`: from the garrisons in reach, or from further off to a rally flag beside it that comes
+    down with it, as the Army's Attack does). The Murmur never call its army home (`wildHit`) or count as an enemy army.
 - **Research** (Colony; `TECHS` in `js/defs.js`, `startResearch`/`updateLab` in `js/sim.js`): a Research Lab (staffed)
   researches one upgrade at a time, cost paid on start (Cancel refunds), progress `dt × mult` per staffed Lab. Upgrades:
   Cargo Racks (`botCarry`), Long-life Cells (`drainMul`, and chargers 50% faster; the old Fast Charging upgrade is folded into it), Rapid Paving, Sentry Optics (`turretRange`,

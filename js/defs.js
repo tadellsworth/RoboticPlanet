@@ -1297,7 +1297,8 @@ const WILD_COLOR = '#a46cff';
  * them out unless one asks (its `murmur`); a map type can bring its own default (SHAPE_PRESETS `murmur`). They live
  * by the day: the setting keeps the day-and-night cycle on (murmurNight, from the game's own clock).
  *
- * - Nests (Versus: placed fairly by the map's symmetry, away from the bases, by Crystal seams and strike sites): up
+ * - Nests (Versus: placed fairly by the map's symmetry, away from the bases and `offRoute` tiles off the shortest ways
+ *   between them, by Crystal seams and strike sites): up
  *   to `orbits` sets of them (a nest for each colony in a set), one set for every `perTiles` tiles of map for two
  *   colonies (Medium, 2240 tiles: two sets on Active, one on Quiet).
  * - Tunnels (S.tun, a tile layer): each night every nest's network spreads, `tiles` more a night (the base, more each
@@ -1329,7 +1330,7 @@ const MURMUR = {
     orbits: 2, perTiles: 1100, tiles: [28, 8, 56], branches: [2, 0.5, 4], cap: [60, 36, 260],
     exits: [2, 0.5, 3], maxExits: 4, pack: [3, 0.34, 5], brutes: 2, waves: 2, raidGap: 1, raidLess: 0,
   },
-  shut: 900, warn: 40, exitArmor: 30, minBase: 18, exitFromBase: 9, exitFromBld: 3, reach: 44, retreat: 16, room: [24, 8], prey: 26,
+  shut: 900, warn: 40, exitArmor: 30, minBase: 18, offRoute: 6, exitFromBase: 9, exitFromBld: 3, reach: 44, retreat: 16, room: [24, 8], prey: 26,
 };
 
 /*

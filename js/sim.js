@@ -8998,8 +8998,9 @@ function tunnelNest(t) { const v = S.tun ? S.tun[t] : 0; if (!v) return null; co
 
 /**
  * The Murmur's nests in a Versus game: fair for every colony (each set of them follows the map's own symmetry, as the
- * Uplinks do: uplinkOrbit), out in the wilds away from the bases (MURMUR.minBase, or a fifth of the map across), by
- * Crystal seams and strike sites (rich deposits), on open ground a colony can walk to. Quiet has fewer (MURMUR orbits).
+ * Uplinks do: uplinkOrbit), out in the wilds away from the bases (MURMUR.minBase, or a fifth of the map across) and off
+ * the ways between them (MURMUR.offRoute), by Crystal seams and strike sites (rich deposits), on open ground a colony
+ * can walk to. Quiet has fewer (MURMUR orbits).
  */
 function placeNestsVersus(seed) {
   const C = murmurCfg();
@@ -9020,10 +9021,22 @@ function placeNestsVersus(seed) {
     }
     return Math.min(c, 14) * 0.5 + Math.min(r, 10) * 0.35;
   };
+  // The ways between the colonies (the shortest walk from each Command Base to each other one, with its twins by the
+  // map's symmetry, so every colony's is the same): no nest within MURMUR.offRoute tiles of them, so the wars between
+  // the colonies aren't decided by which side of the way a nest happened to land.
+  const away = new Uint8Array(N).fill(255), q = [];
+  for (let a = 0; a < Ls.length; a++) for (let b = a + 1; b < Ls.length; b++) {
+    const path = findPath(Ls[a].x, Ls[a].y, Ls[b].x, Ls[b].y);
+    for (const t of path || []) for (const u of uplinkOrbit(t) || [t]) if (away[u]) { away[u] = 0; q.push(u); }
+  }
+  for (let h = 0; h < q.length; h++) {
+    const t = q[h], i = t % W;
+    for (const u of [i > 0 ? t - 1 : -1, i < W - 1 ? t + 1 : -1, t - W, t + W]) if (u >= 0 && u < N && away[u] > away[t] + 1) { away[u] = away[t] + 1; q.push(u); }
+  }
   const nests = [];
-  // (Crowded out, a little closer in and closer together, but only to have one set at all.)
+  // (Crowded out, a little closer in, closer together and nearer the ways, but only to have one set at all.)
   for (let pass = 0; pass < 3 && !nests.length; pass++) {
-    const minBase = Math.max(MURMUR.minBase, span * 0.2) * [1, 0.85, 0.7][pass], apart = [12, 10, 8][pass];
+    const minBase = Math.max(MURMUR.minBase, span * 0.2) * [1, 0.85, 0.7][pass], apart = [12, 10, 8][pass], offRoute = [MURMUR.offRoute, 3, 0][pass];
     const ok = new Uint8Array(N), score = new Float32Array(N);
     for (let j = 2; j < H - 2; j++) for (let i = 2; i < W - 2; i++) {
       const t = j * W + i;
@@ -9032,7 +9045,7 @@ function placeNestsVersus(seed) {
       for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const u = tIdx(i + di, j + dj); if (walkable(u) && !S.bAt[u] && !S.ramp[u]) open++; }
       if (open < 3) continue;
       const d = Ls.map((L) => dist(i, j, L.x, L.y)).sort((a, b) => a - b);
-      if (d[0] < minBase) continue;
+      if (d[0] < minBase || away[t] < offRoute) continue;
       if ((S.posts || []).some((p) => dist2(p.x, p.y, i, j) < 64)) continue;
       ok[t] = 1;
       // By the riches, not far out past the frontier (a little beyond the minimum), a little of the seed's whim.

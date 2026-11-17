@@ -4109,8 +4109,8 @@ function drawTunnelGlow(ctx, ox, oy, z, v0, v1) {
   ctx.globalAlpha = n * (0.55 + 0.15 * Math.sin(R.time * 1.3));
   ctx.drawImage(T.g, ox, oy, S.W * z, S.H * z);
   const i0 = Math.max(0, Math.floor(v0.x) - 1), i1 = Math.min(S.W - 1, Math.ceil(v1.x) + 1), j0 = Math.max(0, Math.floor(v0.y) - 1), j1 = Math.min(S.H - 1, Math.ceil(v1.y) + 1);
-  let drawn = 0;
-  for (let j = j0; j <= j1 && drawn < 900; j++) for (let i = i0; i <= i1; i++) {
+  let drawn = z < 8 ? 300 : 0; // (zoomed right out, the glowing veins alone: the pulses would be specks)
+  for (let j = j0; j <= j1 && drawn < 300; j++) for (let i = i0; i <= i1; i++) {
     const t = j * S.W + i, d = T.dist[t];
     if (!S.tun[t] || d === 65535 || S.road[t]) continue;
     const ph = (((d * 0.5 + R.time * 1.4) % 4) + 4) % 4, k = ph < 1 ? 1 - ph : 0; // (bands every 8 tiles, flowing toward the nest)

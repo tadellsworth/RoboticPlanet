@@ -1081,6 +1081,7 @@ function aiMurmur(p, lvl, lander, smart) {
   const near = (e, r) => { let bd = r * r + 1; for (const b of mine) { const d = dist2(b.x, b.y, e.x, e.y); if (d < bd) bd = d; } return Math.sqrt(bd); };
   const going = new Map();
   for (const u of S.bots) if (!u.dead && u.owner === p && u.task && u.task.type === 'attack') going.set(u.task.target, (going.get(u.task.target) || 0) + 1);
+  for (const r of S.rallies) if (r.owner === p && r.target) going.set(r.target, (going.get(r.target) || 0) + 1);
   const around = (e, r) => { let n = 0; for (const u of S.bots) if (!u.dead && !u.inside && isWild(u.owner) && dist2(u.x, u.y, e.x + 0.5, e.y + 0.5) <= r * r) n++; return n; };
   // 1) Exits near its land, nearest first.
   let ex = null, ed = Infinity;
@@ -1091,7 +1092,7 @@ function aiMurmur(p, lvl, lander, smart) {
   }
   if (ex) {
     const need = 3 + Math.ceil(around(ex, 6) * 0.7);
-    if (attackAvailable(p, ex) >= need && sendAttack(p, ex, need + 1, false, false, true)) return;
+    if (aiMurmurStrike(p, ex, need, need + 1)) return;
   }
   // 2) By day, a nest, with the army to spare.
   if (night || murmurNight(S.time + 100) || P.passive) return;
@@ -1105,7 +1106,25 @@ function aiMurmur(p, lvl, lander, smart) {
   }
   if (!nest) return;
   const need = 4 + (nest.level || 1) + Math.ceil(around(nest, 6) * 0.6);
-  if (attackAvailable(p, nest) >= need + 2) sendAttack(p, nest, need + 2, false, false, true);
+  aiMurmurStrike(p, nest, need + 2, need + 2);
+}
+
+/**
+ * Send `send` warbots at Murmur building e if at least `need` can go: straight at it from the garrisons in reach
+ * (sendAttack), or, from further off, to a rally flag beside it that comes down with it (as the Army's Attack does:
+ * the 'assault' order). True if any went.
+ */
+function aiMurmurStrike(p, e, need, send) {
+  if (attackAvailable(p, e) >= need) return sendAttack(p, e, send, false, false, true) > 0;
+  for (const [di, dj] of [[1, 1], [-1, 1], [1, -1], [-1, -1], [2, 0], [-2, 0], [0, 2], [0, -2]]) {
+    const i = e.x + di, j = e.y + dj;
+    if (!inMap(i, j) || !walkable(tIdx(i, j)) || S.bAt[tIdx(i, j)] || S.zone[tIdx(i, j)] !== homeZone(p)) continue;
+    if (rallyAvailable(p, i, j) < need) return false;
+    const res = sendToRally(p, i, j, send, false, false, true);
+    if (res.sent) res.rally.target = e.id; // (it comes down with the target: followRallies)
+    return res.sent > 0;
+  }
+  return false;
 }
 
 /**

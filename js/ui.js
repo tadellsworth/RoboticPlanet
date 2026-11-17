@@ -5730,7 +5730,7 @@ function openBuildingSheet(b) {
     // A tunnel exit: what it is (its description), whose network, and how to deal with it.
     const nest = getE(b.nest), up = S.bots.filter((u) => !u.dead && u.exit === b.id && u.task && u.task.night).length;
     desc += ` <b>${murmurNight(S.time) ? (alwaysNightMap() ? 'A surge is on' : 'Night') + `: ${up ? `${up} of the Murmur came up here` : 'the Murmur are up'}.` : `${alwaysNightMap() ? 'Between surges' : 'Day'}: quiet until ${alwaysNightMap() ? 'the next surge' : 'nightfall'} (${fmtClock(murmurNextNight())}).`}</b>` +
-      ` Its nest is ${nest ? dirText(b, nest) + ' of here' : 'gone'}. <b>To deal with it:</b> Army → Attack, then tap it (4 armed warbots are plenty), or send warbots below.`;
+      ` Its nest is ${nest ? dirText(b, nest) + ' of here' : 'gone'}. <b>To deal with it:</b> Army → Attack, then tap it (by day 4 armed warbots are plenty; at night bring more), or send warbots below.`;
   } else if (def.wild) {
     const n = S.bots.filter((u) => !u.dead && u.nest === b.id).length;
     desc += ` <b>Level ${b.level || 1} of 3</b>, ${n} of the Murmur out and about. Hoarded: ${Object.keys(b.stock).filter((g) => b.stock[g] > 0).map((g) => `${b.stock[g]} ${GOOD[g].name}`).join(', ') || 'nothing'}.`;
