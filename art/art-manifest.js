@@ -344,6 +344,13 @@ const ART_MANIFEST = {
   // Each piece has six spark frames (light, flickered over it now and then).
   ...WALL_ART,
 
+  // Crash sites (renderer/b/wreck.js): the broken, burnt airframe an aircraft shot down leaves on the ground, one for
+  // every team, seen straight down, nose right (the game turns it the way it came in). `scale`: the frame's width in
+  // tiles, at the aircraft's own size (drawn by ambWreckArt, js/ambient.js).
+  'wreck-cargoplane': { src: 'bots/wreck-cargoplane.webp', scale: 2.08 },
+  'wreck-bomber': { src: 'bots/wreck-bomber.webp', scale: 1.38 },
+  'wreck-airship': { src: 'bots/wreck-airship.webp', scale: 3.4 },
+
   // Still to make (placeholders are drawn until these exist):
   //   resources: crop, oil, uranium     ground: fertile, slope, cliff     markers: missile, rally, oneway
   //   goods:     icon-fiber … icon-warhead (12 HUD icons)

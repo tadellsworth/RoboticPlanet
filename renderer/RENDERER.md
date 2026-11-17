@@ -32,6 +32,7 @@ This folder is the complete setup behind the Terrafall art. It covers every 3D s
 | Rail and roads | station, rail (track tiles), bridge (water, sky and rail bridges), streetlamp, pipe (pipeline tiles) |
 | Ropeway | ropeway (the station), gondola |
 | Vehicles | truck, tanker, roadtrain, freight (loco and wagons), crawler, trader |
+| Aircraft wrecks | wreck: the crash site an aircraft shot down leaves (`c=cargoplane\|bomber\|airship`), built from that aircraft's own scene (plane, bomber, and airship `v=c`, which is on branch `airship-art` until it's merged), broken, crushed, charred and laid on the ground |
 | Robots | rob_worker, rob_hauler, rob_agribot, rob_paver, rob_warbot (the shared `robkit.js`) |
 | The Murmur (Colony wildlife) | murmur_moles: every Murmur class, the Burrow (the nest) at its three levels, and their 3/4 hero shots (the shared `murmur_moleskit.js`). `creature` (the old beetle Scuttler and Brute) and `nest` (the old resin mound) are kept for reference and no longer shipped; `murmur_swarm`, `murmur_burrowers` and `murmur_mycelial` are earlier design directions, not shipped. |
 | The Hollow (installed) | hollow: the tunnel exit (`c=exit`, `state=collapsed`), the Bloom-vein node (`c=veins`), the floating Crystal (`c=floater`), the stone pillars (`c=pillar&v=1\|2`) and the side chamber (`c=chamber`); murmur_moles `c=burrow&s=4` is the Deep's mound. See [The Hollow set](#the-hollow-set). |
@@ -130,6 +131,7 @@ Parameters the scenes read:
 | `d=k` | crawler | Deploy frame 1–9. Frame 9 is the deployed base. |
 | `c=scuttler\|brute` | creature (old, unshipped) | Which creature. |
 | `s=1..3` | nest (old, unshipped), murmur_moles (`c=burrow`) | Nest level. |
+| `c=` | wreck | Which aircraft's wreck: `cargoplane`, `bomber` or `airship` (the Airship's needs `b/airship.js`). `w=` sets the frame's width in world units (defaults 26, 24 and 34). |
 | `c=` | murmur_moles | Which Murmur: `swarmer` (the game's Scuttler), `brute`, `drainer` (the Leech), `spitter`, `sapper`, `spit-glob` (the Spitter's clot alone, flying right), `spit-shards` (the Spitter's volley of crystal shards alone, flying right) or `burrow` (the nest, with `s=`). |
 | `v=base\|rust\|white\|bloom` | murmur_moles | The regional variant (Scuttler, Spitter, Sapper): Rust armoured in ironstone plates, Hoarfell pale, shaggy and slow, Bloom with the Bloom's glowing violet veins. |
 | `pose=feed\|sense\|spit\|surface\|dig\|heave` | murmur_moles | `feed` the Leech latched on (star flared, pressed to the power, threads of charge; `feed=1` works too; with `charge=` it is that full, hungry 0 to full 1, and brightens as it drinks); `sense` any class standing still with its star flared and lit; `spit` the Spitter spitting (`shot=shards`: a volley of shards in place of the clot); `surface` the Sapper breaking the surface; `dig` the Sapper digging in nose first (an unseen floor hides what is underground); `heave` the Sapper under the ground, only the heaving soil at the head of its ridge showing. |
@@ -173,6 +175,7 @@ node walls/run.js out/w 'wall:wall-post@0:piece=post&team=%2338d4ff&frames=6&tod
 | Robots, Road Train, train cars, gondola, trader | 256 | Straight down, 10 units across |
 | The Murmur (murmur_moles) | 256 (rendered at 512; hero shots 512–2048) | Straight down, facing right, centred on the body, `SPRITE_W` units across: Scuttler 5.8, Spitter 6.8, Leech 7.6, Sapper 8.4, Brute 11.4 (designed for `tile × 0.078 × SPRITE_W`; the game draws the Scuttler frame 0.62 of a tile wide and the Brute 0.82, `drawCritter` in `js/render.js`). The Burrow uses the buildings' 57° view on 512, no pad. |
 | Crawler | 512 | Straight down, 20 units across |
+| Aircraft wrecks (wreck) | 512 (rendered at 1024) | Straight down, facing right, `w=` units across (Cargo Plane 26, bomber 24, Airship 34: 2.08, 1.38 and 3.4 tiles in the game, the art's `scale`); a shadow catcher keeps the shadows, the sun at least 52° up |
 | Rail tiles | 256 | Straight down |
 | Pipe tiles | 256 | Straight down |
 | Bridges | 512, or 512 × 1024 for piers, towers and the lamp | The 57° view |
