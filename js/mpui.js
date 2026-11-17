@@ -510,7 +510,8 @@ function mpSyncPauseMenu() {
   $('p-resume').textContent = on ? 'Back to the game' : 'Resume';
   $('p-mppause').hidden = !on;
   if (on) $('p-mppause').textContent = MP.paused ? 'Resume the game for everyone' : 'Pause the game for everyone';
-  $('p-quit').textContent = on ? (UI.mpQuitArm ? 'Tap again to leave: the computer takes over your colony' : 'Leave the game') : 'Save & quit to menu';
+  $('p-quit').textContent = on ? (UI.mpQuitArm ? 'Tap again to leave: the computer takes over your colony' : 'Leave the game') : 'Save & quit';
+  $('p-quit').classList.toggle('p-arm', on && !!UI.mpQuitArm); // (the long line: a row of its own)
   $('p-saved').hidden = on;
 }
 
