@@ -441,8 +441,17 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   flag; `LANDING_GATHER` s after the order it sails with whoever is aboard. A Ferry sunk with bots aboard takes them
   down. Turrets, Bunkers, Mortar Pits and Missiles hit ships; warbots don't chase them (`nearestEnemyBot` with `land`).
   The rival builds a Port once its Foundry runs, a Ferry with a fair army, and every few minutes lands six warbots
-  beside whichever enemy building it can reach that's least guarded (`aiNaval`). Later (after 15 minutes) it builds a
-  second Port out toward the enemy, gives it supply orders (Cement and Ammo) and orders a Container Ship to keep it stocked. The art is top-down like the trucks
+  beside whichever enemy building it can reach that's least guarded (`aiNaval`). Against a rival across the water
+  (Medium and up, not in missions), once it has a decisive lead (half as many warbots again and four more) or a landing
+  is held back by the guns over the beach, it lands a band instead (`aiBeach`, `P.beach`, `AI_BEACH`): it picks the
+  rival's Command Base if it has the warbots to take it, or else the fort it takes fewest to take, and a beach out of
+  the guns' reach near it (off the rival's land where it can be: warbots standing about there run their batteries
+  down), orders a second Ferry, and brings load after load until the band is strong enough, then goes in at the gun
+  covering the target first; it goes with seven tenths of that after four minutes or when its batteries run low, and
+  calls the band off after seven minutes, or once it has lost two in five of what it sent. Later (after 15 minutes) it builds a
+  second Port out toward the enemy, gives it supply orders (Cement and Ammo) and orders a Container Ship to keep it stocked
+  (not while its Ferry is on order: a yard builds a Container Ship first, and short of Alloy the Ferry waited half an
+  hour). The art is top-down like the trucks
   (`renderer/b/ship.js`, `renderer/b/port.js`), drawn two tiles wide with a wake under way (`drawShip`); a ship tied
   up is drawn at its Port's dock. On naval maps a bridge tile costs more the further it is from shore (`bridgeMul`:
   `BRIDGE_NEAR` 2 tiles at the usual price, then `BRIDGE_STEP` 1.5 times more for each tile further).
