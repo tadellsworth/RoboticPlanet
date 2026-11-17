@@ -36,6 +36,16 @@ Still open: a neutral, shared exchange the rivals compete over; contracts for Ch
   (start each tick's robots and AIs from a different player, or run them forward one tick and backward the next); it
   changes every game's course, so seed-pinned tests would need new seeds.
 
+- **Co-op scenarios** (the owner's idea, Nov 17; to brainstorm). Two players together against the computer, as
+  a multiplayer mode of its own, not the main campaign played by two: a set of 2-player scenarios on the campaign's
+  maps and rivals, with goals made for two. One builds while the other fights; two fronts at once; one runs the home
+  economy while the other pushes Depots to the front; escorting each other's trade convoys; a Holdout held together.
+  Kept apart from the solo campaign because its story is one Command Base's (the last reserve on COBALT's Carrier) and
+  every mission would need balancing twice; a finished solo mission could unlock its co-op version. It builds on Teams
+  (any mix of people and computers), lockstep multiplayer and the mission system; new are missions that run in
+  multiplayer (goals shared or each player's own) and a scenario picker in the lobby. Comes after the campaign. Related:
+  Shared colony co-op (two players, one colony) in the November review list.
+
 - **More map shapes** (Rift, Ring valley, Oases, Crossroads and Lakes are now in the game; each would be a
   `SHAPE_PRESETS` entry with its own step in `shapeExtras`, mirrored for fairness like the others):
   - **Terraces:** the land climbs in steps toward a summit in the middle, a ramp or two per step, the richest fields
