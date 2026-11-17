@@ -44,7 +44,8 @@ const AI_ARMY_ROOM = 0.4, AI_WORKER_ROOM = 6;
  * More than it uses: Workers past the ones its buildings call for and `workers` more, Haulers past the ones it wants and
  * `haulers` more (`minHaulers` at least), Tankers past the ones it wants and one more, Freight Trucks and Road Trains
  * past the ones it wants, Agribots and Pavers past the ones its buildings (sites too) take and one more; and of the
- * vehicles and crews only ones idle for a while. It scraps them:
+ * vehicles and crews only ones idle for a while, or with nothing to do now while it has `far` or more past those. It
+ * scraps them:
  * - too many: with less room under the bot limit than the army it wants (vehicles and crews idle `idle` seconds);
  * - in a crisis: no Alloy or no Chips for `crisis` seconds (P.dry) with next to none being made, the ones that give back
  *   what it lacks (only vehicles give Chips back; vehicles and crews idle `crisisIdle` seconds);
@@ -52,7 +53,7 @@ const AI_ARMY_ROOM = 0.4, AI_WORKER_ROOM = 6;
  *   `eco` seconds gives back, one at a time, at most one every `ecoGap` seconds.
  * A kind scrapped isn't ordered again for `hold` seconds (P.scrapT).
  */
-const AI_SCRAP = { workers: 4, haulers: 2, minHaulers: 4, batch: 4, idle: 120, crisis: 90, crisisIdle: 60, eco: 300, ecoGap: 60, hold: 300 };
+const AI_SCRAP = { workers: 4, haulers: 2, minHaulers: 4, far: 3, batch: 4, idle: 120, crisis: 90, crisisIdle: 60, eco: 300, ecoGap: 60, hold: 300 };
 /** The robots it may scrap, vehicles first (they give Chips back too); never the army, planes, ships, trains or Crawlers. */
 const AI_SCRAP_KINDS = ['roadtrain', 'truck', 'tanker', 'agribot', 'paver', 'worker', 'hauler'];
 /**
@@ -251,17 +252,18 @@ function aiScrap(p, c) {
     truck: U.truck, roadtrain: U.roadtrain, agribot: (U.agribot || 0) + 1, paver: (U.paver || 0) + 1,
   };
   let sent = 0;
-  // Up to `max` robots past `keep`, idle `idleFor` seconds at least (Workers and Haulers: `plainIdle`), of the kinds that
-  // give back `gives` (any: null), each to the nearest Foundry it can get to; the vehicles first, then the longest idle.
-  const send = (max, idleFor, plainIdle, gives, kinds) => {
+  // Up to `max` robots past `keep` with nothing to do, of the kinds that give back `gives` (any: null), each to the nearest
+  // Foundry it can get to, the vehicles first, then the longest idle: ones idle `idleFor` seconds, and with `plain` any
+  // Worker or Hauler, and any of a kind while there are AI_SCRAP.far or more past `keep`.
+  const send = (max, idleFor, plain, gives, kinds) => {
     if (max <= 0) return 0;
     const have = {}, list = [];
+    for (const u of S.bots) if (!u.dead && u.owner === p && u.type in keep && !recycling(u)) have[u.type] = (have[u.type] || 0) + 1;
     for (const u of S.bots) {
-      if (u.dead || u.owner !== p || !(u.type in keep) || recycling(u)) continue;
-      have[u.type] = (have[u.type] || 0) + 1;
+      if (u.dead || u.owner !== p || !(u.type in keep) || have[u.type] <= keep[u.type] || recycling(u)) continue;
       if ((kinds && !kinds.includes(u.type)) || (gives && !(recycleYield(u.type)[gives] > 0))) continue;
       if (u.idleSince === undefined || aiBusy(u) || u.shyUntil > S.time || !recyclable(u)) continue;
-      if (S.time - u.idleSince < (u.type === 'worker' || u.type === 'hauler' ? plainIdle : idleFor)) continue;
+      if (S.time - u.idleSince < idleFor && !(plain && (u.type === 'worker' || u.type === 'hauler' || have[u.type] - keep[u.type] >= AI_SCRAP.far))) continue;
       list.push(u);
     }
     list.sort((a, b) => AI_SCRAP_KINDS.indexOf(a.type) - AI_SCRAP_KINDS.indexOf(b.type) || a.idleSince - b.idleSince || a.id - b.id);
@@ -269,6 +271,7 @@ function aiScrap(p, c) {
     for (const u of list) {
       if (n >= max) break;
       if (have[u.type] <= keep[u.type]) continue;
+      if (S.time - u.idleSince < idleFor && u.type !== 'worker' && u.type !== 'hauler' && have[u.type] - keep[u.type] < AI_SCRAP.far) continue;
       const f = recycleFoundry(u);
       if (!f) continue;
       startRecycle(u, f);
@@ -284,14 +287,14 @@ function aiScrap(p, c) {
   const dryFor = (g) => { const r = P.dry && P.dry[g]; return r && S.time - r[1] <= 4 ? S.time - r[0] : 0; };
   const lacks = (g) => dryFor(g) >= AI_SCRAP.crisis && rates[g].made < 1 && (goods[g] || 0) < 1;
   const lackChip = lacks('chip');
-  if (lackChip || lacks('alloy')) send(AI_SCRAP.batch - away, AI_SCRAP.crisisIdle, 0, lackChip ? 'chip' : null, c.few ? AI_SCRAP_KINDS.filter((k) => k !== 'worker') : null);
+  if (lackChip || lacks('alloy')) send(AI_SCRAP.batch - away, AI_SCRAP.crisisIdle, true, lackChip ? 'chip' : null, c.few ? AI_SCRAP_KINDS.filter((k) => k !== 'worker') : null);
   // Too many: no room under the bot limit for the army it wants.
-  if (!c.few && c.room > 0) send(Math.min(AI_SCRAP.batch - away, c.room - away) - sent, AI_SCRAP.idle, 0, null, null);
+  if (!c.few && c.room > 0) send(Math.min(AI_SCRAP.batch - away, c.room - away) - sent, AI_SCRAP.idle, true, null, null);
   // Economic sense (not Easy): the Foundry waits for parts that a robot idle for minutes would give back. One at a time.
   if (c.smart && !c.few && !away && !sent && S.time - (P.scrapEco ?? -1e9) >= AI_SCRAP.ecoGap) {
     const waits = (g) => foundries.some((f) => f.status && f.status.startsWith('Waiting for ' + GOOD[g].name));
     const gives = waits('chip') ? 'chip' : waits('alloy') ? 'alloy' : null;
-    if (gives && send(1, AI_SCRAP.eco, AI_SCRAP.eco, gives, AI_SCRAP_KINDS.filter((k) => k !== 'worker'))) P.scrapEco = S.time;
+    if (gives && send(1, AI_SCRAP.eco, false, gives, AI_SCRAP_KINDS.filter((k) => k !== 'worker'))) P.scrapEco = S.time;
   }
 }
 
