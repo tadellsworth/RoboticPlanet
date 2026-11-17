@@ -185,7 +185,7 @@ const BOTS = {
   scuttler: { name: 'Scuttler', plural: 'Scuttlers', speed: WORKER_SPEED * 1.1, hp: 6, wild: true, bite: 1,
     desc: 'The smallest of the Murmur, quick and never alone. Scuttlers run in packs and go for any bot they catch out in the open.' },
   brute:    { name: 'Brute', plural: 'Brutes', speed: WORKER_SPEED * 0.8, hp: 24, wild: true, bite: 3, smash: true,
-    desc: 'A big, slow, armoured creature of the Murmur. Brutes tear up roads and batter buildings, and bite hard.' },
+    desc: 'A big, slow, armoured creature of the Murmur. Brutes tear up roads, batter buildings and smash bots.' },
 };
 const BOT_ORDER = ['worker', 'hauler', 'truck', 'tanker', 'roadtrain', 'freight', 'cargoship', 'tankship', 'ferry', 'cargoplane', 'bomber', 'crawler', 'agribot', 'paver', 'warbot', 'bulwark', 'torch', 'rocket'];
 /**
