@@ -7347,7 +7347,8 @@ function refreshSheet() {
 
 const OBJECTIVES = [
   { text: 'Robots run on batteries, and your Command Base can\'t charge them. Tap <b>Build</b> and place a <b>Fuel Station</b> beside the road ring round your base: it runs on the Fuel you landed with.', build: ['charger'], done: () => hasBuilt('charger') || hasAny('charger') },
-  { text: 'Tap <b>Build</b> and place a <b>Harvester</b> beside the teal stalk groves.', build: ['harvester'], done: () => hasBuilt('harvester') || hasAny('harvester') },
+  { get text() { return hollowOn() ? 'Nothing grows in the Hollow. Tap <b>Build</b> and place a <b>Harvester</b> beside the violet <b>Bloom veins</b>: it cuts Fiber from them.' : 'Tap <b>Build</b> and place a <b>Harvester</b> beside the teal stalk groves.'; },
+    build: ['harvester'], done: () => hasBuilt('harvester') || hasAny('harvester') },
   { text: '<b>Haulers only drive on roads.</b> Tap <b>Paths</b>, sketch a road from the ring round your Command Base to the Harvester site and tap <b>Build</b> (or tap the site and choose <b>Lay road</b>). Free workers pave it.', done: () => hasBuilt('harvester') || S.buildings.some((b) => !b.dead && b.owner === ME && b.type === 'harvester' && !b.unlinked) },
   { text: 'Build a <b>Quarry</b> near the grey boulders to get Stone.', build: ['quarry'], done: () => hasBuilt('quarry') },
   { text: 'Build a <b>Cement Works</b> near your Command Base: it bakes Stone into <b>Cement</b>, which nearly every building and every road is made of.', build: ['kiln'], done: () => hasBuilt('kiln') },
@@ -7357,7 +7358,9 @@ const OBJECTIVES = [
   { text: 'Build a <b>Bot Foundry</b> so you can make more workers.', build: ['foundry'], done: () => hasBuilt('foundry') },
   { text: 'Tap your <b>Bot Foundry</b> and order some <b>Workers</b>: it only builds the bots you ask for.', done: () => S.players[ME].stats.bots > S.players[ME].stats.startBots || S.buildings.some((b) => !b.dead && b.owner === ME && hasOrders(b)) },
   { text: 'Build an <b>Outpost</b> near your border to claim more land.', build: ['outpost'], done: () => hasBuilt('outpost') },
-  { text: 'Fuel Stations burn <b>Fuel</b>. Build a <b>Bio Farm</b> beside the dark fertile soil to grow it (your Agribot runs it).', build: ['farm'], done: () => hasBuilt('farm') || hasBuilt('refinery') || playerGoods(ME).fuel >= 20 },
+  // (The Hollow: no farms underground; Fuel is refined from the oil seep by the base.)
+  { get text() { return hollowOn() ? 'Fuel Stations burn <b>Fuel</b>, and nothing grows down here. Build an <b>Oil Pump</b> on the dark oil seep and a <b>Refinery</b> to turn its Crude into Fuel.' : 'Fuel Stations burn <b>Fuel</b>. Build a <b>Bio Farm</b> beside the dark fertile soil to grow it (your Agribot runs it).'; },
+    get build() { return hollowOn() ? ['pump', 'refinery'] : ['farm']; }, done: () => hasBuilt('farm') || hasBuilt('refinery') || playerGoods(ME).fuel >= 20 },
   { text: 'Busy crossings jam up. In <b>Paths</b>, choose <b>Junctions</b> and put a traffic light on a junction where three or four roads meet.', done: () => Object.keys(S.lights).some((k) => S.lights[k].owner === ME) || !ownJunction() },
   { text: 'Warbots need <b>Ammo</b>. Build an <b>Ammo Plant</b>: haulers stock your Command Base and Outposts and warbots reload there.', build: ['armory'], done: () => S.mode === 'colony' || hasBuilt('armory') },
 ];

@@ -2062,7 +2062,7 @@ function hollowMap(seed, W, H, cfg) {
   stamp(bx + 4, by - 5.5, 1.3, R_CRYSTAL, 0.9, null, 3);
   stamp(bx + 6.5, by - 1.5, 1.6, R_BOULDER, 0.8, null, 3);
   stamp(bx - 2.5, by + 4.2, 1.1, R_BOULDER, 0.8);
-  stamp(bx - 7, by + 2.5, 1.05, R_OIL, 0.95, null, 2);
+  stamp(bx - 7, by + 2.5, 1.3, R_OIL, 0.95, null, 3); // (the only Fuel down here: a good seep by every base)
   // The chasm hall: boulders and veins on the near side, Ore and Crystal across the chasm.
   stamp(hall.x - side * hall.rx * 0.1, hall.y + hall.ry * 0.55, 1.5, R_BOULDER, 0.8);
   stamp(hall.x + side * hall.rx * 0.7, hall.y + hall.ry * 0.45, 1.3, R_VEIN, 0.85);
@@ -2132,6 +2132,8 @@ function hollowMap(seed, W, H, cfg) {
       if (!free(t) || ![2, 3, 4, 5, 7].includes(kind[t])) continue;
       if (dist(i, j, bx, by) < Math.min(16, Dy * 0.72) || dist(i, j, W - 1 - bx, H - 1 - by) < 12 || dist(i, j, deep.x, deep.y) < 5 || inBreach(i, j, 1.5)) continue;
       if (posts.some((p) => dist(p.x, p.y, i, j) < 5)) continue;
+      // (Not by a floating Crystal mass: its guards would keep every colony's gatherers off it for good.)
+      if (masses.some((m) => dist(m.x, m.y, i, j) < 9 || dist(W - 1 - m.x, H - 1 - m.y, i, j) < 9)) continue;
       let room = 0;
       orth(t, (u) => { if (terrain[u] === T_GROUND && !res[u]) room++; });
       if (room < 3) continue;
@@ -4001,7 +4003,7 @@ function roadSearch(owner, seeds, done) {
   // (Through our own Outposts and Gates, never a rival's: its bots can't pass one, so a road through it links nothing.)
   const like = (t) => roadLikeFor(t, owner);
   const open = (t) => S.bAt[t] > 0 ? passTile(t, owner) : S.road[t] || canRoad(owner, t % W, (t / W) | 0);
-  const turn = done ? ROAD_TURN : 0, ov = anyOverpass();
+  const turn = done ? ROAD_TURN : 0, ov = anyOverpass(), rope = hollowOn();
   const step = (a, b) => (like(a) && like(b) ? canStep(a, b) : stepPlan(a, b));
   // The way the route came into tile t: from prev[t], or straight over the overpass(es) just behind it.
   const way = (t) => {
@@ -4030,6 +4032,9 @@ function roadSearch(owner, seeds, done) {
     // Across a Viaduct: its deck carries the road from one end to the other.
     const v = viaLink(t);
     if (v >= 0) { const nc = c + roadWeight(v); if (nc < cost[v]) { cost[v] = nc; prev[v] = t; heap.push(v, nc); } }
+    // (The Hollow: across one of our Ropeways too, out to a floating Crystal mass, which only a Ropeway or a bridge reaches.)
+    const r = rope ? ropeLink(t) : -1;
+    if (r >= 0 && getE(S.bAt[t]).owner === owner) { const nc = c + roadWeight(r); if (nc < cost[r]) { cost[r] = nc; prev[r] = t; heap.push(r, nc); } }
   }
   return { cost, prev, end: -1 };
 }

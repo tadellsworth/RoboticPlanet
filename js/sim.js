@@ -9397,7 +9397,9 @@ function wildTarget(b) {
   for (const e of S.buildings) {
     if (e.dead || e.owner === WILD_OWNER) continue;
     const d = dist2(e.x, e.y, b.x, b.y), lure = veinLure(e);
-    if (lure ? Math.sqrt(d) <= WILD.reach + VEIN.reach && d / sq(VEIN.pull) < bd : d < bd) { bd = lure ? d / sq(VEIN.pull) : d; best = { x: e.x, y: e.y }; }
+    if (lure && d > sq(WILD.reach + VEIN.reach)) continue;
+    const near = lure ? d / sq(VEIN.pull) : d; // (a Harvester at work on the veins looks VEIN.pull times nearer)
+    if (near < bd) { bd = near; best = { x: e.x, y: e.y }; }
   }
   const R0 = WILD.reach;
   for (let j = Math.max(0, b.y - R0); j <= Math.min(S.H - 1, b.y + R0); j++) {

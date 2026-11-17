@@ -602,7 +602,10 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
     on there, until the night system decides).
   - **No aircraft** (`worldBan`; the AI never plans an Airfield) and **no Ports** (`canPlace` says the lakes are too small).
   - The rival AI: its build plan swaps Bio Farms for Oil Pumps and Grove Planters for more Harvesters, fuel trouble
-    brings an Oil Pump and Refinery, its roads bridge the chasms (Sky bridges) where that's shorter, and `aiRopeway`.
+    brings an Oil Pump and Refinery, its roads bridge the chasms (Sky bridges) where that's shorter, and `aiRopeway`
+    (in the Hollow `roadSearch` carries road reach across a colony's own Ropeways, so a Tap on the mass counts as
+    joined up). Nest sites keep 9 tiles from the masses: the AI never clears nests, and guards there would keep its
+    gatherers off the Crystal for good.
 - **Maps for three or four only** (`minPlayers` in `SHAPE_PRESETS`: the player choice can't go below it, Random only
   picks them for three or four, and Colony games on them leave the other colonies empty). **The Wheel** (`wheel`, three):
   rock spokes run out along the lines between the thirds from a raised hub (the only ground on the top level, the
