@@ -286,6 +286,41 @@ function ambSmoulder(ctx, e, x, y, z, age, wind) {
   ctx.globalAlpha = 1;
 }
 
+/**
+ * An aircraft's wreck after dark, lit faintly so it shows at night (the owner's call): a few small flames still licking
+ * at the broken hull, the firelight on the ground round it, and one light at its end still blinking on its own power.
+ * The flames come in as the fresh wreck's embers die (ambSmoulder) and dwindle to one as it overgrows; the light and
+ * the glow stay for good. Seeded by the wreck (e.s), so a wreck keeps its look; nothing here touches the game.
+ */
+function ambWreckNight(ctx, e, x, y, z, age, g) {
+  const night = TOD.active ? TOD.state.lights : 0;
+  if (night < 0.05) return;
+  const ca = Math.cos(e.w.a), sa = Math.sin(e.w.a), t = R.time;
+  const come = clamp(age / AMB.ruin.embers, 0, 1), nf = g > 0.75 ? 1 : g > 0.4 ? 2 : 3, small = 1 - 0.35 * g;
+  fxGround(ctx, x, y, z * (0.8 + 0.45 * e.len), '#ff8a2a', 0.3 * night * (0.5 + 0.5 * come));
+  fxGlow(ctx, x, y, z * (0.45 + 0.4 * e.len), '#ff9a4a', 0.16 * night * (0.6 + 0.4 * come)); // (the firelight on the hull itself)
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  for (let j = 0; j < nf; j++) {
+    const o = (hash2(e.s, j, 811) - 0.5) * e.len * 0.6, side = (hash2(e.s, j, 812) - 0.5) * 0.3;
+    const bx = x + (ca * o - sa * side) * z, by = y + (sa * o + ca * side) * z;
+    const fl = 0.72 + 0.28 * Math.sin(t * (7 + j * 1.9) + j * 2.3) * Math.sin(t * (3.1 + j) + j), a = night * come * 0.9;
+    const hgt = z * 0.27 * fl * small, w = z * 0.075 * small;
+    const gr = ctx.createLinearGradient(bx, by, bx, by - hgt);
+    gr.addColorStop(0, `rgba(255,236,180,${0.8 * a})`); gr.addColorStop(0.4, `rgba(255,150,50,${0.65 * a})`); gr.addColorStop(1, 'rgba(255,60,10,0)');
+    ctx.fillStyle = gr;
+    ctx.beginPath(); ctx.moveTo(bx - w, by); ctx.quadraticCurveTo(bx - w * 0.9, by - hgt * 0.55, bx + Math.sin(t * 6 + j) * w * 0.5, by - hgt);
+    ctx.quadraticCurveTo(bx + w * 0.9, by - hgt * 0.55, bx + w, by); ctx.closePath(); ctx.fill();
+    fxGlow(ctx, bx, by - hgt * 0.3, z * 0.3 * fl * small, '#ff7a2a', 0.65 * a);
+  }
+  ctx.restore();
+  // the light still blinking at one end: a short red flash every 2.4 s, a faint glow between
+  const end = e.len * 0.42 * (hash2(e.s, 9, 813) < 0.5 ? 1 : -1), lx = x + ca * end * z, ly = y + sa * end * z;
+  const ph = ((t + hash2(e.s, 9, 814) * 2.4) % 2.4) / 2.4, on = ph < 0.14 ? Math.sin((ph / 0.14) * Math.PI) : 0;
+  fxGlow(ctx, lx, ly, z * (0.1 + 0.12 * on), '#ff3b30', night * (0.45 + 0.55 * on));
+  if (on > 0.3) fxGlow(ctx, lx, ly, z * 0.04, '#ffd0c8', night * on); // (its bright core as it flashes)
+}
+
 /** Can remains lie on tile t? Open ground with nothing on it (no road, track, building, lava or tide). */
 function ambGround(t) {
   return S.terrain[t] === T_GROUND && !S.road[t] && !(S.rail && S.rail[t]) && !S.bAt[t] && !(S.lava && S.lava[t]) && !(S.tidal && S.tidal[t]);
@@ -446,6 +481,7 @@ function drawRemains(ctx, ox, oy, z, inView) {
         if (a.nodes) glows.push(x, y, z / a.res, 1, a.nodes);
       }
       if (age < AMB.ruin.smoulder) ambSmoulder(ctx, e, x, y, z, age, wind);
+      ambWreckNight(ctx, e, x, y, z, age, g);
       continue;
     }
     // The burn, softened, coming in as the game's scorch fades and going as things grow over it (once the game's own

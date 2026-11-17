@@ -2235,7 +2235,10 @@ load); they read the game's clock, seed, buildings and effects. Hooks: `drawRema
   five on the Airship's; a drift of snow, sand, ash or dust in two or three and laid a little thinner so the wreck
   still shows), never going back into the ground (`AMB.ruin.p`: growth from 60 s, full at 20 minutes, slower on
   Argos). A fresh one smoulders (`ambSmoulder`: thin smoke off the hull for `AMB.ruin.smoulder` s, its embers glowing
-  after dark for `AMB.ruin.embers` s). Its crash fires bring the carrion birds (`faunaCarrion`), as any wreck's do.
+  after dark for `AMB.ruin.embers` s). After dark every wreck is lit faintly so it shows (`ambWreckNight`, the owner's
+  call): a few small flames along the hull, coming in as the embers die and dwindling to one as it overgrows, firelight
+  on the ground and the hull, and a red light at one end blinking every 2.4 s. Its crash fires bring the carrion birds
+  (`faunaCarrion`), as any wreck's do.
 - **Beacons** (`drawBeacons`). From evening until dawn (`AMB.beam`, faded in over the evening crossfade and out at dawn,
   so never in Always day and always in Always night or the Hollow) every standing, finished Command Base, whoever holds
   it, shines a pale beam straight up from the top of its mast, a hint of its owner's colour in it, with a soft halo, light
