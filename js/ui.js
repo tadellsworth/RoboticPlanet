@@ -192,6 +192,8 @@ function initUI() {
   $('p-haptics').hidden = !hapticsSupported() || !touchScreen;
   syncHaptics();
   $('p-haptics').onclick = () => { setHaptics(!HAPTIC.on); syncHaptics(); sfx('click'); if (HAPTIC.on) try { navigator.vibrate(HAPTIC_PATTERNS.order); } catch (e) { /* not allowed here */ } };
+  // (Weather can be switched in Custom Game's Rules too: the switches are read again as Settings opens.)
+  UI.syncSwitches = () => { syncWx(); syncScouts(); syncHaptics(); };
   initFullscreen();
   syncVol();
   $('p-help').onclick = () => showHelp();
@@ -361,7 +363,7 @@ function pauseView(v, focus) {
   $('p-setview').hidden = !set;
   $('screen-pause').querySelector('.card').classList.toggle('p-set', set);
   $('screen-pause').scrollTop = 0;
-  if (set) { syncGfx(); if (UI.syncTod) UI.syncTod(); }
+  if (set) { syncGfx(); if (UI.syncTod) UI.syncTod(); if (UI.syncSwitches) UI.syncSwitches(); }
   if (focus) $(set ? 'p-back' : 'p-settings').focus({ preventScroll: true });
 }
 
