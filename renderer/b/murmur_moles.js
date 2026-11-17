@@ -398,7 +398,7 @@ function clot(L, K, parent, at, dir, GR, o = {}) {
     K.tube(D, pts, () => r * 0.022, arcM, { n: 15, radial: 5, dirt: 0 });
   }
   // grit shed behind it (and, leaving the mouth, a stream of it back to the lips)
-  const end = o.trail ? D.worldToLocal(parent.localToWorld(new THREE.Vector3(...o.trail))) : new THREE.Vector3(-r * 4, 0, 0);
+  const end = o.trail ? D.worldToLocal(parent.localToWorld(new THREE.Vector3(...o.trail))) : new THREE.Vector3(-r * 2.6, 0, 0);   // (alone, it stays in its frame)
   const nT = o.trail ? 16 : 9;
   for (let i = 0; i < nT; i++) {
     const t = (i + 1) / (nT + 1), p = new THREE.Vector3(-r * 0.9, 0, 0).lerp(end, t), j = r * 0.25 * (1 - t * 0.5);
