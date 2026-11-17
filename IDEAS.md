@@ -14,6 +14,22 @@ Still open: a neutral, shared exchange the rivals compete over; contracts for Ch
 
 ## Held for later
 
+- **More planetary events** (the owner, Nov 17 2026: saved for later). Today's four (`EVENTS` in `js/defs.js`): the dust
+  storm, Ringfall, the solar flare and the *Wren*. Each new one hits every colony alike, comes from the seed and the
+  clock (lockstep), and is mirrored for fairness where it touches the land. The owner's pick, if built: the eclipse
+  and the Carrier drop.
+  - **Ring eclipse.** The Ring's shadow sweeps across the land and for about a minute it's night at midday: the
+    streetlights come on and the birds fall silent. With the Murmur on they stir in the false dark and a few packs come
+    up early (a small raid out of hours); without them it's mostly mood, and Bio Farms pause their growth. Brings the
+    fear of the night into the day.
+  - **Carrier drop.** A reserve supply pod from one of the Carriers in orbit falls off course into no-one's land, at a
+    spot fair to every colony, and the first colony whose robots reach it takes its load (Alloy, Chips, Ammo). A race
+    and a skirmish over neutral ground; in the lore, the Carriers' last reserves running out.
+  - **Flood season** (only on maps with rivers or lakes). The water rises for about 90 seconds: low ground beside it
+    floods, robots wade slowly, and roads at the water's edge can't be used until it goes down; afterwards Bio Farms by
+    the water grow faster for a while. (See Twin rivers below: its fords "a Planet event can flood".)
+  - **Bloom tide** (only in the Bloom). Violet growth creeps over a few patches of each colony's land, blocking building
+    there until a Torch burns it back or a Harvester cuts it for Fiber.
 - **Room to grow in the single-file game** (owner's to-do, Nov 17). `dist/terrafall.html` must stay under 16 MB (its
   host's limit for a page; each file beside it has its own 16 MB). It reached 16,346 KB with the Hollow's and the new
   Fiber and Oil art, so the Forest's and Hoarfell's biome art moved into bundles beside the page like the newer biomes'
