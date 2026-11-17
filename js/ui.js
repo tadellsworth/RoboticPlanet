@@ -5923,7 +5923,8 @@ function refreshBuildingSheet(b) {
       const ins = Object.keys(def.inp).map((g) => goodTag(g, `${b.stock[g] || 0}/${def.hopper || INPUT_CAP}`, !(b.stock[g] > 0))).join(''); // (what it keeps on hand: a Smelter keeps 6)
       const outs = def.make ? Object.keys(def.make).map((g) => goodTag(g, `${b.stock[g] || 0}/${def.out[g]}`)).join('') : '';
       const recipe = Object.keys(def.inp).map((g) => GOOD[g].name).join(' + ') + ' → ' + (def.make ? Object.keys(def.make).map((g) => GOOD[g].name).join('') : 'a new bot');
-      parts.push(`<div class="kv"><span>Recipe</span><span>${recipe}, ${def.work}s</span></div>`);
+      const slow = def.make && def.make.fuel && modFuelRate() < 1; // (Half Fuel, a challenge modifier)
+      parts.push(`<div class="kv"><span>Recipe</span><span>${recipe}, ${slow ? `${def.work / modFuelRate()}s (Half Fuel)` : `${def.work}s`}</span></div>`);
       parts.push(`<div class="section-label">Inputs</div><div class="goodlist">${ins}</div>`);
       if (outs) parts.push(`<div class="section-label">Output</div><div class="goodlist">${outs}</div>`);
       if (def.bots) {
