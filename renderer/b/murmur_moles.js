@@ -703,17 +703,17 @@ function digIn(L, K, G, B, body, o) {
 // up inside the walls.
 function heave(L, K, G, X) {
   const { THREE } = K, soil = [K.crust('#5a4636', { rough: 0.97 }), K.crust('#4a3a2e', { rough: 0.97 }), K.crust('#6e5844', { rough: 0.97 })];
-  const RX = 1.25, RZ = 1.0;
+  const RX = 2.0, RZ = 1.3;   // (about the Sapper's own size: it is right under it)
   const crack = (x, z) => {
     const r = Math.hypot(x / RX, z / RZ), a = Math.atan2(z / RZ, x / RX), w = a * 3 + 0.9 + 0.5 * K.nz(r * 2.5, 1.3, a);
     return Math.pow(Math.abs(Math.cos(w)), 40) * K.sstep(0.08, 0.3, r) * (1 - K.sstep(0.75, 1.0, r)) + Math.pow(Math.abs(Math.cos(r * 9 + K.nz(x * 2, 3, z * 2))), 60) * K.sstep(0.3, 0.45, r) * (1 - K.sstep(0.6, 0.75, r)) * 0.6;
   };
   const hgt = (x, z) => {
-    const r = Math.hypot(x / RX, z / RZ), dome = 0.55 * Math.pow(Math.max(0, 1 - r * r), 0.7);
-    const t = Math.max(0, -x - 0.4) / 2.2, ridge = x < -0.4 ? 0.2 * (1 - t) * Math.exp(-((z / (0.36 * (1 - 0.3 * t))) ** 2)) * (t < 1 ? 1 : 0) : 0;
+    const r = Math.hypot(x / RX, z / RZ), dome = 0.7 * Math.pow(Math.max(0, 1 - r * r), 0.7);
+    const t = Math.max(0, -x - 0.8) / 2.4, ridge = x < -0.8 ? 0.3 * (1 - t) * Math.exp(-((z / (0.6 * (1 - 0.3 * t))) ** 2)) * (t < 1 ? 1 : 0) : 0;
     return Math.max(dome, ridge) * (1 + 0.12 * K.nz(x * 3, 1, z * 3)) + (dome > 0.02 ? 0.03 * K.nz(x * 11, 6, z * 11) : 0) - 0.13 * crack(x, z);
   };
-  const g = new THREE.PlaneGeometry(4.2, 2.6, 168, 104).rotateX(-Math.PI / 2); g.translate(-0.8, 0, 0);
+  const g = new THREE.PlaneGeometry(7.2, 3.4, 260, 124).rotateX(-Math.PI / 2); g.translate(-0.5, 0, 0);
   const p = g.attributes.position, col = new Float32Array(p.count * 3), H = new Float32Array(p.count);
   for (let i = 0; i < p.count; i++) {
     const x = p.getX(i), z = p.getZ(i), h = hgt(x, z), c = crack(x, z); H[i] = h; p.setY(i, Math.max(h, 0));
@@ -725,12 +725,12 @@ function heave(L, K, G, X) {
   g.setIndex(keep); g.setAttribute('color', new THREE.BufferAttribute(col, 3)); g.computeVertexNormals();
   L.mesh(g, K.crust('#ffffff', { rough: 0.95, ns: 0.9 }), 0, 0, 0, { parent: G });
   const clod = (s, k) => { const q = new THREE.DodecahedronGeometry(1, 1), pp = q.attributes.position; for (let i = 0; i < pp.count; i++) { const w = 1 + 0.3 * K.nz(pp.getX(i) * 2 + k, pp.getY(i) * 2, pp.getZ(i) * 2); pp.setXYZ(i, pp.getX(i) * w, pp.getY(i) * w, pp.getZ(i) * w); } q.scale(s, s * 0.7, s); q.computeVertexNormals(); return q; };
-  for (let i = 0; i < 80; i++) {
-    const a = L.rnd() * Math.PI * 2, r = Math.pow(L.rnd(), 0.6) * 1.2, x = Math.cos(a) * r * RX, z = Math.sin(a) * r * RZ, s = 0.03 + Math.pow(L.rnd(), 2.2) * 0.1;
+  for (let i = 0; i < 150; i++) {
+    const a = L.rnd() * Math.PI * 2, r = Math.pow(L.rnd(), 0.6) * 1.15, x = Math.cos(a) * r * RX, z = Math.sin(a) * r * RZ, s = 0.03 + Math.pow(L.rnd(), 2.2) * 0.1;
     L.mesh(clod(s, i), soil[i % 3], x, Math.max(0, hgt(x, z)) + s * 0.2, z, { parent: G, dirt: 0.1, dirtH: s, ry: L.rnd() * 6 });
   }
   // chips of crystal turned up in the cracks
-  for (const [x, z, l] of [[0.32, -0.1, 0.3], [-0.25, 0.32, 0.22], [0.1, 0.45, 0.18], [-0.1, -0.42, 0.2]]) K.cluster(G, [x, Math.max(0, hgt(x, z)) - 0.05, z], [x * 0.8, 1, z * 0.8], 3, l, l * 0.26, X, 0.6, { collar: false });
+  for (const [x, z, l] of [[0.5, -0.15, 0.36], [-0.4, 0.42, 0.28], [0.2, 0.62, 0.22], [-0.2, -0.6, 0.26], [1.1, 0.3, 0.2]]) K.cluster(G, [x, Math.max(0, hgt(x, z)) - 0.05, z], [x * 0.8, 1, z * 0.8], 3, l, l * 0.26, X, 0.6, { collar: false });
   return null;
 }
 
