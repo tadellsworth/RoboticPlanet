@@ -4318,6 +4318,30 @@ function drawTunnels(ctx, ox, oy, z) {
   ctx.drawImage(T.g, ox, oy, S.W * z, S.H * z);
   ctx.restore();
   for (const s of S.mur.shut || []) if (s.until > S.time) drawExitScar(ctx, ox + (s.x + 0.5) * z, oy + (s.y + 0.5) * z, z, (s.until - S.time) / MURMUR.shut);
+  // Their dead (Active), where they fell, until one of them drags it off or it sinks into the ground.
+  for (const d of S.mur.dead || []) {
+    const age = S.time - d.t, a = clamp((MURMUR.craft.bodyLast - age) / 3, 0, 1);
+    if (a > 0) drawMurmurBody(ctx, ox + d.x * z, oy + d.y * z, z, d.type, a, hash2(d.id, 3, 7) * Math.PI * 2);
+  }
+}
+
+/** One of the Murmur dead: a dark heap, limbs drawn in, the Crystal under its skin gone dull (a, how much is left of it). */
+function drawMurmurBody(ctx, x, y, s, type, a, rot) {
+  const k = type === 'brute' ? 1.7 : 1;
+  ctx.save();
+  ctx.translate(x, y); ctx.rotate(rot);
+  ctx.globalAlpha *= a;
+  ctx.fillStyle = 'rgba(10,4,12,0.35)';
+  ctx.beginPath(); ctx.ellipse(s * 0.02, s * 0.05, s * 0.17 * k, s * 0.09 * k, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.strokeStyle = type === 'brute' ? '#2a1a12' : '#1e0f22'; ctx.lineWidth = Math.max(1, s * 0.025 * k); ctx.lineCap = 'round';
+  ctx.beginPath();
+  for (const sy of [-1, 1]) { ctx.moveTo(-s * 0.04 * k, sy * s * 0.05 * k); ctx.lineTo(-s * 0.1 * k, sy * s * 0.1 * k); ctx.moveTo(s * 0.05 * k, sy * s * 0.05 * k); ctx.lineTo(s * 0.02 * k, sy * s * 0.11 * k); }
+  ctx.stroke();
+  ctx.fillStyle = type === 'brute' ? '#3a2519' : '#2b1631';
+  ctx.beginPath(); ctx.ellipse(0, 0, s * 0.13 * k, s * 0.075 * k, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = 'rgba(140,100,190,0.55)'; // (dull crystal along its back)
+  for (let n = 0; n < 3; n++) { ctx.beginPath(); ctx.arc((n - 1) * s * 0.045 * k, -s * 0.02 * k, s * 0.012 * k, 0, Math.PI * 2); ctx.fill(); }
+  ctx.restore();
 }
 
 /**
@@ -4475,6 +4499,13 @@ function minimapTunnels() {
 function drawCritter(ctx, u, x, y, s) {
   const brute = u.type === 'brute', k = brute ? 1.7 : 1, face = u.face || 0;
   const step = u.moved || u.fought ? Math.sin(R.time * (brute ? 12 : 22) + u.id) : 0;
+  // Dragging one of its dead (Active): the body behind it, and a scuff in the dirt where it's been dragged.
+  if (u.drag && BOTS[u.drag]) {
+    const bx = x - Math.cos(face) * s * 0.3 * k, by = y - Math.sin(face) * s * 0.3 * k;
+    ctx.save(); ctx.strokeStyle = 'rgba(30,18,24,0.35)'; ctx.lineWidth = Math.max(1, s * 0.05); ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(bx, by); ctx.lineTo(bx - Math.cos(face) * s * 0.35, by - Math.sin(face) * s * 0.35); ctx.stroke(); ctx.restore();
+    drawMurmurBody(ctx, bx, by, s, u.drag, 1, face + (u.moved ? Math.sin(R.time * 9 + u.id) * 0.15 : 0));
+  }
   ctx.save();
   ctx.translate(x, y);
   ctx.fillStyle = 'rgba(20,8,20,0.3)';
@@ -5347,7 +5378,7 @@ function render(dtReal) {
     for (const e of items) {
       if (e.ent === 'post') { pool(ox + (e.post.x + 0.5) * z, oy + (e.post.y + 0.5) * z, z * 1.4, '#ffd27a'); continue; }
       if (e.ent === 'uplink') { pool(ox + (e.up.x + 0.5) * z, oy + (e.up.y + 0.5) * z, z * 1.5, e.up.owner >= 0 ? PLAYER_COLORS[e.up.owner] : '#dfefff'); continue; }
-      if (e.ent !== 'b' || !e.built || BDEFS[e.type].viaduct) continue;
+      if (e.ent !== 'b' || !e.built || BDEFS[e.type].viaduct || murmurCutOn(e) || murmurDarkAt(e.x, e.y)) continue; // (dark where the Murmur cut the power)
       const size = e.type === 'lander' ? 1.7 : e.type === 'wall' ? 0.45 : e.type === 'gate' ? 0.8 : 1.2;
       pool(ox + (e.x + 0.5) * z, oy + (e.y + 0.5) * z, z * size, BDEFS[e.type].wild ? '#a46cff' : PLAYER_COLORS[e.owner] || '#ffd9a0');
     }

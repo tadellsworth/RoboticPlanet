@@ -373,7 +373,7 @@ function drawStreetLamp(ctx, e, ox, oy, z) {
   if (!post) return;
   const x = ox + e.x * z, y = oy + e.y * z;
   drawArt(ctx, post, x, y, z);
-  const on = TOD.active ? TOD.state.lights : 0, lit = artFor('streetlamp-' + e.kind + '-lit', e.owner);
+  const on = TOD.active && !murmurDarkAt(e.i, e.j) ? TOD.state.lights : 0, lit = artFor('streetlamp-' + e.kind + '-lit', e.owner); // (out where the Murmur cut the lights)
   if (on > 0.01 && lit) { const ga = ctx.globalAlpha; ctx.globalAlpha = ga * on; drawArtRaw(ctx, lit, x, y, z); ctx.globalAlpha = ga; }
 }
 
@@ -383,6 +383,7 @@ function drawStreetLights(ctx, ox, oy, z, v0, v1) {
   ctx.save();
   ctx.globalCompositeOperation = 'lighter';
   for (const e of streetLamps(v0, v1)) {
+    if (murmurDarkAt(e.i, e.j)) continue; // (the Murmur cut the lights here)
     const L = STREETLIGHT[e.kind], w = z * L.r * 2, pool = ART['streetlamp-' + e.kind + '-pool'];
     const x = ox + (e.i + 0.5) * z, y = oy + (e.j + 0.5) * z;
     ctx.globalAlpha = on * L.a;
@@ -461,7 +462,7 @@ function drawCityGlow(ctx, ox, oy, z, items) {
   c.globalAlpha = 0.085 * TOD.state.pools;
   let any = false;
   for (const e of items) {
-    if (e.ent !== 'b' || !e.built || BDEFS[e.type].wild || BDEFS[e.type].barrier || BDEFS[e.type].viaduct) continue;
+    if (e.ent !== 'b' || !e.built || BDEFS[e.type].wild || BDEFS[e.type].barrier || BDEFS[e.type].viaduct || murmurCutOn(e) || murmurDarkAt(e.x, e.y)) continue;
     const col = PLAYER_COLORS[e.owner];
     if (!col) continue;
     const r = z * (e.type === 'lander' ? 4.2 : 3.0) * k;
@@ -490,7 +491,7 @@ function drawRoadGlow(ctx, ox, oy, z, v0, v1) {
   const paths = {};
   for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) {
     const t = j * W + i;
-    if (!S.road[t] || S.bAt[t]) continue;
+    if (!S.road[t] || S.bAt[t] || murmurDarkAt(i, j)) continue; // (where the Murmur put the lights out: dark)
     const o = wayOwner(t), key = (o >= 0 ? o : 'n') + (S.pave[t] === 2 ? 'a' : 'r');
     const P = paths[key] || (paths[key] = new Path2D());
     const x0 = ox + (i + inset) * z, x1 = ox + (i + 1 - inset) * z, y0 = oy + (j + inset) * z, y1 = oy + (j + 1 - inset) * z;

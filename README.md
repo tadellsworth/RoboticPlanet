@@ -1517,6 +1517,43 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
     due and its attack threshold and `AI_NEST_SPARE` (4) more warbots, strikes the nearest nest within `AI_NEST_REACH`
     (26) tiles (`aiMurmurStrike`: from the garrisons in reach, or from further off to a rally flag beside it that comes
     down with it, as the Army's Attack does). The Murmur never call its army home (`wildHit`) or count as an enemy army.
+    Where the Murmur cut its power (`P.murCut`, see below) with no gun over it, it wants one Pulse Turret more and
+    sites it a couple of tiles from what they cut (`aiMurCut`).
+  - **Their craft (Active only; Quiet keeps the plain packs: the owner's call).** `MURMUR.craft` in `js/defs.js`, the
+    section after `murmurWave` in `js/sim.js`. Plans (`S.mur.plans`, saved, checked by `checkSave`, in `hashState`): at
+    the dusk warning `murmurDusk` makes one for each colony (`murmurPlan(p, n, round)`): the target is the weak spot
+    (its building scoring most on charge `chargeWorth`, Bloom-vein lure, being alone, out of every colony gun's reach
+    with 3 to spare (`murmurGuns`/`murmurGunAt`: `gunReach` of every colony building, made once a tick), where they fed
+    and not where they were killed, within the networks' reach, in the nests' walkable zone); the rally point
+    `craft.rally` off it, out of the guns, off its land, toward the nests; the watcher's spot at the edge of its land
+    on the line in; up to two Fuel Stations or Generators within `cutR` to cut first (else two of its streetlamp tiles);
+    and from night `feintFrom`, with `feintArmy` armed warbots in the colony, a feint target at least `feintFar` off,
+    by a garrison if it can. A watcher (task `watch`) surfaces there facing the target and goes down after nightfall
+    (`Contact at the edge of sensor range…`). At each wave `murmurCraftWave` (round 1, and a fresh plan for round 2)
+    sends every exit within `join` of a plan's rally point up with task `rally` (an exit no plan draws: a plain pack,
+    as on Quiet), and the first wave a feint of `feintN` from the exit nearest the feint target (role `feint`).
+    `murmurPlansTick` once a second: when all are at the rally point (or `wait` after the first, `waitMax` in all, and
+    a feint's warbots drawn, `murmurDrawn`, or `feintWait`) `murmurLaunch` sends them: Brutes (else one Scuttler) to cut
+    (role `cut`, `murmurCutStep`, `cutTime` at each: `murmurCut` sets `b.murCut` to the night's end: a cut Fuel Station
+    charges nothing (`insideCharger`, `canCharge`, the charging trips), a cut Generator powers nothing, its panel says
+    so; `S.mur.dark` zones of `dark` tiles, `lampDark` for a lamp, put out the lamps, road glow and building light
+    pools in the drawing, `murmurDarkAt`), the rest held (`task.wait`) until the first cut (or `cutWait`), then the
+    Brutes straight at the target and the Scuttlers `leadGap` later, spread round it (`spread`). A strike that's down
+    to `half` of the number it set out with goes back down (`murmurPullBack`, task `back`; `again` seconds later, with
+    `againLeft` of night to come, as many as got down come up again, `murmurAgain`). On the way in and about, night
+    creatures route with the guns' cover as a cost (`routeOpts` `coverMap`: `murmurGunMap`, every 15 ticks; findPath
+    adds `COVER_COST` there), `murmurPrey` scores what a gun covers 6 a gun lower, and Scuttlers scatter `scatterFor` s
+    when `scatterN` armed warbots are within `scatter` tiles (`murmurScatter`, `murmurFlee`; not again for
+    `scatterCd`). One killed on Active leaves no blast or fire (`killBot` → `murmurBody`): a body in `S.mur.dead`, which
+    the nearest creature within `dragR` drags (task `drag`, at `dragSlow`, `u.drag` drawn behind it) down the nearest
+    exit (a guard, into its nest); one nobody comes for sinks after `bodyLast` s, and all at dawn. Memory
+    (`S.mur.mem`: `kill` and `fed`, each up to `memMost` [x, y, weight], merged within 3 tiles, × `memDecay` each
+    nightfall, gone under 0.3; `murmurRemember`, `murmurMem` within `memR`): a creature on a strike killed by a gun or
+    warbot (`u.hitX`/`hitY`/`hitT`, set by `damageBot`) adds a `kill` there; a colony robot they kill, or a building
+    they cut, a `fed`. Exits open away from the guns and the `kill` memory and toward tonight's rally points; plans and
+    `murmurPrey` steer by both. Messages, in the colony's voice: the watcher, `Power lost at your …`, `Contact
+    withdrawing underground…`, `The Murmur are up again…`, `Second contact, far side…`. Dawn clears the plans, the
+    dark and the dead.
 - **Research** (Colony; `TECHS` in `js/defs.js`, `startResearch`/`updateLab` in `js/sim.js`): a Research Lab (staffed)
   researches one upgrade at a time, cost paid on start (Cancel refunds), progress `dt × mult` per staffed Lab. Upgrades:
   Cargo Racks (`botCarry`), Long-life Cells (`drainMul`, and chargers 50% faster; the old Fast Charging upgrade is folded into it), Rapid Paving, Sentry Optics (`turretRange`,
