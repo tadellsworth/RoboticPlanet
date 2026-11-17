@@ -24,6 +24,10 @@ const AI_PLAN = [
 
 /** The build plan's opening, up to the first Bot Foundry: what a colony with one site at a time builds first (see aiThink). */
 const AI_OPENING = AI_PLAN.slice(0, AI_PLAN.findIndex(([t]) => t === 'foundry') + 1), AI_EASY_OPENING = 360;
+/** A Medium, Normal or Hard rival's opening: the same buildings with the Bot Foundry straight after the first Fuel Station. */
+const AI_OPEN_FIRST = [AI_OPENING[0], ['foundry', 1]].concat(AI_OPENING.slice(1, -1));
+/** ...and how many Workers its buildings take between them. */
+const AI_OPEN_STAFF = Object.entries(Object.fromEntries(AI_OPEN_FIRST)).reduce((n, [t, k]) => n + (BDEFS[t].staff && !BDEFS[t].crew ? k : 0), 0);
 
 /** The buildings that make new bots between them (and what they run on), and the ones a colony down to a handful of
  * workers keeps running come what may (see the triage in aiThink). */
@@ -533,6 +537,19 @@ function aiThink(p) {
   // (Its first minutes go as they always have: with the opening first from the start it had its Foundry as soon as a
   // Normal rival and beat one in half its games.)
   if (maxSites === 1 && !counts.foundry && S.mode !== 'colony' && S.time >= AI_EASY_OPENING) plan = AI_OPENING.concat(plan);
+  // The opening (Medium and up): until each of its buildings has stood once (P.opened), AI_OPEN_FIRST comes before every
+  // other ask, the Bot Foundry straight after the first Fuel Station: the colony lands with what it costs, and every
+  // Worker it makes speeds up the rest. Tenth in the plan, its site waited behind Outposts toward what was short and
+  // their long roads, spare gatherers, Bio Farms and the Ammo Plant, then for a Worker of its own once the buildings
+  // before it had taken every one, and both rivals sat at their ten landing Workers for 10 to 15 minutes (on Long haul
+  // most of all). (What it can't place yet, a Mine with no Ore on its land say, is passed over for the rest.) Not a
+  // mission's rival: the missions are tuned to the plain plan.
+  if (smart && !S.mission && !P.opened) {
+    const built = {};
+    for (const b of me) if (b.built) built[b.type] = (built[b.type] || 0) + 1;
+    if (AI_OPEN_FIRST.every(([t, n]) => (built[t] || 0) >= n)) P.opened = S.time;
+    else plan = AI_OPEN_FIRST.filter(([t, n]) => (counts[t] || 0) < n).concat(plan);
+  }
   if (sites < siteCap) {
     for (const [type, want0] of plan) {
       if (few && (!AI_CHAIN.includes(type) || counts[type])) continue; // triage: only a missing link of the chain
@@ -691,7 +708,10 @@ function aiThink(p) {
 
   // 3) Foundry: keep enough workers, then grow the army. Order specialists when a building needs
   //    one, and enough Haulers (a Freight Truck counts as one and a half) to carry every good in the colony.
-  let wantWorkers = staffed + 3 + Math.min(3, sites);
+  // (In the opening it counts the buildings of the opening too, built or not: each will want a Worker, so the Foundry
+  // it puts up first makes Workers, not warbots with the Alloy and Chips the colony landed with.)
+  const opening = smart && !S.mission && !P.opened, staffSoon = opening ? Math.max(staffed, AI_OPEN_STAFF) : staffed;
+  let wantWorkers = staffSoon + 3 + Math.min(3, sites);
   const needWorkers = wantWorkers; // (what its buildings call for, before the bot limit has its say)
   // A Freight Truck takes the long runs off the Haulers, but sits idle much of the time: it counts as one and a half.
   const wantHaulers = clamp(Math.ceil(me.length * 0.35), 4, 16) - Math.floor(1.5 * (kinds.truck || 0));
@@ -754,7 +774,7 @@ function aiThink(p) {
     // workers already: until then a worker has to stay free to carry).
     if (few) { b.mode = 'worker'; b.orders = !kinds.hauler && workers >= 3 ? { hauler: 1 } : {}; continue; }
     // Workers first while buildings stand empty; then the army gets its share as the game goes on.
-    b.mode = S.mode === 'colony' ? 'worker' : workers < Math.min(staffed + MIN_FREE_WORKERS, wantWorkers) ? 'worker'
+    b.mode = S.mode === 'colony' ? 'worker' : workers < Math.min(staffSoon + MIN_FREE_WORKERS, wantWorkers) ? 'worker'
       : army < wantArmy ? (workers < wantWorkers ? 'alt' : 'warbot')
         : workers < wantWorkers ? 'worker' : spare <= AI_WORKER_ROOM ? 'off' : workers > wantWorkers + 4 ? 'warbot' : 'alt';
     // A third of the army with no Ammo: no more warbots until it's armed (the Alloy goes to Ammo).
@@ -778,7 +798,7 @@ function aiThink(p) {
     const forMissiles = (saving || P.feedMissiles) && (st.missiles ? army >= Math.max(START_WARBOTS + 2, aiArmyOf(rivalOf(p)) + 3)
       : !armyBehind && (!smart || (workers >= wantWorkers && (kinds.hauler || 0) >= wantHaulers)));
     // (Saving for a crossing with a fair army already: the Foundry rests even if workers are short.)
-    if (((forMissiles || needArmory || bridging) && workers >= staffed + 3) || (bridging && P.bridgeNeed && army >= Math.min(wantArmy, 8))) { b.mode = 'off'; delete b.orders.hauler; delete b.orders.truck; }
+    if (((forMissiles || (needArmory && !opening) || bridging) && workers >= staffed + 3) || (bridging && P.bridgeNeed && army >= Math.min(wantArmy, 8))) { b.mode = 'off'; delete b.orders.hauler; delete b.orders.truck; }
     // Haulers when short; while the army is well behind, only when badly short.
     else if ((kinds.hauler || 0) < (armyBehind ? Math.min(wantHaulers, 6) : wantHaulers) && !(b.orders.hauler > 0)) b.orders.hauler = 1;
     else if ((kinds.tanker || 0) < wantTankers && !(b.orders.tanker > 0)) b.orders.tanker = 1;
@@ -1062,8 +1082,9 @@ function aiNaval(p, me, kinds, lvl, lander, canBuild) {
   const P = S.players[p];
   // Warbots it landed march on from the beach once there's nothing left to fight round the flag: the
   // nearest enemy building they can walk to (the enemy Command Base if it's not much further).
+  // (Not a band still gathering on its beach: see aiBeach.)
   for (const r of S.rallies) {
-    if (r.owner !== p || !r.landing || S.time - r.landing < 15) continue;
+    if (r.owner !== p || !r.landing || S.time - r.landing < 15 || (P.beach && !P.beach.go && P.beach.rid === r.id)) continue;
     if (S.buildings.some((b) => !b.dead && foes(b.owner, p) && b.owner >= 0 && dist2(b.x + 0.5, b.y + 0.5, r.x, r.y) < 16)) continue;
     const z = S.zone[tIdx(Math.floor(r.x), Math.floor(r.y))];
     let tgt = null, bd = Infinity;
@@ -1099,7 +1120,7 @@ function aiNaval(p, me, kinds, lvl, lander, canBuild) {
   const army = (kinds.warbot || 0) + (kinds.bulwark || 0) + (kinds.torch || 0); // (the whole army, specialists too)
   // Ships are built at the Port nearest home (its shipyard).
   const yard = ports.filter((b) => b.built).sort((a, b) => dist2(a.x, a.y, lander.x, lander.y) - dist2(b.x, b.y, lander.x, lander.y))[0];
-  const ferry = S.bots.find((u) => !u.dead && u.owner === p && BOTS[u.type].ferry);
+  const ferries = S.bots.filter((u) => !u.dead && u.owner === p && BOTS[u.type].ferry), ferry = ferries[0];
   if (!ferry && yard && army >= lvl.threshold && !(yard.yard && yard.yard.ferry > 0) && !botBanned(p, 'ferry')) orderAtYard(yard, 'ferry', 1);
   // Later on, a second Port out toward the enemy, kept stocked from home by a Container Ship (Cement for
   // building at the front, Ammo for the warbots there).
@@ -1111,8 +1132,12 @@ function aiNaval(p, me, kinds, lvl, lander, canBuild) {
   if (built.length >= 2 && yard) {
     const far = built.reduce((a, b) => (dist2(b.x, b.y, lander.x, lander.y) > dist2(a.x, a.y, lander.x, lander.y) ? b : a));
     if (!far.keep) { setKeep(far, 'cement', 12); setKeep(far, 'ammo', 6); }
-    if (!S.bots.some((u) => !u.dead && u.owner === p && u.type === 'cargoship') && !(yard.yard && yard.yard.cargoship > 0)) orderAtYard(yard, 'cargoship', 1);
+    // (Not while a Ferry is on order: the yard builds a Container Ship first, and short of Alloy that held the Ferry back
+    // for half an hour.)
+    if (!S.bots.some((u) => !u.dead && u.owner === p && u.type === 'cargoship') && !(yard.yard && (yard.yard.cargoship > 0 || yard.yard.ferry > 0))) orderAtYard(yard, 'cargoship', 1);
   }
+  // Medium and up, against a rival across the water: a band that gathers on a beach first (aiBeach).
+  if (S.difficulty !== 'easy' && !S.mission && aiBeach(p, lvl, army, ferries, yard)) return;
   if (!ferry || ferry.landing || !ferry.inside || S.time < lvl.grace || S.time - (P.lastLanding || -999) < 150) return;
   const port = getE(ferry.inside);
   if (!port || !BDEFS[port.type].port) return;
@@ -1145,9 +1170,143 @@ function aiNaval(p, me, kinds, lvl, lander, canBuild) {
   if (!best) { P.lastLanding = S.time - 100; return; }
   // Not onto a beach under guns the boatload can't beat (two more than what covers it: aiGuards): look again later.
   const near = targets.reduce((a, b) => (!a || dist2(b.x, b.y, best.i, best.j) < dist2(a.x, a.y, best.i, best.j) ? b : a), null);
-  if (near && Math.min(FERRY_SEATS, avail) < 2 + Math.ceil(aiFire(aiGuards(near.owner, best.i, best.j, 2, null), 0) - 1e-9)) { P.lastLanding = S.time - 100; return; }
+  if (near && Math.min(FERRY_SEATS, avail) < 2 + Math.ceil(aiFire(aiGuards(near.owner, best.i, best.j, 2, null), 0) - 1e-9)) { P.lastLanding = S.time - 100; P.landHeld = S.time; return; } // (see aiBeach)
   if (!orderLanding(p, ferry, best.i, best.j, Math.min(FERRY_SEATS, avail))) P.lastLanding = S.time;
   else P.lastLanding = S.time - 100;
+}
+
+/**
+ * A band on the beach (P.beach), a Medium, Normal or Hard rival's, against a rival across the water (one it can't walk
+ * to: Islands, Four Isles): its single landings of six (aiNaval) go on as before until it has a decisive lead over that
+ * rival (half as many warbots again and four more, as for a storm: aiMarch) or one is held back by the guns over the
+ * beach (P.landHeld, in the last minute). Then a band gathers on the enemy shore before it attacks. With the lead it goes
+ * for the rival's Command Base, if it has the warbots to take it (aiTakeNeed, and AI_BEACH.more to spare); otherwise, and
+ * after a landing held back, for the enemy fort across the water it takes the fewest warbots to take (one nearer the
+ * Command Base counts a little cheaper). The beach: a shore tile its Ferries can reach within AI_BEACH.reach tiles of
+ * the target, out of the enemy's guns' reach (by two tiles), as clear as can be of garrisons that would come out at it,
+ * off the enemy's land where it can be (a warbot standing about there runs its battery down: BATTERY.warbotWait).
+ * Every Ferry that ties up with warbots to spare brings a load (a second Ferry is ordered for it), until the band is as
+ * strong as that; then it goes in, its flag beside the target and the gun covering it first (as a storm does: aiStorm).
+ * It goes with what it has once it has waited AI_BEACH.wait s with `part` of what it needs, or its batteries are down to
+ * AI_BEACH.bat; with too few after AI_BEACH.give s, it's called off (they go for what is nearest, as a single landing's
+ * do), and so it is when it loses two in five of what it sent there before it goes (that place is then left alone for
+ * five minutes: aiBeaten). Returns whether a band is gathering or on its way in (single landings wait meanwhile). (Six
+ * at a time, each load marching on as it landed, the leading rival on Islands lost load after load to a healthy base,
+ * or never landed at all by a Command Base its guns covered, and the war ran out the clock with 35 warbots to the
+ * loser's few.)
+ */
+const AI_BEACH = { reach: 16, more: 2, wait: 240, part: 0.7, give: 420, bat: 40 };
+function aiBeach(p, lvl, army, ferries, yard) {
+  const P = S.players[p], B = P.beach;
+  const docked = (f) => !f.landing && f.inside && !f.path && getE(f.inside) && BDEFS[getE(f.inside).type].port;
+  if (B) {
+    const T = getE(B.tgt);
+    let r = B.rid ? rallyById(B.rid) : null;
+    if (!r && !B.go) {
+      r = S.rallies.find((q) => q.owner === p && q.landing && Math.abs(q.x - B.i - 0.5) < 1.5 && Math.abs(q.y - B.j - 0.5) < 1.5) || null;
+      if (r) B.rid = r.id;
+    }
+    const band = r ? rallyMembers(r.id).filter((u) => botArmed(u)) : [];
+    const lost = !T || T.dead || !foes(T.owner, p) || S.players[T.owner].out;
+    if (B.go) {
+      // Gone in: over once the target is taken or the band is spent (what's left goes on as a single landing's do).
+      if (lost || !r || band.length * 5 < B.go * 2) { P.beach = null; P.lastLanding = S.time; return true; }
+      const g = getE(r.first);
+      if (!g || g.dead || !foes(g.owner, p)) r.first = aiFirstGun(T.owner, Math.floor(r.x), Math.floor(r.y));
+      return true;
+    }
+    if (lost) { P.beach = null; P.lastLanding = S.time - 60; return true; }
+    // A second Ferry to bring the band twice as fast.
+    if (ferries.length === 1 && yard && !(yard.yard && yard.yard.ferry > 0) && !botBanned(p, 'ferry')) orderAtYard(yard, 'ferry', 1);
+    let coming = 0;
+    for (const f of ferries) if (f.landing && !f.landing.found && f.landing.x === B.i && f.landing.y === B.j) coming += f.landing.n || 0;
+    const have = band.length, waited = S.time - B.since;
+    B.need = Math.max(lvl.threshold, aiTakeNeed(T, lvl, band.filter((u) => BOTS[u.type].shield).length) + AI_BEACH.more);
+    const low = have && band.reduce((n, u) => n + (u.bat ?? 100), 0) < AI_BEACH.bat * have;
+    if (r && have && (have >= B.need || ((waited > AI_BEACH.wait || low) && have >= B.need * AI_BEACH.part))) {
+      const z = S.zone[tIdx(B.i, B.j)];
+      for (const [di, dj] of [[1, 1], [-1, 1], [1, -1], [-1, -1], [2, 0], [-2, 0], [0, 2], [0, -2]]) {
+        const i = T.x + di, j = T.y + dj;
+        if (inMap(i, j) && walkable(tIdx(i, j)) && !S.bAt[tIdx(i, j)] && S.zone[tIdx(i, j)] === z) { r.x = i + 0.5; r.y = j + 0.5; break; }
+      }
+      r.first = aiFirstGun(T.owner, Math.floor(r.x), Math.floor(r.y));
+      B.go = have;
+      (P.fights = P.fights || []).push({ x: T.x, y: T.y, n: have, t: S.time, ids: band.map((u) => u.id) });
+      P.siegeAt = { x: T.x, y: T.y, until: S.time + 120 };
+      return true;
+    }
+    if (waited > AI_BEACH.give) { P.beach = null; P.lastLanding = S.time; return true; }
+    // Losing the band on the beach as fast as it lands (a sortie, guns it didn't see coming): it goes now if it has
+    // `part` of what it needs, or else it's called off and the place left alone a while (aiBeaten).
+    if (B.sent - have - coming >= Math.max(4, B.sent * 0.4)) {
+      if (r && have >= B.need * AI_BEACH.part) B.need = have;
+      else { (P.beaten = P.beaten || []).push({ x: T.x, y: T.y, n: B.sent, until: S.time + 300 }); P.beach = null; P.lastLanding = S.time; return true; }
+      return true;
+    }
+    // More loads: each Ferry tied up with warbots to spare brings one.
+    for (const f of ferries) {
+      const want = B.need + AI_BEACH.more - have - coming;
+      if (want <= 0) break;
+      if (!docked(f)) continue;
+      const port = getE(f.inside), avail = rallyAvailable(p, port.x, port.y, true);
+      if (avail < Math.min(3, want)) continue;
+      const n = Math.min(FERRY_SEATS, avail, want);
+      if (orderLanding(p, f, B.i, B.j, n)) { if (!coming && !have) { P.beach = null; P.lastLanding = S.time - 60; } return true; } // (the beach can't be had now)
+      coming += f.landing ? f.landing.n : 0;
+      B.sent = (B.sent || 0) + (f.landing ? f.landing.n : 0);
+    }
+    return true;
+  }
+  // No band gathering: start one, with a decisive lead over a rival across the water or a single landing just held back
+  // by guns, a Ferry tied up, warbots to spare and the army for it.
+  const f0 = ferries.find(docked), hz = homeZone(p), held = S.time - (P.landHeld ?? -999) < 60;
+  if (!f0 || S.time < lvl.grace || S.time - (P.lastLanding || -999) < 60 || army < lvl.threshold + 2) return false;
+  let storm = -1, sa = Infinity;
+  for (let o = 0; o < S.players.length; o++) {
+    const eL = getE(S.players[o].lander);
+    if (o === p || !foes(o, p) || S.players[o].out || S.players[o].absent || !eL || eL.dead || eL.owner !== o || S.zone[tIdx(eL.x, eL.y)] === hz) continue;
+    const n = aiArmyOf(o);
+    if (army >= n * 1.5 + 4 && n < sa) { sa = n; storm = o; }
+  }
+  if (storm < 0 && !held) return false;
+  const port = getE(f0.inside), avail = rallyAvailable(p, port.x, port.y, true);
+  if (avail < 4) return false;
+  const cands = [];
+  for (const b of S.buildings) {
+    if (b.dead || !b.built || b.owner < 0 || !foes(b.owner, p) || !BDEFS[b.type].mil || BDEFS[b.type].bunker || BDEFS[b.type].wild) continue;
+    if (S.players[b.owner].out || S.zone[tIdx(b.x, b.y)] === hz) continue;
+    const need = Math.max(lvl.threshold, aiTakeNeed(b, lvl, 0) + AI_BEACH.more);
+    if (need > avail + FERRY_SEATS || aiBeaten(P, b, need)) continue;
+    const eL = getE(S.players[b.owner].lander);
+    // (With the lead, the Command Base it can take before anything else.)
+    cands.push({ b, need, s: (storm >= 0 && b.id === S.players[storm].lander ? -100 : 0) + need + (eL ? dist(b.x, b.y, eL.x, eL.y) * 0.15 : 0) });
+  }
+  if (!cands.length) return false;
+  cands.sort((a, c) => a.s - c.s || a.b.id - c.b.id);
+  dangerMap(p);
+  const guns = DANGER.guns[p] || [];
+  for (const c of cands.slice(0, 4)) {
+    const T = c.b, z = S.zone[tIdx(T.x, T.y)], R = AI_BEACH.reach;
+    const forts = S.buildings.filter((e) => !e.dead && e.built && e.owner >= 0 && foes(e.owner, p) && BDEFS[e.type].mil && !BDEFS[e.type].bunker && e.garrison && e.garrison.length && dist2(e.x, e.y, T.x, T.y) <= (R + 8) * (R + 8));
+    let best = null, bs = Infinity;
+    for (let j = Math.max(1, T.y - R); j <= Math.min(S.H - 2, T.y + R); j++) for (let i = Math.max(1, T.x - R); i <= Math.min(S.W - 2, T.x + R); i++) {
+      const t = tIdx(i, j), d = dist(i, j, T.x, T.y);
+      if (d > R || S.zone[t] !== z || S.terrain[t] !== T_GROUND || S.bAt[t] || !walkable(t)) continue;
+      let cover = 0;
+      for (const g of guns) if (dist2(g.b.x + 0.5, g.b.y + 0.5, i + 0.5, j + 0.5) <= (g.r + 2) * (g.r + 2)) cover++;
+      if (cover) continue; // (never under the guns: a band gathering there was shot down load by load)
+      for (const e of forts) if (dist2(e.x, e.y, i, j) <= (SORTIE_REACH + 2) * (SORTIE_REACH + 2)) cover++;
+      const sc = cover * 10 + (S.owner[t] >= 0 && S.owner[t] !== p ? 3 : 0) + d * 0.4;
+      if (sc >= bs || landingBlocked(p, f0, i, j)) continue;
+      bs = sc; best = { i, j };
+    }
+    if (!best) continue;
+    P.beach = { i: best.i, j: best.j, tgt: T.id, need: c.need, since: S.time, go: 0, rid: 0, sent: 0 };
+    if (orderLanding(p, f0, best.i, best.j, Math.min(FERRY_SEATS, avail, c.need + AI_BEACH.more))) { P.beach = null; P.lastLanding = S.time - 60; return false; }
+    P.beach.sent = f0.landing ? f0.landing.n : 0;
+    return true;
+  }
+  return false;
 }
 
 /**
