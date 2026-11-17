@@ -56,6 +56,7 @@ const AI_ARMY_ROOM = 0.4, AI_WORKER_ROOM = 6;
 const AI_SCRAP = { workers: 4, haulers: 2, minHaulers: 4, far: 3, batch: 4, idle: 120, crisis: 90, crisisIdle: 60, eco: 300, ecoGap: 60, hold: 300 };
 /** The robots it may scrap, vehicles first (they give Chips back too); never the army, planes, ships, trains or Crawlers. */
 const AI_SCRAP_KINDS = ['roadtrain', 'truck', 'tanker', 'agribot', 'paver', 'worker', 'hauler'];
+const AI_SCRAPPABLE = Object.fromEntries(AI_SCRAP_KINDS.map((k) => [k, true])); // (a quick lookup)
 /**
  * Crystal: every robot takes a Chip, and every Chip a Crystal. It counts as running short once what's left (in stock and
  * in the ground on its land) would last under AI_CRYSTAL_MINS minutes at the rate it's used (AI_CRYSTAL_BURN a minute at
@@ -225,7 +226,7 @@ function aiScrapHeld(P, kind) { return !!(P.scrapT && S.time - (P.scrapT[kind] ?
 /** Has robot u something to do (a job, a load aboard, taking cover)? Going home, charging, filling up or being mended isn't. */
 function aiBusy(u) {
   const tt = u.task && u.task.type;
-  return !!(tt && tt !== 'home' && tt !== 'charge' && tt !== 'refuel' && tt !== 'repair') || !!u.carry || cargoCount(u) > 0;
+  return !!(tt && tt !== 'home' && tt !== 'charge' && tt !== 'refuel' && tt !== 'repair') || !!u.carry || !!u.mix;
 }
 
 /**
@@ -235,33 +236,33 @@ function aiBusy(u) {
  * it may scrap: since when each has had nothing to do (gone when it's busy).
  */
 function aiScrap(p, c) {
-  const P = S.players[p];
+  const P = S.players[p], have = {};
   let away = 0;
   for (const u of S.bots) {
-    if (u.dead || u.owner !== p) continue;
+    if (u.owner !== p || u.dead || !(u.type in AI_SCRAPPABLE)) continue;
     if (recycling(u)) { away++; continue; }
-    if (!AI_SCRAP_KINDS.includes(u.type)) continue;
-    if (aiBusy(u)) delete u.idleSince;
+    have[u.type] = (have[u.type] || 0) + 1;
+    if (aiBusy(u)) { if (u.idleSince !== undefined) u.idleSince = undefined; } // (not deleted: that slows every use of the robot)
     else if (u.idleSince === undefined) u.idleSince = S.time;
   }
   if (away >= AI_SCRAP.batch) return;
-  const foundries = c.me.filter((b) => b.built && BDEFS[b.type].bots);
-  if (!foundries.length) return;
   const U = c.use, keep = {
     worker: U.worker + AI_SCRAP.workers, hauler: Math.max(AI_SCRAP.minHaulers, U.hauler + AI_SCRAP.haulers), tanker: U.tanker + 1,
     truck: U.truck, roadtrain: U.roadtrain, agribot: (U.agribot || 0) + 1, paver: (U.paver || 0) + 1,
   };
+  if (!AI_SCRAP_KINDS.some((k) => have[k] > keep[k])) return; // (nothing spare)
+  const foundries = c.me.filter((b) => b.built && BDEFS[b.type].bots);
+  if (!foundries.length) return;
   let sent = 0;
   // Up to `max` robots past `keep` with nothing to do, of the kinds that give back `gives` (any: null), each to the nearest
   // Foundry it can get to, the vehicles first, then the longest idle: ones idle `idleFor` seconds, and with `plain` any
   // Worker or Hauler, and any of a kind while there are AI_SCRAP.far or more past `keep`.
   const send = (max, idleFor, plain, gives, kinds) => {
     if (max <= 0) return 0;
-    const have = {}, list = [];
-    for (const u of S.bots) if (!u.dead && u.owner === p && u.type in keep && !recycling(u)) have[u.type] = (have[u.type] || 0) + 1;
+    const ok = {}, list = [];
+    for (const k of AI_SCRAP_KINDS) ok[k] = have[k] > keep[k] && (!kinds || kinds.includes(k)) && (!gives || recycleYield(k)[gives] > 0);
     for (const u of S.bots) {
-      if (u.dead || u.owner !== p || !(u.type in keep) || have[u.type] <= keep[u.type] || recycling(u)) continue;
-      if ((kinds && !kinds.includes(u.type)) || (gives && !(recycleYield(u.type)[gives] > 0))) continue;
+      if (u.dead || u.owner !== p || !ok[u.type] || recycling(u)) continue;
       if (u.idleSince === undefined || aiBusy(u) || u.shyUntil > S.time || !recyclable(u)) continue;
       if (S.time - u.idleSince < idleFor && !(plain && (u.type === 'worker' || u.type === 'hauler' || have[u.type] - keep[u.type] >= AI_SCRAP.far))) continue;
       list.push(u);
