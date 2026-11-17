@@ -2495,10 +2495,10 @@ function landerSalvage(p, dt) {
  * home, doesn't count. A bridge or tunnel is built from the road beside it on that network (its `stand`): the home
  * side. A tile being paved counts as down already, so a second Worker takes the next tile just past it (still
  * growing outward) or another road, and a crew paves one road side by side. A stretch of plan that joins nothing
- * (laid down on its own, out in the open) is still built, once nothing joined is left to pave: from its end nearest
- * home (an end of the stretch, or a tile beside road or a building), inward.
+ * (laid down on its own, out in the open; or the rival's bridge out from its bare shore) is still built: from its end
+ * nearest home (an end of the stretch, or a tile beside road or a building), inward, and after a joined tile as near.
  */
-const PAVE_LATER = 1e6; // (a stretch that joins nothing comes after every one that does)
+const PAVE_ALONE = 12;  // tiles: how much further off a joined tile can be and still come before a stretch that joins nothing
 const PAVE_SPARE = 2;   // charge kept in hand on top of BATTERY.critical when a Worker reckons up a trip (see paveShort)
 const PAVE_FULL = 95;   // a Worker charged this far goes whatever the trip (charging can't give it more)
 const PAVE_TAKE = 8;    // a Worker this many tiles nearer a tile than the one still walking out to it takes it over
@@ -2589,7 +2589,7 @@ function paveBusy(t) { const by = S.paveRes[t], v = by && getE(by); return !!v &
 
 /**
  * The planned road tile worker u should pave next (see paveMap): the nearest one nobody else is paving that joins
- * its network, or is just past a tile being paved; else, once none is left, the end nearest home of a stretch
+ * its network, or is just past a tile being paved, or (PAVE_ALONE further off) the end nearest home of a stretch
  * that joins nothing. With maxD >= 0, only tiles that close to the worker count (carrying on along the same road).
  */
 function nextPaveTile(u, p, maxD) {
@@ -2620,9 +2620,15 @@ function nextPaveTile(u, p, maxD) {
       }
     }
   }
-  // A stretch with a joined tile some Worker can still get to is paved from there: only the rest start anywhere else.
-  const joined = new Set();
+  // A stretch with a joined tile some Worker can still get to is paved from there. One with none (and nobody on it yet)
+  // starts from its end nearest home: of the tiles it may start from that can be got at, the nearest home.
+  const joined = new Set(), start = new Map();
   for (let k = 0; k < n; k++) if (M.join[k] && M.stand[k] >= 0 && !(skip[M.tiles[k]] > S.time)) joined.add(M.comp[k]);
+  for (let k = 0; k < n; k++) {
+    const c = M.comp[k];
+    if (!M.grow[k] || joined.has(c) || going.has(c) || M.stand[k] < 0 || skip[M.tiles[k]] > S.time) continue;
+    if (!(start.get(c) <= M.home[k])) start.set(c, M.home[k]);
+  }
   let best = -1, bs = Infinity;
   for (let k = 0; k < n; k++) {
     const t = M.tiles[k];
@@ -2636,7 +2642,7 @@ function nextPaveTile(u, p, maxD) {
     if (paveBusy(t)) { const v = getE(S.paveRes[t]); if (v === u || v.task.phase !== 'go' || Math.abs(i + 0.5 - v.x) + Math.abs(j + 0.5 - v.y) <= d + PAVE_TAKE) continue; }
     let s;
     if (M.join[k] || next[k]) s = d;
-    else if (M.grow[k] && !joined.has(M.comp[k]) && !going.has(M.comp[k])) s = PAVE_LATER + M.home[k] + d / 1000;
+    else if (M.grow[k] && M.home[k] <= start.get(M.comp[k])) s = d + PAVE_ALONE;
     else continue;
     if (s < bs) { bs = s; best = t; }
   }
