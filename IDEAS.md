@@ -335,11 +335,15 @@ These wait for a later expansion:
   analysis complete. No further instructions will follow."
 - **The Pathfinder wreck.** A neutral landmark on some maps (the joint lander that built the Trade Posts and Uplinks),
   holding archive logs.
-- **The Hollow (planned by the owner, after the Murmur design is settled).** A new biome and map in the Murmur's
-  cavern lair under the Bloom (LORE.md, The Hollow): always night, daylight only down the breach shafts where Command
-  Bases land, floating Crystal masses, chasms, underground lakes, ceiling tremors, Ringfall only through the breaches,
-  no solar flares, Fiber from Bloom veins (which draws the Murmur), the most nests of any map with the Deep's mound at
-  the centre.
+- **The Hollow (decided by the owner, Nov 17; being built).** The Murmur's cavern lair under the Bloom (LORE.md, The
+  Hollow), as **its own map type with its own underground look** (not a biome for other maps). Always night; chasms,
+  black lakes and the most nests of any map, with the Deep's mound at the centre. All four lore features in the first
+  version: **breach shafts** (bases land under shafts of daylight; Ringfall falls only through them, in concentrated
+  drops; Uplinks stand under them), **Bloom veins for Fiber** (no light for Stalks or crops; harvesting veins draws
+  the Murmur), **floating Crystal** (the richest Crystal on masses hanging over the chasms, reached by Ropeway or
+  bridge) and **ceiling tremors** (the Hollow's weather: dust and falling rock). **No aircraft underground** (no
+  Airfields). No solar flares. **The Murmur in Versus become a setting** (Off / Quiet / Active), Active by default in
+  the Hollow and usable on other maps too; the rival AI learns to live with them.
 - **A campaign mode built around the Murmur** (the owner's long-term wish): the owner's outline is in CAMPAIGN.md, 15
   missions in three acts, from the landing in the Rust to "No further instructions" at the Pathfinder.
 - **Archives.** The main menu's Lore guide (`#screen-lore`) is the archive as it stands, the same for everyone. Next: pages that fill with logs found across games (ark construction updates that stop, the last
