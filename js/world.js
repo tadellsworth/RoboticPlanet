@@ -1825,7 +1825,8 @@ function generateMap(seed, W, H, cfg) {
  * No stalk groves or fertile soil: nothing grows without light. Every cavern floor is one level; the Crystal masses
  * stand two levels up; the chasms drop away below. No Trade Posts or Uplinks: the Pathfinder never mapped the Hollow
  * (LORE.md). Returns what generateMap does, plus `hollow`: { breaches: [{x, y, r, home}], masses: [{x, y}], nests:
- * [{x, y}] (sites in twin pairs), deep: {x, y}, relics: [{x, y, goods}], pillars: [tile] }.
+ * [{x, y}] (sites in twin pairs), deep: {x, y}, relics: [{x, y, goods}], pillars: [tile], chambers: [{x, y}] (the side
+ * chambers' middles, for their art) }.
  */
 function hollowMap(seed, W, H, cfg) {
   const RPR = RESOURCE_PRESETS[cfg.rich ?? DEFAULT_RICH];
@@ -2166,7 +2167,8 @@ function hollowMap(seed, W, H, cfg) {
   return {
     terrain, res, amt, grow, elev, ramp, fert, bases: [{ x: bx, y: by }, { x: W - 1 - bx, y: H - 1 - by }],
     spare: null, choke: null, lava: null, ford: null, tidal: null, fault: null, volcano: null,
-    hollow: { breaches, masses: masses.flatMap((m) => [{ x: Math.round(m.x), y: Math.round(m.y) }, { x: W - 1 - Math.round(m.x), y: H - 1 - Math.round(m.y) }]), nests, deep, relics, pillars },
+    hollow: { breaches, masses: masses.flatMap((m) => [{ x: Math.round(m.x), y: Math.round(m.y) }, { x: W - 1 - Math.round(m.x), y: H - 1 - Math.round(m.y) }]), nests, deep, relics, pillars,
+      chambers: chambers.flatMap((c) => [{ x: Math.round(c.x), y: Math.round(c.y) }, { x: W - 1 - Math.round(c.x), y: H - 1 - Math.round(c.y) }]) },
   };
 }
 
@@ -2338,7 +2340,7 @@ function newGame(opts) {
   if (opts.teams && mode === 'versus' && S.players.length === 4) { S.teams = [0, 0, 1, 1]; S.victory = 'capture'; }
   if (m.spare) S.spare = { x: m.spare.x, y: m.spare.y }; // Crossroads for three: the free quarter's corner
   // The Hollow: its breaches, floating Crystal masses, the Murmur's nest sites and the pillars (see hollowMap).
-  if (m.hollow) S.hollow = { breaches: m.hollow.breaches, masses: m.hollow.masses, nests: m.hollow.nests, deep: m.hollow.deep, pillars: m.hollow.pillars };
+  if (m.hollow) S.hollow = { breaches: m.hollow.breaches, masses: m.hollow.masses, nests: m.hollow.nests, deep: m.hollow.deep, pillars: m.hollow.pillars, chambers: m.hollow.chambers };
   mapEventsStart(m);
   // Planetary events (see EVENTS): the first one comes after EVENT_FIRST seconds.
   if (opts.events) { S.events = true; S.event = null; S.nextEvent = EVENT_FIRST; }
@@ -4687,6 +4689,7 @@ function checkSave(o) {
     for (const k of ['breaches', 'masses', 'nests']) if (!Array.isArray(H0[k]) || !H0[k].every(at)) bad();
     if (!H0.breaches.every((b) => Number.isFinite(b.r))) bad();
     if (!Array.isArray(H0.pillars) || !H0.pillars.every((t) => Number.isInteger(t) && t >= 0 && t < o.W * o.H)) bad();
+    if (H0.chambers != null && !(Array.isArray(H0.chambers) && H0.chambers.every(at))) bad(); // (older saves have none: drawn without them)
   }
   if (o.tremor != null && !(obj(o.tremor) && Number.isFinite(o.tremor.next) && (o.tremor.rock == null || Array.isArray(o.tremor.rock)))) bad();
   if (o.event) {
