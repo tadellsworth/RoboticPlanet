@@ -37,7 +37,8 @@ const FAUNA_SONG = { jungle: 1, autumn: 1, savanna: 1, swamp: 1 };
  * The animals. mode: how it lives (FAUNA_MODES); act: when it's out ('day', 'night', 'dusk' or 'all'); hab: the cell
  * habitat it lives in (faunaHab), min of it a cell needs, p the chance a cell has a group (two where there's plenty);
  * n: how many in a group; z: the zoom (px a tile) it is drawn from; size: its length in tiles; col: body, light, dark.
- * shy: how far (tiles) gunfire puts it up; bold: it doesn't flee the fighting (the scavengers).
+ * alt: the habitat it takes where a cell has too little of hab (deer: the forest edges, away from lakes); high: how high
+ * it soars (tiles); bold: it doesn't flee the fighting (the scavengers, the geese passing high over).
  */
 const FAUNA_KINDS = {
   songbird: { mode: 'flock', draw: 'bird', act: 'day', hab: 'tree', min: 4, p: 0.8, n: [5, 9], z: 22, size: 0.19, col: ['#6e5a42', '#e2c08a', '#221a14'], forage: 'edge' },
@@ -60,10 +61,10 @@ const FAUNA_KINDS = {
   duskbat: { mode: 'flit', draw: 'bat', act: 'dusk', hab: 'rock', min: 2, p: 0.5, n: [2, 4], z: 11, size: 0.26, col: ['#4a3a34', '#8a7068', '#2e221c'], lift: 0.3 },
   embermoth: { mode: 'flit', draw: 'moth', act: 'night', hab: 'open', min: 8, p: 0.55, n: [3, 6], z: 11, size: 0.07, col: ['#5a2a14', '#ffb060', '#1a0c06'], glow: '#ff8a30', slow: true },
   floater: { mode: 'drift', draw: 'floater', act: 'all', hab: 'open', min: 6, p: 0.65, n: [1, 3], z: 9, size: 0.3, col: ['#c8a0e8', '#f6dcff', '#6a3a92'], glow: '#d890ff' },
-  vulture: { mode: 'soar', draw: 'raptor', act: 'day', hab: 'open', min: 20, p: 0.16, n: [1, 3], z: 8, size: 0.62, col: ['#3e322a', '#a8987e', '#1a1412'], bold: true, alt: 2.6 },
-  hawk: { mode: 'soar', draw: 'raptor', act: 'day', hab: 'any', min: 0, p: 0.14, n: [1, 1], z: 8, size: 0.44, col: ['#7a5236', '#dcc4a2', '#2a1a10'], bold: true, alt: 2.2 },
-  crow: { mode: 'soar', draw: 'raptor', act: 'day', hab: 'any', min: 0, p: 0, n: [2, 4], z: 8, size: 0.3, col: ['#222026', '#4e4a56', '#0c0c0e'], bold: true, alt: 1.5 },
-  raven: { mode: 'soar', draw: 'raptor', act: 'day', hab: 'any', min: 0, p: 0, n: [2, 3], z: 8, size: 0.36, col: ['#1c1a20', '#46424e', '#08080a'], bold: true, alt: 1.7 },
+  vulture: { mode: 'soar', draw: 'raptor', act: 'day', hab: 'open', min: 20, p: 0.16, n: [1, 3], z: 8, size: 0.62, col: ['#3e322a', '#a8987e', '#1a1412'], bold: true, high: 2.6 },
+  hawk: { mode: 'soar', draw: 'raptor', act: 'day', hab: 'any', min: 0, p: 0.14, n: [1, 1], z: 8, size: 0.44, col: ['#7a5236', '#dcc4a2', '#2a1a10'], bold: true, high: 2.2 },
+  crow: { mode: 'soar', draw: 'raptor', act: 'day', hab: 'any', min: 0, p: 0, n: [2, 4], z: 8, size: 0.3, col: ['#222026', '#4e4a56', '#0c0c0e'], bold: true, high: 1.5 },
+  raven: { mode: 'soar', draw: 'raptor', act: 'day', hab: 'any', min: 0, p: 0, n: [2, 3], z: 8, size: 0.36, col: ['#1c1a20', '#46424e', '#08080a'], bold: true, high: 1.7 },
   vgeese: { mode: 'vee', draw: 'goose', act: 'day', size: 0.3, z: 6, n: [7, 11], bold: true, col: ['#8a7e6e', '#ece4d4', '#1e1c1a'] },
 };
 /*
@@ -959,7 +960,7 @@ const FAUNA_MODES = {
       a.ang = Math.random() * 6.3; a.vx = (Math.random() - 0.5) * 0.15; a.vy = (Math.random() - 0.5) * 0.15;
       for (let k = 0; k < n; k++) {
         const m = faunaMember(at.x, at.y);
-        m.k = (k * Math.PI * 2) / n + Math.random() * 0.6; m.rr = a.r * (0.7 + Math.random() * 0.5); m.alt = (a.K.alt || 2) * (0.85 + Math.random() * 0.3);
+        m.k = (k * Math.PI * 2) / n + Math.random() * 0.6; m.rr = a.r * (0.7 + Math.random() * 0.5); m.alt = (a.K.high || 2) * (0.85 + Math.random() * 0.3);
         const p = FAUNA_MODES.soar.orbit(a, m);
         m.x = p.x; m.y = p.y; m.h = m.alt;
         if (how !== 'place') { const o = faunaOff(p.x, p.y, undefined, undefined, 10); m.x = o.x; m.y = o.y; m.join = 1; m.wait = k * 1.2; }
@@ -1102,6 +1103,12 @@ function faunaShadeFrame() {
 
 /** The wildlife on the ground (render.js, before the buildings and robots): moves everything, then draws what stands or sits. */
 function faunaGround(ctx, ox, oy, z, v0, v1) {
+  if (FAUNA.broken) return;
+  try { faunaGroundDraw(ctx, ox, oy, z, v0, v1); } catch (e) { faunaBroke(e); }
+}
+/** The wildlife went wrong: it's only scenery, so it stops (said once) rather than costing the game its frames and saves. */
+function faunaBroke(e) { FAUNA.broken = true; FAUNA.list.length = 0; if (typeof console !== 'undefined') console.error('Terrafall: the wildlife stopped.', e); }
+function faunaGroundDraw(ctx, ox, oy, z, v0, v1) {
   if (!S || !faunaFrame(z, v0, v1)) return;
   const F = FAUNA;
   faunaShadeFrame();
@@ -1135,6 +1142,10 @@ function faunaGround(ctx, ox, oy, z, v0, v1) {
 
 /** The wildlife in the air (render.js, after the smoke and under the aircraft): fliers and their shadows, and the night's glows. */
 function faunaAir(ctx, ox, oy, z) {
+  if (FAUNA.broken) return;
+  try { faunaAirDraw(ctx, ox, oy, z); } catch (e) { faunaBroke(e); }
+}
+function faunaAirDraw(ctx, ox, oy, z) {
   const F = FAUNA;
   if (!S || !F.k || !F.life || F.of !== S) return;
   ctx.save();
