@@ -86,12 +86,12 @@ Still open: a neutral, shared exchange the rivals compete over; contracts for Ch
     relay deploy.
   - *A stop-gap with no server* (not built): **Copy save as text** and **Paste a save**, the save file gzipped and in
     base64 (8-31 KB of text), carried by the clipboard or a message to yourself.
-- **Recycling: open questions.** (Settled: a robot is taken apart standing at the Foundry, 2 s a round of parts, while
-  the Foundry carries on; a damaged one gives back as much as a sound one, since most give back a single Alloy.) Still
-  open: planes, ships and trains can't reach a Foundry, so they can't be recycled: should their own yards (Airfield,
-  Port, Rail Station) take them apart instead? Recycle spare Workers has no Hauler counterpart for players (the rival
-  scraps both): wanted? Should the rival also scrap other spares (Freight Trucks with no Depot to run, an Agribot with
-  no farm)?
+- **Recycling.** (Settled: a robot is taken apart standing at the Foundry, 2 s a round of parts, while the Foundry
+  carries on; a damaged one gives back as much as a sound one, since most give back a single Alloy.) The owner's
+  answers to the open questions: planes, ships and trains are not recycled at their own yards (Airfield, Port, Rail
+  Station), not for now; no Recycle spare Haulers button for players; the rival scraps its other spares too (Freight
+  Trucks, Tankers, Road Trains, Agribots) when it has too many, is starved of Alloy or Chips, or they stand idle while
+  its Foundry waits for parts (done: `AI_SCRAP` in the README).
 - **Fuel.** Built: Tankers, explosions with chain reactions, Crude and Fuel pipelines, the Generator and trucks burning
   Fuel, and the rival keeping its Fuel up (Bio Farms first when it runs low, an Oil Pump and Refinery once its Foundry
   is up). Still open: a Generator that explodes too.
