@@ -37,6 +37,18 @@ Still open: a neutral, shared exchange the rivals compete over; contracts for Ch
   - **Atmosphere Engine.** A terraforming tower that slowly changes the land round it: no more dust storms in its
     region, barren ground turned fertile (Bio Farms anywhere near), the Bloom pushed back. Finishing the Pathfinder's
     work; the Murmur hate it and go for it.
+  - **The Lance of Corvane** (the owner: "a giant laser gun"; weapon). A planet-scale laser cannon on the colony's own
+    power, by day or night (unlike the Sunlance): it needs Generators or a Nuclear Reactor beside it, and much Alloy,
+    Chips and Crystal (a Ring Crystal lens). It charges for a minute or two before each shot: the colony's lights dim
+    and its factories slow while it does, and a glow climbs the barrel for everyone to see. The beam crosses the whole
+    map in a straight line, cutting through every building in its path, carving a scorched trench, boiling water to
+    steam and breaching Walls; a Command Base holds at a floor, as with Missiles. Counterplay: a Shield Dome takes a
+    shot, buildings spread off the line, wrecking the Generators that feed it stops the charge, and a dust storm
+    scatters the beam. The charging draws the Murmur within reach, so firing by night is a gamble. Lore: an orbital
+    defence design from Earth's last years, found in the archives and built again here, aimed at each other. At night
+    the beam lights the map for a moment and the cut glows red, then cools. (The game has no power lines: Generators
+    power what's within 4 tiles of them. Power lines that carry a Generator's power further, and that the Murmur's
+    Leeches drain, would be an idea of their own; the lore already speaks of them.)
   - **Shield Dome.** A great energy dome over the base, stopping Missiles, bombs, Ringfall and Howitzer shells while
     powered; it drains Crystal all the time, and warbots can still walk in, so a war on it turns from bombardment to
     ground assault.
