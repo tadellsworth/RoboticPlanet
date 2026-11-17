@@ -775,11 +775,12 @@ const MISSIONS = [
       'A route can buy <b>Fuel</b>, at a markup: a <b>Tanker</b> takes it home.',
       '<b>Planet events</b> are on: dust storms, Ringfall, solar flares, and now and then the <i>Wren</i>, a trader ship.',
     ],
-    // (Seed 1445: Ringfall (a meteor shower) at 2:30 and a solar flare over by 9:36. Events are seeded, and on the designed
-    // 1415 the second one, the trader ship, only left at 12:25, so a player who had made the trades by 6 minutes waited 6 more.)
+    // (Seed 1445: Ringfall (a meteor shower) from 2:30 to 3:20 and a solar flare over by 6:33, missions having the shorter
+    // gap between events (MISSION_EVENT_GAP). Events are seeded, and on the designed 1415 the second one, the trader ship,
+    // only left at 12:25, so a player who had made the trades by 6 minutes waited 6 more.)
     mode: 'colony', seed: 1445, size: 1, rough: 1, rich: 3, biome: 'savanna', shape: 0, events: true, limit: [0, 0, 30],
     setup(S) {
-      kit(S, KIT7, 4);
+      kit(S, KIT8, 4); // (with the Grove Planter, as from Pipe Dreams on: without it the Fiber ran out 6 or 7 minutes in)
       const L = getE(S.players[0].lander);
       L.stock.stone += 40;
       L.stock.cement += 20;
