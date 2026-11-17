@@ -29,7 +29,10 @@ how goods move.
   (a building and its road, Stone and Cement, batteries, the first Alloy), **Growing the Colony**, **Roads and
   Traffic**, **Industry and Trade**, **Sea and Sky** (all Colony games, so the economy is learned in peace), then
   **First Contact** (the Murmur's nests, a passive rival, a border war, a chokepoint against a Herald) and **War** (Ammo and
-  repairs, trade convoys, escorts and convoy raids against a Salvager, Torches, Bulwarks and missiles against a Warden, the Nuclear race, Keeps and bombers). All of them are open
+  repairs, trade convoys, escorts and convoy raids against a Salvager, Torches, Bulwarks and missiles against a Warden, the Nuclear race, Keeps and bombers), then a **Bonus**:
+  **King of the Hill**, an Uplinks race for three on The Wheel against two rivals of random doctrine (`victory:
+  'uplinks'`: missionOptions sets `S.victory` and calls `placeUplinks`; goals: hold an Uplink, hold two at once, win
+  the race; a rival winning it loses the mission with `M.why = 'uplinks'`). All of them are open
   from the start; finishing one ticks it off at that difficulty (saved by its `id`, so a reworked mission keeps its
   ticks), and the list marks the first unfinished one **Next up**. A mission is plain data: `chapter`, `brief`, `intro`
   lines for the briefing card, the planet (`seed`, `size`, `rough`, `biome`, `shape`, `players`), the rival (`rival`
@@ -40,14 +43,16 @@ how goods move.
   any other goal counts itself with `count(P, S)` and its own `text` (bridge tiles, a Ramp up a ledge, research done,
   trades, nests cleared, minutes held, a nuclear launch). Each goal's `hint` names the real buttons and keys and its
   `ui` selector lights up the button it needs (`missionCoach` in `js/ui.js`; with `at`, a ring pulses on the building
-  whose panel holds it). Steps already taken stay dark (Build while its menu is open, the card while placing that
+  whose panel holds it: a type, or a function naming the very building or robot, or `{ e, ui }` with the buttons for
+  that step, as Airlift's Crawler and Harbour's two Ports; a hint that says "Trade Post" rings the nearest post). Steps already taken stay dark (Build while its menu is open, the card while placing that
   building: then **Build here** lights, as Paths' **Build** does once a sketch is drawn), a lit button below the fold of
   a panel is scrolled into view once, and a `built` goal whose site is already going up (`goalSites`) says to wait for
   it, or to **Lay road** to a site with none (`siteNeedsRoad`), instead of asking for another (its own `wait` text if
   it has one). From the second mission on, setup puts down the colony the earlier missions taught:
   `kit(S, types, workers)` builds each type where the rival AI would (`aiFindSpot`), finished and road-joined (`KIT6`:
   Harvester, Quarry, Cement Works, Fuel Station, Ore Mine, Crystal Tap, Smelter, Chip Fab, Bot Foundry; `KIT7` adds a
-  Bio Farm), and `preBuild` puts down one building where the mission wants it; custom goals count tiles with
+  Bio Farm, `KIT8` a Grove Planter, from Pipe Dreams on, so the Smelter doesn't burn the Harvester's groves dry; an
+  Agribot comes for each Bio Farm and Grove Planter past the one you land with), and `preBuild` puts down one building where the mission wants it; custom goals count tiles with
   `ownTiles(test)`. Goals once met stay met (`M.got`) unless they say `hold`. **Capture lock:** while any goal other
   than capturing the rival Command Base is open, that base holds at 1 armor against you (`captureLocked`, applied in
   `hitBuilding`; its panel says to finish the other goals first), so winning too soon can't lose a mission.
@@ -364,7 +369,9 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   two robots (Warbots from garrisons as for a march, or idle Workers, who board at the Airfield: the `board` task and
   `ferryWait`, as for a Ferry) anywhere, the enemy's land too, or up to 8 goods (`u.cargo`) for a place **supplied by
   air** (`b.airSupply`: any building with needs, construction sites too; a Drop Outpost and sites in its land have it
-  on). The places take turns (`airSupplyRun`: the one served longest ago, `c.airAt`, or run dry of something, first). A
+  on). Its supply orders then come by plane only, once one is based at an Airfield, not by Hauler (`dispatch`). The
+  places take turns (`airSupplyRun`: the one served longest ago, `c.airAt`, or run dry of something, first; `c.airIn`
+  is when crates last landed there). A
   supply drop comes down as a crate for every few goods (`d.crates`), swaying under team parachutes, and lands in front of
   the building with a puff of dust, its parachute collapsing out flat beside it, before it's taken in (`crateland`;
   art from `renderer/b/airdrop.js`: chute-fall, chute, crate-drop, chute-flat). Each place is served from its nearest
@@ -996,7 +1003,11 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   bots' tasks every second (`updateLoot`), so a run called off never leaves a pile looking taken.
 - **Walls and Gates (Versus):** in Paths, **Walls** (**X**) sketches a wall line: a Wall on each tile (5 Cement, 40
   armor) and a Gate where it crosses a road (6 Cement + 2 Alloy, 32 armor; tap a planned Wall to make it a Gate).
-  They're `prepaid` (paid from storage on Build, no Hauler or road, outside the site limit). Walls block every bot;
+  They're `prepaid` (paid from storage on Build, no Hauler or road, outside the site limit). A Worker builds a Wall
+  from beside it on the home side (`wallStands`: the free neighbour nearest the Command Base by walking, or a Wall
+  site there, the inner row of a double wall, which then waits for the outer row), so nobody is left on top of it,
+  walled out; a site with neither is built from its own tile. (Not the rival's: its lines always keep a Gate,
+  `aiWallGate`, `aiTurtleWalls`, so its builders build on the tile as before.) Walls block every bot;
   Gates let their owner's bots and road through (`passTile(t, who)`). Armed enemy warbots plan through a Wall or
   Gate as if it were `BREACH_COST + armor` tiles long, so they go round a short way or stop and shoot through
   (`breachHit`); a bot whose route gets walled off re-plans (`blockedStep`). An order whose squad can't shoot
@@ -1328,7 +1339,8 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   `shotsPer`), Turbo Motors (`speedMul`), Power Tools (`mult` × 1.15), Nanite Repair (`naniteRepair`).
 - **Planetary events** (`EVENTS` in `js/defs.js`, `updateEvents` in `js/sim.js`; new-game option; in missions only with
   `events: true`, as in Trade Winds, whose setup brings the first one forward with `S.nextEvent`): the
-  first after 8 minutes, then one every 5–8 minutes, never one of the last two again, most with a 20 s warning. **Dust
+  first after 8 minutes, then one every 5–8 minutes (2–3 in a mission, `MISSION_EVENT_GAP`), never one of the last two
+  again, most with a 20 s warning. **Dust
   storm**: bots at `DUST_SPEED` (⅔) and every missile grounded (`missileBlocked`, `nukeBlocked`). **Ringfall** (a meteor
   shower, pieces of the planet's Ring; type `'meteor'`):
   `METEOR_HITS` strikes on each colony's share (mirrored with two players, turned with three: `meteorPlan`), each
@@ -1388,7 +1400,9 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   building can't go where its ring would cover a rival's ordinary building (`ringOverRival`; a Drop Outpost dropped, a
   Port a Ferry founds and a Crawler deploying too): cut-offs come from capture or a fort falling. The AI builds on its own land first and on open ground only when it has no spot at home.
 - **Salvage:** a colony out of Stone or Fiber with no Quarry or Harvester that can still work salvages 1 every 20 s from
-  its Command Base (up to 6), so it can always rebuild. Capturing an enemy Outpost takes its land,
+  its Command Base (up to 6), so it can always rebuild. Meanwhile, with a Quarry or Harvester site waiting
+  (`P.salvaging`), that good goes only to sites, not to finished buildings (a running Smelter would burn the Fiber
+  meant for the Harvester site). Capturing an enemy Outpost takes its land,
   and enemy buildings its ring now covers are cut off (see above).
 - **Controls:** drag to pan, pinch or scroll to zoom, tap anything to inspect it. Wheel deltas are normalised and capped
   per event (smooth on a Magic Mouse or trackpad); a Ctrl + wheel pinch zooms faster, a sideways swipe or Shift + wheel
