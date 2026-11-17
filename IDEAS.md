@@ -14,6 +14,11 @@ Still open: a neutral, shared exchange the rivals compete over; contracts for Ch
 
 ## Held for later
 
+- **The rival doctrines' texts** (owner: on hold until the owner has finished fine-tuning the rivals). Then play each
+  doctrine again, measure what it really does, and rewrite its text to match. Known gaps are under "Doctrine balance
+  and text" in the November review below.
+- **Bigger graphics upgrades** (owner: on hold). More detailed close-zoom art and a WebGL renderer: see the entry of
+  that name below.
 - **A hauler turned back by raiders can still pass close to them** (a known edge case): a hauler with a load turns
   back before rival warbots on the road ahead, but on some maps the only other way to storage runs back past them
   (within about 2 tiles), and a worker caught at a site can fail to find cover. Seen with the foe-shy test's scenario
