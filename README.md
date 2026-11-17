@@ -1164,6 +1164,15 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   for 150 s or once a road reaches it. Sites stuck where its robots won't go (their road through ground where they were
   shot, see `noteDanger`) used to hold every place while the last field ran dry, and two rivals could sit at 0 Chips
   with a few warbots each for 20 minutes.
+- **The rival's opening** (Medium, Normal and Hard: `AI_OPEN_FIRST`, `P.opened` in `js/ai.js`): its Bot Foundry goes up
+  straight after its first Fuel Station (it lands with what the Foundry costs), and the rest of the plan's opening (two
+  Harvesters, a Quarry, a Cement Works, a Mine, a Crystal Tap, a Smelter, a Chip Fab) comes before every other ask until
+  each of them has stood once (what it can't place yet, a Mine with no Ore on its land, is passed over for the rest).
+  Meanwhile its Foundry counts the opening's buildings as wanting a Worker each, so it makes Workers for them, not
+  warbots, and doesn't rest for the Ammo Plant. Tenth in the plan, the Foundry used to wait behind Outposts toward what
+  was short and their long roads, spare gatherers, Bio Farms and the Ammo Plant, then for a Worker of its own once the
+  buildings before it had taken every one: on Long haul both rivals sat at their ten landing Workers until minute 10 to
+  15. Now the first robot comes about half a minute in.
 - **The story** (LORE.md is canon; text and presentation only, nothing in it changes a rule). **Callsigns**
   (`CALLSIGNS`, `callsign(p, colour)`): players are named COBALT (player 0, blue), VERMILION (red), VIRIDIAN (green) and
   TYRIAN (purple) wherever the game used to say "the Red rival" (`playerName`: 'You', a person's name in multiplayer,
