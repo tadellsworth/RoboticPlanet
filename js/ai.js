@@ -543,8 +543,9 @@ function aiThink(p) {
   // Worker it makes speeds up the rest. Tenth in the plan, its site waited behind Outposts toward what was short and
   // their long roads, spare gatherers, Bio Farms and the Ammo Plant, then for a Worker of its own once the buildings
   // before it had taken every one, and both rivals sat at their ten landing Workers for 10 to 15 minutes (on Long haul
-  // most of all). (What it can't place yet, a Mine with no Ore on its land say, is passed over for the rest.)
-  if (smart && !P.opened) {
+  // most of all). (What it can't place yet, a Mine with no Ore on its land say, is passed over for the rest.) Not a
+  // mission's rival: the missions are tuned to the plain plan.
+  if (smart && !S.mission && !P.opened) {
     const built = {};
     for (const b of me) if (b.built) built[b.type] = (built[b.type] || 0) + 1;
     if (AI_OPEN_FIRST.every(([t, n]) => (built[t] || 0) >= n)) P.opened = S.time;
@@ -710,7 +711,7 @@ function aiThink(p) {
   //    one, and enough Haulers (a Freight Truck counts as one and a half) to carry every good in the colony.
   // (In the opening it counts the buildings of the opening too, built or not: each will want a Worker, so the Foundry
   // it puts up first makes Workers, not warbots with the Alloy and Chips the colony landed with.)
-  const opening = smart && !P.opened, staffSoon = opening ? Math.max(staffed, AI_OPEN_STAFF) : staffed;
+  const opening = smart && !S.mission && !P.opened, staffSoon = opening ? Math.max(staffed, AI_OPEN_STAFF) : staffed;
   let wantWorkers = staffSoon + 3 + Math.min(3, sites);
   const needWorkers = wantWorkers; // (what its buildings call for, before the bot limit has its say)
   // A Freight Truck takes the long runs off the Haulers, but sits idle much of the time: it counts as one and a half.
