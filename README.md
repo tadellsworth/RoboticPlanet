@@ -1833,13 +1833,17 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   progressions, arpeggios, bass, drums and short melodies in 8-bar sections. **The war music** takes turns between two
   themes, `WAR_THEMES` (`warTheme`): a game's first fight gets Overdrive (112 bpm Phrygian, sixteenth-note bass,
   four-on-the-floor kick, stabs, the bell lead) and each new fight (war music again after `WAR_GAP` (30) s of game time
-  without it) the other one; within a fight it stays the same. **Redline** (`war2`), the second, is built on the buzzy
-  bass pushed harder (`mGrowl`: two saws, one a little sharp, through a resonant low-pass that snaps down within a
-  quarter second, into a soft clipper, `driveCurve`, over a clean sine an octave down; played dry): a galloping riff on
-  the chord's root with an octave leap and a half-step neighbour (`RIFF`), its filter opening over each chord's two bars
-  and snapping back on the change (over a whole section in the breakdown, `growlOpen`); 124 bpm harmonic minor, a
-  driven kick in a broken beat (`mKickHard`; four to the bar at the peak), an 80s gated snare (`mGate`), open hats, a
-  gliding saw lead with a late vibrato (`mSaw`) and a noise riser (`mRiser`) into a crash on each new section.
+  without it) the other one; within a fight it stays the same. **Redline** (`war2`), the second, is darker: relentless
+  and threatening, the machines grinding forward. It's built on the buzzy bass, lower and dirtier (`mGrind`: two saws an
+  octave under where `mBass` plays and one an octave up, driven hard into the clipper, `boomCurve`, then through a
+  resonant low-pass, with a clean sine on the note, all high-passed at 45 Hz; played dry): straight eighths on a pedal,
+  the key's root whatever the chords above do, but for a half step up and the tritone (`GRIND`), its filter opening
+  slowly over each whole section, 200 Hz to 1.8 kHz, and shut on the next. 104 bpm, D or C♯ Phrygian, a chord every two
+  bars over the pedal (the flat second, the diminished chord on the tritone); a straight, heavy drive with no swing
+  (`mKickHard` four on the floor, or a pounding half-time: kick, kick, snare, kick), a dry snare with an industrial
+  clank (`mClank`), tight closed hats; a low brass swell with a minor second in it (`mBrass`), dissonant stabs on the
+  downbeat (`mStabD`), a droning pedal (`mDrone` on the key's root), a cold low lead now and then (`TOLL`, `mCold`: no
+  vibrato, no glide), and a noise riser (`mRiser`) into a crash and an impact (`mImpact`) on each new section.
   **The campaign theme**, **The Long Silence** (`campaign`), tells the story's arc from a level (`storyLevel`, 0 to 1)
   instead of the game: `musicStory(level)` sets it (the campaign, planned in CAMPAIGN.md, would raise it chapter by
   chapter, `(mission - 1) / 14`; while set, the theme plays in a game in place of the build themes; `null` ends it), and
@@ -1851,8 +1855,10 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   shimmer, the arpeggio in threes, the bell), the colony at work (0.1; Mixolydian, half-time drums), the first murmur
   (0.25; Dorian: the drums fall away, the choir comes in, a heartbeat, the Uplink's call, `mBeacon`, which the ground
   sometimes answers in its rhythm, `mThud`), Contingency (0.4; minor, the main theme's chords, drums back, the bass
-  creeping a half step), the Murmur rising (0.68; Phrygian, the climax: Redline's drums and growl, a drone, the tune on
-  the saw) and the Silence (0.96: everything stops; suspended chords, every progression ending away from home, two lights
+  creeping a half step), the Murmur rising (0.68; Phrygian, the climax, on Redline's machinery: its straight, pounding
+  drums, four on the floor or the half-time, with the dry snare and clank and tight hats, its low grind on the pedal,
+  `mGrind`, under the filter opening over each section, and an impact on each new one; a drone; the tune on a gliding
+  saw lead, `mSaw`) and the Silence (0.96: everything stops; suspended chords, every progression ending away from home, two lights
   left, the tune's first bar alone, the choir again, fainter and far off). Bar by bar the level also sets how much of
   the Murmur is heard: the choir grows 15 dB from 0.25 to 0.75 (an octave higher too from 0.6), glints come oftener,
   the heartbeat beats harder, the ground answers oftener, and the road lights (the `lights` arpeggio, eight a bar) go dark
