@@ -163,7 +163,7 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
 | Roadworks | Its Paver paves and maintains the roads you mark for asphalt (or every joined road), nearest first (1 Asphalt covers 4 tiles) |
 | Ammo Plant | Alloy + Cement → 3 **Ammo**; warbots reload it in the Command Base and Outposts, 5 shots per Ammo (Versus) |
 | Missile Factory | 2 Alloy + Chip + Fuel → **Missile** (20 s each; Versus) |
-| Missile Silo | Fires Missiles at rival buildings up to 18 tiles away; holds 2, reloads in 25 s (Versus) |
+| Missile Silo | Fires Missiles at rival buildings up to 22 tiles away; holds 2, reloads in 60 s (Versus; 25 s until Nov 2026, the owner's call) |
 | Repair Station | Fixes damaged bots three at a time; 1 **Alloy** repairs 12 health (Versus) |
 | Nuclear Reactor | 2 Uranium → 1 **Enriched Uranium** (Nuclear race) |
 | Nuclear Silo | 6 Enriched Uranium + 4 Alloy + 2 Chips → one nuclear missile; fires 40 tiles (Nuclear race) |
