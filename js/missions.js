@@ -599,11 +599,12 @@ const MISSIONS = [
   // Chapter 4, Industry and Trade. Pipelines and power, research, far Depots and trucks, railways, Road Trains, trade and planet events.
   {
     id: 'pipeline', name: 'Pipe Dreams', chapter: 'Industry and Trade',
-    brief: 'Refine Crude into Fuel, pipe it where it is needed and speed your factories up with a Generator.',
+    brief: 'Refine Crude into Fuel, pipe it where it is needed, speed your factories up with a Generator and store Fuel in a Fuel Tank.',
     intro: [
       'A <b>Refinery</b> turns Crude into Fuel, one for one. A full one explodes if it is destroyed.',
       '<b>Pipes</b> carry Crude and Fuel with no Tanker at all, for 0.3 Cement a tile.',
       'A <b>Generator</b> burns Fuel so factories within 4 tiles work a third faster. <b>Turn off</b> (P) saves Fuel.',
+      'A <b>Fuel Tank</b> holds 120 Crude and Fuel. Touching a Refinery, it feeds it Crude and takes in its Fuel.',
       'A Refinery stops once you have 30 Fuel, its stock limit: raise it with + on its panel.',
     ],
     mode: 'colony', seed: 6101, size: 1, rough: 1, rich: 3, biome: 'swamp', shape: 0, limit: [0, 0, 20],
@@ -625,7 +626,7 @@ const MISSIONS = [
           for (const r of S.buildings) if (!r.dead && r.owner === 0 && r.built && r.type === 'refinery') for (const c of buildingPipes(r, net)) refs.add(c);
           return S.buildings.filter((b) => !b.dead && b.owner === 0 && b.type === 'pump' && buildingPipes(b, net).some((c) => refs.has(c))).length;
         },
-        hint: 'Tap the Oil Pump → <b>Pipe it to the Refinery</b> (<kbd>K</kbd>), or lay your own: <b>Paths</b> → <b>Pipes</b>.',
+        hint: 'Tap the Oil Pump → <b>Pipe it in</b>, or lay your own: <b>Paths</b> → <b>Pipes</b> (<kbd>K</kbd>).',
         ui: '#sh-pipe' },
       { kind: 'fuelPipe', n: 1, text: 'Pipe Fuel to a Generator', at: 'generator',
         count: (P, S) => S.buildings.filter((b) => !b.dead && b.owner === 0 && b.type === 'generator' && b.fuelByPipe).length,
@@ -633,9 +634,11 @@ const MISSIONS = [
         // (No #btn-build here: it is always on screen, so it would always be what lights up and the Generator would
         // never get its ring. The coach lights Build by itself while the Make tab and card aren't showing.)
         ui: "#build-tabs [data-g='make'], .bcard[data-t='generator'], #sh-pipefuel" },
-      { kind: 'made', good: 'fuel', n: [25, 40, 50], at: 'refinery',
-        hint: 'Refinery stopped at 30 Fuel? Tap it → Stock limit <b>+</b>. Fuel Stations and Generators burn it.',
-        ui: '#sh-lim-plus' },
+      // An oil bloc: a Fuel Tank touching the Refinery (a feed link each way), with Fuel in it.
+      { kind: 'oilBloc', n: [10, 15, 20], text: 'Store Fuel in a Fuel Tank', at: 'refinery',
+        count: (P, S) => Math.max(0, ...S.buildings.filter((b) => !b.dead && b.owner === 0 && b.built && b.type === 'fueltank' && feedTargets(b).some((l) => l.c.type === 'refinery')).map((b) => b.stock.fuel || 0)),
+        hint: '<b>Build</b> → <b>Gather</b> → <b>Fuel Tank</b> (<kbd>T</kbd>) touching the Refinery. Refinery stopped? Stock limit <b>+</b>.',
+        ui: "#build-tabs [data-g='gather'], .bcard[data-t='fueltank'], #sh-lim-plus" },
     ],
   },
   {

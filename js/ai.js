@@ -7,6 +7,7 @@
 
 /** [good, pause at, resume below]: producers the AI rests when it has plenty. */
 const AI_CAPS = { fab: ['chip', 8, 3], armory: ['ammo', 18, 6], refinery: ['fuel', 30, 10] };
+const AI_FUEL_TANK_PUMPS = 3; // Oil Pumps at work before the rival puts up a Fuel Tank by them
 /**
  * [building type, how many the AI wants]. Entries are tried in order. (No Missile Factory or Silo here: those
  * come only through aiMissilePlan, which waits for an economy and an army and saves up for them. As ordinary
@@ -579,6 +580,9 @@ function aiThink(p) {
     plan = add.concat(plan);
     if (fuelNow < 3) siteCap = Math.max(siteCap, maxSites + 1);
   }
+  // An oil bloc: with AI_FUEL_TANK_PUMPS Oil Pumps at work, a Fuel Tank beside them (its pumps' Crude is piped to it,
+  // see 2b, and Tankers fill up there).
+  if (!counts.fueltank && me.filter((b) => b.built && b.type === 'pump' && !pumpDry(b)).length >= AI_FUEL_TANK_PUMPS && me.some((b) => b.built && b.type === 'foundry')) plan = plan.concat([['fueltank', 1]]);
   // With Fiber nearly gone (no Harvester at work, or construction waiting for it), the Smelters
   // stop burning it until there's some to spare. Construction waits for it at a site that is short of it, and
   // before there is a site at all: none is started without the Fiber in storage (P.fiberWait, set below), and a
@@ -2160,7 +2164,7 @@ function crystalHeld(b, r) {
 }
 
 /** What a bomb is worth dropping on, for the AI: its most valuable buildings, and a loaded Tanker. */
-const AI_BOMB_VALUE = { nukesilo: 14, silo: 12, munitions: 10, reactor: 9, keep: 7, refinery: 7, foundry: 6, armory: 6, airfield: 6, fab: 5, generator: 4, smelter: 4 }; // (no Trade Terminal: nothing is bombed on a Trade Post's ground)
+const AI_BOMB_VALUE = { nukesilo: 14, silo: 12, munitions: 10, reactor: 9, fueltank: 9, keep: 7, refinery: 7, foundry: 6, armory: 6, airfield: 6, fab: 5, generator: 4, smelter: 4 }; // (no Trade Terminal: nothing is bombed on a Trade Post's ground)
 
 /**
  * The AI's Vulcan Bomber: one, built at its Airfield's hangar, and a sortie at most every AI_BOMB_GAP s, at the
@@ -3068,7 +3072,7 @@ function aiSearchSpot(p, type, lander) {
         }
         if (n < 3 || dg < 5) continue;
         s = n * 3 - dHome * 0.2;
-      } else if (type === 'refinery') {
+      } else if (type === 'refinery' || type === 'fueltank') {
         let dp = dHome;
         for (const b of S.buildings) if (!b.dead && b.owner === p && b.type === 'pump') dp = Math.min(dp, dist(i, j, b.x, b.y));
         s = -dp - dHome * 0.2;
