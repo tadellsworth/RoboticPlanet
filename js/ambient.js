@@ -8,11 +8,13 @@
  *   clock, as the weather does (weatherAt), so every device sees the same sky. None on Argos (no air) or in the Hollow
  *   (underground), none with Weather switched off, and none on Graphics Saver.
  * - Remains (drawRemains): what a fight leaves behind outlasts the game's own marks (a building's rubble and burn, a
- *   robot's wreck, a plane come down), and over the minutes that follow it is taken back, by biome: grass, moss and
- *   vines in the green biomes, drifting snow in Hoarfell, sand in the Rust, ash in the Cinderlands, violet Bloom growth
- *   in the Bloom and the Hollow, only dust on Argos. They are found in the game's effects as they happen (a building's
- *   collapse with its fire, a wreck's fire) and kept in R: they don't outlive a save and load. They never stand in the
- *   way of anything, and go the moment a building or site, a road or track takes their tile.
+ *   robot's wreck), and over the minutes that follow it is taken back, by biome: grass, moss and vines in the green
+ *   biomes, drifting snow in Hoarfell, sand in the Rust, ash in the Cinderlands, violet Bloom growth in the Bloom and the
+ *   Hollow, only dust on Argos. They are found in the game's effects as they happen (a building's collapse with its fire,
+ *   a wreck's fire) and kept in R: they don't outlive a save and load. They never stand in the way of anything, and go
+ *   the moment a building or site, a road or track takes their tile. An aircraft's wreck is the game's own (S.wrecks, see
+ *   crashLand: it stays for the rest of the game): its broken airframe is drawn here (ambWreckArt), smouldering a while,
+ *   and it overgrows the same way, slowly, never going back into the ground.
  * - Beacons (drawBeacons): from evening until dawn every standing, finished Command Base, whoever holds it, shines a
  *   pale beam of light straight up into the sky, a hint of its owner's colour in it, with a soft halo at its foot and a
  *   slow pulse. It follows the time of day as shown (never in Always day, always in Always night and in the Hollow,
@@ -33,8 +35,10 @@ const AMB = {
   sun: { morning: 0.65, day: 1, evening: 0.35, night: 0 },
   beam: { morning: 0, day: 0, evening: 0.85, night: 1 },
   // Remains: seconds after it was left when the growth starts and when it's full, how long it then stays and when it
-  // has gone back into the ground. b: a building, u: a robot or vehicle, p: a plane come down. (max: kept at once.)
-  ruin: { max: 400, b: [60, 480, 1200, 1500], u: [30, 300, 720, 900], p: [40, 360, 900, 1100] },
+  // has gone back into the ground. b: a building, u: a robot or vehicle, p: an aircraft's wreck (S.wrecks: it stays for
+  // good, overgrowing slowly; `smoulder`: seconds it smokes once its fires are out, `embers`: seconds it glows after
+  // dark). (max: kept at once, the wrecks apart.)
+  ruin: { max: 400, b: [60, 480, 1200, 1500], u: [30, 300, 720, 900], p: [60, 1200, Infinity, Infinity], smoulder: 240, embers: 150 },
   pulse: 5.5, // seconds a beacon takes to swell and ease back
 };
 
@@ -59,7 +63,7 @@ function ambState() {
   let A = R.amb;
   if (!A || A.of !== S) {
     if (A) for (const e of A.ruins) ambDrop(A, e); // (the last game's pictures)
-    A = R.amb = { of: S, ruins: [], tick: S ? S.tick : 0, seen: new WeakSet(), prevBots: null, beacons: new Map(), humAt: -99, px: 0, buf: A && A.buf };
+    A = R.amb = { of: S, ruins: [], wrecks: new Map(), tick: S ? S.tick : 0, seen: new WeakSet(), prevBots: null, beacons: new Map(), humAt: -99, px: 0, buf: A && A.buf };
   }
   return A;
 }
@@ -184,7 +188,8 @@ function drawCloudShadows(ctx, ox, oy, z) {
 /**
  * Look through the effects added since the last frame for anything left behind: a building that collapsed burning
  * (its collapse, with its fire on the same step: taken down on purpose, it only drops its rubble, as ever), a robot's or
- * vehicle's wreck burning, a plane come down. (Effects are added in step order, so the look back stops at older ones.)
+ * vehicle's wreck burning. (Effects are added in step order, so the look back stops at older ones.) And the aircraft
+ * wrecks (S.wrecks): each new one is taken in, and one that's gone (built over, or its ground changed) is let go.
  */
 function ambScan(A) {
   const fx = S.fx || [], from = A.tick - 1;
@@ -198,6 +203,87 @@ function ambScan(A) {
   }
   A.tick = S.tick;
   A.prevBots = S.bots; // (the step that tidies dead robots away makes a new list: this one still has them)
+  ambWrecks(A);
+}
+
+/**
+ * The aircraft wrecks (S.wrecks, kept by the game itself: see crashLand) as remains: one for each, from when it came down
+ * (so a loaded game's wrecks have grown as far as they had), its growth spread in patches along the hull.
+ */
+function ambWrecks(A) {
+  const W = S.wrecks || [];
+  if (!W.length && !A.wrecks.size) return;
+  const ids = new Set();
+  for (const w of W) {
+    ids.add(w.id);
+    if (A.wrecks.has(w.id)) continue;
+    const C = typeof airCrash === 'function' ? airCrash(w.type) : { len: 1.5 }, len = C.len || 1.5;
+    const e = { k: 'p', w, x: w.x, y: w.y, t0: w.t, t: tIdx(Math.floor(w.x), Math.floor(w.y)), len, r: 0.22 + 0.1 * len, s: w.id % 997, size: len, owner: w.owner, decal: null, life: 150, burn: 150 };
+    A.wrecks.set(w.id, e);
+    A.ruins.push(e);
+  }
+  if (A.wrecks.size > ids.size) for (const [id, e] of A.wrecks) if (!ids.has(id)) { A.wrecks.delete(id); e.gone = true; }
+}
+
+/** The burnt ground under wreck remains e (screen x, y), long down the way it came in and back along its skid; it fades as the growth takes it. */
+function ambWreckBurn(ctx, e, x, y, z, g, smudge) {
+  const a = 0.62 * (1 - 0.75 * g);
+  if (a < 0.02) return;
+  const L = e.len * z * 1.45, W = (0.9 + 0.25 * e.len) * z;
+  ctx.save();
+  ctx.translate(x, y); ctx.rotate(e.w.a);
+  ctx.globalAlpha = a;
+  ctx.drawImage(smudge[e.s % smudge.length], -L / 2, -W / 2, L, W);
+  ctx.globalAlpha = a * 0.7;
+  ctx.drawImage(smudge[(e.s + 1) % smudge.length], -L * 0.95, -W * 0.3, L * 0.7, W * 0.6); // (the gouge it skidded along)
+  ctx.restore();
+}
+
+/**
+ * The broken airframe of wreck w, centred on (x, y) on screen, turned the way it came in: its art ('wreck-<type>',
+ * renderer/b/wreck.js; re-lit for the time of day by drawArt), drawn its own size (the art's scale is its width in
+ * tiles). An aircraft with no art of its own: its outline broken in two, charred black.
+ */
+function ambWreckArt(ctx, w, x, y, z) {
+  const art = typeof artFor === 'function' ? artFor('wreck-' + w.type, w.owner) : null;
+  if (art) { drawArt(ctx, art, x, y, z, w.a); return; }
+  const Lp = (airCrash(w.type).len * z) / 0.97; // (planeOutline's length: the hull is 0.97 of it)
+  ctx.save();
+  ctx.translate(x, y); ctx.rotate(w.a);
+  ctx.fillStyle = 'rgba(30,26,23,0.94)';
+  for (const [x0, x1, dx, turn] of [[-0.05, 1, 0.06, 0.14], [-1, -0.05, -0.03, -0.09]]) {
+    ctx.save();
+    ctx.beginPath(); ctx.rect(x0 * Lp, -Lp, (x1 - x0) * Lp, 2 * Lp); ctx.clip();
+    ctx.translate(dx * Lp, 0); ctx.rotate(turn);
+    planeOutline(ctx, Lp); ctx.fill();
+    ctx.restore();
+  }
+  ctx.restore();
+}
+
+/**
+ * A fresh wreck smouldering: once its fires are out, thin grey smoke still rises off a few places along the hull and
+ * drifts with the wind (`wind`, as the growth's), thinning out over AMB.ruin.smoulder s; after dark its embers glow
+ * for AMB.ruin.embers s, dimming.
+ */
+function ambSmoulder(ctx, e, x, y, z, age, wind) {
+  const k = Math.min(1, age / 10) * (1 - age / AMB.ruin.smoulder), ca = Math.cos(e.w.a), sa = Math.sin(e.w.a), puff = fxPuff(false), n = gfxStep() === 'saver' ? 2 : 3;
+  for (let j = 0; j < n; j++) {
+    const o = (hash2(e.s, j, 801) - 0.5) * e.len * 0.7, bx = x + ca * o * z, by = y + sa * o * z;
+    for (let i = 0; i < 4; i++) {
+      const ph = (S.time * 0.2 + i / 4 + hash2(e.s, j, 802)) % 1, sz = z * (0.14 + 0.5 * ph);
+      ctx.globalAlpha = 0.34 * k * Math.sin(ph * Math.PI);
+      ctx.drawImage(puff, bx + ph * z * 0.45 * wind + Math.sin(ph * 5 + j) * z * 0.06 - sz / 2, by - ph * z * 1.7 - sz / 2, sz, sz);
+    }
+  }
+  const night = TOD.active ? TOD.state.lights : 0, ek = 1 - age / AMB.ruin.embers;
+  if (night > 0.05 && ek > 0) {
+    for (let j = 0; j < 7; j++) {
+      const o = (hash2(e.s, j, 803) - 0.5) * e.len * 0.85, side = (hash2(e.s, j, 804) - 0.5) * 0.35, fl = 0.6 + 0.4 * Math.sin(R.time * (2 + j) + j * 1.7);
+      fxGlow(ctx, x + (ca * o - sa * side) * z, y + (sa * o + ca * side) * z, z * (0.1 + 0.07 * fl), '#ff7a2a', Math.min(1, night * ek * fl * 1.1));
+    }
+  }
+  ctx.globalAlpha = 1;
 }
 
 /** Can remains lie on tile t? Open ground with nothing on it (no road, track, building, lava or tide). */
@@ -213,7 +299,11 @@ function ambAdd(A, e) {
   // One wreck to a tile: where robots fall on top of each other, the first pile stands for them all.
   if (e.k !== 'b') for (const o of A.ruins) if (o.t === e.t && o.k !== 'b') return;
   A.ruins.push(e);
-  if (A.ruins.length > AMB.ruin.max) for (const o of A.ruins.splice(0, A.ruins.length - AMB.ruin.max)) ambDrop(A, o);
+  // (too many: the oldest go, but never an aircraft's wreck: the game keeps those, and lets them go itself)
+  if (A.ruins.length > AMB.ruin.max + A.wrecks.size) {
+    let over = A.ruins.length - AMB.ruin.max - A.wrecks.size;
+    A.ruins = A.ruins.filter((o) => { if (over > 0 && !o.w) { over--; ambDrop(A, o); return false; } return true; });
+  }
 }
 
 /** A building's collapse (collapseFx): if it burned, its rubble stays (the game's own rubble mark, carried on). */
@@ -233,12 +323,8 @@ function ambFromBuilding(A, f, fx, n) {
   ambAdd(A, { k: 'b', x, y, t0, r: 0.55 * big, s, size: big * (d.barrier ? 0.7 : 1), owner: f.owner, decal, life: 90, burn: 70 });
 }
 
-/** A wreck's fire: a robot's or vehicle's (killBot), or a plane come down (landDrop). */
+/** A wreck's fire: a robot's or vehicle's (killBot). (An aircraft's is the game's own wreck: see ambWrecks.) */
 function ambFromFire(A, f) {
-  if (f.life === 14 && f.r === 0.4) { // a plane shot down, where it hit the ground
-    ambAdd(A, { k: 'p', x: f.x, y: f.y, t0: S.time - (S.tick - f.tick) * SIM_STEP, r: 0.55, s: (f.seed * 131 + f.tick) % 997, size: 1.6, owner: -1, decal: null, life: 90, burn: 90 });
-    return;
-  }
   if (!((f.life === 5 || f.life === 9) && (f.r === 0.18 || f.r === 0.3))) return; // (the rest burn for other reasons)
   const u = ambDeadBot(A, f);
   if (!u) return;
@@ -307,12 +393,16 @@ function drawRemains(ctx, ox, oy, z, inView) {
   ambScan(A);
   if (!A.ruins.length) return;
   const now = S.time, G = AMB_GROW[biome()] || AMB_GROW.desert, slow = G.slow || 1;
-  // Built, paved or laid over (a site, a road, track), or gone back into the ground: let go.
+  // Built, paved or laid over (a site, a road, track), or gone back into the ground: let go. (An aircraft's wreck goes
+  // when the game lets it go, and isn't drawn from the moment something is built over it.)
   let w = 0;
-  for (const e of A.ruins) { if (now - e.t0 < AMB.ruin[e.k][3] * slow && ambGround(e.t)) A.ruins[w++] = e; else ambDrop(A, e); }
+  for (const e of A.ruins) {
+    if (e.w ? !e.gone && wreckStands(e.w) : now - e.t0 < AMB.ruin[e.k][3] * slow && ambGround(e.t)) A.ruins[w++] = e;
+    else { ambDrop(A, e); if (e.w && !e.gone) A.wrecks.delete(e.w.id); }
+  }
   A.ruins.length = w;
   const shown = [];
-  for (const e of A.ruins) { if (inView(e.x, e.y, 2)) shown.push(e); else if (e.spr && R.time - e.seen > 20) ambDrop(A, e); }
+  for (const e of A.ruins) { if (inView(e.x, e.y, e.w ? 1 + e.len : 2)) shown.push(e); else if (e.spr && R.time - e.seen > 20) ambDrop(A, e); }
   if (!shown.length) return;
   // The game's rubble marks still being drawn (the remains take over as each fades).
   let alive = null;
@@ -328,9 +418,36 @@ function drawRemains(ctx, ox, oy, z, inView) {
   ctx.save();
   for (const e of shown) {
     const age = now - e.t0, T = AMB.ruin[e.k];
-    const fade = 1 - clamp((age - T[2] * slow) / ((T[3] - T[2]) * slow), 0, 1);
+    const fade = e.w ? 1 : 1 - clamp((age - T[2] * slow) / ((T[3] - T[2]) * slow), 0, 1);
     const g = ambStep(clamp((age - T[0] * slow) / ((T[1] - T[0]) * slow), 0, 1), 0, 1);
     const x = ox + e.x * z, y = oy + e.y * z;
+    // An aircraft's wreck: the burnt ground under it, its broken airframe (the art, turned the way it came in), and
+    // over it, as it overgrows, the growth (a sprite like any remains', in patches along the hull); smoke and embers while
+    // it's fresh. Zoomed far out, a speck.
+    if (e.w) {
+      if (e.len * z < 7) { dots.push(e, 1, g); continue; }
+      ambWreckBurn(ctx, e, x, y, z, g, smudge);
+      ctx.globalAlpha = 1;
+      ambWreckArt(ctx, e.w, x, y, z);
+      if (Math.round(g * 12) > 0) {
+        e.seen = R.time;
+        const gq = Math.round(g * 12), res = Math.min(most, res0, 96);
+        const pick = (name) => {
+          const sp = e.spr && e.spr[name];
+          if (sp && sp.gq === gq && sp.res === res && sp.wind === wind) return sp;
+          if (sp && performance.now() - t0 > budget) return sp;
+          return ambSprite(A, e, name, res, gq, G, wind, true);
+        };
+        const a = pick(ka), b = kb ? pick(kb) : null;
+        if (e.spr) for (const name in e.spr) if (name !== ka && name !== kb) ambFree(A, e.spr[name]), delete e.spr[name];
+        const put = (sp, k) => { const q = z / sp.res; ctx.globalAlpha = k; ctx.drawImage(sp.c, x - sp.cx * q, y - sp.cy * q, sp.c.width * q, sp.c.height * q); };
+        const ga = G.kind === 'green' || G.kind === 'bloom' ? 1 : 0.8; // (drifts thinner over a wreck: it still shows)
+        if (b) { put(late ? b : a, ga); if (over > 0.002) put(late ? a : b, ga * over); } else put(a, ga);
+        if (a.nodes) glows.push(x, y, z / a.res, 1, a.nodes);
+      }
+      if (age < AMB.ruin.smoulder) ambSmoulder(ctx, e, x, y, z, age, wind);
+      continue;
+    }
     // The burn, softened, coming in as the game's scorch fades and going as things grow over it (once the game's own
     // marks have all gone, it's part of the picture).
     const burnt = age >= Math.max(e.life, e.burn), burn = burnt ? 0 : clamp((age - (e.burn - 10)) / 10, 0, 1) * (1 - 0.8 * g) * fade;
@@ -415,13 +532,15 @@ function ambGrade(hex, name) {
  */
 function ambSprite(A, e, name, res, gq, G, wind, burnt) {
   const old = e.spr && e.spr[name];
-  // (as big as what's drawn can reach: wide for a drift's tail, less tall, as everything on the ground is seen at a slant)
-  const R0 = e.r * (e.k === 'b' ? 1 : 1.6), nw = Math.max(4, Math.ceil(2 * R0 * (e.k === 'u' ? 1.75 : 2.05) * res)), nh = Math.max(4, Math.ceil(2 * R0 * (e.k === 'u' ? 1.2 : 1.35) * res));
+  // (as big as what's drawn can reach: wide for a drift's tail, less tall, as everything on the ground is seen at a slant;
+  // an aircraft's wreck, whichever way it lies: its length and the growth's reach round it, both ways)
+  const R0 = e.r * (e.k === 'b' ? 1 : 1.6), ext = e.w ? Math.ceil(2 * (e.len * 0.42 + R0 * 1.3) * res) : 0;
+  const nw = ext || Math.max(4, Math.ceil(2 * R0 * (e.k === 'u' ? 1.75 : 2.05) * res)), nh = ext || Math.max(4, Math.ceil(2 * R0 * (e.k === 'u' ? 1.2 : 1.35) * res));
   const c = old ? old.c : document.createElement('canvas');
   if (old) A.px -= c.width * c.height;
   if (c.width !== nw || c.height !== nh) { c.width = nw; c.height = nh; } else c.getContext('2d').clearRect(0, 0, nw, nh);
   A.px += nw * nh;
-  const col = (h) => ambGrade(h, name), u = R.dpr || 1, cx = nw / 2, cy = nh * 0.55, r = e.r * res;
+  const col = (h) => ambGrade(h, name), u = R.dpr || 1, cx = nw / 2, cy = e.w ? nh / 2 : nh * 0.55, r = e.r * res;
   const lod = { n: { saver: 0.5, auto: 1, high: 1, ultra: 1.4 }[gfxStep()] || 1, fine: res / u >= 14 };
   const lw = (k, least) => Math.max(least * u, res * k);
   const defs = [
@@ -441,6 +560,17 @@ function ambSprite(A, e, name, res, gq, G, wind, burnt) {
     if (G.kind === 'sand') defs.push(['ripple', col(G.shade), lw(0.02, 1)]);
   }
   const P = ambPainter(defs), g = gq / 12, x = c.getContext('2d');
+  if (e.w) { // an aircraft's wreck: only the growth, in patches along its hull (the wreck and its burn are drawn under it;
+    // a drift of snow, sand, ash or dust in two, so the wreck still shows through)
+    const drift = G.kind !== 'green' && G.kind !== 'bloom', big = e.len > 1.8;
+    const ca = Math.cos(e.w.a), sa = Math.sin(e.w.a), nodes = [];
+    const offs = drift ? (big ? [-0.3, 0, 0.3] : [-0.2, 0.2]) : big ? [0, -0.22, 0.22, -0.42, 0.42] : [0, -0.3, 0.3];
+    offs.forEach((o, k) => { const n = ambGrowth(P, G, { k: 'p', s: e.s + k * 37 }, cx + ca * o * e.len * res, cy + sa * o * e.len * res, r, g * (G.kind === 'dust' ? 0.7 : 1), lod, wind); if (n) nodes.push(...n); });
+    ambPaint(x, P);
+    const sp = { c, cx, cy, res, gq, wind, burnt, nodes: nodes.length ? nodes.map((v, k) => (k % 3 === 2 ? v : v - (k % 3 ? cy : cx))) : null };
+    (e.spr || (e.spr = {}))[name] = sp;
+    return sp;
+  }
   if (burnt && g < 1) { // (the burn under it all, as drawRemains draws it while the game's own marks are still there)
     const bw = r * (e.k === 'b' ? 3 : 3.4);
     x.globalAlpha = 0.55 * (1 - 0.8 * g);
@@ -475,10 +605,11 @@ function ambBase(P, e, x, y, r, lod) {
     if (lod.fine) for (let k = 0; k < 3; k++) { const a = (s + k * 41) * 0.9; ambLine(by.beam, al, x + Math.cos(a) * r * 0.2, y - r * 0.1, x + Math.cos(a) * r * 0.7, y - r * (0.25 + k * 0.08)); }
     return;
   }
-  // A robot's, a vehicle's or a plane's wreckage: dark pieces scattered where it fell, one with a fleck of its colony's paint.
-  const n = e.k === 'p' ? 7 : e.size > 1.2 ? 5 : 4;
+  // A robot's or a vehicle's wreckage: dark pieces scattered where it fell, one with a fleck of its colony's paint. (An
+  // aircraft's wreck is its own art: see ambWreckArt.)
+  const n = e.size > 1.2 ? 5 : 4;
   for (let k = 0; k < n; k++) {
-    const an = hash2(s, k, 711) * Math.PI * 2, d = r * (0.05 + 0.85 * hash2(s, k, 712)) * (k ? 1 : 0.3), cs = r * (0.22 + 0.22 * hash2(s, k, 713)) * (e.k === 'p' && k < 2 ? 1.6 : 1);
+    const an = hash2(s, k, 711) * Math.PI * 2, d = r * (0.05 + 0.85 * hash2(s, k, 712)) * (k ? 1 : 0.3), cs = r * (0.22 + 0.22 * hash2(s, k, 713));
     const px = x + Math.cos(an) * d, py = y + Math.sin(an) * d * 0.6, rot = hash2(k, s, 714) * Math.PI * 2;
     ambChunk(by['f' + (k % 3)], al, px, py, cs, rot);
     if (k === 0 && by['chip' + e.owner]) ambChunk(by['chip' + e.owner], al * 0.85, px, py - cs * 0.1, cs * 0.45, rot + 0.6);
