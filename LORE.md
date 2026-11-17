@@ -405,4 +405,10 @@ ridges of heaved earth with violet root-veins, glowing at night with pulses runn
 an exit (it stays shut a while); a wrecked nest's network dies back. They are nobody's side: they never count for
 victory, and the rival colonies live with them too. In the Hollow, where it is always night, the nights are surges,
 and the ground goes dead silent just before each; its nests and the Deep's mound come with the same setting (Active
-there by default), in Versus as in Colony, and tunnel like any other.
+there by default), in Versus as in Colony, and tunnel like any other. On Active they hunt with craft (the owner's
+decision, Nov 17 2026; built), as the art brief has them, shown only in what they do: one stands still at the edge of
+a colony's land at dusk, facing it, then is gone, and the night's strike falls there; they gather out of sight and come
+in together at what no gun covers; the road lights go dark one by one as they cut the power first; a pack that loses
+half its number goes back down and comes again; they take their dead with them; they remember where they were killed
+and where they fed; and later on a small pack draws the warbots off before the main one strikes. The colony only logs
+what it sees ("Contact at the edge of sensor range"). Quiet keeps the plain packs.

@@ -971,14 +971,47 @@ art/units/crawlerbase@1.png	main	crawler::#ff5a6e:crawler-deploy@1-d9:d=9	compos
 art/units/gondola@1.png	main	gondola::#ff5a6e:gondola@1	compose_any.py --b1 3.5 --b2 10
 art/units/crawler-dish.png	main	crawler::#38d4ff:crawler-dish:part=dish	compose_any.py --b1 6 --b2 16
 art/units/trader-ship.png	main	trader:::trader-ship	compose_any.py --b1 3.5 --b2 10
-art/units/scuttler-f0.png	main	murmur_moles:::scuttler-f0:c=swarmer&f=0	compose_any.py --b1 3.5 --b2 10 --glow 1.4
-art/units/scuttler-f1.png	main	murmur_moles:::scuttler-f1:c=swarmer&f=1	compose_any.py --b1 3.5 --b2 10 --glow 1.4
-art/units/scuttler-f2.png	main	murmur_moles:::scuttler-f2:c=swarmer&f=2	compose_any.py --b1 3.5 --b2 10 --glow 1.4
-art/units/scuttler-f3.png	main	murmur_moles:::scuttler-f3:c=swarmer&f=3	compose_any.py --b1 3.5 --b2 10 --glow 1.4
-art/units/brute-f0.png	main	murmur_moles:::brute-f0:c=brute&f=0	compose_any.py --b1 3.5 --b2 10 --glow 1.4
-art/units/brute-f1.png	main	murmur_moles:::brute-f1:c=brute&f=1	compose_any.py --b1 3.5 --b2 10 --glow 1.4
-art/units/brute-f2.png	main	murmur_moles:::brute-f2:c=brute&f=2	compose_any.py --b1 3.5 --b2 10 --glow 1.4
-art/units/brute-f3.png	main	murmur_moles:::brute-f3:c=brute&f=3	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/units/scuttler-f0.png	main	murmur_moles:::scuttler-f0:c=swarmer&f=0&charge=0.3	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/units/scuttler-f1.png	main	murmur_moles:::scuttler-f1:c=swarmer&f=1&charge=0.3	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/units/scuttler-f2.png	main	murmur_moles:::scuttler-f2:c=swarmer&f=2&charge=0.3	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/units/scuttler-f3.png	main	murmur_moles:::scuttler-f3:c=swarmer&f=3&charge=0.3	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/units/brute-f0.png	main	murmur_moles:::brute-f0:c=brute&f=0&charge=0.3	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/units/brute-f1.png	main	murmur_moles:::brute-f1:c=brute&f=1&charge=0.3	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/units/brute-f2.png	main	murmur_moles:::brute-f2:c=brute&f=2&charge=0.3	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/units/brute-f3.png	main	murmur_moles:::brute-f3:c=brute&f=3&charge=0.3	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/units/leech-f0.png	main	murmur_moles:::leech-f0:c=drainer&f=0&charge=0.3	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/units/leech-f1.png	main	murmur_moles:::leech-f1:c=drainer&f=1&charge=0.3	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/units/leech-f2.png	main	murmur_moles:::leech-f2:c=drainer&f=2&charge=0.3	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/units/leech-f3.png	main	murmur_moles:::leech-f3:c=drainer&f=3&charge=0.3	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/units/leech-feed-f0.png	main	murmur_moles:::leech-feed-f0:c=drainer&pose=feed&f=0&charge=0.3	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/units/leech-feed-f1.png	main	murmur_moles:::leech-feed-f1:c=drainer&pose=feed&f=1&charge=0.3	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/units/leech-feed-f2.png	main	murmur_moles:::leech-feed-f2:c=drainer&pose=feed&f=2&charge=0.3	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/units/leech-feed-f3.png	main	murmur_moles:::leech-feed-f3:c=drainer&pose=feed&f=3&charge=0.3	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/units/spitter-f0.png	main	murmur_moles:::spitter-f0:c=spitter&f=0&charge=0.3	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/units/spitter-f1.png	main	murmur_moles:::spitter-f1:c=spitter&f=1&charge=0.3	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/units/spitter-f2.png	main	murmur_moles:::spitter-f2:c=spitter&f=2&charge=0.3	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/units/spitter-f3.png	main	murmur_moles:::spitter-f3:c=spitter&f=3&charge=0.3	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/units/spitter-spit-f0.png	main	murmur_moles:::spitter-spit-f0:c=spitter&pose=spit&f=0&charge=0.3	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/units/spitter-spit-f1.png	main	murmur_moles:::spitter-spit-f1:c=spitter&pose=spit&f=1&charge=0.3	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/units/spitter-spit-f2.png	main	murmur_moles:::spitter-spit-f2:c=spitter&pose=spit&f=2&charge=0.3	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/units/spitter-spit-f3.png	main	murmur_moles:::spitter-spit-f3:c=spitter&pose=spit&f=3&charge=0.3	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/units/sapper-f0.png	main	murmur_moles:::sapper-f0:c=sapper&f=0&charge=0.3	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/units/sapper-f1.png	main	murmur_moles:::sapper-f1:c=sapper&f=1&charge=0.3	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/units/sapper-f2.png	main	murmur_moles:::sapper-f2:c=sapper&f=2&charge=0.3	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/units/sapper-f3.png	main	murmur_moles:::sapper-f3:c=sapper&f=3&charge=0.3	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/units/sapper-dig-f0.png	main	murmur_moles:::sapper-dig-f0:c=sapper&pose=dig&f=0&charge=0.3	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/units/sapper-dig-f1.png	main	murmur_moles:::sapper-dig-f1:c=sapper&pose=dig&f=1&charge=0.3	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/units/sapper-dig-f2.png	main	murmur_moles:::sapper-dig-f2:c=sapper&pose=dig&f=2&charge=0.3	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/units/sapper-dig-f3.png	main	murmur_moles:::sapper-dig-f3:c=sapper&pose=dig&f=3&charge=0.3	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/units/sapper-under-f0.png	main	murmur_moles:::sapper-under-f0:c=sapper&pose=heave&f=0&charge=0.3	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/units/sapper-under-f1.png	main	murmur_moles:::sapper-under-f1:c=sapper&pose=heave&f=1&charge=0.3	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/units/sapper-under-f2.png	main	murmur_moles:::sapper-under-f2:c=sapper&pose=heave&f=2&charge=0.3	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/units/sapper-under-f3.png	main	murmur_moles:::sapper-under-f3:c=sapper&pose=heave&f=3&charge=0.3	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/units/sapper-up-f0.png	main	murmur_moles:::sapper-up-f0:c=sapper&pose=up&f=0&charge=0.3	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/units/sapper-up-f1.png	main	murmur_moles:::sapper-up-f1:c=sapper&pose=up&f=1&charge=0.3	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/units/sapper-up-f2.png	main	murmur_moles:::sapper-up-f2:c=sapper&pose=up&f=2&charge=0.3	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/units/sapper-up-f3.png	main	murmur_moles:::sapper-up-f3:c=sapper&pose=up&f=3&charge=0.3	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/units/sapper-up-f4.png	main	murmur_moles:::sapper-up-f4:c=sapper&pose=up&f=4&charge=0.3	compose_any.py --b1 3.5 --b2 10 --glow 1.4
 
 ## Vehicles, robots and creatures (morning): top-down, facing right
 art/tod/morning/units/truck@0-f0.png	main	truck::#38d4ff:truck@0-f0:f=0&tod=morning	compose_any.py --b1 5 --b2 15
@@ -1101,14 +1134,47 @@ art/tod/morning/units/crawlerbase@1.png	main	crawler::#ff5a6e:crawler-deploy@1-d
 art/tod/morning/units/gondola@1.png	main	gondola::#ff5a6e:gondola@1:tod=morning	compose_any.py --b1 3.5 --b2 10
 art/tod/morning/units/crawler-dish.png	main	crawler::#38d4ff:crawler-dish:part=dish&tod=morning	compose_any.py --b1 6 --b2 16
 art/tod/morning/units/trader-ship.png	main	trader:::trader-ship:tod=morning	compose_any.py --b1 3.5 --b2 10
-art/tod/morning/units/scuttler-f0.png	main	murmur_moles:::scuttler-f0:c=swarmer&f=0&tod=morning	compose_any.py --b1 3.5 --b2 10 --glow 1.4
-art/tod/morning/units/scuttler-f1.png	main	murmur_moles:::scuttler-f1:c=swarmer&f=1&tod=morning	compose_any.py --b1 3.5 --b2 10 --glow 1.4
-art/tod/morning/units/scuttler-f2.png	main	murmur_moles:::scuttler-f2:c=swarmer&f=2&tod=morning	compose_any.py --b1 3.5 --b2 10 --glow 1.4
-art/tod/morning/units/scuttler-f3.png	main	murmur_moles:::scuttler-f3:c=swarmer&f=3&tod=morning	compose_any.py --b1 3.5 --b2 10 --glow 1.4
-art/tod/morning/units/brute-f0.png	main	murmur_moles:::brute-f0:c=brute&f=0&tod=morning	compose_any.py --b1 3.5 --b2 10 --glow 1.4
-art/tod/morning/units/brute-f1.png	main	murmur_moles:::brute-f1:c=brute&f=1&tod=morning	compose_any.py --b1 3.5 --b2 10 --glow 1.4
-art/tod/morning/units/brute-f2.png	main	murmur_moles:::brute-f2:c=brute&f=2&tod=morning	compose_any.py --b1 3.5 --b2 10 --glow 1.4
-art/tod/morning/units/brute-f3.png	main	murmur_moles:::brute-f3:c=brute&f=3&tod=morning	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/tod/morning/units/scuttler-f0.png	main	murmur_moles:::scuttler-f0:c=swarmer&f=0&charge=0.3&tod=morning	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/tod/morning/units/scuttler-f1.png	main	murmur_moles:::scuttler-f1:c=swarmer&f=1&charge=0.3&tod=morning	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/tod/morning/units/scuttler-f2.png	main	murmur_moles:::scuttler-f2:c=swarmer&f=2&charge=0.3&tod=morning	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/tod/morning/units/scuttler-f3.png	main	murmur_moles:::scuttler-f3:c=swarmer&f=3&charge=0.3&tod=morning	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/tod/morning/units/brute-f0.png	main	murmur_moles:::brute-f0:c=brute&f=0&charge=0.3&tod=morning	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/tod/morning/units/brute-f1.png	main	murmur_moles:::brute-f1:c=brute&f=1&charge=0.3&tod=morning	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/tod/morning/units/brute-f2.png	main	murmur_moles:::brute-f2:c=brute&f=2&charge=0.3&tod=morning	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/tod/morning/units/brute-f3.png	main	murmur_moles:::brute-f3:c=brute&f=3&charge=0.3&tod=morning	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/tod/morning/units/leech-f0.png	main	murmur_moles:::leech-f0:c=drainer&f=0&charge=0.3&tod=morning	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/tod/morning/units/leech-f1.png	main	murmur_moles:::leech-f1:c=drainer&f=1&charge=0.3&tod=morning	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/tod/morning/units/leech-f2.png	main	murmur_moles:::leech-f2:c=drainer&f=2&charge=0.3&tod=morning	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/tod/morning/units/leech-f3.png	main	murmur_moles:::leech-f3:c=drainer&f=3&charge=0.3&tod=morning	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/tod/morning/units/leech-feed-f0.png	main	murmur_moles:::leech-feed-f0:c=drainer&pose=feed&f=0&charge=0.3&tod=morning	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/tod/morning/units/leech-feed-f1.png	main	murmur_moles:::leech-feed-f1:c=drainer&pose=feed&f=1&charge=0.3&tod=morning	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/tod/morning/units/leech-feed-f2.png	main	murmur_moles:::leech-feed-f2:c=drainer&pose=feed&f=2&charge=0.3&tod=morning	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/tod/morning/units/leech-feed-f3.png	main	murmur_moles:::leech-feed-f3:c=drainer&pose=feed&f=3&charge=0.3&tod=morning	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/tod/morning/units/spitter-f0.png	main	murmur_moles:::spitter-f0:c=spitter&f=0&charge=0.3&tod=morning	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/tod/morning/units/spitter-f1.png	main	murmur_moles:::spitter-f1:c=spitter&f=1&charge=0.3&tod=morning	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/tod/morning/units/spitter-f2.png	main	murmur_moles:::spitter-f2:c=spitter&f=2&charge=0.3&tod=morning	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/tod/morning/units/spitter-f3.png	main	murmur_moles:::spitter-f3:c=spitter&f=3&charge=0.3&tod=morning	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/tod/morning/units/spitter-spit-f0.png	main	murmur_moles:::spitter-spit-f0:c=spitter&pose=spit&f=0&charge=0.3&tod=morning	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/tod/morning/units/spitter-spit-f1.png	main	murmur_moles:::spitter-spit-f1:c=spitter&pose=spit&f=1&charge=0.3&tod=morning	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/tod/morning/units/spitter-spit-f2.png	main	murmur_moles:::spitter-spit-f2:c=spitter&pose=spit&f=2&charge=0.3&tod=morning	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/tod/morning/units/spitter-spit-f3.png	main	murmur_moles:::spitter-spit-f3:c=spitter&pose=spit&f=3&charge=0.3&tod=morning	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/tod/morning/units/sapper-f0.png	main	murmur_moles:::sapper-f0:c=sapper&f=0&charge=0.3&tod=morning	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/tod/morning/units/sapper-f1.png	main	murmur_moles:::sapper-f1:c=sapper&f=1&charge=0.3&tod=morning	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/tod/morning/units/sapper-f2.png	main	murmur_moles:::sapper-f2:c=sapper&f=2&charge=0.3&tod=morning	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/tod/morning/units/sapper-f3.png	main	murmur_moles:::sapper-f3:c=sapper&f=3&charge=0.3&tod=morning	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/tod/morning/units/sapper-dig-f0.png	main	murmur_moles:::sapper-dig-f0:c=sapper&pose=dig&f=0&charge=0.3&tod=morning	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/tod/morning/units/sapper-dig-f1.png	main	murmur_moles:::sapper-dig-f1:c=sapper&pose=dig&f=1&charge=0.3&tod=morning	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/tod/morning/units/sapper-dig-f2.png	main	murmur_moles:::sapper-dig-f2:c=sapper&pose=dig&f=2&charge=0.3&tod=morning	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/tod/morning/units/sapper-dig-f3.png	main	murmur_moles:::sapper-dig-f3:c=sapper&pose=dig&f=3&charge=0.3&tod=morning	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/tod/morning/units/sapper-under-f0.png	main	murmur_moles:::sapper-under-f0:c=sapper&pose=heave&f=0&charge=0.3&tod=morning	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/tod/morning/units/sapper-under-f1.png	main	murmur_moles:::sapper-under-f1:c=sapper&pose=heave&f=1&charge=0.3&tod=morning	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/tod/morning/units/sapper-under-f2.png	main	murmur_moles:::sapper-under-f2:c=sapper&pose=heave&f=2&charge=0.3&tod=morning	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/tod/morning/units/sapper-under-f3.png	main	murmur_moles:::sapper-under-f3:c=sapper&pose=heave&f=3&charge=0.3&tod=morning	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/tod/morning/units/sapper-up-f0.png	main	murmur_moles:::sapper-up-f0:c=sapper&pose=up&f=0&charge=0.3&tod=morning	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/tod/morning/units/sapper-up-f1.png	main	murmur_moles:::sapper-up-f1:c=sapper&pose=up&f=1&charge=0.3&tod=morning	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/tod/morning/units/sapper-up-f2.png	main	murmur_moles:::sapper-up-f2:c=sapper&pose=up&f=2&charge=0.3&tod=morning	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/tod/morning/units/sapper-up-f3.png	main	murmur_moles:::sapper-up-f3:c=sapper&pose=up&f=3&charge=0.3&tod=morning	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/tod/morning/units/sapper-up-f4.png	main	murmur_moles:::sapper-up-f4:c=sapper&pose=up&f=4&charge=0.3&tod=morning	compose_any.py --b1 3.5 --b2 10 --glow 1.4
 
 ## Vehicles, robots and creatures (evening): top-down, facing right
 art/tod/evening/units/truck@0-f0.png	main	truck::#38d4ff:truck@0-f0:f=0&tod=evening	compose_any.py --b1 5 --b2 15
@@ -1231,14 +1297,47 @@ art/tod/evening/units/crawlerbase@1.png	main	crawler::#ff5a6e:crawler-deploy@1-d
 art/tod/evening/units/gondola@1.png	main	gondola::#ff5a6e:gondola@1:tod=evening	compose_any.py --b1 3.5 --b2 10
 art/tod/evening/units/crawler-dish.png	main	crawler::#38d4ff:crawler-dish:part=dish&tod=evening	compose_any.py --b1 6 --b2 16
 art/tod/evening/units/trader-ship.png	main	trader:::trader-ship:tod=evening	compose_any.py --b1 3.5 --b2 10
-art/tod/evening/units/scuttler-f0.png	main	murmur_moles:::scuttler-f0:c=swarmer&f=0&tod=evening	compose_any.py --b1 3.5 --b2 10 --glow 1.4
-art/tod/evening/units/scuttler-f1.png	main	murmur_moles:::scuttler-f1:c=swarmer&f=1&tod=evening	compose_any.py --b1 3.5 --b2 10 --glow 1.4
-art/tod/evening/units/scuttler-f2.png	main	murmur_moles:::scuttler-f2:c=swarmer&f=2&tod=evening	compose_any.py --b1 3.5 --b2 10 --glow 1.4
-art/tod/evening/units/scuttler-f3.png	main	murmur_moles:::scuttler-f3:c=swarmer&f=3&tod=evening	compose_any.py --b1 3.5 --b2 10 --glow 1.4
-art/tod/evening/units/brute-f0.png	main	murmur_moles:::brute-f0:c=brute&f=0&tod=evening	compose_any.py --b1 3.5 --b2 10 --glow 1.4
-art/tod/evening/units/brute-f1.png	main	murmur_moles:::brute-f1:c=brute&f=1&tod=evening	compose_any.py --b1 3.5 --b2 10 --glow 1.4
-art/tod/evening/units/brute-f2.png	main	murmur_moles:::brute-f2:c=brute&f=2&tod=evening	compose_any.py --b1 3.5 --b2 10 --glow 1.4
-art/tod/evening/units/brute-f3.png	main	murmur_moles:::brute-f3:c=brute&f=3&tod=evening	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/tod/evening/units/scuttler-f0.png	main	murmur_moles:::scuttler-f0:c=swarmer&f=0&charge=0.3&tod=evening	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/tod/evening/units/scuttler-f1.png	main	murmur_moles:::scuttler-f1:c=swarmer&f=1&charge=0.3&tod=evening	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/tod/evening/units/scuttler-f2.png	main	murmur_moles:::scuttler-f2:c=swarmer&f=2&charge=0.3&tod=evening	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/tod/evening/units/scuttler-f3.png	main	murmur_moles:::scuttler-f3:c=swarmer&f=3&charge=0.3&tod=evening	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/tod/evening/units/brute-f0.png	main	murmur_moles:::brute-f0:c=brute&f=0&charge=0.3&tod=evening	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/tod/evening/units/brute-f1.png	main	murmur_moles:::brute-f1:c=brute&f=1&charge=0.3&tod=evening	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/tod/evening/units/brute-f2.png	main	murmur_moles:::brute-f2:c=brute&f=2&charge=0.3&tod=evening	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/tod/evening/units/brute-f3.png	main	murmur_moles:::brute-f3:c=brute&f=3&charge=0.3&tod=evening	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/tod/evening/units/leech-f0.png	main	murmur_moles:::leech-f0:c=drainer&f=0&charge=0.3&tod=evening	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/tod/evening/units/leech-f1.png	main	murmur_moles:::leech-f1:c=drainer&f=1&charge=0.3&tod=evening	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/tod/evening/units/leech-f2.png	main	murmur_moles:::leech-f2:c=drainer&f=2&charge=0.3&tod=evening	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/tod/evening/units/leech-f3.png	main	murmur_moles:::leech-f3:c=drainer&f=3&charge=0.3&tod=evening	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/tod/evening/units/leech-feed-f0.png	main	murmur_moles:::leech-feed-f0:c=drainer&pose=feed&f=0&charge=0.3&tod=evening	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/tod/evening/units/leech-feed-f1.png	main	murmur_moles:::leech-feed-f1:c=drainer&pose=feed&f=1&charge=0.3&tod=evening	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/tod/evening/units/leech-feed-f2.png	main	murmur_moles:::leech-feed-f2:c=drainer&pose=feed&f=2&charge=0.3&tod=evening	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/tod/evening/units/leech-feed-f3.png	main	murmur_moles:::leech-feed-f3:c=drainer&pose=feed&f=3&charge=0.3&tod=evening	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/tod/evening/units/spitter-f0.png	main	murmur_moles:::spitter-f0:c=spitter&f=0&charge=0.3&tod=evening	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/tod/evening/units/spitter-f1.png	main	murmur_moles:::spitter-f1:c=spitter&f=1&charge=0.3&tod=evening	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/tod/evening/units/spitter-f2.png	main	murmur_moles:::spitter-f2:c=spitter&f=2&charge=0.3&tod=evening	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/tod/evening/units/spitter-f3.png	main	murmur_moles:::spitter-f3:c=spitter&f=3&charge=0.3&tod=evening	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/tod/evening/units/spitter-spit-f0.png	main	murmur_moles:::spitter-spit-f0:c=spitter&pose=spit&f=0&charge=0.3&tod=evening	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/tod/evening/units/spitter-spit-f1.png	main	murmur_moles:::spitter-spit-f1:c=spitter&pose=spit&f=1&charge=0.3&tod=evening	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/tod/evening/units/spitter-spit-f2.png	main	murmur_moles:::spitter-spit-f2:c=spitter&pose=spit&f=2&charge=0.3&tod=evening	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/tod/evening/units/spitter-spit-f3.png	main	murmur_moles:::spitter-spit-f3:c=spitter&pose=spit&f=3&charge=0.3&tod=evening	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/tod/evening/units/sapper-f0.png	main	murmur_moles:::sapper-f0:c=sapper&f=0&charge=0.3&tod=evening	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/tod/evening/units/sapper-f1.png	main	murmur_moles:::sapper-f1:c=sapper&f=1&charge=0.3&tod=evening	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/tod/evening/units/sapper-f2.png	main	murmur_moles:::sapper-f2:c=sapper&f=2&charge=0.3&tod=evening	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/tod/evening/units/sapper-f3.png	main	murmur_moles:::sapper-f3:c=sapper&f=3&charge=0.3&tod=evening	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/tod/evening/units/sapper-dig-f0.png	main	murmur_moles:::sapper-dig-f0:c=sapper&pose=dig&f=0&charge=0.3&tod=evening	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/tod/evening/units/sapper-dig-f1.png	main	murmur_moles:::sapper-dig-f1:c=sapper&pose=dig&f=1&charge=0.3&tod=evening	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/tod/evening/units/sapper-dig-f2.png	main	murmur_moles:::sapper-dig-f2:c=sapper&pose=dig&f=2&charge=0.3&tod=evening	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/tod/evening/units/sapper-dig-f3.png	main	murmur_moles:::sapper-dig-f3:c=sapper&pose=dig&f=3&charge=0.3&tod=evening	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/tod/evening/units/sapper-under-f0.png	main	murmur_moles:::sapper-under-f0:c=sapper&pose=heave&f=0&charge=0.3&tod=evening	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/tod/evening/units/sapper-under-f1.png	main	murmur_moles:::sapper-under-f1:c=sapper&pose=heave&f=1&charge=0.3&tod=evening	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/tod/evening/units/sapper-under-f2.png	main	murmur_moles:::sapper-under-f2:c=sapper&pose=heave&f=2&charge=0.3&tod=evening	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/tod/evening/units/sapper-under-f3.png	main	murmur_moles:::sapper-under-f3:c=sapper&pose=heave&f=3&charge=0.3&tod=evening	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/tod/evening/units/sapper-up-f0.png	main	murmur_moles:::sapper-up-f0:c=sapper&pose=up&f=0&charge=0.3&tod=evening	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/tod/evening/units/sapper-up-f1.png	main	murmur_moles:::sapper-up-f1:c=sapper&pose=up&f=1&charge=0.3&tod=evening	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/tod/evening/units/sapper-up-f2.png	main	murmur_moles:::sapper-up-f2:c=sapper&pose=up&f=2&charge=0.3&tod=evening	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/tod/evening/units/sapper-up-f3.png	main	murmur_moles:::sapper-up-f3:c=sapper&pose=up&f=3&charge=0.3&tod=evening	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/tod/evening/units/sapper-up-f4.png	main	murmur_moles:::sapper-up-f4:c=sapper&pose=up&f=4&charge=0.3&tod=evening	compose_any.py --b1 3.5 --b2 10 --glow 1.4
 
 ## Vehicles, robots and creatures (night): top-down, facing right
 art/tod/night/units/truck@0-f0.png	main	truck::#38d4ff:truck@0-f0:f=0&tod=night	compose_any.py --b1 5 --b2 15
@@ -1361,14 +1460,47 @@ art/tod/night/units/crawlerbase@1.png	main	crawler::#ff5a6e:crawler-deploy@1-d9:
 art/tod/night/units/gondola@1.png	main	gondola::#ff5a6e:gondola@1:tod=night	compose_any.py --b1 3.5 --b2 10
 art/tod/night/units/crawler-dish.png	main	crawler::#38d4ff:crawler-dish:part=dish&tod=night	compose_any.py --b1 6 --b2 16
 art/tod/night/units/trader-ship.png	main	trader:::trader-ship:tod=night	compose_any.py --b1 3.5 --b2 10
-art/tod/night/units/scuttler-f0.png	main	murmur_moles:::scuttler-f0:c=swarmer&f=0&tod=night	compose_any.py --b1 3.5 --b2 10 --glow 1.4
-art/tod/night/units/scuttler-f1.png	main	murmur_moles:::scuttler-f1:c=swarmer&f=1&tod=night	compose_any.py --b1 3.5 --b2 10 --glow 1.4
-art/tod/night/units/scuttler-f2.png	main	murmur_moles:::scuttler-f2:c=swarmer&f=2&tod=night	compose_any.py --b1 3.5 --b2 10 --glow 1.4
-art/tod/night/units/scuttler-f3.png	main	murmur_moles:::scuttler-f3:c=swarmer&f=3&tod=night	compose_any.py --b1 3.5 --b2 10 --glow 1.4
-art/tod/night/units/brute-f0.png	main	murmur_moles:::brute-f0:c=brute&f=0&tod=night	compose_any.py --b1 3.5 --b2 10 --glow 1.4
-art/tod/night/units/brute-f1.png	main	murmur_moles:::brute-f1:c=brute&f=1&tod=night	compose_any.py --b1 3.5 --b2 10 --glow 1.4
-art/tod/night/units/brute-f2.png	main	murmur_moles:::brute-f2:c=brute&f=2&tod=night	compose_any.py --b1 3.5 --b2 10 --glow 1.4
-art/tod/night/units/brute-f3.png	main	murmur_moles:::brute-f3:c=brute&f=3&tod=night	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/tod/night/units/scuttler-f0.png	main	murmur_moles:::scuttler-f0:c=swarmer&f=0&charge=0.3&tod=night	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/tod/night/units/scuttler-f1.png	main	murmur_moles:::scuttler-f1:c=swarmer&f=1&charge=0.3&tod=night	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/tod/night/units/scuttler-f2.png	main	murmur_moles:::scuttler-f2:c=swarmer&f=2&charge=0.3&tod=night	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/tod/night/units/scuttler-f3.png	main	murmur_moles:::scuttler-f3:c=swarmer&f=3&charge=0.3&tod=night	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/tod/night/units/brute-f0.png	main	murmur_moles:::brute-f0:c=brute&f=0&charge=0.3&tod=night	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/tod/night/units/brute-f1.png	main	murmur_moles:::brute-f1:c=brute&f=1&charge=0.3&tod=night	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/tod/night/units/brute-f2.png	main	murmur_moles:::brute-f2:c=brute&f=2&charge=0.3&tod=night	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/tod/night/units/brute-f3.png	main	murmur_moles:::brute-f3:c=brute&f=3&charge=0.3&tod=night	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/tod/night/units/leech-f0.png	main	murmur_moles:::leech-f0:c=drainer&f=0&charge=0.3&tod=night	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/tod/night/units/leech-f1.png	main	murmur_moles:::leech-f1:c=drainer&f=1&charge=0.3&tod=night	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/tod/night/units/leech-f2.png	main	murmur_moles:::leech-f2:c=drainer&f=2&charge=0.3&tod=night	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/tod/night/units/leech-f3.png	main	murmur_moles:::leech-f3:c=drainer&f=3&charge=0.3&tod=night	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/tod/night/units/leech-feed-f0.png	main	murmur_moles:::leech-feed-f0:c=drainer&pose=feed&f=0&charge=0.3&tod=night	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/tod/night/units/leech-feed-f1.png	main	murmur_moles:::leech-feed-f1:c=drainer&pose=feed&f=1&charge=0.3&tod=night	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/tod/night/units/leech-feed-f2.png	main	murmur_moles:::leech-feed-f2:c=drainer&pose=feed&f=2&charge=0.3&tod=night	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/tod/night/units/leech-feed-f3.png	main	murmur_moles:::leech-feed-f3:c=drainer&pose=feed&f=3&charge=0.3&tod=night	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/tod/night/units/spitter-f0.png	main	murmur_moles:::spitter-f0:c=spitter&f=0&charge=0.3&tod=night	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/tod/night/units/spitter-f1.png	main	murmur_moles:::spitter-f1:c=spitter&f=1&charge=0.3&tod=night	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/tod/night/units/spitter-f2.png	main	murmur_moles:::spitter-f2:c=spitter&f=2&charge=0.3&tod=night	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/tod/night/units/spitter-f3.png	main	murmur_moles:::spitter-f3:c=spitter&f=3&charge=0.3&tod=night	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/tod/night/units/spitter-spit-f0.png	main	murmur_moles:::spitter-spit-f0:c=spitter&pose=spit&f=0&charge=0.3&tod=night	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/tod/night/units/spitter-spit-f1.png	main	murmur_moles:::spitter-spit-f1:c=spitter&pose=spit&f=1&charge=0.3&tod=night	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/tod/night/units/spitter-spit-f2.png	main	murmur_moles:::spitter-spit-f2:c=spitter&pose=spit&f=2&charge=0.3&tod=night	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/tod/night/units/spitter-spit-f3.png	main	murmur_moles:::spitter-spit-f3:c=spitter&pose=spit&f=3&charge=0.3&tod=night	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/tod/night/units/sapper-f0.png	main	murmur_moles:::sapper-f0:c=sapper&f=0&charge=0.3&tod=night	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/tod/night/units/sapper-f1.png	main	murmur_moles:::sapper-f1:c=sapper&f=1&charge=0.3&tod=night	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/tod/night/units/sapper-f2.png	main	murmur_moles:::sapper-f2:c=sapper&f=2&charge=0.3&tod=night	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/tod/night/units/sapper-f3.png	main	murmur_moles:::sapper-f3:c=sapper&f=3&charge=0.3&tod=night	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/tod/night/units/sapper-dig-f0.png	main	murmur_moles:::sapper-dig-f0:c=sapper&pose=dig&f=0&charge=0.3&tod=night	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/tod/night/units/sapper-dig-f1.png	main	murmur_moles:::sapper-dig-f1:c=sapper&pose=dig&f=1&charge=0.3&tod=night	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/tod/night/units/sapper-dig-f2.png	main	murmur_moles:::sapper-dig-f2:c=sapper&pose=dig&f=2&charge=0.3&tod=night	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/tod/night/units/sapper-dig-f3.png	main	murmur_moles:::sapper-dig-f3:c=sapper&pose=dig&f=3&charge=0.3&tod=night	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/tod/night/units/sapper-under-f0.png	main	murmur_moles:::sapper-under-f0:c=sapper&pose=heave&f=0&charge=0.3&tod=night	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/tod/night/units/sapper-under-f1.png	main	murmur_moles:::sapper-under-f1:c=sapper&pose=heave&f=1&charge=0.3&tod=night	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/tod/night/units/sapper-under-f2.png	main	murmur_moles:::sapper-under-f2:c=sapper&pose=heave&f=2&charge=0.3&tod=night	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/tod/night/units/sapper-under-f3.png	main	murmur_moles:::sapper-under-f3:c=sapper&pose=heave&f=3&charge=0.3&tod=night	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/tod/night/units/sapper-up-f0.png	main	murmur_moles:::sapper-up-f0:c=sapper&pose=up&f=0&charge=0.3&tod=night	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/tod/night/units/sapper-up-f1.png	main	murmur_moles:::sapper-up-f1:c=sapper&pose=up&f=1&charge=0.3&tod=night	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/tod/night/units/sapper-up-f2.png	main	murmur_moles:::sapper-up-f2:c=sapper&pose=up&f=2&charge=0.3&tod=night	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/tod/night/units/sapper-up-f3.png	main	murmur_moles:::sapper-up-f3:c=sapper&pose=up&f=3&charge=0.3&tod=night	compose_any.py --b1 3.5 --b2 10 --glow 1.4
+art/tod/night/units/sapper-up-f4.png	main	murmur_moles:::sapper-up-f4:c=sapper&pose=up&f=4&charge=0.3&tod=night	compose_any.py --b1 3.5 --b2 10 --glow 1.4
 
 
 ## The Lore guide's Murmur pictures (art/lore, 480 x 360 WebP): night hero renders, cropped round the animal

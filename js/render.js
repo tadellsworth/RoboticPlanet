@@ -161,6 +161,7 @@ const MM_DESERT = {};
 function applyBiome() {
   const b = artBiome(typeof biome === 'function' && S ? biome() : 'desert'); // (a biome without art of its own wears another's: BIOME_ART)
   ensureBiomeArt(b); // (the map is baked again as it arrives)
+  if (typeof wildOn === 'function' && wildOn()) ensureMurmurArt(); // (a game with the Murmur: their art, now)
   const look = BIOME_LOOK[b] || BIOME_LOOK.desert;
   if (!THEME_DESERT.cliffTop) { Object.assign(THEME_DESERT, THEME); Object.assign(MM_DESERT, { ground: MM_COLORS.ground, water: MM_COLORS.water, rock: MM_COLORS.rock, ramp: MM_COLORS.ramp }); }
   Object.assign(THEME, THEME_DESERT, look.theme);
@@ -286,12 +287,40 @@ function ensureBiomeArt(b) {
   for (const k of keys) loadArtKey(k, entryOf(k));
 }
 
+/*
+ * The Murmur's art (every creature's frames and their glow, and the Spitter's volley and its hit) loads only in a game
+ * with the Murmur (ensureMurmurArt, from applyBiome), and their re-lit sets for the time of day with it (MURMUR_TOD_KEYS:
+ * see todMurmurIn). In a single-file copy it's a bundle beside the page (murmur.js: the day art and each time's set).
+ */
+const MURMUR_ART = /^(scuttler|brute|leech|spitter|sapper)-|^fx-spit/;
+const _murmurArt = { state: '' };
+function murmurArtKey(key) { return MURMUR_ART.test(key); }
+function ensureMurmurArt() {
+  if (_murmurArt.state || typeof ART_MANIFEST !== 'object') return;
+  _murmurArt.state = 'loading';
+  const keys = Object.keys(ART_MANIFEST).filter(murmurArtKey);
+  const entryOf = (k) => (typeof ART_MANIFEST[k] === 'string' ? { src: ART_MANIFEST[k] } : ART_MANIFEST[k]);
+  const done = () => { _murmurArt.state = 'in'; if (typeof todMurmurIn === 'function') todMurmurIn(); };
+  if (typeof window !== 'undefined' && window.MURMUR_BUNDLE) {
+    const go = () => { const d = window.MURMUR_DATA && window.MURMUR_DATA.day; if (d) for (const k of keys) if (d[k]) loadArtKey(k, { ...entryOf(k), src: d[k] }); done(); };
+    if (window.MURMUR_DATA) { go(); return; }
+    const sc = document.createElement('script');
+    sc.src = 'murmur.js';
+    sc.onload = go;
+    sc.onerror = () => { _murmurArt.state = 'failed'; }; // no bundle: the creatures are drawn in code
+    document.head.appendChild(sc);
+    return;
+  }
+  for (const k of keys) loadArtKey(k, entryOf(k));
+  done();
+}
+
 function loadArt(onChange) {
   if (typeof ART_MANIFEST !== 'object') return;
   R.artChange = onChange;
   // (What the map is baked from goes first, so the map can be baked once, early, while the rest is still coming.)
   for (const key of Object.keys(ART_MANIFEST).sort((a, b) => bakedArt(b) - bakedArt(a))) {
-    if (lazyBiomeOf(key)) continue; // (see ensureBiomeArt)
+    if (lazyBiomeOf(key) || murmurArtKey(key)) continue; // (see ensureBiomeArt and ensureMurmurArt)
     loadArtKey(key, typeof ART_MANIFEST[key] === 'string' ? { src: ART_MANIFEST[key] } : ART_MANIFEST[key]);
   }
 }
@@ -2765,20 +2794,20 @@ function drawBuilding(ctx, type, cx, cy, s, owner, b) {
     if (type === 'viaduct' && b) viaductJoins(ctx, b, cx, cy, s);
     if (type === 'turret' && art.anchor) {
       const head = turretHead(owner, b ? b.aim : Math.PI / 4);
-      if (head) drawArt(ctx, head, cx, cy, s);
+      if (head) { drawArt(ctx, head, cx, cy, s); if (shorted(b)) drawHeadDark(ctx, head, cx, cy, s); }
     }
     // The new defences' art: the Mortar Pit's tube turns like a turret head (mortar-head-0…7, or 0…15),
     // and optional overlays light up as they fire: bunker-fire (muzzle flashes at the slit) and
     // disruptor-pulse (the coils and orb glowing), faded out over a moment.
     if (type === 'mortar') {
       const head = turretHead(owner, b && b.aim !== undefined ? b.aim : -Math.PI / 4, 'mortar');
-      if (head) drawArt(ctx, head, cx, cy, s);
+      if (head) { drawArt(ctx, head, cx, cy, s); if (shorted(b)) drawHeadDark(ctx, head, cx, cy, s); }
     }
     // The Keep: its roof cannon turns like a turret head (keep-head-0…15), and now and then an arc crackles
     // along the razor wire round its walls (keep-spark-0…5: a 0.4 s burst every 2 to 5 seconds).
     if (type === 'keep') {
       const head = turretHead(owner, b && b.aim !== undefined ? b.aim : -Math.PI / 4, 'keep');
-      if (head) drawArt(ctx, head, cx, cy, s);
+      if (head) { drawArt(ctx, head, cx, cy, s); if (shorted(b)) drawHeadDark(ctx, head, cx, cy, s); }
       if (b && b.built) {
         const period = 2 + 3 * hash2(b.x, b.y, 91), ph = (R.time + period * hash2(b.y, b.x, 37)) % period;
         const sp = ph < 0.4 && ART['keep-spark-' + Math.floor(ph / 0.4 * 6)];
@@ -2789,7 +2818,7 @@ function drawBuilding(ctx, type, cx, cy, s, owner, b) {
     // rotary gun follows what it's hosing (minigun-head-0…15).
     if (type === 'flak' || type === 'minigun') {
       const head = turretHead(owner, b && b.aim !== undefined ? b.aim : -Math.PI / 4, type);
-      if (head) drawArt(ctx, head, cx, cy, s);
+      if (head) { drawArt(ctx, head, cx, cy, s); if (shorted(b)) drawHeadDark(ctx, head, cx, cy, s); }
     }
     const fx = type === 'bunker' ? ['bunker-fire', 0.1] : type === 'disruptor' ? ['disruptor-pulse', 0.4] : type === 'mortar' ? ['mortar-flash', 0.15] : null;
     if (fx && b && b.flash && S.time - b.flash < fx[1]) {
@@ -2799,6 +2828,7 @@ function drawBuilding(ctx, type, cx, cy, s, owner, b) {
       if (over) { ctx.globalAlpha = Math.max(0, a); drawArt(ctx, over, cx, cy, s); ctx.globalAlpha = 1; }
     }
     if (type === 'silo' && b && b.stock) drawSiloStatus(ctx, b, cx, cy, s, color);
+    if (shorted(b)) drawShortArcs(ctx, b, cx, cy, s); // (the Spitter's shards: the charge crawling over it)
     return;
   }
   const u = s / 32;
@@ -4319,6 +4349,30 @@ function drawTunnels(ctx, ox, oy, z) {
   ctx.drawImage(T.g, ox, oy, S.W * z, S.H * z);
   ctx.restore();
   for (const s of S.mur.shut || []) if (s.until > S.time) drawExitScar(ctx, ox + (s.x + 0.5) * z, oy + (s.y + 0.5) * z, z, (s.until - S.time) / MURMUR.shut);
+  // Their dead (Active), where they fell, until one of them drags it off or it sinks into the ground.
+  for (const d of S.mur.dead || []) {
+    const age = S.time - d.t, a = clamp((MURMUR.craft.bodyLast - age) / 3, 0, 1);
+    if (a > 0) drawMurmurBody(ctx, ox + d.x * z, oy + d.y * z, z, d.type, a, hash2(d.id, 3, 7) * Math.PI * 2);
+  }
+}
+
+/** One of the Murmur dead: a dark heap, limbs drawn in, the Crystal under its skin gone dull (a, how much is left of it). */
+function drawMurmurBody(ctx, x, y, s, type, a, rot) {
+  const k = type === 'brute' ? 1.7 : 1;
+  ctx.save();
+  ctx.translate(x, y); ctx.rotate(rot);
+  ctx.globalAlpha *= a;
+  ctx.fillStyle = 'rgba(10,4,12,0.35)';
+  ctx.beginPath(); ctx.ellipse(s * 0.02, s * 0.05, s * 0.17 * k, s * 0.09 * k, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.strokeStyle = type === 'brute' ? '#2a1a12' : '#1e0f22'; ctx.lineWidth = Math.max(1, s * 0.025 * k); ctx.lineCap = 'round';
+  ctx.beginPath();
+  for (const sy of [-1, 1]) { ctx.moveTo(-s * 0.04 * k, sy * s * 0.05 * k); ctx.lineTo(-s * 0.1 * k, sy * s * 0.1 * k); ctx.moveTo(s * 0.05 * k, sy * s * 0.05 * k); ctx.lineTo(s * 0.02 * k, sy * s * 0.11 * k); }
+  ctx.stroke();
+  ctx.fillStyle = type === 'brute' ? '#3a2519' : '#2b1631';
+  ctx.beginPath(); ctx.ellipse(0, 0, s * 0.13 * k, s * 0.075 * k, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = 'rgba(140,100,190,0.55)'; // (dull crystal along its back)
+  for (let n = 0; n < 3; n++) { ctx.beginPath(); ctx.arc((n - 1) * s * 0.045 * k, -s * 0.02 * k, s * 0.012 * k, 0, Math.PI * 2); ctx.fill(); }
+  ctx.restore();
 }
 
 /**
@@ -4473,45 +4527,275 @@ function minimapTunnels() {
 }
 
 /** A creature (see WILD): a Scuttler is small and quick, a Brute big and armoured; legs scurry as it moves. */
-function drawCritter(ctx, u, x, y, s) {
-  const brute = u.type === 'brute', k = brute ? 1.7 : 1, face = u.face || 0;
-  const step = u.moved || u.fought ? Math.sin(R.time * (brute ? 12 : 22) + u.id) : 0;
+/*
+ * The Murmur (renderer/b/murmur_moles.js; art in the Murmur's own bundle, see ensureMurmurArt). Each is drawn true to the
+ * others' size but the Brute, shrunk to fit the map: the frame's width in tiles. Its shadow: half-length and half-width
+ * (tiles, turned with it). walk: walking frames a second.
+ */
+const MURMUR_LOOK = {
+  scuttler: { size: 0.62, sh: [0.17, 0.1], walk: 10 },
+  spitter: { size: 0.73, sh: [0.2, 0.13], walk: 9 },
+  leech: { size: 0.81, sh: [0.24, 0.16], walk: 6 },
+  sapper: { size: 0.9, sh: [0.3, 0.12], walk: 7 },
+  brute: { size: 0.82, sh: [0.29, 0.17], walk: 6 },
+};
+/**
+ * Their actions (u.pose, timed by u.poseT): art <type>-<key>-f<n>, n frames, each dt seconds (or each its own: times),
+ * looping (or once: held on the last). Feeding: the star pulsing, the sac swelling with each draw. Spitting: wind-up,
+ * the spit, recoil, recovering. Digging in: soil flying from each hand in turn. Under: the heave rising and splitting
+ * as it goes. Up: the ground bursting, hands and star through, head and shoulders, climbing out.
+ */
+const MURMUR_POSES = {
+  feed: { key: 'feed', n: 4, dt: 0.18 },
+  spit: { key: 'spit', n: 4, times: [0.42, 0.14, 0.2, 0.24] },
+  dig: { key: 'dig', n: 4, dt: 0.13 },
+  under: { key: 'under', n: 4, dt: 0.22 },
+  up: { key: 'up', n: 5, dt: 0.17, once: true },
+};
+
+/** Which of its frames a creature shows now: { key, k (the frame), pose (its MURMUR_POSES entry, if acting) }. */
+function murmurFrame(u) {
+  const P = u.pose && MURMUR_POSES[u.pose];
+  if (P) {
+    const t = typeof u.poseT === 'number' ? u.poseT : R.time + (u.id || 0) * 0.37;
+    let k = 0;
+    if (P.times) {
+      let r = t % P.times.reduce((a, b) => a + b, 0);
+      while (k < P.n - 1 && r >= P.times[k]) r -= P.times[k++];
+    } else k = P.once ? Math.min(P.n - 1, Math.floor(t / P.dt)) : Math.floor(t / P.dt) % P.n;
+    const key = `${u.type}-${P.key}-f${k}`;
+    if (ART[key]) return { key, k, pose: P };
+  }
+  const L = MURMUR_LOOK[u.type] || MURMUR_LOOK.scuttler, moving = (u.moved || u.fought) && !P;
+  const k = moving ? Math.floor(R.time * L.walk + (u.id || 0)) % 4 : 0;
+  return { key: `${u.type}-f${k}`, k, pose: null };
+}
+
+/** How full of charge it is (0..1: what its crystal's glow follows); a creature from before charge was kept: well fed. */
+function murmurCharge(u) { return typeof u.charge === 'number' && u.charge === u.charge ? clamp(u.charge, 0, 1) : 0.75; }
+
+/**
+ * The light of its crystal (and the Leech's sac), over the sprite: its glow image added, as bright as it is charged,
+ * stronger as the light goes, pulsing slowly as it breathes (faster while a Leech drinks; the Spitter's pouches flaring
+ * as it winds up and dimming as they empty; the heave's chips of crystal glinting).
+ */
+function murmurGlow(ctx, u, fr, x, y, w, face) {
+  const g = ART[fr.key + '-glow'];
+  if (!g) return;
+  const id = u.id || 0, ch = murmurCharge(u);
+  let pulse = 0.8 + 0.2 * Math.sin(R.time * 2.4 + id * 1.7);
+  if (u.pose === 'feed') pulse = 0.85 + 0.3 * Math.max(0, Math.sin(R.time * 8 + id));
+  else if (u.pose === 'spit' && fr.pose) pulse = [1.25, 1.35, 0.55, 0.8][fr.k] || 1;
+  else if (u.pose === 'under') pulse = 0.45 + 0.75 * Math.pow(Math.max(0, Math.sin(R.time * 2.7 + id * 2.3)), 8) + 0.2 * Math.max(0, Math.sin(R.time * 4.1 + id));
+  const a = (0.22 + 0.78 * fxNight()) * (0.12 + 0.88 * Math.pow(ch, 0.9)) * pulse;
+  if (a < 0.02) return;
   ctx.save();
-  ctx.translate(x, y);
-  ctx.fillStyle = 'rgba(20,8,20,0.3)';
-  ctx.beginPath(); ctx.ellipse(s * 0.03, s * 0.08, s * 0.17 * k, s * 0.1 * k, 0, 0, Math.PI * 2); ctx.fill();
-  // The art: four walking frames, stepping while it moves or fights.
-  const walk = ART[u.type + '-f0'] ? ART[u.type + '-f' + (u.moved || u.fought ? Math.floor(R.time * (brute ? 6 : 10) + u.id) % 4 : 0)] : null;
-  if (walk) {
-    ctx.restore();
-    drawArt(ctx, walk, x, y, s * (brute ? 0.82 : 0.62), face);
-  } else {
-  ctx.rotate(face);
-  ctx.strokeStyle = brute ? '#3b2418' : '#2a1430'; ctx.lineWidth = Math.max(1, s * 0.03 * k); ctx.lineCap = 'round';
-  ctx.beginPath();
-  for (let n = 0; n < 3; n++) {
-    const lx = (n - 1) * s * 0.07 * k, sw = (n % 2 ? step : -step) * s * 0.035 * k;
-    ctx.moveTo(lx, 0); ctx.lineTo(lx + sw, -s * 0.14 * k);
-    ctx.moveTo(lx, 0); ctx.lineTo(lx - sw, s * 0.14 * k);
-  }
-  ctx.stroke();
-  ctx.fillStyle = brute ? '#6b4430' : '#55306a';
-  ctx.beginPath(); ctx.ellipse(0, 0, s * 0.14 * k, s * 0.09 * k, 0, 0, Math.PI * 2); ctx.fill();
-  ctx.fillStyle = brute ? '#8d5d41' : '#7a4a92';
-  ctx.beginPath(); ctx.ellipse(-s * 0.02 * k, 0, s * 0.08 * k, s * 0.05 * k, 0, 0, Math.PI * 2); ctx.fill();
-  if (brute) {
-    ctx.fillStyle = '#c9b18f';
-    for (const sy of [-1, 1]) { ctx.beginPath(); ctx.moveTo(-s * 0.05, sy * s * 0.12); ctx.lineTo(0, sy * s * 0.2); ctx.lineTo(s * 0.05, sy * s * 0.12); ctx.fill(); }
-  }
-  ctx.fillStyle = brute ? '#ffb347' : '#ff5fd2';
-  ctx.beginPath(); ctx.arc(s * 0.12 * k, -s * 0.03 * k, s * 0.022 * k, 0, Math.PI * 2); ctx.arc(s * 0.12 * k, s * 0.03 * k, s * 0.022 * k, 0, Math.PI * 2); ctx.fill();
+  ctx.globalCompositeOperation = 'lighter';
+  ctx.globalAlpha *= Math.min(1, a);
+  drawArtRaw(ctx, g, x, y, w, face);
   ctx.restore();
+}
+
+/**
+ * Can the colony on this device see a Sapper under the ground here? Within SIGHT_R tiles of any of its buildings, its
+ * bots or its streetlamps (its allies' too). Watching a game with no colony of your own, everything shows. Kept a
+ * moment per creature.
+ */
+const SIGHT_R = 6;
+function colonySees(x, y) {
+  if (!(ME >= 0) || !S.players[ME]) return true;
+  const r2 = SIGHT_R * SIGHT_R, ours = (o) => o >= 0 && (o === ME || !foes(ME, o)) && !isWild(o);
+  for (const b of S.buildings) if (!b.dead && ours(b.owner) && (b.x + 0.5 - x) ** 2 + (b.y + 0.5 - y) ** 2 < r2) return true;
+  for (const b of S.bots) if (!b.dead && ours(b.owner) && (b.x - x) ** 2 + (b.y - y) ** 2 < r2) return true;
+  if (S.road) {
+    const i0 = Math.max(0, Math.floor(x - SIGHT_R)), i1 = Math.min(S.W - 1, Math.ceil(x + SIGHT_R)), j0 = Math.max(0, Math.floor(y - SIGHT_R)), j1 = Math.min(S.H - 1, Math.ceil(y + SIGHT_R));
+    for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) {
+      const t = j * S.W + i; // (a lamp: every third tile of road on open ground, as streetLamps has them)
+      if ((i + 2 * j) % 3 || !S.road[t] || S.terrain[t] !== T_GROUND || S.bAt[t] || (i + 0.5 - x) ** 2 + (j + 0.5 - y) ** 2 >= r2) continue;
+      if (ours(wayOwner(t))) return true;
+    }
+  }
+  return false;
+}
+function murmurInSight(u) {
+  const c = R.sight || (R.sight = new Map()), e = c.get(u.id);
+  if (e && e.of === S && R.time - e.t < 0.5 && Math.abs(e.x - u.x) < 0.3 && Math.abs(e.y - u.y) < 0.3) return e.v;
+  if (c.size > 300) c.clear();
+  const v = colonySees(u.x, u.y);
+  c.set(u.id, { of: S, t: R.time, x: u.x, y: u.y, v });
+  return v;
+}
+
+/** Where a creature faces: as it goes, or while it spits, at what it's spitting at (u.fx: { x, y } or [x, y]). */
+function murmurFace(u) {
+  const t = u.pose === 'spit' && u.fx, tx = t && (Array.isArray(t) ? t[0] : t.x), ty = t && (Array.isArray(t) ? t[1] : t.y);
+  return t && tx === +tx && ty === +ty && (tx !== u.x || ty !== u.y) ? Math.atan2(ty - u.y, tx - u.x) : u.face || 0;
+}
+
+function drawCritter(ctx, u, x, y, s) {
+  const L = MURMUR_LOOK[u.type] || MURMUR_LOOK.scuttler, face = murmurFace(u), under = u.pose === 'under';
+  if (under && !murmurInSight(u)) return; // (a Sapper under the ground shows only where the colony can see)
+  const fr = murmurFrame(u), art = ART[fr.key], w = s * L.size;
+  // Dragging one of its dead (Active): the body behind it, and a scuff in the dirt where it's been dragged.
+  if (u.drag && BOTS[u.drag]) {
+    const k = L.sh[0] / 0.17, bx = x - Math.cos(face) * s * 0.3 * k, by = y - Math.sin(face) * s * 0.3 * k;
+    ctx.save(); ctx.strokeStyle = 'rgba(30,18,24,0.35)'; ctx.lineWidth = Math.max(1, s * 0.05); ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(bx, by); ctx.lineTo(bx - Math.cos(face) * s * 0.35, by - Math.sin(face) * s * 0.35); ctx.stroke(); ctx.restore();
+    drawMurmurBody(ctx, bx, by, s, u.drag, 1, face + (u.moved ? Math.sin(R.time * 9 + u.id) * 0.15 : 0));
+  }
+  if (!under && !(u.pose === 'up' && fr.pose)) { // (its shadow; nothing of it stands on the ground while it's under or coming up)
+    ctx.save();
+    ctx.translate(x + s * 0.03, y + s * 0.08); ctx.rotate(face);
+    ctx.fillStyle = 'rgba(20,8,20,0.3)';
+    ctx.beginPath(); ctx.ellipse(0, 0, s * L.sh[0], s * L.sh[1], 0, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+  }
+  if (art) {
+    drawArt(ctx, art, x, y, w, face);
+    murmurGlow(ctx, u, fr, x, y, w, face);
+  } else if (under) {
+    // (no art yet: a mound of heaved earth)
+    ctx.save(); ctx.translate(x, y); ctx.rotate(face);
+    ctx.fillStyle = todColor('#6a5240'); ctx.beginPath(); ctx.ellipse(0, 0, s * 0.22, s * 0.15, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = todColor('#2e2218'); ctx.lineWidth = Math.max(1, s * 0.02);
+    ctx.beginPath(); ctx.moveTo(-s * 0.12, -s * 0.05); ctx.lineTo(s * 0.02, s * 0.02); ctx.lineTo(s * 0.12, -s * 0.06); ctx.stroke();
+    ctx.restore();
+  } else {
+    // (no art: drawn in code, a body with legs stepping, the Brute bigger)
+    const brute = u.type === 'brute', k = L.sh[0] / 0.17;
+    const step = u.moved || u.fought ? Math.sin(R.time * (brute ? 12 : 22) + u.id) : 0;
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(face);
+    ctx.strokeStyle = brute ? '#3b2418' : '#2a1430'; ctx.lineWidth = Math.max(1, s * 0.03 * k); ctx.lineCap = 'round';
+    ctx.beginPath();
+    for (let n = 0; n < 3; n++) {
+      const lx = (n - 1) * s * 0.07 * k, sw = (n % 2 ? step : -step) * s * 0.035 * k;
+      ctx.moveTo(lx, 0); ctx.lineTo(lx + sw, -s * 0.14 * k);
+      ctx.moveTo(lx, 0); ctx.lineTo(lx - sw, s * 0.14 * k);
+    }
+    ctx.stroke();
+    ctx.fillStyle = brute ? '#6b4430' : '#55306a';
+    ctx.beginPath(); ctx.ellipse(0, 0, s * 0.14 * k, s * 0.09 * k, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = brute ? '#8d5d41' : '#7a4a92';
+    ctx.beginPath(); ctx.ellipse(-s * 0.02 * k, 0, s * 0.08 * k, s * 0.05 * k, 0, 0, Math.PI * 2); ctx.fill();
+    if (brute) {
+      ctx.fillStyle = '#c9b18f';
+      for (const sy of [-1, 1]) { ctx.beginPath(); ctx.moveTo(-s * 0.05, sy * s * 0.12); ctx.lineTo(0, sy * s * 0.2); ctx.lineTo(s * 0.05, sy * s * 0.12); ctx.fill(); }
+    }
+    ctx.fillStyle = brute ? '#ffb347' : '#ff5fd2';
+    ctx.beginPath(); ctx.arc(s * 0.12 * k, -s * 0.03 * k, s * 0.022 * k, 0, Math.PI * 2); ctx.arc(s * 0.12 * k, s * 0.03 * k, s * 0.022 * k, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
   }
   if (u.hp < u.maxHp && R.clean < 2) {
-    const w = s * 0.34 * k;
-    ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fillRect(x - w / 2, y - s * 0.24 * k, w, Math.max(2, s * 0.05));
-    ctx.fillStyle = '#ff5a5a'; ctx.fillRect(x - w / 2, y - s * 0.24 * k, (w * Math.max(0, u.hp)) / u.maxHp, Math.max(2, s * 0.05));
+    const bw = s * 0.34 * L.sh[0] / 0.17, top = y - s * Math.max(0.24, L.sh[0] * 1.3);
+    ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fillRect(x - bw / 2, top, bw, Math.max(2, s * 0.05));
+    ctx.fillStyle = '#ff5a5a'; ctx.fillRect(x - bw / 2, top, (bw * Math.max(0, u.hp)) / u.maxHp, Math.max(2, s * 0.05));
   }
+}
+
+/** The fresh ridge each Sapper under the ground leaves behind it (its last few tiles, kept here as it goes: once it's through, the game's tunnels take over). */
+function sapperTrails() {
+  const T = R.sapTrails || (R.sapTrails = new Map()), live = new Set();
+  for (const u of S.bots) {
+    if (u.dead || u.pose !== 'under') continue;
+    live.add(u.id);
+    let tr = T.get(u.id);
+    if (!tr || tr.of !== S) T.set(u.id, (tr = { of: S, pts: [[u.x, u.y]] }));
+    const last = tr.pts[tr.pts.length - 1];
+    if (Math.hypot(u.x - last[0], u.y - last[1]) > 0.12) { tr.pts.push([u.x, u.y]); if (tr.pts.length > 90) tr.pts.shift(); }
+  }
+  for (const id of [...T.keys()]) if (!live.has(id)) T.delete(id);
+  return T;
+}
+
+/**
+ * Those ridges, where the colony can see them: the heaved earth (with the ground, before it's graded), or at night
+ * (glow) the veins' light along them. The head of each, where it's still digging, tapers under the heave.
+ */
+function drawFreshRidges(ctx, ox, oy, z, glow) {
+  const T = glow ? R.sapTrails : S.bots && sapperTrails(), n = glow ? fxNight() : 1;
+  if (!T || !T.size || n < 0.02) return;
+  const look = glow ? null : tunnelLook(MM_COLORS.ground || [140, 100, 70]);
+  ctx.save();
+  ctx.translate(ox, oy);
+  if (glow) { ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = n * 0.85; }
+  for (const [id, tr] of T) {
+    const u = getE(id);
+    if (!u || u.dead || tr.pts.length < 3 || !murmurInSight(u)) continue;
+    const pts = tr.pts.map((q) => [q[0], q[1]]);
+    let len = 0;
+    pts[0].s = 0;
+    for (let k = 1; k < pts.length; k++) { len += Math.hypot(pts[k][0] - pts[k - 1][0], pts[k][1] - pts[k - 1][1]); pts[k].s = len; }
+    const run = { tiles: [id], pts, L: len, tail0: true, tail1: true, h: hash2(id, 3, 4133) };
+    if (glow) paintRidgeVeins(ctx, [run], z); else paintRidges(ctx, [run], z, look);
+  }
+  ctx.restore();
+}
+
+/** The Spitter's volley in flight (addFx 'spit', from x, y to tx, ty over its life): its shards, and their light at dusk and night. */
+function drawSpitFx(ctx, f, ox, oy, z, k) {
+  const tx = f.tx !== undefined ? f.tx : f.x + 1, ty = f.ty !== undefined ? f.ty : f.y, a = Math.atan2(ty - f.y, tx - f.x);
+  const q = Math.min(1, k * 1.05), x = ox + (f.x + (tx - f.x) * q) * z, y = oy + (f.y + (ty - f.y) * q) * z;
+  const art = ART['fx-spit'], w = z * 0.6;
+  if (art) drawArtRaw(ctx, art, x, y, w, a);
+  else { ctx.fillStyle = '#d8c4ff'; for (let n = 0; n < 4; n++) { ctx.beginPath(); ctx.arc(x - Math.cos(a) * n * z * 0.05, y - Math.sin(a) * n * z * 0.05, z * (0.04 - n * 0.008), 0, Math.PI * 2); ctx.fill(); } }
+  const night = fxNight(), g = ART['fx-spit-glow'];
+  if (g && night > 0.02) { ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = night * (0.8 + 0.2 * Math.sin(R.time * 40)); drawArtRaw(ctx, g, x, y, w, a); ctx.restore(); }
+  if (TOD.active && typeof drawLightPool === 'function') { ctx.globalAlpha = 0.55; drawLightPool(ctx, x, y, z * 0.7, WILD_COLOR); ctx.globalAlpha = 1; }
+}
+
+/** Where the volley strikes (addFx 'spitHit'): the flash, splinters flying back, charge crawling over the struck face, grit embers dying. */
+function drawSpitHitFx(ctx, f, ox, oy, z, k) {
+  const x = ox + f.x * z, y = oy + f.y * z, art = ART['fx-spit-hit'];
+  // (the art's shards came from the left: turned to come the way the volley did, found once among the volleys in flight)
+  const dirs = R.spitDirs || (R.spitDirs = new WeakMap());
+  let a = dirs.get(f);
+  if (a === undefined) {
+    a = 0;
+    let best = 1;
+    for (const v of S.fx) if (v.type === 'spit' && v.tx !== undefined) { const d = Math.hypot(v.tx - f.x, v.ty - f.y); if (d < best) { best = d; a = Math.atan2(v.ty - v.y, v.tx - v.x); } }
+    dirs.set(f, a);
+  }
+  if (art && art.frames) drawSheetFrame(ctx, art, Math.floor(k * art.frames), x, y, z * 1.0, 0, a);
+  else { fxGlow(ctx, x, y, z * 0.5, '#c8a8ff', 1 - k); }
+  if (TOD.active && typeof drawLightPool === 'function' && k < 0.5) { ctx.globalAlpha = 1 - k / 0.5; drawLightPool(ctx, x, y, z * 1.1, WILD_COLOR); ctx.globalAlpha = 1; }
+}
+
+/**
+ * A building the Spitter's shards have shorted (b.shortT, until then): its gun dark, and the charge crawling over it in
+ * short violet-white arcs that jump about.
+ */
+function shorted(b) { return !!(b && b.shortT > S.time); }
+function drawShortArcs(ctx, b, cx, cy, s) {
+  const left = b.shortT - S.time, k = Math.min(1, left / 0.4), seed = Math.floor(R.time * 14) + (b.id || 0) * 13;
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  for (let n = 0; n < 4; n++) {
+    const h1 = hash2(seed, n, 5101), h2 = hash2(n, seed, 5113), h3 = hash2(seed + n, 7, 5119);
+    const a1 = h1 * Math.PI * 2, a2 = a1 + (0.8 + h2 * 1.6) * (h3 < 0.5 ? 1 : -1), r1 = s * (0.18 + 0.2 * h2), r2 = s * (0.12 + 0.24 * h3), up = s * 0.28;
+    const x1 = cx + Math.cos(a1) * r1, y1 = cy - up + Math.sin(a1) * r1 * 0.7, x2 = cx + Math.cos(a2) * r2, y2 = cy - up + Math.sin(a2) * r2 * 0.7;
+    for (const [lw, col] of [[s * 0.06, 'rgba(150,90,255,0.3)'], [s * 0.022, 'rgba(240,228,255,0.95)']]) {
+      ctx.strokeStyle = col; ctx.globalAlpha = k; ctx.lineWidth = Math.max(1, lw);
+      ctx.beginPath(); boltPath(ctx, x1, y1, x2, y2, s * 0.06, seed + n, 6); ctx.stroke();
+    }
+  }
+  ctx.restore();
+  fxGlow(ctx, cx, cy - s * 0.28, s * 0.5, '#b48cff', 0.35 * k * (0.7 + 0.3 * hash2(seed, 1, 5123)));
+}
+/** A gun's head drawn dark while it's shorted (its image's shape filled near-black over it). */
+function drawHeadDark(ctx, head, cx, cy, s) {
+  if (!head || !head.img) return;
+  let m = head.dark;
+  if (!m) {
+    const img = head.img, c = document.createElement('canvas');
+    c.width = img.width; c.height = img.height;
+    const x = c.getContext('2d');
+    x.drawImage(img, 0, 0); x.globalCompositeOperation = 'source-in'; x.fillStyle = 'rgba(8,6,14,0.62)'; x.fillRect(0, 0, c.width, c.height);
+    m = head.dark = { img: c, scale: head.scale, anchor: head.anchor, key: head.key + '-dark' };
+  }
+  drawArtRaw(ctx, m, cx, cy, s);
 }
 
 /**
@@ -5552,6 +5836,7 @@ function refreshOverlay(type) {
 function render(dtReal) {
   R.time += dtReal;
   R.dt = dtReal;
+  if (typeof cursorTick === 'function') cursorTick(R.canvas); // (the mouse cursor follows what's under it: js/cursor.js)
   const ctx = R.ctx, z = R.cam.z, began = performance.now(), fw = R.fw && R.fw.t0 ? R.fw : null;
   if (fw) { fw.other += began - fw.t0; fw.t0 = 0; } // (what the frame did before drawing, and below how long drawing took: see watchFrameRate)
   ctx.setTransform(R.dpr, 0, 0, R.dpr, 0, 0);
@@ -5578,11 +5863,13 @@ function render(dtReal) {
   if (!R.terrOff) ctx.drawImage(R.terr, ox, oy, S.W * z, S.H * z);
   drawPipes(ctx, ox, oy, z, inView); // (graded with the ground at dusk and night)
   if (S.tun) drawTunnels(ctx, ox, oy, z); // the Murmur's tunnels (graded with the ground too)
+  if (S.wildlife) drawFreshRidges(ctx, ox, oy, z, false); // (and a Sapper's fresh ridge, where the colony can see it)
   todGradeGround(ctx); // morning, evening and night light on the ground and its territory tint (buildings and bots have their own re-lit art)
   drawBreachLight(ctx, ox, oy, z); // (the Hollow: daylight down the breach shafts, on the ground graded for the night)
   drawLavaGlow(ctx, ox, oy, z);
   drawBiomeGlow(ctx, ox, oy, z);
   if (S.tun) drawTunnelGlow(ctx, ox, oy, z, v0, v1);
+  if (S.wildlife) drawFreshRidges(ctx, ox, oy, z, true);
   drawRoadGlow(ctx, ox, oy, z, v0, v1);
   drawStreetLights(ctx, ox, oy, z, v0, v1);
 
@@ -5781,13 +6068,17 @@ function render(dtReal) {
     for (const e of items) {
       if (e.ent === 'post') { pool(ox + (e.post.x + 0.5) * z, oy + (e.post.y + 0.5) * z, z * 1.4, '#ffd27a'); continue; }
       if (e.ent === 'uplink') { pool(ox + (e.up.x + 0.5) * z, oy + (e.up.y + 0.5) * z, z * 1.5, e.up.owner >= 0 ? PLAYER_COLORS[e.up.owner] : '#dfefff'); continue; }
-      if (e.ent !== 'b' || !e.built || BDEFS[e.type].viaduct) continue;
+      if (e.ent !== 'b' || !e.built || BDEFS[e.type].viaduct || murmurCutOn(e) || murmurDarkAt(e.x, e.y)) continue; // (dark where the Murmur cut the power)
       const size = e.type === 'lander' ? 1.7 : e.type === 'wall' ? 0.45 : e.type === 'gate' ? 0.8 : 1.2;
+      const dim = S.wildlife ? drunkLight(e.x + 0.5, e.y + 0.5) : 1; // (a Leech drinking from it: its lights dim)
+      if (dim < 1) ctx.globalAlpha *= dim;
       pool(ox + (e.x + 0.5) * z, oy + (e.y + 0.5) * z, z * size, BDEFS[e.type].wild ? '#a46cff' : PLAYER_COLORS[e.owner] || '#ffd9a0');
+      if (dim < 1) ctx.globalAlpha /= dim;
     }
+    drawMurmurLights(ctx, ox, oy, z, items); // (the Murmur's own, violet, as bright as they're charged)
     if (gfx().night > 1) drawUnitLights(ctx, ox, oy, z, items); // (Graphics on Ultra: robots carry lights too)
     ctx.restore();
-    for (const e of items) if (e.ent === 'b' && (e.type === 'turret' || e.type === 'minigun') && e.built && !e.paused) drawSearchlight(ctx, e, ox, oy, z);
+    for (const e of items) if (e.ent === 'b' && (e.type === 'turret' || e.type === 'minigun') && e.built && !e.paused && !shorted(e)) drawSearchlight(ctx, e, ox, oy, z);
   }
   for (const e of items) {
     if (e.ent === 'lamp') { drawStreetLamp(ctx, e, ox, oy, z); continue; }
@@ -7545,6 +7836,8 @@ function drawEffects(ctx, ox, oy, z) {
       if (TOD.active && typeof drawLightPool === 'function' && k < 0.6) { ctx.globalAlpha = 1 - k / 0.6; drawLightPool(ctx, x, y, w * 0.6, '#ff8a2a'); ctx.globalAlpha = 1; }
       continue;
     }
+    if (f.type === 'spit') { drawSpitFx(ctx, f, ox, oy, z, k); continue; } // the Spitter's volley
+    if (f.type === 'spitHit') { drawSpitHitFx(ctx, f, ox, oy, z, k); continue; }
     // Effect art, if a sprite sheet for this effect is installed.
     const sheet = FX_ART[f.type] && ART[FX_ART[f.type]];
     // Pulse-laser glows and coloured sparks (scuffles, creatures) stay drawn in code, in their own colour.

@@ -625,7 +625,8 @@ function aiThink(p) {
   // In a Nuclear race the Reactor and Nuclear Silo get the same treatment: the race is the point.
   // More Pulse Turrets as the game goes on: one more every so often, up to its doctrine's number (aiFort; a
   // Turtle starts early and builds most).
-  const turretsWanted = Math.min(FT.turrets, 1 + Math.floor(Math.max(0, S.time - AI_DEFENCE_AT * (st.turrets ? 0.5 : 1)) / FT.every));
+  // (The Murmur cut the power at one of our buildings lately, with no gun over it: one Pulse Turret more, beside it: see aiMurCut.)
+  const turretsWanted = Math.min(FT.turrets, 1 + Math.floor(Math.max(0, S.time - AI_DEFENCE_AT * (st.turrets ? 0.5 : 1)) / FT.every)) + (aiMurCut(P) ? 1 : 0);
   const defence = (type) => S.mode !== 'colony' && (type === 'turret' ? (counts.turret || 0) < turretsWanted : type === 'keep' ? (counts.keep || 0) < wantKeeps : !counts[type]) &&
     ((type === 'turret' && S.time > AI_DEFENCE_AT * (st.turrets ? 0.5 : 1)) || (type === 'repair' && counts.turret && S.time > AI_DEFENCE_AT + 120) ||
      (nukeOn() && (type === 'reactor' || type === 'nukesilo')) || (type === 'flak' && enemyAir && (counts.flak || 0) < 2) ||
@@ -1224,6 +1225,17 @@ const AI_EXIT_NEAR = 12, AI_NEST_REACH = 26, AI_NEST_SPARE = 4, AI_MURMUR_EVERY 
 // it ran out of Ore a quarter of an hour in, for good.)
 const AI_NEST_CLEAR_VS = 6;
 function aiNestClear() { return S.mode === 'colony' ? AI_NEST_CLEAR : AI_NEST_CLEAR_VS; }
+/**
+ * Where the Murmur cut the power at one of p's buildings in the last two nights with no gun of p's over it now (see
+ * murmurCut), or null: a Pulse Turret goes there (the rival's answer to their craft on Active).
+ */
+function aiMurCut(P) {
+  const c = P.murCut;
+  if (!c || S.time - c.t > TOD_LEN * 2) return null;
+  for (const b of S.buildings) if (!b.dead && b.owner === P.id && b.type === 'turret' && dist2(b.x, b.y, c.x, c.y) <= 16) return null;
+  return c;
+}
+
 function aiMurmur(p, lvl, lander, smart) {
   const P = S.players[p];
   const night = murmurNight(S.time);
@@ -3232,10 +3244,12 @@ function aiSearchSpot(p, type, lander) {
         for (const b of S.buildings) if (!b.dead && b.owner === p && b.type === 'pump') dp = Math.min(dp, dist(i, j, b.x, b.y));
         s = -dp - dHome * 0.2;
       } else if (type === 'turret') {
-        // Round the Command Base, on the side facing the enemy, spread out from the other turrets.
+        // Round the Command Base, on the side facing the enemy, spread out from the other turrets; or, where the Murmur
+        // cut the power, a couple of tiles from what they cut (aiMurCut).
         let dt = 7;
         for (const b of S.buildings) if (!b.dead && b.owner === p && b.type === 'turret') dt = Math.min(dt, dist(i, j, b.x, b.y));
-        s = -Math.abs(dHome - 3.5) * 2 - dist(i, j, ex, ey) * 0.15 + dt * 0.9;
+        const mc = aiMurCut(P);
+        s = mc ? -Math.abs(dist(i, j, mc.x, mc.y) - 2.5) * 3 + dt * 0.3 : -Math.abs(dHome - 3.5) * 2 - dist(i, j, ex, ey) * 0.15 + dt * 0.9;
       } else if (type === 'bunker' || type === 'disruptor' || type === 'mortar' || type === 'minigun') {
         // Out at the front: beside the fort nearest the enemy (a Mortar a little behind it, to reach
         // over it), and spread out from others of its kind.

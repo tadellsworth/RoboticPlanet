@@ -1089,6 +1089,16 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   an army's size is "about" (`scoutAbout`, from the warbot count Statistics shows), and the number a rival waits for
   (`P.massFor.need`) is never told. It's a `toast` (Go to the place, kept in the message list) starting "Scouts:".
   **Scout reports** (a switch in the pause menu's Settings), kept on the device (`terrafall.scouts`). Display only.
+- **Mouse cursor** (`js/cursor.js`): with a mouse (`any-pointer: fine`), the game draws its own cursors at start-up,
+  sharp at 1× and 2× (`drawCursorImage`; `image-set` where the browser takes it): a gunmetal arrow edged in the accent
+  cyan; the arrow lit cyan over what takes a click; a cyan frame for placing and painting; a red reticle for attacking
+  and aiming, amber for landings and air drops; four arrows while a drag moves the map. `buildCursorSheet` reads every
+  cursor rule in the page's stylesheets and asks it again under `html.tf-cur` with ours in its place (pointer → lit,
+  crosshair → frame, default → arrow; the rest, such as not-allowed, stay the system's), so new styles need nothing
+  here; text fields keep the I-beam. The map's cursor follows what's under the mouse (`cursorTick`, from `render`, a
+  look every 0.1 s): lit over any building or one of your robots, the red reticle over a rival's with warbots picked
+  (`canvas#game[data-cur]`). **Custom cursor** (a switch in the pause menu's Settings, shown only with a mouse), kept
+  on the device (`botfall.cursor`). Display only.
 - **Blueprints** (`js/blueprint.js`): kept on the device (`terrafall.blueprints`, up to `BP_MAX` = 8, newest first,
   each `{ name, b: [[type, dx, dy]...], r: [[dx, dy]...] }` round its middle; `bpList` drops anything damaged). Saving:
   **Build → Blueprints** (`openBlueprints`, the `#build-bp` card shown on every tab) → **New blueprint** enters mode
@@ -1457,7 +1467,8 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   "no ark construction update on file after T−14", the *Wren*'s waystation last answering at T−2). It pages like the How
   to play, on the same code (`pagerInit`/`pagerShow`, `HELP_PAGER` and `LORE_PAGER`): it opens on its first page, which
   lists the rest; a picker stays on top, Previous / Next end each page, ← → turn them; Esc, Back or a phone's Back
-  closes it (opening adds a history entry; closing takes it back). Its pictures are `data-src` until it first opens,
+  closes it (opening adds a history entry; closing takes it back). While it's open the music is the campaign theme, The
+  Long Silence (`musicLore`; see Sound). Its pictures are `data-src` until it first opens,
   then all fetched at once, so the service worker keeps them for offline play, and `tools/build-single.js` puts them in a
   bundle beside the page (`dist/lore.js`, fetched when the guide first opens, so the page stays under 16 MB):
   `art/lore/ithaca.webp` (Ithaca I from orbit, the Ring, Argos and Corvane: `renderer/b/lore_planet.js` and
@@ -1526,6 +1537,27 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
     on the minimap (`minimapTunnels`); exits are art (`drawBurrow`: `tunnel-exit`, re-lit for the time of day), violet
     rings on the minimap, and collapsed ones a caved-in mound fading as it settles (`drawExitScar`:
     `tunnel-exit-collapsed`).
+  - **How they're drawn** (`drawCritter`; art from `renderer/b/murmur_moles.js`). Each form true to the others' size,
+    but the Brute shrunk to fit the map (`MURMUR_LOOK`, the sprite's width in tiles): Scuttler 0.62, Spitter 0.73,
+    Leech 0.81, Brute 0.82, Sapper 0.9, with a shadow turned with it. Four walking frames each, and the forms' actions
+    as loops timed by `u.poseT` (`MURMUR_POSES`, `murmurFrame`): the Leech feeding (`u.pose` `feed`: the star pulsing,
+    the sac swelling), the Spitter spitting (`spit`: wind-up, the spit, recoil, recovering), the Sapper digging in
+    (`dig`), under the ground (`under`: only the heave of soil shows) and coming up (`up`: the ground bursting, played
+    once). The sprites are rendered hungry; each has a glow image (`<key>-glow`) added over it as bright as it's charged
+    (`u.charge`, 0..1; none kept, as in an older save: 0.75), stronger as the light goes, breathing slowly (the Leech's
+    quick throb while it drinks, the Spitter's pouches flaring as it winds up, the heave's crystal chips glinting:
+    `murmurGlow`). At dusk and night each throws violet light on the ground round it, as bright as it's charged
+    (`drawMurmurLights`), and the lamps and the glow of a building a Leech drinks beside dim (`drunkLight`). A Sapper under
+    the ground shows only where the colony on this device can see it (`colonySees`: within `SIGHT_R`, 6 tiles, of any of its
+    or its allies' buildings, bots or streetlamps; watching with no colony of your own, everywhere), and so does the fresh
+    ridge it leaves behind it (`sapperTrails`, `drawFreshRidges`: kept as it goes, drawn like the tunnels; once it's
+    through, the sim's tunnel takes over). The Spitter's volley (`addFx('spit', x, y, { tx, ty })`: the shards flying to
+    the target, `drawSpitFx`) and its hit (`'spitHit'`: eight frames, turned the way the volley came, `drawSpitHitFx`)
+    are effects; a building it has shorted (`b.shortT` > `S.time`) has its gun dark and charge crawling over it
+    (`drawHeadDark`, `drawShortArcs`) and no searchlight. Their art loads only in a game with them (`ensureMurmurArt`,
+    from `applyBiome`, with their re-lit sets: `MURMUR_TOD_KEYS`, `todMurmurAdd`); in the single file it's a bundle beside
+    the page (`dist/murmur.js`). Fields the drawing reads and doesn't find (an older save, a Quiet game) fall back to
+    today's walk.
   - **Counterplay.** Turrets, garrisons and warbots treat creatures as enemies; a creature battering a building marks it
     raided (`P.raided`), so forts round it answer (`garrisonDefense`). Warbots **collapse an exit** (`MURMUR.exitArmor`, 30;
     `collapseExit`: gone, nothing opens within 3 tiles for `MURMUR.shut`, 15 min, `S.mur.shut`; `stats.collapsed`) and
@@ -1537,6 +1569,43 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
     due and its attack threshold and `AI_NEST_SPARE` (4) more warbots, strikes the nearest nest within `AI_NEST_REACH`
     (26) tiles (`aiMurmurStrike`: from the garrisons in reach, or from further off to a rally flag beside it that comes
     down with it, as the Army's Attack does). The Murmur never call its army home (`wildHit`) or count as an enemy army.
+    Where the Murmur cut its power (`P.murCut`, see below) with no gun over it, it wants one Pulse Turret more and
+    sites it a couple of tiles from what they cut (`aiMurCut`).
+  - **Their craft (Active only; Quiet keeps the plain packs: the owner's call).** `MURMUR.craft` in `js/defs.js`, the
+    section after `murmurWave` in `js/sim.js`. Plans (`S.mur.plans`, saved, checked by `checkSave`, in `hashState`): at
+    the dusk warning `murmurDusk` makes one for each colony (`murmurPlan(p, n, round)`): the target is the weak spot
+    (its building scoring most on charge `chargeWorth`, Bloom-vein lure, being alone, out of every colony gun's reach
+    with 3 to spare (`murmurGuns`/`murmurGunAt`: `gunReach` of every colony building, made once a tick), where they fed
+    and not where they were killed, within the networks' reach, in the nests' walkable zone); the rally point
+    `craft.rally` off it, out of the guns, off its land, toward the nests; the watcher's spot at the edge of its land
+    on the line in; up to two Fuel Stations or Generators within `cutR` to cut first (else two of its streetlamp tiles);
+    and from night `feintFrom`, with `feintArmy` armed warbots in the colony, a feint target at least `feintFar` off,
+    by a garrison if it can. A watcher (task `watch`) surfaces there facing the target and goes down after nightfall
+    (`Contact at the edge of sensor range…`). At each wave `murmurCraftWave` (round 1, and a fresh plan for round 2)
+    sends every exit within `join` of a plan's rally point up with task `rally` (an exit no plan draws: a plain pack,
+    as on Quiet), and the first wave a feint of `feintN` from the exit nearest the feint target (role `feint`).
+    `murmurPlansTick` once a second: when all are at the rally point (or `wait` after the first, `waitMax` in all, and
+    a feint's warbots drawn, `murmurDrawn`, or `feintWait`) `murmurLaunch` sends them: Brutes (else one Scuttler) to cut
+    (role `cut`, `murmurCutStep`, `cutTime` at each: `murmurCut` sets `b.murCut` to the night's end: a cut Fuel Station
+    charges nothing (`insideCharger`, `canCharge`, the charging trips), a cut Generator powers nothing, its panel says
+    so; `S.mur.dark` zones of `dark` tiles, `lampDark` for a lamp, put out the lamps, road glow and building light
+    pools in the drawing, `murmurDarkAt`), the rest held (`task.wait`) until the first cut (or `cutWait`), then the
+    Brutes straight at the target and the Scuttlers `leadGap` later, spread round it (`spread`). A strike that's down
+    to `half` of the number it set out with goes back down (`murmurPullBack`, task `back`; `again` seconds later, with
+    `againLeft` of night to come, as many as got down come up again, `murmurAgain`). On the way in and about, night
+    creatures route with the guns' cover as a cost (`routeOpts` `coverMap`: `murmurGunMap`, every 15 ticks; findPath
+    adds `COVER_COST` there), `murmurPrey` scores what a gun covers 6 a gun lower, and Scuttlers scatter `scatterFor` s
+    when `scatterN` armed warbots are within `scatter` tiles (`murmurScatter`, `murmurFlee`; not again for
+    `scatterCd`). One killed on Active leaves no blast or fire (`killBot` → `murmurBody`): a body in `S.mur.dead`, which
+    the nearest creature within `dragR` drags (task `drag`, at `dragSlow`, `u.drag` drawn behind it) down the nearest
+    exit (a guard, into its nest); one nobody comes for sinks after `bodyLast` s, and all at dawn. Memory
+    (`S.mur.mem`: `kill` and `fed`, each up to `memMost` [x, y, weight], merged within 3 tiles, × `memDecay` each
+    nightfall, gone under 0.3; `murmurRemember`, `murmurMem` within `memR`): a creature on a strike killed by a gun or
+    warbot (`u.hitX`/`hitY`/`hitT`, set by `damageBot`) adds a `kill` there; a colony robot they kill, or a building
+    they cut, a `fed`. Exits open away from the guns and the `kill` memory and toward tonight's rally points; plans and
+    `murmurPrey` steer by both. Messages, in the colony's voice: the watcher, `Power lost at your …`, `Contact
+    withdrawing underground…`, `The Murmur are up again…`, `Second contact, far side…`. Dawn clears the plans, the
+    dark and the dead.
 - **Research** (Colony; `TECHS` in `js/defs.js`, `startResearch`/`updateLab` in `js/sim.js`): a Research Lab (staffed)
   researches one upgrade at a time, cost paid on start (Cancel refunds), progress `dt × mult` per staffed Lab. Upgrades:
   Cargo Racks (`botCarry`), Long-life Cells (`drainMul`, and chargers 50% faster; the old Fast Charging upgrade is folded into it), Rapid Paving, Sentry Optics (`turretRange`,
@@ -1729,9 +1798,36 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   three themes, `BUILD_THEMES`, every `MUSIC_ROTATE` seconds of play: Lost in a Dream, the main theme (the menu music is a
   slow take on its chords), Night Drive (Dorian, octave bass,
   claps, a plucked lead) and Horizon (half-time, a chord every two bars, an arpeggio in threes)), written a bar at a time from chord
-  progressions, arpeggios, bass, drums and short melodies in 8-bar sections. **Now playing** (`nowPlayingTick` in js/ui.js,
+  progressions, arpeggios, bass, drums and short melodies in 8-bar sections. **The war music** takes turns between two
+  themes, `WAR_THEMES` (`warTheme`): a game's first fight gets Overdrive (112 bpm Phrygian, sixteenth-note bass,
+  four-on-the-floor kick, stabs, the bell lead) and each new fight (war music again after `WAR_GAP` (30) s of game time
+  without it) the other one; within a fight it stays the same. **Redline** (`war2`), the second, is built on the buzzy
+  bass pushed harder (`mGrowl`: two saws, one a little sharp, through a resonant low-pass that snaps down within a
+  quarter second, into a soft clipper, `driveCurve`, over a clean sine an octave down; played dry): a galloping riff on
+  the chord's root with an octave leap and a half-step neighbour (`RIFF`), its filter opening over each chord's two bars
+  and snapping back on the change (over a whole section in the breakdown, `growlOpen`); 124 bpm harmonic minor, a
+  driven kick in a broken beat (`mKickHard`; four to the bar at the peak), an 80s gated snare (`mGate`), open hats, a
+  gliding saw lead with a late vibrato (`mSaw`) and a noise riser (`mRiser`) into a crash on each new section.
+  **The campaign theme**, **The Long Silence** (`campaign`), tells the story's arc from a level (`storyLevel`, 0 to 1)
+  instead of the game: `musicStory(level)` sets it (the campaign, planned in CAMPAIGN.md, would raise it chapter by
+  chapter, `(mission - 1) / 14`; while set, the theme plays in a game in place of the build themes; `null` ends it), and
+  until the campaign exists the **Lore guide** plays it while it's open (`musicLore` from `openLore`/`closeLore`, at
+  `LORE_STORY` (0.33), the first murmur, quiet enough to read by). At each 8-bar section the level picks a stage (its
+  `stages`, each standing over the theme's own settings: `moodDef`); one key, D, all through, the stages walking the
+  modes from the brightest to the darkest, and the same four-bar tune (`STORY_THEME`, played in each stage's scale, so it
+  darkens with them): Landfall (0; Lydian, hopeful and wide: a halo of high chords spread across the stereo, `mHalo`, the
+  shimmer, the arpeggio in threes, the bell), the colony at work (0.1; Mixolydian, half-time drums), the first murmur
+  (0.25; Dorian: the drums fall away, the choir comes in, a heartbeat, the Uplink's call, `mBeacon`, which the ground
+  sometimes answers in its rhythm, `mThud`), Contingency (0.4; minor, the main theme's chords, drums back, the bass
+  creeping a half step), the Murmur rising (0.68; Phrygian, the climax: Redline's drums and growl, a drone, the tune on
+  the saw) and the Silence (0.96: everything stops; suspended chords, every progression ending away from home, two lights
+  left, the tune's first bar alone, the choir again, fainter and far off). Bar by bar the level also sets how much of
+  the Murmur is heard: the choir grows 15 dB from 0.25 to 0.75 (an octave higher too from 0.6), glints come oftener,
+  the heartbeat beats harder, the ground answers oftener, and the road lights (the `lights` arpeggio, eight a bar) go dark
+  one by one (`LIGHTS_OUT`). **Now playing** (`nowPlayingTick` in js/ui.js,
   display only): on a computer (a mouse, the wide layout) a card in the bottom left corner names each theme as it starts
-  (`MUSIC_TITLES`: the menu's slow take is Lost in a Dream too, the war theme Overdrive, the Murmur's Night Murmurs, the nuke alarm Zero Hour, `end`
+  (`MUSIC_TITLES`: the menu's slow take is Lost in a Dream too, the war themes Overdrive and Redline, the Murmur's Night
+  Murmurs, the nuke alarm Zero Hour, the campaign theme The Long Silence (not shown over the Lore guide, a full screen), `end`
   none) for `NP_SHOW` ms, then fades away (nothing stays in the corner between themes); a title shown in the last `NP_AGAIN` ms (a minute) isn't
   shown again, and nothing shows with the Music at 0, in photo mode, under a full screen (the main menu is fine) or where
   it would run into the tools or the menu's card (a new theme's card waits for room). Effects include radio blips for orders, a
@@ -1888,7 +1984,8 @@ pause menu's line under the button says so, as does the new-game Rules' Always n
   re-lit and graded copies of each sprite, the green and purple teams' too, are let go with it (`todDropSet`, `todFree`;
   a graded stand-in goes as soon as the re-lit image arrives), and the sprites drawn lately get the coming set's versions
   ready a couple a frame ahead of the change (`todWarm`, `artSeen`). The single-file
-  build puts each set in a bundle beside the page (`dist/tod-<time>.js`, loaded when needed).
+  build puts each set in a bundle beside the page (`dist/tod-<time>.js`, loaded when needed); the Murmur's re-lit
+  sprites (`MURMUR_TOD_KEYS`) join a set only in a game with them, from their own bundle (`dist/murmur.js`).
 - **Graded in code** (`out = in × multiply + add`, values from the kit's `art/tod/shared/time-of-day.json`): the baked
   ground, roads, track, pipes, plants, resources and territory tint (`todGradeGround`), and any sprite without a
   re-lit version or whose set hasn't loaded yet (`todGraded`). Tile art drawn over the graded ground (bridge piers,
@@ -1972,8 +2069,9 @@ art/art-manifest.js       register custom art here
 art/lore/                 the Lore guide's pictures (the planet, the regions, the Murmur)
 tools/headless-sim.js     AI-vs-AI balance test without a browser
 tools/smoke-test.js       browser test on a phone-sized screen (Playwright)
-tools/build-single.js     bundles everything into dist/terrafall.html (and dist/tod-<time>.js, lore.js and biome-<b>.js:
-                          every biome's art but the Desert's, so the page stays under its 16 MB: LAZY_BIOMES)
+tools/build-single.js     bundles everything into dist/terrafall.html (and dist/tod-<time>.js, lore.js, biome-<b>.js:
+                          every biome's art but the Desert's, so the page stays under its 16 MB: LAZY_BIOMES, and
+                          murmur.js: the Murmur's art, for a game with them)
 relay/                    the multiplayer relay and player feedback: a Cloudflare Worker (deployed by .github/workflows/relay.yml)
 ```
 

@@ -130,10 +130,11 @@ Parameters the scenes read:
 | `d=k` | crawler | Deploy frame 1–9. Frame 9 is the deployed base. |
 | `c=scuttler\|brute` | creature (old, unshipped) | Which creature. |
 | `s=1..3` | nest (old, unshipped), murmur_moles (`c=burrow`) | Nest level. |
-| `c=` | murmur_moles | Which Murmur: `swarmer` (the game's Scuttler), `brute`, `drainer` (the Leech), `spitter`, `sapper`, `spit-glob` (the Spitter's clot alone, flying right) or `burrow` (the nest, with `s=`). |
+| `c=` | murmur_moles | Which Murmur: `swarmer` (the game's Scuttler), `brute`, `drainer` (the Leech), `spitter`, `sapper`, `spit-glob` (the Spitter's clot alone, flying right), `spit-shards` (the Spitter's volley of crystal shards alone, flying right) or `burrow` (the nest, with `s=`). |
 | `v=base\|rust\|white\|bloom` | murmur_moles | The regional variant (Scuttler, Spitter, Sapper): Rust armoured in ironstone plates, Hoarfell pale, shaggy and slow, Bloom with the Bloom's glowing violet veins. |
-| `pose=feed\|sense\|spit\|surface` | murmur_moles | `feed` the Leech latched on (star flared, pressed to the power, threads of charge; `feed=1` works too); `sense` any class standing still with its star flared and lit; `spit` the Spitter spitting; `surface` the Sapper breaking the surface. |
+| `pose=feed\|sense\|spit\|surface\|dig\|heave` | murmur_moles | `feed` the Leech latched on (star flared, pressed to the power, threads of charge; `feed=1` works too; with `charge=` it is that full, hungry 0 to full 1, and brightens as it drinks); `sense` any class standing still with its star flared and lit; `spit` the Spitter spitting (`shot=shards`: a volley of shards in place of the clot); `surface` the Sapper breaking the surface; `dig` the Sapper digging in nose first (an unseen floor hides what is underground); `heave` the Sapper under the ground, only the heaving soil at the head of its ridge showing. |
 | `charge=0..1` | murmur_moles | How full of charge (default 0.75, a well-fed raider): the crystal glows with it and goes dull and lightless when hungry. |
+| `shot=shards` | murmur_moles | With `c=spitter&pose=spit`: the volley of shards leaving its mouth. The impact is a 2D effect, `fx/spit_impact.py`. |
 | `hero=1`, `hi=1\|2`, `ground=0` | murmur_moles | A 3/4 perspective presentation shot on a patch of ground (the Leech feeding gets its power line), rendered 2× or 4× bigger with `hi`; `ground=0` leaves the ground out (to measure where the animal sits). |
 | `piece=` | rail, bridge, pipe | The tile piece (pipe: straight, corner, tee, cross, end, raised). Rail also has `lights-on`; bridges also have `lamp`, and `abut-w/e/n/s` (a Viaduct's abutment tile; `abut-e`: its span leaves eastward). |
 | `style=water\|sky\|rail` | bridge | The bridge type. |
@@ -435,6 +436,38 @@ python3 preview/resource_sheet.py <sheet folder>  # the design sheet and the ren
 ```
 
 Resources are graded for the time of day in code, so each is one day render; its glow pass becomes a night glow image.
+
+## The Leech, the Spitter and the Sapper
+
+A design sheet for the three Murmur forms beside the Scuttler and the Brute, for the owner to approve; not installed.
+Run from this folder (one job at a time; each name gets `&tod=night` and a `-n` name for its night render too):
+
+```
+node run.js out/forms 'murmur_moles:::leech-walk:c=drainer' 'murmur_moles:::spitter-walk:c=spitter' 'murmur_moles:::sapper-walk:c=sapper' \
+  'murmur_moles:::leech-hungry:c=drainer&pose=feed&charge=0.1' 'murmur_moles:::leech-half:c=drainer&pose=feed&charge=0.5' \
+  'murmur_moles:::leech-full:c=drainer&pose=feed' 'murmur_moles:::spitter-spit:c=spitter&pose=spit&shot=shards' \
+  'murmur_moles:::shards:c=spit-shards' 'murmur_moles:::sapper-dig:c=sapper&pose=dig' \
+  'murmur_moles:::sapper-surface:c=sapper&pose=surface' 'murmur_moles:::sapper-heave:c=sapper&pose=heave'
+# walk frames (drainer-f1.., spitter-f1.., sapper-f1..: c=<class>&f=1..3) and hero shots (hero-...: &hero=1) as the sheet lists
+python3 compose_any.py out/forms <every name> --b1 3.5 --b2 11
+python3 fx/spit_impact.py out/fx                                 # the shards striking: eight frames and the stain
+python3 preview/forms_mock.py out/forms out/fx out/preview/forms   # line-ups, action panels, the raid, phone size
+python3 preview/forms_sheet.py out/forms out/preview/forms out/fx <sheet folder>
+```
+
+**In the game** (approved, installed: ART_GUIDE.md, Batch 17). Every Murmur frame the game draws is in jobs.txt
+(`art/units/<key>.png` and its morning, evening and night versions: walking `f0..3` for all five, `leech-feed`,
+`spitter-spit`, `sapper-dig`, `sapper-under` (the scene's `pose=heave`) and `sapper-up`), all rendered hungry
+(`charge=0.3`): the game adds their light with glow images, as bright as each is charged. Name the renders `<key>`,
+`<key>--morning`, `<key>--evening` and `<key>--night`, add `fx-spit` (`c=spit-shards`, by day and `--night`), compose
+them all with `compose_any.py --b1 3.5 --b2 10 --glow 1.4`, then
+
+```
+python3 fx/spit_impact.py out/fx
+python3 tools/install_murmur_forms.py out/murmur out/fx <game>/art   # sprites, their glow images, the volley and its hit
+```
+
+The Lore guide's Spitter (brighter pouches) is the catalogue's `murmur-spitter-hero` through `post/murmur_lore.py`.
 
 ## Installing the Hollow set, the tunnel exits, Reedcane and the survey stake
 

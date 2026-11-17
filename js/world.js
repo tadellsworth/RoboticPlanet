@@ -4319,6 +4319,8 @@ function killBot(bot, quiet) {
   S.byId.delete(bot.id);
   S.players[bot.owner].stats.lost++;
   if (wasFerry && typeof ferryChanged === 'function') ferryChanged(); // its line stops
+  // One of the Murmur on Active: no blast, no fire; the body lies where it fell until they drag it off (murmurBody).
+  if (BOTS[bot.type].wild && !quiet && typeof murmurBody === 'function' && murmurBody(bot)) return;
   if (boom >= 0) {
     postMsg(bot.owner, `A ${BOTS[bot.type].name} carrying ${load} exploded!`, Math.floor(bot.x), Math.floor(bot.y), 'bad');
     fuelBlast(bot.x, bot.y, 'tanker', boom, bot.owner);
@@ -4654,6 +4656,13 @@ function checkSave(o) {
     const M = o.mur;
     if (!obj(M) || (M.nests != null && !(Array.isArray(M.nests) && M.nests.length < 255 && M.nests.every(Number.isInteger)))) bad();
     if (M.shut != null && !(Array.isArray(M.shut) && M.shut.every((e) => obj(e) && Number.isInteger(e.x) && Number.isInteger(e.y) && Number.isFinite(e.until)))) bad();
+    // Their craft (Active: see murmurPlan): plans of numbers, memories of [x, y, weight], their dead, the dark they made.
+    const nums = (e, ks) => obj(e) && ks.every((k) => e[k] == null || Number.isFinite(e[k]));
+    if (M.plans != null && !(Array.isArray(M.plans) && M.plans.length < 64 && M.plans.every((pl) => nums(pl, Object.keys(pl).filter((k) => k !== 'cut')) &&
+      Array.isArray(pl.cut) && pl.cut.every((c) => Array.isArray(c) && c.length <= 5 && c.every(Number.isFinite))))) bad();
+    if (M.mem != null && !(obj(M.mem) && Object.keys(M.mem).every((k) => (k === 'kill' || k === 'fed') && Array.isArray(M.mem[k]) && M.mem[k].length < 64 && M.mem[k].every((e) => Array.isArray(e) && e.length === 3 && e.every(Number.isFinite))))) bad();
+    if (M.dead != null && !(Array.isArray(M.dead) && M.dead.length <= 64 && M.dead.every((d) => nums(d, ['id', 'x', 'y', 't', 'by']) && ownKey(BOTS, d.type)))) bad();
+    if (M.dark != null && !(Array.isArray(M.dark) && M.dark.length < 256 && M.dark.every((d) => nums(d, ['x', 'y', 'r', 'until'])))) bad();
   }
   const owner = (p) => p === -1 || (Number.isInteger(p) && !!o.players[p]);
   for (const P of o.players) if (!obj(P) || !obj(P.stats) || (P.research && !(obj(P.research) && ownKey(TECHS, P.research.key)))) bad();
@@ -4671,7 +4680,7 @@ function checkSave(o) {
     // a Murmur nest's tunnel branches (see murmurGrow): each its head and goal tiles and the tiles it has left to dig
     if (b.br != null && !(Array.isArray(b.br) && b.br.every((e) => obj(e) && [e.h, e.g].every((t) => Number.isInteger(t) && t >= 0 && t < o.W * o.H) && Number.isFinite(e.k)))) bad();
   }
-  for (const u of o.bots) if (!obj(u) || !ownKey(BOTS, u.type) || !owner(u.owner) || !Number.isFinite(u.x) || !Number.isFinite(u.y) || (u.carry != null && !ownKey(GOOD, u.carry))) bad();
+  for (const u of o.bots) if (!obj(u) || !ownKey(BOTS, u.type) || !owner(u.owner) || !Number.isFinite(u.x) || !Number.isFinite(u.y) || (u.carry != null && !ownKey(GOOD, u.carry)) || (u.drag && !ownKey(BOTS, u.drag))) bad();
   if (o.settings != null) {
     const st = o.settings;
     if (!obj(st) || (st.biome != null && !ownKey(BIOMES, st.biome)) || (st.shape != null && !(Number.isInteger(st.shape) && st.shape >= 0 && st.shape < SHAPE_PRESETS.length))) bad();
