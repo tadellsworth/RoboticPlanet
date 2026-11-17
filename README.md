@@ -1072,6 +1072,16 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   an army's size is "about" (`scoutAbout`, from the warbot count Statistics shows), and the number a rival waits for
   (`P.massFor.need`) is never told. It's a `toast` (Go to the place, kept in the message list) starting "Scouts:".
   **Scout reports** (a switch in the pause menu's Settings), kept on the device (`terrafall.scouts`). Display only.
+- **Mouse cursor** (`js/cursor.js`): with a mouse (`any-pointer: fine`), the game draws its own cursors at start-up,
+  sharp at 1× and 2× (`drawCursorImage`; `image-set` where the browser takes it): a gunmetal arrow edged in the accent
+  cyan; the arrow lit cyan over what takes a click; a cyan frame for placing and painting; a red reticle for attacking
+  and aiming, amber for landings and air drops; four arrows while a drag moves the map. `buildCursorSheet` reads every
+  cursor rule in the page's stylesheets and asks it again under `html.tf-cur` with ours in its place (pointer → lit,
+  crosshair → frame, default → arrow; the rest, such as not-allowed, stay the system's), so new styles need nothing
+  here; text fields keep the I-beam. The map's cursor follows what's under the mouse (`cursorTick`, from `render`, a
+  look every 0.1 s): lit over any building or one of your robots, the red reticle over a rival's with warbots picked
+  (`canvas#game[data-cur]`). **Custom cursor** (a switch in the pause menu's Settings, shown only with a mouse), kept
+  on the device (`botfall.cursor`). Display only.
 - **Blueprints** (`js/blueprint.js`): kept on the device (`terrafall.blueprints`, up to `BP_MAX` = 8, newest first,
   each `{ name, b: [[type, dx, dy]...], r: [[dx, dy]...] }` round its middle; `bpList` drops anything damaged). Saving:
   **Build → Blueprints** (`openBlueprints`, the `#build-bp` card shown on every tab) → **New blueprint** enters mode

@@ -192,8 +192,14 @@ function initUI() {
   $('p-haptics').hidden = !hapticsSupported() || !touchScreen;
   syncHaptics();
   $('p-haptics').onclick = () => { setHaptics(!HAPTIC.on); syncHaptics(); sfx('click'); if (HAPTIC.on) try { navigator.vibrate(HAPTIC_PATTERNS.order); } catch (e) { /* not allowed here */ } };
+  // The custom mouse cursor (js/cursor.js): with a mouse only.
+  initCursor();
+  const syncCursor = () => pauseSwitch('p-cursor', CURSOR.on);
+  $('p-cursor').hidden = !CURSOR.ok;
+  syncCursor();
+  $('p-cursor').onclick = () => { setCursorOn(!CURSOR.on); syncCursor(); sfx('click'); };
   // (Weather can be switched in Custom Game's Rules too: the switches are read again as Settings opens.)
-  UI.syncSwitches = () => { syncWx(); syncScouts(); syncHaptics(); };
+  UI.syncSwitches = () => { syncWx(); syncScouts(); syncHaptics(); syncCursor(); };
   initFullscreen();
   syncVol();
   $('p-help').onclick = () => showHelp();
@@ -367,7 +373,7 @@ function pauseView(v, focus) {
   if (focus) $(set ? 'p-back' : 'p-settings').focus({ preventScroll: true });
 }
 
-/** One of the pause menu's on/off settings (Full screen, Weather, Scout reports, Vibration): its switch, On or Off. */
+/** One of the pause menu's on/off settings (Full screen, Weather, Scout reports, Custom cursor, Vibration): its switch, On or Off. */
 function pauseSwitch(id, on) {
   const b = $(id);
   b.setAttribute('aria-checked', on ? 'true' : 'false');
