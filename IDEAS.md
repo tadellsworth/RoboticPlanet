@@ -112,6 +112,14 @@ Still open: a neutral, shared exchange the rivals compete over; contracts for Ch
   bombers, missiles and raids, so it needs guarding and room around it. To settle: how much it holds and costs,
   whether it holds one liquid or both, if Fuel Stations and the Airfield draw from it, how big the blast is next to
   the existing ones (Tanker, Refinery), and how the rival builds, guards and hunts it.
+  **Oil blocs** (the owner, too): the Tank Farm is the hub of an oil district: the Oil Pumps, the Tank Farm, the
+  Refineries and an Asphalt Plant built together as one block. **Oil Pumps pipe into the Tank Farm**: the pipelines
+  we have (Paths → Pipes) join it like storage, so a pump's **Pipe it to the Refinery** and the banner's **Pipe
+  every Oil Pump** would send Crude to the nearest Tank Farm when there is one; from there it goes on by pipe to the
+  Refineries and the Asphalt Plant, and their Fuel comes back into it (feed links where they touch). One choice to
+  weigh: packing a bloc tight saves pipe and Tanker runs, but one blast can then take out the whole block.
+  To be built here after the work in hand (trade routes, the Murmur), not handed to the other chat: it runs through
+  the pipelines, fuel blasts, storage and the rival's oil play.
 
 ## Suggestions from the November review (not decided)
 
