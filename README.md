@@ -476,10 +476,33 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   and every `reload` s fires a salvo of `salvo` shells, each led to where the plane will be when it gets there (shell
   `speed`) give or take `scatter` tiles (`S.flak`, `updateFlakShells`); a burst hurts every enemy aircraft within
   `splash` (`hitAircraft`, `damage` at the middle). One Ammo is `shells` (8) shells. A Cargo Plane gets through one
-  quick pass over a gun hurt and is mended at its Airfield; a few guns bring it down: the wreck falls burning
-  (`S.drops` kind `wreck`) and crashes, and what it carried is lost. Bursts are drawn in the air layer
+  quick pass over a gun hurt and is mended at its Airfield; a few guns bring it down (what it carried is lost) and it
+  falls burning and crashes, leaving its wreck (see **Aircraft shot down**). Bursts are drawn in the air layer
   (`drawFlakBurst`: a flash and fragments, then a ragged black puff that drifts and fades). The AI puts up two Flak
   Guns by its Command Base once a rival has an Airfield or aircraft.
+- **Aircraft shot down** (`hitAircraft`, `AIR_CRASH` in `js/defs.js`, keyed by type; a type with no entry falls as
+  `plane`): the wreck falls (`S.drops` kind `wreck`, `dur` = `fall`: Cargo Plane 7.5 s, Vulcan Bomber 6.5, Airship 11)
+  along `crashPath`: on the way it was flying, its heading turning through `turn` radians (`d.spin`'s way, from
+  `hash2`) and `glide` tiles of ground covered in all (Cargo Plane 7, bomber 8.5 in a tighter turn, Airship 2.4),
+  slowing as it drops; worked out in `CRASH_STEPS` (24) even steps with the game's own trig (`dcos`, `dsin`), so every
+  device brings it down on the same spot, kept inside the map. `crashLand` (from `landDrop`): a fireball where it hits
+  (`blast`) and two more as its tanks go up, the wreck skidding on `skid` tiles and slewing round (`slew`), fires along
+  the hull burning `fire` s (45, 35, 75), long scorch marks; the `aircrash` sound, heard far off by its owner, whoever
+  shot it down and the land's owner (`aircrashnear`, on screen only, for anyone else). Harmless, as before: nothing is
+  damaged. On open ground (`wreckGround`: ground, no building or site, road, track, pipe, lava, Trade Post or Uplink)
+  the wreck stays for the rest of the game in **`S.wrecks`** (`{ id, type, owner, x, y, a (heading), t (when),
+  tiles }`: the tiles its hull lies across, `len` tiles long), saved and hashed
+  (`hashState`), at most `WRECK_MAX` (32), the oldest going first. Into water, lava or a chasm it's gone. It blocks
+  nothing (paths, building and placing never look at it); `clearWrecks` (every 10 steps) lets a wreck go once a
+  building or site, road, track or pipe is on one of its tiles, or the ground there changes (the tide in: `setTide`).
+  `checkSave` checks a save's wrecks. Drawn: the fall by `drawCrashUnder` (first in the air layer: the fire's light
+  on the ground, the shadow, every smoke trail, a crashed one's for `trail` s after) and `drawWreck` (`crashNow`: its
+  height, a plane losing it slowly then diving, the Airship settling; its roll and pitch as squeezes, the Airship's
+  back breaking; the body drawn by `drawPlane` into its own canvas, charred, `crashBody`; flames from `CRASH_LOOK`'s
+  places as they catch, smoke rolling off them, `CRASH_LOOK` `pieces` breaking away, tumbling down on their own
+  smoke), with the `planefall` or `blimpfall` sound (`falling` in `js/audio.js`: engines failing and the wind rising,
+  or the Airship's groan, lasting to the crash: `sfx`'s `dur`). The wreck on the ground is drawn with the remains
+  (`js/ambient.js`: see **Cloud shadows, remains and beacons**).
 - **Ships and Ports** (naval maps only: Islands and Lakes, `naval` in `SHAPE_PRESETS`, `navalMap`; `NAVAL_ON` switches them
   off everywhere): a **Port** (8 Cement, 3 Alloy; Build → Move) is storage on land beside water at least `SEA_MIN` (20)
   tiles big (`portDocks`; `seaNet` labels the bodies of water). Building on other islands: `buildZones` lets you build in the Command Base's zone and any where you hold a built store
@@ -1958,7 +1981,9 @@ Viaduct's abutment tiles (`viaduct-abut-*`) and the working loops of the Oil Pum
 Refinery and Smelter, the Hollow's own set, the Murmur's tunnel exits, and Fiber's Reedcane Stalks (an image for each
 growth stage, `stalkKey`) and the oil seep (its texture drawn across all its tiles as one shape, `drawSeep`, with the
 Pathfinder's survey stake on each, none in the Hollow, which it never mapped; their light at night in the night glow map,
-`resourceGlow`) (ART_GUIDE Batch 16).
+`resourceGlow`) (ART_GUIDE Batch 16). The crash sites aircraft leave when they're shot down are rendered too: the broken,
+burnt airframes of the Cargo Plane, the Vulcan Bomber and the Airship (`wreck-cargoplane`, `wreck-bomber`,
+`wreck-airship`, every time of day, from `renderer/b/wreck.js`; ART_GUIDE Batch 18).
 Still to make: goods icons and a few terrain pieces. The biome art is in `art/biomes/` (six plants per biome with their
 shadows baked in, and the Jungle and Polar ground, water, rock and cliff), and the Red desert ground, water and rock
 are 512×512 (one image per 4×4 tiles, sharp on the zoomed-in map); all WebP to keep the single-file build small. The app icon is in `icons/` (its source: `icons/icon.svg`). Anything without an image falls back to placeholder art drawn in code, so new art can be
@@ -2106,8 +2131,8 @@ load); they read the game's clock, seed, buildings and effects. Hooks: `drawRema
 - **Remains** (`drawRemains`). The game's own marks of a fight fade in a minute or two (`S.decals`: rubble, scorch; a
   wreck's fire in `S.fx`) and aren't saved. `ambScan` looks through the effects added since the last frame: a building's
   `collapse` with its fire on the same step (destroyed by force; one taken down on purpose only drops its rubble), a
-  robot's or vehicle's wreck fire (`killBot`: the robot is found by where it fell and its id), a plane's crash fire
-  (`landDrop`). Murmur nests and creatures leave nothing (they take their dead with them), nor do ships. Each becomes a
+  robot's or vehicle's wreck fire (`killBot`: the robot is found by where it fell and its id). Murmur nests and
+  creatures leave nothing (they take their dead with them), nor do ships. Each becomes a
   remains record in `R.amb.ruins` (at most `AMB.ruin.max`, one wreck pile to a tile, only on open ground) that carries the
   rubble on as the game's mark fades (the same pieces from the same seed) and, from its age in game time, grows over by
   biome (`AMB_GROW`): grass, moss and vines in the green biomes, drifting snow in Hoarfell, sand in the Rust, ash in the
@@ -2117,6 +2142,17 @@ load); they read the game's clock, seed, buildings and effects. Hooks: `drawRema
   `drawArt` blends the re-lit art), made again only when its growth steps on, the zoom needs another size or the wind
   turns, a few a frame; out of view for 20 seconds, its pictures are let go. Kept in `R`, not `S`, so the simulation is
   untouched and nothing new is saved: remains don't outlive a save and load.
+- **Aircraft wrecks** (`ambWrecks`, `ambWreckArt`). An aircraft's wreck is the game's own (`S.wrecks`, see **Aircraft
+  shot down**), so it outlives a save and load; each is taken in as remains (kind `p`, carrying its wreck as `e.w`)
+  from when it came down, and let go when the game lets it go (or the moment `wreckStands` says something is built
+  on it). Drawn in `drawRemains`: the burnt ground under it, long down the way it came in and back along its skid,
+  fading as it overgrows (`ambWreckBurn`); its broken airframe (`ambWreckArt`: the art `wreck-<type>`, turned to its
+  heading and re-lit for the time of day by `drawArt`, its `scale` the frame's width in tiles; an aircraft with no art
+  of its own gets its outline broken in two, charred); then the growth over it, in patches along the hull (three, or
+  five on the Airship's; a drift of snow, sand, ash or dust in two or three and laid a little thinner so the wreck
+  still shows), never going back into the ground (`AMB.ruin.p`: growth from 60 s, full at 20 minutes, slower on
+  Argos). A fresh one smoulders (`ambSmoulder`: thin smoke off the hull for `AMB.ruin.smoulder` s, its embers glowing
+  after dark for `AMB.ruin.embers` s). Its crash fires bring the carrion birds (`faunaCarrion`), as any wreck's do.
 - **Beacons** (`drawBeacons`). From evening until dawn (`AMB.beam`, faded in over the evening crossfade and out at dawn,
   so never in Always day and always in Always night or the Hollow) every standing, finished Command Base, whoever holds
   it, shines a pale beam straight up from the top of its mast, a hint of its owner's colour in it, with a soft halo, light

@@ -8560,29 +8560,267 @@ function drawFlakBurst(ctx, f, x, y, z) {
   }
 }
 
-/** A plane shot down: the wreck tumbling down on fire, trailing black smoke, from where it was hit to where it crashes. */
-function drawWreck(ctx, d, ox, oy, z) {
-  const p = clamp((S.time - d.t0) / AIR_DROP_FALL, 0, 1), tx = d.i + 0.5, ty = d.j + 0.5;
-  const x = d.x + (tx - d.x) * p, y = d.y + (ty - d.y) * p, alt = (d.alt || 1) * (1 - p * p);
-  // the smoke trail behind it
-  for (let n = 6; n >= 1; n--) {
-    const q = Math.max(0, p - n * 0.06), px = d.x + (tx - d.x) * q, py = d.y + (ty - d.y) * q;
-    ctx.fillStyle = `rgba(22,20,20,${0.14 + 0.05 * (6 - n)})`;
-    ctx.beginPath(); ctx.arc(ox + px * z, oy + py * z, z * (0.12 + n * 0.05), 0, Math.PI * 2); ctx.fill();
+/*
+ * An aircraft shot down, falling (S.drops kind 'wreck': AIR_CRASH, crashPath), from where it was hit to where it
+ * crashes (crashLand). It goes on along a descending turn, shrinking as it drops and its shadow closing in on it,
+ * rolling and wallowing (the Airship sinks nose down, its envelope sagging and spreading), its hull charring as it burns:
+ * flames stream back off it, catching in more places as it falls, and pieces break away, each tumbling down on its
+ * own trailing smoke. Its thick black smoke trail lingers and drifts on the wind, and stays a while after the crash.
+ * Two passes: drawCrashUnder, first in the air layer (its fire's light on the ground, its shadow and every trail), then
+ * drawWreck (the wreck, drawn by drawPlane, so whatever aircraft it was; its flames and the pieces).
+ */
+const CRASH_LOOK = {
+  // fire: where flames burst out of the hull (x along it, forward; y across it; fractions of its length), in the order
+  // they catch; pieces: how many break away on the way down; trail: how long a puff of its smoke lasts (s)
+  cargoplane: { fire: [[0.02, 0.31], [-0.15, 0.04], [0.0, -0.19], [0.3, 0.02]], pieces: 3, trail: 7 },
+  bomber: { fire: [[-0.43, 0.05], [-0.43, -0.05], [-0.16, 0.26], [0.12, 0]], pieces: 3, trail: 7 },
+  airship: { fire: [[-0.15, 0.08], [0.12, -0.1], [-0.3, -0.05], [0.25, 0.04], [0, 0.16], [-0.05, -0.15]], pieces: 4, trail: 9 },
+  plane: { fire: [[0.02, 0.3], [-0.15, 0.04], [0, -0.19]], pieces: 3, trail: 7 },
+};
+function crashLook(type) { return Object.prototype.hasOwnProperty.call(CRASH_LOOK, type) ? CRASH_LOOK[type] : CRASH_LOOK.plane; }
+
+/** Falling wreck d's way down, sampled (crashPath at 48 even steps of its fall, kept for it), at fraction s: { x, y, a }. */
+function crashAt(d, s) {
+  const M = R.crashPaths || (R.crashPaths = new WeakMap());
+  let P = M.get(d);
+  if (!P) { P = []; for (let k = 0; k <= 48; k++) P.push(crashPath(d, k / 48)); M.set(d, P); }
+  const f = clamp(s, 0, 1) * 48, k = Math.min(47, Math.floor(f)), q = f - k, A = P[k], B = P[k + 1];
+  return { x: A.x + (B.x - A.x) * q, y: A.y + (B.y - A.y) * q, a: A.a + (B.a - A.a) * q };
+}
+
+/**
+ * Falling wreck d at game time `now`: s (how far through its fall, 0..1), where it is and its heading (x, y, a), its
+ * height (alt, 0..1: a plane loses it slowly at first, then dives; the Airship settles, steadily, heavily), grow (how
+ * much bigger its height makes it, as drawPlane draws a plane in the air, drawAirship an Airship) and its tumble, as the scale along it (kx: a
+ * nose going down) and across it (ky: rolling over); bend: the Airship's back breaking as its envelope gives way.
+ */
+function crashNow(d, now) {
+  const C = airCrash(d.type), dur = d.dur || AIR_DROP_FALL, s = clamp((now - d.t0) / dur, 0, 1), p = crashAt(d, s), tt = now - d.t0, sd = d.id % 13, alt0 = d.alt || 1;
+  let alt, kx, ky, wob, bend = 0;
+  if (C.heavy) {
+    alt = alt0 * (1 - s * (0.7 + 0.3 * s));
+    kx = 1 - 0.3 * s; ky = 1 + 0.07 * s + 0.02 * Math.sin(tt * 1.3 + sd); wob = 0.04 * Math.sin(tt * 0.9 + sd);
+    bend = 0.13 * clamp((s - 0.35) / 0.65, 0, 1) * (d.spin || 1);
+  } else {
+    alt = alt0 * (1 - s * s * (0.55 + 0.45 * s));
+    const roll = (d.spin || 1) * (0.45 + 0.75 * s) + 0.3 * Math.sin(tt * 2.4 + sd);
+    kx = 1 - 0.14 * s; ky = 0.6 + 0.4 * Math.abs(Math.cos(roll)); wob = 0.06 * Math.sin(tt * 3.1 + sd);
   }
-  const f = d.face + p * 2.2 * (d.id % 2 ? 1 : -1);
-  ctx.save();
-  ctx.globalAlpha = 0.92;
-  drawPlane(ctx, { type: d.type, owner: d.owner, face: f, rface: f, hp: 1, maxHp: 1, parked: true }, ox + x * z, oy + y * z, z, alt);
-  ctx.restore();
-  // on fire
+  return { s, x: p.x, y: p.y, a: p.a + wob, alt, grow: C.heavy ? 1 + 0.106 * alt : (1.6 + 0.85 * alt) / 1.6, kx, ky, bend, C, tt, dur };
+}
+
+/**
+ * The falling wreck's body this frame, charred, in a canvas of its own (drawPlane draws it there, at its height's size
+ * but with no shadow of its height or engine trails: its engines are dead), and its silhouette for the shadow:
+ * { c, sil, side (css px) }. Made once a frame.
+ */
+function crashBody(d, st, z) {
+  const M = R.crashBodies || (R.crashBodies = new WeakMap());
+  let B = M.get(d);
+  if (B && B.at === R.time && B.z === z) return B;
+  const dpr = R.dpr || 1, look = crashLook(d.type), Lh = st.C.len * z * st.grow;
+  const side = Math.ceil(Math.max(Lh * 2.2, z * 1.6 * st.grow * 1.6)), n = Math.min(1800, Math.ceil(side * dpr));
+  if (!B) { B = { c: document.createElement('canvas'), sil: document.createElement('canvas') }; M.set(d, B); }
+  for (const c of [B.c, B.sil]) { if (c.width !== n) c.width = c.height = n; c.getContext('2d').setTransform(1, 0, 0, 1, 0, 0); c.getContext('2d').clearRect(0, 0, n, n); }
+  const g = B.c.getContext('2d'), k = n / side;
+  g.setTransform(k, 0, 0, k, 0, 0);
+  // (the Airship: its own sprite, as drawAirship draws it but without its shadow far below or its fans turning: they've
+  // stopped, and its shadow is drawn closing in, with the rest)
+  const ship = BOTS[d.type] && BOTS[d.type].airship && typeof AIRSHIP_ART !== 'undefined' ? artFor(d.type, d.owner) : null;
+  if (ship) drawArt(g, ship, side / 2, side / 2, z * AIRSHIP_ART.frame * (0.94 + 0.1 * st.alt), st.a);
+  else if (BOTS[d.type]) drawPlane(g, { type: d.type, owner: d.owner, face: st.a, rface: st.a, hp: 1, maxHp: 1, parked: true }, side / 2, side / 2, z * st.grow, 0);
+  else { g.translate(side / 2, side / 2); g.rotate(st.a); g.fillStyle = '#4a4f55'; planeOutline(g, Lh / 0.97); g.fill(); g.setTransform(k, 0, 0, k, 0, 0); }
+  // Charring: the whole of it darkening as it burns, soot black round each place that has caught.
+  g.globalCompositeOperation = 'source-atop';
+  g.fillStyle = `rgba(30,20,14,${0.32 + 0.45 * st.s})`;
+  g.fillRect(0, 0, side, side);
+  const ca = Math.cos(st.a), sa = Math.sin(st.a);
+  look.fire.forEach(([fx, fy], j) => {
+    const on = clamp((st.s - j * 0.16) / 0.25, 0, 1);
+    if (!on) return;
+    const px = side / 2 + (ca * fx - sa * fy) * Lh, py = side / 2 + (sa * fx + ca * fy) * Lh, r = Lh * (0.12 + 0.12 * on);
+    const gr = g.createRadialGradient(px, py, 0, px, py, r);
+    gr.addColorStop(0, `rgba(8,6,5,${0.85 * on})`); gr.addColorStop(1, 'rgba(8,6,5,0)');
+    g.fillStyle = gr; g.fillRect(px - r, py - r, 2 * r, 2 * r);
+  });
+  g.globalCompositeOperation = 'source-over';
+  const h = B.sil.getContext('2d');
+  h.drawImage(B.c, 0, 0);
+  h.globalCompositeOperation = 'source-in'; h.fillStyle = '#04080c'; h.fillRect(0, 0, n, n); h.globalCompositeOperation = 'source-over';
+  B.side = side; B.at = R.time; B.z = z;
+  return B;
+}
+
+/**
+ * Draw image `img` (`side` css px square) centred on (x, y), turned to heading a and squeezed kx along it, ky across it;
+ * `bend`: its back breaking (the Airship's envelope buckling), the front half turned one way and the back the other.
+ */
+function crashBlit(ctx, img, side, x, y, a, kx, ky, bend) {
+  for (const h of bend ? [1, -1] : [0]) {
+    ctx.save();
+    ctx.translate(x, y); ctx.rotate(a);
+    if (h) { ctx.beginPath(); ctx.rect(h > 0 ? 0 : -side, -side, side, 2 * side); ctx.clip(); ctx.rotate(h * bend); }
+    ctx.scale(kx, ky); ctx.rotate(-a);
+    ctx.drawImage(img, -side / 2, -side / 2, side, side);
+    ctx.restore();
+  }
+}
+
+/** Which way the wind blows smoke now (+1 east, -1 west): as the clouds and the remains' drifts go (js/ambient.js). */
+function crashWind() { return typeof ambWind === 'function' && typeof WEATHER !== 'undefined' ? (ambWind(Math.floor(S.time / WEATHER.slot)).x > 0 ? 1 : -1) : 1; }
+
+/**
+ * Under everything in the air: for each falling wreck, the light of its fire on the ground (at dusk and night) and its
+ * shadow (the size of the wreck at ground level, closing in on it as it comes down); then every crash's smoke trail,
+ * a falling wreck's and, for a while after, a crashed one's.
+ */
+function drawCrashUnder(ctx, ox, oy, z, inView) {
+  if (R.crashS !== S) { R.crashS = S; R.crashLive = new Set(); R.crashGone = []; }
+  const now = S.time, live = new Set();
+  for (const d of S.drops || []) if (d.kind === 'wreck') live.add(d);
+  for (const d of R.crashLive) if (!live.has(d)) R.crashGone.push({ d, end: d.t0 + (d.dur || AIR_DROP_FALL) });
+  R.crashLive = live;
+  if (!live.size && !R.crashGone.length) return;
+  R.crashGone = R.crashGone.filter((g) => now - g.end < crashLook(g.d.type).trail);
+  for (const d of live) {
+    const st = crashNow(d, now);
+    if (!inView(st.x, st.y, 3 + st.C.len)) continue;
+    const sx = ox + st.x * z, sy = oy + st.y * z, B = crashBody(d, st, z);
+    fxGround(ctx, sx, sy, z * (1.4 + 0.8 * st.s) * st.grow, '#ff8a2a', 0.35 + 0.45 * st.s);
+    const off = z * (0.07 + 1.1 * st.alt);
+    ctx.globalAlpha = 0.34 - 0.14 * st.alt;
+    crashBlit(ctx, B.sil, B.side / st.grow, sx + off * 0.7, sy + off, st.a, st.kx, st.ky, st.bend);
+    ctx.globalAlpha = 1;
+  }
+  const wind = crashWind();
+  for (const g of R.crashGone) crashTrail(ctx, g.d, ox, oy, z, inView, wind);
+  for (const d of live) crashTrail(ctx, d, ox, oy, z, inView, wind);
+}
+
+/**
+ * One crash's smoke trail: thick black puffs left behind it every tenth of a second of its fall (more as it burns more),
+ * each swelling, rising, drifting downwind, greying and thinning out over CRASH_LOOK `trail` seconds.
+ */
+function crashTrail(ctx, d, ox, oy, z, inView, wind) {
+  const C = airCrash(d.type), look = crashLook(d.type), dur = d.dur || AIR_DROP_FALL, life = look.trail, now = S.time;
+  const step = 0.1 / Math.max(0.5, gfx().fx), until = Math.min(now, d.t0 + dur), puff = fxPuff(true), grey = fxPuff(false), dim = 1 - 0.4 * fxNight();
+  for (let k = Math.max(0, Math.ceil((now - life - d.t0) / step)); d.t0 + k * step <= until; k++) {
+    const te = d.t0 + k * step, age = now - te, se = (te - d.t0) / dur, p = crashAt(d, se);
+    const gx = p.x + wind * (C.heavy ? 0.32 : 0.24) * age + (hash2(d.id, k, 71) - 0.5) * 0.12, gy = p.y - (C.heavy ? 0.3 : 0.11) * age + (hash2(d.id, k, 73) - 0.5) * 0.12;
+    if (!inView(gx, gy, 2)) continue;
+    const a = age / life, r = z * (0.2 + 0.75 * Math.sqrt(a)) * (C.heavy ? 1.4 : 1) * (0.75 + 0.5 * se), al = (0.55 + 0.35 * se) * Math.pow(1 - a, 1.2) * Math.min(1, age * 4 + 0.3) * dim;
+    // black at first, greying as it spreads
+    ctx.globalAlpha = al * (1 - 0.55 * a);
+    ctx.drawImage(puff, ox + gx * z - r, oy + gy * z - r, 2 * r, 2 * r);
+    if (a > 0.2) { ctx.globalAlpha = al * 0.45 * a; ctx.drawImage(grey, ox + gx * z - r, oy + gy * z - r, 2 * r, 2 * r); }
+  }
+  ctx.globalAlpha = 1;
+}
+
+/** A falling wreck: its body (crashBody), the flames streaming back off it, and the pieces breaking away. */
+function drawWreck(ctx, d, ox, oy, z, inView) {
+  const st = crashNow(d, S.time);
+  if (!inView(st.x, st.y, 3 + st.C.len)) return;
+  const sx = ox + st.x * z, sy = oy + st.y * z, B = crashBody(d, st, z), look = crashLook(d.type), spots = crashSpots(d, st, sx, sy, z, look);
+  crashSmoke(ctx, spots, st);
+  crashBlit(ctx, B.c, B.side, sx, sy, st.a, st.kx, st.ky, st.bend);
+  crashFlames(ctx, d, spots, st);
+  crashPieces(ctx, d, st, ox, oy, z, look);
+}
+
+/** Where a falling wreck is burning now (CRASH_LOOK fire, catching one after another as it falls), on screen: { j, px, py, heat, r, flick }. */
+function crashSpots(d, st, sx, sy, z, look) {
+  const Lh = st.C.len * z * st.grow, ca = Math.cos(st.a), sa = Math.sin(st.a), t = R.time, out = [];
+  look.fire.forEach(([fx, fy], j) => {
+    const on = clamp((st.s - j * 0.16) / 0.1, 0, 1);
+    if (!on) return;
+    const lx = fx * Lh * st.kx, ly = fy * Lh * st.ky, heat = on * (0.6 + 0.4 * st.s);
+    out.push({ j, px: sx + ca * lx - sa * ly, py: sy + sa * lx + ca * ly, heat, r: z * (0.1 + 0.1 * heat) * st.grow * (st.C.heavy ? 1.35 : 1), flick: 0.8 + 0.2 * Math.sin(t * 23 + j * 3.1) * Math.sin(t * 9.7 + d.id) });
+  });
+  return out;
+}
+
+/** The black smoke rolling back off each burning place into the trail (under the wreck itself). */
+function crashSmoke(ctx, spots, st) {
+  const back = st.a + Math.PI, t = R.time, puff = fxPuff(true);
+  for (const { j, px, py, heat, r } of spots) for (let i = 0; i < 4; i++) {
+    const ph = (t * 1.5 + i / 4 + j * 0.37) % 1, rr = r * (0.9 + 1.6 * ph), dd = r * (0.5 + 3.2 * ph);
+    ctx.globalAlpha = 0.55 * heat * (1 - ph);
+    ctx.drawImage(puff, px + Math.cos(back) * dd - rr, py + Math.sin(back) * dd - rr, 2 * rr, 2 * rr);
+  }
+  ctx.globalAlpha = 1;
+}
+
+/**
+ * The fire on a falling wreck: from each place that has caught, ragged tongues of flame licking back off it in the wind
+ * of its fall (a plane's swept back, the slow Airship's rising more), flickering, growing as it falls.
+ */
+function crashFlames(ctx, d, spots, st) {
+  const k = st.C.heavy ? 0.3 : 1 - 0.5 * st.s, back = Math.atan2(Math.sin(st.a + Math.PI) * k - (1 - k), Math.cos(st.a + Math.PI) * k), t = R.time;
   ctx.save();
   ctx.globalCompositeOperation = 'lighter';
-  const fl = 0.8 + 0.2 * Math.sin(R.time * 40 + d.id), r = z * 0.38 * fl;
-  const g = ctx.createRadialGradient(ox + x * z, oy + y * z, 0, ox + x * z, oy + y * z, r);
-  g.addColorStop(0, 'rgba(255,240,200,0.9)'); g.addColorStop(0.4, 'rgba(255,140,40,0.7)'); g.addColorStop(1, 'rgba(255,60,10,0)');
-  ctx.fillStyle = g; ctx.beginPath(); ctx.arc(ox + x * z, oy + y * z, r, 0, Math.PI * 2); ctx.fill();
+  for (const { j, px, py, heat, r, flick } of spots) {
+    fxGlow(ctx, px, py, r * 2.6 * flick, '#ff6a1c', 0.38 * heat);
+    for (let i = 0; i < 6; i++) {
+      const h1 = hash2(d.id, j * 6 + i, 81), h2 = hash2(d.id, j * 6 + i, 83), lick = 0.7 + 0.3 * Math.sin(t * (9 + i * 2.7) + h2 * 9);
+      const len = r * (0.9 + 1.2 * h1) * lick, w = r * (0.4 + 0.35 * h2);
+      const an = back + (h2 - 0.5) * 1.5 + 0.25 * Math.sin(t * 6 + i * 1.3), ex = px + Math.cos(an) * len, ey = py + Math.sin(an) * len;
+      const nx = -Math.sin(an) * w, ny = Math.cos(an) * w, bend = Math.sin(t * 7 + i) * 0.4;
+      const gr = ctx.createLinearGradient(px, py, ex, ey);
+      gr.addColorStop(0, `rgba(255,200,100,${0.55 * heat})`); gr.addColorStop(0.45, `rgba(255,100,25,${0.5 * heat})`); gr.addColorStop(1, 'rgba(190,40,10,0)');
+      ctx.fillStyle = gr;
+      ctx.beginPath(); ctx.moveTo(px + nx, py + ny);
+      ctx.quadraticCurveTo(px + (ex - px) * 0.5 + nx * (1.1 + bend), py + (ey - py) * 0.5 + ny * (1.1 + bend), ex, ey);
+      ctx.quadraticCurveTo(px + (ex - px) * 0.5 - nx * (1.1 - bend), py + (ey - py) * 0.5 - ny * (1.1 - bend), px - nx, py - ny);
+      ctx.closePath(); ctx.fill();
+    }
+    fxGlow(ctx, px, py, r * 0.7 * flick, '#ffd890', 0.45 * heat);
+  }
   ctx.restore();
+}
+
+/**
+ * Pieces breaking away from a falling wreck (CRASH_LOOK pieces, spread over its fall): each bursts off a burning place
+ * with a flash, falls behind and out to the side, tumbling, its own shadow closing in and a wisp of smoke after it, and
+ * is gone in a puff of dust where it lands.
+ */
+function crashPieces(ctx, d, st, ox, oy, z, look) {
+  const now = S.time, C = st.C, n = look.pieces;
+  for (let k = 0; k < n; k++) {
+    const h = (j) => hash2(d.id, k, 900 + j);
+    const sb = 0.14 + (k * 0.66) / n + h(1) * 0.08, tb = d.t0 + sb * st.dur, age = now - tb, fallT = 1.2 + 0.6 * h(2);
+    if (age < 0 || age > fallT + 0.6) continue;
+    const b = crashNow(d, tb), spot = look.fire[k % look.fire.length], Lh = C.len * b.grow;
+    const ca = Math.cos(b.a), sa = Math.sin(b.a), side = h(3) < 0.5 ? -1 : 1, q = Math.min(1, age / fallT);
+    const gx = b.x + (ca * spot[0] - sa * spot[1]) * Lh - ca * age * 0.55 - sa * side * age * 0.35, gy = b.y + (sa * spot[0] + ca * spot[1]) * Lh - sa * age * 0.55 + ca * side * age * 0.35;
+    const x = ox + gx * z, y = oy + gy * z, alt = b.alt * (1 - q * q);
+    if (age >= fallT) { // landed: a puff of dust, then it's gone
+      const k2 = (age - fallT) / 0.6;
+      ctx.globalAlpha = 0.5 * (1 - k2);
+      const r = z * (0.12 + 0.25 * k2);
+      ctx.drawImage(fxPuff(false), x - r, y - r * 0.7, 2 * r, 1.4 * r);
+      ctx.globalAlpha = 1;
+      continue;
+    }
+    const sz = z * (0.06 + 0.06 * h(4)) * (C.heavy ? 1.5 : 1) * (1 + 0.53 * alt), off = z * 1.1 * alt;
+    ctx.fillStyle = 'rgba(4,8,12,0.25)';
+    ctx.beginPath(); ctx.ellipse(x + off * 0.7, y + off, sz, sz * 0.7, 0, 0, Math.PI * 2); ctx.fill();
+    for (let j = 1; j <= 4; j++) { // its smoke, after it
+      const ta = age - j * 0.1;
+      if (ta < 0) break;
+      const r = z * (0.05 + 0.04 * j), px = x + (ca * 0.55 + sa * side * 0.35) * (age - ta) * z, py = y + (sa * 0.55 - ca * side * 0.35) * (age - ta) * z;
+      ctx.globalAlpha = 0.4 * (1 - j / 5);
+      ctx.drawImage(fxPuff(true), px - r, py - r, 2 * r, 2 * r);
+    }
+    ctx.globalAlpha = 1;
+    const rot = h(5) * 6.3 + age * (5 + 5 * h(6)) * side, c = Math.cos(rot), s2 = Math.sin(rot);
+    ctx.fillStyle = '#2a2622';
+    ctx.beginPath();
+    [[-1, -0.5], [0.8, -0.8], [1, 0.4], [-0.6, 0.7]].forEach(([u, v], i) => { const px = x + (u * c - v * s2) * sz, py = y + (u * s2 + v * c) * sz; if (i) ctx.lineTo(px, py); else ctx.moveTo(px, py); });
+    ctx.closePath(); ctx.fill();
+    if (age < 1) fxGlow(ctx, x, y, sz * 2.2, '#ff8a2a', 0.7 * (1 - age));
+    if (age < 0.25) fxGlow(ctx, x, y, z * 0.4 * Lh * (1 - age / 0.25), '#ffd27a', 0.9 * (1 - age / 0.25)); // (the burst as it breaks away)
+  }
 }
 
 /*
@@ -8649,8 +8887,9 @@ function drawCrateLanding(ctx, f, ox, oy, z) {
 /** Cargo Planes in the air, parachutes and wrecks coming down, flak bursting: drawn over everything on the ground. */
 function drawAirLayer(ctx, ox, oy, z, inView) {
   for (const f of S.fx) if (f.type === 'crateland' && f.t >= 0 && inView(f.x, f.y, 2)) drawCrateLanding(ctx, f, ox, oy, z);
+  drawCrashUnder(ctx, ox, oy, z, inView); // (aircraft shot down: their fires' light on the ground, their shadows and smoke trails)
   for (const d of S.drops || []) {
-    if (d.kind === 'wreck') { if (inView(d.x, d.y, 4)) drawWreck(ctx, d, ox, oy, z); continue; }
+    if (d.kind === 'wreck') { drawWreck(ctx, d, ox, oy, z, inView); continue; }
     if (d.kind === 'supply') {
       if (!inView(d.i, d.j, 4)) continue;
       for (const c of d.crates || [{ dx: 0, dy: 0.62, lag: 0 }]) {

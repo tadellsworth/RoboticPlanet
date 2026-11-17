@@ -9,7 +9,8 @@ and empty Silos, see [Batch 11](#batch-11-colony-wildlife-the-research-lab-and-e
 [Batch 12](#batch-12-ropeway-and-road-train). The new defences are in [Batch 14](#batch-14-bunker-disruptor-tower-and-mortar-pit), and
 weapon effects, explosions and building collapses (muzzle flashes, tracers, smoke, bullet pockmarks, rubble) in
 [Batch 15](#batch-15-weapon-effects-explosions-and-building-collapses). The Hollow's art, the Murmur's tunnels and the new Fiber
-and Oil are in [Batch 16](#batch-16-the-hollow-the-murmurs-tunnels-and-new-fiber-and-oil-installed).
+and Oil are in [Batch 16](#batch-16-the-hollow-the-murmurs-tunnels-and-new-fiber-and-oil-installed); the wrecks aircraft leave
+when they're shot down are in [Batch 18](#batch-18-crash-sites-the-wrecks-aircraft-leave-installed).
 
 This guide has three parts:
 
@@ -1517,6 +1518,43 @@ one burns. Everything else is drawn in code: the violet light on the ground roun
 (the light pool tinted `WILD_COLOR`, as bright as it's charged), lamps and building glow dimming where a Leech drinks, a
 shorted building's dark gun and the arcs crawling over it, and the Sapper's fresh ridge. The Lore guide's Spitter
 (`art/lore/murmur-spitter.webp`) was rendered again for its brighter pouches.
+
+### Batch 18: crash sites, the wrecks aircraft leave (installed)
+
+An aircraft Flak brings down falls burning and crashes, and its wreck lies where it came down for the rest of the game
+(`S.wrecks`; README, "Aircraft shot down"), overgrowing slowly by biome. Each aircraft has its own crash site: its
+broken, burnt airframe lying on the ground at the angle it came in. They were rendered here from each aircraft's own
+scene with `renderer/b/wreck.js` (RENDERER.md: the `wreck` scene, its `c=` and `w=`, and the jobs in `jobs.txt`).
+
+| Key | What | How it's drawn |
+|---|---|---|
+| `wreck-cargoplane` | The Cargo Plane, come down belly first: the nose broken off at the flight deck, swung aside and dug in; the tail snapped behind the wing and twisted away, its T-tail knocked flat; the right wing folded down onto the ground; the left wing missing its tip and its outer engine (they broke away in the fall: the engine lies on its side beside it); the roof burned through behind the wing, its frames showing. 512×512, 26 world units across (2.08 tiles) | Straight down, nose right, no ground, its own soft shadows baked in. Centred on where the wreck lies (`S.wrecks` x, y), turned to its heading (`a`), drawn `scale` tiles across (`ambWreckArt` in `js/ambient.js`, from `drawRemains`, over the burnt ground and under the growth) |
+| `wreck-bomber` | The Vulcan Bomber: radome and canopy broken off and rolled ahead, the right wing's tip pod gone, the left fin flat on the ground beside the tail, the right one bent outward, a tailplane bent down, the deck over the engines burned through. 24 units (1.38 tiles) | The same |
+| `wreck-airship` | The Airship (the armoured blimp, `b/airship.js` `v=c`): settled heavily, its envelope collapsed on itself, long, flattened and buckled into folds, kinked behind the middle, the nose crushed into the ground, burned through in three places to its ring frames; one lift fan torn off and lying on its side, the others hanging off bent pylons, a V-tail fin flat on the ground. 34 units (3.4 tiles) | The same |
+
+All three are neutral (one picture for every team: burnt, their team colours dead) and have morning, evening and night
+versions (`art/tod/<time>/bots/`, keys in `art/tod/tod-keys.js`). **How they were made:** `wreck.js` builds the
+aircraft with its own scene, then bakes every mesh into world space and cuts it into small triangles (so it can bend and
+tear anywhere), gives each triangle to a piece by where it lies (the pieces, their hinges and how each lies are in
+`WRECKS` at the top of the file), crumples the pieces (harder where they tore), lays them on the ground, and chars the
+paint through its vertex colours: soot over the hottest places, heat-browned metal round them, grey-white ash where the
+alloy burned through, scorched paint at the edges; every glow is dead, and the inside of the skin, seen through a tear,
+is black. A few torn panels lie round it. A shadow catcher keeps only the shadows; the sun is kept high (52° or more), so
+the shadows stay short when the game turns the wreck. Rendered at 1024 and composed with
+`compose_any.py --b1 5 --b2 15`, then saved as WebP (quality 82) into `art/bots/` and `art/tod/<time>/bots/`:
+
+```
+cd renderer
+node run.js out/wreck/day 'wreck:::wreck-cargoplane:c=cargoplane' 'wreck:::wreck-bomber:c=bomber' 'wreck:::wreck-airship:c=airship'
+node run.js out/wreck/night 'wreck:::wreck-cargoplane:c=cargoplane&tod=night' ...   # and morning, evening
+python3 compose_any.py out/wreck/day wreck-cargoplane wreck-bomber wreck-airship --b1 5 --b2 15
+```
+
+The Airship's needs `renderer/b/airship.js` (branch `airship-art` until it's merged). The rest of a crash is drawn in
+code: the fall (the aircraft's own sprite drawn by `drawPlane` into a canvas of its own and charred, squeezed as it rolls
+and pitches, flames licking back off it, pieces breaking away, its shadow and a thick smoke trail), the fireball, fires
+and scorch marks, the burnt ground under the wreck, its smouldering and embers, and what grows over it. An aircraft
+added later with no `wreck-<type>` art of its own is drawn as its outline, broken in two and charred, until it has one.
 
 ### Not swappable yet (ask Claude Code if you want these)
 

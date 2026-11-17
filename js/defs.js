@@ -486,6 +486,25 @@ const BOMBER = { ammo: 6, fuel: 3, damage: 14, splash: 1.3, splashBld: 4, botDam
  * Bio Farm grows anything there again (see scorchSoil). The fire is worked out every `tick` s.
  */
 const NAPALM = { fuel: 3, radius: 1.5, burn: 6, bot: 0.6, bld: 0.6, tick: 0.5 };
+/**
+ * An aircraft shot down (hitAircraft) falls burning for `fall` s along a descending turn (crashPath): `glide` tiles of
+ * ground covered in all, slowing as it drops, its heading turning through `turn` radians (one way or the other), from
+ * where it was hit. Then it crashes (crashLand): a fireball, `blast` big, and its wreck skids `skid` tiles on, slewing
+ * round by up to `slew` radians, and burns `fire` s. The wreck stays for the rest of the game (S.wrecks, at most
+ * WRECK_MAX: the oldest go first), `len` tiles long, on the tiles its hull lies across, until a building, road, track
+ * or pipe is built over one of them or the ground there changes (the tide comes in): see clearWrecks. It's scenery: it
+ * blocks nothing and hurts no one, and nor does the crash. `heavy`: the Airship's settling fall. A type with no entry
+ * of its own falls as `plane`.
+ */
+const AIR_CRASH = {
+  cargoplane: { fall: 7.5, glide: 7, turn: 2.4, skid: 0.5, slew: 0.25, len: 1.5, fire: 45, blast: 1.1 },
+  bomber: { fall: 6.5, glide: 8.5, turn: 3.3, skid: 0.6, slew: 0.35, len: 1.1, fire: 35, blast: 1 },
+  airship: { fall: 11, glide: 2.4, turn: 0.5, skid: 0.25, slew: 0.1, len: 2.2, fire: 75, blast: 1.4, heavy: true },
+  plane: { fall: 7, glide: 6.5, turn: 2.4, skid: 0.5, slew: 0.25, len: 1.4, fire: 40, blast: 1.1 },
+};
+const WRECK_MAX = 32, CRASH_STEPS = 24; // (crashPath works the fall out in this many even steps)
+/** How aircraft `type` falls and crashes (AIR_CRASH, or a plane's way for a type with no entry). */
+function airCrash(type) { return Object.prototype.hasOwnProperty.call(AIR_CRASH, type) ? AIR_CRASH[type] : AIR_CRASH.plane; }
 /*
  * Influence. Every finished building but the military ones holds CIV_CLAIM tiles round itself (the military
  * ones claim their wider ring, BDEFS terr), so a colony's land grows as it builds. You can build on any

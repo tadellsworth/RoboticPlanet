@@ -236,6 +236,7 @@ const SFX_GAP = { rumble: 2.5, eruption: 3, clank: 0.12, furnace: 0.6, machine: 
   launch: 0.3, rocket: 0.12, takeoff: 1.5, chute: 0.4, flakfire: 0.25, flak: 0.12, boom: 0.12, shellhit: 0.09, missilehit: 0.2, laser: 0.08, pulse: 0.14, hit: 0.07, produce: 0.25, alert: 1.5, complete: 0.3, order: 0.15,
   weld: 0.25, scrape: 0.3, hiss: 0.6, airbrake: 1.2, honk: 2.5, passby: 0.35, beepback: 0.9, toot: 1, chirp: 0.15, servo: 0.25, nuke: 2, siren: 4,
   bombhit: 0.12, howitzerhit: 0.12, fireball: 0.2, collapse: 0.15, botboom: 0.1, bombfall: 0.15, incoming: 0.3, nukefall: 3,
+  planefall: 0.3, blimpfall: 0.3, aircrash: 0.3, aircrashnear: 0.3,
   flame: 0.45, shieldhit: 0.08, shieldbreak: 0.3,
 };
 
@@ -249,6 +250,7 @@ const SFX_GAP = { rumble: 2.5, eruption: 3, clank: 0.12, furnace: 0.6, machine: 
 const BLAST_SIZE = {
   flak: 0.4, shellhit: 0.55, botboom: 0.6, collapse: 0.9, boom: 1, howitzerhit: 1.1, fireball: 1.3, bombhit: 1.35, missilehit: 1.8, nuke: 3.2,
   bombfall: 0.9, incoming: 1.2, nukefall: 3.2,
+  planefall: 0.9, blimpfall: 0.9, aircrash: 1.5, aircrashnear: 0.9, // (an aircraft shot down: its fall heard only on screen, its crash further off by those it concerns)
   flame: 0.5, shieldhit: 0.45, shieldbreak: 0.6, // (heard only on screen)
 };
 
@@ -451,6 +453,46 @@ function rubble(D, far) {
 }
 
 /**
+ * An aircraft shot down, falling for dur seconds into D, ending as it hits. A plane: its engines failing (a rough,
+ * sputtering whine sinking in pitch, cutting in and out), the wind of its dive rising to a roar, its fire crackling.
+ * The Airship (heavy) groans down instead: a low, beating moan sinking, its frame creaking and buckling, the fire
+ * roaring in its envelope, the wind softer.
+ */
+function falling(D, heavy, dur) {
+  const ac = AUDIO.ctx, t0 = ac.currentTime + 0.05, t1 = t0 + dur, crackle = [];
+  for (let k = 0; k < Math.round(dur * 7); k++) crackle.push({ at: 0.1 + Math.random() * dur, len: 0.006 + Math.random() * 0.02, amp: 0.02 + Math.random() * 0.03, f: 2000 + Math.random() * 4000 });
+  grains(D, crackle, 'highpass', 0.7);
+  _noise(dur, heavy ? 0.06 : 0.11, { type: 'bandpass', freq: heavy ? 300 : 500, to: heavy ? 700 : 1500, q: 0.9, attack: dur * 0.92, dest: D });
+  if (heavy) {
+    for (const [f0, v] of [[62, 0.06], [65.5, 0.05]]) {
+      const o = ac.createOscillator(), lp = ac.createBiquadFilter(), g = ac.createGain();
+      o.type = 'sawtooth';
+      o.frequency.setValueAtTime(f0, t0); o.frequency.linearRampToValueAtTime(f0 * 0.72, t1);
+      lp.type = 'lowpass'; lp.frequency.value = 300;
+      g.gain.value = 0.0001;
+      g.gain.setValueAtTime(0.0001, t0); g.gain.exponentialRampToValueAtTime(v, t0 + 1.5); g.gain.setValueAtTime(v, t1 - 0.3); g.gain.exponentialRampToValueAtTime(0.0001, t1 + 0.05);
+      o.connect(lp).connect(g).connect(D);
+      o.start(t0); o.stop(t1 + 0.1);
+    }
+    for (let k = 0; k < Math.round(dur / 1.4); k++) _noise(0.35 + Math.random() * 0.4, 0.05, { type: 'bandpass', freq: 300 + Math.random() * 400, to: 120 + Math.random() * 100, q: 9, attack: 0.08, delay: 0.4 + Math.random() * (dur - 0.8), dest: D });
+    _noise(dur, 0.06, { type: 'lowpass', freq: 500, to: 900, attack: dur * 0.5, dest: D });
+    return;
+  }
+  const o = ac.createOscillator(), bp = ac.createBiquadFilter(), am = ac.createGain(), env = ac.createGain(), lfo = ac.createOscillator(), lg = ac.createGain();
+  o.type = 'sawtooth';
+  o.frequency.setValueAtTime(420 + Math.random() * 60, t0); o.frequency.exponentialRampToValueAtTime(110, t1);
+  bp.type = 'bandpass'; bp.frequency.setValueAtTime(1400, t0); bp.frequency.exponentialRampToValueAtTime(380, t1); bp.Q.value = 1.2;
+  lfo.type = 'square'; lfo.frequency.setValueAtTime(6, t0); lfo.frequency.linearRampToValueAtTime(11, t1);
+  lg.gain.value = 0.5; am.gain.value = 0.5;
+  lfo.connect(lg).connect(am.gain);
+  env.gain.value = 0.0001;
+  env.gain.setValueAtTime(0.0001, t0); env.gain.exponentialRampToValueAtTime(0.07, t0 + 0.15); env.gain.exponentialRampToValueAtTime(0.03, t0 + dur * 0.7); env.gain.exponentialRampToValueAtTime(0.0001, t1);
+  o.connect(bp).connect(am).connect(env).connect(D);
+  o.start(t0); lfo.start(t0); o.stop(t1 + 0.05); lfo.stop(t1 + 0.05);
+  _noise(dur * 0.45, 0.035, { type: 'bandpass', freq: 1800, to: 900, q: 3, attack: dur * 0.4, delay: dur * 0.55, dest: D }); // (the whistle of the dive)
+}
+
+/**
  * Something coming down on you, for dur seconds, ending as it hits: a bomb's falling whistle (dropping in
  * pitch, louder as it nears), or a missile's roar as it dives in (a rushing whoosh sweeping down, its motor
  * rumbling under it; a nuclear one deeper).
@@ -488,9 +530,10 @@ function natureReady() { return AUDIO.on && !AUDIO.suppress && AUDIO.ctx && AUDI
 
 /**
  * Play a sound effect. dest: an optional node (a panner for a sound on the map), or the map position (dest = x,
- * then y) of an explosion or something coming down, heard from where it is (see blastWhere).
+ * then y) of an explosion or something coming down, heard from where it is (see blastWhere). dur: how long something
+ * coming down takes, in game seconds, for the sounds that last until it lands (an aircraft shot down).
  */
-function sfx(name, dest, y) {
+function sfx(name, dest, y, dur) {
   if (!sfxReady()) return;
   const now = AUDIO.ctx.currentTime;
   if (now - (AUDIO.last[name] || -9) < (SFX_GAP[name] || 0.05)) return;
@@ -570,6 +613,15 @@ function sfx(name, dest, y) {
     case 'bombfall': incoming(D, 'bomb', BOMBER.fall / spd); break;
     case 'incoming': incoming(D, 'missile', MISSILE_WARN / spd); break;
     case 'nukefall': incoming(D, 'nuke', (MISSILE_WARN * 1.6) / spd); break;
+    // An aircraft shot down, falling until it hits (AIR_CRASH fall: dur), and its crash: the impact, the airframe
+    // tearing across the ground, its fuel going up in a fireball.
+    case 'planefall': falling(D, false, (dur || 7) / spd); break;
+    case 'blimpfall': falling(D, true, (dur || 11) / spd); break;
+    case 'aircrash': case 'aircrashnear':
+      blast(D, { size: 1.5, far, gain: 0.7, fire: true }); rubble(D, far);
+      _noise(0.9, 0.08 * (1 - 0.5 * far), { type: 'bandpass', freq: 2400, to: 700, q: 2, attack: 0.02, dest: D });
+      duckMusic(0.45, 1.6);
+      break;
     case 'alert': _tone(880, 0.12, 'square', 0.05, null, 0, D); _tone(660, 0.12, 'square', 0.05, null, 0.15, D); break;
     // A missile leaving its Silo: the ignition pop, then the motor's roar climbing as it rises away.
     // A Howitzer firing: a deep, heavy cannon boom rolling away.
