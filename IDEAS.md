@@ -14,6 +14,22 @@ Still open: a neutral, shared exchange the rivals compete over; contracts for Ch
 
 ## Held for later
 
+- **Upgrades for long games** (the owner, Nov 17 2026: saved for later; the aim is economies that keep growing on large
+  maps, enough to feed the megastructures). Today the only upgrades are the Research Lab's (`TECHS`: Cargo Racks,
+  Long-life Cells, Rapid Paving, Sentry Optics, Turbo Motors, Power Tools, Nanite Repair), colony-wide and Colony only.
+  The picks, if built: building tiers and deep extraction.
+  - **Building tiers (Mk II, Mk III).** An Upgrade button on a gatherer's panel, paid in Alloy and Chips (Crystal too
+    for Mk III), with a short refit while it pauses. Harvester Mk II: 50% faster and its reach 5 tiles to 7; Mk III:
+    twice as fast and a second Worker. The same for the Quarry, Mine, Crystal Tap and Oil Pump, and the factories could
+    follow (Smelter, Chip Fab, Cement Works: Mk II makes 2 a batch). Upgraded buildings look it (a bigger rig, a second
+    arm, brighter lights). The rival upgrades its own once it's established, so long games scale for everyone.
+  - **Deep extraction.** On big maps the fields of Ore, Stone and Crystal run dry and late games starve. A Deep Bore
+    upgrade lets a Mine, Quarry or Crystal Tap keep drawing a trickle from a spent field for good. (Harvesters already
+    have the Grove Planter to regrow their groves.)
+  - **The Research Lab in Versus too,** with economy research beside today's: Diamond Blades (every gatherer 25%
+    faster), Seam Survey (fields hold 30% more), Automation (factories need no Worker inside, freeing Workers to build).
+  - **Automated Harvesters.** A Mk III (or a research) where a Harvester runs on its own, a small drone cutting in place
+    of a Worker: Workers saved in a big late colony.
 - **Megastructures** (the owner, Nov 17 2026: saved for later). Late-game, one per colony, slow to build and seen by
   everyone, so rivals can race or raid them. The picks, if built: the Great Uplink, the Ring Breaker and Arrival City.
   - **Ring Breaker** (weapon). A tether-and-thruster station that pulls fragments out of the Ring and drops them where
