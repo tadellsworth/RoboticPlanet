@@ -4682,7 +4682,8 @@ function checkSave(o) {
     // a Murmur nest's tunnel branches (see murmurGrow): each its head and goal tiles and the tiles it has left to dig
     if (b.br != null && !(Array.isArray(b.br) && b.br.every((e) => obj(e) && [e.h, e.g].every((t) => Number.isInteger(t) && t >= 0 && t < o.W * o.H) && Number.isFinite(e.k)))) bad();
   }
-  for (const u of o.bots) if (!obj(u) || !ownKey(BOTS, u.type) || !owner(u.owner) || !Number.isFinite(u.x) || !Number.isFinite(u.y) || (u.carry != null && !ownKey(GOOD, u.carry)) || (u.drag && !ownKey(BOTS, u.drag))) bad();
+  for (const u of o.bots) if (!obj(u) || !ownKey(BOTS, u.type) || !owner(u.owner) || !Number.isFinite(u.x) || !Number.isFinite(u.y) || (u.carry != null && !ownKey(GOOD, u.carry)) || (u.drag && !ownKey(BOTS, u.drag)) ||
+    (u.pose != null && !['walk', 'feed', 'spit', 'dig', 'under', 'up'].includes(u.pose)) || (u.charge != null && !Number.isFinite(u.charge))) bad();
   if (o.settings != null) {
     const st = o.settings;
     if (!obj(st) || (st.biome != null && !ownKey(BIOMES, st.biome)) || (st.shape != null && !(Number.isInteger(st.shape) && st.shape >= 0 && st.shape < SHAPE_PRESETS.length))) bad();

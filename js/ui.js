@@ -2504,7 +2504,7 @@ function updateMapTip() {
   if (!b0) {
     let bd = 0.3;
     for (const u of S.bots) {
-      if (u.dead || u.inside) continue;
+      if (u.dead || u.inside || (u.under && !murmurInSight(u))) continue; // (nor a Sapper underground out of the colony's sight)
       const d = dist2(u.x, u.y, w.x, w.y);
       if (d < bd) { bd = d; bot = u; }
     }
@@ -4690,7 +4690,7 @@ function tapStack(rally, b, wx, wy) {
   if (b) out.push({ kind: 'bld', e: b });
   const bots = [];
   for (const u of S.bots) {
-    if (u.dead || u.inside) continue;
+    if (u.dead || u.inside || (u.under && !murmurInSight(u))) continue; // (nor a Sapper underground out of the colony's sight)
     const bt = BOTS[u.type], r2 = bt.crawler || bt.siege || bt.truck || bt.rail ? 0.6 : 0.3;
     const d = dist2(u.x, u.y, wx, wy);
     if (d < r2) bots.push([d, u]);
@@ -7253,7 +7253,7 @@ function showArmyCmdBanner(note) {
 function enemyBotAtTap(i, j) {
   let best = null, bd = 1.3 * 1.3;
   for (const u of S.bots) {
-    if (u.dead || u.inside || !foes(u.owner, ME) || u.owner < 0 || u.dropping || (BOTS[u.type].air && u.flight)) continue;
+    if (u.dead || u.inside || !foes(u.owner, ME) || u.owner < 0 || u.dropping || (BOTS[u.type].air && u.flight) || u.under) continue; // (a Sapper underground: nothing reaches it)
     const d = dist2(u.x, u.y, i + 0.5, j + 0.5);
     if (d < bd) { bd = d; best = u; }
   }

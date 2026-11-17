@@ -1248,6 +1248,15 @@ function aiMurmur(p, lvl, lander, smart) {
   for (const u of S.bots) if (!u.dead && u.owner === p && u.task && u.task.type === 'attack') going.set(u.task.target, (going.get(u.task.target) || 0) + 1);
   for (const r of S.rallies) if (r.owner === p && r.target) going.set(r.target, (going.get(r.target) || 0) + 1);
   const around = (e, r) => { let n = 0; for (const u of S.bots) if (!u.dead && !u.inside && isWild(u.owner) && dist2(u.x, u.y, e.x + 0.5, e.y + 0.5) <= r * r) n++; return n; };
+  // 0) A Sapper underground heading in under its Walls or guns (Active): warbots to where the ground heaves up, to
+  //    strike it as it comes up (it can't be hit below).
+  if (P.sapRally && S.time - P.sapRally.t > 40) { if (rallyById(P.sapRally.id)) recallRally(P.sapRally.id); P.sapRally = null; } // (called home after)
+  for (const u of S.bots) {
+    if (P.sapRally || u.dead || !u.under || !u.task || u.task.role !== 'sap' || near({ x: u.task.x, y: u.task.y }, 12) > 12) continue;
+    if (rallyAvailable(p, u.task.x, u.task.y) < 2) continue;
+    const res = sendToRally(p, u.task.x, u.task.y, 3, false, true);
+    if (res && res.sent) { P.sapRally = { id: res.rally.id, t: S.time }; return; }
+  }
   // 1) Exits near its land, nearest first (the first three it might reach). By day, with nothing up round it, the
   //    garrisons send even the warbots they keep at home (all: only the Command Base keeps its own): a quiet exit is
   //    a short walk and a few shots, and every night it stays open it brings a pack.

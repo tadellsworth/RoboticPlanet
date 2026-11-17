@@ -9,7 +9,7 @@
  * The campaign is in seven chapters, played in this order: First Steps (one idea at a time: a building and its road,
  * Stone and Cement, batteries, the first Alloy), Growing the Colony (bots, farmed Fuel, regrowing groves, Outposts),
  * Roads and Traffic, Industry and Trade, Sea and Sky (all in Colony games, so the economy is learned in peace), then
- * First Contact (the Murmur's nests, their cavern lair the Hollow, a rival to practise on, a border war, a chokepoint to hold) and War; after them a
+ * First Contact (the Murmur's nests, their cavern lair the Hollow, their craft and other forms, a rival to practise on, a border war, a chokepoint to hold) and War; after them a
  * Bonus (King of the Hill: an Uplinks race for three). From the second mission on, setup puts down the colony the earlier
  * missions taught (`kit`), so each one is spent on its new idea.
  *
@@ -1040,6 +1040,47 @@ const MISSIONS = [
         count: (P, S) => S.buildings.filter((b) => !b.dead && b.owner === 0 && b.rocked && b.armor >= BDEFS[b.type].armor - 0.01).length,
         hint: 'When rock falls on your Depot (dust trickles down first), tap it → <b>Repair</b> (<kbd>E</kbd>).',
         ui: '#sh-fixbtn' },
+    ],
+  },
+  // What Comes Up: the Murmur on Active, with their craft (the watcher, the power cut first) and their other forms
+  // (the Leech, the Spitter and the Sapper all on the first night, as S.mur.formsFrom and formsAll bring them).
+  {
+    id: 'forms', name: 'What Comes Up', chapter: 'First Contact',
+    brief: 'On Active the Murmur hunt with craft, and other forms come up with the packs. Read the signs, guard the power and catch them.',
+    intro: [
+      'At dusk one of them stands at the edge of your land, facing it: <b>the night\'s strike falls there</b>.',
+      'They go for the power first. Last night a <b>Leech</b> drank a Fuel Station dry: tap it → <b>Repair</b> (<kbd>E</kbd>).',
+      'A <b>Spitter</b> shorts out your guns from a few tiles off. A <b>Sapper</b> digs under and comes up inside.',
+      'Nothing reaches a Sapper underground: catch it as it heaves up. And they take their dead with them.',
+      'Your warbots wait in the Command Base: <b>Army</b> (<kbd>Q</kbd>) → <b>Hold ground</b> (<kbd>G</kbd>) sends them.',
+    ],
+    mode: 'colony', seed: 7, size: 0, rough: 1, rich: 3, biome: 'desert', war: true, murmur: 'active', limit: [0, 0, 25],
+    setup(S) {
+      kit(S, KIT8, 4);
+      const P = S.players[0], L = getE(P.lander);
+      for (let k = 0; k < 6; k++) enterBuilding(addBot(0, 'warbot', L.x, L.y), L);
+      P.stats.startBots = P.stats.bots;
+      L.stock.ammo = 30; L.stock.crystal += 12; L.stock.alloy += 8; L.stock.chip += 4; L.stock.cement += 20;
+      // A second Fuel Station out along the roads, the power they go for: a Leech got to it last night, and it's dark
+      // (dented: Repair brings the power back). And all their forms from the first night.
+      const fs = preBuild(0, 'charger', L.x + 6, L.y + 4, { road: true, reach: 6, stock: { fuel: 4 } });
+      if (fs) murmurCut({ id: 0, p: 0, cut: [], cutMsg: 1 }, [1, fs.id, fs.x, fs.y]);
+      S.mur.formsFrom = 1; S.mur.formsAll = 1;
+    },
+    goals: [
+      { kind: 'powerback', n: 1, text: 'Get the power back', count: (P) => P.stats.powerBack || 0, at: 'charger',
+        hint: 'The dark Fuel Station out along your roads: tap it → <b>Repair</b> (<kbd>E</kbd>). Its power comes back.',
+        ui: '#sh-fixbtn' },
+      { kind: 'guarded', n: [1, 1, 2], text: ['Put a Pulse Turret by a Fuel Station', 'Put Pulse Turrets by {n} Fuel Stations'], at: 'charger',
+        count: (P, S) => S.buildings.filter((b) => !b.dead && b.built && b.owner === 0 && BDEFS[b.type].charger && S.buildings.some((g) => !g.dead && g.built && g.owner === 0 && g.type === 'turret' && dist2(g.x, g.y, b.x, b.y) <= 9)).length,
+        hint: '<b>Build</b> (<kbd>B</kbd>) → <b>Defend</b> (<kbd>4</kbd>) → <b>Pulse Turret</b> (<kbd>T</kbd>) beside a Fuel Station: they cut the power first.',
+        ui: "#btn-build, #build-tabs [data-g='defend'], .bcard[data-t='turret'], #sh-layroad" },
+      { kind: 'watched', n: [2, 3, 4], text: 'Warbots where the watcher stood', count: (P) => P.stats.watchMet || 0,
+        hint: 'At dusk, tap the watcher\'s alert: <b>Army</b> (<kbd>Q</kbd>) → <b>Hold ground</b> (<kbd>G</kbd>) there before nightfall.',
+        ui: '#btn-attack, #ar-hold' },
+      { kind: 'forms', n: 3, text: 'Kill a Leech, a Spitter and a Sapper', count: (P, S) => ['leech', 'spitter', 'sapper'].filter((k) => S.mur && S.mur.slain && S.mur.slain[k]).length,
+        hint: 'Turrets and warbots kill them: <b>Army</b> (<kbd>Q</kbd>) → <b>Hold ground</b> (<kbd>G</kbd>) where a Sapper heaves up.',
+        ui: '#btn-attack, #ar-hold' },
     ],
   },
   {
