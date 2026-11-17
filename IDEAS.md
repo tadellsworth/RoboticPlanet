@@ -167,10 +167,6 @@ built and played through headless:
   missions); goals: hold an Uplink (counted from `S.uplinks`, owner 0 and not jammed), then win the race.
   `finishMission` would also need `M.why = 'uplinks'` for a rival winning it. Kept out of the campaign until a solver
   shows a three-player Uplinks race can be won; Final Descent only mentions Uplinks and free-for-alls.
-- **Salvage that doesn't reach its site.** The Command Base's Fiber/Stone salvage (`landerSalvage`, "so it can always
-  rebuild") can go to a running factory that burns the same good before the gatherer site it was meant for (Border
-  Dispute on Hard stalled on Fiber until the hook set the Harvester site to High priority). A fix in dispatch: while a
-  player is salvaging a good, only sites get it, not built factories. It touches the AI's economy too.
 - **A rail-only line.** A far Rail Station needs a road to be built at all (its builders and materials come by road),
   so Iron Road asks for one. Trains bringing a station site its materials would make a track-only line possible.
 - **Trade Winds waits for its second event.** Events come 300-480 s apart (`EVENT_GAP`), so a quick player can wait a

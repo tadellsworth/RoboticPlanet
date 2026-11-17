@@ -1292,7 +1292,8 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   building can't go where its ring would cover a rival's ordinary building (`ringOverRival`; a Drop Outpost dropped, a
   Port a Ferry founds and a Crawler deploying too): cut-offs come from capture or a fort falling. The AI builds on its own land first and on open ground only when it has no spot at home.
 - **Salvage:** a colony out of Stone or Fiber with no Quarry or Harvester that can still work salvages 1 every 20 s from
-  its Command Base (up to 6), so it can always rebuild. Capturing an enemy Outpost takes its land,
+  its Command Base (up to 6), so it can always rebuild. Meanwhile (`P.salvaging`) that good goes only to sites, not to
+  finished buildings (a running Smelter would burn the Fiber meant for the Harvester site). Capturing an enemy Outpost takes its land,
   and enemy buildings its ring now covers are cut off (see above).
 - **Controls:** drag to pan, pinch or scroll to zoom, tap anything to inspect it. Wheel deltas are normalised and capped
   per event (smooth on a Magic Mouse or trackpad); a Ctrl + wheel pinch zooms faster, a sideways swipe or Shift + wheel

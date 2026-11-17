@@ -1918,7 +1918,7 @@ function dispatch(p) {
     const inp = b.built && BDEFS[b.type].inp;
     for (const [g, n0, keep, autoOnly] of needsOf(b)) {
       const h = fed && fed.length && !keep ? feedHaul(b, g, fed) : null, n = h === null ? n0 : Math.min(n0, h);
-      if (n <= 0 || (g === 'fuel' && b.fuelByPipe)) continue;
+      if (n <= 0 || (g === 'fuel' && b.fuelByPipe) || (b.built && P.salvaging && P.salvaging[g])) continue; // (salvage is for sites: see landerSalvage)
       // Full loads: a factory that is less than a Hauler's load short of an input, with more than its next batch
       // still in hand or on the way, waits to be topped up. (Asked after every batch, a third of all Hauler trips
       // carried a single unit to a factory that wasn't short.) Liquids go as they come.
@@ -2406,7 +2406,8 @@ function repairHint(b) {
 
 /**
  * A colony that has run out of Stone or Fiber with no Quarry or Harvester that can still work
- * (so it couldn't build one) slowly salvages it from its Command Base, enough to get going again.
+ * (so it couldn't build one) slowly salvages it from its Command Base, enough to get going again. Meanwhile that
+ * good goes only to sites (P.salvaging, see dispatch), so the Quarry or Harvester site it's for gets it.
  */
 function landerSalvage(p, dt) {
   const P = S.players[p];
@@ -2420,6 +2421,10 @@ function landerSalvage(p, dt) {
       (b.built ? BDEFS[type].bedrock || reachableRes(b.x, b.y, BDEFS[type].radius, res) > 0 : sumValues(b.stock) >= sumValues(BDEFS[type].cost))); // a Quarry can always cut or dig
     // Cement is Stone already baked (2 per Stone), so it counts towards having enough.
     const amount = (have[g] || 0) + (g === 'stone' ? (have.cement || 0) / 2 : 0);
+    // (While it salvages a good, only sites get it, the gatherer's above all: a running factory that burns it, a
+    // Smelter say, took every one before. See dispatch.)
+    if (!working && amount < SALVAGE_BELOW) (P.salvaging = P.salvaging || {})[g] = true;
+    else if (P.salvaging) delete P.salvaging[g];
     if (working || amount >= SALVAGE_BELOW) { P.salvageT[g] = 0; continue; }
     P.salvageT[g] = (P.salvageT[g] || 0) + dt;
     if (P.salvageT[g] < SALVAGE_EVERY) continue;
