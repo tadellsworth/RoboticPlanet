@@ -94,6 +94,7 @@ function initUI() {
   helpPagerInit();
   initLore();
   initFeedback(); // (Send feedback: main menu and pause menu, js/feedback.js)
+  initCloud(); // (cloud saves: Save to the cloud in the pause menu, Load from a code on the main menu, js/cloud.js)
   initMeta(); // (Colony goals, Records and achievements: js/goals.js)
   $('screen-help').addEventListener('click', (e) => {
     const a = e.target.closest && e.target.closest('[data-jump]');
@@ -244,6 +245,7 @@ function initUI() {
 function initBack() {
   window.addEventListener('popstate', () => {
     if (!UI.inGame) return;
+    if (/^#save=/i.test(location.hash)) return; // (a cloud save link sent to the open game isn't Back: js/cloud.js asks about it)
     history.pushState({ terrafall: 1 }, '');
     if (UI.briefing) closeBriefing(); else escapeKey();
   });
@@ -1427,6 +1429,7 @@ function initDialogs() {
 
 function syncSaved() {
   syncPauseMods();
+  syncCloud(); // (Save to the cloud: not in multiplayer or Observer mode)
   const el = $('p-saved');
   if (!el) return;
   if (UI.watch) { el.textContent = 'Observer mode: nothing here is saved, and your own game stays as it was.'; $('p-quit').textContent = 'Back to the menu'; return; }
@@ -2420,6 +2423,7 @@ function toggleSpeedMenu(refresh) {
 function escapeKey() {
   if (UI.photo) { photoExit(); return; } // (photo mode: back where it was opened from, js/photo.js)
   if (!$('screen-feedback').hidden) { closeFeedback(); return; } // (over the pause menu: back to it)
+  if (!$('screen-cloud').hidden) { closeCloud(); return; } // (cloud saves: over the pause menu, or a link's question)
   if (!$('speed-menu').hidden) { $('speed-menu').hidden = true; return; }
   if (!$('screen-help').hidden) { $('h-close').click(); return; }
   if (!$('screen-stats').hidden) { $('st-close').click(); return; }
@@ -2711,19 +2715,29 @@ function importSaveFile(file) {
   const r = new FileReader();
   r.onerror = () => menuMsg('That file couldn\'t be read.');
   r.onload = () => {
-    let json = String(r.result || '');
-    const prev = S, no = () => menuMsg('That isn\'t a Terrafall save file (or it\'s from a version this one can\'t read).');
-    try {
-      const o = JSON.parse(json);
-      if (o && o.terrafall && typeof o.game === 'string') json = o.game; // a save file; a bare save works too
-      deserializeGame(json);
-    } catch (e) { S = prev; no(); return; }
-    if (!enterLoaded(prev)) { no(); return; }
-    try { const old = localStorage.getItem(SAVE_KEY); if (old) localStorage.setItem(SAVE_BACKUP_KEY, old); } catch (e) { /* storage unavailable or full: it still plays */ }
-    saveGame();
-    postMsg(ME, 'Save file loaded. Welcome back.', 0, 0, 'info');
+    if (!loadSaveText(r.result, 'Save file loaded. Welcome back.')) menuMsg('That isn\'t a Terrafall save file (or it\'s from a version this one can\'t read).');
   };
   r.readAsText(file);
+}
+
+/**
+ * A save file's text (or a bare save) into play, as Load a save file does: checked (checkSave), started, then this
+ * device's save, with the one it replaces kept as the backup. False (nothing changed) if it can't be read or started.
+ * (Also how a cloud save loads: js/cloud.js.)
+ */
+function loadSaveText(text, welcome) {
+  let json = String(text || '');
+  const prev = S;
+  try {
+    const o = JSON.parse(json);
+    if (o && o.terrafall && typeof o.game === 'string') json = o.game; // a save file; a bare save works too
+    deserializeGame(json);
+  } catch (e) { S = prev; return false; }
+  if (!enterLoaded(prev)) return false;
+  try { const old = localStorage.getItem(SAVE_KEY); if (old) localStorage.setItem(SAVE_BACKUP_KEY, old); } catch (e) { /* storage unavailable or full: it still plays */ }
+  saveGame();
+  postMsg(ME, welcome, 0, 0, 'info');
+  return true;
 }
 
 function continueGame() {
