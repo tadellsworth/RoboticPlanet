@@ -1797,6 +1797,20 @@ are 512×512 (one image per 4×4 tiles, sharp on the zoomed-in map); all WebP to
 added one piece at a time. See **[ART_GUIDE.md](ART_GUIDE.md)** for specs, the style brief and prompts,
 including the remaining pieces (Ramp, slope and cliff textures, goods icons).
 
+Work is acted out in code (`workPose`, `drawWorkUnder` and `drawWorkOver` in `js/render.js`): a builder circles its site
+welding, sparks flying; a worker paving spreads fresh concrete across the tile (bridge decks and tunnel linings too);
+a Paver lays asphalt that steams behind it. **Gathering** (`harvestPose`, `harvestAnim`, `drawHarvest`): a robot stops
+at the near edge of what it gathers, facing in (it eases back onto its path as it leaves), and works it with an arm.
+It scythes Reedcane in sweeping arcs, flecks of cane flying the way the blade went (Bloom veins shed glowing violet
+and teal motes as they're cut); drills Ore a few holes at a time, shaking as the bit bores in, cuttings and sparks
+spraying (Uranium's cuttings glow green); breaks boulders and rock faces with a hammer, rearing back between blows,
+each blow a flash, chips flung back off the rock and a cloud of dust; and scores Crystal with a cutting beam that
+traces across the cluster, glints twinkling and slivers coming away. An Agribot turns from plant to plant, snipping
+ripe pods and lifting them back to its hopper as leaves flutter down, or plants a row of three seedlings (crop sprouts,
+or Reedcane shoots for the Grove Planter), the soil puffing up as each goes in. The glows brighten at night. It is all
+drawn from the render clock and the job's own timer (`harvestTime` matches the simulation's), so nothing of it is in
+the simulation; the old up-and-down bob is left for the few jobs without a pose of their own.
+
 Weapon effects are drawn in code: muzzle flashes, tracers, gun smoke, dust kicks and bullet pockmarks round each
 target (sparks on buildings), the Disruptor's arcs, and blasts with a fireball, flying debris, smoke and a scorch mark.
 A destroyed building shakes, leans and sinks into the ground in a dust cloud, with secondary blasts, and leaves rubble.

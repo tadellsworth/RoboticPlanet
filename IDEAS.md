@@ -35,6 +35,14 @@ Still open: a neutral, shared exchange the rivals compete over; contracts for Ch
   sets do), so the page holds code alone and can't fill up again. Then check that the single file still opens straight
   from a folder and still plays offline. Meanwhile, the biggest single images are `effects/nuke-blast-sheet.webp`
   (377 KB) and `effects/fx-fuel-blast.webp` (125 KB), if a quick re-encode is ever wanted.
+- **A new look for the oil seeps** (owner's to-do, Nov 17: "I don't like the current one"). The owner's two reference
+  pictures show a puddle of crude: glossy, jet black, with a soft, wavy, irregular outline (lobes and pinched waists,
+  no straight edges), a few separate small round droplets and smaller puddles scattered beside it, faint dark-grey
+  sheen patches inside, and thin bright white highlights along the lower (front) rims, as if lit from above and
+  behind. Today's seep is a texture drawn across all its tiles as one shape (`drawSeep` in `js/render.js`, the
+  `oil-seep` art) with its night glow in `resourceGlow`; the Hollow's seeps use the same art. A redo would make the
+  puddle (and its droplets) the art, keep it reading as one shape across a seep's tiles, darken as it is pumped dry,
+  and keep a faint gleam at night. Render a sample sheet for the owner to pick from first.
 - **The rival doctrines' texts** (owner: on hold until the owner has finished fine-tuning the rivals). Then play each
   doctrine again, measure what it really does, and rewrite its text to match. Known gaps are under "Doctrine balance
   and text" in the November review below.
