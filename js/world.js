@@ -4753,6 +4753,11 @@ function checkSave(o) {
     if (H0.chambers != null && !(Array.isArray(H0.chambers) && H0.chambers.every(at))) bad(); // (older saves have none: drawn without them)
   }
   if (o.tremor != null && !(obj(o.tremor) && Number.isFinite(o.tremor.next) && (o.tremor.rock == null || Array.isArray(o.tremor.rock)))) bad();
+  // Aircraft wrecks (S.wrecks, see crashLand): numbers, a plain word for the aircraft, the tiles under it on the map.
+  const tileOk = (t) => Number.isInteger(t) && t >= 0 && t < o.W * o.H;
+  if (o.wrecks != null && !(Array.isArray(o.wrecks) && o.wrecks.length <= 4 * WRECK_MAX && o.wrecks.every((w) => obj(w) && Number.isInteger(w.id) &&
+    ['x', 'y', 'a', 't'].every((k) => Number.isFinite(w[k])) && typeof w.type === 'string' && /^[a-z][a-z0-9]{0,23}$/i.test(w.type) && owner(w.owner) &&
+    Array.isArray(w.tiles) && w.tiles.length > 0 && w.tiles.length <= 16 && w.tiles.every(tileOk)))) bad();
   if (o.event) {
     const E = o.event;
     if (!obj(E) || !ownKey(EVENTS, E.type) || (E.offers != null && !obj(E.offers))) bad();
@@ -4824,6 +4829,7 @@ function deserializeGame(json) {
   o.scorch = o.scorch || {};
   o.burnt = o.burnt && typeof o.burnt === 'object' && !Array.isArray(o.burnt) ? o.burnt : {}; // farmland burned for good (saves from before napalm: none)
   o.fires = Array.isArray(o.fires) ? o.fires : [];
+  o.wrecks = o.wrecks || []; // (saves from before aircraft wrecks stayed: none)
   o.roadVer = (o.roadVer || 0) + 1;
   // Saves from before roads were paved by workers have no planned roads.
   if (!o.plan) o.plan = new Array(o.W * o.H).fill(0);
