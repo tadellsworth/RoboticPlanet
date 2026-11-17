@@ -60,7 +60,7 @@ function swarmer(L, K, G, f, v) {
   const { THREE } = K, pal = PAL[v];
   const SC = v === 'white' ? 1.3 : v === 'rust' ? 1.3 : 1.25;
   G.scale.setScalar(SC);
-  const fat = v === 'white' ? 1.18 : v === 'rust' ? 1.08 : 1;        // the White ones are stout, the Rust ones bulked by plates
+  const fat = v === 'white' ? 1.18 : v === 'rust' ? 1.08 : 1;        // the Hoarfell ones are stout, the Rust ones bulked by plates
   const legK = v === 'white' ? 0.8 : 1;                               // short legs: slow-looking
   const sheen = v === 'white' ? { sheen: 1, sheenColor: '#ffffff', rough: 0.62, cc: 0.2, ccr: 0.6 } : {};
   let bodyM, plateM;

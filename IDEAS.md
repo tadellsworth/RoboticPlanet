@@ -88,6 +88,11 @@ Still open: a neutral, shared exchange the rivals compete over; contracts for Ch
 - **Graphics.** A first pass is done (rounded shorelines on ponds, lakes and seas, by day and in the night glow). Rock
   outcrops (crags) stay square: rounded crags were tried in November and the owner preferred the square look. Worth
   another look when new art comes in.
+- **Redesign the Fiber and Oil resources on the map (the owner, Nov 17; for later).** The owner doesn't love either
+  look: Fiber's Stalks (the cluster of teal fungal stalks with glowing mint caps, `stalk`) and the oil seep (the dark
+  glossy pool with a rainbow sheen, `oil`). New designs for both, every time of day and every biome they appear in, as
+  a design sheet for the owner to approve first (as with the Murmur), then installed in place. The Hollow's Bloom veins
+  (also Fiber) are being designed separately.
 - **Bigger graphics upgrades** (owner: for later, after the Graphics quality setting). Installing the game as a
   desktop app gives it no more GPU than a tab does; Chrome already draws its canvas on the graphics card. For a bigger
   step up:
@@ -344,8 +349,17 @@ These wait for a later expansion:
   drops; Uplinks stand under them), **Bloom veins for Fiber** (no light for Stalks or crops; harvesting veins draws
   the Murmur), **floating Crystal** (the richest Crystal on masses hanging over the chasms, reached by Ropeway or
   bridge) and **ceiling tremors** (the Hollow's weather: dust and falling rock). **No aircraft underground** (no
-  Airfields). No solar flares. **The Murmur in Versus become a setting** (Off / Quiet / Active), Active by default in
-  the Hollow and usable on other maps too; the rival AI learns to live with them.
+  Airfields). No solar flares. It's always night there, so the Murmur's night rhythm (below) becomes surges on the
+  same 12-minute clock, and the hum goes silent just before each one.
+- **The Murmur in regular games (decided by the owner, Nov 17; being built).** A Custom Game setting for every map,
+  **Off / Quiet / Active, Active by default** (never on Argos, the moon). It **forces the day/night cycle on**: the
+  Murmur live by it. **By night they tunnel**: every night each nest's tunnel network spreads further (toward power),
+  new exits open along it, and more of them **pop out of the exits** to harass the colonies as they fight each other,
+  so the longer a game goes the bigger the networks and the raids. **At dawn the ones that came up go back down**; the
+  nests stay on the map and can be attacked by day (days to strike the nests, nights to hold the line). **Counterplay:**
+  warbots collapse a tunnel exit (it stays shut a while), and wrecking a nest makes its whole network die back.
+  Tunnels pass under roads, buildings and Walls. Quiet: fewer, slower tunnels and smaller packs. The rival AI learns to
+  live with them.
 - **A campaign mode built around the Murmur** (the owner's long-term wish): the owner's outline is in CAMPAIGN.md, 15
   missions in three acts, from the landing in the Rust to "No further instructions" at the Pathfinder.
 - **Archives.** The main menu's Lore guide (`#screen-lore`) is the archive as it stands, the same for everyone. Next: pages that fill with logs found across games (ark construction updates that stop, the last
@@ -368,5 +382,5 @@ Sapper (tunnels under Walls and surfaces behind them: counters turtling). Mechan
   computer rivals have to handle them too).
 - Glimpsed, not seen: road lights going dark one by one at night as they come; sensor blips before contact.
 - Counters: Torches (built to burn back the Bloom) do extra damage to them and clear burrows; the Research Lab studies
-  them (earlier warnings, better counters). Regional variants: armoured in the Rust, pale and slow in the White,
+  them (earlier warnings, better counters). Regional variants: armoured in the Rust, pale and slow in Hoarfell,
   violet-glowing in the Bloom.

@@ -62,8 +62,8 @@ The name comes from the Ithaca Catalog, a pre-war list of candidate homeworlds n
 | Greenreach | Forest | Prime Stalk country and the survey's favorite. |
 | Emberwood | Autumn forest | The leaves stay red-gold all year. |
 | The Long Grass | Savanna | Easy roads, nowhere to hide. |
-| The Sump | Swamp | Soft ground that Pavers hate. |
-| The White | Polar snow | Ore locked in ice. The coldest posting on Ithaca I. |
+| Blackwater | Swamp | Soft ground that Pavers hate. |
+| Hoarfell | Polar snow | Ore locked in ice. The coldest posting on Ithaca I. |
 | Cinderlands | Volcanic ash | Crust cracked open by the oldest strikes. |
 | The Bloom | Violet alien growth | Native life feeding on fallen Crystal (see Native life). |
 | The Hollow | Underground caverns | The Murmur's lair beneath the Bloom (see The Hollow). |
@@ -114,7 +114,7 @@ No robot has ever logged one alone. The Murmur is always plural, and it is the t
 - **They nest near Crystal seams and strike sites.** The violet Bloom is their ecosystem above ground. They have never been found on the moon.
 - **They grow the Bloom.** The Bloom is a root network the Murmur cultivate along their tunnels. Its veins carry the charge they drain back down to the nests: their version of roads and power lines. Wherever the Bloom spreads, the tunnels below are spreading too.
 - **No vanguard has orders about them.** The Accord assumed the planet was empty. Torches were first built to burn back the Bloom for farmland.
-- **Regional variants (art suggestion):** armored Rust variants, pale slow ones in the White, and Bloom variants that glow violet at night.
+- **Regional variants (art suggestion):** armored Rust variants, pale slow ones in Hoarfell, and Bloom variants that glow violet at night.
 - **A thread for Colony mode:** the tunnels are laid out in patterns the Research Lab can't explain. Are the Murmur only animals? Never answer outright.
 
 ### Art brief: the Murmur
@@ -371,7 +371,8 @@ Decisions the owner made in chat (Nov 2026), kept here with the bible. Adopted n
 meteor showers are **Ringfall**; the rival styles are the doctrines (Balanced: the Steward, Turtle: the Warden, Raider:
 the Salvager, Rusher: the Herald, Tycoon: the Architect); "the Murmur" is the blanket name for the creatures, with
 classes: the Scuttler, the Brute, the Leech (drains charge), the Spitter and the Sapper (the Delver until the owner renamed it, Nov 2026); their look so far is direction B, crystal-backed but mole-like (design/murmur), to be reworked to the art brief
-above; the Lunar biome is Argos, the moon (renamed from Argos by the owner, Nov 2026), where no Murmur live. The biomes take their region names everywhere, the new-game
+above; the Lunar biome is Argos, the moon (renamed from Argos by the owner, Nov 2026), where no Murmur live. The polar region is Hoarfell and the swamp is Blackwater (renamed from the White and the Sump
+by the owner, Nov 2026). The biomes take their region names everywhere, the new-game
 setup included (the owner's decision, Nov 2026), with the kind of ground shown under each (the Rust: red desert). On the setup screen each rival doctrine has a tooltip saying in
 depth how it plays. Planned: the Hollow as a new biome and map once the Murmur design is settled, and later a campaign
 mode built around the Murmur.

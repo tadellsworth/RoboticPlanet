@@ -6,7 +6,7 @@
 //   ?c=swarmer | drainer | brute | spitter | sapper | spit-glob | burrow
 //       swarmer is the game's Scuttler (the brief's Runners), brute its Brute (the Breakers), drainer the Leech
 //   ?v=base | rust | white | bloom      regional variants (Scuttler, Spitter, Sapper): Rust armoured in ironstone plates,
-//                                       White pale, shaggy and slow, Bloom veined and glowing violet
+//                                       Hoarfell pale, shaggy and slow, Bloom veined and glowing violet
 //   ?f=0..3                             walking frame: diagonal pairs (left fore with right hind); only the limbs move
 //   ?charge=0..1                        how full of charge (default 0.75): the crystal glows when full, dims when hungry
 //   ?pose=sense                         any class standing still, its star flared open and pulsing: it has found power
@@ -80,7 +80,7 @@ const xtal = (K, v) => (v === 'white' ? K.XTAL_WHITE : v === 'bloom' ? K.XTAL_BL
 const STAR = { '': { open: 0.42, glow: 0 }, sense: { open: 1, glow: 0.75 }, feed: { open: 1, glow: 1 }, spit: { open: 0.85, glow: 0.5 }, surface: { open: 0.95, glow: 0.6 } };
 
 // coat(L, K, v, o): the fur for a regional variant. The Bloom ones carry the Bloom's root-veins under the skin, glowing
-// violet (with the grit drawn into the same map); the White ones are pale and shaggy.
+// violet (with the grit drawn into the same map); the Hoarfell ones are pale and shaggy.
 function coat(L, K, v, o = {}) {
   const pal = PAL[v];
   if (v === 'bloom') {
@@ -335,7 +335,7 @@ function brute(L, K, G, GL, f, pose) {
 // The two later roles: the SPITTER (counters defence lines) and the SAPPER (counters walls and turtling). Same kit, same
 // palette logic, same regional variants as the Scuttler.
 
-// the grit the Spitter grinds from eaten crystal and carries in its cheek pouches: pale lilac, glowing violet. The White
+// the grit the Spitter grinds from eaten crystal and carries in its cheek pouches: pale lilac, glowing violet. Hoarfell
 // ones' frosted and dim, the Bloom ones' deep violet.
 const GRIT = { skin: '#7a6c86', core: '#c4a6ff', glow: '#9a5cff', chip: '#d8caf4', k: 1 };
 const GRIT_WHITE = { skin: '#b4b2bc', core: '#e0dcf2', glow: '#bdb4e6', chip: '#eef0f6', k: 0.55 };

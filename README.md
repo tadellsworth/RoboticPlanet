@@ -65,7 +65,7 @@ Volcano, Fault line or Canyon maze, and for three or four players only The Wheel
 Valleys and Long Haul 2v2: cards in groups, each with a sketch and a line on it) and the **map size** (Small to
 Huge). **More settings** (a collapsible section, its summary listing whatever isn't the default) holds the planet
 number, the **biome** (named for its region of Ithaca I, `BIOMES[k].name`, with its kind of ground under it, `kind`: the
-Rust (red desert), Greenreach (forest), the White (polar snow), Emberwood, the Long Grass, the Sump, Cinderlands, the
+Rust (red desert), Greenreach (forest), Hoarfell (polar snow), Emberwood, the Long Grass, Blackwater, Cinderlands, the
 Bloom and Argos, the moon; scenery only, with plants that roads and buildings clear), the
 **terrain** (Flat, Gentle, Rolling, Rugged, Mountainous), the **resources** (Scarce to Abundant; Normal is
 `RESOURCE_PRESETS` density 0.78, amount 0.8, which was Sparse until everything was lowered a notch: older saves,
@@ -1284,7 +1284,7 @@ for any section, ‹ ›) and Previous / Next at its end (`helpPage` in `js/ui.j
   (the *Wren*'s arrival line included). A story toast never counts towards the toast limit or pushes a warning out: it
   goes in under a newer warning (a phone on its side shows only the newest) and gives way only to a newer story line,
   the lines of one moment (a surrender's last words and the narrator's line after them) staying together.
-  **Regions** (`BIOMES[k].region`, `regionName`): the Rust, Greenreach, the White, Emberwood, the Long Grass, the Sump,
+  **Regions** (`BIOMES[k].region`, `regionName`): the Rust, Greenreach, Hoarfell, Emberwood, the Long Grass, Blackwater,
   Cinderlands and the Bloom, regions of Ithaca I, and Argos, its moon (Lunar), as flavour only (briefing, landing message, loading lines): the
   setup keeps the plain biome names. **Panel flavour** (`FLAVOR`, `flavorLine`): one quiet italic line at the foot of
   every building's and robot's panel (and the Trade Post's and Uplink's), below every button; the Command Base's is its
